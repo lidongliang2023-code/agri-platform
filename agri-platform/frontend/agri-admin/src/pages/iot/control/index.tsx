@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { Table, Button, Modal, Form, Input, Select, message, Tag, Card } from 'antd';
-import { PoweroffOutlined, PoweronOutlined, RotateCcwOutlined, SettingsOutlined } from '@ant-design/icons';
+import React, { useState } from 'react';
+import { Table, Button, Modal, Form, Input, message, Tag, Card } from 'antd';
+import { PoweroffOutlined, ReloadOutlined, SettingOutlined } from '@ant-design/icons';
 import { DeviceVO } from '@/models/iot/device';
 import { deviceApi, controlApi } from '@/api/iot/device';
 
@@ -14,7 +14,7 @@ const ControlManagement: React.FC = () => {
   const loadDevices = async () => {
     setLoading(true);
     try {
-      const res = await deviceApi.page({ pageNum: 1, pageSize: 100, deviceCategory: 2 });
+      const res = await deviceApi.page({ pageNum: 1, pageSize: 100 });
       if (res.code === 200) {
         setDevices(res.data.list || []);
       }
@@ -25,7 +25,7 @@ const ControlManagement: React.FC = () => {
     }
   };
 
-  useEffect(() => {
+  React.useEffect(() => {
     loadDevices();
   }, []);
 
@@ -70,14 +70,14 @@ const ControlManagement: React.FC = () => {
       ),
     },
     { title: '当前状态', dataIndex: 'currentValue', key: 'currentValue' },
-    { title: '位置', dataIndex: 'location', key: 'location' },
+    { title: '位置', dataIndex: 'installationLocation', key: 'installationLocation' },
     {
       title: '操作',
       key: 'actions',
       render: (_: unknown, record: DeviceVO) => (
         <div style={{ display: 'flex', gap: 8 }}>
           <Button 
-            icon={<PoweronOutlined />} 
+            icon={<ReloadOutlined />} 
             size="small" 
             type="primary"
             disabled={record.onlineStatus !== 1}
@@ -94,7 +94,7 @@ const ControlManagement: React.FC = () => {
             关闭
           </Button>
           <Button 
-            icon={<SettingsOutlined />} 
+            icon={<SettingOutlined />} 
             size="small"
             disabled={record.onlineStatus !== 1}
             onClick={() => handleOpenModal(record)}
@@ -102,7 +102,7 @@ const ControlManagement: React.FC = () => {
             设置
           </Button>
           <Button 
-            icon={<RotateCcwOutlined />} 
+            icon={<ReloadOutlined />} 
             size="small"
             disabled={record.onlineStatus !== 1}
             onClick={() => handleControl(record, 'RESET')}

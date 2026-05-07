@@ -1,9 +1,9 @@
 import { useState, useCallback } from 'react';
 import { message } from 'antd';
-import { PageResult } from '@/models/common';
+import { PageResult, ApiResponse } from '@/models/common';
 
 interface UseTableOptions<T, P> {
-  fetchData: (params: P) => Promise<{ data: PageResult<T> }>;
+  fetchData: (params: P) => Promise<ApiResponse<PageResult<T>>>;
   initialParams?: P;
 }
 
@@ -25,7 +25,11 @@ export const useTable = <T, P>(options: UseTableOptions<T, P>) => {
       const currentParams = newParams || params;
       setParams(currentParams as P);
       const response = await fetchData(currentParams as P);
-      setData(response.data);
+      if (response.code === 200) {
+        setData(response.data);
+      } else {
+        message.error(response.message || '获取数据失败');
+      }
     } catch (error) {
       message.error('获取数据失败');
     } finally {

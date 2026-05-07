@@ -2,6 +2,9 @@ export interface DeviceVO {
   id: number;
   deviceCode: string;
   deviceName: string;
+  deviceType: string;
+  deviceModel: string;
+  manufacturer: string;
   deviceTypeId: number;
   deviceTypeName: string;
   deviceTypeCategory: string;
@@ -12,23 +15,31 @@ export interface DeviceVO {
   locationLat: number;
   locationLng: number;
   locationName: string;
+  installationLocation: string;
+  latitude: number;
+  longitude: number;
   onlineStatus: number;
   onlineStatusText: string;
   lastOnlineTime: string;
   lastReportTime: string;
   deviceStatus: string;
   deviceStatusText: string;
+  currentValue: string;
   protocol: string;
   firmwareVersion: string;
   status: number;
   statusText: string;
   createTime: string;
   createBy: string;
+  orgId: number;
 }
 
 export interface DeviceSaveDTO {
   deviceCode: string;
   deviceName: string;
+  deviceType: string;
+  deviceModel: string;
+  manufacturer: string;
   deviceTypeId: number;
   gatewayId?: number;
   parentId?: number;
@@ -36,16 +47,23 @@ export interface DeviceSaveDTO {
   locationLat?: number;
   locationLng?: number;
   locationName?: string;
+  installationLocation?: string;
+  latitude?: number;
+  longitude?: number;
   protocol?: string;
   firmwareVersion?: string;
   configJson?: string;
   status?: number;
+  orgId?: number;
 }
 
 export interface DeviceUpdateDTO {
   id: number;
   deviceCode?: string;
   deviceName?: string;
+  deviceType?: string;
+  deviceModel?: string;
+  manufacturer?: string;
   deviceTypeId?: number;
   gatewayId?: number;
   parentId?: number;
@@ -53,10 +71,14 @@ export interface DeviceUpdateDTO {
   locationLat?: number;
   locationLng?: number;
   locationName?: string;
+  installationLocation?: string;
+  latitude?: number;
+  longitude?: number;
   protocol?: string;
   firmwareVersion?: string;
   configJson?: string;
   status?: number;
+  orgId?: number;
 }
 
 export interface DevicePageDTO {
@@ -64,10 +86,12 @@ export interface DevicePageDTO {
   pageSize: number;
   deviceCode?: string;
   deviceName?: string;
+  deviceType?: string;
   deviceTypeId?: number;
   plotId?: number;
   onlineStatus?: number;
   status?: number;
+  deviceCategory?: number;
 }
 
 export interface DeviceTypeVO {
@@ -242,6 +266,7 @@ export interface AlertRecordVO {
   propertyName: string;
   triggerValue: string;
   thresholdValue: string;
+  operator: string;
   alertContent: string;
   alertTime: string;
   handleStatus: number;
@@ -269,4 +294,54 @@ export interface AlertRecordPageDTO {
 export interface AlertHandleDTO {
   handleStatus: number;
   handleResult?: string;
+}
+
+export interface SceneVO {
+  id: number;
+  sceneName: string;
+  sceneDesc: string;
+  status: number;
+  active: boolean;
+  createTime: string;
+  updateTime: string;
+}
+
+export interface SceneSaveDTO {
+  sceneName: string;
+  sceneDesc?: string;
+  status?: number;
+}
+
+export interface SceneActivateDTO {
+  active: boolean;
+}
+
+export interface AutomationRuleVO {
+  id: number;
+  ruleName: string;
+  ruleDesc: string;
+  triggerType: number;
+  triggerConfig: string;
+  actionType: number;
+  actionConfig: string;
+  status: number;
+  triggerCount: number;
+  lastExecuteTime: string;
+  createTime: string;
+  updateTime: string;
+}
+
+export interface AutomationRuleSaveDTO {
+  ruleName: string;
+  ruleDesc?: string;
+  triggerType: number;
+  triggerConfig?: string;
+  actionType: number;
+  actionConfig?: string;
+  status?: number;
+}
+
+export interface ControlCommandDTO {
+  command: string;
+  value?: string;
 }

@@ -123,6 +123,18 @@ export const iotRoutes: Routes = [
         meta: { title: '设备类型', permission: 'iot:device:type:list' },
       },
       {
+        path: '/iot/gateway',
+        name: 'GatewayManagement',
+        component: () => import('@/pages/iot/gateway'),
+        meta: { title: '网关管理', permission: 'iot:gateway:list' },
+      },
+      {
+        path: '/iot/plot',
+        name: 'PlotManagement',
+        component: () => import('@/pages/iot/plot'),
+        meta: { title: '地块管理', permission: 'iot:plot:list' },
+      },
+      {
         path: '/iot/data',
         name: 'DataMonitor',
         component: () => import('@/pages/iot/data'),
@@ -151,6 +163,18 @@ export const iotRoutes: Routes = [
         name: 'AutomationManagement',
         component: () => import('@/pages/iot/automation'),
         meta: { title: '自动化规则', permission: 'iot:automation:list' },
+      },
+      {
+        path: '/iot/firmware',
+        name: 'FirmwareManagement',
+        component: () => import('@/pages/iot/firmware'),
+        meta: { title: '固件管理', permission: 'iot:firmware:list' },
+      },
+      {
+        path: '/iot/ota',
+        name: 'OtaManagement',
+        component: () => import('@/pages/iot/ota'),
+        meta: { title: 'OTA升级', permission: 'iot:ota:list' },
       },
     ],
   },

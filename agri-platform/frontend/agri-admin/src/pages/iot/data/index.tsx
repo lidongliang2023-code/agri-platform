@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Typography, Table, Button, Tag } from 'antd';
-import { RefreshOutlined, ThermometerOutlined, DropletOutlined, SunOutlined, CloudOutlined } from '@ant-design/icons';
+import { Card, Table, Button, Tag } from 'antd';
+import { ReloadOutlined } from '@ant-design/icons';
 import { RealtimeDataVO } from '@/models/iot/device';
 import { dataApi } from '@/api/iot/device';
-
-const { Title, Paragraph } = Typography;
 
 const DataMonitor: React.FC = () => {
   const [loading, setLoading] = useState(false);
@@ -84,31 +82,35 @@ const DataMonitor: React.FC = () => {
     { title: '上报时间', dataIndex: 'reportTime', key: 'reportTime' },
   ];
 
-  const stats = [
-    { icon: ThermometerOutlined, label: '平均温度', value: dataList.length ? (dataList.reduce((sum, d) => sum + (d.temperature || 0), 0) / dataList.length).toFixed(1) : '-', unit: '℃' },
-    { icon: DropletOutlined, label: '平均湿度', value: dataList.length ? (dataList.reduce((sum, d) => sum + (d.humidity || 0), 0) / dataList.length).toFixed(1) : '-', unit: '%' },
-    { icon: SunOutlined, label: '平均光照', value: dataList.length ? (dataList.reduce((sum, d) => sum + (d.lightIntensity || 0), 0) / dataList.length).toFixed(0) : '-', unit: 'lux' },
-    { icon: CloudOutlined, label: '平均CO2', value: dataList.length ? (dataList.reduce((sum, d) => sum + (d.co2 || 0), 0) / dataList.length).toFixed(0) : '-', unit: 'ppm' },
-  ];
+  const avgTemp = dataList.length ? (dataList.reduce((sum, d) => sum + (d.temperature || 0), 0) / dataList.length).toFixed(1) : '-';
+  const avgHumidity = dataList.length ? (dataList.reduce((sum, d) => sum + (d.humidity || 0), 0) / dataList.length).toFixed(1) : '-';
+  const avgLight = dataList.length ? (dataList.reduce((sum, d) => sum + (d.lightIntensity || 0), 0) / dataList.length).toFixed(0) : '-';
+  const avgCO2 = dataList.length ? (dataList.reduce((sum, d) => sum + (d.co2 || 0), 0) / dataList.length).toFixed(0) : '-';
 
   return (
     <div className="page-container">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <h2>数据监测</h2>
-        <Button icon={<RefreshOutlined />} onClick={loadData} loading={loading}>刷新</Button>
+        <Button icon={<ReloadOutlined />} onClick={loadData} loading={loading}>刷新</Button>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 16 }}>
-        {stats.map((stat, index) => (
-          <Card key={index} style={{ textAlign: 'center' }}>
-            <stat.icon style={{ fontSize: 24, color: '#1890ff', marginBottom: 8 }} />
-            <div style={{ fontSize: 24, fontWeight: 'bold', color: '#1f1f1f' }}>
-              {stat.value}
-              <span style={{ fontSize: 14, fontWeight: 'normal', color: '#8c8c8c', marginLeft: 4 }}>{stat.unit}</span>
-            </div>
-            <div style={{ fontSize: 14, color: '#8c8c8c', marginTop: 8 }}>{stat.label}</div>
-          </Card>
-        ))}
+        <Card style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 24, fontWeight: 'bold', color: '#1890ff' }}>{avgTemp}</div>
+          <div style={{ fontSize: 14, color: '#8c8c8c', marginTop: 8 }}>平均温度(℃)</div>
+        </Card>
+        <Card style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 24, fontWeight: 'bold', color: '#52c41a' }}>{avgHumidity}</div>
+          <div style={{ fontSize: 14, color: '#8c8c8c', marginTop: 8 }}>平均湿度(%)</div>
+        </Card>
+        <Card style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 24, fontWeight: 'bold', color: '#faad14' }}>{avgLight}</div>
+          <div style={{ fontSize: 14, color: '#8c8c8c', marginTop: 8 }}>平均光照(lux)</div>
+        </Card>
+        <Card style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 24, fontWeight: 'bold', color: '#722ed1' }}>{avgCO2}</div>
+          <div style={{ fontSize: 14, color: '#8c8c8c', marginTop: 8 }}>平均CO2(ppm)</div>
+        </Card>
       </div>
 
       <Card title="实时数据">

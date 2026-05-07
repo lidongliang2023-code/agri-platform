@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Table, Button, Modal, Form, Input, Select, message, Popconfirm, Tag } from 'antd';
-import { AlertTriangleOutlined, CheckOutlined, ClockCircleOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
-import { AlertRecordVO, AlertRecordPageDTO, AlertHandleDTO } from '@/models/iot/device';
+import { Table, Button, Modal, Form, Input, Select, message, Tag } from 'antd';
+import { CheckOutlined, EyeOutlined } from '@ant-design/icons';
+import { AlertRecordVO, AlertRecordPageDTO } from '@/models/iot/device';
 import { alertRecordApi } from '@/api/iot/device';
 import { useTable } from '@/hooks/useTable';
 
@@ -41,7 +41,7 @@ const AlertManagement: React.FC = () => {
       await alertRecordApi.handle(record.id, { handleStatus: 3, handleResult: '已处理' });
       message.success('处理成功');
       refresh();
-    } catch (error) {
+    } catch {
       message.error('处理失败');
     }
   };
@@ -57,7 +57,7 @@ const AlertManagement: React.FC = () => {
       message.success('处理成功');
       setModalVisible(false);
       refresh();
-    } catch (error) {
+    } catch {
       message.error('处理失败');
     }
   };
@@ -72,16 +72,6 @@ const AlertManagement: React.FC = () => {
     }
   };
 
-  const getAlertLevelIcon = (level: number) => {
-    switch (level) {
-      case 1: return <AlertTriangleOutlined style={{ color: '#f5222d' }} />;
-      case 2: return <AlertTriangleOutlined style={{ color: '#fa8c16' }} />;
-      case 3: return <ClockCircleOutlined style={{ color: '#faad14' }} />;
-      case 4: return <ClockCircleOutlined style={{ color: '#1890ff' }} />;
-      default: return <ClockCircleOutlined />;
-    }
-  };
-
   const columns = [
     { title: '预警编号', dataIndex: 'alertNo', key: 'alertNo' },
     { 
@@ -89,12 +79,9 @@ const AlertManagement: React.FC = () => {
       dataIndex: 'alertLevel', 
       key: 'alertLevel',
       render: (level: number) => (
-        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {getAlertLevelIcon(level)}
-          <Tag color={getAlertLevelColor(level)}>
-            {level === 1 ? '紧急' : level === 2 ? '重要' : level === 3 ? '一般' : '提醒'}
-          </Tag>
-        </span>
+        <Tag color={getAlertLevelColor(level)}>
+          {level === 1 ? '紧急' : level === 2 ? '重要' : level === 3 ? '一般' : '提醒'}
+        </Tag>
       ),
     },
     { title: '规则名称', dataIndex: 'ruleName', key: 'ruleName' },
@@ -104,7 +91,7 @@ const AlertManagement: React.FC = () => {
     { 
       title: '触发值/阈值', 
       key: 'trigger',
-      render: (_, record: AlertRecordVO) => `${record.triggerValue} ${record.operator} ${record.thresholdValue}`,
+      render: (_: unknown, record: AlertRecordVO) => `${record.triggerValue} ${record.operator} ${record.thresholdValue}`,
     },
     { 
       title: '状态', 
@@ -145,7 +132,7 @@ const AlertManagement: React.FC = () => {
           <Input placeholder="规则名称" />
         </Form.Item>
         <Form.Item name="alertLevel">
-          <Select placeholder="预警级别">
+          <Select placeholder="预警级别" allowClear>
             <Select.Option value={1}>紧急</Select.Option>
             <Select.Option value={2}>重要</Select.Option>
             <Select.Option value={3}>一般</Select.Option>
@@ -153,7 +140,7 @@ const AlertManagement: React.FC = () => {
           </Select>
         </Form.Item>
         <Form.Item name="handleStatus">
-          <Select placeholder="处理状态">
+          <Select placeholder="处理状态" allowClear>
             <Select.Option value={1}>待处理</Select.Option>
             <Select.Option value={2}>处理中</Select.Option>
             <Select.Option value={3}>已处理</Select.Option>

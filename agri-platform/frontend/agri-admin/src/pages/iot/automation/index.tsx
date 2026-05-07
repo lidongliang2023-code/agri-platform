@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Table, Button, Modal, Form, Input, Select, message, Tag, Switch } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, ClockCircleOutlined } from '@ant-design/icons';
+import { Table, Button, Modal, Form, Input, Select, message, Switch } from 'antd';
+import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { AutomationRuleVO, AutomationRuleSaveDTO } from '@/models/iot/device';
 import { automationApi } from '@/api/iot/device';
 import { useTable } from '@/hooks/useTable';
@@ -48,11 +48,22 @@ const AutomationManagement: React.FC = () => {
     }
   };
 
-  const handleStatusChange = async (id: number, status: boolean) => {
+  const handleStatusChange = async (id: number, checked: boolean) => {
     try {
-      await automationApi.update(id, { status: status ? 1 : 0 });
-      message.success(status ? '已启用' : '已禁用');
-      refresh();
+      const record = data.list.find(item => item.id === id);
+      if (record) {
+        await automationApi.update(id, {
+          ruleName: record.ruleName,
+          ruleDesc: record.ruleDesc,
+          triggerType: record.triggerType,
+          triggerConfig: record.triggerConfig,
+          actionType: record.actionType,
+          actionConfig: record.actionConfig,
+          status: checked ? 1 : 0,
+        });
+        message.success(checked ? '已启用' : '已禁用');
+        refresh();
+      }
     } catch (error) {
       message.error('操作失败');
     }
@@ -114,10 +125,10 @@ const AutomationManagement: React.FC = () => {
       title: '状态', 
       dataIndex: 'status', 
       key: 'status',
-      render: (status: number) => (
+      render: (status: number, record: AutomationRuleVO) => (
         <Switch 
           checked={status === 1} 
-          onChange={(checked) => handleStatusChange((selectedRule?.id || 0), checked)}
+          onChange={(checked) => handleStatusChange(record.id!, checked)}
         />
       ),
     },
@@ -130,7 +141,7 @@ const AutomationManagement: React.FC = () => {
       render: (_: unknown, record: AutomationRuleVO) => (
         <div style={{ display: 'flex', gap: 8 }}>
           <Button icon={<EditOutlined />} size="small" onClick={() => handleEdit(record)}>编辑</Button>
-          <Button icon={<DeleteOutlined />} size="small" danger onClick={() => handleDelete(record.id)}>删除</Button>
+          <Button icon={<DeleteOutlined />} size="small" danger onClick={() => handleDelete(record.id!)}>删除</Button>
         </div>
       ),
     },
@@ -171,7 +182,7 @@ const AutomationManagement: React.FC = () => {
             <Input.TextArea rows={2} placeholder="请输入规则描述" />
           </Form.Item>
           <Form.Item name="triggerType" label="触发类型" rules={[{ required: true }]}>
-            <Select>
+            <Select placeholder="请选择触发类型">
               <Select.Option value={1}>定时触发</Select.Option>
               <Select.Option value={2}>条件触发</Select.Option>
               <Select.Option value={3}>设备触发</Select.Option>
@@ -182,7 +193,7 @@ const AutomationManagement: React.FC = () => {
             <Input.TextArea rows={3} placeholder="请输入触发配置（JSON格式）" />
           </Form.Item>
           <Form.Item name="actionType" label="动作类型" rules={[{ required: true }]}>
-            <Select>
+            <Select placeholder="请选择动作类型">
               <Select.Option value={1}>设备控制</Select.Option>
               <Select.Option value={2}>场景联动</Select.Option>
               <Select.Option value={3}>发送通知</Select.Option>
