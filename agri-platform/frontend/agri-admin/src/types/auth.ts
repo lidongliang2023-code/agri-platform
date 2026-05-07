@@ -6,9 +6,11 @@ export interface LoginVO {
 }
 
 export interface UserInfo {
-  userId: number;
+  id: number;
+  userId?: number;
   username: string;
-  nickname: string;
+  nickname?: string;
+  realName?: string;
   avatar?: string;
   tenantId?: string;
   permissions?: string[];

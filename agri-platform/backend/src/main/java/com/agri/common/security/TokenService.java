@@ -1,6 +1,6 @@
 package com.agri.common.security;
 
-import com.agri.common.constant.GlobalConstants;
+import com.agri.common.config.JwtProperties;
 import com.agri.common.constant.RedisKeys;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
@@ -21,10 +21,12 @@ public class TokenService {
 
     private final StringRedisTemplate redisTemplate;
     private final SecretKey secretKey;
+    private final JwtProperties jwtProperties;
 
-    public TokenService(StringRedisTemplate redisTemplate) {
+    public TokenService(StringRedisTemplate redisTemplate, JwtProperties jwtProperties) {
         this.redisTemplate = redisTemplate;
-        this.secretKey = Keys.hmacShaKeyFor(GlobalConstants.JWT_SECRET.getBytes(StandardCharsets.UTF_8));
+        this.jwtProperties = jwtProperties;
+        this.secretKey = Keys.hmacShaKeyFor(jwtProperties.getSecret().getBytes(StandardCharsets.UTF_8));
     }
 
     public String createToken(LoginUser loginUser) {
@@ -39,13 +41,13 @@ public class TokenService {
                 .claims(claims)
                 .subject(loginUser.getUsername())
                 .issuedAt(new Date())
-                .expiration(new Date(System.currentTimeMillis() + GlobalConstants.JWT_EXPIRATION))
+                .expiration(new Date(System.currentTimeMillis() + jwtProperties.getExpiration()))
                 .signWith(secretKey)
                 .compact();
 
         String tokenKey = RedisKeys.getTokenKey(token);
         redisTemplate.opsForValue().set(tokenKey, String.valueOf(loginUser.getUserId()),
-                GlobalConstants.JWT_EXPIRATION, TimeUnit.MILLISECONDS);
+                jwtProperties.getExpiration(), TimeUnit.MILLISECONDS);
 
         loginUser.setToken(token);
         return token;
@@ -101,6 +103,6 @@ public class TokenService {
 
     public void refreshToken(LoginUser loginUser) {
         String tokenKey = RedisKeys.getTokenKey(loginUser.getToken());
-        redisTemplate.expire(tokenKey, GlobalConstants.JWT_EXPIRATION, TimeUnit.MILLISECONDS);
+        redisTemplate.expire(tokenKey, jwtProperties.getExpiration(), TimeUnit.MILLISECONDS);
     }
 }

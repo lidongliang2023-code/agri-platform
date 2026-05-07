@@ -1,193 +1,202 @@
 import React, { useState } from 'react';
-import { Outlet, useNavigate } from 'react-router-dom';
-import { Layout, Menu, Avatar, Dropdown, theme } from 'antd';
-import {
-  DashboardOutlined,
-  DatabaseOutlined,
-  ExperimentOutlined,
-  ShoppingOutlined,
-  ShopOutlined,
-  FundOutlined,
-  FileTextOutlined,
-  CarOutlined,
-  SafetyOutlined,
-  SettingOutlined,
-  LogoutOutlined,
+import { Layout, Menu, Avatar, Dropdown, Button } from 'antd';
+import { 
+  SettingOutlined, 
+  AppstoreOutlined, 
+  TeamOutlined, 
+  ShopOutlined, 
+  BookOutlined, 
+  HomeOutlined,
   UserOutlined,
+  LogoutOutlined,
   MenuFoldOutlined,
-  MenuUnfoldOutlined,
+  MenuUnfoldOutlined
 } from '@ant-design/icons';
+import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/store/auth';
-import './index.css';
 
 const { Header, Sider, Content } = Layout;
 
-const LayoutPage: React.FC = () => {
-  const [collapsed, setCollapsed] = useState(false);
-  const navigate = useNavigate();
-  const { userInfo, logout } = useAuthStore();
-  const { token } = theme.useToken();
+const iconMap: { [key: string]: React.ReactNode } = {
+  SettingOutlined: <SettingOutlined />,
+  AppstoreOutlined: <AppstoreOutlined />,
+  TeamOutlined: <TeamOutlined />,
+  ShopOutlined: <ShopOutlined />,
+  BookOutlined: <BookOutlined />,
+  HomeOutlined: <HomeOutlined />,
+};
 
-  const menuItems = [
+interface MenuItem {
+  id: number;
+  menuName: string;
+  path: string;
+  menuType: string;
+  icon?: string;
+  parentId?: number;
+  children?: MenuItem[];
+}
+
+const LayoutComponent: React.FC = () => {
+  const [collapsed, setCollapsed] = useState(false);
+  const { userInfo, logout } = useAuthStore();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const menuData: MenuItem[] = [
     {
-      key: '/dashboard',
-      icon: <DashboardOutlined />,
-      label: '工作台',
-    },
-    {
-      key: 'system',
-      icon: <SettingOutlined />,
-      label: '系统管理',
+      id: 6,
+      menuName: '工作台',
+      path: '/dashboard',
+      menuType: 'M',
+      icon: 'HomeOutlined',
       children: [
         {
-          key: '/system/user',
-          icon: <UserOutlined />,
-          label: '用户管理',
-        },
-        {
-          key: '/system/role',
-          icon: <SafetyOutlined />,
-          label: '角色管理',
+          id: 601,
+          menuName: '工作台首页',
+          path: '/dashboard/index',
+          menuType: 'C',
+          parentId: 6,
         },
       ],
     },
     {
-      key: 'masterdata',
-      icon: <DatabaseOutlined />,
-      label: '主数据',
+      id: 1,
+      menuName: '系统管理',
+      path: '/system',
+      menuType: 'M',
+      icon: 'SettingOutlined',
       children: [
-        {
-          key: '/masterdata/product',
-          icon: <ShoppingOutlined />,
-          label: '商品管理',
-        },
-        {
-          key: '/masterdata/customer',
-          icon: <UserOutlined />,
-          label: '客户管理',
-        },
-        {
-          key: '/masterdata/supplier',
-          icon: <ShopOutlined />,
-          label: '供应商管理',
-        },
+        { id: 101, menuName: '用户管理', path: '/system/user', menuType: 'C', parentId: 1 },
+        { id: 102, menuName: '角色管理', path: '/system/role', menuType: 'C', parentId: 1 },
+        { id: 103, menuName: '菜单管理', path: '/system/menu', menuType: 'C', parentId: 1 },
+        { id: 104, menuName: '组织管理', path: '/system/organization', menuType: 'C', parentId: 1 },
       ],
     },
     {
-      key: 'production',
-      icon: <ExperimentOutlined />,
-      label: '生产管理',
+      id: 2,
+      menuName: '商品管理',
+      path: '/product',
+      menuType: 'M',
+      icon: 'AppstoreOutlined',
+      children: [
+        { id: 201, menuName: '商品列表', path: '/product/list', menuType: 'C', parentId: 2 },
+        { id: 202, menuName: '商品分类', path: '/product/category', menuType: 'C', parentId: 2 },
+      ],
     },
     {
-      key: 'trade',
-      icon: <ShoppingOutlined />,
-      label: '交易撮合',
+      id: 3,
+      menuName: '客户管理',
+      path: '/customer',
+      menuType: 'M',
+      icon: 'TeamOutlined',
+      children: [
+        { id: 301, menuName: '客户列表', path: '/customer/list', menuType: 'C', parentId: 3 },
+      ],
     },
     {
-      key: 's2b2c',
-      icon: <ShopOutlined />,
-      label: 'S2B2C',
+      id: 4,
+      menuName: '供应商管理',
+      path: '/supplier',
+      menuType: 'M',
+      icon: 'ShopOutlined',
+      children: [
+        { id: 401, menuName: '供应商列表', path: '/supplier/list', menuType: 'C', parentId: 4 },
+      ],
     },
     {
-      key: 'finance',
-      icon: <FundOutlined />,
-      label: '供应链金融',
-    },
-    {
-      key: 'info',
-      icon: <FileTextOutlined />,
-      label: '信息资讯',
-    },
-    {
-      key: 'service',
-      icon: <CarOutlined />,
-      label: '综合服务',
-    },
-    {
-      key: 'supervision',
-      icon: <SafetyOutlined />,
-      label: '政府监管',
+      id: 5,
+      menuName: '数据字典',
+      path: '/dict',
+      menuType: 'M',
+      icon: 'BookOutlined',
+      children: [
+        { id: 501, menuName: '字典管理', path: '/dict/list', menuType: 'C', parentId: 5 },
+      ],
     },
   ];
-
-  const handleMenuClick = (key: string) => {
-    navigate(key);
-  };
 
   const handleLogout = () => {
     logout();
     navigate('/login');
   };
 
-  const userMenuItems = [
-    {
-      key: 'profile',
-      icon: <UserOutlined />,
-      label: '个人中心',
-    },
-    {
-      key: 'settings',
-      icon: <SettingOutlined />,
-      label: '系统设置',
-    },
-    {
-      type: 'divider' as const,
-    },
-    {
-      key: 'logout',
-      icon: <LogoutOutlined />,
-      label: '退出登录',
-      onClick: handleLogout,
-    },
-  ];
+  const userMenu = (
+    <Menu>
+      <Menu.Item onClick={handleLogout} icon={<LogoutOutlined />}>
+        退出登录
+      </Menu.Item>
+    </Menu>
+  );
+
+  const renderMenuItems = (menus: MenuItem[]): React.ReactNode => {
+    return menus.map((menu) => {
+      if (menu.children && menu.children.length > 0) {
+        return (
+          <Menu.SubMenu
+            key={menu.id}
+            title={
+              <span>
+                {iconMap[menu.icon || 'SettingOutlined']}
+                <span>{menu.menuName}</span>
+              </span>
+            }
+          >
+            {renderMenuItems(menu.children)}
+          </Menu.SubMenu>
+        );
+      }
+      return (
+        <Menu.Item
+          key={menu.id}
+          onClick={() => navigate(menu.path)}
+          className={location.pathname === menu.path ? 'ant-menu-item-selected' : ''}
+        >
+          <span>{menu.menuName}</span>
+        </Menu.Item>
+      );
+    });
+  };
 
   return (
-    <Layout className="app-layout">
+    <Layout style={{ height: '100%' }}>
       <Sider
         trigger={null}
         collapsible
         collapsed={collapsed}
-        width={220}
         style={{
-          overflow: 'auto',
-          height: '100vh',
-          position: 'fixed',
-          left: 0,
-          top: 0,
-          bottom: 0,
+          background: '#001529',
         }}
       >
-        <div className="logo" style={{ height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: collapsed ? 16 : 18, fontWeight: 'bold' }}>
-          {collapsed ? '农业' : '农业产业互联网平台'}
+        <div className="logo" style={{ padding: '16px', color: '#fff', textAlign: 'center', fontWeight: 'bold' }}>
+          {collapsed ? 'AG' : '农业平台'}
         </div>
         <Menu
-          theme="dark"
           mode="inline"
-          defaultSelectedKeys={['/dashboard']}
-          items={menuItems}
-          onClick={({ key }) => handleMenuClick(key)}
-        />
+          theme="dark"
+        >
+          {renderMenuItems(menuData)}
+        </Menu>
       </Sider>
-
-      <Layout style={{ marginLeft: collapsed ? 80 : 220, transition: 'margin-left 0.2s' }}>
-        <Header style={{ padding: '0 16px', background: token.colorBgContainer, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div onClick={() => setCollapsed(!collapsed)} style={{ fontSize: 18, cursor: 'pointer' }}>
-            {collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                <Avatar style={{ backgroundColor: token.colorPrimary }}>
-                  {userInfo?.nickname?.charAt(0) || 'U'}
-                </Avatar>
-                <span>{userInfo?.nickname || '用户'}</span>
-              </div>
-            </Dropdown>
-          </div>
+      <Layout>
+        <Header style={{ padding: 0, background: '#fff', borderBottom: '1px solid #e8e8e8', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Button
+            type="text"
+            icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+            onClick={() => setCollapsed(!collapsed)}
+            style={{
+              fontSize: '16px',
+              width: 64,
+              height: 64,
+            }}
+          />
+          <Dropdown overlay={userMenu} placement="bottomRight">
+            <div style={{ display: 'flex', alignItems: 'center', padding: '0 24px', cursor: 'pointer' }}>
+              <Avatar icon={<UserOutlined />} />
+              <span style={{ marginLeft: 8 }}>{userInfo?.realName || userInfo?.username || '管理员'}</span>
+            </div>
+          </Dropdown>
         </Header>
-
-        <Content style={{ margin: '16px', minHeight: 'calc(100vh - 64px)' }}>
+        <Content style={{ margin: 0, overflow: 'auto' }}>
           <Outlet />
         </Content>
       </Layout>
@@ -195,4 +204,4 @@ const LayoutPage: React.FC = () => {
   );
 };
 
-export default LayoutPage;
+export default LayoutComponent;
