@@ -1,25 +1,25 @@
-package com.agri.iot.entity;
+package com.agri.iot.vo;
 
-import com.agri.common.entity.BaseEntity;
-import com.baomidou.mybatisplus.annotation.TableName;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
-import lombok.EqualsAndHashCode;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Data
-@EqualsAndHashCode(callSuper = true)
-@TableName("agri_iot_device_data")
-public class DeviceData extends BaseEntity {
+public class RealtimeDataVO {
 
     private Long deviceId;
 
     private String deviceCode;
 
+    private String deviceName;
+
+    private String deviceTypeName;
+
     private Long plotId;
 
-    private String dataJson;
+    private String plotName;
 
     private BigDecimal temperature;
 
@@ -37,7 +37,8 @@ public class DeviceData extends BaseEntity {
 
     private String deviceStatus;
 
-    private LocalDateTime reportTime;
+    private String onlineStatus;
 
-    private Integer delFlag;
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime reportTime;
 }

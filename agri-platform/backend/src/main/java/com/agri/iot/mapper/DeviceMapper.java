@@ -19,4 +19,6 @@ public interface DeviceMapper extends BaseMapper<Device> {
     DeviceVO selectDeviceById(@Param("id") Long id);
 
     Device selectByDeviceCode(@Param("deviceCode") String deviceCode);
+
+    List<Device> selectOnlineDevices();
 }

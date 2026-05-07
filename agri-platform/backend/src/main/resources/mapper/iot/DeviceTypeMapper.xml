@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.agri.iot.mapper.DeviceTypeMapper">
+
+    <select id="selectPageVO" resultType="com.agri.iot.vo.DeviceTypeVO">
+        SELECT id, type_code AS typeCode, type_name AS typeName, type_category AS typeCategory,
+               CASE type_category WHEN 'sensor' THEN '传感器' WHEN 'controller' THEN '控制器' WHEN 'gateway' THEN '网关' ELSE '其他' END AS typeCategoryText,
+               icon, protocol, manufacturer, model, spec_json AS specJson, status,
+               CASE status WHEN 1 THEN '正常' ELSE '禁用' END AS statusText,
+               create_by AS createBy, create_time AS createTime
+        FROM agri_iot_device_type
+        WHERE del_flag = 0
+        <if test="dto.typeCode != null and dto.typeCode != ''">
+            AND type_code LIKE CONCAT('%', #{dto.typeCode}, '%')
+        </if>
+        <if test="dto.typeName != null and dto.typeName != ''">
+            AND type_name LIKE CONCAT('%', #{dto.typeName}, '%')
+        </if>
+        <if test="dto.typeCategory != null and dto.typeCategory != ''">
+            AND type_category = #{dto.typeCategory}
+        </if>
+        <if test="dto.status != null">
+            AND status = #{dto.status}
+        </if>
+        ORDER BY create_time DESC
+        LIMIT #{dto.pageNum}, #{dto.pageSize}
+    </select>
+
+    <select id="selectCount" resultType="long">
+        SELECT COUNT(*)
+        FROM agri_iot_device_type
+        WHERE del_flag = 0
+        <if test="dto.typeCode != null and dto.typeCode != ''">
+            AND type_code LIKE CONCAT('%', #{dto.typeCode}, '%')
+        </if>
+        <if test="dto.typeName != null and dto.typeName != ''">
+            AND type_name LIKE CONCAT('%', #{dto.typeName}, '%')
+        </if>
+        <if test="dto.typeCategory != null and dto.typeCategory != ''">
+            AND type_category = #{dto.typeCategory}
+        </if>
+        <if test="dto.status != null">
+            AND status = #{dto.status}
+        </if>
+    </select>
+
+    <select id="selectVOById" resultType="com.agri.iot.vo.DeviceTypeVO">
+        SELECT id, type_code AS typeCode, type_name AS typeName, type_category AS typeCategory,
+               CASE type_category WHEN 'sensor' THEN '传感器' WHEN 'controller' THEN '控制器' WHEN 'gateway' THEN '网关' ELSE '其他' END AS typeCategoryText,
+               icon, protocol, manufacturer, model, spec_json AS specJson, status,
+               CASE status WHEN 1 THEN '正常' ELSE '禁用' END AS statusText,
+               create_by AS createBy, create_time AS createTime
+        FROM agri_iot_device_type
+        WHERE id = #{id} AND del_flag = 0
+    </select>
+
+    <select id="selectByTypeCode" resultType="com.agri.iot.entity.DeviceType">
+        SELECT * FROM agri_iot_device_type WHERE type_code = #{typeCode} AND del_flag = 0
+    </select>
+
+    <select id="selectAllVO" resultType="com.agri.iot.vo.DeviceTypeVO">
+        SELECT id, type_code AS typeCode, type_name AS typeName, type_category AS typeCategory,
+               CASE type_category WHEN 'sensor' THEN '传感器' WHEN 'controller' THEN '控制器' WHEN 'gateway' THEN '网关' ELSE '其他' END AS typeCategoryText,
+               icon, protocol, manufacturer, model, status,
+               CASE status WHEN 1 THEN '正常' ELSE '禁用' END AS statusText
+        FROM agri_iot_device_type
+        WHERE del_flag = 0 AND status = 1
+        ORDER BY sort_order ASC, create_time DESC
+    </select>
+</mapper>

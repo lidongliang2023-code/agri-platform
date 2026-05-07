@@ -16,19 +16,33 @@ public class Device extends BaseEntity {
 
     private String deviceName;
 
-    private String deviceType;
+    private Long deviceTypeId;
 
-    private String deviceModel;
+    private Long gatewayId;
 
-    private String manufacturer;
+    private Long parentId;
 
-    private String installationLocation;
+    private Long plotId;
 
-    private BigDecimal latitude;
+    private BigDecimal locationLat;
 
-    private BigDecimal longitude;
+    private BigDecimal locationLng;
 
-    private Long orgId;
+    private String locationName;
+
+    private Integer onlineStatus;
+
+    private java.time.LocalDateTime lastOnlineTime;
+
+    private java.time.LocalDateTime lastReportTime;
+
+    private String deviceStatus;
+
+    private String protocol;
+
+    private String firmwareVersion;
+
+    private String configJson;
 
     private Integer status;
 

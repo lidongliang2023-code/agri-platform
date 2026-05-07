@@ -1,14 +1,14 @@
-package com.agri.iot.entity;
+package com.agri.iot.vo;
 
-import com.agri.common.entity.BaseEntity;
-import com.baomidou.mybatisplus.annotation.TableName;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
-import lombok.EqualsAndHashCode;
+
+import java.time.LocalDateTime;
 
 @Data
-@EqualsAndHashCode(callSuper = true)
-@TableName("agri_iot_alert_rule")
-public class AlertRule extends BaseEntity {
+public class AlertRuleVO {
+
+    private Long id;
 
     private String ruleCode;
 
@@ -16,7 +16,11 @@ public class AlertRule extends BaseEntity {
 
     private String ruleType;
 
+    private String ruleTypeText;
+
     private Long deviceTypeId;
+
+    private String deviceTypeName;
 
     private String propertyCode;
 
@@ -30,11 +34,18 @@ public class AlertRule extends BaseEntity {
 
     private Integer alertLevel;
 
+    private String alertLevelText;
+
     private String alertChannel;
 
     private String alertTemplate;
 
     private Integer enableStatus;
 
-    private Integer delFlag;
+    private String enableStatusText;
+
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime createTime;
+
+    private String createBy;
 }

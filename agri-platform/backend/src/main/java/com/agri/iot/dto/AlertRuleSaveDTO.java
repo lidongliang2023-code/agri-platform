@@ -1,17 +1,16 @@
-package com.agri.iot.entity;
+package com.agri.iot.dto;
 
-import com.agri.common.entity.BaseEntity;
-import com.baomidou.mybatisplus.annotation.TableName;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import lombok.Data;
-import lombok.EqualsAndHashCode;
 
 @Data
-@EqualsAndHashCode(callSuper = true)
-@TableName("agri_iot_alert_rule")
-public class AlertRule extends BaseEntity {
+public class AlertRuleSaveDTO {
 
+    @NotBlank(message = "规则编码不能为空")
     private String ruleCode;
 
+    @NotBlank(message = "规则名称不能为空")
     private String ruleName;
 
     private String ruleType;
@@ -22,12 +21,15 @@ public class AlertRule extends BaseEntity {
 
     private String propertyName;
 
+    @NotBlank(message = "运算符不能为空")
     private String operator;
 
+    @NotBlank(message = "阈值不能为空")
     private String thresholdValue;
 
     private Integer durationSeconds;
 
+    @NotNull(message = "告警级别不能为空")
     private Integer alertLevel;
 
     private String alertChannel;
@@ -35,6 +37,4 @@ public class AlertRule extends BaseEntity {
     private String alertTemplate;
 
     private Integer enableStatus;
-
-    private Integer delFlag;
 }

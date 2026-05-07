@@ -1,14 +1,13 @@
-package com.agri.iot.entity;
+package com.agri.iot.dto;
 
-import com.agri.common.entity.BaseEntity;
-import com.baomidou.mybatisplus.annotation.TableName;
+import jakarta.validation.constraints.NotNull;
 import lombok.Data;
-import lombok.EqualsAndHashCode;
 
 @Data
-@EqualsAndHashCode(callSuper = true)
-@TableName("agri_iot_alert_rule")
-public class AlertRule extends BaseEntity {
+public class AlertRuleUpdateDTO {
+
+    @NotNull(message = "规则ID不能为空")
+    private Long id;
 
     private String ruleCode;
 
@@ -35,6 +34,4 @@ public class AlertRule extends BaseEntity {
     private String alertTemplate;
 
     private Integer enableStatus;
-
-    private Integer delFlag;
 }

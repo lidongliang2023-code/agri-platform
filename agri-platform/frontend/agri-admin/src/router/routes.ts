@@ -117,6 +117,12 @@ export const iotRoutes: Routes = [
         meta: { title: '设备管理', permission: 'iot:device:list' },
       },
       {
+        path: '/iot/device-type',
+        name: 'DeviceTypeManagement',
+        component: () => import('@/pages/iot/device-type'),
+        meta: { title: '设备类型', permission: 'iot:device:type:list' },
+      },
+      {
         path: '/iot/data',
         name: 'DataMonitor',
         component: () => import('@/pages/iot/data'),
@@ -127,6 +133,24 @@ export const iotRoutes: Routes = [
         name: 'AlertManagement',
         component: () => import('@/pages/iot/alert'),
         meta: { title: '预警管理', permission: 'iot:alert:list' },
+      },
+      {
+        path: '/iot/control',
+        name: 'ControlManagement',
+        component: () => import('@/pages/iot/control'),
+        meta: { title: '远程控制', permission: 'iot:control:list' },
+      },
+      {
+        path: '/iot/scene',
+        name: 'SceneManagement',
+        component: () => import('@/pages/iot/scene'),
+        meta: { title: '场景模式', permission: 'iot:scene:list' },
+      },
+      {
+        path: '/iot/automation',
+        name: 'AutomationManagement',
+        component: () => import('@/pages/iot/automation'),
+        meta: { title: '自动化规则', permission: 'iot:automation:list' },
       },
     ],
   },

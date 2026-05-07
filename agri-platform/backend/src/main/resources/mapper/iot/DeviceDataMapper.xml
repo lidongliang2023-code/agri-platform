@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.agri.iot.mapper.DeviceDataMapper">
+
+    <select id="selectHistoryData" resultType="com.agri.iot.vo.DeviceDataVO">
+        SELECT dd.id, dd.device_id AS deviceId, dd.device_code AS deviceCode,
+               d.device_name AS deviceName, dd.plot_id AS plotId,
+               p.plot_name AS plotName, dd.data_json AS dataJson,
+               dd.temperature, dd.humidity, dd.soil_moisture AS soilMoisture,
+               dd.soil_temp AS soilTemp, dd.ph, dd.light_intensity AS lightIntensity,
+               dd.co2, dd.device_status AS deviceStatus,
+               dd.report_time AS reportTime, dd.create_time AS createTime
+        FROM agri_iot_device_data dd
+        LEFT JOIN agri_iot_device d ON dd.device_id = d.id
+        LEFT JOIN agri_iot_plot p ON dd.plot_id = p.id
+        WHERE dd.device_id = #{deviceId}
+        <if test="startTime != null">
+            AND dd.report_time >= #{startTime}
+        </if>
+        <if test="endTime != null">
+            AND dd.report_time <= #{endTime}
+        </if>
+        ORDER BY dd.report_time DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="selectHistoryCount" resultType="long">
+        SELECT COUNT(*)
+        FROM agri_iot_device_data dd
+        WHERE dd.device_id = #{deviceId}
+        <if test="startTime != null">
+            AND dd.report_time >= #{startTime}
+        </if>
+        <if test="endTime != null">
+            AND dd.report_time <= #{endTime}
+        </if>
+    </select>
+
+    <select id="selectRealtimeData" resultType="com.agri.iot.vo.RealtimeDataVO">
+        SELECT dd.device_id AS deviceId, dd.device_code AS deviceCode,
+               d.device_name AS deviceName, dt.type_name AS deviceTypeName,
+               dd.plot_id AS plotId, p.plot_name AS plotName,
+               dd.temperature, dd.humidity, dd.soil_moisture AS soilMoisture,
+               dd.soil_temp AS soilTemp, dd.ph, dd.light_intensity AS lightIntensity,
+               dd.co2, dd.device_status AS deviceStatus,
+               d.online_status AS onlineStatus, dd.report_time AS reportTime
+        FROM agri_iot_device_data dd
+        LEFT JOIN agri_iot_device d ON dd.device_id = d.id
+        LEFT JOIN agri_iot_device_type dt ON d.device_type_id = dt.id
+        LEFT JOIN agri_iot_plot p ON dd.plot_id = p.id
+        WHERE dd.device_id = #{deviceId}
+        ORDER BY dd.report_time DESC
+        LIMIT 1
+    </select>
+
+    <select id="selectPlotRealtimeData" resultType="com.agri.iot.vo.RealtimeDataVO">
+        SELECT dd.device_id AS deviceId, dd.device_code AS deviceCode,
+               d.device_name AS deviceName, dt.type_name AS deviceTypeName,
+               dd.plot_id AS plotId, p.plot_name AS plotName,
+               dd.temperature, dd.humidity, dd.soil_moisture AS soilMoisture,
+               dd.soil_temp AS soilTemp, dd.ph, dd.light_intensity AS lightIntensity,
+               dd.co2, dd.device_status AS deviceStatus,
+               d.online_status AS onlineStatus, dd.report_time AS reportTime
+        FROM agri_iot_device_data dd
+        LEFT JOIN agri_iot_device d ON dd.device_id = d.id
+        LEFT JOIN agri_iot_device_type dt ON d.device_type_id = dt.id
+        LEFT JOIN agri_iot_plot p ON dd.plot_id = p.id
+        WHERE dd.plot_id = #{plotId}
+        ORDER BY dd.report_time DESC
+    </select>
+</mapper>

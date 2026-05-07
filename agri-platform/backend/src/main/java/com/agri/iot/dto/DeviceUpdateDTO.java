@@ -15,19 +15,25 @@ public class DeviceUpdateDTO {
 
     private String deviceName;
 
-    private String deviceType;
+    private Long deviceTypeId;
 
-    private String deviceModel;
+    private Long gatewayId;
 
-    private String manufacturer;
+    private Long parentId;
 
-    private String installationLocation;
+    private Long plotId;
 
-    private BigDecimal latitude;
+    private BigDecimal locationLat;
 
-    private BigDecimal longitude;
+    private BigDecimal locationLng;
 
-    private Long orgId;
+    private String locationName;
+
+    private String protocol;
+
+    private String firmwareVersion;
+
+    private String configJson;
 
     private Integer status;
 }

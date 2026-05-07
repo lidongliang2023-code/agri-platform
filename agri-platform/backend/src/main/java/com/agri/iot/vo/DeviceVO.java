@@ -15,24 +15,48 @@ public class DeviceVO {
 
     private String deviceName;
 
-    private String deviceType;
+    private Long deviceTypeId;
 
-    private String deviceModel;
+    private String deviceTypeName;
 
-    private String manufacturer;
+    private String deviceTypeCategory;
 
-    private String installationLocation;
+    private Long gatewayId;
 
-    private BigDecimal latitude;
+    private String gatewayName;
 
-    private BigDecimal longitude;
+    private Long plotId;
 
-    private Long orgId;
+    private String plotName;
 
-    private String orgName;
+    private BigDecimal locationLat;
+
+    private BigDecimal locationLng;
+
+    private String locationName;
+
+    private Integer onlineStatus;
+
+    private String onlineStatusText;
+
+    private LocalDateTime lastOnlineTime;
+
+    private LocalDateTime lastReportTime;
+
+    private String deviceStatus;
+
+    private String deviceStatusText;
+
+    private String protocol;
+
+    private String firmwareVersion;
 
     private Integer status;
 
+    private String statusText;
+
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime createTime;
+
+    private String createBy;
 }

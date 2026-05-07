@@ -12,9 +12,11 @@ public class DevicePageDTO extends PageVO {
 
     private String deviceName;
 
-    private String deviceType;
+    private Long deviceTypeId;
 
-    private Long orgId;
+    private Long plotId;
+
+    private Integer onlineStatus;
 
     private Integer status;
 }
