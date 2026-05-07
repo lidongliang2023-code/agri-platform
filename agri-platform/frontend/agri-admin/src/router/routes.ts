@@ -104,6 +104,34 @@ export const dictRoutes: Routes = [
   },
 ];
 
+export const iotRoutes: Routes = [
+  {
+    path: '/iot',
+    name: 'IoTManagement',
+    icon: 'DashboardOutlined',
+    children: [
+      {
+        path: '/iot/device',
+        name: 'DeviceManagement',
+        component: () => import('@/pages/iot/device'),
+        meta: { title: '设备管理', permission: 'iot:device:list' },
+      },
+      {
+        path: '/iot/data',
+        name: 'DataMonitor',
+        component: () => import('@/pages/iot/data'),
+        meta: { title: '数据监测', permission: 'iot:data:list' },
+      },
+      {
+        path: '/iot/alert',
+        name: 'AlertManagement',
+        component: () => import('@/pages/iot/alert'),
+        meta: { title: '预警管理', permission: 'iot:alert:list' },
+      },
+    ],
+  },
+];
+
 export const dashboardRoutes: Routes = [
   {
     path: '/dashboard',
@@ -123,6 +151,7 @@ export const dashboardRoutes: Routes = [
 export const allRoutes: Routes = [
   ...dashboardRoutes,
   ...systemRoutes,
+  ...iotRoutes,
   ...productRoutes,
   ...customerRoutes,
   ...supplierRoutes,

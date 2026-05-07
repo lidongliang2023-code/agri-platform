@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.agri.iot.mapper.DeviceMapper">
+
+    <select id="selectDevicePage" resultType="com.agri.iot.vo.DeviceVO">
+        SELECT d.*, o.org_name AS orgName
+        FROM agri_iot_device d
+        LEFT JOIN agri_md_organization o ON d.org_id = o.id
+        WHERE d.del_flag = 0
+        <if test="dto.deviceCode != null and dto.deviceCode != ''">
+            AND d.device_code LIKE CONCAT('%', #{dto.deviceCode}, '%')
+        </if>
+        <if test="dto.deviceName != null and dto.deviceName != ''">
+            AND d.device_name LIKE CONCAT('%', #{dto.deviceName}, '%')
+        </if>
+        <if test="dto.deviceType != null and dto.deviceType != ''">
+            AND d.device_type = #{dto.deviceType}
+        </if>
+        <if test="dto.orgId != null">
+            AND d.org_id = #{dto.orgId}
+        </if>
+        <if test="dto.status != null">
+            AND d.status = #{dto.status}
+        </if>
+        ORDER BY d.create_time DESC
+        LIMIT #{dto.pageNum}, #{dto.pageSize}
+    </select>
+
+    <select id="selectDeviceCount" resultType="long">
+        SELECT COUNT(*)
+        FROM agri_iot_device d
+        WHERE d.del_flag = 0
+        <if test="dto.deviceCode != null and dto.deviceCode != ''">
+            AND d.device_code LIKE CONCAT('%', #{dto.deviceCode}, '%')
+        </if>
+        <if test="dto.deviceName != null and dto.deviceName != ''">
+            AND d.device_name LIKE CONCAT('%', #{dto.deviceName}, '%')
+        </if>
+        <if test="dto.deviceType != null and dto.deviceType != ''">
+            AND d.device_type = #{dto.deviceType}
+        </if>
+        <if test="dto.orgId != null">
+            AND d.org_id = #{dto.orgId}
+        </if>
+        <if test="dto.status != null">
+            AND d.status = #{dto.status}
+        </if>
+    </select>
+
+    <select id="selectDeviceById" resultType="com.agri.iot.vo.DeviceVO">
+        SELECT d.*, o.org_name AS orgName
+        FROM agri_iot_device d
+        LEFT JOIN agri_md_organization o ON d.org_id = o.id
+        WHERE d.id = #{id} AND d.del_flag = 0
+    </select>
+
+    <select id="selectByDeviceCode" resultType="com.agri.iot.entity.Device">
+        SELECT * FROM agri_iot_device WHERE device_code = #{deviceCode} AND del_flag = 0
+    </select>
+</mapper>
