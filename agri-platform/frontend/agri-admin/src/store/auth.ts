@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { LoginVO, UserInfo } from '@/types/auth';
+import request from '@/utils/request';
 
 interface AuthState {
   token: string | null;
@@ -52,15 +53,7 @@ export const useAuthStore = create<AuthState>()(
         if (!token) return;
 
         try {
-          const response = await fetch('/api/auth/check', {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          });
-
-          if (!response.ok) {
-            get().logout();
-          }
+          await request.get('/api/auth/check');
         } catch {
           get().logout();
         }

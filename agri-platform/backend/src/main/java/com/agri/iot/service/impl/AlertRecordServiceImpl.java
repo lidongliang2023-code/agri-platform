@@ -149,7 +149,8 @@ public class AlertRecordServiceImpl implements IAlertRecordService {
         record.setAlertLevel(rule.getAlertLevel());
         record.setPropertyCode(rule.getPropertyCode());
         record.setPropertyName(rule.getPropertyName());
-        record.setTriggerValue(getPropertyValue(rule.getPropertyCode(), data)?.toString());
+        BigDecimal value = getPropertyValue(rule.getPropertyCode(), data);
+        record.setTriggerValue(value != null ? value.toString() : null);
         record.setThresholdValue(rule.getThresholdValue());
         record.setAlertContent(buildAlertContent(rule, device, data));
         record.setAlertTime(LocalDateTime.now());

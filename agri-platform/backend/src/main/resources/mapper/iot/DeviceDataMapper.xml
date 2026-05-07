@@ -18,7 +18,7 @@
             AND dd.report_time >= #{startTime}
         </if>
         <if test="endTime != null">
-            AND dd.report_time <= #{endTime}
+            AND dd.report_time &lt;= #{endTime}
         </if>
         ORDER BY dd.report_time DESC
         LIMIT #{offset}, #{limit}
@@ -32,7 +32,7 @@
             AND dd.report_time >= #{startTime}
         </if>
         <if test="endTime != null">
-            AND dd.report_time <= #{endTime}
+            AND dd.report_time &lt;= #{endTime}
         </if>
     </select>
 

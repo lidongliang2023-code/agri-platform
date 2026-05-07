@@ -42,7 +42,7 @@
             AND ar.alert_time >= #{dto.startTime}
         </if>
         <if test="dto.endTime != null">
-            AND ar.alert_time <= #{dto.endTime}
+            AND ar.alert_time &lt;= #{dto.endTime}
         </if>
         ORDER BY ar.alert_time DESC
         LIMIT #{dto.pageNum}, #{dto.pageSize}
@@ -77,7 +77,7 @@
             AND ar.alert_time >= #{dto.startTime}
         </if>
         <if test="dto.endTime != null">
-            AND ar.alert_time <= #{dto.endTime}
+            AND ar.alert_time &lt;= #{dto.endTime}
         </if>
     </select>
 

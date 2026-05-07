@@ -7,7 +7,7 @@ import com.agri.common.security.LoginUser;
 import com.agri.masterdata.dto.UserSaveDTO;
 import com.agri.masterdata.entity.User;
 import com.agri.masterdata.service.IUserService;
-import com.agri.masterdata.vo.LoginVO;
+import com.agri.common.vo.LoginVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -74,7 +74,6 @@ public class AuthController {
     public ApiResponse<Void> logout() {
         return ApiResponse.success("退出成功");
     }
-
     public static class LoginDTO {
         private String username;
         private String password;

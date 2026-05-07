@@ -40,13 +40,6 @@ public class MybatisPlusConfig implements MetaObjectHandler {
 
     public static <T> Page<T> buildPage(Integer pageNum, Integer pageSize, String orderBy, String sortOrder) {
         Page<T> page = new Page<>(pageNum, pageSize);
-        if (orderBy != null && !orderBy.isEmpty()) {
-            if ("asc".equalsIgnoreCase(sortOrder)) {
-                page.addOrder(org.apache.ibatis.mapping.OrderItem.asc(orderBy));
-            } else {
-                page.addOrder(org.apache.ibatis.mapping.OrderItem.desc(orderBy));
-            }
-        }
         return page;
     }
 }
