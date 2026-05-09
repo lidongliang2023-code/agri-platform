@@ -48,7 +48,7 @@ public class GatewayServiceImpl extends ServiceImpl<GatewayMapper, Gateway> impl
     public Result<Void> update(Long id, GatewaySaveDTO dto) {
         Gateway gateway = baseMapper.selectById(id);
         if (gateway == null) {
-            return Result.error("网关不存在");
+            return Result.error(404, "网关不存在");
         }
         BeanUtils.copyProperties(dto, gateway);
         gateway.setUpdateTime(LocalDateTime.now());
@@ -66,7 +66,7 @@ public class GatewayServiceImpl extends ServiceImpl<GatewayMapper, Gateway> impl
     public Result<Void> heartbeat(Long id) {
         Gateway gateway = baseMapper.selectById(id);
         if (gateway == null) {
-            return Result.error("网关不存在");
+            return Result.error(404, "网关不存在");
         }
         gateway.setOnlineStatus(1);
         gateway.setUpdateTime(LocalDateTime.now());

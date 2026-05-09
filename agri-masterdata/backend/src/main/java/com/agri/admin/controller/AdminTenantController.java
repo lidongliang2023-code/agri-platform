@@ -45,7 +45,7 @@ public class AdminTenantController {
     }
 
     @Operation(summary = "创建租户")
-    @PostMapping("/create")
+    @PostMapping
     public ApiResponse<Void> createTenant(@RequestBody TenantCreateDTO dto) {
         adminTenantService.createTenant(dto);
         return ApiResponse.success();

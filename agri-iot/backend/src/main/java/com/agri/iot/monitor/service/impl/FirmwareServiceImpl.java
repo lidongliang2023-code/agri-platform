@@ -51,7 +51,7 @@ public class FirmwareServiceImpl extends ServiceImpl<FirmwareMapper, Firmware> i
     public Result<Void> update(Long id, FirmwareSaveDTO dto) {
         Firmware firmware = baseMapper.selectById(id);
         if (firmware == null) {
-            return Result.error("固件不存在");
+            return Result.error(404, "固件不存在");
         }
         BeanUtils.copyProperties(dto, firmware);
         firmware.setUpdateTime(LocalDateTime.now());
@@ -69,7 +69,7 @@ public class FirmwareServiceImpl extends ServiceImpl<FirmwareMapper, Firmware> i
     public Result<Void> activate(Long id) {
         Firmware firmware = baseMapper.selectById(id);
         if (firmware == null) {
-            return Result.error("固件不存在");
+            return Result.error(404, "固件不存在");
         }
         firmware.setIsActive(1);
         firmware.setUpdateTime(LocalDateTime.now());

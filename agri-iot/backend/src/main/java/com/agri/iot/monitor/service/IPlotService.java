@@ -8,7 +8,7 @@ import java.util.List;
 
 public interface IPlotService {
     Result<?> page(PlotPageDTO dto);
-    Result<List<PlotVO>> list();
+    Result<List<PlotVO>> getAll();
     Result<PlotVO> detail(Long id);
     Result<Void> save(PlotSaveDTO dto);
     Result<Void> update(Long id, PlotSaveDTO dto);

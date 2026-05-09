@@ -53,10 +53,10 @@ public class OtaTaskServiceImpl extends ServiceImpl<OtaTaskMapper, OtaTask> impl
     public Result<Void> update(Long id, OtaTaskSaveDTO dto) {
         OtaTask task = baseMapper.selectById(id);
         if (task == null) {
-            return Result.error("任务不存在");
+            return Result.error(404, "任务不存在");
         }
         if (task.getTaskStatus() != 0) {
-            return Result.error("任务已开始执行，无法修改");
+            return Result.error(400, "任务已开始执行，无法修改");
         }
         BeanUtils.copyProperties(dto, task);
         task.setUpdateTime(LocalDateTime.now());
@@ -68,7 +68,7 @@ public class OtaTaskServiceImpl extends ServiceImpl<OtaTaskMapper, OtaTask> impl
     public Result<Void> delete(Long id) {
         OtaTask task = baseMapper.selectById(id);
         if (task != null && task.getTaskStatus() == 1) {
-            return Result.error("任务正在执行中，无法删除");
+            return Result.error(400, "任务正在执行中，无法删除");
         }
         baseMapper.deleteById(id);
         return Result.success();
@@ -78,10 +78,10 @@ public class OtaTaskServiceImpl extends ServiceImpl<OtaTaskMapper, OtaTask> impl
     public Result<Void> execute(Long id) {
         OtaTask task = baseMapper.selectById(id);
         if (task == null) {
-            return Result.error("任务不存在");
+            return Result.error(404, "任务不存在");
         }
         if (task.getTaskStatus() == 1) {
-            return Result.error("任务已在执行中");
+            return Result.error(400, "任务已在执行中");
         }
         task.setTaskStatus(1);
         task.setUpdateTime(LocalDateTime.now());
@@ -93,10 +93,10 @@ public class OtaTaskServiceImpl extends ServiceImpl<OtaTaskMapper, OtaTask> impl
     public Result<Void> cancel(Long id) {
         OtaTask task = baseMapper.selectById(id);
         if (task == null) {
-            return Result.error("任务不存在");
+            return Result.error(404, "任务不存在");
         }
         if (task.getTaskStatus() == 2) {
-            return Result.error("任务已完成，无法取消");
+            return Result.error(400, "任务已完成，无法取消");
         }
         task.setTaskStatus(3);
         task.setUpdateTime(LocalDateTime.now());

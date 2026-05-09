@@ -106,40 +106,13 @@ public class AdminTenantServiceImpl implements IAdminTenantService {
     @Transactional
     public void createTenant(TenantCreateDTO dto) {
         Tenant tenant = new Tenant();
-        tenant.setTenantCode("T" + System.currentTimeMillis());
-        tenant.setTenantName(dto.getTenantName());
-        tenant.setTenantType(dto.getTenantType());
-        tenant.setContactName(dto.getContactName());
-        tenant.setContactPhone(dto.getPhone());
-        tenant.setEmail(dto.getEmail());
-        tenant.setProvince(dto.getProvince());
-        tenant.setCity(dto.getCity());
-        tenant.setDistrict(dto.getDistrict());
-        tenant.setAddress(dto.getAddress());
-        tenant.setStatus(0);
+        tenant.setTenantCode(dto.getCode() != null && !dto.getCode().isEmpty() ? dto.getCode() : "T" + System.currentTimeMillis());
+        tenant.setTenantName(dto.getName());
+        tenant.setContactName(dto.getContactPerson());
+        tenant.setContactPhone(dto.getContactPhone());
+        tenant.setStatus("ACTIVE".equals(dto.getStatus()) ? 0 : 1);
         
         tenantMapper.insert(tenant);
-        
-        TenantQuota quota = new TenantQuota();
-        quota.setTenantId(tenant.getId().toString());
-        quota.setUserLimit(dto.getPackageCode().equals("basic") ? 100 : dto.getPackageCode().equals("pro") ? 500 : 2000);
-        quota.setOrgLimit(100);
-        quota.setProductLimit(dto.getPackageCode().equals("basic") ? 1000 : dto.getPackageCode().equals("pro") ? 5000 : 20000);
-        quota.setStorageLimit(dto.getPackageCode().equals("basic") ? 10737418240L : dto.getPackageCode().equals("pro") ? 107374182400L : 536870912000L);
-        quota.setApiLimit(dto.getPackageCode().equals("basic") ? 10000 : dto.getPackageCode().equals("pro") ? 100000 : 500000);
-        tenantQuotaMapper.insert(quota);
-        
-        User admin = new User();
-        admin.setUserCode("U" + System.currentTimeMillis());
-        admin.setUsername(dto.getAdminUsername());
-        admin.setPassword(userService.encodePassword(dto.getAdminPassword()));
-        admin.setRealName(dto.getContactName());
-        admin.setPhone(dto.getPhone());
-        admin.setUserType(dto.getTenantType());
-        admin.setTenantId(tenant.getId().toString());
-        admin.setUserStatus("active");
-        admin.setRealNameStatus("verified");
-        userMapper.insert(admin);
     }
 
     @Override

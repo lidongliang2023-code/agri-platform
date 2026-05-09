@@ -5,39 +5,13 @@ import lombok.Data;
 @Data
 public class TenantCreateDTO {
 
-    private String tenantType;
+    private String name;
     
-    private String tenantName;
+    private String code;
     
-    private String contactName;
+    private String contactPerson;
     
-    private String phone;
+    private String contactPhone;
     
-    private String email;
-    
-    private String province;
-    
-    private String city;
-    
-    private String district;
-    
-    private String address;
-    
-    private String creditCode;
-    
-    private String legalPerson;
-    
-    private Long registeredCapital;
-    
-    private String businessScope;
-    
-    private String businessLicenseUrl;
-    
-    private String packageCode;
-    
-    private String expireDate;
-    
-    private String adminUsername;
-    
-    private String adminPassword;
+    private String status;
 }

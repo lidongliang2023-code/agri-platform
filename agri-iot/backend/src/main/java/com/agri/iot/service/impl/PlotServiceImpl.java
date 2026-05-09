@@ -46,12 +46,17 @@ public class PlotServiceImpl implements IPlotService {
 
     @Override
     public List<Plot> listByFarmId(String farmId) {
-        return plotMapper.selectByFarmId(farmId);
+        LambdaQueryWrapper<Plot> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Plot::getDelFlag, 0);
+        return plotMapper.selectList(wrapper);
     }
 
     @Override
     public List<Plot> listByCropType(String cropType) {
-        return plotMapper.selectByCropType(cropType);
+        LambdaQueryWrapper<Plot> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Plot::getDelFlag, 0);
+        wrapper.eq(Plot::getCropType, cropType);
+        return plotMapper.selectList(wrapper);
     }
 
     @Override

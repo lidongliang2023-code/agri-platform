@@ -21,8 +21,9 @@ public class OtaTaskController {
 
     @GetMapping("/page")
     @Operation(summary = "OTA任务分页列表")
+    @SuppressWarnings("unchecked")
     public Result<Page<OtaTaskVO>> page(OtaTaskPageDTO dto) {
-        return otaTaskService.page(dto);
+        return (Result<Page<OtaTaskVO>>) otaTaskService.page(dto);
     }
 
     @GetMapping("/{id}")

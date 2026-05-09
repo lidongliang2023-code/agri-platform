@@ -47,12 +47,18 @@ public class AutomationRuleServiceImpl implements IAutomationRuleService {
 
     @Override
     public List<AutomationRule> listByPlotId(String plotId) {
-        return ruleMapper.selectByPlotId(plotId);
+        LambdaQueryWrapper<AutomationRule> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(AutomationRule::getDelFlag, 0);
+        wrapper.like(AutomationRule::getConditionGroup, plotId);
+        return ruleMapper.selectList(wrapper);
     }
 
     @Override
     public List<AutomationRule> listEnabledRules() {
-        return ruleMapper.selectByEnabled(1);
+        LambdaQueryWrapper<AutomationRule> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(AutomationRule::getDelFlag, 0);
+        wrapper.eq(AutomationRule::getEnableStatus, 1);
+        return ruleMapper.selectList(wrapper);
     }
 
     @Override

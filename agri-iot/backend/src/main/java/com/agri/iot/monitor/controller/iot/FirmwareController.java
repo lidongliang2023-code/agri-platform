@@ -21,8 +21,9 @@ public class FirmwareController {
 
     @GetMapping("/page")
     @Operation(summary = "固件分页列表")
+    @SuppressWarnings("unchecked")
     public Result<Page<FirmwareVO>> page(FirmwarePageDTO dto) {
-        return firmwareService.page(dto);
+        return (Result<Page<FirmwareVO>>) firmwareService.page(dto);
     }
 
     @GetMapping("/{id}")

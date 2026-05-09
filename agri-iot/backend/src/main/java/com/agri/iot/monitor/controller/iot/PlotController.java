@@ -22,14 +22,15 @@ public class PlotController {
 
     @GetMapping("/page")
     @Operation(summary = "地块分页列表")
+    @SuppressWarnings("unchecked")
     public Result<Page<PlotVO>> page(PlotPageDTO dto) {
-        return plotService.page(dto);
+        return (Result<Page<PlotVO>>) plotService.page(dto);
     }
 
     @GetMapping("/list")
     @Operation(summary = "地块列表")
     public Result<List<PlotVO>> list() {
-        return plotService.list();
+        return plotService.getAll();
     }
 
     @GetMapping("/{id}")

@@ -21,8 +21,9 @@ public class GatewayController {
 
     @GetMapping("/page")
     @Operation(summary = "网关分页列表")
+    @SuppressWarnings("unchecked")
     public Result<Page<GatewayVO>> page(GatewayPageDTO dto) {
-        return gatewayService.page(dto);
+        return (Result<Page<GatewayVO>>) gatewayService.page(dto);
     }
 
     @GetMapping("/{id}")

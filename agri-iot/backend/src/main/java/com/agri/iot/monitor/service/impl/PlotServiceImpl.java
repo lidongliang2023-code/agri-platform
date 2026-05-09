@@ -33,7 +33,7 @@ public class PlotServiceImpl extends ServiceImpl<PlotMapper, Plot> implements IP
     }
 
     @Override
-    public Result<List<PlotVO>> list() {
+    public Result<List<PlotVO>> getAll() {
         LambdaQueryWrapper<Plot> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Plot::getDeleted, 0);
         List<Plot> plots = baseMapper.selectList(wrapper);
@@ -66,7 +66,7 @@ public class PlotServiceImpl extends ServiceImpl<PlotMapper, Plot> implements IP
     public Result<Void> update(Long id, PlotSaveDTO dto) {
         Plot plot = baseMapper.selectById(id);
         if (plot == null) {
-            return Result.error("地块不存在");
+            return Result.error(404, "地块不存在");
         }
         BeanUtils.copyProperties(dto, plot);
         plot.setUpdateTime(LocalDateTime.now());

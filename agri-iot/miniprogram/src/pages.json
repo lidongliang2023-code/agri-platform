@@ -1,0 +1,73 @@
+{
+  "pages": [
+    {
+      "path": "pages/index/index",
+      "style": {
+        "navigationBarTitleText": "物联网管理"
+      }
+    },
+    {
+      "path": "pages/device/list",
+      "style": {
+        "navigationBarTitleText": "设备列表"
+      }
+    },
+    {
+      "path": "pages/device/detail",
+      "style": {
+        "navigationBarTitleText": "设备详情"
+      }
+    },
+    {
+      "path": "pages/alert/list",
+      "style": {
+        "navigationBarTitleText": "告警列表"
+      }
+    },
+    {
+      "path": "pages/plot/list",
+      "style": {
+        "navigationBarTitleText": "地块管理"
+      }
+    }
+  ],
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "物联网管理",
+    "navigationBarBackgroundColor": "#ffffff",
+    "backgroundColor": "#f5f5f5",
+    "backgroundTextStyle": "dark"
+  },
+  "tabBar": {
+    "color": "#999999",
+    "selectedColor": "#07c160",
+    "borderStyle": "black",
+    "backgroundColor": "#ffffff",
+    "list": [
+      {
+        "pagePath": "pages/index/index",
+        "text": "首页",
+        "iconPath": "static/home.png",
+        "selectedIconPath": "static/home-active.png"
+      },
+      {
+        "pagePath": "pages/device/list",
+        "text": "设备",
+        "iconPath": "static/device.png",
+        "selectedIconPath": "static/device-active.png"
+      },
+      {
+        "pagePath": "pages/alert/list",
+        "text": "告警",
+        "iconPath": "static/alert.png",
+        "selectedIconPath": "static/alert-active.png"
+      },
+      {
+        "pagePath": "pages/plot/list",
+        "text": "地块",
+        "iconPath": "static/plot.png",
+        "selectedIconPath": "static/plot-active.png"
+      }
+    ]
+  }
+}
