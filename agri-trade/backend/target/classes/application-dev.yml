@@ -1,0 +1,17 @@
+server:
+  port: 8082
+
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/agri_trade?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false
+
+logging:
+  level:
+    com.agri.trade: DEBUG
+    org.mybatis: DEBUG
+
+services:
+  masterdata:
+    url: http://localhost:8080
+  production:
+    url: http://localhost:8081

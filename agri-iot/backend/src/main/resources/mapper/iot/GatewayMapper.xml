@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.agri.iot.mapper.GatewayMapper">
+
+    <select id="selectPageVO" resultType="com.agri.iot.vo.GatewayVO">
+        SELECT g.id, g.gateway_code AS gatewayCode, g.gateway_name AS gatewayName,
+               g.ip_address AS ipAddress, g.port, g.protocol,
+               g.online_status AS onlineStatus,
+               CASE g.online_status WHEN 1 THEN '在线' ELSE '离线' END AS onlineStatusText,
+               g.last_online_time AS lastOnlineTime, g.status,
+               CASE g.status WHEN 1 THEN '正常' ELSE '禁用' END AS statusText,
+               g.create_by AS createBy, g.create_time AS createTime
+        FROM agri_iot_gateway g
+        WHERE g.del_flag = 0
+        <if test="dto.gatewayCode != null and dto.gatewayCode != ''">
+            AND g.gateway_code LIKE CONCAT('%', #{dto.gatewayCode}, '%')
+        </if>
+        <if test="dto.gatewayName != null and dto.gatewayName != ''">
+            AND g.gateway_name LIKE CONCAT('%', #{dto.gatewayName}, '%')
+        </if>
+        <if test="dto.onlineStatus != null">
+            AND g.online_status = #{dto.onlineStatus}
+        </if>
+        <if test="dto.status != null">
+            AND g.status = #{dto.status}
+        </if>
+        ORDER BY g.create_time DESC
+        LIMIT #{dto.pageNum}, #{dto.pageSize}
+    </select>
+
+    <select id="selectCount" resultType="long">
+        SELECT COUNT(*)
+        FROM agri_iot_gateway g
+        WHERE g.del_flag = 0
+        <if test="dto.gatewayCode != null and dto.gatewayCode != ''">
+            AND g.gateway_code LIKE CONCAT('%', #{dto.gatewayCode}, '%')
+        </if>
+        <if test="dto.gatewayName != null and dto.gatewayName != ''">
+            AND g.gateway_name LIKE CONCAT('%', #{dto.gatewayName}, '%')
+        </if>
+        <if test="dto.onlineStatus != null">
+            AND g.online_status = #{dto.onlineStatus}
+        </if>
+        <if test="dto.status != null">
+            AND g.status = #{dto.status}
+        </if>
+    </select>
+
+    <select id="selectVOById" resultType="com.agri.iot.vo.GatewayVO">
+        SELECT g.id, g.gateway_code AS gatewayCode, g.gateway_name AS gatewayName,
+               g.ip_address AS ipAddress, g.port, g.protocol,
+               g.online_status AS onlineStatus,
+               CASE g.online_status WHEN 1 THEN '在线' ELSE '离线' END AS onlineStatusText,
+               g.last_online_time AS lastOnlineTime, g.status,
+               CASE g.status WHEN 1 THEN '正常' ELSE '禁用' END AS statusText,
+               g.create_by AS createBy, g.create_time AS createTime
+        FROM agri_iot_gateway g
+        WHERE g.id = #{id} AND g.del_flag = 0
+    </select>
+
+    <select id="selectByGatewayCode" resultType="com.agri.iot.entity.Gateway">
+        SELECT * FROM agri_iot_gateway WHERE gateway_code = #{gatewayCode} AND del_flag = 0
+    </select>
+
+    <select id="selectAllVO" resultType="com.agri.iot.vo.GatewayVO">
+        SELECT g.id, g.gateway_code AS gatewayCode, g.gateway_name AS gatewayName,
+               g.online_status AS onlineStatus,
+               CASE g.online_status WHEN 1 THEN '在线' ELSE '离线' END AS onlineStatusText,
+               g.status, CASE g.status WHEN 1 THEN '正常' ELSE '禁用' END AS statusText
+        FROM agri_iot_gateway g
+        WHERE g.del_flag = 0 AND g.status = 1
+        ORDER BY g.create_time DESC
+    </select>
+</mapper>

@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.agri.iot.mapper.PlotMapper">
+
+    <select id="selectPageVO" resultType="com.agri.iot.vo.PlotVO">
+        SELECT p.id, p.plot_code AS plotCode, p.plot_name AS plotName,
+               p.plot_type AS plotType,
+               CASE p.plot_type WHEN 'field' THEN '大田' WHEN 'greenhouse' THEN '温室' WHEN 'orchard' THEN '果园' ELSE '其他' END AS plotTypeText,
+               p.area, p.location_lat AS locationLat, p.location_lng AS locationLng,
+               p.location_name AS locationName, p.crop_type AS cropType, p.crop_name AS cropName,
+               p.status, CASE p.status WHEN 1 THEN '正常' ELSE '禁用' END AS statusText,
+               p.create_by AS createBy, p.create_time AS createTime
+        FROM agri_iot_plot p
+        WHERE p.del_flag = 0
+        <if test="dto.plotCode != null and dto.plotCode != ''">
+            AND p.plot_code LIKE CONCAT('%', #{dto.plotCode}, '%')
+        </if>
+        <if test="dto.plotName != null and dto.plotName != ''">
+            AND p.plot_name LIKE CONCAT('%', #{dto.plotName}, '%')
+        </if>
+        <if test="dto.plotType != null and dto.plotType != ''">
+            AND p.plot_type = #{dto.plotType}
+        </if>
+        <if test="dto.status != null">
+            AND p.status = #{dto.status}
+        </if>
+        ORDER BY p.create_time DESC
+        LIMIT #{dto.pageNum}, #{dto.pageSize}
+    </select>
+
+    <select id="selectCount" resultType="long">
+        SELECT COUNT(*)
+        FROM agri_iot_plot p
+        WHERE p.del_flag = 0
+        <if test="dto.plotCode != null and dto.plotCode != ''">
+            AND p.plot_code LIKE CONCAT('%', #{dto.plotCode}, '%')
+        </if>
+        <if test="dto.plotName != null and dto.plotName != ''">
+            AND p.plot_name LIKE CONCAT('%', #{dto.plotName}, '%')
+        </if>
+        <if test="dto.plotType != null and dto.plotType != ''">
+            AND p.plot_type = #{dto.plotType}
+        </if>
+        <if test="dto.status != null">
+            AND p.status = #{dto.status}
+        </if>
+    </select>
+
+    <select id="selectVOById" resultType="com.agri.iot.vo.PlotVO">
+        SELECT p.id, p.plot_code AS plotCode, p.plot_name AS plotName,
+               p.plot_type AS plotType,
+               CASE p.plot_type WHEN 'field' THEN '大田' WHEN 'greenhouse' THEN '温室' WHEN 'orchard' THEN '果园' ELSE '其他' END AS plotTypeText,
+               p.area, p.location_lat AS locationLat, p.location_lng AS locationLng,
+               p.location_name AS locationName, p.crop_type AS cropType, p.crop_name AS cropName,
+               p.status, CASE p.status WHEN 1 THEN '正常' ELSE '禁用' END AS statusText,
+               p.create_by AS createBy, p.create_time AS createTime
+        FROM agri_iot_plot p
+        WHERE p.id = #{id} AND p.del_flag = 0
+    </select>
+
+    <select id="selectByPlotCode" resultType="com.agri.iot.entity.Plot">
+        SELECT * FROM agri_iot_plot WHERE plot_code = #{plotCode} AND del_flag = 0
+    </select>
+
+    <select id="selectAllVO" resultType="com.agri.iot.vo.PlotVO">
+        SELECT p.id, p.plot_code AS plotCode, p.plot_name AS plotName,
+               p.plot_type AS plotType,
+               CASE p.plot_type WHEN 'field' THEN '大田' WHEN 'greenhouse' THEN '温室' WHEN 'orchard' THEN '果园' ELSE '其他' END AS plotTypeText,
+               p.location_lat AS locationLat, p.location_lng AS locationLng,
+               p.status, CASE p.status WHEN 1 THEN '正常' ELSE '禁用' END AS statusText
+        FROM agri_iot_plot p
+        WHERE p.del_flag = 0 AND p.status = 1
+        ORDER BY p.create_time DESC
+    </select>
+</mapper>

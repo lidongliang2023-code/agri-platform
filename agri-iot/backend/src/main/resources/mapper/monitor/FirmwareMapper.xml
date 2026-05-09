@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.agri.monitor.mapper.FirmwareMapper">
+
+    <select id="selectPageList" resultType="com.agri.monitor.dto.FirmwareVO">
+        SELECT * FROM firmware
+        WHERE deleted = 0
+        <if test="dto.firmwareCode != null and dto.firmwareCode != ''">
+            AND firmware_code LIKE CONCAT('%', #{dto.firmwareCode}, '%')
+        </if>
+        <if test="dto.firmwareName != null and dto.firmwareName != ''">
+            AND firmware_name LIKE CONCAT('%', #{dto.firmwareName}, '%')
+        </if>
+        <if test="dto.deviceType != null and dto.deviceType != ''">
+            AND device_type = #{dto.deviceType}
+        </if>
+        <if test="dto.isActive != null">
+            AND is_active = #{dto.isActive}
+        </if>
+        ORDER BY create_time DESC
+    </select>
+
+    <select id="selectDetailById" resultType="com.agri.monitor.dto.FirmwareVO">
+        SELECT * FROM firmware WHERE id = #{id}
+    </select>
+
+</mapper>

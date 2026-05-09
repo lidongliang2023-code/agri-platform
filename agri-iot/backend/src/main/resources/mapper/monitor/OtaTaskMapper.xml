@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.agri.monitor.mapper.OtaTaskMapper">
+
+    <select id="selectPageList" resultType="com.agri.monitor.dto.OtaTaskVO">
+        SELECT o.*, f.firmware_name, f.version as firmware_version
+        FROM ota_task o
+        LEFT JOIN firmware f ON o.firmware_id = f.id
+        WHERE o.deleted = 0
+        <if test="dto.taskCode != null and dto.taskCode != ''">
+            AND o.task_code LIKE CONCAT('%', #{dto.taskCode}, '%')
+        </if>
+        <if test="dto.taskName != null and dto.taskName != ''">
+            AND o.task_name LIKE CONCAT('%', #{dto.taskName}, '%')
+        </if>
+        <if test="dto.taskType != null">
+            AND o.task_type = #{dto.taskType}
+        </if>
+        <if test="dto.taskStatus != null">
+            AND o.task_status = #{dto.taskStatus}
+        </if>
+        ORDER BY o.create_time DESC
+    </select>
+
+    <select id="selectDetailById" resultType="com.agri.monitor.dto.OtaTaskVO">
+        SELECT o.*, f.firmware_name, f.version as firmware_version
+        FROM ota_task o
+        LEFT JOIN firmware f ON o.firmware_id = f.id
+        WHERE o.id = #{id}
+    </select>
+
+</mapper>
