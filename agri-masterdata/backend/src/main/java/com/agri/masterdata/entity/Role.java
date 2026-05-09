@@ -2,10 +2,16 @@ package com.agri.masterdata.entity;
 
 import com.agri.common.entity.BaseEntity;
 import com.baomidou.mybatisplus.annotation.TableName;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
 
 @Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 @EqualsAndHashCode(callSuper = true)
 @TableName("agri_md_role")
 public class Role extends BaseEntity {
@@ -17,6 +23,8 @@ public class Role extends BaseEntity {
     private String roleKey;
 
     private String roleType;
+
+    private String description;
 
     private Long parentId;
 

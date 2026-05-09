@@ -25,4 +25,9 @@ public interface RoleMapper extends BaseMapper<Role> {
     void insertRoleMenu(@Param("roleId") Long roleId, @Param("menuId") Long menuId);
 
     Role selectByRoleCode(@Param("roleCode") String roleCode);
+
+    List<RoleVO> selectAdminRoleList(@Param("offset") Integer offset, @Param("limit") Integer limit, 
+                                     @Param("roleName") String roleName, @Param("tenantId") String tenantId);
+
+    long countAdminRoleList(@Param("roleName") String roleName, @Param("tenantId") String tenantId);
 }

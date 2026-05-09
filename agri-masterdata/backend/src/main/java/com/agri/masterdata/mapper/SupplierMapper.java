@@ -16,4 +16,11 @@ public interface SupplierMapper extends BaseMapper<Supplier> {
     SupplierVO selectSupplierById(@Param("id") Long id);
 
     Supplier selectBySupplierCode(@Param("supplierCode") String supplierCode);
+
+    List<SupplierVO> selectAdminSupplierList(@Param("offset") Integer offset, @Param("limit") Integer limit,
+                                             @Param("supplierName") String supplierName, @Param("supplierCode") String supplierCode,
+                                             @Param("status") String status, @Param("tenantId") String tenantId);
+
+    long countAdminSupplierList(@Param("supplierName") String supplierName, @Param("supplierCode") String supplierCode,
+                                @Param("status") String status, @Param("tenantId") String tenantId);
 }

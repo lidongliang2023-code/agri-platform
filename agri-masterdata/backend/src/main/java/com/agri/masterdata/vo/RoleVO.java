@@ -1,11 +1,18 @@
 package com.agri.masterdata.vo;
 
+import com.agri.masterdata.entity.Role;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
 @Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class RoleVO {
 
     private Long id;
@@ -15,6 +22,8 @@ public class RoleVO {
     private String roleName;
 
     private String roleKey;
+
+    private String description;
 
     private Integer roleSort;
 
@@ -37,4 +46,21 @@ public class RoleVO {
     private LocalDateTime updateTime;
 
     private String remark;
+
+    public static RoleVO fromEntity(Role role) {
+        if (role == null) {
+            return null;
+        }
+        return RoleVO.builder()
+                .id(role.getId())
+                .roleCode(role.getRoleCode())
+                .roleName(role.getRoleName())
+                .roleKey(role.getRoleKey())
+                .description(role.getDescription())
+                .status(role.getStatus())
+                .tenantId(role.getTenantId())
+                .createBy(role.getCreateBy())
+                .createTime(role.getCreateTime())
+                .build();
+    }
 }

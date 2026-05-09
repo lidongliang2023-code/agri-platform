@@ -5,12 +5,18 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
 @Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 @EqualsAndHashCode(callSuper = true)
 @TableName("user_authentication")
 public class UserAuthentication extends BaseEntity {
@@ -41,4 +47,13 @@ public class UserAuthentication extends BaseEntity {
 
     @TableField("verified_time")
     private LocalDateTime verifiedTime;
+
+    @TableField("audit_by")
+    private String auditBy;
+
+    @TableField("audit_time")
+    private LocalDateTime auditTime;
+
+    @TableField("audit_note")
+    private String auditNote;
 }

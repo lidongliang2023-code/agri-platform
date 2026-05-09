@@ -18,4 +18,9 @@ public interface DictMapper extends BaseMapper<Dict> {
     DictVO selectDictById(@Param("id") Long id);
 
     Dict selectByDictCode(@Param("dictCode") String dictCode);
+
+    List<DictVO> selectAdminDictList(@Param("offset") Integer offset, @Param("limit") Integer limit, 
+                                     @Param("dictName") String dictName);
+
+    long countAdminDictList(@Param("dictName") String dictName);
 }

@@ -47,4 +47,8 @@ public interface IUserService {
     void mergeUsers(List<Long> sourceUserIds, Long targetUserId);
 
     void splitUser(Long userId);
+
+    UserVO convertToVO(User user);
+
+    String encodePassword(String password);
 }

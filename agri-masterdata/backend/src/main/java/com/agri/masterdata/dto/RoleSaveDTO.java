@@ -19,6 +19,10 @@ public class RoleSaveDTO {
     @Size(max = 100, message = "角色标识长度不能超过100")
     private String roleKey;
 
+    private String description;
+
+    private String tenantId;
+
     private Integer roleSort;
 
     private Integer dataScope;

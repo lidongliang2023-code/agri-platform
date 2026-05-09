@@ -13,15 +13,27 @@ public class TenantUpdateDTO {
 
     private String tenantType;
 
+    private String contactName;
+
     private String contactPerson;
 
     private String contactPhone;
 
     private String contactEmail;
 
+    private String email;
+
     private String logoUrl;
 
     private String domain;
+
+    private String province;
+
+    private String city;
+
+    private String district;
+
+    private String address;
 
     private Integer status;
 

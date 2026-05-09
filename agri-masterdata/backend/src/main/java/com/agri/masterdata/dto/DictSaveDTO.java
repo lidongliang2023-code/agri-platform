@@ -4,6 +4,8 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
+import java.util.List;
+
 @Data
 public class DictSaveDTO {
 
@@ -17,7 +19,11 @@ public class DictSaveDTO {
 
     private String dictType;
 
+    private String description;
+
     private Integer status;
 
     private String remark;
+
+    private List<DictItemSaveDTO> items;
 }

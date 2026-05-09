@@ -16,9 +16,13 @@ public class SupplierSaveDTO {
     @Size(max = 200, message = "供应商名称长度不能超过200")
     private String supplierName;
 
+    private String shortName;
+
     private String supplierType;
 
     private Long orgId;
+
+    private String tenantId;
 
     @Size(max = 50, message = "统一社会信用代码长度不能超过50")
     private String creditCode;
@@ -28,6 +32,9 @@ public class SupplierSaveDTO {
 
     @Size(max = 50, message = "联系人长度不能超过50")
     private String contactPerson;
+
+    @Size(max = 50, message = "联系人姓名长度不能超过50")
+    private String contactName;
 
     @Pattern(regexp = "^1[3-9]\\d{9}$", message = "手机号格式不正确")
     private String contactPhone;

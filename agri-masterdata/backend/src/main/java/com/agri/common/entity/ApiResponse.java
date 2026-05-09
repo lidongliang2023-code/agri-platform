@@ -58,4 +58,13 @@ public class ApiResponse<T> implements Serializable {
     public static <T> ApiResponse<T> created(T data) {
         return new ApiResponse<>(201, "创建成功", data);
     }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class BatchResult {
+        private Integer successCount;
+        private Integer failCount;
+        private String failMessage;
+    }
 }

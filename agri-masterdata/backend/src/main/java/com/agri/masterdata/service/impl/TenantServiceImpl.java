@@ -106,4 +106,9 @@ public class TenantServiceImpl implements ITenantService {
         }
         return BeanCopyUtils.copy(tenant, TenantVO.class);
     }
+
+    @Override
+    public TenantVO convertToVO(Tenant tenant) {
+        return TenantVO.fromEntity(tenant);
+    }
 }

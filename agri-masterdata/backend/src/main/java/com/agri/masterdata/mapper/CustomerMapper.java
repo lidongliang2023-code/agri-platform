@@ -16,4 +16,11 @@ public interface CustomerMapper extends BaseMapper<Customer> {
     CustomerVO selectCustomerById(@Param("id") Long id);
 
     Customer selectByCustomerCode(@Param("customerCode") String customerCode);
+
+    List<CustomerVO> selectAdminCustomerList(@Param("offset") Integer offset, @Param("limit") Integer limit,
+                                             @Param("customerName") String customerName, @Param("customerCode") String customerCode,
+                                             @Param("status") String status, @Param("tenantId") String tenantId);
+
+    long countAdminCustomerList(@Param("customerName") String customerName, @Param("customerCode") String customerCode,
+                                @Param("status") String status, @Param("tenantId") String tenantId);
 }

@@ -1,10 +1,18 @@
 package com.agri.masterdata.vo;
 
+import com.agri.masterdata.entity.Tenant;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime;
 import java.util.Date;
 
 @Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class TenantVO {
 
     private Long id;
@@ -31,9 +39,27 @@ public class TenantVO {
 
     private Integer maxUsers;
 
-    private Date createTime;
+    private LocalDateTime createTime;
 
-    private Date updateTime;
+    private LocalDateTime updateTime;
 
     private String remark;
+
+    public static TenantVO fromEntity(Tenant tenant) {
+        if (tenant == null) {
+            return null;
+        }
+        return TenantVO.builder()
+                .id(tenant.getId())
+                .tenantCode(tenant.getTenantCode())
+                .tenantName(tenant.getTenantName())
+                .tenantType(tenant.getTenantType())
+                .contactPerson(tenant.getContactName())
+                .contactPhone(tenant.getContactPhone())
+                .contactEmail(tenant.getEmail())
+                .status(tenant.getStatus())
+                .createTime(tenant.getCreateTime())
+                .updateTime(tenant.getUpdateTime())
+                .build();
+    }
 }

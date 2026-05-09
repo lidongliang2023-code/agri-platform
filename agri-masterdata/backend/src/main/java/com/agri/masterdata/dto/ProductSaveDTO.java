@@ -26,11 +26,15 @@ public class ProductSaveDTO {
     @Size(max = 100, message = "产地长度不能超过100")
     private String origin;
 
+    private String specification;
+
     private String specJson;
 
     private java.math.BigDecimal price;
 
     private String imageUrls;
+
+    private String tenantId;
 
     private Integer status;
 

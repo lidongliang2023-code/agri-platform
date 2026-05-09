@@ -2,12 +2,18 @@ package com.agri.masterdata.entity;
 
 import com.agri.common.entity.BaseEntity;
 import com.baomidou.mybatisplus.annotation.TableName;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 
 @Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 @EqualsAndHashCode(callSuper = true)
 @TableName("agri_md_organization")
 public class Organization extends BaseEntity {
@@ -65,6 +71,10 @@ public class Organization extends BaseEntity {
     private String riskLevel;
 
     private String creditLevel;
+
+    private String authStatus;
+
+    private String auditNote;
 
     private Integer status;
 

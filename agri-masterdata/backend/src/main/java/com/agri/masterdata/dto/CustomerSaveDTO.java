@@ -16,15 +16,22 @@ public class CustomerSaveDTO {
     @Size(max = 200, message = "客户名称长度不能超过200")
     private String customerName;
 
+    private String shortName;
+
     private String customerType;
 
     private Long orgId;
+
+    private String tenantId;
 
     @Size(max = 50, message = "统一社会信用代码长度不能超过50")
     private String creditCode;
 
     @Size(max = 50, message = "法人代表长度不能超过50")
     private String legalPerson;
+
+    @Size(max = 50, message = "联系人姓名长度不能超过50")
+    private String contactName;
 
     @Pattern(regexp = "^1[3-9]\\d{9}$", message = "手机号格式不正确")
     private String contactPhone;

@@ -34,11 +34,23 @@ public class PageResult<T> implements Serializable {
         this.pages = (total + pageSize - 1) / pageSize;
     }
 
+    public PageResult(List<T> list, Long total, Integer pageNum, Integer pageSize) {
+        this.list = list;
+        this.total = total;
+        this.pageNum = pageNum.longValue();
+        this.pageSize = pageSize.longValue();
+        this.pages = (total + this.pageSize - 1) / this.pageSize;
+    }
+
     public static <T> PageResult<T> of(List<T> list, Long total) {
         return new PageResult<>(list, total);
     }
 
     public static <T> PageResult<T> of(List<T> list, Long total, Long pageNum, Long pageSize) {
+        return new PageResult<>(list, total, pageNum, pageSize);
+    }
+
+    public static <T> PageResult<T> success(List<T> list, long total, int pageNum, int pageSize) {
         return new PageResult<>(list, total, pageNum, pageSize);
     }
 }

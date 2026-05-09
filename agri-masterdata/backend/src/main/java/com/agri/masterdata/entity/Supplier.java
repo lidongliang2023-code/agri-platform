@@ -2,10 +2,16 @@ package com.agri.masterdata.entity;
 
 import com.agri.common.entity.BaseEntity;
 import com.baomidou.mybatisplus.annotation.TableName;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
 
 @Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 @EqualsAndHashCode(callSuper = true)
 @TableName("agri_md_supplier")
 public class Supplier extends BaseEntity {
@@ -13,6 +19,8 @@ public class Supplier extends BaseEntity {
     private String supplierCode;
 
     private String supplierName;
+
+    private String shortName;
 
     private String supplierType;
 

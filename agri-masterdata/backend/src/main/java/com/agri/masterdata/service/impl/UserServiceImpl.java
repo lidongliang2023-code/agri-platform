@@ -13,6 +13,7 @@ import com.agri.masterdata.mapper.UserMapper;
 import com.agri.masterdata.service.IUserService;
 import com.agri.masterdata.vo.UserVO;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -257,5 +258,15 @@ public class UserServiceImpl implements IUserService {
         newUser.setUserStatus("active");
         newUser.setRealNameStatus("unverified");
         userMapper.insert(newUser);
+    }
+
+    @Override
+    public UserVO convertToVO(User user) {
+        return UserVO.fromEntity(user);
+    }
+
+    @Override
+    public String encodePassword(String password) {
+        return passwordEncoder.encode(password);
     }
 }

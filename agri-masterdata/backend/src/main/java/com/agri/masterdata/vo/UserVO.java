@@ -1,12 +1,19 @@
 package com.agri.masterdata.vo;
 
+import com.agri.masterdata.entity.User;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 import java.util.Date;
 import java.util.List;
 
 @Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class UserVO {
 
     private Long id;
@@ -78,4 +85,34 @@ public class UserVO {
     private LocalDateTime updateTime;
 
     private String remark;
+
+    public static UserVO fromEntity(User user) {
+        if (user == null) {
+            return null;
+        }
+        return UserVO.builder()
+                .id(user.getId())
+                .userCode(user.getUserCode())
+                .username(user.getUsername())
+                .realName(user.getRealName())
+                .userType(user.getUserType())
+                .idCardType(user.getIdCardType())
+                .idCardNo(user.getIdCardNo())
+                .phone(user.getPhone())
+                .email(user.getEmail())
+                .province(user.getProvince())
+                .city(user.getCity())
+                .district(user.getDistrict())
+                .address(user.getAddress())
+                .orgId(user.getOrgId())
+                .userStatus(user.getUserStatus())
+                .realNameStatus(user.getRealNameStatus())
+                .status(user.getStatus())
+                .tenantId(user.getTenantId())
+                .createBy(user.getCreateBy())
+                .createTime(user.getCreateTime())
+                .updateBy(user.getUpdateBy())
+                .updateTime(user.getUpdateTime())
+                .build();
+    }
 }

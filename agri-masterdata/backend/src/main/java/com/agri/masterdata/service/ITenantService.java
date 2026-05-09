@@ -3,6 +3,7 @@ package com.agri.masterdata.service;
 import com.agri.common.entity.PageResult;
 import com.agri.masterdata.dto.TenantSaveDTO;
 import com.agri.masterdata.dto.TenantUpdateDTO;
+import com.agri.masterdata.entity.Tenant;
 import com.agri.masterdata.vo.TenantVO;
 
 public interface ITenantService {
@@ -20,4 +21,6 @@ public interface ITenantService {
     void changeStatus(Long id, Integer status);
 
     TenantVO getByTenantCode(String tenantCode);
+
+    TenantVO convertToVO(Tenant tenant);
 }

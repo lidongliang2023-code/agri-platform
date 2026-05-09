@@ -13,5 +13,7 @@ public interface DictItemMapper extends BaseMapper<DictItem> {
 
     List<DictItemVO> selectDictItemsByDictId(@Param("dictId") Long dictId);
 
+    List<DictItem> selectByDictId(@Param("dictId") Long dictId);
+
     void deleteByDictId(@Param("dictId") Long dictId);
 }

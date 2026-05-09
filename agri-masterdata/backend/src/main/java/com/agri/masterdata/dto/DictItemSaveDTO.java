@@ -10,11 +10,17 @@ public class DictItemSaveDTO {
     @NotNull(message = "字典ID不能为空")
     private Long dictId;
 
+    private String itemCode;
+
+    private String itemName;
+
     @NotBlank(message = "字典项文本不能为空")
     private String itemText;
 
     @NotBlank(message = "字典项值不能为空")
     private String itemValue;
+
+    private Integer sortOrder;
 
     private Integer itemSort;
 

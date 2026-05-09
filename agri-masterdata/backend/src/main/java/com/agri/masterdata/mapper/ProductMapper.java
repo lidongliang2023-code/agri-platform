@@ -19,4 +19,13 @@ public interface ProductMapper extends BaseMapper<Product> {
     ProductVO selectProductById(@Param("id") Long id);
 
     Product selectByProductCode(@Param("productCode") String productCode);
+
+    List<ProductVO> selectAdminProductList(@Param("offset") Integer offset, @Param("limit") Integer limit,
+                                           @Param("productName") String productName, @Param("productCode") String productCode,
+                                           @Param("categoryId") String categoryId, @Param("status") String status,
+                                           @Param("tenantId") String tenantId);
+
+    long countAdminProductList(@Param("productName") String productName, @Param("productCode") String productCode,
+                               @Param("categoryId") String categoryId, @Param("status") String status,
+                               @Param("tenantId") String tenantId);
 }
