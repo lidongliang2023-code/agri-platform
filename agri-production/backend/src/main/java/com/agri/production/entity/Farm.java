@@ -1,17 +1,19 @@
 package com.agri.production.entity;
 
+import com.agri.production.common.entity.BaseEntity;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 
 import java.math.BigDecimal;
-import java.util.Date;
 
 @Data
-@TableName("agri_prod_farm")
-public class Farm {
+@EqualsAndHashCode(callSuper = true)
+@TableName("agri_prod_farm_info")
+public class Farm extends BaseEntity {
 
     @TableId(type = IdType.AUTO)
     private Long id;
@@ -65,7 +67,7 @@ public class Farm {
     private String certifications;
 
     @TableField("certification_expire_date")
-    private Date certificationExpireDate;
+    private java.time.LocalDate certificationExpireDate;
 
     @TableField("certifications_json")
     private String certificationsJson;
@@ -77,31 +79,13 @@ public class Farm {
     private String intro;
 
     @TableField("register_date")
-    private Date registerDate;
+    private java.time.LocalDate registerDate;
 
     @TableField("audit_status")
     private String auditStatus;
 
     @TableField("status")
     private String status;
-
-    @TableField("del_flag")
-    private Integer delFlag;
-
-    @TableField("tenant_id")
-    private String tenantId;
-
-    @TableField("create_by")
-    private String createBy;
-
-    @TableField("create_time")
-    private Date createTime;
-
-    @TableField("update_by")
-    private String updateBy;
-
-    @TableField("update_time")
-    private Date updateTime;
 
     @TableField("remark")
     private String remark;

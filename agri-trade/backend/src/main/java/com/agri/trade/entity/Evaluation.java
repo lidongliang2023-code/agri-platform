@@ -1,4 +1,4 @@
-package com.agri.iot.entity.trade;
+package com.agri.trade.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;

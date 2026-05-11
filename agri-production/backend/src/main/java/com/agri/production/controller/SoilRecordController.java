@@ -8,7 +8,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.Date;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @RestController
@@ -64,9 +64,9 @@ public class SoilRecordController {
 
     @PostMapping
     public ApiResponse<Boolean> create(@RequestBody SoilRecord record) {
-        record.setDelFlag(0);
-        record.setCreateTime(new Date());
-        record.setUpdateTime(new Date());
+        record.setDeleted(0);
+        record.setCreateTime(LocalDateTime.now());
+        record.setUpdateTime(LocalDateTime.now());
         boolean success = soilRecordService.save(record);
         if (success) {
             return ApiResponse.success(true);
@@ -81,7 +81,7 @@ public class SoilRecordController {
             return ApiResponse.error("土壤记录不存在");
         }
         record.setId(id);
-        record.setUpdateTime(new Date());
+        record.setUpdateTime(LocalDateTime.now());
         boolean success = soilRecordService.updateById(record);
         if (success) {
             return ApiResponse.success(true);
@@ -95,8 +95,8 @@ public class SoilRecordController {
         if (record == null) {
             return ApiResponse.error("土壤记录不存在");
         }
-        record.setDelFlag(1);
-        record.setUpdateTime(new Date());
+        record.setDeleted(1);
+        record.setUpdateTime(LocalDateTime.now());
         boolean success = soilRecordService.updateById(record);
         if (success) {
             return ApiResponse.success(true);

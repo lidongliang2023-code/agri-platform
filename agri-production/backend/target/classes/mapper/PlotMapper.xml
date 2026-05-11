@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.agri.production.mapper.PlotMapper">
+
+    <select id="pageQuery" resultType="com.agri.production.entity.Plot">
+        SELECT p.* FROM agri_prod_plot_info p
+        WHERE p.deleted = 0 AND p.tenant_id = #{tenantId}
+        <if test="dto.plotName != null and dto.plotName != ''">
+            AND p.plot_name LIKE CONCAT('%', #{dto.plotName}, '%')
+        </if>
+        <if test="dto.farmId != null">
+            AND p.farm_id = #{dto.farmId}
+        </if>
+        <if test="dto.currentCrop != null and dto.currentCrop != ''">
+            AND p.current_crop = #{dto.currentCrop}
+        </if>
+        <if test="dto.status != null and dto.status != ''">
+            AND p.status = #{dto.status}
+        </if>
+        ORDER BY p.create_time DESC
+    </select>
+
+    <select id="selectByFarmId" resultType="com.agri.production.entity.Plot">
+        SELECT * FROM agri_prod_plot_info
+        WHERE farm_id = #{farmId} AND tenant_id = #{tenantId} AND deleted = 0
+        ORDER BY plot_name
+    </select>
+
+    <select id="selectByCode" resultType="com.agri.production.entity.Plot">
+        SELECT * FROM agri_prod_plot_info
+        WHERE plot_code = #{plotCode} AND tenant_id = #{tenantId} AND deleted = 0
+    </select>
+
+</mapper>

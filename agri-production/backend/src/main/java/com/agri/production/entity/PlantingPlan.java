@@ -1,17 +1,20 @@
 package com.agri.production.entity;
 
+import com.agri.production.common.entity.BaseEntity;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 
 import java.math.BigDecimal;
 import java.util.Date;
 
 @Data
+@EqualsAndHashCode(callSuper = true)
 @TableName("agri_prod_planting_plan")
-public class PlantingPlan {
+public class PlantingPlan extends BaseEntity {
 
     @TableId(type = IdType.AUTO)
     private Long id;
@@ -63,24 +66,6 @@ public class PlantingPlan {
 
     @TableField("approval_time")
     private Date approvalTime;
-
-    @TableField("del_flag")
-    private Integer delFlag;
-
-    @TableField("tenant_id")
-    private String tenantId;
-
-    @TableField("create_by")
-    private String createBy;
-
-    @TableField("create_time")
-    private Date createTime;
-
-    @TableField("update_by")
-    private String updateBy;
-
-    @TableField("update_time")
-    private Date updateTime;
 
     @TableField("remark")
     private String remark;

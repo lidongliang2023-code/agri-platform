@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.agri.production.mapper.TraceRecordMapper">
+
+    <select id="selectByTraceCode" resultType="com.agri.production.entity.TraceRecord">
+        SELECT * FROM agri_prod_trace_record
+        WHERE trace_code = #{traceCode} AND deleted = 0
+        ORDER BY sort_order ASC, trace_time DESC
+    </select>
+
+</mapper>

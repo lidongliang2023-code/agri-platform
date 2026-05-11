@@ -20,10 +20,15 @@ D:\agri-platform\agri-iot\backend\src\main\java\com\agri\iot\monitor\entity\Plot
 D:\agri-platform\agri-iot\backend\src\main\java\com\agri\iot\entity\PushConfig.java
 D:\agri-platform\agri-iot\backend\src\main\java\com\agri\iot\mapper\DeviceGroupMapper.java
 D:\agri-platform\agri-iot\backend\src\main\java\com\agri\iot\entity\Plot.java
+D:\agri-platform\agri-iot\backend\src\main\java\com\agri\iot\entity\User.java
 D:\agri-platform\agri-iot\backend\src\main\java\com\agri\iot\service\IAlertRecordService.java
+D:\agri-platform\agri-iot\backend\src\main\java\com\agri\common\mapper\TenantMapper.java
 D:\agri-platform\agri-iot\backend\src\main\java\com\agri\iot\monitor\mapper\PlotMapper.java
 D:\agri-platform\agri-iot\backend\src\main\java\com\agri\iot\common\GlobalExceptionHandler.java
+D:\agri-platform\agri-iot\backend\src\main\java\com\agri\common\service\impl\TenantServiceImpl.java
 D:\agri-platform\agri-iot\backend\src\main\java\com\agri\iot\mapper\PushMapper.java
+D:\agri-platform\agri-iot\backend\src\main\java\com\agri\iot\service\IUserService.java
+D:\agri-platform\agri-iot\backend\src\main\java\com\agri\iot\controller\UserController.java
 D:\agri-platform\agri-iot\backend\src\main\java\com\agri\common\vo\PageVO.java
 D:\agri-platform\agri-iot\backend\src\main\java\com\agri\iot\service\impl\AlertRecordServiceImpl.java
 D:\agri-platform\agri-iot\backend\src\main\java\com\agri\iot\service\impl\DeviceTypeServiceImpl.java
@@ -50,7 +55,10 @@ D:\agri-platform\agri-iot\backend\src\main\java\com\agri\iot\vo\DeviceVO.java
 D:\agri-platform\agri-iot\backend\src\main\java\com\agri\iot\entity\AutomationRule.java
 D:\agri-platform\agri-iot\backend\src\main\java\com\agri\iot\monitor\dto\GatewaySaveDTO.java
 D:\agri-platform\agri-iot\backend\src\main\java\com\agri\iot\service\IAlertRuleService.java
+D:\agri-platform\agri-iot\backend\src\main\java\com\agri\iot\config\SecurityConfig.java
 D:\agri-platform\agri-iot\backend\src\main\java\com\agri\iot\monitor\controller\iot\PlotController.java
+D:\agri-platform\agri-iot\backend\src\main\java\com\agri\common\entity\Tenant.java
+D:\agri-platform\agri-iot\backend\src\main\java\com\agri\common\service\ITenantService.java
 D:\agri-platform\agri-iot\backend\src\main\java\com\agri\iot\monitor\service\IOtaTaskService.java
 D:\agri-platform\agri-iot\backend\src\main\java\com\agri\iot\dto\AlertRulePageDTO.java
 D:\agri-platform\agri-iot\backend\src\main\java\com\agri\iot\monitor\dto\FirmwareVO.java
@@ -66,6 +74,7 @@ D:\agri-platform\agri-iot\backend\src\main\java\com\agri\iot\monitor\service\imp
 D:\agri-platform\agri-iot\backend\src\main\java\com\agri\iot\dto\DeviceTypePageDTO.java
 D:\agri-platform\agri-iot\backend\src\main\java\com\agri\iot\controller\AlertRuleController.java
 D:\agri-platform\agri-iot\backend\src\main\java\com\agri\iot\entity\AlertRecord.java
+D:\agri-platform\agri-iot\backend\src\main\java\com\agri\iot\mapper\UserMapper.java
 D:\agri-platform\agri-iot\backend\src\main\java\com\agri\iot\common\ResultGenerator.java
 D:\agri-platform\agri-iot\backend\src\main\java\com\agri\iot\monitor\controller\iot\GatewayController.java
 D:\agri-platform\agri-iot\backend\src\main\java\com\agri\iot\dto\DeviceTypeUpdateDTO.java
@@ -74,6 +83,7 @@ D:\agri-platform\agri-iot\backend\src\main\java\com\agri\iot\vo\GatewayVO.java
 D:\agri-platform\agri-iot\backend\src\main\java\com\agri\iot\mapper\AutomationRuleMapper.java
 D:\agri-platform\agri-iot\backend\src\main\java\com\agri\iot\feign\MasterDataFeignClient.java
 D:\agri-platform\agri-iot\backend\src\main\java\com\agri\iot\monitor\dto\OtaTaskPageDTO.java
+D:\agri-platform\agri-iot\backend\src\main\java\com\agri\iot\service\impl\UserServiceImpl.java
 D:\agri-platform\agri-iot\backend\src\main\java\com\agri\iot\vo\DeviceTypeVO.java
 D:\agri-platform\agri-iot\backend\src\main\java\com\agri\iot\entity\AlertRule.java
 D:\agri-platform\agri-iot\backend\src\main\java\com\agri\iot\entity\DeviceProperty.java
@@ -83,6 +93,7 @@ D:\agri-platform\agri-iot\backend\src\main\java\com\agri\iot\mapper\AlertRuleMap
 D:\agri-platform\agri-iot\backend\src\main\java\com\agri\iot\service\impl\PushServiceImpl.java
 D:\agri-platform\agri-iot\backend\src\main\java\com\agri\iot\entity\DeviceControlLog.java
 D:\agri-platform\agri-iot\backend\src\main\java\com\agri\iot\dto\PushConfigUpdateDTO.java
+D:\agri-platform\agri-iot\backend\src\main\java\com\agri\common\controller\TenantController.java
 D:\agri-platform\agri-iot\backend\src\main\java\com\agri\iot\controller\DataController.java
 D:\agri-platform\agri-iot\backend\src\main\java\com\agri\iot\monitor\entity\Firmware.java
 D:\agri-platform\agri-iot\backend\src\main\java\com\agri\iot\service\impl\ReportServiceImpl.java

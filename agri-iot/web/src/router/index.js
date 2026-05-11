@@ -28,6 +28,11 @@ const routes = [
         component: () => import('../views/device/DeviceDetail.vue')
       },
       {
+        path: 'device/type',
+        name: 'DeviceTypeList',
+        component: () => import('../views/device/DeviceTypeList.vue')
+      },
+      {
         path: 'group',
         name: 'GroupList',
         component: () => import('../views/group/GroupList.vue')
@@ -76,6 +81,11 @@ const routes = [
         path: 'plot',
         name: 'PlotList',
         component: () => import('../views/plot/PlotList.vue')
+      },
+      {
+        path: 'scene',
+        name: 'SceneList',
+        component: () => import('../views/scene/SceneList.vue')
       }
     ]
   }

@@ -1,6 +1,6 @@
-package com.agri.iot.mapper.trade;
+package com.agri.trade.mapper;
 
-import com.agri.iot.entity.trade.Dispute;
+import com.agri.trade.entity.Dispute;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 
 public interface DisputeMapper extends BaseMapper<Dispute> {

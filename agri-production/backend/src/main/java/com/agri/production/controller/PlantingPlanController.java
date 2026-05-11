@@ -8,7 +8,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.Date;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -61,9 +61,9 @@ public class PlantingPlanController {
 
     @PostMapping
     public ApiResponse<Boolean> create(@RequestBody PlantingPlan plan) {
-        plan.setDelFlag(0);
-        plan.setCreateTime(new Date());
-        plan.setUpdateTime(new Date());
+        plan.setDeleted(0);
+        plan.setCreateTime(LocalDateTime.now());
+        plan.setUpdateTime(LocalDateTime.now());
         plan.setPlanStatus("draft");
         boolean success = plantingPlanService.save(plan);
         if (success) {
@@ -79,7 +79,7 @@ public class PlantingPlanController {
             return ApiResponse.error("种植计划不存在");
         }
         plan.setId(id);
-        plan.setUpdateTime(new Date());
+        plan.setUpdateTime(LocalDateTime.now());
         boolean success = plantingPlanService.updateById(plan);
         if (success) {
             return ApiResponse.success(true);
@@ -93,8 +93,8 @@ public class PlantingPlanController {
         if (plan == null) {
             return ApiResponse.error("种植计划不存在");
         }
-        plan.setDelFlag(1);
-        plan.setUpdateTime(new Date());
+        plan.setDeleted(1);
+        plan.setUpdateTime(LocalDateTime.now());
         boolean success = plantingPlanService.updateById(plan);
         if (success) {
             return ApiResponse.success(true);

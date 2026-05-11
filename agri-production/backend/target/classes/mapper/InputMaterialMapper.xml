@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.agri.production.mapper.InputMaterialMapper">
+
+    <select id="pageQuery" resultType="com.agri.production.entity.InputMaterial">
+        SELECT m.* FROM agri_prod_input_ledger m
+        WHERE m.deleted = 0 AND m.tenant_id = #{tenantId}
+        <if test="dto.materialName != null and dto.materialName != ''">
+            AND m.material_name LIKE CONCAT('%', #{dto.materialName}, '%')
+        </if>
+        <if test="dto.materialType != null and dto.materialType != ''">
+            AND m.material_type = #{dto.materialType}
+        </if>
+        <if test="dto.supplierName != null and dto.supplierName != ''">
+            AND m.supplier_name LIKE CONCAT('%', #{dto.supplierName}, '%')
+        </if>
+        <if test="dto.batchNumber != null and dto.batchNumber != ''">
+            AND m.batch_number = #{dto.batchNumber}
+        </if>
+        <if test="dto.status != null and dto.status != ''">
+            AND m.status = #{dto.status}
+        </if>
+        ORDER BY m.create_time DESC
+    </select>
+
+    <select id="selectByCode" resultType="com.agri.production.entity.InputMaterial">
+        SELECT * FROM agri_prod_input_ledger
+        WHERE material_code = #{materialCode} AND tenant_id = #{tenantId} AND deleted = 0
+    </select>
+
+</mapper>

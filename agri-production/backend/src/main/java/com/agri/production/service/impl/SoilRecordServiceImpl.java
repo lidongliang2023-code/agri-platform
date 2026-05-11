@@ -20,7 +20,7 @@ public class SoilRecordServiceImpl extends ServiceImpl<SoilRecordMapper, SoilRec
     @Override
     public IPage<SoilRecord> queryPage(Page<SoilRecord> page, Long plotId, String healthLevel) {
         LambdaQueryWrapper<SoilRecord> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(SoilRecord::getDelFlag, 0);
+        wrapper.eq(SoilRecord::getDeleted, 0);
         
         if (plotId != null) {
             wrapper.eq(SoilRecord::getPlotId, plotId);
@@ -36,7 +36,7 @@ public class SoilRecordServiceImpl extends ServiceImpl<SoilRecordMapper, SoilRec
     @Override
     public List<SoilRecord> getRecordsByPlotId(Long plotId) {
         LambdaQueryWrapper<SoilRecord> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(SoilRecord::getDelFlag, 0)
+        wrapper.eq(SoilRecord::getDeleted, 0)
                .eq(SoilRecord::getPlotId, plotId)
                .orderByDesc(SoilRecord::getSampleDate);
         return this.list(wrapper);
@@ -45,7 +45,7 @@ public class SoilRecordServiceImpl extends ServiceImpl<SoilRecordMapper, SoilRec
     @Override
     public List<SoilRecord> getRecordsByHealthLevel(String healthLevel) {
         LambdaQueryWrapper<SoilRecord> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(SoilRecord::getDelFlag, 0)
+        wrapper.eq(SoilRecord::getDeleted, 0)
                .eq(SoilRecord::getHealthLevel, healthLevel)
                .orderByDesc(SoilRecord::getSampleDate);
         return this.list(wrapper);
@@ -54,7 +54,7 @@ public class SoilRecordServiceImpl extends ServiceImpl<SoilRecordMapper, SoilRec
     @Override
     public SoilRecord getLatestRecord(Long plotId) {
         LambdaQueryWrapper<SoilRecord> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(SoilRecord::getDelFlag, 0)
+        wrapper.eq(SoilRecord::getDeleted, 0)
                .eq(SoilRecord::getPlotId, plotId)
                .orderByDesc(SoilRecord::getSampleDate)
                .last("LIMIT 1");

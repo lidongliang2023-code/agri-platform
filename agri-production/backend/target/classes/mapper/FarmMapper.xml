@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.agri.production.mapper.FarmMapper">
+
+    <select id="pageQuery" resultType="com.agri.production.entity.Farm">
+        SELECT * FROM agri_prod_farm_info
+        WHERE deleted = 0 AND tenant_id = #{tenantId}
+        <if test="dto.farmName != null and dto.farmName != ''">
+            AND farm_name LIKE CONCAT('%', #{dto.farmName}, '%')
+        </if>
+        <if test="dto.farmType != null and dto.farmType != ''">
+            AND farm_type = #{dto.farmType}
+        </if>
+        <if test="dto.province != null and dto.province != ''">
+            AND province = #{dto.province}
+        </if>
+        <if test="dto.city != null and dto.city != ''">
+            AND city = #{dto.city}
+        </if>
+        <if test="dto.status != null and dto.status != ''">
+            AND status = #{dto.status}
+        </if>
+        <if test="dto.auditStatus != null and dto.auditStatus != ''">
+            AND audit_status = #{dto.auditStatus}
+        </if>
+        ORDER BY create_time DESC
+    </select>
+
+    <select id="selectByCode" resultType="com.agri.production.entity.Farm">
+        SELECT * FROM agri_prod_farm_info
+        WHERE farm_code = #{farmCode} AND tenant_id = #{tenantId} AND deleted = 0
+    </select>
+
+</mapper>

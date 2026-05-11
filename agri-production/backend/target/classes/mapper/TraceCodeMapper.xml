@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.agri.production.mapper.TraceCodeMapper">
+
+    <select id="pageQuery" resultType="com.agri.production.entity.TraceCode">
+        SELECT t.* FROM agri_prod_trace_code t
+        WHERE t.deleted = 0 AND t.tenant_id = #{tenantId}
+        <if test="dto.traceCode != null and dto.traceCode != ''">
+            AND t.trace_code LIKE CONCAT('%', #{dto.traceCode}, '%')
+        </if>
+        <if test="dto.batchNumber != null and dto.batchNumber != ''">
+            AND t.batch_number = #{dto.batchNumber}
+        </if>
+        <if test="dto.productName != null and dto.productName != ''">
+            AND t.product_name LIKE CONCAT('%', #{dto.productName}, '%')
+        </if>
+        <if test="dto.farmCode != null and dto.farmCode != ''">
+            AND t.farm_code = #{dto.farmCode}
+        </if>
+        <if test="dto.status != null and dto.status != ''">
+            AND t.status = #{dto.status}
+        </if>
+        ORDER BY t.create_time DESC
+    </select>
+
+    <select id="selectByTraceCode" resultType="com.agri.production.entity.TraceCode">
+        SELECT * FROM agri_prod_trace_code
+        WHERE trace_code = #{traceCode} AND deleted = 0
+    </select>
+
+    <select id="selectByHarvestId" resultType="com.agri.production.entity.TraceCode">
+        SELECT * FROM agri_prod_trace_code
+        WHERE harvest_id = #{harvestId} AND tenant_id = #{tenantId} AND deleted = 0
+        ORDER BY create_time DESC
+    </select>
+
+    <update id="updateQueryCount">
+        UPDATE agri_prod_trace_code
+        SET query_count = query_count + 1
+        WHERE trace_code = #{traceCode} AND deleted = 0
+    </update>
+
+</mapper>

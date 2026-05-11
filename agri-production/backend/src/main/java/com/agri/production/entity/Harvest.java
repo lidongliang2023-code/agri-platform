@@ -1,47 +1,49 @@
 package com.agri.production.entity;
 
+import com.agri.production.common.entity.BaseEntity;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 
 import java.math.BigDecimal;
-import java.util.Date;
 
 @Data
-@TableName("agri_prod_harvest")
-public class Harvest {
+@EqualsAndHashCode(callSuper = true)
+@TableName("agri_prod_harvest_record")
+public class Harvest extends BaseEntity {
 
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    @TableField("harvest_no")
-    private String harvestNo;
+    @TableField("harvest_code")
+    private String harvestCode;
 
     @TableField("farm_id")
     private Long farmId;
 
+    @TableField("farm_code")
+    private String farmCode;
+
     @TableField("plot_id")
     private Long plotId;
 
-    @TableField("plot_name")
-    private String plotName;
+    @TableField("plot_code")
+    private String plotCode;
 
     @TableField("crop_name")
     private String cropName;
 
-    @TableField("variety_name")
-    private String varietyName;
-
     @TableField("harvest_date")
-    private Date harvestDate;
+    private java.time.LocalDate harvestDate;
 
-    @TableField("harvest_type")
-    private String harvestType;
+    @TableField("expected_quantity")
+    private BigDecimal expectedQuantity;
 
-    @TableField("harvest_quantity")
-    private BigDecimal harvestQuantity;
+    @TableField("actual_quantity")
+    private BigDecimal actualQuantity;
 
     @TableField("unit")
     private String unit;
@@ -49,60 +51,33 @@ public class Harvest {
     @TableField("quality_grade")
     private String qualityGrade;
 
+    @TableField("storage_location")
+    private String storageLocation;
+
     @TableField("harvest_method")
     private String harvestMethod;
 
-    @TableField("harvester")
-    private String harvester;
+    @TableField("harvest_team")
+    private String harvestTeam;
 
-    @TableField("harvest_location_lat")
-    private BigDecimal harvestLocationLat;
+    @TableField("supervisor")
+    private String supervisor;
 
-    @TableField("harvest_location_lng")
-    private BigDecimal harvestLocationLng;
+    @TableField("weather_condition")
+    private String weatherCondition;
 
-    @TableField("photos_json")
-    private String photosJson;
+    @TableField("photos")
+    private String photos;
+
+    @TableField("notes")
+    private String notes;
 
     @TableField("status")
     private String status;
 
-    @TableField("warehousing_quantity")
-    private BigDecimal warehousingQuantity;
+    @TableField("trace_code")
+    private String traceCode;
 
-    @TableField("qualified_rate")
-    private BigDecimal qualifiedRate;
-
-    @TableField("reject_quantity")
-    private BigDecimal rejectQuantity;
-
-    @TableField("reject_reason")
-    private String rejectReason;
-
-    @TableField("chain_status")
-    private String chainStatus;
-
-    @TableField("chain_tx_hash")
-    private String chainTxHash;
-
-    @TableField("remark")
-    private String remark;
-
-    @TableField("del_flag")
-    private Integer delFlag;
-
-    @TableField("tenant_id")
-    private String tenantId;
-
-    @TableField("create_by")
-    private String createBy;
-
-    @TableField("create_time")
-    private Date createTime;
-
-    @TableField("update_by")
-    private String updateBy;
-
-    @TableField("update_time")
-    private Date updateTime;
+    @TableField("batch_number")
+    private String batchNumber;
 }

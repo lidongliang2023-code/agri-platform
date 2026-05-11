@@ -1,123 +1,64 @@
 package com.agri.production.controller;
 
+import com.agri.production.dto.FarmPageDTO;
+import com.agri.production.dto.FarmSaveDTO;
 import com.agri.production.common.entity.ApiResponse;
-import com.agri.production.entity.Farm;
+import com.agri.production.common.entity.PageResult;
 import com.agri.production.service.IFarmService;
-import com.baomidou.mybatisplus.core.metadata.IPage;
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import lombok.RequiredArgsConstructor;
+import com.agri.production.vo.FarmVO;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.Date;
-import java.util.List;
-import java.util.Map;
-
 @RestController
-@RequestMapping("/api/production/farm")
-@RequiredArgsConstructor
+@RequestMapping("/api/v1/production/farms")
 public class FarmController {
 
     private final IFarmService farmService;
 
-    @GetMapping("/page")
-    public ApiResponse<IPage<Farm>> getPage(
-            @RequestParam(defaultValue = "1") Integer pageNum,
-            @RequestParam(defaultValue = "10") Integer pageSize,
-            @RequestParam(required = false) String farmName,
-            @RequestParam(required = false) String farmType,
-            @RequestParam(required = false) String auditStatus) {
-        Page<Farm> page = new Page<>(pageNum, pageSize);
-        IPage<Farm> result = farmService.queryPage(page, farmName, farmType, auditStatus);
-        return ApiResponse.success(result);
-    }
-
-    @GetMapping("/list")
-    public ApiResponse<List<Farm>> getList(
-            @RequestParam(required = false) String farmType,
-            @RequestParam(required = false) String auditStatus) {
-        List<Farm> farms;
-        if (farmType != null && !farmType.isEmpty()) {
-            farms = farmService.getFarmsByType(farmType);
-        } else if (auditStatus != null && !auditStatus.isEmpty()) {
-            farms = farmService.getFarmsByAuditStatus(auditStatus);
-        } else {
-            farms = farmService.getActiveFarms();
-        }
-        return ApiResponse.success(farms);
-    }
-
-    @GetMapping("/{id}")
-    public ApiResponse<Farm> getById(@PathVariable Long id) {
-        Farm farm = farmService.getById(id);
-        if (farm == null) {
-            return ApiResponse.error("农场不存在");
-        }
-        return ApiResponse.success(farm);
+    public FarmController(IFarmService farmService) {
+        this.farmService = farmService;
     }
 
     @PostMapping
-    public ApiResponse<Boolean> create(@RequestBody Farm farm) {
-        farm.setDelFlag(0);
-        farm.setCreateTime(new Date());
-        farm.setUpdateTime(new Date());
-        farm.setAuditStatus("pending");
-        farm.setStatus("inactive");
-        boolean success = farmService.save(farm);
-        if (success) {
-            return ApiResponse.success(true);
-        }
-        return ApiResponse.error("创建失败");
+    public ApiResponse<FarmVO> create(@Valid @RequestBody FarmSaveDTO dto) {
+        String tenantId = "T001";
+        FarmVO vo = farmService.save(dto, tenantId);
+        return ApiResponse.success(vo);
     }
 
     @PutMapping("/{id}")
-    public ApiResponse<Boolean> update(@PathVariable Long id, @RequestBody Farm farm) {
-        Farm existing = farmService.getById(id);
-        if (existing == null) {
-            return ApiResponse.error("农场不存在");
-        }
-        farm.setId(id);
-        farm.setUpdateTime(new Date());
-        boolean success = farmService.updateById(farm);
-        if (success) {
-            return ApiResponse.success(true);
-        }
-        return ApiResponse.error("更新失败");
+    public ApiResponse<FarmVO> update(@PathVariable Long id, @Valid @RequestBody FarmSaveDTO dto) {
+        dto.setId(id);
+        String tenantId = "T001";
+        FarmVO vo = farmService.update(dto, tenantId);
+        return ApiResponse.success(vo);
     }
 
     @DeleteMapping("/{id}")
-    public ApiResponse<Boolean> delete(@PathVariable Long id) {
-        Farm farm = farmService.getById(id);
-        if (farm == null) {
-            return ApiResponse.error("农场不存在");
-        }
-        farm.setDelFlag(1);
-        farm.setUpdateTime(new Date());
-        boolean success = farmService.updateById(farm);
-        if (success) {
-            return ApiResponse.success(true);
-        }
-        return ApiResponse.error("删除失败");
+    public ApiResponse<Void> delete(@PathVariable Long id) {
+        String tenantId = "T001";
+        farmService.delete(id, tenantId);
+        return ApiResponse.success();
     }
 
-    @PostMapping("/{id}/audit")
-    public ApiResponse<Boolean> audit(@PathVariable Long id, @RequestBody Map<String, String> params) {
-        String auditStatus = params.get("auditStatus");
-        String auditComment = params.get("auditComment");
-        String auditor = params.get("auditor");
-        boolean success = farmService.auditFarm(id, auditStatus, auditComment, auditor);
-        if (success) {
-            return ApiResponse.success(true);
-        }
-        return ApiResponse.error("审核失败");
+    @GetMapping("/{id}")
+    public ApiResponse<FarmVO> getById(@PathVariable Long id) {
+        String tenantId = "T001";
+        FarmVO vo = farmService.getById(id, tenantId);
+        return ApiResponse.success(vo);
     }
 
-    @PostMapping("/{id}/status")
-    public ApiResponse<Boolean> updateStatus(@PathVariable Long id, @RequestBody Map<String, String> params) {
-        String status = params.get("status");
-        boolean success = farmService.updateFarmStatus(id, status);
-        if (success) {
-            return ApiResponse.success(true);
-        }
-        return ApiResponse.error("更新状态失败");
+    @GetMapping("/code/{farmCode}")
+    public ApiResponse<FarmVO> getByCode(@PathVariable String farmCode) {
+        String tenantId = "T001";
+        FarmVO vo = farmService.getByCode(farmCode, tenantId);
+        return ApiResponse.success(vo);
+    }
+
+    @GetMapping
+    public ApiResponse<PageResult<FarmVO>> pageQuery(FarmPageDTO dto) {
+        String tenantId = "T001";
+        PageResult<FarmVO> result = farmService.pageQuery(dto, tenantId);
+        return ApiResponse.success(result);
     }
 }

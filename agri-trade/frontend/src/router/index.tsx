@@ -11,6 +11,9 @@ import ContractList from '@/pages/contract/list'
 import LogisticsList from '@/pages/logistics/list'
 import EvaluationList from '@/pages/evaluation/list'
 import DisputeList from '@/pages/dispute/list'
+import MatchList from '@/pages/match/list'
+import PriceList from '@/pages/price/list'
+import QuoteList from '@/pages/quote/list'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const token = localStorage.getItem('token')
@@ -32,6 +35,9 @@ function AppRouter() {
         <Route path="product/create" element={<ProductCreate />} />
         <Route path="demand" element={<DemandList />} />
         <Route path="demand/create" element={<DemandCreate />} />
+        <Route path="quote" element={<QuoteList />} />
+        <Route path="match" element={<MatchList />} />
+        <Route path="price" element={<PriceList />} />
         <Route path="contract" element={<ContractList />} />
         <Route path="logistics" element={<LogisticsList />} />
         <Route path="evaluation" element={<EvaluationList />} />

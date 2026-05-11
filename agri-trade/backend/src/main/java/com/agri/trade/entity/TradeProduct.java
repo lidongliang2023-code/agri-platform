@@ -1,4 +1,4 @@
-package com.agri.iot.entity.trade;
+package com.agri.trade.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
@@ -24,6 +24,9 @@ public class TradeProduct {
 
     @TableField("category_id")
     private Long categoryId;
+
+    @TableField("category_code")
+    private String categoryCode;
 
     @TableField("category_name")
     private String categoryName;
@@ -52,6 +55,9 @@ public class TradeProduct {
     @TableField("spec_level")
     private String specLevel;
 
+    @TableField("quality_level")
+    private String qualityLevel;
+
     @TableField("spec_size")
     private String specSize;
 
@@ -69,6 +75,9 @@ public class TradeProduct {
 
     @TableField("price")
     private BigDecimal price;
+
+    @TableField("unit_price")
+    private BigDecimal unitPrice;
 
     @TableField("price_type")
     private String priceType;
@@ -99,6 +108,9 @@ public class TradeProduct {
 
     @TableField("inquiry_count")
     private Integer inquiryCount;
+
+    @TableField("sales_volume")
+    private Integer salesVolume;
 
     @TableField("match_score")
     private BigDecimal matchScore;

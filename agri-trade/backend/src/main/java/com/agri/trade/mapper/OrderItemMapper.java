@@ -1,6 +1,6 @@
-package com.agri.iot.mapper.trade;
+package com.agri.trade.mapper;
 
-import com.agri.iot.entity.trade.OrderItem;
+import com.agri.trade.entity.OrderItem;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 
 public interface OrderItemMapper extends BaseMapper<OrderItem> {

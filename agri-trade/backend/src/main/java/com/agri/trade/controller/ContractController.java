@@ -1,10 +1,10 @@
-package com.agri.iot.controller.trade;
+package com.agri.trade.controller;
 
-import com.agri.common.entity.ApiResponse;
-import com.agri.iot.entity.trade.Contract;
-import com.agri.iot.entity.trade.ContractTemplate;
-import com.agri.iot.mapper.trade.ContractMapper;
-import com.agri.iot.mapper.trade.ContractTemplateMapper;
+import com.agri.trade.common.entity.ApiResponse;
+import com.agri.trade.entity.Contract;
+import com.agri.trade.entity.ContractTemplate;
+import com.agri.trade.mapper.ContractMapper;
+import com.agri.trade.mapper.ContractTemplateMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;

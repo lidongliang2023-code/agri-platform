@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.agri.production.mapper.HarvestMapper">
+
+    <select id="pageQuery" resultType="com.agri.production.entity.Harvest">
+        SELECT h.* FROM agri_prod_harvest_record h
+        WHERE h.deleted = 0 AND h.tenant_id = #{tenantId}
+        <if test="dto.cropName != null and dto.cropName != ''">
+            AND h.crop_name LIKE CONCAT('%', #{dto.cropName}, '%')
+        </if>
+        <if test="dto.farmId != null">
+            AND h.farm_id = #{dto.farmId}
+        </if>
+        <if test="dto.plotId != null">
+            AND h.plot_id = #{dto.plotId}
+        </if>
+        <if test="dto.qualityGrade != null and dto.qualityGrade != ''">
+            AND h.quality_grade = #{dto.qualityGrade}
+        </if>
+        <if test="dto.status != null and dto.status != ''">
+            AND h.status = #{dto.status}
+        </if>
+        <if test="dto.startDate != null">
+            AND h.harvest_date >= #{dto.startDate}
+        </if>
+        <if test="dto.endDate != null">
+            AND h.harvest_date &lt;= #{dto.endDate}
+        </if>
+        ORDER BY h.harvest_date DESC
+    </select>
+
+    <select id="selectByFarmId" resultType="com.agri.production.entity.Harvest">
+        SELECT * FROM agri_prod_harvest_record
+        WHERE farm_id = #{farmId} AND tenant_id = #{tenantId} AND deleted = 0
+        ORDER BY harvest_date DESC
+    </select>
+
+    <select id="selectByCode" resultType="com.agri.production.entity.Harvest">
+        SELECT * FROM agri_prod_harvest_record
+        WHERE harvest_code = #{harvestCode} AND tenant_id = #{tenantId} AND deleted = 0
+    </select>
+
+</mapper>

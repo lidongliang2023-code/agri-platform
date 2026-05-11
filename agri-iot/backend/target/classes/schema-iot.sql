@@ -149,3 +149,35 @@ INSERT INTO agri_iot_device_group (tenant_id, group_name, group_icon, group_colo
 ('default', '视频监控组', '📷', '#EC4899', '所有视频监控设备', 1, 1),
 ('default', '水产养殖组', '🐟', '#0EA5E9', '增氧机、投饵机等', 1, 1),
 ('default', '畜牧养殖组', '🐄', '#F97316', '饲喂器、环控设备等', 1, 1);
+
+CREATE TABLE IF NOT EXISTS agri_iot_user (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(50) NOT NULL COMMENT '用户名',
+    password VARCHAR(255) NOT NULL COMMENT '密码',
+    real_name VARCHAR(50) COMMENT '真实姓名',
+    phone VARCHAR(20) COMMENT '手机号',
+    email VARCHAR(100) COMMENT '邮箱',
+    role VARCHAR(20) DEFAULT 'user' COMMENT '角色: admin, user, operator',
+    status TINYINT(1) DEFAULT 1 COMMENT '状态 1启用 0禁用',
+    tenant_id BIGINT COMMENT '租户ID',
+    tenant_code VARCHAR(50) COMMENT '租户编码',
+    avatar VARCHAR(255) COMMENT '头像',
+    department VARCHAR(100) COMMENT '部门',
+    last_login_time DATETIME COMMENT '最后登录时间',
+    last_login_ip VARCHAR(50) COMMENT '最后登录IP',
+    login_count INT DEFAULT 0 COMMENT '登录次数',
+    create_by VARCHAR(64) COMMENT '创建人',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_by VARCHAR(64) COMMENT '更新人',
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    remark VARCHAR(500) COMMENT '备注',
+    del_flag TINYINT(1) DEFAULT 0 COMMENT '删除标志',
+    UNIQUE KEY uk_username (username, del_flag),
+    INDEX idx_tenant_id (tenant_id),
+    INDEX idx_role (role)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户表';
+
+INSERT INTO agri_iot_user (username, password, real_name, phone, email, role, status, tenant_code) VALUES
+('admin', '$2a$10$N9qo8uLOickgx2ZMRZoMye.IjzqAKL9xL5jvMFVdNJHvGCgTq/VEq', '管理员', '13800138000', 'admin@example.com', 'admin', 1, 'default'),
+('user', '$2a$10$N9qo8uLOickgx2ZMRZoMye.IjzqAKL9xL5jvMFVdNJHvGCgTq/VEq', '普通用户', '13800138001', 'user@example.com', 'user', 1, 'default'),
+('operator', '$2a$10$N9qo8uLOickgx2ZMRZoMye.IjzqAKL9xL5jvMFVdNJHvGCgTq/VEq', '操作员', '13800138002', 'operator@example.com', 'operator', 1, 'default');

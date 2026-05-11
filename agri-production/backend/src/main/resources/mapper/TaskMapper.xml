@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.agri.production.mapper.TaskMapper">
+
+    <select id="pageQuery" resultType="com.agri.production.entity.Task">
+        SELECT t.* FROM agri_prod_task_info t
+        WHERE t.deleted = 0 AND t.tenant_id = #{tenantId}
+        <if test="dto.taskName != null and dto.taskName != ''">
+            AND t.task_name LIKE CONCAT('%', #{dto.taskName}, '%')
+        </if>
+        <if test="dto.taskType != null and dto.taskType != ''">
+            AND t.task_type = #{dto.taskType}
+        </if>
+        <if test="dto.farmId != null">
+            AND t.farm_id = #{dto.farmId}
+        </if>
+        <if test="dto.plotId != null">
+            AND t.plot_id = #{dto.plotId}
+        </if>
+        <if test="dto.executorId != null">
+            AND t.executor_id = #{dto.executorId}
+        </if>
+        <if test="dto.status != null and dto.status != ''">
+            AND t.status = #{dto.status}
+        </if>
+        <if test="dto.priority != null and dto.priority != ''">
+            AND t.priority = #{dto.priority}
+        </if>
+        <if test="dto.startDate != null">
+            AND DATE(t.plan_start_time) >= #{dto.startDate}
+        </if>
+        <if test="dto.endDate != null">
+            AND DATE(t.plan_end_time) &lt;= #{dto.endDate}
+        </if>
+        ORDER BY t.plan_start_time DESC
+    </select>
+
+    <select id="selectByFarmId" resultType="com.agri.production.entity.Task">
+        SELECT * FROM agri_prod_task_info
+        WHERE farm_id = #{farmId} AND tenant_id = #{tenantId} AND deleted = 0
+        ORDER BY plan_start_time DESC
+    </select>
+
+    <select id="selectByExecutorId" resultType="com.agri.production.entity.Task">
+        SELECT * FROM agri_prod_task_info
+        WHERE executor_id = #{executorId} AND tenant_id = #{tenantId} AND deleted = 0
+        ORDER BY plan_start_time DESC
+    </select>
+
+    <select id="selectByCode" resultType="com.agri.production.entity.Task">
+        SELECT * FROM agri_prod_task_info
+        WHERE task_code = #{taskCode} AND tenant_id = #{tenantId} AND deleted = 0
+    </select>
+
+</mapper>

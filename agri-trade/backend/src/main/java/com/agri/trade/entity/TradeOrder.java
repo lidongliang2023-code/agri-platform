@@ -1,4 +1,4 @@
-package com.agri.iot.entity.trade;
+package com.agri.trade.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
@@ -37,6 +37,12 @@ public class TradeOrder {
     @TableField("buyer_type")
     private String buyerType;
 
+    @TableField("buyer_province")
+    private String buyerProvince;
+
+    @TableField("buyer_city")
+    private String buyerCity;
+
     @TableField("seller_id")
     private Long sellerId;
 
@@ -46,11 +52,23 @@ public class TradeOrder {
     @TableField("seller_phone")
     private String sellerPhone;
 
+    @TableField("seller_province")
+    private String sellerProvince;
+
+    @TableField("seller_city")
+    private String sellerCity;
+
+    @TableField("seller_address")
+    private String sellerAddress;
+
     @TableField("category_id")
     private Long categoryId;
 
     @TableField("category_name")
     private String categoryName;
+
+    @TableField("product_name")
+    private String productName;
 
     @TableField("goods_amount")
     private BigDecimal goodsAmount;
@@ -63,6 +81,9 @@ public class TradeOrder {
 
     @TableField("total_amount")
     private BigDecimal totalAmount;
+
+    @TableField("total_quantity")
+    private BigDecimal totalQuantity;
 
     @TableField("paid_amount")
     private BigDecimal paidAmount;

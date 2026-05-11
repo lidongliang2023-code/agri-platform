@@ -1,11 +1,24 @@
-server:
-  port: 8081
-
 spring:
   datasource:
-    url: jdbc:mysql://localhost:3306/agri_production?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    url: jdbc:sqlite:./data/example_db.sqlite
+    username: admin
+    password: password
+    driver-class-name: org.sqlite.JDBC
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema-sqlite.sql
 
-logging:
-  level:
-    com.agri.production: DEBUG
-    com.agri.production.mapper: DEBUG
+services:
+  iot:
+    url: localhost:8083
+  masterdata:
+    url: localhost:8084
+
+mybatis-plus:
+  mapper-locations: classpath:mapper/**/*.xml
+  type-aliases-package: com.agri.production.entity
+  global-config:
+    db-config:
+      id-type: auto
+      table-underline: true

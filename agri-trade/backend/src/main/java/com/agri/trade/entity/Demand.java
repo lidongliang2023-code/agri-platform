@@ -1,4 +1,4 @@
-package com.agri.iot.entity.trade;
+package com.agri.trade.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
@@ -19,6 +19,9 @@ public class Demand {
     @TableField("demand_no")
     private String demandNo;
 
+    @TableField("demand_name")
+    private String demandName;
+
     @TableField("buyer_id")
     private Long buyerId;
 
@@ -31,14 +34,29 @@ public class Demand {
     @TableField("category_id")
     private Long categoryId;
 
+    @TableField("category_code")
+    private String categoryCode;
+
     @TableField("category_name")
     private String categoryName;
 
     @TableField("variety")
     private String variety;
 
+    @TableField("product_name")
+    private String productName;
+
+    @TableField("spec_desc")
+    private String specDesc;
+
+    @TableField("quality_level")
+    private String qualityLevel;
+
     @TableField("quantity")
     private BigDecimal quantity;
+
+    @TableField("demand_quantity")
+    private BigDecimal demandQuantity;
 
     @TableField("unit")
     private String unit;
@@ -48,6 +66,9 @@ public class Demand {
 
     @TableField("price_max")
     private BigDecimal priceMax;
+
+    @TableField("expected_price")
+    private BigDecimal expectedPrice;
 
     @TableField("delivery_province")
     private String deliveryProvince;
@@ -60,6 +81,12 @@ public class Demand {
 
     @TableField("delivery_address")
     private String deliveryAddress;
+
+    @TableField("delivery_location")
+    private String deliveryLocation;
+
+    @TableField("additional_requirements")
+    private String additionalRequirements;
 
     @TableField("delivery_deadline")
     private Date deliveryDeadline;
@@ -81,6 +108,9 @@ public class Demand {
 
     @TableField("demand_status")
     private String demandStatus;
+
+    @TableField("publish_time")
+    private Date publishTime;
 
     @TableField("expect_response_time")
     private Date expectResponseTime;

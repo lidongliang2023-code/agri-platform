@@ -6,6 +6,9 @@ spring:
     name: agri-trade
   profiles:
     active: dev
+  sql:
+    init:
+      mode: never
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://localhost:3306/agri_trade?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true

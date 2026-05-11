@@ -10,12 +10,17 @@
       </div>
       <nav class="nav-menu">
         <ul>
-          <li v-for="item in menuItems" :key="item.path" :class="{ active: currentPath === item.path }">
-            <a :href="item.path" @click.prevent="handleNavClick(item.path)">
+          <li v-for="item in menuItems" :key="item.path" :class="{ active: isCurrentPath(item), expanded: expandedMenu === item.path }">
+            <a 
+              :href="item.path" 
+              @click.prevent="handleMenuClick(item)"
+              class="menu-link"
+            >
               <span class="nav-icon">{{ item.icon }}</span>
               <span class="nav-label">{{ item.label }}</span>
+              <span v-if="item.children" class="expand-icon" :class="{ expanded: expandedMenu === item.path }">▶</span>
             </a>
-            <ul v-if="item.children" class="sub-menu">
+            <ul v-if="item.children && expandedMenu === item.path" class="sub-menu">
               <li v-for="child in item.children" :key="child.path" :class="{ active: currentPath === child.path }">
                 <a :href="child.path" @click.prevent="handleNavClick(child.path)">
                   {{ child.label }}
@@ -58,6 +63,7 @@ const router = useRouter()
 
 const userInfo = ref({})
 const currentPath = ref('/dashboard')
+const expandedMenu = ref(null)
 
 const menuItems = [
   { path: '/dashboard', label: '运营总览', icon: '📊' },
@@ -66,7 +72,10 @@ const menuItems = [
     label: '租户管理', 
     icon: '🏢',
     children: [
-      { path: '/tenant/list', label: '租户列表' }
+      { path: '/tenant/list', label: '租户列表' },
+      { path: '/tenant/quota', label: '配额管理' },
+      { path: '/tenant/package', label: '套餐配置' },
+      { path: '/tenant/statistics', label: '数据统计' }
     ]
   },
   { 
@@ -109,7 +118,11 @@ const menuItems = [
     label: '数据质量', 
     icon: '✅',
     children: [
-      { path: '/quality/list', label: '质量监控' }
+      { path: '/quality/dashboard', label: '质量仪表盘' },
+      { path: '/quality/list', label: '质量监控' },
+      { path: '/quality/rule', label: '规则配置' },
+      { path: '/quality/task', label: '检测任务' },
+      { path: '/quality/issue', label: '问题工单' }
     ]
   },
   { 
@@ -136,6 +149,18 @@ const menuItems = [
       { path: '/customer/list', label: '客户列表' },
       { path: '/supplier/list', label: '供应商列表' }
     ]
+  },
+  
+  { 
+    path: '/system', 
+    label: '系统配置', 
+    icon: '⚙️',
+    children: [
+      { path: '/system/params', label: '参数配置' },
+      { path: '/system/template', label: '通知模板' },
+      { path: '/system/announcement', label: '公告管理' },
+      { path: '/system/region', label: '行政区划' }
+    ]
   }
 ]
 
@@ -143,6 +168,9 @@ const currentLocation = computed(() => {
   const pathNames = {
     '/dashboard': '运营总览',
     '/tenant/list': '租户管理',
+    '/tenant/quota': '配额管理',
+    '/tenant/package': '套餐配置',
+    '/tenant/statistics': '数据统计',
     '/user/list': '用户管理',
     '/user/audit': '认证审核',
     '/org/list': '组织管理',
@@ -150,14 +178,44 @@ const currentLocation = computed(() => {
     '/permission/log': '操作日志',
     '/datastandard/dict': '数据字典',
     '/datastandard/code-rule': '编码规则',
+    '/quality/dashboard': '质量仪表盘',
     '/quality/list': '质量监控',
+    '/quality/rule': '规则配置',
+    '/quality/task': '检测任务',
+    '/quality/issue': '问题工单',
     '/distribution/list': '分发监控',
     '/product/list': '商品列表',
     '/customer/list': '客户管理',
-    '/supplier/list': '供应商管理'
+    '/supplier/list': '供应商管理',
+    '/system/params': '参数配置',
+    '/system/template': '通知模板',
+    '/system/announcement': '公告管理',
+    '/system/region': '行政区划'
   }
   return pathNames[currentPath.value] || '首页'
 })
+
+const isCurrentPath = (item) => {
+  if (currentPath.value === item.path) return true
+  if (item.children) {
+    return item.children.some(child => currentPath.value === child.path)
+  }
+  return false
+}
+
+const handleMenuClick = (item) => {
+  if (item.children) {
+    if (expandedMenu.value === item.path) {
+      expandedMenu.value = null
+    } else {
+      expandedMenu.value = item.path
+    }
+  }
+  if (!item.children) {
+    currentPath.value = item.path
+    router.push(item.path)
+  }
+}
 
 const handleNavClick = (path) => {
   currentPath.value = path
@@ -179,6 +237,15 @@ onMounted(() => {
     userInfo.value = JSON.parse(user)
   }
   currentPath.value = router.currentRoute.value.path
+  const currentMenu = menuItems.find(item => {
+    if (item.children) {
+      return item.children.some(child => currentPath.value === child.path)
+    }
+    return false
+  })
+  if (currentMenu) {
+    expandedMenu.value = currentMenu.path
+  }
 })
 </script>
 
@@ -200,6 +267,7 @@ onMounted(() => {
   z-index: 100;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .logo-section {
@@ -229,6 +297,8 @@ onMounted(() => {
 .nav-menu {
   flex: 1;
   padding: 10px 0;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .nav-menu ul {
@@ -266,6 +336,17 @@ onMounted(() => {
 .nav-icon {
   margin-right: 10px;
   font-size: 16px;
+}
+
+.expand-icon {
+  margin-left: auto;
+  font-size: 10px;
+  color: #a0aec0;
+  transition: transform 0.2s;
+}
+
+.expand-icon.expanded {
+  transform: rotate(90deg);
 }
 
 .sub-menu {
@@ -393,5 +474,35 @@ onMounted(() => {
 .content-wrapper {
   flex: 1;
   padding: 20px;
+}
+
+.nav-menu::-webkit-scrollbar {
+  width: 6px;
+}
+
+.nav-menu::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.nav-menu::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+.nav-menu::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.nav-menu::-moz-scrollbar {
+  width: 6px;
+}
+
+.nav-menu::-moz-scrollbar-track {
+  background: transparent;
+}
+
+.nav-menu::-moz-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
 }
 </style>

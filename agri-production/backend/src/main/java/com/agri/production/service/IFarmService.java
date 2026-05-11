@@ -1,23 +1,23 @@
 package com.agri.production.service;
 
+import com.agri.production.dto.FarmPageDTO;
+import com.agri.production.dto.FarmSaveDTO;
 import com.agri.production.entity.Farm;
-import com.baomidou.mybatisplus.core.metadata.IPage;
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.agri.production.common.entity.PageResult;
+import com.agri.production.vo.FarmVO;
 import com.baomidou.mybatisplus.extension.service.IService;
-
-import java.util.List;
 
 public interface IFarmService extends IService<Farm> {
 
-    IPage<Farm> queryPage(Page<Farm> page, String farmName, String farmType, String auditStatus);
+    FarmVO save(FarmSaveDTO dto, String tenantId);
 
-    List<Farm> getActiveFarms();
+    FarmVO update(FarmSaveDTO dto, String tenantId);
 
-    List<Farm> getFarmsByType(String farmType);
+    void delete(Long id, String tenantId);
 
-    List<Farm> getFarmsByAuditStatus(String auditStatus);
+    FarmVO getById(Long id, String tenantId);
 
-    boolean auditFarm(Long id, String auditStatus, String auditComment, String auditor);
+    PageResult<FarmVO> pageQuery(FarmPageDTO dto, String tenantId);
 
-    boolean updateFarmStatus(Long id, String status);
+    FarmVO getByCode(String farmCode, String tenantId);
 }

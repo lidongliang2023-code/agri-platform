@@ -2,32 +2,33 @@ package com.agri.production.common.entity;
 
 import com.baomidou.mybatisplus.annotation.FieldFill;
 import com.baomidou.mybatisplus.annotation.TableField;
-import com.fasterxml.jackson.annotation.JsonFormat;
+import com.baomidou.mybatisplus.annotation.TableLogic;
 import lombok.Data;
 
-import java.io.Serializable;
 import java.time.LocalDateTime;
 
 @Data
-public class BaseEntity implements Serializable {
+public abstract class BaseEntity {
 
-    private Long id;
-
+    @TableField(value = "tenant_id", fill = FieldFill.INSERT)
     private String tenantId;
 
-    @TableField(fill = FieldFill.INSERT)
+    @TableField(value = "farm_id", fill = FieldFill.INSERT)
+    private Long farmId;
+
+    @TableField(value = "create_by", fill = FieldFill.INSERT)
     private String createBy;
 
-    @TableField(fill = FieldFill.INSERT)
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @TableField(value = "create_time", fill = FieldFill.INSERT)
     private LocalDateTime createTime;
 
-    @TableField(fill = FieldFill.INSERT_UPDATE)
+    @TableField(value = "update_by", fill = FieldFill.INSERT_UPDATE)
     private String updateBy;
 
-    @TableField(fill = FieldFill.INSERT_UPDATE)
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @TableField(value = "update_time", fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updateTime;
 
-    private String remark;
+    @TableLogic
+    @TableField(value = "deleted")
+    private Integer deleted;
 }

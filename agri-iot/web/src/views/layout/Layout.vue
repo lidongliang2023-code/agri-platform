@@ -114,7 +114,8 @@ const menuItems = ref([
     icon: '📱', 
     path: '/device',
     children: [
-      { id: 'device-list', label: '设备列表', path: '/device/list' }
+      { id: 'device-list', label: '设备列表', path: '/device/list' },
+      { id: 'device-type', label: '设备类型', path: '/device/type' }
     ]
   },
   { id: 'group', label: '设备分组', icon: '📁', path: '/group' },
@@ -159,7 +160,8 @@ const menuItems = ref([
       { id: 'report-export', label: '数据导出', path: '/report/export' }
     ]
   },
-  { id: 'plot', label: '地块管理', icon: '🗺️', path: '/plot' }
+  { id: 'plot', label: '地块管理', icon: '🗺️', path: '/plot' },
+  { id: 'scene', label: '场景管理', icon: '🎬', path: '/scene' }
 ])
 
 const activeMenu = computed(() => {

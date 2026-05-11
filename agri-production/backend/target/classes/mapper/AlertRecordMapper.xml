@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.agri.production.mapper.AlertRecordMapper">
+
+    <select id="pageQuery" resultType="com.agri.production.entity.AlertRecord">
+        SELECT * FROM agri_prod_alert_record
+        WHERE deleted = 0
+        <if test="tenantId != null">AND tenant_id = #{tenantId}</if>
+        <if test="dto.alertType != null and dto.alertType != ''">AND alert_type = #{dto.alertType}</if>
+        <if test="dto.level != null and dto.level != ''">AND level = #{dto.level}</if>
+        <if test="dto.status != null and dto.status != ''">AND status = #{dto.status}</if>
+        <if test="dto.farmId != null">AND farm_id = #{dto.farmId}</if>
+        ORDER BY create_time DESC
+    </select>
+
+    <select id="selectByStatus" resultType="com.agri.production.entity.AlertRecord">
+        SELECT * FROM agri_prod_alert_record
+        WHERE status = #{status} AND deleted = 0
+        <if test="tenantId != null">AND tenant_id = #{tenantId}</if>
+    </select>
+
+    <select id="countByLevel" resultType="long">
+        SELECT COUNT(*) FROM agri_prod_alert_record
+        WHERE level = #{level} AND deleted = 0
+        <if test="tenantId != null">AND tenant_id = #{tenantId}</if>
+    </select>
+
+    <select id="countByStatus" resultType="long">
+        SELECT COUNT(*) FROM agri_prod_alert_record
+        WHERE status = #{status} AND deleted = 0
+        <if test="tenantId != null">AND tenant_id = #{tenantId}</if>
+    </select>
+
+</mapper>
