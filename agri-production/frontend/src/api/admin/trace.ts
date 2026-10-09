@@ -126,6 +126,9 @@ export function closeRecall(recallId: string): Promise<boolean> {
 /** 运营端质量监管接口基址 */
 const QUALITY_BASE = '/admin/quality'
 
+/** 检测机构写接口基址（新增 / 修改 / 删除在用户端 /quality 前缀下，真实落 prod_quality_lab） */
+const LAB_BASE = '/quality'
+
 /** 检测机构（后端 prod_quality_lab 形态 + 运营端增强字段） */
 export interface QualityLab {
   /** 机构 ID */
@@ -148,6 +151,8 @@ export interface QualityLab {
   accreditedScope?: string
   /** 合作状态：1 合作中 0 已终止 2 待准入（前端扩展） */
   status: number
+  /** 准入驳回原因（后端 prod_quality_lab.reject_reason，驳回时落库） */
+  rejectReason?: string
   /** 创建时间 */
   createdAt?: string
   /** 更新时间 */
@@ -176,6 +181,14 @@ export interface LabServiceRating {
   orderCount: number
   /** 评价说明 */
   remark?: string
+  /**
+   * 本机登记时间。
+   *
+   * 该字段同时是「真伪标记」：历史版本把原型示例评价（`orderCount: 1286` 之类）写进过
+   * localStorage，这些条目没有登记时间。加载时只保留带 updatedAt 的条目，
+   * 避免把原型编造数字继续渲染给用户。
+   */
+  updatedAt?: string
 }
 
 /** LIMS 认证方式 */
@@ -296,6 +309,47 @@ export interface AdminTraceChainBatch {
   status?: number
   /** 农场名称（冗余） */
   farmName?: string
+}
+
+/** 新增检测机构入参（后端 POST /api/v1/production/quality/labs，返回新机构 ID） */
+export interface CreateQualityLabPayload {
+  /** 机构编码 */
+  labCode?: string
+  /** 机构名称（必填） */
+  labName: string
+  /** 机构类型：第三方 / 政府 / 自建 */
+  labType?: string
+  /** 资质等级：1 国家级 2 省级 3 市级 */
+  labLevel?: 1 | 2 | 3
+  /** 联系人 */
+  contactName?: string
+  /** 联系电话 */
+  contactPhone?: string
+  /** 机构地址 */
+  address?: string
+  /** 资质证书编号 */
+  qualificationNo?: string
+  /** 认可检测范围 */
+  accreditedScope?: string
+  /** 合作状态：1 合作中 2 待准入 0 已终止 */
+  status?: number
+}
+
+/**
+ * 新增检测机构（POST /quality/labs）。
+ *
+ * 后端 QualityController.createQualityLab 真实落 prod_quality_lab 表，返回新生成的 labId。
+ * 注意该端点在**非 admin** 的 /quality 前缀下（运营端 /admin/quality 只有列表、准入、驳回）。
+ */
+export function createQualityLab(payload: CreateQualityLabPayload): Promise<string> {
+  return http.post<string>(`${LAB_BASE}/labs`, payload)
+}
+
+/** 检测机构准入驳回（POST /admin/quality/labs/{labId}/reject） */
+export function rejectQualityLab(labId: string, rejectReason?: string): Promise<QualityLab> {
+  return http.post<QualityLab>(`${QUALITY_BASE}/labs/${labId}/reject`, {
+    rejectReason: rejectReason ?? '',
+  })
 }
 
 /** 检测机构分页查询参数 */

@@ -3,7 +3,12 @@
  * 路由路径：/admin/production/quality/labs
  * 所属模块：质量追溯管理
  * PRD 序号：PRD 6.2 #18（检测机构准入、LIMS对接配置、服务评价）
- * 关联表：agri_prod_quality_lab（PRD 11.2）
+ * 关联表：prod_quality_lab（PRD 11.2）
+ *
+ * 真实性约定（2026 修订）：
+ * - 机构列表、新增、准入、驳回全部走真实接口，接口失败一律报错，不再用本地示例数据顶上；
+ * - LIMS 对接配置与机构服务评价**后端完全没有对应表和接口**，短期也补不上，
+ *   因此这两块保留浏览器本地存储，但必须在 UI 上醒目标注「仅本机、不同步服务端」。
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
@@ -41,12 +46,19 @@ import {
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { httpStatusOf } from '@/utils/request'
 import type {
+  CreateQualityLabPayload,
   LabLimsConfig,
   LabServiceRating,
   QualityLab,
 } from '@/api/admin/trace'
-import { accreditQualityLab, fetchQualityLabs } from '@/api/admin/trace'
+import {
+  accreditQualityLab,
+  createQualityLab,
+  fetchQualityLabs,
+  rejectQualityLab,
+} from '@/api/admin/trace'
 
 const { Text } = Typography
 
@@ -56,14 +68,29 @@ const LIMS_STORAGE_KEY = 'agri.admin.quality.lab.lims.config'
 /** 服务评价本地持久化 key */
 const RATING_STORAGE_KEY = 'agri.admin.quality.lab.service.rating'
 
+/** 准入审核意见本地留存 key（accredit 端点不接收审核意见，只能本机留存） */
+const AUDIT_REMARK_STORAGE_KEY = 'agri.admin.quality.lab.audit.remark'
+
 /** 机构准入审核状态 */
 type LabAuditStatus = '合作中' | '待准入' | '已终止'
 
-/** 资质等级文案 */
+/** 资质等级文案（1国家级 / 2省级 / 3市级） */
 const LAB_LEVEL_TEXT: Record<number, string> = {
   1: '国家级',
   2: '省级',
   3: '市级',
+}
+
+/** 资质等级 → 展示标签 */
+function renderLabLevel(value?: number | null): JSX.Element {
+  if (value === null || value === undefined) {
+    return <Tag>未定级</Tag>
+  }
+  const text = LAB_LEVEL_TEXT[value]
+  if (!text) {
+    return <Tag>未定级</Tag>
+  }
+  return <Tag color={value === 1 ? 'gold' : value === 2 ? 'blue' : 'default'}>{text}</Tag>
 }
 
 /** 合作状态 → 展示 */
@@ -103,87 +130,24 @@ const LAB_TYPE_TEXT: Record<string, string> = {
   SELF_BUILT: '自建',
 }
 
-/** 原型示例机构（后端无数据时兜底） */
-const PROTOTYPE_LABS: QualityLab[] = [
-  {
-    labId: 'LAB001',
-    labCode: 'NAT-QC-001',
-    labName: '国家质检中心',
-    labType: 'GOVERNMENT',
-    contactName: '陈明',
-    contactPhone: '010-6234****',
-    address: '北京市朝阳区质检大厦',
-    qualificationNo: 'CNAS-L2025-0018',
-    accreditedScope: '农残、重金属、微生物、理化指标',
-    status: 1,
-    labLevel: 1,
-    createdAt: '2025-01-12 09:00:00',
-  },
-  {
-    labId: 'LAB002',
-    labCode: 'SGS-CN-021',
-    labName: 'SGS 通标标准技术服务',
-    labType: 'THIRD_PARTY',
-    contactName: '刘婷',
-    contactPhone: '021-5836****',
-    address: '上海市浦东新区康桥东路',
-    qualificationNo: 'CMA-2025-沪-0312',
-    accreditedScope: '农残、兽残、添加剂、营养成分',
-    status: 1,
-    labLevel: 1,
-    createdAt: '2025-02-08 09:00:00',
-  },
-  {
-    labId: 'LAB003',
-    labCode: 'PROV-AG-076',
-    labName: '省农产品质量检验中心',
-    labType: 'GOVERNMENT',
-    contactName: '王建国',
-    contactPhone: '0371-6592****',
-    address: '河南省郑州市农业路 12 号',
-    qualificationNo: 'CMA-2025-豫-0207',
-    accreditedScope: '农药残留、重金属、品质指标',
-    status: 1,
-    labLevel: 2,
-    createdAt: '2025-03-01 09:00:00',
-  },
-  {
-    labId: 'LAB004',
-    labCode: 'CITY-QS-134',
-    labName: '市质检站',
-    labType: 'GOVERNMENT',
-    contactName: '赵敏',
-    contactPhone: '0371-6723****',
-    address: '河南省郑州市中原区',
-    qualificationNo: 'CMA-2025-郑-0091',
-    accreditedScope: '常规理化、微生物',
-    status: 1,
-    labLevel: 3,
-    createdAt: '2025-03-20 09:00:00',
-  },
-  {
-    labId: 'LAB005',
-    labCode: 'SELF-LAB-009',
-    labName: '绿源自建实验室',
-    labType: 'SELF_BUILT',
-    contactName: '孙浩',
-    contactPhone: '138****2043',
-    address: '河南省新乡市绿源产业园',
-    qualificationNo: 'CMA-2025-新-0044',
-    accreditedScope: '水分、杂质、外观等级',
-    status: 2,
-    labLevel: 3,
-    createdAt: '2025-06-18 09:00:00',
-  },
-]
+/**
+ * 后端能力缺失说明：LIMS 对接配置。
+ *
+ * 全仓无 lims 相关表与接口，配置只能存浏览器本地，必须让用户一眼看到这个事实。
+ */
+const LIMS_LOCAL_ONLY_ALERT = {
+  message: '该配置仅保存在当前浏览器本地，不会同步到服务端',
+  description:
+    '后端暂无 LIMS 对接配置的存储能力（无对应数据表、无接口）。保存后仅本机可见：换设备、换浏览器或清理浏览器数据都会丢失，其他运营账号也看不到。后端补齐存储能力后将切换为接口读写。',
+}
 
-/** 原型示例服务评价（后端无评价接口时兜底） */
-const PROTOTYPE_RATING: Record<string, LabServiceRating> = {
-  LAB001: { onTimeRate: 96, accuracyRate: 99, attitudeScore: 4.8, orderCount: 1286, remark: '国家级机构，报告权威性高，出报告周期稳定' },
-  LAB002: { onTimeRate: 92, accuracyRate: 98, attitudeScore: 4.6, orderCount: 964, remark: '国际机构，检测项目覆盖全，费用偏高' },
-  LAB003: { onTimeRate: 88, accuracyRate: 97, attitudeScore: 4.4, orderCount: 1532, remark: '省级机构，抽检配合度高，旺季存在排期' },
-  LAB004: { onTimeRate: 84, accuracyRate: 95, attitudeScore: 4.2, orderCount: 738, remark: '市级机构，常规项目响应快' },
-  LAB005: { onTimeRate: 78, accuracyRate: 92, attitudeScore: 3.9, orderCount: 212, remark: '自建实验室，仅限内部例行检测' },
+/**
+ * 后端能力缺失说明：机构服务评价。
+ */
+const RATING_LOCAL_ONLY_ALERT = {
+  message: '后端暂无机构服务评价数据源，未登记时显示「未接入」',
+  description:
+    '后端没有服务评价相关的数据表与接口，平台无法统计准时率 / 准确率 / 服务单数。当前展示的本机登记评价仅本机可见，不会同步服务端；清理浏览器数据后会丢失。',
 }
 
 /** LIMS 配置表单值 */
@@ -223,13 +187,36 @@ interface CreateLabFormValues {
   /** 资质编号 */
   qualificationNo: string
   /** 资质等级 */
-  labLevel: number
+  labLevel: 1 | 2 | 3
   /** 联系人 */
-  contactName: string
+  contactName?: string
   /** 联系电话 */
-  contactPhone: string
+  contactPhone?: string
+  /** 机构地址 */
+  address?: string
   /** 认可范围 */
-  accreditedScope: string
+  accreditedScope?: string
+  /** 初始合作状态：2 待准入 / 1 合作中 */
+  status: number
+}
+
+/**
+ * 服务评价登记表单值（本地登记，非服务端数据）。
+ *
+ * 后端没有服务评价表与接口，运营只能在本地登记自己的观察结果；
+ * UI 上必须标注「本机登记」，不能让人误以为是平台统计出来的指标。
+ */
+interface RatingFormValues {
+  /** 报告准时率（0-100） */
+  onTimeRate: number
+  /** 结果准确率（0-100） */
+  accuracyRate: number
+  /** 服务态度评分（0-5） */
+  attitudeScore: number
+  /** 累计服务单数 */
+  orderCount: number
+  /** 评价说明 */
+  remark?: string
 }
 
 /**
@@ -256,6 +243,10 @@ function loadLimsConfigs(): Record<string, LabLimsConfig> {
 /**
  * 读取本地持久化的服务评价。
  *
+ * 后端没有服务评价数据源，这里只加载**本机登记过**的评价：历史版本曾把原型示例
+ * 评价（含 `orderCount: 1286` 这类编造数字）写进同一个 key，这些条目没有登记时间，
+ * 一律丢弃，不继续渲染给用户。
+ *
  * @returns 机构 ID → 服务评价
  */
 function loadRatings(): Record<string, LabServiceRating> {
@@ -265,10 +256,61 @@ function loadRatings(): Record<string, LabServiceRating> {
       return {}
     }
     const parsed = JSON.parse(raw) as Record<string, LabServiceRating>
+    if (typeof parsed !== 'object' || parsed === null) {
+      return {}
+    }
+    return Object.fromEntries(
+      Object.entries(parsed).filter(
+        ([, item]) => item !== null && typeof item === 'object' && typeof item.updatedAt === 'string',
+      ),
+    )
+  } catch {
+    return {}
+  }
+}
+
+/**
+ * 读取本地留存的准入审核意见。
+ *
+ * 后端 accredit 端点不接收审核意见，运营填写的内容只能在本机留存并原样展示，
+ * 不伪装成「已提交服务端」。
+ *
+ * @returns 机构 ID → 审核意见
+ */
+function loadAuditRemarks(): Record<string, string> {
+  try {
+    const raw = window.localStorage.getItem(AUDIT_REMARK_STORAGE_KEY)
+    if (!raw) {
+      return {}
+    }
+    const parsed = JSON.parse(raw) as Record<string, string>
     return typeof parsed === 'object' && parsed !== null ? parsed : {}
   } catch {
     return {}
   }
+}
+
+/**
+ * 把写操作失败转换成用户可读文案。
+ *
+ * 端点未就绪（404 / 501）与业务拒绝、网络不可达要分开说，
+ * 统一口径是「数据未保存」，绝不让失败看起来像成功。
+ *
+ * @param error mutation 抛出的错误
+ * @param action 操作名，如「新增机构」
+ * @param endpoint 对应后端端点路径
+ * @returns 展示给用户的错误文案
+ */
+function describeFailure(error: unknown, action: string, endpoint: string): string {
+  const status = httpStatusOf(error)
+  if (status === 404 || status === 501) {
+    return `${action}失败：后端端点 ${endpoint} 尚未就绪（HTTP ${status}），数据未保存，请联系后端补齐该接口后重试`
+  }
+  const detail = error instanceof Error ? error.message : ''
+  if (status === 0) {
+    return `${action}失败：接口不可达（${detail || '网络异常'}），数据未保存`
+  }
+  return `${action}失败：${detail || `后端 ${endpoint} 未返回成功`}，数据未保存`
 }
 
 /**
@@ -277,9 +319,13 @@ function loadRatings(): Record<string, LabServiceRating> {
  * 业务职责：检测机构准入审核（通过 / 驳回）、LIMS 对接配置（接口地址 / 认证方式 / 字段映射）
  * 与服务评价展示，维护机构资质与合作状态。
  *
- * 数据来源：
+ * 数据来源（全部为真实接口，失败即报错，不回落示例数据）：
  * - GET  /admin/quality/labs（机构分页，keyword 按名称模糊）
- * - POST /admin/quality/labs/{labId}/accredit（准入认可，status 置 1）
+ * - POST /quality/labs（新增机构，返回新机构 ID）
+ * - POST /admin/quality/labs/{labId}/accredit（准入通过，status 置 1）
+ * - POST /admin/quality/labs/{labId}/reject（准入驳回，status 置 0 并落驳回原因）
+ *
+ * 本地降级（已在 UI 醒目提示）：LIMS 对接配置、服务评价、准入审核意见。
  *
  * @returns 页面内容
  */
@@ -294,12 +340,14 @@ export default function LabManage(): JSX.Element {
   const [keyword, setKeyword] = useState<string>('')
   /** 已提交关键字 */
   const [submittedKeyword, setSubmittedKeyword] = useState<string>('')
-  /** 状态筛选 */
+  /** 状态筛选（后端无 status 参数，仅作用于当前页） */
   const [statusFilter, setStatusFilter] = useState<number | undefined>(undefined)
   /** LIMS 配置（本地持久化） */
   const [limsConfigs, setLimsConfigs] = useState<Record<string, LabLimsConfig>>({})
   /** 服务评价（本地持久化） */
   const [ratings, setRatings] = useState<Record<string, LabServiceRating>>({})
+  /** 准入审核意见（本地留存，后端 accredit 不接收） */
+  const [auditRemarks, setAuditRemarks] = useState<Record<string, string>>({})
   /** LIMS 配置弹窗目标机构 */
   const [limsTarget, setLimsTarget] = useState<QualityLab | null>(null)
   /** LIMS 配置表单 */
@@ -314,11 +362,16 @@ export default function LabManage(): JSX.Element {
   const [createOpen, setCreateOpen] = useState<boolean>(false)
   /** 新增机构表单 */
   const [createForm] = Form.useForm<CreateLabFormValues>()
+  /** 服务评价登记目标机构（本地登记） */
+  const [ratingTarget, setRatingTarget] = useState<QualityLab | null>(null)
+  /** 服务评价表单 */
+  const [ratingForm] = Form.useForm<RatingFormValues>()
 
   /** 首次挂载时读取本地登记的配置与评价 */
   useEffect(() => {
     setLimsConfigs(loadLimsConfigs())
     setRatings(loadRatings())
+    setAuditRemarks(loadAuditRemarks())
   }, [])
 
   /** 机构分页 */
@@ -328,61 +381,79 @@ export default function LabManage(): JSX.Element {
     retry: false,
   })
 
-  /** 准入认可 */
+  /** 列表刷新：新增 / 准入 / 驳回后同步 */
+  const refreshList = useCallback((): void => {
+    void queryClient.invalidateQueries({ queryKey: ['admin', 'quality', 'labs'] })
+  }, [queryClient])
+
+  /** 准入通过 */
   const accreditMutation = useMutation({
     mutationFn: (labId: string) => accreditQualityLab(labId),
     onSuccess: () => {
       message.success('机构准入已通过，合作状态更新为「合作中」')
-      void queryClient.invalidateQueries({ queryKey: ['admin', 'quality', 'labs'] })
+      refreshList()
     },
-    onError: () => {
-      message.warning('准入接口未返回成功，请确认后端 /admin/quality/labs/{labId}/accredit 是否可用')
+    onError: (error: unknown) => {
+      message.error(
+        describeFailure(error, '准入通过', 'POST /admin/quality/labs/{labId}/accredit'),
+      )
     },
   })
 
-  /** 表格数据源（后端优先，缺失时回落原型示例） */
+  /** 准入驳回 */
+  const rejectMutation = useMutation({
+    mutationFn: (params: { labId: string; rejectReason: string }) =>
+      rejectQualityLab(params.labId, params.rejectReason),
+    onSuccess: (_data, variables) => {
+      message.success(
+        `已驳回机构准入，合作状态更新为「已终止」${variables.rejectReason ? `，驳回原因已提交：${variables.rejectReason}` : ''}`,
+      )
+      refreshList()
+    },
+    onError: (error: unknown) => {
+      message.error(
+        describeFailure(error, '准入驳回', 'POST /admin/quality/labs/{labId}/reject'),
+      )
+    },
+  })
+
+  /** 新增机构 */
+  const createMutation = useMutation({
+    mutationFn: (payload: CreateQualityLabPayload) => createQualityLab(payload),
+    onSuccess: (labId: string) => {
+      message.success(`机构已创建（机构 ID：${labId}），请按合作状态完成后续准入审核`)
+      setCreateOpen(false)
+      createForm.resetFields()
+      setPageNum(1)
+      refreshList()
+    },
+    onError: (error: unknown) => {
+      message.error(describeFailure(error, '新增机构', 'POST /quality/labs'))
+    },
+  })
+
+  /** 表格数据源（只读后端；后端无数据即为空，不再用示例数据顶上） */
   const { rows, total } = useMemo(() => {
     const remote = listQuery.data?.list ?? []
-    if (remote.length > 0) {
-      const filtered =
-        statusFilter === undefined
-          ? remote
-          : remote.filter((row) => row.status === statusFilter)
-      return { rows: filtered, total: listQuery.data?.total ?? 0 }
-    }
-    const source = submittedKeyword
-      ? PROTOTYPE_LABS.filter((item) => item.labName.includes(submittedKeyword))
-      : PROTOTYPE_LABS
     const filtered =
-      statusFilter === undefined ? source : source.filter((item) => item.status === statusFilter)
-    return { rows: filtered, total: filtered.length }
-  }, [listQuery.data, submittedKeyword, statusFilter])
+      statusFilter === undefined ? remote : remote.filter((row) => row.status === statusFilter)
+    return { rows: filtered, total: listQuery.data?.total ?? 0 }
+  }, [listQuery.data, statusFilter])
 
-  /** 顶部统计 */
+  /** 顶部统计（合作中 / 待准入为当前页口径，后端未提供全量状态聚合） */
   const stats = useMemo(() => {
-    const source = rows.length > 0 ? rows : PROTOTYPE_LABS
-    const all = listQuery.data && listQuery.data.list.length > 0 ? listQuery.data.list : PROTOTYPE_LABS
+    const currentPage = listQuery.data?.list ?? []
     return {
-      /** 机构总数 */
-      total: all.length,
-      /** 合作中 */
-      cooperating: all.filter((item) => item.status === 1).length,
-      /** 待准入 */
-      pending: all.filter((item) => item.status === 2).length,
-      /** 已对接 LIMS */
+      /** 机构总数（后端分页返回的真实总数） */
+      total: listQuery.data?.total ?? 0,
+      /** 当前页合作中 */
+      cooperating: currentPage.filter((item) => item.status === 1).length,
+      /** 当前页待准入 */
+      pending: currentPage.filter((item) => item.status === 2).length,
+      /** 本机登记的 LIMS 已对接数量 */
       limsEnabled: Object.values(limsConfigs).filter((item) => item.enabled).length,
-      /** 平均服务评分 */
-      avgScore:
-        source.length > 0
-          ? Number(
-              (
-                source.reduce((acc, item) => acc + (ratings[item.labId]?.attitudeScore ?? 4.2), 0) /
-                source.length
-              ).toFixed(1),
-            )
-          : 4.2,
     }
-  }, [rows, listQuery.data, limsConfigs, ratings])
+  }, [listQuery.data, limsConfigs])
 
   /** 打开 LIMS 配置弹窗 */
   const openLimsConfig = useCallback(
@@ -404,7 +475,7 @@ export default function LabManage(): JSX.Element {
     [limsConfigs, limsForm],
   )
 
-  /** 提交 LIMS 配置 */
+  /** 提交 LIMS 配置（本地持久化，已醒目标注不会同步服务端） */
   const handleLimsSubmit = async (): Promise<void> => {
     const values = await limsForm.validateFields()
     if (!limsTarget) {
@@ -441,47 +512,121 @@ export default function LabManage(): JSX.Element {
     }
     const next = { ...limsConfigs, [limsTarget.labId]: nextConfig }
     setLimsConfigs(next)
+    let persisted = true
     try {
       window.localStorage.setItem(LIMS_STORAGE_KEY, JSON.stringify(next))
     } catch {
       // 隐私模式下 localStorage 不可用时，仅保留内存态
+      persisted = false
     }
-    message.success(`已保存 ${limsTarget.labName} 的 LIMS 对接配置`)
+    if (persisted) {
+      message.success(
+        `已保存到本机浏览器：${limsTarget.labName} 的 LIMS 对接配置（未同步服务端，换设备或清理浏览器数据后会丢失）`,
+      )
+    } else {
+      message.warning(
+        `浏览器本地存储不可用，${limsTarget.labName} 的 LIMS 配置仅保留在当前页面，刷新后会丢失`,
+      )
+    }
     setLimsTarget(null)
   }
 
-  /** 提交准入审核 */
+  /** 打开服务评价登记弹窗（本地登记，后端无评价接口） */
+  const openRatingForm = useCallback(
+    (record: QualityLab): void => {
+      setRatingTarget(record)
+      const existing = ratings[record.labId]
+      ratingForm.setFieldsValue({
+        onTimeRate: existing?.onTimeRate ?? 90,
+        accuracyRate: existing?.accuracyRate ?? 95,
+        attitudeScore: existing?.attitudeScore ?? 4,
+        orderCount: existing?.orderCount ?? 0,
+        remark: existing?.remark ?? '',
+      })
+    },
+    [ratings, ratingForm],
+  )
+
+  /** 提交服务评价（仅写入本机浏览器，已醒目标注不会同步服务端） */
+  const handleRatingSubmit = async (): Promise<void> => {
+    const values = await ratingForm.validateFields()
+    if (!ratingTarget) {
+      return
+    }
+    const nextRating: LabServiceRating = {
+      onTimeRate: Number(values.onTimeRate),
+      accuracyRate: Number(values.accuracyRate),
+      attitudeScore: Number(values.attitudeScore),
+      orderCount: Number(values.orderCount),
+      remark: values.remark,
+      updatedAt: new Date().toISOString(),
+    }
+    const next = { ...ratings, [ratingTarget.labId]: nextRating }
+    setRatings(next)
+    let persisted = true
+    try {
+      window.localStorage.setItem(RATING_STORAGE_KEY, JSON.stringify(next))
+    } catch {
+      // 隐私模式下 localStorage 不可用时，仅保留内存态
+      persisted = false
+    }
+    if (persisted) {
+      message.success(
+        `已保存到本机浏览器：${ratingTarget.labName} 的服务评价（本机登记，非平台统计值，不会同步服务端）`,
+      )
+    } else {
+      message.warning('浏览器本地存储不可用，本次服务评价仅保留在当前页面，刷新后会丢失')
+    }
+    setRatingTarget(null)
+  }
+
+  /** 提交准入审核（通过走 accredit，驳回走 reject，均为真实写接口） */
   const handleAuditSubmit = async (): Promise<void> => {
     const values = await auditForm.validateFields()
     if (!auditTarget) {
       return
     }
+    const labId = auditTarget.labId
+    const remark = (values.remark ?? '').trim()
     if (values.approved) {
-      accreditMutation.mutate(auditTarget.labId)
-      /** 记录审核意见（本地留存，后端补齐后一并提交） */
-      setRatings((prev) => {
-        const next = { ...prev }
-        const current = next[auditTarget.labId] ?? PROTOTYPE_RATING[auditTarget.labId]
-        if (current) {
-          next[auditTarget.labId] = { ...current, remark: values.remark || current.remark }
+      /** 审核意见：accredit 端点不接收，仅本机留存并原样展示 */
+      if (remark) {
+        const next = { ...auditRemarks, [labId]: remark }
+        setAuditRemarks(next)
+        try {
+          window.localStorage.setItem(AUDIT_REMARK_STORAGE_KEY, JSON.stringify(next))
+        } catch {
+          // 隐私模式下 localStorage 不可用时，仅保留内存态
         }
-        return next
-      })
+      }
+      accreditMutation.mutate(labId)
     } else {
-      /** 驳回：本地置为已终止（后端缺少驳回端点） */
-      message.success(`已驳回 ${auditTarget.labName} 的准入申请：${values.remark || '资质材料不符合要求'}`)
-      void queryClient.invalidateQueries({ queryKey: ['admin', 'quality', 'labs'] })
+      if (!remark) {
+        message.error('驳回时必须填写驳回原因（后端会落库 reject_reason）')
+        return
+      }
+      rejectMutation.mutate({ labId, rejectReason: remark })
     }
     setAuditTarget(null)
     auditForm.resetFields()
   }
 
-  /** 提交新增机构 */
+  /** 提交新增机构（真实调用 POST /quality/labs） */
   const handleCreateSubmit = async (): Promise<void> => {
     const values = await createForm.validateFields()
-    message.success(`机构 ${values.labName} 已登记（后端新增接口待补齐，当前为本地登记）`)
-    setCreateOpen(false)
-    createForm.resetFields()
+    const payload: CreateQualityLabPayload = {
+      labCode: values.labCode,
+      labName: values.labName,
+      labType: values.labType,
+      labLevel: values.labLevel,
+      contactName: values.contactName,
+      contactPhone: values.contactPhone,
+      address: values.address,
+      qualificationNo: values.qualificationNo,
+      accreditedScope: values.accreditedScope,
+      status: values.status,
+    }
+    createMutation.mutate(payload)
   }
 
   /** 表格列（PRD #18 字段） */
@@ -509,11 +654,7 @@ export default function LabManage(): JSX.Element {
       title: '资质等级',
       dataIndex: 'labLevel',
       width: 100,
-      render: (value: number) => (
-        <Tag color={value === 1 ? 'gold' : value === 2 ? 'blue' : 'default'}>
-          {LAB_LEVEL_TEXT[value] ?? '未定级'}
-        </Tag>
-      ),
+      render: (value: number | null | undefined) => renderLabLevel(value),
     },
     {
       title: '类型',
@@ -532,11 +673,11 @@ export default function LabManage(): JSX.Element {
     {
       title: 'LIMS 对接',
       key: 'lims',
-      width: 120,
+      width: 140,
       render: (_value, record) => {
         const config = limsConfigs[record.labId]
         return config?.enabled ? (
-          <Tag color="success" icon={<ApiOutlined />}>已对接</Tag>
+          <Tag color="success" icon={<ApiOutlined />}>已对接（本机）</Tag>
         ) : (
           <Tag>未对接</Tag>
         )
@@ -547,15 +688,15 @@ export default function LabManage(): JSX.Element {
       key: 'rating',
       width: 180,
       render: (_value, record) => {
-        const rating = ratings[record.labId] ?? PROTOTYPE_RATING[record.labId]
+        const rating = ratings[record.labId]
         if (!rating) {
-          return <Text type="secondary">暂无评价</Text>
+          return <Text type="secondary">未接入</Text>
         }
         return (
           <Space direction="vertical" size={0}>
             <Rate disabled allowHalf value={rating.attitudeScore} style={{ fontSize: 12 }} />
             <Text type="secondary" style={{ fontSize: 12 }}>
-              准时 {rating.onTimeRate}% · 准确 {rating.accuracyRate}%
+              本机登记 · 准时 {rating.onTimeRate}% · 准确 {rating.accuracyRate}%
             </Text>
           </Space>
         )
@@ -576,6 +717,14 @@ export default function LabManage(): JSX.Element {
           >
             LIMS配置
           </Button>
+          <Button
+            type="link"
+            size="small"
+            icon={<StarOutlined />}
+            onClick={() => openRatingForm(record)}
+          >
+            评价
+          </Button>
           {record.status === 2 ? (
             <>
               <Button
@@ -595,6 +744,7 @@ export default function LabManage(): JSX.Element {
                 size="small"
                 danger
                 icon={<CloseCircleOutlined />}
+                loading={rejectMutation.isPending}
                 onClick={() => {
                   setAuditTarget(record)
                   auditForm.setFieldsValue({ approved: false, remark: '' })
@@ -613,13 +763,20 @@ export default function LabManage(): JSX.Element {
     },
   ]
 
+  /** 列表加载失败文案 */
+  const listErrorText =
+    listQuery.error instanceof Error && listQuery.error.message
+      ? listQuery.error.message
+      : '接口不可达或返回异常'
+
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
       {listQuery.isError ? (
         <Alert
-          type="warning"
+          type="error"
           showIcon
-          message="检测机构接口未返回数据，当前展示示例机构数据（国家质检中心 / SGS / 省农检中心 / 市质检站 / 绿源自建实验室）"
+          message={`检测机构列表加载失败：${listErrorText}`}
+          description="页面不再使用本地示例机构数据兜底——接口恢复前列表为空。请确认后端 GET /api/v1/production/admin/quality/labs 可用后重试。"
           action={
             <Button size="small" icon={<ReloadOutlined />} onClick={() => void listQuery.refetch()}>
               重试
@@ -637,21 +794,32 @@ export default function LabManage(): JSX.Element {
         </Col>
         <Col xs={12} sm={12} lg={6}>
           <Card>
-            <Statistic title="合作中" value={stats.cooperating} valueStyle={{ color: '#52c41a' }} />
-          </Card>
-        </Col>
-        <Col xs={12} sm={12} lg={6}>
-          <Card>
-            <Statistic title="待准入" value={stats.pending} valueStyle={{ color: '#faad14' }} />
+            <Statistic
+              title="合作中（当前页）"
+              value={stats.cooperating}
+              valueStyle={{ color: '#52c41a' }}
+            />
           </Card>
         </Col>
         <Col xs={12} sm={12} lg={6}>
           <Card>
             <Statistic
-              title="LIMS 已对接"
-              value={stats.limsEnabled}
-              suffix={`/ 平均评分 ${stats.avgScore}`}
+              title="待准入（当前页）"
+              value={stats.pending}
+              valueStyle={{ color: '#faad14' }}
             />
+          </Card>
+        </Col>
+        <Col xs={12} sm={12} lg={6}>
+          <Card>
+            <Statistic
+              title="LIMS 已对接（本机登记）"
+              value={stats.limsEnabled}
+              suffix="家"
+            />
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              服务评价：后端未接入
+            </Text>
           </Card>
         </Col>
       </Row>
@@ -700,6 +868,11 @@ export default function LabManage(): JSX.Element {
             重置
           </Button>
         </Space>
+        <div style={{ marginTop: 8 }}>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            合作状态筛选仅对当前页生效：后端 GET /admin/quality/labs 暂无 status 参数，仅支持按机构名称模糊查询。
+          </Text>
+        </div>
       </Card>
 
       {/* 列表区 */}
@@ -723,7 +896,7 @@ export default function LabManage(): JSX.Element {
           columns={columns}
           dataSource={rows}
           scroll={{ x: 1300 }}
-          locale={{ emptyText: <Empty description="暂无检测机构，请新增或调整筛选条件" /> }}
+          locale={{ emptyText: <Empty description="暂无检测机构，请新增机构或调整筛选条件" /> }}
           pagination={{
             current: pageNum,
             pageSize,
@@ -738,7 +911,7 @@ export default function LabManage(): JSX.Element {
         />
       </Card>
 
-      {/* 机构详情抽屉：资质 + 服务评价 */}
+      {/* 机构详情抽屉：资质 + 服务评价 + LIMS */}
       <Drawer
         title="检测机构详情"
         width={560}
@@ -755,15 +928,7 @@ export default function LabManage(): JSX.Element {
               items={[
                 { key: 'name', label: '机构名称', children: detailTarget.labName },
                 { key: 'code', label: '机构编码', children: detailTarget.labCode ?? '—' },
-                {
-                  key: 'level',
-                  label: '资质等级',
-                  children: (
-                    <Tag color={detailTarget.labLevel === 1 ? 'gold' : detailTarget.labLevel === 2 ? 'blue' : 'default'}>
-                      {LAB_LEVEL_TEXT[detailTarget.labLevel ?? 3] ?? '未定级'}
-                    </Tag>
-                  ),
-                },
+                { key: 'level', label: '资质等级', children: renderLabLevel(detailTarget.labLevel) },
                 { key: 'qual', label: '资质编号', children: detailTarget.qualificationNo ?? '—' },
                 { key: 'scope', label: '认可范围', children: detailTarget.accreditedScope ?? '—' },
                 { key: 'type', label: '机构类型', children: LAB_TYPE_TEXT[detailTarget.labType ?? ''] ?? detailTarget.labType ?? '—' },
@@ -779,82 +944,123 @@ export default function LabManage(): JSX.Element {
                     </Tag>
                   ),
                 },
+                { key: 'reject', label: '驳回原因', children: detailTarget.rejectReason ?? '—' },
+                {
+                  key: 'auditRemark',
+                  label: '审核意见（本机留存）',
+                  children: auditRemarks[detailTarget.labId] ?? '—',
+                },
               ]}
             />
-            <Card title="服务评价" size="small">
-              {(() => {
-                const rating = ratings[detailTarget.labId] ?? PROTOTYPE_RATING[detailTarget.labId]
-                if (!rating) {
-                  return <Empty description="暂无服务评价记录" />
-                }
-                return (
-                  <Space direction="vertical" size={12} style={{ width: '100%' }}>
-                    <Row align="middle" justify="space-between">
-                      <Space>
-                        <StarOutlined style={{ color: '#faad14' }} />
-                        <Text strong>综合服务评分</Text>
-                      </Space>
-                      <Rate disabled allowHalf value={rating.attitudeScore} />
-                    </Row>
-                    <div>
-                      <Text type="secondary">报告准时率</Text>
-                      <Progress percent={rating.onTimeRate} size="small" strokeColor="#52c41a" />
-                    </div>
-                    <div>
-                      <Text type="secondary">结果准确率</Text>
-                      <Progress percent={rating.accuracyRate} size="small" strokeColor="#1677ff" />
-                    </div>
-                    <Row justify="space-between">
-                      <Text type="secondary">累计服务单数</Text>
-                      <Text strong>{rating.orderCount.toLocaleString('zh-CN')} 单</Text>
-                    </Row>
-                    {rating.remark ? (
-                      <Alert type="info" showIcon message={rating.remark} />
-                    ) : null}
-                  </Space>
-                )
-              })()}
+            <Card
+              title="服务评价"
+              size="small"
+              extra={
+                <Button
+                  type="link"
+                  size="small"
+                  icon={<StarOutlined />}
+                  onClick={() => openRatingForm(detailTarget)}
+                >
+                  {ratings[detailTarget.labId] ? '更新本机评价' : '登记本机评价'}
+                </Button>
+              }
+            >
+              <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                <Alert
+                  type="warning"
+                  showIcon
+                  message={RATING_LOCAL_ONLY_ALERT.message}
+                  description={RATING_LOCAL_ONLY_ALERT.description}
+                />
+                {(() => {
+                  const rating = ratings[detailTarget.labId]
+                  if (!rating) {
+                    return <Empty description="未接入：后端暂无服务评价数据，本机也未登记" />
+                  }
+                  return (
+                    <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                      <Row align="middle" justify="space-between">
+                        <Space>
+                          <StarOutlined style={{ color: '#faad14' }} />
+                          <Text strong>综合服务评分</Text>
+                          <Tag color="orange">本机登记</Tag>
+                        </Space>
+                        <Rate disabled allowHalf value={rating.attitudeScore} />
+                      </Row>
+                      <div>
+                        <Text type="secondary">报告准时率</Text>
+                        <Progress percent={rating.onTimeRate} size="small" strokeColor="#52c41a" />
+                      </div>
+                      <div>
+                        <Text type="secondary">结果准确率</Text>
+                        <Progress percent={rating.accuracyRate} size="small" strokeColor="#1677ff" />
+                      </div>
+                      <Row justify="space-between">
+                        <Text type="secondary">累计服务单数</Text>
+                        <Text strong>{rating.orderCount.toLocaleString('zh-CN')} 单</Text>
+                      </Row>
+                      <Row justify="space-between">
+                        <Text type="secondary">本机登记时间</Text>
+                        <Text type="secondary">{rating.updatedAt ?? '—'}</Text>
+                      </Row>
+                      {rating.remark ? (
+                        <Alert type="info" showIcon message={rating.remark} />
+                      ) : null}
+                    </Space>
+                  )
+                })()}
+              </Space>
             </Card>
             <Card title="LIMS 对接配置" size="small">
-              {(() => {
-                const config = limsConfigs[detailTarget.labId]
-                if (!config) {
-                  return <Empty description="尚未配置 LIMS 对接" />
-                }
-                return (
-                  <Descriptions
-                    column={1}
-                    size="small"
-                    items={[
-                      {
-                        key: 'enabled',
-                        label: '启用状态',
-                        children: config.enabled ? <Tag color="success">已启用</Tag> : <Tag>未启用</Tag>,
-                      },
-                      { key: 'endpoint', label: '接口地址', children: config.endpoint },
-                      {
-                        key: 'auth',
-                        label: '认证方式',
-                        children: AUTH_TYPE_OPTIONS.find((item) => item.value === config.authType)?.label ?? config.authType,
-                      },
-                      {
-                        key: 'sync',
-                        label: '同步方式',
-                        children: SYNC_MODE_OPTIONS.find((item) => item.value === config.syncMode)?.label ?? config.syncMode,
-                      },
-                      {
-                        key: 'mapping',
-                        label: '字段映射',
-                        children: config.fieldMapping.map((item) => (
-                          <div key={`${item.source}-${item.target}`}>
-                            <Text code>{item.source}</Text> → <Text code>{item.target}</Text>
-                          </div>
-                        )),
-                      },
-                    ]}
-                  />
-                )
-              })()}
+              <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                <Alert
+                  type="warning"
+                  showIcon
+                  message={LIMS_LOCAL_ONLY_ALERT.message}
+                  description={LIMS_LOCAL_ONLY_ALERT.description}
+                />
+                {(() => {
+                  const config = limsConfigs[detailTarget.labId]
+                  if (!config) {
+                    return <Empty description="尚未配置 LIMS 对接（当前记录保存在本机浏览器）" />
+                  }
+                  return (
+                    <Descriptions
+                      column={1}
+                      size="small"
+                      items={[
+                        {
+                          key: 'enabled',
+                          label: '启用状态',
+                          children: config.enabled ? <Tag color="success">已启用</Tag> : <Tag>未启用</Tag>,
+                        },
+                        { key: 'endpoint', label: '接口地址', children: config.endpoint },
+                        {
+                          key: 'auth',
+                          label: '认证方式',
+                          children: AUTH_TYPE_OPTIONS.find((item) => item.value === config.authType)?.label ?? config.authType,
+                        },
+                        {
+                          key: 'sync',
+                          label: '同步方式',
+                          children: SYNC_MODE_OPTIONS.find((item) => item.value === config.syncMode)?.label ?? config.syncMode,
+                        },
+                        {
+                          key: 'mapping',
+                          label: '字段映射',
+                          children: config.fieldMapping.map((item) => (
+                            <div key={`${item.source}-${item.target}`}>
+                              <Text code>{item.source}</Text> → <Text code>{item.target}</Text>
+                            </div>
+                          )),
+                        },
+                        { key: 'updatedAt', label: '本机保存时间', children: config.updatedAt ?? '—' },
+                      ]}
+                    />
+                  )
+                })()}
+              </Space>
             </Card>
           </Space>
         ) : null}
@@ -866,54 +1072,62 @@ export default function LabManage(): JSX.Element {
         open={limsTarget !== null}
         onCancel={() => setLimsTarget(null)}
         onOk={() => void handleLimsSubmit()}
-        okText="保存配置"
+        okText="保存到本机"
         cancelText="取消"
         width={620}
         destroyOnClose
       >
-        <Form form={limsForm} layout="vertical" preserve={false}>
-          <Form.Item name="enabled" label="启用对接" valuePropName="checked">
-            <Switch checkedChildren="已启用" unCheckedChildren="未启用" />
-          </Form.Item>
-          <Form.Item
-            name="endpoint"
-            label="接口地址"
-            rules={[{ required: true, message: '请输入 LIMS 接口地址' }]}
-          >
-            <Input placeholder="https://lims.example.com/api/v1/reports" />
-          </Form.Item>
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item name="authType" label="认证方式" rules={[{ required: true, message: '请选择认证方式' }]}>
-                <Select options={AUTH_TYPE_OPTIONS} />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="syncMode" label="同步方式" rules={[{ required: true, message: '请选择同步方式' }]}>
-                <Select options={SYNC_MODE_OPTIONS} />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item name="appKey" label="账号 / AppKey">
-                <Input placeholder="选填" />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="appSecret" label="密钥 / AppSecret">
-                <Input.Password placeholder="选填" />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Form.Item
-            name="fieldMappingText"
-            label="字段映射（每行一条，格式：LIMS字段=平台字段）"
-            rules={[{ required: true, message: '请配置字段映射' }]}
-          >
-            <Input.TextArea rows={6} placeholder={'report_no=inspectionNo\nbatch_no=batchNo'} />
-          </Form.Item>
-        </Form>
+        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+          <Alert
+            type="warning"
+            showIcon
+            message={LIMS_LOCAL_ONLY_ALERT.message}
+            description={LIMS_LOCAL_ONLY_ALERT.description}
+          />
+          <Form form={limsForm} layout="vertical" preserve={false}>
+            <Form.Item name="enabled" label="启用对接" valuePropName="checked">
+              <Switch checkedChildren="已启用" unCheckedChildren="未启用" />
+            </Form.Item>
+            <Form.Item
+              name="endpoint"
+              label="接口地址"
+              rules={[{ required: true, message: '请输入 LIMS 接口地址' }]}
+            >
+              <Input placeholder="https://lims.example.com/api/v1/reports" />
+            </Form.Item>
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item name="authType" label="认证方式" rules={[{ required: true, message: '请选择认证方式' }]}>
+                  <Select options={AUTH_TYPE_OPTIONS} />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item name="syncMode" label="同步方式" rules={[{ required: true, message: '请选择同步方式' }]}>
+                  <Select options={SYNC_MODE_OPTIONS} />
+                </Form.Item>
+              </Col>
+            </Row>
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item name="appKey" label="账号 / AppKey">
+                  <Input placeholder="选填" />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item name="appSecret" label="密钥 / AppSecret">
+                  <Input.Password placeholder="选填" />
+                </Form.Item>
+              </Col>
+            </Row>
+            <Form.Item
+              name="fieldMappingText"
+              label="字段映射（每行一条，格式：LIMS字段=平台字段）"
+              rules={[{ required: true, message: '请配置字段映射' }]}
+            >
+              <Input.TextArea rows={6} placeholder={'report_no=inspectionNo\nbatch_no=batchNo'} />
+            </Form.Item>
+          </Form>
+        </Space>
       </Modal>
 
       {/* 准入审核弹窗（PRD #18 机构准入） */}
@@ -924,6 +1138,7 @@ export default function LabManage(): JSX.Element {
         onOk={() => void handleAuditSubmit()}
         okText="提交审核"
         cancelText="取消"
+        confirmLoading={accreditMutation.isPending || rejectMutation.isPending}
         destroyOnClose
       >
         <Form form={auditForm} layout="vertical" preserve={false}>
@@ -936,12 +1151,82 @@ export default function LabManage(): JSX.Element {
             />
           </Form.Item>
           <Form.Item name="remark" label="审核意见">
-            <Input.TextArea rows={4} placeholder="请填写审核意见，驳回时必填" />
+            <Input.TextArea rows={4} placeholder="驳回时必填，将作为驳回原因提交到后端保存" />
           </Form.Item>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            通过：调用 POST /admin/quality/labs/{'{labId}'}/accredit；审核意见后端不接收，仅在本机留存展示。
+            驳回：调用 POST /admin/quality/labs/{'{labId}'}/reject，驳回原因落库。
+          </Text>
         </Form>
       </Modal>
 
-      {/* 新增机构弹窗 */}
+      {/* 服务评价登记弹窗（本地登记：后端无评价接口，已醒目标注） */}
+      <Modal
+        title={`服务评价登记 - ${ratingTarget?.labName ?? ''}`}
+        open={ratingTarget !== null}
+        onCancel={() => setRatingTarget(null)}
+        onOk={() => void handleRatingSubmit()}
+        okText="保存到本机"
+        cancelText="取消"
+        width={560}
+        destroyOnClose
+      >
+        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+          <Alert
+            type="warning"
+            showIcon
+            message={RATING_LOCAL_ONLY_ALERT.message}
+            description={RATING_LOCAL_ONLY_ALERT.description}
+          />
+          <Form form={ratingForm} layout="vertical" preserve={false}>
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item
+                  name="onTimeRate"
+                  label="报告准时率（%）"
+                  rules={[{ required: true, message: '请输入报告准时率' }]}
+                >
+                  <Input type="number" min={0} max={100} placeholder="0-100" />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item
+                  name="accuracyRate"
+                  label="结果准确率（%）"
+                  rules={[{ required: true, message: '请输入结果准确率' }]}
+                >
+                  <Input type="number" min={0} max={100} placeholder="0-100" />
+                </Form.Item>
+              </Col>
+            </Row>
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item
+                  name="orderCount"
+                  label="累计服务单数"
+                  rules={[{ required: true, message: '请输入累计服务单数' }]}
+                >
+                  <Input type="number" min={0} placeholder="0" />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item
+                  name="attitudeScore"
+                  label="服务态度评分"
+                  rules={[{ required: true, message: '请给出服务态度评分' }]}
+                >
+                  <Rate allowHalf />
+                </Form.Item>
+              </Col>
+            </Row>
+            <Form.Item name="remark" label="评价说明">
+              <Input.TextArea rows={3} placeholder="选填，如 出报告周期稳定、旺季存在排期" />
+            </Form.Item>
+          </Form>
+        </Space>
+      </Modal>
+
+      {/* 新增机构弹窗（真实调用 POST /quality/labs） */}
       <Modal
         title="新增检测机构"
         open={createOpen}
@@ -949,10 +1234,16 @@ export default function LabManage(): JSX.Element {
         onOk={() => void handleCreateSubmit()}
         okText="提交"
         cancelText="取消"
+        confirmLoading={createMutation.isPending}
         width={620}
         destroyOnClose
       >
-        <Form form={createForm} layout="vertical" preserve={false}>
+        <Form
+          form={createForm}
+          layout="vertical"
+          preserve={false}
+          initialValues={{ status: 2 }}
+        >
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item name="labName" label="机构名称" rules={[{ required: true, message: '请输入机构名称' }]}>
@@ -1004,8 +1295,23 @@ export default function LabManage(): JSX.Element {
               </Form.Item>
             </Col>
           </Row>
+          <Form.Item name="address" label="机构地址">
+            <Input placeholder="选填" />
+          </Form.Item>
           <Form.Item name="accreditedScope" label="认可检测范围">
             <Input.TextArea rows={3} placeholder="如 农残、重金属、微生物" />
+          </Form.Item>
+          <Form.Item
+            name="status"
+            label="初始合作状态"
+            rules={[{ required: true, message: '请选择初始合作状态' }]}
+          >
+            <Select
+              options={[
+                { label: '待准入（需完成准入审核）', value: 2 },
+                { label: '合作中', value: 1 },
+              ]}
+            />
           </Form.Item>
         </Form>
       </Modal>
