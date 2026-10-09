@@ -49,14 +49,17 @@ import dayjs from 'dayjs'
 import ReactECharts from 'echarts-for-react'
 import type { EChartsOption } from 'echarts'
 import {
+  FOOD_SAFETY_WRITE_ALERT,
   STANDARD_LIBRARY,
   getStandardCheckSummary,
+  isWriteBackendConfirmed,
   listInputCompliance,
   listLabelCompliance,
   listStandardCheckItems,
   listStandardLibrary,
   isMockSource,
   notifyLabelRectify,
+  notifyWriteResult,
   punishInputCompliance,
   runStandardCheck,
 } from '@/api/admin/foodSafety'
@@ -166,13 +169,16 @@ function InputComplianceTab(): JSX.Element {
     retry: false,
   })
 
-  /** 处罚提交 */
+  /** 处罚提交（只有 result.ok 才提示成功并关闭弹窗） */
   const punishMutation = useMutation({
     mutationFn: (payload: { id: string; action: string; amount: number; remark: string }) =>
       punishInputCompliance(payload.id, payload),
-    onSuccess: () => {
+    onSuccess: (result) => {
+      notifyWriteResult(message, result, '处罚已登记并写入服务端')
+      if (!result.ok) {
+        return
+      }
       void queryClient.invalidateQueries({ queryKey: ['admin', 'food-safety', 'compliance', 'inputs'] })
-      message.success('处罚已登记')
       setPunishTarget(null)
       punishForm.resetFields()
     },
@@ -257,6 +263,18 @@ function InputComplianceTab(): JSX.Element {
           style={{ marginBottom: 12 }}
           message="当前展示示例数据，后端接口建设中"
           description="投入品用量、超标判定与处罚金额属于合规强相关数据：本台账取自原型示例口径（原型 P17 Tab1），不具有监管效力。后端 /admin/food-safety/compliance/inputs 接口上线后本 Tab 将自动切换真实数据。"
+        />
+      )}
+
+      {/* 写操作未接入后端明示（禁止「未写入服务端却提示成功」） */}
+      {!isWriteBackendConfirmed() && (
+        <Alert
+          type="warning"
+          showIcon
+          banner
+          style={{ marginBottom: 12 }}
+          message={FOOD_SAFETY_WRITE_ALERT.message}
+          description={`${FOOD_SAFETY_WRITE_ALERT.description}本 Tab 涉及：处罚登记（后端无处罚金额字段）。`}
         />
       )}
 
@@ -486,13 +504,16 @@ function LabelComplianceTab(): JSX.Element {
     retry: false,
   })
 
-  /** 下发整改通知 */
+  /** 下发整改通知（只有 result.ok 才提示成功并关闭弹窗） */
   const rectifyMutation = useMutation({
     mutationFn: (payload: { id: string; deadline: string; remark: string }) =>
       notifyLabelRectify(payload.id, { deadline: payload.deadline, remark: payload.remark }),
-    onSuccess: () => {
+    onSuccess: (result) => {
+      notifyWriteResult(message, result, '整改通知已下发并写入服务端')
+      if (!result.ok) {
+        return
+      }
       void queryClient.invalidateQueries({ queryKey: ['admin', 'food-safety', 'compliance', 'labels'] })
-      message.success('整改通知已下发')
       setRectifyTarget(null)
       rectifyForm.resetFields()
     },
@@ -619,6 +640,18 @@ function LabelComplianceTab(): JSX.Element {
           style={{ marginBottom: 12 }}
           message="当前展示示例数据，后端接口建设中"
           description="标签缺失字段、标识违规判定与整改状态属于合规强相关数据：本列表为补充设计的示例数据，不可作为标签合规结论使用。后端 /admin/food-safety/compliance/labels 接口上线后本 Tab 将自动切换真实数据。"
+        />
+      )}
+
+      {/* 写操作未接入后端明示（禁止「未写入服务端却提示成功」） */}
+      {!isWriteBackendConfirmed() && (
+        <Alert
+          type="warning"
+          showIcon
+          banner
+          style={{ marginBottom: 12 }}
+          message={FOOD_SAFETY_WRITE_ALERT.message}
+          description={`${FOOD_SAFETY_WRITE_ALERT.description}本 Tab 涉及：整改通知下发。`}
         />
       )}
 
@@ -847,12 +880,15 @@ function StandardCheckTab(): JSX.Element {
     retry: false,
   })
 
-  /** 执行标准自动校验 */
+  /** 执行标准自动校验（只有 result.ok 才提示成功并刷新结果） */
   const runMutation = useMutation({
     mutationFn: (payload: { standardNo: string; batchScope: string }) => runStandardCheck(payload),
-    onSuccess: () => {
+    onSuccess: (result) => {
+      notifyWriteResult(message, result, '标准校验已执行并写入服务端')
+      if (!result.ok) {
+        return
+      }
       void queryClient.invalidateQueries({ queryKey: ['admin', 'food-safety', 'compliance', 'standards'] })
-      message.success('标准校验已执行，结果已刷新')
     },
     onError: (error: Error) => {
       message.error(error.message || '标准校验执行失败，请稍后重试')
@@ -939,7 +975,19 @@ function StandardCheckTab(): JSX.Element {
           banner
           style={{ marginBottom: 12 }}
           message="当前展示示例数据，后端接口建设中"
-          description="标准限值比对与通过率判定属于合规强相关数据：标准库、校验项与实测值均为演示用示例，「执行校验」不会触发真实检验数据流。后端 /admin/food-safety/compliance/standards/* 接口上线后本 Tab 将自动切换真实数据。"
+          description="标准限值比对与通过率判定属于合规强相关数据：标准库、校验项与实测值均为演示用示例，不可作为合规结论使用。后端 /admin/food-safety/compliance/standards/* 接口上线后本 Tab 将自动切换真实数据。"
+        />
+      )}
+
+      {/* 写操作未接入后端明示（禁止「未写入服务端却提示成功」） */}
+      {!isWriteBackendConfirmed() && (
+        <Alert
+          type="warning"
+          showIcon
+          banner
+          style={{ marginBottom: 12 }}
+          message={FOOD_SAFETY_WRITE_ALERT.message}
+          description={`${FOOD_SAFETY_WRITE_ALERT.description}本 Tab 涉及：执行标准校验（当前不会触发任何检验数据流）。`}
         />
       )}
 

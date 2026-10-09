@@ -46,11 +46,14 @@ import { useNavigate } from 'react-router-dom'
 import ReactECharts from 'echarts-for-react'
 import type { EChartsOption } from 'echarts'
 import {
+  FOOD_SAFETY_WRITE_ALERT,
   getFoodSafetyMetrics,
   handleFoodSafetyAlert,
   isMockSource,
+  isWriteBackendConfirmed,
   listFarmRisk,
   listFoodSafetyAlerts,
+  notifyWriteResult,
 } from '@/api/admin/foodSafety'
 import type { FoodSafetyAlert, SafetyAlertLevel } from '@/api/admin/foodSafety'
 
@@ -140,13 +143,16 @@ export default function Index(): JSX.Element {
     retry: false,
   })
 
-  /** 处置告警 */
+  /** 处置告警（只有 result.ok 才提示成功并关闭弹窗） */
   const handleMutation = useMutation({
     mutationFn: (payload: { id: string; measure: string; remark?: string }) =>
       handleFoodSafetyAlert(payload.id, { measure: payload.measure, remark: payload.remark }),
-    onSuccess: () => {
+    onSuccess: (result) => {
+      notifyWriteResult(message, result, '告警处置已提交并写入服务端')
+      if (!result.ok) {
+        return
+      }
       void queryClient.invalidateQueries({ queryKey: ['admin', 'food-safety', 'alerts'] })
-      message.success('告警处置已提交')
       setActiveAlert(null)
       handleForm.resetFields()
     },
@@ -341,6 +347,18 @@ export default function Index(): JSX.Element {
           style={{ marginBottom: 12 }}
           message="当前展示示例数据，后端接口建设中"
           description="食品安全属于合规强相关数据：本页指标、风险评分与告警均取自原型示例口径（原型 4.2），不代表真实生产数据，请勿用于对外报送或监管举证。后端 /admin/food-safety/* 接口上线后本页将自动切换真实数据。"
+        />
+      )}
+
+      {/* 写操作未接入后端明示（禁止「未写入服务端却提示成功」） */}
+      {!isWriteBackendConfirmed() && (
+        <Alert
+          type="warning"
+          showIcon
+          banner
+          style={{ marginBottom: 12 }}
+          message={FOOD_SAFETY_WRITE_ALERT.message}
+          description={`${FOOD_SAFETY_WRITE_ALERT.description}本页涉及：告警处置。`}
         />
       )}
 

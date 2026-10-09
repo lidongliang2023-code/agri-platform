@@ -43,6 +43,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import dayjs from 'dayjs'
 import {
   CERT_MARK_TEXT,
+  FOOD_SAFETY_WRITE_ALERT,
   TRUST_AUDIT_COLOR,
   TRUST_AUDIT_TEXT,
   TRUST_LEVEL_COLOR,
@@ -51,7 +52,9 @@ import {
   auditTrustProduct,
   getTrustStats,
   isMockSource,
+  isWriteBackendConfirmed,
   listTrustProducts,
+  notifyWriteResult,
   updateTrustProduct,
 } from '@/api/admin/foodSafety'
 import type {
@@ -136,7 +139,7 @@ export default function TrustLabel(): JSX.Element {
     retry: false,
   })
 
-  /** 编辑提交 */
+  /** 编辑提交（只有 result.ok 才提示成功并关闭弹窗） */
   const editMutation = useMutation({
     mutationFn: (payload: { id: string; values: Omit<TrustProductUpdatePayload, 'validUntil'> & { validUntil: dayjs.Dayjs } }) =>
       updateTrustProduct(payload.id, {
@@ -146,9 +149,12 @@ export default function TrustLabel(): JSX.Element {
         certOrg: payload.values.certOrg,
         validUntil: payload.values.validUntil.format('YYYY-MM-DD'),
       }),
-    onSuccess: () => {
+    onSuccess: (result) => {
+      notifyWriteResult(message, result, '可信农产品信息已更新并写入服务端')
+      if (!result.ok) {
+        return
+      }
       void queryClient.invalidateQueries({ queryKey: ['admin', 'food-safety', 'trust-label'] })
-      message.success('可信农产品信息已更新')
       setEditTarget(null)
     },
     onError: (error: Error) => {
@@ -156,13 +162,20 @@ export default function TrustLabel(): JSX.Element {
     },
   })
 
-  /** 审核提交 */
+  /** 审核提交（只有 result.ok 才提示成功并关闭弹窗） */
   const auditMutation = useMutation({
     mutationFn: (payload: { id: string; action: 'approve' | 'reject'; remark: string }) =>
       auditTrustProduct(payload.id, { action: payload.action, remark: payload.remark }),
-    onSuccess: (_data, variables) => {
+    onSuccess: (result, variables) => {
+      notifyWriteResult(
+        message,
+        result,
+        variables.action === 'approve' ? '审核已通过并写入服务端' : '审核已驳回并写入服务端',
+      )
+      if (!result.ok) {
+        return
+      }
       void queryClient.invalidateQueries({ queryKey: ['admin', 'food-safety', 'trust-label'] })
-      message.success(variables.action === 'approve' ? '审核已通过' : '审核已驳回')
       setAuditTarget(null)
       auditForm.resetFields()
     },
@@ -289,6 +302,18 @@ export default function TrustLabel(): JSX.Element {
           style={{ marginBottom: 12 }}
           message="当前展示示例数据，后端接口建设中"
           description="可信等级、信任分数、认证标志与认证有效期属于对外公示与监管强相关数据：本页取自原型示例口径（原型 P18 / 4.2），不构成真实认证结论，请勿据此对外公示。后端 /admin/food-safety/trust-label/* 接口上线后本页将自动切换真实数据。"
+        />
+      )}
+
+      {/* 写操作未接入后端明示（禁止「未写入服务端却提示成功」） */}
+      {!isWriteBackendConfirmed() && (
+        <Alert
+          type="warning"
+          showIcon
+          banner
+          style={{ marginBottom: 12 }}
+          message={FOOD_SAFETY_WRITE_ALERT.message}
+          description={`${FOOD_SAFETY_WRITE_ALERT.description}本页涉及：可信农产品编辑、主体审核通过 / 驳回。`}
         />
       )}
 

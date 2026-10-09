@@ -34,13 +34,16 @@ import dayjs from 'dayjs'
 import {
   CIRCULATION_TYPE_ICON,
   CIRCULATION_TYPE_TEXT,
+  FOOD_SAFETY_WRITE_ALERT,
   HANDLE_STATUS_COLOR,
   HANDLE_STATUS_TEXT,
   SEVERITY_COLOR,
   SEVERITY_TEXT,
   handleCirculation,
   isMockSource,
+  isWriteBackendConfirmed,
   listCirculation,
+  notifyWriteResult,
 } from '@/api/admin/foodSafety'
 import type { CirculationRecord, CirculationType, Severity } from '@/api/admin/foodSafety'
 
@@ -114,13 +117,16 @@ export default function Circulation(): JSX.Element {
     retry: false,
   })
 
-  /** 处理流通异常 */
+  /** 处理流通异常（只有 result.ok 才提示成功并关闭弹窗） */
   const handleMutation = useMutation({
     mutationFn: (payload: { id: string; action: string; remark: string }) =>
       handleCirculation(payload.id, { action: payload.action, remark: payload.remark }),
-    onSuccess: () => {
+    onSuccess: (result) => {
+      notifyWriteResult(message, result, '处置已提交并写入服务端')
+      if (!result.ok) {
+        return
+      }
       void queryClient.invalidateQueries({ queryKey: ['admin', 'food-safety', 'circulation'] })
-      message.success('处置已提交')
       setActiveRecord(null)
       handleForm.resetFields()
     },
@@ -232,7 +238,19 @@ export default function Circulation(): JSX.Element {
           banner
           style={{ marginBottom: 12 }}
           message="当前展示示例数据，后端接口建设中"
-          description="流通异常涉及召回与责任追溯，属于合规强相关数据：本列表取自原型示例口径（原型 P16），不代表真实异常记录，据此发起的处置动作仅在本机演示环境生效。后端 /admin/food-safety/circulation 接口上线后本页将自动切换真实数据。"
+          description="流通异常涉及召回与责任追溯，属于合规强相关数据：本列表取自原型示例口径（原型 P16），不代表真实异常记录。后端 /admin/food-safety/circulation 接口上线后本页将自动切换真实数据。"
+        />
+      )}
+
+      {/* 写操作未接入后端明示（禁止「未写入服务端却提示成功」） */}
+      {!isWriteBackendConfirmed() && (
+        <Alert
+          type="warning"
+          showIcon
+          banner
+          style={{ marginBottom: 12 }}
+          message={FOOD_SAFETY_WRITE_ALERT.message}
+          description={`${FOOD_SAFETY_WRITE_ALERT.description}本页涉及：流通异常处置。`}
         />
       )}
 

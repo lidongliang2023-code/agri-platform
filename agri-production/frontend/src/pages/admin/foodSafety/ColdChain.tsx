@@ -44,12 +44,15 @@ import dayjs from 'dayjs'
 import {
   COLD_CHAIN_STATUS_COLOR,
   COLD_CHAIN_STATUS_TEXT,
+  FOOD_SAFETY_WRITE_ALERT,
   createMatch,
   enqueueResource,
   getColdChainStats,
   isMockSource,
+  isWriteBackendConfirmed,
   listColdChainResources,
   listMatchRecords,
+  notifyWriteResult,
 } from '@/api/admin/foodSafety'
 import type {
   ColdChainResource,
@@ -201,7 +204,7 @@ export default function ColdChain(): JSX.Element {
     retry: false,
   })
 
-  /** 立即撮合 */
+  /** 立即撮合（只有 result.ok 才提示成功并关闭弹窗） */
   const matchMutation = useMutation({
     mutationFn: (payload: { resourceId: string; values: MatchFormValues }) =>
       createMatch({
@@ -212,9 +215,12 @@ export default function ColdChain(): JSX.Element {
         tempRequire: payload.values.tempRequire,
         remark: payload.values.remark,
       }),
-    onSuccess: () => {
+    onSuccess: (result) => {
+      notifyWriteResult(message, result, '撮合已发起，撮合记录已写入服务端')
+      if (!result.ok) {
+        return
+      }
       void queryClient.invalidateQueries({ queryKey: ['admin', 'food-safety', 'cold-chain'] })
-      message.success('撮合已发起，撮合记录已生成')
       setMatchTarget(null)
       matchForm.resetFields()
     },
@@ -223,7 +229,7 @@ export default function ColdChain(): JSX.Element {
     },
   })
 
-  /** 加入队列 */
+  /** 加入队列（只有 result.ok 才提示成功并关闭弹窗） */
   const queueMutation = useMutation({
     mutationFn: (payload: { resourceId: string; values: QueueFormValues }) =>
       enqueueResource({
@@ -232,9 +238,12 @@ export default function ColdChain(): JSX.Element {
         expectTime: payload.values.expectTime.format('YYYY-MM-DD'),
         remark: payload.values.remark,
       }),
-    onSuccess: () => {
+    onSuccess: (result) => {
+      notifyWriteResult(message, result, '已加入撮合队列并写入服务端')
+      if (!result.ok) {
+        return
+      }
       void queryClient.invalidateQueries({ queryKey: ['admin', 'food-safety', 'cold-chain'] })
-      message.success('已加入撮合队列')
       setQueueTarget(null)
       queueForm.resetFields()
     },
@@ -295,6 +304,18 @@ export default function ColdChain(): JSX.Element {
           style={{ marginBottom: 12 }}
           message="当前展示示例数据，后端接口建设中"
           description="冷链资源状态与撮合记录直接影响温控合规举证：资源池、评分与撮合记录均为演示用示例（口径 156/98/42/16 取自原型 4.2），不可作为冷链履约凭证。后端 /admin/food-safety/cold-chain/* 接口上线后本页将自动切换真实数据。"
+        />
+      )}
+
+      {/* 写操作未接入后端明示（禁止「未写入服务端却提示成功」） */}
+      {!isWriteBackendConfirmed() && (
+        <Alert
+          type="warning"
+          showIcon
+          banner
+          style={{ marginBottom: 12 }}
+          message={FOOD_SAFETY_WRITE_ALERT.message}
+          description={`${FOOD_SAFETY_WRITE_ALERT.description}本页涉及：立即撮合、加入撮合队列。`}
         />
       )}
 

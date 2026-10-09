@@ -5,13 +5,18 @@
  * 冷链资源撮合）来自高保真原型补充页，后端 mod-produce 的
  * `internal/admin` 包下暂无对应 Controller。
  *
- * 处理策略：
+ * 处理策略（2026 修订：写操作禁止「假成功」）：
  * 1. 所有查询统一以 `silent` 方式发起，接口未就绪时不弹全局错误；
- * 2. 请求失败（404 / 网络异常 / 业务异常）时降级到原型示例数据（口径见原型 4.2）；
- * 3. 写操作优先请求后端，失败时落到内存态 Mock 库，保证页面交互闭环；
- * 4. 后端接口上线后无需改动页面即可自动切换到真实数据。
+ * 2. 请求失败（404 / 网络异常 / 业务异常）时降级到原型示例数据（口径见原型 4.2），
+ *    并通过 `isMockSource` 在页面常驻展示「示例数据」明示横幅；
+ * 3. **写操作一律不再落到内存态 Mock 库**。经核对后端 `core-platform/mod-produce`
+ *    当前没有任何 `/admin/food-safety/*` 端点（详见文件末尾《后端能力核对清单》），
+ *    此前「请求失败→改本地数组→返回 true」的写法会让页面弹出「操作成功」，
+ *    而服务端实际没有任何记录，属于监管场景下的实质性风险，已全部改为返回
+ *    {@link WriteResult} 显式失败；
+ * 4. 后端接口上线后无需改动页面：请求成功即自动切换为真实写库结果。
  */
-import { http } from '@/utils/request'
+import { asApiRequestError, http, httpStatusOf } from '@/utils/request'
 import type { BizId, PageQuery, PageResult } from '@/types'
 
 /** 食品安全模块接口前缀 */
@@ -100,6 +105,149 @@ function markSource(key: string, mock: boolean): void {
  */
 export function isMockSource(...keys: string[]): boolean {
   return keys.some((key) => sourceFlags.get(key) === true)
+}
+
+/* ==================== 写操作结果（合规强相关：禁止假成功） ==================== */
+
+/*
+ * 食品安全是「合规强相关」业务：处罚登记、整改通知下发、主体审核、风险处置等动作
+ * 一旦「以为做了其实没做」，在监管举证场景下是实质风险。
+ *
+ * 核对结论（2026）：后端 core-platform/mod-produce 当前不存在任何
+ * `/api/v1/production/admin/food-safety/*` 端点，本文件全部写操作均无法落库。
+ * 因此写操作统一返回 WriteResult 显式结果：
+ * - 只有 ok === true 才允许页面提示「操作成功」；
+ * - ok === false 时必须把失败原因原样展示给用户，且不得改动任何本地数据
+ *   （改动本地数组会让页面看起来「生效了」，等于换一种方式骗人）。
+ */
+
+/** 写操作失败原因 */
+export type WriteFailureReason =
+  /** 请求未到达业务处理（404 / 网络异常 / 5xx）：后端当前没有可用接口，未写入服务端 */
+  | 'backend-not-implemented'
+  /** 后端收到请求并明确拒绝（业务码非 0），错误信息取服务端原文 */
+  | 'backend-rejected'
+  /** 操作对象在示例数据中不存在，无法定位 */
+  | 'not-found'
+
+/** 写操作统一返回体 */
+export interface WriteResult {
+  /** 是否已写入服务端；只有 true 才允许页面提示「操作成功」 */
+  ok: boolean
+  /** 是否仅停留在本机（未写入服务端、本机也未留存任何结果） */
+  local: boolean
+  /** 失败原因；成功时为空串 */
+  reason: WriteFailureReason | ''
+  /** 可直接展示给用户的提示文案 */
+  message: string
+}
+
+/** 最近一次写操作是否成功写入服务端；null 表示本会话尚未发起过写操作 */
+let lastWriteSucceeded: boolean | null = null
+
+/**
+ * 判断写操作链路是否已确认可用。
+ *
+ * 尚未发起过写操作时按「不可用」处理（悲观默认），页面据此展示未接入后端警示横幅；
+ * 一旦有一次写操作被服务端确认成功，横幅自动隐藏——后端补齐接口后无需改前端。
+ *
+ * @returns true 表示最近一次写操作已成功写入服务端
+ */
+export function isWriteBackendConfirmed(): boolean {
+  return lastWriteSucceeded === true
+}
+
+/**
+ * 构造写操作成功结果。
+ *
+ * @param text 成功提示文案
+ * @returns 成功结果
+ */
+function okResult(text: string): WriteResult {
+  lastWriteSucceeded = true
+  return { ok: true, local: false, reason: '', message: text }
+}
+
+/**
+ * 构造「操作对象不存在」的失败结果。
+ *
+ * @param text 提示文案
+ * @returns 失败结果
+ */
+function failNotFound(text: string): WriteResult {
+  lastWriteSucceeded = false
+  return { ok: false, local: true, reason: 'not-found', message: text }
+}
+
+/**
+ * 由请求异常构造失败结果，并区分「后端没接口」与「后端明确拒绝」。
+ *
+ * @param action 操作名称（用于拼提示文案），如「告警处置」
+ * @param error catch 到的异常
+ * @returns 失败结果
+ */
+function failFromError(action: string, error: unknown): WriteResult {
+  lastWriteSucceeded = false
+  const apiError = asApiRequestError(error)
+  if (apiError) {
+    return {
+      ok: false,
+      local: false,
+      reason: 'backend-rejected',
+      message: `${action}失败：${apiError.message}`,
+    }
+  }
+  const status = httpStatusOf(error)
+  const statusText = status > 0 ? `（HTTP ${status}）` : ''
+  return {
+    ok: false,
+    local: true,
+    reason: 'backend-not-implemented',
+    message:
+      `${action}未写入服务端${statusText}：后端暂无可用接口，` +
+      '本次操作没有产生任何服务端记录，本机也未留存，请勿据此认定处置已完成。',
+  }
+}
+
+/** 写操作未接入后端时的统一警示横幅文案（各页顶部常驻展示） */
+export const FOOD_SAFETY_WRITE_ALERT: { message: string; description: string } = {
+  message: '本页写操作后端暂未实现，提交后不会写入服务端',
+  description:
+    '经核对后端 mod-produce 当前没有本页写操作对应的接口。提交处置、整改通知、处罚登记、审核、撮合等动作后，' +
+    '系统只会提示「未写入服务端」，既不会落库也不会在本机留存，请不要据此认定业务动作已完成。',
+}
+
+/** 最小消息接口，与 antd `App.useApp().message` 的 success / error / warning 兼容 */
+export interface WriteResultMessenger {
+  /** 成功提示 */
+  success: (text: string) => void
+  /** 错误提示 */
+  error: (text: string) => void
+  /** 警告提示 */
+  warning: (text: string) => void
+}
+
+/**
+ * 按写操作真实结果弹出提示：成功才提示成功，失败原样展示后端信息。
+ *
+ * @param messenger 消息句柄（页面取 `App.useApp().message`）
+ * @param result 写操作结果
+ * @param successText ok 时展示的成功文案
+ */
+export function notifyWriteResult(
+  messenger: WriteResultMessenger,
+  result: WriteResult,
+  successText: string,
+): void {
+  if (result.ok) {
+    messenger.success(successText)
+    return
+  }
+  if (result.reason === 'backend-rejected') {
+    messenger.error(result.message)
+    return
+  }
+  messenger.warning(result.message)
 }
 
 /* ==================== P15 食品安全监控中心 ==================== */
@@ -326,22 +474,27 @@ export interface AlertHandlePayload {
   remark?: string
 }
 
-/** 处置食品安全告警 */
+/**
+ * 处置食品安全告警。
+ *
+ * 后端核对结论：无对应端点。mod-produce 仅有
+ * `POST /api/v1/production/admin/alerts/{alertId}/dispatch`（AdminAlertController.java:51），
+ * 语义是「派单给处置人」（必填 `@RequestParam memberId`），与本操作的「登记处置措施」
+ * 不一致，且告警 ID 空间不同（本页为示例 ALM 编号），故不可复用，本操作当前无法落库。
+ *
+ * @param id 告警 ID
+ * @param payload 处置措施与说明
+ * @returns 写操作结果；ok 为 false 时未写入服务端
+ */
 export async function handleFoodSafetyAlert(
   id: BizId,
   payload: AlertHandlePayload,
-): Promise<boolean> {
+): Promise<WriteResult> {
   try {
-    await http.post<boolean>(`${BASE}/alerts/${id}/handle`, payload, { silent: true })
-    return true
-  } catch {
-    const target = ALERT_STORE.find((item) => item.id === String(id))
-    if (!target) {
-      throw new Error('告警记录不存在')
-    }
-    target.status = '已处理'
-    target.measure = payload.measure
-    return true
+    await http.post<unknown>(`${BASE}/alerts/${id}/handle`, payload, { silent: true })
+    return okResult('告警处置已提交并写入服务端')
+  } catch (error) {
+    return failFromError('告警处置', error)
   }
 }
 
@@ -515,22 +668,25 @@ export interface CirculationHandlePayload {
   remark: string
 }
 
-/** 处理流通异常 */
+/**
+ * 处理流通异常。
+ *
+ * 后端核对结论：无对应端点。全仓检索 `circulation` / `流通异常` 在 core-platform
+ * 的 Java 代码中零命中，本操作当前无法落库。
+ *
+ * @param id 异常编号
+ * @param payload 处置方式与说明
+ * @returns 写操作结果；ok 为 false 时未写入服务端
+ */
 export async function handleCirculation(
   id: BizId,
   payload: CirculationHandlePayload,
-): Promise<boolean> {
+): Promise<WriteResult> {
   try {
-    await http.post<boolean>(`${BASE}/circulation/${id}/handle`, payload, { silent: true })
-    return true
-  } catch {
-    const record = CIRCULATION_STORE.find((item) => item.id === String(id))
-    if (!record) {
-      throw new Error('流通异常记录不存在')
-    }
-    record.status = payload.action === '关闭' ? 'done' : 'processing'
-    record.measure = payload.action
-    return true
+    await http.post<unknown>(`${BASE}/circulation/${id}/handle`, payload, { silent: true })
+    return okResult('流通异常处置已提交并写入服务端')
+  } catch (error) {
+    return failFromError('流通异常处置', error)
   }
 }
 
@@ -636,18 +792,28 @@ export interface PunishPayload {
   remark: string
 }
 
-/** 对超标记录发起处罚 */
-export async function punishInputCompliance(id: BizId, payload: PunishPayload): Promise<boolean> {
+/**
+ * 对超标记录发起处罚。
+ *
+ * 后端核对结论：无对应端点，且后端数据模型也不支持。core-platform 检索 `punish` /
+ * `处罚` 零命中；唯一含整改字段的实体 `FarmComplianceCheckEntity`
+ * （AdminFarmController.java:105 `PUT /admin/farms/compliance/{checkId}`）
+ * 只有 rectifyRequirement / rectifyDeadline / rectifyStatus 等整改字段，
+ * **没有处罚方式与处罚金额字段**，也没有投入品合规对象，故本操作当前无法落库。
+ *
+ * @param id 合规记录编号
+ * @param payload 处罚方式、金额与整改要求
+ * @returns 写操作结果；ok 为 false 时未写入服务端
+ */
+export async function punishInputCompliance(
+  id: BizId,
+  payload: PunishPayload,
+): Promise<WriteResult> {
   try {
-    await http.post<boolean>(`${BASE}/compliance/inputs/${id}/punish`, payload, { silent: true })
-    return true
-  } catch {
-    const record = INPUT_COMPLIANCE_STORE.find((item) => item.id === String(id))
-    if (!record) {
-      throw new Error('合规记录不存在')
-    }
-    record.violation = `${record.violation}（已处罚：${payload.action}）`
-    return true
+    await http.post<unknown>(`${BASE}/compliance/inputs/${id}/punish`, payload, { silent: true })
+    return okResult('处罚已登记并写入服务端')
+  } catch (error) {
+    return failFromError('处罚登记', error)
   }
 }
 
@@ -748,18 +914,28 @@ export async function listLabelCompliance(
   return pageOf(filtered, params.pageNum, params.pageSize)
 }
 
-/** 下发标签整改通知 */
-export async function notifyLabelRectify(id: BizId, payload: { deadline: string; remark: string }): Promise<boolean> {
+/**
+ * 下发标签整改通知。
+ *
+ * 后端核对结论：无对应端点。后端确有整改能力，但落在**农场合规检查任务**上
+ * （AdminFarmController.java:105 `PUT /admin/farms/compliance/{checkId}`，
+ * 字段 rectifyStatus / rectifyRequirement / rectifyDeadline），业务对象是 CHK 编号的
+ * 检查任务；本操作对象是 LBL 编号的产品标签记录，ID 空间与字段均不同，不可复用，
+ * 故本操作当前无法落库。
+ *
+ * @param id 标签编号
+ * @param payload 整改期限与要求
+ * @returns 写操作结果；ok 为 false 时未写入服务端
+ */
+export async function notifyLabelRectify(
+  id: BizId,
+  payload: { deadline: string; remark: string },
+): Promise<WriteResult> {
   try {
-    await http.post<boolean>(`${BASE}/compliance/labels/${id}/rectify`, payload, { silent: true })
-    return true
-  } catch {
-    const record = LABEL_COMPLIANCE_STORE.find((item) => item.id === String(id))
-    if (!record) {
-      throw new Error('标签记录不存在')
-    }
-    record.rectifyStatus = 'notified'
-    return true
+    await http.post<unknown>(`${BASE}/compliance/labels/${id}/rectify`, payload, { silent: true })
+    return okResult('整改通知已下发并写入服务端')
+  } catch (error) {
+    return failFromError('整改通知下发', error)
   }
 }
 
@@ -912,8 +1088,17 @@ export interface StandardRunPayload {
   batchScope: string
 }
 
-/** 执行行业标准自动校验（返回最新汇总） */
-export async function runStandardCheck(payload: StandardRunPayload): Promise<StandardCheckSummary> {
+/**
+ * 执行行业标准自动校验。
+ *
+ * 后端核对结论：无对应端点。core-platform 检索 `food-safety` / `FoodSafety` 零命中，
+ * 不存在标准校验执行接口。原实现在请求失败后直接返回本地示例汇总，页面提示
+ * 「标准校验已执行，结果已刷新」——实际没有触发任何检验数据流，已改为显式失败。
+ *
+ * @param payload 标准编号与批次范围
+ * @returns 写操作结果；ok 为 true 时才表示服务端确实执行了校验
+ */
+export async function runStandardCheck(payload: StandardRunPayload): Promise<WriteResult> {
   try {
     const res = await http.post<StandardCheckSummary>(
       `${BASE}/compliance/standards/${payload.standardNo}/run`,
@@ -921,12 +1106,12 @@ export async function runStandardCheck(payload: StandardRunPayload): Promise<Sta
       { silent: true },
     )
     if (res && typeof res === 'object' && typeof res.batchCount === 'number') {
-      return res
+      return okResult('标准校验已执行并写入服务端')
     }
-  } catch {
-    /* 接口未就绪，降级到示例数据 */
+  } catch (error) {
+    return failFromError('标准校验执行', error)
   }
-  return getStandardCheckSummary(payload.standardNo)
+  return failNotFound('标准校验未执行：后端未返回校验汇总，未写入服务端')
 }
 
 /* ==================== P18 可信农产品管理 ==================== */
@@ -1156,25 +1341,25 @@ export interface TrustProductUpdatePayload {
   certOrg: string
 }
 
-/** 编辑可信农产品（等级 / 信任分 / 认证信息 / 有效期） */
+/**
+ * 编辑可信农产品（等级 / 信任分 / 认证信息 / 有效期）。
+ *
+ * 后端核对结论：无对应端点。core-platform 检索 `trust-label` / `trustLabel` 零命中，
+ * 不存在可信农产品实体，本操作当前无法落库。
+ *
+ * @param id 产品编号
+ * @param payload 等级、信任分、认证信息与有效期
+ * @returns 写操作结果；ok 为 false 时未写入服务端
+ */
 export async function updateTrustProduct(
   id: BizId,
   payload: TrustProductUpdatePayload,
-): Promise<boolean> {
+): Promise<WriteResult> {
   try {
-    await http.put<boolean>(`${BASE}/trust-label/products/${id}`, payload, { silent: true })
-    return true
-  } catch {
-    const record = TRUST_STORE.find((item) => item.id === String(id))
-    if (!record) {
-      throw new Error('产品记录不存在')
-    }
-    record.level = payload.level
-    record.score = payload.score
-    record.cert = payload.cert
-    record.validUntil = payload.validUntil
-    record.certOrg = payload.certOrg
-    return true
+    await http.put<unknown>(`${BASE}/trust-label/products/${id}`, payload, { silent: true })
+    return okResult('可信农产品信息已更新并写入服务端')
+  } catch (error) {
+    return failFromError('可信农产品信息保存', error)
   }
 }
 
@@ -1186,18 +1371,31 @@ export interface TrustAuditPayload {
   remark: string
 }
 
-/** 审核可信农产品 */
-export async function auditTrustProduct(id: BizId, payload: TrustAuditPayload): Promise<boolean> {
+/**
+ * 审核可信农产品（通过 / 驳回）。
+ *
+ * 后端核对结论：无对应端点。后端确有审批通过 / 驳回能力，但落在**审批单**上
+ * （AdminApprovalController.java:59 `POST /admin/approvals/{approvalId}/approve`
+ * 与 :67 `POST /admin/approvals/{approvalId}/reject`，真实写库，
+ * 入参为 `@RequestParam approverId` / `opinion`），业务对象是 APPR 编号的审批单；
+ * 本操作对象是 P 编号的可信农产品，且入参为 body `{ action, remark }`，
+ * ID 空间与字段均不同，不可复用，故本操作当前无法落库。
+ *
+ * @param id 产品编号
+ * @param payload 审核动作与意见
+ * @returns 写操作结果；ok 为 false 时未写入服务端
+ */
+export async function auditTrustProduct(
+  id: BizId,
+  payload: TrustAuditPayload,
+): Promise<WriteResult> {
   try {
-    await http.post<boolean>(`${BASE}/trust-label/products/${id}/audit`, payload, { silent: true })
-    return true
-  } catch {
-    const record = TRUST_STORE.find((item) => item.id === String(id))
-    if (!record) {
-      throw new Error('产品记录不存在')
-    }
-    record.auditStatus = payload.action === 'approve' ? 'approved' : 'rejected'
-    return true
+    await http.post<unknown>(`${BASE}/trust-label/products/${id}/audit`, payload, { silent: true })
+    const actionText = payload.action === 'approve' ? '审核通过' : '审核驳回'
+    return okResult(`${actionText}已提交并写入服务端`)
+  } catch (error) {
+    const actionText = payload.action === 'approve' ? '审核通过' : '审核驳回'
+    return failFromError(actionText, error)
   }
 }
 
@@ -1554,32 +1752,24 @@ export async function listMatchRecords(params: MatchRecordQuery): Promise<PageRe
   return pageOf(filtered, params.pageNum, params.pageSize)
 }
 
-/** 发起冷链资源撮合（立即撮合） */
-export async function createMatch(payload: MatchPayload): Promise<MatchRecord> {
-  const resource = COLD_CHAIN_STORE.find((item) => item.id === payload.resourceId)
-  if (!resource) {
-    throw new Error('冷链资源不存在')
-  }
-  const record: MatchRecord = {
-    id: `CC${String(MATCH_STORE.length + 1).padStart(3, '0')}`,
-    demander: payload.demander,
-    supplier: resource.name,
-    resourceType: resource.typeLabel,
-    time: /^\d{4}-\d{2}-\d{2}$/.test(payload.startTime) ? payload.startTime.slice(5) : payload.startTime,
-    status: 'processing',
-    cargo: payload.cargo,
-    tempRequire: payload.tempRequire,
-    remark: payload.remark ?? '',
-  }
+/**
+ * 发起冷链资源撮合（立即撮合）。
+ *
+ * 后端核对结论：无对应端点。core-platform 检索 `cold-chain` / `ColdChain` / `冷链`
+ * 零命中，不存在冷链资源与撮合记录实体，本操作当前无法落库。
+ *
+ * 说明：原实现会在请求失败后把记录塞进本地数组并把资源置为「繁忙」再返回成功，
+ * 页面随即提示「撮合记录已生成」——服务端实际没有任何撮合记录，已移除该分支。
+ *
+ * @param payload 撮合入参
+ * @returns 写操作结果；ok 为 false 时未写入服务端
+ */
+export async function createMatch(payload: MatchPayload): Promise<WriteResult> {
   try {
-    await http.post<MatchRecord>(`${BASE}/cold-chain/matches`, payload, { silent: true })
-    return record
-  } catch {
-    MATCH_STORE.unshift(record)
-    if (resource.status === 'idle') {
-      resource.status = 'busy'
-    }
-    return record
+    await http.post<unknown>(`${BASE}/cold-chain/matches`, payload, { silent: true })
+    return okResult('撮合已发起并写入服务端')
+  } catch (error) {
+    return failFromError('冷链资源撮合', error)
   }
 }
 
@@ -1595,28 +1785,48 @@ export interface EnqueuePayload {
   remark?: string
 }
 
-/** 资源繁忙时加入撮合队列 */
-export async function enqueueResource(payload: EnqueuePayload): Promise<MatchRecord> {
-  const resource = COLD_CHAIN_STORE.find((item) => item.id === payload.resourceId)
-  if (!resource) {
-    throw new Error('冷链资源不存在')
-  }
-  const record: MatchRecord = {
-    id: `CC${String(MATCH_STORE.length + 1).padStart(3, '0')}`,
-    demander: payload.demander,
-    supplier: resource.name,
-    resourceType: resource.typeLabel,
-    time: /^\d{4}-\d{2}-\d{2}$/.test(payload.expectTime) ? payload.expectTime.slice(5) : payload.expectTime,
-    status: 'queued',
-    cargo: '排队预约',
-    tempRequire: resource.tempRange,
-    remark: payload.remark ?? '',
-  }
+/**
+ * 资源繁忙时加入撮合队列。
+ *
+ * 后端核对结论：无对应端点（同 {@link createMatch}，后端无冷链撮合能力），
+ * 本操作当前无法落库。原实现失败后会把记录塞进本地数组再返回成功，已移除该分支。
+ *
+ * @param payload 入队入参
+ * @returns 写操作结果；ok 为 false 时未写入服务端
+ */
+export async function enqueueResource(payload: EnqueuePayload): Promise<WriteResult> {
   try {
-    await http.post<MatchRecord>(`${BASE}/cold-chain/queue`, payload, { silent: true })
-    return record
-  } catch {
-    MATCH_STORE.unshift(record)
-    return record
+    await http.post<unknown>(`${BASE}/cold-chain/queue`, payload, { silent: true })
+    return okResult('已加入撮合队列并写入服务端')
+  } catch (error) {
+    return failFromError('加入撮合队列', error)
   }
 }
+
+/* ==================== 后端能力核对清单（写操作） ==================== */
+
+/*
+ * 核对范围：core-platform 全部 47 个 *Controller.java，重点为
+ * mod-produce/src/main/java/com/agri/produce/internal/admin/ 下 12 个运营端 Controller。
+ * 核对方式：逐个比对 @RequestMapping + 映射注解路径，并阅读 Service 实现区分
+ * 「真实写库」与「空壳（返回空列表 / 抛 UnsupportedOperationException）」。
+ *
+ * 结论：**后端不存在任何 /api/v1/production/admin/food-safety/* 端点**
+ * （全仓检索 food-safety / FoodSafety 零命中）。
+ *
+ * | # | 操作 | 前端函数 | 后端端点 | 结论 |
+ * |---|------|----------|----------|------|
+ * | 1 | 台账（可信农产品）修改状态 | updateTrustProduct | 无（检索 trust-label 零命中） | 没有端点 |
+ * | 2 | 整改通知发送 | notifyLabelRectify | 无；仅有 AdminFarmController.java:105 PUT /admin/farms/compliance/{checkId}（真实写库，但对象是农场合规检查任务 CHK，非标签记录 LBL） | 有但对象/字段对不上 |
+ * | 3 | 风险预警处置 | handleFoodSafetyAlert | 无；仅有 AdminAlertController.java:51 POST /admin/alerts/{alertId}/dispatch（真实写库，语义为派单、必填 memberId，非登记处置措施） | 有但字段对不上 |
+ * | 4 | 追溯链生成 | —（本模块无此操作；后端 AdminTraceController.java:41 GET /admin/trace/chain 为查询，非生成） | 不适用 |
+ * | 5 | 处罚金额记录 | punishInputCompliance | 无；FarmComplianceCheckEntity 无处罚金额/处罚方式字段 | 没有端点，模型也不支持 |
+ * | 6 | 主体审核通过 | auditTrustProduct(approve) | 无；仅有 AdminApprovalController.java:59 POST /admin/approvals/{approvalId}/approve（真实写库，对象是审批单 APPR，入参 @RequestParam approverId/opinion） | 有但对象/字段对不上 |
+ * | 7 | 主体驳回 | auditTrustProduct(reject) | 无；仅有 AdminApprovalController.java:67 POST /admin/approvals/{approvalId}/reject（同上） | 有但对象/字段对不上 |
+ * | 8 | 流通异常处置 | handleCirculation | 无（检索 circulation / 流通异常 零命中） | 没有端点 |
+ * | 9 | 冷链撮合 / 加入队列 | createMatch / enqueueResource | 无（检索 cold-chain / 冷链 零命中） | 没有端点 |
+ * | 10 | 标准校验执行 | runStandardCheck | 无 | 没有端点 |
+ *
+ * 因此全部写操作按「情况 B：诚实降级」处理：返回 WriteResult 显式失败，
+ * 不改动任何本地数据，页面据 ok 字段决定提示成功还是失败。
+ */
