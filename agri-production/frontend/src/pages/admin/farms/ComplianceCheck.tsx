@@ -61,7 +61,8 @@ import {
   resolveRectifyStatus,
   todayText,
   updateComplianceTask,
-  useComplianceTasks,
+  upsertRemoteComplianceCheck,
+  useComplianceTaskState,
 } from './supervisionShared'
 import type { ComplianceTaskItem, RectifyStatusKey } from './supervisionShared'
 
@@ -160,8 +161,13 @@ export default function ComplianceCheck(): JSX.Element {
   const [resultForm] = Form.useForm<ResultFormValues>()
   const [trackForm] = Form.useForm<RectifyFormValues>()
 
-  /** 合规检查任务台账 */
-  const tasks = useComplianceTasks()
+  /**
+   * 合规检查任务台账
+   *
+   * 远端优先：以 `GET /admin/farms/compliance/checks` 的服务端数据为准；
+   * 后端不可达时降级到本地缓存并置 `degraded`，由页面顶部横幅显式告知。
+   */
+  const { tasks, degraded, degradeReason } = useComplianceTaskState()
 
   /** 农场列表（用于下拉选择） */
   const farmsQuery = useQuery({
@@ -260,8 +266,11 @@ export default function ComplianceCheck(): JSX.Element {
     return { total: tasks.length, pending, overdue, serious, closed }
   }, [tasks])
 
-  /** 是否存在本地登记数据（后端写接口未开放提示） */
-  const hasLocalTasks: boolean = tasks.some((task) => task.source === 'local')
+  /**
+   * 是否处于降级态：后端合规检查接口不可达，当前列表是本地缓存而非服务端数据。
+   * 必须显式告知，不能把本地数据伪装成服务端数据。
+   */
+  const localOnlyCount: number = tasks.filter((task) => task.source === 'local').length
 
   /**
    * 统一落库：先尝试写入后端，失败则登记到本地。
@@ -274,6 +283,7 @@ export default function ComplianceCheck(): JSX.Element {
       checkId: task.checkId,
       farmId: task.farmId,
       farmName: task.farmName,
+      checkType: task.checkType,
       checkItem: task.checkItem,
       result: task.result,
       problem: task.problem,
@@ -287,7 +297,8 @@ export default function ComplianceCheck(): JSX.Element {
       addComplianceTask(localTask)
       return localTask
     }
-    addComplianceTask(task)
+    // 已落库：以服务端返回为准，本地不再保留副本（本地仅作离线兜底）
+    upsertRemoteComplianceCheck(remote)
     return task
   }
 
@@ -302,12 +313,13 @@ export default function ComplianceCheck(): JSX.Element {
     checkId: string,
     patch: Partial<ComplianceTaskItem>,
   ): Promise<'remote' | 'local'> {
-    updateComplianceTask(checkId, patch)
     const remote = await updateSupervisedComplianceTask(checkId, patch as Record<string, unknown>)
     if (!remote) {
       updateComplianceTask(checkId, { ...patch, source: 'local' })
       return 'local'
     }
+    // 已落库：以服务端返回为准，本地不再保留副本（本地仅作离线兜底）
+    upsertRemoteComplianceCheck(remote)
     return 'remote'
   }
 
@@ -660,13 +672,17 @@ export default function ComplianceCheck(): JSX.Element {
         </Row>
       </Card>
 
-      {hasLocalTasks && (
+      {degraded && (
         <Alert
           style={{ marginTop: 12 }}
           type="warning"
           showIcon
-          message="后端合规检查任务写接口暂未开放，新登记的数据保存在本地（浏览器 localStorage）"
-          description="所有写入均先尝试调用 POST/PUT /admin/farms/compliance，失败后自动降级；后端上线后无需改动页面。"
+          message="后端合规检查接口当前不可达，以下展示的是本地缓存数据（不是服务端数据）"
+          description={
+            `读取 GET /admin/farms/compliance/checks 失败${degradeReason ? `：${degradeReason}` : ''}。` +
+            `当前 ${localOnlyCount} 条任务仅存在于本浏览器；此时的新建与修改也只会写入本地，` +
+            '不会同步到服务端、其他账号也看不到。接口恢复后刷新页面即自动切回服务端数据。'
+          }
         />
       )}
 

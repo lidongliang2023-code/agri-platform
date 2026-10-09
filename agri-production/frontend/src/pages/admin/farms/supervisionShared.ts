@@ -14,9 +14,10 @@
  *
  * 注意：本文件属于页面私有工具，不属于 `@/utils` 公共层，其他模块不应引用。
  */
-import { useSyncExternalStore } from 'react'
-import type { BizId, ComplianceResult } from '@/types'
+import { useEffect, useSyncExternalStore } from 'react'
+import type { BizId, ComplianceCheck, ComplianceResult } from '@/types'
 import type { FarmComplianceProfile } from '@/api/admin/farms'
+import { listComplianceChecks } from '@/api/admin/farms'
 
 /* ==================== 一、风险评分与风险等级分档（原型 P4 / P6 / 4.1） ==================== */
 
@@ -553,22 +554,80 @@ export const SAMPLE_COMPLIANCE_TASKS: ComplianceTaskItem[] = [
   },
 ]
 
-/* ==================== 四、合规检查任务本地登记存储 ==================== */
+/* ==================== 四、合规检查任务存储（远端优先 + 本地兜底） ==================== */
 
 /**
  * 本地存储键
  *
- * 后端 `/admin/farms/compliance` 目前只提供「合规画像」读取，
- * 缺失检查任务写接口，这里用 localStorage 承接登记的检查任务，
- * 使列表页「下发整改」→ 合规检查页「整改跟踪」形成闭环。
+ * 后端已提供检查任务落库（V9 迁移 `prod_farm_compliance_check`、
+ * `POST/PUT /admin/farms/compliance`、`GET /admin/farms/compliance/checks`），
+ * 因此 localStorage 只作为「后端不可达」时的**离线兜底**，不再是数据的权威来源。
+ * 正常路径一律以服务端返回为准；一旦降级，页面必须给出可见提示，
+ * 不允许把本地缓存伪装成服务端数据。
  */
 const TASK_STORAGE_KEY = 'agri-admin:farms:compliance-tasks'
+
+/** 远端一次拉取的条数：运营端台账量级，200 条足够覆盖，不做翻页 */
+const REMOTE_PAGE_SIZE = 200
+
+/** 远端读取状态：idle 未发起 / loading 拉取中 / ok 已拿到 / failed 拉取失败（降级） */
+type RemoteStatus = 'idle' | 'loading' | 'ok' | 'failed'
+
+/** 任务列表数据来源 */
+export type ComplianceTasksSource = 'remote' | 'local'
+
+/** 列表展示占位符：后端无此列时用「—」，绝不编造取值 */
+const EMPTY_TEXT = '—'
+
+/**
+ * 合规检查任务列表快照。
+ *
+ * 供 `useSyncExternalStore` 消费：快照对象必须引用稳定，故由 `cachedState` 缓存，
+ * 只有数据真正变化时才重建（见 `invalidateComplianceTasksState`）。
+ */
+export interface ComplianceTasksState {
+  /** 当前应展示的任务列表 */
+  tasks: ComplianceTaskItem[]
+  /** 数据来源 */
+  source: ComplianceTasksSource
+  /** true 表示后端不可达、当前展示的是本地兜底数据（页面必须显式提示） */
+  degraded: boolean
+  /** 降级原因，用于页面提示文案 */
+  degradeReason?: string
+  /** 远端首次拉取中 */
+  loading: boolean
+}
+
+/**
+ * 后端合规检查记录的真实返回形状。
+ *
+ * `ComplianceCheck`（src/types/approval.ts）只声明了最早一期契约的 10 个字段，
+ * 而 V9 落库后后端实际还返回 checkType / rectifyStatus / rectifyRemark /
+ * rectifyAttachment / rectifiedAt（PRD 6.2 #11 整改跟踪字段）。
+ * 这里以「超集 + 新字段全部可选」的方式扩展，避免为取字段去改共享类型定义；
+ * 反向赋值（`ComplianceCheck` → 本类型）在结构类型下天然成立。
+ */
+interface RemoteComplianceCheck extends ComplianceCheck {
+  checkType?: string
+  rectifyStatus?: RectifyStatusKey
+  rectifyRemark?: string
+  rectifyAttachment?: string
+  rectifiedAt?: string
+}
 
 /** 订阅者集合 */
 const taskListeners = new Set<() => void>()
 
-/** 内存缓存，避免每次快照都反序列化 */
+/** 本地兜底缓存，避免每次快照都反序列化 */
 let cachedTasks: ComplianceTaskItem[] | null = null
+
+/** 远端列表与拉取状态 */
+let remoteStatus: RemoteStatus = 'idle'
+let remoteTasks: ComplianceTaskItem[] = []
+let remoteError: string | null = null
+
+/** 快照缓存，保证 useSyncExternalStore 的 getSnapshot 引用稳定 */
+let cachedState: ComplianceTasksState | null = null
 
 /**
  * 读取任务列表（首次调用做本地持久化读取，空则以原型示例数据初始化）。
@@ -628,19 +687,151 @@ function emitComplianceTasksChange(): void {
   taskListeners.forEach((listener) => listener())
 }
 
+/** 通知所有订阅者 */
+function invalidateComplianceTasksState(): void {
+  cachedState = null
+  emitComplianceTasksChange()
+}
+
 /**
- * 新增检查任务。
+ * 构造当前快照：远端可用则以服务端数据为准，否则降级到本地兜底。
+ *
+ * @returns 列表快照
+ */
+function buildComplianceTasksState(): ComplianceTasksState {
+  if (remoteStatus === 'ok') {
+    return { tasks: remoteTasks, source: 'remote', degraded: false, loading: false }
+  }
+  return {
+    tasks: getComplianceTasks(),
+    source: 'local',
+    degraded: remoteStatus === 'failed',
+    degradeReason: remoteError ?? undefined,
+    loading: remoteStatus === 'loading',
+  }
+}
+
+/**
+ * 读取列表快照（首次调用时构造，之后复用缓存对象）。
+ *
+ * @returns 列表快照
+ */
+export function getComplianceTasksState(): ComplianceTasksState {
+  if (!cachedState) {
+    cachedState = buildComplianceTasksState()
+  }
+  return cachedState
+}
+
+/**
+ * 把后端返回的检查记录映射为页面行模型。
+ *
+ * 后端没有的字段一律落为 `undefined` / 占位「—」，不填 0、不填空串、不编造。
+ *
+ * @param row 后端合规检查记录
+ * @returns 页面行模型
+ */
+function toComplianceTaskItem(row: RemoteComplianceCheck): ComplianceTaskItem {
+  return {
+    checkId: row.checkId,
+    farmId: row.farmId,
+    farmName: row.farmName ?? EMPTY_TEXT,
+    checkType: row.checkType ?? EMPTY_TEXT,
+    checkItem: row.checkItem,
+    result: row.result,
+    problem: row.problem,
+    rectifyRequirement: row.rectifyRequirement,
+    rectifyDeadline: row.rectifyDeadline,
+    checkerName: row.checkerName,
+    checkedAt: row.checkedAt,
+    rectifyStatus: row.rectifyStatus ?? 'none',
+    rectifyRemark: row.rectifyRemark,
+    rectifyAttachment: row.rectifyAttachment,
+    rectifiedAt: row.rectifiedAt,
+    source: 'remote',
+  }
+}
+
+/**
+ * 从服务端拉取合规检查任务（远端优先的数据来源）。
+ *
+ * 失败时把状态置为 `failed`，由快照降级到本地兜底并把 `degraded` 置真，
+ * 供页面给出可见提示；绝不静默把本地数据当成服务端数据。
+ *
+ * @param force true 表示忽略「已就绪」判定强制重拉（写操作后收敛列表用）
+ */
+export async function refreshComplianceTasks(force = false): Promise<void> {
+  if (!force && (remoteStatus === 'loading' || remoteStatus === 'ok')) {
+    return
+  }
+  remoteStatus = 'loading'
+  invalidateComplianceTasksState()
+  try {
+    const page = await listComplianceChecks({ pageNum: 1, pageSize: REMOTE_PAGE_SIZE })
+    const rows = (page?.list ?? []) as RemoteComplianceCheck[]
+    remoteTasks = rows.map(toComplianceTaskItem)
+    remoteStatus = 'ok'
+    remoteError = null
+  } catch (error) {
+    remoteTasks = []
+    remoteStatus = 'failed'
+    remoteError = error instanceof Error ? error.message : '后端不可用'
+  }
+  invalidateComplianceTasksState()
+}
+
+/**
+ * 写接口成功后把服务端返回的记录并入远端列表（服务端是权威来源）。
+ *
+ * @param row 后端返回的检查记录
+ */
+export function upsertRemoteComplianceCheck(row: ComplianceCheck): void {
+  const task = toComplianceTaskItem(row)
+  if (remoteStatus === 'ok') {
+    remoteTasks = [task, ...remoteTasks.filter((item) => item.checkId !== task.checkId)]
+  } else {
+    // 远端列表尚未就绪（首屏拉取失败过）：整体重拉，避免列表只剩这一条被误当成全量
+    void refreshComplianceTasks(true)
+  }
+  // 已确认落库的任务不再保留本地副本，本地仅作离线兜底
+  dropLocalComplianceTask(task.checkId)
+  invalidateComplianceTasksState()
+}
+
+/**
+ * 删除本地兜底副本（任务已确认写入服务端时调用，避免本地与远端重复）。
+ *
+ * @param checkId 检查编号
+ */
+export function dropLocalComplianceTask(checkId: string): void {
+  const current = getComplianceTasks()
+  if (!current.some((item) => item.checkId === checkId)) {
+    return
+  }
+  cachedTasks = current.filter((item) => item.checkId !== checkId)
+  persistComplianceTasks()
+  invalidateComplianceTasksState()
+}
+
+/**
+ * 新增检查任务到本地兜底存储。
+ *
+ * 仅在后端写接口不可用时调用；若远端列表正处于可用状态，
+ * 这里会顺带触发一次重拉，让「经其它入口写入服务端」的任务也能收敛进列表。
  *
  * @param task 待新增的任务
  */
 export function addComplianceTask(task: ComplianceTaskItem): void {
   cachedTasks = [task, ...getComplianceTasks()]
   persistComplianceTasks()
-  emitComplianceTasksChange()
+  invalidateComplianceTasksState()
+  if (remoteStatus === 'ok') {
+    void refreshComplianceTasks(true)
+  }
 }
 
 /**
- * 局部更新检查任务。
+ * 局部更新本地兜底存储中的检查任务（后端写接口不可用时的降级路径）。
  *
  * @param checkId 检查编号
  * @param patch 待合并字段
@@ -653,7 +844,27 @@ export function updateComplianceTask(
     item.checkId === checkId ? { ...item, ...patch } : item,
   )
   persistComplianceTasks()
-  emitComplianceTasksChange()
+  invalidateComplianceTasksState()
+  if (remoteStatus === 'ok') {
+    void refreshComplianceTasks(true)
+  }
+}
+
+/**
+ * 订阅式读取合规检查任务列表快照（远端优先，降级时 `degraded` 为真）。
+ *
+ * @returns 列表快照（含数据来源与降级原因）
+ */
+export function useComplianceTaskState(): ComplianceTasksState {
+  const state = useSyncExternalStore(
+    subscribeComplianceTasks,
+    getComplianceTasksState,
+    getComplianceTasksState,
+  )
+  useEffect(() => {
+    void refreshComplianceTasks()
+  }, [])
+  return state
 }
 
 /**
@@ -662,11 +873,7 @@ export function updateComplianceTask(
  * @returns 任务列表
  */
 export function useComplianceTasks(): ComplianceTaskItem[] {
-  return useSyncExternalStore(
-    subscribeComplianceTasks,
-    getComplianceTasks,
-    getComplianceTasks,
-  )
+  return useComplianceTaskState().tasks
 }
 
 /**
