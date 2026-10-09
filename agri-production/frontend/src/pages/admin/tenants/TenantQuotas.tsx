@@ -5,9 +5,16 @@
  * PRD 序号：PRD 6.2 #6
  * 说明：原型无此页，按 PRD「溯源码/存储/AI调用配额分配与调整」实现，
  * 配额项沿用原型 P3「配额详情」的 4 项口径（农场数 / 溯源码 / 存储空间 / API 调用）。
+ *
+ * 数据来源约定（硬规矩：不造数据、可以降级但不能骗人）：
+ * - 列表数据全部来自后端 GET /admin/tenants/quota-overview，不使用任何本地示例/兜底数据；
+ * - 后端无数据时列表就是空的（由 ProTable 渲染空态），请求失败时顶部显式告警，不清空为成功；
+ * - 后端 OpsQuotaItem.source 标记用量数据来源：仅「农场数」为 COLUMN，
+ *   溯源码 / 存储空间 / API 调用为 NONE（无用量数据源），前端必须展示「—」而不是 0。
  */
 import { useState } from 'react'
 import {
+  Alert,
   App,
   Button,
   Card,
@@ -25,11 +32,11 @@ import {
   Tooltip,
   Typography,
 } from 'antd'
-import { SettingOutlined, WarningOutlined } from '@ant-design/icons'
+import { SettingOutlined } from '@ant-design/icons'
 import { ProTable } from '@ant-design/pro-components'
 import type { ProColumns } from '@ant-design/pro-components'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import type { OpsQuotaItem, OpsTenantQuotaRow, TenantSegmentLevel } from '@/types'
+import type { OpsTenantQuotaRow } from '@/types'
 import {
   batchUpdateQuotaLimits,
   listOpsQuotaOverview,
@@ -39,23 +46,17 @@ import {
 
 const { Text } = Typography
 
-/** 分层 → Tag 颜色 */
-const SEGMENT_COLOR: Record<TenantSegmentLevel, string> = {
-  钻石: 'purple',
-  金牌: 'gold',
-  银牌: 'blue',
-  普通: 'default',
-}
+/**
+ * 配额预警阈值（%），与后端 TenantQuotaService.WARNING_THRESHOLD 保持一致。
+ * 后端「仅看告警」按此阈值过滤，故前端标红口径必须同步，否则会出现「勾选了却筛不出来」。
+ */
+const WARNING_THRESHOLD = 80
 
-/** 租户名称池（生成示例配额数据） */
-const TENANT_NAME_POOL: string[] = [
-  '绿源农业科技有限公司', '丰达农场', '大地种业', '丰收集团', '田园生态',
-  '惠民种植', '鑫农科技', '鑫盛农业科技', '中原农服', '黄河种业',
-  '江淮米业', '东北黑土合作社', '云岭茶业', '天山牧业', '洞庭水产',
-]
+/** 后端标记「有真实用量数据源」的取值（OpsQuotaItem.SOURCE_COLUMN） */
+const QUOTA_SOURCE_COLUMN = 'COLUMN'
 
-/** 分层池 */
-const SEGMENT_POOL: TenantSegmentLevel[] = ['钻石', '金牌', '银牌', '普通']
+/** 无用量数据源时的提示文案 */
+const NO_SOURCE_TIP = '后端暂无该维度的用量数据源，无法统计，故不展示用量与使用率'
 
 /** 配额调整表单 */
 interface QuotaFormValues {
@@ -78,92 +79,25 @@ function resolveTenantName(row: { tenantId: string; tenantName?: string }): stri
   return name ? name : row.tenantId
 }
 
-/** 配额编码联合类型 */
-type QuotaKey = 'farm' | 'traceCode' | 'storage' | 'api'
-
 /**
- * 构造单项配额数据。
+ * 按小数位格式化数字（千分位）。
  *
- * @param key 配额编码
- * @param name 配额名称
- * @param unit 单位
- * @param used 已用量
- * @param limit 上限
+ * @param value 待格式化的数字
  * @param precision 小数位
- * @param quotaType 后端配额类型
- * @param updatedAt 更新时间
- * @returns 配额项
+ * @returns 格式化后的字符串
  */
-function buildQuotaItem(
-  key: QuotaKey,
-  name: string,
-  unit: string,
-  used: number,
-  limit: number,
-  precision: number,
-  quotaType: number,
-  updatedAt: string,
-): OpsQuotaItem {
-  const usageRate = limit > 0 ? Number(((used / limit) * 100).toFixed(1)) : 0
-  return { key, name, unit, used, limit, usageRate, precision, updatedAt, quotaType }
-}
-
-/**
- * 生成配额管理示例数据（后端无数据时兜底）。
- *
- * @param pageNum 页码
- * @param pageSize 每页条数
- * @returns 配额行列表
- */
-function buildSampleQuotaRows(pageNum: number, pageSize: number): OpsTenantQuotaRow[] {
-  /** 平台纳入统计的租户数（原型 4.2 口径：活跃租户 1,286） */
-  const total = 1286
-  const rows: OpsTenantQuotaRow[] = []
-  for (let index = 0; index < pageSize; index += 1) {
-    const seq = (pageNum - 1) * pageSize + index + 1
-    if (seq > total) {
-      break
-    }
-    const base = seq <= 7 ? 0 : (seq % TENANT_NAME_POOL.length)
-    const tier = SEGMENT_POOL[(seq * 3) % 4]
-    const roll = seq % 10
-    const farmUsed = 8 + ((seq * 11) % 60)
-    const farmLimit = farmUsed + 6 + (roll % 12)
-    const traceUsed = 12000 + ((seq * 7300) % 90000)
-    const traceLimit = 100000
-    const storageUsed = Number((1 + ((seq * 17) % 90) / 10).toFixed(1))
-    const storageLimit = 10
-    const apiUsed = 8000 + ((seq * 4310) % 45000)
-    const apiLimit = 50000
-    rows.push({
-      tenantId: `TS${String(seq).padStart(6, '0')}`,
-      tenantCode: `T2025${String(seq).padStart(4, '0')}`,
-      tenantName:
-        seq <= 7
-          ? TENANT_NAME_POOL[seq - 1]
-          : `${TENANT_NAME_POOL[base]}${seq}号基地`,
-      segment: tier,
-      farm: buildQuotaItem('farm', '农场数配额', '个', farmUsed, farmLimit, 0, 1, '2025-07-14 10:00:00'),
-      traceCode: buildQuotaItem('traceCode', '溯源码配额(本月)', '枚', traceUsed, traceLimit, 0, 0, '2025-07-14 10:00:00'),
-      storage: buildQuotaItem('storage', '存储空间', 'GB', storageUsed, storageLimit, 1, 5, '2025-07-14 10:00:00'),
-      api: buildQuotaItem('api', 'API调用次数(本月)', '次', apiUsed, apiLimit, 0, 6, '2025-07-14 10:00:00'),
-      maxUsageRate: 0,
-      updatedAt: '2025-07-14 10:00:00',
-    })
-  }
-  return rows.map((row) => ({
-    ...row,
-    maxUsageRate: Math.max(
-      row.farm.usageRate,
-      row.traceCode.usageRate,
-      row.storage.usageRate,
-      row.api.usageRate,
-    ),
-  }))
+function formatNumber(value: number, precision: number): string {
+  return Number(value).toLocaleString('zh-CN', {
+    minimumFractionDigits: precision,
+    maximumFractionDigits: precision,
+  })
 }
 
 /**
  * 渲染单项配额（迷你进度条 + 用量文案）。
+ *
+ * 后端 source 非 COLUMN 时（无用量数据源），用量为「—」且不渲染进度条，
+ * 因为此时 used=0 只是结构占位，展示 0 会让用户误以为真实用量为 0。
  *
  * @param item 配额项
  * @returns 渲染结果
@@ -174,15 +108,23 @@ function renderQuota(item: {
   usageRate: number
   unit: string
   precision: number
+  source?: 'COLUMN' | 'NONE' | 'UNAVAILABLE'
 }): JSX.Element {
-  const danger = item.usageRate >= 90
-  const text = `${Number(item.used).toLocaleString('zh-CN', {
-    minimumFractionDigits: item.precision,
-    maximumFractionDigits: item.precision,
-  })} / ${Number(item.limit).toLocaleString('zh-CN', {
-    minimumFractionDigits: item.precision,
-    maximumFractionDigits: item.precision,
-  })} ${item.unit}`
+  if (item.source !== QUOTA_SOURCE_COLUMN) {
+    return (
+      <Tooltip title={NO_SOURCE_TIP}>
+        <div style={{ minWidth: 130 }}>
+          <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>用量：—</div>
+          <Progress percent={0} size="small" showInfo={false} strokeColor="rgba(0,0,0,0.15)" />
+          <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>
+            上限 {formatNumber(item.limit, item.precision)} {item.unit}
+          </div>
+        </div>
+      </Tooltip>
+    )
+  }
+  const danger = item.usageRate >= WARNING_THRESHOLD
+  const text = `${formatNumber(item.used, item.precision)} / ${formatNumber(item.limit, item.precision)} ${item.unit}`
   return (
     <Tooltip title={danger ? '即将用尽，建议尽快调整配额' : `已使用 ${item.usageRate}%`}>
       <div style={{ minWidth: 130 }}>
@@ -206,7 +148,7 @@ function renderQuota(item: {
  * 配额管理
  *
  * 业务职责：全平台租户配额一览（农场数 / 溯源码 / 存储空间 / API 调用），
- * 支持按租户、分层检索，单行调整、批量调整与按实际数据重算已用配额。
+ * 支持按租户名称检索、仅看告警，单行调整、批量调整与按实际数据重算已用配额。
  *
  * @returns 页面内容
  */
@@ -226,6 +168,10 @@ export default function TenantQuotas(): JSX.Element {
   const [adjustTarget, setAdjustTarget] = useState<OpsTenantQuotaRow[] | null>(null)
   /** 配额表单 */
   const [quotaForm] = Form.useForm<QuotaFormValues>()
+  /** 后端配额记录总数（后端真实返回值；null 表示尚未取到，展示「—」而不是 0） */
+  const [totalCount, setTotalCount] = useState<number | null>(null)
+  /** 列表加载失败原因；非空时顶部显式告警，绝不静默降级为本地数据 */
+  const [loadError, setLoadError] = useState<string>('')
 
   /** 调整单个租户配额 */
   const updateMutation = useMutation({
@@ -320,19 +266,6 @@ export default function TenantQuotas(): JSX.Element {
       render: (_dom, entity) => <span>{resolveTenantName(entity)}</span>,
     },
     {
-      title: '分层',
-      dataIndex: 'segment',
-      width: 100,
-      valueType: 'select',
-      valueEnum: {
-        钻石: { text: '钻石' },
-        金牌: { text: '金牌' },
-        银牌: { text: '银牌' },
-        普通: { text: '普通' },
-      },
-      render: (_dom, entity) => <Tag color={SEGMENT_COLOR[entity.segment]}>{entity.segment}</Tag>,
-    },
-    {
       title: '农场数配额',
       dataIndex: 'farm',
       width: 170,
@@ -367,7 +300,15 @@ export default function TenantQuotas(): JSX.Element {
       hideInSearch: true,
       sorter: true,
       render: (_dom, entity) => (
-        <Tag color={entity.maxUsageRate >= 90 ? 'red' : entity.maxUsageRate >= 75 ? 'orange' : 'green'}>
+        <Tag
+          color={
+            entity.maxUsageRate >= WARNING_THRESHOLD
+              ? 'red'
+              : entity.maxUsageRate >= WARNING_THRESHOLD * 0.75
+                ? 'orange'
+                : 'green'
+          }
+        >
           {entity.maxUsageRate}%
         </Tag>
       ),
@@ -407,41 +348,38 @@ export default function TenantQuotas(): JSX.Element {
 
   return (
     <div>
-      {/* 顶部提示与统计 */}
+      {/* 顶部统计：只展示后端真实返回的配额记录总数，无任何虚构数字 */}
       <Row gutter={[12, 12]} style={{ marginBottom: 12 }}>
         <Col xs={12} md={6}>
           <Card size="small">
-            <Statistic title="纳入统计租户" value={1286} formatter={(value) => Number(value).toLocaleString('zh-CN')} />
-          </Card>
-        </Col>
-        <Col xs={12} md={6}>
-          <Card size="small">
             <Statistic
-              title="配额告警租户（≥90%）"
-              value={42}
-              valueStyle={{ color: '#ff4d4f' }}
-              prefix={<WarningOutlined />}
+              title="配额记录总数（后端实际）"
+              value={totalCount === null ? '—' : totalCount}
+              formatter={(value) =>
+                typeof value === 'number' ? Number(value).toLocaleString('zh-CN') : String(value)
+              }
             />
           </Card>
         </Col>
-        <Col xs={12} md={6}>
-          <Card size="small">
-            <Statistic title="平均配额使用率" value={68.4} precision={1} suffix="%" />
-          </Card>
-        </Col>
-        <Col xs={12} md={6}>
-          <Card size="small">
-            <Statistic title="本月配额调整次数" value={36} />
-          </Card>
-        </Col>
       </Row>
+
+      {/* 加载失败必须让用户看见：不允许静默降级为本地数据 */}
+      {loadError !== '' && (
+        <Alert
+          type="error"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message={`配额数据加载失败：${loadError}`}
+          description="页面不会用任何本地示例数据兜底。请确认后端服务与 /admin/tenants/quota-overview 接口可用后重试。"
+        />
+      )}
 
       <ProTable<OpsTenantQuotaRow>
         key={tableKey}
         rowKey="tenantId"
         size="small"
         headerTitle="全平台租户配额一览"
-        scroll={{ x: 1500 }}
+        scroll={{ x: 1400 }}
         search={{ labelWidth: 90 }}
         columns={columns}
         rowSelection={{
@@ -456,7 +394,7 @@ export default function TenantQuotas(): JSX.Element {
             已选 {selectedRowKeys.length} 项
           </span>,
           <Space key="warning">
-            <Text type="secondary">仅看告警</Text>
+            <Text type="secondary">{`仅看告警（≥${WARNING_THRESHOLD}%）`}</Text>
             <Switch
               checked={onlyWarning}
               onChange={(checked) => {
@@ -487,36 +425,27 @@ export default function TenantQuotas(): JSX.Element {
               pageNum,
               pageSize,
               tenantName: typeof params.tenantName === 'string' ? params.tenantName : undefined,
-              segment: typeof params.segment === 'string' ? params.segment : undefined,
               onlyWarning,
             })
-            if (result.list && result.list.length > 0) {
-              return { data: result.list, total: result.total, success: true }
-            }
-          } catch {
-            // 后端未就绪时静默降级到示例数据
+            setLoadError('')
+            setTotalCount(result.total)
+            // 后端正常返回（哪怕 list 为空）就原样使用：空就是空，由 ProTable 渲染空态
+            return { data: result.list, total: result.total, success: true }
+          } catch (error) {
+            // 失败必须显式暴露，禁止再用本地兜底数据填充列表
+            setLoadError(error instanceof Error ? error.message : String(error))
+            setTotalCount(null)
+            return { data: [], total: 0, success: false }
           }
-          const sample = buildSampleQuotaRows(pageNum, pageSize)
-          let list = sample
-          if (typeof params.tenantName === 'string' && params.tenantName.trim() !== '') {
-            const keyword = params.tenantName.trim()
-            list = list.filter(
-              (item) =>
-                resolveTenantName(item).includes(keyword) || item.tenantCode.includes(keyword),
-            )
-          }
-          if (typeof params.segment === 'string' && params.segment) {
-            list = list.filter((item) => item.segment === params.segment)
-          }
-          if (onlyWarning) {
-            list = list.filter((item) => item.maxUsageRate >= 90)
-          }
-          return { data: list, total: 1286, success: true }
         }}
       />
 
       <Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: 12 }}>
-        提示：配额使用率 ≥ 90% 会自动标红；「重算」会按租户实际农场 / 用量数据重新统计已用配额。
+        {`提示：配额使用率 ≥ ${WARNING_THRESHOLD}% 会自动标红（与后端预警阈值一致）；「重算」会按租户实际农场 / 用量数据重新统计已用配额。`}
+        <br />
+        数据说明：仅「农场数」有真实用量数据源（取自配额表用量列 used_farm_count）；
+        溯源码 / 存储空间 / API 调用三项后端暂无用量数据源，用量显示为「—」，并非用量为 0。
+        分层（钻石 / 金牌 / 银牌 / 普通）后端无数据源，已移除该列与对应筛选。
       </Text>
 
       {/* 配额调整 / 批量调整弹窗 */}

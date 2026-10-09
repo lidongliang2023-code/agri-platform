@@ -150,6 +150,15 @@ export interface OpsQuotaItem {
   quotaId?: string
   /** 后端配额类型：1 农场数 5 存储容量 6 API 调用；溯源码无枚举记为 0 */
   quotaType: number
+  /**
+   * 用量数据来源（后端 {@code OpsQuotaItem.source}），决定前端能否展示用量：
+   * - `COLUMN`：有真实用量数据源（当前只有「农场数」），used / usageRate 可信，正常展示；
+   * - `NONE`：完全没有用量数据源，used 恒为 0 仅为满足结构，**必须展示「—」而不是 0**；
+   * - `UNAVAILABLE`：数据源暂时不可用（统计失败等），同样展示「—」。
+   *
+   * 缺省 undefined 一律按「无数据源」处理，避免把结构占位的 0 误读成真实用量。
+   */
+  source?: 'COLUMN' | 'NONE' | 'UNAVAILABLE'
 }
 
 /** 租户配额一行（配额管理页） */

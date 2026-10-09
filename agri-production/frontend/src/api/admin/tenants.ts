@@ -218,9 +218,15 @@ export function resetTenantQuotaUsage(tenantId: string): Promise<boolean> {
   return http.post<boolean>(`${BASE}/${tenantId}/quota-usage/reset`)
 }
 
-/** 分页查询全平台租户配额一览（配额管理页） */
+/**
+ * 分页查询全平台租户配额一览（配额管理页）。
+ *
+ * 说明：后端 `GET /admin/tenants/quota-overview` 仅支持 `page` / `size` / `tenantName` / `onlyWarning`，
+ * **不支持 `segment` 参数**（后端 OpsTenantQuotaRow.segment 恒为 null，无分层数据源），
+ * 故此处不再声明 `segment`，避免前端传入一个被后端静默忽略的假筛选条件。
+ */
 export function listOpsQuotaOverview(
-  params: PageQuery & { tenantName?: string; segment?: string; onlyWarning?: boolean },
+  params: PageQuery & { tenantName?: string; onlyWarning?: boolean },
 ): Promise<PageResult<OpsTenantQuotaRow>> {
   return http
     .get<RawOpsPageResult<OpsTenantQuotaRow>>(`${BASE}/quota-overview`, params, { silent: true })
