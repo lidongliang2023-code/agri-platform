@@ -1,0 +1,31 @@
+/**
+ * API 层统一出口
+ *
+ * 业务页面统一从 '@/api' 引入，避免深层相对路径与循环依赖。
+ */
+export * from './farms'
+export * from './plots'
+export * from './plans'
+export * from './tasks'
+export * from './inputs'
+export * from './growth'
+export * from './alerts'
+export * from './iot'
+export * from './harvests'
+export * from './quality'
+export * from './trace'
+export * from './blockchain'
+export * from './ai'
+export * from './analytics'
+export * from './members'
+export * from './messages'
+export * from './settings'
+export * from './admin/dashboard'
+export * from './admin/tenants'
+export * from './admin/farms'
+export * from './admin/monitor'
+export * from './admin/trace'
+export * from './admin/approvals'
+export * from './admin/alerts'
+export * from './admin/sop'
+export * from './admin/reports'
