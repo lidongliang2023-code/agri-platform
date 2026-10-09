@@ -3,11 +3,13 @@ package com.agri.produce.internal.admin;
 import com.agri.shared.result.ApiResponse;
 import com.agri.shared.result.PageResult;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -57,14 +59,23 @@ public class AdminDashboardController {
     }
 
     /**
-     * 生产总览维度统计行（按农场所属省份聚合）。
+     * 生产总览维度统计行。
      *
-     * <p>此前 OpsProductionOverview.tsx 的统计行走页面内 FALLBACK_ROWS 示例值。
-     * 用 prod_farm_info.province 聚合——库里没有 region 列，但省份是真实且有值的维度。</p>
+     * <p>此前 OpsProductionOverview.tsx 的统计行走页面内 FALLBACK_ROWS 示例值；
+     * 且本端点原不收任何参数、恒按省份聚合，把前端传来的 dimension / region /
+     * startDate / endDate 静默丢弃——用户选「按作物」「按租户」拿到的却还是省份行，
+     * 真实数据被贴上错误维度标签。现在四个入参全部真实生效。</p>
+     *
+     * <p>维度 region→农场省份、crop→地块作物、tenant→农场租户，三者均有真实数据源；
+     * 传入不支持的维度会明确 400，绝不退回默认维度假装成功。</p>
      */
     @GetMapping("/overview-rows")
-    public ApiResponse<List<Map<String, Object>>> overviewRows() {
-        return ApiResponse.ok(adminDashboardService.overviewRows());
+    public ApiResponse<List<Map<String, Object>>> overviewRows(
+            @RequestParam(defaultValue = "region") String dimension,
+            @RequestParam(required = false) String region,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+        return ApiResponse.ok(adminDashboardService.overviewRows(dimension, region, startDate, endDate));
     }
 
     /**

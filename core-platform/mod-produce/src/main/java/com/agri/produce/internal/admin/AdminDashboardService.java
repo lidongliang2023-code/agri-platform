@@ -16,6 +16,8 @@ import com.agri.produce.internal.quality.InspectionEntity;
 import com.agri.produce.internal.quality.InspectionMapper;
 import com.agri.produce.internal.task.TaskInfoEntity;
 import com.agri.produce.internal.task.TaskInfoMapper;
+import com.agri.shared.exception.BusinessException;
+import com.agri.shared.exception.ErrorCode;
 import com.agri.shared.result.PageResult;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -31,6 +33,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -57,6 +60,12 @@ public class AdminDashboardService {
     private static final DateTimeFormatter DAY_LABEL = DateTimeFormatter.ofPattern("MM-dd");
     /** 未填写省份的农场归入此分组，避免用"未知区域"之类的猜测名 */
     private static final String PROVINCE_EMPTY = "未填写";
+    /** 未填写作物的地块归入此分组 */
+    private static final String VALUE_EMPTY = "未填写";
+    /** 未归属租户的农场归入此分组 */
+    private static final String TENANT_EMPTY = "未归属";
+    /** overview-rows 支持的统计维度（三个维度均有真实数据源） */
+    private static final List<String> SUPPORTED_DIMENSIONS = List.of("region", "crop", "tenant");
 
     /**
      * 看板总览：农场/地块/任务/批次/告警/设备在线。
@@ -197,81 +206,182 @@ public class AdminDashboardService {
     /**
      * 生产总览维度统计行（运营端 OpsProductionOverview）。
      *
-     * <p>按农场所属省份聚合。用 {@code prod_farm_info.province} 而不是"区域"字段，
-     * 原因是库里没有 region 列，但省份是真实存在且有值的行政维度，能真聚合。</p>
+     * <p><b>为什么必须收 dimension 参数。</b>前端 {@code OpsProductionOverview.tsx:149} 会传
+     * {@code dimension}（region / crop / tenant）、{@code region}、{@code startDate} /
+     * {@code endDate}。此前本端点不收任何参数、恒按省份聚合，等于把这四个入参静默丢弃：
+     * 用户在页面上选「按作物」或「按租户」，拿到的却还是按省份分组的行——
+     * <b>真实数据被贴上了错误的维度标签</b>，比保留兜底数据更糟（因为它看起来完全正常）。
+     * 现在四个入参全部真实生效。</p>
+     *
+     * <p><b>维度的真实数据源：</b></p>
+     * <ul>
+     *   <li>{@code region} → {@code prod_farm_info.province}（库里没有 region 列，但有真实省份值）</li>
+     *   <li>{@code crop}   → {@code prod_plot_info.crop_id}</li>
+     *   <li>{@code tenant} → 农场上的 {@code tenant_id}</li>
+     * </ul>
+     * 三个维度都有真实取值；维度值缺失时归入 {@code 未填写} / {@code 未归属}，不猜名字。
+     *
+     * <p><b>时间范围的适用边界（如实说明，不假装全量生效）：</b>{@code startDate} /
+     * {@code endDate} 只对<b>有时间属性的指标</b>生效——产量（采收日期）、告警数（告警时间）；
+     * 而农场数、在田面积、任务完成率是<b>存量快照</b>，不受时间过滤。宁可少过滤，
+     * 也不能让"面积随时间变化"这种无依据的口径混进来。</p>
      *
      * <p>{@code outputTon} 由采收批次 quantity 折算：单位 kg 除以 1000，单位 t/吨 原样计入，
      * 其余单位不折算也不计入（避免把"箱/件"当成吨）。</p>
      *
+     * @param dimension 统计维度：region / crop / tenant，缺省 region
+     * @param region    省份过滤，空表示不过滤
+     * @param startDate 起始日期，空表示不限
+     * @param endDate   截止日期，空表示不限
      * @return 维度统计行，按农场数倒序
      */
-    public List<Map<String, Object>> overviewRows() {
+    public List<Map<String, Object>> overviewRows(String dimension, String region,
+                                                  LocalDate startDate, LocalDate endDate) {
+        String dim = dimension == null || dimension.isBlank() ? "region" : dimension.trim();
+        if (!SUPPORTED_DIMENSIONS.contains(dim)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "不支持的统计维度：" + dim + "（仅支持 region / crop / tenant）");
+        }
+        boolean cropDim = "crop".equals(dim);
+
         List<FarmInfoEntity> farms = farmInfoMapper.selectList(new LambdaQueryWrapper<FarmInfoEntity>()
                 .eq(FarmInfoEntity::getStatus, 1));
-        Map<String, String> farmProvince = new LinkedHashMap<>();
+        if (region != null && !region.isBlank()) {
+            String target = region.trim();
+            farms = farms.stream()
+                    .filter(f -> target.equals(f.getProvince() == null ? "" : f.getProvince().trim()))
+                    .toList();
+        }
+        Set<String> farmIdScope = new HashSet<>();
         for (FarmInfoEntity farm : farms) {
-            farmProvince.put(farm.getFarmId(),
-                    farm.getProvince() == null || farm.getProvince().isBlank()
-                            ? PROVINCE_EMPTY : farm.getProvince().trim());
+            farmIdScope.add(farm.getFarmId());
         }
-        Map<String, String> plotFarm = new LinkedHashMap<>();
-        for (PlotInfoEntity plot : plotInfoMapper.selectList(null)) {
-            plotFarm.put(plot.getPlotId(), plot.getFarmId());
+        Map<String, String> farmKey = new LinkedHashMap<>();
+        for (FarmInfoEntity farm : farms) {
+            farmKey.put(farm.getFarmId(), cropDim ? "" : groupKeyOf(dim, farm));
         }
+        List<PlotInfoEntity> plots = plotInfoMapper.selectList(null).stream()
+                .filter(p -> farmIdScope.contains(p.getFarmId()))
+                .toList();
         List<TaskInfoEntity> tasks = taskInfoMapper.selectList(null);
         List<AlertInfoEntity> alerts = alertInfoMapper.selectList(null);
         List<HarvestBatchEntity> batches = harvestBatchMapper.selectList(null);
 
-        Map<String, Map<String, Object>> grouped = new LinkedHashMap<>();
-        for (FarmInfoEntity farm : farms) {
-            String province = farmProvince.get(farm.getFarmId());
-            // 计数一律用 int，避免被全局 Long→String 序列化成字符串（与 trend 端点保持同一口径）
-            Map<String, Object> row = grouped.computeIfAbsent(province, key -> {
-                Map<String, Object> init = new LinkedHashMap<>();
-                init.put("name", key);
-                init.put("farmCount", 0);
-                init.put("fieldArea", BigDecimal.ZERO);
-                init.put("outputTon", BigDecimal.ZERO);
-                init.put("taskTotal", 0);
-                init.put("taskDone", 0);
-                init.put("alertCount", 0);
-                return init;
-            });
-            row.put("farmCount", (Integer) row.get("farmCount") + 1);
-            row.put("fieldArea", ((BigDecimal) row.get("fieldArea"))
-                    .add(farm.getAreaTotal() == null ? BigDecimal.ZERO : farm.getAreaTotal()));
-
-            Set<String> plotIds = new HashSet<>();
-            plotFarm.forEach((plotId, farmId) -> {
-                if (farm.getFarmId().equals(farmId)) {
-                    plotIds.add(plotId);
-                }
-            });
-            long taskTotal = tasks.stream().filter(t -> plotIds.contains(t.getPlotId())).count();
-            long taskDone = tasks.stream()
-                    .filter(t -> plotIds.contains(t.getPlotId()) && "done".equals(t.getStatus()))
-                    .count();
-            row.put("taskTotal", (Integer) row.get("taskTotal") + (int) taskTotal);
-            row.put("taskDone", (Integer) row.get("taskDone") + (int) taskDone);
-            row.put("alertCount", (Integer) row.get("alertCount") + (int) alerts.stream()
-                    .filter(a -> farm.getFarmId().equals(a.getFarmId())).count());
-            for (HarvestBatchEntity batch : batches) {
-                if (plotIds.contains(batch.getPlotId())) {
-                    row.put("outputTon", ((BigDecimal) row.get("outputTon")).add(toTon(batch)));
+        // 分组：作物维度以地块为粒度（一个农场可能落入多个作物分组），其余以农场为粒度
+        Map<String, Set<String>> groupPlots = new LinkedHashMap<>();
+        Map<String, Set<String>> groupFarms = new LinkedHashMap<>();
+        Map<String, BigDecimal> groupArea = new LinkedHashMap<>();
+        if (cropDim) {
+            for (PlotInfoEntity plot : plots) {
+                String key = plot.getCropId() == null || plot.getCropId().isBlank()
+                        ? VALUE_EMPTY : plot.getCropId().trim();
+                groupPlots.computeIfAbsent(key, k -> new LinkedHashSet<>()).add(plot.getPlotId());
+                groupFarms.computeIfAbsent(key, k -> new LinkedHashSet<>()).add(plot.getFarmId());
+                groupArea.merge(key, nvl(plot.getArea()), BigDecimal::add);
+            }
+        } else {
+            for (FarmInfoEntity farm : farms) {
+                String key = groupKeyOf(dim, farm);
+                groupFarms.computeIfAbsent(key, k -> new LinkedHashSet<>()).add(farm.getFarmId());
+                groupArea.merge(key, nvl(farm.getAreaTotal()), BigDecimal::add);
+            }
+            for (PlotInfoEntity plot : plots) {
+                String key = farmKey.get(plot.getFarmId());
+                if (key != null) {
+                    groupPlots.computeIfAbsent(key, k -> new LinkedHashSet<>()).add(plot.getPlotId());
                 }
             }
         }
 
-        List<Map<String, Object>> rows = new ArrayList<>(grouped.values());
-        for (Map<String, Object> row : rows) {
-            int taskTotal = (Integer) row.get("taskTotal");
-            row.put("taskRate", taskTotal == 0 ? 0 : (int) Math.round((Integer) row.get("taskDone") * 100.0 / taskTotal));
-            row.put("fieldArea", ((BigDecimal) row.get("fieldArea")).setScale(2, RoundingMode.HALF_UP));
-            row.put("outputTon", ((BigDecimal) row.get("outputTon")).setScale(3, RoundingMode.HALF_UP));
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (String key : groupFarms.keySet()) {
+            Set<String> plotIds = groupPlots.getOrDefault(key, Set.of());
+            Set<String> farmIds = groupFarms.getOrDefault(key, Set.of());
+            int taskTotal = (int) tasks.stream().filter(t -> plotIds.contains(t.getPlotId())).count();
+            int taskDone = (int) tasks.stream()
+                    .filter(t -> plotIds.contains(t.getPlotId()) && "done".equals(t.getStatus()))
+                    .count();
+            int alertCount = (int) alerts.stream()
+                    .filter(a -> farmIds.contains(a.getFarmId()) && inRange(a.getAlertTime(), startDate, endDate))
+                    .count();
+            BigDecimal outputTon = BigDecimal.ZERO;
+            for (HarvestBatchEntity batch : batches) {
+                if (plotIds.contains(batch.getPlotId()) && inRange(batch.getHarvestDate(), startDate, endDate)) {
+                    outputTon = outputTon.add(toTon(batch));
+                }
+            }
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("name", key);
+            row.put("farmCount", farmIds.size());
+            row.put("fieldArea", groupArea.getOrDefault(key, BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP));
+            row.put("outputTon", outputTon.setScale(3, RoundingMode.HALF_UP));
+            row.put("taskTotal", taskTotal);
+            row.put("taskDone", taskDone);
+            row.put("taskRate", taskTotal == 0 ? 0 : (int) Math.round(taskDone * 100.0 / taskTotal));
+            row.put("alertCount", alertCount);
+            rows.add(row);
         }
         rows.sort(Comparator.comparingInt((Map<String, Object> r) -> (Integer) r.get("farmCount")).reversed()
                 .thenComparing(r -> String.valueOf(r.get("name"))));
         return rows;
+    }
+
+    /**
+     * 按维度取农场所属分组键。
+     *
+     * @param dim  维度（region / tenant）
+     * @param farm 农场
+     * @return 分组键
+     */
+    private String groupKeyOf(String dim, FarmInfoEntity farm) {
+        if ("tenant".equals(dim)) {
+            return farm.getTenantId() == null ? TENANT_EMPTY : String.valueOf(farm.getTenantId());
+        }
+        return farm.getProvince() == null || farm.getProvince().isBlank()
+                ? PROVINCE_EMPTY : farm.getProvince().trim();
+    }
+
+    /**
+     * 判 LocalDateTime 是否落在日期区间内（闭区间）；区间为空表示不限。
+     *
+     * @param time      时间，null 视为不在区间内
+     * @param startDate 起始日期，可空
+     * @param endDate   截止日期，可空
+     * @return 命中返回 true
+     */
+    private boolean inRange(LocalDateTime time, LocalDate startDate, LocalDate endDate) {
+        if (time == null) {
+            return false;
+        }
+        return inRange(time.toLocalDate(), startDate, endDate);
+    }
+
+    /**
+     * 判 LocalDate 是否落在日期区间内（闭区间）；区间为空表示不限。
+     *
+     * @param date      日期，null 视为不在区间内
+     * @param startDate 起始日期，可空
+     * @param endDate   截止日期，可空
+     * @return 命中返回 true
+     */
+    private boolean inRange(LocalDate date, LocalDate startDate, LocalDate endDate) {
+        if (date == null) {
+            return false;
+        }
+        if (startDate != null && date.isBefore(startDate)) {
+            return false;
+        }
+        return endDate == null || !date.isAfter(endDate);
+    }
+
+    /**
+     * BigDecimal 空值归零。
+     *
+     * @param value 原值
+     * @return 非空的原值或零
+     */
+    private BigDecimal nvl(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
     }
 
     /**
