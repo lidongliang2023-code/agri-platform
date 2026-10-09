@@ -1,6 +1,5 @@
 package com.agri.produce.internal.admin;
 
-import com.agri.produce.internal.alert.AlertInfoEntity;
 import com.agri.produce.internal.alert.AlertRuleEntity;
 import com.agri.produce.internal.alert.AlertVO;
 import com.agri.shared.result.ApiResponse;
@@ -61,11 +60,16 @@ public class AdminAlertController {
         return ApiResponse.ok(adminAlertService.stats());
     }
 
-    /** 告警派单 */
+    /**
+     * 告警派单。
+     *
+     * <p>对外返回 {@link AlertVO}，与列表端点同口径（此前返回实体，调用方拿到的是
+     * 库内英文枚举 {@code "HANDLED"}）。
+     */
     @PostMapping("/{alertId}/dispatch")
-    public ApiResponse<AlertInfoEntity> dispatch(@org.springframework.web.bind.annotation.PathVariable String alertId,
-                                                 @RequestParam String memberId,
-                                                 @RequestParam(required = false) String remark) {
+    public ApiResponse<AlertVO> dispatch(@org.springframework.web.bind.annotation.PathVariable String alertId,
+                                         @RequestParam String memberId,
+                                         @RequestParam(required = false) String remark) {
         return ApiResponse.ok(adminAlertService.dispatch(alertId, memberId, remark));
     }
 
@@ -77,16 +81,27 @@ public class AdminAlertController {
         return ApiResponse.ok(adminAlertService.toggleRule(ruleId, enabledFlag));
     }
 
-    /** 紧急告警（CRITICAL 且未处置） */
+    /**
+     * 紧急告警（CRITICAL 且未处置）。
+     *
+     * <p>对外返回 {@link AlertVO}，{@code alertLevel} 为数字，与告警列表同口径。
+     */
     @GetMapping("/emergency")
-    public ApiResponse<List<AlertInfoEntity>> emergency(@RequestParam(defaultValue = "60") int minutes) {
+    public ApiResponse<List<AlertVO>> emergency(@RequestParam(defaultValue = "60") int minutes) {
         return ApiResponse.ok(adminAlertService.emergency(minutes));
     }
 
-    /** 告警复核（已处置待复核） */
+    /**
+     * 告警复核（已处置待复核）。
+     *
+     * <p><b>为什么从 {@link AlertInfoEntity} 改成 {@link AlertVO}。</b>运营端「灾情复核」页
+     * （{@code /admin/production/alerts/review}）与告警中心共用 {@code 1/2/3/4} 数字枚举映射，
+     * 吐实体时 {@code alertLevel} 是 {@code "URGENT"}，前端映射取到 undefined 后访问
+     * {@code .color} 抛错，页面崩溃。
+     */
     @GetMapping("/review")
-    public ApiResponse<PageResult<AlertInfoEntity>> review(@RequestParam(defaultValue = "1") long page,
-                                                           @RequestParam(defaultValue = "10") long size) {
+    public ApiResponse<PageResult<AlertVO>> review(@RequestParam(defaultValue = "1") long page,
+                                                   @RequestParam(defaultValue = "10") long size) {
         return ApiResponse.ok(adminAlertService.review(page, size));
     }
 }

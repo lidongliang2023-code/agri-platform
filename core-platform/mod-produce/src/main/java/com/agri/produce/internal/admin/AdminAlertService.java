@@ -114,7 +114,7 @@ public class AdminAlertService {
         Map<String, Object> result = new LinkedHashMap<>();
         long total = alertInfoMapper.selectCount(new LambdaQueryWrapper<AlertInfoEntity>());
         long handled = alertInfoMapper.selectCount(new LambdaQueryWrapper<AlertInfoEntity>()
-                .eq(AlertInfoEntity::getStatus, "HANDLED"));
+                .eq(AlertInfoEntity::getStatus, AlertDict.STATUS_HANDLED));
         for (String level : List.of("INFO", "WARN", "CRITICAL")) {
             result.put(level, alertInfoMapper.selectCount(new LambdaQueryWrapper<AlertInfoEntity>()
                     .eq(AlertInfoEntity::getAlertLevel, level)));
@@ -128,13 +128,16 @@ public class AdminAlertService {
     /**
      * 告警派单：指派处置人并置为处理中状态。
      *
+     * <p>对外返回 {@link AlertVO}（status/alertLevel 已转数字），与列表端点同口径。
+     * 返回值直接吐实体会让调用方拿到 {@code "HANDLED"} 这种库内英文枚举。
+     *
      * @param alertId   告警ID
      * @param memberId  处置成员ID
      * @param remark    派单说明
-     * @return 告警记录
+     * @return 派单后的告警（对外视图）
      */
     @Transactional
-    public AlertInfoEntity dispatch(String alertId, String memberId, String remark) {
+    public AlertVO dispatch(String alertId, String memberId, String remark) {
         AlertInfoEntity alert = alertInfoMapper.selectById(alertId);
         if (alert == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
@@ -143,9 +146,9 @@ public class AdminAlertService {
         alert.setHandleBy(member == null ? memberId : member.getMemberName());
         alert.setHandleRemark(remark);
         alert.setHandleTime(LocalDateTime.now());
-        alert.setStatus("HANDLED");
+        alert.setStatus(AlertDict.STATUS_HANDLED);
         alertInfoMapper.updateById(alert);
-        return alert;
+        return AlertVO.from(alert);
     }
 
     /**
@@ -166,21 +169,42 @@ public class AdminAlertService {
         return rule;
     }
 
-    /** 紧急告警：CRITICAL 级别且未处置 */
-    public List<AlertInfoEntity> emergency(int minutes) {
-        return alertInfoMapper.selectList(new LambdaQueryWrapper<AlertInfoEntity>()
+    /**
+     * 紧急告警：CRITICAL 级别且未处置。
+     *
+     * <p>对外返回 {@link AlertVO}。筛选条件仍按库内英文枚举（{@code CRITICAL/PENDING}），
+     * 由 {@link AlertDict} 的常量表达，不在 SQL 里散写字面量。
+     *
+     * @param minutes 回溯分钟数
+     * @return 紧急告警列表（对外视图）
+     */
+    public List<AlertVO> emergency(int minutes) {
+        List<AlertInfoEntity> entities = alertInfoMapper.selectList(new LambdaQueryWrapper<AlertInfoEntity>()
                 .eq(AlertInfoEntity::getAlertLevel, "CRITICAL")
-                .eq(AlertInfoEntity::getStatus, "PENDING")
+                .eq(AlertInfoEntity::getStatus, AlertDict.STATUS_PENDING)
                 .ge(AlertInfoEntity::getAlertTime, LocalDateTime.now().minusMinutes(minutes))
                 .orderByDesc(AlertInfoEntity::getAlertTime));
+        return entities.stream().map(AlertVO::from).toList();
     }
 
-    /** 告警复核：已处置记录，按处置时间倒序 */
-    public PageResult<AlertInfoEntity> review(long page, long size) {
+    /**
+     * 告警复核：已处置记录，按处置时间倒序。
+     *
+     * <p><b>为什么必须返回 VO。</b>运营端「灾情复核」页（{@code /admin/production/alerts/review}）
+     * 与告警中心共用数字枚举映射，此前直接吐实体 {@link AlertInfoEntity}，
+     * {@code alertLevel} 是 {@code "URGENT"} 这类英文串，前端取 {@code LEVEL_MAP['URGENT']}
+     * 得到 undefined 后访问 {@code .color} 抛错，页面崩溃（实测 pageerror 4 条）。
+     *
+     * @param page 页码
+     * @param size 每页条数
+     * @return 分页结果（对外视图）
+     */
+    public PageResult<AlertVO> review(long page, long size) {
         Page<AlertInfoEntity> result = alertInfoMapper.selectPage(new Page<>(page, size),
                 new LambdaQueryWrapper<AlertInfoEntity>()
-                        .eq(AlertInfoEntity::getStatus, "HANDLED")
+                        .eq(AlertInfoEntity::getStatus, AlertDict.STATUS_HANDLED)
                         .orderByDesc(AlertInfoEntity::getHandleTime));
-        return PageResult.of(result.getRecords(), result.getTotal(), page, size);
+        List<AlertVO> records = result.getRecords().stream().map(AlertVO::from).toList();
+        return PageResult.of(records, result.getTotal(), page, size);
     }
 }
