@@ -38,6 +38,31 @@ export interface Approval {
   submittedAt: string
   /** 审批时间 */
   approvedAt?: string
+
+  /* ------------------------------------------------------------------
+   * 以下字段对齐后端 ApprovalEntity / prod_approval 的真实返回口径。
+   *
+   * 上面那组是「理想口径」，后端并不返回 approvalNo / approvalType /
+   * submittedAt / approverName / approveRemark；实际返回的是
+   * bizType / title / submitAt / approveAt / approveOpinion / currentApproverId。
+   * 前端此前只按理想口径取值，页面上每一列都是 undefined。
+   * 另外 status 后端是字符串枚举（APPROVED / PENDING / REJECTED），
+   * 与本接口声明的数字 ApprovalStatus 不同，取值时需按字符串比较。
+   * ------------------------------------------------------------------ */
+  /** 业务类型（后端 biz_type：CERT / RECALL / QUOTA） */
+  bizType?: string
+  /** 审批标题（后端 title） */
+  title?: string
+  /** 提交时间（后端 submit_at） */
+  submitAt?: string
+  /** 审批时间（后端 approve_at） */
+  approveAt?: string
+  /** 审批意见（后端 approve_opinion） */
+  approveOpinion?: string
+  /** 当前审批人（后端 current_approver_id，后端不返回审批人姓名） */
+  currentApproverId?: string
+  /** 审批层级（后端 approve_level） */
+  approveLevel?: number
 }
 
 /** 审批流程节点配置 */

@@ -7,9 +7,15 @@ import type { Approval, ApprovalFlowConfig } from '@/types'
 
 const BASE = '/admin/approvals'
 
-/** 审批列表查询参数 */
+/**
+ * 审批列表查询参数。
+ *
+ * `approvalType` 在后端是 `prod_approval.biz_type` **字符串枚举**
+ * （CERT / RECALL / QUOTA），不是数字；历史页按字符串传值，
+ * 故此处放宽为 `number | string`（旧数字口径调用方不受影响）。
+ */
 export interface ApprovalListParams extends PageQuery {
-  approvalType?: number
+  approvalType?: number | string
   status?: number
   tenantId?: string
   applicantName?: string
