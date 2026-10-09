@@ -170,6 +170,43 @@ function normalizePage<T>(
   }
 }
 
+/* ==================== 大屏真实可用端点 ==================== */
+/* 实测（登录 core-app 后直连）：
+ * - GET /admin/dashboard            ✅ 真实返回（字段值为字符串）
+ * - GET /admin/dashboard/rank       ✅ 真实返回 TOP 农场
+ * - GET /admin/dashboard/alert-trend✅ 真实返回告警级别分布
+ * - GET /admin/dashboard/screen             ❌ code=500（后端无此端点）
+ * - GET /admin/dashboard/region-distribution❌ code=500（后端无此端点）
+ * - GET /admin/dashboard/realtime           ❌ code=500（后端无此端点）
+ * 大屏页面仅消费前三个真实端点，其余一律空态 + 明确提示，不使用示例数据顶替。 */
+
+/** 运营大盘指标真实返回（GET /admin/dashboard；数值字段运行时为字符串） */
+export interface OpsOverviewMetrics {
+  /** 农场总数 */
+  farmCount?: string | number
+  /** 地块总数 */
+  plotCount?: string | number
+  /** 待办任务数 */
+  taskPending?: string | number
+  /** 在库批次数 */
+  batchInStock?: string | number
+  /** 检测合格单数 */
+  inspectionPass?: string | number
+  /** 检测不合格单数 */
+  inspectionFail?: string | number
+  /** 待处理告警数 */
+  alertPending?: string | number
+  /** 在线设备数 */
+  deviceOnline?: string | number
+  /** 设备总数 */
+  deviceTotal?: string | number
+}
+
+/** 查询运营大盘指标（GET /admin/dashboard） */
+export function fetchOpsOverviewMetrics(): Promise<OpsOverviewMetrics> {
+  return http.get<OpsOverviewMetrics>(BASE, undefined, { silent: true })
+}
+
 /** 查询种植面积排行（TOP N 农场） */
 export function fetchRankItems(limit = 10): Promise<OpsRankItem[]> {
   return http.get<OpsRankItem[]>(`${BASE}/rank`, { limit }, { silent: true })

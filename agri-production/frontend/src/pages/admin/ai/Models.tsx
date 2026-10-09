@@ -9,14 +9,19 @@
  * - 模型卡片：名称 + 状态标签 / 版本·类型·框架 / 准确率 / 今日调用 / 平均延迟 / GPU使用率；
  * - 支持卡片视图与列表视图切换；列表列：名称 / 类型 / 版本 / 准确率 / 状态 / 更新时间 / 操作；
  * - 支持创建模型、编辑、启用 / 停用，并在抽屉中查看「准确率趋势(近7天)」与「调用量趋势(近7天)」；
- * - 说明：后端尚未提供模型注册接口（mod-produce 无 /admin/ai 控制器），
- *   本页以本机模型注册表为准：数据持久化在浏览器 localStorage（key: agri:admin:ai:models），
- *   跨刷新保留以便演示完整流程，后续接入接口只需替换 queryFn。
+ * - 说明：后端**确实没有** AI 模型注册表能力（已核实：7 个 Flyway 迁移文件中无 ai_model /
+ *   model_registry 表；mod-produce 的 AiController 只是 prod_ai_diagnosis 诊断记录 CRUD；
+ *   satellite-ai-gateway 的 VisionController 是空壳桩，永远返回 degraded=true）。
+ *   因此本页**不接任何不存在的接口**，改为本机模型注册表：数据持久化在浏览器
+ *   localStorage（key: agri:admin:ai:models），跨刷新保留以便演示完整流程，
+ *   后续后端补齐接口只需替换 queryFn。
  * - 明示（三件套，缺一不可，避免"看起来像真的"）：
  *   ① 页面顶部常驻 Alert：当前配置保存在本机浏览器，未同步至服务端，不会对线上生效；
- *   ② 所有写操作的成功提示均带限定语「（未同步服务端…）」；
- *   ③ 来自本机注册表的数据行统一带「本机」Tag，与未来服务端返回数据可区分；
- *   另提供「恢复示例数据」按钮用于清空本机注册表。
+ *      换设备 / 换浏览器 / 清理浏览器数据后数据会丢失；
+ *   ② 所有写操作的成功提示均带限定语「已保存到本机（未写入服务端）」；
+ *   ③ 来自本机注册表的数据行统一带「本机」Tag；若内容为内置示例数据再叠「示例数据」Tag；
+ * - 空态：本机注册表为空时**不再静默回退示例数据**，改为空态 + 「载入示例数据」按钮，
+ *   载入后整页数据带「示例数据」标记，杜绝"假台账看起来像真的"。
  */
 import { useEffect, useMemo, useState } from 'react'
 import dayjs from 'dayjs'
@@ -187,23 +192,30 @@ const MOCK_MODELS: AiModel[] = [
 /** 本机模型注册表的 localStorage key（跨刷新保留，仅存在于当前浏览器） */
 const MODEL_STORE_KEY = 'agri:admin:ai:models'
 
+/** 本机注册表数据来源：local=用户在本机写入 / demo=内置示例数据 / empty=空 */
+type StoreSource = 'local' | 'demo' | 'empty'
+
 /**
- * 读取本机模型注册表：优先取 localStorage，缺失 / 解析失败时回退到示例数据
- * @returns 模型列表
+ * 读取本机模型注册表。
+ *
+ * 注意：**不再**在缺失时静默回退示例数据——缺失即返回 null（未初始化），
+ * 由页面展示空态并让用户显式点击「载入示例数据」，避免示例台账伪装成真实数据。
+ *
+ * @returns 模型列表；null 表示本机从未写入过注册表（未初始化）
  */
-const loadModelStore = (): AiModel[] => {
+const loadModelStore = (): AiModel[] | null => {
   try {
     const raw = window.localStorage.getItem(MODEL_STORE_KEY)
     if (raw) {
       const parsed = JSON.parse(raw) as AiModel[]
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      if (Array.isArray(parsed)) {
         return parsed
       }
     }
   } catch {
-    // 浏览器禁用存储或数据损坏时，回退到内置示例数据
+    // 浏览器禁用存储或数据损坏时按「未初始化」处理，由页面显式提示
   }
-  return [...MOCK_MODELS]
+  return null
 }
 
 /**
@@ -218,14 +230,17 @@ const persistModelStore = (list: AiModel[]): void => {
   }
 }
 
-/** 本地演示数据源（持久化到 localStorage，跨刷新保留，但不会同步到服务端） */
-let mockModelStore: AiModel[] = loadModelStore()
+/** 本机模型注册表（null = 未初始化，页面展示空态） */
+let mockModelStore: AiModel[] | null = loadModelStore()
+
+/** 当前数据来源（与 mockModelStore 同步维护，用于页面提示） */
+let storeSource: StoreSource = mockModelStore === null ? 'empty' : 'local'
 
 /** 本机数据标记：所有来自本地注册表的行都需带上该标签，与服务端返回数据区分 */
 const LOCAL_TAG: JSX.Element = <Tag color="purple">本机</Tag>
 
-/** 平台级统计口径（原型 P20） */
-const PLATFORM_STATS = { total: 24, running: 18, pending: 4, todayCalls: 12450 }
+/** 示例数据标记：内容为内置演示数据时额外叠加，避免被当成真实台账 */
+const DEMO_TAG: JSX.Element = <Tag color="orange">示例数据</Tag>
 
 /** 模型类型选项 */
 const TYPE_OPTIONS: { value: ModelType; label: string }[] = [
@@ -262,15 +277,24 @@ export default function Models(): JSX.Element {
   const queryClient = useQueryClient()
   const [form] = Form.useForm<ModelFormValues>()
   const [filters, setFilters] = useState<FilterState>({})
-  const [models, setModels] = useState<AiModel[]>([])
+  const [models, setModels] = useState<AiModel[]>(mockModelStore ?? [])
+  const [source, setSource] = useState<StoreSource>(storeSource)
   const [view, setView] = useState<'card' | 'table'>('card')
   const [drawerOpen, setDrawerOpen] = useState<boolean>(false)
   const [editingId, setEditingId] = useState<string | undefined>(undefined)
   const [detailRow, setDetailRow] = useState<AiModel | undefined>(undefined)
 
+  /** 行来源标签：本机 + （示例数据时）示例数据 */
+  const sourceTag: JSX.Element = (
+    <Space size={4}>
+      {LOCAL_TAG}
+      {source === 'demo' ? DEMO_TAG : null}
+    </Space>
+  )
+
   const listQuery = useQuery({
     queryKey: ['admin-ai-models'],
-    queryFn: async (): Promise<AiModel[]> => mockModelStore,
+    queryFn: async (): Promise<AiModel[]> => mockModelStore ?? [],
   })
 
   useEffect(() => {
@@ -297,10 +321,10 @@ export default function Models(): JSX.Element {
     [models, filters],
   )
 
-  /** 统计 */
+  /** 统计（全部来自本机注册表；后端未提供任何模型指标，不套用平台级硬编码口径） */
   const stats = useMemo(
     () => ({
-      total: PLATFORM_STATS.total,
+      total: models.length,
       running: models.filter((item) => item.status === 'running').length,
       pending: models.filter((item) => item.status === 'pending').length,
       todayCalls: models
@@ -316,7 +340,7 @@ export default function Models(): JSX.Element {
    */
   const handleSave = (values: ModelFormValues): void => {
     if (editingId) {
-      mockModelStore = mockModelStore.map((item) =>
+      mockModelStore = (mockModelStore ?? []).map((item) =>
         item.modelId === editingId
           ? {
               ...item,
@@ -331,10 +355,13 @@ export default function Models(): JSX.Element {
           : item,
       )
       persistModelStore(mockModelStore)
-      message.success('模型信息已保存到本机（未同步服务端，不会对线上生效）')
+      storeSource = 'local'
+      setSource('local')
+      setModels(mockModelStore)
+      message.success('模型信息已保存到本机（未写入服务端），不会对线上生效')
     } else {
       const nextModel: AiModel = {
-        modelId: `AI-${String(mockModelStore.length + 1).padStart(3, '0')}`,
+        modelId: `AI-${String((mockModelStore?.length ?? 0) + 1).padStart(3, '0')}`,
         modelName: values.modelName,
         modelType: values.modelType,
         framework: values.framework,
@@ -345,14 +372,17 @@ export default function Models(): JSX.Element {
         gpuUsage: 0,
         status: 'pending',
         updatedAt: dayjs().format('YYYY-MM-DD HH:mm'),
-        accuracyTrend: Array.from({ length: 7 }, (_, index) =>
-          Number((values.accuracy - 5 + index * 0.8).toFixed(1)),
-        ),
-        callTrend: Array.from({ length: 7 }, (_, index) => index * 20),
+        // 本机新建模型没有历史趋势：服务端未提供趋势数据，此处留空（页面显示「未接入」），
+        // 绝不本地编造一条"看起来在涨"的曲线。
+        accuracyTrend: [],
+        callTrend: [],
       }
-      mockModelStore = [...mockModelStore, nextModel]
+      mockModelStore = [...(mockModelStore ?? []), nextModel]
       persistModelStore(mockModelStore)
-      message.success('模型已保存到本机，等待上线（未同步服务端，不会对线上生效）')
+      storeSource = 'local'
+      setSource('local')
+      setModels(mockModelStore)
+      message.success('模型已保存到本机（未写入服务端），等待上线，不会对线上生效')
     }
     setDrawerOpen(false)
     setEditingId(undefined)
@@ -366,33 +396,54 @@ export default function Models(): JSX.Element {
    * @param nextStatus 目标状态
    */
   const handleToggle = (row: AiModel, nextStatus: ModelStatus): void => {
-    mockModelStore = mockModelStore.map((item) =>
+    mockModelStore = (mockModelStore ?? []).map((item) =>
       item.modelId === row.modelId
         ? { ...item, status: nextStatus, updatedAt: dayjs().format('YYYY-MM-DD HH:mm') }
         : item,
     )
     persistModelStore(mockModelStore)
+    storeSource = 'local'
+    setSource('local')
+    setModels(mockModelStore)
     message.success(
       nextStatus === 'running'
-        ? `「${row.modelName}」已在本机启用（未同步服务端，不会对线上生效）`
-        : `「${row.modelName}」已在本机停用下线（未同步服务端，不会对线上生效）`,
+        ? `「${row.modelName}」已在本机启用（未写入服务端），不会对线上生效`
+        : `「${row.modelName}」已在本机停用下线（未写入服务端），不会对线上生效`,
     )
     void queryClient.invalidateQueries({ queryKey: ['admin-ai-models'] })
   }
 
   /**
-   * 清空本机模型注册表，恢复内置示例数据
+   * 载入内置示例数据（显式触发，绝不静默回退）
    */
-  const handleResetLocal = (): void => {
+  const handleLoadDemo = (): void => {
+    mockModelStore = [...MOCK_MODELS]
+    persistModelStore(mockModelStore)
+    storeSource = 'demo'
+    setSource('demo')
+    setModels(mockModelStore)
+    setEditingId(undefined)
+    form.resetFields()
+    message.warning('已载入内置示例数据 —— 仅存在于本机浏览器，不是服务端真实模型台账')
+    void queryClient.invalidateQueries({ queryKey: ['admin-ai-models'] })
+  }
+
+  /**
+   * 清空本机模型注册表（回到空态，不再自动填充示例数据）
+   */
+  const handleClearLocal = (): void => {
     try {
       window.localStorage.removeItem(MODEL_STORE_KEY)
     } catch {
       // 浏览器禁用存储时忽略
     }
-    mockModelStore = [...MOCK_MODELS]
+    mockModelStore = []
+    storeSource = 'empty'
+    setSource('empty')
+    setModels([])
     setEditingId(undefined)
     form.resetFields()
-    message.success('已清空本机模型数据并恢复内置示例数据')
+    message.success('已清空本机模型注册表（页内回到空态，不会自动填充示例数据）')
     void queryClient.invalidateQueries({ queryKey: ['admin-ai-models'] })
   }
 
@@ -434,7 +485,7 @@ export default function Models(): JSX.Element {
     ],
   })
 
-  /** 平台总调用量趋势（原型 P20 模型调用量趋势） */
+  /** 平台总调用量趋势（原型 P20 模型调用量趋势；仅聚合本机注册表内已有的调用量序列） */
   const platformTrend: EChartsOption = useMemo(() => {
     const total = Array.from({ length: 7 }, (_, index) =>
       models.reduce((sum, item) => sum + (item.callTrend[index] ?? 0), 0),
@@ -454,16 +505,12 @@ export default function Models(): JSX.Element {
           itemStyle: { color: '#1677ff' },
           areaStyle: { color: 'rgba(22,119,255,0.12)' },
         },
-        {
-          name: '成功调用',
-          type: 'line',
-          smooth: true,
-          data: total.map((value) => Math.round(value * 0.985)),
-          itemStyle: { color: '#13a05a' },
-        },
       ],
     }
   }, [models, weekAxis])
+
+  /** 是否存在任何趋势数据（本机新建 / 空表时无趋势，需显式空态而非画一条 0 线） */
+  const hasTrend: boolean = models.some((item) => item.callTrend.length > 0)
 
   const columns = useMemo(
     () => [
@@ -476,6 +523,7 @@ export default function Models(): JSX.Element {
             <Button type="link" size="small" style={{ padding: 0 }} onClick={() => setDetailRow(row)}>
               {text}
             </Button>
+            {source === 'demo' ? DEMO_TAG : null}
             {LOCAL_TAG}
           </Space>
         ),
@@ -492,6 +540,12 @@ export default function Models(): JSX.Element {
         dataIndex: 'accuracy',
         width: 100,
         render: (v: number) => `${v}%`,
+      },
+      {
+        title: '数据来源',
+        key: 'sourceTag',
+        width: 150,
+        render: () => sourceTag,
       },
       {
         title: '状态',
@@ -549,7 +603,7 @@ export default function Models(): JSX.Element {
         ),
       },
     ],
-    [form],
+    [form, source],
   )
 
   return (
@@ -557,44 +611,81 @@ export default function Models(): JSX.Element {
       <Alert
         type="warning"
         showIcon
-        message="当前配置保存在本机浏览器，未同步至服务端，不会对线上生效"
+        banner
+        message="⚠️ 本机演示页：模型注册表仅保存在当前浏览器本地，不会同步到服务端，也不会对线上生效"
         description={
           <span>
-            后端尚未提供 AI 模型注册接口（mod-produce 无 <Typography.Text code>/admin/ai</Typography.Text> 控制器），
-            本页的模型列表、创建 / 编辑、启用 / 停用均写入{' '}
+            后端 <Typography.Text strong>暂无 AI 模型管理能力</Typography.Text>（已核实：无 ai_model /
+            model_registry 表；mod-produce 的 <Typography.Text code>AiController</Typography.Text> 只是
+            诊断记录 CRUD；satellite-ai-gateway 的视觉推理是永远降级的空壳桩）。
+            因此本页的列表、创建 / 编辑、启用 / 停用全部写入{' '}
             <Typography.Text strong>当前浏览器的本地存储（localStorage）</Typography.Text>
             ：<Typography.Text strong>不会同步到服务端</Typography.Text>、对其他运营账号不可见、
             <Typography.Text strong>不会真正改变线上模型的运行状态</Typography.Text>。
-            由于本地存储跨刷新保留，页面上的配置看起来会一直存在，但服务端对此一无所知。
-            列表中带 <Typography.Text code>本机</Typography.Text> 标签的行即为本地数据。
+            <Typography.Text strong>
+              换设备、换浏览器、清理浏览器数据后，这些数据会丢失。
+            </Typography.Text>
+            <br />
+            列表中带 <Typography.Text code>本机</Typography.Text> 标签的行即为本地数据；若同时带{' '}
+            <Typography.Text code>示例数据</Typography.Text> 标签，说明是内置演示台账，
+            <Typography.Text strong>不是任何真实模型</Typography.Text>。
             接入服务端接口前，请勿将本页内容当作生产环境的真实模型台账。
           </span>
         }
         action={
-          <Button size="small" onClick={handleResetLocal}>
-            恢复示例数据
-          </Button>
+          <Space>
+            <Button size="small" onClick={handleLoadDemo}>
+              载入示例数据
+            </Button>
+            <Button size="small" danger onClick={handleClearLocal}>
+              清空本机注册表
+            </Button>
+          </Space>
         }
       />
+
+      {source === 'demo' ? (
+        <Alert
+          type="warning"
+          showIcon
+          message="当前展示的是内置示例数据（示例数据），不是真实模型台账"
+          description="这些内容由前端内置的演示模板生成，仅存在于本机浏览器，用于演示页面交互；服务端不存在这些模型，也不会因本页操作发生任何变化。"
+          action={
+            <Button size="small" danger onClick={handleClearLocal}>
+              清空并回到空态
+            </Button>
+          }
+        />
+      ) : null}
+
+      {source === 'empty' ? (
+        <Alert
+          type="info"
+          showIcon
+          message="本机模型注册表为空：后端未提供模型注册接口，不会从服务端加载任何模型"
+          description="这是本页的真实状态。若只是想演示页面交互，可点击「载入示例数据」；载入后整页会带「示例数据」标记。"
+        />
+      ) : null}
+
       <Row gutter={16}>
         <Col span={6}>
           <Card>
-            <Statistic title="模型总数" value={stats.total} suffix="个" />
+            <Statistic title="模型总数（本机）" value={stats.total} suffix="个" />
           </Card>
         </Col>
         <Col span={6}>
           <Card>
-            <Statistic title="运行中" value={stats.running} suffix="个" valueStyle={{ color: '#13a05a' }} />
+            <Statistic title="运行中（本机）" value={stats.running} suffix="个" valueStyle={{ color: '#13a05a' }} />
           </Card>
         </Col>
         <Col span={6}>
           <Card>
-            <Statistic title="待上线" value={stats.pending} suffix="个" valueStyle={{ color: '#faad14' }} />
+            <Statistic title="待上线（本机）" value={stats.pending} suffix="个" valueStyle={{ color: '#faad14' }} />
           </Card>
         </Col>
         <Col span={6}>
           <Card>
-            <Statistic title="今日调用量" value={stats.todayCalls} />
+            <Statistic title="今日调用量（本机台账累加）" value={stats.todayCalls} />
           </Card>
         </Col>
       </Row>
@@ -626,6 +717,9 @@ export default function Models(): JSX.Element {
             onChange={(value) => setFilters((prev) => ({ ...prev, status: value }))}
           />
           <Button onClick={() => setFilters({})}>重置</Button>
+          <Button onClick={handleLoadDemo} disabled={source === 'demo'}>
+            载入示例数据
+          </Button>
           <Button
             icon={<ReloadOutlined />}
             onClick={() => void queryClient.invalidateQueries({ queryKey: ['admin-ai-models'] })}
@@ -654,9 +748,27 @@ export default function Models(): JSX.Element {
         </Space>
       </Card>
 
-      {displayRows.length === 0 ? (
+      {models.length === 0 ? (
         <Card>
-          <Empty description="暂无符合条件的模型" />
+          <Empty
+            description={
+              <Space direction="vertical" size={8}>
+                <Typography.Text>
+                  本机模型注册表为空 —— 后端没有模型注册接口，这里不会从服务端加载任何模型
+                </Typography.Text>
+                <Typography.Text type="secondary">
+                  如需演示页面交互，可载入内置示例数据（载入后全页带「示例数据」标记）
+                </Typography.Text>
+                <Button type="primary" onClick={handleLoadDemo}>
+                  载入示例数据
+                </Button>
+              </Space>
+            }
+          />
+        </Card>
+      ) : displayRows.length === 0 ? (
+        <Card>
+          <Empty description="暂无符合筛选条件的模型" />
         </Card>
       ) : view === 'card' ? (
         <Row gutter={[16, 16]}>
@@ -667,6 +779,7 @@ export default function Models(): JSX.Element {
                   <Space>
                     <span>{row.modelName}</span>
                     <Tag color={STATUS_MAP[row.status].color}>{STATUS_MAP[row.status].label}</Tag>
+                    {source === 'demo' ? DEMO_TAG : null}
                     {LOCAL_TAG}
                   </Space>
                 }
@@ -764,8 +877,15 @@ export default function Models(): JSX.Element {
         </Card>
       )}
 
-      <Card title="模型调用量趋势(近7天)">
-        <ReactECharts option={platformTrend} style={{ height: 280 }} />
+      <Card
+        title="模型调用量趋势(近7天)（本机台账数据）"
+        extra={<Typography.Text type="secondary">服务端未提供调用量趋势接口</Typography.Text>}
+      >
+        {hasTrend ? (
+          <ReactECharts option={platformTrend} style={{ height: 280 }} />
+        ) : (
+          <Empty description="暂无趋势数据：本机注册表内没有可用的调用量序列（服务端未提供该接口，不做本地估算）" />
+        )}
       </Card>
 
       {/* 模型详情抽屉：准确率与调用量趋势 */}
@@ -781,6 +901,7 @@ export default function Models(): JSX.Element {
               <Descriptions.Item label="模型编号">
                 <Space size={4}>
                   {detailRow.modelId}
+                  {source === 'demo' ? DEMO_TAG : null}
                   {LOCAL_TAG}
                 </Space>
               </Descriptions.Item>
@@ -797,7 +918,11 @@ export default function Models(): JSX.Element {
               <Descriptions.Item label="更新时间">{detailRow.updatedAt}</Descriptions.Item>
             </Descriptions>
             <Card title="准确率趋势(近7天)" size="small">
-              <ReactECharts option={buildTrendOption(detailRow)} style={{ height: 280 }} />
+              {detailRow.accuracyTrend.length > 0 || detailRow.callTrend.length > 0 ? (
+                <ReactECharts option={buildTrendOption(detailRow)} style={{ height: 280 }} />
+              ) : (
+                <Empty description="本机新建模型暂无历史趋势（服务端未提供趋势数据，不做本地估算）" />
+              )}
             </Card>
           </Space>
         ) : null}
