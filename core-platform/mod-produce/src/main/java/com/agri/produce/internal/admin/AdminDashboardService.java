@@ -181,11 +181,14 @@ public class AdminDashboardService {
             Map<String, Object> point = new LinkedHashMap<>();
             point.put("label", day.format(DAY_LABEL));
             point.put("date", day.toString());
-            point.put("taskRate", due == 0 ? 0 : Math.round(done * 100.0 / due));
-            point.put("taskDue", due);
-            point.put("taskDone", done);
+            // 计数一律以 int 输出 → JSON 数字。若用 long 会被全局 Long→String
+            // 序列化成 "1"，与同对象里的 activeWorkers（int→数字）混成两套类型，
+            // 前端一旦直接比较就会出现 "10" > "9" === false 这类静默错判。
+            point.put("taskRate", due == 0 ? 0 : (int) Math.round(done * 100.0 / due));
+            point.put("taskDue", (int) due);
+            point.put("taskDone", (int) done);
             point.put("activeWorkers", workers.size());
-            point.put("alertCount", alertCount);
+            point.put("alertCount", (int) alertCount);
             points.add(point);
         }
         return points;
@@ -222,18 +225,19 @@ public class AdminDashboardService {
         Map<String, Map<String, Object>> grouped = new LinkedHashMap<>();
         for (FarmInfoEntity farm : farms) {
             String province = farmProvince.get(farm.getFarmId());
+            // 计数一律用 int，避免被全局 Long→String 序列化成字符串（与 trend 端点保持同一口径）
             Map<String, Object> row = grouped.computeIfAbsent(province, key -> {
                 Map<String, Object> init = new LinkedHashMap<>();
                 init.put("name", key);
-                init.put("farmCount", 0L);
+                init.put("farmCount", 0);
                 init.put("fieldArea", BigDecimal.ZERO);
                 init.put("outputTon", BigDecimal.ZERO);
-                init.put("taskTotal", 0L);
-                init.put("taskDone", 0L);
-                init.put("alertCount", 0L);
+                init.put("taskTotal", 0);
+                init.put("taskDone", 0);
+                init.put("alertCount", 0);
                 return init;
             });
-            row.put("farmCount", (Long) row.get("farmCount") + 1);
+            row.put("farmCount", (Integer) row.get("farmCount") + 1);
             row.put("fieldArea", ((BigDecimal) row.get("fieldArea"))
                     .add(farm.getAreaTotal() == null ? BigDecimal.ZERO : farm.getAreaTotal()));
 
@@ -247,9 +251,9 @@ public class AdminDashboardService {
             long taskDone = tasks.stream()
                     .filter(t -> plotIds.contains(t.getPlotId()) && "done".equals(t.getStatus()))
                     .count();
-            row.put("taskTotal", (Long) row.get("taskTotal") + taskTotal);
-            row.put("taskDone", (Long) row.get("taskDone") + taskDone);
-            row.put("alertCount", (Long) row.get("alertCount") + alerts.stream()
+            row.put("taskTotal", (Integer) row.get("taskTotal") + (int) taskTotal);
+            row.put("taskDone", (Integer) row.get("taskDone") + (int) taskDone);
+            row.put("alertCount", (Integer) row.get("alertCount") + (int) alerts.stream()
                     .filter(a -> farm.getFarmId().equals(a.getFarmId())).count());
             for (HarvestBatchEntity batch : batches) {
                 if (plotIds.contains(batch.getPlotId())) {
@@ -260,12 +264,12 @@ public class AdminDashboardService {
 
         List<Map<String, Object>> rows = new ArrayList<>(grouped.values());
         for (Map<String, Object> row : rows) {
-            long taskTotal = (Long) row.get("taskTotal");
-            row.put("taskRate", taskTotal == 0 ? 0 : Math.round((Long) row.get("taskDone") * 100.0 / taskTotal));
+            int taskTotal = (Integer) row.get("taskTotal");
+            row.put("taskRate", taskTotal == 0 ? 0 : (int) Math.round((Integer) row.get("taskDone") * 100.0 / taskTotal));
             row.put("fieldArea", ((BigDecimal) row.get("fieldArea")).setScale(2, RoundingMode.HALF_UP));
             row.put("outputTon", ((BigDecimal) row.get("outputTon")).setScale(3, RoundingMode.HALF_UP));
         }
-        rows.sort(Comparator.comparingLong((Map<String, Object> r) -> (Long) r.get("farmCount")).reversed()
+        rows.sort(Comparator.comparingInt((Map<String, Object> r) -> (Integer) r.get("farmCount")).reversed()
                 .thenComparing(r -> String.valueOf(r.get("name"))));
         return rows;
     }
