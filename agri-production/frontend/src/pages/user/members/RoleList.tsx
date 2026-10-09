@@ -432,6 +432,19 @@ export default function RoleList(): JSX.Element {
               message="权限来源与生效说明"
               description="下方勾选框是前端 RBAC 权限点目录（命名规范 {域}.{资源}.{动作}）；已勾选状态读取自服务端 platform_role.permissions，点击「保存权限」会真实写入服务端（PUT /api/v1/admin/roles/{code}/permissions）。保存失败会明确报错，不会假装成功。"
             />
+            {permissionQuery.isError ? (
+              <Alert
+                type="error"
+                showIcon
+                message="未能读取该角色已保存的权限"
+                description="GET /api/v1/admin/roles/{code}/permissions 请求失败。此处不回落到本地示例权限，也不按「未配置」处理；请重试或确认后端平台服务可用。"
+                action={
+                  <Button size="small" onClick={() => void permissionQuery.refetch()}>
+                    重试
+                  </Button>
+                }
+              />
+            ) : null}
             <Descriptions size="small" column={2} bordered>
               <Descriptions.Item label="角色编码">{activeRoleCode || '-'}</Descriptions.Item>
               <Descriptions.Item label="已选权限点">

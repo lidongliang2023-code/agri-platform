@@ -510,7 +510,7 @@ export interface PlatformRole {
  * @returns 平台角色列表
  */
 export async function fetchPlatformRoles(): Promise<PlatformRole[]> {
-  const raw = await httpPlatform.get<unknown>('/roles')
+  const raw = await httpPlatform.get<unknown>('/roles', undefined, { silent: true })
   const list = Array.isArray(raw) ? raw : []
   return list.map((item) => {
     const record = asRecord(item)
@@ -571,9 +571,11 @@ export async function saveRolePermissions(
   }
   let updated: PlatformRole
   try {
-    const raw = await httpPlatform.put<unknown>(`/roles/${encodeURIComponent(roleCode)}/permissions`, {
-      permissions: permissionIds,
-    })
+    const raw = await httpPlatform.put<unknown>(
+      `/roles/${encodeURIComponent(roleCode)}/permissions`,
+      { permissions: permissionIds },
+      { silent: true },
+    )
     const record = asRecord(raw)
     const stored = readValue(record, ['permissions'])
     const saved = Array.isArray(stored) ? stored.map((code) => String(code)) : permissionIds
@@ -623,19 +625,22 @@ function describeRequestError(error: unknown): string {
  *
  * 此前吃的是 `/members/roles/permissions` —— 那个端点后端是硬编码空壳，
  * 固定返回 produce:read / produce:write / produce:admin 三个与数据库无关的假权限码；
- * 现在改读平台域真实端点，读不到就返回空数组（页面显示空态）。
+ * 现在改读平台域真实端点。
+ *
+ * 读取失败直接抛错（不静默返回空数组）：空数组表示「该角色确实没配权限」，
+ * 与「读不到」是两回事，静默兜空会让用户以为权限被清空了。
  *
  * @param roleCode 角色编码
- * @returns 权限码列表；未配置 / 读取失败返回空数组
+ * @returns 权限码列表
  */
 export async function fetchRolePermissions(roleCode: string): Promise<string[]> {
-  try {
-    const raw = await httpPlatform.get<unknown>(`/roles/${encodeURIComponent(roleCode)}/permissions`)
-    const list = Array.isArray(raw) ? raw : []
-    return list.map((item) => String(item))
-  } catch {
-    return []
-  }
+  const raw = await httpPlatform.get<unknown>(
+    `/roles/${encodeURIComponent(roleCode)}/permissions`,
+    undefined,
+    { silent: true },
+  )
+  const list = Array.isArray(raw) ? raw : []
+  return list.map((item) => String(item))
 }
 
 /**
