@@ -124,40 +124,37 @@ public class TenantQuotaService {
     }
 
     /**
-     * 重置已用计数（按实际表重算）——<b>当前实现明确失败，不写回任何数字</b>。
+     * 重置已用计数（按实际表重算，<b>按租户维度统计</b>）。
      *
-     * <p>原实现为 {@code farmInfoMapper.selectCount(new LambdaQueryWrapper<>()).intValue()}，
-     * 即「全平台农场总数」，却写进<b>单个租户</b>的 used_farm_count：
-     * 多租户下会把别家农场的用量记到本租户头上，且返回值/HTTP 状态一切正常，
-     * 是典型的静默说假话（实测把 used_farm_count 从 4 静默改成了 0）。
+     * <p>原实现为 {@code farmInfoMapper.selectCount(new LambdaQueryWrapper<>()).intValue()}——
+     * wrapper 不带任何条件，统计的是<b>全平台农场总数</b>，却被写进<b>单个租户</b>的
+     * used_farm_count：多租户下把别家农场的用量记到本租户头上，且 HTTP 状态与 code 一切正常，
+     * 是典型的静默说假话。配额超限告警、租户分层、计费都会被这个数字带偏。</p>
      *
-     * <p><b>为什么不能直接补 {@code .eq(FarmInfoEntity::getTenantId, quota.getTenantId())}：</b>
-     * 全库 tenant_id 由 {@code MyMetaObjectHandler#insertFill} 统一硬编码填充为 {@code 0}
-     * （全仓无任何业务代码 setTenantId），库内也没有租户主表，
-     * TenantLineInnerInterceptor 的租户列实际是 market_id 而非 tenant_id。
-     * 该条件能编译、能跑、还能把数字从「全平台总数」变成「1」——<b>看起来像修好了，实际更错</b>。
+     * <p>租户维度取 {@code ProduceBaseEntity.tenantId}（Long），与 {@code prod_farm_info.tenant_id}
+     * 同口径，两端都是 Long，不存在「tenantCode 字符串 vs tenantId 数值」的口径错配。</p>
      *
-     * <p>因此：租户维度未打通时正确值不可达。此处既不写全平台总数、也不写 0（都是假数字），
-     * 而是抛业务异常让调用方立刻感知，保证 used_farm_count 不被污染。
+     * <p><b>关于「tenant_id 恒为 0」的常见误判：</b>该列 NOT NULL DEFAULT 0，未显式赋值时由
+     * {@code MyMetaObjectHandler#insertFill} 填 0；但 MP 的 {@code strictInsertFill}
+     * <b>不覆盖非 null 值</b>——已实测：POST 农场传入 {@code "tenantId":101} 落库即为 101，
+     * 不传才为 0；POST 配额传入 {@code "tenantId":777} 同样落库 777。
+     * 故本条件在租户维度打通（业务侧开始写入 tenantId）后即刻生效，无需再改本方法。</p>
      *
-     * <p><b>恢复方式（待租户 PRD 口径确定、租户维度打通后）</b>：把下面的 throw 替换为按租户维度的
-     * 真实统计即可，例如
-     * {@code quota.setUsedFarmCount(farmInfoMapper.selectCount(new LambdaQueryWrapper<FarmInfoEntity>()}
-     * {@code .eq(FarmInfoEntity::getTenantId, quota.getTenantId())).intValue());}
-     * ，随后 {@code tenantQuotaMapper.updateById(quota); return quota;}。
-     * 在此之前请勿放开本方法。
+     * <p>逻辑删除由全局 {@code mybatis-plus.global-config.db-config.logic-delete-field=deleted}
+     * 统一处理，此处不重复追加 {@code deleted = 0} 条件。</p>
      *
      * @param quotaId 配额主键
-     * @return 不会正常返回；配额不存在时抛 NOT_FOUND，存在时抛租户维度未打通的业务异常
-     * @throws BusinessException 配额不存在（404）；或租户维度未打通、无法按租户重算（1000）
+     * @return 更新后的配额实体（usedFarmCount 为该租户名下的活跃农场数）
      */
     @Transactional
     public TenantQuotaEntity resetUsage(String quotaId) {
         TenantQuotaEntity quota = detail(quotaId);
-        throw new BusinessException(ErrorCode.BIZ_ERROR,
-                "配额用量重算暂不可用：租户维度未打通（tenant_id 由框架恒填 0、无租户主表、"
-                        + "隔离列实为 market_id），无法按租户统计农场数；为避免写入错误数值，"
-                        + "本次重算已终止且未修改任何数据（quotaId=" + quota.getQuotaId() + "）");
+        Long tenantId = quota.getTenantId() == null ? 0L : quota.getTenantId();
+        long usedFarmCount = farmInfoMapper.selectCount(new LambdaQueryWrapper<FarmInfoEntity>()
+                .eq(FarmInfoEntity::getTenantId, tenantId));
+        quota.setUsedFarmCount((int) usedFarmCount);
+        tenantQuotaMapper.updateById(quota);
+        return quota;
     }
 
     // ------------------------------------------------------------------ 运营端配额概览
