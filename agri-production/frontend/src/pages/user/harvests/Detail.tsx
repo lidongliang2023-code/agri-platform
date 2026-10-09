@@ -37,6 +37,7 @@ import {
 } from 'antd'
 import { ArrowLeftOutlined, InboxOutlined, PrinterOutlined } from '@ant-design/icons'
 import useFarmStore from '@/store/farm'
+import { DemoDataAlert } from '@/components'
 import { inboundHarvest, queryHarvest } from '@/api/harvests'
 import type { HarvestBatch, InboundStatus } from '@/types'
 import {
@@ -168,12 +169,9 @@ export default function Detail(): JSX.Element {
       ]}
     >
       {detailQuery.data?.demo ? (
-        <Alert
-          type="warning"
-          showIcon
-          style={{ marginBottom: 16 }}
-          message="当前显示的是本地示例数据，未连接服务端"
-          description="采收详情接口不可用（服务未启动或网络异常），以下内容为前端内置示例，不是真实业务数据；入库等操作也不会写入服务端。"
+        <DemoDataAlert
+          scope="采收信息、产量统计与关联信息"
+          writeNote="「确认入库」不会写入服务端，也不会改动本地数据：后端不可用时该操作会直接失败并提示原因（含「未写入服务端」字样）。"
         />
       ) : null}
 

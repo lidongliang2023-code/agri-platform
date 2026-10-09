@@ -15,7 +15,6 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { PageContainer } from '@ant-design/pro-components'
 import {
-  Alert,
   Button,
   Card,
   Col,
@@ -47,6 +46,7 @@ import {
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import useFarmStore from '@/store/farm'
+import { DemoDataAlert } from '@/components'
 import {
   outboundInventory,
   queryHarvests,
@@ -324,12 +324,9 @@ export default function InventoryDetail(): JSX.Element {
       ]}
     >
       {detailQuery.data?.demo ? (
-        <Alert
-          type="warning"
-          showIcon
-          style={{ marginBottom: 16 }}
-          message="当前显示的是本地示例数据，未连接服务端"
-          description="库存详情接口不可用（服务未启动或网络异常），下列库存与流水为前端内置示例，不是真实业务数据；出库 / 调拨 / 冻结操作均不会写入服务端。"
+        <DemoDataAlert
+          scope="库存详情卡片（含库存水位）"
+          writeNote="出库、调拨、冻结 / 解冻都不会写入服务端，也不会改动本地数据：后端不可用时这些操作会直接失败并提示原因（含「未写入服务端」字样）。"
         />
       ) : null}
 
@@ -432,12 +429,9 @@ export default function InventoryDetail(): JSX.Element {
 
       <Card title="📋 出入库记录">
         {flowQuery.data?.demo ? (
-          <Alert
-            type="warning"
-            showIcon
-            style={{ marginBottom: 16 }}
-            message="出入库流水：当前显示的是本地示例数据，未连接服务端"
-            description="库存流水接口不可用（服务未启动或网络异常），下表为前端内置示例流水，不是真实出入库记录。"
+          <DemoDataAlert
+            scope="下方出入库流水表"
+            writeNote="本表为只读展示，不涉及写操作；流水接口不可用时不会向服务端写入任何数据。"
           />
         ) : null}
         <Table<InventoryFlow>

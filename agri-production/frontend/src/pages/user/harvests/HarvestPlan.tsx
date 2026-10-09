@@ -43,6 +43,7 @@ import { PlusOutlined, UserSwitchOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import type { Dayjs } from 'dayjs'
 import useFarmStore from '@/store/farm'
+import { DemoDataAlert } from '@/components'
 import { queryHarvestPlans, submitHarvestPlan, submitLabor, submitMaturity } from '@/api/harvests'
 import { listMembers } from '@/api/members'
 import { listPlots } from '@/api/plots'
@@ -502,12 +503,9 @@ export default function HarvestPlan(): JSX.Element {
       ]}
     >
       {planQuery.data?.demo ? (
-        <Alert
-          type="warning"
-          showIcon
-          style={{ marginBottom: 16 }}
-          message="当前显示的是本地示例数据，未连接服务端"
-          description="采收计划接口不可用（服务未启动或网络异常），以下计划为前端内置示例，不是真实业务数据；新建计划、成熟度评估、人力安排均不会写入服务端。"
+        <DemoDataAlert
+          scope="统计卡与计划列表（含成熟度、人力安排列）"
+          writeNote="新建计划、成熟度评估、人力安排都不会写入服务端，也不会改动本地数据：后端不可用时这些操作会直接失败并提示原因（含「未写入服务端」字样）。"
         />
       ) : null}
 

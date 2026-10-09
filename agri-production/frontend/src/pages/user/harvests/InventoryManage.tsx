@@ -39,6 +39,7 @@ import {
 import { LockOutlined, PlusOutlined, UnlockOutlined, WarningOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import useFarmStore from '@/store/farm'
+import { DemoDataAlert, MetricStatistic, MetricText } from '@/components'
 import {
   inboundInventory,
   outboundInventory,
@@ -303,19 +304,25 @@ export default function InventoryManage(): JSX.Element {
       title: '当前库存',
       dataIndex: 'currentQty',
       width: 120,
-      render: (_, record) =>
-        typeof record.currentQty === 'number'
-          ? `${record.currentQty.toLocaleString()} ${record.unit ?? ''}`
-          : '— / 未接入',
+      render: (_, record) => (
+        <MetricText
+          value={typeof record.currentQty === 'number' ? record.currentQty : null}
+          suffix={record.unit ? ` ${record.unit}` : ''}
+          missingTip="后端 /harvests/inventory 未返回 currentQty（当前返回的是流水结构），显示为「—」"
+        />
+      ),
     },
     {
       title: '安全库存',
       dataIndex: 'safeQty',
       width: 110,
-      render: (_, record) =>
-        typeof record.safeQty === 'number'
-          ? `${record.safeQty.toLocaleString()} ${record.unit ?? ''}`
-          : '— / 未接入',
+      render: (_, record) => (
+        <MetricText
+          value={typeof record.safeQty === 'number' ? record.safeQty : null}
+          suffix={record.unit ? ` ${record.unit}` : ''}
+          missingTip="后端 /harvests/inventory 未返回 safeQty（当前返回的是流水结构），显示为「—」"
+        />
+      ),
     },
     { title: '批次', dataIndex: 'batchNo', width: 130 },
     {
@@ -415,12 +422,9 @@ export default function InventoryManage(): JSX.Element {
       ]}
     >
       {listQuery.data?.demo ? (
-        <Alert
-          type="warning"
-          showIcon
-          style={{ marginBottom: 16 }}
-          message="当前显示的是本地示例数据，未连接服务端"
-          description="库存列表接口不可用（服务未启动或网络异常），下列库存数量与状态为前端内置示例，不是真实库存；入库 / 出库 / 损耗 / 冻结操作均不会写入服务端。"
+        <DemoDataAlert
+          scope="顶部统计卡、库存预警条与下方库存列表"
+          writeNote="入库 / 出库 / 损耗登记 / 冻结解冻都不会写入服务端，也不会改动本地数据：后端不可用时这些操作会直接失败并提示原因（含「未写入服务端」字样），不会像以前那样弹「操作成功」。"
         />
       ) : null}
 
@@ -429,8 +433,8 @@ export default function InventoryManage(): JSX.Element {
           type="warning"
           showIcon
           style={{ marginBottom: 16 }}
-          message={`有 ${overview.missingQtyCount} 条库存记录后端未返回数量字段，已显示为「— / 未接入」`}
-          description="后端暂未提供 currentQty / safeQty 等字段，前端不做补 0、不做估算，也不据此推导库存健康度。"
+          message={`有 ${overview.missingQtyCount} 条记录后端未返回库存台账字段（inventoryId / currentQty / safeQty / productName），相关列显示为「—」`}
+          description="后端 /harvests/inventory 当前返回的是出入库流水结构，不是库存台账。前端不做字段补 0、不做数量估算、也不用流水数量冒充库存数量；接口补齐台账字段后自动填充。"
         />
       ) : null}
 
@@ -442,12 +446,12 @@ export default function InventoryManage(): JSX.Element {
         </Col>
         <Col span={6}>
           <Card>
-            <Statistic
+            <MetricStatistic
               title="库存总量"
-              value={overview.totalQty ?? '— / 未接入'}
-              precision={overview.totalQty === null ? undefined : 0}
-              suffix={overview.totalQty === null ? undefined : 'kg'}
+              value={overview.totalQty}
+              suffix="kg"
               valueStyle={{ color: '#52c41a' }}
+              missingTip="后端未返回任何一条记录的 currentQty，库存总量不做补 0 汇总，显示为「—」"
             />
           </Card>
         </Col>
@@ -482,14 +486,27 @@ export default function InventoryManage(): JSX.Element {
           message={`⚠️ 库存预警：${warnings.length} 个批次需要关注`}
           description={
             <Space direction="vertical" size={2}>
-              {warnings.map((item) => (
-                <Typography.Text key={item.inventoryId}>
-                  {item.warehouseName} - {item.productName} 库存
+              {warnings.map((item, index) => (
+                <Typography.Text key={item.inventoryId ?? `inventory-row-${index}`}>
+                  {item.warehouseName ?? '—'} - {item.productName ?? '—'} 库存
                   {healthOf(item) === 'expiring' ? '临期' : '不足'}（当前{' '}
-                  {typeof item.currentQty === 'number' ? `${item.currentQty}${item.unit ?? ''}` : '— / 未接入'}
-                  {healthOf(item) === 'expiring'
-                    ? `，保质期至 ${item.expireDate}`
-                    : `，安全库存 ${item.safeQty ?? 0}${item.unit}`}
+                  <MetricText
+                    value={typeof item.currentQty === 'number' ? item.currentQty : null}
+                    suffix={item.unit ?? ''}
+                    missingTip="后端未返回 currentQty，显示为「—」"
+                  />
+                  {healthOf(item) === 'expiring' ? (
+                    <>，保质期至 {item.expireDate ?? '—'}</>
+                  ) : (
+                    <>
+                      ，安全库存{' '}
+                      <MetricText
+                        value={typeof item.safeQty === 'number' ? item.safeQty : null}
+                        suffix={item.unit ?? ''}
+                        missingTip="后端未返回 safeQty，显示为「—」"
+                      />
+                    </>
+                  )}
                   ）
                 </Typography.Text>
               ))}

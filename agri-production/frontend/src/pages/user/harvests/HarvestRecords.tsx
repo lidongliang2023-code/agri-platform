@@ -18,7 +18,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { PageContainer, ProTable } from '@ant-design/pro-components'
 import type { ProColumns } from '@ant-design/pro-components'
 import {
-  Alert,
   Badge,
   Button,
   Calendar,
@@ -42,6 +41,7 @@ import { ExportOutlined, InboxOutlined, PlusOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import type { Dayjs } from 'dayjs'
 import useFarmStore from '@/store/farm'
+import { DemoDataAlert } from '@/components'
 import { inboundHarvest, queryHarvests } from '@/api/harvests'
 import { listPlots } from '@/api/plots'
 import type { HarvestBatch, HarvestGrade, InboundStatus, Plot } from '@/types'
@@ -531,12 +531,9 @@ export default function HarvestRecords(): JSX.Element {
       ]}
     >
       {boardQuery.data?.demo ? (
-        <Alert
-          type="warning"
-          showIcon
-          style={{ marginBottom: 16 }}
-          message="当前显示的是本地示例数据，未连接服务端"
-          description="采收列表接口不可用（服务未启动或网络异常），以下列表与统计为前端内置示例，不是真实业务数据；入库等操作也不会写入服务端。"
+        <DemoDataAlert
+          scope="顶部四张统计卡、Tab 计数、日历视图与下方列表"
+          writeNote="「入库 / 批量入库」不会写入服务端，也不会改动本地数据：后端不可用时操作会直接失败，并按失败条数+首个原因如实提示（含「未写入服务端」字样）。"
         />
       ) : null}
 
