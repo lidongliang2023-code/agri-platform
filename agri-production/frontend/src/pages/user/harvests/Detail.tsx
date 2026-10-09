@@ -88,8 +88,8 @@ export default function Detail(): JSX.Element {
       inboundForm.resetFields()
       void queryClient.invalidateQueries({ queryKey: ['production-harvests'] })
     },
-    onError: () => {
-      message.error('入库失败，请稍后重试')
+    onError: (error) => {
+      message.error(error.message || '入库失败，请稍后重试', 6)
     },
   })
 
@@ -169,10 +169,11 @@ export default function Detail(): JSX.Element {
     >
       {detailQuery.data?.demo ? (
         <Alert
-          type="info"
+          type="warning"
           showIcon
           style={{ marginBottom: 16 }}
-          message="后端采收接口暂未返回数据，当前展示内置演示数据（取自原型 P15）"
+          message="当前显示的是本地示例数据，未连接服务端"
+          description="采收详情接口不可用（服务未启动或网络异常），以下内容为前端内置示例，不是真实业务数据；入库等操作也不会写入服务端。"
         />
       ) : null}
 

@@ -1,7 +1,7 @@
 /**
  * 采收与库存管理 API
  */
-import { http } from '@/utils/request'
+import { asApiRequestError, http, httpStatusOf } from '@/utils/request'
 import type { BizId, PageQuery, PageResult } from '@/types'
 import type { HarvestBatch, HarvestPlan, InventoryFlow, InventoryRecord } from '@/types'
 
@@ -102,20 +102,44 @@ export function listInventoryFlows(
   )
 }
 
-/** 库存出库 */
+/**
+ * 库存出库。
+ *
+ * 后端契约为 `POST /harvests/inventory/{batchId}/out`，参数走 **query**
+ * （qty / operatorId / relatedOrderNo），不是 JSON 体。
+ * 备注（remark）后端无对应字段，不做本地编造，直接不传。
+ *
+ * @param batchId 批次 ID
+ * @param payload 出库信息
+ * @returns 服务端返回出库流水时视为成功
+ */
 export function stockOut(
   batchId: string,
   payload: { quantity: number; orderNo?: string; remark?: string },
 ): Promise<boolean> {
-  return http.post<boolean>(`${BASE}/inventory/${batchId}/out`, payload)
+  return http
+    .post<InventoryFlow>(`${BASE}/inventory/${batchId}/out`, undefined, {
+      params: {
+        qty: payload.quantity,
+        relatedOrderNo: payload.orderNo,
+      },
+    })
+    .then((flow) => Boolean(flow))
 }
 
-/** 冻结 / 解冻库存 */
-export function freezeInventory(
-  batchId: string,
-  payload: { frozen: boolean; quantity?: number },
-): Promise<boolean> {
-  return http.patch<boolean>(`${BASE}/inventory/${batchId}/freeze`, payload)
+/**
+ * 冻结库存。
+ *
+ * 后端契约为 `POST /harvests/inventory/{batchId}/freeze`（无请求体，返回冻结后的批次）。
+ * 后端当前没有解冻端点，解冻不在此处实现。
+ *
+ * @param batchId 批次 ID
+ * @returns 服务端返回批次实体时视为成功
+ */
+export function freezeInventory(batchId: string): Promise<boolean> {
+  return http
+    .post<HarvestBatch>(`${BASE}/inventory/${batchId}/freeze`)
+    .then((batch) => Boolean(batch))
 }
 
 /* -------------------------------------------------------------------------- */
@@ -875,8 +899,14 @@ const DEMO_FLOWS: InventoryFlow[] = [
 ]
 
 /**
- * 演示数据源（模块内可变副本）。
- * 写操作在后端不可用时同步更新该副本，保证页面交互连续。
+ * 演示数据源（**只读**）。
+ *
+ * 仅用于「服务端不可用」时的读侧兜底，结果一律带 `demo: true` 标记，
+ * 页面必须据此展示「本地示例数据 / 未连接服务端」横幅。
+ *
+ * ⚠️ 写操作（入库 / 出库 / 调拨 / 损耗 / 冻结 / 新建等）**不再回写这里**：
+ * 曾经的「写本地副本 + return true」会让用户在后端失败时看到「操作成功」，
+ * 属于业务动作丢失而不自知的严重问题。写操作失败必须抛错，由调用方如实提示。
  */
 const demoStore: {
   /** 采收批次 */
@@ -895,18 +925,110 @@ const demoStore: {
 }
 
 /**
- * 静默调用真实接口，失败时回退到演示数据。
+ * 判断一次失败是否属于「服务端不可用」。
+ *
+ * 只有网络不通 / 服务未启动（拿不到 HTTP 响应）、端点不存在（404、405）
+ * 或服务端自身异常（5xx）才判定为不可用；
+ * 服务端已响应并给出业务错误码（code !== 0）属于**明确拒绝**，不允许降级，
+ * 否则会把「后端拒绝了这个请求」伪装成「查到了数据」。
+ *
+ * @param error catch 到的未知错误
+ * @returns 是否可判定为服务端不可用
+ */
+function isBackendUnavailable(error: unknown): boolean {
+  if (asApiRequestError(error)) {
+    return false
+  }
+  const status = httpStatusOf(error)
+  return status === 0 || status === 404 || status === 405 || status >= 500
+}
+
+/**
+ * 静默调用真实接口，仅在「服务端确实不可用」时回退到演示数据。
+ *
+ * 回退结果一律带 `demo: true` 标记，调用方必须据此展示显式的本地数据横幅，
+ * 不允许把演示数据当作服务端数据呈现。
  *
  * @param real 真实接口调用
  * @param fallback 演示数据兜底逻辑
- * @returns 接口结果或演示结果
+ * @returns 接口结果或带 demo 标记的演示结果
  */
 async function withDemoFallback<T>(real: () => Promise<T>, fallback: () => T): Promise<T> {
   try {
     return await real()
-  } catch {
+  } catch (error) {
+    if (!isBackendUnavailable(error)) {
+      throw error
+    }
     return fallback()
   }
+}
+
+/** 写操作失败原因分类 */
+export type WriteFailureKind =
+  /** 服务端不可达（网络异常 / 服务未启动） */
+  | 'unreachable'
+  /** 服务端没有提供该操作端点 */
+  | 'unsupported'
+  /** 服务端异常（5xx） */
+  | 'server-error'
+  /** 服务端收到请求但明确拒绝（业务码非 0） */
+  | 'rejected'
+  /** 其他未知原因 */
+  | 'unknown'
+
+/**
+ * 对写操作失败原因分类，供上层决定提示文案。
+ *
+ * @param error catch 到的未知错误
+ * @returns 失败分类
+ */
+export function classifyWriteFailure(error: unknown): WriteFailureKind {
+  const apiError = asApiRequestError(error)
+  if (apiError) {
+    return apiError.bizCode === 404 || apiError.bizCode === 405 ? 'unsupported' : 'rejected'
+  }
+  const status = httpStatusOf(error)
+  if (status === 0) return 'unreachable'
+  if (status === 404 || status === 405) return 'unsupported'
+  if (status >= 500) return 'server-error'
+  return status === 0 ? 'unreachable' : 'unknown'
+}
+
+/**
+ * 把写操作失败原因转成可直接展示给用户的中文文案。
+ *
+ * 所有文案都以「未写入服务端」收尾，避免出现「失败却看起来成功」的歧义。
+ *
+ * @param action 动作名称，如「入库」「损耗登记」
+ * @param error catch 到的未知错误
+ * @returns 失败提示文案
+ */
+export function describeWriteFailure(action: string, error: unknown): string {
+  const reason = error instanceof Error && error.message ? error.message : ''
+  switch (classifyWriteFailure(error)) {
+    case 'unreachable':
+      return `${action}失败：无法连接服务端（网络异常或服务未启动），本次操作未写入服务端`
+    case 'unsupported':
+      return `${action}失败：服务端暂无该操作接口，本次操作未写入服务端`
+    case 'server-error':
+      return `${action}失败：服务端处理异常${reason ? `（${reason}）` : ''}，本次操作未写入服务端`
+    case 'rejected':
+      return `${action}失败：${reason || '服务端拒绝了该请求'}，本次操作未写入服务端`
+    default:
+      return `${action}失败：${reason || '未知原因'}，本次操作未写入服务端`
+  }
+}
+
+/**
+ * 写操作统一失败出口：抛出带可读原因的 Error，绝不返回「假成功」。
+ *
+ * @param action 动作名称
+ * @param error 原始错误
+ * @returns 永不返回
+ */
+function throwWriteFailure(action: string, error: unknown): never {
+  throw new Error(describeWriteFailure(action, error))
 }
 
 /**
@@ -1057,64 +1179,71 @@ export function queryInventoryFlows(
 }
 
 /**
+ * 采收登记结果。
+ *
+ * 批次创建是主流程，溯源码生成是紧随其后的附加步骤；
+ * 两者结果必须分开表达，避免「批次已落库却提示失败」或「溯源码没生成却提示成功」。
+ */
+export interface SubmitHarvestResult {
+  /** 已在服务端创建的采收批次 */
+  batch: HarvestBatch
+  /** 非空表示批次已写入服务端，但后续步骤（溯源码生成）未完成，需要显式提示 */
+  warning?: string
+}
+
+/**
  * 提交采收登记：新建批次后自动生成批次（HARV-02 + HARV-03）。
  *
+ * 全流程走真实接口：批次创建或详情回查失败直接抛错（不写本地数据、不返回假成功）；
+ * 仅溯源码生成失败时作为**显式告警**返回，因为此时批次本身已经落库。
+ *
  * @param payload 采收登记表单数据
- * @returns 生成的采收批次
+ * @returns 服务端创建的采收批次，以及可能的附加告警
  */
-export async function submitHarvest(payload: Partial<HarvestBatch>): Promise<HarvestBatch> {
+export async function submitHarvest(
+  payload: Partial<HarvestBatch>,
+): Promise<SubmitHarvestResult> {
+  let batchId = ''
   try {
     // 后端 POST /harvests 只返回**新批次主键**（ApiResponse<String>），
     // 需要按需触发溯源码生成后再回查完整实体，不能直接把主键当实体用。
-    const batchId = await createHarvest(payload)
-    if (!batchId) throw new Error('采收批次创建未返回主键')
+    batchId = await createHarvest(payload)
+  } catch (error) {
+    throwWriteFailure('采收登记', error)
+  }
+  if (!batchId) {
+    throw new Error('采收登记失败：服务端未返回新批次主键，本次操作未写入服务端')
+  }
+
+  let batch: HarvestBatch
+  try {
+    batch = await getHarvest(batchId)
+  } catch (error) {
+    throw new Error(
+      `采收批次 ${batchId} 已写入服务端，但详情回查失败：${describeWriteFailure('采收登记', error)}`,
+    )
+  }
+
+  let warning: string | undefined
+  try {
     await generateHarvestBatch(batchId, {
       traceCode: payload.traceCode,
       warehouseName: payload.warehouseName,
-    }).catch(() => undefined)
-    return await getHarvest(batchId)
-  } catch {
-    const now = new Date()
-    const seq = String(demoStore.batches.length + 1).padStart(3, '0')
-    const harvestDate = payload.harvestDate ?? now.toISOString().slice(0, 10)
-    const created: HarvestBatch = {
-      batchId: `HB${seq}`,
-      batchNo: payload.batchNo ?? `H${harvestDate.replace(/-/g, '')}`,
-      plotId: payload.plotId ?? '',
-      plotName: payload.plotName,
-      planId: payload.planId,
-      cropId: payload.cropId ?? '',
-      cropName: payload.cropName,
-      cropVariety: payload.cropVariety,
-      harvestDate,
-      quantity: payload.quantity ?? 0,
-      unit: payload.unit ?? 'kg',
-      grade: payload.grade ?? '待检',
-      status: 1,
-      traceGenerated: false,
-      createdAt: now.toISOString().slice(0, 19).replace('T', ' '),
-      farmId: payload.farmId,
-      farmName: payload.farmName,
-      inboundStatus: 0,
-      harvestArea: payload.harvestArea,
-      appearance: payload.appearance,
-      expectedQuantity: payload.expectedQuantity,
-      perMuYield: payload.perMuYield,
-      operatorId: payload.operatorId,
-      operatorName: payload.operatorName,
-      remark: payload.remark,
-    }
-    demoStore.batches = [created, ...demoStore.batches]
-    return created
+    })
+  } catch (error) {
+    warning = `批次 ${batch.batchNo} 已写入服务端，但溯源码生成未完成：${describeWriteFailure('溯源码生成', error)}`
   }
+  return { batch, warning }
 }
 
 /**
  * 批次入库：生成批次并写入库存流水（HARV-03 + HARV-05）。
  *
+ * 全链路走真实接口；任一步失败即抛错，不写本地演示库存、不返回假成功。
+ *
  * @param batchId 批次 ID
  * @param payload 入库信息
- * @returns 是否成功
+ * @returns 服务端确认入库成功时返回 true
  */
 export async function inboundHarvest(
   batchId: BizId,
@@ -1122,70 +1251,28 @@ export async function inboundHarvest(
 ): Promise<boolean> {
   try {
     await generateHarvestBatch(batchId, { warehouseName: payload.warehouseName })
-    await stockInInventory({
+  } catch (error) {
+    throwWriteFailure('批次入库（生成批次）', error)
+  }
+  try {
+    return await stockInInventory({
       batchId,
       warehouseName: payload.warehouseName ?? '主仓库',
       quantity: payload.quantity ?? 0,
     })
-    return true
-  } catch {
-    const target = demoStore.batches.find((item) => item.batchId === String(batchId))
-    if (target) {
-      target.inboundStatus = 1
-      target.status = 1
-      target.traceGenerated = true
-      target.warehouseName = payload.warehouseName ?? '主仓库'
-    }
-    const exist = demoStore.inventory.find((item) => item.batchId === String(batchId))
-    if (exist) {
-      exist.currentQty += payload.quantity ?? 0
-      exist.lastInAt = new Date().toISOString().slice(0, 19).replace('T', ' ')
-    } else if (target) {
-      const record: InventoryRecord = {
-        inventoryId: `INV${String(demoStore.inventory.length + 1).padStart(3, '0')}`,
-        batchId: String(batchId),
-        batchNo: `BC${target.harvestDate.replace(/-/g, '')}`,
-        warehouseName: payload.warehouseName ?? '主仓库',
-        currentQty: payload.quantity ?? target.quantity,
-        unit: target.unit,
-        frozenQty: 0,
-        productName: `${target.cropName ?? ''}(${target.grade ?? ''}级)`,
-        category: target.cropName,
-        grade: target.grade,
-        safeQty: Math.round((payload.quantity ?? target.quantity) * 0.2),
-        relatedBatchNo: target.batchNo,
-        healthStatus: 'normal',
-        frozen: false,
-        lastInAt: new Date().toISOString().slice(0, 19).replace('T', ' '),
-        createdAt: new Date().toISOString().slice(0, 19).replace('T', ' '),
-      }
-      demoStore.inventory = [record, ...demoStore.inventory]
-      demoStore.flows = [
-        {
-          flowId: `FL${String(demoStore.flows.length + 1).padStart(3, '0')}`,
-          batchId: String(batchId),
-          flowType: 1,
-          quantity: record.currentQty,
-          unit: record.unit,
-          operatorName: target.operatorName,
-          operatedAt: record.lastInAt ?? '',
-          remark: '采收入库',
-          warehouseName: record.warehouseName,
-        },
-        ...demoStore.flows,
-      ]
-      target.inventoryId = record.inventoryId
-    }
-    return true
+  } catch (error) {
+    throwWriteFailure('批次入库', error)
   }
 }
 
 /**
- * 库存出库（HARV-06），后端不可用时同步演示库存。
+ * 库存出库（HARV-06）。
+ *
+ * 只走真实接口；失败即抛错，不写本地演示库存、不返回假成功。
  *
  * @param batchId 批次 ID
  * @param payload 出库信息
- * @returns 是否成功
+ * @returns 服务端确认出库成功时返回 true
  */
 export async function outboundInventory(
   batchId: BizId,
@@ -1198,18 +1285,19 @@ export async function outboundInventory(
 ): Promise<boolean> {
   try {
     return await stockOut(String(batchId), payload)
-  } catch {
-    applyDemoInventoryChange(String(batchId), -Math.abs(payload.quantity), 2, payload)
-    return true
+  } catch (error) {
+    throwWriteFailure('出库', error)
   }
 }
 
 /**
  * 库存入库（补货 / 追加入库）。
  *
+ * 只走真实接口；失败即抛错，不写本地演示库存、不返回假成功。
+ *
  * @param batchId 批次 ID
  * @param payload 入库信息
- * @returns 是否成功
+ * @returns 服务端确认入库成功时返回 true
  */
 export async function inboundInventory(
   batchId: BizId,
@@ -1228,288 +1316,129 @@ export async function inboundInventory(
       remark: payload.remark,
       operatorName: payload.operatorName,
     })
-  } catch {
-    applyDemoInventoryChange(String(batchId), Math.abs(payload.quantity), 1, payload)
-    return true
+  } catch (error) {
+    throwWriteFailure('入库', error)
   }
 }
 
 /**
- * 在演示数据源上追加一条库存流水并更新库存数量。
+ * 损耗登记（HARV-09）。
  *
- * @param batchId 批次 ID
- * @param delta 变动数量（正数入库，负数出库）
- * @param flowType 流水类型：1 入库 2 出库 3 盘点 4 报损
- * @param payload 附加信息
- */
-function applyDemoInventoryChange(
-  batchId: string,
-  delta: number,
-  flowType: 1 | 2 | 3 | 4,
-  payload: {
-    quantity: number
-    orderNo?: string
-    remark?: string
-    operatorName?: string
-    warehouseName?: string
-  },
-): void {
-  const record = demoStore.inventory.find((item) => item.batchId === batchId)
-  if (record) {
-    record.currentQty = Math.max(0, record.currentQty + delta)
-    const stamp = new Date().toISOString().slice(0, 19).replace('T', ' ')
-    if (delta > 0) {
-      record.lastInAt = stamp
-    } else {
-      record.lastOutAt = stamp
-    }
-    if (record.currentQty === 0) {
-      record.healthStatus = 'shortage'
-    } else if (record.safeQty && record.currentQty <= record.safeQty * 0.5) {
-      record.healthStatus = 'shortage'
-    } else if (record.safeQty && record.currentQty <= record.safeQty) {
-      record.healthStatus = 'warning'
-    } else if (record.healthStatus !== 'expiring') {
-      record.healthStatus = 'normal'
-    }
-    if (flowType === 4) {
-      record.lossQty = (record.lossQty ?? 0) + Math.abs(delta)
-      record.lossReason = payload.remark
-    }
-  }
-  demoStore.flows = [
-    {
-      flowId: `FL${String(demoStore.flows.length + 1).padStart(3, '0')}`,
-      batchId,
-      flowType,
-      quantity: delta,
-      unit: record?.unit ?? 'kg',
-      operatorName: payload.operatorName,
-      orderNo: payload.orderNo,
-      operatedAt: new Date().toISOString().slice(0, 19).replace('T', ' '),
-      remark: payload.remark,
-      warehouseName: record?.warehouseName,
-    },
-    ...demoStore.flows,
-  ]
-}
-
-/**
- * 损耗登记（HARV-09），后端不可用时同步演示库存。
+ * 只走真实接口；失败即抛错，不写本地演示库存、不返回假成功。
  *
  * @param payload 损耗信息
- * @returns 是否成功
+ * @returns 服务端确认登记成功时返回 true
  */
 export async function registerLoss(payload: LossPayload): Promise<boolean> {
   try {
     return await registerInventoryLoss(payload)
-  } catch {
-    applyDemoInventoryChange(String(payload.batchId), -Math.abs(payload.quantity), 4, {
-      quantity: payload.quantity,
-      remark: payload.reason,
-      operatorName: payload.operatorName,
-    })
-    return true
+  } catch (error) {
+    throwWriteFailure('损耗登记', error)
   }
 }
 
 /**
- * 冻结 / 解冻库存，后端不可用时同步演示库存。
+ * 冻结 / 解冻库存。
+ *
+ * 冻结走真实接口 POST /harvests/inventory/{batchId}/freeze。
+ * 后端当前**没有解冻端点**，因此解冻不做本地假动作，直接明确失败，
+ * 避免页面显示「已解冻」而服务端库存仍处冻结状态。
  *
  * @param batchId 批次 ID
  * @param frozen true 冻结 / false 解冻
- * @returns 是否成功
+ * @returns 服务端确认操作成功时返回 true
  */
 export async function toggleInventoryFreeze(batchId: BizId, frozen: boolean): Promise<boolean> {
+  if (!frozen) {
+    throw new Error(
+      '解冻失败：服务端暂未提供解冻接口，本次操作未写入服务端（请联系管理员开通该能力）',
+    )
+  }
   try {
-    return await freezeInventory(String(batchId), { frozen })
-  } catch {
-    demoStore.inventory.forEach((item) => {
-      if (item.batchId === String(batchId)) {
-        item.frozen = frozen
-        item.frozenQty = frozen ? item.currentQty : 0
-      }
-    })
-    demoStore.batches.forEach((item) => {
-      if (item.batchId === String(batchId)) {
-        item.status = frozen ? 4 : 1
-      }
-    })
-    return true
+    return await freezeInventory(String(batchId))
+  } catch (error) {
+    throwWriteFailure('冻结', error)
   }
 }
 
 /**
- * 库存调拨，后端不可用时同步演示库存。
+ * 库存调拨。
+ *
+ * 只走真实接口；失败即抛错，不写本地演示库存、不返回假成功。
  *
  * @param payload 调拨信息
- * @returns 是否成功
+ * @returns 服务端确认调拨成功时返回 true
  */
 export async function transferInventoryRecord(payload: TransferPayload): Promise<boolean> {
   try {
     return await transferInventory(payload)
-  } catch {
-    const record = demoStore.inventory.find((item) => item.batchId === String(payload.batchId))
-    if (record) {
-      record.warehouseName = payload.targetWarehouse
-      if (payload.locationCode) record.locationCode = payload.locationCode
-    }
-    demoStore.flows = [
-      {
-        flowId: `FL${String(demoStore.flows.length + 1).padStart(3, '0')}`,
-        batchId: String(payload.batchId),
-        flowType: 3,
-        quantity: 0,
-        unit: record?.unit ?? 'kg',
-        operatedAt: new Date().toISOString().slice(0, 19).replace('T', ' '),
-        remark: `调拨至 ${payload.targetWarehouse}${payload.remark ? ` · ${payload.remark}` : ''}`,
-        warehouseName: payload.targetWarehouse,
-      },
-      ...demoStore.flows,
-    ]
-    return true
+  } catch (error) {
+    throwWriteFailure('调拨', error)
   }
 }
 
 /**
- * 新增库存记录（原型 P17），后端不可用时写入演示数据源。
+ * 新增库存记录（原型 P17）。
+ *
+ * 只走真实接口；失败即抛错，不写本地演示数据源、不返回假成功。
  *
  * @param payload 库存表单数据
- * @returns 新建的库存记录
+ * @returns 服务端新建的库存记录
  */
 export async function submitInventory(payload: InventoryPayload): Promise<InventoryRecord> {
   try {
     return await createInventory(payload)
-  } catch {
-    const safeQty = payload.safeQty ?? 0
-    const currentQty = payload.currentQty ?? 0
-    const record: InventoryRecord = {
-      inventoryId: `INV${String(demoStore.inventory.length + 1).padStart(3, '0')}`,
-      batchId: payload.batchId ?? '',
-      batchNo: payload.batchNo ?? `BC${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`,
-      warehouseName: payload.warehouseName ?? '主仓库',
-      currentQty,
-      unit: payload.unit ?? 'kg',
-      frozenQty: 0,
-      locationCode: payload.locationCode,
-      productName: payload.productName,
-      category: payload.category,
-      grade: payload.grade,
-      safeQty,
-      expireDate: payload.expireDate,
-      relatedBatchNo: payload.relatedBatchNo,
-      healthStatus:
-        payload.healthStatus ??
-        (safeQty > 0 && currentQty <= safeQty * 0.5
-          ? 'shortage'
-          : safeQty > 0 && currentQty <= safeQty
-            ? 'warning'
-            : 'normal'),
-      frozen: false,
-      remark: payload.remark,
-      lastInAt: new Date().toISOString().slice(0, 19).replace('T', ' '),
-      createdAt: new Date().toISOString().slice(0, 19).replace('T', ' '),
-    }
-    demoStore.inventory = [record, ...demoStore.inventory]
-    demoStore.flows = [
-      {
-        flowId: `FL${String(demoStore.flows.length + 1).padStart(3, '0')}`,
-        batchId: record.batchId,
-        flowType: 1,
-        quantity: record.currentQty,
-        unit: record.unit,
-        operatedAt: record.lastInAt ?? '',
-        remark: payload.remark || '手工入库',
-        warehouseName: record.warehouseName,
-      },
-      ...demoStore.flows,
-    ]
-    return record
+  } catch (error) {
+    throwWriteFailure('新增库存', error)
   }
 }
 
 /**
- * 新增采收计划（PRD 6.1 #31），后端不可用时写入演示数据源。
+ * 新增采收计划（PRD 6.1 #31）。
+ *
+ * 只走真实接口；失败即抛错，不写本地演示数据源、不返回假成功。
  *
  * @param payload 计划表单数据
- * @returns 新建的采收计划
+ * @returns 服务端新建的采收计划
  */
 export async function submitHarvestPlan(payload: Partial<HarvestPlan>): Promise<HarvestPlan> {
   try {
     return await createHarvestPlan(payload)
-  } catch {
-    const plan: HarvestPlan = {
-      planId: `HP${String(demoStore.plans.length + 1).padStart(3, '0')}`,
-      planNo: `HP${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`,
-      plotId: payload.plotId ?? '',
-      plotName: payload.plotName,
-      cropId: payload.cropId ?? '',
-      cropName: payload.cropName,
-      cropVariety: payload.cropVariety,
-      planHarvestDate: payload.planHarvestDate ?? new Date().toISOString().slice(0, 10),
-      expectedQuantity: payload.expectedQuantity ?? 0,
-      unit: payload.unit ?? 'kg',
-      managerId: payload.managerId,
-      managerName: payload.managerName,
-      status: 1,
-      createdAt: new Date().toISOString().slice(0, 19).replace('T', ' '),
-      farmId: payload.farmId,
-      farmName: payload.farmName,
-      maturityScore: payload.maturityScore ?? 0,
-      maturityLevel: payload.maturityLevel,
-      laborCount: payload.laborCount ?? 0,
-      laborIds: payload.laborIds ?? [],
-      laborNames: payload.laborNames ?? '',
-      toolPlan: payload.toolPlan,
-      remark: payload.remark,
-    }
-    demoStore.plans = [plan, ...demoStore.plans]
-    return plan
+  } catch (error) {
+    throwWriteFailure('新建采收计划', error)
   }
 }
 
 /**
- * 提交成熟度评估，后端不可用时更新演示数据源。
+ * 提交成熟度评估。
+ *
+ * 只走真实接口；失败即抛错，不写本地演示数据源、不返回假成功。
  *
  * @param planId 计划 ID
  * @param payload 成熟度信息
- * @returns 是否成功
+ * @returns 服务端确认提交成功时返回 true
  */
 export async function submitMaturity(planId: BizId, payload: MaturityPayload): Promise<boolean> {
   try {
     return await updatePlanMaturity(planId, payload)
-  } catch {
-    const plan = demoStore.plans.find((item) => item.planId === String(planId))
-    if (plan) {
-      plan.maturityScore = payload.maturityScore
-      plan.maturityLevel = (payload.maturityLevel as HarvestPlan['maturityLevel']) ?? undefined
-      plan.maturityOperator = payload.maturityOperator
-      plan.maturityAt = new Date().toISOString().slice(0, 19).replace('T', ' ')
-      if (payload.remark) plan.remark = payload.remark
-    }
-    return true
+  } catch (error) {
+    throwWriteFailure('成熟度评估', error)
   }
 }
 
 /**
- * 提交人力安排，后端不可用时更新演示数据源。
+ * 提交人力安排。
+ *
+ * 只走真实接口；失败即抛错，不写本地演示数据源、不返回假成功。
  *
  * @param planId 计划 ID
  * @param payload 人力信息
- * @returns 是否成功
+ * @returns 服务端确认保存成功时返回 true
  */
 export async function submitLabor(planId: BizId, payload: LaborPayload): Promise<boolean> {
   try {
     return await assignPlanLabor(planId, payload)
-  } catch {
-    const plan = demoStore.plans.find((item) => item.planId === String(planId))
-    if (plan) {
-      plan.laborIds = payload.laborIds
-      plan.laborNames = payload.laborNames
-      plan.laborCount = payload.laborCount ?? payload.laborIds.length
-      plan.toolPlan = payload.toolPlan
-      if (plan.status === 1 && payload.laborIds.length > 0) plan.status = 2
-    }
-    return true
+  } catch (error) {
+    throwWriteFailure('人力安排', error)
   }
 }

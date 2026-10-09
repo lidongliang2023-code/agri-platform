@@ -112,8 +112,8 @@ export default function InventoryCreate(): JSX.Element {
       message.success(`库存 ${record.inventoryId} 已创建`)
       navigate('/production/harvests/inventory')
     },
-    onError: () => {
-      message.error('保存失败，请稍后重试')
+    onError: (error) => {
+      message.error(error.message || '保存失败，请稍后重试', 6)
     },
   })
 

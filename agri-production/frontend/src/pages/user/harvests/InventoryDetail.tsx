@@ -153,7 +153,7 @@ export default function InventoryDetail(): JSX.Element {
       outboundForm.resetFields()
       void invalidateAll()
     },
-    onError: () => message.error('出库失败，请稍后重试'),
+    onError: (error) => message.error(error.message || '出库失败，请稍后重试', 6),
   })
 
   /** 调拨 */
@@ -171,7 +171,7 @@ export default function InventoryDetail(): JSX.Element {
       transferForm.resetFields()
       void invalidateAll()
     },
-    onError: () => message.error('调拨失败，请稍后重试'),
+    onError: (error) => message.error(error.message || '调拨失败，请稍后重试', 6),
   })
 
   /** 冻结 / 解冻 */
@@ -182,7 +182,7 @@ export default function InventoryDetail(): JSX.Element {
       message.success(payload.frozen ? '库存已冻结' : '库存已解冻')
       void invalidateAll()
     },
-    onError: () => message.error('操作失败，请稍后重试'),
+    onError: (error) => message.error(error.message || '操作失败，请稍后重试', 6),
   })
 
   /** 关联采收批次（按采收编号匹配） */
@@ -325,10 +325,11 @@ export default function InventoryDetail(): JSX.Element {
     >
       {detailQuery.data?.demo ? (
         <Alert
-          type="info"
+          type="warning"
           showIcon
           style={{ marginBottom: 16 }}
-          message="后端库存接口暂未返回数据，当前展示内置演示数据（取自原型 P18）"
+          message="当前显示的是本地示例数据，未连接服务端"
+          description="库存详情接口不可用（服务未启动或网络异常），下列库存与流水为前端内置示例，不是真实业务数据；出库 / 调拨 / 冻结操作均不会写入服务端。"
         />
       ) : null}
 
@@ -430,6 +431,15 @@ export default function InventoryDetail(): JSX.Element {
       </Card>
 
       <Card title="📋 出入库记录">
+        {flowQuery.data?.demo ? (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginBottom: 16 }}
+            message="出入库流水：当前显示的是本地示例数据，未连接服务端"
+            description="库存流水接口不可用（服务未启动或网络异常），下表为前端内置示例流水，不是真实出入库记录。"
+          />
+        ) : null}
         <Table<InventoryFlow>
           rowKey="flowId"
           dataSource={flows}

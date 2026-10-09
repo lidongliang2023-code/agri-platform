@@ -152,17 +152,32 @@ export default function HarvestRecords(): JSX.Element {
   const invalidateHarvests = (): Promise<void> =>
     queryClient.invalidateQueries({ queryKey: ['production-harvests'] })
 
-  /** 入库（单条 / 批量复用同一动作） */
+  /**
+   * 入库（单条 / 批量复用同一动作）。
+   *
+   * 用 allSettled 逐个收集结果：只要有任何一个批次入库失败就整体判失败，
+   * 并把失败条数与首个失败原因如实报出，绝不把「部分失败」说成「已提交入库」。
+   */
   const inboundMutation = useMutation({
-    mutationFn: (batchIds: string[]) =>
-      Promise.all(batchIds.map((batchId) => inboundHarvest(batchId))),
+    mutationFn: async (batchIds: string[]) => {
+      const settled = await Promise.allSettled(batchIds.map((batchId) => inboundHarvest(batchId)))
+      const failed = settled.filter((item) => item.status === 'rejected')
+      if (failed.length > 0) {
+        const first = failed[0] as PromiseRejectedResult
+        const reason = first.reason instanceof Error ? first.reason.message : String(first.reason)
+        throw new Error(
+          `${batchIds.length} 个批次中 ${failed.length} 个入库失败：${reason}`,
+        )
+      }
+      return batchIds.length
+    },
     onSuccess: (_result, batchIds) => {
-      message.success(`已提交入库 ${batchIds.length} 个批次`)
+      message.success(`${batchIds.length} 个批次已入库，库存流水已生成`)
       setSelectedKeys([])
       void invalidateHarvests()
     },
-    onError: () => {
-      message.error('入库失败，请稍后重试')
+    onError: (error) => {
+      message.error(error.message || '入库失败，请稍后重试', 6)
     },
   })
 
@@ -517,10 +532,11 @@ export default function HarvestRecords(): JSX.Element {
     >
       {boardQuery.data?.demo ? (
         <Alert
-          type="info"
+          type="warning"
           showIcon
           style={{ marginBottom: 16 }}
-          message="后端采收接口暂未返回数据，当前展示内置演示数据（取自原型 P13）"
+          message="当前显示的是本地示例数据，未连接服务端"
+          description="采收列表接口不可用（服务未启动或网络异常），以下列表与统计为前端内置示例，不是真实业务数据；入库等操作也不会写入服务端。"
         />
       ) : null}
 

@@ -126,7 +126,7 @@ export default function InventoryManage(): JSX.Element {
       closeAction()
       void invalidateInventory()
     },
-    onError: () => message.error('入库失败，请稍后重试'),
+    onError: (error) => message.error(error.message || '入库失败，请稍后重试', 6),
   })
 
   /** 出库 */
@@ -138,7 +138,7 @@ export default function InventoryManage(): JSX.Element {
       closeAction()
       void invalidateInventory()
     },
-    onError: () => message.error('出库失败，请稍后重试'),
+    onError: (error) => message.error(error.message || '出库失败，请稍后重试', 6),
   })
 
   /** 损耗登记 */
@@ -150,7 +150,7 @@ export default function InventoryManage(): JSX.Element {
       closeAction()
       void invalidateInventory()
     },
-    onError: () => message.error('损耗登记失败，请稍后重试'),
+    onError: (error) => message.error(error.message || '损耗登记失败，请稍后重试', 6),
   })
 
   /** 冻结 / 解冻 */
@@ -161,7 +161,7 @@ export default function InventoryManage(): JSX.Element {
       message.success(payload.frozen ? '库存已冻结' : '库存已解冻')
       void invalidateInventory()
     },
-    onError: () => message.error('操作失败，请稍后重试'),
+    onError: (error) => message.error(error.message || '操作失败，请稍后重试', 6),
   })
 
   /** 关闭出入库弹窗 */
@@ -220,9 +220,17 @@ export default function InventoryManage(): JSX.Element {
 
   const rows = useMemo<InventoryRecord[]>(() => listQuery.data?.list ?? [], [listQuery.data])
 
-  /** 健康状态兜底计算：后端未返回 healthStatus 时按安全库存 / 保质期推导 */
-  const healthOf = (record: InventoryRecord): string =>
-    record.healthStatus ?? resolveInventoryHealth(record.currentQty, record.safeQty ?? 0, record.expireDate)
+  /**
+   * 健康状态兜底计算：后端未返回 healthStatus 时按安全库存 / 保质期推导。
+   *
+   * 后端没有给出 currentQty 时不做任何推导（禁止拿 0 或随机数顶替），
+   * 直接归入 normal —— 该行的数量列会显示「— / 未接入」。
+   */
+  const healthOf = (record: InventoryRecord): string => {
+    if (record.healthStatus) return record.healthStatus
+    if (typeof record.currentQty !== 'number') return 'normal'
+    return resolveInventoryHealth(record.currentQty, record.safeQty ?? 0, record.expireDate)
+  }
 
   /** 告警列表：不足与临期库存 */
   const warnings = useMemo(
@@ -234,12 +242,25 @@ export default function InventoryManage(): JSX.Element {
     [rows],
   )
 
-  /** 统计概览 */
+  /**
+   * 统计概览。
+   *
+   * 后端未返回数量字段时不补 0、不估算：整列都拿不到数量时统计值显示为「—」，
+   * 只有部分行缺失时才对已有值求和（并在页面提示存在未接入字段）。
+   */
   const overview = useMemo(() => {
-    const totalQty = rows.reduce((sum, item) => sum + item.currentQty, 0)
+    const known = rows.filter((item) => typeof item.currentQty === 'number')
+    const totalQty =
+      known.length > 0 ? known.reduce((sum, item) => sum + (item.currentQty ?? 0), 0) : null
     const frozenQty = rows.reduce((sum, item) => sum + (item.frozenQty ?? 0), 0)
     const lossQty = rows.reduce((sum, item) => sum + (item.lossQty ?? 0), 0)
-    return { totalQty, frozenQty, lossQty, skuCount: rows.length }
+    return {
+      totalQty,
+      frozenQty,
+      lossQty,
+      skuCount: rows.length,
+      missingQtyCount: rows.length - known.length,
+    }
   }, [rows])
 
   /** 品类下拉选项（由当前数据去重生成） */
@@ -282,13 +303,19 @@ export default function InventoryManage(): JSX.Element {
       title: '当前库存',
       dataIndex: 'currentQty',
       width: 120,
-      render: (_, record) => `${record.currentQty.toLocaleString()} ${record.unit}`,
+      render: (_, record) =>
+        typeof record.currentQty === 'number'
+          ? `${record.currentQty.toLocaleString()} ${record.unit ?? ''}`
+          : '— / 未接入',
     },
     {
       title: '安全库存',
       dataIndex: 'safeQty',
       width: 110,
-      render: (_, record) => `${(record.safeQty ?? 0).toLocaleString()} ${record.unit}`,
+      render: (_, record) =>
+        typeof record.safeQty === 'number'
+          ? `${record.safeQty.toLocaleString()} ${record.unit ?? ''}`
+          : '— / 未接入',
     },
     { title: '批次', dataIndex: 'batchNo', width: 130 },
     {
@@ -389,10 +416,21 @@ export default function InventoryManage(): JSX.Element {
     >
       {listQuery.data?.demo ? (
         <Alert
-          type="info"
+          type="warning"
           showIcon
           style={{ marginBottom: 16 }}
-          message="后端库存接口暂未返回数据，当前展示内置演示数据（取自原型 P16）"
+          message="当前显示的是本地示例数据，未连接服务端"
+          description="库存列表接口不可用（服务未启动或网络异常），下列库存数量与状态为前端内置示例，不是真实库存；入库 / 出库 / 损耗 / 冻结操作均不会写入服务端。"
+        />
+      ) : null}
+
+      {overview.missingQtyCount > 0 ? (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message={`有 ${overview.missingQtyCount} 条库存记录后端未返回数量字段，已显示为「— / 未接入」`}
+          description="后端暂未提供 currentQty / safeQty 等字段，前端不做补 0、不做估算，也不据此推导库存健康度。"
         />
       ) : null}
 
@@ -406,9 +444,9 @@ export default function InventoryManage(): JSX.Element {
           <Card>
             <Statistic
               title="库存总量"
-              value={overview.totalQty}
-              precision={0}
-              suffix="kg"
+              value={overview.totalQty ?? '— / 未接入'}
+              precision={overview.totalQty === null ? undefined : 0}
+              suffix={overview.totalQty === null ? undefined : 'kg'}
               valueStyle={{ color: '#52c41a' }}
             />
           </Card>
@@ -447,8 +485,8 @@ export default function InventoryManage(): JSX.Element {
               {warnings.map((item) => (
                 <Typography.Text key={item.inventoryId}>
                   {item.warehouseName} - {item.productName} 库存
-                  {healthOf(item) === 'expiring' ? '临期' : '不足'}（当前 {item.currentQty}
-                  {item.unit}
+                  {healthOf(item) === 'expiring' ? '临期' : '不足'}（当前{' '}
+                  {typeof item.currentQty === 'number' ? `${item.currentQty}${item.unit ?? ''}` : '— / 未接入'}
                   {healthOf(item) === 'expiring'
                     ? `，保质期至 ${item.expireDate}`
                     : `，安全库存 ${item.safeQty ?? 0}${item.unit}`}

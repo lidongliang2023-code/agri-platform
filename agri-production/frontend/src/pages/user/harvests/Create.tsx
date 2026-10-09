@@ -231,14 +231,24 @@ export default function Create(): JSX.Element {
     }
   }, [usageQuery.data])
 
-  /** 提交采收登记 */
+  /**
+   * 提交采收登记。
+   *
+   * submitHarvest 只在服务端真正落库后返回；失败会抛错（文案含「未写入服务端」）。
+   * 若批次已落库但溯源码生成未完成，返回 warning，此处必须显式告警，
+   * 不能当成「操作成功」静默跳过。
+   */
   const submitMutation = useMutation({
     mutationFn: (payload: Partial<HarvestBatch>) => submitHarvest(payload),
-    onSuccess: (batch) => {
-      message.success(`采收登记已提交，批次 ${batch.batchNo} 已生成`)
+    onSuccess: (result) => {
+      if (result.warning) {
+        message.warning(result.warning, 6)
+        return
+      }
+      message.success(`采收登记已提交，批次 ${result.batch.batchNo} 已生成`)
     },
-    onError: () => {
-      message.error('提交失败，请稍后重试')
+    onError: (error) => {
+      message.error(error.message || '提交失败，请稍后重试')
     },
   })
 
@@ -293,12 +303,12 @@ export default function Create(): JSX.Element {
       .then(() => {
         const payload = buildPayload()
         submitMutation.mutate(payload, {
-          onSuccess: (batch) => {
+          onSuccess: (result) => {
             if (keepGoing) {
               form.setFieldsValue({ quantity: undefined, remark: undefined })
               setQuantity(0)
             } else {
-              navigate(`/production/harvests/${batch.batchId}`)
+              navigate(`/production/harvests/${result.batch.batchId}`)
             }
           },
         })

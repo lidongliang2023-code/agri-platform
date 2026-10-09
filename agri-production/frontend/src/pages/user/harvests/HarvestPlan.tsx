@@ -182,8 +182,8 @@ export default function HarvestPlan(): JSX.Element {
       createForm.resetFields()
       void invalidatePlans()
     },
-    onError: () => {
-      message.error('创建失败，请稍后重试')
+    onError: (error) => {
+      message.error(error.message || '创建失败，请稍后重试', 6)
     },
   })
 
@@ -202,8 +202,8 @@ export default function HarvestPlan(): JSX.Element {
       maturityForm.resetFields()
       void invalidatePlans()
     },
-    onError: () => {
-      message.error('提交失败，请稍后重试')
+    onError: (error) => {
+      message.error(error.message || '提交失败，请稍后重试', 6)
     },
   })
 
@@ -222,8 +222,8 @@ export default function HarvestPlan(): JSX.Element {
       laborForm.resetFields()
       void invalidatePlans()
     },
-    onError: () => {
-      message.error('保存失败，请稍后重试')
+    onError: (error) => {
+      message.error(error.message || '保存失败，请稍后重试', 6)
     },
   })
 
@@ -503,10 +503,11 @@ export default function HarvestPlan(): JSX.Element {
     >
       {planQuery.data?.demo ? (
         <Alert
-          type="info"
+          type="warning"
           showIcon
           style={{ marginBottom: 16 }}
-          message="后端采收计划接口暂未返回数据，当前展示内置演示数据（按 PRD 6.1 #31 设计）"
+          message="当前显示的是本地示例数据，未连接服务端"
+          description="采收计划接口不可用（服务未启动或网络异常），以下计划为前端内置示例，不是真实业务数据；新建计划、成熟度评估、人力安排均不会写入服务端。"
         />
       ) : null}
 
