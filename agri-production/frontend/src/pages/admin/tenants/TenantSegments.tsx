@@ -5,9 +5,18 @@
  * PRD 序号：PRD 6.2 #7
  * 说明：原型无此页，按 PRD「租户画像、分层标签、差异化策略」实现，
  * 分层口径沿用原型 4.1 的租户等级（钻石 / 金牌 / 银牌 / 普通）。
+ *
+ * 数据来源约定（硬规矩：可以降级，不能骗人）：
+ * - **后端当前没有对应端点**：`AdminTenantController` 未提供
+ *   `GET /admin/tenants/segment-summary` 与 `GET /admin/tenants/profiles`
+ *   （实测均返回 404），也没有 `PUT /admin/tenants/{tenantId}/profile` 写入端点。
+ * - 因此本页**不使用任何原型示例 / 本地构造数据兜底**：后端没数据就展示空态，
+ *   并在页面顶部显式告警说明「后端暂未提供该数据」，不用本地数据伪装成服务端数据。
+ * - 后端补齐端点后，本页无需改动即可自动展示真实数据。
  */
 import { useMemo, useState } from 'react'
 import {
+  Alert,
   App,
   Button,
   Card,
@@ -15,14 +24,11 @@ import {
   Form,
   Input,
   Modal,
-  Progress,
   Row,
   Select,
   Space,
-  Statistic,
   Table,
   Tag,
-  Tooltip,
   Typography,
 } from 'antd'
 import { TagsOutlined } from '@ant-design/icons'
@@ -65,65 +71,18 @@ const ACTIVITY_COLOR: Record<TenantActivity, string> = {
 /** 可选运营标签 */
 const TAG_OPTIONS: TenantTag[] = ['重点客户', '高潜成长', '续费预警', '配额预警', '政策试点', '待激活']
 
-/** 租户名称池 */
-const TENANT_NAME_POOL: string[] = [
-  '绿源农业科技有限公司', '丰达农场', '大地种业', '丰收集团', '田园生态',
-  '惠民种植', '鑫农科技', '鑫盛农业科技', '中原农服', '黄河种业',
-]
-
 /** 分层池 */
 const SEGMENT_POOL: TenantSegmentLevel[] = ['钻石', '金牌', '银牌', '普通']
 
-/** 策略池 */
-const STRATEGY_POOL: string[] = [
-  '专属客户经理 + 季度业务复盘 + 新功能优先试点',
-  '标准化服务包 + 月度运营巡检 + 用量提醒',
-  '自助服务为主 + 线上课程 + 社区答疑',
-  '重点回访 + 续费激励 + 配额优化建议',
-]
+/** 后端缺失端点时的统一提示口径 */
+const BACKEND_UNAVAILABLE_TITLE = '后端暂未提供租户分层数据'
 
-/** 分层汇总示例数据 */
-const FALLBACK_SUMMARY: TenantSegmentSummary[] = [
-  { segment: '钻石', tenantCount: 186, revenue: 12860000, avgUsageRate: 78.5, strategy: STRATEGY_POOL[0] },
-  { segment: '金牌', tenantCount: 452, revenue: 18640000, avgUsageRate: 72.4, strategy: STRATEGY_POOL[1] },
-  { segment: '银牌', tenantCount: 528, revenue: 9260000, avgUsageRate: 64.8, strategy: STRATEGY_POOL[2] },
-  { segment: '普通', tenantCount: 414, revenue: 3180000, avgUsageRate: 55.2, strategy: STRATEGY_POOL[3] },
-]
-
-/**
- * 生成租户画像示例数据（后端无数据时兜底）。
- *
- * @param pageNum 页码
- * @param pageSize 每页条数
- * @returns 租户画像列表
- */
-function buildSampleProfiles(pageNum: number, pageSize: number): TenantSegmentProfile[] {
-  /** 平台租户总数（原型 4.2 口径） */
-  const total = 1580
-  return Array.from({ length: Math.min(pageSize, Math.max(0, total - (pageNum - 1) * pageSize)) }, (_unused, index) => {
-    const seq = (pageNum - 1) * pageSize + index + 1
-    const tier = SEGMENT_POOL[(seq * 3) % 4]
-    const usageRate = 42 + ((seq * 13) % 60)
-    const activeDays = 6 + ((seq * 5) % 25)
-    const tagCount = (seq % 3) + 1
-    return {
-      tenantId: `TS${String(seq).padStart(6, '0')}`,
-      tenantCode: `T2025${String(seq).padStart(4, '0')}`,
-      tenantName:
-        seq <= TENANT_NAME_POOL.length
-          ? TENANT_NAME_POOL[seq - 1]
-          : `${TENANT_NAME_POOL[seq % TENANT_NAME_POOL.length]}${seq}号基地`,
-      segment: tier,
-      tags: TAG_OPTIONS.slice(0, tagCount),
-      activity: (usageRate > 95 ? '不活跃' : usageRate > 82 ? '低活跃' : '正常') as TenantActivity,
-      quotaUsageRate: usageRate,
-      activeDays,
-      revenue: 20000 + ((seq * 7919) % 400000),
-      strategy: STRATEGY_POOL[(seq * 3) % STRATEGY_POOL.length],
-      updatedAt: `2025-07-${String(10 + (seq % 5)).padStart(2, '0')} 10:00:00`,
-    }
-  })
-}
+/** 后端缺失端点时的详细说明 */
+const BACKEND_UNAVAILABLE_DESC =
+  '后端 AdminTenantController 当前没有 GET /admin/tenants/segment-summary、' +
+  'GET /admin/tenants/profiles 与 PUT /admin/tenants/{tenantId}/profile 端点' +
+  '（实测返回 404），因此本页面不展示任何数据——不用原型示例数据填充列表。' +
+  '待后端补齐端点后本页会自动展示真实分层结果。'
 
 /** 分层 / 策略编辑表单 */
 interface ProfileFormValues {
@@ -170,16 +129,16 @@ export default function TenantSegments(): JSX.Element {
   /** 编辑表单 */
   const [profileForm] = Form.useForm<ProfileFormValues>()
 
-  /** 分层汇总统计 */
+  /** 分层汇总统计（后端当前无此端点，查询会失败 / 返回空，页面据此展示空态） */
   const summaryQuery = useQuery({
     queryKey: ['admin', 'tenants', 'segment-summary'],
     queryFn: () => listTenantSegmentSummary(),
     retry: false,
   })
 
-  /** 租户画像列表 */
+  /** 租户画像列表（后端当前无此端点，查询会失败 / 返回空，页面据此展示空态） */
   const profilesQuery = useQuery({
-    queryKey: ['admin', 'tenants', 'profiles', page, searchKeyword, segmentFilter],
+    queryKey: ['admin', 'tenants', 'profiles', page.pageNum, page.pageSize, searchKeyword, segmentFilter],
     queryFn: () =>
       listTenantProfiles({
         pageNum: page.pageNum,
@@ -190,7 +149,7 @@ export default function TenantSegments(): JSX.Element {
     retry: false,
   })
 
-  /** 更新分层 / 标签 / 策略 */
+  /** 更新分层 / 标签 / 策略（后端无写入端点，失败时会由 http 层显式提示） */
   const profileMutation = useMutation({
     mutationFn: (payload: { tenantId: string; values: ProfileFormValues }) =>
       updateTenantProfile(payload.tenantId, {
@@ -205,24 +164,24 @@ export default function TenantSegments(): JSX.Element {
     },
   })
 
-  /** 分层汇总数据 */
-  const summaries: TenantSegmentSummary[] = useMemo<TenantSegmentSummary[]>(() => {
-    const remote = summaryQuery.data
-    return remote && remote.length > 0 ? remote : FALLBACK_SUMMARY
-  }, [summaryQuery.data])
+  /** 后端不可用（两个读端点都没有有效数据） */
+  const backendUnavailable: boolean =
+    profilesQuery.isError && summaryQuery.isError
 
-  /** 租户画像数据 */
-  const profiles: TenantSegmentProfile[] = useMemo<TenantSegmentProfile[]>(() => {
-    const remote = profilesQuery.data?.list
-    const list = remote && remote.length > 0 ? remote : buildSampleProfiles(page.pageNum, page.pageSize)
-    if (!searchKeyword) {
-      return list
-    }
-    return list.filter(
-      (item) =>
-        resolveTenantName(item).includes(searchKeyword) || item.tenantCode.includes(searchKeyword),
-    )
-  }, [profilesQuery.data, page, searchKeyword])
+  /** 分层汇总数据：只用后端返回值，不用示例数据兜底 */
+  const summaries: TenantSegmentSummary[] = useMemo<TenantSegmentSummary[]>(
+    () => summaryQuery.data ?? [],
+    [summaryQuery.data],
+  )
+
+  /** 租户画像数据：只用后端返回值，不用示例数据兜底 */
+  const profiles: TenantSegmentProfile[] = useMemo<TenantSegmentProfile[]>(
+    () => profilesQuery.data?.list ?? [],
+    [profilesQuery.data],
+  )
+
+  /** 分页总数：后端真实返回值；未取到时为 0（不做任何原型口径的假总数） */
+  const total: number = profilesQuery.data?.total ?? 0
 
   /** 表格列定义 */
   const columns: ColumnsType<TenantSegmentProfile> = [
@@ -240,8 +199,8 @@ export default function TenantSegments(): JSX.Element {
       dataIndex: 'segment',
       width: 110,
       render: (value: TenantSegmentLevel) => (
-        <Tag color={SEGMENT_COLOR[value]}>
-          {SEGMENT_ICON[value]} {value}
+        <Tag color={SEGMENT_COLOR[value] ?? 'default'}>
+          {SEGMENT_ICON[value] ?? ''} {value}
         </Tag>
       ),
     },
@@ -263,40 +222,30 @@ export default function TenantSegments(): JSX.Element {
       title: '活跃度',
       dataIndex: 'activity',
       width: 100,
-      render: (value: TenantActivity) => <Tag color={ACTIVITY_COLOR[value]}>{value}</Tag>,
+      render: (value: TenantActivity) => <Tag color={ACTIVITY_COLOR[value] ?? 'default'}>{value}</Tag>,
     },
     {
       title: '配额使用率',
       dataIndex: 'quotaUsageRate',
       width: 160,
-      sorter: (a, b) => a.quotaUsageRate - b.quotaUsageRate,
-      render: (value: number) => {
-        const danger = value >= 90
-        return (
-          <Tooltip title={danger ? '配额即将用尽，建议尽快调整' : `已使用 ${value}%`}>
-            <Progress
-              percent={Math.min(value, 100)}
-              size="small"
-              status={danger ? 'exception' : 'normal'}
-              strokeColor={danger ? '#ff4d4f' : undefined}
-            />
-          </Tooltip>
-        )
-      },
+      sorter: (a, b) => (a.quotaUsageRate ?? 0) - (b.quotaUsageRate ?? 0),
+      render: (value: number) => (
+        <Tag color={value >= 80 ? 'red' : 'blue'}>{value}%</Tag>
+      ),
     },
     {
       title: '近30天活跃天数',
       dataIndex: 'activeDays',
       width: 130,
-      sorter: (a, b) => a.activeDays - b.activeDays,
+      sorter: (a, b) => (a.activeDays ?? 0) - (b.activeDays ?? 0),
       render: (value: number) => `${value} 天`,
     },
     {
       title: '年度贡献收入',
       dataIndex: 'revenue',
       width: 140,
-      sorter: (a, b) => a.revenue - b.revenue,
-      render: (value: number) => `¥${Number(value).toLocaleString('zh-CN')}`,
+      sorter: (a, b) => (a.revenue ?? 0) - (b.revenue ?? 0),
+      render: (value: number) => `¥${Number(value ?? 0).toLocaleString('zh-CN')}`,
     },
     {
       title: '运营策略',
@@ -304,9 +253,7 @@ export default function TenantSegments(): JSX.Element {
       ellipsis: true,
       width: 260,
       render: (value: string) => (
-        <Tooltip title={value}>
-          <span>{value}</span>
-        </Tooltip>
+        <Tag>{value}</Tag>
       ),
     },
     {
@@ -336,16 +283,27 @@ export default function TenantSegments(): JSX.Element {
 
   return (
     <div>
-      {/* 分层统计卡 */}
-      <Row gutter={[12, 12]} style={{ marginBottom: 12 }}>
+      {/* 后端端点缺失必须让用户看见：不用示例数据冒充服务端返回 */}
+      {backendUnavailable && (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message={BACKEND_UNAVAILABLE_TITLE}
+          description={BACKEND_UNAVAILABLE_DESC}
+        />
+      )}
+
+      {/* 分层统计卡：后端无数据时不渲染任何卡片（渲染 0 也等于在展示假数据） */}
+      <Row gutter={[12, 12]} style={{ marginBottom: summaries.length > 0 ? 12 : 0 }}>
         {summaries.map((item) => (
           <Col key={item.segment} xs={12} md={6}>
             <Card
               size="small"
               title={
                 <Space>
-                  <Tag color={SEGMENT_COLOR[item.segment]}>
-                    {SEGMENT_ICON[item.segment]} {item.segment}
+                  <Tag color={SEGMENT_COLOR[item.segment] ?? 'default'}>
+                    {SEGMENT_ICON[item.segment] ?? ''} {item.segment}
                   </Tag>
                 </Space>
               }
@@ -353,36 +311,30 @@ export default function TenantSegments(): JSX.Element {
             >
               <Row gutter={8}>
                 <Col span={12}>
-                  <Statistic
-                    title="租户数"
-                    value={item.tenantCount}
-                    formatter={(value) => Number(value).toLocaleString('zh-CN')}
-                  />
+                  <div style={{ fontSize: 20, fontWeight: 600 }}>
+                    {Number(item.tenantCount ?? 0).toLocaleString('zh-CN')}
+                  </div>
+                  <Text type="secondary" style={{ fontSize: 12 }}>租户数</Text>
                 </Col>
                 <Col span={12}>
-                  <Statistic
-                    title="贡献收入"
-                    value={item.revenue}
-                    precision={0}
-                    prefix="¥"
-                    formatter={(value) => Number(value).toLocaleString('zh-CN')}
-                  />
+                  <div style={{ fontSize: 20, fontWeight: 600 }}>
+                    ¥{Number(item.revenue ?? 0).toLocaleString('zh-CN')}
+                  </div>
+                  <Text type="secondary" style={{ fontSize: 12 }}>贡献收入</Text>
                 </Col>
               </Row>
-              <Tooltip title={item.strategy}>
-                <div
-                  style={{
-                    marginTop: 8,
-                    fontSize: 12,
-                    color: 'rgba(0,0,0,0.45)',
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                  }}
-                >
-                  策略：{item.strategy}
-                </div>
-              </Tooltip>
+              <div
+                style={{
+                  marginTop: 8,
+                  fontSize: 12,
+                  color: 'rgba(0,0,0,0.45)',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+              >
+                策略：{item.strategy}
+              </div>
             </Card>
           </Col>
         ))}
@@ -440,19 +392,29 @@ export default function TenantSegments(): JSX.Element {
           columns={columns}
           dataSource={profiles}
           scroll={{ x: 1500 }}
+          locale={{
+            emptyText: (
+              <Alert
+                type="warning"
+                showIcon
+                style={{ margin: '12px 0' }}
+                message={BACKEND_UNAVAILABLE_TITLE}
+                description={BACKEND_UNAVAILABLE_DESC}
+              />
+            ),
+          }}
           pagination={{
             current: page.pageNum,
             pageSize: page.pageSize,
-            total: profilesQuery.data?.total ?? 1580,
+            total,
             showSizeChanger: true,
             pageSizeOptions: [10, 20, 50],
             onChange: (pageNum, pageSize) => setPage({ pageNum, pageSize }),
           }}
         />
         <Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: 12 }}>
-          {profilesQuery.data && profilesQuery.data.list.length > 0
-            ? '数据来源：租户分层画像接口'
-            : '当前为原型示例口径（后端分层接口暂未返回数据），可直接调整分层、标签与策略'}
+          数据来源：后端 `GET /admin/tenants/profiles`（当前后端未提供该端点，列表为空）；
+          本页不使用任何原型示例或本地构造数据兜底。
         </Text>
       </Card>
 

@@ -4,9 +4,18 @@
  * 所属模块：运营仪表盘
  * PRD 序号：PRD 6.2 #1
  * 原型来源：P1 dashboard — 运营管理大盘
+ *
+ * 数据来源约定（硬规矩：不造数据源；可以降级，不能骗人）：
+ * - KPI 卡片只展示后端真实返回的字段，来源为 GET /admin/dashboard/overview
+ *   与 GET /admin/tenants/overview；后端没有的指标不渲染、不用原型数字填充；
+ * - 区域分布（/admin/dashboard/region-distribution）与近 7 天趋势（/admin/dashboard/trend）
+ *   后端当前**没有端点**（实测返回 500「系统繁忙」），这两个区块展示空态并显式说明「后端暂未提供」；
+ * - 告警级别分布取 GET /admin/dashboard/alert-trend，告警/审批列表取各自真实分页接口；
+ * - 「较昨日涨跌」后端无同比数据源，因此不展示，也不再多保留一条造假百分比。
  */
 import { useEffect, useMemo, useState } from 'react'
 import {
+  Alert,
   App,
   Button,
   Card,
@@ -17,7 +26,6 @@ import {
   Row,
   Skeleton,
   Space,
-  Spin,
   Statistic,
   Switch,
   Tag,
@@ -25,8 +33,6 @@ import {
   Typography,
 } from 'antd'
 import {
-  ArrowDownOutlined,
-  ArrowUpOutlined,
   BellOutlined,
   CheckCircleOutlined,
   CloseCircleOutlined,
@@ -48,27 +54,29 @@ import {
   fetchTrendPoints,
   getOpsDashboard,
 } from '@/api/admin/dashboard'
-import type { Alert } from '@/types'
+import { getTenantOverview } from '@/api/admin/tenants'
+import type { Alert as AlertItem0 } from '@/types'
 
 const { Text, Title } = Typography
 
-/* ==================== 示例数据口径（原型 P1 / 4.2，后端无数据时兜底） ==================== */
+/** 自动刷新周期（秒） */
+const AUTO_REFRESH_SECONDS = 300
 
-/** 平台级 KPI 示例值 */
-const FALLBACK_KPI = {
-  /** 活跃租户数 */
-  activeTenants: 1286,
-  /** 农场总数 */
-  farmCount: 3542,
-  /** 在田面积（万亩） */
-  fieldAreaWan: 85.6,
-  /** 今日任务 */
-  todayTask: 12458,
-  /** 溯源查询次数 */
-  traceQuery: 45320,
+/** KPI 卡片定义（value 为 null 表示后端未提供该指标，展示「—」而不是 0） */
+interface KpiItem {
+  /** 唯一标识 */
+  key: string
+  /** 标题 */
+  title: string
+  /** 数值；null 表示后端未提供数据源 */
+  value: number | null
+  /** 单位后缀 */
+  suffix: string
+  /** 小数位数 */
+  precision: number
 }
 
-/** 趋势数据项类型 */
+/** 近 7 天趋势数据项（后端 OpsTrendPoint 形态） */
 interface TrendPoint {
   /** X 轴标签 */
   label: string
@@ -80,18 +88,7 @@ interface TrendPoint {
   alertCount: number
 }
 
-/** 近 7 天趋势示例数据（周一～周日） */
-const FALLBACK_TREND: TrendPoint[] = [
-  { label: '周一', taskRate: 82, activeUsers: 1180, alertCount: 18 },
-  { label: '周二', taskRate: 85, activeUsers: 1215, alertCount: 15 },
-  { label: '周三', taskRate: 88, activeUsers: 1240, alertCount: 21 },
-  { label: '周四', taskRate: 84, activeUsers: 1198, alertCount: 24 },
-  { label: '周五', taskRate: 90, activeUsers: 1310, alertCount: 12 },
-  { label: '周六', taskRate: 91, activeUsers: 1286, alertCount: 9 },
-  { label: '周日', taskRate: 87, activeUsers: 1245, alertCount: 16 },
-]
-
-/** 区域统计项类型 */
+/** 区域统计项 */
 interface RegionStatItem {
   /** 区域名称 */
   region: string
@@ -104,20 +101,6 @@ interface RegionStatItem {
   /** 活跃度分层 */
   activityLevel: 'high' | 'middle' | 'low'
 }
-
-/** 区域分布示例数据 */
-const FALLBACK_REGIONS: RegionStatItem[] = [
-  { region: '河南省', farmCount: 720, fieldArea: 185000, tenantCount: 286, activityLevel: 'high' },
-  { region: '山东省', farmCount: 650, fieldArea: 162000, tenantCount: 254, activityLevel: 'high' },
-  { region: '黑龙江省', farmCount: 480, fieldArea: 214000, tenantCount: 132, activityLevel: 'high' },
-  { region: '江苏省', farmCount: 410, fieldArea: 96000, tenantCount: 176, activityLevel: 'middle' },
-  { region: '四川省', farmCount: 355, fieldArea: 88000, tenantCount: 128, activityLevel: 'middle' },
-  { region: '广东省', farmCount: 320, fieldArea: 62000, tenantCount: 154, activityLevel: 'middle' },
-  { region: '河北省', farmCount: 286, fieldArea: 74000, tenantCount: 96, activityLevel: 'middle' },
-  { region: '安徽省', farmCount: 232, fieldArea: 58000, tenantCount: 84, activityLevel: 'low' },
-  { region: '湖北省', farmCount: 208, fieldArea: 51000, tenantCount: 72, activityLevel: 'low' },
-  { region: '浙江省', farmCount: 186, fieldArea: 39000, tenantCount: 88, activityLevel: 'low' },
-]
 
 /** 告警列表项类型 */
 interface AlertItem {
@@ -134,34 +117,6 @@ interface AlertItem {
   /** 关联对象 */
   target: string
 }
-
-/** 告警中心示例数据（原型 P1 Alert Center） */
-const FALLBACK_ALERTS: AlertItem[] = [
-  {
-    id: 'ALT20250714001',
-    title: '设备离线告警',
-    content: '张三种鸡场传感器离线超过30分钟',
-    level: '紧急',
-    relativeTime: '3分钟前',
-    target: '张三种鸡场',
-  },
-  {
-    id: 'ALT20250714002',
-    title: '任务超时预警',
-    content: '李四农场施肥任务超时2小时',
-    level: '重要',
-    relativeTime: '15分钟前',
-    target: '李四农场',
-  },
-  {
-    id: 'ALT20250714003',
-    title: '数据异常提醒',
-    content: '王五农场今日数据上报缺失',
-    level: '一般',
-    relativeTime: '1小时前',
-    target: '王五农场',
-  },
-]
 
 /** 待办审批项类型 */
 interface ApprovalItem {
@@ -181,80 +136,34 @@ interface ApprovalItem {
   priority: string
 }
 
-/** 待办审批示例数据（原型 P1 Pending Approvals） */
-const FALLBACK_APPROVALS: ApprovalItem[] = [
-  {
-    id: 'APR20250714001',
-    no: 'APR20250714001',
-    type: '租户注册审核',
-    target: '鑫盛农业科技有限公司',
-    applicant: '王六',
-    submitTime: '10:30',
-    priority: '紧急',
-  },
-  {
-    id: 'APR20250714002',
-    no: 'APR20250714002',
-    type: '配额调整',
-    target: '张三种鸡场',
-    applicant: '张三',
-    submitTime: '09:15',
-    priority: '重要',
-  },
-  {
-    id: 'APR20250714003',
-    no: 'APR20250714003',
-    type: '农场停用',
-    target: '李四果园',
-    applicant: '李四',
-    submitTime: '08:42',
-    priority: '重要',
-  },
-]
-
-/** 自动刷新周期（秒），对应原型右上角「自动刷新 5:00」 */
-const AUTO_REFRESH_SECONDS = 300
-
-/** KPI 卡片定义 */
-interface KpiItem {
-  /** 唯一标识 */
-  key: string
-  /** 标题 */
-  title: string
-  /** 数值 */
-  value: number
-  /** 单位后缀 */
-  suffix: string
-  /** 小数位数 */
-  precision: number
-  /** 较昨日变化 */
-  trend: number
-  /** 是否为正向变化 */
-  rising: boolean
-}
-
 /**
- * 从后端返回的聚合 Map 中安全取数，缺失时回退到示例口径。
+ * 从后端返回的聚合 Map 中读取非负数值。
+ *
+ * 后端部分聚合字段会序列化成字符串（如 farmCount: "5"），故统一走 Number 强转；
+ * 取不到值时返回 null（调用方展示「—」），**不再回退到任何原型口径数字**。
  *
  * @param source 后端返回对象
  * @param key 字段名
- * @param fallback 兜底值
- * @returns 有效数字
+ * @returns 有效数字；缺失时为 null
  */
-function pickNumber(source: unknown, key: string, fallback: number): number {
+function pickNumber(source: unknown, key: string): number | null {
   if (!source || typeof source !== 'object') {
-    return fallback
+    return null
   }
-  const parsed = Number((source as Record<string, unknown>)[key])
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+  const raw = (source as Record<string, unknown>)[key]
+  if (raw === null || raw === undefined || raw === '') {
+    return null
+  }
+  const parsed = Number(raw)
+  return Number.isFinite(parsed) ? parsed : null
 }
 
 /**
  * 运营管理大盘
  *
  * 业务职责：平台级运营总览，含 KPI 卡片、全国生产分布、近 7 天趋势、
- * 平台告警中心与待办审批事项。数据优先取后端 /admin/dashboard/*，
- * 接口未返回数据时降级到原型示例口径，保证页面始终可用。
+ * 平台告警中心与待办审批事项。所有区块只消费后端真实返回的数据，
+ * 缺失的区块展示空态，不做本地兜底。
  *
  * @returns 页面内容
  */
@@ -278,21 +187,28 @@ export default function OpsDashboard(): JSX.Element {
   /** 告警处理说明 */
   const [alertRemark, setAlertRemark] = useState<string>('')
 
-  /** 核心指标 */
+  /** 核心指标（/admin/dashboard/overview） */
   const metricsQuery = useQuery({
     queryKey: ['admin', 'dashboard', 'metrics'],
     queryFn: () => getOpsDashboard(),
     retry: false,
   })
 
-  /** 区域分布 */
+  /** 租户概览（/admin/tenants/overview，提供真实租户数） */
+  const overviewQuery = useQuery({
+    queryKey: ['admin', 'tenants', 'overview'],
+    queryFn: () => getTenantOverview(),
+    retry: false,
+  })
+
+  /** 区域分布（后端当前无此端点） */
   const regionQuery = useQuery({
     queryKey: ['admin', 'dashboard', 'regions'],
     queryFn: () => fetchRegionStats(),
     retry: false,
   })
 
-  /** 近 7 天趋势 */
+  /** 近 7 天趋势（后端当前无此端点） */
   const trendQuery = useQuery({
     queryKey: ['admin', 'dashboard', 'trend'],
     queryFn: () => fetchTrendPoints(),
@@ -352,83 +268,72 @@ export default function OpsDashboard(): JSX.Element {
     },
   })
 
-  /** KPI 卡片数据 */
+  /** KPI 卡片数据：全部取自后端真实返回的字段，缺项展示「—」 */
   const kpiItems: KpiItem[] = useMemo<KpiItem[]>(() => {
-    const raw = metricsQuery.data as unknown as Record<string, unknown> | undefined
+    const dash = metricsQuery.data as unknown as Record<string, unknown> | undefined
+    const overview = overviewQuery.data
     return [
       {
         key: 'activeTenants',
-        title: '活跃租户数',
-        value: pickNumber(
-          raw,
-          'tenantCount',
-          pickNumber(raw, 'activeTenantCount', FALLBACK_KPI.activeTenants),
-        ),
+        title: '活跃租户',
+        value: overview ? Number(overview.activeTenantCount) : null,
         suffix: '家',
         precision: 0,
-        trend: 3.2,
-        rising: true,
       },
       {
         key: 'farmCount',
         title: '农场总数',
-        value: pickNumber(raw, 'farmCount', FALLBACK_KPI.farmCount),
+        value: pickNumber(dash, 'farmCount'),
         suffix: '个',
         precision: 0,
-        trend: 1.8,
-        rising: true,
       },
       {
-        key: 'fieldArea',
-        title: '在田面积',
-        value: pickNumber(raw, 'fieldAreaWan', FALLBACK_KPI.fieldAreaWan),
-        suffix: '万亩',
-        precision: 1,
-        trend: 2.1,
-        rising: true,
+        key: 'deviceOnline',
+        title: '在线设备',
+        value: pickNumber(dash, 'deviceOnline'),
+        suffix: '台',
+        precision: 0,
       },
       {
-        key: 'todayTask',
-        title: '今日任务',
-        value: pickNumber(
-          raw,
-          'todayTaskCount',
-          pickNumber(raw, 'taskPending', FALLBACK_KPI.todayTask),
-        ),
+        key: 'taskPending',
+        title: '未完成农事任务',
+        value: pickNumber(dash, 'taskPending'),
         suffix: '条',
         precision: 0,
-        trend: 0.5,
-        rising: false,
       },
       {
-        key: 'traceQuery',
-        title: '溯源查询',
-        value: pickNumber(raw, 'traceQueryCount', FALLBACK_KPI.traceQuery),
-        suffix: '次',
+        key: 'alertPending',
+        title: '待处理告警',
+        value: pickNumber(dash, 'alertPending'),
+        suffix: '条',
         precision: 0,
-        trend: 12.4,
-        rising: true,
       },
     ]
-  }, [metricsQuery.data])
+  }, [metricsQuery.data, overviewQuery.data])
 
-  /** 趋势数据 */
-  const trendPoints: TrendPoint[] = useMemo<TrendPoint[]>(() => {
-    const remote = trendQuery.data
-    if (remote && remote.length > 0) {
-      return remote
-    }
-    return FALLBACK_TREND
-  }, [trendQuery.data])
+  /** 趋势数据：后端无此端点时为空数组，由页面渲染空态 */
+  const trendPoints: TrendPoint[] = useMemo<TrendPoint[]>(
+    () => (trendQuery.data ?? []).map((item) => ({
+      label: item.label,
+      taskRate: Number(item.taskRate) || 0,
+      activeUsers: Number(item.activeUsers) || 0,
+      alertCount: Number(item.alertCount) || 0,
+    })),
+    [trendQuery.data],
+  )
 
-  /** 区域分布数据 */
-  const regionStats: RegionStatItem[] = useMemo<RegionStatItem[]>(() => {
-    const remote = regionQuery.data
-    if (remote && remote.length > 0) {
-      return remote
-    }
-    return FALLBACK_REGIONS
-  }, [regionQuery.data])
+  /** 区域分布数据：后端无此端点时为空数组，由页面渲染空态 */
+  const regionStats: RegionStatItem[] = useMemo<RegionStatItem[]>(
+    () =>
+      (regionQuery.data ?? []).map((item) => ({
+        region: item.region,
+        farmCount: Number(item.farmCount) || 0,
+        fieldArea: Number(item.fieldArea) || 0,
+        tenantCount: Number(item.tenantCount) || 0,
+        activityLevel: item.activityLevel,
+      })),
+    [regionQuery.data],
+  )
 
   /** 排行数据（后端 /rank 返回农场维度） */
   const rankItems = useMemo<Array<{ name: string; value: number; plotCount: number }>>(() => {
@@ -443,50 +348,87 @@ export default function OpsDashboard(): JSX.Element {
     }))
   }, [rankQuery.data])
 
-  /** 告警级别计数：紧急 / 重要 / 一般 */
-  const alertLevelCounts = useMemo<{ critical: number; warn: number; info: number }>(() => {
+  /** 告警级别计数：紧急 / 重要 / 一般；后端未返回时为 null（展示「—」） */
+  const alertLevelCounts = useMemo<{ critical: number | null; warn: number | null; info: number | null }>(() => {
     const raw = alertLevelQuery.data
-    const critical = Number(raw?.CRITICAL ?? raw?.critical ?? raw?.['紧急'] ?? 0) || 0
-    const warn = Number(raw?.WARN ?? raw?.warn ?? raw?.['重要'] ?? 0) || 0
-    const info = Number(raw?.INFO ?? raw?.info ?? raw?.['一般'] ?? 0) || 0
-    if (critical + warn + info > 0) {
-      return { critical, warn, info }
-    }
-    return { critical: 3, warn: 8, info: 15 }
+    const critical = pickNumber(raw, 'CRITICAL')
+    const warn = pickNumber(raw, 'WARN')
+    const info = pickNumber(raw, 'INFO')
+    return { critical, warn, info }
   }, [alertLevelQuery.data])
 
-  /** 告警列表 */
+  /** 告警列表：只用后端返回数据，无数据时为空（渲染空态） */
   const alertItems = useMemo<AlertItem[]>(() => {
-    const remote: Alert[] | undefined = alertsQuery.data?.list
-    if (remote && remote.length > 0) {
-      return remote.map((item) => ({
-        id: item.alertId,
-        title: item.alertTitle,
-        content: item.alertContent,
-        level: item.alertLevel >= 3 ? '紧急' : item.alertLevel === 2 ? '重要' : '一般',
-        relativeTime: item.triggeredAt?.slice(11, 16) ?? '--:--',
-        target: item.plotName ?? item.farmId ?? '—',
-      }))
+    const remote: AlertItem0[] | undefined = alertsQuery.data?.list
+    if (!remote || remote.length === 0) {
+      return []
     }
-    return FALLBACK_ALERTS
+    return remote.map((item) => ({
+      id: item.alertId,
+      title: item.alertTitle,
+      content: item.alertContent,
+      level: item.alertLevel >= 3 ? '紧急' : item.alertLevel === 2 ? '重要' : '一般',
+      relativeTime: item.triggeredAt?.slice(11, 16) ?? '--:--',
+      target: item.plotName ?? item.farmId ?? '—',
+    }))
   }, [alertsQuery.data])
 
-  /** 待办审批列表 */
+  /** 待办审批列表：只用后端返回数据，无数据时为空（渲染空态） */
   const approvalItems = useMemo<ApprovalItem[]>(() => {
     const remote = approvalsQuery.data?.list
-    if (remote && remote.length > 0) {
-      return remote.slice(0, 5).map((item) => ({
-        id: item.approvalId,
-        no: item.approvalNo,
-        type: ['农场入驻', '计划变更', '投入品采购', '质量复检', '数据更正'][item.approvalType - 1] ?? '其他',
-        target: item.bizSummary ?? item.tenantName ?? '—',
-        applicant: item.applicantName,
-        submitTime: item.submittedAt?.slice(11, 16) ?? '--:--',
-        priority: '重要',
-      }))
+    if (!remote || remote.length === 0) {
+      return []
     }
-    return FALLBACK_APPROVALS
+    return remote.slice(0, 5).map((item) => ({
+      id: item.approvalId,
+      no: item.approvalNo,
+      type: ['农场入驻', '计划变更', '投入品采购', '质量复检', '数据更正'][item.approvalType - 1] ?? '其他',
+      target: item.bizSummary ?? item.tenantName ?? '—',
+      applicant: item.applicantName,
+      submitTime: item.submittedAt?.slice(11, 16) ?? '--:--',
+      // 后端审批表无优先级字段，不展示编造的优先级
+      priority: '—',
+    }))
   }, [approvalsQuery.data])
+
+  /** 后端缺失的区块端点清单（用于统一降级提示） */
+  const unavailableBlocks = useMemo<string[]>(() => {
+    const blocks: string[] = []
+    if (trendQuery.isError) {
+      blocks.push('近7天趋势：GET /admin/dashboard/trend 后端未实现（实测返回 500）')
+    }
+    if (regionQuery.isError) {
+      blocks.push('全国生产分布：GET /admin/dashboard/region-distribution 后端未实现（实测返回 500）')
+    }
+    if (alertLevelQuery.isError) {
+      blocks.push('告警级别分布（GET /admin/dashboard/alert-trend 不可用）')
+    }
+    if (metricsQuery.isError) {
+      blocks.push('KPI 汇总（GET /admin/dashboard/overview 不可用）')
+    }
+    if (overviewQuery.isError) {
+      blocks.push('租户概览（GET /admin/tenants/overview 不可用）')
+    }
+    if (rankQuery.isError) {
+      blocks.push('种植面积排行（GET /admin/dashboard/rank 不可用）')
+    }
+    if (alertsQuery.isError) {
+      blocks.push('告警列表（GET /admin/alerts 不可用）')
+    }
+    if (approvalsQuery.isError) {
+      blocks.push('待办审批（GET /admin/approvals 不可用）')
+    }
+    return blocks
+  }, [
+    trendQuery.isError,
+    regionQuery.isError,
+    alertLevelQuery.isError,
+    metricsQuery.isError,
+    overviewQuery.isError,
+    rankQuery.isError,
+    alertsQuery.isError,
+    approvalsQuery.isError,
+  ])
 
   /** 自动刷新倒计时 */
   useEffect(() => {
@@ -632,6 +574,16 @@ export default function OpsDashboard(): JSX.Element {
     low: '低活跃',
   }
 
+  /** 后端不可用区块的统一空态文案 */
+  const emptyBlock = (label: string): JSX.Element => (
+    <div style={{ textAlign: 'center', padding: '24px 0' }}>
+      <Empty
+        image={Empty.PRESENTED_IMAGE_SIMPLE}
+        description={<Text type="secondary">{label}：后端暂未提供该数据，此处不用原型示例数据兜底</Text>}
+      />
+    </div>
+  )
+
   return (
     <div>
       {/* 顶部标题栏 + 自动刷新 */}
@@ -641,9 +593,7 @@ export default function OpsDashboard(): JSX.Element {
             运营管理大盘
           </Title>
           <Text type="secondary">
-            {metricsQuery.data
-              ? '数据来源：平台实时汇总'
-              : '当前为原型示例口径（后端聚合接口暂未返回数据）'}
+            数据均取自后端真实接口；后端未提供的指标展示「—」或未展示对应区块
           </Text>
         </Col>
         <Col>
@@ -667,35 +617,41 @@ export default function OpsDashboard(): JSX.Element {
         </Col>
       </Row>
 
-      {/* KPI 卡片区（原型 P1 KPI Cards） */}
+      {/* 缺失端点必须让用户看见：明确列出哪些区块没有真实数据源 */}
+      {unavailableBlocks.length > 0 && (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message={`以下 ${unavailableBlocks.length} 个区块暂无后端数据源，已展示空态（不用示例数据填充）`}
+          description={
+            <ul style={{ margin: 0, paddingLeft: 18 }}>
+              {unavailableBlocks.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          }
+        />
+      )}
+
+      {/* KPI 卡片区：只渲染后端有数据源的指标 */}
       <Row gutter={[12, 12]}>
         {kpiItems.map((item) => (
           <Col key={item.key} xs={24} sm={12} md={8} lg={6} xl={4}>
             <Card size="small" styles={{ body: { padding: 16 } }}>
-              {metricsQuery.isLoading ? (
+              {metricsQuery.isLoading || overviewQuery.isLoading ? (
                 <Skeleton active title={false} paragraph={{ rows: 2 }} />
               ) : (
                 <Statistic
                   title={item.title}
-                  value={item.value}
+                  value={item.value === null ? '—' : item.value}
                   precision={item.precision}
-                  suffix={item.suffix}
-                  formatter={(value) => Number(value).toLocaleString('zh-CN')}
+                  suffix={item.value === null ? undefined : item.suffix}
+                  formatter={(value) =>
+                    typeof value === 'number' ? Number(value).toLocaleString('zh-CN') : String(value)
+                  }
                 />
               )}
-              <Space size={4} style={{ marginTop: 6 }}>
-                {item.rising ? (
-                  <ArrowUpOutlined style={{ color: '#52c41a' }} />
-                ) : (
-                  <ArrowDownOutlined style={{ color: '#ff4d4f' }} />
-                )}
-                <Text style={{ color: item.rising ? '#52c41a' : '#ff4d4f', fontSize: 12 }}>
-                  {item.trend}%
-                </Text>
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  较昨日
-                </Text>
-              </Space>
             </Card>
           </Col>
         ))}
@@ -727,6 +683,8 @@ export default function OpsDashboard(): JSX.Element {
           >
             {regionQuery.isLoading ? (
               <Skeleton active paragraph={{ rows: 6 }} />
+            ) : regionStats.length === 0 ? (
+              emptyBlock('全国生产分布')
             ) : (
               <Row gutter={12}>
                 <Col xs={24} md={12}>
@@ -781,6 +739,8 @@ export default function OpsDashboard(): JSX.Element {
           >
             {trendQuery.isLoading ? (
               <Skeleton active paragraph={{ rows: 6 }} />
+            ) : trendPoints.length === 0 ? (
+              emptyBlock('近7天趋势')
             ) : (
               <ReactECharts option={trendChartOption} style={{ height: 300 }} notMerge />
             )}
@@ -815,19 +775,19 @@ export default function OpsDashboard(): JSX.Element {
           >
             <Row gutter={8} style={{ marginBottom: 8 }}>
               <Col span={8}>
-                <Tag color="red">紧急 {alertLevelCounts.critical}</Tag>
+                <Tag color="red">紧急 {alertLevelCounts.critical ?? '—'}</Tag>
               </Col>
               <Col span={8}>
-                <Tag color="orange">重要 {alertLevelCounts.warn}</Tag>
+                <Tag color="orange">重要 {alertLevelCounts.warn ?? '—'}</Tag>
               </Col>
               <Col span={8}>
-                <Tag color="blue">一般 {alertLevelCounts.info}</Tag>
+                <Tag color="blue">一般 {alertLevelCounts.info ?? '—'}</Tag>
               </Col>
             </Row>
             {alertsQuery.isLoading ? (
               <Skeleton active paragraph={{ rows: 4 }} />
             ) : alertItems.length === 0 ? (
-              <Empty description="暂无告警" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+              <Empty description="暂无告警（后端未返回告警数据）" image={Empty.PRESENTED_IMAGE_SIMPLE} />
             ) : (
               <div style={{ maxHeight: 268, overflowY: 'auto' }}>
                 {alertItems.map((item) => (
@@ -894,7 +854,7 @@ export default function OpsDashboard(): JSX.Element {
             {approvalsQuery.isLoading ? (
               <Skeleton active paragraph={{ rows: 4 }} />
             ) : approvalItems.length === 0 ? (
-              <Empty description="暂无待办审批" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+              <Empty description="暂无待办审批（后端未返回待审数据）" image={Empty.PRESENTED_IMAGE_SIMPLE} />
             ) : (
               <div style={{ maxHeight: 268, overflowY: 'auto' }}>
                 {approvalItems.map((item) => (
@@ -948,17 +908,12 @@ export default function OpsDashboard(): JSX.Element {
         </Col>
       </Row>
 
-      {/* 接口异常降级提示 */}
-      {(metricsQuery.isError || alertsQuery.isError || approvalsQuery.isError) && (
-        <Card size="small" style={{ marginTop: 12 }}>
-          <Space align="start">
-            {alertsQuery.isFetching || approvalsQuery.isFetching ? <Spin size="small" /> : null}
-            <Text type="warning">
-              部分接口暂未返回数据，列表类区块已使用原型示例口径展示，页面操作功能仍可正常使用。
-            </Text>
-          </Space>
-        </Card>
-      )}
+      <Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: 12 }}>
+        数据说明：KPI 取自 `GET /admin/dashboard/overview` 与 `GET /admin/tenants/overview` 的真实返回值；
+        「在田面积」与「溯源查询次数」后端无对应聚合字段，已从 KPI 中移除；
+        「较昨日涨跌」后端无同比数据源，已不再展示。
+        后端缺失的区块展示空态而非示例数据。
+      </Text>
 
       {/* 审批确认弹窗（原型 approve-modal） */}
       <Modal
@@ -1068,7 +1023,7 @@ export default function OpsDashboard(): JSX.Element {
               <Col span={24}>⚠ {activeAlert.title}</Col>
               <Col span={24}>告警内容：{activeAlert.content}</Col>
               <Col span={24}>告警编号：{activeAlert.id}</Col>
-              <Col span={24}>影响范围：2个监控点位</Col>
+              <Col span={24}>关联对象：{activeAlert.target}</Col>
             </Row>
             <div style={{ marginTop: 12 }}>
               <Text>处理措施：</Text>
