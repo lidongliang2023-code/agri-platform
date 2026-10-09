@@ -162,6 +162,61 @@ export function listOpsTenants(params: OpsTenantListParams): Promise<PageResult<
     .then((raw) => normalizeOpsPage<OpsTenant>(raw, params.pageNum, params.pageSize))
 }
 
+/**
+ * 运营端租户列表原始行（后端 `TenantQuotaEntity` 形态）。
+ *
+ * 库内没有租户主表，租户以配额记录为载体（见 `TenantQuotaService` 类注释），
+ * 所以「租户标识」就是后端配额主键 `quotaId`，而不是 `OpsTenant.tenantId`。
+ *
+ * 后端**未提供**租户等级 / 区域 / 联系人 / 在田面积 / 活跃度等字段，
+ * 因此这里不声明它们——声明一个后端不会返回的字段，会让调用方误以为有数据源。
+ */
+export interface OpsTenantRow {
+  /** 租户标识（后端配额主键 quotaId） */
+  quotaId: string
+  /** 租户编码 */
+  tenantCode?: string | null
+  /** 租户名称 */
+  tenantName?: string | null
+  /** 农场数上限 */
+  farmLimit?: number | null
+  /** 地块数上限 */
+  plotLimit?: number | null
+  /** 设备数上限 */
+  deviceLimit?: number | null
+  /** 用户数上限 */
+  userLimit?: number | null
+  /** 存储空间上限（GB） */
+  storageLimitGb?: number | null
+  /** 溯源码上限 */
+  traceCodeLimit?: number | null
+  /** 日 API 调用上限 */
+  apiCallLimit?: number | null
+  /** 已用农场数（真实用量列） */
+  usedFarmCount?: number | null
+  /** 状态：1 正常 / 0 停用 */
+  status?: number | null
+  /** 创建时间 */
+  createdAt?: string | null
+  /** 更新时间 */
+  updatedAt?: string | null
+}
+
+/**
+ * 分页查询运营端租户列表（返回后端 `TenantQuotaEntity` 原始形态）。
+ *
+ * 与 {@link listOpsTenants} 的区别：本函数不做任何字段改名 / 补位，
+ * 后端返回什么就用什么，避免在类型层凭空造出后端没有的字段。
+ *
+ * @param params 分页与过滤参数（后端当前仅支持 status）
+ * @returns 分页结果
+ */
+export function listOpsTenantRows(params: OpsTenantListParams): Promise<PageResult<OpsTenantRow>> {
+  return http
+    .get<RawOpsPageResult<OpsTenantRow>>(BASE, params, { silent: true })
+    .then((raw) => normalizeOpsPage<OpsTenantRow>(raw, params.pageNum, params.pageSize))
+}
+
 /** 分页查询租户农场列表（租户详情 Tab2） */
 export function listTenantFarms(
   tenantId: string,

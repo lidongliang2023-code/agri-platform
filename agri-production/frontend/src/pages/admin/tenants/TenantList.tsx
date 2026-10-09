@@ -4,9 +4,33 @@
  * 所属模块：租户管理
  * PRD 序号：PRD 6.2 #4
  * 原型来源：P2 tenants — 租户列表
+ *
+ * 数据来源约定（硬规矩：不造数据源；可以降级，不能骗人）：
+ * - 列表数据全部来自后端 `GET /admin/tenants`（MyBatis-Plus 分页，支持 page / size / status 三个参数）；
+ *   后端不返回数据时列表就是空的，由 ProTable 渲染空态，**不使用任何本地示例数据兜底**；
+ * - 顶部统计卡全部来自后端 `GET /admin/tenants/overview`（真实聚合结果）；
+ * - 后端 `TenantQuotaEntity` 未提供等级 / 在田面积 / 活跃度 / 区域 / 联系人等字段，
+ *   这些**没有数据源，因此不展示**（既不删除前端预算，也不填 0 或原型数字）；
+ * - 列表请求失败时返回 `success: false` 并在顶部渲染 Alert 暴露后端错误，绝不静默降级。
  */
 import { useMemo, useState } from 'react'
-import { App, Button, Card, Col, Form, InputNumber, Modal, Popconfirm, Progress, Row, Space, Statistic, Tag, Tooltip, Typography } from 'antd'
+import {
+  Alert,
+  App,
+  Button,
+  Card,
+  Col,
+  Form,
+  InputNumber,
+  Modal,
+  Popconfirm,
+  Progress,
+  Row,
+  Space,
+  Statistic,
+  Tag,
+  Typography,
+} from 'antd'
 import {
   CheckCircleOutlined,
   ExportOutlined,
@@ -16,67 +40,45 @@ import { ProTable } from '@ant-design/pro-components'
 import type { ProColumns } from '@ant-design/pro-components'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import type {
-  OpsTenant,
-  PageResult,
-  TenantActivity,
-  TenantSegmentLevel,
-} from '@/types'
-import { listOpsTenants, updateTenantQuotaLimits, updateTenantStatus } from '@/api/admin/tenants'
+import type { TenantOverview } from '@/api/admin/tenants'
+import { getTenantOverview, listOpsTenantRows, updateTenant, updateTenantQuotaLimits } from '@/api/admin/tenants'
+import type { TenantStatus } from '@/types'
 
 const { Text } = Typography
 
-/** 租户等级（数值 → 原型文案） */
-const LEVEL_TEXT: Record<number, TenantSegmentLevel> = {
-  4: '钻石',
-  3: '金牌',
-  2: '银牌',
-  1: '普通',
-}
-
-/** 租户等级（原型文案 → 数值） */
-const LEVEL_VALUE: Record<string, number> = {
-  钻石: 4,
-  金牌: 3,
-  银牌: 2,
-  普通: 1,
-}
-
-/** 等级图标 */
-const LEVEL_ICON: Record<string, string> = {
-  钻石: '💎',
-  金牌: '🥇',
-  银牌: '🥈',
-  普通: '',
-}
-
-/** 租户状态（数值 → 文案） */
+/** 租户状态（后端 TenantQuotaEntity.status：1 正常 / 0 停用） */
 const STATUS_TEXT: Record<number, string> = {
   1: '正常',
-  2: '待审核',
-  3: '冻结',
-  0: '已注销',
+  0: '停用',
 }
 
 /** 状态 → Tag 颜色 */
 const STATUS_COLOR: Record<string, string> = {
   正常: 'green',
-  待审核: 'gold',
-  冻结: 'red',
-  已注销: 'default',
+  停用: 'red',
 }
 
-/** 活跃度 → Tag 颜色 */
-const ACTIVITY_COLOR: Record<TenantActivity, string> = {
-  正常: 'green',
-  低活跃: 'orange',
-  不活跃: 'red',
-}
-
-/** 租户列表行 */
-interface TenantRow extends OpsTenant {
-  /** 配额使用率（%） */
-  usageRate: number
+/**
+ * 租户列表行（与后端 `TenantQuotaEntity` 返回字段一一对应）。
+ *
+ * 说明：库内没有独立的租户主表，租户以配额记录为载体（见 TenantQuotaService 注释），
+ * 因此这里的「租户标识」取的是后端配额主键 `quotaId`。
+ */
+interface TenantRow {
+  /** 租户标识（后端配额主键 quotaId） */
+  tenantId: string
+  /** 租户编码 */
+  tenantCode: string
+  /** 租户名称 */
+  tenantName: string
+  /** 农场数上限（未配置时为 null） */
+  farmLimit: number | null
+  /** 已用农场数（真实用量列 used_farm_count） */
+  usedFarmCount: number
+  /** 租户状态：1 正常 / 0 停用 */
+  status: number
+  /** 创建时间（后端可能为 null） */
+  createdAt?: string | null
 }
 
 /**
@@ -92,100 +94,38 @@ function resolveTenantName(row: { tenantId: string; tenantName?: string }): stri
   return name ? name : row.tenantId
 }
 
-/* ==================== 示例数据生成器（后端无数据时兜底，取自原型 P2 / 4.2） ==================== */
-
-/** 原型 P2 前 7 行真实示例数据 */
-const PROTOTYPE_TENANTS: Array<{
-  tenantCode: string
-  tenantName: string
-  level: TenantSegmentLevel
-  farmCount: number
-  fieldArea: number
-  activity: TenantActivity
-  usageRate: number
-  registeredAt: string
-}> = [
-  { tenantCode: 'T20250001', tenantName: '绿源农业科技有限公司', level: '钻石', farmCount: 45, fieldArea: 12500, activity: '正常', usageRate: 78, registeredAt: '2025-03-15' },
-  { tenantCode: 'T20250002', tenantName: '丰达农场', level: '金牌', farmCount: 38, fieldArea: 9800, activity: '正常', usageRate: 91, registeredAt: '2025-03-18' },
-  { tenantCode: 'T20250003', tenantName: '大地种业', level: '银牌', farmCount: 52, fieldArea: 15200, activity: '正常', usageRate: 62, registeredAt: '2025-04-01' },
-  { tenantCode: 'T20250004', tenantName: '丰收集团', level: '钻石', farmCount: 29, fieldArea: 8600, activity: '正常', usageRate: 95, registeredAt: '2025-04-05' },
-  { tenantCode: 'T20250005', tenantName: '田园生态', level: '金牌', farmCount: 33, fieldArea: 10100, activity: '低活跃', usageRate: 82, registeredAt: '2025-04-12' },
-  { tenantCode: 'T20250006', tenantName: '惠民种植', level: '普通', farmCount: 15, fieldArea: 4200, activity: '不活跃', usageRate: 105, registeredAt: '2025-05-01' },
-  { tenantCode: 'T20250007', tenantName: '鑫农科技', level: '普通', farmCount: 8, fieldArea: 2100, activity: '低活跃', usageRate: 92, registeredAt: '2025-05-20' },
-]
-
-/** 补充租户名称池（用于生成完整分页数据） */
-const EXTRA_TENANT_NAMES: string[] = [
-  '鑫盛农业科技', '中原农服', '黄河种业', '江淮米业', '东北黑土合作社',
-  '云岭茶业', '天山牧业', '洞庭水产', '胶东果蔬', '成都平原农场',
-  '河套灌区农业', '珠江三角洲基地', '辽河农垦', '汉江生态园', '洱海有机农场',
-]
-
 /**
- * 生成分页示例租户数据。
+ * 计算农场配额使用率（%）。
  *
- * 后端接口未返回数据时使用，保证分页、筛选、排序等交互仍然可用。
+ * 分子分母均为后端真实字段；分母缺失（未配置配额）时无法计算，返回 null 由调用方展示「—」，
+ * 不返回 0——0 会让用户误以为「真实用量就是 0」。
  *
- * @param pageNum 页码
- * @param pageSize 每页条数
- * @returns 分页结果
+ * @param row 租户行
+ * @returns 使用率百分比；无分母时为 null
  */
-function buildSampleTenants(pageNum: number, pageSize: number): PageResult<TenantRow> {
-  /** 原型口径的总租户数 */
-  const total = 1580
-  const list: TenantRow[] = []
-  for (let index = 0; index < pageSize; index += 1) {
-    const seq = (pageNum - 1) * pageSize + index + 1
-    if (seq > total) {
-      break
-    }
-    const base = PROTOTYPE_TENANTS[(seq - 1) % PROTOTYPE_TENANTS.length]
-    const isPrototypeRow = seq <= PROTOTYPE_TENANTS.length
-    const name = isPrototypeRow
-      ? base.tenantName
-      : `${EXTRA_TENANT_NAMES[(seq - 1) % EXTRA_TENANT_NAMES.length]}${seq}号基地`
-    const levelRoll = (seq * 7) % 10
-    const level: TenantSegmentLevel =
-      isPrototypeRow
-        ? base.level
-        : levelRoll >= 8
-          ? '钻石'
-          : levelRoll >= 5
-            ? '金牌'
-            : levelRoll >= 2
-              ? '银牌'
-              : '普通'
-    const usageRate = isPrototypeRow ? base.usageRate : 45 + ((seq * 13) % 58)
-    const activity: TenantActivity = isPrototypeRow
-      ? base.activity
-      : usageRate > 95
-        ? '不活跃'
-        : usageRate > 85
-          ? '低活跃'
-          : '正常'
-    list.push({
-      tenantId: `TS${String(seq).padStart(6, '0')}`,
-      tenantCode: isPrototypeRow ? base.tenantCode : `T2025${String(seq).padStart(4, '0')}`,
-      tenantName: name,
-      tenantLevel: (LEVEL_VALUE[level] ?? 1) as OpsTenant['tenantLevel'],
-      status: (seq % 47 === 0 ? 3 : seq % 29 === 0 ? 2 : 1) as OpsTenant['status'],
-      farmCount: isPrototypeRow ? base.farmCount : 8 + ((seq * 11) % 52),
-      memberCount: 5 + ((seq * 3) % 40),
-      deviceCount: 10 + ((seq * 7) % 120),
-      createdAt: `${base.registeredAt} 09:00:00`,
-      region: ['河南省', '山东省', '黑龙江省', '江苏省', '四川省', '广东省'][seq % 6],
-      contactName: ['张三', '李四', '王五', '赵六', '孙七'][seq % 5],
-      contactPhone: `138****${String(1000 + (seq % 9000)).slice(0, 4)}`,
-      fieldArea: isPrototypeRow ? base.fieldArea : 2100 + ((seq * 137) % 13000),
-      activity,
-      quotaUsageRate: usageRate,
-      usageRate,
-    })
+function resolveFarmUsageRate(row: TenantRow): number | null {
+  const limit = row.farmLimit
+  if (typeof limit !== 'number' || limit <= 0) {
+    return null
   }
-  return { pageNum, pageSize, total, pages: Math.ceil(total / pageSize), list }
+  const used = typeof row.usedFarmCount === 'number' ? row.usedFarmCount : 0
+  return Math.round((used / limit) * 100)
 }
 
-/** 配额表单初始值（原型 P3 配额详情） */
+/**
+ * 安全地读取后端返回的整数型字段。
+ *
+ * 后端部分数值字段可能为 null，此处统一收敛为 0 / null，避免把 null 直接渲染出来。
+ *
+ * @param value 后端字段值
+ * @returns number 或 null
+ */
+function toIntOrNull(value: unknown): number | null {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? Math.trunc(parsed) : null
+}
+
+/** 配额表单初始值（原型 P3 配额详情，仅作为调整弹窗的输入占位） */
 interface QuotaFormValues {
   farmLimit: number
   traceCodeLimit: number
@@ -196,8 +136,12 @@ interface QuotaFormValues {
 /**
  * 租户列表
  *
- * 业务职责：全平台 SaaS 租户台账，支持按名称 / 编号、状态、等级、注册时间筛选，
- * 并提供查看、配额调整、停用 / 启用、批量冻结与批量导出能力。
+ * 业务职责：全平台 SaaS 租户台账，支持按状态筛选，
+ * 并提供查看、配额调整、停用 / 启用与批量冻结能力。
+ *
+ * 后端 `GET /admin/tenants` 目前仅支持 page / size / status 三个参数。
+ * 名称、等级、注册时间区间的筛选后端未提供，故此处不再暴露这些筛选项——
+ * 暴露一个会被后端静默忽略的筛选条件，等同于向用户谎称「筛过了」。
  *
  * @returns 页面内容
  */
@@ -216,13 +160,17 @@ export default function TenantList(): JSX.Element {
   const [quotaTarget, setQuotaTarget] = useState<TenantRow | null>(null)
   /** 配额表单 */
   const [quotaForm] = Form.useForm<QuotaFormValues>()
+  /** 列表加载失败原因；非空时顶部显式告警，绝不静默降级为本地数据 */
+  const [loadError, setLoadError] = useState<string>('')
+  /** 后端租户概览（统计卡数据；null 表示尚未取到，展示「—」而不是 0） */
+  const [overview, setOverview] = useState<TenantOverview | null>(null)
 
-  /** 停用 / 启用租户 */
+  /** 停用 / 启用租户（后端无 PATCH /{id}/status，走 PUT /admin/tenants/{id} 局部更新） */
   const statusMutation = useMutation({
-    mutationFn: (payload: { tenantId: string; status: number }) =>
-      updateTenantStatus(payload.tenantId, payload.status),
+    mutationFn: (payload: { tenantId: string; status: TenantStatus }) =>
+      updateTenant(payload.tenantId, { status: payload.status }),
     onSuccess: (_data, variables) => {
-      message.success(variables.status === 3 ? '租户已停用' : '租户已启用')
+      message.success(variables.status === 1 ? '租户已启用' : '租户已停用')
       void queryClient.invalidateQueries({ queryKey: ['admin', 'tenants'] })
       setTableKey((prev) => prev + 1)
     },
@@ -244,125 +192,79 @@ export default function TenantList(): JSX.Element {
     },
   })
 
-  /** 顶部统计卡（原型 P2 统计区，后端无汇总接口时使用原型口径） */
-  const stats = useMemo(
+  /** 顶部统计卡：全部取自后端 /admin/tenants/overview 真实聚合值，无虚构数字 */
+  const stats = useMemo<
+    Array<{ key: string; title: string; value: number | null; color: string }>
+  >(
     () => [
-      { key: 'total', title: '总租户数', value: 1580, color: '#1677ff' },
-      { key: 'active', title: '活跃租户', value: 1286, color: '#52c41a' },
-      { key: 'frozen', title: '冻结租户', value: 42, color: '#ff4d4f' },
-      { key: 'pending', title: '待审核', value: 18, color: '#faad14' },
+      { key: 'total', title: '租户总数', value: overview?.tenantTotal ?? null, color: '#1677ff' },
+      { key: 'active', title: '活跃租户', value: overview?.activeTenantCount ?? null, color: '#52c41a' },
+      { key: 'disabled', title: '停用租户', value: overview?.disabledTenantCount ?? null, color: '#ff4d4f' },
+      {
+        key: 'unregistered',
+        title: '未登记配额',
+        value: overview?.unregisteredTenantCount ?? null,
+        color: '#faad14',
+      },
     ],
-    [],
+    [overview],
   )
 
-  /** 表格列（字段对齐原型 P2） */
+  /** 表格列（仅展示后端真实返回的字段） */
   const columns: ProColumns<TenantRow>[] = [
     {
       title: '租户编号',
       dataIndex: 'tenantCode',
-      width: 130,
+      width: 140,
+      hideInSearch: true,
       copyable: true,
+      render: (_dom, entity) => entity.tenantCode ?? '—',
     },
     {
       title: '租户名称',
       dataIndex: 'tenantName',
       width: 220,
       ellipsis: true,
-      fieldProps: { placeholder: '请输入租户名称 / 编号' },
-      // 后端未登记真实租户名称时（TenantOverviewVO 无 tenantName），兜底展示租户 ID
-      render: (_dom, entity) => (
-        <Tooltip title={resolveTenantName(entity)}>
-          <span>{resolveTenantName(entity)}</span>
-        </Tooltip>
-      ),
+      hideInSearch: true,
+      render: (_dom, entity) => <span>{resolveTenantName(entity)}</span>,
     },
     {
-      title: '等级',
-      dataIndex: 'tenantLevel',
+      title: '已用农场数',
+      dataIndex: 'usedFarmCount',
       width: 110,
-      valueType: 'select',
-      valueEnum: {
-        4: { text: '💎 钻石' },
-        3: { text: '🥇 金牌' },
-        2: { text: '🥈 银牌' },
-        1: { text: '普通' },
-      },
+      hideInSearch: true,
+      render: (_dom, entity) => String(entity.usedFarmCount ?? 0),
+    },
+    {
+      title: '农场配额使用率',
+      dataIndex: 'farmUsageRate',
+      width: 170,
+      hideInSearch: true,
       render: (_dom, entity) => {
-        const level = LEVEL_TEXT[entity.tenantLevel] ?? '普通'
+        const rate = resolveFarmUsageRate(entity)
+        if (rate === null) {
+          return (
+            <Text type="secondary">—（后端未配置农场数上限，无法计算）</Text>
+          )
+        }
+        const danger = rate >= 80
         return (
-          <Tag color={level === '钻石' ? 'purple' : level === '金牌' ? 'gold' : level === '银牌' ? 'blue' : 'default'}>
-            {LEVEL_ICON[level]} {level}
-          </Tag>
+          <Progress
+            percent={Math.min(rate, 100)}
+            size="small"
+            status={danger ? 'exception' : 'normal'}
+            strokeColor={danger ? '#ff4d4f' : undefined}
+            format={() => <span style={{ color: danger ? '#ff4d4f' : undefined }}>{rate}%</span>}
+          />
         )
       },
     },
     {
-      title: '农场数',
-      dataIndex: 'farmCount',
-      width: 90,
-      hideInSearch: true,
-      sorter: true,
-    },
-    {
-      title: '在田面积',
-      dataIndex: 'fieldArea',
-      width: 120,
-      hideInSearch: true,
-      sorter: true,
-      render: (_dom, entity) => `${Number(entity.fieldArea ?? 0).toLocaleString('zh-CN')}亩`,
-    },
-    {
-      title: '活跃',
-      dataIndex: 'activity',
-      width: 100,
-      valueType: 'select',
-      valueEnum: {
-        正常: { text: '正常' },
-        低活跃: { text: '低活跃' },
-        不活跃: { text: '不活跃' },
-      },
-      render: (_dom, entity) => {
-        const activity: TenantActivity = entity.activity ?? '正常'
-        return <Tag color={ACTIVITY_COLOR[activity]}>{activity}</Tag>
-      },
-    },
-    {
-      title: '配额使用率',
-      dataIndex: 'quotaUsageRate',
-      width: 160,
-      hideInSearch: true,
-      sorter: true,
-      render: (_dom, entity) => {
-        const rate = Number(entity.quotaUsageRate ?? entity.usageRate ?? 0)
-        const danger = rate >= 90
-        return (
-          <Tooltip title={danger ? '配额即将用尽，建议尽快调整' : `已使用 ${rate}%`}>
-            <Progress
-              percent={Math.min(rate, 100)}
-              size="small"
-              status={danger ? 'exception' : rate >= 75 ? 'normal' : 'success'}
-              strokeColor={danger ? '#ff4d4f' : undefined}
-              format={() => <span style={{ color: danger ? '#ff4d4f' : undefined }}>{rate}%</span>}
-            />
-          </Tooltip>
-        )
-      },
-    },
-    {
-      title: '注册时间',
+      title: '创建时间',
       dataIndex: 'createdAt',
-      width: 120,
-      valueType: 'dateRange',
-      search: {
-        transform: (value: unknown) => {
-          const range = value as [string, string] | undefined
-          return {
-            startDate: range?.[0],
-            endDate: range?.[1],
-          }
-        },
-      },
-      render: (_dom, entity) => String(entity.createdAt ?? '').slice(0, 10),
+      width: 170,
+      hideInSearch: true,
+      render: (_dom, entity) => String(entity.createdAt ?? '').replace('T', ' ').slice(0, 19) || '—',
     },
     {
       title: '状态',
@@ -371,18 +273,17 @@ export default function TenantList(): JSX.Element {
       valueType: 'select',
       valueEnum: {
         1: { text: '正常' },
-        2: { text: '待审核' },
-        3: { text: '冻结' },
+        0: { text: '停用' },
       },
       render: (_dom, entity) => {
-        const text = STATUS_TEXT[entity.status] ?? '正常'
-        return <Tag color={STATUS_COLOR[text]}>{text}</Tag>
+        const text = STATUS_TEXT[entity.status] ?? '未知'
+        return <Tag color={STATUS_COLOR[text] ?? 'default'}>{text}</Tag>
       },
     },
     {
       title: '操作',
       key: 'action',
-      width: 200,
+      width: 210,
       fixed: 'right',
       hideInSearch: true,
       render: (_dom, entity) => (
@@ -396,16 +297,13 @@ export default function TenantList(): JSX.Element {
             onClick={() => {
               setQuotaTarget(entity)
               quotaForm.setFieldsValue({
-                farmLimit: 60,
-                traceCodeLimit: 100000,
-                storageLimit: 10,
-                apiLimit: 50000,
+                farmLimit: toIntOrNull(entity.farmLimit) ?? undefined,
               })
             }}
           >
             配额调整
           </Button>
-          {entity.status === 3 ? (
+          {entity.status === 0 ? (
             <Popconfirm
               title="确认启用该租户？"
               okText="启用"
@@ -421,7 +319,7 @@ export default function TenantList(): JSX.Element {
               title="确认停用该租户？停用后其所有农场将禁止上报生产数据。"
               okText="停用"
               cancelText="取消"
-              onConfirm={() => statusMutation.mutate({ tenantId: entity.tenantId, status: 3 })}
+              onConfirm={() => statusMutation.mutate({ tenantId: entity.tenantId, status: 0 })}
             >
               <Button type="link" size="small" danger icon={<StopOutlined />}>
                 停用
@@ -440,7 +338,7 @@ export default function TenantList(): JSX.Element {
       return
     }
     await Promise.all(
-      selectedRows.map((row) => updateTenantStatus(row.tenantId, 3)),
+      selectedRows.map((row) => updateTenant(row.tenantId, { status: 0 })),
     )
     message.success(`已冻结 ${selectedRows.length} 个租户`)
     setSelectedRowKeys([])
@@ -455,17 +353,14 @@ export default function TenantList(): JSX.Element {
       message.warning('请先勾选需要导出的租户')
       return
     }
-    const header = ['租户编号', '租户名称', '等级', '农场数', '在田面积(亩)', '活跃度', '配额使用率(%)', '注册时间', '状态']
+    const header = ['租户编号', '租户名称', '已用农场数', '农场配额使用率(%)', '创建时间', '状态']
     const body = rows.map((row) => [
-      row.tenantCode,
+      row.tenantCode ?? '',
       resolveTenantName(row),
-      LEVEL_TEXT[row.tenantLevel] ?? '普通',
-      String(row.farmCount),
-      String(row.fieldArea ?? 0),
-      row.activity ?? '正常',
-      String(row.quotaUsageRate ?? row.usageRate ?? 0),
-      String(row.createdAt ?? '').slice(0, 10),
-      STATUS_TEXT[row.status] ?? '正常',
+      String(row.usedFarmCount ?? 0),
+      String(resolveFarmUsageRate(row) ?? '—'),
+      String(row.createdAt ?? '').replace('T', ' ').slice(0, 19),
+      STATUS_TEXT[row.status] ?? '未知',
     ])
     const csv = [header, ...body].map((line) => line.join(',')).join('\n')
     const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' })
@@ -480,28 +375,41 @@ export default function TenantList(): JSX.Element {
 
   return (
     <div>
-      {/* 统计卡 */}
+      {/* 顶部统计：全部为后端真实聚合值，取不到时展示「—」 */}
       <Row gutter={[12, 12]} style={{ marginBottom: 12 }}>
         {stats.map((item) => (
           <Col key={item.key} xs={12} sm={12} md={6}>
             <Card size="small">
               <Statistic
                 title={item.title}
-                value={item.value}
+                value={item.value === null ? '—' : item.value}
                 valueStyle={{ color: item.color }}
-                formatter={(value) => Number(value).toLocaleString('zh-CN')}
+                formatter={(value) =>
+                  typeof value === 'number' ? Number(value).toLocaleString('zh-CN') : String(value)
+                }
               />
             </Card>
           </Col>
         ))}
       </Row>
 
+      {/* 加载失败必须让用户看见：不允许静默降级为本地示例数据 */}
+      {loadError !== '' && (
+        <Alert
+          type="error"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message={`租户数据加载失败：${loadError}`}
+          description="页面不会用任何本地示例数据兜底。请确认后端服务与 /admin/tenants 接口可用后重试。"
+        />
+      )}
+
       <ProTable<TenantRow>
         key={tableKey}
         rowKey="tenantId"
         size="small"
         headerTitle="租户列表"
-        scroll={{ x: 1400 }}
+        scroll={{ x: 1100 }}
         search={{ labelWidth: 100, defaultCollapsed: false }}
         columns={columns}
         rowSelection={{
@@ -539,54 +447,50 @@ export default function TenantList(): JSX.Element {
           const pageNum = params.current ?? 1
           const pageSize = params.pageSize ?? 20
           try {
-            const result = await listOpsTenants({
+            // 后端 GET /admin/tenants 仅支持 status 过滤；其它参数后端不支持，故不传
+            const status =
+              params.status === undefined || params.status === null || params.status === ''
+                ? undefined
+                : Number(params.status)
+            const result = await listOpsTenantRows({
               pageNum,
               pageSize,
-              tenantName: typeof params.tenantName === 'string' ? params.tenantName : undefined,
-              tenantLevel: Number(params.tenantLevel) || undefined,
-              status: Number(params.status) || undefined,
-              startDate: typeof params.startDate === 'string' ? params.startDate : undefined,
-              endDate: typeof params.endDate === 'string' ? params.endDate : undefined,
+              status: Number.isFinite(status) ? status : undefined,
             })
-            if (result.list && result.list.length > 0) {
-              const rows: TenantRow[] = result.list.map((item) => {
-                const usageRate = Number(item.quotaUsageRate ?? 0)
-                return {
-                  ...item,
-                  fieldArea: item.fieldArea ?? (item.farmCount ?? 0) * 260,
-                  activity: item.activity ?? (usageRate > 95 ? '不活跃' : usageRate > 85 ? '低活跃' : '正常'),
-                  usageRate,
-                }
-              })
-              return { data: rows, total: result.total, success: true }
-            }
-          } catch {
-            // 后端未就绪时静默降级到示例数据，避免全局错误提示干扰使用
+            setLoadError('')
+            void getTenantOverview()
+              .then((data) => setOverview(data))
+              .catch(() => setOverview(null))
+
+            const rows: TenantRow[] = result.list.map((item) => ({
+              tenantId: String(item.quotaId ?? ''),
+              tenantCode: String(item.tenantCode ?? ''),
+              tenantName: String(item.tenantName ?? ''),
+              farmLimit: toIntOrNull(item.farmLimit),
+              usedFarmCount: toIntOrNull(item.usedFarmCount) ?? 0,
+              status: toIntOrNull(item.status) ?? 1,
+              createdAt: item.createdAt,
+            }))
+            // 后端正常返回（哪怕 list 为空）就原样使用：空就是空，由 ProTable 渲染空态
+            return { data: rows, total: result.total, success: true }
+          } catch (error) {
+            // 失败必须显式暴露，禁止再用本地兜底数据填充列表
+            setLoadError(error instanceof Error ? error.message : String(error))
+            setOverview(null)
+            return { data: [], total: 0, success: false }
           }
-          const sample = buildSampleTenants(pageNum, pageSize)
-          let list = sample.list
-          if (typeof params.tenantName === 'string' && params.tenantName.trim() !== '') {
-            const keyword = params.tenantName.trim()
-            list = list.filter(
-              (item) =>
-                resolveTenantName(item).includes(keyword) || item.tenantCode.includes(keyword),
-            )
-          }
-          if (Number(params.tenantLevel)) {
-            list = list.filter((item) => item.tenantLevel === Number(params.tenantLevel))
-          }
-          if (Number(params.status)) {
-            list = list.filter((item) => item.status === Number(params.status))
-          }
-          return { data: list, total: sample.total, success: true }
         }}
         rowClassName={(record) =>
-          Number(record.quotaUsageRate ?? record.usageRate ?? 0) >= 90 ? 'agri-row-danger' : ''
+          (resolveFarmUsageRate(record) ?? 0) >= 80 ? 'agri-row-danger' : ''
         }
       />
 
       <Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: 12 }}>
-        提示：配额使用率 ≥ 90% 的租户已标红，建议尽快调整配额以免影响业务。
+        提示：农场配额使用率 ≥ 80% 的租户已标红，建议尽快调整配额以免影响业务。
+        <br />
+        数据说明：列表与统计卡均为后端真实返回值。后端暂未提供租户等级、在田面积、活跃度、
+        区域与联系人等字段的数据源，这些列已移除（既不用本地算，也不填 0）；
+        后端 `GET /admin/tenants` 仅支持按「状态」过滤，故此处未提供名称 / 等级 / 注册时间的筛选。
       </Text>
 
       <Modal
