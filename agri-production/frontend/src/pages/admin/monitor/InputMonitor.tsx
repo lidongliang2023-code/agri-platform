@@ -701,7 +701,7 @@ export default function InputMonitor(): JSX.Element {
                   description={
                     hasRealData
                       ? '当前筛选条件下暂无投入品预警'
-                      : '未接入：后端无「超量使用预警」数据源。/admin/monitor/inputs 返回的是投入品库存预警（裸 List<Map>，键为 inputId / inputName / stockQty / warnQty / warning），与前端 PageResult<InputUsage> 的形状与键名均不符，不能当使用记录读，故不展示（不用示例数据顶替）'
+                      : '后端 /inputs/usages 在该时间范围内没有返回使用记录（列表与趋势均为空，不使用示例数据顶替）'
                   }
                 />
               ),
@@ -720,7 +720,7 @@ export default function InputMonitor(): JSX.Element {
             ? `投入品使用记录加载失败：${(usageQuery.error as Error | null)?.message ?? '未知错误'}`
             : hasRealData
               ? `已加载真实投入品使用记录 ${usageQuery.data?.list?.length ?? 0} 条，当前展示 ${stats.total} 条（禁限用 ${stats.restricted} / 用量超标 ${stats.overdose}）。标准用量与禁限用名录为业务规则配置，非后端数据。`
-              : '后端未返回投入品使用记录，列表与用量趋势为空（/admin/monitor/inputs 只提供投入品库存预警，形状为裸 List<Map>、键名为 stockQty/warnQty，非使用记录，故不作为预警列表数据来源）。标准用量与禁限用名录为业务规则配置，非后端数据。'
+              : '后端 /inputs/usages（PageResult，键名 dosage / usedAt / farmId / plotId 与后端一致）未返回使用记录，列表与用量趋势为空。标准用量与禁限用名录为业务规则配置，非后端数据。'
         }
       />
 
