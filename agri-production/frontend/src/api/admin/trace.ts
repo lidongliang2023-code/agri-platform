@@ -184,9 +184,9 @@ export interface LabServiceRating {
   /**
    * 本机登记时间。
    *
-   * 该字段同时是「真伪标记」：历史版本把原型示例评价（`orderCount: 1286` 之类）写进过
-   * localStorage，这些条目没有登记时间。加载时只保留带 updatedAt 的条目，
-   * 避免把原型编造数字继续渲染给用户。
+   * 该字段同时是「真伪标记」：历史版本曾把从原型里抄来的示例评价写进 localStorage
+   * （其中的「累计服务单数」直接照搬了原型「活跃租户」的虚构数字），这些条目没有登记时间。
+   * 加载时只保留带 updatedAt 的条目，避免把原型编造数字继续渲染给用户。
    */
   updatedAt?: string
 }
@@ -343,6 +343,24 @@ export interface CreateQualityLabPayload {
  */
 export function createQualityLab(payload: CreateQualityLabPayload): Promise<string> {
   return http.post<string>(`${LAB_BASE}/labs`, payload)
+}
+
+/**
+ * 更新检测机构（PUT /quality/labs/{labId}）。
+ *
+ * <p>与 {@link createQualityLab} 同用 {@code LAB_BASE}（{@code /quality}）。
+ * 注意不要误用同文件上方的 {@link updateLab}——那个走的是 {@code BASE}
+ * （{@code /admin/trace}），后端 AdminTraceController 并没有 {@code /labs} 端点，
+ * 实际是一个不可达的死函数（全仓无调用方）。</p>
+ *
+ * <p>{@code labLevel} 随 V11 迁移（{@code prod_quality_lab.lab_level}）已可落库，
+ * 编辑表单因此可以真实修改资质等级。</p>
+ */
+export function updateQualityLab(
+  labId: string,
+  payload: Partial<CreateQualityLabPayload>,
+): Promise<QualityLab> {
+  return http.put<QualityLab>(`${LAB_BASE}/labs/${labId}`, payload)
 }
 
 /** 检测机构准入驳回（POST /admin/quality/labs/{labId}/reject） */

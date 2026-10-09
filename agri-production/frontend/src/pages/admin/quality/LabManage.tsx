@@ -38,6 +38,7 @@ import {
   ApiOutlined,
   CheckCircleOutlined,
   CloseCircleOutlined,
+  EditOutlined,
   PlusOutlined,
   ReloadOutlined,
   SearchOutlined,
@@ -58,6 +59,7 @@ import {
   createQualityLab,
   fetchQualityLabs,
   rejectQualityLab,
+  updateQualityLab,
 } from '@/api/admin/trace'
 
 const { Text } = Typography
@@ -366,6 +368,10 @@ export default function LabManage(): JSX.Element {
   const [ratingTarget, setRatingTarget] = useState<QualityLab | null>(null)
   /** 服务评价表单 */
   const [ratingForm] = Form.useForm<RatingFormValues>()
+  /** 编辑机构弹窗目标机构 */
+  const [editTarget, setEditTarget] = useState<QualityLab | null>(null)
+  /** 编辑机构表单 */
+  const [editForm] = Form.useForm<CreateLabFormValues>()
 
   /** 首次挂载时读取本地登记的配置与评价 */
   useEffect(() => {
@@ -431,6 +437,69 @@ export default function LabManage(): JSX.Element {
       message.error(describeFailure(error, '新增机构', 'POST /quality/labs'))
     },
   })
+
+  /**
+   * 编辑机构。
+   *
+   * <p>只提交机构描述性字段 + 资质等级（{@code labLevel}，V11 已加列）。
+   * 刻意**不包含**合作状态 {@code status}：状态变更必须走准入审核
+   * （accredit / reject）这条有记录的链路，编辑表单里改状态等于绕开审计。</p>
+   */
+  const updateMutation = useMutation({
+    mutationFn: (params: { labId: string; payload: Partial<CreateQualityLabPayload> }) =>
+      updateQualityLab(params.labId, params.payload),
+    onSuccess: (_data, variables) => {
+      message.success(`机构资料已更新（机构 ID：${variables.labId}）`)
+      setEditTarget(null)
+      editForm.resetFields()
+      refreshList()
+    },
+    onError: (error: unknown) => {
+      message.error(describeFailure(error, '编辑机构', 'PUT /quality/labs/{labId}'))
+    },
+  })
+
+  /** 打开编辑弹窗：用行内真实数据回填，不做任何本地兜底 */
+  const openEditForm = useCallback(
+    (record: QualityLab): void => {
+      setEditTarget(record)
+      editForm.setFieldsValue({
+        labName: record.labName,
+        labCode: record.labCode,
+        labType: record.labType,
+        labLevel: (record.labLevel ?? undefined) as 1 | 2 | 3 | undefined,
+        qualificationNo: record.qualificationNo,
+        contactName: record.contactName,
+        contactPhone: record.contactPhone,
+        address: record.address,
+        accreditedScope: record.accreditedScope,
+      })
+    },
+    [editForm],
+  )
+
+  /** 提交编辑 */
+  const submitEdit = useCallback((): void => {
+    if (!editTarget) {
+      return
+    }
+    void editForm.validateFields().then((values: CreateLabFormValues) => {
+      updateMutation.mutate({
+        labId: editTarget.labId,
+        payload: {
+          labName: values.labName,
+          labCode: values.labCode,
+          labType: values.labType,
+          labLevel: values.labLevel,
+          qualificationNo: values.qualificationNo,
+          contactName: values.contactName,
+          contactPhone: values.contactPhone,
+          address: values.address,
+          accreditedScope: values.accreditedScope,
+        },
+      })
+    })
+  }, [editForm, editTarget, updateMutation])
 
   /** 表格数据源（只读后端；后端无数据即为空，不再用示例数据顶上） */
   const { rows, total } = useMemo(() => {
@@ -709,6 +778,14 @@ export default function LabManage(): JSX.Element {
       fixed: 'right',
       render: (_value, record) => (
         <Space size={4}>
+          <Button
+            type="link"
+            size="small"
+            icon={<EditOutlined />}
+            onClick={() => openEditForm(record)}
+          >
+            编辑
+          </Button>
           <Button
             type="link"
             size="small"
@@ -1313,6 +1390,88 @@ export default function LabManage(): JSX.Element {
               ]}
             />
           </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* 编辑机构弹窗（PUT /quality/labs/{labId}，真实落库；不含合作状态，状态变更走准入审核） */}
+      <Modal
+        title={editTarget ? `编辑检测机构：${editTarget.labName}` : '编辑检测机构'}
+        open={editTarget !== null}
+        onCancel={() => {
+          setEditTarget(null)
+          editForm.resetFields()
+        }}
+        onOk={submitEdit}
+        confirmLoading={updateMutation.isPending}
+        okText="保存"
+        cancelText="取消"
+        width={720}
+        destroyOnClose
+      >
+        <Form form={editForm} layout="vertical" preserve={false}>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="labName" label="机构名称" rules={[{ required: true, message: '请输入机构名称' }]}>
+                <Input placeholder="如 国家质检中心" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="labCode" label="机构编码" rules={[{ required: true, message: '请输入机构编码' }]}>
+                <Input placeholder="如 NAT-QC-001" />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="labType" label="机构类型" rules={[{ required: true, message: '请选择机构类型' }]}>
+                <Select
+                  options={[
+                    { label: '第三方', value: 'THIRD_PARTY' },
+                    { label: '政府', value: 'GOVERNMENT' },
+                    { label: '自建', value: 'SELF_BUILT' },
+                  ]}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="labLevel" label="资质等级" rules={[{ required: true, message: '请选择资质等级' }]}>
+                <Select
+                  options={[
+                    { label: '国家级', value: 1 },
+                    { label: '省级', value: 2 },
+                    { label: '市级', value: 3 },
+                  ]}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Form.Item name="qualificationNo" label="资质编号" rules={[{ required: true, message: '请输入资质编号' }]}>
+            <Input placeholder="如 CNAS-L2025-0018" />
+          </Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="contactName" label="联系人">
+                <Input placeholder="选填" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="contactPhone" label="联系电话">
+                <Input placeholder="选填" />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Form.Item name="address" label="机构地址">
+            <Input placeholder="选填" />
+          </Form.Item>
+          <Form.Item name="accreditedScope" label="认可检测范围">
+            <Input.TextArea rows={3} placeholder="如 农残、重金属、微生物" />
+          </Form.Item>
+          <Alert
+            type="info"
+            showIcon
+            message="合作状态不在此处修改"
+            description="机构合作状态只能通过「通过 / 驳回」准入审核变更（有审核记录可追溯），编辑表单不提供该字段，避免绕开审计。"
+          />
         </Form>
       </Modal>
     </Space>
