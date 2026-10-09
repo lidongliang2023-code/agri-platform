@@ -705,7 +705,12 @@ export default function AiAssistant(): JSX.Element {
                         <Space direction="vertical" size={2} style={{ width: '100%' }}>
                           <Space style={{ width: '100%', justifyContent: 'space-between' }}>
                             <Text strong ellipsis style={{ maxWidth: 170 }}>
-                              {item.title}
+                              {/*
+                                后端 /ai/assistant/sessions 实际返回的是「诊断记录摘要」
+                                （sessionId / plotId / diagnosisType / resultLabel / confidence / diagnosedAt），
+                                **没有 title 字段**。此处用服务端已有的 sessionId 兜底显示，不本地编造会话标题。
+                              */}
+                              {item.title || item.sessionId}
                             </Text>
                             <Space size={0}>
                               <Button
