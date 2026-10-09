@@ -130,11 +130,11 @@ public class MessageNotifyService {
      * @return 未读条数
      * @throws BusinessException 既未传入 receiverId、认证上下文也取不到用户标识时抛出（401）
      */
-    public long unreadCount(String receiverId) {
-        return messageNotifyMapper.selectCount(new LambdaQueryWrapper<MessageNotifyEntity>()
+    public int unreadCount(String receiverId) {
+        return Math.toIntExact(messageNotifyMapper.selectCount(new LambdaQueryWrapper<MessageNotifyEntity>()
                 .eq(MessageNotifyEntity::getReceiverId, resolveReceiverId(receiverId))
                 .eq(MessageNotifyEntity::getReadFlag, 0)
-                .eq(MessageNotifyEntity::getStatus, 1));
+                .eq(MessageNotifyEntity::getStatus, 1)));
     }
 
     /**

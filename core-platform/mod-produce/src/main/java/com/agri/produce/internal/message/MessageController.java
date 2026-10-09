@@ -79,11 +79,17 @@ public class MessageController {
      * 只有看响应体才能发现）。语义上该接口查的就是当前登录人的未读数，
      * 故缺省时由服务端从认证上下文取（见 {@link MessageNotifyService#unreadCount(String)}）。
      *
+     * <p><b>返回类型必须是 {@code Integer} 而不是 {@code Long}：</b>{@code JacksonConfig} 全局把
+     * {@code Long} 序列化为字符串（防 JS 大整数精度丢失），若返回 {@code Long} 则响应体是
+     * {@code "data":"0"}（<b>字符串</b>）；前端 {@code BasicLayout.tsx} 用 {@code unreadCount ?? 0}，
+     * 非空字符串不会被该空值合并兜底，Antd Badge 会把字符串 {@code "0"} 当成要显示的角标内容，
+     * 导致无论有没有未读消息都<b>常驻显示一个 "0" 红点</b>。计数用 Integer 即可输出真正的数字 0。
+     *
      * @param receiverId 可选；传入时按传入值查（保留兼容）
-     * @return 未读条数
+     * @return 未读条数（JSON 数字，非字符串）
      */
     @GetMapping("/unread-count")
-    public ApiResponse<Long> unreadCount(@RequestParam(required = false) String receiverId) {
+    public ApiResponse<Integer> unreadCount(@RequestParam(required = false) String receiverId) {
         return ApiResponse.ok(messageNotifyService.unreadCount(receiverId));
     }
 }
