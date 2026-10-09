@@ -243,19 +243,7 @@ export function formatRegion(province: string, city: string): string {
   return `${province}·${city}`
 }
 
-/** 原型 4.2 平台级示例规模（后端无数据时的统计口径） */
-export const SAMPLE_FARM_TOTALS = {
-  /** 总农场数 */
-  total: 3542,
-  /** 正常 */
-  normal: 2980,
-  /** 预警 */
-  warning: 412,
-  /** 异常 */
-  abnormal: 150,
-}
-
-/** 原型 P4 示例农场数据（后端无数据时降级展示，保证页面可交互） */
+/** 原型 P4 示例农场数据（仅农场列表示例口径使用；统计卡片已改为真实口径，不再使用示例规模） */
 export const SAMPLE_SUPERVISED_FARMS: SupervisedFarmRow[] = [
   {
     farmId: 'F202501',
@@ -332,29 +320,6 @@ export const SAMPLE_SUPERVISED_FARMS: SupervisedFarmRow[] = [
     lastCheckAt: '07-13',
     fromSample: true,
   },
-]
-
-/**
- * 原型 P5 / P1 示例地理分布数据。
- *
- * 后端 `/admin/farms/map` 仅返回省市区与面积（无经纬度），
- * 项目内也没有中国 GeoJSON，故这里提供一组带风险属性的示例点位用于降级展示。
- */
-export const SAMPLE_MAP_POINTS: SupervisionMapPoint[] = [
-  { farmId: 'F202501', farmName: '绿源1号农场', province: '河南省', city: '郑州市', district: '中牟县', areaTotal: 500, riskScore: 35, riskLevel: 'low', statusLabel: '正常' },
-  { farmId: 'F202506', farmName: '绿源蔬菜大棚', province: '河南省', city: '洛阳市', district: '偃师区', areaTotal: 120, riskScore: 45, riskLevel: 'low', statusLabel: '正常' },
-  { farmId: 'F202507', farmName: '中原生态农场', province: '河南省', city: '新乡市', district: '原阳县', areaTotal: 640, riskScore: 66, riskLevel: 'medium', statusLabel: '预警' },
-  { farmId: 'F202502', farmName: '丰达A区农场', province: '山东省', city: '济南市', district: '章丘区', areaTotal: 320, riskScore: 68, riskLevel: 'medium', statusLabel: '预警' },
-  { farmId: 'F202508', farmName: '丰达果蔬基地', province: '山东省', city: '潍坊市', district: '寿光市', areaTotal: 410, riskScore: 28, riskLevel: 'low', statusLabel: '正常' },
-  { farmId: 'F202503', farmName: '大地南基地', province: '黑龙江省', city: '哈尔滨市', district: '五常市', areaTotal: 800, riskScore: 72, riskLevel: 'medium', statusLabel: '预警' },
-  { farmId: 'F202509', farmName: '大地北基地', province: '黑龙江省', city: '齐齐哈尔市', district: '甘南县', areaTotal: 1250, riskScore: 52, riskLevel: 'low', statusLabel: '正常' },
-  { farmId: 'F202504', farmName: '鑫农实验农场', province: '广东省', city: '广州市', district: '从化区', areaTotal: 120, riskScore: 85, riskLevel: 'high', statusLabel: '异常' },
-  { farmId: 'F202510', farmName: '惠民种植园', province: '广东省', city: '惠州市', district: '博罗县', areaTotal: 260, riskScore: 83, riskLevel: 'high', statusLabel: '异常' },
-  { farmId: 'F202505', farmName: '惠民D区农场', province: '河北省', city: '石家庄市', district: '正定县', areaTotal: 260, riskScore: 25, riskLevel: 'low', statusLabel: '正常' },
-  { farmId: 'F202511', farmName: '江南水田农场', province: '江苏省', city: '南京市', district: '溧水区', areaTotal: 480, riskScore: 41, riskLevel: 'low', statusLabel: '正常' },
-  { farmId: 'F202512', farmName: '蜀中粮油农场', province: '四川省', city: '成都市', district: '崇州市', areaTotal: 720, riskScore: 58, riskLevel: 'low', statusLabel: '正常' },
-  { farmId: 'F202513', farmName: '江汉平原农场', province: '湖北省', city: '荆州市', district: '监利市', areaTotal: 960, riskScore: 88, riskLevel: 'high', statusLabel: '异常' },
-  { farmId: 'F202514', farmName: '浙北果蔬农场', province: '浙江省', city: '湖州市', district: '长兴县', areaTotal: 220, riskScore: 33, riskLevel: 'low', statusLabel: '正常' },
 ]
 
 /* ==================== 三、合规检查任务模型（PRD 6.2 #11） ==================== */
@@ -460,100 +425,6 @@ export function todayText(): string {
   return `${now.getFullYear()}-${month}-${day}`
 }
 
-/** 原型 P6 检查记录 / P17 投入品合规的检查任务示例数据 */
-export const SAMPLE_COMPLIANCE_TASKS: ComplianceTaskItem[] = [
-  {
-    checkId: 'CHK20250712001',
-    farmId: 'F202501',
-    farmName: '绿源1号农场',
-    checkType: '常规检查',
-    checkItem: '农药存放与记录完整性',
-    result: 1,
-    checkerName: '王检查',
-    checkedAt: '2025-07-12 10:30:00',
-    rectifyStatus: 'none',
-    source: 'local',
-  },
-  {
-    checkId: 'CHK20250615002',
-    farmId: 'F202501',
-    farmName: '绿源1号农场',
-    checkType: '记录缺失督导',
-    checkItem: '生产记录缺失率抽查',
-    result: 2,
-    problem: '5-6月农药使用记录缺失 6 条',
-    rectifyRequirement: '规范农药存放并补齐缺失记录',
-    rectifyDeadline: '2025-06-30',
-    checkerName: '李监管',
-    checkedAt: '2025-06-15 09:15:00',
-    rectifyStatus: 'rectified',
-    rectifyRemark: '已完成农药专柜存放改造，缺失记录已补齐',
-    rectifyAttachment: 'https://oss.agri.example/rectify/CHK20250615002.pdf',
-    rectifiedAt: '2025-06-26 16:20:00',
-    source: 'local',
-  },
-  {
-    checkId: 'CHK20250520003',
-    farmId: 'F202501',
-    farmName: '绿源1号农场',
-    checkType: '禁限用农资抽查',
-    checkItem: 'XX农药（禁限用清单）使用核查',
-    result: 3,
-    problem: '检出国家禁用农药 XX农药，库存 3 件',
-    rectifyRequirement: '立即停用XX农药并封存库存',
-    rectifyDeadline: '2025-06-05',
-    checkerName: '王检查',
-    checkedAt: '2025-05-20 14:05:00',
-    rectifyStatus: 'rectified',
-    rectifyRemark: '已封存库存并交由第三方销毁，附处置单',
-    rectifyAttachment: 'https://oss.agri.example/rectify/CHK20250520003.pdf',
-    rectifiedAt: '2025-05-28 11:00:00',
-    source: 'local',
-  },
-  {
-    checkId: 'CHK20250710004',
-    farmId: 'F202502',
-    farmName: '丰达A区农场',
-    checkType: '禁限用农资抽查',
-    checkItem: '草甘膦用量合规性抽查',
-    result: 2,
-    problem: '草甘膦单位面积用量超标准 24%',
-    rectifyRequirement: '限期提交用药整改说明并接受复检',
-    rectifyDeadline: '2025-12-31',
-    checkerName: '赵监管',
-    checkedAt: '2025-07-10 15:40:00',
-    rectifyStatus: 'processing',
-    source: 'local',
-  },
-  {
-    checkId: 'CHK20250705005',
-    farmId: 'F202504',
-    farmName: '鑫农实验农场',
-    checkType: '禁限用农资抽查',
-    checkItem: '高毒农药残留抽检',
-    result: 3,
-    problem: '草莓批次农残检出超标（吡虫啉 1.8mg/kg）',
-    rectifyRequirement: '批次封存停用，7 日内提交溯源整改报告',
-    rectifyDeadline: '2025-07-20',
-    checkerName: '李监管',
-    checkedAt: '2025-07-05 08:42:00',
-    rectifyStatus: 'pending',
-    source: 'local',
-  },
-  {
-    checkId: 'CHK20250713006',
-    farmId: 'F202505',
-    farmName: '惠民D区农场',
-    checkType: '记录缺失督导',
-    checkItem: '小麦施肥记录完整性',
-    result: 1,
-    checkerName: '王检查',
-    checkedAt: '2025-07-13 11:20:00',
-    rectifyStatus: 'none',
-    source: 'local',
-  },
-]
-
 /* ==================== 四、合规检查任务存储（远端优先 + 本地兜底） ==================== */
 
 /**
@@ -650,7 +521,9 @@ export function getComplianceTasks(): ComplianceTaskItem[] {
   } catch {
     // 本地存储不可用（隐私模式 / 配额超限）时降级为内存模式
   }
-  cachedTasks = [...SAMPLE_COMPLIANCE_TASKS]
+  // 初始缓存为空数组：读侧已改为远端优先，绝不能在远端数据回来之前
+  // 先塞一批原型示例任务冒充真实台账（原实现初始化为 SAMPLE_COMPLIANCE_TASKS）。
+  cachedTasks = []
   persistComplianceTasks()
   return cachedTasks
 }

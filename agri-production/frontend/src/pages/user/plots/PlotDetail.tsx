@@ -84,16 +84,6 @@ function scoreLevelText(score: number): string {
   return '偏弱'
 }
 
-/** 原型 P5 的 AI 遥感示例值（遥感数据源未接入时使用） */
-const SAMPLE_REMOTE_SENSING = {
-  /** NDVI 指数 */
-  ndvi: 0.78,
-  /** 异常区域描述 */
-  abnormalArea: '东北角约 3 亩偏黄',
-  /** 影像更新时间 */
-  updatedAt: '2026-06-03',
-}
-
 /** 环境指标卡片定义 */
 interface EnvMetric {
   /** 唯一键 */
@@ -314,12 +304,15 @@ export default function PlotDetail(): JSX.Element {
     )[list.length - 1]
   }, [growthQuery.data])
 
-  /** 长势评分（真实：由 growthLevel 折算；缺省回落到 85 示例分） */
-  const vigorScore = useMemo(() => {
+  /**
+   * 长势评分：由真实 growthLevel 折算；无长势记录时为 null，页面显示「未接入」，
+   * 不再回落到示例分 80（那个数字会被当成该地块的真实长势分）。
+   */
+  const vigorScore = useMemo<number | null>(() => {
     if (latestGrowth?.growthLevel) {
-      return GROWTH_LEVEL_SCORE_MAP[latestGrowth.growthLevel] ?? 80
+      return GROWTH_LEVEL_SCORE_MAP[latestGrowth.growthLevel] ?? null
     }
-    return 80
+    return null
   }, [latestGrowth])
 
   /** 是否有真实长势数据 */
@@ -558,10 +551,11 @@ export default function PlotDetail(): JSX.Element {
         >
           {!hasGrowthData && (
             <Alert
-              type="info"
+              type="warning"
               showIcon
               style={{ marginBottom: 12 }}
-              message="当前尚无长势记录，NDVI 与异常区域展示原型示例值（遥感影像源接入后自动切换）"
+              message="遥感影像源未接入：NDVI、异常区域、影像更新时间均无真实数据，显示「未接入」"
+              description="后端暂无遥感/NDVI 数据源。原实现会显示原型示例值（NDVI 0.78、东北角约 3 亩偏黄、2026-06-03），可能被误判为该地块的真实长势，已改为显式标注未接入。"
             />
           )}
           <Row gutter={16}>
@@ -582,43 +576,72 @@ export default function PlotDetail(): JSX.Element {
                     🛰️ 遥感影像
                   </Typography.Text>
                   <Typography.Text type="secondary">
-                    影像更新：{latestGrowth?.recordDate ?? SAMPLE_REMOTE_SENSING.updatedAt}
+                    影像更新：{latestGrowth?.recordDate ?? '未接入'}
                   </Typography.Text>
                 </Space>
               </div>
             </Col>
             <Col xs={24} md={7}>
-              <ReactECharts
-                option={buildGaugeOption(vigorScore)}
-                style={{ height: 220 }}
-                notMerge
-              />
+              {vigorScore === null ? (
+                <div
+                  style={{
+                    height: 220,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Typography.Text type="secondary">长势评分 未接入</Typography.Text>
+                </div>
+              ) : (
+                <ReactECharts
+                  option={buildGaugeOption(vigorScore)}
+                  style={{ height: 220 }}
+                  notMerge
+                />
+              )}
             </Col>
             <Col xs={24} md={7}>
               <Space direction="vertical" size={12} style={{ width: '100%' }}>
                 <Card size="small" title="长势评估">
-                  <Typography.Text strong style={{ fontSize: 20 }}>
-                    {vigorScore} 分
-                  </Typography.Text>
-                  <Divider type="vertical" />
-                  <Tag color={vigorScore >= 75 ? 'green' : 'orange'}>
-                    {scoreLevelText(vigorScore)}
-                  </Tag>
+                  {vigorScore === null ? (
+                    <Space size={6} wrap>
+                      <Typography.Text strong style={{ fontSize: 20 }}>
+                        未接入
+                      </Typography.Text>
+                      <Tag color="orange">无长势记录</Tag>
+                    </Space>
+                  ) : (
+                    <>
+                      <Typography.Text strong style={{ fontSize: 20 }}>
+                        {vigorScore} 分
+                      </Typography.Text>
+                      <Divider type="vertical" />
+                      <Tag color={vigorScore >= 75 ? 'green' : 'orange'}>
+                        {scoreLevelText(vigorScore)}
+                      </Tag>
+                    </>
+                  )}
                 </Card>
                 <Card size="small" title="NDVI 指数">
-                  <Space size={6}>
+                  {/*
+                    后端生长记录（GrowthRecord）根本没有 NDVI 列，
+                    只有株高 / 叶面积指数 / 长势评级，因此 NDVI 一律显示「未接入」，
+                    不拿叶面积指数顶替，也不再显示原型示例的 0.78。
+                  */}
+                  <Space size={6} wrap>
                     <Typography.Text strong style={{ fontSize: 20 }}>
-                      {SAMPLE_REMOTE_SENSING.ndvi}
+                      未接入
                     </Typography.Text>
-                    {!hasGrowthData && <Tag>示例</Tag>}
+                    <Tag color="orange">遥感源未接入</Tag>
                   </Space>
                 </Card>
                 <Card size="small" title="异常区域">
-                  <Space size={6}>
-                    <Typography.Text type="warning">
-                      {SAMPLE_REMOTE_SENSING.abnormalArea}
+                  <Space size={6} wrap>
+                    <Typography.Text type="warning" style={{ fontSize: 20 }}>
+                      未接入
                     </Typography.Text>
-                    {!hasGrowthData && <Tag>示例</Tag>}
+                    <Tag color="orange">遥感源未接入</Tag>
                   </Space>
                 </Card>
               </Space>

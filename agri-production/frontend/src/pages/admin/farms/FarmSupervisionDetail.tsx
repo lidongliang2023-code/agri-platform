@@ -7,7 +7,6 @@
  */
 import { useMemo, useState } from 'react'
 import {
-  Alert,
   App,
   Button,
   Card,
@@ -47,7 +46,6 @@ import {
   CHECK_RESULT_META,
   RECTIFY_STATUS_META,
   RISK_BAND_META,
-  SAMPLE_SUPERVISED_FARMS,
   buildRiskInfo,
   exportCsv,
   formatDate,
@@ -83,8 +81,6 @@ interface FarmDetailModel {
   managerName: string
   /** 负责人电话 */
   managerPhone: string
-  /** 是否来自原型示例 */
-  fromSample: boolean
 }
 
 /** 地块状态文案映射（原型 4.1 生长阶段口径） */
@@ -267,68 +263,67 @@ export default function FarmSupervisionDetail(): JSX.Element {
     retry: false,
   })
 
-  /** 农场详情模型：后端优先，缺省降级为原型示例 */
-  const detail = useMemo<FarmDetailModel>(() => {
+  /**
+   * 农场详情模型：只认后端真实档案。
+   *
+   * 纪律：后端 `/admin/farms` 查不到该农场时**绝不**回落到原型示例。
+   * 原实现在无命中时会拿 `SAMPLE_SUPERVISED_FARMS[0]`（一个完全无关的示例农场）冒充，
+   * 运营据此下发整改、判风险等级会造成实际后果。查不到就返回 null，
+   * 由页面显式提示「未找到该农场」。
+   */
+  const detail = useMemo<FarmDetailModel | null>(() => {
     const farm = farmQuery.data
-    if (farm) {
-      return {
-        farmId: String(farm.farmId),
-        farmCode: farm.farmCode || String(farm.farmId),
-        farmName: farm.farmName,
-        tenantName: farm.tenantId ? `租户 ${farm.tenantId}` : '—',
-        address: farm.address || `${farm.province || ''}${farm.city || ''}${farm.district || ''}`,
-        areaTotal: Number(farm.areaTotal) || 0,
-        crops: '—',
-        managerName: farm.managerName || '—',
-        managerPhone: farm.managerPhone || '',
-        fromSample: false,
-      }
+    if (!farm) {
+      return null
     }
-    const sampleHit = SAMPLE_SUPERVISED_FARMS.find((item) => String(item.farmId) === String(farmId))
-    const base = sampleHit ?? SAMPLE_SUPERVISED_FARMS[0]
     return {
-      farmId: String(farmId ?? ''),
-      farmCode: sampleHit ? base.farmCode : String(farmId ?? ''),
-      farmName: sampleHit ? base.farmName : `农场 ${farmId ?? ''}`,
-      tenantName: base.tenantName,
-      address: `${base.province}${base.city}XX县`,
-      areaTotal: base.areaTotal,
-      crops: base.crops,
-      managerName: '张三',
-      managerPhone: '13812345678',
-      fromSample: true,
+      farmId: String(farm.farmId),
+      farmCode: farm.farmCode || String(farm.farmId),
+      farmName: farm.farmName,
+      tenantName: farm.tenantId ? `租户 ${farm.tenantId}` : '—',
+      address: farm.address || `${farm.province || ''}${farm.city || ''}${farm.district || ''}`,
+      areaTotal: Number(farm.areaTotal) || 0,
+      crops: '—',
+      managerName: farm.managerName || '—',
+      managerPhone: farm.managerPhone || '',
     }
-  }, [farmQuery.data, farmId])
+  }, [farmQuery.data])
 
   /** 合规画像 */
   const profile: FarmComplianceProfile | undefined = profileQuery.data ?? undefined
 
-  /** 风险评分与等级（有画像或真实档案时派生，否则回退到示例行评分） */
-  const risk = useMemo<{ riskScore: number; riskLevel: RiskLevelKey }>(() => {
-    const disabled = farmQuery.data ? Number(farmQuery.data.status) === 0 : false
-    if (profile || farmQuery.data) {
-      return buildRiskInfo(String(farmId ?? ''), profile, disabled)
+  /**
+   * 风险评分与等级：仅在拿到真实农场档案时派生。
+   * 档案都没有时不做任何派生（没有输入就没有输出），由页面显示「未找到」。
+   */
+  const risk = useMemo<{ riskScore: number; riskLevel: RiskLevelKey } | null>(() => {
+    const farm = farmQuery.data
+    if (!farm) {
+      return null
     }
-    const sampleHit = SAMPLE_SUPERVISED_FARMS.find((item) => String(item.farmId) === String(farmId))
-    return {
-      riskScore: sampleHit?.riskScore ?? SAMPLE_SUPERVISED_FARMS[0].riskScore,
-      riskLevel: sampleHit?.riskLevel ?? SAMPLE_SUPERVISED_FARMS[0].riskLevel,
-    }
-  }, [profile, farmQuery.data, farmId])
+    const disabled = Number(farm.status) === 0
+    return buildRiskInfo(String(farm.farmId), profile, disabled)
+  }, [profile, farmQuery.data])
 
-  /** 当前合规率：有认证时按未过期占比计算，否则取原型示例 95.2% */
-  const currentRate = useMemo<number>(() => {
+  /**
+   * 当前合规率：仅在有真实认证数据时计算；无认证数据返回 null 由页面显示「未接入」，
+   * 不再回落到原型示例的 95.2%。
+   */
+  const currentRate = useMemo<number | null>(() => {
     if (profile && profile.certCount > 0) {
       return Number(
         (((profile.certCount - profile.certExpired) / profile.certCount) * 100).toFixed(1),
       )
     }
-    return 95.2
+    return null
   }, [profile])
 
-  /** 合规率趋势序列 */
+  /** 合规率趋势序列（无真实合规率时不生成序列，避免画出示例曲线） */
   const complianceSeries = useMemo(
-    () => buildComplianceSeries(currentRate, String(farmId ?? '')),
+    () =>
+      currentRate === null
+        ? { labels: [] as string[], values: [] as number[] }
+        : buildComplianceSeries(currentRate, String(farmId ?? '')),
     [currentRate, farmId],
   )
 
@@ -420,18 +415,18 @@ export default function FarmSupervisionDetail(): JSX.Element {
     },
   })
 
-  /** 下发整改目标摘要 */
+  /** 下发整改目标摘要（未找到农场时不会渲染弹窗，此值不参与展示） */
   const rectifySummary: RectifyTargetSummary = {
     farmId: String(farmId ?? ''),
-    farmCode: detail.farmCode,
-    farmName: detail.farmName,
-    tenantName: detail.tenantName,
-    riskScore: risk.riskScore,
+    farmCode: detail?.farmCode ?? '',
+    farmName: detail?.farmName ?? '',
+    tenantName: detail?.tenantName ?? '',
+    riskScore: risk?.riskScore ?? 0,
   }
 
   /** 导出投入品使用与合规记录 */
   const handleExport = (): void => {
-    exportCsv<InputUsage>(`农场监管档案_${detail.farmName}`, usages, [
+    exportCsv<InputUsage>(`农场监管档案_${detail?.farmName ?? ''}`, usages, [
       { title: '日期', render: (row) => formatDate(row.usedAt) },
       { title: '品名', render: (row) => row.inputName ?? '—' },
       { title: '类型', render: (row) => guessInputCategory(row.inputName ?? '') },
@@ -439,7 +434,7 @@ export default function FarmSupervisionDetail(): JSX.Element {
       { title: '地块', render: (row) => row.plotName ?? '—' },
       { title: '合规', render: (row) => (judgeUsage(row).pass ? '合规' : '超标') },
     ])
-    message.success(`已导出「${detail.farmName}」投入品使用与合规记录`)
+    message.success(`已导出「${detail?.farmName ?? ''}」投入品使用与合规记录`)
   }
 
   /** 作物状态列 */
@@ -498,7 +493,7 @@ export default function FarmSupervisionDetail(): JSX.Element {
   const complianceColumns: ColumnsType<InputUsage> = [
     { title: '记录编号', dataIndex: 'usageId', width: 170 },
     { title: '日期', dataIndex: 'usedAt', width: 110, render: (value: string) => formatDate(value) },
-    { title: '农场', width: 140, render: () => detail.farmName },
+    { title: '农场', width: 140, render: () => detail?.farmName ?? '—' },
     { title: '投入品', dataIndex: 'inputName', width: 140, render: (value?: string) => value || '—' },
     { title: '类型', width: 100, render: (_value: unknown, row) => guessInputCategory(row.inputName ?? '') },
     {
@@ -623,8 +618,54 @@ export default function FarmSupervisionDetail(): JSX.Element {
     },
   ]
 
-  /** 合规率环比（用于头卡趋势文案） */
-  const rateDelta = Number((complianceSeries.values[5] - complianceSeries.values[4]).toFixed(1))
+  /** 合规率环比（用于头卡趋势文案；无真实合规率时为 null，不展示趋势） */
+  const rateDelta: number | null =
+    currentRate === null
+      ? null
+      : Number((complianceSeries.values[5] - complianceSeries.values[4]).toFixed(1))
+
+  /*
+   * 后端查不到该农场：显式提示「未找到」，绝不拿原型示例档案冒充。
+   * 放在所有 Hook 之后做提前返回，后续 JSX 中 detail / risk 均为非空。
+   */
+  if (!detail || !risk) {
+    return (
+      <div>
+        <Row justify="space-between" align="middle" style={{ marginBottom: 12 }}>
+          <Col>
+            <Title level={4} style={{ margin: 0 }}>
+              农场详情
+            </Title>
+            <Text type="secondary">首页 &gt; 生产管理 &gt; 农场监管 &gt; 农场详情</Text>
+          </Col>
+          <Col>
+            <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/admin/production/farms')}>
+              返回农场列表
+            </Button>
+          </Col>
+        </Row>
+        <Card size="small">
+          {farmQuery.isLoading ? (
+            <Skeleton active paragraph={{ rows: 3 }} />
+          ) : (
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={
+                <Space direction="vertical" size={4}>
+                  <Text strong>未找到该农场（编号 {farmId ?? '—'}）</Text>
+                  <Text type="secondary">
+                    后端 GET /admin/farms 未返回该农场档案。此处不再用原型示例数据冒充
+                    （原实现会拿示例农场顶替，可能被误当作真实档案用于下发整改与风险判定）。
+                  </Text>
+                  <Text type="secondary">请确认农场编号是否正确、该农场是否已录入。</Text>
+                </Space>
+              }
+            />
+          )}
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div>
@@ -698,12 +739,18 @@ export default function FarmSupervisionDetail(): JSX.Element {
                       <Text type="secondary"> /100</Text>
                     </div>
                   </div>
-                  <Tooltip title="趋势由近 6 个月合规率序列推导（后端暂未提供评分时间序列）">
-                    <Tag color={RISK_BAND_META[risk.riskLevel].tagColor}>
-                      {RISK_BAND_META[risk.riskLevel].label} {rateDelta <= 0 ? '↓' : '↑'}
-                      {Math.abs(rateDelta)}分（{rateDelta <= 0 ? '改善' : '恶化'}）
-                    </Tag>
-                  </Tooltip>
+                  {rateDelta === null ? (
+                    <Tooltip title="后端暂无认证数据，无法计算合规率环比">
+                      <Tag>环比 未接入</Tag>
+                    </Tooltip>
+                  ) : (
+                    <Tooltip title="趋势由近 6 个月合规率序列推导（后端暂未提供评分时间序列）">
+                      <Tag color={RISK_BAND_META[risk.riskLevel].tagColor}>
+                        {RISK_BAND_META[risk.riskLevel].label} {rateDelta <= 0 ? '↓' : '↑'}
+                        {Math.abs(rateDelta)}分（{rateDelta <= 0 ? '改善' : '恶化'}）
+                      </Tag>
+                    </Tooltip>
+                  )}
                 </Space>
                 <div>
                   <Text type="secondary" style={{ fontSize: 12 }}>
@@ -712,15 +759,6 @@ export default function FarmSupervisionDetail(): JSX.Element {
                 </div>
               </Col>
             </Row>
-            {detail.fromSample && (
-              <Alert
-                style={{ marginTop: 8 }}
-                type="info"
-                showIcon
-                message="当前展示原型示例档案（后端 /admin/farms 未返回该农场）"
-                description="Tab 内地块、投入品、告警数据仍取自真实接口，接口无数据时显示空态。"
-              />
-            )}
           </div>
         )}
       </Card>
@@ -763,25 +801,38 @@ export default function FarmSupervisionDetail(): JSX.Element {
                     </Col>
                     <Col xs={12} md={8} lg={4}>
                       <Card size="small" styles={{ body: { padding: 12 } }}>
-                        <Statistic title="当前合规率" value={currentRate} suffix="%" precision={1} />
-                        <Tag color={currentRate >= 80 ? 'green' : currentRate >= 60 ? 'orange' : 'red'}>
-                          {currentRate >= 80 ? '✅ 达标' : currentRate >= 60 ? '⚠ 待提升' : '❌ 不足'}
-                        </Tag>
+                        {currentRate === null ? (
+                          <>
+                            <Statistic title="当前合规率" value="未接入" />
+                            <Text type="secondary" style={{ fontSize: 12 }}>
+                              无认证数据，不再显示示例值
+                            </Text>
+                          </>
+                        ) : (
+                          <>
+                            <Statistic title="当前合规率" value={currentRate} suffix="%" precision={1} />
+                            <Tag
+                              color={currentRate >= 80 ? 'green' : currentRate >= 60 ? 'orange' : 'red'}
+                            >
+                              {currentRate >= 80 ? '✅ 达标' : currentRate >= 60 ? '⚠ 待提升' : '❌ 不足'}
+                            </Tag>
+                          </>
+                        )}
                       </Card>
                     </Col>
                     <Col xs={12} md={8} lg={4}>
                       <Card size="small" styles={{ body: { padding: 12 } }}>
-                        <Statistic title="最近产量" value={580} suffix="吨" />
+                        <Statistic title="最近产量" value="未接入" />
                         <Text type="secondary" style={{ fontSize: 12 }}>
-                          上一季水稻
+                          后端暂无产量统计端点（原显示 580 吨为示例值）
                         </Text>
                       </Card>
                     </Col>
                     <Col xs={12} md={8} lg={4}>
                       <Card size="small" styles={{ body: { padding: 12 } }}>
-                        <Statistic title="任务完成率" value={92.5} suffix="%" precision={1} />
+                        <Statistic title="任务完成率" value="未接入" />
                         <Text type="secondary" style={{ fontSize: 12 }}>
-                          原型示例口径
+                          后端暂无任务完成率端点（原显示 92.5% 为示例值）
                         </Text>
                       </Card>
                     </Col>
@@ -846,11 +897,18 @@ export default function FarmSupervisionDetail(): JSX.Element {
                         title="合规率趋势"
                         extra={
                           <Tooltip title="后端暂未提供合规率时间序列：末点取自真实认证数据，历史值为示例口径">
-                            <Text type="secondary">示例口径</Text>
+                            <Text type="secondary">历史点位为示例口径</Text>
                           </Tooltip>
                         }
                       >
-                        <ReactECharts option={complianceOption} style={{ height: 260 }} notMerge />
+                        {currentRate === null ? (
+                          <Empty
+                            image={Empty.PRESENTED_IMAGE_SIMPLE}
+                            description="未接入：无认证数据，无法计算合规率"
+                          />
+                        ) : (
+                          <ReactECharts option={complianceOption} style={{ height: 260 }} notMerge />
+                        )}
                       </Card>
                     </Col>
                   </Row>

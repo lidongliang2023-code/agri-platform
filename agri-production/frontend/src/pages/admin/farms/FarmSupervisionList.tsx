@@ -38,7 +38,6 @@ import type { FarmComplianceProfile } from '@/api/admin/farms'
 import type { Farm } from '@/types'
 import {
   RISK_BAND_META,
-  SAMPLE_FARM_TOTALS,
   SAMPLE_SUPERVISED_FARMS,
   buildRiskInfo,
   exportCsv,
@@ -225,16 +224,14 @@ export default function FarmSupervisionList(): JSX.Element {
     return Array.from(set)
   }, [remoteRows])
 
-  /** 统计卡片数据 */
+  /**
+   * 统计卡片数据：只认真实统计口径。
+   *
+   * 原实现在后端无数据时直接硬编码原型 4.2 的平台级示例（3,542 / 2,980 / 412 / 150），
+   * 是「列表可能是真的、但上面的统计永远是假的」。已移除该分支：
+   * 接口不可用 → 卡片整体显示「未接入」；接口可用 → 全部按真实数据派生（含真实的 0）。
+   */
   const statItems = useMemo<StatItem[]>(() => {
-    if (usingSample) {
-      return [
-        { key: 'total', title: '总农场数', value: SAMPLE_FARM_TOTALS.total, color: '#1677ff' },
-        { key: 'normal', title: '正常', value: SAMPLE_FARM_TOTALS.normal, color: '#52c41a' },
-        { key: 'warning', title: '预警', value: SAMPLE_FARM_TOTALS.warning, color: '#fa8c16' },
-        { key: 'abnormal', title: '异常', value: SAMPLE_FARM_TOTALS.abnormal, color: '#ff4d4f' },
-      ]
-    }
     let normal = 0
     let warning = 0
     let abnormal = 0
@@ -384,6 +381,9 @@ export default function FarmSupervisionList(): JSX.Element {
     message.success(`已导出 ${filteredRows.length} 条农场监管记录`)
   }
 
+  /** 统计口径是否不可用（接口报错时不做任何派生，卡片整体显示「未接入」） */
+  const statsUnavailable: boolean = farmsQuery.isError || profilesQuery.isError
+
   /** 是否启用了后端暂不支持的筛选项 */
   const hasUnsupportedFilter: boolean =
     !usingSample && Boolean(filters.tenantName || filters.province || filters.riskLevel)
@@ -420,20 +420,34 @@ export default function FarmSupervisionList(): JSX.Element {
       </Row>
 
       {/* 统计卡（原型 P4） */}
-      <Row gutter={[12, 12]}>
-        {statItems.map((item) => (
-          <Col key={item.key} xs={12} sm={12} md={6}>
-            <Card size="small" styles={{ body: { padding: 16 } }}>
-              <Text type="secondary">{item.title}</Text>
-              <div>
-                <Text strong style={{ fontSize: 24, color: item.color }}>
-                  {item.value.toLocaleString('zh-CN')}
-                </Text>
-              </div>
-            </Card>
-          </Col>
-        ))}
-      </Row>
+      {statsUnavailable ? (
+        <Card size="small" styles={{ body: { padding: 16 } }}>
+          <Space direction="vertical" size={4} style={{ width: '100%' }}>
+            <Text strong style={{ fontSize: 16 }}>
+              平台级农场统计：未接入
+            </Text>
+            <Text type="secondary">
+              后端暂无平台级农场概览统计端点，且当前 /admin/farms 或合规画像接口不可用，
+              无法派生真实统计。此处不再显示原型示例数字（原 3,542 / 2,980 / 412 / 150 均为示例口径）。
+            </Text>
+          </Space>
+        </Card>
+      ) : (
+        <Row gutter={[12, 12]}>
+          {statItems.map((item) => (
+            <Col key={item.key} xs={12} sm={12} md={6}>
+              <Card size="small" styles={{ body: { padding: 16 } }}>
+                <Text type="secondary">{item.title}</Text>
+                <div>
+                  <Text strong style={{ fontSize: 24, color: item.color }}>
+                    {item.value.toLocaleString('zh-CN')}
+                  </Text>
+                </div>
+              </Card>
+            </Col>
+          ))}
+        </Row>
+      )}
 
       {/* 筛选器（原型 P4 Filter Bar） */}
       <Card size="small" style={{ marginTop: 12 }} styles={{ body: { paddingBottom: 0 } }}>
@@ -548,7 +562,7 @@ export default function FarmSupervisionList(): JSX.Element {
           type="error"
           showIcon
           message="农场列表加载失败"
-          description="接口暂不可用，已切换为原型示例口径展示，筛选与整改下发仍可正常使用。"
+          description="接口暂不可用。统计卡片已显示「未接入」，列表下方为原型示例口径（非真实农场），请勿据此下发整改。"
           action={
             <Button size="small" onClick={handleRefresh}>
               重试
@@ -561,8 +575,8 @@ export default function FarmSupervisionList(): JSX.Element {
           style={{ marginTop: 12 }}
           type="info"
           showIcon
-          message="当前为原型示例口径（后端农场列表暂未返回数据）"
-          description="统计卡片采用原型 4.2 平台级口径（3,542 / 2,980 / 412 / 150），列表与操作功能均可正常使用。"
+          message="当前列表为原型示例口径（后端农场列表返回 0 条）——不是真实农场"
+          description="统计卡片已改为真实口径（当前为 0）。列表中的 5 条为原型 P4 示例数据，请勿据此下发整改；后端录入农场档案后自动切换。"
         />
       )}
       {hasUnsupportedFilter && (

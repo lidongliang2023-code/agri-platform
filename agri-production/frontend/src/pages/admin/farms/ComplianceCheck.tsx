@@ -53,7 +53,6 @@ import {
   CHECK_RESULT_META,
   CHECK_TYPE_OPTIONS,
   RECTIFY_STATUS_META,
-  SAMPLE_SUPERVISED_FARMS,
   addComplianceTask,
   exportCsv,
   formatDate,
@@ -176,31 +175,23 @@ export default function ComplianceCheck(): JSX.Element {
     retry: false,
   })
 
-  /** 农场下拉选项：后端优先，无数据降级为原型示例农场 */
+  /**
+   * 农场下拉选项：只取后端 GET /admin/farms 的真实农场档案。
+   * 原实现在后端无数据时用示例农场顶上，会让运营把检查登记到一个不存在的农场上。
+   */
   const farmOptions = useMemo<Array<{ label: string; value: string }>>(() => {
     const remote = farmsQuery.data?.list ?? []
-    if (remote.length > 0) {
-      return remote.map((farm) => ({
-        label: `${farm.farmName}（${farm.farmCode || farm.farmId}）`,
-        value: String(farm.farmId),
-      }))
-    }
-    return SAMPLE_SUPERVISED_FARMS.map((row) => ({
-      label: `${row.farmName}（${row.farmCode}）`,
-      value: String(row.farmId),
+    return remote.map((farm) => ({
+      label: `${farm.farmName}（${farm.farmCode || farm.farmId}）`,
+      value: String(farm.farmId),
     }))
   }, [farmsQuery.data])
 
-  /** 农场名称映射 */
+  /** 农场名称映射（真实档案优先，任务自带的农场名兜底） */
   const farmNameMap = useMemo<Map<string, string>>(() => {
     const map = new Map<string, string>()
     const remote = farmsQuery.data?.list ?? []
     remote.forEach((farm) => map.set(String(farm.farmId), farm.farmName))
-    SAMPLE_SUPERVISED_FARMS.forEach((row) => {
-      if (!map.has(String(row.farmId))) {
-        map.set(String(row.farmId), row.farmName)
-      }
-    })
     tasks.forEach((task) => {
       if (!map.has(String(task.farmId))) {
         map.set(String(task.farmId), task.farmName)
@@ -683,6 +674,16 @@ export default function ComplianceCheck(): JSX.Element {
             `当前 ${localOnlyCount} 条任务仅存在于本浏览器；此时的新建与修改也只会写入本地，` +
             '不会同步到服务端、其他账号也看不到。接口恢复后刷新页面即自动切回服务端数据。'
           }
+        />
+      )}
+
+      {!farmsQuery.isLoading && farmOptions.length === 0 && (
+        <Alert
+          style={{ marginTop: 12 }}
+          type="warning"
+          showIcon
+          message="后端未返回任何农场档案，当前无法发起抽查"
+          description="GET /admin/farms 返回 0 条。此处不再用示例农场填充下拉框（会把检查登记到并不存在的农场上），请先确认农场档案已录入。"
         />
       )}
 

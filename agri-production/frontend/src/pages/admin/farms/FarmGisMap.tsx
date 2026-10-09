@@ -44,7 +44,6 @@ import {
 import type { FarmComplianceProfile } from '@/api/admin/farms'
 import {
   RISK_BAND_META,
-  SAMPLE_MAP_POINTS,
   buildRiskInfo,
   exportCsv,
   formatRegion,
@@ -186,7 +185,9 @@ export default function FarmGisMap(): JSX.Element {
         }
       })
     }
-    return SAMPLE_MAP_POINTS
+    // 后端 /admin/farms/map 无数据时返回空数组：原实现会用 SAMPLE_MAP_POINTS
+    // （14 条虚构农场分布）冒充，运营会据此判断区域风险。没有数据就是没有数据。
+    return []
   }, [mapQuery.data, profileMap])
 
   /** 是否使用原型示例点位 */
@@ -657,10 +658,10 @@ export default function FarmGisMap(): JSX.Element {
             {usingSample && (
               <Alert
                 style={{ marginBottom: 8 }}
-                type="info"
+                type="warning"
                 showIcon
-                message="当前展示原型示例分布数据（后端 /admin/farms/map 暂未返回数据）"
-                description="筛选、框选、图层切换与导出功能均可正常使用。"
+                message="地理分布：未接入 —— 后端 /admin/farms/map 当前没有返回任何农场"
+                description="原实现会用 14 条虚构的示例农场分布顶上，运营据此判断区域风险会得出错误结论，已移除。后端补录农场档案（含省市县）后此页自动出现真实分布。"
               />
             )}
 
