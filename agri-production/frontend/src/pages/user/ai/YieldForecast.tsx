@@ -50,7 +50,7 @@ import useFarmStore from '@/store/farm'
 import { createYieldForecast, listForecastAccuracy, listYieldForecasts } from '@/api/ai'
 import { listPlots } from '@/api/plots'
 import { formatNumber } from '@/utils/production-adapter'
-import type { Plot, YieldForecast } from '@/types'
+import type { Plot, YieldForecast, YieldForecastSummary } from '@/types'
 import type { ForecastAccuracyPoint } from '@/api/ai'
 
 const { Text } = Typography
@@ -153,7 +153,29 @@ export default function YieldForecast(): JSX.Element {
   /** 地块列表已加载完成且为空 */
   const plotsEmpty: boolean = !plotQuery.isLoading && plotItems.length === 0
 
-  const remoteHistory: YieldForecast[] = historyQuery.data?.list ?? []
+  /**
+   * 服务端历史响应（可能是分页列表，也可能是单点结果 Map）
+   *
+   * ⚠️ 键名/形状陷阱：后端 `GET /ai/yield-forecast` 实际返回
+   * `{plotId, sampleCount, forecastYield, unit}`（见 YieldForecastSummary），
+   * 不是 `{records, total, page, size}`。前端按分页读 `list` 会恒为 undefined，
+   * 此时**不能**提示「服务端无数据」——服务端其实返回了 200 + 业务码 0，只是形状不匹配。
+   */
+  const rawHistory = historyQuery.data as unknown as
+    | (PageResultLike & YieldForecastSummary)
+    | undefined
+
+  /** 服务端确实返回了数据，但形状不是分页列表（键名不匹配） */
+  const historyShapeMismatch: boolean =
+    !historyQuery.isLoading &&
+    !historyQuery.isError &&
+    rawHistory !== undefined &&
+    !Array.isArray(rawHistory.list) &&
+    typeof rawHistory.forecastYield === 'number'
+
+  const remoteHistory: YieldForecast[] = Array.isArray(rawHistory?.list)
+    ? (rawHistory?.list as YieldForecast[])
+    : []
 
   /** 历史预测列表：服务端列表 + 本次会话内服务端返回的新增记录 */
   const history: YieldForecast[] = useMemo(
@@ -533,6 +555,22 @@ export default function YieldForecast(): JSX.Element {
                 description="服务端 GET /ai/yield-forecast 接口不可用，历史记录无法展示。此处不使用示例数据占位。"
               />
             )}
+            {/*
+              ⚠️ 契约不匹配提示（不是「无数据」）：
+              后端 GET /ai/yield-forecast 返回的是 **单个预测结果对象**
+              （AiController#yieldForecast → Map: plotId / sampleCount / forecastYield / unit），
+              而不是 PageResult 分页列表。前端按分页消费时取不到 records → list 为空，
+              但 HTTP 200 + 业务码 0，不会触发 isError——属于「接口通了但键名/结构不符」。
+              此时若只写「服务端无数据」是在说假话，故单独给出契约说明。
+            */}
+            {!historyQuery.isError && !historyQuery.isLoading && remoteHistory.length === 0 && (
+              <Alert
+                type="warning"
+                showIcon
+                message="历史预测记录：服务端未提供列表结构"
+                description="后端 GET /ai/yield-forecast 当前返回的是单条预测结果（plotId / sampleCount / forecastYield / unit），不是历史预测分页列表，因此此处无法列出历史记录。需后端补历史预测列表端点后再对接；在此之前不使用示例数据占位。"
+              />
+            )}
             <Table<YieldForecast>
               rowKey="forecastId"
               columns={columns}
@@ -540,11 +578,7 @@ export default function YieldForecast(): JSX.Element {
               scroll={{ x: 1100 }}
               locale={{
                 emptyText: (
-                  <Empty
-                    description={
-                      historyQuery.isLoading ? '加载中…' : '暂无历史预测记录（服务端无数据）'
-                    }
-                  />
+                  <Empty description={historyQuery.isLoading ? '加载中…' : '暂无历史预测记录'} />
                 ),
               }}
               pagination={{ pageSize: 8, showTotal: (value) => `共 ${value} 条` }}
