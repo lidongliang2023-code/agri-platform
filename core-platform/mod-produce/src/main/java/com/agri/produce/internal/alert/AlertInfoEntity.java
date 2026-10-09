@@ -32,6 +32,9 @@ public class AlertInfoEntity extends ProduceBaseEntity {
     /** 触发规则ID */
     private String ruleId;
 
+    /** 告警来源 1环境 2设备 3病虫害 4任务 5投入品（V8 补列，允许为空） */
+    private Integer alertSource;
+
     /** 告警标题 */
     private String alertTitle;
 

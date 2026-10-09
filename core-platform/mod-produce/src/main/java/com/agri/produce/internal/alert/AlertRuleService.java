@@ -104,6 +104,28 @@ public class AlertRuleService {
         return rule;
     }
 
+    /**
+     * 修改规则状态（前端「启停」按钮走 {@code PATCH /alerts/rules/{ruleId}/status}）。
+     *
+     * <p>此前后端只提供 {@code POST /rules/{ruleId}/toggle?enabledFlag=}，前端却调用
+     * {@code PATCH .../status}，方法不匹配必然 405，规则启停是假功能。
+     * status 与 enabledFlag 同步维护：status=1 视为启用，其余为停用。
+     *
+     * @param ruleId 规则主键
+     * @param status 目标状态（1 启用）
+     * @return 是否更新成功
+     */
+    @Transactional
+    public boolean updateStatus(String ruleId, Integer status) {
+        if (status == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "规则状态不能为空");
+        }
+        AlertRuleEntity rule = detail(ruleId);
+        rule.setStatus(status);
+        rule.setEnabledFlag(status == 1 ? 1 : 0);
+        return alertRuleMapper.updateById(rule) > 0;
+    }
+
     /** 启用的规则（告警引擎拉取） */
     public List<AlertRuleEntity> listEnabled() {
         return alertRuleMapper.selectList(new LambdaQueryWrapper<AlertRuleEntity>()
