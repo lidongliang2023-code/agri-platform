@@ -48,25 +48,15 @@ const GANTT_START_HOUR = 6
 /** 甘特图 X 轴结束小时 */
 const GANTT_END_HOUR = 18
 
-/** 租户下拉选项（原型：全部） */
-const TENANT_OPTIONS: Array<{ value: string; label: string }> = [
-  { value: 'all', label: '全部' },
-  { value: 'T001', label: '绿源农业集团' },
-  { value: 'T002', label: '丰达种植合作社' },
-  { value: 'T003', label: '大地南基地' },
-  { value: 'T004', label: '鑫农实验农场' },
-]
-
 /**
- * 租户 → 农场名称关键字。
- * 说明：任务接口无 tenantId 入参，前端按农场名称关键字做客户端归属过滤。
+ * 说明：本页**已移除「租户」筛选**。
+ *
+ * 后端 TaskInfoEntity 没有 farmId / farmName / tenantId 字段（/tasks 只返回
+ * taskId / taskNo / plotId / taskType / taskName / 计划时间 / assigneeId / status 等），
+ * 原先「租户 → 农场名称关键字」的客户端过滤读的是后端根本不返回的 item.farmName，
+ * 结果必然筛出 0 行——列表空了，页面却把空态归因成「后端未返回数据」，属于静默空白 + 归因说谎。
+ * 按「后端没有 → 不展示 / 显示未接入」的纪律，整个租户筛选链路（选项、状态、下拉、过滤）一并移除。
  */
-const TENANT_FARM_KEYWORD: Record<string, string> = {
-  T001: '绿源',
-  T002: '丰达',
-  T003: '大地',
-  T004: '鑫农',
-}
 
 /** 任务类型下拉选项（原型：全部/施肥/灌溉/巡田/喷药） */
 const TASK_TYPE_OPTIONS: Array<{ value: string; label: string }> = [
@@ -140,12 +130,10 @@ interface OverdueRow {
   owner: string
 }
 
-/** 已应用的筛选条件 */
+/** 已应用的筛选条件（无租户维度：后端任务表不含 farmId / farmName / tenantId） */
 interface AppliedFilter {
   /** 日期 yyyy-MM-dd */
   date: string
-  /** 租户 */
-  tenant: string
   /** 任务类型 */
   taskType: string
   /** 状态 */
@@ -244,16 +232,13 @@ export default function TaskMonitor(): JSX.Element {
 
   /** 筛选草稿：日期 */
   const [draftDate, setDraftDate] = useState<Dayjs>(dayjs())
-  /** 筛选草稿：租户 */
-  const [draftTenant, setDraftTenant] = useState<string>('all')
   /** 筛选草稿：任务类型 */
   const [draftType, setDraftType] = useState<string>('all')
   /** 筛选草稿：状态 */
   const [draftStatus, setDraftStatus] = useState<string>('all')
-  /** 已应用的筛选条件 */
+  /** 已应用的筛选条件（无租户维度：后端任务表不含 farmId / farmName / tenantId） */
   const [applied, setApplied] = useState<AppliedFilter>({
     date: dayjs().format('YYYY-MM-DD'),
-    tenant: 'all',
     taskType: 'all',
     status: 'all',
   })
@@ -286,15 +271,8 @@ export default function TaskMonitor(): JSX.Element {
     },
   })
 
-  /** 任务列表：接口数据 + 客户端租户归属过滤（接口为空时返回空数组，由各区块降级） */
-  const tasks: Task[] = useMemo(() => {
-    const remote = tasksQuery.data?.list ?? []
-    const keyword = TENANT_FARM_KEYWORD[applied.tenant]
-    if (!keyword) {
-      return remote
-    }
-    return remote.filter((item) => (item.farmName ?? '').includes(keyword))
-  }, [tasksQuery.data, applied.tenant])
+  /** 任务列表：只用后端真实返回，不做任何客户端归属过滤（后端任务表无农场 / 租户维度） */
+  const tasks: Task[] = useMemo(() => tasksQuery.data?.list ?? [], [tasksQuery.data])
 
   /** 指标卡数据：只按真实任务计算；无数据时各项为 null（卡片展示「—」） */
   const metrics = useMemo(() => {
@@ -339,7 +317,7 @@ export default function TaskMonitor(): JSX.Element {
       const isOverdue = !isDone && planEnd < Date.now()
       const status: GanttStatus = isDone ? 'done' : isDoing ? (isOverdue ? 'overdue' : 'doing') : isOverdue ? 'overdue' : 'waiting'
       return {
-        row: item.farmName || item.plotName || item.assigneeName || '未分配',
+        row: item.farmName || item.plotName || item.plotId || '未分配',
         name: item.taskName || TASK_TYPE_LABEL_MAP[item.taskType] || item.taskType,
         planStart,
         planEnd,
@@ -431,10 +409,11 @@ export default function TaskMonitor(): JSX.Element {
         return {
           id: item.taskId,
           task: item.taskName || TASK_TYPE_LABEL_MAP[item.taskType] || item.taskType,
-          farm: item.farmName || item.plotName || '—',
+          // 后端无 farmName / plotName / assigneeName，退到真实存在的 plotId / assigneeId
+          farm: item.farmName || item.plotName || item.plotId || '—',
           plan: dayjs(item.planEndDate).format('HH:mm'),
           overdue: `>${diffHours}h`,
-          owner: item.assigneeName || '—',
+          owner: item.assigneeName || item.assigneeId || '—',
         }
       })
     }
@@ -521,7 +500,6 @@ export default function TaskMonitor(): JSX.Element {
   const handleSearch = (): void => {
     setApplied({
       date: draftDate.format('YYYY-MM-DD'),
-      tenant: draftTenant,
       taskType: draftType,
       status: draftStatus,
     })
@@ -531,12 +509,10 @@ export default function TaskMonitor(): JSX.Element {
   const handleReset = (): void => {
     const today = dayjs()
     setDraftDate(today)
-    setDraftTenant('all')
     setDraftType('all')
     setDraftStatus('all')
     setApplied({
       date: today.format('YYYY-MM-DD'),
-      tenant: 'all',
       taskType: 'all',
       status: 'all',
     })
@@ -596,15 +572,6 @@ export default function TaskMonitor(): JSX.Element {
               value={draftDate}
               onChange={(value) => setDraftDate(value ?? dayjs())}
               allowClear={false}
-            />
-          </Space>
-          <Space size={6}>
-            <Text>租户：</Text>
-            <Select
-              style={{ width: 160 }}
-              value={draftTenant}
-              onChange={(value) => setDraftTenant(value)}
-              options={TENANT_OPTIONS}
             />
           </Space>
           <Space size={6}>
@@ -750,7 +717,7 @@ export default function TaskMonitor(): JSX.Element {
             ? `任务接口加载失败：${(tasksQuery.error as Error | null)?.message ?? '未知错误'}`
             : metrics.hasRealData
               ? `已加载 ${tasks.length} 条真实任务数据（日期：${applied.date}）`
-              : '后端未返回任务数据，甘特图、超时列表与类型分布均为空，指标卡显示「—」。'
+              : '后端未返回任务数据，甘特图、超时列表与类型分布均为空，指标卡显示「—」。任务表无 farmId / farmName / tenantId，故「租户」筛选已移除，农场 / 负责人列退到 plotId / assigneeId 展示。'
         }
       />
     </div>
