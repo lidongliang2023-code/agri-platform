@@ -1,9 +1,12 @@
 package com.agri.produce.internal.admin;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.agri.shared.exception.BusinessException;
 import com.agri.produce.internal.farm.FarmInfoEntity;
 import com.agri.produce.internal.farm.FarmInfoMapper;
 import com.agri.produce.internal.trace.TraceCodeEntity;
@@ -123,6 +126,26 @@ class TenantQuotaServiceTest {
         assertThat(usedB).isNotEqualTo(12).as("B 不得退化为全平台总数");
         assertThat(tenantsSeen).containsExactly(10100L, 10200L)
                 .as("两次统计必须各带本租户的 tenantId");
+    }
+
+    /**
+     * 租户未打标（tenant_id = 0 / null）时必须拒绝：此时 {@code tenant_id = 0} 会命中
+     * 全部未打标行，数值等于全平台未打标总量，与「把全平台总数写进单租户」是同一个坑。
+     */
+    @Test
+    void resetUsage_rejectsUntaggedTenant() {
+        when(tenantQuotaMapper.selectById("QUOT-ZERO")).thenReturn(quota("QUOT-ZERO", 0L));
+        when(tenantQuotaMapper.selectById("QUOT-NULL")).thenReturn(quota("QUOT-NULL", null));
+
+        assertThatThrownBy(() -> service.resetUsage("QUOT-ZERO"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("未绑定 tenant_id");
+        assertThatThrownBy(() -> service.resetUsage("QUOT-NULL"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("未绑定 tenant_id");
+
+        // 关键：未打标租户不得触发任何统计，杜绝写入「全平台未打标总量」
+        verifyNoInteractions(farmInfoMapper);
     }
 
     @Test

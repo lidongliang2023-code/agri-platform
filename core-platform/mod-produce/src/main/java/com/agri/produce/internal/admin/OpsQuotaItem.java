@@ -21,6 +21,14 @@ public class OpsQuotaItem {
     /** 无用量数据源（used 无意义，仅为满足结构） */
     public static final String SOURCE_NONE = "NONE";
 
+    /**
+     * 数据源存在，但<b>当前无法归因到本租户</b>：租户未绑定 tenant_id（值为 0）时，
+     * 按 tenant_id 聚合会命中全部未打标行，数值等于全平台未打标总量，展示出来会误导
+     * （与「把全平台总数写进单租户」是同一个坑）。
+     * 前端对齐 {@code types/tenant.ts#OpsQuotaItem} 的 UNAVAILABLE，展示「—」。
+     */
+    public static final String SOURCE_UNAVAILABLE = "UNAVAILABLE";
+
     /** 配额编码 farm / traceCode / storage / api */
     private String key;
 

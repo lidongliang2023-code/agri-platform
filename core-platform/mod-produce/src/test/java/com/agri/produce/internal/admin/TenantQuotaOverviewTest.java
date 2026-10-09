@@ -19,9 +19,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 /**
  * 运营端租户配额概览 单元测试。
  *
- * <p>核心守卫点：<strong>不允许把「没有数据源」伪装成「用量为 0」，
- * 也不允许把「有数据源」写成 0</strong>——农场数（用量列）与溯源码（{@code prod_trace_code}
- * 实时聚合）有真实数据源，标 {@code COLUMN}；存储 / API 真无数据源，标 {@code NONE}。</p>
+ * <p>核心守卫点：<strong>不允许把「没有数据源」伪装成「用量为 0」</strong>——
+ * 农场数有真实用量列，其余三项必须标记 {@code source=NONE}。</p>
  */
 @ExtendWith(MockitoExtension.class)
 class TenantQuotaOverviewTest {
@@ -53,25 +52,22 @@ class TenantQuotaOverviewTest {
     }
 
     @Test
-    void quotaOverview_marksRealSourcesAndHonestNone() {
-        TenantQuotaEntity quota = quota("QUOT-1", "T001", 5, 4);
-        quota.setTenantId(10100L);
-        when(tenantQuotaMapper.selectById("QUOT-1")).thenReturn(quota);
-        when(traceCodeMapper.selectCount(any(LambdaQueryWrapper.class))).thenReturn(7L);
+    void quotaOverview_marksFarmAsRealAndTraceUnavailableWhenUntagged() {
+        // 该配额未打标（tenantId 为 null，等同 0）
+        when(tenantQuotaMapper.selectById("QUOT-1")).thenReturn(quota("QUOT-1", "T001", 5, 4));
 
         List<OpsQuotaItem> items = service.quotaOverview("QUOT-1");
 
         assertThat(items).hasSize(4);
-
-        // 有真实用量数据源的两项：农场数取用量列，溯源码按 prod_trace_code 实时聚合
         assertThat(items.get(0).getKey()).isEqualTo("farm");
         assertThat(items.get(0).getSource()).isEqualTo(OpsQuotaItem.SOURCE_COLUMN);
         assertThat(items.get(0).getUsed()).isEqualTo(4D);
         assertThat(items.get(0).getUsageRate()).isEqualTo(80D);
 
+        // 溯源码：有数据源，但租户未打标时按 tenant_id 聚合 = 全平台未打标总量，不可展示
         assertThat(items.get(1).getKey()).isEqualTo("traceCode");
-        assertThat(items.get(1).getSource()).isEqualTo(OpsQuotaItem.SOURCE_COLUMN);
-        assertThat(items.get(1).getUsed()).isEqualTo(7D).as("溯源码有数据源，不得再写死 0");
+        assertThat(items.get(1).getSource()).isEqualTo(OpsQuotaItem.SOURCE_UNAVAILABLE);
+        assertThat(items.get(1).getUsed()).isEqualTo(0D);
 
         // 真·无数据源的两项：used 为 0 仅为满足结构，必须带 NONE 标记
         assertThat(items.get(2).getKey()).isEqualTo("storage");
@@ -80,6 +76,21 @@ class TenantQuotaOverviewTest {
             assertThat(item.getSource()).isEqualTo(OpsQuotaItem.SOURCE_NONE);
             assertThat(item.getUsed()).isEqualTo(0D);
         }
+    }
+
+    /** 租户已打标时，溯源码应给出真实用量并标 COLUMN */
+    @Test
+    void quotaOverview_traceCodeUsesRealCountWhenTenantTagged() {
+        TenantQuotaEntity tagged = quota("QUOT-2", "T002", 5, 4);
+        tagged.setTenantId(10100L);
+        when(tenantQuotaMapper.selectById("QUOT-2")).thenReturn(tagged);
+        when(traceCodeMapper.selectCount(any(LambdaQueryWrapper.class))).thenReturn(7L);
+
+        List<OpsQuotaItem> items = service.quotaOverview("QUOT-2");
+
+        assertThat(items.get(1).getKey()).isEqualTo("traceCode");
+        assertThat(items.get(1).getSource()).isEqualTo(OpsQuotaItem.SOURCE_COLUMN);
+        assertThat(items.get(1).getUsed()).isEqualTo(7D).as("溯源码有数据源，不得再写死 0");
     }
 
     @Test
