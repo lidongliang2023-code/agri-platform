@@ -6,13 +6,13 @@
 #       用于判定「某个页面的示例数据是不是真的在被展示」，把静态审计结论落成实测结论。
 #
 # 用法：
-#   bash core-platform/scripts/probe-endpoints.sh
-#   bash core-platform/scripts/probe-endpoints.sh "/admin/tenants" "/admin/sop"
-#   EP_FILE=/tmp/my_eps.txt bash core-platform/scripts/probe-endpoints.sh
+#   MYSQL_PWD=<本机 mysql 口令> bash core-platform/scripts/probe-endpoints.sh
+#   MYSQL_PWD=... bash core-platform/scripts/probe-endpoints.sh "/admin/tenants" "/admin/sop"
+#   MYSQL_PWD=... EP_FILE=/tmp/my_eps.txt bash core-platform/scripts/probe-endpoints.sh
 #
 # 可覆盖的环境变量：
 #   JAR               core-app jar 路径
-#   MYSQL_PASSWORD    MySQL 口令（不传则按 root → root123 依次尝试）
+#   MYSQL_PWD         MySQL 口令（必传，脚本内不写任何字面量——见第 4 节说明）
 #   PORT_RANGE        "8091 8099" 端口探测区间
 #   EP_FILE           每行一个端点（相对 /api/v1/production）的文件
 #   SHOW_BODY         返回体预览字符数，默认 300
@@ -22,7 +22,21 @@ set -uo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT" || exit 1
 
-JAR="${JAR:-core-platform/core-app/target/core-app-1.0.0.jar}"
+# jar 取值优先级：显式 JAR= > 共享仓库成品包 > target/ 构建产物
+#
+# 默认优先取仓库里的成品包，而不是 target/：target/ 是并发 mvn 的重灾区，会被反复
+# 冲成 30KB 无 BOOT-INF 的半成品包（实测过多次），导致体积守卫误判、全队被阻塞。
+# 仓库包是 install 产物，不参与 target 的覆写竞争，相对稳定。
+# 仓库包万一被清理时，回落到 target/，而不是直接报「jar 不存在」。
+REPO_JAR="/c/maven/repository/com/agri/core-app/1.0.0/core-app-1.0.0.jar"
+TARGET_JAR="core-platform/core-app/target/core-app-1.0.0.jar"
+if [ -n "${JAR:-}" ]; then
+  :  # 调用方显式指定，一律尊重
+elif [ -f "$REPO_JAR" ]; then
+  JAR="$REPO_JAR"
+else
+  JAR="$TARGET_JAR"
+fi
 PW_SRC="core-platform/mod-platform/src/main/java/com/agri/platform/internal/auth/AdminUserInitializer.java"
 API_PREFIX="/api/v1/production"
 SHOW_BODY="${SHOW_BODY:-300}"
@@ -137,20 +151,42 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 4. 启动（MySQL 口令逐个尝试）
-#    教训：yml 默认 root123 是 Docker 容器的，本机直连要 root。
-#          「mysql 客户端自检通过」≠「应用能连」，两者口令来源不同。
+# 4. 启动
+#
+# 口令一律从环境变量取，脚本里不写任何字面量。
+#   团队纪律：口令一旦进 git 就是永久泄露（reset 也清不掉历史），
+#   而收益只是少打几个字符。本脚本早期版本内联过候选口令，现已移除。
+#
+# 另一条踩过的坑（仍要靠人来注意，脚本帮不上）：
+#   docker-compose 里配的口令和本机直连常常不是同一个，
+#   所以「mysql 客户端自检通过」≠「应用能连」。口令来源要自己确认。
 # ---------------------------------------------------------------------------
-CANDIDATES=(${MYSQL_PASSWORD:-root root123})
+CANDIDATES=()
+if [ -n "${MYSQL_PWD:-}" ]; then CANDIDATES+=("$MYSQL_PWD"); fi
+if [ -n "${MYSQL_PASSWORD:-}" ] && [ "${MYSQL_PASSWORD:-}" != "${MYSQL_PWD:-}" ]; then
+  CANDIDATES+=("$MYSQL_PASSWORD")
+fi
+
+if [ "${#CANDIDATES[@]}" -eq 0 ]; then
+  echo "!! 未提供 MySQL 口令。脚本内不写字面量（团队纪律），请从环境变量传入："
+  echo "     MYSQL_PWD=<本机 mysql 口令> bash $0 [端点...]"
+  echo "   取值参考 core-platform 各模块的 application*.yml 里 spring.datasource.password，"
+  echo "   注意 docker-compose 的值与本机直连常不一致，两者都要试。"
+  exit 1
+fi
+
 LOG="/tmp/probe_ep_${PORT}.log"
 BGPID=""
 
 start_app() {
   local pw="$1"
-  echo "--- 启动（MySQL 口令候选: ${pw}）"
-  java -jar "$JAR" --server.port="$PORT" \
-    --spring.flyway.enabled=false \
-    --spring.datasource.password="$pw" >"$LOG" 2>&1 &
+  # 只打印长度，不回显口令
+  echo "--- 启动（MySQL 口令来自环境变量，长度 ${#pw}）"
+  # 走 SPRING_DATASOURCE_PASSWORD 环境变量而不是 --spring.datasource.password=，
+  # 后者会把口令暴露在进程命令行里（tasklist / wmic 能直接看到）。
+  SPRING_DATASOURCE_PASSWORD="$pw" java -jar "$JAR" \
+    --server.port="$PORT" \
+    --spring.flyway.enabled=false >"$LOG" 2>&1 &
   BGPID=$!
 
   local i code
