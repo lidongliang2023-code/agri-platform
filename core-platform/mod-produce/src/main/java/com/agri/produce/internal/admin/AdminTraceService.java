@@ -79,8 +79,20 @@ public class AdminTraceService {
         TraceCodeEntity traceCode = codes.get(0);
         result.put("found", true);
         result.put("traceCode", traceCode);
-        HarvestBatchEntity batch = traceCode.getBatchId() == null
-                ? null : harvestBatchMapper.selectById(traceCode.getBatchId());
+        // prod_trace_code.batch_id 是 V1 遗留 BIGINT，与 prod_harvest_batch 的 varchar(32) 主键口径不通
+        // （实测 6/6 条溯源码均为合成数字串 9200000000000000xx，按 id 关联命中 0 条，batch 恒为 null）；
+        // 真实批次关联存放在 V2 补列的 batch_no 上，故先按 batch_no 关联，关联不到再退回按 id。
+        HarvestBatchEntity batch = null;
+        if (traceCode.getBatchNo() != null && !traceCode.getBatchNo().isBlank()) {
+            List<HarvestBatchEntity> byNo = harvestBatchMapper.selectList(
+                    new LambdaQueryWrapper<HarvestBatchEntity>()
+                            .eq(HarvestBatchEntity::getBatchNo, traceCode.getBatchNo())
+                            .last("LIMIT 1"));
+            batch = byNo.isEmpty() ? null : byNo.get(0);
+        }
+        if (batch == null && traceCode.getBatchId() != null) {
+            batch = harvestBatchMapper.selectById(traceCode.getBatchId());
+        }
         result.put("batch", batch);
         if (batch != null) {
             result.put("inspections", inspectionMapper.selectList(new LambdaQueryWrapper<InspectionEntity>()
@@ -92,21 +104,29 @@ public class AdminTraceService {
     /**
      * 一键召回：作废批次下全部溯源码并冻结批次。
      *
-     * @param batchId 采收批次ID
+     * 口径修正：prod_trace_code.batch_no 存的是「DEMO-BATCHN-004」这类**批次号**，
+     * 而入参 batchId 是「DEMO-BATCH-004」这类**批次主键**，二者不同；
+     * 旧实现直接 eq(batch_no, batchId) 永远匹配不到（作废恒为 0 张），
+     * 但批次冻结仍会执行，导致「只冻结、不作废」的半生效状态。
+     * 现改为：先按主键取批次（冻结用），再用该批次的 batchNo 去查溯源码（作废用），两者口径一致。
+     *
+     * @param batchId 采收批次ID（prod_harvest_batch.batch_id）
      * @return 作废数量
      */
     @Transactional
     public int recall(String batchId) {
-        List<TraceCodeEntity> codes = traceCodeMapper.selectList(new LambdaQueryWrapper<TraceCodeEntity>()
-                .eq(TraceCodeEntity::getBatchNo, batchId));
-        int count = 0;
-        for (TraceCodeEntity traceCode : codes) {
-            traceCode.setStatus("revoked");
-            traceCodeMapper.updateById(traceCode);
-            count++;
-        }
         HarvestBatchEntity batch = harvestBatchMapper.selectById(batchId);
+        int count = 0;
         if (batch != null) {
+            List<TraceCodeEntity> codes = batch.getBatchNo() == null || batch.getBatchNo().isBlank()
+                    ? new java.util.ArrayList<>()
+                    : traceCodeMapper.selectList(new LambdaQueryWrapper<TraceCodeEntity>()
+                            .eq(TraceCodeEntity::getBatchNo, batch.getBatchNo()));
+            for (TraceCodeEntity traceCode : codes) {
+                traceCode.setStatus("revoked");
+                traceCodeMapper.updateById(traceCode);
+                count++;
+            }
             batch.setStatus(4);
             harvestBatchMapper.updateById(batch);
         }
