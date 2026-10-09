@@ -84,6 +84,32 @@ const STATUS_COLOR: Record<string, string> = {
   已注销: 'default',
 }
 
+/**
+ * 配额预警阈值（%），与后端 TenantQuotaService.WARNING_THRESHOLD 保持一致。
+ * 后端「配额预警」按此阈值判定，前端标红口径必须同步，否则会出现两处口径打架。
+ */
+const WARNING_THRESHOLD = 80
+
+/** 后端标记「有真实用量数据源」的取值（OpsQuotaItem.SOURCE_COLUMN） */
+const QUOTA_SOURCE_COLUMN = 'COLUMN'
+
+/** 无用量数据源时的提示文案 */
+const NO_SOURCE_TIP = '后端暂无该维度的用量数据源，无法统计，故不展示用量与使用率'
+
+/**
+ * 按小数位格式化数字（千分位）。
+ *
+ * @param value 待格式化的数字
+ * @param precision 小数位
+ * @returns 格式化后的字符串
+ */
+function formatNumber(value: number, precision: number): string {
+  return Number(value).toLocaleString('zh-CN', {
+    minimumFractionDigits: precision,
+    maximumFractionDigits: precision,
+  })
+}
+
 /** 租户档案示例数据（原型 P3 头卡 + 基本信息） */
 const FALLBACK_TENANT: OpsTenant = {
   tenantId: 'TS000001',
@@ -116,14 +142,6 @@ const FALLBACK_FARMS: TenantFarmItem[] = [
   { farmId: 'F202518', farmCode: 'F202518', farmName: '绿源蔬菜大棚', areaMu: 120, crops: ['番茄', '黄瓜'], status: '预警', ownerName: '王五' },
   { farmId: 'F202526', farmCode: 'F202526', farmName: '绿源育苗中心', areaMu: 90, crops: ['水稻秧苗'], status: '正常', ownerName: '赵六' },
   { farmId: 'F202533', farmCode: 'F202533', farmName: '绿源稻虾基地', areaMu: 360, crops: ['水稻', '小龙虾'], status: '正常', ownerName: '孙七' },
-]
-
-/** 配额示例数据（原型 P3 Tab3） */
-const FALLBACK_QUOTAS: OpsQuotaItem[] = [
-  { key: 'farm', name: '农场数配额', unit: '个', used: 45, limit: 60, usageRate: 75, precision: 0, updatedAt: '2025-07-14 10:00:00', quotaType: 1 },
-  { key: 'traceCode', name: '溯源码配额(本月)', unit: '枚', used: 85000, limit: 100000, usageRate: 85, precision: 0, updatedAt: '2025-07-14 10:00:00', quotaType: 0 },
-  { key: 'storage', name: '存储空间', unit: 'GB', used: 6.2, limit: 10, usageRate: 62, precision: 1, updatedAt: '2025-07-14 10:00:00', quotaType: 5 },
-  { key: 'api', name: 'API 调用次数(本月)', unit: '次', used: 48200, limit: 50000, usageRate: 96.4, precision: 0, updatedAt: '2025-07-14 10:00:00', quotaType: 6 },
 ]
 
 /** 操作类型池（生成日志示例数据） */
@@ -272,15 +290,20 @@ export default function TenantDetail(): JSX.Element {
     }
   }, [editOpen, editForm, tenant])
 
-  /** 打开配额弹窗时回填当前配额上限 */
+  /**
+   * 打开配额弹窗时回填当前配额上限。
+   *
+   * 只用后端返回的真实上限：后端没给就留空（由 InputNumber 的 placeholder 提示量级），
+   * 不再用原型示例数字回填，避免把示例值当成该租户的真实配额。
+   */
   useEffect(() => {
     if (quotaOpen) {
-      const quotas = quotasQuery.data && quotasQuery.data.length > 0 ? quotasQuery.data : FALLBACK_QUOTAS
+      const remote = quotasQuery.data ?? []
       quotaForm.setFieldsValue({
-        farmLimit: quotas.find((item) => item.key === 'farm')?.limit ?? 60,
-        traceCodeLimit: quotas.find((item) => item.key === 'traceCode')?.limit ?? 100000,
-        storageLimit: quotas.find((item) => item.key === 'storage')?.limit ?? 10,
-        apiLimit: quotas.find((item) => item.key === 'api')?.limit ?? 50000,
+        farmLimit: remote.find((item) => item.key === 'farm')?.limit ?? undefined,
+        traceCodeLimit: remote.find((item) => item.key === 'traceCode')?.limit ?? undefined,
+        storageLimit: remote.find((item) => item.key === 'storage')?.limit ?? undefined,
+        apiLimit: remote.find((item) => item.key === 'api')?.limit ?? undefined,
       })
     }
   }, [quotaOpen, quotaForm, quotasQuery.data])
@@ -329,11 +352,14 @@ export default function TenantDetail(): JSX.Element {
     return remote && remote.length > 0 ? remote : FALLBACK_FARMS
   }, [farmsQuery.data])
 
-  /** 配额数据 */
-  const quotas: OpsQuotaItem[] = useMemo<OpsQuotaItem[]>(() => {
-    const remote = quotasQuery.data
-    return remote && remote.length > 0 ? remote : FALLBACK_QUOTAS
-  }, [quotasQuery.data])
+  /**
+   * 配额数据：只使用后端返回值。
+   *
+   * 后端无数据就是空（渲染空态 + 说明），不再用原型示例配额兜底——
+   * 原 FALLBACK_QUOTAS 里的 used（85000 / 6.2 / 48200）是编造的用量，
+   * 展示出来会让用户以为该租户真的用了这么多。
+   */
+  const quotas: OpsQuotaItem[] = useMemo<OpsQuotaItem[]>(() => quotasQuery.data ?? [], [quotasQuery.data])
 
   /** 日志数据 */
   const logs: TenantOperationLog[] = useMemo<TenantOperationLog[]>(() => {
@@ -558,9 +584,11 @@ export default function TenantDetail(): JSX.Element {
                 <div>
                   <Row justify="space-between" align="middle" style={{ marginBottom: 12 }}>
                     <Text type="secondary">
-                      {quotasQuery.data && quotasQuery.data.length > 0
-                        ? '数据来源：租户配额实时用量'
-                        : '当前为原型示例口径（后端配额接口暂未返回数据）'}
+                      {quotas.length > 0
+                        ? '数据来源：租户配额实时用量（仅「农场数」有真实用量数据源，其余三项显示「—」）'
+                        : quotasQuery.isError
+                          ? `配额数据加载失败：${(quotasQuery.error as Error | null)?.message ?? '未知错误'}`
+                          : '该租户暂无配额数据（后端未返回配额记录）'}
                     </Text>
                     <Space>
                       <Popconfirm
@@ -578,55 +606,83 @@ export default function TenantDetail(): JSX.Element {
                       </Button>
                     </Space>
                   </Row>
-                  <Row gutter={[12, 12]}>
-                    {quotas.map((item) => {
-                      const danger = item.usageRate >= 90
-                      return (
-                        <Col key={item.key} xs={24} sm={12} lg={12}>
-                          <Card
-                            size="small"
-                            style={{ borderColor: danger ? '#ffccc7' : undefined }}
-                            title={item.name}
-                            extra={
-                              <Text type="secondary" style={{ fontSize: 12 }}>
-                                更新于 {String(item.updatedAt).slice(0, 10)}
-                              </Text>
-                            }
-                          >
-                            <Progress
-                              percent={Math.min(item.usageRate, 100)}
-                              status={danger ? 'exception' : 'normal'}
-                              strokeColor={danger ? '#ff4d4f' : '#1677ff'}
-                            />
-                            <Row justify="space-between">
-                              <Text>
-                                {Number(item.used).toLocaleString('zh-CN', {
-                                  minimumFractionDigits: item.precision,
-                                  maximumFractionDigits: item.precision,
-                                })}{' '}
-                                /{' '}
-                                {Number(item.limit).toLocaleString('zh-CN', {
-                                  minimumFractionDigits: item.precision,
-                                  maximumFractionDigits: item.precision,
-                                })}{' '}
-                                {item.unit}
-                              </Text>
-                              <Text strong style={{ color: danger ? '#ff4d4f' : '#1677ff' }}>
-                                {item.usageRate}%
-                              </Text>
-                            </Row>
-                            {danger && (
-                              <Tooltip title="建议尽快调整配额上限">
-                                <div style={{ marginTop: 8, color: '#ff4d4f', fontSize: 12 }}>
-                                  ⚠ 即将用尽，建议尽快调整配额
-                                </div>
-                              </Tooltip>
-                            )}
-                          </Card>
-                        </Col>
-                      )
-                    })}
-                  </Row>
+                  {quotas.length === 0 ? (
+                    <Empty
+                      description={
+                        quotasQuery.isError
+                          ? '配额数据加载失败，未展示任何配额（不使用示例数据兜底）'
+                          : '该租户暂无配额数据'
+                      }
+                    />
+                  ) : (
+                    <Row gutter={[12, 12]}>
+                      {quotas.map((item) => {
+                        const danger = item.usageRate >= WARNING_THRESHOLD
+                        // 后端 source 非 COLUMN 时（无用量数据源），used=0 只是结构占位，
+                        // 展示 0 / 进度条会让用户误以为真实用量为 0，故统一显示「—」。
+                        const hasUsage = item.source === QUOTA_SOURCE_COLUMN
+                        return (
+                          <Col key={item.key} xs={24} sm={12} lg={12}>
+                            <Card
+                              size="small"
+                              style={{ borderColor: danger ? '#ffccc7' : undefined }}
+                              title={item.name}
+                              extra={
+                                <Text type="secondary" style={{ fontSize: 12 }}>
+                                  更新于 {String(item.updatedAt ?? '').slice(0, 10)}
+                                </Text>
+                              }
+                            >
+                              {hasUsage ? (
+                                <>
+                                  <Progress
+                                    percent={Math.min(item.usageRate, 100)}
+                                    status={danger ? 'exception' : 'normal'}
+                                    strokeColor={danger ? '#ff4d4f' : '#1677ff'}
+                                  />
+                                  <Row justify="space-between">
+                                    <Text>
+                                      {formatNumber(item.used, item.precision)} /{' '}
+                                      {formatNumber(item.limit, item.precision)} {item.unit}
+                                    </Text>
+                                    <Text strong style={{ color: danger ? '#ff4d4f' : '#1677ff' }}>
+                                      {item.usageRate}%
+                                    </Text>
+                                  </Row>
+                                  {danger && (
+                                    <Tooltip title="建议尽快调整配额上限">
+                                      <div style={{ marginTop: 8, color: '#ff4d4f', fontSize: 12 }}>
+                                        ⚠ 即将用尽，建议尽快调整配额
+                                      </div>
+                                    </Tooltip>
+                                  )}
+                                </>
+                              ) : (
+                                <Tooltip title={NO_SOURCE_TIP}>
+                                  <div>
+                                    <Progress
+                                      percent={0}
+                                      showInfo={false}
+                                      strokeColor="rgba(0,0,0,0.15)"
+                                    />
+                                    <Row justify="space-between">
+                                      <Text type="secondary">
+                                        用量：— / 上限 {formatNumber(item.limit, item.precision)}{' '}
+                                        {item.unit}
+                                      </Text>
+                                      <Text type="secondary" style={{ fontSize: 12 }}>
+                                        无用量数据源
+                                      </Text>
+                                    </Row>
+                                  </div>
+                                </Tooltip>
+                              )}
+                            </Card>
+                          </Col>
+                        )
+                      })}
+                    </Row>
+                  )}
                 </div>
               ),
             },
