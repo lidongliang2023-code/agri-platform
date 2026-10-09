@@ -71,9 +71,19 @@ public class MessageController {
         return ApiResponse.ok(messageNotifyService.markRead(messageId));
     }
 
-    /** 未读数 */
+    /**
+     * 未读数。
+     *
+     * <p>{@code receiverId} 改为可选（原为必填，前端「我的未读」不传参 → 每次布局渲染都触发
+     * MissingServletRequestParameterException，且被全局异常处理器包装成 HTTP 200 的 code:500，
+     * 只有看响应体才能发现）。语义上该接口查的就是当前登录人的未读数，
+     * 故缺省时由服务端从认证上下文取（见 {@link MessageNotifyService#unreadCount(String)}）。
+     *
+     * @param receiverId 可选；传入时按传入值查（保留兼容）
+     * @return 未读条数
+     */
     @GetMapping("/unread-count")
-    public ApiResponse<Long> unreadCount(@RequestParam String receiverId) {
+    public ApiResponse<Long> unreadCount(@RequestParam(required = false) String receiverId) {
         return ApiResponse.ok(messageNotifyService.unreadCount(receiverId));
     }
 }
