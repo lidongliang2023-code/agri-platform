@@ -152,7 +152,7 @@ export interface OpsQuotaItem {
   quotaType: number
   /**
    * 用量数据来源（后端 {@code OpsQuotaItem.source}），决定前端能否展示用量：
-   * - `COLUMN`：有真实用量数据源（当前只有「农场数」），used / usageRate 可信，正常展示；
+   * - `COLUMN`：有真实用量数据源（当前为「农场数」与「溯源码」），used / usageRate 可信，正常展示；
    * - `NONE`：完全没有用量数据源，used 恒为 0 仅为满足结构，**必须展示「—」而不是 0**；
    * - `UNAVAILABLE`：数据源暂时不可用（统计失败等），同样展示「—」。
    *
