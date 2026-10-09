@@ -947,6 +947,11 @@ SET FOREIGN_KEY_CHECKS = 1;
 --
 -- 需要恢复空态时，逐条执行下面的语句即可。等价做法：直接重跑第 0 节。
 --
+-- 【更推荐】同目录下已有配套的独立清理脚本，直接执行它即可，执行完自带验收查询
+-- （逐表打印 DEMO- 残留数，全部应为 0）：
+--     core-platform/scripts/clean-demo-data.sql
+-- 两个脚本的表清单必须保持一致：本脚本第 0 节新增表时，同步在 clean-demo-data.sql 补上。
+--
 -- DELETE FROM prod_farm_info             WHERE farm_id       LIKE 'DEMO-FARM-%';
 -- DELETE FROM prod_farm_cert             WHERE cert_id       LIKE 'DEMO-CERT-%';
 -- DELETE FROM prod_farm_compliance_check WHERE check_id      LIKE 'DEMO-CHK-%';
