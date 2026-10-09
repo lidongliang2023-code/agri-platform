@@ -21,7 +21,9 @@
 --   仅限本地开发 / 演示 / 验收环境。**禁止在生产库执行。**
 --
 -- 【前置条件】
---   1) 数据库 agri_core 已由 Flyway 迁移至 V10（所有 prod_* 表已建好）。
+--   1) 数据库 agri_core 已由 Flyway 迁移至 V11（所有 prod_* 表已建好，
+--      且 prod_quality_lab 已具备 V11 新增的 lab_level / reject_reason 列）。
+--      若库仍停在 V10，第 11 节的机构插入会因列不存在而失败，先跑迁移再执行本脚本。
 --   2) 平台账号（platform_user.admin）已存在 —— 本脚本不写任何平台用户表。
 --
 -- 【执行方式】
@@ -685,13 +687,30 @@ INSERT INTO prod_inventory_flow (
 -- 11. 检测机构 + 质量检测
 -- =====================================================================================
 
+-- 注：lab_type 取英文枚举 THIRD_PARTY/GOVERNMENT —— 前端 LabManage.tsx 的
+--     LAB_TYPE_TEXT 以英文键做映射（{THIRD_PARTY:'第三方', GOVERNMENT:'政府'}），
+--     若写成中文会取不到映射值。V2 建表注释里的「第三方/政府/自建」是中文说明，
+--     不是落库值，此处以前端契约为准。
+--     lab_level / reject_reason 为 V11 新增列（1国家级 2省级 3市级），
+--     演示数据显式给出，以便「资质等级」列与「驳回」态都能被真实渲染出来。
 INSERT INTO prod_quality_lab (
-    lab_id, market_id, tenant_id, lab_code, lab_name, lab_type, contact_name, contact_phone,
-    address, qualification_no, accredited_scope, status,
+    lab_id, market_id, tenant_id, lab_code, lab_name, lab_type, lab_level,
+    contact_name, contact_phone, address, qualification_no, accredited_scope,
+    status, reject_reason,
     create_by, update_by, create_at, update_at, deleted
 ) VALUES
-('DEMO-LAB-001', @DEMO_MARKET_ID, @DEMO_TENANT_ID, 'DEMO-LABC-001', '【演示】南方农产品质量检测中心', '第三方', '何主任', '13700001001', '广州市萝岗区科学大道 15 号', 'DEMO-CMA-20250001', '农药残留,重金属,微生物', 1, @DEMO_AUDIT_BY, @DEMO_AUDIT_BY, @DEMO_CREATE_AT, @DEMO_UPDATE_AT, 0),
-('DEMO-LAB-002', @DEMO_MARKET_ID, @DEMO_TENANT_ID, 'DEMO-LABC-002', '【演示】市农业农村局检测站',     '政府',   '罗站长', '13700001002', '寿光市圣城街 66 号',         'DEMO-CMA-20250002', '农药残留,兽药残留',       1, @DEMO_AUDIT_BY, @DEMO_AUDIT_BY, @DEMO_CREATE_AT, @DEMO_UPDATE_AT, 0);
+('DEMO-LAB-001', @DEMO_MARKET_ID, @DEMO_TENANT_ID, 'DEMO-LABC-001', '【演示】南方农产品质量检测中心', 'THIRD_PARTY', 1,
+ '何主任', '13700001001', '广州市萝岗区科学大道 15 号', 'DEMO-CMA-20250001', '农药残留,重金属,微生物',
+ 1, NULL,
+ @DEMO_AUDIT_BY, @DEMO_AUDIT_BY, @DEMO_CREATE_AT, @DEMO_UPDATE_AT, 0),
+('DEMO-LAB-002', @DEMO_MARKET_ID, @DEMO_TENANT_ID, 'DEMO-LABC-002', '【演示】市农业农村局检测站',     'GOVERNMENT',  2,
+ '罗站长', '13700001002', '寿光市圣城街 66 号',         'DEMO-CMA-20250002', '农药残留,兽药残留',
+ 1, NULL,
+ @DEMO_AUDIT_BY, @DEMO_AUDIT_BY, @DEMO_CREATE_AT, @DEMO_UPDATE_AT, 0),
+('DEMO-LAB-003', @DEMO_MARKET_ID, @DEMO_TENANT_ID, 'DEMO-LABC-003', '【演示】江汉农产品质检服务站',   'THIRD_PARTY', 3,
+ '郑主任', '13700001003', '荆州市监利市容城大道 45 号', 'DEMO-CMA-20250003', '农药残留,兽药残留',
+ 0, '演示数据：资质认定范围覆盖不全，已驳回并退回补充材料',
+ @DEMO_AUDIT_BY, @DEMO_AUDIT_BY, @DEMO_CREATE_AT, @DEMO_UPDATE_AT, 0);
 
 INSERT INTO prod_inspection (
     inspection_id, market_id, tenant_id, inspection_no, batch_id, plot_id, crop_id,
