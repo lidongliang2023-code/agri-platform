@@ -91,6 +91,20 @@ const MODEL_OPTIONS: { value: string; label: string; version: string }[] = [
   { value: 'ensemble', label: '多模型融合（推荐）', version: 'yield-ensemble-v3.0' },
 ]
 
+/**
+ * 服务端历史响应的「分页列表」形状
+ *
+ * 后端 `GET /ai/yield-forecast` 目前返回的是**单点结果 Map**（见 `YieldForecastSummary`），
+ * 不是 `{records,total,page,size}`。前端需同时兼容两种形状并**在运行时判别**，
+ * 否则会把「键名/形状不匹配」误报成「服务端无数据」——后者是在说假话。
+ */
+interface PageResultLike {
+  /** 数据列表（归一化后的 records） */
+  list?: YieldForecast[]
+  /** 总条数 */
+  total?: number
+}
+
 /** 预测表单字段 */
 interface ForecastFormValues {
   /** 地块 ID */
@@ -563,14 +577,29 @@ export default function YieldForecast(): JSX.Element {
               但 HTTP 200 + 业务码 0，不会触发 isError——属于「接口通了但键名/结构不符」。
               此时若只写「服务端无数据」是在说假话，故单独给出契约说明。
             */}
-            {!historyQuery.isError && !historyQuery.isLoading && remoteHistory.length === 0 && (
+            {/*
+              形状不匹配：服务端确实返回了 200 + 业务码 0 的单点结果，
+              但不是分页列表。此处**不能**提示「服务端无数据」，否则是在说假话。
+            */}
+            {historyShapeMismatch && (
               <Alert
                 type="warning"
                 showIcon
-                message="历史预测记录：服务端未提供列表结构"
+                message="历史预测记录：服务端返回的是单点结果，不是分页列表"
                 description="后端 GET /ai/yield-forecast 当前返回的是单条预测结果（plotId / sampleCount / forecastYield / unit），不是历史预测分页列表，因此此处无法列出历史记录。需后端补历史预测列表端点后再对接；在此之前不使用示例数据占位。"
               />
             )}
+            {!historyShapeMismatch &&
+              !historyQuery.isError &&
+              !historyQuery.isLoading &&
+              remoteHistory.length === 0 && (
+                <Alert
+                  type="info"
+                  showIcon
+                  message="暂无历史预测记录"
+                  description="服务端未返回历史预测列表数据。发起一次预测后记录将出现在此处；此处不使用示例数据占位。"
+                />
+              )}
             <Table<YieldForecast>
               rowKey="forecastId"
               columns={columns}

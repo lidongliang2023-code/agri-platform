@@ -9,6 +9,26 @@ export type DetectStatus = 1 | 2 | 3
 export type DiagnosisStatus = 'PENDING' | 'SUCCESS' | 'FAILED'
 
 /**
+ * 服务端产量预测（骨架）返回体：`GET /api/v1/production/ai/yield-forecast`
+ *
+ * ⚠️ 后端 `AiController#yieldForecast` 的签名是 `ApiResponse<Map<String, Object>>`，
+ * 实际返回的是**单点结果** `{plotId, sampleCount, forecastYield, unit}`，
+ * **不是** `{records, total, page, size}` 分页结构。
+ * 前端若按分页列表去读 `list` 会恒为 undefined——这是键名/形状不匹配，
+ * 不等于「服务端无数据」，页面禁止以后者口径提示用户。
+ */
+export interface YieldForecastSummary {
+  /** 地块 ID（未传 plotId 时为 null） */
+  plotId?: string | null
+  /** 参与测算的样本量 */
+  sampleCount?: number
+  /** 预测产量（骨架口径：样本量 × 100，非真实模型输出） */
+  forecastYield?: number
+  /** 单位，如 kg */
+  unit?: string
+}
+
+/**
  * AI 诊断记录（`GET /api/v1/production/ai`，对应后端 AiDiagnosisEntity / prod_ai_diagnosis）
  *
  * ⚠️ 该实体**没有**危害描述（damage）与推荐用药（drugs）字段，
@@ -95,14 +115,26 @@ export interface ChatMessage {
   createdAt: string
 }
 
-/** AI 问答会话 */
+/**
+ * AI 问答会话
+ *
+ * ⚠️ 键名现实：后端 `GET /ai/assistant/sessions`（AiDiagnosisService#sessions）
+ * 返回的是**诊断记录摘要**，只有 `sessionId / plotId / diagnosisType / resultLabel /
+ * confidence / diagnosedAt`，**没有** `title / lastMessage / createdAt / updatedAt`。
+ * 因此下面四个字段在实际响应中均为 undefined，页面必须显式显示占位，
+ * 不能让列表渲染出「标题空、时间空、摘要空」的空壳行。
+ */
 export interface ChatSession {
   /** 会话 ID */
   sessionId: string
-  /** 会话标题 */
+  /** 会话标题（当前后端不返回） */
   title: string
-  /** 最后一条消息摘要 */
+  /** 最后一条消息摘要（当前后端不返回） */
   lastMessage?: string
+  /** 诊断结果标签（后端会话摘要实际返回的字段，可作标题兜底） */
+  resultLabel?: string
+  /** 诊断时间（后端会话摘要实际返回的字段，可作时间兜底） */
+  diagnosedAt?: string
   /** 创建时间 */
   createdAt: string
   /** 更新时间 */
