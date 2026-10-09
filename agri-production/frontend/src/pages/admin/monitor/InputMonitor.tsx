@@ -30,9 +30,9 @@ import { DownloadOutlined, HomeOutlined, ReloadOutlined } from '@ant-design/icon
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import ReactECharts from 'echarts-for-react'
 import type { EChartsOption } from 'echarts'
-import dayjs from 'dayjs'
 import type { Dayjs } from 'dayjs'
-import { listMonitorInputUsages } from '@/api/admin/monitor'
+import { pageUsages } from '@/api/inputs'
+import type { InputUsageRecord } from '@/types'
 
 const { Text, Title } = Typography
 
@@ -46,14 +46,22 @@ const HANDLE_STATUS_META: Record<HandleStatus, { label: string; color: string }>
   rectified: { label: '已整改', color: 'green' },
 }
 
-/** 异常类型 */
-type AbnormalType = 'restricted' | 'overdose' | 'interval'
+/**
+ * 异常类型。
+ *
+ * `normal` 表示监管规则未命中（既非禁限用、用量也未超标）。
+ * 这类记录**必须继续展示**：原实现把未命中规则的行直接 `return null` 丢弃，
+ * 导致接口明明返回了使用记录、页面却是 0 行，被误读成「后端没数据」。
+ * 是否命中规则属于分类结果，不应成为记录能否出现的条件。
+ */
+type AbnormalType = 'restricted' | 'overdose' | 'interval' | 'normal'
 
 /** 异常类型 → 展示信息 */
 const ABNORMAL_TYPE_META: Record<AbnormalType, { label: string; color: string }> = {
   restricted: { label: '禁限用投入品', color: 'red' },
   overdose: { label: '用量超标准', color: 'orange' },
   interval: { label: '安全间隔期违规', color: 'volcano' },
+  normal: { label: '未见异常', color: 'green' },
 }
 
 /** 异常类型下拉选项 */
@@ -62,16 +70,7 @@ const ABNORMAL_TYPE_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'restricted', label: '禁限用投入品' },
   { value: 'overdose', label: '用量超标准' },
   { value: 'interval', label: '安全间隔期违规' },
-]
-
-/** 农场下拉选项 */
-const FARM_OPTIONS: Array<{ value: string; label: string }> = [
-  { value: 'all', label: '全部' },
-  { value: '绿源1号', label: '绿源1号' },
-  { value: '丰达A区', label: '丰达A区' },
-  { value: '大地南', label: '大地南' },
-  { value: '鑫农实验农场', label: '鑫农实验农场' },
-  { value: '惠民D区', label: '惠民D区' },
+  { value: 'normal', label: '未见异常' },
 ]
 
 /**
@@ -107,90 +106,17 @@ interface InputWarningRow {
   category: string
   /** 异常类型 */
   type: AbnormalType
-  /** 实际用量（kg） */
+  /** 实际用量 */
   usedQty: number
-  /** 标准用量（kg） */
+  /** 计量单位（后端 prod_input_usage.unit，如 kg / L / 袋） */
+  unit: string
+  /** 标准用量（规则配置值，单位与实际用量一致时才具可比性） */
   stdQty: number
   /** 使用时间 */
   usedAt: string
   /** 处置状态 */
   status: HandleStatus
 }
-
-/** 监管预警示例数据（PRD 6.2 #15 禁限用投入品预警 / 用量异常分析） */
-const FALLBACK_WARNINGS: InputWarningRow[] = [
-  {
-    id: 'IW20250714001',
-    farm: '绿源1号',
-    plot: 'A-03 地块',
-    inputName: 'XX农药',
-    category: '农药',
-    type: 'restricted',
-    usedQty: 1.5,
-    stdQty: 0.8,
-    usedAt: '2025-07-14 09:20',
-    status: 'pending',
-  },
-  {
-    id: 'IW20250714002',
-    farm: '丰达A区',
-    plot: 'B-11 地块',
-    inputName: '尿素',
-    category: '肥料',
-    type: 'overdose',
-    usedQty: 22.4,
-    stdQty: 15,
-    usedAt: '2025-07-14 08:05',
-    status: 'notified',
-  },
-  {
-    id: 'IW20250713005',
-    farm: '大地南',
-    plot: 'C-02 地块',
-    inputName: '克百威',
-    category: '农药',
-    type: 'restricted',
-    usedQty: 0.6,
-    stdQty: 0.8,
-    usedAt: '2025-07-13 16:40',
-    status: 'rectified',
-  },
-  {
-    id: 'IW20250713008',
-    farm: '鑫农实验农场',
-    plot: 'D-07 地块',
-    inputName: '复合肥',
-    category: '肥料',
-    type: 'overdose',
-    usedQty: 28.6,
-    stdQty: 20,
-    usedAt: '2025-07-13 10:15',
-    status: 'pending',
-  },
-  {
-    id: 'IW20250712003',
-    farm: '惠民D区',
-    plot: 'E-05 地块',
-    inputName: '多菌灵',
-    category: '农药',
-    type: 'interval',
-    usedQty: 1.4,
-    stdQty: 1.2,
-    usedAt: '2025-07-12 14:30',
-    status: 'notified',
-  },
-]
-
-/** 用量趋势示例数据（近 7 天，实际用量 vs 建议用量，单位 kg） */
-const FALLBACK_TREND: Array<{ date: string; actual: number; standard: number }> = [
-  { date: '7/8', actual: 18.2, standard: 15 },
-  { date: '7/9', actual: 21.5, standard: 15 },
-  { date: '7/10', actual: 16.8, standard: 15 },
-  { date: '7/11', actual: 24.3, standard: 16 },
-  { date: '7/12', actual: 19.6, standard: 16 },
-  { date: '7/13', actual: 26.4, standard: 16 },
-  { date: '7/14', actual: 22.1, standard: 16 },
-]
 
 /**
  * 导出 CSV 文件（带 BOM，Excel 可直接打开）。
@@ -230,10 +156,16 @@ export default function InputMonitor(): JSX.Element {
   const [draftType, setDraftType] = useState<string>('all')
   /** 筛选草稿：农场 */
   const [draftFarm, setDraftFarm] = useState<string>('all')
-  /** 筛选草稿：开始日期 */
-  const [draftStart, setDraftStart] = useState<Dayjs | null>(dayjs().subtract(7, 'day'))
-  /** 筛选草稿：结束日期 */
-  const [draftEnd, setDraftEnd] = useState<Dayjs | null>(dayjs())
+  /**
+   * 筛选草稿：开始日期。
+   *
+   * 默认**不限时间**（null）。旧实现默认「近 7 天」，而真实使用记录的 used_at
+   * 多在数周乃至数月前，初次进入页面必然 0 行——这层过滤同样属于「静默丢数据」，
+   * 且比接口层更难发现（接口明明返回了数据）。需要收窄区间时由用户显式选择。
+   */
+  const [draftStart, setDraftStart] = useState<Dayjs | null>(null)
+  /** 筛选草稿：结束日期，默认不限 */
+  const [draftEnd, setDraftEnd] = useState<Dayjs | null>(null)
   /** 已应用的筛选条件 */
   const [applied, setApplied] = useState<{
     type: string
@@ -243,8 +175,8 @@ export default function InputMonitor(): JSX.Element {
   }>({
     type: 'all',
     farm: 'all',
-    startDate: dayjs().subtract(7, 'day').format('YYYY-MM-DD'),
-    endDate: dayjs().format('YYYY-MM-DD'),
+    startDate: '',
+    endDate: '',
   })
   /** 处置状态覆盖表：预警 ID → 最新处置状态（本地处置闭环） */
   const [statusOverrides, setStatusOverrides] = useState<Record<string, HandleStatus>>({})
@@ -257,48 +189,60 @@ export default function InputMonitor(): JSX.Element {
   /** 处置说明 */
   const [remark, setRemark] = useState<string>('')
 
-  /** 投入品使用记录（/admin/monitor/inputs） */
+  /**
+   * 投入品使用记录。
+   *
+   * 数据源修正（D1 根因）：原先调用 `/admin/monitor/inputs`，而该接口返回的是
+   * **投入品库存预警**——`ApiResponse<List<Map<String,Object>>>`，字段为
+   * inputId / inputName / stockQty / warnQty / warning，且是**无分页的裸数组**。
+   * 本页需要的是**投入品使用记录**（usageId / plotId / farmId / dosage / usedAt），
+   * 二者业务语义不同；更关键的是前端按 `PageResult.list` 取值，而裸数组没有 `list`
+   * 属性，恒为 `undefined`，于是「接口返回 14 条、页面渲染 0 行」。
+   *
+   * 现改为 `GET /api/v1/production/inputs/usages`，返回
+   * `PageResult<InputUsageRecord>`，字段直接对齐 `prod_input_usage`。
+   */
   const usageQuery = useQuery({
-    queryKey: ['admin', 'monitor', 'inputs', applied],
-    queryFn: () =>
-      listMonitorInputUsages({
-        pageNum: 1,
-        pageSize: 100,
-        inputId: undefined,
-        overLimit: applied.type === 'overdose' ? true : undefined,
-      }),
+    queryKey: ['admin', 'monitor', 'inputs-usages'],
+    queryFn: () => pageUsages({ pageNum: 1, pageSize: 500 }),
     retry: false,
   })
 
-  /** 预警列表：真实使用记录命中规则优先，否则用示例口径 */
+  /**
+   * 使用记录列表：由真实投入品使用记录 + 监管规则分类生成。
+   *
+   * 与旧实现的关键差别：旧实现把「未命中任何监管规则」的行直接丢弃
+   * （`if (!isRestricted && !isOverdose) return null`），接口有数据而页面 0 行。
+   * 现改为**保留全部记录**并给出分类结果（禁限用 / 用量超标准 / 未见异常），
+   * 是否命中规则只是分类，不构成「记录能否出现」的条件——
+   * 这样页面行数恒等于接口返回条数，任何异常都能被看见而不是被静默吞掉。
+   *
+   * 字段口径对齐后端 `InputUsageEntity`：用量是 `dosage`（不是 `quantity`），
+   * 农场是 `farmId`、地块是 `plotId`（后端不返回 plotName，不臆造名称）。
+   */
   const warnings: InputWarningRow[] = useMemo(() => {
-    const remote = usageQuery.data?.list ?? []
-    const fromRemote: InputWarningRow[] = remote
-      .map((item, index) => {
-        const name = item.inputName ?? '未知投入品'
-        const stdQty = STD_DOSAGE_MAP[name] ?? 10
-        const usedQty = Number(item.quantity) || 0
-        const isRestricted = RESTRICTED_INPUTS.includes(name)
-        const isOverdose = usedQty > stdQty * 1.1
-        if (!isRestricted && !isOverdose) {
-          return null
-        }
-        return {
-          id: item.usageId || `IU${index}`,
-          farm: item.plotName ?? '—',
-          plot: item.plotName ?? '—',
-          inputName: name,
-          category: isRestricted ? '农药' : '肥料',
-          type: (isRestricted ? 'restricted' : 'overdose') as AbnormalType,
-          usedQty,
-          stdQty,
-          usedAt: item.usedAt ?? '—',
-          status: 'pending' as HandleStatus,
-        }
-      })
-      .filter((item): item is InputWarningRow => item !== null)
-    const base = fromRemote.length > 0 ? fromRemote : FALLBACK_WARNINGS
-    return base
+    const remote: InputUsageRecord[] = usageQuery.data?.list ?? []
+    const fromRemote: InputWarningRow[] = remote.map((item, index) => {
+      const name = item.inputName ?? '未知投入品'
+      const stdQty = STD_DOSAGE_MAP[name] ?? 10
+      const usedQty = Number(item.dosage ?? 0) || 0
+      const isRestricted = RESTRICTED_INPUTS.includes(name)
+      const isOverdose = !isRestricted && usedQty > stdQty * 1.1
+      return {
+        id: item.usageId || `IU${index}`,
+        farm: item.farmId ?? '—',
+        plot: item.plotId ?? '—',
+        inputName: name,
+        category: isRestricted ? '农药' : '肥料',
+        type: (isRestricted ? 'restricted' : isOverdose ? 'overdose' : 'normal') as AbnormalType,
+        usedQty,
+        unit: item.unit ?? '',
+        stdQty,
+        usedAt: item.usedAt ?? '',
+        status: 'pending' as HandleStatus,
+      }
+    })
+    return fromRemote
       .map((item) => ({
         ...item,
         status: statusOverrides[item.id] ?? item.status,
@@ -307,11 +251,22 @@ export default function InputMonitor(): JSX.Element {
       .filter((item) => (applied.farm === 'all' ? true : item.farm === applied.farm))
       .filter((item) => {
         const usedDay = item.usedAt.slice(0, 10)
+        // 无使用时间的记录不做时间过滤（旧实现里空值会被字符串比较静默滤掉）
+        if (!usedDay) {
+          return true
+        }
         const afterStart = applied.startDate ? usedDay >= applied.startDate : true
         const beforeEnd = applied.endDate ? usedDay <= applied.endDate : true
         return afterStart && beforeEnd
       })
   }, [usageQuery.data, applied, statusOverrides])
+
+  /** 农场下拉选项：由真实使用记录反推，避免硬编码名称与真实 farmId 永远匹配不上 */
+  const farmOptions: Array<{ value: string; label: string }> = useMemo(() => {
+    const remote: InputUsageRecord[] = usageQuery.data?.list ?? []
+    const farms = Array.from(new Set(remote.map((item) => item.farmId).filter((v): v is string => Boolean(v))))
+    return [{ value: 'all', label: '全部' }, ...farms.map((f) => ({ value: f, label: f }))]
+  }, [usageQuery.data])
 
   /** 是否使用真实接口数据 */
   const hasRealData = (usageQuery.data?.list?.length ?? 0) > 0
@@ -326,13 +281,14 @@ export default function InputMonitor(): JSX.Element {
       total,
       restricted,
       overdose,
-      rectifiedRate: total === 0 ? 0 : Number(((rectified / total) * 100).toFixed(1)),
+      // 无预警时不显示 0%，显示「—」（0% 会被误读为「已整改比例为 0」）
+      rectifiedRate: total === 0 ? null : Number(((rectified / total) * 100).toFixed(1)),
     }
   }, [warnings])
 
-  /** 用量趋势：真实数据按使用时间聚合，否则用示例口径 */
+  /** 用量趋势：只按真实使用记录聚合，无数据则返回空数组（图表区渲染空态） */
   const trend = useMemo(() => {
-    const remote = usageQuery.data?.list ?? []
+    const remote: InputUsageRecord[] = usageQuery.data?.list ?? []
     if (remote.length > 0) {
       const buckets = new Map<string, { actual: number; standard: number }>()
       remote.forEach((item) => {
@@ -342,7 +298,7 @@ export default function InputMonitor(): JSX.Element {
         const day = item.usedAt.slice(5, 10).replace('-', '/')
         const prev = buckets.get(day) ?? { actual: 0, standard: 0 }
         buckets.set(day, {
-          actual: prev.actual + (Number(item.quantity) || 0),
+          actual: prev.actual + (Number(item.dosage ?? 0) || 0),
           standard: prev.standard + (STD_DOSAGE_MAP[item.inputName ?? ''] ?? 15),
         })
       })
@@ -354,7 +310,7 @@ export default function InputMonitor(): JSX.Element {
         }))
         .slice(-7)
     }
-    return FALLBACK_TREND
+    return []
   }, [usageQuery.data])
 
   /** 用量趋势图配置 */
@@ -409,12 +365,20 @@ export default function InputMonitor(): JSX.Element {
       title: '实际用量',
       dataIndex: 'usedQty',
       key: 'usedQty',
-      width: 100,
+      width: 110,
       render: (value: number, row: InputWarningRow) => (
-        <Text style={{ color: value > row.stdQty ? '#ff4d4f' : undefined }}>{value} kg</Text>
+        <Text style={{ color: value > row.stdQty ? '#ff4d4f' : undefined }}>
+          {value} {row.unit || '—'}
+        </Text>
       ),
     },
-    { title: '标准用量', dataIndex: 'stdQty', key: 'stdQty', width: 100, render: (value: number) => `${value} kg` },
+    {
+      title: '标准用量',
+      dataIndex: 'stdQty',
+      key: 'stdQty',
+      width: 100,
+      render: (value: number, row: InputWarningRow) => `${value} ${row.unit || ''}`,
+    },
     {
       title: '超标',
       key: 'over',
@@ -501,20 +465,13 @@ export default function InputMonitor(): JSX.Element {
     })
   }
 
-  /** 重置 */
+  /** 重置：清掉全部筛选条件（时间恢复为不限） */
   const handleReset = (): void => {
-    const start = dayjs().subtract(7, 'day')
-    const end = dayjs()
     setDraftType('all')
     setDraftFarm('all')
-    setDraftStart(start)
-    setDraftEnd(end)
-    setApplied({
-      type: 'all',
-      farm: 'all',
-      startDate: start.format('YYYY-MM-DD'),
-      endDate: end.format('YYYY-MM-DD'),
-    })
+    setDraftStart(null)
+    setDraftEnd(null)
+    setApplied({ type: 'all', farm: 'all', startDate: '', endDate: '' })
   }
 
   /** 提交处置 */
@@ -610,12 +567,12 @@ export default function InputMonitor(): JSX.Element {
           </Space>
           <Space size={6}>
             <Text>农场：</Text>
-            <Select
-              style={{ width: 160 }}
-              value={draftFarm}
-              onChange={(value) => setDraftFarm(value)}
-              options={FARM_OPTIONS}
-            />
+              <Select
+                style={{ width: 160 }}
+                value={draftFarm}
+                onChange={(value) => setDraftFarm(value)}
+                options={farmOptions}
+              />
           </Space>
           <Space size={6}>
             <Text>使用时间：</Text>
@@ -645,7 +602,7 @@ export default function InputMonitor(): JSX.Element {
             {usageQuery.isLoading ? (
               <Skeleton active title={false} paragraph={{ rows: 2 }} />
             ) : (
-              <Statistic title="预警总数" value={stats.total} />
+              <Statistic title="使用记录总数" value={stats.total} />
             )}
           </Card>
         </Col>
@@ -667,7 +624,7 @@ export default function InputMonitor(): JSX.Element {
           <Card size="small" styles={{ body: { padding: 16 } }}>
             <Statistic
               title="整改完成率"
-              value={stats.rectifiedRate}
+              value={stats.rectifiedRate ?? '—'}
               precision={1}
               suffix="%"
               valueStyle={{ color: '#52c41a' }}
@@ -680,7 +637,18 @@ export default function InputMonitor(): JSX.Element {
       <Row gutter={[12, 12]} style={{ marginTop: 12 }}>
         <Col xs={24} lg={10}>
           <Card size="small" title="投入品用量趋势" extra={<Text type="secondary">近 7 天（kg）</Text>}>
-            <ReactECharts option={trendOption} style={{ height: 300 }} notMerge />
+            {trend.length === 0 ? (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description={
+                  usageQuery.isError
+                    ? `投入品使用记录加载失败：${(usageQuery.error as Error | null)?.message ?? '未知错误'}`
+                    : '后端暂无投入品使用记录，无法生成用量趋势'
+                }
+              />
+            ) : (
+              <ReactECharts option={trendOption} style={{ height: 300 }} notMerge />
+            )}
           </Card>
         </Col>
         <Col xs={24} lg={14}>
@@ -709,7 +677,7 @@ export default function InputMonitor(): JSX.Element {
             type="error"
             showIcon
             message="投入品使用记录接口请求失败"
-            description="已切换为示例口径展示，请检查后端服务后重试。"
+            description="页面不使用示例数据兜底，失败期间预警列表与趋势为空，请检查后端服务后重试。"
             action={
               <Button size="small" onClick={() => void usageQuery.refetch()}>
                 重试
@@ -728,15 +696,17 @@ export default function InputMonitor(): JSX.Element {
         )}
       </Card>
 
-      {/* 数据口径提示 */}
+      {/* 数据口径提示：只说明真实口径，不再出现「示例口径」话术 */}
       <AntAlert
         style={{ marginTop: 12 }}
-        type={hasRealData ? 'success' : 'info'}
+        type={usageQuery.isError ? 'error' : hasRealData ? 'success' : 'info'}
         showIcon
         message={
-          hasRealData
-            ? '已基于真实投入品使用记录命中监管规则生成预警'
-            : '当前展示 PRD 示例口径（后端投入品使用接口未返回数据），筛选、处置与导出功能均可正常使用。'
+          usageQuery.isError
+            ? `投入品使用记录加载失败：${(usageQuery.error as Error | null)?.message ?? '未知错误'}`
+            : hasRealData
+              ? `已加载真实投入品使用记录 ${usageQuery.data?.list?.length ?? 0} 条，当前展示 ${stats.total} 条（禁限用 ${stats.restricted} / 用量超标 ${stats.overdose}）。标准用量与禁限用名录为业务规则配置，非后端数据。`
+              : '后端未返回投入品使用记录，列表与用量趋势为空。标准用量与禁限用名录为业务规则配置，非后端数据。'
         }
       />
 

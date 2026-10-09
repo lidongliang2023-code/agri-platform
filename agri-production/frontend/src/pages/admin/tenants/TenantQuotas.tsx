@@ -10,7 +10,9 @@
  * - 列表数据全部来自后端 GET /admin/tenants/quota-overview，不使用任何本地示例/兜底数据；
  * - 后端无数据时列表就是空的（由 ProTable 渲染空态），请求失败时顶部显式告警，不清空为成功；
  * - 后端 OpsQuotaItem.source 标记用量数据来源：仅「农场数」为 COLUMN，
- *   溯源码 / 存储空间 / API 调用为 NONE（无用量数据源），前端必须展示「—」而不是 0。
+ *   溯源码 / 存储空间 / API 调用为 NONE，前端必须展示「—」而不是 0；
+ * - 三者「没有」的原因不同，文案必须区分：溯源码后端有平台口径统计（/trace/codes/stats）
+ *   但生产域表 tenant_id 全为 0、无租户维度；存储空间 / API 调用后端暂无任何用量数据源。
  */
 import { useState } from 'react'
 import {
@@ -55,8 +57,18 @@ const WARNING_THRESHOLD = 80
 /** 后端标记「有真实用量数据源」的取值（OpsQuotaItem.SOURCE_COLUMN） */
 const QUOTA_SOURCE_COLUMN = 'COLUMN'
 
-/** 无用量数据源时的提示文案 */
+/** 无用量数据源时的提示文案（存储 / API 调用：后端完全没有用量数据源） */
 const NO_SOURCE_TIP = '后端暂无该维度的用量数据源，无法统计，故不展示用量与使用率'
+
+/**
+ * 溯源码维度的提示文案。
+ *
+ * 与存储 / API 调用不同：后端确实有溯源码统计端点（/trace/codes/stats），
+ * 但生产域 prod_trace_code 等表 tenant_id 全为 0，只有平台口径、没有租户维度，
+ * 因此不能按租户展示用量——把平台合计填到每行租户头上仍是假数据。
+ */
+const NO_SOURCE_TIP_TRACE =
+  '后端仅有平台口径的溯源码统计（/trace/codes/stats），无租户维度；不能按租户展示用量，故显示「—」'
 
 /** 配额调整表单 */
 interface QuotaFormValues {
@@ -100,19 +112,23 @@ function formatNumber(value: number, precision: number): string {
  * 因为此时 used=0 只是结构占位，展示 0 会让用户误以为真实用量为 0。
  *
  * @param item 配额项
+ * @param noSourceTip 无数据源时的说明文案（溯源码与存储 / API 的口径不同，需分别传入）
  * @returns 渲染结果
  */
-function renderQuota(item: {
-  used: number
-  limit: number
-  usageRate: number
-  unit: string
-  precision: number
-  source?: 'COLUMN' | 'NONE' | 'UNAVAILABLE'
-}): JSX.Element {
+function renderQuota(
+  item: {
+    used: number
+    limit: number
+    usageRate: number
+    unit: string
+    precision: number
+    source?: 'COLUMN' | 'NONE' | 'UNAVAILABLE'
+  },
+  noSourceTip: string = NO_SOURCE_TIP,
+): JSX.Element {
   if (item.source !== QUOTA_SOURCE_COLUMN) {
     return (
-      <Tooltip title={NO_SOURCE_TIP}>
+      <Tooltip title={noSourceTip}>
         <div style={{ minWidth: 130 }}>
           <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>用量：—</div>
           <Progress percent={0} size="small" showInfo={false} strokeColor="rgba(0,0,0,0.15)" />
@@ -277,7 +293,7 @@ export default function TenantQuotas(): JSX.Element {
       dataIndex: 'traceCode',
       width: 170,
       hideInSearch: true,
-      render: (_dom, entity) => renderQuota(entity.traceCode),
+      render: (_dom, entity) => renderQuota(entity.traceCode, NO_SOURCE_TIP_TRACE),
     },
     {
       title: '存储空间',
@@ -444,7 +460,8 @@ export default function TenantQuotas(): JSX.Element {
         {`提示：配额使用率 ≥ ${WARNING_THRESHOLD}% 会自动标红（与后端预警阈值一致）；「重算」会按租户实际农场 / 用量数据重新统计已用配额。`}
         <br />
         数据说明：仅「农场数」有真实用量数据源（取自配额表用量列 used_farm_count）；
-        溯源码 / 存储空间 / API 调用三项后端暂无用量数据源，用量显示为「—」，并非用量为 0。
+        溯源码后端仅有平台口径统计、无租户维度（不按租户展示，避免把平台合计当成租户用量）；
+        存储空间 / API 调用后端暂无用量数据源。后三项用量显示为「—」，并非用量为 0。
         分层（钻石 / 金牌 / 银牌 / 普通）后端无数据源，已移除该列与对应筛选。
       </Text>
 

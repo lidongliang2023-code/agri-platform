@@ -93,8 +93,17 @@ const WARNING_THRESHOLD = 80
 /** 后端标记「有真实用量数据源」的取值（OpsQuotaItem.SOURCE_COLUMN） */
 const QUOTA_SOURCE_COLUMN = 'COLUMN'
 
-/** 无用量数据源时的提示文案 */
+/** 无用量数据源时的提示文案（存储 / API 调用：后端完全没有用量数据源） */
 const NO_SOURCE_TIP = '后端暂无该维度的用量数据源，无法统计，故不展示用量与使用率'
+
+/**
+ * 溯源码维度的提示文案。
+ *
+ * 后端确实有溯源码统计端点（/trace/codes/stats），但生产域 prod_trace_code 等表
+ * tenant_id 全为 0，只有平台口径、没有租户维度，因此不能按租户（本租户）展示用量。
+ */
+const NO_SOURCE_TIP_TRACE =
+  '后端仅有平台口径的溯源码统计（/trace/codes/stats），无租户维度；不能按租户展示用量，故显示「—」'
 
 /**
  * 按小数位格式化数字（千分位）。
@@ -621,6 +630,9 @@ export default function TenantDetail(): JSX.Element {
                         // 后端 source 非 COLUMN 时（无用量数据源），used=0 只是结构占位，
                         // 展示 0 / 进度条会让用户误以为真实用量为 0，故统一显示「—」。
                         const hasUsage = item.source === QUOTA_SOURCE_COLUMN
+                        // 溯源码与存储 / API 的「没有数据」原因不同，提示文案要区分口径
+                        const noSourceTip =
+                          item.key === 'traceCode' ? NO_SOURCE_TIP_TRACE : NO_SOURCE_TIP
                         return (
                           <Col key={item.key} xs={24} sm={12} lg={12}>
                             <Card
@@ -658,7 +670,7 @@ export default function TenantDetail(): JSX.Element {
                                   )}
                                 </>
                               ) : (
-                                <Tooltip title={NO_SOURCE_TIP}>
+                                <Tooltip title={noSourceTip}>
                                   <div>
                                     <Progress
                                       percent={0}
