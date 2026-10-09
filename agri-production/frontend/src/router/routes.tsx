@@ -149,7 +149,7 @@ const AdminAlertCenter = lazy(() => import('@/pages/admin/alerts/AdminAlertCente
 const EmergencyPlan = lazy(() => import('@/pages/admin/alerts/EmergencyPlan'))
 const DisasterReview = lazy(() => import('@/pages/admin/alerts/DisasterReview'))
 // SOP 与知识库
-const SopAudit = lazy(() => import('@/pages/admin/sop/SopAudit'))
+const SopLibrary = lazy(() => import('@/pages/admin/sop/SopLibrary'))
 const KnowledgeBase = lazy(() => import('@/pages/admin/knowledge/KnowledgeBase'))
 // 统计报表
 const ReportCenter = lazy(() => import('@/pages/admin/reports/ReportCenter'))
@@ -1037,9 +1037,9 @@ export const ADMIN_ROUTES: AppRoute[] = [
   },
   {
     path: 'sop',
-    element: <SopAudit />,
+    element: <SopLibrary />,
     meta: {
-      name: 'SOP模板审核',
+      name: 'SOP标准作业规程库',
       path: '/admin/production/sop',
       module: 'SOP与知识库',
       prd: 'PRD 6.2 #26',
