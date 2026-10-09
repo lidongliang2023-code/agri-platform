@@ -53,6 +53,7 @@ public class AdminDashboardService {
     private final AlertInfoMapper alertInfoMapper;
     private final IotDeviceMapper iotDeviceMapper;
     private final GrowthRecordMapper growthRecordMapper;
+    private final TenantQuotaMapper tenantQuotaMapper;
 
     /** 时间轴展示格式（HH:mm:ss），大屏实时滚动条用 */
     private static final DateTimeFormatter CLOCK = DateTimeFormatter.ofPattern("HH:mm:ss");
@@ -321,9 +322,50 @@ public class AdminDashboardService {
             row.put("alertCount", alertCount);
             rows.add(row);
         }
+        if (cropDim) {
+            rows.sort(Comparator.comparingInt((Map<String, Object> r) -> (Integer) r.get("farmCount")).reversed()
+                    .thenComparing(r -> String.valueOf(r.get("name"))));
+            return rows;
+        }
+        if ("tenant".equals(dim)) {
+            decorateTenantNames(rows);
+        }
         rows.sort(Comparator.comparingInt((Map<String, Object> r) -> (Integer) r.get("farmCount")).reversed()
                 .thenComparing(r -> String.valueOf(r.get("name"))));
         return rows;
+    }
+
+    /**
+     * 租户维度：把分组键（tenantId）换成真实租户名，并保留 tenantId 字段。
+     *
+     * <p><b>为什么不能直接把 ID 当名称。</b>前端该列表头写的是「租户名称」
+     * （{@code OpsProductionOverview.tsx}），直接回 {@code "0"} 就是把内部 ID 当成名称展示。
+     * {@code prod_tenant_quota.tenant_name} 是真实存在的名称来源，按 tenant_id 关联取用。</p>
+     *
+     * <p>配额表里查不到名称时（未登记配额的租户）如实回退到 tenantId——
+     * 那是当时唯一可确定的真实标识，不编名字。</p>
+     *
+     * @param rows 已聚合的租户维度行
+     */
+    private void decorateTenantNames(List<Map<String, Object>> rows) {
+        Map<Long, String> names = new LinkedHashMap<>();
+        for (TenantQuotaEntity quota : tenantQuotaMapper.selectList(null)) {
+            Long tenantId = quota.getTenantId();
+            String name = quota.getTenantName();
+            if (tenantId == null || name == null || name.isBlank() || names.containsKey(tenantId)) {
+                continue;
+            }
+            names.put(tenantId, name.trim());
+        }
+        for (Map<String, Object> row : rows) {
+            String key = String.valueOf(row.get("name"));
+            row.put("tenantId", key);
+            try {
+                row.put("name", names.getOrDefault(Long.valueOf(key), key));
+            } catch (NumberFormatException ignored) {
+                row.put("name", key);
+            }
+        }
     }
 
     /**
