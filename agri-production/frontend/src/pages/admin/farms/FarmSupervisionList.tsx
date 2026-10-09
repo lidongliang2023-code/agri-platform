@@ -38,7 +38,6 @@ import type { FarmComplianceProfile } from '@/api/admin/farms'
 import type { Farm } from '@/types'
 import {
   RISK_BAND_META,
-  SAMPLE_SUPERVISED_FARMS,
   buildRiskInfo,
   exportCsv,
   formatRegion,
@@ -164,11 +163,16 @@ export default function FarmSupervisionList(): JSX.Element {
     [farmsQuery.data, profileMap],
   )
 
-  /** 是否处于原型示例口径（后端无数据） */
-  const usingSample: boolean = !farmsQuery.isLoading && remoteRows.length === 0
-
-  /** 参与筛选与展示的原始数据 */
-  const sourceRows: SupervisedFarmRow[] = usingSample ? SAMPLE_SUPERVISED_FARMS : remoteRows
+  /**
+   * 参与筛选与展示的原始数据：**只认后端 GET /admin/farms 的真实返回**。
+   *
+   * 原实现为 `usingSample ? SAMPLE_SUPERVISED_FARMS : remoteRows`——后端返回 0 条时
+   * 表格里塞 5 条原型示例农场。这与「拿示例数据做监管决策」是同一类后果：
+   * 运营在表格里点「下发整改」，整改就派给了一个根本不存在的农场。
+   * 现在后端返回什么就是什么：0 条就是空表格 + 空态，报错就是错误态 + 重试入口，
+   * 任何情况下表格里都不会再出现示例农场。
+   */
+  const sourceRows: SupervisedFarmRow[] = remoteRows
 
   /** 本地二次过滤后的行（后端尚不支持租户 / 省份 / 风险筛选） */
   const filteredRows = useMemo<SupervisedFarmRow[]>(
@@ -194,32 +198,22 @@ export default function FarmSupervisionList(): JSX.Element {
     [sourceRows, filters],
   )
 
-  /** 展示行：示例口径下本地分页，服务端口径下直接使用当前页 */
-  const pagedRows = useMemo<SupervisedFarmRow[]>(() => {
-    if (!usingSample) {
-      return filteredRows
-    }
-    const start = (pageNum - 1) * pageSize
-    return filteredRows.slice(start, start + pageSize)
-  }, [usingSample, filteredRows, pageNum, pageSize])
+  /** 展示行：分页由服务端完成，当前页结果经本地二次过滤后直接展示 */
+  const pagedRows: SupervisedFarmRow[] = filteredRows
 
-  /** 总条数 */
-  const totalCount: number = usingSample
-    ? filteredRows.length
-    : Number(farmsQuery.data?.total ?? 0)
+  /** 总条数（后端分页总量） */
+  const totalCount: number = Number(farmsQuery.data?.total ?? 0)
 
-  /** 租户选项（去重） */
+  /** 租户选项（去重，仅取真实档案） */
   const tenantOptions = useMemo<string[]>(() => {
     const set = new Set<string>()
-    SAMPLE_SUPERVISED_FARMS.forEach((row) => set.add(row.tenantName))
     remoteRows.forEach((row) => set.add(row.tenantName))
     return Array.from(set).filter(Boolean)
   }, [remoteRows])
 
-  /** 省份选项（去重） */
+  /** 省份选项（去重，仅取真实档案） */
   const provinceOptions = useMemo<string[]>(() => {
     const set = new Set<string>()
-    SAMPLE_SUPERVISED_FARMS.forEach((row) => row.province && set.add(row.province))
     remoteRows.forEach((row) => row.province && set.add(row.province))
     return Array.from(set)
   }, [remoteRows])
@@ -261,7 +255,7 @@ export default function FarmSupervisionList(): JSX.Element {
       { key: 'warning', title: '预警', value: warning, color: '#fa8c16' },
       { key: 'abnormal', title: '异常', value: abnormal, color: '#ff4d4f' },
     ]
-  }, [usingSample, profileMap, remoteRows, farmsQuery.data])
+  }, [profileMap, remoteRows, farmsQuery.data])
 
   /** 下发整改弹窗的农场摘要 */
   const rectifySummary: RectifyTargetSummary | null = useMemo<RectifyTargetSummary | null>(
@@ -385,8 +379,9 @@ export default function FarmSupervisionList(): JSX.Element {
   const statsUnavailable: boolean = farmsQuery.isError || profilesQuery.isError
 
   /** 是否启用了后端暂不支持的筛选项 */
-  const hasUnsupportedFilter: boolean =
-    !usingSample && Boolean(filters.tenantName || filters.province || filters.riskLevel)
+  const hasUnsupportedFilter: boolean = Boolean(
+    filters.tenantName || filters.province || filters.riskLevel,
+  )
 
   return (
     <div>
@@ -562,21 +557,12 @@ export default function FarmSupervisionList(): JSX.Element {
           type="error"
           showIcon
           message="农场列表加载失败"
-          description="接口暂不可用。统计卡片已显示「未接入」，列表下方为原型示例口径（非真实农场），请勿据此下发整改。"
+          description="接口暂不可用。统计卡片已显示「未接入」，表格为空——此处不再用原型示例农场填充，避免把整改派发给不存在的农场。"
           action={
             <Button size="small" onClick={handleRefresh}>
               重试
             </Button>
           }
-        />
-      )}
-      {usingSample && !farmsQuery.isError && (
-        <Alert
-          style={{ marginTop: 12 }}
-          type="info"
-          showIcon
-          message="当前列表为原型示例口径（后端农场列表返回 0 条）——不是真实农场"
-          description="统计卡片已改为真实口径（当前为 0）。列表中的 5 条为原型 P4 示例数据，请勿据此下发整改；后端录入农场档案后自动切换。"
         />
       )}
       {hasUnsupportedFilter && (
