@@ -166,7 +166,7 @@ export default function FarmSupervisionList(): JSX.Element {
   /**
    * 参与筛选与展示的原始数据：**只认后端 GET /admin/farms 的真实返回**。
    *
-   * 原实现为 `usingSample ? SAMPLE_SUPERVISED_FARMS : remoteRows`——后端返回 0 条时
+   * 原实现为「示例开关为真即用写死的示例农场数组，否则用后端行」——后端返回 0 条时
    * 表格里塞 5 条原型示例农场。这与「拿示例数据做监管决策」是同一类后果：
    * 运营在表格里点「下发整改」，整改就派给了一个根本不存在的农场。
    * 现在后端返回什么就是什么：0 条就是空表格 + 空态，报错就是错误态 + 重试入口，

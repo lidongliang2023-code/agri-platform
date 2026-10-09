@@ -443,7 +443,7 @@ export function getComplianceTasks(): ComplianceTaskItem[] {
     // 本地存储不可用（隐私模式 / 配额超限）时降级为内存模式
   }
   // 初始缓存为空数组：读侧已改为远端优先，绝不能在远端数据回来之前
-  // 先塞一批原型示例任务冒充真实台账（原实现初始化为 SAMPLE_COMPLIANCE_TASKS）。
+  // 先塞一批原型示例任务冒充真实台账（原实现初始化为写死的示例任务数组）。
   cachedTasks = []
   persistComplianceTasks()
   return cachedTasks

@@ -185,8 +185,8 @@ export default function FarmGisMap(): JSX.Element {
         }
       })
     }
-    // 后端 /admin/farms/map 无数据时返回空数组：原实现会用 SAMPLE_MAP_POINTS
-    // （14 条虚构农场分布）冒充，运营会据此判断区域风险。没有数据就是没有数据。
+    // 后端 /admin/farms/map 无数据时返回空数组：原实现会用一组写死的虚构农场坐标
+    // （14 条）冒充，运营会据此判断区域风险。没有数据就是没有数据。
     return []
   }, [mapQuery.data, profileMap])
 

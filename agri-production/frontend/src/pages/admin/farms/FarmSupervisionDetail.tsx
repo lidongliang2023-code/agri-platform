@@ -267,7 +267,7 @@ export default function FarmSupervisionDetail(): JSX.Element {
    * 农场详情模型：只认后端真实档案。
    *
    * 纪律：后端 `/admin/farms` 查不到该农场时**绝不**回落到原型示例。
-   * 原实现在无命中时会拿 `SAMPLE_SUPERVISED_FARMS[0]`（一个完全无关的示例农场）冒充，
+   * 原实现在无命中时会拿写死的示例农场数组的第一条（一个完全无关的示例农场）冒充，
    * 运营据此下发整改、判风险等级会造成实际后果。查不到就返回 null，
    * 由页面显式提示「未找到该农场」。
    */
