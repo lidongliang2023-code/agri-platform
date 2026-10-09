@@ -2,6 +2,7 @@ package com.agri.produce.internal.admin;
 
 import com.agri.produce.internal.alert.AlertInfoEntity;
 import com.agri.produce.internal.alert.AlertRuleEntity;
+import com.agri.produce.internal.alert.AlertVO;
 import com.agri.shared.result.ApiResponse;
 import com.agri.shared.result.PageResult;
 import lombok.RequiredArgsConstructor;
@@ -33,12 +34,25 @@ public class AdminAlertController {
         return ApiResponse.ok(adminAlertService.pageRules(page, size, keyword, level));
     }
 
-    /** 告警记录分页 */
+    /**
+     * 告警记录分页。
+     *
+     * <p><b>契约与用户端对齐。</b>返回 {@link AlertVO}（status / alertLevel 已转数字
+     * 1-4），运营端与用户端 {@code /api/v1/production/alerts} 形状一致。此前返回裸实体
+     * {@link AlertInfoEntity}，{@code alertLevel} 是库内英文枚举 {@code "URGENT"}，
+     * 告警中心 {@code LEVEL_MAP['URGENT']} 取到 undefined 后访问 {@code .color} 抛错，
+     * 整页白屏。
+     *
+     * <p>{@code status} / {@code alertLevel} 接收前端数字编码，由 Service 经
+     * {@link com.agri.produce.internal.alert.AlertDict} 转成库内英文枚举后再查，
+     * 避免「传数字永远筛不中」。
+     */
     @GetMapping
-    public ApiResponse<PageResult<AlertInfoEntity>> pageAlerts(@RequestParam(defaultValue = "1") long page,
-                                                               @RequestParam(defaultValue = "10") long size,
-                                                               @RequestParam(required = false) String status) {
-        return ApiResponse.ok(adminAlertService.pageAlerts(page, size, status));
+    public ApiResponse<PageResult<AlertVO>> pageAlerts(@RequestParam(defaultValue = "1") long page,
+                                                       @RequestParam(defaultValue = "10") long size,
+                                                       @RequestParam(required = false) String status,
+                                                       @RequestParam(required = false) String alertLevel) {
+        return ApiResponse.ok(adminAlertService.pageAlerts(page, size, status, alertLevel));
     }
 
     /** 告警统计 */

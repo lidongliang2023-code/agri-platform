@@ -33,6 +33,7 @@ import {
 import { CheckCircleOutlined, EyeOutlined, ReloadOutlined, StopOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { auditSopTemplate, listSopTemplates } from '@/api'
+import { DemoDataAlert } from '@/components'
 import type { PageResult, SopAuditStatus, SopTemplate } from '@/types'
 
 /** SOP 模板行模型（在基础类型上补充版本号与适用区域） */
@@ -210,6 +211,13 @@ const MOCK_TEMPLATES: SopRow[] = [
 /** 本地演示数据源 */
 let mockTemplateStore: SopRow[] = [...MOCK_TEMPLATES]
 
+/** 示例数据覆盖范围（提示条文案，覆盖统计卡与列表） */
+const DEMO_SCOPE = '顶部「待审核 / 已通过 / 已驳回 / 累计引用次数」统计卡与下方模板列表'
+
+/** 示例数据写操作提示 */
+const DEMO_WRITE_NOTE =
+  '通过 / 驳回等审核操作只会修改浏览器本地内存中的示例数据，未写入服务端，刷新页面后即失效。'
+
 /** 查询条件 */
 interface FilterState {
   templateName?: string
@@ -237,6 +245,8 @@ export default function SopAudit(): JSX.Element {
   const [rows, setRows] = useState<SopRow[]>([])
   const [previewRow, setPreviewRow] = useState<SopRow | undefined>(undefined)
   const [auditState, setAuditState] = useState<AuditModalState>({ open: false })
+  /** 是否处于示例数据（演示）模式：由数据层返回的 demo 标志驱动 */
+  const [demoMode, setDemoMode] = useState<boolean>(false)
 
   const listQuery = useQuery({
     queryKey: ['admin-sop-templates', filters],
@@ -284,6 +294,7 @@ export default function SopAudit(): JSX.Element {
   useEffect(() => {
     if (listQuery.data) {
       setRows(listQuery.data.rows)
+      setDemoMode(listQuery.data.demo)
     }
   }, [listQuery.data])
 
@@ -310,7 +321,7 @@ export default function SopAudit(): JSX.Element {
       await auditSopTemplate(row.templateId, { auditStatus: result, auditRemark: remark })
       message.success(successText)
     } catch {
-      message.success(`${successText}（演示模式，仅本地更新）`)
+      message.warning(`${successText}（演示模式，仅本地更新，未写入服务端，刷新后失效）`)
     }
     mockTemplateStore = mockTemplateStore.map((item) =>
       item.templateId === row.templateId
@@ -423,25 +434,62 @@ export default function SopAudit(): JSX.Element {
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
+      {demoMode ? <DemoDataAlert scope={DEMO_SCOPE} writeNote={DEMO_WRITE_NOTE} /> : null}
+
       <Row gutter={16}>
         <Col span={6}>
           <Card>
-            <Statistic title="待审核模板" value={stats.pending} valueStyle={{ color: '#faad14' }} />
+            <Statistic
+              title={
+                <Space size={6}>
+                  待审核模板
+                  {demoMode ? <Tag color="orange">示例</Tag> : null}
+                </Space>
+              }
+              value={stats.pending}
+              valueStyle={{ color: '#faad14' }}
+            />
           </Card>
         </Col>
         <Col span={6}>
           <Card>
-            <Statistic title="已通过模板" value={stats.approved} valueStyle={{ color: '#13a05a' }} />
+            <Statistic
+              title={
+                <Space size={6}>
+                  已通过模板
+                  {demoMode ? <Tag color="orange">示例</Tag> : null}
+                </Space>
+              }
+              value={stats.approved}
+              valueStyle={{ color: '#13a05a' }}
+            />
           </Card>
         </Col>
         <Col span={6}>
           <Card>
-            <Statistic title="已驳回模板" value={stats.rejected} valueStyle={{ color: '#cf1322' }} />
+            <Statistic
+              title={
+                <Space size={6}>
+                  已驳回模板
+                  {demoMode ? <Tag color="orange">示例</Tag> : null}
+                </Space>
+              }
+              value={stats.rejected}
+              valueStyle={{ color: '#cf1322' }}
+            />
           </Card>
         </Col>
         <Col span={6}>
           <Card>
-            <Statistic title="累计引用次数" value={stats.usage} />
+            <Statistic
+              title={
+                <Space size={6}>
+                  累计引用次数
+                  {demoMode ? <Tag color="orange">示例</Tag> : null}
+                </Space>
+              }
+              value={stats.usage}
+            />
           </Card>
         </Col>
       </Row>

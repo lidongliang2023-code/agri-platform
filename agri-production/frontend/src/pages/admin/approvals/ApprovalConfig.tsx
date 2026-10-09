@@ -45,6 +45,7 @@ import {
   listApprovalFlows,
   updateApprovalFlow,
 } from '@/api'
+import { DemoDataAlert } from '@/components'
 import type { ApprovalFlowConfig, ApprovalNodeConfig } from '@/types'
 
 /** 运营端审批类型：1 租户注册 2 配额调整 3 农场停用 4 数据导出 */
@@ -235,6 +236,13 @@ const MOCK_FLOWS: FlowRow[] = [
 /** 本地演示数据源 */
 let mockFlowStore: FlowRow[] = [...MOCK_FLOWS]
 
+/** 示例数据覆盖范围（提示条文案） */
+const DEMO_SCOPE = '下方审批流程台账（流程名称 / 适用类型 / 节点数 / 条件路由 / 状态 / 更新时间）'
+
+/** 示例数据写操作提示 */
+const DEMO_WRITE_NOTE =
+  '新建 / 编辑 / 启用停用 / 删除流程等操作只会修改浏览器本地内存中的示例数据，未写入服务端，刷新页面后即失效。'
+
 /**
  * 创建空白节点
  * @param order 节点序号
@@ -264,6 +272,8 @@ export default function ApprovalConfig(): JSX.Element {
   const [drawerOpen, setDrawerOpen] = useState<boolean>(false)
   const [editingId, setEditingId] = useState<string | undefined>(undefined)
   const [activeTab, setActiveTab] = useState<string>('nodes')
+  /** 是否处于示例数据（演示）模式：由数据层返回的 demo 标志驱动 */
+  const [demoMode, setDemoMode] = useState<boolean>(false)
 
   const listQuery = useQuery({
     queryKey: ['admin-approval-flow-config'],
@@ -291,6 +301,7 @@ export default function ApprovalConfig(): JSX.Element {
   useEffect(() => {
     if (listQuery.data) {
       setFlows(listQuery.data.flows)
+      setDemoMode(listQuery.data.demo)
     }
   }, [listQuery.data])
 
@@ -320,7 +331,7 @@ export default function ApprovalConfig(): JSX.Element {
         }
         message.success('流程配置已保存')
       } catch {
-        message.success('流程配置已保存（演示模式，仅本地更新）')
+        message.warning('流程配置已保存（演示模式，仅本地更新，未写入服务端，刷新后失效）')
       }
       const nextId = editingId ?? `FLOW-${Date.now()}`
       const nextRow: FlowRow = {
@@ -350,7 +361,9 @@ export default function ApprovalConfig(): JSX.Element {
         await updateApprovalFlow(row.flowId, { status: nextStatus })
         message.success(nextStatus === 1 ? '流程已启用' : '流程已停用')
       } catch {
-        message.success(`${nextStatus === 1 ? '流程已启用' : '流程已停用'}（演示模式）`)
+        message.warning(
+          `${nextStatus === 1 ? '流程已启用' : '流程已停用'}（演示模式，仅本地更新，未写入服务端）`,
+        )
       }
       mockFlowStore = mockFlowStore.map((item) =>
         item.flowId === row.flowId ? { ...item, status: nextStatus } : item,
@@ -368,7 +381,7 @@ export default function ApprovalConfig(): JSX.Element {
         await deleteApprovalFlow(row.flowId)
         message.success('流程已删除')
       } catch {
-        message.success('流程已删除（演示模式）')
+        message.warning('流程已删除（演示模式，仅本地更新，未写入服务端，刷新后失效）')
       }
       mockFlowStore = mockFlowStore.filter((item) => item.flowId !== row.flowId)
       return row.flowId
@@ -486,6 +499,8 @@ export default function ApprovalConfig(): JSX.Element {
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
+      {demoMode ? <DemoDataAlert scope={DEMO_SCOPE} writeNote={DEMO_WRITE_NOTE} /> : null}
+
       <Row gutter={16}>
         <Col span={24}>
           <Card styles={{ body: { padding: 12 } }}>

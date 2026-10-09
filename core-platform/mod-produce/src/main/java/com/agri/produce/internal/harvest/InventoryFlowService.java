@@ -27,13 +27,35 @@ public class InventoryFlowService {
     private final InventoryFlowMapper inventoryFlowMapper;
 
     /**
-     * 分页查询。
+     * 分页查询（不带任何过滤条件，用于库存总览）。
      *
+     * @param page 页码
+     * @param size 每页条数
      * @return 分页结果
      */
     public PageResult<InventoryFlowEntity> page(long page, long size) {
+        return page(page, size, null);
+    }
+
+    /**
+     * 分页查询，可按批次过滤。
+     *
+     * <p><b>为什么 batchId 为空时不加条件。</b>该端点语义是「库存总览 + 可选批次筛选」，
+     * 若把空串拼成 {@code WHERE batch_id = ''}，库内没有任何记录命中，页面永远空列表。
+     * MyBatis-Plus 的 {@code eq(condition, column, value)} 重载会按 condition 决定是否拼接，
+     * 因此这里把「是否传了批次」作为布尔条件前置。
+     *
+     * @param page    页码
+     * @param size    每页条数
+     * @param batchId 批次号，null/空白表示不过滤
+     * @return 分页结果
+     */
+    public PageResult<InventoryFlowEntity> page(long page, long size, String batchId) {
+        boolean filterByBatch = batchId != null && !batchId.isBlank();
         Page<InventoryFlowEntity> result = inventoryFlowMapper.selectPage(new Page<>(page, size),
                 new LambdaQueryWrapper<InventoryFlowEntity>()
+                        .eq(filterByBatch, InventoryFlowEntity::getBatchId,
+                                filterByBatch ? batchId.trim() : null)
                         .orderByDesc(InventoryFlowEntity::getCreatedAt));
         return PageResult.of(result.getRecords(), result.getTotal(), page, size);
     }
@@ -91,10 +113,19 @@ public class InventoryFlowService {
         inventoryFlowMapper.deleteById(id);
     }
 
-    /** 批次库存流水 */
+    /**
+     * 批次库存流水。
+     *
+     * <p>{@code batchId} 为空时返回全部流水（按创建时间倒序），不再拼
+     * {@code batch_id = ''} 这种恒不命中的条件。
+     *
+     * @param batchId 批次号，null/空白表示不过滤
+     * @return 流水列表
+     */
     public List<InventoryFlowEntity> listByBatch(String batchId) {
+        boolean filterByBatch = batchId != null && !batchId.isBlank();
         return inventoryFlowMapper.selectList(new LambdaQueryWrapper<InventoryFlowEntity>()
-                .eq(InventoryFlowEntity::getBatchId, batchId)
+                .eq(filterByBatch, InventoryFlowEntity::getBatchId, filterByBatch ? batchId.trim() : null)
                 .orderByDesc(InventoryFlowEntity::getCreatedAt));
     }
 

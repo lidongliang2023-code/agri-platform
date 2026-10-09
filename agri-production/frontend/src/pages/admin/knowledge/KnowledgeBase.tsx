@@ -47,6 +47,7 @@ import {
   publishKnowledgeArticle,
   updateKnowledgeArticle,
 } from '@/api'
+import { DemoDataAlert } from '@/components'
 import type { KnowledgeArticle, PageResult } from '@/types'
 
 /** 审核状态：approved 已审核 / pending 待审核 / deprecated 已废弃 */
@@ -285,13 +286,20 @@ const MOCK_ARTICLES: KnowledgeRow[] = [
 /** 本地演示数据源 */
 let mockArticleStore: KnowledgeRow[] = [...MOCK_ARTICLES]
 
-/** 平台级示例口径（原型 P21 统计卡） */
+/** 平台级示例口径（原型 P21 统计卡，硬编码示例数字，非服务端统计值） */
 const PLATFORM_STATS = {
   total: 15680,
   approved: 14200,
   pending: 850,
   deprecated: 630,
 }
+
+/** 示例数据覆盖范围（提示条文案，覆盖统计卡 / 分类树 / 列表） */
+const DEMO_SCOPE = '顶部「知识条目总数 / 已审核 / 待审核 / 已废弃」统计卡、左侧分类树条目数、下方知识条目列表'
+
+/** 示例数据写操作提示 */
+const DEMO_WRITE_NOTE =
+  '新增 / 编辑 / 审核通过 / 标记废弃 / 删除等操作只会修改浏览器本地内存中的示例数据，未写入服务端，刷新页面后即失效。'
 
 /** 新增/编辑表单值 */
 interface EntryFormValues {
@@ -320,6 +328,8 @@ export default function KnowledgeBase(): JSX.Element {
   const [drawerOpen, setDrawerOpen] = useState<boolean>(false)
   const [editingId, setEditingId] = useState<string | undefined>(undefined)
   const [detailRow, setDetailRow] = useState<KnowledgeRow | undefined>(undefined)
+  /** 是否处于示例数据（演示）模式：由数据层返回的 demo 标志驱动 */
+  const [demoMode, setDemoMode] = useState<boolean>(false)
 
   const listQuery = useQuery({
     queryKey: ['admin-knowledge-articles', keyword, entryTab],
@@ -355,6 +365,7 @@ export default function KnowledgeBase(): JSX.Element {
   useEffect(() => {
     if (listQuery.data) {
       setRows(listQuery.data.rows)
+      setDemoMode(listQuery.data.demo)
     }
   }, [listQuery.data])
 
@@ -396,7 +407,7 @@ export default function KnowledgeBase(): JSX.Element {
         }
         message.success('知识条目已保存')
       } catch {
-        message.success('知识条目已保存（演示模式，仅本地更新）')
+        message.warning('知识条目已保存到本地示例数据（演示模式，未写入服务端，刷新后失效）')
       }
       const nextId = editingId ?? `K${String(mockArticleStore.length + 1).padStart(3, '0')}`
       const nextRow: KnowledgeRow = {
@@ -437,7 +448,7 @@ export default function KnowledgeBase(): JSX.Element {
         await deleteKnowledgeArticle(row.articleId)
         message.success('条目已删除')
       } catch {
-        message.success('条目已删除（演示模式）')
+        message.warning('条目已从本地示例数据移除（演示模式，未写入服务端，刷新后失效）')
       }
       mockArticleStore = mockArticleStore.filter((item) => item.articleId !== row.articleId)
       void queryClient.invalidateQueries({ queryKey: ['admin-knowledge-articles'] })
@@ -457,8 +468,8 @@ export default function KnowledgeBase(): JSX.Element {
         await publishKnowledgeArticle(payload.row.articleId, nextAudit === 'approved' ? 1 : 0)
         message.success(nextAudit === 'approved' ? '条目已审核通过并发布' : '条目已标记为废弃')
       } catch {
-        message.success(
-          `${nextAudit === 'approved' ? '条目已审核通过' : '条目已标记为废弃'}（演示模式）`,
+        message.warning(
+          `${nextAudit === 'approved' ? '条目已审核通过' : '条目已标记为废弃'}（演示模式，仅本地更新，未写入服务端）`,
         )
       }
       mockArticleStore = mockArticleStore.map((item) =>
@@ -619,32 +630,77 @@ export default function KnowledgeBase(): JSX.Element {
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
+      {demoMode ? <DemoDataAlert scope={DEMO_SCOPE} writeNote={DEMO_WRITE_NOTE} /> : null}
+
       <Row gutter={16}>
         <Col span={6}>
           <Card>
-            <Statistic title="知识条目总数" value={PLATFORM_STATS.total} />
+            <Statistic
+              title={
+                <Space size={6}>
+                  知识条目总数
+                  {demoMode ? <Tag color="orange">示例</Tag> : null}
+                </Space>
+              }
+              value={PLATFORM_STATS.total}
+            />
           </Card>
         </Col>
         <Col span={6}>
           <Card>
-            <Statistic title="已审核" value={PLATFORM_STATS.approved} valueStyle={{ color: '#13a05a' }} />
+            <Statistic
+              title={
+                <Space size={6}>
+                  已审核
+                  {demoMode ? <Tag color="orange">示例</Tag> : null}
+                </Space>
+              }
+              value={PLATFORM_STATS.approved}
+              valueStyle={{ color: '#13a05a' }}
+            />
           </Card>
         </Col>
         <Col span={6}>
           <Card>
-            <Statistic title="待审核" value={PLATFORM_STATS.pending} valueStyle={{ color: '#faad14' }} />
+            <Statistic
+              title={
+                <Space size={6}>
+                  待审核
+                  {demoMode ? <Tag color="orange">示例</Tag> : null}
+                </Space>
+              }
+              value={PLATFORM_STATS.pending}
+              valueStyle={{ color: '#faad14' }}
+            />
           </Card>
         </Col>
         <Col span={6}>
           <Card>
-            <Statistic title="已废弃" value={PLATFORM_STATS.deprecated} valueStyle={{ color: '#8c8c8c' }} />
+            <Statistic
+              title={
+                <Space size={6}>
+                  已废弃
+                  {demoMode ? <Tag color="orange">示例</Tag> : null}
+                </Space>
+              }
+              value={PLATFORM_STATS.deprecated}
+              valueStyle={{ color: '#8c8c8c' }}
+            />
           </Card>
         </Col>
       </Row>
 
       <Row gutter={16}>
         <Col span={6}>
-          <Card title="📂 知识分类" styles={{ body: { padding: 12 } }}>
+          <Card
+            title={
+              <Space size={6}>
+                📂 知识分类
+                {demoMode ? <Tag color="orange">示例</Tag> : null}
+              </Space>
+            }
+            styles={{ body: { padding: 12 } }}
+          >
             <Tree
               treeData={treeData}
               defaultExpandAll

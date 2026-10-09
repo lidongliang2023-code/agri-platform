@@ -48,6 +48,7 @@ import {
   listDisasterReviews,
   updateDisasterReview,
 } from '@/api'
+import { DemoDataAlert } from '@/components'
 import type { DisasterReview as DisasterReviewBase, PageResult } from '@/types'
 
 /** 复盘状态：draft 草稿 / reviewed 已归档 */
@@ -254,6 +255,14 @@ const MOCK_REVIEWS: ReviewRow[] = [
 /** 本地演示数据源 */
 let mockReviewStore: ReviewRow[] = [...MOCK_REVIEWS]
 
+/** 示例数据覆盖范围（提示条文案，覆盖统计卡、列表与详情抽屉） */
+const DEMO_SCOPE =
+  '顶部「复盘事件数 / 累计受灾面积 / 涉及农场数 / 累计经济损失」汇总卡、下方复盘列表，以及详情抽屉内的事件时间线与损失评估数据'
+
+/** 示例数据写操作提示 */
+const DEMO_WRITE_NOTE =
+  '新增复盘、保存损失评估、保存改进措施、标记归档、删除等操作只会修改浏览器本地内存中的示例数据，未写入服务端，刷新页面后即失效。'
+
 /** 损失评估表单值 */
 interface LossFormValues {
   affectedFarmCount: number
@@ -298,6 +307,8 @@ export default function DisasterReview(): JSX.Element {
   const [detailRow, setDetailRow] = useState<ReviewRow | undefined>(undefined)
   const [detailOpen, setDetailOpen] = useState<boolean>(false)
   const [createOpen, setCreateOpen] = useState<boolean>(false)
+  /** 是否处于示例数据（演示）模式：由数据层返回的 demo 标志驱动 */
+  const [demoMode, setDemoMode] = useState<boolean>(false)
 
   const listQuery = useQuery({
     queryKey: ['admin-disaster-reviews', filters],
@@ -343,6 +354,7 @@ export default function DisasterReview(): JSX.Element {
   useEffect(() => {
     if (listQuery.data) {
       setRows(listQuery.data.rows)
+      setDemoMode(listQuery.data.demo)
     }
   }, [listQuery.data])
 
@@ -360,7 +372,7 @@ export default function DisasterReview(): JSX.Element {
         })
         message.success('复盘信息已保存')
       } catch {
-        message.success('复盘信息已保存（演示模式，仅本地更新）')
+        message.warning('复盘信息已保存到本地示例数据（演示模式，未写入服务端，刷新后失效）')
       }
       mockReviewStore = mockReviewStore.map((item) =>
         item.reviewId === payload.row.reviewId ? next : item,
@@ -379,7 +391,7 @@ export default function DisasterReview(): JSX.Element {
         await createDisasterReview({ ...values, occurredAt })
         message.success('复盘已创建')
       } catch {
-        message.success('复盘已创建（演示模式，仅本地更新）')
+        message.warning('复盘已创建到本地示例数据（演示模式，未写入服务端，刷新后失效）')
       }
       const nextRow: ReviewRow = {
         reviewId: `DR-${Date.now()}`,
@@ -432,7 +444,7 @@ export default function DisasterReview(): JSX.Element {
         await deleteDisasterReview(row.reviewId)
         message.success('复盘已删除')
       } catch {
-        message.success('复盘已删除（演示模式）')
+        message.warning('复盘已从本地示例数据移除（演示模式，未写入服务端，刷新后失效）')
       }
       mockReviewStore = mockReviewStore.filter((item) => item.reviewId !== row.reviewId)
       return row.reviewId
@@ -538,11 +550,16 @@ export default function DisasterReview(): JSX.Element {
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
+      {demoMode ? <DemoDataAlert scope={DEMO_SCOPE} writeNote={DEMO_WRITE_NOTE} /> : null}
+
       <Row gutter={16}>
         <Col span={6}>
           <Card>
             <Space direction="vertical" size={0}>
-              <Typography.Text type="secondary">复盘事件数</Typography.Text>
+              <Space size={6}>
+                <Typography.Text type="secondary">复盘事件数</Typography.Text>
+                {demoMode ? <Tag color="orange">示例</Tag> : null}
+              </Space>
               <Typography.Title level={3} style={{ margin: 0 }}>
                 {summary.count}
               </Typography.Title>
@@ -552,7 +569,10 @@ export default function DisasterReview(): JSX.Element {
         <Col span={6}>
           <Card>
             <Space direction="vertical" size={0}>
-              <Typography.Text type="secondary">累计受灾面积</Typography.Text>
+              <Space size={6}>
+                <Typography.Text type="secondary">累计受灾面积</Typography.Text>
+                {demoMode ? <Tag color="orange">示例</Tag> : null}
+              </Space>
               <Typography.Title level={3} style={{ margin: 0 }}>
                 {summary.area.toLocaleString()} 亩
               </Typography.Title>
@@ -562,7 +582,10 @@ export default function DisasterReview(): JSX.Element {
         <Col span={6}>
           <Card>
             <Space direction="vertical" size={0}>
-              <Typography.Text type="secondary">涉及农场数</Typography.Text>
+              <Space size={6}>
+                <Typography.Text type="secondary">涉及农场数</Typography.Text>
+                {demoMode ? <Tag color="orange">示例</Tag> : null}
+              </Space>
               <Typography.Title level={3} style={{ margin: 0 }}>
                 {summary.farms} 个
               </Typography.Title>
@@ -572,7 +595,10 @@ export default function DisasterReview(): JSX.Element {
         <Col span={6}>
           <Card>
             <Space direction="vertical" size={0}>
-              <Typography.Text type="secondary">累计经济损失</Typography.Text>
+              <Space size={6}>
+                <Typography.Text type="secondary">累计经济损失</Typography.Text>
+                {demoMode ? <Tag color="orange">示例</Tag> : null}
+              </Space>
               <Typography.Title level={3} style={{ margin: 0, color: '#cf1322' }}>
                 ¥ {summary.loss.toLocaleString()}
               </Typography.Title>

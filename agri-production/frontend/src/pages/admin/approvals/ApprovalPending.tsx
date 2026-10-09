@@ -41,6 +41,7 @@ import {
 } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { approveApproval, batchApprove, listApprovals, rejectApproval } from '@/api'
+import { DemoDataAlert } from '@/components'
 import type { Approval, PageResult } from '@/types'
 
 /** 运营端审批类型：1 租户注册 2 配额调整 3 农场停用 4 数据导出 */
@@ -493,11 +494,10 @@ export default function ApprovalPending(): JSX.Element {
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
       {demoMode ? (
-        <Card styles={{ body: { padding: 12 } }}>
-          <Typography.Text type="secondary">
-            当前为原型示例数据（后端接口暂未返回数据），审批流程可在页面上完整走通。
-          </Typography.Text>
-        </Card>
+        <DemoDataAlert
+          scope="顶部「待审批总数 / 租户注册审核 / 配额调整 / 农场停用 / 数据导出」统计卡与下方待审批列表"
+          writeNote="通过 / 驳回等审批操作只会修改浏览器本地内存中的示例数据，未写入服务端，刷新页面后即失效。"
+        />
       ) : null}
 
       <Row gutter={16}>

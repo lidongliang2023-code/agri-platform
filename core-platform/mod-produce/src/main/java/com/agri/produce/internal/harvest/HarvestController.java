@@ -159,10 +159,22 @@ public class HarvestController {
         return ApiResponse.ok(harvestRecordService.listByPlot(plotId == null ? "" : plotId));
     }
 
-    /** 库存流水总览 */
+    /**
+     * 库存流水总览（可按批次筛选）。
+     *
+     * <p><b>为什么返回 PageResult 而不是裸 List。</b>前端
+     * {@code src/api/harvests.ts queryInventory} 按 {@code PageResult<T>} 解构
+     * （响应拦截器 {@code normalizePageData} 再把 {@code records} 归一化为 {@code list}），
+     * 后端吐裸数组时 {@code response.data.records/total} 取不到，列表恒为空。
+     *
+     * <p><b>为什么 batchId 缺省不加条件。</b>此前实现把空串透传给 Service 拼成
+     * {@code WHERE batch_id = ''}，不传筛选时静默返回 0 条；现在空值表示「不过滤」。
+     */
     @GetMapping("/inventory")
-    public ApiResponse<List<InventoryFlowEntity>> inventory(@RequestParam(required = false) String batchId) {
-        return ApiResponse.ok(inventoryFlowService.listByBatch(batchId == null ? "" : batchId));
+    public ApiResponse<PageResult<InventoryFlowEntity>> inventory(@RequestParam(defaultValue = "1") long page,
+                                                                  @RequestParam(defaultValue = "10") long size,
+                                                                  @RequestParam(required = false) String batchId) {
+        return ApiResponse.ok(inventoryFlowService.page(page, size, batchId));
     }
 
     /** 批次出库 */

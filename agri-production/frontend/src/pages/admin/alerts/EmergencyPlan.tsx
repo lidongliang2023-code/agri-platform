@@ -45,6 +45,7 @@ import {
   listEmergencyPlans,
   updateEmergencyPlan,
 } from '@/api'
+import { DemoDataAlert } from '@/components'
 import type { EmergencyPlan as EmergencyPlanBase, PageResult } from '@/types'
 
 /** 响应级别：1 一级 2 二级 3 三级 */
@@ -321,6 +322,13 @@ const MOCK_PLANS: EmergencyPlanRow[] = [
 /** 本地演示数据源 */
 let mockPlanStore: EmergencyPlanRow[] = [...MOCK_PLANS]
 
+/** 示例数据覆盖范围（提示条文案） */
+const DEMO_SCOPE = '上方应急预案库台账与下方首条预案的处置流程时间线'
+
+/** 示例数据写操作提示 */
+const DEMO_WRITE_NOTE =
+  '新建 / 编辑 / 启用停用 / 删除预案等操作只会修改浏览器本地内存中的示例数据，未写入服务端，刷新页面后即失效；「启动预案」未接入后端，不会真实下发调度指令或通知责任人。'
+
 /** 新建/编辑表单模型 */
 interface PlanFormValues {
   planName: string
@@ -345,6 +353,8 @@ export default function EmergencyPlan(): JSX.Element {
   const [detailRow, setDetailRow] = useState<EmergencyPlanRow | undefined>(undefined)
   const [drawerOpen, setDrawerOpen] = useState<boolean>(false)
   const [editingId, setEditingId] = useState<string | undefined>(undefined)
+  /** 是否处于示例数据（演示）模式：由数据层返回的 demo 标志驱动 */
+  const [demoMode, setDemoMode] = useState<boolean>(false)
 
   const listQuery = useQuery({
     queryKey: ['admin-emergency-plans'],
@@ -380,6 +390,7 @@ export default function EmergencyPlan(): JSX.Element {
   useEffect(() => {
     if (listQuery.data) {
       setRows(listQuery.data.rows)
+      setDemoMode(listQuery.data.demo)
     }
   }, [listQuery.data])
 
@@ -406,7 +417,7 @@ export default function EmergencyPlan(): JSX.Element {
         }
         message.success('预案已保存')
       } catch {
-        message.success('预案已保存（演示模式，仅本地更新）')
+        message.warning('预案已保存到本地示例数据（演示模式，未写入服务端，刷新后失效）')
       }
       const nextId = editingId ?? `EP${String(mockPlanStore.length + 1).padStart(3, '0')}`
       const nextRow: EmergencyPlanRow = {
@@ -445,7 +456,9 @@ export default function EmergencyPlan(): JSX.Element {
         await updateEmergencyPlan(row.planId, { status: nextStatus })
         message.success(nextStatus === 1 ? '预案已启用' : '预案已停用')
       } catch {
-        message.success(`${nextStatus === 1 ? '预案已启用' : '预案已停用'}（演示模式）`)
+        message.warning(
+          `${nextStatus === 1 ? '预案已启用' : '预案已停用'}（演示模式，仅本地更新，未写入服务端）`,
+        )
       }
       mockPlanStore = mockPlanStore.map((item) =>
         item.planId === row.planId ? { ...item, status: nextStatus } : item,
@@ -462,7 +475,7 @@ export default function EmergencyPlan(): JSX.Element {
         await deleteEmergencyPlan(row.planId)
         message.success('预案已删除')
       } catch {
-        message.success('预案已删除（演示模式）')
+        message.warning('预案已从本地示例数据移除（演示模式，未写入服务端，刷新后失效）')
       }
       mockPlanStore = mockPlanStore.filter((item) => item.planId !== row.planId)
       return row.planId
@@ -505,9 +518,18 @@ export default function EmergencyPlan(): JSX.Element {
     setDrawerOpen(true)
   }
 
-  /** 启动预案 */
+  /**
+   * 启动预案
+   *
+   * 说明：后端虽提供 POST /api/v1/production/alerts/plans/{id}/execute，但该接口
+   * 必须携带告警单 ID（alertId）才能执行，本页没有告警上下文，不能凭空构造 ID，
+   * 因此此处不发起真实调用，只给出明确提示，避免把「没执行」弹成「已启动」。
+   * @param row 目标预案
+   */
   const startPlan = (row: EmergencyPlanRow): void => {
-    message.success(`已启动「${row.planName}」，责任人 ${row.ownerName}（${row.ownerPhone}）已收到通知`)
+    message.warning(
+      `「${row.planName}」未真实启动：后端预案执行接口需关联具体告警单（alertId），本页暂无告警上下文，未下发调度指令、未通知责任人 ${row.ownerName}（${row.ownerPhone}）`,
+    )
     setDetailRow(undefined)
   }
 
@@ -605,6 +627,8 @@ export default function EmergencyPlan(): JSX.Element {
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
+      {demoMode ? <DemoDataAlert scope={DEMO_SCOPE} writeNote={DEMO_WRITE_NOTE} /> : null}
+
       <Card
         title="应急预案库"
         extra={
