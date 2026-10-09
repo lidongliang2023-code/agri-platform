@@ -45,7 +45,6 @@ import {
   WarningOutlined,
 } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import dayjs from 'dayjs'
 import ReactECharts from 'echarts-for-react'
 import type { EChartsOption } from 'echarts'
 import {
@@ -1032,7 +1031,11 @@ function StandardCheckTab(): JSX.Element {
         {currentStandard && (
           <div style={{ marginTop: 8 }}>
             <Text type="secondary" style={{ fontSize: 12 }}>
-              当前标准：{currentStandard.label}（发布机构：{currentStandard.issuer}）
+              当前标准：{currentStandard.label}
+              <br />
+              发布机构：{currentStandard.issuer}（标准编号与发布机构为公开常识性信息；
+              <Text type="warning">本平台未与任何标准发布机构对接，该标准库为前端硬编码示例，不代表已同步到现行有效版本</Text>
+              ）
             </Text>
           </div>
         )}
@@ -1071,7 +1074,7 @@ function StandardCheckTab(): JSX.Element {
       {/* 校验项明细 */}
       <Card
         title="校验项明细"
-        extra={<Text type="secondary">最后校验时间：{dayjs().format('YYYY-MM-DD HH:mm')}</Text>}
+        extra={<Text type="secondary">最后校验时间：未接入（无真实校验执行记录）</Text>}
       >
         <Table<StandardCheckItem>
           rowKey="id"
@@ -1082,6 +1085,12 @@ function StandardCheckTab(): JSX.Element {
           pagination={false}
           locale={{ emptyText: <Empty description="该标准下暂无校验项" /> }}
         />
+        <div style={{ marginTop: 8 }}>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            注：「标准限值」「实测值」「判定结果」均为演示用示例，非取自标准原文、也非真实检测数据，
+            不构成任何合规判定结论。
+          </Text>
+        </div>
       </Card>
     </div>
   )
