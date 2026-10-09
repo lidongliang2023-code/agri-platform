@@ -86,11 +86,24 @@ public class InputController {
         return ApiResponse.ok();
     }
 
+    /**
+     * 投入品使用记录分页列表。
+     *
+     * <p>{@code farmId} 此前不在方法签名里，前端/运营端传了也被静默丢弃，
+     * 农场监管详情看到的是全局数据。V10 为 {@code prod_input_usage} 补了 {@code farm_id}
+     * 列后落成真实 SQL 条件，为空时行为不变（查全部）。</p>
+     *
+     * @param farmId 所属农场，可空（新增时由服务端按 plotId 推导填充，见
+     *               {@link InputUsageService#create}）
+     * @param status 状态，可空
+     * @return 分页结果
+     */
     @GetMapping("/usages")
     public ApiResponse<PageResult<InputUsageEntity>> pageInputUsage(@RequestParam(defaultValue = "1") long page,
                                                                     @RequestParam(defaultValue = "10") long size,
+                                                                    @RequestParam(required = false) String farmId,
                                                                     @RequestParam(required = false) Integer status) {
-        return ApiResponse.ok(inputUsageService.page(page, size, status));
+        return ApiResponse.ok(inputUsageService.page(page, size, farmId, status));
     }
 
     @GetMapping("/usages/{id}")

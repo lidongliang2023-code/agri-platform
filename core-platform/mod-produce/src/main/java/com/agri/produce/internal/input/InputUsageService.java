@@ -3,6 +3,8 @@ package com.agri.produce.internal.input;
 import com.agri.core.infra.event.DomainEventPublisher;
 import com.agri.produce.api.event.ProduceEvents;
 import com.agri.produce.internal.common.ProduceIds;
+import com.agri.produce.internal.plot.PlotInfoEntity;
+import com.agri.produce.internal.plot.PlotInfoMapper;
 import com.agri.shared.exception.BusinessException;
 import com.agri.shared.exception.ErrorCode;
 import com.agri.shared.result.PageResult;
@@ -27,17 +29,24 @@ public class InputUsageService {
     private static final String ID_PREFIX = "IUSG";
 
     private final InputUsageMapper inputUsageMapper;
+    private final PlotInfoMapper plotInfoMapper;
     private final DomainEventPublisher eventPublisher;
 
     /**
      * 分页查询。
      *
-     * @param status  状态过滤
+     * <p>{@code farmId} 此前不在方法签名里，Spring 不报错、参数被静默丢弃，
+     * 运营端农场监管详情看到的是全局数据。V10 为 {@code prod_input_usage} 补了
+     * {@code farm_id} 列后落成真实 SQL 条件，为空时不加条件（行为不变）。</p>
+     *
+     * @param farmId 所属农场过滤，为空不过滤
+     * @param status 状态过滤
      * @return 分页结果
      */
-    public PageResult<InputUsageEntity> page(long page, long size, Integer status) {
+    public PageResult<InputUsageEntity> page(long page, long size, String farmId, Integer status) {
         Page<InputUsageEntity> result = inputUsageMapper.selectPage(new Page<>(page, size),
                 new LambdaQueryWrapper<InputUsageEntity>()
+                        .eq(farmId != null && !farmId.isBlank(), InputUsageEntity::getFarmId, farmId)
                         .eq(status != null, InputUsageEntity::getStatus, status)
                         .orderByDesc(InputUsageEntity::getCreatedAt));
         return PageResult.of(result.getRecords(), result.getTotal(), page, size);
@@ -63,6 +72,12 @@ public class InputUsageService {
      * <p>新增成功后在同一本地事务内发布 {@code prod.input.usage.recorded}
      * （经 Outbox 落库，ADR-003 唯一通道），驱动溯源档案、监管报送与库存扣减。</p>
      *
+     * <p><b>farmId 兜底推导。</b>前端 {@code src/api/inputs.ts createUsage} 的入参里
+     * 没有 farmId，若只等前端传，V10 新增的 {@code farm_id} 列会永远填不上、按农场筛选
+     * 永远查不到 —— 等于加了个死列。因此在落库前用 {@code plotId} 反查
+     * {@code prod_plot_info.farm_id} 补上；显式传了 farmId 就以传入值为准，
+     * 推导不到（未挂地块或地块已逻辑删除）保持 null，不报错、不猜、不填占位值。</p>
+     *
      * @param entity 实体
      * @return 落库后的实体
      */
@@ -73,6 +88,13 @@ public class InputUsageService {
         }
         if (entity.getUsedAt() == null) {
             entity.setUsedAt(LocalDateTime.now());
+        }
+        if ((entity.getFarmId() == null || entity.getFarmId().isBlank())
+                && entity.getPlotId() != null && !entity.getPlotId().isBlank()) {
+            PlotInfoEntity plot = plotInfoMapper.selectById(entity.getPlotId());
+            if (plot != null) {
+                entity.setFarmId(plot.getFarmId());
+            }
         }
         inputUsageMapper.insert(entity);
 

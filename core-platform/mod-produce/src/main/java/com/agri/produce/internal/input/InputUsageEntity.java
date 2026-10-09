@@ -26,6 +26,16 @@ public class InputUsageEntity extends ProduceBaseEntity {
     /** 地块ID */
     private String plotId;
 
+    /**
+     * 所属农场ID（V10 补列 prod_input_usage.farm_id）。
+     *
+     * <p>前端 {@code src/api/inputs.ts createUsage} 的入参里没有 farmId，
+     * 故新增时由服务端用 {@code plotId} 反查 {@code prod_plot_info.farm_id} 兜底填充
+     * （见 {@code InputUsageService#create}）；推导不到（未挂地块或地块已删除）保持 null，
+     * 不报错、不猜、不填占位值。</p>
+     */
+    private String farmId;
+
     /** 投入品ID */
     private String inputId;
 
