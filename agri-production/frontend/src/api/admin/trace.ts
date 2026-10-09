@@ -2,6 +2,7 @@
  * 运营端 - 质量追溯 API（溯源 / 检测机构 / 不合格品）
  */
 import { http } from '@/utils/request'
+import { readNumber } from '@/utils/production-adapter'
 import type { PageQuery, PageResult } from '@/types'
 import type { ProductRecall, TestingLab, TraceCode, TraceNode } from '@/types'
 /* 页面补充类型（追加导入，不改动既有定义） */
@@ -436,9 +437,27 @@ export function recallQualityBatch(batchId: string): Promise<{ batchId?: string;
   )
 }
 
-/** 溯源码码段统计（GET /admin/trace/code-stats） */
-export function fetchAdminTraceCodeStats(): Promise<Record<string, number>> {
-  return http.get<Record<string, number>>(`${BASE}/code-stats`)
+/**
+ * 溯源码码段统计（GET /admin/trace/code-stats）。
+ *
+ * ⚠️ 后端返回 `Map<String, Object>`，值实测为**字符串**
+ * （`{"generated":"0","active":"5","scanned":"0","revoked":"0"}`）——
+ * 后端用 Long 计数，而全局 JacksonConfig 给 Long 注册了 ToStringSerializer。
+ *
+ * 声明是 `Record<string, number>`，所以必须在 api 层逐键归一化为真正的 number，
+ * 不能让字符串冒充数字流到页面（TS 编译期发现不了，运行时才会炸）。
+ *
+ * @returns 状态 → 数量（值为 number）
+ */
+export async function fetchAdminTraceCodeStats(): Promise<Record<string, number>> {
+  const raw = await http.get<Record<string, unknown>>(`${BASE}/code-stats`)
+  const record: Record<string, unknown> =
+    raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {}
+  const result: Record<string, number> = {}
+  Object.keys(record).forEach((key) => {
+    result[key] = readNumber({ value: record[key] }, ['value'], 0)
+  })
+  return result
 }
 
 /** 运营端溯源码分页查询参数 */
