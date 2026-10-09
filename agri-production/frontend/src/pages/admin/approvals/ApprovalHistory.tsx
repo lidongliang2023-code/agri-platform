@@ -13,6 +13,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import dayjs from 'dayjs'
 import {
+  Alert,
   App,
   Button,
   Card,
@@ -26,7 +27,6 @@ import {
   Space,
   Statistic,
   Tag,
-  Typography,
 } from 'antd'
 import { ProTable } from '@ant-design/pro-components'
 import type { ProColumns } from '@ant-design/pro-components'
@@ -35,8 +35,41 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { listApprovalHistory } from '@/api'
 import type { Approval, PageResult } from '@/types'
 
-/** 运营端审批类型：1 租户注册 2 配额调整 3 农场停用 4 数据导出 */
-type AdminApprovalType = 1 | 2 | 3 | 4
+/**
+ * 审批业务类型。
+ *
+ * 后端 `prod_approval.biz_type` 是**字符串枚举**（CERT / RECALL / QUOTA），
+ * 并非前端原先假设的数字 1~4；按数字口径取值会得到 undefined。
+ */
+type AdminApprovalType = string
+
+/** 前端展示编码：通过 */
+const STATUS_APPROVED = 2
+/** 前端展示编码：驳回 */
+const STATUS_REJECTED = 3
+
+/**
+ * 后端状态字符串 → 前端展示编码。
+ *
+ * `prod_approval.status` 实际取值为 `APPROVED` / `PENDING` / `REJECTED`。
+ * 历史页原先用 `item.status === 2 || item.status === 3` 过滤，
+ * 字符串与数字严格比较恒为 false，于是「接口返回 2 条、页面渲染 0 行」（D2 根因）。
+ */
+const STATUS_CODE_BY_SERVER: Record<string, 2 | 3> = {
+  APPROVED: STATUS_APPROVED,
+  REJECTED: STATUS_REJECTED,
+}
+
+/** 审批业务类型文案（兼容后端字符串枚举与旧数字口径） */
+const BIZ_TYPE_LABEL: Record<string, string> = {
+  CERT: '认证申请',
+  QUOTA: '配额调整',
+  RECALL: '召回申请',
+  1: '租户注册',
+  2: '配额调整',
+  3: '农场停用',
+  4: '数据导出',
+}
 
 /** 历史审批行模型 */
 interface HistoryRow {
@@ -68,153 +101,12 @@ interface HistoryRow {
   durationHours: number
 }
 
-/** 审批类型文案 */
-const APPROVAL_TYPE_MAP: Record<AdminApprovalType, string> = {
-  1: '租户注册',
-  2: '配额调整',
-  3: '农场停用',
-  4: '数据导出',
-}
-
-/** 原型 P23 明确列出的 5 条已办记录 */
-const PROTOTYPE_ROWS: HistoryRow[] = [
-  {
-    approvalId: 'APR-H-001',
-    approvalNo: 'APR20250713001',
-    approvalType: 1,
-    applicantName: '周八',
-    tenantName: '绿源农业',
-    targetName: '周八家庭农场',
-    bizSummary: '新租户注册，资质核验通过',
-    status: 2,
-    approverName: '管理员A',
-    approveRemark: '营业执照与法人信息核验一致，予以通过。',
-    submittedAt: '2025-07-13 10:20',
-    approvedAt: '2025-07-13 16:30',
-    durationHours: 6.2,
-  },
-  {
-    approvalId: 'APR-H-002',
-    approvalNo: 'APR20250713002',
-    approvalType: 2,
-    applicantName: '吴九',
-    tenantName: '丰达农场',
-    targetName: '溯源码配额',
-    bizSummary: '溯源码月度配额上调至 150,000',
-    status: 2,
-    approverName: '管理员A',
-    approveRemark: '配额使用连续两月超 90%，同意上调。',
-    submittedAt: '2025-07-13 09:00',
-    approvedAt: '2025-07-13 15:20',
-    durationHours: 6.3,
-  },
-  {
-    approvalId: 'APR-H-003',
-    approvalNo: 'APR20250713003',
-    approvalType: 3,
-    applicantName: '郑十',
-    tenantName: '李四果园',
-    targetName: '李四果园',
-    bizSummary: '农场停用申请，地块尚未完成收获结算',
-    status: 3,
-    approverName: '管理员B',
-    approveRemark: '仍有 3 个地块未完成采收结算，暂不批准停用。',
-    submittedAt: '2025-07-13 08:30',
-    approvedAt: '2025-07-13 14:10',
-    durationHours: 5.7,
-  },
-  {
-    approvalId: 'APR-H-004',
-    approvalNo: 'APR20250712001',
-    approvalType: 4,
-    applicantName: '陈一',
-    tenantName: '丰收集团',
-    targetName: '投入品台账导出',
-    bizSummary: '申请导出上季度投入品使用台账',
-    status: 2,
-    approverName: '管理员A',
-    approveRemark: '脱敏后导出，已核对数据用途。',
-    submittedAt: '2025-07-12 09:10',
-    approvedAt: '2025-07-12 11:30',
-    durationHours: 2.3,
-  },
-  {
-    approvalId: 'APR-H-005',
-    approvalNo: 'APR20250712002',
-    approvalType: 1,
-    applicantName: '林二',
-    tenantName: '大地种业',
-    targetName: '大地种业',
-    bizSummary: '新租户注册并完成实名认证',
-    status: 2,
-    approverName: '管理员B',
-    approveRemark: '实名认证与银行卡信息一致，予以通过。',
-    submittedAt: '2025-07-12 08:00',
-    approvedAt: '2025-07-12 10:15',
-    durationHours: 2.2,
-  },
+/** 业务类型下拉选项：取后端真实枚举值，避免出现永远匹配不上的选项 */
+const BIZ_TYPE_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: 'CERT', label: '认证申请' },
+  { value: 'QUOTA', label: '配额调整' },
+  { value: 'RECALL', label: '召回申请' },
 ]
-
-/** 演示数据补充用申请人池 */
-const EXTRA_APPLICANTS: string[] = [
-  '张三',
-  '李四',
-  '王五',
-  '赵六',
-  '孙七',
-  '周八',
-  '吴九',
-  '郑十',
-  '冯十一',
-  '陈十二',
-]
-
-/** 演示数据补充用租户池 */
-const EXTRA_TENANTS: string[] = [
-  '绿源农业',
-  '丰达农场',
-  '大地种业',
-  '丰收集团',
-  '田园生态',
-  '惠民种植',
-  '鑫农科技',
-]
-
-/**
- * 构建演示审批历史数据
- * @returns 32 条已办记录
- */
-function buildMockHistory(): HistoryRow[] {
-  const rows: HistoryRow[] = [...PROTOTYPE_ROWS]
-  for (let i = 0; i < 27; i += 1) {
-    const day = 11 - (i % 10)
-    const monthDay = String(day).padStart(2, '0')
-    const status: 2 | 3 = i % 5 === 0 ? 3 : 2
-    const approvalType = ((i % 4) + 1) as AdminApprovalType
-    rows.push({
-      approvalId: `APR-H-MOCK-${i + 1}`,
-      approvalNo: `APR202507${monthDay}0${String((i % 9) + 1)}`,
-      approvalType,
-      applicantName: EXTRA_APPLICANTS[i % EXTRA_APPLICANTS.length],
-      tenantName: EXTRA_TENANTS[i % EXTRA_TENANTS.length],
-      targetName: `${EXTRA_TENANTS[i % EXTRA_TENANTS.length]} · ${APPROVAL_TYPE_MAP[approvalType]}`,
-      bizSummary: `${EXTRA_TENANTS[i % EXTRA_TENANTS.length]} 提交的${APPROVAL_TYPE_MAP[approvalType]}申请`,
-      status,
-      approverName: i % 2 === 0 ? '管理员A' : '管理员B',
-      approveRemark: status === 2 ? '材料齐全，予以通过。' : '材料不完整，请补充后重新提交。',
-      submittedAt: `2025-07-${monthDay} 0${(i % 8) + 1}:15`,
-      approvedAt: `2025-07-${monthDay} ${String(((i % 8) + 3) % 24).padStart(2, '0')}:40`,
-      durationHours: Number((((i % 9) + 1) * 0.8 + 1).toFixed(1)),
-    })
-  }
-  return rows
-}
-
-/** 本地演示数据源 */
-const MOCK_HISTORY: HistoryRow[] = buildMockHistory()
-
-/** 原型口径的历史总量 */
-const MOCK_TOTAL = 3250
 
 /** 查询条件 */
 interface FilterState {
@@ -234,71 +126,80 @@ export default function ApprovalHistory(): JSX.Element {
   const [form] = Form.useForm<FilterState>()
   const [filters, setFilters] = useState<FilterState>({})
   const [rows, setRows] = useState<HistoryRow[]>([])
-  const [demoMode, setDemoMode] = useState<boolean>(false)
   const [detailRow, setDetailRow] = useState<HistoryRow | undefined>(undefined)
 
   const listQuery = useQuery({
     queryKey: ['admin-approvals-history', filters],
-    queryFn: async (): Promise<{ rows: HistoryRow[]; total: number; demo: boolean }> => {
-      try {
-        const page: PageResult<Approval> = await listApprovalHistory({
+    // 不再 try/catch 兜底到演示数据：请求失败时让 react-query 进入 isError，
+    // 页面显式报错。后端挂了就显示 32 条编造的审批记录，比显示 0 条危险得多——
+    // 那会让验收把假数据当成真实链路跑通。
+    queryFn: async (): Promise<{ rows: HistoryRow[]; total: number }> => {
+      const page: PageResult<Approval> = await listApprovalHistory({
           pageNum: 1,
           pageSize: 500,
           approvalType: filters.approvalType,
           status: filters.status,
           keyword: filters.approvalNo,
         })
-        if (page && Array.isArray(page.list) && page.list.length > 0) {
+        // 接口正常返回即采信真实数据：即使 list 为空也是真实结果，
+        // 不再因为「0 条」就掉进演示数据分支（那会让页面拿编造的 32 行冒充真实数据）。
+        if (page && Array.isArray(page.list)) {
           const serverRows = page.list
-            .filter((item) => item.status === 2 || item.status === 3)
-            .map<HistoryRow>((item) => ({
-              approvalId: item.approvalId,
-              approvalNo: item.approvalNo,
-              approvalType: (item.approvalType as AdminApprovalType) ?? 1,
-              applicantName: item.applicantName,
-              tenantName: item.tenantName,
-              bizSummary: item.bizSummary,
-              status: item.status as 2 | 3,
-              approverName: item.approverName ?? '管理员A',
-              approveRemark: item.approveRemark,
-              submittedAt: item.submittedAt,
-              approvedAt: item.approvedAt ?? item.submittedAt,
-              durationHours: Number(
-                (
-                  (dayjs(item.approvedAt ?? item.submittedAt).valueOf() -
-                    dayjs(item.submittedAt).valueOf()) /
-                  3600000
-                ).toFixed(1),
-              ),
-            }))
-          return { rows: serverRows, total: page.total, demo: false }
+            .map<HistoryRow | null>((item) => {
+              // 后端状态是字符串枚举，先归一化成前端展示编码
+              const code = STATUS_CODE_BY_SERVER[String(item.status).toUpperCase()]
+              if (!code) {
+                return null
+              }
+              const submittedRaw = item.submitAt ?? item.submittedAt ?? ''
+              const approvedRaw = item.approveAt ?? item.approvedAt ?? submittedRaw
+              return {
+                approvalId: item.approvalId,
+                // 后端没有 approvalNo 字段，用业务主键承担「审批编号」展示职责
+                approvalNo: item.approvalNo ?? item.approvalId,
+                approvalType: item.bizType ?? String(item.approvalType ?? ''),
+                applicantName: item.applicantName ?? '—',
+                tenantName: item.tenantName,
+                bizSummary: item.title ?? item.bizSummary,
+                status: code,
+                approverName: item.approverName ?? item.currentApproverId ?? '—',
+                approveRemark: item.approveOpinion ?? item.approveRemark,
+                submittedAt: submittedRaw ? dayjs(submittedRaw).format('YYYY-MM-DD HH:mm') : '—',
+                approvedAt: approvedRaw ? dayjs(approvedRaw).format('YYYY-MM-DD HH:mm') : '—',
+                durationHours: Number(
+                  ((dayjs(approvedRaw).valueOf() - dayjs(submittedRaw).valueOf()) / 3600000).toFixed(1),
+                ),
+              }
+            })
+            .filter((row): row is HistoryRow => row !== null)
+            // 后端 `history()` 只绑定 page / size，approvalType / status / keyword
+            // 传过去会被静默忽略。为使筛选器真的生效、不出现「点了筛选没反应」，
+            // 这里在前端按真实字段再过滤一遍。
+            .filter((row) => {
+              if (filters.approvalType && row.approvalType !== filters.approvalType) {
+                return false
+              }
+              if (filters.status && row.status !== filters.status) {
+                return false
+              }
+              if (filters.approverName && row.approverName !== filters.approverName) {
+                return false
+              }
+              if (filters.approvalNo && !row.approvalNo.includes(filters.approvalNo)) {
+                return false
+              }
+              return true
+            })
+          return { rows: serverRows, total: serverRows.length }
         }
-      } catch {
-        /* 后端不可用时降级为演示数据 */
-      }
-      const filtered = MOCK_HISTORY.filter((row) => {
-        if (filters.approvalNo && !row.approvalNo.includes(filters.approvalNo)) {
-          return false
-        }
-        if (filters.approvalType && row.approvalType !== filters.approvalType) {
-          return false
-        }
-        if (filters.status && row.status !== filters.status) {
-          return false
-        }
-        if (filters.approverName && row.approverName !== filters.approverName) {
-          return false
-        }
-        return true
-      })
-      return { rows: filtered, total: MOCK_TOTAL, demo: true }
-    },
+        return { rows: [], total: 0 }
+      },
+    retry: false,
   })
 
   useEffect(() => {
     if (listQuery.data) {
       setRows(listQuery.data.rows)
-      setDemoMode(listQuery.data.demo)
     }
   }, [listQuery.data])
 
@@ -318,7 +219,7 @@ export default function ApprovalHistory(): JSX.Element {
     const header = ['审批编号', '类型', '申请人', '所属租户', '审批结果', '审批人', '审批时间', '耗时(小时)', '审批意见']
     const body = rows.map((row) => [
       row.approvalNo,
-      APPROVAL_TYPE_MAP[row.approvalType],
+      BIZ_TYPE_LABEL[row.approvalType] ?? row.approvalType,
       row.applicantName,
       row.tenantName ?? '—',
       row.status === 2 ? '通过' : '驳回',
@@ -346,7 +247,9 @@ export default function ApprovalHistory(): JSX.Element {
       title: '类型',
       dataIndex: 'approvalType',
       width: 110,
-      render: (_, row) => <Tag color="geekblue">{APPROVAL_TYPE_MAP[row.approvalType]}</Tag>,
+      render: (_, row) => (
+        <Tag color="geekblue">{BIZ_TYPE_LABEL[row.approvalType] ?? row.approvalType}</Tag>
+      ),
     },
     { title: '申请人', dataIndex: 'applicantName', width: 100 },
     {
@@ -385,12 +288,18 @@ export default function ApprovalHistory(): JSX.Element {
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      {demoMode ? (
-        <Card styles={{ body: { padding: 12 } }}>
-          <Typography.Text type="secondary">
-            当前为原型示例数据（后端接口暂未返回数据），查询 / 导出等功能可正常使用。
-          </Typography.Text>
-        </Card>
+      {listQuery.isError ? (
+        <Alert
+          type="error"
+          showIcon
+          message="审批历史接口请求失败"
+          description="后端 /admin/approvals/history 未返回数据，请检查后端服务后重试。页面不会用示例数据填充。"
+          action={
+            <Button size="small" icon={<ReloadOutlined />} onClick={() => void listQuery.refetch()}>
+              重试
+            </Button>
+          }
+        />
       ) : null}
 
       <Row gutter={16}>
@@ -440,12 +349,7 @@ export default function ApprovalHistory(): JSX.Element {
               allowClear
               placeholder="全部"
               style={{ width: 150 }}
-              options={[
-                { value: 1, label: '租户注册' },
-                { value: 2, label: '配额调整' },
-                { value: 3, label: '农场停用' },
-                { value: 4, label: '数据导出' },
-              ]}
+              options={BIZ_TYPE_OPTIONS}
             />
           </Form.Item>
           <Form.Item name="status" label="结果">
@@ -503,6 +407,11 @@ export default function ApprovalHistory(): JSX.Element {
           search={false}
           options={false}
           dateFormatter="string"
+          locale={{
+            emptyText: listQuery.isError
+              ? '审批历史接口请求失败，暂无可展示数据'
+              : '后端暂无审批历史数据（当前筛选条件下无记录）',
+          }}
           pagination={{
             pageSize: 10,
             showSizeChanger: true,
@@ -532,7 +441,7 @@ export default function ApprovalHistory(): JSX.Element {
           <Descriptions column={1} bordered size="small">
             <Descriptions.Item label="审批编号">{detailRow.approvalNo}</Descriptions.Item>
             <Descriptions.Item label="审批类型">
-              {APPROVAL_TYPE_MAP[detailRow.approvalType]}
+              {BIZ_TYPE_LABEL[detailRow.approvalType] ?? detailRow.approvalType}
             </Descriptions.Item>
             <Descriptions.Item label="申请人">{detailRow.applicantName}</Descriptions.Item>
             <Descriptions.Item label="所属租户">{detailRow.tenantName ?? '—'}</Descriptions.Item>
