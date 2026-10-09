@@ -27,6 +27,14 @@ public class QualityLabEntity extends ProduceBaseEntity {
     /** 机构类型 第三方/政府/自建 */
     private String labType;
 
+    /**
+     * 机构等级：1国家级 2省级 3市级。
+     *
+     * <p>历史机构没有等级数据来源，故列可空、不做回填；前端对 NULL 展示「未定级」，
+     * 这比编一个等级填进去诚实。</p>
+     */
+    private Integer labLevel;
+
     /** 联系人 */
     private String contactName;
 
@@ -42,6 +50,9 @@ public class QualityLabEntity extends ProduceBaseEntity {
     /** 认可检测范围 */
     private String accreditedScope;
 
-    /** 状态 1合作中 0已终止 */
+    /** 状态 1合作中 2待准入 0已终止（驳回） */
     private Integer status;
+
+    /** 准入驳回原因（运营端驳回时填写，未驳回为 NULL） */
+    private String rejectReason;
 }

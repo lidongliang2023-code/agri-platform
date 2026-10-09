@@ -108,6 +108,34 @@ public class AdminQualityService {
     }
 
     /**
+     * 检测机构准入驳回（终止合作）。
+     *
+     * <p>与 {@link #accredit(String)} 对称：认可置 {@code status=1}，驳回置 {@code status=0}。
+     * 前端 {@code LabManage.tsx} 的 STATUS_VIEW 只有「1合作中 / 2待准入 / 0已终止」三态，
+     * 驳回落到 0（已终止）——该页面原注释即为「驳回：本地置为已终止」，与此处语义一致。</p>
+     *
+     * <p>驳回原因可选：运营手填则落 {@code reject_reason}，未填写不覆盖历史值，
+     * 但绝不会因为缺少端点而把用户输入丢掉。</p>
+     *
+     * @param labId   机构ID
+     * @param request 驳回请求体（可为 null，表示无请求体调用）
+     * @return 机构档案
+     */
+    @Transactional
+    public QualityLabEntity reject(String labId, LabRejectRequest request) {
+        QualityLabEntity lab = qualityLabMapper.selectById(labId);
+        if (lab == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND);
+        }
+        lab.setStatus(0);
+        if (request != null && request.getRejectReason() != null && !request.getRejectReason().isBlank()) {
+            lab.setRejectReason(request.getRejectReason().trim());
+        }
+        qualityLabMapper.updateById(lab);
+        return lab;
+    }
+
+    /**
      * 不合格召回：冻结关联批次。
      *
      * @param batchId 采收批次ID

@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -38,6 +39,18 @@ public class AdminQualityController {
     @PostMapping("/labs/{labId}/accredit")
     public ApiResponse<QualityLabEntity> accredit(@PathVariable String labId) {
         return ApiResponse.ok(adminQualityService.accredit(labId));
+    }
+
+    /**
+     * 机构准入驳回（与 accredit 对称）。
+     *
+     * <p>此前运营端「驳回」是纯前端假动作：只弹「已驳回」提示、刷新列表，后端无任何端点，
+     * 库里状态纹丝不动。请求体可选，带驳回原因则落 {@code reject_reason}。</p>
+     */
+    @PostMapping("/labs/{labId}/reject")
+    public ApiResponse<QualityLabEntity> reject(@PathVariable String labId,
+                                               @RequestBody(required = false) LabRejectRequest request) {
+        return ApiResponse.ok(adminQualityService.reject(labId, request));
     }
 
     /**
