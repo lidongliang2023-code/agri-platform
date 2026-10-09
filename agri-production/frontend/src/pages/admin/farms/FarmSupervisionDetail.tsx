@@ -247,11 +247,18 @@ export default function FarmSupervisionDetail(): JSX.Element {
     retry: false,
   })
 
-  /** 投入品使用记录 */
+  /**
+   * 投入品使用记录。
+   *
+   * 此前未传 `farmId`，导致「某农场的详情」里混进了全平台其它农场的用药记录，
+   * 运营据此判投入品合规会得出错误结论。`GET /inputs/usages` 的 `farmId`
+   * 是后端声明并真实生效的过滤参数（见 `InputController#pageInputUsage` 与
+   * `InputUsageService#page`），故按当前农场过滤。
+   */
   const usagesQuery = useQuery({
     queryKey: ['admin', 'farms', 'supervision', 'usages', farmId],
     enabled: Boolean(farmId),
-    queryFn: () => listInputUsages({ pageNum: 1, pageSize: 30 }),
+    queryFn: () => listInputUsages({ farmId: String(farmId), pageNum: 1, pageSize: 30 }),
     retry: false,
   })
 

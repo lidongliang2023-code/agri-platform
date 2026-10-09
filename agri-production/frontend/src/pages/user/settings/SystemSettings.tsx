@@ -10,12 +10,15 @@
  * - Tab 3 操作日志：操作人、操作类型、操作对象、操作时间、IP 与结果的查询表
  *
  * 数据来源：`/settings`（配置列表 / 新增 / 更新 / 批量保存）、`/settings/tenant`（租户信息）、
- * `/settings/logs`（操作日志）；后端骨架未提供后两个端点时静默回落示例数据，
- * 参数改动优先批量提交后端，失败时保留本地生效值，保证设置流程完整可用。
+ * `/settings/logs`（操作日志，当前后端为 404）。
+ *
+ * 纪律：`/settings/logs` 拿不到真实日志时**不再回落示例数据**，而是空表 + 醒目 Alert 横幅
+ * 明示「未接入」，并禁用筛选控件（避免用户以为筛选生效）。编造的审计日志比空表更危险。
  */
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  Alert,
   App as AntdApp,
   Button,
   Card,
@@ -39,7 +42,6 @@ import {
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { EditOutlined, PlusOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons'
-import dayjs from 'dayjs'
 import type { Dayjs } from 'dayjs'
 import useFarmStore from '@/store/farm'
 import {
@@ -198,32 +200,6 @@ const OPERATE_TYPE_OPTIONS: { value: string; label: string }[] = [
   { value: '审核', label: '审核' },
   { value: '配置变更', label: '配置变更' },
 ]
-
-/** 示例操作日志 */
-const DEMO_LOGS: OperationLogItem[] = Array.from({ length: 42 }, (_unused, index) => {
-  const type = OPERATE_TYPE_OPTIONS[index % OPERATE_TYPE_OPTIONS.length].value
-  const operators = ['张三', '李四', '王五', '赵六', '系统']
-  const targets = [
-    '农事任务 TASK-20260603-001',
-    '地块 1号田',
-    '投入品 代森锰锌',
-    '告警规则 棚内高温预警',
-    '系统参数 alert.auto.assign',
-    '采收批次 BC20260515001',
-    '报表 2026-05 生产月报',
-  ]
-  return {
-    logId: `DEMO-LOG-${String(index + 1).padStart(4, '0')}`,
-    operateTime: dayjs('2026-06-03 18:20:00')
-      .subtract(index * 23, 'minute')
-      .format('YYYY-MM-DD HH:mm:ss'),
-    operator: operators[index % operators.length],
-    operateType: type,
-    target: targets[index % targets.length],
-    result: index % 11 === 0 ? 0 : 1,
-    ipAddress: `192.168.1.${20 + (index % 60)}`,
-  }
-})
 
 /** 租户信息表单字段 */
 interface TenantFormValues {
@@ -529,27 +505,41 @@ export default function SystemSettings(): JSX.Element {
   })
 
   const remoteLogs: OperationLogItem[] = logQuery.data?.list ?? []
-  const usingLogFallback: boolean = !logQuery.isLoading && remoteLogs.length === 0
 
-  /** 最终日志数据 */
+  /**
+   * 操作日志「未接入」原因。
+   *
+   * 纪律：后端拿不到日志就**只显示真实数据 + 醒目降级提示**，
+   * 不再用示例日志冒充——审计页面看起来有数据而实际全是编造的，后果比空表严重得多。
+   * 接口恢复后本值自动为空，筛选与分页照常生效。
+   */
+  const logUnavailableReason: string | undefined = logQuery.data?.unavailableReason
+
+  /** 日志筛选控件是否在「未接入」状态下禁用（避免用户以为筛选真的生效） */
+  const logFilterDisabled: boolean = Boolean(logUnavailableReason)
+
+  /**
+   * 最终日志数据：全部来自后端真实记录。
+   *
+   * 操作人 / 时间范围两个维度后端 `/settings/logs` 未承诺支持，
+   * 因此只在**本次已取回的记录**范围内做前端过滤（操作类型仍由后端过滤）。
+   */
   const { logs, total: logTotal } = useMemo<{ logs: OperationLogItem[]; total: number }>(() => {
-    if (!usingLogFallback) {
-      return { logs: remoteLogs, total: logQuery.data?.total ?? 0 }
-    }
     const kw = logOperator.trim()
-    const filtered = DEMO_LOGS.filter((item) => {
-      if (logType && item.operateType !== logType) return false
-      if (kw && !item.operator.includes(kw) && !item.target.includes(kw)) return false
+    const filtered = remoteLogs.filter((item) => {
+      if (kw && !String(item.operator ?? '').includes(kw) && !String(item.target ?? '').includes(kw)) {
+        return false
+      }
       if (logRange?.[0] && logRange?.[1]) {
-        const day = item.operateTime.slice(0, 10)
+        const day = String(item.operateTime ?? '').slice(0, 10)
+        if (!day) return false
         if (day < logRange[0].format('YYYY-MM-DD')) return false
         if (day > logRange[1].format('YYYY-MM-DD')) return false
       }
       return true
     })
-    const start = (logPageNum - 1) * logPageSize
-    return { logs: filtered.slice(start, start + logPageSize), total: filtered.length }
-  }, [usingLogFallback, remoteLogs, logQuery.data?.total, logType, logOperator, logRange, logPageNum, logPageSize])
+    return { logs: filtered, total: filtered.length }
+  }, [remoteLogs, logOperator, logRange])
 
   /** 日志列定义 */
   const logColumns: ColumnsType<OperationLogItem> = [
@@ -681,9 +671,25 @@ export default function SystemSettings(): JSX.Element {
               label: '操作日志',
               children: (
                 <Space direction="vertical" size={16} style={{ width: '100%' }}>
+                  {logUnavailableReason && (
+                    <Alert
+                      banner
+                      showIcon
+                      type="warning"
+                      message="操作日志未接入：后端尚未提供 /settings/logs 接口，本页不展示任何示例数据"
+                      description={
+                        <span>
+                          原因：{logUnavailableReason}
+                          。为避免把编造日志误当成真实审计记录，此处<strong>不会</strong>用示例数据占位；
+                          接口上线后本提示自动消失，表格与筛选即恢复可用。
+                        </span>
+                      }
+                    />
+                  )}
                   <Space wrap size={12}>
                     <Select
                       allowClear
+                      disabled={logFilterDisabled}
                       placeholder="操作类型"
                       style={{ width: 150 }}
                       value={logType}
@@ -695,6 +701,7 @@ export default function SystemSettings(): JSX.Element {
                     />
                     <Input.Search
                       allowClear
+                      disabled={logFilterDisabled}
                       placeholder="操作人 / 操作对象"
                       style={{ width: 220 }}
                       value={logOperator}
@@ -702,6 +709,7 @@ export default function SystemSettings(): JSX.Element {
                       onSearch={() => setLogPageNum(1)}
                     />
                     <RangePicker
+                      disabled={logFilterDisabled}
                       value={logRange}
                       onChange={(value) => {
                         setLogRange(value?.[0] && value?.[1] ? [value[0], value[1]] : undefined)
@@ -709,19 +717,19 @@ export default function SystemSettings(): JSX.Element {
                       }}
                     />
                   </Space>
-                  {usingLogFallback && (
-                    <Empty
-                      description="接口暂未返回日志数据，当前展示示例日志（筛选与分页可用）"
-                      style={{ margin: 0 }}
-                    />
-                  )}
                   <Spin spinning={logQuery.isLoading}>
                     <Table<OperationLogItem>
                       rowKey="logId"
                       columns={logColumns}
                       dataSource={logs}
                       scroll={{ x: 1000 }}
-                      locale={{ emptyText: <Empty description="暂无操作日志" /> }}
+                      locale={{
+                        emptyText: logUnavailableReason ? (
+                          <Empty description="后端未返回操作日志，暂无数据可展示（非示例数据）" />
+                        ) : (
+                          <Empty description="暂无操作日志" />
+                        ),
+                      }}
                       pagination={{
                         current: logPageNum,
                         pageSize: logPageSize,

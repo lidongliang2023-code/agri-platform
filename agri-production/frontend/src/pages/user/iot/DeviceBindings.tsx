@@ -50,6 +50,7 @@ import {
   listDevices,
   metricLabel,
   toDeviceBinding,
+  toMetricList,
   unbindBinding,
   unwrapList,
 } from '@/api/iot'
@@ -266,7 +267,8 @@ export default function DeviceBindings(): JSX.Element {
       setChannels(saved)
       return
     }
-    setChannels(defaultChannels(mappingBinding?.metrics ?? ['airTemperature', 'airHumidity']))
+    const metrics = toMetricList(mappingBinding?.metrics)
+    setChannels(defaultChannels(metrics.length > 0 ? metrics : ['airTemperature', 'airHumidity']))
   }, [mappingOpen, mappingDevice, mappingBinding])
 
   /**
@@ -360,7 +362,7 @@ export default function DeviceBindings(): JSX.Element {
       targetType: row.targetType,
       targetId: row.targetId,
       targetName: row.targetName,
-      metrics: row.metrics ?? [],
+      metrics: toMetricList(row.metrics),
       collectInterval: row.collectInterval ?? DEFAULT_INTERVAL,
     } as BindingFormValues)
     setModalOpen(true)
@@ -441,7 +443,8 @@ export default function DeviceBindings(): JSX.Element {
       title: '采集指标',
       key: 'metrics',
       render: (_value: unknown, row: BindingRow) => {
-        const metrics = row.metrics ?? []
+        // 后端可能给数组 / 逗号串 / null，统一成数组后再渲染，避免对非数组调 .map()
+        const metrics = toMetricList(row.metrics)
         if (metrics.length === 0) return <Typography.Text type="secondary">未配置</Typography.Text>
         return (
           <Space wrap size={4}>

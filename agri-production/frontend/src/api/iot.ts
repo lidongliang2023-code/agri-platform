@@ -94,23 +94,53 @@ const TARGET_BY_BIND_TYPE: Record<IotBindType, number> = {
 }
 
 /**
+ * 把后端「采集指标」字段统一成字符串数组。
+ *
+ * 后端三种形态都出现过：数组、逗号分隔字符串、null。
+ * 页面侧一律按 `string[]` 使用，若直接把字符串/数字丢给 `.map()` / `.toLowerCase()`
+ * 就会在**有真实数据**时空态查不出的崩溃（空列表时这段分支根本不走）。
+ *
+ * @param value 后端原始值
+ * @returns 指标编码数组
+ */
+export function toMetricList(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.filter((item) => item !== null && item !== undefined).map((item) => String(item))
+  }
+  if (typeof value === 'string') {
+    return value
+      .split(',')
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0)
+  }
+  if (typeof value === 'number') return [String(value)]
+  return []
+}
+
+/**
  * 后端绑定关系对象 → 旧版 DeviceBinding 结构。
+ *
+ * 对 `metrics` / `targetType` / `status` / `frequency` 做类型归一，
+ * 后端返回数字枚举或逗号串时不会把非字符串值推给字符串方法。
  *
  * @param vo 后端 IotBindingVO
  * @returns 旧版绑定结构
  */
 export function toDeviceBinding(vo: IotBinding): DeviceBinding {
+  const bindType = String(vo?.bindType ?? '') as IotBindType
+  const status = String(vo?.status ?? '').toUpperCase()
+  const frequency = Number(vo?.frequency)
   return {
-    bindingId: vo.bindingId,
-    deviceId: vo.deviceId,
-    deviceName: vo.deviceName,
-    targetType: (TARGET_BY_BIND_TYPE[vo.bindType] ?? 1) as DeviceBinding['targetType'],
-    targetId: vo.bindTargetId,
-    targetName: vo.bindTargetName,
-    metrics: vo.metrics ?? [],
-    collectInterval: vo.frequency ?? undefined,
-    status: vo.status === 'UNBOUND' ? 0 : 1,
-    boundAt: vo.boundAt,
+    bindingId: String(vo?.bindingId ?? ''),
+    deviceId: String(vo?.deviceId ?? ''),
+    deviceName: vo?.deviceName ? String(vo.deviceName) : undefined,
+    targetType: (TARGET_BY_BIND_TYPE[bindType] ?? 1) as DeviceBinding['targetType'],
+    targetId: vo?.bindTargetId ? String(vo.bindTargetId) : '',
+    targetName: vo?.bindTargetName ? String(vo.bindTargetName) : undefined,
+    metrics: toMetricList(vo?.metrics),
+    collectInterval: Number.isFinite(frequency) && frequency > 0 ? frequency : undefined,
+    status: status === 'UNBOUND' ? 0 : 1,
+    boundAt: vo?.boundAt ? String(vo.boundAt) : '',
   }
 }
 
@@ -304,7 +334,10 @@ export function onlineStatusMeta(status: unknown): { label: string; color: strin
  */
 export function deviceTypeLabel(deviceType: unknown): string {
   if (deviceType === null || deviceType === undefined || deviceType === '') return '-'
-  const key = String(deviceType)
+  // 后端可能返回数字枚举 / 枚举名 / 中文名，统一成字符串再查表，
+  // 避免把 number / object 直接推给 String.prototype 方法。
+  const key = String(deviceType).trim()
+  if (!key) return '-'
   return DEVICE_TYPE_LABEL_MAP[key] ?? DEVICE_TYPE_LABEL_MAP[key.toLowerCase()] ?? key
 }
 
@@ -362,20 +395,25 @@ const METRIC_ALIAS: Record<string, string> = {
  * @param metric 原始指标编码
  * @returns 标准编码
  */
-export function normalizeMetric(metric: string): string {
-  if (!metric) return ''
-  return METRIC_ALIAS[metric] ?? METRIC_ALIAS[metric.toLowerCase()] ?? metric
+export function normalizeMetric(metric: unknown): string {
+  if (metric === null || metric === undefined || metric === '') return ''
+  // 指标编码在后端可能是数字枚举或下划线命名，先归一成字符串再查别名表
+  const raw = String(metric).trim()
+  if (!raw) return ''
+  return METRIC_ALIAS[raw] ?? METRIC_ALIAS[raw.toLowerCase()] ?? raw
 }
 
 /**
  * 查询指标中文名（未登记指标回退原始编码）。
  *
- * @param metric 指标编码
+ * @param metric 指标编码，允许后端给出数字 / 枚举等非字符串值
  * @returns 指标名称
  */
-export function metricLabel(metric: string): string {
-  const key = normalizeMetric(metric)
-  return ENV_METRIC_DEFS.find((item) => item.key === key)?.label ?? metric
+export function metricLabel(metric: unknown): string {
+  const raw = metric === null || metric === undefined || metric === '' ? '' : String(metric).trim()
+  if (!raw) return '-'
+  const key = normalizeMetric(raw)
+  return ENV_METRIC_DEFS.find((item) => item.key === key)?.label ?? raw
 }
 
 /* ============================================================================

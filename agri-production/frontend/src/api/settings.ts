@@ -121,24 +121,53 @@ export interface OperationLogParams extends PageQuery {
   operator?: string
 }
 
+/** 操作日志分页结果（附带「接口未接入」原因，供页面显式降级提示） */
+export interface OperationLogPage extends PageResult<OperationLogItem> {
+  /**
+   * 接口不可用原因。
+   *
+   * 非空表示本次没有拿到任何真实日志，页面必须显式告知用户「未接入」，
+   * **不得**用示例 / 编造日志顶上——那会让审计页面看起来有数据而实际没有。
+   */
+  unavailableReason?: string
+}
+
 /**
- * 分页查询操作日志
+ * 分页查询操作日志。
  *
- * 后端骨架暂未提供 `/settings/logs`，静默回落到空分页，由页面使用示例数据。
+ * 后端当前未提供 `/settings/logs`（实为 404），这里**不再静默回落示例数据**，
+ * 而是把不可用原因一并返回，交由页面做醒目降级提示。
  *
  * @param params 查询参数
- * @returns 分页结果
+ * @returns 分页结果，含可能的不可用原因
  */
 export async function listOperationLogs(
   params: OperationLogParams,
-): Promise<PageResult<OperationLogItem>> {
+): Promise<OperationLogPage> {
+  const empty: OperationLogPage = {
+    pageNum: params.pageNum,
+    pageSize: params.pageSize,
+    total: 0,
+    pages: 0,
+    list: [],
+  }
   try {
     const res = await http.get<PageResult<OperationLogItem>>(`${BASE}/logs`, params, {
       silent: true,
     })
-    if (res && Array.isArray(res.list)) return res
-    return { pageNum: params.pageNum, pageSize: params.pageSize, total: 0, pages: 0, list: [] }
-  } catch {
-    return { pageNum: params.pageNum, pageSize: params.pageSize, total: 0, pages: 0, list: [] }
+    if (res && Array.isArray(res.list)) {
+      return res.list.length > 0
+        ? { ...res }
+        : { ...res, unavailableReason: '后端 /settings/logs 已请求成功，但未返回任何日志记录' }
+    }
+    return {
+      ...empty,
+      unavailableReason: '后端 /settings/logs 返回结构不是分页数据（缺少 list 数组）',
+    }
+  } catch (error) {
+    return {
+      ...empty,
+      unavailableReason: `操作日志接口不可用：${(error as Error)?.message ?? '请求失败'}`,
+    }
   }
 }

@@ -59,9 +59,16 @@ export function deleteInputStock(recordId: string): Promise<boolean> {
   return http.delete<boolean>(`${BASE}/stock/${recordId}`)
 }
 
-/** 分页查询投入品使用记录 */
+/**
+ * 分页查询投入品使用记录。
+ *
+ * `farmId` 为后端 `GET /api/v1/production/inputs/usages` 明确声明的过滤参数
+ * （`InputController#pageInputUsage` `@RequestParam(required = false) String farmId`，
+ * 且 `InputUsageService#page` 会按 `prod_input_usage.farm_id` 真实加过滤条件），
+ * 传了不会被静默丢弃。
+ */
 export function listInputUsages(
-  params: PageQuery & { inputId?: string; plotId?: string; taskId?: string },
+  params: PageQuery & { inputId?: string; plotId?: string; taskId?: string; farmId?: string },
 ): Promise<PageResult<InputUsage>> {
   return http.get<PageResult<InputUsage>>(`${BASE}/usages`, params)
 }
