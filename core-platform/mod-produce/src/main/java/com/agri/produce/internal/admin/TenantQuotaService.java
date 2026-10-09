@@ -3,6 +3,8 @@ package com.agri.produce.internal.admin;
 import com.agri.produce.internal.common.ProduceIds;
 import com.agri.produce.internal.farm.FarmInfoEntity;
 import com.agri.produce.internal.farm.FarmInfoMapper;
+import com.agri.produce.internal.trace.TraceCodeEntity;
+import com.agri.produce.internal.trace.TraceCodeMapper;
 import com.agri.shared.exception.BusinessException;
 import com.agri.shared.exception.ErrorCode;
 import com.agri.shared.result.PageResult;
@@ -56,6 +58,7 @@ public class TenantQuotaService {
 
     private final TenantQuotaMapper tenantQuotaMapper;
     private final FarmInfoMapper farmInfoMapper;
+    private final TraceCodeMapper traceCodeMapper;
 
     /**
      * 分页查询。
@@ -231,9 +234,10 @@ public class TenantQuotaService {
                 quota.getUsedFarmCount() == null ? 0D : quota.getUsedFarmCount().doubleValue(),
                 quota.getFarmLimit() == null ? 0D : quota.getFarmLimit().doubleValue(),
                 0, text(quota.getUpdatedAt()), quota.getQuotaId(), 1, OpsQuotaItem.SOURCE_COLUMN));
-        items.add(OpsQuotaItem.of("traceCode", "溯源码", "个", 0D,
+        items.add(OpsQuotaItem.of("traceCode", "溯源码", "个",
+                (double) countTraceCodeUsage(quota.getTenantId()),
                 quota.getTraceCodeLimit() == null ? 0D : quota.getTraceCodeLimit().doubleValue(),
-                0, text(quota.getUpdatedAt()), quota.getQuotaId(), 0, OpsQuotaItem.SOURCE_NONE));
+                0, text(quota.getUpdatedAt()), quota.getQuotaId(), 0, OpsQuotaItem.SOURCE_COLUMN));
         items.add(OpsQuotaItem.of("storage", "存储空间", "GB", 0D,
                 quota.getStorageLimitGb() == null ? 0D : quota.getStorageLimitGb().doubleValue(),
                 2, text(quota.getUpdatedAt()), quota.getQuotaId(), 5, OpsQuotaItem.SOURCE_NONE));
@@ -241,6 +245,33 @@ public class TenantQuotaService {
                 quota.getApiCallLimit() == null ? 0D : quota.getApiCallLimit().doubleValue(),
                 0, text(quota.getUpdatedAt()), quota.getQuotaId(), 6, OpsQuotaItem.SOURCE_NONE));
         return items;
+    }
+
+    /**
+     * 统计某租户<b>已签发</b>的溯源码数量（溯源码配额的用量口径）。
+     *
+     * <p>数据源为 {@code prod_trace_code}（{@link TraceCodeEntity}），按 {@code tenant_id} 聚合。
+     * 这是四项配额里除农场数之外<b>唯一有真实用量数据源</b>的一项——此前被写死为 0 且标记
+     * {@code SOURCE_NONE}，属于「有数据却不取」，与存储 / API 那种「真没有」性质不同。</p>
+     *
+     * <p><b>口径：</b>统计该租户名下全部<b>未逻辑删除</b>的溯源码，不区分
+     * {@code generated/active/scanned/revoked}。配额衡量的是「已签发量」，
+     * 已作废的码同样占用过一次签发额度，故计入。
+     * 逻辑删除条件由全局 {@code logic-delete-field=deleted} 自动追加，此处不重复书写。</p>
+     *
+     * <p><b>为什么不落库：</b>{@code prod_tenant_quota} 没有对应的 {@code used} 列。
+     * 若新增列却没有触发点（前端「重算」按钮当前只调 {@code reset-usage}），
+     * 该列会长期停留在 0，等于换一种方式「写死 0」。故按读取时实时统计，永不失真。
+     * 若后续要求可「重算」并持久化，需同时补列（V13+）、回填与触发入口三件套。</p>
+     *
+     * @param tenantId 租户标识；{@code null} 视为 0（未打标，与 MyMetaObjectHandler 默认值一致）
+     * @return 该租户名下溯源码条数
+     */
+    public long countTraceCodeUsage(Long tenantId) {
+        Long safeTenantId = tenantId == null ? 0L : tenantId;
+        Long count = traceCodeMapper.selectCount(new LambdaQueryWrapper<TraceCodeEntity>()
+                .eq(TraceCodeEntity::getTenantId, safeTenantId));
+        return count == null ? 0L : count;
     }
 
     /**

@@ -5,9 +5,11 @@ import lombok.Data;
 /**
  * 运营端配额概览单项（对齐前端 {@code types/tenant.ts#OpsQuotaItem}）。
  *
- * <p><b>数据来源诚实标记：</b>{@code source} 说明该用量的出处。
- * 当前只有「农场数」有真实用量列（{@code prod_tenant_quota.used_farm_count}）；
- * 溯源码 / 存储 / API 调用<strong>没有任何用量数据源</strong>（既无用量列，也无可按租户聚合的业务表），
+ * <p><b>数据来源诚实标记：</b>{@code source} 说明该用量的出处。当前有真实用量数据源的有两项：
+ * 「农场数」取用量列 {@code prod_tenant_quota.used_farm_count}；
+ * 「溯源码」按 {@code prod_trace_code.tenant_id} 实时聚合
+ * （见 {@code TenantQuotaService#countTraceCodeUsage}）。
+ * 存储 / API 调用<strong>没有任何用量数据源</strong>（既无用量列，也无可按租户聚合的业务表），
  * 因此 {@code used} 记为 0 且 {@code source = NONE}，<b>不伪造数字</b>。
  * 前端看到 {@code NONE} 应展示「—」而不是 0。</p>
  */
