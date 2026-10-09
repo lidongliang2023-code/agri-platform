@@ -152,9 +152,18 @@ export interface OpsQuotaItem {
   quotaType: number
   /**
    * 用量数据来源（后端 {@code OpsQuotaItem.source}），决定前端能否展示用量：
-   * - `COLUMN`：有真实用量数据源（当前为「农场数」与「溯源码」），used / usageRate 可信，正常展示；
+   * - `COLUMN`：有真实用量数据源，**当前只有「农场数」一项**（取自配额表用量列
+   *   {@code used_farm_count}），used / usageRate 可信，正常展示；
    * - `NONE`：完全没有用量数据源，used 恒为 0 仅为满足结构，**必须展示「—」而不是 0**；
    * - `UNAVAILABLE`：数据源暂时不可用（统计失败等），同样展示「—」。
+   *
+   * <p><b>当前各配额项实测口径（2026-10-09，后端 {@code OpsTenantQuotaRow}）：</b>
+   * 农场数 = {@code COLUMN}；溯源码 / 存储空间 / API 调用 = {@code NONE}。
+   * 其中<b>溯源码</b>后端确实有平台口径统计（{@code /trace/codes/stats}），但生产域
+   * {@code prod_trace_code} 等表 {@code tenant_id} 全为 0、
+   * {@code COUNT(DISTINCT tenant_id)} = 1，<b>没有租户维度</b>——
+   * 因此不得按租户展示用量，更<b>不能把平台总数填进单个租户行</b>（那仍是假数据）。
+   * 存储与 API 调用则是后端完全没有用量数据源。</p>
    *
    * 缺省 undefined 一律按「无数据源」处理，避免把结构占位的 0 误读成真实用量。
    */

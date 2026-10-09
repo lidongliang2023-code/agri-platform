@@ -299,8 +299,9 @@ export default function AdminAlertCenter(): JSX.Element {
           <Card>
             <Statistic
               title="紧急告警"
-              value={stats.critical}
-              suffix="条"
+              // 接口失败时不能显示 0：0 会被读成「确实没有紧急告警」
+              value={listQuery.isError ? '—' : stats.critical}
+              suffix={listQuery.isError ? undefined : '条'}
               valueStyle={{ color: '#cf1322' }}
               prefix={<WarningOutlined />}
             />
@@ -311,8 +312,8 @@ export default function AdminAlertCenter(): JSX.Element {
           <Card>
             <Statistic
               title="重要告警"
-              value={stats.major}
-              suffix="条"
+              value={listQuery.isError ? '—' : stats.major}
+              suffix={listQuery.isError ? undefined : '条'}
               valueStyle={{ color: '#d46b08' }}
             />
           </Card>
@@ -321,8 +322,8 @@ export default function AdminAlertCenter(): JSX.Element {
           <Card>
             <Statistic
               title="一般告警"
-              value={stats.minor}
-              suffix="条"
+              value={listQuery.isError ? '—' : stats.minor}
+              suffix={listQuery.isError ? undefined : '条'}
               valueStyle={{ color: '#1677ff' }}
             />
           </Card>
@@ -331,8 +332,8 @@ export default function AdminAlertCenter(): JSX.Element {
           <Card>
             <Statistic
               title="今日已处理"
-              value={stats.handledToday}
-              suffix="条"
+              value={listQuery.isError ? '—' : stats.handledToday}
+              suffix={listQuery.isError ? undefined : '条'}
               valueStyle={{ color: '#13a05a' }}
               prefix={<CheckCircleOutlined />}
             />

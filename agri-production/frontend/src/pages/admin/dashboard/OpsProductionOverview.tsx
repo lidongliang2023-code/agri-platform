@@ -7,6 +7,7 @@
  */
 import { useMemo, useState } from 'react'
 import {
+  Alert as AntAlert,
   App,
   Button,
   Card,
@@ -82,41 +83,17 @@ const REGION_OPTIONS: Array<{ value: string; label: string }> = [
   { value: '广东省', label: '广东省' },
 ]
 
-/* ==================== 示例数据（后端无明细接口时兜底） ==================== */
-
-/** 按区域示例数据 */
-const FALLBACK_ROWS: Record<Dimension, OverviewRow[]> = {
-  region: [
-    { name: '河南省', farmCount: 720, fieldArea: 185000, outputTon: 5200, taskRate: 89.2, alertCount: 12 },
-    { name: '山东省', farmCount: 650, fieldArea: 162000, outputTon: 4800, taskRate: 91.5, alertCount: 8 },
-    { name: '黑龙江省', farmCount: 480, fieldArea: 214000, outputTon: 7600, taskRate: 86.4, alertCount: 15 },
-    { name: '江苏省', farmCount: 410, fieldArea: 96000, outputTon: 3200, taskRate: 88.7, alertCount: 6 },
-    { name: '四川省', farmCount: 355, fieldArea: 88000, outputTon: 2800, taskRate: 84.3, alertCount: 9 },
-    { name: '广东省', farmCount: 320, fieldArea: 62000, outputTon: 2500, taskRate: 82.1, alertCount: 11 },
-  ],
-  crop: [
-    { name: '水稻', farmCount: 1180, fieldArea: 326000, outputTon: 12400, taskRate: 90.1, alertCount: 14 },
-    { name: '小麦', farmCount: 960, fieldArea: 248000, outputTon: 8600, taskRate: 88.9, alertCount: 9 },
-    { name: '玉米', farmCount: 740, fieldArea: 212000, outputTon: 9800, taskRate: 87.2, alertCount: 12 },
-    { name: '果蔬', farmCount: 512, fieldArea: 108000, outputTon: 4200, taskRate: 85.6, alertCount: 16 },
-    { name: '大豆', farmCount: 386, fieldArea: 96000, outputTon: 3100, taskRate: 86.8, alertCount: 7 },
-    { name: '其它', farmCount: 264, fieldArea: 62000, outputTon: 1900, taskRate: 83.4, alertCount: 5 },
-  ],
-  tenant: [
-    { name: '绿源农业科技有限公司', farmCount: 45, fieldArea: 12500, outputTon: 860, taskRate: 92.5, alertCount: 1 },
-    { name: '大地种业', farmCount: 52, fieldArea: 15200, outputTon: 1120, taskRate: 90.8, alertCount: 2 },
-    { name: '丰达农场', farmCount: 38, fieldArea: 9800, outputTon: 640, taskRate: 89.4, alertCount: 1 },
-    { name: '田园生态', farmCount: 33, fieldArea: 10100, outputTon: 580, taskRate: 84.2, alertCount: 3 },
-    { name: '丰收集团', farmCount: 29, fieldArea: 8600, outputTon: 520, taskRate: 88.1, alertCount: 0 },
-    { name: '惠民种植', farmCount: 15, fieldArea: 4200, outputTon: 210, taskRate: 76.5, alertCount: 4 },
-  ],
-}
-
 /**
  * 生产总览
  *
  * 业务职责：按区域 / 作物 / 租户三个维度聚合展示全平台生产数据，
  * 支持时间范围与区域筛选、表格与图表两种展示方式。
+ *
+ * <p><b>数据口径（硬规矩：不造数据、可以降级但不能骗人）：</b>
+ * 汇总指标取后端 `/admin/dashboard/overview`，维度明细取 `/admin/dashboard/overview-rows`；
+ * 接口返回空就是空，接口报错就显式提示，<b>不使用任何示例 / 兜底数据</b>。
+ * 原实现里「明细为空时换 FALLBACK_ROWS」以及「汇总为 0 时填 3542 / 856000 / 2450 / 26 / 87.3」
+ * 已全部移除——那些数字看起来完全合理，却完全看不出是编造的。</p>
  *
  * @returns 页面内容
  */
@@ -155,28 +132,38 @@ export default function OpsProductionOverview(): JSX.Element {
     retry: false,
   })
 
-  /** 维度明细数据 */
-  const rows = useMemo<OverviewRow[]>(() => {
-    const remote = rowsQuery.data
-    if (remote && remote.length > 0) {
-      return remote.map((item) => ({
+  /** 维度明细数据：只用后端真实返回，接口为空就是空（不再用 FALLBACK_ROWS 兜底） */
+  const rows = useMemo<OverviewRow[]>(
+    () =>
+      (rowsQuery.data ?? []).map((item) => ({
         name: item.name,
         farmCount: Number(item.farmCount) || 0,
         fieldArea: Number(item.fieldArea) || 0,
         outputTon: Number(item.outputTon) || 0,
         taskRate: Number(item.taskRate) || 0,
         alertCount: Number(item.alertCount) || 0,
-      }))
-    }
-    const fallback = FALLBACK_ROWS[filter.dimension]
-    if (filter.region === 'all') {
-      return fallback
-    }
-    return fallback.filter((item) => item.name === filter.region)
-  }, [rowsQuery.data, filter.dimension, filter.region])
+      })),
+    [rowsQuery.data],
+  )
 
-  /** 汇总指标卡（后端无数据时用明细聚合 + 平台口径兜底） */
-  const summary = useMemo(() => {
+  /**
+   * 汇总指标卡：只按后端返回值与真实明细聚合计算。
+   *
+   * 后端既无接口值、也无明细行时各项为 null（卡片展示「—」），不再用
+   * 3542 / 856000 / 2450 / 26 / 87.3 这类示例数字顶替。
+   */
+  const summary: {
+    /** 纳入统计农场数 */
+    farmCount: number | null
+    /** 在田面积（亩） */
+    fieldArea: number | null
+    /** 本期产量（吨） */
+    outputTon: number | null
+    /** 平均任务完成率（%） */
+    taskRate: number | null
+    /** 告警数 */
+    alertCount: number | null
+  } = useMemo(() => {
     const totals = rows.reduce(
       (acc, item) => ({
         farmCount: acc.farmCount + item.farmCount,
@@ -187,21 +174,37 @@ export default function OpsProductionOverview(): JSX.Element {
       { farmCount: 0, fieldArea: 0, outputTon: 0, alertCount: 0 },
     )
     const raw = summaryQuery.data as unknown as Record<string, unknown> | undefined
+    /**
+     * 取值优先级：后端接口值 → 真实明细聚合值 → null（显示「—」）。
+     * 有明细行时聚合值可信，即使是 0 也照实显示（例如 0 条告警是真值）；
+     * 既无接口值又无明细行，才判定为「没有数据」。
+     */
+    const pick = (key: string, aggregated: number): number | null => {
+      const fromApi = Number(raw?.[key] ?? 0)
+      if (Number.isFinite(fromApi) && fromApi > 0) {
+        return fromApi
+      }
+      if (rows.length > 0) {
+        return aggregated
+      }
+      return null
+    }
     const avgTaskRate =
       rows.length > 0
-        ? rows.reduce((acc, item) => acc + item.taskRate, 0) / rows.length
-        : 87.3
+        ? Number((rows.reduce((acc, item) => acc + item.taskRate, 0) / rows.length).toFixed(1))
+        : null
     return {
-      /** 农场总数 */
-      farmCount: Number(raw?.farmCount ?? 0) || totals.farmCount || 3542,
-      /** 在田面积（亩） */
-      fieldArea: Number(raw?.fieldArea ?? 0) || totals.fieldArea || 856000,
-      /** 本期产量（吨） */
-      outputTon: Number(raw?.outputTon ?? 0) || totals.outputTon || 2450,
-      /** 平均任务完成率（%） */
-      taskRate: Number(raw?.taskRate ?? 0) || Number(avgTaskRate.toFixed(1)),
-      /** 告警数 */
-      alertCount: Number(raw?.alertCount ?? 0) || totals.alertCount || 26,
+      farmCount: pick('farmCount', totals.farmCount),
+      fieldArea: pick('fieldArea', totals.fieldArea),
+      outputTon: pick('outputTon', totals.outputTon),
+      taskRate: (() => {
+        const fromApi = Number(raw?.taskRate ?? 0)
+        if (Number.isFinite(fromApi) && fromApi > 0) {
+          return fromApi
+        }
+        return avgTaskRate
+      })(),
+      alertCount: pick('alertCount', totals.alertCount),
     }
   }, [rows, summaryQuery.data])
 
@@ -317,11 +320,44 @@ export default function OpsProductionOverview(): JSX.Element {
           </Title>
           <Text type="secondary">
             {rowsQuery.data && rowsQuery.data.length > 0
-              ? '数据来源：平台生产数据聚合'
-              : '当前为原型示例口径（后端明细接口暂未返回数据）'}
+              ? '数据来源：平台生产数据聚合（/admin/dashboard/overview-rows）'
+              : '后端未返回维度明细数据'}
           </Text>
         </Col>
       </Row>
+
+      {/* 接口失败：显式列出失败端点，不用「示例口径」粉饰 */}
+      {rowsQuery.isError || summaryQuery.isError ? (
+        <AntAlert
+          style={{ marginBottom: 12 }}
+          type="error"
+          showIcon
+          message="生产总览数据加载失败"
+          description={
+            [
+              summaryQuery.isError
+                ? `/admin/dashboard/overview：${(summaryQuery.error as Error | null)?.message ?? '未知错误'}`
+                : null,
+              rowsQuery.isError
+                ? `/admin/dashboard/overview-rows：${(rowsQuery.error as Error | null)?.message ?? '未知错误'}`
+                : null,
+            ]
+              .filter((item): item is string => item !== null)
+              .join('；') || undefined
+          }
+        />
+      ) : null}
+
+      {/* 后端返回空：空态要看得见，不是一行灰色小字 */}
+      {!rowsQuery.isError && !summaryQuery.isError && !rowsQuery.isLoading && rows.length === 0 ? (
+        <AntAlert
+          style={{ marginBottom: 12 }}
+          type="info"
+          showIcon
+          message="后端未返回维度明细数据"
+          description="汇总指标与明细列表均取后端真实接口；当前无数据，指标卡显示「—」、列表为空态，不使用示例数据兜底。"
+        />
+      ) : null}
 
       {/* 筛选区 */}
       <Card size="small" style={{ marginBottom: 12 }}>
@@ -392,9 +428,11 @@ export default function OpsProductionOverview(): JSX.Element {
             ) : (
               <Statistic
                 title="纳入统计农场"
-                value={summary.farmCount}
-                suffix="个"
-                formatter={(value) => Number(value).toLocaleString('zh-CN')}
+                value={summary.farmCount ?? '—'}
+                suffix={summary.farmCount === null ? undefined : '个'}
+                formatter={(value) =>
+                  typeof value === 'number' ? Number(value).toLocaleString('zh-CN') : String(value)
+                }
               />
             )}
           </Card>
@@ -403,8 +441,12 @@ export default function OpsProductionOverview(): JSX.Element {
           <Card size="small">
             <Statistic
               title="在田面积"
-              value={Number((summary.fieldArea / 10000).toFixed(1))}
-              suffix="万亩"
+              value={
+                summary.fieldArea === null
+                  ? '—'
+                  : Number((summary.fieldArea / 10000).toFixed(1))
+              }
+              suffix={summary.fieldArea === null ? undefined : '万亩'}
             />
           </Card>
         </Col>
@@ -412,9 +454,11 @@ export default function OpsProductionOverview(): JSX.Element {
           <Card size="small">
             <Statistic
               title="本期产量"
-              value={summary.outputTon}
-              suffix="吨"
-              formatter={(value) => Number(value).toLocaleString('zh-CN')}
+              value={summary.outputTon ?? '—'}
+              suffix={summary.outputTon === null ? undefined : '吨'}
+              formatter={(value) =>
+                typeof value === 'number' ? Number(value).toLocaleString('zh-CN') : String(value)
+              }
             />
           </Card>
         </Col>
@@ -422,10 +466,17 @@ export default function OpsProductionOverview(): JSX.Element {
           <Card size="small">
             <Statistic
               title="平均任务完成率"
-              value={summary.taskRate}
+              value={summary.taskRate ?? '—'}
               precision={1}
-              suffix="%"
-              valueStyle={{ color: summary.taskRate >= 88 ? '#13a05a' : '#faad14' }}
+              suffix={summary.taskRate === null ? undefined : '%'}
+              valueStyle={{
+                color:
+                  summary.taskRate === null
+                    ? undefined
+                    : summary.taskRate >= 88
+                      ? '#13a05a'
+                      : '#faad14',
+              }}
             />
           </Card>
         </Col>
@@ -456,7 +507,14 @@ export default function OpsProductionOverview(): JSX.Element {
         {rowsQuery.isLoading ? (
           <Skeleton active paragraph={{ rows: 8 }} />
         ) : rows.length === 0 ? (
-          <Empty description="当前筛选条件下暂无生产数据" />
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description={
+              rowsQuery.isError
+                ? '维度明细接口加载失败，暂无数据（不使用示例数据兜底）'
+                : '后端未返回该维度明细数据（不使用示例数据兜底）'
+            }
+          />
         ) : filter.view === 'table' ? (
           <Table<OverviewRow>
             rowKey="name"
