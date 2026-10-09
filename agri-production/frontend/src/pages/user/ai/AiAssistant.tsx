@@ -16,14 +16,22 @@
  *   Enter 发送、Shift+Enter 换行；发送期间展示「思考中」与流式打字效果
  *
  * 数据来源：`/ai/assistant/sessions`（会话列表 / 新建 / 重命名 / 删除）、
- * `/ai/assistant/sessions/{id}/messages`、`/ai/assistant/messages`；
- * 后端骨架阶段无数据时回落原型示例会话，问答由本地农艺知识库兜底，保证真实多轮可交互。
+ * `/ai/assistant/sessions/{id}/messages`、`/ai/assistant/messages`。
+ *
+ * ⚠️ 数据来源纪律（不可回退）：
+ * 1. 会话列表只取服务端返回值；服务端无会话时显示空态 + 醒目提示，
+ *    **不再回落 4 组原型示例会话（DEMO-SESSION-1..4）**。
+ * 2. 消息列表只取服务端返回值；**不再回落示例消息（DEMO-MESSAGES）**。
+ * 3. 问答回复只取服务端返回值；接口失败 / 未返回 content 时明确报错，
+ *    **不再用本地农艺知识库回答**（本地回答包含用药建议，会被误认为模型结论）。
+ * 4. 新建 / 删除 / 重命名会话失败时明确报错，**不再把失败弹成成功**。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent, ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  Alert,
   App as AntdApp,
   Avatar,
   Button,
@@ -87,204 +95,18 @@ interface TaskSuggestion {
 /** 本地消息（新增消息在接口返回前使用本地 ID） */
 type LocalMessage = ChatMessage & { pending?: boolean }
 
-/* ==================== 原型示例会话（P31） ==================== */
-
-/** 示例会话 1：番茄晚疫病防治方案（原型默认选中） */
-const DEMO_SESSIONS: ChatSession[] = [
-  {
-    sessionId: 'DEMO-SESSION-1',
-    title: '番茄晚疫病防治方案',
-    lastMessage: '✅ 已为您生成农事任务：1号田晚疫病防治',
-    createdAt: '2026-06-03 10:30:00',
-    updatedAt: '2026-06-03 10:30:00',
-  },
-  {
-    sessionId: 'DEMO-SESSION-2',
-    title: '黄瓜霜霉病紧急处理',
-    lastMessage: '已给出霜霉病紧急处理方案与用药建议',
-    createdAt: '2026-06-02 14:20:00',
-    updatedAt: '2026-06-02 14:20:00',
-  },
-  {
-    sessionId: 'DEMO-SESSION-3',
-    title: '水稻灌溉计划优化',
-    lastMessage: '建议改为间歇灌溉，可节水约 18%',
-    createdAt: '2026-06-01 09:15:00',
-    updatedAt: '2026-06-01 09:15:00',
-  },
-  {
-    sessionId: 'DEMO-SESSION-4',
-    title: '有机认证标准咨询',
-    lastMessage: '有机认证禁用化学合成农药，建议改用生物制剂',
-    createdAt: '2026-05-30 16:45:00',
-    updatedAt: '2026-05-30 16:45:00',
-  },
-]
-
-/** 原型会话 1 的 4 条气泡（原文照搬） */
-const DEMO_MESSAGES: Record<string, LocalMessage[]> = {
-  'DEMO-SESSION-1': [
-    {
-      messageId: 'DEMO-MSG-1-1',
-      sessionId: 'DEMO-SESSION-1',
-      role: 'user',
-      content:
-        '1号田番茄叶片出现了水渍状斑点，边缘不明显，背面有白色霉层，这是什么病？怎么防治？',
-      createdAt: '2026-06-03 10:24:00',
-    },
-    {
-      messageId: 'DEMO-MSG-1-2',
-      sessionId: 'DEMO-SESSION-1',
-      role: 'assistant',
-      content:
-        '根据您描述的症状——叶片水渍状斑点、背面白色霉层，结合当前环境数据（湿度72%、温度28.5°C），**高度疑似番茄晚疫病（Phytophthora infestans）**。\n\n### 防治建议\n- ① 立即措施：喷施**代森锰锌**（800倍液）或甲霜灵锰锌，每亩用药量 60-80g\n- ② 环境调控：加强通风，降低棚内湿度至 **65% 以下**\n- ③ 后续监测：每 3 天检查一次病斑扩展情况\n- ④ 安全间隔：距采收期 > 15 天，满足休药期要求\n\n需要我帮您生成农事任务单吗？',
-      createdAt: '2026-06-03 10:25:00',
-    },
-    {
-      messageId: 'DEMO-MSG-1-3',
-      sessionId: 'DEMO-SESSION-1',
-      role: 'user',
-      content: '好的，帮我生成任务单，安排张三明天上午执行',
-      createdAt: '2026-06-03 10:28:00',
-    },
-    {
-      messageId: 'DEMO-MSG-1-4',
-      sessionId: 'DEMO-SESSION-1',
-      role: 'assistant',
-      content:
-        '✅ 已为您生成农事任务：\n任务: 1号田晚疫病防治\n执行地块: 1号田\n执行人: 张三\n计划时间: 2026-06-04 08:00-11:00\n用药: 代森锰锌 800倍液，60g/亩\n优先级: 紧急\n\n点击「确认并创建任务」即可写入农事任务列表。',
-      createdAt: '2026-06-03 10:30:00',
-    },
-  ],
-  'DEMO-SESSION-2': [
-    {
-      messageId: 'DEMO-MSG-2-1',
-      sessionId: 'DEMO-SESSION-2',
-      role: 'user',
-      content: '黄瓜叶片正面出现黄色多角形病斑，背面有紫灰色霉层，扩散很快，怎么办？',
-      createdAt: '2026-06-02 14:12:00',
-    },
-    {
-      messageId: 'DEMO-MSG-2-2',
-      sessionId: 'DEMO-SESSION-2',
-      role: 'assistant',
-      content:
-        '这是典型的**黄瓜霜霉病**，高湿（>85%）与 18~24℃ 环境下 3~5 天即可蔓延全棚。\n\n### 紧急处理\n- ① 当晚先降湿：关闭天窗后开启加温 1~2 小时，把棚内湿度压到 75% 以下\n- ② 药剂：喷施**烯酰吗啉**（1500 倍液）+ 代森联，重点喷叶背，亩用水量 45~60L\n- ③ 摘除重病叶并带出棚外销毁，减少再侵染源\n- ④ 3 天后复查，若病斑继续扩展，轮换使用氟噻唑吡乙酮\n\n需要我帮您生成农事任务单吗？',
-      createdAt: '2026-06-02 14:20:00',
-    },
-  ],
-  'DEMO-SESSION-3': [
-    {
-      messageId: 'DEMO-MSG-3-1',
-      sessionId: 'DEMO-SESSION-3',
-      role: 'user',
-      content: '水稻A区现在一直保持浅水层，用水量太大，有没有更省的灌溉方案？',
-      createdAt: '2026-06-01 09:05:00',
-    },
-    {
-      messageId: 'DEMO-MSG-3-2',
-      sessionId: 'DEMO-SESSION-3',
-      role: 'assistant',
-      content:
-        '建议由「长期浅水灌溉」改为**间歇灌溉（干湿交替）**：\n\n### 优化方案\n- ① 分蘖期保持 2~3cm 浅水，够苗后及时晒田\n- ② 孕穗—抽穗期保持 3~5cm 水层，此期对水分最敏感\n- ③ 灌浆期干湿交替，前水不见后水\n- ④ 结合土壤墒情传感器（低于 30% 触发补水）实现按需灌溉\n\n按当前 1200 亩规模测算，全季可节水约 **18%**，同时降低纹枯病发生率。\n\n需要我帮您生成灌溉任务单吗？',
-      createdAt: '2026-06-01 09:15:00',
-    },
-  ],
-  'DEMO-SESSION-4': [
-    {
-      messageId: 'DEMO-MSG-4-1',
-      sessionId: 'DEMO-SESSION-4',
-      role: 'user',
-      content: '我们想做有机认证，现有的化学农药还能继续用吗？',
-      createdAt: '2026-05-30 16:38:00',
-    },
-    {
-      messageId: 'DEMO-MSG-4-2',
-      sessionId: 'DEMO-SESSION-4',
-      role: 'assistant',
-      content:
-        '有机认证（GB/T 19630）明确**禁用化学合成农药、化肥与转基因投入品**，转换期一般为 24 个月（一年生作物）。\n\n### 替代方案\n- ① 病害防治：改用**枯草芽孢杆菌**、哈茨木霉菌等生物制剂\n- ② 虫害防治：黄板 / 杀虫灯 + 释放天敌（如丽蚜小蜂）\n- ③ 施肥：腐熟有机肥 + 绿肥轮作，禁用速效氮肥\n- ④ 台账：完整保留投入品采购凭证与使用记录，供认证审核追溯\n\n建议先在 1 号田做 30 亩转换试点，再逐步扩大。',
-      createdAt: '2026-05-30 16:45:00',
-    },
-  ],
-}
-
-/* ==================== 本地农艺知识库（接口不可用时的兜底回复） ==================== */
-
-/** 知识条目：命中关键词 → 回复模板 */
-interface KnowledgeItem {
-  /** 命中关键词 */
-  keywords: string[]
-  /** 回复内容（Markdown） */
-  answer: string
-}
-
-/** 农艺知识库 */
-const KNOWLEDGE_BASE: KnowledgeItem[] = [
-  {
-    keywords: ['晚疫病', '番茄', '霉层', '水渍'],
-    answer:
-      '根据您描述的症状——叶片水渍状斑点、背面白色霉层，结合当前环境数据（湿度72%、温度28.5°C），**高度疑似番茄晚疫病（Phytophthora infestans）**。\n\n### 防治建议\n- ① 立即措施：喷施**代森锰锌**（800倍液）或甲霜灵锰锌，每亩用药量 60-80g\n- ② 环境调控：加强通风，降低棚内湿度至 **65% 以下**\n- ③ 后续监测：每 3 天检查一次病斑扩展情况\n- ④ 安全间隔：距采收期 > 15 天，满足休药期要求\n\n需要我帮您生成农事任务单吗？',
-  },
-  {
-    keywords: ['霜霉病', '黄瓜', '多角形'],
-    answer:
-      '这是典型的**黄瓜霜霉病**，高湿（>85%）与 18~24℃ 环境下 3~5 天即可蔓延全棚。\n\n### 紧急处理\n- ① 当晚先降湿：把棚内湿度压到 75% 以下\n- ② 药剂：喷施**烯酰吗啉**（1500 倍液）+ 代森联，重点喷叶背，亩用水量 45~60L\n- ③ 摘除重病叶并带出棚外销毁\n- ④ 3 天后复查，若病斑继续扩展，轮换使用氟噻唑吡乙酮\n\n需要我帮您生成农事任务单吗？',
-  },
-  {
-    keywords: ['灌溉', '浇水', '缺水', '墒情'],
-    answer:
-      '建议由「长期漫灌」改为**间歇灌溉（干湿交替）**：\n\n### 优化方案\n- ① 苗期保持浅水层，避免深水淹心\n- ② 关键需水期（孕穗 / 膨果期）保持水层稳定\n- ③ 其余阶段干湿交替，前水不见后水\n- ④ 结合土壤墒情传感器（低于 30% 触发补水）按需灌溉\n\n按当前规模测算全季可节水约 **18%**，并降低根部病害发生率。',
-  },
-  {
-    keywords: ['有机认证', '认证', '有机标准'],
-    answer:
-      '有机认证（GB/T 19630）明确**禁用化学合成农药、化肥与转基因投入品**，转换期一般为 24 个月（一年生作物）。\n\n### 替代方案\n- ① 病害防治：改用**枯草芽孢杆菌**、哈茨木霉菌等生物制剂\n- ② 虫害防治：黄板 / 杀虫灯 + 释放天敌\n- ③ 施肥：腐熟有机肥 + 绿肥轮作\n- ④ 台账：完整保留投入品采购凭证与使用记录\n\n建议先做 30 亩转换试点，再逐步扩大。',
-  },
-  {
-    keywords: ['施肥', '追肥', '肥料', '氮'],
-    answer:
-      '结合当前生育期，建议按**少量多次**原则追肥：\n\n### 施肥建议\n- ① 结果期以高钾型水溶肥为主，N:P:K 约 1:0.5:1.6\n- ② 每亩每次 5~8kg，随水冲施，间隔 7~10 天\n- ③ 叶面补充钙镁硼，预防脐腐与裂果\n- ④ 距采收 10 天内停止氮肥，保证品质与硝酸盐达标',
-  },
-  {
-    keywords: ['蚜虫', '白粉虱', '虫害', '蓟马'],
-    answer:
-      '该虫害建议采用**物理 + 生物 + 化学**三段式防控：\n\n### 防控方案\n- ① 物理：悬挂黄板 / 蓝板 30~40 张每亩，配合防虫网\n- ② 生物：释放丽蚜小蜂或瓢虫，控制虫口基数\n- ③ 化学：虫口达标时喷施**噻虫嗪**（3000 倍液）或吡虫啉，注意轮换用药\n- ④ 安全间隔：采收前 7 天停止用药',
-  },
-  {
-    keywords: ['产量', '预估', '预测'],
-    answer:
-      '产量预测需要结合**亩株数、单株留果数、单果重与历史修正系数**：\n\n### 测算口径\n- ① 亩株数 × 单株留果数 × 平均单果重 = 理论产量\n- ② 乘以 0.85~0.92 的田间修正系数（病虫损失、畸形果）\n- ③ 建议到「AI助手 · 产量预测」页面用模型跑一版，含置信区间与历史准确率\n\n您也可以告诉我地块与作物，我帮您做一版粗算。',
-  },
-  {
-    keywords: ['土壤', 'ph', '酸化', '板结'],
-    answer:
-      '土壤酸化 / 板结建议按**改良 + 培肥**两步走：\n\n### 改良方案\n- ① 施用生石灰 50~100kg/亩（视 pH 值调整），翻耕入土 15~20cm\n- ② 增施腐熟有机肥 2~3 吨/亩，提升有机质\n- ③ 推行深松 + 秸秆还田，打破犁底层\n- ④ 30 天后复测 pH，目标区间 6.0~6.8',
-  },
-]
-
-/** 默认回复（未命中知识库时） */
-const DEFAULT_ANSWER =
-  '我已收到您的问题。为给出更准确的农艺建议，建议补充以下信息：\n\n- ① 作物种类与当前生育期\n- ② 发生地块与发生面积（亩）\n- ③ 症状出现时间与环境数据（温湿度）\n- ④ 近期已使用的投入品\n\n您也可以直接描述症状，我会结合知识库给出**防治方案与用药建议**，并支持一键生成农事任务单。'
-
-/** 生成任务单的回复模板（命中「任务单 / 帮我生成 / 安排」时） */
-const TASK_ANSWER_TEMPLATE =
-  '✅ 已为您生成农事任务：\n任务: 1号田晚疫病防治\n执行地块: 1号田\n执行人: 张三\n计划时间: 2026-06-04 08:00-11:00\n用药: 代森锰锌 800倍液，60g/亩\n优先级: 紧急\n\n点击「确认并创建任务」即可写入农事任务列表。'
+/* ==================== 会话数据 ==================== */
 
 /**
- * 根据用户输入匹配本地知识库
+ * 会话与消息**只取服务端返回值**
  *
- * @param question 用户问题
- * @returns AI 回复内容（Markdown）
+ * ⚠️ 此前页面在 `GET /ai/assistant/sessions` 无数据时回落 4 组原型示例会话与示例消息，
+ * 并在问答接口不可用时用本地农艺知识库直接生成「防治方案 + 用药建议」——
+ * 这些回复并非模型输出，却以与真实回复完全相同的样式展示在对话区，
+ * 会让用户误以为是用药结论。现已全部移除：
+ * - 服务端无会话 → 列表空态 + 醒目提示；
+ * - 问答接口失败 / 未返回内容 → 明确报错，不生成任何回复。
  */
-function answerLocally(question: string): string {
-  const text = question.toLowerCase()
-  if (/任务单|生成任务|帮我安排|安排一下/.test(text)) {
-    return TASK_ANSWER_TEMPLATE
-  }
-  const hit = KNOWLEDGE_BASE.find((item) => item.keywords.some((kw) => text.includes(kw)))
-  return hit ? hit.answer : DEFAULT_ANSWER
-}
 
 /* ==================== Markdown 轻量渲染 ==================== */
 
@@ -469,9 +291,8 @@ function resolveTaskSuggestion(content: string): TaskSuggestion | null {
   if (!suggestion.priority) {
     suggestion.priority = /紧急/.test(content) ? '紧急' : '普通'
   }
-  if (!suggestion.planTime) {
-    suggestion.planTime = dayjs().add(1, 'day').format('YYYY-MM-DD') + ' 08:00-11:00'
-  }
+  // ⚠️ 计划时间不做本地推测：AI 未明确给出时留空，由用户在创建任务页自行填写，
+  // 避免用「明天 08:00-11:00」这类编造值预填表单。
   return suggestion
 }
 
@@ -489,12 +310,12 @@ export default function AiAssistant(): JSX.Element {
   const userInfo = useAuthStore((state) => state.userInfo)
   const farmId = useFarmStore((state) => state.currentFarm?.farmId)
 
-  /** 会话列表（接口优先，回落示例） */
-  const [sessions, setSessions] = useState<ChatSession[]>(DEMO_SESSIONS)
-  const [activeSessionId, setActiveSessionId] = useState<string>(DEMO_SESSIONS[0].sessionId)
+  /** 会话列表（**只取服务端返回值**，无数据时为空态，不再回落示例会话） */
+  const [sessions, setSessions] = useState<ChatSession[]>([])
+  const [activeSessionId, setActiveSessionId] = useState<string>('')
 
   /** 各会话消息（本地合并接口数据） */
-  const [messageMap, setMessageMap] = useState<Record<string, LocalMessage[]>>(DEMO_MESSAGES)
+  const [messageMap, setMessageMap] = useState<Record<string, LocalMessage[]>>({})
 
   /** 输入框内容 */
   const [inputValue, setInputValue] = useState<string>('')
@@ -502,6 +323,8 @@ export default function AiAssistant(): JSX.Element {
   const [pending, setPending] = useState<boolean>(false)
   /** 流式输出的临时文本 */
   const [streamText, setStreamText] = useState<string>('')
+  /** 问答失败原因（接口失败 / 服务端未返回回复内容） */
+  const [chatError, setChatError] = useState<string>('')
 
   /** 重命名弹窗 */
   const [renameOpen, setRenameOpen] = useState<boolean>(false)
@@ -529,18 +352,18 @@ export default function AiAssistant(): JSX.Element {
     queryFn: () => listChatMessages(activeSessionId),
   })
 
-  /** 远程会话就绪后覆盖本地示例 */
+  /** 远程会话就绪后覆盖本地状态（含空数组：服务端无会话即空态） */
   useEffect(() => {
     const remote = sessionsQuery.data
-    if (Array.isArray(remote) && remote.length > 0) {
+    if (Array.isArray(remote)) {
       setSessions(remote)
       setActiveSessionId((prev) =>
-        remote.some((item) => item.sessionId === prev) ? prev : remote[0].sessionId,
+        remote.some((item) => item.sessionId === prev) ? prev : (remote[0]?.sessionId ?? ''),
       )
     }
   }, [sessionsQuery.data])
 
-  /** 远程消息就绪后覆盖本地示例 */
+  /** 远程消息就绪后覆盖本地状态（服务端无消息时保持空态，不再回落示例消息） */
   useEffect(() => {
     const remote = messagesQuery.data
     if (Array.isArray(remote) && remote.length > 0) {
@@ -625,8 +448,10 @@ export default function AiAssistant(): JSX.Element {
   /**
    * 发送消息
    *
-   * 流程：本地追加用户消息 → 展示思考中 → 请求接口（失败则用本地知识库兜底）
-   * → 流式输出 AI 回复 → 更新会话摘要。
+   * 流程：本地追加用户消息 → 展示思考中 → 请求接口 → 流式输出 AI 回复 → 更新会话摘要。
+   *
+   * ⚠️ 问答回复**只取服务端返回值**：接口失败或服务端未返回 content 时明确报错，
+   * 不再用本地农艺知识库生成「防治方案 + 用药建议」（此类本地回复会被误认为模型结论）。
    *
    * @returns Promise
    */
@@ -640,6 +465,7 @@ export default function AiAssistant(): JSX.Element {
     const sessionId = activeSessionId
     const now = dayjs().format('YYYY-MM-DD HH:mm:ss')
     setInputValue('')
+    setChatError('')
     setMessageMap((prev) => ({
       ...prev,
       [sessionId]: [
@@ -655,23 +481,39 @@ export default function AiAssistant(): JSX.Element {
     }))
     setPending(true)
 
-    let reply = ''
     try {
       const res = await sendChatMessage({ sessionId, content })
-      reply = res?.content || answerLocally(content)
-    } catch {
-      reply = answerLocally(content)
+      const reply = res?.content
+      if (!reply) {
+        // 服务端未返回回复内容：不做任何本地兜底生成
+        setChatError(
+          '问答接口已响应，但未返回回复内容（服务端 AI 问答能力未接入）。未生成任何回复，请稍后重试或联系农技员。',
+        )
+        message.warning('服务端未返回回复内容')
+        setPending(false)
+        return
+      }
+      await streamReply(reply, sessionId)
+      setPending(false)
+      setSessions((prev) =>
+        prev.map((item) =>
+          item.sessionId === sessionId
+            ? {
+                ...item,
+                lastMessage: reply.slice(0, 30),
+                updatedAt: dayjs().format('YYYY-MM-DD HH:mm:ss'),
+              }
+            : item,
+        ),
+      )
+    } catch (error) {
+      setChatError(
+        `问答失败：${(error as Error)?.message || '接口不可用'}。未生成任何回复` +
+          '（为避免给出非模型的用药建议，不再使用本地知识库兜底）。',
+      )
+      message.error('问答失败，请稍后重试')
+      setPending(false)
     }
-
-    await streamReply(reply, sessionId)
-    setPending(false)
-    setSessions((prev) =>
-      prev.map((item) =>
-        item.sessionId === sessionId
-          ? { ...item, lastMessage: reply.slice(0, 30), updatedAt: dayjs().format('YYYY-MM-DD HH:mm:ss') }
-          : item,
-      ),
-    )
   }
 
   /** 输入框键盘事件：Enter 发送 / Shift+Enter 换行 */
@@ -682,37 +524,41 @@ export default function AiAssistant(): JSX.Element {
     }
   }
 
-  /** 新建会话 */
+  /**
+   * 新建会话
+   *
+   * ⚠️ 失败时**不创建本地 ID 占位会话**：此前会在接口不可用情况下生成一个
+   * `LOCAL-SESSION-*` 会话并弹「已新建会话」，但该会话在服务端并不存在，
+   * 刷新后即消失，属于把失败弹成成功。现改为原样抛出，由 onError 明确报错。
+   */
   const createMutation = useMutation({
-    mutationFn: async () => {
-      try {
-        const created = await createChatSession('新对话')
-        return created?.sessionId ?? `LOCAL-SESSION-${Date.now()}`
-      } catch {
-        return `LOCAL-SESSION-${Date.now()}`
+    mutationFn: async (): Promise<ChatSession> => {
+      const created = await createChatSession('新对话')
+      if (!created?.sessionId) {
+        throw new Error('服务端未返回会话 ID')
       }
+      return created
     },
-    onSuccess: (sessionId) => {
-      const now = dayjs().format('YYYY-MM-DD HH:mm:ss')
-      setSessions((prev) => [
-        { sessionId, title: '新对话', lastMessage: '', createdAt: now, updatedAt: now },
-        ...prev,
-      ])
-      setMessageMap((prev) => ({ ...prev, [sessionId]: [] }))
-      setActiveSessionId(sessionId)
+    onSuccess: (created) => {
+      setSessions((prev) => [created, ...prev])
+      setMessageMap((prev) => ({ ...prev, [created.sessionId]: [] }))
+      setActiveSessionId(created.sessionId)
       void queryClient.invalidateQueries({ queryKey: ['ai-chat-sessions'] })
       message.success('已新建会话')
     },
+    onError: (error: Error) => {
+      message.error(`新建会话失败：${error?.message || '接口不可用'}`)
+    },
   })
 
-  /** 删除会话 */
+  /**
+   * 删除会话
+   *
+   * 删除以服务端结果为准，失败即报错，不在本地「假装删除」。
+   */
   const deleteMutation = useMutation({
-    mutationFn: async (sessionId: string) => {
-      try {
-        await deleteChatSession(sessionId)
-      } catch {
-        // 回落态仅删除本地
-      }
+    mutationFn: async (sessionId: string): Promise<string> => {
+      await deleteChatSession(sessionId)
       return sessionId
     },
     onSuccess: (sessionId) => {
@@ -725,9 +571,13 @@ export default function AiAssistant(): JSX.Element {
       })
       message.success('会话已删除')
     },
+    onError: (error: Error) => {
+      message.error(`删除会话失败：${error?.message || '接口不可用'}`)
+      void queryClient.invalidateQueries({ queryKey: ['ai-chat-sessions'] })
+    },
   })
 
-  /** 提交重命名 */
+  /** 提交重命名（失败不提示成功） */
   const submitRename = async (): Promise<void> => {
     if (!renameTarget || !renameValue.trim()) {
       message.warning('请输入会话标题')
@@ -736,8 +586,9 @@ export default function AiAssistant(): JSX.Element {
     const title = renameValue.trim()
     try {
       await renameChatSession(renameTarget.sessionId, title)
-    } catch {
-      // 回落态仅更新本地
+    } catch (error) {
+      message.error(`重命名失败：${(error as Error)?.message || '接口不可用'}`)
+      return
     }
     setSessions((prev) =>
       prev.map((item) => (item.sessionId === renameTarget.sessionId ? { ...item, title } : item)),
@@ -768,11 +619,32 @@ export default function AiAssistant(): JSX.Element {
     navigate(`/production/tasks/create?${query}`, { state: { suggestion } })
   }
 
+  /** 会话列表已加载完成且为空（服务端无会话，不用示例会话占位） */
+  const sessionsEmpty: boolean = !sessionsQuery.isLoading && sessions.length === 0
+
   return (
     <div style={{ padding: 24 }}>
+      <Space direction="vertical" size={12} style={{ width: '100%' }}>
+        {sessionsQuery.isError && (
+          <Alert
+            type="error"
+            showIcon
+            message="会话列表加载失败"
+            description="服务端 GET /ai/assistant/sessions 接口不可用。此处不使用任何示例会话占位，请稍后重试。"
+          />
+        )}
+        {!sessionsQuery.isError && sessionsEmpty && (
+          <Alert
+            type="info"
+            showIcon
+            message="暂无会话"
+            description="服务端未返回任何问答会话。点击左上角「＋」新建一个会话后再开始提问；页面不会展示示例会话，以免被误认为真实历史对话。"
+          />
+        )}
+      </Space>
       <Card
-        styles={{ body: { padding: 0, height: 'calc(100vh - 152px)' } }}
-        style={{ overflow: 'hidden' }}
+        styles={{ body: { padding: 0, height: 'calc(100vh - 216px)' } }}
+        style={{ overflow: 'hidden', marginTop: 12 }}
       >
         <div style={{ display: 'flex', height: '100%' }}>
           {/* 左侧：历史对话 */}
@@ -808,7 +680,15 @@ export default function AiAssistant(): JSX.Element {
               <Spin spinning={sessionsQuery.isLoading}>
                 <List
                   dataSource={sessions}
-                  locale={{ emptyText: <Empty description="暂无会话" /> }}
+                  locale={{
+                    emptyText: (
+                      <Empty
+                        description={
+                          sessionsQuery.isLoading ? '加载中…' : '暂无会话（服务端无数据）'
+                        }
+                      />
+                    ),
+                  }}
                   renderItem={(item) => {
                     const active = item.sessionId === activeSessionId
                     return (
@@ -903,9 +783,30 @@ export default function AiAssistant(): JSX.Element {
 
             {/* 消息区 */}
             <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
-              {messages.length === 0 && (
+              {chatError && (
+                <Alert
+                  type="error"
+                  showIcon
+                  style={{ marginBottom: 12 }}
+                  message="未获取到 AI 回复"
+                  description={chatError}
+                />
+              )}
+              {messagesQuery.isError && (
+                <Alert
+                  type="error"
+                  showIcon
+                  style={{ marginBottom: 12 }}
+                  message="历史消息加载失败"
+                  description="服务端 GET /ai/assistant/sessions/{id}/messages 接口不可用。此处不使用示例消息占位。"
+                />
+              )}
+              {messages.length === 0 && !activeSessionId && (
+                <Empty description="请先新建或选择一个会话" style={{ marginTop: 80 }} />
+              )}
+              {messages.length === 0 && activeSessionId && (
                 <Empty
-                  description="开始提问吧，例如：番茄叶片出现水渍状斑点怎么防治？"
+                  description="暂无消息，开始提问吧（回复将来自服务端 AI 问答接口）"
                   style={{ marginTop: 80 }}
                 />
               )}
@@ -1010,9 +911,11 @@ export default function AiAssistant(): JSX.Element {
                   value={inputValue}
                   onChange={(event) => setInputValue(event.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="请输入您的问题..."
+                  placeholder={
+                    activeSessionId ? '请输入您的问题...' : '请先新建或选择一个会话后再提问'
+                  }
                   autoSize={{ minRows: 2, maxRows: 5 }}
-                  disabled={pending}
+                  disabled={pending || !activeSessionId}
                 />
                 <Space style={{ width: '100%', justifyContent: 'space-between' }}>
                   <Text type="secondary" style={{ fontSize: 12 }}>
@@ -1022,7 +925,7 @@ export default function AiAssistant(): JSX.Element {
                     type="primary"
                     icon={<SendOutlined />}
                     loading={pending}
-                    disabled={!inputValue.trim()}
+                    disabled={!inputValue.trim() || !activeSessionId}
                     onClick={() => void handleSend()}
                   >
                     发送

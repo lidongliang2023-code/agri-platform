@@ -3,9 +3,30 @@
  */
 import { http } from '@/utils/request'
 import type { PageQuery, PageResult } from '@/types'
-import type { ChatMessage, ChatSession, PestDetection, YieldForecast } from '@/types'
+import type {
+  AiDiagnosisRecord,
+  ChatMessage,
+  ChatSession,
+  PestDetection,
+  YieldForecast,
+} from '@/types'
 
 const BASE = '/ai'
+
+/**
+ * 分页查询 AI 诊断记录（真实端点 `GET /api/v1/production/ai`）
+ *
+ * 后端 `AiController#page` 返回 `PageResult<AiDiagnosisEntity>`，
+ * 包含 PEST / GROWTH / MATURITY 三类诊断；页面按需自行过滤 PEST 类型。
+ *
+ * @param params 分页与过滤参数
+ * @returns 诊断记录分页结果
+ */
+export function listAiDiagnoses(
+  params: PageQuery & { keyword?: string; status?: string },
+): Promise<PageResult<AiDiagnosisRecord>> {
+  return http.get<PageResult<AiDiagnosisRecord>>(BASE, params)
+}
 
 /** 分页查询病虫害识别记录 */
 export function listPestDetections(
@@ -89,7 +110,9 @@ export interface ForecastAccuracyPoint {
 /**
  * 查询产量预测历史准确率
  *
- * 后端骨架未实现该端点时静默回落到空数组，由页面使用示例口径渲染。
+ * ⚠️ 后端骨架阶段该端点（`GET /ai/yield-forecast/accuracy`）尚未实现，
+ * 此前会静默回落到空数组并由页面用示例口径渲染——属于「把本地数据伪装成服务端数据」。
+ * 现改为**原样抛出错误**，由页面显式提示「未接入」，禁止再回落示例数据。
  *
  * @param params 查询参数
  * @returns 历史准确率明细
@@ -98,16 +121,12 @@ export async function listForecastAccuracy(params: {
   plotId?: string
   cropId?: string
 } = {}): Promise<ForecastAccuracyPoint[]> {
-  try {
-    const res = await http.get<ForecastAccuracyPoint[]>(
-      `${BASE}/yield-forecast/accuracy`,
-      params,
-      { silent: true },
-    )
-    return Array.isArray(res) ? res : []
-  } catch {
-    return []
-  }
+  const res = await http.get<ForecastAccuracyPoint[]>(
+    `${BASE}/yield-forecast/accuracy`,
+    params,
+    { silent: true },
+  )
+  return Array.isArray(res) ? res : []
 }
 
 /** 发起产量预测 */
