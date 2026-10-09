@@ -27,12 +27,27 @@ public class PlotController {
     private final PlotInfoService plotInfoService;
     private final PlotSoilService plotSoilService;
 
+    /**
+     * 地块分页列表。
+     *
+     * <p>{@code farmId} 是农场维度筛选（监管端农场档案「地块」Tab、使用记录页地块下拉
+     * 都会带上传），此前方法签名里没有该参数，参数被静默丢弃、页面显示的是全局数据。
+     * 现补齐并落成真实 SQL 条件，为空时行为不变（查全部）。</p>
+     *
+     * @param farmId       所属农场，可空
+     * @param keyword      地块名称模糊关键字，可空
+     * @param plantingType 种植方式 1露天 2大棚 3水田 4山地，可空
+     * @param status       地块状态，可空
+     * @return 分页结果
+     */
     @GetMapping
     public ApiResponse<PageResult<PlotInfoEntity>> page(@RequestParam(defaultValue = "1") long page,
                                                         @RequestParam(defaultValue = "10") long size,
+                                                        @RequestParam(required = false) String farmId,
                                                         @RequestParam(required = false) String keyword,
+                                                        @RequestParam(required = false) Integer plantingType,
                                                         @RequestParam(required = false) Integer status) {
-        return ApiResponse.ok(plotInfoService.page(page, size, keyword, status));
+        return ApiResponse.ok(plotInfoService.page(page, size, farmId, keyword, plantingType, status));
     }
 
     @GetMapping("/{id}")

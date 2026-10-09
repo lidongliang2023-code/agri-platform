@@ -29,14 +29,26 @@ public class PlotInfoService {
     /**
      * 分页查询。
      *
-     * @param keyword plotName 模糊关键字
-     * @param status  状态过滤
+     * <p>所有筛选条件都是真实生效的 SQL 条件。此前前端 {@code src/api/plots.ts}
+     * 的 {@code PlotListParams} 声明了 {@code farmId}，但方法签名里没有该参数，
+     * Spring 不会报错、参数被静默丢弃，页面「切了农场但列表没变」，显示的是全局数据。
+     * 现补齐 {@code farmId}（对应 {@code prod_plot_info.farm_id}，V2 建表即存在）
+     * 与 {@code plantingType}（对应 {@code prod_plot_info.planting_type}）；
+     * 两者均为可空，为空时不加条件，保持未传参时的原有行为。</p>
+     *
+     * @param farmId       所属农场过滤，为空不过滤
+     * @param keyword      plotName 模糊关键字
+     * @param plantingType 种植方式过滤 1露天 2大棚 3水田 4山地，为空不过滤
+     * @param status       状态过滤
      * @return 分页结果
      */
-    public PageResult<PlotInfoEntity> page(long page, long size, String keyword, Integer status) {
+    public PageResult<PlotInfoEntity> page(long page, long size, String farmId, String keyword,
+                                           Integer plantingType, Integer status) {
         Page<PlotInfoEntity> result = plotInfoMapper.selectPage(new Page<>(page, size),
                 new LambdaQueryWrapper<PlotInfoEntity>()
+                        .eq(farmId != null && !farmId.isBlank(), PlotInfoEntity::getFarmId, farmId)
                         .like(keyword != null && !keyword.isBlank(), PlotInfoEntity::getPlotName, keyword)
+                        .eq(plantingType != null, PlotInfoEntity::getPlantingType, plantingType)
                         .eq(status != null, PlotInfoEntity::getStatus, status)
                         .orderByDesc(PlotInfoEntity::getCreatedAt));
         return PageResult.of(result.getRecords(), result.getTotal(), page, size);
