@@ -43,17 +43,6 @@ export function updateSupervisedFarmStatus(farmId: string, status: number): Prom
   return http.patch<boolean>(`${BASE}/${farmId}/status`, { status })
 }
 
-/** 查询 GIS 地图监管数据 */
-export function listFarmMapPoints(params?: {
-  tenantId?: string
-  farmType?: number
-}): Promise<{ farmId: string; farmName: string; longitude: number; latitude: number }[]> {
-  return http.get<{ farmId: string; farmName: string; longitude: number; latitude: number }[]>(
-    `${BASE}/map`,
-    params,
-  )
-}
-
 /**
  * 分页查询合规检查**任务台账**。
  *

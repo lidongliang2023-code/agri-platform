@@ -115,11 +115,6 @@ export function getEnvironmentTrend(params: {
   return http.get<IotReading[]>(`${BASE}/environment/trend`, params)
 }
 
-/** 查询生长监测总览统计 */
-export function getGrowthOverview(farmId?: string): Promise<Record<string, number>> {
-  return http.get<Record<string, number>>(`${BASE}/overview`, { farmId })
-}
-
 /* ============================================================================
  * 以下为「生长监测页面填充」追加内容，纯新增，不改动既有定义。
  * ========================================================================== */

@@ -2,6 +2,7 @@
  * 质量管理 API（检测 / 分级）
  */
 import { http } from '@/utils/request'
+import { readNumber } from '@/utils/production-adapter'
 import type { PageQuery, PageResult } from '@/types'
 import type { InspectionItem, QualityGradeRule, QualityInspection } from '@/types'
 /* 页面补充类型（追加导入，不改动既有定义） */
@@ -187,7 +188,25 @@ export function fetchActiveLabs(): Promise<TestingLab[]> {
   return http.get<TestingLab[]>(`${BASE}/labs/active`)
 }
 
-/** 查询分级统计（后端 GET /quality/grading，返回 { PASS: n, FAIL: n }） */
-export function fetchGradingStats(): Promise<Record<string, number>> {
-  return http.get<Record<string, number>>(`${BASE}/grading`)
+/**
+ * 查询分级统计（GET /quality/grading）。
+ *
+ * 后端返回 `{ PASS: n, FAIL: n }`：
+ * - **键名就是大写**（与页面 `statsQuery.data?.PASS` 的读法一致，不要改成驼峰）；
+ * - ⚠️ **值是字符串**（实测 `{"PASS":"3","FAIL":"1"}`）——后端用 Long 计数，
+ *   全局 JacksonConfig 给 Long 注册了 ToStringSerializer 所致。
+ *
+ * 因此在 api 层逐键归一化为 number，让 `Record<string, number>` 这句声明名副其实。
+ *
+ * @returns PASS / FAIL 计数（值为 number）
+ */
+export async function fetchGradingStats(): Promise<Record<string, number>> {
+  const raw = await http.get<Record<string, unknown>>(`${BASE}/grading`)
+  const record: Record<string, unknown> =
+    raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {}
+  const result: Record<string, number> = {}
+  Object.keys(record).forEach((key) => {
+    result[key] = readNumber({ value: record[key] }, ['value'], 0)
+  })
+  return result
 }

@@ -324,28 +324,6 @@ export async function markAllMessagesRead(messageIds: string[]): Promise<number>
   return success
 }
 
-/**
- * 查询未读消息数量
- *
- * 后端 `/messages/unread-count` 强制要求 receiverId 入参，
- * 未登录 / 无用户信息时静默降级为 0。
- *
- * @param receiverId 接收人 ID
- * @returns 未读数量
- */
-export async function fetchUnreadCount(receiverId?: string): Promise<number> {
-  if (!receiverId) return 0
-  try {
-    const raw = await http.get<unknown>(
-      '/messages/unread-count',
-      { receiverId },
-      { silent: true },
-    )
-    return readNumber({ value: raw }, ['value'], 0)
-  } catch {
-    return 0
-  }
-}
 
 /* ==================== 团队与人员 / 角色权限 ==================== */
 
