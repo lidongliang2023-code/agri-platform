@@ -7,14 +7,11 @@
 import { useMemo, useState } from 'react'
 import {
   Alert as AntAlert,
-  App,
   Breadcrumb,
   Button,
   Card,
   Col,
   Empty,
-  Modal,
-  Radio,
   Row,
   Segmented,
   Select,
@@ -41,79 +38,35 @@ const RANGE_OPTIONS: Array<{ value: string; label: string }> = [
   { value: '30d', label: '近30天' },
 ]
 
-/** 区域选项 */
-const REGION_OPTIONS: Array<{ value: string; label: string }> = [
-  { value: 'all', label: '全部' },
-  { value: 'north', label: '华北' },
-  { value: 'east', label: '华东' },
-  { value: 'central', label: '华中' },
-  { value: 'south', label: '华南' },
-]
-
-/** 监测站点（地块）选项 */
+/**
+ * 监测站点选项。
+ *
+ * 取值必须是库里真实存在的 deviceId（/iot/readings/series 需要 deviceId），
+ * 名称取自真实设备台账，不再使用编造的 D10001 之类设备编码。
+ */
 const STATION_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'all', label: '全部' },
-  { value: 'A', label: 'A区' },
-  { value: 'B', label: 'B区' },
-  { value: 'C', label: 'C区' },
+  { value: 'DEMO-DEV-002', label: 'A区环境监测站' },
+  { value: 'DEMO-DEV-003', label: 'B区虫情测报灯' },
+  { value: 'DEMO-DEV-005', label: '1号温室环境监控' },
 ]
 
 /** 站点 → 设备编码（真实取数用，/iot/readings/series 需 deviceId） */
 const STATION_DEVICE_MAP: Array<{ station: string; deviceId: string }> = [
-  { station: 'A', deviceId: 'D10001' },
-  { station: 'B', deviceId: 'D10006' },
-  { station: 'C', deviceId: 'D10003' },
+  { station: 'DEMO-DEV-002', deviceId: 'DEMO-DEV-002' },
+  { station: 'DEMO-DEV-003', deviceId: 'DEMO-DEV-003' },
+  { station: 'DEMO-DEV-005', deviceId: 'DEMO-DEV-005' },
 ]
+
+/** deviceId → 设备名称（图例展示用） */
+const DEVICE_NAME_MAP: Record<string, string> = {
+  'DEMO-DEV-002': 'A区环境监测站',
+  'DEMO-DEV-003': 'B区虫情测报灯',
+  'DEMO-DEV-005': '1号温室环境监控',
+}
 
 /** 气温阈值（℃），对应原型 P10 阈值35° */
 const TEMP_THRESHOLD = 35
-
-/** 多站点气温示例数据（原型 P10：X 轴 06:00 / 09:00 / 12:00 / 15:00） */
-const FALLBACK_TEMP_SERIES: Array<{ station: string; points: number[] }> = [
-  { station: 'A区', points: [18.5, 24.6, 32.4, 29.8] },
-  { station: 'B区', points: [17.8, 23.1, 30.2, 28.4] },
-  { station: 'C区', points: [19.2, 25.4, 33.8, 31.0] },
-]
-
-/** 区域 → 气温修正系数（示例口径下用于体现区域差异） */
-const REGION_FACTOR: Record<string, number> = {
-  all: 1,
-  north: 0.86,
-  east: 1,
-  central: 1.06,
-  south: 1.15,
-}
-
-/** 时间范围 → 逐点波动系数，用于生成对应长度的趋势 */
-const RANGE_FACTOR: Record<string, number[]> = {
-  today: [1, 1, 1, 1],
-  '7d': [0.92, 1.04, 0.97, 1.12, 1.02, 0.94, 1.08],
-  '30d': [0.88, 0.95, 1.02, 1.1, 1.16, 1.05, 0.98],
-}
-
-/**
- * 按时间范围与区域生成示例气温序列。
- *
- * @param range 时间范围：today / 7d / 30d
- * @param regionKey 区域编码
- * @returns 各站点的气温序列
- */
-function buildFallbackTempSeries(
-  range: string,
-  regionKey: string,
-): Array<{ station: string; points: number[] }> {
-  const factors = RANGE_FACTOR[range] ?? RANGE_FACTOR.today
-  const regionValue = REGION_FACTOR[regionKey] ?? 1
-  return FALLBACK_TEMP_SERIES.map((item) => ({
-    station: item.station,
-    points: factors.map((factor, index) =>
-      Number((item.points[index % item.points.length] * factor * regionValue).toFixed(1)),
-    ),
-  }))
-}
-
-/** 土壤温度热力图示例数据（原型 P10 16 格） */
-const FALLBACK_SOIL_CELLS: number[] = [22, 23, 21, 20, 25, 24, 23, 22, 32, 30, 28, 27, 23, 22, 21, 19]
 
 /** 环境异常预警行（原型 P10：时间 | 站点 | 异常类型 | 当前值 | 阈值 | 级别 | 操作） */
 interface EnvAlertRow {
@@ -134,14 +87,6 @@ interface EnvAlertRow {
   /** 处理状态 */
   status: string
 }
-
-/** 环境异常预警示例数据 */
-const FALLBACK_ENV_ALERTS: EnvAlertRow[] = [
-  { id: 'EA1', time: '12:35', station: 'A区', type: '高温', value: '38.2°C', threshold: '35°C', level: '紧急', status: '待处理' },
-  { id: 'EA2', time: '11:20', station: 'B区', type: '低湿度', value: '32.1%', threshold: '40%', level: '重要', status: '待处理' },
-  { id: 'EA3', time: '09:45', station: 'C区', type: '强风', value: '8.5m/s', threshold: '7m/s', level: '重要', status: '待处理' },
-  { id: 'EA4', time: '08:10', station: 'A区', type: '暴雨', value: '25mm', threshold: '20mm', level: '一般', status: '已处理' },
-]
 
 /** 预警级别 → Tag 颜色 */
 const LEVEL_COLOR_MAP: Record<string, string> = {
@@ -169,30 +114,19 @@ function buildAxisLabels(range: string): string[] {
 /**
  * 环境数据监控
  *
- * 业务职责：全平台气象 / 土壤环境数据监控，支持时间范围回溯、区域与站点筛选，
- * 输出多站点气温对比、土壤热力图与环境异常预警处理。数据优先取
- * /iot/readings/series，接口无数据时降级到原型 P10 示例口径。
+ * 业务职责：全平台气象 / 土壤环境数据监控，支持时间范围回溯与站点筛选，
+ * 输出多站点气温对比与环境异常预警处理。数据只取 /iot/readings/series；
+ * 后端无数据时各区块展示空态 / 「—」，不用示例数字顶替。
  *
  * @returns 页面内容
  */
 export default function Environment(): JSX.Element {
-  const { message } = App.useApp()
   const queryClient = useQueryClient()
 
   /** 时间范围 */
   const [range, setRange] = useState<string>('today')
-  /** 区域 */
-  const [region, setRegion] = useState<string>('all')
   /** 站点 */
   const [station, setStation] = useState<string>('all')
-  /** 已处理的预警 ID 列表（本地处置闭环） */
-  const [handledIds, setHandledIds] = useState<string[]>([])
-  /** 处理弹窗当前预警 */
-  const [activeAlert, setActiveAlert] = useState<EnvAlertRow | null>(null)
-  /** 处理措施 */
-  const [measure, setMeasure] = useState<string>('下发整改通知')
-  /** 处理说明 */
-  const [remark, setRemark] = useState<string>('')
 
   /** 多站点气温时序（/iot/readings/series） */
   const seriesQuery = useQuery({
@@ -215,42 +149,38 @@ export default function Environment(): JSX.Element {
     [seriesQuery.data],
   )
 
-  /** 指标卡数据：气温取真实末点，其余取原型 P10 口径 */
+  /**
+   * 指标卡数据。
+   *
+   * 气温取真实时序末点；湿度 / 降水 / 光照 / 风速后端**没有任何数据源**，
+   * 一律为 null（展示「—」），不再用示例数字顶替。
+   */
   const metrics = useMemo(() => {
     const first = (seriesQuery.data ?? []).find((item) => (item.readings?.length ?? 0) > 0)
     const lastReading = first?.readings?.[first.readings.length - 1]
     return {
-      temperature: lastReading ? Number(lastReading.metricValue) : 23.5,
-      humidity: 68.2,
-      rainfall: 12.3,
-      illuminance: 45.6,
-      windSpeed: 3.2,
+      temperature: lastReading ? Number(lastReading.metricValue) : null,
+      humidity: null,
+      rainfall: null,
+      illuminance: null,
+      windSpeed: null,
       hasRealData: Boolean(lastReading),
     }
   }, [seriesQuery.data])
 
-  /** 多站点对比 - 气温（原型 P10） */
+  /** 多站点对比 - 气温：只用后端真实读数，无数据则 series 为空（图表区渲染空态） */
   const tempChartOption: EChartsOption = useMemo(() => {
     const labels = buildAxisLabels(range)
     const remote = seriesQuery.data ?? []
-    const series = hasRealSeries
-      ? remote
-          .filter((item) => (item.readings?.length ?? 0) > 0)
-          .filter((item) => station === 'all' || item.station === station)
-          .map((item) => ({
-            type: 'line' as const,
-            name: `${item.station}区`,
-            smooth: true,
-            data: (item.readings ?? []).slice(-labels.length).map((reading) => Number(reading.metricValue)),
-          }))
-      : buildFallbackTempSeries(range, region).filter(
-          (item) => station === 'all' || item.station.startsWith(station),
-        ).map((item) => ({
-          type: 'line' as const,
-          name: item.station,
-          smooth: true,
-          data: item.points,
-        }))
+    const series = remote
+      .filter((item) => (item.readings?.length ?? 0) > 0)
+      .filter((item) => station === 'all' || item.station === station)
+      .map((item) => ({
+        type: 'line' as const,
+        name: DEVICE_NAME_MAP[item.station] ?? item.station,
+        smooth: true,
+        data: (item.readings ?? []).slice(-labels.length).map((reading) => Number(reading.metricValue)),
+      }))
     const axisData = hasRealSeries
       ? (remote.find((item) => (item.readings?.length ?? 0) > 0)?.readings ?? [])
           .slice(-labels.length)
@@ -277,63 +207,16 @@ export default function Environment(): JSX.Element {
           : item,
       ),
     }
-  }, [range, region, station, seriesQuery.data, hasRealSeries])
+  }, [range, station, seriesQuery.data, hasRealSeries])
 
-  /** 土壤数据热力图（原型 P10：4 × 4 数值格 + 低/中/高 图例） */
-  const soilChartOption: EChartsOption = useMemo(() => {
-    const cells = FALLBACK_SOIL_CELLS
-    const data: Array<[number, number, number]> = cells.map((value, index) => [
-      index % 4,
-      Math.floor(index / 4),
-      value,
-    ])
-    return {
-      tooltip: {
-        position: 'top',
-        formatter: (raw: unknown) => {
-          const item = raw as { value: [number, number, number] }
-          return `第${item.value[1] + 1}行 第${item.value[0] + 1}列：${item.value[2]}°C`
-        },
-      },
-      grid: { left: 8, right: 16, top: 8, bottom: 40, containLabel: true },
-      xAxis: { type: 'category', data: ['1', '2', '3', '4'], splitArea: { show: true } },
-      yAxis: { type: 'category', data: ['1', '2', '3', '4'], splitArea: { show: true } },
-      visualMap: {
-        min: 18,
-        max: 34,
-        calculable: true,
-        orient: 'horizontal',
-        left: 'center',
-        bottom: 0,
-        itemWidth: 12,
-        itemHeight: 80,
-        pieces: [
-          { min: 18, max: 22, label: '低', color: '#52c41a' },
-          { min: 22, max: 28, label: '中', color: '#faad14' },
-          { min: 28, max: 34, label: '高', color: '#ff4d4f' },
-        ],
-      },
-      series: [
-        {
-          type: 'heatmap',
-          name: '土壤温度',
-          data,
-          label: { show: true, formatter: '{c}°' },
-          emphasis: { itemStyle: { shadowBlur: 8, shadowColor: 'rgba(0,0,0,0.3)' } },
-        },
-      ],
-    }
-  }, [])
-
-  /** 环境异常预警列表（含本地处置状态） */
-  const alertRows: EnvAlertRow[] = useMemo(
-    () =>
-      FALLBACK_ENV_ALERTS.filter((item) => station === 'all' || item.station.startsWith(station)).map(
-        (item) =>
-          handledIds.includes(item.id) ? { ...item, status: '已处理' } : item,
-      ),
-    [station, handledIds],
-  )
+  /**
+   * 环境异常预警列表。
+   *
+   * 后端暂无「环境异常预警」数据源（/admin/monitor/alerts 当前返回空、
+   * 也没有按站点/阈值的环境预警聚合接口），故列表恒为空并展示空态，
+   * 不再用编造的 4 行预警（38.2°C / 32.1% / 8.5m/s / 25mm）顶替。
+   */
+  const alertRows: EnvAlertRow[] = useMemo(() => [], [])
 
   /** 预警表格列 */
   const alertColumns: ColumnsType<EnvAlertRow> = [
@@ -358,31 +241,11 @@ export default function Environment(): JSX.Element {
         <Tag color={status === '已处理' ? 'green' : 'red'}>{status}</Tag>
       ),
     },
-    {
-      title: '操作',
-      key: 'action',
-      width: 100,
-      render: (_value: unknown, row: EnvAlertRow) => (
-        <Button
-          type="link"
-          size="small"
-          disabled={row.status === '已处理'}
-          onClick={() => {
-            setActiveAlert(row)
-            setMeasure('下发整改通知')
-            setRemark('')
-          }}
-        >
-          处理
-        </Button>
-      ),
-    },
   ]
 
   /** 重置筛选 */
   const handleReset = (): void => {
     setRange('today')
-    setRegion('all')
     setStation('all')
   }
 
@@ -429,15 +292,6 @@ export default function Environment(): JSX.Element {
             />
           </Space>
           <Space size={6}>
-            <Text>区域：</Text>
-            <Select
-              style={{ width: 120 }}
-              value={region}
-              onChange={(value) => setRegion(value)}
-              options={REGION_OPTIONS}
-            />
-          </Space>
-          <Space size={6}>
             <Text>地块站点：</Text>
             <Select
               style={{ width: 120 }}
@@ -450,40 +304,42 @@ export default function Environment(): JSX.Element {
         </Space>
       </Card>
 
-      {/* 指标卡（原型 P10：气温 / 湿度 / 降水 / 光照 / 风速） */}
+      {/* 指标卡：气温取真实末点；湿度 / 降水 / 光照 / 风速后端无数据源，统一显示「—」 */}
       <Row gutter={[12, 12]}>
         <Col xs={12} lg={4}>
           <Card size="small" styles={{ body: { padding: 16 } }}>
             {seriesQuery.isLoading ? (
               <Skeleton active title={false} paragraph={{ rows: 2 }} />
             ) : (
-              <Statistic title="🌡️ 气温" value={metrics.temperature} precision={1} suffix="°C" />
+              <Statistic title="🌡️ 气温" value={metrics.temperature ?? '—'} precision={1} suffix="°C" />
             )}
-            <Text style={{ color: '#ff4d4f', fontSize: 12 }}>↑ 1.2°C</Text>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              {metrics.temperature === null ? '后端暂无读数' : '末次读数'}
+            </Text>
           </Card>
         </Col>
         <Col xs={12} lg={4}>
           <Card size="small" styles={{ body: { padding: 16 } }}>
-            <Statistic title="💧 湿度" value={metrics.humidity} precision={1} suffix="%" />
-            <Text style={{ color: '#52c41a', fontSize: 12 }}>↓ 2.1%</Text>
+            <Statistic title="💧 湿度" value={metrics.humidity ?? '—'} suffix="%" />
+            <Text type="secondary" style={{ fontSize: 12 }}>无数据源</Text>
           </Card>
         </Col>
         <Col xs={12} lg={4}>
           <Card size="small" styles={{ body: { padding: 16 } }}>
-            <Statistic title="🌧️ 降水" value={metrics.rainfall} precision={1} suffix="mm" />
-            <Text style={{ color: '#ff4d4f', fontSize: 12 }}>↑ 5.8mm</Text>
+            <Statistic title="🌧️ 降水" value={metrics.rainfall ?? '—'} suffix="mm" />
+            <Text type="secondary" style={{ fontSize: 12 }}>无数据源</Text>
           </Card>
         </Col>
         <Col xs={12} lg={4}>
           <Card size="small" styles={{ body: { padding: 16 } }}>
-            <Statistic title="☀️ 光照" value={metrics.illuminance} precision={1} suffix="klx" />
-            <Text style={{ color: '#52c41a', fontSize: 12 }}>↓ 3.2klx</Text>
+            <Statistic title="☀️ 光照" value={metrics.illuminance ?? '—'} suffix="klx" />
+            <Text type="secondary" style={{ fontSize: 12 }}>无数据源</Text>
           </Card>
         </Col>
         <Col xs={24} lg={8}>
           <Card size="small" styles={{ body: { padding: 16 } }}>
-            <Statistic title="💨 风速" value={metrics.windSpeed} precision={1} suffix="m/s" />
-            <Text style={{ color: '#ff4d4f', fontSize: 12 }}>↑ 0.5m/s</Text>
+            <Statistic title="💨 风速" value={metrics.windSpeed ?? '—'} suffix="m/s" />
+            <Text type="secondary" style={{ fontSize: 12 }}>无数据源</Text>
           </Card>
         </Col>
       </Row>
@@ -498,24 +354,26 @@ export default function Environment(): JSX.Element {
           >
             {seriesQuery.isLoading ? (
               <Skeleton active paragraph={{ rows: 6 }} />
-            ) : (
+            ) : hasRealSeries ? (
               <ReactECharts option={tempChartOption} style={{ height: 320 }} notMerge />
+            ) : (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description={
+                  seriesQuery.isError
+                    ? `气温时序加载失败：${(seriesQuery.error as Error | null)?.message ?? '未知错误'}`
+                    : '后端暂无气温时序数据（/iot/readings/series 未返回读数）'
+                }
+              />
             )}
           </Card>
         </Col>
         <Col xs={24} lg={10}>
-          <Card
-            size="small"
-            title="土壤数据热力图"
-            extra={
-              <Space size={4}>
-                <Tag color="success">低</Tag>
-                <Tag color="warning">中</Tag>
-                <Tag color="error">高</Tag>
-              </Space>
-            }
-          >
-            <ReactECharts option={soilChartOption} style={{ height: 320 }} notMerge />
+          <Card size="small" title="土壤数据热力图">
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description="后端暂无土壤温度数据源，无法绘制热力图"
+            />
           </Card>
         </Col>
       </Row>
@@ -528,89 +386,30 @@ export default function Environment(): JSX.Element {
           columns={alertColumns}
           dataSource={alertRows}
           pagination={false}
-          locale={{ emptyText: <Empty description="暂无环境异常预警" image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
+          locale={{
+            emptyText: (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description="后端暂无环境异常预警数据源（无按站点 / 阈值的环境预警聚合接口）"
+              />
+            ),
+          }}
         />
       </Card>
 
-      {/* 数据口径提示 */}
+      {/* 数据口径提示：只说明真实口径，不再出现「示例口径」话术 */}
       <AntAlert
         style={{ marginTop: 12 }}
-        type={metrics.hasRealData ? 'success' : 'info'}
+        type={seriesQuery.isError ? 'error' : metrics.hasRealData ? 'success' : 'info'}
         showIcon
         message={
-          metrics.hasRealData
-            ? '已加载真实环境时序数据（/iot/readings/series）'
-            : '当前展示原型示例口径（后端环境时序接口未返回数据），时间范围与站点筛选、预警处理均可正常使用。'
+          seriesQuery.isError
+            ? `环境时序接口加载失败：${(seriesQuery.error as Error | null)?.message ?? '未知错误'}（页面不使用示例数据兜底）`
+            : metrics.hasRealData
+              ? '已加载真实环境时序数据（/iot/readings/series）'
+              : '后端未返回环境时序数据，气温区块显示空态。湿度 / 降水 / 光照 / 风速、土壤热力图与环境异常预警暂无数据源，统一显示「—」或空态。'
         }
       />
-
-      {/* 预警处理弹窗 */}
-      <Modal
-        open={activeAlert !== null}
-        title="环境预警处理"
-        okText="确认处理"
-        cancelText="取消"
-        destroyOnClose
-        onCancel={() => setActiveAlert(null)}
-        onOk={() => {
-          if (!activeAlert) {
-            return
-          }
-          if (!remark.trim()) {
-            message.warning('请填写处理说明')
-            return
-          }
-          setHandledIds((prev) => [...prev, activeAlert.id])
-          message.success(`${activeAlert.station} ${activeAlert.type} 预警已处理：${measure}`)
-          setActiveAlert(null)
-          setRemark('')
-        }}
-      >
-        {activeAlert && (
-          <div>
-            <Row gutter={[0, 8]}>
-              <Col span={12}>站点：{activeAlert.station}</Col>
-              <Col span={12}>异常类型：{activeAlert.type}</Col>
-              <Col span={12}>当前值：{activeAlert.value}</Col>
-              <Col span={12}>阈值：{activeAlert.threshold}</Col>
-              <Col span={12}>级别：{activeAlert.level}</Col>
-              <Col span={12}>时间：{activeAlert.time}</Col>
-            </Row>
-            <div style={{ marginTop: 12 }}>
-              <Text>处理措施：</Text>
-              <Radio.Group
-                style={{ marginTop: 6, display: 'block' }}
-                value={measure}
-                onChange={(event) => setMeasure(String(event.target.value))}
-                options={[
-                  { label: '下发整改通知', value: '下发整改通知' },
-                  { label: '现场核查', value: '现场核查' },
-                  { label: '调整灌溉/通风策略', value: '调整灌溉/通风策略' },
-                ]}
-              />
-            </div>
-            <div style={{ marginTop: 12 }}>
-              <Text>处理说明：</Text>
-              <textarea
-                value={remark}
-                onChange={(event) => setRemark(event.target.value)}
-                rows={3}
-                placeholder="请输入处理说明（必填）"
-                style={{
-                  width: '100%',
-                  marginTop: 6,
-                  padding: 8,
-                  border: '1px solid rgba(0,0,0,0.15)',
-                  borderRadius: 6,
-                  resize: 'vertical',
-                  color: 'inherit',
-                  background: 'transparent',
-                }}
-              />
-            </div>
-          </div>
-        )}
-      </Modal>
     </div>
   )
 }

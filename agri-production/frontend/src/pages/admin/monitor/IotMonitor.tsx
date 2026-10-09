@@ -73,102 +73,61 @@ const STATUS_FILTER_OPTIONS: Array<{ value: string; label: string }> = [
 /** 低电量判定阈值（%） */
 const LOW_BATTERY_THRESHOLD = 20
 
-/** 设备台账示例数据（原型 P9 表格） */
-const FALLBACK_DEVICES: IotDevice[] = [
-  {
-    deviceId: 'D1',
-    deviceCode: 'D10001',
-    deviceName: '气象站A',
-    deviceType: 4,
-    farmName: '绿源1号',
-    onlineStatus: 1,
-    battery: 85,
-    signal: -62,
-    lastHeartbeatAt: '2025-07-14 10:30:00',
-    createdAt: '2025-01-10 09:00:00',
-    updatedAt: '2025-07-14 10:30:00',
-  },
-  {
-    deviceId: 'D2',
-    deviceCode: 'D10002',
-    deviceName: '土壤T1',
-    deviceType: 1,
-    farmName: '绿源1号',
-    onlineStatus: 1,
-    battery: 72,
-    signal: -68,
-    lastHeartbeatAt: '2025-07-14 10:29:00',
-    createdAt: '2025-01-10 09:00:00',
-    updatedAt: '2025-07-14 10:29:00',
-  },
-  {
-    deviceId: 'D3',
-    deviceCode: 'D10003',
-    deviceName: '摄像头3',
-    deviceType: 2,
-    farmName: '丰达A区',
-    onlineStatus: 1,
-    signal: -75,
-    lastHeartbeatAt: '2025-07-14 10:30:00',
-    createdAt: '2025-02-11 09:00:00',
-    updatedAt: '2025-07-14 10:30:00',
-  },
-  {
-    deviceId: 'D4',
-    deviceCode: 'D10004',
-    deviceName: '灌溉阀5',
-    deviceType: 3,
-    farmName: '大地南',
-    onlineStatus: 1,
-    battery: 18,
-    signal: -92,
-    lastHeartbeatAt: '2025-07-14 09:45:00',
-    createdAt: '2025-02-11 09:00:00',
-    updatedAt: '2025-07-14 09:45:00',
-  },
-  {
-    deviceId: 'D5',
-    deviceCode: 'D10005',
-    deviceName: '土壤T8',
-    deviceType: 1,
-    farmName: '鑫农试',
-    onlineStatus: 3,
-    battery: 8,
-    signal: -110,
-    lastHeartbeatAt: '2025-07-13 18:20:00',
-    createdAt: '2025-03-01 09:00:00',
-    updatedAt: '2025-07-13 18:20:00',
-  },
-  {
-    deviceId: 'D6',
-    deviceCode: 'D10006',
-    deviceName: '气象站B',
-    deviceType: 4,
-    farmName: '惠民D',
-    onlineStatus: 2,
-    battery: 65,
-    signal: -60,
-    lastHeartbeatAt: '2025-07-14 08:15:00',
-    createdAt: '2025-03-01 09:00:00',
-    updatedAt: '2025-07-14 08:15:00',
-  },
-]
-
-/** 设备状态卡示例口径（原型 P9） */
-const FALLBACK_STATS = {
-  total: 8542,
-  online: 7820,
-  offline: 562,
-  fault: 160,
+/**
+ * 后端真实设备行。
+ *
+ * prod_iot_device 实际用 `onlineFlag`（1 在线 / 0 离线）表示在线状态，
+ * 没有 `onlineStatus` 字段；`deviceType` 是字符串枚举（SENSOR / CONTROLLER …）。
+ * 这里只在页面内做字段适配，不改共享类型定义，避免影响其它 IoT 页面。
+ */
+type RawIotDevice = IotDevice & {
+  onlineFlag?: number
+  deviceType?: IotDevice['deviceType'] | string
 }
 
-/** 设备类型分布示例口径（原型 P9） */
-const FALLBACK_TYPE_STATS: Array<{ type: number; total: number; onlineRate: number }> = [
-  { type: 4, total: 1280, onlineRate: 92 },
-  { type: 1, total: 3450, onlineRate: 93 },
-  { type: 2, total: 1860, onlineRate: 89 },
-  { type: 3, total: 1520, onlineRate: 94 },
-]
+/** 后端设备类型字符串枚举 → 前端类型编码 */
+const DEVICE_TYPE_CODE: Record<string, number> = {
+  SENSOR: 1,
+  CAMERA: 2,
+  CONTROLLER: 3,
+  WEATHER: 4,
+  DRONE: 5,
+}
+
+/**
+ * 归一化设备类型（后端给字符串枚举，前端用数字编码）。
+ *
+ * @param value 后端原始 deviceType
+ * @returns 前端类型编码；无法识别时返回 undefined（展示「未知」）
+ */
+function resolveDeviceType(value: IotDevice['deviceType'] | string | undefined): number | undefined {
+  if (typeof value === 'number') {
+    return value
+  }
+  if (typeof value === 'string') {
+    return DEVICE_TYPE_CODE[value]
+  }
+  return undefined
+}
+
+/**
+ * 归一化在线状态：优先用 onlineStatus，缺失时按后端 onlineFlag 推导。
+ *
+ * @param device 设备行
+ * @returns 1 在线 / 2 离线 / 3 故障；都取不到时返回 undefined
+ */
+function resolveOnlineStatus(device: RawIotDevice): number | undefined {
+  if (typeof device.onlineStatus === 'number') {
+    return device.onlineStatus
+  }
+  if (device.onlineFlag === 1) {
+    return 1
+  }
+  if (device.onlineFlag === 0) {
+    return 2
+  }
+  return undefined
+}
 
 /**
  * 电量百分比 → 进度条颜色（低电量标红）。
@@ -292,89 +251,73 @@ export default function IotMonitor(): JSX.Element {
       message.success('重启指令已下发')
       void queryClient.invalidateQueries({ queryKey: ['admin', 'monitor', 'iot'] })
     },
-    onError: () => {
-      message.warning('重启指令已登记（后端设备控制接口暂未返回成功）')
+    onError: (error) => {
+      // 失败就是失败：不能把「没下发成功」说成「已登记」
+      message.error(`重启指令下发失败：${(error as Error | null)?.message ?? '未知错误'}`)
     },
   })
 
-  /** 表格数据：接口有数据用真实数据，否则用原型示例 */
+  /**
+   * 表格数据：只使用 /iot/devices 的真实返回，接口无数据就是空表。
+   *
+   * 低电量筛选为客户端过滤（后端无该枚举）：后端不返回 battery 时一律视为「非低电量」，
+   * 不臆造电量值。
+   */
   const rows: IotDevice[] = useMemo(() => {
-    const remote = deviceQuery.data?.list
-    if (remote && remote.length > 0) {
-      // 低电量筛选为客户端过滤（后端无该枚举）
-      const filtered =
-        applied.status === 'low'
-          ? remote.filter(
-              (item) => item.battery !== undefined && item.battery <= LOW_BATTERY_THRESHOLD,
-            )
-          : remote
-      return filtered
+    const remote = deviceQuery.data?.list ?? []
+    if (applied.status !== 'low') {
+      return remote
     }
-    const fallback = FALLBACK_DEVICES.filter((item) => {
-      const matchCode = applied.keyword
-        ? item.deviceCode.includes(applied.keyword) || item.deviceName.includes(applied.keyword)
-        : true
-      const matchType =
-        applied.deviceType === 'all' ? true : String(item.deviceType) === applied.deviceType
-      const matchStatus =
-        applied.status === 'all'
-          ? true
-          : applied.status === 'low'
-            ? (item.battery ?? 100) <= LOW_BATTERY_THRESHOLD
-            : String(item.onlineStatus) === applied.status
-      return matchCode && matchType && matchStatus
-    })
-    return fallback
+    return remote.filter(
+      (item) => item.battery !== undefined && item.battery <= LOW_BATTERY_THRESHOLD,
+    )
   }, [deviceQuery.data, applied])
 
-  /** 是否使用真实接口数据 */
+  /** 是否取到真实接口数据 */
   const hasRealData = (deviceQuery.data?.list?.length ?? 0) > 0
 
-  /** 状态卡统计 */
+  /** 状态卡统计：后端无数据时全部为 null（卡片展示「—」） */
   const stats = useMemo(() => {
-    const remote = statesQuery.data
-    if (remote && remote.length > 0) {
-      const total = remote.length
-      const online = remote.filter((item) => item.onlineStatus === 1).length
-      const offline = remote.filter((item) => item.onlineStatus === 2).length
-      const fault = remote.filter((item) => item.onlineStatus === 3).length
-      return {
-        total,
-        online,
-        offline,
-        fault,
-        onlineRate: Number(((online / Math.max(total, 1)) * 100).toFixed(1)),
-        hasRealData: true,
-      }
+    const remote = (statesQuery.data ?? []) as RawIotDevice[]
+    if (remote.length === 0) {
+      return { total: null, online: null, offline: null, fault: null, onlineRate: null }
     }
+    const total = remote.length
+    const online = remote.filter((item) => resolveOnlineStatus(item) === 1).length
+    const offline = remote.filter((item) => resolveOnlineStatus(item) === 2).length
+    const fault = remote.filter((item) => resolveOnlineStatus(item) === 3).length
     return {
-      ...FALLBACK_STATS,
-      onlineRate: Number(
-        ((FALLBACK_STATS.online / Math.max(FALLBACK_STATS.total, 1)) * 100).toFixed(1),
-      ),
-      hasRealData: false,
+      total,
+      online,
+      offline,
+      fault,
+      onlineRate: Number(((online / Math.max(total, 1)) * 100).toFixed(1)),
     }
   }, [statesQuery.data])
 
-  /** 设备类型分布统计 */
+  /** 设备类型分布：按后端真实设备分组统计，无数据则为空数组 */
   const typeStats = useMemo(() => {
-    const remote = statesQuery.data
-    if (remote && remote.length > 0) {
-      return FALLBACK_TYPE_STATS.map((item) => {
-        const list = remote.filter((device) => device.deviceType === item.type)
-        if (list.length === 0) {
-          return { ...item, real: false }
-        }
-        const online = list.filter((device) => device.onlineStatus === 1).length
-        return {
-          type: item.type,
-          total: list.length,
-          onlineRate: Number(((online / Math.max(list.length, 1)) * 100).toFixed(0)),
-          real: true,
-        }
-      })
-    }
-    return FALLBACK_TYPE_STATS.map((item) => ({ ...item, real: false }))
+    const remote = (statesQuery.data ?? []) as RawIotDevice[]
+    const grouped = new Map<number, { type: number; total: number; online: number }>()
+    remote.forEach((device) => {
+      const type = resolveDeviceType(device.deviceType)
+      if (type === undefined) {
+        return
+      }
+      const bucket = grouped.get(type) ?? { type, total: 0, online: 0 }
+      bucket.total += 1
+      if (resolveOnlineStatus(device) === 1) {
+        bucket.online += 1
+      }
+      grouped.set(type, bucket)
+    })
+    return [...grouped.values()]
+      .sort((a, b) => a.type - b.type)
+      .map((item) => ({
+        type: item.type,
+        total: item.total,
+        onlineRate: Number(((item.online / Math.max(item.total, 1)) * 100).toFixed(0)),
+      }))
   }, [statesQuery.data])
 
   /** 设备表格列（原型 P9：设备编号 | 设备名称 | 类型 | 所属农场 | 状态 | 最后上报 | 电量 | 信号 | 操作） */
@@ -386,19 +329,23 @@ export default function IotMonitor(): JSX.Element {
       dataIndex: 'deviceType',
       key: 'deviceType',
       width: 110,
-      render: (value: number) => {
-        const meta = DEVICE_TYPE_MAP[value]
+      render: (value: IotDevice['deviceType'] | string) => {
+        const meta = DEVICE_TYPE_MAP[resolveDeviceType(value) ?? 0]
         return <Space size={4}>{meta ? <span>{meta.icon}</span> : null}<Text>{meta?.label ?? '未知'}</Text></Space>
       },
     },
-    { title: '所属农场', dataIndex: 'farmName', key: 'farmName', width: 110, render: (value?: string) => value || '—' },
+    { title: '所属农场', dataIndex: 'farmId', key: 'farmId', width: 110, render: (value?: string) => value || '—' },
     {
       title: '状态',
       dataIndex: 'onlineStatus',
       key: 'onlineStatus',
       width: 90,
-      render: (value: number) => {
-        const meta = ONLINE_STATUS_MAP[value] ?? { label: '未知', color: 'default' }
+      render: (_value: unknown, row: IotDevice) => {
+        const status = resolveOnlineStatus(row as RawIotDevice)
+        const meta = (status === undefined ? undefined : ONLINE_STATUS_MAP[status]) ?? {
+          label: '未知',
+          color: 'default',
+        }
         return <Tag color={meta.color}>{meta.label}</Tag>
       },
     },
@@ -416,7 +363,8 @@ export default function IotMonitor(): JSX.Element {
       width: 130,
       render: (value?: number) =>
         value === undefined || value === null ? (
-          <Tag>外接电源 🔌</Tag>
+          // 后端不返回电量时不能臆断为「外接电源」，统一显示「—」
+          <Text type="secondary">—</Text>
         ) : (
           <Space direction="vertical" size={0} style={{ width: '100%' }}>
             <Progress
@@ -436,6 +384,9 @@ export default function IotMonitor(): JSX.Element {
       key: 'signal',
       width: 90,
       render: (value?: number) => {
+        if (value === undefined || value === null) {
+          return <Text type="secondary">—</Text>
+        }
         const meta = signalMeta(value)
         return <Tag color={meta.color}>{meta.text}</Tag>
       },
@@ -452,7 +403,7 @@ export default function IotMonitor(): JSX.Element {
           <Button
             type="link"
             size="small"
-            disabled={row.onlineStatus !== 1}
+            disabled={resolveOnlineStatus(row as RawIotDevice) !== 1}
             loading={rebootMutation.isPending}
             onClick={() => rebootMutation.mutate(row.deviceId)}
           >
@@ -484,15 +435,16 @@ export default function IotMonitor(): JSX.Element {
       message.warning('当前无设备数据可导出')
       return
     }
+    const raw = (row: IotDevice): RawIotDevice => row as RawIotDevice
     const data = rows.map((item) => [
       item.deviceCode,
       item.deviceName,
-      DEVICE_TYPE_MAP[item.deviceType]?.label ?? '未知',
-      item.farmName ?? '—',
-      ONLINE_STATUS_MAP[item.onlineStatus]?.label ?? '未知',
+      DEVICE_TYPE_MAP[resolveDeviceType(raw(item).deviceType) ?? 0]?.label ?? '未知',
+      item.farmId ?? '—',
+      ONLINE_STATUS_MAP[resolveOnlineStatus(raw(item)) ?? 0]?.label ?? '未知',
       item.lastHeartbeatAt ?? '—',
-      item.battery === undefined || item.battery === null ? '外接电源' : `${item.battery}%`,
-      signalMeta(item.signal).text,
+      item.battery === undefined || item.battery === null ? '—' : `${item.battery}%`,
+      item.signal === undefined || item.signal === null ? '—' : signalMeta(item.signal).text,
     ])
     exportCsv(
       `IoT设备报表_${new Date().toISOString().slice(0, 10)}.csv`,
@@ -536,26 +488,26 @@ export default function IotMonitor(): JSX.Element {
         </Col>
       </Row>
 
-      {/* 状态卡（原型 P9：设备总数 / 在线 / 离线 / 故障 / 在线率） */}
+      {/* 状态卡（设备总数 / 在线 / 离线 / 故障 / 在线率）：后端无数据时显示「—」 */}
       <Row gutter={[12, 12]}>
         <Col xs={12} lg={4}>
           <Card size="small" styles={{ body: { padding: 16 } }}>
-            <Statistic title="设备总数" value={stats.total} />
+            <Statistic title="设备总数" value={stats.total ?? '—'} />
           </Card>
         </Col>
         <Col xs={12} lg={4}>
           <Card size="small" styles={{ body: { padding: 16 } }}>
-            <Statistic title="在线" value={stats.online} valueStyle={{ color: '#52c41a' }} />
+            <Statistic title="在线" value={stats.online ?? '—'} valueStyle={{ color: '#52c41a' }} />
           </Card>
         </Col>
         <Col xs={12} lg={4}>
           <Card size="small" styles={{ body: { padding: 16 } }}>
-            <Statistic title="离线" value={stats.offline} />
+            <Statistic title="离线" value={stats.offline ?? '—'} />
           </Card>
         </Col>
         <Col xs={12} lg={4}>
           <Card size="small" styles={{ body: { padding: 16 } }}>
-            <Statistic title="故障" value={stats.fault} valueStyle={{ color: '#ff4d4f' }} />
+            <Statistic title="故障" value={stats.fault ?? '—'} valueStyle={{ color: '#ff4d4f' }} />
           </Card>
         </Col>
         <Col xs={24} lg={8}>
@@ -566,22 +518,36 @@ export default function IotMonitor(): JSX.Element {
               <>
                 <Statistic
                   title="设备在线率"
-                  value={stats.onlineRate}
+                  value={stats.onlineRate ?? '—'}
                   precision={1}
                   suffix="%"
                   valueStyle={{ color: '#1677ff' }}
                 />
-                <Progress percent={stats.onlineRate} size="small" strokeColor="#1677ff" />
+                <Progress
+                  percent={stats.onlineRate ?? 0}
+                  size="small"
+                  strokeColor={stats.onlineRate === null ? 'rgba(0,0,0,0.15)' : '#1677ff'}
+                />
               </>
             )}
           </Card>
         </Col>
       </Row>
 
-      {/* 设备类型分布（原型 P9） */}
+      {/* 设备类型分布：按后端真实设备分组；无数据展示空态 */}
       <Card size="small" title="设备类型分布" style={{ marginTop: 12 }}>
-        <Row gutter={[12, 12]}>
-          {typeStats.map((item) => {
+        {typeStats.length === 0 ? (
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description={
+              statesQuery.isError
+                ? `设备状态接口加载失败：${(statesQuery.error as Error | null)?.message ?? '未知错误'}`
+                : '后端暂无设备数据'
+            }
+          />
+        ) : (
+          <Row gutter={[12, 12]}>
+            {typeStats.map((item) => {
             const meta = DEVICE_TYPE_MAP[item.type]
             return (
               <Col key={item.type} xs={12} lg={6}>
@@ -605,8 +571,9 @@ export default function IotMonitor(): JSX.Element {
                 </Card>
               </Col>
             )
-          })}
-        </Row>
+            })}
+          </Row>
+        )}
       </Card>
 
       {/* 筛选器（原型 P9：设备编号 / 类型 / 状态） */}
@@ -659,7 +626,7 @@ export default function IotMonitor(): JSX.Element {
             type="error"
             showIcon
             message="设备列表接口请求失败"
-            description="请检查网络或后端服务后重试，页面已切换为原型示例口径展示。"
+            description="请检查网络或后端服务后重试。页面不使用示例数据兜底，失败期间表格为空。"
             action={
               <Button size="small" onClick={() => void deviceQuery.refetch()}>
                 重试
@@ -676,7 +643,7 @@ export default function IotMonitor(): JSX.Element {
             pagination={{
               current: pageNum,
               pageSize,
-              total: hasRealData ? deviceQuery.data?.total ?? rows.length : rows.length,
+              total: deviceQuery.data?.total ?? rows.length,
               showSizeChanger: true,
               showTotal: (total) => `共 ${total.toLocaleString('zh-CN')} 条`,
               onChange: (page, size) => {
@@ -688,15 +655,17 @@ export default function IotMonitor(): JSX.Element {
         )}
       </Card>
 
-      {/* 数据口径提示 */}
+      {/* 数据口径提示：只说明真实口径，不再出现「示例口径」话术 */}
       <AntAlert
         style={{ marginTop: 12 }}
-        type={hasRealData ? 'success' : 'info'}
+        type={deviceQuery.isError ? 'error' : hasRealData ? 'success' : 'info'}
         showIcon
         message={
-          hasRealData
-            ? '已加载真实设备台账数据'
-            : '当前展示原型示例口径（后端设备接口未返回数据），筛选、导出与重启操作均可正常使用。'
+          deviceQuery.isError
+            ? `设备台账加载失败：${(deviceQuery.error as Error | null)?.message ?? '未知错误'}`
+            : hasRealData
+              ? '已加载真实设备台账数据（电量 / 信号后端无该字段，显示「—」）'
+              : '后端未返回设备数据，台账为空。统计卡与类型分布同样取真实接口，无数据时显示「—」。'
         }
       />
 

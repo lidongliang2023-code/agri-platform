@@ -140,23 +140,6 @@ interface OverdueRow {
   owner: string
 }
 
-/** 超时任务示例数据 */
-const FALLBACK_OVERDUE: OverdueRow[] = [
-  { id: 'OD1', task: '收割', farm: '大地南', plan: '14:00', overdue: '>2h', owner: '王五' },
-  { id: 'OD2', task: '喷药', farm: '鑫农', plan: '15:00', overdue: '>1h', owner: '赵六' },
-  { id: 'OD3', task: '巡田', farm: '惠民', plan: '09:00', overdue: '>3h', owner: '孙七' },
-]
-
-/** 任务类型分布示例数据（原型 P8：总计 12,458） */
-const FALLBACK_TYPE_DIST: Array<{ name: string; value: number }> = [
-  { name: '施肥', value: 30 },
-  { name: '灌溉', value: 25 },
-  { name: '巡田', value: 15 },
-  { name: '喷药', value: 12 },
-  { name: '收割', value: 10 },
-  { name: '其他', value: 8 },
-]
-
 /** 已应用的筛选条件 */
 interface AppliedFilter {
   /** 日期 yyyy-MM-dd */
@@ -297,8 +280,9 @@ export default function TaskMonitor(): JSX.Element {
       message.success('催办通知已发送')
       void queryClient.invalidateQueries({ queryKey: ['admin', 'monitor', 'tasks'] })
     },
-    onError: () => {
-      message.warning('催办记录已登记（后端催办接口暂未返回成功）')
+    onError: (error) => {
+      // 失败就是失败：不能把「没催办成功」说成「已登记」
+      message.error(`催办失败：${(error as Error | null)?.message ?? '未知错误'}`)
     },
   })
 
@@ -312,14 +296,14 @@ export default function TaskMonitor(): JSX.Element {
     return remote.filter((item) => (item.farmName ?? '').includes(keyword))
   }, [tasksQuery.data, applied.tenant])
 
-  /** 指标卡数据：有真实数据则实时计算，否则取原型 P8 口径 */
+  /** 指标卡数据：只按真实任务计算；无数据时各项为 null（卡片展示「—」） */
   const metrics = useMemo(() => {
     if (tasks.length === 0) {
       return {
-        total: 12458,
-        doneRate: 87.3,
-        avgHours: 2.5,
-        overdueRate: 5.2,
+        total: null,
+        doneRate: null,
+        avgHours: null,
+        overdueRate: null,
         hasRealData: false,
       }
     }
@@ -342,41 +326,10 @@ export default function TaskMonitor(): JSX.Element {
     }
   }, [tasks, tasksQuery.data?.total])
 
-  /** 甘特图数据：真实任务为空时使用原型 P8 示例行 */
+  /** 甘特图数据：只用真实任务，无任务时为空（图表区渲染空态） */
   const ganttTasks: GanttTask[] = useMemo(() => {
     if (tasks.length === 0) {
-      const base = dayjs(applied.date)
-      const build = (
-        row: string,
-        name: string,
-        startHour: number,
-        startMinute: number,
-        endHour: number,
-        endMinute: number,
-        status: GanttStatus,
-        actualDelay = 0,
-      ): GanttTask => {
-        const planStart = base.hour(startHour).minute(startMinute).second(0).valueOf()
-        const planEnd = base.hour(endHour).minute(endMinute).second(0).valueOf()
-        return {
-          row,
-          name,
-          planStart,
-          planEnd,
-          actualStart: planStart,
-          actualEnd: planEnd + actualDelay * 3600000,
-          status,
-        }
-      }
-      return [
-        build('绿源1号农场', '施肥', 6, 0, 9, 0, 'done'),
-        build('绿源1号农场', '灌溉', 9, 30, 12, 0, 'doing'),
-        build('丰达A区农场', '巡田', 7, 0, 9, 0, 'done'),
-        build('丰达A区农场', '喷药', 10, 0, 12, 30, 'done'),
-        build('大地南基地', '收割', 12, 0, 14, 0, 'overdue', 2),
-        build('鑫农实验农场', '播种', 8, 0, 11, 0, 'done'),
-        build('鑫农实验农场', '施肥', 13, 0, 16, 0, 'doing'),
-      ]
+      return []
     }
     return tasks.slice(0, 24).map((item) => {
       const planStart = dayjs(item.planStartDate).valueOf()
@@ -485,13 +438,13 @@ export default function TaskMonitor(): JSX.Element {
         }
       })
     }
-    return FALLBACK_OVERDUE
+    return []
   }, [tasks])
 
-  /** 任务类型分布 */
+  /** 任务类型分布：按真实任务统计，无任务时为空 */
   const typeDist = useMemo(() => {
     if (tasks.length === 0) {
-      return FALLBACK_TYPE_DIST
+      return []
     }
     const counter = new Map<string, number>()
     tasks.forEach((item) => {
@@ -679,66 +632,43 @@ export default function TaskMonitor(): JSX.Element {
         </Space>
       </Card>
 
-      {/* 指标卡（原型 P8：今日任务 / 完成率 / 平均耗时 / 超时率） */}
+      {/* 指标卡：全部按真实任务实时计算；无数据时显示「—」。
+          原「较昨日 ↑3.1% / ↑1.8% / ↓0.3h / ↓0.8%」后端无同比数据源，已删除。 */}
       <Row gutter={[12, 12]}>
         <Col xs={12} xl={6}>
           <Card size="small" styles={{ body: { padding: 16 } }}>
             {tasksQuery.isLoading ? (
               <Skeleton active title={false} paragraph={{ rows: 2 }} />
             ) : (
-              <Statistic title="今日任务" value={metrics.total} />
+              <Statistic title="今日任务" value={metrics.total ?? '—'} />
             )}
-            <Space size={4} style={{ marginTop: 6 }}>
-              <Text style={{ color: '#52c41a', fontSize: 12 }}>↑ 3.1%</Text>
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                较昨日
-              </Text>
-            </Space>
           </Card>
         </Col>
         <Col xs={12} xl={6}>
           <Card size="small" styles={{ body: { padding: 16 } }}>
             <Statistic
               title="完成率"
-              value={metrics.doneRate}
+              value={metrics.doneRate ?? '—'}
               precision={1}
               suffix="%"
               valueStyle={{ color: '#52c41a' }}
             />
-            <Space size={4} style={{ marginTop: 6 }}>
-              <Text style={{ color: '#52c41a', fontSize: 12 }}>↑ 1.8%</Text>
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                较昨日
-              </Text>
-            </Space>
           </Card>
         </Col>
         <Col xs={12} xl={6}>
           <Card size="small" styles={{ body: { padding: 16 } }}>
-            <Statistic title="平均耗时" value={metrics.avgHours} precision={1} suffix="h" />
-            <Space size={4} style={{ marginTop: 6 }}>
-              <Text style={{ color: '#52c41a', fontSize: 12 }}>↓ 0.3h</Text>
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                较昨日
-              </Text>
-            </Space>
+            <Statistic title="平均耗时" value={metrics.avgHours ?? '—'} precision={1} suffix="h" />
           </Card>
         </Col>
         <Col xs={12} xl={6}>
           <Card size="small" styles={{ body: { padding: 16 } }}>
             <Statistic
               title="超时率"
-              value={metrics.overdueRate}
+              value={metrics.overdueRate ?? '—'}
               precision={1}
               suffix="%"
               valueStyle={{ color: '#ff4d4f' }}
             />
-            <Space size={4} style={{ marginTop: 6 }}>
-              <Text style={{ color: '#52c41a', fontSize: 12 }}>↓ 0.8%</Text>
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                较昨日
-              </Text>
-            </Space>
           </Card>
         </Col>
       </Row>
@@ -788,22 +718,39 @@ export default function TaskMonitor(): JSX.Element {
           <Card
             size="small"
             title="任务类型分布"
-            extra={<Text type="secondary">总计 {metrics.total.toLocaleString('zh-CN')}</Text>}
+            extra={
+              <Text type="secondary">
+                总计 {metrics.total === null ? '—' : metrics.total.toLocaleString('zh-CN')}
+              </Text>
+            }
           >
-            <ReactECharts option={typeChartOption} style={{ height: 300 }} notMerge />
+            {typeDist.length === 0 ? (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description={
+                  tasksQuery.isError
+                    ? `任务接口加载失败：${(tasksQuery.error as Error | null)?.message ?? '未知错误'}`
+                    : '后端暂无任务数据'
+                }
+              />
+            ) : (
+              <ReactECharts option={typeChartOption} style={{ height: 300 }} notMerge />
+            )}
           </Card>
         </Col>
       </Row>
 
-      {/* 数据口径提示 */}
+      {/* 数据口径提示：只说明真实口径，不再出现「示例口径」话术 */}
       <AntAlert
         style={{ marginTop: 12 }}
-        type={metrics.hasRealData ? 'success' : 'info'}
+        type={tasksQuery.isError ? 'error' : metrics.hasRealData ? 'success' : 'info'}
         showIcon
         message={
-          metrics.hasRealData
-            ? `已加载 ${tasks.length} 条真实任务数据（日期：${applied.date}）`
-            : '当前展示原型示例口径（后端任务接口在该筛选条件下未返回数据），筛选、催办与导出功能均可正常使用。'
+          tasksQuery.isError
+            ? `任务接口加载失败：${(tasksQuery.error as Error | null)?.message ?? '未知错误'}`
+            : metrics.hasRealData
+              ? `已加载 ${tasks.length} 条真实任务数据（日期：${applied.date}）`
+              : '后端未返回任务数据，甘特图、超时列表与类型分布均为空，指标卡显示「—」。'
         }
       />
     </div>

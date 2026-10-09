@@ -25,7 +25,6 @@ import {
   Switch,
   Table,
   Tag,
-  Tooltip,
   Typography,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
@@ -33,30 +32,21 @@ import {
   BulbOutlined,
   ExclamationCircleOutlined,
   HomeOutlined,
-  PauseOutlined,
-  PlayCircleOutlined,
   ReloadOutlined,
 } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import ReactECharts from 'echarts-for-react'
-import type { EChartsOption } from 'echarts'
 import { closeAlert, listAdminAlerts } from '@/api/admin/alerts'
 import {
   getMonitorOverview,
   listMonitorRealtimeAlerts,
   listMonitorTaskStatusStats,
 } from '@/api/admin/monitor'
-import type { Alert } from '@/types'
-
 const { Text, Title } = Typography
 
-/* ==================== 原型 P7 示例口径（后端无数据时兜底） ==================== */
+/* ==================== 页面内常量与后端字段适配 ==================== */
 
 /** 自动刷新周期（秒），对应原型右上角「自动刷新 ● 30s」 */
 const AUTO_REFRESH_SECONDS = 30
-
-/** 实时数据流滚动间隔（毫秒） */
-const STREAM_SCROLL_INTERVAL = 2500
 
 /** 实时数据流条目 */
 interface StreamItem {
@@ -71,45 +61,6 @@ interface StreamItem {
   /** 事件级别：normal 普通 / warning 告警 */
   level: 'normal' | 'warning'
 }
-
-/** 实时数据流示例数据（原型 P7 实时数据流面板） */
-const FALLBACK_STREAM: StreamItem[] = [
-  { id: 'S1', time: '10:32:15', farm: '绿源农场', event: '完成施肥任务', level: 'normal' },
-  { id: 'S2', time: '10:31:48', farm: '丰达A区', event: '开始灌溉', level: 'normal' },
-  { id: 'S3', time: '10:31:22', farm: '大地南', event: '上报土壤数据', level: 'normal' },
-  { id: 'S4', time: '10:30:55', farm: '田园B区', event: '温度预警', level: 'warning' },
-  { id: 'S5', time: '10:30:12', farm: '鑫农C区', event: '完成巡田', level: 'normal' },
-  { id: 'S6', time: '10:29:45', farm: '惠民D区', event: '设备上线', level: 'normal' },
-  { id: 'S7', time: '10:29:08', farm: '丰收E区', event: '拍照上传', level: 'normal' },
-  { id: 'S8', time: '10:28:33', farm: '绿源农场', event: '完成任务', level: 'normal' },
-]
-
-/** 区域活跃度分层 */
-type ActivityLevel = 'high' | 'middle' | 'low' | 'none'
-
-/** 区域生产状态条目 */
-interface RegionStat {
-  /** 区域名称 */
-  region: string
-  /** 农场数量 */
-  farmCount: number
-  /** 活跃度分层 */
-  level: ActivityLevel
-}
-
-/** 区域生产状态示例数据（原型 P7 区域生产状态地图） */
-const FALLBACK_REGIONS: RegionStat[] = [
-  { region: '河南省', farmCount: 720, level: 'high' },
-  { region: '山东省', farmCount: 650, level: 'high' },
-  { region: '黑龙江省', farmCount: 480, level: 'high' },
-  { region: '江苏省', farmCount: 410, level: 'middle' },
-  { region: '四川省', farmCount: 355, level: 'middle' },
-  { region: '广东省', farmCount: 320, level: 'middle' },
-  { region: '河北省', farmCount: 286, level: 'middle' },
-  { region: '安徽省', farmCount: 232, level: 'low' },
-  { region: '湖北省', farmCount: 208, level: 'low' },
-  { region: '浙江省', farmCount: 186, level: 'none' },
-]
 
 /** 异常预警行（原型 P7 异常预警列表） */
 interface AbnormalRow {
@@ -127,28 +78,104 @@ interface AbnormalRow {
   status: string
 }
 
-/** 异常预警示例数据 */
-const FALLBACK_ABNORMALS: AbnormalRow[] = [
-  { id: 'ABN001', time: '10:31:22', farm: '田园B区', type: '温度超限', level: '紧急', status: '待处理' },
-  { id: 'ABN002', time: '10:28:15', farm: '鑫农C区', type: '设备离线', level: '重要', status: '处理中' },
-  { id: 'ABN003', time: '10:15:40', farm: '惠民D区', type: '湿度异常', level: '重要', status: '待处理' },
-  { id: 'ABN004', time: '09:58:22', farm: '大地南', type: '任务超时', level: '一般', status: '已处理' },
-]
-
-/** 区域活跃度 → 图例颜色 */
-const LEVEL_COLOR_MAP: Record<ActivityLevel, string> = {
-  high: '#52c41a',
-  middle: '#faad14',
-  low: '#ff4d4f',
-  none: '#d9d9d9',
+/**
+ * /admin/alerts 实际返回的告警行。
+ *
+ * 后端实际字段与 types/alert.ts 的 Alert 契约不一致：alertLevel / status 是字符串
+ * 枚举（URGENT / WARN / PENDING …），时间字段是 alertTime 而不是 triggeredAt，
+ * 另带 metric / metricValue。本页在页面内适配，不改共享类型、也不改 api 层
+ * （api/ 层当前是并发冲突区）。
+ */
+interface RawAdminAlert {
+  /** 告警 ID */
+  alertId?: string
+  /** 告警标题 */
+  alertTitle?: string
+  /** 告警内容 */
+  alertContent?: string
+  /** 告警来源 */
+  alertSource?: string | number
+  /** 监测指标 */
+  metric?: string
+  /** 触发值 */
+  metricValue?: string | number
+  /** 告警级别（后端为字符串枚举） */
+  alertLevel?: string | number
+  /** 触发时间（后端字段名为 alertTime） */
+  alertTime?: string
+  /** 处理状态（后端为字符串枚举） */
+  status?: string | number
+  /** 关联农场 ID */
+  farmId?: string
+  /** 关联地块 ID */
+  plotId?: string
+  /** 关联地块名称 */
+  plotName?: string
+  /** 关联设备 ID */
+  deviceId?: string
 }
 
-/** 区域活跃度 → 图例文案 */
-const LEVEL_TEXT_MAP: Record<ActivityLevel, string> = {
-  high: '高活跃',
-  middle: '中活跃',
-  low: '低活跃',
-  none: '无数据',
+/**
+ * 把后端告警级别归一化为页面展示文案，无法识别时返回「—」。
+ *
+ * @param value 后端告警级别（字符串枚举或数字）
+ * @returns 展示文案：紧急 / 重要 / 一般 / —
+ */
+function resolveAlertLevel(value?: string | number): string {
+  if (typeof value === 'number') {
+    return value >= 3 ? '紧急' : value === 2 ? '重要' : '一般'
+  }
+  if (typeof value === 'string' && value.length > 0) {
+    const upper = value.toUpperCase()
+    if (upper === 'URGENT' || upper === 'CRITICAL' || upper === 'HIGH') {
+      return '紧急'
+    }
+    if (upper === 'WARN' || upper === 'WARNING' || upper === 'MEDIUM') {
+      return '重要'
+    }
+    if (upper === 'INFO' || upper === 'LOW') {
+      return '一般'
+    }
+    return value
+  }
+  return '—'
+}
+
+/**
+ * 把后端告警状态归一化为页面展示文案，无法识别时返回「—」。
+ *
+ * @param value 后端处理状态（字符串枚举或数字）
+ * @returns 展示文案：待处理 / 处理中 / 已处理 / —
+ */
+function resolveAlertStatus(value?: string | number): string {
+  if (typeof value === 'number') {
+    return value === 1 ? '待处理' : value === 2 ? '处理中' : '已处理'
+  }
+  if (typeof value === 'string' && value.length > 0) {
+    const upper = value.toUpperCase()
+    if (upper === 'PENDING' || upper === 'UNHANDLED') {
+      return '待处理'
+    }
+    if (upper === 'HANDLING' || upper === 'PROCESSING') {
+      return '处理中'
+    }
+    if (upper === 'HANDLED' || upper === 'CLOSED' || upper === 'RESOLVED') {
+      return '已处理'
+    }
+    return value
+  }
+  return '—'
+}
+
+/**
+ * 判断告警级别是否达到「告警」档（紧急 / 重要），用于数据流标红。
+ *
+ * @param value 后端告警级别
+ * @returns 是否需要按告警样式展示
+ */
+function isWarningLevel(value?: string | number): boolean {
+  const text = resolveAlertLevel(value)
+  return text === '紧急' || text === '重要'
 }
 
 /** 告警级别 → Tag 颜色 */
@@ -197,9 +224,10 @@ function pickNumber(source: unknown, key: string, fallback: number): number {
 /**
  * 生产监控中心
  *
- * 业务职责：实时监控全平台生产状态，包含实时指标卡、实时数据流、
- * 区域生产状态地图与异常预警处理。数据优先取后端 /admin/monitor/* 与
- * /admin/alerts，接口未返回数据时降级到原型 P7 示例口径。
+ * 业务职责：实时监控全平台生产状态，包含实时指标卡、实时数据流与
+ * 异常预警处理。数据只取后端 /admin/monitor/* 与 /admin/alerts：
+ * 接口返回空就是空、接口报错就显式提示，不用示例数字兜底。
+ * 区域生产状态地图因后端无「按区域农场数 / 活跃度」聚合接口，已改为空态说明。
  *
  * @returns 页面内容
  */
@@ -211,12 +239,8 @@ export default function MonitorCenter(): JSX.Element {
   const [autoRefresh, setAutoRefresh] = useState<boolean>(true)
   /** 距下次自动刷新剩余秒数 */
   const [countdown, setCountdown] = useState<number>(AUTO_REFRESH_SECONDS)
-  /** 实时数据流是否暂停滚动 */
-  const [streamPaused, setStreamPaused] = useState<boolean>(false)
   /** 实时数据流筛选：全部 / 仅告警 */
   const [streamFilter, setStreamFilter] = useState<string>('全部')
-  /** 当前滚动中的数据流（原型示例口径） */
-  const [streamItems, setStreamItems] = useState<StreamItem[]>(FALLBACK_STREAM)
   /** 处理弹窗当前异常 */
   const [activeAbnormal, setActiveAbnormal] = useState<AbnormalRow | null>(null)
   /** 处理措施 */
@@ -261,45 +285,62 @@ export default function MonitorCenter(): JSX.Element {
       setHandleRemark('')
       void queryClient.invalidateQueries({ queryKey: ['admin', 'monitor'] })
     },
-    onError: () => {
-      // 后端处理接口未就绪时仍关闭弹窗并提示，保证交互闭环
-      message.warning('处理记录已本地登记（后端处理接口暂未返回成功）')
-      setActiveAbnormal(null)
-      setHandleRemark('')
+    onError: (error) => {
+      // 失败就是失败：不能把「没提交成功」说成「已本地登记」
+      message.error(`异常处理提交失败：${(error as Error | null)?.message ?? '未知错误'}`)
     },
   })
 
-  /** 指标卡数据：在线农场取原型口径，其余优先取后端聚合 */
-  const metricCards = useMemo(() => {
+  /**
+   * 指标卡数据：全部取自 /admin/monitor/overview 与 /admin/monitor/tasks。
+   *
+   * 后端未返回时一律为 null（卡片展示「—」），不再用 8542 / 8069 / 94.5 / 3280 / 3542
+   * 这类示例数字顶替；「在线农场 / 农场总数」后端无聚合接口，恒为 null。
+   */
+  const metricCards: {
+    /** 在线农场数：后端无农场聚合接口，恒为 null，卡片展示「—」 */
+    onlineFarm: number | null
+    /** 农场总数：后端无农场聚合接口，恒为 null */
+    totalFarm: number | null
+    /** 设备在线率（%），由 overview 的 deviceOnline / deviceTotal 计算 */
+    onlineRate: number | null
+    /** 待处理告警数，取 overview.alertPending */
+    alertToday: number | null
+    /** 待处理异常数：优先任务状态聚合，其次 alertPending */
+    pending: number | null
+  } = useMemo(() => {
     const overview = overviewQuery.data as unknown as Record<string, unknown> | undefined
-    const deviceTotal = pickNumber(overview, 'deviceTotal', 8542)
-    const deviceOnline = pickNumber(overview, 'deviceOnline', 8069)
+    const hasOverview = overview !== undefined && overview !== null
+    const deviceTotal = hasOverview ? pickNumber(overview, 'deviceTotal', 0) : null
+    const deviceOnline = hasOverview ? pickNumber(overview, 'deviceOnline', 0) : null
     const onlineRate =
-      deviceTotal > 0 ? Number(((deviceOnline / deviceTotal) * 100).toFixed(1)) : 94.5
-    const alertToday = pickNumber(overview, 'alertPending', 26)
+      deviceTotal !== null && deviceTotal > 0 && deviceOnline !== null
+        ? Number(((deviceOnline / deviceTotal) * 100).toFixed(1))
+        : null
+    const alertToday = hasOverview ? pickNumber(overview, 'alertPending', 0) : null
     const pendingFromTasks = (taskStatsQuery.data ?? []).reduce(
       (sum, item) =>
         ['pending', 'overdue', 'rejected'].includes(item.status) ? sum + Number(item.count ?? 0) : sum,
       0,
     )
-    const pending = pendingFromTasks > 0 ? pendingFromTasks : pickNumber(overview, 'alertPending', 8)
-    return { onlineFarm: 3280, totalFarm: 3542, onlineRate, alertToday, pending }
+    const pending = pendingFromTasks > 0 ? pendingFromTasks : alertToday
+    // 后端无「农场总数 / 在线农场」聚合接口，两项恒为 null，卡片显示「—」
+    const onlineFarm: number | null = null
+    const totalFarm: number | null = null
+    return { onlineFarm, totalFarm, onlineRate, alertToday, pending }
   }, [overviewQuery.data, taskStatsQuery.data])
 
-  /** 实时数据流：后端告警优先，否则用原型示例滚动数据 */
+  /** 实时数据流：只用 /admin/monitor/alerts 的真实返回，无数据即空 */
   const streamRows: StreamItem[] = useMemo(() => {
-    const remote = realtimeQuery.data
-    if (remote && remote.length > 0) {
-      return remote.slice(0, 20).map((item: Alert, index: number) => ({
-        id: item.alertId || item.alertNo || `STREAM-${index}`,
-        time: formatClock(item.triggeredAt),
-        farm: item.plotName || item.farmId || '平台',
-        event: item.alertTitle || item.alertContent || '生产事件',
-        level: item.alertLevel >= 3 ? 'warning' : 'normal',
-      }))
-    }
-    return streamItems
-  }, [realtimeQuery.data, streamItems])
+    const remote = (realtimeQuery.data ?? []) as unknown as RawAdminAlert[]
+    return remote.slice(0, 20).map((item, index) => ({
+      id: item.alertId || `STREAM-${index}`,
+      time: formatClock(item.alertTime),
+      farm: item.plotName || item.farmId || '平台',
+      event: item.alertTitle || item.alertContent || '生产事件',
+      level: isWarningLevel(item.alertLevel) ? 'warning' : 'normal',
+    }))
+  }, [realtimeQuery.data])
 
   /** 按筛选条件过滤后的数据流 */
   const visibleStream: StreamItem[] = useMemo(
@@ -310,37 +351,18 @@ export default function MonitorCenter(): JSX.Element {
     [streamRows, streamFilter],
   )
 
-  /** 异常预警列表 */
+  /** 异常预警列表：只用 /admin/alerts 的真实返回，无数据即空 */
   const abnormalRows: AbnormalRow[] = useMemo(() => {
-    const remote = alertsQuery.data?.list
-    if (remote && remote.length > 0) {
-      return remote.map((item: Alert, index: number) => ({
-        id: item.alertId || `ALERT-${index}`,
-        time: formatClock(item.triggeredAt),
-        farm: item.plotName || item.farmId || '—',
-        type: item.alertTitle || item.alertContent || '生产异常',
-        level: item.alertLevel >= 3 ? '紧急' : item.alertLevel === 2 ? '重要' : '一般',
-        status: item.status === 1 ? '待处理' : item.status === 2 ? '处理中' : '已处理',
-      }))
-    }
-    return FALLBACK_ABNORMALS
+    const remote = (alertsQuery.data?.list ?? []) as unknown as RawAdminAlert[]
+    return remote.map((item, index) => ({
+      id: item.alertId || `ALERT-${index}`,
+      time: formatClock(item.alertTime),
+      farm: item.plotName || item.farmId || '—',
+      type: item.alertTitle || item.alertContent || '生产异常',
+      level: resolveAlertLevel(item.alertLevel),
+      status: resolveAlertStatus(item.status),
+    }))
   }, [alertsQuery.data])
-
-  /** 实时数据流滚动 */
-  useEffect(() => {
-    if (streamPaused) {
-      return undefined
-    }
-    const timer = window.setInterval(() => {
-      setStreamItems((prev) => {
-        if (prev.length === 0) {
-          return prev
-        }
-        return [...prev.slice(1), prev[0]]
-      })
-    }, STREAM_SCROLL_INTERVAL)
-    return () => window.clearInterval(timer)
-  }, [streamPaused])
 
   /** 自动刷新倒计时 */
   useEffect(() => {
@@ -364,28 +386,6 @@ export default function MonitorCenter(): JSX.Element {
     setCountdown(AUTO_REFRESH_SECONDS)
     void queryClient.invalidateQueries({ queryKey: ['admin', 'monitor'] })
   }
-
-  /** 区域生产状态地图（横向柱状图，颜色区分活跃度） */
-  const regionChartOption: EChartsOption = useMemo(() => {
-    const sorted = [...FALLBACK_REGIONS].sort((a, b) => a.farmCount - b.farmCount)
-    return {
-      tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-      grid: { left: 8, right: 24, top: 16, bottom: 8, containLabel: true },
-      xAxis: { type: 'value', name: '农场数', splitLine: { lineStyle: { type: 'dashed' } } },
-      yAxis: { type: 'category', data: sorted.map((item) => item.region) },
-      series: [
-        {
-          type: 'bar',
-          name: '农场数',
-          barWidth: 14,
-          data: sorted.map((item) => ({
-            value: item.farmCount,
-            itemStyle: { color: LEVEL_COLOR_MAP[item.level], borderRadius: [0, 7, 7, 0] },
-          })),
-        },
-      ],
-    }
-  }, [])
 
   /** 异常预警表格列（原型 P7：时间 | 农场 | 异常类型 | 级别 | 处理状态 | 操作） */
   const abnormalColumns: ColumnsType<AbnormalRow> = [
@@ -489,17 +489,26 @@ export default function MonitorCenter(): JSX.Element {
               <>
                 <Statistic
                   title="在线农场"
-                  value={metricCards.onlineFarm}
-                  suffix={`/ ${metricCards.totalFarm.toLocaleString('zh-CN')}`}
-                  formatter={(value) => Number(value).toLocaleString('zh-CN')}
+                  value={metricCards.onlineFarm ?? '—'}
+                  suffix={
+                    metricCards.totalFarm === null
+                      ? undefined
+                      : `/ ${metricCards.totalFarm.toLocaleString('zh-CN')}`
+                  }
+                  formatter={(value) =>
+                    typeof value === 'number' ? Number(value).toLocaleString('zh-CN') : String(value)
+                  }
                 />
                 <Progress
                   percent={Number(
-                    ((metricCards.onlineFarm / Math.max(metricCards.totalFarm, 1)) * 100).toFixed(1),
+                    (
+                      ((metricCards.onlineFarm ?? 0) / Math.max(metricCards.totalFarm ?? 1, 1)) *
+                      100
+                    ).toFixed(1),
                   )}
                   size="small"
                   status="active"
-                  strokeColor="#52c41a"
+                  strokeColor={metricCards.onlineFarm === null ? 'rgba(0,0,0,0.15)' : '#52c41a'}
                 />
               </>
             )}
@@ -512,41 +521,26 @@ export default function MonitorCenter(): JSX.Element {
             ) : (
               <Statistic
                 title="设备在线率"
-                value={metricCards.onlineRate}
+                value={metricCards.onlineRate ?? '—'}
                 precision={1}
                 suffix="%"
                 valueStyle={{ color: '#1677ff' }}
               />
             )}
-            <Space size={4} style={{ marginTop: 6 }}>
-              <Text style={{ color: '#ff4d4f', fontSize: 12 }}>↓ 0.3%</Text>
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                较昨日
-              </Text>
-            </Space>
           </Card>
         </Col>
         <Col xs={24} sm={12} xl={6}>
           <Card size="small" styles={{ body: { padding: 16 } }}>
-            <Statistic title="今日告警数" value={metricCards.alertToday} />
-            <Space size={4} style={{ marginTop: 6 }}>
-              <Text style={{ color: '#ff4d4f', fontSize: 12 }}>↑ 3</Text>
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                较昨日
-              </Text>
-            </Space>
+            <Statistic title="今日告警数（待处理）" value={metricCards.alertToday ?? '—'} />
           </Card>
         </Col>
         <Col xs={24} sm={12} xl={6}>
           <Card size="small" styles={{ body: { padding: 16 } }}>
             <Statistic
               title="待处理异常"
-              value={metricCards.pending}
+              value={metricCards.pending ?? '—'}
               valueStyle={{ color: '#ff4d4f' }}
             />
-            <Space size={4} style={{ marginTop: 6 }}>
-              <Tag color="red">紧急 2</Tag>
-            </Space>
           </Card>
         </Col>
       </Row>
@@ -565,15 +559,6 @@ export default function MonitorCenter(): JSX.Element {
                   onChange={(value) => setStreamFilter(String(value))}
                   options={['全部', '仅告警']}
                 />
-                <Tooltip title={streamPaused ? '恢复滚动' : '暂停滚动'}>
-                  <Button
-                    size="small"
-                    icon={streamPaused ? <PlayCircleOutlined /> : <PauseOutlined />}
-                    onClick={() => setStreamPaused((prev) => !prev)}
-                  >
-                    {streamPaused ? '恢复滚动' : '暂停滚动'}
-                  </Button>
-                </Tooltip>
               </Space>
             }
           >
@@ -617,39 +602,11 @@ export default function MonitorCenter(): JSX.Element {
         </Col>
 
         <Col xs={24} lg={10}>
-          <Card
-            size="small"
-            title="区域生产状态地图"
-            extra={
-              <Space size={4}>
-                <Tag color="success">高活跃</Tag>
-                <Tag color="warning">中活跃</Tag>
-                <Tag color="error">低活跃</Tag>
-                <Tag>无数据</Tag>
-              </Space>
-            }
-          >
-            <ReactECharts option={regionChartOption} style={{ height: 320 }} notMerge />
-            <Row gutter={[8, 8]} style={{ marginTop: 8 }}>
-              {FALLBACK_REGIONS.map((item) => (
-                <Col key={item.region} span={8}>
-                  <Space size={4}>
-                    <span
-                      style={{
-                        display: 'inline-block',
-                        width: 8,
-                        height: 8,
-                        borderRadius: 2,
-                        background: LEVEL_COLOR_MAP[item.level],
-                      }}
-                    />
-                    <Text style={{ fontSize: 12 }}>
-                      {item.region} · {LEVEL_TEXT_MAP[item.level]}
-                    </Text>
-                  </Space>
-                </Col>
-              ))}
-            </Row>
+          <Card size="small" title="区域生产状态地图">
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description="后端暂无「按区域的农场数 / 活跃度」聚合接口，无法绘制区域生产状态地图"
+            />
           </Card>
         </Col>
       </Row>
@@ -665,17 +622,30 @@ export default function MonitorCenter(): JSX.Element {
             columns={abnormalColumns}
             dataSource={abnormalRows}
             pagination={false}
+            locale={{
+              emptyText: alertsQuery.isError
+                ? `异常预警加载失败：${(alertsQuery.error as Error | null)?.message ?? '未知错误'}`
+                : '后端 /admin/alerts 暂无异常预警记录',
+            }}
           />
         )}
       </Card>
 
-      {/* 接口异常降级提示 */}
-      {(taskStatsQuery.isError || overviewQuery.isError || alertsQuery.isError) && (
+      {/* 接口异常提示：明确列出失败的接口，不再用「示例口径」粉饰 */}
+      {(taskStatsQuery.isError || overviewQuery.isError || alertsQuery.isError || realtimeQuery.isError) && (
         <AntAlert
           style={{ marginTop: 12 }}
-          type="warning"
+          type="error"
           showIcon
-          message="部分监控接口暂未返回数据，当前展示原型示例口径，页面筛选与处理操作仍可正常使用。"
+          message="部分监控接口请求失败，相关区块显示为空（不使用示例数据兜底）"
+          description={[
+            overviewQuery.isError ? '监测总览 /admin/monitor/overview' : null,
+            realtimeQuery.isError ? '实时告警流 /admin/monitor/alerts' : null,
+            alertsQuery.isError ? '异常预警 /admin/alerts' : null,
+            taskStatsQuery.isError ? '任务状态聚合 /admin/monitor/tasks' : null,
+          ]
+            .filter((item): item is string => item !== null)
+            .join('；')}
         />
       )}
 

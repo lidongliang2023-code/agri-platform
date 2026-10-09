@@ -13,6 +13,7 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 import {
+  Alert as AntAlert,
   App,
   Button,
   Card,
@@ -34,7 +35,6 @@ import {
 } from 'antd'
 import {
   CheckCircleOutlined,
-  PhoneOutlined,
   ReloadOutlined,
   WarningOutlined,
 } from '@ant-design/icons'
@@ -42,28 +42,22 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { closeAlert, listAdminAlerts } from '@/api'
 import type { Alert, AlertStatus, PageResult } from '@/types'
 
-/** 运营端告警级别：2 一般 3 重要 4 紧急（沿用基础类型的语义，运营侧命名为 一般/重要/紧急） */
-type OpsAlertLevel = 2 | 3 | 4
+/** 运营端告警级别：1 提示 2 一般 3 重要 4 紧急（与后端 AlertDict 的 INFO/WARN/CRITICAL/URGENT 对齐） */
+type OpsAlertLevel = 1 | 2 | 3 | 4
 
-/** 告警类型：设备故障 / 环境异常 / 任务超时 / 数据异常 / 食品安全 */
-type OpsAlertCategory = 'device' | 'environment' | 'task' | 'data' | 'safety'
+/** 告警类型：后端 alertSource 只覆盖设备故障 / 环境异常 / 任务超时三类 */
+type OpsAlertCategory = 'device' | 'environment' | 'task'
 
 /** 告警行模型（在基础 Alert 上补充运营侧展示字段） */
 interface AlertRow extends Alert {
   /** 告警级别 */
   alertLevel: OpsAlertLevel
-  /** 告警类型 */
-  category: OpsAlertCategory
-  /** 影响范围描述 */
-  scope: string
-  /** 关联对象名称（农场/车辆） */
+  /** 告警类型：后端 alertSource 无法归入上述三类时为 undefined，展示「—」 */
+  category?: OpsAlertCategory
+  /** 关联对象名称：优先地块名，其次农场 ID / 地块 ID，都没有时展示「—」 */
   targetName: string
-  /** 关联设备 */
+  /** 关联设备：后端只有 deviceId，无设备名称字段 */
   deviceName?: string
-  /** 联系人 */
-  contactName?: string
-  /** 联系电话 */
-  contactPhone?: string
 }
 
 /** 告警级别文案与颜色 */
@@ -71,6 +65,20 @@ const LEVEL_MAP: Record<OpsAlertLevel, { label: string; color: string }> = {
   4: { label: '紧急', color: 'red' },
   3: { label: '重要', color: 'orange' },
   2: { label: '一般', color: 'blue' },
+  1: { label: '提示', color: 'default' },
+}
+
+/**
+ * 安全取告警级别展示元数据。
+ *
+ * 后端级别越界 / 缺失时返回「—」，避免 LEVEL_MAP[level] 取到 undefined 后
+ * 再访问 .color 导致整页白屏（历史上踩过这个坑）。
+ *
+ * @param level 后端告警级别数字
+ * @returns 展示文案与 Tag 颜色
+ */
+function levelMeta(level: number): { label: string; color: string } {
+  return LEVEL_MAP[level as OpsAlertLevel] ?? { label: '—', color: 'default' }
 }
 
 /** 告警类型文案 */
@@ -78,8 +86,29 @@ const CATEGORY_MAP: Record<OpsAlertCategory, string> = {
   device: '设备故障',
   environment: '环境异常',
   task: '任务超时',
-  data: '数据异常',
-  safety: '食品安全',
+}
+
+/**
+ * 后端 alertSource 编码 → 页面告警类型。
+ *
+ * 后端取值：1 环境 2 设备 3 病虫害 4 任务 5 投入品；病虫害(3) 与投入品(5)
+ * 在本页没有对应分类，返回 undefined 由调用方显示「—」，不做臆测归类。
+ *
+ * @param alertSource 后端告警来源编码
+ * @returns 页面告警类型，无法映射时返回 undefined
+ */
+function resolveCategory(alertSource?: number | string): OpsAlertCategory | undefined {
+  const code = Number(alertSource)
+  if (code === 1) {
+    return 'environment'
+  }
+  if (code === 2) {
+    return 'device'
+  }
+  if (code === 4) {
+    return 'task'
+  }
+  return undefined
 }
 
 /** 告警状态文案与颜色 */
@@ -97,192 +126,14 @@ const MEASURE_OPTIONS: { value: string; label: string }[] = [
   { value: 'DISPATCH_REPAIR', label: '派遣维修人员' },
 ]
 
-/** 待处置告警模板（原型 P24 列出的 5 条 + 3 条补充） */
-const OPEN_TEMPLATES: Array<{
-  level: OpsAlertLevel
-  category: OpsAlertCategory
-  title: string
-  content: string
-  targetName: string
-  scope: string
-  deviceName?: string
-  contactName: string
-  contactPhone: string
-  triggeredAt: string
-}> = [
-  {
-    level: 4,
-    category: 'device',
-    title: '设备离线告警',
-    content: '张三种鸡场传感器D10005离线超过30分钟',
-    targetName: '张三种鸡场',
-    scope: '2个监控点位',
-    deviceName: 'D10005 土壤传感器',
-    contactName: '张三',
-    contactPhone: '138****5678',
-    triggeredAt: '2025-07-14 10:25',
-  },
-  {
-    level: 4,
-    category: 'safety',
-    title: '食品安全告警',
-    content: '鑫农实验农场农药残留超标',
-    targetName: '鑫农实验农场',
-    scope: '批次B2025070',
-    contactName: '李四',
-    contactPhone: '139****1234',
-    triggeredAt: '2025-07-14 10:30',
-  },
-  {
-    level: 4,
-    category: 'environment',
-    title: '冷链温度异常',
-    content: '豫A12345冷链车温度升至-5°C（阈值-18°C）',
-    targetName: '豫A12345 冷链车',
-    scope: '货物 200kg 冻品',
-    contactName: '王司机',
-    contactPhone: '137****8899',
-    triggeredAt: '2025-07-14 10:15',
-  },
-  {
-    level: 3,
-    category: 'task',
-    title: '任务超时预警',
-    content: '李四农场施肥任务超时2小时',
-    targetName: '李四农场',
-    scope: '2个地块',
-    contactName: '李四',
-    contactPhone: '139****1234',
-    triggeredAt: '2025-07-14 09:15',
-  },
-  {
-    level: 3,
-    category: 'environment',
-    title: '土壤湿度异常',
-    content: '大地南基地B区土壤湿度连续3小时低于阈值',
-    targetName: '大地南基地',
-    scope: '3个地块',
-    deviceName: 'S20018 土壤传感器',
-    contactName: '王五',
-    contactPhone: '136****3322',
-    triggeredAt: '2025-07-14 09:02',
-  },
-  {
-    level: 3,
-    category: 'device',
-    title: '摄像头信号中断',
-    content: '绿源1号农场3号摄像头信号中断超过15分钟',
-    targetName: '绿源1号农场',
-    scope: '1个监控点位',
-    deviceName: 'C30012 摄像头',
-    contactName: '张三',
-    contactPhone: '138****5678',
-    triggeredAt: '2025-07-14 08:47',
-  },
-  {
-    level: 2,
-    category: 'data',
-    title: '数据异常提醒',
-    content: '王五农场今日数据上报缺失',
-    targetName: '王五农场',
-    scope: '1个农场',
-    contactName: '王五',
-    contactPhone: '136****3322',
-    triggeredAt: '2025-07-14 08:00',
-  },
-  {
-    level: 2,
-    category: 'device',
-    title: '设备低电量提醒',
-    content: '惠民D区灌溉阀5电量低于20%',
-    targetName: '惠民D区农场',
-    scope: '1个设备',
-    deviceName: 'V50021 灌溉阀',
-    contactName: '孙七',
-    contactPhone: '135****5566',
-    triggeredAt: '2025-07-14 07:35',
-  },
-]
-
-/** 已处置告警补充标题池 */
-const CLOSED_TITLES: Array<[OpsAlertCategory, string]> = [
-  ['task', '任务超时预警'],
-  ['data', '数据异常提醒'],
-  ['environment', '环境异常告警'],
-  ['device', '设备故障告警'],
-  ['safety', '食品安全告警'],
-]
-
-/** 已处置告警涉及对象池 */
-const CLOSED_TARGETS: string[] = [
-  '绿源1号农场',
-  '丰达A区农场',
-  '大地南基地',
-  '鑫农实验农场',
-  '惠民D区农场',
-  '田园B区农场',
-]
-
 /**
- * 构建演示告警数据
- * @returns 26 条告警（紧急 3 / 重要 8 / 一般 15，其中 18 条今日已处理）
+ * 查询条件
+ *
+ * 只保留后端 /admin/alerts 实际支持的 alertLevel 与 status 两个参数；
+ * 「告警类型」后端列表接口没有该筛选维度（已在页面上移除，避免点了没反应）。
  */
-function buildMockAlerts(): AlertRow[] {
-  const rows: AlertRow[] = OPEN_TEMPLATES.map((item, index) => ({
-    alertId: `ALT-OPEN-${index + 1}`,
-    alertNo: `ALT2025071400${index + 1}`,
-    alertTitle: item.title,
-    alertContent: item.content,
-    alertLevel: item.level,
-    alertSource: item.category === 'device' ? 2 : item.category === 'environment' ? 1 : item.category === 'task' ? 4 : item.category === 'data' ? 2 : 5,
-    category: item.category,
-    targetName: item.targetName,
-    scope: item.scope,
-    deviceName: item.deviceName,
-    contactName: item.contactName,
-    contactPhone: item.contactPhone,
-    status: 1,
-    triggeredAt: item.triggeredAt,
-  }))
-
-  const plan: Array<[OpsAlertLevel, number]> = [
-    [3, 5],
-    [2, 13],
-  ]
-  let cursor = 0
-  plan.forEach(([level, count]) => {
-    for (let i = 0; i < count; i += 1) {
-      const tuple = CLOSED_TITLES[cursor % CLOSED_TITLES.length]
-      const target = CLOSED_TARGETS[cursor % CLOSED_TARGETS.length]
-      rows.push({
-        alertId: `ALT-CLOSED-${cursor + 1}`,
-        alertNo: `ALT2025071${(cursor % 3) + 1}${String(cursor + 10)}`,
-        alertTitle: tuple[1],
-        alertContent: `${target}${tuple[1]}，已由运营人员确认处置完成`,
-        alertLevel: level,
-        alertSource: 2,
-        category: tuple[0],
-        targetName: target,
-        scope: '1个农场',
-        status: 3,
-        handlerName: cursor % 2 === 0 ? '管理员A' : '管理员B',
-        handleRemark: '已联系负责人并完成现场处置，设备恢复正常。',
-        triggeredAt: `2025-07-1${(cursor % 3) + 1} 0${(cursor % 9) + 1}:20`,
-        handledAt: `2025-07-1${(cursor % 3) + 1} ${String(((cursor % 9) + 3) % 24).padStart(2, '0')}:40`,
-      })
-      cursor += 1
-    }
-  })
-  return rows
-}
-
-/** 本地演示数据源 */
-let mockAlertStore: AlertRow[] = buildMockAlerts()
-
-/** 查询条件 */
 interface FilterState {
   alertLevel?: OpsAlertLevel
-  category?: OpsAlertCategory
   status?: AlertStatus
 }
 
@@ -307,114 +158,91 @@ export default function AdminAlertCenter(): JSX.Element {
   const [handleForm] = Form.useForm<{ measure: string; remark: string }>()
   const [filters, setFilters] = useState<FilterState>({})
   const [rows, setRows] = useState<AlertRow[]>([])
-  const [demoMode, setDemoMode] = useState<boolean>(false)
+  /** 后端返回的告警总数（分页 total），未加载时为 null，卡片展示「—」 */
+  const [total, setTotal] = useState<number | null>(null)
   const [selectedKeys, setSelectedKeys] = useState<string[]>([])
   const [detailRow, setDetailRow] = useState<AlertRow | undefined>(undefined)
   const [modalState, setModalState] = useState<AlertModalState>({ open: false, ids: [] })
 
   const listQuery = useQuery({
     queryKey: ['admin-alerts-center', filters],
-    queryFn: async (): Promise<{ rows: AlertRow[]; demo: boolean }> => {
-      try {
-        const page: PageResult<Alert> = await listAdminAlerts({
-          pageNum: 1,
-          pageSize: 200,
-          alertLevel: filters.alertLevel,
-          status: filters.status,
-        })
-        if (page && Array.isArray(page.list) && page.list.length > 0) {
-          const serverRows = page.list.map<AlertRow>((item) => ({
-            ...item,
-            alertLevel: (item.alertLevel as OpsAlertLevel) ?? 2,
-            category: 'device',
-            targetName: item.plotName ?? '—',
-            scope: '—',
-          }))
-          return { rows: serverRows, demo: false }
-        }
-      } catch {
-        /* 后端不可用时降级为演示数据 */
-      }
-      const filtered = mockAlertStore.filter((row) => {
-        if (filters.alertLevel && row.alertLevel !== filters.alertLevel) {
-          return false
-        }
-        if (filters.category && row.category !== filters.category) {
-          return false
-        }
-        if (filters.status && row.status !== filters.status) {
-          return false
-        }
-        return true
+    queryFn: async (): Promise<{ rows: AlertRow[]; total: number }> => {
+      // 只取后端真实数据：返回空就是空，报错交给 TanStack Query 标记 isError，
+      // 页面据实展示空态 / 错误提示，不再有任何本地演示数据兜底
+      const page: PageResult<Alert> = await listAdminAlerts({
+        pageNum: 1,
+        pageSize: 200,
+        alertLevel: filters.alertLevel,
+        status: filters.status,
       })
-      return { rows: filtered, demo: true }
+      const list = page?.list ?? []
+      return {
+        rows: list.map<AlertRow>((item) => ({
+          ...item,
+          alertLevel: (item.alertLevel ?? 1) as OpsAlertLevel,
+          category: resolveCategory(item.alertSource),
+          targetName: item.plotName ?? item.farmId ?? item.plotId ?? '—',
+          // 后端只有 deviceId，没有设备名称字段
+          deviceName: item.deviceId ?? undefined,
+        })),
+        total: Number(page?.total ?? list.length),
+      }
     },
   })
 
   useEffect(() => {
     if (listQuery.data) {
       setRows(listQuery.data.rows)
-      setDemoMode(listQuery.data.demo)
+      setTotal(listQuery.data.total)
       setSelectedKeys([])
     }
   }, [listQuery.data])
 
-  /** 指标统计 */
+  /**
+   * 指标统计
+   *
+   * 全部基于后端真实返回的告警列表聚合：每页请求 200 条（当前库内共 20 条），
+   * 因此分级计数等价于全量口径。后端另有 /admin/alerts/stats 聚合接口，
+   * 但前端 api 层尚未暴露该函数，这里用列表聚合，绝不编造数字。
+   */
   const stats = useMemo(() => {
-    const source = mockAlertStore
+    const now = new Date()
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
+      now.getDate(),
+    ).padStart(2, '0')}`
     return {
-      critical: source.filter((row) => row.alertLevel === 4 && row.status !== 3).length,
-      major: source.filter((row) => row.alertLevel === 3 && row.status !== 3).length,
-      minor: source.filter((row) => row.alertLevel === 2 && row.status !== 3).length,
-      handledToday: source.filter((row) => row.status === 3).length,
-      total: source.length,
+      critical: rows.filter((row) => row.alertLevel === 4 && row.status !== 3).length,
+      major: rows.filter((row) => row.alertLevel === 3 && row.status !== 3).length,
+      minor: rows.filter((row) => row.alertLevel === 2 && row.status !== 3).length,
+      handledToday: rows.filter(
+        (row) => row.status === 3 && (row.handledAt ?? '').slice(0, 10) === today,
+      ).length,
+      total,
     }
-  }, [rows])
+  }, [rows, total])
 
   /**
-   * 提交告警处置：调用后端关闭接口，失败时降级为本地更新
+   * 提交告警处置：只调用后端关闭接口，成功 / 失败都如实反馈
    * @param ids 告警 ID 列表
    * @param measure 处理措施
    * @param remark 处理说明
    */
   const submitHandle = async (ids: string[], measure: string, remark: string): Promise<void> => {
     const measureLabel = MEASURE_OPTIONS.find((item) => item.value === measure)?.label ?? measure
-    try {
-      await Promise.all(ids.map((id) => closeAlert(id, `${measureLabel}：${remark}`)))
-      message.success('告警已处置')
-    } catch {
-      message.success('告警已处置（演示模式，仅本地更新）')
-    }
-    mockAlertStore = mockAlertStore.map((item) =>
-      ids.includes(item.alertId)
-        ? {
-            ...item,
-            status: 3,
-            handleRemark: `${measureLabel}：${remark}`,
-            handlerName: '当前运营人员',
-            handledAt: new Date().toISOString().slice(0, 16).replace('T', ' '),
-          }
-        : item,
-    )
-    setRows((prev) =>
-      prev.map((item) =>
-        ids.includes(item.alertId)
-          ? {
-              ...item,
-              status: 3,
-              handleRemark: `${measureLabel}：${remark}`,
-              handlerName: '当前运营人员',
-            }
-          : item,
-      ),
-    )
+    await Promise.all(ids.map((id) => closeAlert(id, `${measureLabel}：${remark}`)))
+    message.success('告警已处置')
     setSelectedKeys([])
+    // 以服务端数据为准重新拉取，不在本地伪造「已处置」状态
     void queryClient.invalidateQueries({ queryKey: ['admin-alerts-center'] })
   }
 
   const handleMutation = useMutation({
     mutationFn: (payload: { ids: string[]; measure: string; remark: string }) =>
       submitHandle(payload.ids, payload.measure, payload.remark),
+    onError: (error) => {
+      // 失败就是失败：不能把「没提交成功」说成「已本地登记」
+      message.error(`告警处置失败：${(error as Error | null)?.message ?? '未知错误'}`)
+    },
   })
 
   /**
@@ -435,31 +263,35 @@ export default function AdminAlertCenter(): JSX.Element {
       message.warning('请选择处理措施并填写处理说明')
       return
     }
-    await handleMutation.mutateAsync({
-      ids: modalState.current ? [modalState.current.alertId] : modalState.ids,
-      measure: values.measure,
-      remark: values.remark,
-    })
-    setModalState({ open: false, ids: [] })
-  }
-
-  /** 联系负责人 */
-  const handleContact = (row: AlertRow): void => {
-    if (!row.contactName) {
-      message.info('该告警未登记联系人')
-      return
+    try {
+      await handleMutation.mutateAsync({
+        ids: modalState.current ? [modalState.current.alertId] : modalState.ids,
+        measure: values.measure,
+        remark: values.remark,
+      })
+      setModalState({ open: false, ids: [] })
+    } catch {
+      // 处置失败时保留弹窗，错误提示由 handleMutation.onError 统一给出
     }
-    message.success(`已通知 ${row.contactName}（${row.contactPhone ?? '号码未登记'}）`)
   }
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      {demoMode ? (
-        <Card styles={{ body: { padding: 12 } }}>
-          <Typography.Text type="secondary">
-            当前为原型示例数据（后端接口暂未返回数据），告警处置流程可在页面上完整走通。
-          </Typography.Text>
-        </Card>
+      {listQuery.isError ? (
+        <AntAlert
+          type="error"
+          showIcon
+          message="告警列表加载失败"
+          description={`${(listQuery.error as Error | null)?.message ?? '未知错误'}（不使用本地示例数据兜底，列表与统计均为空）`}
+        />
+      ) : null}
+      {!listQuery.isError && !listQuery.isLoading && rows.length > 0 ? (
+        <AntAlert
+          type="info"
+          showIcon
+          message="数据口径说明"
+          description="列表与统计均来自后端 /admin/alerts 真实数据；告警编号、告警内容、地块名称与处理人后端暂无数据，统一展示「—」。分级统计基于已加载告警（每页请求 200 条），告警总数取后端分页 total。"
+        />
       ) : null}
 
       <Row gutter={16}>
@@ -508,7 +340,11 @@ export default function AdminAlertCenter(): JSX.Element {
         </Col>
         <Col span={5}>
           <Card>
-            <Statistic title="告警总数" value={stats.total} suffix="条" />
+            <Statistic
+              title="告警总数"
+              value={stats.total ?? '—'}
+              suffix={stats.total === null ? undefined : '条'}
+            />
           </Card>
         </Col>
       </Row>
@@ -529,20 +365,6 @@ export default function AdminAlertCenter(): JSX.Element {
                 { value: 4, label: '紧急' },
                 { value: 3, label: '重要' },
                 { value: 2, label: '一般' },
-              ]}
-            />
-          </Form.Item>
-          <Form.Item name="category" label="告警类型">
-            <Select
-              allowClear
-              placeholder="全部"
-              style={{ width: 160 }}
-              options={[
-                { value: 'device', label: '设备故障' },
-                { value: 'environment', label: '环境异常' },
-                { value: 'task', label: '任务超时' },
-                { value: 'data', label: '数据异常' },
-                { value: 'safety', label: '食品安全' },
               ]}
             />
           </Form.Item>
@@ -602,7 +424,13 @@ export default function AdminAlertCenter(): JSX.Element {
         {listQuery.isLoading ? (
           <Empty description="告警加载中..." />
         ) : rows.length === 0 ? (
-          <Empty description="暂无符合条件的告警" />
+          <Empty
+            description={
+              listQuery.isError
+                ? '告警加载失败，暂无数据可展示（不使用示例数据兜底）'
+                : '后端 /admin/alerts 暂无符合条件的告警'
+            }
+          />
         ) : (
           <List
             dataSource={rows}
@@ -628,16 +456,6 @@ export default function AdminAlertCenter(): JSX.Element {
                   >
                     介入
                   </Button>,
-                  <Button
-                    key="contact"
-                    size="small"
-                    icon={<PhoneOutlined />}
-                    onClick={() => handleContact(row)}
-                  >
-                    {row.category === 'environment' && row.alertTitle.includes('冷链')
-                      ? '联系司机'
-                      : '联系负责人'}
-                  </Button>,
                   <Button key="detail" size="small" onClick={() => setDetailRow(row)}>
                     详情
                   </Button>,
@@ -661,18 +479,19 @@ export default function AdminAlertCenter(): JSX.Element {
                     <Space size={8} wrap>
                       <WarningOutlined style={{ color: '#faad14' }} />
                       <Typography.Text strong>{row.alertTitle}</Typography.Text>
-                      <Tag color={LEVEL_MAP[row.alertLevel].color}>
-                        {LEVEL_MAP[row.alertLevel].label}
+                      <Tag color={levelMeta(row.alertLevel).color}>
+                        {levelMeta(row.alertLevel).label}
                       </Tag>
-                      <Tag>{CATEGORY_MAP[row.category]}</Tag>
+                      {row.category ? <Tag>{CATEGORY_MAP[row.category]}</Tag> : null}
                       <Tag color={STATUS_MAP[row.status].color}>{STATUS_MAP[row.status].label}</Tag>
                     </Space>
                   }
                   description={
                     <Space direction="vertical" size={2}>
-                      <Typography.Text>{row.alertContent}</Typography.Text>
+                      <Typography.Text>{row.alertContent ?? '—'}</Typography.Text>
                       <Typography.Text type="secondary">
-                        告警编号 {row.alertNo} · 触发时间 {row.triggeredAt} · 影响范围 {row.scope}
+                        告警编号 {row.alertNo ?? '—'} · 触发时间 {row.triggeredAt ?? '—'} · 触发值{' '}
+                        {row.triggerValue ?? '—'} · 关联对象 {row.targetName}
                         {row.deviceName ? ` · 关联设备 ${row.deviceName}` : ''}
                       </Typography.Text>
                     </Space>
@@ -717,7 +536,12 @@ export default function AdminAlertCenter(): JSX.Element {
           <Descriptions.Item label="触发时间">
             {modalState.current?.triggeredAt ?? '—'}
           </Descriptions.Item>
-          <Descriptions.Item label="影响范围">{modalState.current?.scope ?? '—'}</Descriptions.Item>
+          <Descriptions.Item label="告警级别">
+            {modalState.current ? levelMeta(modalState.current.alertLevel).label : '—'}
+          </Descriptions.Item>
+          <Descriptions.Item label="关联对象">
+            {modalState.current?.targetName ?? '—'}
+          </Descriptions.Item>
           <Descriptions.Item label="关联设备">
             {modalState.current?.deviceName ?? '—'}
           </Descriptions.Item>
@@ -760,22 +584,21 @@ export default function AdminAlertCenter(): JSX.Element {
       >
         {detailRow ? (
           <Descriptions column={1} bordered size="small">
-            <Descriptions.Item label="告警编号">{detailRow.alertNo}</Descriptions.Item>
+            <Descriptions.Item label="告警编号">{detailRow.alertNo ?? '—'}</Descriptions.Item>
             <Descriptions.Item label="告警标题">{detailRow.alertTitle}</Descriptions.Item>
             <Descriptions.Item label="告警级别">
-              <Tag color={LEVEL_MAP[detailRow.alertLevel].color}>
-                {LEVEL_MAP[detailRow.alertLevel].label}
+              <Tag color={levelMeta(detailRow.alertLevel).color}>
+                {levelMeta(detailRow.alertLevel).label}
               </Tag>
             </Descriptions.Item>
-            <Descriptions.Item label="告警类型">{CATEGORY_MAP[detailRow.category]}</Descriptions.Item>
-            <Descriptions.Item label="告警内容">{detailRow.alertContent}</Descriptions.Item>
-            <Descriptions.Item label="关联对象">{detailRow.targetName}</Descriptions.Item>
-            <Descriptions.Item label="影响范围">{detailRow.scope}</Descriptions.Item>
-            <Descriptions.Item label="关联设备">{detailRow.deviceName ?? '—'}</Descriptions.Item>
-            <Descriptions.Item label="联系人">
-              {detailRow.contactName ? `${detailRow.contactName} ${detailRow.contactPhone ?? ''}` : '—'}
+            <Descriptions.Item label="告警类型">
+              {detailRow.category ? CATEGORY_MAP[detailRow.category] : '—'}
             </Descriptions.Item>
-            <Descriptions.Item label="触发时间">{detailRow.triggeredAt}</Descriptions.Item>
+            <Descriptions.Item label="告警内容">{detailRow.alertContent ?? '—'}</Descriptions.Item>
+            <Descriptions.Item label="关联对象">{detailRow.targetName}</Descriptions.Item>
+            <Descriptions.Item label="触发值">{detailRow.triggerValue ?? '—'}</Descriptions.Item>
+            <Descriptions.Item label="关联设备">{detailRow.deviceName ?? '—'}</Descriptions.Item>
+            <Descriptions.Item label="触发时间">{detailRow.triggeredAt ?? '—'}</Descriptions.Item>
             <Descriptions.Item label="处理状态">
               <Tag color={STATUS_MAP[detailRow.status].color}>{STATUS_MAP[detailRow.status].label}</Tag>
             </Descriptions.Item>
