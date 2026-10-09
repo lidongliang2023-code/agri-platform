@@ -37,15 +37,19 @@ public class TraceController {
         return ApiResponse.ok(traceService.detail(code));
     }
 
-    /** 为批次生成溯源码（采收后可调用；交易商品随 batch.harvested 事件挂载批次溯源标识） */
+    /**
+     * 为批次生成溯源码（采收后可调用；交易商品随 batch.harvested 事件挂载批次溯源标识）。
+     *
+     * <p>{@code batchId} 声明为 {@code String}，理由同 {@link #listByBatch(String)}。</p>
+     */
     @PostMapping("/batches/{batchId}/generate")
-    public ApiResponse<String> generate(@PathVariable Long batchId) {
+    public ApiResponse<String> generate(@PathVariable String batchId) {
         return ApiResponse.ok(traceService.generate(batchId));
     }
 
     /** 旧路径兼容：/api/v1/production/batches/{id}/trace-code 语义 */
     @PostMapping("/batches/{batchId}/trace-code")
-    public ApiResponse<String> generateLegacy(@PathVariable Long batchId) {
+    public ApiResponse<String> generateLegacy(@PathVariable String batchId) {
         return ApiResponse.ok(traceService.generate(batchId));
     }
 
@@ -68,9 +72,16 @@ public class TraceController {
         return ApiResponse.ok(traceService.revoke(code));
     }
 
-    /** 批次下的溯源码 */
+    /**
+     * 批次下的溯源码。
+     *
+     * <p>{@code batchId} 声明为 {@code String}：<b>采收批次 ID 本来就是字符串</b>
+     * （{@code prod_harvest_batch.batch_id} 为 varchar(32)，如 {@code DEMO-BATCH-001}）。
+     * 早先声明为 {@code Long} 会让所有真实批次 ID 在类型转换阶段就失败（HTTP 200 + 业务码 400
+     * 「请求体格式错误」），而 HTTP 状态码在本项目恒为 200，极易被误判成端点不存在。</p>
+     */
     @GetMapping("/batches/{batchId}")
-    public ApiResponse<List<TraceCodeEntity>> listByBatch(@PathVariable Long batchId) {
+    public ApiResponse<List<TraceCodeEntity>> listByBatch(@PathVariable String batchId) {
         return ApiResponse.ok(traceService.listByBatch(batchId));
     }
 
@@ -82,15 +93,27 @@ public class TraceController {
         return ApiResponse.ok(traceService.page(page, size, status));
     }
 
-    /** 生成溯源码 */
+    /**
+     * 生成溯源码。
+     *
+     * <p>{@code batchId} 声明为 {@code String}：采收批次 ID 本来就是字符串，
+     * 声明为 {@code Long} 会让所有真实批次 ID 在类型转换阶段就失败。</p>
+     */
     @PostMapping("/codes/generate")
-    public ApiResponse<String> generateCodes(@RequestParam Long batchId) {
+    public ApiResponse<String> generateCodes(@RequestParam String batchId) {
         return ApiResponse.ok(traceService.generate(batchId));
     }
 
-    /** 全链条节点 */
+    /**
+     * 全链条节点。
+     *
+     * <p>{@code batchId} 声明为 {@code String}，理由同 {@link #listByBatch(String)}。
+     * 服务内部先把它解析成 {@code batch_no} 再跨 {@code prod_harvest_batch} /
+     * {@code prod_trace_code} 两张表对齐——这两张表的 {@code batch_id} 分处
+     * varchar(32) 与 BIGINT 两个 ID 空间，不能直接拿同一个值去查。</p>
+     */
     @GetMapping("/full-chain/{batchId}/nodes")
-    public ApiResponse<List<Map<String, Object>>> fullChain(@PathVariable Long batchId) {
+    public ApiResponse<List<Map<String, Object>>> fullChain(@PathVariable String batchId) {
         return ApiResponse.ok(traceService.fullChain(batchId));
     }
 }
