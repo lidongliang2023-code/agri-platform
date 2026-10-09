@@ -6,7 +6,7 @@
  * - 响应统一解包 { code, data, message }；code !== 0 时 toast 提示并 reject
  * - 401 未授权：清空登录态并跳转登录页
  */
-import axios, { AxiosError, AxiosRequestConfig, InternalAxiosRequestConfig } from 'axios'
+import axios, { AxiosError, AxiosInstance, AxiosRequestConfig, InternalAxiosRequestConfig } from 'axios'
 import { message } from 'antd'
 import useAuthStore from '@/store/auth'
 
@@ -107,8 +107,33 @@ export const SUCCESS_CODE = 0
 /** 登录页地址 */
 const LOGIN_PATH = '/login'
 
+/**
+ * 业务域请求前缀（core-platform mod-produce）。
+ *
+ * `http` / 默认导出的 `request` 使用这个前缀。
+ */
+const PRODUCTION_BASE_URL = '/api/v1/production'
+
+/**
+ * 平台域请求前缀（core-platform mod-platform，如 `/api/v1/admin/roles`）。
+ *
+ * ⚠️ 平台域接口**不能**走 `http`：`http.get('/api/v1/admin/roles')` 会被 axios
+ * 拼成 `/api/v1/production/api/v1/admin/roles`（axios 只有在 url 是带协议的绝对
+ * URL 时才忽略 baseURL），直接 404。跨前缀请求必须用 `httpPlatform`。
+ */
+const PLATFORM_BASE_URL = '/api/v1/admin'
+
 const request = axios.create({
-  baseURL: '/api/v1/production',
+  baseURL: PRODUCTION_BASE_URL,
+  timeout: 20000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+})
+
+/** 平台域请求实例（仅 baseURL 不同，拦截器与业务实例完全一致） */
+const platformRequest = axios.create({
+  baseURL: PLATFORM_BASE_URL,
   timeout: 20000,
   headers: {
     'Content-Type': 'application/json',
@@ -121,16 +146,21 @@ export interface RequestOptions extends AxiosRequestConfig {
 }
 
 /** 请求拦截：注入 token */
-request.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => {
-    const token = useAuthStore.getState().token
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
-    return config
-  },
-  (error: AxiosError) => Promise.reject(error),
-)
+function installRequestInterceptor(instance: AxiosInstance): void {
+  instance.interceptors.request.use(
+    (config: InternalAxiosRequestConfig) => {
+      const token = useAuthStore.getState().token
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`
+      }
+      return config
+    },
+    (error: AxiosError) => Promise.reject(error),
+  )
+}
+
+installRequestInterceptor(request)
+installRequestInterceptor(platformRequest)
 
 /**
  * 业务异常错误对象。
@@ -178,7 +208,8 @@ export function httpStatusOf(error: unknown): number {
 }
 
 /** 响应拦截：解包 + 统一错误处理 */
-request.interceptors.response.use(
+function installResponseInterceptor(instance: AxiosInstance): void {
+  instance.interceptors.response.use(
   (response) => {
     const body = response.data as ApiResult<unknown> | undefined
     const silent = (response.config as RequestOptions)?.silent === true
@@ -220,7 +251,11 @@ request.interceptors.response.use(
     }
     return Promise.reject(error)
   },
-)
+  )
+}
+
+installResponseInterceptor(request)
+installResponseInterceptor(platformRequest)
 
 /** 查询参数类型：任意键值对对象 */
 export type QueryParams = object
@@ -229,27 +264,43 @@ export type QueryParams = object
  * 类型安全的 HTTP 方法集合。
  * 泛型 T 为「解包后的业务数据类型」，调用方无需再取 res.data。
  */
-export const http = {
-  /** GET 请求 */
-  get<T>(url: string, params?: QueryParams, config?: RequestOptions): Promise<T> {
-    return request.get<unknown, T>(url, { params, ...config })
-  },
-  /** POST 请求 */
-  post<T>(url: string, data?: unknown, config?: RequestOptions): Promise<T> {
-    return request.post<unknown, T>(url, data, config)
-  },
-  /** PUT 请求（全量更新） */
-  put<T>(url: string, data?: unknown, config?: RequestOptions): Promise<T> {
-    return request.put<unknown, T>(url, data, config)
-  },
-  /** PATCH 请求（部分更新） */
-  patch<T>(url: string, data?: unknown, config?: RequestOptions): Promise<T> {
-    return request.patch<unknown, T>(url, data, config)
-  },
-  /** DELETE 请求 */
-  delete<T>(url: string, params?: Record<string, unknown>, config?: RequestOptions): Promise<T> {
-    return request.delete<unknown, T>(url, { params, ...config })
-  },
+/**
+ * 按实例构造类型安全的 HTTP 方法集合。
+ *
+ * 泛型 T 为「解包后的业务数据类型」，调用方无需再取 res.data。
+ *
+ * @param instance axios 实例
+ * @returns HTTP 方法集合
+ */
+function createHttpMethods(instance: AxiosInstance) {
+  return {
+    /** GET 请求 */
+    get<T>(url: string, params?: QueryParams, config?: RequestOptions): Promise<T> {
+      return instance.get<unknown, T>(url, { params, ...config })
+    },
+    /** POST 请求 */
+    post<T>(url: string, data?: unknown, config?: RequestOptions): Promise<T> {
+      return instance.post<unknown, T>(url, data, config)
+    },
+    /** PUT 请求（全量更新） */
+    put<T>(url: string, data?: unknown, config?: RequestOptions): Promise<T> {
+      return instance.put<unknown, T>(url, data, config)
+    },
+    /** PATCH 请求（部分更新） */
+    patch<T>(url: string, data?: unknown, config?: RequestOptions): Promise<T> {
+      return instance.patch<unknown, T>(url, data, config)
+    },
+    /** DELETE 请求 */
+    delete<T>(url: string, params?: Record<string, unknown>, config?: RequestOptions): Promise<T> {
+      return instance.delete<unknown, T>(url, { params, ...config })
+    },
+  }
 }
+
+/** 业务域 HTTP 方法集合（baseURL `/api/v1/production`） */
+export const http = createHttpMethods(request)
+
+/** 平台域 HTTP 方法集合（baseURL `/api/v1/admin`）：跨前缀接口走这里，勿用 http */
+export const httpPlatform = createHttpMethods(platformRequest)
 
 export default request

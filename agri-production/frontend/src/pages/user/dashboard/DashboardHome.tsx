@@ -7,7 +7,7 @@
  * 页面用途（PRD）：生产概况、待办任务、告警提醒、关键指标。
  * 布局与配色参照原型 P2 农场详情的指标卡 + P19 生产监控看板的分区结构。
  */
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
@@ -21,10 +21,8 @@ import {
   List,
   Progress,
   Row,
-  Segmented,
   Skeleton,
   Space,
-  Statistic,
   Tag,
   Typography,
 } from 'antd'
@@ -45,16 +43,13 @@ import { fetchActiveAlerts, fetchDashboardOverview, fetchTodoTasks } from '@/api
 import { updateTask } from '@/api'
 import {
   alertLevelMeta,
-  buildMonthTrendFallback,
   formatNumber,
+  metricText,
   priorityMeta,
   taskStatusMeta,
   taskTypeLabel,
 } from '@/utils/production-adapter'
-import type { TrendPointView } from '@/utils/production-adapter'
-
-/** 趋势图时间范围 */
-type TrendRange = 'month' | 'week'
+import { MetricStatistic, MetricText } from '@/components'
 
 /** 指标卡渲染参数 */
 interface MetricCard {
@@ -62,8 +57,8 @@ interface MetricCard {
   key: string
   /** 标题 */
   title: string
-  /** 数值 */
-  value: number
+  /** 数值；null 表示后端暂无该指标数据源，渲染成「—」 */
+  value: number | null
   /** 小数位 */
   precision: number
   /** 单位后缀 */
@@ -85,7 +80,6 @@ export default function DashboardHome(): JSX.Element {
   const { message } = AntdApp.useApp()
   const currentFarm = useFarmStore((state) => state.currentFarm)
   const farmId = currentFarm?.farmId
-  const [trendRange, setTrendRange] = useState<TrendRange>('month')
 
   const overviewQuery = useQuery({
     queryKey: ['dashboard-overview', farmId],
@@ -115,7 +109,7 @@ export default function DashboardHome(): JSX.Element {
     message.success('看板数据已刷新')
   }
 
-  /** 指标卡数据 */
+  /** 指标卡数据（后端没返回的指标一律 null → 渲染「—」+ 可见提示） */
   const metrics = useMemo<MetricCard[]>(() => {
     if (!overview) return []
     return [
@@ -127,17 +121,25 @@ export default function DashboardHome(): JSX.Element {
         suffix: '亩',
         color: '#13a05a',
         icon: <EnvironmentOutlined />,
-        footer: `地块 ${overview.plotCount} 个 · 在田作物 ${overview.cropCount} 种`,
+        footer: `地块 ${metricText(overview.plotCount, 0, ' 个')} · 在田作物 ${metricText(
+          overview.cropCount,
+          0,
+          ' 种',
+        )}`,
       },
       {
-        key: 'taskCompletionRate',
-        title: '本月任务完成率',
-        value: overview.taskCompletionRate,
-        precision: 1,
-        suffix: '%',
+        key: 'yieldTotal',
+        title: '累计产量',
+        value: overview.yieldTotal,
+        precision: 0,
+        suffix: 'kg',
         color: '#1677ff',
         icon: <CheckCircleOutlined />,
-        footer: `本月任务 ${overview.monthTaskTotal} 条 · 已完成 ${overview.monthTaskDone} 条`,
+        footer: `合格率 ${metricText(overview.passRate, 1, '%')} · 亩均成本 ${metricText(
+          overview.avgCostPerMu,
+          0,
+          ' 元',
+        )}`,
       },
       {
         key: 'pendingTaskCount',
@@ -167,7 +169,7 @@ export default function DashboardHome(): JSX.Element {
         suffix: 'kg',
         color: '#52c41a',
         icon: <ExperimentOutlined />,
-        footer: `质量合格率 ${overview.passRate}%`,
+        footer: `已接入指标 ${metricText(overview.metricCount, 0, ' 项')}`,
       },
       {
         key: 'activeDeviceCount',
@@ -177,68 +179,40 @@ export default function DashboardHome(): JSX.Element {
         suffix: '台',
         color: '#722ed1',
         icon: <DashboardOutlined />,
-        footer: `溯源码累计 ${formatNumber(overview.traceCodeCount)} 个`,
+        footer: `溯源码累计 ${formatNumber(overview.traceCodeCount ?? 0)} 个`,
       },
     ]
   }, [overview])
 
-  /** 本月完整趋势（兜底口径来自原型 4.3） */
-  const monthTrend = useMemo<TrendPointView[]>(() => buildMonthTrendFallback(), [])
-
-  /** 当前展示的趋势切片 */
-  const trendData = useMemo<TrendPointView[]>(() => {
-    if (trendRange === 'week') return monthTrend.slice(0, 7)
-    return monthTrend
-  }, [monthTrend, trendRange])
-
   /**
    * 构造趋势图配置
-   * @param rows 趋势数据
+   *
+   * 后端暂无「本月农事趋势」数据源，这里不生成任何本地序列，
+   * 图表渲染「暂无趋势数据源」占位文案，避免把假曲线当真数据看。
+   *
    * @returns ECharts 配置
    */
-  function buildTrendOption(rows: TrendPointView[]): Record<string, unknown> {
+  function buildTrendOption(): Record<string, unknown> {
     return {
       color: ['#13a05a', '#1677ff'],
       tooltip: { trigger: 'axis' },
-      legend: { data: ['计划农事', '已完成'], bottom: 0 },
+      legend: { data: [], show: false },
       grid: { left: 40, right: 20, top: 30, bottom: 40 },
-      xAxis: {
-        type: 'category',
-        data: rows.map((row) => row.date.slice(5)),
-        axisLine: { lineStyle: { color: '#d9d9d9' } },
-        axisLabel: { color: 'rgba(0,0,0,0.45)' },
-      },
-      yAxis: {
-        type: 'value',
-        minInterval: 1,
-        splitLine: { lineStyle: { color: '#f0f0f0' } },
-      },
-      series: [
+      xAxis: { type: 'category', data: [] },
+      yAxis: { type: 'value', minInterval: 1 },
+      series: [],
+      graphic: [
         {
-          name: '计划农事',
-          type: 'bar',
-          barWidth: '45%',
-          data: rows.map((row) => row.planned),
-          itemStyle: { borderRadius: [3, 3, 0, 0] },
-        },
-        {
-          name: '已完成',
-          type: 'line',
-          smooth: true,
-          symbolSize: 5,
-          data: rows.map((row) => row.done),
+          type: 'text',
+          left: 'center',
+          top: 'middle',
+          style: {
+            text: '后端暂无农事趋势数据源，暂不展示曲线',
+            fill: '#999',
+            fontSize: 13,
+          },
         },
       ],
-      graphic: rows.length
-        ? []
-        : [
-            {
-              type: 'text',
-              left: 'center',
-              top: 'middle',
-              style: { text: '本月暂无农事数据', fill: '#999', fontSize: 13 },
-            },
-          ],
       animationDuration: 400,
     }
   }
@@ -254,7 +228,10 @@ export default function DashboardHome(): JSX.Element {
   })
 
   const loading = overviewQuery.isLoading || todoQuery.isLoading || alertQuery.isLoading
-  const hasError = overviewQuery.isError && !overview
+  /** 总览接口不可用（请求失败 / 后端不可达） */
+  const overviewUnavailable = overview?.available === false
+  /** 后端未提供数据源的指标清单 */
+  const missingFields = overview?.missingFields ?? []
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
@@ -281,17 +258,24 @@ export default function DashboardHome(): JSX.Element {
           </Space>
         }
       >
-        {hasError ? (
+        {overviewUnavailable ? (
           <AntAlert
             type="warning"
             showIcon
-            message="统计接口暂不可用，当前展示原型示例口径数据"
-            description="请确认后端生产分析服务已启动；接口恢复后本页会自动重新拉取。"
+            message="统计接口暂不可用，本页指标显示为「—」"
+            description="GET /analytics/overview 请求失败。本页不使用任何本地示例值回填，接口恢复后会自动重新拉取。"
             action={
               <Button size="small" onClick={() => void overviewQuery.refetch()}>
                 重试
               </Button>
             }
+          />
+        ) : missingFields.length > 0 ? (
+          <AntAlert
+            type="warning"
+            showIcon
+            message="本页部分指标后端暂未提供数据源，显示为「—」"
+            description={`暂无数据源的指标：${missingFields.join('、')}。带 ⓘ 图标的数值即为后端未接入项，接口补齐后自动填充。`}
           />
         ) : null}
       </Card>
@@ -320,11 +304,11 @@ export default function DashboardHome(): JSX.Element {
                       gap: 8,
                     }}
                   >
-                    <Statistic
+                    <MetricStatistic
                       title={metric.title}
                       value={metric.value}
                       precision={metric.precision}
-                      suffix={metric.suffix}
+                      suffix={metric.value === null ? undefined : metric.suffix}
                       valueStyle={{ color: metric.color, fontSize: 22, fontWeight: 600 }}
                     />
                     <span style={{ fontSize: 18, color: metric.color }}>{metric.icon}</span>
@@ -490,18 +474,13 @@ export default function DashboardHome(): JSX.Element {
           <Card
             title="本月农事趋势"
             extra={
-              <Segmented<TrendRange>
-                value={trendRange}
-                onChange={setTrendRange}
-                options={[
-                  { label: '本月', value: 'month' },
-                  { label: '近 7 天', value: 'week' },
-                ]}
-              />
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                后端暂无趋势数据源
+              </Typography.Text>
             }
           >
             <ReactECharts
-              option={buildTrendOption(trendData)}
+              option={buildTrendOption()}
               style={{ height: 280 }}
               opts={{ renderer: 'canvas' }}
             />
@@ -515,42 +494,30 @@ export default function DashboardHome(): JSX.Element {
               <Space direction="vertical" size={16} style={{ width: '100%' }}>
                 <div>
                   <Space style={{ width: '100%', justifyContent: 'space-between' }}>
-                    <Typography.Text>本月任务完成率</Typography.Text>
-                    <Typography.Text strong>{overview.taskCompletionRate}%</Typography.Text>
+                    <Typography.Text>检测合格率</Typography.Text>
+                    <MetricText value={overview.passRate} precision={1} suffix="%" />
                   </Space>
                   <Progress
-                    percent={Math.min(100, overview.taskCompletionRate)}
-                    strokeColor="#13a05a"
-                  />
-                </div>
-                <div>
-                  <Space style={{ width: '100%', justifyContent: 'space-between' }}>
-                    <Typography.Text>质量合格率</Typography.Text>
-                    <Typography.Text strong>{overview.passRate}%</Typography.Text>
-                  </Space>
-                  <Progress percent={Math.min(100, overview.passRate)} strokeColor="#1677ff" />
-                </div>
-                <div>
-                  <Space style={{ width: '100%', justifyContent: 'space-between' }}>
-                    <Typography.Text>进行中种养计划</Typography.Text>
-                    <Typography.Text strong>{overview.runningPlanCount} 个</Typography.Text>
-                  </Space>
-                  <Progress
-                    percent={Math.min(100, overview.runningPlanCount * 20)}
-                    strokeColor="#fa8c16"
-                    showInfo={false}
+                    percent={overview.passRate === null ? 0 : Math.min(100, overview.passRate)}
+                    strokeColor={overview.passRate === null ? '#d9d9d9' : '#1677ff'}
+                    showInfo={overview.passRate !== null}
+                    format={() => (overview.passRate === null ? '未接入' : '')}
                   />
                 </div>
                 <Row gutter={16}>
                   <Col span={12}>
-                    <Statistic title="农场数量" value={overview.farmCount} suffix="个" />
+                    <MetricStatistic title="累计产量" value={overview.yieldTotal} suffix="kg" />
                   </Col>
                   <Col span={12}>
-                    <Statistic
-                      title="溯源码累计"
-                      value={overview.traceCodeCount}
-                      formatter={(value) => formatNumber(Number(value))}
-                    />
+                    <MetricStatistic title="亩均生产成本" value={overview.avgCostPerMu} suffix="元" />
+                  </Col>
+                </Row>
+                <Row gutter={16}>
+                  <Col span={12}>
+                    <MetricStatistic title="农场数量" value={overview.farmCount} suffix="个" />
+                  </Col>
+                  <Col span={12}>
+                    <MetricStatistic title="溯源码累计" value={overview.traceCodeCount} suffix="个" />
                   </Col>
                 </Row>
               </Space>

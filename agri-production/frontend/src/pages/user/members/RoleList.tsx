@@ -8,12 +8,20 @@
  * 权限点命名遵循 `{域}.{资源}.{动作}`；数据范围支持
  * SELF / PLOT / FARM / TENANT 等取值（PRD 3.4 + 平台级扩展）。
  *
- * 数据说明：后端 `/members/roles` 目前按 role_code 聚合在职人数，
- * 角色名称与职责取自 PRD 3.1 角色目录（ROLE_CATALOG），权限矩阵前端维护并经
- * localStorage 持久化 + 尝试写回后端，保证「勾选 → 保存 → 复现」的交互闭环。
+ * 数据说明：
+ * - 角色列表 = 平台域真实数据 `GET /api/v1/admin/roles`（platform_role 全表），
+ *   接口不可用 / 返回空时显示空态，不回落到任何本地角色目录；
+ * - 权限读取 = `GET /api/v1/admin/roles/{code}/permissions`（真实落库值），
+ *   **不再**读生产域 `/members/roles/permissions`（后端是硬编码空壳，固定返回
+ *   produce:read / produce:write / produce:admin 三个与数据库无关的假权限码）；
+ * - 权限写入 = `PUT /api/v1/admin/roles/{code}/permissions`，失败明确报错，
+ *   **不再**用 localStorage 伪造「已保存」；
+ * - 在职人数来自生产域 `GET /members/roles`（按 role_code 聚合），
+ *   该端点不返回人数时显示「—」，不补 0。
  */
 import { useEffect, useMemo, useState } from 'react'
 import {
+  Alert,
   App as AntdApp,
   Badge,
   Button,
@@ -32,9 +40,11 @@ import {
   Statistic,
   Table,
   Tag,
+  Tooltip,
   Typography,
 } from 'antd'
 import {
+  InfoCircleOutlined,
   KeyOutlined,
   ReloadOutlined,
   SafetyCertificateOutlined,
@@ -42,7 +52,13 @@ import {
   ThunderboltOutlined,
 } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { fetchRoles, fetchRolePermissions, saveRolePermissions } from '@/api/production-view'
+import {
+  fetchPlatformRoles,
+  fetchRolePermissions,
+  fetchRoles,
+  saveRolePermissions,
+} from '@/api/production-view'
+import type { PlatformRole } from '@/api/production-view'
 import {
   DATA_SCOPE_OPTIONS,
   PERMISSION_GROUPS,
@@ -52,14 +68,23 @@ import {
   flattenPermissions,
   roleName,
 } from '@/utils/production-adapter'
-import type { Role } from '@/types'
 
-/** 角色视图模型 */
-interface RoleRow extends Role {
-  /** 职责描述 */
-  duty: string
-  /** 默认数据范围 */
+/** 角色视图模型（数据全部来自平台域 platform_role，不做任何本地编造） */
+interface RoleRow {
+  /** 角色编码 */
+  roleCode: string
+  /** 角色名称（后端 platform_role.name） */
+  roleName: string
+  /** 平台域权限码（后端 platform_role.permissions） */
+  permissions: string[]
+  /** 在职人数；后端 `/members/roles` 未提供时为 null */
+  memberCount: number | null
+  /** 默认数据范围（来自角色目录，仅作展示建议，非后端数据） */
   defaultScope: string
+  /** 是否在 PRD 3.1 角色目录中（用于补充职责说明） */
+  known: boolean
+  /** 职责说明（命中角色目录时展示，未命中显示「—」） */
+  duty: string
 }
 
 /**
@@ -75,59 +100,65 @@ export default function RoleList(): JSX.Element {
   const [checkedCodes, setCheckedCodes] = useState<string[]>([])
   const [dataScope, setDataScope] = useState<string>('FARM')
 
-  const rolesQuery = useQuery({
-    queryKey: ['role-list'],
+  /** 平台域真实角色列表（authoritative：platform_role 全表） */
+  const platformRolesQuery = useQuery({
+    queryKey: ['platform-roles'],
+    queryFn: () => fetchPlatformRoles(),
+  })
+
+  /** 生产域角色在职人数（按 role_code 聚合，仅作人数展示） */
+  const memberCountQuery = useQuery({
+    queryKey: ['role-member-count'],
     queryFn: () => fetchRoles(),
+    retry: false,
   })
 
   const permissionQuery = useQuery({
     queryKey: ['role-permissions', activeRoleCode],
     queryFn: () => fetchRolePermissions(activeRoleCode),
     enabled: activeRoleCode !== '',
+    retry: false,
   })
 
-  /** 角色表格行：合并后端统计与角色目录 */
+  /** 角色表格行：由平台域真实角色 + 生产域在职人数拼装，无数据即空态 */
   const roleRows = useMemo<RoleRow[]>(() => {
-    const backend = rolesQuery.data ?? []
-    const backendMap = new Map(backend.map((item) => [item.roleCode, item]))
-    // 显式标注 map 回调返回类型：给对象字面量提供上下文类型，
-    // 使 status: 1 收敛为字面量 1（EnableStatus = 0 | 1）而不是被放大成 number。
-    return ROLE_CATALOG.map((catalog): RoleRow => {
-      const hit = backendMap.get(catalog.roleCode)
+    const countMap = new Map(
+      (memberCountQuery.data ?? []).map((item) => [item.roleCode, item.memberCount ?? 0]),
+    )
+    const rows = (platformRolesQuery.data ?? []).map((role: PlatformRole): RoleRow => {
+      const catalog = ROLE_CATALOG.find((item) => item.roleCode === role.code)
       return {
-        roleId: catalog.roleCode,
-        roleCode: catalog.roleCode,
-        roleName: catalog.roleName,
-        description: catalog.description,
-        isSystem: true,
-        memberCount: hit?.memberCount ?? 0,
-        status: 1,
-        createdAt: hit?.createdAt ?? '',
-        duty: catalog.description,
-        defaultScope: catalog.defaultScope,
+        roleCode: role.code,
+        roleName: role.name || catalog?.roleName || role.code,
+        permissions: role.permissions,
+        memberCount: countMap.has(role.code) ? (countMap.get(role.code) as number) : null,
+        defaultScope: catalog?.defaultScope ?? 'TENANT',
+        known: Boolean(catalog),
+        duty: catalog?.description ?? '',
       }
-    }).filter((row) => {
+    })
+    return rows.filter((row) => {
       if (!keyword.trim()) return true
-      const text = `${row.roleName}${row.roleCode}${row.description}`
+      const text = `${row.roleName}${row.roleCode}${row.duty}`
       return text.toLowerCase().includes(keyword.trim().toLowerCase())
     })
-  }, [keyword, rolesQuery.data])
+  }, [keyword, platformRolesQuery.data, memberCountQuery.data])
 
   /** 权限点目录扁平列表 */
   const permissionPoints = useMemo(() => flattenPermissions(), [])
 
   useEffect(() => {
-    if (permissionQuery.data) {
-      setCheckedCodes(permissionQuery.data)
-    } else if (activeRoleCode && permissionQuery.isSuccess) {
-      setCheckedCodes(ROLE_DEFAULT_PERMISSIONS[activeRoleCode] ?? [])
+    // 只信任服务端已配置的权限码；后端返回空数组表示「该角色确实没配权限」，
+    // 不再用角色模板兜底——否则用户会以为这些是服务端已保存的权限。
+    if (activeRoleCode && permissionQuery.isSuccess) {
+      setCheckedCodes(permissionQuery.data ?? [])
     }
   }, [activeRoleCode, permissionQuery.data, permissionQuery.isSuccess])
 
   useEffect(() => {
     if (activeRoleCode) {
       setDataScope(
-        ROLE_CATALOG.find((item) => item.roleCode === activeRoleCode)?.defaultScope ?? 'FARM',
+        ROLE_CATALOG.find((item) => item.roleCode === activeRoleCode)?.defaultScope ?? 'TENANT',
       )
     }
   }, [activeRoleCode])
@@ -135,12 +166,16 @@ export default function RoleList(): JSX.Element {
   const saveMutation = useMutation({
     mutationFn: (payload: { roleCode: string; codes: string[] }) =>
       saveRolePermissions(payload.roleCode, payload.codes),
-    onSuccess: () => {
-      message.success(`角色「${roleName(activeRoleCode)}」权限已保存`)
+    onSuccess: (result) => {
+      message.success(result.message)
       setDrawerOpen(false)
+      void queryClient.invalidateQueries({ queryKey: ['platform-roles'] })
       void queryClient.invalidateQueries({ queryKey: ['role-permissions', activeRoleCode] })
     },
-    onError: (error: Error) => message.error(error.message || '权限保存失败'),
+    onError: (error: Error) => {
+      // 写失败必须明确告知，绝不提示「已保存」
+      message.error(error.message || '权限保存失败：后端暂不支持权限写入')
+    },
   })
 
   /**
@@ -150,7 +185,8 @@ export default function RoleList(): JSX.Element {
    */
   function openDrawer(row: RoleRow): void {
     setActiveRoleCode(row.roleCode)
-    setCheckedCodes(ROLE_DEFAULT_PERMISSIONS[row.roleCode] ?? [])
+    // 以服务端已保存的权限为准，不预填角色模板（模板只是「一键填充」按钮的快捷方式）
+    setCheckedCodes(row.permissions)
     setDataScope(row.defaultScope)
     setDrawerOpen(true)
     void permissionQuery.refetch()
@@ -204,7 +240,13 @@ export default function RoleList(): JSX.Element {
               value={keyword}
               onChange={(event) => setKeyword(event.target.value)}
             />
-            <Button icon={<ReloadOutlined />} onClick={() => void rolesQuery.refetch()}>
+            <Button
+              icon={<ReloadOutlined />}
+              onClick={() => {
+                void platformRolesQuery.refetch()
+                void memberCountQuery.refetch()
+              }}
+            >
               刷新
             </Button>
           </Space>
@@ -212,7 +254,11 @@ export default function RoleList(): JSX.Element {
       >
         <Row gutter={16}>
           <Col xs={12} md={6}>
-            <Statistic title="内置角色数" value={ROLE_CATALOG.length} suffix="个" />
+            <Statistic
+              title="服务端角色数"
+              value={platformRolesQuery.data?.length ?? 0}
+              suffix="个"
+            />
           </Col>
           <Col xs={12} md={6}>
             <Statistic title="权限点总数" value={permissionPoints.length} suffix="个" />
@@ -223,18 +269,42 @@ export default function RoleList(): JSX.Element {
           <Col xs={12} md={6}>
             <Statistic
               title="在岗成员数"
-              value={(rolesQuery.data ?? []).reduce((sum, item) => sum + (item.memberCount ?? 0), 0)}
+              value={(memberCountQuery.data ?? []).reduce(
+                (sum, item) => sum + (item.memberCount ?? 0),
+                0,
+              )}
               suffix="人"
             />
           </Col>
         </Row>
       </Card>
 
+      {platformRolesQuery.isError ? (
+        <Alert
+          type="error"
+          showIcon
+          message="角色接口不可用，无法读取服务端角色"
+          description="GET /api/v1/admin/roles 请求失败，请确认后端平台服务已启动。下方列表不再显示任何本地示例角色。"
+          action={
+            <Button size="small" onClick={() => void platformRolesQuery.refetch()}>
+              重试
+            </Button>
+          }
+        />
+      ) : null}
+
       <Card>
-        {rolesQuery.isLoading ? (
+        {platformRolesQuery.isLoading ? (
           <Skeleton active paragraph={{ rows: 6 }} />
         ) : roleRows.length === 0 ? (
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有匹配的角色" />
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description={
+              keyword.trim()
+                ? '没有匹配的角色'
+                : '服务端暂无角色数据（platform_role 表为空或接口未返回数据）'
+            }
+          />
         ) : (
           <Table<RoleRow>
             rowKey="roleCode"
@@ -259,11 +329,29 @@ export default function RoleList(): JSX.Element {
                 render: (value: string) => <Tag color="blue">{value}</Tag>,
               },
               {
+                title: '已配置权限',
+                dataIndex: 'permissions',
+                width: 120,
+                render: (value: string[]) => (
+                  <Tag color={value.length > 0 ? 'green' : 'default'}>{value.length} 个</Tag>
+                ),
+              },
+              {
                 title: '职责说明',
                 dataIndex: 'duty',
-                render: (value: string) => (
-                  <Typography.Text type="secondary">{value}</Typography.Text>
-                ),
+                render: (_value, row) =>
+                  row.duty ? (
+                    <Typography.Text type="secondary">{row.duty}</Typography.Text>
+                  ) : (
+                    <Tooltip title="该角色不在 PRD 3.1 角色目录中，后端未返回职责描述">
+                      <Typography.Text type="secondary">
+                        —
+                        <InfoCircleOutlined
+                          style={{ fontSize: 11, color: '#faad14', marginLeft: 2 }}
+                        />
+                      </Typography.Text>
+                    </Tooltip>
+                  ),
               },
               {
                 title: '默认数据范围',
@@ -275,9 +363,19 @@ export default function RoleList(): JSX.Element {
                 title: '在岗人数',
                 dataIndex: 'memberCount',
                 width: 110,
-                render: (value: number) => (
-                  <Badge count={value} showZero color="#13a05a" />
-                ),
+                render: (value: number | null) =>
+                  value === null ? (
+                    <Tooltip title="后端 /members/roles 未返回该角色的人数，显示为「—」">
+                      <Typography.Text type="secondary">
+                        —
+                        <InfoCircleOutlined
+                          style={{ fontSize: 11, color: '#faad14', marginLeft: 2 }}
+                        />
+                      </Typography.Text>
+                    </Tooltip>
+                  ) : (
+                    <Badge count={value} showZero color="#13a05a" />
+                  ),
               },
               {
                 title: '操作',
@@ -328,6 +426,12 @@ export default function RoleList(): JSX.Element {
           <Skeleton active paragraph={{ rows: 8 }} />
         ) : (
           <Space direction="vertical" size={16} style={{ width: '100%' }}>
+            <Alert
+              type="info"
+              showIcon
+              message="权限来源与生效说明"
+              description="下方勾选框是前端 RBAC 权限点目录（命名规范 {域}.{资源}.{动作}）；已勾选状态读取自服务端 platform_role.permissions，点击「保存权限」会真实写入服务端（PUT /api/v1/admin/roles/{code}/permissions）。保存失败会明确报错，不会假装成功。"
+            />
             <Descriptions size="small" column={2} bordered>
               <Descriptions.Item label="角色编码">{activeRoleCode || '-'}</Descriptions.Item>
               <Descriptions.Item label="已选权限点">

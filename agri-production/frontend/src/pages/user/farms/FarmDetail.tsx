@@ -26,6 +26,7 @@ import {
   ArrowDownOutlined,
   ArrowUpOutlined,
   EditOutlined,
+  InfoCircleOutlined,
   LeftOutlined,
   LineChartOutlined,
 } from '@ant-design/icons'
@@ -50,6 +51,7 @@ import {
   Typography,
   message,
 } from 'antd'
+import { MetricStatistic } from '@/components'
 import { getFarm, getFarmSummary, listFarmCerts, updateFarm } from '@/api/farms'
 import { listPlots } from '@/api/plots'
 import { listHarvests } from '@/api/harvests'
@@ -286,13 +288,16 @@ export default function FarmDetail(): JSX.Element {
     [plotsQuery.data, farmId],
   )
 
-  /** 本月 / 上月产量（吨）与环比 */
+  /** 本月 / 上月产量（吨）与环比；接口不可用时整体为 null，显示「—」而非 0 吨 */
   const harvestStats = useMemo(() => {
+    if (harvestQuery.isError || !harvestQuery.data) {
+      return { current: null, previous: null, trend: undefined }
+    }
     const now = new Date()
     const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
     const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1)
     const lastMonth = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`
-    const batches = (harvestQuery.data?.list ?? []).filter(
+    const batches = (harvestQuery.data.list ?? []).filter(
       (batch) => batch.farmId === farmId || farmPlots.some((plot) => plot.plotId === batch.plotId),
     )
     const sumOf = (month: string): number =>
@@ -302,28 +307,46 @@ export default function FarmDetail(): JSX.Element {
     const current = Number((sumOf(thisMonth) / 1000).toFixed(2))
     const previous = Number((sumOf(lastMonth) / 1000).toFixed(2))
     return { current, previous, trend: calcTrend(current, previous) }
-  }, [harvestQuery.data, farmId, farmPlots])
+  }, [harvestQuery.data, harvestQuery.isError, farmId, farmPlots])
 
-  /** 本月投入笔数 */
-  const usageCount = useMemo(() => {
+  /** 本月投入笔数；接口不可用时为 null，显示「—」而非 0 笔 */
+  const usageCount: number | null = useMemo(() => {
+    if (usageQuery.isError || !usageQuery.data) return null
     const plotIds = farmPlots.map((plot) => plot.plotId)
-    return (usageQuery.data?.list ?? []).filter(
+    return (usageQuery.data.list ?? []).filter(
       (usage) => usage.plotId && plotIds.includes(usage.plotId),
     ).length
-  }, [usageQuery.data, farmPlots])
+  }, [usageQuery.data, usageQuery.isError, farmPlots])
 
-  /** 概况：地块数 / 在田面积 / 利用率 */
+  /**
+   * 概况：地块数 / 在田面积 / 利用率。
+   *
+   * `GET /farms/{farmId}/summary` 不可用时三项全为 null，
+   * 页面显示「—」并给出可见提示——此前 `pick()` 把缺失值兜成 0，
+   * 会在「利用率 0%」这种位置把「没数据」显示成「确实为零」。
+   */
   const summary = useMemo(() => {
     const raw = summaryQuery.data as unknown as Record<string, unknown> | undefined
-    const pick = (key: string): number => {
+    const available = !summaryQuery.isError && Boolean(raw)
+    const pick = (key: string): number | null => {
+      if (!available) return null
       const parsed = Number(raw?.[key])
-      return Number.isFinite(parsed) ? parsed : 0
+      return Number.isFinite(parsed) ? parsed : null
     }
     const plotAreaTotal = pick('plotAreaTotal')
-    const areaTotal = pick('areaTotal') || Number(farmQuery.data?.areaTotal) || 0
-    const usageRate = areaTotal > 0 ? Math.round((plotAreaTotal / areaTotal) * 100) : 0
+    const declaredArea = pick('areaTotal')
+    const areaTotal =
+      declaredArea !== null && declaredArea > 0
+        ? declaredArea
+        : farmQuery.data?.areaTotal !== undefined && Number(farmQuery.data.areaTotal) > 0
+          ? Number(farmQuery.data.areaTotal)
+          : null
+    const usageRate =
+      plotAreaTotal !== null && areaTotal !== null && areaTotal > 0
+        ? Math.round((plotAreaTotal / areaTotal) * 100)
+        : null
     return { plotCount: pick('plotCount'), plotAreaTotal, areaTotal, usageRate }
-  }, [summaryQuery.data, farmQuery.data])
+  }, [summaryQuery.data, summaryQuery.isError, farmQuery.data])
 
   /** 打开编辑弹窗并回填 */
   const openEdit = (): void => {
@@ -444,15 +467,32 @@ export default function FarmDetail(): JSX.Element {
         <Row gutter={16}>
           <Col xs={24} sm={12} xl={6}>
             <Card>
-              <Statistic title="在田面积" value={summary.plotAreaTotal} suffix="亩" />
+              <MetricStatistic title="在田面积" value={summary.plotAreaTotal} suffix="亩" />
               <Typography.Text type="secondary">
-                利用率 {summary.usageRate}%（总面积 {summary.areaTotal}亩）
+                利用率{' '}
+                {summary.usageRate === null ? (
+                  <Tooltip title="后端 /farms/{farmId}/summary 未提供在田面积 / 总面积，显示为「—」">
+                    <Typography.Text type="secondary" style={{ cursor: 'help' }}>
+                      —
+                      <InfoCircleOutlined style={{ fontSize: 11, color: '#faad14', marginLeft: 2 }} />
+                    </Typography.Text>
+                  </Tooltip>
+                ) : (
+                  `${summary.usageRate}%`
+                )}
+                （总面积 {summary.areaTotal === null ? '—' : summary.areaTotal.toLocaleString('zh-CN')}亩）
               </Typography.Text>
             </Card>
           </Col>
           <Col xs={24} sm={12} xl={6}>
             <Card>
-              <Statistic title="本月产量" value={harvestStats.current} suffix="吨" />
+              <MetricStatistic
+                title="本月产量"
+                value={harvestStats.current}
+                precision={2}
+                suffix="吨"
+                missingTip="采收批次接口未返回数据，显示为「—」，不按 0 吨处理"
+              />
               <Space size={6}>
                 {renderTrend(harvestStats.trend)}
                 <Typography.Text type="secondary">较上月</Typography.Text>
@@ -461,7 +501,12 @@ export default function FarmDetail(): JSX.Element {
           </Col>
           <Col xs={24} sm={12} xl={6}>
             <Card>
-              <Statistic title="本月投入" value={usageCount} suffix="笔" />
+              <MetricStatistic
+                title="本月投入"
+                value={usageCount}
+                suffix="笔"
+                missingTip="投入品使用记录接口未返回数据，显示为「—」，不按 0 笔处理"
+              />
               <Typography.Text type="secondary">投入品使用记录（金额待接入）</Typography.Text>
             </Card>
           </Col>
@@ -476,7 +521,7 @@ export default function FarmDetail(): JSX.Element {
         </Row>
 
         <Card
-          title={`🗺️ 地块分布 (${summary.plotCount || farmPlots.length}个地块)`}
+          title={`🗺️ 地块分布 (${summary.plotCount === null ? farmPlots.length : summary.plotCount}个地块)`}
           extra={
             <Typography.Link onClick={() => navigate(`/production/plots?farmId=${farmId}`)}>
               查看全部地块→

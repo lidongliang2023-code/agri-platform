@@ -979,185 +979,212 @@ export function normalizePlot(raw: unknown): Plot {
   }
 }
 
-/* ==================== 兜底示例数据（原型 4.3 节口径） ==================== */
+/* ==================== 看板总览（只承载后端真实返回的指标） ==================== */
 
-/** 原型 4.3 节主要示例数据口径 */
-export const PROTOTYPE_SAMPLE = {
-  /** 农场数量 */
-  farmCount: 3,
-  /** 地块数量 */
-  plotCount: 12,
-  /** 在田面积（亩） */
-  plantingArea: 450,
-  /** 本月采收量（kg） */
-  monthHarvestQty: 12850,
-  /** 任务总量 */
-  taskTotal: 58,
-  /** 待执行 */
-  taskPending: 8,
-  /** 执行中 */
-  taskDoing: 3,
-  /** 已完成 */
-  taskDone: 45,
-  /** 已逾期 */
-  taskExpired: 2,
-  /** 本月任务数 */
-  monthTask: 28,
-  /** 溯源码总量 */
-  traceCodeCount: 3256,
-  /** IoT 设备数 */
-  deviceCount: 20,
-  /** 在线设备数 */
-  deviceOnline: 18,
-  /** 活跃告警 */
-  alertCount: 3,
-  /** 合格率（%） */
-  passRate: 96.8,
-  /** 作物种类数 */
-  cropCount: 6,
-  /** 进行中计划数 */
-  runningPlanCount: 4,
-} as const
-
-/** 看板总览视图模型 */
-export interface DashboardOverview {
-  /** 农场数量 */
-  farmCount: number
-  /** 地块数量 */
-  plotCount: number
-  /** 在田面积（亩） */
-  plantingArea: number
-  /** 进行中计划数 */
-  runningPlanCount: number
-  /** 待办任务数（pending + executing） */
-  pendingTaskCount: number
-  /** 本月任务总数 */
-  monthTaskTotal: number
-  /** 本月已完成任务数 */
-  monthTaskDone: number
-  /** 本月任务完成率（%） */
-  taskCompletionRate: number
-  /** 未处理告警数 */
-  alertCount: number
-  /** 本月采收量（kg） */
-  monthHarvestQty: number
-  /** 合格率（%） */
-  passRate: number
-  /** 在线设备 / 总设备 */
-  activeDeviceCount: number
-  /** 在田作物种类数 */
-  cropCount: number
-  /** 溯源码总量 */
-  traceCodeCount: number
+/**
+ * 总览指标字段 → 中文名。
+ *
+ * 仅用于「后端未提供该指标数据源」的可见提示文案，不参与任何取值兜底。
+ */
+export const OVERVIEW_METRIC_LABELS: Record<string, string> = {
+  metricCount: '已接入指标数',
+  yieldTotal: '累计产量',
+  passRate: '检测合格率',
+  avgCostPerMu: '亩均生产成本',
+  farmCount: '农场数量',
+  plotCount: '地块数量',
+  plantingArea: '在田面积',
+  runningPlanCount: '进行中计划数',
+  pendingTaskCount: '待办任务数',
+  monthTaskTotal: '本月任务总数',
+  monthTaskDone: '本月已完成任务数',
+  taskCompletionRate: '本月任务完成率',
+  alertCount: '未处理告警数',
+  monthHarvestQty: '本月采收量',
+  activeDeviceCount: '在线设备数',
+  cropCount: '在田作物种类数',
+  traceCodeCount: '溯源码总量',
 }
 
 /**
- * 将后端返回值合并为看板总览（缺失字段回落到原型示例口径）
- * @param raw 后端返回（对象形态不限）
+ * 总览指标字段 → 后端候选键名。
+ *
+ * 后端 `GET /analytics/overview` 目前返回 `prod_analytics_snapshot` 的
+ * `metricCode → metricValue` 映射（种子数据里是 YIELD / PASS_RATE / COST），
+ * 因此这里同时兼容大写下划线与驼峰两种键名；**命中不到就是没有这个数据源**。
+ */
+const OVERVIEW_METRIC_KEYS: Record<string, string[]> = {
+  metricCount: ['metricCount', 'METRIC_COUNT'],
+  yieldTotal: ['yieldTotal', 'YIELD'],
+  passRate: ['passRate', 'PASS_RATE'],
+  avgCostPerMu: ['avgCostPerMu', 'COST'],
+  farmCount: ['farmCount', 'farmTotal', 'FARM_COUNT'],
+  plotCount: ['plotCount', 'plotTotal', 'PLOT_COUNT'],
+  plantingArea: ['plantingArea', 'plantingAreaMu', 'PLANTING_AREA'],
+  runningPlanCount: ['runningPlanCount', 'RUNNING_PLAN_COUNT'],
+  pendingTaskCount: ['pendingTaskCount', 'todoTaskCount', 'PENDING_TASK_COUNT'],
+  monthTaskTotal: ['monthTaskTotal', 'monthTaskCount', 'MONTH_TASK_TOTAL'],
+  monthTaskDone: ['monthTaskDone', 'monthCompletedTaskCount', 'MONTH_TASK_DONE'],
+  taskCompletionRate: ['taskCompletionRate', 'TASK_COMPLETION_RATE'],
+  alertCount: ['alertCount', 'unhandledAlertCount', 'ALERT_COUNT'],
+  monthHarvestQty: ['monthHarvestQty', 'MONTH_HARVEST_QTY'],
+  activeDeviceCount: ['activeDeviceCount', 'deviceOnline', 'ACTIVE_DEVICE_COUNT'],
+  cropCount: ['cropCount', 'cropVarietyCount', 'CROP_COUNT'],
+  traceCodeCount: ['traceCodeCount', 'traceTotal', 'TRACE_CODE_COUNT'],
+}
+
+/**
+ * 读取数字；后端未返回该字段时返回 null（**绝不回落示例值 / 0 / 随机数**）。
+ *
+ * @param source 数据来源
+ * @param keys 候选字段名
+ * @returns 数字；字段缺失或非法返回 null
+ */
+export function readNumberOrNull(source: unknown, keys: string[]): number | null {
+  const value = readValue(source, keys)
+  if (value === undefined) return null
+  const parsed = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+/** 看板总览视图模型（每个指标都可能为 null，表示后端暂无该数据源） */
+export interface DashboardOverview {
+  /** 后端已接入的指标条数 */
+  metricCount: number | null
+  /** 累计产量（kg，metricCode=YIELD） */
+  yieldTotal: number | null
+  /** 检测合格率（%，metricCode=PASS_RATE） */
+  passRate: number | null
+  /** 亩均生产成本（元/亩，metricCode=COST） */
+  avgCostPerMu: number | null
+  /** 农场数量 */
+  farmCount: number | null
+  /** 地块数量 */
+  plotCount: number | null
+  /** 在田面积（亩） */
+  plantingArea: number | null
+  /** 进行中计划数 */
+  runningPlanCount: number | null
+  /** 待办任务数 */
+  pendingTaskCount: number | null
+  /** 本月任务总数 */
+  monthTaskTotal: number | null
+  /** 本月已完成任务数 */
+  monthTaskDone: number | null
+  /** 本月任务完成率（%） */
+  taskCompletionRate: number | null
+  /** 未处理告警数 */
+  alertCount: number | null
+  /** 本月采收量（kg） */
+  monthHarvestQty: number | null
+  /** 在线设备数 */
+  activeDeviceCount: number | null
+  /** 在田作物种类数 */
+  cropCount: number | null
+  /** 溯源码总量 */
+  traceCodeCount: number | null
+  /** 后端未提供数据源的指标中文名清单（页面据此展示可见提示） */
+  missingFields: string[]
+  /** 总览接口本次是否可用（false = 请求失败 / 后端不可达，页面须显式告知） */
+  available: boolean
+}
+
+/**
+ * 将后端返回值映射为看板总览。
+ *
+ * 纪律：后端没有的字段一律为 null，**不做任何示例值回填**。
+ * 调用方必须把 null 渲染成「— / 未接入」并给出可见提示，不许当成 0 展示。
+ *
+ * @param raw 后端返回（对象形态不限）；传 null 表示本次请求不可用
+ * @param available 接口是否可用
  * @returns DashboardOverview
  */
-export function mergeOverview(raw: unknown): DashboardOverview {
+export function buildOverview(raw: unknown, available = true): DashboardOverview {
   const record = asRecord(raw)
-  const monthTaskTotal =
-    readNumber(record, ['monthTaskTotal', 'monthTaskCount'], PROTOTYPE_SAMPLE.monthTask) ||
-    PROTOTYPE_SAMPLE.monthTask
-  const monthTaskDone = readNumber(record, ['monthTaskDone', 'monthCompletedTaskCount'], 0)
-  const pendingTaskCount = readNumber(
-    record,
-    ['pendingTaskCount', 'todoTaskCount'],
-    PROTOTYPE_SAMPLE.taskPending + PROTOTYPE_SAMPLE.taskDoing,
-  )
+  const pick = (field: string): number | null =>
+    readNumberOrNull(record, OVERVIEW_METRIC_KEYS[field] ?? [field])
+
+  const metricCount = pick('metricCount')
+  const yieldTotal = pick('yieldTotal')
+  const passRate = pick('passRate')
+  const avgCostPerMu = pick('avgCostPerMu')
+  const farmCount = pick('farmCount')
+  const plotCount = pick('plotCount')
+  const plantingArea = pick('plantingArea')
+  const runningPlanCount = pick('runningPlanCount')
+  const pendingTaskCount = pick('pendingTaskCount')
+  const monthTaskTotal = pick('monthTaskTotal')
+  const monthTaskDone = pick('monthTaskDone')
+  const taskCompletionRate = pick('taskCompletionRate')
+  const alertCount = pick('alertCount')
+  const monthHarvestQty = pick('monthHarvestQty')
+  const activeDeviceCount = pick('activeDeviceCount')
+  const cropCount = pick('cropCount')
+  const traceCodeCount = pick('traceCodeCount')
+
+  const pairs: [string, number | null][] = [
+    ['metricCount', metricCount],
+    ['yieldTotal', yieldTotal],
+    ['passRate', passRate],
+    ['avgCostPerMu', avgCostPerMu],
+    ['farmCount', farmCount],
+    ['plotCount', plotCount],
+    ['plantingArea', plantingArea],
+    ['runningPlanCount', runningPlanCount],
+    ['pendingTaskCount', pendingTaskCount],
+    ['monthTaskTotal', monthTaskTotal],
+    ['monthTaskDone', monthTaskDone],
+    ['taskCompletionRate', taskCompletionRate],
+    ['alertCount', alertCount],
+    ['monthHarvestQty', monthHarvestQty],
+    ['activeDeviceCount', activeDeviceCount],
+    ['cropCount', cropCount],
+    ['traceCodeCount', traceCodeCount],
+  ]
+
   return {
-    farmCount: readNumber(record, ['farmCount', 'farmTotal'], PROTOTYPE_SAMPLE.farmCount),
-    plotCount: readNumber(record, ['plotCount', 'plotTotal'], PROTOTYPE_SAMPLE.plotCount),
-    plantingArea: readNumber(record, ['plantingArea', 'plantingAreaMu'], PROTOTYPE_SAMPLE.plantingArea),
-    runningPlanCount: readNumber(record, ['runningPlanCount'], PROTOTYPE_SAMPLE.runningPlanCount),
+    metricCount,
+    yieldTotal,
+    passRate,
+    avgCostPerMu,
+    farmCount,
+    plotCount,
+    plantingArea,
+    runningPlanCount,
     pendingTaskCount,
     monthTaskTotal,
-    monthTaskDone: monthTaskDone || Math.round(monthTaskTotal * 0.67),
-    taskCompletionRate: monthTaskTotal
-      ? Number((((monthTaskDone || Math.round(monthTaskTotal * 0.67)) / monthTaskTotal) * 100).toFixed(1))
-      : 0,
-    alertCount: readNumber(record, ['alertCount', 'unhandledAlertCount'], PROTOTYPE_SAMPLE.alertCount),
-    monthHarvestQty: readNumber(record, ['monthHarvestQty', 'harvestQty'], PROTOTYPE_SAMPLE.monthHarvestQty),
-    passRate: readNumber(record, ['passRate', 'qualityPassRate'], PROTOTYPE_SAMPLE.passRate),
-    activeDeviceCount: readNumber(record, ['activeDeviceCount', 'deviceOnline'], PROTOTYPE_SAMPLE.deviceOnline),
-    cropCount: readNumber(record, ['cropCount', 'cropVarietyCount'], PROTOTYPE_SAMPLE.cropCount),
-    traceCodeCount: readNumber(record, ['traceCodeCount', 'traceTotal'], PROTOTYPE_SAMPLE.traceCodeCount),
+    monthTaskDone,
+    taskCompletionRate,
+    alertCount,
+    monthHarvestQty,
+    activeDeviceCount,
+    cropCount,
+    traceCodeCount,
+    missingFields: pairs
+      .filter(([, value]) => value === null)
+      .map(([field]) => OVERVIEW_METRIC_LABELS[field] ?? field),
+    available,
   }
 }
 
 /**
- * 生成确定性的伪随机序列（避免每次渲染抖动）
- * @param seed 种子
- * @param index 序号
- * @param base 基准值
- * @returns 稳定数值
+ * 指标值展示文案：null 显示为「—」（区别于真实数值 0）。
+ *
+ * @param value 指标值
+ * @param precision 小数位
+ * @param suffix 单位后缀
+ * @returns 展示文案
  */
-function pseudoValue(seed: number, index: number, base: number): number {
-  const mixed = Math.sin(seed * 12.9898 + index * 78.233) * 43758.5453
-  const fraction = mixed - Math.floor(mixed)
-  return Math.round(base * (0.6 + fraction * 0.8))
+export function metricText(value: number | null, precision = 0, suffix = ''): string {
+  if (value === null) return '—'
+  return `${value.toLocaleString('zh-CN', {
+    minimumFractionDigits: precision,
+    maximumFractionDigits: precision,
+  })}${suffix}`
 }
 
-/** 趋势点 */
-export interface TrendPointView {
-  /** 日期 */
-  date: string
-  /** 计划值 */
-  planned: number
-  /** 完成值 */
-  done: number
-}
-
-/**
- * 生成「本月农事趋势」兜底序列（口径来自原型 4.3：本月 28 条任务）
- * @param month 月份，yyyy-MM，缺省当月
- * @returns 趋势点数组
- */
-export function buildMonthTrendFallback(month?: string): TrendPointView[] {
-  const base = dayjs(month ? `${month}-01` : undefined).startOf('month')
-  const daysInMonth = base.daysInMonth()
-  const seed = base.date(1).diff(dayjs('2026-01-01'), 'day')
-  return Array.from({ length: daysInMonth }, (_unused, index) => {
-    const planned = pseudoValue(seed, index, 2) === 0 ? 1 : Math.max(1, Math.round(PROTOTYPE_SAMPLE.monthTask / 22))
-    const done = Math.max(0, planned - (index % 4 === 0 ? 1 : 0))
-    return {
-      date: base.add(index, 'day').format('YYYY-MM-DD'),
-      planned,
-      done,
-    }
-  })
-}
-
-/**
- * 生成作物分布兜底数据
- * @returns 作物分布
- */
-export function buildCropDistributionFallback(): { name: string; value: number }[] {
-  return [
-    { name: '番茄', value: 50 },
-    { name: '黄瓜', value: 40 },
-    { name: '辣椒', value: 35 },
-    { name: '茄子', value: 45 },
-    { name: '白菜', value: 30 },
-    { name: '苹果', value: 100 },
-  ]
-}
-
-/**
- * 生成投入品消耗排行兜底数据
- * @returns 投入品排行
- */
-export function buildInputRankingFallback(): { name: string; value: number }[] {
-  return [
-    { name: '复合肥', value: 680 },
-    { name: '有机肥', value: 420 },
-    { name: '吡虫啉', value: 120 },
-    { name: '多菌灵', value: 95 },
-    { name: '尿素', value: 260 },
-  ]
-}
+/** 指标值缺失时的统一提示文案 */
+export const MISSING_METRIC_TIP = '后端暂无该指标数据源，显示为「—」，接口补齐后自动填充'
 
 /**
  * 计算两个日期间按天展开的日期数组（含首尾）

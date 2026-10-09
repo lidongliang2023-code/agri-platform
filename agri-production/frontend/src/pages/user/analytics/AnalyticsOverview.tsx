@@ -5,18 +5,24 @@
  * PRD 序号：PRD 6.1 #43
  *
  * 还原要点（PRD 6.1 #43「多维度数据分析、可视化图表」）：
- * - 指标卡：农场 / 地块 / 在种面积 / 在种计划 / 待办任务 / 本月采收 / 合格率 / 活跃设备
- * - 维度切换：按作物 / 按地块 / 按时间（月）三组口径对比产量、投入、产值与任务完成情况
+ * - 指标卡：累计产量 / 检测合格率 / 亩均成本 / 农场 / 地块 / 在种面积 / 进行中计划 / 待办任务
+ * - 维度切换：按作物 / 按地块 / 按时间三组口径对比产量、投入、产值与任务完成情况
  * - 图表组：产量趋势（折线）、任务完成趋势（柱状）、维度对比（柱线组合）、
  *   作物分布（饼图）、投入品消耗排行（条形）
  * - 任务完成率与投入产出比作为关键结论指标单独呈现
  *
- * 数据来源：`/analytics/dashboard`（总览）、`/analytics/dimension`（多维分析）；
- * 后端骨架无数据时按示例口径本地推导，保证维度切换与图表交互完整可用。
+ * 数据纪律（项目铁规矩：可以降级，不能骗人）：
+ * - 后端 `GET /analytics/dashboard|overview` 返回的是 `prod_analytics_snapshot` 的
+ *   `metricCode → metricValue` 映射（YIELD / PASS_RATE / COST …），**没有的指标一律显示「—」**，
+ *   绝不使用本地示例值回填（此前本页整页都是 DEMO_* 常量在兜底，属于把假数据当真数据展示）；
+ * - 作物分布 / 投入品排行由真实接口（地块列表、投入品使用记录）聚合而来；
+ *   接口无数据时图表显示「暂无数据」，不生成任何本地序列；
+ * - 后端暂无 `/analytics/dimension` 与任务趋势端点，对应图表显示「后端暂无数据源」。
  */
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
+  Alert,
   Card,
   Col,
   DatePicker,
@@ -27,6 +33,7 @@ import {
   Space,
   Spin,
   Statistic,
+  Tooltip,
   Typography,
 } from 'antd'
 import {
@@ -35,6 +42,7 @@ import {
   DashboardOutlined,
   FieldTimeOutlined,
   FundOutlined,
+  InfoCircleOutlined,
 } from '@ant-design/icons'
 import ReactECharts from 'echarts-for-react'
 import dayjs from 'dayjs'
@@ -45,8 +53,12 @@ import {
   getAnalyticsOverview,
   getProductionOverview,
 } from '@/api/analytics'
-import { formatNumber } from '@/utils/production-adapter'
-import type { AnalyticsOverview, ProductionOverview } from '@/types'
+import { fetchMetricTrend } from '@/api/production-view'
+import { listInputUsages } from '@/api/inputs'
+import { listPlots } from '@/api/plots'
+import { buildOverview, formatNumber } from '@/utils/production-adapter'
+import type { DashboardOverview } from '@/utils/production-adapter'
+import { MetricStatistic, MetricText } from '@/components'
 import type { AnalyticsDimension, DimensionPoint } from '@/api/analytics'
 
 const { RangePicker } = DatePicker
@@ -71,105 +83,51 @@ const METRIC_COLORS: string[] = [
   '#a0d911',
 ]
 
-/** 示例作物分布 */
-const DEMO_CROP_DISTRIBUTION: { name: string; value: number }[] = [
-  { name: '番茄', value: 120 },
-  { name: '黄瓜', value: 86 },
-  { name: '辣椒', value: 64 },
-  { name: '茄子', value: 52 },
-  { name: '白菜', value: 40 },
-  { name: '苹果', value: 160 },
-]
-
-/** 示例投入品消耗排行 */
-const DEMO_INPUT_RANKING: { name: string; value: number }[] = [
-  { name: '复合肥', value: 12800 },
-  { name: '尿素', value: 8600 },
-  { name: '代森锰锌', value: 1240 },
-  { name: '烯酰吗啉', value: 680 },
-  { name: '滴灌带', value: 4200 },
-  { name: '生物菌肥', value: 3200 },
-]
+/** 图表无数据时的统一占位文案 */
+const NO_SOURCE_TEXT = '后端暂无该数据源，暂不展示'
 
 /**
- * 生成示例趋势序列
+ * 构造「暂无数据源」图表配置。
  *
- * @param days 天数
- * @param base 基线值
- * @param wave 波动幅度
- * @returns 趋势点
+ * @param text 占位文案
+ * @returns ECharts 配置
  */
-function buildTrend(
-  days: number,
-  base: number,
-  wave: number,
-): { date: string; value: number }[] {
-  return Array.from({ length: days }, (_unused, index) => {
-    const day = dayjs('2026-06-03').subtract(days - 1 - index, 'day')
-    const delta = Math.sin(index / 3) * wave + ((index * 7) % 5) * (wave / 6)
-    return {
-      date: day.format('YYYY-MM-DD'),
-      value: Math.max(0, Number((base + delta).toFixed(1))),
-    }
-  })
+function emptyChartOption(text: string): Record<string, unknown> {
+  return {
+    xAxis: { type: 'category', data: [], show: false },
+    yAxis: { type: 'value', show: false },
+    series: [],
+    graphic: [
+      {
+        type: 'text',
+        left: 'center',
+        top: 'middle',
+        style: { text, fill: '#999', fontSize: 13 },
+      },
+    ],
+  }
 }
 
-/** 示例总览指标 */
-const DEMO_PRODUCTION_OVERVIEW: ProductionOverview = {
-  farmCount: 3,
-  plotCount: 12,
-  plantingArea: 2500,
-  runningPlanCount: 8,
-  pendingTaskCount: 58,
-  monthHarvestQty: 12850,
-  passRate: 98.6,
-  activeDeviceCount: 18,
-}
-
-/** 示例分析总览 */
-const DEMO_ANALYTICS: AnalyticsOverview = {
-  overview: DEMO_PRODUCTION_OVERVIEW,
-  yieldTrend: buildTrend(30, 420, 90),
-  taskTrend: buildTrend(30, 12, 4),
-  inputRanking: DEMO_INPUT_RANKING,
-  cropDistribution: DEMO_CROP_DISTRIBUTION,
-}
-
-/** 示例维度数据（按作物） */
-const DEMO_DIMENSION_CROP: DimensionPoint[] = [
-  { name: '番茄', yieldQty: 62400, areaMu: 120, inputCost: 186000, outputValue: 349440, taskCount: 168, doneCount: 156 },
-  { name: '黄瓜', yieldQty: 39560, areaMu: 86, inputCost: 124000, outputValue: 166152, taskCount: 132, doneCount: 121 },
-  { name: '辣椒', yieldQty: 20480, areaMu: 64, inputCost: 96000, outputValue: 139264, taskCount: 96, doneCount: 88 },
-  { name: '茄子', yieldQty: 21320, areaMu: 52, inputCost: 78000, outputValue: 98072, taskCount: 78, doneCount: 74 },
-  { name: '白菜', yieldQty: 15200, areaMu: 40, inputCost: 42000, outputValue: 31920, taskCount: 54, doneCount: 51 },
-  { name: '苹果', yieldQty: 448000, areaMu: 160, inputCost: 320000, outputValue: 3360000, taskCount: 210, doneCount: 198 },
-]
-
-/** 示例维度数据（按地块） */
-const DEMO_DIMENSION_PLOT: DimensionPoint[] = [
-  { name: '1号田', yieldQty: 23400, areaMu: 45, inputCost: 72000, outputValue: 131040, taskCount: 62, doneCount: 58 },
-  { name: '2号田', yieldQty: 19760, areaMu: 38, inputCost: 61000, outputValue: 110656, taskCount: 55, doneCount: 50 },
-  { name: '3号棚', yieldQty: 6240, areaMu: 12, inputCost: 28000, outputValue: 34944, taskCount: 40, doneCount: 38 },
-  { name: '4号棚', yieldQty: 5200, areaMu: 10, inputCost: 24000, outputValue: 29120, taskCount: 36, doneCount: 34 },
-  { name: '水稻A区', yieldQty: 198400, areaMu: 320, inputCost: 156000, outputValue: 595200, taskCount: 88, doneCount: 82 },
-  { name: '果园北区', yieldQty: 448000, areaMu: 160, inputCost: 320000, outputValue: 3360000, taskCount: 120, doneCount: 113 },
-]
-
-/** 示例维度数据（按时间） */
-const DEMO_DIMENSION_MONTH: DimensionPoint[] = [
-  { name: '2026-01', yieldQty: 186000, areaMu: 520, inputCost: 210000, outputValue: 620000, taskCount: 320, doneCount: 298 },
-  { name: '2026-02', yieldQty: 142000, areaMu: 520, inputCost: 186000, outputValue: 486000, taskCount: 286, doneCount: 268 },
-  { name: '2026-03', yieldQty: 214000, areaMu: 620, inputCost: 248000, outputValue: 742000, taskCount: 356, doneCount: 336 },
-  { name: '2026-04', yieldQty: 268000, areaMu: 680, inputCost: 296000, outputValue: 918000, taskCount: 402, doneCount: 386 },
-  { name: '2026-05', yieldQty: 296000, areaMu: 680, inputCost: 312000, outputValue: 1024000, taskCount: 428, doneCount: 410 },
-  { name: '2026-06', yieldQty: 162000, areaMu: 660, inputCost: 178000, outputValue: 568000, taskCount: 246, doneCount: 214 },
-]
-
-/** 维度 → 示例数据 */
-const DEMO_DIMENSION_MAP: Record<AnalyticsDimension, DimensionPoint[]> = {
-  crop: DEMO_DIMENSION_CROP,
-  plot: DEMO_DIMENSION_PLOT,
-  month: DEMO_DIMENSION_MONTH,
+/**
+ * 判断一次总览响应里是否至少命中了一个真实指标（用于决定要不要再试备用接口）。
+ *
+ * @param overview 映射后的总览
+ * @returns 至少有一个非 null 指标时返回 true
+ */
+function hasAnyMetric(overview: DashboardOverview): boolean {
+  return [
+    overview.metricCount,
+    overview.yieldTotal,
+    overview.passRate,
+    overview.avgCostPerMu,
+    overview.farmCount,
+    overview.plotCount,
+    overview.plantingArea,
+    overview.runningPlanCount,
+    overview.pendingTaskCount,
+    overview.monthHarvestQty,
+    overview.activeDeviceCount,
+  ].some((value) => value !== null)
 }
 
 /**
@@ -186,116 +144,163 @@ export default function AnalyticsOverview(): JSX.Element {
   const [dimension, setDimension] = useState<AnalyticsDimension>('crop')
   /** 统计时间范围 */
   const [range, setRange] = useState<[Dayjs, Dayjs]>([
-    dayjs('2026-06-03').subtract(29, 'day'),
-    dayjs('2026-06-03'),
+    dayjs().subtract(29, 'day'),
+    dayjs(),
   ])
 
   const startDate: string = range[0].format('YYYY-MM-DD')
   const endDate: string = range[1].format('YYYY-MM-DD')
 
-  /** 总览数据 */
+  /**
+   * 总览数据。
+   *
+   * 后端返回 Map（metricCode → metricValue），这里用 buildOverview 映射：
+   * 命中的指标取真实值，未命中的为 null（页面显示「—」）。
+   */
   const overviewQuery = useQuery({
     queryKey: ['analytics-overview', farmId, startDate, endDate],
     queryFn: () => getAnalyticsOverview({ farmId, startDate, endDate }),
+    retry: false,
   })
 
-  /** 生产总览指标（补充总览接口无数据时的口径） */
+  /** 生产总览指标（/analytics/overview，与 dashboard 同源，作为补充数据源） */
   const productionQuery = useQuery({
     queryKey: ['analytics-production-overview', farmId],
     queryFn: () => getProductionOverview(farmId),
+    retry: false,
   })
 
-  /** 维度数据 */
+  /** 产量趋势（后端 GET /analytics/trend?metricCode=YIELD） */
+  const yieldTrendQuery = useQuery({
+    queryKey: ['analytics-yield-trend', farmId],
+    queryFn: () => fetchMetricTrend('YIELD'),
+    retry: false,
+  })
+
+  /** 维度数据（后端暂无 /analytics/dimension，返回空即空态） */
   const dimensionQuery = useQuery({
     queryKey: ['analytics-dimension', farmId, dimension, startDate, endDate],
     queryFn: () => getAnalyticsDimension({ dimension, farmId, startDate, endDate }),
+    retry: false,
   })
 
-  /** 最终总览（接口优先，回落示例） */
-  const overviewData: AnalyticsOverview = useMemo(() => {
-    const remote = overviewQuery.data
-    if (remote && remote.overview) return remote
-    const production = productionQuery.data
-    return {
-      ...DEMO_ANALYTICS,
-      overview: production ?? DEMO_ANALYTICS.overview,
+  /** 地块列表（作物分布聚合源） */
+  const plotsQuery = useQuery({
+    queryKey: ['analytics-plots', farmId],
+    queryFn: () => listPlots({ pageNum: 1, pageSize: 200, farmId }),
+    retry: false,
+  })
+
+  /** 投入品使用记录（消耗排行聚合源） */
+  const usageQuery = useQuery({
+    queryKey: ['analytics-input-usages', farmId],
+    queryFn: () => listInputUsages({ pageNum: 1, pageSize: 200 }),
+    retry: false,
+  })
+
+  /**
+   * 最终总览：接口优先取 dashboard，其次 overview，**两者都失败才标记不可用**；
+   * 无论走哪条路径，缺失字段都是 null，不做任何示例值回填。
+   */
+  const overview: DashboardOverview = useMemo(() => {
+    const dashboard = overviewQuery.data
+    if (hasAnyMetric(buildOverview(dashboard, true))) {
+      return buildOverview(dashboard, true)
     }
+    const production = productionQuery.data
+    if (hasAnyMetric(buildOverview(production, true))) {
+      return buildOverview(production, true)
+    }
+    return buildOverview(null, false)
   }, [overviewQuery.data, productionQuery.data])
 
-  /** 最终维度数据 */
+  /** 最终维度数据：接口有就用，没有就是空（不回落到示例维度表） */
   const dimensionData: DimensionPoint[] = useMemo(() => {
     const remote = dimensionQuery.data
-    if (Array.isArray(remote) && remote.length > 0) return remote
-    return DEMO_DIMENSION_MAP[dimension]
-  }, [dimensionQuery.data, dimension])
+    return Array.isArray(remote) ? remote : []
+  }, [dimensionQuery.data])
+
+  /** 作物分布（真实地块面积聚合） */
+  const cropDistribution = useMemo<{ name: string; value: number }[]>(() => {
+    const buckets = new Map<string, number>()
+    for (const plot of plotsQuery.data?.list ?? []) {
+      const name = plot.cropVariety || plot.cropId || '未种植'
+      buckets.set(name, (buckets.get(name) ?? 0) + (Number(plot.area) || 0))
+    }
+    return Array.from(buckets.entries())
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+  }, [plotsQuery.data])
+
+  /** 投入品消耗排行（真实使用记录聚合） */
+  const inputRanking = useMemo<{ name: string; value: number }[]>(() => {
+    const buckets = new Map<string, number>()
+    for (const usage of usageQuery.data?.list ?? []) {
+      const name = usage.inputName || usage.inputId || '未命名投入品'
+      buckets.set(name, (buckets.get(name) ?? 0) + (Number(usage.quantity) || 0))
+    }
+    return Array.from(buckets.entries())
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 6)
+  }, [usageQuery.data])
 
   /** 指标卡 */
-  const metricCards: { title: string; value: number; suffix: string; precision: number }[] =
-    useMemo(() => {
-      const overview = overviewData.overview
-      return [
-        { title: '农场数量', value: overview.farmCount, suffix: '个', precision: 0 },
-        { title: '地块数量', value: overview.plotCount, suffix: '块', precision: 0 },
-        { title: '在种面积', value: overview.plantingArea, suffix: '亩', precision: 0 },
-        { title: '进行中计划', value: overview.runningPlanCount, suffix: '个', precision: 0 },
-        { title: '待办任务', value: overview.pendingTaskCount, suffix: '条', precision: 0 },
-        { title: '本月采收量', value: overview.monthHarvestQty, suffix: 'kg', precision: 0 },
-        { title: '质量合格率', value: overview.passRate, suffix: '%', precision: 1 },
-        { title: '活跃设备', value: overview.activeDeviceCount, suffix: '台', precision: 0 },
-      ]
-    }, [overviewData])
+  const metricCards: {
+    title: string
+    value: number | null
+    suffix: string
+    precision: number
+  }[] = useMemo(
+    () => [
+      { title: '累计产量', value: overview.yieldTotal, suffix: 'kg', precision: 0 },
+      { title: '检测合格率', value: overview.passRate, suffix: '%', precision: 1 },
+      { title: '亩均生产成本', value: overview.avgCostPerMu, suffix: '元', precision: 0 },
+      { title: '农场数量', value: overview.farmCount, suffix: '个', precision: 0 },
+      { title: '地块数量', value: overview.plotCount, suffix: '块', precision: 0 },
+      { title: '在种面积', value: overview.plantingArea, suffix: '亩', precision: 0 },
+      { title: '进行中计划', value: overview.runningPlanCount, suffix: '个', precision: 0 },
+      { title: '待办任务', value: overview.pendingTaskCount, suffix: '条', precision: 0 },
+    ],
+    [overview],
+  )
 
-  /** 产量趋势图 */
-  const yieldOption = useMemo(
-    () => ({
+  /** 产量趋势图（真实指标序列；无数据则占位） */
+  const yieldOption = useMemo<Record<string, unknown>>(() => {
+    const rows = yieldTrendQuery.data ?? []
+    if (rows.length === 0) return emptyChartOption(NO_SOURCE_TEXT)
+    return {
       tooltip: { trigger: 'axis' },
       grid: { left: 60, right: 24, top: 30, bottom: 40 },
       xAxis: {
         type: 'category',
-        data: overviewData.yieldTrend.map((item) => item.date),
+        data: rows.map((item) => item.date),
         axisLabel: { rotate: 30 },
       },
       yAxis: { type: 'value', name: '产量(kg)' },
       series: [
         {
-          name: '日产量',
+          name: '产量',
           type: 'line',
           smooth: true,
           areaStyle: { opacity: 0.15 },
-          data: overviewData.yieldTrend.map((item) => item.value),
+          data: rows.map((item) => item.value),
           itemStyle: { color: '#1677ff' },
         },
       ],
-    }),
-    [overviewData.yieldTrend],
+    }
+  }, [yieldTrendQuery.data])
+
+  /** 任务完成趋势图（后端暂无端点） */
+  const taskOption = useMemo<Record<string, unknown>>(
+    () => emptyChartOption(NO_SOURCE_TEXT),
+    [],
   )
 
-  /** 任务完成趋势图 */
-  const taskOption = useMemo(
-    () => ({
-      tooltip: { trigger: 'axis' },
-      grid: { left: 60, right: 24, top: 30, bottom: 40 },
-      xAxis: {
-        type: 'category',
-        data: overviewData.taskTrend.map((item) => item.date),
-        axisLabel: { rotate: 30 },
-      },
-      yAxis: { type: 'value', name: '任务数' },
-      series: [
-        {
-          name: '任务完成数',
-          type: 'bar',
-          data: overviewData.taskTrend.map((item) => item.value),
-          itemStyle: { color: '#52c41a' },
-        },
-      ],
-    }),
-    [overviewData.taskTrend],
-  )
-
-  /** 维度对比图（产量柱 + 投入产出比折线） */
-  const dimensionOption = useMemo(
-    () => ({
+  /** 维度对比图（真实维度数据；空则占位） */
+  const dimensionOption = useMemo<Record<string, unknown>>(() => {
+    if (dimensionData.length === 0) return emptyChartOption(NO_SOURCE_TEXT)
+    return {
       tooltip: { trigger: 'axis' },
       legend: { data: ['产量(kg)', '投入产出比'], bottom: 0 },
       grid: { left: 70, right: 70, top: 30, bottom: 50 },
@@ -322,13 +327,13 @@ export default function AnalyticsOverview(): JSX.Element {
           itemStyle: { color: '#fa8c16' },
         },
       ],
-    }),
-    [dimensionData],
-  )
+    }
+  }, [dimensionData])
 
   /** 作物分布饼图 */
-  const cropOption = useMemo(
-    () => ({
+  const cropOption = useMemo<Record<string, unknown>>(() => {
+    if (cropDistribution.length === 0) return emptyChartOption(NO_SOURCE_TEXT)
+    return {
       tooltip: { trigger: 'item' },
       legend: { bottom: 0 },
       series: [
@@ -336,44 +341,45 @@ export default function AnalyticsOverview(): JSX.Element {
           name: '作物分布',
           type: 'pie',
           radius: ['40%', '70%'],
-          data: overviewData.cropDistribution,
+          data: cropDistribution,
         },
       ],
-    }),
-    [overviewData.cropDistribution],
-  )
+    }
+  }, [cropDistribution])
 
   /** 投入品消耗排行 */
-  const inputOption = useMemo(
-    () => ({
+  const inputOption = useMemo<Record<string, unknown>>(() => {
+    if (inputRanking.length === 0) return emptyChartOption(NO_SOURCE_TEXT)
+    return {
       tooltip: { trigger: 'axis' },
       grid: { left: 90, right: 40, top: 20, bottom: 30 },
       xAxis: { type: 'value', name: '用量' },
       yAxis: {
         type: 'category',
-        data: overviewData.inputRanking.map((item) => item.name).reverse(),
+        data: inputRanking.map((item) => item.name).reverse(),
       },
       series: [
         {
           name: '消耗量',
           type: 'bar',
-          data: overviewData.inputRanking.map((item) => item.value).reverse(),
+          data: inputRanking.map((item) => item.value).reverse(),
           itemStyle: { color: '#722ed1' },
         },
       ],
-    }),
-    [overviewData.inputRanking],
-  )
+    }
+  }, [inputRanking])
 
-  /** 任务完成率 */
+  /** 任务完成率（维度数据为空时整体显示「—」） */
   const taskSummary = useMemo(() => {
+    if (dimensionData.length === 0) return null
     const total = dimensionData.reduce((sum, item) => sum + item.taskCount, 0)
     const done = dimensionData.reduce((sum, item) => sum + item.doneCount, 0)
     return { total, done, rate: total === 0 ? 0 : Number(((done / total) * 100).toFixed(1)) }
   }, [dimensionData])
 
-  /** 投入产出合计 */
+  /** 投入产出合计（维度数据为空时整体显示「—」） */
   const ioSummary = useMemo(() => {
+    if (dimensionData.length === 0) return null
     const cost = dimensionData.reduce((sum, item) => sum + item.inputCost, 0)
     const output = dimensionData.reduce((sum, item) => sum + item.outputValue, 0)
     return {
@@ -408,16 +414,32 @@ export default function AnalyticsOverview(): JSX.Element {
           </Space>
         </Card>
 
+        {overview.available === false ? (
+          <Alert
+            type="warning"
+            showIcon
+            message="分析接口暂不可用，本页指标显示为「—」"
+            description="GET /analytics/dashboard 与 /analytics/overview 均未返回数据。本页不使用本地示例口径，接口恢复后自动填充。"
+          />
+        ) : overview.missingFields.length > 0 ? (
+          <Alert
+            type="warning"
+            showIcon
+            message="本页部分指标后端暂未提供数据源，显示为「—」"
+            description={`暂无数据源的指标：${overview.missingFields.join('、')}。带 ⓘ 图标的数值即为后端未接入项，接口补齐后自动填充。`}
+          />
+        ) : null}
+
         <Spin spinning={overviewQuery.isLoading}>
           <Row gutter={[16, 16]}>
             {metricCards.map((card, index) => (
               <Col span={6} key={card.title}>
                 <Card>
-                  <Statistic
+                  <MetricStatistic
                     title={card.title}
                     value={card.value}
                     precision={card.precision}
-                    suffix={card.suffix}
+                    suffix={card.value === null ? undefined : card.suffix}
                     valueStyle={{ color: METRIC_COLORS[index % METRIC_COLORS.length] }}
                   />
                 </Card>
@@ -428,12 +450,28 @@ export default function AnalyticsOverview(): JSX.Element {
 
         <Row gutter={16}>
           <Col span={12}>
-            <Card title="产量趋势">
+            <Card
+              title="产量趋势"
+              extra={
+                (yieldTrendQuery.data?.length ?? 0) === 0 ? (
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    后端暂无趋势数据源
+                  </Text>
+                ) : undefined
+              }
+            >
               <ReactECharts option={yieldOption} style={{ height: 300 }} notMerge />
             </Card>
           </Col>
           <Col span={12}>
-            <Card title="任务完成趋势">
+            <Card
+              title="任务完成趋势"
+              extra={
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  后端暂无趋势数据源
+                </Text>
+              }
+            >
               <ReactECharts option={taskOption} style={{ height: 300 }} notMerge />
             </Card>
           </Col>
@@ -458,24 +496,58 @@ export default function AnalyticsOverview(): JSX.Element {
                     <CheckCircleOutlined style={{ color: '#52c41a' }} />
                     <Text strong>任务完成率</Text>
                   </Space>
-                  <Progress percent={taskSummary.rate} status="active" />
-                  <Text type="secondary" style={{ fontSize: 12 }}>
-                    已完成 {formatNumber(taskSummary.done)} / 共 {formatNumber(taskSummary.total)} 条
-                  </Text>
+                  {taskSummary === null ? (
+                    <Tooltip title="后端暂无 /analytics/dimension 数据源，无法计算完成率">
+                      <div>
+                        <Statistic value="—" valueStyle={{ color: '#bfbfbf' }} />
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                          未接入
+                          <InfoCircleOutlined
+                            style={{ fontSize: 11, color: '#faad14', marginLeft: 2 }}
+                          />
+                        </Text>
+                      </div>
+                    </Tooltip>
+                  ) : (
+                    <>
+                      <Progress percent={taskSummary.rate} status="active" />
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        已完成 {formatNumber(taskSummary.done)} / 共{' '}
+                        {formatNumber(taskSummary.total)} 条
+                      </Text>
+                    </>
+                  )}
                 </div>
                 <div>
                   <Space size={8}>
                     <FundOutlined style={{ color: '#fa8c16' }} />
                     <Text strong>投入产出比</Text>
                   </Space>
-                  <Statistic
-                    value={ioSummary.ratio}
-                    precision={2}
-                    valueStyle={{ color: '#fa8c16' }}
-                  />
-                  <Text type="secondary" style={{ fontSize: 12 }}>
-                    投入 ¥{formatNumber(ioSummary.cost)} · 产值 ¥{formatNumber(ioSummary.output)}
-                  </Text>
+                  {ioSummary === null ? (
+                    <Tooltip title="后端暂无 /analytics/dimension 数据源，无法计算投入产出比">
+                      <div>
+                        <Statistic value="—" valueStyle={{ color: '#bfbfbf' }} />
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                          未接入
+                          <InfoCircleOutlined
+                            style={{ fontSize: 11, color: '#faad14', marginLeft: 2 }}
+                          />
+                        </Text>
+                      </div>
+                    </Tooltip>
+                  ) : (
+                    <>
+                      <Statistic
+                        value={ioSummary.ratio}
+                        precision={2}
+                        valueStyle={{ color: '#fa8c16' }}
+                      />
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        投入 ¥{formatNumber(ioSummary.cost)} · 产值 ¥
+                        {formatNumber(ioSummary.output)}
+                      </Text>
+                    </>
+                  )}
                 </div>
                 <div>
                   <Space size={8}>
@@ -495,22 +567,52 @@ export default function AnalyticsOverview(): JSX.Element {
 
         <Row gutter={16}>
           <Col span={12}>
-            <Card title="作物分布">
+            <Card
+              title="作物分布"
+              extra={
+                cropDistribution.length === 0 ? (
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    暂无地块数据
+                  </Text>
+                ) : undefined
+              }
+            >
               <ReactECharts option={cropOption} style={{ height: 300 }} notMerge />
             </Card>
           </Col>
           <Col span={12}>
-            <Card title="投入品消耗排行">
+            <Card
+              title="投入品消耗排行"
+              extra={
+                inputRanking.length === 0 ? (
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    暂无使用记录
+                  </Text>
+                ) : undefined
+              }
+            >
               <ReactECharts option={inputOption} style={{ height: 300 }} notMerge />
             </Card>
           </Col>
         </Row>
 
-        {overviewQuery.isError && dimensionQuery.isError && (
+        {overview.available === false || overviewQuery.isError ? (
           <Card>
-            <Empty description="分析接口暂未返回数据，当前按示例口径展示（维度切换与图表交互可用）" />
+            <Empty
+              description={
+                <Space direction="vertical">
+                  <Text type="secondary">
+                    分析接口暂未返回数据，本页按真实接口渲染，缺失项显示「—」
+                  </Text>
+                  <Text type="secondary">
+                    已接入指标 {overview.metricCount === null ? '—' : overview.metricCount} 项 ·
+                    累计产量 <MetricText value={overview.yieldTotal} suffix=" kg" />
+                  </Text>
+                </Space>
+              }
+            />
           </Card>
-        )}
+        ) : null}
       </Space>
     </div>
   )

@@ -11,11 +11,11 @@
  * 所有导出函数均返回 Promise，供 `@tanstack/react-query` 的 useQuery 使用。
  */
 import dayjs from 'dayjs'
-import { http } from '@/utils/request'
+import { http, httpPlatform, httpStatusOf } from '@/utils/request'
 import {
   asRecord,
+  buildOverview,
   expandDateRange,
-  mergeOverview,
   normalizeAlert,
   normalizeMember,
   normalizeMessage,
@@ -25,6 +25,7 @@ import {
   normalizePlot,
   normalizeTask,
   readNumber,
+  readNumberOrNull,
   readString,
   readValue,
 } from '@/utils/production-adapter'
@@ -39,6 +40,7 @@ import type {
   Plot,
   Role,
   Task,
+  TrendPoint,
 } from '@/types'
 
 /** 后端分页参数候选名（同时下发以兼容两种实现） */
@@ -81,16 +83,52 @@ function buildPageParams(
 /* ==================== 首页看板 ==================== */
 
 /**
- * 查询生产总览指标（无数据 / 异常时回落到原型示例口径）
+ * 查询生产总览指标。
+ *
+ * 纪律：**不做字段级回落**。后端 `GET /analytics/overview` 返回
+ * `prod_analytics_snapshot` 的 `metricCode → metricValue` 映射，
+ * 没有的指标一律为 null，页面渲染成「—」并给出可见提示，
+ * 绝不用本地示例值 / 0 / 随机数顶替（否则同一张卡片上真数假数混排）。
+ *
+ * 请求失败时不抛错，而是返回 `available: false` 的全 null 视图，
+ * 由页面顶部 Alert 显式告知「接口不可用」。
+ *
  * @param farmId 当前农场 ID
- * @returns 看板总览视图模型
+ * @returns 看板总览视图模型（字段可能为 null）
  */
 export async function fetchDashboardOverview(farmId?: string): Promise<DashboardOverview> {
   try {
     const raw = await http.get<unknown>('/analytics/overview', { farmId }, { silent: true })
-    return mergeOverview(raw)
+    return buildOverview(raw, true)
   } catch {
-    return mergeOverview(undefined)
+    return buildOverview(null, false)
+  }
+}
+
+/**
+ * 查询指定指标的真实趋势序列（后端 GET /analytics/trend?metricCode=）
+ *
+ * 后端 `AnalyticsSnapshotEntity` 字段为 bizDate / metricValue，这里归一为前端 TrendPoint。
+ * 接口不可用时返回空数组，由图表展示「暂无数据」，不生成任何本地序列。
+ *
+ * @param metricCode 指标编码，如 YIELD / PASS_RATE / COST
+ * @returns 趋势点数组（按日期升序）
+ */
+export async function fetchMetricTrend(metricCode: string): Promise<TrendPoint[]> {
+  try {
+    const raw = await http.get<unknown[]>('/analytics/trend', { metricCode }, { silent: true })
+    const list = Array.isArray(raw) ? raw : []
+    const points: TrendPoint[] = []
+    for (const item of list) {
+      const record = asRecord(item)
+      const date = readString(record, ['bizDate', 'biz_date', 'date']).slice(0, 10)
+      const value = readNumberOrNull(record, ['metricValue', 'metric_value', 'value'])
+      if (!date || value === null) continue
+      points.push({ date, value })
+    }
+    return points.sort((a, b) => a.date.localeCompare(b.date))
+  } catch {
+    return []
   }
 }
 
@@ -416,8 +454,12 @@ export async function fetchMembersByFarm(farmId: string): Promise<Member[]> {
 }
 
 /**
- * 查询角色列表（后端按 role_code 聚合在职人数）
- * @returns 角色列表
+ * 查询角色在职人数（后端 `GET /members/roles` 按 role_code 聚合在职人数）
+ *
+ * 注意：这个端点**只提供人数**，不提供角色本身；角色的权威列表走
+ * `fetchPlatformRoles()`（平台域 `GET /api/v1/admin/roles`）。
+ *
+ * @returns 角色 → 在职人数映射（key 为 role_code）
  */
 export async function fetchRoles(): Promise<Role[]> {
   try {
@@ -429,6 +471,7 @@ export async function fetchRoles(): Promise<Role[]> {
       return {
         roleId: roleCode,
         roleCode,
+        // 后端该端点不返回角色名，名称一律由平台域角色列表提供；此处不编造
         roleName: readString(record, ['roleName'], '') || '',
         description: readString(record, ['description'], ''),
         isSystem: true,
@@ -442,109 +485,192 @@ export async function fetchRoles(): Promise<Role[]> {
   }
 }
 
-/** 角色权限本地持久化前缀（后端暂未提供写入接口时的降级方案） */
-const ROLE_PERMISSION_STORAGE_PREFIX = 'agri_role_permissions_'
+/* ==================== 角色与权限 ==================== */
+
+/** 平台域角色行（GET /api/v1/admin/roles 返回的 platform_role 记录） */
+export interface PlatformRole {
+  /** 主键 ID */
+  id: number | null
+  /** 角色编码 */
+  code: string
+  /** 角色名称 */
+  name: string
+  /** 权限码 JSON 数组（后端原始字符串，可能为空） */
+  permissions: string[]
+}
 
 /**
- * 保存角色权限
+ * 查询平台域真实角色列表（GET /api/v1/admin/roles）。
  *
- * 后端暂未提供 `PUT /members/roles/{roleCode}/permissions` 写入接口，
- * 这里先尝试写入（后端补齐后自动生效），失败时降级为 localStorage 持久化，
- * 保证「勾选 → 保存 → 再次进入仍生效」的完整交互闭环。
+ * 这是角色的**唯一权威数据源**（platform_role 全表）。
+ * 生产域的 `/members/roles` 只提供按 role_code 聚合的在职人数，不提供角色本身。
+ *
+ * 接口不可用 / 返回空时返回空数组，页面显示空态——**不回落到任何本地角色目录**。
+ *
+ * @returns 平台角色列表
+ */
+export async function fetchPlatformRoles(): Promise<PlatformRole[]> {
+  const raw = await httpPlatform.get<unknown>('/roles')
+  const list = Array.isArray(raw) ? raw : []
+  return list.map((item) => {
+    const record = asRecord(item)
+    const stored = readValue(record, ['permissions'])
+    let permissions: string[] = []
+    if (Array.isArray(stored)) {
+      permissions = stored.map((code) => String(code))
+    } else if (typeof stored === 'string' && stored.trim()) {
+      try {
+        const parsed = JSON.parse(stored) as unknown
+        if (Array.isArray(parsed)) {
+          permissions = parsed.map((code) => String(code))
+        }
+      } catch {
+        // 存储格式非法时按「未配置」处理，绝不猜测
+        permissions = []
+      }
+    }
+    return {
+      id: readNumberOrNull(record, ['id']),
+      code: readString(record, ['code'], ''),
+      name: readString(record, ['name'], ''),
+      permissions,
+    }
+  })
+}
+
+/** 角色权限保存结果（显式成功 / 失败，不允许「吞掉异常后返回成功」） */
+export interface RolePermissionSaveResult {
+  /** 是否真的落库成功 */
+  success: boolean
+  /** 落库后的权限码（成功时非空） */
+  permissions: string[]
+  /** 失败原因（面向用户的中文说明） */
+  message: string
+}
+
+/**
+ * 保存角色权限：真实写入 `platform_role.permissions`。
+ *
+ * 端点：`PUT /api/v1/admin/roles/{code}/permissions`（core-platform mod-platform）。
+ * 注意 `/api/v1/admin` 与业务域前缀 `/api/v1/production` 不同，
+ * 必须走 `httpPlatform`，否则会被拼成 `/api/v1/production/api/v1/admin/...` 而 404。
+ *
+ * 纪律：**失败不返回成功**。后端明确拒绝（如角色不存在 → 404）或网络异常时，
+ * 抛出可展示的中文错误交给页面 onError，绝不使用 localStorage 伪造「已保存」。
  *
  * @param roleCode 角色编码
  * @param permissionIds 权限编码列表
- * @returns 是否保存成功
+ * @returns 保存结果（success 恒为 true；失败直接抛错）
  */
 export async function saveRolePermissions(
   roleCode: string,
   permissionIds: string[],
-): Promise<boolean> {
-  localStorage.setItem(
-    `${ROLE_PERMISSION_STORAGE_PREFIX}${roleCode}`,
-    JSON.stringify(permissionIds),
-  )
-  try {
-    await http.put<unknown>(
-      `/members/roles/${roleCode}/permissions`,
-      { permissionIds },
-      { silent: true },
-    )
-  } catch {
-    // 后端未实现写入接口时静默降级，不阻塞前端交互
+): Promise<RolePermissionSaveResult> {
+  if (!roleCode) {
+    throw new Error('保存失败：角色编码为空')
   }
-  return true
+  let updated: PlatformRole
+  try {
+    const raw = await httpPlatform.put<unknown>(`/roles/${encodeURIComponent(roleCode)}/permissions`, {
+      permissions: permissionIds,
+    })
+    const record = asRecord(raw)
+    const stored = readValue(record, ['permissions'])
+    const saved = Array.isArray(stored) ? stored.map((code) => String(code)) : permissionIds
+    updated = {
+      id: readNumberOrNull(record, ['id']),
+      code: readString(record, ['code'], roleCode),
+      name: readString(record, ['name'], ''),
+      permissions: saved,
+    }
+  } catch (error) {
+    throw new Error(`保存失败：${describeRequestError(error)}`)
+  }
+  return {
+    success: true,
+    permissions: updated.permissions,
+    message: `角色「${updated.name || updated.code}」权限已写入服务端（${updated.permissions.length} 个权限点）`,
+  }
 }
 
 /**
- * 读取角色已配置权限（本地持久化优先，其次后端接口，最后按角色模板兜底）
+ * 把请求异常翻译成面向用户的中文说明。
+ *
+ * axios 网络层错误的 message 是英文（如 Network Error），直接抛给用户既看不懂
+ * 也掩盖了「后端根本没这个端点」这一事实，这里统一转换。
+ *
+ * @param error catch 到的未知错误
+ * @returns 中文说明
+ */
+function describeRequestError(error: unknown): string {
+  const status = httpStatusOf(error)
+  const bizMessage = (error as { message?: unknown })?.message
+  const text = typeof bizMessage === 'string' && bizMessage ? bizMessage : ''
+  if (status === 404) {
+    return '后端暂不支持权限写入（接口 404）' + (text ? `：${text}` : '')
+  }
+  if (status === 403) {
+    return '当前账号无权限写入角色权限（403）'
+  }
+  if (status === 0) {
+    return '后端服务不可达，未写入服务端'
+  }
+  return text || '后端暂不支持权限写入'
+}
+
+/**
+ * 读取角色已配置权限（GET /api/v1/admin/roles/{code}/permissions）。
+ *
+ * 此前吃的是 `/members/roles/permissions` —— 那个端点后端是硬编码空壳，
+ * 固定返回 produce:read / produce:write / produce:admin 三个与数据库无关的假权限码；
+ * 现在改读平台域真实端点，读不到就返回空数组（页面显示空态）。
+ *
  * @param roleCode 角色编码
- * @returns 权限编码列表
+ * @returns 权限码列表；未配置 / 读取失败返回空数组
  */
 export async function fetchRolePermissions(roleCode: string): Promise<string[]> {
-  const cached = localStorage.getItem(`${ROLE_PERMISSION_STORAGE_PREFIX}${roleCode}`)
-  if (cached) {
-    try {
-      const parsed = JSON.parse(cached)
-      if (Array.isArray(parsed)) return parsed.map((item) => String(item))
-    } catch {
-      // 缓存损坏时忽略，继续走后端读取
-    }
-  }
   try {
-    const raw = await http.get<unknown>(
-      '/members/roles/permissions',
-      { roleCode },
-      { silent: true },
-    )
+    const raw = await httpPlatform.get<unknown>(`/roles/${encodeURIComponent(roleCode)}/permissions`)
     const list = Array.isArray(raw) ? raw : []
-    const codes: string[] = []
-    for (const item of list) {
-      const value = readValue(asRecord(item), ['permissions'])
-      if (Array.isArray(value)) {
-        codes.push(...value.map((code) => String(code)))
-      }
-    }
-    return Array.from(new Set(codes))
+    return list.map((item) => String(item))
   } catch {
     return []
   }
 }
 
 /**
- * 查询权限树
+ * 查询权限树（按角色分组）
  *
- * 后端暂返回骨架数据（produce:read / produce:write / produce:admin），
- * 页面侧的权威目录见 `PERMISSION_GROUPS`。
+ * 数据源为平台域真实角色权限 `GET /api/v1/admin/roles`。
+ * 此前读的是 `/members/roles/permissions` —— 后端是硬编码空壳，固定返回
+ * produce:read / produce:write / produce:admin 三个与数据库无关的假权限码，已弃用。
+ *
+ * 权限点的**权威目录**在前端 `PERMISSION_GROUPS`（RBAC 命名规范 `{域}.{资源}.{动作}`），
+ * 本函数只负责回显服务端真实已配置的权限码；读不到时返回空数组，页面显示空态。
  *
  * @returns 权限树
  */
 export async function fetchPermissions(): Promise<Permission[]> {
+  let roles: PlatformRole[] = []
   try {
-    const raw = await http.get<unknown>('/members/roles/permissions', undefined, { silent: true })
-    const list = Array.isArray(raw) ? raw : []
-    return list.map((item, index) => {
-      const record = asRecord(item)
-      const payload = readValue(record, ['permissions'])
-      const children = Array.isArray(payload)
-        ? payload.map((code, childIndex) => ({
-            permissionId: `${readString(record, ['roleCode'], 'ALL')}-${childIndex}`,
-            permissionCode: String(code),
-            permissionName: String(code),
-            permissionType: 2 as 1 | 2 | 3,
-          }))
-        : []
-      return {
-        permissionId: `group-${index}`,
-        permissionCode: readString(record, ['roleCode'], 'ALL'),
-        permissionName: readString(record, ['roleCode'], '全部权限'),
-        permissionType: 1 as 1 | 2 | 3,
-        children,
-      }
-    })
+    roles = await fetchPlatformRoles()
   } catch {
     return []
   }
+  return roles
+    .filter((role) => role.code !== '' && role.permissions.length > 0)
+    .map((role, index) => ({
+      permissionId: `role-${role.id ?? index}`,
+      permissionCode: role.code,
+      permissionName: role.name || role.code,
+      permissionType: 1 as 1 | 2 | 3,
+      children: role.permissions.map((code, childIndex) => ({
+        permissionId: `${role.code}-${childIndex}`,
+        permissionCode: code,
+        permissionName: code,
+        permissionType: 2 as 1 | 2 | 3,
+      })),
+    }))
 }
 
 /* ==================== 种养计划 ==================== */

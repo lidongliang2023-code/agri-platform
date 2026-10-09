@@ -40,17 +40,23 @@ import {
   fetchAllPlots,
   fetchDashboardOverview,
   fetchFarms,
+  fetchMetricTrend,
   fetchPlotStats,
 } from '@/api/production-view'
-import {
-  buildCropDistributionFallback,
-  buildInputRankingFallback,
-  buildMonthTrendFallback,
-  plotStatusMeta,
-} from '@/utils/production-adapter'
+import { listInputUsages } from '@/api/inputs'
+import { plotStatusMeta } from '@/utils/production-adapter'
+import { MetricStatistic } from '@/components'
 
 /** 趋势图周期 */
 type TrendPeriod = 'week' | 'month' | 'quarter'
+
+/** 排行条目 */
+interface RankItem {
+  /** 名称 */
+  name: string
+  /** 数值 */
+  value: number
+}
 
 /** 区域卡片视图模型 */
 interface RegionCard {
@@ -99,6 +105,20 @@ export default function ProductionCockpit(): JSX.Element {
     queryFn: () => fetchPlotStats(farmId),
   })
 
+  /** 平台域真实指标趋势（metricCode=YIELD，后端 GET /analytics/trend） */
+  const trendQuery = useQuery({
+    queryKey: ['cockpit-yield-trend', farmId],
+    queryFn: () => fetchMetricTrend('YIELD'),
+    retry: false,
+  })
+
+  /** 投入品使用记录（真实数据，用于消耗排行聚合） */
+  const usageQuery = useQuery({
+    queryKey: ['cockpit-input-usages', farmId],
+    queryFn: () => listInputUsages({ pageNum: 1, pageSize: 200 }),
+    retry: false,
+  })
+
   const farmsQuery = useQuery({
     queryKey: ['cockpit-farms'],
     queryFn: () => fetchFarms({ pageNum: 1, pageSize: 20 }),
@@ -108,6 +128,7 @@ export default function ProductionCockpit(): JSX.Element {
   const plots = plotsQuery.data ?? []
   const plotStats = statsQuery.data ?? {}
   const farms = farmsQuery.data?.list ?? []
+  const yieldTrend = trendQuery.data ?? []
 
   /**
    * 刷新全部区块
@@ -119,6 +140,8 @@ export default function ProductionCockpit(): JSX.Element {
       plotsQuery.refetch(),
       statsQuery.refetch(),
       farmsQuery.refetch(),
+      trendQuery.refetch(),
+      usageQuery.refetch(),
     ])
     message.success('驾驶舱数据已刷新')
   }
@@ -138,29 +161,36 @@ export default function ProductionCockpit(): JSX.Element {
       .map((key) => ({ name: plotStatusMeta(Number(key)).label, value: plotStats[key] }))
   }, [plots, plotStats])
 
-  /** 作物分布（按面积聚合，无数据回落原型口径） */
-  const cropDistribution = useMemo(() => {
+  /** 作物分布（按地块真实面积聚合；无地块即空，不用示例口径顶替） */
+  const cropDistribution = useMemo<RankItem[]>(() => {
     const buckets = new Map<string, number>()
     for (const plot of plots) {
       const name = plot.cropVariety || plot.cropId || '未种植'
       buckets.set(name, (buckets.get(name) ?? 0) + plot.area)
     }
-    if (buckets.size > 0) {
-      return Array.from(buckets.entries()).map(([name, value]) => ({ name, value }))
-    }
-    return buildCropDistributionFallback()
+    return Array.from(buckets.entries()).map(([name, value]) => ({ name, value }))
   }, [plots])
 
-  /** 趋势数据切片 */
-  const trendRows = useMemo(() => buildMonthTrendFallback(), [])
+  /** 趋势数据切片（真实指标趋势；接口无数据时为空数组） */
+  const trendRows = yieldTrend
   const trendSlice = useMemo(() => {
-    if (period === 'week') return trendRows.slice(0, 7)
-    if (period === 'quarter') return trendRows.concat(trendRows.slice(0, 30))
+    if (period === 'week') return trendRows.slice(-7)
+    if (period === 'quarter') return trendRows.slice(-90)
     return trendRows
   }, [period, trendRows])
 
-  /** 投入品消耗排行 */
-  const inputRanking = useMemo(() => buildInputRankingFallback(), [])
+  /** 投入品消耗排行 TOP5（按真实使用记录聚合投入品名称 → 用量） */
+  const inputRanking = useMemo<RankItem[]>(() => {
+    const buckets = new Map<string, number>()
+    for (const usage of usageQuery.data?.list ?? []) {
+      const name = usage.inputName || usage.inputId || '未命名投入品'
+      buckets.set(name, (buckets.get(name) ?? 0) + (Number(usage.quantity) || 0))
+    }
+    return Array.from(buckets.entries())
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 5)
+  }, [usageQuery.data])
 
   /** 区域卡片（GIS 区块） */
   const regionCards = useMemo<RegionCard[]>(() => {
@@ -268,14 +298,14 @@ export default function ProductionCockpit(): JSX.Element {
   }
 
   /**
-   * 构造趋势图配置
+   * 构造趋势图配置（只画后端真实返回的指标序列）
    * @returns ECharts 配置
    */
   function buildTrendOption(): Record<string, unknown> {
     return {
-      color: ['#13a05a', '#fa8c16'],
+      color: ['#13a05a'],
       tooltip: { trigger: 'axis' },
-      legend: { data: ['采收/产出', '农事强度'], bottom: 0 },
+      legend: { data: ['累计产量(kg)'], bottom: 0 },
       grid: { left: 55, right: 20, top: 30, bottom: 40 },
       xAxis: {
         type: 'category',
@@ -286,19 +316,27 @@ export default function ProductionCockpit(): JSX.Element {
       yAxis: { type: 'value', splitLine: { lineStyle: { color: '#f0f0f0' } } },
       series: [
         {
-          name: '采收/产出',
+          name: '累计产量(kg)',
           type: 'line',
           smooth: true,
           areaStyle: { opacity: 0.15 },
-          data: trendSlice.map((row) => row.done * 120),
-        },
-        {
-          name: '农事强度',
-          type: 'line',
-          smooth: true,
-          data: trendSlice.map((row) => row.planned),
+          data: trendSlice.map((row) => row.value),
         },
       ],
+      graphic: trendSlice.length
+        ? []
+        : [
+            {
+              type: 'text',
+              left: 'center',
+              top: 'middle',
+              style: {
+                text: '后端暂无产量趋势数据（analytics/trend 无记录）',
+                fill: '#999',
+                fontSize: 13,
+              },
+            },
+          ],
       animationDuration: 400,
     }
   }
@@ -324,11 +362,19 @@ export default function ProductionCockpit(): JSX.Element {
           </Space>
         }
       >
-        {overviewQuery.isError && !overview ? (
+        {overview?.available === false ? (
           <AntAlert
             type="warning"
             showIcon
-            message="统计接口暂不可用，当前图表使用原型示例口径数据"
+            message="统计接口暂不可用，概览类指标显示为「—」"
+            description="GET /analytics/overview 请求失败。图表数据取自真实接口，无数据时显示「暂无数据」，不使用本地示例口径。"
+          />
+        ) : (overview?.missingFields.length ?? 0) > 0 ? (
+          <AntAlert
+            type="warning"
+            showIcon
+            message="本页部分指标后端暂未提供数据源，显示为「—」"
+            description={`暂无数据源的指标：${(overview?.missingFields ?? []).join('、')}。带 ⓘ 图标的数值即为后端未接入项。`}
           />
         ) : null}
       </Card>
@@ -339,9 +385,9 @@ export default function ProductionCockpit(): JSX.Element {
             {loading ? (
               <Skeleton active paragraph={{ rows: 1 }} />
             ) : (
-              <Statistic
+              <MetricStatistic
                 title="在田地块"
-                value={overview?.plotCount ?? 0}
+                value={plotsQuery.isError ? null : plots.length}
                 suffix="个"
                 prefix={<EnvironmentOutlined style={{ color: '#13a05a' }} />}
               />
@@ -353,9 +399,9 @@ export default function ProductionCockpit(): JSX.Element {
             {loading ? (
               <Skeleton active paragraph={{ rows: 1 }} />
             ) : (
-              <Statistic
+              <MetricStatistic
                 title="在线设备"
-                value={overview?.activeDeviceCount ?? 0}
+                value={overview?.activeDeviceCount ?? null}
                 suffix="台"
                 valueStyle={{ color: '#1677ff' }}
               />
@@ -367,9 +413,9 @@ export default function ProductionCockpit(): JSX.Element {
             {loading ? (
               <Skeleton active paragraph={{ rows: 1 }} />
             ) : (
-              <Statistic
-                title="本月任务完成率"
-                value={overview?.taskCompletionRate ?? 0}
+              <MetricStatistic
+                title="检测合格率"
+                value={overview?.passRate ?? null}
                 precision={1}
                 suffix="%"
                 valueStyle={{ color: '#52c41a' }}
@@ -382,9 +428,9 @@ export default function ProductionCockpit(): JSX.Element {
             {loading ? (
               <Skeleton active paragraph={{ rows: 1 }} />
             ) : (
-              <Statistic
+              <MetricStatistic
                 title="活跃告警"
-                value={overview?.alertCount ?? 0}
+                value={overview?.alertCount ?? null}
                 suffix="条"
                 valueStyle={{ color: '#ff4d4f' }}
               />
@@ -428,7 +474,7 @@ export default function ProductionCockpit(): JSX.Element {
       <Row gutter={[16, 16]}>
         <Col xs={24} lg={14}>
           <Card
-            title="产量与农事趋势"
+            title="产量趋势"
             extra={
               <Segmented<TrendPeriod>
                 value={period}
@@ -447,9 +493,20 @@ export default function ProductionCockpit(): JSX.Element {
         <Col xs={24} lg={10}>
           <Card
             title="投入品消耗排行 TOP5"
-            extra={<Typography.Text type="secondary">单位：kg</Typography.Text>}
+            extra={
+              <Typography.Text type="secondary">
+                {inputRanking.length > 0 ? '按真实使用记录聚合' : '暂无使用记录'}
+              </Typography.Text>
+            }
           >
-            <ReactECharts option={buildRankOption(inputRanking, 'kg')} style={{ height: 320 }} />
+            {inputRanking.length === 0 ? (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description="后端暂无投入品使用记录，不展示示例排行"
+              />
+            ) : (
+              <ReactECharts option={buildRankOption(inputRanking, 'kg')} style={{ height: 320 }} />
+            )}
           </Card>
         </Col>
       </Row>

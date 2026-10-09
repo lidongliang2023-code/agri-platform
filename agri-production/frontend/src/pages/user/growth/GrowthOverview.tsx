@@ -32,10 +32,11 @@ import {
   Table,
   Tag,
   Timeline,
+  Tooltip,
   Typography,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { BugOutlined, ReloadOutlined } from '@ant-design/icons'
+import { BugOutlined, InfoCircleOutlined, ReloadOutlined } from '@ant-design/icons'
 import ReactECharts from 'echarts-for-react'
 import type { EChartsOption } from 'echarts'
 import type { Dayjs } from 'dayjs'
@@ -80,14 +81,17 @@ interface PlotGrowth {
   stage: string
   /** 生长天数 */
   days: number
-  /** 长势评分 */
-  score: number
-  /** 长势评级 */
-  level: number
+  /** 长势评分；该地块无任何生长记录时为 null（后端没数据，不臆造评分） */
+  score: number | null
+  /** 长势评级；无记录时为 null */
+  level: number | null
   /** 病虫害描述 */
   pestInfo: string
-  /** 病虫害等级（1 高 2 中 3 低，0 表示无） */
-  pestLevel: number
+  /**
+   * 病虫害等级（1 高 2 中 3 低，0 表示无）。
+   * null 表示该地块没有任何生长记录，AI 诊断结论未知（不能默认显示「健康」）。
+   */
+  pestLevel: number | null
   /** 环境状态文案 */
   envText: string
   /** 该地块记录数 */
@@ -230,7 +234,11 @@ export default function GrowthOverview(): JSX.Element {
       const latest = rows.length > 0 ? rows[rows.length - 1] : null
       const first = rows.length > 0 ? rows[0] : null
       const cropName = plot.cropVariety ?? plot.cropId ?? latest?.cropName ?? '未指定作物'
-      const level = Number(latest?.growthLevel ?? 3)
+      // 该地块没有任何生长记录时，长势评分 / 评级 / 病虫害等级一律为 null：
+      // 此前这里写的是 `latest?.growthLevel ?? 3`，会给「一条记录都没有」的地块凭空打出
+      // 85 分「良好」，属于把本地默认值伪装成服务端数据。
+      const level = latest ? Number(latest.growthLevel ?? 3) : null
+      const validLevel = level !== null && Number.isFinite(level) ? level : null
       const days = first ? Math.max(dayjs().diff(dayjs(recordTime(first)), 'day') + 1, 1) : 0
       const plotEnv = envRows.filter((item) => item.plotId === plot.plotId)
       return {
@@ -239,10 +247,10 @@ export default function GrowthOverview(): JSX.Element {
         icon: cropIcon(cropName),
         stage: latest?.growthStage ?? '未记录',
         days,
-        score: LEVEL_SCORE[level] ?? 80,
-        level,
+        score: validLevel === null ? null : (LEVEL_SCORE[validLevel] ?? null),
+        level: validLevel,
         pestInfo: latest?.pestInfo ?? '',
-        pestLevel: latest ? pestLevelOf(latest) : 0,
+        pestLevel: latest ? pestLevelOf(latest) : null,
         envText: resolveEnvText(plotEnv),
         recordCount: rows.length,
       }
@@ -317,17 +325,36 @@ export default function GrowthOverview(): JSX.Element {
       {
         title: '长势评分',
         key: 'score',
-        sorter: (a: PlotGrowth, b: PlotGrowth) => a.score - b.score,
-        render: (_value: unknown, row: PlotGrowth) => (
-          <Tag color={LEVEL_META[row.level]?.color ?? 'green'}>
-            {row.score}分（{LEVEL_META[row.level]?.label ?? '正常'}）
-          </Tag>
-        ),
+        sorter: (a: PlotGrowth, b: PlotGrowth) => (a.score ?? -1) - (b.score ?? -1),
+        render: (_value: unknown, row: PlotGrowth) =>
+          row.score === null ? (
+            <Tooltip title="该地块暂无生长记录，后端未返回长势评级，不臆造评分">
+              <Tag color="default">
+                —
+                <InfoCircleOutlined style={{ fontSize: 11, color: '#faad14', marginLeft: 2 }} />
+              </Tag>
+            </Tooltip>
+          ) : (
+            <Tag color={LEVEL_META[row.level ?? 3]?.color ?? 'green'}>
+              {row.score}分（{LEVEL_META[row.level ?? 3]?.label ?? '正常'}）
+            </Tag>
+          ),
       },
       {
         title: 'AI诊断',
         key: 'pestInfo',
         render: (_value: unknown, row: PlotGrowth) => {
+          // 没有生长记录 = 没做过诊断，不能显示「✅ 健康」
+          if (row.pestLevel === null) {
+            return (
+              <Tooltip title="该地块暂无生长记录，未做过病虫害诊断，结论未知">
+                <Tag color="default">
+                  未诊断
+                  <InfoCircleOutlined style={{ fontSize: 11, color: '#faad14', marginLeft: 2 }} />
+                </Tag>
+              </Tooltip>
+            )
+          }
           if (row.pestLevel === 1) return <Tag color="red">🔴 {row.pestInfo || '病虫害预警'}</Tag>
           if (row.pestLevel === 2) return <Tag color="orange">⚠️ {row.pestInfo || '病虫害风险'}</Tag>
           return <Tag color="green">✅ 健康</Tag>
@@ -389,13 +416,40 @@ export default function GrowthOverview(): JSX.Element {
   /** 渲染单个地块卡片 */
   const renderPlotCard = (item: PlotGrowth): JSX.Element => {
     const stageIndex = STAGES.indexOf(item.stage)
+    // pestLevel 为 null 表示该地块没有任何生长记录：没诊断过就不能显示「✅ 健康」
     const pestTag =
       item.pestLevel === 1 ? (
         <Tag color="red">🔴 {item.pestInfo || '病虫害预警'}</Tag>
       ) : item.pestLevel === 2 ? (
         <Tag color="orange">⚠️ {item.pestInfo || '病虫害风险'}</Tag>
+      ) : item.pestLevel === null ? (
+        <Tooltip title="该地块暂无生长记录，未做过病虫害诊断，结论未知">
+          <Tag color="default">
+            未诊断
+            <InfoCircleOutlined style={{ fontSize: 11, color: '#faad14', marginLeft: 2 }} />
+          </Tag>
+        </Tooltip>
       ) : (
         <Tag color="green">✅ 健康</Tag>
+      )
+    /** 长势评分展示：无记录时显示「—」而不是臆造分数 */
+    const scoreNode =
+      item.score === null ? (
+        <Tooltip title="该地块暂无生长记录，后端未返回长势评级，不臆造评分">
+          <Typography.Text strong style={{ color: '#bfbfbf', cursor: 'help' }}>
+            —
+            <InfoCircleOutlined style={{ fontSize: 11, color: '#faad14', marginLeft: 2 }} />
+          </Typography.Text>
+        </Tooltip>
+      ) : (
+        <>
+          <Typography.Text strong style={{ color: item.score >= 85 ? '#3f8600' : '#fa8c16' }}>
+            {item.score}分
+          </Typography.Text>
+          <Tag color={LEVEL_META[item.level ?? 3]?.color ?? 'green'}>
+            {LEVEL_META[item.level ?? 3]?.label ?? '正常'}
+          </Tag>
+        </>
       )
     return (
       <Col xs={24} md={12} xl={8} key={item.plot.plotId}>
@@ -438,12 +492,7 @@ export default function GrowthOverview(): JSX.Element {
             <Row justify="space-between">
               <Space size={8}>
                 <Typography.Text type="secondary">长势评分</Typography.Text>
-                <Typography.Text strong style={{ color: item.score >= 85 ? '#3f8600' : '#fa8c16' }}>
-                  {item.score}分
-                </Typography.Text>
-                <Tag color={LEVEL_META[item.level]?.color ?? 'green'}>
-                  {LEVEL_META[item.level]?.label ?? '正常'}
-                </Tag>
+                {scoreNode}
               </Space>
               <Space size={8}>
                 <Typography.Text type="secondary">记录数</Typography.Text>

@@ -20,6 +20,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { PageContainer, ProTable } from '@ant-design/pro-components'
 import type { ProColumns } from '@ant-design/pro-components'
 import {
+  Alert,
   Button,
   Card,
   Col,
@@ -35,10 +36,11 @@ import {
   Statistic,
   Tag,
   Timeline,
+  Tooltip,
   Typography,
   message,
 } from 'antd'
-import { CheckCircleOutlined, HistoryOutlined } from '@ant-design/icons'
+import { CheckCircleOutlined, HistoryOutlined, InfoCircleOutlined } from '@ant-design/icons'
 import type { EChartsOption } from 'echarts'
 import ReactECharts from 'echarts-for-react'
 import dayjs from 'dayjs'
@@ -148,6 +150,44 @@ function formatDate(value?: string): string {
 }
 
 /**
+ * 读取分级统计中的单项数量。
+ *
+ * 纪律：接口未返回该项（或请求失败）时返回 null，由页面显示「—」+ 可见提示，
+ * **不回落 0**——0 会被用户读成「确实一条不合格都没有」，与「没数据」是两回事。
+ *
+ * @param stats 分级统计（后端 GET /quality/grading 返回 { PASS: n, FAIL: n }）
+ * @param key 统计项
+ * @returns 数量；未提供返回 null
+ */
+function pickGradingCount(stats: Record<string, number> | undefined, key: string): number | null {
+  if (!stats) return null
+  const raw = stats[key]
+  if (raw === undefined || raw === null) return null
+  const parsed = Number(raw)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+/**
+ * 渲染可能为 null 的统计值（null 显示「—」并给出可见提示）。
+ *
+ * @param value 统计值
+ * @returns 展示节点
+ */
+function renderGradingValue(value: number | null): JSX.Element {
+  if (value === null) {
+    return (
+      <Tooltip title="后端未返回该统计项（或接口不可用），显示为「—」，不按 0 处理">
+        <Typography.Text type="secondary" style={{ cursor: 'help', fontSize: 24 }}>
+          —
+          <InfoCircleOutlined style={{ fontSize: 12, color: '#faad14', marginLeft: 4 }} />
+        </Typography.Text>
+      </Tooltip>
+    )
+  }
+  return <Statistic value={value} />
+}
+
+/**
  * 质量分级管理页
  *
  * 业务职责：维护批次质量等级评定，支持人工复核改判与等级变更追溯。
@@ -182,6 +222,10 @@ export default function QualityGrading(): JSX.Element {
     enabled: Boolean(farmId),
     queryFn: () => fetchGradingStats(),
   })
+
+  /** 检测结论统计：接口未返回即为 null，页面显示「—」而非 0 */
+  const passCount = pickGradingCount(statsQuery.data, 'PASS')
+  const failCount = pickGradingCount(statsQuery.data, 'FAIL')
 
   /**
    * 持久化本地状态。
@@ -479,25 +523,51 @@ export default function QualityGrading(): JSX.Element {
         </Col>
         <Col span={6}>
           <Card loading={statsQuery.isFetching}>
-            <Statistic
-              title="检测合格"
-              value={Number(statsQuery.data?.PASS ?? 0)}
-              suffix="单"
-              valueStyle={{ color: '#52c41a' }}
-            />
+            {renderGradingValue(passCount)}
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              检测合格（单）
+            </Typography.Text>
           </Card>
         </Col>
         <Col span={6}>
           <Card loading={statsQuery.isFetching}>
-            <Statistic
-              title="检测不合格"
-              value={Number(statsQuery.data?.FAIL ?? 0)}
-              suffix="单"
-              valueStyle={{ color: '#ff4d4f' }}
-            />
+            {renderGradingValue(failCount)}
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              检测不合格（单）
+            </Typography.Text>
           </Card>
         </Col>
       </Row>
+
+      {statsQuery.isError ? (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message="检测结论统计接口不可用，合格 / 不合格数量显示为「—」"
+          description="GET /quality/grading 未返回数据，此处不按 0 处理，避免把「没数据」误读成「没有不合格」。"
+          action={
+            <Button size="small" onClick={() => void statsQuery.refetch()}>
+              重试
+            </Button>
+          }
+        />
+      ) : null}
+
+      {batchQuery.isError ? (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message="采收批次接口不可用，等级评定列表为空"
+          description="GET /harvests 未返回数据，此处不生成任何示例批次。接口恢复后列表会自动加载。"
+          action={
+            <Button size="small" onClick={() => void batchQuery.refetch()}>
+              重试
+            </Button>
+          }
+        />
+      ) : null}
 
       <Row gutter={16} style={{ marginBottom: 16 }}>
         <Col span={8}>
