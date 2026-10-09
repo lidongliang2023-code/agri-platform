@@ -91,8 +91,13 @@ export interface OpsTrendPoint {
   label: string
   /** 任务完成率（%） */
   taskRate: number
-  /** 活跃用户数 */
-  activeUsers: number
+  /**
+   * 当日作业人数（后端字段名 activeWorkers）。
+   *
+   * 口径：当日有作业记录的不同人数（采收作业人 ∪ 生长记录人去重），
+   * **不是**登录活跃用户 / DAU——平台没有埋点与登录流水表，该指标无数据源。
+   */
+  activeWorkers: number
   /** 告警数 */
   alertCount: number
 }

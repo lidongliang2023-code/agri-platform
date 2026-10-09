@@ -82,8 +82,12 @@ interface TrendPoint {
   label: string
   /** 任务完成率（%） */
   taskRate: number
-  /** 活跃用户数 */
-  activeUsers: number
+  /**
+   * 当日作业人数（后端字段名 activeWorkers）。
+   *
+   * 口径：当日有作业记录的不同人数，**不是**登录活跃用户 / DAU。
+   */
+  activeWorkers: number
   /** 告警数 */
   alertCount: number
 }
@@ -316,7 +320,7 @@ export default function OpsDashboard(): JSX.Element {
     () => (trendQuery.data ?? []).map((item) => ({
       label: item.label,
       taskRate: Number(item.taskRate) || 0,
-      activeUsers: Number(item.activeUsers) || 0,
+      activeWorkers: Number(item.activeWorkers) || 0,
       alertCount: Number(item.alertCount) || 0,
     })),
     [trendQuery.data],
@@ -518,10 +522,10 @@ export default function OpsDashboard(): JSX.Element {
     () => ({
       tooltip: { trigger: 'axis' },
       grid: { left: 8, right: 16, top: 40, bottom: 8, containLabel: true },
-      legend: { data: ['任务完成率', '活跃用户', '告警数'], top: 0 },
+      legend: { data: ['任务完成率', '作业人数', '告警数'], top: 0 },
       xAxis: { type: 'category', boundaryGap: false, data: trendPoints.map((item) => item.label) },
       yAxis: [
-        { type: 'value', name: '活跃/告警' },
+        { type: 'value', name: '作业/告警' },
         { type: 'value', name: '完成率(%)', min: 0, max: 100 },
       ],
       series: [
@@ -536,9 +540,10 @@ export default function OpsDashboard(): JSX.Element {
         },
         {
           type: 'line',
-          name: '活跃用户',
+          name: '作业人数',
           smooth: true,
-          data: trendPoints.map((item) => item.activeUsers),
+          // 口径：当日有作业记录的不同人数（非登录活跃用户 / DAU）
+          data: trendPoints.map((item) => item.activeWorkers),
           itemStyle: { color: '#13a05a' },
         },
         {
@@ -735,7 +740,11 @@ export default function OpsDashboard(): JSX.Element {
           <Card
             size="small"
             title="近7天趋势图"
-            extra={<Text type="secondary">任务完成率 / 活跃用户 / 告警数</Text>}
+            extra={
+              <Text type="secondary">
+                任务完成率 / 作业人数（当日有作业记录的人数，非登录活跃用户）/ 告警数
+              </Text>
+            }
           >
             {trendQuery.isLoading ? (
               <Skeleton active paragraph={{ rows: 6 }} />
