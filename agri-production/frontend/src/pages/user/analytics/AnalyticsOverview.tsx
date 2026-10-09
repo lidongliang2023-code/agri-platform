@@ -56,7 +56,7 @@ import {
 import { fetchMetricTrend } from '@/api/production-view'
 import { listInputUsages } from '@/api/inputs'
 import { listPlots } from '@/api/plots'
-import { buildOverview, formatNumber } from '@/utils/production-adapter'
+import { aggregateInputRanking, buildOverview, formatNumber } from '@/utils/production-adapter'
 import type { DashboardOverview } from '@/utils/production-adapter'
 import { MetricStatistic, MetricText } from '@/components'
 import type { AnalyticsDimension, DimensionPoint } from '@/api/analytics'
@@ -232,18 +232,11 @@ export default function AnalyticsOverview(): JSX.Element {
       .sort((a, b) => b.value - a.value)
   }, [plotsQuery.data])
 
-  /** 投入品消耗排行（真实使用记录聚合） */
-  const inputRanking = useMemo<{ name: string; value: number }[]>(() => {
-    const buckets = new Map<string, number>()
-    for (const usage of usageQuery.data?.list ?? []) {
-      const name = usage.inputName || usage.inputId || '未命名投入品'
-      buckets.set(name, (buckets.get(name) ?? 0) + (Number(usage.quantity) || 0))
-    }
-    return Array.from(buckets.entries())
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 6)
-  }, [usageQuery.data])
+  /** 投入品消耗排行（真实使用记录聚合；用量字段读后端 dosage，按名称+单位分组） */
+  const inputRanking = useMemo<{ name: string; value: number }[]>(
+    () => aggregateInputRanking(usageQuery.data?.list ?? [], 6),
+    [usageQuery.data],
+  )
 
   /** 指标卡 */
   const metricCards: {
@@ -352,8 +345,8 @@ export default function AnalyticsOverview(): JSX.Element {
     if (inputRanking.length === 0) return emptyChartOption(NO_SOURCE_TEXT)
     return {
       tooltip: { trigger: 'axis' },
-      grid: { left: 90, right: 40, top: 20, bottom: 30 },
-      xAxis: { type: 'value', name: '用量' },
+      grid: { left: 140, right: 40, top: 20, bottom: 30 },
+      xAxis: { type: 'value', name: '用量（按名称+单位分组，单位见条目名）' },
       yAxis: {
         type: 'category',
         data: inputRanking.map((item) => item.name).reverse(),

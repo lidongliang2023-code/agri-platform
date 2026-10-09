@@ -1205,6 +1205,48 @@ export function expandDateRange(startDate: string, endDate: string): string[] {
   return result
 }
 
+/** 排行条目 */
+export interface RankItem {
+  /** 名称 */
+  name: string
+  /** 数值 */
+  value: number
+}
+
+/**
+ * 按真实投入品使用记录聚合「消耗排行」。
+ *
+ * ⚠️ 键名口径（代码级比对结论，勿改回 `quantity`）：
+ * 后端 `prod_input_usage` 实体与建表列都是 **`dosage`**（InputUsageEntity.dosage），
+ * 前端 `InputUsage` 类型里写的却是 `quantity`——两者**对不上**。
+ * 若按 `quantity` 读取，每条记录都取到 undefined，`|| 0` 之后排行全为 0，
+ * 图表会渲染出一排「看起来正常、值全是 0」的柱条，比保留兜底更难发现。
+ * 因此这里优先读 `dosage`，`quantity` 仅作为前向兼容的备选键。
+ *
+ * ⚠️ 单位口径：不同记录的 `unit` 可能不同（kg / 袋 / L），跨单位相加没有意义，
+ * 所以按「投入品名称 + 单位」分组，分组名里带上单位，不做跨单位累加。
+ *
+ * @param usages 投入品使用记录（后端原始或已归一化的对象均可）
+ * @param topN 取前 N 条，缺省 5
+ * @returns 排行条目（name 形如「腐熟有机肥(kg)」）
+ */
+export function aggregateInputRanking(usages: unknown[], topN = 5): RankItem[] {
+  const buckets = new Map<string, number>()
+  for (const item of usages) {
+    const record = asRecord(item)
+    const name = readString(record, ['inputName', 'input_name'], '') || readString(record, ['inputId', 'input_id'], '') || '未命名投入品'
+    const unit = readString(record, ['unit'], '') || '无单位'
+    const amount = readNumberOrNull(record, ['dosage', 'quantity'])
+    if (amount === null) continue
+    const key = `${name}(${unit})`
+    buckets.set(key, (buckets.get(key) ?? 0) + amount)
+  }
+  return Array.from(buckets.entries())
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, topN)
+}
+
 /**
  * 计算种养计划时间进度百分比
  * @param plan 计划

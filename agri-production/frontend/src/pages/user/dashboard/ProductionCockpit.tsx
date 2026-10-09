@@ -44,19 +44,12 @@ import {
   fetchPlotStats,
 } from '@/api/production-view'
 import { listInputUsages } from '@/api/inputs'
-import { plotStatusMeta } from '@/utils/production-adapter'
+import { aggregateInputRanking, plotStatusMeta } from '@/utils/production-adapter'
+import type { RankItem } from '@/utils/production-adapter'
 import { MetricStatistic } from '@/components'
 
 /** 趋势图周期 */
 type TrendPeriod = 'week' | 'month' | 'quarter'
-
-/** 排行条目 */
-interface RankItem {
-  /** 名称 */
-  name: string
-  /** 数值 */
-  value: number
-}
 
 /** 区域卡片视图模型 */
 interface RegionCard {
@@ -179,18 +172,11 @@ export default function ProductionCockpit(): JSX.Element {
     return trendRows
   }, [period, trendRows])
 
-  /** 投入品消耗排行 TOP5（按真实使用记录聚合投入品名称 → 用量） */
-  const inputRanking = useMemo<RankItem[]>(() => {
-    const buckets = new Map<string, number>()
-    for (const usage of usageQuery.data?.list ?? []) {
-      const name = usage.inputName || usage.inputId || '未命名投入品'
-      buckets.set(name, (buckets.get(name) ?? 0) + (Number(usage.quantity) || 0))
-    }
-    return Array.from(buckets.entries())
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 5)
-  }, [usageQuery.data])
+  /** 投入品消耗排行 TOP5（按真实使用记录聚合；用量字段读后端 dosage，按名称+单位分组） */
+  const inputRanking = useMemo<RankItem[]>(
+    () => aggregateInputRanking(usageQuery.data?.list ?? [], 5),
+    [usageQuery.data],
+  )
 
   /** 区域卡片（GIS 区块） */
   const regionCards = useMemo<RegionCard[]>(() => {
@@ -505,7 +491,10 @@ export default function ProductionCockpit(): JSX.Element {
                 description="后端暂无投入品使用记录，不展示示例排行"
               />
             ) : (
-              <ReactECharts option={buildRankOption(inputRanking, 'kg')} style={{ height: 320 }} />
+              <ReactECharts
+                option={buildRankOption(inputRanking, '（按名称+单位分组，单位见条目名）')}
+                style={{ height: 320 }}
+              />
             )}
           </Card>
         </Col>
