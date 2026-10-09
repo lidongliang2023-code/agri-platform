@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.agri</groupId>
+        <artifactId>core-platform-parent</artifactId>
+        <version>1.0.0</version>
+    </parent>
+
+    <artifactId>satellite-quote-push</artifactId>
+    <name>satellite-quote-push</name>
+    <description>卫星服务 · 行情推送：WebSocket 长连接独立伸缩（ADR-002）；数据源自核心单体行情 API（生产态可切换 MQ 消费）</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.agri</groupId>
+            <artifactId>shared-kernel</artifactId>
+        </dependency>
+        <!-- 无状态推送服务：无数据库、无 Redis（按需伸缩的最小依赖面） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-websocket</artifactId>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>

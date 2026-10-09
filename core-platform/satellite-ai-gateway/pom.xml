@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.agri</groupId>
+        <artifactId>core-platform-parent</artifactId>
+        <version>1.0.0</version>
+    </parent>
+
+    <artifactId>satellite-ai-gateway</artifactId>
+    <name>satellite-ai-gateway</name>
+    <description>卫星服务 · AI 推理网关（ADR-008）：统一 Key 管理 / 限流熔断 / 供应商路由 / 成本核算 / 可降级</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.agri</groupId>
+            <artifactId>core-infra</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.agri</groupId>
+            <artifactId>shared-kernel</artifactId>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>

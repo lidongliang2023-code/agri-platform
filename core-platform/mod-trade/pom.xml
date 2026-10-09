@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.agri</groupId>
+        <artifactId>core-platform-parent</artifactId>
+        <version>1.0.0</version>
+    </parent>
+
+    <artifactId>mod-trade</artifactId>
+    <name>mod-trade</name>
+    <description>交易域：撮合交易 B2B 大宗 MVP / 订单 / 结算清算（表前缀 trade_；依赖 mod-platform 仅限 api 包）</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.agri</groupId>
+            <artifactId>core-infra</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.agri</groupId>
+            <artifactId>shared-kernel</artifactId>
+        </dependency>
+        <!-- 横向依赖规则：仅允许调用对方 api 包（ArchUnit 强制），禁止触达 internal 与跨模块访问数据表 -->
+        <dependency>
+            <groupId>com.agri</groupId>
+            <artifactId>mod-platform</artifactId>
+        </dependency>
+        <!-- 事件契约消费：生产域 batch.harvested / 服务域 quote.updated（仅 api 包） -->
+        <dependency>
+            <groupId>com.agri</groupId>
+            <artifactId>mod-produce</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.agri</groupId>
+            <artifactId>mod-service</artifactId>
+        </dependency>
+    </dependencies>
+</project>

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.agri</groupId>
+        <artifactId>core-platform-parent</artifactId>
+        <version>1.0.0</version>
+    </parent>
+
+    <artifactId>mod-platform</artifactId>
+    <name>mod-platform</name>
+    <description>平台域：统一用户/权限/商品/客商/消息（OHS 开放主机服务，被三大引擎共同消费，ADR-004）</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.agri</groupId>
+            <artifactId>core-infra</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.agri</groupId>
+            <artifactId>shared-kernel</artifactId>
+        </dependency>
+    </dependencies>
+</project>

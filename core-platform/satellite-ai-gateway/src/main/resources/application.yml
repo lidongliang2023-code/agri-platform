@@ -1,0 +1,39 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: satellite-ai-gateway
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: ${MYSQL_URL:jdbc:mysql://localhost:3306/agri_ai?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
+    username: ${MYSQL_USERNAME:root}
+    password: ${MYSQL_PASSWORD:root123}
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema.sql
+  servlet:
+    multipart:
+      max-file-size: 10MB
+
+agri:
+  ai:
+    enabled: ${AI_ENABLED:false}
+    rate-limit-per-minute: 60
+    cost-per-1k-tokens: 0.02
+    providers:
+      general:
+        base-url: ${AI_GENERAL_BASE_URL:https://api.example-llm.com/v1}
+        api-key: ${AI_GENERAL_API_KEY:}
+        model: ${AI_GENERAL_MODEL:gpt-4o-mini}
+      vision:
+        base-url: ${AI_VISION_BASE_URL:http://localhost:9100/v1}
+        api-key: ${AI_VISION_API_KEY:local}
+        model: ${AI_VISION_MODEL:yolov8-pest}
+  event:
+    transport: local
+
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId}] %logger{40} - %msg%n"

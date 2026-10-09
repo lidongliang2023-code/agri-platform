@@ -1,0 +1,42 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: satellite-iot
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: ${MYSQL_URL:jdbc:mysql://localhost:3306/agri_iot?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
+    username: ${MYSQL_USERNAME:root}
+    password: ${MYSQL_PASSWORD:root123}
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema.sql
+
+agri:
+  event:
+    # 卫星服务跨进程投递：开发态 http → 核心单体；生产态切 rocketmq（ADR-003）
+    transport: ${AGRI_EVENT_TRANSPORT:http}
+    http:
+      targets: ${CORE_BASE_URL:http://localhost:8080}
+      internal-token: ${AGRI_INTERNAL_TOKEN:dev-internal-token}
+    rocketmq:
+      name-server: ${ROCKETMQ_NAMESRV:localhost:9876}
+    outbox:
+      relay-interval-ms: 2000
+  iot:
+    mqtt:
+      enabled: ${IOT_MQTT_ENABLED:false}
+      broker: ${IOT_MQTT_BROKER:tcp://localhost:1883}
+      topic-filter: agri/devices/#
+      client-id: agri-iot-ingest
+    thresholds:
+      temperature: 40
+      humidity: 90
+      soil-moisture: 20
+      co2: 1500
+
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId}] %logger{40} - %msg%n"

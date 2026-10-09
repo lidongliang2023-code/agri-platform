@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.agri</groupId>
+        <artifactId>core-platform-parent</artifactId>
+        <version>1.0.0</version>
+    </parent>
+
+    <artifactId>mod-service</artifactId>
+    <name>mod-service</name>
+    <description>服务域：行情资讯 v1（表前缀 svc_；行情长连接推送在卫星服务 satellite-quote-push）</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.agri</groupId>
+            <artifactId>core-infra</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.agri</groupId>
+            <artifactId>shared-kernel</artifactId>
+        </dependency>
+    </dependencies>
+</project>

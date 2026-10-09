@@ -1,0 +1,33 @@
+# core-platform 开发环境依赖（MySQL + Redis + EMQX）
+# 用法：docker compose up -d mysql redis   # 最小依赖
+#       docker compose --profile iot up -d # 含 EMQX（IoT MQTT 联调）
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: agri-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD:-root123}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+
+  redis:
+    image: redis:7-alpine
+    container_name: agri-redis
+    ports:
+      - "6379:6379"
+
+  emqx:
+    image: emqx/emqx:5.6
+    container_name: agri-emqx
+    profiles: ["iot"]
+    ports:
+      - "1883:1883"
+      - "18083:18083"
+    environment:
+      EMQX_DASHBOARD__DEFAULT_PASSWORD: ${EMQX_DASHBOARD_PASSWORD:-public123}
+
+volumes:
+  mysql-data:

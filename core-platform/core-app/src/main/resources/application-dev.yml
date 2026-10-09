@@ -1,0 +1,4 @@
+logging:
+  level:
+    com.agri: debug
+    org.springframework.web: info

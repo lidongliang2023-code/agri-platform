@@ -1,0 +1,95 @@
+package com.agri.platform.internal.auth;
+
+import com.agri.core.infra.security.JwtUtil;
+import com.agri.core.infra.util.JsonUtil;
+import com.agri.core.infra.web.MarketContext;
+import com.agri.shared.exception.ErrorCode;
+import com.agri.shared.result.ApiResponse;
+import io.jsonwebtoken.Claims;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
+import org.springframework.core.annotation.Order;
+import org.springframework.http.MediaType;
+import org.springframework.stereotype.Component;
+import org.springframework.util.AntPathMatcher;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+
+/**
+ * JWT 认证过滤器：解析访问令牌 → 写入市场上下文（ADR-005 框架层统一注入）。
+ * 白名单之外一律要求 Bearer Token；失败返回 401 规范化 JSON。
+ */
+@Component
+@Order(2)
+@RequiredArgsConstructor
+public class JwtAuthFilter extends OncePerRequestFilter {
+
+    private static final AntPathMatcher MATCHER = new AntPathMatcher();
+    private static final List<String> WHITELIST = List.of(
+            "/api/v1/auth/login",
+            "/api/v1/auth/refresh",
+            // 公开行情（数据分级 L1）——卫星服务 satellite-quote-push 拉取数据源亦复用此口径
+            "/api/v1/quotes/**",
+            "/v3/api-docs/**",
+            "/swagger-ui/**",
+            "/swagger-ui.html",
+            "/actuator/**",
+            // 内部事件入口：以 X-Internal-Token 校验（见 InternalEventIngressController）
+            "/internal/**",
+            "/error");
+
+    private final JwtUtil jwtUtil;
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        return WHITELIST.stream().anyMatch(p -> MATCHER.match(p, request.getRequestURI()));
+    }
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
+            throws ServletException, IOException {
+        String token = bearerToken(request);
+        if (token == null) {
+            unauthorized(response, "缺少访问令牌");
+            return;
+        }
+        try {
+            Claims claims = jwtUtil.parse(token);
+            Long userId = Long.valueOf(claims.getSubject());
+            Number marketId = (Number) claims.get("marketId");
+            List<String> roles = ((List<?>) claims.get("roles")).stream().map(String::valueOf).toList();
+            MarketContext.set(new MarketContext.Session(userId, claims.get("username", String.class),
+                    marketId == null ? 1L : marketId.longValue(), roles));
+        } catch (Exception e) {
+            unauthorized(response, "令牌无效或已过期");
+            return;
+        }
+        try {
+            chain.doFilter(request, response);
+        } finally {
+            MarketContext.clear();
+        }
+    }
+
+    private String bearerToken(HttpServletRequest request) {
+        String header = request.getHeader("Authorization");
+        if (header != null && header.startsWith("Bearer ")) {
+            String token = header.substring(7).trim();
+            return token.isEmpty() ? null : token;
+        }
+        return null;
+    }
+
+    private void unauthorized(HttpServletResponse response, String message) throws IOException {
+        response.setStatus(401);
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        response.getWriter().write(JsonUtil.MAPPER.writeValueAsString(ApiResponse.fail(ErrorCode.UNAUTHORIZED)));
+    }
+}

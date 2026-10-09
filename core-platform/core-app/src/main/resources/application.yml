@@ -1,0 +1,90 @@
+server:
+  # 8080 在本机被一个无关的微服务注册中心长期占用（其 /actuator/health 返回
+  # discoveryComposite，含 message-service / user-service / order-service 等），
+  # core-platform 用默认配置永远抢不到该端口。统一默认端口为 8099，
+  # 前端 vite 代理默认值已同步对齐（agri-production/frontend/vite.config.ts）。
+  port: 8099
+
+spring:
+  application:
+    name: core-platform
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: ${MYSQL_URL:jdbc:mysql://localhost:3306/agri_core?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
+    username: ${MYSQL_USERNAME:root}
+    password: ${MYSQL_PASSWORD:root123}
+    hikari:
+      maximum-pool-size: ${MYSQL_POOL_SIZE:20}
+      minimum-idle: 5
+      connection-timeout: 5000
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+  jackson:
+    time-zone: Asia/Shanghai
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    banner: false
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+agri:
+  jwt:
+    # 生产必须经环境变量注入 ≥32 字符密钥；密钥绝不写入代码库
+    secret: ${AGRI_JWT_SECRET:agri-dev-secret-key-change-me-32bytes!}
+    access-ttl-minutes: 120
+    refresh-ttl-days: 7
+  event:
+    # local=进程内投递（开发/单机）；rocketmq=正式形态（多实例部署必选，ADR-003）
+    transport: ${AGRI_EVENT_TRANSPORT:local}
+    rocketmq:
+      name-server: ${ROCKETMQ_NAMESRV:localhost:9876}
+    outbox:
+      relay-interval-ms: 2000
+      batch-size: 50
+      max-retry: 5
+      backoff-base-seconds: 30
+  market:
+    # 无 market_id 语义的全局表（隔离拦截器忽略清单）
+    ignore-tables:
+      - platform_user
+      - platform_role
+      - platform_user_role
+      - platform_outbox_message
+      - platform_consumed_event
+  trade:
+    settlement:
+      enabled: true
+      cron: "0 0 1 * * ?"
+  cors:
+    allowed-origins: ${AGRI_CORS_ORIGINS:http://localhost:5173,http://localhost:3000}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId}] %logger{40} - %msg%n"
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html

@@ -1,0 +1,10 @@
+# 生产配置：全部敏感项经环境变量注入（K8s Secret / 配置中心），yml 中只保留结构与默认占位
+logging:
+  level:
+    com.agri: info
+    root: info
+
+management:
+  endpoint:
+    health:
+      show-details: never

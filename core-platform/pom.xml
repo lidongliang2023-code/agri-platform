@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.agri</groupId>
+    <artifactId>core-platform-parent</artifactId>
+    <version>1.0.0</version>
+    <packaging>pom</packaging>
+    <name>core-platform</name>
+    <description>农业产业互联网平台 · 模块化单体 core-platform + 4 卫星服务（依据总体架构设计 v1.0 / ADR-001~008）</description>
+
+    <modules>
+        <!-- 共享内核：仅无业务语义的工具与公共 VO（ADR-001 图 2） -->
+        <module>shared-kernel</module>
+        <!-- 基础设施：事件总线（本地消息表+MQ）、JWT、市场上下文、MyBatis-Plus 配置 -->
+        <module>core-infra</module>
+        <!-- 平台域：统一用户/权限/商品/客商/消息（ADR-004 主数据四统一，P1 第一优先级） -->
+        <module>mod-platform</module>
+        <!-- 交易域：撮合交易 B2B MVP / 订单 / 结算清算 -->
+        <module>mod-trade</module>
+        <!-- 生产域：农事批次 / 溯源一物一码 / 质检 / 地块 / 设备档案 -->
+        <module>mod-produce</module>
+        <!-- 服务域：行情资讯 v1 -->
+        <module>mod-service</module>
+        <!-- 单一部署单元：模块化单体（含 Flyway 迁移 + ArchUnit CI 门禁） -->
+        <module>core-app</module>
+        <!-- 卫星服务：按「伸缩特征与合规边界」拆分，而非按业务域（ADR-002） -->
+        <module>satellite-iot</module>
+        <module>satellite-ai-gateway</module>
+        <module>satellite-quote-push</module>
+        <module>satellite-gov-exchange</module>
+    </modules>
+
+    <properties>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <spring-boot.version>3.2.5</spring-boot.version>
+        <mybatis-plus.version>3.5.5</mybatis-plus.version>
+        <jjwt.version>0.12.5</jjwt.version>
+        <archunit.version>1.2.1</archunit.version>
+        <rocketmq-client.version>4.9.7</rocketmq-client.version>
+        <paho.version>1.2.5</paho.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-dependencies</artifactId>
+                <version>${spring-boot.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <dependency>
+                <groupId>com.baomidou</groupId>
+                <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
+                <version>${mybatis-plus.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-api</artifactId>
+                <version>${jjwt.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-impl</artifactId>
+                <version>${jjwt.version}</version>
+                <scope>runtime</scope>
+            </dependency>
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-jackson</artifactId>
+                <version>${jjwt.version}</version>
+                <scope>runtime</scope>
+            </dependency>
+
+            <dependency>
+                <groupId>com.tngtech.archunit</groupId>
+                <artifactId>archunit-junit5</artifactId>
+                <version>${archunit.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.apache.rocketmq</groupId>
+                <artifactId>rocketmq-client</artifactId>
+                <version>${rocketmq-client.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.eclipse.paho</groupId>
+                <artifactId>org.eclipse.paho.client.mqttv3</artifactId>
+                <version>${paho.version}</version>
+            </dependency>
+
+            <!-- 内部模块版本对齐 -->
+            <dependency><groupId>com.agri</groupId><artifactId>shared-kernel</artifactId><version>${project.version}</version></dependency>
+            <dependency><groupId>com.agri</groupId><artifactId>core-infra</artifactId><version>${project.version}</version></dependency>
+            <dependency><groupId>com.agri</groupId><artifactId>mod-platform</artifactId><version>${project.version}</version></dependency>
+            <dependency><groupId>com.agri</groupId><artifactId>mod-trade</artifactId><version>${project.version}</version></dependency>
+            <dependency><groupId>com.agri</groupId><artifactId>mod-produce</artifactId><version>${project.version}</version></dependency>
+            <dependency><groupId>com.agri</groupId><artifactId>mod-service</artifactId><version>${project.version}</version></dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <scope>provided</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-maven-plugin</artifactId>
+                    <version>${spring-boot.version}</version>
+                    <executions>
+                        <execution>
+                            <goals><goal>repackage</goal></goals>
+                        </execution>
+                    </executions>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>3.11.0</version>
+                    <configuration>
+                        <source>${maven.compiler.source}</source>
+                        <target>${maven.compiler.target}</target>
+                        <encoding>${project.build.sourceEncoding}</encoding>
+                        <!-- 保留方法参数名：Spring MVC 依赖它解析 @RequestParam / @PathVariable
+                             未显式写 name 的形参（如 @RequestParam(defaultValue="1") long page）。
+                             本项目不继承 spring-boot-starter-parent，不会自动带上该开关，
+                             缺失时运行期抛 IllegalArgumentException:
+                             "Name for argument of type [long] not specified"。
+                             编译期与 ArchUnit 均发现不了，只有真起服务调接口才暴露。 -->
+                        <parameters>true</parameters>
+                        <annotationProcessorPaths>
+                            <path>
+                                <groupId>org.projectlombok</groupId>
+                                <artifactId>lombok</artifactId>
+                                <version>1.18.32</version>
+                            </path>
+                        </annotationProcessorPaths>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>3.2.5</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
+</project>

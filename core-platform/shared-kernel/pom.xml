@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.agri</groupId>
+        <artifactId>core-platform-parent</artifactId>
+        <version>1.0.0</version>
+    </parent>
+
+    <artifactId>shared-kernel</artifactId>
+    <name>shared-kernel</name>
+    <description>共享内核：仅无业务语义的工具与公共 VO —— 防止共享库演化为隐性耦合点（图 2）</description>
+
+    <!-- 有意保持零依赖：任何 Spring / 中间件 / 业务模块依赖都会破坏共享内核纪律 -->
+</project>
