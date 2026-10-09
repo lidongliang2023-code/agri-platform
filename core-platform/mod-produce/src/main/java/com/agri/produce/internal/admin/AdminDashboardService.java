@@ -129,9 +129,11 @@ public class AdminDashboardService {
      * <p>字段口径全部来自现成表的真实聚合，不做任何推测填补：</p>
      * <ul>
      *   <li>{@code taskRate}：当日到期（plan_end_date）的任务中已 done 的占比；当日无到期任务记 0。</li>
-     *   <li>{@code activeUsers}：当日有生产作业记录的不同人数（采收作业人 ∪ 生长记录人 去重）。
-     *       <b>这是"作业人数"，不是"登录活跃用户"</b>——平台没有埋点/登录流水表，
-     *       "活跃用户数"这个口径在本项目无数据源，此处给的是可真算的最接近口径。</li>
+     *   <li>{@code activeWorkers}：当日有生产作业记录的不同 memberId 去重，
+     *       <b>非登录活跃用户</b>。平台没有埋点/登录流水表，"活跃用户数"在本项目无数据源，
+     *       因此字段不叫 activeUsers——叫那个名字就是把作业人数包装成活跃用户。
+     *       本字段的真实口径是「作业人数」：采收作业人（harvest operator_id）
+     *       ∪ 生长记录人（growth recorder_id）去重后的数量。</li>
      *   <li>{@code alertCount}：当日产生的告警数（按 alert_time）。</li>
      * </ul>
      *
@@ -182,7 +184,7 @@ public class AdminDashboardService {
             point.put("taskRate", due == 0 ? 0 : Math.round(done * 100.0 / due));
             point.put("taskDue", due);
             point.put("taskDone", done);
-            point.put("activeUsers", workers.size());
+            point.put("activeWorkers", workers.size());
             point.put("alertCount", alertCount);
             points.add(point);
         }
