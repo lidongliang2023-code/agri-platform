@@ -122,6 +122,15 @@ export interface InputUsageRecord {
   taskId?: string
   /** 地块 ID */
   plotId?: string
+  /**
+   * 所属农场 ID。
+   *
+   * 后端 `InputUsageEntity` 确有此字段（`prod_input_usage.farm_id`），
+   * 新增时由服务端按 plotId 推导填充，列表接口原样返回。
+   * 前端原先未声明，导致「农场」列只能退回 plotId 显示，
+   * 且无法按农场筛选。此处补齐声明，与后端实体保持一致。
+   */
+  farmId?: string
   /** 投入品 ID */
   inputId?: string
   /** 投入品名称 */

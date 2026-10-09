@@ -275,7 +275,10 @@ export default function InputMonitor(): JSX.Element {
   const stats = useMemo(() => {
     const total = warnings.length
     const restricted = warnings.filter((item) => item.type === 'restricted').length
-    const overdose = warnings.filter((item) => item.type !== 'restricted').length
+    // 必须按 'overdose' 精确统计：早期只有 restricted/overdose 两种取值，
+    // 用 `!== 'restricted'` 等价；新增 'normal' 后该写法会把「未见异常」
+    // 也算进用量异常，导致统计虚高（实测把 18 条全报成用量异常）。
+    const overdose = warnings.filter((item) => item.type === 'overdose').length
     const rectified = warnings.filter((item) => item.status === 'rectified').length
     return {
       total,
