@@ -1,6 +1,7 @@
 package com.agri.produce.internal.admin;
 
 import com.agri.produce.internal.common.ProduceIds;
+import com.agri.produce.internal.farm.FarmInfoMapper;
 import com.agri.shared.exception.BusinessException;
 import com.agri.shared.exception.ErrorCode;
 import com.agri.shared.result.PageResult;
@@ -34,6 +35,9 @@ public class AdminFarmComplianceService {
 
     private final FarmComplianceCheckMapper complianceCheckMapper;
 
+    /** 用于校验检查任务必须绑定真实存在的农场档案 */
+    private final FarmInfoMapper farmInfoMapper;
+
     /**
      * 分页查询合规检查任务。
      *
@@ -60,13 +64,22 @@ public class AdminFarmComplianceService {
      * 检查编号缺失时生成、检查时间缺失时取当前时间、整改状态缺失时置 {@code none}
      * （新建任务确实尚未进入整改流程，不是占位数据）。</p>
      *
-     * @param entity 检查任务，farmId 必填
+     * <p><b>farmId 必须指向真实存在的农场档案</b>：合规检查是针对已建档农场的执法动作，
+     * 不绑定真实农场的检查任务，其整改跟踪、风险统计与责任追溯全部失去落点，
+     * 从产生的那一刻起就是脏数据。业务流程上先录农场档案、再发起检查，
+     * 不存在「先建任务后补档案」的合理场景，故库内查不到该农场时抛 {@code NOT_FOUND}。
+     * 注意：PUT 不校验——它按 checkId 定位记录，且不改 farmId。</p>
+     *
+     * @param entity 检查任务，farmId 必填且必须已建档
      * @return 落库后的实体
      */
     @Transactional
     public FarmComplianceCheckEntity create(FarmComplianceCheckEntity entity) {
         if (entity == null || entity.getFarmId() == null || entity.getFarmId().isBlank()) {
             throw new BusinessException(ErrorCode.BAD_REQUEST);
+        }
+        if (farmInfoMapper.selectById(entity.getFarmId()) == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND);
         }
         if (entity.getCheckId() == null || entity.getCheckId().isBlank()) {
             entity.setCheckId(ProduceIds.newId(ID_PREFIX));
