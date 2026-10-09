@@ -48,6 +48,7 @@ import {
   createSupervisedComplianceTask,
   updateSupervisedComplianceTask,
 } from '@/api/admin/farms'
+import type { ComplianceWriteResult } from '@/api/admin/farms'
 import type { BizId, ComplianceResult } from '@/types'
 import {
   CHECK_RESULT_META,
@@ -66,6 +67,15 @@ import {
 import type { ComplianceTaskItem, RectifyStatusKey } from './supervisionShared'
 
 const { Text, Title } = Typography
+
+/**
+ * 农场建档页面路由。
+ *
+ * 运营端目前没有建档入口，建档在生产端「新增农场」页（src/pages/user/farms/Create.tsx），
+ * 其提交接口即 `POST /api/v1/production/farms`。合规检查必须绑定到真实存在的农场档案，
+ * 因此空档案时必须给出可达的建档路径，而不是只写一句"请先建档"。
+ */
+const FARM_CREATE_PATH = '/production/farms/create'
 
 /** 筛选条件 */
 interface CheckFilters {
@@ -126,15 +136,22 @@ interface RectifyFormValues {
  * 3. 整改跟踪：整改状态流转（待整改 → 整改中 → 已整改），上传整改结果凭证并记录闭环时间；
  * 4. 台账查询与导出：按农场 / 检查类型 / 检查结果 / 整改状态筛选。
  *
- * 数据落库策略：后端 `/admin/farms/compliance` 目前仅提供「合规画像」读取端点，
- * 暂无检查任务写接口，因此统一走「后端优先 + 本地登记降级」（见 createSupervisedComplianceTask），
- * 后端端点上线后无需改动页面逻辑。
+ * 数据落库策略：写接口 `POST /admin/farms/compliance` 与 `PUT /admin/farms/compliance/{checkId}`
+ * 均已上线（表 prod_farm_compliance_check，见 V9__produce_farm_compliance_check.sql），
+ * 读取走 `GET /admin/farms/compliance/checks`。
+ *
+ * ⚠️ 写失败**不允许**一律降级后弹成功提示（那等于骗人）。分支口径：
+ * - 成功 → success；
+ * - 后端明确拒绝（业务码非 0，典型是 404 农场档案不存在）→ 错误提示，且**不写本地**
+ *   （写本地等于把一条注定关联不上的任务留在用户机器上）；
+ * - 后端不可达（无响应 / 5xx）→ 离线兜底，但弹 warning 而非 success，
+ *   并说明"仅本浏览器可见、其他账号看不到、接口恢复后不会自动同步"。
  *
  * @returns 页面内容
  */
 export default function ComplianceCheck(): JSX.Element {
   const navigate = useNavigate()
-  const { message } = App.useApp()
+  const { message, modal } = App.useApp()
 
   /** 已提交的筛选条件 */
   const [filters, setFilters] = useState<CheckFilters>({
@@ -264,13 +281,53 @@ export default function ComplianceCheck(): JSX.Element {
   const localOnlyCount: number = tasks.filter((task) => task.source === 'local').length
 
   /**
-   * 统一落库：先尝试写入后端，失败则登记到本地。
+   * 把后端「明确拒绝」翻译成人能看懂的原因。
+   *
+   * 404 在本接口有确定含义：后端 create() 只在 farmId 查不到对应农场档案时抛 NOT_FOUND
+   * （见 AdminFarmComplianceService），所以必须说清"是农场档案不存在，请先建档"，
+   * 不能含糊成"接口未开放"或"请求失败"。
+   *
+   * @param result 后端拒绝结果
+   * @returns 面向运营的说明文案
+   */
+  function describeRejection(result: ComplianceWriteResult): string {
+    if (result.code === 404) {
+      return (
+        '该农场编号在档案库中不存在（后端返回 404，请求已被拒绝）。' +
+        '合规检查必须绑定到真实存在的农场档案：请先完成建档，再发起检查。' +
+        '本次没有写入任何数据（也没有存到本地）——避免留下一条永远关联不上农场的任务。'
+      )
+    }
+    if (result.code === 400) {
+      return `提交参数被后端拒绝（400）${result.message ? `：${result.message}` : ''}。本次未写入任何数据。`
+    }
+    return (
+      `后端拒绝了本次提交（业务码 ${result.code ?? '未知'}）` +
+      `${result.message ? `：${result.message}` : ''}。本次未写入任何数据。`
+    )
+  }
+
+  /**
+   * 落库结果（三分支：成功 / 离线兜底 / 被拒绝）。
+   *
+   * `source` 为 'local' 时表示"确实存下来了，但只在本浏览器"；
+   * 'failed' 表示"什么都没存下来"，二者必须给用户不同的反馈等级。
+   */
+  interface PersistOutcome {
+    /** 数据最终去向 */
+    source: 'remote' | 'local' | 'failed'
+    /** 需要告知用户的原因（local / failed 时必有值） */
+    reason?: string
+  }
+
+  /**
+   * 统一落库：写后端，按失败性质决定是拒绝、还是离线兜底。
    *
    * @param task 检查任务
-   * @returns 落库后的任务
+   * @returns 落库结果
    */
-  async function persistTask(task: ComplianceTaskItem): Promise<ComplianceTaskItem> {
-    const remote = await createSupervisedComplianceTask({
+  async function persistTask(task: ComplianceTaskItem): Promise<PersistOutcome> {
+    const result = await createSupervisedComplianceTask({
       checkId: task.checkId,
       farmId: task.farmId,
       farmName: task.farmName,
@@ -283,35 +340,92 @@ export default function ComplianceCheck(): JSX.Element {
       checkerName: task.checkerName,
       checkedAt: task.checkedAt,
     })
-    if (!remote) {
+    if (result.ok && result.remote) {
+      // 已落库：以服务端返回为准，本地不再保留副本（本地仅作离线兜底）
+      upsertRemoteComplianceCheck(result.remote)
+      return { source: 'remote' }
+    }
+    if (result.kind === 'unreachable') {
       const localTask: ComplianceTaskItem = { ...task, source: 'local' }
       addComplianceTask(localTask)
-      return localTask
+      return {
+        source: 'local',
+        reason:
+          `${result.message}。已临时登记到本地：仅本浏览器可见，其他账号看不到，` +
+          '接口恢复后不会自动同步到服务端。',
+      }
     }
-    // 已落库：以服务端返回为准，本地不再保留副本（本地仅作离线兜底）
-    upsertRemoteComplianceCheck(remote)
-    return task
+    // 后端明确拒绝：不写本地
+    return { source: 'failed', reason: describeRejection(result) }
   }
 
   /**
-   * 统一更新：先尝试更新后端，失败则更新本地。
+   * 统一更新：先更新后端，按失败性质决定是拒绝、还是离线兜底。
+   *
+   * 与创建的两点差异（都有实际依据）：
+   * 1. PUT 的 404 是"检查编号不存在"，不一定是农场问题；
+   * 2. 若这条任务本身就是本地任务（离线时建的），服务端查不到是**预期行为**，
+   *    此时更新本地是正确降级，不算骗人——但要弹 warning 说明。
    *
    * @param checkId 检查编号
    * @param patch 待更新字段
-   * @returns 是否落后端
+   * @param isLocalTask 该任务是否本来就只存在于本地
+   * @returns 更新结果
    */
   async function patchTask(
     checkId: string,
     patch: Partial<ComplianceTaskItem>,
-  ): Promise<'remote' | 'local'> {
-    const remote = await updateSupervisedComplianceTask(checkId, patch as Record<string, unknown>)
-    if (!remote) {
-      updateComplianceTask(checkId, { ...patch, source: 'local' })
-      return 'local'
+    isLocalTask: boolean,
+  ): Promise<PersistOutcome> {
+    const result = await updateSupervisedComplianceTask(checkId, patch as Record<string, unknown>)
+    if (result.ok && result.remote) {
+      upsertRemoteComplianceCheck(result.remote)
+      return { source: 'remote' }
     }
-    // 已落库：以服务端返回为准，本地不再保留副本（本地仅作离线兜底）
-    upsertRemoteComplianceCheck(remote)
-    return 'remote'
+    if (result.kind === 'unreachable') {
+      updateComplianceTask(checkId, { ...patch, source: 'local' })
+      return {
+        source: 'local',
+        reason:
+          `${result.message}。已临时更新到本地：仅本浏览器可见，其他账号看不到，` +
+          '接口恢复后不会自动同步到服务端。',
+      }
+    }
+    if (isLocalTask && result.code === 404) {
+      // 本地任务在服务端本就没有记录，404 是预期的：更新本地即可
+      updateComplianceTask(checkId, { ...patch, source: 'local' })
+      return {
+        source: 'local',
+        reason:
+          '这条任务本来就只存在于本地（服务端暂无此检查编号），已更新本地副本。' +
+          '它不会出现在服务端台账里，其他账号看不到。',
+      }
+    }
+    return { source: 'failed', reason: describeRejection(result) }
+  }
+
+  /**
+   * 按落库结果弹出对应等级的提示。
+   *
+   * success 只用于真正落库；离线兜底用 warning；被拒绝用错误弹窗（文案较长）。
+   *
+   * @param title 操作名，如「发起抽查」
+   * @param successText 成功文案
+   * @param outcome 落库结果
+   */
+  function notifyOutcome(title: string, successText: string, outcome: PersistOutcome): void {
+    if (outcome.source === 'remote') {
+      message.success(successText)
+      return
+    }
+    if (outcome.source === 'local') {
+      message.warning(`${title}已登记到本地，但未写入服务端：${outcome.reason ?? ''}`, 6)
+      return
+    }
+    modal.error({
+      title: `${title}失败`,
+      content: outcome.reason ?? '后端拒绝了本次提交，未写入任何数据。',
+    })
   }
 
   /** 发起抽查提交 */
@@ -333,14 +447,13 @@ export default function ComplianceCheck(): JSX.Element {
         rectifyStatus: 'none',
         source: 'remote',
       }
-      const saved = await persistTask(task)
-      message.success(
-        saved.source === 'remote'
-          ? `已发起「${values.checkType}」，检查编号 ${task.checkId}`
-          : `已发起「${values.checkType}」（后端写接口暂未开放，已本地登记）`,
-      )
-      launchForm.resetFields()
-      setLaunchOpen(false)
+      const outcome = await persistTask(task)
+      notifyOutcome('发起抽查', `已发起「${values.checkType}」，检查编号 ${task.checkId}`, outcome)
+      // 被拒绝时不关闭弹窗，方便直接改选农场重试；成功与离线兜底都视为"已登记"，关闭
+      if (outcome.source !== 'failed') {
+        launchForm.resetFields()
+        setLaunchOpen(false)
+      }
     } catch {
       // 表单校验失败由 antd 自行提示
     } finally {
@@ -365,14 +478,16 @@ export default function ComplianceCheck(): JSX.Element {
         checkerName: values.checkerName,
         rectifyStatus: values.result === 1 ? 'none' : resultTarget.rectifyStatus === 'none' ? 'pending' : resultTarget.rectifyStatus,
       }
-      const target = await patchTask(resultTarget.checkId, patch)
-      message.success(
-        target === 'remote'
-          ? '检查结果已保存'
-          : '检查结果已保存（后端写接口暂未开放，已本地登记）',
+      const outcome = await patchTask(
+        resultTarget.checkId,
+        patch,
+        resultTarget.source === 'local',
       )
-      resultForm.resetFields()
-      setResultTarget(null)
+      notifyOutcome('录入检查结果', '检查结果已保存', outcome)
+      if (outcome.source !== 'failed') {
+        resultForm.resetFields()
+        setResultTarget(null)
+      }
     } catch {
       // 表单校验失败由 antd 自行提示
     } finally {
@@ -397,12 +512,12 @@ export default function ComplianceCheck(): JSX.Element {
             ? `${todayText()} ${new Date().toLocaleTimeString('zh-CN', { hour12: false })}`
             : undefined,
       }
-      const target = await patchTask(trackTarget.checkId, patch)
-      message.success(
-        target === 'remote' ? '整改信息已更新' : '整改信息已更新（后端写接口暂未开放，已本地登记）',
-      )
-      trackForm.resetFields()
-      setTrackTarget(null)
+      const outcome = await patchTask(trackTarget.checkId, patch, trackTarget.source === 'local')
+      notifyOutcome('整改跟踪', '整改信息已更新', outcome)
+      if (outcome.source !== 'failed') {
+        trackForm.resetFields()
+        setTrackTarget(null)
+      }
     } catch {
       // 表单校验失败由 antd 自行提示
     } finally {
@@ -682,8 +797,51 @@ export default function ComplianceCheck(): JSX.Element {
           style={{ marginTop: 12 }}
           type="warning"
           showIcon
-          message="后端未返回任何农场档案，当前无法发起抽查"
-          description="GET /admin/farms 返回 0 条。此处不再用示例农场填充下拉框（会把检查登记到并不存在的农场上），请先确认农场档案已录入。"
+          message={
+            farmsQuery.isError
+              ? '读取农场档案失败，当前无法发起抽查'
+              : '当前没有农场档案，发起合规检查前必须先建档'
+          }
+          description={
+            farmsQuery.isError ? (
+              <Space direction="vertical" size={4}>
+                <Text>
+                  GET /admin/farms 请求失败
+                  {farmsQuery.error instanceof Error ? `：${farmsQuery.error.message}` : ''}
+                  。此处不再用示例农场填充下拉框，请先恢复农场档案接口。
+                </Text>
+                <Button
+                  size="small"
+                  onClick={() => {
+                    void farmsQuery.refetch()
+                  }}
+                >
+                  重试读取农场档案
+                </Button>
+              </Space>
+            ) : (
+              <Space direction="vertical" size={4}>
+                <Text>
+                  GET /admin/farms 返回 0 条。此处不再用示例农场填充下拉框
+                  （会把检查登记到并不存在的农场上）。合规检查必须绑定到真实存在的农场档案，
+                  否则整改跟踪、风险统计与责任追溯全部失去锚点；
+                  后端也会对不存在的 farmId 直接拒绝（404），不会留下脏数据。
+                </Text>
+                <Space wrap>
+                  <Button
+                    size="small"
+                    type="primary"
+                    onClick={() => navigate(FARM_CREATE_PATH)}
+                  >
+                    前往新增农场档案
+                  </Button>
+                  <Text type="secondary">
+                    建档接口 POST /api/v1/production/farms，页面路由 {FARM_CREATE_PATH}
+                  </Text>
+                </Space>
+              </Space>
+            )
+          }
         />
       )}
 

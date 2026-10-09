@@ -132,6 +132,51 @@ request.interceptors.request.use(
   (error: AxiosError) => Promise.reject(error),
 )
 
+/**
+ * 业务异常错误对象。
+ *
+ * 响应拦截器在 `code !== 0` 时 reject 的 Error 会额外挂载后端业务码与 HTTP 状态码，
+ * 供调用方区分「后端收到了请求并明确拒绝」与「后端不可达 / 5xx」，
+ * 从而避免无差别降级后向用户弹出与事实不符的成功提示。
+ *
+ * 说明：字段名用 `bizCode` 而非 `code`，避免与 axios 自身的 `AxiosError.code`
+ * （字符串，如 'ERR_NETWORK'）语义混淆。
+ */
+export interface ApiRequestError extends Error {
+  /** 后端业务码（code !== 0 时的值；网络层错误无此字段） */
+  bizCode?: number
+  /** HTTP 状态码（网络层错误无此字段） */
+  httpStatus?: number
+}
+
+/**
+ * 判断一个未知错误是否为「后端业务拒绝」（请求已到达服务端且被明确拒绝）。
+ *
+ * @param error catch 到的未知错误
+ * @returns 是业务拒绝错误时返回带 bizCode 的错误对象，否则返回 null
+ */
+export function asApiRequestError(error: unknown): ApiRequestError | null {
+  if (!error || typeof error !== 'object') {
+    return null
+  }
+  const candidate = error as ApiRequestError
+  return typeof candidate.bizCode === 'number' ? candidate : null
+}
+
+/**
+ * 读取错误的 HTTP 状态码（无响应时返回 0）。
+ *
+ * @param error catch 到的未知错误
+ * @returns HTTP 状态码，取不到时为 0
+ */
+export function httpStatusOf(error: unknown): number {
+  if (!error || typeof error !== 'object') {
+    return 0
+  }
+  const status = (error as { response?: { status?: number } }).response?.status
+  return typeof status === 'number' ? status : 0
+}
+
 /** 响应拦截：解包 + 统一错误处理 */
 request.interceptors.response.use(
   (response) => {
@@ -147,10 +192,15 @@ request.interceptors.response.use(
       return normalizePageData(body.data)
     }
 
+    // 业务码挂载到 Error 上：调用方据此区分「明确拒绝」与「不可达」，避免无差别降级说假话
+    const failure = new Error(body.message || '请求失败') as ApiRequestError
+    failure.bizCode = body.code
+    failure.httpStatus = response.status
+
     if (!silent) {
       message.error(body.message || '请求失败，请稍后重试')
     }
-    return Promise.reject(new Error(body.message || '请求失败'))
+    return Promise.reject(failure)
   },
   (error: AxiosError<ApiResult<unknown>>) => {
     const status = error.response?.status

@@ -2,8 +2,15 @@
  * 下发整改弹窗（农场监管模块内部复用组件）
  *
  * 被「农场监管列表」「农场监管详情」两个页面共用：选择高/中风险农场后录入检查类型、
- * 整改要求与整改期限并提交。提交采用「后端优先，失败降级本地登记」策略，
- * 保证后端 `/admin/farms/compliance` 写接口尚未开放时业务闭环不被打断。
+ * 整改要求与整改期限并提交。
+ *
+ * ⚠️ 写失败口径与 ComplianceCheck 页保持一致（不能骗人）：
+ * - 成功 → success；
+ * - 后端明确拒绝（业务码非 0，典型是 404 农场档案不存在）→ 错误提示，且不写本地；
+ * - 后端不可达 → 离线兜底，但弹 warning 而非 success，并说明仅本浏览器可见。
+ *
+ * 旧实现把两种情况一律吞成 null 再弹"接口暂未开放，已本地登记"的成功提示，
+ * 在写接口已上线且会校验 farmId 之后，这句话在农场不存在时是假的。
  */
 import { useEffect, useState } from 'react'
 import { App, Col, DatePicker, Form, Input, Modal, Row, Select, Space, Tag } from 'antd'
@@ -20,8 +27,23 @@ import {
   generateCheckId,
   resolveRiskLevel,
   todayText,
+  upsertRemoteComplianceCheck,
 } from './supervisionShared'
 import type { ComplianceTaskItem } from './supervisionShared'
+
+/**
+ * 下发结果（三分支口径同 ComplianceCheck 页）。
+ *
+ * `source` 为 'local' 表示确实存下来了但只在本浏览器；'failed' 表示什么都没存。
+ */
+interface DispatchOutcome {
+  /** 数据最终去向 */
+  source: 'remote' | 'local' | 'failed'
+  /** 需要告知用户的原因（local / failed 时必有值） */
+  reason?: string
+  /** 任务主体，failed 时为空 */
+  task: ComplianceTaskItem | null
+}
 
 /** 下发目标摘要 */
 export interface RectifyTargetSummary {
@@ -69,7 +91,7 @@ interface RectifyFormValues {
  */
 export default function RectifyDispatchModal(props: RectifyDispatchModalProps): JSX.Element {
   const { open, target, onClose, onSuccess } = props
-  const { message } = App.useApp()
+  const { message, modal } = App.useApp()
   const [form] = Form.useForm<RectifyFormValues>()
   /** 是否已初始化默认值，避免每次打开覆盖用户输入 */
   const [initialized, setInitialized] = useState<boolean>(false)
@@ -89,7 +111,7 @@ export default function RectifyDispatchModal(props: RectifyDispatchModalProps): 
     mutationFn: async (payload: {
       target: RectifyTargetSummary
       values: RectifyFormValues
-    }): Promise<ComplianceTaskItem> => {
+    }): Promise<DispatchOutcome> => {
       const level = resolveRiskLevel(payload.target.riskScore)
       const task: ComplianceTaskItem = {
         checkId: generateCheckId(),
@@ -106,8 +128,7 @@ export default function RectifyDispatchModal(props: RectifyDispatchModalProps): 
         rectifyStatus: 'pending',
         source: 'remote',
       }
-      // 后端端点可用时写入服务端，否则降级为本地登记
-      const remote = await createSupervisedComplianceTask({
+      const result = await createSupervisedComplianceTask({
         checkId: task.checkId,
         farmId: task.farmId,
         farmName: task.farmName,
@@ -121,24 +142,61 @@ export default function RectifyDispatchModal(props: RectifyDispatchModalProps): 
         checkerName: task.checkerName,
         checkedAt: task.checkedAt,
       })
-      if (!remote) {
+      if (result.ok && result.remote) {
+        // 已落库：以服务端返回为准，本地不留副本（否则本机那份会冒充服务端数据）
+        upsertRemoteComplianceCheck(result.remote)
+        return { source: 'remote', task }
+      }
+      if (result.kind === 'unreachable') {
         const localTask: ComplianceTaskItem = { ...task, source: 'local' }
         addComplianceTask(localTask)
-        return localTask
+        return {
+          source: 'local',
+          task: localTask,
+          reason:
+            `${result.message}。已临时登记到本地：仅本浏览器可见，其他账号看不到，` +
+            '接口恢复后不会自动同步到服务端。',
+        }
       }
-      addComplianceTask(task)
-      return task
+      // 后端明确拒绝（典型：404 该农场档案不存在）：不写本地
+      return {
+        source: 'failed',
+        task: null,
+        reason:
+          result.code === 404
+            ? '该农场编号在档案库中不存在（后端返回 404，请求已被拒绝）。' +
+              '整改任务必须绑定到真实存在的农场档案：请先完成建档再下发。本次未写入任何数据。'
+            : `后端拒绝了本次下发（业务码 ${result.code ?? '未知'}）` +
+              `${result.message ? `：${result.message}` : ''}。本次未写入任何数据。`,
+      }
     },
-    onSuccess: (task) => {
-      message.success(
-        task.source === 'remote'
-          ? `已向「${task.farmName}」下发整改，整改期限 ${task.rectifyDeadline}`
-          : `已登记整改任务（后端检查任务接口暂未开放，已本地登记），整改期限 ${task.rectifyDeadline}`,
-      )
-      form.resetFields()
-      setInitialized(false)
-      onClose()
-      onSuccess?.(task)
+    onSuccess: (outcome) => {
+      if (outcome.source === 'remote' && outcome.task) {
+        message.success(
+          `已向「${outcome.task.farmName}」下发整改，整改期限 ${outcome.task.rectifyDeadline}`,
+        )
+        form.resetFields()
+        setInitialized(false)
+        onClose()
+        onSuccess?.(outcome.task)
+        return
+      }
+      if (outcome.source === 'local' && outcome.task) {
+        message.warning(
+          `已登记整改任务到本地，但未写入服务端：${outcome.reason ?? ''}（整改期限 ${outcome.task.rectifyDeadline}）`,
+          6,
+        )
+        form.resetFields()
+        setInitialized(false)
+        onClose()
+        onSuccess?.(outcome.task)
+        return
+      }
+      // 被拒绝：不关闭弹窗，保留已填内容便于改选目标重试
+      modal.error({
+        title: '下发整改失败',
+        content: outcome.reason ?? '后端拒绝了本次提交，未写入任何数据。',
+      })
     },
     onError: () => {
       message.error('下发整改失败，请稍后重试')

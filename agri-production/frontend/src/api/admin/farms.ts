@@ -1,7 +1,7 @@
 /**
  * 运营端 - 农场监管 API（含 GIS 与合规检查）
  */
-import { http } from '@/utils/request'
+import { asApiRequestError, http, httpStatusOf } from '@/utils/request'
 import type { BizId, PageQuery, PageResult } from '@/types'
 import type { ComplianceCheck, Farm } from '@/types'
 
@@ -54,14 +54,29 @@ export function listFarmMapPoints(params?: {
   )
 }
 
-/** 分页查询合规检查记录 */
+/**
+ * 分页查询合规检查**任务台账**。
+ *
+ * ⚠️ 端点必须是 `GET /admin/farms/compliance/checks`，不是 `GET /admin/farms/compliance`。
+ * 两者在后端 `AdminFarmController` 里是两个不同端点：
+ * - `/compliance`        → 农场合规**画像清单**（`ApiResponse<List<Map>>`，非分页体）
+ * - `/compliance/checks` → 检查任务**台账**（`ApiResponse<PageResult<FarmComplianceCheckEntity>>`）
+ *
+ * 打错端点的后果是"看起来能用、实际是假的"：画像清单是个数组，归一化后 `list` 为 undefined，
+ * 页面拿到空列表；而新建时前端把 POST 的响应并进了本地 state，所以**提交完能看到、刷新就变 0 条**，
+ * 用户会以为数据丢了。
+ *
+ * 返回结构：后端 `{ code, data: { records, total, page, size } }`，
+ * 经 `src/utils/request.ts` 的 `normalizePageData` 归一化为 `{ list, total, pageNum, pageSize, pages }`，
+ * 与 `PageResult<T>` 一致；入参 `pageNum` / `pageSize` 由后端 PageParamAliasFilter 映射为 `page` / `size`。
+ *
+ * @param params 分页与筛选参数
+ * @returns 归一化后的分页结果
+ */
 export function listComplianceChecks(
   params: PageQuery & { farmId?: string; result?: number },
 ): Promise<PageResult<ComplianceCheck>> {
-  return http.get<PageResult<ComplianceCheck>>(
-    `${BASE}/compliance`,
-    params,
-  )
+  return http.get<PageResult<ComplianceCheck>>(`${BASE}/compliance/checks`, params)
 }
 
 /** 新增合规检查记录 */
@@ -168,26 +183,131 @@ export function listSupervisedFarmMapPoints(): Promise<FarmMapPoint[]> {
 }
 
 /**
- * 登记合规检查任务（后端优先，端点未开放时返回 null 由页面降级为本地登记）
+ * 合规检查写操作结果。
  *
- * 使用 silent 配置，避免端点未开放时弹出全局错误提示。
+ * 设计前提（team-lead 对全仓空 catch 的裁决仍然成立）：**不改成 throw**——
+ * 后端端点未全就绪时 throw 会让页面大面积转错误态。正确做法是保留可控降级、
+ * 但让降级**可见且可区分**，因此这里把失败拆成两类：
+ *
+ * - `rejected`：请求已到达服务端，被明确拒绝（400 / 404 等 4xx，或 2003 这类自定义业务码）。
+ *   这类失败**不应该**降级写本地——写本地等于把一条注定关联不上的任务留在用户机器上。
+ * - `unreachable`：服务端根本没给出有效响应（断网 / 超时），或 HTTP 5xx / 业务码 5xx
+ *   这类**服务端自身故障**。只有这类才可以离线兜底，且页面必须弹 warning 而不是 success。
+ *
+ * ⚠️ 判定口径：能不能降级，取决于"服务端是不是给了一个明确的答复"，而不是"有没有成功"。
+ * 404（农场档案不存在）是明确答复 → 不降级；5xx 是服务端没干成活 → 可降级但要说清。
  */
-export function createSupervisedComplianceTask(
-  payload: Record<string, unknown>,
-): Promise<ComplianceCheck | null> {
-  return http
-    .post<ComplianceCheck>(`${BASE}/compliance`, payload, { silent: true })
-    .catch(() => null)
+export interface ComplianceWriteResult {
+  /** 是否成功写入服务端 */
+  ok: boolean
+  /**
+   * 失败性质：
+   * - `rejected`：后端明确拒绝（请求已到达服务端，业务码非 0）
+   * - `unreachable`：后端不可达（无响应 / 网络中断 / HTTP 5xx）
+   * 成功时该字段为空。
+   */
+  kind?: 'rejected' | 'unreachable'
+  /** 后端业务码或 HTTP 状态码（仅失败时有值） */
+  code?: number
+  /** 失败原因：业务拒绝时为后端 message，不可达时为网络/HTTP 描述 */
+  message?: string
+  /** 成功时服务端返回的任务 */
+  remote?: ComplianceCheck
 }
 
 /**
- * 更新合规检查任务（后端优先，端点未开放时返回 null 由页面降级为本地登记）
+ * 把写操作的未知异常归一化为可区分的失败结果。
+ *
+ * 判定顺序很关键：先看有没有后端业务码（说明服务端收到了请求），
+ * 再看有没有 5xx 之外的 HTTP 状态码，最后才归为不可达。
+ *
+ * @param error catch 到的未知异常
+ * @returns 失败结果（ok 恒为 false）
  */
-export function updateSupervisedComplianceTask(
+function toComplianceWriteFailure(error: unknown): ComplianceWriteResult {
+  const bizError = asApiRequestError(error)
+  if (bizError) {
+    const bizCode = bizError.bizCode ?? 0
+    // 后端 ErrorCode 的取值约定：4xx 是 HTTP 语义码（BAD_REQUEST 400 / NOT_FOUND 404），
+    // 5xx 是服务端故障，其余是 2003 这类自定义业务码（一律视为"服务端明确答复"）。
+    // 只有服务端故障才允许离线兜底；明确答复的一律不写本地，避免留下永远同步不上去的记录。
+    const kind: ComplianceWriteResult['kind'] =
+      bizCode >= 500 && bizCode <= 599 ? 'unreachable' : 'rejected'
+    return {
+      ok: false,
+      kind,
+      code: bizCode,
+      message: bizError.message || '后端拒绝了本次提交',
+    }
+  }
+
+  const status = httpStatusOf(error)
+  if (status > 0 && status < 500) {
+    // 未经业务包装的 4xx（网关/鉴权拦截等）：同样是"服务端收到了并拒绝"
+    return {
+      ok: false,
+      kind: 'rejected',
+      code: status,
+      message: (error as Error)?.message || `请求被拒绝（HTTP ${status}）`,
+    }
+  }
+
+  if (status >= 500) {
+    return {
+      ok: false,
+      kind: 'unreachable',
+      code: status,
+      message: `后端服务异常（HTTP ${status}）`,
+    }
+  }
+
+  return {
+    ok: false,
+    kind: 'unreachable',
+    message: (error as Error)?.message || '后端不可达（无响应，可能是网络中断或服务未启动）',
+  }
+}
+
+/**
+ * 登记合规检查任务（POST /admin/farms/compliance）。
+ *
+ * 不抛异常；失败时返回带 `kind` 的结果，由调用方区分
+ * 「后端明确拒绝（不写本地）」与「后端不可达（可离线兜底，但必须告知）」，
+ * 不能像旧实现那样一律返回 null 后弹成功提示——那是骗人。
+ *
+ * @param payload 检查任务字段
+ * @returns 写操作结果
+ */
+export async function createSupervisedComplianceTask(
+  payload: Record<string, unknown>,
+): Promise<ComplianceWriteResult> {
+  try {
+    const remote = await http.post<ComplianceCheck>(`${BASE}/compliance`, payload, { silent: true })
+    return { ok: true, remote }
+  } catch (error) {
+    return toComplianceWriteFailure(error)
+  }
+}
+
+/**
+ * 更新合规检查任务（PUT /admin/farms/compliance/{checkId}）。
+ *
+ * 与创建同理：失败原因必须可区分，不能一律降级还说成功。
+ *
+ * @param checkId 检查编号
+ * @param payload 待更新字段
+ * @returns 写操作结果
+ */
+export async function updateSupervisedComplianceTask(
   checkId: BizId,
   payload: Record<string, unknown>,
-): Promise<ComplianceCheck | null> {
-  return http
-    .put<ComplianceCheck>(`${BASE}/compliance/${checkId}`, payload, { silent: true })
-    .catch(() => null)
+): Promise<ComplianceWriteResult> {
+  try {
+    const remote = await http.put<ComplianceCheck>(`${BASE}/compliance/${checkId}`, payload, {
+      silent: true,
+    })
+    return { ok: true, remote }
+  } catch (error) {
+    return toComplianceWriteFailure(error)
+  }
 }
