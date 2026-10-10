@@ -91,9 +91,15 @@ export function listSopLibraryByCrop(cropId: string): Promise<SopLibraryItem[]> 
   return http.get<SopLibraryItem[]>(`${SOP_BASE}/by-crop`, { cropId })
 }
 
-/** 分页查询农业知识库文章 */
+/**
+ * 分页查询农业知识库文章。
+ *
+ * ⚠️ 后端 `AdminKnowledgeController#page` 只接收 `page / size / keyword / status`
+ * 四个参数：`title` 与 `category` 都不是它的入参，传了会被静默忽略
+ * （实测 `title=水稻` 仍返回全部条目），因此这里补上真参数名 `keyword`。
+ */
 export function listKnowledgeArticles(
-  params: PageQuery & { title?: string; category?: number; status?: number },
+  params: PageQuery & { title?: string; keyword?: string; category?: number; status?: number },
 ): Promise<PageResult<KnowledgeArticle>> {
   return http.get<PageResult<KnowledgeArticle>>(KB_BASE, params)
 }

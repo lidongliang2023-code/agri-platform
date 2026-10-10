@@ -14,6 +14,7 @@
 import type { CSSProperties, ReactNode } from 'react'
 import { Space, Statistic, Tooltip, Typography } from 'antd'
 import { InfoCircleOutlined } from '@ant-design/icons'
+import { formatMetric, toFiniteNumber } from '@/utils/metric-format'
 
 /** 缺失值展示文案 */
 export const MISSING_VALUE_TEXT = '—'
@@ -79,6 +80,74 @@ export default function MetricStatistic({
       prefix={prefix}
       valueStyle={valueStyle}
     />
+  )
+}
+
+/** 行内数值入参（表格列 / 描述项 / 卡片大数等任意位置） */
+export interface MetricNumberProps {
+  /**
+   * 指标值。
+   *
+   * 类型是 `unknown` 而不是 `number`：调用方拿到的本来就是后端原始字段，
+   * 运行时可能是 undefined / 数字字符串 / null。若这里仍标 `number`，
+   * TypeScript 会「担保」`value.toLocaleString()` 一定安全，
+   * 而这个担保正是本项目两处整页崩溃（`DisasterReview` / `KnowledgeBase`）的来源。
+   */
+  value: unknown
+  /** 小数位，缺省 0 */
+  precision?: number
+  /** 区域，缺省 zh-CN */
+  locale?: string
+  /** 单位后缀，如「 亩」 */
+  suffix?: string
+  /** 前置内容，如「¥ 」 */
+  prefix?: ReactNode
+  /** 数值样式 */
+  style?: CSSProperties
+  /** 缺失时的自定义提示语 */
+  missingTip?: string
+}
+
+/**
+ * 行内数值（表格列 / Descriptions / 卡片大数通用）。
+ *
+ * 与 `MetricText` 的区别：入参收 `unknown`（后端原始字段），
+ * 内部先经 `toFiniteNumber` 判定，缺失时渲染「—」+ 橙色信息图标（hover 出提示），
+ * **不渲染 0、不渲染空白**。
+ *
+ * @param props 见 MetricNumberProps
+ * @returns 千分位数值，或带可见提示的「—」
+ */
+export function MetricNumber({
+  value,
+  precision = 0,
+  locale = 'zh-CN',
+  suffix = '',
+  prefix,
+  style,
+  missingTip = MISSING_VALUE_TIP,
+}: MetricNumberProps): JSX.Element {
+  const numeric = toFiniteNumber(value)
+  if (numeric === null) {
+    return (
+      <Tooltip title={missingTip}>
+        <Typography.Text type="secondary" style={{ cursor: 'help', ...style }}>
+          {MISSING_VALUE_TEXT}
+          <InfoCircleOutlined style={{ fontSize: 11, color: '#faad14', marginLeft: 2 }} />
+        </Typography.Text>
+      </Tooltip>
+    )
+  }
+  return (
+    <Typography.Text style={style}>
+      {prefix}
+      {formatMetric(numeric, {
+        locale,
+        minimumFractionDigits: precision,
+        maximumFractionDigits: precision,
+      })}
+      {suffix}
+    </Typography.Text>
   )
 }
 

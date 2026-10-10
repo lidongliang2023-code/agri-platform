@@ -159,26 +159,66 @@ export interface SopTemplate {
   auditedAt?: string
 }
 
-/** 知识库文章 */
+/**
+ * 知识库文章
+ *
+ * ⚠️ 契约口径（2026-10 实测 `GET /api/v1/production/admin/knowledge`）：
+ * 后端直接吐 `KnowledgeArticleEntity`，真实字段是
+ * `articleId / categoryCode / title / summary / contentUrl / author / source /
+ * readCount / publishAt / status` + 基类审计列 `createdAt / updatedAt`。
+ *
+ * 此前本类型声明的 `category`（数字 1-4）、`content`（正文）、`viewCount`（浏览量）、
+ * `publisherName`、`publishedAt` **后端一个都不返回**，其中 `viewCount` 直接导致
+ * 知识库页「查看数」列与详情抽屉崩在 `v.toLocaleString()`（整页白屏）。
+ *
+ * 处置：
+ * - 后端真字段全部补进类型（`categoryCode` / `contentUrl` / `author` / `source` /
+ *   `readCount` / `publishAt`），页面按真字段名消费；
+ * - 前端历史声明但没有后端对应列的字段一律改成可选，由页面显式降级为「—」，
+ *   不许再让 TS 用必填标注「担保」运行时一定有值。
+ */
 export interface KnowledgeArticle {
   /** 文章 ID */
   articleId: string
   /** 文章标题 */
   title: string
-  /** 分类：1 种植技术 2 病虫害防治 3 政策法规 4 农资知识 */
-  category: 1 | 2 | 3 | 4
+  /** 分类编码（后端真字段）：如 PLANT / PEST / POLICY */
+  categoryCode?: string
+  /**
+   * 分类数字编码：1 种植技术 2 病虫害防治 3 政策法规 4 农资知识。
+   * 后端无 `category` 列（只有 `categoryCode` 字符串），声明为可选，
+   * 写入时后端同样不消费该字段。
+   */
+  category?: 1 | 2 | 3 | 4
   /** 摘要 */
   summary?: string
-  /** 正文 */
-  content: string
+  /** 正文链接（后端真字段 `contentUrl`；不是正文内容本身） */
+  contentUrl?: string
+  /**
+   * 正文内容：后端无该列（只有正文链接），声明为可选，页面显示「—」。
+   */
+  content?: string
   /** 标签列表 */
   tags?: string[]
-  /** 浏览量 */
-  viewCount: number
+  /** 阅读数（后端真字段 `readCount`） */
+  readCount?: number
+  /**
+   * 浏览量：前端历史声明名，后端无该列。
+   * 页面用 `readCount` 填充；两者都缺失时为 undefined，渲染「—」。
+   */
+  viewCount?: number
   /** 发布状态：1 已发布 0 草稿 */
-  status: 0 | 1
-  /** 发布人姓名 */
-  publisherName?: string
-  /** 发布时间 */
+  status?: 0 | 1
+  /** 作者（后端真字段 `author`） */
+  author?: string
+  /** 来源（后端真字段 `source`） */
+  source?: string
+  /** 发布时间（后端真字段 `publishAt`） */
+  publishAt?: string
+  /** 发布时间：前端历史声明名，后端无该列 */
   publishedAt?: string
+  /** 发布人姓名：前端历史声明名，后端无该列（只有 `author`） */
+  publisherName?: string
+  /** 更新时间（后端基类审计列 `updatedAt`） */
+  updatedAt?: string
 }

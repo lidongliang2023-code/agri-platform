@@ -6,14 +6,36 @@
  * 原型页码：P21 ai-knowledge
  *
  * 交互说明（对照原型 P21）：
- * - 顶部统计卡：知识条目总数 15,680 / 已审核 14,200 / 待审核 850 / 已废弃 630；
+ * - 顶部统计卡：知识条目总数 / 已发布 / 草稿 / 已废弃；
  * - 左侧「知识分类」树（含条目数），点击分类过滤右侧列表；
  * - 右上「新增知识条目」，按 病虫害图谱 / 农技文章 / 问答语料 三个分类 Tab 切换语料类型；
  * - 列表列：编号 / 标题 / 分类 / 来源 / 审核状态 / 关联模型 / 操作（查看、编辑、审核、删除）；
  * - 支持全文搜索、编辑、删除、发布上下架与审核（通过 / 废弃）。
+ *
+ * ⚠️ 契约口径（2026-10 实测 `GET /api/v1/production/admin/knowledge`）：
+ * 后端直接吐 `KnowledgeArticleEntity`，真实字段是
+ * `articleId / categoryCode(PLANT|PEST|POLICY) / title / summary / contentUrl /
+ *  author / source / readCount / publishAt / status` + 审计列 `createdAt / updatedAt`。
+ *
+ * 此前前端声明的 `viewCount`（浏览量）后端根本没有——后端叫 `readCount`。
+ * 于是列表「查看数」列 `render: (v: number) => v.toLocaleString()` 拿到 undefined 直接抛
+ * TypeError，React error boundary 接管后整页白屏；详情抽屉同一字段再崩一次。
+ *
+ * 处置（两类问题分开治，不能混为一谈）：
+ * 1. **只是字段名对不上、值是真的** → 按后端真字段名消费（`readCount` / `source` /
+ *    `publishAt` / `categoryCode` / `contentUrl`），这是对齐而不是兜底；
+ * 2. **后端确实没有这个字段** → 显式降级为「—」+ 提示图标，不兜 0、不留空白：
+ *    - `content`（正文）：后端只有正文链接 `contentUrl`，没有正文内容；
+ *    - `entryType`（语料类型）：后端无该字段，三个语料 Tab 不参与过滤；
+ *    - `relatedModel`（关联模型）：后端无该字段；
+ *    - `deprecated`（已废弃）：后端 status 只有 1 已发布 / 0 草稿，无废弃态，统计卡显示「—」。
+ *
+ * 同时撤掉了本地示例文章与硬编码的 15680 / 14200 / 850 / 630 统计卡：
+ * 那组数字与后端真实条目数（实测 3 条）毫无关系，属于「把没有数据渲染成有结论」。
  */
 import { useEffect, useMemo, useState } from 'react'
 import {
+  Alert,
   App,
   Button,
   Card,
@@ -26,7 +48,6 @@ import {
   Row,
   Select,
   Space,
-  Statistic,
   Table,
   Tabs,
   Tag,
@@ -47,74 +68,75 @@ import {
   publishKnowledgeArticle,
   updateKnowledgeArticle,
 } from '@/api'
-import { DemoDataAlert } from '@/components'
+import { MISSING_VALUE_TEXT, MetricNumber, MetricStatistic } from '@/components'
+import { toFiniteNumber } from '@/utils/metric-format'
+import { hasNonEmptyTextFields } from '@/utils/shape-guard'
 import type { KnowledgeArticle, PageResult } from '@/types'
 
-/** 审核状态：approved 已审核 / pending 待审核 / deprecated 已废弃 */
+/** 审核状态：approved 已发布 / pending 草稿 / deprecated 已废弃（后端无废弃态） */
 type AuditState = 'approved' | 'pending' | 'deprecated'
 
-/** 语料类型：pest 病虫害图谱 / article 农技文章 / qa 问答语料 */
+/** 语料类型：pest 病虫害图谱 / article 农技文章 / qa 问答语料（后端无该字段） */
 type EntryType = 'pest' | 'article' | 'qa'
 
-/** 知识条目行模型 */
-interface KnowledgeRow extends KnowledgeArticle {
+/**
+ * 知识条目行模型。
+ *
+ * 继承 `Partial<KnowledgeArticle>`：后端字段可能缺失（`content` 就没有），
+ * 若按必填建模，TS 会担保 `row.content.includes(...)` 一定安全，
+ * 而实际会抛 TypeError——搜索框一输入就崩。
+ */
+interface KnowledgeRow extends Partial<KnowledgeArticle> {
   /** 条目编号 */
   articleNo: string
-  /** 二级分类名称 */
+  /** 一级分类名称（由后端 categoryCode 映射；未知编码直接显示编码本身，不臆断中文名） */
   categoryName: string
   /** 来源 */
   source: string
-  /** 关联模型 */
+  /** 关联模型：后端无该字段 */
   relatedModel?: string
   /** 审核状态 */
   auditState: AuditState
-  /** 语料类型 */
-  entryType: EntryType
+  /** 语料类型：后端无该字段，恒为 undefined，展示「—」 */
+  entryType?: EntryType
   /** 更新时间 */
   updatedAt: string
 }
 
-/** 一级分类（原型 P21 分类树） */
-const TOP_CATEGORIES: { key: string; label: string; count: number }[] = [
-  { key: '种植技术', label: '种植技术', count: 3200 },
-  { key: '养殖技术', label: '养殖技术', count: 2800 },
-  { key: '病虫害防治', label: '病虫害防治', count: 4500 },
-  { key: '土壤管理', label: '土壤管理', count: 2180 },
-  { key: '气象知识', label: '气象知识', count: 1500 },
-  { key: '标准规范', label: '标准规范', count: 1500 },
-]
-
-/** 二级分类 */
-const SUB_CATEGORIES: Record<string, { key: string; label: string; count: number }[]> = {
-  种植技术: [
-    { key: '水稻种植', label: '水稻种植', count: 850 },
-    { key: '小麦种植', label: '小麦种植', count: 620 },
-    { key: '果蔬种植', label: '果蔬种植', count: 1730 },
-  ],
+/**
+ * 后端 `categoryCode` → 中文分类名。
+ *
+ * 只收录实测出现过的编码；未知编码直接回落到编码原文，
+ * 不做「看起来像」的猜测映射（猜错等于给条目贴错标签）。
+ */
+const CATEGORY_CODE_TO_NAME: Record<string, string> = {
+  PLANT: '种植技术',
+  PEST: '病虫害防治',
+  POLICY: '政策法规',
 }
 
-/** 分类选项（下拉用） */
-const CATEGORY_OPTIONS: { value: string; label: string }[] = TOP_CATEGORIES.concat(
-  Object.values(SUB_CATEGORIES).flat(),
-).map((item) => ({ value: item.key, label: item.label }))
+/** 分类选项（下拉用）：静态分类学，非后端统计值 */
+const CATEGORY_OPTIONS: { value: string; label: string }[] = [
+  { value: '种植技术', label: '种植技术' },
+  { value: '病虫害防治', label: '病虫害防治' },
+  { value: '政策法规', label: '政策法规' },
+  { value: '农资知识', label: '农资知识' },
+  { value: '土壤管理', label: '土壤管理' },
+]
 
-/** 基础 KnowledgeArticle.category 映射（1 种植技术 2 病虫害防治 3 政策法规 4 农资知识） */
+/** 分类名 → 后端历史数字编码（后端实际不消费该字段，仅保留写入兼容） */
 const CATEGORY_TO_CODE: Record<string, 1 | 2 | 3 | 4> = {
   种植技术: 1,
-  水稻种植: 1,
-  小麦种植: 1,
-  果蔬种植: 1,
   病虫害防治: 2,
+  政策法规: 3,
+  农资知识: 4,
   土壤管理: 4,
-  气象知识: 4,
-  标准规范: 3,
-  养殖技术: 1,
 }
 
 /** 审核状态文案与颜色 */
 const AUDIT_MAP: Record<AuditState, { label: string; color: string }> = {
-  approved: { label: '已审核', color: 'success' },
-  pending: { label: '待审核', color: 'gold' },
+  approved: { label: '已发布', color: 'success' },
+  pending: { label: '草稿', color: 'gold' },
   deprecated: { label: '已废弃', color: 'default' },
 }
 
@@ -125,181 +147,20 @@ const ENTRY_TYPE_MAP: Record<EntryType, string> = {
   qa: '问答语料',
 }
 
-/** 演示知识条目（原型 P21 列出的 6 条 + 补充） */
-const MOCK_ARTICLES: KnowledgeRow[] = [
-  {
-    articleId: 'K001',
-    articleNo: 'K001',
-    title: '水稻稻瘟病防治技术规程',
-    category: 2,
-    categoryName: '病虫害防治',
-    summary: '涵盖稻瘟病识别要点、药剂选择与施药时机。',
-    content:
-      '稻瘟病分为苗瘟、叶瘟、穗瘟。防治要点：① 选用抗病品种；② 合理密植，控制氮肥；③ 破口前 5-7 天与齐穗期各防治一次，选用登记药剂；④ 严格执行安全间隔期。',
-    tags: ['水稻', '稻瘟病', '植保'],
-    viewCount: 12840,
-    status: 1,
-    publisherName: '国家农技推广中心',
-    publishedAt: '2025-03-12',
-    source: '国家农技推广中心',
-    relatedModel: '病虫害识别',
-    auditState: 'approved',
-    entryType: 'pest',
-    updatedAt: '2025-06-18 10:20',
-  },
-  {
-    articleId: 'K002',
-    articleNo: 'K002',
-    title: '小麦赤霉病早期识别要点',
-    category: 2,
-    categoryName: '病虫害防治',
-    summary: '基于图像识别的赤霉病早期症状判定标准。',
-    content:
-      '赤霉病在扬花期侵染，早期表现为穗部小穗褪色水渍状。识别要点：① 关注扬花期降雨；② 观察穗部褐变与粉红色霉层；③ 结合田间湿度 > 80% 判读；④ 及时喷施并回收病残体。',
-    tags: ['小麦', '赤霉病'],
-    viewCount: 9620,
-    status: 1,
-    publisherName: '农科院',
-    publishedAt: '2025-04-02',
-    source: '农科院',
-    relatedModel: '病虫害识别',
-    auditState: 'approved',
-    entryType: 'pest',
-    updatedAt: '2025-05-22 09:15',
-  },
-  {
-    articleId: 'K003',
-    articleNo: 'K003',
-    title: '有机苹果种植技术标准',
-    category: 1,
-    categoryName: '果蔬种植',
-    summary: '有机果园土壤管理、修剪与病虫害综合防治规范。',
-    content:
-      '有机苹果种植要求：① 不用化学合成农药与肥料；② 行间生草 + 果园覆草提升有机质；③ 采用性诱剂、天敌与矿物源农药；④ 建立完整投入品台账并接受年度检查认证。',
-    tags: ['苹果', '有机种植'],
-    viewCount: 4310,
-    status: 0,
-    publisherName: '省农科院',
-    source: '省农科院',
-    relatedModel: '产量预测',
-    auditState: 'pending',
-    entryType: 'article',
-    updatedAt: '2025-07-08 15:40',
-  },
-  {
-    articleId: 'K004',
-    articleNo: 'K004',
-    title: '土壤重金属检测规范',
-    category: 4,
-    categoryName: '土壤管理',
-    summary: '土壤铅镉汞砷采样布点与限值判定要求。',
-    content:
-      '按 NY/T 标准要求布点：① 每 20 亩不少于 1 个混合样；② 取样深度 0-20cm；③ 每季度一次趋势监测；④ 超标地块须停用并转入修复流程。',
-    tags: ['土壤', '重金属'],
-    viewCount: 7620,
-    status: 1,
-    publisherName: '环保部',
-    publishedAt: '2025-02-18',
-    source: '环保部',
-    relatedModel: '土壤分析',
-    auditState: 'approved',
-    entryType: 'article',
-    updatedAt: '2025-04-26 11:05',
-  },
-  {
-    articleId: 'K005',
-    articleNo: 'K005',
-    title: '2025年玉米种植密度建议',
-    category: 1,
-    categoryName: '种植技术',
-    summary: '按积温带给出玉米适宜密度与收获方式建议。',
-    content:
-      '东北春玉米区：耐密品种 4500-5000 株/亩；黄淮海夏玉米区：4200-4800 株/亩；西南丘陵区：3600-4000 株/亩。密植需配套抗倒伏品种与化控措施。',
-    tags: ['玉米', '密植'],
-    viewCount: 5840,
-    status: 0,
-    publisherName: '农技站',
-    source: '农技站',
-    relatedModel: '产量预测',
-    auditState: 'pending',
-    entryType: 'article',
-    updatedAt: '2025-07-11 08:30',
-  },
-  {
-    articleId: 'K006',
-    articleNo: 'K006',
-    title: '旧版水稻施肥指南',
-    category: 1,
-    categoryName: '种植技术',
-    summary: '2019 版施肥建议，已被新版替代。',
-    content: '该条目为 2019 版水稻施肥指南，施肥量与现行标准不一致，已标记为废弃，仅供历史查阅。',
-    tags: ['水稻', '历史数据'],
-    viewCount: 620,
-    status: 0,
-    publisherName: '历史数据',
-    source: '历史数据',
-    auditState: 'deprecated',
-    entryType: 'article',
-    updatedAt: '2023-11-02 16:20',
-  },
-  {
-    articleId: 'K007',
-    articleNo: 'K007',
-    title: '水稻二化螟图谱与防治问答',
-    category: 2,
-    categoryName: '病虫害防治',
-    summary: 'AI 问答高频问题：二化螟如何识别和防治？',
-    content:
-      '问：水稻出现枯心苗是二化螟吗？答：枯心苗多由二化螟幼虫蛀入心叶造成，剥查可见幼虫及虫粪；可在卵孵盛期选用苏云金杆菌或氯虫苯甲酰胺类登记药剂防治，注意轮换用药。',
-    tags: ['水稻', '二化螟', '问答'],
-    viewCount: 3120,
-    status: 1,
-    publisherName: '农技问答运营组',
-    publishedAt: '2025-05-09',
-    source: '运营沉淀',
-    relatedModel: 'AI问答助手',
-    auditState: 'approved',
-    entryType: 'qa',
-    updatedAt: '2025-06-30 14:10',
-  },
-  {
-    articleId: 'K008',
-    articleNo: 'K008',
-    title: '设施番茄常见生理障碍问答集',
-    category: 2,
-    categoryName: '病虫害防治',
-    summary: '番茄脐腐病、裂果等生理性问题的问答语料。',
-    content:
-      '问：番茄脐腐病怎么防？答：属缺钙生理病害，关键是保持水分均衡供应、避免土壤忽干忽湿，可在幼果期补充螯合钙；同时控制氮肥过量施用。',
-    tags: ['番茄', '问答'],
-    viewCount: 2480,
-    status: 0,
-    publisherName: '运营沉淀',
-    source: '运营沉淀',
-    relatedModel: 'AI问答助手',
-    auditState: 'pending',
-    entryType: 'qa',
-    updatedAt: '2025-07-13 09:50',
-  },
-]
+/** 语料类型缺失提示语 */
+const ENTRY_TYPE_MISSING_TIP = '未接入：后端知识库无「语料类型」字段，显示为「—」，不做臆断归类'
 
-/** 本地演示数据源 */
-let mockArticleStore: KnowledgeRow[] = [...MOCK_ARTICLES]
+/** 查看数缺失提示语 */
+const VIEW_COUNT_MISSING_TIP = '未接入：后端知识库未返回阅读数（readCount），显示为「—」而非 0'
 
-/** 平台级示例口径（原型 P21 统计卡，硬编码示例数字，非服务端统计值） */
-const PLATFORM_STATS = {
-  total: 15680,
-  approved: 14200,
-  pending: 850,
-  deprecated: 630,
-}
+/** 已废弃统计缺失提示语 */
+const DEPRECATED_MISSING_TIP =
+  '未接入：后端知识库 status 只有 1 已发布 / 0 草稿，无「废弃」状态，显示为「—」而非 0'
 
-/** 示例数据覆盖范围（提示条文案，覆盖统计卡 / 分类树 / 列表） */
-const DEMO_SCOPE = '顶部「知识条目总数 / 已审核 / 待审核 / 已废弃」统计卡、左侧分类树条目数、下方知识条目列表'
-
-/** 示例数据写操作提示 */
-const DEMO_WRITE_NOTE =
-  '新增 / 编辑 / 审核通过 / 标记废弃 / 删除等操作只会修改浏览器本地内存中的示例数据，未写入服务端，刷新页面后即失效。'
+/** 语料类型未接入的页面说明 */
+const ENTRY_TYPE_NOTE =
+  '后端知识库没有「病虫害图谱 / 农技文章 / 问答语料」字段，' +
+  '上方三个语料 Tab 当前不参与过滤（不做臆断归类），列表展示全部条目。'
 
 /** 新增/编辑表单值 */
 interface EntryFormValues {
@@ -328,63 +189,72 @@ export default function KnowledgeBase(): JSX.Element {
   const [drawerOpen, setDrawerOpen] = useState<boolean>(false)
   const [editingId, setEditingId] = useState<string | undefined>(undefined)
   const [detailRow, setDetailRow] = useState<KnowledgeRow | undefined>(undefined)
-  /** 是否处于示例数据（演示）模式：由数据层返回的 demo 标志驱动 */
-  const [demoMode, setDemoMode] = useState<boolean>(false)
 
   const listQuery = useQuery({
-    queryKey: ['admin-knowledge-articles', keyword, entryTab],
-    queryFn: async (): Promise<{ rows: KnowledgeRow[]; demo: boolean }> => {
-      try {
-        const page: PageResult<KnowledgeArticle> = await listKnowledgeArticles({
-          pageNum: 1,
-          pageSize: 200,
-          title: keyword,
-          category: entryTab === 'pest' ? 2 : 1,
-        })
-        if (page && Array.isArray(page.list) && page.list.length > 0) {
-          return {
-            rows: page.list.map<KnowledgeRow>((item) => ({
-              ...item,
-              articleNo: item.articleId,
-              categoryName: item.category === 2 ? '病虫害防治' : '种植技术',
-              source: item.publisherName ?? '平台运营',
-              auditState: item.status === 1 ? 'approved' : 'pending',
-              entryType: entryTab,
-              updatedAt: item.publishedAt ?? '—',
-            })),
-            demo: false,
-          }
-        }
-      } catch {
-        /* 后端不可用时降级为演示数据 */
+    queryKey: ['admin-knowledge-articles', keyword],
+    queryFn: async (): Promise<KnowledgeRow[]> => {
+      const page: PageResult<KnowledgeArticle> = await listKnowledgeArticles({
+        pageNum: 1,
+        pageSize: 200,
+        keyword,
+      })
+      const list = page?.list
+      if (!Array.isArray(list) || list.length === 0) {
+        return []
       }
-      return { rows: mockArticleStore, demo: true }
+      return list
+        .filter((item) => hasNonEmptyTextFields(item, ['articleId', 'title']))
+        .map<KnowledgeRow>((item) => ({
+          ...item,
+          articleNo: item.articleId ?? MISSING_VALUE_TEXT,
+          categoryName:
+            CATEGORY_CODE_TO_NAME[item.categoryCode ?? ''] ?? item.categoryCode ?? MISSING_VALUE_TEXT,
+          source: item.source ?? item.author ?? MISSING_VALUE_TEXT,
+          // 后端真字段是 readCount；这里统一到页面使用的 viewCount 名，
+          // 拿不到就留 undefined 由渲染层显示「—」，不兜 0。
+          viewCount: toFiniteNumber(item.readCount) ?? undefined,
+          auditState: item.status === 1 ? 'approved' : 'pending',
+          // 后端无语料类型字段，不做臆断归类
+          entryType: undefined,
+          updatedAt: item.publishAt ?? item.updatedAt ?? MISSING_VALUE_TEXT,
+        }))
     },
   })
 
   useEffect(() => {
     if (listQuery.data) {
-      setRows(listQuery.data.rows)
-      setDemoMode(listQuery.data.demo)
+      setRows(listQuery.data)
     }
   }, [listQuery.data])
 
-  /** 当前展示行（叠加搜索 / 分类 / Tab 过滤） */
+  /** 当前展示行（叠加搜索 / 分类过滤） */
   const displayRows = useMemo(
     () =>
       rows.filter((row) => {
-        if (keyword && !row.title.includes(keyword) && !row.content.includes(keyword)) {
-          return false
+        if (keyword) {
+          // content 后端不返回，必须 ?? '' 兜住，否则搜索框一输入就 undefined.includes 抛错
+          const haystack = `${row.title ?? ''} ${row.summary ?? ''} ${row.content ?? ''}`
+          if (!haystack.includes(keyword)) {
+            return false
+          }
         }
         if (categoryFilter && row.categoryName !== categoryFilter) {
           return false
         }
-        if (entryTab && row.entryType !== entryTab) {
-          return false
-        }
         return true
       }),
-    [rows, keyword, categoryFilter, entryTab],
+    [rows, keyword, categoryFilter],
+  )
+
+  /** 统计汇总：全部来自后端真实条目，已废弃因后端无该状态恒为 null（显示「—」） */
+  const stats = useMemo(
+    () => ({
+      total: rows.length,
+      approved: rows.filter((row) => row.status === 1).length,
+      pending: rows.filter((row) => row.status !== 1).length,
+      deprecated: null,
+    }),
+    [rows],
   )
 
   /** 保存知识条目 */
@@ -395,95 +265,66 @@ export default function KnowledgeBase(): JSX.Element {
         category: CATEGORY_TO_CODE[values.categoryName] ?? 1,
         summary: values.summary,
         content: values.content,
+        contentUrl: values.content,
         tags: [values.categoryName],
-        publisherName: values.source,
-        status: 0,
-      }
-      try {
-        if (editingId) {
-          await updateKnowledgeArticle(editingId, payload)
-        } else {
-          await createKnowledgeArticle(payload)
-        }
-        message.success('知识条目已保存')
-      } catch {
-        message.warning('知识条目已保存到本地示例数据（演示模式，未写入服务端，刷新后失效）')
-      }
-      const nextId = editingId ?? `K${String(mockArticleStore.length + 1).padStart(3, '0')}`
-      const nextRow: KnowledgeRow = {
-        articleId: nextId,
-        articleNo: nextId,
-        title: values.title,
-        category: CATEGORY_TO_CODE[values.categoryName] ?? 1,
-        categoryName: values.categoryName,
-        summary: values.summary,
-        content: values.content,
-        tags: [values.categoryName],
-        viewCount: 0,
-        status: 0,
-        publisherName: values.source,
         source: values.source,
-        relatedModel: values.relatedModel,
-        auditState: 'pending',
-        entryType: values.entryType,
-        updatedAt: new Date().toISOString().slice(0, 16).replace('T', ' '),
+        author: values.source,
+        status: 0,
       }
-      mockArticleStore = editingId
-        ? mockArticleStore.map((item) => (item.articleId === editingId ? nextRow : item))
-        : [nextRow, ...mockArticleStore]
-      return nextRow
+      if (editingId) {
+        await updateKnowledgeArticle(editingId, payload)
+      } else {
+        await createKnowledgeArticle(payload)
+      }
+      return values
     },
     onSuccess: () => {
+      message.success('知识条目已保存')
       setDrawerOpen(false)
       setEditingId(undefined)
       form.resetFields()
       void queryClient.invalidateQueries({ queryKey: ['admin-knowledge-articles'] })
+    },
+    onError: (error: Error) => {
+      message.error(`保存失败：${error.message || '后端拒绝了本次写入'}`)
     },
   })
 
   /** 删除条目 */
   const removeMutation = useMutation({
     mutationFn: async (row: KnowledgeRow) => {
-      try {
-        await deleteKnowledgeArticle(row.articleId)
-        message.success('条目已删除')
-      } catch {
-        message.warning('条目已从本地示例数据移除（演示模式，未写入服务端，刷新后失效）')
-      }
-      mockArticleStore = mockArticleStore.filter((item) => item.articleId !== row.articleId)
+      await deleteKnowledgeArticle(row.articleId ?? '')
+      return row.articleId ?? ''
+    },
+    onSuccess: () => {
+      message.success('条目已删除')
       void queryClient.invalidateQueries({ queryKey: ['admin-knowledge-articles'] })
-      return row.articleId
+    },
+    onError: (error: Error) => {
+      message.error(`删除失败：${error.message || '后端拒绝了本次删除'}`)
     },
   })
 
   /**
-   * 审核条目：通过 -> 已审核并发布；废弃 -> 已废弃并下架
-   * @param row 目标条目
-   * @param result approved / deprecated
+   * 审核条目：通过 -> 发布；废弃 -> 后端无该能力，如实报错
+   * @param payload 目标条目与审核结论
    */
   const auditMutation = useMutation({
     mutationFn: async (payload: { row: KnowledgeRow; result: 'approved' | 'deprecated' }) => {
-      const nextAudit = payload.result
-      try {
-        await publishKnowledgeArticle(payload.row.articleId, nextAudit === 'approved' ? 1 : 0)
-        message.success(nextAudit === 'approved' ? '条目已审核通过并发布' : '条目已标记为废弃')
-      } catch {
-        message.warning(
-          `${nextAudit === 'approved' ? '条目已审核通过' : '条目已标记为废弃'}（演示模式，仅本地更新，未写入服务端）`,
-        )
+      if (payload.result === 'deprecated') {
+        // 后端 status 只有 1/0，没有「废弃」态，也没有下架端点；
+        // 不做本地假更新（那等于宣称已废弃，刷新即露馅）。
+        throw new Error('后端知识库无「废弃」状态，标记废弃未接入')
       }
-      mockArticleStore = mockArticleStore.map((item) =>
-        item.articleId === payload.row.articleId
-          ? {
-              ...item,
-              auditState: nextAudit,
-              status: nextAudit === 'approved' ? 1 : 0,
-              updatedAt: new Date().toISOString().slice(0, 16).replace('T', ' '),
-            }
-          : item,
-      )
+      await publishKnowledgeArticle(payload.row.articleId ?? '', 1)
+      return payload.result
+    },
+    onSuccess: () => {
+      message.success('条目已审核通过并发布')
       void queryClient.invalidateQueries({ queryKey: ['admin-knowledge-articles'] })
-      return nextAudit
+    },
+    onError: (error: Error) => {
+      message.error(`审核失败：${error.message || '后端拒绝了本次审核'}`)
     },
   })
 
@@ -509,40 +350,40 @@ export default function KnowledgeBase(): JSX.Element {
     setDrawerOpen(true)
   }
 
-  /** 分类树数据 */
-  const treeData = useMemo(
-    () =>
-      TOP_CATEGORIES.map((category) => ({
-        key: category.key,
-        title: (
-          <Space size={4}>
-            <span>{category.label}</span>
-            <Typography.Text type="secondary">{category.count.toLocaleString()}</Typography.Text>
-          </Space>
-        ),
-        children: (SUB_CATEGORIES[category.key] ?? []).map((sub) => ({
-          key: sub.key,
-          title: (
-            <Space size={4}>
-              <span>{sub.label}</span>
-              <Typography.Text type="secondary">{sub.count.toLocaleString()}</Typography.Text>
-            </Space>
-          ),
-        })),
-      })),
-    [],
-  )
+  /** 分类树数据：一级分类与条目数均由后端真实条目聚合而来（后端无二级分类） */
+  const treeData = useMemo(() => {
+    const counter = new Map<string, number>()
+    rows.forEach((row) => {
+      counter.set(row.categoryName, (counter.get(row.categoryName) ?? 0) + 1)
+    })
+    return Array.from(counter.entries()).map(([name, count]) => ({
+      key: name,
+      title: (
+        <Space size={4}>
+          <span>{name}</span>
+          <Typography.Text type="secondary">
+            <MetricNumber value={count} />
+          </Typography.Text>
+        </Space>
+      ),
+    }))
+  }, [rows])
 
   const columns = useMemo(
     () => [
-      { title: '编号', dataIndex: 'articleNo', width: 90 },
+      {
+        title: '编号',
+        dataIndex: 'articleNo',
+        width: 90,
+        render: (text?: string) => text ?? MISSING_VALUE_TEXT,
+      },
       {
         title: '标题',
         dataIndex: 'title',
         width: 240,
         render: (text: string, row: KnowledgeRow) => (
           <Button type="link" size="small" style={{ padding: 0 }} onClick={() => setDetailRow(row)}>
-            {text}
+            {text ?? MISSING_VALUE_TEXT}
           </Button>
         ),
       },
@@ -550,28 +391,32 @@ export default function KnowledgeBase(): JSX.Element {
         title: '分类',
         dataIndex: 'categoryName',
         width: 120,
-        render: (text: string) => <Tag color="blue">{text}</Tag>,
+        render: (text?: string) => (text ? <Tag color="blue">{text}</Tag> : MISSING_VALUE_TEXT),
       },
-      { title: '来源', dataIndex: 'source', width: 150 },
+      {
+        title: '来源',
+        dataIndex: 'source',
+        width: 150,
+        render: (text?: string) => text ?? MISSING_VALUE_TEXT,
+      },
       {
         title: '审核状态',
         dataIndex: 'auditState',
         width: 100,
-        render: (state: AuditState) => (
-          <Tag color={AUDIT_MAP[state].color}>{AUDIT_MAP[state].label}</Tag>
-        ),
+        render: (state?: AuditState) =>
+          state ? <Tag color={AUDIT_MAP[state].color}>{AUDIT_MAP[state].label}</Tag> : MISSING_VALUE_TEXT,
       },
       {
         title: '关联模型',
         dataIndex: 'relatedModel',
         width: 120,
-        render: (text?: string) => text ?? '—',
+        render: (text?: string) => text ?? MISSING_VALUE_TEXT,
       },
       {
         title: '查看数',
         dataIndex: 'viewCount',
-        width: 100,
-        render: (v: number) => v.toLocaleString(),
+        width: 110,
+        render: (v: unknown) => <MetricNumber value={v} missingTip={VIEW_COUNT_MISSING_TIP} />,
       },
       {
         title: '操作',
@@ -611,7 +456,7 @@ export default function KnowledgeBase(): JSX.Element {
               icon={<DeleteOutlined />}
               onClick={() =>
                 modal.confirm({
-                  title: `确认删除条目「${row.title}」？`,
+                  title: `确认删除条目「${row.title ?? row.articleNo}」？`,
                   okText: '确认删除',
                   cancelText: '取消',
                   okButtonProps: { danger: true },
@@ -630,61 +475,49 @@ export default function KnowledgeBase(): JSX.Element {
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      {demoMode ? <DemoDataAlert scope={DEMO_SCOPE} writeNote={DEMO_WRITE_NOTE} /> : null}
+      {listQuery.isError ? (
+        <Alert
+          type="error"
+          showIcon
+          message="知识条目加载失败"
+          description={`${(listQuery.error as Error | null)?.message ?? '未知错误'}（不使用本地示例数据兜底，列表与统计均为空）`}
+        />
+      ) : null}
 
       <Row gutter={16}>
         <Col span={6}>
           <Card>
-            <Statistic
-              title={
-                <Space size={6}>
-                  知识条目总数
-                  {demoMode ? <Tag color="orange">示例</Tag> : null}
-                </Space>
-              }
-              value={PLATFORM_STATS.total}
-            />
+            <MetricStatistic title="知识条目总数" value={stats.total} suffix="条" />
           </Card>
         </Col>
         <Col span={6}>
           <Card>
-            <Statistic
-              title={
-                <Space size={6}>
-                  已审核
-                  {demoMode ? <Tag color="orange">示例</Tag> : null}
-                </Space>
-              }
-              value={PLATFORM_STATS.approved}
+            <MetricStatistic
+              title="已发布"
+              value={stats.approved}
+              suffix="条"
               valueStyle={{ color: '#13a05a' }}
             />
           </Card>
         </Col>
         <Col span={6}>
           <Card>
-            <Statistic
-              title={
-                <Space size={6}>
-                  待审核
-                  {demoMode ? <Tag color="orange">示例</Tag> : null}
-                </Space>
-              }
-              value={PLATFORM_STATS.pending}
+            <MetricStatistic
+              title="草稿（未发布）"
+              value={stats.pending}
+              suffix="条"
               valueStyle={{ color: '#faad14' }}
             />
           </Card>
         </Col>
         <Col span={6}>
           <Card>
-            <Statistic
-              title={
-                <Space size={6}>
-                  已废弃
-                  {demoMode ? <Tag color="orange">示例</Tag> : null}
-                </Space>
-              }
-              value={PLATFORM_STATS.deprecated}
+            <MetricStatistic
+              title="已废弃"
+              value={stats.deprecated}
+              suffix="条"
               valueStyle={{ color: '#8c8c8c' }}
+              missingTip={DEPRECATED_MISSING_TIP}
             />
           </Card>
         </Col>
@@ -692,21 +525,20 @@ export default function KnowledgeBase(): JSX.Element {
 
       <Row gutter={16}>
         <Col span={6}>
-          <Card
-            title={
-              <Space size={6}>
-                📂 知识分类
-                {demoMode ? <Tag color="orange">示例</Tag> : null}
-              </Space>
-            }
-            styles={{ body: { padding: 12 } }}
-          >
-            <Tree
-              treeData={treeData}
-              defaultExpandAll
-              selectedKeys={categoryFilter ? [categoryFilter] : []}
-              onSelect={(keys) => setCategoryFilter(keys.length > 0 ? String(keys[0]) : undefined)}
-            />
+          <Card title="📂 知识分类" styles={{ body: { padding: 12 } }}>
+            {treeData.length > 0 ? (
+              <Tree
+                treeData={treeData}
+                defaultExpandAll
+                selectedKeys={categoryFilter ? [categoryFilter] : []}
+                onSelect={(keys) => setCategoryFilter(keys.length > 0 ? String(keys[0]) : undefined)}
+              />
+            ) : (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description="暂无分类（后端无知识条目或尚未加载）"
+              />
+            )}
             {categoryFilter ? (
               <Button
                 type="link"
@@ -717,6 +549,9 @@ export default function KnowledgeBase(): JSX.Element {
                 清除分类筛选
               </Button>
             ) : null}
+            <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginTop: 8, marginBottom: 0 }}>
+              分类与条目数由后端真实条目聚合；后端无二级分类，故不做二级树。
+            </Typography.Paragraph>
           </Card>
         </Col>
         <Col span={18}>
@@ -756,7 +591,14 @@ export default function KnowledgeBase(): JSX.Element {
               </Space>
             }
           >
-            <Table<KnowledgeRow>
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginBottom: 12 }}
+              message="语料类型未接入"
+              description={ENTRY_TYPE_NOTE}
+            />
+            <Table
               rowKey="articleId"
               columns={columns}
               dataSource={displayRows}
@@ -764,7 +606,7 @@ export default function KnowledgeBase(): JSX.Element {
               pagination={{ pageSize: 8, showSizeChanger: true, showTotal: (total) => `共 ${total} 条` }}
               scroll={{ x: 1300 }}
               locale={{
-                emptyText: <Empty description={`暂无${ENTRY_TYPE_MAP[entryTab]}条目`} />,
+                emptyText: <Empty description="暂无知识条目" />,
               }}
             />
           </Card>
@@ -773,7 +615,7 @@ export default function KnowledgeBase(): JSX.Element {
 
       {/* 查看抽屉 */}
       <Drawer
-        title={detailRow ? `知识条目 - ${detailRow.title}` : '知识条目'}
+        title={detailRow ? `知识条目 - ${detailRow.title ?? detailRow.articleNo}` : '知识条目'}
         width={680}
         open={Boolean(detailRow)}
         onClose={() => setDetailRow(undefined)}
@@ -808,11 +650,20 @@ export default function KnowledgeBase(): JSX.Element {
           <Space direction="vertical" size={16} style={{ width: '100%' }}>
             <Descriptions column={2} size="small" bordered>
               <Descriptions.Item label="编号">{detailRow.articleNo}</Descriptions.Item>
-              <Descriptions.Item label="语料类型">{ENTRY_TYPE_MAP[detailRow.entryType]}</Descriptions.Item>
+              <Descriptions.Item label="语料类型">
+                {detailRow.entryType ? (
+                  ENTRY_TYPE_MAP[detailRow.entryType]
+                ) : (
+                  // 后端无语料类型字段：显示「—」+ 提示，不做臆断归类
+                  <MetricNumber value={null} missingTip={ENTRY_TYPE_MISSING_TIP} />
+                )}
+              </Descriptions.Item>
               <Descriptions.Item label="分类">{detailRow.categoryName}</Descriptions.Item>
               <Descriptions.Item label="来源">{detailRow.source}</Descriptions.Item>
-              <Descriptions.Item label="关联模型">{detailRow.relatedModel ?? '—'}</Descriptions.Item>
-              <Descriptions.Item label="查看数">{detailRow.viewCount.toLocaleString()}</Descriptions.Item>
+              <Descriptions.Item label="关联模型">{detailRow.relatedModel ?? MISSING_VALUE_TEXT}</Descriptions.Item>
+              <Descriptions.Item label="查看数">
+                <MetricNumber value={detailRow.viewCount} missingTip={VIEW_COUNT_MISSING_TIP} />
+              </Descriptions.Item>
               <Descriptions.Item label="审核状态">
                 <Tag color={AUDIT_MAP[detailRow.auditState].color}>
                   {AUDIT_MAP[detailRow.auditState].label}
@@ -820,13 +671,28 @@ export default function KnowledgeBase(): JSX.Element {
               </Descriptions.Item>
               <Descriptions.Item label="更新时间">{detailRow.updatedAt}</Descriptions.Item>
               <Descriptions.Item label="摘要" span={2}>
-                {detailRow.summary ?? '—'}
+                {detailRow.summary ?? MISSING_VALUE_TEXT}
               </Descriptions.Item>
             </Descriptions>
             <Card title="正文内容" size="small">
-              <Typography.Paragraph style={{ whiteSpace: 'pre-wrap', marginBottom: 0 }}>
-                {detailRow.content}
-              </Typography.Paragraph>
+              {detailRow.content ? (
+                <Typography.Paragraph style={{ whiteSpace: 'pre-wrap', marginBottom: 0 }}>
+                  {detailRow.content}
+                </Typography.Paragraph>
+              ) : detailRow.contentUrl ? (
+                <Space direction="vertical" size={4}>
+                  <Typography.Text type="secondary">
+                    后端仅提供正文链接，未返回正文内容：
+                  </Typography.Text>
+                  {/* 后端 contentUrl 为演示种子里的不可解析域名，此处以纯文本展示，
+                      不渲染成可点击链接——点了必然加载失败，属于种子口径问题，另行处理 */}
+                  <Typography.Text code>{detailRow.contentUrl}</Typography.Text>
+                </Space>
+              ) : (
+                <Typography.Text type="secondary">
+                  {MISSING_VALUE_TEXT}（后端未返回正文内容与正文链接）
+                </Typography.Text>
+              )}
             </Card>
             {detailRow.tags && detailRow.tags.length > 0 ? (
               <Space>
@@ -870,8 +736,9 @@ export default function KnowledgeBase(): JSX.Element {
               </Form.Item>
             </Col>
             <Col span={8}>
-              <Form.Item name="entryType" label="语料类型" rules={[{ required: true, message: '请选择语料类型' }]}>
+              <Form.Item name="entryType" label="语料类型" tooltip={ENTRY_TYPE_MISSING_TIP}>
                 <Select
+                  allowClear
                   options={[
                     { value: 'pest', label: '病虫害图谱' },
                     { value: 'article', label: '农技文章' },
@@ -881,7 +748,7 @@ export default function KnowledgeBase(): JSX.Element {
               </Form.Item>
             </Col>
             <Col span={8}>
-              <Form.Item name="relatedModel" label="关联模型">
+              <Form.Item name="relatedModel" label="关联模型" tooltip="后端无该字段，保存后不会落库">
                 <Select
                   allowClear
                   options={[

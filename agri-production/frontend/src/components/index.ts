@@ -6,5 +6,15 @@ export type { PagePlaceholderProps, PlaceholderKind } from './PagePlaceholder'
 export { default as PageLoading } from './PageLoading'
 export { default as DemoDataAlert } from './DemoDataAlert'
 export type { DemoDataAlertProps } from './DemoDataAlert'
-export { default as MetricStatistic, MetricText, MISSING_VALUE_TEXT, MISSING_VALUE_TIP } from './MetricStatistic'
-export type { MetricStatisticProps, MetricTextProps } from './MetricStatistic'
+export {
+  default as MetricStatistic,
+  MetricText,
+  MetricNumber,
+  MISSING_VALUE_TEXT,
+  MISSING_VALUE_TIP,
+} from './MetricStatistic'
+export type {
+  MetricStatisticProps,
+  MetricTextProps,
+  MetricNumberProps,
+} from './MetricStatistic'

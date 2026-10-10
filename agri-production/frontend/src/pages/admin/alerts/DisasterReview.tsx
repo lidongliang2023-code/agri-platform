@@ -10,11 +10,31 @@
  *   ② 损失评估表单（影响农场数、受灾面积、经济损失、减产比例，可保存并回调 updateDisasterReview）
  *   ③ 改进措施（可编辑清单，保存到 improvement 字段）；
  * - 支持新增复盘（createDisasterReview）与删除（deleteDisasterReview）。
+ *
+ * ⚠️ 数据源现状（2026-10 实测，见 @/utils/shape-guard 与 @/utils/metric-format）：
+ * `GET /api/v1/production/admin/alerts/review` 返回的是 **AlertVO（告警复核记录）**：
+ * `alertId / alertTitle / alertLevel / alertSource / farmId / plotId / deviceId /
+ * triggerValue / status / handlerName / handleRemark / triggeredAt / handledAt`。
+ * 它**不含**本页需要的 `reviewId / eventName / disasterType / affectedFarmCount /
+ * affectedArea / economicLoss / handleProcess / improvement / reviewerName / createdAt`
+ * 任何一个字段——后端根本没有「灾害事件复盘」这个域。
+ *
+ * 因此本页做过两件事，且顺序不能反：
+ * 1. **形状校验**（`hasNonEmptyTextFields(item, ['reviewId', 'eventName'])`）：
+ *    只有真正带复盘字段的行才算真数据。告警记录一律不当复盘行渲染——
+ *    否则就是把 8 条告警渲染成 8 条「复盘」，每行字段全空，比不显示更骗人。
+ * 2. **缺失值显式降级**：仍保留逐字段的「—」渲染，
+ *    这样后端哪天补上了一半字段（比如有 reviewId 但没 economicLoss），
+ *    页面不会崩、也不会把缺失显示成 0 或空白。
+ *
+ * 同时撤掉了本地示例复盘数据（MOCK_REVIEWS）：本模块既有口径是
+ * 「撤掉硬编码兜底假数据，改为只消费后端真实数据」（见 2b741f94 监控告警域修复），
+ * 用一个带「示例」横幅的假列表盖住「后端没这个域」只会让问题更难发现。
  */
 import { useEffect, useMemo, useState } from 'react'
-import dayjs from 'dayjs'
 import type { Dayjs } from 'dayjs'
 import {
+  Alert,
   App,
   Button,
   Card,
@@ -48,10 +68,12 @@ import {
   listDisasterReviews,
   updateDisasterReview,
 } from '@/api'
-import { DemoDataAlert } from '@/components'
+import { MISSING_VALUE_TEXT, MetricNumber } from '@/components'
+import { sumMetric } from '@/utils/metric-format'
+import { hasNonEmptyTextFields } from '@/utils/shape-guard'
 import type { DisasterReview as DisasterReviewBase, PageResult } from '@/types'
 
-/** 复盘状态：draft 草稿 / reviewed 已归档 */
+/** 复盘状态：draft 草稿 / archived 已归档（后端无该字段，缺失时展示「—」） */
 type ReviewStatus = 'draft' | 'archived'
 
 /** 事件时间线节点 */
@@ -66,17 +88,25 @@ interface TimelineNode {
   color: 'green' | 'blue' | 'red' | 'gray'
 }
 
-/** 复盘行模型 */
-interface ReviewRow extends DisasterReviewBase {
-  /** 事件编号 */
+/**
+ * 复盘行模型。
+ *
+ * 继承 `Partial<DisasterReviewBase>` 而不是 `DisasterReviewBase`：
+ * 后端当前一个复盘字段都不返回，若按「全部必填」建模，
+ * TS 会担保 `row.affectedArea` 一定是 number，
+ * 于是 `row.affectedArea.toLocaleString()` 通过编译却在运行时抛 TypeError——
+ * 这正是本页此前整页白屏的根因。建模成可选才能逼着调用方处理缺失。
+ */
+interface ReviewRow extends Partial<DisasterReviewBase> {
+  /** 事件编号（后端无该字段时回落为 reviewId，再没有则「—」） */
   reviewNo: string
-  /** 复盘状态 */
-  reviewStatus: ReviewStatus
-  /** 减产比例（%） */
-  yieldLossRate: number
-  /** 事件时间线 */
+  /** 复盘状态：后端无该字段时为 undefined，展示「—」 */
+  reviewStatus?: ReviewStatus
+  /** 减产比例（%）：后端无该字段 */
+  yieldLossRate?: number
+  /** 事件时间线：后端无该字段，恒为空数组 */
   timeline: TimelineNode[]
-  /** 改进措施清单 */
+  /** 改进措施清单：由 improvement 文本拆分而来 */
   measures: string[]
 }
 
@@ -100,168 +130,23 @@ const DISASTER_COLOR: Record<string, string> = {
   冰雹: 'geekblue',
 }
 
-/** 演示复盘数据 */
-const MOCK_REVIEWS: ReviewRow[] = [
-  {
-    reviewId: 'DR-001',
-    reviewNo: 'DR20250620001',
-    eventName: '河南中部特大暴雨内涝灾害',
-    disasterType: '洪涝',
-    occurredAt: '2025-06-20 02:30',
-    affectedFarmCount: 126,
-    affectedArea: 28500,
-    economicLoss: 12600000,
-    handleProcess:
-      '6月20日凌晨接报后立即启动极端天气应急预案，组织 42 台抽水泵抢排积水；48 小时内完成受灾核查并协助农户提交保险理赔材料。',
-    improvement:
-      '1. 提前疏通排水沟渠并在低洼地块加装备用泵\n2. 与气象局打通分钟级降雨预警\n3. 高风险区域推广耐涝品种并建立轮作台账',
-    reviewerName: '管理员A',
-    createdAt: '2025-06-28 10:15',
-    reviewStatus: 'archived',
-    yieldLossRate: 32.5,
-    timeline: [
-      {
-        time: '2025-06-19 18:00',
-        title: '气象预警发布',
-        detail: '气象局发布暴雨橙色预警，系统自动向区域内 126 个农场推送预警通知。',
-        color: 'blue',
-      },
-      {
-        time: '2025-06-20 02:30',
-        title: '灾情发生',
-        detail: '短时强降雨导致低洼地块积水，平均积水深度 35cm。',
-        color: 'red',
-      },
-      {
-        time: '2025-06-20 03:10',
-        title: '启动应急预案',
-        detail: '启动极端天气应对预案，调度 42 台抽水泵与周边农户互助排涝。',
-        color: 'green',
-      },
-      {
-        time: '2025-06-22 16:00',
-        title: '抢排完成',
-        detail: '完成 2.85 万亩受灾地块排涝，转入补种与病害防控。',
-        color: 'green',
-      },
-      {
-        time: '2025-06-28 10:15',
-        title: '复盘归档',
-        detail: '完成损失评估与根因分析，形成改进措施清单并归档。',
-        color: 'gray',
-      },
-    ],
-    measures: [
-      '提前疏通排水沟渠并在低洼地块加装备用泵',
-      '与气象局打通分钟级降雨预警推送',
-      '高风险区域推广耐涝品种并建立轮作台账',
-    ],
-  },
-  {
-    reviewId: 'DR-002',
-    reviewNo: 'DR20250705002',
-    eventName: '鲁西北阶段性干旱减产事件',
-    disasterType: '干旱',
-    occurredAt: '2025-07-05 09:00',
-    affectedFarmCount: 84,
-    affectedArea: 19200,
-    economicLoss: 7600000,
-    handleProcess:
-      '协调灌溉设备 260 台套，调整灌溉计划并启用节水灌溉策略；同步调整玉米追肥方案，减少因旱导致的减产。',
-    improvement:
-      '1. 建设墒情监测点位 120 个并实现自动灌溉\n2. 完善抗旱水源调度预案\n3. 推广保水剂与覆膜保墒技术',
-    reviewerName: '管理员B',
-    createdAt: '2025-07-12 15:40',
-    reviewStatus: 'archived',
-    yieldLossRate: 18.6,
-    timeline: [
-      {
-        time: '2025-06-28 09:00',
-        title: '墒情异常预警',
-        detail: '土壤湿度连续 5 天低于阈值，系统生成一般级告警。',
-        color: 'blue',
-      },
-      {
-        time: '2025-07-05 09:00',
-        title: '旱情确认',
-        detail: '1.92 万亩玉米进入抽雄期，缺水导致叶片卷曲。',
-        color: 'red',
-      },
-      {
-        time: '2025-07-06 08:30',
-        title: '调度灌溉资源',
-        detail: '协调灌溉设备 260 台套，启用节水灌溉策略并分时轮灌。',
-        color: 'green',
-      },
-      {
-        time: '2025-07-12 15:40',
-        title: '复盘归档',
-        detail: '完成减产评估，形成抗旱改进措施。',
-        color: 'gray',
-      },
-    ],
-    measures: [
-      '建设墒情监测点位并实现自动灌溉',
-      '完善抗旱水源调度预案',
-      '推广保水剂与覆膜保墒技术',
-    ],
-  },
-  {
-    reviewId: 'DR-003',
-    reviewNo: 'DR20250710003',
-    eventName: '中原地区稻飞虱集中爆发事件',
-    disasterType: '病虫害',
-    occurredAt: '2025-07-10 11:20',
-    affectedFarmCount: 56,
-    affectedArea: 12800,
-    economicLoss: 4300000,
-    handleProcess:
-      '通过病虫害识别模型确认虫情，48 小时内组织统防统治，累计防治面积 1.28 万亩，虫口减退率 92%。',
-    improvement: '1. 加密虫情测报灯点位\n2. 建立统防统治物资储备\n3. 将虫情预警纳入 SOP 模板',
-    reviewerName: '管理员A',
-    createdAt: '2025-07-18 09:05',
-    reviewStatus: 'draft',
-    yieldLossRate: 9.4,
-    timeline: [
-      {
-        time: '2025-07-09 16:00',
-        title: '虫情识别上报',
-        detail: '农户拍照上传，AI 识别判定为稻飞虱，置信度 0.93。',
-        color: 'blue',
-      },
-      {
-        time: '2025-07-10 11:20',
-        title: '确认爆发',
-        detail: '田间调查百丛虫量达 1800 头，达到防治指标。',
-        color: 'red',
-      },
-      {
-        time: '2025-07-12 07:00',
-        title: '统防统治',
-        detail: '调度植保无人机 38 架，完成 1.28 万亩统防统治。',
-        color: 'green',
-      },
-      {
-        time: '2025-07-18 09:05',
-        title: '复盘草稿',
-        detail: '虫口减退率 92%，损失评估待复核。',
-        color: 'gray',
-      },
-    ],
-    measures: ['加密虫情测报灯点位', '建立统防统治物资储备', '将虫情预警纳入 SOP 模板'],
-  },
-]
+/**
+ * 汇总指标缺失提示语。
+ *
+ * 带具体端点与后端真实返回形状，便于下一个人直接定位，
+ * 而不是只看到一句「暂无数据」。
+ */
+const SUMMARY_MISSING_TIP =
+  '未接入：后端 /admin/alerts/review 返回的是告警复核记录（AlertVO），' +
+  '不含 affectedArea / economicLoss / affectedFarmCount，显示为「—」而非 0'
 
-/** 本地演示数据源 */
-let mockReviewStore: ReviewRow[] = [...MOCK_REVIEWS]
-
-/** 示例数据覆盖范围（提示条文案，覆盖统计卡、列表与详情抽屉） */
-const DEMO_SCOPE =
-  '顶部「复盘事件数 / 累计受灾面积 / 涉及农场数 / 累计经济损失」汇总卡、下方复盘列表，以及详情抽屉内的事件时间线与损失评估数据'
-
-/** 示例数据写操作提示 */
-const DEMO_WRITE_NOTE =
-  '新增复盘、保存损失评估、保存改进措施、标记归档、删除等操作只会修改浏览器本地内存中的示例数据，未写入服务端，刷新页面后即失效。'
+/** 后端未接入时的页面说明 */
+const NO_DATA_NOTE =
+  '后端 /api/v1/production/admin/alerts/review 当前返回的是「告警复核」记录' +
+  '（AlertVO：alertId / alertTitle / alertLevel / triggerValue / status …），' +
+  '不含 reviewId / eventName / disasterType / affectedArea / economicLoss 等灾害复盘字段。' +
+  '本页按数据形状判定为「无真数据」，不把告警记录渲染成复盘行，也不使用本地示例数据顶替。' +
+  '新增 / 保存 / 删除接口后端同样未接入，操作会如实报错。'
 
 /** 损失评估表单值 */
 interface LossFormValues {
@@ -307,54 +192,41 @@ export default function DisasterReview(): JSX.Element {
   const [detailRow, setDetailRow] = useState<ReviewRow | undefined>(undefined)
   const [detailOpen, setDetailOpen] = useState<boolean>(false)
   const [createOpen, setCreateOpen] = useState<boolean>(false)
-  /** 是否处于示例数据（演示）模式：由数据层返回的 demo 标志驱动 */
-  const [demoMode, setDemoMode] = useState<boolean>(false)
 
   const listQuery = useQuery({
     queryKey: ['admin-disaster-reviews', filters],
-    queryFn: async (): Promise<{ rows: ReviewRow[]; demo: boolean }> => {
-      try {
-        const page: PageResult<DisasterReviewBase> = await listDisasterReviews({
-          pageNum: 1,
-          pageSize: 100,
-          disasterType: filters.disasterType,
-        })
-        if (page && Array.isArray(page.list) && page.list.length > 0) {
-          return {
-            rows: page.list.map<ReviewRow>((item) => ({
-              ...item,
-              reviewNo: item.reviewId,
-              reviewStatus: 'archived',
-              yieldLossRate: 0,
-              timeline: [],
-              measures: (item.improvement ?? '')
-                .split('\n')
-                .map((line) => line.trim())
-                .filter(Boolean),
-            })),
-            demo: false,
-          }
-        }
-      } catch {
-        /* 后端不可用时降级为演示数据 */
-      }
-      const filtered = mockReviewStore.filter((row) => {
-        if (filters.eventName && !row.eventName.includes(filters.eventName)) {
-          return false
-        }
-        if (filters.disasterType && row.disasterType !== filters.disasterType) {
-          return false
-        }
-        return true
+    queryFn: async (): Promise<ReviewRow[]> => {
+      const page: PageResult<DisasterReviewBase> = await listDisasterReviews({
+        pageNum: 1,
+        pageSize: 100,
+        disasterType: filters.disasterType,
       })
-      return { rows: filtered, demo: true }
+      const list = page?.list
+      if (!Array.isArray(list) || list.length === 0) {
+        return []
+      }
+      // 形状校验：只认真正带「复盘」字段的行。
+      // 接口通了、数组非空、code=0 都判不出「返回的是别的东西」，
+      // 只有按字段形状判才能把 AlertVO 挡在页面之外。
+      return list
+        .filter((item) => hasNonEmptyTextFields(item, ['reviewId', 'eventName']))
+        .map<ReviewRow>((item) => ({
+          ...item,
+          reviewNo: item.reviewId ?? MISSING_VALUE_TEXT,
+          reviewStatus: undefined,
+          yieldLossRate: undefined,
+          timeline: [],
+          measures: (item.improvement ?? '')
+            .split('\n')
+            .map((line) => line.trim())
+            .filter(Boolean),
+        }))
     },
   })
 
   useEffect(() => {
     if (listQuery.data) {
-      setRows(listQuery.data.rows)
-      setDemoMode(listQuery.data.demo)
+      setRows(listQuery.data)
     }
   }, [listQuery.data])
 
@@ -362,24 +234,22 @@ export default function DisasterReview(): JSX.Element {
   const updateMutation = useMutation({
     mutationFn: async (payload: { row: ReviewRow; patch: Partial<ReviewRow> }) => {
       const next = { ...payload.row, ...payload.patch }
-      try {
-        await updateDisasterReview(payload.row.reviewId, {
-          affectedFarmCount: next.affectedFarmCount,
-          affectedArea: next.affectedArea,
-          economicLoss: next.economicLoss,
-          handleProcess: next.handleProcess,
-          improvement: next.measures.join('\n'),
-        })
-        message.success('复盘信息已保存')
-      } catch {
-        message.warning('复盘信息已保存到本地示例数据（演示模式，未写入服务端，刷新后失效）')
-      }
-      mockReviewStore = mockReviewStore.map((item) =>
-        item.reviewId === payload.row.reviewId ? next : item,
-      )
-      setDetailRow(next)
-      void queryClient.invalidateQueries({ queryKey: ['admin-disaster-reviews'] })
+      await updateDisasterReview(payload.row.reviewId ?? '', {
+        affectedFarmCount: next.affectedFarmCount,
+        affectedArea: next.affectedArea,
+        economicLoss: next.economicLoss,
+        handleProcess: next.handleProcess,
+        improvement: next.measures.join('\n'),
+      })
       return next
+    },
+    onSuccess: () => {
+      message.success('复盘信息已保存')
+      void queryClient.invalidateQueries({ queryKey: ['admin-disaster-reviews'] })
+    },
+    onError: (error: Error) => {
+      // 后端没有 PUT /admin/alerts/review/{id}，如实报错，不再提示「已保存到本地示例数据」这种假成功
+      message.error(`保存失败：${error.message || '后端未提供该写入接口'}`)
     },
   })
 
@@ -387,69 +257,33 @@ export default function DisasterReview(): JSX.Element {
   const createMutation = useMutation({
     mutationFn: async (values: CreateFormValues) => {
       const occurredAt = values.occurredAt.format('YYYY-MM-DD HH:mm')
-      try {
-        await createDisasterReview({ ...values, occurredAt })
-        message.success('复盘已创建')
-      } catch {
-        message.warning('复盘已创建到本地示例数据（演示模式，未写入服务端，刷新后失效）')
-      }
-      const nextRow: ReviewRow = {
-        reviewId: `DR-${Date.now()}`,
-        reviewNo: `DR${dayjs().format('YYYYMMDD')}${String(mockReviewStore.length + 1).padStart(3, '0')}`,
-        eventName: values.eventName,
-        disasterType: values.disasterType,
-        occurredAt,
-        affectedFarmCount: values.affectedFarmCount,
-        affectedArea: values.affectedArea,
-        economicLoss: values.economicLoss,
-        handleProcess: values.handleProcess,
-        improvement: values.improvement,
-        reviewerName: values.reviewerName,
-        createdAt: dayjs().format('YYYY-MM-DD HH:mm'),
-        reviewStatus: 'draft',
-        yieldLossRate: 0,
-        timeline: [
-          {
-            time: occurredAt,
-            title: '事件发生',
-            detail: values.handleProcess,
-            color: 'red',
-          },
-          {
-            time: dayjs().format('YYYY-MM-DD HH:mm'),
-            title: '复盘草稿创建',
-            detail: `由 ${values.reviewerName} 创建复盘草稿`,
-            color: 'gray',
-          },
-        ],
-        measures: values.improvement
-          .split('\n')
-          .map((line) => line.trim())
-          .filter(Boolean),
-      }
-      mockReviewStore = [nextRow, ...mockReviewStore]
-      return nextRow
+      await createDisasterReview({ ...values, occurredAt })
+      return occurredAt
     },
     onSuccess: () => {
+      message.success('复盘已创建')
       setCreateOpen(false)
       createForm.resetFields()
       void queryClient.invalidateQueries({ queryKey: ['admin-disaster-reviews'] })
+    },
+    onError: (error: Error) => {
+      message.error(`创建失败：${error.message || '后端未提供该写入接口'}`)
     },
   })
 
   /** 删除复盘 */
   const removeMutation = useMutation({
     mutationFn: async (row: ReviewRow) => {
-      try {
-        await deleteDisasterReview(row.reviewId)
-        message.success('复盘已删除')
-      } catch {
-        message.warning('复盘已从本地示例数据移除（演示模式，未写入服务端，刷新后失效）')
-      }
-      mockReviewStore = mockReviewStore.filter((item) => item.reviewId !== row.reviewId)
-      return row.reviewId
+      await deleteDisasterReview(row.reviewId ?? '')
+      return row.reviewId ?? ''
     },
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['admin-disaster-reviews'] }),
+    onSuccess: () => {
+      message.success('复盘已删除')
+      void queryClient.invalidateQueries({ queryKey: ['admin-disaster-reviews'] })
+    },
+    onError: (error: Error) => {
+      message.error(`删除失败：${error.message || '后端未提供该删除接口'}`)
+    },
   })
 
   /**
@@ -469,51 +303,91 @@ export default function DisasterReview(): JSX.Element {
     measureForm.setFieldsValue({ measures: row.measures })
   }
 
-  /** 统计汇总 */
+  /**
+   * 统计汇总。
+   *
+   * `area` / `loss` / `farms` 用 `sumMetric`：只要有一行缺该字段，
+   * 整个汇总就是 null（渲染「—」），不把缺失行当 0 加起来凑总数。
+   * `count` 是「当前拿到的复盘条数」，是事实而非指标，直接给数字。
+   *
+   * 没有任何行时汇总同样置 null：0 条复盘的「累计受灾面积」不是 0，
+   * 而是「根本没有数据」，渲染成 0 亩等于宣称统计过了。
+   */
   const summary = useMemo(
     () => ({
       count: rows.length,
-      area: rows.reduce((sum, row) => sum + row.affectedArea, 0),
-      loss: rows.reduce((sum, row) => sum + row.economicLoss, 0),
-      farms: rows.reduce((sum, row) => sum + row.affectedFarmCount, 0),
+      area: rows.length === 0 ? null : sumMetric(rows.map((row) => row.affectedArea)),
+      loss: rows.length === 0 ? null : sumMetric(rows.map((row) => row.economicLoss)),
+      farms: rows.length === 0 ? null : sumMetric(rows.map((row) => row.affectedFarmCount)),
     }),
     [rows],
   )
 
   const columns = useMemo(
     () => [
-      { title: '事件编号', dataIndex: 'reviewNo', width: 150 },
+      {
+        title: '事件编号',
+        dataIndex: 'reviewNo',
+        width: 150,
+        render: (text?: string) => text ?? MISSING_VALUE_TEXT,
+      },
       {
         title: '事件名称',
         dataIndex: 'eventName',
         width: 240,
-        render: (text: string) => <Typography.Text strong>{text}</Typography.Text>,
+        render: (text?: string) => <Typography.Text strong>{text ?? MISSING_VALUE_TEXT}</Typography.Text>,
       },
       {
         title: '灾害类型',
         dataIndex: 'disasterType',
         width: 110,
-        render: (text: string) => (
-          <Tag color={DISASTER_COLOR[text] ?? 'default'}>{text}</Tag>
-        ),
+        render: (text?: string) =>
+          text ? <Tag color={DISASTER_COLOR[text] ?? 'default'}>{text}</Tag> : MISSING_VALUE_TEXT,
       },
-      { title: '发生时间', dataIndex: 'occurredAt', width: 150 },
-      { title: '影响农场', dataIndex: 'affectedFarmCount', width: 100, render: (v: number) => `${v} 个` },
-      { title: '受灾面积', dataIndex: 'affectedArea', width: 120, render: (v: number) => `${v.toLocaleString()} 亩` },
+      {
+        title: '发生时间',
+        dataIndex: 'occurredAt',
+        width: 150,
+        render: (text?: string) => text ?? MISSING_VALUE_TEXT,
+      },
+      {
+        title: '影响农场',
+        dataIndex: 'affectedFarmCount',
+        width: 110,
+        render: (v: unknown) => <MetricNumber value={v} suffix=" 个" missingTip={SUMMARY_MISSING_TIP} />,
+      },
+      {
+        title: '受灾面积',
+        dataIndex: 'affectedArea',
+        width: 130,
+        render: (v: unknown) => <MetricNumber value={v} suffix=" 亩" missingTip={SUMMARY_MISSING_TIP} />,
+      },
       {
         title: '经济损失',
         dataIndex: 'economicLoss',
         width: 140,
-        render: (v: number) => `¥ ${v.toLocaleString()}`,
+        render: (v: unknown) => <MetricNumber value={v} prefix="¥ " missingTip={SUMMARY_MISSING_TIP} />,
       },
       {
         title: '状态',
         dataIndex: 'reviewStatus',
         width: 100,
-        render: (status: ReviewStatus) =>
-          status === 'archived' ? <Tag color="success">已归档</Tag> : <Tag color="gold">草稿</Tag>,
+        render: (status?: ReviewStatus) => {
+          if (status === 'archived') {
+            return <Tag color="success">已归档</Tag>
+          }
+          if (status === 'draft') {
+            return <Tag color="gold">草稿</Tag>
+          }
+          return MISSING_VALUE_TEXT
+        },
       },
-      { title: '复盘人', dataIndex: 'reviewerName', width: 100 },
+      {
+        title: '复盘人',
+        dataIndex: 'reviewerName',
+        width: 100,
+        render: (text?: string) => text ?? MISSING_VALUE_TEXT,
+      },
       {
         title: '操作',
         key: 'action',
@@ -531,7 +405,7 @@ export default function DisasterReview(): JSX.Element {
               icon={<DeleteOutlined />}
               onClick={() =>
                 modal.confirm({
-                  title: `确认删除复盘「${row.eventName}」？`,
+                  title: `确认删除复盘「${row.eventName ?? row.reviewNo}」？`,
                   okText: '确认删除',
                   cancelText: '取消',
                   okButtonProps: { danger: true },
@@ -550,16 +424,23 @@ export default function DisasterReview(): JSX.Element {
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      {demoMode ? <DemoDataAlert scope={DEMO_SCOPE} writeNote={DEMO_WRITE_NOTE} /> : null}
+      {listQuery.isError ? (
+        <Alert
+          type="error"
+          showIcon
+          message="复盘列表加载失败"
+          description={`${(listQuery.error as Error | null)?.message ?? '未知错误'}（不使用本地示例数据兜底，列表与汇总均为空）`}
+        />
+      ) : null}
+      {!listQuery.isError && !listQuery.isLoading && rows.length === 0 ? (
+        <Alert type="warning" showIcon message="后端暂无「灾害事件复盘」数据源" description={NO_DATA_NOTE} />
+      ) : null}
 
       <Row gutter={16}>
         <Col span={6}>
           <Card>
             <Space direction="vertical" size={0}>
-              <Space size={6}>
-                <Typography.Text type="secondary">复盘事件数</Typography.Text>
-                {demoMode ? <Tag color="orange">示例</Tag> : null}
-              </Space>
+              <Typography.Text type="secondary">复盘事件数</Typography.Text>
               <Typography.Title level={3} style={{ margin: 0 }}>
                 {summary.count}
               </Typography.Title>
@@ -569,12 +450,9 @@ export default function DisasterReview(): JSX.Element {
         <Col span={6}>
           <Card>
             <Space direction="vertical" size={0}>
-              <Space size={6}>
-                <Typography.Text type="secondary">累计受灾面积</Typography.Text>
-                {demoMode ? <Tag color="orange">示例</Tag> : null}
-              </Space>
+              <Typography.Text type="secondary">累计受灾面积</Typography.Text>
               <Typography.Title level={3} style={{ margin: 0 }}>
-                {summary.area.toLocaleString()} 亩
+                <MetricNumber value={summary.area} suffix=" 亩" missingTip={SUMMARY_MISSING_TIP} />
               </Typography.Title>
             </Space>
           </Card>
@@ -582,12 +460,9 @@ export default function DisasterReview(): JSX.Element {
         <Col span={6}>
           <Card>
             <Space direction="vertical" size={0}>
-              <Space size={6}>
-                <Typography.Text type="secondary">涉及农场数</Typography.Text>
-                {demoMode ? <Tag color="orange">示例</Tag> : null}
-              </Space>
+              <Typography.Text type="secondary">涉及农场数</Typography.Text>
               <Typography.Title level={3} style={{ margin: 0 }}>
-                {summary.farms} 个
+                <MetricNumber value={summary.farms} suffix=" 个" missingTip={SUMMARY_MISSING_TIP} />
               </Typography.Title>
             </Space>
           </Card>
@@ -595,12 +470,9 @@ export default function DisasterReview(): JSX.Element {
         <Col span={6}>
           <Card>
             <Space direction="vertical" size={0}>
-              <Space size={6}>
-                <Typography.Text type="secondary">累计经济损失</Typography.Text>
-                {demoMode ? <Tag color="orange">示例</Tag> : null}
-              </Space>
+              <Typography.Text type="secondary">累计经济损失</Typography.Text>
               <Typography.Title level={3} style={{ margin: 0, color: '#cf1322' }}>
-                ¥ {summary.loss.toLocaleString()}
+                <MetricNumber value={summary.loss} prefix="¥ " missingTip={SUMMARY_MISSING_TIP} />
               </Typography.Title>
             </Space>
           </Card>
@@ -652,13 +524,13 @@ export default function DisasterReview(): JSX.Element {
           loading={listQuery.isLoading}
           pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (total) => `共 ${total} 条` }}
           scroll={{ x: 1400 }}
-          locale={{ emptyText: <Empty description="暂无灾害事件复盘记录" /> }}
+          locale={{ emptyText: <Empty description="暂无灾害事件复盘记录（后端未提供该数据源）" /> }}
         />
       </Card>
 
       {/* 详情抽屉：时间线 / 损失评估 / 改进措施 */}
       <Drawer
-        title={detailRow ? `事件复盘 - ${detailRow.eventName}` : '事件复盘'}
+        title={detailRow ? `事件复盘 - ${detailRow.eventName ?? detailRow.reviewNo}` : '事件复盘'}
         width={820}
         open={detailOpen}
         onClose={() => setDetailOpen(false)}
@@ -676,18 +548,30 @@ export default function DisasterReview(): JSX.Element {
                     <Descriptions column={2} size="small" bordered>
                       <Descriptions.Item label="事件编号">{detailRow.reviewNo}</Descriptions.Item>
                       <Descriptions.Item label="灾害类型">
-                        <Tag color={DISASTER_COLOR[detailRow.disasterType] ?? 'default'}>
-                          {detailRow.disasterType}
-                        </Tag>
+                        {detailRow.disasterType ? (
+                          <Tag color={DISASTER_COLOR[detailRow.disasterType] ?? 'default'}>
+                            {detailRow.disasterType}
+                          </Tag>
+                        ) : (
+                          MISSING_VALUE_TEXT
+                        )}
                       </Descriptions.Item>
-                      <Descriptions.Item label="发生时间">{detailRow.occurredAt}</Descriptions.Item>
-                      <Descriptions.Item label="复盘人">{detailRow.reviewerName}</Descriptions.Item>
-                      <Descriptions.Item label="创建时间">{detailRow.createdAt}</Descriptions.Item>
+                      <Descriptions.Item label="发生时间">
+                        {detailRow.occurredAt ?? MISSING_VALUE_TEXT}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="复盘人">
+                        {detailRow.reviewerName ?? MISSING_VALUE_TEXT}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="创建时间">
+                        {detailRow.createdAt ?? MISSING_VALUE_TEXT}
+                      </Descriptions.Item>
                       <Descriptions.Item label="复盘状态">
                         {detailRow.reviewStatus === 'archived' ? (
                           <Tag color="success">已归档</Tag>
-                        ) : (
+                        ) : detailRow.reviewStatus === 'draft' ? (
                           <Tag color="gold">草稿</Tag>
+                        ) : (
+                          MISSING_VALUE_TEXT
                         )}
                       </Descriptions.Item>
                     </Descriptions>
@@ -706,7 +590,7 @@ export default function DisasterReview(): JSX.Element {
                         }))}
                       />
                     ) : (
-                      <Empty description="该事件暂未生成时间线" />
+                      <Empty description="该事件暂未生成时间线（后端无该字段）" />
                     )}
                   </Space>
                 ),
