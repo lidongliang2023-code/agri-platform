@@ -220,11 +220,185 @@ const inboundStatusProvided: boolean =
 
 ---
 
-## 附：本轮已验证为"真生效"的对照
+---
 
-| 操作 | 端点 | 回读结果 |
+# 域 2：`admin/tenants`（运营端租户管理）
+
+> 产出人：se-verify-fix　日期：2026-10-10
+> 实测环境同域 1（`core-app` :8098）。本域**只出工单不改代码**（除 BT-08 需裁决）。
+
+**现有端点清单**（`AdminTenantController.java`，实测可用）：
+`GET /admin/tenants`（3 条）、`GET /overview`、`GET /overview/{tenantId}`、`GET /{quotaId}`、
+`GET /{quotaId}/usage`、`GET /quotas`（3 条）、`GET /segments`（3 条）、
+`GET /quota-overview`（3 条）、`GET /{quotaId}/quota-overview`、
+`POST /admin/tenants`、`PUT /{id}`、`DELETE /{id}`、`POST /{quotaId}/reset-usage`、
+`PUT /{tenantId}/quota-limits`、`PUT /quota-limits/batch`。
+
+---
+
+## BT-08　「重置已用配额」**前端路径写错**（不是后端缺端点）⭐
+
+| 项 | 内容 |
+| --- | --- |
+| 前端调用 | `POST /admin/tenants/{tenantId}/quota-usage/reset` |
+| **真端点** | `POST /admin/tenants/{quotaId}/reset-usage` |
+| 前端函数 | `tenants.ts` `resetTenantQuotaUsage()` |
+| 真实调用方 | `TenantDetail.tsx:77,336`、`TenantQuotas.tsx:45` |
+
+**成对实测（同一个不存在的 id，排除"id 无效"干扰）**：
+
+```
+POST /admin/tenants/NOPE/reset-usage          → code=404「资源不存在」  ← 端点存在，id 无效
+POST /admin/tenants/NOPE/quota-usage/reset    → code=500「系统繁忙」    ← 端点不存在
+```
+
+**日志原文**：`NoResourceFoundException: No static resource api/v1/production/admin/tenants/NOPE/quota-usage/reset.`
+
+**性质**：与域 1 的 `queryInventoryFlows` 同型——**端点其实存在，是前端把路径写错了**，
+所以用户点「重置已用配额」必失败，而页面看到的是"系统繁忙"，排障极易误判成后端没做。
+
+**期望语义**：前端改为 `POST /admin/tenants/{quotaId}/reset-usage`（注意入参也从 tenantId 换成 quotaId，见 BT-09）。
+
+**⚠️ 需裁决**：这条是**前端一处路径修错**，不是后端工单。是否由我直接改（一行）？
+（`api/admin/tenants.ts` 当前无人在途改动，可安全修改。）
+
+---
+
+## BT-09　租户标识体系：`tenantId` 恒为 `"0"` → 租户详情页 100% 打不开 ⭐（本域根因）
+
+**实测**：`GET /admin/tenants?page=1&size=10` 全部 3 条：
+
+```
+{"quotaId":"DEMO-QUOTA-001","tenantId":"0","tenantCode":"DEMO-TENANT-001","tenantName":"【演示】华南示范农业合作社","status":1}
+{"quotaId":"DEMO-QUOTA-002","tenantId":"0","tenantCode":"DEMO-TENANT-002","tenantName":"【演示】华东稻米产业联合体","status":1}
+{"quotaId":"QUOT202610090954433640","tenantId":"0","tenantCode":"T001","tenantName":"绿源合作社","status":1}
+```
+
+**三条的 `tenantId` 全是 `"0"`**（`prod_tenant_quota.tenant_id` 未填，默认 0）。
+
+**连带失效链（逐环实测）**：
+
+1. `TenantList.tsx:291` 用 `entity.tenantId` 跳转 → 三个「查看」按钮**全部**跳到
+   `/admin/production/tenants/0`；
+2. `getTenant('0')` → `GET /admin/tenants/0` → **code=404「资源不存在」**
+   （而 `GET /admin/tenants/DEMO-QUOTA-001` → **code=0 正常**）；
+3. `getTenantQuotaOverview('0')` → `GET /admin/tenants/0/quota-overview` → **code=404「租户不存在：0」**
+   （而 `GET /admin/tenants/DEMO-QUOTA-001/quota-overview` → **code=0，4 项真数据**
+   `农场数 used=2 / limit=20 / usageRate=10`）；
+4. `getTenantOverviewById('0')` → `GET /admin/tenants/overview/0` → code=0 **但只返回 1 行**
+   （三条租户被聚成 tenantId=0 一条），`GET /overview/1` → 404。
+
+**结论**：`quotaId` 才是可用的租户标识；前端在 `quotaId` / `tenantId` 之间混用。
+
+**期望语义**：
+- 后端：建租户主表、给 `prod_tenant_quota.tenant_id` 填真值（三个租户不能共用一个 0），
+  并明确"租户标识"到底用哪个；
+- 前端：后端补齐前，统一改用 `quotaId` 作为跳转与查询入参（涉及 `TenantList.tsx:291`
+  及 `TenantDetail` 的 `tenantId` 来源）。
+
+**验收**：三条租户应有三个互不相同的 `tenantId`；`GET /admin/tenants/{tenantId}` 各自返回自己那条。
+
+---
+
+## BT-10　租户农场列表端点不存在（详情 Tab2）
+
+| 项 | 内容 |
+| --- | --- |
+| 端点 | `GET /admin/tenants/{tenantId}/farms` |
+| 前端函数 | `listTenantFarms()` |
+| 调用方 | `TenantDetail.tsx:75,250` |
+
+**实测**：`GET /admin/tenants/0/farms?page=1&size=5` → code=500；
+`GET /admin/tenants/NOPE/farms` → code=500。
+**日志**：`NoResourceFoundException: No static resource api/v1/production/admin/tenants/NOPE/farms.`
+
+**期望语义**：按租户返回其农场列表（分页），字段至少含农场名 / 地块数 / 状态。
+**依赖**：BT-09（先有真 tenantId，否则按 0 查不到归属）。
+
+---
+
+## BT-11　租户操作日志端点不存在（详情 Tab4）
+
+| 项 | 内容 |
+| --- | --- |
+| 端点 | `GET /admin/tenants/{tenantId}/logs` |
+| 前端函数 | `listTenantOperationLogs()` |
+| 调用方 | `TenantDetail.tsx:76,266` |
+
+**实测**：code=500；日志 `NoResourceFoundException: ... /NOPE/logs.`
+
+**期望语义**：按租户返回操作日志（分页）。**依赖**：BT-09 与"操作日志表/审计日志"是否有数据源。
+
+---
+
+## BT-12　租户分层画像端点不存在（分层运营页列表）
+
+| 项 | 内容 |
+| --- | --- |
+| 端点 | `GET /admin/tenants/profiles` |
+| 前端函数 | `listTenantProfiles()` |
+| 调用方 | `TenantSegments.tsx:47,156` |
+
+**实测**：`GET /admin/tenants/profiles?page=1&size=5` → **code=404「资源不存在」**。
+
+**⚠️ 注意成因与上面不同**：这里是 **404 而不是 500**，因为 `/profiles` 被通配的
+`GET /{id}` 吞了（把 "profiles" 当成 id 去查，查不到 → 404）。
+**不要因为看到 404 就判"没数据"**——端点根本不存在（见域 1 文档头的排障提醒）。
+
+**契约差距**：前端 `TenantSegmentProfile` 要 11 个字段（`segment / tags / activity /
+quotaUsageRate / activeDays / revenue / strategy` …），后端**没有任何数据源**。
+
+---
+
+## BT-13　分层汇总统计端点不存在（分层运营页统计卡）
+
+| 项 | 内容 |
+| --- | --- |
+| 端点 | `GET /admin/tenants/segment-summary` |
+| 前端函数 | `listTenantSegmentSummary()` |
+| 调用方 | `TenantSegments.tsx:47,148` |
+
+**实测**：code=404（同样被 `GET /{id}` 吞）。后端无分层数据源。
+
+---
+
+## BT-14　分层/配额的写端点不存在
+
+| 前端调用 | 方法 | 实测 | 调用方 |
+| --- | --- | --- | --- |
+| `/admin/tenants/{tenantId}/profile` | PUT | 500 `NoResourceFoundException` | `TenantSegments.tsx:47,168` |
+| `/admin/tenants/segments` | POST | 500 `NoResourceFoundException` | （`createTenantSegment`） |
+| `/admin/tenants/segments/{id}` | DELETE | 500 `NoResourceFoundException` | （`deleteTenantSegment`） |
+| `/admin/tenants/quotas/{id}` | PUT | 500 `NoResourceFoundException` | （`updateTenantQuota`） |
+| `/admin/tenants/{id}/status` | PATCH | 500 `NoResourceFoundException` | （`updateTenantStatus`） |
+
+**后端现状**：只有 `GET /quotas`、`GET /segments` 两个**读**端点，没有任何对应的写端点。
+
+**期望语义**：分层可写（分层 / 标签 / 策略）、配额可改、租户可冻结解冻。
+
+---
+
+## 死代码候选（按规则：端点不存在 **且** 无调用方 → 前端删）
+
+- `updateTenantStatus()`（`PATCH /{id}/status`）：端点不存在 + 全仓 grep **零调用方** → 建议删除声明。
+- `listTenantQuotas()`（`GET /quotas`）：端点**存在且有 3 条数据**，但零调用方 → 不删，
+  等页面接入或后端确认该端点是否废弃。
+
+（本轮只记录，未删除——删除属代码改动，等 team-lead 裁决。）
+
+---
+
+## 附：已验证为"真生效 / 有真数据"的对照（跨两个域）
+
+| 操作 | 端点 | 结果 |
 | --- | --- | --- |
 | 出库 | `POST /harvests/inventory/{batchId}/out` | `prod_inventory_flow` +1 行，按 batchId 回查得到新行 ✅ |
 | 采收批次详情 | `GET /harvests/{batchId}` | 真数据，`demo=false`，9/11 关键字段命中 ✅ |
 | 出入库流水 | `GET /harvests/{batchId}/flows` | 真数据，`demo=false`，每批次 2 条 ✅ |
 | 任务提交验收 | `POST /tasks/{taskId}/submit` | `status=done` + `acceptStatus=0`（已还原）✅ |
+| 租户列表 | `GET /admin/tenants` | 3 条真数据 ✅ |
+| 租户详情（**传 quotaId**） | `GET /admin/tenants/DEMO-QUOTA-001` | 真数据，19 字段 ✅ |
+| 租户配额概览（**传 quotaId**） | `GET /admin/tenants/DEMO-QUOTA-001/quota-overview` | 4 项真数据（农场数 used 2 / limit 20 / rate 10%）✅ |
+| 配额用量 | `GET /admin/tenants/DEMO-QUOTA-001/usage` | 真数据 ✅ |
+| 平台级租户概览 | `GET /admin/tenants/overview` | 真数据（含 farmTotal / deviceOnlineCount / pendingAlertCount）✅ |
+| 配额一览 / 分层列表 | `GET /admin/tenants/quota-overview`、`/segments` | 各 3 条 ✅ |
