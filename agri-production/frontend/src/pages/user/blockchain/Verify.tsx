@@ -3,6 +3,19 @@
  * 路由路径：/production/blockchain/verify
  * 所属模块：区块链增强
  * 原型 pageId：bc-verify（P30）
+ *
+ * ⚠️ 真数据约束（本页此前在此造假，已修复，请勿回退）
+ *
+ * 后端 `BlockchainController` 只提供了 `GET /api/v1/production/blockchain/verify/{txHash}`，
+ * 其返回体是**布尔值**：是否存在 txHash 命中且 status=SUCCESS 的存证记录
+ * （见 BlockchainRecordService#verify 的 selectCount 判定）。
+ * 后端**不返回**存证编号 / 存证类型 / 区块高度 / 确认数 / 签名 / 分步耗时等明细，
+ * 也**没有**按存证编号（certNo）或溯源码（traceCode）验真的端点。
+ *
+ * 据此本页遵守三条硬规则：
+ * 1. 只渲染后端真实返回的结论，不补全任何后端未返回的字段（无数据即留空）；
+ * 2. 接口失败 / 返回异常形状时渲染**明示错误态**，绝不用示例结论顶替；
+ * 3. certNo / traceCode 模式在 UI 上被**明示禁用**并说明「后端暂未提供」，引导改用交易哈希。
  */
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -17,10 +30,8 @@ import {
   Row,
   Space,
   Spin,
-  Steps,
   Tag,
   Typography,
-  message,
 } from 'antd'
 import {
   CheckCircleFilled,
@@ -29,10 +40,10 @@ import {
   RedoOutlined,
   SearchOutlined,
 } from '@ant-design/icons'
-import { verifyCertificate } from '@/api/blockchain'
-import type { CertificateVerifyResult, VerifyCheckItem, VerifyStep } from '@/types'
+import { verifyChain } from '@/api/blockchain'
+import { asApiRequestError, httpStatusOf } from '@/utils/request'
 
-/** 等宽字体样式：链上哈希与签名统一使用 */
+/** 等宽字体样式：链上哈希统一使用 */
 const MONO_STYLE: React.CSSProperties = {
   fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, "Courier New", monospace',
   wordBreak: 'break-all',
@@ -41,80 +52,69 @@ const MONO_STYLE: React.CSSProperties = {
 /** 凭证类型 */
 type VerifyType = 'cert' | 'tx' | 'trace'
 
+/** 后端当前唯一支持的验真方式 */
+const SUPPORTED_TYPE: VerifyType = 'tx'
+
 /** 凭证类型选项 */
 const VERIFY_TYPE_OPTIONS: { value: VerifyType; label: string; placeholder: string }[] = [
-  { value: 'cert', label: '按存证编号', placeholder: '请输入存证编号，如 CERT-20260602183045' },
-  { value: 'tx', label: '按交易哈希', placeholder: '请输入交易哈希，如 0x8a7d9f2e3b1c4a5d6e7f8a9b0c1d2e3f4a5b6c7d' },
-  { value: 'trace', label: '按溯源码', placeholder: '请输入溯源码，如 AG010101202605150001' },
+  { value: 'cert', label: '按存证编号', placeholder: '后端暂未提供该验真入口' },
+  { value: 'tx', label: '按交易哈希', placeholder: '请输入交易哈希，如 DEMO-TX-0x1a2b3c4d5e6f0001' },
+  { value: 'trace', label: '按溯源码', placeholder: '后端暂未提供该验真入口' },
 ]
 
-/** 凭证校验规则：类型 → 正则 + 提示 */
-const VERIFY_PATTERNS: Record<VerifyType, { pattern: RegExp; tip: string }> = {
-  cert: { pattern: /^CERT-[A-Za-z0-9-]+$/, tip: '存证编号格式应为 CERT- 开头，如 CERT-20260602183045' },
-  tx: { pattern: /^0x[0-9a-fA-F]{40}$/, tip: '交易哈希应为 0x 开头的 40 位十六进制字符串' },
-  trace: { pattern: /^[A-Za-z0-9]{8,32}$/, tip: '溯源码应为 8~32 位字母数字组合，如 AG010101202605150001' },
+/**
+ * 交易哈希格式规则。
+ *
+ * 说明：后端 `verify` 是按 txHash 做**精确匹配**（selectCount），对格式没有约束；
+ * 库内真实哈希实测存在两种形态 —— 种子数据 `DEMO-TX-0x1a2b3c4d5e6f0001`，
+ * 以及 anchor 生成的 `0x` + `yyyyMMddHHmmss` + 4 位随机数字（见 ProduceIds#newId）。
+ * 旧版写死 `/^0x[0-9a-fA-F]{40}$/`，会把这两类真实哈希**全部拒掉**（假不可用），
+ * 因此这里只做「非空 + URL 安全字符 + 长度」的宽松校验，其余交给后端精确匹配。
+ */
+const TX_PATTERN = /^[A-Za-z0-9_-]{4,128}$/
+const TX_TIP = '交易哈希应为 4~128 位字母、数字、- 或 _，如 DEMO-TX-0x1a2b3c4d5e6f0001'
+
+/** 各「后端未提供」模式的明示说明 */
+const UNSUPPORTED_TIP: Record<Exclude<VerifyType, 'tx'>, string> = {
+  cert:
+    '后端暂未提供「按存证编号验真」的端点（/api/v1/production/blockchain/verify 只接受 txHash），' +
+    '为避免给出编造的验真结论，该入口已停用。请改用「按交易哈希」验真：可在存证记录列表复制交易哈希后在此验证。',
+  trace:
+    '后端暂未提供「按溯源码验真」的端点（/api/v1/production/blockchain/verify 只接受 txHash），' +
+    '为避免给出编造的验真结论，该入口已停用。请改用「按交易哈希」验真：可在存证记录列表复制交易哈希后在此验证。',
 }
 
-/** 原型 P30 验证进度六步 */
-const PROTOTYPE_STEPS: VerifyStep[] = [
-  { title: '查询链上数据', duration: '0.3s', passed: true },
-  { title: '拉取链下原始数据', duration: '0.2s', passed: true },
-  { title: '计算数据哈希', duration: '0.1s', passed: true },
-  { title: '哈希比对', duration: '0.0s', passed: true },
-  { title: '签名验证', duration: '0.2s', passed: true },
-  { title: '区块确认数检查', duration: '0.1s', passed: true },
-]
+/** 后端验真端点（展示在数据来源中，便于用户核对） */
+const VERIFY_ENDPOINT = 'GET /api/v1/production/blockchain/verify/{txHash}'
 
-/** 原型 P29 / P30 五项验真结论 */
-const PROTOTYPE_CHECKS: VerifyCheckItem[] = [
-  {
-    key: 'hash-consistency',
-    label: '数据哈希一致性',
-    passed: true,
-    detail: '链上哈希 = 链下计算哈希（SHA-256 逐字节比对一致）',
-  },
-  {
-    key: 'signature-validity',
-    label: '数字签名有效性',
-    passed: true,
-    detail: 'ECDSA 签名验证通过，签名方为 agri-chain-001 共识节点',
-  },
-  {
-    key: 'confirmations',
-    label: '区块确认数达标',
-    passed: true,
-    detail: '15 确认 > 6 阈值，确认数满足安全阈值要求',
-  },
-  {
-    key: 'timestamp',
-    label: '时间戳可信',
-    passed: true,
-    detail: '链上时间 2026-06-02 18:30:52 与业务时间 2026-06-02 18:30:45 一致',
-  },
-  {
-    key: 'integrity',
-    label: '数据未被篡改',
-    passed: true,
-    detail: '原始数据完整性校验通过，链上指纹与链下快照一致',
-  },
-]
+/** 验真通过时的结论说明（对应后端返回 true 的真实语义） */
+const PASS_DETAIL = '链上存在该交易哈希对应的存证记录，且存证状态为 SUCCESS'
 
-/** 原型 P30 示例验真结果 */
-const MOCK_RESULT: CertificateVerifyResult = {
-  certNo: 'CERT-20260602183045',
-  bizTypeName: '检测报告',
-  txHash: '0x8a7d9f2e3b1c4a5d6e7f8a9b0c1d2e3f4a5b6c7d',
-  blockHeight: 8234398,
-  confirmations: 15,
-  passed: true,
-  summary: '数据未被篡改，区块链存证有效',
-  costSeconds: 0.9,
-  steps: PROTOTYPE_STEPS,
-  checks: PROTOTYPE_CHECKS,
+/** 验真未通过时的结论说明（对应后端返回 false 的真实语义） */
+const FAIL_DETAIL = '链上未检索到该交易哈希对应的成功存证记录'
+
+/**
+ * 验真结论：只承载后端真实返回的字段。
+ *
+ * 与旧版 `CertificateVerifyResult` 的区别：不含 certNo / bizTypeName / blockHeight /
+ * confirmations / steps / checks —— 后端均不返回，填进去就是编的。
+ */
+interface VerifyOutcome {
+  /** 被验证的交易哈希 */
+  txHash: string
+  /** 后端 GET /blockchain/verify/{txHash} 真实返回的布尔值 */
+  passed: boolean
+  /** 验真完成时间 */
+  verifiedAt: string
 }
 
-/** 单步推进耗时（毫秒），用于还原原型的分步验证进度动画 */
-const STEP_INTERVAL = 320
+/** 验真失败描述：区分故障类型，避免笼统提示掩盖真实原因 */
+interface VerifyFailure {
+  /** 失败标题 */
+  title: string
+  /** 失败详情（含后端业务码 / HTTP 状态码 / 原始错误信息） */
+  detail: string
+}
 
 /**
  * 触发浏览器下载
@@ -135,39 +135,41 @@ function downloadFile(filename: string, content: string): void {
 }
 
 /**
- * 将接口返回结果归一化为验真结果
+ * 把验真请求失败转成明示的失败描述。
  *
- * 后端 GET /blockchain/verify 当前仅返回 Boolean，此处兼容布尔值与完整结构两种形态。
+ * 区分三种故障：后端明确业务拒绝（请求已到达服务端）/ HTTP 非 200 / 后端不可达，
+ * 便于用户与运维判断是「接口报错」还是「服务没起」。
  *
- * @param raw 接口原始返回
- * @param fallback 兜底结果（接口不可用时使用）
- * @returns 验真结果
+ * @param error catch 到的未知错误
+ * @returns 失败描述
  */
-function normalizeResult(raw: unknown, fallback: CertificateVerifyResult): CertificateVerifyResult {
-  if (raw && typeof raw === 'object' && Array.isArray((raw as CertificateVerifyResult).checks)) {
-    return raw as CertificateVerifyResult
-  }
-  if (typeof raw === 'boolean') {
+function describeFailure(error: unknown): VerifyFailure {
+  const rawMessage = error instanceof Error ? error.message : String(error)
+  const apiError = asApiRequestError(error)
+  if (apiError && typeof apiError.bizCode === 'number') {
     return {
-      ...fallback,
-      passed: raw,
-      summary: raw ? '数据未被篡改，区块链存证有效' : '链上未检索到该凭证或校验不一致',
-      checks: fallback.checks.map((item) => ({
-        ...item,
-        passed: raw ? item.passed : false,
-        detail: raw ? item.detail : '链上验真返回 false，该项未通过',
-      })),
-      steps: fallback.steps.map((item) => ({ ...item, passed: raw ? item.passed : false })),
+      title: '验真接口返回业务失败，未取得验真结论',
+      detail: `后端业务码 ${apiError.bizCode}（HTTP ${apiError.httpStatus ?? 200}）：${rawMessage}`,
     }
   }
-  return fallback
+  const status = httpStatusOf(error)
+  if (status > 0) {
+    return {
+      title: `验真接口返回 HTTP ${status}，未取得验真结论`,
+      detail: rawMessage,
+    }
+  }
+  return {
+    title: '无法连接验真接口（网络异常或超时），未取得验真结论',
+    detail: rawMessage,
+  }
 }
 
 /**
  * 存证验证（原型 P30）
  *
- * 业务职责：对外存证验真入口，支持按存证编号 / 交易哈希 / 溯源码三种凭证验证，
- * 展示六步验证进度与五项验真结论。
+ * 业务职责：对外存证验真入口。后端当前仅支持按交易哈希验真，返回布尔结论；
+ * 其余凭证类型明示不可用。接口失败时只渲染错误态，不渲染任何示例结论。
  *
  * @returns 页面内容
  */
@@ -184,135 +186,137 @@ export default function Verify(): JSX.Element {
   const [value, setValue] = useState<string>(query.get('value') ?? '')
   const [errorTip, setErrorTip] = useState<string>('')
   const [verifying, setVerifying] = useState<boolean>(false)
-  const [stepIndex, setStepIndex] = useState<number>(0)
-  const [result, setResult] = useState<CertificateVerifyResult | null>(null)
-  const [apiFailed, setApiFailed] = useState<boolean>(false)
+  const [outcome, setOutcome] = useState<VerifyOutcome | null>(null)
+  const [failure, setFailure] = useState<VerifyFailure | null>(null)
 
-  /** 当前凭证对应的兜底结果（保证示例数据与输入一致） */
-  const fallbackResult = (): CertificateVerifyResult => {
-    if (verifyType === 'cert') {
-      return { ...MOCK_RESULT, certNo: value.trim() || MOCK_RESULT.certNo }
-    }
-    if (verifyType === 'tx') {
-      return { ...MOCK_RESULT, txHash: value.trim() || MOCK_RESULT.txHash }
-    }
-    return { ...MOCK_RESULT, certNo: MOCK_RESULT.certNo }
-  }
+  /** 当前模式是否被后端支持 */
+  const supported = verifyType === SUPPORTED_TYPE
 
-  /** 分步推进：每 STEP_INTERVAL 毫秒完成一步，全部完成后请求真实验真接口 */
+  /** 请求真实验真接口：仅交易哈希模式 */
   useEffect(() => {
     if (!verifying) return undefined
-    if (stepIndex < PROTOTYPE_STEPS.length) {
-      const timer = setTimeout(() => setStepIndex((prev) => prev + 1), STEP_INTERVAL)
-      return () => clearTimeout(timer)
-    }
 
     let cancelled = false
-    const payload =
-      verifyType === 'cert'
-        ? { certNo: value.trim() }
-        : verifyType === 'tx'
-          ? { txHash: value.trim() }
-          : { traceCode: value.trim() }
+    const txHash = value.trim()
 
-    verifyCertificate(payload)
-      .then((raw) => {
+    verifyChain(encodeURIComponent(txHash))
+      .then((raw: unknown) => {
         if (cancelled) return
-        setResult(normalizeResult(raw, fallbackResult()))
-        setApiFailed(false)
+        if (typeof raw === 'boolean') {
+          setOutcome({
+            txHash,
+            passed: raw,
+            verifiedAt: new Date().toLocaleString('zh-CN'),
+          })
+          setFailure(null)
+        } else {
+          // 后端返回了非布尔值：无法判定，按失败处理，绝不猜测一个结论
+          setOutcome(null)
+          setFailure({
+            title: '后端返回了非预期的验真结果，未取得验真结论',
+            detail: `期望布尔值，实际为 ${raw === null ? 'null' : typeof raw}`,
+          })
+        }
         setVerifying(false)
       })
-      .catch((err: Error) => {
+      .catch((error: unknown) => {
         if (cancelled) return
-        setResult(fallbackResult())
-        setApiFailed(true)
+        // 关键：失败时只记录失败原因，不写入任何结论
+        setOutcome(null)
+        setFailure(describeFailure(error))
         setVerifying(false)
-        message.warning(`验真接口不可用，已展示示例结论：${err.message}`)
       })
 
     return () => {
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [verifying, stepIndex])
+  }, [verifying])
 
-  /** 开始验证：先做表单校验 */
+  /** 开始验证：先做格式校验 */
   const handleStart = (): void => {
-    const text = value.trim()
-    if (!text) {
-      setErrorTip('请输入待验证的凭证')
+    if (!supported) {
+      setErrorTip('该验真方式后端暂未提供，请改用「按交易哈希」')
       return
     }
-    const rule = VERIFY_PATTERNS[verifyType]
-    if (!rule.pattern.test(text)) {
-      setErrorTip(rule.tip)
+    const text = value.trim()
+    if (!text) {
+      setErrorTip('请输入待验证的交易哈希')
+      return
+    }
+    if (!TX_PATTERN.test(text)) {
+      setErrorTip(TX_TIP)
       return
     }
     setErrorTip('')
-    setResult(null)
-    setApiFailed(false)
-    setStepIndex(0)
+    setOutcome(null)
+    setFailure(null)
     setVerifying(true)
   }
 
   /** 重新验证 */
   const handleReset = (): void => {
-    setResult(null)
-    setApiFailed(false)
-    setStepIndex(0)
+    setOutcome(null)
+    setFailure(null)
+    if (!supported) {
+      setErrorTip('该验真方式后端暂未提供，请改用「按交易哈希」')
+      return
+    }
     if (value.trim()) {
       setVerifying(true)
     } else {
-      setErrorTip('请输入待验证的凭证')
+      setErrorTip('请输入待验证的交易哈希')
     }
   }
 
-  /** 切换凭证类型时清空输入与结果 */
+  /** 切换凭证类型时清空输入与结论 */
   const handleTypeChange = (next: VerifyType): void => {
     setVerifyType(next)
     setValue('')
     setErrorTip('')
-    setResult(null)
-    setApiFailed(false)
-    setStepIndex(0)
+    setOutcome(null)
+    setFailure(null)
     setVerifying(false)
   }
 
-  /** 下载验证报告 */
-  const handleDownload = (): void => {
-    if (!result) return
-    const lines = [
-      '========== 区块链存证验证报告 ==========',
-      `凭证类型：${VERIFY_TYPE_OPTIONS.find((item) => item.value === verifyType)?.label ?? '-'}`,
-      `存证编号：${result.certNo}`,
-      `存证类型：${result.bizTypeName ?? '-'}`,
-      `交易哈希：${result.txHash ?? '-'}`,
-      `区块高度：${result.blockHeight?.toLocaleString('en-US') ?? '-'}`,
-      `确认数：${result.confirmations ?? 0}`,
-      `总耗时：${result.costSeconds}s`,
-      `总体结论：${result.passed ? '✅ 验证通过' : '❌ 验证失败'} —— ${result.summary}`,
-      '----------------------------------',
-      '验证进度：',
-      ...result.steps.map((item, index) => `  ${index + 1}. ${item.title} ${item.duration} ${item.passed ? '✅' : '❌'}`),
-      '----------------------------------',
-      '验真结论：',
-      ...result.checks.map((item) => `  ${item.passed ? '✅' : '❌'} ${item.label} —— ${item.detail}`),
-      '======================================',
-    ]
-    downloadFile(`验证报告_${result.certNo}.txt`, lines.join('\n'))
-    message.success('验证报告已下载')
+  /** 一键切换到后端支持的验真方式 */
+  const handleSwitchToTx = (): void => {
+    setVerifyType('tx')
+    setErrorTip('')
+    setOutcome(null)
+    setFailure(null)
+    setVerifying(false)
   }
 
-  const steps = result?.steps ?? PROTOTYPE_STEPS
+  /** 下载验证报告：只写入后端真实返回的内容 */
+  const handleDownload = (): void => {
+    if (!outcome) return
+    const lines = [
+      '========== 区块链存证验证报告 ==========',
+      `验真方式：按交易哈希`,
+      `交易哈希：${outcome.txHash}`,
+      `验真时间：${outcome.verifiedAt}`,
+      `数据来源：${VERIFY_ENDPOINT}`,
+      `后端返回：${String(outcome.passed)}`,
+      `验真结论：${outcome.passed ? '通过' : '未通过'}`,
+      `结论说明：${outcome.passed ? PASS_DETAIL : FAIL_DETAIL}`,
+      '----------------------------------',
+      '说明：后端该端点仅返回布尔值（是否存在该交易哈希且状态为 SUCCESS 的存证记录），',
+      '不提供区块高度 / 确认数 / 签名等明细，故本报告不包含这些字段。',
+      '======================================',
+    ]
+    downloadFile(`验证报告_${outcome.txHash}.txt`, lines.join('\n'))
+  }
+
   const placeholder =
     VERIFY_TYPE_OPTIONS.find((item) => item.value === verifyType)?.placeholder ?? ''
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      <Card title="🔍 存证验证">
+      <Card title="🔍 存证验真">
         <Space direction="vertical" size={16} style={{ width: '100%' }}>
           <Space direction="vertical" size={8} style={{ width: '100%' }}>
-            <Typography.Text strong>验证入口</Typography.Text>
+            <Typography.Text strong>验真方式</Typography.Text>
             <Radio.Group
               value={verifyType}
               onChange={(event) => handleTypeChange(event.target.value as VerifyType)}
@@ -326,6 +330,7 @@ export default function Verify(): JSX.Element {
                   size="large"
                   placeholder={placeholder}
                   value={value}
+                  disabled={!supported}
                   status={errorTip ? 'error' : undefined}
                   onChange={(event) => {
                     setValue(event.target.value)
@@ -341,13 +346,14 @@ export default function Verify(): JSX.Element {
                     size="large"
                     icon={<SearchOutlined />}
                     loading={verifying}
+                    disabled={!supported}
                     onClick={handleStart}
                   >
-                    开始验证
+                    开始验真
                   </Button>
-                  {result && (
+                  {(outcome || failure) && (
                     <Button size="large" icon={<RedoOutlined />} onClick={handleReset}>
-                      重新验证
+                      重新验真
                     </Button>
                   )}
                 </Space>
@@ -356,85 +362,87 @@ export default function Verify(): JSX.Element {
             {errorTip && <Alert type="error" showIcon message={errorTip} />}
           </Space>
 
+          {!supported && (
+            <Alert
+              type="warning"
+              showIcon
+              message={`「${VERIFY_TYPE_OPTIONS.find((item) => item.value === verifyType)?.label ?? ''}」后端暂未提供，该入口已停用`}
+              description={UNSUPPORTED_TIP[verifyType as Exclude<VerifyType, 'tx'>]}
+              action={
+                <Button size="small" type="primary" onClick={handleSwitchToTx}>
+                  改用交易哈希验真
+                </Button>
+              }
+            />
+          )}
+
           <Alert
             type="info"
             showIcon
-            message="ℹ️ 输入存证编号、交易哈希或溯源码，系统将从链上拉取数据并与链下原始数据进行比对验证"
+            message="当前后端仅支持按交易哈希验真"
+            description={`数据来源：${VERIFY_ENDPOINT}。后端返回布尔值，表示「是否存在该交易哈希且存证状态为 SUCCESS 的存证记录」。`}
           />
 
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            链ID：<span style={MONO_STYLE}>agri-chain-001</span> · 安全确认阈值：≥ 6 个区块
+            后端未返回区块高度、确认数、数字签名、分步耗时等明细，本页不展示这些字段；接口失败时只给出失败提示，不会编造任何结论。
           </Typography.Text>
         </Space>
       </Card>
 
-      {(verifying || result) && (
-        <Card title="验证进度">
-          {verifying ? (
-            <Space direction="vertical" size={12} style={{ width: '100%' }}>
-              <Spin tip={`正在验证 ${value.trim()} ...`}>
-                <div style={{ minHeight: 200 }} />
-              </Spin>
-              <Steps
-                direction="vertical"
-                size="small"
-                current={stepIndex}
-                items={PROTOTYPE_STEPS.map((item, index) => ({
-                  title: `${index + 1}. ${item.title}`,
-                  description: index < stepIndex ? `耗时 ${item.duration}` : '进行中...',
-                  status: index < stepIndex ? 'finish' : index === stepIndex ? 'process' : 'wait',
-                }))}
-              />
-            </Space>
-          ) : (
-            <Space direction="vertical" size={12} style={{ width: '100%' }}>
-              <Steps
-                direction="vertical"
-                size="small"
-                current={steps.length}
-                items={steps.map((item, index) => ({
-                  title: `${index + 1}. ${item.title}`,
-                  description: `耗时 ${item.duration}`,
-                  status: item.passed ? 'finish' : 'error',
-                }))}
-              />
-              <Typography.Text type="secondary">
-                总耗时 {result?.costSeconds ?? 0.9}s
-              </Typography.Text>
-            </Space>
-          )}
+      {verifying && (
+        <Card title="验真进行中">
+          <Spin tip="正在请求后端验真接口 ...">
+            <div style={{ minHeight: 120 }} />
+          </Spin>
         </Card>
       )}
 
-      {result && !verifying && (
+      {!verifying && failure && (
         <Card
-          title="验证结果"
+          title="验真失败"
+          extra={
+            <Button icon={<RedoOutlined />} onClick={handleReset}>
+              重试
+            </Button>
+          }
+        >
+          <Alert
+            type="error"
+            showIcon
+            message={failure.title}
+            description={
+              <Space direction="vertical" size={4}>
+                <Typography.Text>{failure.detail}</Typography.Text>
+                <Typography.Text type="secondary">
+                  未取得验真结论，页面不会编造任何结果 —— 请修复后端连通性后重试，
+                  或前往存证记录列表确认该交易哈希是否存在。
+                </Typography.Text>
+              </Space>
+            }
+          />
+        </Card>
+      )}
+
+      {!verifying && outcome && (
+        <Card
+          title="验真结果"
           extra={
             <Space>
               <Button icon={<DownloadOutlined />} onClick={handleDownload}>
                 下载验证报告
               </Button>
               <Button type="primary" icon={<RedoOutlined />} onClick={handleReset}>
-                重新验证
+                重新验真
               </Button>
             </Space>
           }
         >
           <Space direction="vertical" size={16} style={{ width: '100%' }}>
-            {apiFailed && (
-              <Alert
-                type="warning"
-                showIcon
-                message="验真接口暂不可用，以下为原型示例结论"
-                description="请检查后端服务 /api/v1/production/blockchain/verify"
-              />
-            )}
-
             <Alert
-              type={result.passed ? 'success' : 'error'}
+              type={outcome.passed ? 'success' : 'error'}
               showIcon
               icon={
-                result.passed ? (
+                outcome.passed ? (
                   <CheckCircleFilled style={{ color: '#13a05a' }} />
                 ) : (
                   <CloseCircleFilled style={{ color: '#ff4d4f' }} />
@@ -443,79 +451,44 @@ export default function Verify(): JSX.Element {
               message={
                 <Space>
                   <Typography.Text strong style={{ fontSize: 16 }}>
-                    {result.passed ? '✅ 验证通过' : '❌ 验证失败'}
+                    {outcome.passed ? '✅ 验真通过' : '❌ 验真未通过'}
                   </Typography.Text>
-                  <Typography.Text>{result.summary}</Typography.Text>
+                  <Typography.Text>{outcome.passed ? PASS_DETAIL : FAIL_DETAIL}</Typography.Text>
                 </Space>
               }
             />
 
             <Descriptions bordered size="small" column={2}>
-              <Descriptions.Item label="存证编号">
-                <span style={MONO_STYLE}>{result.certNo}</span>
-              </Descriptions.Item>
-              <Descriptions.Item label="存证类型">
-                <Tag color="geekblue">{result.bizTypeName ?? '-'}</Tag>
-              </Descriptions.Item>
               <Descriptions.Item label="交易哈希">
-                <span style={MONO_STYLE}>{result.txHash ?? '-'}</span>
+                <span style={MONO_STYLE}>{outcome.txHash}</span>
               </Descriptions.Item>
-              <Descriptions.Item label="区块高度">
-                <span style={MONO_STYLE}>
-                  {(result.blockHeight ?? 0).toLocaleString('en-US')}
-                </span>
+              <Descriptions.Item label="验真结论">
+                <Tag color={outcome.passed ? 'success' : 'error'}>
+                  {outcome.passed ? '通过' : '未通过'}
+                </Tag>
               </Descriptions.Item>
-              <Descriptions.Item label="确认数">
-                <Space>
-                  <Typography.Text type="success" strong>
-                    {result.confirmations ?? 0}
-                  </Typography.Text>
-                  <Typography.Text type="secondary">（安全阈值 ≥ 6）</Typography.Text>
-                </Space>
+              <Descriptions.Item label="后端返回值">
+                <span style={MONO_STYLE}>{String(outcome.passed)}</span>
               </Descriptions.Item>
-              <Descriptions.Item label="链ID">
-                <span style={MONO_STYLE}>agri-chain-001</span>
+              <Descriptions.Item label="验真时间">{outcome.verifiedAt}</Descriptions.Item>
+              <Descriptions.Item label="数据来源" span={2}>
+                <span style={MONO_STYLE}>{VERIFY_ENDPOINT}</span>
+              </Descriptions.Item>
+              <Descriptions.Item label="判定依据" span={2}>
+                是否存在该交易哈希且存证状态为 SUCCESS 的存证记录（后端 selectCount &gt; 0）
               </Descriptions.Item>
             </Descriptions>
 
-            <div>
-              <Typography.Text strong>五项验真结论</Typography.Text>
-              <Space direction="vertical" size={8} style={{ width: '100%', marginTop: 8 }}>
-                {result.checks.map((item) => (
-                  <Alert
-                    key={item.key}
-                    type={item.passed ? 'success' : 'error'}
-                    showIcon
-                    icon={
-                      item.passed ? (
-                        <CheckCircleFilled style={{ color: '#13a05a' }} />
-                      ) : (
-                        <CloseCircleFilled style={{ color: '#ff4d4f' }} />
-                      )
-                    }
-                    message={
-                      <Space>
-                        <Typography.Text strong>{item.label}</Typography.Text>
-                        <Tag color={item.passed ? 'success' : 'error'}>
-                          {item.passed ? '通过' : '失败'}
-                        </Tag>
-                      </Space>
-                    }
-                    description={item.detail}
-                  />
-                ))}
-              </Space>
-            </div>
+            {!outcome.passed && (
+              <Alert
+                type="info"
+                showIcon
+                message="未通过的可能原因"
+                description="该交易哈希在库内不存在；或对应存证记录的状态不是 SUCCESS（仍处于 PENDING / 失败重试中）。请到存证记录列表核对后重试。"
+              />
+            )}
 
             <Space>
-              <Button
-                type="link"
-                onClick={() =>
-                  navigate(`/production/blockchain/records/${encodeURIComponent(result.certNo)}`)
-                }
-              >
-                查看存证详情
-              </Button>
               <Button type="link" onClick={() => navigate('/production/blockchain/records')}>
                 存证记录列表
               </Button>
