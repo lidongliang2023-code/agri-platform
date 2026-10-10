@@ -1285,4 +1285,127 @@ ProductionReports.tsx（pages/user/analytics/，路由 /production/analytics/rep
   这一条已登记为 **BT-33**（编号订正：原写作 BT-31，与 team-lead 另开的 CORS PATCH
   工单撞号，故改号；BT-32 是 team-lead 的 `OpsDataScreen.tsx` 枚举键名兼容工单，不归本条）。
   已做的止血：逐行标「示例数据」+ 禁导出 / 禁打印 + 修正假文案。
-  **是否整个删除，取决于 BT-33 的裁决结论**（见下）。
+  **是否整个删除，取决于 BT-33 的裁决结论**（见 BT-33，已裁决删除并执行）。
+
+---
+
+# 域：`api/admin/alerts`（运营端异常告警）
+
+> 扫描人：se-verify-fix　日期：2026-10-10　性质：**只读调研**（只做 GET 实测 +
+> 后端源码对照 + 前端静态审计），**不改任何业务代码**。
+> 后端 `AdminAlertController`（`core-platform/mod-produce/.../internal/admin/`）的全部映射：
+> `GET /rules`、`GET ""`、`GET /stats`、`POST /{alertId}/dispatch`、
+> `POST /rules/{ruleId}/toggle`、`GET /emergency`、`GET /review`——**一共 7 个，没有第八个**。
+
+## 本域已验证有真数据的端点
+
+| 端点 | 实测 |
+| --- | --- |
+| `GET /admin/alerts` | code=0，`PageResult<AlertVO>` 真数据（DEMO-ALERT-005 等）✅ |
+| `GET /admin/alerts/stats` | code=0，`{INFO:"6",WARN:"7",CRITICAL:"4",total:"20",handled:"8",handleRate:"40"}` ✅ |
+| `GET /admin/alerts/rules` | code=0，`PageResult<AlertRuleEntity>` 真数据 ✅ |
+| `GET /admin/alerts/review` | code=0，`PageResult<AlertVO>` 真数据 ✅ |
+| `GET /admin/alerts/emergency` | code=0，但 `data: []`，且是**告警**不是预案（见 BT-38）⚠️ |
+
+## BT-34　`closeAlert` 端点不存在 →「告警处置 / 关闭」100% 失败 ⚠️ P1
+
+**前端**：`api/admin/alerts.ts:28` `PATCH /admin/alerts/{alertId}/close`。
+**后端**：控制器里**没有任何 `/close` 映射**（7 个映射见上，无 close）。
+
+**真实调用方（3 处，都有调用）**：
+- `pages/admin/alerts/AdminAlertCenter.tsx:232`
+- `pages/admin/dashboard/OpsDashboard.tsx:288`
+- `pages/admin/monitor/MonitorCenter.tsx:304`
+
+**性质**：不是"假成功"——三处都在 `onError` 里如实报错，使用者看到的是失败。
+问题是**这个能力后端压根没有**，所以"处置告警"这个核心动作**永远点不动**。
+按判定规则属"端点不存在 + 有调用方" → 后端工单。
+
+**期望语义**：提供关闭 / 处置告警的端点（PATCH 或 POST 由后端定，前端跟随），
+落处置措施与说明，并回传处置后的告警对象。
+
+## BT-35　`dispatchAlert` 用 PATCH，后端是 POST → 方法不匹配（端点**存在**）⚠️
+
+| 项 | 前端 | 后端 |
+| --- | --- | --- |
+| 方法 | **`PATCH`** `/admin/alerts/{alertId}/dispatch` | **`POST`** `/admin/alerts/{alertId}/dispatch` |
+| 返回 | `Promise<boolean>` | `ApiResponse<AlertVO>` |
+
+**实测**：`GET /admin/alerts/DEMO-ALERT-005` → 500（见 BT-36，详情端点不存在），
+因此无法用"真 id 走一遍"验证；但源码层面方法确实不一致。
+
+**零调用方**：全仓 grep `dispatchAlert` 只命中声明本身。
+按 team-lead 裁决口径（端点存在 + 有真数据 → 修契约不删；只有端点不存在 + 零调用方才删）：
+端点**存在**，故**应改为 POST 并把返回类型改成 `AlertVO`**，不删——
+留着一个方法写错的声明会被下一个人复制粘贴走。
+
+**另一半也错**：后端返回 `AlertVO`，前端声明 `boolean`——
+调用方拿 boolean 判断成功与否，而实际拿到的是一个对象（恒为真值），
+等于"永远判断成成功"。这是**类型撒谎 + 潜在的假成功**，即使现在没人调用也要修。
+
+## BT-36　`getAdminAlert` 端点不存在（用真 id 与假 id 成对验证）· 零调用方 → 建议删
+
+**成对实测**（core-app :8095）：
+
+```
+GET /admin/alerts/DEMO-ALERT-005   → code=500   ← **真 id 也 500**
+GET /admin/alerts/ALERT-NOPE       → code=500
+对照 GET /admin/tenants/NOPE       → code=404   ← 已知有 /{id} handler 的路径长这样
+```
+
+**判读**：真 id 与假 id 都是 500，而有 `/{id}` handler 的对照路径是 404 →
+**`GET /admin/alerts/{id}` 没有任何 handler**（控制器里也没有 `@GetMapping("/{id}")`）。
+注意这次的对照形式比"同一个 id 打两条路径"更强：**真 id 都取不到，就不是"id 无效"，是端点不存在**。
+
+**零调用方** → 按规则（端点不存在 + 零调用方）建议**删除**该声明。待裁决。
+
+## BT-37　应急预案 CRUD 四个端点全不存在；`GET /emergency` 也不是预案库
+
+**前端声明**（`api/admin/alerts.ts`）：
+`GET /emergency/{planId}`、`POST /emergency`、`PUT /emergency/{planId}`、`DELETE /emergency/{planId}`。
+**后端**：这四个**一个都没有**（映射表见域首）。
+
+**现状**：`pages/admin/alerts/EmergencyPlan.tsx` 的写操作在 catch 里
+`message.warning('预案已保存到本地示例数据（演示模式，未写入服务端，刷新后失效）')`——
+**写操作是诚实的**（明说没写进服务端），并有 `DemoDataAlert` 常驻横幅。所以不是"假成功"。
+问题是**预案库能力后端完全没有**，页面只能靠本地 mock 撑着。
+
+⚠️ **另有一条 read 侧问题**：`GET /admin/alerts/emergency` 的后端实现是
+`emergency(@RequestParam(defaultValue="60") int minutes)`，返回 `List<AlertVO>`——
+它是**「近 N 分钟的紧急告警」**，不是「应急预案库」。
+前端却按 `PageResult<EmergencyPlan>` 取 `pageNum / pageSize / alertType / status`，
+后端**只认 `minutes`**，其余入参全部丢弃（与 BT-30 同类的"静默忽略入参"）。
+实测 `GET /admin/alerts/emergency` → `data: []`。
+
+## BT-38　`EmergencyPlan.tsx` 在「返回空数组」时也回落 mock 数据（read 侧兜底）⚠️
+
+**源码**：`EmergencyPlan.tsx:359-390`
+
+```ts
+if (page && Array.isArray(page.list) && page.list.length > 0) { return {rows: …, demo: false} }
+} catch { /* 后端不可用时降级为演示数据 */ }
+return { rows: mockPlanStore, demo: true }      // ← 空列表**也**走这里
+```
+
+**问题**：`GET /admin/alerts/emergency` 当前就返回 `[]`，于是页面**稳定地**展示 mock 预案库。
+虽然挂了 `DemoDataAlert` 横幅，但列表里躺着一套服务端并不存在的预案，
+且映射时**硬编码了字段**：`region: '全域'`、`creatorName: '管理员A'`、`drillDate: item.updatedAt.slice(0,10)`、`steps: []`。
+
+**与 BT-33 同类**：BT-33 已裁决"删示例、走诚实空态"，本条口径应当一致。
+**待裁决**：是否同样删除 `mockPlanStore` 回落、改走空态 + 原因说明。
+（本轮按纪律只登记，未改代码。）
+
+## BT-39　灾害复盘 `POST / PUT / DELETE /review` 三个写端点不存在
+
+**前端声明**：`POST /admin/alerts/review`、`PUT /admin/alerts/review/{reviewId}`、
+`DELETE /admin/alerts/review/{reviewId}`。**后端**：控制器里只有 `GET /review`，三个写端点都没有。
+
+**现状**：`DisasterReview.tsx` 三个 mutation 都在 catch 里
+`message.error('…失败：…')`，**写操作诚实**（不谎报成功）。
+
+**契约附带项**：`GET /admin/alerts/review` 返回的是 `PageResult<AlertVO>`（**告警**），
+而前端声明 `PageResult<DisasterReview>`（灾害复盘）。页面已自己
+`(page?.list ?? []) as unknown as AlertReviewItem[]` 强转了，等于承认"这就是告警"——
+**类型声明仍是撒谎**，建议把 `listDisasterReviews` 的返回类型直接改成告警复盘类型。
+
+---
