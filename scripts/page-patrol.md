@@ -206,6 +206,65 @@ GET /analytics/DEMO-SNAP-001    → 200 有数据
 - 正确模板：`api/settings.ts` 的 `listOperationLogs`，它把 `unavailableReason` 透传给页面。
 - 注意别让 `absent` 断言撞上自己的文案（横幅里引用了成功提示原文，会让"没有成功提示"的断言误判）。
 
+### 附 2：两种"HTTP 200 + code 0 但其实没干活"的静默失败
+
+前面那节的"假成功"是**前端自己骗自己**（catch 里无条件 success）。下面两种更隐蔽：
+后端真的回了 `{"code":0,"message":"success"}`，前端也真的没撒谎，但**事情并没办成**。
+只验"返回 200 / 没有报错"会全部漏掉。
+
+#### 类型一：静默写空（写进去了，但字段是 null）
+
+现象：`POST /settings`（旧实现）返回 200 + `settingId`，**回读却发现
+`setting_key=null`、`setting_value=null`** —— 一行空记录被写进了库。
+
+成因：前端字段名与后端 DTO 不一致（前端 `configKey/configValue`，
+后端要 `settingKey/settingValue`），后端没有校验、直接落库。
+
+判定：`INSERT` 类操作**必须回读**刚写进去的那条记录，逐字段比对非空。
+
+#### 类型二：静默无操作（返回成功，但没有任何一行被改/删）
+
+现象：`DELETE /settings/{不存在的 id}` 返回 `{"code":0,"message":"success"}`，
+**但该 id 的记录压根不存在，一行也没删掉**；再按 key 回读，记录仍在。
+
+判定：`UPDATE` / `DELETE` 类操作必须**回读校验"目标状态确实达成了"**，
+而不是只看返回值。
+
+#### 共同判据：写操作必须「回读」才算验过
+
+统一标准（团队约定）：
+
+> **写操作的验收 = 调用 → 回读 → 比对。只看到 200 / code 0 不算数。**
+
+标准动作模板就是 `api/settings.ts` 的 `deleteSetting`：
+
+1. 先 `GET` 拿到目标记录的**真实 id**（不要自己拼 id）；
+2. 执行写操作；
+3. **再 `GET` 一次**：
+   - 删除类 → 记录必须查不到；查得到就抛「删除未生效：后端返回成功但记录仍在」；
+   - 新增/修改类 → 关键字段必须非空且等于写入值；是 null 就抛「写入未生效」。
+
+实测样例（本轮 core-app :8098）：
+
+| 操作 | 返回 | 回读结果 | 结论 |
+| --- | --- | --- | --- |
+| `POST /settings/save`（字段名映射正确） | 200 / code 0 | 10 个配置键全部非空、值正确 | 真生效 |
+| `POST /settings`（旧实现，字段名不对） | 200 / code 0 + settingId | `setting_key=null` | **静默写空** |
+| `DELETE /settings/{不存在 id}` | 200 / code 0 | 记录仍在 | **静默无操作** |
+| `POST /harvests/inventory/{batchId}/out` | 200 / code 0 + flowId | `prod_inventory_flow` 多一行、按 batchId 回读查得到 | 真生效 |
+| `POST /harvests/inventory/in` 等 4 个 | 200 / **code 500**（`NoResourceFoundException` / `HttpRequestMethodNotSupportedException`） | — | 端点不存在 |
+
+#### 排障提示：别把"端点不存在"报成"接口建设中"
+
+后端 `NoResourceFoundException` 与**方法不被允许**（`HttpRequestMethodNotSupportedException`，
+例如只有 `GET /harvests/inventory` 却发了 POST）都表现为 **HTTP 200 + code 500**，
+与"服务端真异常"无法从响应体区分 —— 必须翻日志看异常类名。
+
+同理，演示兜底横幅不能写「接口建设中」：`queryInventoryFlows` 曾把路径写错
+（`/harvests/inventory/{batchId}/flows`），实测返回 code 500，兜底既不触发、页面也不报错，
+只剩一张**空表**，看上去像"这段时间没有流水"，排障方向被彻底带偏。
+现在兜底结果带 `demoReason`，失败态也会原样显示后端原因。
+
 ## 纪律
 
 本脚本**只观测、不修复**：不修改任何被测页面源码，不 mock 接口，不跳过失败页面。
