@@ -47,7 +47,14 @@ export interface ReportTask {
   status?: string
 }
 
-/** 报表中心统计项 */
+/**
+ * 报表中心统计项。
+ *
+ * ⚠️ 实测（core-app :8097）：后端 `AdminReportController` **没有** `/stat` 端点，
+ * 该路径会被 `@GetMapping("/{id}")` 吞掉 → `detail("stat")` 抛 NOT_FOUND。
+ * 即本调用当前**必然失败**。因此这里不再静默回落示例数字，而是把不可用原因一并返回，
+ * 由页面显示失败态（模板见 `src/api/settings.ts` 的 listOperationLogs）。
+ */
 export interface ReportCenterStat {
   /** 报表总数 */
   totalCount: number
@@ -57,18 +64,85 @@ export interface ReportCenterStat {
   downloadCount: number
   /** 生成失败数量 */
   failedCount: number
+  /**
+   * 接口不可用原因。
+   *
+   * 非空表示本次**没有拿到任何真实统计**，页面必须显式告知用户「未接入」并显示为「—」，
+   * **不得**用示例数字顶上——那会让「接口挂了」看起来和「有 128 份本月报表」一模一样。
+   */
+  unavailableReason?: string
 }
 
-/** 查询报表中心统计 */
-export function getReportCenterStat(): Promise<ReportCenterStat> {
-  return http.get<ReportCenterStat>(`${BASE}/stat`)
+/** 报表中心统计接口返回的原始字段（不含不可用原因） */
+type RawReportCenterStat = Omit<ReportCenterStat, 'unavailableReason'>
+
+/** 查询报表中心统计（失败时返回不可用原因，不返回编造数字） */
+export async function getReportCenterStat(): Promise<ReportCenterStat> {
+  try {
+    const res = await http.get<RawReportCenterStat>(`${BASE}/stat`, undefined, { silent: true })
+    if (res && typeof res === 'object' && typeof res.totalCount === 'number') {
+      return {
+        totalCount: res.totalCount,
+        monthCount: res.monthCount ?? 0,
+        downloadCount: res.downloadCount ?? 0,
+        failedCount: res.failedCount ?? 0,
+      }
+    }
+    return {
+      totalCount: 0,
+      monthCount: 0,
+      downloadCount: 0,
+      failedCount: 0,
+      unavailableReason: `后端 ${BASE}/stat 已请求成功，但未返回可识别的统计字段（缺少 totalCount）`,
+    }
+  } catch (error) {
+    return {
+      totalCount: 0,
+      monthCount: 0,
+      downloadCount: 0,
+      failedCount: 0,
+      unavailableReason: `报表中心统计接口不可用：${(error as Error)?.message ?? '请求失败'}`,
+    }
+  }
 }
 
-/** 分页查询报表中心列表 */
-export function listAdminReports(
-  params: PageQuery & { reportType?: number; period?: string; tenantId?: string },
-): Promise<PageResult<ReportItem>> {
-  return http.get<PageResult<ReportItem>>(BASE, params)
+/** 报表中心列表分页结果（附带「接口不可用」原因，供页面显式降级提示） */
+export interface AdminReportPage extends PageResult<ReportTask> {
+  /** 非空表示本次没有拿到任何真实报表任务，页面必须显示失败态而非空列表冒充「没有报表」 */
+  unavailableReason?: string
+}
+
+/**
+ * 分页查询报表中心列表。
+ *
+ * 后端 `AdminReportController#page` 只接受 `page / size / keyword / status` 四个入参，
+ * 因此这里不再声明后端不消费的 `reportType` / `period` / `tenantId`。
+ */
+export async function listAdminReports(
+  params: PageQuery & { keyword?: string; status?: string },
+): Promise<AdminReportPage> {
+  const empty: AdminReportPage = {
+    pageNum: params.pageNum ?? 1,
+    pageSize: params.pageSize ?? 10,
+    total: 0,
+    pages: 0,
+    list: [],
+  }
+  try {
+    const res = await http.get<PageResult<ReportTask>>(BASE, params, { silent: true })
+    if (res && Array.isArray(res.list)) {
+      return { ...res }
+    }
+    return {
+      ...empty,
+      unavailableReason: `后端 ${BASE} 返回结构不是分页数据（缺少 list 数组）`,
+    }
+  } catch (error) {
+    return {
+      ...empty,
+      unavailableReason: `报表任务列表接口不可用：${(error as Error)?.message ?? '请求失败'}`,
+    }
+  }
 }
 
 /** 查询报表详情 */

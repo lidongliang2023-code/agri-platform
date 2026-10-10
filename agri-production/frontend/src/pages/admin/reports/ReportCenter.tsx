@@ -47,9 +47,10 @@ import {
   StarOutlined,
 } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
+import type { CSSProperties } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getReportCenterStat, listAdminReports } from '@/api'
-import type { PageResult, ReportItem } from '@/types'
+import type { AdminReportPage } from '@/api'
 
 /** 报表大类：production 生产报表 / quality 质量报表 / device 设备报表 / alert 告警报表 */
 type ReportGroup = 'production' | 'quality' | 'device' | 'alert'
@@ -139,6 +140,12 @@ const REPORT_CARDS: ReportCard[] = [
 /** 收藏缓存 key */
 const FAVORITE_KEY = 'agri:admin:reports:favorites'
 
+/** 统计接口不可用时统计卡显示的占位符（不是 0，0 会被读成「本月生成 0 份」） */
+const UNAVAILABLE_TEXT = '—'
+
+/** 占位符样式：弱化，避免与真实数字混淆 */
+const UNAVAILABLE_VALUE_STYLE: CSSProperties = { color: '#bfbfbf', fontSize: 24 }
+
 /**
  * 读取本地收藏
  * @returns 已收藏报表 ID 列表
@@ -177,33 +184,34 @@ export default function ReportCenter(): JSX.Element {
   const [onlyFavorite, setOnlyFavorite] = useState<boolean>(false)
   const [serverTotal, setServerTotal] = useState<number | undefined>(undefined)
 
+  /**
+   * 报表中心统计。
+   *
+   * ⚠️ 不再在 catch 里返回 `{ totalCount: 6, monthCount: 128, downloadCount: 862, failedCount: 2 }`
+   * 这类编造数字：后端 `GET /admin/reports/stat` 实际不存在（会被 `@GetMapping("/{id}")`
+   * 吞掉后抛 NOT_FOUND），编造数字会让「接口挂了」显示成「本月生成 128 份」。
+   * 现在由 api 层返回 `unavailableReason`，本页按失败态渲染。
+   */
   const statQuery = useQuery({
     queryKey: ['admin-report-center-stat'],
-    queryFn: async () => {
-      try {
-        return await getReportCenterStat()
-      } catch {
-        return { totalCount: 6, monthCount: 128, downloadCount: 862, failedCount: 2 }
-      }
+    queryFn: () => getReportCenterStat(),
+  })
+
+  /** 统计接口不可用原因（非空即本次没拿到任何真实统计） */
+  const statUnavailableReason: string | undefined = statQuery.data?.unavailableReason
+
+  /** 服务端报表任务列表；失败时同样带 unavailableReason，不做「空列表」冒充 */
+  const listQuery = useQuery({
+    queryKey: ['admin-report-center-list'],
+    queryFn: async (): Promise<AdminReportPage> => {
+      const page = await listAdminReports({ pageNum: 1, pageSize: 100 })
+      setServerTotal(page.unavailableReason ? undefined : page.total)
+      return page
     },
   })
 
-  const listQuery = useQuery({
-    queryKey: ['admin-report-center-list'],
-    queryFn: async (): Promise<PageResult<ReportItem>> => {
-      try {
-        const page = await listAdminReports({ pageNum: 1, pageSize: 100 })
-        if (page && Array.isArray(page.list) && page.list.length > 0) {
-          setServerTotal(page.total)
-          return page
-        }
-      } catch {
-        /* 后端不可用时降级为演示数据 */
-      }
-      setServerTotal(undefined)
-      return { pageNum: 1, pageSize: 100, total: 0, pages: 0, list: [] }
-    },
-  })
+  /** 报表任务列表接口不可用原因 */
+  const listUnavailableReason: string | undefined = listQuery.data?.unavailableReason
 
   useEffect(() => {
     window.localStorage.setItem(FAVORITE_KEY, JSON.stringify(favorites))
@@ -282,6 +290,37 @@ export default function ReportCenter(): JSX.Element {
     message.success(`「${card.name}」已下载（前端即时生成的摘要文件，非服务端原始报表）`)
   }
 
+  /**
+   * 渲染一张统计卡。
+   *
+   * 统计接口不可用时统一显示「—」：接口失败 ≠ 有 128 份本月报表，
+   * 用示例数字顶上会让用户把「接口挂了」读成「业务量很大」。
+   *
+   * @param title 卡片标题
+   * @param value 真实统计值（仅在接口可用时使用）
+   * @param suffix 单位（仅在接口可用时显示）
+   * @param valueStyle 数值样式（仅在接口可用时应用）
+   * @returns 统计卡所在的栅格列
+   */
+  const renderStatCard = (
+    title: string,
+    value: number,
+    suffix: string,
+    valueStyle?: CSSProperties,
+  ): JSX.Element => (
+    <Col span={6}>
+      <Card>
+        <Statistic
+          title={title}
+          value={statUnavailableReason ? UNAVAILABLE_TEXT : value}
+          suffix={statUnavailableReason ? undefined : suffix}
+          valueStyle={statUnavailableReason ? UNAVAILABLE_VALUE_STYLE : valueStyle}
+          loading={!statUnavailableReason && statQuery.isPending}
+        />
+      </Card>
+    </Col>
+  )
+
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
       <Alert
@@ -298,36 +337,47 @@ export default function ReportCenter(): JSX.Element {
           </span>
         }
       />
+      {statUnavailableReason ? (
+        <Alert
+          banner
+          showIcon
+          type="warning"
+          message="报表中心统计未接入：后端尚未提供 /admin/reports/stat，四张统计卡显示「—」，不使用示例数字占位"
+          description={
+            <span>
+              原因：{statUnavailableReason}。为避免把编造数字误当成真实统计，此处
+              <strong>不会</strong>用示例值填充；接口上线后本提示自动消失，卡片即恢复真实数字。
+            </span>
+          }
+        />
+      ) : null}
+
+      {listUnavailableReason ? (
+        <Alert
+          banner
+          showIcon
+          type="warning"
+          message="服务端报表任务列表不可用，下方卡片一律按示例数据处理"
+          description={
+            <span>
+              原因：{listUnavailableReason}。此时所有卡片都会带{' '}
+              <Typography.Text code>示例</Typography.Text> 标签，
+              <strong>不代表服务端已存在这些报表</strong>。
+            </span>
+          }
+        />
+      ) : null}
+
       <Row gutter={16}>
-        <Col span={6}>
-          <Card>
-            <Statistic
-              title="报表总数"
-              value={serverTotal ?? statQuery.data?.totalCount ?? 0}
-              suffix="类"
-            />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card>
-            <Statistic title="本月生成" value={statQuery.data?.monthCount ?? 0} suffix="份" />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card>
-            <Statistic title="下载次数" value={statQuery.data?.downloadCount ?? 0} suffix="次" />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card>
-            <Statistic
-              title="生成失败"
-              value={statQuery.data?.failedCount ?? 0}
-              suffix="份"
-              valueStyle={{ color: (statQuery.data?.failedCount ?? 0) > 0 ? '#cf1322' : undefined }}
-            />
-          </Card>
-        </Col>
+        {renderStatCard('报表总数', serverTotal ?? statQuery.data?.totalCount ?? 0, '类')}
+        {renderStatCard('本月生成', statQuery.data?.monthCount ?? 0, '份')}
+        {renderStatCard('下载次数', statQuery.data?.downloadCount ?? 0, '次')}
+        {renderStatCard(
+          '生成失败',
+          statQuery.data?.failedCount ?? 0,
+          '份',
+          (statQuery.data?.failedCount ?? 0) > 0 ? { color: '#cf1322' } : undefined,
+        )}
       </Row>
 
       <Card>
