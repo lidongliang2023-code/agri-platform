@@ -20,7 +20,6 @@ import {
   Row,
   Select,
   Space,
-  Statistic,
   Table,
   Tag,
   Typography,
@@ -40,10 +39,11 @@ import { useNavigate } from 'react-router-dom'
 import type { AdminInspectionRow } from '@/api/admin/trace'
 import {
   fetchAdminQualityOverview,
-  fetchFailedInspections,
   fetchQualityInspections,
   recallQualityBatch,
 } from '@/api/admin/trace'
+import { readNumberOrNull } from '@/utils/production-adapter'
+import MetricStatistic from '@/components/MetricStatistic'
 
 const { Text } = Typography
 
@@ -270,13 +270,6 @@ export default function Inspections(): JSX.Element {
     retry: false,
   })
 
-  /** 不合格检测清单 */
-  const failedQuery = useQuery({
-    queryKey: ['admin', 'quality', 'inspections', 'failed'],
-    queryFn: () => fetchFailedInspections(),
-    retry: false,
-  })
-
   /** 不合格批次召回 */
   const recallMutation = useMutation({
     mutationFn: (batchId: string) => recallQualityBatch(batchId),
@@ -320,25 +313,57 @@ export default function Inspections(): JSX.Element {
     return { rows: filtered, total: fallback.total }
   }, [listQuery.data, pageNum, pageSize, submitted])
 
-  /** 顶部指标（原型 P14 结合 /admin/quality/overview） */
-  const metrics = useMemo(() => {
+  /**
+   * 顶部指标（只认 `/admin/quality/overview` 的真实返回）。
+   *
+   * 实测该接口**所有字段都是字符串**（不是数字）：
+   * <pre>
+   * {"passCount":"3","failCount":"1","passRate":"75","labCount":"3","frozenBatch":"1"}
+   * </pre>
+   * 因此：
+   * 1. 不能做 `passCount + failCount`——那是字符串拼接，`"3" + "1"` = **`"31"`**，
+   *    「报告总数」会显示 31（真实 4）。逐键走 {@link readNumberOrNull} 归一
+   *    （与 `fetchAdminTraceCodeStats` 同一套思路：声明是 number、运行时是 string，
+   *    TS 编译期发现不了）；
+   * 2. 接口失败时**不能**用 95.2 / 11_850 / 12_450 这类原型数字顶替。尤其
+   *    `passRate ?? 95.2` 配上「>= 95 显示绿色」的配色规则，会让**接口一失败、
+   *    合格率恰好 95.2、指标卡变绿**——把失败伪装成「状态良好」，比显示「—」危险得多。
+   *    缺失一律 null，渲染成「—」。
+   *
+   * 注：`readNumber` 的缺省值是 0，0 是「统计过、结果是 0」的结论，
+   * 不能用来表达「没拿到」，所以这里必须用 `readNumberOrNull`。
+   */
+  const metrics = useMemo<{
+    totalReports: number | null
+    passCount: number | null
+    failCount: number | null
+    passRate: number | null
+    labCount: number | null
+    frozenBatch: number | null
+  }>(() => {
     const raw = overviewQuery.data
-    const failedCount = failedQuery.data?.length ?? 0
-    return {
-      /** 报告总数 */
-      totalReports: raw ? raw.passCount + raw.failCount : PROTOTYPE_TOTAL,
-      /** 合格数 */
-      passCount: raw?.passCount ?? 11_850,
-      /** 不合格数 */
-      failCount: raw?.failCount ?? failedCount,
-      /** 合格率（%） */
-      passRate: Number(raw?.passRate ?? 95.2),
-      /** 合作机构数 */
-      labCount: raw?.labCount ?? LAB_OPTIONS.length,
-      /** 已冻结批次 */
-      frozenBatch: raw?.frozenBatch ?? 0,
+    if (!raw) {
+      return {
+        totalReports: null,
+        passCount: null,
+        failCount: null,
+        passRate: null,
+        labCount: null,
+        frozenBatch: null,
+      }
     }
-  }, [overviewQuery.data, failedQuery.data])
+    const passCount = readNumberOrNull(raw, ['passCount'])
+    const failCount = readNumberOrNull(raw, ['failCount'])
+    return {
+      /** 报告总数 = 合格 + 不合格（先各自转成数字再相加；任一项缺失则整体缺失） */
+      totalReports: passCount !== null && failCount !== null ? passCount + failCount : null,
+      passCount,
+      failCount,
+      passRate: readNumberOrNull(raw, ['passRate']),
+      labCount: readNumberOrNull(raw, ['labCount']),
+      frozenBatch: readNumberOrNull(raw, ['frozenBatch']),
+    }
+  }, [overviewQuery.data])
 
   /** 下载报告原件（有 reportUrl 时跳转，否则本地导出 CSV） */
   const handleDownload = (record: AdminInspectionRow): void => {
@@ -481,12 +506,17 @@ export default function Inspections(): JSX.Element {
       <Row gutter={16}>
         <Col xs={12} sm={12} lg={6}>
           <Card>
-            <Statistic title="报告总数" value={metrics.totalReports} valueStyle={{ color: '#1677ff' }} />
+            <MetricStatistic
+              title="报告总数"
+              value={metrics.totalReports}
+              /* 缺失态由组件统一渲染灰色「—」+ 橙色图标，这里不能无条件上蓝色 */
+              valueStyle={metrics.totalReports === null ? undefined : { color: '#1677ff' }}
+            />
           </Card>
         </Col>
         <Col xs={12} sm={12} lg={6}>
           <Card>
-            <Statistic
+            <MetricStatistic
               title="合格报告"
               value={metrics.passCount}
               suffix={<CheckCircleOutlined style={{ color: '#52c41a' }} />}
@@ -495,22 +525,35 @@ export default function Inspections(): JSX.Element {
         </Col>
         <Col xs={12} sm={12} lg={6}>
           <Card>
-            <Statistic
+            <MetricStatistic
               title="不合格报告"
               value={metrics.failCount}
-              valueStyle={{ color: metrics.failCount > 0 ? '#ff4d4f' : undefined }}
+              valueStyle={
+                metrics.failCount !== null && metrics.failCount > 0
+                  ? { color: '#ff4d4f' }
+                  : undefined
+              }
               suffix={<WarningOutlined />}
             />
           </Card>
         </Col>
         <Col xs={12} sm={12} lg={6}>
           <Card>
-            <Statistic
+            <MetricStatistic
               title="检测合格率"
               value={metrics.passRate}
               precision={1}
               suffix="%"
-              valueStyle={{ color: metrics.passRate >= 95 ? '#52c41a' : '#faad14' }}
+              /*
+               * ⚠️ 缺失时**不参与配色**：原来 `passRate ?? 95.2` + `>= 95 变绿`
+               * 会让接口失败时刚好落在绿色区间。null 一律不染色（组件内部缺失态
+               * 会用灰色「—」+ 橙色信息图标渲染）。
+               */
+              valueStyle={
+                metrics.passRate === null
+                  ? undefined
+                  : { color: metrics.passRate >= 95 ? '#52c41a' : '#faad14' }
+              }
             />
           </Card>
         </Col>

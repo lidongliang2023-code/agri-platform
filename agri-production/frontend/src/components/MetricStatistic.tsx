@@ -30,8 +30,8 @@ export interface MetricStatisticProps {
   value: number | null
   /** 小数位，缺省 0 */
   precision?: number
-  /** 单位后缀 */
-  suffix?: string
+  /** 单位后缀（与 antd `Statistic` 一致，允许传图标等节点） */
+  suffix?: ReactNode
   /** 前置内容（图标等） */
   prefix?: ReactNode
   /** 数值样式 */
