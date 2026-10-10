@@ -28,9 +28,26 @@ export function listTenants(params: TenantListParams): Promise<PageResult<Tenant
   return http.get<PageResult<Tenant>>(BASE, params)
 }
 
-/** 查询租户详情 */
-export function getTenant(tenantId: BizId): Promise<Tenant> {
-  return http.get<Tenant>(`${BASE}/${tenantId}`)
+/**
+ * 查询租户详情（GET /admin/tenants/{id}）。
+ *
+ * ⚠️ 后端 `AdminTenantController#detail` 返回的是 **`TenantQuotaEntity`（配额记录）**，
+ * 不是「租户档案实体」——库内没有租户主表，租户以配额记录为载体。
+ * 实测（2026-10-10，端口 8096，code=0）返回键为：
+ * `marketId, tenantId, createBy, updateBy, createdAt, updatedAt, deleted, quotaId,
+ *  tenantCode, tenantName, farmLimit, plotLimit, deviceLimit, userLimit,
+ *  storageLimitGb, traceCodeLimit, apiCallLimit, usedFarmCount, status`。
+ *
+ * 因此**没有**联系人 / 联系电话 / 区域 / 统一社会信用代码 / 法定代表人 / 地址 /
+ * 经营范围 / 租户等级 / 成员数 / 设备数（实际值）/ 在田面积 / 活跃度 / 到期时间等字段。
+ * 此前这里声明返回 `Tenant`（把上面这些字段标成必填或可选），
+ * 前端于是用原型示例值补齐——页面上每一个"档案字段"都是编造的。
+ *
+ * @param tenantId 租户标识（后端 `quotaId`）
+ * @returns 后端配额记录真实形态
+ */
+export function getTenant(tenantId: BizId): Promise<OpsTenantRow> {
+  return http.get<OpsTenantRow>(`${BASE}/${tenantId}`)
 }
 
 /** 新增租户 */
@@ -174,6 +191,13 @@ export function listOpsTenants(params: OpsTenantListParams): Promise<PageResult<
 export interface OpsTenantRow {
   /** 租户标识（后端配额主键 quotaId） */
   quotaId: string
+  /**
+   * 租户 ID（后端 `prod_tenant_quota.tenant_id`，Long 全局序列化为字符串）。
+   *
+   * 单租户概览 `GET /admin/tenants/overview/{tenantId}` 的入参是 **Long**，
+   * 只能传这个值；传 `quotaId` 会返回 code=400。
+   */
+  tenantId?: string | null
   /** 租户编码 */
   tenantCode?: string | null
   /** 租户名称 */

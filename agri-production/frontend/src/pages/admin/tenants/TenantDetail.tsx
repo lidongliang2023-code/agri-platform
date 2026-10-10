@@ -4,9 +4,33 @@
  * 所属模块：租户管理
  * PRD 序号：PRD 6.2 #5
  * 原型来源：P3 tenant-detail — 租户详情（基本信息 / 农场列表 / 配额详情 / 操作日志）
+ *
+ * ⚠️ 契约错位（2026-10-10 实测，后端 8096）：
+ * 后端 AdminTenantController 没有租户主表，租户以**配额记录**为载体，
+ * GET /admin/tenants/{id} 返回 TenantQuotaEntity，实测键为
+ *   marketId, tenantId, createBy, updateBy, createdAt, updatedAt, deleted, quotaId,
+ *   tenantCode, tenantName, farmLimit, plotLimit, deviceLimit, userLimit,
+ *   storageLimitGb, traceCodeLimit, apiCallLimit, usedFarmCount, status
+ * 因此 PRD 原型里的「统一社会信用代码 / 法定代表人 / 注册地址 / 经营范围 / 所属区域 /
+ * 联系人 / 联系电话 / 到期时间 / 租户等级 / 成员数量 / 在田面积 / 活跃度」**后端均无此列**。
+ *
+ * 此前本页用 FALLBACK_TENANT 原型档案（张三 / 138****5678 / 河南省郑州市 / 91410100MA45XXXX /
+ * 在田面积 12500 / 配额使用率 96.4 …）与后端返回值合并，后端没给的字段全部由原型补位，
+ * 页面看上去档案完整，实际每一个补位值都是编造的。现按项目铁律改为「—」+ 提示。
+ *
+ * 另：GET /admin/tenants/{id}/farms 与 /admin/tenants/{id}/logs **端点不存在**
+ * （实测 HTTP 200 / code=500，源码 AdminTenantController 无对应映射；
+ * 注意不是路径漏 production 段——带段实测同样是 500，而带段的已存在端点返回 code=0）。
+ * 此前农场列表回落 5 条原型农场、日志回落按页码生成的示例日志并把总数写死 2456，
+ * 现改为空态 + 显式说明端点缺失。
+ *
+ * 真实可用的补充数据源：GET /admin/tenants/overview/{tenantId}（入参为 Long，
+ * 只能用详情里的 tenantId，传 quotaId 返回 400）返回 farmCount / plotCount /
+ * deviceCount / farmUsageRate 等真实聚合值，本页用它填「农场数量 / 设备数量 / 配额使用率」。
  */
 import { useEffect, useMemo, useState } from 'react'
 import {
+  Alert,
   App,
   Button,
   Card,
@@ -28,60 +52,46 @@ import {
   Tooltip,
   Typography,
 } from 'antd'
+import {
+  ArrowLeftOutlined,
+  EditOutlined,
+  InfoCircleOutlined,
+  StopOutlined,
+} from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
-import { ArrowLeftOutlined, EditOutlined, StopOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
+import { MetricNumber } from '@/components'
 import type {
   OpsQuotaItem,
-  OpsTenant,
   TenantFarmItem,
   TenantOperationLog,
-  TenantSegmentLevel,
+  TenantStatus,
 } from '@/types'
 import {
   getTenant,
+  getTenantOverviewById,
   getTenantQuotaOverview,
   listTenantFarms,
   listTenantOperationLogs,
   resetTenantQuotaUsage,
   updateTenant,
   updateTenantQuotaLimits,
-  updateTenantStatus,
 } from '@/api/admin/tenants'
+import type { OpsTenantRow } from '@/api/admin/tenants'
 
 const { Text, Title } = Typography
 
-/** 等级数值 → 文案 */
-const LEVEL_TEXT: Record<number, TenantSegmentLevel> = {
-  4: '钻石',
-  3: '金牌',
-  2: '银牌',
-  1: '普通',
-}
-
-/** 等级图标 */
-const LEVEL_ICON: Record<string, string> = {
-  钻石: '💎',
-  金牌: '🥇',
-  银牌: '🥈',
-  普通: '',
-}
-
-/** 状态 → 文案 */
+/** 状态 → 文案（对齐后端 TenantQuotaEntity.status：1 正常 / 0 停用） */
 const STATUS_TEXT: Record<number, string> = {
   1: '正常',
-  2: '待审核',
-  3: '冻结',
-  0: '已注销',
+  0: '停用',
 }
 
 /** 状态 → 颜色 */
 const STATUS_COLOR: Record<string, string> = {
   正常: 'green',
-  待审核: 'gold',
-  冻结: 'red',
-  已注销: 'default',
+  停用: 'default',
 }
 
 /**
@@ -105,6 +115,53 @@ const NO_SOURCE_TIP = '后端暂无该维度的用量数据源，无法统计，
 const NO_SOURCE_TIP_TRACE =
   '后端仅有平台口径的溯源码统计（/trace/codes/stats），无租户维度；不能按租户展示用量，故显示「—」'
 
+/** 后端无此列的档案字段统一提示 */
+const NO_COLUMN_TIP =
+  '后端 TenantQuotaEntity（库内以配额记录承载租户）无此列，显示为「—」，后端补齐字段后自动填充'
+
+/** 无聚合数据源的统计字段提示 */
+const NO_STAT_TIP = '后端未提供该租户此统计项的数据源，显示为「—」，接口补齐后自动填充'
+
+/** 农场 / 日志端点缺失说明 */
+const FARMS_ENDPOINT_TIP =
+  '后端 AdminTenantController 无 GET /admin/tenants/{id}/farms 映射（实测 code=500，端点不存在），已列入后端缺口批次'
+
+/** 日志端点缺失说明 */
+const LOGS_ENDPOINT_TIP =
+  '后端 AdminTenantController 无 GET /admin/tenants/{id}/logs 映射（实测 code=500，端点不存在），已列入后端缺口批次'
+
+/** 配额调整表单 */
+interface QuotaFormValues {
+  farmLimit: number
+  traceCodeLimit: number
+  storageLimit: number
+  apiLimit: number
+}
+
+/** 租户编辑表单（仅后端真实存在的字段） */
+interface TenantFormValues {
+  tenantName: string
+}
+
+/**
+ * 缺失值文本（带可见提示图标）。
+ *
+ * 不渲染 0、不渲染空白：0 是一个结论（"统计过了，结果是 0"），
+ * 空白让用户分不清「没数」还是「出错」。
+ *
+ * @param props tip 悬浮说明
+ * @returns 「—」+ 橙色信息图标
+ */
+function MissingText({ tip }: { tip: string }): JSX.Element {
+  return (
+    <Tooltip title={tip}>
+      <Text type="secondary" style={{ cursor: 'help' }}>
+        —<InfoCircleOutlined style={{ fontSize: 11, color: '#faad14', marginLeft: 2 }} />
+      </Text>
+    </Tooltip>
+  )
+}
+
 /**
  * 按小数位格式化数字（千分位）。
  *
@@ -119,104 +176,25 @@ function formatNumber(value: number, precision: number): string {
   })
 }
 
-/** 租户档案示例数据（原型 P3 头卡 + 基本信息） */
-const FALLBACK_TENANT: OpsTenant = {
-  tenantId: 'TS000001',
-  tenantCode: 'T20250001',
-  tenantName: '绿源农业科技有限公司',
-  contactName: '张三',
-  contactPhone: '138****5678',
-  region: '河南省 · 郑州市',
-  tenantLevel: 4,
-  status: 1,
-  farmCount: 45,
-  memberCount: 186,
-  deviceCount: 320,
-  activatedAt: '2025-03-15 09:00:00',
-  expireAt: '2026-03-14',
-  createdAt: '2025-03-15 09:00:00',
-  creditCode: '91410100MA45XXXX',
-  legalPerson: '张三',
-  address: '河南省郑州市金水区XX路XX号',
-  businessScope: '农业种植、农产品加工、农业技术推广',
-  fieldArea: 12500,
-  activity: '正常',
-  quotaUsageRate: 96.4,
-}
-
-/** 农场列表示例数据（原型 P3 Tab2） */
-const FALLBACK_FARMS: TenantFarmItem[] = [
-  { farmId: 'F202501', farmCode: 'F202501', farmName: '绿源1号农场', areaMu: 500, crops: ['水稻', '小麦'], status: '正常', ownerName: '张三' },
-  { farmId: 'F202510', farmCode: 'F202510', farmName: '绿源果园基地', areaMu: 280, crops: ['苹果', '梨'], status: '正常', ownerName: '李四' },
-  { farmId: 'F202518', farmCode: 'F202518', farmName: '绿源蔬菜大棚', areaMu: 120, crops: ['番茄', '黄瓜'], status: '预警', ownerName: '王五' },
-  { farmId: 'F202526', farmCode: 'F202526', farmName: '绿源育苗中心', areaMu: 90, crops: ['水稻秧苗'], status: '正常', ownerName: '赵六' },
-  { farmId: 'F202533', farmCode: 'F202533', farmName: '绿源稻虾基地', areaMu: 360, crops: ['水稻', '小龙虾'], status: '正常', ownerName: '孙七' },
-]
-
-/** 操作类型池（生成日志示例数据） */
-const LOG_TYPES: string[] = ['创建任务', '修改地块', '配额调整', '新增农场', '登录系统', '导出报表']
-
-/** 操作人池 */
-const LOG_OPERATORS: string[] = ['张三', '李四', '管理员A', '王五', '赵六']
-
 /**
- * 生成操作日志示例数据（原型 P3 Tab4 共 2,456 条）。
+ * 租户展示名：后端未提供租户名称时兜底展示租户编号 / 标识，避免出现空白。
  *
- * @param pageNum 页码
- * @param pageSize 每页条数
- * @returns 日志列表
- */
-function buildSampleLogs(pageNum: number, pageSize: number): TenantOperationLog[] {
-  return Array.from({ length: Math.min(pageSize, 20) }, (_unused, index) => {
-    const seq = (pageNum - 1) * pageSize + index + 1
-    const minute = 8 + ((seq * 7) % 50)
-    const hour = 8 + ((seq * 3) % 10)
-    return {
-      logId: `LOG${String(seq).padStart(6, '0')}`,
-      operateTime: `2025-07-14 ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:${String((seq * 11) % 60).padStart(2, '0')}`,
-      operator: LOG_OPERATORS[seq % LOG_OPERATORS.length],
-      operateType: LOG_TYPES[seq % LOG_TYPES.length],
-      detail: `${LOG_TYPES[seq % LOG_TYPES.length]}#${1000 + seq}`,
-      ipAddress: `10.0.${(seq % 3) + 1}.${(seq % 250) + 1}`,
-    }
-  })
-}
-
-/** 配额调整表单 */
-interface QuotaFormValues {
-  farmLimit: number
-  traceCodeLimit: number
-  storageLimit: number
-  apiLimit: number
-}
-
-/** 租户编辑表单 */
-interface TenantFormValues {
-  tenantName: string
-  contactName?: string
-  contactPhone?: string
-  region?: string
-  businessScope?: string
-}
-
-/**
- * 租户展示名：后端未提供租户名称时兜底展示租户 ID，避免标题与档案区出现空白。
- *
- * 判空覆盖 undefined / null / '' / 纯空白串（'   ' 视为空）。
- *
- * @param tenant 租户数据
+ * @param tenant 后端配额记录
  * @returns 用于展示的租户标识
  */
-function resolveTenantName(tenant: { tenantId?: string; tenantName?: string }): string {
-  const name = tenant.tenantName?.trim()
-  return name ? name : (tenant.tenantId ?? '')
+function resolveTenantName(tenant: OpsTenantRow | null, tenantId: string): string {
+  const name = tenant?.tenantName?.trim()
+  if (name) {
+    return name
+  }
+  return tenant?.tenantCode?.trim() || tenantId
 }
 
 /**
  * 租户详情
  *
  * 业务职责：展示单个租户的档案信息、下属农场、配额使用情况与操作日志，
- * 支持编辑租户、冻结 / 解冻与配额调整。
+ * 支持编辑租户、停用 / 启用与配额调整。
  *
  * @returns 页面内容
  */
@@ -241,7 +219,7 @@ export default function TenantDetail(): JSX.Element {
   /** 日志分页 */
   const [logPage, setLogPage] = useState<{ pageNum: number; pageSize: number }>({ pageNum: 1, pageSize: 10 })
 
-  /** 租户档案 */
+  /** 租户档案（后端 TenantQuotaEntity，无数据就是 null，不用原型档案补位） */
   const tenantQuery = useQuery({
     queryKey: ['admin', 'tenants', tenantId],
     queryFn: () => getTenant(tenantId),
@@ -249,7 +227,24 @@ export default function TenantDetail(): JSX.Element {
     enabled: tenantId !== '',
   })
 
-  /** 农场列表 */
+  /** 后端真实档案 */
+  const tenant: OpsTenantRow | null = tenantQuery.data ?? null
+
+  /**
+   * 单租户概览（真实聚合值）。
+   *
+   * 入参必须是 Long（详情里的 tenantId），传 quotaId 后端返回 400，故用正则先判纯数字。
+   */
+  const numericTenantId: string = tenant?.tenantId ?? ''
+  const overviewQuery = useQuery({
+    queryKey: ['admin', 'tenants', 'overview-of', numericTenantId],
+    queryFn: () => getTenantOverviewById(numericTenantId),
+    retry: false,
+    enabled: numericTenantId !== '' && /^\d+$/.test(numericTenantId),
+  })
+  const overview = overviewQuery.data ?? null
+
+  /** 农场列表（端点不存在，失败即空态） */
   const farmsQuery = useQuery({
     queryKey: ['admin', 'tenants', tenantId, 'farms', farmPage],
     queryFn: () => listTenantFarms(tenantId, farmPage),
@@ -265,7 +260,7 @@ export default function TenantDetail(): JSX.Element {
     enabled: tenantId !== '' && activeTab === 'quotas',
   })
 
-  /** 操作日志 */
+  /** 操作日志（端点不存在，失败即空态） */
   const logsQuery = useQuery({
     queryKey: ['admin', 'tenants', tenantId, 'logs', logPage],
     queryFn: () => listTenantOperationLogs(tenantId, logPage),
@@ -273,29 +268,10 @@ export default function TenantDetail(): JSX.Element {
     enabled: tenantId !== '' && activeTab === 'logs',
   })
 
-  /** 租户档案：后端无数据时使用原型示例 */
-  const tenant: OpsTenant = useMemo<OpsTenant>(() => {
-    const remote = tenantQuery.data
-    if (remote && remote.tenantId) {
-      return {
-        ...FALLBACK_TENANT,
-        ...remote,
-        tenantId: remote.tenantId ?? tenantId,
-      }
-    }
-    return { ...FALLBACK_TENANT, tenantId: tenantId || FALLBACK_TENANT.tenantId }
-  }, [tenantQuery.data, tenantId])
-
-  /** 打开编辑弹窗时回填表单 */
+  /** 打开编辑弹窗时回填表单（只回填后端真实字段） */
   useEffect(() => {
     if (editOpen) {
-      editForm.setFieldsValue({
-        tenantName: tenant.tenantName,
-        contactName: tenant.contactName,
-        contactPhone: tenant.contactPhone,
-        region: tenant.region,
-        businessScope: tenant.businessScope,
-      })
+      editForm.setFieldsValue({ tenantName: tenant?.tenantName ?? '' })
     }
   }, [editOpen, editForm, tenant])
 
@@ -317,22 +293,31 @@ export default function TenantDetail(): JSX.Element {
     }
   }, [quotaOpen, quotaForm, quotasQuery.data])
 
-  /** 更新租户 */
+  /** 更新租户（PUT /admin/tenants/{id}，真实端点） */
   const editMutation = useMutation({
     mutationFn: (payload: TenantFormValues) => updateTenant(tenantId, payload),
     onSuccess: () => {
-      message.success('租户信息已更新')
+      message.success('租户名称已更新')
       setEditOpen(false)
       void queryClient.invalidateQueries({ queryKey: ['admin', 'tenants', tenantId] })
     },
   })
 
-  /** 冻结租户 */
-  const freezeMutation = useMutation({
-    mutationFn: () => updateTenantStatus(tenantId, 3),
-    onSuccess: () => {
-      message.success('租户已冻结')
+  /**
+   * 停用 / 启用租户。
+   *
+   * 走真实端点 `PUT /admin/tenants/{id}`（请求体为 TenantQuotaEntity）。
+   * 后端 **没有** `PATCH /admin/tenants/{id}/status` 映射（AdminTenantController 无此方法），
+   * 此前调用它必然 500——按钮看着能用，实际一次也没生效过。
+   */
+  const statusMutation = useMutation({
+    mutationFn: (status: TenantStatus) => updateTenant(tenantId, { status }),
+    onSuccess: (_, status) => {
+      message.success(status === 1 ? '租户已启用' : '租户已停用')
       void queryClient.invalidateQueries({ queryKey: ['admin', 'tenants', tenantId] })
+    },
+    onError: (error: Error) => {
+      message.error(`状态更新失败：${error.message}`)
     },
   })
 
@@ -355,11 +340,11 @@ export default function TenantDetail(): JSX.Element {
     },
   })
 
-  /** 农场列表数据 */
-  const farms: TenantFarmItem[] = useMemo<TenantFarmItem[]>(() => {
-    const remote = farmsQuery.data?.list
-    return remote && remote.length > 0 ? remote : FALLBACK_FARMS
-  }, [farmsQuery.data])
+  /** 农场列表：只使用后端返回值，端点缺失时为空（不再回落原型农场） */
+  const farms: TenantFarmItem[] = useMemo<TenantFarmItem[]>(
+    () => farmsQuery.data?.list ?? [],
+    [farmsQuery.data],
+  )
 
   /**
    * 配额数据：只使用后端返回值。
@@ -370,11 +355,11 @@ export default function TenantDetail(): JSX.Element {
    */
   const quotas: OpsQuotaItem[] = useMemo<OpsQuotaItem[]>(() => quotasQuery.data ?? [], [quotasQuery.data])
 
-  /** 日志数据 */
-  const logs: TenantOperationLog[] = useMemo<TenantOperationLog[]>(() => {
-    const remote = logsQuery.data?.list
-    return remote && remote.length > 0 ? remote : buildSampleLogs(logPage.pageNum, logPage.pageSize)
-  }, [logsQuery.data, logPage])
+  /** 日志数据：只使用后端返回值，端点缺失时为空（不再生成示例日志） */
+  const logs: TenantOperationLog[] = useMemo<TenantOperationLog[]>(
+    () => logsQuery.data?.list ?? [],
+    [logsQuery.data],
+  )
 
   /** 农场表格列 */
   const farmColumns: ColumnsType<TenantFarmItem> = [
@@ -385,7 +370,7 @@ export default function TenantDetail(): JSX.Element {
       dataIndex: 'areaMu',
       width: 110,
       sorter: (a, b) => a.areaMu - b.areaMu,
-      render: (value: number) => Number(value).toLocaleString('zh-CN'),
+      render: (value: number) => <MetricNumber value={value} />,
     },
     {
       title: '作物',
@@ -426,13 +411,28 @@ export default function TenantDetail(): JSX.Element {
     { title: 'IP地址', dataIndex: 'ipAddress', width: 140 },
   ]
 
-  /** 等级文案 */
-  const levelText = LEVEL_TEXT[tenant.tenantLevel] ?? '普通'
-  /** 状态文案 */
-  const statusText = STATUS_TEXT[tenant.status] ?? '正常'
+  /** 状态文案（后端只有 1 正常 / 0 停用；未知值不猜，显示「—」） */
+  const statusText: string | null = tenant?.status === undefined || tenant?.status === null
+    ? null
+    : (STATUS_TEXT[tenant.status] ?? null)
 
   return (
     <div>
+      {/* 契约错位必须让用户看见：后端返回的是配额记录，不是租户档案 */}
+      <Alert
+        type="warning"
+        showIcon
+        style={{ marginBottom: 12 }}
+        message="后端暂无「租户档案」实体，本页按配额记录（TenantQuotaEntity）真实字段展示"
+        description={
+          '实测 GET /admin/tenants/{id} 只返回配额记录字段（tenantCode / tenantName / 七项配额上限 / ' +
+          'usedFarmCount / status / 时间列）。原型档案里的联系人、联系电话、所属区域、统一社会信用代码、' +
+          '法定代表人、注册地址、经营范围、到期时间、租户等级、成员数量、在田面积、活跃度后端均无此列，' +
+          '统一显示「—」（此前用原型示例值补位，属编造）。农场数量 / 设备数量 / 配额使用率取自真实端点 ' +
+          'GET /admin/tenants/overview/{tenantId}。'
+        }
+      />
+
       {/* 顶部操作栏 */}
       <Row justify="space-between" align="middle" style={{ marginBottom: 12 }}>
         <Col>
@@ -450,16 +450,29 @@ export default function TenantDetail(): JSX.Element {
             <Button icon={<EditOutlined />} onClick={() => setEditOpen(true)}>
               编辑
             </Button>
-            <Popconfirm
-              title="确认冻结该租户？"
-              okText="冻结"
-              cancelText="取消"
-              onConfirm={() => freezeMutation.mutate()}
-            >
-              <Button danger icon={<StopOutlined />} loading={freezeMutation.isPending}>
-                冻结
-              </Button>
-            </Popconfirm>
+            {tenant?.status === 1 ? (
+              <Popconfirm
+                title="确认停用该租户？"
+                okText="停用"
+                cancelText="取消"
+                onConfirm={() => statusMutation.mutate(0)}
+              >
+                <Button danger icon={<StopOutlined />} loading={statusMutation.isPending}>
+                  停用
+                </Button>
+              </Popconfirm>
+            ) : (
+              <Popconfirm
+                title="确认启用该租户？"
+                okText="启用"
+                cancelText="取消"
+                onConfirm={() => statusMutation.mutate(1)}
+              >
+                <Button icon={<StopOutlined />} loading={statusMutation.isPending}>
+                  启用
+                </Button>
+              </Popconfirm>
+            )}
           </Space>
         </Col>
       </Row>
@@ -476,49 +489,51 @@ export default function TenantDetail(): JSX.Element {
                 <div>
                   <div>
                     <Text strong style={{ fontSize: 18 }}>
-                      {resolveTenantName(tenant)}
+                      {resolveTenantName(tenant, tenantId)}
                     </Text>
                   </div>
-                  <Text type="secondary">租户编号：{tenant.tenantCode}</Text>
+                  <Text type="secondary">租户编号：{tenant?.tenantCode ?? '—'}</Text>
                 </div>
               </Space>
             </Col>
             <Col xs={12} md={4}>
               <Text type="secondary">等级</Text>
               <div>
-                <Tag color={levelText === '钻石' ? 'purple' : levelText === '金牌' ? 'gold' : levelText === '银牌' ? 'blue' : 'default'}>
-                  {LEVEL_ICON[levelText]} {levelText}
-                </Tag>
+                <MissingText tip="后端 TenantQuotaEntity 无租户等级列（tenantLevel），显示为「—」" />
               </div>
             </Col>
             <Col xs={12} md={4}>
               <Text type="secondary">状态</Text>
               <div>
-                <Tag color={STATUS_COLOR[statusText]}>{statusText}</Tag>
+                {statusText ? (
+                  <Tag color={STATUS_COLOR[statusText] ?? 'default'}>{statusText}</Tag>
+                ) : (
+                  <MissingText tip={NO_COLUMN_TIP} />
+                )}
               </div>
             </Col>
             <Col xs={12} md={4}>
               <Text type="secondary">联系人</Text>
               <div>
-                <Text>{tenant.contactName ?? '—'}</Text>
+                <MissingText tip={NO_COLUMN_TIP} />
               </div>
             </Col>
             <Col xs={12} md={4}>
               <Text type="secondary">联系电话</Text>
               <div>
-                <Text>{tenant.contactPhone ?? '—'}</Text>
+                <MissingText tip={NO_COLUMN_TIP} />
               </div>
             </Col>
             <Col xs={12} md={4}>
               <Text type="secondary">注册时间</Text>
               <div>
-                <Text>{String(tenant.createdAt ?? '').slice(0, 10) || '—'}</Text>
+                <Text>{String(tenant?.createdAt ?? '').slice(0, 10) || '—'}</Text>
               </div>
             </Col>
             <Col xs={12} md={4}>
               <Text type="secondary">到期时间</Text>
               <div>
-                <Text>{String(tenant.expireAt ?? '').slice(0, 10) || '—'}</Text>
+                <MissingText tip={NO_COLUMN_TIP} />
               </div>
             </Col>
           </Row>
@@ -540,25 +555,87 @@ export default function TenantDetail(): JSX.Element {
                   size="small"
                   column={{ xs: 1, sm: 2, md: 3 }}
                   items={[
-                    { key: 'name', label: '企业名称', children: resolveTenantName(tenant) },
-                    { key: 'credit', label: '统一社会信用代码', children: tenant.creditCode ?? '—' },
-                    { key: 'legal', label: '法定代表人', children: tenant.legalPerson ?? '—' },
-                    { key: 'address', label: '注册地址', children: tenant.address ?? '—' },
-                    { key: 'scope', label: '经营范围', children: tenant.businessScope ?? '—', span: { xs: 1, sm: 2, md: 3 } },
-                    { key: 'region', label: '所属区域', children: tenant.region ?? '—' },
-                    { key: 'farm', label: '农场数量', children: `${tenant.farmCount} 个` },
-                    { key: 'member', label: '成员数量', children: `${tenant.memberCount} 人` },
-                    { key: 'device', label: '设备数量', children: `${tenant.deviceCount} 台` },
-                    { key: 'area', label: '在田面积', children: `${Number(tenant.fieldArea ?? 0).toLocaleString('zh-CN')} 亩` },
-                    { key: 'activity', label: '活跃度', children: tenant.activity ?? '正常' },
+                    { key: 'name', label: '企业名称', children: resolveTenantName(tenant, tenantId) },
+                    { key: 'code', label: '租户编号', children: tenant?.tenantCode ?? '—' },
+                    {
+                      key: 'quotaId',
+                      label: '配额记录号',
+                      children: tenant?.quotaId ?? '—',
+                    },
+                    { key: 'credit', label: '统一社会信用代码', children: <MissingText tip={NO_COLUMN_TIP} /> },
+                    { key: 'legal', label: '法定代表人', children: <MissingText tip={NO_COLUMN_TIP} /> },
+                    { key: 'address', label: '注册地址', children: <MissingText tip={NO_COLUMN_TIP} /> },
+                    { key: 'scope', label: '经营范围', children: <MissingText tip={NO_COLUMN_TIP} />, span: { xs: 1, sm: 2, md: 3 } },
+                    { key: 'region', label: '所属区域', children: <MissingText tip={NO_COLUMN_TIP} /> },
+                    {
+                      key: 'farm',
+                      label: '农场数量',
+                      children: (
+                        <MetricNumber value={overview?.farmCount} suffix=" 个" missingTip={NO_STAT_TIP} />
+                      ),
+                    },
+                    { key: 'member', label: '成员数量', children: <MissingText tip={NO_STAT_TIP} /> },
+                    {
+                      key: 'device',
+                      label: '设备数量',
+                      children: (
+                        <MetricNumber value={overview?.deviceCount} suffix=" 台" missingTip={NO_STAT_TIP} />
+                      ),
+                    },
+                    { key: 'area', label: '在田面积', children: <MissingText tip={NO_STAT_TIP} /> },
+                    { key: 'activity', label: '活跃度', children: <MissingText tip={NO_STAT_TIP} /> },
                     {
                       key: 'usage',
-                      label: '配额使用率',
+                      label: '农场配额使用率',
                       children: (
-                        <Tag color={Number(tenant.quotaUsageRate ?? 0) >= 90 ? 'red' : 'green'}>
-                          {Number(tenant.quotaUsageRate ?? 0)}%
-                        </Tag>
+                        <MetricNumber value={overview?.farmUsageRate} precision={0} suffix="%" missingTip={NO_STAT_TIP} />
                       ),
+                    },
+                    /* ---- 以下为后端 TenantQuotaEntity 真实字段 ---- */
+                    {
+                      key: 'farmLimit',
+                      label: '农场数上限',
+                      children: <MetricNumber value={tenant?.farmLimit} suffix=" 个" missingTip={NO_COLUMN_TIP} />,
+                    },
+                    {
+                      key: 'plotLimit',
+                      label: '地块数上限',
+                      children: <MetricNumber value={tenant?.plotLimit} suffix=" 个" missingTip={NO_COLUMN_TIP} />,
+                    },
+                    {
+                      key: 'deviceLimit',
+                      label: '设备数上限',
+                      children: <MetricNumber value={tenant?.deviceLimit} suffix=" 台" missingTip={NO_COLUMN_TIP} />,
+                    },
+                    {
+                      key: 'userLimit',
+                      label: '用户数上限',
+                      children: <MetricNumber value={tenant?.userLimit} suffix=" 人" missingTip={NO_COLUMN_TIP} />,
+                    },
+                    {
+                      key: 'storageLimit',
+                      label: '存储空间上限',
+                      children: <MetricNumber value={tenant?.storageLimitGb} suffix=" GB" missingTip={NO_COLUMN_TIP} />,
+                    },
+                    {
+                      key: 'traceLimit',
+                      label: '溯源码上限',
+                      children: <MetricNumber value={tenant?.traceCodeLimit} suffix=" 枚" missingTip={NO_COLUMN_TIP} />,
+                    },
+                    {
+                      key: 'apiLimit',
+                      label: '日 API 调用上限',
+                      children: <MetricNumber value={tenant?.apiCallLimit} suffix=" 次" missingTip={NO_COLUMN_TIP} />,
+                    },
+                    {
+                      key: 'usedFarm',
+                      label: '已用农场数',
+                      children: <MetricNumber value={tenant?.usedFarmCount} suffix=" 个" missingTip={NO_COLUMN_TIP} />,
+                    },
+                    {
+                      key: 'updated',
+                      label: '更新时间',
+                      children: String(tenant?.updatedAt ?? '').slice(0, 19) || '—',
                     },
                   ]}
                 />
@@ -568,22 +645,31 @@ export default function TenantDetail(): JSX.Element {
               key: 'farms',
               label: '农场列表',
               children: (
-                <Table<TenantFarmItem>
-                  rowKey="farmId"
-                  size="small"
-                  loading={farmsQuery.isLoading}
-                  columns={farmColumns}
-                  dataSource={farms}
-                  locale={{ emptyText: <Empty description="该租户暂无农场" /> }}
-                  pagination={{
-                    current: farmPage.pageNum,
-                    pageSize: farmPage.pageSize,
-                    total: farmsQuery.data?.total ?? farms.length,
-                    showSizeChanger: true,
-                    pageSizeOptions: [10, 20, 50],
-                    onChange: (page, size) => setFarmPage({ pageNum: page, pageSize: size }),
-                  }}
-                />
+                <div>
+                  <Alert
+                    type="warning"
+                    showIcon
+                    style={{ marginBottom: 12 }}
+                    message="后端暂无该租户的农场列表端点"
+                    description={FARMS_ENDPOINT_TIP}
+                  />
+                  <Table<TenantFarmItem>
+                    rowKey="farmId"
+                    size="small"
+                    loading={farmsQuery.isLoading}
+                    columns={farmColumns}
+                    dataSource={farms}
+                    locale={{ emptyText: <Empty description="后端未返回农场数据（不使用原型示例兜底）" /> }}
+                    pagination={{
+                      current: farmPage.pageNum,
+                      pageSize: farmPage.pageSize,
+                      total: farmsQuery.data?.total ?? 0,
+                      showSizeChanger: true,
+                      pageSizeOptions: [10, 20, 50],
+                      onChange: (page, size) => setFarmPage({ pageNum: page, pageSize: size }),
+                    }}
+                  />
+                </div>
               ),
             },
             {
@@ -702,29 +788,39 @@ export default function TenantDetail(): JSX.Element {
               key: 'logs',
               label: '操作日志',
               children: (
-                <Table<TenantOperationLog>
-                  rowKey="logId"
-                  size="small"
-                  loading={logsQuery.isLoading}
-                  columns={logColumns}
-                  dataSource={logs}
-                  locale={{ emptyText: <Empty description="暂无操作日志" /> }}
-                  pagination={{
-                    current: logPage.pageNum,
-                    pageSize: logPage.pageSize,
-                    total: logsQuery.data?.total ?? 2456,
-                    showSizeChanger: true,
-                    pageSizeOptions: [10, 20, 50],
-                    onChange: (page, size) => setLogPage({ pageNum: page, pageSize: size }),
-                  }}
-                />
+                <div>
+                  <Alert
+                    type="warning"
+                    showIcon
+                    style={{ marginBottom: 12 }}
+                    message="后端暂无该租户的操作日志端点"
+                    description={LOGS_ENDPOINT_TIP}
+                  />
+                  <Table<TenantOperationLog>
+                    rowKey="logId"
+                    size="small"
+                    loading={logsQuery.isLoading}
+                    columns={logColumns}
+                    dataSource={logs}
+                    locale={{ emptyText: <Empty description="后端未返回操作日志（不使用示例日志兜底）" /> }}
+                    pagination={{
+                      current: logPage.pageNum,
+                      pageSize: logPage.pageSize,
+                      /** 后端未返回就用真实条数 0，不再写死原型口径的 2456 */
+                      total: logsQuery.data?.total ?? logs.length,
+                      showSizeChanger: true,
+                      pageSizeOptions: [10, 20, 50],
+                      onChange: (page, size) => setLogPage({ pageNum: page, pageSize: size }),
+                    }}
+                  />
+                </div>
               ),
             },
           ]}
         />
       </Card>
 
-      {/* 编辑租户弹窗 */}
+      {/* 编辑租户弹窗：只保留后端 TenantQuotaEntity 真实存在的字段 */}
       <Modal
         open={editOpen}
         title="编辑租户"
@@ -743,6 +839,13 @@ export default function TenantDetail(): JSX.Element {
           })
         }}
       >
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message="后端 TenantQuotaEntity 仅「租户名称」可编辑"
+          description="联系人 / 联系电话 / 所属区域 / 经营范围等字段后端无对应列，提交也不会落库，因此不在本表单中提供（避免「填了没用」的假动作）。"
+        />
         <Form<TenantFormValues> form={editForm} layout="vertical" preserve={false}>
           <Form.Item
             name="tenantName"
@@ -750,22 +853,6 @@ export default function TenantDetail(): JSX.Element {
             rules={[{ required: true, message: '请输入企业名称' }, { max: 60, message: '不超过 60 个字符' }]}
           >
             <Input placeholder="请输入企业名称" maxLength={60} />
-          </Form.Item>
-          <Form.Item name="contactName" label="联系人" rules={[{ max: 20, message: '不超过 20 个字符' }]}>
-            <Input placeholder="请输入联系人" maxLength={20} />
-          </Form.Item>
-          <Form.Item
-            name="contactPhone"
-            label="联系电话"
-            rules={[{ pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号' }]}
-          >
-            <Input placeholder="请输入联系电话" maxLength={11} />
-          </Form.Item>
-          <Form.Item name="region" label="所属区域" rules={[{ max: 40, message: '不超过 40 个字符' }]}>
-            <Input placeholder="如：河南省 · 郑州市" maxLength={40} />
-          </Form.Item>
-          <Form.Item name="businessScope" label="经营范围">
-            <Input.TextArea rows={3} placeholder="如：农业种植、农产品加工、农业技术推广" maxLength={200} />
           </Form.Item>
         </Form>
       </Modal>

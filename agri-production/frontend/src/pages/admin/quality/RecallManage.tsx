@@ -93,19 +93,30 @@ const STATUS_VIEW: Record<HandleStatus, { text: string; color: string }> = {
 /** 召回流程四个阶段 */
 const RECALL_STAGES: string[] = ['发起召回', '通知', '回收登记', '结案']
 
-/** 不合格批次行（页面消费形态） */
+/**
+ * 不合格批次行（页面消费形态）。
+ *
+ * 后端没有「不合格品处置单」实体，本页实际消费的是
+ * `GET /admin/quality/inspections/failed` 返回的 `InspectionEntity`（不合格检测记录）。
+ * 因此行身份用后端真实主键 `inspectionId`，展示号用 `inspectionNo`——
+ * 原 `recallNo`（RC…）是把检测单号的数字位截出来拼成的，会让人误以为存在处置单。
+ */
 interface RecallRow {
-  /** 处置单号 */
-  recallNo: string
+  /** 检测单 ID（后端 inspectionId，真实唯一键） */
+  inspectionId: string
+  /** 检测单号（后端 inspectionNo） */
+  inspectionNo: string | null
   /** 批次 ID（HarvestBatchId，string） */
   batchId: string
-  /** 批次号 */
-  batchNo: string
-  /** 产品名称 */
-  cropName: string
-  /** 检测机构 */
-  labName: string
-  /** 不合格项 */
+  /** 批次号（后端 InspectionEntity 无 batchNo 列，为 null 时展示批次 ID） */
+  batchNo: string | null
+  /** 作物 ID（后端真实字段） */
+  cropId: string | null
+  /** 产品名称（后端无 cropName 列，故为 null 时展示「—」） */
+  cropName: string | null
+  /** 检测机构（后端无 labName / labId 列，故为 null 时展示「—」） */
+  labName: string | null
+  /** 不合格项（后端无 failItems 列，故为空数组时展示「—」） */
   failItems: string[]
   /** 发现时间 */
   foundAt: string
@@ -134,12 +145,14 @@ interface RecallRow {
   stage: number
   /** 已回收数量 */
   recoveredQty: number
-  /** 处置结果 */
+  /** 处置结果（本地登记） */
   result?: string
-  /** 复盘记录 */
+  /** 复盘记录（本地登记） */
   review?: string
-  /** 责任人 */
+  /** 责任人（本地登记，运营在处置闭环里填写） */
   ownerName?: string
+  /** 检测人（后端 InspectionEntity.inspectorName，真实字段） */
+  inspectorName?: string
 }
 
 /** 处置表单值（处置闭环） */
@@ -166,94 +179,28 @@ interface ReviewFormValues {
   review: string
 }
 
-/** 不合格项池（用于兜底数据，对应事件载荷 failItems） */
-const FAIL_ITEM_POOL: string[][] = [
-  ['农药残留超标（毒死蜱 0.12mg/kg，限值 0.05）', '重金属镉超标（0.22mg/kg，限值 0.2）'],
-  ['农药残留超标（吡虫啉 0.8mg/kg，限值 0.5）'],
-  ['微生物菌落总数超标（1.2×10⁵ CFU/g）', '大肠菌群阳性'],
-  ['重金属铅超标（0.35mg/kg，限值 0.2）'],
-  ['水分含量超标（15.8%，限值 14.5%）', '黄粒米比例超标'],
-]
+/**
+ * 「产品 / 作物」缺失提示。
+ *
+ * 实测 `InspectionEntity` 只有 `cropId`，没有 `cropName`，
+ * 也没有任何可换作物名称的字段（本页数据源里没有作物字典）。
+ */
+const CROP_MISSING_TIP =
+  '后端 InspectionEntity 只有 cropId，未提供作物名称；显示为「—」，接口补齐后自动填充'
 
-/** 产品池（兜底数据用） */
-const CROP_POOL: string[] = ['有机蔬菜', '红富士苹果', '有机牛奶', '有机大米', '土鸡蛋']
+/** 「检测机构」缺失提示（后端 InspectionEntity 无 labId / labName 列） */
+const LAB_MISSING_TIP =
+  '后端 InspectionEntity 无检测机构字段（labId / labName），显示为「—」，接口补齐后自动填充'
 
-/** 检测机构池（兜底数据用） */
-const LAB_POOL: string[] = ['省农检中心', '国家质检中心', 'SGS', '市质检站']
+/** 「不合格项」缺失提示（后端 InspectionEntity 无 failItems 列） */
+const FAIL_ITEMS_MISSING_TIP =
+  '后端 InspectionEntity 无不合格项字段（failItems），只有 result=FAIL 与检测报告地址 reportUrl；显示为「—」'
 
-/** 原型示例不合格批次（PRD #19 口径） */
-const PROTOTYPE_RECALLS: RecallRow[] = [
-  {
-    recallNo: 'RC20250714001',
-    batchId: 'B2025070',
-    batchNo: 'B2025070',
-    cropName: '有机蔬菜',
-    labName: '省农检中心',
-    failItems: FAIL_ITEM_POOL[0],
-    foundAt: '2025-07-14 10:30:00',
-    quantity: 5200,
-    unit: 'kg',
-    sampleQty: null,
-    handleType: 1,
-    status: 2,
-    stage: 2,
-    recoveredQty: 3100,
-    ownerName: '李质量',
-  },
-  {
-    recallNo: 'RC20250713002',
-    batchId: 'B2025068',
-    batchNo: 'B2025068',
-    cropName: '土鸡蛋',
-    labName: '市质检站',
-    failItems: FAIL_ITEM_POOL[2],
-    foundAt: '2025-07-13 16:20:00',
-    quantity: 1800,
-    unit: '枚',
-    sampleQty: null,
-    handleType: 2,
-    status: 3,
-    stage: 3,
-    recoveredQty: 1800,
-    result: '全部销毁，已完成无害化处理并留存影像证据',
-    review: '供应商入厂检验缺失，已增加批批检并要求供应商提供出厂报告',
-    ownerName: '王质量',
-  },
-  {
-    recallNo: 'RC20250712003',
-    batchId: 'B2025065',
-    batchNo: 'B2025065',
-    cropName: '有机牛奶',
-    labName: '国家质检中心',
-    failItems: FAIL_ITEM_POOL[3],
-    foundAt: '2025-07-12 09:15:00',
-    quantity: 2400,
-    unit: 'L',
-    sampleQty: null,
-    handleType: 3,
-    status: 1,
-    stage: 0,
-    recoveredQty: 0,
-    ownerName: '赵质量',
-  },
-  {
-    recallNo: 'RC20250711004',
-    batchId: 'B2025061',
-    batchNo: 'B2025061',
-    cropName: '有机大米',
-    labName: 'SGS',
-    failItems: FAIL_ITEM_POOL[4],
-    foundAt: '2025-07-11 14:05:00',
-    quantity: 8600,
-    unit: 'kg',
-    sampleQty: null,
-    handleType: 4,
-    status: 2,
-    stage: 2,
-    recoveredQty: 6200,
-    ownerName: '孙质量',
-  },
-]
+/** 本页与 PRD 模型的差异说明（页顶告警） */
+const CONTRACT_NOTE =
+  '后端没有「不合格品处置单」实体：本页行数据来自 GET /admin/quality/inspections/failed ' +
+  '（InspectionEntity 不合格检测记录），因此没有处置单号、检测机构、不合格项明细、影响范围与计量单位。' +
+  '处置方式 / 处置状态 / 回收数量由运营在本页本地登记（后端无处置单写入端点），不代表后端已有该状态。'
 
 /**
  * 回收率（已回收 / 影响范围）。
@@ -279,15 +226,31 @@ function recoveryRate(row: RecallRow): number | null {
  * @returns 处置行列表
  */
 function mapInspectionsToRows(inspections: AdminInspectionRow[]): RecallRow[] {
-  return inspections.map((item, index) => {
-    const failItems = FAIL_ITEM_POOL[index % FAIL_ITEM_POOL.length]
+  return inspections.map((item) => {
     return {
-      recallNo: `RC${(item.inspectionNo ?? item.inspectionId).replace(/\D/g, '').slice(0, 8) || String(index)}`,
+      /** 行身份用后端真实主键，不拼装「处置单号」 */
+      inspectionId: item.inspectionId,
+      inspectionNo: item.inspectionNo ?? null,
       batchId: item.batchId ?? '',
-      batchNo: item.batchNo ?? item.batchId ?? '—',
-      cropName: item.cropName ?? CROP_POOL[index % CROP_POOL.length],
-      labName: item.labName ?? item.inspectorName ?? LAB_POOL[index % LAB_POOL.length],
-      failItems,
+      /** 后端 InspectionEntity 无 batchNo 列，只能回落到批次 ID（真实值，不是编造） */
+      batchNo: item.batchNo ?? item.batchId ?? null,
+      cropId: item.cropId ?? null,
+      /**
+       * 产品：后端只有 cropId，没有 cropName。
+       * 此前用 CROP_POOL 按行号取「有机蔬菜 / 土鸡蛋 / 有机牛奶 …」补位，属编造。
+       */
+      cropName: item.cropName ?? null,
+      /**
+       * 检测机构：后端无 labId / labName。
+       * 此前用「检测人姓名」或 LAB_POOL（省农检中心 / SGS …）补位，属编造。
+       */
+      labName: item.labName ?? null,
+      /**
+       * 不合格项：后端无 failItems 列。
+       * 此前用 FAIL_ITEM_POOL 按行号取「农药残留超标（毒死蜱 0.12mg/kg…）」等
+       * 一整段编造的检测结论补位——用户会以为这些是真实检出值。
+       */
+      failItems: [],
       foundAt: item.sampleAt ?? item.createdAt ?? '',
       /**
        * 影响范围与计量单位：后端没有，置 null（页面渲染「—」）。
@@ -301,12 +264,13 @@ function mapInspectionsToRows(inspections: AdminInspectionRow[]): RecallRow[] {
       unit: null,
       /** 抽样数量：sampleQty 是后端真实字段，直接取原值，不做放大、不做兜底 */
       sampleQty: toFiniteNumber(item.sampleQty),
-      /** 默认按召回处置，运营可在处置闭环中改判 */
+      /** 默认按召回处置，运营可在处置闭环中改判（本地登记态，非后端返回） */
       handleType: 1,
       status: 1,
       stage: 0,
       recoveredQty: 0,
-      ownerName: item.inspectorName,
+      /** 责任人由运营登记，不拿检测人冒充 */
+      inspectorName: item.inspectorName,
     }
   })
 }
@@ -390,24 +354,30 @@ export default function RecallManage(): JSX.Element {
     },
   })
 
-  /** 表格数据源：后端不合格清单 + 本地处置登记，缺失时回落原型示例 */
+  /**
+   * 表格数据源：后端不合格检测清单 + 本地处置登记。
+   *
+   * 后端返回空就是空（渲染空态 + 说明），**不再回落 PROTOTYPE_RECALLS 原型台账**——
+   * 那 4 条原型行（RC20250714001 / 有机蔬菜 5200kg / 省农检中心 …）与后端数据毫无关系，
+   * 接口偶发失败时会被当成真实不合格批次展示。
+   */
   const rows = useMemo<RecallRow[]>(() => {
     const remote = failedQuery.data ?? []
-    const mapped = remote.length > 0 ? mapInspectionsToRows(remote) : PROTOTYPE_RECALLS
+    const mapped = mapInspectionsToRows(remote)
     /** 本地登记优先（运营改判后的状态覆盖接口原始态） */
     const merged = mapped.map((row) => {
-      const local = localRows.find((item) => item.batchId === row.batchId)
+      const local = localRows.find((item) => item.inspectionId === row.inspectionId)
       return local ? { ...row, ...local } : row
     })
     const extra = localRows.filter(
-      (item) => !merged.some((row) => row.batchId === item.batchId),
+      (item) => !merged.some((row) => row.inspectionId === item.inspectionId),
     )
     const all = [...merged, ...extra]
     return all.filter((row) => {
       if (
         submittedKeyword &&
-        !row.batchNo.includes(submittedKeyword) &&
-        !row.recallNo.includes(submittedKeyword)
+        !(row.batchNo ?? '').includes(submittedKeyword) &&
+        !(row.inspectionNo ?? '').includes(submittedKeyword)
       ) {
         return false
       }
@@ -437,18 +407,32 @@ export default function RecallManage(): JSX.Element {
     }
   }, [rows, overviewQuery.data])
 
-  /** 更新某一批次的处置状态（本地登记） */
-  const patchRow = (batchId: string, patch: Partial<RecallRow>): void => {
+  /**
+   * 更新某一行的处置状态（本地登记）。
+   *
+   * 行键用后端真实主键 `inspectionId`：此前用 `batchId`，而同一批次可能存在多条不合格检测，
+   * 会串改到错误的行。
+   *
+   * @param inspectionId 检测单 ID
+   * @param patch 待合并的本地登记字段
+   */
+  const patchRow = (inspectionId: string, patch: Partial<RecallRow>): void => {
     setLocalRows((prev) => {
-      const index = prev.findIndex((item) => item.batchId === batchId)
+      const index = prev.findIndex((item) => item.inspectionId === inspectionId)
       if (index === -1) {
-        return [...prev, { ...(rows.find((row) => row.batchId === batchId) as RecallRow), ...patch }]
+        const base = rows.find((row) => row.inspectionId === inspectionId)
+        if (!base) {
+          return prev
+        }
+        return [...prev, { ...base, ...patch }]
       }
       const next = [...prev]
       next[index] = { ...next[index], ...patch }
       return next
     })
-    setActiveRow((prev) => (prev && prev.batchId === batchId ? { ...prev, ...patch } : prev))
+    setActiveRow((prev) =>
+      prev && prev.inspectionId === inspectionId ? { ...prev, ...patch } : prev,
+    )
   }
 
   /** 发起召回（冻结批次 + 作废码段） */
@@ -459,7 +443,7 @@ export default function RecallManage(): JSX.Element {
     }
     freezeMutation.mutate(row.batchId)
     recallMutation.mutate(row.batchId)
-    patchRow(row.batchId, { status: 2, stage: 1, handleType: 1 })
+    patchRow(row.inspectionId, { status: 2, stage: 1, handleType: 1 })
     message.success(`已通知渠道方启动召回：${row.batchNo}`)
   }
 
@@ -469,7 +453,7 @@ export default function RecallManage(): JSX.Element {
     if (!activeRow) {
       return
     }
-    patchRow(activeRow.batchId, {
+    patchRow(activeRow.inspectionId, {
       handleType: values.handleType,
       ownerName: values.ownerName,
       result: values.result,
@@ -494,7 +478,7 @@ export default function RecallManage(): JSX.Element {
       message.error('回收数量不能超过影响范围数量')
       return
     }
-    patchRow(activeRow.batchId, { recoveredQty: values.recoveredQty, stage: 3 })
+    patchRow(activeRow.inspectionId, { recoveredQty: values.recoveredQty, stage: 3 })
     message.success(
       `回收登记成功：${formatMetric(values.recoveredQty)}${activeRow.unit ? ` ${activeRow.unit}` : ''}`,
     )
@@ -508,28 +492,61 @@ export default function RecallManage(): JSX.Element {
     if (!activeRow) {
       return
     }
-    patchRow(activeRow.batchId, { review: values.review, status: 3, stage: 3 })
+    patchRow(activeRow.inspectionId, { review: values.review, status: 3, stage: 3 })
     message.success('处置已结案，复盘记录已归档')
     setReviewOpen(false)
     reviewForm.resetFields()
   }
 
-  /** 表格列（PRD #19 字段） */
+  /**
+   * 表格列。
+   *
+   * 列口径按后端真实字段命名：后端没有处置单实体，所以第一列是「检测单号」
+   * （而非把检测单号的数字位截出来拼成的「处置单号 RC…」）。
+   */
   const columns: ColumnsType<RecallRow> = [
-    { title: '处置单号', dataIndex: 'recallNo', width: 160, render: (value: string) => <Text copyable>{value}</Text> },
-    { title: '批次号', dataIndex: 'batchNo', width: 130 },
-    { title: '产品', dataIndex: 'cropName', width: 120 },
+    {
+      title: '检测单号',
+      dataIndex: 'inspectionNo',
+      width: 160,
+      render: (value: string | null, record) => (
+        <Text copyable={value ? { text: value } : false}>{value ?? record.inspectionId}</Text>
+      ),
+    },
+    {
+      title: '批次号',
+      dataIndex: 'batchNo',
+      width: 130,
+      render: (value: string | null) => value ?? '—',
+    },
+    {
+      title: '产品 / 作物',
+      dataIndex: 'cropName',
+      width: 140,
+      render: (value: string | null, record) =>
+        value ?? (record.cropId ? <Text type="secondary">{record.cropId}（作物 ID）</Text> : <MetricNumber value={null} missingTip={CROP_MISSING_TIP} />),
+    },
+    {
+      title: '检测机构',
+      dataIndex: 'labName',
+      width: 130,
+      render: (value: string | null) =>
+        value ?? <MetricNumber value={null} missingTip={LAB_MISSING_TIP} />,
+    },
     {
       title: '不合格项',
       dataIndex: 'failItems',
-      width: 260,
-      render: (items: string[]) => (
-        <Space direction="vertical" size={2}>
-          {items.map((item) => (
-            <Text key={item} type="danger" style={{ fontSize: 12 }}>• {item}</Text>
-          ))}
-        </Space>
-      ),
+      width: 200,
+      render: (items: string[]) =>
+        items.length > 0 ? (
+          <Space direction="vertical" size={2}>
+            {items.map((item) => (
+              <Text key={item} type="danger" style={{ fontSize: 12 }}>• {item}</Text>
+            ))}
+          </Space>
+        ) : (
+          <MetricNumber value={null} missingTip={FAIL_ITEMS_MISSING_TIP} />
+        ),
     },
     {
       title: '发现时间',
@@ -613,7 +630,7 @@ export default function RecallManage(): JSX.Element {
         <Alert
           type="warning"
           showIcon
-          message="不合格检测清单接口未返回数据，当前展示示例处置台账"
+          message="不合格检测清单接口未返回数据，当前列表为空（不使用示例台账兜底）"
           action={
             <Button size="small" icon={<ReloadOutlined />} onClick={() => void failedQuery.refetch()}>
               重试
@@ -622,13 +639,21 @@ export default function RecallManage(): JSX.Element {
         />
       ) : null}
 
+      {/* 契约错位说明：本页没有后端处置单实体，行数据来自不合格检测记录 */}
+      <Alert
+        type="warning"
+        showIcon
+        message="本页数据与 PRD 模型不完全一致（契约错位，已按后端真实字段展示）"
+        description={CONTRACT_NOTE}
+      />
+
       {/* 事件说明（PRD 11.3） */}
       <Alert
         type="error"
         showIcon
         icon={<ExclamationCircleOutlined />}
         message="不合格批次由事件 prod.quality.test.failed 触发（载荷 batchNo / failItems）"
-        description="检测结论判定为 FAIL 后，运营需在本页完成：发起召回 → 通知 → 回收登记 → 结案，并登记处置方式与复盘记录形成处置闭环。"
+        description="检测结论判定为 FAIL 后，运营需在本页完成：发起召回 → 通知 → 回收登记 → 结案，并登记处置方式与复盘记录形成处置闭环。注：后端当前未返回 failItems，事件载荷中的不合格项明细暂无法在本页还原。"
       />
 
       {/* 统计卡 */}
@@ -664,7 +689,7 @@ export default function RecallManage(): JSX.Element {
       <Card>
         <Space wrap size={12}>
           <Input
-            placeholder="请输入批次号 / 处置单号"
+            placeholder="请输入批次号 / 检测单号"
             value={keyword}
             allowClear
             style={{ width: 220 }}
@@ -718,13 +743,20 @@ export default function RecallManage(): JSX.Element {
         }
       >
         <Table<RecallRow>
-          rowKey="recallNo"
+          /** 行键用后端真实主键 inspectionId（此前用拼装出来的 recallNo，不是后端字段） */
+          rowKey="inspectionId"
           size="small"
           loading={failedQuery.isLoading}
           columns={columns}
           dataSource={rows}
-          scroll={{ x: 1630 }}
-          locale={{ emptyText: <Empty description="暂无不合格批次" /> }}
+          scroll={{ x: 1780 }}
+          locale={{
+            emptyText: failedQuery.isLoading ? (
+              <Empty description="加载中…" />
+            ) : (
+              <Empty description="后端未返回不合格检测记录（不使用原型台账兜底）" />
+            ),
+          }}
           pagination={{
             pageSize: 10,
             showSizeChanger: true,
@@ -735,7 +767,7 @@ export default function RecallManage(): JSX.Element {
 
       {/* 处置详情抽屉：召回流程 + 处置闭环 */}
       <Drawer
-        title={`不合格品处置 - ${activeRow?.batchNo ?? ''}`}
+        title={`不合格品处置 - ${activeRow?.batchNo ?? activeRow?.inspectionNo ?? ''}`}
         width={680}
         open={activeRow !== null}
         onClose={() => setActiveRow(null)}
@@ -748,21 +780,43 @@ export default function RecallManage(): JSX.Element {
               size="small"
               bordered
               items={[
-                { key: 'no', label: '处置单号', children: activeRow.recallNo },
-                { key: 'batch', label: '批次号', children: activeRow.batchNo },
-                { key: 'crop', label: '产品', children: activeRow.cropName },
-                { key: 'lab', label: '检测机构', children: activeRow.labName },
+                {
+                  key: 'no',
+                  label: '检测单号',
+                  children: activeRow.inspectionNo ?? activeRow.inspectionId,
+                },
+                { key: 'batch', label: '批次号', children: activeRow.batchNo ?? '—' },
+                {
+                  key: 'crop',
+                  label: '产品 / 作物',
+                  children: activeRow.cropName ?? (
+                    activeRow.cropId ? (
+                      <Text type="secondary">{activeRow.cropId}（作物 ID）</Text>
+                    ) : (
+                      <MetricNumber value={null} missingTip={CROP_MISSING_TIP} />
+                    )
+                  ),
+                },
+                {
+                  key: 'lab',
+                  label: '检测机构',
+                  children:
+                    activeRow.labName ?? <MetricNumber value={null} missingTip={LAB_MISSING_TIP} />,
+                },
                 {
                   key: 'fail',
                   label: '不合格项',
                   span: 2,
-                  children: (
-                    <Space direction="vertical" size={2}>
-                      {activeRow.failItems.map((item) => (
-                        <Text key={item} type="danger">• {item}</Text>
-                      ))}
-                    </Space>
-                  ),
+                  children:
+                    activeRow.failItems.length > 0 ? (
+                      <Space direction="vertical" size={2}>
+                        {activeRow.failItems.map((item) => (
+                          <Text key={item} type="danger">• {item}</Text>
+                        ))}
+                      </Space>
+                    ) : (
+                      <MetricNumber value={null} missingTip={FAIL_ITEMS_MISSING_TIP} />
+                    ),
                 },
                 { key: 'found', label: '发现时间', children: activeRow.foundAt?.slice(0, 16) ?? '—' },
                 {
@@ -817,7 +871,8 @@ export default function RecallManage(): JSX.Element {
                     </Space>
                   ),
                 },
-                { key: 'owner', label: '责任人', children: activeRow.ownerName ?? '—' },
+                { key: 'owner', label: '责任人（本地登记）', children: activeRow.ownerName ?? '—' },
+                { key: 'inspector', label: '检测人', children: activeRow.inspectorName ?? '—' },
               ]}
             />
 
@@ -863,7 +918,7 @@ export default function RecallManage(): JSX.Element {
                   icon={<NotificationOutlined />}
                   disabled={activeRow.stage < 1}
                   onClick={() => {
-                    patchRow(activeRow.batchId, { stage: Math.max(activeRow.stage, 2) })
+                    patchRow(activeRow.inspectionId, { stage: Math.max(activeRow.stage, 2) })
                     message.success('通知已发送：渠道方 / 门店 / 消费者公告')
                   }}
                 >

@@ -9,7 +9,8 @@
  * 数据来源约定（硬规矩：可以降级，不能骗人）：
  * - **后端当前没有对应端点**：`AdminTenantController` 未提供
  *   `GET /admin/tenants/segment-summary` 与 `GET /admin/tenants/profiles`
- *   （实测均返回 404），也没有 `PUT /admin/tenants/{tenantId}/profile` 写入端点。
+ *   （2026-10-10 复测，后端 8096：HTTP 200 / code=404 / message=资源不存在），
+ *   也没有 `PUT /admin/tenants/{tenantId}/profile` 写入端点。
  * - 因此本页**不使用任何原型示例 / 本地构造数据兜底**：后端没数据就展示空态，
  *   并在页面顶部显式告警说明「后端暂未提供该数据」，不用本地数据伪装成服务端数据。
  * - 后端补齐端点后，本页无需改动即可自动展示真实数据。
@@ -34,6 +35,8 @@ import {
 import { TagsOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { MetricNumber } from '@/components'
+import { toFiniteNumber } from '@/utils/metric-format'
 import type {
   TenantActivity,
   TenantSegmentLevel,
@@ -76,6 +79,16 @@ const SEGMENT_POOL: TenantSegmentLevel[] = ['钻石', '金牌', '银牌', '普�
 
 /** 后端缺失端点时的统一提示口径 */
 const BACKEND_UNAVAILABLE_TITLE = '后端暂未提供租户分层数据'
+
+/**
+ * 分层指标缺失提示。
+ *
+ * 后端补齐 `/profiles` / `/segment-summary` 后，若返回行里没有
+ * `tenantCount` / `revenue` / `avgUsageRate` / `activeDays` / `quotaUsageRate`，
+ * 这些位置必须显示「—」，**不许兜成 0**（0 会被读成"统计过了，结果是 0"）。
+ */
+const SEGMENT_METRIC_MISSING_TIP =
+  '后端未返回该分层指标（tenantCount / revenue / avgUsageRate / activeDays / quotaUsageRate），显示为「—」，接口补齐后自动填充'
 
 /** 后端缺失端点时的详细说明 */
 const BACKEND_UNAVAILABLE_DESC =
@@ -228,24 +241,30 @@ export default function TenantSegments(): JSX.Element {
       title: '配额使用率',
       dataIndex: 'quotaUsageRate',
       width: 160,
-      sorter: (a, b) => (a.quotaUsageRate ?? 0) - (b.quotaUsageRate ?? 0),
-      render: (value: number) => (
-        <Tag color={value >= 80 ? 'red' : 'blue'}>{value}%</Tag>
-      ),
+      sorter: (a, b) => (toFiniteNumber(a.quotaUsageRate) ?? 0) - (toFiniteNumber(b.quotaUsageRate) ?? 0),
+      render: (value: number) => {
+        const numeric = toFiniteNumber(value)
+        if (numeric === null) {
+          return <MetricNumber value={value} suffix="%" missingTip={SEGMENT_METRIC_MISSING_TIP} />
+        }
+        return <Tag color={numeric >= 80 ? 'red' : 'blue'}>{numeric}%</Tag>
+      },
     },
     {
       title: '近30天活跃天数',
       dataIndex: 'activeDays',
       width: 130,
-      sorter: (a, b) => (a.activeDays ?? 0) - (b.activeDays ?? 0),
-      render: (value: number) => `${value} 天`,
+      sorter: (a, b) => (toFiniteNumber(a.activeDays) ?? 0) - (toFiniteNumber(b.activeDays) ?? 0),
+      render: (value: number) => <MetricNumber value={value} suffix=" 天" missingTip={SEGMENT_METRIC_MISSING_TIP} />,
     },
     {
       title: '年度贡献收入',
       dataIndex: 'revenue',
       width: 140,
-      sorter: (a, b) => (a.revenue ?? 0) - (b.revenue ?? 0),
-      render: (value: number) => `¥${Number(value ?? 0).toLocaleString('zh-CN')}`,
+      sorter: (a, b) => (toFiniteNumber(a.revenue) ?? 0) - (toFiniteNumber(b.revenue) ?? 0),
+      render: (value: number) => (
+        <MetricNumber value={value} prefix="¥" missingTip={SEGMENT_METRIC_MISSING_TIP} />
+      ),
     },
     {
       title: '运营策略',
@@ -307,18 +326,31 @@ export default function TenantSegments(): JSX.Element {
                   </Tag>
                 </Space>
               }
-              extra={<Text type="secondary" style={{ fontSize: 12 }}>平均使用率 {item.avgUsageRate}%</Text>}
+              extra={
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  平均使用率{' '}
+                  <MetricNumber
+                    value={item.avgUsageRate}
+                    suffix="%"
+                    missingTip={SEGMENT_METRIC_MISSING_TIP}
+                  />
+                </Text>
+              }
             >
               <Row gutter={8}>
                 <Col span={12}>
                   <div style={{ fontSize: 20, fontWeight: 600 }}>
-                    {Number(item.tenantCount ?? 0).toLocaleString('zh-CN')}
+                    <MetricNumber value={item.tenantCount} missingTip={SEGMENT_METRIC_MISSING_TIP} />
                   </div>
                   <Text type="secondary" style={{ fontSize: 12 }}>租户数</Text>
                 </Col>
                 <Col span={12}>
                   <div style={{ fontSize: 20, fontWeight: 600 }}>
-                    ¥{Number(item.revenue ?? 0).toLocaleString('zh-CN')}
+                    <MetricNumber
+                      value={item.revenue}
+                      prefix="¥"
+                      missingTip={SEGMENT_METRIC_MISSING_TIP}
+                    />
                   </div>
                   <Text type="secondary" style={{ fontSize: 12 }}>贡献收入</Text>
                 </Col>
@@ -333,7 +365,7 @@ export default function TenantSegments(): JSX.Element {
                   textOverflow: 'ellipsis',
                 }}
               >
-                策略：{item.strategy}
+                策略：{item.strategy?.trim() ? item.strategy : '—'}
               </div>
             </Card>
           </Col>
