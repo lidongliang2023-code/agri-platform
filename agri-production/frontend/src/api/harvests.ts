@@ -1202,10 +1202,14 @@ export function queryInventoryRecord(inventoryId: BizId): Promise<DemoResult<Inv
 /**
  * 出入库流水查询（真实接口优先，服务端不可用回退演示数据）。
  *
- * ⚠️ 路径曾写错：`/harvests/inventory/{batchId}/flows` 实测返回 `code=500`，
- * 而真端点是 `HarvestController.java:98` 的 `/harvests/{batchId}/flows`（实测 200 有数据）。
- * 写错的那段时间本函数的演示兜底 **100% 被触发** —— 库存详情页的「出入库记录」表
- * 从来没有显示过一条真实流水，用户却以为在看真数据。改回正确路径后取的是真实流水。
+ * ⚠️ 路径曾写错：`/harvests/inventory/{batchId}/flows` 实测返回 **HTTP 200 + 业务码 500**，
+ * 而真端点是 `HarvestController.java:98` 的 `/harvests/{batchId}/flows`（实测 code=0 有数据）。
+ *
+ * 更正一处早期误判：当时以为「演示兜底 100% 被触发」，实际不是。
+ * 业务码 500 会被 `isBackendUnavailable` 判成「服务端明确拒绝」→ **不兜底、直接抛错**，
+ * 于是库存详情页的「出入库记录」表现为**一张空表 + 没有任何提示**，
+ * 看上去像"这段时间没有流水"，比兜底更难发现。改回正确路径后取的是真实流水；
+ * 失败态的显式提示见 `InventoryDetail.tsx` 的 `flowQuery.isError` 分支。
  */
 export function queryInventoryFlows(
   batchId: BizId,
