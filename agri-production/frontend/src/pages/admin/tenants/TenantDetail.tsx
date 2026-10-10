@@ -331,9 +331,22 @@ export default function TenantDetail(): JSX.Element {
     },
   })
 
-  /** 重置已用配额 */
+  /**
+   * 重置已用配额。
+   *
+   * ⚠️ 真端点 `POST /admin/tenants/{quotaId}/reset-usage` 要的是 **quotaId**，
+   * 路由上的 `tenantId` 不是它要的标识（种子数据里 tenant_id 全库为 0，
+   * 见 `docs/backend-tickets.md` BT-09）。取不到 quotaId 就直接失败，
+   * **不拿 tenantId 冒充 quotaId**——那只会制造一次必失败的调用。
+   */
   const resetMutation = useMutation({
-    mutationFn: () => resetTenantQuotaUsage(tenantId),
+    mutationFn: () => {
+      const quotaId = tenant?.quotaId
+      if (!quotaId) {
+        throw new Error('未能取到配额记录 ID（quotaId），未提交重算请求')
+      }
+      return resetTenantQuotaUsage(quotaId)
+    },
     onSuccess: () => {
       message.success('已按实际业务数据重算配额用量')
       void queryClient.invalidateQueries({ queryKey: ['admin', 'tenants', tenantId, 'quotas'] })

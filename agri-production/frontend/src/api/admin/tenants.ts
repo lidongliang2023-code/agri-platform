@@ -65,10 +65,18 @@ export function deleteTenant(tenantId: BizId): Promise<void> {
   return http.delete<void>(`${BASE}/${tenantId}`)
 }
 
-/** 冻结 / 解冻租户 */
-export function updateTenantStatus(tenantId: BizId, status: number): Promise<boolean> {
-  return http.patch<boolean>(`${BASE}/${tenantId}/status`, { status })
-}
+/*
+ * `updateTenantStatus`（`PATCH /admin/tenants/{id}/status`）已删除（2026-10-10）。
+ *
+ * 判定依据（端点不存在 **且** 无调用方 → 删；端点不存在 **但** 有调用方 → 提后端单）：
+ * - 端点实测不存在：`PATCH /admin/tenants/0/status` → `code=500`，
+ *   日志 `NoResourceFoundException: No static resource api/v1/production/admin/tenants/0/status.`
+ *   （`AdminTenantController` 只有 `PUT /{id}`，没有任何 `/{id}/status` 映射。）
+ * - 调用方实测 0 处：全仓 grep `updateTenantStatus` 只命中本声明本身。
+ *
+ * 留着只会让人误以为"租户冻结/解冻有接口，只是暂时没接"。
+ * 后端真做了该能力时再重新引入，并同步补 `PUT /{id}` 之外的语义。
+ */
 
 /** 分页查询租户配额 */
 export function listTenantQuotas(
@@ -292,9 +300,28 @@ export function batchUpdateQuotaLimits(payload: {
   return http.put<boolean>(`${BASE}/quota-limits/batch`, payload)
 }
 
-/** 重置租户已用配额（按实际业务数据重算） */
-export function resetTenantQuotaUsage(tenantId: string): Promise<boolean> {
-  return http.post<boolean>(`${BASE}/${tenantId}/quota-usage/reset`)
+/**
+ * 重置租户已用配额（按实际业务数据重算）。
+ *
+ * ⚠️ 路径曾写错：原实现打 `POST /admin/tenants/{tenantId}/quota-usage/reset`，
+ * 而真端点是 `AdminTenantController` 的 `POST /admin/tenants/{quotaId}/reset-usage`
+ * —— 端点一直存在，是**前端把路径写错了**，所以这个按钮此前必失败，
+ * 而页面只显示"系统繁忙"，排障极易误判成"后端没做这个接口"。
+ *
+ * 成对实测（2026-10-10，core-app :8098，**同一个不存在的 id**，排除"id 无效"干扰）：
+ * - `POST /admin/tenants/NOPE/reset-usage`         → `code=404「资源不存在」` → 端点存在，id 无效
+ * - `POST /admin/tenants/NOPE/quota-usage/reset`   → `code=500「系统繁忙」`   → 端点不存在
+ *   日志：`NoResourceFoundException: No static resource api/v1/production/admin/tenants/NOPE/quota-usage/reset.`
+ *
+ * ⚠️ 入参语义也变了：真端点要的是 **`quotaId`**（后端配额主键），不是 `tenantId`。
+ * 传 tenantId 会拿到 404「资源不存在」（当前种子数据里 tenant_id 全库为 0，
+ * 见 `docs/backend-tickets.md` BT-09）。
+ *
+ * @param quotaId 后端配额记录主键（如 `DEMO-QUOTA-001`）
+ * @returns 服务端确认重算成功时返回 true
+ */
+export function resetTenantQuotaUsage(quotaId: string): Promise<boolean> {
+  return http.post<boolean>(`${BASE}/${quotaId}/reset-usage`)
 }
 
 /**

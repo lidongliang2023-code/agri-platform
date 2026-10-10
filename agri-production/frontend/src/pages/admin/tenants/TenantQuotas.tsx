@@ -213,9 +213,19 @@ export default function TenantQuotas(): JSX.Element {
     },
   })
 
-  /** 重算已用配额 */
+  /**
+   * 重算已用配额。
+   *
+   * ⚠️ 真端点 `POST /admin/tenants/{quotaId}/reset-usage` 要的是 **quotaId**，
+   * 不是 tenantId（此前传 tenantId 打到了一条根本不存在的路径上，必失败）。
+   *
+   * 实测：`GET /admin/tenants/quota-overview` 的行里，`tenantId` 字段**填的其实就是
+   * quotaId**（三条分别为 `DEMO-QUOTA-001` / `DEMO-QUOTA-002` / `QUOT2026...`），
+   * 且 `farm.quotaId` 同样是这个值。这里优先取 `farm.quotaId`，取不到再回落到该字段。
+   */
   const resetMutation = useMutation({
-    mutationFn: (tenantId: string) => resetTenantQuotaUsage(tenantId),
+    mutationFn: (row: OpsTenantQuotaRow) =>
+      resetTenantQuotaUsage(row.farm?.quotaId ?? row.tenantId),
     onSuccess: () => {
       message.success('已按实际业务数据重算配额用量')
       setTableKey((prev) => prev + 1)
@@ -351,7 +361,7 @@ export default function TenantQuotas(): JSX.Element {
             title="按实际业务数据重算该租户的已用配额？"
             okText="重算"
             cancelText="取消"
-            onConfirm={() => resetMutation.mutate(entity.tenantId)}
+            onConfirm={() => resetMutation.mutate(entity)}
           >
             <Button type="link" size="small">
               重算
