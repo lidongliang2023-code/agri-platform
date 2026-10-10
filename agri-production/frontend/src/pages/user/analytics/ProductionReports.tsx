@@ -13,8 +13,16 @@
  *   打印输出独立可打印视图（window.print）
  *
  * 数据来源：`/analytics/reports`（列表 / 生成 / 删除 / 导出）、
- * `/analytics/reports/subscriptions`（订阅）；后端骨架无数据时回落示例报表，
- * 订阅配置持久化在浏览器本地，保证订阅闭环可用。
+ * `/analytics/reports/subscriptions`（订阅）。
+ *
+ * 实测现状（逐条依据见 docs/backend-tickets.md BT-23 ~ BT-30）：
+ * - 生成：`POST /analytics/reports` 不存在（实测 500）→ 点击如实报错，不造本地行；
+ * - 删除：`DELETE /analytics/{id}` 删的是**指标快照**（错误实体）→ 只有「本页暂存」
+ *   的行允许移除，服务端行的删除按钮置灰并写明原因（BT-27）；
+ * - 导出：后端导出端点不存在 → 回落本地 CSV，文件名与提示均标注
+ *   「本地生成，未同步服务端」，且 CSV 里**不含任何编造的业务指标**（BT-26）；
+ * - 订阅：4 个订阅端点全部不存在（实测 500）→ 只落浏览器本地，页面常驻横幅
+ *   明示「不会真的推送」（BT-24）。
  */
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -37,6 +45,7 @@ import {
   Switch,
   Table,
   Tag,
+  Tooltip,
   Typography,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
@@ -61,6 +70,7 @@ import {
 } from '@/api/analytics'
 import { formatNumber } from '@/utils/production-adapter'
 import { hasNonEmptyTextFields } from '@/utils/shape-guard'
+import { asApiRequestError, httpStatusOf } from '@/utils/request'
 import type { ReportItem, ReportType } from '@/types'
 import type { ReportSubscription, SubscribePeriod } from '@/api/analytics'
 
@@ -115,30 +125,73 @@ const CHANNEL_OPTIONS: { value: number; label: string }[] = [
 /** 订阅本地持久化键 */
 const SUBSCRIPTION_STORAGE_KEY = 'agri_report_subscriptions'
 
-/**
- * 本地生成报表的 reportId 前缀。
+/*
+ * 说明：这里曾有 `LOCAL_REPORT_ID_PREFIX` + `isLocalReport()`（按 id 前缀识别
+ * "本地生成的报表"）。BT-25 之后**不再有任何代码会造出本地报表行**——生成失败
+ * 就是失败，不再落一条 `LOCAL-REPORT-*` 的假行，所以那套前缀判断已经没有生产者，
+ * 属死代码，删除。
  *
- * 后端报表 id 形如 `DEMO-RPT-001`，两边前缀不同，因此：
- *  ① 列表里能一眼区分「服务端真数据」与「本地生成」；
- *  ② 作为 React `rowKey` 不会与服务端 id 撞车。
+ * 现在改用「这一行是不是只存在于本页状态里」来判断（见组件内 `isPageOnlyReport`）：
+ * 服务端列表返回的行不在其中，本页示例行 / 本次会话生成的行在其中。
  */
-export const LOCAL_REPORT_ID_PREFIX = 'LOCAL-REPORT-'
+
+/** 示例报表 id 前缀（回落用的内置样例，不是服务端数据） */
+const DEMO_REPORT_ID_PREFIX = 'DEMO-REPORT-'
 
 /**
- * 判断一份报表是不是用户在本地生成的（未写入服务端）。
+ * 判断一行是否为内置示例报表。
  *
- * 仅按 reportId 前缀判断，不依赖任何额外字段——本地生成与服务端返回的
- * 都是同一个 `ReportItem`，靠 id 空间区分最可靠。
+ * 示例报表只用于"接口不通时把页面填起来"的旧兜底，**不是真实数据**，
+ * 因此不允许导出 / 打印成"好像有一份报表"的产物（BT-26）。
  *
  * @param report 报表行
- * @returns 是本地生成时返回 true
+ * @returns 是示例数据时返回 true
  */
-export function isLocalReport(report: ReportItem | undefined | null): boolean {
+export function isDemoReport(report: ReportItem | undefined | null): boolean {
   if (!report || typeof report.reportId !== 'string') {
     return false
   }
-  return report.reportId.startsWith(LOCAL_REPORT_ID_PREFIX)
+  return report.reportId.startsWith(DEMO_REPORT_ID_PREFIX)
 }
+
+/**
+ * 把写操作失败原因写成一句能据此排障的话（只陈述实测现象，不猜原因）。
+ *
+ * @param error catch 到的未知错误
+ * @returns 失败原因描述
+ */
+function describeFailure(error: unknown): string {
+  const apiError = asApiRequestError(error)
+  if (apiError) {
+    return `后端返回业务码 ${apiError.bizCode}（${apiError.message || '无提示'}）`
+  }
+  const status = httpStatusOf(error)
+  if (status === 0) {
+    return `无法连接到服务端（${(error as Error)?.message ?? '网络异常'}）`
+  }
+  return `HTTP ${status}（${(error as Error)?.message ?? '未知原因'}）`
+}
+
+/**
+ * 后端「生成报表」能力当前不存在，点击后如实失败时的统一提示语。
+ *
+ * ⚠️ 不要为了消掉 500 而改打 `POST /analytics`：那是往**指标快照表**
+ * （prod_analytics_snapshot）里插一条报表数据 —— 会把"假装成功"升级成
+ * "真的把库写脏"。端点修好前保持失败态即可。
+ */
+const GENERATE_UNAVAILABLE_HINT =
+  '报表生成服务未接入（后端 POST /analytics/reports 不存在），未生成任何文件'
+
+/**
+ * 删除不可用原因（BT-27）。
+ *
+ * 后端 `DELETE /analytics/{id}` 落到 `AnalyticsSnapshotService.delete()`，
+ * 删的是**指标快照**（prod_analytics_snapshot），不是报表——删错实体。
+ * 端点修正前，服务端行的删除按钮置灰，并把原因写在 tooltip 里，
+ * 不能让使用者以为"点一下就删掉了"。
+ */
+const DELETE_UNAVAILABLE_REASON =
+  '删除暂不可用：后端 DELETE /analytics/{id} 删的是指标快照（错误实体，见 BT-27 / 治理项 G-01），端点修正前不开放'
 
 /** 示例报表 */
 const DEMO_REPORTS: ReportItem[] = Array.from({ length: 16 }, (_unused, index) => {
@@ -217,6 +270,12 @@ function downloadBlob(filename: string, content: string, mime: string): void {
 /**
  * 生成报表导出内容（CSV）
  *
+ * ⚠️ 旧实现在末尾硬编码了 5 行"业务指标"（在种面积 2500 / 本月采收量 12850 /
+ * 任务完成率 92.8 / 质量合格率 98.6 / 投入产出比 3.42）。那是**编造的业务数据**——
+ * 落到用户磁盘上就是一份看起来有内容的假报表，比在页面上显示更难被发现。
+ * BT-26 已删除：CSV 只写这一行报表**自身的真实字段**，后端没给明细指标就写明
+ * "无"，绝不补数。
+ *
  * @param report 报表
  * @returns CSV 文本
  */
@@ -232,13 +291,11 @@ function buildReportCsv(report: ReportItem): string {
     '状态',
     report.status === 2 ? '已完成' : report.status === 1 ? '生成中' : '失败',
   ])
+  rows.push(['文件大小', formatFileSize(report.fileSize)])
+  rows.push(['数据来源', '本页当前展示的字段；后端未提供报表明细'])
   rows.push(['', ''])
   rows.push(['指标', '数值'])
-  rows.push(['在种面积(亩)', '2500'])
-  rows.push(['本月采收量(kg)', '12850'])
-  rows.push(['任务完成率(%)', '92.8'])
-  rows.push(['质量合格率(%)', '98.6'])
-  rows.push(['投入产出比', '3.42'])
+  rows.push(['后端未提供报表明细指标，本文件不含任何业务指标数值', ''])
   return rows.map((row) => row.join(',')).join('\n')
 }
 
@@ -316,10 +373,17 @@ export default function ProductionReports(): JSX.Element {
   const [subscribeOpen, setSubscribeOpen] = useState<boolean>(false)
   const [subscribeForm] = Form.useForm<SubscribeFormValues>()
 
-  /** 本地新增报表 */
+  /** 本次会话由「生成报表」成功返回后新增的报表（服务端生成，只是还没进列表） */
   const [extraReports, setExtraReports] = useState<ReportItem[]>([])
+  /** 使用者在本页移除的行 id（示例行不在服务端，只能从本页消失） */
+  const [hiddenIds, setHiddenIds] = useState<string[]>([])
   /** 订阅列表 */
   const [subscriptions, setSubscriptions] = useState<ReportSubscription[]>([])
+  /**
+   * 订阅未同步到服务端的**真实原因**（端点不存在时由实测写入）。
+   * 用于常驻横幅——不能只靠 3 秒就消失的 toast 说明"未同步"。
+   */
+  const [subscribeNote, setSubscribeNote] = useState<string | null>(null)
 
   /** 报表列表 */
   const listQuery = useQuery({
@@ -406,15 +470,17 @@ export default function ProductionReports(): JSX.Element {
     // 关键字先归一化，两条分支共用同一口径（trim + 转小写）
     const kw = keyword.trim().toLowerCase()
     if (shapeMismatch) {
-      // 服务端没有报表数据，但用户本地生成的报表照常展示（列表里带「本地生成」标记）
-      const localOnly = extraReports.filter((item) => matchFilter(item, typeFilter, kw))
+      // 服务端没有报表数据，但本次会话生成的报表照常展示（列表里带标记）
+      const localOnly = extraReports.filter(
+        (item) => matchFilter(item, typeFilter, kw) && !hiddenIds.includes(item.reportId),
+      )
       return { rows: localOnly, total: localOnly.length }
     }
     if (!usingFallback) {
       return { rows: remoteRows, total: listQuery.data?.total ?? 0 }
     }
-    const filtered = [...extraReports, ...DEMO_REPORTS].filter((item) =>
-      matchFilter(item, typeFilter, kw),
+    const filtered = [...extraReports, ...DEMO_REPORTS].filter(
+      (item) => matchFilter(item, typeFilter, kw) && !hiddenIds.includes(item.reportId),
     )
     const start = (pageNum - 1) * pageSize
     return { rows: filtered.slice(start, start + pageSize), total: filtered.length }
@@ -428,10 +494,46 @@ export default function ProductionReports(): JSX.Element {
     pageNum,
     pageSize,
     extraReports,
+    hiddenIds,
   ])
 
   /**
-   * 提交生成报表
+   * 本次会话新增行的 reportId 集合。
+   *
+   * 这些行是「生成报表」真实成功后返回的，但服务端列表接口当前返回的是指标快照，
+   * 刷新后不会出现，所以先留在本页状态里并打标，避免看起来像凭空冒出来。
+   */
+  const extraIds = useMemo<Set<string>>(
+    () => new Set(extraReports.map((item) => item.reportId)),
+    [extraReports],
+  )
+
+  /**
+   * 判断一行是不是**只存在于本页状态里**（示例行 / 本次会话新增行）。
+   *
+   * 只有这类行的「移除」是纯前端操作、且能如实说明；服务端列表返回的行不在此列——
+   * 它们的删除端点删错实体，按钮必须置灰（BT-27）。
+   *
+   * @param report 报表行
+   * @returns 仅存在于本页时返回 true
+   */
+  const isPageOnlyReport = (report: ReportItem | undefined | null): boolean => {
+    if (!report || typeof report.reportId !== 'string') return false
+    return isDemoReport(report) || extraIds.has(report.reportId)
+  }
+
+  /**
+   * 提交生成报表。
+   *
+   * ⚠️ 历史实现（已删除，见 docs/backend-tickets.md BT-25）：
+   * 先在本地塞一条 `draft`，后端失败被 `catch {}` **完全静默**，然后**无条件**
+   * `setTimeout(…, 2500)` 把该行改成 `status: 2`（已完成）+ `fileSize: 156 * 1024`
+   * （**硬编码 156KB**）+ `fileUrl: ''`，并弹「生成完成」。
+   * 实测 `POST /analytics/reports` 返回 500（端点不存在），所以那套流程从状态到
+   * 文件大小到成功提示 **没有一处是真实数据**——属于"写操作谎称成功"。
+   *
+   * 现在：后端成不成功以**服务端返回**为准。端点不存在就如实报错，
+   * 不造本地行、不定时把状态改成"已完成"、不硬编码文件大小。
    *
    * @returns Promise
    */
@@ -445,73 +547,117 @@ export default function ProductionReports(): JSX.Element {
     }
     const template = REPORT_TEMPLATES.find((item) => item.value === values.template)
     const period = values.range[0].format('YYYY-MM-DD')
-    const draft: ReportItem = {
-      // 时间戳 + 随机后缀：同一毫秒内连点两次也不会生成重复 id（否则 rowKey 会撞）
-      reportId: `${LOCAL_REPORT_ID_PREFIX}${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      reportName: `${period} ${template?.label ?? '生产报表'}`,
-      reportType: template?.type ?? 3,
-      period,
-      generatedAt: dayjs().format('YYYY-MM-DD HH:mm:ss'),
-      generatorName: '当前用户',
-      fileSize: undefined,
-      status: 1,
-    }
     setGenerating(true)
-    setExtraReports((prev) => [draft, ...prev])
-    setGenerateOpen(false)
     try {
       const created = await generateReport({
-        reportType: draft.reportType,
+        reportType: template?.type ?? 3,
         period,
         farmId,
       })
-      if (created?.reportId) {
-        setExtraReports((prev) =>
-          prev.map((item) => (item.reportId === draft.reportId ? { ...item, ...created } : item)),
-        )
+      if (!created?.reportId) {
+        // 端点不存在时后端不会给 reportId，这里如实失败，绝不补一条本地行冒充
+        message.error(`生成失败：${GENERATE_UNAVAILABLE_HINT}`)
+        return
       }
-    } catch {
-      // 后端骨架阶段生成接口不可用，走本地模拟
+      setExtraReports((prev) => [{ ...created }, ...prev])
+      message.success(`${created.reportName ?? '报表'} 已由服务端生成`)
+    } catch (error) {
+      message.error(`生成失败：${describeFailure(error)}。${GENERATE_UNAVAILABLE_HINT}`)
+    } finally {
+      setGenerating(false)
+      setGenerateOpen(false)
     }
-    // 模拟异步生成：2.5 秒后标记为已完成
-    window.setTimeout(() => {
-      setExtraReports((prev) =>
-        prev.map((item) =>
-          item.reportId === draft.reportId
-            ? { ...item, status: 2, fileSize: 156 * 1024, fileUrl: '' }
-            : item,
-        ),
-      )
-      message.success(`${draft.reportName} 生成完成`)
-    }, 2500)
-    setGenerating(false)
     void queryClient.invalidateQueries({ queryKey: ['production-reports'] })
   }
 
   /**
-   * 导出报表
+   * 导出报表（BT-26）。
    *
-   * 优先使用后端导出接口返回的文件地址，失败时回落为前端 CSV Blob 下载。
+   * 两条硬规矩：
+   * 1. **示例数据不可导出**——导出来的 CSV 会被当成真有一份报表，属于把假数据
+   *    落到用户磁盘上，比在页面上显示更严重；
+   * 2. 后端 `GET /analytics/reports/{id}/export` 实测 500（端点不存在），
+   *    回落本地 CSV 时必须明示「本地生成，未同步服务端」，不能只说"已导出"。
    *
    * @param report 报表
    * @returns Promise
    */
   const handleExport = async (report: ReportItem): Promise<void> => {
+    if (isDemoReport(report)) {
+      message.warning('这是页面内置的示例报表，不是真实数据，不可导出')
+      return
+    }
     try {
       const res = await exportReport(report.reportId)
       if (res?.fileUrl) {
         window.open(res.fileUrl, '_blank')
-        message.success('已打开导出文件')
+        message.success('已打开服务端导出文件')
         return
       }
-    } catch {
-      // 后端无导出能力时回落本地 CSV
+      message.warning('后端未返回导出文件地址')
+    } catch (error) {
+      // 后端无导出能力 → 本地拼 CSV，但必须说清楚这是本地产物
+      message.warning(`后端导出不可用（${describeFailure(error)}），以下为本地生成的文件`)
     }
-    downloadBlob(`${report.reportName}.csv`, buildReportCsv(report), 'text/csv')
-    message.success('已导出为 CSV 文件')
+    downloadBlob(`本地导出-${report.reportName}.csv`, buildReportCsv(report), 'text/csv')
+    message.success('已导出 CSV（本地生成，未同步服务端）')
   }
 
-  /** 提交订阅 */
+  /**
+   * 删除报表（BT-27）。
+   *
+   * 旧实现：`void deleteReport(id).catch(() => undefined)` 之后**无条件**
+   * `message.success('报表已删除')` —— 后端删没删不知道，前端一律报成功。
+   * 且实测 `DELETE /analytics/{id}` 删的是**指标快照**（删错实体），
+   * 在端点修正前这个按钮不能看起来"能删"。
+   *
+   * 本地生成的行不在服务端，从列表移除是**纯前端状态**操作，这部分照常做，
+   * 但提示语要说明它本来就不在服务端。
+   *
+   * @param report 报表
+   * @returns Promise
+   */
+  const handleDelete = async (report: ReportItem): Promise<void> => {
+    if (isPageOnlyReport(report)) {
+      // 纯前端状态操作：这一行本来就不在服务端报表列表里，移除它不产生任何服务端影响
+      setExtraReports((prev) => prev.filter((item) => item.reportId !== report.reportId))
+      setHiddenIds((prev) => [...prev, report.reportId])
+      void queryClient.invalidateQueries({ queryKey: ['production-reports'] })
+      if (isDemoReport(report)) {
+        message.warning('已移除该示例行（示例数据本就不在服务端，刷新页面会重新出现）')
+      } else {
+        message.success('已移除本页记录（该记录不在服务端报表列表中）')
+      }
+      return
+    }
+    /*
+     * 服务端返回的报表行：删除端点当前删的是指标快照（错误实体，BT-27 / G-01）。
+     * 页面上按钮已置灰，这里保留的是「端点修好之后的验收口径」——
+     * 必须拿到"确有记录被删除"的返回才算成功，返回成功但没删掉任何行要如实报错。
+     */
+    try {
+      const deleted = await deleteReport(report.reportId)
+      if (!deleted) {
+        // 后端返回成功但没删掉任何行（见治理项 G-01），如实说没删成
+        message.error('删除未生效：后端返回成功但没有记录被删除')
+        return
+      }
+      void queryClient.invalidateQueries({ queryKey: ['production-reports'] })
+      message.success('报表已删除')
+    } catch (error) {
+      message.error(`删除失败，未执行删除：${describeFailure(error)}`)
+    }
+  }
+
+  /**
+   * 提交订阅（BT-24）。
+   *
+   * 订阅 4 个端点实测全部 500（不存在），所以这里只能落到浏览器本地。
+   * 按手册规矩：本地暂存必须**明示未同步服务端**——成功提示改口径，
+   * 页面上另有常驻横幅（见订阅卡片顶部）。
+   *
+   * @returns Promise
+   */
   const submitSubscribe = async (): Promise<void> => {
     let values: SubscribeFormValues
     try {
@@ -528,10 +674,13 @@ export default function ProductionReports(): JSX.Element {
       receivers: values.receivers ?? [],
       status: 1 as 0 | 1,
     }
+    let synced = false
     try {
       await subscribeReport(payload)
-    } catch {
-      // 后端骨架阶段订阅接口不可用，落本地存储
+      synced = true
+    } catch (error) {
+      // 端点不存在（实测 500）：不再静默，把原因记下来给常驻横幅用
+      setSubscribeNote(`订阅未同步到服务端：${describeFailure(error)}`)
     }
     const next: ReportSubscription = {
       ...payload,
@@ -540,18 +689,28 @@ export default function ProductionReports(): JSX.Element {
     }
     persistSubscriptions([next, ...subscriptions])
     setSubscribeOpen(false)
-    message.success('订阅已保存')
+    if (synced) {
+      message.success('订阅已保存到服务端')
+    } else {
+      message.warning('订阅仅保存在本浏览器，不会推送，也未同步到服务端')
+    }
   }
 
   /** 删除订阅 */
   const removeSubscription = async (subscribeId: string): Promise<void> => {
+    let synced = false
     try {
       await unsubscribeReport(subscribeId)
+      synced = true
     } catch {
-      // 忽略后端失败
+      // 端点不存在：只在本地移除，提示语如实说明
     }
     persistSubscriptions(subscriptions.filter((item) => item.subscribeId !== subscribeId))
-    message.success('订阅已取消')
+    if (synced) {
+      message.success('订阅已取消（服务端已同步）')
+    } else {
+      message.warning('已在本浏览器移除该订阅；服务端未同步（订阅端点不存在）')
+    }
   }
 
   /** 启停订阅 */
@@ -576,8 +735,14 @@ export default function ProductionReports(): JSX.Element {
             <FileTextOutlined />
             <Text strong>{value}</Text>
             <Tag color="blue">{REPORT_TYPE_LABEL[record.reportType] ?? '其他'}</Tag>
-            {/* 本地生成的报表必须显式标记：否则使用者分不清哪些是服务端真数据 */}
-            {isLocalReport(record) ? <Tag color="orange">本地生成</Tag> : null}
+            {/*
+              来源必须逐行标清楚：示例数据不是真报表（不可导出 / 打印），
+              本次会话新增的行还没进服务端列表。不标的话使用者一律当成真数据。
+            */}
+            {isDemoReport(record) ? <Tag color="red">示例数据</Tag> : null}
+            {!isDemoReport(record) && extraIds.has(record.reportId) ? (
+              <Tag color="orange">本次生成</Tag>
+            ) : null}
           </Space>
           <Text type="secondary" style={{ fontSize: 12 }}>
             周期 {record.period}
@@ -632,24 +797,29 @@ export default function ProductionReports(): JSX.Element {
             type="link"
             size="small"
             icon={<PrinterOutlined />}
-            disabled={record.status !== 2}
+            disabled={record.status !== 2 || isDemoReport(record)}
             onClick={() => printReport(record)}
           >
             打印
           </Button>
-          <Popconfirm
-            title="确认删除该报表？"
-            onConfirm={() => {
-              void deleteReport(record.reportId).catch(() => undefined)
-              setExtraReports((prev) => prev.filter((item) => item.reportId !== record.reportId))
-              void queryClient.invalidateQueries({ queryKey: ['production-reports'] })
-              message.success('报表已删除')
-            }}
-          >
-            <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-              删除
-            </Button>
-          </Popconfirm>
+          {isPageOnlyReport(record) ? (
+            <Popconfirm
+              title="确认移除该报表？"
+              description="该行不在服务端，移除只是从本页消失，不影响任何服务端数据。"
+              onConfirm={() => void handleDelete(record)}
+            >
+              <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+                移除
+              </Button>
+            </Popconfirm>
+          ) : (
+            // 服务端行的删除端点删错实体（BT-27）：置灰 + 写明原因，不能看着"能删"
+            <Tooltip title={DELETE_UNAVAILABLE_REASON}>
+              <Button type="link" size="small" danger icon={<DeleteOutlined />} disabled>
+                删除
+              </Button>
+            </Tooltip>
+          )}
         </Space>
       ),
     },
@@ -664,7 +834,10 @@ export default function ProductionReports(): JSX.Element {
               <Space size={8}>
                 <FileTextOutlined style={{ fontSize: 20, color: '#1677ff' }} />
                 <span style={{ fontSize: 18, fontWeight: 600 }}>生产报表</span>
-                <Text type="secondary">共 {formatNumber(total)} 份报表 · {subscriptions.length} 项订阅</Text>
+                <Text type="secondary">
+                  共 {formatNumber(total)} 份报表{usingFallback ? '（示例）' : ''} ·{' '}
+                  {subscriptions.length} 项订阅
+                </Text>
               </Space>
             </Col>
             <Col>
@@ -743,8 +916,9 @@ export default function ProductionReports(): JSX.Element {
                     reportType，因此不作为报表行展示。
                   </Text>
                   <Text>
-                    下方列表仅展示你在本地生成的报表（带「本地生成」标记，未写入服务端）；
-                    服务端暂无线上报表数据即为真实状态。
+                    指标快照不会被拼成报表行展示；服务端暂无线上报表数据即为真实状态。
+                    下方列表正常情况下为空——「生成报表」当前会如实报错（后端
+                    POST /analytics/reports 不存在），不会造出本地假行。
                   </Text>
                 </Space>
               }
@@ -752,9 +926,12 @@ export default function ProductionReports(): JSX.Element {
           )}
 
           {usingFallback && (
-            <Empty
-              description="接口暂未返回报表数据，当前展示示例报表（生成 / 订阅 / 导出 / 打印均可用）"
+            <Alert
+              showIcon
+              type="warning"
               style={{ margin: '12px 0' }}
+              message="以下为内置示例报表，不是真实数据"
+              description="接口暂未返回报表数据，列表展示的是页面内置样例（每行带「示例数据」标记）。示例行不可导出、不可打印；「生成报表」当前也会如实报错（后端 POST /analytics/reports 不存在）。"
             />
           )}
 
@@ -780,6 +957,21 @@ export default function ProductionReports(): JSX.Element {
         </Card>
 
         <Card title="报表订阅">
+          {/*
+            订阅只落在浏览器 localStorage，服务端 4 个订阅端点实测全部 500（不存在），
+            所以**不会真的推送**。这条横幅常驻——只弹 toast 的话，3 秒后列表里
+            仍是一套服务端并不存在、也不会执行的"订阅"。
+          */}
+          {subscriptions.length > 0 ? (
+            <Alert
+              showIcon
+              type="warning"
+              banner
+              style={{ marginBottom: 12 }}
+              message="以下订阅配置仅保存在本浏览器（localStorage），未同步服务端，不会真的推送"
+              description={subscribeNote ?? '订阅端点当前不可用（POST/GET/PUT/DELETE /analytics/reports/subscriptions 实测均返回 500），换浏览器或清缓存后配置会丢失。'}
+            />
+          ) : null}
           {subscriptions.length === 0 ? (
             <Empty description="暂无订阅，点击右上角「订阅报表」按周期自动推送" />
           ) : (
@@ -865,6 +1057,14 @@ export default function ProductionReports(): JSX.Element {
         width={560}
       >
         <Form form={generateForm} layout="vertical">
+          {/* 后端没有生成能力，先把话说明白：点击后会如实报错，不会"转两秒就完成" */}
+          <Alert
+            showIcon
+            type="warning"
+            style={{ marginBottom: 16 }}
+            message="报表生成服务未接入"
+            description="后端 POST /analytics/reports 当前不存在（实测返回 500）。点击「确定」会如实报错，不会产生任何报表文件。"
+          />
           <Form.Item
             name="template"
             label="报表模板"
