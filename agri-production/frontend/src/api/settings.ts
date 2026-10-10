@@ -27,9 +27,22 @@ export function getSetting(configKey: string): Promise<SettingItem> {
   return http.get<SettingItem>(`${BASE}/${configKey}`)
 }
 
-/** 新增配置项 */
+/**
+ * 新增配置项。
+ *
+ * ⚠️ 实测（core-app :8098）：后端 `SettingController#create` 用 `SysSettingEntity` 接收入参，
+ * 字段是 `settingKey / settingValue / settingName`，**不是**前端这里的 `configKey /
+ * configValue / description`。因此按当前形状调用虽然会返回 200 + 新 settingId，
+ * 落库的却是一行 `setting_key=null / setting_value=null` 的空配置——**写成功但没写入内容**。
+ * 该字段口径不一致已列入后端补齐清单，此处保留现状但必须有提示，避免被当成"新增成功"。
+ *
+ * 失败提示交由调用方统一处理（`silent`），避免拦截器与页面重复弹提示。
+ *
+ * @param payload 配置项
+ * @returns 新配置项的 settingId
+ */
 export function createSetting(payload: SettingItem): Promise<string> {
-  return http.post<string>(BASE, payload)
+  return http.post<string>(BASE, payload, { silent: true })
 }
 
 /** 更新配置项 */
@@ -42,9 +55,21 @@ export function deleteSetting(configKey: string): Promise<void> {
   return http.delete<void>(`${BASE}/${configKey}`)
 }
 
-/** 批量保存系统配置 */
+/**
+ * 批量保存系统配置。
+ *
+ * ⚠️ 实测（core-app :8098）：后端**没有** `PUT /settings/batch` 这个端点，该请求会被
+ * `@PutMapping("/{id}")` 兜住并反序列化成单个 `SysSettingEntity`，返回
+ * `code=400 请求体格式错误`。也就是说本调用当前**必然失败**——调用方必须如实报错，
+ * 不能吞掉异常后提示"已保存"。
+ *
+ * 失败提示交由调用方统一处理（`silent`），避免拦截器与页面重复弹提示。
+ *
+ * @param payload 配置项数组
+ * @returns 保存是否成功
+ */
 export function saveSettings(payload: SettingItem[]): Promise<boolean> {
-  return http.put<boolean>(`${BASE}/batch`, payload)
+  return http.put<boolean>(`${BASE}/batch`, payload, { silent: true })
 }
 
 /** 租户信息（系统设置 · 租户信息 Tab） */
@@ -73,26 +98,63 @@ export interface TenantProfile {
   expireAt?: string
 }
 
+/** 租户信息查询结果（附带「接口不可用」原因，供页面显式降级提示） */
+export interface TenantProfileResult {
+  /** 租户档案，后端没有时为 null */
+  profile: TenantProfile | null
+  /**
+   * 接口不可用原因。
+   *
+   * 非空表示本次没有拿到任何真实租户档案，页面必须显式告知用户「未接入」，
+   * **不得**用农场名、农场编码或硬编码档案冒充——那会让用户以为平台里已经存在
+   * 一套真实的租户资料，进而拿它去做合同 / 发票 / 资质审核。
+   */
+  unavailableReason?: string
+}
+
 /**
- * 查询租户信息
+ * 查询租户信息。
  *
- * 后端骨架暂未提供 `/settings/tenant`，静默回落到 null，由页面使用当前农场上下文兜底。
+ * ⚠️ 实测（core-app :8098）：后端**没有** `GET /settings/tenant` 这个端点，该路径会被
+ * `SettingController#detail` 的 `@GetMapping("/{id}")` 吞掉，返回
+ * `code=404 资源不存在`（与请求 `/settings/zzz-not-exist` 完全一致，可据此判定是
+ * 端点缺失而非"该租户没档案"）。因此本函数**不再静默回落到 null**，而是把不可用原因
+ * 一并返回，交由页面做醒目降级提示。
  *
- * @returns 租户信息，不存在时为 null
+ * @returns 查询结果，含可能的不可用原因
  */
-export async function getTenantProfile(): Promise<TenantProfile | null> {
+export async function getTenantProfile(): Promise<TenantProfileResult> {
   try {
     const res = await http.get<TenantProfile>(`${BASE}/tenant`, undefined, { silent: true })
-    if (res && typeof res === 'object' && res.tenantName) return res
-    return null
-  } catch {
-    return null
+    if (res && typeof res === 'object' && res.tenantName) {
+      return { profile: res }
+    }
+    return {
+      profile: null,
+      unavailableReason: '后端 /settings/tenant 已请求成功，但未返回任何租户档案',
+    }
+  } catch (error) {
+    return {
+      profile: null,
+      unavailableReason: `租户档案接口不可用：${(error as Error)?.message ?? '请求失败'}`,
+    }
   }
 }
 
-/** 保存租户信息 */
+/**
+ * 保存租户信息。
+ *
+ * ⚠️ 实测（core-app :8098）：后端**没有** `PUT /settings/tenant` 这个端点，该路径同样被
+ * `@PutMapping("/{id}")` 吞掉，返回 `code=404 资源不存在`。也就是说本调用当前**必然失败**——
+ * 调用方必须如实报错，不能吞掉异常后提示"已保存"。
+ *
+ * 失败提示交由调用方统一处理（`silent`），避免拦截器与页面重复弹提示。
+ *
+ * @param payload 租户信息
+ * @returns 保存是否成功
+ */
 export function saveTenantProfile(payload: TenantProfile): Promise<boolean> {
-  return http.put<boolean>(`${BASE}/tenant`, payload)
+  return http.put<boolean>(`${BASE}/tenant`, payload, { silent: true })
 }
 
 /** 操作日志（系统设置 · 操作日志 Tab） */

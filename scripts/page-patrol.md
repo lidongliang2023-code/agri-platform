@@ -140,6 +140,72 @@ harness 侧问题，**不是页面 bug**，不要去改页面。
 - 断言文案若包含被 `<strong>` 等标签包裹的文字，HTML 去标签时**不要插空格**替换
   （`replace(/<[^>]*>/g, '')`），否则「是推导值」会变成「是 推导值」，断言不上。
 
+## 端点实测：404 / 500 的三种成因（看代码判定会全判错）
+
+后端 **HTTP 恒为 200**，一切成败都在 body 的 `code` 里（`request.ts` 的 SUCCESS_CODE=0）。
+因此"这个接口是不是不存在"只能靠**实测 body**，不能靠看 URL 像不像、也不能靠看有没有 404 页。
+下面三种成因的表现完全不同，混为一谈会得出完全错误的结论（实测自 core-app :8098）。
+
+### 1. 「404 资源不存在」很可能不是"没数据"，而是 URL 被通配 `/{id}` 吞了
+
+现象：`GET /settings/tenant`、`GET /analytics/dimension` 都返回 `code=404 资源不存在`，
+看起来像"这个租户/这个维度没有数据"。
+
+真相：控制器里有 `@GetMapping("/{id}")` 的**详情端点**，这些子路径被它当成 id 匹配走了，
+`detail("tenant")` 查不到就抛 NOT_FOUND。判定方法（很硬，建议照抄）：
+
+```
+GET /analytics/dimension        → 404 资源不存在
+GET /analytics/zzz-not-exist    → 404 资源不存在   ← 与上面**完全一致**
+GET /analytics/DEMO-SNAP-001    → 200 有数据
+```
+
+**与一个确定不存在的 id 返回完全一致 = 端点缺失**，不是数据缺失。
+
+⚠️ 危害：诊断时会把"资源不存在"误读成数据问题，于是去补数据、加兜底、造示例数据，
+而实际上那个端点从来没有过。同一个 `/{id}` 也会吞掉**写**请求——
+`PUT /settings/tenant`、`PUT /settings/batch` 都走 `@PutMapping("/{id}")`。
+
+### 2. 端点完全不存在时是 **500**，不是 404 —— 看 `NoResourceFoundException`
+
+没有任何 handler 匹配 → Spring 把它当静态资源找 → 找不到 → 抛
+`org.springframework.web.servlet.resource.NoResourceFoundException: No static resource api/v1/production/analytics/reports/subscriptions.`
+→ 全局异常处理 → `code=500 系统繁忙，请稍后重试`。
+
+所以 **500 未必是路径漏了一个段，也未必是后端 bug**。日志原文里出现
+`NoResourceFoundException: No static resource ...` 就是**端点根本不存在**。
+
+### 3. 端点存在但参数名不匹配，同样是 500
+
+`GET /settings/by-key` 要的参数名是 `settingKey`：
+
+```
+?settingKey=xxx → 200
+?configKey=xxx  → 500，日志：MissingServletRequestParameterException:
+                  Required request parameter 'settingKey' for method parameter type String is not present
+```
+
+### → 排障顺序：先排路径、再排参数名
+
+看到 500 时按这个顺序走，不要直接判"端点不存在"或"后端 bug"：
+
+1. 日志里有没有 `NoResourceFoundException` → 有 = 端点不存在
+2. 日志里有没有 `MissingServletRequestParameterException` → 有 = 端点存在，参数名不对
+3. 都没有 → 才是真的后端异常
+
+同理，看到 404 时先怀疑"是不是被 `/{id}` 吞了"，用"与不存在的 id 对比"验证。
+
+### 附：写操作的「假成功」比读操作危险，且只在后端失败时才暴露
+
+判据：**成功才 `message.success`；失败必须 `message.error` 并带上真实失败原因**，
+不许 catch 里留一句注释（如「后端骨架阶段保存失败，保留本地生效」）然后无条件 success。
+
+- 验收必须**成对**：后端可用时验一次、**后端停掉时验一次**（第二种才是重点）。
+- 若产品确实需要"后端不可用时本地暂存"，必须明确告诉用户**「仅保存在本地，未同步服务端」**，
+  并常驻一条横幅——只弹 toast 的话，3 秒后表格里仍是一套服务端并不存在的配置值。
+- 正确模板：`api/settings.ts` 的 `listOperationLogs`，它把 `unavailableReason` 透传给页面。
+- 注意别让 `absent` 断言撞上自己的文案（横幅里引用了成功提示原文，会让"没有成功提示"的断言误判）。
+
 ## 纪律
 
 本脚本**只观测、不修复**：不修改任何被测页面源码，不 mock 接口，不跳过失败页面。

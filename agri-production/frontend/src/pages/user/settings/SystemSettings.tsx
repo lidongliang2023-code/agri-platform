@@ -44,6 +44,7 @@ import type { ColumnsType } from 'antd/es/table'
 import { EditOutlined, PlusOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons'
 import type { Dayjs } from 'dayjs'
 import useFarmStore from '@/store/farm'
+import { asApiRequestError, httpStatusOf } from '@/utils/request'
 import {
   createSetting,
   getTenantProfile,
@@ -56,6 +57,29 @@ import type { OperationLogItem, SettingItem, TenantProfile } from '@/api/setting
 
 const { RangePicker } = DatePicker
 const { Text } = Typography
+
+/**
+ * 把 catch 到的未知错误读成人能看懂的失败原因。
+ *
+ * 优先用后端业务码（请求已到达服务端并被明确拒绝，如「资源不存在」「请求体格式错误」），
+ * 其次用 HTTP 状态码（如 500），最后才是网络层文案（后端不可达）。
+ * 目的是让页面提示里的原因**来自本次真实响应**，而不是写死的兜底话术。
+ *
+ * @param error catch 到的未知错误
+ * @returns 失败原因文案
+ */
+function failureReasonOf(error: unknown): string {
+  const detail = (error as Error)?.message?.trim()
+  const apiError = asApiRequestError(error)
+  if (apiError) {
+    return `${detail || '请求失败'}（后端业务码 ${apiError.bizCode}）`
+  }
+  const status = httpStatusOf(error)
+  if (status > 0) {
+    return `${detail || '请求失败'}（HTTP ${status}）`
+  }
+  return detail || '网络异常，后端不可达'
+}
 
 /** 租户等级文案 */
 const TENANT_LEVEL_LABEL: Record<number, string> = {
@@ -240,19 +264,17 @@ export default function SystemSettings(): JSX.Element {
 
   /* ---------------- 租户信息 ---------------- */
 
-  /** 租户信息 */
+  /**
+   * 租户档案。
+   *
+   * 纪律：初始值**一律留空**，不回落到当前农场名 / 农场编码，也不预填任何硬编码档案
+   * （统一社会信用代码、法人、联系人、地址、经营范围、等级、到期时间等）。
+   * 后端没有租户档案端点时空着显示「—」，比编一份"看起来很真实"的档案安全得多——
+   * 租户信息是要拿去做合同、发票与资质审核的。
+   */
   const [tenant, setTenant] = useState<TenantProfile>({
-    tenantName: currentFarm?.farmName ?? '阳光有机农场',
-    tenantCode: currentFarm?.farmCode ?? 'TENANT-000001',
-    creditCode: '91310000MA1FL2XY8K',
-    legalPerson: '李栋梁',
-    contactName: '张三',
-    contactPhone: '138-0000-0000',
-    region: '山东省 / 寿光市',
-    address: '山东省寿光市现代农业产业园 A 区 12 号',
-    businessScope: '蔬菜、水果种植与销售；农产品初加工；农业技术服务',
-    tenantLevel: 3,
-    expireAt: '2027-05-31',
+    tenantName: '',
+    tenantCode: '',
   })
   const [tenantEditing, setTenantEditing] = useState<boolean>(false)
   const [tenantSaving, setTenantSaving] = useState<boolean>(false)
@@ -264,8 +286,11 @@ export default function SystemSettings(): JSX.Element {
     queryFn: () => getTenantProfile(),
   })
 
+  /** 租户档案「未接入」原因（非空表示本次没拿到任何真实档案） */
+  const tenantUnavailableReason: string | undefined = tenantQuery.data?.unavailableReason
+
   useEffect(() => {
-    const remote = tenantQuery.data
+    const remote = tenantQuery.data?.profile
     if (remote) {
       setTenant((prev) => ({ ...prev, ...remote }))
     }
@@ -304,13 +329,16 @@ export default function SystemSettings(): JSX.Element {
       await saveSettings([
         { configKey: 'tenant.profile', configValue: JSON.stringify(next), description: '租户信息' },
       ])
-    } catch {
-      // 后端骨架阶段保存失败，保留本地生效
+      setTenant(next)
+      setTenantEditing(false)
+      message.success('租户信息已保存到服务端')
+    } catch (error) {
+      // 保存失败：不写入 tenant 状态、不关闭弹窗。
+      // 弹窗保持打开 = 用户填的内容还在（这就是"本地保留"），但页面不会把它当成
+      // 已保存的租户档案展示，也不会提示"已保存"。
+      message.error(`租户信息保存失败，未同步到服务端：${failureReasonOf(error)}`)
     }
-    setTenant(next)
     setTenantSaving(false)
-    setTenantEditing(false)
-    message.success('租户信息已保存')
   }
 
   /* ---------------- 参数配置 ---------------- */
@@ -326,9 +354,29 @@ export default function SystemSettings(): JSX.Element {
     ),
   )
   const [paramSaving, setParamSaving] = useState<boolean>(false)
+  /**
+   * 是否存在「仅本地修改、未同步服务端」的参数值。
+   *
+   * 为真时页面常驻一条横幅：**不能**只在失败那一下弹个 toast 就过去——toast 消失后
+   * 表格里仍是一套服务端并不存在的配置值，用户会以为配置已经生效。
+   */
+  const [paramsUnsaved, setParamsUnsaved] = useState<boolean>(false)
   /** 新增参数弹窗 */
   const [createOpen, setCreateOpen] = useState<boolean>(false)
   const [createForm] = Form.useForm<SettingItem>()
+
+  /**
+   * 记录一次参数值的本地修改。
+   *
+   * 任何改动都只发生在前端 state，服务端此刻还没有收到写入，因此一并打上未保存标记。
+   *
+   * @param key 配置键
+   * @param value 新值
+   */
+  const changeParamValue = (key: string, value: string): void => {
+    setParamValues((prev) => ({ ...prev, [key]: value }))
+    setParamsUnsaved(true)
+  }
 
   /** 远程配置 */
   const settingsQuery = useQuery({
@@ -364,20 +412,27 @@ export default function SystemSettings(): JSX.Element {
     setParamSaving(true)
     try {
       await saveSettings(payload)
-    } catch {
-      // 后端骨架阶段保存失败，保留本地生效
+      setParamsUnsaved(false)
+      void queryClient.invalidateQueries({ queryKey: ['settings-config'] })
+      message.success('参数配置已保存到服务端')
+    } catch (error) {
+      // 保存失败：本地值保留在表格里（用户不必重填），但必须常驻横幅 + 明确报错，
+      // 绝不能提示"已保存"。
+      setParamsUnsaved(true)
+      message.error(
+        `参数配置保存失败，未同步到服务端：${failureReasonOf(error)}。` +
+          '当前表格里的值只是本地修改，刷新页面后会丢失',
+      )
     }
     setParamSaving(false)
-    void queryClient.invalidateQueries({ queryKey: ['settings-config'] })
-    message.success('参数配置已保存')
   }
 
   /** 重置单个参数 */
   const resetParam = (key: string): void => {
     const spec = PARAM_MAP[key]
     if (!spec) return
-    setParamValues((prev) => ({ ...prev, [key]: spec.defaultValue }))
-    message.success(`「${spec.name}」已恢复默认值`)
+    changeParamValue(key, spec.defaultValue)
+    message.success(`「${spec.name}」已恢复默认值（仅本地，尚未保存到服务端）`)
   }
 
   /** 新增自定义参数 */
@@ -391,12 +446,14 @@ export default function SystemSettings(): JSX.Element {
     }
     try {
       await createSetting(values)
-    } catch {
-      // 后端骨架阶段新增失败，仅本地生效
+      setParamValues((prev) => ({ ...prev, [values.configKey]: values.configValue }))
+      setCreateOpen(false)
+      message.success('配置项已新增')
+    } catch (error) {
+      // 新增失败：不写进本地参数表（否则表格里会多出一条服务端并不存在的配置），
+      // 弹窗保持打开以便用户保留已填内容并重试。
+      message.error(`配置项新增失败，未同步到服务端：${failureReasonOf(error)}`)
     }
-    setParamValues((prev) => ({ ...prev, [values.configKey]: values.configValue }))
-    setCreateOpen(false)
-    message.success('配置项已新增')
   }
 
   /** 参数表格列定义 */
@@ -431,9 +488,7 @@ export default function SystemSettings(): JSX.Element {
               checked={current === '1'}
               checkedChildren="开启"
               unCheckedChildren="关闭"
-              onChange={(checked) =>
-                setParamValues((prev) => ({ ...prev, [record.key]: checked ? '1' : '0' }))
-              }
+              onChange={(checked) => changeParamValue(record.key, checked ? '1' : '0')}
             />
           )
         }
@@ -446,12 +501,7 @@ export default function SystemSettings(): JSX.Element {
               step={record.key === 'ai.confidence.threshold' ? 0.01 : 1}
               addonAfter={record.unit}
               style={{ width: '100%' }}
-              onChange={(value) =>
-                setParamValues((prev) => ({
-                  ...prev,
-                  [record.key]: String(value ?? record.defaultValue),
-                }))
-              }
+              onChange={(value) => changeParamValue(record.key, String(value ?? record.defaultValue))}
             />
           )
         }
@@ -460,7 +510,7 @@ export default function SystemSettings(): JSX.Element {
             value={current}
             options={record.options}
             style={{ width: '100%' }}
-            onChange={(value) => setParamValues((prev) => ({ ...prev, [record.key]: value }))}
+            onChange={(value) => changeParamValue(record.key, value)}
           />
         )
       },
@@ -587,11 +637,33 @@ export default function SystemSettings(): JSX.Element {
                         </Button>
                       </Col>
                     </Row>
+                    {tenantUnavailableReason && (
+                      <Alert
+                        showIcon
+                        type="warning"
+                        message="租户档案未接入：后端暂无 /settings/tenant 端点，本页不展示任何示例档案"
+                        description={
+                          <span>
+                            原因：{tenantUnavailableReason}。实测该路径会被后端的
+                            <Text code>/settings/{'{id}'}</Text>
+                            详情端点吞掉并返回「资源不存在」，与请求一个不存在的 id 完全一致，
+                            因此这是<strong>端点缺失</strong>而不是"该租户没有档案"。
+                            为避免把农场名或编造的档案当成真实租户资料，此处一律显示「-」；
+                            <strong>保存同样不可用</strong>（PUT 走同一路径），点击保存会如实报错。
+                            端点补齐已列入后端批次。
+                          </span>
+                        }
+                      />
+                    )}
                     <Descriptions bordered column={2} size="small">
-                      <Descriptions.Item label="租户名称">{tenant.tenantName}</Descriptions.Item>
-                      <Descriptions.Item label="租户编码">{tenant.tenantCode}</Descriptions.Item>
+                      <Descriptions.Item label="租户名称">{tenant.tenantName || '-'}</Descriptions.Item>
+                      <Descriptions.Item label="租户编码">{tenant.tenantCode || '-'}</Descriptions.Item>
                       <Descriptions.Item label="租户等级">
-                        <Tag color="gold">{TENANT_LEVEL_LABEL[tenant.tenantLevel ?? 2]}</Tag>
+                        {tenant.tenantLevel && TENANT_LEVEL_LABEL[tenant.tenantLevel] ? (
+                          <Tag color="gold">{TENANT_LEVEL_LABEL[tenant.tenantLevel]}</Tag>
+                        ) : (
+                          '-'
+                        )}
                       </Descriptions.Item>
                       <Descriptions.Item label="服务到期时间">
                         {tenant.expireAt || '-'}
@@ -629,7 +701,7 @@ export default function SystemSettings(): JSX.Element {
                   <Row justify="space-between" align="middle">
                     <Col>
                       <Text type="secondary">
-                        参数变更后点击「保存配置」批量提交；开关型参数即时生效
+                        参数变更后需点击「保存配置」批量提交服务端；未保存前仅存在于本页
                       </Text>
                     </Col>
                     <Col>
@@ -654,6 +726,14 @@ export default function SystemSettings(): JSX.Element {
                       </Space>
                     </Col>
                   </Row>
+                  {paramsUnsaved && (
+                    <Alert
+                      showIcon
+                      type="warning"
+                      message="存在未同步到服务端的本地修改"
+                      description="下列参数值只是本页的本地修改——服务端尚未收到任何写入（保存失败或还没点保存），刷新页面后会丢失。只有点击「保存配置」后出现绿色成功提示，服务端才真正收到这些值。"
+                    />
+                  )}
                   <Spin spinning={settingsQuery.isLoading}>
                     <Table<ParamSpec>
                       rowKey="key"
