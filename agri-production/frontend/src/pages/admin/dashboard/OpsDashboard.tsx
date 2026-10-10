@@ -163,6 +163,28 @@ function pickNumber(source: unknown, key: string): number | null {
 }
 
 /**
+ * 按候选键顺序取第一个有值的数值（告警级别键名兼容用）。
+ *
+ * 告警级别枚举正在迁移，同一个桶在迁移前后是两个不同的键：
+ * `CRITICAL→important`、`WARN→normal`、`INFO→info`、`URGENT→urgent`
+ * （**不是**简单大小写转换）。迁移还没执行完，所以这里**新旧键都认**，
+ * 且旧键排在前面——删掉旧键会在迁移落地前立刻退化成「—」。
+ *
+ * @param source 后端返回对象
+ * @param keys 候选键，按优先级从高到低
+ * @returns 第一个命中且能解析成有限数字的值；全都不命中时为 null
+ */
+function pickNumberAny(source: unknown, keys: string[]): number | null {
+  for (const key of keys) {
+    const value = pickNumber(source, key)
+    if (value !== null) {
+      return value
+    }
+  }
+  return null
+}
+
+/**
  * 运营管理大盘
  *
  * 业务职责：平台级运营总览，含 KPI 卡片、全国生产分布、近 7 天趋势、
@@ -352,12 +374,22 @@ export default function OpsDashboard(): JSX.Element {
     }))
   }, [rankQuery.data])
 
-  /** 告警级别计数：紧急 / 重要 / 一般；后端未返回时为 null（展示「—」） */
+  /**
+   * 告警级别计数：紧急 / 重要 / 一般；后端未返回时为 null（展示「—」）。
+   *
+   * 键名兼容见 {@link pickNumberAny}：迁移前是 `CRITICAL / WARN / INFO`，
+   * 迁移后是 `important / normal / info`，两套都认。
+   *
+   * ⚠️ `URGENT / urgent` 这一档**没有并入「紧急」**：旧端点实测只返回
+   * `INFO / WARN / CRITICAL`（DB 里另有 3 条 URGENT 未计入），页面也只有三个卡片位，
+   * 硬塞进去会在迁移落地那天悄悄改掉「紧急」的口径。是否新增第四个卡位
+   * 由 team-lead 裁决，本批不擅自扩大口径。
+   */
   const alertLevelCounts = useMemo<{ critical: number | null; warn: number | null; info: number | null }>(() => {
     const raw = alertLevelQuery.data
-    const critical = pickNumber(raw, 'CRITICAL')
-    const warn = pickNumber(raw, 'WARN')
-    const info = pickNumber(raw, 'INFO')
+    const critical = pickNumberAny(raw, ['CRITICAL', 'important'])
+    const warn = pickNumberAny(raw, ['WARN', 'normal'])
+    const info = pickNumberAny(raw, ['INFO', 'info'])
     return { critical, warn, info }
   }, [alertLevelQuery.data])
 

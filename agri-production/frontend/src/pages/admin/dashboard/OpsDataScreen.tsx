@@ -92,18 +92,42 @@ function toNumber(value: string | number | undefined): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined
 }
 
-/** 告警级别中文名 */
+/**
+ * 告警级别中文名。
+ *
+ * 兼容两套键名（枚举迁移还没执行完，**旧键必须留着**）：
+ * - 迁移前：`INFO / WARN / CRITICAL`（实测 `GET /admin/dashboard/alert-trend`
+ *   当前返回 `{"INFO":"6","WARN":"7","CRITICAL":"4"}`）
+ * - 迁移后：`info / normal / important / urgent`，对应关系
+ *   `INFO→info`、`WARN→normal`、`CRITICAL→important`、`URGENT→urgent`
+ *   （**不是**大小写转换）。两套并存时只是多几个键，不会互相顶掉。
+ */
 const ALERT_LEVEL_TEXT: Record<string, string> = {
   INFO: '提示级',
   WARN: '预警级',
   CRITICAL: '严重级',
+  URGENT: '紧急级',
+  info: '提示级',
+  normal: '预警级',
+  important: '严重级',
+  urgent: '紧急级',
 }
 
-/** 告警级别配色 */
+/**
+ * 告警级别配色。
+ *
+ * 键名兼容说明见 {@link ALERT_LEVEL_TEXT}；未命中的键回落到
+ * {@link SCREEN_THEME.accentBlue}（调用方兜底），不会变成"无色"。
+ */
 const ALERT_LEVEL_COLOR: Record<string, string> = {
   INFO: SCREEN_THEME.accentBlue,
   WARN: SCREEN_THEME.accentOrange,
   CRITICAL: SCREEN_THEME.accentRed,
+  URGENT: SCREEN_THEME.accentRed,
+  info: SCREEN_THEME.accentBlue,
+  normal: SCREEN_THEME.accentOrange,
+  important: SCREEN_THEME.accentRed,
+  urgent: SCREEN_THEME.accentRed,
 }
 
 /** 不可用面板的空态（深色底适配） */

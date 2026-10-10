@@ -118,6 +118,16 @@ interface RawAdminAlert {
 /**
  * 把后端告警级别归一化为页面展示文案，无法识别时返回「—」。
  *
+ * 兼容两套词表（枚举迁移还没执行完，**旧的必须留着**，删了会立刻退化）：
+ * - 迁移前的大写英文枚举：`URGENT / CRITICAL / WARN / INFO`（+ `HIGH / MEDIUM / LOW` 别名）
+ * - 迁移后的小写词表：与 `api/admin/foodSafety.ts` 的 {@code SafetyAlertLevel}
+ *   （`urgent | important | normal`）同族，对应关系是
+ *   `CRITICAL→important`、`WARN→normal`、`INFO→info`、`URGENT→urgent`
+ *   ——**不是**简单大小写转换，`important` 与 `IMPORTANT` 是两个不同来源。
+ *
+ * 数字分支（`>=3 紧急 / ==2 重要 / 其余一般`）服务于 `/admin/alerts`（AlertVO，
+ * 对外统一为数字编码），实测零漂移，**不要动**。
+ *
  * @param value 后端告警级别（字符串枚举或数字）
  * @returns 展示文案：紧急 / 重要 / 一般 / —
  */
@@ -134,6 +144,19 @@ function resolveAlertLevel(value?: string | number): string {
       return '重要'
     }
     if (upper === 'INFO' || upper === 'LOW') {
+      return '一般'
+    }
+    // 迁移后的小写词表：注意 'important' 走 toUpperCase() 是 'IMPORTANT'，
+    // 上面三个分支都匹配不到，会原样返回 'important' 导致 {@link isWarningLevel}
+    // 恒为 false——数据流标红整体失效，所以必须单独认。
+    const lower = value.toLowerCase()
+    if (lower === 'urgent' || lower === 'important' || lower === 'high') {
+      return '紧急'
+    }
+    if (lower === 'normal' || lower === 'warning' || lower === 'medium') {
+      return '重要'
+    }
+    if (lower === 'info' || lower === 'low') {
       return '一般'
     }
     return value
