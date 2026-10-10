@@ -306,7 +306,7 @@ export default function TraceCodeManage(): JSX.Element {
         )
       }
       if (result.fail > 0) {
-        message.warning(`${result.fail} 个未生成（同一批次已存在溯源码时后端会拦截重复生成）`)
+        message.warning(`${result.fail} 个未生成（后端生成接口不可用，或该批次不存在）`)
       }
       setGenOpen(false)
       setSelectedKeys([])
@@ -721,7 +721,7 @@ export default function TraceCodeManage(): JSX.Element {
             name="batchId"
             label="关联批次"
             rules={[{ required: true, message: '请选择或输入采收批次 ID' }]}
-            extra="后端同一批次仅允许存在一个溯源码，重复生成会被拦截"
+            extra="一个批次可生成多个溯源码，每次提交发一个新码（唯一性由 uk_trace_code 保证）"
           >
             <AutoComplete
               options={batchOptions}
