@@ -53,6 +53,7 @@ import {
 import { listMembers } from '@/api/members'
 import { listPlots } from '@/api/plots'
 import { alertLevelMeta } from '@/utils/production-adapter'
+import { toFiniteNumber } from '@/utils/metric-format'
 import { errorMessageOf } from '@/utils/request'
 import { MISSING_VALUE_TEXT } from '@/components/MetricStatistic'
 import type { AlertLevel, AlertRule, Plot } from '@/types'
@@ -108,6 +109,60 @@ const LEVEL_OPTIONS: { value: number; label: string }[] = [
   { value: 2, label: '一般' },
   { value: 1, label: '提示' },
 ]
+
+/**
+ * 后端 `alert_level` 取值 → 页面级别数字（1 提示 2 一般 3 严重 4 紧急）。
+ *
+ * 实测（不是照前端类型猜的）：
+ * <pre>
+ * GET /production/alerts/rules → AlertRuleEntity 直出，alertLevel 是字符串
+ *   DEMO-RULE-001 "WARN"   DEMO-RULE-002 "CRITICAL"
+ *   DEMO-RULE-003 "INFO"   DEMO-RULE-006 "URGENT"
+ * SELECT DISTINCT alert_level FROM prod_alert_rule → INFO / WARN / CRITICAL / URGENT
+ * </pre>
+ * 而 {@link alertLevelMeta} 只认数字，字符串进去一律走 default → 列表里
+ * 「告警级别」列**所有行都显示「提示」**。此处按真值收窄。
+ *
+ * 数字口径不是我定的，来自后端 {@code AlertDict} 自己的双向映射
+ * （{@code levelOf}: 1→INFO 2→WARN 3→CRITICAL 4→URGENT；
+ *  {@code statusOf} 反向同值），与 {@link alertLevelMeta} 的
+ *  1 提示 / 2 一般 / 3 严重 / 4 紧急 完全一致。
+ *
+ * 同时兼容枚举迁移后的小写词表（与 BT-32 同一套对应关系）：
+ * `INFO→info`、`WARN→normal`、`CRITICAL→important`、`URGENT→urgent`。
+ */
+const ALERT_LEVEL_FROM_BACKEND: Record<string, AlertLevel> = {
+  INFO: 1,
+  WARN: 2,
+  CRITICAL: 3,
+  URGENT: 4,
+  info: 1,
+  normal: 2,
+  important: 3,
+  urgent: 4,
+}
+
+/** 级别无法识别时的兜底（不臆造严重程度，取最轻档并保留原值供提示） */
+const ALERT_LEVEL_FALLBACK: AlertLevel = 1
+
+/**
+ * 后端 `metric` 中文名 → 前端字典 {@link METRIC_OPTIONS} 的 value。
+ *
+ * 实测后端存的是中文档案名（`空气温度` / `土壤含水量` / `水位` / `CO2浓度` /
+ * `心跳间隔`），而前端字典的 value 是英文键（`airTemperature`）。两边对不上时
+ * 页面拿不到单位，只能显示「空气温度 > undefined℃」——缺的是阈值（见
+ * {@link toRuleView}），单位同样取不到。
+ * 命中不了就保留后端原值（页面照常显示中文名，只是没有单位），**不猜**。
+ */
+const METRIC_VALUE_BY_LABEL: Record<string, string> = METRIC_OPTIONS.reduce(
+  (acc, item) => {
+    acc[item.label] = item.value
+    // 去掉空格 / 下标差异后再收一版：「CO₂ 浓度」↔「CO2浓度」
+    acc[item.label.replace(/[\s₂]/g, (m) => (m === '₂' ? '2' : ''))] = item.value
+    return acc
+  },
+  {} as Record<string, string>,
+)
 
 /**
  * 通知渠道下拉选项。
@@ -171,16 +226,24 @@ interface RuleExtra {
 /**
  * 规则视图模型。
  *
- * {@code types/alert.ts} 的 {@code AlertRule.notifyChannels} 声明为 {@code number[]}，
- * 与后端 {@code AlertRuleEntity.notifyChannels}（String，逗号分隔中文档案名）不符，
- * 按其为 number[] 直接渲染字符串就会 `channels.map is not a function` 崩页。
- * 这里按实测契约改写成 string，其余字段沿用公共类型；公共类型的订正需同步
- * `types/alert.ts`，不在本文件扩散修改。
+ * 三处按实测契约改掉公共类型 {@code AlertRule} 的声明（公共类型的全局订正需同步
+ * `types/alert.ts`，不在本文件扩散修改）：
+ * 1. `notifyChannels` 声明为 {@code number[]}，后端 {@code AlertRuleEntity.notifyChannels}
+ *    是 String（逗号分隔中文档案名），按 number[] 渲染会 `channels.map is not a function` 崩页；
+ * 2. `threshold` / `duration` 声明为非空的 {@code number}，但真实记录可能没配阈值
+ *    （实测新建未填时为 null），非空声明会让"缺失"无处安放、只能显示成 0 或 null；
+ * 3. `alertLevel` 声明为数字，后端是 {@code "WARN"} 这类字符串枚举，映射见
+ *    {@link ALERT_LEVEL_FROM_BACKEND}。
  */
-type RuleView = Omit<AlertRule, 'notifyChannels'> & RuleExtra & {
-  /** 通知渠道：后端为逗号分隔中文档案名字符串，未配置时为 null */
-  notifyChannels?: string | null
-}
+type RuleView = Omit<AlertRule, 'notifyChannels' | 'threshold' | 'duration'> &
+  RuleExtra & {
+    /** 通知渠道：后端为逗号分隔中文档案名字符串，未配置时为 null */
+    notifyChannels?: string | null
+    /** 阈值：后端 threshold_value 缺失时为 null（展示「—」，不是 0） */
+    threshold: number | null
+    /** 持续时间（分钟）：后端 duration_min 缺失时为 null */
+    duration: number | null
+  }
 
 /** 规则提交载荷（notifyChannels 按后端 String 契约提交逗号串） */
 type RulePayload = Partial<Omit<AlertRule, 'notifyChannels'>> &
@@ -202,6 +265,80 @@ type RulePayload = Partial<Omit<AlertRule, 'notifyChannels'>> &
  */
 function toApiPayload(payload: RulePayload): Partial<AlertRule> {
   return payload as unknown as Partial<AlertRule>
+}
+
+/**
+ * 后端 {@code AlertRuleEntity} → 页面视图模型 {@link RuleView}。
+ *
+ * 之前这里是一句 `as unknown as RuleView[]` 的硬转，字段名对不上就直接是
+ * `undefined`：阈值读 `threshold`（后端叫 `thresholdValue`）、时长读
+ * `duration`（后端叫 `durationMin`）、级别读数字（后端是 `WARN` 这类字符串）、
+ * 适用范围读 `scope`/`scopeIds`（后端**根本没有这两个字段**），于是列表里出现
+ * 「空气温度 > undefined℃」「告警级别一律提示」「适用范围一律未选择地块」。
+ *
+ * 实测的单条 JSON（{@code GET /production/alerts/rules}）如下，字段名以它为准：
+ * <pre>
+ * {
+ *   "ruleId": "DEMO-RULE-001", "farmId": "DEMO-FARM-001",
+ *   "plotId": null, "deviceId": null, "ruleName": "棚内高温预警",
+ *   "metric": "空气温度", "operator": "gt",
+ *   "thresholdValue": 35, "durationMin": 10,
+ *   "alertLevel": "WARN", "notifyChannels": "站内,短信",
+ *   "enabledFlag": 1, "status": 1, "createdAt": "2026-10-10 09:00:00"
+ * }
+ * </pre>
+ *
+ * 三个取值口径：
+ * - 数值缺失一律 `null`（页面展示「—」），**不补 0**——0 是"统计过，结果是 0"，
+ *   与"没这个值"是两回事；
+ * - `scope` 由 `plotId` 推导：有 `plotId` 即地块级，否则农场级。后端没有
+ *   `scope` 字段，这是**推导出的展示口径**，不是后端返回值；
+ * - `metric` 命中不了中文→英文的反向表时保留后端原值，不猜。
+ *
+ * @param raw 后端单条记录
+ * @returns 页面视图模型
+ */
+function toRuleView(raw: unknown): RuleView {
+  const source = (raw ?? {}) as Record<string, unknown>
+
+  // 阈值 / 时长：后端字段是 threshold_value / duration_min，同时兼容旧名
+  const threshold = toFiniteNumber(source.thresholdValue ?? source.threshold)
+  const duration = toFiniteNumber(source.durationMin ?? source.duration)
+
+  // 适用范围：后端无 scope 字段，按 plotId 推导（展示口径，非后端原值）
+  const plotId = typeof source.plotId === 'string' && source.plotId ? source.plotId : null
+  const scope: 'farm' | 'plot' = plotId ? 'plot' : 'farm'
+
+  // 告警级别：字符串枚举 → 数字；已经是数字的直接用；都认不出来才兜底
+  const rawLevel = source.alertLevel
+  const levelFromEnum =
+    typeof rawLevel === 'string' ? ALERT_LEVEL_FROM_BACKEND[rawLevel] ?? null : null
+  const levelFromNumber = toFiniteNumber(rawLevel)
+  const alertLevel: AlertLevel =
+    levelFromEnum ??
+    (levelFromNumber !== null && [1, 2, 3, 4].includes(levelFromNumber)
+      ? (levelFromNumber as AlertLevel)
+      : ALERT_LEVEL_FALLBACK)
+
+  const rawMetric = typeof source.metric === 'string' ? source.metric : ''
+  const status = source.status === 1 || source.status === '1' ? 1 : 0
+
+  return {
+    ruleId: typeof source.ruleId === 'string' ? source.ruleId : '',
+    ruleName: typeof source.ruleName === 'string' ? source.ruleName : '',
+    metric: METRIC_VALUE_BY_LABEL[rawMetric] ?? rawMetric,
+    operator: (typeof source.operator === 'string'
+      ? source.operator
+      : 'gt') as AlertRule['operator'],
+    threshold,
+    duration,
+    alertLevel,
+    scope,
+    scopeIds: plotId ? [plotId] : [],
+    notifyChannels: typeof source.notifyChannels === 'string' ? source.notifyChannels : null,
+    status,
+    createdAt: typeof source.createdAt === 'string' ? source.createdAt : '',
+  }
 }
 
 /** 规则表单字段 */
@@ -390,14 +527,20 @@ const DEMO_RULES: RuleView[] = buildDemoRules()
 /**
  * 将阈值条件渲染为表达式文本
  *
+ * 阈值缺失时显示「阈值 —」（不是 0、也不是 null 字符串）：0 会被读成"阈值就是 0"，
+ * 与"后端没给这个字段"是两回事。
+ *
  * @param rule 规则
- * @returns 表达式，如「空气温度 > 38℃ 持续 20 分钟」
+ * @returns 表达式，如「空气温度 > 38℃ 持续 20 分钟」；阈值缺失时如「空气温度 > —」
  */
 function renderCondition(rule: RuleView): string {
   const metric = METRIC_MAP[rule.metric] ?? { label: rule.metric, unit: '' }
-  return `${metric.label} ${OPERATOR_SYMBOL[rule.operator] ?? rule.operator} ${rule.threshold}${
+  const thresholdText = rule.threshold === null ? MISSING_VALUE_TEXT : String(rule.threshold)
+  const durationText =
+    rule.duration !== null && rule.duration > 0 ? `，持续 ${rule.duration} 分钟` : ''
+  return `${metric.label} ${OPERATOR_SYMBOL[rule.operator] ?? rule.operator} ${thresholdText}${
     metric.unit
-  }${rule.duration > 0 ? `，持续 ${rule.duration} 分钟` : ''}`
+  }${durationText}`
 }
 
 /**
@@ -451,9 +594,10 @@ export default function AlertRules(): JSX.Element {
     queryFn: () => listMembers({ pageNum: 1, pageSize: 100 }),
   })
 
-  // 后端返回的是 AlertRuleEntity，notifyChannels 为 String；types/alert.ts 声明为 number[]，
-  // 此处按实测契约收窄（同 toApiPayload，待公共类型全局订正后可去掉 unknown 中转）
-  const remoteRows: RuleView[] = (listQuery.data?.list ?? []) as unknown as RuleView[]
+  // 后端直出 AlertRuleEntity，字段名与 types/alert.ts 的 AlertRule 并不一致
+  // （threshold_value / duration_min / alert_level 字符串 / 无 scope 字段），
+  // 走 toRuleView() 按实测契约逐字段映射，不再硬转。
+  const remoteRows: RuleView[] = (listQuery.data?.list ?? []).map(toRuleView)
   const usingFallback: boolean =
     !listQuery.isLoading && (listQuery.isError || remoteRows.length === 0)
 
@@ -490,10 +634,51 @@ export default function AlertRules(): JSX.Element {
     return { rows: filtered.slice(start, start + pageSize), total: filtered.length }
   }, [usingFallback, remoteRows, listQuery.data?.total, keyword, statusFilter, pageNum, pageSize, localRules, extraRules])
 
-  /** 打开新增弹窗 */
+  /** 打开新增弹窗（表单回填统一在 {@link modalOpen} 的 effect 里做） */
   const openCreate = (): void => {
     setEditing(null)
+    setModalOpen(true)
+  }
+
+  /** 打开编辑弹窗 */
+  const openEdit = (rule: RuleView): void => {
+    setEditing(rule)
+    setModalOpen(true)
+  }
+
+  /**
+   * 回填新增 / 编辑表单。
+   *
+   * ⚠️ 原来是在 `openCreate / openEdit` 里直接 `form.setFieldsValue()`，但 Modal 里的
+   * Form 那一刻还没挂载，`useForm` 实例没连到任何 Form 元素，`setFieldsValue` 是空操作
+   * （antd 只在 console 里警告 `Instance created by useForm is not connected to any Form
+   * element`，页面上什么都不报、也不报错）。实测后果：
+   * **点「编辑」弹出的是一张空表单**，六个必填项全空 → 提交被 `validateFields` 拦住，
+   * 只弹「请完整填写规则信息」，规则根本改不了；新增同理（默认阈值 38、30 分钟也没带出来）。
+   *
+   * 只在弹窗真正打开之后（Modal 的 `afterOpenChange`）回填，此时 Form 已挂载。
+   */
+  const fillForm = (): void => {
     form.resetFields()
+    if (editing) {
+      form.setFieldsValue({
+        ruleName: editing.ruleName,
+        metric: editing.metric,
+        operator: editing.operator,
+        // 后端缺阈值 / 时长时表单留空（必填校验会拦住），不用 0 顶替
+        threshold: editing.threshold ?? undefined,
+        duration: editing.duration ?? undefined,
+        alertLevel: editing.alertLevel,
+        scope: editing.scope,
+        scopeIds: editing.scopeIds ?? [],
+        notifyChannels: parseNotifyChannels(editing.notifyChannels),
+        notifyUserIds: editing.notifyUserIds ?? [],
+        activeRange: editing.activeStart
+          ? [dayjs(editing.activeStart, 'HH:mm'), dayjs(editing.activeEnd || '23:59', 'HH:mm')]
+          : undefined,
+      })
+      return
+    }
     form.setFieldsValue({
       operator: 'gt',
       alertLevel: 3,
@@ -504,29 +689,6 @@ export default function AlertRules(): JSX.Element {
       threshold: 38,
       activeRange: [dayjs('00:00', 'HH:mm'), dayjs('23:59', 'HH:mm')],
     })
-    setModalOpen(true)
-  }
-
-  /** 打开编辑弹窗 */
-  const openEdit = (rule: RuleView): void => {
-    setEditing(rule)
-    form.resetFields()
-    form.setFieldsValue({
-      ruleName: rule.ruleName,
-      metric: rule.metric,
-      operator: rule.operator,
-      threshold: rule.threshold,
-      duration: rule.duration,
-      alertLevel: rule.alertLevel,
-      scope: rule.scope,
-      scopeIds: rule.scopeIds ?? [],
-      notifyChannels: parseNotifyChannels(rule.notifyChannels),
-      notifyUserIds: rule.notifyUserIds ?? [],
-      activeRange: rule.activeStart
-        ? [dayjs(rule.activeStart, 'HH:mm'), dayjs(rule.activeEnd || '23:59', 'HH:mm')]
-        : undefined,
-    })
-    setModalOpen(true)
   }
 
   /** 指标变化时带出默认阈值 */
@@ -898,7 +1060,9 @@ export default function AlertRules(): JSX.Element {
         onOk={() => void handleSubmit()}
         confirmLoading={submitting}
         width={720}
-        destroyOnClose
+        afterOpenChange={(open: boolean) => {
+          if (open) fillForm()
+        }}
       >
         <Form form={form} layout="vertical" preserve={false}>
           <Form.Item
