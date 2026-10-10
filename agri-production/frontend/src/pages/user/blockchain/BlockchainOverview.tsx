@@ -194,6 +194,10 @@ export default function BlockchainOverview(): JSX.Element {
   const notSuccess = total - success - failed
 
   const allRecords: BlockchainBizRecord[] = recordsQuery.data?.list ?? []
+  /** 本次实际参与统计的样本条数（后端分页上限内取到的真实记录数） */
+  const scannedCount: number = allRecords.length
+  /** 后端存证总条数（用于判断样本是否为全量） */
+  const backendTotal: number = toNumber(recordsQuery.data?.total, scannedCount)
 
   /** 类型分布：按 bizType 对真实记录分组计数 */
   const typeStats = useMemo<{ name: string; value: number }[]>(() => {
@@ -436,8 +440,10 @@ export default function BlockchainOverview(): JSX.Element {
           </Col>
         </Row>
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          数据来源：GET /api/v1/production/blockchain/overview（后端仅返回 total / success / failed；
-          环比增幅、验证通过率等指标后端未提供，故不展示）。
+          数据来源：GET /api/v1/production/blockchain/overview。「存证总数 / 上链成功 /
+          上链失败」是后端直接返回的字段（后端返回的是字符串，展示前已转数字）；
+          「未成功（含上链中）」是<strong>推导值</strong> = total − success − failed，
+          <strong>不是后端字段</strong>。环比增幅、验证通过率等指标后端未提供，故不展示。
         </Typography.Text>
       </Card>
 
@@ -446,7 +452,19 @@ export default function BlockchainOverview(): JSX.Element {
           <Card
             title="存证类型分布"
             loading={recordsQuery.isLoading && !recordsQuery.data}
+            extra={
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                样本 N={scannedCount}
+              </Typography.Text>
+            }
           >
+            {/* 图上方就把样本量摆出来：N 很小时百分比没有统计意义，藏掉 N 等于误导 */}
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              按 biz_type 分组统计 · 样本 {scannedCount} 条
+              {backendTotal > scannedCount
+                ? `（后端共 ${backendTotal} 条，本次仅统计前 ${scannedCount} 条，占比不代表全量）`
+                : '（即后端全部存证，占比即全量占比）'}
+            </Typography.Text>
             {typeStats.length > 0 ? (
               <ReactECharts option={pieOption} style={{ height: 320 }} notMerge />
             ) : (
@@ -459,8 +477,9 @@ export default function BlockchainOverview(): JSX.Element {
               />
             )}
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              统计口径：对 GET /blockchain/records 返回的真实记录按 bizType 分组计数（最多
-              {STAT_SCAN_SIZE} 条），非后端 overview 直接返回。
+              统计口径：后端 overview 不返回类型分布，此处对 GET /blockchain/records 返回的
+              <strong>真实记录</strong>按 biz_type 分组计数（单次最多取 {STAT_SCAN_SIZE} 条），
+              不是后端直接下发的统计值。
             </Typography.Text>
           </Card>
         </Col>
@@ -498,6 +517,9 @@ export default function BlockchainOverview(): JSX.Element {
               </Button>
             }
           >
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              按 anchor_at 倒序取前 5 条 · 样本 {scannedCount} 条（后端共 {backendTotal} 条）
+            </Typography.Text>
             <Table<RecentRow>
               rowKey={(row) => `${row.time}-${row.summary}`}
               size="small"
