@@ -76,6 +76,17 @@ public void delete(String id) {
 
 ## BT-01　库存台账实体缺失（最高优先，是 BT-02/03/04 的根因之一）
 
+> ⚠️ **本条结论已过期，需修订**（2026-10-10 复核，只读）：
+> 原文称「`SHOW TABLES LIKE '%inventory%'` 只有 `prod_inventory_flow`，**不存在任何库存台账表**」。
+> 现在 **`prod_inventory` 已存在**（`inventory_id / batch_id / warehouse_id / warehouse_name /
+> location_code / current_qty / frozen_qty / safe_qty / health_status / expire_date` 全齐），
+> 且有 5 条真种子数据（DEMO-INVT-001~005，current_qty 分别为 5400 / 5080 / 80 / 620 / 96000）。
+> **台账表和数据都已有了**，剩下的问题是"列表接口读的不是它"（见下方 BT-01 补充）。
+>
+> 保留本条作为历史记录，但**不要再以"没有台账表"为由给新工单定性**。
+
+---
+
 | 项 | 内容 |
 | --- | --- |
 | 端点 | `GET /api/v1/production/harvests/inventory` |
@@ -104,6 +115,26 @@ public void delete(String id) {
 
 **验收**：调 `GET /harvests/inventory` 逐字段比对，`inventoryId / currentQty / warehouseName` 必须非空。
 
+### BT-01 补充（2026-10-10 只读复核）：台账表有了，但列表接口读的是**流水**
+
+**只读实测**（core-app :8095，MySQL `agri_core` 直读，未做任何写操作）：
+
+| 事实 | 证据 |
+| --- | --- |
+| 台账表 `prod_inventory` 存在且有 5 条真数据 | `DEMO-INVT-001~005`，`current_qty` = 5400 / 5080 / 80 / 620 / **96000** |
+| 流水表 `prod_inventory_flow` 有 5 条 | `DEMO-INV-001~005`，含 `before_qty` / `after_qty` |
+| `GET /harvests/inventory`（列表）返回的是**流水**，不是台账 | 5 行里 `inventoryId / currentQty / warehouseName / locationCode / frozenQty` **全为 null**，只有 `batchId` / `warehouseId` |
+| `GET /harvests/inventory/{id}` 取不到台账 | `DEMO-INVT-004` 与 `zzz-not-exist` **均 500**（两者同响应 → 未形成对照，只能判定该路径无 handler，需换差一段路径再确认） |
+
+⚠️ **一次差点误报，记下来免得别人再踩**：列表里 `DEMO-BATCH-001 + DEMO-WH-001` 出现了**两次**，
+第一眼很像"同批次同仓库重复台账"。但那两行是**流水**（入 8600 / 出 -3200），
+同一批次有多条流水是**正常的**——台账表 `prod_inventory` 里 `GROUP BY batch_id, warehouse_id HAVING COUNT(*)>1`
+**零命中**，并不存在重复台账。判断"重复"前必须先确认看的是哪张表。
+
+**结论**：写走 `prod_inventory`（台账）、读走 `prod_inventory_flow`（流水）——
+**入库写成功了，页面上也永远看不见**（列表恒显示流水形状，currentQty 恒 null）。
+这条与 BT-02 是同一个根因的两面。
+
 ---
 
 ## BT-02　入库端点不存在
@@ -121,7 +152,37 @@ public void delete(String id) {
 **期望语义**：按批次入库，写入库存流水并更新台账当前库存；返回成功时**台账 currentQty 必须真的变化**。
 
 **验收**：调一次 → `GET /harvests/{batchId}/flows` 回读应多一条 `flowType=1` 的流水；
-台账上线后（BT-01）还应回读 `currentQty` 增量等于入库量。
+台账上线后（BT-01 已完成，见上文补充）还应回读 `currentQty` 增量等于入库量。
+
+### ⚠️ BT-02 二次实测（2026-10-10 15:58，:8098）：端点后来出现了，但它是**静默假成功** —— 已转 se-backend-inv
+
+> 定性升级：原先是"端点不存在"（500），现在端点存在了，问题反而更严重——
+> **返回成功但没干成事**，前端照着 `data=true` 弹「入库成功」。
+
+**实测**（调用 → 回读 → 比对）：
+
+```
+POST /harvests/inventory/in  →  {"code":0,"message":"success","data":true}
+回读 DEMO-INVT-004            →  current_qty 仍为 96000.00（**没变**）
+实际发生的事                   →  新造了一条台账 INV202610101558046365（同 batch + 同 warehouse）
+                                 + 一条流水
+```
+
+**后果比"没生效"更麻烦**：同一批次同一仓库可以存在 N 条台账 →
+列表里同一批次重复出现，**"当前库存"不再唯一**，任何按 `batch_id` 聚合的口径都会翻倍。
+
+**库当前是干净的**（2026-10-10 复核，只读）：`prod_inventory` 只有 5 条 `DEMO-INVT-*`，
+`inventory_id LIKE 'INV2026%'` 零命中；`prod_inventory_flow` 无今天 15:00 之后的行
+→ 那次探针写入的痕迹已经清掉了，**不需要额外还原**。
+
+**整改要求（se-backend-inv）**：
+1. 按 `batch + warehouse + location` 定位已有台账做 **upsert**，不要每次新增；
+2. 加**唯一约束**，从库层面禁止同批次同库位多台账；
+3. 返回值回传**更新后的 `currentQty`**，不要只返 `boolean`——
+   只返 boolean 的话调用方无法判断"到底加到多少了"，等于把验收责任推给前端回读。
+
+**回读验收（本条由 se-verify-fix 执行）**：先快照 → 调用 → 回读 → 还原。
+判据：`data` 里的 `currentQty` = 快照值 + 入库量，且台账**条数不增加**。
 
 ---
 
@@ -140,6 +201,14 @@ public void delete(String id) {
 **期望语义**：登记损耗（PRD 对应 `flowType=4` 报损），写流水并扣减台账。
 
 **验收**：调一次 → 回读应多一条 `flowType=4` 且 `qty<0` 的流水。
+
+### 附：BT-03 / BT-04 共用一套错误文案（team-lead 转述，已一并派给 se-backend-inv）
+
+调拨（BT-04）场景失败时，页面读到的是**「报损」**的文案——BT-03 与 BT-04 复用了同一段错误提示，
+导致使用者在调拨失败时看到与操作完全不相干的提示，会按错误的方向去排查。
+
+整改：两个操作各自的失败提示必须带上**自己的操作名**（损耗登记 / 调拨），不要共用。
+（本段依据 team-lead 转述登记，**实测原文待补**——se-backend-inv 改完后由 se-verify-fix 回读验收时一并补上。）
 
 ---
 
@@ -1066,6 +1135,39 @@ GET /analytics/dashboard?farmId=DEMO-FARM-001 → 与上面**逐字节相同**
 
 > **编号订正**：原登记为 BT-31，与 team-lead 另开的 CORS `allowedMethods` 缺 PATCH 工单撞号，
 > 改号 **BT-33**。（BT-32 = team-lead 的 `OpsDataScreen.tsx` 告警级别键名兼容工单，与本条无关。）
+
+### ✅ 裁决（team-lead / 用户，2026-10-10）：**删**，不是"保留但标注"
+
+1. 删掉 16 条 `DEMO-REPORT-*` 内置示例，**连同 `usingFallback` 分支一起删**（没有生产者就别留机制）；
+2. `isError` / 空结果走 `<Empty>` + 明示真实原因；
+3. 生成按钮保留，点击仍如实报错（BT-25 已做，保持）；
+4. `buildReportCsv` 的硬编码指标保持删除状态（BT-26）。
+
+理由：`/admin/reports` 也不是答案（见下"前置核查"），"改端点"这条路不通，
+诚实承认能力缺失才是对的。补用户端报表端点 + 真导出（BT-18）另开后端工单排队。
+
+**已执行**（commit `fcac21fa`）：
+- 删除 `DEMO_REPORTS` / `usingFallback` / `DEMO_REPORT_ID_PREFIX` / `isDemoReport`
+  （连带删掉"示例行禁导出 / 禁打印"两个已无生产者的分支），
+  `isPageOnlyReport` 简化为 `isSessionReport`；
+- `rows.length === 0` 时走 `<Empty>`，`emptyReason` 分三种：
+  接口失败 → 「报表列表接口请求失败：…」；返的是指标快照 → 「后端暂未提供用户端报表能力：
+  …返回 N 条指标快照…」；确实没有 → 「服务端当前没有任何报表记录」。
+  表格 `locale.emptyText` 同步带上原因。
+
+**成对实测**（jsdom 真实页面 + 真实后端 :8095；改前用 `3c923cf9` 的页面源码，唯一变量是前端代码）：
+
+| 观测点 | 改前 | 改后 |
+| --- | --- | --- |
+| **场景1 后端挂了** 表格行数 | **10** | **0** |
+| 首行文本 | `2026-06-03 生产日报｜日报｜**示例数据**｜周期 2026-06-03｜08:00:00｜系统自动｜**128.0 KB**｜**已完成**｜导出 打印 移除` | `(无数据行)` |
+| 出现「示例数据」 | **true** | **false** |
+| 出现「暂无报表」 | false | **true** |
+| 出现「请求失败」 | false | **true** |
+| **场景2 后端正常** 表格行数 | 0（仅有一条 Alert） | 0 |
+| 出现「暂未提供用户端报表能力」 | false | **true** |
+
+两场景下改后「示例数据」/「DEMO-REPORT-」均为 **false**。`tsc --noEmit -p tsconfig.json` 退出 0。
 
 **发现经过**：BT-25 改完后做成对实测时，后端 :8098 一度挂掉，页面 `listReports` 报错 →
 `usingFallback` 为真 → 列表里出现 **16 条 `DEMO-REPORT-*` 内置示例报表**（每页 10 条）。
