@@ -1770,3 +1770,241 @@ public ApiResponse<Map<String, Object>> iot() {
 - 两个写 mutation 的 `onError` 注释"失败就是失败"。
 
 ---
+
+## 域 5：SOP 与知识库（`api/admin/sop.ts` + `pages/admin/sop` + `pages/admin/knowledge`）
+
+> 扫描人：se-verify-fix　日期：2026-10-10　性质：**只读调研**为主，
+> 另按「快照 → 调用 → 回读 → 还原」做了**一次可还原的写入实测**（BT-57 必须要回读才能定性）。
+> 后端：`AdminSopController`（6 个映射）+ `AdminKnowledgeController`（6 个映射），
+> 实测端点全部落在我自己的实例 `:8095`（jar `C:/Users/.../Temp/sevf/core-app-sevf.jar`，
+> 日志 `sevf-8095.log`）。
+> **写操作诚实性**：⚠️ **本域有一例真 P0 静默写空**（BT-57，知识库新增/编辑）。
+> SOP 侧 `SopLibrary.tsx` 是纯只读页，无写操作，也没有兜底数据。
+
+## 本域已验证有真数据的端点
+
+| 端点 | 实测 |
+| --- | --- |
+| `GET /admin/sop?page&size` | code=0，3 条 `DEMO-SOP-001/002/003`（`sopType` PLANT/PEST/HARVEST，`status` 全 1）✅ |
+| `GET /admin/sop/DEMO-SOP-001` | code=0，真数据 ✅ |
+| `GET /admin/sop/zzz-not-exist` | **code=404** → handler 存在、实体不存在，判定诚实 ✅ |
+| `GET /admin/sop/by-crop?cropId=DEMO-CROP-001` | code=0，真数据 ✅ |
+| `POST /admin/sop/zzz-not-exist/publish` | **code=404**（`publish` 先走 `detail()`）✅ 诚实 |
+| `GET /admin/knowledge?page&size` | code=0，3 条 `DEMO-ART-001/002/003`（`categoryCode` PLANT/PEST/POLICY，`readCount` 386/512/174）✅ |
+| `GET /admin/knowledge/DEMO-ART-001` | code=0，真数据 ✅ |
+| `GET /admin/knowledge/zzz-not-exist` | **code=404** ✅ 诚实 |
+| `GET /admin/knowledge/by-category?categoryCode=PLANT` | code=0，真数据 ✅ |
+| `DELETE /admin/knowledge/{不存在}` | **code=0 + data:null** ❌（BT-59） |
+| `DELETE /admin/sop/{不存在}` | **code=0 + data:null** ❌（BT-59） |
+| `PATCH /admin/knowledge/{真id}/publish` | **code=500「系统繁忙」** ❌（BT-58） |
+| `POST /admin/knowledge/{真id}/publish` | code=0，`status` 由 0 → 1 ✅ |
+
+> 分页入参说明：后端 `page()` 只认 `page` / `size`，前端统一传 `pageNum` / `pageSize`，
+> 由后端 `PageParamAliasFilter` 做等价兼容。实测
+> `?pageNum=1&pageSize=1` 与 `?page=1&size=1` 返回完全一致（`size=1`，`records=1`），
+> **这条不是问题**，特此留档避免后人重复排查。
+
+## BT-57　知识库「新增 / 编辑知识条目」：分类（表单必填项）写入后被静默丢弃，仍弹「知识条目已保存」⚠️ **P0（本轮第三例写操作静默写空）**
+
+**现象**：`KnowledgeBase.tsx` 的保存抽屉里「分类」是 `rules: [{ required: true }]` 的必填项。
+用户选完分类、填完正文、点保存 → 后端 200 + `code:0` → 页面 `onSuccess` 弹
+`message.success('知识条目已保存')` → **刷新后分类列是「—」**。
+
+**根因**（两端对照）：
+
+| 前端 `saveMutation` 组装的 payload | 后端 `KnowledgeArticleEntity` 是否存在该列 |
+| --- | --- |
+| `title` | ✅ `title` |
+| `category: 1｜2｜3｜4` | ❌ **无 `category` 列**（只有 `categoryCode: String`）→ **静默丢弃** |
+| `summary` | ✅ `summary` |
+| `content`（正文） | ❌ **无 `content` 列** → **静默丢弃** |
+| `contentUrl: values.content` | ✅ `contentUrl`，但把正文文本塞进了「正文链接」列 → **字段语义污染** |
+| `tags: [分类名]` | ❌ **无 `tags` 列** → **静默丢弃** |
+| `source` / `author` | ✅ |
+| `status: 0` | ✅ |
+
+后端 `@PostMapping public ApiResponse<String> create(@RequestBody KnowledgeArticleEntity entity)`
+——Jackson 对未知属性**不报错**（未开 `FAIL_ON_UNKNOWN_PROPERTIES`），`category` / `content` /
+`tags` 三个字段直接蒸发，返回值仍是 `code:0` + 新主键。前端拿到 `code:0` 就报成功。
+
+**成对实测（我先快照 → 调用 → 回读 → 已还原）**：
+
+```
+写入前：SELECT COUNT(*) FROM prod_knowledge_article → 3
+
+POST /admin/knowledge
+{"title":"ZZZ-SEVF-写入验证","category":1,"summary":"摘要ABC",
+ "content":"正文内容正文内容","contentUrl":"正文内容正文内容",
+ "tags":["种植技术"],"source":"来源X","author":"来源X","status":0}
+→ {"code":0,"message":"success","data":"KNWL202610101634127017","traceId":null}   ← 看起来成功
+
+GET  /admin/knowledge/KNWL202610101634127017
+→ {"code":0,"data":{"articleId":"KNWL202610101634127017",
+                    "categoryCode":null,          ← 分类没了（前端传了 category:1）
+                    "title":"ZZZ-SEVF-写入验证",
+                    "summary":"摘要ABC",
+                    "contentUrl":"正文内容正文内容",  ← 正文被塞进了「正文链接」列
+                    "author":"来源X","source":"来源X","readCount":null,"status":0}}
+
+DELETE /admin/knowledge/KNWL202610101634127017   ← 还原
+写入后：GET /admin/knowledge → total=3，['DEMO-ART-001','DEMO-ART-002','DEMO-ART-003']  ✅ 已复原
+```
+
+**编辑路径同样静默**：`updateKnowledgeArticle` → `PUT /{id}` → `update()` 里
+`updateById(entity)`（MyBatis-Plus 默认 `NOT_NULL`，不传的字段不动）+ `detail(id)`。
+payload 里**根本没有 `categoryCode`**，所以改分类在编辑态也是**无操作 + code:0 + 提示成功**。
+
+**为什么这是 P0 而不是"小瑕疵"**：用户在必填项里选了分类，系统回了一句"已保存"，
+回读发现没存——这是「说了做了其实没做」，和 BT-25（报表生成）、BT-40（审批通过）同类，
+但更隐蔽：那两例是**整条写失败**，这一例是**写进去了但少写了**，
+列表不刷新看不出来，刷新也只是「—」，不会报错。
+
+**待裁决（我不自行改代码）**，三个选项：
+1. 前端改为写 `categoryCode` 字符串（`PLANT` / `PEST` / `POLICY`），并把 `content` / `tags`
+   从 payload 里删掉（写了也不存就别写），同时保存后**回读校验**再报成功；
+2. 后端在 `KnowledgeArticleEntity` 上补 `content` 列、`category` → `categoryCode` 的兼容映射；
+3. 两者都做。另：`CATEGORY_OPTIONS` 里的「农资知识 / 土壤管理」在任何方案下都**没有对应的
+   `categoryCode`**，需单独决定是砍掉这两个选项还是补编码（见 BT-62）。
+
+## BT-58　`publishKnowledgeArticle` 用 PATCH，后端只有 POST →「审核通过」100% 失败；且后端不接受 `status` ⚠️ P1
+
+**方法不匹配**（与 BT-35 / BT-41 / BT-47 同一类后端/前端动词分歧）：
+
+```java
+// AdminKnowledgeController:59-62
+@PostMapping("/{articleId}/publish")                    // ← 只有 POST
+public ApiResponse<KnowledgeArticleEntity> publish(@PathVariable String articleId) {
+    return ApiResponse.ok(knowledgeArticleService.publish(articleId));
+}
+```
+```ts
+// api/admin/sop.ts:137
+return http.patch<boolean>(`${KB_BASE}/${articleId}/publish`, { status })   // ← 用 PATCH
+```
+
+**实测**（对我自己新建的 status=0 行）：
+- `PATCH /admin/knowledge/{id}/publish` body `{"status":1}` → `code:500`「系统繁忙，请稍后重试」；
+  回读 `status` 仍为 **0**，`publishAt` 仍为 **null** —— **确实没写进去**。
+- `POST /admin/knowledge/{id}/publish` → `code:0`，回读 `status` = **1** ✅
+
+→ 页面上「审核通过」按钮（`KnowledgeBase.tsx:439`、`:630`）**每次点都失败**，
+用户看到的文案是「审核失败：系统繁忙，请稍后重试」——**"系统繁忙"会误导成偶发故障**，
+实际是永久性的方法不匹配。
+
+**第二层：即使把动词改成 POST，`status` 参数也是谎**。
+后端 `KnowledgeArticleService.publish()` 硬置 `setStatus(1); setPublishAt(now())`，
+**方法签名上没有任何 status 入参**。而前端 `publishKnowledgeArticle(articleId, status)`
+承诺"可以传任意状态"——下架（status=0）在后端**根本做不到**。
+（`AdminSopController.publish` 同样硬置 `setStatus(1)`，无 status 入参。）
+
+**待裁决**：
+1. 前端改 `http.post` 并把签名收敛成 `publishKnowledgeArticle(articleId)`（去掉 status 参数，
+   不承诺后端做不到的事）；或
+2. 后端把 `publish(articleId, status)` 做成真能上下架，前端再保留 status。
+
+附带：`publishKnowledgeArticle` 声明 `Promise<boolean>`，后端返回的是
+`KnowledgeArticleEntity`（对象）——**类型撒谎**（返回值实际是 `null`/实体，不是布尔）。
+
+## BT-59　`DELETE /admin/knowledge/{不存在}` 与 `DELETE /admin/sop/{不存在}` 都返回 200 + code 0 ⚠️ 挂 **G-01**
+
+**实测**：
+```
+DELETE /admin/knowledge/zzz-not-exist → {"code":0,"message":"success","data":null}
+DELETE /admin/sop/zzz-not-exist       → {"code":0,"message":"success","data":null}
+```
+
+**源码**：两个 controller 都是 `sopLibraryService.delete(id); return ApiResponse.ok();`
+——`delete()` 里 `sopLibraryMapper.deleteById(id)` 的**影响行数被丢弃**，
+删不到任何行也照样 `ok()`。前端 `deleteSopLibrary` / `deleteKnowledgeArticle`
+声明 `Promise<boolean>`，但 `data` 是 `null`（不是 `false`），页面也不读返回值。
+
+**影响**：`KnowledgeBase.tsx` 的 `removeMutation.onSuccess` 无条件弹「条目已删除」。
+删一条已被别人删掉的行 → 依旧提示"已删除"（这条尚可接受，因为目标确实没了），
+但**删一条主键写错的行 → 也提示"已删除"，而那行还躺着**。
+
+**归属**：与 **G-01**（`deleteById` 丢弃影响行数）完全同源，**挂在 G-01 下统一治理**，
+不在 sop / knowledge 两个实体上分别打补丁。前端侧若要先行，可参照 BT-22 的做法：
+调用后回读一次，确认真的没了再报成功。
+
+## BT-60　`api/admin/sop.ts` 里 5 个 SOP 函数零调用方；后端 `POST /admin/sop/{sopId}/publish` 也零调用方 → 建议删
+
+全仓 grep（含 `@/api` 桶导出）确认，SOP 侧实际被页面引用的**只有** `listSopLibrary`
+（`SopLibrary.tsx:48`）与类型 `SopLibraryItem`：
+
+| 函数 | 路径 | 后端是否存在 | 调用方 |
+| --- | --- | --- | --- |
+| `getSopLibrary` | `GET /admin/sop/{sopId}` | ✅ | **零** |
+| `createSopLibrary` | `POST /admin/sop` | ✅ | **零** |
+| `updateSopLibrary` | `PUT /admin/sop/{sopId}` | ✅ | **零** |
+| `deleteSopLibrary` | `DELETE /admin/sop/{sopId}` | ✅ | **零**（且见 BT-59） |
+| `listSopLibraryByCrop` | `GET /admin/sop/by-crop` | ✅ | **零** |
+| （无对应前端函数） | `POST /admin/sop/{sopId}/publish` | ✅ | **零** |
+
+即：**SOP 规程库目前是一个纯只读页面**，没有任何新增/编辑/删除/发布入口。
+后端 6 个映射里 5 个没有任何前端消费者。
+
+**待裁决**：删这 5 个声明（与 BT-36 / BT-46 / BT-48 同一批处理），
+还是先把 SOP 的增删改做成真页面。⚠️ 若选择"做成真页面"，请先读 BT-57——
+照现在这套 payload 组装习惯做出来，会再复制一例静默写空。
+
+## BT-61　`listKnowledgeArticles` 仍带 `title` / `category` 两个后端不消费的入参
+
+```ts
+// api/admin/sop.ts:101-105
+export function listKnowledgeArticles(
+  params: PageQuery & { title?: string; keyword?: string; category?: number; status?: number },
+): Promise<PageResult<KnowledgeArticle>> {
+  return http.get<PageResult<KnowledgeArticle>>(KB_BASE, params)
+}
+```
+
+后端 `AdminKnowledgeController#page` 只接收 `page / size / keyword / status` 四个参数
+（源码 `:29-35`），`title` 与 `category` **传了也不进查询条件**（这一点文件头 JSDoc 已写明）。
+
+现状：唯一调用方 `KnowledgeBase.tsx:196` 只传 `{pageNum, pageSize, keyword}`，
+**没有传 `title` / `category`**，所以当前不产生实际的谎报。
+但这两个入参留在签名里，就是在**邀请**下一个人传它然后以为生效了。
+
+**待裁决**：从签名里删掉 `title` / `category`（保留 JSDoc 里那段"后端不消费"的说明），
+与 BT-60 一并清理。
+
+## BT-62　`CATEGORY_TO_CODE` 的注释说"仅保留写入兼容"，实际**完全不兼容** → 注释撒谎
+
+```ts
+/** 分类名 → 后端历史数字编码（后端实际不消费该字段，仅保留写入兼容） */
+const CATEGORY_TO_CODE: Record<string, 1 | 2 | 3 | 4> = {
+  种植技术: 1, 病虫害防治: 2, 政策法规: 3, 农资知识: 4, 土壤管理: 4,
+}
+```
+
+三条与事实不符：
+1. 后端**没有** `category` 列，字段名都不一样（`categoryCode` 是 String，
+   取值为 `PLANT` / `PEST` / `POLICY`），**不是"不消费"而是"字段对不上"**，
+   "兼容"二字会让人以为改个数字就能通；
+2. 读侧映射 `CATEGORY_CODE_TO_NAME` 只认 `PLANT` / `PEST` / `POLICY`，
+   **「农资知识」「土壤管理」在任何编码体系下都不存在** —— 选了它们写进去，
+   读回来必然是「—」，是 BT-57 里最隐蔽的一支；
+3. `土壤管理` 与 `农资知识` **共用编码 4**，本身就是两个名字挤一个号。
+
+**待裁决**：要么把注释改成"后端字段为 `categoryCode`（PLANT/PEST/POLICY），
+本表仅为历史遗留、当前不参与读写"，要么连表一起删（配合 BT-57 的方案 1）。
+另需单独裁决「农资知识 / 土壤管理」两个分类是砍掉还是后端补编码。
+
+## 附：本域诚实的地方（不要改坏）
+
+- `SopLibrary.tsx`：整页**只读**，无任何写操作；`dash()` 对缺失值统一显示「—」，
+  注释明写"无本地示例数据、无空结果兜底塞数据"；旧的「SOP 模板审核」模型
+  （AUDIT_STATUS_MAP / 6 条 MOCK_TEMPLATES / `PATCH /{id}/audit`）已被整段删掉，
+  并在文件头留了原因——**这是本域最值得保住的一段**。
+- `KnowledgeBase.tsx`：「废弃」按钮走
+  `throw new Error('后端知识库无「废弃」状态，标记废弃未接入')`，注释明写
+  "不做本地假更新（那等于宣称已废弃，刷新即露馅）"——**主动失败，不伪造状态**。
+- 三个明示缺失的提示语：`VIEW_COUNT_MISSING_TIP` / `ENTRY_TYPE_MISSING_TIP` /
+  `DEPRECATED_MISSING_TIP`，文案都是"未接入：…显示为「—」而非 0"。
+- 硬编码统计卡 `15680 / 14200 / 850 / 630` 已删除，统计全部由后端真实条目聚合。
+- `saveMutation` / `removeMutation` / `auditMutation` **三个都写了 `onError`**，
+  没有 `catch {}` 静默 —— BT-57 的问题在于**字段被丢**，不在于失败被吞。
+- 分类树 `treeData` 的条目数由后端真实条目聚合；分类名未知时回落编码原文，
+  注释明写"不做「看起来像」的猜测映射"。
+
+---
