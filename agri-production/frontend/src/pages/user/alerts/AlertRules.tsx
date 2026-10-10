@@ -53,6 +53,7 @@ import {
 import { listMembers } from '@/api/members'
 import { listPlots } from '@/api/plots'
 import { alertLevelMeta } from '@/utils/production-adapter'
+import { MISSING_VALUE_TEXT } from '@/components/MetricStatistic'
 import type { AlertLevel, AlertRule, Plot } from '@/types'
 
 const { Text } = Typography
@@ -107,18 +108,61 @@ const LEVEL_OPTIONS: { value: number; label: string }[] = [
   { value: 1, label: '提示' },
 ]
 
-/** 通知渠道 */
-const NOTIFY_CHANNEL_OPTIONS: { value: number; label: string }[] = [
-  { value: 1, label: '站内消息' },
-  { value: 2, label: '短信' },
-  { value: 3, label: '微信' },
+/**
+ * 通知渠道下拉选项。
+ *
+ * 取值必须与后端一致：{@code AlertRuleEntity.notifyChannels} 字段注释写明
+ * 「通知渠道 站内/短信/微信（逗号分隔）」，{@code prod_alert_rule.notify_channels}
+ * 实测就是中文档案名（如 `站内,短信`）。此处不自建数字编码映射
+ * —— {@link AlertDict} 里也没有渠道映射，自行造一套会让读写两侧对不上。
+ */
+const NOTIFY_CHANNEL_OPTIONS: { value: string; label: string }[] = [
+  { value: '站内', label: '站内消息' },
+  { value: '短信', label: '短信' },
+  { value: '微信', label: '微信' },
 ]
 
-/** 通知渠道文案 */
-const NOTIFY_CHANNEL_LABEL: Record<number, string> = {
-  1: '站内',
-  2: '短信',
-  3: '微信',
+/** 渠道缺失时的提示语 */
+const NOTIFY_CHANNEL_MISSING_TIP = '后端未返回该规则的通知渠道（notify_channels 为空），显示为「—」'
+
+/**
+ * 取后端真实失败原因。
+ *
+ * 写操作失败时必须把原因透传给用户——"写失败却提示已保存"是本轮最严禁的一类问题，
+ * 而"失败但不说原因"同样让人无法判断是网络问题还是数据被拒。
+ *
+ * @param error 捕获到的异常
+ * @returns 用于展示的原因文案；拿不到原因时给占位，不编造
+ */
+function errorMessageOf(error: unknown): string {
+  return error instanceof Error && error.message ? error.message : '未知错误（后端未返回原因）'
+}
+
+/**
+ * 解析后端的通知渠道字段。
+ *
+ * 实测所见形态（{@code SELECT rule_id, notify_channels FROM prod_alert_rule}）：
+ * <pre>
+ * DEMO-RULE-001  站内,短信
+ * DEMO-RULE-002  站内,短信,微信
+ * DEMO-RULE-003  站内
+ * RULE2026...    NULL
+ * </pre>
+ * 即「中文档案名 + 英文半角逗号（hex 2C）」的字符串，未配置时为 null。
+ * 这里同时兼容全角逗号与数组形态，保证任何返回形态都只做拆分、不做臆造翻译。
+ *
+ * @param value 后端原值
+ * @returns 渠道名列表；空数组表示该规则未配置渠道或后端未返回该字段
+ */
+function parseNotifyChannels(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean)
+  }
+  if (typeof value !== 'string') return []
+  return value
+    .split(/[,，;；]/)
+    .map((item) => item.trim())
+    .filter(Boolean)
 }
 
 /**
@@ -136,11 +180,41 @@ interface RuleExtra {
   notifyUserIds?: string[]
 }
 
-/** 规则视图模型 */
-type RuleView = AlertRule & RuleExtra
+/**
+ * 规则视图模型。
+ *
+ * {@code types/alert.ts} 的 {@code AlertRule.notifyChannels} 声明为 {@code number[]}，
+ * 与后端 {@code AlertRuleEntity.notifyChannels}（String，逗号分隔中文档案名）不符，
+ * 按其为 number[] 直接渲染字符串就会 `channels.map is not a function` 崩页。
+ * 这里按实测契约改写成 string，其余字段沿用公共类型；公共类型的订正需同步
+ * `types/alert.ts`，不在本文件扩散修改。
+ */
+type RuleView = Omit<AlertRule, 'notifyChannels'> & RuleExtra & {
+  /** 通知渠道：后端为逗号分隔中文档案名字符串，未配置时为 null */
+  notifyChannels?: string | null
+}
 
-/** 规则提交载荷 */
-type RulePayload = Partial<AlertRule> & RuleExtra
+/** 规则提交载荷（notifyChannels 按后端 String 契约提交逗号串） */
+type RulePayload = Partial<Omit<AlertRule, 'notifyChannels'>> &
+  RuleExtra & {
+    /** 通知渠道，逗号分隔 */
+    notifyChannels?: string
+  }
+
+/**
+ * 提交载荷 → api 层参数。
+ *
+ * {@code types/alert.ts} 里 {@code AlertRule.notifyChannels} 仍声明为 {@code number[]}，
+ * 与后端 {@code AlertRuleEntity.notifyChannels}（String）不符，属于公共类型的历史遗留，
+ * 需要连同 threshold / duration / scope 等字段一起全局订正（不在本次改动范围内）。
+ * 此处只在「页面 → api」这一个边界做显式收窄，避免散落的隐式 any。
+ *
+ * @param payload 页面提交载荷
+ * @returns api 层入参
+ */
+function toApiPayload(payload: RulePayload): Partial<AlertRule> {
+  return payload as unknown as Partial<AlertRule>
+}
 
 /** 规则表单字段 */
 interface RuleFormValues {
@@ -160,8 +234,8 @@ interface RuleFormValues {
   scope: 'farm' | 'plot'
   /** 适用地块 */
   scopeIds?: string[]
-  /** 通知渠道 */
-  notifyChannels: number[]
+  /** 通知渠道（取值见 NOTIFY_CHANNEL_OPTIONS，与后端中文档案名一致） */
+  notifyChannels: string[]
   /** 通知成员 */
   notifyUserIds?: string[]
   /** 生效时段 */
@@ -310,7 +384,7 @@ function buildDemoRules(count = 18): RuleView[] {
       alertLevel: tpl.alertLevel,
       scope: index % 3 === 0 ? 'farm' : 'plot',
       scopeIds: index % 3 === 0 ? [] : [`DEMO-PLOT-${(index % 6) + 1}`],
-      notifyChannels: index % 2 === 0 ? [1, 2] : [1, 3],
+      notifyChannels: index % 2 === 0 ? '站内,短信' : '站内,微信',
       status: index % 5 === 0 ? 0 : 1,
       createdAt: dayjs('2026-06-03 10:30:00')
         .subtract(index * 3, 'day')
@@ -389,7 +463,9 @@ export default function AlertRules(): JSX.Element {
     queryFn: () => listMembers({ pageNum: 1, pageSize: 100 }),
   })
 
-  const remoteRows: RuleView[] = (listQuery.data?.list ?? []) as RuleView[]
+  // 后端返回的是 AlertRuleEntity，notifyChannels 为 String；types/alert.ts 声明为 number[]，
+  // 此处按实测契约收窄（同 toApiPayload，待公共类型全局订正后可去掉 unknown 中转）
+  const remoteRows: RuleView[] = (listQuery.data?.list ?? []) as unknown as RuleView[]
   const usingFallback: boolean =
     !listQuery.isLoading && (listQuery.isError || remoteRows.length === 0)
 
@@ -434,7 +510,7 @@ export default function AlertRules(): JSX.Element {
       operator: 'gt',
       alertLevel: 3,
       scope: 'plot',
-      notifyChannels: [1],
+      notifyChannels: ['站内'],
       duration: 30,
       metric: 'airTemperature',
       threshold: 38,
@@ -456,7 +532,7 @@ export default function AlertRules(): JSX.Element {
       alertLevel: rule.alertLevel,
       scope: rule.scope,
       scopeIds: rule.scopeIds ?? [],
-      notifyChannels: rule.notifyChannels ?? [],
+      notifyChannels: parseNotifyChannels(rule.notifyChannels),
       notifyUserIds: rule.notifyUserIds ?? [],
       activeRange: rule.activeStart
         ? [dayjs(rule.activeStart, 'HH:mm'), dayjs(rule.activeEnd || '23:59', 'HH:mm')]
@@ -493,7 +569,7 @@ export default function AlertRules(): JSX.Element {
       alertLevel: values.alertLevel as AlertLevel,
       scope: values.scope,
       scopeIds: values.scope === 'plot' ? (values.scopeIds ?? []) : [],
-      notifyChannels: values.notifyChannels,
+      notifyChannels: values.notifyChannels.join(','),
       notifyUserIds: values.notifyUserIds ?? [],
       activeStart: values.activeRange?.[0]?.format('HH:mm'),
       activeEnd: values.activeRange?.[1]?.format('HH:mm'),
@@ -502,15 +578,15 @@ export default function AlertRules(): JSX.Element {
     setSubmitting(true)
     try {
       if (editing) {
-        await updateAlertRule(editing.ruleId, payload)
+        await updateAlertRule(editing.ruleId, toApiPayload(payload))
         setLocalRules((prev) =>
           prev.map((item) => (item.ruleId === editing.ruleId ? { ...item, ...payload } : item)),
         )
         message.success('规则已更新')
       } else {
-        const created = await createAlertRule(payload)
+        const created = await createAlertRule(toApiPayload(payload))
         const nextRule: RuleView = {
-          ...(payload as AlertRule),
+          ...(payload as RuleView),
           ruleId: created || `LOCAL-RULE-${Date.now()}`,
           createdAt: dayjs().format('YYYY-MM-DD HH:mm:ss'),
         }
@@ -521,8 +597,12 @@ export default function AlertRules(): JSX.Element {
       }
       await queryClient.invalidateQueries({ queryKey: ['production-alert-rules'] })
       setModalOpen(false)
-    } catch {
-      // 后端骨架阶段可能失败，本地仍然落库保证交互闭环
+    } catch (error) {
+      /**
+       * 写入服务端失败：本地仍然落一份以保证页面可交互，
+       * 但**不能提示"已保存"**——必须说明"未同步服务端 + 刷新会丢 + 真实原因"。
+       */
+      const reason = errorMessageOf(error)
       if (editing) {
         setLocalRules((prev) =>
           prev.map((item) => (item.ruleId === editing.ruleId ? { ...item, ...payload } : item)),
@@ -530,17 +610,17 @@ export default function AlertRules(): JSX.Element {
         setExtraRules((prev) =>
           prev.map((item) => (item.ruleId === editing.ruleId ? { ...item, ...payload } : item)),
         )
-        message.success('规则已更新（本地生效）')
+        message.warning(`规则未同步到服务端（${reason}），仅本页本地生效，刷新后会还原`)
       } else {
         setExtraRules((prev) => [
           {
-            ...(payload as AlertRule),
+            ...(payload as RuleView),
             ruleId: `LOCAL-RULE-${Date.now()}`,
             createdAt: dayjs().format('YYYY-MM-DD HH:mm:ss'),
           },
           ...prev,
         ])
-        message.success('规则已新增（本地生效）')
+        message.warning(`规则未写入服务端（${reason}），仅本页本地生效，刷新后会丢失`)
       }
       setModalOpen(false)
     } finally {
@@ -548,13 +628,23 @@ export default function AlertRules(): JSX.Element {
     }
   }
 
-  /** 启停规则 */
+  /**
+   * 启停规则。
+   *
+   * 此前 `catch {}` 空吞后 `onSuccess` 恒触发「规则已启用 / 已停用」——
+   * 后端 PATCH 失败时列表开关照样翻、照样报成功，用户以为生效了。
+   * 现在把「是否真的写到服务端」作为结果的一部分带回 `onSuccess`，
+   * 成功才说成功；失败说「未同步服务端 + 真实原因 + 刷新会还原」。
+   */
   const toggleMutation = useMutation({
     mutationFn: async (payload: { rule: RuleView; status: 0 | 1 }) => {
+      let remoteOk = true
+      let reason = ''
       try {
         await updateAlertRuleStatus(payload.rule.ruleId, payload.status)
-      } catch {
-        // 回落态失败时仅更新本地状态
+      } catch (error) {
+        remoteOk = false
+        reason = errorMessageOf(error)
       }
       setLocalRules((prev) =>
         prev.map((item) =>
@@ -566,28 +656,47 @@ export default function AlertRules(): JSX.Element {
           item.ruleId === payload.rule.ruleId ? { ...item, status: payload.status } : item,
         ),
       )
-      return payload.status
+      return { status: payload.status, remoteOk, reason }
     },
-    onSuccess: (status) => {
-      message.success(status === 1 ? '规则已启用' : '规则已停用')
-      void queryClient.invalidateQueries({ queryKey: ['production-alert-rules'] })
+    onSuccess: ({ status, remoteOk, reason }) => {
+      if (remoteOk) {
+        message.success(status === 1 ? '规则已启用' : '规则已停用')
+        void queryClient.invalidateQueries({ queryKey: ['production-alert-rules'] })
+        return
+      }
+      message.warning(
+        `${status === 1 ? '启用' : '停用'}未同步到服务端（${reason}），仅本页本地生效，刷新后会还原`,
+      )
     },
   })
 
-  /** 删除规则 */
+  /**
+   * 删除规则。
+   *
+   * 同 {@link toggleMutation}：此前 `catch {}` 空吞后无条件报「规则已删除」，
+   * 后端记录仍在，刷新就回来。现在按服务端是否真的删除分别提示。
+   */
   const deleteMutation = useMutation({
     mutationFn: async (ruleId: string) => {
+      let remoteOk = true
+      let reason = ''
       try {
         await deleteAlertRule(ruleId)
-      } catch {
-        // 回落态失败时仅更新本地状态
+      } catch (error) {
+        remoteOk = false
+        reason = errorMessageOf(error)
       }
       setLocalRules((prev) => prev.filter((item) => item.ruleId !== ruleId))
       setExtraRules((prev) => prev.filter((item) => item.ruleId !== ruleId))
+      return { remoteOk, reason }
     },
-    onSuccess: () => {
-      message.success('规则已删除')
-      void queryClient.invalidateQueries({ queryKey: ['production-alert-rules'] })
+    onSuccess: ({ remoteOk, reason }) => {
+      if (remoteOk) {
+        message.success('规则已删除')
+        void queryClient.invalidateQueries({ queryKey: ['production-alert-rules'] })
+        return
+      }
+      message.warning(`删除未同步到服务端（${reason}），仅在本页移除，刷新后会重新出现`)
     },
   })
 
@@ -644,16 +753,26 @@ export default function AlertRules(): JSX.Element {
       title: '通知方式',
       dataIndex: 'notifyChannels',
       width: 180,
-      render: (channels: number[], record) => (
-        <Space size={4} wrap>
-          {(channels ?? []).map((item) => (
-            <Tag key={item}>{NOTIFY_CHANNEL_LABEL[item] ?? '其他'}</Tag>
-          ))}
-          {(record.notifyUserIds ?? []).length > 0 && (
-            <Tag color="purple">{record.notifyUserIds?.length} 人</Tag>
-          )}
-        </Space>
-      ),
+      render: (channels: RuleView['notifyChannels'], record) => {
+        const list = parseNotifyChannels(channels)
+        return (
+          <Space size={4} wrap>
+            {list.length === 0 ? (
+              <Tooltip title={NOTIFY_CHANNEL_MISSING_TIP}>
+                <Text type="secondary" style={{ cursor: 'help' }}>
+                  {MISSING_VALUE_TEXT}
+                </Text>
+              </Tooltip>
+            ) : (
+              // 后端给的就是中文档案名，原样展示；不做任何本地编码换算
+              list.map((item) => <Tag key={item}>{item}</Tag>)
+            )}
+            {(record.notifyUserIds ?? []).length > 0 && (
+              <Tag color="purple">{record.notifyUserIds?.length} 人</Tag>
+            )}
+          </Space>
+        )
+      },
     },
     {
       title: '生效时段',
