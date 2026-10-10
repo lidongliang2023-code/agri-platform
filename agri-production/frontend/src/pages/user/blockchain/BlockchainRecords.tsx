@@ -3,8 +3,24 @@
  * 路由路径：/production/blockchain/records
  * 所属模块：区块链增强
  * 原型 pageId：bc-records（P28）
+ *
+ * ⚠️ 真数据约束（本页此前造假量最大，已修复，请勿回退）
+ *
+ * 旧版三处造假已全部拆除：
+ * 1. `MOCK_RECORDS` 共 2347 条（PROTOTYPE_ROWS 5 行 + buildMockRecord 确定性伪随机生成，
+ *    含伪造的哈希与签名），在 `isError || remoteRows.length === 0` 时整表顶替真实数据。
+ *    —— 服务端真的返回空列表就是空：`length === 0` 的兜底分支已删除，现在显示空态。
+ * 2. 批量验真 catch 分支用本地 `confirmations >= 6` 判定并输出
+ *    「接口不可用，按链上确认数 N 判定为通过（示例结论）」—— 写操作假成功，最恶劣的一处。
+ *    —— 现在批量验真只调真接口 `GET /blockchain/verify/{txHash}`，失败就是失败，明示
+ *    「未取得验真结论」，不做任何本地判定。
+ * 3. 表格列渲染后端根本不返回的字段（confirmations / anchorMethod / chainId / certNo）、
+ *    筛选区传后端不接收的参数（bizType / startDate / endDate，实测被静默忽略）。
+ *    —— 现在只展示后端 BlockchainRecordEntity 的真实字段，筛选只保留后端支持的 status 与 keyword。
+ *
+ * 覆盖率低（全表仅数条存证）是真实结论，按真实渲染，不补假数据。
  */
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ProTable } from '@ant-design/pro-components'
@@ -29,295 +45,55 @@ import {
   CloseCircleFilled,
   CopyOutlined,
   ExportOutlined,
+  ReloadOutlined,
   SafetyCertificateOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
-import type { Dayjs } from 'dayjs'
-import { listCertRecords, verifyCertificate } from '@/api/blockchain'
-import type { BlockchainCertRecord, CertStatusCode, CertificateVerifyResult } from '@/types'
+import { listCertRecords, verifyChain } from '@/api/blockchain'
+import type { BlockchainBizRecord, CertStatusCode } from '@/types'
+import { asApiRequestError, httpStatusOf, toNumber } from '@/utils/request'
 import useFarmStore from '@/store/farm'
 
-/** 等宽字体样式：哈希与签名统一使用 */
+/** 等宽字体样式：哈希统一使用 */
 const MONO_STYLE: React.CSSProperties = {
   fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, "Courier New", monospace',
   wordBreak: 'break-all',
 }
 
-/** 存证总数（原型口径 4.3：存证 2,347 条） */
-const MOCK_TOTAL_COUNT = 2347
+/** 业务类型编码 → 名称（后端实测取值：TRACE / INSPECTION / HARVEST） */
+const BIZ_TYPE_NAME: Record<string, string> = {
+  FARMING: '生产记录',
+  INSPECTION: '检测报告',
+  INPUT: '投入品使用',
+  HARVEST: '采收入库',
+  CIRCULATION: '流通记录',
+  IOT: 'IoT数据',
+  TRACE: '溯源记录',
+}
 
-/** 原型示例数据的基准时间（页面示例数据围绕该时间生成） */
-const MOCK_BASE: Dayjs = dayjs('2026-06-02 22:00:00')
-
-/** 业务类型字典 */
-const BIZ_TYPE_OPTIONS: { value: string; label: string }[] = [
-  { value: 'FARMING', label: '生产记录' },
-  { value: 'INSPECTION', label: '检测报告' },
-  { value: 'INPUT', label: '投入品使用' },
-  { value: 'HARVEST', label: '采收入库' },
-  { value: 'CIRCULATION', label: '流通记录' },
-  { value: 'IOT', label: 'IoT数据' },
-]
-
-/** 业务类型编码 → 名称 */
-const BIZ_TYPE_NAME: Record<string, string> = BIZ_TYPE_OPTIONS.reduce<
-  Record<string, string>
->((acc, item) => {
-  acc[item.value] = item.label
-  return acc
-}, {})
-
-/** 存证状态字典 */
+/** 存证状态字典（后端 records 接口支持 status 过滤） */
 const STATUS_OPTIONS: { value: CertStatusCode; label: string }[] = [
-  { value: 'SUCCESS', label: '✅已确认' },
+  { value: 'SUCCESS', label: '✅已上链' },
   { value: 'PENDING', label: '⏳上链中' },
   { value: 'FAILED', label: '❌上链失败' },
 ]
 
-/** 时间范围字典 */
-const PERIOD_OPTIONS: { value: string; label: string }[] = [
-  { value: 'MONTH', label: '本月' },
-  { value: 'LAST_MONTH', label: '上月' },
-  { value: 'QUARTER', label: '本季度' },
-]
-
-/** 上链方式取值（原型 4.2） */
-const ANCHOR_METHODS: string[] = ['定时批量', '实时上链', '手动上链']
-
-/**
- * 生成确定性伪随机十六进制串，用于示例数据的哈希与签名
- *
- * @param seed 种子字符串
- * @param length 目标长度
- * @returns 十六进制字符串
- */
-function pseudoHex(seed: string, length: number): string {
-  let hash = 2166136261
-  for (let i = 0; i < seed.length; i += 1) {
-    hash ^= seed.charCodeAt(i)
-    hash = Math.imul(hash, 16777619)
-  }
-  let out = ''
-  while (out.length < length) {
-    out += (hash >>> 0).toString(16).padStart(8, '0')
-    hash = Math.imul(hash ^ (hash >>> 13), 1274126177)
-  }
-  return out.slice(0, length)
-}
-
-/**
- * 按权重挑选业务类型，使示例数据的类型分布贴近原型 P27
- *
- * @param index 数据序号
- * @returns 业务类型编码
- */
-function pickBizType(index: number): string {
-  const bucket = index % 100
-  if (bucket < 44) return 'FARMING'
-  if (bucket < 63) return 'INSPECTION'
-  if (bucket < 80) return 'INPUT'
-  if (bucket < 92) return 'HARVEST'
-  if (bucket < 97) return 'CIRCULATION'
-  return 'IOT'
-}
-
-/**
- * 构造单条示例存证记录
- *
- * @param index 数据序号，0 起
- * @returns 存证记录
- */
-function buildMockRecord(index: number): BlockchainCertRecord {
-  const time = MOCK_BASE.subtract(index * 37, 'minute')
-  const dateText = time.format('YYYYMMDD')
-  const bizType = pickBizType(index)
-  const bizTypeName = BIZ_TYPE_NAME[bizType] ?? '生产记录'
-  const bizNoPrefix: Record<string, string> = {
-    FARMING: 'PRD',
-    INSPECTION: 'INS',
-    INPUT: 'INP',
-    HARVEST: 'BC',
-    CIRCULATION: 'LOG',
-    IOT: 'IOT',
-  }
-  const status: CertStatusCode =
-    index % 23 === 0 ? 'FAILED' : index % 17 === 0 ? 'PENDING' : 'SUCCESS'
-  const anchorMethod = ANCHOR_METHODS[index % 3]
-  const traceCode = `AG010101202605${String(150001 + index).padStart(6, '0')}`
-  const baseBlock = 8234401 - index
-
-  return {
-    recordId: `CERT-${dateText}${String(183000 + index)}`,
-    certNo: `CERT-${dateText}${String(183000 + index)}`,
-    bizType,
-    bizTypeName,
-    bizNo: `${bizNoPrefix[bizType] ?? 'PRD'}${dateText}${String(1001 + index).padStart(3, '0')}`,
-    traceCode,
-    bizSummary: `${bizTypeName}批量数据 ${index + 1}`,
-    txHash: `0x${pseudoHex(`tx-${index}`, 40)}`,
-    blockHeight: status === 'SUCCESS' ? baseBlock : undefined,
-    blockTime: status === 'SUCCESS' ? time.add(7, 'second').format('YYYY-MM-DD HH:mm:ss') : undefined,
-    chainId: 'agri-chain-001',
-    confirmations:
-      status === 'SUCCESS' ? 6 + (index % 20) : status === 'PENDING' ? index % 6 : 0,
-    confirmThreshold: 6,
-    dataHash: pseudoHex(`hash-${index}`, 64),
-    signature: `MEUCIQ${pseudoHex(`sig-${index}`, 24)}...`,
-    anchorMethod,
-    status,
-    failReason: status === 'FAILED' ? '共识节点超时，未获得足额区块确认' : undefined,
-    submittedAt: time.format('YYYY-MM-DD HH:mm:ss'),
-    anchorAt: status === 'SUCCESS' ? time.add(7, 'second').format('YYYY-MM-DD HH:mm:ss') : undefined,
-    payload: {
-      存证编号: `CERT-${dateText}${String(183000 + index)}`,
-      业务类型: bizTypeName,
-      业务单号: `${bizNoPrefix[bizType] ?? 'PRD'}${dateText}${String(1001 + index).padStart(3, '0')}`,
-      关联溯源码: traceCode,
-      数据摘要: `${bizTypeName}批量数据 ${index + 1}`,
-    },
-  }
-}
-
-/** 原型 P28 表格前 5 行（逐行还原） */
-const PROTOTYPE_ROWS: BlockchainCertRecord[] = [
-  {
-    recordId: 'CERT-20260602220000',
-    certNo: 'CERT-20260602220000',
-    bizType: 'FARMING',
-    bizTypeName: '生产记录',
-    bizNo: 'PRD20260602001',
-    traceCode: 'AG010101202605150001',
-    bizSummary: '5月批量数据',
-    txHash: '0x3a2b1c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b',
-    blockHeight: 8234401,
-    blockTime: '2026-06-02 22:00:07',
-    chainId: 'agri-chain-001',
-    confirmations: 18,
-    confirmThreshold: 6,
-    dataHash: pseudoHex('hash-p0', 64),
-    signature: 'MEUCIQ3a2b1c4d5e6f7a8b9c0d1e2f3a4b...',
-    anchorMethod: '定时批量',
-    status: 'SUCCESS',
-    submittedAt: '2026-06-02 22:00:00',
-    anchorAt: '2026-06-02 22:00:07',
-    payload: { 数据摘要: '5月批量数据', 关联溯源码: 'AG010101202605150001' },
-  },
-  {
-    recordId: 'CERT-20260602183045',
-    certNo: 'CERT-20260602183045',
-    bizType: 'INSPECTION',
-    bizTypeName: '检测报告',
-    bizNo: 'INS20260515001',
-    traceCode: 'AG010101202605150001',
-    bizSummary: '农残检测',
-    txHash: '0x8a7d9f2e3b1c4a5d6e7f8a9b0c1d2e3f4a5b6c7d',
-    blockHeight: 8234398,
-    blockTime: '2026-06-02 18:30:52',
-    chainId: 'agri-chain-001',
-    confirmations: 15,
-    confirmThreshold: 6,
-    dataHash: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca4967412345678',
-    signature: 'MEUCIQDd8vJfK3Hh2N7Yx1bZ6Vk9N8a3mQfWjKHp+RxdYlVq...',
-    anchorMethod: '实时上链',
-    status: 'SUCCESS',
-    submittedAt: '2026-06-02 18:30:45',
-    anchorAt: '2026-06-02 18:30:52',
-    payload: {
-      检测编号: 'INS20260515001',
-      产品名称: '有机番茄',
-      批次号: 'BC20260515',
-      检测项目: ['农药残留', '重金属'],
-      检测结果: '合格',
-      检测机构: '中检集团',
-      质量等级: 'A级',
-      关联溯源码: 'AG010101202605150001',
-    },
-  },
-  {
-    recordId: 'CERT-20260602150000',
-    certNo: 'CERT-20260602150000',
-    bizType: 'INPUT',
-    bizTypeName: '投入品使用',
-    bizNo: 'INP20260602003',
-    traceCode: 'AG010101202605150002',
-    bizSummary: '黄瓜追肥',
-    txHash: '0x7f8e6d5c4b3a291807162534435261708192a3b',
-    blockHeight: 8234395,
-    blockTime: '2026-06-02 15:00:09',
-    chainId: 'agri-chain-001',
-    confirmations: 21,
-    confirmThreshold: 6,
-    dataHash: pseudoHex('hash-p2', 64),
-    signature: 'MEUCIQ7f8e6d5c4b3a2918071625344352617...',
-    anchorMethod: '实时上链',
-    status: 'SUCCESS',
-    submittedAt: '2026-06-02 15:00:00',
-    anchorAt: '2026-06-02 15:00:09',
-    payload: { 数据摘要: '黄瓜追肥', 关联溯源码: 'AG010101202605150002' },
-  },
-  {
-    recordId: 'CERT-20260603010000',
-    certNo: 'CERT-20260603010000',
-    bizType: 'INPUT',
-    bizTypeName: '投入品使用',
-    bizNo: 'INP20260603001',
-    traceCode: 'AG010101202605150003',
-    bizSummary: '辣椒用药',
-    txHash: undefined,
-    blockHeight: undefined,
-    blockTime: undefined,
-    chainId: 'agri-chain-001',
-    confirmations: 2,
-    confirmThreshold: 6,
-    dataHash: pseudoHex('hash-p3', 64),
-    signature: undefined,
-    anchorMethod: '实时上链',
-    status: 'PENDING',
-    submittedAt: '2026-06-03 01:00:00',
-    anchorAt: undefined,
-    payload: { 数据摘要: '辣椒用药', 关联溯源码: 'AG010101202605150003' },
-  },
-  {
-    recordId: 'CERT-20260602090000',
-    certNo: 'CERT-20260602090000',
-    bizType: 'FARMING',
-    bizTypeName: '生产记录',
-    bizNo: 'PRD20260602005',
-    traceCode: 'AG010101202605150002',
-    bizSummary: '除草记录',
-    txHash: undefined,
-    blockHeight: undefined,
-    blockTime: undefined,
-    chainId: 'agri-chain-001',
-    confirmations: 0,
-    confirmThreshold: 6,
-    dataHash: pseudoHex('hash-p4', 64),
-    signature: undefined,
-    anchorMethod: '手动上链',
-    status: 'FAILED',
-    failReason: '节点签名校验失败，业务数据已回滚',
-    submittedAt: '2026-06-02 09:00:00',
-    anchorAt: undefined,
-    payload: { 数据摘要: '除草记录', 关联溯源码: 'AG010101202605150002' },
-  },
-]
-
-/** 完整示例数据集（接口无数据时兜底，共 2,347 条） */
-const MOCK_RECORDS: BlockchainCertRecord[] = Array.from(
-  { length: MOCK_TOTAL_COUNT },
-  (_, index) => (index < PROTOTYPE_ROWS.length ? PROTOTYPE_ROWS[index] : buildMockRecord(index)),
-)
-
-/** 筛选条件 */
+/** 筛选条件：只保留后端 records 接口真正支持的参数 */
 interface FilterState {
-  /** 业务类型 */
-  bizType?: string
-  /** 存证状态 */
+  /** 存证状态 PENDING / SUCCESS / FAILED */
   status?: CertStatusCode
-  /** 时间范围 */
-  period?: string
-  /** 关键字：存证编号 / 交易哈希 / 溯源码 */
+  /** 关键字：后端仅按 biz_no（业务单号）模糊匹配 */
   keyword?: string
+}
+
+/** 批量验真结果 */
+interface BatchResult {
+  /** 存证记录号 */
+  recordId: string
+  /** 是否通过（仅来自后端真实返回） */
+  passed: boolean | null
+  /** 结论说明 */
+  detail: string
 }
 
 /**
@@ -364,41 +140,48 @@ function downloadFile(filename: string, content: string): void {
 }
 
 /**
- * 解析时间范围
+ * 把列表查询失败原因转成明示文案：区分「后端业务拒绝」「HTTP 非 200」「后端不可达」。
  *
- * @param period 时间范围编码
- * @param anchor 基准时间
- * @returns 起止日期
+ * @param error catch 到的未知错误
+ * @returns 失败文案
  */
-function resolveRange(
-  period: string | undefined,
-  anchor: Dayjs,
-): { startDate?: string; endDate?: string } {
-  if (!period) return {}
-  if (period === 'MONTH') {
-    return {
-      startDate: anchor.startOf('month').format('YYYY-MM-DD'),
-      endDate: anchor.endOf('month').format('YYYY-MM-DD'),
-    }
+function describeError(error: unknown): string {
+  const rawMessage = error instanceof Error ? error.message : String(error)
+  const apiError = asApiRequestError(error)
+  if (apiError && typeof apiError.bizCode === 'number') {
+    return `后端业务码 ${apiError.bizCode}（HTTP ${apiError.httpStatus ?? 200}）：${rawMessage}`
   }
-  if (period === 'LAST_MONTH') {
-    const last = anchor.subtract(1, 'month')
-    return {
-      startDate: last.startOf('month').format('YYYY-MM-DD'),
-      endDate: last.endOf('month').format('YYYY-MM-DD'),
-    }
+  const status = httpStatusOf(error)
+  if (status > 0) {
+    return `HTTP ${status}：${rawMessage}`
   }
-  return {
-    startDate: anchor.startOf('month').subtract((anchor.month() % 3), 'month').format('YYYY-MM-DD'),
-    endDate: anchor.endOf('month').format('YYYY-MM-DD'),
+  return `网络异常或超时：${rawMessage}`
+}
+
+/**
+ * 把验真请求失败转成明示的失败文案。
+ *
+ * @param error catch 到的未知错误
+ * @returns 失败文案（不含任何本地判定结论）
+ */
+function describeFailure(error: unknown): string {
+  const rawMessage = error instanceof Error ? error.message : String(error)
+  const apiError = asApiRequestError(error)
+  if (apiError && typeof apiError.bizCode === 'number') {
+    return `验真接口返回业务失败（业务码 ${apiError.bizCode}）：${rawMessage}`
   }
+  const status = httpStatusOf(error)
+  if (status > 0) {
+    return `验真接口返回 HTTP ${status}：${rawMessage}`
+  }
+  return `无法连接验真接口（网络异常或超时）：${rawMessage}`
 }
 
 /**
  * 存证记录列表（原型 P28）
  *
- * 业务职责：存证流水查询，支持类型 / 时间 / 状态 / 溯源码筛选，
- * 支持勾选后批量验证与导出。
+ * 业务职责：存证流水查询（后端支持 status 与 biz_no 关键字），
+ * 支持勾选后批量验真（后端只支持按交易哈希验真）与导出。
  *
  * @returns 页面内容
  */
@@ -412,9 +195,7 @@ export default function BlockchainRecords(): JSX.Element {
   const [filters, setFilters] = useState<FilterState>(() => {
     const status = searchParams.get('status')
     return {
-      bizType: undefined,
       status: status === 'PENDING' || status === 'SUCCESS' || status === 'FAILED' ? status : undefined,
-      period: undefined,
       keyword: undefined,
     }
   })
@@ -423,50 +204,22 @@ export default function BlockchainRecords(): JSX.Element {
   const [selectedKeys, setSelectedKeys] = useState<string[]>([])
   const [batchOpen, setBatchOpen] = useState<boolean>(false)
   const [batchLoading, setBatchLoading] = useState<boolean>(false)
-  const [batchResults, setBatchResults] = useState<
-    { certNo: string; passed: boolean; detail: string }[]
-  >([])
+  const [batchResults, setBatchResults] = useState<BatchResult[]>([])
 
-  /** 远程数据 */
-  const { data, isLoading, isError, error } = useQuery({
+  /** 远程数据：只用后端真实返回，不做任何示例兜底 */
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['blockchain-records', farmId, filters, pageNum, pageSize],
     queryFn: () =>
       listCertRecords({
         pageNum,
         pageSize,
-        bizType: filters.bizType,
         status: filters.status,
         keyword: filters.keyword,
-        ...resolveRange(filters.period, dayjs()),
       }),
   })
 
-  const remoteRows: BlockchainCertRecord[] = data?.list ?? []
-  const usingMock: boolean = !isLoading && (isError || remoteRows.length === 0)
-
-  /** 最终渲染数据：接口数据优先，否则使用示例数据（并按条件本地筛选分页） */
-  const { rows, total } = useMemo<{ rows: BlockchainCertRecord[]; total: number }>(() => {
-    if (!usingMock) {
-      return { rows: remoteRows, total: data?.total ?? 0 }
-    }
-    const range = resolveRange(filters.period, MOCK_BASE)
-    const keyword = filters.keyword?.trim().toLowerCase() ?? ''
-    const filtered = MOCK_RECORDS.filter((item) => {
-      if (filters.bizType && item.bizType !== filters.bizType) return false
-      if (filters.status && item.status !== filters.status) return false
-      if (range.startDate && range.endDate) {
-        const day = (item.submittedAt ?? '').slice(0, 10)
-        if (!day || day < range.startDate || day > range.endDate) return false
-      }
-      if (keyword) {
-        const haystack = `${item.certNo} ${item.txHash ?? ''} ${item.traceCode ?? ''} ${item.bizNo ?? ''}`.toLowerCase()
-        if (!haystack.includes(keyword)) return false
-      }
-      return true
-    })
-    const start = (pageNum - 1) * pageSize
-    return { rows: filtered.slice(start, start + pageSize), total: filtered.length }
-  }, [usingMock, remoteRows, data?.total, filters, pageNum, pageSize, isLoading, isError])
+  const rows: BlockchainBizRecord[] = data?.list ?? []
+  const total: number = data?.total ?? 0
 
   /** 执行筛选 */
   const handleSearch = (): void => {
@@ -477,17 +230,22 @@ export default function BlockchainRecords(): JSX.Element {
 
   /** 重置筛选 */
   const handleReset = (): void => {
-    const empty: FilterState = { bizType: undefined, status: undefined, period: undefined, keyword: undefined }
+    const empty: FilterState = { status: undefined, keyword: undefined }
     setDraft(empty)
     setFilters(empty)
     setPageNum(1)
     setSelectedKeys([])
   }
 
-  /** 批量验证 */
+  /**
+   * 批量验真：只调真接口 GET /blockchain/verify/{txHash}。
+   *
+   * 失败时 passed 记 null（未取得结论），detail 写失败原因，
+   * **不**做 confirmations >= 阈值 之类的本地判定。
+   */
   const handleBatchVerify = async (): Promise<void> => {
     const targets = rows.filter(
-      (item) => selectedKeys.includes(item.recordId) && Boolean(item.txHash),
+      (item) => selectedKeys.includes(item.recordId ?? '') && Boolean(item.txHash),
     )
     if (targets.length === 0) {
       message.warning('请勾选至少一条已上链（含交易哈希）的存证记录')
@@ -495,65 +253,68 @@ export default function BlockchainRecords(): JSX.Element {
     }
     setBatchOpen(true)
     setBatchLoading(true)
-    const results = await Promise.all(
-      targets.map(async (item) => {
+    const results: BatchResult[] = await Promise.all(
+      targets.map(async (item): Promise<BatchResult> => {
+        const txHash = item.txHash as string
+        const recordId = item.recordId ?? '-'
         try {
-          const res: unknown = await verifyCertificate({ txHash: item.txHash as string })
-          const result = res as CertificateVerifyResult
-          if (result && typeof result === 'object' && typeof result.passed === 'boolean') {
+          const raw: unknown = await verifyChain(encodeURIComponent(txHash))
+          if (typeof raw === 'boolean') {
             return {
-              certNo: item.certNo,
-              passed: result.passed,
-              detail: result.summary,
+              recordId,
+              passed: raw,
+              detail: raw
+                ? '后端验真返回 true：存在该交易哈希且状态为 SUCCESS 的存证记录'
+                : '后端验真返回 false：未检索到该交易哈希对应的成功存证记录',
             }
           }
           return {
-            certNo: item.certNo,
-            passed: Boolean(res),
-            detail: `链上验真返回：${String(res)}（确认数 ${item.confirmations ?? 0}）`,
+            recordId,
+            passed: null,
+            detail: `未取得验真结论：后端返回了非布尔值（${raw === null ? 'null' : typeof raw}）`,
           }
-        } catch {
-          const passed = (item.confirmations ?? 0) >= (item.confirmThreshold ?? 6)
+        } catch (err) {
           return {
-            certNo: item.certNo,
-            passed,
-            detail: passed
-              ? `接口不可用，按链上确认数 ${item.confirmations ?? 0} 判定为通过（示例结论）`
-              : `接口不可用，确认数 ${item.confirmations ?? 0} 未达阈值 ${item.confirmThreshold ?? 6}`,
+            recordId,
+            passed: null,
+            detail: `未取得验真结论：${describeFailure(err)}`,
           }
         }
       }),
     )
     setBatchResults(results)
     setBatchLoading(false)
+    const okCount = results.filter((item) => item.passed === true).length
+    const failCount = results.filter((item) => item.passed === null).length
+    message.info(
+      `批量验真完成：通过 ${okCount} 条、未通过 ${results.length - okCount - failCount} 条、未取得结论 ${failCount} 条`,
+    )
   }
 
-  /** 导出当前筛选结果为 CSV */
+  /** 导出当前页结果为 CSV（只导出后端真实字段） */
   const handleExport = (): void => {
     const header = [
-      '存证编号',
-      '存证时间',
-      '存证类型',
-      '数据摘要',
+      '存证记录号',
+      '业务类型',
+      '业务单号',
+      '关联批次',
       '关联溯源码',
       '交易哈希',
-      '上链方式',
       '区块高度',
-      '确认数',
+      '上链时间',
       '状态',
     ]
     const body = rows.map((item) =>
       [
-        item.certNo,
-        item.anchorAt ?? item.submittedAt ?? '',
-        item.bizTypeName ?? '',
-        item.bizSummary ?? '',
+        item.recordId ?? '',
+        BIZ_TYPE_NAME[item.bizType ?? ''] ?? item.bizType ?? '',
+        item.bizNo ?? '',
+        item.batchId ?? '',
         item.traceCode ?? '',
         item.txHash ?? '',
-        item.anchorMethod ?? '',
         item.blockHeight ?? '',
-        item.confirmations ?? '',
-        item.status === 'SUCCESS' ? '已确认' : item.status === 'PENDING' ? '上链中' : '上链失败',
+        item.anchorAt ?? '',
+        item.status === 'SUCCESS' ? '已上链' : item.status === 'PENDING' ? '上链中' : '上链失败',
       ]
         .map((cell) => `"${String(cell).replace(/"/g, '""')}"`)
         .join(','),
@@ -562,31 +323,30 @@ export default function BlockchainRecords(): JSX.Element {
     message.success(`已导出 ${rows.length} 条存证记录`)
   }
 
-  /** 表格列定义 */
-  const columns: ProColumns<BlockchainCertRecord>[] = [
+  /** 表格列定义：全部为后端 BlockchainRecordEntity 真实字段 */
+  const columns: ProColumns<BlockchainBizRecord>[] = [
     {
-      title: '存证编号',
-      dataIndex: 'certNo',
+      title: '存证记录号',
+      dataIndex: 'recordId',
       width: 190,
       render: (_, record) => (
-        <Typography.Text style={MONO_STYLE} copyable={{ text: record.certNo, tooltips: ['复制编号', '已复制'] }}>
-          {record.certNo}
+        <Typography.Text style={MONO_STYLE} copyable={{ text: record.recordId, tooltips: ['复制编号', '已复制'] }}>
+          {record.recordId ?? '-'}
         </Typography.Text>
       ),
     },
     {
-      title: '存证时间',
-      dataIndex: 'anchorAt',
-      width: 160,
-      render: (_, record) => record.anchorAt ?? record.submittedAt ?? '-',
-    },
-    {
-      title: '存证类型',
-      dataIndex: 'bizTypeName',
+      title: '业务类型',
+      dataIndex: 'bizType',
       width: 110,
-      render: (_, record) => <Tag color="geekblue">{record.bizTypeName ?? '-'}</Tag>,
+      render: (_, record) => (
+        <Tag color="geekblue">
+          {BIZ_TYPE_NAME[record.bizType ?? ''] ?? record.bizType ?? '-'}
+        </Tag>
+      ),
     },
-    { title: '数据摘要', dataIndex: 'bizSummary', width: 160, ellipsis: true },
+    { title: '业务单号', dataIndex: 'bizNo', width: 160, ellipsis: true },
+    { title: '关联批次', dataIndex: 'batchId', width: 160, ellipsis: true },
     {
       title: '关联溯源码',
       dataIndex: 'traceCode',
@@ -615,34 +375,26 @@ export default function BlockchainRecords(): JSX.Element {
             />
           </Space>
         ) : (
-          <Typography.Text type="secondary">-</Typography.Text>
+          <Typography.Text type="secondary">—（未上链）</Typography.Text>
         ),
     },
-    { title: '上链方式', dataIndex: 'anchorMethod', width: 100 },
     {
       title: '区块高度',
       dataIndex: 'blockHeight',
-      width: 120,
+      width: 130,
       render: (_, record) =>
-        record.blockHeight ? (
-          <span style={MONO_STYLE}>{record.blockHeight.toLocaleString('en-US')}</span>
-        ) : (
+        record.blockHeight === null || record.blockHeight === undefined ? (
           <Typography.Text type="secondary">-</Typography.Text>
+        ) : (
+          // 后端 blockHeight 运行时是字符串，必须先 toNumber 再格式化
+          <span style={MONO_STYLE}>{toNumber(record.blockHeight, 0).toLocaleString('en-US')}</span>
         ),
     },
     {
-      title: '确认数',
-      dataIndex: 'confirmations',
-      width: 110,
-      render: (_, record) => {
-        const value = record.confirmations ?? 0
-        const threshold = record.confirmThreshold ?? 6
-        return (
-          <Typography.Text type={value >= threshold ? 'success' : 'warning'}>
-            {value} / ≥{threshold}
-          </Typography.Text>
-        )
-      },
+      title: '上链时间',
+      dataIndex: 'anchorAt',
+      width: 160,
+      render: (_, record) => record.anchorAt ?? '-',
     },
     {
       title: '状态',
@@ -652,7 +404,7 @@ export default function BlockchainRecords(): JSX.Element {
         if (record.status === 'SUCCESS') {
           return (
             <Tag color="success" icon={<CheckCircleFilled />}>
-              ✅已确认
+              ✅已上链
             </Tag>
           )
         }
@@ -684,17 +436,24 @@ export default function BlockchainRecords(): JSX.Element {
           >
             详情
           </Button>
-          <Button
-            type="link"
-            size="small"
-            onClick={() =>
-              navigate(
-                `/production/blockchain/verify?type=tx&value=${encodeURIComponent(record.txHash ?? record.certNo)}`,
-              )
-            }
-          >
-            验证
-          </Button>
+          {record.txHash ? (
+            <Button
+              type="link"
+              size="small"
+              onClick={() =>
+                navigate(
+                  `/production/blockchain/verify?type=tx&value=${encodeURIComponent(record.txHash as string)}`,
+                )
+              }
+            >
+              验证
+            </Button>
+          ) : (
+            // 后端验真只接受 txHash：无哈希时不给入口，避免点进去必然失败
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              未上链，不可验真
+            </Typography.Text>
+          )}
         </Space>
       ),
     },
@@ -710,7 +469,7 @@ export default function BlockchainRecords(): JSX.Element {
             disabled={selectedKeys.length === 0}
             onClick={() => void handleBatchVerify()}
           >
-            批量验证
+            批量验真
           </Button>
           <Button icon={<ExportOutlined />} onClick={handleExport}>
             导出
@@ -721,35 +480,38 @@ export default function BlockchainRecords(): JSX.Element {
       <Space direction="vertical" size={12} style={{ width: '100%' }}>
         {isError && (
           <Alert
-            type="warning"
+            type="error"
             showIcon
-            message="存证记录接口暂不可用，当前展示原型示例数据"
-            description={(error as Error | undefined)?.message ?? '请检查后端服务 /api/v1/production/blockchain/records'}
+            message="存证记录接口调用失败，未取得任何记录"
+            description={
+              <Space direction="vertical" size={4}>
+                <Typography.Text>
+                  {error ? describeError(error) : '请检查后端服务 /api/v1/production/blockchain/records'}
+                </Typography.Text>
+                <Typography.Text type="secondary">
+                  此处不会用占位数据顶替 —— 列表为空即代表未取得，不代表后端没有存证。
+                </Typography.Text>
+              </Space>
+            }
+            action={
+              <Button size="small" icon={<ReloadOutlined />} onClick={() => void refetch()}>
+                重试
+              </Button>
+            }
+          />
+        )}
+
+        {!isError && !isLoading && total === 0 && (
+          <Alert
+            type="info"
+            showIcon
+            message="后端当前没有存证记录"
+            description="接口调用成功但返回 0 条。这是真实结论，不是接口故障 —— 可先在「区块链存证总览」页用「手动上链」创建一条存证。"
           />
         )}
 
         <Row gutter={[12, 12]}>
           <Col xs={24} sm={12} md={6}>
-            <Select
-              allowClear
-              style={{ width: '100%' }}
-              placeholder="全部类型"
-              value={draft.bizType}
-              options={BIZ_TYPE_OPTIONS}
-              onChange={(value) => setDraft((prev) => ({ ...prev, bizType: value }))}
-            />
-          </Col>
-          <Col xs={24} sm={12} md={5}>
-            <Select
-              allowClear
-              style={{ width: '100%' }}
-              placeholder="时间范围"
-              value={draft.period}
-              options={PERIOD_OPTIONS}
-              onChange={(value) => setDraft((prev) => ({ ...prev, period: value }))}
-            />
-          </Col>
-          <Col xs={24} sm={12} md={5}>
             <Select
               allowClear
               style={{ width: '100%' }}
@@ -759,10 +521,10 @@ export default function BlockchainRecords(): JSX.Element {
               onChange={(value) => setDraft((prev) => ({ ...prev, status: value }))}
             />
           </Col>
-          <Col xs={24} sm={12} md={8}>
+          <Col xs={24} sm={12} md={10}>
             <Input
               allowClear
-              placeholder="搜索存证编号 / 交易哈希 / 溯源码..."
+              placeholder="业务单号模糊匹配（后端 keyword 只匹配 biz_no）"
               value={draft.keyword}
               onChange={(event) => setDraft((prev) => ({ ...prev, keyword: event.target.value }))}
               onPressEnter={handleSearch}
@@ -775,14 +537,20 @@ export default function BlockchainRecords(): JSX.Element {
               </Button>
               <Button onClick={handleReset}>重置</Button>
               <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                共 {total.toLocaleString('en-US')} 条
-                {usingMock ? '（示例数据）' : ''}
+                共 {total.toLocaleString('en-US')} 条（后端真实返回）
               </Typography.Text>
             </Space>
           </Col>
         </Row>
 
-        <ProTable<BlockchainCertRecord>
+        <Alert
+          type="info"
+          showIcon
+          message="筛选与字段口径说明"
+          description="后端 GET /blockchain/records 只接收 status 与 keyword（仅按 biz_no 模糊匹配）。业务类型筛选、按时间范围筛选后端不支持（实测传参被静默忽略），已从筛选区移除，避免「筛了不生效」。表格同样只展示后端真实字段：确认数、上链方式、存证编号（certNo）、数字签名、链ID 后端均不返回，故不展示。"
+        />
+
+        <ProTable<BlockchainBizRecord>
           rowKey="recordId"
           size="small"
           columns={columns}
@@ -807,17 +575,17 @@ export default function BlockchainRecords(): JSX.Element {
               setPageSize(nextSize)
             },
           }}
-          locale={{ emptyText: '暂无存证记录，试试调整筛选条件' }}
+          locale={{ emptyText: '后端当前没有存证记录（接口成功返回 0 条）' }}
         />
 
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          已选 {selectedKeys.length} 条 · 上链方式取值：定时批量 / 实时上链 / 手动上链 · 链ID：
-          <span style={MONO_STYLE}>agri-chain-001</span>
+          已选 {selectedKeys.length} 条 · 批量验真仅支持「已上链（含交易哈希）」的记录 ——
+          后端验真端点只接受 txHash，无哈希的记录不参与。
         </Typography.Text>
       </Space>
 
       <Modal
-        title="批量验证结果"
+        title="批量验真结果"
         open={batchOpen}
         onCancel={() => setBatchOpen(false)}
         footer={[
@@ -832,17 +600,20 @@ export default function BlockchainRecords(): JSX.Element {
           {!batchLoading &&
             batchResults.map((item) => (
               <Alert
-                key={item.certNo}
-                type={item.passed ? 'success' : 'error'}
+                key={item.recordId}
+                type={item.passed === null ? 'warning' : item.passed ? 'success' : 'error'}
                 showIcon
                 message={
-                  <span style={MONO_STYLE}>{item.certNo} {item.passed ? '验证通过' : '验证不通过'}</span>
+                  <span style={MONO_STYLE}>
+                    {item.recordId}{' '}
+                    {item.passed === null ? '未取得验真结论' : item.passed ? '验真通过' : '验真未通过'}
+                  </span>
                 }
                 description={item.detail}
               />
             ))}
           {!batchLoading && batchResults.length === 0 && (
-            <Typography.Text type="secondary">无验证结果</Typography.Text>
+            <Typography.Text type="secondary">无验真结果</Typography.Text>
           )}
         </Space>
       </Modal>

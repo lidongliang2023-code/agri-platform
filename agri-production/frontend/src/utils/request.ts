@@ -65,7 +65,7 @@ export interface PageData<T> {
  * @param fallback 无法解析时使用的兜底值
  * @returns 解析后的有限数字
  */
-function toNumber(value: unknown, fallback: number): number {
+export function toNumber(value: unknown, fallback: number): number {
   if (typeof value === 'number') {
     return Number.isFinite(value) ? value : fallback
   }

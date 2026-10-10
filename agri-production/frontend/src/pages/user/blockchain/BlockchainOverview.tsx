@@ -3,6 +3,20 @@
  * 路由路径：/production/blockchain
  * 所属模块：区块链增强
  * 原型 pageId：blockchain（P27）
+ *
+ * ⚠️ 真数据约束（本页此前必现造假，已修复，请勿回退）
+ *
+ * 后端 `GET /blockchain/overview` 只返回 `{total, success, failed}`（且三个值是**字符串**），
+ * 不返回 monthRecords / monthGrowth / pendingRecords / verifyPassRate / typeStats / health /
+ * recentRecords / pendingQueue。旧版用 `MOCK_OVERVIEW` 兜底，且 `isValidOverview()` 只认
+ * `totalRecords` —— 后端根本没有这个字段，导致**接口完全正常时也 100% 展示示例数据**。
+ *
+ * 现在：
+ * 1. 指标卡只消费后端真实返回的 total / success / failed（先 toNumber 再渲染与运算）；
+ * 2. 「存证类型分布」「最近存证记录」改用**真实的** GET /blockchain/records 数据本地统计，
+ *    并明示统计口径；
+ * 3. 后端完全没有提供的指标（链上健康度、待上链队列）改为明示「后端暂未提供」，不填任何值；
+ * 4. 接口失败只渲染错误态，不渲染任何示例数据。
  */
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -12,10 +26,9 @@ import {
   Button,
   Card,
   Col,
+  Empty,
   Form,
   Input,
-  List,
-  message,
   Modal,
   Row,
   Select,
@@ -25,6 +38,7 @@ import {
   Table,
   Tag,
   Typography,
+  message,
 } from 'antd'
 import {
   ArrowRightOutlined,
@@ -32,26 +46,20 @@ import {
   ClockCircleOutlined,
   CloudUploadOutlined,
   LinkOutlined,
-  SafetyCertificateOutlined,
+  ReloadOutlined,
   SettingOutlined,
-  ThunderboltFilled,
 } from '@ant-design/icons'
 import ReactECharts from 'echarts-for-react'
 import type { EChartsOption } from 'echarts'
 import type { ColumnsType } from 'antd/es/table'
-import { anchorRecord, getChainOverview } from '@/api/blockchain'
-import type {
-  BlockchainChainOverview,
-  ChainRecentRecord,
-  ChainTypeStat,
-} from '@/types'
+import {
+  anchorRecord,
+  getChainOverview,
+  listCertRecords,
+} from '@/api/blockchain'
+import type { BlockchainBizRecord } from '@/types'
+import { asApiRequestError, httpStatusOf, toNumber } from '@/utils/request'
 import useFarmStore from '@/store/farm'
-
-/** 等宽字体样式：链上哈希、签名统一使用 */
-const MONO_STYLE: React.CSSProperties = {
-  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, "Courier New", monospace',
-  wordBreak: 'break-all',
-}
 
 /** 存证设置本地缓存键 */
 const SETTINGS_KEY = 'agri_bc_settings'
@@ -73,7 +81,18 @@ const DEFAULT_SETTINGS: ChainSettings = {
   batchTime: '03:30',
 }
 
-/** 业务类型选项（对齐原型 P27 类型分布） */
+/** 业务类型编码 → 名称（后端 bizType 实测取值：TRACE / INSPECTION / HARVEST） */
+const BIZ_TYPE_NAME: Record<string, string> = {
+  FARMING: '生产记录',
+  INSPECTION: '检测报告',
+  INPUT: '投入品使用',
+  HARVEST: '采收入库',
+  CIRCULATION: '流通记录',
+  IOT: 'IoT数据',
+  TRACE: '溯源记录',
+}
+
+/** 业务类型选项（手动上链表单） */
 const BIZ_TYPE_OPTIONS = [
   { value: 'FARMING', label: '生产记录' },
   { value: 'INSPECTION', label: '检测报告' },
@@ -83,45 +102,8 @@ const BIZ_TYPE_OPTIONS = [
   { value: 'IOT', label: 'IoT数据' },
 ]
 
-/**
- * 原型示例数据（P27）：接口无数据时兜底渲染，保证页面高保真可交互
- */
-const MOCK_OVERVIEW: BlockchainChainOverview = {
-  totalRecords: 2347,
-  monthRecords: 186,
-  monthGrowth: 28,
-  pendingRecords: 23,
-  verifyPassRate: 99.7,
-  verifyPassGrowth: 0.2,
-  typeStats: [
-    { name: '生产记录', value: 1024 },
-    { name: '检测报告', value: 456 },
-    { name: '投入品使用', value: 389 },
-    { name: '采收入库', value: 278 },
-    { name: '流通记录', value: 120 },
-    { name: 'IoT数据', value: 80 },
-  ],
-  health: {
-    status: '正常运行',
-    blockHeight: 8234567,
-    latestBlockTime: '2026-06-03 03:25:18',
-    onlineNodes: '5/5',
-    integrityCheck: '最近1000条存证全部通过',
-    integrityPassed: true,
-    confirmRate: 99.0,
-  },
-  recentRecords: [
-    { time: '06-02 22:00', type: '生产记录', summary: '5月生产数据批量上链', status: 'SUCCESS' },
-    { time: '06-02 18:30', type: '检测报告', summary: '番茄农残检测INS0531', status: 'SUCCESS' },
-    { time: '06-02 15:00', type: '投入品使用', summary: '黄瓜追肥记录3条', status: 'SUCCESS' },
-    { time: '06-02 10:20', type: '采收入库', summary: '番茄采收500kg', status: 'SUCCESS' },
-  ],
-  pendingQueue: [
-    { title: '06-03投入品使用记录', count: 8, expectTime: '预计03:30上链' },
-    { title: '06-03农事任务记录', count: 12, expectTime: '预计03:30上链' },
-    { title: '06-03IoT环境数据', count: 3, expectTime: '预计04:00上链' },
-  ],
-}
+/** 类型分布取数上限：后端 records 是分页接口，这里一次性取一批做本地分组统计 */
+const STAT_SCAN_SIZE = 500
 
 /**
  * 读取本地存证设置
@@ -138,19 +120,42 @@ function readSettings(): ChainSettings {
 }
 
 /**
- * 判断总览数据是否为有效业务数据（接口返回空对象时视为无数据）
- * @param data 接口返回的总览数据
- * @returns 是否有效
+ * 把查询失败原因转成明示文案：区分「后端业务拒绝」「HTTP 非 200」「后端不可达」，
+ * 避免把所有故障笼统说成「接口暂不可用」。
+ *
+ * @param error catch 到的未知错误
+ * @returns 失败文案
  */
-function isValidOverview(data: BlockchainChainOverview | undefined): boolean {
-  return Boolean(data && typeof data.totalRecords === 'number' && data.totalRecords > 0)
+function describeError(error: unknown): string {
+  const rawMessage = error instanceof Error ? error.message : String(error)
+  const apiError = asApiRequestError(error)
+  if (apiError && typeof apiError.bizCode === 'number') {
+    return `后端业务码 ${apiError.bizCode}（HTTP ${apiError.httpStatus ?? 200}）：${rawMessage}`
+  }
+  const status = httpStatusOf(error)
+  if (status > 0) {
+    return `HTTP ${status}：${rawMessage}`
+  }
+  return `网络异常或超时：${rawMessage}`
+}
+
+/** 最近存证记录行（由真实存证记录映射而来） */
+interface RecentRow {
+  /** 上链时间；未上链时展示创建时间占位 */
+  time: string
+  /** 业务类型名称 */
+  type: string
+  /** 业务单号 */
+  summary: string
+  /** 存证状态 */
+  status: string
 }
 
 /**
  * 区块链存证总览（原型 P27）
  *
- * 业务职责：展示存证总量、本月上链、待上链、验证通过率四项指标，
- * 存证类型分布饼图、链上健康度、最近存证记录、待上链队列与验证工具入口。
+ * 业务职责：展示后端真实提供的存证总量 / 上链成功 / 上链失败三项指标，
+ * 用真实存证记录统计类型分布与最近存证，并对后端未提供的能力做明示说明。
  *
  * @returns 页面内容
  */
@@ -169,16 +174,54 @@ export default function BlockchainOverview(): JSX.Element {
   }>()
   const [settingsForm] = Form.useForm<ChainSettings>()
 
-  /** 总览数据：接口优先，无数据或异常时兜底原型示例数据 */
-  const { data, isLoading, isError, error } = useQuery<BlockchainChainOverview>({
+  /** 总览统计：后端真实形状 {total, success, failed}（值可能是字符串） */
+  const overviewQuery = useQuery({
     queryKey: ['blockchain-overview', farmId],
     queryFn: () => getChainOverview(),
   })
 
-  const overview: BlockchainChainOverview = isValidOverview(data)
-    ? (data as BlockchainChainOverview)
-    : MOCK_OVERVIEW
-  const usingMock: boolean = !isValidOverview(data)
+  /** 真实存证记录：用于类型分布与最近存证（后端 overview 不提供这两项） */
+  const recordsQuery = useQuery({
+    queryKey: ['blockchain-overview-records', farmId],
+    queryFn: () => listCertRecords({ pageNum: 1, pageSize: STAT_SCAN_SIZE }),
+  })
+
+  const rawStat = overviewQuery.data
+  const total = toNumber(rawStat?.total, 0)
+  const success = toNumber(rawStat?.success, 0)
+  const failed = toNumber(rawStat?.failed, 0)
+  /** 未成功条数：由三个真实计数推导（total − success − failed），不是估算 */
+  const notSuccess = total - success - failed
+
+  const allRecords: BlockchainBizRecord[] = recordsQuery.data?.list ?? []
+
+  /** 类型分布：按 bizType 对真实记录分组计数 */
+  const typeStats = useMemo<{ name: string; value: number }[]>(() => {
+    const counter = new Map<string, number>()
+    allRecords.forEach((item) => {
+      const key = item.bizType ?? 'UNKNOWN'
+      counter.set(key, (counter.get(key) ?? 0) + 1)
+    })
+    return Array.from(counter.entries())
+      .map(([code, value]) => ({ name: BIZ_TYPE_NAME[code] ?? code, value }))
+      .sort((a, b) => b.value - a.value)
+  }, [allRecords])
+
+  /** 最近存证记录：按上链时间倒序取前 5 条真实记录 */
+  const recentRows = useMemo<RecentRow[]>(
+    () =>
+      allRecords
+        .slice()
+        .sort((a, b) => String(b.anchorAt ?? b.createdAt ?? '').localeCompare(String(a.anchorAt ?? a.createdAt ?? '')))
+        .slice(0, 5)
+        .map((item) => ({
+          time: String(item.anchorAt ?? item.createdAt ?? '-').slice(5, 16),
+          type: BIZ_TYPE_NAME[item.bizType ?? ''] ?? item.bizType ?? '-',
+          summary: item.bizNo ?? '-',
+          status: item.status ?? '-',
+        })),
+    [allRecords],
+  )
 
   /** 手动上链 */
   const anchorMutation = useMutation({
@@ -189,32 +232,18 @@ export default function BlockchainOverview(): JSX.Element {
       setAnchorOpen(false)
       anchorForm.resetFields()
       void queryClient.invalidateQueries({ queryKey: ['blockchain-overview'] })
+      void queryClient.invalidateQueries({ queryKey: ['blockchain-overview-records'] })
       void queryClient.invalidateQueries({ queryKey: ['blockchain-records'] })
     },
     onError: (err: Error) => {
-      message.warning(`提交上链失败：${err.message}（已按本地模式记录）`)
-      setAnchorOpen(false)
-      anchorForm.resetFields()
-    },
-  })
-
-  /** 立即上链（处理待上链队列） */
-  const flushMutation = useMutation({
-    mutationFn: () =>
-      anchorRecord({ bizType: 'BATCH', bizNo: `PENDING-${Date.now()}`, bizSummary: '待上链队列批量上链' }),
-    onSuccess: () => {
-      message.success(`已触发 ${overview.pendingRecords} 条待上链数据上链`)
-      void queryClient.invalidateQueries({ queryKey: ['blockchain-overview'] })
-    },
-    onError: (err: Error) => {
-      message.warning(`批量上链失败：${err.message}`)
+      // 写操作失败就是失败，不允许「已按本地模式记录」这类假成功话术
+      message.error(`提交上链失败，未写入任何存证：${err.message}`)
     },
   })
 
   /** 存证类型分布饼图配置 */
-  const pieOption = useMemo<EChartsOption>(() => {
-    const stats: ChainTypeStat[] = overview.typeStats ?? []
-    return {
+  const pieOption = useMemo<EChartsOption>(
+    () => ({
       tooltip: { trigger: 'item', formatter: '{b}：{c} 条（{d}%）' },
       legend: { bottom: 0, left: 'center', itemWidth: 12, itemHeight: 8 },
       color: ['#13a05a', '#2f7ed8', '#f6a623', '#8b5cf6', '#ef5350', '#26c6da'],
@@ -227,17 +256,18 @@ export default function BlockchainOverview(): JSX.Element {
           avoidLabelOverlap: true,
           itemStyle: { borderRadius: 6, borderColor: '#ffffff', borderWidth: 2 },
           label: { formatter: '{b}\n{c} 条', fontSize: 12 },
-          data: stats.map((item) => ({ name: item.name, value: item.value })),
+          data: typeStats.map((item) => ({ name: item.name, value: item.value })),
         },
       ],
-    }
-  }, [overview.typeStats])
+    }),
+    [typeStats],
+  )
 
   /** 最近存证记录列定义 */
-  const recentColumns: ColumnsType<ChainRecentRecord> = [
+  const recentColumns: ColumnsType<RecentRow> = [
     { title: '时间', dataIndex: 'time', width: 110 },
     { title: '类型', dataIndex: 'type', width: 110 },
-    { title: '摘要', dataIndex: 'summary' },
+    { title: '业务单号', dataIndex: 'summary' },
     {
       title: '状态',
       dataIndex: 'status',
@@ -277,14 +307,63 @@ export default function BlockchainOverview(): JSX.Element {
     setSettingsOpen(false)
   }
 
+  const overviewError = overviewQuery.isError
+  const recordsError = recordsQuery.isError
+
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      {isError && (
+      {overviewError && (
         <Alert
-          type="warning"
+          type="error"
           showIcon
-          message="链上总览接口暂不可用，当前展示原型示例数据"
-          description={(error as Error | undefined)?.message ?? '请检查后端服务 /api/v1/production/blockchain/overview'}
+          message="存证总览接口调用失败，未取得任何统计数据"
+          description={
+            <Space direction="vertical" size={4}>
+              <Typography.Text>
+                {overviewQuery.error
+                  ? describeError(overviewQuery.error)
+                  : '请检查后端服务 /api/v1/production/blockchain/overview'}
+              </Typography.Text>
+              <Typography.Text type="secondary">
+                此处不会用占位数据顶替 —— 统计数字显示为「—」即代表未取得，不代表 0。
+              </Typography.Text>
+            </Space>
+          }
+          action={
+            <Button
+              size="small"
+              icon={<ReloadOutlined />}
+              onClick={() => void overviewQuery.refetch()}
+            >
+              重试
+            </Button>
+          }
+        />
+      )}
+
+      {recordsError && (
+        <Alert
+          type="error"
+          showIcon
+          message="存证记录接口调用失败，类型分布与最近存证无法统计"
+          description={
+            <Space direction="vertical" size={4}>
+              <Typography.Text>
+                {recordsQuery.error
+                  ? describeError(recordsQuery.error)
+                  : '请检查后端服务 /api/v1/production/blockchain/records'}
+              </Typography.Text>
+            </Space>
+          }
+          action={
+            <Button
+              size="small"
+              icon={<ReloadOutlined />}
+              onClick={() => void recordsQuery.refetch()}
+            >
+              重试
+            </Button>
+          }
         />
       )}
 
@@ -295,7 +374,7 @@ export default function BlockchainOverview(): JSX.Element {
             <span>区块链存证总览</span>
           </Space>
         }
-        loading={isLoading && !data}
+        loading={overviewQuery.isLoading && !overviewQuery.data}
         extra={
           <Space>
             <Button
@@ -316,7 +395,7 @@ export default function BlockchainOverview(): JSX.Element {
             <Card size="small">
               <Statistic
                 title="存证总数"
-                value={overview.totalRecords}
+                value={overviewError ? '—' : total}
                 suffix="条"
                 valueStyle={{ color: '#13a05a' }}
               />
@@ -325,50 +404,64 @@ export default function BlockchainOverview(): JSX.Element {
           <Col xs={24} sm={12} lg={6}>
             <Card size="small">
               <Statistic
-                title="本月上链"
-                value={overview.monthRecords}
+                title="上链成功"
+                value={overviewError ? '—' : success}
                 suffix="条"
-                prefix={<ThunderboltFilled style={{ color: '#f6a623' }} />}
+                valueStyle={{ color: '#13a05a' }}
               />
-              <Typography.Text type="success" style={{ fontSize: 12 }}>
-                ↑ +{overview.monthGrowth}% 环比
-              </Typography.Text>
             </Card>
           </Col>
           <Col xs={24} sm={12} lg={6}>
             <Card size="small">
               <Statistic
-                title="待上链"
-                value={overview.pendingRecords}
+                title="上链失败"
+                value={overviewError ? '—' : failed}
                 suffix="条"
-                prefix={<ClockCircleOutlined style={{ color: '#2f7ed8' }} />}
+                valueStyle={{ color: failed > 0 ? '#ff4d4f' : undefined }}
+              />
+            </Card>
+          </Col>
+          <Col xs={24} sm={12} lg={6}>
+            <Card size="small">
+              <Statistic
+                title="未成功（含上链中）"
+                value={overviewError ? '—' : notSuccess}
+                suffix="条"
+                valueStyle={{ color: '#2f7ed8' }}
               />
               <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                ⏳ 排队中
-              </Typography.Text>
-            </Card>
-          </Col>
-          <Col xs={24} sm={12} lg={6}>
-            <Card size="small">
-              <Statistic
-                title="链上验证通过率"
-                value={overview.verifyPassRate}
-                precision={1}
-                suffix="%"
-                valueStyle={{ color: '#13a05a' }}
-              />
-              <Typography.Text type="success" style={{ fontSize: 12 }}>
-                ↑ +{overview.verifyPassGrowth}%
+                按 total − success − failed 推导
               </Typography.Text>
             </Card>
           </Col>
         </Row>
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          数据来源：GET /api/v1/production/blockchain/overview（后端仅返回 total / success / failed；
+          环比增幅、验证通过率等指标后端未提供，故不展示）。
+        </Typography.Text>
       </Card>
 
       <Row gutter={[16, 16]}>
         <Col xs={24} lg={14}>
-          <Card title="存证类型分布" loading={isLoading && !data}>
-            <ReactECharts option={pieOption} style={{ height: 320 }} notMerge />
+          <Card
+            title="存证类型分布"
+            loading={recordsQuery.isLoading && !recordsQuery.data}
+          >
+            {typeStats.length > 0 ? (
+              <ReactECharts option={pieOption} style={{ height: 320 }} notMerge />
+            ) : (
+              <Empty
+                description={
+                  recordsError
+                    ? '接口调用失败，无法统计类型分布'
+                    : '后端暂无存证记录，无法统计类型分布'
+                }
+              />
+            )}
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              统计口径：对 GET /blockchain/records 返回的真实记录按 bizType 分组计数（最多
+              {STAT_SCAN_SIZE} 条），非后端 overview 直接返回。
+            </Typography.Text>
           </Card>
         </Col>
         <Col xs={24} lg={10}>
@@ -379,64 +472,13 @@ export default function BlockchainOverview(): JSX.Element {
                 <span>链上健康度</span>
               </Space>
             }
-            loading={isLoading && !data}
           >
-            <Space direction="vertical" size={12} style={{ width: '100%' }}>
-              <Row gutter={[12, 12]}>
-                <Col span={12}>
-                  <Statistic
-                    title="联盟链状态"
-                    value={overview.health?.status ?? '正常运行'}
-                    valueStyle={{ fontSize: 20, color: '#13a05a' }}
-                  />
-                </Col>
-                <Col span={12}>
-                  <Statistic
-                    title="当前区块高度"
-                    value={overview.health?.blockHeight ?? 0}
-                    valueStyle={{ fontSize: 20 }}
-                  />
-                </Col>
-                <Col span={12}>
-                  <Statistic
-                    title="最近出块时间"
-                    value={overview.health?.latestBlockTime ?? '-'}
-                    valueStyle={{ fontSize: 16 }}
-                  />
-                </Col>
-                <Col span={12}>
-                  <Statistic
-                    title="共识节点数"
-                    value={overview.health?.onlineNodes ?? '-'}
-                    suffix="在线"
-                    valueStyle={{ fontSize: 20 }}
-                  />
-                </Col>
-                <Col span={12}>
-                  <Statistic
-                    title="链上确认率"
-                    value={overview.health?.confirmRate ?? 0}
-                    precision={1}
-                    suffix="%"
-                    valueStyle={{ fontSize: 20 }}
-                  />
-                </Col>
-                <Col span={12}>
-                  <Statistic
-                    title="链ID"
-                    value="agri-chain-001"
-                    valueStyle={{ fontSize: 16, ...MONO_STYLE }}
-                  />
-                </Col>
-              </Row>
-              <Alert
-                type={overview.health?.integrityPassed === false ? 'error' : 'success'}
-                showIcon
-                icon={<SafetyCertificateOutlined />}
-                message="链上数据完整性校验"
-                description={`✅ ${overview.health?.integrityCheck ?? '最近1000条存证全部通过'}`}
-              />
-            </Space>
+            <Alert
+              type="info"
+              showIcon
+              message="后端暂未提供链上健康度指标"
+              description="联盟链运行状态、当前区块高度、最近出块时间、共识节点数、链上确认率、链ID、数据完整性校验 —— 后端 GET /blockchain/overview 均不返回这些字段，本页不填充任何占位数值。"
+            />
           </Card>
         </Col>
       </Row>
@@ -445,7 +487,7 @@ export default function BlockchainOverview(): JSX.Element {
         <Col xs={24} lg={14}>
           <Card
             title="最近存证记录"
-            loading={isLoading && !data}
+            loading={recordsQuery.isLoading && !recordsQuery.data}
             extra={
               <Button
                 type="link"
@@ -456,13 +498,13 @@ export default function BlockchainOverview(): JSX.Element {
               </Button>
             }
           >
-            <Table<ChainRecentRecord>
-              rowKey={(record) => `${record.time}-${record.summary}`}
+            <Table<RecentRow>
+              rowKey={(row) => `${row.time}-${row.summary}`}
               size="small"
               pagination={false}
               columns={recentColumns}
-              dataSource={overview.recentRecords ?? []}
-              locale={{ emptyText: '暂无存证记录' }}
+              dataSource={recentRows}
+              locale={{ emptyText: '后端暂无存证记录' }}
             />
           </Card>
         </Col>
@@ -474,50 +516,21 @@ export default function BlockchainOverview(): JSX.Element {
                 <span>待上链队列</span>
               </Space>
             }
-            loading={isLoading && !data}
             extra={
-              <Space>
-                <Button
-                  type="primary"
-                  size="small"
-                  loading={flushMutation.isPending}
-                  onClick={() => flushMutation.mutate()}
-                >
-                  立即上链
-                </Button>
-                <Button
-                  size="small"
-                  onClick={() =>
-                    navigate('/production/blockchain/records?status=PENDING')
-                  }
-                >
-                  查看队列详情
-                </Button>
-              </Space>
+              <Button
+                size="small"
+                onClick={() => navigate('/production/blockchain/records?status=PENDING')}
+              >
+                查看上链中的记录
+              </Button>
             }
           >
-            <Space direction="vertical" size={4} style={{ width: '100%' }}>
-              <Typography.Text strong>
-                ⏳ 排队中 {overview.pendingRecords} 条：
-              </Typography.Text>
-              <List
-                size="small"
-                dataSource={overview.pendingQueue ?? []}
-                locale={{ emptyText: '队列已清空' }}
-                renderItem={(item) => (
-                  <List.Item>
-                    <Space direction="vertical" size={0}>
-                      <Typography.Text>
-                        · {item.title} {item.count}条
-                      </Typography.Text>
-                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                        {item.expectTime}
-                      </Typography.Text>
-                    </Space>
-                  </List.Item>
-                )}
-              />
-            </Space>
+            <Alert
+              type="info"
+              showIcon
+              message="后端暂未提供待上链队列与批量上链能力"
+              description="后端没有「待上链队列」查询端点，也没有批量上链 / 重试上链端点（POST /blockchain/anchor 只能单条新建存证）。本页不再提供「立即上链」按钮 —— 旧实现点一次只新建一条 BATCH 存证，却提示「N 条待上链数据已上链」，属于写操作假成功。请到存证记录列表按状态筛选后逐条处理。"
+            />
           </Card>
         </Col>
       </Row>
@@ -525,12 +538,13 @@ export default function BlockchainOverview(): JSX.Element {
       <Card title="存证验证工具">
         <Space direction="vertical" size={8} style={{ width: '100%' }}>
           <Typography.Text type="secondary">
-            输入存证编号、交易哈希或溯源码，系统将从链上拉取数据并与链下原始数据进行比对验证。
+            当前后端仅支持「按交易哈希」验真（GET /blockchain/verify/{"{txHash}"}
+            ，返回布尔值）；按存证编号 / 溯源码验真后端暂未提供。
           </Typography.Text>
           <Space>
             <Button
               type="primary"
-              icon={<SafetyCertificateOutlined />}
+              icon={<LinkOutlined />}
               onClick={() => navigate('/production/blockchain/verify')}
             >
               进入存证验证
@@ -542,15 +556,11 @@ export default function BlockchainOverview(): JSX.Element {
               存证记录列表
             </Button>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              当前安全确认阈值：≥ {settings.confirmThreshold} 个区块
+              安全确认阈值设置：≥ {settings.confirmThreshold} 个区块
               {settings.autoAnchor ? '（自动上链已开启）' : '（自动上链已关闭）'}
+              （该阈值为本地设置项，后端验真不使用它）
             </Typography.Text>
           </Space>
-          {usingMock && !isError && (
-            <Typography.Text type="warning" style={{ fontSize: 12 }}>
-              提示：后端暂无总览数据，以上为原型示例数据。
-            </Typography.Text>
-          )}
         </Space>
       </Card>
 

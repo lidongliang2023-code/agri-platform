@@ -133,6 +133,10 @@ export interface BlockchainBizRecord {
   anchorAt?: string | null
   /** 存证状态：PENDING / SUCCESS / FAILED */
   status?: string | null
+  /** 记录创建时间（ProduceBaseEntity 审计字段，后端真实返回；未上链时用它兜底排序） */
+  createdAt?: string | null
+  /** 记录更新时间（ProduceBaseEntity 审计字段，后端真实返回） */
+  updatedAt?: string | null
 }
 
 /** 存证类型分布项 */

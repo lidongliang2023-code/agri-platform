@@ -3,24 +3,36 @@
  * 路由路径：/production/blockchain/records/:recordId
  * 所属模块：区块链增强
  * 原型 pageId：bc-detail（P29）
+ *
+ * ⚠️ 真数据约束（本页此前多处造假，已修复，请勿回退）
+ *
+ * 后端 `GET /blockchain/{id}` 只返回 BlockchainRecordEntity 的真实字段：
+ * recordId / bizType / bizNo / batchId / traceCode / chainType / chainNetwork /
+ * txHash / blockHeight / payloadHash / anchorAt / status。
+ * 后端**不返回** certNo / blockTime / chainId / confirmations / confirmThreshold /
+ * dataHash / signature / anchorMethod / submittedAt / payload / bizTypeName。
+ *
+ * 旧版三处造假已全部拆除：
+ * 1. `MOCK_DETAIL` 兜底，并把路由参数 recordId 塞进 MOCK 的 recordId / certNo / payload，
+ *    使页面标题与 URL 一致、用户无从分辨 —— 现在取不到数据就明示空态 / 错误态；
+ * 2. `MOCK_CHAIN_LINK` 在「关联存证链路」Timeline 里**无条件**渲染，即使详情是真数据链路也是编的
+ *    —— 现在改为明示「后端暂未提供」；
+ * 3. `buildChecks()` 用后端不存在的 dataHash / signature / blockTime 推导五项验真结论，
+ *    `result.passed` 恒 undefined，实际走 `Boolean(res)` 分支并输出前端拼的结论
+ *    —— 现在改为只调真接口 `GET /blockchain/verify/{txHash}`，按布尔结论渲染。
  */
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   Alert,
   Button,
   Card,
-  Col,
-  Collapse,
   Descriptions,
-  Divider,
-  Row,
+  Result,
   Space,
   Spin,
-  Steps,
   Tag,
-  Timeline,
   Typography,
   message,
 } from 'antd'
@@ -30,68 +42,51 @@ import {
   CloseCircleFilled,
   CopyOutlined,
   DownloadOutlined,
-  ExportOutlined,
-  FileTextOutlined,
   LinkOutlined,
+  ReloadOutlined,
   SafetyCertificateOutlined,
 } from '@ant-design/icons'
-import { getCertRecord, verifyCertificate } from '@/api/blockchain'
-import type {
-  BlockchainCertRecord,
-  CertificateVerifyResult,
-  VerifyCheckItem,
-} from '@/types'
+import { getCertRecord, verifyChain } from '@/api/blockchain'
+import type { BlockchainBizRecord } from '@/types'
+import { asApiRequestError, httpStatusOf, toNumber } from '@/utils/request'
 
-/** 等宽字体样式：链上哈希与签名统一使用 */
+/** 等宽字体样式：链上哈希统一使用 */
 const MONO_STYLE: React.CSSProperties = {
   fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, "Courier New", monospace',
   wordBreak: 'break-all',
 }
 
-/** 安全确认阈值（原型 P29：安全阈值 ≥ 6） */
-const CONFIRM_THRESHOLD = 6
-
-/** 原型 P29 示例存证：CERT-20260602183045（检测报告） */
-const MOCK_DETAIL: BlockchainCertRecord = {
-  recordId: 'CERT-20260602183045',
-  certNo: 'CERT-20260602183045',
-  bizType: 'INSPECTION',
-  bizTypeName: '检测报告',
-  bizNo: 'INS20260515001',
-  traceCode: 'AG010101202605150001',
-  bizSummary: '番茄农残检测INS0531',
-  txHash: '0x8a7d9f2e3b1c4a5d6e7f8a9b0c1d2e3f4a5b6c7d',
-  blockHeight: 8234398,
-  blockTime: '2026-06-02 18:30:52',
-  chainId: 'agri-chain-001',
-  confirmations: 15,
-  confirmThreshold: CONFIRM_THRESHOLD,
-  dataHash: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca4967412345678',
-  signature: 'MEUCIQDd8vJfK3Hh2N7Yx1bZ6Vk9N8a3mQfWjKHp+RxdYlVq...',
-  anchorMethod: '实时上链',
-  status: 'SUCCESS',
-  submittedAt: '2026-06-02 18:30:45',
-  anchorAt: '2026-06-02 18:30:45',
-  payload: {
-    检测编号: 'INS20260515001',
-    产品名称: '有机番茄',
-    批次号: 'BC20260515',
-    检测项目: ['农药残留', '重金属'],
-    检测结果: '合格',
-    检测机构: '中检集团',
-    质量等级: 'A级',
-    关联溯源码: 'AG010101202605150001',
-  },
+/** 业务类型编码 → 名称（后端实测取值：TRACE / INSPECTION / HARVEST） */
+const BIZ_TYPE_NAME: Record<string, string> = {
+  FARMING: '生产记录',
+  INSPECTION: '检测报告',
+  INPUT: '投入品使用',
+  HARVEST: '采收入库',
+  CIRCULATION: '流通记录',
+  IOT: 'IoT数据',
+  TRACE: '溯源记录',
 }
 
-/** 原型 P29 关联存证链路（溯源码 AG010101202605150001 的完整链路） */
-const MOCK_CHAIN_LINK: { date: string; type: string; txHash: string; passed: boolean; current?: boolean }[] = [
-  { date: '03-15', type: '种植记录', txHash: '0x3a2b...', passed: true },
-  { date: '04-10', type: '施肥记录', txHash: '0x7f8e...', passed: true },
-  { date: '05-01', type: '病虫害防治', txHash: '0x4c5d...', passed: true },
-  { date: '05-15', type: '检测报告(当前)', txHash: '0x8a7d...', passed: true, current: true },
-  { date: '05-20', type: '采收入库', txHash: '0x2b3c...', passed: true },
-]
+/** 验真端点（展示在结果里，便于核对） */
+const VERIFY_ENDPOINT = 'GET /api/v1/production/blockchain/verify/{txHash}'
+
+/** 验真结论：只承载后端真实返回的字段 */
+interface VerifyOutcome {
+  /** 被验证的交易哈希 */
+  txHash: string
+  /** 后端真实返回的布尔值 */
+  passed: boolean
+  /** 验真时间 */
+  verifiedAt: string
+}
+
+/** 验真失败描述 */
+interface VerifyFailure {
+  /** 失败标题 */
+  title: string
+  /** 失败详情 */
+  detail: string
+}
 
 /**
  * 复制文本到剪贴板
@@ -137,47 +132,25 @@ function downloadFile(filename: string, content: string): void {
 }
 
 /**
- * 由存证记录推导五项验真结论（原型 P29 / P30）
+ * 把验真请求失败转成明示的失败描述。
  *
- * @param record 存证记录
- * @returns 五项验真结论
+ * @param error catch 到的未知错误
+ * @returns 失败描述
  */
-function buildChecks(record: BlockchainCertRecord): VerifyCheckItem[] {
-  const confirmations = record.confirmations ?? 0
-  const threshold = record.confirmThreshold ?? CONFIRM_THRESHOLD
-  const confirmed = record.status === 'SUCCESS'
-  return [
-    {
-      key: 'hash-consistency',
-      label: '数据哈希一致性',
-      passed: confirmed && Boolean(record.dataHash),
-      detail: `链上哈希 = 链下计算哈希（SHA-256：${(record.dataHash ?? '').slice(0, 16)}...）`,
-    },
-    {
-      key: 'signature-validity',
-      label: '数字签名有效性',
-      passed: confirmed && Boolean(record.signature),
-      detail: record.signature ? 'ECDSA 签名验证通过，签名方为联盟链共识节点' : '未获取到链上签名，无法完成验真',
-    },
-    {
-      key: 'confirmations',
-      label: '区块确认数达标',
-      passed: confirmations >= threshold,
-      detail: `${confirmations} 确认 ${confirmations >= threshold ? '>' : '<'} ${threshold} 阈值`,
-    },
-    {
-      key: 'timestamp',
-      label: '时间戳可信',
-      passed: confirmed && Boolean(record.blockTime),
-      detail: `链上时间 ${record.blockTime ?? '-'} 与业务时间 ${record.anchorAt ?? record.submittedAt ?? '-'} 一致`,
-    },
-    {
-      key: 'integrity',
-      label: '数据未被篡改',
-      passed: confirmed,
-      detail: '原始数据完整性校验通过，链上指纹与本地快照逐字段比对一致',
-    },
-  ]
+function describeFailure(error: unknown): VerifyFailure {
+  const rawMessage = error instanceof Error ? error.message : String(error)
+  const apiError = asApiRequestError(error)
+  if (apiError && typeof apiError.bizCode === 'number') {
+    return {
+      title: '验真接口返回业务失败，未取得验真结论',
+      detail: `后端业务码 ${apiError.bizCode}（HTTP ${apiError.httpStatus ?? 200}）：${rawMessage}`,
+    }
+  }
+  const status = httpStatusOf(error)
+  if (status > 0) {
+    return { title: `验真接口返回 HTTP ${status}，未取得验真结论`, detail: rawMessage }
+  }
+  return { title: '无法连接验真接口（网络异常或超时），未取得验真结论', detail: rawMessage }
 }
 
 /**
@@ -186,15 +159,15 @@ function buildChecks(record: BlockchainCertRecord): VerifyCheckItem[] {
  * @param data 接口返回数据
  * @returns 是否有效
  */
-function isValidRecord(data: BlockchainCertRecord | undefined): boolean {
+function isValidRecord(data: BlockchainBizRecord | undefined): boolean {
   return Boolean(data && data.recordId)
 }
 
 /**
  * 存证详情（原型 P29）
  *
- * 业务职责：展示单条存证的链上元数据、链上信息（交易哈希 / 区块高度 / 链ID / 确认数）、
- * 数据指纹（SHA-256 / ECDSA）、原始数据摘要、五项验真结论与关联存证链路。
+ * 业务职责：展示单条存证的后端真实字段，并对「验真」这一唯一后端能力提供真实入口；
+ * 取不到数据时渲染明示的空态 / 错误态，不使用任何示例存证。
  *
  * @returns 页面内容
  */
@@ -202,119 +175,83 @@ export default function RecordDetail(): JSX.Element {
   const navigate = useNavigate()
   const { recordId = '' } = useParams<{ recordId: string }>()
   const [verifying, setVerifying] = useState<boolean>(false)
-  const [checks, setChecks] = useState<VerifyCheckItem[] | null>(null)
+  const [outcome, setOutcome] = useState<VerifyOutcome | null>(null)
+  const [failure, setFailure] = useState<VerifyFailure | null>(null)
 
-  /** 存证详情：接口优先，异常或无数据时兜底原型示例数据 */
-  const { data, isLoading, isError, error } = useQuery<BlockchainCertRecord>({
+  /** 存证详情：只取真实数据 */
+  const { data, isLoading, isError, error, refetch } = useQuery<BlockchainBizRecord>({
     queryKey: ['blockchain-record-detail', recordId],
     queryFn: () => getCertRecord(recordId),
     enabled: Boolean(recordId),
   })
 
-  const usingMock = !isLoading && (isError || !isValidRecord(data))
-
-  /** 最终渲染的存证记录 */
-  const record: BlockchainCertRecord = useMemo<BlockchainCertRecord>(() => {
-    if (isValidRecord(data)) return data as BlockchainCertRecord
-    // 示例数据：编号对齐当前路由参数，保证页面标题与路由一致
-    return {
-      ...MOCK_DETAIL,
-      recordId: recordId || MOCK_DETAIL.recordId,
-      certNo: recordId || MOCK_DETAIL.certNo,
-      payload: { ...MOCK_DETAIL.payload, 存证编号: recordId || MOCK_DETAIL.certNo },
-    }
-  }, [data, recordId])
-
-  /** 验真结论：默认由链上信息推导，点击「重新验证」后以接口结果为准 */
-  const finalChecks: VerifyCheckItem[] = checks ?? buildChecks(record)
-  const confirmations = record.confirmations ?? 0
-  const threshold = record.confirmThreshold ?? CONFIRM_THRESHOLD
-  const confirmOk = confirmations >= threshold
-  const allPassed = finalChecks.every((item) => item.passed)
-
-  /** 重新验证 */
-  const handleReVerify = async (): Promise<void> => {
+  /** 验真：只调真接口 GET /blockchain/verify/{txHash} */
+  const handleVerify = async (txHash: string): Promise<void> => {
     setVerifying(true)
+    setOutcome(null)
+    setFailure(null)
     try {
-      const res: unknown = await verifyCertificate({
-        txHash: record.txHash,
-        certNo: record.certNo,
-      })
-      const result = res as CertificateVerifyResult
-      if (result && typeof result === 'object' && Array.isArray(result.checks)) {
-        setChecks(result.checks)
-        message.success(result.passed ? '验证通过：数据未被篡改，区块链存证有效' : '验证未通过，请检查链上数据')
+      const raw: unknown = await verifyChain(encodeURIComponent(txHash))
+      if (typeof raw === 'boolean') {
+        setOutcome({
+          txHash,
+          passed: raw,
+          verifiedAt: new Date().toLocaleString('zh-CN'),
+        })
       } else {
-        // 后端仅返回布尔值（GET /blockchain/verify → Boolean），按链上信息本地推导结论
-        const passed = Boolean(res)
-        setChecks(
-          buildChecks(record).map((item) => ({
-            ...item,
-            passed: item.key === 'confirmations' ? item.passed : passed,
-            detail: passed ? item.detail : '链上验真返回 false，未通过校验',
-          })),
-        )
-        message.success(passed ? '验证通过：数据未被篡改，区块链存证有效' : '验证未通过，请检查链上数据')
+        // 后端返回了非布尔值：无法判定，按失败处理，绝不猜测结论
+        setFailure({
+          title: '后端返回了非预期的验真结果，未取得验真结论',
+          detail: `期望布尔值，实际为 ${raw === null ? 'null' : typeof raw}`,
+        })
       }
     } catch (err) {
-      setChecks(buildChecks(record))
-      message.warning(`验真接口不可用，已按链上信息给出结论：${(err as Error).message}`)
+      setFailure(describeFailure(err))
     } finally {
       setVerifying(false)
     }
   }
 
-  /** 下载存证证书 */
-  const handleDownloadCert = (): void => {
+  /** 下载存证证书：只写后端真实返回的字段 */
+  const handleDownloadCert = (record: BlockchainBizRecord): void => {
     const lines = [
       '========== 区块链存证证书 ==========',
-      `存证编号：${record.certNo}`,
-      `存证类型：${record.bizTypeName ?? '-'}`,
-      `存证时间：${record.anchorAt ?? record.submittedAt ?? '-'}`,
-      `上链方式：${record.anchorMethod ?? '-'}`,
-      `存证状态：${record.status === 'SUCCESS' ? '区块链已确认' : record.status === 'PENDING' ? '上链中' : '上链失败'}`,
+      `存证记录号：${record.recordId}`,
+      `业务类型：${BIZ_TYPE_NAME[record.bizType ?? ''] ?? record.bizType ?? '-'}`,
+      `业务单号：${record.bizNo ?? '-'}`,
+      `关联批次：${record.batchId ?? '-'}`,
+      `关联溯源码：${record.traceCode ?? '-'}`,
+      `链类型 / 网络：${record.chainType ?? '-'} / ${record.chainNetwork ?? '-'}`,
+      `存证状态：${record.status ?? '-'}`,
+      `上链时间：${record.anchorAt ?? '-'}`,
       '----------------------------------',
       `交易哈希：${record.txHash ?? '-'}`,
       `区块高度：${record.blockHeight ?? '-'}`,
-      `出块时间：${record.blockTime ?? '-'}`,
-      `链ID：${record.chainId ?? 'agri-chain-001'}`,
-      `确认数：${confirmations}（安全阈值 ≥ ${threshold}）`,
-      `数据指纹(SHA-256)：${record.dataHash}`,
-      `数字签名(ECDSA)：${record.signature ?? '-'}`,
+      `内容哈希(payloadHash)：${record.payloadHash ?? '-'}`,
       '----------------------------------',
-      '验真结论：',
-      ...finalChecks.map((item) => `  ${item.passed ? '✅' : '❌'} ${item.label}：${item.detail}`),
+      `验真结论：${outcome ? (outcome.passed ? '通过' : '未通过') : '尚未验真'}`,
+      `验真端点：${outcome ? VERIFY_ENDPOINT : '-'}`,
+      '说明：后端不返回确认数 / 数字签名 / 链ID / 出块时间等字段，本证书不包含这些项。',
       '==================================',
     ]
-    downloadFile(`存证证书_${record.certNo}.txt`, lines.join('\n'))
+    downloadFile(`存证证书_${record.recordId}.txt`, lines.join('\n'))
     message.success('存证证书已下载')
   }
 
-  /** 导出验证报告 */
-  const handleExportReport = (): void => {
+  /** 导出验真报告：只有真的验过才写结论 */
+  const handleExportReport = (record: BlockchainBizRecord): void => {
     const lines = [
-      '========== 存证验证报告 ==========',
-      `存证编号：${record.certNo}`,
+      '========== 存证验真报告 ==========',
+      `存证记录号：${record.recordId}`,
       `交易哈希：${record.txHash ?? '-'}`,
-      `区块高度：${record.blockHeight ?? '-'}`,
-      `链ID：${record.chainId ?? 'agri-chain-001'}`,
-      `确认数：${confirmations}（阈值 ≥ ${threshold}）`,
-      `总体结论：${allPassed ? '验证通过' : '验证未通过'}`,
-      '----------------------------------',
-      ...finalChecks.map((item) => `${item.passed ? '[通过]' : '[失败]'} ${item.label} —— ${item.detail}`),
+      `验真端点：${VERIFY_ENDPOINT}`,
+      `验真时间：${outcome?.verifiedAt ?? '-'}`,
+      `后端返回值：${outcome ? String(outcome.passed) : '-'}`,
+      `验真结论：${outcome ? (outcome.passed ? '通过' : '未通过') : '尚未验真（未调用验真接口）'}`,
       '==================================',
     ]
-    downloadFile(`验证报告_${record.certNo}.txt`, lines.join('\n'))
-    message.success('验证报告已导出')
-  }
-
-  /** 关联业务跳转：检测报告 → 质量检测，其余 → 全链路溯源 */
-  const handleGotoBiz = (): void => {
-    if (record.bizType === 'INSPECTION') {
-      navigate('/production/quality')
-      return
-    }
-    navigate('/production/trace/full-chain')
+    downloadFile(`验真报告_${record.recordId}.txt`, lines.join('\n'))
+    message.success('验真报告已导出')
   }
 
   if (isLoading) {
@@ -326,6 +263,61 @@ export default function RecordDetail(): JSX.Element {
       </Card>
     )
   }
+
+  /** 接口异常：明示错误态 + 重试，不渲染任何示例存证 */
+  if (isError) {
+    return (
+      <Card>
+        <Result
+          status="error"
+          title="存证详情接口调用失败"
+          subTitle={
+            <Space direction="vertical" size={4}>
+              <Typography.Text>
+                {(error as Error | undefined)?.message ??
+                  '请检查后端服务 /api/v1/production/blockchain/{id}'}
+              </Typography.Text>
+              <Typography.Text type="secondary">
+                未取得该存证的任何数据，此处不会展示占位存证 —— 留空即代表「未取得」。
+              </Typography.Text>
+            </Space>
+          }
+          extra={
+            <Space>
+              <Button icon={<ReloadOutlined />} onClick={() => void refetch()}>
+                重试
+              </Button>
+              <Button onClick={() => navigate('/production/blockchain/records')}>
+                返回列表
+              </Button>
+            </Space>
+          }
+        />
+      </Card>
+    )
+  }
+
+  /** 接口正常但查无此记录：明示空态，不塞示例 */
+  if (!isValidRecord(data)) {
+    return (
+      <Card>
+        <Result
+          status="warning"
+          title="未找到该存证记录"
+          subTitle={`后端 GET /api/v1/production/blockchain/{id} 未返回 recordId 为「${recordId || '-'}」的记录。该存证可能已被删除，或编号有误。`}
+          extra={
+            <Button type="primary" onClick={() => navigate('/production/blockchain/records')}>
+              返回存证记录列表
+            </Button>
+          }
+        />
+      </Card>
+    )
+  }
+
+  const record: BlockchainBizRecord = data as BlockchainBizRecord
+  const txHash = record.txHash ?? ''
+  const blockHeight = toNumber(record.blockHeight, 0)
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
@@ -340,45 +332,30 @@ export default function RecordDetail(): JSX.Element {
             >
               返回列表
             </Button>
-            <span>存证详情 #{record.certNo}</span>
+            <span>存证详情 #{record.recordId}</span>
           </Space>
         }
-        extra={
-          <Button
-            type="primary"
-            icon={<SafetyCertificateOutlined />}
-            onClick={() =>
-              navigate(`/production/blockchain/verify?type=cert&value=${encodeURIComponent(record.certNo)}`)
-            }
-          >
-            验证
-          </Button>
-        }
       >
-        {isError && (
-          <Alert
-            type="warning"
-            showIcon
-            style={{ marginBottom: 12 }}
-            message="存证详情接口暂不可用，当前展示原型示例数据"
-            description={(error as Error | undefined)?.message ?? '请检查后端服务 /api/v1/production/blockchain/{id}'}
-          />
-        )}
         <Descriptions bordered size="small" column={3} title={<Space><LinkOutlined />链上元数据</Space>}>
-          <Descriptions.Item label="存证编号">
-            <Typography.Text style={MONO_STYLE} copyable={{ text: record.certNo, tooltips: ['复制编号', '已复制'] }}>
-              {record.certNo}
+          <Descriptions.Item label="存证记录号">
+            <Typography.Text style={MONO_STYLE} copyable={{ text: record.recordId, tooltips: ['复制编号', '已复制'] }}>
+              {record.recordId}
             </Typography.Text>
           </Descriptions.Item>
-          <Descriptions.Item label="存证类型">
-            🔬 {record.bizTypeName ?? '-'}
+          <Descriptions.Item label="业务类型">
+            <Tag color="geekblue">
+              {BIZ_TYPE_NAME[record.bizType ?? ''] ?? record.bizType ?? '-'}
+            </Tag>
           </Descriptions.Item>
-          <Descriptions.Item label="存证时间">{record.anchorAt ?? record.submittedAt ?? '-'}</Descriptions.Item>
-          <Descriptions.Item label="上链方式">{record.anchorMethod ?? '-'}</Descriptions.Item>
+          <Descriptions.Item label="业务单号">{record.bizNo ?? '-'}</Descriptions.Item>
+          <Descriptions.Item label="关联批次">{record.batchId ?? '-'}</Descriptions.Item>
+          <Descriptions.Item label="链类型 / 网络">
+            {record.chainType ?? '-'} / {record.chainNetwork ?? '-'}
+          </Descriptions.Item>
           <Descriptions.Item label="存证状态">
             {record.status === 'SUCCESS' ? (
               <Tag color="success" icon={<CheckCircleFilled />}>
-                ✅ 区块链已确认
+                ✅ 已上链
               </Tag>
             ) : record.status === 'PENDING' ? (
               <Tag color="processing">⏳ 上链中</Tag>
@@ -388,217 +365,183 @@ export default function RecordDetail(): JSX.Element {
               </Tag>
             )}
           </Descriptions.Item>
-          <Descriptions.Item label="链ID">
-            <span style={MONO_STYLE}>{record.chainId ?? 'agri-chain-001'}</span>
-          </Descriptions.Item>
         </Descriptions>
-        {usingMock && !isError && (
-          <Typography.Text type="warning" style={{ fontSize: 12 }}>
-            提示：后端暂无该存证数据，以上为原型示例数据（CERT-20260602183045）。
-          </Typography.Text>
-        )}
       </Card>
 
-      <Row gutter={[16, 16]}>
-        <Col xs={24} lg={14}>
-          <Card title={<Space><LinkOutlined />链上信息</Space>}>
-            <Descriptions bordered size="small" column={1}>
-              <Descriptions.Item label="交易哈希">
-                <Space size={4}>
-                  <Typography.Text style={MONO_STYLE}>{record.txHash ?? '-'}</Typography.Text>
-                  {record.txHash && (
-                    <Button
-                      type="link"
-                      size="small"
-                      icon={<CopyOutlined />}
-                      onClick={() => void copyText(record.txHash as string)}
-                    >
-                      复制
-                    </Button>
-                  )}
-                </Space>
-              </Descriptions.Item>
-              <Descriptions.Item label="区块高度">
-                <span style={MONO_STYLE}>
-                  {(record.blockHeight ?? 0).toLocaleString('en-US')}
-                </span>
-              </Descriptions.Item>
-              <Descriptions.Item label="出块时间">{record.blockTime ?? '-'}</Descriptions.Item>
-              <Descriptions.Item label="链ID">
-                <span style={MONO_STYLE}>{record.chainId ?? 'agri-chain-001'}</span>
-              </Descriptions.Item>
-              <Descriptions.Item label="确认数">
-                <Space>
-                  {confirmOk ? (
-                    <Typography.Text type="success" strong style={{ fontSize: 16 }}>
-                      <CheckCircleFilled /> {confirmations} 个区块确认
-                    </Typography.Text>
-                  ) : (
-                    <Typography.Text type="warning" strong style={{ fontSize: 16 }}>
-                      <CloseCircleFilled /> {confirmations} 个区块确认
-                    </Typography.Text>
-                  )}
-                  <Typography.Text type="secondary">
-                    （安全阈值 ≥ {threshold}）{confirmOk ? '已达标' : '未达标'}
-                  </Typography.Text>
-                </Space>
-              </Descriptions.Item>
-            </Descriptions>
-          </Card>
-        </Col>
-        <Col xs={24} lg={10}>
-          <Card title="📎 数据指纹">
-            <Space direction="vertical" size={12} style={{ width: '100%' }}>
-              <div>
-                <Typography.Text type="secondary">原始数据哈希(SHA-256)</Typography.Text>
-                <div>
-                  <Typography.Text style={MONO_STYLE} copyable={{ text: record.dataHash, tooltips: ['复制指纹', '已复制'] }}>
-                    {record.dataHash}
-                  </Typography.Text>
-                </div>
-              </div>
-              <div>
-                <Typography.Text type="secondary">数字签名(ECDSA)</Typography.Text>
-                <div>
-                  <Typography.Text
-                    style={MONO_STYLE}
-                    copyable={{ text: record.signature ?? '', tooltips: ['复制签名', '已复制'] }}
-                  >
-                    {record.signature ?? '-'}
-                  </Typography.Text>
-                </div>
-              </div>
-              <Button
-                size="small"
-                icon={<CopyOutlined />}
-                onClick={() => void copyText(record.dataHash)}
-              >
-                复制数据指纹
-              </Button>
-            </Space>
-          </Card>
-        </Col>
-      </Row>
-
-      <Card title="📋 原始数据摘要">
-        <Descriptions bordered size="small" column={3}>
-          {Object.entries(record.payload ?? {}).map(([key, value]) => (
-            <Descriptions.Item key={key} label={key}>
-              {Array.isArray(value) ? value.join(' + ') : String(value)}
-            </Descriptions.Item>
-          ))}
-          <Descriptions.Item label="关联溯源码">
-            <Typography.Link
-              onClick={() => navigate('/production/trace/full-chain')}
-              style={MONO_STYLE}
-            >
-              {record.traceCode ?? '-'}
-            </Typography.Link>
+      <Card title={<Space><LinkOutlined />链上信息</Space>}>
+        <Descriptions bordered size="small" column={1}>
+          <Descriptions.Item label="交易哈希">
+            {txHash ? (
+              <Space size={4}>
+                <Typography.Text style={MONO_STYLE}>{txHash}</Typography.Text>
+                <Button
+                  type="link"
+                  size="small"
+                  icon={<CopyOutlined />}
+                  onClick={() => void copyText(txHash)}
+                >
+                  复制
+                </Button>
+              </Space>
+            ) : (
+              <Typography.Text type="secondary">—（该记录尚未上链，后端未回填哈希）</Typography.Text>
+            )}
+          </Descriptions.Item>
+          <Descriptions.Item label="区块高度">
+            <span style={MONO_STYLE}>
+              {record.blockHeight === null || record.blockHeight === undefined
+                ? '—'
+                : blockHeight.toLocaleString('en-US')}
+            </span>
+          </Descriptions.Item>
+          <Descriptions.Item label="上链时间">{record.anchorAt ?? '—'}</Descriptions.Item>
+          <Descriptions.Item label="内容哈希（payloadHash）">
+            {record.payloadHash ? (
+              <Typography.Text style={MONO_STYLE} copyable={{ text: record.payloadHash, tooltips: ['复制指纹', '已复制'] }}>
+                {record.payloadHash}
+              </Typography.Text>
+            ) : (
+              <Typography.Text type="secondary">—</Typography.Text>
+            )}
           </Descriptions.Item>
         </Descriptions>
-        <Divider style={{ margin: '12px 0' }} />
-        <Collapse
-          items={[
-            {
-              key: 'payload',
-              label: '存证数据原始内容（JSON）',
-              children: (
-                <pre
-                  style={{
-                    ...MONO_STYLE,
-                    margin: 0,
-                    padding: 12,
-                    background: '#fafafa',
-                    borderRadius: 6,
-                    fontSize: 12,
-                    whiteSpace: 'pre-wrap',
-                  }}
-                >
-                  {JSON.stringify(
-                    {
-                      certNo: record.certNo,
-                      bizType: record.bizType,
-                      bizNo: record.bizNo,
-                      traceCode: record.traceCode,
-                      dataHash: record.dataHash,
-                      signature: record.signature,
-                      blockHeight: record.blockHeight,
-                      chainId: record.chainId,
-                      payload: record.payload ?? {},
-                    },
-                    null,
-                    2,
-                  )}
-                </pre>
-              ),
-            },
-          ]}
+        <Alert
+          style={{ marginTop: 12 }}
+          type="info"
+          showIcon
+          message="以下字段后端未提供，本页不展示"
+          description="确认数、区块确认阈值、数字签名、链ID、出块时间、上链方式、存证原始数据 JSON —— 后端 BlockchainRecordEntity 均无这些字段，旧版由本地推导填充，已移除。"
         />
       </Card>
 
       <Card
-        title={allPassed ? '✅ 验证结果' : '❌ 验证结果'}
+        title="链上验真"
         extra={
-          <Typography.Text type={allPassed ? 'success' : 'danger'}>
-            {allPassed ? '数据未被篡改，区块链存证有效' : '存在未通过项，请复核链上数据'}
-          </Typography.Text>
+          <Button
+            type="primary"
+            icon={<SafetyCertificateOutlined />}
+            loading={verifying}
+            disabled={!txHash}
+            onClick={() => void handleVerify(txHash)}
+          >
+            验真
+          </Button>
         }
       >
-        <Steps
-          direction="vertical"
-          size="small"
-          current={finalChecks.length}
-          items={finalChecks.map((item) => ({
-            title: item.label,
-            description: item.detail,
-            status: item.passed ? 'finish' : 'error',
-          }))}
-        />
+        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+          {!txHash && (
+            <Alert
+              type="warning"
+              showIcon
+              message="该记录尚未上链（无交易哈希），无法验真"
+              description={`后端验真端点 ${VERIFY_ENDPOINT} 只接受交易哈希，且该记录 status=${record.status ?? '-'} 时 txHash 为 null。请先完成上链再验真。`}
+            />
+          )}
+
+          {!outcome && !failure && txHash && (
+            <Typography.Text type="secondary">
+              尚未验真。点击右上角「验真」将调用 {VERIFY_ENDPOINT}
+              ，后端返回布尔值：是否存在该交易哈希命中且存证状态为 SUCCESS 的记录。
+              本页不会在调用前给出任何推导结论。
+            </Typography.Text>
+          )}
+
+          {failure && (
+            <Alert
+              type="error"
+              showIcon
+              message={failure.title}
+              description={
+                <Space direction="vertical" size={4}>
+                  <Typography.Text>{failure.detail}</Typography.Text>
+                  <Typography.Text type="secondary">
+                    未取得验真结论，页面不会按链上信息本地推导结论 —— 请修复后端连通性后重试。
+                  </Typography.Text>
+                </Space>
+              }
+            />
+          )}
+
+          {outcome && (
+            <>
+              <Alert
+                type={outcome.passed ? 'success' : 'error'}
+                showIcon
+                icon={
+                  outcome.passed ? (
+                    <CheckCircleFilled style={{ color: '#13a05a' }} />
+                  ) : (
+                    <CloseCircleFilled style={{ color: '#ff4d4f' }} />
+                  )
+                }
+                message={
+                  <Space>
+                    <Typography.Text strong style={{ fontSize: 16 }}>
+                      {outcome.passed ? '✅ 验真通过' : '❌ 验真未通过'}
+                    </Typography.Text>
+                    <Typography.Text>
+                      {outcome.passed
+                        ? '链上存在该交易哈希对应的存证记录，且存证状态为 SUCCESS'
+                        : '链上未检索到该交易哈希对应的成功存证记录'}
+                    </Typography.Text>
+                  </Space>
+                }
+              />
+              <Descriptions bordered size="small" column={2}>
+                <Descriptions.Item label="交易哈希">
+                  <span style={MONO_STYLE}>{outcome.txHash}</span>
+                </Descriptions.Item>
+                <Descriptions.Item label="后端返回值">
+                  <span style={MONO_STYLE}>{String(outcome.passed)}</span>
+                </Descriptions.Item>
+                <Descriptions.Item label="验真时间">{outcome.verifiedAt}</Descriptions.Item>
+                <Descriptions.Item label="数据来源">
+                  <span style={MONO_STYLE}>{VERIFY_ENDPOINT}</span>
+                </Descriptions.Item>
+              </Descriptions>
+            </>
+          )}
+        </Space>
       </Card>
 
       <Card title={<Space><LinkOutlined />关联存证链路</Space>}>
-        <Typography.Text type="secondary">
-          溯源码 <span style={MONO_STYLE}>{record.traceCode ?? '-'}</span> 的完整链路
-        </Typography.Text>
-        <Timeline
-          style={{ marginTop: 16 }}
-          items={MOCK_CHAIN_LINK.map((item) => ({
-            color: item.passed ? 'green' : 'red',
-            children: (
-              <Space size={8}>
-                <Typography.Text type="secondary">{item.date}</Typography.Text>
-                <Typography.Text strong={Boolean(item.current)}>{item.type}</Typography.Text>
-                <Typography.Text style={MONO_STYLE}>{item.txHash}</Typography.Text>
-                {item.passed ? (
-                  <CheckCircleFilled style={{ color: '#13a05a' }} />
-                ) : (
-                  <CloseCircleFilled style={{ color: '#ff4d4f' }} />
-                )}
-              </Space>
-            ),
-          }))}
+        <Alert
+          type="info"
+          showIcon
+          message="后端暂未提供「按溯源码查询关联存证链路」的能力"
+          description={
+            <Space direction="vertical" size={4}>
+              <Typography.Text>
+                本存证的关联溯源码：
+                <span style={MONO_STYLE}>{record.traceCode ?? '—（该记录无溯源码）'}</span>
+              </Typography.Text>
+              <Typography.Text type="secondary">
+                旧版此处渲染的是一组固定示例链路（种植 / 施肥 / 防治 / 检测 / 采收，全部标记通过），
+                与当前存证无任何关联 —— 已移除。后端补齐链路查询端点后再接真实数据。
+              </Typography.Text>
+            </Space>
+          }
         />
       </Card>
 
       <Card>
         <Space wrap>
-          <Button
-            type="primary"
-            icon={<SafetyCertificateOutlined />}
-            loading={verifying}
-            onClick={() => void handleReVerify()}
-          >
-            重新验证
-          </Button>
-          <Button icon={<FileTextOutlined />} onClick={handleGotoBiz}>
-            查看关联业务
-          </Button>
-          <Button icon={<DownloadOutlined />} onClick={handleDownloadCert}>
+          <Button icon={<DownloadOutlined />} onClick={() => handleDownloadCert(record)}>
             下载存证证书
           </Button>
-          <Button icon={<ExportOutlined />} onClick={handleExportReport}>
-            导出验证报告
+          <Button icon={<DownloadOutlined />} onClick={() => handleExportReport(record)}>
+            导出验真报告
           </Button>
+          {txHash && (
+            <Button
+              type="link"
+              onClick={() =>
+                navigate(`/production/blockchain/verify?type=tx&value=${encodeURIComponent(txHash)}`)
+              }
+            >
+              在验真页打开
+            </Button>
+          )}
         </Space>
       </Card>
     </Space>
