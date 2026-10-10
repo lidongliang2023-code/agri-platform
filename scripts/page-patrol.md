@@ -204,6 +204,10 @@ GET /analytics/DEMO-SNAP-001    → 200 有数据
 - 若产品确实需要"后端不可用时本地暂存"，必须明确告诉用户**「仅保存在本地，未同步服务端」**，
   并常驻一条横幅——只弹 toast 的话，3 秒后表格里仍是一套服务端并不存在的配置值。
 - 正确模板：`api/settings.ts` 的 `listOperationLogs`，它把 `unavailableReason` 透传给页面。
+  ⚠️ **引它的写法，不要以为它接口是通的**：实测 `GET /settings/logs` 端点**不存在**（404），
+  所以它当前同样永远返回 `unavailableReason`、拿不到一条真实日志
+  （全后端 grep `OperationLog` / `SysLog` 零命中，见 `docs/backend-tickets.md` BT-20）。
+  模板的价值在**结构**（失败带原因、不回落示例数据），不在"它自己有数据"。
 - 注意别让 `absent` 断言撞上自己的文案（横幅里引用了成功提示原文，会让"没有成功提示"的断言误判）。
 
 ### 附 2：两种"HTTP 200 + code 0 但其实没干活"的静默失败

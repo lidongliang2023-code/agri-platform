@@ -538,7 +538,110 @@ quotaUsageRate / activeDays / revenue / strategy` …），后端**没有任何�
 
 ---
 
-## 附：已验证为"真生效 / 有真数据"的对照（跨三个域）
+---
+
+# 域 4：`settings`（系统设置）
+
+> 产出人：se-verify-fix　日期：2026-10-10　实测端口 **8097**
+> 本域**只出工单不改代码**。
+
+**现有端点**（`SettingController.java`）：`GET /settings`（4 条）、`GET /{id}`、`POST`、
+`PUT /{id}`、`DELETE /{id}`、`GET /by-key?settingKey=`、`POST /save`。
+
+---
+
+## BT-19　租户档案端点不存在（读 + 写都没有）
+
+| 项 | 内容 |
+| --- | --- |
+| 读端点 | `GET /api/v1/production/settings/tenant` → **code=404「资源不存在」** |
+| 写端点 | `PUT /api/v1/production/settings/tenant` → **code=404「资源不存在」** |
+| 前端函数 | `getTenantProfile()` / `saveTenantProfile()` |
+| 调用方 | `SystemSettings.tsx:50-54,286,327` |
+
+**前端现状**：已诚实化——`getTenantProfile` 返回 `unavailableReason`，页面显示「—」并挂说明横幅；
+`saveTenantProfile` 失败则如实报错、不写本地。**纯后端工单。**
+
+**期望语义**：租户档案的读与保存（农场名称 / 统一社会信用代码 / 联系人 / 区域 / 简介等）。
+需先确认落库位置（`prod_sys_setting` 显然不是放档案的地方）。
+
+---
+
+## BT-20　操作日志端点不存在 ⚠️（它是巡检手册里的"标准模板"）
+
+| 项 | 内容 |
+| --- | --- |
+| 端点 | `GET /api/v1/production/settings/logs` → **code=404「资源不存在」** |
+| 前端函数 | `listOperationLogs()` |
+| 调用方 | `SystemSettings.tsx:51` |
+
+**全后端佐证**：`core-platform` 下 grep `OperationLog` / `SysLog` **零命中**，也没有任何 `/logs` 映射。
+
+**⚠️ 必须说清楚的一点**：`scripts/page-patrol.md` 与本文档都把 `listOperationLogs` 当作
+**"失败带 `unavailableReason`、不回落示例数据"的正确模板**——这个**写法**仍然是标准，
+但**它自己的端点同样不存在**，所以它当前也永远返回 `unavailableReason`、拿不到一条真实日志。
+引用它时请引**结构**，不要误以为"这个接口是通的"。
+
+**期望语义**：提供操作日志数据源与分页端点（谁 / 何时 / 做了什么 / 结果）。
+
+---
+
+## BT-21　`getSetting(configKey)` 的路径取不到数据（**与既有裁决冲突，请裁决**）
+
+**实测**（同一个配置项，三种取法）：
+
+```
+GET /settings/by-key?settingKey=DEMO.alert.notifyChannels → code=0 ✅ 正确用法
+GET /settings/DEMO-SET-001                                → code=0 ✅（传的是 settingId）
+GET /settings/DEMO.alert.notifyChannels                   → code=404 ❌（前端 getSetting 的写法）
+```
+
+**成因**：`@GetMapping("/{id}")` 里的 `id` 是 **`settingId`**，不是 `settingKey`。
+前端 `getSetting(configKey)`（`api/settings.ts:78-79`）把 configKey 拼进 `/{configKey}`，
+对该端点而言就是在用一个不存在的 id 去查 → 404。
+
+**零调用方**：全仓 grep `getSetting(` 只命中声明本身，**没有任何页面调用**。
+
+**⚠️ 与既有裁决冲突**：上一轮 team-lead 曾裁决「`getSetting(configKey)`（path `/{configKey}`）
+必须 NOT be changed」。当时的上下文是"不要顺手改"，现在实测证明**这个写法取不到数据**。
+请裁决二选一：
+1. **删除**该声明（端点用法错 + 零调用方，按规则应删）；
+2. **改为走 `GET /settings/by-key?settingKey=`**（与 `deleteSetting` 里已用的正确取法一致）。
+
+**本轮只记录，未改动。**
+
+---
+
+## BT-22　写端点的两处"静默"行为（后端）
+
+| 现象 | 实测 | 类型 |
+| --- | --- | --- |
+| `DELETE /settings/{不存在的 id}` | `code=0 / success`，**一行也没删** | **静默无操作** |
+| `POST /settings/save` **空体** `{}` | `code=0 / success`，且**真的 INSERT 了一条 `setting_key` / `setting_value` 全为 NULL 的行** | **静默写空** |
+
+（第二条是本轮实测**亲手触发**的：为探端点存在性发了一次空体 POST，库里多了一条
+`SETG202610101458363756`（键值全 NULL），**已 DELETE 清理**；顺带把早前探针留下的另外两条
+NULL 键值行也一并清理，当前 `prod_sys_setting` 已无 `setting_key IS NULL` 的行。）
+
+**期望语义**：
+- `DELETE` 应返回受影响行数，删不到就报错（不要让调用方以为删成功了）；
+- `POST /save` 应校验 `settingKey` 非空，空则 400 且**不落库**。
+
+**前端侧**已按"回读验收"标准处理：`deleteSetting` 就是「取真实 id → 删 → 再读校验」，
+正是为了防这类静默；但**服务端不该依赖调用方回读才发现没删成**。
+
+---
+
+## 观察项（未开工单）
+
+`GET /settings?page=1&size=10` 返回 **4 条**（`DEMO-SET-001~004`），而库里
+`prod_sys_setting` 有 18 行——差额是按 `market_id` / `tenant_id` 隔离的结果。
+即：**通过页面保存的 10 条参数配置（13:34 那批）不在当前租户的列表里**。
+需确认这是预期的多租户隔离，还是保存时写错了 market/tenant 归属。
+
+---
+
+## 附：已验证为"真生效 / 有真数据"的对照（跨四个域）
 
 | 操作 | 端点 | 结果 |
 | --- | --- | --- |
@@ -555,3 +658,6 @@ quotaUsageRate / activeDays / revenue / strategy` …），后端**没有任何�
 | 报表任务列表 | `GET /admin/reports` | 2 条真任务（GOV/PENDING、QUALITY/DONE）✅ |
 | 报表任务详情 | `GET /admin/reports/DEMO-RPT-002` | 真数据，17 字段 ✅ |
 | 生产/质量报表 | `GET /admin/reports/production`、`/quality` | 各 1 条（裸数组）✅ |
+| 系统配置列表 | `GET /settings?page=1&size=10` | 4 条真配置 ✅ |
+| 配置项（按 id / 按 key） | `GET /settings/DEMO-SET-001`、`GET /settings/by-key?settingKey=…` | 真数据，17 字段 ✅ |
+| 保存配置 | `POST /settings/save` | 真写入并回读校验通过（见 BT-01 同款标准）✅ |
