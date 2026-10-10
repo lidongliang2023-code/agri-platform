@@ -15,6 +15,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { PageContainer } from '@ant-design/pro-components'
 import {
+  Alert as AntAlert,
   Button,
   Card,
   Col,
@@ -56,6 +57,7 @@ import {
   transferInventoryRecord,
 } from '@/api/harvests'
 import type { InventoryFlow, InventoryRecord } from '@/types'
+import { asApiRequestError, httpStatusOf } from '@/utils/request'
 import {
   GRADE_COLOR_MAP,
   GRADE_LABEL_MAP,
@@ -264,6 +266,27 @@ export default function InventoryDetail(): JSX.Element {
     keyof typeof INVENTORY_HEALTH_META
   const healthMeta = INVENTORY_HEALTH_META[health] ?? INVENTORY_HEALTH_META.normal
   const flows = flowQuery.data?.list ?? []
+
+  /**
+   * 出入库流水查询失败的**真实原因**（后端业务码 / HTTP 状态 / 连不上）。
+   * 只陈述实测现象，不写成「接口建设中」这类猜测。
+   */
+  const flowErrorMessage: string = (() => {
+    const error = flowQuery.error as unknown
+    if (!error) {
+      return '未知原因'
+    }
+    const apiError = asApiRequestError(error)
+    if (apiError) {
+      return `后端返回业务码 ${apiError.bizCode}（${apiError.message || '无提示'}）`
+    }
+    const status = httpStatusOf(error)
+    if (status === 0) {
+      return `无法连接到服务端（${(error as Error)?.message ?? '网络异常'}）`
+    }
+    return `HTTP ${status}（${(error as Error)?.message ?? '未知原因'}）`
+  })()
+
   const safePercent =
     record.safeQty && record.safeQty > 0
       ? Math.min(100, Math.round((record.currentQty / (record.safeQty * 2)) * 100))
@@ -326,6 +349,7 @@ export default function InventoryDetail(): JSX.Element {
       {detailQuery.data?.demo ? (
         <DemoDataAlert
           scope="库存详情卡片（含库存水位）"
+          reason={detailQuery.data?.demoReason}
           writeNote="出库、调拨、冻结 / 解冻都不会写入服务端，也不会改动本地数据：后端不可用时这些操作会直接失败并提示原因（含「未写入服务端」字样）。"
         />
       ) : null}
@@ -431,7 +455,24 @@ export default function InventoryDetail(): JSX.Element {
         {flowQuery.data?.demo ? (
           <DemoDataAlert
             scope="下方出入库流水表"
+            reason={flowQuery.data?.demoReason}
             writeNote="本表为只读展示，不涉及写操作；流水接口不可用时不会向服务端写入任何数据。"
+          />
+        ) : null}
+        {/*
+          失败必须说出来，不能只留一张空表。
+          教训：`queryInventoryFlows` 曾把路径写成 `/harvests/inventory/{batchId}/flows`，
+          后端返回「业务码 500」，这里是「空表 + 无任何提示」，看上去像"这段时间没有流水"，
+          真正的原因（前端路径写错）被完全藏住。现在把后端给的原因原样显示。
+        */}
+        {flowQuery.isError ? (
+          <AntAlert
+            banner
+            showIcon
+            type="error"
+            style={{ marginBottom: 16 }}
+            message={`出入库流水未取到：${flowErrorMessage}`}
+            description="这不是「这段时间没有出入库流水」，而是本次请求失败了。请把上面的原因报给后端或前端负责人。"
           />
         ) : null}
         <Table<InventoryFlow>

@@ -533,6 +533,7 @@ export default function HarvestRecords(): JSX.Element {
       {boardQuery.data?.demo ? (
         <DemoDataAlert
           scope="顶部四张统计卡、Tab 计数、日历视图与下方列表"
+          reason={boardQuery.data?.demoReason}
           writeNote="「入库 / 批量入库」不会写入服务端，也不会改动本地数据：后端不可用时操作会直接失败，并按失败条数+首个原因如实提示（含「未写入服务端」字样）。"
         />
       ) : null}
