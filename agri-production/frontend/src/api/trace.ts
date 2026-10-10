@@ -106,8 +106,10 @@ export function fetchTraceCodeDetail(code: string): Promise<RawTraceCode> {
 /**
  * 为批次生成溯源码（后端 POST /trace/codes/generate?batchId=）
  *
- * 注意：后端同一批次仅允许存在一个溯源码，重复生成会抛 TRACE_CODE_DUPLICATED，
- * 批量生成时页面层需循环调用并按成功 / 失败分别提示。
+ * 注意：后端**每次调用发一个新码、一个批次可以有多个码**
+ * （prod_trace_code 的唯一键只有 uk_trace_code(code)，没有按批次的唯一约束）。
+ * 唯一性由 uk_trace_code 保证，因此批量生成循环调用即可；
+ * 只有当连续 10 次随机后缀碰撞时才会失败（业务码 3002）。
  */
 export function generateTraceCode(
   batchId: string | number,

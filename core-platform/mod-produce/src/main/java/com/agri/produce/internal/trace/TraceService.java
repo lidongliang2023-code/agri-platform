@@ -31,7 +31,7 @@ public class TraceService {
     private final HarvestBatchMapper harvestBatchMapper;
     private final DomainEventPublisher eventPublisher;
 
-    /** 码值碰撞后的最大重生成次数（三位随机后缀，单批次 900 个可用值） */
+    /** 码值碰撞后的最大重生成次数（四位随机后缀，单批次 9000 个可用值） */
     private static final int CODE_GENERATE_MAX_RETRY = 10;
 
     /**
@@ -64,8 +64,10 @@ public class TraceService {
      * {@code TRACE_CODE_DUPLICATED} 守卫与既有数据自相矛盾，已移除。
      * 本方法语义是：<b>每次调用发一个新码</b>，唯一性由 {@code uk_trace_code} 保证。</p>
      *
-     * <p><b>码值碰撞处理</b>：码值形如 {@code TRC + batchNo + 三位随机后缀}（100~999，
-     * 即单批次 900 个可用值）。随机后缀存在碰撞可能，因此生成后先按 code 查重，
+     * <p><b>码值碰撞处理</b>：码值形如 {@code TRC + batchNo + 四位随机后缀}（1000~9999，
+     * 即单批次 9000 个可用值）。表语义是「一物一码」（V1__init_core.sql:266），
+     * 一个采收批次按包装拆码时 900 个不够用（5000kg / 10kg 装就是 500 个，再拆箱就超），
+     * 因此后缀取四位。随机后缀存在碰撞可能，因此生成后先按 code 查重，
      * 撞了就重新生成，最多 {@link #CODE_GENERATE_MAX_RETRY} 次；重试耗尽时抛
      * {@code TRACE_CODE_DUPLICATED} 并说明原因（不依赖唯一键冲突异常兜底，那会变成 500）。</p>
      *
@@ -108,7 +110,7 @@ public class TraceService {
     /**
      * 生成一个未被占用的溯源码。
      *
-     * <p>码值形如 {@code TRC + batchNo + 三位随机后缀}（{@code nextInt(100, 999)}）。
+     * <p>码值形如 {@code TRC + batchNo + 四位随机后缀}（{@code nextInt(1000, 9999)}）。
      * 随机后缀会碰撞，所以先按 {@code code} 查重再决定是否采用；
      * 连续碰撞到上限就明确报错，而不是把唯一键冲突抛成 500。</p>
      *
@@ -118,7 +120,7 @@ public class TraceService {
      */
     private String generateUniqueCode(String batchNo, String batchId) {
         for (int attempt = 1; attempt <= CODE_GENERATE_MAX_RETRY; attempt += 1) {
-            String candidate = "TRC" + batchNo + ThreadLocalRandom.current().nextInt(100, 999);
+            String candidate = "TRC" + batchNo + ThreadLocalRandom.current().nextInt(1000, 9999);
             Long used = traceCodeMapper.selectCount(new LambdaQueryWrapper<TraceCodeEntity>()
                     .eq(TraceCodeEntity::getCode, candidate));
             if (used == null || used == 0L) {
@@ -128,7 +130,7 @@ public class TraceService {
         throw new BusinessException(
                 ErrorCode.TRACE_CODE_DUPLICATED,
                 "溯源码生成失败：连续 " + CODE_GENERATE_MAX_RETRY
-                        + " 次码值碰撞（单批次可用值仅 900 个），batchId=" + batchId
+                        + " 次码值碰撞（单批次可用值仅 9000 个），batchId=" + batchId
                         + "，batchNo=" + batchNo);
     }
 

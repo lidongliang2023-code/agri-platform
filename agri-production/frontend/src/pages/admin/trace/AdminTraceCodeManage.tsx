@@ -522,15 +522,15 @@ export default function AdminTraceCodeManage(): JSX.Element {
     let successCount = 0
     try {
       /**
-       * 后端同一批次仅允许存在一个溯源码（重复生成抛 TRACE_CODE_DUPLICATED），
-       * 因此批量生成按数量循环提交，成功 / 失败分别计数。
+       * 后端每次调用发一个新码、一个批次可以有多个码（唯一性由 uk_trace_code(code)
+       * 保证，没有按批次的唯一约束），因此按数量循环提交即可。
        */
       for (let index = 0; index < values.count; index += 1) {
         try {
           await generateTraceCode(values.batchId)
           successCount += 1
         } catch {
-          // 达到唯一约束上限时停止，避免无意义重试
+          // 接口报错即停止，避免无意义重试
           break
         }
       }
@@ -543,7 +543,7 @@ export default function AdminTraceCodeManage(): JSX.Element {
       generateForm.resetFields()
       void queryClient.invalidateQueries({ queryKey: ['admin', 'trace', 'codes'] })
     } else {
-      message.warning('生成失败：该批次已存在溯源码或后端生成接口不可用')
+      message.warning('生成失败：后端生成接口不可用，或该批次不存在')
     }
   }
 
