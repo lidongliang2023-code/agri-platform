@@ -253,8 +253,9 @@ public class InventoryService {
         }
         ledger.setHealthStatus(resolveHealth(ledger));
 
+        InventoryOperationResultKind kind = InventoryOperationResultKind.UPDATED;
         if (created) {
-            insertOrResurrect(ledger);
+            kind = insertOrResurrect(ledger);
         } else {
             inventoryMapper.updateById(ledger);
         }
@@ -265,7 +266,7 @@ public class InventoryService {
         inventoryFlowMapper.insert(flow);
 
         markBatchInbound(batchId, warehouseName);
-        return InventoryOperationResult.of(ledger, before, quantity, flow.getFlowId(), created);
+        return InventoryOperationResult.of(ledger, before, quantity, flow.getFlowId(), kind);
     }
 
     /**
@@ -308,7 +309,8 @@ public class InventoryService {
         if (after.compareTo(BigDecimal.ZERO) <= 0) {
             markBatchStatus(batchId, 3);
         }
-        return InventoryOperationResult.of(ledger, before, quantity.negate(), flow.getFlowId(), false);
+        return InventoryOperationResult.of(ledger, before, quantity.negate(), flow.getFlowId(),
+                InventoryOperationResultKind.UPDATED);
     }
 
     /**
@@ -366,8 +368,9 @@ public class InventoryService {
         target.setCurrentQty(targetAfter);
         target.setLastInAt(LocalDateTime.now());
         target.setHealthStatus(resolveHealth(target));
+        InventoryOperationResultKind targetKind = InventoryOperationResultKind.UPDATED;
         if (created) {
-            insertOrResurrect(target);
+            targetKind = insertOrResurrect(target);
         } else {
             inventoryMapper.updateById(target);
         }
@@ -378,12 +381,13 @@ public class InventoryService {
         inventoryFlowMapper.insert(targetFlow);
 
         InventoryOperationResult result = InventoryOperationResult.of(source, before, quantity.negate(),
-                sourceFlow.getFlowId(), false);
+                sourceFlow.getFlowId(), InventoryOperationResultKind.UPDATED);
         result.setTargetInventoryId(target.getInventoryId());
         result.setTargetWarehouseName(targetWarehouse);
         result.setTargetBeforeQty(targetBefore);
         result.setTargetCurrentQty(targetAfter);
-        result.setTargetLedgerCreated(created);
+        result.setTargetResultKind(targetKind);
+        result.setTargetLedgerCreated(targetKind == InventoryOperationResultKind.CREATED);
         result.setTargetFlowId(targetFlow.getFlowId());
         return result;
     }
@@ -468,18 +472,21 @@ public class InventoryService {
      * 只做复活不加约束则拦不住绕过本 Service 的写入。
      *
      * @param ledger 待落库的新台账（库位须已归一化）
+     * @return 实际发生的作用方式：有墓碑为 {@code RESURRECTED}，否则 {@code CREATED}
      */
-    private void insertOrResurrect(InventoryEntity ledger) {
+    private InventoryOperationResultKind insertOrResurrect(InventoryEntity ledger) {
         String tombstoneId = inventoryMapper.selectDeletedSlotId(
                 ledger.getBatchId(), ledger.getWarehouseName(),
                 normalizeLocation(ledger.getLocationCode()));
         if (tombstoneId != null) {
+            // 复活：数量清零后重写，避免把上次作废台账的库存带回来
             inventoryMapper.resurrectSlot(tombstoneId);
             ledger.setInventoryId(tombstoneId);
             inventoryMapper.updateById(ledger);
-            return;
+            return InventoryOperationResultKind.RESURRECTED;
         }
         inventoryMapper.insert(ledger);
+        return InventoryOperationResultKind.CREATED;
     }
 
     /**

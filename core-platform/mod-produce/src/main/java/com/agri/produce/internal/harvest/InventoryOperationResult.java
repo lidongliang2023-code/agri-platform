@@ -43,7 +43,22 @@ public class InventoryOperationResult {
     /** 计量单位 */
     private String unit;
 
-    /** 本次是否新建了台账：true 表示新建行，false 表示在已有行上累加 */
+    /**
+     * 本次对台账行的作用方式，判断语义以本字段为准。
+     *
+     * @see InventoryOperationResultKind
+     */
+    private InventoryOperationResultKind resultKind;
+
+    /**
+     * 是否新建了台账行。
+     *
+     * <p><b>等价于 {@code resultKind == CREATED}</b>，仅为兼容既有调用方保留。
+     * 注意它<b>不能</b>用来判断「是不是新出现了一条在用台账」—— 复活墓碑行
+     * （{@link InventoryOperationResultKind#RESURRECTED}）同样会让一条台账进入在用，
+     * 但本字段为 {@code false}，且 {@code inventoryId} 是墓碑行的旧主键。
+     * 需要区分语义时一律读 {@code resultKind}。
+     */
     private boolean ledgerCreated;
 
     /** 本次写入的流水号 */
@@ -61,7 +76,13 @@ public class InventoryOperationResult {
     /** 调拨目标变动后库存，非调拨为 null */
     private BigDecimal targetCurrentQty;
 
-    /** 调拨目标侧是否新建台账 */
+    /** 调拨目标侧的作用方式（CREATED / UPDATED / RESURRECTED），非调拨为 null */
+    private InventoryOperationResultKind targetResultKind;
+
+    /**
+     * 调拨目标侧是否新建台账行，等价于
+     * {@code targetResultKind == CREATED}，兼容字段，语义以 {@code targetResultKind} 为准。
+     */
     private boolean targetLedgerCreated;
 
     /** 调拨目标侧流水号 */
@@ -70,15 +91,16 @@ public class InventoryOperationResult {
     /**
      * 构造主台账侧结果。
      *
-     * @param ledger   变动后的台账
-     * @param beforeQty 变动前库存
+     * @param ledger    变动后的台账
+     * @param beforeQty 变动前库存（复活场景恒为 0）
      * @param deltaQty  变动量（正增负减）
      * @param flowId    流水号
-     * @param created   是否新建台账
+     * @param kind      本次对台账行的作用方式
      * @return 结果视图
      */
     public static InventoryOperationResult of(InventoryEntity ledger, BigDecimal beforeQty,
-                                              BigDecimal deltaQty, String flowId, boolean created) {
+                                              BigDecimal deltaQty, String flowId,
+                                              InventoryOperationResultKind kind) {
         InventoryOperationResult result = new InventoryOperationResult();
         result.setInventoryId(ledger.getInventoryId());
         result.setBatchId(ledger.getBatchId());
@@ -88,7 +110,8 @@ public class InventoryOperationResult {
         result.setDeltaQty(deltaQty);
         result.setCurrentQty(ledger.getCurrentQty());
         result.setUnit(ledger.getUnit());
-        result.setLedgerCreated(created);
+        result.setResultKind(kind);
+        result.setLedgerCreated(kind == InventoryOperationResultKind.CREATED);
         result.setFlowId(flowId);
         return result;
     }
