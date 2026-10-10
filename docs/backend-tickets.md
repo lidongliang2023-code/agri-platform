@@ -1530,3 +1530,123 @@ setRows((prev) => prev.filter((item) => !ids.includes(item.approvalId)))  // ←
   形状校验不让骨架数据冒充真流程。✅
 
 ---
+
+# 域：`api/admin/farms`（运营端农场监管）
+
+> 扫描人：se-verify-fix　日期：2026-10-10　性质：**只读调研**（GET 实测 +
+> 后端源码对照 + 前端静态审计），**不改任何业务代码**。
+> 后端 `AdminFarmController` 全部映射（9 个）：`GET ""`、`GET /{farmId}/compliance`、
+> `GET /cert-expiring`、`PUT /{farmId}/status`、`GET /map`、`GET /compliance`、
+> `GET /compliance/checks`、`POST /compliance`、`PUT /compliance/{checkId}`。
+
+**总体印象：这个域已经被诚实化过一轮**（`FarmSupervisionList` / `FarmSupervisionDetail` /
+`ComplianceCheck` 三页里到处是"原实现会用示例农场顶替，此处不再…"的注释），
+**没有发现写操作谎报成功**。下面的条目主要是"端点不存在 + 零调用方的死声明"和两处残留示例口径。
+
+## 本域已验证有真数据的端点
+
+| 端点 | 实测 |
+| --- | --- |
+| `GET /admin/farms` | code=0，`PageResult<FarmInfoEntity>`（DEMO-FARM-001 等）✅ |
+| `GET /admin/farms/map` | code=0，`[{farmId, farmName, province, city, district, areaTotal}]` ✅（⚠️ 确实**不含经纬度**，与前端注释一致） |
+| `GET /admin/farms/compliance/checks` | code=0，`PageResult<FarmComplianceCheckEntity>`（DEMO-CHK-004）✅ |
+| `GET /admin/farms/compliance` | code=0，List<Map> 真数据 ⚠️（字段类型混用，见 BT-49） |
+| `GET /admin/farms/{farmId}/compliance` | code=0，Map 真数据 ⚠️（同上） |
+| `GET /admin/farms/cert-expiring` | code=0，但 `data: []`（端点在、无数据） |
+| `GET /admin/farms/{farmId}` | **真 id `DEMO-FARM-001` 也 500** ❌（见 BT-46） |
+
+✅ **值得记一笔"没编造，别改坏"**：`/admin/farms/map` 不含经纬度，而
+`FarmGisMap.tsx` 里 **grep `longitude` / `latitude` / `Math.random` 全部零命中**
+——GIS 页**没有**拿随机数伪造坐标。这是对的，保持。
+
+## BT-46　`GET / PUT / DELETE /admin/farms/{farmId}` 三个端点都不存在 · 零调用方 → 建议删
+
+**成对实测**（比"同 id 两条路径"更直接：**真 id 与假 id 都打同一路径**，再拿同前缀下有 handler 的路径做对照）：
+
+```
+GET /admin/farms/DEMO-FARM-001          → 500   ← 真 id 也是 500
+GET /admin/farms/FARM-NOPE              → 500
+对照 GET /admin/farms/DEMO-FARM-001/compliance → 200  ← 同前缀、有 handler 的路径长这样
+```
+
+后端 9 个映射里也没有 `GET /{farmId}` / `PUT /{farmId}` / `DELETE /{farmId}`。
+
+**受影响的前端声明**（`api/admin/farms.ts`，**全部零外部引用**）：
+`getSupervisedFarm`（GET）、`updateSupervisedFarm`（PUT）、`deleteSupervisedFarm`（DELETE）。
+
+按判定规则（**端点不存在 + 零调用方**）→ **建议删除**这三个声明。待裁决。
+
+## BT-47　`updateSupervisedFarmStatus` 用 PATCH，后端是 PUT；且与正确实现重复
+
+| 函数 | 前端写法 | 后端 |
+| --- | --- | --- |
+| `updateSupervisedFarmStatus` | **`PATCH`** `/{farmId}/status`，body `{status}` | `PUT /{farmId}/status?enable=true\|false` |
+| `toggleSupervisedFarmStatus` | **`PUT`** `/{farmId}/status?enable=` | ✅ 正确 |
+
+两个函数打同一个路径，一个对一个错。`updateSupervisedFarmStatus` **零外部引用**，
+`toggleSupervisedFarmStatus` 也零外部引用（本域监管停用/恢复目前没接上页面）。
+错的那个建议删（端点形式与后端不符 + 无调用方 + 有正确的孪生实现）。待裁决。
+
+## BT-48　`deleteComplianceCheck` 端点不存在 · 零调用方 → 建议删
+
+前端 `DELETE /admin/farms/compliance/{checkId}`；后端只有
+`POST /compliance` 与 `PUT /compliance/{checkId}`，**没有 DELETE**。零外部引用 → 建议删。待裁决。
+
+## BT-49　合规画像接口**同对象内字符串与数字混用** → 类型撒谎 ⚠️
+
+**实测**（`GET /admin/farms/compliance`，两条端点形状一致）：
+
+```json
+{"farmId":"DEMO-FARM-001","farmName":"…","plotCount":"5","certCount":2,
+ "certExpiring":"0","certExpired":"0","complianceLevel":"OK"}
+```
+
+| 字段 | 实际类型 | 前端 `FarmComplianceProfile` 声明 |
+| --- | --- | --- |
+| `plotCount` | **字符串** `"5"` | `number` ❌ |
+| `certCount` | 数字 `2` | `number` ✅ |
+| `certExpiring` | **字符串** `"0"` | `number` ❌ |
+| `certExpired` | **字符串** `"0"` | `number` ❌ |
+
+**同一个对象里字符串和数字并存**——与 `#76 修正 dashboard 计数类型混用` 是同一类问题，
+属于后端 `Map<String,Object>` 组装时没做类型收敛。
+
+⚠️ **为什么现在没炸**：`FarmSupervisionDetail.tsx:319-324` 算合规率时用的是
+`(certCount - certExpired) / certCount`，JS 减法会隐式把 `"0"` 转数字，
+所以**恰好不出错**。但这是运气不是契约——一旦后端把 `certCount` 也拼成字符串，
+`("2" - "0") / "2"` 仍侥幸成立，而任何 `+` 拼接或 `===` 比较都会立刻翻车。
+
+**建议**：后端统一为数字（或前端在 api 层做一次 `Number()` 收敛）。
+
+## BT-50　`FarmSupervisionDetail` 合规率趋势图：6 个点里 **5 个是编造的** ⚠️ 待裁决
+
+**源码**：`FarmSupervisionDetail.tsx:172-193` `buildComplianceSeries()`
+
+```ts
+const offset = ((seedValue >> (i * 2)) % 7) - 3          // 由 farmId 哈希出来的偏移
+values.push(Math.min(100, Math.max(0, currentRate + offset)))   // 前 5 点
+values.push(currentRate)                                  // 只有第 6 点是真的
+```
+
+以「当前合规率」为末点、按 farmId 的稳定哈希**反推**出前 5 个月的值，画出一条"近 6 个月合规率趋势"。
+**只有末点是真实数据，其余 5 点是编造的**（哈希保证多次渲染不跳变，反而更像真数据）。
+
+**当前的提示方式**：只在卡片右上角挂了一个 `Text type="secondary"` + Tooltip
+「历史点位为示例口径」——**一条六点折线里五个点不是真的，用小字标注不够**，
+读图的人看的是曲线形状（"合规率在回升/恶化"），而形状完全是哈希决定的。
+
+**与 BT-33 同类**：示例数据不该靠标注留在图上。
+**建议**（待裁决）：后端没有时间序列就不画趋势图，改为只显示「当前合规率」这一个真值。
+
+## 附：本域诚实的地方（不要改坏）
+
+- `FarmSupervisionList.tsx`：`mapFarmToRow` 注释明确"任何情况下表格里都不会再出现示例农场"；
+  统计卡片注释"不再显示原型示例数字（原 3,542 / 2,980 / 412 / 150 均为示例口径）"。
+- `FarmSupervisionDetail.tsx`：查不到农场时显式「未找到」，注释写明"绝不拿原型示例档案冒充
+  （可能被误当作真实档案用于下发整改与风险判定）"；产量/完成率原示例值 580 吨 / 92.5% 已撤。
+- `ComplianceCheck.tsx`：写操作失败用 `message.warning('…已登记到本地，但未写入服务端')`；
+  下拉框"不再用示例农场填充"。
+- `api/admin/farms.ts` 的 `ComplianceWriteResult`：把失败拆成 `rejected`（服务端明确拒绝，**不降级**）
+  与 `unreachable`（服务端故障，才可离线兜底）——**这个口径是对的，值得作为其他域的模板**。
+
+---
