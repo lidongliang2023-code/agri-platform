@@ -32,6 +32,7 @@ import {
   Space,
   Statistic,
   Tag,
+  Tooltip,
   Typography,
   message,
 } from 'antd'
@@ -99,10 +100,20 @@ export default function Detail(): JSX.Element {
     window.print()
   }
 
-  /** 提交入库 */
+  /**
+   * 提交入库。
+   *
+   * 仓库名**不再有默认值**：该项必填，`validateFields` 已保证有值；
+   * 这里再兜一次是为了类型收口——真拿不到就直接失败，不用"主仓库"冒充。
+   */
   const handleInbound = (): void => {
     inboundForm.validateFields().then((values) => {
-      inboundMutation.mutate(values.warehouseName ?? '主仓库')
+      const warehouseName = values.warehouseName as string | undefined
+      if (!warehouseName) {
+        message.error('请先选择入库仓库，未提交到服务端')
+        return
+      }
+      inboundMutation.mutate(warehouseName)
     })
   }
 
@@ -135,6 +146,14 @@ export default function Detail(): JSX.Element {
     )
   }
 
+  /**
+   * 后端 `HarvestBatchEntity` **不返回** `inboundStatus`（实测 `GET /harvests/{batchId}`
+   * 的字段全集里没有它）。所以任何 `?? 0` 兜底都等价于「恒为待入库」——页面会显示一个
+   * 服务端从没说过的状态。这里显式判定"后端给没给"，没给就显示"未提供"。
+   * 后端补字段的工单见 `docs/backend-tickets.md`（观察项）。
+   */
+  const inboundStatusProvided: boolean =
+    batch.inboundStatus !== undefined && batch.inboundStatus !== null
   const inbound = INBOUND_STATUS_META[(batch.inboundStatus ?? 0) as InboundStatus]
   const finishRate =
     batch.expectedQuantity && batch.expectedQuantity > 0
@@ -153,16 +172,30 @@ export default function Detail(): JSX.Element {
       }
       subTitle={batch.farmName ?? currentFarm?.farmName}
       extra={[
-        <Button
-          key="inbound"
-          type="primary"
-          icon={<InboxOutlined />}
-          disabled={(batch.inboundStatus ?? 0) !== 0}
-          loading={inboundMutation.isPending}
-          onClick={() => setInboundOpen(true)}
+        /*
+         * 后端不返回 inboundStatus，无法判断"是否已入库"。
+         * 这里**不禁用**按钮（禁用会让入库功能彻底不可用），改为在 Tooltip 里说明风险，
+         * 让用户自己确认；入库弹窗里同样带一行提示。
+         */
+        <Tooltip
+          key="inbound-tip"
+          title={
+            inboundStatusProvided
+              ? undefined
+              : '后端未提供入库状态，无法判断是否已入库；若已入库请勿重复提交'
+          }
         >
-          确认入库
-        </Button>,
+          <Button
+            key="inbound"
+            type="primary"
+            icon={<InboxOutlined />}
+            disabled={inboundStatusProvided && (batch.inboundStatus ?? 0) !== 0}
+            loading={inboundMutation.isPending}
+            onClick={() => setInboundOpen(true)}
+          >
+            确认入库
+          </Button>
+        </Tooltip>,
         <Button key="print" icon={<PrinterOutlined />} onClick={handlePrint}>
           打印采收单
         </Button>,
@@ -181,9 +214,16 @@ export default function Detail(): JSX.Element {
           <Descriptions.Item label="采收编号">{batch.batchNo}</Descriptions.Item>
           <Descriptions.Item label="状态">
             <Space size={4}>
-              <Tag color={inbound.color}>
-                <span style={{ color: inbound.color }}>●</span> {inbound.label}
-              </Tag>
+              {inboundStatusProvided ? (
+                <Tag color={inbound.color}>
+                  <span style={{ color: inbound.color }}>●</span> {inbound.label}
+                </Tag>
+              ) : (
+                // 后端未返回该字段：不能显示「待入库」——那是兜底出来的，不是服务端真值
+                <Tooltip title="后端未返回入库状态字段（inboundStatus），此处不是服务端真值；后端工单已派">
+                  <Tag>入库状态未提供</Tag>
+                </Tooltip>
+              )}
               <Tag color={BATCH_STATUS_META[batch.status]?.color ?? 'default'}>
                 {BATCH_STATUS_META[batch.status]?.label ?? batch.status}
               </Tag>
@@ -283,9 +323,15 @@ export default function Detail(): JSX.Element {
             ) : (
               <Space>
                 <Typography.Text type="secondary">未生成溯源码</Typography.Text>
-                {(batch.inboundStatus ?? 0) === 0 ? (
-                  <Typography.Text type="secondary">（入库后自动生成）</Typography.Text>
-                ) : null}
+                {inboundStatusProvided ? (
+                  (batch.inboundStatus ?? 0) === 0 ? (
+                    <Typography.Text type="secondary">（入库后自动生成）</Typography.Text>
+                  ) : null
+                ) : (
+                  <Typography.Text type="secondary">
+                    （是否已入库后端未提供，溯源码在入库成功后生成）
+                  </Typography.Text>
+                )}
               </Space>
             )}
           </Descriptions.Item>
@@ -329,8 +375,17 @@ export default function Detail(): JSX.Element {
           form={inboundForm}
           layout="vertical"
           style={{ marginTop: 16 }}
-          initialValues={{ warehouseName: '主仓库' }}
+          /* 不再默认"主仓库"：默认值会被当成真实仓库名直接入库（与 ?? 0 兜底同型） */
+          initialValues={{}}
         >
+          {!inboundStatusProvided ? (
+            <Alert
+              type="warning"
+              showIcon
+              style={{ marginBottom: 12 }}
+              message="后端未提供入库状态，无法判断是否已入库——若已入库请勿重复提交"
+            />
+          ) : null}
           <Form.Item
             name="warehouseName"
             label="入库仓库"
