@@ -53,6 +53,7 @@ import {
 import { listMembers } from '@/api/members'
 import { listPlots } from '@/api/plots'
 import { alertLevelMeta } from '@/utils/production-adapter'
+import { errorMessageOf } from '@/utils/request'
 import { MISSING_VALUE_TEXT } from '@/components/MetricStatistic'
 import type { AlertLevel, AlertRule, Plot } from '@/types'
 
@@ -124,19 +125,6 @@ const NOTIFY_CHANNEL_OPTIONS: { value: string; label: string }[] = [
 
 /** 渠道缺失时的提示语 */
 const NOTIFY_CHANNEL_MISSING_TIP = '后端未返回该规则的通知渠道（notify_channels 为空），显示为「—」'
-
-/**
- * 取后端真实失败原因。
- *
- * 写操作失败时必须把原因透传给用户——"写失败却提示已保存"是本轮最严禁的一类问题，
- * 而"失败但不说原因"同样让人无法判断是网络问题还是数据被拒。
- *
- * @param error 捕获到的异常
- * @returns 用于展示的原因文案；拿不到原因时给占位，不编造
- */
-function errorMessageOf(error: unknown): string {
-  return error instanceof Error && error.message ? error.message : '未知错误（后端未返回原因）'
-}
 
 /**
  * 解析后端的通知渠道字段。

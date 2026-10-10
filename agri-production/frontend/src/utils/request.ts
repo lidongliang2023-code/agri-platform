@@ -287,6 +287,26 @@ export function httpStatusOf(error: unknown): number {
   return typeof status === 'number' ? status : 0
 }
 
+/**
+ * 取写操作失败时展示给用户的原因文案。
+ *
+ * 写操作（新增 / 编辑 / 启停 / 删除 / 处置 / 忽略…）失败时必须把原因透传给用户：
+ * "写失败却提示已保存"是本轮最严禁的一类问题，而"失败但不说原因"同样让人无法
+ * 判断是网络断了还是数据被拒。拿不到原因时返回占位文案，**绝不编造**具体原因。
+ *
+ * 原来在 `pages/user/alerts/AlertRules.tsx` 与 `AlertCenter.tsx` 各留了一份私有副本，
+ * 出现第三处之前上提到这里，避免同一个函数散落多份。
+ *
+ * 需要更结构化的失败信息（业务码 / HTTP 状态）时用 {@link asApiRequestError}
+ * 与 {@link httpStatusOf}，本函数只负责给出一句能直接展示的中文文案。
+ *
+ * @param error catch 到的未知错误
+ * @returns 用于展示的原因文案
+ */
+export function errorMessageOf(error: unknown): string {
+  return error instanceof Error && error.message ? error.message : '未知错误（后端未返回原因）'
+}
+
 /** 响应拦截：解包 + 统一错误处理 */
 function installResponseInterceptor(instance: AxiosInstance): void {
   instance.interceptors.response.use(

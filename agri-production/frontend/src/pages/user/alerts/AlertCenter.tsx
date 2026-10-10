@@ -54,24 +54,11 @@ import type { Dayjs } from 'dayjs'
 import useFarmStore from '@/store/farm'
 import { getAlertStats, handleAlert, ignoreAlerts, listAlerts } from '@/api/alerts'
 import { alertLevelMeta, alertStatusMeta, formatNumber } from '@/utils/production-adapter'
+import { errorMessageOf } from '@/utils/request'
 import type { Alert, AlertLevel, AlertSource, AlertStatus } from '@/types'
 
 const { RangePicker } = DatePicker
 const { Text, Paragraph } = Typography
-
-/**
- * 取后端真实失败原因。
- *
- * 处置告警失败时必须把原因透传给用户——"写失败却提示已处理"是本轮最严禁的一类问题：
- * 用户据此认为告警已经处置完，实际上服务端状态没变、告警还在未处理列表里。
- * 拿不到原因时给占位文案，不编造。
- *
- * @param error 捕获到的异常
- * @returns 用于展示的原因文案
- */
-function errorMessageOf(error: unknown): string {
-  return error instanceof Error && error.message ? error.message : '未知错误（后端未返回原因）'
-}
 
 /** 示例数据基准时间（与原型示例口径一致） */
 const DEMO_BASE: Dayjs = dayjs('2026-06-03 10:30:00')
