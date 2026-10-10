@@ -342,11 +342,29 @@ export default function RecallManage(): JSX.Element {
     },
   })
 
-  /** 一键召回（作废码段 + 冻结批次） */
+  /**
+   * 一键召回（作废码段 + 冻结批次）。
+   *
+   * ⚠️ 后端 `{@code AdminTraceService.recall}` 在 `selectById` 拿不到批次时
+   * **不报错、直接返回 0**（实测 `POST /admin/trace/recall?batchId=__NO_SUCH_BATCH__`
+   * → HTTP 200 + `{"code":0,"data":0}`）。此前前端拿到 0 也照样弹
+   * 「召回已执行：作废溯源码 0 张，批次已冻结」——批次根本不存在，什么都没冻结，
+   * 运营会以为已经处置完。
+   *
+   * 前端分不出来「批次不存在」和「批次存在但名下没有溯源码」（后端两种都回 0），
+   * 所以 `count === 0` 时**不再宣称批次已冻结**。后端侧 NOT_FOUND 已另开工单。
+   */
   const recallMutation = useMutation({
     mutationFn: (batchId: string) => recallAdminTraceBatch(batchId),
     onSuccess: (count) => {
-      message.success(`召回已执行：作废溯源码 ${count} 张，批次已冻结`)
+      const invalidated = Number.isFinite(Number(count)) ? Number(count) : 0
+      if (invalidated > 0) {
+        message.success(`召回已执行：作废溯源码 ${invalidated} 张，批次已冻结`)
+      } else {
+        message.warning(
+          '召回未生效：服务端作废了 0 张溯源码。该批次可能不存在，也可能该批次名下没有溯源码——未确认批次已冻结，请核对批次 ID',
+        )
+      }
       void queryClient.invalidateQueries({ queryKey: ['admin', 'quality'] })
     },
     onError: () => {
@@ -435,7 +453,17 @@ export default function RecallManage(): JSX.Element {
     )
   }
 
-  /** 发起召回（冻结批次 + 作废码段） */
+  /**
+   * 发起召回（冻结批次 + 作废码段）。
+   *
+   * ⚠️ 原来这里在 `mutate()` 之后**无条件**弹 `已通知渠道方启动召回：${batchNo}`——
+   * 两个 mutation 都还没回来（而且实测双双 403 / 后端返 0）时就已经宣称"已通知渠道方"。
+   * 与 BT-63 是同一类问题：失败被说成成功，运营据此认为处置已经发出去了。
+   *
+   * 现在不再自己报成功：**冻结的结果由 freezeMutation 报、作废的结果由
+   * recallMutation 报**，两者都如实区分成功 / 未同步 / 未生效。
+   * 这里只做本地状态推进（本页可见的处置阶段），不做任何结果宣告。
+   */
   const handleStartRecall = (row: RecallRow): void => {
     if (!row.batchId) {
       message.warning('该记录未关联批次，无法发起召回')
@@ -444,7 +472,6 @@ export default function RecallManage(): JSX.Element {
     freezeMutation.mutate(row.batchId)
     recallMutation.mutate(row.batchId)
     patchRow(row.inspectionId, { status: 2, stage: 1, handleType: 1 })
-    message.success(`已通知渠道方启动召回：${row.batchNo}`)
   }
 
   /** 提交处置方式与结果（处置闭环） */

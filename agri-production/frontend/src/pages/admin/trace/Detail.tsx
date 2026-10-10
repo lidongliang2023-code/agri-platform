@@ -104,11 +104,30 @@ export default function Detail(): JSX.Element {
     },
   })
 
-  /** 一键召回（作废码段 + 冻结批次） */
+  /**
+   * 一键召回（作废码段 + 冻结批次）。
+   *
+   * ⚠️ 后端 `{@code AdminTraceService.recall}` 在 `selectById` 拿不到批次时
+   * **不报错、直接返回 0**（实测 `POST /admin/trace/recall?batchId=__NO_SUCH_BATCH__`
+   * → HTTP 200 + `{"code":0,"data":0}`）。此前前端拿到 0 也照样弹
+   * 「召回已执行，作废溯源码 0 张并冻结批次」——批次根本不存在，什么都没冻结。
+   * 且**刷新不会露馅**：列表里本来就没有这个批次，运营会以为"召回了只是这批没码"。
+   *
+   * 前端分不出来「批次不存在」和「批次存在但名下没有溯源码」（两种情况后端都回 0），
+   * 所以 `count === 0` 时**不再宣称批次已冻结**，把两种可能都写出来让人去核。
+   * 后端侧的 NOT_FOUND 已另开工单，改完这里应当改成按 code 分支。
+   */
   const recallMutation = useMutation({
     mutationFn: (batchId: string) => recallAdminTraceBatch(batchId),
     onSuccess: (count) => {
-      message.success(`召回已执行，作废溯源码 ${count} 张并冻结批次`)
+      const invalidated = Number.isFinite(Number(count)) ? Number(count) : 0
+      if (invalidated > 0) {
+        message.success(`召回已执行，作废溯源码 ${invalidated} 张并冻结批次`)
+      } else {
+        message.warning(
+          '召回未生效：服务端作废了 0 张溯源码。该批次可能不存在，也可能该批次名下没有溯源码——未确认批次已冻结，请核对批次 ID',
+        )
+      }
       void queryClient.invalidateQueries({ queryKey: ['admin', 'trace', 'chain', code] })
     },
     onError: () => {
