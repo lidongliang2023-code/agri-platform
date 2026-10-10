@@ -442,7 +442,9 @@ export default function TenantDetail(): JSX.Element {
           'usedFarmCount / status / 时间列）。原型档案里的联系人、联系电话、所属区域、统一社会信用代码、' +
           '法定代表人、注册地址、经营范围、到期时间、租户等级、成员数量、在田面积、活跃度后端均无此列，' +
           '统一显示「—」（此前用原型示例值补位，属编造）。农场数量 / 设备数量 / 配额使用率取自真实端点 ' +
-          'GET /admin/tenants/overview/{tenantId}。'
+          'GET /admin/tenants/overview/{tenantId}。注意：当前种子数据所有配额记录的 tenantId 恒为 "0" ' +
+          '（后端工单 BT-09），所以这三个值目前是「同一租户口径」，不同配额记录会显示相同数字；' +
+          'BT-09 修复后才具备真正的租户级口径。'
         }
       />
 
