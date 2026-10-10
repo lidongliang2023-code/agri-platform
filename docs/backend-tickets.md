@@ -1650,3 +1650,123 @@ values.push(currentRate)                                  // 只有第 6 点是�
   与 `unreachable`（服务端故障，才可离线兜底）——**这个口径是对的，值得作为其他域的模板**。
 
 ---
+
+# 域：`api/admin/monitor`（运营端生产监控）
+
+> 扫描人：se-verify-fix　日期：2026-10-10　性质：**只读调研**（GET 实测 +
+> 后端源码对照 + 前端静态审计），**不改任何业务代码**。
+> 后端 `AdminMonitorController` 全部映射（7 个，**全是 GET**）：
+> `GET /overview`、`GET /devices`、`GET /alerts`、`GET /readings/latest`、
+> `GET /tasks`、`GET /iot`、`GET /inputs`——**一个写端点都没有**。
+
+**写操作诚实性**：本域两个真实写操作（`IotMonitor.tsx` 重启设备、`TaskMonitor.tsx` 催办）
+都写了 `onError` 且注释明确"失败就是失败：不能把「没下发成功」说成「已登记」"。
+**没有谎报成功**。但两个端点后端都不存在 → 功能 100% 死（见 BT-55）。
+
+## 本域已验证有真数据的端点
+
+| 端点 | 实测 |
+| --- | --- |
+| `GET /admin/monitor/overview` | code=0，`{deviceTotal:"12",deviceOnline:"10",onlineRate:"83",alertPending:"7",ruleEnabled:"5"}` ⚠️ 全字符串（BT-52） |
+| `GET /admin/monitor/iot` | code=0，与 `/overview` **逐字节相同** ⚠️（BT-51） |
+| `GET /admin/monitor/tasks` | code=0，`[{status:"pending",count:"2"},{assigned…},{doing…},{done:"7"},{rejected:"1"}]` ⚠️ 是聚合不是台账（BT-53） |
+| `GET /admin/monitor/inputs` | code=0，`[{inputId,inputName,stockQty:8200.000,warnQty:2000.000,warning:false}…]` ⚠️ 是预警清单（BT-54） |
+| `GET /admin/monitor/devices` | code=0，`List<IotDeviceEntity>` 真数据 ✅ |
+| `GET /admin/monitor/readings/latest?deviceId=` | code=0，`IotReadingEntity` 真数据 ✅ |
+| `GET /admin/monitor/alerts` | code=0，但 `data: []`（端点在、无数据） |
+| `GET /admin/monitor/metrics` | **500** ❌（BT-55） |
+
+## BT-51　`GET /admin/monitor/iot` 就是 `/overview`，前端却把它当设备列表 ⚠️
+
+**源码铁证**（`AdminMonitorController:57-60`）：
+
+```java
+@GetMapping("/iot")
+public ApiResponse<Map<String, Object>> iot() {
+    return ApiResponse.ok(adminMonitorService.overview());   // ← 直接返回 overview()
+}
+```
+
+**实测**：`/overview` 与 `/iot` 返回**逐字节相同**的
+`{"deviceTotal":"12","deviceOnline":"10","onlineRate":"83","alertPending":"7","ruleEnabled":"5"}`。
+
+**前端**：`listMonitorDevices()` 声明 `GET /admin/monitor/iot` → `Promise<PageResult<IotDevice>>`，
+还传 `tenantId` / `onlineStatus`（后端**不接受任何入参**）。实际拿到的是 5 个统计数字，
+`list` 恒为 undefined → 页面恒空。**零调用方**（IoT 监控页实际用的是 `/devices`）。
+
+**与 BT-29 同类**（`overview` == `dashboard`）：两个路径、**一个实现**，
+会被当成"主数据源 + 备用数据源"两个独立来源来用——**备用数据源是假的**。
+
+## BT-52　监控总览 5 个指标**全是字符串**，前端全声明 number → 类型撒谎
+
+实测 `"deviceTotal":"12"` / `"deviceOnline":"10"` / `"onlineRate":"83"` /
+`"alertPending":"7"` / `"ruleEnabled":"5"`——**值全是字符串**。
+前端 `MonitorOverview`（`api/admin/monitor.ts:73-84`）5 个字段全部声明为 `number`。
+
+⚠️ 当前能显示是因为 `MonitorCenter.tsx:239-244` 的 `pickNumber()` 做了
+`Number(...)` 收敛，但这属于**前端替后端擦屁股**。
+与 BT-49（farms 合规画像字符串/数字混用）是同一个后端组装习惯问题，建议一并治理。
+
+## BT-53　`GET /admin/monitor/tasks` 是**任务状态聚合**，前端同一路径声明了两种返回类型
+
+**实测**：`[{"status":"pending","count":"2"},{"status":"assigned","count":"2"},
+{"status":"doing","count":"2"},{"status":"done","count":"7"},{"status":"rejected","count":"1"}]`
+——5 条**状态聚合**，`count` 还是字符串，且后端**不接受任何入参**。
+
+前端对**同一个路径**声明了两种形状：
+- `listMonitorTasks()` → `Promise<PageResult<Task>>` —— **完全错**（那不是任务台账）
+- `listMonitorTaskStatusStats()` → `Promise<MonitorTaskStatusStat[]>` —— 形状对，
+  但 `count: number` 与实际字符串不符
+
+实际只有后者被调用（`MonitorCenter.tsx:277`）；前者零调用方。
+⚠️ 建议：删掉 `listMonitorTasks`，或改打真正的任务分页端点（`/admin/.../tasks` 若有的话）。
+
+## BT-54　`GET /admin/monitor/inputs` 是**投入品库存预警清单**，同样两种声明冲突
+
+**实测**：`[{"inputId":"DEMO-INPUT-001","inputName":"腐熟有机肥","stockQty":8200.000,
+"warnQty":2000.000,"warning":false}, …]`——是**库存预警**，字段与 `MonitorInputWarning` 吻合
+（这几个是**真数字**），且后端同样**不接受任何入参**。
+
+前端同一路径两种声明：
+- `listMonitorInputUsages()` → `Promise<PageResult<InputUsage>>` —— **错**（那不是投入品使用台账）
+- `listMonitorInputWarnings()` → `Promise<MonitorInputWarning[]>` —— **对**
+
+两者目前**都零调用方**（`InputMonitor.tsx` 实际打的是 `/inputs/usages`）。
+
+## BT-55　四个端点不存在：其中两个有真实调用方 →「重启设备 / 催办」100% 失败 ⚠️ P1
+
+| 前端函数 | 路径 | 后端 | 调用方 |
+| --- | --- | --- | --- |
+| `getMonitorMetrics` | `GET /admin/monitor/metrics` | **无**（实测 500） | 零调用方 |
+| `getMonitorTask` | `GET /admin/monitor/tasks/{taskId}` | **无** | 零调用方 |
+| `urgeTask` | `PATCH /admin/monitor/tasks/{taskId}/urge` | **无** | **`TaskMonitor.tsx:283`** |
+| `rebootDevice` | `PATCH /admin/monitor/iot/{deviceId}/reboot` | **无** | **`IotMonitor.tsx:249`** |
+
+后端 7 个映射**全是 GET**，没有任何 PATCH/POST。
+→ 「催办任务」与「远程重启设备」两个运营动作**必然失败**。
+页面侧是诚实的（`onError` 里 `message.error`），所以不是假成功，但**功能不存在**。
+
+**建议**：后端补端点；或若产品上暂不支持远程重启 / 催办，前端应把按钮置灰并写明
+"后端未提供该能力"，而不是让使用者点了才看到失败。
+
+## BT-56　三个页面的 JSDoc 仍写着"降级到原型示例口径"，与实际实现**矛盾** ⚠️
+
+注释撒谎也是"假可用"的一种——后来的人照注释就会以为这里还在回落示例数据。
+
+| 文件 | 过时注释 | 实际实现 |
+| --- | --- | --- |
+| `InputMonitor.tsx:147` | "接口无数据时降级到 PRD 示例口径" | `:683/:704` 明写"不使用示例数据兜底" |
+| `IotMonitor.tsx:198` | "接口无数据时降级到原型 P9 示例口径" | `:629` 明写"不使用示例数据兜底，失败期间表格为空" |
+| `TaskMonitor.tsx:242` | "接口无数据时降级到原型 P8 示例口径" | 实际 `tasksQuery.data?.list ?? []`，无兜底 |
+
+**建议**：把三处注释改成与实际一致（"接口无数据即空态，不使用示例数据"）。属文档修正，待裁决。
+
+## 附：本域诚实的地方（不要改坏）
+
+- `MonitorCenter.tsx`：指标卡注释"不再用 8542 / 8069 / 94.5 / 3280 / 3542 这类示例数字顶替"；
+  `pickNumber` 的兜底值是 **0**，不是示例数字；「在线农场 / 农场总数」后端无聚合 → 恒为 null 显示「—」。
+- `IotMonitor.tsx`：低电量筛选注释"后端不返回 battery 时一律视为「非低电量」，**不臆造电量值**"。
+- `Environment.tsx`：注释"后端无数据时各区块展示空态 / 「—」，不用示例数字顶替"。
+- 两个写 mutation 的 `onError` 注释"失败就是失败"。
+
+---
