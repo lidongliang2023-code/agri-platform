@@ -39,6 +39,7 @@ import {
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { MetricNumber } from '@/components'
 import { recallAdminTraceBatch } from '@/api/admin/trace'
 import {
   fetchAdminQualityOverview,
@@ -46,8 +47,27 @@ import {
   recallQualityBatch,
 } from '@/api/admin/trace'
 import type { AdminInspectionRow } from '@/api/admin/trace'
+import { formatMetric, sumMetric, toFiniteNumber } from '@/utils/metric-format'
 
 const { Text } = Typography
+
+/**
+ * 「影响范围 / 计量单位」缺失提示。
+ *
+ * 实测（后端 8096，GET /api/v1/production/admin/quality/inspections/failed，code=0）：
+ * 该端点返回 `InspectionEntity`，键集合为
+ * `inspectionId / inspectionNo / batchId / plotId / cropId / inspectionType /
+ *  inspectorId / inspectorName / sampleQty / sampleAt / result / reportUrl / status`
+ * 以及审计列，**没有「影响范围」字段，也没有计量单位字段**。
+ */
+const SCOPE_MISSING_TIP =
+  '后端 /admin/quality/inspections/failed 返回 InspectionEntity，无「影响范围 / 计量单位」字段，显示为「—」，接口补齐后自动填充'
+
+/** 抽样数量缺失提示（后端字段存在但个别行未填时） */
+const SAMPLE_QTY_MISSING_TIP = '后端未返回该检测的抽样数量（sampleQty），显示为「—」'
+
+/** 回收率缺失提示：分母（影响范围）未知时不可计算 */
+const RECOVERY_RATE_MISSING_TIP = '影响范围未知，回收率无法计算，显示为「—」'
 
 /** 处置方式：1 召回 2 销毁 3 降级 4 返工（对齐 PRD 11.2 RecallHandleType） */
 type HandleType = 1 | 2 | 3 | 4
@@ -89,10 +109,23 @@ interface RecallRow {
   failItems: string[]
   /** 发现时间 */
   foundAt: string
-  /** 影响范围（涉及数量） */
-  quantity: number
-  /** 计量单位 */
-  unit: string
+  /**
+   * 影响范围（涉及数量）。
+   *
+   * 后端 `/admin/quality/inspections/failed` 无此字段，故为 `null` 时页面渲染「—」。
+   * 类型必须可空：实测该端点返回 `InspectionEntity`，只有 `sampleQty`（抽样数量），
+   * 没有可充当「影响范围」的字段。此前标成必填 `number`，运行时只能靠编造补位。
+   */
+  quantity: number | null
+  /**
+   * 计量单位。
+   *
+   * 后端 `InspectionEntity` 无 `unit` 列（实测键集合中不存在），
+   * 此前在映射里硬编码 `'kg'`，等于替后端声明单位。现为 `null` 时渲染「—」。
+   */
+  unit: string | null
+  /** 抽样数量（后端 InspectionEntity.sampleQty，真实字段；未返回时为 null） */
+  sampleQty: number | null
   /** 处置方式 */
   handleType: HandleType
   /** 处置进度 */
@@ -160,6 +193,7 @@ const PROTOTYPE_RECALLS: RecallRow[] = [
     foundAt: '2025-07-14 10:30:00',
     quantity: 5200,
     unit: 'kg',
+    sampleQty: null,
     handleType: 1,
     status: 2,
     stage: 2,
@@ -176,6 +210,7 @@ const PROTOTYPE_RECALLS: RecallRow[] = [
     foundAt: '2025-07-13 16:20:00',
     quantity: 1800,
     unit: '枚',
+    sampleQty: null,
     handleType: 2,
     status: 3,
     stage: 3,
@@ -194,6 +229,7 @@ const PROTOTYPE_RECALLS: RecallRow[] = [
     foundAt: '2025-07-12 09:15:00',
     quantity: 2400,
     unit: 'L',
+    sampleQty: null,
     handleType: 3,
     status: 1,
     stage: 0,
@@ -210,6 +246,7 @@ const PROTOTYPE_RECALLS: RecallRow[] = [
     foundAt: '2025-07-11 14:05:00',
     quantity: 8600,
     unit: 'kg',
+    sampleQty: null,
     handleType: 4,
     status: 2,
     stage: 2,
@@ -217,6 +254,23 @@ const PROTOTYPE_RECALLS: RecallRow[] = [
     ownerName: '孙质量',
   },
 ]
+
+/**
+ * 回收率（已回收 / 影响范围）。
+ *
+ * 分母「影响范围」后端未提供（实测 `InspectionEntity` 无此字段），
+ * 此时返回 null 由页面渲染「—」，不做「除以 Math.max(quantity, 1)」这类自欺计算。
+ *
+ * @param row 处置行
+ * @returns 百分比数值；分母缺失或为 0 时返回 null
+ */
+function recoveryRate(row: RecallRow): number | null {
+  const scope = toFiniteNumber(row.quantity)
+  if (scope === null || scope <= 0) {
+    return null
+  }
+  return (row.recoveredQty / scope) * 100
+}
 
 /**
  * 将不合格检测记录归一化为处置行。
@@ -227,7 +281,6 @@ const PROTOTYPE_RECALLS: RecallRow[] = [
 function mapInspectionsToRows(inspections: AdminInspectionRow[]): RecallRow[] {
   return inspections.map((item, index) => {
     const failItems = FAIL_ITEM_POOL[index % FAIL_ITEM_POOL.length]
-    const quantity = Number(item.sampleQty ?? 0) * 100 || 1200 + index * 350
     return {
       recallNo: `RC${(item.inspectionNo ?? item.inspectionId).replace(/\D/g, '').slice(0, 8) || String(index)}`,
       batchId: item.batchId ?? '',
@@ -236,8 +289,18 @@ function mapInspectionsToRows(inspections: AdminInspectionRow[]): RecallRow[] {
       labName: item.labName ?? item.inspectorName ?? LAB_POOL[index % LAB_POOL.length],
       failItems,
       foundAt: item.sampleAt ?? item.createdAt ?? '',
-      quantity,
-      unit: 'kg',
+      /**
+       * 影响范围与计量单位：后端没有，置 null（页面渲染「—」）。
+       *
+       * 此处原先写作 `Number(item.sampleQty ?? 0) * 100 || 1200 + index * 350`，两处都是编造：
+       * - `* 100`：凭空放大 100 倍，实测 sampleQty=2 时页面显示「200 kg」；
+       * - `|| 1200 + index * 350`：sampleQty 为 0 / 缺失时按行号编出
+       *   1200 / 1550 / 1900 … 等差序列，与任何真实数据都无关。
+       */
+      quantity: null,
+      unit: null,
+      /** 抽样数量：sampleQty 是后端真实字段，直接取原值，不做放大、不做兜底 */
+      sampleQty: toFiniteNumber(item.sampleQty),
       /** 默认按召回处置，运营可在处置闭环中改判 */
       handleType: 1,
       status: 1,
@@ -360,7 +423,8 @@ export default function RecallManage(): JSX.Element {
     const pending = rows.filter((row) => row.status === 1).length
     const processing = rows.filter((row) => row.status === 2).length
     const finished = rows.filter((row) => row.status === 3).length
-    const affected = rows.reduce((acc, row) => acc + row.quantity, 0)
+    /** 任一行影响范围缺失则合计为 null（sumMetric 语义：不允许用部分数据冒充全量） */
+    const affected = sumMetric(rows.map((row) => row.quantity))
     return {
       /** 不合格批次总数 */
       total: rows.length,
@@ -422,12 +486,18 @@ export default function RecallManage(): JSX.Element {
     if (!activeRow) {
       return
     }
-    if (values.recoveredQty > activeRow.quantity) {
+    /**
+     * 影响范围后端未提供时无法做上限校验（不能拿一个编造的分母去卡真实录入），
+     * 此时只登记、不校验，页面回收率同步显示「—」。
+     */
+    if (activeRow.quantity !== null && values.recoveredQty > activeRow.quantity) {
       message.error('回收数量不能超过影响范围数量')
       return
     }
     patchRow(activeRow.batchId, { recoveredQty: values.recoveredQty, stage: 3 })
-    message.success(`回收登记成功：${values.recoveredQty} ${activeRow.unit}`)
+    message.success(
+      `回收登记成功：${formatMetric(values.recoveredQty)}${activeRow.unit ? ` ${activeRow.unit}` : ''}`,
+    )
     setRecoveryOpen(false)
     recoveryForm.resetFields()
   }
@@ -471,8 +541,22 @@ export default function RecallManage(): JSX.Element {
       title: '影响范围',
       dataIndex: 'quantity',
       width: 130,
-      render: (value: number, record) => (
-        <Text strong>{`${value.toLocaleString('zh-CN')} ${record.unit}`}</Text>
+      render: (value: number | null, record) => (
+        <Text strong>
+          <MetricNumber
+            value={value}
+            suffix={record.unit ? ` ${record.unit}` : ''}
+            missingTip={SCOPE_MISSING_TIP}
+          />
+        </Text>
+      ),
+    },
+    {
+      title: '抽样数量',
+      dataIndex: 'sampleQty',
+      width: 110,
+      render: (value: number | null) => (
+        <MetricNumber value={value} missingTip={SAMPLE_QTY_MISSING_TIP} />
       ),
     },
     {
@@ -623,7 +707,10 @@ export default function RecallManage(): JSX.Element {
         title="不合格批次处置台账"
         extra={
           <Space wrap>
-            <Text type="secondary">影响范围合计：{stats.affected.toLocaleString('zh-CN')}</Text>
+            <Space size={4}>
+              <Text type="secondary">影响范围合计：</Text>
+              <MetricNumber value={stats.affected} missingTip={SCOPE_MISSING_TIP} />
+            </Space>
             <Button icon={<ReloadOutlined />} onClick={() => void failedQuery.refetch()}>
               刷新
             </Button>
@@ -636,7 +723,7 @@ export default function RecallManage(): JSX.Element {
           loading={failedQuery.isLoading}
           columns={columns}
           dataSource={rows}
-          scroll={{ x: 1500 }}
+          scroll={{ x: 1630 }}
           locale={{ emptyText: <Empty description="暂无不合格批次" /> }}
           pagination={{
             pageSize: 10,
@@ -679,9 +766,22 @@ export default function RecallManage(): JSX.Element {
                 },
                 { key: 'found', label: '发现时间', children: activeRow.foundAt?.slice(0, 16) ?? '—' },
                 {
+                  key: 'sample',
+                  label: '抽样数量',
+                  children: (
+                    <MetricNumber value={activeRow.sampleQty} missingTip={SAMPLE_QTY_MISSING_TIP} />
+                  ),
+                },
+                {
                   key: 'scope',
                   label: '影响范围',
-                  children: `${activeRow.quantity.toLocaleString('zh-CN')} ${activeRow.unit}`,
+                  children: (
+                    <MetricNumber
+                      value={activeRow.quantity}
+                      suffix={activeRow.unit ? ` ${activeRow.unit}` : ''}
+                      missingTip={SCOPE_MISSING_TIP}
+                    />
+                  ),
                 },
                 {
                   key: 'handle',
@@ -700,7 +800,22 @@ export default function RecallManage(): JSX.Element {
                 {
                   key: 'recovered',
                   label: '已回收',
-                  children: `${activeRow.recoveredQty.toLocaleString('zh-CN')} ${activeRow.unit}（${((activeRow.recoveredQty / Math.max(activeRow.quantity, 1)) * 100).toFixed(0)}%）`,
+                  children: (
+                    <Space size={4}>
+                      <MetricNumber
+                        value={activeRow.recoveredQty}
+                        suffix={activeRow.unit ? ` ${activeRow.unit}` : ''}
+                      />
+                      <Text type="secondary">（回收率 </Text>
+                      <MetricNumber
+                        value={recoveryRate(activeRow)}
+                        precision={0}
+                        suffix="%"
+                        missingTip={RECOVERY_RATE_MISSING_TIP}
+                      />
+                      <Text type="secondary">）</Text>
+                    </Space>
+                  ),
                 },
                 { key: 'owner', label: '责任人', children: activeRow.ownerName ?? '—' },
               ]}
@@ -726,7 +841,7 @@ export default function RecallManage(): JSX.Element {
                   },
                   {
                     color: activeRow.stage >= 2 ? 'blue' : 'gray',
-                    children: `回收登记：已回收 ${activeRow.recoveredQty.toLocaleString('zh-CN')} ${activeRow.unit}`,
+                    children: `回收登记：已回收 ${formatMetric(activeRow.recoveredQty)}${activeRow.unit ? ` ${activeRow.unit}` : ''}`,
                   },
                   {
                     color: activeRow.stage >= 3 ? 'green' : 'gray',
