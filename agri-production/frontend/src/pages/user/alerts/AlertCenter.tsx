@@ -59,6 +59,20 @@ import type { Alert, AlertLevel, AlertSource, AlertStatus } from '@/types'
 const { RangePicker } = DatePicker
 const { Text, Paragraph } = Typography
 
+/**
+ * 取后端真实失败原因。
+ *
+ * 处置告警失败时必须把原因透传给用户——"写失败却提示已处理"是本轮最严禁的一类问题：
+ * 用户据此认为告警已经处置完，实际上服务端状态没变、告警还在未处理列表里。
+ * 拿不到原因时给占位文案，不编造。
+ *
+ * @param error 捕获到的异常
+ * @returns 用于展示的原因文案
+ */
+function errorMessageOf(error: unknown): string {
+  return error instanceof Error && error.message ? error.message : '未知错误（后端未返回原因）'
+}
+
 /** 示例数据基准时间（与原型示例口径一致） */
 const DEMO_BASE: Dayjs = dayjs('2026-06-03 10:30:00')
 
@@ -404,32 +418,48 @@ export default function AlertCenter(): JSX.Element {
   /**
    * 执行处置动作
    *
+   * 此前 `catch {}` 空吞后，受理 / 处理 / 关闭三个调用点一律 `message.success`——
+   * 后端没写进去也报「已受理 / 已处理 / 已关闭」，刷新就打回原形。现在把
+   * 「是否真的写到服务端」作为结果的一部分返回，由调用方按结果分别提示。
+   *
+   * 注意 `handleAlert` 的返回值含义：后端 `AlertInfoService.handle` 返回
+   * `updateById(alert) > 0`，即**真的改到了行**才为 true。返回 false 同样算失败
+   * （告警不存在 / 已被他人处置），不能因为「没抛异常」就当成功。
+   *
    * @param alert 目标告警
    * @param nextStatus 目标状态
    * @param remark 处理意见
    * @param handlerName 处理人
-   * @returns void
+   * @returns remoteOk 是否真的写进服务端；reason 失败原因（成功时为空串）
    */
   async function doHandle(
     alert: Alert,
     nextStatus: AlertStatus,
     remark: string,
     handlerName: string,
-  ): Promise<void> {
+  ): Promise<{ remoteOk: boolean; reason: string }> {
     const patch: Partial<Alert> = {
       status: nextStatus,
       handleRemark: remark,
       handlerName,
       handledAt: dayjs().format('YYYY-MM-DD HH:mm:ss'),
     }
+    let remoteOk = false
+    let reason = ''
     try {
-      await handleAlert(alert.alertId, { status: nextStatus, handleRemark: remark })
-      await queryClient.invalidateQueries({ queryKey: ['production-alerts'] })
-      await queryClient.invalidateQueries({ queryKey: ['production-alerts-stats'] })
-    } catch {
-      // 后端骨架阶段处置可能失败，本地补丁保证闭环交互可用
+      const updated = await handleAlert(alert.alertId, { status: nextStatus, handleRemark: remark })
+      if (updated) {
+        remoteOk = true
+        await queryClient.invalidateQueries({ queryKey: ['production-alerts'] })
+        await queryClient.invalidateQueries({ queryKey: ['production-alerts-stats'] })
+      } else {
+        reason = '服务端未更新任何记录（该告警可能不存在或已被他人处置）'
+      }
+    } catch (error) {
+      reason = errorMessageOf(error)
     }
     setPatches((prev) => ({ ...prev, [alert.alertId]: { ...prev[alert.alertId], ...patch } }))
+    return { remoteOk, reason }
   }
 
   /** 打开处理弹窗 */
@@ -448,31 +478,46 @@ export default function AlertCenter(): JSX.Element {
     if (!handleTarget) return
     const values = handleForm.getFieldsValue()
     setHandleSubmitting(true)
-    await doHandle(
+    const { remoteOk, reason } = await doHandle(
       handleTarget,
       2,
       values.handleMeasure || '已确认受理，待现场处置。',
       values.handlerName || '当前用户',
     )
     setHandleSubmitting(false)
-    message.success('告警已确认受理，进入处理中')
+    if (remoteOk) {
+      message.success('告警已确认受理，进入处理中')
+    } else {
+      message.warning(`受理未同步到服务端（${reason}），仅本页本地生效，刷新后会还原`)
+    }
     setHandleOpen(false)
   }
 
   /** 提交处理：2 → 3 */
   const handleProcess = async (): Promise<void> => {
     if (!handleTarget) return
+    let values: HandleFormValues
     try {
-      const values = await handleForm.validateFields()
-      const remark = `处理措施：${values.handleMeasure ?? ''}；处理结果：${values.handleResult ?? ''}`
-      setHandleSubmitting(true)
-      await doHandle(handleTarget, 3, remark, values.handlerName || '当前用户')
-      setHandleSubmitting(false)
-      message.success('处理结果已提交，告警标记为已处理')
-      setHandleOpen(false)
+      values = await handleForm.validateFields()
     } catch {
       message.warning('请填写处理措施后再提交')
+      return
     }
+    const remark = `处理措施：${values.handleMeasure ?? ''}；处理结果：${values.handleResult ?? ''}`
+    setHandleSubmitting(true)
+    const { remoteOk, reason } = await doHandle(
+      handleTarget,
+      3,
+      remark,
+      values.handlerName || '当前用户',
+    )
+    setHandleSubmitting(false)
+    if (remoteOk) {
+      message.success('处理结果已提交，告警标记为已处理')
+    } else {
+      message.warning(`处理未同步到服务端（${reason}），仅本页本地生效，刷新后会还原`)
+    }
+    setHandleOpen(false)
   }
 
   /** 关闭告警：3 → 4 */
@@ -480,24 +525,39 @@ export default function AlertCenter(): JSX.Element {
     if (!handleTarget) return
     const values = handleForm.getFieldsValue()
     setHandleSubmitting(true)
-    await doHandle(
+    const { remoteOk, reason } = await doHandle(
       handleTarget,
       4,
       values.handleResult || '处置完毕，复核通过后关闭告警。',
       values.handlerName || handleTarget.handlerName || '当前用户',
     )
     setHandleSubmitting(false)
-    message.success('告警已关闭')
+    if (remoteOk) {
+      message.success('告警已关闭')
+    } else {
+      message.warning(`关闭未同步到服务端（${reason}），仅本页本地生效，刷新后会还原`)
+    }
     setHandleOpen(false)
   }
 
-  /** 忽略告警 */
+  /**
+   * 忽略告警（批量）。
+   *
+   * 此前 `catch {}` 空吞后无条件报「已忽略所选告警」，服务端一条都没改也报成功。
+   * 后端 `AlertInfoService.ignoreBatch` 的返回值同样是「真的改到行」才为 true
+   * （id 列表为空返回 false，id 不存在抛 404），因此 false 也按失败处理。
+   */
   const ignoreMutation = useMutation({
     mutationFn: async (ids: string[]) => {
+      let remoteOk = false
+      let reason = ''
       try {
-        await ignoreAlerts(ids)
-      } catch {
-        // 回落态忽略失败时仅走本地补丁
+        remoteOk = await ignoreAlerts(ids)
+        if (!remoteOk) {
+          reason = '服务端未更新任何记录（所选告警可能不存在或已被他人处置）'
+        }
+      } catch (error) {
+        reason = errorMessageOf(error)
       }
       const now = dayjs().format('YYYY-MM-DD HH:mm:ss')
       setPatches((prev) => {
@@ -507,9 +567,16 @@ export default function AlertCenter(): JSX.Element {
         })
         return next
       })
+      return { remoteOk, reason, count: ids.length }
     },
-    onSuccess: () => {
-      message.success('已忽略所选告警')
+    onSuccess: ({ remoteOk, reason, count }) => {
+      if (remoteOk) {
+        message.success(`已忽略所选 ${count} 条告警`)
+        void queryClient.invalidateQueries({ queryKey: ['production-alerts'] })
+        void queryClient.invalidateQueries({ queryKey: ['production-alerts-stats'] })
+      } else {
+        message.warning(`忽略未同步到服务端（${reason}），仅本页本地生效，刷新后会还原`)
+      }
       setSelectedKeys([])
     },
   })
