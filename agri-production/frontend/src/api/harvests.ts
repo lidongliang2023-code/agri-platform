@@ -282,22 +282,17 @@ export function assignPlanLabor(planId: BizId, payload: LaborPayload): Promise<b
   return http.patch<boolean>(`${BASE}/plan/${planId}/labor`, payload)
 }
 
-/** 采收批次统计概览（原型 P13 概览卡） */
-export interface HarvestOverview {
-  /** 本季采收总量（kg） */
-  seasonQuantity: number
-  /** 本月采收次数 */
-  monthCount: number
-  /** A 级占比（%） */
-  gradeARatio: number
-  /** 待入库条数 */
-  pendingInbound: number
-}
-
-/** 查询采收概览统计 */
-export function fetchHarvestOverview(farmId?: string): Promise<HarvestOverview> {
-  return http.get<HarvestOverview>(`${BASE}/overview`, { farmId })
-}
+/*
+ * 「采收批次统计概览」`fetchHarvestOverview` / `HarvestOverview` 已删除（2026-10-10）。
+ *
+ * 判定依据（端点不存在 **且** 无调用方 → 删；端点不存在 **但** 有调用方 → 提后端单）：
+ * - 端点实测 404：`GET /api/v1/production/harvests/overview?farmId=DEMO-FARM-001`
+ *   → `{"code":404,"message":"资源不存在"}`，与 `/harvests/zzz-not-exist` 返回完全一致；
+ *   `HarvestController` 里也没有任何 `/overview` 映射（后端 overview 都在 admin/analytics 下）。
+ * - 调用方实测 0 处：全仓 grep `fetchHarvestOverview|HarvestOverview` 只命中这两个声明本身。
+ *
+ * 因此它是纯死代码。留着只会让人误以为「采收概览有接口，只是暂时没调」。
+ */
 
 /** 数据来源标记：true 表示结果来自内置演示数据（后端接口未就绪或异常） */
 export interface DemoFlag {
