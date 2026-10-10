@@ -5,7 +5,16 @@
  * 必须在页面顶部渲染本组件，明确告知使用者：
  *   ① 当前看到的是示例数据；
  *   ② 数据来自前端本地样例，不是服务端返回；
- *   ③ 页面上的写操作（如有）不会落库。
+ *   ③ 页面上的写操作（如有）不会落库；
+ *   ④ **这次为什么降级**（`reason`）。
+ *
+ * 关于 ④ 为什么必须带真实原因（2026-10-10 教训）：
+ * `api/harvests.ts` 的 `queryInventoryFlows` 曾把路径写成
+ * `/harvests/inventory/{batchId}/flows`（实测 `code=500`），演示兜底因此 **100% 被触发**，
+ * 而当时的横幅只写「接口建设中」。用户（包括排障的人）看到这句会以为「后端还没做这个接口」，
+ * 实际是**前端路径写错** —— 一句笼统文案把排障方向彻底带偏。
+ * 所以降级横幅必须写出**实测到的具体原因**（HTTP 状态 / 后端业务码 / 连不上），
+ * 原因缺失时也要明说「接口层未回传原因」，不允许拿「接口建设中」蒙过去。
  *
  * 设计原则（项目铁规矩）：可以降级，不能骗人——降级必须让用户看得见。
  * 因此本组件使用 warning 类型 + banner 样式，占据整行宽度，不允许弱化成一
@@ -30,7 +39,19 @@ export interface DemoDataAlertProps {
    * 部分模块失真。因此默认值仅作兜底，不能替代各页的准确口径。
    */
   writeNote?: string
+  /**
+   * 本次降级的**真实原因**，由数据层实测后回传（如
+   * `GET /harvests/DEMO-BATCH-001/flows 后端返回业务码 500（系统繁忙，请稍后重试）`）。
+   *
+   * 强烈建议必传：横幅里写「接口建设中」会把排障方向带偏（见文件头注释里的教训）。
+   * 未传时组件会显式显示「接口层未回传原因」，而不是猜一个理由。
+   */
+  reason?: string
 }
+
+/** reason 缺失时的占位说明：宁可承认没拿到原因，也不编一个 */
+const REASON_MISSING =
+  '本次降级原因未由接口层回传（无法判定是端点不存在、服务端异常还是网络不通）——不能据此推断后端"接口建设中"。'
 
 /**
  * 默认写操作提示语（兜底用，偏保守：宁可多提示，不可漏提示）
@@ -49,6 +70,7 @@ const DEFAULT_WRITE_NOTE =
 export default function DemoDataAlert({
   scope,
   writeNote = DEFAULT_WRITE_NOTE,
+  reason,
 }: DemoDataAlertProps): JSX.Element {
   return (
     <Alert
@@ -66,7 +88,16 @@ export default function DemoDataAlert({
       description={
         <Space direction="vertical" size={2}>
           <Typography.Text>
-            数据来源为前端本地内置样例，后端接口未返回数据（接口不可用或暂无数据），页面已自动降级展示。
+            数据来源为前端本地内置样例：后端接口本次没有返回可用数据，页面已自动降级展示。
+          </Typography.Text>
+          <Typography.Text>
+            {reason ? (
+              <>
+                本次降级原因（实测）：<Typography.Text code>{reason}</Typography.Text>
+              </>
+            ) : (
+              REASON_MISSING
+            )}
           </Typography.Text>
           <Typography.Text>示例数据覆盖范围：{scope}。</Typography.Text>
           {writeNote ? <Typography.Text>{writeNote}</Typography.Text> : null}
