@@ -269,3 +269,36 @@ GET /analytics/DEMO-SNAP-001    → 200 有数据
 
 本脚本**只观测、不修复**：不修改任何被测页面源码，不 mock 接口，不跳过失败页面。
 跑不通就如实记录跑不通。
+
+### 协同纪律：同文件撞车时用 `git apply --cached` 按 hunk 暂存
+
+多智能体并行时，同一份文件常有别人的**在途未提交改动**。
+这时 `git add -- <路径>` / `git commit -- <路径>` 会**把别人的改动一起提交进去**。
+
+解法：只把自己的改动做成补丁，**只作用于索引**：
+
+```bash
+# 1) 取当前 HEAD 版本作为基线（索引里也是这份）
+git show HEAD:<文件> > /tmp/base.ts
+
+# 2) 在 base 上只应用"我自己的那一处改动" → /tmp/mine.ts
+#    （脚本化替换最稳：命中不到原文就报错退出，不要半途而废）
+
+# 3) 生成补丁并把路径头改回仓库路径（只留自己的 hunk）
+git diff --no-index --no-color -U3 /tmp/base.ts /tmp/mine.ts \
+  | sed -e 's|a/base.ts|a/<仓库路径>|' -e 's|b/mine.ts|b/<仓库路径>|' \
+  | tr -d '\r' > /tmp/mine.patch      # 去掉 CRLF，否则 apply 失败
+
+# 4) 只动索引，工作区原样不动
+git apply --cached /tmp/mine.patch
+git commit -m "..."                    # 提交后 git status 里只剩别人的改动
+```
+
+要点：
+- `--cached` 是关键：补丁只进索引，**不碰工作区**，别人的在途改动原封不动；
+- 第 2 步一定要先 `git apply --cached --check` 试一遍；
+- 补丁必须 `tr -d '\r'`，CRLF 会让 `git apply` 报 "patch does not apply"；
+- 提交后 `git status` 若该文件仍是 ` M`（工作区改、索引干净），说明成功。
+
+另外：自己的改动也要**同时写进工作区**，否则下次 `git status` 会把自己没保存的改动
+和别人的混在一起看不清。
