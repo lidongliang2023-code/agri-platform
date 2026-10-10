@@ -15,7 +15,13 @@
  * 数据来源：`/analytics/reports`（列表 / 生成 / 删除 / 导出）、
  * `/analytics/reports/subscriptions`（订阅）。
  *
- * 实测现状（逐条依据见 docs/backend-tickets.md BT-23 ~ BT-30）：
+ * ⚠️ 本页**没有任何示例 / 兜底报表数据**（BT-33 已删除 16 条 `DEMO-REPORT-*`
+ * 内置示例及其 `usingFallback` 回落机制）。用户端报表能力当前**后端确实没有**：
+ * `GET /analytics/reports` 返回的是指标快照，另一个候选 `GET /admin/reports`
+ * 是运营端监管报表（词表 / 生成人 / 农场范围都不对）。因此列表为空是**真实状态**，
+ * 空态文案写明原因即可，不能用示例数据把页面"填起来"。
+ *
+ * 实测现状（逐条依据见 docs/backend-tickets.md BT-23 ~ BT-33）：
  * - 生成：`POST /analytics/reports` 不存在（实测 500）→ 点击如实报错，不造本地行；
  * - 删除：`DELETE /analytics/{id}` 删的是**指标快照**（错误实体）→ 只有「本页暂存」
  *   的行允许移除，服务端行的删除按钮置灰并写明原因（BT-27）；
@@ -126,33 +132,15 @@ const CHANNEL_OPTIONS: { value: number; label: string }[] = [
 const SUBSCRIPTION_STORAGE_KEY = 'agri_report_subscriptions'
 
 /*
- * 说明：这里曾有 `LOCAL_REPORT_ID_PREFIX` + `isLocalReport()`（按 id 前缀识别
- * "本地生成的报表"）。BT-25 之后**不再有任何代码会造出本地报表行**——生成失败
- * 就是失败，不再落一条 `LOCAL-REPORT-*` 的假行，所以那套前缀判断已经没有生产者，
- * 属死代码，删除。
+ * 说明：这里曾有两套按 id 前缀识别"非服务端数据"的判断——
+ *   `LOCAL_REPORT_ID_PREFIX` + `isLocalReport()`：BT-25 之后不再有任何代码造本地
+ *     报表行（生成失败就是失败），没有生产者 → 已删；
+ *   `DEMO_REPORT_ID_PREFIX` + `isDemoReport()`：BT-33 删掉 16 条内置示例报表后
+ *     同样没有生产者 → 一并删。
  *
- * 现在改用「这一行是不是只存在于本页状态里」来判断（见组件内 `isPageOnlyReport`）：
- * 服务端列表返回的行不在其中，本页示例行 / 本次会话生成的行在其中。
+ * 现在只剩一种区分（见组件内 `isSessionReport`）：本次会话由「生成报表」
+ * 真实成功后返回的、但还没进服务端列表的行。
  */
-
-/** 示例报表 id 前缀（回落用的内置样例，不是服务端数据） */
-const DEMO_REPORT_ID_PREFIX = 'DEMO-REPORT-'
-
-/**
- * 判断一行是否为内置示例报表。
- *
- * 示例报表只用于"接口不通时把页面填起来"的旧兜底，**不是真实数据**，
- * 因此不允许导出 / 打印成"好像有一份报表"的产物（BT-26）。
- *
- * @param report 报表行
- * @returns 是示例数据时返回 true
- */
-export function isDemoReport(report: ReportItem | undefined | null): boolean {
-  if (!report || typeof report.reportId !== 'string') {
-    return false
-  }
-  return report.reportId.startsWith(DEMO_REPORT_ID_PREFIX)
-}
 
 /**
  * 把写操作失败原因写成一句能据此排障的话（只陈述实测现象，不猜原因）。
@@ -193,35 +181,27 @@ const GENERATE_UNAVAILABLE_HINT =
 const DELETE_UNAVAILABLE_REASON =
   '删除暂不可用：后端 DELETE /analytics/{id} 删的是指标快照（错误实体，见 BT-27 / 治理项 G-01），端点修正前不开放'
 
-/** 示例报表 */
-const DEMO_REPORTS: ReportItem[] = Array.from({ length: 16 }, (_unused, index) => {
-  const type = ((index % 5) + 1) as ReportType
-  const status = index === 2 ? 1 : index === 11 ? 3 : 2
-  return {
-    reportId: `DEMO-REPORT-${String(index + 1).padStart(4, '0')}`,
-    reportName: `${dayjs('2026-06-03').subtract(index, 'day').format('YYYY-MM-DD')} 生产${
-      REPORT_TYPE_LABEL[type]
-    }`,
-    reportType: type,
-    period:
-      type === 3
-        ? dayjs('2026-06-03').subtract(index, 'month').format('YYYY-MM')
-        : dayjs('2026-06-03').subtract(index, 'day').format('YYYY-MM-DD'),
-    generatedAt: dayjs('2026-06-03 08:00:00')
-      .subtract(index, 'day')
-      .format('YYYY-MM-DD HH:mm:ss'),
-    generatorName: ['系统自动', '张三', '李四'][index % 3],
-    fileUrl: '',
-    fileSize: 128 * 1024 + index * 15360,
-    status: status as 1 | 2 | 3,
-  }
-})
+/*
+ * ⚠️ 这里原本有 16 条 `DEMO_REPORT_ID_PREFIX`（`DEMO-REPORT-*`）内置示例报表，
+ * 在列表接口报错（`usingFallback`）时铺满列表。BT-33 已裁决删除，理由：
+ *
+ * 1. 它掩盖的是**契约错位**而不是"暂时没数据"——页面打的是
+ *    `GET /analytics/reports`，那个端点返回的是**指标快照**
+ *    （`AnalyticsSnapshotService#reports` 查 `prod_analytics_snapshot`），
+ *    从来就不是报表。铺上 16 条像模像样的"报表"，使用者会以为
+ *    「报表功能已经能用，只是这批数据碰巧长这样」，反而没人去修端点。
+ * 2. 另一个候选 `GET /admin/reports` 也不是答案（运营端监管报表：类型词表
+ *    GOV/BIZ/QUALITY ≠ 本页日报/周报/月报；生成人恒为 SUPER_ADMIN；
+ *    不接受 farmId；隔离只到 market_id，会把全市场的报表列给用户端农场）。
+ *    → 既然"改端点"这条路不通，就该**如实承认用户端报表能力不存在**。
+ * 3. `usingFallback` 这条分支本身也随之删除——没有生产者就别留机制，
+ *    留着迟早被当成"合法的兜底写法"复制到别的页面。
+ *
+ * 现在的口径：接口报错 / 返回空 / 形状不对，一律走空态 + 写明真实原因。
+ */
 
 /**
  * 按「报表类型 + 关键字」过滤一行报表。
- *
- * 抽出来是因为它同时服务于「示例报表回落」与「仅展示本地生成报表」两条分支，
- * 两处的过滤口径必须一致，否则同一条报表在不同分支下会时隐时现。
  *
  * @param item 报表行
  * @param type 报表类型过滤值，为空表示不过滤
@@ -454,48 +434,41 @@ export default function ProductionReports(): JSX.Element {
    * 报表（会掩盖真实状态），也**不**把指标拼成报表行（三列全空更难读），
    * 走空态 + 明示说明，把「后端返回的是什么」直接写给使用者看。
    *
-   * 但用户自己点「生成报表」造出来的 `extraReports` **不在此列**：那是使用者
-   * 主动操作产生的真实数据，不是开发者编造的示例，不能因为服务端没数据就让它
-   * 凭空消失。故此处仍然展示，并由列渲染打上「本地生成」标记以区分来源。
+   * 但用户自己点「生成报表」真实成功后返回的 `extraReports` **不在此列**：
+   * 那是使用者主动操作产生的数据，不是开发者编造的示例，不能因为服务端列表
+   * 返的不是报表就让它凭空消失。故此处仍然展示，并打标区分来源。
    */
   const shapeMismatch: boolean =
     !listQuery.isLoading && rawRows.length > 0 && remoteRows.length === 0
-  const usingFallback: boolean =
-    !listQuery.isLoading &&
-    !shapeMismatch &&
-    (listQuery.isError || remoteRows.length === 0)
 
-  /** 最终报表数据 */
-  const { rows, total } = useMemo<{ rows: ReportItem[]; total: number }>(() => {
-    // 关键字先归一化，两条分支共用同一口径（trim + 转小写）
-    const kw = keyword.trim().toLowerCase()
+  /**
+   * 空态原因（BT-33：不回落示例数据，改为把真实原因写出来）。
+   *
+   * 三种情况分别给不同文案，避免一律说"暂无数据"——
+   * "接口挂了"和"后端没这个能力"对使用者是完全不同的两件事。
+   */
+  const emptyReason: string = (() => {
+    if (listQuery.isLoading) return ''
+    if (listQuery.isError) {
+      return `报表列表接口请求失败：${describeFailure(listQuery.error)}`
+    }
     if (shapeMismatch) {
-      // 服务端没有报表数据，但本次会话生成的报表照常展示（列表里带标记）
-      const localOnly = extraReports.filter(
-        (item) => matchFilter(item, typeFilter, kw) && !hiddenIds.includes(item.reportId),
-      )
-      return { rows: localOnly, total: localOnly.length }
+      return `后端暂未提供用户端报表能力：GET /analytics/reports 本次返回 ${rawRows.length} 条记录，均为指标快照（metricCode / metricName / metricValue / unit / bizDate），不含 reportId / reportName / reportType，因此不作为报表展示`
     }
-    if (!usingFallback) {
-      return { rows: remoteRows, total: listQuery.data?.total ?? 0 }
-    }
-    const filtered = [...extraReports, ...DEMO_REPORTS].filter(
+    return '服务端当前没有任何报表记录'
+  })()
+
+  /** 最终报表数据：服务端报表行 + 本次会话生成的行，不做任何示例兜底 */
+  const { rows, total } = useMemo<{ rows: ReportItem[]; total: number }>(() => {
+    // 关键字先归一化（trim + 转小写）
+    const kw = keyword.trim().toLowerCase()
+    const visible = [...extraReports, ...remoteRows].filter(
       (item) => matchFilter(item, typeFilter, kw) && !hiddenIds.includes(item.reportId),
     )
+    // 服务端分页只对 remoteRows 有意义；这里合并后统一前端切片，避免 total 撒谎
     const start = (pageNum - 1) * pageSize
-    return { rows: filtered.slice(start, start + pageSize), total: filtered.length }
-  }, [
-    shapeMismatch,
-    usingFallback,
-    remoteRows,
-    listQuery.data?.total,
-    typeFilter,
-    keyword,
-    pageNum,
-    pageSize,
-    extraReports,
-    hiddenIds,
-  ])
+    return { rows: visible.slice(start, start + pageSize), total: visible.length }
+  }, [remoteRows, typeFilter, keyword, pageNum, pageSize, extraReports, hiddenIds])
 
   /**
    * 本次会话新增行的 reportId 集合。
@@ -509,17 +482,17 @@ export default function ProductionReports(): JSX.Element {
   )
 
   /**
-   * 判断一行是不是**只存在于本页状态里**（示例行 / 本次会话新增行）。
+   * 判断一行是不是**本次会话生成的**（服务端返回了，但还没进服务端列表）。
    *
    * 只有这类行的「移除」是纯前端操作、且能如实说明；服务端列表返回的行不在此列——
    * 它们的删除端点删错实体，按钮必须置灰（BT-27）。
    *
    * @param report 报表行
-   * @returns 仅存在于本页时返回 true
+   * @returns 是本次会话生成的行时返回 true
    */
-  const isPageOnlyReport = (report: ReportItem | undefined | null): boolean => {
+  const isSessionReport = (report: ReportItem | undefined | null): boolean => {
     if (!report || typeof report.reportId !== 'string') return false
-    return isDemoReport(report) || extraIds.has(report.reportId)
+    return extraIds.has(report.reportId)
   }
 
   /**
@@ -579,14 +552,12 @@ export default function ProductionReports(): JSX.Element {
    * 2. 后端 `GET /analytics/reports/{id}/export` 实测 500（端点不存在），
    *    回落本地 CSV 时必须明示「本地生成，未同步服务端」，不能只说"已导出"。
    *
+   * 注：BT-33 删掉内置示例报表后，"示例行禁导出"这个分支已无生产者，一并删除。
+   *
    * @param report 报表
    * @returns Promise
    */
   const handleExport = async (report: ReportItem): Promise<void> => {
-    if (isDemoReport(report)) {
-      message.warning('这是页面内置的示例报表，不是真实数据，不可导出')
-      return
-    }
     try {
       const res = await exportReport(report.reportId)
       if (res?.fileUrl) {
@@ -611,23 +582,19 @@ export default function ProductionReports(): JSX.Element {
    * 且实测 `DELETE /analytics/{id}` 删的是**指标快照**（删错实体），
    * 在端点修正前这个按钮不能看起来"能删"。
    *
-   * 本地生成的行不在服务端，从列表移除是**纯前端状态**操作，这部分照常做，
-   * 但提示语要说明它本来就不在服务端。
+   * 本次会话生成的行还没进服务端列表，从列表移除是**纯前端状态**操作，
+   * 这部分照常做，但提示语要说明它本来就不在服务端。
    *
    * @param report 报表
    * @returns Promise
    */
   const handleDelete = async (report: ReportItem): Promise<void> => {
-    if (isPageOnlyReport(report)) {
+    if (isSessionReport(report)) {
       // 纯前端状态操作：这一行本来就不在服务端报表列表里，移除它不产生任何服务端影响
       setExtraReports((prev) => prev.filter((item) => item.reportId !== report.reportId))
       setHiddenIds((prev) => [...prev, report.reportId])
       void queryClient.invalidateQueries({ queryKey: ['production-reports'] })
-      if (isDemoReport(report)) {
-        message.warning('已移除该示例行（示例数据本就不在服务端，刷新页面会重新出现）')
-      } else {
-        message.success('已移除本页记录（该记录不在服务端报表列表中）')
-      }
+      message.success('已移除本页记录（该记录不在服务端报表列表中）')
       return
     }
     /*
@@ -736,13 +703,10 @@ export default function ProductionReports(): JSX.Element {
             <Text strong>{value}</Text>
             <Tag color="blue">{REPORT_TYPE_LABEL[record.reportType] ?? '其他'}</Tag>
             {/*
-              来源必须逐行标清楚：示例数据不是真报表（不可导出 / 打印），
-              本次会话新增的行还没进服务端列表。不标的话使用者一律当成真数据。
+              本次会话生成的行还没进服务端列表，必须标出来；
+              不标的话使用者会以为它已经在服务端了。
             */}
-            {isDemoReport(record) ? <Tag color="red">示例数据</Tag> : null}
-            {!isDemoReport(record) && extraIds.has(record.reportId) ? (
-              <Tag color="orange">本次生成</Tag>
-            ) : null}
+            {extraIds.has(record.reportId) ? <Tag color="orange">本次生成</Tag> : null}
           </Space>
           <Text type="secondary" style={{ fontSize: 12 }}>
             周期 {record.period}
@@ -797,12 +761,12 @@ export default function ProductionReports(): JSX.Element {
             type="link"
             size="small"
             icon={<PrinterOutlined />}
-            disabled={record.status !== 2 || isDemoReport(record)}
+            disabled={record.status !== 2}
             onClick={() => printReport(record)}
           >
             打印
           </Button>
-          {isPageOnlyReport(record) ? (
+          {isSessionReport(record) ? (
             <Popconfirm
               title="确认移除该报表？"
               description="该行不在服务端，移除只是从本页消失，不影响任何服务端数据。"
@@ -835,8 +799,7 @@ export default function ProductionReports(): JSX.Element {
                 <FileTextOutlined style={{ fontSize: 20, color: '#1677ff' }} />
                 <span style={{ fontSize: 18, fontWeight: 600 }}>生产报表</span>
                 <Text type="secondary">
-                  共 {formatNumber(total)} 份报表{usingFallback ? '（示例）' : ''} ·{' '}
-                  {subscriptions.length} 项订阅
+                  共 {formatNumber(total)} 份报表 · {subscriptions.length} 项订阅
                 </Text>
               </Space>
             </Col>
@@ -902,44 +865,35 @@ export default function ProductionReports(): JSX.Element {
             />
           </Space>
 
-          {shapeMismatch && (
-            <Alert
-              showIcon
-              type="warning"
-              style={{ margin: '12px 0' }}
-              message="后端 /analytics/reports 当前未返回报表数据"
+          {/*
+            空态：BT-33 起不再回落任何示例报表，改用 Empty + 真实原因。
+            原因分三种（接口失败 / 返回的是指标快照 / 确实没有记录），
+            不能一律说"暂无数据"——"接口挂了"和"后端没这个能力"是两件事。
+          */}
+          {rows.length === 0 && !listQuery.isLoading ? (
+            <Empty
+              style={{ margin: '24px 0' }}
               description={
-                <Space direction="vertical" size={2}>
-                  <Text>
-                    该接口本次返回 {rawRows.length} 条记录，均为指标快照（metricCode /
-                    metricName / metricValue / unit / bizDate），不含 reportId / reportName /
-                    reportType，因此不作为报表行展示。
+                <Space direction="vertical" size={4}>
+                  <Text strong>暂无报表</Text>
+                  <Text type="secondary" style={{ maxWidth: 620, display: 'inline-block' }}>
+                    {emptyReason}
                   </Text>
-                  <Text>
-                    指标快照不会被拼成报表行展示；服务端暂无线上报表数据即为真实状态。
-                    下方列表正常情况下为空——「生成报表」当前会如实报错（后端
-                    POST /analytics/reports 不存在），不会造出本地假行。
+                  <Text type="secondary" style={{ maxWidth: 620, display: 'inline-block' }}>
+                    「生成报表」当前也会如实报错（后端 POST /analytics/reports 不存在，
+                    实测返回 500），不会产生任何报表文件。
                   </Text>
                 </Space>
               }
             />
-          )}
-
-          {usingFallback && (
-            <Alert
-              showIcon
-              type="warning"
-              style={{ margin: '12px 0' }}
-              message="以下为内置示例报表，不是真实数据"
-              description="接口暂未返回报表数据，列表展示的是页面内置样例（每行带「示例数据」标记）。示例行不可导出、不可打印；「生成报表」当前也会如实报错（后端 POST /analytics/reports 不存在）。"
-            />
-          )}
+          ) : null}
 
           <Spin spinning={listQuery.isLoading || generating}>
             <Table<ReportItem>
               rowKey="reportId"
               columns={columns}
               dataSource={rows}
+              locale={{ emptyText: emptyReason || '暂无报表' }}
               scroll={{ x: 1100 }}
               pagination={{
                 current: pageNum,
