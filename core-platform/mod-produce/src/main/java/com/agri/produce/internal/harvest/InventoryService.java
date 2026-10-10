@@ -161,10 +161,13 @@ public class InventoryService {
         if (entity.getFrozen() == null) {
             entity.setFrozen(Boolean.FALSE);
         }
+        // V16 起 location_code 为 NOT NULL DEFAULT ''，未指定库位必须落成空串，
+        // 不能留 null（否则 INSERT 直接被列约束拒绝）
+        entity.setLocationCode(normalizeLocation(entity.getLocationCode()));
         // 批次号 / 品名 / 品类 / 等级 从批次表补齐，避免新建的台账 batchNo 为 null
         applyBatchSnapshot(entity, entity.getBatchId());
         normalize(entity);
-        inventoryMapper.insert(entity);
+        insertOrResurrect(entity);
         return entity;
     }
 
@@ -224,7 +227,7 @@ public class InventoryService {
             ledger.setInventoryId(ProduceIds.newId(ID_PREFIX));
             ledger.setBatchId(batchId);
             ledger.setWarehouseName(warehouseName);
-            ledger.setLocationCode(locationCode);
+            ledger.setLocationCode(normalizeLocation(locationCode));
             ledger.setCurrentQty(BigDecimal.ZERO);
             ledger.setFrozenQty(BigDecimal.ZERO);
             ledger.setLossQty(BigDecimal.ZERO);
@@ -251,7 +254,7 @@ public class InventoryService {
         ledger.setHealthStatus(resolveHealth(ledger));
 
         if (created) {
-            inventoryMapper.insert(ledger);
+            insertOrResurrect(ledger);
         } else {
             inventoryMapper.updateById(ledger);
         }
@@ -348,7 +351,7 @@ public class InventoryService {
             target.setInventoryId(ProduceIds.newId(ID_PREFIX));
             target.setBatchId(batchId);
             target.setWarehouseName(targetWarehouse);
-            target.setLocationCode(targetLocation);
+            target.setLocationCode(normalizeLocation(targetLocation));
             target.setCurrentQty(BigDecimal.ZERO);
             target.setFrozenQty(BigDecimal.ZERO);
             target.setLossQty(BigDecimal.ZERO);
@@ -364,7 +367,7 @@ public class InventoryService {
         target.setLastInAt(LocalDateTime.now());
         target.setHealthStatus(resolveHealth(target));
         if (created) {
-            inventoryMapper.insert(target);
+            insertOrResurrect(target);
         } else {
             inventoryMapper.updateById(target);
         }
@@ -448,6 +451,35 @@ public class InventoryService {
         // 查都 miss 然后各插一条。（DB 层唯一约束另见 V1x 迁移，本方法与之互补）
         List<InventoryEntity> rows = inventoryMapper.selectList(wrapper.last("LIMIT 1 FOR UPDATE"));
         return rows.isEmpty() ? null : rows.get(0);
+    }
+
+    /**
+     * 插入新台账；若该库位存在墓碑行（已逻辑删除的同三元组）则<b>复活</b>它再写入。
+     *
+     * <p><b>为什么必须复活而不是直接插。</b>V16 的唯一约束
+     * {@code uk_inventory_slot(batch_id, warehouse_name, location_code, deleted)}
+     * 把 {@code deleted} 计入键中，意味着同一三元组最多 1 条在用 + 1 条已删除。
+     * 「删除台账 → 同库位再入库」时墓碑行已占住 {@code deleted=1} 那格，
+     * 再 INSERT 一条 {@code deleted=1} 的新行会撞唯一键 → 500。
+     * 因此这里先查墓碑，命中就 {@code UPDATE ... deleted=0} 复活（并清零数量），
+     * 再用 {@code updateById} 写入本次内容。
+     *
+     * <p>约束与复活必须成对存在：只加约束会把静默 bug 变成 500；
+     * 只做复活不加约束则拦不住绕过本 Service 的写入。
+     *
+     * @param ledger 待落库的新台账（库位须已归一化）
+     */
+    private void insertOrResurrect(InventoryEntity ledger) {
+        String tombstoneId = inventoryMapper.selectDeletedSlotId(
+                ledger.getBatchId(), ledger.getWarehouseName(),
+                normalizeLocation(ledger.getLocationCode()));
+        if (tombstoneId != null) {
+            inventoryMapper.resurrectSlot(tombstoneId);
+            ledger.setInventoryId(tombstoneId);
+            inventoryMapper.updateById(ledger);
+            return;
+        }
+        inventoryMapper.insert(ledger);
     }
 
     /**
@@ -622,6 +654,19 @@ public class InventoryService {
 
     private static BigDecimal nvl(BigDecimal value) {
         return value == null ? BigDecimal.ZERO : value;
+    }
+
+    /**
+     * 库位归一化：null / 空白一律落成空串。
+     *
+     * <p>V16 起 {@code location_code} 是 {@code NOT NULL DEFAULT ''}，空串表示
+     * 「未指定库位」。这里必须归一化，否则新建台账时 INSERT 会被列约束拒绝。
+     *
+     * @param value 原始库位
+     * @return 非空库位串
+     */
+    private static String normalizeLocation(String value) {
+        return value == null || value.isBlank() ? "" : value.trim();
     }
 
     private static String blankToNull(String value) {
