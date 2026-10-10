@@ -374,6 +374,20 @@ export default function TenantQuotas(): JSX.Element {
 
   return (
     <div>
+      {/*
+        口径说明（接后端工单 BT-09）：本页「租户」的标识取自**配额记录**，不是后端的 tenant_id。
+        实测 prod_tenant_quota.tenant_id 与 prod_farm_info.tenant_id 当前全库为 0（6 个农场、
+        COUNT(DISTINCT tenant_id)=1、min=max=0），因此「租户编号」列实际显示的是配额记录 ID
+        （quotaId），「重算」也是按 quotaId 提交的。不说明的话，使用者会把这一列当成真的租户 ID。
+      */}
+      <Alert
+        type="info"
+        showIcon
+        style={{ marginBottom: 12 }}
+        message="租户标识口径：当前取自配额记录（quotaId）"
+        description="后端 tenant_id 字段全库为 0、暂不可用，所以本页「租户编号」列显示的是配额记录 ID（quotaId），「重算」也按 quotaId 提交。等后端工单 BT-09 明确口径（回填 tenant_id，或统一以 quotaId 作为租户标识，二选一）后，本页口径会同步调整。"
+      />
+
       {/* 顶部统计：只展示后端真实返回的配额记录总数，无任何虚构数字 */}
       <Row gutter={[12, 12]} style={{ marginBottom: 12 }}>
         <Col xs={12} md={6}>
