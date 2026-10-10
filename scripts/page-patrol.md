@@ -195,6 +195,38 @@ GET /analytics/DEMO-SNAP-001    → 200 有数据
 
 同理，看到 404 时先怀疑"是不是被 `/{id}` 吞了"，用"与不存在的 id 对比"验证。
 
+### 4. 同一 id 成对探测：判别"端点存在 / 不存在"的标准动作
+
+前面三条靠"看响应判成因"，但对**写端点**（POST / PUT / DELETE）常常判不出来：
+端点不存在是 500、id 无效是 404，可 404 也可能只是"这个 id 查不到"，
+而换个真 id 去试又会**同时改变两个变量**（路径变了、id 也变有效了），结论不干净。
+
+标准动作：拿**同一个不存在的 id**，打**两条路径**，让"id 无效"恒定：
+
+```
+POST   /admin/tenants/NOPE/reset-usage        → 404（有 handler 接住，id 查不到）
+POST   /admin/tenants/NOPE/quota-usage/reset  → 500（无 handler → NoResourceFoundException）
+DELETE /analytics/reports/NOPE                → 500（两段，无 handler）
+DELETE /analytics/NOPE                        → 404（一段，进 @DeleteMapping("/{id}")）
+GET    /analytics/NOPE                        → 404（同上，进 @GetMapping("/{id}")）
+GET    /analytics/zzz-not-exist               → 404（对照组）
+```
+
+**同一个 id、两种响应 = 干净排除了"id 无效"这个干扰项。**
+比"换个真 id 试试"严谨——真 id 会同时改变路径与 id 有效性两个变量。
+
+判读：
+
+| 结果 | 结论 |
+| --- | --- |
+| 404 | 该路径**确实有 handler** 接收（多半是通配 `/{id}`），只是 id 查不到 → **端点存在**，别去"补端点" |
+| 500（日志 `NoResourceFoundException: No static resource ...`） | 该路径**根本没有 handler** → 端点不存在 |
+| 两条都是 404 / 都是 500 | 没形成对照，换差一个路径段的写法再试一次 |
+
+⚠️ 顺带一条：成对探测还能炸出**静默无操作**——`DELETE /analytics/NOPE` 返回
+`code=0 / success`，可 NOPE 压根不存在、一行没删（源码 `deleteById(id)` 丢弃了受影响行数）。
+所以"端点存在"之后还要按下一节的回读标准验一次，别停在"有响应就算通"。
+
 ### 附：写操作的「假成功」比读操作危险，且只在后端失败时才暴露
 
 判据：**成功才 `message.success`；失败必须 `message.error` 并带上真实失败原因**，
@@ -255,6 +287,7 @@ GET /analytics/DEMO-SNAP-001    → 200 有数据
 | `POST /settings/save`（字段名映射正确） | 200 / code 0 | 10 个配置键全部非空、值正确 | 真生效 |
 | `POST /settings`（旧实现，字段名不对） | 200 / code 0 + settingId | `setting_key=null` | **静默写空** |
 | `DELETE /settings/{不存在 id}` | 200 / code 0 | 记录仍在 | **静默无操作** |
+| `DELETE /analytics/NOPE`（同样的不存在的 id） | 200 / code 0 | 一行没删；源码 `deleteById(id)` 丢弃受影响行数 | **静默无操作**（同上，第二例 → 是通用模板问题，不是单个实体的 bug） |
 | `POST /harvests/inventory/{batchId}/out` | 200 / code 0 + flowId | `prod_inventory_flow` 多一行、按 batchId 回读查得到 | 真生效 |
 | `POST /harvests/inventory/in` 等 4 个 | 200 / **code 500**（`NoResourceFoundException` / `HttpRequestMethodNotSupportedException`） | — | 端点不存在 |
 

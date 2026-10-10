@@ -661,3 +661,258 @@ NULL 键值行也一并清理，当前 `prod_sys_setting` 已无 `setting_key IS
 | 系统配置列表 | `GET /settings?page=1&size=10` | 4 条真配置 ✅ |
 | 配置项（按 id / 按 key） | `GET /settings/DEMO-SET-001`、`GET /settings/by-key?settingKey=…` | 真数据，17 字段 ✅ |
 | 保存配置 | `POST /settings/save` | 真写入并回读校验通过（见 BT-01 同款标准）✅ |
+
+---
+
+---
+
+# 域 5：`analytics`（用户端数据分析与生产报表）
+
+> 产出人：se-verify-fix　日期：2026-10-10　实测环境：`core-app` :8098（自有实例）。
+> 本域**读侧已经被前序同事诚实化过**（`AnalyticsOverview.tsx` 全文无示例值兜底、
+> `ProductionReports.tsx` 列表侧有形状守卫），所以本轮**读侧没有新假数据**；
+> 新发现的问题集中在**写侧（4 处假成功）**与**后端缺能力**。
+> 按本轮纪律：**只出工单不改代码**，写侧修法已写明，等 team-lead 裁决。
+
+**后端现有端点**（`AnalyticsController.java` 全文 80 行，已逐行核对）：
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/analytics`（page / size / status） | 指标快照分页 |
+| GET | `/analytics/{id}` | 快照详情 |
+| POST | `/analytics` | **新建指标快照**（不是报表） |
+| PUT / DELETE | `/analytics/{id}` | 快照更新 / 删除 |
+| GET | `/analytics/trend?metricCode=` | 单指标趋势 ✅ 真数据 |
+| GET | `/analytics/overview?farmId=` | 指标 Map ✅ |
+| GET | `/analytics/dashboard?farmId=` | **与 overview 同一实现** |
+| GET | `/analytics/reports?metricCode=` | **指标快照分组，不是报表** |
+
+前端 `api/analytics.ts` 共 11 个函数，其中 **6 个打在后端不存在的路径上**。
+
+---
+
+## BT-23　`yield-trend` / `task-trend` / `dimension` 三个端点不存在（404）
+
+| 端点 | 实测 | 对照 |
+| --- | --- | --- |
+| `GET /analytics/yield-trend?startDate=…&endDate=…` | **404 资源不存在** | `/analytics/zzz-not-exist` → 404（完全一致） |
+| `GET /analytics/task-trend?startDate=…&endDate=…` | **404 资源不存在** | 同上 |
+| `GET /analytics/dimension?dimension=crop` | **404 资源不存在** | 同上 |
+
+**成因**：三者都被 `@GetMapping("/{id}")` 吞掉，后端拿 "yield-trend" 当快照 id 去查 → 404。
+（本项目的第 4、5、6 例同类坑，见 BT-12/13/15。）
+
+**前端现状**：
+- `getYieldTrend` / `getTaskTrend`（`api/analytics.ts:25-40`）**零调用方**——页面已改用
+  `fetchMetricTrend('YIELD')`（`@/api/production-view`）打真的 `GET /analytics/trend?metricCode=`；
+- `getAnalyticsDimension` 的 catch 吞成 `[]`，页面走空态并显示「后端暂无该数据源」
+  （`AnalyticsOverview.tsx:217-221,265`），**不回落示例维度表** → **前端已诚实**。
+
+→ **纯后端工单**。期望语义：产量趋势 / 任务完成趋势 / 多维度分析（作物 / 地块 / 月份）。
+
+⚠️ 接入提醒：真的趋势端点 `GET /analytics/trend?metricCode=YIELD` 返回的是
+`AnalyticsSnapshotEntity`（`snapshotId / farmId / bizDate / metricCode / metricValue …`），
+**不是**前端声明的 `TrendPoint { date, value }`，接入前必须对齐字段名，否则又是一次静默写空。
+
+---
+
+## BT-24　报表订阅 4 个端点全部不存在（500），前端 3 处假成功 ⚠️ P0
+
+**实测（同一 id 成对探测，`NOPE` 为不存在的 id）**：
+
+| 端点 | 实测 |
+| --- | --- |
+| `GET /analytics/reports/subscriptions` | **500** `系统繁忙`（无 handler） |
+| `POST /analytics/reports/subscribe` | **500** |
+| `DELETE /analytics/reports/subscriptions/{id}` | **500** |
+
+**全后端佐证**：`core-platform` 下 grep `subscribe` / `subscriptions` 只命中 RocketMQ 与 MQTT 的
+`consumer.subscribe(...)`，**没有任何订阅实体、表或映射**——是能力缺失，不是路径写错。
+
+**前端现状（`ProductionReports.tsx`，三处都违反"写操作验收标准"）**：
+
+| 位置 | 现状 | 性质 |
+| --- | --- | --- |
+| `:531-543` 提交订阅 | POST 500 → `catch {}` 静默 → 生成 `LOCAL-SUB-<时间戳>` 写 localStorage → `message.success('订阅已保存')` | **假成功**：用户以为已订阅，实际只写进本机浏览器 localStorage，换设备 / 清缓存即消失，且永远不会推送。违反手册「本地暂存必须明示未同步服务端 + 常驻横幅」 |
+| `:547-555` 取消订阅 | DELETE 500 → `catch {}` 忽略 → 本地移除 → `message.success('订阅已取消')` | **假成功** |
+| `:343-357` 订阅列表 | GET 500 → `catch {}` → `[]` → 回落 localStorage 读取 | 把**本机 localStorage** 里的订阅当真实订阅展示 |
+
+**建议修法（等裁决）**：订阅保存失败时要么如实报错，要么成功提示改为
+「已保存在本浏览器，未同步服务端，不会真的推送」并常驻一条横幅；
+列表侧区分「服务端订阅」与「本地订阅」两列 / 两个来源标记。
+
+---
+
+## BT-25　「生成报表」全程无真实数据 ⚠️ P0（本域最严重的一条）
+
+| 项 | 内容 |
+| --- | --- |
+| 端点 | `POST /analytics/reports` → **500 系统繁忙（端点不存在）** |
+| 前端函数 | `generateReport()`（`api/analytics.ts:60-66`） |
+| 调用方 | `ProductionReports.tsx:462-475` |
+
+**实测证据链**：
+
+1. `POST /analytics/reports` → 500。后端**没有任何"生成报表"能力**；
+   `/analytics` 上唯一的 POST 是 `create(@RequestBody AnalyticsSnapshotEntity)`，
+   即**新建一条指标快照**，与报表无关。
+2. 前端 `submitGenerate` 先在本地造一条 `draft` 塞进列表（`:448-460`），
+   调用后端失败后 `catch { // 后端骨架阶段生成接口不可用，走本地模拟 }` **完全静默**；
+3. 然后**无条件**执行 `window.setTimeout(…, 2500)`：把该行改成
+   `status: 2`（已完成）、`fileSize: 156 * 1024`（**硬编码 156KB**）、`fileUrl: ''`，
+   并 `message.success(`${draft.reportName} 生成完成`)`。
+
+**性质**：用户点「生成报表」→ 后端没这个端点 → 页面 2.5 秒后弹「生成完成」，
+列表多出一条"已完成 / 156KB"的报表 —— **从状态到文件大小到成功提示，没有一处是真实数据**。
+这是本次战役定义里最典型的 fake-usable（比"回落示例数据"更严重：它是**写操作谎称成功**）。
+
+**建议修法（等裁决）**：
+- 后端失败 → `message.error('生成失败：' + 真实原因)`，**不得**标记完成；
+- `fileSize` 不许硬编码常量（没有就显示「—」）；
+- 本地生成物保留可以，但状态列必须显示「本地生成，未同步服务端」，不能显示"已完成"。
+
+⚠️ **不要为了消掉 500 就改打 `POST /analytics`**：那是往指标快照表里插一条报表数据，
+会把"假装成功"升级成"真的写脏了库"。
+
+---
+
+## BT-26　「导出报表」回落本地 CSV，且对编造出来的行同样生效
+
+| 端点 | 实测 |
+| --- | --- |
+| `GET /analytics/reports/{id}/export` | **500**（端点不存在） |
+| 成对对照 `GET /analytics/NOPE/export` | **500**（同样是两段路径、无 handler） |
+
+**前端现状**（`ProductionReports.tsx:499-512`）：`exportReport` 失败 → `catch {}` 静默 →
+用**前端内存里的对象** `buildReportCsv(report)` 拼 CSV → `message.success('已导出为 CSV 文件')`。
+
+**问题**：导出内容不是服务端数据；对 BT-25 编造出来的行执行导出时，CSV 里是编造的报表名与周期，
+而提示语「已导出为 CSV 文件」让它看起来像正常功能。
+
+**建议修法**：失败时明确提示「后端导出不可用，以下为页面当前展示内容的本地导出」，
+并在文件名上带 `本地` 标记；或直接报错不导出。
+
+---
+
+## BT-27　删除报表无条件报成功（且删错实体）
+
+**实测（同一 id 成对探测）**：
+
+```
+DELETE /analytics/reports/NOPE → 500（两段路径，无 handler → 端点不存在）
+DELETE /analytics/NOPE         → 404（一段路径，进 @DeleteMapping("/{id}") → 端点存在、id 无效）
+```
+
+**前端现状**（`ProductionReports.tsx:640-647`）：
+
+```ts
+void deleteReport(record.reportId).catch(() => undefined)   // 失败完全静默
+setExtraReports(prev => prev.filter(...))
+message.success('报表已删除')                                // 无条件成功
+```
+
+服务端一个字节都没变，用户看到「报表已删除」。
+
+**另一层语义错位**：即使把路径改对成 `DELETE /analytics/{id}`，它删的是
+**指标快照**（`AnalyticsSnapshotService#delete` → `analyticsSnapshotMapper.deleteById`），
+不是报表——会把"删报表"变成"删指标"，属于删错实体。
+
+---
+
+## BT-28　`DELETE` 不校验受影响行数，删不到也返回 success（后端 · 通用模板问题 · 第二例）
+
+**实测**：`DELETE /analytics/NOPE`（NOPE 不存在）→ `{"code":0,"message":"success"}`，
+但**一行也没删**。
+
+**源码**：`AnalyticsSnapshotService.java:93-95`
+
+```java
+public void delete(String id) {
+    analyticsSnapshotMapper.deleteById(id);   // MyBatis-Plus 的受影响行数被丢弃
+}
+```
+
+**与 BT-22 同源**：`DELETE /settings/{不存在的 id}` 同样返回 success 且一行没删。
+两处不同模块、同一成因 → 这是**通用 Service 模板的问题**，不是某个实体的 bug。
+
+**期望语义**：受影响行数 = 0 时抛 NOT_FOUND（或返回受影响行数让调用方判断），
+不要让调用方以为删成功了。
+
+**建议**：作为**全库统一治理项**处理（所有 `deleteById` 都应当检查返回值），
+而不是逐个实体补——否则每接一个新实体就多一处静默无操作。
+
+---
+
+## BT-29　`overview` 与 `dashboard` 是同一实现；`ProductionOverview` / `AnalyticsOverview` 类型零字段命中
+
+**实测**（同一个 farmId）：
+
+```
+GET /analytics/overview?farmId=DEMO-FARM-001  → {"YIELD":86420,"PASS_RATE":96.8,"COST":1284.5,"metricCount":3}
+GET /analytics/dashboard?farmId=DEMO-FARM-001 → 与上面**逐字节相同**
+（不带 farmId 时 metricCount=6 → farmId 确实有过滤作用，但两个端点始终相同）
+```
+
+**源码**：`AnalyticsController.java:63-73`，`dashboard()` 直接 `return overview(farmId)`。
+
+**类型比对**：
+
+| 前端声明（`types/analytics.ts`） | 后端真值 | 结果 |
+| --- | --- | --- |
+| `ProductionOverview` 8 字段（farmCount / plotCount / plantingArea / runningPlanCount / pendingTaskCount / monthHarvestQty / passRate / activeDeviceCount） | 只有 `YIELD` / `PASS_RATE` / `COST` / `metricCount` 四个键 | **8 个字段名零命中**（`PASS_RATE` 与 `passRate` 也只是语义相近、取值口径未对齐） |
+| `AnalyticsOverview`（overview / yieldTrend / taskTrend / inputRanking / cropDistribution） | 裸 `Map<String,Object>` | **零命中** |
+
+**前端现状**：页面**没有**按这两个类型渲染——`AnalyticsOverview.tsx` 用 `buildOverview()` 读
+`metricCode` 键、缺字段显示「—」，所以当前**不会显示错误数字**。
+但类型声明仍是"契约撒谎"（与域 3 BT-16 同源），且：
+
+⚠️ 页面把 `dashboard` 当主数据源、`overview` 当备用数据源
+（`AnalyticsOverview.tsx:205-215`，注释写"两者都失败才标记不可用"）——
+而两者是**同一个后端实现**，一个挂另一个必挂，**这个"备用数据源"是假的**。
+
+**建议**：类型改为 `Record<string, number>`（或新增 `AnalyticsMetricMap`）；
+备用数据源逻辑要么删掉，要么换成真有差异的端点。
+
+---
+
+## BT-30　`GET /analytics/reports` 静默忽略分页与筛选参数
+
+**实测**：
+
+```
+/analytics/reports                                             → 6 条
+/analytics/reports?reportType=1&period=2026-10&pageNum=1&pageSize=2 → 仍是 6 条
+/analytics/reports?metricCode=YIELD                            → 2 条（只有 metricCode 生效）
+```
+
+**源码**：`reports(@RequestParam(required=false) String metricCode)`——其余入参一律丢弃。
+
+**前端影响**：`listReports` 传了 `pageNum / pageSize / reportType / period`，
+其中 `reportType` / `period` **后端完全不读**；分页之所以"看起来生效"，
+是 `toPageResult` 在**前端**切的片。使用者会以为是服务端筛选。
+
+**附带的契约错位**（与域 3 BT-16/17 同源）：该端点返回的是
+`{ metricCode, metricName, metricValue, unit, bizDate }` 的**指标快照**，
+不是报表——没有 `reportId` / `reportName` / `reportType` / `period`。
+前端 `ProductionReports.tsx:373-402` 已用形状守卫挡住（不满足就空态 + 明示），**前端侧已诚实**。
+
+**期望语义**：要么支持 `reportType` / 分页参数，要么在契约里写明"本端点仅按 metricCode 过滤"；
+真正的"报表列表"能力应另开端点（域 3 的 `GET /admin/reports` 才是报表）。
+
+---
+
+## 附：本域已验证有真数据的端点
+
+| 端点 | 实测 |
+| --- | --- |
+| `GET /analytics/overview?farmId=` | code=0，真指标 Map（YIELD 86420 / PASS_RATE 96.8 / COST 1284.5 / metricCount）✅ |
+| `GET /analytics/dashboard?farmId=` | 同上（与 overview 同源）✅ |
+| `GET /analytics/trend?metricCode=YIELD` | code=0，真快照序列 ✅ |
+| `GET /analytics?page=1&size=3` | code=0，PageResult 真数据 ✅ |
+| `GET /analytics/reports` | code=0，6 条指标快照（**不是报表**，见 BT-30）⚠️ |
+
+**读侧已诚实化，本轮不重复开工单**：
+- `AnalyticsOverview.tsx` 头部注释明确"没有的指标一律显示「—」、绝不使用本地示例值回填"，
+  作物分布 / 投入排行由地块、投入品使用记录两个真接口聚合，无数据显示「暂无数据」；
+- `ProductionReports.tsx` 列表侧有形状守卫（`:373-402`），接口通了但返的不是报表时走空态 + 明示，
+  **不**回落示例报表。
