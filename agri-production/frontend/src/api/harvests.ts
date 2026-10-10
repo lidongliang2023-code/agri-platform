@@ -294,10 +294,21 @@ export function assignPlanLabor(planId: BizId, payload: LaborPayload): Promise<b
  * 因此它是纯死代码。留着只会让人误以为「采收概览有接口，只是暂时没调」。
  */
 
-/** 数据来源标记：true 表示结果来自内置演示数据（后端接口未就绪或异常） */
+/**
+ * 数据来源标记：`demo` 为 true 表示结果来自内置演示数据（后端接口未就绪或异常）。
+ *
+ * `demoReason` 记的是**本次降级的实测原因**（HTTP 状态 / 连不上服务端），
+ * 由 {@link withDemoFallback} 在回退那一刻写入，页面必须把它原样显示给用户。
+ *
+ * 为什么必须带原因：横幅只写「接口不可用」会被理解成「后端接口建设中」，
+ * 而真实原因可能是前端路径写错、端点不存在、服务端 5xx 或根本连不上——
+ * 一句笼统文案会把排障方向带偏，所以这里只陈述实测现象，不做推断。
+ */
 export interface DemoFlag {
   /** 是否为演示数据 */
   demo: boolean
+  /** 本次降级的真实原因（实测）；页面应原样展示 */
+  demoReason?: string
 }
 
 /** 带来源标记的分页结果 */
@@ -939,10 +950,41 @@ function isBackendUnavailable(error: unknown): boolean {
 }
 
 /**
+ * 把「服务端不可用」的原因写成人能读、且能据此排障的一句话。
+ *
+ * 只陈述**实测到的现象**（HTTP 状态 / 连不上），不推断「后端接口建设中」——
+ * 那是猜测，而且经常是错的（例如前端路径写错也会表现为拿不到数据）。
+ *
+ * @param error catch 到的未知错误
+ * @returns 原因描述
+ */
+function describeUnavailable(error: unknown): string {
+  const apiError = asApiRequestError(error)
+  if (apiError) {
+    return `后端返回业务码 ${apiError.bizCode}（${apiError.message || '无提示'}），HTTP ${apiError.httpStatus ?? '未知'}`
+  }
+  const status = httpStatusOf(error)
+  if (status === 0) {
+    return `无法连接到服务端（${(error as Error)?.message ?? '网络异常'}）`
+  }
+  if (status === 404) {
+    return '后端返回 HTTP 404：请求的地址不存在（端点不存在或路径写错）'
+  }
+  if (status === 405) {
+    return '后端返回 HTTP 405：请求方法不被允许'
+  }
+  if (status >= 500) {
+    return `后端返回 HTTP ${status}：服务端异常`
+  }
+  return `请求失败：HTTP ${status}（${(error as Error)?.message ?? '未知原因'}）`
+}
+
+/**
  * 静默调用真实接口，仅在「服务端确实不可用」时回退到演示数据。
  *
- * 回退结果一律带 `demo: true` 标记，调用方必须据此展示显式的本地数据横幅，
- * 不允许把演示数据当作服务端数据呈现。
+ * 回退结果一律带 `demo: true` 标记，并把本次降级的**真实原因**写进 `demoReason`，
+ * 调用方必须据此展示显式的本地数据横幅，**且要把原因原样显示**——
+ * 只写「接口建设中」会把排障方向带偏（见 {@link DemoFlag} 注释）。
  *
  * @param real 真实接口调用
  * @param fallback 演示数据兜底逻辑
@@ -955,7 +997,12 @@ async function withDemoFallback<T>(real: () => Promise<T>, fallback: () => T): P
     if (!isBackendUnavailable(error)) {
       throw error
     }
-    return fallback()
+    const result = fallback()
+    const flagged = result as T & DemoFlag
+    if (flagged && typeof flagged === 'object' && flagged.demo === true) {
+      flagged.demoReason = describeUnavailable(error)
+    }
+    return result
   }
 }
 
