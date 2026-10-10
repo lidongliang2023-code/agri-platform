@@ -408,6 +408,46 @@ A5: response.inventoryId === 预期主键
 再解它读目标 `.class` 字节码，用字符串/`javap` 找新加的符号。
 交接时 jar 按 **commit hash** 命名，不按时间命名。
 
+### 附 7：字节码判据的两处实操细节（嵌套层 vs 外层 / 现成脚本）
+
+**① 业务 `.class` 在嵌套层，资源文件在外层 —— 只翻嵌套层会漏掉迁移和 yml**
+
+fat jar 是两层结构，两类东西不在同一层：
+
+| 内容 | 位置 | 例子 |
+|---|---|---|
+| 各模块的业务 `.class` | **嵌套层** `BOOT-INF/lib/<module>-1.0.0.jar` | `BOOT-INF/lib/mod-produce-1.0.0.jar` 里的 `.../AdminTraceService.class` |
+| 资源文件（Flyway 迁移、配置） | **外层** `BOOT-INF/classes/` | `BOOT-INF/classes/db/migration/V17__produce_alert_level_width.sql` |
+
+所以「把嵌套层展开来找」只适用于 `.class`。**查迁移文件、查 yml 必须看外层的
+`BOOT-INF/classes/`**，否则会得出「jar 里没有这个迁移」的错误结论。
+
+**② 新增迁移必须重新打 jar，Flyway 才看得见**
+
+Flyway 的 `locations: classpath:db/migration` 读的是 **jar 内的资源**，不是源码目录。
+写完 `Vxx__*.sql` 直接 `java -jar` 旧 jar，Flyway 根本看不到新版本——
+表现为「启动了、日志里没报错、但迁移没应用」，又是一处静默无效。
+
+→ 判据：**启动前先在 jar 里 grep 到该迁移文件**，grep 不到就先 `mvn -o install` 再起。
+（我踩过：写完 V17 直接起 17:31 那支 jar，白等 18 秒才发现 jar 里没有 V17。）
+
+**③ 现成脚本**（本机没有 `jar` / `unzip`，用 Python）：
+
+```python
+# 用法: python jarfind.py core-app-1.0.0.jar V17
+import io, sys, zipfile
+
+path, needle = sys.argv[1], sys.argv[2]
+z = zipfile.ZipFile(path)
+names = list(z.namelist())                       # 外层：含 BOOT-INF/classes/**
+for n in z.namelist():
+    if n.startswith("BOOT-INF/lib/") and n.endswith(".jar"):
+        names += zipfile.ZipFile(io.BytesIO(z.read(n))).namelist()   # 嵌套层：业务 .class
+print([n for n in names if needle in n])
+```
+
+注意 Windows 下要传**盘符形式**的路径（`C:/...`），Git Bash 的 `/c/...` 形式 Python 不认。
+
 ## 纪律
 
 本脚本**只观测、不修复**：不修改任何被测页面源码，不 mock 接口，不跳过失败页面。
