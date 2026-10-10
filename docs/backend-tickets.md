@@ -2008,3 +2008,368 @@ const CATEGORY_TO_CODE: Record<string, 1 | 2 | 3 | 4> = {
   注释明写"不做「看起来像」的猜测映射"。
 
 ---
+
+## 域 6：溯源与质量（`api/admin/trace.ts` + `pages/admin/trace` + `pages/admin/quality`）
+
+> 扫描人：se-verify-fix　日期：2026-10-10　性质：**只读调研**（GET 实测 + 源码对照 +
+> 前端静态审计），**不改任何业务代码**。写端点只用「不存在的 batchId」做**无副作用**探测
+> （命中即 0 行受影响），未写入任何真实数据。
+> 后端：`AdminTraceController`（7 个映射）、`AdminQualityController`（7 个映射）、
+> `QualityController`（`/quality`，20 个映射）、`TraceController`（`/trace`）。
+> 实测落在我自己的实例 `:8095`。
+>
+> **写操作诚实性**：⚠️ **本域有一例 P0 静默假成功**（BT-63，一键召回），
+> 且读侧有两处**整页/整列编造**（BT-64 / BT-65）。
+> 但 `AdminQualityService` 的三个写操作（accredit / reject / recall）**是诚实的**
+> ——同样的「目标不存在」场景它抛 404，正好是 BT-63 的对照组。
+
+## 本域已验证有真数据的端点
+
+| 端点 | 实测 |
+| --- | --- |
+| `GET /admin/trace?page&size` | code=0，6 条 `DEMO-TC-0001..0006`（`status` 是 **ACTIVE/INACTIVE 大写**）✅ |
+| `GET /admin/trace/codes?page&size` | code=0，**与上一行逐字段相同**（BT-68） |
+| `GET /admin/trace/code-stats` | code=0，`{"generated":"0","active":"5","scanned":"0","revoked":"0"}` ⚠️ 值全字符串、四桶中三桶恒 0（BT-66） |
+| `GET /admin/trace/labs` | code=0，`[{labId,labName,labType,qualificationNo}…]` 真数据 ✅ |
+| `GET /admin/quality/overview` | code=0，`{"passCount":"3","failCount":"1","passRate":"75","labCount":"3","frozenBatch":"1"}` ⚠️ 全字符串（BT-70） |
+| `GET /admin/quality/labs?page&size` | code=0，真数据 ✅ |
+| `GET /admin/quality/inspections?page&size` | code=0，真数据 ✅ |
+| `GET /admin/quality/inspections/failed` | code=0，真数据 ✅ |
+| `GET /admin/trace/overview` | **code=500** ❌ 端点不存在（BT-69） |
+| `GET /admin/trace/codes/{code}` | **code=500** ❌ 端点不存在（BT-69） |
+| `GET /admin/trace/nodes/{batchId}` | **code=500** ❌ 端点不存在（BT-69） |
+| `POST /admin/trace/recall?batchId=不存在` | **code=0 + data:0** ❌ 静默假成功（BT-63） |
+| `POST /admin/trace/recalls?batchId=不存在` | **code=0 + data:0** ❌ 同上（别名，BT-68） |
+| `POST /admin/quality/recalls?batchId=不存在` | **code=404「资源不存在」** ✅ 诚实（对照组） |
+
+## BT-63　一键召回对**不存在的批次**返回 `code:0 + data:0`，前端无条件宣称「批次已冻结」⚠️ **P0（本轮第四例写假成功，且是第一例「目标不存在也说成功」）**
+
+**源码**（`AdminTraceService.recall`，`:118-136`）：
+
+```java
+@Transactional
+public int recall(String batchId) {
+    HarvestBatchEntity batch = harvestBatchMapper.selectById(batchId);
+    int count = 0;
+    if (batch != null) {                    // ← 查不到就什么都不做，也不抛异常
+        ... 逐条 setStatus("revoked") ...
+        batch.setStatus(4);
+        harvestBatchMapper.updateById(batch);
+    }
+    return count;                           // ← 返回 0
+}
+```
+
+**前端**（`Detail.tsx:110`、`RecallManage.tsx:348`）：
+
+```ts
+onSuccess: (count) => {
+  message.success(`召回已执行：作废溯源码 ${count} 张，批次已冻结`)   // ← 无条件
+}
+```
+
+**成对实测（同一个不存在的 `batchId=zzz-not-exist`）**：
+
+```
+POST /admin/trace/recall?batchId=zzz-not-exist    → {"code":0,"data":0}          ← 什么都没做
+POST /admin/trace/recalls?batchId=zzz-not-exist   → {"code":0,"data":0}          ← 别名，同样
+POST /admin/quality/recalls?batchId=zzz-not-exist → {"code":404,"message":"资源不存在"}  ← 对照组
+```
+
+→ 运营在「一键召回」里填错/粘错批次 ID（或批次已被清理）→ 弹窗写
+「**召回已执行：作废溯源码 0 张，批次已冻结**」。
+「0 张」是诚实的数字，但「**批次已冻结**」是凭空的——那一行批次从头到尾没被碰过。
+
+**为什么比 BT-25 / BT-40 / BT-57 更该先修**：那三例刷新列表就会露馅；
+这一例刷新列表**不会露馅**——列表里本来就没有这个批次，
+运营会认为"召回了，只是这个批次没有码"，只有去库里查 `prod_harvest_batch.status` 才知道没冻结。
+
+**对照组说明**：`AdminQualityService.recall`（`POST /admin/quality/recalls`）
+在 `batch == null` 时 `throw new BusinessException(ErrorCode.NOT_FOUND)` → 404 →
+前端 `onError` 弹「召回接口未返回成功，请确认批次 ID 是否有效」。
+**同一件事，两个 service 两种处置**。这说明修法很明确：照 `AdminQualityService` 抄即可。
+
+**建议归属**：与 **G-01** 同源（都是「写操作在目标不存在 / 影响 0 行时静默返回成功」）。
+BT-22 / BT-28 是 `deleteById` 丢弃影响行数，这一例是 `selectById → null → 不抛异常`，
+**代码形态不同但用户可见后果完全一致**。建议把 G-01 的口径从
+「`deleteById` 丢弃影响行数」放宽为「**写操作在目标不存在或影响 0 行时必须显式失败**」，
+把 BT-22 / BT-28 / BT-59 / BT-63 一并收进去治理，别一个实体打一个补丁。
+
+**待裁决（我不自行改代码）**：
+1. `AdminTraceService.recall` 在 `batch == null` 时抛 `NOT_FOUND`（与 quality 侧对齐）；
+2. 前端 `onSuccess` 改为**回读校验**（确认 `status === 4`）后再报成功，
+   并把「已冻结」这句从「无条件断言」改成「按回读结果表述」；
+3. 两者都做（推荐）。
+
+## BT-64　溯源码管理页：后端返回空时 `buildFallbackRows()` 编造整页行，`total` 编成 **2,450,000** ⚠️ **P0（读侧编造量级最大）**
+
+**源码**（`AdminTraceCodeManage.tsx:307-346`）：
+
+```ts
+/** 表格数据源：后端数据优先，缺失时回落兜底数据 */
+const { rows, total } = useMemo(() => {
+  if (remoteRows.length > 0) { ... }
+  const fallback = buildFallbackRows(pageNum, pageSize)      // ← 编造
+  ...
+  return { rows: filtered, total: fallback.total }            // ← 编造的 total
+}, [...])
+```
+
+```ts
+const PROTOTYPE_TOTAL = 2_450_000      // 「原型口径总码量」
+...
+return { list, total: PROTOTYPE_TOTAL }   // buildFallbackRows 末尾
+```
+```ts
+const PRODUCT_POOL = ['有机大米','红富士苹果','有机蔬菜','有机牛奶','土鸡蛋']
+const FARM_POOL    = ['绿源1号','丰达A区','大地南','惠民D','鑫农试']
+const CODE_PREFIX  = 'TRC'
+```
+
+**后果**：只要接口返回空数组（后端没数据 / 该状态过滤无命中 / 接口失败期间），
+页面就渲染出一整页 `TRC20250714xxx` 开头的**编造溯源码**，
+分页器显示「**共 2,450,000 条**」，其中前 8 条直接照抄
+`PROTOTYPE_ROWS`（`TRC20250714001`…`TRC20250713011`，含编造的批次号 `B2025071`、
+产品名、农场名、扫码次数），第 9 条起用 `(seq*5)%10` 滚动生成状态、
+`(seq*3)%12` 生成扫码次数、`2025-07-xx` 生成日期。
+
+⚠️ 这些行**长得和真行一模一样**，且「生成日期 / 扫码 / 批量导出 / 跳转链路详情」
+的按钮全都可点（点了才会失败或跳到不存在的码）。
+
+**注意**：后端现在**有** 6 条真数据，所以当前打开页面看到的是真数据，
+这个兜底**只在接口为空或失败时触发**——正因如此它更危险：
+平时测不出来，一旦后端抖动，页面立刻变成"有 245 万条码"的假象。
+
+**建议**：删掉 `buildFallbackRows` / `PROTOTYPE_ROWS` / `PROTOTYPE_TOTAL` /
+`PRODUCT_POOL` / `FARM_POOL`，空结果走 `<Empty>` + 失败原因（与本轮 BT-33 的处置一致）。
+
+## BT-65　同一页面「产品」与「农场」两列 **100% 编造**——后端 `TraceCodeEntity` 根本没有这两个字段 ⚠️ P1
+
+后端 `GET /admin/trace/codes` 单条记录的**全部字段**（实测）：
+`id / marketId / tenantId / createdAt / updatedAt / deleted / batchId / batchNo /
+code / status / activatedAt / activatedBy / scanCount / lastScanAt / expireDate`
+——**没有 `productName`，没有 `farmName`**。
+
+而页面列定义里明写着「产品」「农场」两列（`:376-377`），映射代码是：
+
+```ts
+productName: item.productName ?? PRODUCT_POOL[seq % PRODUCT_POOL.length],
+farmName:    item.farmName    ?? FARM_POOL[seq % FARM_POOL.length],
+```
+
+`item.productName` 恒为 `undefined` → **每一行**的产品名与农场名都取自常量池，
+按行序号轮换。也就是说页面上「有机大米 / 绿源1号」这类内容
+**与数据库里的任何一张表都没有关系**，却和真码 `DEMO-TC-0005` 并排显示在同一行。
+
+**这不是"缺失兜底"，是"没有这个字段却造了两列"**：
+后端 `prod_trace_code` 只关联到 `batch_no`，产品与农场要经批次/地块再跳两级才能拿到，
+属于后端缺口。**正确处置是删掉这两列，或显示「未接入」**，不是从池子里取值。
+
+## BT-66　溯源码 status 存在**三套互不通的词表** ⚠️ P1
+
+| 口径 | 取值 | 出处 |
+| --- | --- | --- |
+| 数据库实际值 | `ACTIVE` / `INACTIVE`（**大写**） | `SELECT code,status FROM prod_trace_code` 实测 6/6 |
+| 前端词表 | `generated` / `active` / `scanned` / `revoked`（**小写**） | `CodeStatusView`（`AdminTraceCodeManage.tsx:49`） |
+| 召回写入 | `revoked`（**小写**） | `AdminTraceService.recall` `setStatus("revoked")` |
+| 统计桶 | `generated` / `active` / `scanned` / `revoked` | `codeStats()` 按这四个字符串 count |
+
+三段后果：
+1. **状态列显示原始英文大写**：`STATUS_TEXT[value] ?? value`（`:390`）取不到大写键，
+   直接把 `"ACTIVE"` / `"INACTIVE"` 渲染给用户看；
+2. **`codeStats` 四个桶里三个恒为 0**：实测 `{"generated":"0","active":"5","scanned":"0","revoked":"0"}`
+   ——`generated` / `scanned` / `revoked` 在现有数据口径下永远统计不到，
+   统计卡却把这 4 个桶并列展示，看上去像"四个维度都有数据"；
+   （`active=5` 能对上是因为 MySQL 默认排序规则大小写不敏感，
+   换成区分大小写的库/列就会全部变 0——目前**是靠数据库 collation 侥幸成立的**。）
+3. **召回会往同一列写第三种大小写**：`recall()` 写小写 `revoked`，
+   与种子数据的大写 `ACTIVE` 混在同一列，之后任何按大小写敏感的统计都会漏掉这批。
+
+**待裁决**：统一词表（建议后端枚举定死一套 + 存量数据一次性订正），
+前端 `CodeStatusView` 按真实词表建模；在那之前，「状态」列不应把未知值原样渲染给用户，
+应显式标注「未知状态：ACTIVE」。
+
+## BT-67　`Number(item.batchId)` 把 18 位批次 ID 截断；且该 ID 与批次主键口径不通
+
+```ts
+batchId: Number(item.batchId ?? 0),
+```
+
+后端 `batchId` 实测是 **`"920000000000000004"`**（18 位）。`Number()` 只有 53 位有效精度
+（≈16 位十进制），转换后末几位被抹平——页面上显示的 `batchId` 已经不是库里的值，
+拿它去跳详情或反查必然查不到。
+
+而且这个字段口径本来就不通：后端 `AdminTraceService.chain()` 的注释已经写明
+「`prod_trace_code.batch_id` 是 V1 遗留 BIGINT，与 `prod_harvest_batch` 的 varchar(32)
+主键口径不通（实测 6/6 条溯源码均为合成数字串，按 id 关联命中 0 条，batch 恒为 null）」，
+真实关联走 `batch_no`。
+
+→ 前端仍把这个不可用的 `batchId` 转成 number 展示，是"把一个已知无效的字段渲染得像有效"。
+建议：直接显示后端原字符串，或改显示 `batchNo`（后端注释确认这个才是可关联的口径）。
+
+## BT-68　「两个路径、一个实现」在本域出现**两例** → 累计第 3、4 例，请开治理项
+
+```java
+// AdminTraceController
+@GetMapping                       page(...)  → adminTraceService.page(page, size, status)
+@GetMapping("/codes")             codes(...) → adminTraceService.page(page, size, status)   // 同一个方法
+@PostMapping("/recall")           recall(...)  → adminTraceService.recall(batchId)
+@PostMapping("/recalls")          recalls(...) → adminTraceService.recall(batchId)          // 注释即写「别名」
+```
+
+实测 `/admin/trace?page=1&size=3` 与 `/admin/trace/codes?page=1&size=3` **返回逐字段相同**。
+
+这是继 **BT-29**（`overview` == `dashboard`）与 **BT-51**（`/iot` == `/overview`）之后
+的第三、第四例。我在 monitor 域已经提过一次，这里证据更硬（源码注释直接写了"别名"）。
+**风险**：两条路径会被后来的人当成"主数据源 + 备用数据源"，
+而"备用数据源"其实是同一个东西——一旦主路径出错，切过去不是降级而是同一个错。
+请裁决是否开一个治理项统一收口（我建议开，编号你定）。
+
+## BT-69　`api/admin/trace.ts` 前半段 **15 个函数零调用方**，且后端根本没有对应映射
+
+全仓 grep 确认，被页面引用的只有文件下半段那批
+（`fetchAdminTraceCodeStats` / `fetchAdminTraceCodes` / `fetchAdminTraceChain` /
+`recallAdminTraceBatch` / `fetchQualityLabs` / `accreditQualityLab` / `rejectQualityLab` /
+`createQualityLab` / `updateQualityLab` / `fetchQualityInspections` /
+`fetchFailedInspections` / `fetchAdminQualityOverview` / `recallQualityBatch`）。
+
+上半段 15 个（`BASE = '/admin/trace'`）：`getTraceOverview`、`listAdminTraceCodes`、
+`getAdminTraceCode`、`freezeTraceCode`、`listAdminTraceNodes`、`listLabs`、`getLab`、
+`createLab`、`updateLab`、`deleteLab`、`listRecalls`、`getRecall`、`createRecall`、
+`updateRecall`、`closeRecall`，**全部零调用方**，另加 `fetchChainLabs`（`:494`）也是零调用。
+
+后端 `AdminTraceController` 的 7 个映射里**没有**
+`/overview`、`/codes/{code}`、`/codes/{code}/freeze`、`/nodes/{batchId}`、`/labs/{labId}`、
+`/recalls/{recallId}`、`/recalls/{id}/close`——实测 `/admin/trace/overview` = **code 500**。
+
+即：这些声明**既是死代码，又指向不存在的端点**。若哪天有人按名字取用
+（比如 `freezeTraceCode` 冻结码），会立刻踩到「200 + code 500」的假可用。
+（`updateLab` 的 JSDoc 已经自认"是一个不可达的死函数（全仓无调用方）"——
+说明清理时是逐个确认过的，剩下这 14 个建议一并清掉。）
+
+## BT-70　`/admin/quality/overview` 五个值**全是字符串**，前端声明 number → 顺带造成 `passCount + failCount` 变**字符串拼接** ⚠️ P1
+
+实测：`{"passCount":"3","failCount":"1","passRate":"75","labCount":"3","frozenBatch":"1"}`
+（后端用 `long` 计数 + 全局 JacksonConfig 给 Long 注册了 `ToStringSerializer`）。
+
+前端 `AdminQualityOverview`（`api/admin/trace.ts:230-241`）5 个字段**全部声明 `number`**。
+
+**已造成的实际错误**（`Inspections.tsx:329`）：
+
+```ts
+totalReports: raw ? raw.passCount + raw.failCount : PROTOTYPE_TOTAL,
+```
+
+`"3" + "1"` = **`"31"`**，而 `<Statistic title="报告总数" value={metrics.totalReports} />`
+（`:484`）照单全收 → **页面显示「报告总数 31」，真实值是 4**。
+这不是理论风险，是当前就能复现的错误数字。
+
+同一类问题的其他出口：`RecallManage.tsx:406`
+`frozenBatch: overviewQuery.data?.frozenBatch ?? finished` → 拿到字符串 `"1"`，
+渲染成「/ 已冻结 1」（`:681`），目前**碰巧对**，但类型依旧是谎。
+
+**对照**：`TraceOverview.tsx:141-155` 用了 `toNumber(...)` 收敛并显示「未接入」，
+**那一处是对的**（见"诚实的地方"）；`Inspections.tsx` 与 `RecallManage.tsx` 没做这层收敛。
+
+**建议**：`fetchAdminQualityOverview` 在 api 层逐键 `toNumber` 归一
+（与 `fetchAdminTraceCodeStats` 已有的做法一致），从根上不再让字符串冒充数字；
+`Inspections.tsx:329` 的 `+` 改成数值相加。
+
+## BT-71　`Inspections.tsx`：总览取不到时用硬编码 `11_850` / `95.2` / `12_450` 顶替，表格空结果同样走原型兜底 ⚠️ P1
+
+```ts
+const PROTOTYPE_TOTAL = 12_450                       // :170
+...
+totalReports: raw ? raw.passCount + raw.failCount : PROTOTYPE_TOTAL,   // :329
+passCount:    raw?.passCount  ?? 11_850,                                // :331
+failCount:    raw?.failCount  ?? failedCount,
+passRate:     Number(raw?.passRate ?? 95.2),                            // :335
+labCount:     raw?.labCount   ?? LAB_OPTIONS.length,                    // :337
+frozenBatch:  raw?.frozenBatch ?? 0,
+```
+
+`raw` 是 `overviewQuery.data`，**接口失败 / 加载中时它是 `undefined`** →
+指标卡显示「合格报告 **11850**」「检测合格率 **95.2%**」「报告总数 **12450**」。
+这三个数字与后端 4 条检测记录毫无关系，是原型 P14 里抄来的。
+
+⚠️ 尤其 `95.2` 会直接影响**颜色语义**：`:513` 的
+`valueStyle={{ color: metrics.passRate >= 95 ? '#52c41a' : '#faad14' }}`
+——接口一失败，合格率就"恰好"落在 95 以上，**指标卡变绿**。
+
+表格侧同样是空结果兜底（`:307` `buildFallbackRows(pageNum, pageSize)`，
+注释直写「缺失时回落原型 P14 示例」）。
+
+**建议**：指标卡在 `overviewQuery` 未取到数据时显示「未接入」+ 失败原因（照
+`TraceOverview.tsx` 的写法），删掉 `11_850` / `95.2` / `12_450` / `PROTOTYPE_TOTAL`
+与 `buildFallbackRows`。
+
+## BT-72　`AdminTraceCodeManage.tsx` 激活溯源码时把操作人**硬编码**成「运营管理员」
+
+```ts
+mutationFn: (code: string) => activateTraceCode(code, '运营管理员'),
+```
+
+后端 `POST /trace/activate` 会把 `activatedBy` 落进 `prod_trace_code.activated_by`。
+运营端这样调用后，库里记的操作人永远是字符串「运营管理员」，**不是真实登录用户**——
+溯源链路上"谁激活的码"这条审计信息从此失真。
+（真数据里 `DEMO-TC-0005.activatedBy = "DEMO-MEM-005"`，说明这列本来是存真实主体的。）
+
+**建议**：改成取当前登录用户（或后端从 token 里取，前端不再传）。
+
+## BT-73　`RecallManage.tsx` 的「本地处置登记」只存在 `useState`，刷新即丢，却与接口数据合并进同一张表和同一组统计 · P2
+
+```ts
+/** 本地处置台账（后端无处置单端点时承接运营登记） */
+const [localRows, setLocalRows] = useState<RecallRow[]>([])
+```
+
+处置方式 / 处置状态 / 回收数量 / 责任人 / 复盘记录全部走 `patchRow()` 写进 `localRows`，
+**没有任何持久化**（无 localStorage、无后端端点）。后果：
+1. 运营填完处置闭环 → 刷新页面 → 全部回到接口原始态，且**没有任何提示**；
+2. `localRows` 与后端行 `{...row, ...local}` 合并（`:370`），页面上分不出哪部分是后端真态、
+   哪部分是本机登记；
+3. 顶部统计 `pending / processing / finished`（`:393-395`）直接由合并后的 `status` 算出，
+   **本地登记会改变"待处置 / 处置中 / 已闭环"三个官方口径的计数**。
+
+✅ **这一条有明示文案**：页面顶部 `CONTRACT_NOTE`（`:200-203`）写明了
+"后端没有「不合格品处置单」实体…处置方式 / 处置状态 / 回收数量由运营在本页本地登记
+（后端无处置单写入端点），**不代表后端已有该状态**"。
+所以它不是"偷偷造假"，属于"说了但不持久"，定 P2。
+
+**建议**（二选一，待裁决）：
+1. 后端补「不合格品处置单」实体与端点，本地登记改为真写入；
+2. 维持本地登记，但补上持久化 + 在行上打「本地登记」标记，
+   并让顶部三个统计**只统计后端口径**，不让本地登记污染官方计数。
+
+## 附：本域诚实的地方（不要改坏）
+
+- **`AdminQualityService` 三个写操作在目标不存在时都抛 `NOT_FOUND`**
+  （`accredit` / `reject` / `recall`，各自 `throw new BusinessException(ErrorCode.NOT_FOUND)`）
+  → 404 → 前端 `onError` 报「…未返回成功」。**这正是 BT-63 的对照组与修法模板**。
+- `AdminQualityController.reject` 的 JSDoc 明写"此前运营端「驳回」是纯前端假动作：
+  只弹「已驳回」提示、刷新列表，后端无任何端点，库里状态纹丝不动"——**假动作已被修掉，
+  并把原因留在了代码里**，这是最值得保住的一类痕迹。
+- `LabManage.tsx` 四个 mutation 全有 `onError` + `describeFailure(error, 动作, 端点)`；
+  `createMutation.onSuccess` 用**服务端返回的 `labId`**（不是本地造一个）；
+  `updateMutation` 刻意**不包含 `status`**，注释写明"状态变更必须走准入审核
+  （accredit / reject）这条有记录的链路，编辑表单里改状态等于绕开审计"；
+  `openEditForm` 注释"用行内真实数据回填，不做任何本地兜底"。
+- **`CreateQualityLabPayload` 的 10 个字段与 `QualityLabEntity` 逐字段对齐**
+  （`labId/labCode/labName/labType/labLevel/contactName/contactPhone/address/
+  qualificationNo/accreditedScope/status`）——**对照 BT-57（知识库 `category` 被静默丢弃），
+  这里没有同款问题**，不要在清理时误伤。
+- `fetchAdminTraceCodeStats`（`api/admin/trace.ts:452`）已把 `code-stats` 的字符串值
+  **逐键 `readNumber` 归一为真 number**，JSDoc 说明了「Long → ToStringSerializer」的根因，
+  并写明"不能让字符串冒充数字流到页面"。**这是 BT-70 的修法模板。**
+- `TraceOverview.tsx:141-155 / :261-271` 一律 `toNumber(...) === undefined ? '未接入'`，
+  **不兜 0**。
+- `RecallManage.tsx` 明写"**不再回落 PROTOTYPE_RECALLS 原型台账**——那 4 条原型行
+  （RC20250714001 / 有机蔬菜 5200kg / 省农检中心…）与后端数据毫无关系，
+  接口偶发失败时会被当成真实不合格批次展示"，并给出了理由。
+- `RecallManage.tsx:265`「`sampleQty` 是后端真实字段，直接取原值，**不做放大、不做兜底**」。
+- `Detail.tsx` 全部档案字段 `?? '未接入'`，批次档案取不到时明写
+  "后端未关联到批次档案（batch = null）"。
+- `AdminTraceService.chain()` 的注释如实记录了 V1 遗留 BIGINT 与 varchar 主键口径不通、
+  `batch` 恒为 null 的事实，以及改用 `batch_no` 关联的原因——**把已知缺陷写在代码里而不是藏起来**。
+
+---
