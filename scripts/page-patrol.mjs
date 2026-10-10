@@ -453,6 +453,8 @@ async function patrolOne(ctx, route, deep) {
     consoleErrorsReal: 0,
     firstError: '',
     firstRealError: '',
+    /** 首条未捕获异常的**原始完整堆栈**（不截断、不转述），供人工定位源码坐标 */
+    firstPageErrorStack: '',
     demoBanner: null,
     demoSnippet: '',
     screenshot: '',
@@ -473,7 +475,8 @@ async function patrolOne(ctx, route, deep) {
     }
   })
   page.on('pageerror', (err) => {
-    pageErrors.push(err && err.message ? err.message : String(err))
+    // 优先保留完整 stack（含源码坐标），退化为 message
+    pageErrors.push(err && err.stack ? err.stack : err && err.message ? err.message : String(err))
   })
 
   // 注入登录态：必须在页面脚本执行前写入 localStorage，否则首屏会以未登录态渲染并跳登录页
@@ -534,6 +537,8 @@ async function patrolOne(ctx, route, deep) {
   record.consoleErrorsReal = realConsole.length
   const realAll = [...pageErrors, ...realConsole]
   record.firstRealError = realAll.length ? String(realAll[0]).slice(0, 300) : ''
+  // 原始堆栈不截断：转述过的「文件:行号」属于二手信息，会误导修复者，这里必须留原文
+  record.firstPageErrorStack = pageErrors.length ? String(pageErrors[0]) : ''
   record.ok = record.httpStatus !== null && record.blank === false
 
   if (deep) {
