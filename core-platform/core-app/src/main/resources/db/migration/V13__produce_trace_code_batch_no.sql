@@ -1,0 +1,17 @@
+-- 溯源码：解除 legacy batch_id 的 NOT NULL 约束
+--
+-- 背景（与 V1/V2 的事实对齐，勿凭直觉改）：
+--   * V1__init_core.sql:254 建 prod_trace_code，batch_id BIGINT NOT NULL。
+--     该列源自 V1 的 legacy prod_batch（数字主键），是"旧农事批次"的遗留字段。
+--   * V2__produce_domain.sql:518 建 prod_harvest_batch，主键 batch_id 是 VARCHAR(32)
+--     （如 DEMO-BATCH-001），另有 batch_no VARCHAR(32) 唯一键。
+--   * V2__produce_domain.sql:996 已为 prod_trace_code 补列 batch_no VARCHAR(32) 并建
+--     idx_trace_batch_no —— 说明"按批次号关联"才是设计意图。
+--
+-- 因此采收批次（varchar）与 legacy 批次（BIGINT）分处两个 ID 空间，
+-- 不存在天然映射，也不允许合成数字去填 batch_id（那会让每一行都成为脏数据）。
+-- 本迁移只做一件事：把 batch_id 改为可空，使"按 batch_no 关联、batch_id 留空"
+-- 成为合法写入路径。
+--
+-- 注意：不要在本文件里再加 batch_no 列（V2 已加），也不要改其他表。
+ALTER TABLE prod_trace_code MODIFY COLUMN batch_id BIGINT NULL COMMENT 'V1 旧农事批次ID（遗留字段，可空）';

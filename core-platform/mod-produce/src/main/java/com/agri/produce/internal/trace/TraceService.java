@@ -2,8 +2,6 @@ package com.agri.produce.internal.trace;
 
 import com.agri.core.infra.event.DomainEventPublisher;
 import com.agri.produce.api.event.ProduceEvents;
-import com.agri.produce.internal.batch.BatchEntity;
-import com.agri.produce.internal.batch.BatchMapper;
 import com.agri.produce.internal.harvest.HarvestBatchEntity;
 import com.agri.produce.internal.harvest.HarvestBatchMapper;
 import com.agri.shared.exception.BusinessException;
@@ -30,7 +28,6 @@ import java.util.Map;
 public class TraceService {
 
     private final TraceCodeMapper traceCodeMapper;
-    private final BatchMapper batchMapper;
     private final HarvestBatchMapper harvestBatchMapper;
     private final DomainEventPublisher eventPublisher;
 
@@ -42,11 +39,20 @@ public class TraceService {
      * 且查重走 {@code prod_trace_code.batch_id}（BIGINT）必然与采收批次（varchar）落空，
      * 导致同一批次被重复发码。</p>
      *
-     * <p><b>关于 {@code batch_id} 的取值</b>：{@code prod_trace_code.batch_id} 是
-     * {@code BIGINT NOT NULL}，而采收批次只有 varchar 主键，两者没有天然映射。
-     * 这里只在能定位到<b>遗留 {@code prod_batch} 主键</b>时才写入；
-     * 定位不到就明确报 {@code NOT_FOUND}，<b>绝不生成无意义的数字填充该列</b>。
-     * 对齐批次一律以 {@code batch_no} 为准。</p>
+     * <p><b>关于 {@code batch_id} 的取值</b>：{@code prod_trace_code.batch_id} 是 V1 遗留的
+     * {@code BIGINT} 列（源自 legacy {@code prod_batch} 的数字主键），而采收批次
+     * （{@code prod_harvest_batch.batch_id}）是 varchar(32)，两者分处两个 ID 空间，
+     * <b>不存在天然映射</b>。V13 已把该列改为可空，因此这里：
+     * <ul>
+     *   <li>对齐批次一律以 {@code batch_no} 为准（V2 补列，已建 idx_trace_batch_no）；</li>
+     *   <li>{@code batch_id} <b>留空</b>，绝不合成无意义的数字去填——那会让每一行都成为
+     *       与任何真实批次都关联不上的脏数据。</li>
+     * </ul>
+     *
+     * <p><b>不再依赖 legacy {@code prod_batch}</b>：旧实现要求存在
+     * {@code prod_batch.batch_code == 解析出的 batch_no} 才肯发码，而 legacy 表全库只有
+     * 一行（{@code PH20260901001}），对不上任何采收批次，导致 DEMO-BATCH-001..006
+     * 全部 404。现在只校验采收批次本身是否存在。</p>
      *
      * @param batchId 采收批次业务 ID（如 {@code DEMO-BATCH-001}）或遗留数字批次 ID
      * @return 溯源码
@@ -55,25 +61,34 @@ public class TraceService {
     public String generate(String batchId) {
         String batchNo = resolveBatchNo(batchId);
         if (batchNo == null) {
-            throw new BusinessException(ErrorCode.NOT_FOUND);
+            throw new BusinessException(
+                    ErrorCode.NOT_FOUND,
+                    "无法解析出批次号（batch_no）：batchId=" + batchId);
+        }
+
+        // 必须在真实存在的采收批次上发码；查不到就明确拒绝，不写入任何行
+        HarvestBatchEntity harvestBatch = harvestBatchMapper.selectOne(
+                new LambdaQueryWrapper<HarvestBatchEntity>()
+                        .eq(HarvestBatchEntity::getBatchNo, batchNo)
+                        .last("LIMIT 1"));
+        if (harvestBatch == null) {
+            throw new BusinessException(
+                    ErrorCode.NOT_FOUND,
+                    "采收批次不存在：batchId=" + batchId + "，batchNo=" + batchNo);
         }
 
         Long exists = traceCodeMapper.selectCount(new LambdaQueryWrapper<TraceCodeEntity>()
                 .eq(TraceCodeEntity::getBatchNo, batchNo));
         if (exists > 0) {
-            throw new BusinessException(ErrorCode.TRACE_CODE_DUPLICATED);
-        }
-
-        BatchEntity legacyBatch = batchMapper.selectOne(new LambdaQueryWrapper<BatchEntity>()
-                .eq(BatchEntity::getBatchCode, batchNo)
-                .last("LIMIT 1"));
-        if (legacyBatch == null || legacyBatch.getId() == null) {
-            throw new BusinessException(ErrorCode.NOT_FOUND);
+            throw new BusinessException(
+                    ErrorCode.TRACE_CODE_DUPLICATED,
+                    "该批次已生成过溯源码：batchId=" + batchId + "，batchNo=" + batchNo);
         }
 
         String code = "TRC" + batchNo + ThreadLocalRandom.current().nextInt(100, 999);
         TraceCodeEntity traceCode = new TraceCodeEntity();
-        traceCode.setBatchId(legacyBatch.getId());
+        // batch_id 留空：见本方法 Javadoc，V13 起该列可空，禁止合成数字填充
+        traceCode.setBatchId(null);
         traceCode.setBatchNo(batchNo);
         traceCode.setCode(code);
         traceCode.setStatus("generated");
