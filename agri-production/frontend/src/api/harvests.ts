@@ -1157,7 +1157,14 @@ export function queryInventoryRecord(inventoryId: BizId): Promise<DemoResult<Inv
   )
 }
 
-/** 出入库流水查询（真实接口优先，异常回退演示数据） */
+/**
+ * 出入库流水查询（真实接口优先，服务端不可用回退演示数据）。
+ *
+ * ⚠️ 路径曾写错：`/harvests/inventory/{batchId}/flows` 实测返回 `code=500`，
+ * 而真端点是 `HarvestController.java:98` 的 `/harvests/{batchId}/flows`（实测 200 有数据）。
+ * 写错的那段时间本函数的演示兜底 **100% 被触发** —— 库存详情页的「出入库记录」表
+ * 从来没有显示过一条真实流水，用户却以为在看真数据。改回正确路径后取的是真实流水。
+ */
 export function queryInventoryFlows(
   batchId: BizId,
   params: PageQuery,
@@ -1165,7 +1172,7 @@ export function queryInventoryFlows(
   return withDemoFallback(
     () =>
       http
-        .get<PageResult<InventoryFlow>>(`${BASE}/inventory/${batchId}/flows`, params, {
+        .get<PageResult<InventoryFlow>>(`${BASE}/${batchId}/flows`, params, {
           silent: true,
         })
         .then(markReal),
