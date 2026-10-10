@@ -16,11 +16,17 @@ token 取自 `AdminUserInitializer.java`。**全部结论来自实际 HTTP 调�
 
 ---
 
-# 跨实体治理项 G-01　`deleteById` 丢弃受影响行数 → 「删了个寂寞」还报 success
+# 跨实体治理项 G-01　写操作「目标不存在 / 影响 0 行」仍返回成功 → 说做了其实没做
 
 > 开单人：se-verify-fix　日期：2026-10-10　裁决：team-lead
 > 性质：**不是某个实体的 bug，是通用 Service 模板的问题**。因此单独立项，
 > 不逐实体补工单——否则每接一个新实体就多一处静默无操作。
+>
+> ⚠️ **口径已于 2026-10-10 放宽（team-lead 批准）**
+> 原名「`deleteById` 丢弃受影响行数」，只覆盖了 `deleteById` 这**一种代码形态**。
+> 六域扫完后发现同一后果还有第二种代码形态（BT-63：`selectById → null → 不抛异常`）。
+> 因此本项**按「用户可见后果」立项，不按「代码形态」立项**，口径改为：
+> **「写操作在目标不存在、或影响 0 行时，必须显式失败」**。
 
 ## 现象（两处不同模块、同一成因，均为实测）
 
@@ -28,8 +34,10 @@ token 取自 `AdminUserInitializer.java`。**全部结论来自实际 HTTP 调�
 |---|---|---|---|---|
 | BT-22 | `DELETE /settings/{不存在的 id}` | `code=0 success` | 一行没删，记录原封不动 | `SysSettingService#delete` |
 | BT-28 | `DELETE /analytics/NOPE` | `code=0 success` | 一行没删 | `AnalyticsSnapshotService.java:93-95` |
+| BT-59 | `DELETE /admin/knowledge/zzz-not-exist`、`DELETE /admin/sop/zzz-not-exist` | `code=0 / data:null` | 一行没删 | `KnowledgeArticleService#delete` / `SopLibraryService#delete` |
+| BT-63 | `POST /admin/trace/recall?batchId=zzz-not-exist` | `code=0 / data:0` | **批次没冻结、码没作废** | `AdminTraceService.java:118-136` |
 
-两处的 Service 都是同一写法：
+前四处（BT-22 / BT-28 / BT-59）的 Service 都是同一写法：
 
 ```java
 public void delete(String id) {
@@ -40,6 +48,34 @@ public void delete(String id) {
 `deleteById` 返回 `int`（受影响行数），这里既没接收、也没判断、也没抛错，
 于是不管删没删到，Controller 一律返回成功。
 
+**BT-63 是同一种后果、另一种写法**——不是丢弃返回值，而是「查不到就什么都不做」：
+
+```java
+// AdminTraceService.recall  （AdminTraceService.java:118-136）
+HarvestBatchEntity batch = harvestBatchMapper.selectById(batchId);
+int count = 0;
+if (batch != null) {          // ← 查不到就整个跳过：既不写库，也不抛异常
+    ... 逐条 setStatus("revoked") ...
+    batch.setStatus(4);
+    harvestBatchMapper.updateById(batch);
+}
+return count;                 // ← 返回 0，Controller 照样 ApiResponse.ok(0)
+```
+
+**对照组（BT-63 取证时顺带取得，修法由此确定，无需讨论选项）**：
+同一个不存在的 `batchId=zzz-not-exist`——
+
+```
+POST /admin/trace/recall?batchId=zzz-not-exist    → {"code":0,"data":0}             ← 说谎
+POST /admin/trace/recalls?batchId=zzz-not-exist   → {"code":0,"data":0}             ← 别名，同样
+POST /admin/quality/recalls?batchId=zzz-not-exist → {"code":404,"message":"资源不存在"}  ← 诚实
+```
+
+`AdminQualityService.recall` 在 `batch == null` 时 `throw new BusinessException(ErrorCode.NOT_FOUND)`
+→ 404 → 前端 `onError` 报「召回接口未返回成功」；
+`AdminTraceService.recall` 静默返回 0 → 前端弹「**批次已冻结**」。
+**同一件事、两个 Service、两种处置——照诚实那一侧抄即可。**
+
 ## 为什么必须放在基础设施层解决
 
 - 逐实体改 = 每个新实体复制粘贴一次同样的坑；今天两处，明天十处。
@@ -48,21 +84,45 @@ public void delete(String id) {
   但那是防御性代码，不该是每个调用方各自的负担。
 - 与「静默写空」是同一类问题：响应体说成功，服务端什么都没做。
 
+## 挂在 G-01 下的既有工单（4 例，2026-10-10 收口）
+
+| BT | 域 | 调用 | 代码形态 |
+| --- | --- | --- | --- |
+| **BT-22** | settings | `DELETE /settings/{id}` 删不到也返回 success；前端已做「删完回读复核」防护 | `deleteById` 丢弃返回值 |
+| **BT-28** | analytics | `DELETE /analytics/{id}` 删不到也返回 success，第二例 | `deleteById` 丢弃返回值 |
+| **BT-59** | sop / knowledge | `DELETE /admin/sop/{不存在}`、`DELETE /admin/knowledge/{不存在}` 均 `code=0 / data:null` | `deleteById` 丢弃返回值 |
+| **BT-63** | trace | `POST /admin/trace/recall?batchId={不存在}` → `code=0 / data:0`，前端宣称「批次已冻结」 | `selectById → null → 不抛异常` |
+
+附注：
+- BT-28 的路径还**删错了实体**（删的是指标快照，不是报表），
+  那部分属于**实体/端点**问题，仍归 BT-27 / BT-28 自身，不并入 G-01。
+- BT-63 **建议优先修**：BT-22/28/59 刷新列表就会露馅（行还在），
+  而 BT-63 **刷新不会露馅**——列表里本来就没这个批次，运营会以为"召回了，只是这批没码"，
+  只有查 `prod_harvest_batch.status` 才知道压根没冻结。
+
+## 判据（照此验收，不要凭响应码判断）
+
+1. **不看响应码**：本后端 HTTP 恒 200，写操作失败也可以是 `code=0`（这正是本项的全部内容）。
+2. **必须回读**：调用 → 回读 → 比对。**只看返回码永远发现不了 BT-22/28/59/63 任何一条。**
+3. **回读要比对"该变的是否变了"**，不是"有没有报错"：
+   - 删除类 → 目标行是否还在；
+   - 状态类（BT-63）→ `status` 是否真的变成期望值；
+   - 计数类 → 返回的数量是否 > 0（返回 0 且无异常 = 静默无操作）。
+4. **成对取证**：同一个不存在的 id 打两条**语义等价**的路径（如 `/trace/recall` vs
+   `/quality/recalls`），一边 404 一边 `code=0` 即坐实静默。**这条比单独测一条有说服力得多。**
+
 ## 期望语义（建议方案，请后端定）
 
-1. **统一**：在通用 Service 基类 / 模板方法里收口删除——
-   `int affected = mapper.deleteById(id); if (affected == 0) throw NOT_FOUND;`
-   （或在响应里带上 `affected`，由调用方判断，二者选一，但**必须全库一致**）。
+1. **统一**：在通用 Service 基类 / 模板方法里收口——
+   - 删除：`int affected = mapper.deleteById(id); if (affected == 0) throw NOT_FOUND;`
+   - 更新：`int affected = mapper.updateById(e); if (affected == 0) throw NOT_FOUND;`
+   - 查不到即无操作（BT-63 形态）：`if (entity == null) throw NOT_FOUND;`
+     ——**与 `AdminQualityService` 现成的写法保持一致**，不要另起一套。
+   - 备选：不抛异常，改为在响应里带上 `affected` 由调用方判断。
+     **二者选一，但必须全库一致**——一半抛异常一半带计数，调用方照样没法写统一逻辑。
 2. 逻辑删除（`deleted` 字段）的实体同理：`updateById` 也要看返回值。
 3. 治理完成后，前端 `deleteSetting` 里的"删完回读复核"可以撤掉，
    改为直接信任响应——**但撤之前必须先实测确认受影响行数真的回来了**。
-
-## 挂在 G-01 下的既有工单
-
-- **BT-22**（settings 域）：`DELETE /settings/{id}` 删不到也返回 success。
-- **BT-28**（analytics 域）：`DELETE /analytics/{id}` 删不到也返回 success，第二例。
-  - 附注：BT-28 的路径还删错了实体（删的是指标快照，不是报表），
-    那部分属于**实体/端点**问题，仍归 BT-27 / BT-28 自身，不并入 G-01。
 
 ## 前端侧已做的防护（不等后端，先不骗人）
 
@@ -1921,6 +1981,20 @@ DELETE /admin/sop/zzz-not-exist       → {"code":0,"message":"success","data":n
 **影响**：`KnowledgeBase.tsx` 的 `removeMutation.onSuccess` 无条件弹「条目已删除」。
 删一条已被别人删掉的行 → 依旧提示"已删除"（这条尚可接受，因为目标确实没了），
 但**删一条主键写错的行 → 也提示"已删除"，而那行还躺着**。
+
+**补充实测（2026-10-10，扫域收尾时复查）**：这个 `deleteById` 是**逻辑删除**，
+不是物理删除——`prod_knowledge_article.deleted` 是 `tinyint NOT NULL DEFAULT 0`，
+删除只是把它置 1，行仍然留在表里（MyBatis-Plus 查询自动过滤 `deleted=0`）。
+
+> 自查记录：本人在 BT-57 的写入实测里以 `DELETE` 做还原，当时只验了应用层
+> （`GET /admin/knowledge` 回到 total=3）就下了"已复原"的结论，**没有查到表级**，
+> 因此未发现物理行数是 4（其中 1 条 `deleted=1` 的墓碑）。
+> 事后已将该墓碑物理清除，表恢复为 3 条 `DEMO-ART-001/002/003`、`deleted` 全 0。
+> 教训单列：**凡声称"已还原"，必须表级验证，不能只信应用层总数。**
+
+⚠️ 这条同时说明：**「条目已删除」这句提示在物理意义上从来没成立过**
+——行一直在，只是被打了个标。逻辑删除本身是平台既定机制（无需改），
+但前端不该把它表述成"删除"以外的确定性结论，更不该在影响 0 行时也这样说。
 
 **归属**：与 **G-01**（`deleteById` 丢弃影响行数）完全同源，**挂在 G-01 下统一治理**，
 不在 sop / knowledge 两个实体上分别打补丁。前端侧若要先行，可参照 BT-22 的做法：
