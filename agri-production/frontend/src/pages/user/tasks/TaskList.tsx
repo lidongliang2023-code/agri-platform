@@ -69,7 +69,8 @@ type ViewMode = 'table' | 'kanban'
  *
  * `doing` / `done` 是后端真值（旧代码的 `executing` / `accepted` 后端不存在，
  * 导致「执行中」「已完成」两个 Tab 恒为 0 条）。
- * `overdue` 不是后端状态，走本地推导；`submitted` 后端无此状态（去留待裁决）。
+ * `overdue` 不是后端状态，走本地推导；`submitted` 后端暂未提供（裁决：保留 Tab + 明示，
+ * 列入后端补齐清单，不删前端功能）。
  */
 type TabKey = 'all' | 'pending' | 'doing' | 'submitted' | 'done' | 'rejected' | 'overdue'
 
@@ -718,7 +719,8 @@ export default function TaskList(): JSX.Element {
         />
         {/* 逾期是本地推导值，不是后端状态——不标注会让用户以为是后端判定的 */}
         <Typography.Paragraph type="secondary" style={{ fontSize: 12, margin: '8px 0 0' }}>
-          {OVERDUE_DERIVED_NOTICE}；「待验收」后端同样无该状态（选中会返回 0 条），去留待产品裁决。
+          {OVERDUE_DERIVED_NOTICE}；「待验收」后端暂未提供该状态（后端流转缺"提交验收"这一环，
+          已列入后端补齐清单），选中会返回 0 条——是后端缺口，不是"没有待验收任务"。
         </Typography.Paragraph>
         {!farmId ? (
           <Empty description="请先在顶部切换农场" />

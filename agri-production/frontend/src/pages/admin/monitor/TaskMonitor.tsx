@@ -590,6 +590,11 @@ export default function TaskMonitor(): JSX.Element {
               onChange={(value) => setDraftDate(value ?? dayjs())}
               allowClear={false}
             />
+            {/* 这个日期选择器目前不生效：后端 /tasks 不消费 startDate/endDate。
+                不改成前端本地过滤——那等于用本地筛选假装后端支持，会制造新的假。 */}
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              （后端暂未消费日期参数，暂不生效）
+            </Typography.Text>
           </Space>
           <Space size={6}>
             <Text>任务类型：</Text>
@@ -624,7 +629,7 @@ export default function TaskMonitor(): JSX.Element {
             {tasksQuery.isLoading ? (
               <Skeleton active title={false} paragraph={{ rows: 2 }} />
             ) : (
-              <Statistic title="今日任务" value={metrics.total ?? '—'} />
+              <Statistic title="任务总数（非「今日」）" value={metrics.total ?? '—'} />
             )}
           </Card>
         </Col>
@@ -656,10 +661,12 @@ export default function TaskMonitor(): JSX.Element {
           </Card>
         </Col>
       </Row>
-      {/* 分子分母口径与「逾期」来源必须明示：逾期不是后端字段，是本地按 planEndDate 推导 */}
+      {/* 分子分母口径、「逾期」来源、日期参数失效——三处都必须明示，否则用户会把"全量"读成"今日" */}
       <Typography.Paragraph type="secondary" style={{ fontSize: 12, margin: '8px 0 0' }}>
-        完成率 / 平均耗时 / 超时率由本次查询返回的前 {tasks.length} 条任务计算（后端总数{' '}
-        {tasksQuery.data?.total ?? '—'} 条）；{OVERDUE_DERIVED_NOTICE}。
+        当前为全量任务统计（共 {tasksQuery.data?.total ?? '—'} 条）：后端 <code>/tasks</code>{' '}
+        暂未消费 startDate / endDate 参数（实测带与不带返回完全一致），所以这里的「任务总数 / 完成率 /
+        平均耗时 / 超时率」都不是「今日」口径，也没有按页面上的日期筛选生效。完成率等由本次查询返回的前{' '}
+        {tasks.length} 条任务计算；{OVERDUE_DERIVED_NOTICE}。
       </Typography.Paragraph>
 
       {/* 任务执行甘特图（原型 P8 Gantt Chart） */}

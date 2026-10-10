@@ -260,7 +260,8 @@ export default function TaskAcceptance(): JSX.Element {
     )
   }
 
-  // 后端「执行中」真值是 doing（旧代码的 executing 后端不存在）；submitted 后端亦无该状态，去留待裁决
+  // 后端「执行中」真值是 doing（旧代码的 executing 后端不存在）；
+  // submitted 后端暂未提供该状态，已列入后端补齐清单，此处保留判定
   const canReview = task.status === 'submitted' || task.status === TASK_STATUS_DOING
 
   return (

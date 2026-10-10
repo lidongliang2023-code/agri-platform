@@ -16,8 +16,9 @@ import type { OptionItem } from './common'
  * 前端凡是判 `status === 'accepted'` 的地方**分母恒为 0**（完成率恒显示 0.0%）。
  * 现已收敛为后端真值：`executing → doing`，`accepted → done`。
  *
- * `submitted`（待验收）后端同样没有对应状态，**本轮未裁决**（去掉 Tab 与否待产品拍板），
- * 故仍保留在联合类型里，但不得视为"后端会返回该值"。
+ * `submitted`（待验收）后端**暂未提供**该状态。裁决（2026-10-10 team-lead）：
+ * **保留前端 Tab + 明示**，列入后端补齐清单——删前端 Tab 等于删功能，属于放弃而非解决。
+ * 故仍保留在联合类型里，但不得视为"后端会返回该值"（选中会返回 0 条）。
  *
  * `overdue`（逾期）后端**不存储**，是前端按 `planEndDate` 推导的派生口径，
  * 统一走 {@link isTaskOverdue}，UI 必须带 {@link OVERDUE_DERIVED_NOTICE} 标注。
@@ -254,8 +255,10 @@ export const TASK_TYPE_OPTIONS: OptionItem[] = [
 /**
  * 任务状态选项（取值与后端一致）。
  *
- * `submitted` 后端无此状态，保留是因为「待验收」Tab 的去留尚未裁决，
- * 选中它传给后端会返回 0 条——这是已知现状，不是"没数据"。
+ * `submitted`（待验收）后端**暂未提供**该状态：后端流转目前是
+ * `pending → assigned → doing → done/rejected`，缺"干完活提交验收"这一环。
+ * 裁决：**保留前端 Tab + 明示**，并列入后端补齐清单（不删前端功能）。
+ * 因此选中它传给后端会返回 0 条——这是后端缺口，不是"没有待验收任务"。
  */
 export const TASK_STATUS_OPTIONS: OptionItem[] = [
   { value: 'pending', label: '待执行' },
@@ -263,7 +266,7 @@ export const TASK_STATUS_OPTIONS: OptionItem[] = [
   { value: 'doing', label: '执行中' },
   { value: 'done', label: '已完成' },
   { value: 'rejected', label: '已驳回' },
-  { value: 'submitted', label: '待验收（后端无该状态，待裁决）' },
+  { value: 'submitted', label: '待验收（后端暂未提供该状态）' },
 ]
 
 /** 任务优先级选项：4 紧急 / 3 重要 / 2 普通 / 1 低 */
