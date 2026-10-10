@@ -32,6 +32,7 @@ import {
   Space,
   Tabs,
   Tag,
+  Tooltip,
   Typography,
   message,
 } from 'antd'
@@ -48,7 +49,12 @@ import { deleteTask, dispatchTask, fetchTaskPage } from '@/api/tasks'
 import { listMembers } from '@/api/members'
 import { listPlots } from '@/api/plots'
 import type { Member, Plot, Task, TaskStatus } from '@/types'
-import { isTaskOverdue, OVERDUE_DERIVED_NOTICE } from '@/types/task'
+import {
+  isTaskOverdue,
+  OVERDUE_DERIVED_NOTICE,
+  TASK_ACCEPT_PENDING,
+  TASK_STATUS_DONE,
+} from '@/types/task'
 import {
   ACCEPT_STATUS_META,
   TASK_PRIORITY_COLOR_MAP,
@@ -71,13 +77,30 @@ type ViewMode = 'table' | 'kanban'
  * 导致「执行中」「已完成」两个 Tab 恒为 0 条）。
  * `overdue` 不是后端状态，走本地推导。
  *
- * ⚠️ 原「待验收」Tab 已删除：它筛的是 `status === 'submitted'`，而 PRD 8.1.1 与后端
- * `status` 枚举里都没有这个值（后端用例：14 条任务零命中），所以它恒为 0 条、纯属编造。
- * 「待验收」这个业务状态真实存在，但挂在 `acceptStatus === 0` 上（见
- * {@link TASK_ACCEPT_PENDING}），不是 status —— 要恢复这个 Tab 得按 acceptStatus 筛，
- * 不能按一个不存在的 status 值筛。
+ * ⚠️ `acceptPending`（待验收）**不是** `status` 取值。
+ * 旧代码把它写成 `status === 'submitted'` —— PRD 8.1.1 与后端 status 枚举里都没有这个
+ * 值（后端 14 条任务零命中），所以它恒为 0 条、纯属编造，已被删除。
+ * 「待验收」这个业务状态真实存在，但挂在 `acceptStatus === 0` 上：后端
+ * `TaskInfoService.submit()` 置 `status="done"` + `acceptStatus=0`（实测
+ * `POST /tasks/DEMO-TASK-010/submit` → `{status:"done", acceptStatus:0}`）。
+ * 因此本 Tab 的判据是 **`status === 'done' && acceptStatus === TASK_ACCEPT_PENDING`**，
+ * 与「已完成」Tab（`status === 'done'`）是**包含关系**，不是互斥 —— 和「已逾期」
+ * 与其他 Tab 的关系同理。
  */
-type TabKey = 'all' | 'pending' | 'doing' | 'done' | 'rejected' | 'overdue'
+type TabKey = 'all' | 'pending' | 'doing' | 'acceptPending' | 'done' | 'rejected' | 'overdue'
+
+/**
+ * 无法用后端 `GET /tasks` 的 `status` 入参表达的 Tab，只能客户端筛选。
+ *
+ * 依据（`core-platform` `TaskController.pageQuery`，仅接受 page/size/keyword/status）：
+ * - `pending` 含 `pending` + `assigned` 两个值，而 status 只接受单值；
+ * - `overdue` 后端不存储，是本地按 planEndDate 推导的派生口径；
+ * - `acceptPending` 在 acceptStatus 维度，后端不提供该入参。
+ *
+ * 这三个 Tab 在列表视图下必须改用本地筛选结果分页；否则会出现
+ * 「Tab 写着 N 条、表格却列出全部」的口径不一致（旧代码三者全都有这个毛病）。
+ */
+const CLIENT_ONLY_TABS: readonly TabKey[] = ['pending', 'overdue', 'acceptPending']
 
 /** 列表筛选条件 */
 interface TaskFilters {
@@ -133,7 +156,7 @@ function isTodayTask(task: Task): boolean {
   return !today.isBefore(start) && !today.isAfter(end)
 }
 
-/** Tab 过滤：全部 / 待执行 / 执行中 / 已完成 / 已驳回 / 已逾期 */
+/** Tab 过滤：全部 / 待执行 / 执行中 / 待验收 / 已完成 / 已驳回 / 已逾期 */
 function matchTab(task: Task, tab: TabKey): boolean {
   switch (tab) {
     case 'all':
@@ -142,6 +165,10 @@ function matchTab(task: Task, tab: TabKey): boolean {
       return task.status === 'pending' || task.status === 'assigned'
     case 'overdue':
       return isOverdue(task)
+    case 'acceptPending':
+      // 验收维度：已提交（status=done）但还没验收（acceptStatus=0）。
+      // 注意这里用的是 acceptStatus，不是某个 status 值 —— 后端没有 'submitted'。
+      return task.status === TASK_STATUS_DONE && task.acceptStatus === TASK_ACCEPT_PENDING
     default:
       return task.status === tab
   }
@@ -152,6 +179,9 @@ function matchTab(task: Task, tab: TabKey): boolean {
  * 待执行（pending + assigned）与已逾期为复合条件，交由前端过滤，故不传 status。
  */
 function toServerStatus(tab: TabKey): string | undefined {
+  // 只有与后端 status 取值一一对应的 Tab 才能下压到服务端；
+  // `pending`（两值合并）、`overdue`（派生）、`acceptPending`（另一维度）都不行，
+  // 统一返回 undefined，由 {@link CLIENT_ONLY_TABS} 标记改用本地筛选。
   if (tab === 'doing' || tab === 'done' || tab === 'rejected') {
     return tab
   }
@@ -195,10 +225,13 @@ export default function TaskList(): JSX.Element {
       fetchTaskPage({ farmId, ...filters, status: undefined, pageNum: 1, pageSize: 200 }),
   })
 
-  /** 列表视图数据源：服务端分页 */
+  /** 当前 Tab 能否下压到后端 status 参数；不能的走本地筛选（见 CLIENT_ONLY_TABS） */
+  const clientOnlyTab = CLIENT_ONLY_TABS.includes(tab)
+
+  /** 列表视图数据源：服务端分页（仅当后端能表达当前 Tab 时才发请求） */
   const tableQuery = useQuery({
     queryKey: ['production-tasks', 'table', farmId, filters, tab, pageNum, pageSize],
-    enabled: Boolean(farmId) && view === 'table',
+    enabled: Boolean(farmId) && view === 'table' && !clientOnlyTab,
     queryFn: () =>
       fetchTaskPage({ farmId, ...filters, status: toServerStatus(tab), pageNum, pageSize }),
   })
@@ -250,6 +283,7 @@ export default function TaskList(): JSX.Element {
       all: allTasks.length,
       pending: 0,
       doing: 0,
+      acceptPending: 0,
       done: 0,
       rejected: 0,
       overdue: 0,
@@ -257,12 +291,36 @@ export default function TaskList(): JSX.Element {
     allTasks.forEach((task) => {
       if (task.status === 'pending' || task.status === 'assigned') counts.pending += 1
       if (task.status === 'doing') counts.doing += 1
-      if (task.status === 'done') counts.done += 1
+      if (task.status === 'done') {
+        counts.done += 1
+        // 待验收是「已完成」里还没验收的那一批（验收维度，非 status 维度）
+        if (task.acceptStatus === TASK_ACCEPT_PENDING) counts.acceptPending += 1
+      }
       if (task.status === 'rejected') counts.rejected += 1
       if (isOverdue(task)) counts.overdue += 1
     })
     return counts
   }, [allTasks])
+
+  /**
+   * 列表视图的行与总数。
+   *
+   * 后端能表达当前 Tab 时走服务端分页；不能表达（待执行 / 已逾期 / 待验收）时用
+   * 本地筛选结果做本地分页 —— 否则 Tab 计数与表格内容会对不上。
+   */
+  const tableRows = useMemo<Task[]>(() => {
+    if (!clientOnlyTab) {
+      return tableQuery.data?.list ?? []
+    }
+    const start = (pageNum - 1) * pageSize
+    return filteredTasks.slice(start, start + pageSize)
+  }, [clientOnlyTab, tableQuery.data, filteredTasks, pageNum, pageSize])
+
+  /** 列表视图总数（与 {@link tableRows} 同源） */
+  const tableTotal = clientOnlyTab ? filteredTasks.length : (tableQuery.data?.total ?? 0)
+
+  /** 列表视图加载态（本地筛选时看板查询即为数据源） */
+  const tableLoading = clientOnlyTab ? boardQuery.isFetching : tableQuery.isFetching
 
   /** 统一失效刷新 */
   const invalidateTasks = (): Promise<void> =>
@@ -321,7 +379,7 @@ export default function TaskList(): JSX.Element {
 
   /** 导出当前筛选结果为 CSV */
   const handleExport = (): void => {
-    const rows = view === 'table' ? (tableQuery.data?.list ?? []) : filteredTasks
+    const rows = view === 'table' ? (clientOnlyTab ? filteredTasks : (tableQuery.data?.list ?? [])) : filteredTasks
     if (rows.length === 0) {
       message.warning('暂无可导出的数据')
       return
@@ -564,14 +622,14 @@ export default function TaskList(): JSX.Element {
     <ProTable<Task>
       rowKey="taskId"
       columns={columns}
-      dataSource={tableQuery.data?.list ?? []}
-      loading={tableQuery.isFetching}
+      dataSource={tableRows}
+      loading={tableLoading}
       search={false}
       options={{ reload: () => void invalidateTasks(), density: true, setting: true }}
       pagination={{
         current: pageNum,
         pageSize,
-        total: tableQuery.data?.total ?? 0,
+        total: tableTotal,
         showSizeChanger: true,
         onChange: (nextPage, nextSize) => {
           setPageNum(nextPage)
@@ -713,6 +771,16 @@ export default function TaskList(): JSX.Element {
             { key: 'all', label: `全部(${tabCounts.all})` },
             { key: 'pending', label: `待执行(${tabCounts.pending})` },
             { key: 'doing', label: `执行中(${tabCounts.doing})` },
+            {
+              key: 'acceptPending',
+              // 「待验收」是验收维度（acceptStatus），不是任务状态维度（status）——
+              // 必须写清楚，否则容易被误读成后端还有一个 'submitted' 状态。
+              label: (
+                <Tooltip title="按验收状态筛选：status=done 且 acceptStatus=0（待验收）。这是「验收状态」维度，与「任务状态」status 是两个维度；后端 status 枚举里没有 submitted。本 Tab 是「已完成」的子集，不是互斥关系。">
+                  <span>待验收({tabCounts.acceptPending})</span>
+                </Tooltip>
+              ),
+            },
             { key: 'done', label: `已完成(${tabCounts.done})` },
             { key: 'rejected', label: `已驳回(${tabCounts.rejected})` },
             { key: 'overdue', label: `已逾期(${tabCounts.overdue})` },
@@ -720,10 +788,13 @@ export default function TaskList(): JSX.Element {
         />
         {/* 逾期是本地推导值，不是后端状态——不标注会让用户以为是后端判定的 */}
         <Typography.Paragraph type="secondary" style={{ fontSize: 12, margin: '8px 0 0' }}>
-          {OVERDUE_DERIVED_NOTICE}；「已提交待验收」的任务在后端是
-          <Typography.Text code>status=done</Typography.Text> 且
-          <Typography.Text code>acceptStatus=0</Typography.Text>（不体现为独立的 status 值），
-          因此本页「已完成」里也包含已提交、但还没验收的任务。
+          {OVERDUE_DERIVED_NOTICE}。「待验收」Tab 走
+          <Typography.Text code>status=done &amp;&amp; acceptStatus=0</Typography.Text>
+          —— 它是<strong>验收状态</strong>维度，与「任务状态」status 是两个维度（后端 status 只有
+          pending/assigned/doing/done/rejected，<strong>没有</strong> submitted）；
+          它是「已完成」的<strong>子集</strong>（已提交但还没验收），两者不互斥，
+          与「已逾期」和其他 Tab 的关系同理。看板按 status 分列，故不单设「待验收」列，
+          以免同一条任务在两个列里重复出现。
         </Typography.Paragraph>
         {!farmId ? (
           <Empty description="请先在顶部切换农场" />
@@ -736,7 +807,7 @@ export default function TaskList(): JSX.Element {
               </Space>
             }
           />
-        ) : view === 'table' && tableQuery.isError ? (
+        ) : view === 'table' && (clientOnlyTab ? boardQuery.isError : tableQuery.isError) ? (
           <Empty
             description={
               <Space direction="vertical">
