@@ -1062,7 +1062,10 @@ GET /analytics/dashboard?farmId=DEMO-FARM-001 → 与上面**逐字节相同**
 
 ---
 
-## BT-31　列表接口报错时回落 16 条内置示例报表（前端侧，本轮新发现 · 待裁决）
+## BT-33　列表接口报错时回落 16 条内置示例报表（前端侧 · 待裁决）
+
+> **编号订正**：原登记为 BT-31，与 team-lead 另开的 CORS `allowedMethods` 缺 PATCH 工单撞号，
+> 改号 **BT-33**。（BT-32 = team-lead 的 `OpsDataScreen.tsx` 告警级别键名兼容工单，与本条无关。）
 
 **发现经过**：BT-25 改完后做成对实测时，后端 :8098 一度挂掉，页面 `listReports` 报错 →
 `usingFallback` 为真 → 列表里出现 **16 条 `DEMO-REPORT-*` 内置示例报表**（每页 10 条）。
@@ -1084,6 +1087,81 @@ GET /analytics/dashboard?farmId=DEMO-FARM-001 → 与上面**逐字节相同**
 **待裁决**：`DEMO_REPORTS` 是否整个删除（与 `settings` / `admin/reports` 域"不回落示例数据"
 的既定口径一致）？删掉后 `usingFallback` 分支即为空态 + 原因说明。
 
+### 前置核查：这个页面到底该打哪个端点？（team-lead 要求只读核查，结论如下）
+
+#### 1. 调用链（现状）
+
+```
+ProductionReports.tsx（pages/user/analytics/，路由 /production/analytics/reports，**用户端**）
+  → listReports()                       @/api/analytics.ts:52
+    → http.get('/analytics/reports', params)
+      → GET /api/v1/production/analytics/reports
+```
+
+#### 2. 两个候选端点的实测形状（均 :8098 实测，本轮）
+
+**A. `GET /analytics/reports`（当前在打的那个）**
+
+```json
+{"code":0,"message":"success","data":[
+  {"metricCode":"YIELD","metricName":"累计产量","metricValue":86420.0000,"unit":"kg","bizDate":"2026-10-09"},
+  {"metricCode":"PASS_RATE","metricName":"检测合格率","metricValue":96.8000,"unit":"%","bizDate":"2026-10-09"},
+  {"metricCode":"…"}
+]}
+```
+
+存在性对照：`GET /analytics/zzz-not-exist` → `code=404 资源不存在`（进 `@GetMapping("/{id}")`）。
+**源码铁证**（`AnalyticsSnapshotService#reports`，:124-141）：它 `selectList` 的是
+**`AnalyticsSnapshotEntity`（表 `prod_analytics_snapshot`）**，然后手工 `row.put("metricCode"/"metricName"/"metricValue"/"unit"/"bizDate")`。
+→ **这个端点从头到尾没碰过报表表，它叫 reports 但返回的是指标快照。**
+
+**B. `GET /admin/reports?page=1&size=2`**
+
+```json
+{"code":0,"message":"success","data":{"records":[
+ {"reportId":"DEMO-RPT-002","reportType":"GOV","reportName":"2026年度农产品质量追溯监管年报",
+  "farmId":null,"bizDateFrom":"2026-01-01","bizDateTo":"2026-12-31",
+  "generatorId":"SUPER_ADMIN","fileUrl":null,"generatedAt":null,"status":"PENDING"}
+]}}
+```
+
+存在性对照：`GET /admin/reports/NOPE-NOPE` → `code=404 资源不存在`。
+实体：`ReportTaskEntity` → **表 `prod_report_task`**，这才是真的报表实体。
+
+#### 3. 结论：**是契约错位，不是"数据不足"** —— 但**不是"改打 B"就能了事**
+
+页面把**指标快照列表**当**报表列表**渲染。16 条内置示例正是在掩盖这个错位——
+所以"删示例"和"留示例"单独讨论都不成立，得先定"这个页面该展示什么"。
+
+⚠️ 但 B 也不是现成答案，四处不通：
+
+| 维度 | 页面口径 | `/admin/reports` 实际 | 是否通 |
+| --- | --- | --- | --- |
+| 报表类型词表 | 日报 / 周报 / 月报 / 季报 / 年报 + 专题（1-5） | `GOV` / `BIZ` / `QUALITY` | ❌ 词表不通（与 BT-32 同类问题） |
+| 生成人 | 当前用户 | `generatorId = "SUPER_ADMIN"` | ❌ 是运营端造的监管报表，不是农场自己的报表 |
+| 农场范围 | 当前 farmId | `page()` **不接受 farmId**；`farmId` 可为 `null` | ❌ 无农场维度 |
+| 数据隔离 | 只看到自己农场的 | `TenantLineInnerInterceptor` 隔离的是 **`market_id`（市场）**，不是农场 / 租户 | ❌ 会把整个市场所有农场的报表列出来 |
+
+#### 4. 用户端页面打运营端 `/admin/reports` 是否可行？
+
+- **技术上能通**：`JwtAuthFilter` 只校验 token 有效性（无 token → 401），**不按路径 / 角色鉴权**；
+  `admin` 包内没有任何 `@PreAuthorize` / `hasRole`；`WebConfig` 里只有 CORS，没有安全规则。
+  → 任意有效 token 都能调通 `/admin/**`。
+- **但架构上零先例**：全仓 grep，`@/api/admin/*` **只被 `pages/admin/**` 引用**，
+  `pages/user/**` 里没有任何一处打 `/admin/` 端点。
+- **数据范围会越界**：见上表第 4 行，会把全市场的监管报表列给用户端农场。
+
+**→ 不建议用户端页面直接改打 `/admin/reports`。**
+
+#### 5. 给裁决的三个选项（按推荐度排序）
+
+1. **后端补用户端报表端点**（推荐）：`prod_report_task` 按 `farmId` 过滤 + 报表类型词表
+   与用户端对齐（或新增 farm 级报表表）。页面改打新端点 → 示例数据自然可删。
+2. **先定页面定位**：如果产品上这个页面就该展示"运营下发的监管年报"，那它不是用户端页面，
+   应挪到运营端，并接受 `GOV/BIZ/QUALITY` 词表 —— 这是产品裁决，不是前端能定的。
+3. **维持现状 + 删示例**：承认"后端没有用户端报表能力"，页面走"未接入"空态。
+   这一条无论选 1 还是 2 都该做（示例数据本就不该留），与端点选择**不冲突**，可先行。
+
 ---
 
 ## 附：本域已验证有真数据的端点
@@ -1102,5 +1180,7 @@ GET /analytics/dashboard?farmId=DEMO-FARM-001 → 与上面**逐字节相同**
 - `ProductionReports.tsx` 列表侧有形状守卫，接口通了但返的不是报表时走空态 + 明示，
   **不**回落示例报表；
 - ⚠️ 但**接口报错（isError）**时仍会回落 16 条 `DEMO-REPORT-*` 内置示例报表——
-  这一条本轮已登记为 **BT-31**（逐行标「示例数据」+ 禁导出/打印 + 修正假文案），
-  是否整个删除待裁决。
+  这一条已登记为 **BT-33**（编号订正：原写作 BT-31，与 team-lead 另开的 CORS PATCH
+  工单撞号，故改号；BT-32 是 team-lead 的 `OpsDataScreen.tsx` 枚举键名兼容工单，不归本条）。
+  已做的止血：逐行标「示例数据」+ 禁导出 / 禁打印 + 修正假文案。
+  **是否整个删除，取决于 BT-33 的裁决结论**（见下）。
