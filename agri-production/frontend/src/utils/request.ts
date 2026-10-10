@@ -136,6 +136,10 @@ export interface PageQueryLike {
  * 若不做切片，只按 pageSize 算出 `pages`，就会出现分页器显示多页、
  * 但每一页都渲染全量且内容完全相同的**假分页**。
  *
+ * ⚠️ `total` 是**后端全量行数**，`list` 只是**当前页的切片** —— 两者不相等是
+ * 正常现象。下游要总数请一律读 `total`，**不要用 `list.length` 代替**
+ * （切片后 `list.length` ≤ pageSize，拿它当总数会静默少算）。
+ *
  * 幂等：入参已经是归一化分页结构（含 `list` 数组）时原样返回，
  * 因此后端日后改成真 PageResult 也不需要改调用方。
  *
@@ -158,15 +162,18 @@ export function toPageResult<T>(raw: unknown, params: PageQueryLike = {}): PageD
     const total = all.length
     // 页码小于 1 时按第 1 页处理，避免 slice 起始下标为负（slice(-n, 0) 会得到空数组）
     const safePageNum = pageNum > 0 ? pageNum : 1
-    // 每页条数非正时不做切片（整表即一页），同时 pages 记 0
+    // 每页条数非正时整表即一页（不做切片）。此时 sliceSize = total，
+    // 下面的 pages 会算成 1 而不是 0 —— 有数据却显示 0 页是错的。
     const sliceSize = pageSize > 0 ? pageSize : total
     const start = (safePageNum - 1) * sliceSize
     return {
       list: all.slice(start, start + sliceSize),
       total,
       pageNum: safePageNum,
-      pageSize,
-      pages: pageSize > 0 ? Math.ceil(total / pageSize) : 0,
+      // 回传生效值而非调用方原值：整表一页时 pageSize 应为 total，
+      // 否则会出现 list.length !== pageSize 的自相矛盾结构。
+      pageSize: sliceSize,
+      pages: sliceSize > 0 ? Math.ceil(total / sliceSize) : 0,
     }
   }
 
