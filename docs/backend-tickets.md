@@ -257,10 +257,29 @@ POST /admin/tenants/NOPE/quota-usage/reset    → code=500「系统繁忙」    
 **性质**：与域 1 的 `queryInventoryFlows` 同型——**端点其实存在，是前端把路径写错了**，
 所以用户点「重置已用配额」必失败，而页面看到的是"系统繁忙"，排障极易误判成后端没做。
 
-**期望语义**：前端改为 `POST /admin/tenants/{quotaId}/reset-usage`（注意入参也从 tenantId 换成 quotaId，见 BT-09）。
+**裁决（team-lead 2026-10-10）**：批准改，但要求先确认调用方手上有 quotaId。
+**已确认有**：实测 `GET /admin/tenants/quota-overview` 的行里，`tenantId` 字段**填的其实就是
+quotaId**（三条为 `DEMO-QUOTA-001` / `DEMO-QUOTA-002` / `QUOT202610090954433640`），
+且 `farm.quotaId` 同为这个值；`TenantDetail` 侧 `OpsTenantRow.quotaId` 也可得。
 
-**⚠️ 需裁决**：这条是**前端一处路径修错**，不是后端工单。是否由我直接改（一行）？
-（`api/admin/tenants.ts` 当前无人在途改动，可安全修改。）
+**已修复（commit `9bb52bf5`）**：路径改回 `POST /admin/tenants/{quotaId}/reset-usage`，
+入参语义同步改为 quotaId（`TenantQuotas` 传 `row.farm?.quotaId ?? row.tenantId`；
+`TenantDetail` 传 `tenant?.quotaId`，取不到就直接抛错，**不拿 tenantId 冒充 quotaId**）。
+
+**修复后实测（真实模块 `ssrLoadModule` + 真后端 :8098）**：
+
+| 用例 | 结果 |
+| --- | --- |
+| 真 quotaId `DEMO-QUOTA-001` | 业务码 **1000** 明确拒绝：**「该租户未绑定 tenant_id（当前值为 0）：按 tenant_id 统计会退化成「全部未打标农场的总数」，与全平台统计等价并产出误导性数值，已拒绝执行；请先回填 `prod_farm_info.tenant_id` 后重试（quotaId=DEMO-QUOTA-001）」** |
+| 不存在的 id `NOPE` | **bizCode=404**（不是 500）✅ |
+
+两条合起来说明：**路径与入参都已命中真端点**（不再是 500 路径不存在），
+但功能仍不可用——**根因是 BT-09**：不仅 `prod_tenant_quota.tenant_id` 全库为 0，
+**`prod_farm_info.tenant_id` 也是全 0**（实测 6 个农场 `COUNT(DISTINCT tenant_id)=1`、min=max=0），
+后端自己都拒绝按 tenant_id 统计（怕产出误导性数值）。
+
+**这条后端守卫做得对**：它宁可明确拒绝，也不返回一个"看起来有数、实际是全平台总数"的值。
+前端侧无需再改，等 BT-09 回填数据后即可用。
 
 ---
 
@@ -290,13 +309,25 @@ POST /admin/tenants/NOPE/quota-usage/reset    → code=500「系统繁忙」    
 
 **结论**：`quotaId` 才是可用的租户标识；前端在 `quotaId` / `tenantId` 之间混用。
 
-**期望语义**：
-- 后端：建租户主表、给 `prod_tenant_quota.tenant_id` 填真值（三个租户不能共用一个 0），
-  并明确"租户标识"到底用哪个；
-- 前端：后端补齐前，统一改用 `quotaId` 作为跳转与查询入参（涉及 `TenantList.tsx:291`
-  及 `TenantDetail` 的 `tenantId` 来源）。
+**补充实测（2026-10-10，BT-08 修复后触发出来的）**：问题不止 `prod_tenant_quota.tenant_id`。
+后端 `reset-usage` 直接拒绝执行并点名另一张表：
 
-**验收**：三条租户应有三个互不相同的 `tenantId`；`GET /admin/tenants/{tenantId}` 各自返回自己那条。
+> 「该租户未绑定 tenant_id（当前值为 0）……请先回填 **`prod_farm_info.tenant_id`** 后重试」
+
+DB 复核：`SELECT COUNT(*) , COUNT(DISTINCT tenant_id), MIN(tenant_id), MAX(tenant_id) FROM prod_farm_info`
+→ `6 个农场 / distinct=1 / min=0 / max=0`。**农场表的 tenant_id 同样全是 0。**
+
+即：**租户维度在配额表与农场表两张主表上都没有区分度**，与 team-lead 已知的
+「生产域 7 张主表 `COUNT(DISTINCT tenant_id)` 全部为 1」是同一个系统性问题。
+
+**裁决（team-lead 2026-10-10）**：
+1. 前端改用 `quotaId` 作为租户标识（它有三条不同的真值，可用）——不等后端回填；
+2. 后端工单记一条**标识口径**类（不是"补端点"）：要么回填 `tenant_id`，
+   要么明确 `quotaId` 即租户标识并在 API 层统一——**二选一，不许继续混用**；
+3. 页面顶部明说口径："当前租户标识取自配额记录（quotaId），后端 tenant_id 字段全库为 0 暂不可用"。
+
+**验收**：三条租户应有三个互不相同的 `tenantId`；`GET /admin/tenants/{tenantId}` 各自返回自己那条；
+`prod_farm_info.tenant_id` 要有真值且能区分到具体租户（否则 `reset-usage` 仍会被后端拒绝）。
 
 ---
 
@@ -378,13 +409,13 @@ quotaUsageRate / activeDays / revenue / strategy` …），后端**没有任何�
 
 ---
 
-## 死代码候选（按规则：端点不存在 **且** 无调用方 → 前端删）
+## 死代码处置（team-lead 2026-10-10 裁决）
 
-- `updateTenantStatus()`（`PATCH /{id}/status`）：端点不存在 + 全仓 grep **零调用方** → 建议删除声明。
-- `listTenantQuotas()`（`GET /quotas`）：端点**存在且有 3 条数据**，但零调用方 → 不删，
-  等页面接入或后端确认该端点是否废弃。
-
-（本轮只记录，未删除——删除属代码改动，等 team-lead 裁决。）
+- **`updateTenantStatus()`（`PATCH /{id}/status`）→ 已删除**（commit `9bb52bf5`）。
+  判据：端点不存在 **且** 无调用方 → 删。删除处留了说明注释（含实测证据），
+  避免以后有人以为"租户冻结/解冻有接口，只是暂时没接"。
+- **`listTenantQuotas()`（`GET /quotas`）→ 保留**。判据：端点**存在且有 3 条真数据**，
+  只是暂时没人用（"暂时没人用"≠"不能用"），删了以后要用还得重建。
 
 ---
 
