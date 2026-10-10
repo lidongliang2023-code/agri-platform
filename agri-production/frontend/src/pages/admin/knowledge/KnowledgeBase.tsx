@@ -32,6 +32,14 @@
  *
  * 同时撤掉了本地示例文章与硬编码的 15680 / 14200 / 850 / 630 统计卡：
  * 那组数字与后端真实条目数（实测 3 条）毫无关系，属于「把没有数据渲染成有结论」。
+ *
+ * ⚠️ 写入口径（BT-57，实测 `prod_knowledge_article` 列）：
+ * 后端只有 `article_id / category_code / title / summary / content_url /
+ * author / source / read_count / publish_at / status`。
+ * 此前 payload 里的 `category`（数字编码）、`content`（正文）、`tags` 三列**都不存在**，
+ * 而 Spring Boot 默认 `FAIL_ON_UNKNOWN_PROPERTIES=false`，未知字段直接忽略、不报错，
+ * 于是「接口 200 + 前端提示已保存」，用户选的分类其实没落库、刷新后分类列只剩「—」。
+ * 现在：payload 只写真列 + 保存后 GET 详情回读逐字段比对，对不上就如实列出。
  */
 import { useEffect, useMemo, useState } from 'react'
 import {
@@ -64,6 +72,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createKnowledgeArticle,
   deleteKnowledgeArticle,
+  getKnowledgeArticle,
   listKnowledgeArticles,
   publishKnowledgeArticle,
   updateKnowledgeArticle,
@@ -115,23 +124,30 @@ const CATEGORY_CODE_TO_NAME: Record<string, string> = {
   POLICY: '政策法规',
 }
 
-/** 分类选项（下拉用）：静态分类学，非后端统计值 */
-const CATEGORY_OPTIONS: { value: string; label: string }[] = [
-  { value: '种植技术', label: '种植技术' },
-  { value: '病虫害防治', label: '病虫害防治' },
-  { value: '政策法规', label: '政策法规' },
-  { value: '农资知识', label: '农资知识' },
-  { value: '土壤管理', label: '土壤管理' },
-]
-
-/** 分类名 → 后端历史数字编码（后端实际不消费该字段，仅保留写入兼容） */
-const CATEGORY_TO_CODE: Record<string, 1 | 2 | 3 | 4> = {
-  种植技术: 1,
-  病虫害防治: 2,
-  政策法规: 3,
-  农资知识: 4,
-  土壤管理: 4,
+/**
+ * 分类名 → 后端真实 `categoryCode`。
+ *
+ * 实测 `prod_knowledge_article` **只有 `category_code` 字符串列**，
+ * 真实取值就是种子里的 PLANT / PEST / POLICY 三种。
+ *
+ * 此前前端写的是 `category: 1|2|3|4`——后端根本没有 `category` 这一列，
+ * Jackson 默认忽略未知属性（`FAIL_ON_UNKNOWN_PROPERTIES` 未开启），
+ * 于是形成「用户选了分类 → 接口返回 200 → 前端提示已保存 → 分类其实没落库」，
+ * 刷新之后列表的分类列只剩「—」（BT-57）。
+ *
+ * 因此下拉只提供**后端真能存进去**的三个分类：
+ * 给一个存不进去的选项，等于让用户以为自己选成功了。
+ */
+const CATEGORY_NAME_TO_CODE: Record<string, string> = {
+  种植技术: 'PLANT',
+  病虫害防治: 'PEST',
+  政策法规: 'POLICY',
 }
+
+/** 分类选项（下拉用）：由上面这张真编码表派生，不额外提供无编码的分类 */
+const CATEGORY_OPTIONS: { value: string; label: string }[] = Object.keys(CATEGORY_NAME_TO_CODE).map(
+  (name) => ({ value: name, label: name }),
+)
 
 /** 审核状态文案与颜色 */
 const AUDIT_MAP: Record<AuditState, { label: string; color: string }> = {
@@ -170,7 +186,21 @@ interface EntryFormValues {
   relatedModel?: string
   entryType: EntryType
   summary?: string
-  content: string
+  /** 正文链接（后端真字段 `contentUrl`；后端没有正文内容列） */
+  contentUrl?: string
+}
+
+/**
+ * 保存后回读发现的「没生效」字段清单项。
+ *
+ * @property label 字段中文名（给用户看）
+ * @property sent  前端提交的值
+ * @property got   服务端回读到的值
+ */
+interface FieldDrift {
+  label: string
+  sent: string
+  got: string
 }
 
 /**
@@ -188,6 +218,8 @@ export default function KnowledgeBase(): JSX.Element {
   const [rows, setRows] = useState<KnowledgeRow[]>([])
   const [drawerOpen, setDrawerOpen] = useState<boolean>(false)
   const [editingId, setEditingId] = useState<string | undefined>(undefined)
+  /** 正在编辑的原始行：保存时用它保留 status 等不该被覆盖的字段 */
+  const [editingRow, setEditingRow] = useState<KnowledgeRow | undefined>(undefined)
   const [detailRow, setDetailRow] = useState<KnowledgeRow | undefined>(undefined)
 
   const listQuery = useQuery({
@@ -257,31 +289,77 @@ export default function KnowledgeBase(): JSX.Element {
     [rows],
   )
 
-  /** 保存知识条目 */
+  /**
+   * 保存知识条目。
+   *
+   * 两条硬约束（BT-57）：
+   * 1. **payload 只写 `prod_knowledge_article` 真实存在的列**
+   *    （articleId / categoryCode / title / summary / contentUrl / author /
+   *     source / readCount / publishAt / status）。
+   *    `category` / `content` / `tags` 三列后端都没有，写了也不会报错——
+   *    Spring Boot 默认 `FAIL_ON_UNKNOWN_PROPERTIES=false`，直接静默忽略，
+   *    于是「提示已保存」而用户选的分类、填的正文其实没入库。
+   * 2. **保存后回读**（GET /admin/knowledge/{id}）逐字段比对，
+   *    有对不上的就如实列出来，不再无条件弹「已保存」。
+   */
   const saveMutation = useMutation({
-    mutationFn: async (values: EntryFormValues) => {
+    mutationFn: async (values: EntryFormValues): Promise<FieldDrift[]> => {
+      const categoryCode = CATEGORY_NAME_TO_CODE[values.categoryName]
+      if (!categoryCode) {
+        // 下拉已经只给有编码的分类，这里是防御：真走到了就如实报错，绝不悄悄存成别的
+        throw new Error(`分类「${values.categoryName}」在后端没有对应编码，未保存`)
+      }
       const payload: Partial<KnowledgeArticle> = {
         title: values.title,
-        category: CATEGORY_TO_CODE[values.categoryName] ?? 1,
+        categoryCode,
         summary: values.summary,
-        content: values.content,
-        contentUrl: values.content,
-        tags: [values.categoryName],
+        // 后端只有「正文链接」列，没有正文列；正文内容不写入（写了也存不下）
+        contentUrl: values.contentUrl,
         source: values.source,
-        author: values.source,
-        status: 0,
+        /*
+         * 编辑时沿用条目当前状态：此前无条件写 status: 0，
+         * 会把一条已发布条目悄悄改回草稿（updateById 对非 null 字段照写）。
+         */
+        status: editingRow?.status ?? 0,
+      }
+
+      const targetId = editingId ?? (await createKnowledgeArticle(payload))
+      if (!targetId) {
+        throw new Error('后端未返回条目 ID，无法确认是否落库')
       }
       if (editingId) {
         await updateKnowledgeArticle(editingId, payload)
-      } else {
-        await createKnowledgeArticle(payload)
       }
-      return values
+
+      // 回读校验：以服务端真实状态为准，不拿「请求发出去了」当成功
+      const saved = await getKnowledgeArticle(targetId)
+      const drifts: FieldDrift[] = []
+      const compare = (label: string, sent?: string | null, got?: string | null): void => {
+        const a = sent ?? ''
+        const b = got ?? ''
+        if (a !== b) {
+          drifts.push({ label, sent: a, got: b })
+        }
+      }
+      compare('标题', payload.title, saved?.title)
+      compare('分类', payload.categoryCode, saved?.categoryCode)
+      compare('摘要', payload.summary, saved?.summary)
+      compare('正文链接', payload.contentUrl, saved?.contentUrl)
+      compare('来源', payload.source, saved?.source)
+      return drifts
     },
-    onSuccess: () => {
-      message.success('知识条目已保存')
+    onSuccess: (drifts: FieldDrift[]) => {
+      if (drifts.length > 0) {
+        const detail = drifts
+          .map((item) => `${item.label}（提交「${item.sent || '空'}」，回读「${item.got || '空'}」）`)
+          .join('；')
+        message.warning(`条目已提交，但回读发现 ${drifts.length} 个字段未生效：${detail}`)
+      } else {
+        message.success('知识条目已保存（回读校验一致）')
+      }
       setDrawerOpen(false)
       setEditingId(undefined)
+      setEditingRow(undefined)
       form.resetFields()
       void queryClient.invalidateQueries({ queryKey: ['admin-knowledge-articles'] })
     },
@@ -334,6 +412,7 @@ export default function KnowledgeBase(): JSX.Element {
    */
   const openDrawer = (row?: KnowledgeRow): void => {
     setEditingId(row?.articleId)
+    setEditingRow(row)
     form.setFieldsValue(
       row
         ? {
@@ -343,7 +422,8 @@ export default function KnowledgeBase(): JSX.Element {
             relatedModel: row.relatedModel,
             entryType: row.entryType,
             summary: row.summary,
-            content: row.content,
+            // 后端只有正文链接列：编辑时回填 contentUrl，不回填 content
+            contentUrl: row.contentUrl,
           }
         : { entryType: entryTab, categoryName: '病虫害防治' },
     )
@@ -767,8 +847,19 @@ export default function KnowledgeBase(): JSX.Element {
           <Form.Item name="summary" label="摘要">
             <Input.TextArea rows={2} maxLength={200} showCount />
           </Form.Item>
-          <Form.Item name="content" label="正文内容" rules={[{ required: true, message: '请输入正文内容' }]}>
-            <Input.TextArea rows={8} maxLength={2000} showCount />
+          {/*
+            后端知识库**没有正文内容列**，只有 `content_url varchar(255)`。
+            此前这一项是「正文内容」多行框（maxLength 2000），保存时写进 contentUrl：
+            - 类型就不对（正文塞进链接列）；
+            - 长度也不对——MySQL 是 STRICT 模式，超过 255 字符会直接 1406 报错。
+            改成如实填写正文链接，长度上限与后端列一致。
+          */}
+          <Form.Item
+            name="contentUrl"
+            label="正文链接"
+            tooltip="后端知识库只有「正文链接」列（content_url，上限 255 字符），没有正文内容列；正文内容无法保存"
+          >
+            <Input placeholder="如：https://example.com/kb/rice-blast.html" maxLength={255} showCount />
           </Form.Item>
         </Form>
       </Drawer>
