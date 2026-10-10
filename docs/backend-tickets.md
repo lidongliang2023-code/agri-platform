@@ -183,7 +183,40 @@ token 取自 `AdminUserInitializer.java`。**全部结论来自实际 HTTP 调�
 后端从不返回该字段 → 恒为 `0` → **所有批次的入库状态恒显示「待入库」、按钮恒可点**。
 
 这是"后端没给、前端用默认值兜底"，不是前端编造，但**页面显示的状态并非服务端真值**。
-是否开工单请 team-lead 裁决（倾向：后端补字段，或前端改为明示"后端未提供入库状态"）。
+
+**team-lead 裁决（2026-10-10）：两边都做。** 后端补 `inboundStatus` + `warehouseName`（已并入
+`se-backend-inv` 的工单）；前端**过渡期改成明示"后端未提供入库状态"**，不再用 `?? 0` 兜底成"待入库"。
+
+### 前端过渡期改法（实施规格）
+
+后端未补字段前，`HarvestBatch.inboundStatus` 在**任何一条真实数据上都是 `undefined`**，
+所以下面三处的 `?? 0` 等价于"恒为待入库"，必须改为显式的「未提供」判定。
+
+判定统一收口成一个变量（放在 `Detail.tsx` 里 `const inbound = ...` 之前）：
+
+```ts
+/** 后端 HarvestBatchEntity 当前不返回 inboundStatus；未返回时不得当成 0（待入库） */
+const inboundStatusProvided: boolean =
+  batch.inboundStatus !== undefined && batch.inboundStatus !== null
+```
+
+| 位置 | 现状 | 过渡期改法 |
+| --- | --- | --- |
+| `Detail.tsx:138`<br>`const inbound = INBOUND_STATUS_META[(batch.inboundStatus ?? 0) as InboundStatus]` | 恒取「待入库」的文案与颜色 | `inboundStatusProvided` 为 false 时不要取 `INBOUND_STATUS_META[0]`，改渲染一个中性 Tag：`<Tag>入库状态未提供</Tag>`，并挂 Tooltip「后端未返回入库状态字段，此处不是服务端真值（后端工单已派）」 |
+| `Detail.tsx:160`<br>`disabled={(batch.inboundStatus ?? 0) !== 0}` | 恒为 false →「确认入库」**恒可点**（即使用户已入库过，也没有任何提示） | **不要改成禁用**（那会让入库功能彻底不可用）。保持可点，但在按钮上加 Tooltip：「后端未提供入库状态，无法判断是否已入库；若已入库请勿重复提交」，点击后弹窗里也带一行同样措辞的 Alert |
+| `Detail.tsx:286`<br>`{(batch.inboundStatus ?? 0) === 0 ? '（入库后自动生成）' : null}` | 恒显示「（入库后自动生成）」 | `inboundStatusProvided` 为 false 时改为「（是否已入库后端未提供，溯源码在入库成功后生成）」 |
+
+**顺带（同型问题）**：`Detail.tsx:332` 入库弹窗 `initialValues={{ warehouseName: '主仓库' }}`
+把仓库名**默认写死成"主仓库"**——用户不填就直接以"主仓库"入库，这是"默认值冒充真实值"，
+与 `?? 0` 同型。改为**留空 + 必填校验**（或给一个真实存在的仓库下拉），不要给默认值。
+
+**用户最终看到什么**：
+1. 入库状态一栏显示「入库状态未提供」（灰色 Tag + Tooltip 说明原因），**不再显示"待入库"**；
+2. 「确认入库」按钮仍可点，但 hover 有提示说明"无法判断是否已入库，请勿重复提交"；
+3. 入库弹窗里的仓库名必须自己填/选，不再默认"主仓库"。
+
+**依赖**：`Detail.tsx` 曾在 `se-harvest2` 的编辑范围内，动手前先 `git status --porcelain`
+确认无在途改动；有则按"协同纪律"用 `git apply --cached` 按 hunk 提交。
 
 ---
 
