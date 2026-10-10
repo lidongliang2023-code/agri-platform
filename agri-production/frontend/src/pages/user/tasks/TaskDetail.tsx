@@ -67,6 +67,7 @@ import { listMembers } from '@/api/members'
 import type { Member, Task, TaskRecord } from '@/types'
 import {
   ACCEPT_STATUS_META,
+  TASK_ACCEPT_PENDING,
   TASK_PRIORITY_COLOR_MAP,
   TASK_PRIORITY_LABEL_MAP,
   TASK_RECORD_TYPE_OPTIONS,
@@ -586,7 +587,7 @@ export default function TaskDetail(): JSX.Element {
           <Button
             type="primary"
             icon={<CheckCircleOutlined />}
-            disabled={task.status !== 'submitted'}
+            disabled={task.acceptStatus !== TASK_ACCEPT_PENDING}
             onClick={() => {
               setReviewPass(true)
               setReviewOpen(true)
@@ -597,7 +598,7 @@ export default function TaskDetail(): JSX.Element {
           <Button
             danger
             icon={<CloseCircleOutlined />}
-            disabled={task.status !== 'submitted'}
+            disabled={task.acceptStatus !== TASK_ACCEPT_PENDING}
             onClick={() => {
               setReviewPass(false)
               setReviewOpen(true)

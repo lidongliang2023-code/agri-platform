@@ -69,10 +69,15 @@ type ViewMode = 'table' | 'kanban'
  *
  * `doing` / `done` 是后端真值（旧代码的 `executing` / `accepted` 后端不存在，
  * 导致「执行中」「已完成」两个 Tab 恒为 0 条）。
- * `overdue` 不是后端状态，走本地推导；`submitted` 后端暂未提供（裁决：保留 Tab + 明示，
- * 列入后端补齐清单，不删前端功能）。
+ * `overdue` 不是后端状态，走本地推导。
+ *
+ * ⚠️ 原「待验收」Tab 已删除：它筛的是 `status === 'submitted'`，而 PRD 8.1.1 与后端
+ * `status` 枚举里都没有这个值（后端用例：14 条任务零命中），所以它恒为 0 条、纯属编造。
+ * 「待验收」这个业务状态真实存在，但挂在 `acceptStatus === 0` 上（见
+ * {@link TASK_ACCEPT_PENDING}），不是 status —— 要恢复这个 Tab 得按 acceptStatus 筛，
+ * 不能按一个不存在的 status 值筛。
  */
-type TabKey = 'all' | 'pending' | 'doing' | 'submitted' | 'done' | 'rejected' | 'overdue'
+type TabKey = 'all' | 'pending' | 'doing' | 'done' | 'rejected' | 'overdue'
 
 /** 列表筛选条件 */
 interface TaskFilters {
@@ -106,7 +111,6 @@ interface BoardColumn {
 const BOARD_COLUMNS: BoardColumn[] = [
   { key: 'pending', title: '待执行', color: '#1677ff', statuses: ['pending', 'assigned'] },
   { key: 'doing', title: '执行中', color: '#fa8c16', statuses: ['doing'] },
-  { key: 'submitted', title: '待验收', color: '#722ed1', statuses: ['submitted'] },
   { key: 'done', title: '已完成', color: '#52c41a', statuses: ['done'] },
   { key: 'rejected', title: '已驳回', color: '#ff4d4f', statuses: ['rejected'] },
 ]
@@ -129,7 +133,7 @@ function isTodayTask(task: Task): boolean {
   return !today.isBefore(start) && !today.isAfter(end)
 }
 
-/** Tab 过滤：全部 / 待执行 / 执行中 / 待验收 / 已完成 / 已逾期 */
+/** Tab 过滤：全部 / 待执行 / 执行中 / 已完成 / 已驳回 / 已逾期 */
 function matchTab(task: Task, tab: TabKey): boolean {
   switch (tab) {
     case 'all':
@@ -148,7 +152,7 @@ function matchTab(task: Task, tab: TabKey): boolean {
  * 待执行（pending + assigned）与已逾期为复合条件，交由前端过滤，故不传 status。
  */
 function toServerStatus(tab: TabKey): string | undefined {
-  if (tab === 'doing' || tab === 'submitted' || tab === 'done' || tab === 'rejected') {
+  if (tab === 'doing' || tab === 'done' || tab === 'rejected') {
     return tab
   }
   return undefined
@@ -246,7 +250,6 @@ export default function TaskList(): JSX.Element {
       all: allTasks.length,
       pending: 0,
       doing: 0,
-      submitted: 0,
       done: 0,
       rejected: 0,
       overdue: 0,
@@ -254,7 +257,6 @@ export default function TaskList(): JSX.Element {
     allTasks.forEach((task) => {
       if (task.status === 'pending' || task.status === 'assigned') counts.pending += 1
       if (task.status === 'doing') counts.doing += 1
-      if (task.status === 'submitted') counts.submitted += 1
       if (task.status === 'done') counts.done += 1
       if (task.status === 'rejected') counts.rejected += 1
       if (isOverdue(task)) counts.overdue += 1
@@ -711,7 +713,6 @@ export default function TaskList(): JSX.Element {
             { key: 'all', label: `全部(${tabCounts.all})` },
             { key: 'pending', label: `待执行(${tabCounts.pending})` },
             { key: 'doing', label: `执行中(${tabCounts.doing})` },
-            { key: 'submitted', label: `待验收(${tabCounts.submitted})` },
             { key: 'done', label: `已完成(${tabCounts.done})` },
             { key: 'rejected', label: `已驳回(${tabCounts.rejected})` },
             { key: 'overdue', label: `已逾期(${tabCounts.overdue})` },
@@ -719,8 +720,10 @@ export default function TaskList(): JSX.Element {
         />
         {/* 逾期是本地推导值，不是后端状态——不标注会让用户以为是后端判定的 */}
         <Typography.Paragraph type="secondary" style={{ fontSize: 12, margin: '8px 0 0' }}>
-          {OVERDUE_DERIVED_NOTICE}；「待验收」后端暂未提供该状态（后端流转缺"提交验收"这一环，
-          已列入后端补齐清单），选中会返回 0 条——是后端缺口，不是"没有待验收任务"。
+          {OVERDUE_DERIVED_NOTICE}；「已提交待验收」的任务在后端是
+          <Typography.Text code>status=done</Typography.Text> 且
+          <Typography.Text code>acceptStatus=0</Typography.Text>（不体现为独立的 status 值），
+          因此本页「已完成」里也包含已提交、但还没验收的任务。
         </Typography.Paragraph>
         {!farmId ? (
           <Empty description="请先在顶部切换农场" />

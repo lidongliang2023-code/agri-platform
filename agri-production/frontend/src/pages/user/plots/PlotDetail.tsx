@@ -70,7 +70,6 @@ const TASK_STATUS_META: Record<string, { label: string; color: string }> = {
   assigned: { label: '待执行', color: 'blue' },
   doing: { label: '执行中', color: 'orange' },
   executing: { label: '执行中', color: 'orange' },
-  submitted: { label: '待验收', color: 'purple' },
   done: { label: '已完成', color: 'green' },
   accepted: { label: '已完成', color: 'green' },
   rejected: { label: '已驳回', color: 'red' },

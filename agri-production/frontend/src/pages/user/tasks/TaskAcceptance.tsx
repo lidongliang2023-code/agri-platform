@@ -42,7 +42,7 @@ import {
   TASK_STATUS_LABEL_MAP,
   TASK_TYPE_LABEL_MAP,
 } from '@/types'
-import { TASK_STATUS_DOING } from '@/types/task'
+import { TASK_ACCEPT_PENDING, TASK_STATUS_DOING } from '@/types/task'
 
 /** 执行记录类型文本 */
 const RECORD_TYPE_TEXT: Record<number, string> = {
@@ -260,9 +260,10 @@ export default function TaskAcceptance(): JSX.Element {
     )
   }
 
-  // 后端「执行中」真值是 doing（旧代码的 executing 后端不存在）；
-  // submitted 后端暂未提供该状态，已列入后端补齐清单，此处保留判定
-  const canReview = task.status === 'submitted' || task.status === TASK_STATUS_DOING
+  // 后端「执行中」真值是 doing（旧代码的 executing 后端不存在）。
+  // 「已提交待验收」不体现为 status，而是 acceptStatus === 0
+  // （TaskInfoService.java:144-151 的 submit() 置 status=done + acceptStatus=0）。
+  const canReview = task.acceptStatus === TASK_ACCEPT_PENDING || task.status === TASK_STATUS_DOING
 
   return (
     <PageContainer

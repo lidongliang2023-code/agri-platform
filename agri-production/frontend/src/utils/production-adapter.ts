@@ -372,8 +372,11 @@ export function priorityMeta(priority: number): TagMeta {
 /**
  * 任务状态标签。
  *
- * 后端真值为 `pending / assigned / doing / done / rejected`；`executing` / `accepted` /
- * `submitted` 是前端历史字面量，后端不产出（实测 `GET /tasks` 无这些值），此处仅为兼容保留。
+ * 后端真值为 `pending / assigned / doing / done / rejected`。
+ * `executing` / `accepted` / `completed` 是 PRD 8.1.1 定义过的旧字面量，后端改用
+ * `doing` / `done` 后已不再产出，此处仅为兼容旧数据保留显示。**不要**往回加
+ * `submitted` / `awaiting_acceptance`——PRD 与后端都没有这两个值，
+ * 「待验收」在后端是 `acceptStatus === 0`，不是 status（见 `TASK_ACCEPT_PENDING`）。
  *
  * @param status 状态串
  * @returns Tag 元信息
@@ -387,9 +390,6 @@ export function taskStatusMeta(status: string): TagMeta {
     case 'executing':
     case 'doing':
       return { label: '执行中', color: 'processing' }
-    case 'submitted':
-    case 'awaiting_acceptance':
-      return { label: '待验收', color: 'gold' }
     case 'accepted':
     case 'done':
     case 'completed':
