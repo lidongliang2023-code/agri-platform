@@ -364,6 +364,77 @@ POST /harvests/inventory/in  →  {"code":0,"message":"success","data":true}
 **回读验收（本条由 se-verify-fix 执行）**：先快照 → 调用 → 回读 → 还原。
 判据：`data` 里的 `currentQty` = 快照值 + 入库量，且台账**条数不增加**。
 
+### ✅ BT-02 回读验收结果（2026-10-10 17:06，se-verify-fix，:8095）— **PASS，已修复**
+
+> 复现用例按 team-lead 指定：**不传 `locationCode`**（这正是旧实现新造台账的那个场景）。
+> 脚本：`C:/Users/71502/AppData/Local/Temp/sevf/bt02_accept.py`（快照 → 调用 → 回读 → 还原 → 断言）。
+
+**被测 jar 的确认方式（重要，别再用 mtime 推断）**：
+我起初按"jar mtime(16:03) < commit 时间(16:31/16:46/16:54) ⇒ 不含修复"判它过期，
+**这个推断是错的**——se-backend-inv 是**先构建(16:51)后提交(16:54)**，所以 mtime 反而更早。
+改用**字节码判据**（fat jar 要解嵌套层 `BOOT-INF/lib/mod-produce-1.0.0.jar`）：
+
+```
+InventoryOperationResultKind.class  RESURRECTED:True  UPDATED:True  CREATED:True
+InventoryOperationResult.class      resultKind:True   targetResultKind:True  ledgerCreated:True
+InventoryService.class              insertOrResurrect:True  selectDeletedSlotId:True
+```
+
+**实测**（调用 → 回读）：
+
+```
+POST /harvests/inventory/in
+{"batchId":"DEMO-BATCH-004","warehouseName":"主仓库","quantity":1,"unit":"kg"}   ← 无 locationCode
+→ {"code":0,"data":{
+     "inventoryId":"DEMO-INVT-004",      ← 命中已有台账，不是新 id
+     "locationCode":"M-01-01",
+     "beforeQty":96000.00,"deltaQty":1,"currentQty":96001.00,
+     "resultKind":"UPDATED","ledgerCreated":false,
+     "flowId":"INVF202610101706087071"}}
+
+库级回读：
+  DEMO-INVT-004.current_qty  96000.00 → 96001.00
+  在用台账行数                5        → 5          （没有新造行）
+  流水行数                    5        → 6          （写了 1 条流水，符合预期）
+```
+
+**断言（7/7 通过）**：
+
+| # | 断言 | 结果 |
+| --- | --- | --- |
+| A0 | `code == 0`（且不是布尔 `true` 冒充成功） | ✅ |
+| A1 | `currentQty` **+1**（96000 → 96001） | ✅ |
+| A2 | **台账行数不变**（5 → 5） | ✅ |
+| A3' | `resultKind == "UPDATED"`（**主判据**） | ✅ |
+| A3 | `ledgerCreated == false`（兼容字段） | ✅ |
+| A4 | 响应 `currentQty` == **库里回读值**（响应不得自证） | ✅ |
+| A5 | 响应 `inventoryId == "DEMO-INVT-004"` | ✅ |
+
+**A3' / A5 是 se-backend-inv 建议后加的**，两条都补在了关键点上：
+- `resultKind` 把语义钉死（`CREATED` 新造 / `UPDATED` 累加 / `RESURRECTED` 复活墓碑），
+  `ledgerCreated` 已降级为 `= (resultKind == CREATED)` 的兼容字段；
+- A5 排除了"**改对了数但改错了行**"——只看 `currentQty` +1 的话这条漏网是存在的。
+
+**还原（表级验证，含 tombstone 计数）**：
+```
+current_qty 还原 96000.00；删除本次新增流水 1 条 INVF202610101706087071
+还原后：在用台账 5 / 墓碑(deleted=1) 0 / 物理总行数 5 / 流水 5     ✅ 与基线一致
+```
+（按 BT-57 留下的教训，这次还原**查到了表级并计入 tombstone**，没有只信应用层总数。）
+
+**未独立验证的部分（如实声明）**：`RESURRECTED`（复活墓碑）路径**我没有自己跑**——
+它需要先在 `prod_inventory` 上逻辑删出一条墓碑，属于额外的共享库写入，
+本轮未做。该路径由 se-backend-inv 自测，其报称结果为
+`resultKind=RESURRECTED / ledgerCreated=false / beforeQty=0 / inventoryId == 墓碑行原 id /
+currentQty == 本次入库量（不是 旧值+本次）`。**若需要我独立复验，请 team-lead 指派，我再动。**
+
+⚠️ **顺带修正一条我自己说错的话**：我此前提示 se-backend-inv
+"`prod_harvest_batch` 里的墓碑 `TMP-PROBE-001` 可当复活样本、可能占了 `uk_inventory_slot` 的槽位"——
+**后半句是错的**：`uk_inventory_slot` 建在 `prod_inventory` 上，
+`prod_harvest_batch` 的墓碑与它无关，不占任何槽位。
+（前半句"它是逻辑删除的运行时证据"仍然成立。）判据要盯 `deleted` 的值，**不能盯 `deleteById` 的返回行数**——
+逻辑删除返回 1 但行仍在，返回行数看不出真假。
+
 ---
 
 ## BT-03　损耗登记端点不存在
