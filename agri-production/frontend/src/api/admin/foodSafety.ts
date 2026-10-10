@@ -725,61 +725,75 @@ export interface InputComplianceQuery extends PageQuery {
   farmName?: string
 }
 
-/** 投入品合规示例数据（原型 P17 Tab1 前 4 条） */
-const INPUT_COMPLIANCE_SEEDS: Array<Omit<InputComplianceRecord, 'id' | 'checkDate'>> = [
-  { farmName: '绿源1号', inputName: '尿素', inputType: '氮肥', dosage: '50kg/亩', result: 'pass', violation: '—' },
-  { farmName: '绿源1号', inputName: '吡虫啉', inputType: '农药', dosage: '200g/亩', result: 'pass', violation: '—' },
-  { farmName: '鑫农试', inputName: 'XX农药', inputType: '农药', dosage: '150g/亩', result: 'over', violation: '用量超标50%' },
-  { farmName: '丰达A区', inputName: '草甘膦', inputType: '除草', dosage: '100g/亩', result: 'pass', violation: '—' },
-  { farmName: '惠民D区', inputName: '磷酸二铵', inputType: '磷肥', dosage: '35kg/亩', result: 'pass', violation: '—' },
-  { farmName: '大地南基地', inputName: '毒死蜱', inputType: '农药', dosage: '180g/亩', result: 'over', violation: '禁限用农药' },
-  { farmName: '中原B区', inputName: '硫酸钾', inputType: '钾肥', dosage: '28kg/亩', result: 'pass', violation: '—' },
-  { farmName: '金穗C区', inputName: '多菌灵', inputType: '杀菌剂', dosage: '120g/亩', result: 'pass', violation: '—' },
-  { farmName: '沃土E区', inputName: '赤霉酸', inputType: '调节剂', dosage: '60g/亩', result: 'over', violation: '用量超标20%' },
-  { farmName: '兴盛G区', inputName: '有机肥', inputType: '有机肥', dosage: '800kg/亩', result: 'pass', violation: '—' },
-  { farmName: '稻田H区', inputName: '乙草胺', inputType: '除草', dosage: '90g/亩', result: 'pass', violation: '—' },
-  { farmName: '麦香I区', inputName: '氯氰菊酯', inputType: '农药', dosage: '210g/亩', result: 'over', violation: '安全间隔期不足' },
-]
+/**
+ * 投入品合规台账分页结果（附带「接口不可用」原因）。
+ *
+ * 与 `listOperationLogs` 同一模板：拿不到真实数据就返回空表 + 原因，
+ * **绝不用示例数据顶上**——本 Tab 的用量、超标判定要拿去做监管举证，
+ * 看起来有数据而实际是编的，后果比空表严重得多。
+ */
+export interface InputCompliancePage extends PageResult<InputComplianceRecord> {
+  /**
+   * 接口不可用原因。
+   *
+   * 非空表示本次没有拿到任何真实台账记录，页面必须显式告知用户「未接入」，
+   * 不得回落到原型示例口径。
+   */
+  unavailableReason?: string
+}
 
-/** 投入品合规 Mock 库 */
-const INPUT_COMPLIANCE_STORE: InputComplianceRecord[] = INPUT_COMPLIANCE_SEEDS.map((seed, index) => ({
-  ...seed,
-  id: `REC${String(index + 1).padStart(3, '0')}`,
-  checkDate: index < 4 ? '2025-07-14' : '2025-07-13',
-}))
-
-/** 分页查询投入品合规台账 */
+/**
+ * 分页查询投入品合规台账。
+ *
+ * ⚠️ 实测（core-app :8098）：`GET /admin/food-safety/compliance/inputs` 返回
+ * `code=500 系统繁忙`，且与请求 `/admin/food-safety/zzz-not-exist` **完全一致**——
+ * 按 page-patrol 的判定法，这是**整个 `/admin/food-safety/**` 前缀都没有端点**
+ * （`NoResourceFoundException`），不是"暂时没数据"。
+ *
+ * 因此这里**取消原型示例数据回落**（原 `INPUT_COMPLIANCE_STORE` 12 条种子已删除）：
+ * 接口失败一律返回空表 + `unavailableReason`，由页面醒目提示。
+ *
+ * @param params 查询参数
+ * @returns 分页结果，含可能的不可用原因
+ */
 export async function listInputCompliance(
   params: InputComplianceQuery,
-): Promise<PageResult<InputComplianceRecord>> {
+): Promise<InputCompliancePage> {
+  const empty: InputCompliancePage = {
+    list: [],
+    total: 0,
+    pageNum: params.pageNum ?? 1,
+    pageSize: params.pageSize ?? 10,
+    pages: 0,
+  }
   try {
-    const res = await http.get<PageResult<InputComplianceRecord>>(`${BASE}/compliance/inputs`, params, {
-      silent: true,
-    })
+    const res = await http.get<PageResult<InputComplianceRecord>>(
+      `${BASE}/compliance/inputs`,
+      params,
+      { silent: true },
+    )
     if (res && Array.isArray(res.list)) {
       markSource('inputs', false)
-      return res
+      return res.list.length > 0
+        ? { ...res }
+        : { ...res, unavailableReason: '后端 /admin/food-safety/compliance/inputs 已请求成功，但未返回任何台账记录' }
     }
-  } catch {
-    /* 接口未就绪，降级到原型示例口径 */
+    markSource('inputs', false)
+    return {
+      ...empty,
+      unavailableReason: '后端 /admin/food-safety/compliance/inputs 返回结构不是分页数据（缺少 list 数组）',
+    }
+  } catch (error) {
+    markSource('inputs', false)
+    const apiError = asApiRequestError(error)
+    const detail = (error as Error)?.message?.trim() || '请求失败'
+    return {
+      ...empty,
+      unavailableReason:
+        `投入品合规台账接口不可用（${apiError ? `后端业务码 ${apiError.bizCode}` : `HTTP ${httpStatusOf(error) || '网络异常'}`}）：${detail}。` +
+        '实测该请求与请求一个确定不存在的路径返回一致，判定为后端 /admin/food-safety/** 前缀暂无端点',
+    }
   }
-  const filtered = INPUT_COMPLIANCE_STORE.filter((item) => {
-    if (params.result && params.result !== 'all' && item.result !== params.result) {
-      return false
-    }
-    if (params.farmName && !item.farmName.includes(params.farmName.trim())) {
-      return false
-    }
-    if (params.keyword) {
-      const keyword = params.keyword.trim()
-      if (keyword && !item.inputName.includes(keyword) && !item.id.includes(keyword)) {
-        return false
-      }
-    }
-    return true
-  })
-  markSource('inputs', true)
-  return pageOf(filtered, params.pageNum, params.pageSize)
 }
 
 /** 处罚入参 */
@@ -970,15 +984,25 @@ export interface StandardCheckItem {
 }
 
 /** 标准校验汇总 */
+/**
+ * 标准校验汇总。
+ *
+ * ⚠️ 四个字段均允许 `null`，语义是「后端未提供该数据源」，**不能用 0 代替**。
+ * 原因：后端 `/compliance/standards/{no}/summary` 一旦先于标准库上线，
+ * 下拉里会出现后端返回的新标准号，而该标准在示例汇总里没有对应条目；
+ * 若此处回落成 0，页面会显示「0 批 / 通过率 0%」，
+ * 看起来像"校验跑过了、结果是零"，实际是根本没有数据——属于用 0 冒充真实结果。
+ * 正确做法是回落到 null，由页面按 `MetricStatistic` 显示「—」并说明原因。
+ */
 export interface StandardCheckSummary {
-  /** 校验批次总数 */
-  batchCount: number
-  /** 通过批次数 */
-  passCount: number
-  /** 不通过批次数 */
-  failCount: number
-  /** 通过率（%） */
-  passRate: number
+  /** 校验批次总数；null = 后端未提供 */
+  batchCount: number | null
+  /** 通过批次数；null = 后端未提供 */
+  passCount: number | null
+  /** 不通过批次数；null = 后端未提供 */
+  failCount: number | null
+  /** 通过率（%）；null = 后端未提供 */
+  passRate: number | null
 }
 
 /** 标准库下拉（补充设计） */
@@ -990,8 +1014,13 @@ export const STANDARD_LIBRARY: StandardLibraryItem[] = [
   { value: 'GBT19630-2019', label: 'GB/T 19630-2019 有机产品 生产、加工、标识与管理体系', issuer: '国家市场监督管理总局' },
 ]
 
-/** 各标准校验汇总（补充设计；合计 1240 批 / 通过 1151 批 → 通过率 92.8%，与原型 4.2 口径一致） */
-const STANDARD_SUMMARY: Record<string, Omit<StandardCheckSummary, 'passRate'>> = {
+/**
+ * 各标准校验汇总（补充设计；合计 1240 批 / 通过 1151 批 → 通过率 92.8%，与原型 4.2 口径一致）。
+ *
+ * 这里刻意不复用 `StandardCheckSummary`：本映射是**具体条目**，三个计数恒为数字；
+ * 对外接口才允许 null（表示"取不到条目"）。两者语义不同，不能共用同一类型。
+ */
+const STANDARD_SUMMARY: Record<string, { batchCount: number; passCount: number; failCount: number }> = {
   'GB2762-2022': { batchCount: 320, passCount: 295, failCount: 25 },
   'GB2763-2021': { batchCount: 410, passCount: 380, failCount: 30 },
   'GB7718-2011': { batchCount: 260, passCount: 244, failCount: 16 },
@@ -1075,8 +1104,13 @@ export async function getStandardCheckSummary(standardNo: string): Promise<Stand
     /* 接口未就绪，降级到示例数据 */
   }
   markSource('standard-summary', true)
-  const raw = STANDARD_SUMMARY[standardNo] ?? { batchCount: 0, passCount: 0, failCount: 0 }
-  const passRate = raw.batchCount > 0 ? Number(((raw.passCount / raw.batchCount) * 100).toFixed(1)) : 0
+  const raw = STANDARD_SUMMARY[standardNo]
+  if (!raw) {
+    // 该标准在示例汇总里没有条目：回落到 null（未接入），绝不回落成 0
+    return { batchCount: null, passCount: null, failCount: null, passRate: null }
+  }
+  const passRate =
+    raw.batchCount > 0 ? Number(((raw.passCount / raw.batchCount) * 100).toFixed(1)) : 0
   return { ...raw, passRate }
 }
 
@@ -1829,4 +1863,74 @@ export async function enqueueResource(payload: EnqueuePayload): Promise<WriteRes
  *
  * 因此全部写操作按「情况 B：诚实降级」处理：返回 WriteResult 显式失败，
  * 不改动任何本地数据，页面据 ok 字段决定提示成功还是失败。
+ */
+
+/* ==================== 前端字段对照表（后端上线时补「后端字段」列） ==================== */
+
+/*
+ * 用途：后端补齐 /admin/food-safety/* 时，照这张表做键名比对，避免照着原型或 README
+ * 写前端 type 导致大面积错位（参照采收模块 planNo↔recordId、quantity↔qty 的教训）。
+ *
+ * 用法：后端 Entity 定稿后，在每行末尾补上后端字段名；不一致的按项目纪律改**前端**键名，
+ * 不改后端契约。后端没有的字段，前端显示「— / 未接入」（用 MetricStatistic / MetricText）。
+ *
+ * 图例：⟨待补⟩ = 后端字段列还没填。
+ *
+ * ── P15 食品安全监控中心（Index.tsx）──────────────────────────────
+ * FoodSafetyMetrics  safetyIndex ⟨待补⟩ / safetyIndexDelta ⟨待补⟩ / passRate ⟨待补⟩
+ *                    passRateDelta ⟨待补⟩ / alertCount ⟨待补⟩ / urgentAlertCount ⟨待补⟩
+ *                    compliancePassRate ⟨待补⟩ / coldChainPassRate ⟨待补⟩
+ * FarmRiskItem       farmId ⟨待补⟩ / farmName ⟨待补⟩ / score ⟨待补⟩
+ * FoodSafetyAlert    id ⟨待补⟩ / type ⟨待补⟩ / target ⟨待补⟩ / code ⟨待补⟩ / time ⟨待补⟩
+ *                    level ⟨待补⟩ / status ⟨待补⟩ / measure? ⟨待补⟩
+ * AlertHandlePayload measure ⟨待补⟩ / remark? ⟨待补⟩        ← 写操作入参
+ *
+ * ── P16 流通异常检测（Circulation.tsx）────────────────────────────
+ * CirculationRecord  id ⟨待补⟩ / foundAt ⟨待补⟩ / batchNo ⟨待补⟩ / product ⟨待补⟩
+ *                    type ⟨待补⟩ / severity ⟨待补⟩ / impact ⟨待补⟩ / status ⟨待补⟩
+ *                    foundDate ⟨待补⟩ / measure? ⟨待补⟩
+ * CirculationQuery   type? ⟨待补⟩ / severity? ⟨待补⟩ / date? ⟨待补⟩
+ * CirculationHandlePayload action ⟨待补⟩ / remark ⟨待补⟩  ← 写操作入参
+ *
+ * ── P17 合规校验管理（Compliance.tsx）─────────────────────────────
+ * InputComplianceRecord id ⟨待补⟩ / farmName ⟨待补⟩ / inputName ⟨待补⟩ / inputType ⟨待补⟩
+ *                    dosage ⟨待补⟩ / result ⟨待补⟩ / violation ⟨待补⟩ / checkDate ⟨待补⟩
+ * PunishPayload      action ⟨待补⟩ / amount ⟨待补⟩ / remark ⟨待补⟩   ← 写操作入参
+ *                    ⚠️ 后端 prod_input_usage 无处罚/金额字段，需后端先扩表
+ * LabelComplianceRecord id ⟨待补⟩ / productName ⟨待补⟩ / producer ⟨待补⟩ / labelVersion ⟨待补⟩
+ *                    requiredFields ⟨待补⟩ / filledFields ⟨待补⟩ / missingFields ⟨待补⟩
+ *                    marking ⟨待补⟩ / markingNote ⟨待补⟩ / result ⟨待补⟩ / checkedAt ⟨待补⟩
+ *                    rectifyStatus ⟨待补⟩
+ *                    ⚠️ 后端无 prod_label_* 表，唯一带 rectify_* 的是 prod_farm_compliance_check
+ * StandardLibraryItem value ⟨待补⟩ / label ⟨待补⟩ / issuer ⟨待补⟩
+ * StandardCheckItem  id ⟨待补⟩ / standardNo ⟨待补⟩ / itemName ⟨待补⟩ / limitValue ⟨待补⟩
+ *                    measuredValue ⟨待补⟩ / result ⟨待补⟩ / batchNo ⟨待补⟩
+ * StandardCheckSummary batchCount ⟨待补⟩ / passCount ⟨待补⟩ / failCount ⟨待补⟩ / passRate ⟨待补⟩
+ *                    ⚠️ 四字段均允许 null（后端未提供），**不得用 0 代替**
+ * StandardRunPayload standardNo ⟨待补⟩ / batchScope ⟨待补⟩        ← 写操作入参
+ *
+ * ── P18 可信农产品管理（TrustLabel.tsx）───────────────────────────
+ * TrustProduct       id ⟨待补⟩ / name ⟨待补⟩ / category ⟨待补⟩ / producer ⟨待补⟩
+ *                    level ⟨待补⟩ / score ⟨待补⟩ / cert ⟨待补⟩ / validUntil ⟨待补⟩
+ *                    auditStatus ⟨待补⟩ / certOrg ⟨待补⟩
+ *                    ⚠️ 后端无可信农产品实体表；审核落点建议 prod_approval
+ *                       （通用 biz_type/biz_id，现有取值 CERT / RECALL / QUOTA）
+ * TrustStats         total ⟨待补⟩ / diamond ⟨待补⟩ / gold ⟨待补⟩ / silver ⟨待补⟩ / normal ⟨待补⟩
+ * TrustProductUpdatePayload level ⟨待补⟩ / score ⟨待补⟩ / cert ⟨待补⟩ / certOrg ⟨待补⟩
+ *                    validUntil ⟨待补⟩                            ← 写操作入参
+ * TrustAuditPayload  action ⟨待补⟩ / remark ⟨待补⟩                 ← 写操作入参
+ *
+ * ── P19 冷链资源撮合（ColdChain.tsx）──────────────────────────────
+ * ColdChainResource  id ⟨待补⟩ / name ⟨待补⟩ / type ⟨待补⟩ / typeLabel ⟨待补⟩ / spec ⟨待补⟩
+ *                    tempRange ⟨待补⟩ / city ⟨待补⟩ / district ⟨待补⟩ / status ⟨待补⟩
+ *                    rating ⟨待补⟩ / contact ⟨待补⟩ / phone ⟨待补⟩ / lastMaintainDate ⟨待补⟩
+ * ColdChainStats     total ⟨待补⟩ / available ⟨待补⟩ / busy ⟨待补⟩ / offline ⟨待补⟩
+ *                    matchRate ⟨待补⟩
+ * MatchRecord        id ⟨待补⟩ / demander ⟨待补⟩ / supplier ⟨待补⟩ / resourceType ⟨待补⟩
+ *                    time ⟨待补⟩ / status ⟨待补⟩ / cargo ⟨待补⟩ / tempRequire ⟨待补⟩ / remark ⟨待补⟩
+ * MatchPayload       resourceId ⟨待补⟩ / demander ⟨待补⟩ / cargo ⟨待补⟩ / startTime ⟨待补⟩
+ *                    tempRequire ⟨待补⟩ / remark? ⟨待补⟩           ← 写操作入参
+ * EnqueuePayload     resourceId ⟨待补⟩ / expectTime ⟨待补⟩ / demander ⟨待补⟩ / remark? ⟨待补⟩
+ *                                                                  ← 写操作入参
+ *                    ⚠️ 后端无冷链资源 / 撮合表（检索 cold-chain / 冷链 零命中）
  */

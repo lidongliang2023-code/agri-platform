@@ -45,6 +45,7 @@ import {
   WarningOutlined,
 } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { MetricStatistic, MetricText } from '@/components'
 import ReactECharts from 'echarts-for-react'
 import type { EChartsOption } from 'echarts'
 import {
@@ -186,6 +187,9 @@ function InputComplianceTab(): JSX.Element {
     },
   })
 
+  /** 台账「未接入」原因（非空表示本次没拿到任何真实记录，示例数据已不再回落） */
+  const complianceUnavailableReason: string | undefined = listQuery.data?.unavailableReason
+
   /** 全量数据 */
   const allRecords = statsQuery.data?.list ?? []
   /** 合规条数 */
@@ -253,15 +257,22 @@ function InputComplianceTab(): JSX.Element {
 
   return (
     <div>
-      {/* 示例数据明示（食品安全为合规强相关数据，禁止静默降级） */}
-      {isMockSource('inputs') && (
+      {/* 台账未接入：后端 /admin/food-safety/** 暂无端点，此处**不再**回落原型示例数据 */}
+      {complianceUnavailableReason && (
         <Alert
           type="warning"
           showIcon
           banner
           style={{ marginBottom: 12 }}
-          message="当前展示示例数据，后端接口建设中"
-          description="投入品用量、超标判定与处罚金额属于合规强相关数据：本台账取自原型示例口径（原型 P17 Tab1），不具有监管效力。后端 /admin/food-safety/compliance/inputs 接口上线后本 Tab 将自动切换真实数据。"
+          message="投入品合规台账未接入：后端暂无 /admin/food-safety/compliance/inputs 端点，本 Tab 不展示任何示例数据"
+          description={
+            <span>
+              原因：{complianceUnavailableReason}。投入品用量、超标判定与处罚金额属于合规强相关
+              数据，<strong>不会</strong>用原型示例口径（原型 P17 Tab1）占位——看起来有数据而实际
+              是编的，在监管举证场景下后果比空表严重得多。接口上线后本提示自动消失，表格、
+              统计卡与筛选即恢复可用。
+            </span>
+          }
         />
       )}
 
@@ -280,18 +291,29 @@ function InputComplianceTab(): JSX.Element {
       <Row gutter={[12, 12]} style={{ marginBottom: 12 }}>
         <Col xs={24} sm={8}>
           <Card>
-            <Statistic title="校验记录总数" value={allRecords.length} />
+            {/* 台账未接入时显示「—」而不是 0：0 会被读成"查过了，没有记录" */}
+            <Statistic title="校验记录总数" value={complianceUnavailableReason ? '—' : allRecords.length} />
           </Card>
         </Col>
         <Col xs={24} sm={8}>
           <Card>
-            <Statistic title="合规记录" value={passCount} valueStyle={{ color: '#52c41a' }} />
+            <Statistic
+              title="合规记录"
+              value={complianceUnavailableReason ? '—' : passCount}
+              valueStyle={{ color: '#52c41a' }}
+            />
           </Card>
         </Col>
         <Col xs={24} sm={8}>
           <Card>
-            <Statistic title="超标记录" value={overCount} valueStyle={{ color: '#ff4d4f' }} />
-            <Text type="secondary">合规率 {passRate}%</Text>
+            <Statistic
+              title="超标记录"
+              value={complianceUnavailableReason ? '—' : overCount}
+              valueStyle={{ color: '#ff4d4f' }}
+            />
+            <Text type="secondary">
+              合规率 {complianceUnavailableReason ? '—' : `${passRate}%`}
+            </Text>
           </Card>
         </Col>
       </Row>
@@ -898,18 +920,33 @@ function StandardCheckTab(): JSX.Element {
   const library: StandardLibraryItem[] = libraryQuery.data ?? STANDARD_LIBRARY
   /** 当前标准 */
   const currentStandard = library.find((item) => item.value === standardNo)
-  /** 汇总数据 */
+  /**
+   * 汇总数据。
+   *
+   * 缺省值一律为 `null`（未接入），**不是 0**：查询失败或该标准无汇总数据时，
+   * 显示「0 批 / 通过率 0%」会被读成"校验执行过、结果为零"，实际是根本没有数据。
+   */
   const summary: StandardCheckSummary = summaryQuery.data ?? {
-    batchCount: 0,
-    passCount: 0,
-    failCount: 0,
-    passRate: 0,
+    batchCount: null,
+    passCount: null,
+    failCount: null,
+    passRate: null,
   }
+  /** 汇总缺失时的提示语（带具体标准号，比通用文案可诊断） */
+  const summaryMissingTip = `未接入：后端未提供标准 ${standardNo} 的校验汇总，显示为「—」而非 0，接口补齐后自动填充`
   /** 校验项 */
   const items: StandardCheckItem[] = itemsQuery.data ?? []
 
-  /** 通过率仪表盘配置 */
-  const gaugeOption: EChartsOption = {
+  /**
+   * 通过率仪表盘配置。
+   *
+   * 通过率为 `null`（未接入）时**不构造图表**，改由页面展示「—」+ 说明，
+   * 避免把 null 兜成 0 画出一个指向 0% 的仪表盘（那等于宣称"校验跑过、通过率为零"）。
+   */
+  const gaugeOption: EChartsOption | null =
+    summary.passRate === null
+      ? null
+      : {
     tooltip: { formatter: '{a}：{c}%' },
     series: [
       {
@@ -1045,17 +1082,29 @@ function StandardCheckTab(): JSX.Element {
       <Row gutter={[12, 12]} style={{ marginBottom: 12 }}>
         <Col xs={24} sm={12} xl={6}>
           <Card>
-            <Statistic title="校验批次总数" value={summary.batchCount} suffix="批" />
+            <MetricStatistic title="校验批次总数" value={summary.batchCount} suffix="批" missingTip={summaryMissingTip} />
           </Card>
         </Col>
         <Col xs={24} sm={12} xl={6}>
           <Card>
-            <Statistic title="通过批次" value={summary.passCount} suffix="批" valueStyle={{ color: '#52c41a' }} />
+            <MetricStatistic
+              title="通过批次"
+              value={summary.passCount}
+              suffix="批"
+              valueStyle={{ color: '#52c41a' }}
+              missingTip={summaryMissingTip}
+            />
           </Card>
         </Col>
         <Col xs={24} sm={12} xl={6}>
           <Card>
-            <Statistic title="不通过批次" value={summary.failCount} suffix="批" valueStyle={{ color: '#ff4d4f' }} />
+            <MetricStatistic
+              title="不通过批次"
+              value={summary.failCount}
+              suffix="批"
+              valueStyle={{ color: '#ff4d4f' }}
+              missingTip={summaryMissingTip}
+            />
           </Card>
         </Col>
         <Col xs={24} sm={12} xl={6}>
@@ -1063,6 +1112,10 @@ function StandardCheckTab(): JSX.Element {
             {summaryQuery.isLoading ? (
               <div style={{ height: 130, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Text type="secondary">加载中…</Text>
+              </div>
+            ) : gaugeOption === null ? (
+              <div style={{ height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <MetricText value={null} missingTip={summaryMissingTip} />
               </div>
             ) : (
               <ReactECharts option={gaugeOption} style={{ height: 180 }} notMerge />
