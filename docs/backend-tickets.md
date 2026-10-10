@@ -521,6 +521,24 @@ quotaUsageRate / activeDays / revenue / strategy` …），后端**没有任何�
 
 **期望语义**：真正产出报表文件并返回可下载的真实地址；或明确该能力未实现。
 
+### 补充实测（2026-10-10，:8097）：真调一次 generate，证明「产物不存在」
+
+上面只证了端点存在（`NOPE` → 404）。这里**真调用一次**（`DEMO-RPT-002`，测后已用 mysql 还原）：
+
+```
+BEFORE            {"status":"PENDING","generatedAt":null,"fileUrl":null}
+POST /generate    code=0 → {"status":"DONE","generatedAt":"2026-10-10 15:20:17",
+                            "fileUrl":"/report/DEMO-RPT-002.xlsx"}
+
+GET /report/DEMO-RPT-002.xlsx   → HTTP 200  响应体 {"code":500,"message":"系统繁忙，请稍后重试"}
+GET /report/NOPE-999.xlsx       → HTTP 200  响应体 **完全一致**      ← 对照组
+```
+
+关键：**HTTP 是 200**（JSON 包装体），不是 404，所以只看 HTTP 状态会以为文件在。
+对"生成出来的文件名"和"根本不存在的文件名"请求，**返回完全相同** → 产物确实不存在。
+
+`DEMO-RPT-002` 已还原为 `status=PENDING / generatedAt=null / fileUrl=null` 并回读确认。
+
 ---
 
 ## 附：`admin/reports` 域已验证有真数据的端点
