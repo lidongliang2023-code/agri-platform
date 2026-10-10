@@ -101,6 +101,63 @@ function normalizePageData<T>(data: unknown): T | PageData<T> {
   return data as T
 }
 
+/**
+ * 分页入参的最小形状。
+ *
+ * 后端主参数名是 `page` / `size`，前端页面统一用 `pageNum` / `pageSize`
+ * （由 PageParamAliasFilter 做等价兼容），此处两者都接受。
+ */
+export interface PageQueryLike {
+  /** 页码，从 1 开始 */
+  pageNum?: number
+  /** 页码别名，与 pageNum 等价 */
+  page?: number
+  /** 每页条数 */
+  pageSize?: number
+  /** 每页条数别名，与 pageSize 等价 */
+  size?: number
+}
+
+/**
+ * 把「后端直接返回裸数组」的响应适配成前端统一分页结构。
+ *
+ * 背景：响应拦截器里的 `normalizePageData` 只认 `{ records: [...] }` 这一种
+ * 分页结构，`data` 是裸数组时它原样透传，导致声明了
+ * `Promise<PageResult<T>>` 的 api 函数实际返回一个数组，页面解构出的 `list`
+ * 恒为 `undefined`。本函数把裸数组补成完整的 `PageResult`，使页面无需改动。
+ *
+ * 幂等：入参已经是归一化分页结构（含 `list` 数组）时原样返回，
+ * 因此后端日后改成真 PageResult 也不需要改调用方。
+ *
+ * @param raw 接口解包后的业务数据（裸数组 / 已归一化的分页对象 / 其他）
+ * @param params 本次请求的分页入参，用于回填 pageNum / pageSize
+ * @returns 前端统一分页结构；无法识别时返回空分页（`list` 为空数组，不是 undefined）
+ */
+export function toPageResult<T>(raw: unknown, params: PageQueryLike = {}): PageData<T> {
+  const pageNum = toNumber(params.pageNum ?? params.page, 1)
+  const pageSize = toNumber(params.pageSize ?? params.size, 10)
+
+  // 已经是归一化分页结构（拦截器处理过真 PageResult）：原样返回
+  if (raw && typeof raw === 'object' && Array.isArray((raw as PageData<T>).list)) {
+    return raw as PageData<T>
+  }
+
+  // 裸数组：后端未做分页，整表就是一页
+  if (Array.isArray(raw)) {
+    const list = raw as T[]
+    return {
+      list,
+      total: list.length,
+      pageNum,
+      pageSize,
+      pages: pageSize > 0 ? Math.ceil(list.length / pageSize) : 0,
+    }
+  }
+
+  // 无法识别（null / 非数组对象 / 异常形状）：返回空分页，绝不返回 undefined
+  return { list: [], total: 0, pageNum, pageSize, pages: 0 }
+}
+
 /** 业务成功码 */
 export const SUCCESS_CODE = 0
 

@@ -1,7 +1,7 @@
 /**
  * 运营端 - 统计报表 API
  */
-import { http } from '@/utils/request'
+import { http, toPageResult } from '@/utils/request'
 import type { PageQuery, PageResult } from '@/types'
 import type { ReportItem } from '@/types'
 
@@ -54,11 +54,20 @@ export function generateProductionReport(payload: {
   return http.post<ReportItem>(`${BASE}/production`, payload)
 }
 
-/** 分页查询质量报表 */
-export function listQualityReports(
+/**
+ * 分页查询质量报表
+ *
+ * ⚠️ 实测（core-app 直连）：`GET /api/v1/production/admin/reports/quality`
+ * 返回 `{ code: 0, data: [...] }`——`data` 是**裸数组**而非 PageResult
+ * （后端 AdminReportController#quality 直接返回 List，且不接受 page/size）。
+ * 裸数组不会被响应拦截器归一化，调用方拿不到 `list`。用 `toPageResult` 补成
+ * 分页结构，函数签名保持不变，页面（AdminQualityReport.tsx）无需改动。
+ */
+export async function listQualityReports(
   params: PageQuery & { period?: string; tenantId?: string },
 ): Promise<PageResult<ReportItem>> {
-  return http.get<PageResult<ReportItem>>(`${BASE}/quality`, params)
+  const raw = await http.get<unknown>(`${BASE}/quality`, params)
+  return toPageResult<ReportItem>(raw, params)
 }
 
 /** 生成质量报表 */

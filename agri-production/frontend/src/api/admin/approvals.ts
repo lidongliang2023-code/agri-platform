@@ -1,7 +1,7 @@
 /**
  * 运营端 - 审批管理 API
  */
-import { http } from '@/utils/request'
+import { http, toPageResult } from '@/utils/request'
 import type { PageQuery, PageResult } from '@/types'
 import type { Approval, ApprovalFlowConfig } from '@/types'
 
@@ -62,11 +62,23 @@ export function listApprovalHistory(
   return http.get<PageResult<Approval>>(`${BASE}/history`, params)
 }
 
-/** 分页查询审批流程配置 */
-export function listApprovalFlows(
+/**
+ * 分页查询审批流程配置
+ *
+ * ⚠️ 实测（core-app 直连）：`GET /api/v1/production/admin/approvals/config`
+ * 返回 `{ code: 0, data: [...] }`——`data` 是**裸数组**而非 PageResult
+ * （后端 AdminApprovalController#config 直接返回 List，且不接受 page/size）。
+ * 响应拦截器的 `normalizePageData` 只认 `{ records: [...] }`，裸数组会原样透传，
+ * 调用方解构出的 `list` 恒为 undefined。故在此统一用 `toPageResult` 补成分页结构。
+ *
+ * 函数签名保持 `Promise<PageResult<ApprovalFlowConfig>>` 不变，
+ * 页面（ApprovalConfig.tsx）无需改动。
+ */
+export async function listApprovalFlows(
   params: PageQuery & { approvalType?: number },
 ): Promise<PageResult<ApprovalFlowConfig>> {
-  return http.get<PageResult<ApprovalFlowConfig>>(`${BASE}/config`, params)
+  const raw = await http.get<unknown>(`${BASE}/config`, params)
+  return toPageResult<ApprovalFlowConfig>(raw, params)
 }
 
 /** 查询审批流程配置详情 */

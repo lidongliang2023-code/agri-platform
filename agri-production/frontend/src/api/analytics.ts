@@ -1,7 +1,7 @@
 /**
  * 数据分析与报表 API
  */
-import { http } from '@/utils/request'
+import { http, toPageResult } from '@/utils/request'
 import type { PageQuery, PageResult } from '@/types'
 import type { AnalyticsOverview, ProductionOverview, ReportItem, TrendPoint } from '@/types'
 
@@ -39,11 +39,21 @@ export function getTaskTrend(params: {
   return http.get<TrendPoint[]>(`${BASE}/task-trend`, params)
 }
 
-/** 分页查询生产报表 */
-export function listReports(
+/**
+ * 分页查询生产报表
+ *
+ * ⚠️ 实测（core-app 直连）：`GET /api/v1/production/analytics/reports`
+ * 返回 `{ code: 0, data: [...] }`——`data` 是**裸数组**而非 PageResult
+ * （后端 AnalyticsController#reports 直接返回 List<Map>，且不接受 page/size）。
+ * 裸数组不会被响应拦截器归一化，页面（ProductionReports.tsx）拿到的
+ * `list` 恒为 undefined 而误判成「接口失败」并回落示例数据。
+ * 用 `toPageResult` 补成分页结构，函数签名保持不变，页面无需改动。
+ */
+export async function listReports(
   params: PageQuery & { reportType?: number; period?: string },
 ): Promise<PageResult<ReportItem>> {
-  return http.get<PageResult<ReportItem>>(`${BASE}/reports`, params)
+  const raw = await http.get<unknown>(`${BASE}/reports`, params)
+  return toPageResult<ReportItem>(raw, params)
 }
 
 /** 生成生产报表 */
