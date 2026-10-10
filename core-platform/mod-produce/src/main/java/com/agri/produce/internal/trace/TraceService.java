@@ -110,7 +110,7 @@ public class TraceService {
     /**
      * 生成一个未被占用的溯源码。
      *
-     * <p>码值形如 {@code TRC + batchNo + 四位随机后缀}（{@code nextInt(1000, 9999)}）。
+     * <p>码值形如 {@code TRC + batchNo + 四位随机后缀}（{@code nextInt(1000, 10000)}）。
      * 随机后缀会碰撞，所以先按 {@code code} 查重再决定是否采用；
      * 连续碰撞到上限就明确报错，而不是把唯一键冲突抛成 500。</p>
      *
@@ -120,7 +120,9 @@ public class TraceService {
      */
     private String generateUniqueCode(String batchNo, String batchId) {
         for (int attempt = 1; attempt <= CODE_GENERATE_MAX_RETRY; attempt += 1) {
-            String candidate = "TRC" + batchNo + ThreadLocalRandom.current().nextInt(1000, 9999);
+            // Random#nextInt(origin, bound) 是左闭右开，取满 1000~9999 共 9000 个值
+            // 必须写 nextInt(1000, 10000)；写成 9999 会漏掉 9999 本身，只剩 8999 个。
+            String candidate = "TRC" + batchNo + ThreadLocalRandom.current().nextInt(1000, 10000);
             Long used = traceCodeMapper.selectCount(new LambdaQueryWrapper<TraceCodeEntity>()
                     .eq(TraceCodeEntity::getCode, candidate));
             if (used == null || used == 0L) {

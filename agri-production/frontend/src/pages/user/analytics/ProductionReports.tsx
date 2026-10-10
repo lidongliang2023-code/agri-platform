@@ -19,6 +19,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  Alert,
   App as AntdApp,
   Button,
   Card,
@@ -59,6 +60,7 @@ import {
   unsubscribeReport,
 } from '@/api/analytics'
 import { formatNumber } from '@/utils/production-adapter'
+import { hasNonEmptyTextFields } from '@/utils/shape-guard'
 import type { ReportItem, ReportType } from '@/types'
 import type { ReportSubscription, SubscribePeriod } from '@/api/analytics'
 
@@ -326,12 +328,38 @@ export default function ProductionReports(): JSX.Element {
     }
   }
 
-  const remoteRows: ReportItem[] = listQuery.data?.list ?? []
+  /** 接口原始返回行（形状未校验，可能是指标快照而不是报表） */
+  const rawRows: ReportItem[] = listQuery.data?.list ?? []
+  /**
+   * 形状校验（实测依据见 @/utils/shape-guard）：
+   * `GET /analytics/reports` 当前返回的是**指标快照**
+   * `{ metricCode, metricName, metricValue, unit, bizDate }`，不是报表——
+   * 没有 reportId / reportName / reportType / period。
+   * 因此以「同时具备 reportId 与 reportName」作为「这是一份报表」的最小必要形状，
+   * 不满足的行一律不展示（不能用指标冒充报表行：三列全空比空列表更难读）。
+   */
+  const remoteRows: ReportItem[] = rawRows.filter((item) =>
+    hasNonEmptyTextFields(item, ['reportId', 'reportName']),
+  )
+  /**
+   * 接口通了、也返了数据，但没有一行是报表。
+   *
+   * 当前 `/analytics/reports` 就是这种情况（返回指标快照）。此时**不**回落示例
+   * 报表（会掩盖真实状态），也**不**把指标拼成报表行（三列全空更难读），
+   * 走空态 + 明示说明，把「后端返回的是什么」直接写给使用者看。
+   */
+  const shapeMismatch: boolean =
+    !listQuery.isLoading && rawRows.length > 0 && remoteRows.length === 0
   const usingFallback: boolean =
-    !listQuery.isLoading && (listQuery.isError || remoteRows.length === 0)
+    !listQuery.isLoading &&
+    !shapeMismatch &&
+    (listQuery.isError || remoteRows.length === 0)
 
   /** 最终报表数据 */
   const { rows, total } = useMemo<{ rows: ReportItem[]; total: number }>(() => {
+    if (shapeMismatch) {
+      return { rows: [], total: 0 }
+    }
     if (!usingFallback) {
       return { rows: remoteRows, total: listQuery.data?.total ?? 0 }
     }
@@ -343,7 +371,17 @@ export default function ProductionReports(): JSX.Element {
     })
     const start = (pageNum - 1) * pageSize
     return { rows: filtered.slice(start, start + pageSize), total: filtered.length }
-  }, [usingFallback, remoteRows, listQuery.data?.total, typeFilter, keyword, pageNum, pageSize, extraReports])
+  }, [
+    shapeMismatch,
+    usingFallback,
+    remoteRows,
+    listQuery.data?.total,
+    typeFilter,
+    keyword,
+    pageNum,
+    pageSize,
+    extraReports,
+  ])
 
   /**
    * 提交生成报表
@@ -640,6 +678,27 @@ export default function ProductionReports(): JSX.Element {
               onSearch={() => setPageNum(1)}
             />
           </Space>
+
+          {shapeMismatch && (
+            <Alert
+              showIcon
+              type="warning"
+              style={{ margin: '12px 0' }}
+              message="后端 /analytics/reports 当前未返回报表数据"
+              description={
+                <Space direction="vertical" size={2}>
+                  <Text>
+                    该接口本次返回 {rawRows.length} 条记录，均为指标快照（metricCode /
+                    metricName / metricValue / unit / bizDate），不含 reportId / reportName /
+                    reportType，因此不作为报表行展示。
+                  </Text>
+                  <Text>
+                    下方列表为空即为真实状态；「生成报表」创建的报表仅保存在本地，不会写入服务端。
+                  </Text>
+                </Space>
+              }
+            />
+          )}
 
           {usingFallback && (
             <Empty

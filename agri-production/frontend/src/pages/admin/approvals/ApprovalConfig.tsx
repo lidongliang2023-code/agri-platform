@@ -46,6 +46,7 @@ import {
   updateApprovalFlow,
 } from '@/api'
 import { DemoDataAlert } from '@/components'
+import { hasNonEmptyTextFields } from '@/utils/shape-guard'
 import type { ApprovalFlowConfig, ApprovalNodeConfig } from '@/types'
 
 /** 运营端审批类型：1 租户注册 2 配额调整 3 农场停用 4 数据导出 */
@@ -114,10 +115,15 @@ interface TimeoutEscalation {
   notifyBySms: boolean
 }
 
-/** 流程配置扩展模型 */
-interface FlowRow extends ApprovalFlowConfig {
-  /** 审批类型 */
-  approvalType: AdminApprovalType
+/**
+ * 流程配置扩展模型
+ *
+ * `approvalType` 用 `Omit` 摘掉后重新声明为**可选**：后端一旦没给审批类型，
+ * 页面必须显示「未指定」，不能靠 `?? 1` 硬塞成「租户注册」——那是凭空造标签。
+ */
+interface FlowRow extends Omit<ApprovalFlowConfig, 'approvalType'> {
+  /** 审批类型；后端未返回有效值时为 undefined，页面显示「未指定」 */
+  approvalType?: AdminApprovalType
   /** 条件路由列表 */
   conditionRoutes: ConditionRoute[]
   /** 超时升级规则列表 */
@@ -280,15 +286,32 @@ export default function ApprovalConfig(): JSX.Element {
     queryFn: async (): Promise<{ flows: FlowRow[]; demo: boolean }> => {
       try {
         const { list } = await listApprovalFlows({ pageNum: 1, pageSize: 100 })
-        if (Array.isArray(list) && list.length > 0) {
-          return {
-            flows: list.map<FlowRow>((item) => ({
-              ...item,
-              approvalType: (item.approvalType as AdminApprovalType) ?? 1,
-              conditionRoutes: [],
-              escalations: [],
-            })),
-            demo: false,
+        if (Array.isArray(list)) {
+          // 形状校验（实测依据见 @/utils/shape-guard）：
+          // `GET /admin/approvals/config` 当前返回的是 `{ bizType, approveLevel }`
+          // 骨架（ApprovalService#config() 硬编码的 CERT / RECALL / QUOTA 三条），
+          // 既没有 flowId 也没有 flowName，更没有 nodes —— 是「审批类型级别」的
+          // 骨架，不是流程台账要的 ApprovalFlowConfig。
+          //
+          // 是否走真数据由「数据形状」决定，不是由「接口通不通」决定：
+          // 接口通了但只给骨架，仍然算没有真数据，保持 demo: true，
+          // 让 DemoDataAlert 横幅继续提示「非服务端真实数据」。
+          // 否则横幅消失、三条骨架被标成凭空的「租户注册」，比降级更骗人。
+          const realFlows = list.filter((item) =>
+            hasNonEmptyTextFields(item, ['flowId', 'flowName']),
+          )
+          if (realFlows.length > 0) {
+            return {
+              flows: realFlows.map<FlowRow>((item) => ({
+                ...item,
+                // 不认识的审批类型保持 undefined，由列渲染显示「未指定」，
+                // 绝不兜底成 1（那会把 CERT/RECALL/QUOTA 一律标成「租户注册」）
+                approvalType: item.approvalType as AdminApprovalType | undefined,
+                conditionRoutes: [],
+                escalations: [],
+              })),
+              demo: false,
+            }
           }
         }
       } catch {
@@ -423,9 +446,13 @@ export default function ApprovalConfig(): JSX.Element {
         title: '适用审批类型',
         dataIndex: 'approvalType',
         width: 140,
-        render: (value: AdminApprovalType) => (
-          <Tag color="geekblue">{APPROVAL_TYPE_MAP[value] ?? '未指定'}</Tag>
-        ),
+        // 后端没给审批类型时显示「未指定」，不臆造默认值
+        render: (value?: AdminApprovalType) =>
+          value ? (
+            <Tag color="geekblue">{APPROVAL_TYPE_MAP[value]}</Tag>
+          ) : (
+            <Tag>未指定</Tag>
+          ),
       },
       {
         title: '节点数',
@@ -532,7 +559,8 @@ export default function ApprovalConfig(): JSX.Element {
         }
       >
         <Table<FlowRow>
-          rowKey="flowId"
+          // 兜底到下标：万一某行没有 flowId（后端形状漂移）也不会撞成重复 key
+          rowKey={(record, index) => record.flowId || `flow-row-${index ?? 0}`}
           columns={columns}
           dataSource={flows}
           loading={listQuery.isLoading}
