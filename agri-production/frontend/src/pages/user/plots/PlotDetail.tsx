@@ -428,12 +428,17 @@ export default function PlotDetail(): JSX.Element {
       },
     },
     {
+      // 后端任务 / 地块相关接口返回体中不存在 onChain 字段（已连服实测确认），
+      // 此处不再声称"由区块链存证模块写入"（那会让人以为有数据源、只是恰好为空），
+      // 改为明示「未接入」。
       title: (
-        <Tooltip title="上链状态由区块链存证模块写入，以存证查询为准">上链 🔗</Tooltip>
+        <Tooltip title="后端未提供上链状态字段（onChain），显示为「未接入」，不做本地估算">
+          上链 🔗
+        </Tooltip>
       ),
       key: 'onChain',
-      width: 100,
-      render: () => <Typography.Text type="secondary">—</Typography.Text>,
+      width: 110,
+      render: () => <Typography.Text type="secondary">未接入</Typography.Text>,
     },
   ]
 

@@ -37,6 +37,7 @@ import {
   Statistic,
   Table,
   Tag,
+  Tooltip,
   Typography,
   message,
 } from 'antd'
@@ -400,11 +401,17 @@ export default function QualityInspection(): JSX.Element {
       },
     },
     {
-      title: '上链',
+      // 后端质检记录返回体中不存在 onChain 字段（已连服实测确认），
+      // 旧实现把 undefined 当 false 渲染成「⏳ 待上链」，是一个没有依据的业务结论。
+      // 现统一降级为显式「未接入」。
+      title: (
+        <Tooltip title="后端未提供上链状态字段（onChain），显示为「未接入」，不做本地估算">
+          上链 🔗
+        </Tooltip>
+      ),
       key: 'onChain',
       width: 110,
-      render: (_, record) =>
-        record.onChain ? <Tag color="green">🔗 已上链</Tag> : <Tag>⏳ 待上链</Tag>,
+      render: () => <Typography.Text type="secondary">未接入</Typography.Text>,
     },
     {
       title: '操作',

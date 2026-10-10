@@ -11,6 +11,14 @@
  * - 🔗 全链路流程图（种植 → 投入品 → 检测 → 采收 → 入库 → 流通）+ 时间轴明细
  * - 每个节点展示：时间、操作人、记录详情、存证状态
  * - 支持按批次号 / 溯源码查询（/trace/full-chain/{batchId}/nodes）
+ *
+ * 【数据源实测 2026-10-09】后端 5 个链路相关端点（growth / inputs/usages /
+ * quality/inspections/by-batch / trace/full-chain/{id}/nodes / harvests/{id}）
+ * 返回体中**均不存在 onChain、txHash 字段**（已连服实测确认）。
+ * 因此「已上链 / 待上链」不是真实判断，而是把 undefined 当 false 渲染出来的假结论——
+ * 它会让运营以为数据"还没上链"而去推动上链动作。
+ * 现统一降级为显式「未接入」（MetricStatistic value={null} → 「—」+ 橙色 ⓘ + Tooltip），
+ * 节点的 onChain 类型改为 boolean | null（null = 后端未提供），接口补齐后自动填充。
  */
 import { useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -31,6 +39,7 @@ import {
   Steps,
   Tag,
   Timeline,
+  Tooltip,
   Typography,
   message,
 } from 'antd'
@@ -42,6 +51,7 @@ import {
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import useFarmStore from '@/store/farm'
+import { MetricStatistic } from '@/components'
 import { fetchFullChainNodes, fetchTraceCodeDetail } from '@/api/trace'
 import { listInspectionsByBatch } from '@/api/quality'
 import { getHarvest, listInventoryFlows } from '@/api/harvests'
@@ -92,11 +102,19 @@ interface ChainNode {
   operator?: string
   /** 记录详情 */
   detail?: string
-  /** 是否已上链 */
-  onChain: boolean
-  /** 上链交易哈希 */
+  /**
+   * 是否已上链。
+   * null = 后端未提供该字段（实测所有链路端点返回体均无 onChain），显示为「未接入」；
+   * true / false 仅在后端真正返回该字段后才会出现。
+   */
+  onChain: boolean | null
+  /** 上链交易哈希（后端实测未返回） */
   txHash?: string
 }
+
+/** 上链状态缺失时的提示语 */
+const ON_CHAIN_MISSING_TIP =
+  '后端未提供上链状态字段（onChain），显示为「未接入」；不做本地估算，接口补齐后自动填充'
 
 /** 检测类型展示文案 */
 const INSPECT_TYPE_TEXT: Record<string, string> = {
@@ -249,7 +267,8 @@ export default function FullChainTrace(): JSX.Element {
         detail: [firstGrowth.growthStage, firstGrowth.pestInfo, firstGrowth.remark]
           .filter(Boolean)
           .join(' · '),
-        onChain: Boolean(firstGrowth.onChain),
+        // 后端生长记录返回体无 onChain 字段，按「未提供」处理
+        onChain: null,
       })
     }
 
@@ -263,7 +282,8 @@ export default function FullChainTrace(): JSX.Element {
         timeText: formatTime(usage.usedAt),
         operator: usage.operatorName ?? usage.operatorId,
         detail: `${usage.quantity ?? 0}${usage.unit ?? ''} · ${usage.usageMethod ?? '常规施用'}`,
-        onChain: Boolean(usage.onChain),
+        // 后端投入品使用记录返回体无 onChain 字段，按「未提供」处理
+        onChain: null,
       })
     })
 
@@ -282,7 +302,8 @@ export default function FullChainTrace(): JSX.Element {
         detail: `${INSPECT_TYPE_TEXT[String(item.inspectionType)] ?? item.inspectionType ?? '检测'} · 机构 ${
           item.labName ?? '—'
         }`,
-        onChain: Boolean(item.onChain),
+        // 后端质检记录返回体无 onChain 字段，按「未提供」处理
+        onChain: null,
       })
     })
 
@@ -298,7 +319,7 @@ export default function FullChainTrace(): JSX.Element {
         detail: `批次 ${batchQuery.data.batchNo ?? batchQuery.data.batchId} · 地块 ${
           batchQuery.data.plotName ?? batchQuery.data.plotId ?? '—'
         }`,
-        onChain: false,
+        onChain: null,
       })
     }
 
@@ -312,7 +333,7 @@ export default function FullChainTrace(): JSX.Element {
         timeText: formatTime(storageFlow.operatedAt),
         operator: storageFlow.operatorName,
         detail: `关联单据 ${storageFlow.orderNo ?? '—'}`,
-        onChain: false,
+        onChain: null,
       })
     } else {
       nodes.push({
@@ -320,7 +341,7 @@ export default function FullChainTrace(): JSX.Element {
         stage: 'storage',
         title: '入库记录 - 待操作',
         timeText: '待入库',
-        onChain: false,
+        onChain: null,
       })
     }
 
@@ -334,7 +355,7 @@ export default function FullChainTrace(): JSX.Element {
         timeText: formatTime(outboundFlow.operatedAt),
         operator: outboundFlow.operatorName,
         detail: `关联单据 ${outboundFlow.orderNo ?? '—'}`,
-        onChain: false,
+        onChain: null,
       })
     } else {
       nodes.push({
@@ -342,7 +363,7 @@ export default function FullChainTrace(): JSX.Element {
         stage: 'logistics',
         title: '流通记录 - 待操作',
         timeText: '待出库',
-        onChain: false,
+        onChain: null,
       })
     }
 
@@ -356,8 +377,9 @@ export default function FullChainTrace(): JSX.Element {
         timeText: formatTime(node.occurredAt),
         operator: node.operatorName,
         detail: node.description ?? `节点类型 ${node.nodeType}`,
-        onChain: Boolean(node.onChain),
-        txHash: node.txHash,
+        // 后端全链路节点返回体无 onChain / txHash 字段，按「未提供」处理
+        onChain: null,
+        txHash: undefined,
       })
     })
 
@@ -377,11 +399,22 @@ export default function FullChainTrace(): JSX.Element {
     nodesQuery.data,
   ])
 
-  /** 存证统计 */
+  /**
+   * 存证统计。
+   *
+   * 后端未提供 onChain 字段时 onChain 为 null（不是 0），
+   * verifyPassed 同步为 null，页面显示「未接入」而不是「待上链」——
+   * 避免用 undefined 算出一个看起来像判断的假结论。
+   */
   const chainStats = useMemo(() => {
     const total = chainNodes.length
-    const onChain = chainNodes.filter((item) => item.onChain).length
-    return { total, onChain, verifyPassed: total > 0 && onChain === total }
+    const known = chainNodes.filter((item) => item.onChain !== null)
+    const onChain = known.length === 0 ? null : known.filter((item) => item.onChain === true).length
+    return {
+      total,
+      onChain,
+      verifyPassed: onChain === null ? null : total > 0 && onChain === total,
+    }
   }, [chainNodes])
 
   /** 流程图步骤 */
@@ -424,7 +457,7 @@ export default function FullChainTrace(): JSX.Element {
         item.timeText,
         item.operator ?? '—',
         item.detail ?? '—',
-        item.onChain ? '已上链' : '待上链',
+        item.onChain === null ? '未接入' : item.onChain ? '已上链' : '待上链',
       ]
         .map(escapeCsv)
         .join(','),
@@ -478,6 +511,12 @@ export default function FullChainTrace(): JSX.Element {
     }
     return (
       <Space direction="vertical" size={16} style={{ width: '100%' }}>
+        <Alert
+          banner
+          type="warning"
+          showIcon
+          message="存证状态口径说明：后端所有链路端点均未返回上链状态字段（onChain / 交易哈希），页面的「已上链 / 待上链」一律显示为「未接入」，不做本地估算"
+        />
         <Row gutter={16}>
           <Col span={8}>
             <Card>
@@ -486,11 +525,11 @@ export default function FullChainTrace(): JSX.Element {
           </Col>
           <Col span={8}>
             <Card>
-              <Statistic
+              <MetricStatistic
                 title="已上链"
                 value={chainStats.onChain}
                 suffix="条"
-                valueStyle={{ color: '#52c41a' }}
+                missingTip={ON_CHAIN_MISSING_TIP}
               />
             </Card>
           </Col>
@@ -498,8 +537,21 @@ export default function FullChainTrace(): JSX.Element {
             <Card>
               <Statistic
                 title="验证状态"
-                value={chainStats.verifyPassed ? '通过' : '待上链'}
-                valueStyle={{ color: chainStats.verifyPassed ? '#52c41a' : '#fa8c16' }}
+                value={
+                  chainStats.verifyPassed === null
+                    ? '未接入'
+                    : chainStats.verifyPassed
+                      ? '通过'
+                      : '待上链'
+                }
+                valueStyle={{
+                  color:
+                    chainStats.verifyPassed === null
+                      ? '#bfbfbf'
+                      : chainStats.verifyPassed
+                        ? '#52c41a'
+                        : '#fa8c16',
+                }}
               />
             </Card>
           </Col>
@@ -522,7 +574,15 @@ export default function FullChainTrace(): JSX.Element {
                       <Typography.Text style={{ color: meta.color }}>
                         {item.title}
                       </Typography.Text>
-                      {item.onChain ? <Tag color="green">🔗 已上链</Tag> : <Tag>⏳ 待上链</Tag>}
+                      {item.onChain === null ? (
+                        <Tooltip title={ON_CHAIN_MISSING_TIP}>
+                          <Tag color="default">未接入</Tag>
+                        </Tooltip>
+                      ) : item.onChain ? (
+                        <Tag color="green">🔗 已上链</Tag>
+                      ) : (
+                        <Tag>⏳ 待上链</Tag>
+                      )}
                     </Space>
                     <div style={{ marginTop: 4 }}>
                       <Typography.Text type="secondary">
