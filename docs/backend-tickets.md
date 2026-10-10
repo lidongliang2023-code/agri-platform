@@ -34,7 +34,7 @@ token 取自 `AdminUserInitializer.java`。**全部结论来自实际 HTTP 调�
 |---|---|---|---|---|
 | BT-22 | `DELETE /settings/{不存在的 id}` | `code=0 success` | 一行没删，记录原封不动 | `SysSettingService#delete` |
 | BT-28 | `DELETE /analytics/NOPE` | `code=0 success` | 一行没删 | `AnalyticsSnapshotService.java:93-95` |
-| BT-59 | `DELETE /admin/knowledge/zzz-not-exist`、`DELETE /admin/sop/zzz-not-exist` | `code=0 / data:null` | 一行没删 | `KnowledgeArticleService#delete` / `SopLibraryService#delete` |
+| BT-59 | `DELETE /admin/knowledge/zzz-not-exist`、`DELETE /admin/sop/zzz-not-exist` | `code=0 / data:null` | **影响 0 行**（逻辑删除没命中任何行，`deleted` 没被置 1） | `KnowledgeArticleService#delete` / `SopLibraryService#delete` |
 | BT-63 | `POST /admin/trace/recall?batchId=zzz-not-exist` | `code=0 / data:0` | **批次没冻结、码没作废** | `AdminTraceService.java:118-136` |
 
 前四处（BT-22 / BT-28 / BT-59）的 Service 都是同一写法：
@@ -105,7 +105,10 @@ POST /admin/quality/recalls?batchId=zzz-not-exist → {"code":404,"message":"资
 1. **不看响应码**：本后端 HTTP 恒 200，写操作失败也可以是 `code=0`（这正是本项的全部内容）。
 2. **必须回读**：调用 → 回读 → 比对。**只看返回码永远发现不了 BT-22/28/59/63 任何一条。**
 3. **回读要比对"该变的是否变了"**，不是"有没有报错"：
-   - 删除类 → 目标行是否还在；
+   - 删除类 → 目标行的 `deleted` 是否被置 1。
+     ⚠️ 本项目的 `deleteById` 是**逻辑删除**（全局 `logic-delete-field: deleted` +
+     `@TableLogic`），所以"删了"的判据是 `deleted=1` **且应用层查不到**，
+     **不是"行从表里消失"**。用"行数变没变"当判据会把逻辑删除误判成没删。
    - 状态类（BT-63）→ `status` 是否真的变成期望值；
    - 计数类 → 返回的数量是否 > 0（返回 0 且无异常 = 静默无操作）。
 4. **成对取证**：同一个不存在的 id 打两条**语义等价**的路径（如 `/trace/recall` vs
@@ -2119,6 +2122,25 @@ DELETE /admin/sop/zzz-not-exist       → {"code":0,"message":"success","data":n
 **归属**：与 **G-01**（`deleteById` 丢弃影响行数）完全同源，**挂在 G-01 下统一治理**，
 不在 sop / knowledge 两个实体上分别打补丁。前端侧若要先行，可参照 BT-22 的做法：
 调用后回读一次，确认真的没了再报成功。
+
+**开单人补充复核（se-verify-fix，2026-10-10）**：上面「逻辑删除」这条补充实测我独立复核过，
+**结论成立**，两条独立证据：
+
+1. **全局配置**：`core-app/src/main/resources/application.yml:40-41` 配了
+   `logic-delete-field: deleted` / `logic-delete-value: 1`；
+   `ProduceBaseEntity.java:43` 的 `deleted` 上有 `@TableLogic`。
+   → `deleteById` 实际执行的是 `UPDATE ... SET deleted=1`，**不是物理 DELETE**。
+2. **库里真的有墓碑**：`prod_harvest_batch` 现有一条 `HBT202610091458235512 /
+   TMP-PROBE-001 / deleted=1` 的行仍在表里（应用层查不到）。
+   → 逻辑删除在运行时确实生效。
+
+因此本条「删不到」的准确表述是：**UPDATE 影响 0 行、返回值被丢弃、响应仍 `code=0`**，
+不是"行消失了"。措辞已同步修正到 G-01 的现象表。
+
+⚠️ **连带教训（我认，记在这里避免重犯）**：BT-57 的写入实测我用 `DELETE` 做还原，
+当时只验了应用层（`GET /admin/knowledge` 回到 `total=3`）就下"已复原"结论，**没查到表级**，
+因此没发现自己留下的是一条 `deleted=1` 的墓碑而非"干净还原"。
+**凡声称"已还原"，必须表级验证（含 tombstone 计数），不能只信应用层总数。**
 
 ## BT-60　`api/admin/sop.ts` 里 5 个 SOP 函数零调用方；后端 `POST /admin/sop/{sopId}/publish` 也零调用方 → 建议删
 
