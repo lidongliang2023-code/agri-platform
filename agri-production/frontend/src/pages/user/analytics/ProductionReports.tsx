@@ -115,6 +115,31 @@ const CHANNEL_OPTIONS: { value: number; label: string }[] = [
 /** 订阅本地持久化键 */
 const SUBSCRIPTION_STORAGE_KEY = 'agri_report_subscriptions'
 
+/**
+ * 本地生成报表的 reportId 前缀。
+ *
+ * 后端报表 id 形如 `DEMO-RPT-001`，两边前缀不同，因此：
+ *  ① 列表里能一眼区分「服务端真数据」与「本地生成」；
+ *  ② 作为 React `rowKey` 不会与服务端 id 撞车。
+ */
+export const LOCAL_REPORT_ID_PREFIX = 'LOCAL-REPORT-'
+
+/**
+ * 判断一份报表是不是用户在本地生成的（未写入服务端）。
+ *
+ * 仅按 reportId 前缀判断，不依赖任何额外字段——本地生成与服务端返回的
+ * 都是同一个 `ReportItem`，靠 id 空间区分最可靠。
+ *
+ * @param report 报表行
+ * @returns 是本地生成时返回 true
+ */
+export function isLocalReport(report: ReportItem | undefined | null): boolean {
+  if (!report || typeof report.reportId !== 'string') {
+    return false
+  }
+  return report.reportId.startsWith(LOCAL_REPORT_ID_PREFIX)
+}
+
 /** 示例报表 */
 const DEMO_REPORTS: ReportItem[] = Array.from({ length: 16 }, (_unused, index) => {
   const type = ((index % 5) + 1) as ReportType
@@ -138,6 +163,23 @@ const DEMO_REPORTS: ReportItem[] = Array.from({ length: 16 }, (_unused, index) =
     status: status as 1 | 2 | 3,
   }
 })
+
+/**
+ * 按「报表类型 + 关键字」过滤一行报表。
+ *
+ * 抽出来是因为它同时服务于「示例报表回落」与「仅展示本地生成报表」两条分支，
+ * 两处的过滤口径必须一致，否则同一条报表在不同分支下会时隐时现。
+ *
+ * @param item 报表行
+ * @param type 报表类型过滤值，为空表示不过滤
+ * @param kw 已转小写并 trim 过的关键字
+ * @returns 命中过滤时返回 true
+ */
+function matchFilter(item: ReportItem, type: number | undefined, kw: string): boolean {
+  if (type && item.reportType !== type) return false
+  if (kw && !`${item.reportName} ${item.period}`.toLowerCase().includes(kw)) return false
+  return true
+}
 
 /**
  * 格式化文件大小
@@ -347,6 +389,10 @@ export default function ProductionReports(): JSX.Element {
    * 当前 `/analytics/reports` 就是这种情况（返回指标快照）。此时**不**回落示例
    * 报表（会掩盖真实状态），也**不**把指标拼成报表行（三列全空更难读），
    * 走空态 + 明示说明，把「后端返回的是什么」直接写给使用者看。
+   *
+   * 但用户自己点「生成报表」造出来的 `extraReports` **不在此列**：那是使用者
+   * 主动操作产生的真实数据，不是开发者编造的示例，不能因为服务端没数据就让它
+   * 凭空消失。故此处仍然展示，并由列渲染打上「本地生成」标记以区分来源。
    */
   const shapeMismatch: boolean =
     !listQuery.isLoading && rawRows.length > 0 && remoteRows.length === 0
@@ -357,18 +403,19 @@ export default function ProductionReports(): JSX.Element {
 
   /** 最终报表数据 */
   const { rows, total } = useMemo<{ rows: ReportItem[]; total: number }>(() => {
+    // 关键字先归一化，两条分支共用同一口径（trim + 转小写）
+    const kw = keyword.trim().toLowerCase()
     if (shapeMismatch) {
-      return { rows: [], total: 0 }
+      // 服务端没有报表数据，但用户本地生成的报表照常展示（列表里带「本地生成」标记）
+      const localOnly = extraReports.filter((item) => matchFilter(item, typeFilter, kw))
+      return { rows: localOnly, total: localOnly.length }
     }
     if (!usingFallback) {
       return { rows: remoteRows, total: listQuery.data?.total ?? 0 }
     }
-    const kw = keyword.trim().toLowerCase()
-    const filtered = [...extraReports, ...DEMO_REPORTS].filter((item) => {
-      if (typeFilter && item.reportType !== typeFilter) return false
-      if (kw && !`${item.reportName} ${item.period}`.toLowerCase().includes(kw)) return false
-      return true
-    })
+    const filtered = [...extraReports, ...DEMO_REPORTS].filter((item) =>
+      matchFilter(item, typeFilter, kw),
+    )
     const start = (pageNum - 1) * pageSize
     return { rows: filtered.slice(start, start + pageSize), total: filtered.length }
   }, [
@@ -399,7 +446,8 @@ export default function ProductionReports(): JSX.Element {
     const template = REPORT_TEMPLATES.find((item) => item.value === values.template)
     const period = values.range[0].format('YYYY-MM-DD')
     const draft: ReportItem = {
-      reportId: `LOCAL-REPORT-${Date.now()}`,
+      // 时间戳 + 随机后缀：同一毫秒内连点两次也不会生成重复 id（否则 rowKey 会撞）
+      reportId: `${LOCAL_REPORT_ID_PREFIX}${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       reportName: `${period} ${template?.label ?? '生产报表'}`,
       reportType: template?.type ?? 3,
       period,
@@ -528,6 +576,8 @@ export default function ProductionReports(): JSX.Element {
             <FileTextOutlined />
             <Text strong>{value}</Text>
             <Tag color="blue">{REPORT_TYPE_LABEL[record.reportType] ?? '其他'}</Tag>
+            {/* 本地生成的报表必须显式标记：否则使用者分不清哪些是服务端真数据 */}
+            {isLocalReport(record) ? <Tag color="orange">本地生成</Tag> : null}
           </Space>
           <Text type="secondary" style={{ fontSize: 12 }}>
             周期 {record.period}
@@ -693,7 +743,8 @@ export default function ProductionReports(): JSX.Element {
                     reportType，因此不作为报表行展示。
                   </Text>
                   <Text>
-                    下方列表为空即为真实状态；「生成报表」创建的报表仅保存在本地，不会写入服务端。
+                    下方列表仅展示你在本地生成的报表（带「本地生成」标记，未写入服务端）；
+                    服务端暂无线上报表数据即为真实状态。
                   </Text>
                 </Space>
               }
