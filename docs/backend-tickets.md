@@ -282,6 +282,10 @@ mapper.deleteById(id);   // 此处 affected == 0 只可能表示"并发下已被
 - **BT-29**（analytics 域）：`overview` == `dashboard`
 - **BT-51**（monitor 域）：`/iot` == `/overview`
 - **BT-68**（trace 域）：`/trace` == `/trace/codes`、`/recall` == `/recalls`（两例）
+- **BT-77**（harvests 域）：`/{batchId}/outbound` == `/inventory/{batchId}/out`，前者零调用方（死代码候选）
+
+> 累计 6 例（BT-29 / BT-51 / BT-68×2 / BT-77）。**死代码删除不批量处理**，
+> 每一处都要逐条确认 ① 零调用方 ② 端点确实无用途。
 
 ---
 
@@ -670,6 +674,260 @@ POST /harvests/inventory/zzz-not-exist/transfers → {"code":500,"message":"系�
 
 **期望语义**：二选一——后端加 `operatorName`（或 `operatorId`）落库，
 或前端把该字段从 payload 里删掉并同步改调用方，**不允许"传了但静默丢弃"**。
+
+---
+
+## BT-74　出库流水与库存台账**结构上无法关联**：`prod_inventory_flow` 没有 `inventory_id` 列 · P1
+
+| 项 | 内容 |
+| --- | --- |
+| 端点 | `POST /api/v1/production/harvests/inventory/{batchId}/out` |
+| 方法 | POST（**端点存在且真写入**） |
+| 前端函数 | `outboundInventory()` → `stockOut()`（`api/harvests.ts:167,1208`） |
+| 真实调用方 | `InventoryDetail.tsx:52,151`、`InventoryManage.tsx:45,136` |
+
+**现象**：出库流水只能落到「批次」粒度，**落不到台账行**，也**不写仓库**。
+
+**证据（三条，逐条可复现）**
+
+1. `DESCRIBE prod_inventory_flow` 共 20 列，**没有 `inventory_id`**（也没有 `location_code`）。
+   字段全集：`flow_id / market_id / tenant_id / batch_id / warehouse_id / flow_type / qty / unit /
+   before_qty / after_qty / operator_id / operator_name / warehouse_name / related_order_no / remark /
+   create_by / update_by / create_at / update_at / deleted`。
+2. `InventoryFlowEntity`（`mod-produce/.../harvest/InventoryFlowEntity.java`）字段同样**没有 `inventoryId`**
+   ——不是 MyBatis 漏映射，是实体就没有。
+3. 实测出库响应（`2026-10-10 17:50`，`DEMO-BATCH-004`）20 个 key 内**不存在 `inventoryId`**，
+   且 `warehouseId=null` / `warehouseName=null`，尽管表里**有**这两列（BT-04 调拨流水会写）。
+
+**后果**
+
+- 前端「库存流水」页的仓库列对出库流水**恒为空白**，用户看不到"这 4kg 从哪个仓出去的"；
+- 追溯链在「批次 ↔ 台账」这一节断开：同批次多仓时，**无法回答这次出库扣的是哪一条台账**
+  （见 BT-75）；
+- 无法按台账行聚合流水做对账，`SUM(flow.qty)` 与 `SUM(ledger.current_qty)` 无从校验。
+
+**判据**：调用出库 → 读 `prod_inventory_flow` 该 `flow_id` 行 → `warehouse_name` 为 NULL、
+`inventory_id` 列不存在 → FAIL。
+
+> ⚠️ **不要拿"响应里没有 `inventoryId`"当"后端漏传"的证据**——实体和表都没有这个字段，
+> 是**结构缺失**，不是序列化问题。本条即我在 BT-03/出库验收里 A5 断言 FAIL 的根因：
+> **该断言应标记为「不适用」，不是后端缺陷。**
+
+**处置（待裁决）**
+
+1. V17 加列 `inventory_id` + 实体字段 `inventoryId`，入库 / 出库 / 损耗 / 调拨**四条写路径都落值**；
+2. 出库同时落 `warehouseId` / `warehouseName`（**列已存在，只差赋值**，成本最低）；
+3. 历史行回填：按 `batch_id` 唯一定位的台账回填。
+
+---
+
+## BT-75　出库扣减台账取 `listByBatch(batchId).get(0)`，同批次多仓时**扣哪条由数据库返回顺序决定** · P1
+
+| 项 | 内容 |
+| --- | --- |
+| 端点 | `POST /api/v1/production/harvests/inventory/{batchId}/out` |
+| 方法 | POST（端点存在） |
+| 代码位置 | `InventoryService.syncOutbound`（`InventoryService.java:404-422`）、`InventoryFlowService.outbound`（`:154` 起） |
+
+**证据（代码）**
+
+```java
+// InventoryService.java:404-422
+public void syncOutbound(String batchId, BigDecimal qty) {
+    List<InventoryEntity> ledgers = listByBatch(batchId);
+    if (ledgers.isEmpty()) {
+        // 历史数据没有台账是既定事实，不凭空造一行，也不拦住流水写入
+        return;
+    }
+    InventoryEntity ledger = ledgers.get(0);   // ← 取第 0 条，无 ORDER BY 保证
+    ...
+    ledger.setCurrentQty(before.subtract(delta));
+```
+
+- 端点签名 `inventoryOut(batchId, qty, operatorId, operatorName, relatedOrderNo)`
+  **不收 `warehouseName` / `locationCode`**，调用方**无法指定从哪个仓出**；
+- `get(0)` 无排序保证 → 同批次有多条台账时，扣减目标不确定；
+- **扣错了也不报错**：只做数量扣减，不校验扣的是不是调用方想要的那条。
+- ⚠️ **"同批次多条台账"不是假想状态**：BT-04 调拨正是官方制造路径——源仓扣、目标仓加，
+  调拨完成后该批次天然有两条台账。种子数据每批只有一条，所以现在看不出来。
+
+**判据**
+
+1. 为同一批次在同仓库另一库位建第二条台账（`+10`）；
+2. `POST /inventory/{batchId}/out?qty=1`；
+3. **表级回读**两条台账的 `current_qty`，看被扣的是哪一条；
+4. 不依赖运行时的那条断言：**端点无法表达"我要从 `M-01-01` 出"** —— 看签名即可判 FAIL。
+
+> 脚本已备好（`C:/Users/71502/AppData/Local/Temp/sevf/bt75_76_probe.py`），
+> 本次**未跑完**：跑到 S1 时鉴权头过期（`code=401 未认证或凭证已失效`），需新 token 后补跑。
+> 已执行的 S0 基线部分无任何写入。
+
+**期望语义**：出库必须能定位到**唯一**台账行。三选一——
+
+1. 端点加 `warehouseName` + `locationCode`，复用 BT-02 修复里 `resolveLedger` 的同一套定位逻辑，
+   定位不到就 `NOT_FOUND`；
+2. 同批次多条台账时**不猜**，直接抛 `BAD_REQUEST` 要求调用方指定库位；
+3. 至少按「当前库存最大 + 主键升序」稳定排序（与 BT-02 的 `resolveLedger` 一致），
+   **不能是裸 `get(0)`**。
+
+---
+
+## BT-76　出库流水的 `beforeQty / afterQty` 是「该批次流水 `qty` 累加和」，**不是台账 `currentQty`** · P2
+
+| 项 | 内容 |
+| --- | --- |
+| 端点 | `POST /api/v1/production/harvests/inventory/{batchId}/out` |
+| 代码位置 | `InventoryFlowService.outbound`（`InventoryFlowService.java:154` 起） |
+
+**证据（代码）**
+
+```java
+List<InventoryFlowEntity> history = listByBatch(batchId);
+BigDecimal before = BigDecimal.ZERO;
+for (InventoryFlowEntity flow : history) {
+    if (flow.getQty() != null) { before = before.add(flow.getQty()); }
+}
+...
+flow.setBeforeQty(before);
+flow.setAfterQty(before.add(delta));
+```
+
+**证据（实测，`2026-10-10 17:50`，`DEMO-BATCH-004`）**
+
+| 口径 | 值 |
+| --- | --- |
+| 台账 `DEMO-INVT-004.current_qty`（库回读） | `96000.00` |
+| 出库响应 `beforeQty` | `96010.00` |
+| 出库响应 `afterQty` | `96006.00` |
+| 差值 | **+10** |
+
+差值来源（已定位）：一条 `qty=+10` 的入库流水，**其台账行已被物理删除、流水却留在表里**——
+`DELETE /harvests/inventory/{inventoryId}` **只删台账，不删流水**。
+
+**后果**
+
+- 前端若把 `beforeQty` 当「出库前库存」展示，看到的是**流水累加和**，与台账页的「当前库存」
+  是**两个口径**；
+- 只要出现「删台账留流水」或「直接改台账不写流水」，两个数就**永久漂移且无任何提示**；
+- 与 BT-74 同源：正因为流水没有 `inventory_id`，才只能退化成"按 batch 累加"这种粗口径。
+
+**判据**：调用出库 → 比对 `响应.beforeQty` vs
+`SELECT SUM(current_qty) FROM prod_inventory WHERE batch_id=? AND deleted=0`；不等即 FAIL。
+**不得用响应里的 `afterQty` 自证**（`after = before + delta`，是自洽的）。
+
+**处置（待裁决）**
+
+1. `beforeQty / afterQty` 改为取**被扣减那条台账**的扣减前后值——与 BT-75 一起修：
+   先定位台账行，再记数，两个数天然对得上；
+2. 删除台账时必须同步处置其流水（一并逻辑删除；或明确声明"流水是历史凭证、保留但不得参与累加"——
+   后者要改累加口径为「只对未删台账的流水求和」，仍不如方案 1 干净）；
+3. 补台账↔流水定期对账：同批次 `SUM(flow.qty)` vs `SUM(ledger.current_qty)`，不一致告警。
+
+---
+
+## BT-77　`/{batchId}/outbound` 与 `/inventory/{batchId}/out` 是同一实现（G-02 第 5 例）· P3
+
+| 项 | 内容 |
+| --- | --- |
+| 路径 A | `POST /api/v1/production/harvests/{batchId}/outbound`（`HarvestController.java:161`） |
+| 路径 B | `POST /api/v1/production/harvests/inventory/{batchId}/out`（`HarvestController.java:293`） |
+| 实现 | **同一个** `inventoryFlowService.outbound(batchId, qty, operatorId, operatorName, relatedOrderNo)`，五个参数零差异 |
+
+**前端只调路径 B**（`api/harvests.ts:167`）。路径 A **零调用方**：全仓 grep `outbound`
+只剩页面 Tab 文案（`HarvestRecords.tsx` 的 `'outbound'` 标签），**没有任何 API 调用点**。
+
+→ **死代码候选**。按 team-lead 裁决「死代码可以删，但**不批量处理**，每一处都要逐条确认
+① 零调用方 ② 端点确实不存在/确无用途」。本条两条都满足，但**等裁决后再删**，且删之前必须按
+「`AdminFarmService.java:82` 的 `"WARN"` 字面量扫描」这条教训，用**全仓字面量 + 端点签名**
+双重确认，不能只看 grep 计数。
+
+---
+
+## ✅ BT-03 / BT-04 / 出库 / RESURRECTED　写路径验收结果（2026-10-10 17:48，se-verify-fix）
+
+**方法**：快照 → 调用 → 库级回读 → 还原 → 表级验证。脚本
+`C:/Users/71502/AppData/Local/Temp/sevf/bt03_04_accept.py`。
+统一断言组沿用 BT-02 的 A0–A5，并按 team-lead 要求扩展：**调拨两侧各做一遍 A4 + A5**，
+**预期主键在调用之前取**，**逻辑删除 + 唯一索引处额外验「结果行数 == 1 不是 2」**。
+
+**总计 PASS 39 / FAIL 1 / TOTAL 40**（唯一的 FAIL 是我的断言不适用，非后端缺陷，见下）。
+
+### CASE 1　BT-03 损耗登记 `POST /harvests/inventory/{batchId}/loss`（9/9 PASS）
+
+| # | 断言 | 结果 | 实测 |
+| --- | --- | --- | --- |
+| 1 | A0 `code == 0` | ✅ | `0` |
+| 2 | A1 `current_qty == 96000-2`（库回读） | ✅ | `95998.00` |
+| 3 | A1b `loss_qty == 0+2`（库回读） | ✅ | `2.00` |
+| 4 | A2 台账行数不变 | ✅ | `5 → 5` |
+| 5 | A3' `resultKind == "UPDATED"` | ✅ | `UPDATED` |
+| 6 | A3 `ledgerCreated == false` | ✅ | `False` |
+| 7 | A4 响应 `currentQty` == 库回读值 | ✅ | `95998` vs `95998.00` |
+| 8 | A5 响应 `inventoryId == DEMO-INVT-004` | ✅ | `DEMO-INVT-004` |
+| 9 | 新增 `flow_type=4` 流水 1 条 | ✅ | `INVF…1749001878` |
+
+### CASE 2　BT-04 跨仓调拨 `POST /harvests/inventory/{batchId}/transfer`（11/11 PASS）
+
+预期主键 `INV202610101748587534` 在**调用之前**预置并取得。
+
+| # | 断言 | 结果 | 实测 |
+| --- | --- | --- | --- |
+| 10 | A0 `code == 0` | ✅ | `0` |
+| 11 | 【源】A1 `current_qty == 96000-3` | ✅ | `95997.00` |
+| 12 | 【源】A4 响应值 == 库回读值 | ✅ | `95997` vs `95997.00` |
+| 13 | 【源】A5 主键 == `DEMO-INVT-004` | ✅ | `DEMO-INVT-004` |
+| 14 | 【源】A3' `resultKind == "UPDATED"` | ✅ | `UPDATED` |
+| 15 | 【目标】A1 `current_qty == 10+3` | ✅ | `13.0` |
+| 16 | 【目标】A4 `targetCurrentQty` == 库回读值 | ✅ | `13` vs `13.00` |
+| 17 | 【目标】A5 主键 == `INV202610101748587534`（**必须更新已有行，不能新建**） | ✅ | 一致 |
+| 18 | 【目标】A3' `targetResultKind == "UPDATED"`（不是 `CREATED`） | ✅ | `UPDATED` |
+| 19 | 【目标】A3 `targetLedgerCreated == false` | ✅ | `False` |
+| 20 | A2 台账行数不变（目标侧未新建行） | ✅ | `6 → 6` |
+
+> 第 17 条是本 CASE 的**关键**：只验源侧会漏掉"目标侧新建了一条行而不是更新已有行"，
+> 且**预期主键必须调用前取**——写完再取就退化成 A4，A5 白做。
+
+### CASE 3　批次出库 `POST /harvests/inventory/{batchId}/out?qty=4`（5 PASS / 1 FAIL）
+
+| # | 断言 | 结果 | 实测 |
+| --- | --- | --- | --- |
+| 21 | A0 `code == 0` | ✅ | `0` |
+| 22 | A1 `current_qty == 96000-4`（库回读） | ✅ | `95996.00` |
+| 23 | A2 台账行数不变 | ✅ | `5 → 5` |
+| 24 | A5 流水 `inventoryId == DEMO-INVT-004` | ❌ | **不适用**——响应 20 个 key 内无 `inventoryId`；`prod_inventory_flow` 表与 `InventoryFlowEntity` 实体**都没有该字段/列**。已另立 **BT-74**（P1 结构缺失），不是本次修复回归 |
+| 25 | 流水 `qty` 为负（`== -4`） | ✅ | `-4` |
+| 26 | 新增流水 1 条 | ✅ | `INVF…1749098540` |
+
+### CASE 4　RESURRECTED 独立复验（13/13 PASS）
+
+墓碑在 `prod_inventory` 真实造出（`deleted=1`），复活后再入库。
+
+| # | 断言 | 结果 | 实测 |
+| --- | --- | --- | --- |
+| 27 | 步骤1 新建 `resultKind == "CREATED"` | ✅ | `CREATED` |
+| 28 | 步骤2 造出墓碑（**表级** `deleted == 1`） | ✅ | `1` |
+| 29 | 步骤2 应用层查不到（在用行数回落） | ✅ | `5 → 5` |
+| 30 | A0 `code == 0` | ✅ | `0` |
+| 31 | `resultKind == "RESURRECTED"` | ✅ | `RESURRECTED` |
+| 32 | `beforeQty == 0` | ✅ | `0` |
+| 33 | `inventoryId == 墓碑原 id` | ✅ | `INV202610101749153613` |
+| 34 | `currentQty == 本次入库量 7`（**不是 旧值+本次**） | ✅ | `7` |
+| 35 | A4 响应值 == 库回读值 | ✅ | `7` vs `7.00` |
+| 36 | **结果行数 == 1 不是 2**（复活生效，不是墓碑+新行） | ✅ | `1` |
+| 37 | `ledgerCreated == false`（复活不是新建） | ✅ | `False` |
+| 38 | 还原后**墓碑计数归零**（== 快照） | ✅ | `0 → 0` |
+| 39 | 还原后**在用行数** == 快照 | ✅ | `5 → 5` |
+
+### 还原与数据卫生
+
+- 四个 CASE 全部还原，最终表级：**在用 5 / 墓碑 0 / 物理 5 / 流水 5**，`DEMO-INVT-004 = 96000.00`，
+  与起始基线逐项一致。
+- ⚠️ **自纠一处**：CASE 2 预置目标台账时写的 `+10` 入库流水，还原阶段只物理删了台账行、
+  **漏删了这条流水**，导致库里残留一条孤儿流水（后来的 BT-76 实测 `beforeQty=96010` 就是被它污染的）。
+  已单独清除 `INVF202610101748586513` 并重新做表级验证归零。
+  教训（与 BT-57 那次"声称已还原但留下墓碑"同源，第二次犯）：
+  **凡声称"已还原"，表级验证必须覆盖"本次写过的每一张表、每一种 deleted 状态"，
+  不能只验台账行数。** 该孤儿流水反面印证了 BT-76：删台账不留流水会让流水累加和永久漂移。
 
 ---
 
