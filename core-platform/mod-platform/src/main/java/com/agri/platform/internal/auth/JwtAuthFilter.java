@@ -48,6 +48,14 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
+        // CORS 预检（OPTIONS）不携带 Authorization，浏览器也不会为预检附加自定义头。
+        // 若在此拦截，预检会在到达 CORS 校验之前就被 401，浏览器直接判定跨域失败，
+        // 表现为"接口存在但前端永远调不通"。预检是否放行由 CORS 配置
+        // （WebConfig#corsConfigurer）裁决：通过则返回 200 + Access-Control-* 头，
+        // 来源不在白名单则返回 403 Invalid CORS request，两种情况都不会进入控制器。
+        if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
+            return true;
+        }
         return WHITELIST.stream().anyMatch(p -> MATCHER.match(p, request.getRequestURI()));
     }
 

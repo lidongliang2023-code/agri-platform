@@ -1,4 +1,10 @@
 # 生产配置：全部敏感项经环境变量注入（K8s Secret / 配置中心），yml 中只保留结构与默认占位
+agri:
+  cors:
+    # 生产环境：来源必须逐一显式列出，端口位通配符一律不放行。
+    # 两项均由环境变量注入（AGRI_CORS_ORIGINS / AGRI_CORS_ORIGIN_PATTERNS），默认留空。
+    allowed-origins: ${AGRI_CORS_ORIGINS:}
+    allowed-origin-patterns: ${AGRI_CORS_ORIGIN_PATTERNS:}
 logging:
   level:
     com.agri: info

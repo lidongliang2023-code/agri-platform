@@ -70,7 +70,14 @@ agri:
       enabled: true
       cron: "0 0 1 * * ?"
   cors:
+    # 精确来源白名单：生产环境必须经 AGRI_CORS_ORIGINS 注入，禁止出现通配符。
     allowed-origins: ${AGRI_CORS_ORIGINS:http://localhost:5173,http://localhost:3000}
+    # 来源模式白名单：仅用于放开本机回环地址的任意端口。
+    # 根因（BT-31）：前端 axios 走相对路径 /api/**，vite dev server 端口被占用时会漂移
+    # 到 5174/5175...，vite proxy 的 changeOrigin 只改写 Host、不改写 Origin，
+    # 后端收到的 Origin 因此是浏览器端口，不在白名单内即 403 Invalid CORS request。
+    # 通配符只出现在端口位（localhost / 127.0.0.1 主机固定），application-prod.yml 置空。
+    allowed-origin-patterns: ${AGRI_CORS_ORIGIN_PATTERNS:http://localhost:*,http://127.0.0.1:*}
 
 management:
   endpoints:
