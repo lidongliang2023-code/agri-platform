@@ -254,33 +254,39 @@ public class HarvestController {
         return ApiResponse.ok();
     }
 
-    /** 成品入库（BT-02）：台账加库存 + 写 flowType=1 流水 + 批次标记已入库 */
+    /**
+     * 成品入库（BT-02）：台账加库存 + 写 flowType=1 流水 + 批次标记已入库。
+     *
+     * <p><b>为什么返回 {@link InventoryOperationResult} 而不是 {@code Boolean}。</b>
+     * 此前恒返回 {@code true}，se-verify-fix 回读验收时发现入库实际是<b>新造一条台账</b>
+     * 而非累加到已有台账，原台账 {@code currentQty} 纹丝不动，但响应仍是
+     * {@code code=0 / data=true} —— 典型的静默假成功。现在回传
+     * {@code inventoryId / beforeQty / deltaQty / currentQty / ledgerCreated}，
+     * 调用方可以直接「调用 → 回读 → 比对」闭环验证。
+     */
     @PostMapping("/inventory/in")
-    public ApiResponse<Boolean> stockIn(@RequestBody InventoryStockInRequest request) {
-        inventoryService.stockIn(request);
-        return ApiResponse.ok(Boolean.TRUE);
+    public ApiResponse<InventoryOperationResult> stockIn(@RequestBody InventoryStockInRequest request) {
+        return ApiResponse.ok(inventoryService.stockIn(request));
     }
 
     /** 损耗登记（BT-03）：台账扣减 + 累加损耗 + 写 flowType=4 流水 */
     @PostMapping("/inventory/{batchId}/loss")
-    public ApiResponse<Boolean> inventoryLoss(@PathVariable String batchId,
-                                              @RequestBody InventoryLossRequest request) {
+    public ApiResponse<InventoryOperationResult> inventoryLoss(@PathVariable String batchId,
+                                                               @RequestBody InventoryLossRequest request) {
         if (request != null && (request.getBatchId() == null || request.getBatchId().isBlank())) {
             request.setBatchId(batchId);
         }
-        inventoryService.registerLoss(batchId, request);
-        return ApiResponse.ok(Boolean.TRUE);
+        return ApiResponse.ok(inventoryService.registerLoss(batchId, request));
     }
 
     /** 库存调拨（BT-04）：原库位扣减 + 目标仓库累加 + 写成对出入库流水 */
     @PostMapping("/inventory/{batchId}/transfer")
-    public ApiResponse<Boolean> inventoryTransfer(@PathVariable String batchId,
-                                                  @RequestBody InventoryTransferRequest request) {
+    public ApiResponse<InventoryOperationResult> inventoryTransfer(@PathVariable String batchId,
+                                                                   @RequestBody InventoryTransferRequest request) {
         if (request != null && (request.getBatchId() == null || request.getBatchId().isBlank())) {
             request.setBatchId(batchId);
         }
-        inventoryService.transfer(batchId, request);
-        return ApiResponse.ok(Boolean.TRUE);
+        return ApiResponse.ok(inventoryService.transfer(batchId, request));
     }
 
     /** 批次出库（BT-07：operatorName 落库到流水，不再静默丢弃） */

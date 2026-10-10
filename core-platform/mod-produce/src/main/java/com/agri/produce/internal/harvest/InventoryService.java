@@ -199,13 +199,18 @@ public class InventoryService {
      * 成品入库（工单 BT-02）：台账当前库存增加 + 写 {@code flowType=1} 流水
      * + 把批次标记为已入库。
      *
-     * <p>同一「批次 + 仓库 + 库位」已存在台账时累加，否则新建一行。
+     * <p>同一「批次 + 仓库（+ 库位）」已存在台账时<b>累加</b>，否则才新建一行
+     * （BT-02 修复前此处恒新建，见 {@link #findLedger} 的说明）。
+     *
+     * <p><b>为什么返回 {@link InventoryOperationResult} 而不是 {@code boolean}。</b>
+     * 调用方必须能拿到「改前 / 改后 / 改的是哪一行」才能回读比对，否则又是一次
+     * 「响应说成功、数据没动」的静默假成功。
      *
      * @param request 入库入参
-     * @return 入库后的台账
+     * @return 入库结果（含变动后 currentQty，供调用方回读比对）
      */
     @Transactional
-    public InventoryEntity stockIn(InventoryStockInRequest request) {
+    public InventoryOperationResult stockIn(InventoryStockInRequest request) {
         requireBody(request, "入库请求体不能为空");
         String batchId = requireText(request.getBatchId(), "batchId 必填");
         String warehouseName = requireText(request.getWarehouseName(), "warehouseName 必填");
@@ -251,12 +256,13 @@ public class InventoryService {
             inventoryMapper.updateById(ledger);
         }
 
-        inventoryFlowMapper.insert(buildFlow(batchId, ledger.getWarehouseId(), warehouseName,
+        InventoryFlowEntity flow = buildFlow(batchId, ledger.getWarehouseId(), warehouseName,
                 1, quantity, ledger.getUnit(), before, after, null, request.getOperatorName(),
-                null, request.getRemark()));
+                null, request.getRemark());
+        inventoryFlowMapper.insert(flow);
 
         markBatchInbound(batchId, warehouseName);
-        return ledger;
+        return InventoryOperationResult.of(ledger, before, quantity, flow.getFlowId(), created);
     }
 
     /**
@@ -264,14 +270,14 @@ public class InventoryService {
      *
      * @param batchId 批次ID（路径变量）
      * @param request 损耗入参
-     * @return 扣减后的台账
+     * @return 报损结果（含变动后 currentQty，供调用方回读比对）
      */
     @Transactional
-    public InventoryEntity registerLoss(String batchId, InventoryLossRequest request) {
+    public InventoryOperationResult registerLoss(String batchId, InventoryLossRequest request) {
         requireBody(request, "报损请求体不能为空");
         requireText(batchId, "batchId 必填");
         BigDecimal quantity = requirePositive(request.getQuantity(), "损耗数量必须大于 0");
-        InventoryEntity ledger = requireLedger(batchId);
+        InventoryEntity ledger = requireLedger(batchId, "报损");
 
         BigDecimal before = nvl(ledger.getCurrentQty());
         if (before.compareTo(quantity) < 0) {
@@ -291,14 +297,15 @@ public class InventoryService {
         ledger.setHealthStatus(resolveHealth(ledger));
         inventoryMapper.updateById(ledger);
 
-        inventoryFlowMapper.insert(buildFlow(batchId, ledger.getWarehouseId(), ledger.getWarehouseName(),
+        InventoryFlowEntity flow = buildFlow(batchId, ledger.getWarehouseId(), ledger.getWarehouseName(),
                 4, quantity.negate(), ledger.getUnit(), before, after, null, request.getOperatorName(),
-                null, defaultText(request.getRemark(), request.getReason())));
+                null, defaultText(request.getRemark(), request.getReason()));
+        inventoryFlowMapper.insert(flow);
 
         if (after.compareTo(BigDecimal.ZERO) <= 0) {
             markBatchStatus(batchId, 3);
         }
-        return ledger;
+        return InventoryOperationResult.of(ledger, before, quantity.negate(), flow.getFlowId(), false);
     }
 
     /**
@@ -306,17 +313,17 @@ public class InventoryService {
      *
      * @param batchId 批次ID（路径变量）
      * @param request 调拨入参
-     * @return 调拨后的原台账
+     * @return 调拨结果（源侧 currentQty + 目标侧 targetCurrentQty，双侧都可回读比对）
      */
     @Transactional
-    public InventoryEntity transfer(String batchId, InventoryTransferRequest request) {
+    public InventoryOperationResult transfer(String batchId, InventoryTransferRequest request) {
         requireBody(request, "调拨请求体不能为空");
         requireText(batchId, "batchId 必填");
         String targetWarehouse = requireText(request.getTargetWarehouse(), "targetWarehouse 必填");
         BigDecimal quantity = requirePositive(request.getQuantity(), "调拨数量必须大于 0");
         String targetLocation = blankToNull(request.getLocationCode());
 
-        InventoryEntity source = requireLedger(batchId);
+        InventoryEntity source = requireLedger(batchId, "调拨");
         BigDecimal before = nvl(source.getCurrentQty());
         if (before.compareTo(quantity) < 0) {
             throw new BusinessException(ErrorCode.BAD_REQUEST,
@@ -329,9 +336,10 @@ public class InventoryService {
         source.setHealthStatus(resolveHealth(source));
         inventoryMapper.updateById(source);
 
-        inventoryFlowMapper.insert(buildFlow(batchId, source.getWarehouseId(), source.getWarehouseName(),
+        InventoryFlowEntity sourceFlow = buildFlow(batchId, source.getWarehouseId(), source.getWarehouseName(),
                 2, quantity.negate(), source.getUnit(), before, after, null, null,
-                null, request.getRemark()));
+                null, request.getRemark());
+        inventoryFlowMapper.insert(sourceFlow);
 
         InventoryEntity target = findLedger(batchId, targetWarehouse, targetLocation);
         boolean created = target == null;
@@ -361,11 +369,20 @@ public class InventoryService {
             inventoryMapper.updateById(target);
         }
 
-        inventoryFlowMapper.insert(buildFlow(batchId, target.getWarehouseId(), targetWarehouse,
+        InventoryFlowEntity targetFlow = buildFlow(batchId, target.getWarehouseId(), targetWarehouse,
                 1, quantity, target.getUnit(), targetBefore, targetAfter, null, null,
-                null, request.getRemark()));
+                null, request.getRemark());
+        inventoryFlowMapper.insert(targetFlow);
 
-        return source;
+        InventoryOperationResult result = InventoryOperationResult.of(source, before, quantity.negate(),
+                sourceFlow.getFlowId(), false);
+        result.setTargetInventoryId(target.getInventoryId());
+        result.setTargetWarehouseName(targetWarehouse);
+        result.setTargetBeforeQty(targetBefore);
+        result.setTargetCurrentQty(targetAfter);
+        result.setTargetLedgerCreated(created);
+        result.setTargetFlowId(targetFlow.getFlowId());
+        return result;
     }
 
     /**
@@ -400,37 +417,54 @@ public class InventoryService {
     /* -------------------------------------------------------------- 内部辅助 */
 
     /**
-     * 定位「批次 + 仓库 + 库位」对应的台账行。库位为空时按「批次 + 仓库」匹配。
+     * 定位「批次 + 仓库（+ 库位）」对应的台账行，用于入库 / 调拨的 upsert。
+     *
+     * <p><b>为什么库位为空时不能加 {@code isNull(location_code)}。</b>BT-02 实测
+     * （se-verify-fix 回读验收发现）：种子台账 {@code DEMO-INVT-004} 的库位是
+     * {@code 'M-01-01'}，而调用方只传了 {@code batchId + warehouseName}、没传库位。
+     * 旧实现此时拼的是 {@code WHERE location_code IS NULL} —— 必然命中不到任何行，
+     * 于是每次入库都 <b>新造一条台账</b>，表现为「响应 200/true，但原台账库存纹丝不动」，
+     * 同批次同仓库在列表里重复出现，「当前库存」不再唯一。
+     *
+     * <p>正确语义是：<b>不传库位 = 不关心库位</b>，按「批次 + 仓库」唯一定位（同一仓库
+     * 内取当前库存最大的那一条，库存相同再按主键升序保证结果稳定）；<b>传了库位</b>
+     * 才按三元组精确匹配。
      *
      * @param batchId       批次ID
      * @param warehouseName 仓库名称
-     * @param locationCode  库位编号，可为 null
+     * @param locationCode  库位编号，null 表示调用方未指定（不参与匹配）
      * @return 台账行，不存在返回 null
      */
     private InventoryEntity findLedger(String batchId, String warehouseName, String locationCode) {
         LambdaQueryWrapper<InventoryEntity> wrapper = Wrappers.<InventoryEntity>lambdaQuery()
                 .eq(InventoryEntity::getBatchId, batchId)
                 .eq(InventoryEntity::getWarehouseName, warehouseName)
-                .orderByDesc(InventoryEntity::getCurrentQty);
-        if (locationCode == null) {
-            wrapper.isNull(InventoryEntity::getLocationCode);
-        } else {
+                .orderByDesc(InventoryEntity::getCurrentQty)
+                .orderByAsc(InventoryEntity::getInventoryId);
+        if (locationCode != null) {
             wrapper.eq(InventoryEntity::getLocationCode, locationCode);
         }
-        List<InventoryEntity> rows = inventoryMapper.selectList(wrapper);
+        // upsert 的读-改-写必须是原子的：FOR UPDATE 锁住候选行，避免并发下两次
+        // 查都 miss 然后各插一条。（DB 层唯一约束另见 V1x 迁移，本方法与之互补）
+        List<InventoryEntity> rows = inventoryMapper.selectList(wrapper.last("LIMIT 1 FOR UPDATE"));
         return rows.isEmpty() ? null : rows.get(0);
     }
 
     /**
      * 取批次台账，不存在抛 404（不返回空实体冒充成功）。
      *
+     * <p><b>为什么报损与调拨不能用同一句文案。</b>旧实现共用「无法出库/报损」，
+     * 运营在调拨场景看到「报损」会以为是损耗登记失败，误判业务含义。这里按调用方
+     * 传入的动作名分述（BT-03 报损 / BT-04 调拨）。
+     *
      * @param batchId 批次ID
+     * @param action  动作名，用于拼接明确的原因文案
      * @return 台账行
      */
-    private InventoryEntity requireLedger(String batchId) {
+    private InventoryEntity requireLedger(String batchId, String action) {
         List<InventoryEntity> ledgers = listByBatch(batchId);
         if (ledgers.isEmpty()) {
-            throw new BusinessException(ErrorCode.NOT_FOUND, "批次 " + batchId + " 暂无库存台账，无法出库/报损");
+            throw new BusinessException(ErrorCode.NOT_FOUND, "批次 " + batchId + " 暂无库存台账，无法" + action);
         }
         return ledgers.get(0);
     }
