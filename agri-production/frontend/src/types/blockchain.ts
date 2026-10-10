@@ -95,6 +95,46 @@ export interface BlockchainCertRecord {
   payload?: Record<string, unknown>
 }
 
+/**
+ * 存证域 `GET /blockchain/by-biz` 返回的存证记录（对齐后端 BlockchainRecordEntity 真实字段）。
+ *
+ * ⚠️ 字段名与运行时形状均以连服实测为准（2026-10-10，core-app :8140）：
+ * `{"recordId":"DEMO-CHAIN-001","bizType":"TRACE","bizNo":"DEMO-TC-0001","batchId":"DEMO-BATCH-001",
+ *   "traceCode":"DEMO-TC-0001","chainType":"TrustChain","chainNetwork":"agri-mainnet",
+ *   "txHash":"DEMO-TX-0x1a2b3c4d5e6f0001","blockHeight":"12884201","status":"SUCCESS","anchorAt":"..."}`
+ *
+ * 两个必须知道的坑：
+ * - `blockHeight` 运行时是**字符串**（"12884201"），不是 number；展示前统一 String() 处理，
+ *   否则会踩本项目已发生过的 Long→String 静默错判。
+ * - `txHash` / `blockHeight` / `status` 在 PENDING 记录上恒为 null（未出块、未回填哈希）。
+ */
+export interface BlockchainBizRecord {
+  /** 存证记录 ID */
+  recordId: string
+  /** 业务类型：TRACE / INSPECTION / HARVEST */
+  bizType?: string
+  /** 关联业务单号（TRACE=溯源码、INSPECTION=质检单号、HARVEST=批次号 batch_no） */
+  bizNo?: string
+  /** 关联批次 ID */
+  batchId?: string
+  /** 关联溯源码 */
+  traceCode?: string
+  /** 链类型 */
+  chainType?: string
+  /** 链网络标识 */
+  chainNetwork?: string
+  /** 交易哈希；PENDING 记录为 null */
+  txHash?: string | null
+  /** 区块高度（运行时为字符串）；PENDING 记录为 null */
+  blockHeight?: string | number | null
+  /** 存证内容哈希 */
+  payloadHash?: string | null
+  /** 上链时间；PENDING 记录为 null */
+  anchorAt?: string | null
+  /** 存证状态：PENDING / SUCCESS / FAILED */
+  status?: string | null
+}
+
 /** 存证类型分布项 */
 export interface ChainTypeStat {
   /** 类型名称 */

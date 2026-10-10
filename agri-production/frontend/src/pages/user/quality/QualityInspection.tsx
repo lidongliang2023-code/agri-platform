@@ -15,7 +15,7 @@
  */
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { PageContainer, ProTable } from '@ant-design/pro-components'
 import type { ProColumns } from '@ant-design/pro-components'
 import {
@@ -55,7 +55,14 @@ import {
   submitInspectionResult,
 } from '@/api/quality'
 import { listHarvests } from '@/api/harvests'
-import type { HarvestBatch, InspectionItem, RawInspection, TestingLab } from '@/types'
+import { listBlockchainByBiz } from '@/api/blockchain'
+import type {
+  BlockchainBizRecord,
+  HarvestBatch,
+  InspectionItem,
+  RawInspection,
+  TestingLab,
+} from '@/types'
 
 /** 列表一次性拉取上限（后端未提供结果 / 机构过滤，二者在前端二次过滤） */
 const MAX_FETCH_SIZE = 200
@@ -210,6 +217,42 @@ export default function QualityInspection(): JSX.Element {
     enabled: Boolean(detailId),
     queryFn: () => fetchInspectionItems(detailId),
   })
+
+  /** 当前列表的检测单号（存证域 INSPECTION 类按单号关联，非 inspectionId） */
+  const inspectionNos = useMemo<string[]>(
+    () =>
+      (listQuery.data?.list ?? [])
+        .map((item) => String(item.inspectionNo ?? item.inspectionId ?? ''))
+        .filter((item) => item !== ''),
+    [listQuery.data],
+  )
+
+  /** 存证域：逐条按检测单号查上链存证（GET /blockchain/by-biz，裸数组，无记录返回 []） */
+  const anchorQueries = useQueries({
+    queries: inspectionNos.map((bizNo) => ({
+      queryKey: ['blockchain-by-biz', 'INSPECTION', bizNo],
+      enabled: Boolean(bizNo),
+      retry: false,
+      queryFn: () => listBlockchainByBiz({ bizType: 'INSPECTION' as const, bizNo }),
+    })),
+  })
+
+  /** 检测单号 → 存证记录（同单号多条时取第一条） */
+  const anchorMap = useMemo(() => {
+    const map = new Map<string, BlockchainBizRecord>()
+    anchorQueries.forEach((query) => {
+      ;(query.data ?? []).forEach((record) => {
+        const key = String(record.bizNo ?? '')
+        if (key !== '' && !map.has(key)) {
+          map.set(key, record)
+        }
+      })
+    })
+    return map
+  }, [anchorQueries])
+
+  /** 存证查询是否仍在进行（进行中不渲染结论，避免把「还没查到」显示成「无存证」） */
+  const anchorLoading = anchorQueries.some((query) => query.isFetching)
 
   /** 机构下拉选项 */
   const labOptions = useMemo(
@@ -401,17 +444,40 @@ export default function QualityInspection(): JSX.Element {
       },
     },
     {
-      // 后端质检记录返回体中不存在 onChain 字段（已连服实测确认），
-      // 旧实现把 undefined 当 false 渲染成「⏳ 待上链」，是一个没有依据的业务结论。
-      // 现统一降级为显式「未接入」。
+      // 上链状态取自存证域 GET /blockchain/by-biz（bizType=INSPECTION、bizNo=检测单号），
+      // 连服实测 DEMO-INSPC-001 能查到 SUCCESS 记录。
+      // 旧实现读后端不存在的 record.onChain，把 undefined 当 false 渲染成「⏳ 待上链」，
+      // 是没有依据的业务结论；现改为查存证域取真值，无记录时显示「无存证」。
       title: (
-        <Tooltip title="后端未提供上链状态字段（onChain），显示为「未接入」，不做本地估算">
+        <Tooltip title="上链状态取自存证域 /blockchain/by-biz（按检测单号关联）：已上链=存证 SUCCESS、待上链=存证 PENDING、无存证=查过存证域但无匹配记录">
           上链 🔗
         </Tooltip>
       ),
       key: 'onChain',
       width: 110,
-      render: () => <Typography.Text type="secondary">未接入</Typography.Text>,
+      render: (_, record) => {
+        if (anchorLoading) {
+          return <Typography.Text type="secondary">查询中…</Typography.Text>
+        }
+        const anchor = anchorMap.get(String(record.inspectionNo ?? record.inspectionId ?? ''))
+        if (!anchor) {
+          return <Typography.Text type="secondary">无存证</Typography.Text>
+        }
+        if (anchor.status === 'SUCCESS') {
+          // 交易哈希挂在 span 的原生 title 上：列宽只有 110px 放不下完整哈希，
+          // 但哈希必须让用户取得到（hover 可见），同时也是「这条是真存证」的凭据。
+          const blockText =
+            anchor.blockHeight == null ? '' : ` · 区块高度 ${String(anchor.blockHeight)}`
+          return (
+            <Tooltip title={anchor.txHash ? `交易哈希 ${anchor.txHash}${blockText}` : '存证已确认'}>
+              <span title={anchor.txHash ? `交易哈希 ${anchor.txHash}${blockText}` : undefined}>
+                <Tag color="green">🔗 已上链</Tag>
+              </span>
+            </Tooltip>
+          )
+        }
+        return <Tag>⏳ 待上链</Tag>
+      },
     },
     {
       title: '操作',

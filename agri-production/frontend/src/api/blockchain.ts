@@ -4,6 +4,7 @@
 import { http } from '@/utils/request'
 import type { PageQuery, PageResult } from '@/types'
 import type {
+  BlockchainBizRecord,
   BlockchainCertRecord,
   BlockchainChainOverview,
   BlockchainOverview,
@@ -109,4 +110,35 @@ export function verifyCertificate(params: {
 /** 查询存证总览（原型 P27：指标卡 + 类型分布 + 链上健康度 + 待上链队列） */
 export function getChainOverview(): Promise<BlockchainChainOverview> {
   return http.get<BlockchainChainOverview>(`${BASE}/overview`)
+}
+
+/** by-biz 查询入参 */
+export interface BlockchainByBizParams {
+  /**
+   * 业务类型。
+   * ⚠️ 后端 bizType 与 bizNo 是**成对**的，两边口径必须匹配，否则恒返回 []：
+   * TRACE→溯源码、INSPECTION→质检单号(inspection_no)、HARVEST→批次号(batch_no)。
+   */
+  bizType: 'TRACE' | 'INSPECTION' | 'HARVEST'
+  /** 业务单号（见 bizType 注释里的口径） */
+  bizNo: string
+}
+
+/**
+ * 按业务类型 + 业务单号查询存证记录（GET /blockchain/by-biz）。
+ *
+ * ⚠️ 这是**非分页**端点：返回后端裸数组（`ApiResponse<List<BlockchainRecordEntity>>`），
+ * 无匹配记录时返回 `[]`。因此**不要**套 `toPageResult` —— 套上去会凭空引入
+ * 「按 pageNum/pageSize 切片」的语义，让调用方误以为后端支持分页并丢数据。
+ *
+ * ⚠️ 关联键实测结论（2026-10-10 连服）：`bizNo` 必须传 **batch_no** 不能传 batch_id ——
+ * 传 `DEMO-BATCH-001` 返回 `[]`，传同批次的 `DEMO-BATCHN-001` 才有数据。
+ *
+ * @param params 业务类型 + 业务单号
+ * @returns 存证记录数组；无记录时为空数组（不是 undefined / null）
+ */
+export function listBlockchainByBiz(
+  params: BlockchainByBizParams,
+): Promise<BlockchainBizRecord[]> {
+  return http.get<BlockchainBizRecord[]>(`${BASE}/by-biz`, params)
 }
