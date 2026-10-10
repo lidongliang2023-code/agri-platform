@@ -14,7 +14,6 @@
  */
 import { http, toPageResult } from '@/utils/request'
 import type { PageQuery, PageResult } from '@/types'
-import type { ReportItem } from '@/types'
 
 const BASE = '/admin/reports'
 
@@ -145,9 +144,26 @@ export async function listAdminReports(
   }
 }
 
-/** 查询报表详情 */
-export function getAdminReport(reportId: string): Promise<ReportItem> {
-  return http.get<ReportItem>(`${BASE}/${reportId}`)
+/**
+ * 查询报表详情。
+ *
+ * ⚠️ 历史实现声明返回 `ReportItem`（报表中心那套：period / fileSize /
+ * generatorName / status 为 1|2|3），但后端 `AdminReportController#detail`
+ * 返回的是 `ReportTaskEntity`——两套字段**零交集**。照 `ReportItem` 取值只会
+ * 拿到一对象 undefined，属于"端点在、但契约错"。
+ *
+ * 成对实测（core-app :8098，同一基址、只换 id，排除"路径不存在"这个干扰项）：
+ *   `GET /admin/reports/DEMO-RPT-002` → code=0，data 为完整 ReportTaskEntity
+ *     （reportType=GOV / bizDateFrom=2026-01-01 / generatorId=SUPER_ADMIN / status=PENDING）
+ *   `GET /admin/reports/NOPE-NOPE`    → code=404 资源不存在
+ * 说明端点真实存在、数据真实，因此**修契约为 `ReportTask`，不删函数**
+ * （"零调用方"只在端点不存在时才构成删除理由；留着错误契约会被复制粘贴扩散）。
+ *
+ * @param reportId 报表编号
+ * @returns 报表任务（后端实体形状）
+ */
+export function getAdminReport(reportId: string): Promise<ReportTask> {
+  return http.get<ReportTask>(`${BASE}/${reportId}`)
 }
 
 /**

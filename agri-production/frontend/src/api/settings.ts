@@ -42,6 +42,8 @@ interface SysSettingSaved {
   settingKey: string
   /** 配置值 */
   settingValue: string
+  /** 备注（对应前端 description） */
+  remark?: string
 }
 
 /**
@@ -64,19 +66,35 @@ export function listSettings(): Promise<SettingItem[]> {
 }
 
 /**
- * 查询单个配置项。
+ * 按配置键查询单个配置项。
  *
- * ⚠️ 实测（core-app :8098）：这个路径会被后端的 `@GetMapping("/{id}")` 兜住，
- * 而 `{id}` 要的是**业务主键 settingId**（如 `DEMO-SET-001`），不是配置键。
- * 传 configKey 进去会拿到 `code=404 资源不存在`。按 team-lead 裁决保持现状不改行为，
- * 但调用方必须知道：要按配置键取数请走 `/settings/by-key?settingKey=...`。
- * 当前无调用方。
+ * ⚠️ 历史实现打的是 `GET /settings/{id}`，而 `{id}` 要的是**业务主键 settingId**
+ * （如 `DEMO-SET-001`），不是配置键——属于"端点在、但契约错"。
+ * 成对实测（core-app :8098，**同一个 key** 对照，排除"key 本身无效"这个干扰项）：
+ *   `GET /settings/DEMO.alert.notifyChannels`              → code=404 资源不存在
+ *   `GET /settings/by-key?settingKey=DEMO.alert.notifyChannels`
+ *                                          → code=0，返回 settingValue=["INBOX","SMS","WECHAT"]
+ * 裁决：**改走 `by-key`，不删函数**。端点存在且有真数据就修契约；
+ * 只有"端点不存在 + 零调用方"才删。留着错误写法会被下一个复制粘贴走。
+ * 字段名也一并按后端口径映射回来（与 `deleteSetting` 同一套做法）。
  *
  * @param configKey 配置键
- * @returns 配置项
+ * @returns 配置项；该键不存在时返回 null（后端此时返回 `data: null`，不是报错）
  */
-export function getSetting(configKey: string): Promise<SettingItem> {
-  return http.get<SettingItem>(`${BASE}/${configKey}`)
+export async function getSetting(configKey: string): Promise<SettingItem | null> {
+  const saved = await http.get<SysSettingSaved | null>(
+    `${BASE}/by-key`,
+    { settingKey: configKey },
+    { silent: true },
+  )
+  if (!saved?.settingKey) {
+    return null
+  }
+  return {
+    configKey: saved.settingKey,
+    configValue: saved.settingValue,
+    description: saved.remark,
+  }
 }
 
 /**
