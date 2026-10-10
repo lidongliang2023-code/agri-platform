@@ -116,7 +116,9 @@ export default function PlanCalendar(): JSX.Element {
       }),
   })
 
-  const entries = calendarQuery.data ?? []
+  const entries = calendarQuery.data?.entries ?? []
+  /** 日历各来源的不可用原因（非空表示本次少了一块排期，不是"没有排期"） */
+  const calendarUnavailableReasons = calendarQuery.data?.unavailableReasons ?? []
 
   /**
    * 将当日条目的状态 / 来源映射为 Badge 语义
@@ -258,6 +260,25 @@ export default function PlanCalendar(): JSX.Element {
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
+      {calendarUnavailableReasons.length > 0 && (
+        <AntAlert
+          showIcon
+          type="warning"
+          message="农事日历本次不完整：部分数据来源未取到"
+          description={
+            <span>
+              {calendarUnavailableReasons.map((reason) => (
+                <span key={reason}>
+                  {reason}
+                  <br />
+                </span>
+              ))}
+              因此日历里缺少对应排期——<strong>这不是"这段时间没有安排"</strong>，
+              不要据此判断某段时间空闲。此处不会用示例数据补位。
+            </span>
+          }
+        />
+      )}
       <Card
         title={
           <Space>

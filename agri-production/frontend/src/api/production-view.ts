@@ -989,6 +989,34 @@ function clampRange(
 }
 
 /**
+ * 农事日历查询结果（附带各来源的「接口不可用」原因）。
+ *
+ * 日历由「农事任务 + 计划阶段」两个来源合成，任一个拿不到都只会让日历**少一部分排期**，
+ * 而页面上看不出来少了哪一块——这正是静默 catch 最危险的地方：用户会以为"这段时间没有安排"。
+ * 因此这里把不可用原因一并返回，由页面醒目提示本次缺了哪个来源。
+ */
+export interface CalendarEntriesResult {
+  /** 日历条目（来源不可用时该来源为空，绝不用示例数据顶上） */
+  entries: CalendarEntry[]
+  /** 各来源的不可用原因；为空表示两个来源都取到了真实数据 */
+  unavailableReasons: string[]
+}
+
+/**
+ * 描述某个日历数据来源的失败原因。
+ *
+ * @param source 来源名称
+ * @param error catch 到的未知错误
+ * @returns 中文说明
+ */
+function describeSourceFailure(source: string, error: unknown): string {
+  const status = httpStatusOf(error)
+  const detail = (error as Error)?.message?.trim()
+  const kind = status > 0 ? `HTTP ${status}` : '后端不可达'
+  return `${source}接口不可用（${kind}）${detail ? `：${detail}` : ''}`
+}
+
+/**
  * 查询农事日历（按月区间聚合「计划阶段 + 农事任务」）
  *
  * **跨月可见性**：阶段与任务均按其完整日期区间做「重叠判定」并**逐日展开**，
@@ -996,14 +1024,15 @@ function clampRange(
  * 依然能看到 4/1~4/5 的排期，不会因只按 startDate 所属月过滤而丢失。
  *
  * @param params 查询参数（startDate / endDate 为查询窗口）
- * @returns 日历条目列表（多日条目按天展开）
+ * @returns 日历条目与不可用原因（多日条目按天展开）
  */
 export async function fetchCalendarEntries(params: {
   startDate: string
   endDate: string
   farmId?: string
-}): Promise<CalendarEntry[]> {
+}): Promise<CalendarEntriesResult> {
   const entries: CalendarEntry[] = []
+  const unavailableReasons: string[] = []
   const { startDate: rangeStart, endDate: rangeEnd } = params
 
   // 1) 农事任务：区间重叠 + 逐日展开
@@ -1044,8 +1073,11 @@ export async function fetchCalendarEntries(params: {
         })
       }
     }
-  } catch {
-    // 静默：任务接口不可用时不影响阶段日历渲染
+  } catch (error) {
+    // 不再静默：任务这一半缺失会让日历"看起来这段时间没有安排"，必须告诉用户缺了什么
+    unavailableReasons.push(
+      `${describeSourceFailure('农事任务', error)}——本次日历里不会有任务排期，这不是"这段时间没有任务"`,
+    )
   }
 
   // 2) 计划生育期阶段：同为区间重叠 + 逐日展开
@@ -1087,11 +1119,14 @@ export async function fetchCalendarEntries(params: {
         }
       }
     }
-  } catch {
-    // 静默：计划接口不可用时降级为空集合
+  } catch (error) {
+    // 不再静默：计划阶段这一半缺失同样是"少了一块排期"而不是"没有排期"
+    unavailableReasons.push(
+      `${describeSourceFailure('种养计划阶段', error)}——本次日历里不会有生育期阶段排期，这不是"这段时间没有阶段"`,
+    )
   }
 
-  return entries
+  return { entries, unavailableReasons }
 }
 
 /**
