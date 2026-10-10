@@ -4,8 +4,12 @@ import com.agri.produce.internal.harvest.HarvestBatchEntity;
 import com.agri.produce.internal.harvest.HarvestBatchMapper;
 import com.agri.produce.internal.quality.InspectionEntity;
 import com.agri.produce.internal.quality.InspectionMapper;
+import com.agri.produce.internal.quality.QualityLabEntity;
+import com.agri.produce.internal.quality.QualityLabMapper;
 import com.agri.produce.internal.trace.TraceCodeEntity;
 import com.agri.produce.internal.trace.TraceCodeMapper;
+import com.agri.shared.exception.BusinessException;
+import com.agri.shared.exception.ErrorCode;
 import com.agri.shared.result.PageResult;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -13,11 +17,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import com.agri.produce.internal.quality.QualityLabEntity;
-import com.agri.produce.internal.quality.QualityLabMapper;
 
 /**
  * 运营端：溯源监管与召回（码段统计、全链条回溯、一键召回）。
@@ -110,26 +113,42 @@ public class AdminTraceService {
      * 但批次冻结仍会执行，导致「只冻结、不作废」的半生效状态。
      * 现改为：先按主键取批次（冻结用），再用该批次的 batchNo 去查溯源码（作废用），两者口径一致。
      *
+     * <p><b>批次不存在必须失败（G-01 / BT-63）</b>：旧实现在 {@code batch == null} 时整个跳过，
+     * 既不写库也不抛异常，直接返回 0，Controller 照样包装成 {@code code=0}，
+     * 前端于是宣称「批次已冻结」——而 {@code prod_harvest_batch.status} 根本没变。
+     * 这类"刷新列表也不会露馅"的静默无操作是 G-01 里危害最大的一档。
+     * 现改为与 {@link AdminQualityService#recall(String)} 完全一致：
+     * 查不到即 {@code throw new BusinessException(ErrorCode.NOT_FOUND)}。
+     *
+     * <p><b>返回值 0 有两义，验收时不可只看数量</b>：
+     * 「批次不存在」已改为抛异常，因此**能走到返回值的 0 一定是合法 0**——
+     * 批次存在、已冻结，只是该批次名下没有溯源码（{@code batch_no} 为空或无码）。
+     * 此时 {@code status} 已被置 4，属于真生效。
+     * 所以 G-01 判据里「计数类 → 返回 0 即静默无操作」对本方法**不适用**，
+     * 主判据必须是回读 {@code prod_harvest_batch.status == 4}。
+     *
      * @param batchId 采收批次ID（prod_harvest_batch.batch_id）
-     * @return 作废数量
+     * @return 作废数量（0 表示批次存在但该批次名下无溯源码，此时批次仍已冻结）
+     * @throws BusinessException 批次不存在（{@link ErrorCode#NOT_FOUND}）
      */
     @Transactional
     public int recall(String batchId) {
         HarvestBatchEntity batch = harvestBatchMapper.selectById(batchId);
-        int count = 0;
-        if (batch != null) {
-            List<TraceCodeEntity> codes = batch.getBatchNo() == null || batch.getBatchNo().isBlank()
-                    ? new java.util.ArrayList<>()
-                    : traceCodeMapper.selectList(new LambdaQueryWrapper<TraceCodeEntity>()
-                            .eq(TraceCodeEntity::getBatchNo, batch.getBatchNo()));
-            for (TraceCodeEntity traceCode : codes) {
-                traceCode.setStatus("revoked");
-                traceCodeMapper.updateById(traceCode);
-                count++;
-            }
-            batch.setStatus(4);
-            harvestBatchMapper.updateById(batch);
+        if (batch == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND);
         }
+        List<TraceCodeEntity> codes = batch.getBatchNo() == null || batch.getBatchNo().isBlank()
+                ? new ArrayList<>()
+                : traceCodeMapper.selectList(new LambdaQueryWrapper<TraceCodeEntity>()
+                        .eq(TraceCodeEntity::getBatchNo, batch.getBatchNo()));
+        int count = 0;
+        for (TraceCodeEntity traceCode : codes) {
+            traceCode.setStatus("revoked");
+            traceCodeMapper.updateById(traceCode);
+            count++;
+        }
+        batch.setStatus(4);
+        harvestBatchMapper.updateById(batch);
         return count;
     }
 
@@ -137,7 +156,7 @@ public class AdminTraceService {
     public List<Map<String, Object>> labs() {
         List<QualityLabEntity> labs = qualityLabMapper.selectList(new LambdaQueryWrapper<QualityLabEntity>()
                 .eq(QualityLabEntity::getStatus, 1));
-        List<Map<String, Object>> result = new java.util.ArrayList<>();
+        List<Map<String, Object>> result = new ArrayList<>();
         for (QualityLabEntity lab : labs) {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("labId", lab.getLabId());

@@ -100,6 +100,13 @@ POST /admin/quality/recalls?batchId=zzz-not-exist → {"code":404,"message":"资
   而 BT-63 **刷新不会露馅**——列表里本来就没这个批次，运营会以为"召回了，只是这批没码"，
   只有查 `prod_harvest_batch.status` 才知道压根没冻结。
 
+## 修复状态
+
+| BT | 状态 | 落地 | 验收实测 |
+| --- | --- | --- | --- |
+| **BT-63** | ✅ **已修** | `AdminTraceService#recall` 改为 `batch == null` 时 `throw new BusinessException(ErrorCode.NOT_FOUND)`，与 `AdminQualityService#recall` 完全一致（commit 见本节末） | 同一 `batchId=zzz-not-exist` 打三条路径，`/trace/recall`、`/trace/recalls`、`/quality/recalls` **全部 `code=404 资源不存在`**（修复前是 404/404/**0** 不一致）；真实批次 `DEMO-BATCH-002`：`data=1`，回读 `status 1→4`、码 `ACTIVE→revoked`，基线已还原 |
+| BT-22 / BT-28 / BT-59 | 未修 | 同形态（`deleteById` 丢弃返回值） | 落地时须照上方「判据修正 2 / 3」的形态写，**不要**用 `affected == 0 → NOT_FOUND` |
+
 ## 判据（照此验收，不要凭响应码判断）
 
 1. **不看响应码**：本后端 HTTP 恒 200，写操作失败也可以是 `code=0`（这正是本项的全部内容）。
@@ -111,8 +118,65 @@ POST /admin/quality/recalls?batchId=zzz-not-exist → {"code":404,"message":"资
      **不是"行从表里消失"**。用"行数变没变"当判据会把逻辑删除误判成没删。
    - 状态类（BT-63）→ `status` 是否真的变成期望值；
    - 计数类 → 返回的数量是否 > 0（返回 0 且无异常 = 静默无操作）。
+     ⚠️ **此条对 BT-63 已失效，见下方「判据修正」第 1 条**——修完之后返回 0 是合法结果。
 4. **成对取证**：同一个不存在的 id 打两条**语义等价**的路径（如 `/trace/recall` vs
    `/quality/recalls`），一边 404 一边 `code=0` 即坐实静默。**这条比单独测一条有说服力得多。**
+
+### 判据修正（2026-10-10　se-backend-inv　BT-63 修复时实测取得，team-lead 批准并入）
+
+修正动机：上面第 3 条的两款判据（"受影响行数"、"返回数量 > 0"）**单独使用都会误判**，
+而且误判方向相反——一个把"已生效"判成"没生效"，一个把"没生效"判成"已生效"。
+
+**修正 1：计数类不能用"返回 0"当判据（BT-63 修完后尤其不能用）**
+
+`AdminTraceService.recall` 的返回值 0 **有两义**：
+
+- 批次不存在 → 现已 `throw BusinessException(ErrorCode.NOT_FOUND)`，走不到返回值；
+- 批次存在、已冻结，但 `batch_no` 为空或名下无溯源码 → **合法 0**，此时 `status` 已被置 4。
+
+也就是说：**凡是能走到 `return` 的 0，一定是合法 0**（不存在的分支已经抛异常了）。
+因此本方法的判据只能是回读 `prod_harvest_batch.status = 4`，
+**不能**是"data 是否 > 0"。用后者会把"批次已冻结、只是这批没码"误判成静默无操作。
+
+**修正 2：删除类不能用"受影响行数"单独当判据——`affected == 0` 也可能是"已删除"**
+
+实测（`prod_knowledge_article`，MyBatis SQL 打印取证）：同一个 `article_id` 连续删两次——
+
+```
+第 1 次：{"code":0,"data":null}   回读 deleted = 1
+第 2 次：{"code":0,"data":null}   回读 deleted = 1   ← 行确实处于"已删除"
+         实际 SQL：
+         ==> Preparing: UPDATE prod_knowledge_article SET deleted = 1
+                        WHERE article_id = ? AND deleted = 0 AND market_id = 1
+         <== Updates: 0                              ← 受影响行数为 0
+```
+
+注意逻辑删除的实际形态：`deleteById` 生成的是 `UPDATE ... SET deleted = 1 WHERE ... AND deleted = 0`，
+**`deleted = 0` 是谓词的一部分**。所以第二次删时该行已经被谓词排除，`Updates: 0`
+的真实语义是「**已删除**」，而**不是**「**不存在**」。
+
+→ 若照「期望语义」第 1 条 `if (affected == 0) throw NOT_FOUND` 落地，
+**幂等重删会被误报成 404**（用户看到"资源不存在"，实际资源存在且已删除）。
+
+→ 故删除类判据必须是 **`deleted = 1` 且应用层查不到**，两步都要：
+只看 `deleted` 无法区分"刚删的"和"早就是墓碑"；只看应用层查不到，
+无法区分"逻辑删除生效"和"行本来就压根没有"。
+`affected` 只剩一个用途：区分「本次真改了」与「本次是幂等空转」，
+**不能用来判定存在性**。
+
+**修正 3：由此推出「期望语义」第 1 条的落地形态要改**
+
+不能写成 `affected == 0 → NOT_FOUND`。正确形态是先判存在、再执行：
+
+```java
+// 存在性判断走 Wrapper（自动带 deleted = 0，天然只看活行）
+if (mapper.selectById(id) == null) {
+    throw new BusinessException(ErrorCode.NOT_FOUND);
+}
+mapper.deleteById(id);   // 此处 affected == 0 只可能表示"并发下已被别人删掉"，按幂等处理
+```
+
+与 `AdminQualityService#accredit / reject / recall` 现成写法一致，不另起一套。
 
 ## 期望语义（建议方案，请后端定）
 
