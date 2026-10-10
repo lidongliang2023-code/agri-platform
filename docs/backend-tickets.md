@@ -388,7 +388,126 @@ quotaUsageRate / activeDays / revenue / strategy` …），后端**没有任何�
 
 ---
 
-## 附：已验证为"真生效 / 有真数据"的对照（跨两个域）
+---
+
+# 域 3：`admin/reports`（运营端统计报表）
+
+> 产出人：se-verify-fix　日期：2026-10-10　实测环境同域 1（`core-app` :8098）。
+> 本域前端**已由前序同事做过一轮诚实化**（`catch` 里的"后端暂不可用，当前使用本地计算结果"
+> 已删、`/stat` 与列表都改为返回 `unavailableReason`），所以本轮**没有发现新的"假数据"**，
+> 剩余 4 条全是"后端缺能力 / 契约不符"。
+
+**现有端点**（`AdminReportController.java`）：`GET /admin/reports`（page / size / keyword / status）、
+`GET /{id}`、`POST`、`PUT /{id}`、`DELETE /{id}`、`POST /{reportId}/generate`、
+`GET /by-type?reportType=`、`GET /production`、`GET /quality`。
+
+---
+
+## BT-15　`GET /admin/reports/stat` 端点不存在（报表中心统计卡）
+
+| 项 | 内容 |
+| --- | --- |
+| 端点 | `GET /admin/reports/stat` |
+| 前端函数 | `getReportCenterStat()` |
+| 调用方 | `ReportCenter.tsx` 顶部统计卡 |
+
+**实测**：`GET /admin/reports/stat` → **code=404「资源不存在」**，与对照组
+`GET /admin/reports/zzz-not-exist`（404）**完全一致**。
+
+**成因**：`/stat` 被 `@GetMapping("/{id}")` 吞掉，后端拿 "stat" 当报表 id 去查，查不到 → 404。
+（不是"没数据"，是端点根本不存在——见域 2 的 BT-12/13，同一个坑。）
+
+**前端现状**：`getReportCenterStat` 已改为返回 `unavailableReason`，页面显示失败态与「—」，
+**不再用示例数字顶上**（旧代码曾在 catch 里返回 `monthCount: 128` 这类编造值）。
+→ **前端侧无需改动**，纯等后端。
+
+**期望语义**：4 项统计——报表总数 / 本月生成数 / 已下载次数 / 生成失败数。
+
+---
+
+## BT-16　`getAdminReport` 声明的 `ReportItem` 契约与后端 `ReportTaskEntity` 不符 ⚠️ 前端侧问题
+
+| 项 | 内容 |
+| --- | --- |
+| 端点 | `GET /admin/reports/{id}`（**端点存在且有真数据**） |
+| 前端声明 | `reports.ts:149` `getAdminReport(): Promise<ReportItem>` |
+| 契约来源 | `types/analytics.ts:51` `ReportItem` |
+
+**实测** `GET /admin/reports/DEMO-RPT-002` 真值：
+
+```json
+{"reportId":"DEMO-RPT-002","reportType":"GOV","reportName":"2026年度农产品质量追溯监管年报",
+ "status":"PENDING","fileUrl":null,"generatedAt":null,
+ "bizDateFrom":"2026-01-01","bizDateTo":"2026-12-31","generatorId":"SUPER_ADMIN","farmId":null}
+```
+
+**逐字段比对**：
+
+| 前端 `ReportItem` | 后端真值 | 结果 |
+| --- | --- | --- |
+| `reportType: ReportType`（1日报/2周报/3月报/4季报/5年报） | `"GOV"` / `"BIZ"` / `"QUALITY"`（**字符串**） | ❌ 类型完全不同 |
+| `status: 1 \| 2 \| 3` | `"PENDING"` / `"RUNNING"` / `"DONE"` / `"FAILED"`（**字符串**） | ❌ 数字判断恒不成立 |
+| `period: string`（必填，如 "2026-03"） | **后端没有该字段**（用 `bizDateFrom` / `bizDateTo`） | ❌ 恒 undefined |
+| `fileSize?: number` | **后端没有** | ❌ 恒 undefined |
+| `generatorName?: string` | 后端是 `generatorId`（`"SUPER_ADMIN"`） | ❌ 恒 undefined |
+
+**性质**：端点存在、数据真实，但**前端声明的返回类型是一个后端不会返回的形状**——
+调用方按 `ReportItem` 渲染会全空，且 `status` 的数字判断恒不成立。这是"契约撒谎"，不是后端问题。
+
+**零调用方**：全仓 grep `getAdminReport` 只命中声明本身，没有任何页面调用。
+→ 按规则（端点存在 + 无调用方 + 契约不符）：**建议删除该声明，或改为返回 `ReportTask`**。
+**本轮只记录，未删除**（删除属代码改动，等 team-lead 裁决）。
+
+---
+
+## BT-17　`GET /admin/reports/by-type` 参数名不匹配 → 500（端点**存在**）
+
+**实测**：`GET /admin/reports/by-type?type=GOV` → **code=500「系统繁忙」**。
+**日志**：`MissingServletRequestParameterException: Required request parameter 'reportType' is not present`
+
+**成因**：端点存在，但必填入参叫 **`reportType`**，不是 `type`。
+这正是"端点存在但参数名不匹配同样返回 500"的典型（与 `NoResourceFoundException` 的 500
+在响应体上无法区分，只能靠日志）。
+
+**前端现状**：`api/admin/reports.ts` **未声明**该端点，零调用方 → 暂无影响，记录备查。
+**注意**：该端点返回**裸数组**（`List<ReportTaskEntity>`，非 PageResult），接入时必须用 `toPageResult`。
+
+---
+
+## BT-18　`POST /admin/reports/{reportId}/generate` 不产出真实文件
+
+| 项 | 内容 |
+| --- | --- |
+| 端点 | `POST /admin/reports/{reportId}/generate` |
+| 存在性实测 | `POST /admin/reports/NOPE/generate` → **404」（端点存在，id 无效；若端点不存在会是 500） |
+
+**问题**：后端 `ReportTaskService#generate` 只把状态改成 `DONE`、
+回填一个 `/report/{id}.xlsx` **字符串**，**并不产出任何真实报表文件**。
+用户点「生成」会看到"已完成"，但拿不到文件——这是"写操作谎称成功"。
+
+**前端现状**：`createReportTask` 的注释里已明确"不调用它，调用等于向用户谎称已生成"，
+**前端已诚实（不调用）**。→ 纯后端工单。
+
+**期望语义**：真正产出报表文件并返回可下载的真实地址；或明确该能力未实现。
+
+---
+
+## 附：`admin/reports` 域已验证有真数据的端点
+
+| 端点 | 实测 |
+| --- | --- |
+| `GET /admin/reports?page=1&size=5` | code=0，**2 条**真任务（DEMO-RPT-002 / GOV / PENDING；DEMO-RPT-001 / QUALITY / DONE）✅ |
+| `GET /admin/reports/{id}` | code=0，真数据（17 字段）✅ |
+| `GET /admin/reports/production` | code=0，**裸数组** 1 条 ✅（前端已用 `toPageResult` 处理） |
+| `GET /admin/reports/quality` | code=0，**裸数组** 1 条 ✅ |
+| `POST /admin/reports`、`PUT /{id}`、`DELETE /{id}` | 端点存在（来自映射；**未实际调用**，避免造脏数据） |
+
+**另**：`ReportCenter.tsx:161` 有个 `catch { return [] }`，但它是
+`localStorage` 收藏夹的 JSON 解析失败兜底（坏了就当没收藏），**不涉及真数据判定，可接受的兜底**。
+
+---
+
+## 附：已验证为"真生效 / 有真数据"的对照（跨三个域）
 
 | 操作 | 端点 | 结果 |
 | --- | --- | --- |
@@ -402,3 +521,6 @@ quotaUsageRate / activeDays / revenue / strategy` …），后端**没有任何�
 | 配额用量 | `GET /admin/tenants/DEMO-QUOTA-001/usage` | 真数据 ✅ |
 | 平台级租户概览 | `GET /admin/tenants/overview` | 真数据（含 farmTotal / deviceOnlineCount / pendingAlertCount）✅ |
 | 配额一览 / 分层列表 | `GET /admin/tenants/quota-overview`、`/segments` | 各 3 条 ✅ |
+| 报表任务列表 | `GET /admin/reports` | 2 条真任务（GOV/PENDING、QUALITY/DONE）✅ |
+| 报表任务详情 | `GET /admin/reports/DEMO-RPT-002` | 真数据，17 字段 ✅ |
+| 生产/质量报表 | `GET /admin/reports/production`、`/quality` | 各 1 条（裸数组）✅ |
