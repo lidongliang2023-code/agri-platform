@@ -48,6 +48,7 @@ import { deleteTask, dispatchTask, fetchTaskPage } from '@/api/tasks'
 import { listMembers } from '@/api/members'
 import { listPlots } from '@/api/plots'
 import type { Member, Plot, Task, TaskStatus } from '@/types'
+import { isTaskOverdue, OVERDUE_DERIVED_NOTICE } from '@/types/task'
 import {
   ACCEPT_STATUS_META,
   TASK_PRIORITY_COLOR_MAP,
@@ -63,8 +64,14 @@ import {
 /** 视图模式：列表 / 看板 */
 type ViewMode = 'table' | 'kanban'
 
-/** 状态 Tab 键值 */
-type TabKey = 'all' | 'pending' | 'executing' | 'submitted' | 'accepted' | 'rejected' | 'overdue'
+/**
+ * 状态 Tab 键值。
+ *
+ * `doing` / `done` 是后端真值（旧代码的 `executing` / `accepted` 后端不存在，
+ * 导致「执行中」「已完成」两个 Tab 恒为 0 条）。
+ * `overdue` 不是后端状态，走本地推导；`submitted` 后端无此状态（去留待裁决）。
+ */
+type TabKey = 'all' | 'pending' | 'doing' | 'submitted' | 'done' | 'rejected' | 'overdue'
 
 /** 列表筛选条件 */
 interface TaskFilters {
@@ -94,20 +101,23 @@ interface BoardColumn {
   statuses: TaskStatus[]
 }
 
-/** 看板列配置（对照原型 P7 三列，并补齐待验收 / 已驳回） */
+/** 看板列配置（statuses 一律用后端真值；后端状态全集 pending/assigned/doing/done/rejected） */
 const BOARD_COLUMNS: BoardColumn[] = [
   { key: 'pending', title: '待执行', color: '#1677ff', statuses: ['pending', 'assigned'] },
-  { key: 'executing', title: '执行中', color: '#fa8c16', statuses: ['executing'] },
+  { key: 'doing', title: '执行中', color: '#fa8c16', statuses: ['doing'] },
   { key: 'submitted', title: '待验收', color: '#722ed1', statuses: ['submitted'] },
-  { key: 'accepted', title: '已完成', color: '#52c41a', statuses: ['accepted'] },
+  { key: 'done', title: '已完成', color: '#52c41a', statuses: ['done'] },
   { key: 'rejected', title: '已驳回', color: '#ff4d4f', statuses: ['rejected'] },
 ]
 
-/** 已逾期判定：计划结束日期早于今天且尚未完成 */
+/**
+ * 已逾期判定：统一走 {@link isTaskOverdue}（本地按 planEndDate 推导，非后端状态）。
+ *
+ * @param task 任务
+ * @returns 是否逾期
+ */
 function isOverdue(task: Task): boolean {
-  if (!task.planEndDate) return false
-  if (task.status === 'accepted') return false
-  return dayjs(task.planEndDate).isBefore(dayjs(), 'day')
+  return isTaskOverdue(task)
 }
 
 /** 今日任务判定：今天落在计划起止区间内 */
@@ -137,7 +147,7 @@ function matchTab(task: Task, tab: TabKey): boolean {
  * 待执行（pending + assigned）与已逾期为复合条件，交由前端过滤，故不传 status。
  */
 function toServerStatus(tab: TabKey): string | undefined {
-  if (tab === 'executing' || tab === 'submitted' || tab === 'accepted' || tab === 'rejected') {
+  if (tab === 'doing' || tab === 'submitted' || tab === 'done' || tab === 'rejected') {
     return tab
   }
   return undefined
@@ -234,17 +244,17 @@ export default function TaskList(): JSX.Element {
     const counts: Record<TabKey, number> = {
       all: allTasks.length,
       pending: 0,
-      executing: 0,
+      doing: 0,
       submitted: 0,
-      accepted: 0,
+      done: 0,
       rejected: 0,
       overdue: 0,
     }
     allTasks.forEach((task) => {
       if (task.status === 'pending' || task.status === 'assigned') counts.pending += 1
-      if (task.status === 'executing') counts.executing += 1
+      if (task.status === 'doing') counts.doing += 1
       if (task.status === 'submitted') counts.submitted += 1
-      if (task.status === 'accepted') counts.accepted += 1
+      if (task.status === 'done') counts.done += 1
       if (task.status === 'rejected') counts.rejected += 1
       if (isOverdue(task)) counts.overdue += 1
     })
@@ -699,13 +709,17 @@ export default function TaskList(): JSX.Element {
           items={[
             { key: 'all', label: `全部(${tabCounts.all})` },
             { key: 'pending', label: `待执行(${tabCounts.pending})` },
-            { key: 'executing', label: `执行中(${tabCounts.executing})` },
+            { key: 'doing', label: `执行中(${tabCounts.doing})` },
             { key: 'submitted', label: `待验收(${tabCounts.submitted})` },
-            { key: 'accepted', label: `已完成(${tabCounts.accepted})` },
+            { key: 'done', label: `已完成(${tabCounts.done})` },
             { key: 'rejected', label: `已驳回(${tabCounts.rejected})` },
             { key: 'overdue', label: `已逾期(${tabCounts.overdue})` },
           ]}
         />
+        {/* 逾期是本地推导值，不是后端状态——不标注会让用户以为是后端判定的 */}
+        <Typography.Paragraph type="secondary" style={{ fontSize: 12, margin: '8px 0 0' }}>
+          {OVERDUE_DERIVED_NOTICE}；「待验收」后端同样无该状态（选中会返回 0 条），去留待产品裁决。
+        </Typography.Paragraph>
         {!farmId ? (
           <Empty description="请先在顶部切换农场" />
         ) : view === 'kanban' && boardQuery.isError ? (

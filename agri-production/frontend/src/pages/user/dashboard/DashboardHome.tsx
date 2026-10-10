@@ -49,6 +49,7 @@ import {
   taskStatusMeta,
   taskTypeLabel,
 } from '@/utils/production-adapter'
+import { TASK_STATUS_DOING } from '@/types/task'
 import { MetricStatistic, MetricText } from '@/components'
 
 /** 指标卡渲染参数 */
@@ -217,9 +218,14 @@ export default function DashboardHome(): JSX.Element {
     }
   }
 
-  /** 任务状态流转（开始执行） */
+  /**
+   * 任务状态流转（开始执行）。
+   *
+   * ⚠️ 状态值必须是后端真值：后端只认 `doing`（旧代码写 `executing`，
+   * 后端不存在该值，等于写了一个永远不会出现的状态）。
+   */
   const startMutation = useMutation({
-    mutationFn: (taskId: string) => updateTask(taskId, { status: 'executing' }),
+    mutationFn: (taskId: string) => updateTask(taskId, { status: TASK_STATUS_DOING }),
     onSuccess: () => {
       message.success('任务已置为执行中')
       void todoQuery.refetch()

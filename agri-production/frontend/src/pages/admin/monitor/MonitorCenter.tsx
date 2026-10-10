@@ -318,9 +318,14 @@ export default function MonitorCenter(): JSX.Element {
         ? Number(((deviceOnline / deviceTotal) * 100).toFixed(1))
         : null
     const alertToday = hasOverview ? pickNumber(overview, 'alertPending', 0) : null
+    /**
+     * 待处理异常数：后端 `/admin/monitor/tasks` 只产 `pending/assigned/doing/done/rejected`，
+     * 旧代码过滤列表里的 `overdue` 后端不产出、永不命中，已去掉。
+     * （注：合计为 0 时回落到 alertPending 的口径漂移仍在，属另一单，本轮不改。）
+     */
     const pendingFromTasks = (taskStatsQuery.data ?? []).reduce(
       (sum, item) =>
-        ['pending', 'overdue', 'rejected'].includes(item.status) ? sum + Number(item.count ?? 0) : sum,
+        ['pending', 'rejected'].includes(item.status) ? sum + Number(item.count ?? 0) : sum,
       0,
     )
     const pending = pendingFromTasks > 0 ? pendingFromTasks : alertToday

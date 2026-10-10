@@ -3,14 +3,84 @@
  */
 import type { OptionItem } from './common'
 
-/** 任务状态 */
+/**
+ * 任务状态。
+ *
+ * ⚠️ 取值来自后端，非空想。实测依据（2026-10-10，core-app :8098）：
+ * - `GET /api/v1/production/tasks` 全量 14 条，status 取值集合 =
+ *   `pending / assigned / doing / done / rejected`；
+ * - `TaskInfoService.java:103` 派发写 `assigned`，`:122` 验收通过写 `done`、驳回写 `rejected`；
+ * - 全后端 java 代码 grep `accepted` / `executing` / `submitted` / `overdue` **均零命中**。
+ *
+ * 因此旧词汇表里的 `executing` / `accepted` 一律不存在（写库路径也不写这两个值），
+ * 前端凡是判 `status === 'accepted'` 的地方**分母恒为 0**（完成率恒显示 0.0%）。
+ * 现已收敛为后端真值：`executing → doing`，`accepted → done`。
+ *
+ * `submitted`（待验收）后端同样没有对应状态，**本轮未裁决**（去掉 Tab 与否待产品拍板），
+ * 故仍保留在联合类型里，但不得视为"后端会返回该值"。
+ *
+ * `overdue`（逾期）后端**不存储**，是前端按 `planEndDate` 推导的派生口径，
+ * 统一走 {@link isTaskOverdue}，UI 必须带 {@link OVERDUE_DERIVED_NOTICE} 标注。
+ */
 export type TaskStatus =
   | 'pending'
   | 'assigned'
-  | 'executing'
-  | 'submitted'
-  | 'accepted'
+  | 'doing'
+  | 'done'
   | 'rejected'
+  /** 后端无此状态，保留仅为未裁决的「待验收」Tab；不会由后端返回 */
+  | 'submitted'
+
+/** 后端真实存在的任务状态（不含 `submitted`） */
+export type BackendTaskStatus = Exclude<TaskStatus, 'submitted'>
+
+/** 已终结状态：进入这两态后不再计入逾期 */
+export const TASK_FINAL_STATUSES: readonly BackendTaskStatus[] = ['done', 'rejected']
+
+/** 「已完成」对应的后端真值（旧代码误用 `accepted`，后端不存在该值） */
+export const TASK_STATUS_DONE: BackendTaskStatus = 'done'
+
+/** 「执行中」对应的后端真值（旧代码误用 `executing`，后端不存在该值） */
+export const TASK_STATUS_DOING: BackendTaskStatus = 'doing'
+
+/**
+ * 判断任务是否已按后端口径完成。
+ *
+ * @param status 任务状态
+ * @returns 后端 `done` 时为 true
+ */
+export function isTaskDone(status: unknown): boolean {
+  return status === 'done'
+}
+
+/**
+ * 判断任务是否为「已逾期」——**派生口径，非后端状态**。
+ *
+ * 判据：存在 `planEndDate`、且早于当前时间、且状态不属于 {@link TASK_FINAL_STATUSES}。
+ *
+ * @param task 任务对象（只需 planEndDate / status）
+ * @param now 当前时间，默认 `new Date()`
+ * @returns 是否逾期
+ */
+export function isTaskOverdue(
+  task: { planEndDate?: string | null; status?: unknown },
+  now: Date = new Date(),
+): boolean {
+  if (!task.planEndDate) {
+    return false
+  }
+  const end = new Date(task.planEndDate).getTime()
+  if (!Number.isFinite(end)) {
+    return false
+  }
+  if (TASK_FINAL_STATUSES.includes(task.status as BackendTaskStatus)) {
+    return false
+  }
+  return end < now.getTime()
+}
+
+/** 逾期口径标注：凡在 UI 上展示「逾期 / 超时」数量或列表，必须带上这句 */
+export const OVERDUE_DERIVED_NOTICE = '已逾期为本地按计划结束时间推导，非后端状态字段；后端状态只有 pending/assigned/doing/done/rejected'
 
 /** 任务优先级：1 低 2 中 3 高 4 紧急 */
 export type TaskPriority = 1 | 2 | 3 | 4
@@ -52,7 +122,7 @@ export interface Task {
   assignerId?: string
   /** 派发人姓名 */
   assignerName?: string
-  /** 状态：pending/assigned/executing/submitted/accepted/rejected */
+  /** 状态：后端真值为 pending/assigned/doing/done/rejected（详见 TaskStatus 注释） */
   status: TaskStatus
   /** 优先级：1 低 2 中 3 高 4 紧急 */
   priority: TaskPriority
@@ -181,14 +251,19 @@ export const TASK_TYPE_OPTIONS: OptionItem[] = [
   { value: 'other', label: '其他' },
 ]
 
-/** 任务状态选项 */
+/**
+ * 任务状态选项（取值与后端一致）。
+ *
+ * `submitted` 后端无此状态，保留是因为「待验收」Tab 的去留尚未裁决，
+ * 选中它传给后端会返回 0 条——这是已知现状，不是"没数据"。
+ */
 export const TASK_STATUS_OPTIONS: OptionItem[] = [
   { value: 'pending', label: '待执行' },
   { value: 'assigned', label: '已派发' },
-  { value: 'executing', label: '执行中' },
-  { value: 'submitted', label: '待验收' },
-  { value: 'accepted', label: '已完成' },
+  { value: 'doing', label: '执行中' },
+  { value: 'done', label: '已完成' },
   { value: 'rejected', label: '已驳回' },
+  { value: 'submitted', label: '待验收（后端无该状态，待裁决）' },
 ]
 
 /** 任务优先级选项：4 紧急 / 3 重要 / 2 普通 / 1 低 */
@@ -222,13 +297,16 @@ export const TASK_STATUS_LABEL_MAP: Record<string, string> = TASK_STATUS_OPTIONS
   return acc
 }, {})
 
-/** 任务状态 → Tag 颜色 */
+/** 任务状态 → Tag 颜色（键为后端真值；兼容旧字面量 accepted/executing/completed） */
 export const TASK_STATUS_COLOR_MAP: Record<string, string> = {
   pending: 'default',
   assigned: 'blue',
+  doing: 'processing',
   executing: 'processing',
   submitted: 'gold',
+  done: 'success',
   accepted: 'success',
+  completed: 'success',
   rejected: 'error',
 }
 

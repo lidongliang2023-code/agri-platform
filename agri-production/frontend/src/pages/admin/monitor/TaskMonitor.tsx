@@ -40,6 +40,13 @@ import { urgeTask } from '@/api/admin/monitor'
 import { listTasks } from '@/api/tasks'
 import { TASK_TYPE_LABEL_MAP } from '@/types'
 import type { Task } from '@/types'
+import {
+  isTaskDone,
+  isTaskOverdue,
+  OVERDUE_DERIVED_NOTICE,
+  TASK_STATUS_DOING,
+  TASK_STATUS_DONE,
+} from '@/types/task'
 
 const { Text, Title } = Typography
 
@@ -69,13 +76,23 @@ const TASK_TYPE_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'sowing', label: '播种' },
 ]
 
-/** 状态下拉选项（原型：全部/已完成/进行中/超时） */
+/**
+ * 状态下拉选项。
+ *
+ * 取值必须是后端真值：后端任务状态只有 `pending / assigned / doing / done / rejected`
+ * （实测 `GET /tasks` 14 条，`TaskInfoService.java:103/122` 写入 `assigned` / `done` / `rejected`）。
+ * 旧版的 `accepted` / `executing` 后端不存在，传过去恒返回 0 条。
+ * `overdue` 后端不存储，只能本地按 `planEndDate` 推导，**不能作为 status 传给后端**。
+ */
 const STATUS_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'all', label: '全部' },
-  { value: 'accepted', label: '已完成' },
-  { value: 'executing', label: '进行中' },
-  { value: 'overdue', label: '超时' },
+  { value: TASK_STATUS_DONE, label: '已完成' },
+  { value: TASK_STATUS_DOING, label: '进行中' },
+  { value: 'overdue', label: '超时（本地推导，非后端状态）' },
 ]
+
+/** 可作为参数传给后端 `status` 的状态（overdue 不在其中） */
+const SERVER_STATUS_VALUES: readonly string[] = ['all', TASK_STATUS_DONE, TASK_STATUS_DOING]
 
 /** 任务执行状态（甘特图图例口径） */
 type GanttStatus = 'done' | 'doing' | 'overdue' | 'waiting'
@@ -253,7 +270,10 @@ export default function TaskMonitor(): JSX.Element {
         startDate: applied.date,
         endDate: applied.date,
         taskType: applied.taskType === 'all' ? undefined : applied.taskType,
-        status: ['accepted', 'executing'].includes(applied.status) ? applied.status : undefined,
+        // 只有后端真值才能当 status 传；overdue 是本地推导，传过去恒 0 条
+        status: SERVER_STATUS_VALUES.includes(applied.status) && applied.status !== 'all'
+          ? applied.status
+          : undefined,
       }),
     retry: false,
   })
@@ -286,10 +306,9 @@ export default function TaskMonitor(): JSX.Element {
       }
     }
     const total = tasks.length
-    const doneCount = tasks.filter((item) => item.status === 'accepted').length
-    const overdueCount = tasks.filter(
-      (item) => item.status !== 'accepted' && dayjs(item.planEndDate).valueOf() < Date.now(),
-    ).length
+    // 后端「已完成」的真值是 done；旧代码判 accepted（后端无此值）导致 doneCount 恒为 0、完成率恒 0%
+    const doneCount = tasks.filter((item) => isTaskDone(item.status)).length
+    const overdueCount = tasks.filter((item) => isTaskOverdue(item)).length
     const durationSum = tasks.reduce((sum, item) => {
       const start = dayjs(item.actualStartDate || item.planStartDate).valueOf()
       const end = dayjs(item.actualEndDate || item.planEndDate).valueOf()
@@ -312,9 +331,9 @@ export default function TaskMonitor(): JSX.Element {
     return tasks.slice(0, 24).map((item) => {
       const planStart = dayjs(item.planStartDate).valueOf()
       const planEnd = dayjs(item.planEndDate).valueOf()
-      const isDone = item.status === 'accepted'
-      const isDoing = item.status === 'executing' || item.status === 'assigned'
-      const isOverdue = !isDone && planEnd < Date.now()
+      const isDone = isTaskDone(item.status)
+      const isDoing = item.status === TASK_STATUS_DOING || item.status === 'assigned'
+      const isOverdue = isTaskOverdue(item)
       const status: GanttStatus = isDone ? 'done' : isDoing ? (isOverdue ? 'overdue' : 'doing') : isOverdue ? 'overdue' : 'waiting'
       return {
         row: item.farmName || item.plotName || item.plotId || '未分配',
@@ -397,9 +416,7 @@ export default function TaskMonitor(): JSX.Element {
 
   /** 超时任务列表 */
   const overdueRows: OverdueRow[] = useMemo(() => {
-    const remote = tasks.filter(
-      (item) => item.status !== 'accepted' && dayjs(item.planEndDate).valueOf() < Date.now(),
-    )
+    const remote = tasks.filter((item) => isTaskOverdue(item))
     if (remote.length > 0) {
       return remote.map((item) => {
         const diffHours = Math.max(
@@ -639,6 +656,11 @@ export default function TaskMonitor(): JSX.Element {
           </Card>
         </Col>
       </Row>
+      {/* 分子分母口径与「逾期」来源必须明示：逾期不是后端字段，是本地按 planEndDate 推导 */}
+      <Typography.Paragraph type="secondary" style={{ fontSize: 12, margin: '8px 0 0' }}>
+        完成率 / 平均耗时 / 超时率由本次查询返回的前 {tasks.length} 条任务计算（后端总数{' '}
+        {tasksQuery.data?.total ?? '—'} 条）；{OVERDUE_DERIVED_NOTICE}。
+      </Typography.Paragraph>
 
       {/* 任务执行甘特图（原型 P8 Gantt Chart） */}
       <Card
@@ -670,7 +692,15 @@ export default function TaskMonitor(): JSX.Element {
       {/* 超时任务列表 + 任务类型分布 */}
       <Row gutter={[12, 12]} style={{ marginTop: 12 }}>
         <Col xs={24} lg={14}>
-          <Card size="small" title="超时任务列表">
+          <Card
+            size="small"
+            title="超时任务列表"
+            extra={
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                {OVERDUE_DERIVED_NOTICE}
+              </Typography.Text>
+            }
+          >
             <Table<OverdueRow>
               rowKey="id"
               size="small"

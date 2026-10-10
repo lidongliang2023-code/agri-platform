@@ -461,7 +461,7 @@ export default function TaskDetail(): JSX.Element {
           key="start"
           type="primary"
           icon={<PlayCircleOutlined />}
-          disabled={task.status === 'executing' || task.status === 'accepted'}
+          disabled={task.status === 'doing' || task.status === 'done'}
           loading={startMutation.isPending}
           onClick={() => startMutation.mutate()}
         >
@@ -567,14 +567,14 @@ export default function TaskDetail(): JSX.Element {
           <Button
             type="primary"
             icon={<PlayCircleOutlined />}
-            disabled={task.status === 'executing' || task.status === 'accepted'}
+            disabled={task.status === 'doing' || task.status === 'done'}
             loading={startMutation.isPending}
             onClick={() => startMutation.mutate()}
           >
             开始执行
           </Button>
           <Button
-            disabled={task.status !== 'executing'}
+            disabled={task.status !== 'doing'}
             loading={submitMutation.isPending}
             onClick={() => submitMutation.mutate()}
           >

@@ -58,12 +58,20 @@ import type { Task } from '@/types'
 import { PLOT_STATUS_META } from '@/types'
 
 /** 地块状态元数据 */
-/** 任务状态文案（与任务模块保持一致） */
+/**
+ * 任务状态文案。
+ *
+ * 键必须是后端真值 `pending/assigned/doing/done/rejected`；
+ * `executing` / `accepted` 是前端历史字面量，后端不产出，仅作兼容保留，
+ * 缺了 `done` 这一项会导致「已完成」标签永不命中（旧代码就是只有 accepted）。
+ */
 const TASK_STATUS_META: Record<string, { label: string; color: string }> = {
   pending: { label: '待执行', color: 'blue' },
   assigned: { label: '待执行', color: 'blue' },
+  doing: { label: '执行中', color: 'orange' },
   executing: { label: '执行中', color: 'orange' },
   submitted: { label: '待验收', color: 'purple' },
+  done: { label: '已完成', color: 'green' },
   accepted: { label: '已完成', color: 'green' },
   rejected: { label: '已驳回', color: 'red' },
 }

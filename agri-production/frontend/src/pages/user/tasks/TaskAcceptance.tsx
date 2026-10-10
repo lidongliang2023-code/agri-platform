@@ -42,6 +42,7 @@ import {
   TASK_STATUS_LABEL_MAP,
   TASK_TYPE_LABEL_MAP,
 } from '@/types'
+import { TASK_STATUS_DOING } from '@/types/task'
 
 /** 执行记录类型文本 */
 const RECORD_TYPE_TEXT: Record<number, string> = {
@@ -259,7 +260,8 @@ export default function TaskAcceptance(): JSX.Element {
     )
   }
 
-  const canReview = task.status === 'submitted' || task.status === 'executing'
+  // 后端「执行中」真值是 doing（旧代码的 executing 后端不存在）；submitted 后端亦无该状态，去留待裁决
+  const canReview = task.status === 'submitted' || task.status === TASK_STATUS_DOING
 
   return (
     <PageContainer

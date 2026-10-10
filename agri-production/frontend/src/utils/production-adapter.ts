@@ -370,7 +370,11 @@ export function priorityMeta(priority: number): TagMeta {
 }
 
 /**
- * 任务状态标签（兼容后端 doing/done 与前端 executing/submitted 两套取值）
+ * 任务状态标签。
+ *
+ * 后端真值为 `pending / assigned / doing / done / rejected`；`executing` / `accepted` /
+ * `submitted` 是前端历史字面量，后端不产出（实测 `GET /tasks` 无这些值），此处仅为兼容保留。
+ *
  * @param status 状态串
  * @returns Tag 元信息
  */
