@@ -12,6 +12,7 @@ import {
   Button,
   Card,
   DatePicker,
+  Empty,
   Form,
   Input,
   InputNumber,
@@ -20,12 +21,14 @@ import {
   Space,
   Table,
   Tag,
+  Tooltip,
   Typography,
 } from 'antd'
 import {
   CheckCircleOutlined,
   DownloadOutlined,
   ExportOutlined,
+  InfoCircleOutlined,
   PlusOutlined,
   ReloadOutlined,
   SearchOutlined,
@@ -42,6 +45,8 @@ import {
   generateTraceCode,
   revokeTraceCode,
 } from '@/api/trace'
+import { MISSING_VALUE_TEXT, MetricNumber } from '@/components/MetricStatistic'
+import { toFiniteNumber } from '@/utils/metric-format'
 
 const { Text } = Typography
 
@@ -64,24 +69,62 @@ const STATUS_COLOR: Record<CodeStatusView, string> = {
   revoked: 'red',
 }
 
-/** 溯源码行（页面消费形态） */
+/**
+ * 溯源码行（页面消费形态）。
+ *
+ * ⚠️ 字段口径以 `prod_trace_code` 真实列为准（BT-64/65 实测）：
+ * `id / market_id / tenant_id / batch_id / batch_no / code / status /
+ *  activated_at / activated_by / scan_count / last_scan_at / expire_date / create_at`。
+ * **没有 `product_name`、没有 `farm_name`**——这两列此前是前端用
+ * `PRODUCT_POOL[seq % 5]` / `FARM_POOL[seq % 5]` 编出来的，每一行看起来都有归属、实际全是假的。
+ *
+ * 所有可缺失字段一律 `| null`，由渲染层显示「—」，不兜 0、不兜原型数字。
+ */
 interface TraceCodeRow {
   /** 溯源码（业务定位字段，链路跳转用它） */
   code: string
-  /** 批次 ID */
-  batchId: number
+  /** 批次 ID（后端是 Long，转 number 会丢精度，故保留原始字符串） */
+  batchId: string | null
   /** 批次号 */
-  batchNo: string
-  /** 产品名称 */
-  productName: string
-  /** 农场名称 */
-  farmName: string
-  /** 生成日期 */
-  createdAt: string
+  batchNo: string | null
+  /** 生成日期（YYYY-MM-DD） */
+  createdAt: string | null
   /** 扫码次数 */
-  scanCount: number
-  /** 状态 */
-  status: CodeStatusView
+  scanCount: number | null
+  /** 状态（后端枚举外的取值归为 null，但原始值仍保留在 statusText 里如实展示） */
+  status: CodeStatusView | null
+  /** 状态展示文案：已知枚举给中文，未知取值原样显示，缺失显示「—」 */
+  statusText: string
+}
+
+/** 后端已知的状态枚举（TraceService 写入的是这套小写值） */
+const KNOWN_STATUS: CodeStatusView[] = ['generated', 'active', 'scanned', 'revoked']
+
+/** 文本字段缺失提示语 */
+const TEXT_MISSING_TIP = '后端未返回该字段，显示为「—」，接口补齐后自动填充'
+
+/**
+ * 文本型字段渲染：有值显示原文，缺失显示「—」+ 橙色信息图标。
+ *
+ * ⚠️ 不能用 `MetricNumber` 渲染文本——它内部走 `toFiniteNumber`，
+ * 会把「DEMO-BATCHN-004」这类**非数字字符串判成缺失**而显示「—」，
+ * 反而把真数据藏起来了（本轮验收第一轮就踩到）。
+ *
+ * @param value 后端原始文本值
+ * @returns 文本节点或缺失标记
+ */
+function renderTextOrMissing(value: string | null): JSX.Element {
+  if (value) {
+    return <Text>{value}</Text>
+  }
+  return (
+    <Tooltip title={TEXT_MISSING_TIP}>
+      <Typography.Text type="secondary" style={{ cursor: 'help' }}>
+        {MISSING_VALUE_TEXT}
+        <InfoCircleOutlined style={{ fontSize: 11, color: '#faad14', marginLeft: 2 }} />
+      </Typography.Text>
+    </Tooltip>
+  )
 }
 
 /** 筛选表单值 */
@@ -108,138 +151,14 @@ interface GenerateFormValues {
   expireDate?: Dayjs
 }
 
-/** 原型 P12 示例数据 */
-const PROTOTYPE_ROWS: TraceCodeRow[] = [
-  {
-    code: 'TRC20250714001',
-    batchId: 2025071,
-    batchNo: 'B2025071',
-    productName: '有机大米',
-    farmName: '绿源1号',
-    createdAt: '2025-07-14',
-    scanCount: 5,
-    status: 'scanned',
-  },
-  {
-    code: 'TRC20250714002',
-    batchId: 2025071,
-    batchNo: 'B2025071',
-    productName: '有机大米',
-    farmName: '绿源1号',
-    createdAt: '2025-07-14',
-    scanCount: 2,
-    status: 'scanned',
-  },
-  {
-    code: 'TRC20250714003',
-    batchId: 2025072,
-    batchNo: 'B2025072',
-    productName: '红富士苹果',
-    farmName: '丰达A区',
-    createdAt: '2025-07-14',
-    scanCount: 0,
-    status: 'active',
-  },
-  {
-    code: 'TRC20250714004',
-    batchId: 2025072,
-    batchNo: 'B2025072',
-    productName: '红富士苹果',
-    farmName: '丰达A区',
-    createdAt: '2025-07-14',
-    scanCount: 0,
-    status: 'generated',
-  },
-  {
-    code: 'TRC20250713010',
-    batchId: 2025070,
-    batchNo: 'B2025070',
-    productName: '有机蔬菜',
-    farmName: '大地南',
-    createdAt: '2025-07-13',
-    scanCount: 8,
-    status: 'scanned',
-  },
-  {
-    code: 'TRC20250713011',
-    batchId: 2025070,
-    batchNo: 'B2025070',
-    productName: '有机蔬菜',
-    farmName: '大地南',
-    createdAt: '2025-07-13',
-    scanCount: 1,
-    status: 'scanned',
-  },
-]
-
-/** 产品名称池（生成兜底数据用） */
-const PRODUCT_POOL: string[] = ['有机大米', '红富士苹果', '有机蔬菜', '有机牛奶', '土鸡蛋']
-
-/** 农场名称池（生成兜底数据用） */
-const FARM_POOL: string[] = ['绿源1号', '丰达A区', '大地南', '惠民D', '鑫农试']
-
-/** 原型口径总码量 */
-const PROTOTYPE_TOTAL = 2_450_000
-
-/** 码前缀 */
-const CODE_PREFIX = 'TRC'
-
-/**
- * 生成兜底分页数据。
- *
- * 后端分页无数据时使用，保证分页、筛选、批量选择等交互仍然可用。
- *
- * @param pageNum 页码
- * @param pageSize 每页条数
- * @returns 分页结果
- */
-function buildFallbackRows(pageNum: number, pageSize: number): {
-  list: TraceCodeRow[]
-  total: number
-} {
-  const list: TraceCodeRow[] = []
-  for (let index = 0; index < pageSize; index += 1) {
-    const seq = (pageNum - 1) * pageSize + index + 1
-    if (seq > PROTOTYPE_TOTAL) {
-      break
-    }
-    const base = PROTOTYPE_ROWS[(seq - 1) % PROTOTYPE_ROWS.length]
-    const isPrototypeRow = seq <= PROTOTYPE_ROWS.length
-    const statusRoll = (seq * 5) % 10
-    const status: CodeStatusView = isPrototypeRow
-      ? base.status
-      : statusRoll >= 8
-        ? 'revoked'
-        : statusRoll >= 5
-          ? 'scanned'
-          : statusRoll >= 2
-            ? 'active'
-            : 'generated'
-    list.push({
-      code: isPrototypeRow
-        ? base.code
-        : `${CODE_PREFIX}2025${String(1000 + (seq % 8999)).slice(0, 4)}${String(seq % 100).padStart(2, '0')}`,
-      batchId: isPrototypeRow ? base.batchId : 2025060 + (seq % 20),
-      batchNo: isPrototypeRow ? base.batchNo : `B2025${String(60 + (seq % 20)).padStart(3, '0')}`,
-      productName: isPrototypeRow
-        ? base.productName
-        : PRODUCT_POOL[seq % PRODUCT_POOL.length],
-      farmName: isPrototypeRow ? base.farmName : FARM_POOL[seq % FARM_POOL.length],
-      createdAt: isPrototypeRow
-        ? base.createdAt
-        : `2025-07-${String(1 + (seq % 14)).padStart(2, '0')}`,
-      scanCount: isPrototypeRow ? base.scanCount : (seq * 3) % 12,
-      status,
-    })
-  }
-  return { list, total: PROTOTYPE_TOTAL }
-}
-
 /**
  * 溯源码管理
  *
- * 业务职责：全平台溯源码查询与状态管理，支持按溯源码 / 批次号 / 产品 / 状态 / 生成日期筛选，
+ * 业务职责：全平台溯源码查询与状态管理，支持按溯源码 / 批次号 / 状态 / 生成日期筛选，
  * 提供批量生成、批量激活、批量作废与批量导出能力，并可跳转溯源链路详情（按 code）。
+ *
+ * ⚠️ 「产品」筛选项与「产品 / 农场」两列已删除（BT-65）：
+ * `prod_trace_code` 没有这两个字段，此前整列由 `PRODUCT_POOL[seq % 5]` 编造。
  *
  * @returns 页面内容
  */
@@ -276,9 +195,13 @@ export default function AdminTraceCodeManage(): JSX.Element {
     retry: false,
   })
 
-  /** 后端分页结果（归一化后：list / total） */
+  /**
+   * 后端分页结果（归一化后：list / total）。
+   * `total` 为 null 表示**没拿到总数**（接口未返回 / 失败），渲染「—」；
+   * 不用 0 顶替——0 是「查过了、确实 0 条」的结论。
+   */
   const remoteRows = listQuery.data?.list ?? []
-  const remoteTotal = listQuery.data?.total ?? 0
+  const remoteTotal: number | null = listQuery.data?.total ?? null
 
   /** 激活溯源码 */
   const activateMutation = useMutation({
@@ -304,90 +227,89 @@ export default function AdminTraceCodeManage(): JSX.Element {
     },
   })
 
-  /** 表格数据源：后端数据优先，缺失时回落兜底数据 */
+  /** 表格数据源：只认后端真数据，空结果就是空态 */
   const { rows, total } = useMemo(() => {
-    if (remoteRows.length > 0) {
-      const mapped: TraceCodeRow[] = remoteRows.map((item, index) => {
-        const status = (item.status ?? 'generated') as CodeStatusView
-        const seq = (pageNum - 1) * pageSize + index + 1
-        return {
-          code: item.code,
-          batchId: Number(item.batchId ?? 0),
-          batchNo: item.batchNo ?? `B2025${String(60 + (seq % 20)).padStart(3, '0')}`,
-          productName: item.productName ?? PRODUCT_POOL[seq % PRODUCT_POOL.length],
-          farmName: item.farmName ?? FARM_POOL[seq % FARM_POOL.length],
-          createdAt: (item.createdAt ?? '').slice(0, 10) || `2025-07-${String(1 + (seq % 14)).padStart(2, '0')}`,
-          scanCount: Number(item.scanCount ?? 0),
-          status: status === 'generated' && (item.scanCount ?? 0) > 0 ? 'scanned' : status,
-        }
-      })
-      /** 前端侧补充关键字过滤（后端仅支持 status 过滤） */
-      const filtered = mapped.filter((row) => {
-        if (filter.code && !row.code.includes(filter.code)) {
-          return false
-        }
-        if (filter.batchNo && !row.batchNo.includes(filter.batchNo)) {
-          return false
-        }
-        if (filter.product && row.productName !== filter.product) {
-          return false
-        }
-        if (filter.dateRange && filter.dateRange.length === 2) {
-          const start = filter.dateRange[0].format('YYYY-MM-DD')
-          const end = filter.dateRange[1].format('YYYY-MM-DD')
-          if (row.createdAt && (row.createdAt < start || row.createdAt > end)) {
-            return false
-          }
-        }
-        return true
-      })
-      return { rows: filtered, total: filtered.length > 0 ? remoteTotal : 0 }
-    }
-    const fallback = buildFallbackRows(pageNum, pageSize)
-    const filtered = fallback.list.filter((row) => {
+    /*
+     * 只用后端真数据，缺失一律 null → 渲染「—」。
+     * 此前后端没有数据时（乃至任何一页为空时）会走 `buildFallbackRows()`
+     * 凭空造出整页行、并把 total 写成 2,450,000（BT-64），已删除。
+     */
+    const mapped: TraceCodeRow[] = remoteRows.map((item) => {
+      const rawStatus = typeof item.status === 'string' ? item.status : ''
+      const known = KNOWN_STATUS.includes(rawStatus as CodeStatusView)
+      const status: CodeStatusView | null = known ? (rawStatus as CodeStatusView) : null
+      const scanCount = toFiniteNumber(item.scanCount)
+      return {
+        code: item.code ?? '',
+        batchId: typeof item.batchId === 'string' ? item.batchId : String(item.batchId ?? ''),
+        batchNo: item.batchNo ?? null,
+        createdAt: item.createdAt ? String(item.createdAt).slice(0, 10) : null,
+        scanCount,
+        status,
+        // 枚举外的取值（如种子数据里的大写 ACTIVE / INACTIVE）原样显示，不冒充成已知状态
+        statusText: status ? STATUS_TEXT[status] : rawStatus || MISSING_VALUE_TEXT,
+      }
+    })
+    /** 前端侧补充关键字过滤（后端 `/codes` 仅支持 status 过滤） */
+    const filtered = mapped.filter((row) => {
       if (filter.code && !row.code.includes(filter.code)) {
         return false
       }
-      if (filter.batchNo && !row.batchNo.includes(filter.batchNo)) {
-        return false
-      }
-      if (filter.product && row.productName !== filter.product) {
-        return false
-      }
-      if (filter.status && row.status !== filter.status) {
+      if (filter.batchNo && !(row.batchNo ?? '').includes(filter.batchNo)) {
         return false
       }
       if (filter.dateRange && filter.dateRange.length === 2) {
         const start = filter.dateRange[0].format('YYYY-MM-DD')
         const end = filter.dateRange[1].format('YYYY-MM-DD')
-        if (row.createdAt < start || row.createdAt > end) {
+        if (row.createdAt && (row.createdAt < start || row.createdAt > end)) {
           return false
         }
       }
       return true
     })
-    return { rows: filtered, total: fallback.total }
-  }, [remoteRows, remoteTotal, pageNum, pageSize, filter])
+    return { rows: filtered, total: remoteTotal }
+  }, [remoteRows, remoteTotal, filter])
 
-  /** 表格列（对齐原型 P12） */
+  /**
+   * 表格列（对齐原型 P12，**删掉「产品」「农场」两列**）。
+   *
+   * BT-65：后端 `prod_trace_code` 没有 product_name / farm_name，
+   * 这两列此前 100% 由 `PRODUCT_POOL[seq % 5]` / `FARM_POOL[seq % 5]` 编造——
+   * 每一行看起来都有产品归属和农场归属，实际全是假的。后端补齐字段前不展示。
+   */
   const columns: ColumnsType<TraceCodeRow> = [
-    { title: '溯源码', dataIndex: 'code', width: 180, render: (value: string) => <Text copyable>{value}</Text> },
-    { title: '批次号', dataIndex: 'batchNo', width: 120 },
-    { title: '产品', dataIndex: 'productName', width: 120 },
-    { title: '农场', dataIndex: 'farmName', width: 120 },
-    { title: '生成日期', dataIndex: 'createdAt', width: 120 },
+    {
+      title: '溯源码',
+      dataIndex: 'code',
+      width: 180,
+      render: (value: string) =>
+        value ? <Text copyable>{value}</Text> : <MetricNumber value={null} />,
+    },
+    {
+      title: '批次号',
+      dataIndex: 'batchNo',
+      width: 120,
+      render: (value: string | null) => renderTextOrMissing(value),
+    },
+    {
+      title: '生成日期',
+      dataIndex: 'createdAt',
+      width: 120,
+      render: (value: string | null) => renderTextOrMissing(value),
+    },
     {
       title: '扫码次数',
       dataIndex: 'scanCount',
       width: 100,
-      render: (value: number) => <Text strong>{value}</Text>,
+      render: (value: number | null) =>
+        value === null ? <MetricNumber value={null} /> : <Text strong>{value}</Text>,
     },
     {
       title: '状态',
       dataIndex: 'status',
       width: 100,
-      render: (value: CodeStatusView) => (
-        <Tag color={STATUS_COLOR[value] ?? 'default'}>{STATUS_TEXT[value] ?? value}</Tag>
+      render: (value: CodeStatusView | null, record) => (
+        <Tag color={value ? (STATUS_COLOR[value] ?? 'default') : 'default'}>{record.statusText}</Tag>
       ),
     },
     {
@@ -499,9 +421,16 @@ export default function AdminTraceCodeManage(): JSX.Element {
       message.warning('当前无可导出数据')
       return
     }
-    const header = ['溯源码', '批次号', '产品', '农场', '生成日期', '扫码次数', '状态']
+    // 导出列与表格列一致：后端没有产品 / 农场字段，不导出
+    const header = ['溯源码', '批次号', '生成日期', '扫码次数', '状态']
     const body = source.map((row) =>
-      [row.code, row.batchNo, row.productName, row.farmName, row.createdAt, String(row.scanCount), STATUS_TEXT[row.status] ?? row.status].join(','),
+      [
+        row.code,
+        row.batchNo ?? MISSING_VALUE_TEXT,
+        row.createdAt ?? MISSING_VALUE_TEXT,
+        row.scanCount === null ? MISSING_VALUE_TEXT : String(row.scanCount),
+        row.statusText,
+      ].join(','),
     )
     const blob = new Blob([`\uFEFF${header.join(',')}\n${body.join('\n')}`], {
       type: 'text/csv;charset=utf-8',
@@ -551,9 +480,10 @@ export default function AdminTraceCodeManage(): JSX.Element {
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
       {listQuery.isError ? (
         <Alert
-          type="warning"
+          type="error"
           showIcon
-          message="溯源码分页接口未返回数据，当前展示原型 P12 示例数据（共 2,450,000 条）"
+          message="溯源码分页接口未返回数据，列表为空"
+          description={`${(listQuery.error as Error | null)?.message ?? '未知错误'}（不使用原型 P12 示例数据兜底，列表为空）`}
           action={
             <Button size="small" icon={<ReloadOutlined />} onClick={() => void listQuery.refetch()}>
               重试
@@ -571,19 +501,10 @@ export default function AdminTraceCodeManage(): JSX.Element {
           <Form.Item name="batchNo" label="批次号">
             <Input placeholder="请输入批次号" allowClear style={{ width: 160 }} />
           </Form.Item>
-          <Form.Item name="product" label="产品">
-            <Select
-              placeholder="全部"
-              allowClear
-              style={{ width: 140 }}
-              options={[
-                { label: '全部', value: '' },
-                { label: '有机大米', value: '有机大米' },
-                { label: '红富士苹果', value: '红富士苹果' },
-                { label: '有机蔬菜', value: '有机蔬菜' },
-              ]}
-            />
-          </Form.Item>
+          {/*
+            「产品」筛选项已删除（BT-65）：它过滤的是前端编造的 productName 列，
+            后端既没有该字段也不支持按产品过滤，留着只会让人以为过滤生效了。
+          */}
           <Form.Item name="status" label="状态">
             <Select
               placeholder="全部"
@@ -654,12 +575,26 @@ export default function AdminTraceCodeManage(): JSX.Element {
               selectedRowKeys: selectedCodes,
               onChange: (keys) => setSelectedCodes(keys as string[]),
             }}
+            locale={{
+              emptyText: (
+                <Empty
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  description={
+                    listQuery.isError
+                      ? '溯源码分页接口未返回数据'
+                      : '后端暂无溯源码（不使用原型示例数据兜底）'
+                  }
+                />
+              ),
+            }}
             pagination={{
               current: pageNum,
               pageSize,
-              total,
+              // total 为 null（没拿到总数）时给 0，并用 showTotal 如实显示「—」而不是编一个数
+              total: total ?? 0,
               showSizeChanger: true,
-              showTotal: (value) => `共 ${value.toLocaleString('zh-CN')} 条`,
+              showTotal: () =>
+                total === null ? '总数未知（后端未返回 total）' : `共 ${total.toLocaleString('zh-CN')} 条`,
               onChange: (page, size) => {
                 setPageNum(page)
                 setPageSize(size)
