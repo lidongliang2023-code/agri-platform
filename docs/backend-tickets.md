@@ -1409,3 +1409,124 @@ return { rows: mockPlanStore, demo: true }      // ← 空列表**也**走这里
 **类型声明仍是撒谎**，建议把 `listDisasterReviews` 的返回类型直接改成告警复盘类型。
 
 ---
+
+# 域：`api/admin/approvals`（运营端审批管理）
+
+> 扫描人：se-verify-fix　日期：2026-10-10　性质：**只读调研**（GET 实测 +
+> 后端源码对照 + 前端静态审计），**不改任何业务代码**。
+> 后端 `AdminApprovalController` 全部映射：`GET ""`、`GET /{id}`、`POST ""`、`PUT /{id}`、
+> `DELETE /{id}`、`POST /{approvalId}/approve`、`POST /{approvalId}/reject`、
+> `GET /pending`、`GET /history`、`GET /config`——**共 10 个**。
+
+## 本域已验证有真数据的端点
+
+| 端点 | 实测 |
+| --- | --- |
+| `GET /admin/approvals` | code=0，`PageResult<ApprovalEntity>`（DEMO-APR-002 / bizType=RECALL）✅ |
+| `GET /admin/approvals/history` | code=0，PageResult 真数据 ✅ |
+| `GET /admin/approvals/pending` | code=0，**裸数组** `List<ApprovalEntity>` 真数据 ✅（⚠️ 前端**没有**声明这个端点） |
+| `GET /admin/approvals/config` | code=0，但只有 `[{bizType:"CERT",approveLevel:2},{bizType:"RECALL",approveLevel:1},{bizType:"QUOTA",approveLevel:1}]` ⚠️（见 BT-43） |
+| `GET /admin/approvals/{id}` | `APPROVAL-NOPE` → **404**（有 handler，id 无效）✅ |
+
+## BT-40　「审批通过 / 驳回」失败也 `message.success` ⚠️ **P0（本轮第二例写操作谎称成功）**
+
+**源码**：`pages/admin/approvals/ApprovalPending.tsx:356-369`
+
+```ts
+const successText = action === 'approve' ? '审批已通过' : '审批已驳回'
+try {
+  …await approveApproval(ids[0], { remark }) / batchApprove(…) / rejectApproval(…)
+  message.success(successText)
+} catch {
+  message.success(`${successText}（演示模式，仅本地更新）`)   // ← 失败也是 success
+}
+mockApprovalStore = …                                          // ← 本地改状态
+setRows((prev) => prev.filter((item) => !ids.includes(item.approvalId)))  // ← 行从列表消失
+```
+
+**性质**：跟 BT-25 同一类，但**危害更大**——
+- 失败分支用的是 `message.success`，只是加了个"（演示模式，仅本地更新）"后缀；
+  绿色成功提示里写着「审批已通过」，服务端一条都没改；
+- 紧接着还在本地把该行**从待审列表里移除**，页面看起来"审批完了"，无一点异常痕迹；
+- **审批是有业务效力的动作**（召回 / 认证 / 配额），"已通过"但服务端未通过，
+  比报表生成假成功更容易导致真实损失。
+
+**旁证：同一域里两种写法不一致，Pending 页是漏网之鱼**——
+`ApprovalConfig.tsx` 的保存 / 启停 / 删除，catch 里用的都是
+`message.warning('…（演示模式，仅本地更新，未写入服务端，刷新后失效）')`（**诚实**）；
+`ApprovalPending.tsx` 用的是 `message.success`。
+
+**建议修法（待裁决后执行）**：catch 分支改 `message.error` + 真实失败原因；
+「仅本地更新」只允许用 `warning` 且必须写明"服务端未变更、刷新后失效"。
+
+## BT-41　`approveApproval` / `rejectApproval` **三重不匹配**，必然失败 ⚠️ P1
+
+| 维度 | 前端（`api/admin/approvals.ts:35-48`） | 后端（`AdminApprovalController:59-73`） |
+| --- | --- | --- |
+| HTTP 方法 | **`PATCH`** `/{id}/approve` | **`POST`** `/{approvalId}/approve` |
+| 参数形态 | **请求体** `{ remark }` | **`@RequestParam`** `approverId` / `opinion`（**不读 body**） |
+| 参数名 | `remark` | `opinion` |
+| 返回类型 | `Promise<boolean>` | `ApiResponse<ApprovalEntity>` |
+
+也就是说就算把 PATCH 改成 POST，`{remark}` 仍然绑不上（后端要 query 上的 `opinion`）。
+**当前这两个调用必然失败**——这正是 BT-40 那条"失败也报成功"必然被触发的原因，两条要一起看。
+
+**类型撒谎**：后端返回 `ApprovalEntity`，前端声明 `boolean`。
+调用方若用 `if (await approveApproval(...))` 判断，拿到的是一个**对象**（恒为真值），
+**永远判断成成功**。与 BT-35（`dispatchAlert`）是同一个坑。
+
+**真实调用方**：`ApprovalPending.tsx:360/362/365`、`OpsDashboard.tsx:276-277`。
+
+## BT-42　`batchApprove` 端点不存在
+
+前端 `PATCH /admin/approvals/batch-approve`。后端 10 个映射里**没有** `batch-approve`。
+实测 `GET /admin/approvals/batch-approve` → **404**（被 `@GetMapping("/{id}")` 当 id 吞了），
+说明也没有 GET handler；`PATCH` 更是无 handler。
+调用方：`ApprovalPending.tsx:362`（多选审批时走这条）→ 多选审批**必然失败**。
+
+## BT-43　审批流程配置：4 个 CRUD 端点全不存在；`GET /config` 返回的也不是 `ApprovalFlowConfig`
+
+**前端声明**：`GET /config/{flowId}`、`POST /config`、`PUT /config/{flowId}`、`DELETE /config/{flowId}`。
+**后端**：只有 `GET /config`，另外四个**一个都没有**（实测 `GET /config/NOPE` → 500，无 handler）。
+
+**契约错位**：`GET /admin/approvals/config` 实测返回
+`[{"bizType":"CERT","approveLevel":2},{"bizType":"RECALL","approveLevel":1},{"bizType":"QUOTA","approveLevel":1}]`
+——只有**两个字段**，是「每种业务类型的审批级数」，**不是流程台账**。
+没有 `flowId` / `flowName` / `nodes` / `conditionRoutes` / `escalations`。
+
+**前端现状（诚实，值得保留）**：`ApprovalConfig.tsx:288-300` 做了形状校验，
+注释明确"接口通了但只给骨架，仍然算没有真数据，保持 `demo: true`，
+让 `DemoDataAlert` 横幅继续提示——否则三条骨架被标成凭空的「租户注册」，比降级更骗人"。
+**这段是对的，不要改成"有数据就去掉横幅"。**
+
+## BT-44　`listApprovals` / `listApprovalHistory` 静默忽略大部分入参
+
+| 端点 | 前端传 | 后端实际接受 |
+| --- | --- | --- |
+| `GET /admin/approvals` | `pageNum/pageSize/approvalType/status/tenantId/applicantName` | `page` / `size` / **`keyword`** / `status`（且 `status` 是 **String**） |
+| `GET /admin/approvals/history` | 同上 | **只有** `page` / `size` |
+
+后果：`approvalType` / `tenantId` / `applicantName` **全部被丢弃**，
+`history` 连 `status` 都不认。使用者按类型 / 申请人筛选会看到"筛了但结果没变"。
+与 BT-30 同类（"静默忽略入参"）。
+
+⚠️ 另：后端 `page()` 的 `status` 是 `String`，前端 `ApprovalListParams.status` 是 `number`——
+`status=1` 传过去被当字符串比较，属于**类型口径不一致**，需要实测确认是否真能筛。
+
+## BT-45　`OpsDashboard` 的审批 mutation 只有 `onSuccess`，失败**完全静默**
+
+`OpsDashboard.tsx:273-281` 的 `approvalMutation` 只定义了 `onSuccess`（弹「审批已通过」），
+全文件 **grep `onError` 零命中**。结合 BT-41（这两个端点必然失败）的结果是：
+使用者点「通过」→ **什么提示都没有** → 弹窗不关（`setActiveApproval(null)` 在 onSuccess 里）
+→ 只能反复点。**不是谎报成功，但是"静默失败"**，同样违反写操作验收标准。
+
+**建议**：补 `onError` 如实报错（或至少 `message.error`），失败时不要把弹窗留在半开状态。
+
+## 附：本域诚实的地方（不要改坏）
+
+- `ApprovalHistory.tsx`：注释明确"不再 try/catch 兜底到演示数据，请求失败时让 react-query 进入 isError"，
+  空态文案写明"后端 /admin/approvals/history 未返回数据……页面不会用示例数据填充"。✅
+- `ApprovalConfig.tsx`：写操作失败用 `message.warning` 明说未写入服务端；
+  形状校验不让骨架数据冒充真流程。✅
+
+---
