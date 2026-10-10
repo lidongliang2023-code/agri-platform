@@ -31,6 +31,9 @@ public class TraceService {
     private final HarvestBatchMapper harvestBatchMapper;
     private final DomainEventPublisher eventPublisher;
 
+    /** 码值碰撞后的最大重生成次数（三位随机后缀，单批次 900 个可用值） */
+    private static final int CODE_GENERATE_MAX_RETRY = 10;
+
     /**
      * 为已采收批次生成一物一码（初始状态 generated）。
      *
@@ -54,8 +57,20 @@ public class TraceService {
      * 一行（{@code PH20260901001}），对不上任何采收批次，导致 DEMO-BATCH-001..006
      * 全部 404。现在只校验采收批次本身是否存在。</p>
      *
+     * <p><b>一个批次可以有多个码</b>：{@code prod_trace_code} 的唯一键只有
+     * {@code uk_trace_code (code)}（V1__init_core.sql:254-266），schema 层没有按批次的
+     * 唯一约束；种子数据里 {@code DEMO-BATCHN-001} 本身就挂着 DEMO-TC-0001 与
+     * DEMO-TC-0002 两个码。因此"一个批次只能有一个码"的
+     * {@code TRACE_CODE_DUPLICATED} 守卫与既有数据自相矛盾，已移除。
+     * 本方法语义是：<b>每次调用发一个新码</b>，唯一性由 {@code uk_trace_code} 保证。</p>
+     *
+     * <p><b>码值碰撞处理</b>：码值形如 {@code TRC + batchNo + 三位随机后缀}（100~999，
+     * 即单批次 900 个可用值）。随机后缀存在碰撞可能，因此生成后先按 code 查重，
+     * 撞了就重新生成，最多 {@link #CODE_GENERATE_MAX_RETRY} 次；重试耗尽时抛
+     * {@code TRACE_CODE_DUPLICATED} 并说明原因（不依赖唯一键冲突异常兜底，那会变成 500）。</p>
+     *
      * @param batchId 采收批次业务 ID（如 {@code DEMO-BATCH-001}）或遗留数字批次 ID
-     * @return 溯源码
+     * @return 本次新生成的溯源码
      */
     @Transactional
     public String generate(String batchId) {
@@ -77,15 +92,8 @@ public class TraceService {
                     "采收批次不存在：batchId=" + batchId + "，batchNo=" + batchNo);
         }
 
-        Long exists = traceCodeMapper.selectCount(new LambdaQueryWrapper<TraceCodeEntity>()
-                .eq(TraceCodeEntity::getBatchNo, batchNo));
-        if (exists > 0) {
-            throw new BusinessException(
-                    ErrorCode.TRACE_CODE_DUPLICATED,
-                    "该批次已生成过溯源码：batchId=" + batchId + "，batchNo=" + batchNo);
-        }
+        String code = generateUniqueCode(batchNo, batchId);
 
-        String code = "TRC" + batchNo + ThreadLocalRandom.current().nextInt(100, 999);
         TraceCodeEntity traceCode = new TraceCodeEntity();
         // batch_id 留空：见本方法 Javadoc，V13 起该列可空，禁止合成数字填充
         traceCode.setBatchId(null);
@@ -95,6 +103,33 @@ public class TraceService {
         traceCode.setScanCount(0);
         traceCodeMapper.insert(traceCode);
         return code;
+    }
+
+    /**
+     * 生成一个未被占用的溯源码。
+     *
+     * <p>码值形如 {@code TRC + batchNo + 三位随机后缀}（{@code nextInt(100, 999)}）。
+     * 随机后缀会碰撞，所以先按 {@code code} 查重再决定是否采用；
+     * 连续碰撞到上限就明确报错，而不是把唯一键冲突抛成 500。</p>
+     *
+     * @param batchNo 批次号
+     * @param batchId 原始入参，仅用于报错时定位
+     * @return 未被占用的溯源码
+     */
+    private String generateUniqueCode(String batchNo, String batchId) {
+        for (int attempt = 1; attempt <= CODE_GENERATE_MAX_RETRY; attempt += 1) {
+            String candidate = "TRC" + batchNo + ThreadLocalRandom.current().nextInt(100, 999);
+            Long used = traceCodeMapper.selectCount(new LambdaQueryWrapper<TraceCodeEntity>()
+                    .eq(TraceCodeEntity::getCode, candidate));
+            if (used == null || used == 0L) {
+                return candidate;
+            }
+        }
+        throw new BusinessException(
+                ErrorCode.TRACE_CODE_DUPLICATED,
+                "溯源码生成失败：连续 " + CODE_GENERATE_MAX_RETRY
+                        + " 次码值碰撞（单批次可用值仅 900 个），batchId=" + batchId
+                        + "，batchNo=" + batchNo);
     }
 
     /**
