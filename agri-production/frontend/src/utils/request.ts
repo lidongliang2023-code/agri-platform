@@ -126,11 +126,21 @@ export interface PageQueryLike {
  * `Promise<PageResult<T>>` 的 api 函数实际返回一个数组，页面解构出的 `list`
  * 恒为 `undefined`。本函数把裸数组补成完整的 `PageResult`，使页面无需改动。
  *
+ * ⚠️ 这类端点**在后端是整表全量返回、完全忽略分页入参的**（实测
+ * `GET /analytics/reports?pageNum=2&pageSize=2` 仍返回全部 6 行，
+ * 源码上 `AnalyticsController#reports` 只接收 `metricCode`，没有 page/size）。
+ * 因此这里做的是**前端切片分页（伪分页）**：
+ * - `total` / `pages` 反映后端真实的全量规模，不因切片而变小；
+ * - `list` 按调用方传入的 `pageNum` / `pageSize` 切片，使「第 1 页只渲染
+ *   pageSize 行、翻到第 2 页是另外一批行」成立。
+ * 若不做切片，只按 pageSize 算出 `pages`，就会出现分页器显示多页、
+ * 但每一页都渲染全量且内容完全相同的**假分页**。
+ *
  * 幂等：入参已经是归一化分页结构（含 `list` 数组）时原样返回，
  * 因此后端日后改成真 PageResult 也不需要改调用方。
  *
  * @param raw 接口解包后的业务数据（裸数组 / 已归一化的分页对象 / 其他）
- * @param params 本次请求的分页入参，用于回填 pageNum / pageSize
+ * @param params 本次请求的分页入参，用于回填 pageNum / pageSize 并切片
  * @returns 前端统一分页结构；无法识别时返回空分页（`list` 为空数组，不是 undefined）
  */
 export function toPageResult<T>(raw: unknown, params: PageQueryLike = {}): PageData<T> {
@@ -142,15 +152,21 @@ export function toPageResult<T>(raw: unknown, params: PageQueryLike = {}): PageD
     return raw as PageData<T>
   }
 
-  // 裸数组：后端未做分页，整表就是一页
+  // 裸数组：后端全量返回，这里按调用方的分页入参做前端切片
   if (Array.isArray(raw)) {
-    const list = raw as T[]
+    const all = raw as T[]
+    const total = all.length
+    // 页码小于 1 时按第 1 页处理，避免 slice 起始下标为负（slice(-n, 0) 会得到空数组）
+    const safePageNum = pageNum > 0 ? pageNum : 1
+    // 每页条数非正时不做切片（整表即一页），同时 pages 记 0
+    const sliceSize = pageSize > 0 ? pageSize : total
+    const start = (safePageNum - 1) * sliceSize
     return {
-      list,
-      total: list.length,
-      pageNum,
+      list: all.slice(start, start + sliceSize),
+      total,
+      pageNum: safePageNum,
       pageSize,
-      pages: pageSize > 0 ? Math.ceil(list.length / pageSize) : 0,
+      pages: pageSize > 0 ? Math.ceil(total / pageSize) : 0,
     }
   }
 
