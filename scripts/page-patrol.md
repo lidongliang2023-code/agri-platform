@@ -78,6 +78,19 @@ node scripts/page-patrol.mjs --mode deep \
 每条记录字段：`路径 / 是否白屏 / console错误数（含真实错误数，剥离 antd 弃用告警等
 框架噪声，原始值同样保留）/ 首条错误文本 / 是否出现演示数据横幅 / 截图路径`。
 
+## 关于崩溃栈里的行号（重要）
+
+`firstPageErrorStack` 里的 `xxx.tsx:406:83` 是 **Vite 下发模块**的行号，
+不是仓库里原始文件的行号——esbuild 的 JSX 转译会整体偏移行号（实测
+DisasterReview.tsx 偏移约 96 行）。引用堆栈时必须回原始文件核对，或一并说明这是转译后行号。
+
+核对办法：
+
+```bash
+curl -s --noproxy '*' "http://localhost:5199/src/pages/admin/alerts/DisasterReview.tsx" -o /tmp/served.js
+sed -n '406p' /tmp/served.js   # 看这一行是什么，再回原文件 grep 定位真实行号
+```
+
 ## 纪律
 
 本脚本**只观测、不修复**：不修改任何被测页面源码，不 mock 接口，不跳过失败页面。
