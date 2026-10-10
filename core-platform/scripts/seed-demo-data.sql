@@ -94,6 +94,10 @@ DELETE FROM prod_iot_maintenance       WHERE maintain_id   LIKE 'DEMO-MAIN-%';
 DELETE FROM prod_harvest_batch         WHERE batch_id      LIKE 'DEMO-BATCH-%';
 DELETE FROM prod_harvest_record        WHERE record_id     LIKE 'DEMO-HARV-%';
 DELETE FROM prod_inventory_flow        WHERE flow_id       LIKE 'DEMO-INV-%';
+-- 库存台账（V14 新增表 prod_inventory）。主键前缀 DEMO-INVT- 与流水的 DEMO-INV- 物理
+-- 区分：「DEMO-INV-%」匹配不到「DEMO-INVT-001」，两张表必须各写各的 DELETE，
+-- 否则重跑脚本时台账会堆积重复行（主键相同则 INSERT 直接失败）。
+DELETE FROM prod_inventory             WHERE inventory_id  LIKE 'DEMO-INVT-%';
 DELETE FROM prod_inspection            WHERE inspection_id LIKE 'DEMO-INSP-%';
 DELETE FROM prod_quality_lab           WHERE lab_id        LIKE 'DEMO-LAB-%';
 DELETE FROM prod_trace_code            WHERE batch_no      LIKE 'DEMO-BATCH-%' OR code LIKE 'DEMO-TC-%';
@@ -683,6 +687,59 @@ INSERT INTO prod_inventory_flow (
 ('DEMO-INV-004', @DEMO_MARKET_ID, @DEMO_TENANT_ID, 'DEMO-BATCH-002', 'DEMO-WH-001', 4,  -120.00, 'kg',  5200.00,  5080.00, 'DEMO-MEM-002', NULL,             '演示数据：冷链运输损耗报损',   @DEMO_AUDIT_BY, @DEMO_AUDIT_BY, '2026-07-30 09:00:00', @DEMO_UPDATE_AT, 0),
 ('DEMO-INV-005', @DEMO_MARKET_ID, @DEMO_TENANT_ID, 'DEMO-BATCH-004', 'DEMO-WH-002', 1, 96000.00, 'kg',     0.00, 96000.00, 'DEMO-MEM-005', NULL,             '演示数据：稻谷批次入库',       @DEMO_AUDIT_BY, @DEMO_AUDIT_BY, '2026-10-08 20:00:00', @DEMO_UPDATE_AT, 0);
 
+-- 库存台账（V14 新增表 prod_inventory —— 与上面的「流水」是两回事：
+--   流水 = 每一次变动一行（before_qty/after_qty）；台账 = 当前状态一行。
+--   此前库里只有流水，前端「库存管理 / 库存详情」两页拿不到任何台账（工单 BT-01）。
+-- 口径与上方流水种子同源：DEMO-BATCH-001 的 5400 = 8600 入库 - 3200 出库；
+--   DEMO-BATCH-002 的 5080 = 5200 入库 - 120 报损，两边对得上，不是拍脑袋填的数。
+-- health_status 由后端 resolveHealth 同序重算（不足 > 临期 > 预警 > 正常），
+--   这里给的值与该算法一致：003 是 620<=500? 否 -> 620<=500? 否... 见下方逐行注释。
+INSERT INTO prod_inventory (
+    inventory_id, market_id, tenant_id, batch_id, batch_no, warehouse_id, warehouse_name,
+    location_code, product_name, category, grade, current_qty, frozen_qty, safe_qty, unit,
+    loss_qty, loss_reason, last_in_at, last_out_at, expire_date, health_status, frozen,
+    related_batch_no, remark,
+    create_by, update_by, create_at, update_at, deleted
+) VALUES
+-- 5400 远高于 safe 200，保质期 2027-06-30 尚远 -> normal
+('DEMO-INVT-001', @DEMO_MARKET_ID, @DEMO_TENANT_ID, 'DEMO-BATCH-001', 'DEMO-BATCHN-001', 'DEMO-WH-001', '冷藏库A',
+ 'A-01-02', '番茄(一级)', '番茄', '一级', 5400.00, 0.00, 200.00, 'kg',
+ 120.00, NULL, '2026-06-28 19:00:00', '2026-07-02 10:30:00', '2027-06-30', 'normal', 0,
+ 'DEMO-BATCHN-001', '演示数据：番茄批次台账（8600 入库 -3200 出库）',
+ @DEMO_AUDIT_BY, @DEMO_AUDIT_BY, '2026-06-28 19:00:00', @DEMO_UPDATE_AT, 0),
+-- 保质期 2026-10-12，距今 ≤ 3 天 -> expiring
+('DEMO-INVT-002', @DEMO_MARKET_ID, @DEMO_TENANT_ID, 'DEMO-BATCH-002', 'DEMO-BATCHN-002', 'DEMO-WH-001', '冷藏库A',
+ 'A-02-01', '黄瓜(一级)', '黄瓜', '一级', 5080.00, 0.00, 150.00, 'kg',
+ 120.00, '冷链运输损耗', '2026-07-26 19:00:00', '2026-07-30 09:00:00', '2026-10-12', 'expiring', 0,
+ 'DEMO-BATCHN-002', '演示数据：黄瓜批次台账（5200 入库 -120 报损，临期）',
+ @DEMO_AUDIT_BY, @DEMO_AUDIT_BY, '2026-07-26 19:00:00', @DEMO_UPDATE_AT, 0),
+-- 620 介于 safe 1000 与其一半 500 之间 -> warning
+('DEMO-INVT-003', @DEMO_MARKET_ID, @DEMO_TENANT_ID, 'DEMO-BATCH-003', 'DEMO-BATCHN-003', 'DEMO-WH-002', '冷藏库B',
+ 'B-01-03', '辣椒(待检)', '辣椒', '待检', 620.00, 0.00, 1000.00, 'kg',
+ 0.00, NULL, '2026-09-28 15:00:00', NULL, '2027-06-30', 'warning', 0,
+ 'DEMO-BATCHN-003', '演示数据：辣椒批次台账（620 介于安全库存 1000 与其一半之间，预警）',
+ @DEMO_AUDIT_BY, @DEMO_AUDIT_BY, '2026-09-28 15:00:00', @DEMO_UPDATE_AT, 0),
+('DEMO-INVT-004', @DEMO_MARKET_ID, @DEMO_TENANT_ID, 'DEMO-BATCH-004', 'DEMO-BATCHN-004', 'DEMO-WH-002', '主仓库',
+ 'M-01-01', '稻谷(二级)', '稻谷', '二级', 96000.00, 0.00, 1000.00, 'kg',
+ 0.00, NULL, '2026-10-08 20:00:00', NULL, '2027-10-08', 'normal', 0,
+ 'DEMO-BATCHN-004', '演示数据：稻谷批次台账',
+ @DEMO_AUDIT_BY, @DEMO_AUDIT_BY, '2026-10-08 20:00:00', @DEMO_UPDATE_AT, 0),
+-- 80 <= safe 800 的一半 400 -> shortage；frozen=1 展示冻结态
+('DEMO-INVT-005', @DEMO_MARKET_ID, @DEMO_TENANT_ID, 'DEMO-BATCH-005', 'DEMO-BATCHN-005', 'DEMO-WH-003', '冷藏库C',
+ 'C-02-04', '辣椒(一级)', '辣椒', '一级', 80.00, 200.00, 800.00, 'kg',
+ 0.00, NULL, '2026-09-20 17:30:00', NULL, '2027-06-30', 'shortage', 1,
+ 'DEMO-BATCHN-005', '演示数据：辣椒批次台账（冻结 200kg，80 不足安全库存 800 的一半）',
+ @DEMO_AUDIT_BY, @DEMO_AUDIT_BY, '2026-09-20 17:30:00', @DEMO_UPDATE_AT, 0);
+
+-- 批次入库状态与仓库名（V14 新增列）。填的是「该批次是否真的进了库」这一真值，
+-- 与上方台账种子同源（同一 batch_id）；DEMO-BATCH-006 是已冻结且无台账的批次，
+-- 保持 0 未入库 —— 前端 Detail.tsx 的 (inboundStatus ?? 0) !== 0 在该条上会正确显示待入库。
+UPDATE prod_harvest_batch SET inbound_status = 1, warehouse_name = '冷藏库A' WHERE batch_id = 'DEMO-BATCH-001';
+UPDATE prod_harvest_batch SET inbound_status = 1, warehouse_name = '冷藏库A' WHERE batch_id = 'DEMO-BATCH-002';
+UPDATE prod_harvest_batch SET inbound_status = 1, warehouse_name = '冷藏库B' WHERE batch_id = 'DEMO-BATCH-003';
+UPDATE prod_harvest_batch SET inbound_status = 1, warehouse_name = '主仓库'   WHERE batch_id = 'DEMO-BATCH-004';
+UPDATE prod_harvest_batch SET inbound_status = 1, warehouse_name = '冷藏库C' WHERE batch_id = 'DEMO-BATCH-005';
+
 -- =====================================================================================
 -- 11. 检测机构 + 质量检测
 -- =====================================================================================
@@ -977,6 +1034,7 @@ SET FOREIGN_KEY_CHECKS = 1;
 -- DELETE FROM prod_harvest_batch         WHERE batch_id      LIKE 'DEMO-BATCH-%';
 -- DELETE FROM prod_harvest_record        WHERE record_id     LIKE 'DEMO-HARV-%';
 -- DELETE FROM prod_inventory_flow        WHERE flow_id       LIKE 'DEMO-INV-%';
+-- DELETE FROM prod_inventory             WHERE inventory_id  LIKE 'DEMO-INVT-%';
 -- DELETE FROM prod_inspection            WHERE inspection_id LIKE 'DEMO-INSP-%';
 -- DELETE FROM prod_quality_lab           WHERE lab_id        LIKE 'DEMO-LAB-%';
 -- DELETE FROM prod_trace_code            WHERE batch_no      LIKE 'DEMO-BATCH-%' OR code LIKE 'DEMO-TC-%';

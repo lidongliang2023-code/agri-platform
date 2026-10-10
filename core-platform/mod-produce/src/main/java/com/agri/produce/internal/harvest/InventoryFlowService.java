@@ -26,6 +26,9 @@ public class InventoryFlowService {
 
     private final InventoryFlowMapper inventoryFlowMapper;
 
+    /** 台账服务：出库必须同时扣减台账，否则流水与台账脱节 */
+    private final InventoryService inventoryService;
+
     /**
      * 分页查询（不带任何过滤条件，用于库存总览）。
      *
@@ -129,10 +132,32 @@ public class InventoryFlowService {
                 .orderByDesc(InventoryFlowEntity::getCreatedAt));
     }
 
-    /** 出库：写流水并计算变动前后库存 */
+    /**
+     * 批次出库：写 {@code flowType=2} 流水，并同步扣减台账当前库存。
+     *
+     * <p><b>为什么必须收 {@code operatorName} 并落库（工单 BT-07）。</b>此前签名只有
+     * {@code qty / operatorId / relatedOrderNo}，前端 {@code StockInPayload /
+     * LossPayload} 真实传的 {@code operatorName} 既没落库也没报错，属于「传了但静默丢弃」，
+     * 与「静默写空」同型。现在该字段写入 {@code prod_inventory_flow.operator_name}
+     * （V14 新增列），调用方传了就一定看得到，不会再无声消失。
+     *
+     * <p><b>为什么还要动台账。</b>V14 之前库里没有台账表，出库只能写流水；台账上线后
+     * 若出库不同步扣减，{@code currentQty} 就会与流水累计值对不上，等于台账说假话。
+     * 该批次没有台账时只写流水（历史数据的既定事实），不凭空造台账行。
+     *
+     * @param batchId        批次号
+     * @param qty            出库数量（正数），不得为 null/非正
+     * @param operatorId     操作人ID
+     * @param operatorName   操作人姓名（落库，不再静默丢弃）
+     * @param relatedOrderNo 关联交易单号
+     * @return 出库流水
+     */
     @Transactional
     public InventoryFlowEntity outbound(String batchId, BigDecimal qty, String operatorId,
-                                        String relatedOrderNo) {
+                                        String operatorName, String relatedOrderNo) {
+        if (qty == null || qty.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "出库数量必须大于 0");
+        }
         List<InventoryFlowEntity> history = listByBatch(batchId);
         BigDecimal before = BigDecimal.ZERO;
         for (InventoryFlowEntity flow : history) {
@@ -140,7 +165,7 @@ public class InventoryFlowService {
                 before = before.add(flow.getQty());
             }
         }
-        BigDecimal delta = (qty == null ? BigDecimal.ZERO : qty).negate();
+        BigDecimal delta = qty.negate();
         InventoryFlowEntity flow = new InventoryFlowEntity();
         flow.setFlowId(ProduceIds.newId("INVF"));
         flow.setBatchId(batchId);
@@ -150,8 +175,10 @@ public class InventoryFlowService {
         flow.setBeforeQty(before);
         flow.setAfterQty(before.add(delta));
         flow.setOperatorId(operatorId);
+        flow.setOperatorName(operatorName);
         flow.setRelatedOrderNo(relatedOrderNo);
         inventoryFlowMapper.insert(flow);
+        inventoryService.syncOutbound(batchId, qty);
         return flow;
     }
 }

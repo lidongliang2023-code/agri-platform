@@ -40,8 +40,20 @@ public class InventoryFlowEntity extends ProduceBaseEntity {
     /** 变动后库存 */
     private BigDecimal afterQty;
 
-    /** 操作人 */
+    /**
+     * 操作人
+     *
+     * <p>与 {@link #operatorName} 并存：{@code operator_id} 是人员主键，
+     * {@code operator_name} 是页面展示用姓名。BT-07 之前只收 {@code operatorId}，
+     * 调用方传的 {@code operatorName} 既不落库也不报错（静默丢弃），本列即为修复。
+     */
     private String operatorId;
+
+    /** 操作人姓名（V14 新增，BT-07） */
+    private String operatorName;
+
+    /** 仓库名称（V14 新增，调拨/出库展示） */
+    private String warehouseName;
 
     /** 关联交易单号 */
     private String relatedOrderNo;

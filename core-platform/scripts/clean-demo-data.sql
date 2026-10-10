@@ -86,6 +86,9 @@ DELETE FROM prod_alert_info            WHERE alert_id      LIKE 'DEMO-ALERT-%';
 DELETE FROM prod_harvest_batch         WHERE batch_id      LIKE 'DEMO-BATCH-%';
 DELETE FROM prod_harvest_record        WHERE record_id     LIKE 'DEMO-HARV-%';
 DELETE FROM prod_inventory_flow        WHERE flow_id       LIKE 'DEMO-INV-%';
+-- 库存台账（V14 新增表）。主键前缀 DEMO-INVT-：与流水的 DEMO-INV- 物理区分，
+-- 「DEMO-INV-%」匹配不到「DEMO-INVT-001」，两张表必须各写各的 DELETE。
+DELETE FROM prod_inventory             WHERE inventory_id  LIKE 'DEMO-INVT-%';
 DELETE FROM prod_inspection            WHERE inspection_id LIKE 'DEMO-INSP-%';
 DELETE FROM prod_quality_lab           WHERE lab_id        LIKE 'DEMO-LAB-%';
 DELETE FROM prod_trace_code            WHERE batch_no      LIKE 'DEMO-BATCH-%' OR code LIKE 'DEMO-TC-%';
@@ -138,6 +141,7 @@ UNION ALL SELECT 'prod_alert_info',            COUNT(*) FROM prod_alert_info    
 UNION ALL SELECT 'prod_harvest_batch',         COUNT(*) FROM prod_harvest_batch         WHERE batch_id      LIKE 'DEMO-%'
 UNION ALL SELECT 'prod_harvest_record',        COUNT(*) FROM prod_harvest_record        WHERE record_id     LIKE 'DEMO-%'
 UNION ALL SELECT 'prod_inventory_flow',        COUNT(*) FROM prod_inventory_flow        WHERE flow_id       LIKE 'DEMO-%'
+UNION ALL SELECT 'prod_inventory',             COUNT(*) FROM prod_inventory             WHERE inventory_id  LIKE 'DEMO-%'
 UNION ALL SELECT 'prod_inspection',            COUNT(*) FROM prod_inspection            WHERE inspection_id LIKE 'DEMO-%'
 UNION ALL SELECT 'prod_quality_lab',           COUNT(*) FROM prod_quality_lab           WHERE lab_id        LIKE 'DEMO-%'
 UNION ALL SELECT 'prod_trace_code',            COUNT(*) FROM prod_trace_code            WHERE batch_no      LIKE 'DEMO-%' OR code LIKE 'DEMO-TC-%'

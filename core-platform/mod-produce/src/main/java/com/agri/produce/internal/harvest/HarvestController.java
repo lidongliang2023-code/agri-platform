@@ -26,6 +26,7 @@ public class HarvestController {
     private final HarvestBatchService harvestBatchService;
     private final HarvestRecordService harvestRecordService;
     private final InventoryFlowService inventoryFlowService;
+    private final InventoryService inventoryService;
 
     @GetMapping
     public ApiResponse<PageResult<HarvestBatchEntity>> page(@RequestParam(defaultValue = "1") long page,
@@ -161,8 +162,9 @@ public class HarvestController {
     public ApiResponse<InventoryFlowEntity> outbound(@PathVariable String batchId,
                                                      @RequestParam BigDecimal qty,
                                                      @RequestParam(required = false) String operatorId,
+                                                     @RequestParam(required = false) String operatorName,
                                                      @RequestParam(required = false) String relatedOrderNo) {
-        return ApiResponse.ok(inventoryFlowService.outbound(batchId, qty, operatorId, relatedOrderNo));
+        return ApiResponse.ok(inventoryFlowService.outbound(batchId, qty, operatorId, operatorName, relatedOrderNo));
     }
 
     /**
@@ -195,30 +197,100 @@ public class HarvestController {
     }
 
     /**
-     * 库存流水总览（可按批次筛选）。
+     * 库存台账列表（BT-01）。
      *
-     * <p><b>为什么返回 PageResult 而不是裸 List。</b>前端
+     * <p><b>为什么返回台账而不是流水。</b>此前这里返回的是 {@code InventoryFlowEntity}
+     * （出入库流水），因为库里根本没有台账表 —— 前端 {@code InventoryRecord} 契约的
+     * 12 个关键字段只命中 {@code batchId / unit} 两个，「库存管理」页永远拿不到真台账。
+     * V14 建了 {@code prod_inventory} 之后改为返回台账，缺失的 10 个字段全部有真值。
+     *
+     * <p><b>为什么空值一律表示「不过滤」。</b>把空串拼成
+     * {@code WHERE warehouse_name = ''} 会静默返回 0 条（本项目已在此栽过一次），
+     * 各筛选条件都在 Service 里用布尔条件前置判断，不传就是不过滤。
+     *
+     * <p><b>为什么仍返回 PageResult 而不是裸 List。</b>前端
      * {@code src/api/harvests.ts queryInventory} 按 {@code PageResult<T>} 解构
      * （响应拦截器 {@code normalizePageData} 再把 {@code records} 归一化为 {@code list}），
      * 后端吐裸数组时 {@code response.data.records/total} 取不到，列表恒为空。
      *
-     * <p><b>为什么 batchId 缺省不加条件。</b>此前实现把空串透传给 Service 拼成
+     * <p><b>为什么各筛选参数缺省不加条件。</b>此前把空串透传给 Service 拼成
      * {@code WHERE batch_id = ''}，不传筛选时静默返回 0 条；现在空值表示「不过滤」。
      */
     @GetMapping("/inventory")
-    public ApiResponse<PageResult<InventoryFlowEntity>> inventory(@RequestParam(defaultValue = "1") long page,
-                                                                  @RequestParam(defaultValue = "10") long size,
-                                                                  @RequestParam(required = false) String batchId) {
-        return ApiResponse.ok(inventoryFlowService.page(page, size, batchId));
+    public ApiResponse<PageResult<InventoryEntity>> inventory(@RequestParam(defaultValue = "1") long page,
+                                                              @RequestParam(defaultValue = "10") long size,
+                                                              @RequestParam(required = false) String batchNo,
+                                                              @RequestParam(required = false) String warehouseName,
+                                                              @RequestParam(required = false) String category,
+                                                              @RequestParam(required = false) String healthStatus,
+                                                              @RequestParam(required = false) String keyword) {
+        return ApiResponse.ok(inventoryService.page(page, size, batchNo, warehouseName,
+                category, healthStatus, keyword));
     }
 
-    /** 批次出库 */
+    /** 库存台账详情（BT-06） */
+    @GetMapping("/inventory/{inventoryId}")
+    public ApiResponse<InventoryEntity> inventoryDetail(@PathVariable String inventoryId) {
+        return ApiResponse.ok(inventoryService.detail(inventoryId));
+    }
+
+    /** 新增库存台账（BT-05）：此前该路径只有 GET，POST 返回 405 */
+    @PostMapping("/inventory")
+    public ApiResponse<InventoryEntity> createInventory(@RequestBody InventoryEntity entity) {
+        return ApiResponse.ok(inventoryService.create(entity));
+    }
+
+    /** 更新库存台账 */
+    @PutMapping("/inventory/{inventoryId}")
+    public ApiResponse<InventoryEntity> updateInventory(@PathVariable String inventoryId,
+                                                        @RequestBody InventoryEntity entity) {
+        return ApiResponse.ok(inventoryService.update(inventoryId, entity));
+    }
+
+    /** 删除库存台账 */
+    @DeleteMapping("/inventory/{inventoryId}")
+    public ApiResponse<Void> deleteInventory(@PathVariable String inventoryId) {
+        inventoryService.delete(inventoryId);
+        return ApiResponse.ok();
+    }
+
+    /** 成品入库（BT-02）：台账加库存 + 写 flowType=1 流水 + 批次标记已入库 */
+    @PostMapping("/inventory/in")
+    public ApiResponse<Boolean> stockIn(@RequestBody InventoryStockInRequest request) {
+        inventoryService.stockIn(request);
+        return ApiResponse.ok(Boolean.TRUE);
+    }
+
+    /** 损耗登记（BT-03）：台账扣减 + 累加损耗 + 写 flowType=4 流水 */
+    @PostMapping("/inventory/{batchId}/loss")
+    public ApiResponse<Boolean> inventoryLoss(@PathVariable String batchId,
+                                              @RequestBody InventoryLossRequest request) {
+        if (request != null && (request.getBatchId() == null || request.getBatchId().isBlank())) {
+            request.setBatchId(batchId);
+        }
+        inventoryService.registerLoss(batchId, request);
+        return ApiResponse.ok(Boolean.TRUE);
+    }
+
+    /** 库存调拨（BT-04）：原库位扣减 + 目标仓库累加 + 写成对出入库流水 */
+    @PostMapping("/inventory/{batchId}/transfer")
+    public ApiResponse<Boolean> inventoryTransfer(@PathVariable String batchId,
+                                                  @RequestBody InventoryTransferRequest request) {
+        if (request != null && (request.getBatchId() == null || request.getBatchId().isBlank())) {
+            request.setBatchId(batchId);
+        }
+        inventoryService.transfer(batchId, request);
+        return ApiResponse.ok(Boolean.TRUE);
+    }
+
+    /** 批次出库（BT-07：operatorName 落库到流水，不再静默丢弃） */
     @PostMapping("/inventory/{batchId}/out")
     public ApiResponse<InventoryFlowEntity> inventoryOut(@PathVariable String batchId,
                                                          @RequestParam BigDecimal qty,
                                                          @RequestParam(required = false) String operatorId,
+                                                         @RequestParam(required = false) String operatorName,
                                                          @RequestParam(required = false) String relatedOrderNo) {
-        return ApiResponse.ok(inventoryFlowService.outbound(batchId, qty, operatorId, relatedOrderNo));
+        return ApiResponse.ok(inventoryFlowService.outbound(batchId, qty, operatorId, operatorName, relatedOrderNo));
     }
 
     /** 批次冻结 */

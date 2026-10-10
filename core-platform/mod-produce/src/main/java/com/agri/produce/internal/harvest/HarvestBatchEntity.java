@@ -63,4 +63,17 @@ public class HarvestBatchEntity extends ProduceBaseEntity {
 
     /** 状态 1在库 2部分出库 3清空 4冻结 5归档 */
     private Integer status;
+
+    /**
+     * 入库状态 0未入库 1已入库 2部分入库（V14 新增）。
+     *
+     * <p><b>为什么必须有真值。</b>此前后端从不返回该字段，前端 {@code Detail.tsx} 用
+     * {@code (batch.inboundStatus ?? 0) !== 0} 判断「确认入库」是否可点，
+     * 恒为 0 导致所有批次一律显示「待入库」、按钮一律可点 —— 页面显示的状态并非服务端真值。
+     * 该字段由入库动作（{@code POST /harvests/inventory/in}）真写入，不靠前端兜底。
+     */
+    private Integer inboundStatus;
+
+    /** 入库仓库名称（V14 新增，冗余自库存台账） */
+    private String warehouseName;
 }
