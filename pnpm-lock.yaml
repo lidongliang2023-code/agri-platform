@@ -8,6 +8,97 @@ importers:
 
   .: {}
 
+  agri-master-data/web:
+    dependencies:
+      '@agri/shared':
+        specifier: workspace:*
+        version: link:../../packages/agri-shared
+      '@ant-design/icons':
+        specifier: ^5.2.6
+        version: 5.6.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@ant-design/pro-components':
+        specifier: ^2.6.43
+        version: 2.8.10(antd@5.29.3(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(rc-field-form@2.7.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@tanstack/react-query':
+        specifier: ^5.17.19
+        version: 5.104.1(react@18.3.1)
+      ahooks:
+        specifier: ^3.7.8
+        version: 3.10.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      antd:
+        specifier: ^5.13.2
+        version: 5.29.3(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      axios:
+        specifier: ^1.6.5
+        version: 1.16.0(debug@4.4.3(supports-color@7.2.0))
+      dayjs:
+        specifier: ^1.11.10
+        version: 1.11.23
+      echarts:
+        specifier: ^5.5.0
+        version: 5.6.0
+      echarts-for-react:
+        specifier: ^3.0.2
+        version: 3.0.6(echarts@5.6.0)(react@18.3.1)
+      lodash:
+        specifier: ^4.17.21
+        version: 4.18.1
+      react:
+        specifier: ^18.2.0
+        version: 18.3.1
+      react-dom:
+        specifier: ^18.2.0
+        version: 18.3.1(react@18.3.1)
+      react-router-dom:
+        specifier: ^6.21.2
+        version: 6.30.6(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      zustand:
+        specifier: ^4.4.7
+        version: 4.5.7(@types/react@18.3.31)(react@18.3.1)
+    devDependencies:
+      '@types/lodash':
+        specifier: ^4.14.202
+        version: 4.17.26
+      '@types/node':
+        specifier: ^20.11.5
+        version: 20.19.43
+      '@types/react':
+        specifier: ^18.2.48
+        version: 18.3.31
+      '@types/react-dom':
+        specifier: ^18.2.18
+        version: 18.3.7(@types/react@18.3.31)
+      '@typescript-eslint/eslint-plugin':
+        specifier: ^6.19.1
+        version: 6.21.0(@typescript-eslint/parser@6.21.0(eslint@8.57.1(supports-color@7.2.0))(supports-color@7.2.0)(typescript@5.9.3))(eslint@8.57.1(supports-color@7.2.0))(supports-color@7.2.0)(typescript@5.9.3)
+      '@typescript-eslint/parser':
+        specifier: ^6.19.1
+        version: 6.21.0(eslint@8.57.1(supports-color@7.2.0))(supports-color@7.2.0)(typescript@5.9.3)
+      '@vitejs/plugin-react':
+        specifier: ^4.2.1
+        version: 4.7.0(supports-color@7.2.0)(vite@5.4.21(@types/node@20.19.43)(less@4.9.1(supports-color@7.2.0))(lightningcss@1.33.0))
+      eslint:
+        specifier: ^8.56.0
+        version: 8.57.1(supports-color@7.2.0)
+      eslint-plugin-react-hooks:
+        specifier: ^4.6.0
+        version: 4.6.2(eslint@8.57.1(supports-color@7.2.0))
+      eslint-plugin-react-refresh:
+        specifier: ^0.4.5
+        version: 0.4.26(eslint@8.57.1(supports-color@7.2.0))
+      less:
+        specifier: ^4.6.4
+        version: 4.9.1(supports-color@7.2.0)
+      prettier:
+        specifier: ^3.2.4
+        version: 3.9.9
+      typescript:
+        specifier: ^5.3.3
+        version: 5.9.3
+      vite:
+        specifier: ^5.0.11
+        version: 5.4.21(@types/node@20.19.43)(less@4.9.1(supports-color@7.2.0))(lightningcss@1.33.0)
+
   agri-production/frontend:
     dependencies:
       '@agri/shared':
