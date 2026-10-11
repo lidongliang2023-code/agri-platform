@@ -5,21 +5,23 @@
  * `/api/v1/production`），而登录 / 刷新令牌位于 `/api/v1/auth`，不在业务前缀之下，
  * 因此这里单独持有一个 axios 实例，并复用同一套 `{ code, data, message }` 解包规则。
  *
- * 令牌存放位置：`@/store/auth`（zustand，持久化到 localStorage）：
- *   - `agri_token`          访问令牌（`@/utils/request` 读取它注入 Authorization 头）
- *   - `agri_refresh_token`  刷新令牌
- *   - `agri_token_expire_at` 访问令牌过期时间（epoch 毫秒）
+ * 令牌存放位置（V2.0 第 4.3 节「Token 存储」）：
+ *   - 访问令牌：`@/store/auth` 的**内存**字段（刷新页面即消失，不写 localStorage）；
+ *   - 刷新令牌：**只存在于服务端 HttpOnly Cookie**，前端读不到也不该读到。
+ *     登录/刷新时由服务端 Set-Cookie 下发，浏览器自动携带（`withCredentials`）。
  *
  * 刷新策略（不改动 `@/utils/request` 的前提下实现）：
- *   1. 请求拦截：访问令牌剩余有效期不足 `REFRESH_AHEAD_MS` 时，先静默换新再发请求；
- *   2. 启动守卫：刷新页面后若令牌已过期但刷新令牌仍在，先换一组新令牌；
- *   3. 兜底：仍收到 401 时由 `@/utils/request` 清空登录态并跳转 `/login`。
+ *   1. 启动续签：页面加载时先用 Cookie 换一组新访问令牌，换完才渲染路由
+ *      （见 `bootstrapAuthRefresh` 与 `store/auth` 的 `authReady`）；
+ *   2. 请求拦截：访问令牌剩余有效期不足 `REFRESH_AHEAD_MS` 时，先静默换新再发请求；
+ *   3. 兜底：仍收到 401 时由 `@/utils/request` 清空登录态并跳转 `/login`；
+ *   4. 登出：`store.logout()` 会经注册的钩子回调服务端登出，吊销刷新令牌并清 Cookie。
  *
  * @module api/auth
  */
 import axios, { type AxiosResponse, type InternalAxiosRequestConfig } from 'axios'
 import request from '@/utils/request'
-import useAuthStore from '@/store/auth'
+import useAuthStore, { registerServerLogout } from '@/store/auth'
 
 /** 认证端点前缀 */
 const AUTH_BASE = '/api/v1/auth'
@@ -93,8 +95,6 @@ export interface AuthUserVO {
 export interface LoginResult {
   /** 访问令牌 */
   accessToken: string
-  /** 刷新令牌 */
-  refreshToken: string
   /** 访问令牌有效期（秒）；后端可能返回字符串，故兼容两种形态 */
   expiresIn: number | string
   /** 当前用户 */
@@ -107,6 +107,9 @@ const authRequest = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  // 必须带凭证：刷新令牌在 HttpOnly Cookie 里，不带这行浏览器不会在 /refresh、/logout
+  // 上携带它（开发期经 Vite 代理是同源，看似可有可无；生产分域部署时缺了它直接失效）
+  withCredentials: true,
 })
 
 /**
@@ -159,13 +162,13 @@ export async function login(payload: LoginPayload): Promise<LoginResult> {
 /**
  * 用刷新令牌换新一组令牌（服务端旋转，旧刷新令牌随即失效）。
  *
- * @param refreshToken 刷新令牌
- * @returns 新的令牌与用户信息
+ * <p>刷新令牌由浏览器经 HttpOnly Cookie 自动携带（`withCredentials`），前端拿不到也不需要
+ * 它。请求体留空是刻意的：往里塞令牌，就等于又给它开了一条能落进 localStorage 的路。</p>
+ *
+ * @returns 新的访问令牌与用户信息
  */
-export async function refreshToken(refreshToken: string): Promise<LoginResult> {
-  const response = await authRequest.post<AuthApiResult<LoginResult>>('/refresh', {
-    refreshToken,
-  })
+export async function refreshSession(): Promise<LoginResult> {
+  const response = await authRequest.post<AuthApiResult<LoginResult>>('/refresh', {})
   return unwrapAuthResult(response)
 }
 
@@ -183,13 +186,13 @@ export async function fetchCurrentUser(): Promise<AuthUserVO> {
 }
 
 /**
- * 退出登录（通知服务端失效刷新令牌）。
+ * 退出登录：服务端吊销刷新令牌并清除 HttpOnly Cookie。
  *
- * @param refreshToken 刷新令牌，可为空
+ * <p>凭证全在 Cookie 里，前端既拿不到也无须传令牌；服务端按 Cookie 吊销。</p>
  */
-export async function logout(refreshToken?: string | null): Promise<void> {
+export async function logout(): Promise<void> {
   try {
-    await authRequest.post<AuthApiResult<null>>('/logout', { refreshToken: refreshToken ?? '' })
+    await authRequest.post<AuthApiResult<null>>('/logout', {})
   } catch {
     // 服务端登出失败不影响本地清理，静默忽略
   }
@@ -217,7 +220,7 @@ export function resolveHomePath(roles: string[]): string {
 }
 
 /**
- * 把一次登录 / 刷新结果写入 zustand（含刷新令牌与过期时间）。
+ * 把一次登录 / 刷新结果写入 zustand（访问令牌与用户信息；刷新令牌不经前端）。
  *
  * @param result 登录或刷新结果
  * @param marketId 当前市场 ID
@@ -235,7 +238,6 @@ export function persistSession(result: LoginResult, marketId?: number): void {
       userType: resolveHomePath(result.user?.roles ?? []) === ADMIN_HOME_PATH ? 1 : 3,
     },
     permissions: result.user?.roles ?? [],
-    refreshToken: result.refreshToken,
     expiresIn: Number(result.expiresIn),
     roles: result.user?.roles ?? [],
     marketId: marketId ?? null,
@@ -254,11 +256,8 @@ async function doRefresh(): Promise<string> {
   if (refreshing) {
     return refreshing
   }
-  const currentRefreshToken = useAuthStore.getState().refreshToken
-  if (!currentRefreshToken) {
-    throw new Error('缺少刷新令牌，请重新登录')
-  }
-  refreshing = refreshToken(currentRefreshToken)
+  // 刷新令牌在 HttpOnly Cookie 里：前端只负责发这一次请求，不参与令牌管理
+  refreshing = refreshSession()
     .then((result) => {
       persistSession(result, useAuthStore.getState().marketId ?? undefined)
       return result.accessToken
@@ -270,24 +269,26 @@ async function doRefresh(): Promise<string> {
 }
 
 /**
- * 应用启动时调用：若访问令牌已过期但刷新令牌仍在，先静默换新一组。
+ * 应用启动时调用：用 HttpOnly Cookie 里的刷新令牌静默换一组新访问令牌。
  *
- * 刷新失败时清理登录态但不主动跳转——跳转交给后续请求的 401 处理，
- * 避免与 `@/utils/request` 的跳转逻辑重复触发。
+ * <p>访问令牌只存内存，刷新页面后必然为空，所以"刷新页面还能保持登录"完全依赖这一步。
+ * 换签失败时清理登录态但不主动跳转——跳转交给路由守卫与后续请求的 401 处理，
+ * 避免与 `@/utils/request` 的跳转逻辑重复触发。</p>
+ *
+ * <p>无论成功与否，最后都必须置 `authReady`，否则界面会永远停在"正在恢复登录状态"。</p>
  */
 export async function bootstrapAuthRefresh(): Promise<void> {
-  const { token, refreshToken: rt, tokenExpireAt } = useAuthStore.getState()
-  if (!token || !rt) {
-    return
-  }
-  // 尚未接近过期，无需刷新
-  if (tokenExpireAt > Date.now() + REFRESH_AHEAD_MS) {
-    return
-  }
+  // 只有"本机上次确实登录过"的痕迹（本地留有用户资料）才值得跑续签，未登录访客直接跳过
+  const maybeLoggedIn = Boolean(useAuthStore.getState().userInfo)
   try {
-    await doRefresh()
+    if (maybeLoggedIn) {
+      await doRefresh()
+    }
   } catch {
+    // 无 Cookie / Cookie 已过期 / 服务端已吊销：清干净本地痕迹，回到未登录态
     useAuthStore.getState().logout()
+  } finally {
+    useAuthStore.getState().setAuthReady(true)
   }
 }
 
@@ -299,9 +300,9 @@ export async function bootstrapAuthRefresh(): Promise<void> {
 export function installAuthRefreshInterceptor(): void {
   request.interceptors.request.use(
     async (config: InternalAxiosRequestConfig) => {
-      const { token, refreshToken: rt, tokenExpireAt } = useAuthStore.getState()
-      // 无令牌 / 无刷新令牌 / 距过期还早 —— 原样放行
-      if (!token || !rt) {
+      const { token, tokenExpireAt } = useAuthStore.getState()
+      // 无令牌 / 距过期还早 —— 原样放行
+      if (!token) {
         return config
       }
       if (tokenExpireAt <= 0 || tokenExpireAt > Date.now() + REFRESH_AHEAD_MS) {
@@ -318,3 +319,13 @@ export function installAuthRefreshInterceptor(): void {
     (error: unknown) => Promise.reject(error),
   )
 }
+
+/**
+ * 把"服务端登出"注册进 store。
+ *
+ * 这样任何调用 `store.logout()` 的地方（顶栏退出、401 清理、续签失败）都会顺带吊销
+ * 服务端刷新令牌并清除 HttpOnly Cookie，不必逐个调用点去补网络请求。
+ */
+registerServerLogout(() => {
+  void logout()
+})

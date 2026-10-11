@@ -5,8 +5,8 @@ import com.agri.core.infra.security.TokenService;
 import com.agri.core.infra.web.MarketContext;
 import com.agri.platform.internal.auth.dto.LoginRequest;
 import com.agri.platform.internal.auth.dto.LoginVO;
-import com.agri.platform.internal.auth.dto.RefreshRequest;
 import com.agri.platform.internal.auth.dto.UserVO;
+import com.agri.platform.internal.auth.dto.AuthOutcome;
 import com.agri.platform.internal.permission.RoleEntity;
 import com.agri.platform.internal.permission.RoleMapper;
 import com.agri.platform.internal.user.UserEntity;
@@ -36,7 +36,13 @@ public class AuthService {
     private final TokenService tokenService;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
-    public LoginVO login(LoginRequest request) {
+    /**
+     * 账号密码登录。
+     *
+     * @param request 登录请求
+     * @return 响应体 + 待写入 HttpOnly Cookie 的刷新令牌
+     */
+    public AuthOutcome login(LoginRequest request) {
         UserEntity user = userMapper.selectOne(new LambdaQueryWrapper<UserEntity>()
                 .eq(UserEntity::getUsername, request.username()));
         if (user == null || !passwordEncoder.matches(request.password(), user.getPassword())) {
@@ -49,8 +55,14 @@ public class AuthService {
         return buildLogin(user, marketId);
     }
 
-    public LoginVO refresh(RefreshRequest request) {
-        long[] ids = tokenService.consume(request.refreshToken());
+    /**
+     * 用刷新令牌换一组新令牌（服务端一次性旋转，旧刷新令牌随即失效）。
+     *
+     * @param refreshToken 刷新令牌（由 Controller 从 HttpOnly Cookie 或请求体取得）
+     * @return 响应体 + 新的刷新令牌
+     */
+    public AuthOutcome refresh(String refreshToken) {
+        long[] ids = tokenService.consume(refreshToken);
         UserEntity user = userMapper.selectById(ids[0]);
         if (user == null || user.getStatus() == null || user.getStatus() != 1) {
             throw new BusinessException(ErrorCode.REFRESH_TOKEN_INVALID);
@@ -73,12 +85,13 @@ public class AuthService {
         return new UserVO(user.getId(), user.getUsername(), user.getNickname(), session.getRoles());
     }
 
-    private LoginVO buildLogin(UserEntity user, Long marketId) {
+    private AuthOutcome buildLogin(UserEntity user, Long marketId) {
         List<String> roles = roleCodesOf(user.getId(), marketId);
         String accessToken = jwtUtil.createAccessToken(user.getId(), user.getUsername(), marketId, roles);
         String refreshToken = tokenService.issueRefreshToken(user.getId(), marketId);
-        return new LoginVO(accessToken, refreshToken, jwtUtil.accessTtlSeconds(),
+        LoginVO body = new LoginVO(accessToken, jwtUtil.accessTtlSeconds(),
                 new UserVO(user.getId(), user.getUsername(), user.getNickname(), roles));
+        return new AuthOutcome(body, refreshToken);
     }
 
     private List<String> roleCodesOf(Long userId, Long marketId) {

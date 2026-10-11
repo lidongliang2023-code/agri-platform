@@ -34,6 +34,9 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     private static final List<String> WHITELIST = List.of(
             "/api/v1/auth/login",
             "/api/v1/auth/refresh",
+            // 登出：凭刷新令牌（HttpOnly Cookie）即可执行，必须放行 ——
+            // 访问令牌过期后用户仍需要能退出，否则登出会因 401 永远失败（这正是修复前的表现）。
+            "/api/v1/auth/logout",
             // 公开行情（数据分级 L1）——卫星服务 satellite-quote-push 拉取数据源亦复用此口径
             "/api/v1/quotes/**",
             "/v3/api-docs/**",

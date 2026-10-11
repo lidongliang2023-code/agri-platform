@@ -88,6 +88,7 @@ class CoreAppStartupSmokeTest {
     private static final List<String> AUTH_WHITELIST = List.of(
             "/api/v1/auth/login",
             "/api/v1/auth/refresh",
+            "/api/v1/auth/logout",
             "/api/v1/quotes/**",
             "/v3/api-docs/**",
             "/swagger-ui/**",

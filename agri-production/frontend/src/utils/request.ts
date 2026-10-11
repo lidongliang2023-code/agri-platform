@@ -209,6 +209,9 @@ const request = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  // 携带 Cookie：刷新令牌只走 HttpOnly Cookie（V2.0 4.3），
+  // 分域部署（前端 app 域 / 接口 api 域）时少了这行浏览器不会带上它
+  withCredentials: true,
 })
 
 /** 平台域请求实例（仅 baseURL 不同，拦截器与业务实例完全一致） */
@@ -218,6 +221,7 @@ const platformRequest = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true,
 })
 
 /** 扩展请求配置：是否静默失败（不弹全局错误提示） */
