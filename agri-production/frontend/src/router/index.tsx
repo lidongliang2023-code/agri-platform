@@ -3,12 +3,39 @@
  *
  * 用户端挂载在 /production（UserLayout），运营端挂载在 /admin/production（AdminLayout）。
  */
-import { createBrowserRouter, Navigate } from 'react-router-dom'
+import { createBrowserRouter, Navigate, useSearchParams } from 'react-router-dom'
 import UserLayout from '@/layouts/UserLayout'
 import AdminLayout from '@/layouts/AdminLayout'
 import NotFound from '@/pages/NotFound'
-import Login from '@/pages/Login'
+import AdminLogin from '@/pages/admin/AdminLogin'
+import UserLogin from '@/pages/user/UserLogin'
 import { ADMIN_ROUTES, USER_ROUTES } from './routes'
+import useAuthStore from '@/store/auth'
+import { ADMIN_LOGIN_PATH, USER_LOGIN_PATH, resolveHomePath } from '@/api/auth'
+
+/**
+ * 登录入口按端分流（`/login` 的落地组件）。
+ *
+ * 保留 `/login` 是为了兼容旧链接与 `@/utils/request` 的 401 跳转：把分流收在这一处，
+ * 401 那条链路就自动落回"对应端的登录页"，无需改动请求层（避免 auth → request 循环依赖）。
+ *
+ * 判据（按 team-lead 裁决「按端重定向」）：
+ *   1) 已登录 → 按角色回对应首页；
+ *   2) 未登录且带 `?end=user` → 用户端登录页；
+ *   3) 其余（含 `?end=admin` 与无参数）→ 运营端登录页。
+ *
+ * @returns 重定向节点
+ */
+function LoginEntry(): JSX.Element {
+  const token = useAuthStore((state) => state.token)
+  const roles = useAuthStore((state) => state.roles)
+  const [searchParams] = useSearchParams()
+
+  if (token) {
+    return <Navigate to={resolveHomePath(roles)} replace />
+  }
+  return <Navigate to={searchParams.get('end') === 'user' ? USER_LOGIN_PATH : ADMIN_LOGIN_PATH} replace />
+}
 
 const router = createBrowserRouter([
   {
@@ -26,10 +53,20 @@ const router = createBrowserRouter([
     children: ADMIN_ROUTES,
   },
   {
-    // 登录页：独立全屏页面，不挂任何 Layout，也不进业务分组与页面条数统计
-    //（页面条数由 routes.tsx 的 TOTAL_PAGE_COUNT 从路由表派生，此处不再写死数字）
+    // 登录入口：按端分流（见 LoginEntry 注释）
     path: '/login',
-    element: <Login />,
+    element: <LoginEntry />,
+  },
+  {
+    // 运营端独立登录页（路线 2「独立登录页」拆分）：独立全屏页，不挂任何 Layout，
+    // 也不进业务分组与页面条数统计（条数由 routes.tsx 的 TOTAL_PAGE_COUNT 派生）
+    path: '/admin/login',
+    element: <AdminLogin />,
+  },
+  {
+    // 用户端独立登录页（同上）
+    path: '/production/login',
+    element: <UserLogin />,
   },
   {
     path: '*',

@@ -27,6 +27,18 @@ const AUTH_BASE = '/api/v1/auth'
 /** 登录页地址（与 `@/utils/request` 中保持一致） */
 export const LOGIN_PATH = '/login'
 
+/**
+ * 运营端独立登录页路径（路线 2「独立登录页」拆分，2026-10-11）。
+ *
+ * 背景：V2.0 第 2.3 节 D1 要求九大子系统独立应用、各自独立登录页；
+ * 现阶段先把现有单应用的运营端 / 用户端拆成两个独立登录页，
+ * 原 {@link LOGIN_PATH} 保留为「按端分流」入口，兼容旧链接与 401 跳转。
+ */
+export const ADMIN_LOGIN_PATH = '/admin/login'
+
+/** 用户端独立登录页路径（同上） */
+export const USER_LOGIN_PATH = '/production/login'
+
 /** 用户端首页 */
 export const USER_HOME_PATH = '/production/dashboard'
 
