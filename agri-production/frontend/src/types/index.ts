@@ -10,14 +10,14 @@
  * tsconfig paths 映射（而非 exports 子路径）后重新迁移。
  */
 export * from '@agri/shared/types/common'
-export * from './farm'
+export * from '@agri/shared/types/farm'
 export * from '@agri/shared/types/plan'
-export * from './task'
+export * from '@agri/shared/types/task'
 export * from '@agri/shared/types/input'
 export * from '@agri/shared/types/growth'
 export * from '@agri/shared/types/alert'
 export * from '@agri/shared/types/iot'
-export * from './harvest'
+export * from '@agri/shared/types/harvest'
 export * from '@agri/shared/types/quality'
 export * from '@agri/shared/types/trace'
 export * from '@agri/shared/types/blockchain'
