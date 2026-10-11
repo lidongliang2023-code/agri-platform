@@ -1,6 +1,7 @@
 package com.agri.platform.internal.auth;
 
 import com.agri.core.infra.security.JwtUtil;
+import com.agri.core.infra.security.TokenRevocationService;
 import com.agri.core.infra.util.JsonUtil;
 import com.agri.core.infra.web.MarketContext;
 import com.agri.shared.exception.ErrorCode;
@@ -48,6 +49,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             "/error");
 
     private final JwtUtil jwtUtil;
+    private final TokenRevocationService revocationService;
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
@@ -72,6 +74,12 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         }
         try {
             Claims claims = jwtUtil.parse(token);
+            // 黑名单检查必须排在业务之前：已吊销的令牌即便签名有效、也未过期，也必须拒绝。
+            // 这是"登出 / 改密 / 强制下线立即生效"的唯一落点（V2.0 5.3 吊销、5.4 单点登出）。
+            if (revocationService.isRevoked(claims.getId())) {
+                unauthorized(response, "令牌已吊销，请重新登录");
+                return;
+            }
             Long userId = Long.valueOf(claims.getSubject());
             Number marketId = (Number) claims.get("marketId");
             List<String> roles = ((List<?>) claims.get("roles")).stream().map(String::valueOf).toList();

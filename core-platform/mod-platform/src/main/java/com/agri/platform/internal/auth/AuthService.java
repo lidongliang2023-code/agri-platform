@@ -1,6 +1,7 @@
 package com.agri.platform.internal.auth;
 
 import com.agri.core.infra.security.JwtUtil;
+import com.agri.core.infra.security.TokenRevocationService;
 import com.agri.core.infra.security.TokenService;
 import com.agri.core.infra.web.MarketContext;
 import com.agri.platform.internal.auth.dto.LoginRequest;
@@ -17,6 +18,7 @@ import com.agri.shared.exception.BusinessException;
 import com.agri.shared.exception.ErrorCode;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -27,6 +29,7 @@ import java.util.List;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AuthService {
 
     private final UserMapper userMapper;
@@ -34,6 +37,7 @@ public class AuthService {
     private final RoleMapper roleMapper;
     private final JwtUtil jwtUtil;
     private final TokenService tokenService;
+    private final TokenRevocationService revocationService;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
     /**
@@ -70,10 +74,27 @@ public class AuthService {
         return buildLogin(user, ids[1]);
     }
 
+    /**
+     * 登出：吊销该用户**全部**刷新令牌与全部在有效期内的访问令牌
+     * （V2.0 第 5.4 节「删除/吊销该用户所有子系统的 Refresh Token，并将各 Access Token jti 加入黑名单」）。
+     *
+     * <p>只吊销手里这一枚是不够的：用户在手机、另一台电脑、另一个子系统上登录过，
+     * 那些会话必须一起下线，否则"退出登录"只是当前这台浏览器的错觉。</p>
+     *
+     * @param refreshToken 本次登出携带的刷新令牌（用于定位用户）；为空或已失效时无法定位用户，只清当前会话
+     */
     public void logout(String refreshToken) {
+        Long userId = null;
         if (refreshToken != null && !refreshToken.isBlank()) {
-            tokenService.revoke(refreshToken);
+            userId = tokenService.revoke(refreshToken);
         }
+        if (userId == null) {
+            // 取不到用户：登录本就在过期/伪造令牌状态下登出，无需再做全端吊销
+            return;
+        }
+        int refreshRevoked = tokenService.revokeAllForUser(userId);
+        int accessRevoked = revocationService.revokeAllForUser(userId);
+        log.info("登出全端联动：用户 {} 吊销刷新令牌 {} 枚、访问令牌 {} 枚", userId, refreshRevoked, accessRevoked);
     }
 
     public UserVO me() {
@@ -87,9 +108,12 @@ public class AuthService {
 
     private AuthOutcome buildLogin(UserEntity user, Long marketId) {
         List<String> roles = roleCodesOf(user.getId(), marketId);
-        String accessToken = jwtUtil.createAccessToken(user.getId(), user.getUsername(), marketId, roles);
+        JwtUtil.IssuedAccessToken issued =
+                jwtUtil.issueAccessToken(user.getId(), user.getUsername(), marketId, roles);
+        // 登记 jti：不登记的话，这枚令牌在"全端登出"时无法被找到并拉黑
+        revocationService.recordIssued(issued.jti(), user.getId(), issued.expiresAtMillis());
         String refreshToken = tokenService.issueRefreshToken(user.getId(), marketId);
-        LoginVO body = new LoginVO(accessToken, jwtUtil.accessTtlSeconds(),
+        LoginVO body = new LoginVO(issued.token(), jwtUtil.accessTtlSeconds(),
                 new UserVO(user.getId(), user.getUsername(), user.getNickname(), roles));
         return new AuthOutcome(body, refreshToken);
     }
