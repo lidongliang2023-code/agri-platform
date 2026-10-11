@@ -1,0 +1,14 @@
+# 路线 2「先基建再拆」第一步：给跨子系统共享资产一个"家"。
+#
+# 成员纳入过程（2026-10-11，用户选定「以 pnpm 为唯一包管理器」）：
+#   现有应用 agri-production/frontend 自本次起纳入 workspace。纳入会让 pnpm 重排它的
+#   node_modules（hoisting 变化），因此必须成对执行「纳入 + 完整回归验证（tsc / build）」，
+#   不允许只改本文件而跳过验证。
+#
+# 为什么用 pnpm：V2.0 第 4.3 节指定 pnpm 8（本机实测 pnpm 11.25.0，版本偏新但同族可用；
+#   若要严格对齐 8.x，用 corepack 固定版本即可）。
+packages:
+  - 'packages/*'
+  - 'agri-production/frontend'
+allowBuilds:
+  esbuild: set this to true or false

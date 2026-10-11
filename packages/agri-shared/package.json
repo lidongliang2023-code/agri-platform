@@ -1,0 +1,26 @@
+{
+  "name": "@agri/shared",
+  "version": "0.1.0",
+  "private": true,
+  "description": "农业产业互联网平台 · 跨子系统共享资产（组件 / 布局 / 主题 / 工具 / 类型）",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./types/*": "./src/types/*",
+    "./styles/*": "./src/styles/*"
+  },
+  "sideEffects": [
+    "*.css",
+    "*.less"
+  ],
+  "peerDependencies": {
+    "antd": "^5.13.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  }
+}

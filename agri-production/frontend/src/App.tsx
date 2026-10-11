@@ -7,9 +7,9 @@ import { App as AntdApp, ConfigProvider } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
 import { RouterProvider } from 'react-router-dom'
 import router from '@/router'
-import { antdTheme } from '@/styles/theme'
+import { antdTheme } from '@agri/shared'
 import { bootstrapAuthRefresh, installAuthRefreshInterceptor } from '@/api/auth'
-import '@/styles/global.less'
+import '@agri/shared/styles/global.less'
 
 /**
  * 令牌续期：请求拦截器在访问令牌临近过期时用刷新令牌静默换新；

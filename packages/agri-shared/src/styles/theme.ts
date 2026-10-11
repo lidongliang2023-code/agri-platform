@@ -5,10 +5,13 @@
  */
 import type { ThemeConfig } from 'antd'
 
-/** 品牌主色（农业绿） */
+/**
+ * 品牌主色（农业绿）。
+ *
+ * 用户端与运营端**共用**一个主色：此前运营端另设深蓝主色与深色侧边栏来「区分两端」，
+ * 导致同一套业务页在两端视觉不一致，已按「运营端风格对齐用户端」的要求统一。
+ */
 export const BRAND_COLOR = '#13a05a'
-/** 运营端主色（深蓝，用于区分用户端） */
-export const ADMIN_COLOR = '#1677ff'
 
 /** 布局尺寸常量 */
 export const LAYOUT_SIZE = {
@@ -47,11 +50,3 @@ export const antdTheme: ThemeConfig = {
   },
 }
 
-/** 运营端主题配置（深色侧边栏由 Layout 组件单独控制） */
-export const antdAdminTheme: ThemeConfig = {
-  ...antdTheme,
-  token: {
-    ...antdTheme.token,
-    colorPrimary: ADMIN_COLOR,
-  },
-}

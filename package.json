@@ -1,0 +1,10 @@
+{
+  "name": "agri-platform-workspace",
+  "version": "0.0.0",
+  "private": true,
+  "description": "农业产业互联网平台 · pnpm workspace 根（路线 2「先基建再拆」基建）",
+  "engines": {
+    "node": ">=18",
+    "pnpm": ">=8"
+  }
+}

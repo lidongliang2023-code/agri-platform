@@ -2,7 +2,8 @@
  * 通用后台布局（用户端 / 运营端共用）
  *
  * 组成：可折叠侧边栏（按一级模块分组） + 顶栏（当前农场切换 / 消息 / 用户） + 面包屑 + 内容区。
- * 用户端与运营端通过 variant 区分菜单数据源与视觉风格（运营端深色侧边栏）。
+ * 用户端与运营端通过 variant 区分**菜单数据源**；视觉风格保持一致
+ * （同一主题 Token、同为浅色侧边栏、同一品牌主色），避免同一业务页在两端两套观感。
  */
 import { Suspense, useEffect, useMemo, useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
@@ -33,7 +34,7 @@ import { listAllFarms } from '@/api/farms'
 import useAuthStore from '@/store/auth'
 import useFarmStore from '@/store/farm'
 import { ADMIN_MENU, USER_MENU, buildBreadcrumb, matchMenu } from '@/config/menu'
-import { ADMIN_COLOR, BRAND_COLOR, LAYOUT_SIZE } from '@/styles/theme'
+import { BRAND_COLOR, LAYOUT_SIZE } from '@agri/shared'
 
 const { Header, Sider, Content } = Layout
 
@@ -141,7 +142,7 @@ export default function BasicLayout({ variant, title }: BasicLayoutProps): JSX.E
         collapsible
         collapsed={collapsed}
         trigger={null}
-        theme={isAdmin ? 'dark' : 'light'}
+        theme="light"
         width={LAYOUT_SIZE.siderWidth}
         collapsedWidth={LAYOUT_SIZE.siderCollapsedWidth}
       >
@@ -152,18 +153,18 @@ export default function BasicLayout({ variant, title }: BasicLayoutProps): JSX.E
             alignItems: 'center',
             justifyContent: collapsed ? 'center' : 'flex-start',
             padding: collapsed ? 0 : '0 16px',
-            color: isAdmin ? '#ffffff' : BRAND_COLOR,
+            color: BRAND_COLOR,
             fontWeight: 600,
             fontSize: 16,
             whiteSpace: 'nowrap',
             overflow: 'hidden',
           }}
         >
-          {collapsed ? '农' : isAdmin ? '农业生产运营平台' : '农业生产管理系统'}
+          {collapsed ? '农' : title}
         </div>
         <Menu
           mode="inline"
-          theme={isAdmin ? 'dark' : 'light'}
+          theme="light"
           items={menuItems}
           selectedKeys={matched ? [matched.leaf.key] : []}
           defaultOpenKeys={matched ? [matched.group.key] : []}
@@ -218,7 +219,7 @@ export default function BasicLayout({ variant, title }: BasicLayoutProps): JSX.E
               <Space style={{ cursor: 'pointer' }}>
                 <Avatar
                   size="small"
-                  style={{ backgroundColor: isAdmin ? ADMIN_COLOR : BRAND_COLOR }}
+                  style={{ backgroundColor: BRAND_COLOR }}
                   icon={<UserOutlined />}
                   src={userInfo?.avatar}
                 />

@@ -6,6 +6,10 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
+      // 必须排在 '@' 之前：Vite 的 alias 按插入顺序做前缀匹配，
+      // 否则 '@' 会先把 '@agri/shared/...' 吞成 './src/agri/shared/...'。
+      // 用 alias 而不是依赖 package.json 的 exports 子路径 —— 后者在 tsc 侧不可靠（B2a 已踩过）。
+      '@agri/shared': path.resolve(__dirname, '../../packages/agri-shared/src'),
       '@': path.resolve(__dirname, './src'),
     },
   },
