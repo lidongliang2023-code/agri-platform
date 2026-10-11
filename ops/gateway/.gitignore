@@ -1,0 +1,5 @@
+# 运行时产物：桶里是发布出来的前端产物，logs 是 nginx 运行日志，都不进版本库
+bucket/
+logs/
+temp/
+*.pid

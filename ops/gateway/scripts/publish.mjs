@@ -1,0 +1,194 @@
+#!/usr/bin/env node
+/**
+ * 前端发布器 —— 实现《网关与域名规划》第三节「静态产物与灰度版本指针」。
+ *
+ * <p>目录契约（与 V2.0 4.7 的 `bucket:/{app}/versions/{version}/` 一致）：</p>
+ * <pre>
+ * bucket/{app}/
+ *   ├── index.html          当前版本指针（短缓存，内容为该版本的 index.html）
+ *   ├── manifest.json       当前指针元数据（app/version/builtAt/entry）
+ *   └── versions/{version}/ 不可变产物目录
+ * </pre>
+ *
+ * <p>为什么必须是「版本目录 + 指针」而不是覆盖发布：回滚 = 把指针切回上一个目录，
+ * 秒级且不需要重新构建；`--repoint` 就是这个动作。版本目录一旦发布就不再改动，
+ * 所以 nginx 可以对它下长缓存。</p>
+ *
+ * <p><b>本脚本会主动拦住一类"看起来发布成功、打开却白屏"的故障</b>：
+ * index.html 里引用的资源前缀与版本目录必须一致。用默认的 `vite build` 产物
+ * （资源按 `/assets/...` 绝对路径引用）放进 `versions/<v>/` 就会出现这种白屏 ——
+ * 指针切过去了，资源却 404。发布前校验，不合格直接失败，而不是发上去等用户发现。</p>
+ *
+ * 用法：
+ *   node ops/gateway/scripts/publish.mjs --app prod --version 20261011-v1 --build
+ *   node ops/gateway/scripts/publish.mjs --app prod --repoint 20261010-9f8e7d   # 回滚
+ */
+import { cp, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import path from 'node:path'
+import process from 'node:process'
+import { fileURLToPath } from 'node:url'
+
+const GATEWAY_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const BUCKET_DIR = path.join(GATEWAY_DIR, 'bucket')
+
+/** 已登记子系统 → 前端工程目录（相对仓库根）。新增子系统时在这里加一行。 */
+const APPS = {
+  prod: { frontendDir: path.join('agri-production', 'frontend'), title: '生产管理系统' },
+}
+
+const USAGE = `用法：
+  publish.mjs --app <slug> --version <标签> [--build] [--force]
+  publish.mjs --app <slug> --repoint <标签>          # 回滚/切指针
+
+参数：
+  --app <slug>        子系统代号（当前已登记：${Object.keys(APPS).join('、')}）
+  --version <标签>    版本目录名，建议 日期-短哈希，如 20261011-a1b2c3
+  --build             先执行 tsc 与 vite build（带 --base=/{app}/versions/{version}/）
+  --force             版本目录已存在时也覆盖（正常发布**不应**用到，版本目录不可变）
+  --repoint <标签>    只切换指针到已存在的版本目录
+`
+
+function fail(message) {
+  console.error(`\n✗ ${message}\n`)
+  process.exit(1)
+}
+
+function parseArgs(argv) {
+  const out = {}
+  for (let i = 0; i < argv.length; i += 1) {
+    const token = argv[i]
+    if (!token.startsWith('--')) fail(`无法识别的参数：${token}`)
+    const key = token.slice(2)
+    if (key === 'build' || key === 'force') {
+      out[key] = true
+      continue
+    }
+    const value = argv[i + 1]
+    if (value === undefined || value.startsWith('--')) fail(`参数 --${key} 缺少取值`)
+    out[key] = value
+    i += 1
+  }
+  return out
+}
+
+function repoRoot() {
+  let current = GATEWAY_DIR
+  for (;;) {
+    if (existsSync(path.join(current, 'pnpm-workspace.yaml'))) return current
+    const parent = path.dirname(current)
+    if (parent === current) fail('未找到仓库根（含 pnpm-workspace.yaml）')
+    current = parent
+  }
+}
+
+async function existsAsDir(target) {
+  try {
+    return (await stat(target)).isDirectory()
+  } catch {
+    return false
+  }
+}
+
+/** 发布一个版本的产物目录，并（可选）把指针切过去。 */
+async function publishVersion(app, version, distDir, { force, repoint }) {
+  const appBucket = path.join(BUCKET_DIR, app)
+  const versionDir = path.join(appBucket, 'versions', version)
+
+  if (repoint) {
+    if (!existsSync(path.join(versionDir, 'index.html'))) {
+      fail(`版本目录不存在或缺少 index.html，无法切指针：${versionDir}`)
+    }
+  } else {
+    if (!existsAsDir(distDir)) {
+      fail(`产物目录不存在：${distDir}（先构建，或加 --build）`)
+    }
+    if ((await readdir(distDir)).length === 0) {
+      fail(`产物目录为空：${distDir}`)
+    }
+    if (existsSync(versionDir) && !force) {
+      fail(`版本目录已存在：${versionDir}\n版本目录按约定不可变。换一个 --version，或在确认要覆盖时加 --force。`)
+    }
+    // 关键校验：资源前缀必须与版本目录一致，否则就是"指针切过去了、资源却 404"的白屏发布
+    const distIndex = await readFile(path.join(distDir, 'index.html'), 'utf8')
+    const expectedPrefix = `/${app}/versions/${version}/`
+    if (!distIndex.includes(expectedPrefix)) {
+      fail(
+        `产物里的资源前缀与版本目录不一致，发布后必然白屏。\n` +
+          `  期望包含：${expectedPrefix}\n` +
+          `  实际 index.html 片段：${(distIndex.match(/src="[^"]+"/) || ['(未找到 script src)'])[0]}\n` +
+          `  解法：用 --build 发布（脚本会带 --base=/${app}/versions/${version}/ 重新构建）。`,
+      )
+    }
+    await rm(versionDir, { recursive: true, force: true })
+    await mkdir(versionDir, { recursive: true })
+    await cp(distDir, versionDir, { recursive: true })
+  }
+
+  // 切指针：指针文件就是该版本的 index.html（其内资源已是 /{app}/versions/{v}/ 绝对前缀）
+  const versionIndex = await readFile(path.join(versionDir, 'index.html'), 'utf8')
+  await mkdir(appBucket, { recursive: true })
+  await writeFile(path.join(appBucket, 'index.html'), versionIndex, 'utf8')
+  await writeFile(
+    path.join(appBucket, 'manifest.json'),
+    JSON.stringify(
+      {
+        app,
+        version,
+        repointedAt: repoint ? new Date().toISOString() : null,
+        publishedAt: repoint ? undefined : new Date().toISOString(),
+        entry: `versions/${version}/index.html`,
+      },
+      null,
+      2,
+    ) + '\n',
+    'utf8',
+  )
+  return versionDir
+}
+
+const args = parseArgs(process.argv.slice(2))
+if (!args.app) fail('缺少 --app')
+const appConfig = APPS[args.app]
+if (!appConfig) fail(`未登记的子系统：${args.app}（已登记：${Object.keys(APPS).join('、')}）`)
+
+const root = repoRoot()
+const frontendDir = path.join(root, appConfig.frontendDir)
+
+if (args.repoint) {
+  const dir = await publishVersion(args.app, args.repoint, null, { force: false, repoint: true })
+  console.log(`\n✓ 指针已切到 ${args.app}@${args.repoint}`)
+  console.log(`  版本目录 ${dir}`)
+  console.log(`  访问     http://localhost/${args.app}/index.html\n`)
+  process.exit(0)
+}
+
+if (!args.version) fail('缺少 --version')
+const distDir = path.join(frontendDir, 'dist')
+
+if (args.build) {
+  const base = `/${args.app}/versions/${args.version}/`
+  console.log(`构建 ${appConfig.title}（base=${base}）…`)
+  const tsc = spawnSync(process.execPath, [path.join(frontendDir, 'node_modules/typescript/bin/tsc'), '--noEmit'], {
+    cwd: frontendDir,
+    stdio: 'inherit',
+  })
+  if (tsc.status !== 0) fail('类型检查未通过，发布中止')
+  const vite = spawnSync(
+    process.execPath,
+    [path.join(frontendDir, 'node_modules/vite/bin/vite.js'), 'build', `--base=${base}`],
+    { cwd: frontendDir, stdio: 'inherit' },
+  )
+  if (vite.status !== 0) fail('构建失败，发布中止')
+}
+
+const versionDir = await publishVersion(args.app, args.version, distDir, {
+  force: Boolean(args.force),
+  repoint: false,
+})
+console.log(`\n✓ 已发布 ${args.app}@${args.version}`)
+console.log(`  版本目录 ${versionDir}`)
+console.log(`  指针     ${path.join(BUCKET_DIR, args.app, 'index.html')}`)
+console.log(`  访问     http://localhost/${args.app}/index.html`)
+console.log(`  回滚     node ops/gateway/scripts/publish.mjs --app ${args.app} --repoint <旧版本>\n`)
