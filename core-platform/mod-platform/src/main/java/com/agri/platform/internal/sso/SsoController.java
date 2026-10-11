@@ -104,6 +104,24 @@ public class SsoController {
         return ApiResponse.ok();
     }
 
+    // 单点登出（浏览器可整页导航的形态；V2.0 第 5.4 节第 1 步：任一子系统点击退出 → 跳转 SSO 登出端点）。
+    //
+    // 为什么除了 POST 还需要这个 GET：SSO 会话 Cookie 只存在于 sso 域，子系统发起的跨域 XHR
+    // 带不上它 —— 在生产拓扑（prod.agri-platform.com 与 sso.agri-platform.com 不同站点）下更是如此。
+    // 必须由浏览器整页导航到 sso 域，"销毁全局会话"才发生在正确的域上。这也解释了为什么不能
+    // 图省事让子系统直接调自己域的登出接口：那只能清掉子系统，清不掉认证中心。
+    @GetMapping("/logout")
+    public ResponseEntity<Void> logoutAndRedirect(@RequestParam("client_id") String clientId,
+                                                 HttpServletRequest request, HttpServletResponse response) {
+        List<String> allowed = properties.getClients().get(clientId);
+        if (allowed == null || allowed.isEmpty()) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "未注册的 client_id：" + clientId);
+        }
+        sessionService.destroy(request, response);
+        // 回到该客户端注册在案的第一个来源（取自配置白名单，不是请求参数 —— 避免开放重定向）
+        return redirect(allowed.get(0) + "?logout=1");
+    }
+
     // client_id 与 redirect_uri 必须成对匹配注册在案的前缀。
     //
     // 这是本流程里最容易被省略、后果也最严重的一步：不校验 redirect_uri，

@@ -78,6 +78,17 @@ export interface LoginPayload {
   marketId?: number | null
 }
 
+/** 登出选项 */
+export interface LogoutOptions {
+  /**
+   * 是否同时销毁 SSO 全局会话（默认 true）。
+   *
+   * <p>显式点退出登录时应该销毁（V2.0 5.4：一处登出、全部失效）；而 401 之后的本地清理
+   * 不该跳 SSO 登出端点 —— 那种情况下 SSO 会话往往仍然有效，跳过去只会把用户弹去 SSO 再弹回来。</p>
+   */
+  sso?: boolean
+}
+
 /** 登录态状态与行为 */
 export interface AuthState {
   /** 访问令牌（仅内存；页面刷新后由静默续签恢复） */
@@ -112,8 +123,8 @@ export interface AuthState {
   setPermissions: (permissions: string[]) => void
   /** 整体登录（token + 用户 + 权限，可附带刷新令牌 / 有效期 / 角色 / 市场） */
   login: (payload: LoginPayload) => void
-  /** 退出登录并跳转登录页 */
-  logout: () => void
+  /** 退出登录（默认连带销毁 SSO 全局会话） */
+  logout: (options?: LogoutOptions) => void
 }
 
 /** 从 localStorage 读取 JSON，失败时返回默认值 */
@@ -191,7 +202,7 @@ const useAuthStore = create<AuthState>((set, get) => ({
 
   setAuthReady: (ready: boolean) => set({ authReady: ready }),
 
-  logout: () => {
+  logout: (options?: LogoutOptions) => {
     localStorage.removeItem(ROLES_KEY)
     localStorage.removeItem(MARKET_ID_KEY)
     localStorage.removeItem('agri_user_info')
@@ -207,7 +218,7 @@ const useAuthStore = create<AuthState>((set, get) => ({
     })
     // 通知服务端：吊销刷新令牌并清除 HttpOnly Cookie。
     // 少了这一步就会出现"点了登出、刷新页面又登回来"—— Cookie 还在，静默续签照样成功。
-    serverLogoutNotifier?.()
+    serverLogoutNotifier?.(options)
   },
 }))
 
@@ -217,10 +228,10 @@ const useAuthStore = create<AuthState>((set, get) => ({
  * 为什么用注册而不是直接 import：`api/auth` 依赖本 store，本 store 反向 import 会成环；
  * 且本 store 也是 `@/utils/request` 处理 401 时的清理入口，那里同样不该背上网络调用。
  */
-let serverLogoutNotifier: (() => void) | null = null
+let serverLogoutNotifier: ((options?: LogoutOptions) => void) | null = null
 
 /** 注册服务端登出动作（由 `@/api/auth` 在模块加载时调用一次） */
-export function registerServerLogout(fn: () => void): void {
+export function registerServerLogout(fn: (options?: LogoutOptions) => void): void {
   serverLogoutNotifier = fn
 }
 

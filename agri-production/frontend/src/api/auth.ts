@@ -22,6 +22,7 @@
 import axios, { type AxiosResponse, type InternalAxiosRequestConfig } from 'axios'
 import request from '@/utils/request'
 import useAuthStore, { registerServerLogout } from '@/store/auth'
+import { SSO_CLIENT_ID, ssoLogoutUrl } from '@/api/sso'
 
 /** 认证端点前缀 */
 const AUTH_BASE = '/api/v1/auth'
@@ -286,7 +287,7 @@ export async function bootstrapAuthRefresh(): Promise<void> {
     }
   } catch {
     // 无 Cookie / Cookie 已过期 / 服务端已吊销：清干净本地痕迹，回到未登录态
-    useAuthStore.getState().logout()
+    useAuthStore.getState().logout({ sso: false })
   } finally {
     useAuthStore.getState().setAuthReady(true)
   }
@@ -326,6 +327,13 @@ export function installAuthRefreshInterceptor(): void {
  * 这样任何调用 `store.logout()` 的地方（顶栏退出、401 清理、续签失败）都会顺带吊销
  * 服务端刷新令牌并清除 HttpOnly Cookie，不必逐个调用点去补网络请求。
  */
-registerServerLogout(() => {
-  void logout()
+registerServerLogout((options) => {
+  void (async () => {
+    // 先吊销平台令牌（刷新令牌 + 访问令牌黑名单），再决定是否去 SSO 域销毁全局会话。
+    // 顺序不能反：整页导航会中断当前文档的请求，跳走之后就没机会再发了。
+    await logout()
+    if (options?.sso !== false) {
+      window.location.href = ssoLogoutUrl(SSO_CLIENT_ID)
+    }
+  })()
 })

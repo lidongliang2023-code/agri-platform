@@ -9,6 +9,9 @@ import type { LoginResult } from './auth'
 
 const SSO_PATH = '/api/v1/sso'
 
+/** 本应用在 SSO 中心的 client_id（与后端 SsoProperties 的注册表对应） */
+export const SSO_CLIENT_ID = 'prod'
+
 /**
  * SSO 中心地址。
  *
@@ -95,4 +98,14 @@ export async function exchangeCode(clientId: string, code: string, state: string
   sessionStorage.removeItem(VERIFIER_KEY)
   sessionStorage.removeItem(STATE_KEY)
   return body.data as LoginResult
+}
+
+/**
+ * SSO 登出端点地址（供浏览器**整页导航**使用）。
+ *
+ * <p>为什么不能像换票那样用 XHR：SSO 会话 Cookie 只存在于 sso 域，子系统发起的跨域请求带不上它，
+ * 销毁全局会话必须发生在 sso 域上。所以登出是「跳过去、它清理完再跳回来」，而不是一次 XHR。</p>
+ */
+export function ssoLogoutUrl(clientId: string = SSO_CLIENT_ID): string {
+  return `${resolveSsoOrigin()}/logout?client_id=${encodeURIComponent(clientId)}`
 }

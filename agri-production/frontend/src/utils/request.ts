@@ -342,7 +342,8 @@ function installResponseInterceptor(instance: AxiosInstance): void {
     const silent = (error.config as RequestOptions)?.silent === true
 
     if (status === 401) {
-      useAuthStore.getState().logout()
+      // 只清本地与平台会话：401 不代表 SSO 全局会话失效，跳 SSO 登出会把用户弹去再弹回
+      useAuthStore.getState().logout({ sso: false })
       if (!window.location.pathname.startsWith(LOGIN_PATH)) {
         window.location.href = LOGIN_PATH
       }
