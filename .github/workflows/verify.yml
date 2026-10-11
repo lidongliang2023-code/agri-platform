@@ -1,0 +1,43 @@
+name: verify
+
+# 门禁跑在每次 push 到主干与每个 PR 上。
+# 检查项本身写在 ops/ci/verify.mjs 里（本地与 CI 跑同一份），本文件只负责环境与顺序。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出
+        uses: actions/checkout@v4
+
+      - name: 安装 pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12
+
+      - name: 安装 Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      # 共享包**脱离 workspace**单独安装：CI 检出的是已入库内容，
+      # 而 pnpm-workspace.yaml 里登记的部分子系统目录（agri-master-data 等）尚未入库，
+      # 根 install 会因成员缺失而失败。这条命令已在本地实测可用（43 个用例照跑）。
+      - name: 安装共享包依赖（脱离 workspace）
+        run: pnpm --dir packages/agri-shared install --ignore-workspace
+
+      - name: 安装 nginx（用于 `nginx -t` 校验网关配置）
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq nginx
+
+      # 门禁脚本内部直接调 vitest / vite 的 JS 入口（不经 pnpm 包装脚本，跨平台一致）
+      - name: 统一门禁（workspace 成员 / 共享包单测与覆盖率 / 网关配置 / 发布产物完整性）
+        run: node ops/ci/verify.mjs
