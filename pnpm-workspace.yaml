@@ -16,8 +16,18 @@ packages:
   # 提醒：agri-master-data/ 目前**尚未纳入版本控制**，所以在"没有这个目录的克隆"里
   # pnpm install 会因成员缺失而失败；等它入库后，这一行应改为通配收口。
   - 'agri-master-data/web'
+  # 供应链金融前端（Vue 3 栈）：共享包的接入通道是设计令牌的 CSS 变量投影
+  # （`@agri/shared/tokens/tokens.css`）——该栈没有 TS，也不使用 antd。
+  - 'agri-finance/frontend'
+  # S2B2C 四端（Vue 3 栈）：与供应链金融同理，共享通道是设计令牌的 CSS 变量投影。
+  - 'agri-s2b2c/frontend-channel'
+  - 'agri-s2b2c/frontend-consumer'
+  - 'agri-s2b2c/frontend-platform'
+  - 'agri-s2b2c/frontend-supplier'
 # pnpm >=10 默认拦截依赖的构建脚本。esbuild 的 postinstall 负责把平台二进制就位，
 # 被拦掉时 pnpm install 会直接以 ERR_PNPM_IGNORED_BUILDS 失败（已实测），vite 少了它跑不起来。
 # 按「最小允许清单」只放 esbuild：以后新增依赖的构建脚本同样在此显式登记，而不是关掉整个机制。
 allowBuilds:
+  '@parcel/watcher': true
   esbuild: true
+  vue-demi: true

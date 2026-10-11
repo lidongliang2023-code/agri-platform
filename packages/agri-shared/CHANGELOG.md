@@ -8,6 +8,17 @@
 
 ### 新增
 
+- **令牌层（跨栈共享面，2026-10-11）**：新增框架无关的设计令牌 `tokens/` ——
+  纯 TS 常量（品牌色 / 语义色 / 布局尺寸 / 圆角 / 字号）+ `tokens.css` 的 CSS 变量投影。
+  动机：平台前端不是同一套栈（React+TS+antd 与 Vue3+JS 并存），而此前品牌色只以 antd
+  `ThemeConfig` 的形式存在，Vue 侧**无处可取**，只能各写一个色值。
+  现在两侧各自投影：React 用 `styles/theme.ts`（已改为由令牌派生），Vue / 任意栈
+  `import '@agri/shared/tokens/tokens.css'` 即可拿到同一套令牌（无需 TypeScript）。
+  `styles/global.less` 改为 inline 引用 `tokens.css`，不再重复定义变量。
+- **令牌一致性门禁**：`tests/tokens.test.ts` 把 `tokens.css` 与 TS 定义**逐项**比对
+  （多一个变量、少一个变量、值不一致，任一条都红），并断言 antd 主题确实由令牌派生、
+  `global.less` 不再自行定义令牌。共享包门禁现为 5 个测试文件 43 条用例、覆盖率 100%。
+
 - **T2 首批落地（2026-10-11）**：接入 `vitest` 5.0.3 + `@vitest/coverage-v8`，
   单测与覆盖率门禁成为包内可执行脚本（`pnpm test` / `pnpm test:coverage`）。
   - 用例 37 条 / 4 个文件，覆盖本包**全部 5 个含运行时代码的模块**：

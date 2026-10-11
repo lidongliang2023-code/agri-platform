@@ -2,10 +2,9 @@
  * 全局样式
  */
 
-:root {
-  --agri-brand-color: #13a05a;
-  --agri-content-bg: #f5f7fa;
-}
+// CSS 变量不再在这里定义：唯一真源是 ../tokens/tokens.css（由框架无关的令牌投影而来），
+// 这里只用 (inline) 把它并进来。此前两处各写一份，改一处漏一处没人会发现。
+@import (inline) '../tokens/tokens.css';
 
 * {
   box-sizing: border-box;

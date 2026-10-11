@@ -1,0 +1,23 @@
+/**
+ * 设计令牌的 CSS 变量投影（框架无关）。
+ *
+ * 权威定义在 ./index.ts 的 CSS_VARIABLES；本文件与它的一致性由 tests/tokens.test.ts 逐项比对。
+ * 任何栈（React / Vue / 原生）都可以 `import '@agri/shared/tokens/tokens.css'` 拿到同一套品牌令牌 ——
+ * 这是目前唯一一条不依赖框架、也不需要 TypeScript 的共享通道。
+ */
+:root {
+  --agri-brand-color: #13a05a;
+  --agri-color-success: #52c41a;
+  --agri-color-warning: #faad14;
+  --agri-color-error: #ff4d4f;
+  --agri-color-info: #1677ff;
+  --agri-content-bg: #f5f7fa;
+  --agri-container-bg: #ffffff;
+  --agri-radius: 6px;
+  --agri-font-size-base: 14px;
+  --agri-font-size-card-header: 15px;
+  --agri-sider-width: 220px;
+  --agri-sider-collapsed-width: 72px;
+  --agri-header-height: 56px;
+  --agri-content-padding: 16px;
+}
