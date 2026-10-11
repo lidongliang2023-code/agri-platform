@@ -36,6 +36,7 @@ const BUCKET_DIR = path.join(GATEWAY_DIR, 'bucket')
 /** 已登记子系统 → 前端工程目录（相对仓库根）。新增子系统时在这里加一行。 */
 const APPS = {
   prod: { frontendDir: path.join('agri-production', 'frontend'), title: '生产管理系统' },
+  mdm: { frontendDir: path.join('agri-master-data', 'web'), title: '主数据管理平台' },
 }
 
 const USAGE = `用法：
@@ -46,6 +47,7 @@ const USAGE = `用法：
   --app <slug>        子系统代号（当前已登记：${Object.keys(APPS).join('、')}）
   --version <标签>    版本目录名，建议 日期-短哈希，如 20261011-a1b2c3
   --build             先执行 tsc 与 vite build（带 --base=/{app}/versions/{version}/）
+  --dist <目录>       直接发布现成产物目录（不构建）；与 --build 互斥
   --force             版本目录已存在时也覆盖（正常发布**不应**用到，版本目录不可变）
   --repoint <标签>    只切换指针到已存在的版本目录
 `
@@ -165,7 +167,9 @@ if (args.repoint) {
 }
 
 if (!args.version) fail('缺少 --version')
-const distDir = path.join(frontendDir, 'dist')
+if (args.build && args.dist) fail('--build 与 --dist 不能同时给：前者是现场构建，后者是直接发布现成产物')
+// 产物目录：默认取工程内 dist；CI 或"构建在别处、只在这里发布"时用 --dist 指定
+const distDir = args.dist ? path.resolve(args.dist) : path.join(frontendDir, 'dist')
 
 if (args.build) {
   const base = `/${args.app}/versions/${args.version}/`
