@@ -23,9 +23,14 @@
 | S2B2C 商城（消费者端） | `mall.agri.local` / `mall-consumer.agri.local` | `:8082` | Vue 3 + vant | :8088（未跑） |
 | S2B2C 商城（供应商端） | `mall-supplier.agri.local` | `:8084` | Vue 3 + element-plus | :8088（未跑） |
 | S2B2C 商城（渠道端） | `mall-channel.agri.local` | `:8085` | Vue 3 + element-plus | :8088（未跑） |
+| 统一认证中心（登录页） | `sso.agri.local` | `:8090` | React + TS | core-platform（:8093，在跑） |
 
 后端未跑的子域，其 `/api` 会返回 **502** —— 这正是"请求被路由到了该子系统自己的上游"的证据
 （不是被吞掉、也不是 404）。后端起来后无需改配置。
+
+`sso` 这个 vhost 比其它子系统多一条映射：`/authorize` 短路径 → 后端的 `/api/v1/sso/authorize`。
+授权端点在 OIDC 惯例里是干净路径（子系统要把浏览器整页送过来），而我们的后端统一挂在 `/api/v1` 下，
+所以在网关做一次路径映射，而不是把 `/api/v1/sso/authorize` 这个地址写进每个子系统的跳转代码。
 
 ## 启动
 

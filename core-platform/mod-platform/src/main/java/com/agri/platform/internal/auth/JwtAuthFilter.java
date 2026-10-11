@@ -38,6 +38,12 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             // 登出：凭刷新令牌（HttpOnly Cookie）即可执行，必须放行 ——
             // 访问令牌过期后用户仍需要能退出，否则登出会因 401 永远失败（这正是修复前的表现）。
             "/api/v1/auth/logout",
+            // SSO 授权码流程（V2.0 5.2）：这四个端点本身就在"拿令牌之前"，
+            // 要求它们带访问令牌等于让登录流程无法开始（鸡生蛋问题）。
+            "/api/v1/sso/authorize",
+            "/api/v1/sso/login",
+            "/api/v1/sso/token",
+            "/api/v1/sso/logout",
             // 公开行情（数据分级 L1）——卫星服务 satellite-quote-push 拉取数据源亦复用此口径
             "/api/v1/quotes/**",
             "/v3/api-docs/**",

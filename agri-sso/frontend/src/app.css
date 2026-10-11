@@ -1,0 +1,87 @@
+/* 登录页样式：色值与尺寸一律取设计令牌（--agri-*），不在这里另写一份 */
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+
+.sso-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--agri-content-bg, #f5f7fa);
+}
+
+.sso-card {
+  width: 360px;
+  padding: 32px 28px;
+  background: var(--agri-container-bg, #ffffff);
+  border-radius: calc(var(--agri-radius, 6px) * 2);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.sso-title {
+  margin: 0;
+  font-size: calc(var(--agri-font-size-base, 14px) * 1.4);
+  color: var(--agri-brand-color, #13a05a);
+  text-align: center;
+}
+
+.sso-subtitle {
+  margin: 0;
+  text-align: center;
+  font-size: var(--agri-font-size-base, 14px);
+  color: rgba(0, 0, 0, 0.45);
+}
+
+.sso-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: var(--agri-font-size-base, 14px);
+  color: rgba(0, 0, 0, 0.75);
+}
+
+.sso-input {
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid #d9d9d9;
+  border-radius: var(--agri-radius, 6px);
+  font-size: var(--agri-font-size-base, 14px);
+}
+
+.sso-input:focus {
+  outline: none;
+  border-color: var(--agri-brand-color, #13a05a);
+}
+
+.sso-error {
+  color: var(--agri-color-error, #ff4d4f);
+  font-size: var(--agri-font-size-base, 14px);
+}
+
+.sso-button {
+  height: 40px;
+  border: none;
+  border-radius: var(--agri-radius, 6px);
+  background: var(--agri-brand-color, #13a05a);
+  color: #fff;
+  font-size: calc(var(--agri-font-size-base, 14px) + 2px);
+  cursor: pointer;
+}
+
+.sso-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.sso-hint {
+  margin: 0;
+  font-size: calc(var(--agri-font-size-base, 14px) - 2px);
+  line-height: 1.6;
+  color: rgba(0, 0, 0, 0.45);
+}

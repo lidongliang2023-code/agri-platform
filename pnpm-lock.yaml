@@ -354,6 +354,37 @@ importers:
         specifier: ^5.1.6
         version: 5.4.21(@types/node@20.19.43)(less@4.9.1(supports-color@7.2.0))(lightningcss@1.33.0)(sass@1.105.1)
 
+  agri-sso/frontend:
+    dependencies:
+      '@agri/shared':
+        specifier: workspace:*
+        version: link:../../packages/agri-shared
+      react:
+        specifier: ^18.2.0
+        version: 18.3.1
+      react-dom:
+        specifier: ^18.2.0
+        version: 18.3.1(react@18.3.1)
+    devDependencies:
+      '@types/node':
+        specifier: ^20.11.5
+        version: 20.19.43
+      '@types/react':
+        specifier: ^18.2.48
+        version: 18.3.31
+      '@types/react-dom':
+        specifier: ^18.2.18
+        version: 18.3.7(@types/react@18.3.31)
+      '@vitejs/plugin-react':
+        specifier: ^4.2.1
+        version: 4.7.0(supports-color@7.2.0)(vite@5.4.21(@types/node@20.19.43)(less@4.9.1(supports-color@7.2.0))(lightningcss@1.33.0)(sass@1.105.1))
+      typescript:
+        specifier: ^5.3.3
+        version: 5.9.3
+      vite:
+        specifier: ^5.0.11
+        version: 5.4.21(@types/node@20.19.43)(less@4.9.1(supports-color@7.2.0))(lightningcss@1.33.0)(sass@1.105.1)
+
   packages/agri-shared:
     dependencies:
       antd:

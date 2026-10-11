@@ -40,13 +40,19 @@ public class AuthService {
     private final TokenRevocationService revocationService;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
+    // 认证结果：身份与市场，**不含任何令牌**。
+    // SSO 授权码流程里「认证」与「换票」是两个时刻（V2.0 第 5.2 节 ③④ 与 ⑥⑦）：前者在 SSO 域发生，
+    // 后者在子系统拿 code 回来换取时发生。因此把凭据校验单独抽出来，认证那一刻不下发任何令牌。
+    public record AuthenticatedUser(Long userId, Long marketId) {
+    }
+
     /**
-     * 账号密码登录。
+     * 只做凭据校验，不下发令牌。
      *
      * @param request 登录请求
-     * @return 响应体 + 待写入 HttpOnly Cookie 的刷新令牌
+     * @return 认证通过的身份与市场
      */
-    public AuthOutcome login(LoginRequest request) {
+    public AuthenticatedUser authenticate(LoginRequest request) {
         UserEntity user = userMapper.selectOne(new LambdaQueryWrapper<UserEntity>()
                 .eq(UserEntity::getUsername, request.username()));
         if (user == null || !passwordEncoder.matches(request.password(), user.getPassword())) {
@@ -56,7 +62,18 @@ public class AuthService {
             throw new BusinessException(ErrorCode.USER_DISABLED);
         }
         Long marketId = request.marketId() == null ? 1L : request.marketId();
-        return buildLogin(user, marketId);
+        return new AuthenticatedUser(user.getId(), marketId);
+    }
+
+    /**
+     * 账号密码登录（自有登录页仍在用）。
+     *
+     * @param request 登录请求
+     * @return 响应体 + 待写入 HttpOnly Cookie 的刷新令牌
+     */
+    public AuthOutcome login(LoginRequest request) {
+        AuthenticatedUser user = authenticate(request);
+        return issueTokens(user.userId(), user.marketId());
     }
 
     /**
@@ -104,6 +121,17 @@ public class AuthService {
             throw new BusinessException(ErrorCode.UNAUTHORIZED);
         }
         return new UserVO(user.getId(), user.getUsername(), user.getNickname(), session.getRoles());
+    }
+
+    // 为指定用户签发一组令牌 —— 登录与 SSO 换票（/api/v1/sso/token）共用这一条路径。
+    // 刻意共用：否则 SSO 那条路会漏掉 jti 登记、刷新令牌索引、角色查询等步骤，
+    // 而漏掉的表现是「登出后它还能用」这类很难查的问题。
+    public AuthOutcome issueTokens(Long userId, Long marketId) {
+        UserEntity user = userMapper.selectById(userId);
+        if (user == null || user.getStatus() == null || user.getStatus() != 1) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED);
+        }
+        return buildLogin(user, marketId);
     }
 
     private AuthOutcome buildLogin(UserEntity user, Long marketId) {

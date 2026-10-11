@@ -252,7 +252,7 @@ function insertAfterLastImport(text, line, label) {
 }
 
 const mode = args.check ? '检查' : args.dryRun ? '干跑' : '写入'
-console.log(`\n【${mode}】${args.app}   栈=${isTsStack ? 'TS（React/antd 系）' : 'JS（Vue 系）'}   共享包相对路径：${sharedRel}`)
+console.log(`\n【${mode}】${args.app}   栈=${isTsStack ? 'TS（paths + alias + 接线自检）' : 'JS（仅 CSS 令牌通道）'}   共享包相对路径：${sharedRel}`)
 if (planned.length) console.log(`  待处理：\n${planned.map((f) => `    - ${f}`).join('\n')}`)
 if (skipped.length) console.log(`  跳过（已就绪）：\n${skipped.map((f) => `    - ${f}`).join('\n')}`)
 if (problems.length) console.log(`  ⚠ 未完成项：\n${problems.map((f) => `    - ${f}`).join('\n')}`)
