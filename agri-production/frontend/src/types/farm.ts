@@ -1,7 +1,7 @@
 /**
  * 农场 / 地块 / 土壤档案 实体类型
  */
-import type { EnableStatus } from './common'
+import type { EnableStatus } from '@agri/shared/types/common'
 
 /** 农场类型：1 种植 2 养殖 3 混合 */
 export type FarmType = 1 | 2 | 3

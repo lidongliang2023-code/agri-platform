@@ -1,61 +1,83 @@
 /**
  * 农事任务 / 任务模板 实体类型
  */
-import type { OptionItem } from './common'
+import type { OptionItem } from '@agri/shared/types/common'
 
 /**
  * 任务状态。
  *
- * ⚠️ 取值来自后端，非空想。实测依据（2026-10-10，core-app :8098）：
- * - `GET /api/v1/production/tasks` 全量 14 条，status 取值集合 =
- *   `pending / assigned / doing / done / rejected`；
- * - `TaskInfoService.java:103` 派发写 `assigned`，`:122` 验收通过写 `done`、驳回写 `rejected`；
- * - 全后端 java 代码 grep `accepted` / `executing` / `submitted` / `overdue` **均零命中**。
+ * PRD 8.1.1 的目标词表为：
+ * `pending / assigned / executing / completed / suspended / cancelled / expired / rejected`。
+ * 当前处于枚举迁移窗口：后端已完成前向兼容、数据尚未切换，两套都要认；数据切换完成并验证后再移除旧词，届时需单独提单。
+ * 数据库及部分旧接口响应仍可能返回 `doing`（等价于 `executing`）和 `done`（等价于
+ * `completed`），因此前端类型、判定和展示映射必须同时保留新旧字面量，避免统计或列表静默归零。
  *
- * 因此旧词汇表里的 `executing` / `accepted` 一律不存在（写库路径也不写这两个值），
- * 前端凡是判 `status === 'accepted'` 的地方**分母恒为 0**（完成率恒显示 0.0%）。
- * 现已收敛为后端真值：`executing → doing`，`accepted → done`。
- *
- * `submitted`（待验收）**已删除**（裁决 2026-10-10 team-lead，依据 PRD 8.1.1
- * 「任务状态」枚举只有 pending/executing/completed/suspended/cancelled/expired/rejected，
- * 没有 submitted —— 它是纯编造，不是"后端暂未提供"）。
- *
- * ⚠️ 但「待验收」这个业务状态**真实存在**，只是不在 `status` 上：
- * `TaskInfoService.java:144-151` 的 `submit()` 置 `status="done"` + `acceptStatus=0`，
- * 即"已提交待验收"= `status === 'done' && acceptStatus === 0`（见 {@link TASK_ACCEPT_PENDING}）。
- * 判定"能不能验收"一律看 `acceptStatus`，**不要再找一个不存在的 status 值**。
- *
- * `overdue`（逾期）后端**不存储**，是前端按 `planEndDate` 推导的派生口径，
- * 统一走 {@link isTaskOverdue}，UI 必须带 {@link OVERDUE_DERIVED_NOTICE} 标注。
+ * `accepted`、`submitted` 与 `overdue` 都不是任务 status：
+ * - 「待验收」由 `acceptStatus === 0` 表达；当前提交接口仍可能写入
+ *   `status="done"` + `acceptStatus=0`，判断时必须通过 {@link isTaskDone} 兼容新旧完成态；
+ * - 「已逾期」由 {@link isTaskOverdue} 根据 `planEndDate` 派生，UI 必须带
+ *   {@link OVERDUE_DERIVED_NOTICE} 标注。
  */
-export type TaskStatus = 'pending' | 'assigned' | 'doing' | 'done' | 'rejected'
+export type TaskStatus =
+  | 'pending'
+  | 'assigned'
+  | 'executing'
+  | 'doing'
+  | 'completed'
+  | 'done'
+  | 'suspended'
+  | 'cancelled'
+  | 'expired'
+  | 'rejected'
 
-/** 已终结状态：进入这两态后不再计入逾期 */
-export const TASK_FINAL_STATUSES: readonly TaskStatus[] = ['done', 'rejected']
+/** 已终结状态：完成态兼容新旧值，取消、过期与驳回也不再计入逾期 */
+export const TASK_FINAL_STATUSES: readonly TaskStatus[] = [
+  'completed',
+  'done',
+  'cancelled',
+  'expired',
+  'rejected',
+]
 
-/** 「已完成」对应的后端真值（旧代码误用 `accepted`，后端不存在该值） */
+/** 「已完成」的 PRD 标准值，用于只展示一个选项及兼容后的查询入参 */
+export const TASK_STATUS_COMPLETED: TaskStatus = 'completed'
+
+/** 「执行中」的 PRD 标准值，用于只展示一个选项及兼容后的查询入参 */
+export const TASK_STATUS_EXECUTING: TaskStatus = 'executing'
+
+/** 「已完成」的迁移前旧值；数据切换完成并验证前不可删除 */
 export const TASK_STATUS_DONE: TaskStatus = 'done'
 
-/** 「执行中」对应的后端真值（旧代码误用 `executing`，后端不存在该值） */
+/** 「执行中」的迁移前旧值；当前写入路径仍使用它，数据切换完成前不可删除 */
 export const TASK_STATUS_DOING: TaskStatus = 'doing'
 
 /**
  * 验收状态「待验收」。
  *
- * 后端 `POST /tasks/{taskId}/submit`（`TaskInfoService.java:144-151`）把任务置为
- * `status="done"` + `acceptStatus=0`，也就是说"待验收"**不体现为 status 枚举**，
- * 而是 `acceptStatus`。前端要判断"可以验收吗"，用这个值，不要去找 `submitted`。
+ * 当前后端 `POST /tasks/{taskId}/submit` 仍可能把任务置为 `status="done"` +
+ * `acceptStatus=0`；数据切换后状态可能为 `completed`。也就是说「待验收」不体现为
+ * 独立的 status 枚举，而是 `acceptStatus`。前端判断能否验收时必须读取这个值。
  */
 export const TASK_ACCEPT_PENDING: AcceptStatus = 0
 
 /**
- * 判断任务是否已按后端口径完成。
+ * 判断任务是否处于执行中（兼容 PRD 新值与迁移前旧值）。
  *
  * @param status 任务状态
- * @returns 后端 `done` 时为 true
+ * @returns `executing` 或 `doing` 时为 true
+ */
+export function isTaskExecuting(status: unknown): boolean {
+  return status === TASK_STATUS_EXECUTING || status === TASK_STATUS_DOING
+}
+
+/**
+ * 判断任务是否已完成（兼容 PRD 新值与迁移前旧值）。
+ *
+ * @param status 任务状态
+ * @returns `completed` 或 `done` 时为 true
  */
 export function isTaskDone(status: unknown): boolean {
-  return status === 'done'
+  return status === TASK_STATUS_COMPLETED || status === TASK_STATUS_DONE
 }
 
 /**
@@ -85,7 +107,8 @@ export function isTaskOverdue(
 }
 
 /** 逾期口径标注：凡在 UI 上展示「逾期 / 超时」数量或列表，必须带上这句 */
-export const OVERDUE_DERIVED_NOTICE = '已逾期为本地按计划结束时间推导，非后端状态字段；后端状态只有 pending/assigned/doing/done/rejected'
+export const OVERDUE_DERIVED_NOTICE =
+  '已逾期为本地按计划结束时间推导，非后端状态字段；任务状态按 PRD 词表展示，迁移窗口兼容旧值 doing/done'
 
 /** 任务优先级：1 低 2 中 3 高 4 紧急 */
 export type TaskPriority = 1 | 2 | 3 | 4
@@ -127,7 +150,7 @@ export interface Task {
   assignerId?: string
   /** 派发人姓名 */
   assignerName?: string
-  /** 状态：后端真值为 pending/assigned/doing/done/rejected（详见 TaskStatus 注释） */
+  /** 状态：采用 PRD 词表，迁移窗口兼容 doing/done（详见 TaskStatus 注释） */
   status: TaskStatus
   /** 优先级：1 低 2 中 3 高 4 紧急 */
   priority: TaskPriority
@@ -257,16 +280,20 @@ export const TASK_TYPE_OPTIONS: OptionItem[] = [
 ]
 
 /**
- * 任务状态选项（取值与后端 `status` 字段完全一致）。
+ * 任务状态下拉选项。
  *
- * 「待验收」**不在**这张表里——它不在 `status` 上，而是 `acceptStatus === 0`
- * （见 {@link TASK_ACCEPT_PENDING}）。把它塞进 status 枚举正是本次删除的原因。
+ * 只展示 PRD 标准词表，避免同一业务状态出现 `executing / doing` 或
+ * `completed / done` 两个重复选项。旧值仅保留在类型、判定函数和展示映射中。
+ * 「待验收」不在 status 上，而由 `acceptStatus === 0` 表达。
  */
 export const TASK_STATUS_OPTIONS: OptionItem[] = [
   { value: 'pending', label: '待执行' },
   { value: 'assigned', label: '已派发' },
-  { value: 'doing', label: '执行中' },
-  { value: 'done', label: '已完成' },
+  { value: TASK_STATUS_EXECUTING, label: '执行中' },
+  { value: TASK_STATUS_COMPLETED, label: '已完成' },
+  { value: 'suspended', label: '已暂停' },
+  { value: 'cancelled', label: '已取消' },
+  { value: 'expired', label: '已过期' },
   { value: 'rejected', label: '已驳回' },
 ]
 
@@ -293,23 +320,27 @@ export const TASK_TYPE_LABEL_MAP: Record<string, string> = TASK_TYPE_OPTIONS.red
   return acc
 }, {})
 
-/** 任务状态 → 显示名称 */
-export const TASK_STATUS_LABEL_MAP: Record<string, string> = TASK_STATUS_OPTIONS.reduce<
-  Record<string, string>
->((acc, item) => {
-  acc[item.value] = item.label
-  return acc
-}, {})
+/** 任务状态 → 显示名称（下拉仅新词，映射同时兼容迁移前旧词） */
+export const TASK_STATUS_LABEL_MAP: Record<string, string> = {
+  ...TASK_STATUS_OPTIONS.reduce<Record<string, string>>((acc, item) => {
+    acc[item.value] = item.label
+    return acc
+  }, {}),
+  doing: '执行中',
+  done: '已完成',
+}
 
-/** 任务状态 → Tag 颜色（键为后端真值；兼容旧字面量 accepted/executing/completed） */
+/** 任务状态 → Tag 颜色（PRD 标准值与迁移前 doing/done 均覆盖） */
 export const TASK_STATUS_COLOR_MAP: Record<string, string> = {
   pending: 'default',
   assigned: 'blue',
-  doing: 'processing',
   executing: 'processing',
-  done: 'success',
-  accepted: 'success',
+  doing: 'processing',
   completed: 'success',
+  done: 'success',
+  suspended: 'warning',
+  cancelled: 'default',
+  expired: 'volcano',
   rejected: 'error',
 }
 

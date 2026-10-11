@@ -4,7 +4,7 @@
  * 说明：本文件中追加的字段与枚举元数据为「采收与库存」页面专用扩展，
  * 不修改他人已定义字段，仅做向后兼容的可选字段追加。
  */
-import type { OptionItem } from './common'
+import type { OptionItem } from '@agri/shared/types/common'
 
 /** 质量等级：A / B / C / D / reject / 待检 */
 export type HarvestGrade = 'A' | 'B' | 'C' | 'D' | 'reject' | '待检'
@@ -241,7 +241,7 @@ export const GRADE_OPTIONS: OptionItem<HarvestGrade>[] = [
 ]
 
 /** 质量等级 → 标签颜色：A 绿 / B 蓝 / C 橙 / D 黄 / reject 红 / 待检 灰 */
-export const GRADE_COLOR_MAP: Record<HarvestGrade, string> = {
+export const GRADE_COLOR_MAP: Record<string, string> = {
   A: 'green',
   B: 'blue',
   C: 'orange',
@@ -250,8 +250,15 @@ export const GRADE_COLOR_MAP: Record<HarvestGrade, string> = {
   待检: 'default',
 }
 
-/** 质量等级 → 展示文案 */
-export const GRADE_LABEL_MAP: Record<HarvestGrade, string> = {
+/**
+ * 质量等级 → 展示文案
+ *
+ * <p>索引类型放宽为 `string` 的原因同 {@link GRADE_COLOR_MAP}：
+ * 后端 `grade` 是 `varchar`，可能返回 `HarvestGrade` 枚举外的取值；
+ * 收窄索引类型会让 `GRADE_LABEL_MAP[record.grade]` 报 TS7053。
+ * 未命中的取值由调用方 `?? record.grade` 兜底，显示原始值而非空白。
+ */
+export const GRADE_LABEL_MAP: Record<string, string> = {
   A: 'A级',
   B: 'B级',
   C: 'C级',
