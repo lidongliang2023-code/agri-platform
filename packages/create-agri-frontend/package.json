@@ -1,0 +1,16 @@
+{
+  "name": "@agri/create-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "农业产业互联网平台 · 子系统前端脚手架（V2.0 第 4.8 节 CLI 模板）",
+  "type": "module",
+  "bin": {
+    "create-agri-frontend": "./bin/create.mjs"
+  },
+  "scripts": {
+    "smoke": "node bin/create.mjs --help"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
