@@ -56,7 +56,7 @@ import { alertLevelMeta } from '@/utils/production-adapter'
 import { toFiniteNumber } from '@/utils/metric-format'
 import { errorMessageOf } from '@/utils/request'
 import { MISSING_VALUE_TEXT } from '@/components/MetricStatistic'
-import type { AlertLevel, AlertRule, Plot } from '@/types'
+import type { AlertLevel, AlertRule } from '@/types'
 
 const { Text } = Typography
 const { RangePicker: TimeRangePicker } = TimePicker
@@ -367,36 +367,6 @@ interface RuleFormValues {
   activeRange?: [Dayjs, Dayjs]
 }
 
-/** 示例地块（成员 / 地块接口无数据时的兜底） */
-const FALLBACK_PLOTS: Plot[] = [
-  '1号田',
-  '2号田',
-  '3号棚',
-  '4号棚',
-  '水稻A区',
-  '果园北区',
-].map((name, index) => ({
-  plotId: `DEMO-PLOT-${index + 1}`,
-  plotCode: `PLOT-${String(index + 1).padStart(3, '0')}`,
-  plotName: name,
-  farmId: '',
-  area: 40 + index * 15,
-  plantingType: 2,
-  soilType: '壤土',
-  irrigationType: '滴灌',
-  status: 2,
-  createdAt: '2026-03-01 08:00:00',
-  updatedAt: '2026-03-01 08:00:00',
-}))
-
-/** 示例成员 ID → 姓名映射（兜底） */
-const FALLBACK_MEMBERS: { value: string; label: string }[] = [
-  { value: 'DEMO-USER-1', label: '张三（农场主）' },
-  { value: 'DEMO-USER-2', label: '李四（农艺师）' },
-  { value: 'DEMO-USER-3', label: '王五（管理员）' },
-  { value: 'DEMO-USER-4', label: '赵六（运维）' },
-]
-
 /** 示例规则模板 */
 const DEMO_RULE_TEMPLATES: {
   ruleName: string
@@ -598,12 +568,17 @@ export default function AlertRules(): JSX.Element {
   // （threshold_value / duration_min / alert_level 字符串 / 无 scope 字段），
   // 走 toRuleView() 按实测契约逐字段映射，不再硬转。
   const remoteRows: RuleView[] = (listQuery.data?.list ?? []).map(toRuleView)
-  const usingFallback: boolean =
-    !listQuery.isLoading && (listQuery.isError || remoteRows.length === 0)
+  // 只在**接口出错**时回落示例规则。
+  // 原条件含 `remoteRows.length === 0`：接口成功但确实没有规则时也会铺示例规则，
+  // 用户会把自己没建过的规则当成真实配置。空态就是空态，空 ≠ 假。
+  const usingFallback: boolean = !listQuery.isLoading && listQuery.isError
 
   const plotOptions: { value: string; label: string }[] = useMemo(() => {
     const plots = plotQuery.data?.list ?? []
-    const source = plots.length > 0 ? plots : FALLBACK_PLOTS
+    // 无地块时就是空选项 —— 不用编造地块。
+    // 理由：地块选项会随新建 / 编辑规则一起提交，编造值会让规则挂到不存在的业务对象上，
+    // 比"显示假数据"更重。已移除原 FALLBACK_PLOTS 兜底（连带清理其唯一依赖的类型导入）。
+    const source = plots
     return source.map((item) => ({
       value: item.plotId,
       label: `${item.plotName}（${item.area} 亩）`,
@@ -612,7 +587,7 @@ export default function AlertRules(): JSX.Element {
 
   const memberOptions: { value: string; label: string }[] = useMemo(() => {
     const members = memberQuery.data?.list ?? []
-    if (members.length === 0) return FALLBACK_MEMBERS
+    // 无成员时同样就是空选项；原 FALLBACK_MEMBERS 兜底已移除（同属"会被提交的编造值"）。
     return members.map((item) => ({ value: item.userId, label: item.realName }))
   }, [memberQuery.data])
 
@@ -1025,7 +1000,7 @@ export default function AlertRules(): JSX.Element {
 
           {usingFallback && (
             <Empty
-              description="接口暂未返回规则数据，当前展示示例规则（新增 / 编辑 / 启停均可用）"
+              description="接口请求失败，当前展示示例规则（新增 / 编辑 / 启停均可用）；接口恢复后自动切回真实数据。"
               style={{ margin: '12px 0' }}
             />
           )}

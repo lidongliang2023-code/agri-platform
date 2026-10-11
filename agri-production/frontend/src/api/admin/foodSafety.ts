@@ -154,7 +154,15 @@ let lastWriteSucceeded: boolean | null = null
  * @returns true 表示最近一次写操作已成功写入服务端
  */
 export function isWriteBackendConfirmed(): boolean {
-  return lastWriteSucceeded === true
+  // 悲观默认已过期：食品安全 5 个页面的 7 个写端点在本里程碑全部落地并逐条实测通过
+  //   （告警处置为浏览器级实测、其余 6 个为 API 级实测 + 库内回读），
+  //   「后端未接入」在业务上已不存在。若继续用 `=== true`，新打开页面会先显示一句
+  //   已被证伪的「提交后不会写入服务端」，等用户偶然成功提交一次才消失 —— 属于误导。
+  // 改为「未被证伪即视为可用」：默认不提示，只有当某次写操作真的失败（lastWriteSucceeded=false）
+  //   时才提示，安全网保留。
+  // 后续建议：连同这 7 处横幅与 lastWriteSucceeded 标志整体退役（失败态应由写操作自身的
+  //   错误提示承担），已列入清理清单。
+  return lastWriteSucceeded !== false
 }
 
 /**

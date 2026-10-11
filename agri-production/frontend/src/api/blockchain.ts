@@ -48,9 +48,26 @@ export function listChainRecords(
   )
 }
 
-/** 查询上链记录详情 */
+/**
+ * 查询上链记录详情。
+ *
+ * <p>路径已对齐后端实际契约：后端 `BlockchainController` 的详情端点是扁平路径
+ * `GET /api/v1/production/blockchain/{id}`（`/records` 只用于分页列表）。
+ * 原实现调 `/blockchain/records/{id}`，该路径后端不存在，必然 404。</p>
+ *
+ * <p>本次只改路径：后端详情返回 `BlockchainRecordEntity`，与本函数返回类型一致，无需改调用方。</p>
+ *
+ * <p><b>同文件另两处不一致（未在本轮处理）</b>：
+ * `submitChain` 调 `POST /records`，而后端创建端点是 `POST /blockchain`，
+ * 且后端返回的是 `String recordId` 而非记录对象——路径与返回体双重不符，涉及调用方处理方式，另行裁决；
+ * `retryChain` 调 `PATCH /records/{id}/retry`，后端**完全没有 retry 能力**（全项目无 PatchMapping），
+ * 需按「功能既定而端点缺失则补端点」补后端，属独立开发任务。</p>
+ *
+ * @param recordId 存证记录 ID
+ * @returns 存证记录
+ */
 export function getChainRecord(recordId: string): Promise<BlockchainRecord> {
-  return http.get<BlockchainRecord>(`${BASE}/records/${recordId}`)
+  return http.get<BlockchainRecord>(`${BASE}/${recordId}`)
 }
 
 /** 提交上链 */

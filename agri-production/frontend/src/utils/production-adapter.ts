@@ -372,10 +372,9 @@ export function priorityMeta(priority: number): TagMeta {
 /**
  * 任务状态标签。
  *
- * 后端真值为 `pending / assigned / doing / done / rejected`。
- * `executing` / `accepted` / `completed` 是 PRD 8.1.1 定义过的旧字面量，后端改用
- * `doing` / `done` 后已不再产出，此处仅为兼容旧数据保留显示。**不要**往回加
- * `submitted` / `awaiting_acceptance`——PRD 与后端都没有这两个值，
+ * 迁移窗口内后端仍返回旧词，PRD 标准值也要认，两套字面量映射到同一展示：
+ * `executing ≡ doing`（执行中）、`completed ≡ done`（已完成）。
+ * `accepted` 仅为历史脏值兜底；`submitted` / `awaiting_acceptance` 一律不予支持，
  * 「待验收」在后端是 `acceptStatus === 0`，不是 status（见 `TASK_ACCEPT_PENDING`）。
  *
  * @param status 状态串
@@ -394,6 +393,12 @@ export function taskStatusMeta(status: string): TagMeta {
     case 'done':
     case 'completed':
       return { label: '已完成', color: 'success' }
+    case 'suspended':
+      return { label: '已暂停', color: 'gold' }
+    case 'cancelled':
+      return { label: '已取消', color: 'default' }
+    case 'expired':
+      return { label: '已过期', color: 'volcano' }
     case 'rejected':
       return { label: '已驳回', color: 'red' }
     default:
@@ -1083,6 +1088,10 @@ export interface DashboardOverview {
   monthHarvestQty: number | null
   /** 在线设备数 */
   activeDeviceCount: number | null
+  /** 后端尚未接入的指标（原始响应里连字段都没有），与「已接入但当前无数据」是两回事 */
+  unwiredFields: string[]
+  /** 后端已接入、但当前确实无数据（字段存在且为 null） */
+  emptyFields: string[]
   /** 在田作物种类数 */
   cropCount: number | null
   /** 溯源码总量 */
@@ -1167,8 +1176,35 @@ export function buildOverview(raw: unknown, available = true): DashboardOverview
     missingFields: pairs
       .filter(([, value]) => value === null)
       .map(([field]) => OVERVIEW_METRIC_LABELS[field] ?? field),
+    // 区分两种「显示为 —」：字段缺失（后端未接入） vs 字段存在但为 null（已接入、当前无数据）。
+    //
+    // 判据必须用 hasOwnProperty 直接看**原始响应有没有这个键**，不能用 readValue：
+    // 实测 readValue 对「键存在且值为 null」同样返回 undefined，会把两类都误判成「未接入」。
+    unwiredFields: pairs
+      .filter(([field, value]) => value === null
+        && !hasOverviewKey(record, field))
+      .map(([field]) => OVERVIEW_METRIC_LABELS[field] ?? field),
+    emptyFields: pairs
+      .filter(([field, value]) => value === null
+        && hasOverviewKey(record, field))
+      .map(([field]) => OVERVIEW_METRIC_LABELS[field] ?? field),
     available,
   }
+}
+
+/**
+ * 原始响应里是否存在该指标的任一候选字段名（含值为 null 的情况）。
+ *
+ * 用途：区分「后端未接入」（键不存在）与「已接入但当前无数据」（键存在且为 null）。
+ *
+ * @param record 原始响应对象
+ * @param field  归一化字段名
+ * @returns 命中任一候选字段名时为 true
+ */
+function hasOverviewKey(record: Record<string, unknown>, field: string): boolean {
+  return (OVERVIEW_METRIC_KEYS[field] ?? [field]).some((key) =>
+    Object.prototype.hasOwnProperty.call(record, key),
+  )
 }
 
 /**

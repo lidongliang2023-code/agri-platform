@@ -306,8 +306,10 @@ export default function AlertCenter(): JSX.Element {
   })
 
   const remoteRows: Alert[] = listQuery.data?.list ?? []
-  const usingFallback: boolean =
-    !listQuery.isLoading && (listQuery.isError || remoteRows.length === 0)
+  // 只在**接口出错**时回落示例数据。
+  // 原先还包含 `remoteRows.length === 0`：那会让「接口成功、但本农场确实没有告警」也显示示例数据 ——
+  // 用户会把编造的告警当成自己的真实告警。空态就是空态，空 ≠ 假。
+  const usingFallback: boolean = !listQuery.isLoading && listQuery.isError
 
   /**
    * 应用本地处置补丁
@@ -804,7 +806,7 @@ export default function AlertCenter(): JSX.Element {
 
           {usingFallback && (
             <Empty
-              description="接口暂未返回数据，当前展示示例数据（筛选 / 分页 / 处置闭环均可用）"
+              description="接口请求失败，当前展示示例数据（筛选 / 分页 / 处置闭环均可用）；接口恢复后自动切回真实数据。"
               style={{ margin: '12px 0' }}
             />
           )}
