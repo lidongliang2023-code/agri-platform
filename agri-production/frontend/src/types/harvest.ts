@@ -6,4 +6,12 @@
  * （TaskMonitor.tsx / DashboardHome.tsx），改它们会构成对他人在途文件的二次改动。
  * 待九大前端拆分、或那些文件的主人落库后，可直接把这些引用改指 @agri/shared 并删掉本桩。
  */
+/**
+ * @deprecated 真源已是 `@agri/shared/types/harvest`（唯一权威定义）；本桩仅为兼容
+ * 仍按子路径引用的旧代码（`@/types/harvest`）。按 V2.0 第 4.8 节「废弃策略」保留
+ * 至少一个 major 过渡期后再删除。TypeScript 无法对 `export *` 做符号级标注。
+ *
+ * 附注：本文件曾同时承载他人在途改动（等级映射表放宽），归属需其确认，
+ * 故不在此处改动调用方引用。
+ */
 export * from '@agri/shared/types/harvest'
