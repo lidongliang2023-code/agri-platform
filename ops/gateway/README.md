@@ -11,6 +11,21 @@
   同域是上一轮 HttpOnly 刷新令牌能在开发期零 CORS 配置直接生效的前提。
 - **版本目录 + 指针发布**：`bucket/{app}/versions/{version}/` 不可变，`bucket/{app}/index.html` 是指针；
   回滚是把指针切回去，秒级、不用重新构建。
+- **多子系统并存**：当前已在网关上挂 6 个子系统前端（React 与 Vue 两套栈各 3 个），彼此互不串台。
+
+## 已接入子系统与本地端口
+
+| 子系统 | 子域 | 本地端口 | 栈 | 其自身后端 |
+| :-- | :-- | :-- | :-- | :-- |
+| 生产管理系统 | `prod.agri.local` | `:80` | React + TS + antd | core-platform（:8093，在跑） |
+| 主数据管理平台 | `mdm.agri.local` | `:8080` | React + TS + antd | :8083（未跑） |
+| 供应链金融 | `finance.agri.local` | `:8081` | Vue 3 + element-plus | :8087（未跑） |
+| S2B2C 商城（消费者端） | `mall.agri.local` / `mall-consumer.agri.local` | `:8082` | Vue 3 + vant | :8088（未跑） |
+| S2B2C 商城（供应商端） | `mall-supplier.agri.local` | `:8084` | Vue 3 + element-plus | :8088（未跑） |
+| S2B2C 商城（渠道端） | `mall-channel.agri.local` | `:8085` | Vue 3 + element-plus | :8088（未跑） |
+
+后端未跑的子域，其 `/api` 会返回 **502** —— 这正是"请求被路由到了该子系统自己的上游"的证据
+（不是被吞掉、也不是 404）。后端起来后无需改配置。
 
 ## 启动
 
@@ -37,6 +52,13 @@ C:\nginx\nginx.exe -p <同上路径> -s stop
    顺序错了会报 `upstream not found`（server 块先被解析到，而它引用的上游还没定义）。
 4. 启动命令会让 PowerShell 会话挂住（nginx 是常驻进程）。要后台起就用
    `Start-Process -WindowStyle Hidden`，别直接在前台跑。
+5. **子域一多要调 `server_names_hash_bucket_size`**：新增若干 server_name 后会报
+   `could not build server_names_hash, you should increase server_names_hash_bucket_size: 32`，
+   此时**整份配置加载失败** —— 已监听的端口继续按旧配置服务，新端口一个都不会起来
+   （表现为新子域全都不通、老子域一切正常，很容易误判成"新配置没生效"）。已在 `conf/nginx.conf` 设为 64。
+6. **本地"一端一口"的代价**：每个监听端口都需要自己的 `default_server` 兜底，否则该端口上唯一的
+   server 块会接走任何未知 Host。生产只有一个监听端口（443），一条默认 server 就够 ——
+   这条冗余是本地免 hosts 约定的产物，不是生产形态。
 
 ## 发布与回滚
 

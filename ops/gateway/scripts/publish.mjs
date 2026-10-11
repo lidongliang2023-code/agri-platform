@@ -37,6 +37,14 @@ const BUCKET_DIR = path.join(GATEWAY_DIR, 'bucket')
 const APPS = {
   prod: { frontendDir: path.join('agri-production', 'frontend'), title: '生产管理系统' },
   mdm: { frontendDir: path.join('agri-master-data', 'web'), title: '主数据管理平台' },
+  finance: { frontendDir: path.join('agri-finance', 'frontend'), title: '供应链金融平台' },
+  // S2B2C 一个子系统有四个端（渠道/消费者/平台运营/供应商），按端各出一份产物。
+  // 生产环境它们同属 mall 子域（按路径区分端），本地为了能直接点开，各给一个端口。
+  'mall-consumer': { frontendDir: path.join('agri-s2b2c', 'frontend-consumer'), title: 'S2B2C 商城（消费者端）' },
+  'mall-supplier': { frontendDir: path.join('agri-s2b2c', 'frontend-supplier'), title: 'S2B2C 商城（供应商端）' },
+  'mall-channel': { frontendDir: path.join('agri-s2b2c', 'frontend-channel'), title: 'S2B2C 商城（渠道端）' },
+  // 注意：agri-s2b2c/frontend-platform 未登记 —— 它当前构建不过（既有源码缺陷，见 ops/workspace/README.md），
+  // 发布器对「未登记子系统」会直接拒绝，这里保持拒绝状态而不是登记一个发布不出来的应用。
 }
 
 const USAGE = `用法：
@@ -174,11 +182,15 @@ const distDir = args.dist ? path.resolve(args.dist) : path.join(frontendDir, 'di
 if (args.build) {
   const base = `/${args.app}/versions/${args.version}/`
   console.log(`构建 ${appConfig.title}（base=${base}）…`)
-  const tsc = spawnSync(process.execPath, [path.join(frontendDir, 'node_modules/typescript/bin/tsc'), '--noEmit'], {
-    cwd: frontendDir,
-    stdio: 'inherit',
-  })
-  if (tsc.status !== 0) fail('类型检查未通过，发布中止')
+  // 类型检查只在工程真的装了 TypeScript 时才跑：Vue 系的工程没有 TS，
+  // 无条件调用会因找不到 tsc 而把发布直接中止（不是类型错误，却报成失败）。
+  const tscBin = path.join(frontendDir, 'node_modules', 'typescript', 'bin', 'tsc')
+  if (existsSync(tscBin)) {
+    const tsc = spawnSync(process.execPath, [tscBin, '--noEmit'], { cwd: frontendDir, stdio: 'inherit' })
+    if (tsc.status !== 0) fail('类型检查未通过，发布中止')
+  } else {
+    console.log('  （该工程未使用 TypeScript，跳过类型检查）')
+  }
   const vite = spawnSync(
     process.execPath,
     [path.join(frontendDir, 'node_modules/vite/bin/vite.js'), 'build', `--base=${base}`],
