@@ -1,0 +1,4 @@
+# 这个锁文件只在"脱离 workspace 单独安装"时才会生成（CI 用它绕开未入库的 workspace 成员）。
+# 本仓库的依赖锁以**根目录** pnpm-lock.yaml 为唯一真源，包内这份是安装副产物，不入库。
+# 详见 ops/ci/README.md 的「CI 的已知边界」。
+pnpm-lock.yaml
