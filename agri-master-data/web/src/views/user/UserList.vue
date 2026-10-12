@@ -141,6 +141,7 @@
 
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
+import { message } from 'ant-design-vue'
 import { getUserList, createUser, updateUser, changeStatus } from '../../utils/api'
 
 const tableData = ref([])
@@ -182,23 +183,19 @@ const loadData = async () => {
       realNameStatus: searchForm.realNameStatus
     })
     if (response.code === 200) {
-      tableData.value = response.data.list || mockUsers
-      total.value = response.data.total || mockUsers.length
+      tableData.value = response.data.list ?? []
+      total.value = response.data.total ?? 0
+    } else {
+      message.error(response.message || '加载数据失败')
+      tableData.value = []
+      total.value = 0
     }
   } catch (error) {
-    console.error('Failed to load users:', error)
-    tableData.value = mockUsers
-    total.value = mockUsers.length
+    message.error(error instanceof Error ? error.message : '加载数据失败')
+    tableData.value = []
+    total.value = 0
   }
 }
-
-const mockUsers = [
-  { id: 1, userCode: 'USER001', username: 'admin', realName: '管理员', phone: '13800138001', email: 'admin@test.com', userType: 'enterprise', realNameStatus: 'verified', userStatus: 'active', createTime: '2024-01-10 10:00:00' },
-  { id: 2, userCode: 'USER002', username: 'zhangsan', realName: '张三', phone: '13800138002', email: 'zhangsan@test.com', userType: 'individual', realNameStatus: 'verified', userStatus: 'active', createTime: '2024-01-11 14:30:00' },
-  { id: 3, userCode: 'USER003', username: 'lisi', realName: '李四', phone: '13800138003', email: 'lisi@test.com', userType: 'individual', realNameStatus: 'pending', userStatus: 'active', createTime: '2024-01-12 09:15:00' },
-  { id: 4, userCode: 'USER004', username: 'wangwu', realName: '王五', phone: '13800138004', email: 'wangwu@test.com', userType: 'enterprise', realNameStatus: 'unverified', userStatus: 'inactive', createTime: '2024-01-13 16:45:00' },
-  { id: 5, userCode: 'USER005', username: 'zhaoliu', realName: '赵六', phone: '13800138005', email: 'zhaoliu@test.com', userType: 'individual', realNameStatus: 'verified', userStatus: 'active', createTime: '2024-01-14 11:20:00' }
-]
 
 const handleCurrentChange = (page) => {
   if (page >= 1 && page <= totalPages.value) {

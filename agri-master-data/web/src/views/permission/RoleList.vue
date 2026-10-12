@@ -142,6 +142,7 @@
 
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
+import { message } from 'ant-design-vue'
 import { getRoleList, createRole, updateRole, deleteRole as apiDeleteRole } from '../../utils/api'
 
 const tableData = ref([])
@@ -181,23 +182,19 @@ const loadData = async () => {
       status: searchForm.status
     })
     if (response.code === 200) {
-      tableData.value = response.data.list || mockRoles
-      total.value = response.data.total || mockRoles.length
+      tableData.value = response.data.list ?? []
+      total.value = response.data.total ?? 0
+    } else {
+      message.error(response.message || '加载数据失败')
+      tableData.value = []
+      total.value = 0
     }
   } catch (error) {
-    console.error('Failed to load roles:', error)
-    tableData.value = mockRoles
-    total.value = mockRoles.length
+    message.error(error instanceof Error ? error.message : '加载数据失败')
+    tableData.value = []
+    total.value = 0
   }
 }
-
-const mockRoles = [
-  { id: 1, roleCode: 'ADMIN', roleName: '超级管理员', roleKey: 'admin', roleType: 'system', dataScope: 1, status: 1, createTime: '2024-01-01 00:00:00' },
-  { id: 2, roleCode: 'TENANT_ADMIN', roleName: '租户管理员', roleKey: 'tenantAdmin', roleType: 'system', dataScope: 2, status: 1, createTime: '2024-01-01 00:00:00' },
-  { id: 3, roleCode: 'OPERATOR', roleName: '操作员', roleKey: 'operator', roleType: 'custom', dataScope: 3, status: 1, createTime: '2024-01-10 10:00:00' },
-  { id: 4, roleCode: 'AUDITOR', roleName: '审核员', roleKey: 'auditor', roleType: 'custom', dataScope: 2, status: 0, createTime: '2024-01-11 14:30:00' },
-  { id: 5, roleCode: 'VIEWER', roleName: '查看员', roleKey: 'viewer', roleType: 'custom', dataScope: 3, status: 1, createTime: '2024-01-12 09:15:00' }
-]
 
 const handleCurrentChange = (page) => {
   if (page >= 1 && page <= totalPages.value) {

@@ -233,25 +233,22 @@ const loadData = async () => {
       status: searchForm.status
     })
     if (response.code === 200) {
-      tableData.value = response.data.list || mockIssues
-      total.value = response.data.total || mockIssues.length
+      tableData.value = response.data.list ?? []
+      total.value = response.data.total ?? 0
       totalPages.value = Math.ceil(total.value / pageSize.value)
+    } else {
+      message.error(response.message || '加载数据失败')
+      tableData.value = []
+      total.value = 0
+      totalPages.value = 0
     }
   } catch (error) {
-    message.error('加载数据失败')
-    tableData.value = mockIssues
-    total.value = mockIssues.length
-    totalPages.value = Math.ceil(total.value / pageSize.value)
+    message.error(error instanceof Error ? error.message : '加载数据失败')
+    tableData.value = []
+    total.value = 0
+    totalPages.value = 0
   }
 }
-
-const mockIssues = [
-  { id: 1, issueCode: 'ISSUE001', issueLevel: 'critical', issueType: '数据缺失', issueDesc: '用户张三的身份证号码缺失', relatedData: '用户ID: 1', detectTime: '2024-01-15 10:30:00', status: 'pending' },
-  { id: 2, issueCode: 'ISSUE002', issueLevel: 'warning', issueType: '数据格式错误', issueDesc: '商品价格格式不正确', relatedData: '商品ID: 1001', detectTime: '2024-01-15 09:15:00', status: 'processing' },
-  { id: 3, issueCode: 'ISSUE003', issueLevel: 'info', issueType: '数据重复', issueDesc: '存在重复的组织名称', relatedData: '组织ID: 5', detectTime: '2024-01-15 14:20:00', status: 'resolved' },
-  { id: 4, issueCode: 'ISSUE004', issueLevel: 'critical', issueType: '数据过期', issueDesc: '证书已过期', relatedData: '证书ID: 20', detectTime: '2024-01-15 16:45:00', status: 'pending' },
-  { id: 5, issueCode: 'ISSUE005', issueLevel: 'warning', issueType: '数据不一致', issueDesc: '租户配额使用超出限制', relatedData: '租户ID: 1', detectTime: '2024-01-15 11:00:00', status: 'pending' }
-]
 
 const handleSizeChange = (size) => {
   pageSize.value = size

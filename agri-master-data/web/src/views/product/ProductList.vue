@@ -151,6 +151,7 @@
 
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
+import { message } from 'ant-design-vue'
 import { getProductList, createProduct, updateProduct } from '../../utils/api'
 
 const tableData = ref([])
@@ -194,23 +195,19 @@ const loadData = async () => {
       status: searchForm.status
     })
     if (response.code === 200) {
-      tableData.value = response.data.list || mockProducts
-      total.value = response.data.total || mockProducts.length
+      tableData.value = response.data.list ?? []
+      total.value = response.data.total ?? 0
+    } else {
+      message.error(response.message || '加载数据失败')
+      tableData.value = []
+      total.value = 0
     }
   } catch (error) {
-    console.error('Failed to load products:', error)
-    tableData.value = mockProducts
-    total.value = mockProducts.length
+    message.error(error instanceof Error ? error.message : '加载数据失败')
+    tableData.value = []
+    total.value = 0
   }
 }
-
-const mockProducts = [
-  { id: 1, productCode: 'P001', barcode: '6901234567890', productName: '有机大米', category: 'agricultural', specification: '5kg/袋', unit: '袋', brand: '稻香', status: 1, createTime: '2024-01-10 10:00:00' },
-  { id: 2, productCode: 'P002', barcode: '6901234567891', productName: '复合肥', category: 'agricultural_materials', specification: '25kg/袋', unit: '袋', brand: '农丰', status: 1, createTime: '2024-01-11 14:30:00' },
-  { id: 3, productCode: 'P003', barcode: '6901234567892', productName: '苹果汁', category: 'processed', specification: '500ml/瓶', unit: '瓶', brand: '鲜果', status: 0, createTime: '2024-01-12 09:15:00' },
-  { id: 4, productCode: 'P004', barcode: '6901234567893', productName: '有机蔬菜礼盒', category: 'agricultural', specification: '5kg/盒', unit: '盒', brand: '绿源', status: 1, createTime: '2024-01-13 16:45:00' },
-  { id: 5, productCode: 'P005', barcode: '6901234567894', productName: '农药', category: 'agricultural_materials', specification: '500ml/瓶', unit: '瓶', brand: '农卫士', status: 1, createTime: '2024-01-14 11:20:00' }
-]
 
 const handleCurrentChange = (page) => {
   if (page >= 1 && page <= totalPages.value) {

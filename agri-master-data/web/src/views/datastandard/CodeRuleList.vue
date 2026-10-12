@@ -172,25 +172,22 @@ const loadData = async () => {
       status: searchForm.status
     })
     if (response.code === 200) {
-      tableData.value = response.data.list || mockRules
-      total.value = response.data.total || mockRules.length
+      tableData.value = response.data.list ?? []
+      total.value = response.data.total ?? 0
       totalPages.value = Math.ceil(total.value / pageSize.value)
+    } else {
+      message.error(response.message || '加载数据失败')
+      tableData.value = []
+      total.value = 0
+      totalPages.value = 0
     }
   } catch (error) {
-    message.error('加载数据失败')
-    tableData.value = mockRules
-    total.value = mockRules.length
-    totalPages.value = Math.ceil(total.value / pageSize.value)
+    message.error(error instanceof Error ? error.message : '加载数据失败')
+    tableData.value = []
+    total.value = 0
+    totalPages.value = 0
   }
 }
-
-const mockRules = [
-  { id: 1, ruleCode: 'RULE001', ruleName: '商品编码规则', rulePattern: 'PRD{yyyyMMdd}{seq}', ruleType: 'auto', prefix: 'PRD', seqLength: 6, status: 1, createTime: '2024-01-15 10:30:00' },
-  { id: 2, ruleCode: 'RULE002', ruleName: '订单编码规则', rulePattern: 'ORD{yyyyMMdd}{seq}', ruleType: 'auto', prefix: 'ORD', seqLength: 8, status: 1, createTime: '2024-01-16 14:20:00' },
-  { id: 3, ruleCode: 'RULE003', ruleName: '用户编码规则', rulePattern: 'USR{seq}', ruleType: 'auto', prefix: 'USR', seqLength: 6, status: 0, createTime: '2024-01-17 09:15:00' },
-  { id: 4, ruleCode: 'RULE004', ruleName: '组织编码规则', rulePattern: 'ORG{seq}', ruleType: 'auto', prefix: 'ORG', seqLength: 6, status: 1, createTime: '2024-01-18 16:45:00' },
-  { id: 5, ruleCode: 'RULE005', ruleName: '手动输入编码', rulePattern: 'MANUAL', ruleType: 'manual', prefix: '', seqLength: 0, status: 1, createTime: '2024-01-19 11:00:00' }
-]
 
 const handleSizeChange = (size) => {
   pageSize.value = size

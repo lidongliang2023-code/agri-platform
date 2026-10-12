@@ -195,6 +195,7 @@
 
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
+import { message } from 'ant-design-vue'
 import { getDictList, createDict, updateDict, deleteDict as apiDeleteDict } from '../../utils/api'
 
 const tableData = ref([])
@@ -241,23 +242,19 @@ const loadData = async () => {
       status: searchForm.status
     })
     if (response.code === 200) {
-      tableData.value = response.data.list || mockDicts
-      total.value = response.data.total || mockDicts.length
+      tableData.value = response.data.list ?? []
+      total.value = response.data.total ?? 0
+    } else {
+      message.error(response.message || '加载数据失败')
+      tableData.value = []
+      total.value = 0
     }
   } catch (error) {
-    console.error('Failed to load dicts:', error)
-    tableData.value = mockDicts
-    total.value = mockDicts.length
+    message.error(error instanceof Error ? error.message : '加载数据失败')
+    tableData.value = []
+    total.value = 0
   }
 }
-
-const mockDicts = [
-  { id: 1, dictCode: 'YES_NO', dictName: '是否', dictType: 'base', description: '是/否选择', status: 1, createTime: '2024-01-01 00:00:00' },
-  { id: 2, dictCode: 'USER_TYPE', dictName: '用户类型', dictType: 'user', description: '用户类型字典', status: 1, createTime: '2024-01-02 10:00:00' },
-  { id: 3, dictCode: 'ORG_TYPE', dictName: '组织类型', dictType: 'org', description: '组织类型字典', status: 1, createTime: '2024-01-03 14:30:00' },
-  { id: 4, dictCode: 'AUTH_STATUS', dictName: '认证状态', dictType: 'base', description: '认证状态字典', status: 0, createTime: '2024-01-04 09:15:00' },
-  { id: 5, dictCode: 'PRODUCT_STATUS', dictName: '商品状态', dictType: 'product', description: '商品状态字典', status: 1, createTime: '2024-01-05 16:45:00' }
-]
 
 const handleCurrentChange = (page) => {
   if (page >= 1 && page <= totalPages.value) {

@@ -151,6 +151,7 @@
 
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
+import { message } from 'ant-design-vue'
 import { getSupplierList, createSupplier, updateSupplier } from '../../utils/api'
 
 const tableData = ref([])
@@ -194,23 +195,19 @@ const loadData = async () => {
       status: searchForm.status
     })
     if (response.code === 200) {
-      tableData.value = response.data.list || mockSuppliers
-      total.value = response.data.total || mockSuppliers.length
+      tableData.value = response.data.list ?? []
+      total.value = response.data.total ?? 0
+    } else {
+      message.error(response.message || '加载数据失败')
+      tableData.value = []
+      total.value = 0
     }
   } catch (error) {
-    console.error('Failed to load suppliers:', error)
-    tableData.value = mockSuppliers
-    total.value = mockSuppliers.length
+    message.error(error instanceof Error ? error.message : '加载数据失败')
+    tableData.value = []
+    total.value = 0
   }
 }
-
-const mockSuppliers = [
-  { id: 1, supplierCode: 'S001', supplierName: '农丰化肥厂', supplierType: 'manufacturer', contactPerson: '张三', contactPhone: '13800138001', businessLicense: '91110105XXXXXXXXX', address: '山东省济南市xxx区', status: 1, createTime: '2024-01-10 10:00:00' },
-  { id: 2, supplierCode: 'S002', supplierName: '绿色农资经销', supplierType: 'dealer', contactPerson: '李四', contactPhone: '13800138002', businessLicense: '91110106XXXXXXXXX', address: '河南省郑州市xxx路', status: 1, createTime: '2024-01-11 14:30:00' },
-  { id: 3, supplierCode: 'S003', supplierName: '华南总代理', supplierType: 'agent', contactPerson: '王五', contactPhone: '13800138003', businessLicense: '91110107XXXXXXXXX', address: '广东省广州市xxx街', status: 0, createTime: '2024-01-12 09:15:00' },
-  { id: 4, supplierCode: 'S004', supplierName: '有机食品加工厂', supplierType: 'manufacturer', contactPerson: '赵六', contactPhone: '13800138004', businessLicense: '91110108XXXXXXXXX', address: '四川省成都市xxx园区', status: 1, createTime: '2024-01-13 16:45:00' },
-  { id: 5, supplierCode: 'S005', supplierName: '农资批发中心', supplierType: 'dealer', contactPerson: '钱七', contactPhone: '13800138005', businessLicense: '91110109XXXXXXXXX', address: '浙江省杭州市xxx路', status: 1, createTime: '2024-01-14 11:20:00' }
-]
 
 const handleCurrentChange = (page) => {
   if (page >= 1 && page <= totalPages.value) {

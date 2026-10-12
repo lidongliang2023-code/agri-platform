@@ -62,31 +62,31 @@
           <tr v-for="tenant in tenantList" :key="tenant.id">
             <td class="name-cell">
               <span class="tenant-icon">🏢</span>
-              <span class="tenant-name">{{ tenant.name }}</span>
+              <span class="tenant-name">{{ tenant.tenantName }}</span>
             </td>
-            <td>{{ tenant.code }}</td>
+            <td>{{ tenant.tenantCode }}</td>
             <td>{{ tenant.contactPerson }}</td>
             <td>{{ tenant.contactPhone }}</td>
             <td>
-              <span class="status-badge" :class="tenant.status.toLowerCase()">
-                {{ tenant.status === 'ACTIVE' ? '启用' : '禁用' }}
+              <span class="status-badge" :class="isEnabled(tenant) ? 'active' : 'inactive'">
+                {{ isEnabled(tenant) ? '启用' : '禁用' }}
               </span>
             </td>
-            <td>{{ formatDate(tenant.createdAt) }}</td>
+            <td>{{ formatDate(tenant.createTime) }}</td>
             <td class="action-cell">
               <button class="action-btn view" @click="viewTenant(tenant)">查看</button>
               <button class="action-btn edit" @click="editTenant(tenant)">编辑</button>
               <button 
                 class="action-btn"
-                :class="tenant.status === 'ACTIVE' ? 'disable' : 'enable'"
+                :class="isEnabled(tenant) ? 'disable' : 'enable'"
                 @click="toggleTenantStatus(tenant)"
               >
-                {{ tenant.status === 'ACTIVE' ? '禁用' : '启用' }}
+                {{ isEnabled(tenant) ? '禁用' : '启用' }}
               </button>
               <button 
                 class="action-btn delete" 
                 @click="deleteTenant(tenant.id)"
-                v-if="tenant.status === 'INACTIVE'"
+                v-if="!isEnabled(tenant)"
               >
                 删除
               </button>
@@ -165,8 +165,8 @@
           </div>
           <div class="detail-row">
             <span class="detail-label">状态</span>
-            <span class="status-badge" :class="selectedTenant.status.toLowerCase()">
-              {{ selectedTenant.status === 'ACTIVE' ? '启用' : '禁用' }}
+            <span class="status-badge" :class="isEnabled(selectedTenant) ? 'active' : 'inactive'">
+              {{ isEnabled(selectedTenant) ? '启用' : '禁用' }}
             </span>
           </div>
           <div class="detail-row">
@@ -184,6 +184,7 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
+import { message } from 'ant-design-vue'
 import { getTenantList, createTenant, updateTenant, deleteTenant as apiDeleteTenant, updateTenantStatus } from '../../utils/api'
 
 const searchForm = reactive({
@@ -219,35 +220,43 @@ onMounted(() => {
 const loadTenants = async () => {
   try {
     const response = await getTenantList({
-      page: currentPage.value,
-      size: 10,
+      pageNum: currentPage.value,
+      pageSize: 10,
       keyword: searchForm.keyword,
-      status: searchForm.status
+      // 后端参数名是 tenantStatus（不是 status），传错名字筛选项不会报错、只是不生效
+      tenantStatus: searchForm.status
     })
     if (response.code === 200) {
-      tenantList.value = response.data.list || mockTenants
-      totalCount.value = response.data.total || mockTenants.length
+      tenantList.value = response.data.list ?? []
+      totalCount.value = response.data.total ?? 0
       totalPages.value = Math.ceil(totalCount.value / 10)
-      
-      activeCount.value = tenantList.value.filter(t => t.status === 'ACTIVE').length
-      inactiveCount.value = tenantList.value.filter(t => t.status === 'INACTIVE').length
+
+      activeCount.value = tenantList.value.filter(isEnabled).length
+      inactiveCount.value = tenantList.value.filter(t => !isEnabled(t)).length
+    } else {
+      message.error(response.message || '加载数据失败')
+      tenantList.value = []
+      totalCount.value = 0
+      totalPages.value = 0
     }
   } catch (error) {
-    console.error('Failed to load tenants:', error)
-    tenantList.value = mockTenants
-    totalCount.value = mockTenants.length
-    activeCount.value = mockTenants.filter(t => t.status === 'ACTIVE').length
-    inactiveCount.value = mockTenants.filter(t => t.status === 'INACTIVE').length
+    // 不再回落到演示数据：接口失败就说失败
+    message.error(error instanceof Error ? error.message : '加载数据失败')
+    tenantList.value = []
+    totalCount.value = 0
+    totalPages.value = 0
+    activeCount.value = 0
+    inactiveCount.value = 0
   }
 }
 
-const mockTenants = [
-  { id: 1, name: '阳光农场', code: 'TENANT001', contactPerson: '张三', contactPhone: '13800138001', status: 'ACTIVE', createdAt: '2024-01-15 10:30:00' },
-  { id: 2, name: '绿色果园', code: 'TENANT002', contactPerson: '李四', contactPhone: '13800138002', status: 'ACTIVE', createdAt: '2024-01-16 14:20:00' },
-  { id: 3, name: '生态农庄', code: 'TENANT003', contactPerson: '王五', contactPhone: '13800138003', status: 'INACTIVE', createdAt: '2024-01-17 09:15:00' },
-  { id: 4, name: '现代农业园', code: 'TENANT004', contactPerson: '赵六', contactPhone: '13800138004', status: 'ACTIVE', createdAt: '2024-01-18 16:45:00' },
-  { id: 5, name: '丰收农场', code: 'TENANT005', contactPerson: '钱七', contactPhone: '13800138005', status: 'ACTIVE', createdAt: '2024-01-19 11:00:00' }
-]
+/**
+ * 租户是否启用。
+ *
+ * 接口返回的 status 是数字（StatusEnum：1=启用 / 0=禁用），不是 'ACTIVE' 字符串——
+ * 原模板拿字符串比较，结果每一行都会显示成"禁用"，而且 `.toLowerCase()` 在数字上会直接抛错。
+ */
+const isEnabled = (tenant) => Number(tenant?.status) === 1
 
 const handleSearch = () => {
   currentPage.value = 1
@@ -290,7 +299,7 @@ const closeModal = () => {
 
 const handleAdd = async () => {
   if (!form.name || !form.code) {
-    alert('请填写必填项')
+    message.warning('请填写必填项')
     return
   }
   
@@ -302,28 +311,30 @@ const handleAdd = async () => {
       response = await createTenant(form)
     }
     if (response.code === 200) {
-      alert(form.id ? '修改成功' : '创建成功')
+      message.success(form.id ? '修改成功' : '创建成功')
       closeModal()
       loadTenants()
     } else {
-      alert(response.message || '操作失败')
+      message.error(response.message || '操作失败')
     }
   } catch (error) {
-    alert('操作失败')
+    message.error(error instanceof Error ? error.message : '操作失败')
   }
 }
 
 const toggleTenantStatus = async (tenant) => {
   try {
-    const response = await updateTenantStatus(tenant.id, tenant.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE')
+    // 启停传数值（StatusEnum 口径），不是 'ACTIVE'/'INACTIVE' 字符串
+    const next = isEnabled(tenant) ? 0 : 1
+    const response = await updateTenantStatus(tenant.id, next)
     if (response.code === 200) {
-      alert(tenant.status === 'ACTIVE' ? '禁用成功' : '启用成功')
+      message.success(isEnabled(tenant) ? '已禁用' : '已启用')
       loadTenants()
     } else {
-      alert(response.message || '操作失败')
+      message.error(response.message || '操作失败')
     }
   } catch (error) {
-    alert('操作失败')
+    message.error(error instanceof Error ? error.message : '操作失败')
   }
 }
 
@@ -332,19 +343,25 @@ const deleteTenant = async (id) => {
   try {
     const response = await apiDeleteTenant(id)
     if (response.code === 200) {
-      alert('删除成功')
+      message.success('删除成功')
       loadTenants()
     } else {
-      alert(response.message || '删除失败')
+      message.error(response.message || '删除失败')
     }
   } catch (error) {
-    alert('删除失败')
+    message.error(error instanceof Error ? error.message : '删除失败')
   }
 }
 
-const formatDate = (date) => {
-  if (!date) return ''
-  return date.split(' ')[0]
+/**
+ * 只取日期部分。
+ *
+ * 后端返回的是 ISO 形态（`2026-10-12T17:32:41`），而旧实现只按空格切分，
+ * 于是 ISO 会被原样透传，界面上出现 "2026-10-12T17:32:41" 这种带 T 的写法。
+ */
+const formatDate = (value) => {
+  if (!value) return ''
+  return String(value).replace('T', ' ').split(' ')[0]
 }
 </script>
 

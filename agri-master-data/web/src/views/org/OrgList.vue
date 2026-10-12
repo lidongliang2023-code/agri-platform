@@ -137,6 +137,7 @@
 
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
+import { message } from 'ant-design-vue'
 import { getOrgList, createOrg, updateOrg, deleteOrg } from '../../utils/api'
 
 const tableData = ref([])
@@ -182,23 +183,19 @@ const loadData = async () => {
       orgType: searchForm.orgType
     })
     if (response.code === 200) {
-      tableData.value = response.data.list || mockOrgs
-      total.value = response.data.total || mockOrgs.length
+      tableData.value = response.data.list ?? []
+      total.value = response.data.total ?? 0
+    } else {
+      message.error(response.message || '加载数据失败')
+      tableData.value = []
+      total.value = 0
     }
   } catch (error) {
-    console.error('Failed to load orgs:', error)
-    tableData.value = mockOrgs
-    total.value = mockOrgs.length
+    message.error(error instanceof Error ? error.message : '加载数据失败')
+    tableData.value = []
+    total.value = 0
   }
 }
-
-const mockOrgs = [
-  { id: 1, orgCode: 'ORG001', orgName: '阳光农业科技有限公司', orgType: 'enterprise', legalPerson: '张三', contactPerson: '李四', contactPhone: '13800138001', address: '北京市朝阳区xxx路xxx号', authStatus: 'verified', createTime: '2024-01-10 10:00:00' },
-  { id: 2, orgCode: 'ORG002', orgName: '绿色果蔬合作社', orgType: 'cooperative', legalPerson: '王五', contactPerson: '赵六', contactPhone: '13800138002', address: '山东省济南市xxx区', authStatus: 'verified', createTime: '2024-01-11 14:30:00' },
-  { id: 3, orgCode: 'ORG003', orgName: '李家农场', orgType: 'farmer', legalPerson: '李七', contactPerson: '李七', contactPhone: '13800138003', address: '河南省郑州市xxx村', authStatus: 'pending', createTime: '2024-01-12 09:15:00' },
-  { id: 4, orgCode: 'ORG004', orgName: '现代农业示范园', orgType: 'enterprise', legalPerson: '钱八', contactPerson: '孙九', contactPhone: '13800138004', address: '四川省成都市xxx园区', authStatus: 'unverified', createTime: '2024-01-13 16:45:00' },
-  { id: 5, orgCode: 'ORG005', orgName: '丰收果园', orgType: 'cooperative', legalPerson: '周十', contactPerson: '吴十一', contactPhone: '13800138005', address: '陕西省西安市xxx镇', authStatus: 'verified', createTime: '2024-01-14 11:20:00' }
-]
 
 const handleCurrentChange = (page) => {
   if (page >= 1 && page <= totalPages.value) {

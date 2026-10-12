@@ -184,25 +184,23 @@ const loadData = async () => {
       status: searchForm.status
     })
     if (response.code === 200) {
-      tableData.value = response.data.list || mockTasks
-      total.value = response.data.total || mockTasks.length
+      // 用 ?? 而不是 ||：空数组与 0 都是**真实结果**，|| 会把它们换成演示数据
+      tableData.value = response.data.list ?? []
+      total.value = response.data.total ?? 0
       totalPages.value = Math.ceil(total.value / pageSize.value)
+    } else {
+      message.error(response.message || '加载数据失败')
+      tableData.value = []
+      total.value = 0
     }
   } catch (error) {
-    message.error('加载数据失败')
-    tableData.value = mockTasks
-    total.value = mockTasks.length
-    totalPages.value = Math.ceil(total.value / pageSize.value)
+    // 不再回落到演示数据：接口失败就说失败，否则页面满屏数字却全是假的
+    message.error(error instanceof Error ? error.message : '加载数据失败')
+    tableData.value = []
+    total.value = 0
+    totalPages.value = 0
   }
 }
-
-const mockTasks = [
-  { id: 1, taskCode: 'TASK001', taskName: '租户数据同步', targetSystem: 'ERP系统', dataType: '租户数据', triggerType: 'auto', status: 'success', progress: 100, executeTime: '2024-01-15 10:30:00', errorMessage: '' },
-  { id: 2, taskCode: 'TASK002', taskName: '商品数据同步', targetSystem: '电商平台', dataType: '商品数据', triggerType: 'auto', status: 'running', progress: 65, executeTime: '2024-01-15 14:20:00', errorMessage: '' },
-  { id: 3, taskCode: 'TASK003', taskName: '用户数据同步', targetSystem: 'CRM系统', dataType: '用户数据', triggerType: 'manual', status: 'failed', progress: 30, executeTime: '2024-01-15 09:15:00', errorMessage: '网络超时' },
-  { id: 4, taskCode: 'TASK004', taskName: '订单数据同步', targetSystem: '财务系统', dataType: '订单数据', triggerType: 'auto', status: 'pending', progress: 0, executeTime: '2024-01-15 16:45:00', errorMessage: '' },
-  { id: 5, taskCode: 'TASK005', taskName: '库存数据同步', targetSystem: 'WMS系统', dataType: '库存数据', triggerType: 'auto', status: 'paused', progress: 45, executeTime: '2024-01-15 11:00:00', errorMessage: '' }
-]
 
 const handleSizeChange = (size) => {
   pageSize.value = size

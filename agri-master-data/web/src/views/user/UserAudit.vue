@@ -192,37 +192,24 @@ const loadData = async () => {
       authType: searchForm.authType
     })
     if (response.code === 200) {
-      tableData.value = response.data.list || mockAudits
-      total.value = response.data.total || mockAudits.length
+      tableData.value = response.data.list ?? []
+      total.value = response.data.total ?? 0
       totalPages.value = Math.ceil(total.value / pageSize.value)
     } else {
-      message.warning('获取数据失败，使用本地数据')
-      tableData.value = mockAudits
-      total.value = mockAudits.length
-      totalPages.value = Math.ceil(total.value / pageSize.value)
+      message.error(response.message || '加载数据失败')
+      tableData.value = []
+      total.value = 0
+      totalPages.value = 0
     }
   } catch (error) {
-    console.error('认证审核列表加载失败:', error)
-    if (error.response) {
-      message.error(`加载失败: ${error.response.status} - ${error.response.statusText}`)
-    } else if (error.request) {
-      message.warning('网络请求失败，使用本地数据')
-    } else {
-      message.error('请求配置错误')
-    }
-    tableData.value = mockAudits
-    total.value = mockAudits.length
-    totalPages.value = Math.ceil(total.value / pageSize.value)
+    // 三种失败原因（后端拒绝 / 网络不通 / 配置错）都如实报出来，但**不再回落本地数据**：
+    // 之前"网络失败就用本地数据"会把一次网络故障伪装成一次成功的加载。
+    message.error(error instanceof Error ? error.message : '认证审核列表加载失败')
+    tableData.value = []
+    total.value = 0
+    totalPages.value = 0
   }
 }
-
-const mockAudits = [
-  { id: 1, username: 'user001', realName: '张三', idCardType: '身份证', idCardNo: '110101199001011234', phone: '13800138001', authType: 'individual', authStatus: 'pending', createTime: '2024-01-15 10:30:00' },
-  { id: 2, username: 'user002', realName: '李四', idCardType: '身份证', idCardNo: '110101199001015678', phone: '13800138002', authType: 'individual', authStatus: 'approved', createTime: '2024-01-15 09:15:00' },
-  { id: 3, username: 'user003', realName: '王五', idCardType: '营业执照', idCardNo: '911100001234567890', phone: '13800138003', authType: 'enterprise', authStatus: 'pending', createTime: '2024-01-15 14:20:00' },
-  { id: 4, username: 'user004', realName: '赵六', idCardType: '身份证', idCardNo: '110101199001019012', phone: '13800138004', authType: 'individual', authStatus: 'rejected', createTime: '2024-01-14 16:45:00' },
-  { id: 5, username: 'user005', realName: '钱七', idCardType: '营业执照', idCardNo: '911100009876543210', phone: '13800138005', authType: 'enterprise', authStatus: 'approved', createTime: '2024-01-14 11:00:00' }
-]
 
 const handleSizeChange = (size) => {
   pageSize.value = size

@@ -149,6 +149,7 @@
 
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
+import { message } from 'ant-design-vue'
 import { getCustomerList, createCustomer, updateCustomer } from '../../utils/api'
 
 const tableData = ref([])
@@ -187,23 +188,19 @@ const loadData = async () => {
       status: searchForm.status
     })
     if (response.code === 200) {
-      tableData.value = response.data.list || mockCustomers
-      total.value = response.data.total || mockCustomers.length
+      tableData.value = response.data.list ?? []
+      total.value = response.data.total ?? 0
+    } else {
+      message.error(response.message || '加载数据失败')
+      tableData.value = []
+      total.value = 0
     }
   } catch (error) {
-    console.error('Failed to load customers:', error)
-    tableData.value = mockCustomers
-    total.value = mockCustomers.length
+    message.error(error instanceof Error ? error.message : '加载数据失败')
+    tableData.value = []
+    total.value = 0
   }
 }
-
-const mockCustomers = [
-  { id: 1, customerCode: 'C001', customerName: '阳光超市', customerType: 'enterprise', contactPerson: '张三', contactPhone: '13800138001', email: 'zhang@sunny.com', address: '北京市朝阳区xxx路', status: 1, createTime: '2024-01-10 10:00:00' },
-  { id: 2, customerCode: 'C002', customerName: '李四', customerType: 'individual', contactPerson: '李四', contactPhone: '13800138002', email: 'li@test.com', address: '上海市浦东新区xxx号', status: 1, createTime: '2024-01-11 14:30:00' },
-  { id: 3, customerCode: 'C003', customerName: '绿色食品公司', customerType: 'enterprise', contactPerson: '王五', contactPhone: '13800138003', email: 'wang@green.com', address: '广东省广州市xxx区', status: 0, createTime: '2024-01-12 09:15:00' },
-  { id: 4, customerCode: 'C004', customerName: '赵六', customerType: 'individual', contactPerson: '赵六', contactPhone: '13800138004', email: 'zhao@test.com', address: '江苏省南京市xxx街', status: 1, createTime: '2024-01-13 16:45:00' },
-  { id: 5, customerCode: 'C005', customerName: '农产品批发中心', customerType: 'enterprise', contactPerson: '钱七', contactPhone: '13800138005', email: 'qian@wholesale.com', address: '浙江省杭州市xxx路', status: 1, createTime: '2024-01-14 11:20:00' }
-]
 
 const handleCurrentChange = (page) => {
   if (page >= 1 && page <= totalPages.value) {

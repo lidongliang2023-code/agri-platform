@@ -8,6 +8,7 @@ import com.agri.admin.vo.TenantDetailVO;
 import com.agri.admin.vo.TenantPackageVO;
 import com.agri.admin.vo.TenantStatisticsVO;
 import com.agri.common.entity.PageResult;
+import com.agri.common.enums.StatusEnum;
 import com.agri.common.exception.BusinessException;
 import com.agri.common.util.SnowflakeIdUtil;
 import com.agri.masterdata.dto.TenantSaveDTO;
@@ -52,7 +53,12 @@ public class AdminTenantServiceImpl implements IAdminTenantService {
         LambdaQueryWrapper<Tenant> wrapper = new LambdaQueryWrapper<>();
         
         if (tenantStatus != null && !tenantStatus.isEmpty()) {
-            wrapper.eq(Tenant::getStatus, tenantStatus);
+            // status 是 INT，直接 eq(String "ACTIVE") 会被 MySQL 隐式转成 0 ——
+            // 于是"启用"筛出 status=0 的行、"禁用"几乎筛不出任何行，两个筛选项都错。
+            //
+            // 这里按 StatusEnum 的口径（1=启用 / 0=禁用）翻译，同时接受前端可能传来的
+            // "ACTIVE"/"1" 两种写法，避免前后端口径切换期间出现静默空列表。
+            wrapper.eq(Tenant::getStatus, parseTenantStatus(tenantStatus));
         }
         if (tenantType != null && !tenantType.isEmpty()) {
             wrapper.eq(Tenant::getTenantType, tenantType);
@@ -110,7 +116,9 @@ public class AdminTenantServiceImpl implements IAdminTenantService {
         tenant.setTenantName(dto.getName());
         tenant.setContactName(dto.getContactPerson());
         tenant.setContactPhone(dto.getContactPhone());
-        tenant.setStatus("ACTIVE".equals(dto.getStatus()) ? 0 : 1);
+        // 统一到 StatusEnum：1=启用、0=禁用。原实现是反的（ACTIVE→0），
+        // 与共享包 StatusEnum 以及本模块其它统计口径互相矛盾。
+        tenant.setStatus(parseTenantStatus(dto.getStatus()));
         
         tenantMapper.insert(tenant);
     }
@@ -141,8 +149,10 @@ public class AdminTenantServiceImpl implements IAdminTenantService {
             throw new BusinessException("租户不存在");
         }
         
-        tenant.setStatus(-1);
-        tenantMapper.updateById(tenant);
+        // 逻辑删除走 del_flag（MyBatis-Plus 已配 logic-delete-field=delFlag，deleteById 会自动置 1）。
+        // 原实现把 status 置成 -1：既绕过了框架的逻辑删除，又让列表照旧能查到这条记录
+        // （列表不按 del_flag 过滤）——"删了还在"就是这么来的。
+        tenantMapper.deleteById(id);
     }
 
     @Override
@@ -299,15 +309,34 @@ public class AdminTenantServiceImpl implements IAdminTenantService {
             new LambdaQueryWrapper<Tenant>().eq(Tenant::getTenantType, "individual")
         ));
         summary.setActiveTenants(tenantMapper.selectCount(
-            new LambdaQueryWrapper<Tenant>().eq(Tenant::getStatus, 0)
+            new LambdaQueryWrapper<Tenant>().eq(Tenant::getStatus, StatusEnum.ENABLE.getCode())
         ));
         summary.setInactiveTenants(tenantMapper.selectCount(
-            new LambdaQueryWrapper<Tenant>().eq(Tenant::getStatus, 1)
+            new LambdaQueryWrapper<Tenant>().eq(Tenant::getStatus, StatusEnum.DISABLE.getCode())
         ));
-        summary.setExpiredTenants(0L);
-        summary.setAvgQualityScore(96.8);
+        // 到期判定与质量评分都没有数据来源，留空而不是写死 0 / 96.8
+        summary.setExpiredTenants(null);
+        summary.setAvgQualityScore(null);
         summary.setTotalUsers(userMapper.selectCount(new LambdaQueryWrapper<User>()));
         return summary;
+    }
+
+    /**
+     * 把前端传来的租户状态翻译成 StatusEnum 的数值口径。
+     *
+     * <p>同时接受 "ACTIVE"/"INACTIVE" 与 "1"/"0"：前者是历史上前端表单里的值，
+     * 后者是 StatusEnum 的值。切换期间两边都可能出现，认不出的一律按"启用"处理，
+     * 绝不因为一个筛选项拼错就把整张列表变成空的。</p>
+     */
+    private Integer parseTenantStatus(String raw) {
+        if (raw == null || raw.isEmpty()) {
+            return StatusEnum.ENABLE.getCode();
+        }
+        String normalized = raw.trim().toUpperCase();
+        if ("INACTIVE".equals(normalized) || "0".equals(normalized) || "DISABLE".equals(normalized)) {
+            return StatusEnum.DISABLE.getCode();
+        }
+        return StatusEnum.ENABLE.getCode();
     }
 
     private TenantDetailVO.UserOrgStats getUserOrgStats(Long tenantId) {

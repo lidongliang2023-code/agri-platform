@@ -108,25 +108,22 @@ const loadData = async () => {
       endTime: searchForm.endTime
     })
     if (response.code === 200) {
-      tableData.value = response.data.list || mockLogs
-      total.value = response.data.total || mockLogs.length
+      tableData.value = response.data.list ?? []
+      total.value = response.data.total ?? 0
       totalPages.value = Math.ceil(total.value / pageSize.value)
+    } else {
+      message.error(response.message || '加载数据失败')
+      tableData.value = []
+      total.value = 0
+      totalPages.value = 0
     }
   } catch (error) {
-    message.error('加载数据失败')
-    tableData.value = mockLogs
-    total.value = mockLogs.length
-    totalPages.value = Math.ceil(total.value / pageSize.value)
+    message.error(error instanceof Error ? error.message : '加载数据失败')
+    tableData.value = []
+    total.value = 0
+    totalPages.value = 0
   }
 }
-
-const mockLogs = [
-  { id: 1, username: 'admin', operationType: 'login', operationDesc: '用户登录系统', module: '系统管理', targetId: '', ipAddress: '192.168.1.100', createTime: '2024-01-15 10:30:00' },
-  { id: 2, username: 'admin', operationType: 'create', operationDesc: '新增租户：阳光农场', module: '租户管理', targetId: '1', ipAddress: '192.168.1.100', createTime: '2024-01-15 10:35:00' },
-  { id: 3, username: 'user1', operationType: 'update', operationDesc: '修改用户信息', module: '用户管理', targetId: '5', ipAddress: '192.168.1.101', createTime: '2024-01-15 11:00:00' },
-  { id: 4, username: 'admin', operationType: 'delete', operationDesc: '删除字典项', module: '数据标准', targetId: '10', ipAddress: '192.168.1.100', createTime: '2024-01-15 11:30:00' },
-  { id: 5, username: 'user2', operationType: 'query', operationDesc: '查询商品列表', module: '商品管理', targetId: '', ipAddress: '192.168.1.102', createTime: '2024-01-15 12:00:00' }
-]
 
 const handleSizeChange = (size) => {
   pageSize.value = size
