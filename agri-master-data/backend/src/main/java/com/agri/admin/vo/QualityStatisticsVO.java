@@ -35,6 +35,12 @@ public class QualityStatisticsVO {
      * 需要四个状态齐全，缺两个就只能编 —— 所以改成列表一次给全。</p>
      */
     private List<StatusStatistic> statusStatistics;
+
+    /** 各规则检出问题的排行（按检出数倒序） */
+    private List<RuleRanking> ruleRanking;
+
+    /** 检测任务累计执行次数（所有任务 run_count 之和） */
+    private Long taskExecutions;
     private List<QualityTrend> qualityTrend;
     private List<QualityTrend> trends;
 
@@ -79,5 +85,18 @@ public class QualityStatisticsVO {
         /** 状态码：pending / processing / resolved / ignored */
         private String status;
         private Long issueCount;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class RuleRanking {
+        private Long ruleId;
+        private String ruleName;
+        /** 该规则检出且尚未解决（pending / processing）的问题数 */
+        private Long count;
+        /** 占全部问题的比例（%）。没有检测样本量，因此不是"命中率"，页面按"占比"表述。 */
+        private Double hitRate;
     }
 }

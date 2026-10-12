@@ -36,6 +36,8 @@ public class QualityIssue extends BaseEntity {
     private String status;
     private String handler;
     private String resolveRemark;
+    /** 检出的质量规则ID（手工登记的问题为空） */
+    private Long ruleId;
     private LocalDateTime detectTime;
     private LocalDateTime resolveTime;
     private Integer delFlag;

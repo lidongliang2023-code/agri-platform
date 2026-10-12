@@ -83,11 +83,12 @@
                 <div class="rate-bar">
                   <div 
                     class="rate-fill" 
-                    :style="{width: task.successRate + '%'}"
+                    :style="{width: (task.successRate ?? 0) + '%'}"
                     :class="getRateClass(task.successRate)"
                   ></div>
                 </div>
-                <span>{{ task.successRate }}%</span>
+                <!-- 成功率为空表示"没有执行引擎、不编数字"，显示 — 而不是 0% -->
+                <span>{{ task.successRate == null ? '—' : task.successRate + '%' }}</span>
               </div>
             </td>
             <td class="action-cell">
@@ -117,6 +118,11 @@
           <button class="close-btn" @click="closeAddModal">×</button>
         </div>
         <div class="modal-body">
+          <!-- 任务编码是后端的唯一标识，原表单没有这一项，不补上就没法新建任务 -->
+          <div class="form-group">
+            <label>任务编码 *</label>
+            <input type="text" v-model="form.code" class="form-input" placeholder="如 TASK-USER-DAILY" :disabled="isEdit" />
+          </div>
           <div class="form-group">
             <label>任务名称 *</label>
             <input type="text" v-model="form.name" class="form-input" placeholder="请输入任务名称" />
@@ -171,6 +177,11 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
+import { message } from 'ant-design-vue'
+import {
+  getQualityTaskList, createQualityTask, updateQualityTask,
+  deleteQualityTask, runQualityTask, getQualityRuleList
+} from '../../utils/api'
 
 const showAddModal = ref(false)
 const isEdit = ref(false)
@@ -181,6 +192,7 @@ const totalPages = ref(1)
 
 const form = reactive({
   id: null,
+  code: '',
   name: '',
   type: 'manual',
   cronExpression: '0 0 2 * * ?',
@@ -190,26 +202,8 @@ const form = reactive({
 
 const tasks = ref([])
 const availableRules = ref([])
-
-const mockTasks = [
-  { id: 1, name: '每日用户数据质量检测', type: 'scheduled', ruleNames: ['用户名完整性检查', '手机号格式验证'], ruleIds: [1, 2], nextRunTime: '2026-05-10 02:00:00', status: 'scheduled', lastRunTime: '2026-05-09 02:00:00', successRate: 99 },
-  { id: 2, name: '实时用户认证检测', type: 'realtime', ruleNames: ['身份证号验证', '邮箱格式验证'], ruleIds: [3, 7], nextRunTime: '-', status: 'running', lastRunTime: '刚刚', successRate: 98 },
-  { id: 3, name: '每周组织数据一致性检查', type: 'scheduled', ruleNames: ['组织名称一致性'], ruleIds: [4], nextRunTime: '2026-05-12 02:00:00', status: 'scheduled', lastRunTime: '2026-05-05 02:00:00', successRate: 100 },
-  { id: 4, name: '供应商资质到期检测', type: 'scheduled', ruleNames: ['供应商资质有效期'], ruleIds: [8], nextRunTime: '2026-05-10 02:00:00', status: 'completed', lastRunTime: '2026-05-09 02:00:00', successRate: 95 },
-  { id: 5, name: '商品编码唯一性检查', type: 'manual', ruleNames: ['商品编码唯一性'], ruleIds: [5], nextRunTime: '-', status: 'failed', lastRunTime: '2026-05-08 15:30:00', successRate: 90 },
-  { id: 6, name: '客户数据时效性检测', type: 'scheduled', ruleNames: ['数据更新时效性'], ruleIds: [6], nextRunTime: '2026-05-10 02:00:00', status: 'scheduled', lastRunTime: '2026-05-09 02:00:00', successRate: 97 }
-]
-
-const mockRules = [
-  { id: 1, name: '用户名完整性检查' },
-  { id: 2, name: '手机号格式验证' },
-  { id: 3, name: '身份证号验证' },
-  { id: 4, name: '组织名称一致性' },
-  { id: 5, name: '商品编码唯一性' },
-  { id: 6, name: '数据更新时效性' },
-  { id: 7, name: '邮箱格式验证' },
-  { id: 8, name: '供应商资质有效期' }
-]
+// 原来这里是一份 6 条的写死任务数组与 8 条写死规则下拉：增删改、触发执行全在内存里。
+// 现在数据来自 /admin/masterdata/quality/tasks，规则下拉来自 /quality/rules。
 
 const filteredTasks = computed(() => {
   return tasks.value.filter(task => {
@@ -240,12 +234,16 @@ const getStatusText = (status) => {
     scheduled: '待执行',
     running: '执行中',
     completed: '已完成',
-    failed: '失败'
+    failed: '失败',
+    paused: '已暂停'
   }
   return texts[status] || status
 }
 
 const getRateClass = (rate) => {
+  // 成功率为 null 时不套用任何配色：原来 null >= 95 为 false，会一路落到 poor 的红色 ——
+  // 把"暂无数据"画成了"差"。
+  if (rate == null) return ''
   if (rate >= 95) return 'excellent'
   if (rate >= 90) return 'good'
   if (rate >= 80) return 'normal'
@@ -267,10 +265,44 @@ const onTypeChange = () => {
   }
 }
 
-const loadData = () => {
-  tasks.value = mockTasks
-  availableRules.value = mockRules
-  totalPages.value = Math.ceil(tasks.value.length / 10)
+/** 接口行 → 页面行（接口字段是 taskName / taskType / runCount / lastFailCount） */
+const toRow = (row) => ({
+  id: row.id,
+  code: row.taskCode,
+  name: row.taskName,
+  type: row.taskType || 'manual',
+  ruleIds: row.ruleIds ?? [],
+  ruleNames: row.ruleNames ?? [],
+  nextRunTime: row.nextRunTime,
+  status: row.status || 'scheduled',
+  lastRunTime: row.lastRunTime,
+  successRate: row.successRate,
+  runCount: row.runCount ?? 0,
+  lastFailCount: row.lastFailCount,
+  cronExpression: row.cronExpression
+})
+
+const loadData = async () => {
+  try {
+    const [taskRes, ruleRes] = await Promise.all([
+      getQualityTaskList(),
+      getQualityRuleList()
+    ])
+    if (taskRes.code !== 200) {
+      message.error(taskRes.message || '加载检测任务失败')
+      tasks.value = []
+      return
+    }
+    // 不再回落到演示数据：失败就说失败
+    tasks.value = (taskRes.data ?? []).map(toRow)
+    totalPages.value = Math.max(1, Math.ceil(tasks.value.length / 10))
+    if (ruleRes.code === 200) {
+      availableRules.value = (ruleRes.data ?? []).map(r => ({ id: r.id, name: r.ruleName }))
+    }
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '加载检测任务失败')
+    tasks.value = []
+  }
 }
 
 onMounted(() => {
@@ -289,67 +321,81 @@ const editTask = (task) => {
   isEdit.value = true
   Object.assign(form, {
     id: task.id,
+    code: task.code,
     name: task.name,
     type: task.type,
+    cronExpression: task.cronExpression || '0 0 2 * * ?',
     ruleIds: [...task.ruleIds],
-    enabled: task.status !== 'disabled'
+    enabled: task.status !== 'paused'
   })
   showAddModal.value = true
 }
 
-const deleteTask = (task) => {
-  if (confirm(`确定删除任务 "${task.name}" 吗？`)) {
-    tasks.value = tasks.value.filter(t => t.id !== task.id)
-    alert('任务已删除')
+const deleteTask = async (task) => {
+  if (!confirm(`确定删除任务 "${task.name}" 吗？`)) {
+    return
+  }
+  try {
+    const response = await deleteQualityTask(task.id)
+    if (response.code === 200) {
+      message.success('任务已删除')
+      loadData()
+    } else {
+      message.error(response.message || '删除失败')
+    }
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '删除失败')
   }
 }
 
-const runTask = (task) => {
-  if (task.status === 'running') return
-  task.status = 'running'
-  alert(`任务 "${task.name}" 已开始执行`)
-  setTimeout(() => {
-    task.status = 'completed'
-    task.lastRunTime = '刚刚'
-  }, 2000)
+const runTask = async (task) => {
+  try {
+    const response = await runQualityTask(task.id)
+    if (response.code === 200) {
+      // 如实说明这一步做了什么：只记录了一次巡检，检测引擎尚未实现
+      message.success(`已记录一次巡检（关联 ${response.data?.lastSuccessCount ?? 0} 条规则；检测引擎尚未实现，非真实规则计算）`)
+      loadData()
+    } else {
+      message.error(response.message || '触发失败')
+    }
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '触发失败')
+  }
 }
 
-const saveTask = () => {
+const saveTask = async () => {
+  if (!form.code) {
+    message.warning('请填写任务编码')
+    return
+  }
   if (!form.name || form.ruleIds.length === 0) {
-    alert('请填写任务名称并选择至少一个检测规则')
+    message.warning('请填写任务名称并选择至少一个检测规则')
     return
   }
 
-  if (isEdit.value) {
-    const index = tasks.value.findIndex(t => t.id === form.id)
-    if (index !== -1) {
-      const ruleNames = form.ruleIds.map(id => availableRules.value.find(r => r.id === id)?.name || '')
-      tasks.value[index] = {
-        ...tasks.value[index],
-        name: form.name,
-        type: form.type,
-        ruleIds: [...form.ruleIds],
-        ruleNames,
-        status: form.enabled ? tasks.value[index].status : 'disabled'
-      }
-    }
-    alert('任务已更新')
-  } else {
-    const ruleNames = form.ruleIds.map(id => availableRules.value.find(r => r.id === id)?.name || '')
-    tasks.value.push({
-      id: Date.now(),
-      name: form.name,
-      type: form.type,
-      ruleIds: [...form.ruleIds],
-      ruleNames,
-      nextRunTime: form.type === 'scheduled' ? '2026-05-10 02:00:00' : '-',
-      status: form.enabled ? 'scheduled' : 'disabled',
-      lastRunTime: '-',
-      successRate: 0
-    })
-    alert('任务已创建')
+  const payload = {
+    taskCode: form.code,
+    taskName: form.name,
+    taskType: form.type,
+    cronExpression: form.type === 'scheduled' ? form.cronExpression : null,
+    status: form.enabled ? 'scheduled' : 'paused',
+    ruleIds: form.ruleIds
   }
-  closeAddModal()
+
+  try {
+    const response = isEdit.value
+      ? await updateQualityTask(form.id, payload)
+      : await createQualityTask(payload)
+    if (response.code === 200) {
+      message.success(isEdit.value ? '任务已更新' : '任务已创建')
+      closeAddModal()
+      loadData()
+    } else {
+      message.error(response.message || '保存失败')
+    }
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '保存失败')
+  }
 }
 
 const prevPage = () => {

@@ -10,8 +10,12 @@ import com.agri.common.exception.BusinessException;
 import com.agri.common.security.SecurityUtils;
 import com.agri.masterdata.entity.QualityIssue;
 import com.agri.masterdata.entity.QualityIssueHandle;
+import com.agri.masterdata.entity.QualityRule;
+import com.agri.masterdata.entity.QualityTask;
 import com.agri.masterdata.mapper.QualityIssueHandleMapper;
 import com.agri.masterdata.mapper.QualityIssueMapper;
+import com.agri.masterdata.mapper.QualityRuleMapper;
+import com.agri.masterdata.mapper.QualityTaskMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -44,6 +48,8 @@ public class AdminQualityServiceImpl implements IAdminQualityService {
 
     private final QualityIssueMapper qualityIssueMapper;
     private final QualityIssueHandleMapper qualityIssueHandleMapper;
+    private final QualityRuleMapper qualityRuleMapper;
+    private final QualityTaskMapper qualityTaskMapper;
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     private static final DateTimeFormatter DATETIME_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
@@ -74,6 +80,8 @@ public class AdminQualityServiceImpl implements IAdminQualityService {
         vo.setOverallScore(null);
         vo.setDomainStatistics(buildDomainStatistics(tenantId));
         vo.setStatusStatistics(buildStatusStatistics(tenantId));
+        vo.setRuleRanking(buildRuleRanking(total));
+        vo.setTaskExecutions(buildTaskExecutions());
         vo.setDomainQualities(new ArrayList<>());
         vo.setQualityTrend(getQualityTrend(timeRange, null));
         vo.setTrends(vo.getQualityTrend());
@@ -337,6 +345,44 @@ public class AdminQualityServiceImpl implements IAdminQualityService {
             list.add(stat);
         }
         return list;
+    }
+
+    /**
+     * 各规则检出问题的排行。
+     *
+     * <p>口径说明：只统计**尚未解决**的问题（pending / processing），且按"占全部问题的比例"排序，
+     * 不叫"命中率" —— 命中率需要检测样本量（跑了多少次、检出多少次），当前没有检测引擎，
+     * 拿不到分母。名字改了、含义写清楚，比给一个算不出来的百分数强。</p>
+     */
+    private List<QualityStatisticsVO.RuleRanking> buildRuleRanking(long total) {
+        List<QualityStatisticsVO.RuleRanking> ranking = new ArrayList<>();
+        List<QualityRule> rules = qualityRuleMapper.selectList(null);
+        for (QualityRule rule : rules) {
+            Long count = qualityIssueMapper.selectCount(
+                    new LambdaQueryWrapper<QualityIssue>()
+                            .eq(QualityIssue::getRuleId, rule.getId())
+                            .in(QualityIssue::getStatus, List.of("pending", "processing")));
+            if (count == null || count == 0) {
+                continue;
+            }
+            QualityStatisticsVO.RuleRanking item = new QualityStatisticsVO.RuleRanking();
+            item.setRuleId(rule.getId());
+            item.setRuleName(rule.getRuleName());
+            item.setCount(count);
+            item.setHitRate(total > 0 ? Math.round(count * 10000.0 / total) / 100.0 : 0.0);
+            ranking.add(item);
+        }
+        ranking.sort((a, b) -> Long.compare(b.getCount(), a.getCount()));
+        return ranking;
+    }
+
+    /** 任务累计执行次数（所有任务 run_count 之和）。成功率不在这里算 —— 没有引擎时它没有语义。 */
+    private Long buildTaskExecutions() {
+        long total = 0;
+        for (QualityTask task : qualityTaskMapper.selectList(null)) {
+            total += (task.getRunCount() == null ? 0 : task.getRunCount());
+        }
+        return total;
     }
 
     /** 处置：改问题状态 + 追加一条处置记录 */

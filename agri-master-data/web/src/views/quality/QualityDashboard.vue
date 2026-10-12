@@ -49,14 +49,16 @@
         <div class="stat-icon purple">🔄</div>
         <div class="stat-content">
           <div class="stat-value">{{ stats.taskExecutions ?? '—' }}</div>
-          <div class="stat-label">检测任务执行次数 · 未接入</div>
+          <!-- 标签里的"未接入"按有无数据决定：接了任务族之后这一项已经有真值，
+               写死的后缀会让"57 次 · 未接入"自相矛盾 -->
+          <div class="stat-label">检测任务执行次数{{ stats.taskExecutions == null ? ' · 未接入' : '' }}</div>
         </div>
       </div>
       <div class="stat-card">
         <div class="stat-icon teal">📈</div>
         <div class="stat-content">
           <div class="stat-value">{{ stats.taskSuccessRate ?? '—' }}</div>
-          <div class="stat-label">任务成功率 · 未接入</div>
+          <div class="stat-label">任务成功率{{ stats.taskSuccessRate == null ? ' · 未接入' : '' }}</div>
         </div>
       </div>
     </div>
@@ -158,18 +160,20 @@
     <div class="chart-row">
       <div class="chart-card">
         <div class="card-header">
-          <h3>规则命中率 Top 5</h3>
+          <!-- 改称"检出问题排行"：口径是"该规则当前未解决的问题数占全部问题的比例"。
+               命中率需要检测样本量（跑了多少次、检出多少次），没有检测引擎时算不出来。 -->
+          <h3>规则检出问题排行</h3>
         </div>
         <div class="chart-content">
           <div class="ranking-list">
             <div v-if="ruleRanking.length === 0" class="empty-hint">
-              未接入：质量规则族（规则配置 / 检测任务）后端尚未实现，这里没有命中率可算
+              暂无规则检出的未解决问题
             </div>
             <div v-for="(item, index) in ruleRanking" :key="item.name" class="ranking-item">
               <div class="rank-badge" :class="'rank-' + (index + 1)">{{ index + 1 }}</div>
               <div class="rank-info">
                 <div class="rank-name">{{ item.name }}</div>
-                <div class="rank-rate">命中率 {{ item.hitRate }}%</div>
+                <div class="rank-rate">占全部问题 {{ item.hitRate }}%</div>
               </div>
               <div class="rank-bar-container">
                 <div class="rank-bar" :style="{width: item.hitRate + '%'}"></div>
@@ -256,7 +260,7 @@ const severityDistribution = ref([])
 const statusDistribution = ref([])
 const trendData = ref([])
 const chartLabels = ref([])
-/** 规则命中率排行：质量规则族（/quality/rules）后端尚未实现，暂无数据来源 */
+/** 规则检出问题排行（来自统计接口的 ruleRanking） */
 const ruleRanking = ref([])
 const domainDistribution = ref([])
 const recentIssues = ref([])
@@ -305,6 +309,8 @@ const loadAll = async () => {
       // "待处理工单"= 待处理 + 处理中：只算 pending 会把正在处理的漏掉
       stats.value.openIssues = (statusMap.pending ?? 0) + (statusMap.processing ?? 0)
       stats.value.resolvedRate = s.resolutionRate
+      // 检测任务累计执行次数：真数据（各任务 run_count 之和）
+      stats.value.taskExecutions = s.taskExecutions ?? 0
 
       const total = s.totalIssues ?? 0
       const severityItems = [
@@ -330,6 +336,14 @@ const loadAll = async () => {
         name: item.domainName,
         count: item.issueCount,
         icon: DOMAIN_ICONS[item.domainCode] ?? '📄'
+      }))
+
+      // 规则检出问题排行。口径是"该规则当前未解决的问题数占全部问题的比例"，
+      // 不是命中率（命中率需要检测样本量，没有引擎时算不出来），页面按"占比"表述。
+      ruleRanking.value = (s.ruleRanking ?? []).map((item) => ({
+        name: item.ruleName,
+        hitRate: item.hitRate,
+        count: item.count
       }))
     }
 

@@ -89,6 +89,12 @@
           <button class="close-btn" @click="closeAddModal">×</button>
         </div>
         <div class="modal-body">
+          <!-- 规则编码是后端的主键式标识（唯一索引），原来表单里没有这一项，
+               不补上就没法新建规则。编辑时禁用，避免改掉已有编码。 -->
+          <div class="form-group">
+            <label>规则编码 *</label>
+            <input type="text" v-model="form.code" class="form-input" placeholder="如 RULE-USER-IDCARD" :disabled="isEdit" />
+          </div>
           <div class="form-group">
             <label>规则名称 *</label>
             <input type="text" v-model="form.name" class="form-input" placeholder="请输入规则名称" />
@@ -100,6 +106,7 @@
               <option value="accuracy">准确性规则</option>
               <option value="consistency">一致性规则</option>
               <option value="timeliness">时效性规则</option>
+              <option value="uniqueness">唯一性规则</option>
             </select>
           </div>
           <div class="form-group">
@@ -146,6 +153,8 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
+import { message } from 'ant-design-vue'
+import { getQualityRuleList, createQualityRule, updateQualityRule, deleteQualityRule } from '../../utils/api'
 
 const showAddModal = ref(false)
 const isEdit = ref(false)
@@ -155,6 +164,7 @@ const filterKeyword = ref('')
 
 const form = reactive({
   id: null,
+  code: '',
   name: '',
   type: 'completeness',
   description: '',
@@ -166,17 +176,8 @@ const form = reactive({
 })
 
 const rules = ref([])
-
-const mockRules = [
-  { id: 1, name: '用户名完整性检查', type: 'completeness', description: '检查用户姓名是否完整填写', target: 'user_master', field: 'username', expression: 'not null', threshold: 99, enabled: true },
-  { id: 2, name: '手机号格式验证', type: 'accuracy', description: '验证手机号格式是否正确', target: 'user_master', field: 'phone', expression: '^1[3-9]\\d{9}$', threshold: 98, enabled: true },
-  { id: 3, name: '身份证号验证', type: 'accuracy', description: '验证身份证号码格式', target: 'user_master', field: 'id_card', expression: '^[1-9]\\d{5}(18|19|20)\\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\\d|3[01])\\d{3}[\\dXx]$', threshold: 95, enabled: true },
-  { id: 4, name: '组织名称一致性', type: 'consistency', description: '检查组织名称在各系统中的一致性', target: 'organization', field: 'name', expression: 'same', threshold: 100, enabled: true },
-  { id: 5, name: '商品编码唯一性', type: 'consistency', description: '确保商品编码全局唯一', target: 'product', field: 'code', expression: 'unique', threshold: 100, enabled: false },
-  { id: 6, name: '数据更新时效性', type: 'timeliness', description: '检查数据更新是否及时', target: 'customer', field: 'update_time', expression: '< 30 days', threshold: 95, enabled: true },
-  { id: 7, name: '邮箱格式验证', type: 'accuracy', description: '验证邮箱地址格式', target: 'user_master', field: 'email', expression: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$', threshold: 90, enabled: true },
-  { id: 8, name: '供应商资质有效期', type: 'timeliness', description: '检查供应商资质是否过期', target: 'supplier', field: 'cert_expire_date', expression: '> now', threshold: 98, enabled: true }
-]
+// 原来这里是一份 8 条的写死规则数组：列表、新增、修改、删除、启停全在浏览器内存里，
+// 刷新即复位。现在数据来自 /admin/masterdata/quality/rules。
 
 const filteredRules = computed(() => {
   return rules.value.filter(rule => {
@@ -202,13 +203,43 @@ const getRuleTypeName = (type) => {
     completeness: '完整性规则',
     accuracy: '准确性规则',
     consistency: '一致性规则',
-    timeliness: '时效性规则'
+    timeliness: '时效性规则',
+    uniqueness: '唯一性规则'
   }
   return names[type] || '未知类型'
 }
 
-const loadRules = () => {
-  rules.value = mockRules
+/** 接口行 → 页面行（接口字段是 ruleCode / ruleName / targetTable / status） */
+const toRow = (row) => ({
+  id: row.id,
+  code: row.ruleCode,
+  name: row.ruleName,
+  type: row.ruleType || 'completeness',
+  description: row.description,
+  target: row.targetTable,
+  domain: row.targetDomain,
+  field: row.targetField,
+  expression: row.expression,
+  threshold: row.threshold,
+  severity: row.severity,
+  // 接口用 StatusEnum（1 启用 / 0 禁用），页面用布尔
+  enabled: Number(row.status) === 1
+})
+
+const loadRules = async () => {
+  try {
+    const response = await getQualityRuleList()
+    if (response.code !== 200) {
+      message.error(response.message || '加载质量规则失败')
+      rules.value = []
+      return
+    }
+    // 不再回落到演示数据：失败就说失败
+    rules.value = (response.data ?? []).map(toRow)
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '加载质量规则失败')
+    rules.value = []
+  }
 }
 
 onMounted(() => {
@@ -229,38 +260,78 @@ const editRule = (rule) => {
   showAddModal.value = true
 }
 
-const deleteRule = (rule) => {
-  if (confirm(`确定删除规则 "${rule.name}" 吗？`)) {
-    rules.value = rules.value.filter(r => r.id !== rule.id)
-    alert('规则已删除')
+const deleteRule = async (rule) => {
+  if (!confirm(`确定删除规则 "${rule.name}" 吗？`)) {
+    return
+  }
+  try {
+    const response = await deleteQualityRule(rule.id)
+    if (response.code === 200) {
+      message.success('规则已删除')
+      loadRules()
+    } else {
+      // 被任务引用的规则后端会拒绝删除，这里把原因透传给用户
+      message.error(response.message || '删除失败')
+    }
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '删除失败')
   }
 }
 
-const toggleRule = (rule) => {
-  rule.enabled = !rule.enabled
-  alert(`规则已${rule.enabled ? '启用' : '停用'}`)
+const toggleRule = async (rule) => {
+  const nextStatus = rule.enabled ? 0 : 1
+  try {
+    // 只提交 status：后端是"只覆盖本次传了的字段"
+    const response = await updateQualityRule(rule.id, { status: nextStatus })
+    if (response.code === 200) {
+      message.success(`规则已${nextStatus === 1 ? '启用' : '停用'}`)
+      loadRules()
+    } else {
+      message.error(response.message || '操作失败')
+    }
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '操作失败')
+  }
 }
 
-const saveRule = () => {
+const saveRule = async () => {
+  if (!form.code) {
+    message.warning('请填写规则编码')
+    return
+  }
   if (!form.name || !form.field || !form.expression) {
-    alert('请填写必填字段')
+    message.warning('请填写必填字段')
     return
   }
 
-  if (isEdit.value) {
-    const index = rules.value.findIndex(r => r.id === form.id)
-    if (index !== -1) {
-      rules.value[index] = { ...form }
-    }
-    alert('规则已更新')
-  } else {
-    rules.value.push({
-      ...form,
-      id: Date.now()
-    })
-    alert('规则已创建')
+  const payload = {
+    ruleCode: form.code,
+    ruleName: form.name,
+    ruleType: form.type,
+    description: form.description,
+    targetTable: form.target,
+    targetDomain: form.domain,
+    targetField: form.field,
+    expression: form.expression,
+    threshold: Number(form.threshold) || 0,
+    severity: form.severity,
+    status: form.enabled ? 1 : 0
   }
-  closeAddModal()
+
+  try {
+    const response = isEdit.value
+      ? await updateQualityRule(form.id, payload)
+      : await createQualityRule(payload)
+    if (response.code === 200) {
+      message.success(isEdit.value ? '规则已更新' : '规则已创建')
+      closeAddModal()
+      loadRules()
+    } else {
+      message.error(response.message || '保存失败')
+    }
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '保存失败')
+  }
 }
 </script>
 

@@ -868,6 +868,7 @@ CREATE TABLE IF NOT EXISTS `agri_md_quality_issue` (
   `status` VARCHAR(32) COMMENT '处理状态：pending 待处理 / processing 处理中 / resolved 已解决 / ignored 已忽略',
   `handler` VARCHAR(64) COMMENT '处理人',
   `resolve_remark` VARCHAR(500) COMMENT '处置说明',
+  `rule_id` BIGINT NULL COMMENT '检出的质量规则ID（手工登记的问题为空）',
   `detect_time` DATETIME COMMENT '检测（发现）时间',
   `resolve_time` DATETIME COMMENT '处置完成时间',
   `tenant_id` VARCHAR(64) COMMENT '租户ID（此处存租户编码）',
@@ -903,3 +904,77 @@ CREATE TABLE IF NOT EXISTS `agri_md_quality_issue_handle` (
   PRIMARY KEY (`id`),
   KEY `idx_quality_handle_issue` (`issue_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='质量问题处置记录表';
+
+-- ---------------------------------------------------------------------------
+-- 质量规则表（2026-10-12 新增）
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `agri_md_quality_rule` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `rule_code` VARCHAR(64) NOT NULL COMMENT '规则编码，唯一',
+  `rule_name` VARCHAR(128) NOT NULL COMMENT '规则名称',
+  `rule_type` VARCHAR(32) COMMENT '规则类型：completeness 缺失 / accuracy 格式 / consistency 一致性 / uniqueness 重复 / timeliness 时效',
+  `description` VARCHAR(500) COMMENT '规则说明',
+  `target_domain` VARCHAR(64) COMMENT '目标数据域编码：user / org / product / permission / customer',
+  `target_table` VARCHAR(128) COMMENT '目标表名',
+  `target_field` VARCHAR(128) COMMENT '目标字段',
+  `expression` VARCHAR(500) COMMENT '校验表达式或判定条件',
+  `threshold` INT COMMENT '阈值（0-100）',
+  `severity` VARCHAR(16) COMMENT '检出问题的默认严重程度：high / medium / low',
+  `status` INT DEFAULT 1 COMMENT '状态：1 启用 / 0 禁用',
+  `del_flag` INT DEFAULT 0 COMMENT '删除标志',
+  `tenant_id` VARCHAR(64) COMMENT '租户ID',
+  `create_time` DATETIME COMMENT '创建时间',
+  `create_by` VARCHAR(64) COMMENT '创建人',
+  `update_time` DATETIME COMMENT '更新时间',
+  `update_by` VARCHAR(64) COMMENT '更新人',
+  `remark` VARCHAR(500) COMMENT '备注',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_quality_rule_code` (`rule_code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='数据质量规则表';
+
+-- ---------------------------------------------------------------------------
+-- 质量检测任务表（2026-10-12 新增）
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `agri_md_quality_task` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `task_code` VARCHAR(64) NOT NULL COMMENT '任务编码，唯一',
+  `task_name` VARCHAR(128) NOT NULL COMMENT '任务名称',
+  `task_type` VARCHAR(32) COMMENT '执行类型：scheduled 定时 / realtime 实时 / manual 手动',
+  `cron_expression` VARCHAR(64) COMMENT '调度表达式（定时任务）',
+  `status` VARCHAR(32) COMMENT '任务状态：scheduled / running / completed / failed / paused',
+  `last_run_time` DATETIME COMMENT '最近执行时间',
+  `next_run_time` DATETIME COMMENT '下次执行时间',
+  `last_success_count` INT COMMENT '最近一次成功检测项数',
+  `last_fail_count` INT COMMENT '最近一次失败（检出问题）项数',
+  `success_rate` DECIMAL(5,2) COMMENT '最近一次成功率（%）',
+  `run_count` INT DEFAULT 0 COMMENT '累计执行次数',
+  `del_flag` INT DEFAULT 0 COMMENT '删除标志',
+  `tenant_id` VARCHAR(64) COMMENT '租户ID',
+  `create_time` DATETIME COMMENT '创建时间',
+  `create_by` VARCHAR(64) COMMENT '创建人',
+  `update_time` DATETIME COMMENT '更新时间',
+  `update_by` VARCHAR(64) COMMENT '更新人',
+  `remark` VARCHAR(500) COMMENT '备注',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_quality_task_code` (`task_code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='质量检测任务表';
+
+-- ---------------------------------------------------------------------------
+-- 任务与规则的关联表（2026-10-12 新增）
+-- 一个任务可挂多条规则，一条规则也可被多个任务引用，故用独立的关联表。
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `agri_md_quality_task_rule` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `task_id` BIGINT NOT NULL COMMENT '任务ID',
+  `rule_id` BIGINT NOT NULL COMMENT '规则ID',
+  `status` INT DEFAULT 1 COMMENT '状态：1 有效 / 0 失效',
+  `del_flag` INT DEFAULT 0 COMMENT '删除标志',
+  `tenant_id` VARCHAR(64) COMMENT '租户ID',
+  `create_time` DATETIME COMMENT '创建时间',
+  `create_by` VARCHAR(64) COMMENT '创建人',
+  `update_time` DATETIME COMMENT '更新时间',
+  `update_by` VARCHAR(64) COMMENT '更新人',
+  `remark` VARCHAR(500) COMMENT '备注',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_quality_task_rule` (`task_id`, `rule_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='质量检测任务-规则关联表';

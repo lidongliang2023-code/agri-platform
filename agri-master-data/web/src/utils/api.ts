@@ -299,6 +299,22 @@ export const getQualityStatistics = (params?: QueryParams) =>
   get(`${BASE}/quality/statistics`, params)
 export const getQualityTrend = (params?: QueryParams) => get(`${BASE}/quality/trend`, params)
 
+/* ------------------------------- 质量规则 / 任务 ------------------------------- */
+
+export const getQualityRuleList = (params?: QueryParams) => get(`${BASE}/quality/rules`, params)
+export const createQualityRule = (data: unknown) => post(`${BASE}/quality/rules`, data)
+export const updateQualityRule = (id: number | string, data: unknown) =>
+  put(`${BASE}/quality/rules/${id}`, data)
+export const deleteQualityRule = (id: number | string) => del(`${BASE}/quality/rules/${id}`)
+
+export const getQualityTaskList = (params?: QueryParams) => get(`${BASE}/quality/tasks`, params)
+export const createQualityTask = (data: unknown) => post(`${BASE}/quality/tasks`, data)
+export const updateQualityTask = (id: number | string, data: unknown) =>
+  put(`${BASE}/quality/tasks/${id}`, data)
+export const deleteQualityTask = (id: number | string) => del(`${BASE}/quality/tasks/${id}`)
+/** 手工触发一次巡检（不是真实规则计算，检测引擎尚未实现） */
+export const runQualityTask = (id: number | string) => post(`${BASE}/quality/tasks/${id}/run`)
+
 /* ---------------------------------- 数据分发 ---------------------------------- */
 
 export const getDistributionList = (params?: QueryParams) =>

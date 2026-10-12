@@ -287,6 +287,72 @@ VALUES
 -- 清理演示数据（需要时手工执行）
 -- ---------------------------------------------------------------------------
 -- ---------------------------------------------------------------------------
+-- 质量规则（12 条）与检测任务（5 个）—— 对应运营端「数据质量 → 规则配置 / 检测任务」
+-- 规则与演示问题一一对应，这样「规则检出问题排行」才有真实的分母。
+-- ---------------------------------------------------------------------------
+INSERT IGNORE INTO `agri_md_quality_rule`
+  (`id`,`rule_code`,`rule_name`,`rule_type`,`description`,`target_domain`,`target_table`,`target_field`,
+   `expression`,`threshold`,`severity`,`status`,`del_flag`,`tenant_id`,`create_time`,`create_by`,`remark`)
+VALUES
+  (2901,'RULE-USER-IDCARD','身份证号验证','accuracy','按证件类型校验号码格式与校验位','user','agri_md_user','id_card_no','regex(^\\d{17}[\\dXx]$)',100,'high',1,0,'T1001','2025-03-01 06:00:00','system','示范数据'),
+  (2902,'RULE-USER-PHONE-UNIQ','手机号唯一性','uniqueness','同一手机号不允许绑定多个用户','user','agri_md_user','phone','unique',100,'high',1,0,'T1001','2025-03-01 06:01:00','system','示范数据'),
+  (2903,'RULE-USER-AUTH','实名认证完整性','completeness','启用用户必须有认证记录','user','agri_md_user_authentication','user_id','not null',100,'high',1,0,'T1001','2025-03-01 06:02:00','system','示范数据'),
+  (2904,'RULE-USER-EMAIL','邮箱域名有效性','accuracy','邮箱域名需可解析','user','agri_md_user','email','resolvable domain',95,'high',1,0,'T1001','2025-03-01 06:03:00','system','示范数据'),
+  (2905,'RULE-ORG-LICENSE','营业执照完整性','completeness','企业类组织必须填写营业执照号','org','agri_md_organization','business_license','not null',100,'medium',1,0,'T1001','2025-03-01 06:04:00','system','示范数据'),
+  (2906,'RULE-ORG-PATH','组织层级路径一致性','consistency','org_path 必须与上级组织拼出的路径一致','org','agri_md_organization','org_path','equals(parent.path + id)',100,'high',1,0,'T1001','2025-03-01 06:05:00','system','示范数据'),
+  (2907,'RULE-PRODUCT-PRICE','商品价格格式','accuracy','价格必须为数字且大于 0','product','agri_md_product','price','is numeric and > 0',100,'low',1,0,'T1001','2025-03-01 06:06:00','system','示范数据'),
+  (2908,'RULE-PRODUCT-CATEGORY','商品分类与品名匹配','accuracy','品名关键字需落在所选分类下','product','agri_md_product','category_id','category matches name',90,'medium',1,0,'T1001','2025-03-01 06:07:00','system','示范数据'),
+  (2909,'RULE-CUSTOMER-TIMELINESS','客户联系信息时效性','timeliness','联系信息超过 180 天未更新即提示','customer','agri_md_customer','contact_phone','updated within 180d',100,'medium',1,0,'T1001','2025-03-01 06:08:00','system','示范数据'),
+  (2910,'RULE-CUSTOMER-CREDIT-UNIQ','统一社会信用代码唯一性','uniqueness','同一信用代码只能对应一个客户','customer','agri_md_customer','credit_code','unique',100,'medium',1,0,'T1001','2025-03-01 06:09:00','system','示范数据'),
+  (2911,'RULE-SUPPLIER-QUALIFICATION','供应商资质完整性','completeness','供应商必须填写资质证明编号','supplier','agri_md_supplier','qualification','not null',100,'low',1,0,'T1001','2025-03-01 06:10:00','system','示范数据'),
+  (2912,'RULE-PERM-MUTEX','互斥权限检测','consistency','同一角色不允许同时拥有互斥权限','permission','agri_md_role_permission','role_id','mutex check',100,'low',0,0,'T1001','2025-03-01 06:11:00','system','已停用，用于验证状态列');
+
+-- 把演示问题挂到对应规则上（UPDATE 而不是 INSERT：这些问题行已存在）
+UPDATE `agri_md_quality_issue` SET `rule_id` = 2901 WHERE `issue_code` = 'QI-20261003-001';
+UPDATE `agri_md_quality_issue` SET `rule_id` = 2905 WHERE `issue_code` = 'QI-20261004-001';
+UPDATE `agri_md_quality_issue` SET `rule_id` = 2902 WHERE `issue_code` = 'QI-20261005-001';
+UPDATE `agri_md_quality_issue` SET `rule_id` = 2907 WHERE `issue_code` = 'QI-20261006-001';
+UPDATE `agri_md_quality_issue` SET `rule_id` = 2909 WHERE `issue_code` = 'QI-20261007-001';
+UPDATE `agri_md_quality_issue` SET `rule_id` = 2906 WHERE `issue_code` = 'QI-20261008-001';
+UPDATE `agri_md_quality_issue` SET `rule_id` = 2911 WHERE `issue_code` = 'QI-20261009-001';
+UPDATE `agri_md_quality_issue` SET `rule_id` = 2908 WHERE `issue_code` = 'QI-20261009-002';
+UPDATE `agri_md_quality_issue` SET `rule_id` = 2910 WHERE `issue_code` = 'QI-20261010-001';
+UPDATE `agri_md_quality_issue` SET `rule_id` = 2903 WHERE `issue_code` = 'QI-20261011-001';
+UPDATE `agri_md_quality_issue` SET `rule_id` = 2912 WHERE `issue_code` = 'QI-20261011-002';
+UPDATE `agri_md_quality_issue` SET `rule_id` = 2904 WHERE `issue_code` = 'QI-20261012-001';
+
+INSERT IGNORE INTO `agri_md_quality_task`
+  (`id`,`task_code`,`task_name`,`task_type`,`cron_expression`,`status`,`last_run_time`,`next_run_time`,
+   `last_success_count`,`last_fail_count`,`success_rate`,`run_count`,`del_flag`,`tenant_id`,`create_time`,`create_by`,`remark`)
+VALUES
+  (3001,'TASK-USER-DAILY','每日用户数据质量检测','scheduled','0 0 2 * * ?','scheduled','2026-10-12 02:00:00','2026-10-13 02:00:00',4,4,NULL,21,0,'T1001','2025-03-01 06:20:00','system','示范数据'),
+  (3002,'TASK-ORG-WEEKLY','每周组织数据一致性检查','scheduled','0 0 2 ? * MON','scheduled','2026-10-06 02:00:00','2026-10-13 02:00:00',2,2,NULL,8,0,'T1001','2025-03-01 06:21:00','system','示范数据'),
+  (3003,'TASK-PRODUCT-DAILY','每日商品数据检测','scheduled','0 30 2 * * ?','scheduled','2026-10-12 02:30:00','2026-10-13 02:30:00',2,2,NULL,15,0,'T1001','2025-03-01 06:22:00','system','示范数据'),
+  (3004,'TASK-CUSTOMER-DAILY','每日客户与供应商检测','scheduled','0 0 3 * * ?','scheduled','2026-10-12 03:00:00','2026-10-13 03:00:00',3,3,NULL,12,0,'T1001','2025-03-01 06:23:00','system','成功率留空：检测引擎未实现，不编数字'),
+  (3005,'TASK-MANUAL-FULL','全量主数据巡检（手工）','manual',NULL,'paused',NULL,NULL,NULL,NULL,NULL,0,0,'T1001','2025-03-01 06:24:00','system','示范数据');
+
+INSERT IGNORE INTO `agri_md_quality_task_rule`
+  (`id`,`task_id`,`rule_id`,`status`,`del_flag`,`tenant_id`,`create_time`,`create_by`)
+VALUES
+  (3101,3001,2901,1,0,'T1001','2025-03-01 06:20:10','system'),
+  (3102,3001,2902,1,0,'T1001','2025-03-01 06:20:11','system'),
+  (3103,3001,2903,1,0,'T1001','2025-03-01 06:20:12','system'),
+  (3104,3001,2904,1,0,'T1001','2025-03-01 06:20:13','system'),
+  (3105,3002,2905,1,0,'T1001','2025-03-01 06:21:10','system'),
+  (3106,3002,2906,1,0,'T1001','2025-03-01 06:21:11','system'),
+  (3107,3003,2907,1,0,'T1001','2025-03-01 06:22:10','system'),
+  (3108,3003,2908,1,0,'T1001','2025-03-01 06:22:11','system'),
+  (3109,3004,2909,1,0,'T1001','2025-03-01 06:23:10','system'),
+  (3110,3004,2910,1,0,'T1001','2025-03-01 06:23:11','system'),
+  (3111,3004,2911,1,0,'T1001','2025-03-01 06:23:12','system'),
+  (3112,3005,2901,1,0,'T1001','2025-03-01 06:24:10','system'),
+  (3113,3005,2905,1,0,'T1001','2025-03-01 06:24:11','system'),
+  (3114,3005,2909,1,0,'T1001','2025-03-01 06:24:12','system');
+
+-- ---------------------------------------------------------------------------
+-- 清理演示数据（需要时手工执行）
+-- ---------------------------------------------------------------------------
+-- ---------------------------------------------------------------------------
 -- 数据质量问题（12 条）与处置记录 —— 对应运营端「数据质量」下的监控 / 工单 / 仪表盘
 -- detect_time 刻意落在最近 10 天内，否则趋势折线会是一条平线看不出效果。
 -- ---------------------------------------------------------------------------
@@ -343,6 +409,9 @@ VALUES
 -- DELETE FROM `agri_md_system_config`               WHERE `id` BETWEEN 1000 AND 2999;
 -- DELETE FROM `agri_md_tenant_package`              WHERE `id` BETWEEN 1000 AND 2999;
 -- DELETE FROM `agri_md_quality_issue_handle`        WHERE `id` BETWEEN 1000 AND 2999;
+-- DELETE FROM `agri_md_quality_task_rule`           WHERE `id` BETWEEN 1000 AND 3999;
+-- DELETE FROM `agri_md_quality_task`                WHERE `id` BETWEEN 1000 AND 3999;
+-- DELETE FROM `agri_md_quality_rule`                WHERE `id` BETWEEN 1000 AND 3999;
 -- DELETE FROM `agri_md_quality_issue`               WHERE `id` BETWEEN 1000 AND 2999;
 -- DELETE FROM `agri_md_tenant_quota`               WHERE `id` BETWEEN 1000 AND 2999;
 -- DELETE FROM `agri_md_code_rule`                  WHERE `id` BETWEEN 1000 AND 2999;
