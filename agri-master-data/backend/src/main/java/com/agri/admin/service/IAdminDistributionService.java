@@ -11,7 +11,8 @@ public interface IAdminDistributionService {
 
     DistributionStatisticsVO getDistributionStatistics(String tenantId, String timeRange);
 
-    PageResult<DistributionTaskVO> getDistributionTasks(Integer pageNum, Integer pageSize, String status, String targetSystem, String tenantId);
+    /** keyword 匹配任务编码 / 任务名称（页面顶部有一个搜索框，原接口没这个参数，搜索点了没反应） */
+    PageResult<DistributionTaskVO> getDistributionTasks(Integer pageNum, Integer pageSize, String status, String targetSystem, String tenantId, String keyword);
 
     DistributionDetailVO getDistributionDetail(Long id);
 

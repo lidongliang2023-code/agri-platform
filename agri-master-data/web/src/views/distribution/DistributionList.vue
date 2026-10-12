@@ -48,8 +48,9 @@
           <tr v-for="task in tableData" :key="task.id">
             <td>{{ task.taskCode }}</td>
             <td>{{ task.taskName }}</td>
-            <td>{{ task.targetSystem }}</td>
-            <td>{{ task.dataType }}</td>
+            <!-- 接口给的是编码 + 名称两个字段，页面要显示的是名称 -->
+            <td>{{ task.targetSystemName || task.targetSystem }}</td>
+            <td>{{ task.dataTypeName || task.dataType }}</td>
             <td>
               <span class="type-badge" :class="task.triggerType">
                 {{ task.triggerType === 'auto' ? '自动' : '手动' }}
@@ -66,7 +67,8 @@
               </div>
               <span class="progress-text">{{ task.progress }}%</span>
             </td>
-            <td>{{ formatDate(task.executeTime) }}</td>
+            <!-- 原页面读 executeTime，接口里没有这个字段（是 startTime）→ 这一列会恒为空 -->
+            <td>{{ formatDate(task.startTime) }}</td>
             <td class="action-cell">
               <button class="action-btn view" @click="viewDetail(task)">详情</button>
               <button 
@@ -113,11 +115,11 @@
           </div>
           <div class="detail-row">
             <span class="detail-label">目标系统</span>
-            <span class="detail-value">{{ detailData.targetSystem }}</span>
+            <span class="detail-value">{{ detailData.targetSystemName || detailData.targetSystem }}</span>
           </div>
           <div class="detail-row">
             <span class="detail-label">数据类型</span>
-            <span class="detail-value">{{ detailData.dataType }}</span>
+            <span class="detail-value">{{ detailData.dataTypeName || detailData.dataType }}</span>
           </div>
           <div class="detail-row">
             <span class="detail-label">触发方式</span>
@@ -131,11 +133,22 @@
           </div>
           <div class="detail-row">
             <span class="detail-label">执行时间</span>
-            <span class="detail-value">{{ detailData.executeTime }}</span>
+            <!-- 原页面读 executeTime，接口里是 startTime -->
+            <span class="detail-value">{{ detailData.startTime }}</span>
           </div>
           <div class="detail-row">
             <span class="detail-label">错误信息</span>
             <span class="detail-value error-text">{{ detailData.errorMessage || '无' }}</span>
+          </div>
+          <!-- 分发日志：由接口按任务自身的时间戳与失败原因给出（没有独立的日志表） -->
+          <div class="detail-row" v-if="detailData.logs && detailData.logs.length">
+            <span class="detail-label">执行日志</span>
+            <div class="detail-value">
+              <div v-for="(log, index) in detailData.logs" :key="index" :class="['log-line', log.level]">
+                <span class="log-time">{{ log.time }}</span>
+                <span class="log-msg">{{ log.message }}</span>
+              </div>
+            </div>
           </div>
         </div>
         <div class="modal-footer">
@@ -149,7 +162,7 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
-import { getDistributionList, retryDistribution } from '../../utils/api'
+import { getDistributionList, getDistributionDetail, retryDistribution } from '../../utils/api'
 
 const tableData = ref([])
 const pageNum = ref(1)
@@ -213,8 +226,19 @@ const handleCurrentChange = (page) => {
 }
 
 const viewDetail = (row) => {
-  detailData.value = row
+  // 先用列表行占位（弹窗立刻有内容），再取详情补上执行日志等列表不返回的字段
+  detailData.value = { ...row }
   detailVisible.value = true
+  void (async () => {
+    try {
+      const response = await getDistributionDetail(row.id)
+      if (response.code === 200 && detailData.value && detailData.value.id === row.id) {
+        detailData.value = { ...row, ...response.data }
+      }
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '加载分发详情失败')
+    }
+  })()
 }
 
 const retryTask = async (id) => {
@@ -627,5 +651,22 @@ onMounted(() => {
 .btn-primary:hover {
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(35, 134, 54, 0.3);
+}
+
+/* 分发日志 */
+.log-line {
+  display: flex;
+  gap: 10px;
+  font-size: 12px;
+  line-height: 1.9;
+}
+
+.log-time {
+  color: #a0aec0;
+  white-space: nowrap;
+}
+
+.log-line.error .log-msg {
+  color: #da3633;
 }
 </style>

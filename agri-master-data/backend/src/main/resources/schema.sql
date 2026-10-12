@@ -978,3 +978,42 @@ CREATE TABLE IF NOT EXISTS `agri_md_quality_task_rule` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_quality_task_rule` (`task_id`, `rule_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='质量检测任务-规则关联表';
+
+-- ---------------------------------------------------------------------------
+-- 数据分发任务表（2026-10-13 新增）
+--
+-- /admin/masterdata/distribution/* 八个端点此前全是空壳：统计是 builder 写死的数字、
+-- 任务列表恒返回空数组、重试/暂停/恢复是空方法体。数据分发页因此永远看不到数据。
+--
+-- 页面用到的 task_name / trigger_type / progress 三个字段在原来的 VO 里根本没有，
+-- 这里一并补齐（否则那一列恒为空）。
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `agri_md_distribution_task` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `task_code` VARCHAR(64) NOT NULL COMMENT '任务编码，唯一',
+  `task_name` VARCHAR(128) NOT NULL COMMENT '任务名称',
+  `target_system` VARCHAR(64) COMMENT '目标系统编码：erp / mall / crm / wms',
+  `target_system_name` VARCHAR(128) COMMENT '目标系统名称',
+  `data_type` VARCHAR(64) COMMENT '数据类型编码：tenant / user / product / order',
+  `data_type_name` VARCHAR(128) COMMENT '数据类型名称',
+  `trigger_type` VARCHAR(16) COMMENT '触发方式：auto 自动 / manual 手动',
+  `status` VARCHAR(32) COMMENT '任务状态：pending / running / success / failed / paused',
+  `total_count` INT COMMENT '本次分发记录总数',
+  `success_count` INT COMMENT '成功条数',
+  `failed_count` INT COMMENT '失败条数',
+  `progress` INT COMMENT '进度（0-100）',
+  `delay` DECIMAL(10,2) COMMENT '平均耗时（秒）',
+  `tenant_id` VARCHAR(64) COMMENT '租户ID（此处存租户编码）',
+  `tenant_name` VARCHAR(128) COMMENT '租户名称',
+  `start_time` DATETIME COMMENT '开始时间',
+  `end_time` DATETIME COMMENT '结束时间',
+  `error_message` VARCHAR(500) COMMENT '失败原因',
+  `del_flag` INT DEFAULT 0 COMMENT '删除标志',
+  `create_time` DATETIME COMMENT '创建时间',
+  `create_by` VARCHAR(64) COMMENT '创建人',
+  `update_time` DATETIME COMMENT '更新时间',
+  `update_by` VARCHAR(64) COMMENT '更新人',
+  `remark` VARCHAR(500) COMMENT '备注',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_distribution_task_code` (`task_code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='数据分发任务表';

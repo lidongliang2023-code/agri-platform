@@ -36,8 +36,9 @@ public class AdminDistributionController {
             @RequestParam(defaultValue = "10") Integer pageSize,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String targetSystem,
-            @RequestParam(required = false) String tenantId) {
-        return ApiResponse.success(adminDistributionService.getDistributionTasks(pageNum, pageSize, status, targetSystem, tenantId));
+            @RequestParam(required = false) String tenantId,
+            @RequestParam(required = false) String keyword) {
+        return ApiResponse.success(adminDistributionService.getDistributionTasks(pageNum, pageSize, status, targetSystem, tenantId, keyword));
     }
 
     @Operation(summary = "获取分发任务详情")
