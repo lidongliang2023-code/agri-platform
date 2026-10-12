@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.agri.masterdata.mapper.CustomerMapper">
+
+    <select id="selectCustomerList" resultType="com.agri.masterdata.vo.CustomerVO">
+        SELECT c.*, o.org_name AS orgName
+        FROM agri_md_customer c
+        LEFT JOIN agri_md_organization o ON c.org_id = o.id
+        WHERE c.del_flag = 0
+        ORDER BY c.create_time DESC
+    </select>
+
+    <select id="selectCustomerById" resultType="com.agri.masterdata.vo.CustomerVO">
+        SELECT c.*, o.org_name AS orgName
+        FROM agri_md_customer c
+        LEFT JOIN agri_md_organization o ON c.org_id = o.id
+        WHERE c.id = #{id} AND c.del_flag = 0
+    </select>
+
+    <select id="selectByCustomerCode" resultType="com.agri.masterdata.entity.Customer">
+        SELECT * FROM agri_md_customer WHERE customer_code = #{customerCode} AND del_flag = 0
+    </select>
+</mapper>
