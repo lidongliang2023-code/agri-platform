@@ -37,6 +37,54 @@
       </div>
     </div>
 
+    <!--
+      组织架构树。
+
+      这段是从未接线的 masterdata/OrganizationManagement 页合并过来的 ——
+      那一页唯一比本页多的能力就是"按层级看组织"，而它的数据是本地假数组。
+      搬过来后改成读 GET /org/tree（真数据），并把原来写死的三层嵌套
+      换成"按 parentId 建树 + 拍平渲染"，层数不再受限于三层。
+    -->
+    <div class="tree-panel">
+      <div class="panel-header">
+        <h3>组织架构树</h3>
+        <span class="panel-hint" v-if="selectedOrg">
+          已选中：{{ selectedOrg.orgName }}
+          <button class="link-btn" @click="clearSelected">清除</button>
+        </span>
+      </div>
+      <div v-if="treeError" class="tree-empty">{{ treeError }}</div>
+      <div v-else-if="treeNodes.length === 0" class="tree-empty">暂无组织数据</div>
+      <ul v-else class="tree-list">
+        <li
+          v-for="node in treeNodes"
+          :key="node.id"
+          class="tree-row"
+          :class="{ active: selectedOrg && selectedOrg.id === node.id }"
+          :style="{ paddingLeft: node.depth * 18 + 8 + 'px' }"
+          @click="selectNode(node)"
+        >
+          <span
+            class="node-toggle"
+            @click.stop="toggleNode(node)"
+          >{{ node.hasChildren ? (expandedIds.includes(node.id) ? '▼' : '▶') : '·' }}</span>
+          <span class="node-name">{{ node.orgName }}</span>
+          <span class="node-type">{{ getOrgTypeLabel(node.orgType) }}</span>
+          <span class="node-auth">{{ getStatusLabel(node.authStatus) }}</span>
+        </li>
+      </ul>
+    </div>
+
+    <div class="selected-strip" v-if="selectedOrg">
+      <span>编码：{{ selectedOrg.orgCode || '—' }}</span>
+      <span>类型：{{ getOrgTypeLabel(selectedOrg.orgType) }}</span>
+      <span>法人：{{ selectedOrg.legalPerson || '—' }}</span>
+      <span>联系人：{{ selectedOrg.contactPerson || '—' }}</span>
+      <span>电话：{{ selectedOrg.contactPhone || '—' }}</span>
+      <span>认证：{{ getStatusLabel(selectedOrg.authStatus) }}</span>
+      <span>层级：{{ selectedOrg.orgLevel ?? '—' }}</span>
+    </div>
+
     <div class="table-card">
       <table class="data-table">
         <thead>
@@ -138,7 +186,7 @@
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
 import { message } from 'ant-design-vue'
-import { getOrgList, createOrg, updateOrg, deleteOrg } from '../../utils/api'
+import { getOrgList, getOrgTree, createOrg, updateOrg, deleteOrg } from '../../utils/api'
 
 const tableData = ref([])
 const pageNum = ref(1)
@@ -208,6 +256,70 @@ const loadData = async () => {
     tableData.value = []
     total.value = 0
   }
+}
+
+/* ---------------------------- 组织架构树（真数据） ---------------------------- */
+
+/** 树的全量数据（拍平后的可见节点） */
+const treeNodes = ref([])
+const treeError = ref('')
+const expandedIds = ref([])
+const selectedOrg = ref(null)
+/** 原始树数据（未经展开过滤），供 toggleNode 重新计算 */
+let treeSource = []
+
+/** 把树按"当前展开了哪些节点"拍平成带 depth 的列表，模板只需一层 v-for */
+function flatten(nodes, depth = 0, out = []) {
+  nodes.forEach((node) => {
+    out.push({ ...node, depth, hasChildren: node.children.length > 0 })
+    if (node.children.length > 0 && expandedIds.value.includes(node.id)) {
+      flatten(node.children, depth + 1, out)
+    }
+  })
+  return out
+}
+
+function refreshTreeNodes() {
+  treeNodes.value = flatten(treeSource)
+}
+
+const loadTree = async () => {
+  treeError.value = ''
+  try {
+    const response = await getOrgTree()
+    if (response.code !== 200) {
+      treeError.value = response.message || '组织架构树加载失败'
+      treeSource = []
+      treeNodes.value = []
+      return
+    }
+    // 接口 /org/tree 返回的本来就是**嵌套树**（每个节点自带 children），
+    // 不需要在前端按 parentId 重新拼一次 —— 那样反而会把 children 覆盖掉。
+    treeSource = response.data ?? []
+    // 默认展开根节点，否则进来只看到几个根、像"没有下级"
+    expandedIds.value = treeSource.map((node) => node.id)
+    refreshTreeNodes()
+  } catch (error) {
+    treeError.value = error instanceof Error ? error.message : '组织架构树加载失败'
+    treeSource = []
+    treeNodes.value = []
+  }
+}
+
+const toggleNode = (node) => {
+  if (!node.hasChildren) return
+  expandedIds.value = expandedIds.value.includes(node.id)
+    ? expandedIds.value.filter((id) => id !== node.id)
+    : [...expandedIds.value, node.id]
+  refreshTreeNodes()
+}
+
+const selectNode = (node) => {
+  selectedOrg.value = node
+}
+
+const clearSelected = () => {
+  selectedOrg.value = null
 }
 
 const handleCurrentChange = (page) => {
@@ -295,6 +407,7 @@ const formatDate = (date) => {
 }
 
 onMounted(() => {
+  loadTree()
   loadData()
 })
 </script>
@@ -653,5 +766,107 @@ onMounted(() => {
 .btn-primary {
   background: linear-gradient(135deg, #238636 0%, #2ea043 100%);
   color: #fff;
+}
+
+/* ---------------------------- 组织架构树 ---------------------------- */
+
+.tree-panel {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.panel-header h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #2d3748;
+}
+
+.panel-hint {
+  font-size: 12px;
+  color: #718096;
+}
+
+.link-btn {
+  border: none;
+  background: none;
+  color: #238636;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.tree-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.tree-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #2d3748;
+  cursor: pointer;
+}
+
+.tree-row:hover {
+  background: #f5f7fa;
+}
+
+.tree-row.active {
+  background: rgba(35, 134, 54, 0.1);
+  color: #238636;
+}
+
+.node-toggle {
+  width: 12px;
+  font-size: 10px;
+  color: #a0aec0;
+}
+
+.node-name {
+  flex: 1;
+}
+
+.node-type,
+.node-auth {
+  font-size: 12px;
+  color: #a0aec0;
+}
+
+.tree-empty {
+  padding: 20px;
+  text-align: center;
+  font-size: 13px;
+  color: #a0aec0;
+}
+
+.selected-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  padding: 12px 20px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  color: #4a5568;
 }
 </style>

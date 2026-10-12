@@ -37,6 +37,9 @@ public class OrganizationVO {
      */
     private String legalPerson;
 
+    /** 组织层级：1 一级 / 2 二级 …，树形展示与详情都会用到 */
+    private Integer orgLevel;
+
     private String contactPerson;
 
     private String contactPhone;
@@ -68,6 +71,8 @@ public class OrganizationVO {
                 .ancestors(org.getAncestors())
                 .orgCode(org.getOrgCode())
                 .orgType(org.getOrgType())
+                .legalPerson(org.getLegalPerson())
+                .orgLevel(org.getOrgLevel())
                 .contactPerson(org.getContactPerson())
                 .contactPhone(org.getContactPhone())
                 .address(org.getAddress())

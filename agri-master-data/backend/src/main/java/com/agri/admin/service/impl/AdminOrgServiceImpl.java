@@ -36,11 +36,24 @@ public class AdminOrgServiceImpl implements IAdminOrgService {
         return buildOrgTree(null, allOrgs);
     }
 
+    /**
+     * 判断是不是根节点。
+     *
+     * <p>原实现只把 {@code parentId == null} 当根，而库里的根节点写的是 **0** ——
+     * 于是 getOrgTree 永远返回空数组。它一直返回 200、也不报错，
+     * 只是"一条数据都没有"，这类接口光看状态码是发现不了的。</p>
+     */
+    private boolean isRoot(Long parentId) {
+        return parentId == null || parentId == 0L;
+    }
+
     private List<OrganizationVO> buildOrgTree(Long parentId, List<Organization> allOrgs) {
         List<OrganizationVO> tree = new ArrayList<>();
         for (Organization org : allOrgs) {
-            if ((parentId == null && org.getParentId() == null) || 
-                (parentId != null && parentId.equals(org.getParentId()))) {
+            boolean matched = (parentId == null)
+                    ? isRoot(org.getParentId())
+                    : parentId.equals(org.getParentId());
+            if (matched) {
                 OrganizationVO vo = OrganizationVO.fromEntity(org);
                 vo.setChildren(buildOrgTree(org.getId(), allOrgs));
                 tree.add(vo);
