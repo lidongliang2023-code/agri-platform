@@ -14,6 +14,12 @@ spring:
   sql:
     init:
       mode: always
+      # 必须显式指定 UTF-8：Spring 的 spring.sql.init.encoding 默认值是**平台默认编码**，
+      # 在中文 Windows 上是 GBK。schema.sql / data.sql 都是 UTF-8 文件，
+      # 按 GBK 读会把所有中文变成乱码再写进库 —— 实测种子租户名被存成
+      # "绯荤粺绉熸埛"（"系统租户" 的 UTF-8 字节被当 GBK 解读），且 UTF-8 无法还原的字会被
+      # 替换成 U+FFFD（不可逆的数据损坏）。这个坑不报错、只在界面上表现为乱码，最难查。
+      encoding: UTF-8
       schema-locations: classpath:schema.sql
       data-locations: classpath:data.sql
   redis:
