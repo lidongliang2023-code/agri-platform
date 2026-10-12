@@ -1017,3 +1017,38 @@ CREATE TABLE IF NOT EXISTS `agri_md_distribution_task` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_distribution_task_code` (`task_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='数据分发任务表';
+
+-- ---------------------------------------------------------------------------
+-- 操作日志表（2026-10-13 新增）
+--
+-- 运营端「权限审计 → 操作日志」页要显示"谁在什么时候对哪个模块做了什么"，
+-- 而 /permission/operation-log、change-log、anomaly 三个端点此前都是空方法体。
+--
+-- 另外发现：仓库里其实早有一份 LogAspect + @LogOperation 注解，
+-- 但**没有任何一个方法用过那个注解** —— 切面从未触发；而且它即使触发也只写 SLF4J
+-- 文本日志、不落库。所以那一套等于完全没有生效，这里按"全部写操作留痕"重建：
+-- 切点直接挂在 @PostMapping / @PutMapping / @DeleteMapping 上，不需要给每个方法加注解。
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `agri_md_operation_log` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `module` VARCHAR(128) COMMENT '操作模块（取自控制器的 Swagger Tag）',
+  -- 用小写 create / update / delete / other：页面上的类型徽标与筛选下拉直接吃这几个值。
+  -- 原先写成 INSERT / UPDATE / DELETE 会让"筛选=新增(create)"永远筛不出任何记录。
+  `operation_type` VARCHAR(32) COMMENT '操作类型：create / update / delete / other',
+  `operation_desc` VARCHAR(255) COMMENT '操作描述（取自接口的 summary，如"创建租户"）',
+  `target_id` VARCHAR(64) COMMENT '目标ID（从请求路径里取出的最后一个数字段）',
+  `request_method` VARCHAR(16) COMMENT 'HTTP 方法',
+  `request_uri` VARCHAR(255) COMMENT '请求路径',
+  `operator` VARCHAR(64) COMMENT '操作人',
+  `operator_id` BIGINT COMMENT '操作人ID（平台令牌的 sub）',
+  `ip_address` VARCHAR(64) COMMENT '来源IP',
+  `params` VARCHAR(1000) COMMENT '请求参数摘要（截断保存）',
+  `result` VARCHAR(16) COMMENT '结果：success / fail',
+  `error_message` VARCHAR(500) COMMENT '失败原因',
+  `duration_ms` BIGINT COMMENT '耗时（毫秒）',
+  `tenant_id` VARCHAR(64) COMMENT '租户ID',
+  `create_time` DATETIME COMMENT '操作时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_operation_log_time` (`create_time`),
+  KEY `idx_operation_log_module` (`module`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='操作日志表';

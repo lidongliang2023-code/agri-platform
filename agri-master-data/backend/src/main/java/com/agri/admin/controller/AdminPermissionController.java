@@ -2,6 +2,7 @@ package com.agri.admin.controller;
 
 import com.agri.admin.dto.PermissionStatisticsDTO;
 import com.agri.admin.service.IAdminPermissionService;
+import com.agri.admin.vo.OperationLogVO;
 import com.agri.admin.vo.PermissionChangeLogVO;
 import com.agri.admin.vo.PermissionStatisticsVO;
 import com.agri.common.entity.ApiResponse;
@@ -86,14 +87,16 @@ public class AdminPermissionController {
 
     @Operation(summary = "获取操作日志")
     @GetMapping("/operation-log")
-    public ApiResponse<PageResult<PermissionChangeLogVO>> getOperationLogs(
+    public ApiResponse<PageResult<OperationLogVO>> getOperationLogs(
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "10") Integer pageSize,
-            @RequestParam(required = false) String operator,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String operationType,
             @RequestParam(required = false) String module,
             @RequestParam(required = false) String startTime,
             @RequestParam(required = false) String endTime) {
-        return ApiResponse.success(adminPermissionService.getOperationLogs(pageNum, pageSize, operator, module, startTime, endTime));
+        return ApiResponse.success(adminPermissionService.getOperationLogs(
+                pageNum, pageSize, keyword, operationType, module, startTime, endTime));
     }
 
     @Operation(summary = "导出权限变更记录")

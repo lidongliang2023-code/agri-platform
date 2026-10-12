@@ -20,11 +20,10 @@
       <div class="filter-group">
         <select v-model="searchForm.operationType" class="filter-select">
           <option value="">全部类型</option>
-          <option value="login">登录</option>
           <option value="create">新增</option>
           <option value="update">修改</option>
           <option value="delete">删除</option>
-          <option value="query">查询</option>
+          <option value="other">其他</option>
         </select>
       </div>
       <div class="filter-group">
@@ -93,7 +92,10 @@ const searchForm = reactive({
 })
 
 const getOperationLabel = (type) => {
-  const labels = { login: '登录', create: '新增', update: '修改', delete: '删除', query: '查询' }
+  // 这几个值必须与后端 agri_md_operation_log.operation_type 完全一致：
+  // 后端只对写操作留痕（查询接口刻意不记），所以"登录/查询"两个选项下永远筛不出数据，
+  // 留着它们只会让人以为功能坏了。
+  const labels = { create: '新增', update: '修改', delete: '删除', other: '其他' }
   return labels[type] || type
 }
 
@@ -148,6 +150,14 @@ onMounted(() => {
 <style scoped>
 .permission-log {
   padding: 20px;
+  /* 把页面宽度锁在视口内。
+     原因：外层布局的 .main-content 是 flex 项且没有 min-width: 0，它会被本页 7 列宽表格的
+     min-content 撑到超过视口（实测约 909px），于是工具栏、表格右侧列全跑到视口之外，
+     只能靠拖动整页横向滚动才能看到。
+     200px = 侧栏宽度，16px = 竖向滚动条预留；这里的百分比是相对"已被撑开"的父级算的，
+     所以只能用 100vw，不能用 100%。表格改用自身横向滚动（见 .table-card）。 */
+  max-width: calc(100vw - 216px);
+  box-sizing: border-box;
 }
 
 .page-header {
@@ -172,6 +182,9 @@ onMounted(() => {
 
 .search-bar {
   display: flex;
+  /* 窄屏或侧栏占位大时，搜索框 / 类型 / 两个日期会顶出卡片右侧。
+     换行比横向截断可读 —— 原先日期选择器被裁掉一半，看不全也点不准。 */
+  flex-wrap: wrap;
   gap: 16px;
   margin-bottom: 20px;
 }
@@ -179,6 +192,7 @@ onMounted(() => {
 .search-group {
   display: flex;
   flex: 1;
+  min-width: 260px;
 }
 
 .search-input {
@@ -199,12 +213,15 @@ onMounted(() => {
   background: #fff;
   border: 1px solid #e2e8f0;
   border-left: none;
-  padding: 10px 24px;
+  padding: 10px 16px;
   border-radius: 0 8px 8px 0;
   font-size: 14px;
   color: #238636;
   cursor: pointer;
   transition: all 0.2s;
+  /* 不加这两句，按钮宽度由内容决定，"搜索"两个字会被挤成上下两行 */
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .search-btn:hover {
@@ -214,6 +231,7 @@ onMounted(() => {
 .filter-group {
   display: flex;
   align-items: center;
+  flex-shrink: 0;
 }
 
 .filter-select {
@@ -242,12 +260,26 @@ onMounted(() => {
   background: #fff;
   border-radius: 12px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  overflow: hidden;
+  /* 原来是 overflow: hidden —— 本页有 7 列，右侧的 IP / 时间被直接裁掉，
+     页面上看起来像"这两列没有数据"。改成横向可滚动：列还在，只是需要滑一下。 */
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* 视口不够宽时让搜索框独占一行。
+   不能只靠 .search-bar 的 flex-wrap 自动判断：这个页面的容器宽度会被下面的宽表格撑大
+   （表格 min-width 880px），于是"看起来有空间、实际没有"，筛选控件会被推到视口之外。
+   按视口宽度分档是不依赖容器宽度的确定做法。 */
+@media (max-width: 1100px) {
+  .search-group {
+    flex: 1 1 100%;
+  }
 }
 
 .data-table {
   width: 100%;
   border-collapse: collapse;
+  min-width: 880px;
 }
 
 .data-table th,
@@ -299,6 +331,11 @@ onMounted(() => {
 .type-badge.query {
   background: rgba(160, 174, 192, 0.1);
   color: #a0aec0;
+}
+
+.type-badge.other {
+  background: rgba(160, 174, 192, 0.1);
+  color: #718096;
 }
 
 .pagination {
