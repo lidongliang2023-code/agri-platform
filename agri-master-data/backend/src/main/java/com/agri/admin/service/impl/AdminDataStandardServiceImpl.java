@@ -11,9 +11,12 @@ import com.agri.masterdata.dto.DictItemSaveDTO;
 import com.agri.masterdata.dto.DictSaveDTO;
 import com.agri.masterdata.entity.Dict;
 import com.agri.masterdata.entity.DictItem;
+import com.agri.masterdata.entity.CodeRule;
+import com.agri.masterdata.mapper.CodeRuleMapper;
 import com.agri.masterdata.mapper.DictItemMapper;
 import com.agri.masterdata.mapper.DictMapper;
 import com.agri.masterdata.vo.DictVO;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -21,6 +24,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 
 @Service
 @Slf4j
@@ -29,6 +34,7 @@ public class AdminDataStandardServiceImpl implements IAdminDataStandardService {
 
     private final DictMapper dictMapper;
     private final DictItemMapper dictItemMapper;
+    private final CodeRuleMapper codeRuleMapper;
 
     @Override
     public PageResult<DictVO> getDictList(Integer pageNum, Integer pageSize, String dictName) {
@@ -103,33 +109,165 @@ public class AdminDataStandardServiceImpl implements IAdminDataStandardService {
     }
 
     @Override
-    public List<CodeRuleVO> getCodeRuleList() {
-        return new ArrayList<>();
+    public PageResult<CodeRuleVO> getCodeRuleList(Integer pageNum, Integer pageSize, String keyword, String status) {
+        int offset = (pageNum - 1) * pageSize;
+
+        // 列表与总数共用同一份条件：分两处写条件，只要漏改一处就会出现
+        // "总数说 20 条、当页却是另一批数据"这种静默不一致。
+        LambdaQueryWrapper<CodeRule> wrapper = new LambdaQueryWrapper<>();
+        if (keyword != null && !keyword.isEmpty()) {
+            wrapper.and(w -> w.like(CodeRule::getRuleCode, keyword).or().like(CodeRule::getRuleName, keyword));
+        }
+        if (status != null && !status.isEmpty()) {
+            wrapper.eq(CodeRule::getStatus, Integer.valueOf(status));
+        }
+        wrapper.orderByAsc(CodeRule::getRuleCode);
+
+        Long total = codeRuleMapper.selectCount(wrapper);
+        wrapper.last("LIMIT " + offset + "," + pageSize);
+
+        List<CodeRuleVO> list = new ArrayList<>();
+        for (CodeRule rule : codeRuleMapper.selectList(wrapper)) {
+            list.add(toCodeRuleVO(rule));
+        }
+        return PageResult.success(list, total, pageNum, pageSize);
     }
 
     @Override
     public CodeRuleVO getCodeRuleDetail(Long id) {
-        return null;
+        CodeRule rule = codeRuleMapper.selectById(id);
+        if (rule == null) {
+            throw new BusinessException("编码规则不存在");
+        }
+        return toCodeRuleVO(rule);
     }
 
     @Override
     @Transactional
     public void createCodeRule(CodeRuleDTO dto) {
+        // 规则编码上有唯一索引。先查一次是为了给出可读的提示，
+        // 而不是把数据库的 Duplicate entry 直接抛给用户。
+        Long exists = codeRuleMapper.selectCount(
+                new LambdaQueryWrapper<CodeRule>().eq(CodeRule::getRuleCode, dto.getRuleCode()));
+        if (exists != null && exists > 0) {
+            throw new BusinessException("规则编码已存在：" + dto.getRuleCode());
+        }
+
+        CodeRule rule = new CodeRule();
+        // 规则编码是 NOT NULL 且有唯一索引：新增时必须显式写入，
+        // 否则 MySQL 报 Field 'rule_code' doesn't have a default value（500）。
+        rule.setRuleCode(dto.getRuleCode());
+        applyDto(rule, dto);
+        rule.setStatus(dto.getStatus() == null ? 1 : dto.getStatus());
+        rule.setDelFlag(0);
+        codeRuleMapper.insert(rule);
     }
 
     @Override
     @Transactional
     public void updateCodeRule(Long id, CodeRuleDTO dto) {
+        CodeRule rule = codeRuleMapper.selectById(id);
+        if (rule == null) {
+            throw new BusinessException("编码规则不存在");
+        }
+
+        // 只覆盖本次传了的字段：启用/禁用按钮只带一个 status，
+        // 若在这里无脑 set 全部字段，会把规则名称、格式等一并清空。
+        if (dto.getRuleCode() != null && !dto.getRuleCode().isEmpty() && !dto.getRuleCode().equals(rule.getRuleCode())) {
+            Long exists = codeRuleMapper.selectCount(
+                    new LambdaQueryWrapper<CodeRule>()
+                            .eq(CodeRule::getRuleCode, dto.getRuleCode())
+                            .ne(CodeRule::getId, id));
+            if (exists != null && exists > 0) {
+                throw new BusinessException("规则编码已存在：" + dto.getRuleCode());
+            }
+            rule.setRuleCode(dto.getRuleCode());
+        }
+        applyDto(rule, dto);
+        if (dto.getStatus() != null) {
+            rule.setStatus(dto.getStatus());
+        }
+        codeRuleMapper.updateById(rule);
     }
 
     @Override
     @Transactional
     public void deleteCodeRule(Long id) {
+        CodeRule rule = codeRuleMapper.selectById(id);
+        if (rule == null) {
+            throw new BusinessException("编码规则不存在");
+        }
+        // 走 del_flag（MyBatis-Plus 已配 logic-delete-field=delFlag）
+        codeRuleMapper.deleteById(id);
     }
 
     @Override
     public String testCodeRule(Long id) {
-        return "TEST001";
+        CodeRule rule = codeRuleMapper.selectById(id);
+        if (rule == null) {
+            throw new BusinessException("编码规则不存在");
+        }
+        // 按规则真实拼一个样例，而不是返回写死的 TEST001 ——
+        // "试算"的意义就在于把用户配的前缀/日期/序号长度拼出来给他看。
+        StringBuilder code = new StringBuilder();
+        if (rule.getPrefix() != null) {
+            code.append(rule.getPrefix());
+        }
+        if (rule.getDateFormat() != null && !rule.getDateFormat().isEmpty()) {
+            code.append(LocalDate.now().format(DateTimeFormatter.ofPattern(rule.getDateFormat())));
+        }
+        int seqLength = rule.getSeqLength() == null ? 4 : rule.getSeqLength();
+        code.append(String.format("%0" + seqLength + "d", 1));
+        if (rule.getSuffix() != null) {
+            code.append(rule.getSuffix());
+        }
+        return code.toString();
+    }
+
+    /** DTO → 实体（只覆盖非空字段，用于新增与更新共用） */
+    private void applyDto(CodeRule rule, CodeRuleDTO dto) {
+        if (dto.getRuleName() != null) {
+            rule.setRuleName(dto.getRuleName());
+        }
+        if (dto.getRuleType() != null) {
+            rule.setRuleType(dto.getRuleType());
+        }
+        if (dto.getRulePattern() != null) {
+            rule.setRulePattern(dto.getRulePattern());
+        }
+        if (dto.getDescription() != null) {
+            rule.setDescription(dto.getDescription());
+        }
+        if (dto.getSeqLength() != null) {
+            rule.setSeqLength(dto.getSeqLength());
+        }
+        if (dto.getDateFormat() != null) {
+            rule.setDateFormat(dto.getDateFormat());
+        }
+        if (dto.getPrefix() != null) {
+            rule.setPrefix(dto.getPrefix());
+        }
+        if (dto.getSuffix() != null) {
+            rule.setSuffix(dto.getSuffix());
+        }
+    }
+
+    private CodeRuleVO toCodeRuleVO(CodeRule rule) {
+        CodeRuleVO vo = new CodeRuleVO();
+        vo.setId(rule.getId());
+        vo.setRuleCode(rule.getRuleCode());
+        vo.setRuleName(rule.getRuleName());
+        vo.setRuleType(rule.getRuleType());
+        vo.setRulePattern(rule.getRulePattern());
+        vo.setDescription(rule.getDescription());
+        vo.setSeqLength(rule.getSeqLength());
+        vo.setDateFormat(rule.getDateFormat());
+        vo.setPrefix(rule.getPrefix());
+        vo.setSuffix(rule.getSuffix());
+        vo.setStatus(rule.getStatus());
+        vo.setCreateTime(rule.getCreateTime() == null ? null : rule.getCreateTime().toString());
+        vo.setUpdateTime(rule.getUpdateTime() == null ? null : rule.getUpdateTime().toString());
+        return vo;
     }
 
     @Override

@@ -25,7 +25,15 @@ public interface IAdminDataStandardService {
 
     void addDictItem(Long id, DictItemSaveDTO dto);
 
-    List<CodeRuleVO> getCodeRuleList();
+    /**
+     * 编码规则分页列表。
+     *
+     * <p>原签名是没有分页参数的 `List&lt;CodeRuleVO&gt; getCodeRuleList()`，
+     * 而页面按分页结构消费（读 `data.list` / `data.total` 并渲染翻页控件）——
+     * 接口返回裸数组时 `data.list` 恒为 undefined，页面永远空着。
+     * 现与字典列表同一口径：分页 + 关键字 + 状态。</p>
+     */
+    PageResult<CodeRuleVO> getCodeRuleList(Integer pageNum, Integer pageSize, String keyword, String status);
 
     CodeRuleVO getCodeRuleDetail(Long id);
 

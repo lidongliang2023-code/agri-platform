@@ -263,9 +263,10 @@ const toggleStatus = async (row) => {
   }
 }
 
-const formatDate = (date) => {
-  if (!date) return ''
-  return date.split(' ')[0]
+/** 只取日期部分。后端返回 ISO（2026-10-12T17:32:41），只按空格切分会把 T 一起显示出来。 */
+const formatDate = (value) => {
+  if (!value) return ''
+  return String(value).replace('T', ' ').split(' ')[0]
 }
 
 onMounted(() => {

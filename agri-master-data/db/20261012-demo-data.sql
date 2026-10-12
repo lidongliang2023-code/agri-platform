@@ -231,6 +231,19 @@ VALUES
   (2207,'AUTH2007','1202','enterprise','approved',2,'{"license":"410105198203041234"}','pass','admin','2025-03-05 10:00:00',1,0,'T1002','2025-03-04 10:30:00','system','已通过');
 
 -- ---------------------------------------------------------------------------
+-- 编码规则（5 条）—— 对应运营端「数据标准 → 编码规则」页
+-- ---------------------------------------------------------------------------
+INSERT IGNORE INTO `agri_md_code_rule`
+  (`id`,`rule_code`,`rule_name`,`rule_type`,`rule_pattern`,`description`,`seq_length`,`date_format`,`prefix`,`suffix`,
+   `status`,`del_flag`,`tenant_id`,`create_time`,`create_by`,`remark`)
+VALUES
+  (2401,'RULE_PRODUCT','商品编码规则','auto','PRD{yyyyMMdd}{seq}','商品主数据编码，前缀 PRD + 日期 + 6 位序号',6,'yyyyMMdd','PRD',NULL,1,0,'T1001','2025-03-01 10:00:00','system','示范数据'),
+  (2402,'RULE_TENANT','租户编码规则','auto','TEN{seq}','租户编码，前缀 TEN + 4 位序号',4,NULL,'TEN',NULL,1,0,'T1001','2025-03-01 10:01:00','system','示范数据'),
+  (2403,'RULE_USER','用户编码规则','auto','USR{yyyyMM}{seq}','用户编码，前缀 USR + 年月 + 5 位序号',5,'yyyyMM','USR',NULL,1,0,'T1001','2025-03-01 10:02:00','system','示范数据'),
+  (2404,'RULE_ORG','组织编码规则','auto','ORG{seq}','组织编码，前缀 ORG + 6 位序号',6,NULL,'ORG',NULL,1,0,'T1001','2025-03-01 10:03:00','system','示范数据'),
+  (2405,'RULE_MANUAL','手工录入编码','manual','MANUAL','特殊场景由人工录入，不使用系统生成',0,NULL,NULL,NULL,0,0,'T1001','2025-03-01 10:04:00','system','已停用，用于验证状态列及筛选');
+
+-- ---------------------------------------------------------------------------
 -- 租户配额（每租户一条；tenant_id 存的是租户主键的字符串形式）
 -- ---------------------------------------------------------------------------
 INSERT IGNORE INTO `agri_md_tenant_quota`
@@ -252,6 +265,7 @@ VALUES
 -- 清理演示数据（需要时手工执行）
 -- ---------------------------------------------------------------------------
 -- DELETE FROM `agri_md_tenant_quota`               WHERE `id` BETWEEN 1000 AND 2999;
+-- DELETE FROM `agri_md_code_rule`                  WHERE `id` BETWEEN 1000 AND 2999;
 -- DELETE FROM `agri_md_user_authentication`        WHERE `id` BETWEEN 1000 AND 2999;
 -- DELETE FROM `agri_md_customer_supplier_relation` WHERE `id` BETWEEN 1000 AND 2999;
 -- DELETE FROM `agri_md_supplier`                   WHERE `id` BETWEEN 1000 AND 2999;

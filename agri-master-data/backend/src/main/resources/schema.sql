@@ -749,3 +749,33 @@ CREATE TABLE IF NOT EXISTS `agri_md_product_region` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_product_region` (`product_id`, `region_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='商品产区关联表';
+
+-- ---------------------------------------------------------------------------
+-- 编码规则表（2026-10-12 新增）
+--
+-- 为什么此时才建：运营端「数据标准 → 编码规则」页与 /admin/masterdata/standard/code-rule/*
+-- 六个端点早就存在，但后端是空壳（列表恒返回空数组、test 返回写死的 TEST001），
+-- 页面上永远看不到东西 —— 缺的不是数据，是这张表。建表让该族从占位变成真实现。
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `agri_md_code_rule` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `rule_code` VARCHAR(64) NOT NULL COMMENT '规则编码',
+  `rule_name` VARCHAR(128) NOT NULL COMMENT '规则名称',
+  `rule_type` VARCHAR(32) COMMENT '规则类型：auto 自动生成 / manual 手动输入',
+  `rule_pattern` VARCHAR(255) COMMENT '编码格式示例，如 PRD{yyyyMMdd}{seq}',
+  `description` VARCHAR(500) COMMENT '规则说明',
+  `seq_length` INT COMMENT '序号段长度（不足补零）',
+  `date_format` VARCHAR(64) COMMENT '日期段格式，如 yyyyMMdd；为空表示不含日期',
+  `prefix` VARCHAR(32) COMMENT '前缀',
+  `suffix` VARCHAR(32) COMMENT '后缀',
+  `status` INT DEFAULT 1 COMMENT '状态：1 启用 / 0 禁用',
+  `del_flag` INT DEFAULT 0 COMMENT '删除标志：0 未删除 / 1 已删除',
+  `tenant_id` VARCHAR(64) COMMENT '租户ID（此处存租户编码）',
+  `create_time` DATETIME COMMENT '创建时间',
+  `create_by` VARCHAR(64) COMMENT '创建人',
+  `update_time` DATETIME COMMENT '更新时间',
+  `update_by` VARCHAR(64) COMMENT '更新人',
+  `remark` VARCHAR(500) COMMENT '备注',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_code_rule_code` (`rule_code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='编码规则表';

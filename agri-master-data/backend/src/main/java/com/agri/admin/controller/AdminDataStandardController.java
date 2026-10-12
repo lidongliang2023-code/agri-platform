@@ -70,8 +70,12 @@ public class AdminDataStandardController {
 
     @Operation(summary = "获取编码规则列表")
     @GetMapping("/code-rule/list")
-    public ApiResponse<List<CodeRuleVO>> getCodeRuleList() {
-        return ApiResponse.success(adminDataStandardService.getCodeRuleList());
+    public ApiResponse<PageResult<CodeRuleVO>> getCodeRuleList(
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(defaultValue = "10") Integer pageSize,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String status) {
+        return ApiResponse.success(adminDataStandardService.getCodeRuleList(pageNum, pageSize, keyword, status));
     }
 
     @Operation(summary = "获取编码规则详情")
