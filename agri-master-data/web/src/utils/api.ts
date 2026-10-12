@@ -349,6 +349,7 @@ export const deleteSupplier = (id: number | string) => del(`${BASE}/customer/sup
 /* ---------------------------------- 系统配置 ---------------------------------- */
 
 export const getSystemConfigList = () => get(`${BASE}/config/list`)
+export const createSystemConfig = (data: unknown) => post(`${BASE}/config`, data)
 export const getSystemConfig = (id: number | string) => get(`${BASE}/config/${id}`)
 export const getSystemConfigByKey = (configKey: string) => get(`${BASE}/config/value/${configKey}`)
 export const updateSystemConfig = (id: number | string, data: unknown) =>

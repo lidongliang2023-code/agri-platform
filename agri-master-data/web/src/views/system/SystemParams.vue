@@ -122,6 +122,8 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
+import { message } from 'ant-design-vue'
+import { getSystemConfigList, createSystemConfig, updateSystemConfig } from '../../utils/api'
 
 const showAddModal = ref(false)
 const isEdit = ref(false)
@@ -139,27 +141,26 @@ const form = reactive({
   description: ''
 })
 
-const paramGroups = ['系统设置', '数据质量', '租户管理', '权限控制', '数据分发']
-
 const params = ref([])
 
-const mockParams = [
-  { id: 1, code: 'SYS_NAME', name: '系统名称', group: '系统设置', type: 'string', value: '主数据管理系统', enabled: true, description: '系统显示名称' },
-  { id: 2, code: 'SYS_VERSION', name: '系统版本', group: '系统设置', type: 'string', value: 'V1.0.0', enabled: true, description: '当前系统版本号' },
-  { id: 3, code: 'MAX_TENANT_COUNT', name: '最大租户数', group: '租户管理', type: 'number', value: '100', enabled: true, description: '系统支持的最大租户数量' },
-  { id: 4, code: 'DATA_EXPIRE_DAYS', name: '数据保留天数', group: '数据质量', type: 'number', value: '365', enabled: true, description: '检测数据保留天数' },
-  { id: 5, code: 'AUTO_SYNC_ENABLE', name: '自动同步', group: '数据分发', type: 'boolean', value: 'true', enabled: true, description: '是否启用数据自动同步' },
-  { id: 6, code: 'LOGIN_ATTEMPT_LIMIT', name: '登录尝试次数', group: '权限控制', type: 'number', value: '5', enabled: true, description: '登录失败最大尝试次数' },
-  { id: 7, code: 'TOKEN_EXPIRE_HOURS', name: 'Token过期时间', group: '权限控制', type: 'number', value: '24', enabled: true, description: '访问Token过期时间（小时）' },
-  { id: 8, code: 'QUALITY_CHECK_INTERVAL', name: '质量检测间隔', group: '数据质量', type: 'number', value: '60', enabled: false, description: '定时检测间隔（分钟）' }
-]
+/**
+ * 分组列表**从数据里推导**，不再写死。
+ *
+ * 写死的问题是：后端新增了一个分组（比如"数据安全"），筛选下拉里不会出现它，
+ * 那一组参数就永远筛不出来 —— 而界面上完全看不出缺了什么。
+ */
+const paramGroups = computed(() => {
+  const groups = new Set()
+  params.value.forEach(p => { if (p.group) groups.add(p.group) })
+  return Array.from(groups)
+})
 
 const filteredParams = computed(() => {
   return params.value.filter(param => {
     const matchGroup = filterGroup.value === 'all' || param.group === filterGroup.value
     const matchKeyword = !filterKeyword.value || 
-      param.code.toLowerCase().includes(filterKeyword.value.toLowerCase()) ||
-      param.name.toLowerCase().includes(filterKeyword.value.toLowerCase())
+      (param.code ?? '').toLowerCase().includes(filterKeyword.value.toLowerCase()) ||
+      (param.name ?? '').toLowerCase().includes(filterKeyword.value.toLowerCase())
     return matchGroup && matchKeyword
   })
 })
@@ -174,8 +175,33 @@ const getTypeText = (type) => {
   return texts[type] || type
 }
 
-const loadData = () => {
-  params.value = mockParams
+/** 接口字段 → 页面字段。两边命名不同（configKey/configName/… vs code/name/…），映射只在这一处做。 */
+const toRow = (row) => ({
+  id: row.id,
+  code: row.configKey,
+  name: row.configName,
+  group: row.groupName,
+  type: row.configType || 'string',
+  value: row.configValue,
+  // 接口给的是 StatusEnum 口径的数字（1 启用 / 0 禁用），页面用布尔开关
+  enabled: Number(row.status) === 1,
+  description: row.description
+})
+
+const loadData = async () => {
+  try {
+    const response = await getSystemConfigList()
+    if (response.code !== 200) {
+      message.error(response.message || '加载系统配置失败')
+      params.value = []
+      return
+    }
+    // 不再回落到演示数据：失败就说失败
+    params.value = (response.data ?? []).map(toRow)
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '加载系统配置失败')
+    params.value = []
+  }
 }
 
 onMounted(() => {
@@ -196,31 +222,52 @@ const editParam = (param) => {
   showAddModal.value = true
 }
 
-const toggleParam = (param) => {
-  param.enabled = !param.enabled
-  alert(`参数 "${param.name}" 已${param.enabled ? '启用' : '禁用'}`)
+const toggleParam = async (param) => {
+  const nextStatus = param.enabled ? 0 : 1
+  try {
+    // 只提交 status：接口侧是"只覆盖本次传了的字段"，不会被清空其它列
+    const response = await updateSystemConfig(param.id, { status: nextStatus })
+    if (response.code === 200) {
+      message.success(`参数「${param.name}」已${nextStatus === 1 ? '启用' : '禁用'}`)
+      loadData()
+    } else {
+      message.error(response.message || '操作失败')
+    }
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '操作失败')
+  }
 }
 
-const saveParam = () => {
+const saveParam = async () => {
   if (!form.code || !form.name || !form.value) {
-    alert('请填写必填字段')
+    message.warning('请填写必填字段')
     return
   }
 
-  if (isEdit.value) {
-    const index = params.value.findIndex(p => p.id === form.id)
-    if (index !== -1) {
-      params.value[index] = { ...params.value[index], ...form }
-    }
-    alert('参数已更新')
-  } else {
-    params.value.push({
-      id: Date.now(),
-      ...form
-    })
-    alert('参数已新增')
+  const payload = {
+    configKey: form.code,
+    configName: form.name,
+    groupName: form.group,
+    configType: form.type,
+    configValue: form.value,
+    description: form.description,
+    status: form.enabled ? 1 : 0
   }
-  closeModal()
+
+  try {
+    const response = isEdit.value
+      ? await updateSystemConfig(form.id, payload)
+      : await createSystemConfig(payload)
+    if (response.code === 200) {
+      message.success(isEdit.value ? '参数已更新' : '参数已新增')
+      closeModal()
+      loadData()
+    } else {
+      message.error(response.message || '保存失败')
+    }
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '保存失败')
+  }
 }
 </script>
 

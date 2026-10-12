@@ -779,3 +779,33 @@ CREATE TABLE IF NOT EXISTS `agri_md_code_rule` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_code_rule_code` (`rule_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='编码规则表';
+
+-- ---------------------------------------------------------------------------
+-- 系统配置表（2026-10-12 新增）
+--
+-- 与编码规则同样的情况：/admin/masterdata/config/* 七个端点早就存在，
+-- 但列表恒返回空数组、getConfigValue 恒返回写死的 "test.value"、
+-- 详情报的是 "test.key / 测试配置"，页面上看不到任何真实配置项。
+--
+-- 列名注意：`key` 与 `group` 都是 MySQL 保留字，故用 `config_key` / `group_name`。
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `agri_md_system_config` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `config_key` VARCHAR(128) NOT NULL COMMENT '参数编码，唯一',
+  `config_name` VARCHAR(128) NOT NULL COMMENT '参数名称',
+  `config_value` TEXT COMMENT '参数值（JSON 类型也存这里，按文本保存）',
+  `config_type` VARCHAR(32) COMMENT '数据类型：string/number/boolean/json',
+  `group_name` VARCHAR(64) COMMENT '参数分组',
+  `sort_order` INT DEFAULT 0 COMMENT '组内排序',
+  `description` VARCHAR(500) COMMENT '参数说明',
+  `status` INT DEFAULT 1 COMMENT '状态：1 启用 / 0 禁用',
+  `del_flag` INT DEFAULT 0 COMMENT '删除标志：0 未删除 / 1 已删除',
+  `tenant_id` VARCHAR(64) COMMENT '租户ID（全局配置为空）',
+  `create_time` DATETIME COMMENT '创建时间',
+  `create_by` VARCHAR(64) COMMENT '创建人',
+  `update_time` DATETIME COMMENT '更新时间',
+  `update_by` VARCHAR(64) COMMENT '更新人',
+  `remark` VARCHAR(500) COMMENT '备注',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_system_config_key` (`config_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='系统配置表';
