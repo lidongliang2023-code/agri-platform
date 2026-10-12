@@ -1,11 +1,11 @@
 <template>
   <div class="org-detail">
     <div class="page-header">
-      <el-button @click="goBack">← 返回</el-button>
+      <a-button @click="goBack">← 返回</a-button>
       <h1 class="page-title">组织详情</h1>
     </div>
 
-    <el-card v-if="orgData">
+    <a-card v-if="orgData">
       <div class="detail-section">
         <h3 class="section-title">基本信息</h3>
         <div class="info-grid">
@@ -39,13 +39,13 @@
           </div>
           <div class="info-item">
             <span class="label">认证状态</span>
-            <el-tag :type="getStatusType(orgData.authStatus)">
+            <a-tag :type="getStatusType(orgData.authStatus)">
               {{ getStatusLabel(orgData.authStatus) }}
-            </el-tag>
+            </a-tag>
           </div>
         </div>
       </div>
-    </el-card>
+    </a-card>
   </div>
 </template>
 

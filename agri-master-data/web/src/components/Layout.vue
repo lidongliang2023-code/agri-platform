@@ -42,7 +42,8 @@
             <div class="user-avatar">👤</div>
             <div class="user-detail">
               <span class="user-name">{{ userInfo.nickname || userInfo.username || '管理员' }}</span>
-              <span class="user-email">admin@masterdata.com</span>
+              <!-- 原来这里写死 admin@masterdata.com：一个真实的界面上不该出现编造的邮箱 -->
+              <span class="user-email">{{ userInfo.roles?.length ? userInfo.roles.join(' / ') : '未分配角色' }}</span>
             </div>
           </div>
         </div>
@@ -57,11 +58,20 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { useSessionStore } from '@/stores/session'
+import { ssoLogoutUrl } from '@/utils/sso'
 
 const router = useRouter()
+/**
+ * 登录态取唯一来源（Pinia）。
+ *
+ * 这里原来直接读 localStorage 里的 `user` / `token`，等于在 store 之外另开一份状态：
+ * 两份状态必然分叉，而且 localStorage 里的凭证本来就不该存在（V2.0 第 4.3 节）。
+ */
+const session = useSessionStore()
 
-const userInfo = ref({})
+/** 当前用户展示信息（内存态优先，回退到持久化的非凭证资料） */
+const userInfo = computed(() => session.user ?? { username: '', nickname: '', roles: [] })
 const currentPath = ref('/dashboard')
 const expandedMenu = ref(null)
 
@@ -223,19 +233,13 @@ const handleNavClick = (path) => {
 }
 
 const handleLogout = () => {
-  localStorage.removeItem('token')
-  localStorage.removeItem('user')
-  ElMessage.success('退出成功')
-  setTimeout(() => {
-    router.push('/login')
-  }, 1000)
+  session.clear()
+  // 必须由浏览器**整页导航**到认证中心的登出端点：SSO 会话 Cookie 只存在于那个域上，
+  // 子系统发起的跨域 XHR 带不上它 —— 只清本地会出现"点了登出、刷新又登回来"。
+  window.location.href = ssoLogoutUrl()
 }
 
 onMounted(() => {
-  const user = localStorage.getItem('user')
-  if (user) {
-    userInfo.value = JSON.parse(user)
-  }
   currentPath.value = router.currentRoute.value.path
   const currentMenu = menuItems.find(item => {
     if (item.children) {

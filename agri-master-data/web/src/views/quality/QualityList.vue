@@ -164,7 +164,9 @@
         <div class="modal-body">
           <div class="form-group">
             <label>处理结果</label>
-            <select v-model="handleForm.handleResult" class="form-select">
+            <!-- 字段名对齐后端：处置接口的参数是 status（必填）+ remark。
+                 原来的 handleResult/handleNote 会被后端判成"缺少必需的请求参数 status"。 -->
+            <select v-model="handleForm.status" class="form-select">
               <option value="">请选择处理结果</option>
               <option value="fixed">已修复</option>
               <option value="ignored">无需处理</option>
@@ -173,7 +175,7 @@
           </div>
           <div class="form-group">
             <label>处理备注</label>
-            <textarea v-model="handleForm.handleNote" rows="3" class="form-textarea" placeholder="请输入处理备注"></textarea>
+            <textarea v-model="handleForm.remark" rows="3" class="form-textarea" placeholder="请输入处理备注"></textarea>
           </div>
         </div>
         <div class="modal-footer">
@@ -187,7 +189,7 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { message } from 'ant-design-vue'
 import { getQualityList, handleQualityIssue } from '../../utils/api'
 
 const tableData = ref([])
@@ -207,8 +209,8 @@ const searchForm = reactive({
 })
 
 const handleForm = reactive({
-  handleResult: '',
-  handleNote: ''
+    status: '',
+    remark: ''
 })
 
 const getLevelLabel = (level) => {
@@ -236,7 +238,7 @@ const loadData = async () => {
       totalPages.value = Math.ceil(total.value / pageSize.value)
     }
   } catch (error) {
-    ElMessage.error('加载数据失败')
+    message.error('加载数据失败')
     tableData.value = mockIssues
     total.value = mockIssues.length
     totalPages.value = Math.ceil(total.value / pageSize.value)
@@ -268,32 +270,32 @@ const viewDetail = (row) => {
 
 const handleIssue = (row) => {
   detailData.value = row
-  handleForm.handleResult = ''
-  handleForm.handleNote = ''
+  handleForm.status = ''
+  handleForm.remark = ''
   handleModalVisible.value = true
 }
 
 const confirmHandle = async () => {
-  if (!handleForm.handleResult) {
-    ElMessage.warning('请选择处理结果')
+  if (!handleForm.status) {
+    message.warning('请选择处理结果')
     return
   }
   
   try {
     const response = await handleQualityIssue(detailData.value.id, {
-      handleResult: handleForm.handleResult,
-      handleNote: handleForm.handleNote
+      status: handleForm.status,
+      remark: handleForm.remark
     })
     if (response.code === 200) {
-      ElMessage.success('处理成功')
+      message.success('处理成功')
       handleModalVisible.value = false
       detailVisible.value = false
       loadData()
     } else {
-      ElMessage.error(response.message || '操作失败')
+      message.error(response.message || '操作失败')
     }
   } catch (error) {
-    ElMessage.error('操作失败')
+    message.error('操作失败')
   }
 }
 

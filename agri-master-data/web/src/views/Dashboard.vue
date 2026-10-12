@@ -1,9 +1,30 @@
+<!--
+  运营总览。
+
+  本页有一条硬规矩：**只显示查回来的数**。
+
+  改动前这里写死了四个 KPI（128 / 3,542 / 567 / 8,934）、七天的活跃度柱、四条待审核、
+  四条告警 —— 后端一失败就"回落到演示数据"，于是页面永远是满的，
+  看起来一切正常，但一个真数都没有。
+
+  现在：有数据就显示数据；没有数据来源的区块显示"未接入"并说明原因；
+  接口失败直接把失败原因显示出来。空态比假数据有用 —— 假数据会让人基于它做判断。
+-->
 <template>
   <div class="dashboard">
     <div class="section-header">
       <h1 class="section-title">运营总览</h1>
       <p class="section-desc">数据概览与统计分析</p>
     </div>
+
+    <a-alert
+      v-if="loadError"
+      type="error"
+      show-icon
+      class="load-error"
+      :message="`总览数据加载失败：${loadError}`"
+      description="下面显示的都是空值，不是真实统计结果。请检查后端与登录态是否正常。"
+    />
 
     <div class="stats-cards">
       <div class="stat-card" v-for="stat in stats" :key="stat.label">
@@ -12,30 +33,22 @@
           <div class="stat-value">{{ stat.value }}</div>
           <div class="stat-label">{{ stat.label }}</div>
         </div>
-        <div class="stat-trend" :class="stat.trend">
-          {{ stat.change }}
-        </div>
       </div>
     </div>
 
     <div class="main-content">
       <div class="chart-section">
         <div class="section-header small">
-          <h3>租户活跃度趋势</h3>
-          <select class="time-select">
-            <option>本周</option>
-            <option>本月</option>
-            <option>本季度</option>
-          </select>
+          <h3>租户活跃度排行</h3>
+          <span class="section-note">按启用状态租户，展示各租户下的启用用户数</span>
         </div>
-        <div class="activity-chart">
-          <div class="chart-bars">
-            <div v-for="(day, index) in activityData" :key="index" class="bar-item">
-              <div class="bar-wrapper">
-                <div class="bar-fill" :style="{ height: day.value + '%' }"></div>
-              </div>
-              <span class="bar-label">{{ day.label }}</span>
-            </div>
+        <div v-if="activities.length === 0" class="empty-state">暂无租户数据</div>
+        <div v-else class="rank-list">
+          <div v-for="item in activities" :key="item.tenantId" class="rank-item">
+            <span class="rank-no">{{ item.rank }}</span>
+            <span class="rank-name">{{ item.tenantName || '未命名租户' }}</span>
+            <span class="rank-type">{{ item.tenantType || '—' }}</span>
+            <span class="rank-value">{{ item.userCount ?? '—' }} 用户</span>
           </div>
         </div>
       </div>
@@ -43,46 +56,30 @@
       <div class="right-panel">
         <div class="card">
           <div class="card-header">
-            <h3>数据质量评分</h3>
+            <h3>数据质量</h3>
           </div>
-          <div class="quality-pie">
-            <div class="pie-chart">
-              <div class="pie-circle"></div>
-              <div class="pie-center">
-                <span class="pie-value">85</span>
-                <span class="pie-unit">分</span>
-              </div>
-            </div>
-            <div class="pie-legend">
-              <div class="legend-item">
-                <span class="legend-dot good"></span>
-                <span>优质 75%</span>
-              </div>
-              <div class="legend-item">
-                <span class="legend-dot medium"></span>
-                <span>中等 15%</span>
-              </div>
-              <div class="legend-item">
-                <span class="legend-dot poor"></span>
-                <span>待优化 10%</span>
-              </div>
-            </div>
+          <!-- 质量评分需要质量规则与检测结果，后端尚未接入，这里如实说明 -->
+          <div class="not-wired">
+            <p class="not-wired-title">未接入</p>
+            <p class="not-wired-desc">
+              质量评分与各域分布需要「质量规则 + 检测结果」作为数据来源，
+              主数据域目前还没有这两张表，因此不展示任何评分数字。
+            </p>
           </div>
         </div>
 
         <div class="card">
           <div class="card-header">
             <h3>待审核事项</h3>
-            <button class="view-all">查看全部</button>
           </div>
           <div class="audit-list">
-            <div v-for="item in pendingAudits" :key="item.id" class="audit-item">
+            <div v-for="item in pendingAudits" :key="item.label" class="audit-item">
               <span class="audit-icon">{{ item.icon }}</span>
               <div class="audit-info">
-                <span class="audit-title">{{ item.title }}</span>
-                <span class="audit-time">{{ item.time }}</span>
+                <span class="audit-title">{{ item.label }}</span>
+                <span class="audit-time">{{ item.hint }}</span>
               </div>
-              <button class="audit-action">审核</button>
+              <span class="audit-count">{{ item.value === null ? '未接入' : item.value }}</span>
             </div>
           </div>
         </div>
@@ -93,26 +90,29 @@
       <div class="card wide">
         <div class="card-header">
           <h3>系统告警</h3>
-          <button class="view-all">查看全部</button>
+          <span class="section-note">告警需要监控阈值规则作为来源</span>
         </div>
-        <div class="alert-table">
+        <div v-if="alerts.length === 0" class="empty-state">
+          暂无告警数据（告警来源未接入，此处不再用示例告警填充）
+        </div>
+        <div v-else class="alert-table">
           <table>
             <thead>
               <tr>
                 <th>级别</th>
-                <th>消息</th>
-                <th>模块</th>
+                <th>标题</th>
+                <th>内容</th>
+                <th>租户</th>
                 <th>时间</th>
-                <th>操作</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="alert in alerts" :key="alert.id">
-                <td><span class="alert-badge" :class="alert.level">{{ alert.level }}</span></td>
-                <td>{{ alert.message }}</td>
-                <td>{{ alert.module }}</td>
-                <td>{{ alert.time }}</td>
-                <td><button class="handle-btn">处理</button></td>
+              <tr v-for="(alert, index) in alerts" :key="index">
+                <td><span class="alert-badge">{{ alert.level }}</span></td>
+                <td>{{ alert.title }}</td>
+                <td>{{ alert.content }}</td>
+                <td>{{ alert.tenantName || '—' }}</td>
+                <td>{{ alert.createTime || '—' }}</td>
               </tr>
             </tbody>
           </table>
@@ -123,58 +123,75 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
-import { getDashboard } from '../utils/api'
+import { ref, computed, onMounted } from 'vue'
+import { getDashboard, getTenantActivity } from '../utils/api'
 
-const stats = reactive([
-  { label: '租户总数', value: '128', icon: '🏢', change: '+12.5%', trend: 'up' },
-  { label: '用户总数', value: '3,542', icon: '👥', change: '+8.3%', trend: 'up' },
-  { label: '组织总数', value: '567', icon: '🏠', change: '+5.2%', trend: 'up' },
-  { label: '商品总数', value: '8,934', icon: '📦', change: '-2.1%', trend: 'down' }
+const metrics = ref(null)
+const audit = ref(null)
+const activities = ref([])
+const alerts = ref([])
+const loadError = ref('')
+
+/** 显示规则：null / undefined 一律显示为 "—"，不显示 0（0 是"查到了 0 条"，含义完全不同） */
+const show = (value) => (value === null || value === undefined ? '—' : value)
+
+const stats = computed(() => [
+  { label: '租户总数', value: show(metrics.value?.tenantCount), icon: '🏢' },
+  { label: '用户总数', value: show(metrics.value?.userCount), icon: '👥' },
+  { label: '组织总数', value: show(metrics.value?.orgCount), icon: '🏠' },
+  { label: '待认证用户', value: show(audit.value?.userCertCount), icon: '🪪' },
 ])
 
-const activityData = [
-  { label: '周一', value: 65 },
-  { label: '周二', value: 78 },
-  { label: '周三', value: 82 },
-  { label: '周四', value: 71 },
-  { label: '周五', value: 85 },
-  { label: '周六', value: 45 },
-  { label: '周日', value: 38 }
-]
+const pendingAudits = computed(() => [
+  {
+    label: '用户认证审核',
+    value: audit.value?.userCertCount ?? null,
+    hint: '认证状态为 pending 的用户',
+    icon: '👤',
+  },
+  {
+    label: '组织资质审核',
+    value: audit.value?.orgCertCount ?? null,
+    hint: '认证状态为 pending 的组织',
+    icon: '🏠',
+  },
+  {
+    label: '标准变更审批',
+    value: audit.value?.standardChangeCount ?? null,
+    hint: '标准变更表尚未建立',
+    icon: '📋',
+  },
+  {
+    label: '质量问题工单',
+    value: audit.value?.qualityIssueCount ?? null,
+    hint: '质量问题表尚未建立',
+    icon: '⚠️',
+  },
+])
 
-const pendingAudits = [
-  { id: 1, title: '用户张三实名认证审核', icon: '👤', time: '10分钟前' },
-  { id: 2, title: '组织XX公司资质审核', icon: '🏠', time: '30分钟前' },
-  { id: 3, title: '用户李四企业认证审核', icon: '👤', time: '1小时前' },
-  { id: 4, title: '商品有机认证审核', icon: '📦', time: '2小时前' }
-]
-
-const alerts = [
-  { id: 1, level: 'error', message: '租户T001数据同步失败', time: '5分钟前', module: '数据分发' },
-  { id: 2, level: 'warning', message: '数据质量评分低于阈值', time: '15分钟前', module: '数据质量' },
-  { id: 3, level: 'info', message: '新租户注册成功', time: '30分钟前', module: '租户管理' },
-  { id: 4, level: 'warning', message: 'API调用次数接近上限', time: '1小时前', module: '系统监控' }
-]
-
-onMounted(() => {
-  loadData()
-})
-
-const loadData = async () => {
+async function loadData() {
+  loadError.value = ''
   try {
-    const response = await getDashboard()
-    if (response.code === 200 && response.data) {
-      const data = response.data
-      if (data.tenantCount !== undefined) stats[0].value = data.tenantCount.toString()
-      if (data.userCount !== undefined) stats[1].value = data.userCount.toString()
-      if (data.orgCount !== undefined) stats[2].value = data.orgCount.toString()
-      if (data.productCount !== undefined) stats[3].value = data.productCount.toString()
+    const dashboard = await getDashboard()
+    if (dashboard.code !== 200) {
+      loadError.value = dashboard.message || '后端返回业务失败'
+      return
+    }
+    metrics.value = dashboard.data?.coreMetrics ?? null
+    audit.value = dashboard.data?.pendingAudit ?? null
+    alerts.value = dashboard.data?.alerts ?? []
+
+    const activity = await getTenantActivity(10)
+    if (activity.code === 200) {
+      activities.value = activity.data ?? []
     }
   } catch (error) {
-    console.error('Failed to load dashboard data:', error)
+    // 不再"回落到演示数据"：失败就说失败，否则页面满屏数字却全是假的
+    loadError.value = error instanceof Error ? error.message : '请求失败'
   }
 }
+
+onMounted(loadData)
 </script>
 
 <style scoped>
@@ -188,6 +205,9 @@ const loadData = async () => {
 
 .section-header.small {
   margin-bottom: 16px;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
 }
 
 .section-title {
@@ -201,6 +221,15 @@ const loadData = async () => {
   font-size: 14px;
   color: #a0aec0;
   margin: 4px 0 0;
+}
+
+.section-note {
+  font-size: 12px;
+  color: #a0aec0;
+}
+
+.load-error {
+  margin-bottom: 20px;
 }
 
 .stats-cards {
@@ -218,12 +247,6 @@ const loadData = async () => {
   align-items: center;
   gap: 16px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  transition: all 0.2s;
-}
-
-.stat-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .stat-icon {
@@ -252,23 +275,6 @@ const loadData = async () => {
   color: #a0aec0;
 }
 
-.stat-trend {
-  font-size: 12px;
-  font-weight: 500;
-  padding: 4px 8px;
-  border-radius: 12px;
-}
-
-.stat-trend.up {
-  background: rgba(35, 134, 54, 0.1);
-  color: #238636;
-}
-
-.stat-trend.down {
-  background: rgba(218, 54, 51, 0.1);
-  color: #da3633;
-}
-
 .main-content {
   display: grid;
   grid-template-columns: 2fr 1fr;
@@ -283,54 +289,50 @@ const loadData = async () => {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
-.time-select {
-  padding: 6px 12px;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  font-size: 13px;
-  color: #4a5568;
-  background: #fff;
-  cursor: pointer;
-}
-
-.activity-chart {
-  padding-top: 20px;
-}
-
-.chart-bars {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  height: 200px;
-}
-
-.bar-item {
+.rank-list {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  flex: 1;
 }
 
-.bar-wrapper {
-  width: 32px;
-  height: 160px;
-  background: #f0f0f0;
-  border-radius: 4px;
+.rank-item {
   display: flex;
-  align-items: flex-end;
-  margin-bottom: 8px;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 4px;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 13px;
 }
 
-.bar-fill {
-  width: 100%;
-  background: linear-gradient(180deg, #238636 0%, #2ea043 100%);
-  border-radius: 4px;
-  transition: height 0.3s ease;
+.rank-item:last-child {
+  border-bottom: none;
 }
 
-.bar-label {
+.rank-no {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(35, 134, 54, 0.1);
+  color: #238636;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-size: 12px;
+}
+
+.rank-name {
+  flex: 1;
+  color: #2d3748;
+  font-weight: 500;
+}
+
+.rank-type {
   color: #a0aec0;
+}
+
+.rank-value {
+  color: #4a5568;
+  min-width: 72px;
+  text-align: right;
 }
 
 .right-panel {
@@ -346,14 +348,10 @@ const loadData = async () => {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
-.card.wide {
-  grid-column: span 2;
-}
-
 .card-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: baseline;
   margin-bottom: 16px;
 }
 
@@ -364,102 +362,34 @@ const loadData = async () => {
   margin: 0;
 }
 
-.view-all {
+.not-wired {
+  padding: 16px;
+  border: 1px dashed #d9d9d9;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.not-wired-title {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #8c8c8c;
+}
+
+.not-wired-desc {
+  margin: 0;
   font-size: 12px;
-  color: #238636;
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 4px;
-  transition: background 0.2s;
+  line-height: 1.7;
+  color: #8c8c8c;
 }
 
-.view-all:hover {
-  background: rgba(35, 134, 54, 0.1);
-}
-
-.quality-pie {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 30px;
-  padding: 20px 0;
-}
-
-.pie-chart {
-  position: relative;
-  width: 120px;
-  height: 120px;
-}
-
-.pie-circle {
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  background: conic-gradient(
-    #238636 0deg 270deg,
-    #d29922 270deg 324deg,
-    #da3633 324deg 360deg
-  );
-}
-
-.pie-center {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 80px;
-  height: 80px;
-  border-radius: 50%;
-  background: #fff;
-  display: flex;
-  align-items: baseline;
-  justify-content: center;
-}
-
-.pie-value {
-  font-size: 28px;
-  font-weight: 700;
-  color: #238636;
-}
-
-.pie-unit {
-  font-size: 12px;
-  color: #a0aec0;
-  margin-left: 2px;
-}
-
-.pie-legend {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.legend-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.empty-state {
+  padding: 28px 16px;
+  text-align: center;
   font-size: 13px;
-  color: #4a5568;
-}
-
-.legend-dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-}
-
-.legend-dot.good {
-  background: #238636;
-}
-
-.legend-dot.medium {
-  background: #d29922;
-}
-
-.legend-dot.poor {
-  background: #da3633;
+  color: #a0aec0;
+  background: #fafafa;
+  border-radius: 8px;
 }
 
 .audit-list {
@@ -505,20 +435,10 @@ const loadData = async () => {
   color: #a0aec0;
 }
 
-.audit-action {
-  font-size: 12px;
+.audit-count {
+  font-size: 16px;
+  font-weight: 600;
   color: #238636;
-  background: rgba(35, 134, 54, 0.1);
-  border: none;
-  padding: 6px 12px;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.audit-action:hover {
-  background: #238636;
-  color: #fff;
 }
 
 .bottom-section {
@@ -540,17 +460,7 @@ const loadData = async () => {
   padding: 12px;
   text-align: left;
   border-bottom: 1px solid #f0f0f0;
-}
-
-.alert-table th {
   font-size: 13px;
-  font-weight: 600;
-  color: #4a5568;
-}
-
-.alert-table td {
-  font-size: 13px;
-  color: #2d3748;
 }
 
 .alert-badge {
@@ -558,36 +468,7 @@ const loadData = async () => {
   font-weight: 500;
   padding: 4px 10px;
   border-radius: 12px;
-}
-
-.alert-badge.error {
-  background: rgba(218, 54, 51, 0.1);
-  color: #da3633;
-}
-
-.alert-badge.warning {
-  background: rgba(210, 153, 34, 0.1);
-  color: #d29922;
-}
-
-.alert-badge.info {
   background: rgba(59, 130, 246, 0.1);
   color: #3b82f6;
-}
-
-.handle-btn {
-  font-size: 12px;
-  color: #238636;
-  background: rgba(35, 134, 54, 0.1);
-  border: none;
-  padding: 6px 12px;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.handle-btn:hover {
-  background: #238636;
-  color: #fff;
 }
 </style>

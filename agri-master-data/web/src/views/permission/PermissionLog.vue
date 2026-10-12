@@ -76,7 +76,7 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { message } from 'ant-design-vue'
 import { getOperationLogs } from '../../utils/api'
 
 const tableData = ref([])
@@ -113,7 +113,7 @@ const loadData = async () => {
       totalPages.value = Math.ceil(total.value / pageSize.value)
     }
   } catch (error) {
-    ElMessage.error('加载数据失败')
+    message.error('加载数据失败')
     tableData.value = mockLogs
     total.value = mockLogs.length
     totalPages.value = Math.ceil(total.value / pageSize.value)

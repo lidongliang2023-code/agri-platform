@@ -4,18 +4,44 @@ import com.agri.admin.service.IDashboardService;
 import com.agri.admin.vo.DashboardVO;
 import com.agri.admin.vo.HealthDashboardVO;
 import com.agri.admin.vo.TenantActivityVO;
-import com.agri.masterdata.entity.*;
-import com.agri.masterdata.mapper.*;
+import com.agri.common.enums.StatusEnum;
+import com.agri.masterdata.entity.Organization;
+import com.agri.masterdata.entity.Tenant;
+import com.agri.masterdata.entity.User;
+import com.agri.masterdata.entity.UserAuthentication;
+import com.agri.masterdata.mapper.OrganizationMapper;
+import com.agri.masterdata.mapper.TenantMapper;
+import com.agri.masterdata.mapper.UserAuthenticationMapper;
+import com.agri.masterdata.mapper.UserMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
+/**
+ * 运营总览。
+ *
+ * <p><b>本类的核心约束：查不到就说没有，不编。</b></p>
+ *
+ * <p>改动前的实现里混了大量**没有数据来源却当成真值返回**的字段，其中两类尤其危险：</p>
+ * <ul>
+ *   <li><b>告警列表</b>：5 条写死的告警，`createTime` 取 `LocalDateTime.now()` ——
+ *       前端拿到的是"刚刚发生"的真实时间戳，界面上完全看不出是假的；</li>
+ *   <li><b>随机数</b>：租户活跃度里 `userCount` 用 `Math.random()*1000+100`、
+ *       健康度趋势用 `Math.random()` 生成折线 —— 每次刷新数字都变，
+ *       反而比写死更像"实时数据"。</li>
+ * </ul>
+ *
+ * <p>现在：能查库的查库；没有数据来源的返回 <b>null</b> 或空集合，由前端显示"未接入/暂无"。
+ * 这比返回一个看起来合理的数字要诚实 —— 后者会让人基于假数字做判断。</p>
+ *
+ * <p>顺带修掉一个真实的口径 bug：原来的统计条件写的是 `status = 0`，
+ * 而 `StatusEnum` 里 <b>1 才是启用</b>（0 是禁用）。所以租户/用户/组织三个总数
+ * 一直在统计"已禁用的条数"，库里有 1 个租户也照样显示 0。</p>
+ */
 @Service
 @RequiredArgsConstructor
 public class DashboardServiceImpl implements IDashboardService {
@@ -25,174 +51,125 @@ public class DashboardServiceImpl implements IDashboardService {
     private final OrganizationMapper organizationMapper;
     private final UserAuthenticationMapper userAuthenticationMapper;
 
+    /** 认证审核中状态值（与 UserAuthentication.authStatus 口径一致） */
+    private static final String AUDIT_PENDING = "pending";
+
     @Override
     public DashboardVO getDashboard(String timeRange) {
         DashboardVO vo = new DashboardVO();
-        
         vo.setCoreMetrics(getCoreMetrics());
-        vo.setDistributionStatus(getDistributionStatus());
-        vo.setAlerts(getAlerts(5));
         vo.setPendingAudit(getPendingAudit());
-        vo.setQualityDistribution(getQualityDistribution());
-        
+        vo.setAlerts(getAlerts(5));
+        // 分发状态与数据质量分布目前**没有数据来源**（主数据域没有分发任务表、
+        // 也没有质量评分表），返回 null 而不是编一组百分比。
+        vo.setDistributionStatus(null);
+        vo.setQualityDistribution(null);
         return vo;
     }
 
     @Override
     public HealthDashboardVO getHealthDashboard() {
         HealthDashboardVO vo = new HealthDashboardVO();
-        
-        vo.setOverallScore(96.8);
-        
-        List<HealthDashboardVO.DomainScore> domainScores = new ArrayList<>();
-        domainScores.add(createDomainScore("用户主数据", "user", 98.5, 3));
-        domainScores.add(createDomainScore("组织主数据", "org", 97.2, 5));
-        domainScores.add(createDomainScore("商品主数据", "product", 96.1, 8));
-        domainScores.add(createDomainScore("权限主数据", "permission", 99.2, 1));
-        domainScores.add(createDomainScore("客户供应商", "customer", 95.8, 6));
-        vo.setDomainScores(domainScores);
-        
-        List<HealthDashboardVO.ScoreTrend> trends = new ArrayList<>();
-        for (int i = 6; i >= 0; i--) {
-            HealthDashboardVO.ScoreTrend trend = new HealthDashboardVO.ScoreTrend();
-            trend.setDate(LocalDate.now().minusDays(i).format(DateTimeFormatter.ofPattern("MM-dd")));
-            trend.setScore(96.0 + Math.random() * 2);
-            trends.add(trend);
-        }
-        vo.setScoreTrends(trends);
-        
-        List<HealthDashboardVO.QualityIssue> issues = new ArrayList<>();
-        issues.add(createQualityIssue("数据重复", "用户主数据", "发现重复身份证号", "中等", 5L));
-        issues.add(createQualityIssue("格式错误", "商品主数据", "商品编码格式不符合规范", "低", 12L));
-        issues.add(createQualityIssue("数据缺失", "组织主数据", "部分组织缺少营业执照信息", "高", 3L));
-        vo.setTopIssues(issues);
-        
-        HealthDashboardVO.DataFreshness freshness = new HealthDashboardVO.DataFreshness();
-        freshness.setLastUpdateTime(LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
-        freshness.setUpdateCountToday(1234L);
-        freshness.setFreshnessRate(99.5);
-        vo.setDataFreshness(freshness);
-        
+        // 健康度评分需要质量规则与检测结果，二者都未接入，故整体留空。
+        vo.setOverallScore(null);
+        vo.setDomainScores(Collections.emptyList());
+        vo.setScoreTrends(Collections.emptyList());
+        vo.setTopIssues(Collections.emptyList());
+        vo.setDataFreshness(null);
         return vo;
     }
 
     @Override
     public List<TenantActivityVO> getTenantActivity(Integer limit) {
-        List<TenantActivityVO> result = new ArrayList<>();
-        
+        int size = (limit == null || limit <= 0) ? 10 : limit;
         List<Tenant> tenants = tenantMapper.selectList(
-            new LambdaQueryWrapper<Tenant>()
-                .eq(Tenant::getStatus, 0)
-                .orderByDesc(Tenant::getCreateTime)
-                .last("LIMIT " + limit)
+                new LambdaQueryWrapper<Tenant>()
+                        .eq(Tenant::getStatus, StatusEnum.ENABLE.getCode())
+                        .orderByDesc(Tenant::getCreateTime)
+                        .last("LIMIT " + size)
         );
-        
+
+        List<TenantActivityVO> result = new ArrayList<>();
         int rank = 1;
         for (Tenant tenant : tenants) {
             TenantActivityVO vo = new TenantActivityVO();
             vo.setRank(rank++);
-            vo.setTenantId(tenant.getId().toString());
+            vo.setTenantId(tenant.getId() == null ? null : tenant.getId().toString());
             vo.setTenantName(tenant.getTenantName());
             vo.setTenantType(tenant.getTenantType());
-            vo.setUserCount((long) (Math.random() * 1000 + 100));
-            vo.setQualityScore(95 + Math.random() * 5);
-            vo.setDataUpdateCount((long) (Math.random() * 1000));
+            // 该租户下的启用用户数：真查库。
+            vo.setUserCount(userMapper.selectCount(
+                    new LambdaQueryWrapper<User>()
+                            .eq(User::getTenantId, tenant.getTenantCode())
+                            .eq(User::getStatus, StatusEnum.ENABLE.getCode())
+            ));
+            // 下面两项没有数据来源，明确留空；原来这里是 Math.random()。
+            vo.setQualityScore(null);
+            vo.setDataUpdateCount(null);
             result.add(vo);
         }
-        
         return result;
     }
 
     @Override
     public List<DashboardVO.AlertItem> getAlerts(Integer limit) {
-        List<DashboardVO.AlertItem> alerts = new ArrayList<>();
-        
-        alerts.add(createAlert("紧急", "租户配额预警", "租户T001用户配额使用达到95%", "T001", "阳光农业集团"));
-        alerts.add(createAlert("重要", "认证即将过期", "用户U10056实名认证即将过期", "T002", "绿野生态科技"));
-        alerts.add(createAlert("重要", "质量评分下降", "数据质量综合评分下降0.5%", null, null));
-        alerts.add(createAlert("重要", "异常权限检测", "检测到互斥角色分配", "T003", "丰收供应链"));
-        alerts.add(createAlert("一般", "存储预警", "租户T004存储空间使用达到80%", "T004", "农资经销商"));
-        
-        return alerts.size() > limit ? alerts.subList(0, limit) : alerts;
+        // 告警需要监控/阈值规则作为来源，当前未接入。返回空列表，
+        // 前端显示"暂无告警"—— 而不是 5 条带着当前时间戳的假告警。
+        return Collections.emptyList();
     }
 
     @Override
     public DashboardVO.PendingAudit getPendingAudit() {
         DashboardVO.PendingAudit audit = new DashboardVO.PendingAudit();
-        
         audit.setUserCertCount(userAuthenticationMapper.selectCount(
-            new LambdaQueryWrapper<UserAuthentication>()
-                .eq(UserAuthentication::getAuthStatus, "pending")
+                new LambdaQueryWrapper<UserAuthentication>()
+                        .eq(UserAuthentication::getAuthStatus, AUDIT_PENDING)
         ));
-        audit.setOrgCertCount(12L);
-        audit.setStandardChangeCount(3L);
-        audit.setQualityIssueCount(8L);
-        
+        audit.setOrgCertCount(organizationMapper.selectCount(
+                new LambdaQueryWrapper<Organization>()
+                        .eq(Organization::getAuthStatus, AUDIT_PENDING)
+        ));
+        // 标准变更申请与质量问题都还没有对应的表，留空而不是写死 3 / 8。
+        audit.setStandardChangeCount(null);
+        audit.setQualityIssueCount(null);
         return audit;
     }
 
     private DashboardVO.CoreMetrics getCoreMetrics() {
         DashboardVO.CoreMetrics metrics = new DashboardVO.CoreMetrics();
-        
-        metrics.setTenantCount(tenantMapper.selectCount(new LambdaQueryWrapper<Tenant>().eq(Tenant::getStatus, 0)));
-        metrics.setUserCount(userMapper.selectCount(new LambdaQueryWrapper<User>().eq(User::getStatus, 0)));
-        metrics.setOrgCount(organizationMapper.selectCount(new LambdaQueryWrapper<Organization>().eq(Organization::getStatus, 0)));
-        metrics.setQualityScore(96.8);
-        
-        metrics.setTenantCountChange("↑5.2%");
-        metrics.setUserCountChange("↑8.3%");
-        metrics.setOrgCountChange("↑3.1%");
-        metrics.setQualityScoreChange("↑0.5%");
-        
+        metrics.setTenantCount(countEnabledTenants());
+        metrics.setUserCount(countEnabledUsers());
+        metrics.setOrgCount(countEnabledOrgs());
+        // 质量评分与四个环比都没有数据来源（没有历史快照表，算不出环比），留空。
+        metrics.setQualityScore(null);
+        metrics.setTenantCountChange(null);
+        metrics.setUserCountChange(null);
+        metrics.setOrgCountChange(null);
+        metrics.setQualityScoreChange(null);
         return metrics;
     }
 
-    private DashboardVO.DistributionStatus getDistributionStatus() {
-        DashboardVO.DistributionStatus status = new DashboardVO.DistributionStatus();
-        status.setTodayDistribution(1234L);
-        status.setSuccessRate(99.8);
-        status.setAvgDelay(0.3);
-        status.setFailedCount(2L);
-        return status;
+    private Long countEnabledTenants() {
+        return tenantMapper.selectCount(
+                new LambdaQueryWrapper<Tenant>()
+                        .eq(Tenant::getStatus, StatusEnum.ENABLE.getCode())
+                        .eq(Tenant::getDelFlag, 0)
+        );
     }
 
-    private DashboardVO.QualityDistribution getQualityDistribution() {
-        DashboardVO.QualityDistribution dist = new DashboardVO.QualityDistribution();
-        dist.setUserMasterData(98.0);
-        dist.setOrgMasterData(97.0);
-        dist.setProductMasterData(96.0);
-        dist.setPermissionMasterData(99.0);
-        dist.setCustomerSupplier(95.0);
-        return dist;
+    private Long countEnabledUsers() {
+        return userMapper.selectCount(
+                new LambdaQueryWrapper<User>()
+                        .eq(User::getStatus, StatusEnum.ENABLE.getCode())
+                        .eq(User::getDelFlag, 0)
+        );
     }
 
-    private DashboardVO.AlertItem createAlert(String level, String title, String content, String tenantId, String tenantName) {
-        DashboardVO.AlertItem alert = new DashboardVO.AlertItem();
-        alert.setLevel(level);
-        alert.setTitle(title);
-        alert.setContent(content);
-        alert.setTenantId(tenantId);
-        alert.setTenantName(tenantName);
-        alert.setCreateTime(LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
-        return alert;
-    }
-
-    private HealthDashboardVO.DomainScore createDomainScore(String name, String code, Double score, Integer issues) {
-        HealthDashboardVO.DomainScore ds = new HealthDashboardVO.DomainScore();
-        ds.setDomainName(name);
-        ds.setDomainCode(code);
-        ds.setScore(score);
-        ds.setIssueCount(issues);
-        return ds;
-    }
-
-    private HealthDashboardVO.QualityIssue createQualityIssue(String type, String domain, String desc, String severity, Long count) {
-        HealthDashboardVO.QualityIssue issue = new HealthDashboardVO.QualityIssue();
-        issue.setIssueType(type);
-        issue.setDomain(domain);
-        issue.setDescription(desc);
-        issue.setSeverity(severity);
-        issue.setCount(count);
-        return issue;
+    private Long countEnabledOrgs() {
+        return organizationMapper.selectCount(
+                new LambdaQueryWrapper<Organization>()
+                        .eq(Organization::getStatus, StatusEnum.ENABLE.getCode())
+                        .eq(Organization::getDelFlag, 0)
+        );
     }
 }

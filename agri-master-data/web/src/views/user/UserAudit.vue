@@ -154,7 +154,7 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { message } from 'ant-design-vue'
 import { getUserAuditList, reviewUserCert } from '../../utils/api'
 
 const tableData = ref([])
@@ -196,7 +196,7 @@ const loadData = async () => {
       total.value = response.data.total || mockAudits.length
       totalPages.value = Math.ceil(total.value / pageSize.value)
     } else {
-      ElMessage.warning('获取数据失败，使用本地数据')
+      message.warning('获取数据失败，使用本地数据')
       tableData.value = mockAudits
       total.value = mockAudits.length
       totalPages.value = Math.ceil(total.value / pageSize.value)
@@ -204,11 +204,11 @@ const loadData = async () => {
   } catch (error) {
     console.error('认证审核列表加载失败:', error)
     if (error.response) {
-      ElMessage.error(`加载失败: ${error.response.status} - ${error.response.statusText}`)
+      message.error(`加载失败: ${error.response.status} - ${error.response.statusText}`)
     } else if (error.request) {
-      ElMessage.warning('网络请求失败，使用本地数据')
+      message.warning('网络请求失败，使用本地数据')
     } else {
-      ElMessage.error('请求配置错误')
+      message.error('请求配置错误')
     }
     tableData.value = mockAudits
     total.value = mockAudits.length
@@ -243,20 +243,20 @@ const approve = async (id) => {
   try {
     const response = await reviewUserCert(id, { authStatus: 'approved', auditNote: '审核通过' })
     if (response.code === 200) {
-      ElMessage.success('审核通过')
+      message.success('审核通过')
       detailVisible.value = false
       loadData()
     } else {
-      ElMessage.error(response.message || '操作失败')
+      message.error(response.message || '操作失败')
     }
   } catch (error) {
-    ElMessage.error('操作失败')
+    message.error('操作失败')
   }
 }
 
 const confirmReject = async () => {
   if (!rejectForm.auditNote) {
-    ElMessage.warning('请填写拒绝原因')
+    message.warning('请填写拒绝原因')
     return
   }
   
@@ -266,16 +266,16 @@ const confirmReject = async () => {
       auditNote: rejectForm.auditNote 
     })
     if (response.code === 200) {
-      ElMessage.success('已拒绝')
+      message.success('已拒绝')
       showRejectModal.value = false
       detailVisible.value = false
       rejectForm.auditNote = ''
       loadData()
     } else {
-      ElMessage.error(response.message || '操作失败')
+      message.error(response.message || '操作失败')
     }
   } catch (error) {
-    ElMessage.error('操作失败')
+    message.error('操作失败')
   }
 }
 

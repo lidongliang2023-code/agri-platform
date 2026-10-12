@@ -1,3 +1,13 @@
+<!--
+  运营端登录页 —— **委托平台统一认证中心**（V2.0 第 5.1 / 5.2 节）。
+
+  这个页面**不收集密码**，也**不碰任何凭证**：它的唯一职责是把浏览器送到认证中心，
+  并把"回来后要去哪"记下来。子系统前端与后端都不接触用户密码。
+
+  为什么原来那版必须删掉：它自带一份"后端调不通就本地放行 admin/admin123"的兜底，
+  等于把"接口挂了"静默变成"登录成功、进去看演示数据"。这比报错更难发现，
+  因为它看起来是通的。现在后端不可达就直接把失败原因显示出来。
+-->
 <template>
   <div class="login-container">
     <div class="login-bg"></div>
@@ -11,33 +21,25 @@
           </div>
         </div>
       </div>
-      <el-form ref="loginForm" :model="form" :rules="rules" class="login-form">
-        <el-form-item prop="username">
-          <el-input 
-            v-model="form.username" 
-            placeholder="用户名" 
-            size="large"
-            prefix-icon="User"
-            class="input-field"
-          />
-        </el-form-item>
-        <el-form-item prop="password">
-          <el-input 
-            v-model="form.password" 
-            type="password" 
-            placeholder="密码" 
-            size="large"
-            prefix-icon="Lock"
-            class="input-field"
-            @keyup.enter="handleLogin"
-          />
-        </el-form-item>
-        <el-form-item class="login-btn-wrap">
-          <el-button type="primary" size="large" class="login-btn" @click="handleLogin">
-            登 录
-          </el-button>
-        </el-form-item>
-      </el-form>
+
+      <div class="delegate">
+        <p class="delegate-title">使用平台账号登录</p>
+        <p class="delegate-desc">
+          账号由平台统一认证中心管理，本系统不保存你的密码与登录凭证。
+        </p>
+        <a-button
+          type="primary"
+          size="large"
+          block
+          :loading="redirecting"
+          class="login-btn"
+          @click="startLogin"
+        >
+          前往统一认证中心
+        </a-button>
+        <p v-if="error" class="delegate-error">{{ error }}</p>
+      </div>
+
       <div class="login-footer">
         <span>© 2024 主数据管理系统</span>
       </div>
@@ -45,62 +47,62 @@
   </div>
 </template>
 
-<script setup>
-import { ref, reactive } from 'vue'
-import { ElMessage } from 'element-plus'
-import { login } from '../utils/api'
+<script setup lang="ts">
+import { ref, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
+import { redirectToSso } from '@/utils/sso'
 
-const form = reactive({
-  username: '',
-  password: ''
-})
+const route = useRoute()
+const redirecting = ref(false)
+const error = ref('')
 
-const rules = {
-  username: [
-    { required: true, message: '请输入用户名', trigger: 'blur' }
-  ],
-  password: [
-    { required: true, message: '请输入密码', trigger: 'blur' }
-  ]
+/** 去认证中心。带回跳目标，登录后能回到用户原本想去的页面。 */
+async function startLogin(): Promise<void> {
+  redirecting.value = true
+  error.value = ''
+  try {
+    const target = typeof route.query.redirect === 'string' ? route.query.redirect : undefined
+    await redirectToSso(target)
+  } catch (cause) {
+    redirecting.value = false
+    error.value = cause instanceof Error ? cause.message : '无法跳转到统一认证中心'
+  }
 }
 
-const handleLogin = async () => {
-  if (!form.username || !form.password) {
-    ElMessage.warning('请输入用户名和密码')
+onMounted(() => {
+  // 带 ?local=1 时不自动跳转：那是从失败的回跳页回来的，自动跳会变成无限来回
+  if (route.query.local === '1') {
     return
   }
-  
-  try {
-    const response = await login(form)
-    if (response.code === 200) {
-      localStorage.setItem('token', response.data.token)
-      localStorage.setItem('user', JSON.stringify(response.data.userInfo))
-      localStorage.setItem('userType', 'admin')
-      ElMessage.success('登录成功')
-      setTimeout(() => {
-        window.location.href = '/'
-      }, 1000)
-    } else {
-      ElMessage.error(response.message || '登录失败')
-    }
-  } catch (error) {
-    console.log('后端服务未启动，使用模拟登录')
-    if (form.username === 'admin' && form.password === 'admin123') {
-      localStorage.setItem('token', 'admin_token_' + Date.now())
-      localStorage.setItem('user', JSON.stringify({ username: 'admin', nickname: '管理员' }))
-      localStorage.setItem('userType', 'admin')
-      ElMessage.success('登录成功')
-      setTimeout(() => {
-        window.location.href = '/'
-      }, 1000)
-    } else {
-      ElMessage.error('登录失败，请使用测试账号：admin/admin123')
-    }
-  }
-}
+  void startLogin()
+})
 </script>
 
 <style scoped>
+.delegate {
+  padding: 0 8px;
+}
+
+.delegate-title {
+  margin: 0 0 6px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.delegate-desc {
+  margin: 0 0 20px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #667085;
+}
+
+.delegate-error {
+  margin: 14px 0 0;
+  font-size: 13px;
+  color: #da3633;
+}
+
 .login-container {
   min-height: 100vh;
   display: flex;

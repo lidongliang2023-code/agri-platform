@@ -137,7 +137,7 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { message } from 'ant-design-vue'
 import { getCodeRuleList, createCodeRule, updateCodeRule } from '../../utils/api'
 
 const tableData = ref([])
@@ -177,7 +177,7 @@ const loadData = async () => {
       totalPages.value = Math.ceil(total.value / pageSize.value)
     }
   } catch (error) {
-    ElMessage.error('加载数据失败')
+    message.error('加载数据失败')
     tableData.value = mockRules
     total.value = mockRules.length
     totalPages.value = Math.ceil(total.value / pageSize.value)
@@ -228,7 +228,7 @@ const editRule = (row) => {
 
 const saveRule = async () => {
   if (!form.ruleCode || !form.ruleName) {
-    ElMessage.warning('请填写必填项')
+    message.warning('请填写必填项')
     return
   }
   
@@ -241,14 +241,14 @@ const saveRule = async () => {
     }
     
     if (response.code === 200) {
-      ElMessage.success(form.id ? '修改成功' : '创建成功')
+      message.success(form.id ? '修改成功' : '创建成功')
       modalVisible.value = false
       loadData()
     } else {
-      ElMessage.error(response.message || '操作失败')
+      message.error(response.message || '操作失败')
     }
   } catch (error) {
-    ElMessage.error('操作失败')
+    message.error('操作失败')
   }
 }
 
@@ -256,13 +256,13 @@ const toggleStatus = async (row) => {
   try {
     const response = await updateCodeRule(row.id, { status: row.status === 1 ? 0 : 1 })
     if (response.code === 200) {
-      ElMessage.success(row.status === 1 ? '禁用成功' : '启用成功')
+      message.success(row.status === 1 ? '禁用成功' : '启用成功')
       loadData()
     } else {
-      ElMessage.error(response.message || '操作失败')
+      message.error(response.message || '操作失败')
     }
   } catch (error) {
-    ElMessage.error('操作失败')
+    message.error('操作失败')
   }
 }
 

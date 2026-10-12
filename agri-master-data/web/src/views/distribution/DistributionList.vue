@@ -148,7 +148,7 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { message } from 'ant-design-vue'
 import { getDistributionList, retryDistribution } from '../../utils/api'
 
 const tableData = ref([])
@@ -189,7 +189,7 @@ const loadData = async () => {
       totalPages.value = Math.ceil(total.value / pageSize.value)
     }
   } catch (error) {
-    ElMessage.error('加载数据失败')
+    message.error('加载数据失败')
     tableData.value = mockTasks
     total.value = mockTasks.length
     totalPages.value = Math.ceil(total.value / pageSize.value)
@@ -223,23 +223,23 @@ const retryTask = async (id) => {
   try {
     const response = await retryDistribution(id)
     if (response.code === 200) {
-      ElMessage.success('重试任务已提交')
+      message.success('重试任务已提交')
       loadData()
     } else {
-      ElMessage.error(response.message || '操作失败')
+      message.error(response.message || '操作失败')
     }
   } catch (error) {
-    ElMessage.error('操作失败')
+    message.error('操作失败')
   }
 }
 
 const pauseTask = (row) => {
-  ElMessage.info(`任务 ${row.taskName} 已暂停`)
+  message.info(`任务 ${row.taskName} 已暂停`)
   loadData()
 }
 
 const resumeTask = (row) => {
-  ElMessage.info(`任务 ${row.taskName} 已恢复`)
+  message.info(`任务 ${row.taskName} 已恢复`)
   loadData()
 }
 
