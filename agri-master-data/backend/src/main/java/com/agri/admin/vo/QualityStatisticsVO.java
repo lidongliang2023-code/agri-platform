@@ -27,6 +27,14 @@ public class QualityStatisticsVO {
     private Double resolutionRate;
     private List<DomainQuality> domainQualities;
     private List<DomainStatistics> domainStatistics;
+
+    /**
+     * 按处理状态的问题数分布（待处理 / 处理中 / 已解决 / 已忽略）。
+     *
+     * <p>原先只有 pendingCount / resolvedCount 两个标量，仪表盘的"处理状态分布"
+     * 需要四个状态齐全，缺两个就只能编 —— 所以改成列表一次给全。</p>
+     */
+    private List<StatusStatistic> statusStatistics;
     private List<QualityTrend> qualityTrend;
     private List<QualityTrend> trends;
 
@@ -61,5 +69,15 @@ public class QualityStatisticsVO {
         private Long totalIssues;
         private Long resolvedIssues;
         private Double avgScore;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class StatusStatistic {
+        /** 状态码：pending / processing / resolved / ignored */
+        private String status;
+        private Long issueCount;
     }
 }

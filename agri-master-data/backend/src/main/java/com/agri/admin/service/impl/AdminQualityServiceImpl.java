@@ -73,6 +73,7 @@ public class AdminQualityServiceImpl implements IAdminQualityService {
         // 质量评分需要质量规则与评分模型，当前没有数据来源 —— 留空而不是编一个 96.8
         vo.setOverallScore(null);
         vo.setDomainStatistics(buildDomainStatistics(tenantId));
+        vo.setStatusStatistics(buildStatusStatistics(tenantId));
         vo.setDomainQualities(new ArrayList<>());
         vo.setQualityTrend(getQualityTrend(timeRange, null));
         vo.setTrends(vo.getQualityTrend());
@@ -323,6 +324,19 @@ public class AdminQualityServiceImpl implements IAdminQualityService {
             stat.setIssueCount(stat.getIssueCount() + 1);
         }
         return new ArrayList<>(grouped.values());
+    }
+
+    /** 按状态分布。四种状态即使为 0 也返回，仪表盘不必自己去补缺项。 */
+    private List<QualityStatisticsVO.StatusStatistic> buildStatusStatistics(String tenantId) {
+        String[] statuses = {"pending", "processing", "resolved", "ignored"};
+        List<QualityStatisticsVO.StatusStatistic> list = new ArrayList<>();
+        for (String status : statuses) {
+            QualityStatisticsVO.StatusStatistic stat = new QualityStatisticsVO.StatusStatistic();
+            stat.setStatus(status);
+            stat.setIssueCount(countWith(tenantId, "status", status));
+            list.add(stat);
+        }
+        return list;
     }
 
     /** 处置：改问题状态 + 追加一条处置记录 */

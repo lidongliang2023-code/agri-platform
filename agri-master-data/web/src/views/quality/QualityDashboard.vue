@@ -33,29 +33,30 @@
       <div class="stat-card">
         <div class="stat-icon blue">✅</div>
         <div class="stat-content">
-          <div class="stat-value">{{ stats.resolvedRate }}%</div>
+          <!-- 解决率可能为 null（一条问题都没有时无法计算），显示 "—" 而不是 0% -->
+          <div class="stat-value">{{ stats.resolvedRate == null ? '—' : stats.resolvedRate + '%' }}</div>
           <div class="stat-label">问题解决率</div>
         </div>
       </div>
       <div class="stat-card">
         <div class="stat-icon orange">⚡</div>
         <div class="stat-content">
-          <div class="stat-value">{{ stats.averageTime }}</div>
-          <div class="stat-label">平均处理时长(小时)</div>
+          <div class="stat-value">{{ stats.averageTime ?? '—' }}</div>
+          <div class="stat-label">平均处理时长(小时) · 未接入</div>
         </div>
       </div>
       <div class="stat-card">
         <div class="stat-icon purple">🔄</div>
         <div class="stat-content">
-          <div class="stat-value">{{ stats.taskExecutions }}</div>
-          <div class="stat-label">检测任务执行次数</div>
+          <div class="stat-value">{{ stats.taskExecutions ?? '—' }}</div>
+          <div class="stat-label">检测任务执行次数 · 未接入</div>
         </div>
       </div>
       <div class="stat-card">
         <div class="stat-icon teal">📈</div>
         <div class="stat-content">
-          <div class="stat-value">{{ stats.taskSuccessRate }}%</div>
-          <div class="stat-label">任务成功率</div>
+          <div class="stat-value">{{ stats.taskSuccessRate ?? '—' }}</div>
+          <div class="stat-label">任务成功率 · 未接入</div>
         </div>
       </div>
     </div>
@@ -161,6 +162,9 @@
         </div>
         <div class="chart-content">
           <div class="ranking-list">
+            <div v-if="ruleRanking.length === 0" class="empty-hint">
+              未接入：质量规则族（规则配置 / 检测任务）后端尚未实现，这里没有命中率可算
+            </div>
             <div v-for="(item, index) in ruleRanking" :key="item.name" class="ranking-item">
               <div class="rank-badge" :class="'rank-' + (index + 1)">{{ index + 1 }}</div>
               <div class="rank-info">
@@ -202,6 +206,7 @@
         </div>
         <div class="chart-content">
           <div class="recent-issues">
+            <div v-if="recentIssues.length === 0" class="empty-hint">暂无问题工单</div>
             <div v-for="issue in recentIssues" :key="issue.id" class="issue-item">
               <div class="issue-severity" :class="issue.severity">{{ getSeverityIcon(issue.severity) }}</div>
               <div class="issue-content">
@@ -221,18 +226,24 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { message } from 'ant-design-vue'
+import { getQualityStatistics, getQualityTrend, getQualityList } from '../../utils/api'
 
 const dateRange = ref('week')
 const activeTrendTab = ref('issues')
 
 const stats = ref({
-  totalIssues: 156,
-  openIssues: 23,
-  resolvedRate: 85,
-  averageTime: 4.2,
-  taskExecutions: 1247,
-  taskSuccessRate: 98
+  // 全部先置空：原来这里是 156 / 23 / 85 / 4.2 / 1247 / 98 六个写死的数字，
+  // 页面看起来"有数据"，实际一条都不是真的。
+  totalIssues: null,
+  openIssues: null,
+  resolvedRate: null,
+  // 下面三项没有数据来源：处置时长要处置时间戳、任务执行要有检测任务族。
+  // 保持 null，模板显示"—"，不编数字。
+  averageTime: null,
+  taskExecutions: null,
+  taskSuccessRate: null
 })
 
 const trendTabs = [
@@ -241,48 +252,117 @@ const trendTabs = [
   { value: 'quality', label: '质量评分' }
 ]
 
-const severityDistribution = ref([
-  { severity: 'critical', label: '严重', count: 12, color: '#dc2626', degrees: 27.8, startDegrees: 0 },
-  { severity: 'high', label: '高', count: 35, color: '#ea580c', degrees: 80.9, startDegrees: 27.8 },
-  { severity: 'medium', label: '中', count: 68, color: '#d29922', degrees: 157.9, startDegrees: 108.7 },
-  { severity: 'low', label: '低', count: 41, color: '#238636', degrees: 93.4, startDegrees: 266.6 }
-])
+const severityDistribution = ref([])
+const statusDistribution = ref([])
+const trendData = ref([])
+const chartLabels = ref([])
+/** 规则命中率排行：质量规则族（/quality/rules）后端尚未实现，暂无数据来源 */
+const ruleRanking = ref([])
+const domainDistribution = ref([])
+const recentIssues = ref([])
 
-const statusDistribution = ref([
-  { status: 'pending', label: '待处理', count: 23, percentage: 14.7, color: '#ea580c' },
-  { status: 'processing', label: '处理中', count: 15, percentage: 9.6, color: '#2563eb' },
-  { status: 'resolved', label: '已解决', count: 108, percentage: 69.2, color: '#238636' },
-  { status: 'closed', label: '已关闭', count: 10, percentage: 6.5, color: '#6b7280' }
-])
+const SEVERITY_META = {
+  high: { label: '严重', color: '#dc2626' },
+  medium: { label: '警告', color: '#d29922' },
+  low: { label: '提示', color: '#238636' }
+}
+const STATUS_META = {
+  pending: { label: '待处理', color: '#ea580c' },
+  processing: { label: '处理中', color: '#2563eb' },
+  resolved: { label: '已解决', color: '#238636' },
+  ignored: { label: '已忽略', color: '#6b7280' }
+}
+const DOMAIN_ICONS = { user: '👤', org: '🏢', product: '📦', permission: '🔒', customer: '👥', supplier: '🏭' }
 
-const trendData = ref([12, 18, 15, 22, 19, 25, 21, 28, 24, 30, 26, 32])
-const chartLabels = ref(['5/1', '5/2', '5/3', '5/4', '5/5', '5/6', '5/7', '5/8', '5/9', '5/10', '5/11', '5/12'])
+/** 时间范围下拉 → 趋势接口的天数（后端认 7d/30d 这类写法） */
+const RANGE_DAYS = { today: 1, week: 7, month: 30, quarter: 90 }
 
-const ruleRanking = ref([
-  { name: '身份证号验证', hitRate: 95, count: 156 },
-  { name: '手机号格式检查', hitRate: 88, count: 137 },
-  { name: '邮箱格式验证', hitRate: 76, count: 118 },
-  { name: '组织名称一致性', hitRate: 65, count: 101 },
-  { name: '商品编码唯一性', hitRate: 52, count: 81 }
-])
+/** 给饼图算每段的角度与起始角 */
+function withDegrees(items, total) {
+  let start = 0
+  return items.map((item) => {
+    const degrees = total > 0 ? (item.count / total) * 360 : 0
+    const entry = { ...item, degrees, startDegrees: start }
+    start += degrees
+    return entry
+  })
+}
 
-const domainDistribution = ref([
-  { domain: 'user', name: '用户主数据', count: 45, icon: '👤' },
-  { domain: 'organization', name: '组织主数据', count: 32, icon: '🏢' },
-  { domain: 'product', name: '商品主数据', count: 28, icon: '📦' },
-  { domain: 'customer', name: '客户主数据', count: 30, icon: '👥' },
-  { domain: 'supplier', name: '供应商主数据', count: 21, icon: '🏭' }
-])
+const loadAll = async () => {
+  try {
+    const [statRes, trendRes, issueRes] = await Promise.all([
+      getQualityStatistics(),
+      getQualityTrend({ timeRange: `${RANGE_DAYS[dateRange.value] ?? 7}d` }),
+      getQualityList({ pageNum: 1, pageSize: 5 })
+    ])
 
-const recentIssues = ref([
-  { id: 1, code: 'QI-20260512-001', description: '检测到23条用户数据身份证号格式不正确', domain: '用户主数据', severity: 'high', time: '10分钟前' },
-  { id: 2, code: 'QI-20260512-002', description: '客户联系电话缺失率超过阈值', domain: '客户主数据', severity: 'medium', time: '30分钟前' },
-  { id: 3, code: 'QI-20260512-003', description: '商品编码重复检测', domain: '商品主数据', severity: 'critical', time: '1小时前' },
-  { id: 4, code: 'QI-20260512-004', description: '供应商资质证书即将到期', domain: '供应商主数据', severity: 'medium', time: '2小时前' },
-  { id: 5, code: 'QI-20260512-005', description: '组织名称在多系统中不一致', domain: '组织主数据', severity: 'low', time: '3小时前' }
-])
+    if (statRes.code === 200 && statRes.data) {
+      const s = statRes.data
+      const statusMap = {}
+      ;(s.statusStatistics ?? []).forEach((item) => { statusMap[item.status] = item.issueCount ?? 0 })
+
+      stats.value.totalIssues = s.totalIssues ?? 0
+      // "待处理工单"= 待处理 + 处理中：只算 pending 会把正在处理的漏掉
+      stats.value.openIssues = (statusMap.pending ?? 0) + (statusMap.processing ?? 0)
+      stats.value.resolvedRate = s.resolutionRate
+
+      const total = s.totalIssues ?? 0
+      const severityItems = [
+        { severity: 'high', count: s.highSeverityCount ?? 0 },
+        { severity: 'medium', count: s.mediumSeverityCount ?? 0 },
+        { severity: 'low', count: s.lowSeverityCount ?? 0 }
+      ].map((item) => ({ ...item, ...SEVERITY_META[item.severity] }))
+      severityDistribution.value = withDegrees(severityItems, total)
+
+      statusDistribution.value = Object.keys(STATUS_META).map((key) => {
+        const count = statusMap[key] ?? 0
+        return {
+          status: key,
+          label: STATUS_META[key].label,
+          color: STATUS_META[key].color,
+          count,
+          percentage: total > 0 ? Math.round((count / total) * 1000) / 10 : 0
+        }
+      })
+
+      domainDistribution.value = (s.domainStatistics ?? []).map((item) => ({
+        domain: item.domainCode,
+        name: item.domainName,
+        count: item.issueCount,
+        icon: DOMAIN_ICONS[item.domainCode] ?? '📄'
+      }))
+    }
+
+    if (trendRes.code === 200) {
+      // 折线图放最近 12 个点，与图表的坐标逻辑一致
+      const points = (trendRes.data ?? []).slice(-12)
+      trendData.value = points.map((p) => p.totalIssues ?? 0)
+      chartLabels.value = points.map((p) => String(p.date).slice(5))
+    }
+
+    if (issueRes.code === 200) {
+      recentIssues.value = (issueRes.data.list ?? []).map((row) => ({
+        id: row.id,
+        code: row.issueCode,
+        description: row.description,
+        domain: row.domain || row.domainName,
+        severity: row.severity,
+        time: row.createTime
+      }))
+    }
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '质量数据加载失败')
+  }
+}
+
+watch(dateRange, () => { void loadAll() })
 
 const chartPoints = computed(() => {
+  // 趋势还没加载完（或该区间没有问题）时返回空数组：Math.max(...[]) 是 -Infinity，
+  // 会算出 NaN 坐标，SVG 上的表现是整条折线消失。
+  if (trendData.value.length === 0) {
+    return []
+  }
   const max = Math.max(...trendData.value)
   const min = Math.min(...trendData.value)
   const range = max - min || 1
@@ -328,10 +408,20 @@ const getSeverityIcon = (severity) => {
 }
 
 onMounted(() => {
+  loadAll()
 })
 </script>
 
 <style scoped>
+.empty-hint {
+  padding: 24px 16px;
+  text-align: center;
+  font-size: 13px;
+  color: #a0aec0;
+  background: #fafafa;
+  border-radius: 8px;
+}
+
 .quality-dashboard {
   padding: 20px;
 }
