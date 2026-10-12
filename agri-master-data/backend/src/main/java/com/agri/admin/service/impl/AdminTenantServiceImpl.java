@@ -14,20 +14,28 @@ import com.agri.common.exception.BusinessException;
 import com.agri.common.util.SnowflakeIdUtil;
 import com.agri.masterdata.dto.TenantSaveDTO;
 import com.agri.masterdata.dto.TenantUpdateDTO;
+import com.agri.masterdata.entity.OperationLog;
+import com.agri.masterdata.entity.Organization;
 import com.agri.masterdata.entity.Tenant;
 import com.agri.masterdata.entity.TenantPackage;
 import com.agri.masterdata.entity.TenantQuota;
 import com.agri.masterdata.entity.User;
+import com.agri.masterdata.entity.UserAuthentication;
+import com.agri.masterdata.mapper.OperationLogMapper;
+import com.agri.masterdata.mapper.OrganizationMapper;
 import com.agri.masterdata.mapper.TenantMapper;
 import com.agri.masterdata.mapper.TenantPackageMapper;
 import com.agri.masterdata.mapper.TenantQuotaMapper;
+import com.agri.masterdata.mapper.UserAuthenticationMapper;
 import com.agri.masterdata.mapper.UserMapper;
 import com.agri.masterdata.service.ITenantQuotaService;
 import com.agri.masterdata.service.ITenantService;
 import com.agri.masterdata.service.IUserService;
 import com.agri.masterdata.vo.TenantVO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -37,13 +45,20 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.Date;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
 public class AdminTenantServiceImpl implements IAdminTenantService {
+
+    private static final DateTimeFormatter DAY_FMT = DateTimeFormatter.ofPattern("MM-dd");
+    private static final DateTimeFormatter MONTH_FMT = DateTimeFormatter.ofPattern("yyyy-MM");
+    private static final DateTimeFormatter OPERATION_LOG_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
     private final ITenantService tenantService;
     private final ITenantQuotaService tenantQuotaService;
@@ -52,6 +67,9 @@ public class AdminTenantServiceImpl implements IAdminTenantService {
     private final TenantPackageMapper tenantPackageMapper;
     private final TenantQuotaMapper tenantQuotaMapper;
     private final UserMapper userMapper;
+    private final OrganizationMapper organizationMapper;
+    private final UserAuthenticationMapper userAuthenticationMapper;
+    private final OperationLogMapper operationLogMapper;
 
     @Override
     public PageResult<TenantVO> getTenantList(Integer pageNum, Integer pageSize, String tenantStatus, String tenantType, String keyword) {
@@ -416,6 +434,8 @@ public class AdminTenantServiceImpl implements IAdminTenantService {
         vo.setSummary(getTenantSummary());
         vo.setTrends(getTenantTrends(timeRange));
         vo.setRankings(getTenantRankings());
+        vo.setTenantTypes(countByName("tenant_type", "未填写"));
+        vo.setRegions(countByName("province", "未填写"));
         return vo;
     }
 
@@ -423,11 +443,15 @@ public class AdminTenantServiceImpl implements IAdminTenantService {
     public TenantStatisticsVO.Summary getTenantSummary() {
         TenantStatisticsVO.Summary summary = new TenantStatisticsVO.Summary();
         summary.setTotalTenants(tenantMapper.selectCount(new LambdaQueryWrapper<Tenant>()));
+        // 按类型统计必须忽略大小写：库里存的是 'ENTERPRISE' / 'INDIVIDUAL'（大写），
+        // 这里原先按小写 'enterprise' 比较 —— 赶上 MySQL 不区分大小写的排序规则能碰巧命中，
+        // 一旦库改成 _bin / _as_cs，就会恒返回 0：列表里明明有 7 家企业租户，
+        // 统计卡片上却是"企业租户 0 家"。用 UPPER() 把口径固定下来。
         summary.setEnterpriseTenants(tenantMapper.selectCount(
-            new LambdaQueryWrapper<Tenant>().eq(Tenant::getTenantType, "enterprise")
+            new LambdaQueryWrapper<Tenant>().apply("UPPER(tenant_type) = {0}", "ENTERPRISE")
         ));
         summary.setIndividualTenants(tenantMapper.selectCount(
-            new LambdaQueryWrapper<Tenant>().eq(Tenant::getTenantType, "individual")
+            new LambdaQueryWrapper<Tenant>().apply("UPPER(tenant_type) = {0}", "INDIVIDUAL")
         ));
         summary.setActiveTenants(tenantMapper.selectCount(
             new LambdaQueryWrapper<Tenant>().eq(Tenant::getStatus, StatusEnum.ENABLE.getCode())
@@ -435,11 +459,38 @@ public class AdminTenantServiceImpl implements IAdminTenantService {
         summary.setInactiveTenants(tenantMapper.selectCount(
             new LambdaQueryWrapper<Tenant>().eq(Tenant::getStatus, StatusEnum.DISABLE.getCode())
         ));
-        // 到期判定与质量评分都没有数据来源，留空而不是写死 0 / 96.8
-        summary.setExpiredTenants(null);
+        // 到期数现在有真实来源（agri_md_tenant.expire_time），不再是"没有来源所以留空"
+        summary.setExpiredTenants(tenantMapper.selectCount(
+            new LambdaQueryWrapper<Tenant>()
+                .isNotNull(Tenant::getExpireTime)
+                .lt(Tenant::getExpireTime, new Date())
+        ));
+        // 租户主数据质量得分仍然没有来源（没有"按租户汇总质量得分"的表），留空而不是写死 96.8
         summary.setAvgQualityScore(null);
         summary.setTotalUsers(userMapper.selectCount(new LambdaQueryWrapper<User>()));
         return summary;
+    }
+
+    /**
+     * 按某一列分组计数，空值归到 {@code emptyLabel}。
+     *
+     * <p>为什么不在 Java 里用 GROUP BY 的原样结果：SQL 里 null 会单独成一行 {@code NULL -> n}，
+     * 前端拿到的 name 是 null，图表上就是一个没有名字的柱子。统一显示成"未填写"，
+     * 让"这个租户没填省份"在页面上是看得见的，而不是看起来像图表坏了。</p>
+     */
+    private List<TenantStatisticsVO.NameCount> countByName(String column, String emptyLabel) {
+        QueryWrapper<Tenant> wrapper = new QueryWrapper<>();
+        wrapper.select(column + " AS name", "COUNT(*) AS cnt").groupBy(column);
+        List<TenantStatisticsVO.NameCount> result = new ArrayList<>();
+        for (Map<String, Object> row : tenantMapper.selectMaps(wrapper)) {
+            Object name = row.get("name");
+            Object count = row.get("cnt");
+            result.add(new TenantStatisticsVO.NameCount(
+                name == null ? emptyLabel : String.valueOf(name),
+                count == null ? 0L : Long.valueOf(String.valueOf(count))));
+        }
+        result.sort(Comparator.comparing(TenantStatisticsVO.NameCount::getCount).reversed());
+        return result;
     }
 
     /**
@@ -462,84 +513,194 @@ public class AdminTenantServiceImpl implements IAdminTenantService {
 
     private TenantDetailVO.UserOrgStats getUserOrgStats(Long tenantId) {
         TenantDetailVO.UserOrgStats stats = new TenantDetailVO.UserOrgStats();
-        stats.setTotalUsers(1256L);
-        stats.setVerifiedUsers(1180L);
-        stats.setPendingUsers(12L);
-        stats.setTotalOrgs(56L);
-        stats.setVerifiedOrgs(48L);
-        stats.setPendingOrgs(3L);
+        Tenant tenant = tenantMapper.selectById(tenantId);
+        String code = tenant == null ? null : tenant.getTenantCode();
+        String idText = String.valueOf(tenantId);
+
+        stats.setTotalUsers(userMapper.selectCount(tenantScoped(User::getTenantId, code, idText)));
+
+        LambdaQueryWrapper<UserAuthentication> approved = tenantScoped(UserAuthentication::getTenantId, code, idText);
+        approved.apply("UPPER(auth_status) = {0}", "APPROVED");
+        stats.setVerifiedUsers(userAuthenticationMapper.selectCount(approved));
+
+        LambdaQueryWrapper<UserAuthentication> pending = tenantScoped(UserAuthentication::getTenantId, code, idText);
+        pending.apply("UPPER(auth_status) = {0}", "PENDING");
+        stats.setPendingUsers(userAuthenticationMapper.selectCount(pending));
+
+        stats.setTotalOrgs(organizationMapper.selectCount(tenantScoped(Organization::getTenantId, code, idText)));
+
+        LambdaQueryWrapper<Organization> verifiedOrgs = tenantScoped(Organization::getTenantId, code, idText);
+        verifiedOrgs.apply("UPPER(auth_status) = {0}", "VERIFIED");
+        stats.setVerifiedOrgs(organizationMapper.selectCount(verifiedOrgs));
+
+        LambdaQueryWrapper<Organization> pendingOrgs = tenantScoped(Organization::getTenantId, code, idText);
+        pendingOrgs.apply("UPPER(auth_status) = {0}", "PENDING");
+        stats.setPendingOrgs(organizationMapper.selectCount(pendingOrgs));
+
         return stats;
     }
 
-    private TenantDetailVO.QualityScore getQualityScore(Long tenantId) {
-        TenantDetailVO.QualityScore score = new TenantDetailVO.QualityScore();
-        score.setOverallScore(99.2);
-        score.setUserMasterData(99.5);
-        score.setOrgMasterData(99.1);
-        score.setProductMasterData(98.8);
-        score.setPermissionMasterData(99.8);
-        return score;
+    /**
+     * 把条件限定到某个租户。
+     *
+     * <p>关联键是<b>租户编码</b>（'T1001' 这种）而不是 agri_md_tenant 的主键 ——
+     * 用户表和组织表的 tenant_id 列存的就是编码。同时认主键文本，是为了兼容
+     * 早期可能按主键写入的数据：宁可多认一种写法，也不要在页面上显示成 0。</p>
+     */
+    private static <T> LambdaQueryWrapper<T> tenantScoped(SFunction<T, ?> column, String code, String idText) {
+        LambdaQueryWrapper<T> wrapper = new LambdaQueryWrapper<>();
+        if (code == null || code.isEmpty() || code.equals(idText)) {
+            wrapper.eq(column, idText);
+        } else {
+            wrapper.and(w -> w.eq(column, code).or().eq(column, idText));
+        }
+        return wrapper;
     }
 
+    /**
+     * 租户主数据质量得分 —— <b>没有数据来源，如实返回空。</b>
+     *
+     * <p>原先这里写死了 99.2 / 99.5 / 99.1 / 98.8 / 99.8：换个租户点进去，五个分数纹丝不动，
+     * 却是页面上最显眼的一块。现在返回一个全 null 的对象，页面显示"—"。
+     * 要有真数字，先得有"按租户 + 按数据域汇总质量得分"的表（数据质量模块目前只有问题工单，
+     * 没有得分汇总），并在每次质量检测后回写。</p>
+     */
+    private TenantDetailVO.QualityScore getQualityScore(Long tenantId) {
+        return new TenantDetailVO.QualityScore();
+    }
+
+    /**
+     * 租户的操作记录 —— 取 agri_md_operation_log 里目标为该租户的真实留痕。
+     *
+     * <p>原先这里三条记录（"管理员-小李"、"用户配额从1500调整至2000"、"自动续费成功"）
+     * 是写死的，时间还停在 2026-05。现在变成真数据：由 AdminOperationLogAspect 记录的
+     * 对这个租户的每一次写操作（改资料、停启用、调配额、换套餐……）。</p>
+     */
     private List<TenantDetailVO.OperationLog> getOperationLogs(Long tenantId) {
         List<TenantDetailVO.OperationLog> logs = new ArrayList<>();
-        
-        TenantDetailVO.OperationLog log1 = new TenantDetailVO.OperationLog();
-        log1.setTime("2026-05-15 10:30");
-        log1.setOperationType("配额调整");
-        log1.setOperator("管理员-小李");
-        log1.setContent("用户配额从1500调整至2000");
-        logs.add(log1);
-        
-        TenantDetailVO.OperationLog log2 = new TenantDetailVO.OperationLog();
-        log2.setTime("2026-05-14 15:20");
-        log2.setOperationType("套餐变更");
-        log2.setOperator("管理员-小王");
-        log2.setContent("套餐从基础版升级为专业版");
-        logs.add(log2);
-        
-        TenantDetailVO.OperationLog log3 = new TenantDetailVO.OperationLog();
-        log3.setTime("2026-05-13 09:00");
-        log3.setOperationType("续费");
-        log3.setOperator("系统");
-        log3.setContent("自动续费成功");
-        logs.add(log3);
-        
+        LambdaQueryWrapper<OperationLog> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(OperationLog::getTargetId, String.valueOf(tenantId))
+            .orderByDesc(OperationLog::getCreateTime)
+            .orderByDesc(OperationLog::getId)
+            .last("LIMIT 20");
+        for (OperationLog entity : operationLogMapper.selectList(wrapper)) {
+            TenantDetailVO.OperationLog item = new TenantDetailVO.OperationLog();
+            item.setTime(entity.getCreateTime() == null ? null : entity.getCreateTime().format(OPERATION_LOG_FMT));
+            item.setOperationType(entity.getOperationDesc());
+            item.setOperator(entity.getOperator());
+            item.setContent("fail".equals(entity.getResult())
+                ? "失败：" + (entity.getErrorMessage() == null ? "未知原因" : entity.getErrorMessage())
+                : entity.getRequestMethod() + " " + entity.getRequestUri());
+            logs.add(item);
+        }
         return logs;
     }
 
     private List<TenantStatisticsVO.TenantTrend> getTenantTrends(String timeRange) {
-        List<TenantStatisticsVO.TenantTrend> trends = new ArrayList<>();
-        
-        for (int i = 6; i >= 0; i--) {
-            TenantStatisticsVO.TenantTrend trend = new TenantStatisticsVO.TenantTrend();
-            trend.setDate(LocalDate.now().minusDays(i).format(DateTimeFormatter.ofPattern("MM-dd")));
-            trend.setNewTenants((long) (Math.random() * 10 + 5));
-            trend.setActiveTenants(100L + (long) (Math.random() * 30));
-            trend.setChurnTenants((long) (Math.random() * 3));
-            trends.add(trend);
+        int days = switch (timeRange == null ? "" : timeRange) {
+            case "7d" -> 7;
+            case "90d" -> 90;
+            case "1y" -> 365;
+            default -> 30;
+        };
+        boolean byMonth = days > 31;
+        LocalDate today = LocalDate.now();
+        LocalDate from = today.minusDays(days - 1L);
+
+        QueryWrapper<Tenant> wrapper = new QueryWrapper<>();
+        wrapper.select("DATE(create_time) AS d", "COUNT(*) AS cnt")
+            .ge("create_time", from.atStartOfDay())
+            .groupBy("DATE(create_time)");
+        Map<String, Long> counts = new HashMap<>();
+        for (Map<String, Object> row : tenantMapper.selectMaps(wrapper)) {
+            Object day = row.get("d");
+            Object count = row.get("cnt");
+            if (day != null) {
+                counts.put(String.valueOf(day).substring(0, 10),
+                    count == null ? 0L : Long.valueOf(String.valueOf(count)));
+            }
         }
-        
+
+        List<TenantStatisticsVO.TenantTrend> trends = new ArrayList<>();
+        if (byMonth) {
+            LocalDate lastMonth = today.withDayOfMonth(1);
+            for (LocalDate cursor = from.withDayOfMonth(1); !cursor.isAfter(lastMonth); cursor = cursor.plusMonths(1)) {
+                trends.add(buildTrend(cursor.format(MONTH_FMT), counts, cursor,
+                    cursor.withDayOfMonth(cursor.lengthOfMonth())));
+            }
+        } else {
+            for (LocalDate cursor = from; !cursor.isAfter(today); cursor = cursor.plusDays(1)) {
+                trends.add(buildTrend(cursor.format(DAY_FMT), counts, cursor, cursor));
+            }
+        }
         return trends;
     }
 
+    private TenantStatisticsVO.TenantTrend buildTrend(String label, Map<String, Long> counts,
+                                                      LocalDate bucketStart, LocalDate bucketEnd) {
+        long total = 0L;
+        for (LocalDate cursor = bucketStart; !cursor.isAfter(bucketEnd); cursor = cursor.plusDays(1)) {
+            total += counts.getOrDefault(cursor.toString(), 0L);
+        }
+        TenantStatisticsVO.TenantTrend trend = new TenantStatisticsVO.TenantTrend();
+        trend.setDate(label);
+        trend.setNewTenants(total);
+        // 活跃 / 流失没有来源：前者要租户活跃度日志，后者要租户状态变更历史，两张表都不存在。
+        // 刻意留 null 而不是 0：0 的意思是"那天活跃租户数为零"，那是在编造事实。
+        trend.setActiveTenants(null);
+        trend.setChurnTenants(null);
+        return trend;
+    }
+
+    /**
+     * 租户活跃度排行 —— 真按"该租户下的用户数"排序。
+     *
+     * <p>原先整段是编的：租户名从种子数据里抄了五个，用户数 / 质量分 / 数据更新次数全是
+     * {@code Math.random()} 乘出来的，每次刷新都不一样。现在租户、用户数、组织数都来自库，
+     * 用两次分组查询取计数，不做"每个租户查一次"的 N+1。</p>
+     *
+     * <p>{@code qualityScore / dataUpdates} 保持 null：没有质量得分汇总表，
+     * 也没有"数据变更次数"的统计表。要有真数字得先建这两样东西。</p>
+     */
     private List<TenantStatisticsVO.TenantRank> getTenantRankings() {
+        Map<String, Long> userCounts = groupedCount(userMapper.selectMaps(
+            new QueryWrapper<User>().select("tenant_id AS tid", "COUNT(*) AS cnt").groupBy("tenant_id")), "tid");
+        Map<String, Long> orgCounts = groupedCount(organizationMapper.selectMaps(
+            new QueryWrapper<Organization>().select("tenant_id AS tid", "COUNT(*) AS cnt").groupBy("tenant_id")), "tid");
+
+        List<Tenant> tenants = tenantMapper.selectList(new LambdaQueryWrapper<Tenant>());
+        tenants.sort(Comparator.comparingLong(
+            (Tenant tenant) -> userCounts.getOrDefault(tenant.getTenantCode(), 0L)).reversed());
+
         List<TenantStatisticsVO.TenantRank> rankings = new ArrayList<>();
-        String[] names = {"阳光农业集团", "绿野生态科技", "丰收供应链", "农资经销商联盟", "绿色食品公司"};
-        
-        for (int i = 0; i < 5; i++) {
+        for (Tenant tenant : tenants) {
+            if (rankings.size() >= 10) {
+                break;
+            }
             TenantStatisticsVO.TenantRank rank = new TenantStatisticsVO.TenantRank();
-            rank.setRank(i + 1);
-            rank.setTenantId("T" + (1001 + i));
-            rank.setTenantName(names[i]);
-            rank.setTenantType(i < 3 ? "enterprise" : "individual");
-            rank.setUserCount((long) (Math.random() * 1000 + 500));
-            rank.setQualityScore(95 + Math.random() * 5);
-            rank.setDataUpdates((long) (Math.random() * 1000));
-            rank.setStatus("正常");
+            rank.setRank(rankings.size() + 1);
+            rank.setTenantId(tenant.getTenantCode());
+            rank.setTenantName(tenant.getTenantName());
+            rank.setTenantType(tenant.getTenantType());
+            rank.setUserCount(userCounts.getOrDefault(tenant.getTenantCode(), 0L));
+            rank.setOrgCount(orgCounts.getOrDefault(tenant.getTenantCode(), 0L));
+            rank.setQualityScore(null);
+            rank.setDataUpdates(null);
+            rank.setStatus(StatusEnum.ENABLE.getCode().equals(tenant.getStatus()) ? "启用中" : "已停用");
             rankings.add(rank);
         }
-        
         return rankings;
+    }
+
+    private static Map<String, Long> groupedCount(List<Map<String, Object>> rows, String keyColumn) {
+        Map<String, Long> result = new LinkedHashMap<>();
+        for (Map<String, Object> row : rows) {
+            Object key = row.get(keyColumn);
+            Object count = row.get("cnt");
+            if (key != null) {
+                result.put(String.valueOf(key), count == null ? 0L : Long.valueOf(String.valueOf(count)));
+            }
+        }
+        return result;
     }
 }
