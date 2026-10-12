@@ -12,4 +12,18 @@
     <delete id="deleteByDictId">
         DELETE FROM agri_md_dict_item WHERE dict_id = #{dictId}
     </delete>
+
+    <!--
+      按字典 id 取字典项实体。
+
+      这个方法在 DictItemMapper 接口里一直声明着，但 XML 里**从来没有对应语句** ——
+      于是 GET /admin/masterdata/standard/dict/{id}（字典详情，页面的"字典项列表"弹窗要用）
+      一调就抛 Invalid bound statement (not found)，500。
+      之前的端点巡检只覆盖了列表类接口，没扫到这个详情接口，所以一直没暴露。
+    -->
+    <select id="selectByDictId" resultType="com.agri.masterdata.entity.DictItem">
+        SELECT * FROM agri_md_dict_item
+        WHERE dict_id = #{dictId} AND del_flag = 0
+        ORDER BY item_sort ASC
+    </select>
 </mapper>

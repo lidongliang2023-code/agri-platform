@@ -136,8 +136,8 @@
             <tbody>
               <tr v-for="item in dictItems" :key="item.id">
                 <td>{{ item.itemValue }}</td>
-                <td>{{ item.itemLabel }}</td>
-                <td>{{ item.sortOrder }}</td>
+<td>{{ item.itemName }}</td>
+<td>{{ item.itemSort }}</td>
                 <td>
                   <span class="status-badge" :class="item.status === 1 ? 'active' : 'inactive'">
                     {{ item.status === 1 ? '启用' : '禁用' }}
@@ -196,7 +196,7 @@
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
 import { message } from 'ant-design-vue'
-import { getDictList, createDict, updateDict, deleteDict as apiDeleteDict } from '../../utils/api'
+import { getDictList, getDictDetail, createDict, updateDict, deleteDict as apiDeleteDict, createDictItem, updateDictItem, deleteDictItem as apiDeleteDictItem } from '../../utils/api'
 
 const tableData = ref([])
 const pageNum = ref(1)
@@ -329,13 +329,25 @@ const deleteDict = async (id) => {
 }
 
 const viewItems = (row) => {
-  currentDictName.value = row.dictName
-  currentDictId.value = row.id
-  dictItems.value = [
-    { id: 1, itemValue: '1', itemLabel: '是', sortOrder: 1, status: 1 },
-    { id: 2, itemValue: '0', itemLabel: '否', sortOrder: 2, status: 1 }
-  ]
-  itemsModalVisible.value = true
+  // 原来这里写死了"是/否"两条：点任何字典都看到同一份假内容。
+  // 现在按字典 id 查真实字典项。
+  void (async () => {
+    currentDictName.value = row.dictName
+    currentDictId.value = row.id
+    try {
+      const response = await getDictDetail(row.id)
+      if (response.code === 200) {
+        dictItems.value = response.data?.items ?? []
+      } else {
+        message.error(response.message || '加载字典项失败')
+        dictItems.value = []
+      }
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '加载字典项失败')
+      dictItems.value = []
+    }
+    itemsModalVisible.value = true
+  })()
 }
 
 const closeItemsModal = () => {
@@ -354,8 +366,9 @@ const openItemCreateModal = () => {
 const editDictItem = (row) => {
   itemForm.id = row.id
   itemForm.itemValue = row.itemValue
-  itemForm.itemLabel = row.itemLabel
-  itemForm.sortOrder = row.sortOrder
+  // 接口字段是 itemName / itemSort
+  itemForm.itemLabel = row.itemName
+  itemForm.sortOrder = row.itemSort
   itemForm.status = row.status
   itemModalVisible.value = true
 }
@@ -366,42 +379,53 @@ const closeItemModal = () => {
 
 const saveDictItem = async () => {
   if (!itemForm.itemValue || !itemForm.itemLabel) {
-    alert('请填写必填项')
+    message.warning('请填写必填项')
     return
   }
-  
+
+  const payload = {
+    itemName: itemForm.itemLabel,
+    itemValue: itemForm.itemValue,
+    itemSort: Number(itemForm.sortOrder) || 1,
+    status: itemForm.status
+  }
+
   try {
-    if (itemForm.id) {
-      const index = dictItems.value.findIndex(item => item.id === itemForm.id)
-      if (index !== -1) {
-        dictItems.value[index] = { ...itemForm }
-      }
+    // 原来只改本地数组：弹窗里"添加/修改成功"，关掉再打开（甚至刷新）就回到原样
+    const response = itemForm.id
+      ? await updateDictItem(itemForm.id, payload)
+      : await createDictItem(currentDictId.value, payload)
+    if (response.code === 200) {
+      message.success(itemForm.id ? '修改成功' : '添加成功')
+      closeItemModal()
+      viewItems({ id: currentDictId.value, dictName: currentDictName.value })
     } else {
-      dictItems.value.push({
-        ...itemForm,
-        id: Date.now()
-      })
+      message.error(response.message || '操作失败')
     }
-    alert(itemForm.id ? '修改成功' : '添加成功')
-    closeItemModal()
   } catch (error) {
-    alert('操作失败')
+    message.error(error instanceof Error ? error.message : '操作失败')
   }
 }
 
 const deleteDictItem = async (id) => {
   if (!confirm('确定要删除该字典项吗？')) return
   try {
-    dictItems.value = dictItems.value.filter(item => item.id !== id)
-    alert('删除成功')
+    const response = await apiDeleteDictItem(id)
+    if (response.code === 200) {
+      message.success('删除成功')
+      viewItems({ id: currentDictId.value, dictName: currentDictName.value })
+    } else {
+      message.error(response.message || '删除失败')
+    }
   } catch (error) {
-    alert('删除失败')
+    message.error(error instanceof Error ? error.message : '删除失败')
   }
 }
 
 const formatDate = (date) => {
   if (!date) return ''
-  return date.split(' ')[0]
+  // 后端返回 ISO（如 2026-10-12T17:32:41），只按空格切分会把 T 一起显示出来
+  return String(date).replace('T', ' ').split(' ')[0]
 }
 
 onMounted(() => {

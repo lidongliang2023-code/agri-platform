@@ -165,8 +165,21 @@ const form = reactive({
 })
 
 const getOrgTypeLabel = (type) => {
-  const labels = { enterprise: '企业', cooperative: '合作社', farmer: '农户' }
-  return labels[type] || type
+  // 大小写不敏感，并覆盖后端实际在用的取值：
+  // 库里存的是 ENTERPRISE / COOPERATIVE / FARM / DEPARTMENT，
+  // 而原映射表只认小写的 enterprise/cooperative/farmer，
+  // 于是每一行都把原始编码直接显示出来（表里显示 "FARM" 而不是"农场"）。
+  const labels = {
+    enterprise: '企业',
+    cooperative: '合作社',
+    farmer: '农户',
+    farm: '农场',
+    department: '部门',
+    government: '政府机构',
+    other: '其他'
+  }
+  if (!type) return '—'
+  return labels[String(type).toLowerCase()] || type
 }
 
 const getStatusLabel = (status) => {
@@ -277,7 +290,8 @@ const deleteOrgById = async (id) => {
 
 const formatDate = (date) => {
   if (!date) return ''
-  return date.split(' ')[0]
+  // 后端返回 ISO（如 2026-10-12T17:32:41），只按空格切分会把 T 一起显示出来
+  return String(date).replace('T', ' ').split(' ')[0]
 }
 
 onMounted(() => {

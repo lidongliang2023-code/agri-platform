@@ -243,7 +243,8 @@ const resumeTask = (row) => {
 
 const formatDate = (date) => {
   if (!date) return ''
-  return date.split(' ')[0]
+  // 后端返回 ISO（如 2026-10-12T17:32:41），只按空格切分会把 T 一起显示出来
+  return String(date).replace('T', ' ').split(' ')[0]
 }
 
 onMounted(() => {

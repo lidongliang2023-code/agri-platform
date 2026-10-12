@@ -48,6 +48,7 @@
     <select id="selectAdminCustomerList" resultType="com.agri.masterdata.vo.CustomerVO">
         SELECT c.id, c.customer_code, c.customer_name, c.short_name, c.customer_type,
                c.org_id, c.credit_code, c.legal_person, c.contact_name, c.contact_phone,
+               c.email,
                c.address, c.level, c.status, c.tenant_id, c.create_by, c.create_time, c.remark,
                o.org_name AS orgName
         FROM agri_md_customer c

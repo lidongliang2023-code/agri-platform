@@ -63,7 +63,8 @@
             </td>
             <td>{{ supplier.contactPerson }}</td>
             <td>{{ supplier.contactPhone }}</td>
-            <td>{{ supplier.businessLicense }}</td>
+            <!-- 供应商 VO 没有 businessLicense；执照号用统一社会信用代码（creditCode） -->
+            <td>{{ supplier.creditCode }}</td>
             <td class="address-cell">{{ supplier.address }}</td>
             <td>
               <span class="status-badge" :class="supplier.status === 1 ? 'active' : 'inactive'">
@@ -292,7 +293,8 @@ const viewDetail = (id) => {
 
 const formatDate = (date) => {
   if (!date) return ''
-  return date.split(' ')[0]
+  // 后端返回 ISO（如 2026-10-12T17:32:41），只按空格切分会把 T 一起显示出来
+  return String(date).replace('T', ' ').split(' ')[0]
 }
 
 onMounted(() => {

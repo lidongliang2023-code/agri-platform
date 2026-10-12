@@ -38,6 +38,14 @@ public class CustomerVO {
 
     private String contactPhone;
 
+    /**
+     * 邮箱。
+     *
+     * <p>客户表本来就有 email 列、页面也有一列"邮箱"，但 VO 里没有这个字段，
+     * 于是那一列永远是空的 —— 有数据、有位置，只差把字段接出来。</p>
+     */
+    private String email;
+
     private String address;
 
     private String level;

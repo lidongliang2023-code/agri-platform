@@ -25,6 +25,9 @@ public class DictVO {
 
     private String dictType;
 
+    /** 字典说明。表里有 description 列、页面有"描述"一列，但 VO 缺该字段。 */
+    private String description;
+
     private Integer status;
 
     private List<DictItemVO> items;
@@ -46,6 +49,7 @@ public class DictVO {
                 .dictName(dict.getDictName())
                 .dictCode(dict.getDictCode())
                 .dictType(dict.getDictType())
+                .description(dict.getDescription())
                 .status(dict.getStatus())
                 .tenantId(dict.getTenantId())
                 .createBy(dict.getCreateBy())

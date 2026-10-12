@@ -29,6 +29,14 @@ public class OrganizationVO {
 
     private String orgTypeName;
 
+    /**
+     * 法人代表。
+     *
+     * <p>组织表有 legal_person 列、列表页也有"法人"一列，但 VO 缺这个字段，
+     * 那一列一直是空的。</p>
+     */
+    private String legalPerson;
+
     private String contactPerson;
 
     private String contactPhone;

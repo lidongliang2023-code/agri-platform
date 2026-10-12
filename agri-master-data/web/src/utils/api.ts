@@ -255,6 +255,10 @@ export const updateDict = (id: number | string, data: unknown) =>
 export const deleteDict = (id: number | string) => del(`${BASE}/standard/dict/${id}`)
 export const createDictItem = (dictId: number | string, data: unknown) =>
   post(`${BASE}/standard/dict/${dictId}/item`, data)
+export const updateDictItem = (itemId: number | string, data: unknown) =>
+  put(`${BASE}/standard/dict/item/${itemId}`, data)
+export const deleteDictItem = (itemId: number | string) =>
+  del(`${BASE}/standard/dict/item/${itemId}`)
 
 export const getCodeRuleList = (params?: QueryParams) => get(`${BASE}/standard/code-rule/list`, params)
 export const getCodeRuleDetail = (id: number | string) => get(`${BASE}/standard/code-rule/${id}`)

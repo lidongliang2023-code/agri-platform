@@ -68,6 +68,20 @@ public class AdminDataStandardController {
         return ApiResponse.success();
     }
 
+    @Operation(summary = "修改字典项")
+    @PutMapping("/dict/item/{itemId}")
+    public ApiResponse<Void> updateDictItem(@PathVariable Long itemId, @RequestBody DictItemSaveDTO dto) {
+        adminDataStandardService.updateDictItem(itemId, dto);
+        return ApiResponse.success();
+    }
+
+    @Operation(summary = "删除字典项")
+    @DeleteMapping("/dict/item/{itemId}")
+    public ApiResponse<Void> deleteDictItem(@PathVariable Long itemId) {
+        adminDataStandardService.deleteDictItem(itemId);
+        return ApiResponse.success();
+    }
+
     @Operation(summary = "获取编码规则列表")
     @GetMapping("/code-rule/list")
     public ApiResponse<PageResult<CodeRuleVO>> getCodeRuleList(

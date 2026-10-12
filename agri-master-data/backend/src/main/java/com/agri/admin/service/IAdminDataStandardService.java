@@ -26,6 +26,17 @@ public interface IAdminDataStandardService {
     void addDictItem(Long id, DictItemSaveDTO dto);
 
     /**
+     * 修改字典项。
+     *
+     * <p>页面的字典项弹窗同时承担新增与编辑，但后端原来只有"新增"一个端点，
+     * 编辑只能改前端数组、刷新即失效。</p>
+     */
+    void updateDictItem(Long itemId, DictItemSaveDTO dto);
+
+    /** 删除字典项（逻辑删除）。原来只有按字典删全部，没有删单项。 */
+    void deleteDictItem(Long itemId);
+
+    /**
      * 编码规则分页列表。
      *
      * <p>原签名是没有分页参数的 `List&lt;CodeRuleVO&gt; getCodeRuleList()`，

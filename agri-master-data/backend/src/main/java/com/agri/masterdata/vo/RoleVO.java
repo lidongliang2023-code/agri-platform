@@ -23,6 +23,14 @@ public class RoleVO {
 
     private String roleKey;
 
+    /**
+     * 角色类型：system 系统内置 / custom 自定义。
+     *
+     * <p>表里有 role_type 列、页面也按它显示"系统角色/自定义"，但 VO 缺这个字段 ——
+     * 结果是每一行都落进"自定义"分支。</p>
+     */
+    private String roleType;
+
     private String description;
 
     private Integer roleSort;
@@ -64,6 +72,7 @@ public class RoleVO {
                 .roleCode(role.getRoleCode())
                 .roleName(role.getRoleName())
                 .roleKey(role.getRoleKey())
+                .roleType(role.getRoleType())
                 .description(role.getDescription())
                 .status(role.getStatus())
                 .tenantId(role.getTenantId())

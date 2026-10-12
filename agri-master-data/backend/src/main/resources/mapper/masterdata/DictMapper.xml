@@ -31,6 +31,7 @@
 
     <select id="selectAdminDictList" resultType="com.agri.masterdata.vo.DictVO">
         SELECT d.id, d.dict_name, d.dict_code, d.dict_type, d.status,
+               d.description,
                d.tenant_id, d.create_by, d.create_time, d.remark
         FROM agri_md_dict d
         <where>

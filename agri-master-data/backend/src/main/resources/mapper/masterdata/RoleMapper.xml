@@ -74,6 +74,7 @@
 
     <select id="selectAdminRoleList" resultType="com.agri.masterdata.vo.RoleVO">
         SELECT r.id, r.role_code, r.role_name, r.role_key, r.description, r.data_scope,
+               r.role_type,
                r.status, r.tenant_id, r.create_by, r.create_time, r.update_by, r.update_time, r.remark,
                r.sort_order AS roleSort
         FROM agri_md_role r

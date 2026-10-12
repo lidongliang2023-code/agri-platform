@@ -41,10 +41,8 @@
         <thead>
           <tr>
             <th>商品编码</th>
-            <th>条码</th>
             <th>商品名称</th>
             <th>商品分类</th>
-            <th>规格</th>
             <th>单位</th>
             <th>品牌</th>
             <th>状态</th>
@@ -55,14 +53,12 @@
         <tbody>
           <tr v-for="product in tableData" :key="product.id">
             <td>{{ product.productCode }}</td>
-            <td>{{ product.barcode }}</td>
             <td>{{ product.productName }}</td>
             <td>
-              <span class="type-badge" :class="product.category">
-                {{ getCategoryLabel(product.category) }}
-              </span>
+              <!-- 接口只给 categoryName（分类名），没有列表页原来用的 category 编码；
+                   原来的 getCategoryLabel 按编码映射，拿到 undefined 会显示空白 -->
+              <span class="type-badge">{{ product.categoryName || '—' }}</span>
             </td>
-            <td>{{ product.specification }}</td>
             <td>{{ product.unit }}</td>
             <td>{{ product.brand }}</td>
             <td>
@@ -292,7 +288,8 @@ const viewDetail = (id) => {
 
 const formatDate = (date) => {
   if (!date) return ''
-  return date.split(' ')[0]
+  // 后端返回 ISO（如 2026-10-12T17:32:41），只按空格切分会把 T 一起显示出来
+  return String(date).replace('T', ' ').split(' ')[0]
 }
 
 onMounted(() => {

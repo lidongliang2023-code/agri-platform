@@ -99,13 +99,74 @@ public class AdminDataStandardServiceImpl implements IAdminDataStandardService {
     @Override
     @Transactional
     public void addDictItem(Long id, DictItemSaveDTO dto) {
-        DictItem item = DictItem.builder()
-                .dictId(id)
-                .itemCode(dto.getItemCode())
-                .itemName(dto.getItemName())
-                .sortOrder(dto.getSortOrder())
-                .build();
+        Dict dict = dictMapper.selectById(id);
+        if (dict == null) {
+            throw new BusinessException("字典不存在");
+        }
+        DictItem item = new DictItem();
+        item.setDictId(id);
+        // 表的 dict_code / item_code 两列是 NOT NULL 且无默认值（它们是从旧结构沿用下来的），
+        // 页面表单里没有这两项，必须在这里补：dict_code 取自所属字典，item_code 缺省用 itemValue 兜底。
+        // 少了这一步，新增字典项直接 500：Field 'dict_code' doesn't have a default value。
+        item.setDictCode(dict.getDictCode());
+        if (dto.getItemCode() == null || dto.getItemCode().isEmpty()) {
+            item.setItemCode(dto.getItemValue());
+        }
+        // 原实现只写了 itemCode / itemName / sortOrder 三个字段，
+        // 页面上填的"值"（itemValue）、排序（itemSort）、状态全部被丢掉 —— 存进去是空值。
+        applyDictItemDto(item, dto);
+        if (item.getStatus() == null) {
+            item.setStatus(1);
+        }
+        item.setDelFlag(0);
         dictItemMapper.insert(item);
+    }
+
+    @Override
+    @Transactional
+    public void updateDictItem(Long itemId, DictItemSaveDTO dto) {
+        DictItem item = dictItemMapper.selectById(itemId);
+        if (item == null) {
+            throw new BusinessException("字典项不存在");
+        }
+        applyDictItemDto(item, dto);
+        dictItemMapper.updateById(item);
+    }
+
+    @Override
+    @Transactional
+    public void deleteDictItem(Long itemId) {
+        DictItem item = dictItemMapper.selectById(itemId);
+        if (item == null) {
+            throw new BusinessException("字典项不存在");
+        }
+        // 走 del_flag 逻辑删除
+        dictItemMapper.deleteById(itemId);
+    }
+
+    /** 字典项 DTO → 实体（新增与修改共用，避免两条路径映射的字段不一致） */
+    private void applyDictItemDto(DictItem item, DictItemSaveDTO dto) {
+        if (dto.getItemCode() != null) {
+            item.setItemCode(dto.getItemCode());
+        }
+        if (dto.getItemName() != null) {
+            item.setItemName(dto.getItemName());
+        }
+        if (dto.getItemText() != null) {
+            item.setItemText(dto.getItemText());
+        }
+        if (dto.getItemValue() != null) {
+            item.setItemValue(dto.getItemValue());
+        }
+        if (dto.getStatus() != null) {
+            item.setStatus(dto.getStatus());
+        }
+        // 列表按 item_sort 排序，故两个排序字段都写，保持取值一致
+        Integer sort = dto.getItemSort() != null ? dto.getItemSort() : dto.getSortOrder();
+        if (sort != null) {
+            item.setItemSort(sort);
+            item.setSortOrder(sort);
+        }
     }
 
     @Override

@@ -60,7 +60,8 @@
                 {{ customer.customerType === 'enterprise' ? '企业客户' : '个人客户' }}
               </span>
             </td>
-            <td>{{ customer.contactPerson }}</td>
+            <!-- 接口字段是 contactName（客户表列名 contact_name），原写 contactPerson 恒为空 -->
+            <td>{{ customer.contactName }}</td>
             <td>{{ customer.contactPhone }}</td>
             <td>{{ customer.email }}</td>
             <td class="address-cell">{{ customer.address }}</td>
@@ -285,7 +286,8 @@ const viewDetail = (id) => {
 
 const formatDate = (date) => {
   if (!date) return ''
-  return date.split(' ')[0]
+  // 后端返回 ISO（如 2026-10-12T17:32:41），只按空格切分会把 T 一起显示出来
+  return String(date).replace('T', ' ').split(' ')[0]
 }
 
 onMounted(() => {
