@@ -10,7 +10,10 @@ import lombok.EqualsAndHashCode;
 
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("department")
+// 表名必须以 schema.sql 为准：主数据域的物理表统一带 agri_md_ 前缀。
+// 原先写成不带前缀的 department，运行时 MySQL 直接报
+// Table 'agri_masterdata.department' doesn't exist —— 表名对不上，业务代码再正确也跑不起来。
+@TableName("agri_md_department")
 public class Department extends BaseEntity {
 
     @TableId(value = "dept_id", type = IdType.ASSIGN_ID)

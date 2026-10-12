@@ -12,7 +12,8 @@ import java.time.LocalDateTime;
 
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("user_profile")
+// 表名以 schema.sql 为准（agri_md_ 前缀），详见 Department 上的同类注释。
+@TableName("agri_md_user_profile")
 public class UserProfile extends BaseEntity {
 
     @TableId(value = "profile_id", type = IdType.ASSIGN_ID)

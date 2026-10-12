@@ -10,7 +10,8 @@ import lombok.EqualsAndHashCode;
 
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("position")
+// 表名以 schema.sql 为准（agri_md_ 前缀），详见 Department 上的同类注释。
+@TableName("agri_md_position")
 public class Position extends BaseEntity {
 
     @TableId(value = "position_id", type = IdType.ASSIGN_ID)

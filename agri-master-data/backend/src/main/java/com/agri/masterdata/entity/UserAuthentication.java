@@ -18,7 +18,8 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @EqualsAndHashCode(callSuper = true)
-@TableName("user_authentication")
+// 表名以 schema.sql 为准（agri_md_ 前缀），详见 Department 上的同类注释。
+@TableName("agri_md_user_authentication")
 public class UserAuthentication extends BaseEntity {
 
     @TableId(value = "auth_id", type = IdType.ASSIGN_ID)

@@ -42,6 +42,14 @@ mybatis-plus:
     map-underscore-to-camel-case: true
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
 
+# 平台访问令牌（V2.0 第 5.2/5.3 节）—— 与 core-platform 的 agri.jwt 同一份配置键。
+# 生产必须由环境变量 AGRI_JWT_SECRET 注入（≥32 字符）；这里的开发默认值仅为本地可跑通。
+agri:
+  jwt:
+    secret: ${AGRI_JWT_SECRET:agri-dev-secret-key-change-me-32bytes!}
+    issuer: agri-core-platform
+
+# 私有会话令牌（存量 /api/* 接口族的迁移窗口内兼容），与平台令牌无关。
 jwt:
   secret: agri-masterdata-jwt-secret-key-2024
   expiration: 86400000

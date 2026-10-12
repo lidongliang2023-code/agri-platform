@@ -7,7 +7,8 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 @Data
-@TableName("org_hierarchy")
+// 表名以 schema.sql 为准（agri_md_ 前缀），详见 Department 上的同类注释。
+@TableName("agri_md_org_hierarchy")
 public class OrgHierarchy {
 
     @TableId(value = "hierarchy_id", type = IdType.ASSIGN_ID)

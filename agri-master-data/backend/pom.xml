@@ -126,6 +126,18 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <!--
+                  必须显式绑定 repackage：缺了它 `mvn package` 只产出普通 jar（无 BOOT-INF、
+                  无 Main-Class），V2.0 第 3 章要求的"九大子系统独立部署/独立域名"就落不了地 ——
+                  产物根本起不来。这与主仓根 pom 的其它可独立部署模块保持同一口径。
+                -->
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
                 <configuration>
                     <excludes>
                         <exclude>

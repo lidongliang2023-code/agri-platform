@@ -9,7 +9,8 @@ import java.time.LocalDateTime;
 
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("user_identity")
+// 表名以 schema.sql 为准（agri_md_ 前缀），详见 Department 上的同类注释。
+@TableName("agri_md_user_identity")
 public class UserIdentity extends BaseEntity {
 
     @TableId(value = "identity_id", type = IdType.ASSIGN_ID)

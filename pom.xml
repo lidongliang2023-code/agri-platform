@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.agri</groupId>
+    <artifactId>agri-platform</artifactId>
+    <version>1.0.0</version>
+    <packaging>pom</packaging>
+    <name>agri-platform</name>
+    <description>农业产业互联网平台</description>
+
+    <modules>
+        <module>agri-common</module>
+        <module>agri-auth</module>
+        <module>agri-master-data/backend</module>
+        <module>agri-trade/backend</module>
+        <module>agri-production/backend</module>
+        <module>agri-iot/backend</module>
+        <module>agri-service</module>
+        <module>agri-admin</module>
+        <module>agri-ai</module>
+        <module>agri-data-platform</module>
+        <module>agri-operation</module>
+        <module>agri-tech-platform</module>
+    </modules>
+
+    <properties>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <spring-boot.version>3.2.5</spring-boot.version>
+        <mybatis-plus.version>3.5.5</mybatis-plus.version>
+        <sa-token.version>1.37.0</sa-token.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-dependencies</artifactId>
+                <version>${spring-boot.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <dependency>
+                <groupId>com.baomidou</groupId>
+                <artifactId>mybatis-plus-boot-starter</artifactId>
+                <version>${mybatis-plus.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>cn.dev33</groupId>
+                <artifactId>sa-token-spring-boot3-starter</artifactId>
+                <version>${sa-token.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.agri</groupId>
+                <artifactId>agri-common</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.agri</groupId>
+                <artifactId>agri-auth</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-maven-plugin</artifactId>
+                    <version>${spring-boot.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>3.11.0</version>
+                    <configuration>
+                        <source>${maven.compiler.source}</source>
+                        <target>${maven.compiler.target}</target>
+                        <encoding>${project.build.sourceEncoding}</encoding>
+                        <!--
+                          必须开启 -parameters：Spring Framework 6.1（Boot 3.2）已移除
+                          LocalVariableTableParameterNameDiscoverer，不再从调试信息里猜参数名。
+                          缺了这个开关，所有写成 @RequestParam String x / @PathVariable Long id
+                          （即没有显式写名字）的接口，在运行时抛
+                          IllegalArgumentException: Name for argument of type [...] not specified，
+                          表现是"接口存在、鉴权也过了，但一调就 500"。
+
+                          实测出处：主数据 /admin/masterdata/dashboard 在认证打通后立刻 500，
+                          堆栈正是这一条。core-platform 的 pom 早已单独设了 <parameters>true</parameters>，
+                          卫星模块走的是本根 pom，所以只有它们集体中招。
+                        -->
+                        <parameters>true</parameters>
+                        <annotationProcessorPaths>
+                            <path>
+                                <groupId>org.projectlombok</groupId>
+                                <artifactId>lombok</artifactId>
+                                <version>1.18.32</version>
+                            </path>
+                        </annotationProcessorPaths>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
+</project>
