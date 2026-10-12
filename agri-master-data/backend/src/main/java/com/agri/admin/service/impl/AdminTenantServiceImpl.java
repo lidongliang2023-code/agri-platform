@@ -15,9 +15,11 @@ import com.agri.common.util.SnowflakeIdUtil;
 import com.agri.masterdata.dto.TenantSaveDTO;
 import com.agri.masterdata.dto.TenantUpdateDTO;
 import com.agri.masterdata.entity.Tenant;
+import com.agri.masterdata.entity.TenantPackage;
 import com.agri.masterdata.entity.TenantQuota;
 import com.agri.masterdata.entity.User;
 import com.agri.masterdata.mapper.TenantMapper;
+import com.agri.masterdata.mapper.TenantPackageMapper;
 import com.agri.masterdata.mapper.TenantQuotaMapper;
 import com.agri.masterdata.mapper.UserMapper;
 import com.agri.masterdata.service.ITenantQuotaService;
@@ -47,6 +49,7 @@ public class AdminTenantServiceImpl implements IAdminTenantService {
     private final ITenantQuotaService tenantQuotaService;
     private final IUserService userService;
     private final TenantMapper tenantMapper;
+    private final TenantPackageMapper tenantPackageMapper;
     private final TenantQuotaMapper tenantQuotaMapper;
     private final UserMapper userMapper;
 
@@ -285,69 +288,126 @@ public class AdminTenantServiceImpl implements IAdminTenantService {
 
     @Override
     public List<TenantPackageVO> getPackageList() {
+        // 原实现是在这里手搓三个 VO 返回的（基础版/专业版/企业版），没有表、也不落库：
+        // 页面上看得见、改得动，刷新一下就回到那三个写死的套餐。
         List<TenantPackageVO> packages = new ArrayList<>();
-        
-        TenantPackageVO basic = new TenantPackageVO();
-        basic.setId(1L);
-        basic.setPackageCode("basic");
-        basic.setPackageName("基础版");
-        basic.setPackageDesc("适合小型租户使用");
-        basic.setUserLimit(100);
-        basic.setOrgLimit(50);
-        basic.setProductLimit(1000);
-        basic.setStorageLimit(10737418240L);
-        basic.setApiLimit(10000);
-        basic.setServiceLevelDesc("工作日支持");
-        basic.setPrice(999.0);
-        basic.setDuration(365);
-        basic.setStatus(0);
-        packages.add(basic);
-        
-        TenantPackageVO pro = new TenantPackageVO();
-        pro.setId(2L);
-        pro.setPackageCode("pro");
-        pro.setPackageName("专业版");
-        pro.setPackageDesc("适合中型租户使用");
-        pro.setUserLimit(500);
-        pro.setOrgLimit(100);
-        pro.setProductLimit(5000);
-        pro.setStorageLimit(107374182400L);
-        pro.setApiLimit(100000);
-        pro.setServiceLevelDesc("7x12小时支持");
-        pro.setPrice(2999.0);
-        pro.setDuration(365);
-        pro.setStatus(0);
-        packages.add(pro);
-        
-        TenantPackageVO enterprise = new TenantPackageVO();
-        enterprise.setId(3L);
-        enterprise.setPackageCode("enterprise");
-        enterprise.setPackageName("企业版");
-        enterprise.setPackageDesc("适合大型企业租户");
-        enterprise.setUserLimit(2000);
-        enterprise.setOrgLimit(500);
-        enterprise.setProductLimit(20000);
-        enterprise.setStorageLimit(536870912000L);
-        enterprise.setApiLimit(500000);
-        enterprise.setServiceLevelDesc("7x24小时专属支持");
-        enterprise.setPrice(9999.0);
-        enterprise.setDuration(365);
-        enterprise.setStatus(0);
-        packages.add(enterprise);
-        
+        for (TenantPackage entity : tenantPackageMapper.selectList(
+                new LambdaQueryWrapper<TenantPackage>()
+                        .orderByAsc(TenantPackage::getServiceLevel)
+                        .orderByAsc(TenantPackage::getId))) {
+            packages.add(toPackageVO(entity));
+        }
         return packages;
     }
 
     @Override
+    @Transactional
     public void createPackage(TenantPackageDTO dto) {
+        if (dto.getPackageCode() == null || dto.getPackageCode().isEmpty()) {
+            throw new BusinessException("套餐编码不能为空");
+        }
+        Long exists = tenantPackageMapper.selectCount(
+                new LambdaQueryWrapper<TenantPackage>().eq(TenantPackage::getPackageCode, dto.getPackageCode()));
+        if (exists != null && exists > 0) {
+            throw new BusinessException("套餐编码已存在：" + dto.getPackageCode());
+        }
+        TenantPackage entity = new TenantPackage();
+        entity.setPackageCode(dto.getPackageCode());
+        entity.setDelFlag(0);
+        applyPackageDto(entity, dto);
+        entity.setStatus(1);
+        tenantPackageMapper.insert(entity);
     }
 
     @Override
+    @Transactional
     public void updatePackage(Long id, TenantPackageDTO dto) {
+        TenantPackage entity = tenantPackageMapper.selectById(id);
+        if (entity == null) {
+            throw new BusinessException("套餐不存在");
+        }
+        // 只覆盖本次传了的字段：否则"改个价格"会把限额、说明一并清空
+        applyPackageDto(entity, dto);
+        tenantPackageMapper.updateById(entity);
     }
 
     @Override
+    @Transactional
     public void deletePackage(Long id) {
+        TenantPackage entity = tenantPackageMapper.selectById(id);
+        if (entity == null) {
+            throw new BusinessException("套餐不存在");
+        }
+        tenantPackageMapper.deleteById(id);
+    }
+
+    /** 服务级别 → 描述（未显式提供描述时按级别给出） */
+    private String defaultServiceLevelDesc(Integer level) {
+        if (level == null) {
+            return null;
+        }
+        switch (level) {
+            case 3:
+                return "7x24小时专属支持";
+            case 2:
+                return "7x12小时支持";
+            default:
+                return "工作日支持";
+        }
+    }
+
+    private void applyPackageDto(TenantPackage entity, TenantPackageDTO dto) {
+        if (dto.getPackageName() != null) {
+            entity.setPackageName(dto.getPackageName());
+        }
+        if (dto.getPackageDesc() != null) {
+            entity.setPackageDesc(dto.getPackageDesc());
+        }
+        if (dto.getUserLimit() != null) {
+            entity.setUserLimit(dto.getUserLimit());
+        }
+        if (dto.getOrgLimit() != null) {
+            entity.setOrgLimit(dto.getOrgLimit());
+        }
+        if (dto.getProductLimit() != null) {
+            entity.setProductLimit(dto.getProductLimit());
+        }
+        if (dto.getStorageLimit() != null) {
+            entity.setStorageLimit(dto.getStorageLimit());
+        }
+        if (dto.getApiLimit() != null) {
+            entity.setApiLimit(dto.getApiLimit());
+        }
+        if (dto.getPrice() != null) {
+            entity.setPrice(java.math.BigDecimal.valueOf(dto.getPrice()));
+        }
+        if (dto.getDuration() != null) {
+            entity.setDuration(dto.getDuration());
+        }
+        if (dto.getServiceLevel() != null) {
+            entity.setServiceLevel(dto.getServiceLevel());
+            entity.setServiceLevelDesc(defaultServiceLevelDesc(dto.getServiceLevel()));
+        }
+    }
+
+    private TenantPackageVO toPackageVO(TenantPackage entity) {
+        TenantPackageVO vo = new TenantPackageVO();
+        vo.setId(entity.getId());
+        vo.setPackageCode(entity.getPackageCode());
+        vo.setPackageName(entity.getPackageName());
+        vo.setPackageDesc(entity.getPackageDesc());
+        vo.setUserLimit(entity.getUserLimit());
+        vo.setOrgLimit(entity.getOrgLimit());
+        vo.setProductLimit(entity.getProductLimit());
+        vo.setStorageLimit(entity.getStorageLimit());
+        vo.setApiLimit(entity.getApiLimit());
+        vo.setServiceLevelDesc(entity.getServiceLevelDesc());
+        vo.setServiceLevel(entity.getServiceLevel());
+        vo.setPrice(entity.getPrice() == null ? null : entity.getPrice().doubleValue());
+        vo.setDuration(entity.getDuration());
+        vo.setStatus(entity.getStatus());
+        vo.setCreateTime(entity.getCreateTime() == null ? null : entity.getCreateTime().toString());
+        return vo;
     }
 
     @Override

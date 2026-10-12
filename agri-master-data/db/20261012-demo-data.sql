@@ -286,7 +286,27 @@ VALUES
 -- ---------------------------------------------------------------------------
 -- 清理演示数据（需要时手工执行）
 -- ---------------------------------------------------------------------------
+-- ---------------------------------------------------------------------------
+-- 租户套餐（3 条）—— 对应运营端「租户管理 → 套餐配置」页
+-- 价格单位由 duration 推导（365 天按"年"、30 天按"月"），存储上限单位是字节。
+-- ---------------------------------------------------------------------------
+INSERT IGNORE INTO `agri_md_tenant_package`
+  (`id`,`package_code`,`package_name`,`package_desc`,`user_limit`,`org_limit`,`product_limit`,`storage_limit`,
+   `api_limit`,`service_level`,`service_level_desc`,`price`,`duration`,`status`,`del_flag`,`tenant_id`,
+   `create_time`,`create_by`,`remark`)
+VALUES
+  (2601,'BASE','基础版','适合小型租户起步使用，含最基本的用户与商品容量',50,5,500,10737418240,10000,1,'工作日支持',
+   199.00,365,1,0,NULL,'2025-03-01 07:00:00','system','示范数据'),
+  (2602,'PRO','专业版','适合中型租户，容量与服务级别同步提升',500,50,5000,107374182400,100000,2,'7x12小时支持',
+   599.00,365,1,0,NULL,'2025-03-01 07:01:00','system','示范数据'),
+  (2603,'ENTERPRISE','企业版','大型企业租户，容量按需扩展并含专属支持',2000,500,20000,536870912000,500000,3,'7x24小时专属支持',
+   1999.00,365,1,0,NULL,'2025-03-01 07:02:00','system','示范数据');
+
+-- ---------------------------------------------------------------------------
+-- 清理演示数据（需要时手工执行）
+-- ---------------------------------------------------------------------------
 -- DELETE FROM `agri_md_system_config`               WHERE `id` BETWEEN 1000 AND 2999;
+-- DELETE FROM `agri_md_tenant_package`              WHERE `id` BETWEEN 1000 AND 2999;
 -- DELETE FROM `agri_md_tenant_quota`               WHERE `id` BETWEEN 1000 AND 2999;
 -- DELETE FROM `agri_md_code_rule`                  WHERE `id` BETWEEN 1000 AND 2999;
 -- DELETE FROM `agri_md_user_authentication`        WHERE `id` BETWEEN 1000 AND 2999;

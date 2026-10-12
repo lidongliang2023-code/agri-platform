@@ -102,6 +102,13 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
+import { message } from 'ant-design-vue'
+import {
+  getTenantPackageList,
+  createTenantPackage,
+  updateTenantPackage,
+  deleteTenantPackage as apiDeleteTenantPackage
+} from '../../utils/api'
 
 const showAddModal = ref(false)
 const isEdit = ref(false)
@@ -122,56 +129,69 @@ const form = reactive({
 
 const packageList = ref([])
 
-const mockPackages = [
-  {
-    id: 1,
-    name: '基础版',
-    type: 'BASE',
-    price: 199,
-    priceUnit: '月',
-    features: [
-      { name: '最大用户数', value: '50' },
-      { name: '最大组织数', value: '5' },
-      { name: '最大商品数', value: '500' },
-      { name: '存储空间', value: '10GB' },
-      { name: '每日API调用', value: '10,000次' },
-      { name: '客服支持', value: '基础支持' }
-    ]
-  },
-  {
-    id: 2,
-    name: '专业版',
-    type: 'PRO',
-    price: 599,
-    priceUnit: '月',
-    features: [
-      { name: '最大用户数', value: '500' },
-      { name: '最大组织数', value: '50' },
-      { name: '最大商品数', value: '5,000' },
-      { name: '存储空间', value: '100GB' },
-      { name: '每日API调用', value: '100,000次' },
-      { name: '客服支持', value: '标准支持' }
-    ]
-  },
-  {
-    id: 3,
-    name: '企业版',
-    type: 'ENTERPRISE',
-    price: 1999,
-    priceUnit: '月',
-    features: [
-      { name: '最大用户数', value: '不限' },
-      { name: '最大组织数', value: '不限' },
-      { name: '最大商品数', value: '不限' },
-      { name: '存储空间', value: '500GB' },
-      { name: '每日API调用', value: '不限' },
-      { name: '客服支持', value: '7×24小时' }
-    ]
-  }
-]
+const BYTES_PER_GB = 1024 * 1024 * 1024
+const toGb = (bytes) => (bytes == null ? 0 : Math.round((bytes / BYTES_PER_GB) * 10) / 10)
+const toBytes = (gb) => Math.round(Number(gb || 0) * BYTES_PER_GB)
 
-const loadPackages = () => {
-  packageList.value = mockPackages
+/** 服务级别与页面下拉值的对应关系（1/2/3 ↔ BASIC/STANDARD/ENTERPRISE） */
+const LEVEL_TO_SUPPORT = { 1: 'BASIC', 2: 'STANDARD', 3: 'ENTERPRISE' }
+const SUPPORT_TO_LEVEL = { BASIC: 1, STANDARD: 2, ENTERPRISE: 3 }
+const SUPPORT_LABELS = { BASIC: '基础支持', STANDARD: '标准支持', ENTERPRISE: '7×24小时' }
+
+/**
+ * 卡片上的"功能清单"是由限额字段**派生**出来的展示项，不是独立数据。
+ *
+ * 接口侧只有 userLimit / orgLimit / … 这些数字，页面把它们渲染成"最大用户数: 50"这样的条目；
+ * 反过来编辑时也从这些数字直接回填，不再像原来那样去解析 "存储空间: 10GB" 这种字符串
+ * （那种写法一旦文案改一个字、或出现"不限"，回填就会静默变成 0）。
+ */
+function deriveFeatures(row) {
+  const orUnlimited = (value) => (value == null || value <= 0 ? '不限' : String(value))
+  return [
+    { name: '最大用户数', value: orUnlimited(row.maxUsers) },
+    { name: '最大组织数', value: orUnlimited(row.maxOrgs) },
+    { name: '最大商品数', value: orUnlimited(row.maxProducts) },
+    { name: '存储空间', value: row.maxStorage > 0 ? `${row.maxStorage}GB` : '不限' },
+    { name: '每日API调用', value: orUnlimited(row.maxApiCalls) },
+    // 优先用接口给的服务级别文案（工作日支持 / 7x12小时支持 / 7x24小时专属支持），
+    // 拿不到才退回按级别写的通用文案
+    { name: '客服支持', value: row.serviceLevelDesc || SUPPORT_LABELS[row.supportLevel] || '—' }
+  ]
+}
+
+const loadPackages = async () => {
+  try {
+    const response = await getTenantPackageList()
+    if (response.code !== 200) {
+      message.error(response.message || '加载套餐失败')
+      packageList.value = []
+      return
+    }
+    // 不再回落到演示数据：失败就说失败
+    packageList.value = (response.data ?? []).map(row => {
+      const item = {
+        id: row.id,
+        name: row.packageName,
+        // 套餐编码即页面上的"类型"（BASE/PRO/ENTERPRISE），卡片配色也用这个值
+        type: (row.packageCode || '').toUpperCase(),
+        price: row.price,
+        // 价格单位由有效期推导：365 天按"年"，其余按"月"
+        priceUnit: (row.duration ?? 0) >= 365 ? '年' : '月',
+        maxUsers: row.userLimit ?? 0,
+        maxOrgs: row.orgLimit ?? 0,
+        maxProducts: row.productLimit ?? 0,
+        maxStorage: toGb(row.storageLimit),
+        maxApiCalls: row.apiLimit ?? 0,
+        supportLevel: LEVEL_TO_SUPPORT[row.serviceLevel] ?? 'BASIC',
+        serviceLevelDesc: row.serviceLevelDesc
+      }
+      item.features = deriveFeatures(item)
+      return item
+    })
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '加载套餐失败')
+    packageList.value = []
+  }
 }
 
 onMounted(() => {
@@ -193,64 +213,69 @@ const editPackage = (pkg) => {
   form.type = pkg.type
   form.price = pkg.price
   form.priceUnit = pkg.priceUnit
-  pkg.features.forEach(f => {
-    if (f.name === '最大用户数') form.maxUsers = parseInt(f.value) || 0
-    if (f.name === '最大组织数') form.maxOrgs = parseInt(f.value) || 0
-    if (f.name === '最大商品数') form.maxProducts = parseInt(f.value.replace(',', '')) || 0
-    if (f.name === '存储空间') form.maxStorage = parseInt(f.value) || 0
-    if (f.name === '每日API调用') form.maxApiCalls = parseInt(f.value.replace(',', '')) || 0
-    if (f.name === '客服支持') form.supportLevel = f.value === '基础支持' ? 'BASIC' : f.value === '标准支持' ? 'STANDARD' : 'ENTERPRISE'
-  })
+  // 直接从数值字段回填，不从 features 的展示文案里反解（含"不限"时反解会静默变成 0）
+  form.maxUsers = pkg.maxUsers
+  form.maxOrgs = pkg.maxOrgs
+  form.maxProducts = pkg.maxProducts
+  form.maxStorage = pkg.maxStorage
+  form.maxApiCalls = pkg.maxApiCalls
+  form.supportLevel = pkg.supportLevel
   showAddModal.value = true
 }
 
-const deletePackage = (pkg) => {
-  if (confirm(`确定删除套餐 "${pkg.name}" 吗？`)) {
-    packageList.value = packageList.value.filter(p => p.id !== pkg.id)
-    alert('套餐已删除')
+const deletePackage = async (pkg) => {
+  if (!confirm(`确定删除套餐 "${pkg.name}" 吗？`)) {
+    return
+  }
+  try {
+    const response = await apiDeleteTenantPackage(pkg.id)
+    if (response.code === 200) {
+      message.success('套餐已删除')
+      loadPackages()
+    } else {
+      message.error(response.message || '删除失败')
+    }
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '删除失败')
   }
 }
 
-const savePackage = () => {
+const savePackage = async () => {
   if (!form.name || form.price <= 0) {
-    alert('请填写完整的套餐信息')
+    message.warning('请填写完整的套餐信息')
     return
   }
-  
-  const features = [
-    { name: '最大用户数', value: form.maxUsers > 0 ? form.maxUsers.toString() : '不限' },
-    { name: '最大组织数', value: form.maxOrgs > 0 ? form.maxOrgs.toString() : '不限' },
-    { name: '最大商品数', value: form.maxProducts > 0 ? form.maxProducts.toString() : '不限' },
-    { name: '存储空间', value: form.maxStorage > 0 ? form.maxStorage + 'GB' : '不限' },
-    { name: '每日API调用', value: form.maxApiCalls > 0 ? form.maxApiCalls.toString() : '不限' },
-    { name: '客服支持', value: form.supportLevel === 'BASIC' ? '基础支持' : form.supportLevel === 'STANDARD' ? '标准支持' : '7×24小时' }
-  ]
 
-  if (isEdit.value) {
-    const index = packageList.value.findIndex(p => p.id === form.id)
-    if (index !== -1) {
-      packageList.value[index] = {
-        ...packageList.value[index],
-        name: form.name,
-        type: form.type,
-        price: form.price,
-        priceUnit: form.priceUnit,
-        features
-      }
-    }
-    alert('套餐已更新')
-  } else {
-    packageList.value.push({
-      id: Date.now(),
-      name: form.name,
-      type: form.type,
-      price: form.price,
-      priceUnit: form.priceUnit,
-      features
-    })
-    alert('套餐已创建')
+  const payload = {
+    packageCode: form.type,
+    packageName: form.name,
+    packageDesc: `${form.name}（${form.priceUnit}付）`,
+    userLimit: Number(form.maxUsers) || 0,
+    orgLimit: Number(form.maxOrgs) || 0,
+    productLimit: Number(form.maxProducts) || 0,
+    // 输入框是 GB，接口要字节：漏了这一行会把 10GB 存成 10 字节
+    storageLimit: toBytes(form.maxStorage),
+    apiLimit: Number(form.maxApiCalls) || 0,
+    serviceLevel: SUPPORT_TO_LEVEL[form.supportLevel] ?? 1,
+    price: Number(form.price) || 0,
+    // 价格单位反向映射成有效期天数（年→365，月→30）
+    duration: form.priceUnit === '年' ? 365 : 30
   }
-  closeAddModal()
+
+  try {
+    const response = isEdit.value
+      ? await updateTenantPackage(form.id, payload)
+      : await createTenantPackage(payload)
+    if (response.code === 200) {
+      message.success(isEdit.value ? '套餐已更新' : '套餐已创建')
+      closeAddModal()
+      loadPackages()
+    } else {
+      message.error(response.message || '保存失败')
+    }
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '保存失败')
+  }
 }
 </script>
 

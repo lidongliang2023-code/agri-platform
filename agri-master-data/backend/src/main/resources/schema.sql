@@ -809,3 +809,41 @@ CREATE TABLE IF NOT EXISTS `agri_md_system_config` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_system_config_key` (`config_key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='系统配置表';
+
+-- ---------------------------------------------------------------------------
+-- 租户套餐表（2026-10-12 新增）
+--
+-- 与编码规则/系统配置同样：/admin/masterdata/tenant/package/* 四个端点早就存在，
+-- 但 getPackageList 是在代码里手搓三个 VO（基础版/专业版/企业版）返回的，
+-- 增删改全是空方法体 —— 页面上"能看懂、能编辑"，改完刷新就没了。
+--
+-- **为什么没有"套餐功能清单"子表**：页面上的 pkg.features[] 并不是独立的功能目录，
+-- 而是下面 user_limit / org_limit / product_limit / storage_limit / api_limit / 服务级别
+-- 这几个字段的展示形态（页面的 editPackage 就是把这些名字反解回表单数值）。
+-- 再建一张子表等于把同一批数字存两遍，必然对不齐。
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `agri_md_tenant_package` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `package_code` VARCHAR(64) NOT NULL COMMENT '套餐编码：BASE/PRO/ENTERPRISE，唯一',
+  `package_name` VARCHAR(128) NOT NULL COMMENT '套餐名称',
+  `package_desc` VARCHAR(500) COMMENT '套餐说明',
+  `user_limit` INT COMMENT '用户数上限',
+  `org_limit` INT COMMENT '组织数上限',
+  `product_limit` INT COMMENT '商品数上限',
+  `storage_limit` BIGINT COMMENT '存储上限（字节）',
+  `api_limit` INT COMMENT '每日 API 调用上限',
+  `service_level` INT COMMENT '服务级别：1 基础 / 2 标准 / 3 专属',
+  `service_level_desc` VARCHAR(128) COMMENT '服务级别描述，如"7x24小时专属支持"',
+  `price` DECIMAL(18,2) COMMENT '价格',
+  `duration` INT COMMENT '有效期（天）',
+  `status` INT DEFAULT 1 COMMENT '状态：1 启用 / 0 禁用',
+  `del_flag` INT DEFAULT 0 COMMENT '删除标志：0 未删除 / 1 已删除',
+  `tenant_id` VARCHAR(64) COMMENT '租户ID（套餐为平台级配置，通常为空）',
+  `create_time` DATETIME COMMENT '创建时间',
+  `create_by` VARCHAR(64) COMMENT '创建人',
+  `update_time` DATETIME COMMENT '更新时间',
+  `update_by` VARCHAR(64) COMMENT '更新人',
+  `remark` VARCHAR(500) COMMENT '备注',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_tenant_package_code` (`package_code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='租户套餐表';
