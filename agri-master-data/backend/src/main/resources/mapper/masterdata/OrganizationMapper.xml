@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  OrganizationMapper 的 SQL。
+
+  这个文件此前**根本不存在**，而 OrganizationMapper 接口里声明了 7 个方法 ——
+  后果是 org/list、org/tree、org/cert-audit 三个页面一律 500，
+  报错是 Invalid bound statement (not found)。接口先行、SQL 未落地，
+  不是"SQL 写错了"，是"SQL 从来没写过"。
+-->
+<mapper namespace="com.agri.masterdata.mapper.OrganizationMapper">
+
+    <sql id="orgColumns">
+        o.id, o.org_code, o.org_name, o.org_type, o.parent_id, o.ancestors, o.org_level,
+        o.org_path, o.legal_person, o.contact_person, o.contact_phone, o.contact_mobile,
+        o.province, o.city, o.district, o.address, o.business_license, o.tax_no,
+        o.org_status, o.auth_status, o.status, o.tenant_id, o.create_by, o.create_time, o.remark
+    </sql>
+
+    <select id="selectOrgTree" resultType="com.agri.masterdata.vo.OrganizationVO">
+        SELECT <include refid="orgColumns"/>
+        FROM agri_md_organization o
+        WHERE o.del_flag = 0
+        <if test="tenantId != null and tenantId != ''">
+            AND o.tenant_id = #{tenantId}
+        </if>
+        ORDER BY o.org_level ASC, o.id ASC
+    </select>
+
+    <select id="selectOrgChildren" resultType="com.agri.masterdata.vo.OrganizationVO">
+        SELECT <include refid="orgColumns"/>
+        FROM agri_md_organization o
+        WHERE o.del_flag = 0 AND o.parent_id = #{parentId}
+        <if test="tenantId != null and tenantId != ''">
+            AND o.tenant_id = #{tenantId}
+        </if>
+        ORDER BY o.id ASC
+    </select>
+
+    <select id="selectOrgByTenantId" resultType="com.agri.masterdata.entity.Organization">
+        SELECT * FROM agri_md_organization
+        WHERE del_flag = 0
+        <if test="tenantId != null and tenantId != ''">
+            AND tenant_id = #{tenantId}
+        </if>
+        ORDER BY org_level ASC, id ASC
+    </select>
+
+    <!-- 运营端组织列表：分页 + 多条件，列表与总数共用同一 where。 -->
+    <sql id="adminOrgWhere">
+        o.del_flag = 0
+        <if test="tenantId != null and tenantId != ''">
+            AND o.tenant_id = #{tenantId}
+        </if>
+        <if test="orgName != null and orgName != ''">
+            AND o.org_name LIKE CONCAT('%', #{orgName}, '%')
+        </if>
+        <if test="orgType != null and orgType != ''">
+            AND o.org_type = #{orgType}
+        </if>
+    </sql>
+
+    <select id="selectAdminOrgList" resultType="com.agri.masterdata.vo.OrganizationVO">
+        SELECT <include refid="orgColumns"/>
+        FROM agri_md_organization o
+        <where>
+            <include refid="adminOrgWhere"/>
+        </where>
+        ORDER BY o.create_time DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="countAdminOrgList" resultType="long">
+        SELECT COUNT(*)
+        FROM agri_md_organization o
+        <where>
+            <include refid="adminOrgWhere"/>
+        </where>
+    </select>
+
+    <!-- 运营端组织认证审核列表（/admin/masterdata/org/cert-audit）。
+
+         creditCode 取不到：组织表里没有 credit_code 列（只有 business_license / tax_no），
+         这里**不编一个值**填进去，宁可让它为 null —— 审核页把它标成"未登记"即可。
+         tenantName 来自租户表，是真 join 出来的。 -->
+    <sql id="orgAuditWhere">
+        o.del_flag = 0
+        <if test="authStatus != null and authStatus != ''">
+            AND o.auth_status = #{authStatus}
+        </if>
+    </sql>
+
+    <select id="selectOrgCertAuditList" resultType="com.agri.admin.vo.OrgAuditVO">
+        SELECT o.id, o.org_code, o.org_name, o.org_type, o.legal_person, o.contact_mobile,
+               o.business_license, o.auth_status, o.create_time, o.tenant_id,
+               t.tenant_name AS tenantName
+        FROM agri_md_organization o
+        LEFT JOIN agri_md_tenant t ON t.id = o.tenant_id
+        <where>
+            <include refid="orgAuditWhere"/>
+        </where>
+        ORDER BY o.create_time DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="countOrgCertAuditList" resultType="long">
+        SELECT COUNT(*)
+        FROM agri_md_organization o
+        <where>
+            <include refid="orgAuditWhere"/>
+        </where>
+    </select>
+</mapper>

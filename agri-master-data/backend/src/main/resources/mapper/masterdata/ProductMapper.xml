@@ -51,4 +51,48 @@
     <select id="selectByProductCode" resultType="com.agri.masterdata.entity.Product">
         SELECT * FROM agri_md_product WHERE product_code = #{productCode} AND del_flag = 0
     </select>
+
+    <!-- 运营端商品列表（/admin/masterdata/product/list）：分页 + 多条件。
+         categoryId 由控制器按逗号分隔传入，可能是多个，故用 IN 而不是 = 。
+         列表与总数共用同一 where，口径不会分叉。 -->
+    <sql id="adminProductWhere">
+        p.del_flag = 0
+        <if test="tenantId != null and tenantId != ''">
+            AND p.tenant_id = #{tenantId}
+        </if>
+        <if test="productName != null and productName != ''">
+            AND p.product_name LIKE CONCAT('%', #{productName}, '%')
+        </if>
+        <if test="productCode != null and productCode != ''">
+            AND p.product_code LIKE CONCAT('%', #{productCode}, '%')
+        </if>
+        <if test="categoryId != null and categoryId != ''">
+            AND FIND_IN_SET(p.category_id, #{categoryId})
+        </if>
+        <if test="status != null and status != ''">
+            AND p.status = #{status}
+        </if>
+    </sql>
+
+    <select id="selectAdminProductList" resultType="com.agri.masterdata.vo.ProductVO">
+        SELECT p.id, p.product_code, p.product_name, p.category_id, p.brand, p.unit,
+               p.origin, p.spec_json, p.price, p.image_urls, p.status, p.tenant_id,
+               p.create_by, p.create_time, p.remark,
+               c.category_name AS categoryName
+        FROM agri_md_product p
+        LEFT JOIN agri_md_product_category c ON c.id = p.category_id
+        <where>
+            <include refid="adminProductWhere"/>
+        </where>
+        ORDER BY p.create_time DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="countAdminProductList" resultType="long">
+        SELECT COUNT(*)
+        FROM agri_md_product p
+        <where>
+            <include refid="adminProductWhere"/>
+        </where>
+    </select>
 </mapper>

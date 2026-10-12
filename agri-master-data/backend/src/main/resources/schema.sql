@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS `agri_md_user` (
   `create_by` VARCHAR(64) COMMENT '创建人',
   `update_time` DATETIME COMMENT '更新时间',
   `update_by` VARCHAR(64) COMMENT '更新人',
+  `remark` VARCHAR(500) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_username` (`username`),
   UNIQUE KEY `uk_phone` (`phone`),
@@ -56,6 +57,14 @@ CREATE TABLE IF NOT EXISTS `agri_md_tenant` (
   `create_by` VARCHAR(64) COMMENT '创建人',
   `update_time` DATETIME COMMENT '更新时间',
   `update_by` VARCHAR(64) COMMENT '更新人',
+  `contact_person` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `contact_email` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `logo_url` VARCHAR(500) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `domain` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `expire_time` DATETIME NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `max_users` INT NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `tenant_id` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `remark` VARCHAR(500) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_tenant_code` (`tenant_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='租户表';
@@ -77,6 +86,12 @@ CREATE TABLE IF NOT EXISTS `agri_md_tenant_quota` (
   `create_by` VARCHAR(64) COMMENT '创建人',
   `update_time` DATETIME COMMENT '更新时间',
   `update_by` VARCHAR(64) COMMENT '更新人',
+  `quota_type` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `org_limit` INT NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `used_orgs` INT NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `max_value` INT NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `current_value` INT NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `remark` VARCHAR(500) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_tenant_id` (`tenant_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='租户配额表';
@@ -99,6 +114,10 @@ CREATE TABLE IF NOT EXISTS `agri_md_role` (
   `create_by` VARCHAR(64) COMMENT '创建人',
   `update_time` DATETIME COMMENT '更新时间',
   `update_by` VARCHAR(64) COMMENT '更新人',
+  `role_key` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `description` VARCHAR(500) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `data_scope` VARCHAR(500) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `remark` VARCHAR(500) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_role_code` (`role_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='角色表';
@@ -133,6 +152,10 @@ CREATE TABLE IF NOT EXISTS `agri_md_menu` (
   `create_by` VARCHAR(64) COMMENT '创建人',
   `update_time` DATETIME COMMENT '更新时间',
   `update_by` VARCHAR(64) COMMENT '更新人',
+  `order_num` INT NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `visible` INT NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `perms` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `remark` VARCHAR(500) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_menu_code` (`menu_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='菜单表';
@@ -164,6 +187,18 @@ CREATE TABLE IF NOT EXISTS `agri_md_permission` (
   `create_by` VARCHAR(64) COMMENT '创建人',
   `update_time` DATETIME COMMENT '更新时间',
   `update_by` VARCHAR(64) COMMENT '更新人',
+  `permission_id` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `permission_code` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `permission_name` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `permission_type` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `parent_id` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `permission_path` VARCHAR(500) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `permission_icon` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `permission_url` VARCHAR(500) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `component` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `is_leaf` INT NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `sort_order` INT NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `remark` VARCHAR(500) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_perm_code` (`perm_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='权限表';
@@ -177,6 +212,7 @@ CREATE TABLE IF NOT EXISTS `agri_md_role_permission` (
   `tenant_id` VARCHAR(64) COMMENT '租户ID',
   `create_time` DATETIME COMMENT '创建时间',
   `create_by` VARCHAR(64) COMMENT '创建人',
+  `permission_id` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_role_perm` (`role_id`, `perm_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='角色权限关联表';
@@ -211,6 +247,15 @@ CREATE TABLE IF NOT EXISTS `agri_md_organization` (
   `create_by` VARCHAR(64) COMMENT '创建人',
   `update_time` DATETIME COMMENT '更新时间',
   `update_by` VARCHAR(64) COMMENT '更新人',
+  `ancestors` VARCHAR(500) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `org_level` INT NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `org_path` VARCHAR(500) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `contact_person` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `contact_phone` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `address` VARCHAR(500) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `auth_status` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `audit_note` VARCHAR(500) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `remark` VARCHAR(500) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_org_code` (`org_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='组织表';
@@ -228,6 +273,12 @@ CREATE TABLE IF NOT EXISTS `agri_md_department` (
   `create_by` VARCHAR(64) COMMENT '创建人',
   `update_time` DATETIME COMMENT '更新时间',
   `update_by` VARCHAR(64) COMMENT '更新人',
+  `dept_id` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `parent_dept_id` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `dept_manager` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `contact_phone` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `dept_count` INT NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `remark` VARCHAR(500) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_dept_code` (`dept_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='部门表';
@@ -245,6 +296,13 @@ CREATE TABLE IF NOT EXISTS `agri_md_position` (
   `create_by` VARCHAR(64) COMMENT '创建人',
   `update_time` DATETIME COMMENT '更新时间',
   `update_by` VARCHAR(64) COMMENT '更新人',
+  `position_id` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `position_code` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `position_name` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `position_level` INT NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `position_desc` VARCHAR(500) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `incumbent_count` INT NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `remark` VARCHAR(500) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_pos_code` (`pos_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='岗位表';
@@ -269,6 +327,10 @@ CREATE TABLE IF NOT EXISTS `agri_md_product` (
   `create_by` VARCHAR(64) COMMENT '创建人',
   `update_time` DATETIME COMMENT '更新时间',
   `update_by` VARCHAR(64) COMMENT '更新人',
+  `origin` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `spec_json` VARCHAR(500) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `image_urls` VARCHAR(500) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `remark` VARCHAR(500) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_product_code` (`product_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='商品表';
@@ -287,6 +349,10 @@ CREATE TABLE IF NOT EXISTS `agri_md_product_category` (
   `create_by` VARCHAR(64) COMMENT '创建人',
   `update_time` DATETIME COMMENT '更新时间',
   `update_by` VARCHAR(64) COMMENT '更新人',
+  `ancestors` VARCHAR(500) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `order_num` INT NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `icon` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `remark` VARCHAR(500) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_category_code` (`category_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='商品分类表';
@@ -307,6 +373,13 @@ CREATE TABLE IF NOT EXISTS `agri_md_product_attribute` (
   `create_by` VARCHAR(64) COMMENT '创建人',
   `update_time` DATETIME COMMENT '更新时间',
   `update_by` VARCHAR(64) COMMENT '更新人',
+  `attribute_code` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `attribute_name` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `attribute_type` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `unit` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `options` VARCHAR(500) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `is_unique` INT NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `remark` VARCHAR(500) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_attr_code` (`attr_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='商品属性表';
@@ -325,6 +398,14 @@ CREATE TABLE IF NOT EXISTS `agri_md_quality_standard` (
   `create_by` VARCHAR(64) COMMENT '创建人',
   `update_time` DATETIME COMMENT '更新时间',
   `update_by` VARCHAR(64) COMMENT '更新人',
+  `attribute_code` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `attribute_name` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `operator` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `min_value` DECIMAL(18,4) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `max_value` DECIMAL(18,4) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `unit` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `reference` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `remark` VARCHAR(500) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_standard_code` (`standard_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='质量标准表';
@@ -348,6 +429,12 @@ CREATE TABLE IF NOT EXISTS `agri_md_customer` (
   `create_by` VARCHAR(64) COMMENT '创建人',
   `update_time` DATETIME COMMENT '更新时间',
   `update_by` VARCHAR(64) COMMENT '更新人',
+  `short_name` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `org_id` BIGINT NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `credit_code` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `legal_person` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `level` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `remark` VARCHAR(500) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_customer_code` (`customer_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='客户表';
@@ -373,6 +460,13 @@ CREATE TABLE IF NOT EXISTS `agri_md_supplier` (
   `create_by` VARCHAR(64) COMMENT '创建人',
   `update_time` DATETIME COMMENT '更新时间',
   `update_by` VARCHAR(64) COMMENT '更新人',
+  `short_name` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `org_id` BIGINT NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `credit_code` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `legal_person` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `contact_person` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `level` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `remark` VARCHAR(500) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_supplier_code` (`supplier_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='供应商表';
@@ -387,6 +481,15 @@ CREATE TABLE IF NOT EXISTS `agri_md_customer_supplier_relation` (
   `tenant_id` VARCHAR(64) COMMENT '租户ID',
   `create_time` DATETIME COMMENT '创建时间',
   `create_by` VARCHAR(64) COMMENT '创建人',
+  `relation_id` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `cooperation_level` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `start_date` DATETIME NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `end_date` DATETIME NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `transaction_count` INT NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `total_amount` DECIMAL(18,4) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `avg_unit_price` DECIMAL(18,4) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `payment_status` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `dispute_count` INT NULL COMMENT '实体字段对齐补齐（2026-10-12）',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_customer_supplier` (`customer_id`, `supplier_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='客户供应商关系表';
@@ -405,6 +508,14 @@ CREATE TABLE IF NOT EXISTS `agri_md_address_region` (
   `create_by` VARCHAR(64) COMMENT '创建人',
   `update_time` DATETIME COMMENT '更新时间',
   `update_by` VARCHAR(64) COMMENT '更新人',
+  `region_id` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `level` INT NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `pinyin` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `pinyin_abbr` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `area_code` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `postal_code` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `tenant_id` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `remark` VARCHAR(500) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_region_code` (`region_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='行政区划表';
@@ -425,6 +536,19 @@ CREATE TABLE IF NOT EXISTS `agri_md_production_region` (
   `create_by` VARCHAR(64) COMMENT '创建人',
   `update_time` DATETIME COMMENT '更新时间',
   `update_by` VARCHAR(64) COMMENT '更新人',
+  `parent_code` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `region_type` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `province` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `city` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `district` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `address` VARCHAR(500) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `longitude` DECIMAL(18,4) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `latitude` DECIMAL(18,4) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `rainfall` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `sunshine_hours` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `specialty` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `certification` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `remark` VARCHAR(500) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_pr_region_code` (`region_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='产区表';
@@ -445,6 +569,13 @@ CREATE TABLE IF NOT EXISTS `agri_md_logistics_node` (
   `create_by` VARCHAR(64) COMMENT '创建人',
   `update_time` DATETIME COMMENT '更新时间',
   `update_by` VARCHAR(64) COMMENT '更新人',
+  `node_id` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `region_code` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `address` VARCHAR(500) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `capacity` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `services` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `contact_person` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `contact_phone` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_node_code` (`node_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='物流节点表';
@@ -461,6 +592,8 @@ CREATE TABLE IF NOT EXISTS `agri_md_dict` (
   `create_by` VARCHAR(64) COMMENT '创建人',
   `update_time` DATETIME COMMENT '更新时间',
   `update_by` VARCHAR(64) COMMENT '更新人',
+  `description` VARCHAR(500) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `remark` VARCHAR(500) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_dict_code` (`dict_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='字典表';
@@ -479,6 +612,11 @@ CREATE TABLE IF NOT EXISTS `agri_md_dict_item` (
   `create_by` VARCHAR(64) COMMENT '创建人',
   `update_time` DATETIME COMMENT '更新时间',
   `update_by` VARCHAR(64) COMMENT '更新人',
+  `dict_id` BIGINT NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `item_name` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `item_text` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `item_sort` INT NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `remark` VARCHAR(500) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_dict_item` (`dict_code`, `item_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='字典项表';
@@ -499,6 +637,12 @@ CREATE TABLE IF NOT EXISTS `agri_md_user_authentication` (
   `create_by` VARCHAR(64) COMMENT '创建人',
   `update_time` DATETIME COMMENT '更新时间',
   `update_by` VARCHAR(64) COMMENT '更新人',
+  `auth_id` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `auth_level` INT NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `auth_result` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `verified_by` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `verified_time` DATETIME NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `remark` VARCHAR(500) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_user_auth` (`user_id`, `auth_type`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户认证表';
@@ -516,6 +660,12 @@ CREATE TABLE IF NOT EXISTS `agri_md_user_identity` (
   `create_by` VARCHAR(64) COMMENT '创建人',
   `update_time` DATETIME COMMENT '更新时间',
   `update_by` VARCHAR(64) COMMENT '更新人',
+  `identity_id` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `identity_name` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `identity_status` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `verified_time` DATETIME NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `expire_time` DATETIME NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `remark` VARCHAR(500) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户身份表';
 
@@ -531,6 +681,12 @@ CREATE TABLE IF NOT EXISTS `agri_md_user_profile` (
   `create_by` VARCHAR(64) COMMENT '创建人',
   `update_time` DATETIME COMMENT '更新时间',
   `update_by` VARCHAR(64) COMMENT '更新人',
+  `profile_id` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `profile_type` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `profile_data` VARCHAR(500) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `tags` VARCHAR(500) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `score_data` VARCHAR(500) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `remark` VARCHAR(500) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_user_profile` (`user_id`, `profile_key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户画像表';
@@ -547,6 +703,11 @@ CREATE TABLE IF NOT EXISTS `agri_md_data_permission` (
   `create_by` VARCHAR(64) COMMENT '创建人',
   `update_time` DATETIME COMMENT '更新时间',
   `update_by` VARCHAR(64) COMMENT '更新人',
+  `dp_id` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `data_scope` VARCHAR(500) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `custom_depts` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `data_conditions` VARCHAR(500) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `module_type` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='数据权限表';
 
@@ -560,6 +721,10 @@ CREATE TABLE IF NOT EXISTS `agri_md_org_hierarchy` (
   `tenant_id` VARCHAR(64) COMMENT '租户ID',
   `create_time` DATETIME COMMENT '创建时间',
   `create_by` VARCHAR(64) COMMENT '创建人',
+  `hierarchy_id` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `parent_org_id` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `ancestor_org_id` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `path` VARCHAR(500) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_org_ancestor` (`org_id`, `ancestor_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='组织层级表';
@@ -573,6 +738,14 @@ CREATE TABLE IF NOT EXISTS `agri_md_product_region` (
   `tenant_id` VARCHAR(64) COMMENT '租户ID',
   `create_time` DATETIME COMMENT '创建时间',
   `create_by` VARCHAR(64) COMMENT '创建人',
+  `region_code` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `region_name` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `region_type` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `main_products` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `description` VARCHAR(500) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `advantage` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `capacity` DECIMAL(18,4) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
+  `output_ratio` DECIMAL(18,4) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_product_region` (`product_id`, `region_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='商品产区关联表';

@@ -56,4 +56,39 @@
     <select id="selectByRoleCode" resultType="com.agri.masterdata.entity.Role">
         SELECT * FROM agri_md_role WHERE role_code = #{roleCode} AND del_flag = 0
     </select>
+
+    <!-- 运营端角色列表（/admin/masterdata/permission/role/list）：分页 + 多条件。
+
+         注意 sort_order 必须显式起别名 roleSort：VO 里的字段叫 roleSort，
+         而列名 sort_order 在开启 map-underscore-to-camel-case 后只会映射成 sortOrder，
+         不写别名会得到一个恒为 null 的排序字段（页面上表现为"排序值整列空白"）。 -->
+    <sql id="adminRoleWhere">
+        r.del_flag = 0
+        <if test="tenantId != null and tenantId != ''">
+            AND r.tenant_id = #{tenantId}
+        </if>
+        <if test="roleName != null and roleName != ''">
+            AND r.role_name LIKE CONCAT('%', #{roleName}, '%')
+        </if>
+    </sql>
+
+    <select id="selectAdminRoleList" resultType="com.agri.masterdata.vo.RoleVO">
+        SELECT r.id, r.role_code, r.role_name, r.role_key, r.description, r.data_scope,
+               r.status, r.tenant_id, r.create_by, r.create_time, r.update_by, r.update_time, r.remark,
+               r.sort_order AS roleSort
+        FROM agri_md_role r
+        <where>
+            <include refid="adminRoleWhere"/>
+        </where>
+        ORDER BY r.sort_order ASC, r.id ASC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="countAdminRoleList" resultType="long">
+        SELECT COUNT(*)
+        FROM agri_md_role r
+        <where>
+            <include refid="adminRoleWhere"/>
+        </where>
+    </select>
 </mapper>

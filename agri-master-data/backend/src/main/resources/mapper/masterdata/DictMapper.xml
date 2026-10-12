@@ -18,4 +18,33 @@
     <select id="selectByDictCode" resultType="com.agri.masterdata.entity.Dict">
         SELECT * FROM agri_md_dict WHERE dict_code = #{dictCode} AND del_flag = 0
     </select>
+
+    <!-- 运营端数据字典列表（/admin/masterdata/standard/dict/list）：分页 + 按名称模糊。
+         列表与总数共用同一 where，口径不会分叉。
+         items（字典项）不在这里查：它是 DictItem 的子集合，列表页逐行再查会退化成 N+1。 -->
+    <sql id="adminDictWhere">
+        d.del_flag = 0
+        <if test="dictName != null and dictName != ''">
+            AND d.dict_name LIKE CONCAT('%', #{dictName}, '%')
+        </if>
+    </sql>
+
+    <select id="selectAdminDictList" resultType="com.agri.masterdata.vo.DictVO">
+        SELECT d.id, d.dict_name, d.dict_code, d.dict_type, d.status,
+               d.tenant_id, d.create_by, d.create_time, d.remark
+        FROM agri_md_dict d
+        <where>
+            <include refid="adminDictWhere"/>
+        </where>
+        ORDER BY d.dict_code ASC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="countAdminDictList" resultType="long">
+        SELECT COUNT(*)
+        FROM agri_md_dict d
+        <where>
+            <include refid="adminDictWhere"/>
+        </where>
+    </select>
 </mapper>

@@ -20,4 +20,44 @@
     <select id="selectBySupplierCode" resultType="com.agri.masterdata.entity.Supplier">
         SELECT * FROM agri_md_supplier WHERE supplier_code = #{supplierCode} AND del_flag = 0
     </select>
+
+    <!-- 运营端供应商列表（/admin/masterdata/customer/supplier/list）：分页 + 多条件，
+         列表与总数共用同一 where，口径不会分叉。详见 CustomerMapper.xml 同名片段的注释。 -->
+    <sql id="adminSupplierWhere">
+        s.del_flag = 0
+        <if test="tenantId != null and tenantId != ''">
+            AND s.tenant_id = #{tenantId}
+        </if>
+        <if test="supplierName != null and supplierName != ''">
+            AND s.supplier_name LIKE CONCAT('%', #{supplierName}, '%')
+        </if>
+        <if test="supplierCode != null and supplierCode != ''">
+            AND s.supplier_code LIKE CONCAT('%', #{supplierCode}, '%')
+        </if>
+        <if test="status != null and status != ''">
+            AND s.status = #{status}
+        </if>
+    </sql>
+
+    <select id="selectAdminSupplierList" resultType="com.agri.masterdata.vo.SupplierVO">
+        SELECT s.id, s.supplier_code, s.supplier_name, s.short_name, s.supplier_type,
+               s.org_id, s.credit_code, s.legal_person, s.contact_person, s.contact_phone,
+               s.address, s.level, s.status, s.tenant_id, s.create_by, s.create_time, s.remark,
+               o.org_name AS orgName
+        FROM agri_md_supplier s
+        LEFT JOIN agri_md_organization o ON o.id = s.org_id
+        <where>
+            <include refid="adminSupplierWhere"/>
+        </where>
+        ORDER BY s.create_time DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="countAdminSupplierList" resultType="long">
+        SELECT COUNT(*)
+        FROM agri_md_supplier s
+        <where>
+            <include refid="adminSupplierWhere"/>
+        </where>
+    </select>
 </mapper>

@@ -20,4 +20,50 @@
     <select id="selectByCustomerCode" resultType="com.agri.masterdata.entity.Customer">
         SELECT * FROM agri_md_customer WHERE customer_code = #{customerCode} AND del_flag = 0
     </select>
+
+    <!--
+      运营端客户列表（PRD V2.0 /admin/masterdata/customer/list）。
+
+      与上面 selectCustomerList 的差别有两点，都不是随手加的：
+        1. 运营端要**分页 + 多条件**，旧方法是整表返回、只按 tenantId 过滤；
+        2. 列表与总数**共用同一个 where 片段**。写成两份 SQL 的话，
+           只要有一处条件漏改，"总数说 100 条、当页却是别的口径"就会静默发生。
+    -->
+    <sql id="adminCustomerWhere">
+        c.del_flag = 0
+        <if test="tenantId != null and tenantId != ''">
+            AND c.tenant_id = #{tenantId}
+        </if>
+        <if test="customerName != null and customerName != ''">
+            AND c.customer_name LIKE CONCAT('%', #{customerName}, '%')
+        </if>
+        <if test="customerCode != null and customerCode != ''">
+            AND c.customer_code LIKE CONCAT('%', #{customerCode}, '%')
+        </if>
+        <if test="status != null and status != ''">
+            AND c.status = #{status}
+        </if>
+    </sql>
+
+    <select id="selectAdminCustomerList" resultType="com.agri.masterdata.vo.CustomerVO">
+        SELECT c.id, c.customer_code, c.customer_name, c.short_name, c.customer_type,
+               c.org_id, c.credit_code, c.legal_person, c.contact_name, c.contact_phone,
+               c.address, c.level, c.status, c.tenant_id, c.create_by, c.create_time, c.remark,
+               o.org_name AS orgName
+        FROM agri_md_customer c
+        LEFT JOIN agri_md_organization o ON o.id = c.org_id
+        <where>
+            <include refid="adminCustomerWhere"/>
+        </where>
+        ORDER BY c.create_time DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="countAdminCustomerList" resultType="long">
+        SELECT COUNT(*)
+        FROM agri_md_customer c
+        <where>
+            <include refid="adminCustomerWhere"/>
+        </where>
+    </select>
 </mapper>
