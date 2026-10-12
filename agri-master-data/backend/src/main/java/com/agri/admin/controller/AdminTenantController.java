@@ -6,6 +6,7 @@ import com.agri.admin.dto.TenantQuotaAdjustDTO;
 import com.agri.admin.service.IAdminTenantService;
 import com.agri.admin.vo.TenantDetailVO;
 import com.agri.admin.vo.TenantPackageVO;
+import com.agri.admin.vo.TenantQuotaOverviewVO;
 import com.agri.admin.vo.TenantStatisticsVO;
 import com.agri.common.entity.ApiResponse;
 import com.agri.common.entity.PageResult;
@@ -76,6 +77,15 @@ public class AdminTenantController {
     @GetMapping("/{id}/quota")
     public ApiResponse<TenantDetailVO.QuotaInfo> getTenantQuota(@PathVariable Long id) {
         return ApiResponse.success(adminTenantService.getTenantQuota(id));
+    }
+
+    @Operation(summary = "获取租户配额总览列表")
+    @GetMapping("/quota/list")
+    public ApiResponse<PageResult<TenantQuotaOverviewVO>> getQuotaOverview(
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(defaultValue = "10") Integer pageSize,
+            @RequestParam(required = false) String keyword) {
+        return ApiResponse.success(adminTenantService.getQuotaOverview(pageNum, pageSize, keyword));
     }
 
     @Operation(summary = "调整租户配额")

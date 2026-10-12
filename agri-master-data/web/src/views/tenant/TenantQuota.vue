@@ -39,36 +39,51 @@
               <span class="tenant-icon">🏢</span>
               <span class="tenant-name">{{ tenant.name }}</span>
             </td>
-            <td>{{ tenant.type === 'ENTERPRISE' ? '企业租户' : '个人租户' }}</td>
+            <td>{{ tenantTypeLabel(tenant.type) }}</td>
             <td>
+              <template v-if="tenant.hasQuota">
               <div class="quota-bar">
                 <div class="quota-fill" :style="{width: tenant.userUsagePercent + '%'}"></div>
               </div>
               <span class="quota-text">{{ tenant.userUsed }} / {{ tenant.userLimit }}</span>
+              </template>
+              <span v-else class="quota-empty">未配置配额</span>
             </td>
             <td>
+              <template v-if="tenant.hasQuota">
               <div class="quota-bar">
                 <div class="quota-fill" :style="{width: tenant.orgUsagePercent + '%'}"></div>
               </div>
               <span class="quota-text">{{ tenant.orgUsed }} / {{ tenant.orgLimit }}</span>
+              </template>
+              <span v-else class="quota-empty">—</span>
             </td>
             <td>
+              <template v-if="tenant.hasQuota">
               <div class="quota-bar">
                 <div class="quota-fill" :style="{width: tenant.productUsagePercent + '%'}"></div>
               </div>
               <span class="quota-text">{{ tenant.productUsed }} / {{ tenant.productLimit }}</span>
+              </template>
+              <span v-else class="quota-empty">—</span>
             </td>
             <td>
+              <template v-if="tenant.hasQuota">
               <div class="quota-bar">
                 <div class="quota-fill" :style="{width: tenant.storageUsagePercent + '%'}"></div>
               </div>
               <span class="quota-text">{{ tenant.storageUsed }}GB / {{ tenant.storageLimit }}GB</span>
+              </template>
+              <span v-else class="quota-empty">—</span>
             </td>
             <td>
+              <template v-if="tenant.hasQuota">
               <div class="quota-bar">
                 <div class="quota-fill" :style="{width: tenant.apiUsagePercent + '%'}"></div>
               </div>
               <span class="quota-text">{{ tenant.apiUsed }} / {{ tenant.apiLimit }}</span>
+              </template>
+              <span v-else class="quota-empty">—</span>
             </td>
             <td class="action-cell">
               <button class="action-btn edit" @click="editQuota(tenant)">编辑配额</button>
@@ -128,6 +143,27 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
+import { message, Modal } from 'ant-design-vue'
+import { getTenantQuotaOverview, adjustTenantQuota } from '../../utils/api'
+
+/**
+ * 存储配额的接口单位是**字节**（与 TenantPackageVO 一致），页面按 GB 展示与录入。
+ *
+ * 换算必须写在一处并双向使用：接口给字节、输入框收 GB，
+ * 只要有一边忘了换算，"10 GB" 就会存成 10 字节，而页面上看起来完全正常。
+ */
+const BYTES_PER_GB = 1024 * 1024 * 1024
+const toGb = (bytes) => (bytes == null ? 0 : Math.round((bytes / BYTES_PER_GB) * 10) / 10)
+const toBytes = (gb) => Math.round(Number(gb || 0) * BYTES_PER_GB)
+
+/** 租户类型展示名。原来只判断 ENTERPRISE/其它两种，合作社与个体经营都会被显示成"个人租户"。 */
+const TENANT_TYPE_LABELS = {
+  ENTERPRISE: '企业租户',
+  COOPERATIVE: '合作社',
+  INDIVIDUAL: '个体经营',
+  FARM: '农场',
+}
+const tenantTypeLabel = (type) => TENANT_TYPE_LABELS[type] ?? (type || '—')
 
 const searchForm = reactive({
   keyword: ''
@@ -149,30 +185,60 @@ const editForm = reactive({
   apiLimit: 0
 })
 
-const mockTenants = [
-  { id: 1, name: '阳光农业集团', type: 'ENTERPRISE', userUsed: 1256, userLimit: 2000, orgUsed: 56, orgLimit: 100, productUsed: 3500, productLimit: 5000, storageUsed: 45.6, storageLimit: 100, apiUsed: 12345, apiLimit: 100000 },
-  { id: 2, name: '绿野生态科技', type: 'ENTERPRISE', userUsed: 986, userLimit: 2000, orgUsed: 32, orgLimit: 100, productUsed: 2800, productLimit: 5000, storageUsed: 32.8, storageLimit: 100, apiUsed: 8567, apiLimit: 100000 },
-  { id: 3, name: '丰收供应链', type: 'ENTERPRISE', userUsed: 856, userLimit: 1000, orgUsed: 28, orgLimit: 50, productUsed: 1500, productLimit: 2000, storageUsed: 18.5, storageLimit: 50, apiUsed: 6234, apiLimit: 50000 },
-  { id: 4, name: '农资经销商001', type: 'PERSONAL', userUsed: 156, userLimit: 50, orgUsed: 3, orgLimit: 5, productUsed: 200, productLimit: 500, storageUsed: 5.2, storageLimit: 10, apiUsed: 1234, apiLimit: 10000 },
-  { id: 5, name: '个体农户老李', type: 'PERSONAL', userUsed: 56, userLimit: 50, orgUsed: 1, orgLimit: 5, productUsed: 80, productLimit: 500, storageUsed: 2.1, storageLimit: 10, apiUsed: 856, apiLimit: 10000 }
-]
-
 const calculateUsagePercent = (used, limit) => {
-  if (limit === 0) return 0
+  // 限额为 0（或缺失）时不算"100% 用满"，而是 0 —— 否则"未配置"会画成一根满格红条
+  if (!limit) return 0
   return Math.min((used / limit) * 100, 100)
 }
 
-const loadTenants = () => {
-  tenantList.value = mockTenants.map(t => ({
-    ...t,
-    userUsagePercent: calculateUsagePercent(t.userUsed, t.userLimit),
-    orgUsagePercent: calculateUsagePercent(t.orgUsed, t.orgLimit),
-    productUsagePercent: calculateUsagePercent(t.productUsed, t.productLimit),
-    storageUsagePercent: calculateUsagePercent(t.storageUsed, t.storageLimit),
-    apiUsagePercent: calculateUsagePercent(t.apiUsed, t.apiLimit)
-  }))
-  totalCount.value = tenantList.value.length
-  totalPages.value = Math.ceil(totalCount.value / 10)
+const loadTenants = async () => {
+  try {
+    const response = await getTenantQuotaOverview({
+      pageNum: currentPage.value,
+      pageSize: 10,
+      keyword: searchForm.keyword
+    })
+    if (response.code !== 200) {
+      message.error(response.message || '加载配额数据失败')
+      tenantList.value = []
+      totalCount.value = 0
+      totalPages.value = 1
+      return
+    }
+    // 不再回落到演示数据：接口失败就说失败，否则满屏数字看着正常、其实一条不是真的
+    tenantList.value = (response.data.list ?? []).map(row => {
+      const item = {
+        id: row.id,
+        name: row.tenantName,
+        code: row.tenantCode,
+        type: row.tenantType,
+        hasQuota: row.hasQuota === true,
+        userUsed: row.userUsed ?? 0,
+        userLimit: row.userLimit ?? 0,
+        orgUsed: row.orgUsed ?? 0,
+        orgLimit: row.orgLimit ?? 0,
+        productUsed: row.productUsed ?? 0,
+        productLimit: row.productLimit ?? 0,
+        storageUsed: toGb(row.storageUsed),
+        storageLimit: toGb(row.storageLimit),
+        apiUsed: row.apiUsed ?? 0,
+        apiLimit: row.apiLimit ?? 0
+      }
+      item.userUsagePercent = calculateUsagePercent(item.userUsed, item.userLimit)
+      item.orgUsagePercent = calculateUsagePercent(item.orgUsed, item.orgLimit)
+      item.productUsagePercent = calculateUsagePercent(item.productUsed, item.productLimit)
+      item.storageUsagePercent = calculateUsagePercent(item.storageUsed, item.storageLimit)
+      item.apiUsagePercent = calculateUsagePercent(item.apiUsed, item.apiLimit)
+      return item
+    })
+    totalCount.value = response.data.total ?? 0
+    totalPages.value = Math.max(1, Math.ceil(totalCount.value / 10))
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '加载配额数据失败')
+    tenantList.value = []
+    totalCount.value = 0
+    totalPages.value = 1
+  }
 }
 
 onMounted(() => {
@@ -217,13 +283,49 @@ const closeEditModal = () => {
 }
 
 const saveQuota = () => {
-  alert('配额配置已更新')
-  closeEditModal()
-  loadTenants()
+  void (async () => {
+    try {
+      const response = await adjustTenantQuota(editForm.id, {
+        userLimit: Number(editForm.userLimit) || 0,
+        orgLimit: Number(editForm.orgLimit) || 0,
+        productLimit: Number(editForm.productLimit) || 0,
+        // 输入框是 GB，接口要字节：这一行漏了就会把 10GB 存成 10 字节
+        storageLimit: toBytes(editForm.storageLimit),
+        apiLimit: Number(editForm.apiLimit) || 0,
+        reason: '运营端手工调整'
+      })
+      if (response.code === 200) {
+        message.success('配额配置已更新')
+        closeEditModal()
+        loadTenants()
+      } else {
+        message.error(response.message || '保存失败')
+      }
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '保存失败')
+    }
+  })()
 }
 
 const viewQuotaDetail = (tenant) => {
-  alert(`查看租户 ${tenant.name} 的配额详情`)
+  if (!tenant.hasQuota) {
+    Modal.info({
+      title: `租户 ${tenant.name}`,
+      content: '该租户尚未配置配额记录。可在「编辑配额」中补齐各项限额。'
+    })
+    return
+  }
+  Modal.info({
+    title: `租户 ${tenant.name} 的配额用量`,
+    content: [
+      `用户：${tenant.userUsed} / ${tenant.userLimit}（${tenant.userUsagePercent.toFixed(1)}%）`,
+      `组织：${tenant.orgUsed} / ${tenant.orgLimit}（${tenant.orgUsagePercent.toFixed(1)}%）`,
+      `商品：${tenant.productUsed} / ${tenant.productLimit}（${tenant.productUsagePercent.toFixed(1)}%）`,
+      `存储：${tenant.storageUsed} GB / ${tenant.storageLimit} GB（${tenant.storageUsagePercent.toFixed(1)}%）`,
+      `API：${tenant.apiUsed} / ${tenant.apiLimit}（${tenant.apiUsagePercent.toFixed(1)}%）`
+      // 用「；」连接而不是换行符：antd 的 content 按纯文本渲染，\n 不会断行
+    ].join('；')
+  })
 }
 </script>
 
@@ -356,6 +458,12 @@ const viewQuotaDetail = (tenant) => {
 .quota-text {
   font-size: 12px;
   color: #718096;
+}
+
+/* "未配置配额"：与"配额为 0"区分开，后者看起来像是被限死了 */
+.quota-empty {
+  font-size: 12px;
+  color: #c0c4cc;
 }
 
 .action-cell {

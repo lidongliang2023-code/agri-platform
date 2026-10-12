@@ -175,6 +175,13 @@ export const deleteTenant = (id: number | string) => del(`${BASE}/tenant/${id}`)
 export const updateTenantStatus = (id: number | string, status: number | string) =>
   put(`${BASE}/tenant/${id}/status`, null, { status })
 export const getTenantQuota = (id: number | string) => get(`${BASE}/tenant/${id}/quota`)
+/**
+ * 配额总览（租户 + 其配额用量，一行一个租户）。
+ *
+ * <p>存储字段单位是**字节**，与 `TenantPackageVO` 一致；页面按 GB 展示时自行换算。</p>
+ */
+export const getTenantQuotaOverview = (params?: QueryParams) =>
+  get(`${BASE}/tenant/quota/list`, params)
 export const adjustTenantQuota = (id: number | string, data: unknown) =>
   put(`${BASE}/tenant/${id}/quota`, data)
 export const setTenantQuotaAlertThreshold = (id: number | string, threshold: number) =>

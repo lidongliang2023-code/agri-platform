@@ -6,6 +6,7 @@ import com.agri.admin.dto.TenantQuotaAdjustDTO;
 import com.agri.admin.service.IAdminTenantService;
 import com.agri.admin.vo.TenantDetailVO;
 import com.agri.admin.vo.TenantPackageVO;
+import com.agri.admin.vo.TenantQuotaOverviewVO;
 import com.agri.admin.vo.TenantStatisticsVO;
 import com.agri.common.entity.PageResult;
 import com.agri.common.enums.StatusEnum;
@@ -34,7 +35,9 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -188,6 +191,64 @@ public class AdminTenantServiceImpl implements IAdminTenantService {
         }
         
         return info;
+    }
+
+    @Override
+    public PageResult<TenantQuotaOverviewVO> getQuotaOverview(Integer pageNum, Integer pageSize, String keyword) {
+        // 先按条件分页查租户，再把这批租户的配额**一次性**捞回来合并。
+        // 不写成"每个租户查一次配额"：那是 N+1，一页 10 个租户就是 11 次数据库往返。
+        LambdaQueryWrapper<Tenant> tenantWrapper = new LambdaQueryWrapper<>();
+        if (keyword != null && !keyword.isEmpty()) {
+            tenantWrapper.and(w -> w.like(Tenant::getTenantName, keyword)
+                    .or().like(Tenant::getTenantCode, keyword));
+        }
+        tenantWrapper.orderByDesc(Tenant::getCreateTime);
+
+        IPage<Tenant> page = tenantMapper.selectPage(new Page<>(pageNum, pageSize), tenantWrapper);
+        List<Tenant> tenants = page.getRecords();
+
+        // agri_md_tenant_quota.tenant_id 存的是租户主键的字符串形式（与 getTenantQuota 同口径）
+        Map<String, TenantQuota> quotaMap = new HashMap<>();
+        if (!tenants.isEmpty()) {
+            List<String> tenantIds = new ArrayList<>();
+            for (Tenant tenant : tenants) {
+                if (tenant.getId() != null) {
+                    tenantIds.add(tenant.getId().toString());
+                }
+            }
+            if (!tenantIds.isEmpty()) {
+                for (TenantQuota quota : tenantQuotaMapper.selectList(
+                        new LambdaQueryWrapper<TenantQuota>().in(TenantQuota::getTenantId, tenantIds))) {
+                    quotaMap.put(quota.getTenantId(), quota);
+                }
+            }
+        }
+
+        List<TenantQuotaOverviewVO> list = new ArrayList<>();
+        for (Tenant tenant : tenants) {
+            TenantQuotaOverviewVO vo = new TenantQuotaOverviewVO();
+            vo.setId(tenant.getId());
+            vo.setTenantCode(tenant.getTenantCode());
+            vo.setTenantName(tenant.getTenantName());
+            vo.setTenantType(tenant.getTenantType());
+
+            TenantQuota quota = tenant.getId() == null ? null : quotaMap.get(tenant.getId().toString());
+            vo.setHasQuota(quota != null);
+            if (quota != null) {
+                vo.setUserUsed(quota.getUsedUsers());
+                vo.setUserLimit(quota.getUserLimit());
+                vo.setOrgUsed(quota.getUsedOrgs());
+                vo.setOrgLimit(quota.getOrgLimit());
+                vo.setProductUsed(quota.getUsedProducts());
+                vo.setProductLimit(quota.getProductLimit());
+                vo.setStorageUsed(quota.getUsedStorage());
+                vo.setStorageLimit(quota.getStorageLimit());
+                vo.setApiUsed(quota.getUsedApi());
+                vo.setApiLimit(quota.getApiLimit());
+            }
+            list.add(vo);
+        }
+        return PageResult.success(list, page.getTotal(), pageNum, pageSize);
     }
 
     @Override
