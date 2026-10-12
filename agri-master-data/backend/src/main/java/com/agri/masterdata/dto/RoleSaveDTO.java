@@ -25,7 +25,8 @@ public class RoleSaveDTO {
 
     private Integer roleSort;
 
-    private Integer dataScope;
+    /** 数据范围：ALL / TENANT / ORG / DEPT / OWNER（与 RoleVO、Role 实体同口径，见 RoleVO 注释） */
+    private String dataScope;
 
     private Integer status;
 

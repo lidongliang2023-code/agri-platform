@@ -27,7 +27,15 @@ public class RoleVO {
 
     private Integer roleSort;
 
-    private Integer dataScope;
+    /**
+     * 数据范围：ALL / TENANT / ORG / DEPT / OWNER。
+     *
+     * <p>类型必须是 String —— PRD《主数据管理模块系统PRD.md》第 1910 行明确写着
+     * `data_scope | ENUM | 数据范围：ALL/TENANT/ORG/DEPT/OWNER`，实体 {@code Role.dataScope}
+     * 也是 String。原声明成 Integer，于是列表查询一旦真读到数据就抛
+     * `Cannot determine value type from string 'ALL'` —— 空表时看不出来，一填数据就 500。</p>
+     */
+    private String dataScope;
 
     private String dataScopeName;
 

@@ -185,7 +185,7 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
-import { getTenantList, createTenant, updateTenant, deleteTenant as apiDeleteTenant, updateTenantStatus } from '../../utils/api'
+import { getTenantList, getTenantStatisticsSummary, createTenant, updateTenant, deleteTenant as apiDeleteTenant, updateTenantStatus } from '../../utils/api'
 
 const searchForm = reactive({
   keyword: '',
@@ -214,8 +214,40 @@ const form = reactive({
 })
 
 onMounted(() => {
+  loadSummary()
   loadTenants()
 })
+
+/**
+ * 顶部三个统计口径来自**汇总接口**，不是"当前页里数一数"。
+ *
+ * 原来这三块是拿当前页的 10 行现算的：第 1 页 10 行全是启用，就显示"10 启用中 / 0 已禁用"，
+ * 翻到第 2 页只剩一条禁用记录时又变成"0 启用中 / 1 已禁用" —— 同一批数据，翻页就变数，
+ * 而且和"租户总数"对不上。现在总数/启用/禁用一律取 /tenant/statistics/summary 的全局口径，
+ * 列表分页只反映"当前筛选下的条数"。
+ */
+const loadSummary = async () => {
+  try {
+    const response = await getTenantStatisticsSummary()
+    if (response.code === 200 && response.data) {
+      totalCount.value = response.data.totalTenants ?? 0
+      activeCount.value = response.data.activeTenants ?? 0
+      inactiveCount.value = response.data.inactiveTenants ?? 0
+    }
+  } catch (error) {
+    // 汇总失败不影响列表本身，但要让用户知道这几个数是旧的/空的
+    console.error('租户汇总加载失败:', error)
+    totalCount.value = 0
+    activeCount.value = 0
+    inactiveCount.value = 0
+  }
+}
+
+/** 变更成功后同时刷新列表与汇总，避免"表格变了、上面数字没变" */
+const refresh = () => {
+  loadSummary()
+  loadTenants()
+}
 
 const loadTenants = async () => {
   try {
@@ -228,25 +260,17 @@ const loadTenants = async () => {
     })
     if (response.code === 200) {
       tenantList.value = response.data.list ?? []
-      totalCount.value = response.data.total ?? 0
-      totalPages.value = Math.ceil(totalCount.value / 10)
-
-      activeCount.value = tenantList.value.filter(isEnabled).length
-      inactiveCount.value = tenantList.value.filter(t => !isEnabled(t)).length
+      totalPages.value = Math.ceil((response.data.total ?? 0) / 10)
     } else {
       message.error(response.message || '加载数据失败')
       tenantList.value = []
-      totalCount.value = 0
       totalPages.value = 0
     }
   } catch (error) {
     // 不再回落到演示数据：接口失败就说失败
     message.error(error instanceof Error ? error.message : '加载数据失败')
     tenantList.value = []
-    totalCount.value = 0
     totalPages.value = 0
-    activeCount.value = 0
-    inactiveCount.value = 0
   }
 }
 
@@ -313,7 +337,7 @@ const handleAdd = async () => {
     if (response.code === 200) {
       message.success(form.id ? '修改成功' : '创建成功')
       closeModal()
-      loadTenants()
+      refresh()
     } else {
       message.error(response.message || '操作失败')
     }
@@ -329,7 +353,7 @@ const toggleTenantStatus = async (tenant) => {
     const response = await updateTenantStatus(tenant.id, next)
     if (response.code === 200) {
       message.success(isEnabled(tenant) ? '已禁用' : '已启用')
-      loadTenants()
+      refresh()
     } else {
       message.error(response.message || '操作失败')
     }
@@ -344,7 +368,7 @@ const deleteTenant = async (id) => {
     const response = await apiDeleteTenant(id)
     if (response.code === 200) {
       message.success('删除成功')
-      loadTenants()
+      refresh()
     } else {
       message.error(response.message || '删除失败')
     }
