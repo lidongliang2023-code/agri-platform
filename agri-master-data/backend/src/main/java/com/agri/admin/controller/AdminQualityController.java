@@ -1,6 +1,7 @@
 package com.agri.admin.controller;
 
 import com.agri.admin.service.IAdminQualityService;
+import com.agri.admin.dto.QualityIssueSaveDTO;
 import com.agri.admin.vo.QualityDetailVO;
 import com.agri.admin.vo.QualityIssueVO;
 import com.agri.admin.vo.QualityStatisticsVO;
@@ -39,6 +40,13 @@ public class AdminQualityController {
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String tenantId) {
         return ApiResponse.success(adminQualityService.getQualityIssues(pageNum, pageSize, severity, domain, status, tenantId));
+    }
+
+    @Operation(summary = "手工登记质量问题")
+    @PostMapping("/issues")
+    public ApiResponse<Void> createQualityIssue(@RequestBody QualityIssueSaveDTO dto) {
+        adminQualityService.createQualityIssue(dto);
+        return ApiResponse.success();
     }
 
     @Operation(summary = "获取质量问题详情")

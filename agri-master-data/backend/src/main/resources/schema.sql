@@ -847,3 +847,59 @@ CREATE TABLE IF NOT EXISTS `agri_md_tenant_package` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_tenant_package_code` (`package_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='租户套餐表';
+
+-- ---------------------------------------------------------------------------
+-- 数据质量问题表（2026-10-12 新增）
+--
+-- /admin/masterdata/quality/* 六个端点（statistics / issues / issues/{id} / handle /
+-- batch-handle / trend）此前全是空壳：统计是 builder 写死的数字、列表恒返回空数组。
+-- 质量监控、问题工单、质量仪表盘三个页面因此永远看不到数据。
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `agri_md_quality_issue` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `issue_code` VARCHAR(64) NOT NULL COMMENT '问题编码，唯一',
+  `issue_type` VARCHAR(64) COMMENT '问题类型：completeness 缺失 / accuracy 格式 / consistency 一致性 / uniqueness 重复 / timeliness 时效',
+  `severity` VARCHAR(16) COMMENT '严重程度：high / medium / low',
+  `domain_code` VARCHAR(64) COMMENT '所属数据域编码：user / org / product / permission / customer',
+  `domain_name` VARCHAR(128) COMMENT '所属数据域名称',
+  `description` VARCHAR(500) COMMENT '问题描述',
+  `affected_data` VARCHAR(255) COMMENT '关联数据（表名/字段/主键等定位信息）',
+  `affected_records` INT COMMENT '受影响记录数',
+  `status` VARCHAR(32) COMMENT '处理状态：pending 待处理 / processing 处理中 / resolved 已解决 / ignored 已忽略',
+  `handler` VARCHAR(64) COMMENT '处理人',
+  `resolve_remark` VARCHAR(500) COMMENT '处置说明',
+  `detect_time` DATETIME COMMENT '检测（发现）时间',
+  `resolve_time` DATETIME COMMENT '处置完成时间',
+  `tenant_id` VARCHAR(64) COMMENT '租户ID（此处存租户编码）',
+  `del_flag` INT DEFAULT 0 COMMENT '删除标志：0 未删除 / 1 已删除',
+  `create_time` DATETIME COMMENT '创建时间',
+  `create_by` VARCHAR(64) COMMENT '创建人',
+  `update_time` DATETIME COMMENT '更新时间',
+  `update_by` VARCHAR(64) COMMENT '更新人',
+  `remark` VARCHAR(500) COMMENT '备注',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_quality_issue_code` (`issue_code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='数据质量问题表';
+
+-- ---------------------------------------------------------------------------
+-- 质量问题处置记录表（2026-10-12 新增）
+--
+-- 质量详情里要展示"处置历史"（谁、什么时候、做了什么）。这部分必须是独立的表：
+-- 只把最后一次处置结果写在问题行上，等于把"过程"丢了，出了问题回溯不了。
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `agri_md_quality_issue_handle` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `issue_id` BIGINT NOT NULL COMMENT '问题ID',
+  `action` VARCHAR(64) COMMENT '动作：fixed 已修复 / ignored 无需处理 / processing 转处理中 / reopen 重新打开',
+  `operator` VARCHAR(64) COMMENT '操作人',
+  `remark` VARCHAR(500) COMMENT '处置说明',
+  `status` INT DEFAULT 1 COMMENT '状态：1 有效 / 0 失效',
+  `del_flag` INT DEFAULT 0 COMMENT '删除标志',
+  `tenant_id` VARCHAR(64) COMMENT '租户ID',
+  `create_time` DATETIME COMMENT '创建时间',
+  `create_by` VARCHAR(64) COMMENT '创建人',
+  `update_time` DATETIME COMMENT '更新时间',
+  `update_by` VARCHAR(64) COMMENT '更新人',
+  PRIMARY KEY (`id`),
+  KEY `idx_quality_handle_issue` (`issue_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='质量问题处置记录表';

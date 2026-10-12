@@ -1,6 +1,7 @@
 package com.agri.admin.service;
 
 import com.agri.admin.vo.QualityDetailVO;
+import com.agri.admin.dto.QualityIssueSaveDTO;
 import com.agri.admin.vo.QualityIssueVO;
 import com.agri.admin.vo.QualityStatisticsVO;
 import com.agri.common.entity.PageResult;
@@ -12,6 +13,9 @@ public interface IAdminQualityService {
     QualityStatisticsVO getQualityStatistics(String tenantId, String timeRange);
 
     PageResult<QualityIssueVO> getQualityIssues(Integer pageNum, Integer pageSize, String severity, String domain, String status, String tenantId);
+
+    /** 手工登记一条质量问题（问题编码由服务端生成） */
+    void createQualityIssue(QualityIssueSaveDTO dto);
 
     QualityDetailVO getQualityDetail(Long id);
 

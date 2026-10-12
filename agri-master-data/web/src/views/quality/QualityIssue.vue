@@ -149,17 +149,11 @@
               </label>
             </div>
           </div>
-          <div class="form-group">
-            <label>关联规则</label>
-            <select v-model="form.ruleId" class="form-input">
-              <option value="">请选择关联规则</option>
-              <option v-for="rule in availableRules" :key="rule.id" :value="rule.id">{{ rule.name }}</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>处理人</label>
-            <input type="text" v-model="form.assignee" class="form-input" placeholder="请输入处理人姓名" />
-          </div>
+          <!--
+            原来这里有"关联规则"下拉与"处理人"输入，两处都去掉了 —— 不是懒得接，而是接上也是假的：
+            - 质量规则族（/quality/rules）后端还没做，下拉恒为空，留着的效果是"选项点不出来"；
+            - 登记接口不接收处理人：处理人由"谁点了处置"决定，服务端记当前登录用户。
+          -->
         </div>
         <div class="modal-footer">
           <button class="btn btn-cancel" @click="closeAddModal">取消</button>
@@ -244,6 +238,8 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
+import { message } from 'ant-design-vue'
+import { getQualityList, getQualityDetail, handleQualityIssue, createQualityIssue } from '../../utils/api'
 
 const showAddModal = ref(false)
 const showDetailModal = ref(false)
@@ -259,38 +255,22 @@ const form = reactive({
   description: '',
   domain: 'user',
   severity: 'medium',
-  ruleId: '',
+  // 处理人不在这里填：由"谁点了处置"决定，服务端记当前登录用户
   assignee: ''
 })
 
 const selectedIssue = ref(null)
 
 const severities = [
-  { value: 'critical', label: '严重' },
-  { value: 'high', label: '高' },
+  // 与后端 severity 口径一致：high / medium / low（原来多一个 critical，筛它永远没结果）
+  { value: 'high', label: '严重' },
   { value: 'medium', label: '中' },
   { value: 'low', label: '低' }
 ]
 
 const issues = ref([])
-const availableRules = ref([])
-
-const mockIssues = [
-  { id: 1, code: 'QI-20260509-001', description: '检测到15条用户数据身份证号格式不正确', domain: '用户主数据', severity: 'high', status: 'pending', createTime: '2026-05-09 10:30:00', assignee: '张三', logs: [{ time: '2026-05-09 10:30:00', action: '工单创建', operator: '系统' }] },
-  { id: 2, code: 'QI-20260509-002', description: '供应商资质证书即将到期', domain: '供应商主数据', severity: 'medium', status: 'processing', createTime: '2026-05-09 09:15:00', assignee: '李四', logs: [{ time: '2026-05-09 09:15:00', action: '工单创建', operator: '系统' }, { time: '2026-05-09 09:20:00', action: '开始处理', operator: '李四' }] },
-  { id: 3, code: 'QI-20260508-003', description: '商品编码重复，存在重复数据', domain: '商品主数据', severity: 'critical', status: 'resolved', createTime: '2026-05-08 14:20:00', assignee: '王五', logs: [{ time: '2026-05-08 14:20:00', action: '工单创建', operator: '系统' }, { time: '2026-05-08 14:30:00', action: '开始处理', operator: '王五' }, { time: '2026-05-08 16:00:00', action: '问题已解决', operator: '王五' }] },
-  { id: 4, code: 'QI-20260508-004', description: '客户联系电话缺失率超过阈值', domain: '客户主数据', severity: 'medium', status: 'pending', createTime: '2026-05-08 11:00:00', assignee: '', logs: [{ time: '2026-05-08 11:00:00', action: '工单创建', operator: '系统' }] },
-  { id: 5, code: 'QI-20260507-005', description: '组织名称在多系统中不一致', domain: '组织主数据', severity: 'low', status: 'closed', createTime: '2026-05-07 16:45:00', assignee: '赵六', logs: [{ time: '2026-05-07 16:45:00', action: '工单创建', operator: '系统' }, { time: '2026-05-07 17:00:00', action: '开始处理', operator: '赵六' }, { time: '2026-05-07 17:30:00', action: '问题已解决', operator: '赵六' }, { time: '2026-05-07 17:35:00', action: '工单关闭', operator: '赵六' }] },
-  { id: 6, code: 'QI-20260507-006', description: '用户邮箱格式验证失败', domain: '用户主数据', severity: 'low', status: 'pending', createTime: '2026-05-07 10:00:00', assignee: '', logs: [{ time: '2026-05-07 10:00:00', action: '工单创建', operator: '系统' }] }
-]
-
-const mockRules = [
-  { id: 1, name: '用户名完整性检查' },
-  { id: 2, name: '手机号格式验证' },
-  { id: 3, name: '身份证号验证' },
-  { id: 4, name: '组织名称一致性' },
-  { id: 5, name: '商品编码唯一性' }
-]
+// 原来这里是一份 6 条的写死工单数组：列表、处理、关闭、新增全部只改本地。
+// 现在数据来自 /admin/masterdata/quality/issues，处置走 /issues/{id}/handle。
 
 const filteredIssues = computed(() => {
   return issues.value.filter(issue => {
@@ -323,7 +303,8 @@ const getStatusText = (status) => {
     pending: '待处理',
     processing: '处理中',
     resolved: '已解决',
-    closed: '已关闭'
+    closed: '已关闭',
+    ignored: '已忽略'
   }
   return texts[status] || status
 }
@@ -338,10 +319,43 @@ const getProgressPercent = (status) => {
   return percent[status] || 0
 }
 
-const loadData = () => {
-  issues.value = mockIssues
-  availableRules.value = mockRules
-  totalPages.value = Math.ceil(issues.value.length / 10)
+/** 接口行 → 页面行。接口字段是 issueCode / handler / domainName，页面用的是 code / assignee / domain。 */
+const toRow = (row) => ({
+  id: row.id,
+  code: row.issueCode,
+  description: row.description,
+  domain: row.domain || row.domainName || '—',
+  domainCode: row.domainCode,
+  severity: row.severity || 'medium',
+  status: row.status || 'pending',
+  createTime: row.createTime,
+  assignee: row.handler,
+  logs: []
+})
+
+const loadData = async () => {
+  try {
+    const response = await getQualityList({
+      pageNum: currentPage.value,
+      pageSize: 10,
+      // 后端参数名是 severity
+      severity: filterSeverity.value === 'all' ? '' : filterSeverity.value,
+      status: filterStatus.value === 'all' ? '' : filterStatus.value
+    })
+    if (response.code !== 200) {
+      message.error(response.message || '加载工单失败')
+      issues.value = []
+      totalPages.value = 1
+      return
+    }
+    // 不再回落到演示数据：失败就说失败
+    issues.value = (response.data.list ?? []).map(toRow)
+    totalPages.value = Math.max(1, Math.ceil((response.data.total ?? 0) / 10))
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '加载工单失败')
+    issues.value = []
+    totalPages.value = 1
+  }
 }
 
 onMounted(() => {
@@ -362,71 +376,103 @@ const closeDetailModal = () => {
 }
 
 const viewIssue = (issue) => {
-  selectedIssue.value = issue
+  selectedIssue.value = { ...issue }
   showDetailModal.value = true
+  // 处置历史单独取：列表不返回它（一页 10 行各带一串历史会把列表响应撑大）
+  void (async () => {
+    try {
+      const response = await getQualityDetail(issue.id)
+      if (response.code === 200 && selectedIssue.value && selectedIssue.value.id === issue.id) {
+        const histories = response.data?.handleHistories ?? []
+        selectedIssue.value = {
+          ...selectedIssue.value,
+          resolveRemark: response.data?.resolveRemark,
+          logs: histories.map(h => ({ time: h.time, action: h.action, operator: h.operator, remark: h.remark }))
+        }
+      }
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '加载处置历史失败')
+    }
+  })()
 }
 
-const processIssue = (issue) => {
+const processIssue = async (issue) => {
   if (issue.status === 'resolved' || issue.status === 'closed') return
-  issue.status = 'processing'
-  issue.assignee = issue.assignee || '当前用户'
-  issue.logs.push({
-    time: '刚刚',
-    action: '开始处理',
-    operator: issue.assignee
-  })
-  alert(`工单 "${issue.code}" 已开始处理`)
-  if (showDetailModal.value) {
-    selectedIssue.value = { ...issue }
+  try {
+    const response = await handleQualityIssue(issue.id, { status: 'processing', remark: '开始处理' })
+    if (response.code === 200) {
+      message.success(`工单「${issue.code}」已开始处理`)
+      await loadData()
+      if (showDetailModal.value) {
+        viewIssue({ ...issue, status: 'processing' })
+      }
+    } else {
+      message.error(response.message || '操作失败')
+    }
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '操作失败')
   }
 }
 
-const closeIssue = (issue) => {
-  if (confirm(`确定关闭工单 "${issue.code}" 吗？`)) {
-    issue.status = 'closed'
-    issue.logs.push({
-      time: '刚刚',
-      action: '工单关闭',
-      operator: '当前用户'
-    })
-    alert('工单已关闭')
+const closeIssue = async (issue) => {
+  if (!confirm(`确定关闭工单 "${issue.code}" 吗？`)) {
+    return
+  }
+  try {
+    // 关闭 = 标记为已解决（状态口径：pending / processing / resolved / ignored）
+    const response = await handleQualityIssue(issue.id, { status: 'resolved', remark: '工单关闭' })
+    if (response.code === 200) {
+      message.success('工单已关闭')
+      await loadData()
+      closeDetailModal()
+    } else {
+      message.error(response.message || '操作失败')
+    }
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '操作失败')
   }
 }
 
-const saveIssue = () => {
+/** 页面上的数据域下拉值 → 后端用的域编码与名称 */
+const DOMAIN_LABELS = {
+  user: ['user', '用户主数据'],
+  organization: ['org', '组织主数据'],
+  product: ['product', '商品主数据'],
+  customer: ['customer', '客户主数据'],
+  supplier: ['supplier', '供应商主数据']
+}
+
+const saveIssue = async () => {
   if (!form.description) {
-    alert('请填写问题描述')
+    message.warning('请填写问题描述')
     return
   }
 
   if (isEdit.value) {
-    const index = issues.value.findIndex(i => i.id === form.id)
-    if (index !== -1) {
-      issues.value[index] = {
-        ...issues.value[index],
-        description: form.description,
-        domain: form.domain,
-        severity: form.severity,
-        assignee: form.assignee
-      }
-    }
-    alert('工单已更新')
-  } else {
-    const code = `QI-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}-${String(issues.value.length + 1).padStart(3, '0')}`
-    issues.value.push({
-      id: Date.now(),
-      code,
-      description: form.description,
-      domain: form.domain === 'user' ? '用户主数据' : form.domain === 'organization' ? '组织主数据' : form.domain === 'product' ? '商品主数据' : form.domain === 'customer' ? '客户主数据' : '供应商主数据',
-      severity: form.severity,
-      status: 'pending',
-      createTime: '刚刚',
-      assignee: form.assignee,
-      logs: [{ time: '刚刚', action: '工单创建', operator: '系统' }]
-    })
-    alert('工单已创建')
+    // 后端目前只支持"登记"与"处置"，不支持改问题描述 —— 改描述属于篡改检测结论，
+    // 真要改应该重新登记一条。这里如实说明，不假装保存成功。
+    message.warning('质量问题不支持修改描述，请关闭后重新登记')
+    return
   }
-  closeAddModal()
+
+  const [domainCode, domainName] = DOMAIN_LABELS[form.domain] ?? ['user', '用户主数据']
+  try {
+    const response = await createQualityIssue({
+      description: form.description,
+      domainCode,
+      domainName,
+      severity: form.severity
+    })
+    if (response.code === 200) {
+      message.success('工单已创建')
+      closeAddModal()
+      await loadData()
+    } else {
+      message.error(response.message || '创建失败')
+    }
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '创建失败')
+  }
 }
 
 const prevPage = () => {

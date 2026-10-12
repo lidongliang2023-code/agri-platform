@@ -9,19 +9,21 @@
 
     <div class="stats-row">
       <div class="stat-item">
-        <span class="stat-num">{{ stats.totalIssues || 125 }}</span>
+        <!-- 原来这里是 `|| 125` 这类写死兜底：统计没取到就显示 125 / 45 / 12 / 85%，
+             看起来像有数据、其实一条不是真的。现在取不到就显示 "—"。 -->
+        <span class="stat-num">{{ stats.totalIssues ?? '—' }}</span>
         <span class="stat-text">问题总数</span>
       </div>
       <div class="stat-item warning">
-        <span class="stat-num">{{ stats.warningIssues || 45 }}</span>
+        <span class="stat-num">{{ stats.mediumSeverityCount ?? '—' }}</span>
         <span class="stat-text">警告问题</span>
       </div>
       <div class="stat-item danger">
-        <span class="stat-num">{{ stats.criticalIssues || 12 }}</span>
+        <span class="stat-num">{{ stats.highSeverityCount ?? '—' }}</span>
         <span class="stat-text">严重问题</span>
       </div>
       <div class="stat-item success">
-        <span class="stat-num">{{ stats.resolvedRate || '85%' }}</span>
+        <span class="stat-num">{{ stats.resolutionRate == null ? '—' : stats.resolutionRate + '%' }}</span>
         <span class="stat-text">解决率</span>
       </div>
     </div>
@@ -39,9 +41,10 @@
       <div class="filter-group">
         <select v-model="searchForm.level" class="filter-select">
           <option value="">全部级别</option>
-          <option value="critical">严重</option>
-          <option value="warning">警告</option>
-          <option value="info">提示</option>
+          <!-- 取值与后端 severity 一致：high / medium / low -->
+          <option value="high">严重</option>
+          <option value="medium">警告</option>
+          <option value="low">提示</option>
         </select>
       </div>
       <div class="filter-group">
@@ -72,14 +75,16 @@
           <tr v-for="issue in tableData" :key="issue.id">
             <td>{{ issue.issueCode }}</td>
             <td>
-              <span class="level-badge" :class="issue.issueLevel">
-                {{ getLevelLabel(issue.issueLevel) }}
+              <!-- 接口字段是 severity（high/medium/low），页面原来读 issueLevel，
+                   两者名字不同 → 这一列会恒为空、徽标也永远没有配色 -->
+              <span class="level-badge" :class="issue.severity">
+                {{ getLevelLabel(issue.severity) }}
               </span>
             </td>
             <td>{{ issue.issueType }}</td>
-            <td>{{ issue.issueDesc }}</td>
-            <td>{{ issue.relatedData }}</td>
-            <td>{{ formatDate(issue.detectTime) }}</td>
+            <td>{{ issue.description }}</td>
+            <td>{{ issue.affectedData }}</td>
+            <td>{{ formatDate(issue.createTime) }}</td>
             <td>
               <span class="status-badge" :class="issue.status">
                 {{ getStatusLabel(issue.status) }}
@@ -190,7 +195,7 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
-import { getQualityList, handleQualityIssue } from '../../utils/api'
+import { getQualityList, getQualityStatistics, handleQualityIssue } from '../../utils/api'
 
 const tableData = ref([])
 const pageNum = ref(1)
@@ -214,12 +219,13 @@ const handleForm = reactive({
 })
 
 const getLevelLabel = (level) => {
-  const labels = { critical: '严重', warning: '警告', info: '提示' }
+  // 与后端统一后的严重程度口径：high / medium / low
+  const labels = { high: '严重', medium: '警告', low: '提示' }
   return labels[level] || level
 }
 
 const getStatusLabel = (status) => {
-  const labels = { pending: '待处理', processing: '处理中', resolved: '已解决' }
+  const labels = { pending: '待处理', processing: '处理中', resolved: '已解决', ignored: '已忽略' }
   return labels[status] || status
 }
 
@@ -229,7 +235,8 @@ const loadData = async () => {
       pageNum: pageNum.value,
       pageSize: pageSize.value,
       keyword: searchForm.keyword,
-      level: searchForm.level,
+      // 后端参数名是 severity；页面上的下拉仍叫"级别"
+      severity: searchForm.level,
       status: searchForm.status
     })
     if (response.code === 200) {
@@ -247,6 +254,21 @@ const loadData = async () => {
     tableData.value = []
     total.value = 0
     totalPages.value = 0
+  }
+}
+
+/** 顶部四个统计取全局口径（不是拿当前页现算，否则翻页就变数） */
+const loadStats = async () => {
+  try {
+    const response = await getQualityStatistics()
+    if (response.code === 200 && response.data) {
+      stats.value = response.data
+    } else {
+      stats.value = {}
+    }
+  } catch (error) {
+    console.error('质量统计加载失败:', error)
+    stats.value = {}
   }
 }
 
@@ -277,16 +299,26 @@ const confirmHandle = async () => {
     message.warning('请选择处理结果')
     return
   }
-  
+
+  /**
+   * 弹窗里的"处理结果"取值（fixed / ignored / pending）是页面自己的叫法，
+   * 后端的状态口径是 resolved / ignored / processing。
+   * 直接把 fixed 当 status 提交，库里会存进一个谁都不认的状态字（实测就是这样），
+   * 列表里显示成 "fixed"。这里做一次显式翻译。
+   */
+  const HANDLE_RESULT_TO_STATUS = { fixed: 'resolved', ignored: 'ignored', pending: 'processing' }
+
   try {
     const response = await handleQualityIssue(detailData.value.id, {
-      status: handleForm.status,
+      status: HANDLE_RESULT_TO_STATUS[handleForm.status] ?? handleForm.status,
       remark: handleForm.remark
     })
     if (response.code === 200) {
       message.success('处理成功')
       handleModalVisible.value = false
       detailVisible.value = false
+      // 处置会改变"已解决/解决率"，所以统计也要跟着刷
+      loadStats()
       loadData()
     } else {
       message.error(response.message || '操作失败')
@@ -303,6 +335,7 @@ const formatDate = (date) => {
 }
 
 onMounted(() => {
+  loadStats()
   loadData()
 })
 </script>
@@ -467,17 +500,20 @@ onMounted(() => {
   border-radius: 12px;
 }
 
-.level-badge.critical {
+.level-badge.critical,
+.level-badge.high {
   background: rgba(218, 54, 51, 0.1);
   color: #da3633;
 }
 
-.level-badge.warning {
+.level-badge.warning,
+.level-badge.medium {
   background: rgba(210, 153, 34, 0.1);
   color: #d29922;
 }
 
-.level-badge.info {
+.level-badge.info,
+.level-badge.low {
   background: rgba(59, 130, 246, 0.1);
   color: #3b82f6;
 }

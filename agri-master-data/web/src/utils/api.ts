@@ -280,6 +280,8 @@ export const approveStandardChange = (id: number | string, status: string, remar
 
 export const getQualityList = (params?: QueryParams) => get(`${BASE}/quality/issues`, params)
 export const getQualityDetail = (id: number | string) => get(`${BASE}/quality/issues/${id}`)
+/** 手工登记质量问题（问题编码由服务端生成） */
+export const createQualityIssue = (data: unknown) => post(`${BASE}/quality/issues`, data)
 /**
  * 处置质量问题。
  *

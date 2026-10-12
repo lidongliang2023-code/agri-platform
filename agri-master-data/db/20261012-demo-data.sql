@@ -287,6 +287,41 @@ VALUES
 -- 清理演示数据（需要时手工执行）
 -- ---------------------------------------------------------------------------
 -- ---------------------------------------------------------------------------
+-- 数据质量问题（12 条）与处置记录 —— 对应运营端「数据质量」下的监控 / 工单 / 仪表盘
+-- detect_time 刻意落在最近 10 天内，否则趋势折线会是一条平线看不出效果。
+-- ---------------------------------------------------------------------------
+INSERT IGNORE INTO `agri_md_quality_issue`
+  (`id`,`issue_code`,`issue_type`,`severity`,`domain_code`,`domain_name`,`description`,`affected_data`,
+   `affected_records`,`status`,`handler`,`resolve_remark`,`detect_time`,`resolve_time`,`tenant_id`,
+   `del_flag`,`create_time`,`create_by`,`remark`)
+VALUES
+  (2701,'QI-20261003-001','accuracy','high','user','用户主数据','检测到 15 条用户身份证号格式不正确','agri_md_user.id_card_no',15,'resolved','admin','已按证件类型逐条修正并复核', '2026-10-03 02:10:00','2026-10-04 10:20:00','T1001',0,'2026-10-03 02:10:00','system','示范数据'),
+  (2702,'QI-20261004-001','completeness','medium','org','组织主数据','8 个组织缺少营业执照信息','agri_md_organization.business_license',8,'resolved','admin','已通知对应租户补齐','2026-10-04 02:10:00','2026-10-05 09:30:00','T1001',0,'2026-10-04 02:10:00','system','示范数据'),
+  (2703,'QI-20261005-001','uniqueness','high','user','用户主数据','发现 3 组手机号重复','agri_md_user.phone',3,'processing','admin',NULL,'2026-10-05 02:10:00',NULL,'T1002',0,'2026-10-05 02:10:00','system','示范数据'),
+  (2704,'QI-20261006-001','accuracy','low','product','商品主数据','商品价格格式不符合规范（含非数字字符）','agri_md_product.price',12,'pending',NULL,NULL,'2026-10-06 02:10:00',NULL,'T1003',0,'2026-10-06 02:10:00','system','示范数据'),
+  (2705,'QI-20261007-001','timeliness','medium','customer','客户主数据','客户联系信息超过 180 天未更新','agri_md_customer.contact_phone',26,'pending',NULL,NULL,'2026-10-07 02:10:00',NULL,'T1001',0,'2026-10-07 02:10:00','system','示范数据'),
+  (2706,'QI-20261008-001','consistency','high','org','组织主数据','组织层级路径与上级组织不一致','agri_md_organization.org_path',5,'processing','admin',NULL,'2026-10-08 02:10:00',NULL,'T1005',0,'2026-10-08 02:10:00','system','示范数据'),
+  (2707,'QI-20261009-001','completeness','low','supplier','供应商主数据','6 个供应商未填写资质证明编号','agri_md_supplier.qualification',6,'pending',NULL,NULL,'2026-10-09 02:10:00',NULL,'T1004',0,'2026-10-09 02:10:00','system','示范数据'),
+  (2708,'QI-20261009-002','accuracy','medium','product','商品主数据','商品分类与品名不匹配（疑似选错分类）','agri_md_product.category_id',4,'pending',NULL,NULL,'2026-10-09 02:20:00',NULL,'T1002',0,'2026-10-09 02:20:00','system','示范数据'),
+  (2709,'QI-20261010-001','uniqueness','medium','customer','客户主数据','同一统一社会信用代码对应两个客户','agri_md_customer.credit_code',2,'resolved','admin','已合并重复客户并保留主档','2026-10-10 02:10:00','2026-10-10 16:40:00','T1003',0,'2026-10-10 02:10:00','system','示范数据'),
+  (2710,'QI-20261011-001','completeness','high','user','用户主数据','18 个用户缺少实名认证记录','agri_md_user_authentication.user_id',18,'pending',NULL,NULL,'2026-10-11 02:10:00',NULL,'T1009',0,'2026-10-11 02:10:00','system','示范数据'),
+  (2711,'QI-20261011-002','consistency','low','permission','权限主数据','2 个角色被分配了互斥权限','agri_md_role_permission.role_id',2,'ignored','admin','业务确认这两个角色由同一人兼任，属预期配置','2026-10-11 02:20:00','2026-10-11 15:10:00','T1001',0,'2026-10-11 02:20:00','system','示范数据'),
+  (2712,'QI-20261012-001','accuracy','high','user','用户主数据','检测到 7 条邮箱域名不存在','agri_md_user.email',7,'pending',NULL,NULL,'2026-10-12 02:10:00',NULL,'T1006',0,'2026-10-12 02:10:00','system','示范数据');
+
+INSERT IGNORE INTO `agri_md_quality_issue_handle`
+  (`id`,`issue_id`,`action`,`operator`,`remark`,`status`,`del_flag`,`tenant_id`,`create_time`,`create_by`)
+VALUES
+  (2801,2701,'processing','admin','已定位到 15 条记录，逐条核对证件类型',1,0,'T1001','2026-10-03 09:10:00','system'),
+  (2802,2701,'resolved','admin','已按证件类型逐条修正并复核',1,0,'T1001','2026-10-04 10:20:00','system'),
+  (2803,2702,'processing','admin','已发出补充材料通知',1,0,'T1001','2026-10-04 10:30:00','system'),
+  (2804,2702,'resolved','admin','已通知对应租户补齐',1,0,'T1001','2026-10-05 09:30:00','system'),
+  (2805,2709,'resolved','admin','已合并重复客户并保留主档',1,0,'T1003','2026-10-10 16:40:00','system'),
+  (2806,2711,'ignored','admin','业务确认这两个角色由同一人兼任，属预期配置',1,0,'T1001','2026-10-11 15:10:00','system');
+
+-- ---------------------------------------------------------------------------
+-- 清理演示数据（需要时手工执行）
+-- ---------------------------------------------------------------------------
+-- ---------------------------------------------------------------------------
 -- 租户套餐（3 条）—— 对应运营端「租户管理 → 套餐配置」页
 -- 价格单位由 duration 推导（365 天按"年"、30 天按"月"），存储上限单位是字节。
 -- ---------------------------------------------------------------------------
@@ -307,6 +342,8 @@ VALUES
 -- ---------------------------------------------------------------------------
 -- DELETE FROM `agri_md_system_config`               WHERE `id` BETWEEN 1000 AND 2999;
 -- DELETE FROM `agri_md_tenant_package`              WHERE `id` BETWEEN 1000 AND 2999;
+-- DELETE FROM `agri_md_quality_issue_handle`        WHERE `id` BETWEEN 1000 AND 2999;
+-- DELETE FROM `agri_md_quality_issue`               WHERE `id` BETWEEN 1000 AND 2999;
 -- DELETE FROM `agri_md_tenant_quota`               WHERE `id` BETWEEN 1000 AND 2999;
 -- DELETE FROM `agri_md_code_rule`                  WHERE `id` BETWEEN 1000 AND 2999;
 -- DELETE FROM `agri_md_user_authentication`        WHERE `id` BETWEEN 1000 AND 2999;
