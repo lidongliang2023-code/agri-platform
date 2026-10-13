@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { Button, Card, Descriptions, Empty, Popconfirm, Space, Spin, Table, Tag, Typography, message } from 'antd'
 import { ArrowLeftOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import { deleteDemand, getDemandById, getDemandMatches, matchDemand } from '@/api/demand'
+import { createInquiry, getMyInquiries, type InquiryVO } from '@/api/inquiry'
 
 interface Demand {
   id: number
@@ -53,6 +54,14 @@ const STATUS_TAG: Record<string, { text: string; color: string }> = {
   closed: { text: '已关闭', color: 'default' }
 }
 
+// 询价状态词表（后端创建时写 pending_reply，报价后转 quoted）
+const INQUIRY_STATUS: Record<string, { text: string; color: string }> = {
+  pending_reply: { text: '待报价', color: 'warning' },
+  quoted: { text: '已报价', color: 'processing' },
+  converted: { text: '已成交', color: 'success' },
+  closed: { text: '已关闭', color: 'default' }
+}
+
 /**
  * 采购需求详情（原型"采购需求 → 需求详情"）。
  *
@@ -66,6 +75,39 @@ export default function DemandDetail() {
   const [matches, setMatches] = useState<MatchRow[]>([])
   const [loading, setLoading] = useState(true)
   const [matching, setMatching] = useState(false)
+  // 本需求的询价记录：撮合出货源之后，下一步就是向它询价 ——
+  // 在此之前链路上游没有入口（只能靠 SQL 造询价单），整条"询价→报价→受理→订单"起不来。
+  const [inquiries, setInquiries] = useState<InquiryVO[]>([])
+  const [inquirying, setInquirying] = useState<number | null>(null)
+
+  const loadInquiries = useCallback(() => {
+    if (!id) return
+    getMyInquiries()
+      .then((res: { code: number; data?: InquiryVO[] }) => {
+        if (res?.code === 200) {
+          setInquiries((res.data ?? []).filter((item) => String(item.demandId) === String(id)))
+        }
+      })
+      .catch(() => undefined)
+  }, [id])
+
+  const handleInquiry = async (productId: number) => {
+    if (!id) return
+    setInquirying(productId)
+    try {
+      const res = await createInquiry(Number(id), productId)
+      if (res?.code === 200) {
+        message.success('已发起询价，等待供应商报价；报价会出现在「报价管理」里')
+        loadInquiries()
+      } else {
+        message.error(res?.message ?? '发起询价失败')
+      }
+    } catch {
+      message.error('发起询价失败（检查后端是否在运行）')
+    } finally {
+      setInquirying(null)
+    }
+  }
 
   const loadMatches = useCallback(() => {
     if (!id) return
@@ -90,7 +132,8 @@ export default function DemandDetail() {
       .catch(() => message.error('加载需求失败（检查后端是否在运行）'))
       .finally(() => setLoading(false))
     loadMatches()
-  }, [id, loadMatches])
+    loadInquiries()
+  }, [id, loadMatches, loadInquiries])
 
   const handleMatch = async () => {
     if (!id) return
@@ -220,7 +263,52 @@ export default function DemandDetail() {
                 render: (val: number) => (val ? <a>订单 #{val}</a> : '未下单')
               },
               { title: '订单状态', dataIndex: 'orderStatus', render: (val: string) => val || '—' },
-              { title: '生成时间', dataIndex: 'createTime' }
+              { title: '生成时间', dataIndex: 'createTime' },
+              {
+                title: '操作',
+                width: 120,
+                render: (_: unknown, row: MatchRow) => (
+                  <Popconfirm
+                    title="向这家供应商发起询价？"
+                    description="发起后进入「询价 → 报价 → 受理 → 生成订单」这条链路，供应商报价会出现在报价管理里。"
+                    okText="确 定"
+                    cancelText="取 消"
+                    onConfirm={() => handleInquiry(row.productId)}
+                  >
+                    <Button type="link" loading={inquirying === row.productId}>发起询价</Button>
+                  </Popconfirm>
+                )
+              }
+            ]}
+          />
+        )}
+      </Card>
+
+      <Card title={`本需求的询价记录（${inquiries.length}）`} style={{ marginTop: 16 }}>
+        {inquiries.length === 0 ? (
+          <Empty description="还没有发起过询价，可在上面的撮合结果里对某个货源点「发起询价」" />
+        ) : (
+          <Table
+            rowKey="id"
+            size="small"
+            dataSource={inquiries}
+            pagination={false}
+            columns={[
+              { title: '询价单号', dataIndex: 'inquiryNo', width: 170 },
+              { title: '货源', dataIndex: 'productName', width: 200,
+                render: (val: string, row: InquiryVO) => val ?? `商品 #${row.productId}` },
+              { title: '供应商', dataIndex: 'sellerName', width: 160, render: (val: string) => val ?? '—' },
+              { title: '数量', dataIndex: 'quantity', width: 100,
+                render: (val: number, row: InquiryVO) => (val == null ? '—' : `${val}${row.unit ?? ''}`) },
+              { title: '已报价', dataIndex: 'replyCount', width: 90,
+                render: (val: number) => `${val ?? 0} 条` },
+              { title: '状态', dataIndex: 'inquiryStatus', width: 100,
+                render: (val: string) => {
+                  const hit = INQUIRY_STATUS[val]
+                  return <Tag color={hit?.color ?? 'default'}>{hit?.text ?? val}</Tag>
+                } },
+              { title: '报价截止', dataIndex: 'replyDeadline', width: 170, render: (val: string) => val ?? '—' },
+              { title: '发起时间', dataIndex: 'createTime', width: 170 }
             ]}
           />
         )}

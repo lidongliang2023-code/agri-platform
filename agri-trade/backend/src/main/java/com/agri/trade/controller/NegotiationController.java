@@ -31,13 +31,32 @@ public class NegotiationController {
 
     @PostMapping("/inquiry")
     public ApiResponse<Inquiry> createInquiry(@RequestBody Map<String, Object> params) {
-        Long demandId = ((Number) params.get("demandId")).longValue();
-        Long productId = ((Number) params.get("productId")).longValue();
-        Long buyerId = params.containsKey("buyerId") ? ((Number) params.get("buyerId")).longValue() : null;
+        // 原先这里无条件执行 ((Number) params.get("demandId")).longValue()：
+        // 请求里没带 demandId 就是空指针 → 500，页面上只看到"发起询价失败"，
+        // 后端日志里是一行类型转换异常。改成先校验再取。
+        Long demandId = asLong(params.get("demandId"));
+        Long productId = asLong(params.get("productId"));
+        if (demandId == null || productId == null) {
+            return ApiResponse.error("请指定要对哪个货源发起询价（demandId 与 productId 都不能为空）");
+        }
 
-        Inquiry inquiry = inquiryService.createInquiry(demandId, productId, buyerId);
+        // 采购方**由服务端按登录身份推导**，不再采信请求体里的 buyerId ——
+        // 否则谁都能以别人的名义向供应商发起询价（供应商看到的是"某家采购方来问了"）。
+        PlatformIdentityService.MerchantScope scope = identityService.currentScope();
+        if (!scope.resolved()) {
+            return ApiResponse.error(scope.error());
+        }
+        Long buyerId = null;
+        if (!scope.merchantIds().isEmpty()) {
+            buyerId = scope.merchantIds().get(0);
+        }
+        if (buyerId == null) {
+            return ApiResponse.error("当前账号还没有绑定经营主体，无法发起询价");
+        }
+
+        Inquiry inquiry = inquiryService.createInquiry(demandId, productId, scope.merchantIds());
         if (inquiry == null) {
-            return ApiResponse.error("创建询价失败");
+            return ApiResponse.error("发起询价失败：采购需求或货源不存在，或这张需求不是你的（只能对自己的采购需求询价）");
         }
         return ApiResponse.success(inquiry);
     }
@@ -57,6 +76,32 @@ public class NegotiationController {
     public ApiResponse<List<Inquiry>> getBuyerInquiries(@PathVariable Long buyerId) {
         List<Inquiry> inquiries = inquiryService.getInquiriesByBuyer(buyerId);
         return ApiResponse.success(inquiries);
+    }
+
+    /**
+     * 我发起的询价（范围由服务端按登录身份推导）。
+     *
+     * <p>注意路径要比 {@code /inquiry/{inquiryId}/quotes} 更具体，否则会被那条吃掉 ——
+     * Spring 会按最具体的模板匹配，"{@code inquiry/mine}" 与 "{@code inquiry/{id}/quotes}"
+     * 段数不同，不会冲突。</p>
+     */
+    @GetMapping("/inquiry/mine")
+    public ApiResponse<List<Inquiry>> myInquiries() {
+        PlatformIdentityService.MerchantScope scope = identityService.currentScope();
+        if (!scope.resolved()) {
+            return ApiResponse.error(scope.error());
+        }
+        return ApiResponse.success(inquiryService.getInquiriesByScope(scope.merchantIds()));
+    }
+
+    /** 我收到的询价（供应商视角，等我报价的）。 */
+    @GetMapping("/inquiry/received")
+    public ApiResponse<List<Inquiry>> receivedInquiries() {
+        PlatformIdentityService.MerchantScope scope = identityService.currentScope();
+        if (!scope.resolved()) {
+            return ApiResponse.error(scope.error());
+        }
+        return ApiResponse.success(inquiryService.getReceivedInquiriesByScope(scope.merchantIds()));
     }
 
     @GetMapping("/inquiry/seller/{sellerId}")
@@ -90,6 +135,23 @@ public class NegotiationController {
         BigDecimal freightAmount = params.containsKey("freightAmount") ? 
                 new BigDecimal(params.get("freightAmount").toString()) : null;
         String remark = (String) params.get("remark");
+
+        // 只有**被询价的那家供应商**能报价。
+        //
+        // 原先这条路径不校验：任何登录用户都能对别人的询价单报价，而报价单上的卖家
+        // 是从询价单带过来的 —— 也就是说能以别人的名义给采购方报价，
+        // 采购方那边看到的"某某供应商报了价"根本不是那家供应商报的。
+        PlatformIdentityService.MerchantScope scope = identityService.currentScope();
+        if (!scope.resolved()) {
+            return ApiResponse.error(scope.error());
+        }
+        com.agri.trade.entity.Inquiry inquiry = inquiryService.getById(inquiryId);
+        if (inquiry == null) {
+            return ApiResponse.error("询价单不存在");
+        }
+        if (inquiry.getSellerId() == null || !scope.merchantIds().contains(inquiry.getSellerId())) {
+            return ApiResponse.error("只有被询价的供应商可以报价");
+        }
 
         Quote quote = quoteService.createQuote(inquiryId, unitPrice, quantity, freightAmount, remark);
         if (quote == null) {

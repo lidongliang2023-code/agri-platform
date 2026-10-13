@@ -32,11 +32,17 @@ public class InquiryServiceImpl extends ServiceImpl<InquiryMapper, Inquiry> impl
     private final TradeOrderMapper orderMapper;
 
     @Override
-    public Inquiry createInquiry(Long demandId, Long productId, Long buyerId) {
+    public Inquiry createInquiry(Long demandId, Long productId, java.util.Collection<Long> buyerScopeMerchantIds) {
         Demand demand = demandMapper.selectById(demandId);
         TradeProduct product = productMapper.selectById(productId);
 
         if (demand == null || product == null) {
+            return null;
+        }
+        // 只能对**自己的**采购需求发起询价：询价单的采购方是从需求带过来的，
+        // 不校验的话，任何人都能替别人去问价（供应商那边看到的是那家采购方在问）。
+        if (buyerScopeMerchantIds == null || demand.getBuyerId() == null
+                || !buyerScopeMerchantIds.contains(demand.getBuyerId())) {
             return null;
         }
 
@@ -111,6 +117,31 @@ public class InquiryServiceImpl extends ServiceImpl<InquiryMapper, Inquiry> impl
     public List<Inquiry> getInquiriesByBuyer(Long buyerId) {
         LambdaQueryWrapper<Inquiry> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Inquiry::getBuyerId, buyerId);
+        wrapper.eq(Inquiry::getDelFlag, 0);
+        wrapper.orderByDesc(Inquiry::getCreateTime);
+        return baseMapper.selectList(wrapper);
+    }
+
+    @Override
+    public List<Inquiry> getInquiriesByScope(java.util.Collection<Long> merchantIds) {
+        if (merchantIds == null || merchantIds.isEmpty()) {
+            // 没有绑定主体就没有范围 —— 返回空集，而不是"全平台询价"
+            return new ArrayList<>();
+        }
+        LambdaQueryWrapper<Inquiry> wrapper = new LambdaQueryWrapper<>();
+        wrapper.in(Inquiry::getBuyerId, merchantIds);
+        wrapper.eq(Inquiry::getDelFlag, 0);
+        wrapper.orderByDesc(Inquiry::getCreateTime);
+        return baseMapper.selectList(wrapper);
+    }
+
+    @Override
+    public List<Inquiry> getReceivedInquiriesByScope(java.util.Collection<Long> merchantIds) {
+        if (merchantIds == null || merchantIds.isEmpty()) {
+            return new ArrayList<>();
+        }
+        LambdaQueryWrapper<Inquiry> wrapper = new LambdaQueryWrapper<>();
+        wrapper.in(Inquiry::getSellerId, merchantIds);
         wrapper.eq(Inquiry::getDelFlag, 0);
         wrapper.orderByDesc(Inquiry::getCreateTime);
         return baseMapper.selectList(wrapper);

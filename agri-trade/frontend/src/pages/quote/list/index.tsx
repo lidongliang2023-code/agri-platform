@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react'
-import { Card, Table, Button, Space, Tag, Modal, Form, Input, InputNumber, Select, DatePicker, message, Popconfirm } from 'antd'
+import { useState, useEffect, useCallback } from 'react'
+import { Alert, Card, Table, Button, Space, Tag, Modal, Form, Input, InputNumber, Select, DatePicker, message, Popconfirm, Typography } from 'antd'
 import { PlusOutlined, SearchOutlined, EditOutlined, DeleteOutlined, CheckOutlined } from '@ant-design/icons'
 import { getQuoteList, createQuote, updateQuote, deleteQuote, acceptQuote, convertQuoteToOrder, QuoteVO, QuoteQuery } from '@/api/quote'
 import { getMyMerchants } from '@/api/identity'
+import { getReceivedInquiries, quoteInquiry, type InquiryVO } from '@/api/inquiry'
 import { useNavigate } from 'react-router-dom'
 import dayjs from 'dayjs'
 
@@ -49,6 +50,53 @@ export default function QuoteList() {
 
   const isMyQuoteAsBuyer = (record: QuoteVO) =>
     record.buyerId != null && myMerchantIds.includes(String(record.buyerId))
+
+  // 收到的询价：采购方向我发起、等我报价的。没有这块，供应商在页面上看不到谁来问过价，
+  // 整条"询价 → 报价 → 受理 → 订单"会在供应商响应这一步断掉。
+  const [received, setReceived] = useState<InquiryVO[]>([])
+  const [quoteOpen, setQuoteOpen] = useState<InquiryVO | null>(null)
+  const [quoting, setQuoting] = useState(false)
+  const [quoteForm] = Form.useForm()
+
+  const loadReceived = useCallback(() => {
+    getReceivedInquiries()
+      .then((res: { code: number; data?: InquiryVO[] }) => {
+        if (res?.code === 200) setReceived(res.data ?? [])
+      })
+      .catch(() => undefined)
+  }, [])
+
+  useEffect(() => {
+    loadReceived()
+  }, [loadReceived])
+
+  const submitInquiryQuote = async () => {
+    if (!quoteOpen) return
+    const values = await quoteForm.validateFields()
+    setQuoting(true)
+    try {
+      const res = await quoteInquiry({
+        inquiryId: quoteOpen.id,
+        unitPrice: values.unitPrice,
+        quantity: values.quantity ?? quoteOpen.quantity,
+        freightAmount: values.freightAmount,
+        remark: values.remark
+      })
+      if (res?.code === 200) {
+        message.success('已报价，采购方会在「报价管理」里看到并受理')
+        setQuoteOpen(null)
+        quoteForm.resetFields()
+        loadData()
+        loadReceived()
+      } else {
+        message.error(res?.message ?? '报价失败')
+      }
+    } catch {
+      message.error('报价失败')
+    } finally {
+      setQuoting(false)
+    }
+  }
 
   useEffect(() => {
     loadData()
@@ -247,6 +295,42 @@ export default function QuoteList() {
 
   return (
     <div>
+      <Card title={`收到的询价（${received.length}）`} style={{ marginBottom: 16 }}>
+        {received.length === 0 ? (
+          <Typography.Text type="secondary">暂时没有采购方向你询价</Typography.Text>
+        ) : (
+          <Table
+            rowKey="id"
+            size="small"
+            dataSource={received}
+            pagination={false}
+            columns={[
+              { title: '询价单号', dataIndex: 'inquiryNo', width: 170 },
+              { title: '采购方', dataIndex: 'buyerName', width: 170, render: (v: string) => v ?? '—' },
+              { title: '货源', dataIndex: 'productName', width: 190, render: (v: string) => v ?? '—' },
+              { title: '数量', dataIndex: 'quantity', width: 100,
+                render: (v: number, row: InquiryVO) => (v == null ? '—' : `${v}${row.unit ?? ''}`) },
+              { title: '期望价', dataIndex: 'priceMin', width: 150,
+                render: (_: unknown, row: InquiryVO) =>
+                  row.priceMin == null ? '—' : `¥${row.priceMin}${row.priceMax == null ? '' : ' ~ ¥' + row.priceMax}` },
+              { title: '已报价', dataIndex: 'replyCount', width: 90, render: (v: number) => `${v ?? 0} 条` },
+              { title: '状态', dataIndex: 'inquiryStatus', width: 100,
+                render: (v: string) => (v === 'quoted'
+                  ? <Tag color="processing">已报价</Tag>
+                  : <Tag color="warning">待报价</Tag>) },
+              { title: '报价截止', dataIndex: 'replyDeadline', width: 170, render: (v: string) => v ?? '—' },
+              {
+                title: '操作',
+                width: 100,
+                render: (_: unknown, row: InquiryVO) => (
+                  <Button type="link" onClick={() => { setQuoteOpen(row); quoteForm.resetFields() }}>报价</Button>
+                )
+              }
+            ]}
+          />
+        )}
+      </Card>
+
       <Card title="报价管理" style={{ marginBottom: 16 }}>
         <Space style={{ marginBottom: 16 }}>
           <Input
@@ -353,6 +437,42 @@ export default function QuoteList() {
           </Form.Item>
           <Form.Item name="remark" label="备注">
             <Input.TextArea placeholder="请输入备注" rows={3} />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={`对该询价报价${quoteOpen ? ' · ' + quoteOpen.inquiryNo : ''}`}
+        open={!!quoteOpen}
+        onCancel={() => setQuoteOpen(null)}
+        onOk={submitInquiryQuote}
+        confirmLoading={quoting}
+        destroyOnClose
+      >
+        {quoteOpen && (
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 12 }}
+            message={`采购方：${quoteOpen.buyerName ?? '—'}；货源：${quoteOpen.productName ?? '—'}`}
+            description={
+              '数量默认沿用询价单里的；总价由服务端按「单价 × 数量 + 运费」计算。' +
+              '报价后采购方会在「报价管理」里看到，受理即生成订单。'
+            }
+          />
+        )}
+        <Form form={quoteForm} layout="vertical">
+          <Form.Item name="unitPrice" label="单价" rules={[{ required: true, message: '请输入单价' }]}>
+            <InputNumber style={{ width: '100%' }} min={0} precision={2} placeholder="你的报价单价" />
+          </Form.Item>
+          <Form.Item name="quantity" label="数量" extra={`留空则沿用询价单数量（${quoteOpen?.quantity ?? '—'}${quoteOpen?.unit ?? ''}）`}>
+            <InputNumber style={{ width: '100%' }} min={0} />
+          </Form.Item>
+          <Form.Item name="freightAmount" label="运费">
+            <InputNumber style={{ width: '100%' }} min={0} precision={2} placeholder="可留空，默认 0" />
+          </Form.Item>
+          <Form.Item name="remark" label="备注">
+            <Input.TextArea rows={2} placeholder="例如：含包装、7 天内可发货" />
           </Form.Item>
         </Form>
       </Modal>
