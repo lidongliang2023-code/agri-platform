@@ -1,6 +1,7 @@
 package com.agri.trade.common.security;
 
 import com.agri.trade.security.PlatformTokenService;
+import com.agri.trade.service.OperatorPermissionService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
@@ -22,22 +23,16 @@ import org.springframework.web.servlet.HandlerInterceptor;
 @Component
 public class AuthenticationInterceptor implements HandlerInterceptor {
 
-    /**
-     * 运营端角色。
-     *
-     * <p>取自平台角色表：SUPER_ADMIN（超级管理员）与 MARKET_OPS（市场运营，
-     * 权限含 trade:read / trade:write）。</p>
-     */
-    private static final java.util.Set<String> OPERATOR_ROLES =
-            java.util.Set.of("SUPER_ADMIN", "MARKET_OPS");
-
     /** 运营端接口前缀。 */
     private static final String OPERATOR_PATH_PREFIX = "/api/trade/admin/";
 
     private final PlatformTokenService platformTokenService;
+    private final OperatorPermissionService operatorPermissionService;
 
-    public AuthenticationInterceptor(PlatformTokenService platformTokenService) {
+    public AuthenticationInterceptor(PlatformTokenService platformTokenService,
+                                     OperatorPermissionService operatorPermissionService) {
         this.platformTokenService = platformTokenService;
+        this.operatorPermissionService = operatorPermissionService;
     }
 
     @Override
@@ -57,22 +52,43 @@ public class AuthenticationInterceptor implements HandlerInterceptor {
             return reject(response, 401, "令牌无效或已过期");
         }
 
-        // 运营端接口要角色，不只是"登录了"。
+        LoginUserHolder.setLoginUser(loginUser);
+
+        // ---- 授权（谁能调）----
         //
-        // 补这道判断之前，运营端整片接口（订单监管/纠纷仲裁/退款审核/赔付执行/货源审核/交易大盘）
-        // **只校验了令牌有效**：任何一个普通用户（例如只有 FARMER 角色的农场账号）拿到自己的令牌
-        // 就能看到全平台订单、审批别人的退款与赔付。LoginUser.hasRole / SecurityUtils.hasRole
-        // 早就写好了，但从来没有任何地方调用过 —— 权限体系是"建了没用"。
-        if (request.getRequestURI().startsWith(OPERATOR_PATH_PREFIX)
-                && loginUser.getRoles().stream().noneMatch(OPERATOR_ROLES::contains)) {
-            log.warn("非运营角色访问运营端接口被拒：user={} roles={} uri={}",
-                    loginUser.getUsername(), loginUser.getRoles(), request.getRequestURI());
-            return reject(response, 403, "无权访问运营端接口：需要运营角色（SUPER_ADMIN 或 MARKET_OPS）");
+        // 运营端的准入分两种来源，合起来才没有漏网：
+        //   ① 路径前缀 /api/trade/admin/** —— 运营端各页面的接口族，要 trade:read；
+        //   ② 方法/类上的 @OperatorOnly —— 挂在业务路径上的运营动作（退款审核、
+        //      纠纷调解/仲裁、赔付审核与打款）。这些天然属于"某张订单/某场纠纷"的资源，
+        //      不可能都挪到 /admin 下，只按前缀拦会漏掉最要命的口子（打款、退款是真金白银）。
+        //
+        // 判定用平台的 RBAC（platform_user_role ⋈ platform_role.permissions，
+        // 按令牌 + 当前市场实时解析），而不是只看令牌里的角色摘要 ——
+        // 架构文档 V2.0 5.5：细权限以后端实时鉴权为准。平台不可达时拒绝，不放行。
+        String required = requiredPermission(request, handler);
+        if (required != null) {
+            OperatorPermissionService.Decision decision = operatorPermissionService.check(required);
+            if (!decision.allowed()) {
+                log.warn("运营权限不足被拒：user={} uri={} required={} reason={}",
+                        loginUser.getUsername(), request.getRequestURI(), required, decision.message());
+                return reject(response, 403, decision.message());
+            }
         }
 
-        LoginUserHolder.setLoginUser(loginUser);
         log.debug("已认证：{}", loginUser.getUsername());
         return true;
+    }
+
+    /** 这个请求需要哪个权限码；普通业务接口返回 null（由各自的身份判权负责）。 */
+    private String requiredPermission(HttpServletRequest request, Object handler) {
+        OperatorOnly annotation = ((HandlerMethod) handler).getMethodAnnotation(OperatorOnly.class);
+        if (annotation == null) {
+            annotation = ((HandlerMethod) handler).getBeanType().getAnnotation(OperatorOnly.class);
+        }
+        if (annotation != null) {
+            return annotation.value();
+        }
+        return request.getRequestURI().startsWith(OPERATOR_PATH_PREFIX) ? "trade:read" : null;
     }
 
     @Override

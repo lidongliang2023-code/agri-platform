@@ -1,5 +1,7 @@
-import { Layout, Menu, Typography } from 'antd'
+import { useEffect, useState } from 'react'
+import { Button, Layout, Menu, Result, Spin, Typography } from 'antd'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { getMyPermissions, hasPermission, type MyPermission } from '@/api/permission'
 import {
   AppstoreOutlined, AuditOutlined, FileSearchOutlined, SwapOutlined, TeamOutlined, RollbackOutlined,
   SafetyCertificateOutlined, ApartmentOutlined, AccountBookOutlined, SafetyOutlined, AppstoreAddOutlined,
@@ -18,6 +20,46 @@ const { Sider, Header, Content } = Layout
 export default function AdminLayout() {
   const navigate = useNavigate()
   const location = useLocation()
+
+  /**
+   * 运营端入口守卫。
+   *
+   * <p>服务端已经按 RBAC 拦住 /api/trade/admin/** 与所有 @OperatorOnly 接口，
+   * 这里只是不让人进来对着一屏 403 发懵 —— 没权限就直接说清楚。
+   * 解析失败（认证中心不可达）时按"无权限"处理，与服务端 fail-closed 一致。</p>
+   */
+  const [perm, setPerm] = useState<MyPermission | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    getMyPermissions()
+      .then((res: { code: number; data?: MyPermission }) => setPerm(res?.code === 0 ? res.data ?? null : null))
+      .catch(() => setPerm(null))
+      .finally(() => setLoading(false))
+  }, [])
+
+  if (loading) {
+    return (
+      <div style={{ padding: 80, textAlign: 'center' }}>
+        <Spin />
+      </div>
+    )
+  }
+
+  if (!hasPermission(perm ?? undefined, 'trade:read')) {
+    return (
+      <Result
+        status="403"
+        title="无权访问运营端"
+        subTitle="运营端需要平台运营权限（trade:read）。当前账号没有该权限，请用运营账号登录，或联系平台运营开通。"
+        extra={
+          <Button type="primary" onClick={() => navigate('/')}>
+            返回用户端
+          </Button>
+        }
+      />
+    )
+  }
 
   return (
     <Layout style={{ minHeight: '100vh' }}>

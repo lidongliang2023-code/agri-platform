@@ -134,6 +134,7 @@ public class DisputeController {
     }
 
     @PostMapping("/{id}/mediation")
+    @com.agri.trade.common.security.OperatorOnly
     public ApiResponse<Boolean> mediationDispute(@PathVariable Long id, @RequestBody java.util.Map<String, String> params) {
         Dispute dispute = disputeMapper.selectById(id);
         if (dispute == null) return ApiResponse.error("纠纷不存在");
@@ -161,6 +162,7 @@ public class DisputeController {
     }
 
     @PostMapping("/{id}/arbitration")
+    @com.agri.trade.common.security.OperatorOnly
     public ApiResponse<Boolean> arbitrationDispute(@PathVariable Long id, @RequestBody java.util.Map<String, Object> params) {
         Dispute dispute = disputeMapper.selectById(id);
         if (dispute == null) return ApiResponse.error("纠纷不存在");

@@ -21,4 +21,13 @@ public interface PlatformFeignClient {
 
     @GetMapping("/api/v1/platform/merchants/mine")
     Map<String, Object> myMerchants(@RequestHeader("Authorization") String authorization);
+
+    /**
+     * 调用方在当前市场下的角色与权限码（RBAC 实时鉴权）。
+     *
+     * <p>与上面同一口径：只解析"自己"，不接受 userId 参数 —— 否则换个 id
+     * 就能探测别人的权限。运营端接口的准入判定走这里（见 OperatorPermissionService）。</p>
+     */
+    @GetMapping("/api/v1/platform/permissions/mine")
+    Map<String, Object> myPermissions(@RequestHeader("Authorization") String authorization);
 }
