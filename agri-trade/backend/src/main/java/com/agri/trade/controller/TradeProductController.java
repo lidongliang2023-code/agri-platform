@@ -7,6 +7,7 @@ import com.agri.trade.entity.ProductImage;
 import com.agri.trade.mapper.ProductImageMapper;
 import com.agri.trade.mapper.TradeProductMapper;
 import com.agri.trade.mapper.TradeProductCategoryMapper;
+import com.agri.trade.service.PlatformIdentityService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -24,6 +25,7 @@ public class TradeProductController {
     private final TradeProductMapper productMapper;
     private final TradeProductCategoryMapper categoryMapper;
     private final ProductImageMapper productImageMapper;
+    private final PlatformIdentityService identityService;
 
     /**
      * 商品图片。
@@ -137,6 +139,17 @@ public class TradeProductController {
 
     @PostMapping
     public ApiResponse<Boolean> createProduct(@RequestBody TradeProduct product) {
+        // 供应商由服务端按登录用户绑定的经营主体决定。
+        // 这里原先既不看身份、也不读请求体里的 sellerId —— 而表里 seller_id 是 NOT NULL，
+        // 于是"发布货源"每次都直接 500（Field 'seller_id' doesn't have a default value）。
+        PlatformIdentityService.MerchantSelection seller = identityService.selectMerchant(product.getSellerId());
+        if (!seller.ok()) {
+            return ApiResponse.error(seller.error());
+        }
+        product.setSellerId(seller.merchantId());
+        if (product.getSellerName() == null || product.getSellerName().isEmpty()) {
+            product.setSellerName(seller.merchantName());
+        }
         product.setProductCode("P" + System.currentTimeMillis());
         product.setDelFlag(0);
         product.setStatus(1);
@@ -149,7 +162,13 @@ public class TradeProductController {
 
     @PutMapping("/{id}")
     public ApiResponse<Boolean> updateProduct(@PathVariable Long id, @RequestBody TradeProduct product) {
+        TradeProduct exist = productMapper.selectById(id);
+        if (exist == null) return ApiResponse.error("商品不存在");
+        String denied = denyIfNotOwner(exist);
+        if (denied != null) return ApiResponse.error(denied);
         product.setId(id);
+        // 不允许改归属：请求体里带 sellerId 就能把别人的货源挂到自己名下（或反过来）。
+        product.setSellerId(null);
         product.setUpdateTime(new Date());
         int result = productMapper.updateById(product);
         return result > 0 ? ApiResponse.success(true) : ApiResponse.error("更新失败");
@@ -159,9 +178,30 @@ public class TradeProductController {
     public ApiResponse<Boolean> deleteProduct(@PathVariable Long id) {
         TradeProduct product = productMapper.selectById(id);
         if (product == null) return ApiResponse.error("商品不存在");
+        String denied = denyIfNotOwner(product);
+        if (denied != null) return ApiResponse.error(denied);
         // 同上：必须用 deleteById，否则接口成功而记录还在。
         int result = productMapper.deleteById(id);
         return result > 0 ? ApiResponse.success(true) : ApiResponse.error("删除失败");
+    }
+
+    /**
+     * 判权：只有货源所属的经营主体能改/删它。
+     *
+     * <p>读（列表 / 详情）不设范围 —— 货源本来就是要给买家浏览的；
+     * 但改与删此前**谁都能调**，换个 id 就能下架别人的货源。</p>
+     *
+     * @return 拒绝原因；允许时返回 null
+     */
+    private String denyIfNotOwner(TradeProduct product) {
+        PlatformIdentityService.MerchantScope scope = identityService.currentScope();
+        if (!scope.resolved()) {
+            return scope.error();
+        }
+        if (product.getSellerId() != null && scope.merchantIds().contains(product.getSellerId())) {
+            return null;
+        }
+        return "只能操作自己发布的货源";
     }
 
     @PostMapping("/{id}/audit")

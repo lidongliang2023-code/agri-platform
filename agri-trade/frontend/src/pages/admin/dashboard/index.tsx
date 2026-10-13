@@ -5,8 +5,10 @@ import { getAdminOverview, type AdminOverview } from '@/api/admin'
 /**
  * 交易大盘（PRD 10.2 第一组）。
  *
- * <p>所有数字都来自真实表聚合（订单 / 货源 / 纠纷），没有一个写死 ——
- * 用户端那边的 /api/trade/operation/* 返回的是代码里写死的字符串数组，是反面教材。</p>
+ * <p>所有数字都来自真实表聚合（订单 / 货源 / 纠纷），没有一个写死。</p>
+ *
+ * <p>（曾经另有一套 /api/trade/operation/*，那里的大盘数字是写死的字符串数组与随机数，
+ * 且无人调用 —— 已整组删除，避免"两个大盘、一个真一个假"。）</p>
  */
 export default function AdminDashboard() {
   const [data, setData] = useState<AdminOverview | null>(null)
