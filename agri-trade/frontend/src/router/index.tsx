@@ -25,6 +25,8 @@ import AdminLayout from '@/pages/admin/layout'
 import AdminDashboard from '@/pages/admin/dashboard'
 import AdminProductAudit from '@/pages/admin/product'
 import AdminOrderOversight from '@/pages/admin/order'
+import AdminDispute from '@/pages/admin/dispute'
+import AdminRefund from '@/pages/admin/refund'
 import { isLoggedIn } from '@/utils/session'
 import { SSO_CALLBACK_PATH } from '@/utils/sso'
 
@@ -52,6 +54,8 @@ function AppRouter() {
         <Route path="dashboard" element={<AdminDashboard />} />
         <Route path="product" element={<AdminProductAudit />} />
         <Route path="order" element={<AdminOrderOversight />} />
+        <Route path="dispute" element={<AdminDispute />} />
+        <Route path="refund" element={<AdminRefund />} />
       </Route>
       <Route path="/" element={
         <PrivateRoute>

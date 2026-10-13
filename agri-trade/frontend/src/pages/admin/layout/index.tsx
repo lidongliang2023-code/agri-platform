@@ -1,6 +1,8 @@
 import { Layout, Menu, Typography } from 'antd'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { AppstoreOutlined, AuditOutlined, FileSearchOutlined, SwapOutlined } from '@ant-design/icons'
+import {
+  AppstoreOutlined, AuditOutlined, FileSearchOutlined, SwapOutlined, TeamOutlined, RollbackOutlined
+} from '@ant-design/icons'
 
 const { Sider, Header, Content } = Layout
 
@@ -30,7 +32,9 @@ export default function AdminLayout() {
           items={[
             { key: '/admin/trade/dashboard', icon: <AppstoreOutlined />, label: '交易大盘' },
             { key: '/admin/trade/product', icon: <AuditOutlined />, label: '货源审核' },
-            { key: '/admin/trade/order', icon: <FileSearchOutlined />, label: '订单监管' }
+            { key: '/admin/trade/order', icon: <FileSearchOutlined />, label: '订单监管' },
+            { key: '/admin/trade/dispute', icon: <TeamOutlined />, label: '纠纷仲裁' },
+            { key: '/admin/trade/refund', icon: <RollbackOutlined />, label: '退款审核' }
           ]}
         />
       </Sider>

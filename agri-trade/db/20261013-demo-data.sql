@@ -434,6 +434,15 @@ UPDATE `agri_trade_order` SET `order_status`='shipped',         `payment_status`
 UPDATE `agri_trade_order` SET `order_status`='pending_confirm', `payment_status`='partial', `paid_amount`=272400,  `logistics_status`=NULL,         `buyer_confirmed`=0, `settle_status`=NULL WHERE `id`=7603;
 UPDATE `agri_trade_order` SET `order_status`='cancelled',       `payment_status`='unpaid',  `paid_amount`=0,       `logistics_status`=NULL,         `buyer_confirmed`=0, `settle_status`=NULL WHERE `id`=7604;
 
+-- 纠纷的还原：在运营端把"调解 → 仲裁"点一遍之后，重跑本文件即可回到初始状态
+-- （8031 是处理中、未进入任何阶段；8032 已协商关闭）。
+UPDATE `agri_trade_dispute` SET
+    `dispute_status`='processing', `process_stage`=NULL,
+    `mediator`=NULL, `mediation_time`=NULL, `mediation_result`=NULL,
+    `arbitrator`=NULL, `arbitration_time`=NULL, `arbitration_result`=NULL,
+    `close_time`=NULL, `close_reason`=NULL
+WHERE `id`=8031;
+
 -- ===========================================================================
 -- 清理语句（默认注释）。要清空本文件的演示数据时放开这几行执行即可 ——
 -- 只删 7000-8099 段，不会碰到真实数据。

@@ -47,6 +47,7 @@ public class AdminTradeController {
     private final TradeProductMapper productMapper;
     private final OrderItemMapper orderItemMapper;
     private final DisputeMapper disputeMapper;
+    private final com.agri.trade.mapper.RefundRecordMapper refundMapper;
 
     /** 交易大盘总览：订单与金额、待办件数、近 7 日趋势、品类与区域分布。 */
     @Operation(summary = "交易大盘总览")
@@ -275,5 +276,65 @@ public class AdminTradeController {
 
     private static BigDecimal nullSafe(BigDecimal value) {
         return value == null ? BigDecimal.ZERO : value;
+    }
+
+    /**
+     * 纠纷仲裁列表（运营端）。
+     *
+     * <p>注意：用户端的 /api/trade/dispute/page 本来就没有按人过滤、返回的是全平台纠纷 ——
+     * 那是用户端的越权面（买家能看到别人的纠纷）。运营端这里显式走 /admin/ 前缀，
+     * 用户端那一侧应当按当前用户补过滤条件（已记在待办里）。</p>
+     */
+    @Operation(summary = "纠纷仲裁列表")
+    @GetMapping("/dispute/page")
+    public ApiResponse<IPage<Dispute>> disputePage(
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(defaultValue = "10") Integer pageSize,
+            @RequestParam(required = false) String disputeStatus,
+            @RequestParam(required = false) String stage,
+            @RequestParam(required = false) String keyword) {
+        Page<Dispute> page = new Page<>(pageNum, pageSize);
+        LambdaQueryWrapper<Dispute> wrapper = new LambdaQueryWrapper<>();
+        if (disputeStatus != null && !disputeStatus.isEmpty()) {
+            wrapper.eq(Dispute::getDisputeStatus, disputeStatus);
+        }
+        if (stage != null && !stage.isEmpty()) {
+            wrapper.eq(Dispute::getProcessStage, stage);
+        }
+        if (keyword != null && !keyword.isEmpty()) {
+            wrapper.and(w -> w.like(Dispute::getDisputeNo, keyword)
+                    .or().like(Dispute::getComplainantName, keyword)
+                    .or().like(Dispute::getRespondentName, keyword));
+        }
+        wrapper.orderByDesc(Dispute::getCreateTime);
+        return ApiResponse.success(disputeMapper.selectPage(page, wrapper));
+    }
+
+    /**
+     * 退款审核列表（运营端）。
+     *
+     * <p>退款记录此前只有"申请"和"审核"两个写接口，没有任何列表入口 ——
+     * 运营端根本看不到有哪些退款等着审。</p>
+     */
+    @Operation(summary = "退款审核列表")
+    @GetMapping("/refund/page")
+    public ApiResponse<IPage<com.agri.trade.entity.RefundRecord>> refundPage(
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(defaultValue = "10") Integer pageSize,
+            @RequestParam(required = false) String refundStatus,
+            @RequestParam(required = false) String keyword) {
+        Page<com.agri.trade.entity.RefundRecord> page = new Page<>(pageNum, pageSize);
+        LambdaQueryWrapper<com.agri.trade.entity.RefundRecord> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(com.agri.trade.entity.RefundRecord::getDelFlag, 0);
+        if (refundStatus != null && !refundStatus.isEmpty()) {
+            wrapper.eq(com.agri.trade.entity.RefundRecord::getRefundStatus, refundStatus);
+        }
+        if (keyword != null && !keyword.isEmpty()) {
+            wrapper.and(w -> w.like(com.agri.trade.entity.RefundRecord::getRefundNo, keyword)
+                    .or().like(com.agri.trade.entity.RefundRecord::getOrderNo, keyword)
+                    .or().like(com.agri.trade.entity.RefundRecord::getApplicantName, keyword));
+        }
+        wrapper.orderByDesc(com.agri.trade.entity.RefundRecord::getCreateTime);
+        return ApiResponse.success(refundMapper.selectPage(page, wrapper));
     }
 }

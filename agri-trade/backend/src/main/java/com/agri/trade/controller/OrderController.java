@@ -285,7 +285,11 @@ public class OrderController {
         if (result > 0 && "approved".equals(params.get("status"))) {
             TradeOrder order = orderMapper.selectById(refund.getOrderId());
             if (order != null) {
-                order.setRefundAmount(order.getRefundAmount().add(refund.getRefundAmount()));
+                // 累加已退金额时必须容 null：经接口新建的订单没有写 refund_amount，
+                // 直接 .add() 会 NPE，表现是"审核通过"这个动作 500。
+                BigDecimal refunded = order.getRefundAmount() == null ? BigDecimal.ZERO : order.getRefundAmount();
+                BigDecimal current = refund.getRefundAmount() == null ? BigDecimal.ZERO : refund.getRefundAmount();
+                order.setRefundAmount(refunded.add(current));
                 order.setPaymentStatus("refunded");
                 order.setOrderStatus("refunded");
                 order.setUpdateTime(new Date());
