@@ -17,6 +17,7 @@ import ContractList from '@/pages/contract/list'
 import LogisticsList from '@/pages/logistics/list'
 import EvaluationList from '@/pages/evaluation/list'
 import DisputeList from '@/pages/dispute/list'
+import MineDashboardPage from '@/pages/mine'
 import MatchList from '@/pages/match/list'
 import PriceList from '@/pages/price/list'
 import QuoteList from '@/pages/quote/list'
@@ -81,6 +82,7 @@ function AppRouter() {
         </PrivateRoute>
       }>
         <Route index element={<Home />} />
+        <Route path="mine" element={<MineDashboardPage />} />
         <Route path="order" element={<OrderList />} />
         <Route path="order/detail/:id" element={<OrderDetail />} />
         <Route path="order/confirm" element={<OrderConfirm />} />

@@ -490,6 +490,11 @@ INSERT IGNORE INTO `agri_trade_order_item`
 UPDATE `agri_trade_order` SET `settle_status`=NULL, `settle_time`=NULL WHERE `id`=7605;
 DELETE FROM `agri_trade_settlement` WHERE `order_id`=7605;
 
+-- 订单明细的 total_price 必须补上：本段是按**建表列名**写的（amount），
+-- 而实体映射的是 total_price —— 不补的话，这份明细在"热销货源"这类按明细聚合的
+-- 统计里金额算成 0（只有数量算得对），表现是"卖了 300 件、金额只有 248 万"。
+UPDATE `agri_trade_order_item` SET `total_price` = `amount` WHERE `order_id` = 7605;
+
 -- ===========================================================================
 -- 清理语句（默认注释）。要清空本文件的演示数据时放开这几行执行即可 ——
 -- 只删 7000-8099 段，不会碰到真实数据。

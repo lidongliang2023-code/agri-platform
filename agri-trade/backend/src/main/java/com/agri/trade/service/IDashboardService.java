@@ -79,8 +79,9 @@ public interface IDashboardService {
         private Integer pendingOrders;
         private Integer completedOrders;
         private BigDecimal avgOrderValue;
-        private Integer favoriteSellers;
-        private Integer followedProducts;
+        // 原先这里还有 favoriteSellers / followedProducts 两个字段，
+        // 取值是 3+random(10) / 5+random(15) —— 纯随机数。库里没有收藏/关注表，
+        // 也就没有真实来源，所以直接把字段删掉，而不是继续填一个编出来的数字。
         private List<TransactionTrend> spendingTrend;
         private List<TopBuyer.PurchaseCategory> purchaseCategories;
         private List<OrderStatusStats> orderStatusDistribution;
@@ -103,10 +104,6 @@ public interface IDashboardService {
         public void setCompletedOrders(Integer completedOrders) { this.completedOrders = completedOrders; }
         public BigDecimal getAvgOrderValue() { return avgOrderValue; }
         public void setAvgOrderValue(BigDecimal avgOrderValue) { this.avgOrderValue = avgOrderValue; }
-        public Integer getFavoriteSellers() { return favoriteSellers; }
-        public void setFavoriteSellers(Integer favoriteSellers) { this.favoriteSellers = favoriteSellers; }
-        public Integer getFollowedProducts() { return followedProducts; }
-        public void setFollowedProducts(Integer followedProducts) { this.followedProducts = followedProducts; }
         public List<TransactionTrend> getSpendingTrend() { return spendingTrend; }
         public void setSpendingTrend(List<TransactionTrend> spendingTrend) { this.spendingTrend = spendingTrend; }
         public List<TopBuyer.PurchaseCategory> getPurchaseCategories() { return purchaseCategories; }
