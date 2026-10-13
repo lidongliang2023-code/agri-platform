@@ -1,5 +1,16 @@
 import axios from 'axios'
 
+/**
+ * 报价转订单。
+ *
+ * <p>此前这条链路是断的：接受报价只改报价状态、不生成订单。
+ * 接口幂等（同一报价重复调用返回同一张订单），金额由服务端按报价口径计算。</p>
+ */
+export async function convertQuoteToOrder(quoteId: number | string) {
+  const response = await axios.post(`/api/trade/negotiation/quote/${quoteId}/convert`)
+  return response.data
+}
+
 export interface QuoteQuery {
   pageNum: number
   pageSize: number

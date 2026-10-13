@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { Card, Table, Button, Space, Tag, Modal, Form, Input, InputNumber, Select, DatePicker, message, Popconfirm } from 'antd'
 import { PlusOutlined, SearchOutlined, EditOutlined, DeleteOutlined, CheckOutlined } from '@ant-design/icons'
-import { getQuoteList, createQuote, updateQuote, deleteQuote, acceptQuote, QuoteVO, QuoteQuery } from '@/api/quote'
+import { getQuoteList, createQuote, updateQuote, deleteQuote, acceptQuote, convertQuoteToOrder, QuoteVO, QuoteQuery } from '@/api/quote'
+import { useNavigate } from 'react-router-dom'
 import dayjs from 'dayjs'
 
 const statusMap: Record<string, { color: string; text: string }> = {
@@ -13,6 +14,7 @@ const statusMap: Record<string, { color: string; text: string }> = {
 }
 
 export default function QuoteList() {
+  const navigate = useNavigate()
   const [loading, setLoading] = useState(false)
   const [data, setData] = useState<QuoteVO[]>([])
   const [total, setTotal] = useState(0)
@@ -91,6 +93,27 @@ export default function QuoteList() {
     }
   }
 
+  /**
+   * 报价转订单。
+   *
+   * <p>接受报价之后必须再走这一步才有订单 —— 后端的 acceptQuote 只改报价状态，
+   * 生成订单是 convertToOrder 的职责（服务端算金额、落订单明细、回写 orderId 做幂等）。
+   * 转完直接把人送到「确认订单」页，那里能改收货信息并确认。</p>
+   */
+  const handleConvert = async (id: number) => {
+    try {
+      const res = await convertQuoteToOrder(id)
+      if (res.code === 200 && res.data) {
+        message.success('已生成订单，请确认收货信息')
+        navigate(`/order/confirm?orderId=${res.data.id}`)
+      } else {
+        message.error(res.message || '生成订单失败')
+      }
+    } catch {
+      message.error('生成订单失败')
+    }
+  }
+
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields()
@@ -151,10 +174,19 @@ export default function QuoteList() {
               删除
             </Button>
           </Popconfirm>
-          {record.quoteStatus === 'approved' && (
+          {/* 后端写的状态是 pending / accepted / rejected —— 这里原先判断 'approved'，
+              那个值后端从来不产生，于是"接受"按钮一次都没出现过。 */}
+          {record.quoteStatus === 'pending' && (
             <Popconfirm title="确定接受此报价吗？" onConfirm={() => handleAccept(record.id)}>
               <Button type="link" size="small" icon={<CheckOutlined />}>
                 接受
+              </Button>
+            </Popconfirm>
+          )}
+          {record.quoteStatus === 'accepted' && (
+            <Popconfirm title="按此报价生成订单？" onConfirm={() => handleConvert(record.id)}>
+              <Button type="link" size="small">
+                生成订单
               </Button>
             </Popconfirm>
           )}

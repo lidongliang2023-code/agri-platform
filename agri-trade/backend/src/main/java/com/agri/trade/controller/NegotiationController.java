@@ -3,6 +3,7 @@ package com.agri.trade.controller;
 import com.agri.trade.common.entity.ApiResponse;
 import com.agri.trade.entity.Inquiry;
 import com.agri.trade.entity.Quote;
+import com.agri.trade.entity.TradeOrder;
 import com.agri.trade.service.IInquiryService;
 import com.agri.trade.service.IQuoteService;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -107,6 +108,18 @@ public class NegotiationController {
             return ApiResponse.error("报价不存在");
         }
         return ApiResponse.success(quote);
+    }
+
+    @Operation(summary = "报价转订单")
+    @PostMapping("/quote/{quoteId}/convert")
+    public ApiResponse<TradeOrder> convertQuoteToOrder(@PathVariable Long quoteId) {
+        TradeOrder order = quoteService.convertToOrder(quoteId);
+        if (order == null) {
+            // 两种 null：报价不存在，或状态不允许（已拒绝的报价不能转订单）。
+            // 提示要覆盖两种，否则用户会去怀疑"报价怎么没了"。
+            return ApiResponse.error("报价不存在或当前状态不允许生成订单（已拒绝的报价不能转订单）");
+        }
+        return ApiResponse.success(order);
     }
 
     @GetMapping("/quote/seller/{sellerId}")

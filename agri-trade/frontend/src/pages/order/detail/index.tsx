@@ -44,7 +44,8 @@ interface OrderItemRow {
   unit: string
   quantity: number
   unitPrice: number
-  amount: number
+  /** 实体字段是 totalPrice（表里另有 amount 列，但实体没映射，读它恒空） */
+  totalPrice: number
   traceCode: string
 }
 
@@ -249,7 +250,7 @@ export default function OrderDetail() {
                 render: (val: number, row: OrderItemRow) => `${val} ${row.unit ?? ''}`
               },
               { title: '单价', dataIndex: 'unitPrice', render: (val: number) => `¥${val}` },
-              { title: '金额', dataIndex: 'amount', render: (val: number) => `¥${val}` },
+              { title: '金额', dataIndex: 'totalPrice', render: (val: number) => `¥${val}` },
               { title: '溯源码', dataIndex: 'traceCode', render: (val: string) => val || '—' }
             ]}
           />

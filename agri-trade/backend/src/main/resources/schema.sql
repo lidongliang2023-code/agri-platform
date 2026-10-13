@@ -487,7 +487,11 @@ CREATE TABLE IF NOT EXISTS `agri_trade_order_item` (
     `unit` VARCHAR(20) NOT NULL COMMENT '计量单位',
     `quantity` DECIMAL(18,4) NOT NULL COMMENT '数量',
     `unit_price` DECIMAL(18,4) NOT NULL COMMENT '单价',
-    `amount` DECIMAL(18,2) NOT NULL COMMENT '金额',
+    -- 历史列：实体 OrderItem 映射的是 total_price，不再写这一列。
+    -- 原来是 NOT NULL 且无默认值 —— 于是任何经接口创建的订单明细都插不进去
+    -- （报 "Field 'amount' doesn't have a default value"）。改成可空，
+    -- 保留列不删是为了不动历史数据。
+    `amount` DECIMAL(18,2) NULL COMMENT '金额（历史列，实体已改用 total_price）',
     `batch_no` VARCHAR(64) NULL COMMENT '批次号',
     `trace_code` VARCHAR(64) NULL COMMENT '溯源码',
     `del_flag` TINYINT(1) DEFAULT 0 COMMENT '删除标记',

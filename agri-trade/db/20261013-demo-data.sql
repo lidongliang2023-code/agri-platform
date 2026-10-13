@@ -418,6 +418,10 @@ UPDATE `agri_trade_match_record` SET
     `convert_time` = CASE WHEN `order_id` IS NOT NULL THEN `create_time` ELSE NULL END
 WHERE `id` BETWEEN 7000 AND 8099;
 
+-- 订单明细的金额：实体字段是 total_price，我插入时写在 amount 列上 ——
+-- 值在库里、接口读不到，订单明细的"金额"一列会空。搬过去。
+UPDATE `agri_trade_order_item` SET `total_price` = `amount` WHERE `id` BETWEEN 7000 AND 8099;
+
 -- 订单状态口径对齐 + 还原。
 --
 -- 两件事：一是插入时我写的 'pending' 不在后端状态机里（后端认的是

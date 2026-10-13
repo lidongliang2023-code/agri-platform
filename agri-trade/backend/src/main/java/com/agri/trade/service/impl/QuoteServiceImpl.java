@@ -3,9 +3,13 @@ package com.agri.trade.service.impl;
 import com.agri.trade.entity.Quote;
 import com.agri.trade.entity.Inquiry;
 import com.agri.trade.entity.TradeProduct;
+import com.agri.trade.entity.TradeOrder;
+import com.agri.trade.entity.OrderItem;
 import com.agri.trade.mapper.QuoteMapper;
 import com.agri.trade.mapper.InquiryMapper;
 import com.agri.trade.mapper.TradeProductMapper;
+import com.agri.trade.mapper.TradeOrderMapper;
+import com.agri.trade.mapper.OrderItemMapper;
 import com.agri.trade.service.IQuoteService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -25,6 +29,96 @@ public class QuoteServiceImpl extends ServiceImpl<QuoteMapper, Quote> implements
 
     private final InquiryMapper inquiryMapper;
     private final TradeProductMapper productMapper;
+    private final TradeOrderMapper tradeOrderMapper;
+    private final OrderItemMapper orderItemMapper;
+
+    @Override
+    @Transactional
+    public TradeOrder convertToOrder(Long quoteId) {
+        Quote quote = baseMapper.selectById(quoteId);
+        if (quote == null) {
+            return null;
+        }
+        // 已拒绝的报价不能转订单：那不是"还没定的价"，而是"已经谈崩的价"。
+        if ("rejected".equals(quote.getQuoteStatus())) {
+            return null;
+        }
+        // 幂等：同一份报价只生成一张订单。没有这道保护，重复点一下"生成订单"
+        // 就会多出一张重复订单，而订单一旦生成就很难悄悄撤掉。
+        if (quote.getOrderId() != null) {
+            TradeOrder exist = tradeOrderMapper.selectById(quote.getOrderId());
+            if (exist != null) {
+                return exist;
+            }
+        }
+
+        Inquiry inquiry = quote.getInquiryId() == null ? null : inquiryMapper.selectById(quote.getInquiryId());
+        TradeProduct product = quote.getProductId() == null ? null : productMapper.selectById(quote.getProductId());
+
+        BigDecimal goods = quote.getQuoteAmount() != null ? quote.getQuoteAmount()
+                : (quote.getTotalAmount() != null ? quote.getTotalAmount() : BigDecimal.ZERO);
+        BigDecimal freight = quote.getFreightAmount() == null ? BigDecimal.ZERO : quote.getFreightAmount();
+        BigDecimal discount = quote.getDiscountAmount() == null ? BigDecimal.ZERO : quote.getDiscountAmount();
+
+        Date now = new Date();
+        TradeOrder order = new TradeOrder();
+        order.setOrderNo("SO" + System.currentTimeMillis());
+        order.setDemandId(inquiry != null ? inquiry.getDemandId() : null);
+        order.setBuyerId(quote.getBuyerId());
+        order.setBuyerName(quote.getBuyerName());
+        order.setSellerId(quote.getSellerId());
+        order.setSellerName(quote.getSellerName());
+        if (product != null) {
+            order.setCategoryId(product.getCategoryId());
+            order.setCategoryName(product.getCategoryName());
+        }
+        order.setGoodsAmount(goods);
+        order.setFreightAmount(freight);
+        order.setDiscountAmount(discount);
+        // 总额由服务端按同一套口径算：报价单上的数字只作参考，
+        // 落库金额不能是"谁调接口谁说了算"。
+        order.setTotalAmount(goods.add(freight).subtract(discount));
+        order.setPaidAmount(BigDecimal.ZERO);
+        order.setCurrency("CNY");
+        order.setPaymentStatus("unpaid");
+        order.setOrderStatus("pending_confirm");
+        order.setDeliveryAddress(quote.getDeliveryAddress());
+        order.setDeliveryDeadline(quote.getDeliveryDeadline());
+        order.setSource("quote");
+        order.setDelFlag(0);
+        order.setCreateTime(now);
+        order.setUpdateTime(now);
+        tradeOrderMapper.insert(order);
+
+        // 订单明细：一份报价先落一行，确认订单时买家还能改数量（改的是订单，不是报价）
+        OrderItem item = new OrderItem();
+        item.setOrderId(order.getId());
+        item.setProductId(quote.getProductId());
+        item.setProductName(quote.getProductName());
+        item.setCategoryId(order.getCategoryId());
+        item.setCategoryName(order.getCategoryName());
+        item.setUnit(quote.getUnit());
+        item.setQuantity(quote.getQuantity());
+        item.setUnitPrice(quote.getUnitPrice());
+        // 实体里的金额字段叫 totalPrice（不是 amount）—— 表里有 amount 列但实体没映射它，
+        // 写 amount 会成功入库、接口却读不到，页面上"金额"一列永远是空的。
+        item.setTotalPrice(quote.getQuoteAmount());
+        item.setDelFlag(0);
+        item.setCreateTime(now);
+        orderItemMapper.insert(item);
+
+        // 回写报价：接受 + 关联订单
+        quote.setQuoteStatus("accepted");
+        quote.setBuyerResponse("accepted");
+        if (quote.getResponseTime() == null) {
+            quote.setResponseTime(now);
+        }
+        quote.setOrderId(order.getId());
+        quote.setUpdateTime(now);
+        baseMapper.updateById(quote);
+
+        return order;
+    }
 
     @Override
     public IPage<Quote> getQuotePage(int pageNum, int pageSize, String quoteStatus, Long sellerId, Long buyerId) {

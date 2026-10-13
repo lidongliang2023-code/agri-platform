@@ -1,6 +1,7 @@
 package com.agri.trade.service;
 
 import com.agri.trade.entity.Quote;
+import com.agri.trade.entity.TradeOrder;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.IService;
 
@@ -29,4 +30,16 @@ public interface IQuoteService extends IService<Quote> {
      * 报价列表页因此无处可取数（前端调的是 /api/trade/quote/list，后端根本没有这个路径）。</p>
      */
     IPage<Quote> getQuotePage(int pageNum, int pageSize, String quoteStatus, Long sellerId, Long buyerId);
+
+    /**
+     * 报价转订单。
+     *
+     * <p>此前这条链路是断的：acceptQuote 只把报价置为 accepted，谁都不生成订单 ——
+     * 原型里的"创建订单/确认订单"两页正应该落在这里。</p>
+     *
+     * <p>幂等：同一份报价只生成一张订单（报价上回写 orderId，重复调用返回已有订单）。</p>
+     *
+     * @return 生成的订单；报价不存在时返回 null
+     */
+    TradeOrder convertToOrder(Long quoteId);
 }
