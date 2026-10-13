@@ -26,7 +26,7 @@ interface Order {
 interface OrderItemRow {
   id: number
   productName: string
-  specSize: string
+  specLevel: string
   unit: string
   quantity: number
   unitPrice: number
@@ -155,7 +155,7 @@ export default function OrderConfirm() {
           locale={{ emptyText: '这笔订单没有明细行' }}
           columns={[
             { title: '商品', dataIndex: 'productName' },
-            { title: '规格', dataIndex: 'specSize' },
+            { title: '等级', dataIndex: 'specLevel', render: (val: string) => val || '—' },
             {
               title: '数量',
               dataIndex: 'quantity',

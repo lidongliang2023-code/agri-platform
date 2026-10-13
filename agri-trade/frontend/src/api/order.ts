@@ -43,6 +43,17 @@ export async function createOrder(data: any) {
   return response.data
 }
 
+/**
+ * 从货源直接下单（不经报价）。
+ *
+ * <p>只需传 productId / quantity / 收货信息；**价格与总额由服务端算**
+ * （单价取货源上的价格，货款 = 单价 × 数量），不接受调用方传金额。</p>
+ */
+export async function createOrderFromProduct(data: Record<string, unknown>) {
+  const response = await axios.post('/api/trade/order/from-product', data)
+  return response.data
+}
+
 export async function updateOrder(id: number, data: any) {
   const response = await axios.put(`/api/trade/order/${id}`, data)
   return response.data

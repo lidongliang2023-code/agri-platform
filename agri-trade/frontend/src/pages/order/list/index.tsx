@@ -102,6 +102,9 @@ export default function OrderList() {
               <Button icon={<ReloadOutlined />} onClick={() => load(query)}>
                 刷新
               </Button>
+              <Button type="primary" onClick={() => navigate('/order/create')}>
+                创建订单
+              </Button>
             </Space>
           </Col>
         </Row>

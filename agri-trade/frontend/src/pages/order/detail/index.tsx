@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
-  Button, Card, Descriptions, Empty, Form, Input, Modal, Popconfirm, Rate, Space, Spin, Table, Tag, Typography, message
+  Button, Card, Descriptions, Empty, Form, Input, InputNumber, Modal, Popconfirm, Rate, Select, Space, Spin, Table, Tag, Typography, message
 } from 'antd'
 import { ArrowLeftOutlined } from '@ant-design/icons'
-import { getOrderById, getOrderItems, payOrder, updateOrderStatus } from '@/api/order'
+import { applyOrderRefund, getOrderById, getOrderItems, payOrder, updateOrderStatus } from '@/api/order'
 import { createEvaluation } from '@/api/evaluation'
 
 interface Order {
@@ -40,7 +40,8 @@ interface OrderItemRow {
   id: number
   productId: number
   productName: string
-  specSize: string
+  /** 实体是 specLevel（表里没有 spec_size，货源上的 specSize 存不进订单明细） */
+  specLevel: string
   unit: string
   quantity: number
   unitPrice: number
@@ -87,6 +88,8 @@ export default function OrderDetail() {
   const [acting, setActing] = useState(false)
   const [evalOpen, setEvalOpen] = useState(false)
   const [evalForm] = Form.useForm()
+  const [refundOpen, setRefundOpen] = useState(false)
+  const [refundForm] = Form.useForm()
 
   const load = useCallback(() => {
     if (!id) return
@@ -164,6 +167,31 @@ export default function OrderDetail() {
     }
   }
 
+  /**
+   * 申请退款。
+   *
+   * <p>后端会把订单状态置为 refunding 并生成一条 pending 的退款单；
+   * 审核与打款属运营端（/order/refund/{id}/audit），用户端只负责发起。
+   * 金额默认带出订单已付金额，可改为部分退款。</p>
+   */
+  const submitRefund = async (values: { refundType: string; refundAmount: number; refundReason: string }) => {
+    if (!order) return
+    const res = await applyOrderRefund(order.id, {
+      refundType: values.refundType,
+      refundAmount: values.refundAmount,
+      refundReason: values.refundReason,
+      applicantType: 'buyer'
+    })
+    if (res?.code === 200) {
+      message.success('退款申请已提交，等待平台审核')
+      setRefundOpen(false)
+      refundForm.resetFields()
+      load()
+    } else {
+      message.error(res?.message ?? '退款申请失败')
+    }
+  }
+
   if (loading) {
     return (
       <div style={{ padding: 80, textAlign: 'center' }}>
@@ -198,6 +226,20 @@ export default function OrderDetail() {
         )}
         {(order.orderStatus === 'received' || order.orderStatus === 'completed') && (
           <Button onClick={() => setEvalOpen(true)}>评价这笔交易</Button>
+        )}
+        {(order.orderStatus === 'paid' || order.orderStatus === 'shipped' || order.orderStatus === 'received') && (
+          <Button
+            danger
+            onClick={() => {
+              refundForm.setFieldsValue({
+                refundType: 'full',
+                refundAmount: order.paidAmount ?? order.totalAmount
+              })
+              setRefundOpen(true)
+            }}
+          >
+            申请退款
+          </Button>
         )}
       </Space>
 
@@ -243,7 +285,7 @@ export default function OrderDetail() {
             pagination={false}
             columns={[
               { title: '商品', dataIndex: 'productName' },
-              { title: '规格', dataIndex: 'specSize' },
+              { title: '等级', dataIndex: 'specLevel', render: (val: string) => val || '—' },
               {
                 title: '数量',
                 dataIndex: 'quantity',
@@ -270,6 +312,31 @@ export default function OrderDetail() {
           </Form.Item>
           <Form.Item label="评价内容" name="evaluationContent">
             <Input.TextArea rows={3} placeholder="说说这次交易的质量、服务、物流情况" />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        open={refundOpen}
+        title="申请退款"
+        onCancel={() => setRefundOpen(false)}
+        onOk={() => refundForm.submit()}
+        okText="提交申请"
+      >
+        <Form form={refundForm} layout="vertical" onFinish={submitRefund}>
+          <Form.Item label="退款类型" name="refundType" rules={[{ required: true, message: '请选择退款类型' }]}>
+            <Select
+              options={[
+                { value: 'full', label: '全额退款' },
+                { value: 'partial', label: '部分退款' }
+              ]}
+            />
+          </Form.Item>
+          <Form.Item label="退款金额（元）" name="refundAmount" rules={[{ required: true, message: '请填写退款金额' }]}>
+            <InputNumber min={0.01} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item label="退款原因" name="refundReason" rules={[{ required: true, message: '请填写退款原因' }]}>
+            <Input.TextArea rows={3} placeholder="例如：到货品质与约定不符" />
           </Form.Item>
         </Form>
       </Modal>

@@ -5,6 +5,9 @@ import com.agri.trade.entity.TradeOrder;
 import com.agri.trade.entity.OrderItem;
 import com.agri.trade.entity.PaymentRecord;
 import com.agri.trade.entity.RefundRecord;
+import com.agri.trade.entity.TradeProduct;
+import com.agri.trade.common.security.SecurityUtils;
+import com.agri.trade.mapper.TradeProductMapper;
 import com.agri.trade.mapper.TradeOrderMapper;
 import com.agri.trade.mapper.OrderItemMapper;
 import com.agri.trade.mapper.PaymentRecordMapper;
@@ -18,6 +21,7 @@ import org.springframework.web.bind.annotation.*;
 import java.math.BigDecimal;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -29,6 +33,95 @@ public class OrderController {
     private final OrderItemMapper itemMapper;
     private final PaymentRecordMapper paymentMapper;
     private final RefundRecordMapper refundMapper;
+    private final TradeProductMapper productMapper;
+
+    /**
+     * 从货源直接下单（原型"订单管理 → 创建订单"）。
+     *
+     * <p>与报价转订单的区别：这条路径没有询价/报价环节，买家看中货源直接买。
+     * 因此**价格必须服务端算**：单价取货源上的价格，货款 = 单价 × 数量，
+     * 总额 = 货款 + 运费（运费可由请求带，优惠暂固定为 0）。
+     * 直接采信请求里的总额等于把金额交给浏览器决定。</p>
+     *
+     * <p>买家取当前登录用户（平台令牌），卖家取货源上的供应商。</p>
+     */
+    @PostMapping("/from-product")
+    public ApiResponse<TradeOrder> createOrderFromProduct(@RequestBody Map<String, Object> params) {
+        Long productId = params.get("productId") == null ? null : Long.valueOf(params.get("productId").toString());
+        BigDecimal quantity = params.get("quantity") == null ? null : new BigDecimal(params.get("quantity").toString());
+        if (productId == null || quantity == null || quantity.signum() <= 0) {
+            return ApiResponse.error("请选择货源并填写大于 0 的数量");
+        }
+        TradeProduct product = productMapper.selectById(productId);
+        if (product == null) {
+            return ApiResponse.error("货源不存在");
+        }
+        // 未上架的货源不能下单：草稿/待审核的货源只有卖家自己能看，不该能被买
+        if (!"published".equals(product.getPublishStatus())) {
+            return ApiResponse.error("该货源未上架，暂时不能下单");
+        }
+        BigDecimal unitPrice = product.getPrice() != null ? product.getPrice() : product.getPriceMin();
+        if (unitPrice == null || unitPrice.signum() <= 0) {
+            return ApiResponse.error("该货源没有可用价格（缺价格与起报价），请先补充");
+        }
+        BigDecimal freight = params.get("freightAmount") == null
+                ? BigDecimal.ZERO
+                : new BigDecimal(params.get("freightAmount").toString());
+        BigDecimal goods = unitPrice.multiply(quantity);
+
+        Date now = new Date();
+        TradeOrder order = new TradeOrder();
+        order.setOrderNo("SO" + System.currentTimeMillis());
+        order.setBuyerId(SecurityUtils.getUserId());
+        order.setBuyerName(SecurityUtils.getUsername());
+        order.setSellerId(product.getSellerId());
+        order.setSellerName(product.getSellerName());
+        order.setCategoryId(product.getCategoryId());
+        order.setCategoryName(product.getCategoryName());
+        order.setGoodsAmount(goods);
+        order.setFreightAmount(freight);
+        order.setDiscountAmount(BigDecimal.ZERO);
+        order.setTotalAmount(goods.add(freight));
+        order.setPaidAmount(BigDecimal.ZERO);
+        order.setCurrency("CNY");
+        order.setPaymentStatus("unpaid");
+        order.setOrderStatus("pending_confirm");
+        order.setDeliveryProvince(str(params.get("deliveryProvince")));
+        order.setDeliveryCity(str(params.get("deliveryCity")));
+        order.setDeliveryAddress(str(params.get("deliveryAddress")));
+        order.setDeliveryContact(str(params.get("deliveryContact")));
+        order.setDeliveryPhone(str(params.get("deliveryPhone")));
+        order.setSource("product");
+        order.setDelFlag(0);
+        order.setCreateTime(now);
+        order.setUpdateTime(now);
+        orderMapper.insert(order);
+
+        OrderItem item = new OrderItem();
+        item.setOrderId(order.getId());
+        item.setProductId(product.getId());
+        item.setProductName(product.getProductName());
+        item.setCategoryId(product.getCategoryId());
+        item.setCategoryName(product.getCategoryName());
+        item.setVariety(product.getVariety());
+        // OrderItem 实体只有 specLevel，没有 specSize（货源上有 specSize 但订单明细存不下它）
+        item.setSpecLevel(product.getSpecLevel());
+        item.setUnit(product.getUnit());
+        item.setQuantity(quantity);
+        item.setUnitPrice(unitPrice);
+        // 实体映射的是 totalPrice（表里那个 amount 列实体不写）
+        item.setTotalPrice(goods);
+        item.setHarvestBatchNo(product.getHarvestBatchNo());
+        item.setDelFlag(0);
+        item.setCreateTime(now);
+        itemMapper.insert(item);
+
+        return ApiResponse.success(order);
+    }
+
+    private static String str(Object value) {
+        return value == null ? null : value.toString();
+    }
 
     @GetMapping("/page")
     public ApiResponse<IPage<TradeOrder>> getOrderPage(

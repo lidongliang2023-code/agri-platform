@@ -208,6 +208,12 @@ export default function ProductDetail() {
             <Space style={{ marginTop: 8 }}>
               <Button
                 type="primary"
+                onClick={() => navigate(`/order/create?productId=${product.id}`)}
+              >
+                立即下单
+              </Button>
+              <Button
+                type="primary"
                 onClick={() => navigate(`/demand/create?productId=${product.id}`)}
               >
                 以此商品发布采购需求
