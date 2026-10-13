@@ -1,35 +1,45 @@
-import { Card, Row, Col, Statistic, Table, Tag, Button } from 'antd'
-import { WarningOutlined, DingdingOutlined, ShoppingCartOutlined, UserOutlined, ManOutlined } from '@ant-design/icons'
+import { Card, Row, Col, Statistic, Table, Button } from 'antd'
+import { ShoppingCartOutlined, UserOutlined, ManOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
-import { getMarketData, getRecentTransactions } from '@/api/home'
+import { getHomeSummary } from '@/api/home'
 
 function Home() {
-  const { data: marketData } = useQuery({
-    queryKey: ['marketData'],
-    queryFn: getMarketData,
+  // 一次请求拿全：原先这里是两个返回写死对象的"接口"，页面根本不发请求
+  const { data: summary } = useQuery({
+    queryKey: ['homeSummary'],
+    queryFn: getHomeSummary,
   })
-
-  const { data: transactions } = useQuery({
-    queryKey: ['recentTransactions'],
-    queryFn: getRecentTransactions,
-  })
+  const stat = summary?.data?.stat
+  // 保留两个局部变量名，下面两个表格的 dataSource 不用改
+  const marketData = { data: { marketList: summary?.data?.categoryQuotes || [] } }
+  const transactions = { data: summary?.data?.recentDeals || [] }
 
   const marketColumns = [
-    { title: '品类', dataIndex: 'category', key: 'category' },
-    { title: '均价', dataIndex: 'price', key: 'price', render: (val: string) => `${val}元/斤` },
-    { title: '涨跌幅', dataIndex: 'change', key: 'change', render: (val: string) => (
-      <Tag color={val.startsWith('+') ? 'green' : 'red'}>
-        {val.startsWith('+') ? <WarningOutlined /> : <DingdingOutlined />} {val}
-      </Tag>
-    )},
-    { title: '成交量', dataIndex: 'volume', key: 'volume', render: (val: string) => `${val}吨` },
+    { title: '品类', dataIndex: 'categoryName', key: 'categoryName' },
+    {
+      title: '在架货源',
+      dataIndex: 'productCount',
+      key: 'productCount',
+      render: (val: number) => `${val} 个`
+    },
+    {
+      title: '价格区间',
+      key: 'priceRange',
+      // 不写"元/斤"：货源的计价单位各不相同（袋 / 箱 / 吨 / 公斤），统一换算等于编数据
+      render: (_: unknown, row: { minPrice: number; maxPrice: number }) =>
+        row.minPrice == null ? '—' : `¥${row.minPrice} ~ ¥${row.maxPrice}`
+    }
   ]
 
   const transactionColumns = [
     { title: '商品', dataIndex: 'productName', key: 'productName' },
-    { title: '买家', dataIndex: 'buyerName', key: 'buyerName', ellipsis: true },
-    { title: '数量', dataIndex: 'quantity', key: 'quantity', render: (val: string) => `${val}斤` },
-    { title: '单价', dataIndex: 'unitPrice', key: 'unitPrice', render: (val: string) => `${val}元/斤` },
+    {
+      title: '数量',
+      dataIndex: 'quantity',
+      key: 'quantity',
+      render: (val: number, row: { unit?: string }) => (val == null ? '—' : `${val} ${row.unit ?? ''}`)
+    },
+    { title: '金额', dataIndex: 'amount', key: 'amount', render: (val: number) => `¥${val}` },
     { title: '时间', dataIndex: 'time', key: 'time' },
   ]
 
@@ -47,35 +57,35 @@ function Home() {
           <Col span={6}>
             <Statistic 
               title="累计交易额" 
-              value={marketData?.data?.totalAmount || 0} 
+              value={Number(stat?.tradeAmount || 0)} 
               prefix="¥" 
-              suffix="亿"
+              suffix="元"
               valueStyle={{ color: '#1890ff' }}
             />
           </Col>
           <Col span={6}>
             <Statistic 
-              title="注册用户数" 
-              value={marketData?.data?.userCount || 0} 
-              suffix="万人"
-              prefix={<UserOutlined />}
-              valueStyle={{ color: '#52c41a' }}
-            />
-          </Col>
-          <Col span={6}>
-            <Statistic 
               title="累计成交笔数" 
-              value={marketData?.data?.transactionCount || 0} 
-              suffix="万笔"
+              value={Number(stat?.dealCount || 0)} 
+              suffix="笔"
               prefix={<ShoppingCartOutlined />}
               valueStyle={{ color: '#fa8c16' }}
             />
           </Col>
           <Col span={6}>
             <Statistic 
-              title="覆盖区域" 
-              value={marketData?.data?.coverageCount || 0} 
-              suffix="个县域"
+              title="参与买卖方" 
+              value={Number(stat?.participantCount || 0)} 
+              suffix="家"
+              prefix={<UserOutlined />}
+              valueStyle={{ color: '#52c41a' }}
+            />
+          </Col>
+          <Col span={6}>
+            <Statistic 
+              title="在架货源" 
+              value={Number(stat?.publishedProductCount || 0)} 
+              suffix="个"
               prefix={<ManOutlined />}
               valueStyle={{ color: '#722ed1' }}
             />

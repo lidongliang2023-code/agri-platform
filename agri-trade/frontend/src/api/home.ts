@@ -1,54 +1,50 @@
-export interface MarketData {
-  totalAmount: number
-  userCount: number
-  transactionCount: number
-  coverageCount: number
-  marketList: MarketItem[]
+/**
+ * 用户端首页数据。
+ *
+ * <p><b>这里原来是三个返回写死对象的函数</b> —— `getMarketData()` 直接把
+ * "累计交易额 128.5 亿、注册用户数 56.8 万人、累计成交 89.2 万笔"当数据返回，
+ * `getRecentTransactions()` 返回"山东寿光番茄 / 北京XX商贸"这类编出来的成交记录，
+ * 首页连一次后端请求都没发。页面看起来一切正常，数字全是假的。</p>
+ *
+ * <p>现在改为请求 /api/trade/home/summary，每一项都有可核对的真实口径
+ * （见后端 HomeController 的字段注释）。</p>
+ */
+import axios from 'axios'
+
+export interface HomeStat {
+  /** 累计交易额（元），已取消订单不计入 */
+  tradeAmount: number
+  /** 累计成交笔数（笔） */
+  dealCount: number
+  /** 参与交易的买卖方数（家/人），按订单里的 buyerId/sellerId 去重 */
+  participantCount: number
+  /** 在架货源数（个） */
+  publishedProductCount: number
 }
 
-export interface MarketItem {
-  category: string
-  price: string
-  change: string
-  volume: string
+export interface CategoryQuote {
+  categoryName: string
+  productCount: number
+  minPrice: number
+  maxPrice: number
 }
 
-export interface TransactionItem {
-  id: number
+export interface RecentDeal {
+  orderNo: string
   productName: string
-  buyerName: string
-  quantity: string
-  unitPrice: string
+  quantity: number
+  unit: string
+  amount: number
   time: string
 }
 
-export async function getMarketData() {
-  const mockData = {
-    data: {
-      totalAmount: 128.5,
-      userCount: 56.8,
-      transactionCount: 89.2,
-      coverageCount: 320,
-      marketList: [
-        { category: '红富士苹果', price: '3.25', change: '+8.2%', volume: '12,850' },
-        { category: '土豆', price: '1.15', change: '-2.5%', volume: '8,230' },
-        { category: '白萝卜', price: '0.85', change: '+1.2%', volume: '5,670' },
-        { category: '大白菜', price: '0.62', change: '-5.3%', volume: '9,120' },
-      ]
-    }
-  }
-  return mockData
+export interface HomeSummary {
+  stat: HomeStat
+  categoryQuotes: CategoryQuote[]
+  recentDeals: RecentDeal[]
 }
 
-export async function getRecentTransactions() {
-  const mockData = {
-    data: [
-      { id: 1, productName: '山东寿光番茄', buyerName: '北京XX商贸', quantity: '5000', unitPrice: '2.5', time: '2分钟前' },
-      { id: 2, productName: '云南蓝莓', buyerName: '上海XX超市', quantity: '2000', unitPrice: '35', time: '5分钟前' },
-      { id: 3, productName: '陕西洛川苹果', buyerName: '广州XX批发', quantity: '10000', unitPrice: '3.8', time: '8分钟前' },
-      { id: 4, productName: '海南芒果', buyerName: '深圳XX餐饮', quantity: '3000', unitPrice: '8.5', time: '12分钟前' },
-      { id: 5, productName: '新疆红枣', buyerName: '杭州XX食品', quantity: '8000', unitPrice: '12', time: '15分钟前' },
-    ]
-  }
-  return mockData
+export async function getHomeSummary() {
+  const response = await axios.get('/api/trade/home/summary')
+  return response.data
 }
