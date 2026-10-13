@@ -24,6 +24,17 @@ import java.util.Map;
 @Slf4j
 public class EvaluationServiceImpl extends ServiceImpl<EvaluationMapper, Evaluation> implements IEvaluationService {
 
+    /**
+     * 评价状态词表：正常展示 = published，被申诉隐藏 = hidden
+     * （见 CreditService.EVALUATION_STATUSES 与前端评价列表的状态渲染）。
+     *
+     * <p>这三个方法原先都按 "normal" 过滤 —— 全库没有任何地方写这个值，
+     * 所以它们返回的永远是空列表 / 0 分。属"代码在、结论永远是错的"那一类，
+     * 而且因为没有被任何接口调用，页面上也看不出问题（我的看板的平均分走的是
+     * DashboardServiceImpl，那里用的是 published）。这里统一到 PUBLISHED。</p>
+     */
+    private static final String PUBLISHED = "published";
+
     private final TradeOrderMapper orderMapper;
 
     @Override
@@ -153,7 +164,7 @@ public class EvaluationServiceImpl extends ServiceImpl<EvaluationMapper, Evaluat
     public List<Evaluation> getEvaluationsForSeller(Long sellerId) {
         LambdaQueryWrapper<Evaluation> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Evaluation::getDelFlag, 0);
-        wrapper.eq(Evaluation::getEvaluationStatus, "normal");
+        wrapper.eq(Evaluation::getEvaluationStatus, PUBLISHED);
         wrapper.eq(Evaluation::getEvaluateeId, sellerId);
         wrapper.orderByDesc(Evaluation::getCreateTime);
         return baseMapper.selectList(wrapper);
@@ -163,7 +174,7 @@ public class EvaluationServiceImpl extends ServiceImpl<EvaluationMapper, Evaluat
     public BigDecimal getAverageRating(Long userId, String userType) {
         LambdaQueryWrapper<Evaluation> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Evaluation::getDelFlag, 0);
-        wrapper.eq(Evaluation::getEvaluationStatus, "normal");
+        wrapper.eq(Evaluation::getEvaluationStatus, PUBLISHED);
         
         if ("buyer".equals(userType)) {
             wrapper.eq(Evaluation::getEvaluatorId, userId);
@@ -190,7 +201,7 @@ public class EvaluationServiceImpl extends ServiceImpl<EvaluationMapper, Evaluat
 
         LambdaQueryWrapper<Evaluation> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Evaluation::getDelFlag, 0);
-        wrapper.eq(Evaluation::getEvaluationStatus, "normal");
+        wrapper.eq(Evaluation::getEvaluationStatus, PUBLISHED);
         
         if ("buyer".equals(userType)) {
             wrapper.eq(Evaluation::getEvaluatorId, userId);
