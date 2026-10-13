@@ -24,7 +24,7 @@
  *   node ops/gateway/scripts/publish.mjs --app prod --repoint 20261010-9f8e7d   # 回滚
  */
 import { cp, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
-import { existsSync } from 'node:fs'
+import { existsSync, readdirSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import path from 'node:path'
 import process from 'node:process'
@@ -37,6 +37,7 @@ const BUCKET_DIR = path.join(GATEWAY_DIR, 'bucket')
 const APPS = {
   prod: { frontendDir: path.join('agri-production', 'frontend'), title: '生产管理系统' },
   mdm: { frontendDir: path.join('agri-master-data', 'web'), title: '主数据管理平台' },
+  trade: { frontendDir: path.join('agri-trade', 'frontend'), title: '交易撮合平台' },
   finance: { frontendDir: path.join('agri-finance', 'frontend'), title: '供应链金融平台' },
   // S2B2C 一个子系统有四个端（渠道/消费者/平台运营/供应商），按端各出一份产物。
   // 生产环境它们同属 mall 子域（按路径区分端），本地为了能直接点开，各给一个端口。
@@ -180,21 +181,51 @@ if (args.build && args.dist) fail('--build 与 --dist 不能同时给：前者�
 // 产物目录：默认取工程内 dist；CI 或"构建在别处、只在这里发布"时用 --dist 指定
 const distDir = args.dist ? path.resolve(args.dist) : path.join(frontendDir, 'dist')
 
+/**
+ * 找 npm 包里的可执行脚本，兼容两种 node_modules 布局。
+ *
+ * <p>为什么需要它：npm 的扁平布局下 `<pkg>/bin/x.js` 一定在
+ * `node_modules/<pkg>/bin/x.js`；而 pnpm 把真身放在
+ * `node_modules/.pnpm/<pkg>@<版本>/node_modules/<pkg>/`，顶层只留软链 ——
+ * 交易撮合前端（agri-trade/frontend）就是 pnpm 布局，脚本原先按写死的扁平路径去找，
+ * 直接报 `Cannot find module .../node_modules/vite/bin/vite.js`，发布中止。</p>
+ */
+function resolveBin(frontendDir, pkg, relBin) {
+  const direct = path.join(frontendDir, 'node_modules', pkg, relBin)
+  if (existsSync(direct)) {
+    return direct
+  }
+  const pnpmDir = path.join(frontendDir, 'node_modules', '.pnpm')
+  if (existsSync(pnpmDir)) {
+    for (const entry of readdirSync(pnpmDir)) {
+      if (entry === pkg || entry.startsWith(`${pkg}@`)) {
+        const candidate = path.join(pnpmDir, entry, 'node_modules', pkg, relBin)
+        if (existsSync(candidate)) {
+          return candidate
+        }
+      }
+    }
+  }
+  return null
+}
+
 if (args.build) {
   const base = `/${args.app}/versions/${args.version}/`
   console.log(`构建 ${appConfig.title}（base=${base}）…`)
   // 类型检查只在工程真的装了 TypeScript 时才跑：Vue 系的工程没有 TS，
   // 无条件调用会因找不到 tsc 而把发布直接中止（不是类型错误，却报成失败）。
-  const tscBin = path.join(frontendDir, 'node_modules', 'typescript', 'bin', 'tsc')
-  if (existsSync(tscBin)) {
+  const tscBin = resolveBin(frontendDir, 'typescript', path.join('bin', 'tsc'))
+  if (tscBin) {
     const tsc = spawnSync(process.execPath, [tscBin, '--noEmit'], { cwd: frontendDir, stdio: 'inherit' })
     if (tsc.status !== 0) fail('类型检查未通过，发布中止')
   } else {
     console.log('  （该工程未使用 TypeScript，跳过类型检查）')
   }
+  const viteBin = resolveBin(frontendDir, 'vite', path.join('bin', 'vite.js'))
+  if (!viteBin) fail(`找不到 vite 可执行文件（${frontendDir}）：既不在 node_modules/vite/bin，也不在 pnpm 的 .pnpm 存储里`)
   const vite = spawnSync(
     process.execPath,
-    [path.join(frontendDir, 'node_modules/vite/bin/vite.js'), 'build', `--base=${base}`],
+    [viteBin, 'build', `--base=${base}`],
     { cwd: frontendDir, stdio: 'inherit' },
   )
   if (vite.status !== 0) fail('构建失败，发布中止')
