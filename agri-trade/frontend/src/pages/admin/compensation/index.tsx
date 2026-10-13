@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Button, Card, Col, Form, Input, Modal, Popconfirm, Row, Select, Space, Table, Tag, message } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
-import { getAdminCompensationPage, reviewCompensation } from '@/api/admin'
+import { executeCompensation, getAdminCompensationPage, reviewCompensation } from '@/api/admin'
 import { getCurrentUser } from '@/utils/session'
 
 interface CompensationRow {
@@ -32,15 +32,13 @@ const STATUS: Record<string, { text: string; color: string }> = {
 /**
  * 赔付执行（运营端）。
  *
- * <p>页面只给一个"核准并打款"动作，这不是偷懒，而是照着后端实际行为做的：
- * `CompensationServiceImpl.reviewCompensation` 在审核结果为 approved 时，
- * 末尾会直接调用 `executeCompensation` —— 核准与打款在后端是同一次调用完成的，
- * 单据在核准返回时已经是 paid 并带了打款流水号。</p>
+ * <p><b>核准与打款是两个动作</b>：核准只把单据置为"已核准待打款"，
+ * 打款走独立的 execute 接口（只在核准后才允许）。</p>
  *
- * <p>所以这里不能再放一个独立的"打款"按钮：点下去时单据已是 paid，
- * execute 的状态守卫会返回 false，界面报"执行失败"，而钱其实早就出去了 ——
- * 一个必然失败、且失败信息与事实相反的按钮，比没有按钮更糟。
- * "审批与付款应当分离"属财务口径的改进，涉及资金流程，已记在待办里而不是顺手改。</p>
+ * <p>这曾经是不成立的：`reviewCompensation` 原先在核准通过后直接调用 executeCompensation，
+ * 审核接口返回时单据已经是 paid —— 界面上再放一个"打款"按钮必然报"执行失败"，
+ * 而钱其实早就出去了。后端已按财务口径拆开（审批是"该不该赔"，付款是"钱出没出"），
+ * 这个页面才对得上。</p>
  */
 export default function AdminCompensation() {
   const [rows, setRows] = useState<CompensationRow[]>([])
@@ -87,6 +85,17 @@ export default function AdminCompensation() {
       load()
     } else {
       message.error(res?.message ?? '审核失败')
+    }
+  }
+
+  /** 打款：仅对"已核准待打款"的单据可用；执行后置 paid 并生成打款流水号 */
+  const execute = async (row: CompensationRow) => {
+    const res = await executeCompensation(row.id)
+    if (res?.code === 200) {
+      message.success('已打款')
+      load()
+    } else {
+      message.error(res?.message ?? '打款失败')
     }
   }
 
@@ -188,18 +197,27 @@ export default function AdminCompensation() {
                 if (row.compensationStatus === 'pending') {
                   return (
                     <Space size="small">
-                      <Popconfirm
-                        title={`核准后将立即打款 ¥${row.compensationAmount} 给「${row.recipientName}」，确认？`}
-                        onConfirm={() => review(row, true, '审核通过')}
-                      >
+                      <Popconfirm title="核准后进入「待打款」，确认？" onConfirm={() => review(row, true, '审核通过')}>
                         <Button type="link" size="small">
-                          核准并打款
+                          核准
                         </Button>
                       </Popconfirm>
                       <Button type="link" size="small" danger onClick={() => setCurrent(row)}>
                         驳回
                       </Button>
                     </Space>
+                  )
+                }
+                if (row.compensationStatus === 'approved') {
+                  return (
+                    <Popconfirm
+                      title={`确认打款 ¥${row.compensationAmount} 给「${row.recipientName}」？`}
+                      onConfirm={() => execute(row)}
+                    >
+                      <Button type="link" size="small">
+                        打款
+                      </Button>
+                    </Popconfirm>
                   )
                 }
                 return <span style={{ color: '#a0aec0' }}>已完结</span>

@@ -77,10 +77,14 @@ public class CompensationServiceImpl extends ServiceImpl<CompensationRecordMappe
         compensation.setUpdateTime(new Date());
         baseMapper.updateById(compensation);
 
-        if ("approved".equals(reviewResult)) {
-            executeCompensation(compensationId);
-        }
-
+        // 这里原先在核准通过后**直接调用 executeCompensation 打款** ——
+        // 也就是"审批"与"付款"两个动作被合成了一次调用：
+        //   · 审核接口返回时单据已是 paid 并带上了打款流水号，界面上再点"打款"必然报"执行失败"
+        //     （那时状态已不是 approved，守卫直接返回 false），而钱其实早就出去了；
+        //   · 财务口径上审批与付款本就应该分开 —— 审批是"该不该赔"，付款是"钱出没出"，
+        //     合成一步之后，出了争议也说不清是哪一环的问题。
+        // 现在拆开：核准只置 approved（待打款），打款走独立的 execute 接口。
+        // 大盘待办里的"已核准待打款"这一项，正是等这个动作来清。
         return compensation;
     }
 
