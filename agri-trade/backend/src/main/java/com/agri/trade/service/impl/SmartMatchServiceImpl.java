@@ -391,7 +391,12 @@ public class SmartMatchServiceImpl implements ISmartMatchService {
             MatchRecord record = new MatchRecord();
             record.setMatchNo("MT" + System.currentTimeMillis() + "-" + order);
             record.setDemandId(demandId);
+            // 表里 buyer_id 是 NOT NULL，实体此前没有这个字段 —— 落库直接报
+            // "Field 'buyer_id' doesn't have a default value"。采购方就是这张需求的采购方。
+            record.setBuyerId(demand.getBuyerId());
             record.setProductId(productId);
+            // seller_id 同样是 NOT NULL 而实体原先没映射，取被匹配货源的供应商
+            record.setSellerId(product.getSellerId());
             record.setMatchType("demand_to_product");
             record.setMatchScore(result.getMatchScore());
             record.setCategoryScore(result.getCategoryScore());
@@ -407,8 +412,12 @@ public class SmartMatchServiceImpl implements ISmartMatchService {
             order++;
         }
 
-        if (!records.isEmpty()) {
-            matchRecordMapper.insertBatch(records);
+        // 逐条 insert，不再走那条手写批量 SQL：
+        // 那条 SQL 引用的是 demand_no / product_name / seller_name / match_status 等
+        // **表里根本没有、实体也没有**的列（会先报 "no getter for demandNo"），
+        // 等于撮合记录的落库路径从来没有通过。
+        for (MatchRecord record : records) {
+            matchRecordMapper.insert(record);
         }
 
         return records;

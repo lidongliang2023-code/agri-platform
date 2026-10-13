@@ -7,6 +7,8 @@ import com.agri.trade.entity.MatchRecord;
 import com.agri.trade.mapper.DemandMapper;
 import com.agri.trade.mapper.MatchRecordMapper;
 import com.agri.trade.service.PlatformIdentityService;
+import com.agri.trade.service.ISmartMatchService;
+import com.agri.trade.vo.MatchResultVO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -25,6 +27,7 @@ public class DemandController {
     private final DemandMapper demandMapper;
     private final MatchRecordMapper matchRecordMapper;
     private final PlatformIdentityService identityService;
+    private final ISmartMatchService smartMatchService;
 
     @GetMapping("/page")
     public ApiResponse<IPage<Demand>> getDemandPage(
@@ -115,25 +118,24 @@ public class DemandController {
     }
 
     @PostMapping("/{id}/match")
-    public ApiResponse<Boolean> matchDemand(@PathVariable Long id) {
+    public ApiResponse<List<MatchResultVO>> matchDemand(
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "5") Integer limit) {
         Demand demand = demandMapper.selectById(id);
         if (demand == null) return ApiResponse.error("需求不存在");
-        
-        MatchRecord record = new MatchRecord();
-        record.setMatchNo("MT" + System.currentTimeMillis());
-        record.setDemandId(id);
-        record.setMatchType("demand_to_product");
-        record.setMatchScore(new BigDecimal("85.50"));
-        record.setCategoryScore(new BigDecimal("90"));
-        record.setPriceScore(new BigDecimal("80"));
-        record.setDistanceScore(new BigDecimal("85"));
-        record.setQualityScore(new BigDecimal("90"));
-        record.setMatchReason("品类匹配度高，价格符合预期");
-        record.setDelFlag(0);
-        record.setCreateTime(new Date());
-        
-        int result = matchRecordMapper.insert(record);
-        return result > 0 ? ApiResponse.success(true) : ApiResponse.error("匹配失败");
+
+        // 这里原先自己拼了一条撮合记录就完事：没有 productId（而该列 NOT NULL，
+        // 所以这个接口**一调就是 500**），分数还是写死的 85.50/90/80/85/90，
+        // 理由"品类匹配度高，价格符合预期"也是编的 —— 也就是说页面上的
+        // 「触发智能撮合」从来没成功过，撮合记录里的那些数据全是 SQL 造进去的。
+        //
+        // 平台里本来就有真正的撮合引擎（ISmartMatchService：按品类/价格/距离/质量/
+        // 信誉/偏好加权打分），而且它自己会把结果落库。这里改成调它。
+        List<MatchResultVO> results = smartMatchService.matchDemandToProducts(id, limit);
+        if (results.isEmpty()) {
+            return ApiResponse.error("没有找到可匹配的货源（该需求的品类/品种下暂无在架货源）");
+        }
+        return ApiResponse.success(results);
     }
 
     @GetMapping("/{id}/matches")

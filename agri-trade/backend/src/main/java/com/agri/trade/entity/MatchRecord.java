@@ -22,8 +22,25 @@ public class MatchRecord {
     @TableField("demand_id")
     private Long demandId;
 
+    /**
+     * 采购方主体ID。
+     *
+     * <p>表里是 NOT NULL，但实体此前没有这个字段 —— 撮合记录一落库就报
+     * "Field 'buyer_id' doesn't have a default value"。</p>
+     */
+    @TableField("buyer_id")
+    private Long buyerId;
+
     @TableField("product_id")
     private Long productId;
+
+    /**
+     * 供应商主体ID（取自被匹配的货源）。
+     *
+     * <p>表里是 NOT NULL，实体同样漏了这个字段 —— 与 buyer_id 是同一处缺口。</p>
+     */
+    @TableField("seller_id")
+    private Long sellerId;
 
     @TableField("match_type")
     private String matchType;

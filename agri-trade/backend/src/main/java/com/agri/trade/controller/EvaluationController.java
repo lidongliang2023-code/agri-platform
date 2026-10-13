@@ -3,8 +3,10 @@ package com.agri.trade.controller;
 import com.agri.trade.common.entity.ApiResponse;
 import com.agri.trade.entity.Evaluation;
 import com.agri.trade.entity.EvaluationAppeal;
+import com.agri.trade.entity.TradeOrder;
 import com.agri.trade.mapper.EvaluationMapper;
 import com.agri.trade.mapper.EvaluationAppealMapper;
+import com.agri.trade.mapper.TradeOrderMapper;
 import com.agri.trade.service.PlatformIdentityService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -24,6 +26,7 @@ public class EvaluationController {
     private final EvaluationMapper evaluationMapper;
     private final EvaluationAppealMapper appealMapper;
     private final PlatformIdentityService identityService;
+    private final TradeOrderMapper orderMapper;
 
     @GetMapping("/page")
     public ApiResponse<IPage<Evaluation>> getEvaluationPage(
@@ -56,9 +59,57 @@ public class EvaluationController {
 
     @PostMapping
     public ApiResponse<Boolean> createEvaluation(@RequestBody Evaluation evaluation) {
+        // 评价是"交易一方对另一方的公开说法"，所以：
+        //   ① 只有这笔订单的买卖双方能评价（原先谁都能给任何订单发一条评价）；
+        //   ② 评价人与被评价人**由服务端按订单推导**，不采信请求体 ——
+        //      否则可以冒用别人的名义评价；
+        //   ③ 状态写词表里的 published（原先写的是 show，全库只有这一处这么写，
+        //      结果这条评价在信用看板/平均分这类按 published 过滤的地方**根本不算数**）。
+        if (evaluation.getOrderId() == null) {
+            return ApiResponse.error("请指定要评价的订单");
+        }
+        TradeOrder order = orderMapper.selectById(evaluation.getOrderId());
+        if (order == null) {
+            return ApiResponse.error("订单不存在");
+        }
+        PlatformIdentityService.MerchantScope scope = identityService.currentScope();
+        if (!scope.resolved()) {
+            return ApiResponse.error(scope.error());
+        }
+        Long buyerId = order.getBuyerId();
+        Long sellerId = order.getSellerId();
+        boolean amBuyer = buyerId != null && scope.merchantIds().contains(buyerId);
+        boolean amSeller = sellerId != null && scope.merchantIds().contains(sellerId);
+        if (!amBuyer && !amSeller) {
+            return ApiResponse.error("只有这笔订单的买卖双方可以评价");
+        }
+        // 评价人 = 我自己那一方；被评价人 = 对方
+        if (amBuyer) {
+            evaluation.setEvaluatorId(buyerId);
+            evaluation.setEvaluatorName(order.getBuyerName());
+            evaluation.setEvaluateeId(sellerId);
+            evaluation.setEvaluateeName(order.getSellerName());
+        } else {
+            evaluation.setEvaluatorId(sellerId);
+            evaluation.setEvaluatorName(order.getSellerName());
+            evaluation.setEvaluateeId(buyerId);
+            evaluation.setEvaluateeName(order.getBuyerName());
+        }
+        if (evaluation.getRatingOverall() == null) {
+            return ApiResponse.error("请给出综合评分");
+        }
+        // 表上 uk_order_id 只允许一笔订单一条评价：提前给出清楚提示，
+        // 而不是让数据库抛唯一键冲突（页面上只会看到"创建失败"）。
+        Long exists = evaluationMapper.selectCount(new LambdaQueryWrapper<Evaluation>()
+                .eq(Evaluation::getOrderId, evaluation.getOrderId())
+                .eq(Evaluation::getDelFlag, 0));
+        if (exists != null && exists > 0) {
+            return ApiResponse.error("这笔订单已经评价过了");
+        }
+
         evaluation.setEvaluationNo("EV" + System.currentTimeMillis());
         evaluation.setDelFlag(0);
-        evaluation.setEvaluationStatus("show");
+        evaluation.setEvaluationStatus("published");
         evaluation.setCreateTime(new Date());
         evaluation.setUpdateTime(new Date());
         int result = evaluationMapper.insert(evaluation);
