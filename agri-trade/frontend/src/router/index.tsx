@@ -19,6 +19,7 @@ import EvaluationList from '@/pages/evaluation/list'
 import DisputeList from '@/pages/dispute/list'
 import MineDashboardPage from '@/pages/mine'
 import MyGuarantee from '@/pages/mine-guarantee'
+import MyCompensation from '@/pages/mine-compensation'
 import MatchList from '@/pages/match/list'
 import PriceList from '@/pages/price/list'
 import QuoteList from '@/pages/quote/list'
@@ -91,6 +92,7 @@ function AppRouter() {
         <Route index element={<Home />} />
         <Route path="mine" element={<MineDashboardPage />} />
         <Route path="my-guarantee" element={<MyGuarantee />} />
+        <Route path="my-compensation" element={<MyCompensation />} />
         <Route path="order" element={<OrderList />} />
         <Route path="order/detail/:id" element={<OrderDetail />} />
         <Route path="order/confirm" element={<OrderConfirm />} />

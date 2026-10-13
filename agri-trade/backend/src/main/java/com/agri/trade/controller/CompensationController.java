@@ -5,6 +5,7 @@ import com.agri.trade.entity.MerchantGuarantee;
 import com.agri.trade.entity.CompensationRecord;
 import com.agri.trade.service.IGuaranteeService;
 import com.agri.trade.service.ICompensationService;
+import com.agri.trade.service.PlatformIdentityService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -19,6 +20,7 @@ public class CompensationController {
 
     private final IGuaranteeService guaranteeService;
     private final ICompensationService compensationService;
+    private final PlatformIdentityService identityService;
 
     @PostMapping("/guarantee")
     public ApiResponse<MerchantGuarantee> createGuarantee(@RequestBody Map<String, Object> params) {
@@ -86,7 +88,7 @@ public class CompensationController {
 
         CompensationRecord compensation = compensationService.createCompensation(orderId, disputeId, compensationType, amount, applicantId, applicantName);
         if (compensation == null) {
-            return ApiResponse.error("创建失败：金额必须大于 0；带纠纷时要确认纠纷存在且没有重复赔付");
+            return ApiResponse.error("创建失败：金额必须大于 0，且必须挂在一场纠纷或一张订单上（同一场纠纷只能赔一次）");
         }
         return ApiResponse.success(compensation);
     }
@@ -101,6 +103,23 @@ public class CompensationController {
     public ApiResponse<List<CompensationRecord>> getCompensationsByOrder(@PathVariable Long orderId) {
         List<CompensationRecord> compensations = compensationService.getByOrder(orderId);
         return ApiResponse.success(compensations);
+    }
+
+    /**
+     * 我的获赔（用户端）。
+     *
+     * <p>收款方范围由服务端按登录令牌推导 —— 赔付涉及具体金额与主体，
+     * 不能像原先那样只提供一个"按收款方 id 查"的接口（那等于谁都能查别人的获赔记录）。
+     * 服务层的 getByRecipient 一直有，但没有任何接口和页面暴露过：
+     * 用户根本看不到自己有没有拿到赔付。</p>
+     */
+    @GetMapping("/mine")
+    public ApiResponse<List<CompensationRecord>> getMyCompensations() {
+        PlatformIdentityService.MerchantScope scope = identityService.currentScope();
+        if (!scope.resolved()) {
+            return ApiResponse.error(scope.error());
+        }
+        return ApiResponse.success(compensationService.getByRecipients(scope.merchantIds()));
     }
 
     @PostMapping("/{compensationId}/review")

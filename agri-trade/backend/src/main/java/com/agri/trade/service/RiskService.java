@@ -301,6 +301,11 @@ public class RiskService {
             List<PaymentRecord> payments = paymentMapper.selectList(new LambdaQueryWrapper<PaymentRecord>()
                     .eq(PaymentRecord::getOrderId, order.getId())
                     .in(PaymentRecord::getPaymentStatus, List.of("success", "paid"))
+                    // 排除赔付打款：那是平台往外付的钱，不是"买家的钱到了"。
+                    // 不排除的话，一笔赔付会把这条订单的付款时间锚点推到赔款那一刻，
+                    // 真正超时的订单反而不再告警。（存量流水的 payment_type 为空，要带上 isNull）
+                    .and(w -> w.isNull(PaymentRecord::getPaymentType)
+                            .or().ne(PaymentRecord::getPaymentType, "compensation"))
                     .orderByDesc(PaymentRecord::getPaymentTime));
             // 没有支付流水时退回订单创建时间：宁可早报，也不要因为缺流水而漏报
             Date anchor = payments.isEmpty() || payments.get(0).getPaymentTime() == null

@@ -3,9 +3,11 @@ package com.agri.trade.service.impl;
 import com.agri.trade.entity.CompensationRecord;
 import com.agri.trade.entity.TradeOrder;
 import com.agri.trade.entity.Dispute;
+import com.agri.trade.entity.PaymentRecord;
 import com.agri.trade.mapper.CompensationRecordMapper;
 import com.agri.trade.mapper.TradeOrderMapper;
 import com.agri.trade.mapper.DisputeMapper;
+import com.agri.trade.mapper.PaymentRecordMapper;
 import com.agri.trade.service.ICompensationService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -24,6 +26,7 @@ public class CompensationServiceImpl extends ServiceImpl<CompensationRecordMappe
 
     private final TradeOrderMapper orderMapper;
     private final DisputeMapper disputeMapper;
+    private final PaymentRecordMapper paymentMapper;
 
     @Override
     @Transactional
@@ -35,6 +38,11 @@ public class CompensationServiceImpl extends ServiceImpl<CompensationRecordMappe
         }
         // 一单纠纷只赔一次：原先同一个 disputeId 可以反复建单，
         // 每张单都能各自走到"已打款"，等于同一场纠纷赔了多次。
+        // 同时要求赔付必须挂在"一场纠纷"或"一笔订单"上 —— 没有来源的赔付单
+        // 事后查不到为什么赔、也进不了资金流水（流水要挂订单号）。
+        if (disputeId == null && orderId == null) {
+            return null;
+        }
         if (disputeId != null) {
             CompensationRecord exist = getByDispute(disputeId);
             if (exist != null) {
@@ -145,6 +153,34 @@ public class CompensationServiceImpl extends ServiceImpl<CompensationRecordMappe
 
         baseMapper.updateById(compensation);
 
+        // 资金流水：赔付打款要进支付流水表，否则这块钱在账上没有任何痕迹
+        // （原先只写了赔付单自己的 transaction_id，对账时查不到这笔出款）。
+        // payment_type = compensation 是这条记录与"订单收款"的区分标记 ——
+        // 风控的发货超时规则按最新一条已付流水算"钱什么时候到的"，
+        // 赔付出款不能被当成买家付款时间（那边也已按 payment_type 排除）。
+        if (compensation.getOrderId() != null) {
+            PaymentRecord payout = new PaymentRecord();
+            payout.setPaymentNo("PY" + System.currentTimeMillis());
+            payout.setOrderId(compensation.getOrderId());
+            payout.setOrderNo(compensation.getOrderNo());
+            // 出款方是平台，收款方是受损方
+            payout.setPayerName("平台");
+            payout.setPayeeId(compensation.getRecipientId());
+            payout.setPayeeName(compensation.getRecipientName());
+            payout.setPaymentType("compensation");
+            payout.setAmount(compensation.getCompensationAmount());
+            payout.setActualAmount(compensation.getCompensationAmount());
+            payout.setPaymentMethod("platform");
+            payout.setPaymentChannel("platform");
+            payout.setTransactionId(compensation.getTransactionId());
+            payout.setPaymentStatus("paid");
+            payout.setPaymentTime(compensation.getPayTime());
+            payout.setDelFlag(0);
+            payout.setCreateTime(new Date());
+            payout.setUpdateTime(new Date());
+            paymentMapper.insert(payout);
+        }
+
         if (compensation.getDisputeId() != null) {
             Dispute dispute = disputeMapper.selectById(compensation.getDisputeId());
             if (dispute != null) {
@@ -185,6 +221,18 @@ public class CompensationServiceImpl extends ServiceImpl<CompensationRecordMappe
     public List<CompensationRecord> getByRecipient(Long recipientId) {
         LambdaQueryWrapper<CompensationRecord> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(CompensationRecord::getRecipientId, recipientId);
+        wrapper.eq(CompensationRecord::getDelFlag, 0);
+        wrapper.orderByDesc(CompensationRecord::getCreateTime);
+        return baseMapper.selectList(wrapper);
+    }
+
+    @Override
+    public List<CompensationRecord> getByRecipients(java.util.Collection<Long> recipientIds) {
+        if (recipientIds == null || recipientIds.isEmpty()) {
+            return List.of();
+        }
+        LambdaQueryWrapper<CompensationRecord> wrapper = new LambdaQueryWrapper<>();
+        wrapper.in(CompensationRecord::getRecipientId, recipientIds);
         wrapper.eq(CompensationRecord::getDelFlag, 0);
         wrapper.orderByDesc(CompensationRecord::getCreateTime);
         return baseMapper.selectList(wrapper);

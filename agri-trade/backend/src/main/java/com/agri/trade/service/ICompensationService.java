@@ -20,4 +20,11 @@ public interface ICompensationService extends IService<CompensationRecord> {
     List<CompensationRecord> getByOrder(Long orderId);
 
     List<CompensationRecord> getByRecipient(Long recipientId);
+
+    /**
+     * 按"收款方属于我"取赔付单（用户端「我的获赔」用）。
+     *
+     * <p>一个人可能绑了多家主体，这里一次查完，范围由服务端从令牌推导。</p>
+     */
+    List<CompensationRecord> getByRecipients(java.util.Collection<Long> recipientIds);
 }

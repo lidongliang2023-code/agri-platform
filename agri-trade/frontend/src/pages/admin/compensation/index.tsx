@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Alert, Button, Card, Col, Form, Input, InputNumber, Modal, Popconfirm, Row, Select, Space, Table, Tag, message } from 'antd'
 import { PlusOutlined, ReloadOutlined } from '@ant-design/icons'
 import { createCompensation, executeCompensation, getAdminCompensationPage, getAdminDisputePage, reviewCompensation } from '@/api/admin'
+import { getOrderList } from '@/api/order'
 import { getCurrentUser } from '@/utils/session'
 
 interface CompensationRow {
@@ -66,6 +67,7 @@ export default function AdminCompensation() {
   // 建单时可挂到一场纠纷上：挂了就以纠纷为准（订单、收款方、申请人由后端按纠纷推导），
   // 同一场纠纷只允许赔一次。
   const [disputes, setDisputes] = useState<Array<{ id: number; disputeNo: string; claimAmount?: number; complainantName?: string }>>([])
+  const [orders, setOrders] = useState<Array<{ id: number; orderNo?: string; productName?: string; totalAmount?: number }>>([])
 
   const openCreate = async () => {
     createForm.resetFields()
@@ -76,10 +78,22 @@ export default function AdminCompensation() {
     } catch {
       setDisputes([])
     }
+    try {
+      const res = await getOrderList({ pageNum: 1, pageSize: 100 })
+      if (res?.code === 200) setOrders(res.data?.records ?? [])
+    } catch {
+      setOrders([])
+    }
   }
 
   const submitCreate = async () => {
     const values = await createForm.validateFields()
+    // 赔付必须能追溯：挂在纠纷上（推荐）或者至少挂到一笔订单上，
+    // 否则这笔出款事后查不到为什么赔，也进不了挂订单号的资金流水。
+    if (!values.disputeId && !values.orderId) {
+      message.warning('请至少关联一场纠纷或一张订单')
+      return
+    }
     setSaving(true)
     try {
       const res = await createCompensation(values)
@@ -316,7 +330,7 @@ export default function AdminCompensation() {
           showIcon
           style={{ marginBottom: 12 }}
           message="仲裁判「支持申请人/部分支持」时，系统会自动落一张待审核的赔付单"
-          description="这里用于手工补单（例如没有走纠纷的平台补偿）。挂了纠纷就以纠纷为准：同一场纠纷只能赔一次，订单与收款方由系统按纠纷推导。"
+          description="这里用于手工补单（例如没有走纠纷的平台补偿）。挂了纠纷就以纠纷为准：同一场纠纷只能赔一次，订单与收款方由系统按纠纷推导；不挂纠纷时至少要挂一张订单，否则这笔钱进不了资金流水。"
         />
         <Form form={createForm} layout="vertical">
           <Form.Item
@@ -332,6 +346,22 @@ export default function AdminCompensation() {
               options={disputes.map((d) => ({
                 value: d.id,
                 label: `${d.disputeNo}　${d.complainantName ?? ''}　索赔 ¥${d.claimAmount ?? '—'}`
+              }))}
+            />
+          </Form.Item>
+          <Form.Item
+            name="orderId"
+            label="关联订单（可选）"
+            extra="挂了纠纷时可以留空 —— 订单由纠纷自动带出"
+          >
+            <Select
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              placeholder="选择订单"
+              options={orders.map((o) => ({
+                value: o.id,
+                label: `${o.orderNo ?? o.id}　${o.productName ?? ''}　¥${o.totalAmount ?? '—'}`
               }))}
             />
           </Form.Item>
