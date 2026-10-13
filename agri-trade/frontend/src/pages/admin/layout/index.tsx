@@ -3,7 +3,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
   AppstoreOutlined, AuditOutlined, FileSearchOutlined, SwapOutlined, TeamOutlined, RollbackOutlined,
   SafetyCertificateOutlined, ApartmentOutlined, AccountBookOutlined, SafetyOutlined, AppstoreAddOutlined,
-  IdcardOutlined, SettingOutlined
+  IdcardOutlined, SettingOutlined, AlertOutlined, BarChartOutlined
 } from '@ant-design/icons'
 
 const { Sider, Header, Content } = Layout
@@ -46,7 +46,9 @@ export default function AdminLayout() {
             // 将来若有独立的平台管理端，这一项整体迁过去即可。
             { key: '/admin/trade/bindings', icon: <ApartmentOutlined />, label: '用户-主体绑定' },
             { key: '/admin/trade/certification', icon: <IdcardOutlined />, label: '认证管理' },
-            { key: '/admin/trade/config', icon: <SettingOutlined />, label: '系统配置' }
+            { key: '/admin/trade/config', icon: <SettingOutlined />, label: '系统配置' },
+            { key: '/admin/trade/risk', icon: <AlertOutlined />, label: '风控管理' },
+            { key: '/admin/trade/report', icon: <BarChartOutlined />, label: '报表' }
           ]}
         />
       </Sider>

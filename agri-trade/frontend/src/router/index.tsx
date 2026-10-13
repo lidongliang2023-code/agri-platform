@@ -34,6 +34,8 @@ import AdminCredit from '@/pages/admin/credit'
 import AdminCatalog from '@/pages/admin/catalog'
 import AdminCertification from '@/pages/admin/certification'
 import AdminConfig from '@/pages/admin/config'
+import AdminRisk from '@/pages/admin/risk'
+import AdminReport from '@/pages/admin/report'
 import { isLoggedIn } from '@/utils/session'
 import { SSO_CALLBACK_PATH } from '@/utils/sso'
 
@@ -70,6 +72,8 @@ function AppRouter() {
         <Route path="catalog" element={<AdminCatalog />} />
         <Route path="certification" element={<AdminCertification />} />
         <Route path="config" element={<AdminConfig />} />
+        <Route path="risk" element={<AdminRisk />} />
+        <Route path="report" element={<AdminReport />} />
       </Route>
       <Route path="/" element={
         <PrivateRoute>

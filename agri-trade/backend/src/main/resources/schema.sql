@@ -1023,3 +1023,52 @@ VALUES
      '按货款（不含运费）计收，例：0.005 = 0.5%。卖家应收 = 订单总额 − 平台服务费。改动只影响之后新结算的订单，已结算记录里的费率是当时的快照。', 1),
     ('product.publish-requires-audit', 'true', 'boolean', 'product', '货源发布需要审核',
      'true：新发布的货源先进入「待审核」，由运营在货源审核页通过后才对买家可见；false：新货源直接上架。', 1);
+
+-- 风控阈值：三条规则各一个阈值，都由这一组配置驱动（改了下次扫描即生效）
+INSERT IGNORE INTO `agri_trade_config`
+    (`config_key`, `config_value`, `value_type`, `config_group`, `config_name`, `description`, `editable`)
+VALUES
+    ('risk.low-price-ratio', '0.7', 'number', 'risk', '异常低价阈值',
+     '在架货源单价低于「同品类其它在架货源均价 × 该比例」即预警。例：0.7 = 低于均价七成。同品类在架货源少于 2 个时不判定（均价没有意义）。', 1),
+    ('risk.low-rating-threshold', '3.0', 'number', 'risk', '差评均分阈值',
+     '主体在统计窗口内的平均星级低于该值、且评价条数达到下限时预警。', 1),
+    ('risk.low-rating-min-count', '2', 'number', 'risk', '差评条数下限',
+     '低于该条数不作判定 —— 只有一条差评就预警会把正常商家也打上风险。', 1),
+    ('risk.rating-window-days', '30', 'number', 'risk', '差评统计窗口（天）', '只统计最近这些天的评价。', 1),
+    ('risk.delivery-timeout-hours', '48', 'number', 'risk', '发货超时（小时）',
+     '订单已付款、状态仍是「已付款」且距付款时间超过该小时数即预警（说明一直没发货）。', 1);
+
+-- ===========================================================================
+-- 风控告警
+--
+-- 与"写死的假预警"的区别：每一条告警都是**扫描时用真实数据算出来的**，
+-- detail 里带着当时算出来的数字（例如"该货源 ¥12/吨，同品类在架均价 ¥128/吨"），
+-- 运营可以自己复核。规则与阈值都写在配置里，页面上能看到当期生效值。
+--
+-- 去重：同一条规则 + 同一个对象，未处理时只保留一条（否则每次扫描都刷一批重复告警）。
+-- 处理结果保留：办理人、时间、备注都要留痕（和违规处置同一套口径）。
+-- ===========================================================================
+CREATE TABLE IF NOT EXISTS `agri_trade_risk_alert` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `alert_no` VARCHAR(64) NOT NULL COMMENT '告警编号',
+    `rule_code` VARCHAR(32) NOT NULL COMMENT '规则编码：low_price 异常低价 / low_rating 差评集中 / delivery_timeout 发货超时',
+    `rule_name` VARCHAR(64) NULL COMMENT '规则名称（留痕快照）',
+    `alert_level` VARCHAR(16) NULL COMMENT '等级：high / medium / low',
+    `subject_type` VARCHAR(32) NULL COMMENT '对象类型：product 货源 / merchant 主体 / order 订单',
+    `subject_id` BIGINT NULL COMMENT '对象ID',
+    `subject_name` VARCHAR(160) NULL COMMENT '对象名称（留痕快照）',
+    `title` VARCHAR(128) NULL COMMENT '告警标题',
+    `detail` VARCHAR(500) NULL COMMENT '判定依据（含当时算出的数字，便于复核）',
+    `alert_status` VARCHAR(16) NOT NULL DEFAULT 'new' COMMENT 'new 待处理 / handled 已处理 / ignored 已忽略',
+    `handler` VARCHAR(64) NULL COMMENT '处理人',
+    `handle_time` DATETIME NULL COMMENT '处理时间',
+    `handle_remark` VARCHAR(500) NULL COMMENT '处理备注',
+    `detected_at` DATETIME NULL COMMENT '检出时间',
+    `del_flag` TINYINT(1) DEFAULT 0 COMMENT '删除标记',
+    `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_alert_no` (`alert_no`),
+    KEY `idx_rule_subject` (`rule_code`, `subject_type`, `subject_id`),
+    KEY `idx_alert_status` (`alert_status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='风控告警表';
