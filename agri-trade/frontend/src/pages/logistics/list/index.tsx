@@ -1,10 +1,11 @@
-import { useState } from 'react'
-import { Table, Button, Card, Input, Select, Space, Tag, Modal, Form, Descriptions, message, Popconfirm } from 'antd'
+import { useState, useEffect } from 'react'
+import { Table, Button, Card, Input, InputNumber, Select, Space, Tag, Modal, Form, Descriptions, message, Popconfirm } from 'antd'
 import { EditOutlined, DeleteOutlined, SearchOutlined, EyeOutlined, TruckOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   getLogisticsList, getLogisticsTraces, updateLogisticsStatus, deleteLogistics,
-  type LogisticsQuery, type LogisticsVO, type LogisticsTraceVO
+  getCarriers, updateLogistics,
+  type CarrierVO, type LogisticsQuery, type LogisticsVO, type LogisticsTraceVO
 } from '@/api/logistics'
 
 /**
@@ -35,8 +36,12 @@ const statusText = (value: string) => LOGISTICS_STATUS[value]?.text ?? value
  *
  * <p>这一页原先四个操作按钮（跟踪/查看/编辑/删除）都没有 onClick —— 点了什么都不发生；
  * 搜索框与状态下拉也是摆设（后端连 logisticsNo 参数都没收）。
- * 现在：编辑 → 改物流状态（POST /{id}/status）、跟踪 → 看轨迹、查看 → 看单据详情、
- * 删除 → 软删（已签收的不允许删），搜索与状态筛选也真正参与查询。</p>
+ * 现在：编辑 → 改承运商/类型/运费/收货信息（PUT /{id}）并单独改状态（POST /{id}/status，会写轨迹）、
+ * 跟踪 → 看轨迹、查看 → 看单据详情、删除 → 软删（已签收的不允许删），
+ * 搜索与状态筛选也真正参与查询。</p>
+ *
+ * <p>后端本轮同时按身份收口：列表只返回"我是买方或卖方"的订单的物流单，
+ * 详情/轨迹/改状态/编辑/删除/新建都要求调用方是该订单的当事人。</p>
  */
 function LogisticsList() {
   const queryClient = useQueryClient()
@@ -51,6 +56,16 @@ function LogisticsList() {
   const [editing, setEditing] = useState<LogisticsVO | null>(null)
   const [saving, setSaving] = useState(false)
   const [form] = Form.useForm()
+  const [carriers, setCarriers] = useState<CarrierVO[]>([])
+
+  // 承运商列表：物流单创建时若没选承运商，编辑时就选不出来了 —— 这才是"编辑"存在的意义
+  useEffect(() => {
+    getCarriers()
+      .then((res: { code: number; data?: CarrierVO[] }) => {
+        if (res?.code === 200) setCarriers(res.data ?? [])
+      })
+      .catch(() => setCarriers([]))
+  }, [])
 
   const [traceRow, setTraceRow] = useState<LogisticsVO | null>(null)
   const [traces, setTraces] = useState<LogisticsTraceVO[]>([])
@@ -62,7 +77,17 @@ function LogisticsList() {
 
   const openEdit = (row: LogisticsVO) => {
     setEditing(row)
-    form.setFieldsValue({ status: row.logisticsStatus, location: row.currentLocation, signReceiver: row.signReceiver })
+    form.setFieldsValue({
+      status: row.logisticsStatus,
+      location: row.currentLocation,
+      signReceiver: row.signReceiver,
+      carrierId: row.carrierId ?? undefined,
+      logisticsType: row.logisticsType ?? undefined,
+      freightAmount: row.freightAmount ?? undefined,
+      receiverContact: row.receiverContact ?? undefined,
+      receiverPhone: row.receiverPhone ?? undefined,
+      receiverAddress: row.receiverAddress ?? undefined
+    })
   }
 
   const submitEdit = async () => {
@@ -70,6 +95,20 @@ function LogisticsList() {
     const values = await form.validateFields()
     setSaving(true)
     try {
+      // 先改"安排运输"的字段（承运商/类型/运费/收货信息）
+      const basic = await updateLogistics(editing.id, {
+        carrierId: values.carrierId,
+        logisticsType: values.logisticsType,
+        freightAmount: values.freightAmount,
+        receiverContact: values.receiverContact,
+        receiverPhone: values.receiverPhone,
+        receiverAddress: values.receiverAddress
+      })
+      if (basic?.code !== 200) {
+        message.error(basic?.message ?? '保存失败')
+        return
+      }
+      // 状态单独走状态接口（它会顺带写一条轨迹）
       const res = await updateLogisticsStatus(editing.id, values.status, {
         location: values.location,
         signReceiver: values.signReceiver
@@ -194,7 +233,7 @@ function LogisticsList() {
       />
 
       <Modal
-        title={`更新物流状态${editing ? ' · ' + editing.logisticsNo : ''}`}
+        title={`编辑物流单${editing ? ' · ' + editing.logisticsNo : ''}`}
         open={!!editing}
         onCancel={() => setEditing(null)}
         onOk={submitEdit}
@@ -202,6 +241,23 @@ function LogisticsList() {
         destroyOnClose
       >
         <Form form={form} layout="vertical">
+          <Form.Item name="carrierId" label="承运商" extra="原先创建后承运商改不了，现在可以在这里改">
+            <Select
+              allowClear
+              placeholder="选择承运商"
+              options={carriers.map((c) => ({ value: c.id, label: c.carrierName }))}
+            />
+          </Form.Item>
+          <Form.Item name="logisticsType" label="物流类型">
+            <Select
+              allowClear
+              placeholder="选择物流类型"
+              options={Object.entries(LOGISTICS_TYPE).map(([value, label]) => ({ value, label }))}
+            />
+          </Form.Item>
+          <Form.Item name="freightAmount" label="运费">
+            <InputNumber style={{ width: '100%' }} min={0} precision={2} placeholder="可留空" />
+          </Form.Item>
           <Form.Item name="status" label="物流状态" rules={[{ required: true, message: '请选择状态' }]}>
             <Select options={Object.entries(LOGISTICS_STATUS).map(([value, item]) => ({ value, label: item.text }))} />
           </Form.Item>
@@ -210,6 +266,15 @@ function LogisticsList() {
           </Form.Item>
           <Form.Item name="signReceiver" label="签收人">
             <Input placeholder="状态选到「已签收」时填写" />
+          </Form.Item>
+          <Form.Item name="receiverContact" label="收货人">
+            <Input placeholder="可留空" />
+          </Form.Item>
+          <Form.Item name="receiverPhone" label="收货电话">
+            <Input placeholder="可留空" />
+          </Form.Item>
+          <Form.Item name="receiverAddress" label="收货地址">
+            <Input.TextArea rows={2} placeholder="可留空" />
           </Form.Item>
         </Form>
       </Modal>

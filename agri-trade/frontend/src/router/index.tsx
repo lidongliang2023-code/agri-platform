@@ -40,6 +40,7 @@ import AdminRisk from '@/pages/admin/risk'
 import AdminReport from '@/pages/admin/report'
 import AdminGuarantee from '@/pages/admin/guarantee'
 import AdminContractTemplate from '@/pages/admin/contract-template'
+import AdminCarrier from '@/pages/admin/carrier'
 import { isLoggedIn } from '@/utils/session'
 import { SSO_CALLBACK_PATH } from '@/utils/sso'
 
@@ -80,6 +81,7 @@ function AppRouter() {
         <Route path="report" element={<AdminReport />} />
         <Route path="guarantee" element={<AdminGuarantee />} />
         <Route path="contract-template" element={<AdminContractTemplate />} />
+        <Route path="carrier" element={<AdminCarrier />} />
       </Route>
       <Route path="/" element={
         <PrivateRoute>

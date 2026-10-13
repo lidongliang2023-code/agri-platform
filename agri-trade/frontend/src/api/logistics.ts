@@ -82,3 +82,30 @@ export async function deleteLogistics(id: number) {
   const response = await axios.delete(`/api/trade/logistics/${id}`)
   return response.data
 }
+
+/**
+ * 修改物流单（承运商、类型、运费、收发信息、预计送达）。
+ *
+ * 这个接口此前**根本不存在** —— 物流单一旦创建，承运商就再也改不了
+ * （页面上的"编辑"只能改状态）。状态仍然走 /{id}/status（那会写轨迹）。
+ */
+export async function updateLogistics(id: number, data: Record<string, unknown>) {
+  const response = await axios.put(`/api/trade/logistics/${id}`, data)
+  return response.data
+}
+
+/** 承运商列表（物流编辑时选用）。 */
+export interface CarrierVO {
+  id: number
+  carrierCode: string
+  carrierName: string
+  carrierType: string
+  contactPerson: string
+  contactPhone: string
+  status: number
+}
+
+export async function getCarriers() {
+  const response = await axios.get('/api/trade/logistics/carrier/list')
+  return response.data
+}
