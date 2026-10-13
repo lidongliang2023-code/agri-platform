@@ -26,10 +26,27 @@ public class DisputeController {
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "10") Integer pageSize,
             @RequestParam(required = false) Long orderId,
-            @RequestParam(required = false) String disputeStatus) {
+            @RequestParam(required = false) String disputeStatus,
+            // 参与方范围：申请人或被申请人。用户端必须传其中之一，见下面守卫。
+            @RequestParam(required = false) Long participantId,
+            @RequestParam(required = false) Long complainantId,
+            @RequestParam(required = false) Long respondentId) {
         Page<Dispute> page = new Page<>(pageNum, pageSize);
         LambdaQueryWrapper<Dispute> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Dispute::getDelFlag, 0);
+        // 与订单同理：原先不传任何范围就返回全平台纠纷 —— 买家能看到别人的纠纷单。
+        // 全平台查询归运营端（/admin/trade/dispute/page）。这里改成"必须给出范围"。
+        // 平台上目前还没有"用户 ↔ 经营主体"的映射，所以用户端传自己的用户 id 会查不到数据；
+        // 那是**正确**结果（查不到 ≠ 看得到别人的），映射建好后再把口径接上。
+        if (participantId == null && complainantId == null && respondentId == null) {
+            return ApiResponse.error("查询纠纷必须指定参与方（participantId）或申请人/被申请人；全平台查询请使用运营端接口");
+        }
+        if (participantId != null) {
+            Long pid = participantId;
+            wrapper.and(w -> w.eq(Dispute::getComplainantId, pid).or().eq(Dispute::getRespondentId, pid));
+        }
+        if (complainantId != null) wrapper.eq(Dispute::getComplainantId, complainantId);
+        if (respondentId != null) wrapper.eq(Dispute::getRespondentId, respondentId);
         if (orderId != null) wrapper.eq(Dispute::getOrderId, orderId);
         if (disputeStatus != null) wrapper.eq(Dispute::getDisputeStatus, disputeStatus);
         wrapper.orderByDesc(Dispute::getCreateTime);

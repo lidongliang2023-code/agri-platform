@@ -2,11 +2,16 @@ import { Table, Button, Card, Input, Select, Space } from 'antd'
 import { DeleteOutlined, SearchOutlined, EyeOutlined, SettingOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { getDisputeList } from '@/api/dispute'
+import { getCurrentUser } from '@/utils/session'
 
 function DisputeList() {
+  // 只查"与我有关"的纠纷：后端已取消"不传范围就返回全平台"的兜底。
+  // 平台上还没有"用户 ↔ 经营主体"的映射，所以这里传的是平台用户 id，
+  // 查不到数据是正确结果（查不到 ≠ 看得到别人的）。
+  const participantId = getCurrentUser()?.id
   const { data, isLoading } = useQuery({
-    queryKey: ['disputes'],
-    queryFn: () => getDisputeList({ pageNum: 1, pageSize: 10 }),
+    queryKey: ['disputes', participantId],
+    queryFn: () => getDisputeList({ pageNum: 1, pageSize: 10, participantId }),
   })
 
   const columns = [

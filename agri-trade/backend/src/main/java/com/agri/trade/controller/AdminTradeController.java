@@ -102,9 +102,11 @@ public class AdminTradeController {
                 new LambdaQueryWrapper<TradeProduct>()
                         .eq(TradeProduct::getDelFlag, 0)
                         .eq(TradeProduct::getPublishStatus, "pending")));
-        // 纠纷表没有逻辑删除标记，状态用 pending / processing / resolved
+        // 纠纷表**有**逻辑删除标记（del_flag），别忘了带上 —— 否则会把软删的单据也算进待办
         todos.put("openDisputeCount", disputeMapper.selectCount(
-                new LambdaQueryWrapper<Dispute>().in(Dispute::getDisputeStatus, List.of("pending", "processing"))));
+                new LambdaQueryWrapper<Dispute>()
+                        .eq(Dispute::getDelFlag, 0)
+                        .in(Dispute::getDisputeStatus, List.of("pending", "processing"))));
         todos.put("refundingOrderCount", orderMapper.selectCount(
                 new LambdaQueryWrapper<TradeOrder>()
                         .eq(TradeOrder::getDelFlag, 0)
@@ -305,6 +307,7 @@ public class AdminTradeController {
             @RequestParam(required = false) String keyword) {
         Page<Dispute> page = new Page<>(pageNum, pageSize);
         LambdaQueryWrapper<Dispute> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Dispute::getDelFlag, 0);
         if (disputeStatus != null && !disputeStatus.isEmpty()) {
             wrapper.eq(Dispute::getDisputeStatus, disputeStatus);
         }

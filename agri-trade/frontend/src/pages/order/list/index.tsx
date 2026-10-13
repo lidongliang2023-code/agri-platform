@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Button, Card, Col, Input, Row, Select, Space, Table, Tag, message } from 'antd'
+import { Alert, Button, Card, Col, Input, Row, Select, Space, Table, Tag, message } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
 import { getOrderList, type OrderQuery } from '@/api/order'
+import { getCurrentUser } from '@/utils/session'
 
 interface OrderRow {
   id: number
@@ -47,7 +48,13 @@ export default function OrderList() {
   const [rows, setRows] = useState<OrderRow[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
-  const [query, setQuery] = useState<OrderQuery>({ pageNum: 1, pageSize: 10 })
+  // 只查"与我有关"的订单（我是买家或卖家）。后端已取消"不传范围就返回全平台"的兜底 ——
+  // 全平台查询归运营端。平台上还没有"用户 ↔ 经营主体"的映射，所以查不到数据是正确结果。
+  const [query, setQuery] = useState<OrderQuery>({
+    pageNum: 1,
+    pageSize: 10,
+    participantId: getCurrentUser()?.id
+  })
 
   const load = useCallback((next: OrderQuery) => {
     setLoading(true)
@@ -111,6 +118,15 @@ export default function OrderList() {
       </Card>
 
       <Card title={`订单 ${total} 条`}>
+        {rows.length === 0 && !loading && (
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 12 }}
+            message="这里只显示与你相关的订单"
+            description="当前账号在平台侧还没有绑定经营主体（用户与商户的映射尚未建立），因此查询不到数据。这不是权限故障，也不能通过放开范围来解决 —— 那会让买家看到别人的订单。"
+          />
+        )}
         <Table
           rowKey="id"
           loading={loading}

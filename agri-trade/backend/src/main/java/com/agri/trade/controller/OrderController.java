@@ -133,10 +133,23 @@ public class OrderController {
             // 列表页要按订单号搜、按支付状态筛。原先只认 buyerId/sellerId/orderStatus，
             // 前端传的 orderNo 与 paymentStatus 被 Spring 静默忽略（搜了等于没搜）。
             @RequestParam(required = false) String orderNo,
-            @RequestParam(required = false) String paymentStatus) {
+            @RequestParam(required = false) String paymentStatus,
+            // 参与方范围：买家或卖家是此人。用户端必须给出范围，见下面守卫。
+            @RequestParam(required = false) Long participantId) {
         Page<TradeOrder> page = new Page<>(pageNum, pageSize);
         LambdaQueryWrapper<TradeOrder> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(TradeOrder::getDelFlag, 0);
+        // 全平台查询归运营端（/admin/trade/order/page）。用户端这个接口原先**不给任何范围
+        // 就返回全平台订单** —— 买家能看到别人家的订单，那是越权面。
+        // 这里改成"必须给出范围"；平台目前还没有"用户 ↔ 经营主体"的映射，
+        // 所以用户端传自己的用户 id 会查不到数据 —— 那是**正确**结果（查不到 ≠ 看得到别人的）。
+        if (participantId == null && buyerId == null && sellerId == null) {
+            return ApiResponse.error("查询订单必须指定参与方（participantId）或买方/卖方；全平台查询请使用运营端接口");
+        }
+        if (participantId != null) {
+            Long pid = participantId;
+            wrapper.and(w -> w.eq(TradeOrder::getBuyerId, pid).or().eq(TradeOrder::getSellerId, pid));
+        }
         if (buyerId != null) wrapper.eq(TradeOrder::getBuyerId, buyerId);
         if (sellerId != null) wrapper.eq(TradeOrder::getSellerId, sellerId);
         if (orderStatus != null) wrapper.eq(TradeOrder::getOrderStatus, orderStatus);

@@ -7,6 +7,10 @@ export interface DisputeQuery {
   orderId?: string
   applicantId?: string
   disputeStatus?: string
+  /** 参与方范围：申请人或被申请人是此人（用户端必传，后端不再允许全量查询） */
+  participantId?: number | string
+  complainantId?: number | string
+  respondentId?: number | string
 }
 
 export interface DisputeVO {
