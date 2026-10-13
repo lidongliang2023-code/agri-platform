@@ -908,3 +908,50 @@ CREATE TABLE IF NOT EXISTS `agri_trade_evaluation_appeal` (
     UNIQUE KEY `uk_appeal_no` (`appeal_no`),
     INDEX `idx_evaluation_id` (`evaluation_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='评价申诉表';
+
+-- ===========================================================================
+-- 结算与分账（运营端）
+--
+-- 为什么单独建表而不是只改订单上的 settle_status：
+-- 订单上的 settle_status/settle_time 只能表达"结没结"，表达不了**分账口径** ——
+-- 平台服务费按什么费率、收了多少、卖家实收多少。这三样必须留痕，
+-- 否则事后对不上账，也没法向买卖双方解释"这笔钱为什么少了这些"。
+--
+-- 口径（本轮确定的）：
+--   · 结算时点：订单**确认收货之后**（order_status in received/completed）。
+--     平台主打"交易资金托管"，钱应当在买家验收之后才放给卖家；
+--   · 平台服务费：按**货款**计（不含运费），费率取配置项
+--     agri.trade.settlement.platform-fee-rate，默认 0.5%；
+--   · 卖家应收 = 订单总额 − 平台服务费。
+-- ===========================================================================
+CREATE TABLE IF NOT EXISTS `agri_trade_settlement` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `settlement_no` VARCHAR(64) NOT NULL COMMENT '结算单号',
+    `order_id` BIGINT NOT NULL COMMENT '订单ID',
+    `order_no` VARCHAR(64) NULL COMMENT '订单编号',
+    `buyer_id` BIGINT NULL COMMENT '采购方主体ID',
+    `buyer_name` VARCHAR(100) NULL COMMENT '采购方名称',
+    `seller_id` BIGINT NULL COMMENT '供应方主体ID',
+    `seller_name` VARCHAR(100) NULL COMMENT '供应方名称',
+    `goods_amount` DECIMAL(18,2) NULL COMMENT '货款金额',
+    `freight_amount` DECIMAL(18,2) NULL COMMENT '运费',
+    `total_amount` DECIMAL(18,2) NULL COMMENT '订单总额',
+    `platform_fee_rate` DECIMAL(8,4) NULL COMMENT '平台服务费率',
+    `platform_fee` DECIMAL(18,2) NULL COMMENT '平台服务费',
+    `seller_receivable` DECIMAL(18,2) NULL COMMENT '卖家应收（订单总额 − 平台服务费）',
+    `settle_status` VARCHAR(32) NULL DEFAULT 'settled' COMMENT '结算状态：settled 已结算',
+    `settle_time` DATETIME NULL COMMENT '结算时间',
+    `settle_by` VARCHAR(64) NULL COMMENT '结算操作人',
+    `remark` VARCHAR(500) NULL COMMENT '备注',
+    `del_flag` TINYINT(1) DEFAULT 0 COMMENT '删除标记',
+    `tenant_id` VARCHAR(64) NULL COMMENT '租户ID',
+    `create_by` VARCHAR(64) NULL COMMENT '创建人',
+    `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_by` VARCHAR(64) NULL COMMENT '更新人',
+    `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_settlement_no` (`settlement_no`),
+    UNIQUE KEY `uk_order_id` (`order_id`),
+    INDEX `idx_seller_id` (`seller_id`),
+    INDEX `idx_settle_time` (`settle_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='订单结算分账表';

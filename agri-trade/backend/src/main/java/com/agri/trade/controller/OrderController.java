@@ -241,8 +241,10 @@ public class OrderController {
             order.setBuyerConfirmed(1);
             order.setBuyerConfirmTime(new Date());
         } else if ("completed".equals(status)) {
-            order.setSettleStatus("settled");
-            order.setSettleTime(new Date());
+            // 这里原先顺手把 settle_status 置成 settled —— 那等于"订单完成 = 钱已经结给卖家"，
+            // 而结算是平台把钱放给卖家的动作，属于运营端职责（见 SettlementService）。
+            // 两者绑在一起的结果是：运营端永远没有"待结算"可处理，结算页无事可做。
+            // 现在只推进订单自身状态，是否结算由运营端显式操作。
         }
         
         int result = orderMapper.updateById(order);

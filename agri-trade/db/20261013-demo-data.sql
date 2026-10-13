@@ -461,6 +461,35 @@ UPDATE `agri_trade_dispute` SET
     `close_time`=NULL, `close_reason`=NULL
 WHERE `id`=8031;
 
+/* ---------------------------- 结算与分账 ----------------------------
+   7605 是**唯一一笔走到"已确认收货"的订单**，用来给运营端的「结算与分账」提供一条真实的
+   待结算数据（其余四单分别是 已付款/已发货/待确认/已取消，按新口径都还不能结算）。
+   为什么口径是"确认收货之后"：平台主打交易资金托管，钱应当在买家验收后才放给卖家；
+   按"已付款"就结算等于把托管做成了过账。
+
+   本单**不预置结算记录** —— 结算要由运营端点一次，那条记录才算发生。
+   重跑本文件会把订单 7605 重置回待结算（见下方 UPDATE）。
+   -------------------------------------------------------------------- */
+INSERT IGNORE INTO `agri_trade_order`
+ (`id`,`order_no`,`demand_id`,`contract_id`,`buyer_id`,`buyer_name`,`buyer_phone`,`buyer_type`,
+  `seller_id`,`seller_name`,`seller_phone`,`category_id`,`category_name`,`goods_amount`,`freight_amount`,
+  `discount_amount`,`total_amount`,`paid_amount`,`refund_amount`,`payment_method`,`payment_status`,`order_status`,
+  `delivery_province`,`delivery_city`,`delivery_district`,`delivery_address`,`delivery_contact`,`delivery_phone`,
+  `delivery_deadline`,`source`,`create_by`) VALUES
+ (7605,'T20261013005',7201,7921,3001,'北京新发地批发市场','010-63001188','wholesaler',
+  2001,'绿源农业合作社','0451-82001166',5101,'大米',1200000.00,12000.00,0.00,1212000.00,1212000.00,0.00,
+  'transfer','paid','received','北京市','北京市','丰台区','新发地农产品批发市场粮油区 3 号库','王建国','13801112233',
+  '2026-10-20 00:00:00','demand','buyer_3001');
+
+INSERT IGNORE INTO `agri_trade_order_item`
+ (`id`,`order_id`,`product_id`,`product_code`,`product_name`,`category_id`,`category_name`,`variety`,
+  `spec_level`,`spec_size`,`unit`,`quantity`,`unit_price`,`amount`,`batch_no`,`trace_code`,`create_by`) VALUES
+ (7705,7605,7001,'P20261013001','东北五常大米 25kg/袋',5101,'大米','五常稻花香','一级','25kg/袋','吨',100,12000.00,1200000.00,'HB20260920A','TR202610130005','buyer_3001');
+
+-- 重跑还原：把 7605 拉回"待结算"，并清掉它可能产生的结算记录
+UPDATE `agri_trade_order` SET `settle_status`=NULL, `settle_time`=NULL WHERE `id`=7605;
+DELETE FROM `agri_trade_settlement` WHERE `order_id`=7605;
+
 -- ===========================================================================
 -- 清理语句（默认注释）。要清空本文件的演示数据时放开这几行执行即可 ——
 -- 只删 7000-8099 段，不会碰到真实数据。
@@ -484,6 +513,7 @@ WHERE `id`=8031;
 -- DELETE FROM `agri_trade_evaluation`           WHERE `id` BETWEEN 7000 AND 8099;
 -- DELETE FROM `agri_trade_dispute`              WHERE `id` BETWEEN 7000 AND 8099;
 -- DELETE FROM `agri_trade_order`                WHERE `id` BETWEEN 7000 AND 8099;
+-- DELETE FROM `agri_trade_settlement`           WHERE `order_id` BETWEEN 7000 AND 8099;
 -- DELETE FROM `agri_trade_demand`               WHERE `id` BETWEEN 7000 AND 8099;
 -- DELETE FROM `agri_trade_product`              WHERE `id` BETWEEN 7000 AND 8099;
 -- DELETE FROM `agri_trade_category`             WHERE `id` BETWEEN 7000 AND 8099;

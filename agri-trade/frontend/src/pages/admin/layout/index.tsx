@@ -2,7 +2,7 @@ import { Layout, Menu, Typography } from 'antd'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
   AppstoreOutlined, AuditOutlined, FileSearchOutlined, SwapOutlined, TeamOutlined, RollbackOutlined,
-  SafetyCertificateOutlined, ApartmentOutlined
+  SafetyCertificateOutlined, ApartmentOutlined, AccountBookOutlined
 } from '@ant-design/icons'
 
 const { Sider, Header, Content } = Layout
@@ -34,6 +34,7 @@ export default function AdminLayout() {
             { key: '/admin/trade/dashboard', icon: <AppstoreOutlined />, label: '交易大盘' },
             { key: '/admin/trade/product', icon: <AuditOutlined />, label: '货源审核' },
             { key: '/admin/trade/order', icon: <FileSearchOutlined />, label: '订单监管' },
+            { key: '/admin/trade/settlement', icon: <AccountBookOutlined />, label: '结算与分账' },
             { key: '/admin/trade/dispute', icon: <TeamOutlined />, label: '纠纷仲裁' },
             { key: '/admin/trade/refund', icon: <RollbackOutlined />, label: '退款审核' },
             { key: '/admin/trade/compensation', icon: <SafetyCertificateOutlined />, label: '赔付执行' },

@@ -61,6 +61,16 @@ agri:
   jwt:
     secret: ${AGRI_JWT_SECRET:agri-dev-secret-key-change-me-32bytes!}
     issuer: agri-core-platform
+  trade:
+    settlement:
+      # 平台服务费率，按**货款**计（不含运费）。卖家应收 = 订单总额 − 平台服务费。
+      # 结算是运营端的显式动作（POST /api/trade/admin/settlement/{orderId}/settle），
+      # 不做定时自动打款 —— 涉及钱的动作不该在没人看着的时候自己跑。
+      # 这里的默认值只是开发用；正式环境应由运营给定并经环境变量注入。
+      #
+      # 注意别和 core-platform 里那个同名配置搞混：那边的 agri.trade.settlement
+      # 是平台内部交易面（mod-trade）自己一套订单表用的，与本模块的订单不是同一套数据。
+      platform-fee-rate: ${AGRI_TRADE_SETTLEMENT_FEE_RATE:0.005}
 
 logging:
   level:
