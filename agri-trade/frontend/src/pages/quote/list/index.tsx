@@ -13,6 +13,16 @@ const statusMap: Record<string, { color: string; text: string }> = {
   expired: { color: 'default', text: '已过期' },
 }
 
+/**
+ * 质量等级入库时以中文标签存进 quality_description（表里没有独立的质量等级列）。
+ * 编辑回填要把标签转回下拉框的取值 —— 否则下拉框匹配不上、显示为空，
+ * 用户一保存就把原来的等级抹掉了。
+ */
+function qualityCode(label?: string): string | undefined {
+  const map: Record<string, string> = { 特级: 'premium', 一级: 'level1', 二级: 'level2', 三级: 'level3' }
+  return label ? map[label] ?? label : undefined
+}
+
 export default function QuoteList() {
   const navigate = useNavigate()
   const [loading, setLoading] = useState(false)
@@ -61,6 +71,13 @@ export default function QuoteList() {
     form.setFieldsValue({
       ...record,
       deliveryTime: record.deliveryTime ? dayjs(record.deliveryTime) : null,
+      // 表单收的是"有效期(天)"，库里存的是绝对时间点 —— 编辑时把剩余天数反算回来。
+      // 不反算的话，字段名对不上会被 antd 静默忽略，表单里永远显示空。
+      validDays: record.validUntil
+        ? Math.max(1, Math.ceil(dayjs(record.validUntil).diff(dayjs(), 'day', true)))
+        : 7,
+      // 质量等级入库时转成了中文标签，这里再转回下拉框的取值
+      qualityLevel: qualityCode(record.qualityDescription),
     })
     setFormVisible(true)
   }
@@ -148,7 +165,23 @@ export default function QuoteList() {
     { title: '单位', dataIndex: 'unit', key: 'unit', width: 60 },
     { title: '总价', dataIndex: 'totalAmount', key: 'totalAmount', render: (v: number) => `¥${v}` },
     { title: '供应商', dataIndex: 'sellerName', key: 'sellerName' },
-    { title: '有效期', dataIndex: 'validDays', key: 'validDays', render: (v: number) => `${v}天` },
+    {
+      title: '有效期至',
+      dataIndex: 'validUntil',
+      key: 'validUntil',
+      width: 170,
+      render: (v: string) => {
+        // 之前这一列读的是 validDays —— 表里没有这个字段，整列永远显示 "undefined天"。
+        if (!v) return '—'
+        const expired = dayjs(v).isBefore(dayjs())
+        return (
+          <span style={{ color: expired ? '#999' : undefined }}>
+            {v}
+            {expired ? '（已过期）' : ''}
+          </span>
+        )
+      }
+    },
     {
       title: '状态',
       dataIndex: 'quoteStatus',
@@ -276,11 +309,13 @@ export default function QuoteList() {
               ]}
             />
           </Form.Item>
-          <Form.Item name="sellerName" label="供应商名称" rules={[{ required: true, message: '请输入供应商名称' }]}>
-            <Input placeholder="请输入供应商名称" />
-          </Form.Item>
+          {/*
+            供应商不再是自由文本：报价的卖方由服务端按登录用户绑定的经营主体推导
+            （见 PlatformIdentityService）。原先这里让用户手填供应商名称，
+            后端根本不接收这个字段 —— 填了等于没填，还会让人以为报价挂到了别家名下。
+          */}
           <Form.Item name="validDays" label="有效期(天)" rules={[{ required: true, message: '请输入有效期' }]}>
-            <InputNumber placeholder="请输入有效期天数" style={{ width: '100%' }} min={1} />
+            <InputNumber placeholder="请输入有效期天数" style={{ width: '100%' }} min={1} max={365} />
           </Form.Item>
           <Form.Item name="qualityLevel" label="质量等级">
             <Select

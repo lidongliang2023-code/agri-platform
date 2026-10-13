@@ -20,12 +20,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.Date;
 import java.util.List;
 
 @Service
 @RequiredArgsConstructor
 public class QuoteServiceImpl extends ServiceImpl<QuoteMapper, Quote> implements IQuoteService {
+
+    /** 报价默认有效期（天）。与"卖家回应询价"那条路径保持同一个默认值。 */
+    private static final int DEFAULT_VALID_DAYS = 7;
 
     private final InquiryMapper inquiryMapper;
     private final TradeProductMapper productMapper;
@@ -190,6 +194,117 @@ public class QuoteServiceImpl extends ServiceImpl<QuoteMapper, Quote> implements
         inquiryMapper.updateById(inquiry);
 
         return quote;
+    }
+
+    @Override
+    @Transactional
+    public Quote createQuoteFromForm(Quote draft, Long sellerId, String sellerName, Integer validDays) {
+        Quote quote = new Quote();
+        quote.setQuoteNo("QT" + System.currentTimeMillis());
+        quote.setProductId(draft.getProductId());
+        quote.setProductName(draft.getProductName());
+        quote.setBuyerId(draft.getBuyerId());
+        quote.setBuyerName(draft.getBuyerName());
+        quote.setSellerId(sellerId);
+        quote.setSellerName(sellerName);
+        quote.setUnitPrice(draft.getUnitPrice());
+        quote.setQuantity(draft.getQuantity());
+        quote.setUnit(draft.getUnit());
+        // 总价由服务端算（单价 × 数量）。表单里那个数字只作参考 ——
+        // 让请求体直接决定金额，等于把报价单的钱数交给浏览器。
+        quote.setTotalAmount(amount(draft.getUnitPrice(), draft.getQuantity()));
+        quote.setQuoteAmount(quote.getTotalAmount());
+        quote.setFreightAmount(BigDecimal.ZERO);
+        quote.setDiscountAmount(BigDecimal.ZERO);
+        quote.setDeliveryTime(draft.getDeliveryTime());
+        quote.setDeliveryAddress(draft.getDeliveryAddress());
+        quote.setQualityDescription(draft.getQualityDescription());
+        quote.setPayment_terms("prepayment");
+        quote.setValidUntil(validUntil(validDays));
+        quote.setQuoteStatus("pending");
+        quote.setDelFlag(0);
+        Date now = new Date();
+        quote.setCreateTime(now);
+        quote.setUpdateTime(now);
+        quote.setRemark(draft.getRemark());
+        baseMapper.insert(quote);
+        return quote;
+    }
+
+    @Override
+    @Transactional
+    public boolean updateQuoteFromForm(Long id, Quote patch, Integer validDays) {
+        Quote exist = baseMapper.selectById(id);
+        if (exist == null || (exist.getDelFlag() != null && exist.getDelFlag() == 1)) {
+            return false;
+        }
+        // 已生成订单或已定稿的报价不能改：改了单价就是把已成单的金额改掉。
+        if (exist.getOrderId() != null || !"pending".equals(exist.getQuoteStatus())) {
+            return false;
+        }
+        if (patch.getProductName() != null) {
+            exist.setProductName(patch.getProductName());
+        }
+        if (patch.getUnitPrice() != null) {
+            exist.setUnitPrice(patch.getUnitPrice());
+        }
+        if (patch.getQuantity() != null) {
+            exist.setQuantity(patch.getQuantity());
+        }
+        if (patch.getUnit() != null) {
+            exist.setUnit(patch.getUnit());
+        }
+        if (patch.getDeliveryTime() != null) {
+            exist.setDeliveryTime(patch.getDeliveryTime());
+        }
+        if (patch.getDeliveryAddress() != null) {
+            exist.setDeliveryAddress(patch.getDeliveryAddress());
+        }
+        if (patch.getQualityDescription() != null) {
+            exist.setQualityDescription(patch.getQualityDescription());
+        }
+        if (patch.getRemark() != null) {
+            exist.setRemark(patch.getRemark());
+        }
+        // 金额跟着改后的单价/数量重算，不允许出现"改了数量、总价还是旧的"
+        exist.setTotalAmount(amount(exist.getUnitPrice(), exist.getQuantity()));
+        exist.setQuoteAmount(exist.getTotalAmount());
+        if (validDays != null) {
+            exist.setValidUntil(validUntil(validDays));
+        }
+        exist.setUpdateTime(new Date());
+        return baseMapper.updateById(exist) > 0;
+    }
+
+    @Override
+    @Transactional
+    public boolean deleteQuote(Long id) {
+        Quote exist = baseMapper.selectById(id);
+        if (exist == null) {
+            return false;
+        }
+        // 已生成订单的报价不能删：删了订单就找不到来源了。
+        if (exist.getOrderId() != null) {
+            return false;
+        }
+        // 必须用 deleteById：MyBatis-Plus 配了全局逻辑删除字段（del_flag），
+        // updateById 会**跳过** SET 里的逻辑删除列。写成 setDelFlag(1)+updateById 的效果是
+        // 接口返回成功、update_time 也变了，但 del_flag 一直是 0 —— 记录根本没删掉，列表里还在。
+        // （实测：接口 data=true，读库 del_flag 仍是 0。）
+        return baseMapper.deleteById(id) > 0;
+    }
+
+    private static BigDecimal amount(BigDecimal unitPrice, BigDecimal quantity) {
+        if (unitPrice == null || quantity == null) {
+            return BigDecimal.ZERO;
+        }
+        return unitPrice.multiply(quantity).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    /** 有效期：按天算出来一个绝对时间点存库（表里只有 valid_until 这一列，没有天数列）。 */
+    private static Date validUntil(Integer validDays) {
+        int days = (validDays == null || validDays < 1) ? DEFAULT_VALID_DAYS : Math.min(validDays, 365);
+        return new Date(System.currentTimeMillis() + days * 24L * 60 * 60 * 1000);
     }
 
     @Override

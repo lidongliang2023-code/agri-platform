@@ -194,9 +194,9 @@ public class ContractServiceImpl extends ServiceImpl<ContractMapper, Contract> i
     public boolean deleteTemplate(Long templateId) {
         ContractTemplate template = templateMapper.selectById(templateId);
         if (template != null) {
-            template.setDelFlag(1);
-            template.setUpdateTime(new Date());
-            templateMapper.updateById(template);
+            // 软删走 deleteById：全局逻辑删除字段不会被 updateById 写进 SET，
+            // 原来的 setDelFlag(1)+updateById 是"看起来删了、其实没删"。
+            templateMapper.deleteById(templateId);
             return true;
         }
         return false;

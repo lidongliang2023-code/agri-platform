@@ -13,6 +13,36 @@ public interface IQuoteService extends IService<Quote> {
     Quote createQuote(Long inquiryId, BigDecimal unitPrice, BigDecimal quantity, 
                       BigDecimal freightAmount, String remark);
 
+    /**
+     * 独立报价（不挂询价单）——「报价管理 → 新增报价」走这条。
+     *
+     * <p>与 {@link #createQuote} 的区别：那条是"卖家回应某张询价单"，主体、品类、
+     * 收货地全部继承询价单；这条是卖家自己挂一份报价。</p>
+     *
+     * <p>卖家身份由**服务端**决定（当前用户绑定的经营主体），不采信请求体里的 sellerId；
+     * 总价与有效期也由服务端算 —— 报价单上的金额与时效不能由调用方说了算。</p>
+     *
+     * @param validDays 有效期天数；为空取默认 7 天，上限 365 天
+     */
+    Quote createQuoteFromForm(Quote draft, Long sellerId, String sellerName, Integer validDays);
+
+    /**
+     * 修改报价（仅限"待审核"且尚未生成订单的报价）。
+     *
+     * <p>已接受/已转订单的报价不允许改：改了单价就等于把已经成单的金额改掉。</p>
+     *
+     * @param validDays 为空表示不改有效期
+     * @return 是否修改成功
+     */
+    boolean updateQuoteFromForm(Long id, Quote patch, Integer validDays);
+
+    /**
+     * 删除报价（软删，del_flag=1）。
+     *
+     * <p>已生成订单的报价不允许删：删掉之后订单就找不到来源了。</p>
+     */
+    boolean deleteQuote(Long id);
+
     List<Quote> getQuotesByBuyer(Long buyerId);
 
     List<Quote> getQuotesBySeller(Long sellerId);

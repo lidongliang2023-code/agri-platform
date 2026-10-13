@@ -87,9 +87,9 @@ public class TradeProductController {
     public ApiResponse<Boolean> deleteCategory(@PathVariable Long id) {
         TradeProductCategory category = categoryMapper.selectById(id);
         if (category == null) return ApiResponse.error("分类不存在");
-        category.setDelFlag(1);
-        category.setUpdateTime(new Date());
-        int result = categoryMapper.updateById(category);
+        // 软删走 deleteById：全局逻辑删除字段在 updateById 的 SET 里会被跳过，
+        // setDelFlag(1)+updateById 只会改 update_time，记录其实没删掉。
+        int result = categoryMapper.deleteById(id);
         return result > 0 ? ApiResponse.success(true) : ApiResponse.error("删除失败");
     }
 
@@ -159,9 +159,8 @@ public class TradeProductController {
     public ApiResponse<Boolean> deleteProduct(@PathVariable Long id) {
         TradeProduct product = productMapper.selectById(id);
         if (product == null) return ApiResponse.error("商品不存在");
-        product.setDelFlag(1);
-        product.setUpdateTime(new Date());
-        int result = productMapper.updateById(product);
+        // 同上：必须用 deleteById，否则接口成功而记录还在。
+        int result = productMapper.deleteById(id);
         return result > 0 ? ApiResponse.success(true) : ApiResponse.error("删除失败");
     }
 

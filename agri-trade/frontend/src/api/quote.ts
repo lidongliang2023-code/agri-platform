@@ -23,18 +23,27 @@ export interface QuoteQuery {
 export interface QuoteVO {
   id: number
   quoteNo: string
-  demandId: number
+  inquiryId: number
   productId: number
   productName: string
   sellerId: number
   sellerName: string
+  buyerId: number
+  buyerName: string
   unitPrice: number
   quantity: number
   unit: string
   totalAmount: number
-  validDays: number
-  expireTime: string
-  qualityLevel: string
+  /**
+   * 有效期至。
+   *
+   * 表里只有 valid_until 一个 datetime 列（没有"天数"列），所以这里就是绝对时间点。
+   * 原先 VO 上写的是 validDays / expireTime 两个都不存在的字段 ——
+   * 列表"有效期"一列因此永远显示 undefined天，而新增表单提交的 validDays 后端从来没收过。
+   */
+  validUntil: string
+  /** 质量等级以中文标签存在 quality_description 里（表里没有独立的质量等级列） */
+  qualityDescription: string
   deliveryTime: string
   deliveryAddress: string
   remark: string

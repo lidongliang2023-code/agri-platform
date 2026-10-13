@@ -6,15 +6,20 @@ import com.agri.trade.entity.Quote;
 import com.agri.trade.entity.TradeOrder;
 import com.agri.trade.service.IInquiryService;
 import com.agri.trade.service.IQuoteService;
+import com.agri.trade.service.PlatformIdentityService;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/trade/negotiation")
 @RequiredArgsConstructor
@@ -22,6 +27,7 @@ public class NegotiationController {
 
     private final IInquiryService inquiryService;
     private final IQuoteService quoteService;
+    private final PlatformIdentityService identityService;
 
     @PostMapping("/inquiry")
     public ApiResponse<Inquiry> createInquiry(@RequestBody Map<String, Object> params) {
@@ -67,6 +73,16 @@ public class NegotiationController {
 
     @PostMapping("/quote")
     public ApiResponse<Quote> createQuote(@RequestBody Map<String, Object> params) {
+        // 两条路径共用一个入口，但数据来源完全不同，所以在这里就分开：
+        //   · 带 inquiryId → "卖家回应某张询价单"，主体/品类/收货地全部继承询价单；
+        //   · 不带 inquiryId → "报价管理 → 新增报价"，卖家自己挂一份报价。
+        //
+        // 原先这里无条件执行 ((Number) params.get("inquiryId")).longValue()，
+        // 而新增报价的表单根本不带 inquiryId —— 于是每次点"新增报价"都是 NPE → 500。
+        // 页面上只看到"操作失败"，后端日志里是一行类型转换异常。
+        if (params.get("inquiryId") == null) {
+            return createStandaloneQuote(params);
+        }
         Long inquiryId = ((Number) params.get("inquiryId")).longValue();
         BigDecimal unitPrice = new BigDecimal(params.get("unitPrice").toString());
         BigDecimal quantity = params.containsKey("quantity") ? 
@@ -80,6 +96,138 @@ public class NegotiationController {
             return ApiResponse.error("创建报价失败");
         }
         return ApiResponse.success(quote);
+    }
+
+    /**
+     * 新增独立报价（不挂询价单）。
+     *
+     * <p>卖家的主体号**由服务端从令牌推导**，不读请求体里的 sellerId ——
+     * 否则任何人都能冒用别人的名义挂报价。</p>
+     */
+    private ApiResponse<Quote> createStandaloneQuote(Map<String, Object> params) {
+        PlatformIdentityService.MerchantSelection seller = identityService.selectMerchant(null);
+        if (!seller.ok()) {
+            return ApiResponse.error(seller.error());
+        }
+        Quote draft = new Quote();
+        draft.setProductId(asLong(params.get("productId")));
+        draft.setProductName(asString(params.get("productName")));
+        draft.setUnitPrice(asDecimal(params.get("unitPrice")));
+        draft.setQuantity(asDecimal(params.get("quantity")));
+        draft.setUnit(asString(params.get("unit")));
+        draft.setDeliveryTime(asDate(params.get("deliveryTime")));
+        draft.setDeliveryAddress(asString(params.get("deliveryAddress")));
+        // 质量等级没有独立列（表里只有 quality_description），按口径存进描述列，
+        // 存的是面上的标签文本（特级/一级…），不编一个不存在的字段。
+        draft.setQualityDescription(qualityText(params.get("qualityLevel")));
+        draft.setRemark(asString(params.get("remark")));
+
+        if (draft.getProductName() == null || draft.getUnitPrice() == null || draft.getQuantity() == null) {
+            return ApiResponse.error("产品名称、单价、数量都必须填写");
+        }
+        Quote created = quoteService.createQuoteFromForm(draft, seller.merchantId(), seller.merchantName(),
+                asInt(params.get("validDays")));
+        return ApiResponse.success(created);
+    }
+
+    @Operation(summary = "修改报价（仅限待审核、未生成订单的报价）")
+    @PutMapping("/quote/{id}")
+    public ApiResponse<Boolean> updateQuote(@PathVariable Long id, @RequestBody Map<String, Object> params) {
+        Quote patch = new Quote();
+        patch.setProductName(asString(params.get("productName")));
+        patch.setUnitPrice(asDecimal(params.get("unitPrice")));
+        patch.setQuantity(asDecimal(params.get("quantity")));
+        patch.setUnit(asString(params.get("unit")));
+        patch.setDeliveryTime(asDate(params.get("deliveryTime")));
+        patch.setDeliveryAddress(asString(params.get("deliveryAddress")));
+        patch.setQualityDescription(qualityText(params.get("qualityLevel")));
+        patch.setRemark(asString(params.get("remark")));
+
+        boolean ok = quoteService.updateQuoteFromForm(id, patch, asInt(params.get("validDays")));
+        return ok
+                ? ApiResponse.success(true)
+                : ApiResponse.error("报价不存在、已被删除，或已受理/已生成订单（这三种情况都不允许修改）");
+    }
+
+    @Operation(summary = "删除报价（软删；已生成订单的报价不允许删）")
+    @DeleteMapping("/quote/{id}")
+    public ApiResponse<Boolean> deleteQuote(@PathVariable Long id) {
+        boolean ok = quoteService.deleteQuote(id);
+        return ok ? ApiResponse.success(true) : ApiResponse.error("报价不存在或已生成订单，无法删除");
+    }
+
+    private static Long asLong(Object value) {
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        if (value instanceof String text && !text.isEmpty()) {
+            try {
+                return Long.valueOf(text);
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private static Integer asInt(Object value) {
+        Long parsed = asLong(value);
+        return parsed == null ? null : parsed.intValue();
+    }
+
+    private static BigDecimal asDecimal(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number number) {
+            return new BigDecimal(number.toString());
+        }
+        String text = value.toString().trim();
+        if (text.isEmpty()) {
+            return null;
+        }
+        try {
+            return new BigDecimal(text);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private static String asString(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String text = value.toString().trim();
+        return text.isEmpty() ? null : text;
+    }
+
+    /** 质量等级按面上的中文标签落库（表里没有独立列，只有 quality_description）。 */
+    private static String qualityText(Object value) {
+        String code = asString(value);
+        if (code == null) {
+            return null;
+        }
+        return switch (code) {
+            case "premium" -> "特级";
+            case "level1" -> "一级";
+            case "level2" -> "二级";
+            case "level3" -> "三级";
+            default -> code;
+        };
+    }
+
+    /** 交货时间表单传的是 yyyy-MM-dd（前端 format 过的），这里按同格式解析。 */
+    private static Date asDate(Object value) {
+        String text = asString(value);
+        if (text == null) {
+            return null;
+        }
+        try {
+            return new SimpleDateFormat("yyyy-MM-dd").parse(text);
+        } catch (Exception e) {
+            log.debug("交货时间解析失败，忽略该字段：{}", text);
+            return null;
+        }
     }
 
     @GetMapping("/quote/buyer/{buyerId}")

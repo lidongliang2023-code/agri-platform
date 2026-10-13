@@ -108,9 +108,9 @@ public class DemandController {
     public ApiResponse<Boolean> deleteDemand(@PathVariable Long id) {
         Demand demand = demandMapper.selectById(id);
         if (demand == null) return ApiResponse.error("需求不存在");
-        demand.setDelFlag(1);
-        demand.setUpdateTime(new Date());
-        int result = demandMapper.updateById(demand);
+        // 软删必须走 deleteById —— MyBatis-Plus 的全局逻辑删除字段在 updateById 里会被跳过，
+        // 写 setDelFlag(1)+updateById 只会改掉 update_time，记录还在（接口却返回成功）。
+        int result = demandMapper.deleteById(id);
         return result > 0 ? ApiResponse.success(true) : ApiResponse.error("删除失败");
     }
 
