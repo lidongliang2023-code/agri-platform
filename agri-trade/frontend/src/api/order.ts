@@ -48,7 +48,34 @@ export async function updateOrder(id: number, data: any) {
   return response.data
 }
 
-export async function deleteOrder(id: number) {
-  const response = await axios.delete(`/api/trade/order/${id}`)
+// 订单没有删除接口，也不该有：交易单据只能通过状态流转（取消/退款）终结，
+// 直接删掉会让资金与物流的追溯断链。原先这里调 DELETE /order/{id}，后端从未注册过。
+
+/** 订单明细 */
+export async function getOrderItems(id: number | string) {
+  const response = await axios.get(`/api/trade/order/${id}/items`)
+  return response.data
+}
+
+/**
+ * 订单状态流转。
+ *
+ * <p>后端认的状态：paid（支付）/ shipped（发货）/ received（收货）/ completed（完成），
+ * 各自带副作用：置已付金额、置物流已揽收、置买家已确认、置已结算。</p>
+ */
+export async function updateOrderStatus(id: number | string, status: string) {
+  const response = await axios.post(`/api/trade/order/${id}/status`, { status })
+  return response.data
+}
+
+/** 支付 */
+export async function payOrder(id: number | string, data: Record<string, unknown>) {
+  const response = await axios.post(`/api/trade/order/${id}/pay`, data)
+  return response.data
+}
+
+/** 申请退款 */
+export async function applyOrderRefund(id: number | string, data: Record<string, unknown>) {
+  const response = await axios.post(`/api/trade/order/${id}/refund`, data)
   return response.data
 }

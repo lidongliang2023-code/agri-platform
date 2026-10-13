@@ -3,6 +3,7 @@ import Layout from '@/pages/layout'
 import Login from '@/pages/login'
 import Home from '@/pages/home'
 import OrderList from '@/pages/order/list'
+import OrderDetail from '@/pages/order/detail'
 import ProductList from '@/pages/product/list'
 import ProductCreate from '@/pages/product/create'
 import ProductDetail from '@/pages/product/detail'
@@ -39,6 +40,7 @@ function AppRouter() {
       }>
         <Route index element={<Home />} />
         <Route path="order" element={<OrderList />} />
+        <Route path="order/detail/:id" element={<OrderDetail />} />
         <Route path="product" element={<ProductList />} />
         <Route path="product/create" element={<ProductCreate />} />
         <Route path="product/detail/:id" element={<ProductDetail />} />

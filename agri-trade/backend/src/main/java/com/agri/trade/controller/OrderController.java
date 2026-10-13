@@ -36,13 +36,19 @@ public class OrderController {
             @RequestParam(defaultValue = "10") Integer pageSize,
             @RequestParam(required = false) Long buyerId,
             @RequestParam(required = false) Long sellerId,
-            @RequestParam(required = false) String orderStatus) {
+            @RequestParam(required = false) String orderStatus,
+            // 列表页要按订单号搜、按支付状态筛。原先只认 buyerId/sellerId/orderStatus，
+            // 前端传的 orderNo 与 paymentStatus 被 Spring 静默忽略（搜了等于没搜）。
+            @RequestParam(required = false) String orderNo,
+            @RequestParam(required = false) String paymentStatus) {
         Page<TradeOrder> page = new Page<>(pageNum, pageSize);
         LambdaQueryWrapper<TradeOrder> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(TradeOrder::getDelFlag, 0);
         if (buyerId != null) wrapper.eq(TradeOrder::getBuyerId, buyerId);
         if (sellerId != null) wrapper.eq(TradeOrder::getSellerId, sellerId);
         if (orderStatus != null) wrapper.eq(TradeOrder::getOrderStatus, orderStatus);
+        if (paymentStatus != null) wrapper.eq(TradeOrder::getPaymentStatus, paymentStatus);
+        if (orderNo != null && !orderNo.isEmpty()) wrapper.like(TradeOrder::getOrderNo, orderNo);
         wrapper.orderByDesc(TradeOrder::getCreateTime);
         return ApiResponse.success(orderMapper.selectPage(page, wrapper));
     }

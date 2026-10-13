@@ -1,58 +1,176 @@
-import { Table, Button, Card, Input, Select, Space } from 'antd'
-import { EditOutlined, DeleteOutlined, SearchOutlined, EyeOutlined } from '@ant-design/icons'
-import { useQuery } from '@tanstack/react-query'
-import { getOrderList } from '@/api/order'
+import { useCallback, useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { Button, Card, Col, Input, Row, Select, Space, Table, Tag, message } from 'antd'
+import { ReloadOutlined } from '@ant-design/icons'
+import { getOrderList, type OrderQuery } from '@/api/order'
 
-function OrderList() {
-  const { data, isLoading } = useQuery({
-    queryKey: ['orders'],
-    queryFn: () => getOrderList({ pageNum: 1, pageSize: 10 }),
-  })
-
-  const columns = [
-    { title: '订单编号', dataIndex: 'orderNo', key: 'orderNo' },
-    { title: '买家', dataIndex: 'buyerName', key: 'buyerName' },
-    { title: '卖家', dataIndex: 'sellerName', key: 'sellerName' },
-    { title: '商品分类', dataIndex: 'categoryName', key: 'categoryName' },
-    { title: '订单金额', dataIndex: 'totalAmount', key: 'totalAmount', render: (val: number) => `¥${val}` },
-    { title: '订单状态', dataIndex: 'orderStatus', key: 'orderStatus' },
-    { title: '支付状态', dataIndex: 'paymentStatus', key: 'paymentStatus' },
-    { title: '创建时间', dataIndex: 'createTime', key: 'createTime' },
-    { title: '操作', key: 'action', render: () => (
-      <Space>
-        <Button type="link" icon={<EyeOutlined />}>查看</Button>
-        <Button type="link" icon={<EditOutlined />}>编辑</Button>
-        <Button type="link" danger icon={<DeleteOutlined />}>删除</Button>
-      </Space>
-    )},
-  ]
-
-  return (
-    <Card title="订单管理">
-      <div style={{ marginBottom: 16, display: 'flex', gap: 16 }}>
-        <Input placeholder="订单编号" prefix={<SearchOutlined />} style={{ width: 200 }} />
-        <Select placeholder="订单状态" style={{ width: 150 }} options={[
-          { value: 'all', label: '全部' },
-          { value: 'pending', label: '待付款' },
-          { value: 'paid', label: '已付款' },
-          { value: 'shipped', label: '已发货' },
-          { value: 'completed', label: '已完成' },
-        ]} />
-        <Button type="primary">搜索</Button>
-      </div>
-      <Table 
-        columns={columns} 
-        dataSource={data?.data?.records || []} 
-        loading={isLoading}
-        rowKey="id" 
-        pagination={{
-          current: data?.data?.current,
-          total: data?.data?.total,
-          pageSize: 10,
-        }}
-      />
-    </Card>
-  )
+interface OrderRow {
+  id: number
+  orderNo: string
+  buyerName: string
+  sellerName: string
+  categoryName: string
+  totalAmount: number
+  paidAmount: number
+  orderStatus: string
+  paymentStatus: string
+  createTime: string
 }
 
-export default OrderList
+const ORDER_STATUS: Record<string, { text: string; color: string }> = {
+  pending_confirm: { text: '待确认', color: 'warning' },
+  pending: { text: '待付款', color: 'warning' },
+  paid: { text: '已付款', color: 'processing' },
+  shipped: { text: '已发货', color: 'blue' },
+  received: { text: '已收货', color: 'cyan' },
+  completed: { text: '已完成', color: 'success' },
+  cancelled: { text: '已取消', color: 'default' },
+  refunding: { text: '退款中', color: 'orange' },
+  refunded: { text: '已退款', color: 'default' }
+}
+
+const PAY_STATUS: Record<string, { text: string; color: string }> = {
+  unpaid: { text: '未支付', color: 'warning' },
+  partial: { text: '部分支付', color: 'orange' },
+  paid: { text: '已支付', color: 'success' },
+  refunded: { text: '已退款', color: 'default' }
+}
+
+/**
+ * 订单列表（原型"订单管理 → 订单列表"）。
+ *
+ * <p>接上本次新增的 orderNo / paymentStatus 过滤参数：这两个参数前端一直在传，
+ * 后端却从来没接收过（搜了等于没搜）。</p>
+ */
+export default function OrderList() {
+  const navigate = useNavigate()
+  const [rows, setRows] = useState<OrderRow[]>([])
+  const [total, setTotal] = useState(0)
+  const [loading, setLoading] = useState(false)
+  const [query, setQuery] = useState<OrderQuery>({ pageNum: 1, pageSize: 10 })
+
+  const load = useCallback((next: OrderQuery) => {
+    setLoading(true)
+    getOrderList(next)
+      .then((res: { code: number; data?: { records?: OrderRow[]; total?: number }; message?: string }) => {
+        if (res?.code === 200) {
+          setRows(res.data?.records ?? [])
+          setTotal(res.data?.total ?? 0)
+        } else {
+          message.error(res?.message ?? '加载订单失败')
+        }
+      })
+      .catch(() => message.error('加载订单失败（检查后端是否在运行）'))
+      .finally(() => setLoading(false))
+  }, [])
+
+  useEffect(() => {
+    load(query)
+  }, [query, load])
+
+  return (
+    <div style={{ padding: 20 }}>
+      <Card style={{ marginBottom: 16 }}>
+        <Row gutter={[12, 12]} align="middle">
+          <Col flex="260px">
+            <Input.Search
+              allowClear
+              placeholder="按订单号搜索"
+              onSearch={(value) => setQuery((prev) => ({ ...prev, pageNum: 1, orderNo: value || undefined }))}
+            />
+          </Col>
+          <Col flex="180px">
+            <Select
+              allowClear
+              placeholder="全部订单状态"
+              style={{ width: '100%' }}
+              onChange={(value) => setQuery((prev) => ({ ...prev, pageNum: 1, orderStatus: value }))}
+              options={Object.entries(ORDER_STATUS).map(([value, item]) => ({ value, label: item.text }))}
+            />
+          </Col>
+          <Col flex="160px">
+            <Select
+              allowClear
+              placeholder="全部支付状态"
+              style={{ width: '100%' }}
+              onChange={(value) => setQuery((prev) => ({ ...prev, pageNum: 1, paymentStatus: value }))}
+              options={Object.entries(PAY_STATUS).map(([value, item]) => ({ value, label: item.text }))}
+            />
+          </Col>
+          <Col flex="auto">
+            <Space>
+              <Button icon={<ReloadOutlined />} onClick={() => load(query)}>
+                刷新
+              </Button>
+            </Space>
+          </Col>
+        </Row>
+      </Card>
+
+      <Card title={`订单 ${total} 条`}>
+        <Table
+          rowKey="id"
+          loading={loading}
+          dataSource={rows}
+          scroll={{ x: 1200 }}
+          pagination={{
+            current: query.pageNum,
+            pageSize: query.pageSize,
+            total,
+            showSizeChanger: true,
+            onChange: (page, size) => setQuery((prev) => ({ ...prev, pageNum: page, pageSize: size }))
+          }}
+          columns={[
+            {
+              title: '订单号',
+              dataIndex: 'orderNo',
+              width: 170,
+              render: (text: string, row: OrderRow) => (
+                <a onClick={() => navigate(`/order/detail/${row.id}`)}>{text}</a>
+              )
+            },
+            { title: '采购方', dataIndex: 'buyerName', width: 160 },
+            { title: '供货方', dataIndex: 'sellerName', width: 160 },
+            { title: '品类', dataIndex: 'categoryName', width: 100 },
+            { title: '订单金额', dataIndex: 'totalAmount', width: 130, render: (val: number) => `¥${val}` },
+            {
+              title: '已付',
+              dataIndex: 'paidAmount',
+              width: 120,
+              render: (val: number) => (val ? `¥${val}` : '—')
+            },
+            {
+              title: '订单状态',
+              dataIndex: 'orderStatus',
+              width: 110,
+              render: (val: string) => {
+                const tag = ORDER_STATUS[val] ?? { text: val, color: 'default' }
+                return <Tag color={tag.color}>{tag.text}</Tag>
+              }
+            },
+            {
+              title: '支付状态',
+              dataIndex: 'paymentStatus',
+              width: 110,
+              render: (val: string) => {
+                const tag = PAY_STATUS[val] ?? { text: val, color: 'default' }
+                return <Tag color={tag.color}>{tag.text}</Tag>
+              }
+            },
+            { title: '下单时间', dataIndex: 'createTime', width: 170 },
+            {
+              title: '操作',
+              width: 90,
+              fixed: 'right',
+              render: (_: unknown, row: OrderRow) => (
+                <Button type="link" size="small" onClick={() => navigate(`/order/detail/${row.id}`)}>
+                  详情
+                </Button>
+              )
+            }
+          ]}
+        />
+      </Card>
+    </div>
+  )
+}

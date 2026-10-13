@@ -418,6 +418,18 @@ UPDATE `agri_trade_match_record` SET
     `convert_time` = CASE WHEN `order_id` IS NOT NULL THEN `create_time` ELSE NULL END
 WHERE `id` BETWEEN 7000 AND 8099;
 
+-- 订单状态口径对齐 + 还原。
+--
+-- 两件事：一是插入时我写的 'pending' 不在后端状态机里（后端认的是
+-- pending_confirm / paid / shipped / received / completed），
+-- 页面上"推进状态"按钮会因为这个不认识的取值而不出现；
+-- 二是这几条 UPDATE 同时充当"还原脚本" —— 在演示环境里点着状态机走一遍之后，
+-- 重跑本文件就能回到初始状态（下面的值与原 INSERT 一致）。
+UPDATE `agri_trade_order` SET `order_status`='paid',            `payment_status`='paid',    `paid_amount`=2496000, `logistics_status`='in_transit', `buyer_confirmed`=0, `settle_status`=NULL WHERE `id`=7601;
+UPDATE `agri_trade_order` SET `order_status`='shipped',         `payment_status`='paid',    `paid_amount`=896000,  `logistics_status`='delivered',  `buyer_confirmed`=0, `settle_status`=NULL WHERE `id`=7602;
+UPDATE `agri_trade_order` SET `order_status`='pending_confirm', `payment_status`='partial', `paid_amount`=272400,  `logistics_status`=NULL,         `buyer_confirmed`=0, `settle_status`=NULL WHERE `id`=7603;
+UPDATE `agri_trade_order` SET `order_status`='cancelled',       `payment_status`='unpaid',  `paid_amount`=0,       `logistics_status`=NULL,         `buyer_confirmed`=0, `settle_status`=NULL WHERE `id`=7604;
+
 -- ===========================================================================
 -- 清理语句（默认注释）。要清空本文件的演示数据时放开这几行执行即可 ——
 -- 只删 7000-8099 段，不会碰到真实数据。
