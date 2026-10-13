@@ -1,37 +1,48 @@
 server:
-  port: 8082
+  # 8084 不能用：nginx 的 mall-supplier 虚拟主机就听在 8084
+  # （见 ops/gateway/conf/conf.d/40-vue-apps.conf），后端再绑这个端口只会
+  # "Web server failed to start. Port 8084 was already in use"。
+  # 8089 在网关与各子系统后端里都没人占用。
+  port: 8089
 
 spring:
   application:
     name: agri-trade
   profiles:
-    active: dev
+    # 默认走 MySQL —— 平台基线：九个前台共用一个 MySQL 实例、各用各的库（架构文档 V2.0）。
+    #
+    # 原先这里默认 h2 内存库、而且下面的 sql.init.mode=never：那套组合下**一张表都不会建**，
+    # 应用能正常启动、任何接口都报 "Table doesn't exist"，等于跑了一个空壳。
+    # 需要脱离 MySQL 单跑时用 --spring.profiles.active=h2（application-h2.yml 保留着）。
+    active: mysql
   sql:
     init:
-      mode: never
+      mode: always
+      # 必须显式指定 UTF-8：spring.sql.init.encoding 默认取**平台默认编码**，
+      # 中文 Windows 上是 GBK。schema.sql 是 UTF-8 文件，按 GBK 读会把中文注释写成乱码。
+      encoding: UTF-8
+      schema-locations: classpath:schema.sql
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://localhost:3306/agri_trade?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
     username: root
-    password: root123
-  redis:
-    host: localhost
-    port: 6379
-    password:
-    database: 2
-    timeout: 3000ms
+    password: root
   jackson:
     time-zone: GMT+8
     date-format: yyyy-MM-dd HH:mm:ss
     serialization:
       write-dates-as-timestamps: false
+  data:
+    redis:
+      host: localhost
+      port: 6379
 
 mybatis-plus:
   mapper-locations: classpath*:mapper/**/*.xml
   type-aliases-package: com.agri.trade.entity
   global-config:
     db-config:
-      id-type: auto
+      id-type: assign_id
       logic-delete-field: delFlag
       logic-delete-value: 1
       logic-not-delete-value: 0
@@ -57,6 +68,11 @@ feign:
 
 services:
   masterdata:
-    url: http://localhost:8081
-  production:
+    # 主数据域后端实际跑在 8083（与 ops/gateway 的 upstream mdm_backend 一致）。
+    # 原先写 8081 是照抄另一套端口的残留：8081 现在是 nginx 给 agri-finance 的前端虚拟主机，
+    # 拿它当主数据接口地址只会把 Feign 调用打到网关的静态站点上。
     url: http://localhost:8083
+  production:
+    # 生产管理域后端跑在 8082（见 agri-production/backend/src/main/resources/application.yml）。
+    # 原先写 8083 —— 那是主数据域后端的端口，等于把两个域的服务地址都指错了。
+    url: http://localhost:8082

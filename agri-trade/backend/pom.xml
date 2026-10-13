@@ -15,7 +15,13 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.2.0</version>
+        <!-- 对齐平台基线 3.2.x 补丁线：core-platform 与 agri-master-data 跑在 3.2.5。
+             取 3.2.4 而不是 3.2.5 的原因很具体：本机仓库里 spring-boot-starter-parent
+             只有 3.0.4 / 3.2.0 / 3.2.4，缺 3.2.5 的 parent POM，离线构建会直接
+             "Non-resolvable parent POM"。原先的 3.2.0 则更糟：连
+             spring-boot-maven-plugin:3.2.0 都没有，`mvn spring-boot:run` 报
+             NoPluginFoundForPrefix，应用根本起不来。 -->
+        <version>3.2.4</version>
         <relativePath/>
     </parent>
 
@@ -115,11 +121,12 @@
             <optional>true</optional>
         </dependency>
 
-        <dependency>
-            <groupId>com.h2database</groupId>
-            <artifactId>h2</artifactId>
-            <scope>runtime</scope>
-        </dependency>
+        <!-- 这里原先声明了 com.h2database:h2（runtime），已移除。
+             原因有两条，第一条是硬的：本机离线仓库里 h2 一个版本都没有，
+             留着它 `mvn spring-boot:run` 直接 DependencyResolutionException，模块根本起不来。
+             第二条是方向性的：平台基线（架构文档 V2.0）要求九个前台统一用 MySQL，
+             MySQL 驱动本就在上面的依赖里声明过了。
+             需要脱离 MySQL 单跑时再联网把 H2 加回来（application-h2.yml 仍然保留）。 -->
 
         <dependency>
             <groupId>cn.hutool</groupId>
@@ -146,7 +153,15 @@
                             <artifactId>lombok</artifactId>
                         </exclude>
                     </excludes>
+                    <executable>true</executable>
                 </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>
