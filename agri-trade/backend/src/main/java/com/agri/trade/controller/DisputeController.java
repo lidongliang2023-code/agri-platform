@@ -29,7 +29,9 @@ public class DisputeController {
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "10") Integer pageSize,
             @RequestParam(required = false) Long orderId,
-            @RequestParam(required = false) String disputeStatus) {
+            @RequestParam(required = false) String disputeStatus,
+            // 列表页的搜索框一直在，但后端从来没收过 disputeNo —— 输了字点搜索没有任何变化。
+            @RequestParam(required = false) String disputeNo) {
         // 与订单列表同一口径：范围由服务端从令牌推导，前端不再自报参与方。
         PlatformIdentityService.MerchantScope scope = identityService.currentScope();
         if (!scope.resolved()) {
@@ -46,6 +48,7 @@ public class DisputeController {
         wrapper.and(w -> w.in(Dispute::getComplainantId, mine).or().in(Dispute::getRespondentId, mine));
         if (orderId != null) wrapper.eq(Dispute::getOrderId, orderId);
         if (disputeStatus != null) wrapper.eq(Dispute::getDisputeStatus, disputeStatus);
+        if (disputeNo != null && !disputeNo.isEmpty()) wrapper.like(Dispute::getDisputeNo, disputeNo);
         wrapper.orderByDesc(Dispute::getCreateTime);
         return ApiResponse.success(disputeMapper.selectPage(page, wrapper));
     }
@@ -82,7 +85,10 @@ public class DisputeController {
         if (result > 0) {
             TradeOrder order = orderMapper.selectById(dispute.getOrderId());
             if (order != null) {
-                order.setOrderStatus("in_dispute");
+                // 只记下"这单正在争议中"，**不改订单自己的状态**。
+                // 原先把订单置成 in_dispute —— 那个取值不在订单状态词表里（前端只会渲染成灰标签原文），
+                // 而且会把订单的生命周期位置（已付款/已发货）直接抹掉。
+                // 争议的进度有自己的 dispute_status 与 process_stage，不该覆盖订单状态。
                 order.setDisputeId(dispute.getId());
                 orderMapper.updateById(order);
             }
@@ -129,15 +135,49 @@ public class DisputeController {
         dispute.setUpdateTime(new Date());
 
         int result = disputeMapper.updateById(dispute);
-        if (result > 0) {
-            TradeOrder order = orderMapper.selectById(dispute.getOrderId());
-            if (order != null) {
-                order.setOrderStatus("completed");
-                orderMapper.updateById(order);
-            }
-            return ApiResponse.success(true);
+        // 仲裁结论只落在纠纷单上。原先这里还会把订单状态改成 completed ——
+        // 那是把"争议结束"误当成"订单走完了"，等于替买卖双方把订单结算掉。
+        return result > 0 ? ApiResponse.success(true) : ApiResponse.error("仲裁失败");
+    }
+
+    /**
+     * 当事人自行了结纠纷（和解 / 撤诉）。
+     *
+     * <p>与运营端 mediation / arbitration 的区别：那两个是第三方介入后给出结论，
+     * 这里是当事双方自己谈拢了，不需要运营经手。原先前端 api/dispute.ts 里写好了
+     * resolveDispute，页面上也有"处理"按钮，但后端没有这个路径 —— 点下去只能 404。</p>
+     *
+     * <p>权限：必须是自己参与的纠纷（沿用与详情同一套判权口径），
+     * 否则任何人都能替别人把纠纷"了结"掉。</p>
+     */
+    @PostMapping("/{id}/resolve")
+    public ApiResponse<Boolean> resolveDispute(@PathVariable Long id, @RequestBody java.util.Map<String, String> params) {
+        Dispute dispute = disputeMapper.selectById(id);
+        if (dispute == null) return ApiResponse.error("纠纷不存在");
+        String denied = denyIfNotParticipant(dispute);
+        if (denied != null) return ApiResponse.error(denied);
+        if ("resolved".equals(dispute.getDisputeStatus()) || "closed".equals(dispute.getDisputeStatus())) {
+            return ApiResponse.error("该纠纷已经了结，不能重复处理");
         }
-        return ApiResponse.error("仲裁失败");
+
+        String result = params.get("result");
+        String remark = params.get("remark");
+        dispute.setDisputeStatus("resolved");
+        dispute.setProcessStage("resolved");
+        dispute.setMediationResult(result);
+        dispute.setCloseTime(new Date());
+        dispute.setCloseReason(switch (result == null ? "" : result) {
+            case "agreed" -> "双方自行达成和解";
+            case "withdrawn" -> "申请人撤回";
+            default -> "当事人了结";
+        });
+        if (remark != null && !remark.isEmpty()) {
+            dispute.setRemark(remark);
+        }
+        dispute.setUpdateTime(new Date());
+
+        int updated = disputeMapper.updateById(dispute);
+        return updated > 0 ? ApiResponse.success(true) : ApiResponse.error("处理失败");
     }
 
     /**

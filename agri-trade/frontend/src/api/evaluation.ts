@@ -23,7 +23,9 @@ export interface EvaluationVO {
   ratingDelivery: number
   evaluationContent: string
   evaluationStatus: string
-  appealStatus: string
+  // 评价表里没有 appealStatus 这个字段（申诉是独立的 agri_trade_evaluation_appeal 表）。
+  // 原先这里带着它，页面上"是否匿名"那一列就去读了一个永远不存在的键。
+  isAnonymous: number
   createTime: string
   updateTime: string
 }

@@ -5,21 +5,29 @@ export interface DisputeQuery {
   pageSize: number
   orderId?: string
   disputeStatus?: string
+  disputeNo?: string
 }
 
 export interface DisputeVO {
   id: number
   disputeNo: string
   orderId: number
-  applicantId: number
-  applicantName: string
+  // 纠纷表的申请人是 complainant*（不是 applicant*），被申请人是 respondent*
+  complainantId: number
+  complainantName: string
   respondentId: number
   respondentName: string
   disputeType: string
-  disputeAmount: number
+  disputeReason: string
+  disputeDescription: string
   claimAmount: number
-  disputeContent: string
   disputeStatus: string
+  processStage: string
+  mediationResult: string
+  arbitrationResult: string
+  compensationAmount: number
+  closeTime: string
+  closeReason: string
   createTime: string
   updateTime: string
 }

@@ -10,7 +10,10 @@ import com.agri.trade.mapper.TradeProductCategoryMapper;
 import com.agri.trade.mapper.TradeProductMapper;
 import com.agri.trade.service.ISmartMatchService;
 import com.agri.trade.vo.MatchResultVO;
+import com.agri.trade.vo.MatchRecordVO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -436,5 +439,105 @@ public class SmartMatchServiceImpl implements ISmartMatchService {
         wrapper.eq(MatchRecord::getDelFlag, 0);
         wrapper.orderByDesc(MatchRecord::getMatchScore);
         return matchRecordMapper.selectList(wrapper);
+    }
+
+    @Override
+    public IPage<MatchRecordVO> getMatchRecordPage(int pageNum, int pageSize,
+                                                   Long demandId, Long productId, String matchType,
+                                                   Collection<Long> scopeMerchantIds) {
+        LambdaQueryWrapper<MatchRecord> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(MatchRecord::getDelFlag, 0);
+
+        // 数据范围：只返回"我参与的撮合"——我发布的采购需求（buyerId 是我的主体）
+        // 或我发布的货源（sellerId 是我的主体）。不传范围就返回全量，
+        // 会让任何登录用户看到别人的撮合分数与理由，和前面刚收口的订单/纠纷是同一类问题。
+        List<Long> myDemandIds = scopeMerchantIds == null || scopeMerchantIds.isEmpty()
+                ? List.of()
+                : demandMapper.selectList(new LambdaQueryWrapper<Demand>()
+                        .select(Demand::getId)
+                        .in(Demand::getBuyerId, scopeMerchantIds))
+                        .stream().map(Demand::getId).toList();
+        List<Long> myProductIds = scopeMerchantIds == null || scopeMerchantIds.isEmpty()
+                ? List.of()
+                : productMapper.selectList(new LambdaQueryWrapper<TradeProduct>()
+                        .select(TradeProduct::getId)
+                        .in(TradeProduct::getSellerId, scopeMerchantIds))
+                        .stream().map(TradeProduct::getId).toList();
+
+        wrapper.and(w -> {
+            if (!myDemandIds.isEmpty() && !myProductIds.isEmpty()) {
+                w.in(MatchRecord::getDemandId, myDemandIds).or().in(MatchRecord::getProductId, myProductIds);
+            } else if (!myDemandIds.isEmpty()) {
+                w.in(MatchRecord::getDemandId, myDemandIds);
+            } else if (!myProductIds.isEmpty()) {
+                w.in(MatchRecord::getProductId, myProductIds);
+            } else {
+                // 一个都没有 —— 用一个恒假条件返回空集，而不是放开成全量
+                w.eq(MatchRecord::getId, -1L);
+            }
+        });
+
+        if (demandId != null) {
+            wrapper.eq(MatchRecord::getDemandId, demandId);
+        }
+        if (productId != null) {
+            wrapper.eq(MatchRecord::getProductId, productId);
+        }
+        if (matchType != null && !matchType.isEmpty()) {
+            wrapper.eq(MatchRecord::getMatchType, matchType);
+        }
+        wrapper.orderByDesc(MatchRecord::getCreateTime);
+        Page<MatchRecord> page = matchRecordMapper.selectPage(new Page<>(pageNum, pageSize), wrapper);
+
+        // 批量补名称：逐条 selectById 会变成 N+1 查询，一页 10 条就是 20 次往返。
+        Set<Long> productIds = page.getRecords().stream()
+                .map(MatchRecord::getProductId).filter(Objects::nonNull).collect(Collectors.toSet());
+        Set<Long> demandIds = page.getRecords().stream()
+                .map(MatchRecord::getDemandId).filter(Objects::nonNull).collect(Collectors.toSet());
+        Map<Long, TradeProduct> products = productIds.isEmpty() ? Map.of()
+                : productMapper.selectBatchIds(productIds).stream()
+                        .collect(Collectors.toMap(TradeProduct::getId, p -> p));
+        Map<Long, Demand> demands = demandIds.isEmpty() ? Map.of()
+                : demandMapper.selectBatchIds(demandIds).stream()
+                        .collect(Collectors.toMap(Demand::getId, d -> d));
+
+        List<MatchRecordVO> rows = new ArrayList<>();
+        for (MatchRecord record : page.getRecords()) {
+            MatchRecordVO vo = new MatchRecordVO();
+            vo.setId(record.getId());
+            vo.setMatchNo(record.getMatchNo());
+            vo.setDemandId(record.getDemandId());
+            vo.setProductId(record.getProductId());
+            vo.setMatchType(record.getMatchType());
+            vo.setMatchScore(record.getMatchScore());
+            vo.setCategoryScore(record.getCategoryScore());
+            vo.setPriceScore(record.getPriceScore());
+            vo.setDistanceScore(record.getDistanceScore());
+            vo.setQualityScore(record.getQualityScore());
+            vo.setMatchReason(record.getMatchReason());
+            vo.setRecommendOrder(record.getRecommendOrder());
+            vo.setInquiryStatus(record.getInquiryStatus());
+            vo.setOrderStatus(record.getOrderStatus());
+            vo.setOrderId(record.getOrderId());
+            vo.setCreateTime(record.getCreateTime());
+
+            Demand demand = record.getDemandId() == null ? null : demands.get(record.getDemandId());
+            if (demand != null) {
+                vo.setDemandNo(demand.getDemandNo());
+                vo.setDemandName(demand.getDemandName());
+            }
+            TradeProduct product = record.getProductId() == null ? null : products.get(record.getProductId());
+            if (product != null) {
+                vo.setProductName(product.getProductName());
+                vo.setProductCode(product.getProductCode());
+                vo.setSellerId(product.getSellerId());
+                vo.setSellerName(product.getSellerName());
+            }
+            rows.add(vo);
+        }
+
+        Page<MatchRecordVO> result = new Page<>(page.getCurrent(), page.getSize(), page.getTotal());
+        result.setRecords(rows);
+        return result;
     }
 }

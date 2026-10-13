@@ -50,6 +50,19 @@ public class PlatformIdentityService {
             return !merchantIds.isEmpty();
         }
 
+        /** 我绑定的主体里，编号等于给定值的那个主体的名称；不属于我则返回 null。 */
+        public String nameOf(Long merchantId) {
+            if (merchantId == null) {
+                return null;
+            }
+            for (Map<String, Object> binding : bindings) {
+                if (merchantId.equals(toLong(binding.get("merchantId")))) {
+                    return str(binding.get("merchantName"));
+                }
+            }
+            return null;
+        }
+
         static MerchantScope ok(List<Map<String, Object>> bindings) {
             LinkedHashSet<Long> ids = new LinkedHashSet<>();
             for (Map<String, Object> binding : bindings) {

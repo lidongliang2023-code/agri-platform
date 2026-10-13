@@ -23,7 +23,38 @@ export interface MatchQuery {
   pageSize: number
   demandId?: number
   productId?: number
-  matchStatus?: string
+  matchType?: string
+}
+
+/**
+ * 撮合记录（列表用）。
+ *
+ * <p>注意这不是 MatchRecord 实体：记录表里只有 demandId/productId，没有商品名与供应商名。
+ * 后端在 /match/list 里已经把名称补好再返回 —— 直接读实体字段只会得到两列空白。</p>
+ */
+export interface MatchRecordVO {
+  id: number
+  matchNo: string
+  demandId: number
+  demandNo: string
+  demandName: string
+  productId: number
+  productName: string
+  productCode: string
+  sellerId: number
+  sellerName: string
+  matchType: string
+  matchScore: number
+  categoryScore: number
+  priceScore: number
+  distanceScore: number
+  qualityScore: number
+  matchReason: string
+  recommendOrder: number
+  inquiryStatus: string
+  orderStatus: string
+  orderId: number
+  createTime: string
 }
 
 export async function matchDemandToProducts(demandId: number, limit: number = 10) {
