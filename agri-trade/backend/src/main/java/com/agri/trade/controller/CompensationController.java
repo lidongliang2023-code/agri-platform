@@ -68,11 +68,26 @@ public class CompensationController {
         Long orderId = params.containsKey("orderId") ? ((Number) params.get("orderId")).longValue() : null;
         Long disputeId = params.containsKey("disputeId") ? ((Number) params.get("disputeId")).longValue() : null;
         String compensationType = (String) params.get("compensationType");
-        BigDecimal amount = new BigDecimal(params.get("amount").toString());
-        Long applicantId = ((Number) params.get("applicantId")).longValue();
+        // 金额必填且必须能解析：原先直接 params.get("amount").toString()，
+        // 不传就是 NPE→500，传个 "abc" 就是 NumberFormatException→500。
+        if (params.get("amount") == null) {
+            return ApiResponse.error("赔付金额不能为空");
+        }
+        BigDecimal amount;
+        try {
+            amount = new BigDecimal(params.get("amount").toString().trim());
+        } catch (NumberFormatException e) {
+            return ApiResponse.error("赔付金额格式不正确");
+        }
+        // 申请人可以不带：带了纠纷就按纠纷的申请人算（服务层兜底），
+        // 原先这里无条件 ((Number) params.get("applicantId")).longValue()，缺一个字段就 500。
+        Long applicantId = params.get("applicantId") == null ? null : ((Number) params.get("applicantId")).longValue();
         String applicantName = (String) params.get("applicantName");
 
         CompensationRecord compensation = compensationService.createCompensation(orderId, disputeId, compensationType, amount, applicantId, applicantName);
+        if (compensation == null) {
+            return ApiResponse.error("创建失败：金额必须大于 0；带纠纷时要确认纠纷存在且没有重复赔付");
+        }
         return ApiResponse.success(compensation);
     }
 

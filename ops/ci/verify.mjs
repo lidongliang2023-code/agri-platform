@@ -14,6 +14,9 @@
  *   <li><b>bucket</b>：发布产物完整性 —— 指针 → 版本目录 → index.html 引用的资源是否真的存在。
  *       这一条专门盯"指针切过去了、资源却 404"的白屏发布。</li>
  *   <li><b>apps</b>：逐个子系统前端跑它自己的 build（默认关闭，加 --build 打开）。</li>
+ *   <li><b>schema</b>：扫"NOT NULL 且无默认值、但实体没映射"的列 —— 这类列一插入就 500，
+ *       而列表页一切正常，光靠点页面发现不了（见 scripts/check-notnull-columns.mjs）。
+ *       没设 MYSQL_PWD 或连不上库时跳过（CI 里没有数据库，属预期）。</li>
  * </ul>
  *
  * <p><b>CI 的已知边界</b>：`agri-master-data/`、`agri-finance/`、`agri-s2b2c/` 这些目录目前
@@ -268,11 +271,45 @@ async function checkApps() {
   }
 }
 
+/** ---------- schema：表里的列和实体是否对得上 ---------- */
+
+/**
+ * 扫"NOT NULL 且没有默认值、但实体没映射"的列。
+ *
+ * <p>为什么单列一组：这类列的失败方式是"写接口 500、列表页完全正常"，
+ * 而演示数据通常是直接写进库的，所以点页面点不出来 —— 本仓库已经栽过两次
+ * （agri_trade_dispute 的发起纠纷、agri_trade_contract 的创建合同）。</p>
+ *
+ * <p>需要数据库，所以本地跑；CI 没有库时跳过而不是判失败。</p>
+ */
+function checkSchema() {
+  const script = path.join(REPO_ROOT, 'scripts', 'check-notnull-columns.mjs')
+  if (!existsSync(script)) {
+    record('schema', '列与实体一致性', 'skip', 'scripts/check-notnull-columns.mjs 不存在')
+    return
+  }
+  if (!process.env.MYSQL_PWD) {
+    record('schema', '列与实体一致性', 'skip', '未设 MYSQL_PWD（CI 无数据库，属预期）')
+    return
+  }
+  const result = run(process.execPath, [script])
+  const output = `${result.stdout ?? ''}${result.stderr ?? ''}`.trim()
+  if (result.status === 0) {
+    record('schema', '列与实体一致性', 'pass', '没有"插入即 500"的列')
+  } else if (result.status === 3) {
+    record('schema', '列与实体一致性', 'skip', output.split(/\r?\n/)[0])
+  } else {
+    // 脚本自己会把表名列名打出来，这里整段带上，别让人再去手敲一遍
+    record('schema', '列与实体一致性', 'fail', output.split(/\r?\n/).filter((l) => l.includes('✗')).join(' | ').slice(0, 400))
+  }
+}
+
 // ---------------- 执行 ----------------
 if (enabled('workspace')) await checkWorkspace()
 if (enabled('shared')) checkShared()
 if (enabled('gateway')) await checkGateway()
 if (enabled('bucket')) await checkBucket()
+if (enabled('schema')) checkSchema()
 if (args.build && enabled('apps')) await checkApps()
 
 const icons = { pass: '✓', fail: '✗', skip: '·', warn: '⚠' }

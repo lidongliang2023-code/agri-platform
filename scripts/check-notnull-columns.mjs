@@ -14,7 +14,7 @@
  *   MYSQL_PWD=<本机 mysql 口令> node scripts/check-notnull-columns.mjs [库名] [实体目录...]
  *   mysql 客户端不在 PATH 时用 MYSQL_BIN 指定绝对路径
  * 默认库名 agri_trade，默认实体目录 agri-trade/backend/src/main/java/com/agri/trade/entity
- * 退出码：0 = 没发现，1 = 发现（可直接用在 CI 里）
+ * 退出码：0 = 没发现，1 = 发现（可直接用在 CI 里），2 = 缺 MYSQL_PWD，3 = 连不上库
  */
 import { execFileSync } from 'node:child_process'
 import { readdirSync, readFileSync, existsSync } from 'node:fs'
@@ -59,11 +59,18 @@ const defaultMysql =
 const mysqlBin = process.env.MYSQL_BIN || (existsSync(defaultMysql) ? defaultMysql : 'mysql')
 
 function query(sql) {
-  const out = execFileSync(
-    mysqlBin,
-    ['-uroot', `-p${pwd}`, '-N', '-B', '-e', sql],
-    { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }
-  )
+  let out
+  try {
+    out = execFileSync(
+      mysqlBin,
+      ['-uroot', `-p${pwd}`, '-N', '-B', '-e', sql],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }
+    )
+  } catch (error) {
+    // 连不上库不算"发现隐患"，单独用 3 退出，让调用方（门禁）判成 skip 而不是 fail
+    console.error(`连不上 MySQL（${mysqlBin}）：${error.stderr?.toString().trim().split('\n')[0] ?? error.message}`)
+    process.exit(3)
+  }
   // 注意：Windows 上 mysql 客户端的输出是 CRLF，单元格末尾会带 \r，
   // 不 trim 的话列名永远匹配不上实体映射（会满屏误报）。
   return out

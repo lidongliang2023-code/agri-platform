@@ -5,11 +5,13 @@ import com.agri.trade.entity.Quote;
 import com.agri.trade.entity.Demand;
 import com.agri.trade.entity.TradeProduct;
 import com.agri.trade.entity.TradeOrder;
+import com.agri.trade.entity.OrderItem;
 import com.agri.trade.mapper.InquiryMapper;
 import com.agri.trade.mapper.QuoteMapper;
 import com.agri.trade.mapper.DemandMapper;
 import com.agri.trade.mapper.TradeProductMapper;
 import com.agri.trade.mapper.TradeOrderMapper;
+import com.agri.trade.mapper.OrderItemMapper;
 import com.agri.trade.service.IInquiryService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -30,6 +32,7 @@ public class InquiryServiceImpl extends ServiceImpl<InquiryMapper, Inquiry> impl
     private final TradeProductMapper productMapper;
     private final QuoteMapper quoteMapper;
     private final TradeOrderMapper orderMapper;
+    private final OrderItemMapper orderItemMapper;
 
     @Override
     public Inquiry createInquiry(Long demandId, Long productId, java.util.Collection<Long> buyerScopeMerchantIds) {
@@ -220,11 +223,33 @@ public class InquiryServiceImpl extends ServiceImpl<InquiryMapper, Inquiry> impl
         // 页面上会直接显示英文原文，而且它不等同于任何已知状态。用 pending_confirm。
         order.setOrderStatus("pending_confirm");
         order.setPaymentStatus("unpaid");
+        // 订单来源：与"接受报价"那条路（QuoteServiceImpl）同一口径。
+        // 这里原先没写 source —— 订单落库后来源为空，按来源做的统计会把这一类整批漏掉。
+        order.setSource("quote");
         order.setDelFlag(0);
         order.setCreateTime(new Date());
         order.setUpdateTime(new Date());
 
         orderMapper.insert(order);
+
+        // 订单明细：与"接受报价"那条路保持一致。
+        // 这里原先一行明细都不落 —— 从询价转出来的订单，详情页的"商品明细"永远是空的
+        // （同一个订单表，两条生成路径一个写明细一个不写，页面表现就不一样）。
+        OrderItem item = new OrderItem();
+        item.setOrderId(order.getId());
+        item.setProductId(quote.getProductId());
+        item.setProductName(quote.getProductName());
+        item.setCategoryId(order.getCategoryId());
+        item.setCategoryName(order.getCategoryName());
+        item.setUnit(quote.getUnit());
+        item.setQuantity(quote.getQuantity());
+        item.setUnitPrice(quote.getUnitPrice());
+        // 实体里的金额字段叫 totalPrice（表里另有 amount 列，实体没映射 —— 写 amount
+        // 会入库成功但接口读不到，页面上金额一列永远是空的）
+        item.setTotalPrice(quote.getQuoteAmount() != null ? quote.getQuoteAmount() : order.getGoodsAmount());
+        item.setDelFlag(0);
+        item.setCreateTime(new Date());
+        orderItemMapper.insert(item);
 
         inquiry.setOrderId(order.getId());
         inquiry.setInquiryStatus("converted");

@@ -29,6 +29,33 @@ public class CompensationServiceImpl extends ServiceImpl<CompensationRecordMappe
     @Transactional
     public CompensationRecord createCompensation(Long orderId, Long disputeId, String compensationType,
                                                  BigDecimal amount, Long applicantId, String applicantName) {
+        // 金额必须为正：这是要打出去的钱，0 或负数没有业务含义（原先直接落库）
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            return null;
+        }
+        // 一单纠纷只赔一次：原先同一个 disputeId 可以反复建单，
+        // 每张单都能各自走到"已打款"，等于同一场纠纷赔了多次。
+        if (disputeId != null) {
+            CompensationRecord exist = getByDispute(disputeId);
+            if (exist != null) {
+                return exist;
+            }
+            Dispute dispute = disputeMapper.selectById(disputeId);
+            if (dispute == null) {
+                return null;
+            }
+            if (orderId == null) {
+                orderId = dispute.getOrderId();
+            }
+            // 申请人没带就按纠纷的申请人算（运营建单时不必再手抄一遍主体号）
+            if (applicantId == null) {
+                applicantId = dispute.getComplainantId();
+            }
+            if (applicantName == null || applicantName.isEmpty()) {
+                applicantName = dispute.getComplainantName();
+            }
+        }
+
         CompensationRecord compensation = new CompensationRecord();
         compensation.setCompensationNo("CP" + System.currentTimeMillis());
         compensation.setOrderId(orderId);
@@ -46,8 +73,16 @@ public class CompensationServiceImpl extends ServiceImpl<CompensationRecordMappe
             TradeOrder order = orderMapper.selectById(orderId);
             if (order != null) {
                 compensation.setOrderNo(order.getOrderNo());
-                compensation.setRecipientId(order.getBuyerId());
-                compensation.setRecipientName(order.getBuyerName());
+                // 收款方 = 受损方。纠纷里申请人是买方时赔给买方，是卖方时赔给卖方 ——
+                // 原先一律写订单买方，卖方申请成立的赔付会被打给买方。
+                Dispute dispute = disputeId == null ? null : disputeMapper.selectById(disputeId);
+                if (dispute != null && "seller".equals(dispute.getComplainantType())) {
+                    compensation.setRecipientId(order.getSellerId());
+                    compensation.setRecipientName(order.getSellerName());
+                } else {
+                    compensation.setRecipientId(order.getBuyerId());
+                    compensation.setRecipientName(order.getBuyerName());
+                }
             }
         }
 
@@ -60,6 +95,12 @@ public class CompensationServiceImpl extends ServiceImpl<CompensationRecordMappe
     public CompensationRecord reviewCompensation(Long compensationId, String reviewResult, String reviewer, String remark) {
         CompensationRecord compensation = baseMapper.selectById(compensationId);
         if (compensation == null) {
+            return null;
+        }
+        // 只有"待审核"的单据能审：原先任何状态都能再审 ——
+        // 已经打款的单再点一次"驳回"，状态会从 paid 翻回 rejected，而钱早就出去了；
+        // 反过来已驳回的单也能被改成通过。一张单据只能被审一次。
+        if (!"pending".equals(compensation.getCompensationStatus())) {
             return null;
         }
 
@@ -107,7 +148,15 @@ public class CompensationServiceImpl extends ServiceImpl<CompensationRecordMappe
         if (compensation.getDisputeId() != null) {
             Dispute dispute = disputeMapper.selectById(compensation.getDisputeId());
             if (dispute != null) {
-                dispute.setDisputeStatus("completed");
+                // 纠纷状态词表里没有 completed —— 那个值前端两个页面都认不出来，
+                // 会直接显示英文原文，而且"未结"与"已解决"两个筛选也都不认它，
+                // 赔完款的纠纷反而从两个列表里同时消失。赔付完成就是已解决。
+                dispute.setDisputeStatus("resolved");
+                // 赔了多少、什么时候赔的，记在纠纷单上（表里就有这两列，原先从没写过），
+                // 否则运营回看纠纷时看不到"最后赔了多少"。
+                dispute.setCompensationAmount(compensation.getCompensationAmount());
+                dispute.setCompensationTime(compensation.getPayTime());
+                dispute.setUpdateTime(new Date());
                 disputeMapper.updateById(dispute);
             }
         }

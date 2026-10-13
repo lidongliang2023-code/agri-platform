@@ -127,6 +127,19 @@ export async function getAdminCompensationPage(params: Record<string, unknown>) 
   return response.data
 }
 
+/**
+ * 新建赔付单。
+ *
+ * <p>这个接口此前**没有任何前端调用** —— 赔付执行页只有"核准/打款"，
+ * 于是"要赔一笔钱"这件事只能靠人工写库。仲裁判了"支持申请人"之后，
+ * 后端现在会自动落一张待审核的赔付单；运营也可以在这里手工补一张
+ * （例如没有走纠纷的平台补偿）。</p>
+ */
+export async function createCompensation(data: Record<string, unknown>) {
+  const response = await axios.post('/api/trade/compensation', data)
+  return response.data
+}
+
 /** 赔付审核：reviewResult 取 approved / rejected，其余字段作为审核痕迹留库 */
 export async function reviewCompensation(
   id: number | string,

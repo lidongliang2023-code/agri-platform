@@ -6,6 +6,7 @@ import com.agri.trade.entity.TradeOrder;
 import com.agri.trade.mapper.DisputeMapper;
 import com.agri.trade.mapper.TradeOrderMapper;
 import com.agri.trade.service.PlatformIdentityService;
+import com.agri.trade.service.ICompensationService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -23,6 +24,7 @@ public class DisputeController {
     private final DisputeMapper disputeMapper;
     private final TradeOrderMapper orderMapper;
     private final PlatformIdentityService identityService;
+    private final ICompensationService compensationService;
 
     @GetMapping("/page")
     public ApiResponse<IPage<Dispute>> getDisputePage(
@@ -163,19 +165,57 @@ public class DisputeController {
         Dispute dispute = disputeMapper.selectById(id);
         if (dispute == null) return ApiResponse.error("纠纷不存在");
 
+        String arbitrationResult = (String) params.get("result");
         dispute.setProcessStage("arbitration");
         dispute.setArbitrator((String) params.get("arbitrator"));
         dispute.setArbitrationTime(new Date());
-        dispute.setArbitrationResult((String) params.get("result"));
+        dispute.setArbitrationResult(arbitrationResult);
         dispute.setDisputeStatus("resolved");
         dispute.setCloseTime(new Date());
         dispute.setCloseReason("仲裁结束");
         dispute.setUpdateTime(new Date());
 
         int result = disputeMapper.updateById(dispute);
+        // 仲裁判了"支持申请人/部分支持" = 平台认下了要赔钱这件事，
+        // 这里落一张**待审核**的赔付单，接着走赔付执行页的"核准 → 打款"两步。
+        //
+        // 为什么必须由系统生成：创建赔付单的接口（POST /api/trade/compensation）
+        // 在整份前端里一次都没被调用过 —— 赔付执行页只有"核准/打款"，
+        // 于是仲裁判赔之后，赔付单只能靠人工写库，或者干脆就没人赔。
+        // 金额：全额支持取索赔金额；部分支持由仲裁传入 compensationAmount。
+        // 注意：这里的 result 是 updateById 的影响行数（int），裁定结论在 arbitrationResult 里。
+        // 别写成 "uphold".equals(result) —— String.equals(Integer) 不报错、恒为 false，
+        // 表现就是"这段代码明明在、却从来没生效过"。
+        if ("uphold".equals(arbitrationResult) || "partial".equals(arbitrationResult)) {
+            java.math.BigDecimal award = toAmount(params.get("compensationAmount"));
+            if (award == null) {
+                award = dispute.getCompensationAmount() != null ? dispute.getCompensationAmount() : dispute.getClaimAmount();
+            }
+            if (award != null && award.compareTo(java.math.BigDecimal.ZERO) > 0) {
+                compensationService.createCompensation(
+                        dispute.getOrderId(),
+                        dispute.getId(),
+                        dispute.getDisputeType() == null ? "dispute" : dispute.getDisputeType(),
+                        award,
+                        dispute.getComplainantId(),
+                        dispute.getComplainantName());
+            }
+        }
         // 仲裁结论只落在纠纷单上。原先这里还会把订单状态改成 completed ——
         // 那是把"争议结束"误当成"订单走完了"，等于替买卖双方把订单结算掉。
         return result > 0 ? ApiResponse.success(true) : ApiResponse.error("仲裁失败");
+    }
+
+    /** 从请求体里取一个金额（可能是 Number，也可能是字符串），取不到返回 null。 */
+    private java.math.BigDecimal toAmount(Object raw) {
+        if (raw == null) {
+            return null;
+        }
+        try {
+            return new java.math.BigDecimal(String.valueOf(raw).trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     /**

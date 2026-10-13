@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Button, Card, Col, Form, Input, Modal, Popconfirm, Row, Select, Space, Table, Tag, message } from 'antd'
-import { ReloadOutlined } from '@ant-design/icons'
-import { executeCompensation, getAdminCompensationPage, reviewCompensation } from '@/api/admin'
+import { Alert, Button, Card, Col, Form, Input, InputNumber, Modal, Popconfirm, Row, Select, Space, Table, Tag, message } from 'antd'
+import { PlusOutlined, ReloadOutlined } from '@ant-design/icons'
+import { createCompensation, executeCompensation, getAdminCompensationPage, getAdminDisputePage, reviewCompensation } from '@/api/admin'
 import { getCurrentUser } from '@/utils/session'
 
 interface CompensationRow {
@@ -29,6 +29,16 @@ const STATUS: Record<string, { text: string; color: string }> = {
   paid: { text: '已打款', color: 'success' }
 }
 
+/** 赔付类型（库里存的是英文枚举，建单时给一组对得上的取值）。 */
+const COMPENSATION_TYPE: Record<string, string> = {
+  delay: '交付延误',
+  quality: '质量不符',
+  quantity: '数量短缺',
+  price: '价格争议',
+  dispute: '纠纷裁定',
+  other: '其他'
+}
+
 /**
  * 赔付执行（运营端）。
  *
@@ -50,6 +60,43 @@ export default function AdminCompensation() {
   const [keyword, setKeyword] = useState('')
   const [current, setCurrent] = useState<CompensationRow | null>(null)
   const [form] = Form.useForm()
+  const [creating, setCreating] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [createForm] = Form.useForm()
+  // 建单时可挂到一场纠纷上：挂了就以纠纷为准（订单、收款方、申请人由后端按纠纷推导），
+  // 同一场纠纷只允许赔一次。
+  const [disputes, setDisputes] = useState<Array<{ id: number; disputeNo: string; claimAmount?: number; complainantName?: string }>>([])
+
+  const openCreate = async () => {
+    createForm.resetFields()
+    setCreating(true)
+    try {
+      const res = await getAdminDisputePage({ pageNum: 1, pageSize: 50, disputeStatus: 'open' })
+      if (res?.code === 200) setDisputes(res.data?.records ?? [])
+    } catch {
+      setDisputes([])
+    }
+  }
+
+  const submitCreate = async () => {
+    const values = await createForm.validateFields()
+    setSaving(true)
+    try {
+      const res = await createCompensation(values)
+      if (res?.code === 200) {
+        message.success('已建单，等核准')
+        setCreating(false)
+        createForm.resetFields()
+        load()
+      } else {
+        message.error(res?.message ?? '建单失败')
+      }
+    } catch {
+      message.error('建单失败（请检查后端是否在运行）')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   const load = useCallback(() => {
     setLoading(true)
@@ -131,9 +178,14 @@ export default function AdminCompensation() {
             />
           </Col>
           <Col flex="auto">
+            <Space>
             <Button icon={<ReloadOutlined />} onClick={load}>
               刷新
             </Button>
+            <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+              新建赔付单
+            </Button>
+            </Space>
           </Col>
         </Row>
       </Card>
@@ -246,6 +298,51 @@ export default function AdminCompensation() {
             rules={[{ required: true, message: '请填写驳回原因' }]}
           >
             <Input.TextArea rows={3} placeholder="例如：责任认定尚未完成，暂不予赔付" />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title="新建赔付单"
+        open={creating}
+        onCancel={() => setCreating(false)}
+        onOk={submitCreate}
+        confirmLoading={saving}
+        destroyOnClose
+        width={640}
+      >
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message="仲裁判「支持申请人/部分支持」时，系统会自动落一张待审核的赔付单"
+          description="这里用于手工补单（例如没有走纠纷的平台补偿）。挂了纠纷就以纠纷为准：同一场纠纷只能赔一次，订单与收款方由系统按纠纷推导。"
+        />
+        <Form form={createForm} layout="vertical">
+          <Form.Item
+            name="disputeId"
+            label="关联纠纷（可选）"
+            extra="只列出未结纠纷；选了之后订单、收款方、申请人都按这单纠纷推导"
+          >
+            <Select
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              placeholder="不挂纠纷也可以，直接填下面的类型与金额"
+              options={disputes.map((d) => ({
+                value: d.id,
+                label: `${d.disputeNo}　${d.complainantName ?? ''}　索赔 ¥${d.claimAmount ?? '—'}`
+              }))}
+            />
+          </Form.Item>
+          <Form.Item name="compensationType" label="赔付类型" rules={[{ required: true, message: '请选择类型' }]}>
+            <Select
+              placeholder="请选择"
+              options={Object.entries(COMPENSATION_TYPE).map(([value, label]) => ({ value, label }))}
+            />
+          </Form.Item>
+          <Form.Item name="amount" label="赔付金额（元）" rules={[{ required: true, message: '请填写金额' }]}>
+            <InputNumber style={{ width: '100%' }} min={0.01} precision={2} placeholder="必须大于 0" />
           </Form.Item>
         </Form>
       </Modal>
