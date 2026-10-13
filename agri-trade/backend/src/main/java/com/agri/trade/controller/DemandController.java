@@ -28,12 +28,27 @@ public class DemandController {
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "10") Integer pageSize,
             @RequestParam(required = false) Long buyerId,
-            @RequestParam(required = false) String demandStatus) {
+            @RequestParam(required = false) String demandStatus,
+            // 需求列表页要按需求单号、品类、关键词搜。
+            // 原先只有 buyerId 与状态两个条件，页面上的搜框输了字点搜索毫无变化
+            // （参数名对不上，Spring 直接忽略）。
+            @RequestParam(required = false) String demandNo,
+            @RequestParam(required = false) Long categoryId,
+            @RequestParam(required = false) String keyword) {
         Page<Demand> page = new Page<>(pageNum, pageSize);
         LambdaQueryWrapper<Demand> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Demand::getDelFlag, 0);
         if (buyerId != null) wrapper.eq(Demand::getBuyerId, buyerId);
         if (demandStatus != null) wrapper.eq(Demand::getDemandStatus, demandStatus);
+        if (demandNo != null && !demandNo.isEmpty()) wrapper.like(Demand::getDemandNo, demandNo);
+        if (categoryId != null) wrapper.eq(Demand::getCategoryId, categoryId);
+        if (keyword != null && !keyword.isEmpty()) {
+            // 关键词同时匹配需求名称 / 商品名称 / 品种：这三个是买家写需求时最可能被搜的字段。
+            // 用 and(...or...) 包一层，否则 or 会把前面的 del_flag / 状态条件一起放开。
+            wrapper.and(w -> w.like(Demand::getDemandName, keyword)
+                    .or().like(Demand::getProductName, keyword)
+                    .or().like(Demand::getVariety, keyword));
+        }
         wrapper.orderByDesc(Demand::getCreateTime);
         return ApiResponse.success(demandMapper.selectPage(page, wrapper));
     }

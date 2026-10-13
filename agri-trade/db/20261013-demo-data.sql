@@ -403,6 +403,21 @@ WHERE `id` BETWEEN 7000 AND 8099;
 -- is_anonymous 是页面上"是否匿名"列读的字段（0=实名 1=匿名）
 UPDATE `agri_trade_evaluation` SET `is_anonymous` = 0 WHERE `id` BETWEEN 7000 AND 8099;
 
+-- 需求的名称与商品名：列表页/详情页要显示，而插入时这两列没给值（页面会一片空白）。
+-- 用已有的品类与品种拼一个可读标题，不新造事实。
+UPDATE `agri_trade_demand` SET
+    `demand_name`  = CONCAT(COALESCE(`category_name`, '农产品'), '·', COALESCE(`variety`, ''), ' 采购需求'),
+    `product_name` = COALESCE(NULLIF(`variety`, ''), `category_name`)
+WHERE `id` BETWEEN 7000 AND 8099
+  AND (`demand_name` IS NULL OR `demand_name` = '');
+
+-- 撮合记录的"下单情况"：实体里有 order_status / convert_time，表里插入时是空的。
+-- 按已有 order_id 推导（有订单=已转单），不是新编的状态。
+UPDATE `agri_trade_match_record` SET
+    `order_status` = CASE WHEN `order_id` IS NOT NULL THEN 'completed' ELSE 'pending' END,
+    `convert_time` = CASE WHEN `order_id` IS NOT NULL THEN `create_time` ELSE NULL END
+WHERE `id` BETWEEN 7000 AND 8099;
+
 -- ===========================================================================
 -- 清理语句（默认注释）。要清空本文件的演示数据时放开这几行执行即可 ——
 -- 只删 7000-8099 段，不会碰到真实数据。

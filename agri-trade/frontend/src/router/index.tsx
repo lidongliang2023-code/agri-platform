@@ -9,6 +9,7 @@ import ProductDetail from '@/pages/product/detail'
 import ShopDetail from '@/pages/shop/detail'
 import DemandList from '@/pages/demand/list'
 import DemandCreate from '@/pages/demand/create'
+import DemandDetail from '@/pages/demand/detail'
 import ContractList from '@/pages/contract/list'
 import LogisticsList from '@/pages/logistics/list'
 import EvaluationList from '@/pages/evaluation/list'
@@ -44,6 +45,7 @@ function AppRouter() {
         <Route path="shop/:sellerId" element={<ShopDetail />} />
         <Route path="demand" element={<DemandList />} />
         <Route path="demand/create" element={<DemandCreate />} />
+        <Route path="demand/detail/:id" element={<DemandDetail />} />
         <Route path="quote" element={<QuoteList />} />
         <Route path="match" element={<MatchList />} />
         <Route path="price" element={<PriceList />} />
