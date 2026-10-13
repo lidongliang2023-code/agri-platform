@@ -30,12 +30,19 @@ public class EvaluationController {
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "10") Integer pageSize,
             @RequestParam(required = false) Long orderId,
-            @RequestParam(required = false) Long evaluateeId) {
+            @RequestParam(required = false) Long evaluateeId,
+            // 列表页的搜索框与评分下拉一直在，但后端从来没收过这两个参数 —— 输了字、选了星级都没反应。
+            @RequestParam(required = false) String evaluationNo,
+            @RequestParam(required = false) BigDecimal ratingOverall) {
         Page<Evaluation> page = new Page<>(pageNum, pageSize);
         LambdaQueryWrapper<Evaluation> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Evaluation::getDelFlag, 0);
         if (orderId != null) wrapper.eq(Evaluation::getOrderId, orderId);
         if (evaluateeId != null) wrapper.eq(Evaluation::getEvaluateeId, evaluateeId);
+        if (evaluationNo != null && !evaluationNo.isEmpty()) {
+            wrapper.like(Evaluation::getEvaluationNo, evaluationNo);
+        }
+        if (ratingOverall != null) wrapper.eq(Evaluation::getRatingOverall, ratingOverall);
         wrapper.orderByDesc(Evaluation::getCreateTime);
         return ApiResponse.success(evaluationMapper.selectPage(page, wrapper));
     }

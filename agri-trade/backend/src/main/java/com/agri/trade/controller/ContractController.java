@@ -5,6 +5,7 @@ import com.agri.trade.entity.Contract;
 import com.agri.trade.entity.ContractTemplate;
 import com.agri.trade.mapper.ContractMapper;
 import com.agri.trade.mapper.ContractTemplateMapper;
+import com.agri.trade.service.PlatformIdentityService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -22,6 +23,7 @@ public class ContractController {
 
     private final ContractMapper contractMapper;
     private final ContractTemplateMapper templateMapper;
+    private final PlatformIdentityService identityService;
 
     @GetMapping("/template/page")
     public ApiResponse<IPage<ContractTemplate>> getTemplatePage(
@@ -58,15 +60,26 @@ public class ContractController {
     public ApiResponse<IPage<Contract>> getContractPage(
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "10") Integer pageSize,
-            @RequestParam(required = false) Long buyerId,
-            @RequestParam(required = false) Long sellerId,
-            @RequestParam(required = false) String contractStatus) {
+            @RequestParam(required = false) String contractStatus,
+            // 列表页的搜索框一直在，但后端从来没收过 contractNo —— 输了字点搜索没有任何变化。
+            @RequestParam(required = false) String contractNo) {
+        // 数据范围：只返回"我参与的合同"（我是买方或卖方）。
+        // 这个接口原先**不给范围就返回全平台合同** —— 与订单/纠纷是同一个越权面，
+        // 只是当时没一起收口。合同里有金额、签署状态与双方名称，更不该全量外露。
+        PlatformIdentityService.MerchantScope scope = identityService.currentScope();
+        if (!scope.resolved()) {
+            return ApiResponse.error(scope.error());
+        }
         Page<Contract> page = new Page<>(pageNum, pageSize);
+        if (!scope.hasBinding()) {
+            return ApiResponse.success(page);
+        }
+        List<Long> mine = scope.merchantIds();
         LambdaQueryWrapper<Contract> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Contract::getDelFlag, 0);
-        if (buyerId != null) wrapper.eq(Contract::getBuyerId, buyerId);
-        if (sellerId != null) wrapper.eq(Contract::getSellerId, sellerId);
+        wrapper.and(w -> w.in(Contract::getBuyerId, mine).or().in(Contract::getSellerId, mine));
         if (contractStatus != null) wrapper.eq(Contract::getContractStatus, contractStatus);
+        if (contractNo != null && !contractNo.isEmpty()) wrapper.like(Contract::getContractNo, contractNo);
         wrapper.orderByDesc(Contract::getCreateTime);
         return ApiResponse.success(contractMapper.selectPage(page, wrapper));
     }

@@ -1,9 +1,11 @@
 import { Card, Row, Col, Statistic, Table, Button } from 'antd'
 import { ShoppingCartOutlined, UserOutlined, ManOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import { getHomeSummary } from '@/api/home'
 
 function Home() {
+  const navigate = useNavigate()
   // 一次请求拿全：原先这里是两个返回写死对象的"接口"，页面根本不发请求
   const { data: summary } = useQuery({
     queryKey: ['homeSummary'],
@@ -95,7 +97,8 @@ function Home() {
 
       <Row gutter={16}>
         <Col span={14}>
-          <Card title="今日行情快报" extra={<Button type="link">查看更多</Button>}>
+          {/* "查看更多"原先没有 onClick，点了什么都不发生。行情详情页已经有了（/price），接过去即可。 */}
+          <Card title="今日行情快报" extra={<Button type="link" onClick={() => navigate('/price')}>查看更多</Button>}>
             <Table 
               columns={marketColumns} 
               dataSource={marketData?.data?.marketList || []} 

@@ -2,12 +2,15 @@ import { useState } from 'react'
 import { Alert, Table, Button, Card, Input, Select, Space, Rate, Modal, Form, message } from 'antd'
 import { SearchOutlined, WarningOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
-import { getEvaluationList, appealEvaluation, type EvaluationVO } from '@/api/evaluation'
+import { getEvaluationList, appealEvaluation, type EvaluationQuery, type EvaluationVO } from '@/api/evaluation'
 
 function EvaluationList() {
+  const [query, setQuery] = useState<EvaluationQuery>({ pageNum: 1, pageSize: 10 })
+  const [draft, setDraft] = useState<{ evaluationNo?: string; ratingOverall?: number }>({})
+
   const { data, isLoading } = useQuery({
-    queryKey: ['evaluations'],
-    queryFn: () => getEvaluationList({ pageNum: 1, pageSize: 10 }),
+    queryKey: ['evaluations', query],
+    queryFn: () => getEvaluationList(query),
   })
 
   const [appealRow, setAppealRow] = useState<EvaluationVO | null>(null)
@@ -78,25 +81,36 @@ function EvaluationList() {
   return (
     <Card title="信用评价">
       <div style={{ marginBottom: 16, display: 'flex', gap: 16 }}>
-        <Input placeholder="评价编号/订单号" prefix={<SearchOutlined />} style={{ width: 200 }} />
-        <Select placeholder="评分" style={{ width: 150 }} options={[
-          { value: 'all', label: '全部' },
-          { value: '5', label: '5星' },
-          { value: '4', label: '4星' },
-          { value: '3', label: '3星' },
-          { value: '1-2', label: '1-2星' },
-        ]} />
-        <Button type="primary">搜索</Button>
+        {/* 搜索框与评分下拉此前都没有接：输了字点搜索没有任何变化。
+            评分选项也改成库里真实存在的整星值 —— 原来那个 "1-2星" 是区间，
+            后端按等值匹配，选它永远返回空。 */}
+        <Input
+          placeholder="评价编号"
+          prefix={<SearchOutlined />}
+          style={{ width: 200 }}
+          allowClear
+          onChange={(e) => setDraft((prev) => ({ ...prev, evaluationNo: e.target.value || undefined }))}
+        />
+        <Select
+          placeholder="综合评分"
+          style={{ width: 150 }}
+          allowClear
+          onChange={(v) => setDraft((prev) => ({ ...prev, ratingOverall: v }))}
+          options={[5, 4, 3, 2, 1].map((v) => ({ value: v, label: `${v}星` }))}
+        />
+        <Button type="primary" onClick={() => setQuery((prev) => ({ ...prev, pageNum: 1, ...draft }))}>搜索</Button>
+        <Button onClick={() => { setDraft({}); setQuery({ pageNum: 1, pageSize: 10 }) }}>重置</Button>
       </div>
-      <Table 
-        columns={columns} 
-        dataSource={data?.data?.records || []} 
+      <Table
+        columns={columns}
+        dataSource={data?.data?.records || []}
         loading={isLoading}
-        rowKey="id" 
+        rowKey="id"
         pagination={{
           current: data?.data?.current,
           total: data?.data?.total,
-          pageSize: 10,
+          pageSize: query.pageSize,
+          onChange: (page, size) => setQuery((prev) => ({ ...prev, pageNum: page, pageSize: size }))
         }}
       />
 

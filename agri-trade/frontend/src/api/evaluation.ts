@@ -7,6 +7,8 @@ export interface EvaluationQuery {
   orderId?: string
   evaluatorId?: string
   evaluateeId?: string
+  /** 综合评分：按整星等值匹配（后端就是等值查） */
+  ratingOverall?: number
 }
 
 export interface EvaluationVO {
