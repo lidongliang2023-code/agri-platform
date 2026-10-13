@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Card, Table, Button, Input, Space, Tag, Modal, Descriptions, message, Statistic, Row, Col, Progress, Select } from 'antd'
+// Progress / Select 没有被用到，删掉 —— 类型检查（tsc --noEmit）会把它当成错误挡住发布
+import { Card, Table, Button, Input, Space, Tag, Modal, Descriptions, message, Statistic, Row, Col } from 'antd'
 import { SearchOutlined, LineChartOutlined } from '@ant-design/icons'
 import {
   getPriceRecommendation,

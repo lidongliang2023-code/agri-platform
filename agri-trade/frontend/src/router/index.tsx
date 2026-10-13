@@ -14,16 +14,21 @@ import DisputeList from '@/pages/dispute/list'
 import MatchList from '@/pages/match/list'
 import PriceList from '@/pages/price/list'
 import QuoteList from '@/pages/quote/list'
+import SsoCallback from '@/pages/sso/callback'
+import { isLoggedIn } from '@/utils/session'
+import { SSO_CALLBACK_PATH } from '@/utils/sso'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
-  const token = localStorage.getItem('token')
-  return token ? <>{children}</> : <Navigate to="/login" />
+  // 登录态从内存里的会话读，不再读 localStorage —— 令牌放 localStorage 会被任何一处 XSS 拿走
+  return isLoggedIn() ? <>{children}</> : <Navigate to="/login" replace />
 }
 
 function AppRouter() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      {/* SSO 回跳页必须在守卫之外：它就是"正在登录"的那一步 */}
+      <Route path={SSO_CALLBACK_PATH} element={<SsoCallback />} />
       <Route path="/" element={
         <PrivateRoute>
           <Layout />

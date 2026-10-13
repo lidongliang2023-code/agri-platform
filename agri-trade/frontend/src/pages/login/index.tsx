@@ -1,96 +1,58 @@
 import { useState } from 'react'
-import { Form, Input, Button, Card, message } from 'antd'
-import { UserOutlined, LockOutlined, MessageOutlined } from '@ant-design/icons'
-import { useNavigate } from 'react-router-dom'
+import { Button, Card } from 'antd'
+import { MessageOutlined } from '@ant-design/icons'
+import { useSearchParams } from 'react-router-dom'
+import { redirectToSso } from '../../utils/sso'
 
-function Login() {
-  const navigate = useNavigate()
-  const [loading, setLoading] = useState(false)
+/**
+ * 登录页 —— 只负责把用户送到平台统一认证中心。
+ *
+ * <p>这里原先是一个假登录：表单校验 `admin / 123456`，通过后往 localStorage 写一个
+ * `mock-token`。那既不是认证（绕过表单直接写 localStorage 就能进系统），
+ * 也违反架构文档 V2.0 第 5.1 节"子系统不接触用户密码"。现在整页只有一件事：
+ * 跳转到认证中心走授权码 + PKCE 流程。</p>
+ */
+export default function Login() {
+  const [params] = useSearchParams()
+  const [redirecting, setRedirecting] = useState(false)
 
-  const onFinish = async (values: { username: string; password: string }) => {
-    setLoading(true)
+  const handleLogin = async () => {
+    setRedirecting(true)
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      if (values.username === 'admin' && values.password === '123456') {
-        localStorage.setItem('token', 'mock-token')
-        message.success('登录成功')
-        navigate('/order')
-      } else {
-        message.error('用户名或密码错误')
-      }
-    } finally {
-      setLoading(false)
+      await redirectToSso(params.get('redirect') ?? undefined)
+    } catch {
+      setRedirecting(false)
     }
   }
 
   return (
-    <div style={{ 
-      minHeight: '100vh', 
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center'
-    }}>
-      <Card 
-        style={{ 
-          width: 400, 
-          boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
-          borderRadius: '12px'
-        }}
-      >
-        <div style={{ textAlign: 'center', marginBottom: 24 }}>
-          <MessageOutlined style={{ fontSize: 48, color: '#667eea', marginBottom: 12 }} />
-          <h2 style={{ margin: 0, color: '#1f1f1f' }}>交易撮合管理系统</h2>
-          <p style={{ color: '#999', marginTop: 8 }}>农业产业互联网平台</p>
-        </div>
-
-        <Form
-          name="login"
-          onFinish={onFinish}
-          layout="vertical"
+    <div
+      style={{
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #1565C0 0%, #7B1FA2 100%)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <Card style={{ width: 420, textAlign: 'center', borderRadius: 12 }}>
+        <MessageOutlined style={{ fontSize: 48, color: '#1565C0' }} />
+        <h2 style={{ margin: '16px 0 4px' }}>交易撮合平台</h2>
+        <p style={{ color: '#999', margin: 0 }}>农业产业互联网平台</p>
+        <p style={{ color: '#999', fontSize: 13, marginTop: 24 }}>
+          使用平台统一账号登录，本系统不保存你的密码
+        </p>
+        <Button
+          type="primary"
+          size="large"
+          block
+          loading={redirecting}
+          onClick={handleLogin}
+          style={{ height: 44, fontSize: 16, marginTop: 8 }}
         >
-          <Form.Item
-            name="username"
-            label="用户名"
-            rules={[{ required: true, message: '请输入用户名' }]}
-          >
-            <Input 
-              prefix={<UserOutlined />} 
-              placeholder="请输入用户名"
-              size="large"
-            />
-          </Form.Item>
-
-          <Form.Item
-            name="password"
-            label="密码"
-            rules={[{ required: true, message: '请输入密码' }]}
-          >
-            <Input.Password 
-              prefix={<LockOutlined />} 
-              placeholder="请输入密码"
-              size="large"
-            />
-          </Form.Item>
-
-          <Form.Item>
-            <Button 
-              type="primary" 
-              htmlType="submit" 
-              loading={loading}
-              style={{ width: '100%', height: 44, fontSize: 16 }}
-            >
-              登 录
-            </Button>
-          </Form.Item>
-
-          <div style={{ textAlign: 'center', color: '#999', fontSize: 13 }}>
-            <p>默认账号：admin / 123456</p>
-          </div>
-        </Form>
+          前往平台认证中心登录
+        </Button>
       </Card>
     </div>
   )
 }
-
-export default Login

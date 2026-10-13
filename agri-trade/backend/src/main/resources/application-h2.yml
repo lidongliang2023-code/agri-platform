@@ -1,29 +1,21 @@
 server:
-  port: 8082
+  port: 8084
 
 spring:
   application:
     name: agri-trade
+  sql:
+    init:
+      mode: never
   datasource:
     driver-class-name: org.h2.Driver
-    url: jdbc:h2:mem:agri_trade;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    url: jdbc:h2:mem:agri_trade;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=MySQL
     username: sa
     password: 
   h2:
     console:
       enabled: true
       path: /h2-console
-  jpa:
-    database-platform: org.hibernate.dialect.H2Dialect
-    hibernate:
-      ddl-auto: update
-    show-sql: true
-  redis:
-    host: localhost
-    port: 6379
-    password:
-    database: 2
-    timeout: 3000ms
   jackson:
     time-zone: GMT+8
     date-format: yyyy-MM-dd HH:mm:ss
@@ -35,7 +27,7 @@ mybatis-plus:
   type-aliases-package: com.agri.trade.entity
   global-config:
     db-config:
-      id-type: auto
+      id-type: assign_id
       logic-delete-field: delFlag
       logic-delete-value: 1
       logic-not-delete-value: 0

@@ -54,6 +54,14 @@ jwt:
   secret: agri-trade-jwt-secret-key-2024
   expiration: 86400000
 
+# 平台访问令牌（架构文档 V2.0 第 5.2/5.3 节）——与 core-platform 的 agri.jwt 同一份配置键，
+# 只有同键同密钥，SSO 签发的令牌在本模块才验得过签。上面那个 `jwt.secret` 是交易模块自己的
+# 私有密钥（历史遗留，当前没有代码在用它签发/校验），与平台令牌是两套东西，不要混用。
+agri:
+  jwt:
+    secret: ${AGRI_JWT_SECRET:agri-dev-secret-key-change-me-32bytes!}
+    issuer: agri-core-platform
+
 logging:
   level:
     com.agri.trade: DEBUG
