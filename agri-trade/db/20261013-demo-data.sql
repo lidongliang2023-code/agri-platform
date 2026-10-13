@@ -434,6 +434,19 @@ UPDATE `agri_trade_order` SET `order_status`='shipped',         `payment_status`
 UPDATE `agri_trade_order` SET `order_status`='pending_confirm', `payment_status`='partial', `paid_amount`=272400,  `logistics_status`=NULL,         `buyer_confirmed`=0, `settle_status`=NULL WHERE `id`=7603;
 UPDATE `agri_trade_order` SET `order_status`='cancelled',       `payment_status`='unpaid',  `paid_amount`=0,       `logistics_status`=NULL,         `buyer_confirmed`=0, `settle_status`=NULL WHERE `id`=7604;
 
+-- 卖方号与经营主体对齐（2026-10-13）。
+--
+-- 交易模块的 seller_id 本来就是按 platform_merchant.id 编的（平台注册表里 2001 已存在），
+-- 但**名字对不上**：主体 2001 的注册名是"绿源农业合作社"，而这里插入时写的是"黑龙江禾丰农业"。
+-- 号相同、名不同，正是"看起来能连上、其实是两家公司"的典型；以平台注册表（权威）为准把名字对齐。
+-- （2002-2006 这五家已由 core-platform 的 V24 迁移补进注册表，名字与下面一致。）
+UPDATE `agri_trade_product`   SET `seller_name`='绿源农业合作社' WHERE `seller_id`=2001 AND `id` BETWEEN 7000 AND 8099;
+UPDATE `agri_trade_order`     SET `seller_name`='绿源农业合作社' WHERE `seller_id`=2001 AND `id` BETWEEN 7000 AND 8099;
+UPDATE `agri_trade_contract`  SET `seller_name`='绿源农业合作社' WHERE `seller_id`=2001 AND `id` BETWEEN 7000 AND 8099;
+UPDATE `agri_trade_quote`     SET `seller_name`='绿源农业合作社' WHERE `seller_id`=2001 AND `id` BETWEEN 7000 AND 8099;
+UPDATE `agri_trade_inquiry`   SET `seller_name`='绿源农业合作社' WHERE `seller_id`=2001 AND `id` BETWEEN 7000 AND 8099;
+UPDATE `agri_trade_evaluation` SET `evaluatee_name`='绿源农业合作社' WHERE `evaluatee_id`=2001 AND `id` BETWEEN 7000 AND 8099;
+
 -- 赔付状态口径对齐：插入时我写的 'reviewing' 不在后端词汇里
 -- （后端用的是 pending / approved / rejected / paid），
 -- 页面上的状态标签会因此显示成一个没人认识的灰标签。
