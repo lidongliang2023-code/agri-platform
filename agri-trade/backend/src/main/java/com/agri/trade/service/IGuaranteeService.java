@@ -15,6 +15,19 @@ public interface IGuaranteeService extends IService<MerchantGuarantee> {
 
     boolean unfreezeGuarantee(Long guaranteeId, BigDecimal amount);
 
+    /**
+     * 带操作人与原因的冻结 / 解冻。
+     *
+     * <p>金额变动要留痕：谁、什么时候、因为什么动的。原因是必填项 ——
+     * 冻结商家的钱而不能回答"为什么"，是最容易被投诉也最难自证的一类问题。</p>
+     */
+    boolean freezeGuarantee(Long guaranteeId, BigDecimal amount, String operator, String reason);
+
+    boolean unfreezeGuarantee(Long guaranteeId, BigDecimal amount, String operator, String reason);
+
+    /** 保证金账户的流水（按时间倒序）。 */
+    List<com.agri.trade.entity.GuaranteeLog> getLogs(Long guaranteeId);
+
     boolean deductGuarantee(Long guaranteeId, BigDecimal amount);
 
     boolean replenishGuarantee(Long guaranteeId, BigDecimal amount);

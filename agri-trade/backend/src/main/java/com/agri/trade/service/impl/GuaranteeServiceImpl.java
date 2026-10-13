@@ -4,6 +4,8 @@ import com.agri.trade.entity.MerchantGuarantee;
 import com.agri.trade.entity.CompensationRecord;
 import com.agri.trade.mapper.MerchantGuaranteeMapper;
 import com.agri.trade.mapper.CompensationRecordMapper;
+import com.agri.trade.mapper.GuaranteeLogMapper;
+import com.agri.trade.entity.GuaranteeLog;
 import com.agri.trade.service.IGuaranteeService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -20,6 +22,7 @@ import java.util.List;
 public class GuaranteeServiceImpl extends ServiceImpl<MerchantGuaranteeMapper, MerchantGuarantee> implements IGuaranteeService {
 
     private final CompensationRecordMapper compensationRecordMapper;
+    private final GuaranteeLogMapper guaranteeLogMapper;
 
     @Override
     @Transactional
@@ -48,6 +51,12 @@ public class GuaranteeServiceImpl extends ServiceImpl<MerchantGuaranteeMapper, M
     @Override
     @Transactional
     public boolean freezeGuarantee(Long guaranteeId, BigDecimal amount) {
+        return freezeGuarantee(guaranteeId, amount, null, null);
+    }
+
+    @Override
+    @Transactional
+    public boolean freezeGuarantee(Long guaranteeId, BigDecimal amount, String operator, String reason) {
         MerchantGuarantee guarantee = baseMapper.selectById(guaranteeId);
         if (guarantee == null) {
             return false;
@@ -57,16 +66,26 @@ public class GuaranteeServiceImpl extends ServiceImpl<MerchantGuaranteeMapper, M
             return false;
         }
 
+        BigDecimal availableBefore = guarantee.getAvailableAmount();
+        BigDecimal frozenBefore = guarantee.getFrozenAmount();
         guarantee.setAvailableAmount(guarantee.getAvailableAmount().subtract(amount));
         guarantee.setFrozenAmount(guarantee.getFrozenAmount().add(amount));
         guarantee.setUpdateTime(new Date());
         baseMapper.updateById(guarantee);
+        writeLog(guarantee, "freeze", amount, availableBefore, guarantee.getAvailableAmount(),
+                frozenBefore, guarantee.getFrozenAmount(), operator, reason);
         return true;
     }
 
     @Override
     @Transactional
     public boolean unfreezeGuarantee(Long guaranteeId, BigDecimal amount) {
+        return unfreezeGuarantee(guaranteeId, amount, null, null);
+    }
+
+    @Override
+    @Transactional
+    public boolean unfreezeGuarantee(Long guaranteeId, BigDecimal amount, String operator, String reason) {
         MerchantGuarantee guarantee = baseMapper.selectById(guaranteeId);
         if (guarantee == null) {
             return false;
@@ -76,10 +95,14 @@ public class GuaranteeServiceImpl extends ServiceImpl<MerchantGuaranteeMapper, M
             return false;
         }
 
+        BigDecimal availableBefore = guarantee.getAvailableAmount();
+        BigDecimal frozenBefore = guarantee.getFrozenAmount();
         guarantee.setFrozenAmount(guarantee.getFrozenAmount().subtract(amount));
         guarantee.setAvailableAmount(guarantee.getAvailableAmount().add(amount));
         guarantee.setUpdateTime(new Date());
         baseMapper.updateById(guarantee);
+        writeLog(guarantee, "unfreeze", amount, availableBefore, guarantee.getAvailableAmount(),
+                frozenBefore, guarantee.getFrozenAmount(), operator, reason);
         return true;
     }
 
@@ -126,6 +149,37 @@ public class GuaranteeServiceImpl extends ServiceImpl<MerchantGuaranteeMapper, M
 
         MerchantGuarantee guarantee = baseMapper.selectOne(wrapper);
         return guarantee != null ? guarantee.getAvailableAmount() : BigDecimal.ZERO;
+    }
+
+    @Override
+    public List<GuaranteeLog> getLogs(Long guaranteeId) {
+        return guaranteeLogMapper.selectList(new LambdaQueryWrapper<GuaranteeLog>()
+                .eq(GuaranteeLog::getGuaranteeId, guaranteeId)
+                .eq(GuaranteeLog::getDelFlag, 0)
+                .orderByDesc(GuaranteeLog::getId));
+    }
+
+    /** 记一条流水：动作、金额、动作前后的可用/冻结额、操作人、原因。 */
+    private void writeLog(MerchantGuarantee guarantee, String action, BigDecimal amount,
+                          BigDecimal availableBefore, BigDecimal availableAfter,
+                          BigDecimal frozenBefore, BigDecimal frozenAfter,
+                          String operator, String reason) {
+        GuaranteeLog log = new GuaranteeLog();
+        log.setGuaranteeId(guarantee.getId());
+        log.setGuaranteeNo(guarantee.getGuaranteeNo());
+        log.setMerchantId(guarantee.getMerchantId());
+        log.setMerchantName(guarantee.getMerchantName());
+        log.setAction(action);
+        log.setAmount(amount);
+        log.setAvailableBefore(availableBefore);
+        log.setAvailableAfter(availableAfter);
+        log.setFrozenBefore(frozenBefore);
+        log.setFrozenAfter(frozenAfter);
+        log.setOperator(operator);
+        log.setReason(reason);
+        log.setDelFlag(0);
+        log.setCreateTime(new Date());
+        guaranteeLogMapper.insert(log);
     }
 
     @Override

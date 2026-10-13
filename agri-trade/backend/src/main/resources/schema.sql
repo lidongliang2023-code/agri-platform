@@ -1072,3 +1072,32 @@ CREATE TABLE IF NOT EXISTS `agri_trade_risk_alert` (
     KEY `idx_rule_subject` (`rule_code`, `subject_type`, `subject_id`),
     KEY `idx_alert_status` (`alert_status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='风控告警表';
+
+-- ===========================================================================
+-- 保证金流水
+--
+-- 为什么要这张表：保证金的冻结/解冻/补缴/扣划原先只改账户上的四个金额
+-- （总额/可用/冻结/已用），**不留任何记录**。钱动过而查不到"谁在什么时候因为什么动的"，
+-- 商家来问就只能对着一个净额猜。这里按"每一笔动作留一条"补上，
+-- 并把动作前后的可用与冻结额一并记下来，便于对账。
+-- ===========================================================================
+CREATE TABLE IF NOT EXISTS `agri_trade_guarantee_log` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `guarantee_id` BIGINT NOT NULL COMMENT '保证金账户ID',
+    `guarantee_no` VARCHAR(64) NULL COMMENT '保证金单号（快照）',
+    `merchant_id` BIGINT NULL COMMENT '经营主体ID',
+    `merchant_name` VARCHAR(100) NULL COMMENT '主体名称（快照）',
+    `action` VARCHAR(32) NOT NULL COMMENT '动作：create 开立 / verify 审核 / freeze 冻结 / unfreeze 解冻 / replenish 补缴 / deduct 扣划',
+    `amount` DECIMAL(18,2) NULL COMMENT '本次变动金额',
+    `available_before` DECIMAL(18,2) NULL COMMENT '变动前可用额',
+    `available_after` DECIMAL(18,2) NULL COMMENT '变动后可用额',
+    `frozen_before` DECIMAL(18,2) NULL COMMENT '变动前冻结额',
+    `frozen_after` DECIMAL(18,2) NULL COMMENT '变动后冻结额',
+    `operator` VARCHAR(64) NULL COMMENT '操作人',
+    `reason` VARCHAR(500) NULL COMMENT '原因（冻结/解冻/扣划必须填）',
+    `del_flag` TINYINT(1) DEFAULT 0 COMMENT '删除标记',
+    `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    PRIMARY KEY (`id`),
+    KEY `idx_guarantee_id` (`guarantee_id`),
+    KEY `idx_action` (`action`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='保证金流水表';

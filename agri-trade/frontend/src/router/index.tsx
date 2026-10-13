@@ -37,6 +37,7 @@ import AdminCertification from '@/pages/admin/certification'
 import AdminConfig from '@/pages/admin/config'
 import AdminRisk from '@/pages/admin/risk'
 import AdminReport from '@/pages/admin/report'
+import AdminGuarantee from '@/pages/admin/guarantee'
 import { isLoggedIn } from '@/utils/session'
 import { SSO_CALLBACK_PATH } from '@/utils/sso'
 
@@ -75,6 +76,7 @@ function AppRouter() {
         <Route path="config" element={<AdminConfig />} />
         <Route path="risk" element={<AdminRisk />} />
         <Route path="report" element={<AdminReport />} />
+        <Route path="guarantee" element={<AdminGuarantee />} />
       </Route>
       <Route path="/" element={
         <PrivateRoute>
