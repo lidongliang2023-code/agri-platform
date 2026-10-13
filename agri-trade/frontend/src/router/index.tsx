@@ -32,6 +32,7 @@ import AdminBindings from '@/pages/admin/bindings'
 import AdminSettlement from '@/pages/admin/settlement'
 import AdminCredit from '@/pages/admin/credit'
 import AdminCatalog from '@/pages/admin/catalog'
+import AdminCertification from '@/pages/admin/certification'
 import { isLoggedIn } from '@/utils/session'
 import { SSO_CALLBACK_PATH } from '@/utils/sso'
 
@@ -66,6 +67,7 @@ function AppRouter() {
         <Route path="settlement" element={<AdminSettlement />} />
         <Route path="credit" element={<AdminCredit />} />
         <Route path="catalog" element={<AdminCatalog />} />
+        <Route path="certification" element={<AdminCertification />} />
       </Route>
       <Route path="/" element={
         <PrivateRoute>

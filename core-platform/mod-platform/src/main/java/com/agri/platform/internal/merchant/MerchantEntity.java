@@ -23,4 +23,12 @@ public class MerchantEntity extends BaseEntity {
 
     /** 1=正常 0=禁用 */
     private Integer status;
+
+    /** 认证状态：unverified 未认证 / pending 待审核 / approved 已认证 / rejected 已驳回 */
+    private String verifyStatus;
+
+    private java.time.LocalDateTime verifyTime;
+
+    /** 最近一次审核意见 */
+    private String verifyRemark;
 }
