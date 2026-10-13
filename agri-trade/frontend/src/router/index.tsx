@@ -21,6 +21,10 @@ import MatchList from '@/pages/match/list'
 import PriceList from '@/pages/price/list'
 import QuoteList from '@/pages/quote/list'
 import SsoCallback from '@/pages/sso/callback'
+import AdminLayout from '@/pages/admin/layout'
+import AdminDashboard from '@/pages/admin/dashboard'
+import AdminProductAudit from '@/pages/admin/product'
+import AdminOrderOversight from '@/pages/admin/order'
 import { isLoggedIn } from '@/utils/session'
 import { SSO_CALLBACK_PATH } from '@/utils/sso'
 
@@ -35,6 +39,20 @@ function AppRouter() {
       <Route path="/login" element={<Login />} />
       {/* SSO 回跳页必须在守卫之外：它就是"正在登录"的那一步 */}
       <Route path={SSO_CALLBACK_PATH} element={<SsoCallback />} />
+      {/* 运营端：同一套 SSO 登录，但布局与页面集合与用户端完全分开 */}
+      <Route
+        path="/admin/trade"
+        element={
+          <PrivateRoute>
+            <AdminLayout />
+          </PrivateRoute>
+        }
+      >
+        <Route index element={<Navigate to="/admin/trade/dashboard" replace />} />
+        <Route path="dashboard" element={<AdminDashboard />} />
+        <Route path="product" element={<AdminProductAudit />} />
+        <Route path="order" element={<AdminOrderOversight />} />
+      </Route>
       <Route path="/" element={
         <PrivateRoute>
           <Layout />
