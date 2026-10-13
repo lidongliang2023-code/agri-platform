@@ -2,7 +2,7 @@ import { Layout, Menu, Typography } from 'antd'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
   AppstoreOutlined, AuditOutlined, FileSearchOutlined, SwapOutlined, TeamOutlined, RollbackOutlined,
-  SafetyCertificateOutlined, ApartmentOutlined, AccountBookOutlined
+  SafetyCertificateOutlined, ApartmentOutlined, AccountBookOutlined, SafetyOutlined
 } from '@ant-design/icons'
 
 const { Sider, Header, Content } = Layout
@@ -37,6 +37,7 @@ export default function AdminLayout() {
             { key: '/admin/trade/settlement', icon: <AccountBookOutlined />, label: '结算与分账' },
             { key: '/admin/trade/dispute', icon: <TeamOutlined />, label: '纠纷仲裁' },
             { key: '/admin/trade/refund', icon: <RollbackOutlined />, label: '退款审核' },
+            { key: '/admin/trade/credit', icon: <SafetyOutlined />, label: '信用管理' },
             { key: '/admin/trade/compensation', icon: <SafetyCertificateOutlined />, label: '赔付执行' },
             // 平台级功能：数据与接口都归 core-platform（不在交易库里），
             // 它决定"谁能看到哪些数据"，所以单独放在交易监管各项之后。

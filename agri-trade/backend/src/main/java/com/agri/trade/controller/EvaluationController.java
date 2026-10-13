@@ -132,27 +132,14 @@ public class EvaluationController {
         return text.isEmpty() ? null : text;
     }
 
-    @PostMapping("/appeal/{id}/audit")
-    public ApiResponse<Boolean> auditAppeal(@PathVariable Long id, @RequestBody java.util.Map<String, String> params) {
-        EvaluationAppeal appeal = appealMapper.selectById(id);
-        if (appeal == null) return ApiResponse.error("申诉不存在");
-
-        appeal.setAppealStatus(params.get("status"));
-        appeal.setReviewer(params.get("reviewer"));
-        appeal.setReviewTime(new Date());
-        appeal.setReviewResult(params.get("result"));
-        appeal.setReviewRemark(params.get("remark"));
-        appeal.setUpdateTime(new Date());
-
-        int result = appealMapper.updateById(appeal);
-        if (result > 0 && "approved".equals(params.get("status"))) {
-            Evaluation evaluation = evaluationMapper.selectById(appeal.getEvaluationId());
-            if (evaluation != null) {
-                evaluation.setEvaluationStatus("hidden");
-                evaluation.setHideReason("申诉通过");
-                evaluationMapper.updateById(evaluation);
-            }
-        }
-        return result > 0 ? ApiResponse.success(true) : ApiResponse.error("审核失败");
-    }
+    /*
+     * 申诉审核接口已移除。
+     *
+     * 原先是 POST /api/trade/evaluation/appeal/{id}/audit —— 它没有任何运营角色校验
+     * （路径不在 /api/trade/admin 下，认证拦截器那道运营角色判断覆盖不到），
+     * 也就是说**任何登录用户都能审核申诉，而审核通过会把别人的评价置为隐藏**。
+     * 那个能力已经搬到运营端：POST /api/trade/admin/credit/appeal/{id}/audit，
+     * 由 AdminCreditController + CreditService 承担，自动受角色校验保护。
+     * 前端此前没有任何地方调用旧路径（已核实），所以直接删除而不是保留兼容。
+     */
 }
