@@ -166,6 +166,11 @@ public class LogisticsController {
         }
 
         String status = (String) params.get("status");
+        // 轨迹是"状态流转"的记录。编辑物流单时页面会把当前状态一并回传，
+        // 原先这里无条件写轨迹 —— 用户只是改个承运商/运费，轨迹里也会多出一条
+        // 一模一样的"运输中"，看轨迹分不清是真的动了货还是被人点了一下保存。
+        String previousStatus = logistics.getLogisticsStatus();
+        boolean statusChanged = !java.util.Objects.equals(status, previousStatus);
         logistics.setLogisticsStatus(status);
 
         // 时间戳各自归位：原先 in_transit 会把 delivery_time（送达时间）写掉 ——
@@ -188,7 +193,9 @@ public class LogisticsController {
         
         int result = logisticsMapper.updateById(logistics);
         if (result > 0) {
-            addTrace(id, status, (String) params.get("location"));
+            if (statusChanged) {
+                addTrace(id, status, (String) params.get("location"));
+            }
             return ApiResponse.success(true);
         }
         return ApiResponse.error("更新失败");
