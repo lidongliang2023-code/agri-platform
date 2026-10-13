@@ -135,8 +135,7 @@ export default function AdminDashboard() {
       </Row>
 
       <Typography.Paragraph type="secondary" style={{ marginTop: 16 }}>
-        说明：数据取自订单 / 货源 / 纠纷三张真实表；用户端那三个 operation/* 统计接口返回的是
-        代码里写死的数组，运营端不采用。
+        说明：数据取自订单 / 货源 / 纠纷三张真实表，没有一个数字是写死的。
       </Typography.Paragraph>
     </div>
   )
