@@ -1,6 +1,7 @@
 package com.agri.trade.controller;
 
 import com.agri.trade.common.entity.ApiResponse;
+import com.agri.trade.common.security.SecurityUtils;
 import com.agri.trade.entity.Demand;
 import com.agri.trade.entity.MatchRecord;
 import com.agri.trade.mapper.DemandMapper;
@@ -64,9 +65,26 @@ public class DemandController {
     public ApiResponse<Boolean> createDemand(@RequestBody Demand demand) {
         demand.setDemandNo("DM" + System.currentTimeMillis());
         demand.setDelFlag(0);
-        demand.setDemandStatus("publish");
-        demand.setCreateTime(new Date());
-        demand.setUpdateTime(new Date());
+        // 状态取值必须与系统其余地方一致：列表/详情的状态标签认的是
+        // pending / matching / quoted / completed / closed。
+        // 原先这里写 "publish"，新建的需求到列表里就成了一个没人认识的灰标签。
+        if (demand.getDemandStatus() == null || demand.getDemandStatus().isEmpty()) {
+            demand.setDemandStatus("pending");
+        }
+        // 采购方：表单不该让买家自己填 ID。优先用请求里带的（例如代运营录入），
+        // 否则取当前登录用户（平台令牌里的 sub / username）。
+        if (demand.getBuyerId() == null) {
+            demand.setBuyerId(SecurityUtils.getUserId());
+        }
+        if (demand.getBuyerName() == null || demand.getBuyerName().isEmpty()) {
+            demand.setBuyerName(SecurityUtils.getUsername());
+        }
+        Date now = new Date();
+        if (demand.getPublishTime() == null) {
+            demand.setPublishTime(now);
+        }
+        demand.setCreateTime(now);
+        demand.setUpdateTime(now);
         int result = demandMapper.insert(demand);
         return result > 0 ? ApiResponse.success(true) : ApiResponse.error("创建失败");
     }
