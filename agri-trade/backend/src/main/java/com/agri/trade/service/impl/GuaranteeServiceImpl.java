@@ -128,15 +128,25 @@ public class GuaranteeServiceImpl extends ServiceImpl<MerchantGuaranteeMapper, M
     @Override
     @Transactional
     public boolean replenishGuarantee(Long guaranteeId, BigDecimal amount) {
+        return replenishGuarantee(guaranteeId, amount, null, null);
+    }
+
+    @Override
+    @Transactional
+    public boolean replenishGuarantee(Long guaranteeId, BigDecimal amount, String operator, String reason) {
         MerchantGuarantee guarantee = baseMapper.selectById(guaranteeId);
         if (guarantee == null) {
             return false;
         }
 
+        BigDecimal availableBefore = guarantee.getAvailableAmount();
+        BigDecimal frozenBefore = guarantee.getFrozenAmount();
         guarantee.setTotalAmount(guarantee.getTotalAmount().add(amount));
         guarantee.setAvailableAmount(guarantee.getAvailableAmount().add(amount));
         guarantee.setUpdateTime(new Date());
         baseMapper.updateById(guarantee);
+        writeLog(guarantee, "replenish", amount, availableBefore, guarantee.getAvailableAmount(),
+                frozenBefore, guarantee.getFrozenAmount(), operator, reason);
         return true;
     }
 

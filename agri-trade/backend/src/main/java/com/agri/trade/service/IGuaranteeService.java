@@ -32,6 +32,14 @@ public interface IGuaranteeService extends IService<MerchantGuarantee> {
 
     boolean replenishGuarantee(Long guaranteeId, BigDecimal amount);
 
+    /**
+     * 补缴（商家主动加钱）。带操作人与原因，会写一条流水。
+     *
+     * <p>补缴同样要留痕：保证金是商家的钱，"什么时候加过多少"必须有据可查，
+     * 否则对账时只能看一个净额。</p>
+     */
+    boolean replenishGuarantee(Long guaranteeId, BigDecimal amount, String operator, String reason);
+
     BigDecimal getAvailableBalance(Long merchantId);
 
     List<MerchantGuarantee> getGuaranteesByMerchant(Long merchantId);

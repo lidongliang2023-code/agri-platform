@@ -3,7 +3,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
   AppstoreOutlined, AuditOutlined, FileSearchOutlined, SwapOutlined, TeamOutlined, RollbackOutlined,
   SafetyCertificateOutlined, ApartmentOutlined, AccountBookOutlined, SafetyOutlined, AppstoreAddOutlined,
-  IdcardOutlined, SettingOutlined, AlertOutlined, BarChartOutlined, BankOutlined
+  IdcardOutlined, SettingOutlined, AlertOutlined, BarChartOutlined, BankOutlined, FileTextOutlined
 } from '@ant-design/icons'
 
 const { Sider, Header, Content } = Layout
@@ -49,7 +49,8 @@ export default function AdminLayout() {
             { key: '/admin/trade/config', icon: <SettingOutlined />, label: '系统配置' },
             { key: '/admin/trade/risk', icon: <AlertOutlined />, label: '风控管理' },
             { key: '/admin/trade/report', icon: <BarChartOutlined />, label: '报表' },
-            { key: '/admin/trade/guarantee', icon: <BankOutlined />, label: '保证金管理' }
+            { key: '/admin/trade/guarantee', icon: <BankOutlined />, label: '保证金管理' },
+            { key: '/admin/trade/contract-template', icon: <FileTextOutlined />, label: '合同模板' }
           ]}
         />
       </Sider>

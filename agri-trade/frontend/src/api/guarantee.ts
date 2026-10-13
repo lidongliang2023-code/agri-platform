@@ -75,3 +75,26 @@ export async function unfreezeGuarantee(id: number, amount: number, reason: stri
   })
   return response.data
 }
+
+// ------------------------------ 商家侧 ------------------------------
+
+/** 我的保证金账户（范围由服务端按登录身份推导）。 */
+export async function getMyGuarantees() {
+  const response = await axios.get('/api/trade/guarantee/mine')
+  return response.data
+}
+
+/** 我的保证金流水。 */
+export async function getMyGuaranteeLogs(id: number) {
+  const response = await axios.get(`/api/trade/guarantee/mine/${id}/logs`)
+  return response.data
+}
+
+/** 补缴（只给自己的账户，会写一条流水）。 */
+export async function replenishMyGuarantee(id: number, amount: number, reason?: string) {
+  const response = await axios.post(`/api/trade/guarantee/${id}/replenish`, {
+    amount: String(amount),
+    reason
+  })
+  return response.data
+}

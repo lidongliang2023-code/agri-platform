@@ -18,6 +18,7 @@ import LogisticsList from '@/pages/logistics/list'
 import EvaluationList from '@/pages/evaluation/list'
 import DisputeList from '@/pages/dispute/list'
 import MineDashboardPage from '@/pages/mine'
+import MyGuarantee from '@/pages/mine-guarantee'
 import MatchList from '@/pages/match/list'
 import PriceList from '@/pages/price/list'
 import QuoteList from '@/pages/quote/list'
@@ -38,6 +39,7 @@ import AdminConfig from '@/pages/admin/config'
 import AdminRisk from '@/pages/admin/risk'
 import AdminReport from '@/pages/admin/report'
 import AdminGuarantee from '@/pages/admin/guarantee'
+import AdminContractTemplate from '@/pages/admin/contract-template'
 import { isLoggedIn } from '@/utils/session'
 import { SSO_CALLBACK_PATH } from '@/utils/sso'
 
@@ -77,6 +79,7 @@ function AppRouter() {
         <Route path="risk" element={<AdminRisk />} />
         <Route path="report" element={<AdminReport />} />
         <Route path="guarantee" element={<AdminGuarantee />} />
+        <Route path="contract-template" element={<AdminContractTemplate />} />
       </Route>
       <Route path="/" element={
         <PrivateRoute>
@@ -85,6 +88,7 @@ function AppRouter() {
       }>
         <Route index element={<Home />} />
         <Route path="mine" element={<MineDashboardPage />} />
+        <Route path="my-guarantee" element={<MyGuarantee />} />
         <Route path="order" element={<OrderList />} />
         <Route path="order/detail/:id" element={<OrderDetail />} />
         <Route path="order/confirm" element={<OrderConfirm />} />
