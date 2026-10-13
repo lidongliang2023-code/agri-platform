@@ -434,6 +434,11 @@ UPDATE `agri_trade_order` SET `order_status`='shipped',         `payment_status`
 UPDATE `agri_trade_order` SET `order_status`='pending_confirm', `payment_status`='partial', `paid_amount`=272400,  `logistics_status`=NULL,         `buyer_confirmed`=0, `settle_status`=NULL WHERE `id`=7603;
 UPDATE `agri_trade_order` SET `order_status`='cancelled',       `payment_status`='unpaid',  `paid_amount`=0,       `logistics_status`=NULL,         `buyer_confirmed`=0, `settle_status`=NULL WHERE `id`=7604;
 
+-- 赔付状态口径对齐：插入时我写的 'reviewing' 不在后端词汇里
+-- （后端用的是 pending / approved / rejected / paid），
+-- 页面上的状态标签会因此显示成一个没人认识的灰标签。
+UPDATE `agri_trade_compensation` SET `compensation_status`='pending' WHERE `id` BETWEEN 7000 AND 8099 AND `compensation_status`='reviewing';
+
 -- 纠纷的还原：在运营端把"调解 → 仲裁"点一遍之后，重跑本文件即可回到初始状态
 -- （8031 是处理中、未进入任何阶段；8032 已协商关闭）。
 UPDATE `agri_trade_dispute` SET

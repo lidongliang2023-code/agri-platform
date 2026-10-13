@@ -27,6 +27,7 @@ import AdminProductAudit from '@/pages/admin/product'
 import AdminOrderOversight from '@/pages/admin/order'
 import AdminDispute from '@/pages/admin/dispute'
 import AdminRefund from '@/pages/admin/refund'
+import AdminCompensation from '@/pages/admin/compensation'
 import { isLoggedIn } from '@/utils/session'
 import { SSO_CALLBACK_PATH } from '@/utils/sso'
 
@@ -56,6 +57,7 @@ function AppRouter() {
         <Route path="order" element={<AdminOrderOversight />} />
         <Route path="dispute" element={<AdminDispute />} />
         <Route path="refund" element={<AdminRefund />} />
+        <Route path="compensation" element={<AdminCompensation />} />
       </Route>
       <Route path="/" element={
         <PrivateRoute>

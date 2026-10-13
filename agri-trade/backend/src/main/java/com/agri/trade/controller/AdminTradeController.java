@@ -48,6 +48,7 @@ public class AdminTradeController {
     private final OrderItemMapper orderItemMapper;
     private final DisputeMapper disputeMapper;
     private final com.agri.trade.mapper.RefundRecordMapper refundMapper;
+    private final com.agri.trade.mapper.CompensationRecordMapper compensationMapper;
 
     /** 交易大盘总览：订单与金额、待办件数、近 7 日趋势、品类与区域分布。 */
     @Operation(summary = "交易大盘总览")
@@ -108,6 +109,15 @@ public class AdminTradeController {
                 new LambdaQueryWrapper<TradeOrder>()
                         .eq(TradeOrder::getDelFlag, 0)
                         .eq(TradeOrder::getOrderStatus, "refunding")));
+        // 赔付：待审核 + 已核准待打款。后者是"钱已经批了但还没出去"，口径上更急。
+        todos.put("pendingCompensationCount", compensationMapper.selectCount(
+                new LambdaQueryWrapper<com.agri.trade.entity.CompensationRecord>()
+                        .eq(com.agri.trade.entity.CompensationRecord::getDelFlag, 0)
+                        .eq(com.agri.trade.entity.CompensationRecord::getCompensationStatus, "pending")));
+        todos.put("approvedCompensationCount", compensationMapper.selectCount(
+                new LambdaQueryWrapper<com.agri.trade.entity.CompensationRecord>()
+                        .eq(com.agri.trade.entity.CompensationRecord::getDelFlag, 0)
+                        .eq(com.agri.trade.entity.CompensationRecord::getCompensationStatus, "approved")));
         return todos;
     }
 
@@ -336,5 +346,33 @@ public class AdminTradeController {
         }
         wrapper.orderByDesc(com.agri.trade.entity.RefundRecord::getCreateTime);
         return ApiResponse.success(refundMapper.selectPage(page, wrapper));
+    }
+
+    /**
+     * 赔付执行列表（运营端）。
+     *
+     * <p>与退款同一类问题：赔付只有"创建 / 审核 / 执行"三个写接口，**没有列表入口**，
+     * 运营看不到有哪些赔付等着审、哪些已经核准等着打款。</p>
+     */
+    @Operation(summary = "赔付执行列表")
+    @GetMapping("/compensation/page")
+    public ApiResponse<IPage<com.agri.trade.entity.CompensationRecord>> compensationPage(
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(defaultValue = "10") Integer pageSize,
+            @RequestParam(required = false) String compensationStatus,
+            @RequestParam(required = false) String keyword) {
+        Page<com.agri.trade.entity.CompensationRecord> page = new Page<>(pageNum, pageSize);
+        LambdaQueryWrapper<com.agri.trade.entity.CompensationRecord> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(com.agri.trade.entity.CompensationRecord::getDelFlag, 0);
+        if (compensationStatus != null && !compensationStatus.isEmpty()) {
+            wrapper.eq(com.agri.trade.entity.CompensationRecord::getCompensationStatus, compensationStatus);
+        }
+        if (keyword != null && !keyword.isEmpty()) {
+            wrapper.and(w -> w.like(com.agri.trade.entity.CompensationRecord::getCompensationNo, keyword)
+                    .or().like(com.agri.trade.entity.CompensationRecord::getOrderNo, keyword)
+                    .or().like(com.agri.trade.entity.CompensationRecord::getRecipientName, keyword));
+        }
+        wrapper.orderByDesc(com.agri.trade.entity.CompensationRecord::getCreateTime);
+        return ApiResponse.success(compensationMapper.selectPage(page, wrapper));
     }
 }

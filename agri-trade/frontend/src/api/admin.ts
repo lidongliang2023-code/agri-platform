@@ -115,3 +115,34 @@ export async function auditRefund(
   const response = await axios.post(`/api/trade/order/refund/${id}/audit`, { status, reviewer, remark })
   return response.data
 }
+
+/* ------------------------------ 赔付执行 ------------------------------ */
+
+export async function getAdminCompensationPage(params: Record<string, unknown>) {
+  const response = await axios.get('/admin/trade/compensation/page', { params })
+  return response.data
+}
+
+/** 赔付审核：reviewResult 取 approved / rejected，其余字段作为审核痕迹留库 */
+export async function reviewCompensation(
+  id: number | string,
+  reviewResult: 'approved' | 'rejected',
+  reviewer: string,
+  remark?: string
+) {
+  const response = await axios.post(`/api/trade/compensation/${id}/review`, { reviewResult, reviewer, remark })
+  return response.data
+}
+
+/**
+ * 赔付打款。
+ *
+ * <p>后端只在状态为 approved 时允许执行，执行后置 paid 并生成打款流水号 ——
+ * "核准"与"打款"是两个动作，页面上不合成一个按钮。</p>
+ */
+export async function executeCompensation(id: number | string) {
+  const response = await axios.post(`/api/trade/compensation/${id}/execute`)
+  return response.data
+}
+
+
