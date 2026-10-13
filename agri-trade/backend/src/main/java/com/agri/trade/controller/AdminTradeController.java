@@ -293,9 +293,9 @@ public class AdminTradeController {
     /**
      * 纠纷仲裁列表（运营端）。
      *
-     * <p>注意：用户端的 /api/trade/dispute/page 本来就没有按人过滤、返回的是全平台纠纷 ——
-     * 那是用户端的越权面（买家能看到别人的纠纷）。运营端这里显式走 /admin/ 前缀，
-     * 用户端那一侧应当按当前用户补过滤条件（已记在待办里）。</p>
+     * <p>两套接口的分工：用户端 /api/trade/dispute/page 已按当前用户绑定的经营主体过滤
+     * （范围由服务端从令牌推导，见 PlatformIdentityService）；运营端这里要的是全平台视野，
+     * 所以显式走 /admin/ 前缀，不走用户端那套口径。</p>
      */
     @Operation(summary = "纠纷仲裁列表")
     @GetMapping("/dispute/page")

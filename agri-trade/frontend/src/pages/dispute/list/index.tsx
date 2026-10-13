@@ -1,18 +1,20 @@
-import { Table, Button, Card, Input, Select, Space } from 'antd'
+import { Alert, Table, Button, Card, Input, Select, Space } from 'antd'
 import { DeleteOutlined, SearchOutlined, EyeOutlined, SettingOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { getDisputeList } from '@/api/dispute'
-import { getCurrentUser } from '@/utils/session'
+import { getMyMerchants } from '@/api/identity'
 
 function DisputeList() {
-  // 只查"与我有关"的纠纷：后端已取消"不传范围就返回全平台"的兜底。
-  // 平台上还没有"用户 ↔ 经营主体"的映射，所以这里传的是平台用户 id，
-  // 查不到数据是正确结果（查不到 ≠ 看得到别人的）。
-  const participantId = getCurrentUser()?.id
+  // 只查"与我有关"的纠纷。范围由后端按登录令牌推导，前端不再自报参与方
+  // （原先传的是平台用户 id，与纠纷表里的主体号不是一个域，所以永远查不到）。
   const { data, isLoading } = useQuery({
-    queryKey: ['disputes', participantId],
-    queryFn: () => getDisputeList({ pageNum: 1, pageSize: 10, participantId }),
+    queryKey: ['disputes'],
+    queryFn: () => getDisputeList({ pageNum: 1, pageSize: 10 }),
   })
+  // 把"没有纠纷"和"没绑主体"分开显示，避免一张说不清的空表
+  const { data: merchantData } = useQuery({ queryKey: ['my-merchants'], queryFn: getMyMerchants })
+  const merchants = merchantData?.code === 200 ? merchantData.data ?? [] : null
+  const identityError = merchantData && merchantData.code !== 200 ? merchantData.message ?? '无法解析你的经营主体' : null
 
   const columns = [
     { title: '纠纷编号', dataIndex: 'disputeNo', key: 'disputeNo' },
@@ -44,6 +46,18 @@ function DisputeList() {
 
   return (
     <Card title="纠纷管理">
+      {identityError && (
+        <Alert type="error" showIcon style={{ marginBottom: 12 }} message="身份解析失败" description={identityError} />
+      )}
+      {!identityError && merchants?.length === 0 && (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message="当前账号还没有绑定经营主体"
+          description="因此查询不到任何纠纷。请运营在「用户-主体绑定」里为你绑定经营主体后重试。"
+        />
+      )}
       <div style={{ marginBottom: 16, display: 'flex', gap: 16 }}>
         <Input placeholder="纠纷编号/订单号" prefix={<SearchOutlined />} style={{ width: 200 }} />
         <Select placeholder="纠纷状态" style={{ width: 150 }} options={[

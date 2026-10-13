@@ -75,6 +75,11 @@ feign:
         readTimeout: 10000
 
 services:
+  platform:
+    # core-platform：身份解析（当前用户 -> 经营主体）走它的 /api/v1/platform/merchants/mine。
+    # 为什么不在交易模块直连平台库取绑定关系：架构文档 V2.0 要求跨域取数走接口，
+    # 否则平台一旦换库/拆库，交易模块会跟着一起崩。
+    url: http://localhost:8093
   masterdata:
     # 主数据域后端实际跑在 8083（与 ops/gateway 的 upstream mdm_backend 一致）。
     # 原先写 8081 是照抄另一套端口的残留：8081 现在是 nginx 给 agri-finance 的前端虚拟主机，

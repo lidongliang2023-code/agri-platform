@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Alert, Button, Card, Col, Input, Row, Select, Space, Table, Tag, message } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
 import { getOrderList, type OrderQuery } from '@/api/order'
-import { getCurrentUser } from '@/utils/session'
+import { getMyMerchants, type MyMerchant } from '@/api/identity'
 
 interface OrderRow {
   id: number
@@ -40,21 +40,41 @@ const PAY_STATUS: Record<string, { text: string; color: string }> = {
 /**
  * 订单列表（原型"订单管理 → 订单列表"）。
  *
- * <p>接上本次新增的 orderNo / paymentStatus 过滤参数：这两个参数前端一直在传，
- * 后端却从来没接收过（搜了等于没搜）。</p>
+ * <p>身份不再自报：范围由后端按登录令牌推导（后端调 core-platform 的
+ * /api/v1/platform/merchants/mine）。前端此前把登录用户 id 当 participantId 传上来，
+ * 与交易表里的经营主体号不是一个域，所以"永远查不到"；而只要改这个参数又能看别人的单据。
+ * 现在前端连这个参数都不再传。</p>
  */
 export default function OrderList() {
   const navigate = useNavigate()
   const [rows, setRows] = useState<OrderRow[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
-  // 只查"与我有关"的订单（我是买家或卖家）。后端已取消"不传范围就返回全平台"的兜底 ——
-  // 全平台查询归运营端。平台上还没有"用户 ↔ 经营主体"的映射，所以查不到数据是正确结果。
+  // 只查"与我有关"的订单（我是买家或卖家）。范围由后端推导，这里不传参与方。
   const [query, setQuery] = useState<OrderQuery>({
     pageNum: 1,
-    pageSize: 10,
-    participantId: getCurrentUser()?.id
+    pageSize: 10
   })
+  // 我的主体：用来把"没有单据"和"没绑主体"区分开（否则就是一张说不清的空表）
+  const [merchants, setMerchants] = useState<MyMerchant[] | null>(null)
+  const [identityError, setIdentityError] = useState<string | null>(null)
+
+  useEffect(() => {
+    getMyMerchants()
+      .then((res) => {
+        if (res?.code === 200) {
+          setMerchants(res.data ?? [])
+          setIdentityError(null)
+        } else {
+          setMerchants([])
+          setIdentityError(res?.message ?? '无法解析你的经营主体')
+        }
+      })
+      .catch(() => {
+        setMerchants([])
+        setIdentityError('无法解析你的经营主体（请检查 core-platform 是否在运行）')
+      })
+  }, [])
 
   const load = useCallback((next: OrderQuery) => {
     setLoading(true)
@@ -118,14 +138,22 @@ export default function OrderList() {
       </Card>
 
       <Card title={`订单 ${total} 条`}>
-        {rows.length === 0 && !loading && (
+        {identityError && (
+          <Alert type="error" showIcon style={{ marginBottom: 12 }} message="身份解析失败" description={identityError} />
+        )}
+        {!identityError && merchants?.length === 0 && (
           <Alert
-            type="info"
+            type="warning"
             showIcon
             style={{ marginBottom: 12 }}
-            message="这里只显示与你相关的订单"
-            description="当前账号在平台侧还没有绑定经营主体（用户与商户的映射尚未建立），因此查询不到数据。这不是权限故障，也不能通过放开范围来解决 —— 那会让买家看到别人的订单。"
+            message="当前账号还没有绑定经营主体"
+            description="因此查询不到任何订单。这不是权限故障，也不能靠放开查询范围来解决（那会让买家看到别人的订单）。请运营在「用户-主体绑定」里为你绑定经营主体后重试。"
           />
+        )}
+        {!identityError && merchants && merchants.length > 0 && (
+          <div style={{ marginBottom: 12, color: '#666' }}>
+            当前身份：{merchants.map((item) => `${item.merchantName}（${item.roleInMerchant}）`).join('、')}
+          </div>
         )}
         <Table
           rowKey="id"

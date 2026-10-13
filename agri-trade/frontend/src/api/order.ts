@@ -4,12 +4,8 @@ export interface OrderQuery {
   pageNum: number
   pageSize: number
   orderNo?: string
-  buyerId?: string
-  sellerId?: string
   orderStatus?: string
   paymentStatus?: string
-  /** 参与方范围：买家或卖家是此人（用户端必传，后端不再允许全量查询） */
-  participantId?: number | string
 }
 
 export interface TradeOrderVO {

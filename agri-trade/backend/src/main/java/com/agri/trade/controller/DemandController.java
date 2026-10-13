@@ -6,6 +6,7 @@ import com.agri.trade.entity.Demand;
 import com.agri.trade.entity.MatchRecord;
 import com.agri.trade.mapper.DemandMapper;
 import com.agri.trade.mapper.MatchRecordMapper;
+import com.agri.trade.service.PlatformIdentityService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -23,6 +24,7 @@ public class DemandController {
 
     private final DemandMapper demandMapper;
     private final MatchRecordMapper matchRecordMapper;
+    private final PlatformIdentityService identityService;
 
     @GetMapping("/page")
     public ApiResponse<IPage<Demand>> getDemandPage(
@@ -71,13 +73,18 @@ public class DemandController {
         if (demand.getDemandStatus() == null || demand.getDemandStatus().isEmpty()) {
             demand.setDemandStatus("pending");
         }
-        // 采购方：表单不该让买家自己填 ID。优先用请求里带的（例如代运营录入），
-        // 否则取当前登录用户（平台令牌里的 sub / username）。
-        if (demand.getBuyerId() == null) {
-            demand.setBuyerId(SecurityUtils.getUserId());
+        // 采购方 = 当前登录用户绑定的经营主体。
+        // 此前取的是平台用户 id —— 与需求/询价/报价/订单链上的主体号不是一个域，
+        // 于是"我发布的需求"在列表里按主体号过滤时永远查不到，而且后面整条
+        // 询价 → 报价 → 下单链路都把用户 id 当买方号带下去，一路错到底。
+        // 代运营代录入时可以点名主体，但必须点的是自己的（selectMerchant 会校验）。
+        PlatformIdentityService.MerchantSelection mine = identityService.selectMerchant(demand.getBuyerId());
+        if (!mine.ok()) {
+            return ApiResponse.error(mine.error());
         }
+        demand.setBuyerId(mine.merchantId());
         if (demand.getBuyerName() == null || demand.getBuyerName().isEmpty()) {
-            demand.setBuyerName(SecurityUtils.getUsername());
+            demand.setBuyerName(mine.merchantName());
         }
         Date now = new Date();
         if (demand.getPublishTime() == null) {

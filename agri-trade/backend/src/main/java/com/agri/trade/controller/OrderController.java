@@ -12,6 +12,7 @@ import com.agri.trade.mapper.TradeOrderMapper;
 import com.agri.trade.mapper.OrderItemMapper;
 import com.agri.trade.mapper.PaymentRecordMapper;
 import com.agri.trade.mapper.RefundRecordMapper;
+import com.agri.trade.service.PlatformIdentityService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -34,6 +35,7 @@ public class OrderController {
     private final PaymentRecordMapper paymentMapper;
     private final RefundRecordMapper refundMapper;
     private final TradeProductMapper productMapper;
+    private final PlatformIdentityService identityService;
 
     /**
      * 从货源直接下单（原型"订单管理 → 创建订单"）。
@@ -69,11 +71,18 @@ public class OrderController {
                 : new BigDecimal(params.get("freightAmount").toString());
         BigDecimal goods = unitPrice.multiply(quantity);
 
+        // 买家 = 当前登录用户绑定的经营主体（不是平台用户 id —— 交易各表里的买方号是主体号，
+        // 拿用户 id 塞进去就成了"下完单自己查不到"）。一人多主体时必须点名，不自动猜。
+        PlatformIdentityService.MerchantSelection mine = identityService.selectMerchant(null);
+        if (!mine.ok()) {
+            return ApiResponse.error(mine.error());
+        }
+
         Date now = new Date();
         TradeOrder order = new TradeOrder();
         order.setOrderNo("SO" + System.currentTimeMillis());
-        order.setBuyerId(SecurityUtils.getUserId());
-        order.setBuyerName(SecurityUtils.getUsername());
+        order.setBuyerId(mine.merchantId());
+        order.setBuyerName(mine.merchantName());
         order.setSellerId(product.getSellerId());
         order.setSellerName(product.getSellerName());
         order.setCategoryId(product.getCategoryId());
@@ -127,31 +136,28 @@ public class OrderController {
     public ApiResponse<IPage<TradeOrder>> getOrderPage(
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "10") Integer pageSize,
-            @RequestParam(required = false) Long buyerId,
-            @RequestParam(required = false) Long sellerId,
             @RequestParam(required = false) String orderStatus,
-            // 列表页要按订单号搜、按支付状态筛。原先只认 buyerId/sellerId/orderStatus，
-            // 前端传的 orderNo 与 paymentStatus 被 Spring 静默忽略（搜了等于没搜）。
             @RequestParam(required = false) String orderNo,
-            @RequestParam(required = false) String paymentStatus,
-            // 参与方范围：买家或卖家是此人。用户端必须给出范围，见下面守卫。
-            @RequestParam(required = false) Long participantId) {
+            @RequestParam(required = false) String paymentStatus) {
+        // 参与方范围**由服务端从令牌推导**，前端不再传（第 2 步的收口）。
+        // 之前是前端把登录用户 id 当 participantId 传上来：既查不到（两套号不是一个域），
+        // 又能靠改这个参数看别人的单据 —— 范围是调用方自报的，等于没有范围。
+        PlatformIdentityService.MerchantScope scope = identityService.currentScope();
+        if (!scope.resolved()) {
+            return ApiResponse.error(scope.error());
+        }
         Page<TradeOrder> page = new Page<>(pageNum, pageSize);
+        if (!scope.hasBinding()) {
+            // 已登录、但账号还没绑定经营主体：返回空页。这是**真的**没有"与我有关"的单据，
+            // 与"不给范围就返回全平台订单"是两回事（后者是越权面）。
+            // 前端会另行调 /api/trade/identity/my-merchants，把"尚未绑定主体"明确显示出来。
+            return ApiResponse.success(page);
+        }
         LambdaQueryWrapper<TradeOrder> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(TradeOrder::getDelFlag, 0);
-        // 全平台查询归运营端（/admin/trade/order/page）。用户端这个接口原先**不给任何范围
-        // 就返回全平台订单** —— 买家能看到别人家的订单，那是越权面。
-        // 这里改成"必须给出范围"；平台目前还没有"用户 ↔ 经营主体"的映射，
-        // 所以用户端传自己的用户 id 会查不到数据 —— 那是**正确**结果（查不到 ≠ 看得到别人的）。
-        if (participantId == null && buyerId == null && sellerId == null) {
-            return ApiResponse.error("查询订单必须指定参与方（participantId）或买方/卖方；全平台查询请使用运营端接口");
-        }
-        if (participantId != null) {
-            Long pid = participantId;
-            wrapper.and(w -> w.eq(TradeOrder::getBuyerId, pid).or().eq(TradeOrder::getSellerId, pid));
-        }
-        if (buyerId != null) wrapper.eq(TradeOrder::getBuyerId, buyerId);
-        if (sellerId != null) wrapper.eq(TradeOrder::getSellerId, sellerId);
+        // 我名下的主体只要是买方或卖方就与我有关。全平台查询归运营端（/admin/trade/order/page）。
+        List<Long> mine = scope.merchantIds();
+        wrapper.and(w -> w.in(TradeOrder::getBuyerId, mine).or().in(TradeOrder::getSellerId, mine));
         if (orderStatus != null) wrapper.eq(TradeOrder::getOrderStatus, orderStatus);
         if (paymentStatus != null) wrapper.eq(TradeOrder::getPaymentStatus, paymentStatus);
         if (orderNo != null && !orderNo.isEmpty()) wrapper.like(TradeOrder::getOrderNo, orderNo);
@@ -163,11 +169,18 @@ public class OrderController {
     public ApiResponse<TradeOrder> getOrderById(@PathVariable Long id) {
         TradeOrder order = orderMapper.selectById(id);
         if (order == null) return ApiResponse.error("订单不存在");
+        String denied = denyIfNotParticipant(order);
+        if (denied != null) return ApiResponse.error(denied);
         return ApiResponse.success(order);
     }
 
     @GetMapping("/{id}/items")
     public ApiResponse<List<OrderItem>> getOrderItems(@PathVariable Long id) {
+        // 明细同样要判权：光锁住详情、留着明细等于没锁（订单 id 是连号的，猜一个就能看别人的货）。
+        TradeOrder order = orderMapper.selectById(id);
+        if (order == null) return ApiResponse.error("订单不存在");
+        String denied = denyIfNotParticipant(order);
+        if (denied != null) return ApiResponse.error(denied);
         LambdaQueryWrapper<OrderItem> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(OrderItem::getOrderId, id);
         wrapper.eq(OrderItem::getDelFlag, 0);
@@ -176,7 +189,14 @@ public class OrderController {
 
     @PostMapping
     public ApiResponse<Boolean> createOrder(@RequestBody TradeOrder order) {
+        // 买方身份不采信请求体：表单里带 buyerId 就能以别人名义建单。
+        PlatformIdentityService.MerchantSelection mine = identityService.selectMerchant(order.getBuyerId());
+        if (!mine.ok()) {
+            return ApiResponse.error(mine.error());
+        }
         order.setOrderNo("SO" + System.currentTimeMillis());
+        order.setBuyerId(mine.merchantId());
+        order.setBuyerName(mine.merchantName());
         order.setDelFlag(0);
         order.setOrderStatus("pending_confirm");
         order.setPaymentStatus("unpaid");
@@ -189,7 +209,13 @@ public class OrderController {
 
     @PutMapping("/{id}")
     public ApiResponse<Boolean> updateOrder(@PathVariable Long id, @RequestBody TradeOrder order) {
+        TradeOrder existing = orderMapper.selectById(id);
+        if (existing == null) return ApiResponse.error("订单不存在");
+        String denied = denyIfNotParticipant(existing);
+        if (denied != null) return ApiResponse.error(denied);
         order.setId(id);
+        order.setBuyerId(null);
+        order.setSellerId(null);
         order.setUpdateTime(new Date());
         int result = orderMapper.updateById(order);
         return result > 0 ? ApiResponse.success(true) : ApiResponse.error("更新失败");
@@ -199,6 +225,8 @@ public class OrderController {
     public ApiResponse<Boolean> updateOrderStatus(@PathVariable Long id, @RequestBody java.util.Map<String, String> params) {
         TradeOrder order = orderMapper.selectById(id);
         if (order == null) return ApiResponse.error("订单不存在");
+        String denied = denyIfNotParticipant(order);
+        if (denied != null) return ApiResponse.error(denied);
         
         String status = params.get("status");
         order.setOrderStatus(status);
@@ -225,6 +253,8 @@ public class OrderController {
     public ApiResponse<Boolean> payOrder(@PathVariable Long id, @RequestBody java.util.Map<String, Object> params) {
         TradeOrder order = orderMapper.selectById(id);
         if (order == null) return ApiResponse.error("订单不存在");
+        String denied = denyIfNotParticipant(order);
+        if (denied != null) return ApiResponse.error(denied);
 
         PaymentRecord payment = new PaymentRecord();
         payment.setPaymentNo("PY" + System.currentTimeMillis());
@@ -258,6 +288,8 @@ public class OrderController {
     public ApiResponse<Boolean> applyRefund(@PathVariable Long id, @RequestBody java.util.Map<String, Object> params) {
         TradeOrder order = orderMapper.selectById(id);
         if (order == null) return ApiResponse.error("订单不存在");
+        String denied = denyIfNotParticipant(order);
+        if (denied != null) return ApiResponse.error(denied);
 
         RefundRecord refund = new RefundRecord();
         refund.setRefundNo("RF" + System.currentTimeMillis());
@@ -311,5 +343,27 @@ public class OrderController {
             return ApiResponse.success(true);
         }
         return result > 0 ? ApiResponse.success(true) : ApiResponse.error("审核失败");
+    }
+
+    /**
+     * 判权：当前用户的主体必须是这单的买方或卖方。
+     *
+     * @return 拒绝原因；允许访问时返回 null
+     */
+    private String denyIfNotParticipant(TradeOrder order) {
+        PlatformIdentityService.MerchantScope scope = identityService.currentScope();
+        if (!scope.resolved()) {
+            return scope.error();
+        }
+        if (!scope.hasBinding()) {
+            return "当前账号还没有绑定经营主体，看不到相关单据（请联系运营在「用户-主体绑定」里配置）";
+        }
+        List<Long> mine = scope.merchantIds();
+        if (mine.contains(order.getBuyerId()) || mine.contains(order.getSellerId())) {
+            return null;
+        }
+        // 不区分"不存在"和"无权"以外的细节，也不回显对方的名称/编号 —— 否则这个接口本身
+        // 就成了"拿 id 探测别人单据是否存在"的工具。
+        return "无权查看该订单";
     }
 }
