@@ -54,6 +54,14 @@ export async function createContract(data: any) {
 }
 
 export async function signContract(id: number) {
-  const response = await axios.post(`/api/trade/contract/${id}/sign`)
+  // 签署方由服务端按登录身份判定（不接受前端声明"我是买方还是卖方"），
+  // 所以这里不需要传任何参数。空对象是为了满足后端 @RequestBody 的读取。
+  const response = await axios.post(`/api/trade/contract/${id}/sign`, {})
+  return response.data
+}
+
+/** 归档（后端 /{id}/archive 早已有，前端一直没有入口）。 */
+export async function archiveContract(id: number) {
+  const response = await axios.post(`/api/trade/contract/${id}/archive`, {})
   return response.data
 }

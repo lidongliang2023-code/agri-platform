@@ -1,8 +1,9 @@
-import { useState } from 'react'
-import { Table, Button, Card, Input, Select, Tag, Modal, Descriptions } from 'antd'
-import { SearchOutlined, EyeOutlined } from '@ant-design/icons'
-import { useQuery } from '@tanstack/react-query'
-import { getContractList, type ContractQuery, type ContractVO } from '@/api/contract'
+import { useEffect, useState } from 'react'
+import { Table, Button, Card, Input, Select, Tag, Modal, Descriptions, Space, Popconfirm, message } from 'antd'
+import { SearchOutlined, EyeOutlined, EditOutlined, InboxOutlined } from '@ant-design/icons'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { getContractList, signContract, archiveContract, type ContractQuery, type ContractVO } from '@/api/contract'
+import { getMyMerchants } from '@/api/identity'
 
 /**
  * 取值来自库里的真实词表（contract_status / buyer_sign_status / seller_sign_status）：
@@ -42,9 +43,61 @@ const renderTag = (map: Record<string, { text: string; color: string }>) => (val
  * 经营主体收口），与订单/纠纷是同一类问题。</p>
  */
 function ContractList() {
+  const queryClient = useQueryClient()
   const [query, setQuery] = useState<ContractQuery>({ pageNum: 1, pageSize: 10 })
   const [draft, setDraft] = useState<{ contractNo?: string; contractStatus?: string }>({})
   const [viewing, setViewing] = useState<ContractVO | null>(null)
+  // 我的经营主体：签署方由服务端判定（不接受前端声明我是买方还是卖方），
+  // 前端据此决定"签署/归档"按钮显不显示，避免按钮点得动、点了被拒。
+  const [myMerchantIds, setMyMerchantIds] = useState<string[]>([])
+  const [signing, setSigning] = useState<string | null>(null)
+
+  useEffect(() => {
+    getMyMerchants()
+      .then((res) => {
+        if (res?.code === 200) setMyMerchantIds((res.data ?? []).map((m) => String(m.merchantId)))
+      })
+      .catch(() => setMyMerchantIds([]))
+  }, [])
+
+  const isBuyer = (row: ContractVO) => row.buyerId != null && myMerchantIds.includes(String(row.buyerId))
+  const isSeller = (row: ContractVO) => row.sellerId != null && myMerchantIds.includes(String(row.sellerId))
+
+  /** 我这一方还没签、且合同没被取消 —— 才给"签署"入口。 */
+  const canSign = (row: ContractVO) =>
+    row.contractStatus !== 'cancelled' &&
+    ((isBuyer(row) && row.buyerSignStatus !== 'signed') || (isSeller(row) && row.sellerSignStatus !== 'signed'))
+
+  const handleSign = async (row: ContractVO) => {
+    setSigning(String(row.id))
+    try {
+      const res = await signContract(row.id)
+      if (res?.code === 200) {
+        message.success('签署成功')
+        queryClient.invalidateQueries({ queryKey: ['contracts'] })
+      } else {
+        message.error(res?.message ?? '签署失败')
+      }
+    } catch {
+      message.error('签署失败（请检查后端是否在运行）')
+    } finally {
+      setSigning(null)
+    }
+  }
+
+  const handleArchive = async (row: ContractVO) => {
+    try {
+      const res = await archiveContract(row.id)
+      if (res?.code === 200) {
+        message.success('已归档')
+        queryClient.invalidateQueries({ queryKey: ['contracts'] })
+      } else {
+        message.error(res?.message ?? '归档失败')
+      }
+    } catch {
+      message.error('归档失败')
+    }
+  }
 
   const { data, isLoading } = useQuery({
     queryKey: ['contracts', query],
@@ -72,10 +125,33 @@ function ContractList() {
     {
       title: '操作',
       key: 'action',
-      width: 90,
+      width: 200,
       fixed: 'right' as const,
       render: (_: unknown, row: ContractVO) => (
-        <Button type="link" icon={<EyeOutlined />} onClick={() => setViewing(row)}>查看</Button>
+        <Space size={0}>
+          <Button type="link" icon={<EyeOutlined />} onClick={() => setViewing(row)}>查看</Button>
+          {canSign(row) && (
+            <Popconfirm
+              title="确认签署这份合同？"
+              description="签署方由服务端按你的登录身份判定，签署后不可撤销。"
+              okText="确 定"
+              cancelText="取 消"
+              onConfirm={() => handleSign(row)}
+            >
+              <Button type="link" icon={<EditOutlined />} loading={signing === String(row.id)}>签署</Button>
+            </Popconfirm>
+          )}
+          {row.archiveStatus !== 'archived' && (isBuyer(row) || isSeller(row)) && (
+            <Popconfirm
+              title="确认归档这份合同？"
+              okText="确 定"
+              cancelText="取 消"
+              onConfirm={() => handleArchive(row)}
+            >
+              <Button type="link" icon={<InboxOutlined />}>归档</Button>
+            </Popconfirm>
+          )}
+        </Space>
       )
     }
   ]

@@ -96,8 +96,10 @@ public class ContractController {
         contract.setContractNo("CO" + System.currentTimeMillis());
         contract.setDelFlag(0);
         contract.setContractStatus("draft");
-        contract.setBuyerSignStatus("unsigned");
-        contract.setSellerSignStatus("unsigned");
+        // 签署状态用词表里的 pending（原先这里写 unsigned，第三种写法，
+        // 前端的状态映射认不出它，页面上会直接显示英文原文）
+        contract.setBuyerSignStatus("pending");
+        contract.setSellerSignStatus("pending");
         contract.setChainStatus("pending");
         contract.setCreateTime(new Date());
         contract.setUpdateTime(new Date());
@@ -106,20 +108,49 @@ public class ContractController {
     }
 
     @PostMapping("/{id}/sign")
-    public ApiResponse<Boolean> signContract(@PathVariable Long id, @RequestBody java.util.Map<String, String> params) {
+    public ApiResponse<Boolean> signContract(@PathVariable Long id,
+                                             @RequestBody(required = false) java.util.Map<String, String> params) {
         Contract contract = contractMapper.selectById(id);
         if (contract == null) return ApiResponse.error("合同不存在");
 
-        String signatoryType = params.get("signatoryType");
+        // 签署方由服务端判定，**不采信请求体里的 signatoryType** ——
+        // 原先签名侧完全由调用方声明，等于任何人（包括与合同无关的第三方）都能
+        // 拿别人的合同签上"买方"或"卖方"，还能把两侧都签掉、直接把合同推成已生效。
+        // 委托签署要留痕也应该走"授权"这一层，而不是让签名接口自己声明我是谁。
+        PlatformIdentityService.MerchantScope scope = identityService.currentScope();
+        if (!scope.resolved()) {
+            return ApiResponse.error(scope.error());
+        }
+        boolean amBuyer = contract.getBuyerId() != null && scope.merchantIds().contains(contract.getBuyerId());
+        boolean amSeller = contract.getSellerId() != null && scope.merchantIds().contains(contract.getSellerId());
+        if (!amBuyer && !amSeller) {
+            return ApiResponse.error("只有合同当事人（买方或卖方）可以签署");
+        }
+        if ("cancelled".equals(contract.getContractStatus())) {
+            return ApiResponse.error("合同已取消，不能再签署");
+        }
+
+        // 挑一侧来签：优先挑"我有资格、且还没签"的那一侧。
+        // 一个人同时是买卖双方时（同一主体自签），第一次会签买方，第二次自然落到卖方。
+        String signatoryType;
+        if (amBuyer && !"signed".equals(contract.getBuyerSignStatus())) {
+            signatoryType = "buyer";
+        } else if (amSeller && !"signed".equals(contract.getSellerSignStatus())) {
+            signatoryType = "seller";
+        } else {
+            return ApiResponse.error("你这一方已经签署过了，不能重复签署");
+        }
+
         if ("buyer".equals(signatoryType)) {
             contract.setBuyerSignStatus("signed");
             contract.setBuyerSignTime(new Date());
-            contract.setBuyerSignIp(params.get("signIp"));
+            contract.setBuyerSignIp(clientIp());
             contract.setBuyerSignature("SIGN-" + UUID.randomUUID().toString().substring(0, 32));
         } else if ("seller".equals(signatoryType)) {
             contract.setSellerSignStatus("signed");
             contract.setSellerSignTime(new Date());
-            contract.setSellerSignIp(params.get("signIp"));
+            // 签署 IP 取服务端看到的来源地址，不采信请求体（那是可以随便填的留痕）
+            contract.setSellerSignIp(clientIp());
             contract.setSellerSignature("SIGN-" + UUID.randomUUID().toString().substring(0, 32));
         }
 
@@ -129,7 +160,13 @@ public class ContractController {
             contract.setEffectiveDate(new Date());
             
             contract.setChainStatus("success");
-            contract.setChainTxHash("0x" + UUID.randomUUID().toString().replace("-", "").substring(0, 64));
+            // UUID 去掉横线是 32 位十六进制，取 64 位会越界（StringIndexOutOfBoundsException），
+            // 而这一行正好在"双方都签完"的那一刻执行 —— 也就是说：
+            // **双签走到最后一步必然 500，合同签署从来没有真正完成过。**
+            // 拼两个 UUID 凑满 64 位十六进制。
+            String hex = UUID.randomUUID().toString().replace("-", "")
+                    + UUID.randomUUID().toString().replace("-", "");
+            contract.setChainTxHash("0x" + hex.substring(0, 64));
             contract.setChainTime(new Date());
         }
 
@@ -142,10 +179,34 @@ public class ContractController {
     public ApiResponse<Boolean> archiveContract(@PathVariable Long id) {
         Contract contract = contractMapper.selectById(id);
         if (contract == null) return ApiResponse.error("合同不存在");
+        PlatformIdentityService.MerchantScope scope = identityService.currentScope();
+        if (!scope.resolved()) {
+            return ApiResponse.error(scope.error());
+        }
+        boolean party = (contract.getBuyerId() != null && scope.merchantIds().contains(contract.getBuyerId()))
+                || (contract.getSellerId() != null && scope.merchantIds().contains(contract.getSellerId()));
+        if (!party) {
+            return ApiResponse.error("只有合同当事人可以归档");
+        }
         contract.setArchiveStatus("archived");
         contract.setArchiveTime(new Date());
         contract.setUpdateTime(new Date());
         int result = contractMapper.updateById(contract);
         return result > 0 ? ApiResponse.success(true) : ApiResponse.error("归档失败");
+    }
+
+    /** 取服务端看到的调用方地址，用于签署留痕。 */
+    private static String clientIp() {
+        org.springframework.web.context.request.ServletRequestAttributes attributes =
+                (org.springframework.web.context.request.ServletRequestAttributes)
+                        org.springframework.web.context.request.RequestContextHolder.getRequestAttributes();
+        if (attributes == null) {
+            return null;
+        }
+        String forwarded = attributes.getRequest().getHeader("X-Forwarded-For");
+        if (forwarded != null && !forwarded.isEmpty()) {
+            return forwarded.split(",")[0].trim();
+        }
+        return attributes.getRequest().getRemoteAddr();
     }
 }
