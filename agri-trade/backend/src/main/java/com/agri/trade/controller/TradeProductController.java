@@ -8,6 +8,7 @@ import com.agri.trade.mapper.ProductImageMapper;
 import com.agri.trade.mapper.TradeProductMapper;
 import com.agri.trade.mapper.TradeProductCategoryMapper;
 import com.agri.trade.service.PlatformIdentityService;
+import com.agri.trade.service.TradeConfigService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -26,6 +27,7 @@ public class TradeProductController {
     private final TradeProductCategoryMapper categoryMapper;
     private final ProductImageMapper productImageMapper;
     private final PlatformIdentityService identityService;
+    private final TradeConfigService configService;
 
     /**
      * 商品图片。
@@ -136,7 +138,10 @@ public class TradeProductController {
         product.setProductCode("P" + System.currentTimeMillis());
         product.setDelFlag(0);
         product.setStatus(1);
-        product.setPublishStatus("draft");
+        // 是否先送审由运营配置决定（默认 true，与原先行为一致）：
+        // 关了之后新货源直接上架，适合运营自己替商家代发的场景。
+        boolean requiresAudit = configService.getBoolean("product.publish-requires-audit", true);
+        product.setPublishStatus(requiresAudit ? "pending" : "published");
         product.setCreateTime(new Date());
         product.setUpdateTime(new Date());
         int result = productMapper.insert(product);

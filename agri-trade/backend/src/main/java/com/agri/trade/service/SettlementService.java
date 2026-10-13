@@ -52,9 +52,18 @@ public class SettlementService {
 
     private final SettlementMapper settlementMapper;
     private final TradeOrderMapper orderMapper;
+    private final TradeConfigService configService;
 
+    /** 配置文件里的默认费率；运营在「系统配置」里改过就以库里的为准。 */
     @Value("${agri.trade.settlement.platform-fee-rate:0.005}")
-    private BigDecimal platformFeeRate;
+    private BigDecimal defaultPlatformFeeRate;
+
+    private static final String FEE_RATE_KEY = "settlement.platform-fee-rate";
+
+    /** 当前生效的费率：库里的配置优先，其次配置文件默认值。 */
+    private BigDecimal currentFeeRate() {
+        return configService.getDecimal(FEE_RATE_KEY, defaultPlatformFeeRate);
+    }
 
     /**
      * 待结算订单（分页）。
@@ -123,7 +132,7 @@ public class SettlementService {
         }
 
         Map<String, Object> summary = new LinkedHashMap<>();
-        summary.put("platformFeeRate", platformFeeRate);
+        summary.put("platformFeeRate", currentFeeRate());
         summary.put("pendingCount", pendingOrders.size());
         summary.put("pendingAmount", pendingAmount.setScale(2, RoundingMode.HALF_UP));
         summary.put("pendingPlatformFee", pendingFee.setScale(2, RoundingMode.HALF_UP));
@@ -180,7 +189,7 @@ public class SettlementService {
         settlement.setGoodsAmount(nullToZero(order.getGoodsAmount()));
         settlement.setFreightAmount(nullToZero(order.getFreightAmount()));
         settlement.setTotalAmount(total);
-        settlement.setPlatformFeeRate(platformFeeRate);
+        settlement.setPlatformFeeRate(currentFeeRate());
         settlement.setPlatformFee(fee);
         settlement.setSellerReceivable(total.subtract(fee).setScale(2, RoundingMode.HALF_UP));
         settlement.setSettleStatus("settled");
@@ -212,7 +221,7 @@ public class SettlementService {
 
     private BigDecimal platformFee(TradeOrder order) {
         BigDecimal goods = nullToZero(order.getGoodsAmount());
-        return goods.multiply(platformFeeRate).setScale(2, RoundingMode.HALF_UP);
+        return goods.multiply(currentFeeRate()).setScale(2, RoundingMode.HALF_UP);
     }
 
     private Map<String, Object> toPendingView(TradeOrder order) {
@@ -229,7 +238,7 @@ public class SettlementService {
         view.put("freightAmount", nullToZero(order.getFreightAmount()));
         view.put("totalAmount", total);
         view.put("orderStatus", order.getOrderStatus());
-        view.put("platformFeeRate", platformFeeRate);
+        view.put("platformFeeRate", currentFeeRate());
         view.put("platformFee", fee);
         view.put("sellerReceivable", total.subtract(fee).setScale(2, RoundingMode.HALF_UP));
         view.put("settleTime", order.getSettleTime());

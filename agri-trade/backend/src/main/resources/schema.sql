@@ -988,3 +988,38 @@ CREATE TABLE IF NOT EXISTS `agri_trade_product_violation` (
     INDEX `idx_product_id` (`product_id`),
     INDEX `idx_violation_status` (`violation_status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='商品违规处置记录表';
+
+-- ===========================================================================
+-- 运营配置（系统配置）
+--
+-- 只放**真的有代码在读**的配置项，不放"看起来像配置"的空壳。
+-- 一个配置项只有在某处被读取、改了会真的改变系统行为时才有意义；
+-- 否则运营改了没反应，比没有这一页更糟（本项目在别处已经吃过这个亏）。
+--
+-- 取值优先级：这张表 > 配置文件（application.yml）。表里没有记录时用配置文件的值，
+-- 这样升级/换环境时行为不会因为"库里少一行"而变。
+-- ===========================================================================
+CREATE TABLE IF NOT EXISTS `agri_trade_config` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `config_key` VARCHAR(64) NOT NULL COMMENT '配置键',
+    `config_value` VARCHAR(255) NULL COMMENT '配置值（统一按字符串存，类型见 value_type）',
+    `value_type` VARCHAR(16) NULL DEFAULT 'string' COMMENT '值类型：string / number / boolean',
+    `config_group` VARCHAR(32) NULL COMMENT '分组：settlement 结算 / product 货源 / order 订单',
+    `config_name` VARCHAR(64) NULL COMMENT '展示名',
+    `description` VARCHAR(500) NULL COMMENT '说明（改了会影响什么）',
+    `editable` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否允许运营修改：1可改 0只读',
+    `del_flag` TINYINT(1) DEFAULT 0 COMMENT '删除标记',
+    `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_config_key` (`config_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='运营配置表';
+
+-- 种子配置：这两项**当前都有代码在读**，改了就真的改变行为
+INSERT IGNORE INTO `agri_trade_config`
+    (`config_key`, `config_value`, `value_type`, `config_group`, `config_name`, `description`, `editable`)
+VALUES
+    ('settlement.platform-fee-rate', '0.005', 'number', 'settlement', '平台服务费率',
+     '按货款（不含运费）计收，例：0.005 = 0.5%。卖家应收 = 订单总额 − 平台服务费。改动只影响之后新结算的订单，已结算记录里的费率是当时的快照。', 1),
+    ('product.publish-requires-audit', 'true', 'boolean', 'product', '货源发布需要审核',
+     'true：新发布的货源先进入「待审核」，由运营在货源审核页通过后才对买家可见；false：新货源直接上架。', 1);
