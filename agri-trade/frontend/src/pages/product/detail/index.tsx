@@ -36,6 +36,7 @@ interface TradeProduct {
 
 const STATUS_TEXT: Record<string, { text: string; color: string }> = {
   published: { text: '已发布', color: 'success' },
+  offline: { text: '已下架', color: 'default' },
   pending: { text: '待审核', color: 'warning' },
   draft: { text: '草稿', color: 'default' },
   rejected: { text: '已驳回', color: 'error' }

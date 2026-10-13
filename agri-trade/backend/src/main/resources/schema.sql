@@ -955,3 +955,36 @@ CREATE TABLE IF NOT EXISTS `agri_trade_settlement` (
     INDEX `idx_seller_id` (`seller_id`),
     INDEX `idx_settle_time` (`settle_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='订单结算分账表';
+
+-- ===========================================================================
+-- 商品违规处置（运营端）
+--
+-- 为什么单独建表，而不是只把货源的 publish_status 改成"下架"：
+-- 状态只说明"现在不在架"，说明不了**为什么**、**谁处理的**、**有没有申诉/恢复**。
+-- 违规处置是要能被追问的（商家会来问"我的货为什么没了"），所以每次处置留一条记录，
+-- 恢复时把原记录标记为已撤销，而不是把痕迹删掉。
+-- ===========================================================================
+CREATE TABLE IF NOT EXISTS `agri_trade_product_violation` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `violation_no` VARCHAR(64) NOT NULL COMMENT '处置单号',
+    `product_id` BIGINT NOT NULL COMMENT '货源ID',
+    `product_name` VARCHAR(128) NULL COMMENT '货源名称（留痕快照）',
+    `seller_id` BIGINT NULL COMMENT '供应商主体ID',
+    `seller_name` VARCHAR(100) NULL COMMENT '供应商名称',
+    `violation_type` VARCHAR(32) NULL COMMENT '违规类型：false_info 信息不实 / banned 禁售品 / price_fraud 价格欺诈 / quality 质量问题 / other 其它',
+    `reason` VARCHAR(500) NOT NULL COMMENT '处置原因',
+    `action` VARCHAR(32) NULL COMMENT '处置动作：offline 下架',
+    `violation_status` VARCHAR(32) NULL DEFAULT 'active' COMMENT '状态：active 生效中 / revoked 已撤销',
+    `previous_publish_status` VARCHAR(32) NULL COMMENT '处置前的上架状态（恢复时用）',
+    `operator` VARCHAR(64) NULL COMMENT '处理人',
+    `revoke_time` DATETIME NULL COMMENT '撤销时间',
+    `revoke_reason` VARCHAR(500) NULL COMMENT '撤销原因',
+    `del_flag` TINYINT(1) DEFAULT 0 COMMENT '删除标记',
+    `tenant_id` VARCHAR(64) NULL COMMENT '租户ID',
+    `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_violation_no` (`violation_no`),
+    INDEX `idx_product_id` (`product_id`),
+    INDEX `idx_violation_status` (`violation_status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='商品违规处置记录表';

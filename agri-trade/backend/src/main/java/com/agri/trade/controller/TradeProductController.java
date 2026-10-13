@@ -67,33 +67,16 @@ public class TradeProductController {
         return ApiResponse.success(categoryMapper.selectList(wrapper));
     }
 
-    @PostMapping("/category")
-    public ApiResponse<Boolean> createCategory(@RequestBody TradeProductCategory category) {
-        category.setDelFlag(0);
-        category.setStatus(1);
-        category.setCreateTime(new Date());
-        category.setUpdateTime(new Date());
-        int result = categoryMapper.insert(category);
-        return result > 0 ? ApiResponse.success(true) : ApiResponse.error("创建失败");
-    }
-
-    @PutMapping("/category/{id}")
-    public ApiResponse<Boolean> updateCategory(@PathVariable Long id, @RequestBody TradeProductCategory category) {
-        category.setId(id);
-        category.setUpdateTime(new Date());
-        int result = categoryMapper.updateById(category);
-        return result > 0 ? ApiResponse.success(true) : ApiResponse.error("更新失败");
-    }
-
-    @DeleteMapping("/category/{id}")
-    public ApiResponse<Boolean> deleteCategory(@PathVariable Long id) {
-        TradeProductCategory category = categoryMapper.selectById(id);
-        if (category == null) return ApiResponse.error("分类不存在");
-        // 软删走 deleteById：全局逻辑删除字段在 updateById 的 SET 里会被跳过，
-        // setDelFlag(1)+updateById 只会改 update_time，记录其实没删掉。
-        int result = categoryMapper.deleteById(id);
-        return result > 0 ? ApiResponse.success(true) : ApiResponse.error("删除失败");
-    }
+    /*
+     * 品类的增删改（POST/PUT/DELETE /category）已移出本控制器。
+     *
+     * 它们原本挂在**用户侧**路径 /api/trade/product/category 下，且没有任何角色校验 ——
+     * 品类是全平台的分类体系，任何一个登录用户都能新增、改名、删掉它，
+     * 而删除会直接影响所有引用该品类的货源。现在归到运营端
+     * /api/trade/admin/category/**，自动受运营角色校验保护。
+     *
+     * 上面的两个读接口保留：给货源的筛选与发布表单取品类用，属于正常的用户侧读取。
+     */
 
     @GetMapping("/page")
     public ApiResponse<IPage<TradeProduct>> getProductPage(

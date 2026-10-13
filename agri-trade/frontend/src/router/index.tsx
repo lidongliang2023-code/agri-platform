@@ -31,6 +31,7 @@ import AdminCompensation from '@/pages/admin/compensation'
 import AdminBindings from '@/pages/admin/bindings'
 import AdminSettlement from '@/pages/admin/settlement'
 import AdminCredit from '@/pages/admin/credit'
+import AdminCatalog from '@/pages/admin/catalog'
 import { isLoggedIn } from '@/utils/session'
 import { SSO_CALLBACK_PATH } from '@/utils/sso'
 
@@ -64,6 +65,7 @@ function AppRouter() {
         <Route path="bindings" element={<AdminBindings />} />
         <Route path="settlement" element={<AdminSettlement />} />
         <Route path="credit" element={<AdminCredit />} />
+        <Route path="catalog" element={<AdminCatalog />} />
       </Route>
       <Route path="/" element={
         <PrivateRoute>

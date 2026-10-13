@@ -25,6 +25,7 @@ interface ProductRow {
 const STATUS: Record<string, { text: string; color: string }> = {
   pending: { text: '待审核', color: 'warning' },
   published: { text: '已发布', color: 'success' },
+  offline: { text: '已下架', color: 'default' },
   rejected: { text: '已驳回', color: 'error' },
   draft: { text: '草稿', color: 'default' }
 }
@@ -97,6 +98,7 @@ export default function AdminProductAudit() {
               options={[
                 { value: 'pending', label: '待审核' },
                 { value: 'published', label: '已发布' },
+                { value: 'offline', label: '已下架' },
                 { value: 'rejected', label: '已驳回' },
                 { value: 'draft', label: '草稿' },
                 { value: '', label: '全部状态' }
