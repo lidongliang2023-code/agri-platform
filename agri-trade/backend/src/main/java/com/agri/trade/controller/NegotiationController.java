@@ -244,8 +244,12 @@ public class NegotiationController {
             @RequestParam(required = false) String quoteStatus,
             @RequestParam(required = false) Long sellerId,
             @RequestParam(required = false) Long buyerId) {
+        PlatformIdentityService.MerchantScope scope = identityService.currentScope();
+        if (!scope.resolved()) {
+            return ApiResponse.error(scope.error());
+        }
         return ApiResponse.success(
-                quoteService.getQuotePage(pageNum, pageSize, quoteStatus, sellerId, buyerId));
+                quoteService.getQuotePage(pageNum, pageSize, quoteStatus, sellerId, buyerId, scope.merchantIds()));
     }
 
     @Operation(summary = "报价详情")
@@ -261,6 +265,15 @@ public class NegotiationController {
     @Operation(summary = "报价转订单")
     @PostMapping("/quote/{quoteId}/convert")
     public ApiResponse<TradeOrder> convertQuoteToOrder(@PathVariable Long quoteId) {
+        Quote quote = quoteService.getById(quoteId);
+        if (quote == null) {
+            return ApiResponse.error("报价不存在");
+        }
+        // 与"受理"同一口径：生成订单是采购方的动作，否则等于替别人下单。
+        String denied = denyIfNotBuyer(quote);
+        if (denied != null) {
+            return ApiResponse.error(denied);
+        }
         TradeOrder order = quoteService.convertToOrder(quoteId);
         if (order == null) {
             // 两种 null：报价不存在，或状态不允许（已拒绝的报价不能转订单）。
@@ -282,6 +295,19 @@ public class NegotiationController {
         if (quote == null) {
             return ApiResponse.error("报价不存在");
         }
+        String denied = denyIfNotBuyer(quote);
+        if (denied != null) {
+            return ApiResponse.error(denied);
+        }
+        if ("rejected".equals(quote.getQuoteStatus())) {
+            return ApiResponse.error("这份报价已经被拒绝，不能再接受");
+        }
+        // 幂等：这条报价若已经生成过订单，就不再重复受理。
+        // 原先前端是"接受"与"生成订单"两个按钮，两条路径都会试着建单，
+        // 重复点一次就会在同一份报价上落下第二张订单。
+        if (quote.getOrderId() != null) {
+            return ApiResponse.error("这份报价已经生成过订单，请勿重复受理");
+        }
 
         quoteService.acceptQuote(quoteId);
         inquiryService.convertToOrder(quote.getInquiryId(), quoteId);
@@ -290,9 +316,42 @@ public class NegotiationController {
 
     @PostMapping("/quote/{quoteId}/reject")
     public ApiResponse<Boolean> rejectQuote(@PathVariable Long quoteId, @RequestBody Map<String, String> params) {
+        Quote quote = quoteService.getById(quoteId);
+        if (quote == null) {
+            return ApiResponse.error("报价不存在");
+        }
+        String denied = denyIfNotBuyer(quote);
+        if (denied != null) {
+            return ApiResponse.error(denied);
+        }
         String reason = params.get("reason");
         quoteService.rejectQuote(quoteId, reason);
         return ApiResponse.success(true);
+    }
+
+    /**
+     * 判权：受理/拒绝报价是**采购方**的动作。
+     *
+     * <p>原先这两个接口没有任何校验 —— 任何登录用户都能受理别人的报价，
+     * 而受理会沿着询价单直接**替买卖双方生成一张订单**（金额、双方名称都由报价单带过去）。
+     * 那是"以别人的名义下单"，比看到别人的数据严重得多。</p>
+     *
+     * @return 拒绝原因；允许时返回 null
+     */
+    private String denyIfNotBuyer(Quote quote) {
+        PlatformIdentityService.MerchantScope scope = identityService.currentScope();
+        if (!scope.resolved()) {
+            return scope.error();
+        }
+        if (quote.getBuyerId() == null) {
+            // 独立报价（报价管理页直接新增的那种）没有采购方，无从受理；
+            // 需要成交请走"询价 → 报价 → 受理"这条链路。
+            return "这条报价没有指定采购方，无法受理（请通过询价流程成交）";
+        }
+        if (scope.merchantIds().contains(quote.getBuyerId())) {
+            return null;
+        }
+        return "只有采购方可以受理或拒绝这份报价";
     }
 
     @PutMapping("/inquiry/{inquiryId}/status")

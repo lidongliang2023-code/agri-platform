@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Card, Table, Button, Space, Tag, Modal, Form, Input, InputNumber, Select, DatePicker, message, Popconfirm } from 'antd'
 import { PlusOutlined, SearchOutlined, EditOutlined, DeleteOutlined, CheckOutlined } from '@ant-design/icons'
 import { getQuoteList, createQuote, updateQuote, deleteQuote, acceptQuote, convertQuoteToOrder, QuoteVO, QuoteQuery } from '@/api/quote'
+import { getMyMerchants } from '@/api/identity'
 import { useNavigate } from 'react-router-dom'
 import dayjs from 'dayjs'
 
@@ -32,6 +33,22 @@ export default function QuoteList() {
   const [formVisible, setFormVisible] = useState(false)
   const [currentItem, setCurrentItem] = useState<QuoteVO | null>(null)
   const [form] = Form.useForm()
+  // 我的经营主体：受理/生成订单是**采购方**的动作，服务端会校验；
+  // 前端据此决定这两个按钮显不显示 —— 否则会出现"按钮点得动、点了被拒"的别扭状态。
+  const [myMerchantIds, setMyMerchantIds] = useState<string[]>([])
+
+  useEffect(() => {
+    getMyMerchants()
+      .then((res) => {
+        if (res?.code === 200) {
+          setMyMerchantIds((res.data ?? []).map((m) => String(m.merchantId)))
+        }
+      })
+      .catch(() => setMyMerchantIds([]))
+  }, [])
+
+  const isMyQuoteAsBuyer = (record: QuoteVO) =>
+    record.buyerId != null && myMerchantIds.includes(String(record.buyerId))
 
   useEffect(() => {
     loadData()
@@ -209,14 +226,14 @@ export default function QuoteList() {
           </Popconfirm>
           {/* 后端写的状态是 pending / accepted / rejected —— 这里原先判断 'approved'，
               那个值后端从来不产生，于是"接受"按钮一次都没出现过。 */}
-          {record.quoteStatus === 'pending' && (
+          {record.quoteStatus === 'pending' && isMyQuoteAsBuyer(record) && (
             <Popconfirm title="确定接受此报价吗？" onConfirm={() => handleAccept(record.id)}>
               <Button type="link" size="small" icon={<CheckOutlined />}>
                 接受
               </Button>
             </Popconfirm>
           )}
-          {record.quoteStatus === 'accepted' && (
+          {record.quoteStatus === 'accepted' && isMyQuoteAsBuyer(record) && (
             <Popconfirm title="按此报价生成订单？" onConfirm={() => handleConvert(record.id)}>
               <Button type="link" size="small">
                 生成订单

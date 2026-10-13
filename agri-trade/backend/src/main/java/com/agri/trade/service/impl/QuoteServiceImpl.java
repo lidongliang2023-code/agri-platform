@@ -126,8 +126,22 @@ public class QuoteServiceImpl extends ServiceImpl<QuoteMapper, Quote> implements
 
     @Override
     public IPage<Quote> getQuotePage(int pageNum, int pageSize, String quoteStatus, Long sellerId, Long buyerId) {
+        return getQuotePage(pageNum, pageSize, quoteStatus, sellerId, buyerId, null);
+    }
+
+    @Override
+    public IPage<Quote> getQuotePage(int pageNum, int pageSize, String quoteStatus,
+                                     Long sellerId, Long buyerId, java.util.Collection<Long> scopeMerchantIds) {
         LambdaQueryWrapper<Quote> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Quote::getDelFlag, 0);
+        // 数据范围：只返回"我参与的报价"（我是买方或卖方）。原先不给范围就返回全平台报价 ——
+        // 报价里有单价、数量与供应商，是正在谈的生意，与订单/合同是同一类问题。
+        if (scopeMerchantIds == null || scopeMerchantIds.isEmpty()) {
+            wrapper.eq(Quote::getId, -1L);
+        } else {
+            wrapper.and(w -> w.in(Quote::getBuyerId, scopeMerchantIds)
+                    .or().in(Quote::getSellerId, scopeMerchantIds));
+        }
         if (quoteStatus != null && !quoteStatus.isEmpty()) {
             wrapper.eq(Quote::getQuoteStatus, quoteStatus);
         }

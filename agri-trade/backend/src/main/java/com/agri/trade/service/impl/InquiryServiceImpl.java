@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.math.BigDecimal;
 import java.util.Date;
 import java.util.List;
 
@@ -153,6 +154,13 @@ public class InquiryServiceImpl extends ServiceImpl<InquiryMapper, Inquiry> impl
             return;
         }
 
+        // 幂等：同一份报价只生成一张订单。
+        // 这条路径原先没有任何幂等保护 —— 每调用一次就 insert 一张新订单，
+        // 而它对上层是"受理报价"的副产物，重复点一次就多一张单（且两张单互不相关）。
+        if (quote.getOrderId() != null) {
+            return;
+        }
+
         TradeOrder order = new TradeOrder();
         order.setOrderNo("SO" + System.currentTimeMillis());
         order.setDemandId(inquiry.getDemandId());
@@ -162,15 +170,24 @@ public class InquiryServiceImpl extends ServiceImpl<InquiryMapper, Inquiry> impl
         order.setSellerName(inquiry.getSellerName());
         order.setCategoryId(inquiry.getCategoryId());
         order.setCategoryName(inquiry.getCategoryName());
-        order.setGoodsAmount(quote.getTotalAmount());
-        order.setFreightAmount(quote.getFreightAmount());
-        order.setDiscountAmount(quote.getDiscountAmount());
-        order.setTotalAmount(quote.getTotalAmount().add(quote.getFreightAmount()).subtract(quote.getDiscountAmount()));
+        // 金额一律按 0 兜底：运费/优惠在库里都允许为 NULL，直接参与运算会空指针
+        // （实测：报价 7401 的 discount_amount 为空，受理时报
+        //  NullPointerException: Cannot read field "intCompact" because "subtrahend" is null，
+        //  表现是"受理报价"接口 500，而报价状态已经被改成了 accepted —— 半截成功）。
+        BigDecimal goods = quote.getTotalAmount() == null ? BigDecimal.ZERO : quote.getTotalAmount();
+        BigDecimal freight = quote.getFreightAmount() == null ? BigDecimal.ZERO : quote.getFreightAmount();
+        BigDecimal discount = quote.getDiscountAmount() == null ? BigDecimal.ZERO : quote.getDiscountAmount();
+        order.setGoodsAmount(goods);
+        order.setFreightAmount(freight);
+        order.setDiscountAmount(discount);
+        order.setTotalAmount(goods.add(freight).subtract(discount));
         order.setDeliveryProvince(inquiry.getDeliveryProvince());
         order.setDeliveryCity(inquiry.getDeliveryCity());
         order.setDeliveryAddress(inquiry.getDeliveryAddress());
         order.setDeliveryDeadline(quote.getDeliveryTime());
-        order.setOrderStatus("pending_pay");
+        // 取值必须在订单状态词表内：原先写的是 pending_pay —— 那个值前端不认识，
+        // 页面上会直接显示英文原文，而且它不等同于任何已知状态。用 pending_confirm。
+        order.setOrderStatus("pending_confirm");
         order.setPaymentStatus("unpaid");
         order.setDelFlag(0);
         order.setCreateTime(new Date());

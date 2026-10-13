@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.IService;
 
 import java.math.BigDecimal;
+import java.util.Collection;
 import java.util.List;
 
 public interface IQuoteService extends IService<Quote> {
@@ -60,6 +61,14 @@ public interface IQuoteService extends IService<Quote> {
      * 报价列表页因此无处可取数（前端调的是 /api/trade/quote/list，后端根本没有这个路径）。</p>
      */
     IPage<Quote> getQuotePage(int pageNum, int pageSize, String quoteStatus, Long sellerId, Long buyerId);
+
+    /**
+     * 报价分页查询（带数据范围）。
+     *
+     * @param scopeMerchantIds 当前账号绑定的经营主体；为空即"没有范围"，返回空集而不是全量
+     */
+    IPage<Quote> getQuotePage(int pageNum, int pageSize, String quoteStatus,
+                              Long sellerId, Long buyerId, Collection<Long> scopeMerchantIds);
 
     /**
      * 报价转订单。
