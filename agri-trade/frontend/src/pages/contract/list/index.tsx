@@ -13,9 +13,13 @@ function ContractList() {
     { title: '合同编号', dataIndex: 'contractNo', key: 'contractNo' },
     { title: '买方', dataIndex: 'buyerName', key: 'buyerName' },
     { title: '卖方', dataIndex: 'sellerName', key: 'sellerName' },
-    { title: '商品名称', dataIndex: 'goodsName', key: 'goodsName' },
-    { title: '合同金额', dataIndex: 'totalAmount', key: 'totalAmount', render: (val: number) => `¥${val}` },
-    { title: '签署状态', dataIndex: 'signStatus', key: 'signStatus' },
+  // 字段名对着接口实际返回的 VO 核过：合同表没有 goodsName / totalAmount / signStatus 这三个字段，
+  // 对应的真实字段是 contractName / contractAmount / buyerSignStatus+sellerSignStatus。
+  // 原先这三列恒为空白（接口 200、页面看着像"没数据"）。
+  { title: '合同名称', dataIndex: 'contractName', key: 'contractName' },
+  { title: '合同金额', dataIndex: 'contractAmount', key: 'contractAmount', render: (val: number) => `¥${val}` },
+  { title: '买方签署', dataIndex: 'buyerSignStatus', key: 'buyerSignStatus' },
+  { title: '卖方签署', dataIndex: 'sellerSignStatus', key: 'sellerSignStatus' },
     { title: '合同状态', dataIndex: 'contractStatus', key: 'contractStatus' },
     { title: '生效日期', dataIndex: 'effectiveDate', key: 'effectiveDate' },
     { title: '到期日期', dataIndex: 'expireDate', key: 'expireDate' },

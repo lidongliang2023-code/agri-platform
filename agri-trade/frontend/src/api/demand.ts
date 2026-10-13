@@ -28,7 +28,7 @@ export interface DemandVO {
 }
 
 export async function getDemandList(params: DemandQuery) {
-  const response = await axios.get('/api/trade/demand/list', { params })
+  const response = await axios.get('/api/trade/demand/page', { params })
   return response.data
 }
 

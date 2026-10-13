@@ -33,36 +33,38 @@ export interface QuoteVO {
 }
 
 export async function getQuoteList(params: QuoteQuery) {
-  const response = await axios.get('/api/trade/quote/list', { params })
+  // 报价接口挂在 negotiation 下（/api/trade/quote/* 后端从未注册过）；
+  // 分页端点是我这次补的 /negotiation/quote/page。
+  const response = await axios.get('/api/trade/negotiation/quote/page', { params })
   return response.data
 }
 
 export async function getQuoteById(id: number) {
-  const response = await axios.get(`/api/trade/quote/${id}`)
+  const response = await axios.get(`/api/trade/negotiation/quote/${id}`)
   return response.data
 }
 
 export async function createQuote(data: Partial<QuoteVO>) {
-  const response = await axios.post('/api/trade/quote', data)
+  const response = await axios.post('/api/trade/negotiation/quote', data)
   return response.data
 }
 
 export async function updateQuote(id: number, data: Partial<QuoteVO>) {
-  const response = await axios.put(`/api/trade/quote/${id}`, data)
+  const response = await axios.put(`/api/trade/negotiation/quote/${id}`, data)
   return response.data
 }
 
 export async function deleteQuote(id: number) {
-  const response = await axios.delete(`/api/trade/quote/${id}`)
+  const response = await axios.delete(`/api/trade/negotiation/quote/${id}`)
   return response.data
 }
 
 export async function acceptQuote(id: number) {
-  const response = await axios.post(`/api/trade/quote/${id}/accept`)
+  const response = await axios.post(`/api/trade/negotiation/quote/${id}/accept`)
   return response.data
 }
 
 export async function rejectQuote(id: number, reason: string) {
-  const response = await axios.post(`/api/trade/quote/${id}/reject`, { reason })
+  const response = await axios.post(`/api/trade/negotiation/quote/${id}/reject`, { reason })
   return response.data
 }

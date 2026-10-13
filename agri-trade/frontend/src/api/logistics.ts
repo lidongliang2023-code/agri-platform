@@ -25,7 +25,7 @@ export interface LogisticsVO {
 }
 
 export async function getLogisticsList(params: LogisticsQuery) {
-  const response = await axios.get('/api/trade/logistics/list', { params })
+  const response = await axios.get('/api/trade/logistics/page', { params })
   return response.data
 }
 

@@ -27,7 +27,7 @@ export interface DisputeVO {
 }
 
 export async function getDisputeList(params: DisputeQuery) {
-  const response = await axios.get('/api/trade/dispute/list', { params })
+  const response = await axios.get('/api/trade/dispute/page', { params })
   return response.data
 }
 

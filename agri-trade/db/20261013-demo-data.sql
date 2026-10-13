@@ -359,6 +359,51 @@ INSERT IGNORE INTO `agri_trade_compensation`
   'reviewing','admin','2026-10-15 10:00:00','pending','待承运商责任认定后放款','buyer_3003');
 
 -- ===========================================================================
+-- 对齐补充：把值搬到「接口真正返回的字段」上
+--
+-- 上面的 INSERT 是按**建表语句的列名**写的，而接口返回的字段来自实体类 —— 两边有漂移：
+--   · logistics 表用 delivery_* / pickup_*，实体用 receiver_* / sender_*；
+--   · dispute 表用 applicant_* / dispute_content，实体用 complainant_* / dispute_description；
+--   · contract 的 contract_name / contract_amount / 双方签署状态是后补的列，插入时为空。
+-- 结果就是"数据在库里、接口返回的字段却是 null、页面一列列空白"。
+-- 下面把这些值搬过去；可重复执行。
+-- ===========================================================================
+UPDATE `agri_trade_logistics` SET
+    `sender_province`   = `pickup_province`,
+    `sender_city`       = `pickup_city`,
+    `sender_district`   = `pickup_district`,
+    `sender_address`    = `pickup_address`,
+    `sender_contact`    = `pickup_contact`,
+    `sender_phone`      = `pickup_phone`,
+    `receiver_province` = `delivery_province`,
+    `receiver_city`     = `delivery_city`,
+    `receiver_district` = `delivery_district`,
+    `receiver_address`  = `delivery_address`,
+    `receiver_contact`  = `delivery_contact`,
+    `receiver_phone`    = `delivery_phone`,
+    `current_location`  = CONCAT(`delivery_city`, `delivery_district`)
+WHERE `id` BETWEEN 7000 AND 8099;
+
+UPDATE `agri_trade_dispute` SET
+    `complainant_id`      = `applicant_id`,
+    `complainant_name`    = `applicant_name`,
+    `dispute_reason`      = `dispute_type`,
+    `dispute_description` = `dispute_content`
+WHERE `id` BETWEEN 7000 AND 8099;
+
+UPDATE `agri_trade_contract` SET
+    `contract_name`      = CONCAT('购销合同 · ', `goods_name`),
+    `contract_amount`    = `total_amount`,
+    `buyer_sign_status`  = IF(`buyer_sign_time` IS NULL, 'pending', 'signed'),
+    `seller_sign_status` = IF(`seller_sign_time` IS NULL, 'pending', 'signed'),
+    `sign_date`          = `buyer_sign_time`,
+    `delivery_date`      = `delivery_deadline`
+WHERE `id` BETWEEN 7000 AND 8099;
+
+-- is_anonymous 是页面上"是否匿名"列读的字段（0=实名 1=匿名）
+UPDATE `agri_trade_evaluation` SET `is_anonymous` = 0 WHERE `id` BETWEEN 7000 AND 8099;
+
+-- ===========================================================================
 -- 清理语句（默认注释）。要清空本文件的演示数据时放开这几行执行即可 ——
 -- 只删 7000-8099 段，不会碰到真实数据。
 -- ===========================================================================

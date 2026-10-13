@@ -31,7 +31,7 @@ export interface ContractVO {
 }
 
 export async function getContractList(params: ContractQuery) {
-  const response = await axios.get('/api/trade/contract/list', { params })
+  const response = await axios.get('/api/trade/contract/page', { params })
   return response.data
 }
 

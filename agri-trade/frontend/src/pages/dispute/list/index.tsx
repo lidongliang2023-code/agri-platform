@@ -12,12 +12,12 @@ function DisputeList() {
   const columns = [
     { title: '纠纷编号', dataIndex: 'disputeNo', key: 'disputeNo' },
     { title: '订单编号', dataIndex: 'orderId', key: 'orderId' },
-    { title: '申请人', dataIndex: 'applicantName', key: 'applicantName' },
+  // 纠纷表的申请人是 complainant*（不是 applicant*）；金额只有 claimAmount（索赔金额）
+  { title: '申请人', dataIndex: 'complainantName', key: 'complainantName' },
     { title: '被申请人', dataIndex: 'respondentName', key: 'respondentName' },
     { title: '纠纷类型', dataIndex: 'disputeType', key: 'disputeType' },
-    { title: '纠纷金额', dataIndex: 'disputeAmount', key: 'disputeAmount', render: (val: number) => `¥${val}` },
     { title: '索赔金额', dataIndex: 'claimAmount', key: 'claimAmount', render: (val: number) => `¥${val}` },
-    { title: '纠纷内容', dataIndex: 'disputeContent', key: 'disputeContent', ellipsis: true },
+  { title: '纠纷内容', dataIndex: 'disputeDescription', key: 'disputeDescription', ellipsis: true },
     { title: '纠纷状态', dataIndex: 'disputeStatus', key: 'disputeStatus',
       render: (status: string) => {
         if (status === 'pending') return <span style={{ color: '#faad14' }}>待处理</span>

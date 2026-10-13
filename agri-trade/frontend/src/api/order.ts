@@ -29,7 +29,7 @@ export interface TradeOrderVO {
 }
 
 export async function getOrderList(params: OrderQuery) {
-  const response = await axios.get('/api/trade/order/list', { params })
+  const response = await axios.get('/api/trade/order/page', { params })
   return response.data
 }
 

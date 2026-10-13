@@ -29,7 +29,8 @@ export interface TradeProductVO {
 }
 
 export async function getProductList(params: ProductQuery) {
-  const response = await axios.get('/api/trade/product/list', { params })
+  // 后端注册的是 /page（MyBatis-Plus 分页），没有 /list —— 原先调 /list 必然 404。
+  const response = await axios.get('/api/trade/product/page', { params })
   return response.data
 }
 

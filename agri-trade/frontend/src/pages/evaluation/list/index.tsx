@@ -23,12 +23,14 @@ function EvaluationList() {
         <span style={{ color: '#999' }}>已隐藏</span> : 
         <span style={{ color: '#52c41a' }}>展示中</span>
     },
-    { title: '申诉状态', dataIndex: 'appealStatus', key: 'appealStatus',
-      render: (status: string) => {
-        if (status === 'none') return <span style={{ color: '#999' }}>无</span>
-        if (status === 'pending') return <span style={{ color: '#faad14' }}>处理中</span>
-        return <span style={{ color: '#52c41a' }}>已处理</span>
-      }
+  // 评价本身没有申诉字段：申诉是独立的 agri_trade_evaluation_appeal 表（有单独的接口）。
+  // 这里原先读 appealStatus，而接口里根本没有这个键 —— 一列永远空白。
+  { title: '是否匿名', dataIndex: 'isAnonymous', key: 'isAnonymous',
+      // isAnonymous 是 0/1，不是原来的申诉状态串 —— 渲染逻辑跟着字段一起改，
+      // 否则三种分支都对不上、整列只会显示"已处理"
+      render: (val: number) => (val === 1
+        ? <span style={{ color: '#999' }}>匿名</span>
+        : <span style={{ color: '#52c41a' }}>实名</span>)
     },
     { title: '创建时间', dataIndex: 'createTime', key: 'createTime' },
     { title: '操作', key: 'action', render: () => (

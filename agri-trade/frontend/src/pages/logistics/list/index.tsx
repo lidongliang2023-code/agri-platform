@@ -15,7 +15,8 @@ function LogisticsList() {
     { title: '承运商', dataIndex: 'carrierName', key: 'carrierName' },
     { title: '物流类型', dataIndex: 'logisticsType', key: 'logisticsType' },
     { title: '运费', dataIndex: 'freightAmount', key: 'freightAmount', render: (val: number) => `¥${val}` },
-    { title: '收货地址', dataIndex: 'deliveryAddress', key: 'deliveryAddress', ellipsis: true },
+  // 物流表用 sender_* / receiver_* 命名，没有 deliveryAddress（那是订单表的字段）
+  { title: '收货地址', dataIndex: 'receiverAddress', key: 'receiverAddress', ellipsis: true },
     { title: '物流状态', dataIndex: 'logisticsStatus', key: 'logisticsStatus' },
     { title: '创建时间', dataIndex: 'createTime', key: 'createTime' },
     { title: '操作', key: 'action', render: () => (

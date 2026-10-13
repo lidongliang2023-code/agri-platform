@@ -8,6 +8,8 @@ import com.agri.trade.mapper.InquiryMapper;
 import com.agri.trade.mapper.TradeProductMapper;
 import com.agri.trade.service.IQuoteService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -23,6 +25,23 @@ public class QuoteServiceImpl extends ServiceImpl<QuoteMapper, Quote> implements
 
     private final InquiryMapper inquiryMapper;
     private final TradeProductMapper productMapper;
+
+    @Override
+    public IPage<Quote> getQuotePage(int pageNum, int pageSize, String quoteStatus, Long sellerId, Long buyerId) {
+        LambdaQueryWrapper<Quote> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Quote::getDelFlag, 0);
+        if (quoteStatus != null && !quoteStatus.isEmpty()) {
+            wrapper.eq(Quote::getQuoteStatus, quoteStatus);
+        }
+        if (sellerId != null) {
+            wrapper.eq(Quote::getSellerId, sellerId);
+        }
+        if (buyerId != null) {
+            wrapper.eq(Quote::getBuyerId, buyerId);
+        }
+        wrapper.orderByDesc(Quote::getCreateTime);
+        return page(new Page<>(pageNum, pageSize), wrapper);
+    }
 
     @Override
     @Transactional

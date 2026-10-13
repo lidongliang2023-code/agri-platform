@@ -5,6 +5,8 @@ import com.agri.trade.entity.Inquiry;
 import com.agri.trade.entity.Quote;
 import com.agri.trade.service.IInquiryService;
 import com.agri.trade.service.IQuoteService;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -83,6 +85,28 @@ public class NegotiationController {
     public ApiResponse<List<Quote>> getBuyerQuotes(@PathVariable Long buyerId) {
         List<Quote> quotes = quoteService.getQuotesByBuyer(buyerId);
         return ApiResponse.success(quotes);
+    }
+
+    @Operation(summary = "报价分页列表")
+    @GetMapping("/quote/page")
+    public ApiResponse<IPage<Quote>> getQuotePage(
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(defaultValue = "10") Integer pageSize,
+            @RequestParam(required = false) String quoteStatus,
+            @RequestParam(required = false) Long sellerId,
+            @RequestParam(required = false) Long buyerId) {
+        return ApiResponse.success(
+                quoteService.getQuotePage(pageNum, pageSize, quoteStatus, sellerId, buyerId));
+    }
+
+    @Operation(summary = "报价详情")
+    @GetMapping("/quote/{id}")
+    public ApiResponse<Quote> getQuoteById(@PathVariable Long id) {
+        Quote quote = quoteService.getById(id);
+        if (quote == null) {
+            return ApiResponse.error("报价不存在");
+        }
+        return ApiResponse.success(quote);
     }
 
     @GetMapping("/quote/seller/{sellerId}")

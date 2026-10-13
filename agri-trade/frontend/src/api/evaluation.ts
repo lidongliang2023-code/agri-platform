@@ -29,7 +29,7 @@ export interface EvaluationVO {
 }
 
 export async function getEvaluationList(params: EvaluationQuery) {
-  const response = await axios.get('/api/trade/evaluation/list', { params })
+  const response = await axios.get('/api/trade/evaluation/page', { params })
   return response.data
 }
 
