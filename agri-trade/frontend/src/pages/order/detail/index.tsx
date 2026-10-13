@@ -5,7 +5,8 @@ import {
 } from 'antd'
 import { ArrowLeftOutlined } from '@ant-design/icons'
 import { applyOrderRefund, getOrderById, getOrderItems, payOrder, updateOrderStatus } from '@/api/order'
-import { createEvaluation } from '@/api/evaluation'
+import { createEvaluation, getEvaluationList, type EvaluationVO } from '@/api/evaluation'
+import { getMyMerchants } from '@/api/identity'
 
 interface Order {
   id: number
@@ -90,6 +91,29 @@ export default function OrderDetail() {
   const [evalForm] = Form.useForm()
   const [refundOpen, setRefundOpen] = useState(false)
   const [refundForm] = Form.useForm()
+  const [evaluations, setEvaluations] = useState<EvaluationVO[]>([])
+  const [myMerchantIds, setMyMerchantIds] = useState<number[]>([])
+
+  // 这张订单上的评价（双向都可能各有一条）。判断"我评过没有"要用我绑定的主体对
+  // evaluatorId —— 前端自报身份没有意义，服务端也只认令牌。
+  const loadEvaluations = useCallback(() => {
+    if (!id) return
+    getEvaluationList({ pageNum: 1, pageSize: 10, orderId: String(id) })
+      .then((res: { code: number; data?: { records?: EvaluationVO[] } }) => {
+        if (res?.code === 200) setEvaluations(res.data?.records ?? [])
+      })
+      .catch(() => setEvaluations([]))
+  }, [id])
+
+  useEffect(() => {
+    getMyMerchants()
+      .then((res) => {
+        if (res?.code === 200) setMyMerchantIds((res.data ?? []).map((m) => Number(m.merchantId)))
+      })
+      .catch(() => setMyMerchantIds([]))
+  }, [])
+
+  const myEvaluation = evaluations.find((e) => myMerchantIds.includes(Number(e.evaluatorId))) ?? null
 
   const load = useCallback(() => {
     if (!id) return
@@ -106,7 +130,8 @@ export default function OrderDetail() {
         if (res?.code === 200) setItems(res.data ?? [])
       })
       .catch(() => undefined)
-  }, [id])
+    loadEvaluations()
+  }, [id, loadEvaluations])
 
   useEffect(() => {
     load()
@@ -148,20 +173,18 @@ export default function OrderDetail() {
 
   const submitEvaluation = async (values: { ratingOverall: number; evaluationContent: string }) => {
     if (!order) return
+    // 评价人与被评价人由服务端按订单推导 —— 前端不再自报（自报了也不采信）
     const res = await createEvaluation({
       orderId: order.id,
-      evaluatorId: order.buyerId,
-      evaluatorName: order.buyerName,
-      evaluateeId: order.sellerId,
-      evaluateeName: order.sellerName,
       ratingOverall: values.ratingOverall,
-      evaluationContent: values.evaluationContent,
-      evaluationStatus: 'published'
+      evaluationContent: values.evaluationContent
     })
     if (res?.code === 200) {
       message.success('评价已提交')
       setEvalOpen(false)
       evalForm.resetFields()
+      // 立刻把评价卡片刷新出来 —— 提交成功后自己这条要马上可见
+      loadEvaluations()
     } else {
       message.error(res?.message ?? '评价提交失败')
     }
@@ -224,7 +247,7 @@ export default function OrderDetail() {
             <Button loading={acting}>推进到「{nextStep.label}」</Button>
           </Popconfirm>
         )}
-        {(order.orderStatus === 'received' || order.orderStatus === 'completed') && (
+        {(order.orderStatus === 'received' || order.orderStatus === 'completed') && !myEvaluation && (
           <Button onClick={() => setEvalOpen(true)}>评价这笔交易</Button>
         )}
         {(order.orderStatus === 'paid' || order.orderStatus === 'shipped' || order.orderStatus === 'received') && (
@@ -296,6 +319,45 @@ export default function OrderDetail() {
               { title: '溯源码', dataIndex: 'traceCode', render: (val: string) => val || '—' }
             ]}
           />
+        )}
+      </Card>
+
+      <Card title={`交易评价（${evaluations.length}）`} style={{ marginTop: 16 }}>
+        {evaluations.length === 0 ? (
+          <Empty
+            description={
+              order.orderStatus === 'received' || order.orderStatus === 'completed'
+                ? '这笔订单还没有评价 —— 买卖双方各可以评一次'
+                : '订单走到「已收货」之后才开放评价'
+            }
+          />
+        ) : (
+          <Space direction="vertical" style={{ width: '100%' }} size={12}>
+            {/* 双向评价：买家评卖家、卖家评买家，各一条、互不影响 */}
+            {[
+              { key: 'buyer', label: '买家评价', row: evaluations.find((e) => e.evaluatorId === order.buyerId) ?? null },
+              { key: 'seller', label: '卖家评价', row: evaluations.find((e) => e.evaluatorId === order.sellerId) ?? null }
+            ].map(({ key, label, row }) => (
+              <Card key={key} size="small" type="inner" title={`${label}${row && myMerchantIds.includes(Number(row.evaluatorId)) ? '（我方）' : ''}`}>
+                {row ? (
+                  <Space direction="vertical" style={{ width: '100%' }}>
+                    <Space>
+                      <Rate disabled value={row.ratingOverall} />
+                      <Typography.Text type="secondary">
+                        {row.evaluatorName} → {row.evaluateeName}　{row.createTime}
+                      </Typography.Text>
+                    </Space>
+                    <Typography.Text>{row.evaluationContent || '（未填写文字评价）'}</Typography.Text>
+                    {row.replyContent && (
+                      <Typography.Text type="secondary">被评价方回复：{row.replyContent}</Typography.Text>
+                    )}
+                  </Space>
+                ) : (
+                  <Typography.Text type="secondary">还没有评价</Typography.Text>
+                )}
+              </Card>
+            ))}
+          </Space>
         )}
       </Card>
 

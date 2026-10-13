@@ -371,7 +371,9 @@ CREATE TABLE IF NOT EXISTS `agri_trade_evaluation` (
     `hide_reason` TEXT NULL COMMENT '实体字段补齐（2026-10-13）',
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_evaluation_no` (`evaluation_no`),
-    UNIQUE KEY `uk_order_id` (`order_id`),
+    -- 一张订单允许双向各评价一次（买家评卖家 / 卖家评买家）。
+    -- 原来这里是 uk_order_id（一单一条），先评的那方把位置占了，另一方再也评不了。
+    UNIQUE KEY `uk_order_evaluator` (`order_id`, `evaluator_id`),
     INDEX `idx_evaluator_id` (`evaluator_id`),
     INDEX `idx_evaluatee_id` (`evaluatee_id`),
     INDEX `idx_evaluation_status` (`evaluation_status`),

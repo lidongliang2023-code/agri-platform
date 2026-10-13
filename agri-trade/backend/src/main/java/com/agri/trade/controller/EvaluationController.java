@@ -98,13 +98,16 @@ public class EvaluationController {
         if (evaluation.getRatingOverall() == null) {
             return ApiResponse.error("请给出综合评分");
         }
-        // 表上 uk_order_id 只允许一笔订单一条评价：提前给出清楚提示，
-        // 而不是让数据库抛唯一键冲突（页面上只会看到"创建失败"）。
+        // 一张订单允许**双向各一条**：买家评卖家、卖家评买家。
+        // 原先表上是 uk_order_id（一单只能一条），于是先评价的那一方把位置占了，
+        // 另一方再也评不了 —— 卖方在平台上的信用分永远只有买家给的那一半。
+        // 现在唯一键是 (order_id, evaluator_id)：同一方只能评一次，双方互不影响。
         Long exists = evaluationMapper.selectCount(new LambdaQueryWrapper<Evaluation>()
                 .eq(Evaluation::getOrderId, evaluation.getOrderId())
+                .eq(Evaluation::getEvaluatorId, evaluation.getEvaluatorId())
                 .eq(Evaluation::getDelFlag, 0));
         if (exists != null && exists > 0) {
-            return ApiResponse.error("这笔订单已经评价过了");
+            return ApiResponse.error("你已经评价过这笔交易了（对方是否评价不影响你）");
         }
 
         evaluation.setEvaluationNo("EV" + System.currentTimeMillis());

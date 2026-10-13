@@ -93,6 +93,12 @@ function AppRouter() {
         <Route path="mine" element={<MineDashboardPage />} />
         <Route path="my-guarantee" element={<MyGuarantee />} />
         <Route path="my-compensation" element={<MyCompensation />} />
+      {/*
+        兜底：没有匹配到的路径回首页。
+        原先没有任何兜底路由，点了一个过期/写错的链接（例如 /order/7601，
+        真实路径是 /order/detail/7601）会渲染成一张白屏，看不出是网址错了。
+      */}
+      <Route path="*" element={<Navigate to="/" replace />} />
         <Route path="order" element={<OrderList />} />
         <Route path="order/detail/:id" element={<OrderDetail />} />
         <Route path="order/confirm" element={<OrderConfirm />} />
