@@ -3,6 +3,8 @@ package com.agri.trade.controller;
 import com.agri.trade.common.entity.ApiResponse;
 import com.agri.trade.entity.TradeProduct;
 import com.agri.trade.entity.TradeProductCategory;
+import com.agri.trade.entity.ProductImage;
+import com.agri.trade.mapper.ProductImageMapper;
 import com.agri.trade.mapper.TradeProductMapper;
 import com.agri.trade.mapper.TradeProductCategoryMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -21,6 +23,22 @@ public class TradeProductController {
 
     private final TradeProductMapper productMapper;
     private final TradeProductCategoryMapper categoryMapper;
+    private final ProductImageMapper productImageMapper;
+
+    /**
+     * 商品图片。
+     *
+     * <p>商品详情页要展示主图与详情图，而 agri_trade_product_image 表此前没有任何读接口 ——
+     * 详情页只能显示一个占位框。这里按 product_id 取，主图排在前。</p>
+     */
+    @GetMapping("/{id}/images")
+    public ApiResponse<List<ProductImage>> getProductImages(@PathVariable Long id) {
+        LambdaQueryWrapper<ProductImage> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(ProductImage::getDelFlag, 0)
+               .eq(ProductImage::getProductId, id)
+               .orderByAsc(ProductImage::getSortOrder);
+        return ApiResponse.success(productImageMapper.selectList(wrapper));
+    }
 
     @GetMapping("/category/page")
     public ApiResponse<IPage<TradeProductCategory>> getCategoryPage(
@@ -81,14 +99,32 @@ public class TradeProductController {
             @RequestParam(defaultValue = "10") Integer pageSize,
             @RequestParam(required = false) Long categoryId,
             @RequestParam(required = false) String productName,
-            @RequestParam(required = false) String publishStatus) {
+            @RequestParam(required = false) String publishStatus,
+            // 供应商店铺页需要"该店铺的全部货源"，原先没有 sellerId 过滤条件，
+            // 只能把全部商品拉回来在前端筛 —— 现在下推到 SQL。
+            @RequestParam(required = false) Long sellerId,
+            // 列表页的价格排序。取值 price / priceMin / createTime，order 取 asc / desc。
+            @RequestParam(required = false) String sortField,
+            @RequestParam(required = false) String sortOrder) {
         Page<TradeProduct> page = new Page<>(pageNum, pageSize);
         LambdaQueryWrapper<TradeProduct> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(TradeProduct::getDelFlag, 0);
         if (categoryId != null) wrapper.eq(TradeProduct::getCategoryId, categoryId);
         if (productName != null) wrapper.like(TradeProduct::getProductName, productName);
         if (publishStatus != null) wrapper.eq(TradeProduct::getPublishStatus, publishStatus);
-        wrapper.orderByDesc(TradeProduct::getCreateTime);
+        if (sellerId != null) wrapper.eq(TradeProduct::getSellerId, sellerId);
+        // 白名单式排序：只认三个已知字段，其他一律回落默认排序 ——
+        // 直接把请求参数拼进 orderBy 是 SQL 注入面
+        boolean asc = "asc".equalsIgnoreCase(sortOrder);
+        if ("price".equals(sortField)) {
+            wrapper.orderBy(true, asc, TradeProduct::getPrice);
+        } else if ("priceMin".equals(sortField)) {
+            wrapper.orderBy(true, asc, TradeProduct::getPriceMin);
+        } else if ("createTime".equals(sortField)) {
+            wrapper.orderBy(true, asc, TradeProduct::getCreateTime);
+        } else {
+            wrapper.orderByDesc(TradeProduct::getCreateTime);
+        }
         return ApiResponse.success(productMapper.selectPage(page, wrapper));
     }
 

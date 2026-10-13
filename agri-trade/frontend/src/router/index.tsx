@@ -5,6 +5,8 @@ import Home from '@/pages/home'
 import OrderList from '@/pages/order/list'
 import ProductList from '@/pages/product/list'
 import ProductCreate from '@/pages/product/create'
+import ProductDetail from '@/pages/product/detail'
+import ShopDetail from '@/pages/shop/detail'
 import DemandList from '@/pages/demand/list'
 import DemandCreate from '@/pages/demand/create'
 import ContractList from '@/pages/contract/list'
@@ -38,6 +40,8 @@ function AppRouter() {
         <Route path="order" element={<OrderList />} />
         <Route path="product" element={<ProductList />} />
         <Route path="product/create" element={<ProductCreate />} />
+        <Route path="product/detail/:id" element={<ProductDetail />} />
+        <Route path="shop/:sellerId" element={<ShopDetail />} />
         <Route path="demand" element={<DemandList />} />
         <Route path="demand/create" element={<DemandCreate />} />
         <Route path="quote" element={<QuoteList />} />

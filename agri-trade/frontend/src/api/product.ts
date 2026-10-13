@@ -5,9 +5,21 @@ export interface ProductQuery {
   pageSize: number
   productCode?: string
   productName?: string
-  sellerId?: string
-  categoryId?: string
+  sellerId?: number | string
+  categoryId?: number | string
   publishStatus?: string
+  /** 排序字段：price / priceMin / createTime（后端按白名单处理，其他值回落默认排序） */
+  sortField?: string
+  sortOrder?: 'asc' | 'desc'
+}
+
+/** 商品图片（agri_trade_product_image） */
+export interface ProductImage {
+  id: number
+  productId: number
+  imageUrl: string
+  imageType: string
+  sortOrder: number
 }
 
 export interface TradeProductVO {
@@ -36,6 +48,17 @@ export async function getProductList(params: ProductQuery) {
 
 export async function getProductById(id: number) {
   const response = await axios.get(`/api/trade/product/${id}`)
+  return response.data
+}
+
+export async function getProductImages(id: number | string) {
+  const response = await axios.get(`/api/trade/product/${id}/images`)
+  return response.data
+}
+
+/** 商品分类（用于列表页的品类筛选） */
+export async function getCategoryList() {
+  const response = await axios.get('/api/trade/product/category/list')
   return response.data
 }
 
