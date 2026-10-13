@@ -1,14 +1,56 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Alert, Table, Button, Card, Input, Select, Space, Rate, Modal, Form, message } from 'antd'
-import { SearchOutlined, WarningOutlined } from '@ant-design/icons'
+import { SearchOutlined, WarningOutlined, MessageOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
-import { getEvaluationList, appealEvaluation, type EvaluationQuery, type EvaluationVO } from '@/api/evaluation'
+import { getEvaluationList, appealEvaluation, replyEvaluation, type EvaluationQuery, type EvaluationVO } from '@/api/evaluation'
+import { getMyMerchants } from '@/api/identity'
 
 function EvaluationList() {
   const [query, setQuery] = useState<EvaluationQuery>({ pageNum: 1, pageSize: 10 })
   const [draft, setDraft] = useState<{ evaluationNo?: string; ratingOverall?: number }>({})
+  // 我的经营主体：回复是**被评价方的官方回应**，服务端会判定"你是不是被评价方"，
+  // 前端据此决定按钮显不显示（避免按钮点得动、点了被拒）。
+  const [myMerchantIds, setMyMerchantIds] = useState<string[]>([])
+  const [replyRow, setReplyRow] = useState<EvaluationVO | null>(null)
+  const [replying, setReplying] = useState(false)
+  const [replyForm] = Form.useForm()
 
-  const { data, isLoading } = useQuery({
+  useEffect(() => {
+    getMyMerchants()
+      .then((res) => {
+        if (res?.code === 200) setMyMerchantIds((res.data ?? []).map((m) => String(m.merchantId)))
+      })
+      .catch(() => setMyMerchantIds([]))
+  }, [])
+
+  /** 我是被评价方、且还没回过 —— 才给回复入口。 */
+  const canReply = (row: EvaluationVO) =>
+    row.evaluateeId != null &&
+    myMerchantIds.includes(String(row.evaluateeId)) &&
+    !row.replyContent
+
+  const submitReply = async () => {
+    if (!replyRow) return
+    const values = await replyForm.validateFields()
+    setReplying(true)
+    try {
+      const res = await replyEvaluation(replyRow.id, values.content)
+      if (res?.code === 200) {
+        message.success('已回复')
+        setReplyRow(null)
+        replyForm.resetFields()
+        refetch()
+      } else {
+        message.error(res?.message ?? '回复失败')
+      }
+    } catch {
+      message.error('回复失败')
+    } finally {
+      setReplying(false)
+    }
+  }
+
+  const { data, isLoading, refetch } = useQuery({
     queryKey: ['evaluations', query],
     queryFn: () => getEvaluationList(query),
   })
@@ -67,12 +109,21 @@ function EvaluationList() {
         : <span style={{ color: '#52c41a' }}>实名</span>)
     },
     { title: '创建时间', dataIndex: 'createTime', key: 'createTime' },
-    { title: '操作', key: 'action', width: 150, render: (_: unknown, row: EvaluationVO) => (
+    { title: '商家回复', dataIndex: 'replyContent', key: 'replyContent', width: 180, ellipsis: true,
+      render: (v: string) => v ?? '—' },
+    { title: '操作', key: 'action', width: 170, render: (_: unknown, row: EvaluationVO) => (
       <Space size={0}>
         {/*
-          只留"申诉"这一个真实动作：回复/详情/删除三个按钮此前都没有 onClick，
-          点了什么都不发生 —— 与其留着骗人，不如先撤掉，等在做的页面补齐再挂回来。
+          回复按钮接回来了：后端 PUT /evaluation/{id}/reply 一直都在，
+          此前按钮没有 onClick 被我撤掉了。现在只在"我是被评价方、且还没回过"时出现
+          （服务端也会判定，前端只是不让按钮点了被拒）。只允许回一次 ——
+          官方回应被反复改写，买家那边看到的就不是当时的说法了。
+          删除按钮仍然没有：后端没有这个接口，评价也不该由当事人删掉。
         */}
+        {canReply(row) && (
+          <Button type="link" icon={<MessageOutlined />}
+            onClick={() => { setReplyRow(row); replyForm.resetFields() }}>回复</Button>
+        )}
         <Button type="link" icon={<WarningOutlined />} onClick={() => setAppealRow(row)}>申诉</Button>
       </Space>
     )},
@@ -146,6 +197,28 @@ function EvaluationList() {
           </Form.Item>
           <Form.Item name="appealEvidence" label="证据说明">
             <Input.TextArea rows={2} placeholder="例如：聊天记录、质检报告编号（可留空）" />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={`回复评价${replyRow ? ' · ' + replyRow.evaluationNo : ''}`}
+        open={!!replyRow}
+        onCancel={() => setReplyRow(null)}
+        onOk={submitReply}
+        confirmLoading={replying}
+        destroyOnClose
+      >
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message="回复会以被评价方的名义公开展示"
+          description="只能回复一次（官方回应被反复改写，买家看到的就不是当时的说法了）。需要修改请走申诉或联系运营。"
+        />
+        <Form form={replyForm} layout="vertical">
+          <Form.Item name="content" label="回复内容" rules={[{ required: true, message: '请填写回复内容' }]}>
+            <Input.TextArea rows={4} placeholder="例如：感谢反馈，我们已调整发货安排" />
           </Form.Item>
         </Form>
       </Modal>

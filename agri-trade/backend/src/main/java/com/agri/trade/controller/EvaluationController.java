@@ -69,7 +69,29 @@ public class EvaluationController {
     public ApiResponse<Boolean> replyEvaluation(@PathVariable Long id, @RequestBody java.util.Map<String, String> params) {
         Evaluation evaluation = evaluationMapper.selectById(id);
         if (evaluation == null) return ApiResponse.error("评价不存在");
-        evaluation.setReplyContent(params.get("content"));
+
+        // 回复是**被评价方的官方回应**：只有被评价的那家主体能回，
+        // 否则任何人都能替商家"回"一句（那句话在页面上是挂着商家名的）。
+        PlatformIdentityService.MerchantScope scope = identityService.currentScope();
+        if (!scope.resolved()) {
+            return ApiResponse.error(scope.error());
+        }
+        if (evaluation.getEvaluateeId() == null
+                || scope.nameOf(evaluation.getEvaluateeId()) == null) {
+            return ApiResponse.error("只有被评价方可以回复这条评价");
+        }
+
+        String content = params.get("content");
+        if (content == null || content.trim().isEmpty()) {
+            return ApiResponse.error("回复内容不能为空");
+        }
+        // 只允许回复一次：官方回应被反复改写，买家那边看到的就不是当时的说法了。
+        // 需要修改请走申诉/运营介入（留痕）。
+        if (evaluation.getReplyContent() != null && !evaluation.getReplyContent().isEmpty()) {
+            return ApiResponse.error("这条评价已经回复过了");
+        }
+
+        evaluation.setReplyContent(content.trim());
         evaluation.setReplyTime(new Date());
         evaluation.setUpdateTime(new Date());
         int result = evaluationMapper.updateById(evaluation);
