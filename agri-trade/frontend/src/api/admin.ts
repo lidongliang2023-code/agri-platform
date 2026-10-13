@@ -1,5 +1,9 @@
 /**
- * 运营端接口（/admin/trade/*）。
+ * 运营端接口（/api/trade/admin/*）。
+ *
+ * <p>前缀刻意**不带 /admin/trade**：那个前缀是运营端的**页面路由**（/admin/trade/order 是页面）。
+ * 接口与页面共用一个前缀时，网关没法区分"要一张页面"还是"要一份数据" ——
+ * 放行接口就会让直接刷新页面变成 404。规则：页面归 /admin/**，接口一律归 /api/**。</p>
  *
  * <p>与用户端接口分开一个文件：两者的数据范围不同，混在一起时很容易出现
  * "运营端页面调了用户端接口"这种越权调用。</p>
@@ -43,35 +47,35 @@ export interface AdminOverview {
 }
 
 export async function getAdminOverview() {
-  const response = await axios.get('/admin/trade/dashboard/overview')
+  const response = await axios.get('/api/trade/admin/dashboard/overview')
   return response.data
 }
 
 export async function getAdminProductPage(params: Record<string, unknown>) {
-  const response = await axios.get('/admin/trade/product/page', { params })
+  const response = await axios.get('/api/trade/admin/product/page', { params })
   return response.data
 }
 
 /** 货源审核：approved=true 通过、false 驳回；auditRemark 是会留痕的审核意见 */
 export async function auditProduct(id: number | string, approved: boolean, auditRemark?: string) {
-  const response = await axios.post(`/admin/trade/product/${id}/audit`, { approved, auditRemark })
+  const response = await axios.post(`/api/trade/admin/product/${id}/audit`, { approved, auditRemark })
   return response.data
 }
 
 export async function getAdminOrderPage(params: Record<string, unknown>) {
-  const response = await axios.get('/admin/trade/order/page', { params })
+  const response = await axios.get('/api/trade/admin/order/page', { params })
   return response.data
 }
 
 export async function getAdminOrderDetail(id: number | string) {
-  const response = await axios.get(`/admin/trade/order/${id}`)
+  const response = await axios.get(`/api/trade/admin/order/${id}`)
   return response.data
 }
 
 /* ------------------------------ 纠纷仲裁 ------------------------------ */
 
 export async function getAdminDisputePage(params: Record<string, unknown>) {
-  const response = await axios.get('/admin/trade/dispute/page', { params })
+  const response = await axios.get('/api/trade/admin/dispute/page', { params })
   return response.data
 }
 
@@ -96,7 +100,7 @@ export async function arbitrateDispute(id: number | string, arbitrator: string, 
 /* ------------------------------ 退款审核 ------------------------------ */
 
 export async function getAdminRefundPage(params: Record<string, unknown>) {
-  const response = await axios.get('/admin/trade/refund/page', { params })
+  const response = await axios.get('/api/trade/admin/refund/page', { params })
   return response.data
 }
 
@@ -119,7 +123,7 @@ export async function auditRefund(
 /* ------------------------------ 赔付执行 ------------------------------ */
 
 export async function getAdminCompensationPage(params: Record<string, unknown>) {
-  const response = await axios.get('/admin/trade/compensation/page', { params })
+  const response = await axios.get('/api/trade/admin/compensation/page', { params })
   return response.data
 }
 

@@ -43,7 +43,7 @@ const ORDER_STATUS: Record<string, { text: string; color: string }> = {
 /**
  * 订单监管（PRD 10.2 第三组）。
  *
- * <p>运营看的是**全平台**订单（用户端只能看与自己相关的），所以走的是 /admin/trade 下的
+ * <p>运营看的是**全平台**订单（用户端只能看与自己相关的），所以走的是 /api/trade/admin 下的
  * 独立接口，而不是用户端那个 /api/trade/order/page —— 数据范围不同的两套接口不能共用。</p>
  */
 export default function AdminOrderOversight() {

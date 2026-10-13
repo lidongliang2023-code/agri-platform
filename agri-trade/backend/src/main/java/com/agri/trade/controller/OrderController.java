@@ -155,7 +155,7 @@ public class OrderController {
         }
         LambdaQueryWrapper<TradeOrder> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(TradeOrder::getDelFlag, 0);
-        // 我名下的主体只要是买方或卖方就与我有关。全平台查询归运营端（/admin/trade/order/page）。
+        // 我名下的主体只要是买方或卖方就与我有关。全平台查询归运营端（/api/trade/admin/order/page）。
         List<Long> mine = scope.merchantIds();
         wrapper.and(w -> w.in(TradeOrder::getBuyerId, mine).or().in(TradeOrder::getSellerId, mine));
         if (orderStatus != null) wrapper.eq(TradeOrder::getOrderStatus, orderStatus);

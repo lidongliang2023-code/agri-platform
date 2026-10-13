@@ -30,8 +30,16 @@ import java.util.Map;
 /**
  * 交易撮合 · 运营端接口（PRD V6.0 第 10.2 节）。
  *
- * <p>运营端此前**一个接口都没有**（/admin/trade/* 从未注册），所以那 42 个页面无从谈起。
+ * <p>运营端此前**一个接口都没有**（从未注册），所以那 42 个页面无从谈起。
  * 本次先把三组最核心的立起来：交易大盘、货源审核、订单监管。</p>
+ *
+ * <p><b>路径为什么是 /api/trade/admin 而不是 /admin/trade</b>：
+ * 前端运营端的**页面路由**就挂在 /admin/trade/** 下（/admin/trade/order 是页面，
+ * /admin/trade/order/page 曾经是接口）。两者共用一个前缀时，网关无法区分
+ * "浏览器要一张页面"和"前端要一份数据"：给接口放行就会把页面请求也送去后端，
+ * 直接刷新页面就变成一个 404 白页。所以这里统一到本模块的接口族 /api/trade/** 下 ——
+ * 规则简单到不会记错：**页面归 /admin/**，接口一律归 /api/**。
+ * 平台级接口则走 /api/v1/**。**</p>
  *
  * <p>数据口径全部取自真实表，**不做任何写死的统计** —— 用户端的
  * /api/trade/operation/* 就是反面教材：那三个接口返回的是 OperationServiceImpl 里的
@@ -39,7 +47,7 @@ import java.util.Map;
  */
 @Tag(name = "运营端 - 交易监管")
 @RestController
-@RequestMapping("/admin/trade")
+@RequestMapping("/api/trade/admin")
 @RequiredArgsConstructor
 public class AdminTradeController {
 
