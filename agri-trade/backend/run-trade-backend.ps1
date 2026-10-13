@@ -65,19 +65,27 @@ if (Test-Path $mavenSettings) {
     $mavenArgs += @('-s', $mavenSettings)
 }
 
-$packageArgs = $mavenArgs -ne 'spring-boot:run'
-$packageArgs += @('package')
+# 编译（含资源拷贝）——不用 package：spring-boot 的 repackage 在这台机器上会被后台进程
+# 占住产物文件而失败（"Execution repackage ... failed"），而 compile 一路稳定。
+$compileArgs = $mavenArgs -ne 'spring-boot:run'
+$compileArgs += @('compile')
 
-Write-Host "打包交易撮合后端（profile $Profile）…"
-& mvn @packageArgs
+Write-Host "编译交易撮合后端（profile $Profile）…"
+& mvn @compileArgs
 if ($LASTEXITCODE -ne 0) {
-    throw "打包失败，已中止启动。"
+    throw "编译失败，已中止启动。"
 }
 
-$jar = Join-Path $backendDir 'target\agri-trade-1.0.0-SNAPSHOT.jar'
-if (-not (Test-Path $jar)) {
-    throw "没有找到可执行产物：$jar"
+# 依赖 classpath：缓存成 target\cp.txt，依赖没变就不必每次重算
+$cpFile = Join-Path $backendDir 'target\cp.txt'
+if (-not (Test-Path $cpFile)) {
+    Write-Host "解析依赖 classpath…"
+    & mvn -o -q dependency:build-classpath "-Dmdep.outputFile=target\cp.txt" @mavenArgs[1..($mavenArgs.Count-1)]
+    if (-not (Test-Path $cpFile)) {
+        throw "无法生成依赖 classpath（$cpFile）"
+    }
 }
+$deps = (Get-Content $cpFile -Raw).Trim()
 
-Write-Host "启动交易撮合后端：端口 $Port（配置文件里的 server.port 同值），jar = $jar"
-& java -jar $jar
+Write-Host "启动交易撮合后端：端口 $Port（配置文件里的 server.port 同值）"
+& java -cp ((Join-Path $backendDir 'target\classes') + ';' + $deps) com.agri.trade.TradeApplication
