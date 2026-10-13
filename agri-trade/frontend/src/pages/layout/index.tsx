@@ -13,6 +13,7 @@ import {
   FundOutlined,
   BankOutlined,
   SafetyCertificateOutlined,
+  IdcardOutlined,
 } from '@ant-design/icons'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 
@@ -23,6 +24,7 @@ const menuItems = [
   { key: 'mine', label: '我的看板', icon: <FundOutlined /> },
   { key: 'my-guarantee', label: '我的保证金', icon: <BankOutlined /> },
   { key: 'my-compensation', label: '我的获赔', icon: <SafetyCertificateOutlined /> },
+  { key: 'my-identity', label: '实名认证', icon: <IdcardOutlined /> },
   { key: 'order', label: '订单管理', icon: <ShoppingCartOutlined /> },
   { key: 'product', label: '商品管理', icon: <AppstoreOutlined /> },
   { key: 'demand', label: '需求管理', icon: <FileTextOutlined /> },

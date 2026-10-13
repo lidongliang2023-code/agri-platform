@@ -20,6 +20,7 @@ import DisputeList from '@/pages/dispute/list'
 import MineDashboardPage from '@/pages/mine'
 import MyGuarantee from '@/pages/mine-guarantee'
 import MyCompensation from '@/pages/mine-compensation'
+import MyIdentity from '@/pages/mine-identity'
 import MatchList from '@/pages/match/list'
 import PriceList from '@/pages/price/list'
 import QuoteList from '@/pages/quote/list'
@@ -42,6 +43,7 @@ import AdminReport from '@/pages/admin/report'
 import AdminGuarantee from '@/pages/admin/guarantee'
 import AdminContractTemplate from '@/pages/admin/contract-template'
 import AdminCarrier from '@/pages/admin/carrier'
+import AdminIdentity from '@/pages/admin/identity'
 import { isLoggedIn } from '@/utils/session'
 import { SSO_CALLBACK_PATH } from '@/utils/sso'
 
@@ -83,6 +85,7 @@ function AppRouter() {
         <Route path="guarantee" element={<AdminGuarantee />} />
         <Route path="contract-template" element={<AdminContractTemplate />} />
         <Route path="carrier" element={<AdminCarrier />} />
+        <Route path="identity" element={<AdminIdentity />} />
       </Route>
       <Route path="/" element={
         <PrivateRoute>
@@ -93,6 +96,7 @@ function AppRouter() {
         <Route path="mine" element={<MineDashboardPage />} />
         <Route path="my-guarantee" element={<MyGuarantee />} />
         <Route path="my-compensation" element={<MyCompensation />} />
+        <Route path="my-identity" element={<MyIdentity />} />
       {/*
         兜底：没有匹配到的路径回首页。
         原先没有任何兜底路由，点了一个过期/写错的链接（例如 /order/7601，

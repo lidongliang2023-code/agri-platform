@@ -94,7 +94,8 @@ export default function AdminLayout() {
             { key: '/admin/trade/report', icon: <BarChartOutlined />, label: '报表' },
             { key: '/admin/trade/guarantee', icon: <BankOutlined />, label: '保证金管理' },
             { key: '/admin/trade/contract-template', icon: <FileTextOutlined />, label: '合同模板' },
-            { key: '/admin/trade/carrier', icon: <CarOutlined />, label: '承运商管理' }
+            { key: '/admin/trade/carrier', icon: <CarOutlined />, label: '承运商管理' },
+            { key: '/admin/trade/identity', icon: <IdcardOutlined />, label: '实名认证审核' }
           ]}
         />
       </Sider>

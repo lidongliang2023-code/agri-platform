@@ -23,3 +23,44 @@ export async function getMyMerchants(): Promise<{ code: number; message?: string
   const response = await axios.get('/api/trade/identity/my-merchants')
   return response.data
 }
+
+/**
+ * 个人实名认证。
+ *
+ * <p>口径：服务端**不存身份证号明文**，只存掩码与加盐哈希；因此这里拿回来的
+ * 永远是掩码（如 `110***********002X`），页面上也不必为"显示明文"做任何事。
+ * 提交时明文只在请求体里出现一次。</p>
+ */
+export interface RealNameRecord {
+  id: number | string
+  identityNo: string
+  realName: string
+  idNoMasked: string
+  status: 'pending' | 'verified' | 'rejected'
+  submitTime: string
+  reviewerName: string | null
+  reviewTime: string | null
+  reviewRemark: string | null
+  /** 重新提交时：号码与上一次是否不同（服务端用同一条记录的盐比对哈希得出） */
+  idNoChanged: boolean
+}
+
+export async function getMyRealName(): Promise<{ code: number; message?: string; data?: RealNameRecord | null }> {
+  const response = await axios.get('/api/v1/platform/identity/real-name/mine')
+  return response.data
+}
+
+export async function submitRealName(data: { realName: string; idNo: string }) {
+  const response = await axios.post('/api/v1/platform/identity/real-name', data)
+  return response.data
+}
+
+export async function getUserIdentityPage(params: Record<string, unknown>) {
+  const response = await axios.get('/api/v1/admin/user-identities', { params })
+  return response.data
+}
+
+export async function reviewUserIdentity(id: number | string, approved: boolean, remark?: string) {
+  const response = await axios.post(`/api/v1/admin/user-identities/${id}/review`, { approved, remark })
+  return response.data
+}

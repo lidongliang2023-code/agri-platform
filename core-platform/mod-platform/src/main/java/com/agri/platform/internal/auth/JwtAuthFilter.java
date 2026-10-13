@@ -4,6 +4,8 @@ import com.agri.core.infra.security.JwtUtil;
 import com.agri.core.infra.security.TokenRevocationService;
 import com.agri.core.infra.util.JsonUtil;
 import com.agri.core.infra.web.MarketContext;
+import com.agri.platform.internal.permission.UserPermissionService;
+import com.agri.shared.exception.BusinessException;
 import com.agri.shared.exception.ErrorCode;
 import com.agri.shared.result.ApiResponse;
 import io.jsonwebtoken.Claims;
@@ -56,6 +58,19 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
     private final TokenRevocationService revocationService;
+    private final UserPermissionService userPermissionService;
+
+    /** 运营端接口前缀（平台自身的管理接口）。 */
+    private static final String ADMIN_PATH_PREFIX = "/api/v1/admin/";
+
+    /**
+     * 只有超级管理员能碰的两类：角色权限管理与用户管理。
+     *
+     * <p>其它 {@code /api/v1/admin/**} 放给"运营角色"（SUPER_ADMIN / MARKET_OPS），
+     * 但那两类能改"别人有什么权限"、能建用户，属于授权本身的授权 —— 收在超管手里。</p>
+     */
+    private static final List<String> SUPER_ADMIN_ONLY = List.of(
+            "/api/v1/admin/roles/**", "/api/v1/admin/users/**");
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
@@ -89,9 +104,38 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             Long userId = Long.valueOf(claims.getSubject());
             Number marketId = (Number) claims.get("marketId");
             List<String> roles = ((List<?>) claims.get("roles")).stream().map(String::valueOf).toList();
+            long currentMarket = marketId == null ? 1L : marketId.longValue();
             MarketContext.set(new MarketContext.Session(userId, claims.get("username", String.class),
-                    marketId == null ? 1L : marketId.longValue(), roles));
+                    currentMarket, roles));
+
+            // ---- 平台运营端准入 ----
+            //
+            // 此前 /api/v1/admin/** 只有"登录了"这一层：任何普通用户（例如只绑了农户角色的账号）
+            // 都能调角色权限管理、用户绑定、经营主体认证审核，以及个人实名审核
+            // —— 等于可以自己给自己批实名。
+            //
+            // 判定走 RBAC 表（platform_user_role ⋈ platform_role.permissions）实时解析，
+            // 而不是令牌里的角色摘要：架构文档 V2.0 5.5「细权限以后端实时鉴权为准」。
+            // 权限数据本身出问题时抛 BusinessException，由下面的 catch 原样返回 403 原因。
+            if (request.getRequestURI().startsWith(ADMIN_PATH_PREFIX)) {
+                UserPermissionService.Resolved resolved = userPermissionService.resolve(userId, currentMarket);
+                boolean superAdminOnly = SUPER_ADMIN_ONLY.stream()
+                        .anyMatch(p -> MATCHER.match(p, request.getRequestURI()));
+                boolean allowed = superAdminOnly
+                        ? resolved.has(UserPermissionService.WILDCARD)
+                        : resolved.isOperator();
+                if (!allowed) {
+                    forbidden(response, superAdminOnly
+                            ? "该接口只有平台超级管理员可以调用"
+                            : "无权访问平台运营端接口：需要运营角色（SUPER_ADMIN 或 MARKET_OPS）");
+                    return;
+                }
+            }
         } catch (Exception e) {
+            if (e instanceof BusinessException be) {
+                forbidden(response, be.getMessage());
+                return;
+            }
             unauthorized(response, "令牌无效或已过期");
             return;
         }
@@ -116,5 +160,13 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         response.getWriter().write(JsonUtil.MAPPER.writeValueAsString(ApiResponse.fail(ErrorCode.UNAUTHORIZED)));
+    }
+
+    private void forbidden(HttpServletResponse response, String message) throws IOException {
+        response.setStatus(403);
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        response.getWriter().write(JsonUtil.MAPPER.writeValueAsString(
+                ApiResponse.fail(ErrorCode.FORBIDDEN.getCode(), message)));
     }
 }
