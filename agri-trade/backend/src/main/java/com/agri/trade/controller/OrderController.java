@@ -37,6 +37,10 @@ public class OrderController {
     private final TradeProductMapper productMapper;
     private final PlatformIdentityService identityService;
 
+    /** 能发起退款的订单状态：钱已经在平台手里。待付款、已取消、已退款都没得退。 */
+    private static final List<String> REFUNDABLE_ORDER_STATUS =
+            List.of("paid", "shipped", "received", "completed");
+
     /**
      * 从货源直接下单（原型"订单管理 → 创建订单"）。
      *
@@ -293,16 +297,62 @@ public class OrderController {
         String denied = denyIfNotParticipant(order);
         if (denied != null) return ApiResponse.error(denied);
 
+        // 一单一待审：同一订单已经挂着待审退款单时不允许再申请一条。
+        // 原先没有任何拦截 —— 反复点"申请退款"能生成一堆待审单，运营端看到的是
+        // 互相打架的几个金额，通过任意一条都可能把整单置为已退款。
+        Long pending = refundMapper.selectCount(new LambdaQueryWrapper<RefundRecord>()
+                .eq(RefundRecord::getOrderId, id)
+                .eq(RefundRecord::getRefundStatus, "pending")
+                .eq(RefundRecord::getDelFlag, 0));
+        if (pending != null && pending > 0) {
+            return ApiResponse.error("该订单已有一条待审核的退款申请，请等运营审核完成");
+        }
+        if (!REFUNDABLE_ORDER_STATUS.contains(order.getOrderStatus())) {
+            return ApiResponse.error("当前订单状态（" + order.getOrderStatus() + "）不能发起退款");
+        }
+
+        // 金额必须服务端校验：原先直接 new BigDecimal(params.get(...)) —— 传个负数、
+        // 传个比货款还大的数、或者干脆不传（NPE 后 500），都能走到插入。
+        Object rawAmount = params.get("refundAmount");
+        if (rawAmount == null || String.valueOf(rawAmount).trim().isEmpty()) {
+            return ApiResponse.error("退款金额不能为空");
+        }
+        BigDecimal amount;
+        try {
+            amount = new BigDecimal(String.valueOf(rawAmount));
+        } catch (NumberFormatException e) {
+            return ApiResponse.error("退款金额格式不正确");
+        }
+        BigDecimal paid = order.getPaidAmount() == null ? BigDecimal.ZERO : order.getPaidAmount();
+        BigDecimal alreadyRefunded = order.getRefundAmount() == null ? BigDecimal.ZERO : order.getRefundAmount();
+        BigDecimal refundable = paid.subtract(alreadyRefunded);
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
+            return ApiResponse.error("退款金额必须大于 0");
+        }
+        if (amount.compareTo(refundable) > 0) {
+            return ApiResponse.error("退款金额不能超过可退金额：" + refundable + " 元");
+        }
+
+        // 申请人取当前主体的那一侧，不采信请求体里的 applicantId/applicantType ——
+        // 原先申请人一律写成买方，卖方发起时单据上会显示成买方申请的。
+        Long applicantId = order.getBuyerId();
+        String applicantName = order.getBuyerName();
+        PlatformIdentityService.MerchantScope scope = identityService.currentScope();
+        if (scope.resolved() && !scope.merchantIds().contains(order.getBuyerId())) {
+            applicantId = order.getSellerId();
+            applicantName = order.getSellerName();
+        }
+
         RefundRecord refund = new RefundRecord();
         refund.setRefundNo("RF" + System.currentTimeMillis());
         refund.setOrderId(id);
         refund.setOrderNo(order.getOrderNo());
         refund.setRefundType((String) params.get("refundType"));
-        refund.setRefundAmount(new BigDecimal(params.get("refundAmount").toString()));
+        refund.setRefundAmount(amount);
         refund.setRefundReason((String) params.get("refundReason"));
-        refund.setApplicantType((String) params.get("applicantType"));
-        refund.setApplicantId(order.getBuyerId());
-        refund.setApplicantName(order.getBuyerName());
+        refund.setApplicantType(applicantId.equals(order.getBuyerId()) ? "buyer" : "seller");
+        refund.setApplicantId(applicantId);
+        refund.setApplicantName(applicantName);
         refund.setRefundStatus("pending");
         refund.setDelFlag(0);
         refund.setCreateTime(new Date());
@@ -322,14 +372,27 @@ public class OrderController {
         RefundRecord refund = refundMapper.selectById(id);
         if (refund == null) return ApiResponse.error("退款记录不存在");
 
-        refund.setRefundStatus(params.get("status"));
+        String status = params.get("status");
+        if (!"approved".equals(status) && !"rejected".equals(status)) {
+            return ApiResponse.error("审核结果只能是 approved（通过）或 rejected（驳回）");
+        }
+        // 一张退款单只能审一次：原先已驳回/已通过的单还能再审 ——
+        // 驳回后隔一会儿再点"通过"，钱照样退，驳回等于没发生。
+        if (!"pending".equals(refund.getRefundStatus())) {
+            return ApiResponse.error("这条退款申请已经处理过了（" + refund.getRefundStatus() + "），不能重复审核");
+        }
+
+        refund.setRefundStatus(status);
         refund.setReviewer(params.get("reviewer"));
         refund.setReviewTime(new Date());
         refund.setReviewRemark(params.get("remark"));
         refund.setUpdateTime(new Date());
 
         int result = refundMapper.updateById(refund);
-        if (result > 0 && "approved".equals(params.get("status"))) {
+        if (result <= 0) {
+            return ApiResponse.error("审核失败");
+        }
+        if ("approved".equals(status)) {
             TradeOrder order = orderMapper.selectById(refund.getOrderId());
             if (order != null) {
                 // 累加已退金额时必须容 null：经接口新建的订单没有写 refund_amount，
@@ -344,7 +407,43 @@ public class OrderController {
             }
             return ApiResponse.success(true);
         }
-        return result > 0 ? ApiResponse.success(true) : ApiResponse.error("审核失败");
+
+        // 驳回：必须把订单从"售后中"放回去。
+        // 原先驳回只改退款单、不动订单 —— 订单就永远停在 refunding（PRD 词表里的"5 售后中"）：
+        // 发不了货、也收不了货，买卖双方都没有下一步可做，等于这张单被卡死。
+        TradeOrder order = orderMapper.selectById(refund.getOrderId());
+        if (order != null && "refunding".equals(order.getOrderStatus())) {
+            Long stillPending = refundMapper.selectCount(new LambdaQueryWrapper<RefundRecord>()
+                    .eq(RefundRecord::getOrderId, refund.getOrderId())
+                    .eq(RefundRecord::getRefundStatus, "pending")
+                    .eq(RefundRecord::getDelFlag, 0));
+            if (stillPending == null || stillPending == 0) {
+                order.setOrderStatus(statusBeforeRefund(order));
+                order.setUpdateTime(new Date());
+                orderMapper.updateById(order);
+            }
+        }
+        return ApiResponse.success(true);
+    }
+
+    /**
+     * 订单进入"售后中"之前所处的状态 —— 退款被驳回后要把订单放回这里。
+     *
+     * <p>订单表没有"上一状态"列，这里按订单自己留下的进度痕迹倒推，口径与
+     * /{id}/status 里推进状态时写的字段一致：结算过 → 已完成；买家确认过收货 →
+     * 已收货；有物流在走 → 已发货；否则就是已付款待发货。</p>
+     */
+    private String statusBeforeRefund(TradeOrder order) {
+        if ("settled".equals(order.getSettleStatus())) {
+            return "completed";
+        }
+        if (order.getBuyerConfirmed() != null && order.getBuyerConfirmed() == 1) {
+            return "received";
+        }
+        if (order.getLogisticsStatus() != null && !order.getLogisticsStatus().isEmpty()) {
+            return "shipped";
+        }
+        return "paid";
     }
 
     /**

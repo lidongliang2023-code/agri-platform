@@ -70,9 +70,46 @@ public class DisputeController {
         if (!mine.ok()) {
             return ApiResponse.error(mine.error());
         }
-        dispute.setComplainantId(mine.merchantId());
+        if (dispute.getOrderId() == null) {
+            return ApiResponse.error("必须指定关联订单");
+        }
+        TradeOrder order = orderMapper.selectById(dispute.getOrderId());
+        if (order == null) {
+            return ApiResponse.error("订单不存在");
+        }
+        Long me = mine.merchantId();
+        // 只能对"自己参与的订单"发起纠纷。原先不校验订单归属 —— 任何人都能
+        // 拿一个不相干的订单号发起纠纷，把自己的当事人身份挂到别人的单子上。
+        if (!me.equals(order.getBuyerId()) && !me.equals(order.getSellerId())) {
+            return ApiResponse.error("只能对自己参与的订单发起纠纷");
+        }
+        // 一单一条未结纠纷：否则同一张订单被反复发起，运营端面对一堆重复案件，
+        // 每一条都能各自走到仲裁，结论还可能互相矛盾。
+        Long open = disputeMapper.selectCount(new LambdaQueryWrapper<Dispute>()
+                .eq(Dispute::getOrderId, order.getId())
+                .in(Dispute::getDisputeStatus, List.of("pending", "processing"))
+                .eq(Dispute::getDelFlag, 0));
+        if (open != null && open > 0) {
+            return ApiResponse.error("该订单已有一条未结纠纷，请等它处理完再发起");
+        }
+
+        dispute.setComplainantId(me);
         if (dispute.getComplainantName() == null || dispute.getComplainantName().isEmpty()) {
             dispute.setComplainantName(mine.merchantName());
+        }
+        // 被申请人由订单的对侧推导，不采信请求体 —— 否则可以把任何不相干的主体
+        // 拖进纠纷（表里 respondent_id 还是 NOT NULL，漏填就直接插入失败）。
+        if (me.equals(order.getBuyerId())) {
+            dispute.setComplainantType("buyer");
+            dispute.setRespondentId(order.getSellerId());
+            dispute.setRespondentName(order.getSellerName());
+        } else {
+            dispute.setComplainantType("seller");
+            dispute.setRespondentId(order.getBuyerId());
+            dispute.setRespondentName(order.getBuyerName());
+        }
+        if (dispute.getOrderNo() == null || dispute.getOrderNo().isEmpty()) {
+            dispute.setOrderNo(order.getOrderNo());
         }
         dispute.setDisputeNo("DS" + System.currentTimeMillis());
         dispute.setDelFlag(0);
@@ -83,15 +120,12 @@ public class DisputeController {
         
         int result = disputeMapper.insert(dispute);
         if (result > 0) {
-            TradeOrder order = orderMapper.selectById(dispute.getOrderId());
-            if (order != null) {
-                // 只记下"这单正在争议中"，**不改订单自己的状态**。
-                // 原先把订单置成 in_dispute —— 那个取值不在订单状态词表里（前端只会渲染成灰标签原文），
-                // 而且会把订单的生命周期位置（已付款/已发货）直接抹掉。
-                // 争议的进度有自己的 dispute_status 与 process_stage，不该覆盖订单状态。
-                order.setDisputeId(dispute.getId());
-                orderMapper.updateById(order);
-            }
+            // 只记下"这单正在争议中"，**不改订单自己的状态**。
+            // 原先把订单置成 in_dispute —— 那个取值不在订单状态词表里（前端只会渲染成灰标签原文），
+            // 而且会把订单的生命周期位置（已付款/已发货）直接抹掉。
+            // 争议的进度有自己的 dispute_status 与 process_stage，不该覆盖订单状态。
+            order.setDisputeId(dispute.getId());
+            orderMapper.updateById(order);
             return ApiResponse.success(true);
         }
         return ApiResponse.error("创建失败");
@@ -113,6 +147,10 @@ public class DisputeController {
             dispute.setCloseTime(new Date());
             dispute.setCloseReason("调解达成一致");
         } else {
+            // 转入仲裁 = 案件已经有人在办了，不再是"待受理"。
+            // 原先只改 process_stage、状态还是 pending，运营端按"未结"筛的时候
+            // 这些已经在仲裁里的案子会被当成待受理，与大盘数字对不上。
+            dispute.setDisputeStatus("processing");
             dispute.setProcessStage("arbitration");
         }
 

@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { Alert, Table, Button, Card, Input, Select, Space, Tag, Modal, Form, Descriptions, message } from 'antd'
-import { SearchOutlined, EyeOutlined, SettingOutlined } from '@ant-design/icons'
+import { Alert, Table, Button, Card, Input, InputNumber, Select, Space, Tag, Modal, Form, Descriptions, message } from 'antd'
+import { SearchOutlined, EyeOutlined, SettingOutlined, PlusOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { getDisputeList, resolveDispute, type DisputeQuery, type DisputeVO } from '@/api/dispute'
+import { createDispute, getDisputeList, resolveDispute, type DisputeQuery, type DisputeVO } from '@/api/dispute'
 import { getMyMerchants } from '@/api/identity'
+import { getOrderList } from '@/api/order'
 
 /**
  * 纠纷状态词表（库里的真实取值）。
@@ -18,6 +19,31 @@ const DISPUTE_STATUS: Record<string, { text: string; color: string }> = {
   arbitrating: { text: '仲裁中', color: 'purple' },
   resolved: { text: '已解决', color: 'success' },
   closed: { text: '已关闭', color: 'default' }
+}
+
+/**
+ * 纠纷阶段词表（库里的真实取值）。
+ *
+ * <p>process_stage 原先在两个页面都是原样打印，列表里显示的就是 "complain"、
+ * "arbitration"、"resolved" 这些英文。发起的纠纷停在 complain 阶段，最显眼。</p>
+ */
+const DISPUTE_STAGE: Record<string, string> = {
+  complain: '申请中',
+  mediation: '调解中',
+  arbitration: '仲裁中',
+  resolved: '已了结',
+  closed: '已关闭'
+}
+
+/** 纠纷类型（后端是自由字符串，这里给一组与业务对得上的常用值）。 */
+const DISPUTE_TYPE: Record<string, string> = {
+  quality: '质量不符',
+  delivery: '交付延误',
+  delay: '交付延误',
+  quantity: '数量短缺',
+  price: '价格争议',
+  payment: '货款结算',
+  other: '其他'
 }
 
 function DisputeList() {
@@ -39,6 +65,51 @@ function DisputeList() {
   const [saving, setSaving] = useState(false)
   const [form] = Form.useForm()
   const [viewing, setViewing] = useState<DisputeVO | null>(null)
+  const [creating, setCreating] = useState(false)
+  const [createForm] = Form.useForm()
+
+  // 发起纠纷时要选一张"与我有关"的订单。列表接口本来就只返回我参与过的订单，
+  // 所以这里不需要再过滤。
+  const { data: orderData } = useQuery({
+    queryKey: ['orders-for-dispute'],
+    queryFn: () => getOrderList({ pageNum: 1, pageSize: 100 })
+  })
+  const myOrders = orderData?.code === 200 ? orderData.data?.records ?? [] : []
+
+  /**
+   * 发起纠纷。
+   *
+   * <p>这条路径此前是**整条死掉的**：页面上没有入口，而后端 POST /dispute 一旦被调用
+   * 就 500 —— 纠纷表里 applicant_id / applicant_name / dispute_content 三列是 NOT NULL
+   * 且没有默认值，实体既不映射也没人写，插入直接被 MySQL 拒掉。
+   * 也就是说"发起纠纷"从来没有成功过，演示库里的两条纠纷是直接写进去的。</p>
+   */
+  const submitCreate = async () => {
+    const values = await createForm.validateFields()
+    setSaving(true)
+    try {
+      const res = await createDispute({
+        orderId: values.orderId,
+        complainantId: values.complainantId,
+        disputeType: values.disputeType,
+        disputeReason: values.disputeReason,
+        disputeDescription: values.disputeDescription,
+        claimAmount: values.claimAmount
+      })
+      if (res?.code === 200) {
+        message.success('已发起纠纷，等运营调解或仲裁')
+        setCreating(false)
+        createForm.resetFields()
+        queryClient.invalidateQueries({ queryKey: ['disputes'] })
+      } else {
+        message.error(res?.message ?? '发起失败')
+      }
+    } catch {
+      message.error('发起失败（请检查后端是否在运行）')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   /**
    * 当事人自行了结（和解 / 撤诉）。
@@ -73,7 +144,12 @@ function DisputeList() {
     // 纠纷表的申请人是 complainant*（不是 applicant*）；金额只有 claimAmount（索赔金额）
     { title: '申请人', dataIndex: 'complainantName', key: 'complainantName' },
     { title: '被申请人', dataIndex: 'respondentName', key: 'respondentName' },
-    { title: '纠纷类型', dataIndex: 'disputeType', key: 'disputeType' },
+    {
+      title: '纠纷类型',
+      dataIndex: 'disputeType',
+      key: 'disputeType',
+      render: (val: string) => (val ? DISPUTE_TYPE[val] ?? val : '—')
+    },
     { title: '索赔金额', dataIndex: 'claimAmount', key: 'claimAmount', render: (val: number) => (val == null ? '—' : `¥${val}`) },
     { title: '纠纷内容', dataIndex: 'disputeDescription', key: 'disputeDescription', ellipsis: true },
     {
@@ -85,7 +161,12 @@ function DisputeList() {
         return <Tag color={hit?.color ?? 'default'}>{hit?.text ?? status}</Tag>
       }
     },
-    { title: '当前阶段', dataIndex: 'processStage', key: 'processStage', render: (v: string) => v ?? '—' },
+    {
+      title: '当前阶段',
+      dataIndex: 'processStage',
+      key: 'processStage',
+      render: (v: string) => (v ? DISPUTE_STAGE[v] ?? v : '—')
+    },
     { title: '创建时间', dataIndex: 'createTime', key: 'createTime' },
     {
       title: '操作',
@@ -108,7 +189,14 @@ function DisputeList() {
   ]
 
   return (
-    <Card title="纠纷管理">
+    <Card
+      title="纠纷管理"
+      extra={
+        <Button type="primary" icon={<PlusOutlined />} onClick={() => { createForm.resetFields(); setCreating(true) }}>
+          发起纠纷
+        </Button>
+      }
+    >
       {identityError && (
         <Alert type="error" showIcon style={{ marginBottom: 12 }} message="身份解析失败" description={identityError} />
       )}
@@ -185,6 +273,60 @@ function DisputeList() {
       </Modal>
 
       <Modal
+        title="发起纠纷"
+        open={creating}
+        onCancel={() => setCreating(false)}
+        onOk={submitCreate}
+        confirmLoading={saving}
+        destroyOnClose
+        width={640}
+      >
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message="只能对「自己参与的订单」发起纠纷"
+          description="被申请人由系统按订单的另一方自动判定。同一张订单只能有一条未结纠纷。"
+        />
+        <Form form={createForm} layout="vertical">
+          {merchants && merchants.length > 1 && (
+            <Form.Item name="complainantId" label="以哪家主体发起" rules={[{ required: true, message: '请选择主体' }]}>
+              <Select
+                placeholder="请选择"
+                options={merchants.map((m) => ({ value: m.merchantId, label: m.merchantName }))}
+              />
+            </Form.Item>
+          )}
+          <Form.Item name="orderId" label="关联订单" rules={[{ required: true, message: '请选择订单' }]}>
+            <Select
+              showSearch
+              optionFilterProp="label"
+              placeholder="选择你参与过的订单"
+              options={myOrders.map((o: { id: number; orderNo?: string; productName?: string; totalAmount?: number }) => ({
+                value: o.id,
+                label: `${o.orderNo ?? o.id}　${o.productName ?? ''}　¥${o.totalAmount ?? '—'}`
+              }))}
+            />
+          </Form.Item>
+          <Form.Item name="disputeType" label="纠纷类型" rules={[{ required: true, message: '请选择类型' }]}>
+            <Select
+              placeholder="请选择"
+              options={Object.entries(DISPUTE_TYPE).map(([value, label]) => ({ value, label }))}
+            />
+          </Form.Item>
+          <Form.Item name="disputeReason" label="纠纷事由" rules={[{ required: true, message: '请填写事由' }]}>
+            <Input placeholder="例如：到货品质与样品不符" />
+          </Form.Item>
+          <Form.Item name="disputeDescription" label="详细说明">
+            <Input.TextArea rows={4} placeholder="发生经过、已有的沟通与诉求（可留空）" />
+          </Form.Item>
+          <Form.Item name="claimAmount" label="索赔金额（元）">
+            <InputNumber style={{ width: '100%' }} min={0} precision={2} placeholder="可留空" />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
         title="纠纷详情"
         open={!!viewing}
         onCancel={() => setViewing(null)}
@@ -197,14 +339,18 @@ function DisputeList() {
             <Descriptions.Item label="关联订单">{viewing.orderId}</Descriptions.Item>
             <Descriptions.Item label="申请人">{viewing.complainantName ?? '—'}</Descriptions.Item>
             <Descriptions.Item label="被申请人">{viewing.respondentName ?? '—'}</Descriptions.Item>
-            <Descriptions.Item label="纠纷类型">{viewing.disputeType ?? '—'}</Descriptions.Item>
+            <Descriptions.Item label="纠纷类型">
+              {viewing.disputeType ? DISPUTE_TYPE[viewing.disputeType] ?? viewing.disputeType : '—'}
+            </Descriptions.Item>
             <Descriptions.Item label="索赔金额">{viewing.claimAmount != null ? `¥${viewing.claimAmount}` : '—'}</Descriptions.Item>
             <Descriptions.Item label="状态">
               <Tag color={DISPUTE_STATUS[viewing.disputeStatus]?.color ?? 'default'}>
                 {DISPUTE_STATUS[viewing.disputeStatus]?.text ?? viewing.disputeStatus}
               </Tag>
             </Descriptions.Item>
-            <Descriptions.Item label="当前阶段">{viewing.processStage ?? '—'}</Descriptions.Item>
+            <Descriptions.Item label="当前阶段">
+              {viewing.processStage ? DISPUTE_STAGE[viewing.processStage] ?? viewing.processStage : '—'}
+            </Descriptions.Item>
             <Descriptions.Item label="纠纷事由" span={2}>{viewing.disputeReason ?? '—'}</Descriptions.Item>
             <Descriptions.Item label="纠纷描述" span={2}>{viewing.disputeDescription ?? '—'}</Descriptions.Item>
             <Descriptions.Item label="调解结果" span={2}>{viewing.mediationResult ?? '—'}</Descriptions.Item>

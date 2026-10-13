@@ -319,7 +319,12 @@ public class AdminTradeController {
         Page<Dispute> page = new Page<>(pageNum, pageSize);
         LambdaQueryWrapper<Dispute> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Dispute::getDelFlag, 0);
-        if (disputeStatus != null && !disputeStatus.isEmpty()) {
+        // disputeStatus=open 表示"未结案件"，与运营大盘上"待处理纠纷"的口径一致
+        // （大盘统计的是 pending + processing）。此前运营点开大盘的待办数字跳到这里，
+        // 默认只看 processing，条数对不上。
+        if ("open".equals(disputeStatus)) {
+            wrapper.in(Dispute::getDisputeStatus, java.util.List.of("pending", "processing"));
+        } else if (disputeStatus != null && !disputeStatus.isEmpty()) {
             wrapper.eq(Dispute::getDisputeStatus, disputeStatus);
         }
         if (stage != null && !stage.isEmpty()) {

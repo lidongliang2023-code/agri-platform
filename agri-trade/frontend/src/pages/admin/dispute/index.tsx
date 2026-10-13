@@ -30,8 +30,24 @@ const STATUS: Record<string, { text: string; color: string }> = {
 }
 
 const STAGE: Record<string, string> = {
+  // 新发起的纠纷停在 complain；了结后写 resolved —— 这两个原先都不在表里，
+  // 页面上就把英文原文直接显示出来了。
+  complain: '申请中',
   mediation: '调解中',
-  arbitration: '仲裁中'
+  arbitration: '仲裁中',
+  resolved: '已了结',
+  closed: '已关闭'
+}
+
+/** 纠纷类型（库里存的是英文枚举，表格里原先直接打印原文）。 */
+const DISPUTE_TYPE: Record<string, string> = {
+  quality: '质量不符',
+  delay: '交付延误',
+  delivery: '交付延误',
+  quantity: '数量短缺',
+  price: '价格争议',
+  payment: '货款结算',
+  other: '其他'
 }
 
 /**
@@ -47,7 +63,9 @@ export default function AdminDispute() {
   const [loading, setLoading] = useState(false)
   const [pageNum, setPageNum] = useState(1)
   const [pageSize, setPageSize] = useState(10)
-  const [status, setStatus] = useState('processing')
+  // 默认看"未结"：与运营大盘上「待处理纠纷」的口径一致（pending + processing）。
+  // 此前默认只看 processing，于是大盘说有几件、点进来只看到一部分。
+  const [status, setStatus] = useState('open')
   const [keyword, setKeyword] = useState('')
   const [current, setCurrent] = useState<DisputeRow | null>(null)
   const [form] = Form.useForm()
@@ -101,6 +119,7 @@ export default function AdminDispute() {
                 setStatus(value)
               }}
               options={[
+                { value: 'open', label: '未结（待受理+处理中）' },
                 { value: 'processing', label: '处理中' },
                 { value: 'pending', label: '待受理' },
                 { value: 'resolved', label: '已解决' },
@@ -146,7 +165,12 @@ export default function AdminDispute() {
             { title: '纠纷单号', dataIndex: 'disputeNo', width: 160 },
             { title: '申请人', dataIndex: 'complainantName', width: 150 },
             { title: '被申请人', dataIndex: 'respondentName', width: 150 },
-            { title: '类型', dataIndex: 'disputeType', width: 100 },
+            {
+              title: '类型',
+              dataIndex: 'disputeType',
+              width: 100,
+              render: (val: string) => (val ? DISPUTE_TYPE[val] ?? val : '—')
+            },
             { title: '索赔金额', dataIndex: 'claimAmount', width: 120, render: (val: number) => `¥${val}` },
             {
               title: '纠纷事由',
