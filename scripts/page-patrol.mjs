@@ -488,6 +488,14 @@ async function patrolOne(ctx, route, deep) {
     const err = req.failure && req.failure() ? req.failure().errorText : ''
     failedUrls.push(`REQFAIL ${req.method()} ${req.url()} ${err}`)
   })
+  /** @type {string[]} 所有 /api/ 调用的状态（用来回答"页面到底调了谁、结果如何"） */
+  const apiCalls = []
+  page.on('response', (res) => {
+    const url = res.url()
+    if (url.includes('/api/')) {
+      apiCalls.push(`${res.status()} ${res.request().method()} ${url.replace('http://localhost', '')}`)
+    }
+  })
   page.on('response', (res) => {
     if (res.status() >= 400) {
       failedUrls.push(`${res.status()} ${res.request().method()} ${res.url()}`)
@@ -537,6 +545,36 @@ async function patrolOne(ctx, route, deep) {
       /* 页面已导航走的竞态：忽略，目标路由仍会重新加载应用 */
     }
   }
+  // 还要写入**非凭证的界面态**（用户资料 / 角色 / 权限 / 市场），与真实登录页的 persistSession 一致。
+  //
+  // 为什么不能只拿 Cookie：bootstrapAuthRefresh() 有一道门槛 ——
+  // 「只有本机上次确实登录过的痕迹（本地留有 userInfo）才值得跑续签，未登录访客直接跳过」。
+  // 少写这一项，应用就认定"没登录过" -> 根本不发 /auth/refresh -> authReady=true 但 token=null
+  // -> 布局（农场切换器 / 消息铃铛）带空令牌发请求 -> 401 -> 全局 401 处理清登录态并跳登录页，
+  // 而页面自己的接口一个都没来得及调。实测：7 条路由的调用列表里只有
+  // farms/all(401)、messages/unread-count(401)、auth/logout(200)，被测页面自己的接口从未被调用。
+  //
+  // 这几项按 src/store/auth.ts 的设计本来就**不是凭证**（令牌始终只在内存 + HttpOnly Cookie），
+  // 写它们不绕过任何安全机制，只是把"这个浏览器上次登录过"这一事实告诉应用。
+  if (token && ctx.userInfo) {
+    try {
+      await page.evaluate(
+        (state) => {
+          try {
+            localStorage.setItem('agri_user_info', JSON.stringify(state.userInfo))
+            localStorage.setItem('agri_roles', JSON.stringify(state.roles ?? []))
+            localStorage.setItem('agri_permissions', JSON.stringify(state.permissions ?? []))
+            localStorage.setItem('agri_market_id', String(state.marketId ?? 1))
+          } catch {
+            /* localStorage unavailable: ignore */
+          }
+        },
+        { userInfo: ctx.userInfo, roles: ctx.roles ?? [], permissions: [], marketId: 1 },
+      )
+    } catch {
+      /* navigation race: ignore */
+    }
+  }
   const target = `${BASE_URL}${route.fullPath}`
   try {
     const resp = await page.goto(target, {
@@ -573,6 +611,7 @@ async function patrolOne(ctx, route, deep) {
   record.firstPageErrorStack = pageErrors.length ? String(pageErrors[0]) : ''
   // 失败请求按 URL 落进报告（最多 10 条，够定位即可）
   record.failedUrls = failedUrls.slice(0, 10)
+  record.apiCalls = apiCalls.slice(0, 40)
   record.ok = record.httpStatus !== null && record.blank === false
 
   if (deep) {
