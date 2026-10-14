@@ -125,7 +125,19 @@ public class TaskController {
         // 前端走查询串（pass/opinion，见 api/tasks.ts 的 reviewTask）；
         // 同时认 acceptStatus/remark 两个名字，调用方用哪套都行。
         // 这里不用 @RequestBody：前端不带请求体，带 @RequestBody 会 500（见 submitTask 的说明）。
-        Integer finalStatus = pass == null ? acceptStatus : (Boolean.TRUE.equals(pass) ? 1 : 2);
+        // 注意：这里**不能**写成 `pass == null ? acceptStatus : (Boolean.TRUE.equals(pass) ? 1 : 2)`。
+        // 三元表达式两支一个 Integer、一个 int，Java 会做二进制数值提升，把整个表达式的类型判成 int ——
+        // 于是 acceptStatus 为 null 时那一支会被**拆箱**，直接 NPE。实测：
+        // POST /tasks/1/acceptance 不带参数 → 500「Cannot invoke "java.lang.Integer.intValue()"
+        // because "acceptStatus" is null」。写成 if/else 就没有这层提升。
+        Integer finalStatus;
+        if (Boolean.TRUE.equals(pass)) {
+            finalStatus = 1;
+        } else if (Boolean.FALSE.equals(pass)) {
+            finalStatus = 2;
+        } else {
+            finalStatus = acceptStatus;
+        }
         String finalRemark = remark != null ? remark : opinion;
         TaskVO vo = taskService.acceptTask(id, finalStatus, finalRemark, acceptorName, tenantId);
         return ApiResponse.success(vo);

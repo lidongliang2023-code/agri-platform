@@ -2,6 +2,7 @@ package com.agri.production.service.impl;
 
 import com.agri.production.dto.TaskPageDTO;
 import com.agri.production.dto.TaskSaveDTO;
+import com.agri.production.common.exception.BusinessException;
 import com.agri.production.entity.Task;
 import com.agri.production.entity.TaskRecord;
 import com.agri.production.common.entity.PageResult;
@@ -44,10 +45,10 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
     public TaskVO update(TaskSaveDTO dto, String tenantId) {
         Task task = getById(dto.getId());
         if (task == null || !tenantId.equals(task.getTenantId())) {
-            throw new RuntimeException("任务不存在");
+            throw new BusinessException(404, "任务不存在");
         }
         if (!"pending".equals(task.getStatus())) {
-            throw new RuntimeException("任务已开始执行，无法修改");
+            throw new BusinessException(400, "任务已开始执行，无法修改");
         }
         BeanCopyUtils.copy(dto, task);
         updateById(task);
@@ -59,10 +60,10 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
     public void delete(Long id, String tenantId) {
         Task task = getById(id);
         if (task == null || !tenantId.equals(task.getTenantId())) {
-            throw new RuntimeException("任务不存在");
+            throw new BusinessException(404, "任务不存在");
         }
         if ("executing".equals(task.getStatus())) {
-            throw new RuntimeException("任务正在执行中，无法删除");
+            throw new BusinessException(400, "任务正在执行中，无法删除");
         }
         removeById(id);
     }
@@ -71,7 +72,7 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
     public TaskVO getById(Long id, String tenantId) {
         Task task = getById(id);
         if (task == null || !tenantId.equals(task.getTenantId())) {
-            throw new RuntimeException("任务不存在");
+            throw new BusinessException(404, "任务不存在");
         }
         return BeanCopyUtils.copy(task, TaskVO.class);
     }
@@ -89,12 +90,12 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
     public TaskVO startTask(Long id, String tenantId) {
         Task task = getById(id);
         if (task == null || !tenantId.equals(task.getTenantId())) {
-            throw new RuntimeException("任务不存在");
+            throw new BusinessException(404, "任务不存在");
         }
         // 可从"待处理"或"已派发"开始执行 —— 派发（assign）会把状态置成 assigned，
         // 只认 pending 的话，派完人反而开始不了（自己的状态机自相矛盾）。
         if (!"pending".equals(task.getStatus()) && !"assigned".equals(task.getStatus())) {
-            throw new RuntimeException("任务状态不正确：" + task.getStatus() + "（只有待处理/已派发的任务能开始执行）");
+            throw new BusinessException(400, "任务状态不正确：" + task.getStatus() + "（只有待处理/已派发的任务能开始执行）");
         }
         task.setStatus("executing");
         task.setActualStartTime(LocalDateTime.now());
@@ -107,10 +108,10 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
     public TaskVO completeTask(Long id, String resultDesc, String resultPhotoUrls, String tenantId) {
         Task task = getById(id);
         if (task == null || !tenantId.equals(task.getTenantId())) {
-            throw new RuntimeException("任务不存在");
+            throw new BusinessException(404, "任务不存在");
         }
         if (!"executing".equals(task.getStatus())) {
-            throw new RuntimeException("任务状态不正确");
+            throw new BusinessException(400, "任务状态不正确");
         }
         task.setStatus("completed");
         task.setActualEndTime(LocalDateTime.now());
@@ -126,10 +127,10 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
     public TaskVO acceptTask(Long id, Integer acceptStatus, String remark, String acceptorName, String tenantId) {
         Task task = getById(id);
         if (task == null || !tenantId.equals(task.getTenantId())) {
-            throw new RuntimeException("任务不存在");
+            throw new BusinessException(404, "任务不存在");
         }
         if (acceptStatus == null || (acceptStatus != 1 && acceptStatus != 2)) {
-            throw new RuntimeException("验收结论只能是 1（通过）或 2（驳回）");
+            throw new BusinessException(400, "验收结论只能是 1（通过）或 2（驳回）");
         }
         // 通过：任务完成（完成时间就是实际结束时间，出参 completedAt 由它派生）
         // 驳回：退回执行（status 用词表里的 doing，与前端 isTaskExecuting 兼容），驳回次数 +1
@@ -154,7 +155,7 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
     public java.util.Map<String, Object> getAcceptance(Long id, String tenantId) {
         Task task = getById(id);
         if (task == null || !tenantId.equals(task.getTenantId())) {
-            throw new RuntimeException("任务不存在");
+            throw new BusinessException(404, "任务不存在");
         }
         java.util.Map<String, Object> view = new java.util.LinkedHashMap<>();
         // 这个模块没有独立的"验收表"：验收结论就存在任务行上，这里按前端 TaskAcceptance 的字段拼
@@ -174,10 +175,10 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
     public TaskVO assignTask(Long id, Long assigneeId, String assigneeName, String tenantId) {
         Task task = getById(id);
         if (task == null || !tenantId.equals(task.getTenantId())) {
-            throw new RuntimeException("任务不存在");
+            throw new BusinessException(404, "任务不存在");
         }
         if (assigneeId == null) {
-            throw new RuntimeException("必须指定执行人");
+            throw new BusinessException(400, "必须指定执行人");
         }
         task.setExecutorId(assigneeId);
         // 姓名优先取调用方带的；没带就沿用原来的（否则会出现"执行人只有 id 没有名字"，
@@ -198,7 +199,7 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
                                                     String tenantId) {
         Task task = getById(taskId);
         if (task == null || !tenantId.equals(task.getTenantId())) {
-            throw new RuntimeException("任务不存在");
+            throw new BusinessException(404, "任务不存在");
         }
         Page<TaskRecord> page = new Page<>(pageNum == null ? 1 : pageNum, pageSize == null ? 50 : pageSize);
         IPage<TaskRecord> result = taskRecordMapper.selectPage(page,
@@ -219,7 +220,7 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
     public Long createRecord(Long taskId, java.util.Map<String, Object> body, String tenantId) {
         Task task = getById(taskId);
         if (task == null || !tenantId.equals(task.getTenantId())) {
-            throw new RuntimeException("任务不存在");
+            throw new BusinessException(404, "任务不存在");
         }
         TaskRecord record = new TaskRecord();
         record.setTaskId(taskId);
@@ -281,7 +282,7 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
     public TaskVO getByCode(String taskCode, String tenantId) {
         Task task = baseMapper.selectByCode(taskCode, tenantId);
         if (task == null) {
-            throw new RuntimeException("任务不存在");
+            throw new BusinessException(404, "任务不存在");
         }
         return BeanCopyUtils.copy(task, TaskVO.class);
     }
