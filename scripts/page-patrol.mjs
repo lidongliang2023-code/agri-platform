@@ -507,6 +507,9 @@ async function patrolOne(ctx, route, deep) {
   })
 
   // 登录态：**在页面里调一次登录接口**，让浏览器把刷新令牌收进 HttpOnly Cookie。
+  // 注意落点必须是**静态同源 URL**：落 /login 会整页送去统一认证中心（另一个源），
+  // 于是这次登录会把刷新 Cookie 种到**认证中心的域**上，应用源上没有 Cookie（实测踩到）；
+  // 落应用路由则会先以未登录态启动应用、触发 401 链。manifest.json 是桶里的静态文件，两者都不是。
   //
   // 为什么不往 localStorage 写令牌（这版之前就是这么写的，一直没登进去）：前端按
   // V2.0 4.3 已把访问令牌改成"只在内存 + HttpOnly Cookie 静默续签"，
@@ -517,7 +520,7 @@ async function patrolOne(ctx, route, deep) {
   // 随后 page.goto 目标路由时，应用的 bootstrapAuthRefresh 会用 Cookie 换回访问令牌。
   if (token) {
     try {
-      await page.goto(`${BASE_URL}/login`, { waitUntil: 'domcontentloaded', timeout: 20000 })
+      await page.goto(`${BASE_URL}/prod/manifest.json`, { waitUntil: 'domcontentloaded', timeout: 20000 })
     } catch {
       /* 登录页本身加载失败也继续：后面 goto 目标路由会如实报错 */
     }
@@ -556,24 +559,26 @@ async function patrolOne(ctx, route, deep) {
   //
   // 这几项按 src/store/auth.ts 的设计本来就**不是凭证**（令牌始终只在内存 + HttpOnly Cookie），
   // 写它们不绕过任何安全机制，只是把"这个浏览器上次登录过"这一事实告诉应用。
+  // 界面态用 evaluateOnNewDocument 写：它在**应用脚本之前**执行，不参与导航竞态。
+  //
+  // 为什么不能用 page.evaluate 写（上一版就是这么写的，实测失败）：`/login` 这个路由会立刻
+  // 把整页送去统一认证中心，evaluate 与那次导航抢同一个执行上下文 —— 写入被丢掉。
+  // 现场回读的证据：目标页最终停在 /login、正文是「统一认证中心 …」，而
+  // localStorage 的 agri_user_info 长度为 0（我的写入没落盘）。
   if (token && ctx.userInfo) {
-    try {
-      await page.evaluate(
-        (state) => {
-          try {
-            localStorage.setItem('agri_user_info', JSON.stringify(state.userInfo))
-            localStorage.setItem('agri_roles', JSON.stringify(state.roles ?? []))
-            localStorage.setItem('agri_permissions', JSON.stringify(state.permissions ?? []))
-            localStorage.setItem('agri_market_id', String(state.marketId ?? 1))
-          } catch {
-            /* localStorage unavailable: ignore */
-          }
-        },
-        { userInfo: ctx.userInfo, roles: ctx.roles ?? [], permissions: [], marketId: 1 },
-      )
-    } catch {
-      /* navigation race: ignore */
-    }
+    await page.evaluateOnNewDocument(
+      (state) => {
+        try {
+          localStorage.setItem('agri_user_info', JSON.stringify(state.userInfo))
+          localStorage.setItem('agri_roles', JSON.stringify(state.roles ?? []))
+          localStorage.setItem('agri_permissions', JSON.stringify(state.permissions ?? []))
+          localStorage.setItem('agri_market_id', String(state.marketId ?? 1))
+        } catch {
+          /* localStorage unavailable: ignore */
+        }
+      },
+      { userInfo: ctx.userInfo, roles: ctx.roles ?? [], permissions: [], marketId: 1 },
+    )
   }
   const target = `${BASE_URL}${route.fullPath}`
   try {
@@ -585,7 +590,6 @@ async function patrolOne(ctx, route, deep) {
   } catch (err) {
     record.note = `goto 失败：${err && err.message ? err.message : String(err)}`
   }
-
   // 网络空闲后再给 React 一帧时间完成懒加载组件的渲染
   await page.waitForNetworkIdle({ idleTime: 600, timeout: 10000 }).catch(() => {})
   await new Promise((r) => setTimeout(r, 800))
@@ -599,6 +603,30 @@ async function patrolOne(ctx, route, deep) {
     record.note += ` | 白屏判定失败：${err && err.message ? err.message : String(err)}`
   }
 
+  // 回读现场：注入的界面态到底有没有生效、页面最终停在哪、正文前 160 字是什么。
+  // 这一步是给"注入没生效"这种自我欺骗留的自证手段 —— 光看"0 异常"永远发现不了。
+  try {
+    const diag = await page.evaluate(() => {
+      let userInfoLen = 0
+      try {
+          userInfoLen = (localStorage.getItem('agri_user_info') || '').length
+      } catch {
+        /* localStorage unavailable */
+      }
+      return {
+        userInfoLen,
+        path: location.pathname,
+        text: (document.body && document.body.innerText ? document.body.innerText : '')
+          .replace(/\s+/g, ' ')
+          .slice(0, 160),
+      }
+    })
+    record.userInfoLen = diag.userInfoLen
+    record.finalPath = diag.path
+    record.bodyText = diag.text
+  } catch (err) {
+    record.note += ` | 回读失败：${err && err.message ? err.message : String(err)}`
+  }
   record.consoleErrors = consoleErrors.length
   record.pageErrors = pageErrors.length
   const all = [...pageErrors, ...consoleErrors]
