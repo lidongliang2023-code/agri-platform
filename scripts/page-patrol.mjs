@@ -137,7 +137,13 @@ const args = parseArgs(process.argv.slice(2))
 /** 前端基址 */
 const BASE_URL = String(args.base ?? DEFAULT_BASE).replace(/\/+$/, '')
 /** 后端基址 */
-const API_URL = String(args.api ?? DEFAULT_API).replace(/\/+$/, '')
+/**
+ * 后端基址（取登录令牌用）。默认**与前端同源**（--base 那个地址）：页面本身就是通过它取数据
+ * （部署态经网关 :80 转发 /api，dev 态由 vite 代理）。这里曾写死 core-platform 的默认端口 8099，
+ * 而本机实际在 8093、网关在 :80 —— 登录必然失败，巡检静默退化成"未登录态扫描"：页面全 401、
+ * 数据一律为空，汇总却照样显示"0 白屏 0 未捕获异常"，看起来像通过。需要单独指定时用 --api。
+ */
+const API_URL = String(args.api ?? args.base ?? DEFAULT_API).replace(/\/+$/, '')
 /** 巡检模式：light | deep */
 const MODE = String(args.mode ?? 'light').toLowerCase()
 /** 深度巡检条数上限（0 表示不限） */
