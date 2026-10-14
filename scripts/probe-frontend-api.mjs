@@ -1,0 +1,144 @@
+#!/usr/bin/env node
+/**
+ * 扫雷之三：**前端真的会发出的请求** vs 目标后端有没有处理器。
+ *
+ * 为什么需要它：前两把扫雷脚本盯的是"表列 vs 实体"（check-entity-columns /
+ * check-notnull-columns），那是**后端自己内部**的一致性。但切流（把某个域从
+ * core-platform 换到独立服务）碎掉页面的方式完全是另一类：路径根本没有处理器。
+ * 这一类靠点页面很难发现全 —— 一次只看得见当前这一页，而"哪些页会碎"是全域问题。
+ *
+ * 做法：把前端 api 层里的每条 `http.get/post/...('<path>')` 抓出来（`${BASE}` 之类的
+ * 常量就近解析，其余占位符替换成可解析的值），逐条打到目标后端，然后**按提示语区分**
+ * 两种 404：
+ *   · `接口不存在` —— Spring 的 NoResourceFoundException 兜底，意思是"后端没有这个处理器"；
+ *   · 业务里的"不存在"（如"种养计划不存在"）—— 处理器在，只是这条数据没有。
+ * 只认前者为"缺口"，否则任何一条查不到的演示数据都会被误报成缺接口。
+ *
+ * 用法：
+ *   node scripts/probe-frontend-api.mjs <api 目录> <目标 baseURL> <访问令牌> [占位符]
+ * 例：
+ *   TOKEN=$(curl -s -X POST http://localhost/api/v1/auth/login \
+ *     -H 'Content-Type: application/json' \
+ *     -d '{"username":"admin","password":"Admin@123","marketId":1}' | ... )
+ *   node scripts/probe-frontend-api.mjs agri-production/frontend/src/api \
+ *     http://localhost:8092/api/v1/production "$TOKEN"
+ *
+ * 退出码：0 = 没有缺口；1 = 有缺口（切流前应当归零）。
+ */
+import { readdirSync, readFileSync } from 'node:fs'
+import path from 'node:path'
+
+const [apiDir, baseUrl, token, placeholder = '1'] = process.argv.slice(2)
+if (!apiDir || !baseUrl || !token) {
+  console.error('用法：node scripts/probe-frontend-api.mjs <api 目录> <目标 baseURL> <访问令牌> [占位符]')
+  process.exit(2)
+}
+
+const CALL = /http(?:Platform)?\.(get|post|put|patch|delete)(?:<[^>]*>)?\(\s*(`[^`]*`|'[^']*')/g
+const CONST = /const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*'([^']*)'/g
+
+/** 递归收集 .ts */
+function walk(dir, out = []) {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name)
+    if (entry.isDirectory()) walk(full, out)
+    else if (entry.name.endsWith('.ts')) out.push(full)
+  }
+  return out
+}
+
+const seen = new Map()
+for (const file of walk(apiDir)) {
+  const text = readFileSync(file, 'utf8')
+  const consts = {}
+  for (const m of text.matchAll(CONST)) consts[m[1]] = m[2]
+  for (const m of text.matchAll(CALL)) {
+    const method = m[1].toUpperCase()
+    const template = m[2].slice(1, -1)
+    const resolved = template.replace(/\$\{([^}]+)\}/g, (_all, expr) => {
+      const name = expr.trim()
+      if (Object.prototype.hasOwnProperty.call(consts, name)) return consts[name]
+      return name.startsWith('BASE') ? (consts.BASE ?? '') : placeholder
+    })
+    if (!resolved.startsWith('/')) continue
+    const key = `${method} ${resolved}`
+    if (!seen.has(key)) seen.set(key, { file: path.relative(apiDir, file), method, path: resolved })
+  }
+}
+
+const list = [...seen.values()].sort((a, b) => a.path.localeCompare(b.path))
+const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+const missing = []
+const handledButFailed = []
+const ok = []
+
+for (const c of list) {
+  let status = 0
+  let body = ''
+  try {
+    const res = await fetch(`${baseUrl}${c.path}`, {
+      method: c.method,
+      headers,
+      body: ['POST', 'PUT', 'PATCH'].includes(c.method) ? '{}' : undefined,
+    })
+    status = res.status
+    body = await res.text()
+  } catch (error) {
+    status = -1
+    body = String(error)
+  }
+  if (/接口不存在/.test(body) || status === 404) {
+    missing.push({ ...c, status })
+    continue
+  }
+  if (status >= 400 || status === -1) {
+    handledButFailed.push({ ...c, status, note: body.slice(0, 130) })
+    continue
+  }
+  let code = null
+  let message = ''
+  try {
+    const parsed = JSON.parse(body)
+    code = parsed.code
+    message = parsed.message ?? ''
+  } catch {
+    message = '（响应不是 JSON）'
+  }
+  if (code === 0) ok.push({ ...c, status })
+  else handledButFailed.push({ ...c, status, note: `code=${code} ${message}`.slice(0, 150) })
+}
+
+const segmentOf = (p) => {
+  const parts = p.split('/').filter(Boolean)
+  return p.startsWith('/admin/') ? `admin/${parts[1] ?? ''}` : (parts[0] ?? '')
+}
+
+console.log(`== 前端会发出的请求：${list.length} 条（去重后） ==`)
+console.log(`== 缺口 ${missing.length} | 有处理器但本次调用未成功 ${handledButFailed.length} | 成功 ${ok.length} ==`)
+
+const stats = new Map()
+for (const [kind, item] of [
+  ...missing.map((x) => ['missing', x]),
+  ...handledButFailed.map((x) => ['failed', x]),
+  ...ok.map((x) => ['ok', x]),
+]) {
+  const seg = segmentOf(item.path)
+  const row = stats.get(seg) ?? { missing: 0, failed: 0, ok: 0 }
+  row[kind] += 1
+  stats.set(seg, row)
+}
+console.log('\n== 按路径段统计 ==')
+console.log('  ' + '段'.padEnd(20) + '缺处理器'.padStart(10) + '有处理器未成功'.padStart(16) + '成功'.padStart(8))
+for (const [seg, row] of [...stats.entries()].sort((a, b) => b[1].missing - a[1].missing)) {
+  console.log(
+    `  ${seg.padEnd(18)} ${String(row.missing).padStart(10)} ${String(row.failed).padStart(16)} ${String(row.ok).padStart(8)}`,
+  )
+}
+
+console.log(`\n-- 缺处理器的路径（${missing.length} 条） --`)
+for (const m of missing) console.log(`  ${m.method.padEnd(6)} ${m.path.padEnd(56)} [${m.file}]`)
+
+console.log(`\n-- 有处理器但本次调用未成功（${handledButFailed.length} 条，探测用的占位参数所致者属正常） --`)
+for (const m of handledButFailed) console.log(`  ${m.method.padEnd(6)} ${m.path.padEnd(56)} ${m.note}`)
+
+process.exit(missing.length > 0 ? 1 : 0)
