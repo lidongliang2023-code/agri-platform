@@ -6,6 +6,10 @@ spring:
     name: agri-production
   profiles:
     active: dev
+  data:
+    redis:
+      host: localhost
+      port: 6379
 
 mybatis-plus:
   configuration:
@@ -21,3 +25,20 @@ mybatis-plus:
 logging:
   level:
     com.agri.production: debug
+
+# 运营端准入（平台 RBAC，V2.0 第 5.5 节）—— 组件来自 agri-common 的 com.agri.common.rbac，
+# 这里只声明"本服务的运营接口在哪、要什么权限码"。
+#
+# 注意：本服务原先不依赖 agri-common，这一步一并把依赖补上了（见 pom.xml）；
+# 运行时生效与否要看 operator-paths 配没配 —— 组件没配路径时装配会打 WARN，不会静默失效。
+platform:
+  rbac:
+    operator-paths:
+      - /api/v1/production/admin/**
+      - /api/production/admin/**
+    read-permission: production:read
+    write-permission: production:write
+
+services:
+  platform:
+    url: http://localhost:8093

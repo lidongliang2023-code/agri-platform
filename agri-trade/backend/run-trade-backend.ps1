@@ -76,10 +76,20 @@ if ($LASTEXITCODE -ne 0) {
     throw "编译失败，已中止启动。"
 }
 
-# 依赖 classpath：缓存成 target\cp.txt，依赖没变就不必每次重算
+# 依赖 classpath：缓存成 target\cp.txt
+#
+# 缓存判据**不能只看"文件在不在"**：pom.xml 改了依赖、而 cp.txt 还是旧的，
+# 运行时 classpath 就缺那个 jar —— 表现是"代码编译通过、启动正常、新加的组件却完全没生效"。
+# 实测踩过一次：给交易模块加 agri-common（运营端鉴权组件）后重启，RBAC 拦截器没有任何反应，
+# 因为 cp.txt 是改 pom 之前生成的，agri-common 压根不在运行时 classpath 上。
+# 这里按"pom.xml 是否比 cp.txt 新"决定要不要重算。
 $cpFile = Join-Path $backendDir 'target\cp.txt'
-if (-not (Test-Path $cpFile)) {
+$pomFile = Join-Path $backendDir 'pom.xml'
+$staleCp = (-not (Test-Path $cpFile)) -or
+    ((Get-Item $pomFile).LastWriteTime -gt (Get-Item $cpFile).LastWriteTime)
+if ($staleCp) {
     Write-Host "解析依赖 classpath…"
+    Remove-Item -LiteralPath $cpFile -Force -ErrorAction SilentlyContinue
     & mvn -o -q dependency:build-classpath "-Dmdep.outputFile=target\cp.txt" @mavenArgs[1..($mavenArgs.Count-1)]
     if (-not (Test-Path $cpFile)) {
         throw "无法生成依赖 classpath（$cpFile）"

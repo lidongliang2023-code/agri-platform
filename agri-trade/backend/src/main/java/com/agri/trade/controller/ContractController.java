@@ -46,7 +46,7 @@ public class ContractController {
     }
 
     @PostMapping("/template")
-    @com.agri.trade.common.security.OperatorOnly
+    @com.agri.common.rbac.OperatorOnly
     public ApiResponse<Boolean> createTemplate(@RequestBody ContractTemplate template) {
         template.setTemplateCode("CT" + System.currentTimeMillis());
         template.setDelFlag(0);

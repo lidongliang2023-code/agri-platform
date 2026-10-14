@@ -59,6 +59,18 @@
             <artifactId>spring-cloud-starter-openfeign</artifactId>
         </dependency>
 
+        <!--
+            平台公共模块：运营端准入（RBAC）就用它里面的 com.agri.common.rbac。
+            此前交易模块自己抄了一份 OperatorOnly + 权限服务，两套实现会各自漂移
+            （例如"运营路径上的写接口该要写权限还是读权限"改了一处漏一处），
+            所以统一依赖 agri-common，与其它子系统共用同一个拦截器。
+        -->
+        <dependency>
+            <groupId>com.agri</groupId>
+            <artifactId>agri-common</artifactId>
+            <version>1.0.0</version>
+        </dependency>
+
         <dependency>
             <groupId>com.baomidou</groupId>
             <artifactId>mybatis-plus-spring-boot3-starter</artifactId>

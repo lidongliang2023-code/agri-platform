@@ -60,6 +60,25 @@ jwt:
   secret: agri-masterdata-jwt-secret-key-2024
   expiration: 86400000
 
+# 运营端准入（平台 RBAC，V2.0 第 5.5 节）。
+#
+# 组件来自 agri-common（com.agri.common.rbac，自动装配），这里只声明"本服务的运营接口在哪、
+# 要什么权限码"：命中路径的请求按方法要读/写权限，方法上标了 @OperatorOnly 的按标注要。
+# 权限码与 platform_role.permissions 同一套词表 —— 目前只有 SUPER_ADMIN 的 ["*"] 覆盖
+# masterdata:*，也就是说主数据运营端默认只对超管开放；要让市场运营也能进，
+# 把 masterdata:read/write 加进 MARKET_OPS 的权限即可（数据变更，不动代码）。
+platform:
+  rbac:
+    operator-paths:
+      - /admin/masterdata/**
+    read-permission: masterdata:read
+    write-permission: masterdata:write
+
+# 平台认证中心地址（RBAC 权限解析与将来的其它平台调用都走它）
+services:
+  platform:
+    url: http://localhost:8093
+
 logging:
   level:
     com.agri: DEBUG

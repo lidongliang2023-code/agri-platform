@@ -23,7 +23,7 @@ public class CompensationController {
     private final PlatformIdentityService identityService;
 
     @PostMapping("/guarantee")
-    @com.agri.trade.common.security.OperatorOnly
+    @com.agri.common.rbac.OperatorOnly
     public ApiResponse<MerchantGuarantee> createGuarantee(@RequestBody Map<String, Object> params) {
         Long merchantId = ((Number) params.get("merchantId")).longValue();
         String merchantName = (String) params.get("merchantName");
@@ -34,21 +34,21 @@ public class CompensationController {
     }
 
     @GetMapping("/guarantee/merchant/{merchantId}")
-    @com.agri.trade.common.security.OperatorOnly("trade:read")
+    @com.agri.common.rbac.OperatorOnly("trade:read")
     public ApiResponse<List<MerchantGuarantee>> getMerchantGuarantees(@PathVariable Long merchantId) {
         List<MerchantGuarantee> guarantees = guaranteeService.getGuaranteesByMerchant(merchantId);
         return ApiResponse.success(guarantees);
     }
 
     @GetMapping("/guarantee/{merchantId}/balance")
-    @com.agri.trade.common.security.OperatorOnly("trade:read")
+    @com.agri.common.rbac.OperatorOnly("trade:read")
     public ApiResponse<BigDecimal> getGuaranteeBalance(@PathVariable Long merchantId) {
         BigDecimal balance = guaranteeService.getAvailableBalance(merchantId);
         return ApiResponse.success(balance);
     }
 
     @PostMapping("/guarantee/{guaranteeId}/freeze")
-    @com.agri.trade.common.security.OperatorOnly
+    @com.agri.common.rbac.OperatorOnly
     public ApiResponse<Boolean> freezeGuarantee(@PathVariable Long guaranteeId, @RequestBody Map<String, Object> params) {
         BigDecimal amount = new BigDecimal(params.get("amount").toString());
         boolean result = guaranteeService.freezeGuarantee(guaranteeId, amount);
@@ -56,7 +56,7 @@ public class CompensationController {
     }
 
     @PostMapping("/guarantee/{guaranteeId}/unfreeze")
-    @com.agri.trade.common.security.OperatorOnly
+    @com.agri.common.rbac.OperatorOnly
     public ApiResponse<Boolean> unfreezeGuarantee(@PathVariable Long guaranteeId, @RequestBody Map<String, Object> params) {
         BigDecimal amount = new BigDecimal(params.get("amount").toString());
         boolean result = guaranteeService.unfreezeGuarantee(guaranteeId, amount);
@@ -64,7 +64,7 @@ public class CompensationController {
     }
 
     @PostMapping("/guarantee/{guaranteeId}/replenish")
-    @com.agri.trade.common.security.OperatorOnly
+    @com.agri.common.rbac.OperatorOnly
     public ApiResponse<Boolean> replenishGuarantee(@PathVariable Long guaranteeId, @RequestBody Map<String, Object> params) {
         BigDecimal amount = new BigDecimal(params.get("amount").toString());
         boolean result = guaranteeService.replenishGuarantee(guaranteeId, amount);
@@ -72,7 +72,7 @@ public class CompensationController {
     }
 
     @PostMapping
-    @com.agri.trade.common.security.OperatorOnly
+    @com.agri.common.rbac.OperatorOnly
     public ApiResponse<CompensationRecord> createCompensation(@RequestBody Map<String, Object> params) {
         Long orderId = params.containsKey("orderId") ? ((Number) params.get("orderId")).longValue() : null;
         Long disputeId = params.containsKey("disputeId") ? ((Number) params.get("disputeId")).longValue() : null;
@@ -101,14 +101,14 @@ public class CompensationController {
     }
 
     @GetMapping("/dispute/{disputeId}")
-    @com.agri.trade.common.security.OperatorOnly("trade:read")
+    @com.agri.common.rbac.OperatorOnly("trade:read")
     public ApiResponse<CompensationRecord> getCompensationByDispute(@PathVariable Long disputeId) {
         CompensationRecord compensation = compensationService.getByDispute(disputeId);
         return ApiResponse.success(compensation);
     }
 
     @GetMapping("/order/{orderId}")
-    @com.agri.trade.common.security.OperatorOnly("trade:read")
+    @com.agri.common.rbac.OperatorOnly("trade:read")
     public ApiResponse<List<CompensationRecord>> getCompensationsByOrder(@PathVariable Long orderId) {
         List<CompensationRecord> compensations = compensationService.getByOrder(orderId);
         return ApiResponse.success(compensations);
@@ -132,7 +132,7 @@ public class CompensationController {
     }
 
     @PostMapping("/{compensationId}/review")
-    @com.agri.trade.common.security.OperatorOnly
+    @com.agri.common.rbac.OperatorOnly
     public ApiResponse<CompensationRecord> reviewCompensation(@PathVariable Long compensationId, @RequestBody Map<String, String> params) {
         String reviewResult = params.get("reviewResult");
         String reviewer = params.get("reviewer");
@@ -146,7 +146,7 @@ public class CompensationController {
     }
 
     @PostMapping("/{compensationId}/execute")
-    @com.agri.trade.common.security.OperatorOnly
+    @com.agri.common.rbac.OperatorOnly
     public ApiResponse<Boolean> executeCompensation(@PathVariable Long compensationId) {
         boolean result = compensationService.executeCompensation(compensationId);
         return result ? ApiResponse.success(true) : ApiResponse.error("执行失败");

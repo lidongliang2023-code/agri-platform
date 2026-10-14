@@ -368,7 +368,7 @@ public class OrderController {
     }
 
     @PostMapping("/refund/{id}/audit")
-    @com.agri.trade.common.security.OperatorOnly
+    @com.agri.common.rbac.OperatorOnly
     public ApiResponse<Boolean> auditRefund(@PathVariable Long id, @RequestBody java.util.Map<String, String> params) {
         RefundRecord refund = refundMapper.selectById(id);
         if (refund == null) return ApiResponse.error("退款记录不存在");

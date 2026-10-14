@@ -99,3 +99,16 @@ services:
     # 生产管理域后端跑在 8082（见 agri-production/backend/src/main/resources/application.yml）。
     # 原先写 8083 —— 那是主数据域后端的端口，等于把两个域的服务地址都指错了。
     url: http://localhost:8082
+
+# 运营端准入（平台 RBAC，V2.0 第 5.5 节）—— 由 agri-common 里的
+# OperatorGuardInterceptor 自动装配后生效，这里只声明"本服务的运营接口在哪、要什么权限码"：
+#   · /api/trade/admin/** ：运营端各页面的接口族，GET 要 trade:read、写要 trade:write；
+#   · 方法上标了 @OperatorOnly 的：按标注要权限（退款审核、纠纷调解/仲裁、赔付审核与打款等
+#     挂在业务路径上的运营动作 —— 这些不可能都挪到 /admin 下，只按前缀拦会漏掉最要命的口子）。
+# 权限码与 platform_role.permissions 同一套词表，按令牌 + 当前市场实时解析（不是令牌摘要）。
+platform:
+  rbac:
+    operator-paths:
+      - /api/trade/admin/**
+    read-permission: trade:read
+    write-permission: trade:write

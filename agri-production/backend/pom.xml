@@ -53,6 +53,16 @@
             <artifactId>spring-cloud-starter-openfeign</artifactId>
         </dependency>
 
+        <!--
+            平台公共模块：运营端准入（RBAC）用它的 com.agri.common.rbac。
+            生产模块的运营接口在 /api/v1/production/admin/** 下，配置见 application.yml。
+        -->
+        <dependency>
+            <groupId>com.agri</groupId>
+            <artifactId>agri-common</artifactId>
+            <version>1.0.0</version>
+        </dependency>
+
         <dependency>
             <groupId>com.baomidou</groupId>
             <artifactId>mybatis-plus-spring-boot3-starter</artifactId>

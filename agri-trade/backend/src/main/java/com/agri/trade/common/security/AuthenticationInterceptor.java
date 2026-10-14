@@ -1,7 +1,6 @@
 package com.agri.trade.common.security;
 
 import com.agri.trade.security.PlatformTokenService;
-import com.agri.trade.service.OperatorPermissionService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
@@ -23,16 +22,10 @@ import org.springframework.web.servlet.HandlerInterceptor;
 @Component
 public class AuthenticationInterceptor implements HandlerInterceptor {
 
-    /** 运营端接口前缀。 */
-    private static final String OPERATOR_PATH_PREFIX = "/api/trade/admin/";
-
     private final PlatformTokenService platformTokenService;
-    private final OperatorPermissionService operatorPermissionService;
 
-    public AuthenticationInterceptor(PlatformTokenService platformTokenService,
-                                     OperatorPermissionService operatorPermissionService) {
+    public AuthenticationInterceptor(PlatformTokenService platformTokenService) {
         this.platformTokenService = platformTokenService;
-        this.operatorPermissionService = operatorPermissionService;
     }
 
     @Override
@@ -53,42 +46,11 @@ public class AuthenticationInterceptor implements HandlerInterceptor {
         }
 
         LoginUserHolder.setLoginUser(loginUser);
-
-        // ---- 授权（谁能调）----
-        //
-        // 运营端的准入分两种来源，合起来才没有漏网：
-        //   ① 路径前缀 /api/trade/admin/** —— 运营端各页面的接口族，要 trade:read；
-        //   ② 方法/类上的 @OperatorOnly —— 挂在业务路径上的运营动作（退款审核、
-        //      纠纷调解/仲裁、赔付审核与打款）。这些天然属于"某张订单/某场纠纷"的资源，
-        //      不可能都挪到 /admin 下，只按前缀拦会漏掉最要命的口子（打款、退款是真金白银）。
-        //
-        // 判定用平台的 RBAC（platform_user_role ⋈ platform_role.permissions，
-        // 按令牌 + 当前市场实时解析），而不是只看令牌里的角色摘要 ——
-        // 架构文档 V2.0 5.5：细权限以后端实时鉴权为准。平台不可达时拒绝，不放行。
-        String required = requiredPermission(request, handler);
-        if (required != null) {
-            OperatorPermissionService.Decision decision = operatorPermissionService.check(required);
-            if (!decision.allowed()) {
-                log.warn("运营权限不足被拒：user={} uri={} required={} reason={}",
-                        loginUser.getUsername(), request.getRequestURI(), required, decision.message());
-                return reject(response, 403, decision.message());
-            }
-        }
-
+        // 授权（运营端准入）不在这里：它统一由 agri-common 的 OperatorGuardInterceptor 处理
+        // （路径前缀按方法要读/写权限 + @OperatorOnly 标注的运营动作），
+        // 与其它子系统共用一份实现。这个拦截器只回答"你是谁"。
         log.debug("已认证：{}", loginUser.getUsername());
         return true;
-    }
-
-    /** 这个请求需要哪个权限码；普通业务接口返回 null（由各自的身份判权负责）。 */
-    private String requiredPermission(HttpServletRequest request, Object handler) {
-        OperatorOnly annotation = ((HandlerMethod) handler).getMethodAnnotation(OperatorOnly.class);
-        if (annotation == null) {
-            annotation = ((HandlerMethod) handler).getBeanType().getAnnotation(OperatorOnly.class);
-        }
-        if (annotation != null) {
-            return annotation.value();
-        }
-        return request.getRequestURI().startsWith(OPERATOR_PATH_PREFIX) ? "trade:read" : null;
     }
 
     @Override

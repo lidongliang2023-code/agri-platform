@@ -100,7 +100,7 @@ public class GuaranteeController {
     }
 
     @GetMapping("/page")
-    @com.agri.trade.common.security.OperatorOnly("trade:read")
+    @com.agri.common.rbac.OperatorOnly("trade:read")
     public ApiResponse<IPage<MerchantGuarantee>> getGuaranteePage(
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "10") Integer pageSize,
@@ -114,7 +114,7 @@ public class GuaranteeController {
     }
 
     @GetMapping("/{id}")
-    @com.agri.trade.common.security.OperatorOnly("trade:read")
+    @com.agri.common.rbac.OperatorOnly("trade:read")
     public ApiResponse<MerchantGuarantee> getGuaranteeById(@PathVariable Long id) {
         MerchantGuarantee guarantee = guaranteeMapper.selectById(id);
         if (guarantee == null) return ApiResponse.error("保证金记录不存在");
@@ -122,7 +122,7 @@ public class GuaranteeController {
     }
 
     @PostMapping
-    @com.agri.trade.common.security.OperatorOnly
+    @com.agri.common.rbac.OperatorOnly
     public ApiResponse<Boolean> createGuarantee(@RequestBody MerchantGuarantee guarantee) {
         guarantee.setGuaranteeNo("GT" + System.currentTimeMillis());
         guarantee.setDelFlag(0);
@@ -138,7 +138,7 @@ public class GuaranteeController {
     }
 
     @PostMapping("/{id}/verify")
-    @com.agri.trade.common.security.OperatorOnly
+    @com.agri.common.rbac.OperatorOnly
     public ApiResponse<Boolean> verifyGuarantee(@PathVariable Long id, @RequestBody java.util.Map<String, String> params) {
         MerchantGuarantee guarantee = guaranteeMapper.selectById(id);
         if (guarantee == null) return ApiResponse.error("保证金记录不存在");
@@ -151,7 +151,7 @@ public class GuaranteeController {
     }
 
     @GetMapping("/compensation/page")
-    @com.agri.trade.common.security.OperatorOnly("trade:read")
+    @com.agri.common.rbac.OperatorOnly("trade:read")
     public ApiResponse<IPage<CompensationRecord>> getCompensationPage(
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "10") Integer pageSize) {
@@ -163,7 +163,7 @@ public class GuaranteeController {
     }
 
     @PostMapping("/compensation")
-    @com.agri.trade.common.security.OperatorOnly
+    @com.agri.common.rbac.OperatorOnly
     public ApiResponse<Boolean> createCompensation(@RequestBody CompensationRecord compensation) {
         compensation.setCompensationNo("CP" + System.currentTimeMillis());
         compensation.setDelFlag(0);
@@ -175,7 +175,7 @@ public class GuaranteeController {
     }
 
     @PostMapping("/compensation/{id}/audit")
-    @com.agri.trade.common.security.OperatorOnly
+    @com.agri.common.rbac.OperatorOnly
     public ApiResponse<Boolean> auditCompensation(@PathVariable Long id, @RequestBody java.util.Map<String, Object> params) {
         CompensationRecord compensation = compensationMapper.selectById(id);
         if (compensation == null) return ApiResponse.error("赔付记录不存在");

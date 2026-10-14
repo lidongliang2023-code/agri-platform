@@ -15,6 +15,10 @@ spring:
     console:
       enabled: true
       path: /h2-console
+  data:
+    redis:
+      host: localhost
+      port: 6379
 
 mybatis-plus:
   configuration:
@@ -28,6 +32,23 @@ mybatis-plus:
 services:
   masterdata:
     url: http://localhost:8081
+  # 平台认证中心：RBAC 权限解析走它的 /api/v1/platform/permissions/mine
+  platform:
+    url: http://localhost:8093
+
+# 运营端准入（平台 RBAC，V2.0 第 5.5 节）—— 组件来自 agri-common 的 com.agri.common.rbac。
+#
+# IoT 后端整体是"管理面"（设备/分组/告警规则/自动化/场景都由运营与运维人员维护），
+# 没有用户端与运营端的路径分界，所以这里按整个 /api/iot/** 要求 iot 权限：
+#   · 读接口要 iot:read、写接口要 iot:write（拦截器按 HTTP 方法区分）；
+#   · 设备数据上报/推送这类服务间调用带的是内部令牌（没有用户 Bearer 令牌），
+#     拦截器对"没有令牌"的请求直接放行 —— 认证是各服务自己的事，这里只管授权。
+platform:
+  rbac:
+    operator-paths:
+      - /api/iot/**
+    read-permission: iot:read
+    write-permission: iot:write
 
 logging:
   level:
