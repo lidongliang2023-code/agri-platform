@@ -39,7 +39,7 @@ import {
 import { LockOutlined, PlusOutlined, UnlockOutlined, WarningOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import useFarmStore from '@/store/farm'
-import { DemoDataAlert, MetricStatistic, MetricText } from '@/components'
+import { MetricStatistic, MetricText } from '@/components'
 import {
   inboundInventory,
   outboundInventory,
@@ -421,13 +421,6 @@ export default function InventoryManage(): JSX.Element {
         </Button>,
       ]}
     >
-      {listQuery.data?.demo ? (
-        <DemoDataAlert
-          scope="顶部统计卡、库存预警条与下方库存列表"
-          reason={listQuery.data?.demoReason}
-          writeNote="入库 / 出库 / 损耗登记 / 冻结解冻都不会写入服务端，也不会改动本地数据：后端不可用时这些操作会直接失败并提示原因（含「未写入服务端」字样），不会像以前那样弹「操作成功」。"
-        />
-      ) : null}
 
       {overview.missingQtyCount > 0 ? (
         <Alert

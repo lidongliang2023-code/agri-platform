@@ -41,7 +41,6 @@ import { ExportOutlined, InboxOutlined, PlusOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import type { Dayjs } from 'dayjs'
 import useFarmStore from '@/store/farm'
-import { DemoDataAlert } from '@/components'
 import { inboundHarvest, queryHarvests } from '@/api/harvests'
 import { listPlots } from '@/api/plots'
 import type { HarvestBatch, HarvestGrade, InboundStatus, Plot } from '@/types'
@@ -515,7 +514,7 @@ export default function HarvestRecords(): JSX.Element {
           ]}
         />,
         <Button key="plan" onClick={() => navigate('/production/harvests/plan')}>
-          采收计划
+          地块采收记录
         </Button>,
         <Button key="inventory" onClick={() => navigate('/production/harvests/inventory')}>
           库存管理
@@ -530,13 +529,6 @@ export default function HarvestRecords(): JSX.Element {
         </Button>,
       ]}
     >
-      {boardQuery.data?.demo ? (
-        <DemoDataAlert
-          scope="顶部四张统计卡、Tab 计数、日历视图与下方列表"
-          reason={boardQuery.data?.demoReason}
-          writeNote="「入库 / 批量入库」不会写入服务端，也不会改动本地数据：后端不可用时操作会直接失败，并按失败条数+首个原因如实提示（含「未写入服务端」字样）。"
-        />
-      ) : null}
 
       <Row gutter={16} style={{ marginBottom: 16 }}>
         <Col span={6}>

@@ -38,7 +38,6 @@ import {
 } from 'antd'
 import { ArrowLeftOutlined, InboxOutlined, PrinterOutlined } from '@ant-design/icons'
 import useFarmStore from '@/store/farm'
-import { DemoDataAlert } from '@/components'
 import { inboundHarvest, queryHarvest } from '@/api/harvests'
 import type { HarvestBatch, InboundStatus } from '@/types'
 import {
@@ -117,7 +116,7 @@ export default function Detail(): JSX.Element {
     })
   }
 
-  const batch: HarvestBatch | undefined = detailQuery.data?.data
+  const batch: HarvestBatch | undefined = detailQuery.data
 
   /** 加载态 */
   if (detailQuery.isLoading) {
@@ -201,13 +200,6 @@ export default function Detail(): JSX.Element {
         </Button>,
       ]}
     >
-      {detailQuery.data?.demo ? (
-        <DemoDataAlert
-          scope="采收信息、产量统计与关联信息"
-          reason={detailQuery.data?.demoReason}
-          writeNote="「确认入库」不会写入服务端，也不会改动本地数据：后端不可用时该操作会直接失败并提示原因（含「未写入服务端」字样）。"
-        />
-      ) : null}
 
       <Card title="📋 采收信息" style={{ marginBottom: 16 }}>
         <Descriptions bordered column={3} size="middle">

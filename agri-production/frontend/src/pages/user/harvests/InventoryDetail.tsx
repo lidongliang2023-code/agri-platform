@@ -47,7 +47,6 @@ import {
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import useFarmStore from '@/store/farm'
-import { DemoDataAlert } from '@/components'
 import {
   outboundInventory,
   queryHarvests,
@@ -122,7 +121,7 @@ export default function InventoryDetail(): JSX.Element {
     queryFn: () => queryInventoryRecord(inventoryId as string),
   })
 
-  const record: InventoryRecord | undefined = detailQuery.data?.data
+  const record: InventoryRecord | undefined = detailQuery.data
 
   /** 出入库流水 */
   const flowQuery = useQuery({
@@ -346,13 +345,6 @@ export default function InventoryDetail(): JSX.Element {
         ),
       ]}
     >
-      {detailQuery.data?.demo ? (
-        <DemoDataAlert
-          scope="库存详情卡片（含库存水位）"
-          reason={detailQuery.data?.demoReason}
-          writeNote="出库、调拨、冻结 / 解冻都不会写入服务端，也不会改动本地数据：后端不可用时这些操作会直接失败并提示原因（含「未写入服务端」字样）。"
-        />
-      ) : null}
 
       <Row gutter={16} style={{ marginBottom: 16 }}>
         <Col span={6}>
@@ -452,13 +444,6 @@ export default function InventoryDetail(): JSX.Element {
       </Card>
 
       <Card title="📋 出入库记录">
-        {flowQuery.data?.demo ? (
-          <DemoDataAlert
-            scope="下方出入库流水表"
-            reason={flowQuery.data?.demoReason}
-            writeNote="本表为只读展示，不涉及写操作；流水接口不可用时不会向服务端写入任何数据。"
-          />
-        ) : null}
         {/*
           失败必须说出来，不能只留一张空表。
           教训：`queryInventoryFlows` 曾把路径写成 `/harvests/inventory/{batchId}/flows`，
