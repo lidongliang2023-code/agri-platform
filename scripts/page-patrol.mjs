@@ -480,6 +480,19 @@ async function patrolOne(ctx, route, deep) {
       consoleErrors.push(msg.text())
     }
   })
+  /** @type {string[]} 失败请求（URL 级）：只有"页面出错"没有"哪个 URL 出错"时，排查只能靠猜 */
+  const failedUrls = []
+  // 实测教训：巡检台一度显示"0 白屏 0 未捕获异常"，而页面其实停在登录页、
+  // 每条路由两个 401 —— 但报告里只有一句通用文案，不知道 401 打在哪个端点上。
+  page.on('requestfailed', (req) => {
+    const err = req.failure && req.failure() ? req.failure().errorText : ''
+    failedUrls.push(`REQFAIL ${req.method()} ${req.url()} ${err}`)
+  })
+  page.on('response', (res) => {
+    if (res.status() >= 400) {
+      failedUrls.push(`${res.status()} ${res.request().method()} ${res.url()}`)
+    }
+  })
   page.on('pageerror', (err) => {
     // 优先保留完整 stack（含源码坐标），退化为 message
     pageErrors.push(err && err.stack ? err.stack : err && err.message ? err.message : String(err))
@@ -558,6 +571,8 @@ async function patrolOne(ctx, route, deep) {
   record.firstRealError = realAll.length ? String(realAll[0]).slice(0, 300) : ''
   // 原始堆栈不截断：转述过的「文件:行号」属于二手信息，会误导修复者，这里必须留原文
   record.firstPageErrorStack = pageErrors.length ? String(pageErrors[0]) : ''
+  // 失败请求按 URL 落进报告（最多 10 条，够定位即可）
+  record.failedUrls = failedUrls.slice(0, 10)
   record.ok = record.httpStatus !== null && record.blank === false
 
   if (deep) {
