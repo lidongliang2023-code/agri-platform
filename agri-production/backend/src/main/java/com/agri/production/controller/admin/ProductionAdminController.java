@@ -31,7 +31,9 @@ public class ProductionAdminController {
     private final com.agri.production.mapper.InputMaterialMapper inputMaterialMapper;
     private final com.agri.production.mapper.AlertRecordMapper alertRecordMapper;
     private final com.agri.production.mapper.IoTDeviceMapper ioTDeviceMapper;
-    private final com.agri.production.mapper.QualityInspectionMapper qualityInspectionMapper;
+    // 检测单改用契约口径的实体/表（agri_prod_inspection）：旧实体映射的
+    // agri_prod_quality_inspection 只有 3 列对得上，这个控制器的统计与列表一直是坏的
+    private final com.agri.production.mapper.InspectionMapper inspectionMapper;
 
     public ProductionAdminController(
             com.agri.production.mapper.FarmMapper farmMapper,
@@ -41,7 +43,7 @@ public class ProductionAdminController {
             com.agri.production.mapper.InputMaterialMapper inputMaterialMapper,
             com.agri.production.mapper.AlertRecordMapper alertRecordMapper,
             com.agri.production.mapper.IoTDeviceMapper ioTDeviceMapper,
-            com.agri.production.mapper.QualityInspectionMapper qualityInspectionMapper) {
+            com.agri.production.mapper.InspectionMapper inspectionMapper) {
         this.farmMapper = farmMapper;
         this.taskMapper = taskMapper;
         this.traceCodeMapper = traceCodeMapper;
@@ -49,7 +51,7 @@ public class ProductionAdminController {
         this.inputMaterialMapper = inputMaterialMapper;
         this.alertRecordMapper = alertRecordMapper;
         this.ioTDeviceMapper = ioTDeviceMapper;
-        this.qualityInspectionMapper = qualityInspectionMapper;
+        this.inspectionMapper = inspectionMapper;
     }
 
     @GetMapping("/dashboard")
@@ -63,7 +65,7 @@ public class ProductionAdminController {
         long traceCount = traceCodeMapper.selectCount(null);
         long alertCount = alertRecordMapper.selectCount(null);
         long deviceCount = ioTDeviceMapper.selectCount(null);
-        long inspectionCount = qualityInspectionMapper.selectCount(null);
+        long inspectionCount = inspectionMapper.selectCount(null);
 
         result.put("farmCount", farmCount);
         result.put("taskCount", taskCount);
@@ -114,8 +116,8 @@ public class ProductionAdminController {
     }
 
     @GetMapping("/quality-inspections")
-    public ApiResponse<List<QualityInspection>> getInspectionList() {
-        List<QualityInspection> inspections = qualityInspectionMapper.selectList(null);
+    public ApiResponse<List<Inspection>> getInspectionList() {
+        List<Inspection> inspections = inspectionMapper.selectList(null);
         return ApiResponse.success(inspections);
     }
 
@@ -144,8 +146,10 @@ public class ProductionAdminController {
         deviceStats.put("online", ioTDeviceMapper.countByStatus("online", null));
 
         Map<String, Object> qualityStats = new HashMap<>();
-        qualityStats.put("total", qualityInspectionMapper.selectCount(null));
-        qualityStats.put("qualified", qualityInspectionMapper.countByQualified(1, null));
+        qualityStats.put("total", inspectionMapper.selectCount(null));
+        // 合格 = 结论 PASS（契约里 result 只有 PASS/FAIL 两个值）
+        qualityStats.put("qualified", inspectionMapper.selectCount(
+                new LambdaQueryWrapper<Inspection>().eq(Inspection::getResult, "PASS")));
 
         result.put("farm", farmStats);
         result.put("task", taskStats);
