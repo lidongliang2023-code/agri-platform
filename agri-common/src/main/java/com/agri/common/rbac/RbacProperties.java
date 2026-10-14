@@ -42,6 +42,17 @@ public class RbacProperties {
     private String writePermission = "platform:write";
 
     /**
+     * 命中运营路径时**是否必须带令牌**。
+     *
+     * <p>默认 false：多数子系统自己那层已经有认证（网关注入身份、或本服务的过滤器校验令牌），
+     * 拦截器只做授权，没令牌就交给那层去回 401，避免出现"没登录被告知无权限"的误导。</p>
+     *
+     * <p>但对**完全没有认证层**的服务（例如 IoT 后端：只有 CORS 与密码编码器，没有任何
+     * 令牌校验），默认行为等于运营接口裸奔 —— 此时把它设为 true：运营路径没令牌直接 401。</p>
+     */
+    private boolean requireAuth = false;
+
+    /**
      * 平台权限解析地址。
      *
      * <p>默认取 {@code services.platform.url}（各子系统本来就要配这个域名来调 core-platform），

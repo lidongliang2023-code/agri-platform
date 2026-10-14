@@ -73,6 +73,14 @@ platform:
       - /admin/masterdata/**
     read-permission: masterdata:read
     write-permission: masterdata:write
+    # 本服务自己有认证层（com.agri.common.security.AuthenticationInterceptor，
+    # 由 com.agri.common.config.WebMvcConfig 注册：先验平台访问令牌、再退回私有会话令牌）。
+    # 实测不带令牌调 /admin/masterdata/standard/dict/list 会被它挡住，返回体的业务码是
+    # "用户未登录"（注意 HTTP 状态是 200 —— 这个模块用"HTTP 200 + 业务码"表达失败，
+    # 别把 200 当成放行）。
+    # 既然认证已经有人管，这里打开 require-auth 纯属纵深防御：万一哪天那个拦截器被摘掉，
+    # 运营接口不会跟着变成敞开的。
+    require-auth: true
 
 # 平台认证中心地址（RBAC 权限解析与将来的其它平台调用都走它）
 services:

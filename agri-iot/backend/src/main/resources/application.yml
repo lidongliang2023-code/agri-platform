@@ -1,5 +1,7 @@
 server:
-  port: 8082
+  # 8082 已归生产管理后端（agri-production），两个服务原先都写 8082，本机只能起一个。
+  # IoT 让到 8085，并在 ops/gateway 的 upstream 里登记（见 10-upstreams.conf）。
+  port: 8085
 
 spring:
   application:
@@ -41,14 +43,18 @@ services:
 # IoT 后端整体是"管理面"（设备/分组/告警规则/自动化/场景都由运营与运维人员维护），
 # 没有用户端与运营端的路径分界，所以这里按整个 /api/iot/** 要求 iot 权限：
 #   · 读接口要 iot:read、写接口要 iot:write（拦截器按 HTTP 方法区分）；
-#   · 设备数据上报/推送这类服务间调用带的是内部令牌（没有用户 Bearer 令牌），
-#     拦截器对"没有令牌"的请求直接放行 —— 认证是各服务自己的事，这里只管授权。
+#   · require-auth=true 是专门为这个服务开的：IoT 后端目前**没有任何认证层**
+#     （SecurityConfig 里只有密码编码器；全模块搜不到 OncePerRequestFilter / HandlerInterceptor /
+#     sa-token 的任何用法，也就是说 /api/iot/** 此前是对公网敞开的），若不在这里要求令牌，
+#     运营接口等于裸奔。这是代码层面确认过的，不是推测。
+#     其它子系统（交易/主数据）自己有认证层，保持默认 false 即可。
 platform:
   rbac:
     operator-paths:
       - /api/iot/**
     read-permission: iot:read
     write-permission: iot:write
+    require-auth: true
 
 logging:
   level:

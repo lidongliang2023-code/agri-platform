@@ -46,10 +46,15 @@ public class OperatorGuardInterceptor implements HandlerInterceptor {
         if (required == null) {
             return true;
         }
-        // 没带令牌：交给各子系统自己的认证层处理（那是 401 的语义，不是 403）
+        // 没带令牌：默认交给各子系统自己的认证层处理（那是 401 的语义，不是 403）；
+        // 但服务本身没有认证层时（require-auth=true），必须在这里挡住 —— 否则运营接口裸奔。
         String header = request.getHeader(AUTHORIZATION);
         if (header == null || !header.startsWith("Bearer ")) {
-            return true;
+            if (!properties.isRequireAuth()) {
+                return true;
+            }
+            return reject(response, HttpServletResponse.SC_UNAUTHORIZED,
+                    "该操作需要登录后携带平台访问令牌");
         }
 
         Set<String> permissions = permissionResolver.currentPermissions();
@@ -90,11 +95,15 @@ public class OperatorGuardInterceptor implements HandlerInterceptor {
     }
 
     private boolean reject(HttpServletResponse response, String message) throws Exception {
-        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+        return reject(response, HttpServletResponse.SC_FORBIDDEN, message);
+    }
+
+    private boolean reject(HttpServletResponse response, int status, String message) throws Exception {
+        response.setStatus(status);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         // 不依赖各子系统的响应体结构：code/message/data 是它们共同的最小交集
-        response.getWriter().write("{\"code\":403,\"message\":\"" + message + "\",\"data\":null}");
+        response.getWriter().write("{\"code\":" + status + ",\"message\":\"" + message + "\",\"data\":null}");
         return false;
     }
 }

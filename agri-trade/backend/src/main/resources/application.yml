@@ -112,3 +112,8 @@ platform:
       - /api/trade/admin/**
     read-permission: trade:read
     write-permission: trade:write
+    # 交易模块自己有认证拦截器（WebMvcConfig 注册的 AuthenticationInterceptor，
+    # 不带令牌访问运营接口实测 401），所以这里默认 false 也够用。
+    # 仍然显式打开：一旦哪天那个拦截器被摘掉或改了白名单，运营接口不会跟着变敞开 ——
+    # 纵深防御，代价是"多一次前置校验"。
+    require-auth: true

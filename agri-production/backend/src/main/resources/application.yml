@@ -36,6 +36,10 @@ platform:
     operator-paths:
       - /api/v1/production/admin/**
       - /api/production/admin/**
+    # 权限码刻意用 production:* 而不是已有的 produce:*：
+    # platform_role 里 FARMER 角色**也持有 produce:read/produce:write**（那是"生产数据"的权限，
+    # 农户本来就该有）。运营端如果用 produce:*，等于每个农户账号都能进生产管理运营端。
+    # 两个码字面相近、后果相反，这里写清楚免得下一个人想当然合并。
     read-permission: production:read
     write-permission: production:write
 
