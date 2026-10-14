@@ -12,6 +12,7 @@ import com.agri.production.mapper.PlotMapper;
 import com.agri.production.mapper.QualityGradeRuleMapper;
 import com.agri.production.mapper.TestingLabMapper;
 import com.agri.production.service.IQualityService;
+import com.agri.production.service.IDomainEventService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -51,13 +52,16 @@ public class QualityServiceImpl implements IQualityService {
     private final TestingLabMapper labMapper;
     private final QualityGradeRuleMapper gradeRuleMapper;
     private final PlotMapper plotMapper;
+    private final IDomainEventService domainEventService;
 
     public QualityServiceImpl(InspectionMapper inspectionMapper, TestingLabMapper labMapper,
-                             QualityGradeRuleMapper gradeRuleMapper, PlotMapper plotMapper) {
+                             QualityGradeRuleMapper gradeRuleMapper, PlotMapper plotMapper,
+                             IDomainEventService domainEventService) {
         this.inspectionMapper = inspectionMapper;
         this.labMapper = labMapper;
         this.gradeRuleMapper = gradeRuleMapper;
         this.plotMapper = plotMapper;
+        this.domainEventService = domainEventService;
     }
 
     /* ==================== 检测单 ==================== */
@@ -214,6 +218,19 @@ public class QualityServiceImpl implements IQualityService {
         }
         inspection.setUpdateTime(LocalDateTime.now());
         inspectionMapper.updateById(inspection);
+        // 契约要求结论联动 prod.quality.test.passed / failed。按 2026-10-14 拍板的事件口径
+        // （复用平台 core-infra 的 outbox 契约）**落库为 NEW**，投递由 relay 负责 ——
+        // 现在没有 relay，状态就停在 NEW，不谎报"已发送"。
+        domainEventService.qualityTested(
+                RESULT_PASS.equals(normalized),
+                inspection.getBatchId() == null ? null : String.valueOf(inspection.getBatchId()),
+                inspection.getBatchNo(),
+                String.valueOf(inspection.getInspectionId()),
+                inspection.getInspectionNo(),
+                inspection.getInspectionType(),
+                RESULT_FAIL.equals(normalized) ? inspection.getRemark() : null,
+                LocalDateTime.now().toString(),
+                tenantId);
         return inspection;
     }
 

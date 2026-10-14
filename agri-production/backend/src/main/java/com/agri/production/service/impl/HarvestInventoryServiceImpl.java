@@ -13,6 +13,7 @@ import com.agri.production.mapper.InventoryFlowMapper;
 import com.agri.production.mapper.InventoryMapper;
 import com.agri.production.mapper.PlotMapper;
 import com.agri.production.service.IHarvestInventoryService;
+import com.agri.production.service.IDomainEventService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -46,15 +47,17 @@ public class HarvestInventoryServiceImpl implements IHarvestInventoryService {
     private final InventoryFlowMapper flowMapper;
     private final HarvestMapper harvestRecordMapper;
     private final PlotMapper plotMapper;
+    private final IDomainEventService domainEventService;
 
     public HarvestInventoryServiceImpl(HarvestBatchMapper batchMapper, InventoryMapper inventoryMapper,
                                       InventoryFlowMapper flowMapper, HarvestMapper harvestRecordMapper,
-                                      PlotMapper plotMapper) {
+                                      PlotMapper plotMapper, IDomainEventService domainEventService) {
         this.batchMapper = batchMapper;
         this.inventoryMapper = inventoryMapper;
         this.flowMapper = flowMapper;
         this.harvestRecordMapper = harvestRecordMapper;
         this.plotMapper = plotMapper;
+        this.domainEventService = domainEventService;
     }
 
     /* ==================== 采收批次 ==================== */
@@ -155,8 +158,18 @@ public class HarvestInventoryServiceImpl implements IHarvestInventoryService {
         batch.setTraceGenerated(1);
         batch.setUpdateTime(LocalDateTime.now());
         batchMapper.updateById(batch);
-        // 契约注释说这一步要发布领域事件 prod.batch.harvested。本服务没有事件总线，
-        // 因此没有伪造该事件 —— 作为缺口记在交付说明里。
+        // 契约要求这一步发布领域事件 prod.batch.harvested。按 2026-10-14 拍板的事件口径
+        // （复用平台 core-infra 那套 outbox 契约）**落库为 NEW**，投递由 relay 负责 ——
+        // 现在没有 relay，所以状态停在 NEW，不谎报"已发送"。
+        domainEventService.batchHarvested(
+                String.valueOf(batch.getBatchId()),
+                batch.getBatchNo(),
+                batch.getPlotId() == null ? null : String.valueOf(batch.getPlotId()),
+                batch.getCropId() == null ? null : String.valueOf(batch.getCropId()),
+                batch.getQuantity() == null ? null : batch.getQuantity().toPlainString(),
+                batch.getUnit(),
+                batch.getHarvestDate() == null ? null : batch.getHarvestDate().toString(),
+                tenantId);
         return batch;
     }
 

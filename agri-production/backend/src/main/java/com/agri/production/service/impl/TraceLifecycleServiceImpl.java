@@ -13,6 +13,7 @@ import com.agri.production.mapper.InputUsageRecordMapper;
 import com.agri.production.mapper.InventoryFlowMapper;
 import com.agri.production.mapper.TraceCodeMapper;
 import com.agri.production.service.ITraceLifecycleService;
+import com.agri.production.service.IDomainEventService;
 import com.agri.production.vo.TraceCodeContractVO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -48,15 +49,18 @@ public class TraceLifecycleServiceImpl implements ITraceLifecycleService {
     private final InspectionMapper inspectionMapper;
     private final InventoryFlowMapper inventoryFlowMapper;
     private final InputUsageRecordMapper inputUsageMapper;
+    private final IDomainEventService domainEventService;
 
     public TraceLifecycleServiceImpl(TraceCodeMapper traceCodeMapper, HarvestBatchMapper batchMapper,
                                     InspectionMapper inspectionMapper, InventoryFlowMapper inventoryFlowMapper,
-                                    InputUsageRecordMapper inputUsageMapper) {
+                                    InputUsageRecordMapper inputUsageMapper,
+                                    IDomainEventService domainEventService) {
         this.traceCodeMapper = traceCodeMapper;
         this.batchMapper = batchMapper;
         this.inspectionMapper = inspectionMapper;
         this.inventoryFlowMapper = inventoryFlowMapper;
         this.inputUsageMapper = inputUsageMapper;
+        this.domainEventService = domainEventService;
     }
 
     @Override
@@ -133,6 +137,13 @@ public class TraceLifecycleServiceImpl implements ITraceLifecycleService {
         log.info("溯源码 {} 激活（操作人入参 {}，表无对应列，未落库）", code, activatedBy);
         entity.setUpdateTime(LocalDateTime.now());
         traceCodeMapper.updateById(entity);
+        // 契约要求激活联动 prod.trace.activated；按拍板口径落 outbox（status=NEW），不谎报"已发送"。
+        domainEventService.traceActivated(code,
+                entity.getHarvestId() == null ? null : String.valueOf(entity.getHarvestId()),
+                entity.getBatchNumber(),
+                activatedBy,
+                LocalDateTime.now().toString(),
+                tenantId);
         return TraceCodeContractVO.of(entity);
     }
 

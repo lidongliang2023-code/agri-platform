@@ -1112,3 +1112,25 @@ INSERT IGNORE INTO agri_prod_trace_code
 SELECT 2, 'AG010102202605280001', b.batch_no, b.batch_no, CONCAT(b.crop_name, '(', b.grade, '级)'),
        'inactive', b.farm_id, b.plot_id, b.crop_name, b.grade, b.harvest_date, 0, '2001'
 FROM agri_prod_harvest_batch b WHERE b.batch_no = 'H20260528';
+-- ---------------------------------------------------------------- 领域事件 outbox
+-- 口径（2026-10-14 拍板）：**复用 core-platform core-infra 那套事件契约**，不自创机制 ——
+-- 那边已有 DomainEventPublisher + EventTransport（local/http/rocketmq 三种实现）
+-- + 事务性 outbox（OutboxMessage/OutboxService/OutboxRelay，状态 NEW → SENT）。
+-- 这里落一张同构的表：payload 的字段名照抄 mod-produce 的 ProduceEvents record
+-- （ProdBatchHarvested / QualityTestPassed / QualityTestFailed / TraceActivated）。
+-- 只落库、不投递：status 停在 NEW，sent_at 为空 —— **不谎报"已发送"**；
+-- 将来接投递（HTTP 到平台或 RocketMQ）时只加一个 relay，业务代码不动。
+CREATE TABLE IF NOT EXISTS agri_prod_domain_event (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    event_type VARCHAR(191) NOT NULL COMMENT '与 ProduceEvents 常量同名，如 prod.batch.harvested',
+    event_key VARCHAR(191) COMMENT '事件键（业务主键），便于消费者幂等',
+    payload TEXT COMMENT '事件载荷 JSON（字段名与平台 record 对齐）',
+    status VARCHAR(32) DEFAULT 'NEW' COMMENT 'NEW 未投递 / SENT 已投递',
+    occurred_at DATETIME COMMENT '事件发生时间',
+    sent_at DATETIME COMMENT '投递时间；未投递为空',
+    tenant_id VARCHAR(191) NOT NULL,
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    deleted BIGINT DEFAULT 0,
+    INDEX `idx_domain_event_type` (event_type),
+    INDEX `idx_domain_event_status` (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
