@@ -231,6 +231,23 @@ harvest_id BIGINT,
 product_name TEXT,
 product_spec TEXT,
 batch_code TEXT,
+harvest_code VARCHAR(191),
+batch_number VARCHAR(191),
+product_code VARCHAR(191),
+farm_id BIGINT,
+farm_code VARCHAR(191),
+farm_name VARCHAR(191),
+plot_id BIGINT,
+plot_code VARCHAR(191),
+crop_name VARCHAR(191),
+quality_grade VARCHAR(64),
+harvest_date DATE,
+activate_time DATETIME,
+first_query_time DATETIME,
+query_count INT DEFAULT 0,
+blockchain_tx_hash VARCHAR(191),
+blockchain_block_height BIGINT,
+remark TEXT,
 production_date DATE,
 expiry_date DATE,
 status VARCHAR(255) DEFAULT 'inactive',
@@ -1081,3 +1098,17 @@ VALUES
     (1, 1, 1, 1250.0000, 'kg', '张工', NULL, '2026-06-01 15:00:00', '采收入库', '冷藏库A', '2001'),
     (2, 2, 1, 850.0000, 'kg', '张工', NULL, '2026-05-28 16:20:00', '采收入库', '冷藏库A', '2001'),
     (3, 2, 2, -450.0000, 'kg', '张工', 'SO20260602', '2026-06-02 10:00:00', '销售出库', '冷藏库A', '2001');
+
+-- 演示溯源码（tenant 2001）：绑到演示采收批次，字段从批次推导，不编造
+INSERT IGNORE INTO agri_prod_trace_code
+    (id, trace_code, harvest_code, batch_number, product_name, status, farm_id, plot_id, crop_name,
+     quality_grade, harvest_date, query_count, tenant_id)
+SELECT 1, 'AG010101202606010001', b.batch_no, b.batch_no, CONCAT(b.crop_name, '(', b.grade, '级)'),
+       'active', b.farm_id, b.plot_id, b.crop_name, b.grade, b.harvest_date, 0, '2001'
+FROM agri_prod_harvest_batch b WHERE b.batch_no = 'H20260601';
+INSERT IGNORE INTO agri_prod_trace_code
+    (id, trace_code, harvest_code, batch_number, product_name, status, farm_id, plot_id, crop_name,
+     quality_grade, harvest_date, query_count, tenant_id)
+SELECT 2, 'AG010102202605280001', b.batch_no, b.batch_no, CONCAT(b.crop_name, '(', b.grade, '级)'),
+       'inactive', b.farm_id, b.plot_id, b.crop_name, b.grade, b.harvest_date, 0, '2001'
+FROM agri_prod_harvest_batch b WHERE b.batch_no = 'H20260528';
