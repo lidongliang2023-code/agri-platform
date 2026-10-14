@@ -25,7 +25,17 @@ public interface ITaskService extends IService<Task> {
 
     TaskVO completeTask(Long id, String resultDesc, String resultPhotoUrls, String tenantId);
 
-    TaskVO approveTask(Long id, String approvalStatus, String approvalComment, String tenantId);
+    /**
+     * 任务验收（前端契约：POST /tasks/{id}/acceptance）。
+     *
+     * @param acceptStatus 0 待验收 1 通过 2 驳回
+     * @param remark       验收意见
+     * @param acceptorName 验收人姓名（这个模块还没有从令牌取显示名的能力，先由请求带入）
+     */
+    TaskVO acceptTask(Long id, Integer acceptStatus, String remark, String acceptorName, String tenantId);
+
+    /** 验收视图（前端 TaskAcceptance 页读的字段）。 */
+    java.util.Map<String, Object> getAcceptance(Long id, String tenantId);
 
     List<TaskVO> listByFarmId(Long farmId, String tenantId);
 

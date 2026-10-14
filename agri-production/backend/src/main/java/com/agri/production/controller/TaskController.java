@@ -82,13 +82,30 @@ public class TaskController {
         return ApiResponse.success(vo);
     }
 
-    @PostMapping("/{id}/approve")
-    public ApiResponse<TaskVO> approveTask(@PathVariable Long id, @RequestBody Map<String, String> body) {
+    /**
+     * 任务验收。
+     *
+     * <p>路径与入参按前端契约（{@code api/tasks.ts} 的
+     * {@code GET/POST /tasks/{taskId}/acceptance}，入参 {@code acceptStatus} / {@code remark}）。
+     * 原先这里是 {@code POST /{id}/approve} + {@code approvalStatus/approvalComment} ——
+     * 名字前端不认，而且那两个字段对应的列在表里根本不存在（写了就是 Unknown column）。</p>
+     */
+    @PostMapping("/{id}/acceptance")
+    public ApiResponse<TaskVO> acceptTask(@PathVariable Long id, @RequestBody Map<String, Object> body) {
         String tenantId = TenantContextService.currentTenantId();
-        String approvalStatus = body.get("approvalStatus");
-        String approvalComment = body.get("approvalComment");
-        TaskVO vo = taskService.approveTask(id, approvalStatus, approvalComment, tenantId);
+        Object status = body.get("acceptStatus");
+        Integer acceptStatus = status == null ? null : Integer.valueOf(String.valueOf(status));
+        String remark = body.get("remark") == null ? null : String.valueOf(body.get("remark"));
+        String acceptorName = body.get("acceptorName") == null ? null : String.valueOf(body.get("acceptorName"));
+        TaskVO vo = taskService.acceptTask(id, acceptStatus, remark, acceptorName, tenantId);
         return ApiResponse.success(vo);
+    }
+
+    /** 验收视图（前端 TaskAcceptance 页面读它）。 */
+    @GetMapping("/{id}/acceptance")
+    public ApiResponse<Map<String, Object>> getAcceptance(@PathVariable Long id) {
+        String tenantId = TenantContextService.currentTenantId();
+        return ApiResponse.success(taskService.getAcceptance(id, tenantId));
     }
 
     @GetMapping("/farm/{farmId}")

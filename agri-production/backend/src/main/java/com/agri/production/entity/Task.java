@@ -93,14 +93,41 @@ public class Task extends BaseEntity {
     @TableField("result_desc")
     private String resultDesc;
 
-    @TableField("approval_status")
-    private String approvalStatus;
-
-    @TableField("approval_comment")
-    private String approvalComment;
+    /*
+     * 原先这里还有 approval_status / approval_comment 两个字段：表里从来没有这两列，
+     * 而 MyBatis-Plus 生成的 SELECT 会把它们带上 —— 一查任务就是
+     * Unknown column 'approval_status' in 'field list'（任务接口整片 500，实测踩到）。
+     * 按"以接口为准"的口径换成下面的 accept_*（前端读的就是那一组）。
+     */
 
     @TableField("template_id")
     private Long templateId;
+
+    /**
+     * 派发人 / 验收（前端「农事任务」页契约里的 assignerId / assignerName /
+     * acceptStatus / acceptRemark / rejectCount）。
+     *
+     * <p>原先实体上叫 approval_status / approval_comment —— 既不在表里、前端也不认这两个名字
+     * （页面读的是 acceptStatus / acceptRemark）。按"以接口为准"的口径换成这两个，
+     * 并补上派发人与驳回次数。</p>
+     */
+    @TableField("assigner_id")
+    private Long assignerId;
+    @TableField("assigner_name")
+    private String assignerName;
+    /** 0 待验收 1 通过 2 驳回 */
+    @TableField("accept_status")
+    private Integer acceptStatus;
+    @TableField("accept_remark")
+    private String acceptRemark;
+    @TableField("reject_count")
+    private Integer rejectCount;
+    @TableField("acceptor_id")
+    private Long acceptorId;
+    @TableField("acceptor_name")
+    private String acceptorName;
+    @TableField("accepted_at")
+    private java.time.LocalDateTime acceptedAt;
 
     @TableField("remark")
     private String remark;

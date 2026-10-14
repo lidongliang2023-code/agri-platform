@@ -27,7 +27,7 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
         task.setTenantId(tenantId);
         task.setTaskCode(generateTaskCode(tenantId));
         task.setStatus("pending");
-        task.setApprovalStatus("pending");
+        task.setAcceptStatus(0); // 待验收（原先写 approval_status，那一列在表里并不存在）
         save(task);
         return BeanCopyUtils.copy(task, TaskVO.class);
     }
@@ -107,28 +107,57 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
         task.setActualEndTime(LocalDateTime.now());
         task.setResultDesc(resultDesc);
         task.setResultPhotoUrls(resultPhotoUrls);
-        task.setApprovalStatus("pending");
+        task.setAcceptStatus(0); // 待验收（原先写 approval_status，那一列在表里并不存在）
         updateById(task);
         return BeanCopyUtils.copy(task, TaskVO.class);
     }
 
     @Override
     @Transactional
-    public TaskVO approveTask(Long id, String approvalStatus, String approvalComment, String tenantId) {
+    public TaskVO acceptTask(Long id, Integer acceptStatus, String remark, String acceptorName, String tenantId) {
         Task task = getById(id);
         if (task == null || !tenantId.equals(task.getTenantId())) {
             throw new RuntimeException("任务不存在");
         }
-        if (!"completed".equals(task.getStatus())) {
-            throw new RuntimeException("任务未完成，无法审批");
+        if (acceptStatus == null || (acceptStatus != 1 && acceptStatus != 2)) {
+            throw new RuntimeException("验收结论只能是 1（通过）或 2（驳回）");
         }
-        task.setApprovalStatus(approvalStatus);
-        task.setApprovalComment(approvalComment);
-        if ("rejected".equals(approvalStatus)) {
-            task.setStatus("rejected");
+        // 通过：任务完成（完成时间就是实际结束时间，出参 completedAt 由它派生）
+        // 驳回：退回执行（status 用词表里的 doing，与前端 isTaskExecuting 兼容），驳回次数 +1
+        if (acceptStatus == 1) {
+            task.setStatus("completed");
+            if (task.getActualEndTime() == null) {
+                task.setActualEndTime(java.time.LocalDateTime.now());
+            }
+        } else {
+            task.setStatus("doing");
+            task.setRejectCount((task.getRejectCount() == null ? 0 : task.getRejectCount()) + 1);
         }
+        task.setAcceptStatus(acceptStatus);
+        task.setAcceptRemark(remark);
+        task.setAcceptorName(acceptorName);
+        task.setAcceptedAt(java.time.LocalDateTime.now());
         updateById(task);
         return BeanCopyUtils.copy(task, TaskVO.class);
+    }
+
+    @Override
+    public java.util.Map<String, Object> getAcceptance(Long id, String tenantId) {
+        Task task = getById(id);
+        if (task == null || !tenantId.equals(task.getTenantId())) {
+            throw new RuntimeException("任务不存在");
+        }
+        java.util.Map<String, Object> view = new java.util.LinkedHashMap<>();
+        // 这个模块没有独立的"验收表"：验收结论就存在任务行上，这里按前端 TaskAcceptance 的字段拼
+        view.put("acceptanceId", null);
+        view.put("taskId", task.getId());
+        view.put("acceptStatus", task.getAcceptStatus() == null ? 0 : task.getAcceptStatus());
+        view.put("acceptorId", task.getAcceptorId());
+        view.put("acceptorName", task.getAcceptorName());
+        view.put("remark", task.getAcceptRemark());
+        view.put("attachmentUrls", java.util.List.of());
+        view.put("acceptedAt", task.getAcceptedAt());
+        return view;
     }
 
     @Override

@@ -65,6 +65,32 @@ id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
 task_code VARCHAR(191) NOT NULL UNIQUE,
 task_name TEXT NOT NULL,
 task_type TEXT,
+-- 下面这批列实体早就在用、建表脚本原先没有（详见 schema-patch-task-page.sql 的说明）。
+-- 一次建对，老库用补丁脚本补。
+task_type_detail TEXT,
+farm_code TEXT,
+plot_code TEXT,
+crop_name TEXT,
+task_desc TEXT,
+input_materials TEXT,
+input_materials_json TEXT,
+expected_output DECIMAL(18,4),
+actual_output DECIMAL(18,4),
+quality_requirement TEXT,
+result_photo_urls TEXT,
+result_desc TEXT,
+template_id BIGINT,
+-- 前端「农事任务」页契约里明确要的字段（任务列表/详情的 assignerName、acceptStatus、
+-- acceptRemark、rejectCount、completedAt 都在这几列上）
+assigner_id BIGINT,
+assigner_name TEXT,
+accept_status BIGINT DEFAULT 0,
+accept_remark TEXT,
+reject_count BIGINT DEFAULT 0,
+-- 验收人与验收时间（前端 TaskAcceptance 要显示"谁在什么时候验收的"）
+acceptor_id BIGINT,
+acceptor_name VARCHAR(191),
+accepted_at DATETIME,
 description TEXT,
 farm_id BIGINT,
 plot_id BIGINT,
@@ -504,3 +530,47 @@ VALUES
     (1, 1, 'DEV001', 'temperature', '空气温度', 24.5000, '℃', '2026-10-13 08:00:00', 'good', 1, 1, '2001'),
     (2, 1, 'DEV001', 'temperature', '空气温度', 26.3000, '℃', '2026-10-13 12:00:00', 'good', 1, 1, '2001'),
     (3, 1, 'DEV001', 'temperature', '空气温度', 27.8000, '℃', '2026-10-13 16:00:00', 'good', 1, 1, '2001');
+
+-- ---------------------------------------------------------------- 任务模板库
+-- 前端「农事任务管理 → 任务模板库」要读它；实体 TaskTemplate 早就写好，
+-- 但建表脚本里一直没有这张表（接口一调就 "Table ... doesn't exist"）。
+-- 列名按实体（= 接口口径）建。
+CREATE TABLE IF NOT EXISTS agri_prod_task_template (
+id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+template_code VARCHAR(191) NOT NULL UNIQUE,
+template_name TEXT NOT NULL,
+template_type VARCHAR(255),
+crop_category VARCHAR(255),
+crop_name VARCHAR(255),
+task_type VARCHAR(255),
+growth_stage VARCHAR(255),
+description TEXT,
+template_content TEXT,
+recommended_duration_hours BIGINT,
+required_inputs TEXT,
+optional_inputs TEXT,
+is_system BIGINT DEFAULT 0,
+use_count BIGINT DEFAULT 0,
+sort_order BIGINT DEFAULT 0,
+status VARCHAR(255) DEFAULT 'active',
+del_flag BIGINT DEFAULT 0,
+tenant_id VARCHAR(191) NOT NULL,
+create_by TEXT,
+create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+update_by TEXT,
+update_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+remark TEXT,
+    INDEX `idx_task_template_tenant_id` (tenant_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 演示模板（系统内置两条；template_code 唯一，INSERT IGNORE 可重复执行）
+INSERT IGNORE INTO agri_prod_task_template
+    (template_code, template_name, template_type, crop_category, crop_name, task_type, growth_stage,
+     description, template_content, recommended_duration_hours, required_inputs, is_system, status, tenant_id)
+VALUES
+    ('TPL-FERT-01', '水稻春季追肥标准作业', 'system', '粮食作物', '水稻', '施肥', '分蘖期',
+     '分蘖期追施尿素，促进有效分蘖', '1) 按 15kg/亩 称量尿素；2) 均匀撒施；3) 施后浅水灌溉并记录。',
+     4, '尿素,复合肥', 1, 'active', '2001'),
+    ('TPL-PEST-01', '大棚病虫害统防统治', 'system', '蔬菜', '西红柿', '打药', '结果期',
+     '结果期预防灰霉病与白粉虱', '1) 检查虫口密度；2) 生物农药优先；3) 用药后记录安全间隔期。',
+     3, '生物农药', 1, 'active', '2001');
