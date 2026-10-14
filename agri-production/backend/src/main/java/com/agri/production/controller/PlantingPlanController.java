@@ -170,6 +170,27 @@ public class PlantingPlanController {
         return ApiResponse.success(planStageService.listByPlan(planId, tenantId));
     }
 
+    /**
+     * 计划的阶段**分页**列表（api 层 listPlanStages 走这条）。
+     *
+     * <p>路径与上面那条只差一个 {@code /list}，但两条都得有：分页这条是 core-platform 也实现的
+     * 同名端点，漏了它，切流后该路径会变成 405（路径在、方法不在），而网关的回退只认 404。</p>
+     */
+    @GetMapping("/{planId}/stages")
+    public ApiResponse<PageResult<PlanStage>> pageStages(
+            @PathVariable Long planId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer pageNum,
+            @RequestParam(required = false) Integer size,
+            @RequestParam(required = false) Integer pageSize,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Integer status) {
+        String tenantId = TenantContextService.currentTenantId();
+        plantingPlanService.detail(planId, tenantId);
+        return ApiResponse.success(planStageService.pageByPlan(planId,
+                firstNonNull(pageNum, page, 1), firstNonNull(pageSize, size, 10), keyword, status, tenantId));
+    }
+
     /** 新增阶段，返回新阶段 ID。 */
     @PostMapping("/{planId}/stages")
     public ApiResponse<String> createStage(@PathVariable Long planId, @RequestBody PlanStage stage) {

@@ -4,7 +4,10 @@ import com.agri.production.common.exception.BusinessException;
 import com.agri.production.entity.PlanStage;
 import com.agri.production.mapper.PlanStageMapper;
 import com.agri.production.service.IPlanStageService;
+import com.agri.production.common.entity.PageResult;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +25,23 @@ public class PlanStageServiceImpl extends ServiceImpl<PlanStageMapper, PlanStage
                 .eq(PlanStage::getTenantId, tenantId)
                 .orderByAsc(PlanStage::getStageSeq)
                 .orderByAsc(PlanStage::getStageId));
+    }
+
+    @Override
+    public PageResult<PlanStage> pageByPlan(Long planId, int pageNum, int pageSize, String keyword, Integer status, String tenantId) {
+        LambdaQueryWrapper<PlanStage> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(PlanStage::getPlanId, planId).eq(PlanStage::getTenantId, tenantId);
+        if (keyword != null && !keyword.isBlank()) {
+            wrapper.like(PlanStage::getStageName, keyword.trim());
+        }
+        if (status != null) {
+            wrapper.eq(PlanStage::getStatus, status);
+        }
+        wrapper.orderByAsc(PlanStage::getStageSeq).orderByAsc(PlanStage::getStageId);
+        int safePage = pageNum > 0 ? pageNum : 1;
+        int safeSize = pageSize > 0 ? pageSize : 10;
+        IPage<PlanStage> result = this.page(new Page<>(safePage, safeSize), wrapper);
+        return PageResult.of(result.getRecords(), result.getTotal(), safePage, safeSize);
     }
 
     @Override
