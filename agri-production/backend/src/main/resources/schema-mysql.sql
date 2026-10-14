@@ -320,6 +320,18 @@ device_type TEXT,
 device_model TEXT,
 manufacturer TEXT,
 install_location TEXT,
+-- 下面这批列是**实体已经在用、而建表脚本原先没有**的（详见 schema-patch-device-columns.sql 的说明：
+-- 设备表与实体是两套设计，交集只有 12 列）。这里补上是为新库一次建对；
+-- location / last_online_time 与旧列 install_location / last_connect_time 同义，老库用补丁脚本搬迁。
+location TEXT,
+mac_address TEXT,
+install_date DATETIME,
+last_online_time DATETIME,
+battery_level BIGINT,
+signal_strength BIGINT,
+serial_number TEXT,
+firmware_version TEXT,
+description TEXT,
 farm_id BIGINT,
 plot_id BIGINT,
 status VARCHAR(255) DEFAULT 'offline',
@@ -345,6 +357,14 @@ value DECIMAL(12,4),
 unit TEXT,
 collect_time DATETIME DEFAULT CURRENT_TIMESTAMP,
 quality VARCHAR(255) DEFAULT 'good',
+-- 同上：实体用的是 data_time / quality_flag / device_code / sensor_name / raw_data / farm_id / plot_id
+device_code TEXT,
+sensor_name TEXT,
+data_time DATETIME,
+quality_flag VARCHAR(255),
+raw_data TEXT,
+farm_id BIGINT,
+plot_id BIGINT,
 tenant_id VARCHAR(191) NOT NULL,
 create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
     INDEX `idx_sensor_tenant_id` (tenant_id),
@@ -457,3 +477,30 @@ INSERT IGNORE INTO agri_prod_input_inventory (material_id, quantity, tenant_id) 
 INSERT IGNORE INTO agri_prod_harvest_record (harvest_code, crop_name, farm_id, plot_id, harvest_date, quantity, unit, tenant_id) VALUES ('H001', '西红柿', 1, 1, '2024-01-15', 2500, 'kg', '2001');
 INSERT IGNORE INTO agri_prod_alert_rule (rule_code, rule_name, alert_type, level, tenant_id) VALUES ('R001', '土壤湿度异常', 'soil', 'warning', '2001');
 INSERT IGNORE INTO agri_prod_alert_rule (rule_code, rule_name, alert_type, level, tenant_id) VALUES ('R002', '温度超限', 'temperature', 'error', '2001');
+
+-- 演示设备（设备列表页要有东西可看；device_code 唯一，INSERT IGNORE 可重复执行）
+INSERT IGNORE INTO agri_prod_iot_device
+    (device_code, device_name, device_type, device_model, manufacturer, install_location, location,
+     farm_id, plot_id, status, ip_address, protocol, serial_number, firmware_version,
+     battery_level, signal_strength, last_online_time, is_enabled, tenant_id)
+VALUES
+    ('DEV001', '一号大棚温湿度传感器', 'sensor', 'TH-100', '农芯科技', 'A区-地块1', 'A区-地块1',
+     1, 1, 'online', '192.168.1.21', 'MQTT', 'SN-TH-0001', 'v1.2.3',
+     92, -55, NOW(), 1, '2001'),
+    ('DEV002', '二号大棚土壤墒情仪', 'sensor', 'SM-200', '农芯科技', 'A区-地块2', 'A区-地块2',
+     1, 2, 'online', '192.168.1.22', 'MQTT', 'SN-SM-0002', 'v1.1.8',
+     78, -61, NOW(), 1, '2001'),
+    ('DEV003', '气象站（离线备用）', 'weather_station', 'WS-500', '云耕智能', 'B区-地块1', 'B区-地块1',
+     2, 3, 'offline', '192.168.1.30', 'HTTP', 'SN-WS-0003', 'v2.0.1',
+     NULL, NULL, NULL, 1, '2001');
+
+-- 演示传感器读数（设备 1 的三条，让"历史数据/统计"两个接口有真实数值可看；
+-- 表上没有唯一键，用显式 id + INSERT IGNORE 保证可重复执行）
+INSERT IGNORE INTO agri_prod_sensor_data
+    (id, device_id, device_code, sensor_type, sensor_name, value, unit, data_time, quality_flag, farm_id, plot_id, tenant_id)
+VALUES
+    -- 三条都是同一传感器类型：/sensor-data/statistics 的契约是"按设备"聚合（方法签名里没有
+    -- sensorType），混着不同量纲会让 avg/max/min 变成没有意义的数字（℃ 和 % 一起平均）。
+    (1, 1, 'DEV001', 'temperature', '空气温度', 24.5000, '℃', '2026-10-13 08:00:00', 'good', 1, 1, '2001'),
+    (2, 1, 'DEV001', 'temperature', '空气温度', 26.3000, '℃', '2026-10-13 12:00:00', 'good', 1, 1, '2001'),
+    (3, 1, 'DEV001', 'temperature', '空气温度', 27.8000, '℃', '2026-10-13 16:00:00', 'good', 1, 1, '2001');

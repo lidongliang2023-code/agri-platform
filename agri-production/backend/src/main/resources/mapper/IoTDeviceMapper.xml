@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  设备主表。接口原先一调就 500：IoTDeviceMapper 声明了 pageQuery / countByStatus，
+  但没有任何地方写这两条语句（Invalid bound statement (not found)）。
+
+  租户口径：tenantId 为空即不过滤（运营端传 null 要看全平台），用户端传真实主体 id。
+-->
+<mapper namespace="com.agri.production.mapper.IoTDeviceMapper">
+
+    <select id="pageQuery" resultType="com.agri.production.entity.IoTDevice">
+        SELECT * FROM agri_prod_iot_device
+        WHERE deleted = 0
+        <if test="tenantId != null and tenantId != ''">AND tenant_id = #{tenantId}</if>
+        <if test="deviceName != null and deviceName != ''">
+            AND device_name LIKE CONCAT('%', #{deviceName}, '%')
+        </if>
+        <if test="deviceType != null and deviceType != ''">AND device_type = #{deviceType}</if>
+        <if test="status != null and status != ''">AND status = #{status}</if>
+        ORDER BY create_time DESC
+    </select>
+
+    <select id="countByStatus" resultType="long">
+        SELECT COUNT(*) FROM agri_prod_iot_device
+        WHERE status = #{status} AND deleted = 0
+        <if test="tenantId != null and tenantId != ''">AND tenant_id = #{tenantId}</if>
+    </select>
+
+</mapper>

@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  传感器数据。与 IoTDeviceMapper 同样是"接口声明了、XML 里没有"的那一类（4 个方法全缺）。
+
+  两点说明：
+  1) 聚合类（小时均值/统计）**前端目前没有消费方**（全前端搜不到 hourly/avgValue 之类的用法），
+     所以下面这几个 key 名是这里定的；将来前端要什么，改这四个语句即可。
+  2) 时间列用 data_time（实体字段；老库用补丁脚本从 collect_time 迁过数据）。
+     MySQL 的小时格式化是 DATE_FORMAT（SQLite 是 strftime）—— 换库时这类函数必须逐条改。
+-->
+<mapper namespace="com.agri.production.mapper.SensorDataMapper">
+
+    <select id="selectByDeviceId" resultType="com.agri.production.entity.SensorData">
+        SELECT * FROM agri_prod_sensor_data
+        WHERE device_id = #{deviceId}
+        <if test="startTime != null">AND data_time &gt;= #{startTime}</if>
+        <if test="endTime != null">AND data_time &lt;= #{endTime}</if>
+        ORDER BY data_time DESC
+    </select>
+
+    <select id="getLatestByDevice" resultType="java.util.Map">
+        SELECT s.device_id AS deviceId, s.device_code AS deviceCode, s.sensor_type AS sensorType,
+               s.sensor_name AS sensorName, s.value AS value, s.unit AS unit,
+               s.data_time AS dataTime, s.quality_flag AS qualityFlag
+        FROM agri_prod_sensor_data s
+        JOIN (
+            SELECT device_id, MAX(data_time) AS latest
+            FROM agri_prod_sensor_data
+            WHERE device_id IN
+            <foreach collection="deviceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            GROUP BY device_id
+        ) m ON m.device_id = s.device_id AND m.latest = s.data_time
+    </select>
+
+    <select id="getHourlyAverage" resultType="java.util.Map">
+        SELECT DATE_FORMAT(data_time, '%Y-%m-%d %H:00:00') AS hour,
+               ROUND(AVG(value), 4) AS avgValue,
+               COUNT(*) AS sampleCount
+        FROM agri_prod_sensor_data
+        WHERE device_id = #{deviceId}
+        <if test="startTime != null">AND data_time &gt;= #{startTime}</if>
+        <if test="endTime != null">AND data_time &lt;= #{endTime}</if>
+        GROUP BY DATE_FORMAT(data_time, '%Y-%m-%d %H:00:00')
+        ORDER BY hour
+    </select>
+
+    <select id="getStatistics" resultType="java.util.Map">
+        SELECT COUNT(*) AS dataCount,
+               ROUND(AVG(value), 4) AS avgValue,
+               <!-- 别名必须加反引号：MAXVALUE 是 MySQL 的保留字（分区语法里用的），
+                    不加反引号直接 "You have an error in your SQL syntax"（实测踩到）。 -->
+               ROUND(MAX(value), 4) AS `maxValue`,
+               ROUND(MIN(value), 4) AS `minValue`,
+               MAX(data_time) AS latestTime
+        FROM agri_prod_sensor_data
+        WHERE device_id = #{deviceId}
+        <if test="startTime != null">AND data_time &gt;= #{startTime}</if>
+        <if test="endTime != null">AND data_time &lt;= #{endTime}</if>
+    </select>
+
+</mapper>
