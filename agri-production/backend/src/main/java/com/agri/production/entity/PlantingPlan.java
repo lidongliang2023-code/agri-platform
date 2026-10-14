@@ -58,6 +58,41 @@ public class PlantingPlan extends BaseEntity {
     @TableField("plan_summary")
     private String planSummary;
 
+    /**
+     * 前端「生产计划」页契约要、而实体原先没有的字段。
+     *
+     * <p>契约（@agri/shared/types/plan 的 Plan）读的是 plotName / cropId / cropName /
+     * cropVariety / managerId / managerName / sopTemplateId / farmName —— 缺一个页面上就是空列。
+     * 其中 plotName / farmName 是冗余展示字段（写入时按 plotId / farmId 补全）。</p>
+     */
+    @TableField("plot_name")
+    private String plotName;
+
+    /**
+     * 地块 ID。
+     *
+     * <p>表里一直有 {@code plot_id}，实体却漏了它 —— 后果不是"少显示一列"：
+     * 前端计划列表/详情（{@code Plan.plotId}）、按地块查在种计划的冲突校验
+     * （PRD R-PLAN-01）、农事日历的地块归属**同时拿不到值**。补上之后这些逻辑才有输入。</p>
+     */
+    @TableField("plot_id")
+    private Long plotId;
+
+    @TableField("farm_name")
+    private String farmName;
+    @TableField("crop_id")
+    private Long cropId;
+    @TableField("crop_name")
+    private String cropName;
+    @TableField("crop_variety")
+    private String cropVariety;
+    @TableField("manager_id")
+    private Long managerId;
+    @TableField("manager_name")
+    private String managerName;
+    @TableField("sop_template_id")
+    private Long sopTemplateId;
+
     @TableField("approval_comment")
     private String approvalComment;
 

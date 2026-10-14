@@ -16,8 +16,10 @@
 --   sensor_data.quality_flag       ← quality
 -- 其余新增列在当前库里没有对应来源，留空（不编数据）。
 --
--- 跑法（老库）：
---   mysql -uroot -p agri_production < schema-patch-device-columns.sql
+-- 跑法：mysql -uroot -p --default-character-set=utf8mb4 agri_production < schema-patch-device-columns.sql
+-- ⚠️ --default-character-set=utf8mb4 不能省：Windows 版 mysql 客户端默认按**系统本地编码**
+--    （中文机器上是 gbk）声明连接，而本文件是 UTF-8。省掉它，脚本里的中文会被双重编码写进库 ——
+--    实测演示数据落库成 "2026 骞存槬鑼?按绋荤?妞嶈?鍒"，接口与页面跟着一起乱，且**不可逆**。
 -- 新库不用跑：schema-mysql.sql 里这两张表已经把这些列建好了。
 
 -- ---------- 设备主表 ----------

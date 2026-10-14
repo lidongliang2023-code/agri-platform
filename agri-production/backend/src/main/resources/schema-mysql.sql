@@ -465,6 +465,32 @@ CREATE TABLE IF NOT EXISTS agri_prod_planting_plan (
 id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
 plan_code VARCHAR(191) NOT NULL UNIQUE,
 plan_name TEXT NOT NULL,
+-- 实体与前端契约要用、建表脚本原先没有的列（详见 schema-patch-plan-page.sql 的说明）：
+--   实体侧：plan_year / plan_season / plan_status / total_area / total_budget / expected_output /
+--           expected_profit / start_date / end_date / plan_summary / approval_comment / approver / approval_time
+--   契约侧：plot_name / crop_id / crop_name / crop_variety / manager_id / manager_name /
+--           sop_template_id / farm_name（后两个名字是冗余展示字段）
+plan_year BIGINT,
+plan_season VARCHAR(191),
+plan_status VARCHAR(255) DEFAULT 'draft',
+total_area DECIMAL(18,4),
+total_budget DECIMAL(18,4),
+expected_output DECIMAL(18,4),
+expected_profit DECIMAL(18,4),
+start_date DATETIME,
+end_date DATETIME,
+plan_summary TEXT,
+approval_comment TEXT,
+approver VARCHAR(191),
+approval_time DATETIME,
+plot_name VARCHAR(191),
+farm_name VARCHAR(191),
+crop_id BIGINT,
+crop_name VARCHAR(191),
+crop_variety VARCHAR(191),
+manager_id BIGINT,
+manager_name VARCHAR(191),
+sop_template_id BIGINT,
 crop_type TEXT,
 variety TEXT,
 farm_id BIGINT,
@@ -604,3 +630,68 @@ VALUES
     ('TPL-PEST-01', '大棚病虫害统防统治', 'system', '蔬菜', '西红柿', '打药', '结果期',
      '结果期预防灰霉病与白粉虱', '1) 检查虫口密度；2) 生物农药优先；3) 用药后记录安全间隔期。',
      3, '生物农药', 1, 'active', '2001');
+
+-- ---------------------------------------------------------------- 生产计划（演示）
+-- 种植计划页要有东西可看：一条"进行中"的水稻春茬计划。
+-- plan_status 用词表值（draft / pending / active / completed / terminated），
+-- 出参里由 PlantingPlanVO 映射成前端契约的 1..5。
+INSERT IGNORE INTO agri_prod_planting_plan
+    (plan_code, plan_name, plan_year, plan_season, plan_status, total_area, total_budget,
+     expected_output, expected_profit, start_date, end_date, plan_summary,
+     farm_id, farm_name, plot_id, plot_name, crop_id, crop_name, crop_variety,
+     manager_id, manager_name, sop_template_id, tenant_id)
+VALUES
+    ('PLAN-2026-SPR-01', '2026 年春茬水稻种植计划', 2026, '春季', 'active', 120.0000, 86000.0000,
+     60000.0000, 42000.0000, '2026-04-01 00:00:00', '2026-09-30 00:00:00',
+     '五常基地春茬水稻：4 月整地播种，9 月收获；配套追肥与病虫防治 SOP。',
+     1, '示范农场', 1, 'A区-地块1', 1, '水稻', '五常稻花香2号',
+     1, '张工（农场管理员）', (SELECT id FROM agri_prod_task_template WHERE template_code = 'TPL-FERT-01'), '2001');
+
+-- ---------------------------------------------------------------- 生育期阶段（种养计划详情页）
+-- 前端「种养计划详情」页要读/写它：GET /plans/{planId}/stages/list 与
+-- POST/PUT/DELETE /plans/{planId}/stages[/{stageId}]；实体 PlanStage 已按契约写好，
+-- 而建表脚本里一直没有这张表 —— 一调就是 "Table 'agri_production.agri_prod_plan_stage'
+-- doesn't exist"，详情页的阶段列表恒为空、新增阶段必然失败。
+-- 列名按实体（= 接口口径）建。刻意**没有 farm_id**：阶段按"租户 + 计划"归属。
+CREATE TABLE IF NOT EXISTS agri_prod_plan_stage (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    plan_id BIGINT NOT NULL,
+    stage_seq INT,
+    stage_name VARCHAR(191) NOT NULL,
+    task_type VARCHAR(191),
+    plan_start_date DATE,
+    plan_end_date DATE,
+    actual_start_date DATE,
+    actual_end_date DATE,
+    description TEXT,
+    status INT DEFAULT 1,
+    tenant_id VARCHAR(191) NOT NULL,
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    deleted BIGINT DEFAULT 0,
+    INDEX `idx_plan_stage_plan_id` (plan_id),
+    INDEX `idx_plan_stage_tenant_id` (tenant_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 演示阶段：与演示计划 PLAN-2026-SPR-01 的说明一致（4 月整地播种 → 9 月收获）。
+-- 前两个阶段已完成、第三个进行中、第四个未开始 —— 详情页的完成率与"最大延误"两处判定
+-- 都需要"有真有假"的输入才有意义（全部已完成等于没验）。
+INSERT IGNORE INTO agri_prod_plan_stage
+    (id, plan_id, stage_seq, stage_name, task_type, plan_start_date, plan_end_date,
+     actual_start_date, actual_end_date, description, status, tenant_id)
+VALUES
+    (1, (SELECT id FROM agri_prod_planting_plan WHERE plan_code = 'PLAN-2026-SPR-01'),
+     1, '整地期', '整地', '2026-04-01', '2026-04-10', '2026-04-01', '2026-04-09',
+     '旋耕两遍、施足底肥，田面平整度误差控制在 3cm 以内。', 3, '2001'),
+    (2, (SELECT id FROM agri_prod_planting_plan WHERE plan_code = 'PLAN-2026-SPR-01'),
+     2, '播种育秧期', '播种', '2026-04-11', '2026-04-30', '2026-04-11', '2026-04-28',
+     '浸种催芽后播种，秧田期保持浅水层。', 3, '2001'),
+    (3, (SELECT id FROM agri_prod_planting_plan WHERE plan_code = 'PLAN-2026-SPR-01'),
+     3, '分蘖期', '追肥', '2026-05-01', '2026-06-20', NULL, NULL,
+     '分蘖肥一次，配合灌排水晒田。', 2, '2001'),
+    (4, (SELECT id FROM agri_prod_planting_plan WHERE plan_code = 'PLAN-2026-SPR-01'),
+     4, '抽穗灌浆期', '防治', '2026-06-21', '2026-08-20', NULL, NULL,
+     '重点防治稻瘟病与稻飞虱，保持田间湿润。', 1, '2001'),
+    (5, (SELECT id FROM agri_prod_planting_plan WHERE plan_code = 'PLAN-2026-SPR-01'),
+     5, '成熟收获期', '收获', '2026-08-21', '2026-09-30', NULL, NULL,
+     '九成熟收割，晒场水分降到 14% 以下。', 1, '2001');
