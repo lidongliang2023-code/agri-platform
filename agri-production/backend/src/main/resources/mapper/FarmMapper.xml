@@ -36,7 +36,9 @@
 
     <select id="selectByCode" resultType="com.agri.production.entity.Farm">
         SELECT * FROM agri_prod_farm_info
-        WHERE farm_code = #{farmCode} AND tenant_id = #{tenantId} AND deleted = 0
+        WHERE farm_code = #{farmCode}
+        <if test="tenantId != null and tenantId != ''">AND tenant_id = #{tenantId}</if>
+        AND deleted = 0
     </select>
 
 </mapper>

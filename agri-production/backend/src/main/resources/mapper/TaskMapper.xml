@@ -39,19 +39,25 @@
 
     <select id="selectByFarmId" resultType="com.agri.production.entity.Task">
         SELECT * FROM agri_prod_task_info
-        WHERE farm_id = #{farmId} AND tenant_id = #{tenantId} AND deleted = 0
+        WHERE farm_id = #{farmId}
+        <if test="tenantId != null and tenantId != ''">AND tenant_id = #{tenantId}</if>
+        AND deleted = 0
         ORDER BY plan_start_time DESC
     </select>
 
     <select id="selectByExecutorId" resultType="com.agri.production.entity.Task">
         SELECT * FROM agri_prod_task_info
-        WHERE executor_id = #{executorId} AND tenant_id = #{tenantId} AND deleted = 0
+        WHERE executor_id = #{executorId}
+        <if test="tenantId != null and tenantId != ''">AND tenant_id = #{tenantId}</if>
+        AND deleted = 0
         ORDER BY plan_start_time DESC
     </select>
 
     <select id="selectByCode" resultType="com.agri.production.entity.Task">
         SELECT * FROM agri_prod_task_info
-        WHERE task_code = #{taskCode} AND tenant_id = #{tenantId} AND deleted = 0
+        WHERE task_code = #{taskCode}
+        <if test="tenantId != null and tenantId != ''">AND tenant_id = #{tenantId}</if>
+        AND deleted = 0
     </select>
 
 </mapper>

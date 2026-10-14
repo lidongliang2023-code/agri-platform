@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.stream.Collectors;
 
@@ -84,6 +85,22 @@ public class GlobalExceptionHandler {
     public ApiResponse<Void> handleNoHandlerFoundException(NoHandlerFoundException e) {
         log.error("资源不存在: {}", e.getMessage());
         return ApiResponse.fail(404, "资源不存在");
+    }
+
+    /**
+     * 路径不存在 → 404。
+     *
+     * <p>Spring Boot 3.2 起，未匹配的请求会落到静态资源处理器并抛
+     * {@link NoResourceFoundException}（而不是上面那个 NoHandlerFoundException）——
+     * 上面那条规则因此从来不会命中，未匹配路径会被下面的 Exception 兜底成 **500**，
+     * 实测拼错一个接口地址就是 {"code":500,"message":"系统异常，请稍后再试"}，
+     * 前端会以为服务挂了、日志里也是 ERROR 级别（其实只是地址写错）。</p>
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ApiResponse<Void> handleNoResourceFoundException(NoResourceFoundException e) {
+        log.warn("接口不存在: {}", e.getResourcePath());
+        return ApiResponse.fail(404, "接口不存在：" + e.getResourcePath());
     }
 
     @ExceptionHandler(Exception.class)

@@ -4,7 +4,9 @@
 
     <select id="pageQuery" resultType="com.agri.production.entity.InputMaterial">
         SELECT m.* FROM agri_prod_input_ledger m
-        WHERE m.deleted = 0 AND m.tenant_id = #{tenantId}
+        WHERE m.deleted = 0
+        <!-- 运营端传 null 时不做租户过滤（口径见 FarmMapper.pageQuery 的说明） -->
+        <if test="tenantId != null and tenantId != ''">AND m.tenant_id = #{tenantId}</if>
         <if test="dto.materialName != null and dto.materialName != ''">
             AND m.material_name LIKE CONCAT('%', #{dto.materialName}, '%')
         </if>
@@ -25,7 +27,9 @@
 
     <select id="selectByCode" resultType="com.agri.production.entity.InputMaterial">
         SELECT * FROM agri_prod_input_ledger
-        WHERE material_code = #{materialCode} AND tenant_id = #{tenantId} AND deleted = 0
+        WHERE material_code = #{materialCode}
+        <if test="tenantId != null and tenantId != ''">AND tenant_id = #{tenantId}</if>
+        AND deleted = 0
     </select>
 
 </mapper>

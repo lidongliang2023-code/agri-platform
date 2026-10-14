@@ -4,7 +4,9 @@
 
     <select id="pageQuery" resultType="com.agri.production.entity.Plot">
         SELECT p.* FROM agri_prod_plot_info p
-        WHERE p.deleted = 0 AND p.tenant_id = #{tenantId}
+        WHERE p.deleted = 0
+        <!-- 运营端传 null 时不做租户过滤（口径见 FarmMapper.pageQuery 的说明） -->
+        <if test="tenantId != null and tenantId != ''">AND p.tenant_id = #{tenantId}</if>
         <if test="dto.plotName != null and dto.plotName != ''">
             AND p.plot_name LIKE CONCAT('%', #{dto.plotName}, '%')
         </if>
@@ -22,13 +24,17 @@
 
     <select id="selectByFarmId" resultType="com.agri.production.entity.Plot">
         SELECT * FROM agri_prod_plot_info
-        WHERE farm_id = #{farmId} AND tenant_id = #{tenantId} AND deleted = 0
+        WHERE farm_id = #{farmId}
+        <if test="tenantId != null and tenantId != ''">AND tenant_id = #{tenantId}</if>
+        AND deleted = 0
         ORDER BY plot_name
     </select>
 
     <select id="selectByCode" resultType="com.agri.production.entity.Plot">
         SELECT * FROM agri_prod_plot_info
-        WHERE plot_code = #{plotCode} AND tenant_id = #{tenantId} AND deleted = 0
+        WHERE plot_code = #{plotCode}
+        <if test="tenantId != null and tenantId != ''">AND tenant_id = #{tenantId}</if>
+        AND deleted = 0
     </select>
 
 </mapper>

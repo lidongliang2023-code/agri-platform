@@ -4,7 +4,9 @@
 
     <select id="pageQuery" resultType="com.agri.production.entity.Harvest">
         SELECT h.* FROM agri_prod_harvest_record h
-        WHERE h.deleted = 0 AND h.tenant_id = #{tenantId}
+        WHERE h.deleted = 0
+        <!-- 运营端传 null 时不做租户过滤（口径见 FarmMapper.pageQuery 的说明） -->
+        <if test="tenantId != null and tenantId != ''">AND h.tenant_id = #{tenantId}</if>
         <if test="dto.cropName != null and dto.cropName != ''">
             AND h.crop_name LIKE CONCAT('%', #{dto.cropName}, '%')
         </if>
@@ -31,13 +33,17 @@
 
     <select id="selectByFarmId" resultType="com.agri.production.entity.Harvest">
         SELECT * FROM agri_prod_harvest_record
-        WHERE farm_id = #{farmId} AND tenant_id = #{tenantId} AND deleted = 0
+        WHERE farm_id = #{farmId}
+        <if test="tenantId != null and tenantId != ''">AND tenant_id = #{tenantId}</if>
+        AND deleted = 0
         ORDER BY harvest_date DESC
     </select>
 
     <select id="selectByCode" resultType="com.agri.production.entity.Harvest">
         SELECT * FROM agri_prod_harvest_record
-        WHERE harvest_code = #{harvestCode} AND tenant_id = #{tenantId} AND deleted = 0
+        WHERE harvest_code = #{harvestCode}
+        <if test="tenantId != null and tenantId != ''">AND tenant_id = #{tenantId}</if>
+        AND deleted = 0
     </select>
 
 </mapper>
