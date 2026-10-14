@@ -4,7 +4,9 @@
 
     <select id="pageQuery" resultType="com.agri.production.entity.Task">
         SELECT t.* FROM agri_prod_task_info t
-        WHERE t.deleted = 0 AND t.tenant_id = #{tenantId}
+        WHERE t.deleted = 0
+        <!-- 运营端传 null 时不做租户过滤（同 FarmMapper 的说明：写死 tenant_id = #{tenantId} 会让运营端永远查不到数据） -->
+        <if test="tenantId != null and tenantId != ''">AND t.tenant_id = #{tenantId}</if>
         <if test="dto.taskName != null and dto.taskName != ''">
             AND t.task_name LIKE CONCAT('%', #{dto.taskName}, '%')
         </if>

@@ -1,13 +1,20 @@
 spring:
   datasource:
-    url: jdbc:sqlite:./data/example_db.sqlite
-    username: admin
-    password: password
-    driver-class-name: org.sqlite.JDBC
+    # 与平台其它域一致：各自一个 MySQL 库（V2.0 数据存储口径）。
+    # 原先这里是本地 SQLite 文件库（./data/example_db.sqlite）—— 能单机跑通，但
+    # 与平台口径不一致：多实例部署会各写各的文件、备份与迁移都对不上。
+    # 建库语句：CREATE DATABASE agri_production DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+    url: jdbc:mysql://localhost:3306/agri_production?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password: root
+    driver-class-name: com.mysql.cj.jdbc.Driver
   sql:
     init:
       mode: always
-      schema-locations: classpath:schema-sqlite.sql
+      # 必须显式指定 UTF-8：spring.sql.init.encoding 默认取**平台默认编码**，
+      # 中文 Windows 上是 GBK，脚本里的中文种子会被写成乱码（不可逆）。
+      encoding: UTF-8
+      schema-locations: classpath:schema-mysql.sql
 
 services:
   iot:
