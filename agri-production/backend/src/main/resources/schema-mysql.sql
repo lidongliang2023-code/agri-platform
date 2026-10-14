@@ -940,3 +940,144 @@ VALUES
     (2, 'B', '一级', 1, '西红柿', '单果重 / 糖度 / 外观', '单果重150-200g，糖度5.5-6.5，允许轻微色差', 1.1000, 1, '2001', '常规批发'),
     (3, 'C', '二级', 1, '西红柿', '单果重 / 糖度 / 外观', '单果重100-150g，糖度4.5-5.5', 0.9500, 1, '2001', '本地市场'),
     (4, 'D', '等外', 1, '西红柿', '单果重 / 糖度 / 外观', '不满足以上任一等级', 0.7000, 1, '2001', '加工原料');
+
+-- ---------------------------------------------------------------- 采收批次 / 成品库存 / 库存流水
+-- 前端「采收与库存」七页读的是三套契约（@agri/shared/types/harvest.ts）：
+--   HarvestBatch（batchId/batchNo/plotId/cropId/harvestDate/quantity/unit/grade/status/
+--     traceGenerated/inboundStatus/harvestArea/appearance/perMuYield/relatedTaskId…）
+--   InventoryRecord（inventoryId/batchId/warehouseName/currentQty/frozenQty/locationCode/
+--     lastInAt/lastOutAt/safeQty/expireDate/lossQty…）
+--   InventoryFlow（flowId/batchId/flowType 1入库 2出库 3调拨 4损耗/quantity/orderNo/operatedAt…）
+-- 这三张表原先都不存在（旧的是 harvest_record 那套"采收记录"，字段完全不同），
+-- 所以按契约另建。采收记录表继续服务 /harvests/plan（按地块聚合已发生的采收）。
+
+CREATE TABLE IF NOT EXISTS agri_prod_harvest_batch (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    batch_no VARCHAR(191) NOT NULL UNIQUE,
+    plot_id BIGINT,
+    plot_name VARCHAR(191),
+    plan_id BIGINT,
+    crop_id BIGINT,
+    crop_name VARCHAR(191),
+    crop_variety VARCHAR(191),
+    harvest_date DATE,
+    quantity DECIMAL(18,4),
+    unit VARCHAR(32),
+    grade VARCHAR(32) COMMENT 'A / B / C / D / reject / 待检',
+    inspection_id BIGINT,
+    inspection_no VARCHAR(191),
+    operator_id BIGINT,
+    operator_name VARCHAR(191),
+    status INT DEFAULT 1 COMMENT '1 在库 2 部分出库 3 清空 4 冻结 5 归档',
+    trace_generated INT DEFAULT 0,
+    trace_code VARCHAR(191),
+    farm_id BIGINT,
+    farm_name VARCHAR(191),
+    inbound_status INT DEFAULT 0 COMMENT '0 待入库 1 已入库 2 已出库',
+    harvest_area DECIMAL(12,4) COMMENT '采收面积（亩）',
+    appearance VARCHAR(32) COMMENT '外观等级：优 / 良 / 中 / 差',
+    expected_quantity DECIMAL(18,4),
+    per_mu_yield DECIMAL(18,4) COMMENT '亩产',
+    related_task_id BIGINT,
+    related_task_name VARCHAR(191),
+    warehouse_name VARCHAR(191),
+    inventory_id BIGINT,
+    remark TEXT,
+    tenant_id VARCHAR(191) NOT NULL,
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    deleted BIGINT DEFAULT 0,
+    INDEX `idx_harvest_batch_tenant_id` (tenant_id),
+    INDEX `idx_harvest_batch_plot_id` (plot_id),
+    INDEX `idx_harvest_batch_farm_id` (farm_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS agri_prod_inventory (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    batch_id BIGINT NOT NULL,
+    batch_no VARCHAR(191),
+    warehouse_name VARCHAR(191) NOT NULL,
+    current_qty DECIMAL(18,4) DEFAULT 0,
+    unit VARCHAR(32),
+    frozen_qty DECIMAL(18,4) DEFAULT 0,
+    location_code VARCHAR(64),
+    last_in_at DATETIME,
+    last_out_at DATETIME,
+    product_name VARCHAR(191),
+    category VARCHAR(64),
+    grade VARCHAR(32),
+    safe_qty DECIMAL(18,4) COMMENT '安全库存',
+    expire_date DATE,
+    related_batch_no VARCHAR(191),
+    loss_qty DECIMAL(18,4) DEFAULT 0,
+    loss_reason VARCHAR(191),
+    frozen INT DEFAULT 0 COMMENT '1 冻结 / 0 正常',
+    remark TEXT,
+    tenant_id VARCHAR(191) NOT NULL,
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    deleted BIGINT DEFAULT 0,
+    INDEX `idx_inventory_tenant_id` (tenant_id),
+    INDEX `idx_inventory_batch_id` (batch_id),
+    INDEX `idx_inventory_warehouse` (warehouse_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS agri_prod_inventory_flow (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    batch_id BIGINT NOT NULL,
+    flow_type INT NOT NULL COMMENT '1 入库 2 出库 3 调拨 4 损耗',
+    quantity DECIMAL(18,4) COMMENT '带符号：入库为正，出库/损耗为负',
+    unit VARCHAR(32),
+    operator_name VARCHAR(191),
+    order_no VARCHAR(191),
+    operated_at DATETIME,
+    remark TEXT,
+    warehouse_name VARCHAR(191),
+    tenant_id VARCHAR(191) NOT NULL,
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    deleted BIGINT DEFAULT 0,
+    INDEX `idx_inv_flow_batch_id` (batch_id),
+    INDEX `idx_inv_flow_tenant_id` (tenant_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 演示数据（tenant 2001）。三条批次 + 两条库存 + 三条流水，且**数量互为对账**：
+--   批次 1：采收 1250kg → 入库 1250 → 库存 1250（未出库）
+--   批次 2：采收  850kg → 入库 850 → 出库 450 → 库存 400
+--   批次 3：采收  620kg → 尚未入库（inbound_status=0），因此没有库存行、没有流水
+-- 地块/农场挂到已有的演示数据（plot 1/2、farm 1）。
+INSERT IGNORE INTO agri_prod_harvest_batch
+    (id, batch_no, plot_id, plot_name, crop_id, crop_name, crop_variety, harvest_date, quantity, unit,
+     grade, operator_id, operator_name, status, trace_generated, trace_code, farm_id, farm_name,
+     inbound_status, harvest_area, appearance, expected_quantity, per_mu_yield, warehouse_name,
+     inventory_id, tenant_id, remark)
+VALUES
+    (1, 'H20260601', 1, 'A区-地块1', 1, '西红柿', '中杂9号', '2026-06-01', 1250.0000, 'kg',
+     'A', 1, '张工', 1, 1, 'AG010101202606010001', 1, '示范农场',
+     1, 2.0000, '优', 1500.0000, 625.0000, '冷藏库A', 1, '2001', '头茬果，全数入库'),
+    (2, 'H20260528', 2, 'A区-地块2', 1, '西红柿', '中杂9号', '2026-05-28', 850.0000, 'kg',
+     'B', 1, '张工', 2, 1, 'AG010102202605280001', 1, '示范农场',
+     2, 1.5000, '良', 1200.0000, 567.0000, '冷藏库A', 2, '2001', '已出库 450kg 给批发商'),
+    (3, 'H20260525', 1, 'A区-地块1', 1, '西红柿', '中杂9号', '2026-05-25', 620.0000, 'kg',
+     'C', 1, '张工', 1, 0, NULL, 1, '示范农场',
+     0, 1.0000, '中', 900.0000, 620.0000, NULL, NULL, '2001', '待入库');
+
+INSERT IGNORE INTO agri_prod_inventory
+    (id, batch_id, batch_no, warehouse_name, current_qty, unit, frozen_qty, location_code, last_in_at,
+     last_out_at, product_name, category, grade, safe_qty, expire_date, related_batch_no, loss_qty,
+     frozen, tenant_id, remark)
+VALUES
+    (1, 1, 'H20260601', '冷藏库A', 1250.0000, 'kg', 0, 'A-01-02', '2026-06-01 15:00:00',
+     NULL, '西红柿(A级)', '西红柿', 'A', 200.0000, '2026-06-15', 'H20260601', 0,
+     0, '2001', NULL),
+    (2, 2, 'H20260528', '冷藏库A', 400.0000, 'kg', 0, 'A-02-01', '2026-05-28 16:20:00',
+     '2026-06-02 10:00:00', '西红柿(B级)', '西红柿', 'B', 150.0000, '2026-06-10', 'H20260528', 0,
+     0, '2001', NULL);
+
+INSERT IGNORE INTO agri_prod_inventory_flow
+    (id, batch_id, flow_type, quantity, unit, operator_name, order_no, operated_at, remark,
+     warehouse_name, tenant_id)
+VALUES
+    (1, 1, 1, 1250.0000, 'kg', '张工', NULL, '2026-06-01 15:00:00', '采收入库', '冷藏库A', '2001'),
+    (2, 2, 1, 850.0000, 'kg', '张工', NULL, '2026-05-28 16:20:00', '采收入库', '冷藏库A', '2001'),
+    (3, 2, 2, -450.0000, 'kg', '张工', 'SO20260602', '2026-06-02 10:00:00', '销售出库', '冷藏库A', '2001');
