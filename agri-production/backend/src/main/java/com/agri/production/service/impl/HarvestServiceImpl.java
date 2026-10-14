@@ -1,5 +1,6 @@
 package com.agri.production.service.impl;
 
+import com.agri.production.common.exception.BusinessException;
 import com.agri.production.dto.HarvestPageDTO;
 import com.agri.production.dto.HarvestSaveDTO;
 import com.agri.production.entity.Harvest;
@@ -38,7 +39,7 @@ public class HarvestServiceImpl extends ServiceImpl<HarvestMapper, Harvest> impl
     public HarvestVO update(HarvestSaveDTO dto, String tenantId) {
         Harvest harvest = getById(dto.getId());
         if (harvest == null || !tenantId.equals(harvest.getTenantId())) {
-            throw new RuntimeException("采收记录不存在");
+            throw new BusinessException(404, "采收记录不存在");
         }
         BeanCopyUtils.copy(dto, harvest);
         updateById(harvest);
@@ -50,7 +51,7 @@ public class HarvestServiceImpl extends ServiceImpl<HarvestMapper, Harvest> impl
     public void delete(Long id, String tenantId) {
         Harvest harvest = getById(id);
         if (harvest == null || !tenantId.equals(harvest.getTenantId())) {
-            throw new RuntimeException("采收记录不存在");
+            throw new BusinessException(404, "采收记录不存在");
         }
         removeById(id);
     }
@@ -59,7 +60,7 @@ public class HarvestServiceImpl extends ServiceImpl<HarvestMapper, Harvest> impl
     public HarvestVO getById(Long id, String tenantId) {
         Harvest harvest = getById(id);
         if (harvest == null || !tenantId.equals(harvest.getTenantId())) {
-            throw new RuntimeException("采收记录不存在");
+            throw new BusinessException(404, "采收记录不存在");
         }
         return BeanCopyUtils.copy(harvest, HarvestVO.class);
     }
@@ -82,7 +83,7 @@ public class HarvestServiceImpl extends ServiceImpl<HarvestMapper, Harvest> impl
     public HarvestVO getByCode(String harvestCode, String tenantId) {
         Harvest harvest = baseMapper.selectByCode(harvestCode, tenantId);
         if (harvest == null) {
-            throw new RuntimeException("采收记录不存在");
+            throw new BusinessException(404, "采收记录不存在");
         }
         return BeanCopyUtils.copy(harvest, HarvestVO.class);
     }
@@ -92,7 +93,7 @@ public class HarvestServiceImpl extends ServiceImpl<HarvestMapper, Harvest> impl
     public HarvestVO complete(Long id, java.math.BigDecimal actualQuantity, String qualityGrade, String tenantId) {
         Harvest harvest = getById(id);
         if (harvest == null || !tenantId.equals(harvest.getTenantId())) {
-            throw new RuntimeException("采收记录不存在");
+            throw new BusinessException(404, "采收记录不存在");
         }
         harvest.setActualQuantity(actualQuantity);
         harvest.setQualityGrade(qualityGrade);
