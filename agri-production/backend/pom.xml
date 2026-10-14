@@ -15,7 +15,12 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.2.0</version>
+        <!-- 对齐平台基线：core-platform 与 agri-master-data 跑在 3.2.5，agri-trade 取 3.2.4
+             （本机离线仓库里 starter-parent 只有 3.0.4 / 3.2.0 / 3.2.4，没有 3.2.5 的 POM）。
+             原先这里固定 3.2.0：本机连 spring-boot-maven-plugin:3.2.0 都没有，
+             `mvn package` 与 `spring-boot:run` 都会失败 —— 这也是这个模块一直没能在本地
+             构建、因而没做过运行时验证的原因。取 3.2.4 是与 agri-trade 同一套已验证组合。 -->
+        <version>3.2.4</version>
         <relativePath/>
     </parent>
 

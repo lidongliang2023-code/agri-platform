@@ -42,6 +42,10 @@ platform:
     # 两个码字面相近、后果相反，这里写清楚免得下一个人想当然合并。
     read-permission: production:read
     write-permission: production:write
+    # 这个服务**没有自己的认证层**（全模块搜不到 OncePerRequestFilter / addInterceptors /
+    # sa-token 的任何用法），实测不带令牌调 /api/v1/production/admin/farms 返回 200。
+    # 所以必须在这里要求令牌，否则运营端接口对匿名请求敞开。
+    require-auth: true
 
 services:
   platform:

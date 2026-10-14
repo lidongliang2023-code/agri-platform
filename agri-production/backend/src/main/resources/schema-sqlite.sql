@@ -1,3 +1,12 @@
+-- 生产管理模块的建表与种子（SQLite 方言）。
+--
+-- 种子数据一律用 INSERT OR IGNORE：这个脚本由 spring.sql.init.mode=always 在**每次启动**时执行，
+-- 而 farm_code / plot_code 这些列上有 UNIQUE 约束 —— 用普通 INSERT 的话，
+-- 第一次启动成功、第二次启动直接 [SQLITE_CONSTRAINT_UNIQUE] 报错、应用起不来。
+-- （实测：本机 data/example_db.sqlite 里已有 F001 之后，重启就卡在
+--   "Failed to execute SQL script statement #48 ... agri_prod_farm_info.farm_code"。）
+-- 用 INSERT OR IGNORE 的语义正是需要的：已存在的种子跳过，不覆盖用户改过的数据。
+
 CREATE TABLE IF NOT EXISTS agri_prod_farm_info (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     farm_code TEXT NOT NULL UNIQUE,
@@ -478,23 +487,23 @@ CREATE TABLE IF NOT EXISTS agri_prod_planting_plan (
 
 CREATE INDEX IF NOT EXISTS idx_planting_plan_tenant_id ON agri_prod_planting_plan(tenant_id);
 
-INSERT INTO agri_prod_farm_info (farm_code, farm_name, tenant_id) VALUES ('F001', '示范农场', 'T001');
-INSERT INTO agri_prod_farm_info (farm_code, farm_name, tenant_id) VALUES ('F002', '绿色生态园', 'T001');
+INSERT OR IGNORE INTO agri_prod_farm_info (farm_code, farm_name, tenant_id) VALUES ('F001', '示范农场', 'T001');
+INSERT OR IGNORE INTO agri_prod_farm_info (farm_code, farm_name, tenant_id) VALUES ('F002', '绿色生态园', 'T001');
 
-INSERT INTO agri_prod_plot_info (plot_code, plot_name, farm_id, tenant_id) VALUES ('P001', 'A区-地块1', 1, 'T001');
-INSERT INTO agri_prod_plot_info (plot_code, plot_name, farm_id, tenant_id) VALUES ('P002', 'A区-地块2', 1, 'T001');
-INSERT INTO agri_prod_plot_info (plot_code, plot_name, farm_id, tenant_id) VALUES ('P003', 'B区-地块1', 2, 'T001');
+INSERT OR IGNORE INTO agri_prod_plot_info (plot_code, plot_name, farm_id, tenant_id) VALUES ('P001', 'A区-地块1', 1, 'T001');
+INSERT OR IGNORE INTO agri_prod_plot_info (plot_code, plot_name, farm_id, tenant_id) VALUES ('P002', 'A区-地块2', 1, 'T001');
+INSERT OR IGNORE INTO agri_prod_plot_info (plot_code, plot_name, farm_id, tenant_id) VALUES ('P003', 'B区-地块1', 2, 'T001');
 
-INSERT INTO agri_prod_task_info (task_code, task_name, task_type, farm_id, plot_id, tenant_id) VALUES ('T001', '春季施肥', '施肥', 1, 1, 'T001');
-INSERT INTO agri_prod_task_info (task_code, task_name, task_type, farm_id, plot_id, tenant_id) VALUES ('T002', '病虫害防治', '防治', 1, 2, 'T001');
+INSERT OR IGNORE INTO agri_prod_task_info (task_code, task_name, task_type, farm_id, plot_id, tenant_id) VALUES ('T001', '春季施肥', '施肥', 1, 1, 'T001');
+INSERT OR IGNORE INTO agri_prod_task_info (task_code, task_name, task_type, farm_id, plot_id, tenant_id) VALUES ('T002', '病虫害防治', '防治', 1, 2, 'T001');
 
-INSERT INTO agri_prod_input_material (material_code, material_name, material_type, unit, tenant_id) VALUES ('M001', '有机肥料', '肥料', 'kg', 'T001');
-INSERT INTO agri_prod_input_material (material_code, material_name, material_type, unit, tenant_id) VALUES ('M002', '生物农药', '农药', 'L', 'T001');
+INSERT OR IGNORE INTO agri_prod_input_material (material_code, material_name, material_type, unit, tenant_id) VALUES ('M001', '有机肥料', '肥料', 'kg', 'T001');
+INSERT OR IGNORE INTO agri_prod_input_material (material_code, material_name, material_type, unit, tenant_id) VALUES ('M002', '生物农药', '农药', 'L', 'T001');
 
-INSERT INTO agri_prod_input_inventory (material_id, quantity, tenant_id) VALUES (1, 5000, 'T001');
-INSERT INTO agri_prod_input_inventory (material_id, quantity, tenant_id) VALUES (2, 200, 'T001');
+INSERT OR IGNORE INTO agri_prod_input_inventory (material_id, quantity, tenant_id) VALUES (1, 5000, 'T001');
+INSERT OR IGNORE INTO agri_prod_input_inventory (material_id, quantity, tenant_id) VALUES (2, 200, 'T001');
 
-INSERT INTO agri_prod_harvest_record (harvest_code, crop_name, farm_id, plot_id, harvest_date, quantity, unit, tenant_id) VALUES ('H001', '西红柿', 1, 1, '2024-01-15', 2500, 'kg', 'T001');
+INSERT OR IGNORE INTO agri_prod_harvest_record (harvest_code, crop_name, farm_id, plot_id, harvest_date, quantity, unit, tenant_id) VALUES ('H001', '西红柿', 1, 1, '2024-01-15', 2500, 'kg', 'T001');
 
-INSERT INTO agri_prod_alert_rule (rule_code, rule_name, alert_type, level, tenant_id) VALUES ('R001', '土壤湿度异常', 'soil', 'warning', 'T001');
-INSERT INTO agri_prod_alert_rule (rule_code, rule_name, alert_type, level, tenant_id) VALUES ('R002', '温度超限', 'temperature', 'error', 'T001');
+INSERT OR IGNORE INTO agri_prod_alert_rule (rule_code, rule_name, alert_type, level, tenant_id) VALUES ('R001', '土壤湿度异常', 'soil', 'warning', 'T001');
+INSERT OR IGNORE INTO agri_prod_alert_rule (rule_code, rule_name, alert_type, level, tenant_id) VALUES ('R002', '温度超限', 'temperature', 'error', 'T001');
