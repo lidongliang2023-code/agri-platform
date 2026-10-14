@@ -49,6 +49,12 @@ current_crop TEXT,
 planting_date DATE,
 expected_harvest_date DATE,
 status VARCHAR(255) DEFAULT 'active',
+farm_code VARCHAR(191),
+boundary TEXT,
+center_longitude DECIMAL(12,6),
+center_latitude DECIMAL(12,6),
+soil_ph DECIMAL(6,2),
+soil_organic_matter DECIMAL(10,4),
 tenant_id VARCHAR(191) NOT NULL,
 create_by TEXT,
 create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -131,6 +137,11 @@ safety_level TEXT,
 toxicity_level TEXT,
 usage_instructions TEXT,
 dosage TEXT,
+registration_no VARCHAR(191),
+safety_interval INT,
+stock_qty DECIMAL(18,4) DEFAULT 0,
+supplier_id BIGINT,
+status INT DEFAULT 1,
 warning_threshold BIGINT DEFAULT 100,
 tenant_id VARCHAR(191) NOT NULL,
 create_by TEXT,
@@ -522,8 +533,8 @@ INSERT IGNORE INTO agri_prod_plot_info (plot_code, plot_name, farm_id, tenant_id
 INSERT IGNORE INTO agri_prod_plot_info (plot_code, plot_name, farm_id, tenant_id) VALUES ('P003', 'B区-地块1', 2, '2001');
 INSERT IGNORE INTO agri_prod_task_info (task_code, task_name, task_type, farm_id, plot_id, tenant_id) VALUES ('T001', '春季施肥', '施肥', 1, 1, '2001');
 INSERT IGNORE INTO agri_prod_task_info (task_code, task_name, task_type, farm_id, plot_id, tenant_id) VALUES ('T002', '病虫害防治', '防治', 1, 2, '2001');
-INSERT IGNORE INTO agri_prod_input_material (material_code, material_name, material_type, unit, tenant_id) VALUES ('M001', '有机肥料', '肥料', 'kg', '2001');
-INSERT IGNORE INTO agri_prod_input_material (material_code, material_name, material_type, unit, tenant_id) VALUES ('M002', '生物农药', '农药', 'L', '2001');
+INSERT IGNORE INTO agri_prod_input_material (material_code, material_name, material_type, unit, tenant_id) VALUES ('M001', '有机肥料', 'FERTILIZER', 'kg', '2001');
+INSERT IGNORE INTO agri_prod_input_material (material_code, material_name, material_type, unit, tenant_id) VALUES ('M002', '生物农药', 'PESTICIDE', 'L', '2001');
 INSERT IGNORE INTO agri_prod_input_inventory (material_id, quantity, tenant_id) VALUES (1, 5000, '2001');
 INSERT IGNORE INTO agri_prod_input_inventory (material_id, quantity, tenant_id) VALUES (2, 200, '2001');
 INSERT IGNORE INTO agri_prod_harvest_record (harvest_code, crop_name, farm_id, plot_id, harvest_date, quantity, unit, tenant_id) VALUES ('H001', '西红柿', 1, 1, '2024-01-15', 2500, 'kg', '2001');
@@ -695,3 +706,100 @@ VALUES
     (5, (SELECT id FROM agri_prod_planting_plan WHERE plan_code = 'PLAN-2026-SPR-01'),
      5, '成熟收获期', '收获', '2026-08-21', '2026-09-30', NULL, NULL,
      '九成熟收割，晒场水分降到 14% 以下。', 1, '2001');
+
+-- ---------------------------------------------------------------- 农资投入品（两张新表 + 演示数据）
+-- 前端「投入品」这一组页面（台账 / 出入库 / 使用记录 / 流水账）读的是：
+--   api/inputs.ts 的 InputInfo（inputCode/inputName/inputType/spec/unit/manufacturer/
+--   registrationNo/safetyInterval/stockQty/warnQty/supplierId/status + 后端回填的 nearestExpireDate）、
+--   InputStockFlow（flowType 1入库 2领用 3退回 4盘盈 5盘亏 6报损，qty 带符号）、
+--   types/input 的 InputUsageRecord（dosage / method 是契约字段名）。
+-- 档案表 agri_prod_input_material 本来就有，缺的 5 列已在上面的 CREATE 里补齐
+-- （老库由 schema-patch-input-page.sql 补）；流水与使用记录两张表原先根本不存在。
+--
+-- ⚠️ 演示数据的 input_id **一律按 material_code 子查询取**，不写死自增号：
+--    这张表在建库脚本前面就已经种下两条（M001 有机肥料 / M002 生物农药），
+--    先前演示行用 id 1..4 时主键撞车被 INSERT IGNORE 静默跳过，
+--    流水于是挂到了那两条种子身上 —— 档案库存 0、流水却写着 +40，两处对不上。
+
+CREATE TABLE IF NOT EXISTS agri_prod_input_stock_flow (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    input_id BIGINT NOT NULL,
+    warehouse_id BIGINT,
+    flow_type INT NOT NULL COMMENT '1入库 2领用 3退回 4盘盈 5盘亏 6报损',
+    qty DECIMAL(18,4) NOT NULL COMMENT '带符号：入库/退回/盘盈为正，领用/盘亏/报损为负',
+    batch_no VARCHAR(191),
+    expire_date DATE,
+    operator_id BIGINT,
+    related_task_id BIGINT,
+    remark TEXT,
+    tenant_id VARCHAR(191) NOT NULL,
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    deleted BIGINT DEFAULT 0,
+    INDEX `idx_input_flow_input_id` (input_id),
+    INDEX `idx_input_flow_tenant_id` (tenant_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS agri_prod_input_usage (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    task_id BIGINT,
+    plot_id BIGINT,
+    farm_id BIGINT,
+    input_id BIGINT,
+    input_name VARCHAR(191),
+    dosage DECIMAL(18,4),
+    unit VARCHAR(64),
+    method VARCHAR(64) COMMENT '施用方式：喷施 / 沟施 / 撒施 …',
+    operator_id BIGINT,
+    used_at DATETIME,
+    safety_interval_days INT,
+    status INT DEFAULT 1 COMMENT '1正常 0作废',
+    remark TEXT,
+    tenant_id VARCHAR(191) NOT NULL,
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    deleted BIGINT DEFAULT 0,
+    INDEX `idx_input_usage_input_id` (input_id),
+    INDEX `idx_input_usage_task_id` (task_id),
+    INDEX `idx_input_usage_tenant_id` (tenant_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 四条农资覆盖页面上会出现的三种关键状态：正常、低库存且临期、低库存（无效期流水）。
+-- stock_qty 与流水**必须对得上**（这是这一页最容易被看穿的假数据）：
+--   复合肥 40 = +40；稻瘟灵 6 = +10 − 4；种子 30 = +30；基质盘 2 = +2
+INSERT IGNORE INTO agri_prod_input_material
+    (id, material_code, material_name, material_type, specification, unit, manufacturer,
+     registration_no, safety_interval, stock_qty, warning_threshold, status, tenant_id, remark)
+VALUES
+    (101, 'IN-DEMO-001', '复合肥（水稻专用）', 'FERTILIZER', '50kg/袋', '袋', '中化化肥有限公司',
+     '农肥（2024）准字1234号', NULL, 40.0000, 20.0000, 1, '2001', '底肥与分蘖肥通用'),
+    (102, 'IN-DEMO-002', '稻瘟灵乳油', 'PESTICIDE', '500ml/瓶', '瓶', '湖南海利化工股份有限公司',
+     'PD20231234', 21, 6.0000, 10.0000, 1, '2001', '防治稻瘟病，安全间隔期 21 天'),
+    (103, 'IN-DEMO-003', '五常稻花香2号种子', 'SEED', '5kg/袋', '袋', '五常市种子公司',
+     NULL, NULL, 30.0000, 10.0000, 1, '2001', '春茬水稻用种'),
+    (104, 'IN-DEMO-004', '育秧基质盘', 'OTHER', '60片/箱', '箱', '哈尔滨农垦塑料制品厂',
+     NULL, NULL, 2.0000, 5.0000, 1, '2001', '育秧周转用');
+
+INSERT IGNORE INTO agri_prod_input_stock_flow
+    (id, input_id, flow_type, qty, batch_no, expire_date, operator_id, related_task_id, remark, tenant_id)
+VALUES
+    (101, (SELECT id FROM agri_prod_input_material WHERE material_code = 'IN-DEMO-001'),
+     1, 40.0000, 'F20260401', '2027-04-01', 1, NULL, '春耕备肥入库', '2001'),
+    (102, (SELECT id FROM agri_prod_input_material WHERE material_code = 'IN-DEMO-002'),
+     1, 10.0000, 'P20260410', '2026-10-20', 1, NULL, '防治药剂入库（临期，用于验证临期提示）', '2001'),
+    (103, (SELECT id FROM agri_prod_input_material WHERE material_code = 'IN-DEMO-002'),
+     2, -4.0000, 'P20260410', '2026-10-20', 1, 2, '分蘖期稻瘟病防治领用', '2001'),
+    (104, (SELECT id FROM agri_prod_input_material WHERE material_code = 'IN-DEMO-003'),
+     1, 30.0000, 'S20260320', '2027-03-20', 1, NULL, '春播用种入库', '2001'),
+    (105, (SELECT id FROM agri_prod_input_material WHERE material_code = 'IN-DEMO-004'),
+     1, 2.0000, 'M20260101', NULL, 1, NULL, '育秧基质盘入库（无生产效期）', '2001');
+
+-- 使用记录：挂到已有的演示任务 1（春季施肥）/ 2（病虫害防治）上，"关联任务"列才有内容
+INSERT IGNORE INTO agri_prod_input_usage
+    (id, task_id, plot_id, farm_id, input_id, input_name, dosage, unit, method, operator_id,
+     used_at, safety_interval_days, status, tenant_id, remark)
+VALUES
+    (101, 1, 1, 1, (SELECT id FROM agri_prod_input_material WHERE material_code = 'IN-DEMO-001'),
+     '复合肥（水稻专用）', 40.0000, '袋', '沟施', 1, '2026-04-05 08:00:00', NULL, 1, '2001', '整地期施底肥'),
+    (102, 2, 1, 1, (SELECT id FROM agri_prod_input_material WHERE material_code = 'IN-DEMO-002'),
+     '稻瘟灵乳油', 4.0000, '瓶', '喷施', 1, '2026-05-12 09:30:00', 21, 1, '2001', '分蘖期稻瘟病防治');

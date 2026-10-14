@@ -134,11 +134,14 @@ public class AnalyticsServiceImpl implements IAnalyticsService {
         long lowStockCount = 0;
 
         for (InputMaterial material : materials) {
-            if (material.getCurrentStock() != null) {
-                totalStock = totalStock.add(material.getCurrentStock());
+            // 字段名跟着投入品实体收敛成契约命名：currentStock → stockQty、minStock → warnQty
+            // （同义改名的原因是实体原先映射的 agri_prod_input_ledger 表根本不存在，
+            //   而库里真正在用的是 agri_prod_input_material，列名是 stock_qty / warning_threshold）
+            if (material.getStockQty() != null) {
+                totalStock = totalStock.add(material.getStockQty());
             }
-            if (material.getMinStock() != null && material.getCurrentStock() != null) {
-                if (material.getCurrentStock().compareTo(material.getMinStock()) < 0) {
+            if (material.getWarnQty() != null && material.getStockQty() != null) {
+                if (material.getStockQty().compareTo(material.getWarnQty()) < 0) {
                     lowStockCount++;
                 }
             }

@@ -28,9 +28,20 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 
-const [apiDir, baseUrl, token, placeholder = '1'] = process.argv.slice(2)
+const args = process.argv.slice(2).filter((a) => !a.startsWith('--'))
+const [apiDir, baseUrl, token, placeholder = '1'] = args
+/**
+ * 默认**不发 DELETE**。
+ *
+ * 为什么单独给它一个开关：GET/POST/PUT/PATCH 都可以靠"故意空的请求体"让处理器在写库前失败
+ * （既证明了处理器存在，又不动数据），而 DELETE 没有请求体可用来"让它失败" —— 一发就是真删。
+ * 实测代价：探针打到 agri-production 时把既有的演示投入品 M001 逻辑删掉了，
+ * 后续所有 /inputs/1/** 调用都变成"投入品不存在"，看起来像后端坏了。
+ * 需要 DELETE 覆盖时显式加 --include-deletes，并确认目标库是可丢弃的。
+ */
+const includeDeletes = process.argv.slice(2).includes('--include-deletes')
 if (!apiDir || !baseUrl || !token) {
-  console.error('用法：node scripts/probe-frontend-api.mjs <api 目录> <目标 baseURL> <访问令牌> [占位符]')
+  console.error('用法：node scripts/probe-frontend-api.mjs <api 目录> <目标 baseURL> <访问令牌> [占位符] [--include-deletes]')
   process.exit(2)
 }
 
@@ -67,12 +78,14 @@ for (const file of walk(apiDir)) {
 }
 
 const list = [...seen.values()].sort((a, b) => a.path.localeCompare(b.path))
+const skipped = list.filter((c) => c.method === 'DELETE' && !includeDeletes)
+const probing = list.filter((c) => !(c.method === 'DELETE' && !includeDeletes))
 const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
 const missing = []
 const handledButFailed = []
 const ok = []
 
-for (const c of list) {
+for (const c of probing) {
   let status = 0
   let body = ''
   try {
@@ -115,6 +128,9 @@ const segmentOf = (p) => {
 
 console.log(`== 前端会发出的请求：${list.length} 条（去重后） ==`)
 console.log(`== 缺口 ${missing.length} | 有处理器但本次调用未成功 ${handledButFailed.length} | 成功 ${ok.length} ==`)
+if (skipped.length > 0) {
+  console.log(`== 跳过 ${skipped.length} 条 DELETE（默认不删数据；需要时加 --include-deletes，并确认目标库可丢） ==`)
+}
 
 const stats = new Map()
 for (const [kind, item] of [
