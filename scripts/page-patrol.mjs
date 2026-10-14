@@ -485,32 +485,45 @@ async function patrolOne(ctx, route, deep) {
     pageErrors.push(err && err.stack ? err.stack : err && err.message ? err.message : String(err))
   })
 
-  // 注入登录态：必须在页面脚本执行前写入 localStorage，否则首屏会以未登录态渲染并跳登录页
+  // 登录态：**在页面里调一次登录接口**，让浏览器把刷新令牌收进 HttpOnly Cookie。
+  //
+  // 为什么不往 localStorage 写令牌（这版之前就是这么写的，一直没登进去）：前端按
+  // V2.0 4.3 已把访问令牌改成"只在内存 + HttpOnly Cookie 静默续签"，
+  // src/store/auth.ts 启动时还会主动**删掉** localStorage 里的 agri_token/agri_refresh_token，
+  // 所以写进去既不生效、还会被清掉 —— 表现为页面全程 401 并跳登录页，而汇总表只显示
+  // "0 白屏 0 异常"，看起来像通过。
+  // 现在的做法与真实用户一致：先落到本域，再在页面上下文里发一次登录请求（凭据走 Cookie），
+  // 随后 page.goto 目标路由时，应用的 bootstrapAuthRefresh 会用 Cookie 换回访问令牌。
   if (token) {
-    await page.evaluateOnNewDocument(
-      (keys, values) => {
-        try {
-          keys.forEach((k, i) => {
-            if (values[i] !== null && values[i] !== undefined) {
-              localStorage.setItem(k, values[i])
-            }
-          })
-        } catch {
-          /* localStorage 不可用时忽略，由页面自行表现 */
-        }
-      },
-      [TOKEN_KEY, REFRESH_TOKEN_KEY, USER_INFO_KEY, 'agri_permissions', 'agri_roles', 'agri_token_expire_at'],
-      [
-        token,
-        ctx.refreshToken ?? null,
-        ctx.userInfo ? JSON.stringify(ctx.userInfo) : null,
-        JSON.stringify(ctx.roles ?? []),
-        JSON.stringify(ctx.roles ?? []),
-        String(Date.now() + 24 * 3600 * 1000),
-      ]
-    )
+    try {
+      await page.goto(`${BASE_URL}/login`, { waitUntil: 'domcontentloaded', timeout: 20000 })
+    } catch {
+      /* 登录页本身加载失败也继续：后面 goto 目标路由会如实报错 */
+    }
+    try {
+      await page.evaluate(
+        async (creds) => {
+          try {
+            await fetch('/api/v1/auth/login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify(creds),
+            })
+          } catch {
+            /* 网络失败不在此处报错，由目标页面的表现反映 */
+          }
+        },
+        {
+          username: LOGIN_USER,
+          password: process.env.AGRI_ADMIN_PASSWORD || LOGIN_PASS,
+          marketId: 1,
+        },
+      )
+    } catch {
+      /* 页面已导航走的竞态：忽略，目标路由仍会重新加载应用 */
+    }
   }
-
   const target = `${BASE_URL}${route.fullPath}`
   try {
     const resp = await page.goto(target, {
