@@ -119,6 +119,17 @@ public class QualityServiceImpl implements IQualityService {
         Inspection inspection = new Inspection();
         inspection.setTenantId(tenantId);
         applyDto(inspection, dto);
+        // 送检登记至少要说清"检什么、检哪一批/哪块地"。少了这两条校验，一个空请求体
+        // 就能在库里留下一行"检测类型为空、状态待检、抽样时间是现在"的空壳检测单 ——
+        // 列表上是一行没有意义的记录，而审计时谁也说不清它从哪来（实测：空体体检脚本
+        // 连打 13 次，就在演示库里留下了 13 行这样的记录）。
+        if (isBlank(inspection.getInspectionType())) {
+            throw new BusinessException(400, "检测类型不能为空（SELF 自检 / SEND 送检 / SAMPLING 抽检）");
+        }
+        if (inspection.getBatchId() == null && inspection.getPlotId() == null
+                && isBlank(inspection.getCropName())) {
+            throw new BusinessException(400, "请至少指定抽样来源：批次 / 地块 / 作物");
+        }
         if (inspection.getInspectionNo() == null || inspection.getInspectionNo().isBlank()) {
             inspection.setInspectionNo(nextInspectionNo(tenantId));
         }

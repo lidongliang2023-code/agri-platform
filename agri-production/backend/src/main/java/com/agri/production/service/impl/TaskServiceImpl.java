@@ -222,6 +222,13 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
         if (task == null || !tenantId.equals(task.getTenantId())) {
             throw new BusinessException(404, "任务不存在");
         }
+        // 打卡记录至少要有"这是个什么动作"：executeType 1 开始 / 2 过程 / 3 完成。
+        // 少了这条校验，一个空请求体就能写进一行"动作、时间、照片、GPS 全空"的记录
+        // （实测：空体体检连打几次，任务详情页的打卡列表里就多出几行空白）。
+        Integer executeType = toInt(body.get("executeType"));
+        if (executeType == null || executeType < 1 || executeType > 3) {
+            throw new BusinessException(400, "打卡类型不能为空，且只能是 1（开始）/ 2（过程）/ 3（完成）");
+        }
         TaskRecord record = new TaskRecord();
         record.setTaskId(taskId);
         record.setExecutorId(task.getExecutorId());
@@ -230,7 +237,7 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
         record.setCreateTime(LocalDateTime.now());
         // 打卡时间以调用方给的为准（离线补传时要保留真实时间），没给就取当前
         record.setExecuteTime(parseTime(body.get("executeTime")));
-        record.setExecuteType(toInt(body.get("executeType")));
+        record.setExecuteType(executeType);
         record.setPhotos(body.get("photos") == null ? null : String.valueOf(body.get("photos")));
         record.setGpsLat(toDecimal(body.get("gpsLat")));
         record.setGpsLng(toDecimal(body.get("gpsLng")));
