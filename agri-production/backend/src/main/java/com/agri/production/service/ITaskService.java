@@ -37,6 +37,15 @@ public interface ITaskService extends IService<Task> {
     /** 验收视图（前端 TaskAcceptance 页读的字段）。 */
     java.util.Map<String, Object> getAcceptance(Long id, String tenantId);
 
+    /** 派发 / 转派任务（前端契约：POST /tasks/{id}/assign?assigneeId=）。 */
+    TaskVO assignTask(Long id, Long assigneeId, String assigneeName, String tenantId);
+
+    /** 任务执行记录（打卡）分页。 */
+    java.util.Map<String, Object> pageRecords(Long taskId, Integer pageNum, Integer pageSize, String tenantId);
+
+    /** 新增打卡记录，返回新记录 id。 */
+    Long createRecord(Long taskId, java.util.Map<String, Object> body, String tenantId);
+
     List<TaskVO> listByFarmId(Long farmId, String tenantId);
 
     List<TaskVO> listByExecutorId(Long executorId, String tenantId);

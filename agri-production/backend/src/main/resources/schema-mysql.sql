@@ -532,6 +532,36 @@ VALUES
     (3, 1, 'DEV001', 'temperature', '空气温度', 27.8000, '℃', '2026-10-13 16:00:00', 'good', 1, 1, '2001');
 
 -- ---------------------------------------------------------------- 任务模板库
+-- 任务执行记录（打卡）。前端「农事任务详情」读的是 recordId/executeTime/executeType/
+-- photos/gpsLat/gpsLng/gpsDistance/abnormalDesc/offlineFlag —— 实体字段名直接按这套命名，
+-- 物理列用 snake_case。
+CREATE TABLE IF NOT EXISTS agri_prod_task_record (
+id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+task_id BIGINT NOT NULL,
+executor_id BIGINT,
+executor_name VARCHAR(191),
+execute_time DATETIME,
+execute_type BIGINT COMMENT '1 开始 2 过程 3 完成',
+photos TEXT COMMENT '照片地址（JSON 数组字符串或逗号分隔）',
+gps_lat DECIMAL(12,8),
+gps_lng DECIMAL(12,8),
+gps_distance DECIMAL(12,2) COMMENT '距地块中心距离（米）',
+abnormal_desc TEXT,
+offline_flag BIGINT DEFAULT 0 COMMENT '0 在线 1 离线补传',
+tenant_id VARCHAR(191) NOT NULL,
+create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX `idx_task_record_task_id` (task_id),
+    INDEX `idx_task_record_tenant_id` (tenant_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 演示打卡记录（任务 1 的两条：开始 + 过程）
+INSERT IGNORE INTO agri_prod_task_record
+    (id, task_id, executor_id, executor_name, execute_time, execute_type, photos, gps_lat, gps_lng, gps_distance, offline_flag, tenant_id)
+VALUES
+    (1, 1, 11, '王师傅', '2026-10-13 07:40:00', 1, '[]', 45.12345678, 126.65432100, 12.50, 0, '2001'),
+    (2, 1, 11, '王师傅', '2026-10-13 09:20:00', 2, '[]', 45.12349999, 126.65439999, 15.20, 0, '2001');
+
+-- ---------------------------------------------------------------- 任务模板库
 -- 前端「农事任务管理 → 任务模板库」要读它；实体 TaskTemplate 早就写好，
 -- 但建表脚本里一直没有这张表（接口一调就 "Table ... doesn't exist"）。
 -- 列名按实体（= 接口口径）建。

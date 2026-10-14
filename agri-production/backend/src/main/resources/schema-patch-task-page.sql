@@ -81,6 +81,35 @@ VALUES
      3, '生物农药', 1, 'active', '2001');
 
 -- ---------- 3. 演示任务补上新列的值 ----------
+-- ---------- 3. 任务打卡记录（执行记录）----------
+-- 前端「农事任务详情」的打卡与记录列表要它；实体 TaskRecord 字段名直接按前端契约命名
+-- （recordId 映射到列 id，其余同名 snake_case）。
+CREATE TABLE IF NOT EXISTS agri_prod_task_record (
+id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+task_id BIGINT NOT NULL,
+executor_id BIGINT,
+executor_name VARCHAR(191),
+execute_time DATETIME,
+execute_type BIGINT COMMENT '1 开始 2 过程 3 完成',
+photos TEXT COMMENT '照片地址（JSON 数组字符串或逗号分隔）',
+gps_lat DECIMAL(12,8),
+gps_lng DECIMAL(12,8),
+gps_distance DECIMAL(12,2) COMMENT '距地块中心距离（米）',
+abnormal_desc TEXT,
+offline_flag BIGINT DEFAULT 0 COMMENT '0 在线 1 离线补传',
+tenant_id VARCHAR(191) NOT NULL,
+create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX `idx_task_record_task_id` (task_id),
+    INDEX `idx_task_record_tenant_id` (tenant_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT IGNORE INTO agri_prod_task_record
+    (id, task_id, executor_id, executor_name, execute_time, execute_type, photos, gps_lat, gps_lng, gps_distance, offline_flag, tenant_id)
+VALUES
+    (1, 1, 11, '王师傅', '2026-10-13 07:40:00', 1, '[]', 45.12345678, 126.65432100, 12.50, 0, '2001'),
+    (2, 1, 11, '王师傅', '2026-10-13 09:20:00', 2, '[]', 45.12349999, 126.65439999, 15.20, 0, '2001');
+
+-- ---------- 4. 演示任务补上新列的值 ----------
 -- 不补的话列表里这些字段都是空的（"有行没值"看起来像 bug，实测就是这种观感）
 UPDATE agri_prod_task_info SET
     task_desc = '分蘖期按 15kg/亩 追施尿素，施后浅水灌溉',

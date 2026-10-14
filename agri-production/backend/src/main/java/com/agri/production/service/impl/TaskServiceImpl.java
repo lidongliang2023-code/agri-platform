@@ -3,14 +3,18 @@ package com.agri.production.service.impl;
 import com.agri.production.dto.TaskPageDTO;
 import com.agri.production.dto.TaskSaveDTO;
 import com.agri.production.entity.Task;
+import com.agri.production.entity.TaskRecord;
 import com.agri.production.common.entity.PageResult;
 import com.agri.production.common.util.BeanCopyUtils;
 import com.agri.production.mapper.TaskMapper;
+import com.agri.production.mapper.TaskRecordMapper;
 import com.agri.production.service.ITaskService;
 import com.agri.production.vo.TaskVO;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,7 +22,10 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
+@RequiredArgsConstructor
 public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements ITaskService {
+
+    private final TaskRecordMapper taskRecordMapper;
 
     @Override
     @Transactional
@@ -84,8 +91,10 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
         if (task == null || !tenantId.equals(task.getTenantId())) {
             throw new RuntimeException("任务不存在");
         }
-        if (!"pending".equals(task.getStatus())) {
-            throw new RuntimeException("任务状态不正确");
+        // 可从"待处理"或"已派发"开始执行 —— 派发（assign）会把状态置成 assigned，
+        // 只认 pending 的话，派完人反而开始不了（自己的状态机自相矛盾）。
+        if (!"pending".equals(task.getStatus()) && !"assigned".equals(task.getStatus())) {
+            throw new RuntimeException("任务状态不正确：" + task.getStatus() + "（只有待处理/已派发的任务能开始执行）");
         }
         task.setStatus("executing");
         task.setActualStartTime(LocalDateTime.now());
@@ -158,6 +167,102 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
         view.put("attachmentUrls", java.util.List.of());
         view.put("acceptedAt", task.getAcceptedAt());
         return view;
+    }
+
+    @Override
+    @Transactional
+    public TaskVO assignTask(Long id, Long assigneeId, String assigneeName, String tenantId) {
+        Task task = getById(id);
+        if (task == null || !tenantId.equals(task.getTenantId())) {
+            throw new RuntimeException("任务不存在");
+        }
+        if (assigneeId == null) {
+            throw new RuntimeException("必须指定执行人");
+        }
+        task.setExecutorId(assigneeId);
+        // 姓名优先取调用方带的；没带就沿用原来的（否则会出现"执行人只有 id 没有名字"，
+        // 列表页那一列就空了）
+        if (assigneeName != null && !assigneeName.isEmpty()) {
+            task.setExecutorName(assigneeName);
+        }
+        // 派发后进入"已派发"：原先只有 pending，派了人也还是 pending，看板上分不清
+        if ("pending".equals(task.getStatus())) {
+            task.setStatus("assigned");
+        }
+        updateById(task);
+        return BeanCopyUtils.copy(task, TaskVO.class);
+    }
+
+    @Override
+    public java.util.Map<String, Object> pageRecords(Long taskId, Integer pageNum, Integer pageSize,
+                                                    String tenantId) {
+        Task task = getById(taskId);
+        if (task == null || !tenantId.equals(task.getTenantId())) {
+            throw new RuntimeException("任务不存在");
+        }
+        Page<TaskRecord> page = new Page<>(pageNum == null ? 1 : pageNum, pageSize == null ? 50 : pageSize);
+        IPage<TaskRecord> result = taskRecordMapper.selectPage(page,
+                new LambdaQueryWrapper<TaskRecord>()
+                        .eq(TaskRecord::getTaskId, taskId)
+                        .orderByDesc(TaskRecord::getExecuteTime));
+        // 前端分页适配读的是 records/total/page/size（见 api/tasks.ts 的 normalizePageResult）
+        java.util.Map<String, Object> view = new java.util.LinkedHashMap<>();
+        view.put("records", result.getRecords());
+        view.put("total", result.getTotal());
+        view.put("page", result.getCurrent());
+        view.put("size", result.getSize());
+        return view;
+    }
+
+    @Override
+    @Transactional
+    public Long createRecord(Long taskId, java.util.Map<String, Object> body, String tenantId) {
+        Task task = getById(taskId);
+        if (task == null || !tenantId.equals(task.getTenantId())) {
+            throw new RuntimeException("任务不存在");
+        }
+        TaskRecord record = new TaskRecord();
+        record.setTaskId(taskId);
+        record.setExecutorId(task.getExecutorId());
+        record.setExecutorName(task.getExecutorName());
+        record.setTenantId(tenantId);
+        record.setCreateTime(LocalDateTime.now());
+        // 打卡时间以调用方给的为准（离线补传时要保留真实时间），没给就取当前
+        record.setExecuteTime(parseTime(body.get("executeTime")));
+        record.setExecuteType(toInt(body.get("executeType")));
+        record.setPhotos(body.get("photos") == null ? null : String.valueOf(body.get("photos")));
+        record.setGpsLat(toDecimal(body.get("gpsLat")));
+        record.setGpsLng(toDecimal(body.get("gpsLng")));
+        record.setGpsDistance(toDecimal(body.get("gpsDistance")));
+        record.setAbnormalDesc(body.get("abnormalDesc") == null ? null : String.valueOf(body.get("abnormalDesc")));
+        record.setOfflineFlag(toInt(body.get("offlineFlag")));
+        taskRecordMapper.insert(record);
+        return record.getRecordId();
+    }
+
+    private LocalDateTime parseTime(Object value) {
+        if (value == null || String.valueOf(value).isBlank()) {
+            return LocalDateTime.now();
+        }
+        String text = String.valueOf(value).trim().replace('T', ' ');
+        if (text.length() > 19) {
+            text = text.substring(0, 19);
+        }
+        return LocalDateTime.parse(text, java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+    }
+
+    private Integer toInt(Object value) {
+        if (value == null || String.valueOf(value).isBlank()) {
+            return null;
+        }
+        return Integer.valueOf(String.valueOf(value));
+    }
+
+    private java.math.BigDecimal toDecimal(Object value) {
+        if (value == null || String.valueOf(value).isBlank()) {
+            return null;
+        }
+        return new java.math.BigDecimal(String.valueOf(value));
     }
 
     @Override

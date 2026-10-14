@@ -75,10 +75,18 @@ for (const file of files) {
   }
   const mapped = new Set()
   for (const m of text.matchAll(/@TableField\("([^"]+)"\)/g)) mapped.add(m[1])
+  // @TableId 也要认：主键列名可能和 Java 字段名不同（例如字段 recordId 映射到列 id），
+  // 只按驼峰转下划线会算出 record_id，被误报成"表里没有这一列"。
+  for (const m of text.matchAll(/@TableId\(\s*(?:value\s*=\s*)?"([^"]+)"/g)) mapped.add(m[1])
   // @TableField(exist = false) 的字段是**非数据库字段**（例如树形结构的 children），
   // 先整段剔除再扫字段名，否则会被误报成"表里没有这一列"（主数据模块实测踩到）。
   const withoutTransient = text.replace(/@TableField\(exist\s*=\s*false\)\s*\n\s*private[^;]+;/g, '')
-  for (const m of withoutTransient.matchAll(/^\s*private\s+[\w<>,.\s]+\s+(\w+);/gm)) mapped.add(toSnake(m[1]))
+  // 主键字段名已经从 @TableId 记过列名，这里不再用驼峰名覆盖
+  const pkField = text.match(/@TableId\([^)]*\)\s*\n\s*private\s+[\w<>,.\s]+\s+(\w+);/)
+  for (const m of withoutTransient.matchAll(/^\s*private\s+[\w<>,.\s]+\s+(\w+);/gm)) {
+    if (pkField && m[1] === pkField[1]) continue
+    mapped.add(toSnake(m[1]))
+  }
   const real = tables.get(table)
   const missing = [...mapped].filter((c) => !real.has(c) && c !== 'id')
   if (missing.length) {

@@ -73,11 +73,35 @@ public class TaskController {
         return ApiResponse.success(vo);
     }
 
-    @PostMapping("/{id}/complete")
-    public ApiResponse<TaskVO> completeTask(@PathVariable Long id, @RequestBody Map<String, String> body) {
+    /**
+     * 派发 / 转派任务。
+     *
+     * <p>前端是 {@code POST /tasks/{id}/assign?assigneeId=xxx}（参数在查询串里，
+     * 见 api/tasks.ts 的 dispatchTask）—— 后端此前没有这个接口。</p>
+     */
+    @PostMapping("/{id}/assign")
+    public ApiResponse<TaskVO> assignTask(@PathVariable Long id,
+                                          @RequestParam Long assigneeId,
+                                          @RequestParam(required = false) String assigneeName) {
         String tenantId = TenantContextService.currentTenantId();
-        String resultDesc = body.get("resultDesc");
-        String resultPhotoUrls = body.get("resultPhotoUrls");
+        return ApiResponse.success(taskService.assignTask(id, assigneeId, assigneeName, tenantId));
+    }
+
+    /**
+     * 提交成果（执行中 → 待验收）。
+     *
+     * <p>前端契约是 {@code POST /tasks/{id}/submit}（无请求体，见 submitTaskResult）——
+     * 后端此前叫 {@code /complete} 且要求 body 必填，前端一调就是 400/404。
+     * 保留 /complete 作为别名（同一实现），避免如果还有别处在用旧路径。</p>
+     */
+    @PostMapping({"/{id}/submit", "/{id}/complete"})
+    public ApiResponse<TaskVO> submitTask(@PathVariable Long id,
+                                          @RequestParam(required = false) String resultDesc,
+                                          @RequestParam(required = false) String resultPhotoUrls) {
+        String tenantId = TenantContextService.currentTenantId();
+        // 用查询参数而不是 @RequestBody：前端提交成果时不带请求体，
+        // 而带 @RequestBody 的方法会拒绝 x-www-form-urlencoded / 无体请求
+        // （实测 500：Content-Type 'application/x-www-form-urlencoded' is not supported）。
         TaskVO vo = taskService.completeTask(id, resultDesc, resultPhotoUrls, tenantId);
         return ApiResponse.success(vo);
     }
@@ -91,14 +115,41 @@ public class TaskController {
      * 名字前端不认，而且那两个字段对应的列在表里根本不存在（写了就是 Unknown column）。</p>
      */
     @PostMapping("/{id}/acceptance")
-    public ApiResponse<TaskVO> acceptTask(@PathVariable Long id, @RequestBody Map<String, Object> body) {
+    public ApiResponse<TaskVO> acceptTask(@PathVariable Long id,
+                                          @RequestParam(required = false) Boolean pass,
+                                          @RequestParam(required = false) String opinion,
+                                          @RequestParam(required = false) Integer acceptStatus,
+                                          @RequestParam(required = false) String remark,
+                                          @RequestParam(required = false) String acceptorName) {
         String tenantId = TenantContextService.currentTenantId();
-        Object status = body.get("acceptStatus");
-        Integer acceptStatus = status == null ? null : Integer.valueOf(String.valueOf(status));
-        String remark = body.get("remark") == null ? null : String.valueOf(body.get("remark"));
-        String acceptorName = body.get("acceptorName") == null ? null : String.valueOf(body.get("acceptorName"));
-        TaskVO vo = taskService.acceptTask(id, acceptStatus, remark, acceptorName, tenantId);
+        // 前端走查询串（pass/opinion，见 api/tasks.ts 的 reviewTask）；
+        // 同时认 acceptStatus/remark 两个名字，调用方用哪套都行。
+        // 这里不用 @RequestBody：前端不带请求体，带 @RequestBody 会 500（见 submitTask 的说明）。
+        Integer finalStatus = pass == null ? acceptStatus : (Boolean.TRUE.equals(pass) ? 1 : 2);
+        String finalRemark = remark != null ? remark : opinion;
+        TaskVO vo = taskService.acceptTask(id, finalStatus, finalRemark, acceptorName, tenantId);
         return ApiResponse.success(vo);
+    }
+
+    /** 任务执行记录（打卡）列表：GET /tasks/{id}/records?page=&size= */
+    @GetMapping("/{id}/records")
+    public ApiResponse<Map<String, Object>> listRecords(@PathVariable Long id,
+                                                        @RequestParam(defaultValue = "1") Integer page,
+                                                        @RequestParam(required = false) Integer pageNum,
+                                                        @RequestParam(defaultValue = "50") Integer size,
+                                                        @RequestParam(required = false) Integer pageSize) {
+        String tenantId = TenantContextService.currentTenantId();
+        return ApiResponse.success(taskService.pageRecords(id,
+                pageNum != null ? pageNum : page,
+                pageSize != null ? pageSize : size,
+                tenantId));
+    }
+
+    /** 新增打卡记录：POST /tasks/{id}/records */
+    @PostMapping("/{id}/records")
+    public ApiResponse<String> createRecord(@PathVariable Long id, @RequestBody Map<String, Object> body) {
+        String tenantId = TenantContextService.currentTenantId();
+        return ApiResponse.success(String.valueOf(taskService.createRecord(id, body, tenantId)));
     }
 
     /** 验收视图（前端 TaskAcceptance 页面读它）。 */
