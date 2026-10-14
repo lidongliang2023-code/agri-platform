@@ -3,6 +3,7 @@ package com.agri.production.service;
 import com.agri.production.common.entity.PageResult;
 import com.agri.production.vo.TraceCodeContractVO;
 
+import java.util.Map;
 import java.util.List;
 
 /**
@@ -33,4 +34,22 @@ public interface ITraceLifecycleService {
     int batchUpdateStatus(List<String> codes, String targetStatus, String tenantId);
 
     List<TraceCodeContractVO> listByBatch(String batchId, String tenantId);
+
+    /**
+     * 全链路节点（前端 {@code GET /trace/full-chain/{batchId}/nodes}，契约 {@code TraceFullChainNode}）。
+     *
+     * <p><b>派生，不建表</b>：节点从各域**已有的真实数据**聚合而来 —— 采收批次本身、
+     * 该批次的质检单、该批次的库存流水、该地块的投入品使用记录、该批次的溯源码。
+     * 哪个域没有数据，就没有那一段节点（不补空节点、不编时间）。</p>
+     */
+    List<Map<String, Object>> fullChainNodes(String batchId, String tenantId);
+
+    /**
+     * 按溯源码取全链路（前端 {@code GET /trace/full-chain/trace/{code}}，契约 {@code TraceNode}）。
+     *
+     * <p>先按码找到批次，再走与 {@link #fullChainNodes} 同一套聚合；
+     * 契约里多出来的 {@code nodeId}/{@code nodeName} 由阶段+引用号拼出，{@code onChain}
+     * 只在真有交易哈希时为 true（没有存证记录就是 false，不猜）。</p>
+     */
+    List<Map<String, Object>> fullChainByCode(String code, String tenantId);
 }

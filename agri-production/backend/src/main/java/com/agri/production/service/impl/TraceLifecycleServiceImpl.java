@@ -3,8 +3,14 @@ package com.agri.production.service.impl;
 import com.agri.production.common.entity.PageResult;
 import com.agri.production.common.exception.BusinessException;
 import com.agri.production.entity.HarvestBatch;
+import com.agri.production.entity.Inspection;
+import com.agri.production.entity.InputUsageRecord;
+import com.agri.production.entity.InventoryFlow;
 import com.agri.production.entity.TraceCode;
 import com.agri.production.mapper.HarvestBatchMapper;
+import com.agri.production.mapper.InspectionMapper;
+import com.agri.production.mapper.InputUsageRecordMapper;
+import com.agri.production.mapper.InventoryFlowMapper;
 import com.agri.production.mapper.TraceCodeMapper;
 import com.agri.production.service.ITraceLifecycleService;
 import com.agri.production.vo.TraceCodeContractVO;
@@ -19,7 +25,10 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
@@ -36,10 +45,18 @@ public class TraceLifecycleServiceImpl implements ITraceLifecycleService {
 
     private final TraceCodeMapper traceCodeMapper;
     private final HarvestBatchMapper batchMapper;
+    private final InspectionMapper inspectionMapper;
+    private final InventoryFlowMapper inventoryFlowMapper;
+    private final InputUsageRecordMapper inputUsageMapper;
 
-    public TraceLifecycleServiceImpl(TraceCodeMapper traceCodeMapper, HarvestBatchMapper batchMapper) {
+    public TraceLifecycleServiceImpl(TraceCodeMapper traceCodeMapper, HarvestBatchMapper batchMapper,
+                                    InspectionMapper inspectionMapper, InventoryFlowMapper inventoryFlowMapper,
+                                    InputUsageRecordMapper inputUsageMapper) {
         this.traceCodeMapper = traceCodeMapper;
         this.batchMapper = batchMapper;
+        this.inspectionMapper = inspectionMapper;
+        this.inventoryFlowMapper = inventoryFlowMapper;
+        this.inputUsageMapper = inputUsageMapper;
     }
 
     @Override
@@ -189,6 +206,184 @@ public class TraceLifecycleServiceImpl implements ITraceLifecycleService {
             list.add(TraceCodeContractVO.of(c));
         }
         return list;
+    }
+
+    /* ==================== 全链路（派生聚合） ==================== */
+
+    @Override
+    public List<Map<String, Object>> fullChainNodes(String batchId, String tenantId) {
+        HarvestBatch batch = requireBatch(batchId, tenantId);
+        List<Map<String, Object>> nodes = new ArrayList<>();
+
+        // 1) 采收
+        Map<String, Object> harvest = new LinkedHashMap<>();
+        harvest.put("nodeType", "harvest");
+        harvest.put("nodeName", "采收");
+        harvest.put("stage", "harvest");
+        harvest.put("refId", batch.getBatchId());
+        harvest.put("refNo", batch.getBatchNo());
+        harvest.put("occurredAt", batch.getHarvestDate() == null ? null : batch.getHarvestDate().toString());
+        harvest.put("operatorName", batch.getOperatorName());
+        harvest.put("description", String.format("采收 %s %s，等级 %s",
+                batch.getQuantity() == null ? "—" : batch.getQuantity().stripTrailingZeros().toPlainString(),
+                batch.getUnit() == null ? "" : batch.getUnit(),
+                batch.getGrade() == null ? "—" : batch.getGrade()));
+        harvest.put("onChain", batch.getTraceCode() != null);
+        nodes.add(harvest);
+
+        // 2) 质检（按批次号或批次 id 关联；契约的检测单挂的是批次）
+        for (Inspection ins : inspectionMapper.selectList(new LambdaQueryWrapper<Inspection>()
+                .eq(Inspection::getTenantId, tenantId)
+                .and(q -> q.eq(Inspection::getBatchId, batch.getBatchId())
+                        .or().eq(Inspection::getBatchNo, batch.getBatchNo())))) {
+            Map<String, Object> node = new LinkedHashMap<>();
+            node.put("nodeType", "inspect");
+            node.put("nodeName", "质量检测");
+            node.put("stage", "inspect");
+            node.put("refId", ins.getInspectionId());
+            node.put("refNo", ins.getInspectionNo());
+            node.put("occurredAt", ins.getSampleAt() == null ? null : ins.getSampleAt().toString());
+            node.put("operatorName", ins.getInspectorName());
+            node.put("description", String.format("%s，结论 %s，状态 %s",
+                    ins.getInspectionType() == null ? "检测" : ins.getInspectionType(),
+                    ins.getResult() == null ? "—" : ins.getResult(),
+                    ins.getStatus() == null ? "—" : ins.getStatus()));
+            node.put("onChain", Boolean.FALSE);
+            nodes.add(node);
+        }
+
+        // 3) 入库 / 出库（该批次的库存流水）
+        for (InventoryFlow flow : inventoryFlowMapper.selectList(new LambdaQueryWrapper<InventoryFlow>()
+                .eq(InventoryFlow::getTenantId, tenantId)
+                .eq(InventoryFlow::getBatchId, batch.getBatchId()))) {
+            Map<String, Object> node = new LinkedHashMap<>();
+            node.put("nodeType", "storage");
+            node.put("nodeName", flowTypeName(flow.getFlowType()));
+            node.put("stage", "storage");
+            node.put("refId", flow.getFlowId());
+            node.put("refNo", flow.getWarehouseName());
+            node.put("occurredAt", flow.getOperatedAt() == null ? null : flow.getOperatedAt().toString());
+            node.put("operatorName", flow.getOperatorName());
+            node.put("description", String.format("%s %s %s%s",
+                    flowTypeName(flow.getFlowType()),
+                    flow.getQuantity() == null ? "—" : flow.getQuantity().stripTrailingZeros().toPlainString(),
+                    flow.getUnit() == null ? "" : flow.getUnit(),
+                    flow.getRemark() == null ? "" : "（" + flow.getRemark() + "）"));
+            node.put("onChain", Boolean.FALSE);
+            nodes.add(node);
+        }
+
+        // 4) 投入品使用（按地块关联：这一批作物用过什么，直接决定溯源可信度）
+        if (batch.getPlotId() != null) {
+            for (InputUsageRecord usage : inputUsageMapper.selectList(new LambdaQueryWrapper<InputUsageRecord>()
+                    .eq(InputUsageRecord::getTenantId, tenantId)
+                    .eq(InputUsageRecord::getPlotId, batch.getPlotId()))) {
+                Map<String, Object> node = new LinkedHashMap<>();
+                node.put("nodeType", "input");
+                node.put("nodeName", "投入品使用");
+                node.put("stage", "input");
+                node.put("refId", usage.getUsageId());
+                node.put("refNo", usage.getInputName());
+                node.put("occurredAt", usage.getUsedAt() == null ? null : usage.getUsedAt().toString());
+                node.put("operatorName", usage.getOperatorId());
+                node.put("description", String.format("使用 %s %s%s，方式 %s",
+                        usage.getInputName() == null ? "—" : usage.getInputName(),
+                        usage.getDosage() == null ? "—" : usage.getDosage().stripTrailingZeros().toPlainString(),
+                        usage.getUnit() == null ? "" : usage.getUnit(),
+                        usage.getMethod() == null ? "—" : usage.getMethod()));
+                node.put("onChain", Boolean.FALSE);
+                nodes.add(node);
+            }
+        }
+
+        // 5) 溯源码（该批次的码；有交易哈希才算已上链）
+        for (TraceCode code : traceCodeMapper.selectList(new LambdaQueryWrapper<TraceCode>()
+                .eq(TraceCode::getTenantId, tenantId)
+                .and(q -> q.eq(TraceCode::getHarvestId, batch.getBatchId())
+                        .or().eq(TraceCode::getBatchNumber, batch.getBatchNo())))) {
+            Map<String, Object> node = new LinkedHashMap<>();
+            node.put("nodeType", "trace");
+            node.put("nodeName", "溯源码");
+            node.put("stage", "trace");
+            node.put("refId", code.getId());
+            node.put("refNo", code.getTraceCode());
+            node.put("occurredAt", code.getActivateTime() == null ? null : code.getActivateTime().toString());
+            node.put("operatorName", null);
+            node.put("description", "溯源码状态 " + normalize(code.getStatus())
+                    + "，查询 " + (code.getQueryCount() == null ? 0 : code.getQueryCount()) + " 次");
+            node.put("txHash", code.getBlockchainTxHash());
+            node.put("onChain", code.getBlockchainTxHash() != null && !code.getBlockchainTxHash().isBlank());
+            nodes.add(node);
+        }
+
+        nodes.sort(Comparator.comparing(n -> String.valueOf(n.get("occurredAt") == null ? "" : n.get("occurredAt"))));
+        return nodes;
+    }
+
+    @Override
+    public List<Map<String, Object>> fullChainByCode(String code, String tenantId) {
+        TraceCode entity = getOwned(code, tenantId);
+        String batchKey = entity.getBatchNumber() != null ? entity.getBatchNumber()
+                : (entity.getHarvestId() == null ? null : String.valueOf(entity.getHarvestId()));
+        if (batchKey == null) {
+            throw new BusinessException(400, "该溯源码没有关联批次，无法取全链路");
+        }
+        List<Map<String, Object>> raw = fullChainNodes(batchKey, tenantId);
+        List<Map<String, Object>> nodes = new ArrayList<>();
+        int index = 1;
+        for (Map<String, Object> node : raw) {
+            Map<String, Object> shaped = new LinkedHashMap<>();
+            shaped.put("nodeId", node.get("nodeType") + "-" + (node.get("refId") == null ? index : node.get("refId")));
+            shaped.put("batchId", entity.getHarvestId());
+            shaped.put("stage", node.get("stage"));
+            shaped.put("stageName", node.get("nodeName"));
+            shaped.put("occurredAt", node.get("occurredAt"));
+            shaped.put("operatorName", node.get("operatorName"));
+            shaped.put("description", node.get("description"));
+            shaped.put("refId", node.get("refId"));
+            shaped.put("txHash", node.get("txHash"));
+            shaped.put("onChain", node.get("onChain"));
+            nodes.add(shaped);
+            index += 1;
+        }
+        return nodes;
+    }
+
+    /** 取并校验批次（按 id 或按批次号都能定位，页面两边都在用）。 */
+    private HarvestBatch requireBatch(String batchKey, String tenantId) {
+        if (batchKey == null || batchKey.isBlank()) {
+            throw new BusinessException(400, "缺少 batchId");
+        }
+        Long id = toLong(batchKey);
+        HarvestBatch batch = id == null ? null : batchMapper.selectById(id);
+        if (batch == null) {
+            batch = batchMapper.selectOne(new LambdaQueryWrapper<HarvestBatch>()
+                    .eq(HarvestBatch::getTenantId, tenantId)
+                    .eq(HarvestBatch::getBatchNo, batchKey.trim())
+                    .last("LIMIT 1"));
+        }
+        if (batch == null || !tenantId.equals(batch.getTenantId())) {
+            throw new BusinessException(404, "采收批次不存在：" + batchKey);
+        }
+        return batch;
+    }
+
+    private static String flowTypeName(Integer flowType) {
+        if (flowType == null) {
+            return "库存操作";
+        }
+        switch (flowType) {
+            case 1:
+                return "成品入库";
+            case 2:
+                return "成品出库";
+            case 3:
+                return "库存调拨";
+            case 4:
+                return "损耗登记";
+            default:
+                return "库存操作";
+        }
     }
 
     /* ==================== 内部工具 ==================== */

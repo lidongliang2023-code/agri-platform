@@ -109,6 +109,23 @@ public class TraceController {
         return ApiResponse.success(traceService.listByBatch(batchId, TenantContextService.currentTenantId()));
     }
 
+    /**
+     * 全链路节点（前端 fetchFullChainNodes）。
+     *
+     * <p>派生聚合：采收批次 + 该批次质检 + 该批次库存流水 + 该地块投入品使用 + 该批次溯源码。
+     * 哪个域没数据就没有那一段，不补空节点。</p>
+     */
+    @GetMapping("/full-chain/{batchId}/nodes")
+    public ApiResponse<List<Map<String, Object>>> fullChainNodes(@PathVariable String batchId) {
+        return ApiResponse.success(traceService.fullChainNodes(batchId, TenantContextService.currentTenantId()));
+    }
+
+    /** 按溯源码取全链路（前端 traceByCode）。 */
+    @GetMapping("/full-chain/trace/{code}")
+    public ApiResponse<List<Map<String, Object>>> fullChainByCode(@PathVariable String code) {
+        return ApiResponse.success(traceService.fullChainByCode(code, TenantContextService.currentTenantId()));
+    }
+
     /** 按批次生成（前端 generateTraceCodeByBatch）。 */
     @PostMapping("/batches/{batchId}/generate")
     public ApiResponse<String> generateByBatch(@PathVariable String batchId) {
