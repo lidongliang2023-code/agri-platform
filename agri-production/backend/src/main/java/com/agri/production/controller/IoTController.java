@@ -11,6 +11,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
+import com.agri.production.service.TenantContextService;
 
 @RestController
 @RequestMapping("/api/v1/production/iot")
@@ -29,7 +30,7 @@ public class IoTController {
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "10") Integer pageSize) {
-        return ApiResponse.success(ioTService.listDevices(deviceName, deviceType, status, pageNum, pageSize, "T001"));
+        return ApiResponse.success(ioTService.listDevices(deviceName, deviceType, status, pageNum, pageSize, TenantContextService.currentTenantId()));
     }
 
     @GetMapping("/devices/{id}")
@@ -40,14 +41,14 @@ public class IoTController {
 
     @PostMapping("/devices")
     public ApiResponse<IoTDevice> saveDevice(@RequestBody IoTDevice device) {
-        IoTDevice saved = ioTService.saveDevice(device, "T001");
+        IoTDevice saved = ioTService.saveDevice(device, TenantContextService.currentTenantId());
         return ApiResponse.success(saved);
     }
 
     @PutMapping("/devices/{id}")
     public ApiResponse<IoTDevice> updateDevice(@PathVariable Long id, @RequestBody IoTDevice device) {
         device.setId(id);
-        IoTDevice saved = ioTService.saveDevice(device, "T001");
+        IoTDevice saved = ioTService.saveDevice(device, TenantContextService.currentTenantId());
         return ApiResponse.success(saved);
     }
 
@@ -107,7 +108,7 @@ public class IoTController {
 
     @GetMapping("/statistics")
     public ApiResponse<Map<String, Object>> getIoTStatistics() {
-        Map<String, Object> statistics = ioTService.getIoTStatistics("T001");
+        Map<String, Object> statistics = ioTService.getIoTStatistics(TenantContextService.currentTenantId());
         return ApiResponse.success(statistics);
     }
 }

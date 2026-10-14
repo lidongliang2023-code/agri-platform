@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.*;
 import com.agri.production.common.entity.PageResult;
 import java.util.List;
 import java.util.Map;
+import com.agri.production.service.TenantContextService;
 
 @RestController
 @RequestMapping("/api/v1/production/quality")
@@ -24,7 +25,7 @@ public class QualityInspectionController {
 
     @GetMapping("/inspections")
     public ApiResponse<PageResult<?>> listInspections(QualityInspectionQueryDTO dto) {
-        return ApiResponse.success(qualityInspectionService.listInspections(dto, "T001"));
+        return ApiResponse.success(qualityInspectionService.listInspections(dto, TenantContextService.currentTenantId()));
     }
 
     @GetMapping("/inspections/{id}")
@@ -35,14 +36,14 @@ public class QualityInspectionController {
 
     @PostMapping("/inspections")
     public ApiResponse<QualityInspection> saveInspection(@RequestBody QualityInspectionSaveDTO dto) {
-        QualityInspection inspection = qualityInspectionService.saveInspection(dto, "T001");
+        QualityInspection inspection = qualityInspectionService.saveInspection(dto, TenantContextService.currentTenantId());
         return ApiResponse.success(inspection);
     }
 
     @PutMapping("/inspections/{id}")
     public ApiResponse<QualityInspection> updateInspection(@PathVariable Long id, @RequestBody QualityInspectionSaveDTO dto) {
         dto.setId(id);
-        QualityInspection inspection = qualityInspectionService.saveInspection(dto, "T001");
+        QualityInspection inspection = qualityInspectionService.saveInspection(dto, TenantContextService.currentTenantId());
         return ApiResponse.success(inspection);
     }
 
@@ -60,7 +61,7 @@ public class QualityInspectionController {
 
     @GetMapping("/items")
     public ApiResponse<List<InspectionItem>> listItems() {
-        List<InspectionItem> items = qualityInspectionService.listItems("T001");
+        List<InspectionItem> items = qualityInspectionService.listItems(TenantContextService.currentTenantId());
         return ApiResponse.success(items);
     }
 
@@ -72,14 +73,14 @@ public class QualityInspectionController {
 
     @PostMapping("/items")
     public ApiResponse<InspectionItem> saveItem(@RequestBody InspectionItem item) {
-        InspectionItem saved = qualityInspectionService.saveItem(item, "T001");
+        InspectionItem saved = qualityInspectionService.saveItem(item, TenantContextService.currentTenantId());
         return ApiResponse.success(saved);
     }
 
     @PutMapping("/items/{id}")
     public ApiResponse<InspectionItem> updateItem(@PathVariable Long id, @RequestBody InspectionItem item) {
         item.setId(id);
-        InspectionItem saved = qualityInspectionService.saveItem(item, "T001");
+        InspectionItem saved = qualityInspectionService.saveItem(item, TenantContextService.currentTenantId());
         return ApiResponse.success(saved);
     }
 
@@ -91,7 +92,7 @@ public class QualityInspectionController {
 
     @GetMapping("/statistics")
     public ApiResponse<Map<String, Object>> getStatistics() {
-        Map<String, Object> statistics = qualityInspectionService.getInspectionStatistics("T001");
+        Map<String, Object> statistics = qualityInspectionService.getInspectionStatistics(TenantContextService.currentTenantId());
         return ApiResponse.success(statistics);
     }
 }

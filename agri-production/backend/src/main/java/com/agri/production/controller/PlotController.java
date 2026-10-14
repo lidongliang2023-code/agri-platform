@@ -10,6 +10,7 @@ import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import com.agri.production.service.TenantContextService;
 
 @RestController
 @RequestMapping("/api/v1/production/plots")
@@ -23,7 +24,7 @@ public class PlotController {
 
     @PostMapping
     public ApiResponse<PlotVO> create(@Valid @RequestBody PlotSaveDTO dto) {
-        String tenantId = "T001";
+        String tenantId = TenantContextService.currentTenantId();
         PlotVO vo = plotService.save(dto, tenantId);
         return ApiResponse.success(vo);
     }
@@ -31,42 +32,42 @@ public class PlotController {
     @PutMapping("/{id}")
     public ApiResponse<PlotVO> update(@PathVariable Long id, @Valid @RequestBody PlotSaveDTO dto) {
         dto.setId(id);
-        String tenantId = "T001";
+        String tenantId = TenantContextService.currentTenantId();
         PlotVO vo = plotService.update(dto, tenantId);
         return ApiResponse.success(vo);
     }
 
     @DeleteMapping("/{id}")
     public ApiResponse<Void> delete(@PathVariable Long id) {
-        String tenantId = "T001";
+        String tenantId = TenantContextService.currentTenantId();
         plotService.delete(id, tenantId);
         return ApiResponse.success();
     }
 
     @GetMapping("/{id}")
     public ApiResponse<PlotVO> getById(@PathVariable Long id) {
-        String tenantId = "T001";
+        String tenantId = TenantContextService.currentTenantId();
         PlotVO vo = plotService.getById(id, tenantId);
         return ApiResponse.success(vo);
     }
 
     @GetMapping("/code/{plotCode}")
     public ApiResponse<PlotVO> getByCode(@PathVariable String plotCode) {
-        String tenantId = "T001";
+        String tenantId = TenantContextService.currentTenantId();
         PlotVO vo = plotService.getByCode(plotCode, tenantId);
         return ApiResponse.success(vo);
     }
 
     @GetMapping
     public ApiResponse<PageResult<PlotVO>> pageQuery(PlotPageDTO dto) {
-        String tenantId = "T001";
+        String tenantId = TenantContextService.currentTenantId();
         PageResult<PlotVO> result = plotService.pageQuery(dto, tenantId);
         return ApiResponse.success(result);
     }
 
     @GetMapping("/farm/{farmId}")
     public ApiResponse<List<PlotVO>> listByFarmId(@PathVariable Long farmId) {
-        String tenantId = "T001";
+        String tenantId = TenantContextService.currentTenantId();
         List<PlotVO> list = plotService.listByFarmId(farmId, tenantId);
         return ApiResponse.success(list);
     }

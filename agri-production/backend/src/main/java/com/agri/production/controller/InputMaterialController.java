@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
 import java.util.Map;
+import com.agri.production.service.TenantContextService;
 
 @RestController
 @RequestMapping("/api/v1/production/inputs")
@@ -24,7 +25,7 @@ public class InputMaterialController {
 
     @PostMapping
     public ApiResponse<InputMaterialVO> create(@Valid @RequestBody InputMaterialSaveDTO dto) {
-        String tenantId = "T001";
+        String tenantId = TenantContextService.currentTenantId();
         InputMaterialVO vo = inputMaterialService.save(dto, tenantId);
         return ApiResponse.success(vo);
     }
@@ -32,42 +33,42 @@ public class InputMaterialController {
     @PutMapping("/{id}")
     public ApiResponse<InputMaterialVO> update(@PathVariable Long id, @Valid @RequestBody InputMaterialSaveDTO dto) {
         dto.setId(id);
-        String tenantId = "T001";
+        String tenantId = TenantContextService.currentTenantId();
         InputMaterialVO vo = inputMaterialService.update(dto, tenantId);
         return ApiResponse.success(vo);
     }
 
     @DeleteMapping("/{id}")
     public ApiResponse<Void> delete(@PathVariable Long id) {
-        String tenantId = "T001";
+        String tenantId = TenantContextService.currentTenantId();
         inputMaterialService.delete(id, tenantId);
         return ApiResponse.success();
     }
 
     @GetMapping("/{id}")
     public ApiResponse<InputMaterialVO> getById(@PathVariable Long id) {
-        String tenantId = "T001";
+        String tenantId = TenantContextService.currentTenantId();
         InputMaterialVO vo = inputMaterialService.getById(id, tenantId);
         return ApiResponse.success(vo);
     }
 
     @GetMapping("/code/{materialCode}")
     public ApiResponse<InputMaterialVO> getByCode(@PathVariable String materialCode) {
-        String tenantId = "T001";
+        String tenantId = TenantContextService.currentTenantId();
         InputMaterialVO vo = inputMaterialService.getByCode(materialCode, tenantId);
         return ApiResponse.success(vo);
     }
 
     @GetMapping
     public ApiResponse<PageResult<InputMaterialVO>> pageQuery(InputMaterialPageDTO dto) {
-        String tenantId = "T001";
+        String tenantId = TenantContextService.currentTenantId();
         PageResult<InputMaterialVO> result = inputMaterialService.pageQuery(dto, tenantId);
         return ApiResponse.success(result);
     }
 
     @PostMapping("/{id}/stock-in")
     public ApiResponse<InputMaterialVO> stockIn(@PathVariable Long id, @RequestBody Map<String, Object> body) {
-        String tenantId = "T001";
+        String tenantId = TenantContextService.currentTenantId();
         BigDecimal quantity = new BigDecimal(body.get("quantity").toString());
         String batchNumber = (String) body.get("batchNumber");
         InputMaterialVO vo = inputMaterialService.stockIn(id, quantity, batchNumber, tenantId);
@@ -76,7 +77,7 @@ public class InputMaterialController {
 
     @PostMapping("/{id}/stock-out")
     public ApiResponse<InputMaterialVO> stockOut(@PathVariable Long id, @RequestBody Map<String, Object> body) {
-        String tenantId = "T001";
+        String tenantId = TenantContextService.currentTenantId();
         BigDecimal quantity = new BigDecimal(body.get("quantity").toString());
         String usageTaskId = (String) body.get("usageTaskId");
         InputMaterialVO vo = inputMaterialService.stockOut(id, quantity, usageTaskId, tenantId);

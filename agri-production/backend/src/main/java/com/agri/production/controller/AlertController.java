@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.*;
 import com.agri.production.common.entity.PageResult;
 import java.util.List;
 import java.util.Map;
+import com.agri.production.service.TenantContextService;
 
 @RestController
 @RequestMapping("/api/v1/production/alerts")
@@ -26,7 +27,7 @@ public class AlertController {
 
     @GetMapping("/rules")
     public ApiResponse<List<AlertRule>> listRules() {
-        List<AlertRule> rules = alertService.listRules("T001");
+        List<AlertRule> rules = alertService.listRules(TenantContextService.currentTenantId());
         return ApiResponse.success(rules);
     }
 
@@ -38,14 +39,14 @@ public class AlertController {
 
     @PostMapping("/rules")
     public ApiResponse<AlertRule> saveRule(@Valid @RequestBody AlertRuleSaveDTO dto) {
-        AlertRule rule = alertService.saveRule(dto, "T001");
+        AlertRule rule = alertService.saveRule(dto, TenantContextService.currentTenantId());
         return ApiResponse.success(rule);
     }
 
     @PutMapping("/rules/{id}")
     public ApiResponse<AlertRule> updateRule(@PathVariable Long id, @Valid @RequestBody AlertRuleSaveDTO dto) {
         dto.setId(id);
-        AlertRule rule = alertService.saveRule(dto, "T001");
+        AlertRule rule = alertService.saveRule(dto, TenantContextService.currentTenantId());
         return ApiResponse.success(rule);
     }
 
@@ -63,7 +64,7 @@ public class AlertController {
 
     @GetMapping("/records")
     public ApiResponse<PageResult<?>> listRecords(AlertRecordQueryDTO dto) {
-        return ApiResponse.success(alertService.listRecords(dto, "T001"));
+        return ApiResponse.success(alertService.listRecords(dto, TenantContextService.currentTenantId()));
     }
 
     @GetMapping("/records/{id}")
@@ -84,7 +85,7 @@ public class AlertController {
 
     @GetMapping("/plans")
     public ApiResponse<List<EmergencyPlan>> listPlans() {
-        List<EmergencyPlan> plans = alertService.listPlans("T001");
+        List<EmergencyPlan> plans = alertService.listPlans(TenantContextService.currentTenantId());
         return ApiResponse.success(plans);
     }
 
@@ -96,14 +97,14 @@ public class AlertController {
 
     @PostMapping("/plans")
     public ApiResponse<EmergencyPlan> savePlan(@RequestBody EmergencyPlan plan) {
-        EmergencyPlan saved = alertService.savePlan(plan, "T001");
+        EmergencyPlan saved = alertService.savePlan(plan, TenantContextService.currentTenantId());
         return ApiResponse.success(saved);
     }
 
     @PutMapping("/plans/{id}")
     public ApiResponse<EmergencyPlan> updatePlan(@PathVariable Long id, @RequestBody EmergencyPlan plan) {
         plan.setId(id);
-        EmergencyPlan saved = alertService.savePlan(plan, "T001");
+        EmergencyPlan saved = alertService.savePlan(plan, TenantContextService.currentTenantId());
         return ApiResponse.success(saved);
     }
 
@@ -121,7 +122,7 @@ public class AlertController {
 
     @GetMapping("/statistics")
     public ApiResponse<Map<String, Object>> getStatistics() {
-        Map<String, Object> statistics = alertService.getAlertStatistics("T001");
+        Map<String, Object> statistics = alertService.getAlertStatistics(TenantContextService.currentTenantId());
         return ApiResponse.success(statistics);
     }
 }

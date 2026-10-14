@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.*;
 import com.agri.production.common.entity.PageResult;
 import java.util.List;
 import java.util.Map;
+import com.agri.production.service.TenantContextService;
 
 @RestController
 @RequestMapping("/api/v1/production/sop")
@@ -27,7 +28,7 @@ public class SopController {
             @RequestParam(required = false) String taskType,
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "10") Integer pageSize) {
-        return ApiResponse.success(sopService.listTemplates(templateName, category, taskType, pageNum, pageSize, "T001"));
+        return ApiResponse.success(sopService.listTemplates(templateName, category, taskType, pageNum, pageSize, TenantContextService.currentTenantId()));
     }
 
     @GetMapping("/templates/{id}")
@@ -38,14 +39,14 @@ public class SopController {
 
     @PostMapping("/templates")
     public ApiResponse<SopTemplate> saveTemplate(@RequestBody SopTemplate template) {
-        SopTemplate saved = sopService.saveTemplate(template, "T001");
+        SopTemplate saved = sopService.saveTemplate(template, TenantContextService.currentTenantId());
         return ApiResponse.success(saved);
     }
 
     @PutMapping("/templates/{id}")
     public ApiResponse<SopTemplate> updateTemplate(@PathVariable Long id, @RequestBody SopTemplate template) {
         template.setId(id);
-        SopTemplate saved = sopService.saveTemplate(template, "T001");
+        SopTemplate saved = sopService.saveTemplate(template, TenantContextService.currentTenantId());
         return ApiResponse.success(saved);
     }
 
@@ -63,7 +64,7 @@ public class SopController {
 
     @GetMapping("/templates/by-task-type")
     public ApiResponse<List<SopTemplate>> getTemplatesByTaskType(@RequestParam String taskType) {
-        List<SopTemplate> templates = sopService.getTemplatesByTaskType(taskType, "T001");
+        List<SopTemplate> templates = sopService.getTemplatesByTaskType(taskType, TenantContextService.currentTenantId());
         return ApiResponse.success(templates);
     }
 
@@ -72,7 +73,7 @@ public class SopController {
             @RequestParam Long templateId,
             @RequestParam(required = false) Long taskId,
             @RequestParam String executor) {
-        SopExecution execution = sopService.startExecution(templateId, taskId, executor, "T001");
+        SopExecution execution = sopService.startExecution(templateId, taskId, executor, TenantContextService.currentTenantId());
         return ApiResponse.success(execution);
     }
 
@@ -83,7 +84,7 @@ public class SopController {
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "10") Integer pageSize) {
-        return ApiResponse.success(sopService.listExecutions(templateId, taskId, status, pageNum, pageSize, "T001"));
+        return ApiResponse.success(sopService.listExecutions(templateId, taskId, status, pageNum, pageSize, TenantContextService.currentTenantId()));
     }
 
     @GetMapping("/executions/{id}")

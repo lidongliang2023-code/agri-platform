@@ -21,6 +21,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import com.agri.production.service.TenantContextService;
 
 @Service
 public class AlertServiceImpl implements IAlertService {
@@ -112,7 +113,7 @@ public class AlertServiceImpl implements IAlertService {
 
     @Override
     public void autoHandleAlerts() {
-        List<AlertRecord> pendingAlerts = alertRecordMapper.selectByStatus("pending", "T001");
+        List<AlertRecord> pendingAlerts = alertRecordMapper.selectByStatus("pending", TenantContextService.currentTenantId());
         for (AlertRecord alert : pendingAlerts) {
             AlertRule rule = alertRuleMapper.selectById(alert.getRuleId());
             if (rule != null && rule.getAutoHandle() != null && rule.getAutoHandle() == 1) {

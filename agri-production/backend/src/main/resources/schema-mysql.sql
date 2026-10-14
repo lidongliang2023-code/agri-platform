@@ -440,17 +440,20 @@ deleted BIGINT DEFAULT 0,
 remark TEXT,
     INDEX `idx_planting_plan_tenant_id` (tenant_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-INSERT IGNORE INTO agri_prod_farm_info (farm_code, farm_name, tenant_id) VALUES ('F001', '示范农场', 'T001');
-INSERT IGNORE INTO agri_prod_farm_info (farm_code, farm_name, tenant_id) VALUES ('F002', '绿色生态园', 'T001');
-INSERT IGNORE INTO agri_prod_plot_info (plot_code, plot_name, farm_id, tenant_id) VALUES ('P001', 'A区-地块1', 1, 'T001');
-INSERT IGNORE INTO agri_prod_plot_info (plot_code, plot_name, farm_id, tenant_id) VALUES ('P002', 'A区-地块2', 1, 'T001');
-INSERT IGNORE INTO agri_prod_plot_info (plot_code, plot_name, farm_id, tenant_id) VALUES ('P003', 'B区-地块1', 2, 'T001');
-INSERT IGNORE INTO agri_prod_task_info (task_code, task_name, task_type, farm_id, plot_id, tenant_id) VALUES ('T001', '春季施肥', '施肥', 1, 1, 'T001');
-INSERT IGNORE INTO agri_prod_task_info (task_code, task_name, task_type, farm_id, plot_id, tenant_id) VALUES ('T002', '病虫害防治', '防治', 1, 2, 'T001');
-INSERT IGNORE INTO agri_prod_input_material (material_code, material_name, material_type, unit, tenant_id) VALUES ('M001', '有机肥料', '肥料', 'kg', 'T001');
-INSERT IGNORE INTO agri_prod_input_material (material_code, material_name, material_type, unit, tenant_id) VALUES ('M002', '生物农药', '农药', 'L', 'T001');
-INSERT IGNORE INTO agri_prod_input_inventory (material_id, quantity, tenant_id) VALUES (1, 5000, 'T001');
-INSERT IGNORE INTO agri_prod_input_inventory (material_id, quantity, tenant_id) VALUES (2, 200, 'T001');
-INSERT IGNORE INTO agri_prod_harvest_record (harvest_code, crop_name, farm_id, plot_id, harvest_date, quantity, unit, tenant_id) VALUES ('H001', '西红柿', 1, 1, '2024-01-15', 2500, 'kg', 'T001');
-INSERT IGNORE INTO agri_prod_alert_rule (rule_code, rule_name, alert_type, level, tenant_id) VALUES ('R001', '土壤湿度异常', 'soil', 'warning', 'T001');
-INSERT IGNORE INTO agri_prod_alert_rule (rule_code, rule_name, alert_type, level, tenant_id) VALUES ('R002', '温度超限', 'temperature', 'error', 'T001');
+-- 种子里的 tenant_id = '2001' 是**演示经营主体**（绿源农业合作社）。
+-- 口径（2026-10-14 拍板）：一主体一租户，tenant_id 存经营主体 id；不需要市场维度。
+-- 也就是说这些演示数据只有绑定到 2001 的账号看得到；运营端不受租户限制（传 null 即全平台）。
+INSERT IGNORE INTO agri_prod_farm_info (farm_code, farm_name, tenant_id) VALUES ('F001', '示范农场', '2001');
+INSERT IGNORE INTO agri_prod_farm_info (farm_code, farm_name, tenant_id) VALUES ('F002', '绿色生态园', '2001');
+INSERT IGNORE INTO agri_prod_plot_info (plot_code, plot_name, farm_id, tenant_id) VALUES ('P001', 'A区-地块1', 1, '2001');
+INSERT IGNORE INTO agri_prod_plot_info (plot_code, plot_name, farm_id, tenant_id) VALUES ('P002', 'A区-地块2', 1, '2001');
+INSERT IGNORE INTO agri_prod_plot_info (plot_code, plot_name, farm_id, tenant_id) VALUES ('P003', 'B区-地块1', 2, '2001');
+INSERT IGNORE INTO agri_prod_task_info (task_code, task_name, task_type, farm_id, plot_id, tenant_id) VALUES ('T001', '春季施肥', '施肥', 1, 1, '2001');
+INSERT IGNORE INTO agri_prod_task_info (task_code, task_name, task_type, farm_id, plot_id, tenant_id) VALUES ('T002', '病虫害防治', '防治', 1, 2, '2001');
+INSERT IGNORE INTO agri_prod_input_material (material_code, material_name, material_type, unit, tenant_id) VALUES ('M001', '有机肥料', '肥料', 'kg', '2001');
+INSERT IGNORE INTO agri_prod_input_material (material_code, material_name, material_type, unit, tenant_id) VALUES ('M002', '生物农药', '农药', 'L', '2001');
+INSERT IGNORE INTO agri_prod_input_inventory (material_id, quantity, tenant_id) VALUES (1, 5000, '2001');
+INSERT IGNORE INTO agri_prod_input_inventory (material_id, quantity, tenant_id) VALUES (2, 200, '2001');
+INSERT IGNORE INTO agri_prod_harvest_record (harvest_code, crop_name, farm_id, plot_id, harvest_date, quantity, unit, tenant_id) VALUES ('H001', '西红柿', 1, 1, '2024-01-15', 2500, 'kg', '2001');
+INSERT IGNORE INTO agri_prod_alert_rule (rule_code, rule_name, alert_type, level, tenant_id) VALUES ('R001', '土壤湿度异常', 'soil', 'warning', '2001');
+INSERT IGNORE INTO agri_prod_alert_rule (rule_code, rule_name, alert_type, level, tenant_id) VALUES ('R002', '温度超限', 'temperature', 'error', '2001');

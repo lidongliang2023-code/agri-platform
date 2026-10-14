@@ -10,6 +10,7 @@ import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import com.agri.production.service.TenantContextService;
 
 @RestController
 @RequestMapping("/api/v1/production/trace")
@@ -23,21 +24,21 @@ public class TraceController {
 
     @PostMapping("/generate")
     public ApiResponse<List<TraceCodeVO>> generate(@Valid @RequestBody TraceCodeGenerateDTO dto) {
-        String tenantId = "T001";
+        String tenantId = TenantContextService.currentTenantId();
         List<TraceCodeVO> list = traceCodeService.generate(dto, tenantId);
         return ApiResponse.success(list);
     }
 
     @PostMapping("/{traceCode}/activate")
     public ApiResponse<TraceCodeVO> activate(@PathVariable String traceCode) {
-        String tenantId = "T001";
+        String tenantId = TenantContextService.currentTenantId();
         TraceCodeVO vo = traceCodeService.activate(traceCode, tenantId);
         return ApiResponse.success(vo);
     }
 
     @PostMapping("/{traceCode}/deactivate")
     public ApiResponse<Void> deactivate(@PathVariable String traceCode) {
-        String tenantId = "T001";
+        String tenantId = TenantContextService.currentTenantId();
         traceCodeService.deactivate(traceCode, tenantId);
         return ApiResponse.success();
     }
@@ -50,21 +51,21 @@ public class TraceController {
 
     @GetMapping("/code/{traceCode}")
     public ApiResponse<TraceCodeVO> getByTraceCode(@PathVariable String traceCode) {
-        String tenantId = "T001";
+        String tenantId = TenantContextService.currentTenantId();
         TraceCodeVO vo = traceCodeService.getByTraceCode(traceCode, tenantId);
         return ApiResponse.success(vo);
     }
 
     @GetMapping
     public ApiResponse<PageResult<TraceCodeVO>> pageQuery(TraceCodeQueryDTO dto) {
-        String tenantId = "T001";
+        String tenantId = TenantContextService.currentTenantId();
         PageResult<TraceCodeVO> result = traceCodeService.pageQuery(dto, tenantId);
         return ApiResponse.success(result);
     }
 
     @GetMapping("/harvest/{harvestId}")
     public ApiResponse<List<TraceCodeVO>> listByHarvestId(@PathVariable Long harvestId) {
-        String tenantId = "T001";
+        String tenantId = TenantContextService.currentTenantId();
         List<TraceCodeVO> list = traceCodeService.listByHarvestId(harvestId, tenantId);
         return ApiResponse.success(list);
     }

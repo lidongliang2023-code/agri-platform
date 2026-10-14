@@ -8,6 +8,7 @@ import com.agri.production.service.IFarmService;
 import com.agri.production.vo.FarmVO;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
+import com.agri.production.service.TenantContextService;
 
 @RestController
 @RequestMapping("/api/v1/production/farms")
@@ -21,7 +22,7 @@ public class FarmController {
 
     @PostMapping
     public ApiResponse<FarmVO> create(@Valid @RequestBody FarmSaveDTO dto) {
-        String tenantId = "T001";
+        String tenantId = TenantContextService.currentTenantId();
         FarmVO vo = farmService.save(dto, tenantId);
         return ApiResponse.success(vo);
     }
@@ -29,35 +30,35 @@ public class FarmController {
     @PutMapping("/{id}")
     public ApiResponse<FarmVO> update(@PathVariable Long id, @Valid @RequestBody FarmSaveDTO dto) {
         dto.setId(id);
-        String tenantId = "T001";
+        String tenantId = TenantContextService.currentTenantId();
         FarmVO vo = farmService.update(dto, tenantId);
         return ApiResponse.success(vo);
     }
 
     @DeleteMapping("/{id}")
     public ApiResponse<Void> delete(@PathVariable Long id) {
-        String tenantId = "T001";
+        String tenantId = TenantContextService.currentTenantId();
         farmService.delete(id, tenantId);
         return ApiResponse.success();
     }
 
     @GetMapping("/{id}")
     public ApiResponse<FarmVO> getById(@PathVariable Long id) {
-        String tenantId = "T001";
+        String tenantId = TenantContextService.currentTenantId();
         FarmVO vo = farmService.getById(id, tenantId);
         return ApiResponse.success(vo);
     }
 
     @GetMapping("/code/{farmCode}")
     public ApiResponse<FarmVO> getByCode(@PathVariable String farmCode) {
-        String tenantId = "T001";
+        String tenantId = TenantContextService.currentTenantId();
         FarmVO vo = farmService.getByCode(farmCode, tenantId);
         return ApiResponse.success(vo);
     }
 
     @GetMapping
     public ApiResponse<PageResult<FarmVO>> pageQuery(FarmPageDTO dto) {
-        String tenantId = "T001";
+        String tenantId = TenantContextService.currentTenantId();
         PageResult<FarmVO> result = farmService.pageQuery(dto, tenantId);
         return ApiResponse.success(result);
     }

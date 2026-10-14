@@ -5,6 +5,7 @@ import com.agri.production.service.IAIAssistantService;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
+import com.agri.production.service.TenantContextService;
 
 @RestController
 @RequestMapping("/api/v1/production/ai")
@@ -19,7 +20,7 @@ public class AIAssistantController {
     @PostMapping("/ask")
     public ApiResponse<Map<String, Object>> askQuestion(@RequestBody Map<String, String> request) {
         String question = request.get("question");
-        Map<String, Object> result = aiAssistantService.askQuestion(question, "T001");
+        Map<String, Object> result = aiAssistantService.askQuestion(question, TenantContextService.currentTenantId());
         return ApiResponse.success(result);
     }
 
@@ -28,7 +29,7 @@ public class AIAssistantController {
         String imageUrl = request.get("imageUrl");
         String cropType = request.get("cropType");
         String symptoms = request.get("symptoms");
-        Map<String, Object> result = aiAssistantService.diagnoseDisease(imageUrl, cropType, symptoms, "T001");
+        Map<String, Object> result = aiAssistantService.diagnoseDisease(imageUrl, cropType, symptoms, TenantContextService.currentTenantId());
         return ApiResponse.success(result);
     }
 
@@ -38,7 +39,7 @@ public class AIAssistantController {
         Long plotId = request.get("plotId") != null ? ((Number) request.get("plotId")).longValue() : null;
         String cropType = (String) request.get("cropType");
         String plantingDate = (String) request.get("plantingDate");
-        Map<String, Object> result = aiAssistantService.predictYield(farmId, plotId, cropType, plantingDate, "T001");
+        Map<String, Object> result = aiAssistantService.predictYield(farmId, plotId, cropType, plantingDate, TenantContextService.currentTenantId());
         return ApiResponse.success(result);
     }
 
@@ -47,13 +48,13 @@ public class AIAssistantController {
         Long plotId = request.get("plotId") != null ? ((Number) request.get("plotId")).longValue() : null;
         String cropType = (String) request.get("cropType");
         String growthStage = (String) request.get("growthStage");
-        Map<String, Object> result = aiAssistantService.recommendInputMaterial(plotId, cropType, growthStage, "T001");
+        Map<String, Object> result = aiAssistantService.recommendInputMaterial(plotId, cropType, growthStage, TenantContextService.currentTenantId());
         return ApiResponse.success(result);
     }
 
     @PostMapping("/analyze-soil")
     public ApiResponse<Map<String, Object>> analyzeSoil(@RequestBody Map<String, Object> soilData) {
-        Map<String, Object> result = aiAssistantService.analyzeSoil(soilData, "T001");
+        Map<String, Object> result = aiAssistantService.analyzeSoil(soilData, TenantContextService.currentTenantId());
         return ApiResponse.success(result);
     }
 }
