@@ -38,12 +38,28 @@ const [apiDir, baseUrl, token, placeholder = '1'] = args
  * 实测代价：探针打到 agri-production 时把既有的演示投入品 M001 逻辑删掉了，
  * 后续所有 /inputs/1/** 调用都变成"投入品不存在"，看起来像后端坏了。
  * 需要 DELETE 覆盖时显式加 --include-deletes，并确认目标库是可丢弃的。
+ *
+ * 还有一类**不需要请求体就能跑完整个动作**的端点（"空体也会真执行"）：
+ *   · POST /trace/batches/{id}/generate —— 给批次生成溯源码。路径参数就有全部所需信息，
+ *     空体照样生成，实测连跑几次就在演示库里留下 4 条 generated 码（AG0120261015xxxx），
+ *     看起来像"演示数据变多了"，实际是探针留下的垃圾。
+ * 这类按前缀列在 SIDE_EFFECT_PATHS 里，同样默认跳过，需要时加 --include-side-effects。
+ * 新增发现就往这个清单里加一条，而不是每次跑完手动去库里删。
  */
 const includeDeletes = process.argv.slice(2).includes('--include-deletes')
+const includeSideEffects = process.argv.slice(2).includes('--include-side-effects')
 if (!apiDir || !baseUrl || !token) {
-  console.error('用法：node scripts/probe-frontend-api.mjs <api 目录> <目标 baseURL> <访问令牌> [占位符] [--include-deletes]')
+  console.error('用法：node scripts/probe-frontend-api.mjs <api 目录> <目标 baseURL> <访问令牌> [占位符] [--include-deletes] [--include-side-effects]')
   process.exit(2)
 }
+
+/**
+ * "不带请求体也会真的改库"的动作端点前缀。
+ *
+ * 判据：路径里已经把动作所需的标识给全了，空体只是走个过场 —— 探针一发就生效。
+ * 与 DELETE 同样处理：默认跳过，避免"只是扫个雷"却留下演示数据。
+ */
+const SIDE_EFFECT_PATHS = ['/trace/batches/']
 
 const CALL = /http(?:Platform)?\.(get|post|put|patch|delete)(?:<[^>]*>)?\(\s*(`[^`]*`|'[^']*')/g
 const CONST = /const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*'([^']*)'/g
@@ -78,8 +94,11 @@ for (const file of walk(apiDir)) {
 }
 
 const list = [...seen.values()].sort((a, b) => a.path.localeCompare(b.path))
-const skipped = list.filter((c) => c.method === 'DELETE' && !includeDeletes)
-const probing = list.filter((c) => !(c.method === 'DELETE' && !includeDeletes))
+const isDelete = (c) => c.method === 'DELETE' && !includeDeletes
+const isSideEffect = (c) =>
+  !includeSideEffects && SIDE_EFFECT_PATHS.some((prefix) => c.path.startsWith(prefix))
+const skipped = list.filter((c) => isDelete(c) || isSideEffect(c))
+const probing = list.filter((c) => !isDelete(c) && !isSideEffect(c))
 const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
 const missing = []
 const handledButFailed = []
@@ -129,7 +148,15 @@ const segmentOf = (p) => {
 console.log(`== 前端会发出的请求：${list.length} 条（去重后） ==`)
 console.log(`== 缺口 ${missing.length} | 有处理器但本次调用未成功 ${handledButFailed.length} | 成功 ${ok.length} ==`)
 if (skipped.length > 0) {
-  console.log(`== 跳过 ${skipped.length} 条 DELETE（默认不删数据；需要时加 --include-deletes，并确认目标库可丢） ==`)
+  const deletes = skipped.filter((c) => c.method === 'DELETE').length
+  const effects = skipped.length - deletes
+  console.log(
+    `== 跳过 ${skipped.length} 条会真改库的请求（DELETE ${deletes} 条 / 空体也执行的动作 ${effects} 条）` +
+      `—— 需要覆盖时加 --include-deletes / --include-side-effects，并确认目标库可丢 ==`,
+  )
+  for (const c of skipped.filter((x) => x.method !== 'DELETE')) {
+    console.log(`   · ${c.method} ${c.path}（空体也执行，会留下数据）`)
+  }
 }
 
 const stats = new Map()

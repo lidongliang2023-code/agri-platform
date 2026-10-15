@@ -1118,21 +1118,27 @@ FROM agri_prod_harvest_batch b WHERE b.batch_no = 'H20260528';
 -- + 事务性 outbox（OutboxMessage/OutboxService/OutboxRelay，状态 NEW → SENT）。
 -- 这里落一张同构的表：payload 的字段名照抄 mod-produce 的 ProduceEvents record
 -- （ProdBatchHarvested / QualityTestPassed / QualityTestFailed / TraceActivated）。
--- 只落库、不投递：status 停在 NEW，sent_at 为空 —— **不谎报"已发送"**；
--- 将来接投递（HTTP 到平台或 RocketMQ）时只加一个 relay，业务代码不动。
+-- 投递由本服务的 DomainEventRelay 承担（业务代码不动）：NEW →（接收端确认 code=0）SENT；
+-- 失败按指数退避重试，次数用尽转 DEAD（可经运营端重放）。
+-- **绝不谎报"已发送"**：接收端只是 HTTP 200 但响应码非 0（例如入口在、监听器没有 = 404）
+-- 一律算投递失败，原因记在 last_error 上 —— 详见 DomainEventRelay 的类注释。
 CREATE TABLE IF NOT EXISTS agri_prod_domain_event (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     event_type VARCHAR(191) NOT NULL COMMENT '与 ProduceEvents 常量同名，如 prod.batch.harvested',
     event_key VARCHAR(191) COMMENT '事件键（业务主键），便于消费者幂等',
     payload TEXT COMMENT '事件载荷 JSON（字段名与平台 record 对齐）',
-    status VARCHAR(32) DEFAULT 'NEW' COMMENT 'NEW 未投递 / SENT 已投递',
+    status VARCHAR(32) DEFAULT 'NEW' COMMENT 'NEW 待投递 / SENT 已投递 / DEAD 投递失败（可重放）',
     occurred_at DATETIME COMMENT '事件发生时间',
     sent_at DATETIME COMMENT '投递时间；未投递为空',
+    retry_count INT DEFAULT 0 COMMENT '已尝试投递次数（成功也计一次）',
+    next_retry_at DATETIME NULL COMMENT '下次可投递时间；为空表示立即可投',
+    last_error VARCHAR(500) NULL COMMENT '最近一次投递失败的原因',
     tenant_id VARCHAR(191) NOT NULL,
     create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
     deleted BIGINT DEFAULT 0,
     INDEX `idx_domain_event_type` (event_type),
-    INDEX `idx_domain_event_status` (status)
+    INDEX `idx_domain_event_status` (status),
+    INDEX `idx_domain_event_next_retry` (next_retry_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;-- 补丁：区块链存证两张表 + 演示数据（可重复执行）。
 --
 -- 背景：实体 ChainRecord / ChainVerifyLog 早就在 agri-production 里（列名、词表都定好了），
@@ -1193,13 +1199,13 @@ INSERT IGNORE INTO agri_prod_chain_record
     (id, record_no, chain_type, target_type, target_id, target_code, data_hash, tx_hash, block_number,
      chain_status, chain_time, failed_reason, retry_count, tenant_id, create_time)
 VALUES
-    (1, 'CHAIN-20260601-0001', 'FISCO_BCOS', 'HARVEST', 1, 'H20260601',
+    (1, 'CHAIN-20260601-0001', 'SIMULATED', 'HARVEST', 1, 'H20260601',
      SHA2('H20260601|采收|1250kg', 256),
-     '0x7f3a1c9e5b2d4a6f8c0e1d2b3a4c5d6e7f8091a2b3c4d5e6f7089a1b2c3d4e5f', 1024,
+     'SIMU7F3A1C9E5B2D4A6F8C0E1D2B3A4C5D6E', 1024,
      'SUCCESS', '2026-06-01 16:02:00', NULL, 0, '2001', '2026-06-01 15:58:00'),
-    (2, 'CHAIN-20260615-0002', 'FISCO_BCOS', 'QUALITY', 3, 'QC-DEMO-003',
+    (2, 'CHAIN-20260615-0002', 'SIMULATED', 'QUALITY', 3, 'QC-DEMO-003',
      SHA2('QC-DEMO-003|质检|PASS', 256), NULL, NULL,
      'PENDING', NULL, NULL, 0, '2001', '2026-06-15 09:10:00'),
-    (3, 'CHAIN-20260528-0003', 'FISCO_BCOS', 'TRACE', 2, 'AG010102202605280001',
+    (3, 'CHAIN-20260528-0003', 'SIMULATED', 'TRACE', 2, 'AG010102202605280001',
      SHA2('AG010102202605280001|溯源码', 256), NULL, NULL,
-     'FAILED', NULL, '链节点连接超时（演示数据）', 2, '2001', '2026-05-28 17:30:00');
+     'FAILED', NULL, '模拟链提交失败（演示数据，已重试 2 次）', 2, '2001', '2026-05-28 17:30:00');
