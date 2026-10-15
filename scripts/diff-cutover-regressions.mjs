@@ -27,19 +27,31 @@
  *   node scripts/diff-cutover-regressions.mjs agri-production/frontend/src/api \
  *     http://localhost/api/v1/production http://localhost:8093/api/v1/production "$TOKEN"
  *
+ * ⚠️ 会真的改库的端点一律跳过（与 probe-frontend-api.mjs 同一份口径）：
+ *   · DELETE —— 一发就是真删；
+ *   · 路径里已经带全动作标识、空体也照样执行的 `/generate` 类端点 ——
+ *     实测代价：POST /harvests/1/generate 会**真的**给批次生成溯源码并落一条
+ *     prod.batch.harvested 事件，POST /trace/batches/1/generate 会真的生成溯源码。
+ *     只是跑个对照，演示库里就多出一条码 + 一条事件，看起来像"数据自己长出来的"。
+ *
  * 退出码：0 = 没有"新服务非 0 而平台侧 0"的路径；1 = 有（逐条分诊，别直接当回归）。
  */
 import { readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 
-const [apiDir, gatewayBase, coreBase, token, placeholder = '1'] = process.argv.slice(2)
+const args = process.argv.slice(2).filter((a) => !a.startsWith('--'))
+const includeSideEffects = process.argv.slice(2).includes('--include-side-effects')
+const [apiDir, gatewayBase, coreBase, token, placeholder = '1'] = args
 if (!apiDir || !gatewayBase || !coreBase || !token) {
-  console.error('用法：node scripts/diff-cutover-regressions.mjs <api 目录> <经网关 baseURL> <直连平台 baseURL> <访问令牌> [占位符]')
+  console.error('用法：node scripts/diff-cutover-regressions.mjs <api 目录> <经网关 baseURL> <直连平台 baseURL> <访问令牌> [占位符] [--include-side-effects]')
   process.exit(2)
 }
 
 const CALL = /http(?:Platform)?\.(get|post|put|patch|delete)(?:<[^>]*>)?\(\s*(`[^`]*`|'[^']*')/g
 const CONST = /const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*'([^']*)'/g
+
+/** 空体也会真改库的动作端点（后缀匹配）。新增发现往这里加，别每次手动去库里删。 */
+const SIDE_EFFECT_SUFFIXES = ['/generate']
 
 function walk(dir, out = []) {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
@@ -65,6 +77,8 @@ for (const file of walk(apiDir)) {
       return name.startsWith('BASE') ? (consts.BASE ?? '') : placeholder
     })
     if (!resolved.startsWith('/')) continue
+    // 空体也执行的动作端点（如 /**/generate）同样跳过：跑一次就多一条演示数据
+    if (!includeSideEffects && SIDE_EFFECT_SUFFIXES.some((suffix) => resolved.endsWith(suffix))) continue
     const key = `${method} ${resolved}`
     if (!seen.has(key)) seen.set(key, { file: path.relative(apiDir, file), method, path: resolved })
   }

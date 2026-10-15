@@ -60,6 +60,8 @@ if (!apiDir || !baseUrl || !token) {
  * 与 DELETE 同样处理：默认跳过，避免"只是扫个雷"却留下演示数据。
  */
 const SIDE_EFFECT_PATHS = ['/trace/batches/']
+/** 同类的后缀匹配（如 /harvests/1/generate：给批次生成溯源码 + 落 prod.batch.harvested 事件） */
+const SIDE_EFFECT_SUFFIXES = ['/generate']
 
 const CALL = /http(?:Platform)?\.(get|post|put|patch|delete)(?:<[^>]*>)?\(\s*(`[^`]*`|'[^']*')/g
 const CONST = /const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*'([^']*)'/g
@@ -95,8 +97,15 @@ for (const file of walk(apiDir)) {
 
 const list = [...seen.values()].sort((a, b) => a.path.localeCompare(b.path))
 const isDelete = (c) => c.method === 'DELETE' && !includeDeletes
+/**
+ * 只对**写方法**判副作用：`GET /trace/batches/1` 什么都不改，
+ * 按前缀一起跳过会把一个本来能验的读端点也放过（少验一条，却没换来任何安全）。
+ */
 const isSideEffect = (c) =>
-  !includeSideEffects && SIDE_EFFECT_PATHS.some((prefix) => c.path.startsWith(prefix))
+  !includeSideEffects &&
+  ['POST', 'PUT', 'PATCH'].includes(c.method) &&
+  (SIDE_EFFECT_PATHS.some((prefix) => c.path.startsWith(prefix)) ||
+    SIDE_EFFECT_SUFFIXES.some((suffix) => c.path.endsWith(suffix)))
 const skipped = list.filter((c) => isDelete(c) || isSideEffect(c))
 const probing = list.filter((c) => !isDelete(c) && !isSideEffect(c))
 const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
