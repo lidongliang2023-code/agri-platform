@@ -595,8 +595,14 @@ remark TEXT,
 -- 种子里的 tenant_id = '2001' 是**演示经营主体**（绿源农业合作社）。
 -- 口径（2026-10-14 拍板）：一主体一租户，tenant_id 存经营主体 id；不需要市场维度。
 -- 也就是说这些演示数据只有绑定到 2001 的账号看得到；运营端不受租户限制（传 null 即全平台）。
-INSERT IGNORE INTO agri_prod_farm_info (farm_code, farm_name, tenant_id) VALUES ('F001', '示范农场', '2001');
-INSERT IGNORE INTO agri_prod_farm_info (farm_code, farm_name, tenant_id) VALUES ('F002', '绿色生态园', '2001');
+-- 这两个农场的 farm_code / 名称 / 平台标识必须与 schema-patch-farm-identity.sql 保持一致。
+-- 教训（2026-10-15 实际踩到）：本文件每次启动都会跑，靠的是 farm_code 唯一键让 INSERT IGNORE 跳过；
+-- 只要把已有行的 farm_code 换成别的值，重启就会**再插一条**（那天多出 2 行"示范农场/绿色生态园"，
+-- 且不带平台标识，看起来像数据自己长出来的）。改演示行的唯一键值 = 改种子的幂等前提，两边要一起改。
+INSERT IGNORE INTO agri_prod_farm_info (farm_code, farm_name, platform_farm_id, tenant_id)
+    VALUES ('DEMO-FARMC-001', '【演示】华南绿色蔬菜示范农场', 'DEMO-FARM-001', '2001');
+INSERT IGNORE INTO agri_prod_farm_info (farm_code, farm_name, platform_farm_id, tenant_id)
+    VALUES ('DEMO-FARMC-002', '【演示】华东智慧稻田农场', 'DEMO-FARM-002', '2001');
 INSERT IGNORE INTO agri_prod_plot_info (plot_code, plot_name, farm_id, tenant_id) VALUES ('P001', 'A区-地块1', 1, '2001');
 INSERT IGNORE INTO agri_prod_plot_info (plot_code, plot_name, farm_id, tenant_id) VALUES ('P002', 'A区-地块2', 1, '2001');
 INSERT IGNORE INTO agri_prod_plot_info (plot_code, plot_name, farm_id, tenant_id) VALUES ('P003', 'B区-地块1', 2, '2001');
