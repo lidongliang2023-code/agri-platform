@@ -3,11 +3,13 @@ package com.agri.production.service.impl;
 import com.agri.production.common.entity.PageResult;
 import com.agri.production.common.exception.BusinessException;
 import com.agri.production.entity.CirculationAnomaly;
+import com.agri.production.entity.FoodSafetyColdChainResource;
 import com.agri.production.entity.FarmRisk;
 import com.agri.production.entity.FoodSafetyAlert;
 import com.agri.production.entity.FoodSafetyStandardItem;
 import com.agri.production.entity.FoodSafetyStandardSummary;
 import com.agri.production.mapper.CirculationAnomalyMapper;
+import com.agri.production.mapper.FoodSafetyColdChainResourceMapper;
 import com.agri.production.mapper.FarmRiskMapper;
 import com.agri.production.mapper.FoodSafetyAlertMapper;
 import com.agri.production.mapper.FoodSafetyStandardItemMapper;
@@ -46,6 +48,7 @@ public class AdminFoodSafetyServiceImpl implements IAdminFoodSafetyService {
     private static final String STATUS_DONE = "已处理";
     private static final String LEVEL_URGENT = "urgent";
     private static final String RESULT_PASS = "pass";
+    private static final String RESOURCE_OFFLINE = "offline";
     private static final int ALERT_LIMIT_MAX = 200;
 
     private final FoodSafetyAlertMapper alertMapper;
@@ -53,17 +56,20 @@ public class AdminFoodSafetyServiceImpl implements IAdminFoodSafetyService {
     private final FarmRiskMapper farmRiskMapper;
     private final FoodSafetyStandardItemMapper standardItemMapper;
     private final FoodSafetyStandardSummaryMapper standardSummaryMapper;
+    private final FoodSafetyColdChainResourceMapper coldChainResourceMapper;
 
     public AdminFoodSafetyServiceImpl(FoodSafetyAlertMapper alertMapper,
                                      CirculationAnomalyMapper circulationMapper,
                                      FarmRiskMapper farmRiskMapper,
                                      FoodSafetyStandardItemMapper standardItemMapper,
-                                     FoodSafetyStandardSummaryMapper standardSummaryMapper) {
+                                     FoodSafetyStandardSummaryMapper standardSummaryMapper,
+                                     FoodSafetyColdChainResourceMapper coldChainResourceMapper) {
         this.alertMapper = alertMapper;
         this.circulationMapper = circulationMapper;
         this.farmRiskMapper = farmRiskMapper;
         this.standardItemMapper = standardItemMapper;
         this.standardSummaryMapper = standardSummaryMapper;
+        this.coldChainResourceMapper = coldChainResourceMapper;
     }
 
     @Override
@@ -197,12 +203,28 @@ public class AdminFoodSafetyServiceImpl implements IAdminFoodSafetyService {
                 .eq(FoodSafetyAlert::getLevel, LEVEL_URGENT));
         result.put("urgentAlertCount", urgent == null ? 0L : urgent);
         result.put("compliancePassRate", compliancePassRate());
-        // 冷链资源表还没有数据（冷链子域未接入）。这里给 0 是**占位**，不代表"达标率 0%"：
-        // 与合规两项不同，它现在连一行输入都没有。子域接入后立刻改成真算（见 IAdminFoodSafetyService 注释）。
-        result.put("coldChainPassRate", BigDecimal.ZERO);
+        result.put("coldChainPassRate", coldChainPassRate());
         result.put("pendingAlertCount", alertMapper.selectCount(new LambdaQueryWrapper<FoodSafetyAlert>()
                 .in(FoodSafetyAlert::getStatus, List.of(STATUS_PENDING, STATUS_PROCESSING))));
         return result;
+    }
+
+    /**
+     * 冷链达标率（%）= 非离线资源占比。
+     *
+     * <p>口径来自平台侧同名字段：离线·故障的资源算"不达标"，繁忙仍算可用。
+     * 没有任何资源时返回 null（"没有数据源"），不是 0%。</p>
+     */
+    private BigDecimal coldChainPassRate() {
+        List<FoodSafetyColdChainResource> resources = coldChainResourceMapper.selectList(null);
+        if (resources.isEmpty()) {
+            return null;
+        }
+        long offline = resources.stream()
+                .filter(resource -> RESOURCE_OFFLINE.equals(resource.getResourceStatus()))
+                .count();
+        return BigDecimal.valueOf((resources.size() - offline) * 100)
+                .divide(BigDecimal.valueOf(resources.size()), 1, RoundingMode.HALF_UP);
     }
 
     /** 明细里最新的抽检月份（没有明细则为 null）。 */
