@@ -15,8 +15,9 @@
  *    —— 现在批量验真只调真接口 `GET /blockchain/verify/{txHash}`，失败就是失败，明示
  *    「未取得验真结论」，不做任何本地判定。
  * 3. 表格列渲染后端根本不返回的字段（confirmations / anchorMethod / chainId / certNo）、
- *    筛选区传后端不接收的参数（bizType / startDate / endDate，实测被静默忽略）。
- *    —— 现在只展示后端 BlockchainRecordEntity 的真实字段，筛选只保留后端支持的 status 与 keyword。
+ *    筛选区传后端不接收的参数（原先是 bizType / startDate / endDate）。
+ *    —— 现在只展示后端真实返回的字段；筛选保留 status / bizType / keyword（三者后端都真的支持，
+ *    2026-10-15 切流到 agri-production 后逐条复核），startDate / endDate 后端不支持故不提供。
  *
  * 覆盖率低（全表仅数条存证）是真实结论，按真实渲染，不补假数据。
  */
@@ -60,16 +61,31 @@ const MONO_STYLE: React.CSSProperties = {
   wordBreak: 'break-all',
 }
 
-/** 业务类型编码 → 名称（后端实测取值：TRACE / INSPECTION / HARVEST） */
+/**
+ * 业务类型编码 → 名称。
+ *
+ * 取值来自存证表 `target_type`，实测（agri-production 直连，2026-10-15）是
+ * **TRACE / QUALITY / HARVEST**；`INSPECTION` 是平台侧旧词表，服务端查询时会归一成 QUALITY，
+ * 所以两个词都留着 —— 但 `QUALITY` 必须有名，否则这一列会原样显示英文编码（"QUALITY"），
+ * 同一列里一半中文一半英文看着像没翻译完。
+ */
 const BIZ_TYPE_NAME: Record<string, string> = {
   FARMING: '生产记录',
   INSPECTION: '检测报告',
+  QUALITY: '质量检测',
   INPUT: '投入品使用',
   HARVEST: '采收入库',
   CIRCULATION: '流通记录',
   IOT: 'IoT数据',
   TRACE: '溯源记录',
 }
+
+/** 业务类型筛选项（值即 target_type；INSPECTION 由服务端归一，这里不重复列出） */
+const BIZ_TYPE_OPTIONS: { value: string; label: string }[] = [
+  { value: 'HARVEST', label: '采收入库' },
+  { value: 'QUALITY', label: '质量检测' },
+  { value: 'TRACE', label: '溯源记录' },
+]
 
 /** 存证状态字典（后端 records 接口支持 status 过滤） */
 const STATUS_OPTIONS: { value: CertStatusCode; label: string }[] = [
@@ -82,7 +98,9 @@ const STATUS_OPTIONS: { value: CertStatusCode; label: string }[] = [
 interface FilterState {
   /** 存证状态 PENDING / SUCCESS / FAILED */
   status?: CertStatusCode
-  /** 关键字：后端仅按 biz_no（业务单号）模糊匹配 */
+  /** 业务类型（target_type） */
+  bizType?: string
+  /** 关键字：后端按业务键（target_code）与存证记录号（record_no）模糊匹配 */
   keyword?: string
 }
 
@@ -196,6 +214,7 @@ export default function BlockchainRecords(): JSX.Element {
     const status = searchParams.get('status')
     return {
       status: status === 'PENDING' || status === 'SUCCESS' || status === 'FAILED' ? status : undefined,
+      bizType: undefined,
       keyword: undefined,
     }
   })
@@ -214,6 +233,7 @@ export default function BlockchainRecords(): JSX.Element {
         pageNum,
         pageSize,
         status: filters.status,
+        bizType: filters.bizType,
         keyword: filters.keyword,
       }),
   })
@@ -230,7 +250,7 @@ export default function BlockchainRecords(): JSX.Element {
 
   /** 重置筛选 */
   const handleReset = (): void => {
-    const empty: FilterState = { status: undefined, keyword: undefined }
+    const empty: FilterState = { status: undefined, bizType: undefined, keyword: undefined }
     setDraft(empty)
     setFilters(empty)
     setPageNum(1)
@@ -346,17 +366,10 @@ export default function BlockchainRecords(): JSX.Element {
       ),
     },
     { title: '业务单号', dataIndex: 'bizNo', width: 160, ellipsis: true },
-    { title: '关联批次', dataIndex: 'batchId', width: 160, ellipsis: true },
-    {
-      title: '关联溯源码',
-      dataIndex: 'traceCode',
-      width: 190,
-      render: (_, record) => (
-        <Typography.Text style={MONO_STYLE} ellipsis={{ tooltip: record.traceCode }}>
-          {record.traceCode ?? '-'}
-        </Typography.Text>
-      ),
-    },
+    // 「关联批次」「关联溯源码」两列**已删**：本服务的存证表没有单独存这两个键（只有 target_code
+    // 一个业务键），两列于是恒为 "-"。恒空的列会让人以为"这两项数据没同步过来"，
+    // 而事实是**不这么存**——业务键列已经把批次号/溯源码显示出来了。
+    // 本页自己的原则就是"只展示后端真实返回的字段"，删列才是遵守它。
     {
       title: '交易哈希',
       dataIndex: 'txHash',
@@ -521,10 +534,20 @@ export default function BlockchainRecords(): JSX.Element {
               onChange={(value) => setDraft((prev) => ({ ...prev, status: value }))}
             />
           </Col>
-          <Col xs={24} sm={12} md={10}>
+          <Col xs={24} sm={12} md={6}>
+            <Select
+              allowClear
+              style={{ width: '100%' }}
+              placeholder="全部业务类型"
+              value={draft.bizType}
+              options={BIZ_TYPE_OPTIONS}
+              onChange={(value) => setDraft((prev) => ({ ...prev, bizType: value }))}
+            />
+          </Col>
+          <Col xs={24} sm={12} md={8}>
             <Input
               allowClear
-              placeholder="业务单号模糊匹配（后端 keyword 只匹配 biz_no）"
+              placeholder="业务单号 / 存证记录号 模糊匹配"
               value={draft.keyword}
               onChange={(event) => setDraft((prev) => ({ ...prev, keyword: event.target.value }))}
               onPressEnter={handleSearch}
@@ -547,7 +570,7 @@ export default function BlockchainRecords(): JSX.Element {
           type="info"
           showIcon
           message="筛选与字段口径说明"
-          description="后端 GET /blockchain/records 只接收 status 与 keyword（仅按 biz_no 模糊匹配）。业务类型筛选、按时间范围筛选后端不支持（实测传参被静默忽略），已从筛选区移除，避免「筛了不生效」。表格同样只展示后端真实字段：确认数、上链方式、存证编号（certNo）、数字签名、链ID 后端均不返回，故不展示。"
+          description="后端 GET /blockchain/records 支持 status、bizType、keyword 三个筛选参数（2026-10-15 复核）：keyword 匹配业务键（target_code）与存证记录号（record_no）。业务类型取值是存证表的 target_type（HARVEST / QUALITY / TRACE）—— 平台侧旧词表叫 INSPECTION，服务端已归一成 QUALITY。按时间范围筛选后端仍不支持，故未提供。表格只展示后端真实返回的字段：确认数、上链方式、数字签名、链ID 后端均不返回，故不展示。"
         />
 
         <ProTable<BlockchainBizRecord>

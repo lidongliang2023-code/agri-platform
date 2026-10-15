@@ -3,11 +3,7 @@
  */
 import { http } from '@/utils/request'
 import type { PageQuery, PageResult } from '@/types'
-import type {
-  BlockchainBizRecord,
-  BlockchainOverview,
-  BlockchainRecord,
-} from '@/types'
+import type { BlockchainBizRecord, BlockchainRecord } from '@/types'
 
 const BASE = '/blockchain'
 
@@ -58,10 +54,9 @@ export function listChainRecords(
  * <p>本次只改路径：后端详情返回 `BlockchainRecordEntity`，与本函数返回类型一致，无需改调用方。</p>
  *
  * <p><b>同文件另两处不一致（未在本轮处理）</b>：
- * `submitChain` 调 `POST /records`，而后端创建端点是 `POST /blockchain`，
- * 且后端返回的是 `String recordId` 而非记录对象——路径与返回体双重不符，涉及调用方处理方式，另行裁决；
- * `retryChain` 调 `PATCH /records/{id}/retry`，后端**完全没有 retry 能力**（全项目无 PatchMapping），
- * 需按「功能既定而端点缺失则补端点」补后端，属独立开发任务。</p>
+ * 同文件另两处不一致**已于 2026-10-15 收口**：`submitChain`（`POST /records`）与
+ * `retryChain`（`PATCH /records/{id}/retry`）此前后端都没有端点，现已按前端契约补齐
+ * （见后端 `BlockchainController` 的写路径）。</p>
  *
  * @param recordId 存证记录 ID
  * @returns 存证记录
@@ -87,11 +82,13 @@ export function verifyChain(txHash: string): Promise<boolean> {
   return http.get<boolean>(`${BASE}/verify/${txHash}`)
 }
 
-/** 查询区块链概览统计 */
-export function getBlockchainOverview(): Promise<BlockchainOverview> {
-  return http.get<BlockchainOverview>(`${BASE}/overview`)
-}
-
+/*
+ * 这里原本还有一个 `getBlockchainOverview(): Promise<BlockchainOverview>`，**已删除**。
+ * 原因：它的返回类型 `BlockchainOverview`（totalRecords / monthRecords / blockHeight /
+ * nodeCount / successRate / trend）与后端实际返回的形状对不上，而且全仓没有任何调用方 ——
+ * 一个"没人调、类型又错"的函数留着，下一个人照它的类型写代码就会直接踩空。
+ * 概览页用的是下面的 `getChainOverview()`（返回 total / success / failed 三件套）。
+ */
 /* ============================================================================
  * 以下为「区块链存证（P27 ~ P30）」页面填充时追加的方法，纯新增。
  * ==========================================================================*/
@@ -99,16 +96,23 @@ export function getBlockchainOverview(): Promise<BlockchainOverview> {
 /**
  * 存证记录查询参数。
  *
- * ⚠️ 后端 `BlockchainController#records` 的签名只接收 `page` / `size` / `keyword` / `status`
- * 四个参数，其中 `keyword` 只做 `biz_no` 的模糊匹配。
- * 实测（2026-10-10）传 `bizType=TRACE` 后端**静默忽略**（仍返回全量 4 条），
- * 传 `startDate` / `endDate` 同样无效 —— 这几个参数已从类型中移除，
- * 避免调用方以为筛选生效（筛了不生效比没有筛选更误导）。
+ * 后端支持三个筛选参数（2026-10-15 复核 agri-production）：
+ *   · `status` —— PENDING / SUCCESS / FAILED；
+ *   · `bizType` —— 存证表 `target_type`（HARVEST / QUALITY / TRACE；`INSPECTION` 服务端归一成 QUALITY）；
+ *   · `keyword` —— 模糊匹配业务键 `target_code` 与存证记录号 `record_no`。
+ *
+ * ⚠️ 历史结论（core-platform 直连，2026-10-10）是"bizType 会被静默忽略、keyword 只认 biz_no"，
+ * 那是**平台侧旧实现**的行为，切流后不再适用 —— 这份注释跟着实现一起更新，
+ * 否则调用方会按过期结论做取舍。
+ *
+ * 按时间范围筛选后端仍不支持，故类型里没有 `startDate` / `endDate`（不加就是不让调用方以为能用）。
  */
 export interface CertRecordListParams extends PageQuery {
   /** 存证状态：PENDING / SUCCESS / FAILED */
   status?: string
-  /** 关键字：后端仅按 biz_no（业务单号）模糊匹配 */
+  /** 业务类型：存证表 target_type */
+  bizType?: string
+  /** 关键字：模糊匹配业务键（target_code）与存证记录号（record_no） */
   keyword?: string
 }
 
@@ -138,17 +142,21 @@ export function anchorRecord(payload: {
 /**
  * 存证验真（GET /blockchain/verify）。
  *
- * ⚠️ 后端签名为 `verify(@RequestParam String txHash)` —— **只支持交易哈希**，
- * `certNo` / `traceCode` 传过去会被忽略，且 `txHash` 必填、缺失即业务异常。
- * 因此调用方**只应按 txHash 走**；按存证编号 / 溯源码验真在后端不存在，
- * UI 层须明示禁用（见 Verify.tsx / BlockchainRecords.tsx），不要去调一个必然失败的接口。
+ * 后端接受两个入参，**至少给一个**（都不给返回业务码 400）：
+ *   · `txHash` —— 匹配存证记录的 `tx_hash`（交易哈希）；
+ *   · `certNo` —— 匹配存证记录的 `target_code`，即**存证的业务键**。业务单号与溯源码
+ *     都存在这一列，所以"按业务单号"和"按溯源码"在后端是同一个查询，不是两套判定逻辑。
+ *     注意它**不是** `record_no`（人读存证编号），传 `CHAIN-20260601-0001` 查不到东西。
  *
  * 返回体是布尔值：是否存在该 txHash 命中且 status=SUCCESS 的存证记录。
+ *
+ * ⚠️ 本部署是**模拟链**（存证 `chainType=SIMULATED`、交易哈希带 `SIMU` 前缀）：
+ * 这里的 true 只表示"本库有一条 SUCCESS 的同键记录"，**不是**链上完整性校验。
+ * UI 必须把这一点说清楚（见 Verify.tsx 的「模拟链提示」），不能写成"链上验真通过"。
  */
 export function verifyCertificate(params: {
   certNo?: string
   txHash?: string
-  traceCode?: string
 }): Promise<boolean> {
   return http.get<boolean>(`${BASE}/verify`, params)
 }
@@ -168,11 +176,14 @@ export function getChainOverview(): Promise<BlockchainOverviewStat> {
 export interface BlockchainByBizParams {
   /**
    * 业务类型。
-   * ⚠️ 后端 bizType 与 bizNo 是**成对**的，两边口径必须匹配，否则恒返回 []：
-   * TRACE→溯源码、INSPECTION→质检单号(inspection_no)、HARVEST→批次号(batch_no)。
+   *
+   * 服务端存的是**存证表的 target_type**：TRACE（溯源码）/ QUALITY（质检）/ HARVEST（采收批次）。
+   * 这里给 `INSPECTION` 是**旧词表**（平台侧 core-platform 与历史页面的叫法），
+   * 服务端已做归一：`INSPECTION` → `QUALITY`。两边叫法不一致时**不要**靠"反正查不到就算了"，
+   * 归一集中放在后端一处（ChainRecordServiceImpl#normalizeBizType）。
    */
   bizType: 'TRACE' | 'INSPECTION' | 'HARVEST'
-  /** 业务单号（见 bizType 注释里的口径） */
+  /** 业务键：库里的 target_code（批次号 / 质检单号 / 溯源码），服务端同时接受 bizId 这个旧名字 */
   bizNo: string
 }
 
@@ -183,8 +194,10 @@ export interface BlockchainByBizParams {
  * 无匹配记录时返回 `[]`。因此**不要**套 `toPageResult` —— 套上去会凭空引入
  * 「按 pageNum/pageSize 切片」的语义，让调用方误以为后端支持分页并丢数据。
  *
- * ⚠️ 关联键实测结论（2026-10-10 连服）：`bizNo` 必须传 **batch_no** 不能传 batch_id ——
- * 传 `DEMO-BATCH-001` 返回 `[]`，传同批次的 `DEMO-BATCHN-001` 才有数据。
+ * ⚠️ 关联键口径（2026-10-15 切流到 agri-production 后复核）：
+ * 服务端按存证记录的 `target_code` 精确匹配（数字键则额外认 `target_id`）。
+ * 传 batch_id（数字主键）与传 batch_no（单号）是两条不同的命中路径，报文里要传对字段名 ——
+ * 参数名写错会直接 400，而**字段名对、值不对**只会静默返回 `[]`，后者更难查。
  *
  * @param params 业务类型 + 业务单号
  * @returns 存证记录数组；无记录时为空数组（不是 undefined / null）

@@ -40,7 +40,7 @@ import {
   RedoOutlined,
   SearchOutlined,
 } from '@ant-design/icons'
-import { verifyChain } from '@/api/blockchain'
+import { verifyCertificate, verifyChain } from '@/api/blockchain'
 import { asApiRequestError, httpStatusOf } from '@/utils/request'
 
 /** 等宽字体样式：链上哈希统一使用 */
@@ -52,46 +52,81 @@ const MONO_STYLE: React.CSSProperties = {
 /** 凭证类型 */
 type VerifyType = 'cert' | 'tx' | 'trace'
 
-/** 后端当前唯一支持的验真方式 */
-const SUPPORTED_TYPE: VerifyType = 'tx'
-
-/** 凭证类型选项 */
+/**
+ * 凭证类型选项。
+ *
+ * <p>三种方式**都可用**了（2026-10-15 后端补上写路径与 `certNo` 入参后）：
+ * `tx` 走 `GET /blockchain/verify/{txHash}`，`cert` / `trace` 走
+ * `GET /blockchain/verify?certNo=…`。此处不再有"已停用"的入口 —— 停用入口只有在
+ * 后端真的没有该能力时才成立，能力补上就必须同时把入口打开，否则页面会继续
+ * 告诉用户"暂未提供"，而那句话已经是假的了。</p>
+ */
 const VERIFY_TYPE_OPTIONS: { value: VerifyType; label: string; placeholder: string }[] = [
-  { value: 'cert', label: '按存证编号', placeholder: '后端暂未提供该验真入口' },
-  { value: 'tx', label: '按交易哈希', placeholder: '请输入交易哈希，如 DEMO-TX-0x1a2b3c4d5e6f0001' },
-  { value: 'trace', label: '按溯源码', placeholder: '后端暂未提供该验真入口' },
+  { value: 'cert', label: '按业务单号', placeholder: '请输入存证对应的业务单号，如 H20260601' },
+  { value: 'tx', label: '按交易哈希', placeholder: '请输入交易哈希，如 SIMU5B2D4A6F8C0E1D2B3A4C5D6E7F8091A2' },
+  { value: 'trace', label: '按溯源码', placeholder: '请输入溯源码，如 AG010101202606010001' },
 ]
 
 /**
  * 交易哈希格式规则。
  *
  * 说明：后端 `verify` 是按 txHash 做**精确匹配**（selectCount），对格式没有约束；
- * 库内真实哈希实测存在两种形态 —— 种子数据 `DEMO-TX-0x1a2b3c4d5e6f0001`，
- * 以及 anchor 生成的 `0x` + `yyyyMMddHHmmss` + 4 位随机数字（见 ProduceIds#newId）。
- * 旧版写死 `/^0x[0-9a-fA-F]{40}$/`，会把这两类真实哈希**全部拒掉**（假不可用），
- * 因此这里只做「非空 + URL 安全字符 + 长度」的宽松校验，其余交给后端精确匹配。
+ * 库内真实哈希存在多种形态 —— 演示种子 `0x` + 32 位十六进制，以及本部署写路径生成的
+ * `SIMU` + 十六进制（模拟链）。旧版写死 `/^0x[0-9a-fA-F]{40}$/`，会把这两类真实哈希
+ * **全部拒掉**（假不可用），因此这里只做「非空 + URL 安全字符 + 长度」的宽松校验，
+ * 其余交给后端精确匹配。
  */
 const TX_PATTERN = /^[A-Za-z0-9_-]{4,128}$/
-const TX_TIP = '交易哈希应为 4~128 位字母、数字、- 或 _，如 DEMO-TX-0x1a2b3c4d5e6f0001'
+const TX_TIP = '交易哈希应为 4~128 位字母、数字、- 或 _，如 SIMU5B2D4A6F8C0E1D2B3A4C5D6E7F8091A2'
+/** 业务单号 / 溯源码的宽松校验（同样交给后端精确匹配） */
+const CODE_TIP = '应为 4~64 位字母、数字、- 或 _，如 H20260601 / AG010101202606010001'
 
-/** 各「后端未提供」模式的明示说明 */
-const UNSUPPORTED_TIP: Record<Exclude<VerifyType, 'tx'>, string> = {
-  cert:
-    '后端暂未提供「按存证编号验真」的端点（/api/v1/production/blockchain/verify 只接受 txHash），' +
-    '为避免给出编造的验真结论，该入口已停用。请改用「按交易哈希」验真：可在存证记录列表复制交易哈希后在此验证。',
-  trace:
-    '后端暂未提供「按溯源码验真」的端点（/api/v1/production/blockchain/verify 只接受 txHash），' +
-    '为避免给出编造的验真结论，该入口已停用。请改用「按交易哈希」验真：可在存证记录列表复制交易哈希后在此验证。',
+/**
+ * 各验真方式对应的后端调用与端点（展示在数据来源中，便于用户核对）。
+ *
+ * <p>{@code cert} 与 {@code trace} 在后端是**同一个入参** {@code certNo}，
+ * 匹配的都是存证的业务键列（{@code agri_prod_chain_record.target_code}）——
+ * 业务单号与溯源码都存这一列，所以两种入口点下去是同一个查询。
+ * 这里如实把这一点写出来，避免用户以为"按溯源码"和"按业务单号"是两套不同的判定逻辑。</p>
+ */
+const VERIFY_METHODS: Record<VerifyType, { label: string; endpoint: string; matchHint: string }> = {
+  tx: {
+    label: '按交易哈希',
+    endpoint: 'GET /api/v1/production/blockchain/verify/{txHash}',
+    matchHint: '交易哈希（tx_hash）',
+  },
+  cert: {
+    label: '按业务单号',
+    endpoint: 'GET /api/v1/production/blockchain/verify?certNo=…',
+    matchHint: '业务键（target_code，业务单号/溯源码同列）',
+  },
+  trace: {
+    label: '按溯源码',
+    endpoint: 'GET /api/v1/production/blockchain/verify?certNo=…',
+    matchHint: '业务键（target_code，业务单号/溯源码同列）',
+  },
 }
 
-/** 后端验真端点（展示在数据来源中，便于用户核对） */
-const VERIFY_ENDPOINT = 'GET /api/v1/production/blockchain/verify/{txHash}'
-
 /** 验真通过时的结论说明（对应后端返回 true 的真实语义） */
-const PASS_DETAIL = '链上存在该交易哈希对应的存证记录，且存证状态为 SUCCESS'
+const PASS_DETAIL = '本库存在同键、状态为 SUCCESS 的存证记录'
 
 /** 验真未通过时的结论说明（对应后端返回 false 的真实语义） */
-const FAIL_DETAIL = '链上未检索到该交易哈希对应的成功存证记录'
+const FAIL_DETAIL = '本库没有同键且状态为 SUCCESS 的存证记录'
+
+/**
+ * 验真的真实边界（本部署）。
+ *
+ * <p>必须写在页面上：本部署是**模拟链**（存证的 {@code chainType = SIMULATED}，
+ * 交易哈希带 {@code SIMU} 前缀），后端验真做的是"库里有没有一条 SUCCESS 的同键记录"，
+ * **不是**链上完整性校验（没有 merkle / 回执 / 节点比对）。说成"链上验真"会让人以为
+ * 数据被动过就会被发现 —— 实际做不到，这句话不能省。</p>
+ */
+const VERIFY_SCOPE_TIP =
+  '判定依据：本库是否存在同键且存证状态为 SUCCESS 的存证记录（后端 selectCount > 0）。'
+
+const SIMULATED_CHAIN_TIP =
+  '本部署未接真链：存证的 chainType 为 SIMULATED、交易哈希带 SIMU 前缀。因此本页结论表示' +
+  '「平台库内存证台账已登记」，不等于链上完整性校验（不含 merkle 校验、链上回执核对）。'
 
 /**
  * 验真结论：只承载后端真实返回的字段。
@@ -100,9 +135,11 @@ const FAIL_DETAIL = '链上未检索到该交易哈希对应的成功存证记�
  * confirmations / steps / checks —— 后端均不返回，填进去就是编的。
  */
 interface VerifyOutcome {
-  /** 被验证的交易哈希 */
-  txHash: string
-  /** 后端 GET /blockchain/verify/{txHash} 真实返回的布尔值 */
+  /** 被验证的凭证值（交易哈希 / 业务单号 / 溯源码） */
+  subject: string
+  /** 本次使用的验真方式 */
+  method: VerifyType
+  /** 后端 GET /blockchain/verify 真实返回的布尔值 */
   passed: boolean
   /** 验真完成时间 */
   verifiedAt: string
@@ -169,7 +206,8 @@ function describeFailure(error: unknown): VerifyFailure {
  * 存证验证（原型 P30）
  *
  * 业务职责：对外存证验真入口。后端当前仅支持按交易哈希验真，返回布尔结论；
- * 其余凭证类型明示不可用。接口失败时只渲染错误态，不渲染任何示例结论。
+ * 三种方式（交易哈希 / 业务单号 / 溯源码）后端均已支持，出参只有布尔值。
+ * 接口失败时只渲染错误态，不渲染任何示例结论。
  *
  * @returns 页面内容
  */
@@ -189,22 +227,27 @@ export default function Verify(): JSX.Element {
   const [outcome, setOutcome] = useState<VerifyOutcome | null>(null)
   const [failure, setFailure] = useState<VerifyFailure | null>(null)
 
-  /** 当前模式是否被后端支持 */
-  const supported = verifyType === SUPPORTED_TYPE
-
-  /** 请求真实验真接口：仅交易哈希模式 */
+  /** 请求真实验真接口：按当前验真方式选端点（三种方式后端都已支持） */
   useEffect(() => {
     if (!verifying) return undefined
 
     let cancelled = false
-    const txHash = value.trim()
+    const subject = value.trim()
+    const method = verifyType
 
-    verifyChain(encodeURIComponent(txHash))
+    // tx 走路径参数端点；业务单号 / 溯源码走后端同一个 certNo 入参
+    const request: Promise<boolean> =
+      method === 'tx'
+        ? verifyChain(encodeURIComponent(subject))
+        : verifyCertificate({ certNo: subject })
+
+    request
       .then((raw: unknown) => {
         if (cancelled) return
         if (typeof raw === 'boolean') {
           setOutcome({
-            txHash,
+            subject,
+            method,
             passed: raw,
             verifiedAt: new Date().toLocaleString('zh-CN'),
           })
@@ -235,17 +278,13 @@ export default function Verify(): JSX.Element {
 
   /** 开始验证：先做格式校验 */
   const handleStart = (): void => {
-    if (!supported) {
-      setErrorTip('该验真方式后端暂未提供，请改用「按交易哈希」')
-      return
-    }
     const text = value.trim()
     if (!text) {
-      setErrorTip('请输入待验证的交易哈希')
+      setErrorTip(`请输入待验证的${VERIFY_METHODS[verifyType].label.replace('按', '')}`)
       return
     }
     if (!TX_PATTERN.test(text)) {
-      setErrorTip(TX_TIP)
+      setErrorTip(verifyType === 'tx' ? TX_TIP : CODE_TIP)
       return
     }
     setErrorTip('')
@@ -258,14 +297,10 @@ export default function Verify(): JSX.Element {
   const handleReset = (): void => {
     setOutcome(null)
     setFailure(null)
-    if (!supported) {
-      setErrorTip('该验真方式后端暂未提供，请改用「按交易哈希」')
-      return
-    }
     if (value.trim()) {
       setVerifying(true)
     } else {
-      setErrorTip('请输入待验证的交易哈希')
+      setErrorTip(`请输入待验证的${VERIFY_METHODS[verifyType].label.replace('按', '')}`)
     }
   }
 
@@ -279,33 +314,27 @@ export default function Verify(): JSX.Element {
     setVerifying(false)
   }
 
-  /** 一键切换到后端支持的验真方式 */
-  const handleSwitchToTx = (): void => {
-    setVerifyType('tx')
-    setErrorTip('')
-    setOutcome(null)
-    setFailure(null)
-    setVerifying(false)
-  }
-
   /** 下载验证报告：只写入后端真实返回的内容 */
   const handleDownload = (): void => {
     if (!outcome) return
+    const method = VERIFY_METHODS[outcome.method]
     const lines = [
       '========== 区块链存证验证报告 ==========',
-      `验真方式：按交易哈希`,
-      `交易哈希：${outcome.txHash}`,
+      `验真方式：${method.label}`,
+      `凭证值：${outcome.subject}`,
       `验真时间：${outcome.verifiedAt}`,
-      `数据来源：${VERIFY_ENDPOINT}`,
+      `数据来源：${method.endpoint}`,
       `后端返回：${String(outcome.passed)}`,
       `验真结论：${outcome.passed ? '通过' : '未通过'}`,
       `结论说明：${outcome.passed ? PASS_DETAIL : FAIL_DETAIL}`,
       '----------------------------------',
-      '说明：后端该端点仅返回布尔值（是否存在该交易哈希且状态为 SUCCESS 的存证记录），',
+      '说明一：后端该端点仅返回布尔值（是否存在该凭证键且状态为 SUCCESS 的存证记录），',
       '不提供区块高度 / 确认数 / 签名等明细，故本报告不包含这些字段。',
+      '说明二：本部署未接真链（chainType=SIMULATED，交易哈希带 SIMU 前缀），',
+      '上述结论表示平台库内存证台账已登记，不等于链上完整性校验。',
       '======================================',
     ]
-    downloadFile(`验证报告_${outcome.txHash}.txt`, lines.join('\n'))
+    downloadFile(`验证报告_${outcome.subject}.txt`, lines.join('\n'))
   }
 
   const placeholder =
@@ -330,7 +359,6 @@ export default function Verify(): JSX.Element {
                   size="large"
                   placeholder={placeholder}
                   value={value}
-                  disabled={!supported}
                   status={errorTip ? 'error' : undefined}
                   onChange={(event) => {
                     setValue(event.target.value)
@@ -346,7 +374,6 @@ export default function Verify(): JSX.Element {
                     size="large"
                     icon={<SearchOutlined />}
                     loading={verifying}
-                    disabled={!supported}
                     onClick={handleStart}
                   >
                     开始验真
@@ -362,26 +389,22 @@ export default function Verify(): JSX.Element {
             {errorTip && <Alert type="error" showIcon message={errorTip} />}
           </Space>
 
-          {!supported && (
-            <Alert
-              type="warning"
-              showIcon
-              message={`「${VERIFY_TYPE_OPTIONS.find((item) => item.value === verifyType)?.label ?? ''}」后端暂未提供，该入口已停用`}
-              description={UNSUPPORTED_TIP[verifyType as Exclude<VerifyType, 'tx'>]}
-              action={
-                <Button size="small" type="primary" onClick={handleSwitchToTx}>
-                  改用交易哈希验真
-                </Button>
-              }
-            />
-          )}
-
           <Alert
             type="info"
             showIcon
-            message="当前后端仅支持按交易哈希验真"
-            description={`数据来源：${VERIFY_ENDPOINT}。后端返回布尔值，表示「是否存在该交易哈希且存证状态为 SUCCESS 的存证记录」。`}
+            message="验真口径"
+            description={
+              <Space direction="vertical" size={4}>
+                <Typography.Text>
+                  数据来源：<span style={MONO_STYLE}>{VERIFY_METHODS[verifyType].endpoint}</span>
+                </Typography.Text>
+                <Typography.Text>匹配字段：{VERIFY_METHODS[verifyType].matchHint}</Typography.Text>
+                <Typography.Text>{VERIFY_SCOPE_TIP}</Typography.Text>
+              </Space>
+            }
           />
+
+          <Alert type="warning" showIcon message="模拟链提示" description={SIMULATED_CHAIN_TIP} />
 
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
             后端未返回区块高度、确认数、数字签名、分步耗时等明细，本页不展示这些字段；接口失败时只给出失败提示，不会编造任何结论。
@@ -459,8 +482,8 @@ export default function Verify(): JSX.Element {
             />
 
             <Descriptions bordered size="small" column={2}>
-              <Descriptions.Item label="交易哈希">
-                <span style={MONO_STYLE}>{outcome.txHash}</span>
+              <Descriptions.Item label={VERIFY_METHODS[outcome.method].label}>
+                <span style={MONO_STYLE}>{outcome.subject}</span>
               </Descriptions.Item>
               <Descriptions.Item label="验真结论">
                 <Tag color={outcome.passed ? 'success' : 'error'}>
@@ -472,10 +495,13 @@ export default function Verify(): JSX.Element {
               </Descriptions.Item>
               <Descriptions.Item label="验真时间">{outcome.verifiedAt}</Descriptions.Item>
               <Descriptions.Item label="数据来源" span={2}>
-                <span style={MONO_STYLE}>{VERIFY_ENDPOINT}</span>
+                <span style={MONO_STYLE}>{VERIFY_METHODS[outcome.method].endpoint}</span>
               </Descriptions.Item>
               <Descriptions.Item label="判定依据" span={2}>
-                是否存在该交易哈希且存证状态为 SUCCESS 的存证记录（后端 selectCount &gt; 0）
+                {VERIFY_METHODS[outcome.method].matchHint}；{VERIFY_SCOPE_TIP}
+              </Descriptions.Item>
+              <Descriptions.Item label="链类型" span={2}>
+                <Tag color="orange">SIMULATED（模拟链，未接真链）</Tag>
               </Descriptions.Item>
             </Descriptions>
 
@@ -484,7 +510,7 @@ export default function Verify(): JSX.Element {
                 type="info"
                 showIcon
                 message="未通过的可能原因"
-                description="该交易哈希在库内不存在；或对应存证记录的状态不是 SUCCESS（仍处于 PENDING / 失败重试中）。请到存证记录列表核对后重试。"
+                description="该凭证在库内没有对应记录；或对应存证记录的状态不是 SUCCESS（仍处于 PENDING / 失败重试中）。请到存证记录列表核对后重试。"
               />
             )}
 
