@@ -78,9 +78,9 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
     }
 
     @Override
-    public PageResult<TaskVO> pageQuery(TaskPageDTO dto, String tenantId) {
+    public PageResult<TaskVO> pageQuery(TaskPageDTO dto, Long farmId, String tenantId) {
         Page<Task> page = new Page<>(dto.getPageNum(), dto.getPageSize());
-        IPage<Task> result = baseMapper.pageQuery(page, dto, tenantId);
+        IPage<Task> result = baseMapper.pageQuery(page, dto, farmId, tenantId);
         List<TaskVO> voList = BeanCopyUtils.copyList(result.getRecords(), TaskVO.class);
         return PageResult.of(voList, result.getTotal(), dto.getPageNum(), dto.getPageSize());
     }

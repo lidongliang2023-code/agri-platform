@@ -7,6 +7,7 @@ import com.agri.production.entity.PlanStage;
 import com.agri.production.entity.PlantingPlan;
 import com.agri.production.service.IPlanStageService;
 import com.agri.production.service.IPlantingPlanService;
+import com.agri.production.service.FarmIdResolver;
 import com.agri.production.service.TenantContextService;
 import com.agri.production.vo.PlantingPlanVO;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -42,11 +43,14 @@ public class PlantingPlanController {
 
     private final IPlantingPlanService plantingPlanService;
     private final IPlanStageService planStageService;
+    private final FarmIdResolver farmIdResolver;
 
     public PlantingPlanController(IPlantingPlanService plantingPlanService,
-                                  IPlanStageService planStageService) {
+                                  IPlanStageService planStageService,
+                                  FarmIdResolver farmIdResolver) {
         this.plantingPlanService = plantingPlanService;
         this.planStageService = planStageService;
+        this.farmIdResolver = farmIdResolver;
     }
 
     /** 分页查询计划列表。 */
@@ -69,7 +73,10 @@ public class PlantingPlanController {
                 current, limit,
                 keyword != null ? keyword : planName,
                 status, planStatus,
-                parseLong(farmId), planYear, tenantId);
+                // 农场筛选走解析。原先这里是 parseLong + "非数字不算错误 → 返回 null"，
+                // 于是 farmId=DEMO-FARM-010 时**过滤条件被丢掉、返回全量**：
+                // 页面显示的是"该农场的计划"，实际是所有农场的。现在解析不出来直接 400。
+                farmIdResolver.resolveFilter(farmId, tenantId), planYear, tenantId);
         return ApiResponse.success(result);
     }
 
@@ -230,15 +237,4 @@ public class PlantingPlanController {
         return 1;
     }
 
-    private static Long parseLong(String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        try {
-            return Long.valueOf(value.trim());
-        } catch (NumberFormatException e) {
-            // 传了非数字的 farmId（例如前端别处用的业务编码）不是错误，只是这个过滤条件用不上
-            return null;
-        }
-    }
 }

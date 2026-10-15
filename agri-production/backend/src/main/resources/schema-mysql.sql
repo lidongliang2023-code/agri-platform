@@ -24,7 +24,11 @@ register_date DATE,
 audit_status VARCHAR(255) DEFAULT 'pending',
 status VARCHAR(255) DEFAULT 'active',
 tenant_id VARCHAR(191) NOT NULL,
+-- farm_id 是基类 BaseEntity 的通用"所属农场"（Long）；本表这一列是历史遗留的 VARCHAR，
+-- 不参与农场身份映射（平台侧标识用下面的 platform_farm_id），也不能删：
+-- BaseEntity.farmId 映射到它，MyBatis-Plus 的 selectById 会带上这一列。
 farm_id VARCHAR(191),
+platform_farm_id VARCHAR(64) COMMENT '平台侧农场标识（DEMO-FARM-xxx），用于把页面传回的 farmId 换算成本地主键；见 schema-patch-farm-identity.sql',
 create_by TEXT,
 create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
 update_by TEXT,
@@ -32,7 +36,9 @@ update_time DATETIME DEFAULT CURRENT_TIMESTAMP,
 deleted BIGINT DEFAULT 0,
 remark TEXT,
     INDEX `idx_farm_tenant_id` (tenant_id),
-    INDEX `idx_farm_farm_code` (farm_code)
+    INDEX `idx_farm_farm_code` (farm_code),
+    -- 平台侧农场标识唯一（一个平台农场只映射到一行本地农场）；演示数据见 schema-patch-farm-identity.sql
+    UNIQUE KEY `uk_farm_platform_id` (platform_farm_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE IF NOT EXISTS agri_prod_plot_info (
 id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,

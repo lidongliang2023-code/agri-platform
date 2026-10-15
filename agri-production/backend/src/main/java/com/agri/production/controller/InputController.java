@@ -9,6 +9,7 @@ import com.agri.production.entity.InputMaterial;
 import com.agri.production.entity.InputStockFlow;
 import com.agri.production.entity.InputUsageRecord;
 import com.agri.production.service.IInputService;
+import com.agri.production.service.FarmIdResolver;
 import com.agri.production.service.TenantContextService;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -48,9 +49,11 @@ public class InputController {
     private static final DateTimeFormatter DATE_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private final IInputService inputService;
+    private final FarmIdResolver farmIdResolver;
 
-    public InputController(IInputService inputService) {
+    public InputController(IInputService inputService, FarmIdResolver farmIdResolver) {
         this.inputService = inputService;
+        this.farmIdResolver = farmIdResolver;
     }
 
     /* ==================== 投入品档案 ==================== */
@@ -230,7 +233,9 @@ public class InputController {
         String tenantId = TenantContextService.currentTenantId();
         return ApiResponse.success(inputService.pageUsages(
                 firstNonNull(pageNum, page, 1), firstNonNull(pageSize, size, 10),
-                status, toLong(inputId), toLong(plotId), toLong(taskId), toLong(farmId), tenantId));
+                // 农场筛选走解析（页面传的是平台侧标识 DEMO-FARM-xxx）；解析不出来 400，不静默丢条件
+                status, toLong(inputId), toLong(plotId), toLong(taskId),
+                farmIdResolver.resolveFilter(farmId, tenantId), tenantId));
     }
 
     /** 新增使用记录。 */

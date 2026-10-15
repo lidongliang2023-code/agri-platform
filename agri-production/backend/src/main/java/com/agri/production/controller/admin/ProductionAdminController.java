@@ -34,6 +34,7 @@ public class ProductionAdminController {
     // 检测单改用契约口径的实体/表（agri_prod_inspection）：旧实体映射的
     // agri_prod_quality_inspection 只有 3 列对得上，这个控制器的统计与列表一直是坏的
     private final com.agri.production.mapper.InspectionMapper inspectionMapper;
+    private final com.agri.production.service.FarmIdResolver farmIdResolver;
 
     public ProductionAdminController(
             com.agri.production.mapper.FarmMapper farmMapper,
@@ -43,7 +44,8 @@ public class ProductionAdminController {
             com.agri.production.mapper.InputMaterialMapper inputMaterialMapper,
             com.agri.production.mapper.AlertRecordMapper alertRecordMapper,
             com.agri.production.mapper.IoTDeviceMapper ioTDeviceMapper,
-            com.agri.production.mapper.InspectionMapper inspectionMapper) {
+            com.agri.production.mapper.InspectionMapper inspectionMapper,
+            com.agri.production.service.FarmIdResolver farmIdResolver) {
         this.farmMapper = farmMapper;
         this.taskMapper = taskMapper;
         this.traceCodeMapper = traceCodeMapper;
@@ -52,6 +54,7 @@ public class ProductionAdminController {
         this.alertRecordMapper = alertRecordMapper;
         this.ioTDeviceMapper = ioTDeviceMapper;
         this.inspectionMapper = inspectionMapper;
+        this.farmIdResolver = farmIdResolver;
     }
 
     @GetMapping("/dashboard")
@@ -90,7 +93,10 @@ public class ProductionAdminController {
     @GetMapping("/tasks")
     public ApiResponse<PageResult<TaskVO>> getTaskList(TaskPageDTO dto) {
         Page<Task> page = new Page<>(dto.getPageNum(), dto.getPageSize());
-        IPage<Task> result = taskMapper.pageQuery(page, dto, null);
+        // 运营端这条列表同样要解析 farmId：dto.farmId 是前端原值（可能是平台侧标识），
+        // 直接拿去和 bigint 的 farm_id 比较会被 MySQL 当 0 → 静默查空
+        IPage<Task> result = taskMapper.pageQuery(page, dto,
+                farmIdResolver.resolveFilter(dto.getFarmId(), null), null);
         List<TaskVO> voList = BeanCopyUtils.copyList(result.getRecords(), TaskVO.class);
         return ApiResponse.success(PageResult.of(voList, result.getTotal(), dto.getPageNum(), dto.getPageSize()));
     }

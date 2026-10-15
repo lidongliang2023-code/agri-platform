@@ -19,7 +19,12 @@ public interface ITaskService extends IService<Task> {
 
     TaskVO getById(Long id, String tenantId);
 
-    PageResult<TaskVO> pageQuery(TaskPageDTO dto, String tenantId);
+    /**
+     * 分页查询任务。
+     *
+     * @param farmId 解析后的本地农场主键（调用方用 FarmIdResolver 从 dto.farmId 换算）；null = 不过滤
+     */
+    PageResult<TaskVO> pageQuery(TaskPageDTO dto, Long farmId, String tenantId);
 
     TaskVO startTask(Long id, String tenantId);
 

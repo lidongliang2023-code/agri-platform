@@ -7,6 +7,7 @@ import com.agri.production.entity.Inspection;
 import com.agri.production.entity.QualityGradeRule;
 import com.agri.production.entity.TestingLab;
 import com.agri.production.service.IQualityService;
+import com.agri.production.service.FarmIdResolver;
 import com.agri.production.service.TenantContextService;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -41,9 +42,11 @@ import java.util.Map;
 public class QualityController {
 
     private final IQualityService qualityService;
+    private final FarmIdResolver farmIdResolver;
 
-    public QualityController(IQualityService qualityService) {
+    public QualityController(IQualityService qualityService, FarmIdResolver farmIdResolver) {
         this.qualityService = qualityService;
+        this.farmIdResolver = farmIdResolver;
     }
 
     /* ==================== 检测单 ==================== */
@@ -69,7 +72,9 @@ public class QualityController {
         return ApiResponse.success(qualityService.pageInspections(
                 firstNonNull(pageNum, page, 1), firstNonNull(pageSize, size, 10),
                 keyword, status,
-                toLong(farmId), toLong(batchId),
+                // 农场筛选走解析：页面传的是平台侧标识（DEMO-FARM-xxx）；解析不出来就 400，
+                // 而不是像原先那样 parseLong 失败 → null → 过滤条件被悄悄丢掉、返回全量
+                farmIdResolver.resolveFilter(farmId, tenantId), toLong(batchId),
                 inspectionType != null ? inspectionType : inspectType,
                 result != null ? result : inspectResult,
                 startDate, endDate, tenantId));

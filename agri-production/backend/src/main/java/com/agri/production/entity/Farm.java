@@ -10,6 +10,18 @@ import lombok.EqualsAndHashCode;
 
 import java.math.BigDecimal;
 
+/**
+ * 农场。
+ *
+ * <p><b>{@code platformFarmId} 是"平台侧农场标识"</b>（{@code agri_core.prod_farm_info.farm_id}，
+ * 形如 {@code DEMO-FARM-001}）：页面的"当前农场"取自平台侧的 {@code /farms}，传回来的就是这个
+ * 标识，本服务靠它把自己的农场主键换算出来（见 {@code FarmIdResolver}）。</p>
+ *
+ * <p>为什么平台标识单独一列而不是复用本表的 {@code farm_id} 列：实体基类
+ * {@link BaseEntity} 已经把 {@code farm_id} 映射成 {@code Long}（所有生产实体通用的"所属农场"），
+ * 而本表那一列是 {@code VARCHAR(191)} —— 在 Farm 里再声明一个 String 类型的 {@code farmId}
+ * 会因 getter 返回类型冲突直接编译不过。所以这里用 {@code platform_farm_id}。</p>
+ */
 @Data
 @EqualsAndHashCode(callSuper = true)
 @TableName("agri_prod_farm_info")
@@ -20,6 +32,10 @@ public class Farm extends BaseEntity {
 
     @TableField("farm_code")
     private String farmCode;
+
+    /** 平台侧农场标识（如 DEMO-FARM-001）。历史数据可能为 NULL —— 没有这一层映射 */
+    @TableField("platform_farm_id")
+    private String platformFarmId;
 
     @TableField("farm_name")
     private String farmName;

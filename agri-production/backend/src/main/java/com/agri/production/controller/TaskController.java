@@ -5,6 +5,7 @@ import com.agri.production.dto.TaskSaveDTO;
 import com.agri.production.common.entity.ApiResponse;
 import com.agri.production.common.entity.PageResult;
 import com.agri.production.service.ITaskService;
+import com.agri.production.service.FarmIdResolver;
 import com.agri.production.vo.TaskVO;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
@@ -18,9 +19,11 @@ import com.agri.production.service.TenantContextService;
 public class TaskController {
 
     private final ITaskService taskService;
+    private final FarmIdResolver farmIdResolver;
 
-    public TaskController(ITaskService taskService) {
+    public TaskController(ITaskService taskService, FarmIdResolver farmIdResolver) {
         this.taskService = taskService;
+        this.farmIdResolver = farmIdResolver;
     }
 
     @PostMapping
@@ -60,9 +63,13 @@ public class TaskController {
     }
 
     @GetMapping
-    public ApiResponse<PageResult<TaskVO>> pageQuery(TaskPageDTO dto) {
+    public ApiResponse<PageResult<TaskVO>> pageQuery(TaskPageDTO dto,
+                                                     @RequestParam(required = false) String farmId) {
         String tenantId = TenantContextService.currentTenantId();
-        PageResult<TaskVO> result = taskService.pageQuery(dto, tenantId);
+        // farmId 走解析：页面传的是平台侧农场标识（DEMO-FARM-xxx）。
+        // 原先 DTO 里是 Long，Spring 在绑定时就抛「参数类型不匹配: farmId」——
+        // 用户只看到"400"，既不知道是自己传错了、也不知道该传本服务的数字 id。
+        PageResult<TaskVO> result = taskService.pageQuery(dto, farmIdResolver.resolveFilter(farmId, tenantId), tenantId);
         return ApiResponse.success(result);
     }
 
@@ -172,9 +179,9 @@ public class TaskController {
     }
 
     @GetMapping("/farm/{farmId}")
-    public ApiResponse<List<TaskVO>> listByFarmId(@PathVariable Long farmId) {
+    public ApiResponse<List<TaskVO>> listByFarmId(@PathVariable String farmId) {
         String tenantId = TenantContextService.currentTenantId();
-        List<TaskVO> list = taskService.listByFarmId(farmId, tenantId);
+        List<TaskVO> list = taskService.listByFarmId(farmIdResolver.resolveFilter(farmId, tenantId), tenantId);
         return ApiResponse.success(list);
     }
 

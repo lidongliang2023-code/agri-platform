@@ -6,6 +6,7 @@ import com.agri.production.entity.HarvestBatch;
 import com.agri.production.entity.Inventory;
 import com.agri.production.entity.InventoryFlow;
 import com.agri.production.service.IHarvestInventoryService;
+import com.agri.production.service.FarmIdResolver;
 import com.agri.production.service.TenantContextService;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -38,9 +39,11 @@ import java.util.Map;
 public class HarvestController {
 
     private final IHarvestInventoryService service;
+    private final FarmIdResolver farmIdResolver;
 
-    public HarvestController(IHarvestInventoryService service) {
+    public HarvestController(IHarvestInventoryService service, FarmIdResolver farmIdResolver) {
         this.service = service;
+        this.farmIdResolver = farmIdResolver;
     }
 
     /* ==================== 采收批次 ==================== */
@@ -61,10 +64,14 @@ public class HarvestController {
             @RequestParam(required = false) Integer inboundStatus,
             @RequestParam(required = false) String startDate,
             @RequestParam(required = false) String endDate) {
+        String tenantId = TenantContextService.currentTenantId();
         return ApiResponse.success(service.pageBatches(
                 firstNonNull(pageNum, page, 1), firstNonNull(pageSize, size, 10),
-                toLong(farmId), toLong(plotId), toLong(cropId), batchNo, grade, status, inboundStatus,
-                startDate, endDate, TenantContextService.currentTenantId()));
+                // farmId 走解析：页面传的是平台侧农场标识（DEMO-FARM-xxx），直接 Long.parseLong 会失败，
+                // 失败后过滤条件就被丢掉了 —— 现在解析不出来会 400，不再静默全量返回
+                farmIdResolver.resolveFilter(farmId, tenantId),
+                toLong(plotId), toLong(cropId), batchNo, grade, status, inboundStatus,
+                startDate, endDate, tenantId));
     }
 
     /** 按地块聚合已发生的采收记录（页面「地块采收记录」）。 */

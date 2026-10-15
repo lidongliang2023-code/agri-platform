@@ -13,8 +13,11 @@
         <if test="dto.taskType != null and dto.taskType != ''">
             AND t.task_type = #{dto.taskType}
         </if>
-        <if test="dto.farmId != null">
-            AND t.farm_id = #{dto.farmId}
+        <!-- 农场过滤用**解析后**的主键参数，不用 dto.farmId：
+             dto.farmId 是前端原值（可能是 DEMO-FARM-001 这种平台侧标识），
+             拿它跟 bigint 的 farm_id 比较会被 MySQL 当 0 处理 → 静默返回空。 -->
+        <if test="farmId != null">
+            AND t.farm_id = #{farmId}
         </if>
         <if test="dto.plotId != null">
             AND t.plot_id = #{dto.plotId}
