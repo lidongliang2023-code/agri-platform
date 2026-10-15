@@ -1304,3 +1304,35 @@ deleted BIGINT DEFAULT 0,
     INDEX `idx_msg_tenant_id` (tenant_id),
     INDEX `idx_msg_read_flag` (read_flag)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 生产团队成员（用户端「团队与人员」）。
+--
+-- 字段口径照抄平台侧 prod_member（member_type = OWNER/AGRONOMIST/INSPECTOR/OPERATOR、
+-- role_code = FARM_OWNER/AGRONOMIST/...），只在结构上换成本服务的约定：
+-- 自增主键 + 业务编号 member_id、tenant_id varchar、create_time/update_time、deleted bigint。
+--
+-- status 的取值范围按**页面口径**：1 在职 / 2 待激活 / 0 已停用。平台侧老数据只有 1/0 两种，
+-- 页面「邀请」时发的是 2（"邀请已发出，成员待激活"），所以这一列不能按布尔用。
+CREATE TABLE IF NOT EXISTS agri_prod_member (
+id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+member_id VARCHAR(32) NOT NULL COMMENT '成员编号（业务主键）',
+tenant_id VARCHAR(191) NOT NULL,
+farm_id VARCHAR(64) COMMENT '所属农场（本服务农场主键，字符串存）',
+user_id VARCHAR(64) COMMENT '平台用户编号（未激活为空）',
+member_name VARCHAR(50) COMMENT '姓名',
+member_type VARCHAR(20) COMMENT 'OWNER/AGRONOMIST/INSPECTOR/OPERATOR',
+phone VARCHAR(20),
+role_code VARCHAR(32) COMMENT '角色编码，用于「角色与权限」页按角色聚合在职人数',
+post_name VARCHAR(50) COMMENT '岗位',
+join_date DATE COMMENT '加入日期',
+status TINYINT DEFAULT 1 COMMENT '1 在职 / 2 待激活 / 0 已停用',
+create_by TEXT,
+create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+update_by TEXT,
+update_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+deleted BIGINT DEFAULT 0,
+    UNIQUE KEY `uk_member_member_id` (member_id),
+    INDEX `idx_member_tenant_id` (tenant_id),
+    INDEX `idx_member_role_code` (role_code),
+    INDEX `idx_member_status` (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
