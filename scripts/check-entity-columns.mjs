@@ -60,6 +60,27 @@ for (const [table, column] of query(
 }
 
 const files = (only.length ? only.map((n) => `${n}.java`) : readdirSync(entityDir).filter((f) => f.endsWith('.java')))
+/**
+ * 基类的列也要算进来（2026-10-15 补）。
+ *
+ * 本脚本原先只看实体文件里自己声明的字段，而大多数实体写的是 `extends BaseEntity` ——
+ * 基类映射的 tenant_id / farm_id / create_by / create_time / update_by / update_time / deleted
+ * 会出现在每一条 SELECT/INSERT 里，表里少一列就是 Unknown column。
+ * 这类漏检实测发生过：agri_prod_emergency_plan 没有 farm_id，于是"查应急预案列表"直接 500，
+ * 而本脚本报的是"实体与表列一致 ✅"。
+ */
+const baseEntityPath = path.join(entityDir, '..', 'common', 'entity', 'BaseEntity.java')
+const baseColumns = new Set()
+let baseColumnsLoaded = false
+if (existsSync(baseEntityPath)) {
+  const baseText = readFileSync(baseEntityPath, 'utf8')
+  for (const m of baseText.matchAll(/@Table(?:Field|Id)\(\s*(?:value\s*=\s*)?"([^"]+)"[^)]*\)/g)) {
+    baseColumns.add(m[1])
+  }
+  baseColumnsLoaded = true
+} else {
+  console.log(`⚠️ 没找到 ${path.relative(process.cwd(), baseEntityPath)}，本次**未校验继承来的列**（结果可能偏乐观）`)
+}
 let problems = 0
 for (const file of files) {
   const full = path.join(entityDir, file)
@@ -74,6 +95,10 @@ for (const file of files) {
     continue
   }
   const mapped = new Set()
+  // 继承 BaseEntity 的实体：把基类映射的列并进来（它们同样会出现在 SQL 里）
+  if (/\bextends\s+BaseEntity\b/.test(text) && baseColumnsLoaded) {
+    for (const column of baseColumns) mapped.add(column)
+  }
   // @TableField(exist = false) 的字段是**非数据库字段**（例如树形结构的 children、按流水聚合出的
   // nearestExpireDate），先整段剔除，否则会被误报成"表里没有这一列"。
   const withoutTransient = text.replace(/@TableField\([^)]*exist\s*=\s*false[^)]*\)\s*\n\s*private[^;]+;/g, '')

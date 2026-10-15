@@ -109,11 +109,13 @@ public class ProductionAdminController {
         return ApiResponse.success(PageResult.of(voList, result.getTotal(), dto.getPageNum(), dto.getPageSize()));
     }
 
-    @GetMapping("/alerts")
-    public ApiResponse<List<AlertRecord>> getAlertList() {
-        List<AlertRecord> alerts = alertRecordMapper.selectByStatus("pending", null);
-        return ApiResponse.success(alerts);
-    }
+    /*
+     * 这里原先有一个 GET /admin/alerts（返回裸数组、只查 status='pending'）。
+     * 已删除（2026-10-15）：运营端「告警中心」页面按 PageResult<Alert> 消费（读 data.records），
+     * 裸数组一条也渲染不出来；而且它只查 pending 一种状态，与页面的状态筛选对不上。
+     * 正确实现是 AdminAlertController 的 GET /admin/alerts（分页 + 数字编码筛选 + AlertVO 形状）。
+     * 两个同路径处理器会直接让应用起不来，所以是**替换**而不是并存。
+     */
 
     @GetMapping("/devices")
     public ApiResponse<List<IoTDevice>> getDeviceList() {
