@@ -5,9 +5,13 @@ import com.agri.production.common.exception.BusinessException;
 import com.agri.production.entity.CirculationAnomaly;
 import com.agri.production.entity.FarmRisk;
 import com.agri.production.entity.FoodSafetyAlert;
+import com.agri.production.entity.FoodSafetyStandardItem;
+import com.agri.production.entity.FoodSafetyStandardSummary;
 import com.agri.production.mapper.CirculationAnomalyMapper;
 import com.agri.production.mapper.FarmRiskMapper;
 import com.agri.production.mapper.FoodSafetyAlertMapper;
+import com.agri.production.mapper.FoodSafetyStandardItemMapper;
+import com.agri.production.mapper.FoodSafetyStandardSummaryMapper;
 import com.agri.production.service.IAdminFoodSafetyService;
 import com.agri.production.vo.AdminFsAlertVO;
 import com.agri.production.vo.AdminFsCirculationVO;
@@ -41,18 +45,25 @@ public class AdminFoodSafetyServiceImpl implements IAdminFoodSafetyService {
     private static final String STATUS_PROCESSING = "处理中";
     private static final String STATUS_DONE = "已处理";
     private static final String LEVEL_URGENT = "urgent";
+    private static final String RESULT_PASS = "pass";
     private static final int ALERT_LIMIT_MAX = 200;
 
     private final FoodSafetyAlertMapper alertMapper;
     private final CirculationAnomalyMapper circulationMapper;
     private final FarmRiskMapper farmRiskMapper;
+    private final FoodSafetyStandardItemMapper standardItemMapper;
+    private final FoodSafetyStandardSummaryMapper standardSummaryMapper;
 
     public AdminFoodSafetyServiceImpl(FoodSafetyAlertMapper alertMapper,
                                      CirculationAnomalyMapper circulationMapper,
-                                     FarmRiskMapper farmRiskMapper) {
+                                     FarmRiskMapper farmRiskMapper,
+                                     FoodSafetyStandardItemMapper standardItemMapper,
+                                     FoodSafetyStandardSummaryMapper standardSummaryMapper) {
         this.alertMapper = alertMapper;
         this.circulationMapper = circulationMapper;
         this.farmRiskMapper = farmRiskMapper;
+        this.standardItemMapper = standardItemMapper;
+        this.standardSummaryMapper = standardSummaryMapper;
     }
 
     @Override
@@ -169,22 +180,68 @@ public class AdminFoodSafetyServiceImpl implements IAdminFoodSafetyService {
         BigDecimal previousSafetyIndex = farmRiskAverage(previous);
         long previousSampleCount = farmRiskSampleCount(previous);
 
+        // 合规指标按**校验项明细自身的时间**算当期，与风险评分用哪个月无关：
+        // 两条链的数据不是同一天产生的，强行共用一个"当期"会把某一边算成空。
+        YearMonth itemMonth = latestItemMonth();
+        BigDecimal passRate = itemPassRate(itemMonth);
+        BigDecimal previousPassRate = itemPassRate(itemMonth == null ? null : itemMonth.minusMonths(1));
+
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("safetyIndex", safetyIndex);
         result.put("safetyIndexDelta", delta(safetyIndex, previousSafetyIndex, previousSampleCount));
-        // 合规抽查通过率依赖 standard_item 等表（后续子域迁移）；现在如实给 0 而不是编一个
-        result.put("passRate", BigDecimal.ZERO);
-        result.put("passRateDelta", null);
+        result.put("passRate", passRate);
+        result.put("passRateDelta", rateDelta(passRate, previousPassRate));
         Long alertCount = alertMapper.selectCount(new LambdaQueryWrapper<>());
         result.put("alertCount", alertCount == null ? 0L : alertCount);
         Long urgent = alertMapper.selectCount(new LambdaQueryWrapper<FoodSafetyAlert>()
                 .eq(FoodSafetyAlert::getLevel, LEVEL_URGENT));
         result.put("urgentAlertCount", urgent == null ? 0L : urgent);
-        result.put("compliancePassRate", BigDecimal.ZERO);
+        result.put("compliancePassRate", compliancePassRate());
+        // 冷链资源表还没有数据（冷链子域未接入）。这里给 0 是**占位**，不代表"达标率 0%"：
+        // 与合规两项不同，它现在连一行输入都没有。子域接入后立刻改成真算（见 IAdminFoodSafetyService 注释）。
         result.put("coldChainPassRate", BigDecimal.ZERO);
         result.put("pendingAlertCount", alertMapper.selectCount(new LambdaQueryWrapper<FoodSafetyAlert>()
                 .in(FoodSafetyAlert::getStatus, List.of(STATUS_PENDING, STATUS_PROCESSING))));
         return result;
+    }
+
+    /** 明细里最新的抽检月份（没有明细则为 null）。 */
+    private YearMonth latestItemMonth() {
+        FoodSafetyStandardItem latest = standardItemMapper.selectOne(new LambdaQueryWrapper<FoodSafetyStandardItem>()
+                .isNotNull(FoodSafetyStandardItem::getCheckTime)
+                .orderByDesc(FoodSafetyStandardItem::getCheckTime).last("LIMIT 1"));
+        return latest == null || latest.getCheckTime() == null ? null : YearMonth.from(latest.getCheckTime());
+    }
+
+    /** 当期标准校验项的合格占比（%），1 位小数；该月没有抽检项时返回 null。 */
+    private BigDecimal itemPassRate(YearMonth month) {
+        if (month == null) {
+            return null;
+        }
+        List<FoodSafetyStandardItem> items = standardItemMapper.selectList(
+                new LambdaQueryWrapper<FoodSafetyStandardItem>()
+                        .ge(FoodSafetyStandardItem::getCheckTime, month.atDay(1).atStartOfDay())
+                        .lt(FoodSafetyStandardItem::getCheckTime, month.plusMonths(1).atDay(1).atStartOfDay()));
+        if (items.isEmpty()) {
+            return null;
+        }
+        long pass = items.stream().filter(item -> RESULT_PASS.equals(item.getCheckResult())).count();
+        return BigDecimal.valueOf(pass * 100)
+                .divide(BigDecimal.valueOf(items.size()), 1, RoundingMode.HALF_UP);
+    }
+
+    /** 批次级合规校验通过率（%）：全部标准的 pass_count / batch_count 之和；无批次时 null。 */
+    private BigDecimal compliancePassRate() {
+        long batch = 0;
+        long pass = 0;
+        for (FoodSafetyStandardSummary summary : standardSummaryMapper.selectList(null)) {
+            batch += summary.getBatchCount() == null ? 0 : summary.getBatchCount();
+            pass += summary.getPassCount() == null ? 0 : summary.getPassCount();
+        }
+        if (batch == 0) {
+            return null;
+        }
+        return BigDecimal.valueOf(pass * 100).divide(BigDecimal.valueOf(batch), 1, RoundingMode.HALF_UP);
     }
 
     private BigDecimal farmRiskAverage(YearMonth month) {
@@ -222,6 +279,19 @@ public class AdminFoodSafetyServiceImpl implements IAdminFoodSafetyService {
      */
     private BigDecimal delta(BigDecimal current, BigDecimal previous, long previousSampleCount) {
         if (current == null || previous == null || previousSampleCount == 0) {
+            return null;
+        }
+        return current.subtract(previous).setScale(1, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * 通过率的环比增量（百分点）。
+     *
+     * <p>上一期没有样本时返回 null —— 与 {@link #delta} 同一个理由：
+     * 用"本期 - 0"会显示成一次真实的暴涨。</p>
+     */
+    private BigDecimal rateDelta(BigDecimal current, BigDecimal previous) {
+        if (current == null || previous == null) {
             return null;
         }
         return current.subtract(previous).setScale(1, RoundingMode.HALF_UP);

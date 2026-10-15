@@ -46,8 +46,16 @@ public interface IAdminFoodSafetyService {
      * 监控中心指标：{@code safetyIndex / safetyIndexDelta / passRate / passRateDelta /
      * alertCount / urgentAlertCount / compliancePassRate / coldChainPassRate}。
      *
-     * <p>依赖合规抽查与冷链两组表（子域先后迁移），在它们到位之前，涉及的分项会以
-     * 0 或 null 如实返回，不填看起来合理的假数。</p>
+     * <p>口径（与平台侧 AdminFoodSafetyMonitorService 一致）：</p>
+     * <ul>
+     *   <li>{@code safetyIndex} / {@code safetyIndexDelta}：当期与上期农场风险评分均值，及环比；</li>
+     *   <li>{@code passRate} / {@code passRateDelta}：当期与上期**校验项**合格占比，及环比（合规子域已接入，故为真算）；</li>
+     *   <li>{@code compliancePassRate}：全部标准 {@code pass_count / batch_count}（批次级，与 P17 Tab3 同源）；</li>
+     *   <li>{@code coldChainPassRate}：冷链资源非离线占比 —— <b>冷链子域尚未接入，当前恒为占位的 0</b>，
+     *       不是"达标率 0%"；接入 P19 那一批端点时一并改成真算。</li>
+     * </ul>
+     *
+     * <p>凡是没有数据源的分项一律不给"看起来合理"的数：能算的算，算不了的给 null（页面渲染「—」）。</p>
      */
     Map<String, Object> metrics();
 }
