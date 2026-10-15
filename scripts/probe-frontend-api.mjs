@@ -77,7 +77,14 @@ if (!apiDir || !baseUrl || !token) {
  * 判据：路径里已经把动作所需的标识给全了，空体只是走个过场 —— 探针一发就生效。
  * 与 DELETE 同样处理：默认跳过，避免"只是扫个雷"却留下演示数据。
  */
-const SIDE_EFFECT_PATHS = ['/trace/batches/']
+const SIDE_EFFECT_PATHS = [
+  '/trace/batches/',
+  // PATCH /messages/read-all —— 用户端消息中心「全部已读」。
+  // 路径里没有 id、也没有请求体，探针一发就把该租户所有未读消息标成已读
+  // （实测：跑一轮 probe 之后，消息中心 4 条未读全变成已读、头部角标从 4 变 0，
+  //  而页面本身没有任何异常 —— 只有对着库看 read_flag 才发现）。
+  '/messages/read-all',
+]
 /**
  * 同类的后缀匹配（路径里已带全动作标识、空体也照样执行的动作端点）。
  *

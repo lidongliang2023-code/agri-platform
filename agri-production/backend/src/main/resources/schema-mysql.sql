@@ -1268,3 +1268,39 @@ VALUES
     (3, 'CHAIN-20260528-0003', 'SIMULATED', 'TRACE', 2, 'AG010102202605280001',
      SHA2('AG010102202605280001|溯源码', 256), NULL, NULL,
      'FAILED', NULL, '模拟链提交失败（演示数据，已重试 2 次）', 2, '2001', '2026-05-28 17:30:00');
+
+-- 站内消息通知（用户端「消息中心」+ 布局右上角未读角标）。
+--
+-- 这张表原先只存在于平台侧（prod_message_notify），本服务没有 —— 而「消息中心」页与
+-- 每个页面头部轮询的未读数都打 /api/v1/production/messages/**，属生产域用户端。
+-- 建表放在 schema-mysql.sql（随应用启动自动建，IF NOT EXISTS 幂等），演示数据在
+-- schema-patch-message-notify.sql。
+--
+-- msg_type 存平台侧的**字符串口径**（SYSTEM/TASK/ALERT/QUALITY），不落成数字：
+-- 页面自己把字符串归一成 1~4（见 utils/production-adapter.ts 的 normalizeMessageType），
+-- 后端再转一次等于两处维护同一张映射表，迟早对不上。
+CREATE TABLE IF NOT EXISTS agri_prod_message_notify (
+id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+message_id VARCHAR(32) NOT NULL COMMENT '消息编号（业务主键）',
+tenant_id VARCHAR(191) NOT NULL,
+farm_id VARCHAR(64) COMMENT '关联农场（本服务农场主键，字符串存）',
+receiver_id VARCHAR(64) COMMENT '接收人（平台侧成员编号，如 DEMO-MEM-001）',
+msg_type VARCHAR(20) COMMENT 'SYSTEM/TASK/ALERT/QUALITY',
+title VARCHAR(128),
+content VARCHAR(1000),
+biz_id VARCHAR(64) COMMENT '业务单号（页面据此跳转）',
+link_path VARCHAR(200) COMMENT '指定跳转路径；为空时页面按 biz_id 兜底',
+read_flag TINYINT DEFAULT 0 COMMENT '已读 0否 1是',
+sent_at DATETIME COMMENT '发送时间（列表按它倒序）',
+read_at DATETIME COMMENT '阅读时间',
+channel VARCHAR(20) DEFAULT 'INBOX' COMMENT '渠道 INBOX/SMS/WECHAT',
+status TINYINT DEFAULT 1 COMMENT '状态 1有效 0撤回',
+create_by TEXT,
+create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+update_by TEXT,
+update_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+deleted BIGINT DEFAULT 0,
+    UNIQUE KEY `uk_msg_message_id` (message_id),
+    INDEX `idx_msg_tenant_id` (tenant_id),
+    INDEX `idx_msg_read_flag` (read_flag)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
