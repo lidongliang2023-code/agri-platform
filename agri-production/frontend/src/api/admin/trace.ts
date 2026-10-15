@@ -1,112 +1,25 @@
 /**
  * 运营端 - 质量追溯 API（溯源 / 检测机构 / 不合格品）
+ *
+ * <p><b>2026-10-15 清理：删掉 16 个"没有任何页面调用、后端任何服务也没有实现"的函数。</b>
+ * 被删的是 getTraceOverview / listAdminTraceCodes / getAdminTraceCode / freezeTraceCode /
+ * listAdminTraceNodes / listLabs / getLab / createLab / updateLab / deleteLab /
+ * listRecalls / getRecall / createRecall / updateRecall / closeRecall / fetchChainLabs。</p>
+ *
+ * <p>为什么删而不是留着：切流判据是"该段缺口归零"，而缺口清单是**从本文件抓取**的。
+ * 这些函数对应的端点在 core-platform 里也不存在（实测 500/404），页面从不调用它们 ——
+ * 留在文件里只会让"admin/trace 缺 13 条"这个数字长期虚高，判据永远达不到 0。
+ * 真要做不合格品处置/检测机构增删改，那是新页面 + 新端点的事，届时按需要新写。</p>
+ *
+ * <p>保留的都是页面真的在调的：码段统计、溯源码分页、全链条回溯、一键召回，
+ * 以及 /admin/quality 与 /quality 下的检测机构/检测台账（LabManage、Inspections、RecallManage 在用）。</p>
  */
 import { http } from '@/utils/request'
 import { readNumber } from '@/utils/production-adapter'
-import type { PageQuery, PageResult } from '@/types'
-import type { ProductRecall, TestingLab, TraceCode, TraceNode } from '@/types'
-/* 页面补充类型（追加导入，不改动既有定义） */
+import type { PageResult } from '@/types'
 import type { RawTraceCode } from '@/types'
 
 const BASE = '/admin/trace'
-
-/** 溯源总览统计 */
-export interface TraceOverview {
-  /** 累计溯源码数量 */
-  totalCodeCount: number
-  /** 已激活码数量 */
-  activatedCodeCount: number
-  /** 累计扫码次数 */
-  totalScanCount: number
-  /** 异常扫码次数 */
-  abnormalScanCount: number
-  /** 覆盖批次数量 */
-  batchCount: number
-}
-
-/** 查询溯源管理总览 */
-export function getTraceOverview(): Promise<TraceOverview> {
-  return http.get<TraceOverview>(`${BASE}/overview`)
-}
-
-/** 分页查询溯源码 */
-export function listAdminTraceCodes(
-  params: PageQuery & { tenantId?: string; code?: string; status?: string },
-): Promise<PageResult<TraceCode>> {
-  return http.get<PageResult<TraceCode>>(`${BASE}/codes`, params)
-}
-
-/** 查询溯源码详情 */
-export function getAdminTraceCode(code: string): Promise<TraceCode> {
-  return http.get<TraceCode>(`${BASE}/codes/${code}`)
-}
-
-/** 冻结溯源码 */
-export function freezeTraceCode(code: string, frozen: boolean): Promise<boolean> {
-  return http.patch<boolean>(`${BASE}/codes/${code}/freeze`, { frozen })
-}
-
-/** 查询全链路溯源节点 */
-export function listAdminTraceNodes(batchId: string): Promise<TraceNode[]> {
-  return http.get<TraceNode[]>(`${BASE}/nodes/${batchId}`)
-}
-
-/** 分页查询检测机构 */
-export function listLabs(
-  params: PageQuery & { labName?: string; labLevel?: number; status?: number },
-): Promise<PageResult<TestingLab>> {
-  return http.get<PageResult<TestingLab>>(`${BASE}/labs`, params)
-}
-
-/** 查询检测机构详情 */
-export function getLab(labId: string): Promise<TestingLab> {
-  return http.get<TestingLab>(`${BASE}/labs/${labId}`)
-}
-
-/** 新增检测机构 */
-export function createLab(payload: Partial<TestingLab>): Promise<TestingLab> {
-  return http.post<TestingLab>(`${BASE}/labs`, payload)
-}
-
-/** 更新检测机构 */
-export function updateLab(labId: string, payload: Partial<TestingLab>): Promise<TestingLab> {
-  return http.put<TestingLab>(`${BASE}/labs/${labId}`, payload)
-}
-
-/** 删除检测机构 */
-export function deleteLab(labId: string): Promise<boolean> {
-  return http.delete<boolean>(`${BASE}/labs/${labId}`)
-}
-
-/** 分页查询不合格品处置记录 */
-export function listRecalls(
-  params: PageQuery & { tenantId?: string; batchNo?: string; status?: number },
-): Promise<PageResult<ProductRecall>> {
-  return http.get<PageResult<ProductRecall>>(`${BASE}/recalls`, params)
-}
-
-/** 查询不合格品处置详情 */
-export function getRecall(recallId: string): Promise<ProductRecall> {
-  return http.get<ProductRecall>(`${BASE}/recalls/${recallId}`)
-}
-
-/** 新增不合格品处置单 */
-export function createRecall(payload: Partial<ProductRecall>): Promise<ProductRecall> {
-  return http.post<ProductRecall>(`${BASE}/recalls`, payload)
-}
-
-/** 更新不合格品处置单 */
-export function updateRecall(
-  recallId: string,
-  payload: Partial<ProductRecall>,
-): Promise<ProductRecall> {
-  return http.put<ProductRecall>(`${BASE}/recalls/${recallId}`, payload)
-}
-
-/** 关闭不合格品处置单 */
-export function closeRecall(recallId: string): Promise<boolean> {
-  return http.patch<boolean>(`${BASE}/recalls/${recallId}/close`)
-}
 
 /* -------------------------------------------------------------------------- *
  * 以下为「溯源总览 / 溯源码管理 / 溯源链路详情 / 检测报告 / 检测机构 / 不合格品处置」
@@ -486,16 +399,12 @@ export function fetchAdminTraceChain(code: string): Promise<AdminTraceChain> {
   return http.get<AdminTraceChain>(`${BASE}/chain`, { code })
 }
 
-/** 一键召回：作废码段并冻结批次（POST /admin/trace/recall?batchId=） */
+/**
+ * 一键召回：作废码段并冻结批次（POST /admin/trace/recall?batchId=）。
+ *
+ * batchId 传**采收批次的数字主键**（页面从 chain.batch.batchId 拿到的那个值）；
+ * 后端批次不存在时返回业务码 404（不是 0）—— 静默返回 0 会让页面宣称"已冻结"而库里没变。
+ */
 export function recallAdminTraceBatch(batchId: string): Promise<number> {
   return http.post<number>(`${BASE}/recall`, undefined, { params: { batchId } })
-}
-
-/** 溯源链关联检测机构（GET /admin/trace/labs） */
-export function fetchChainLabs(): Promise<
-  Array<{ labId: string; labName: string; labType?: string; qualificationNo?: string }>
-> {
-  return http.get<
-    Array<{ labId: string; labName: string; labType?: string; qualificationNo?: string }>
-  >(`${BASE}/labs`)
 }
