@@ -78,27 +78,116 @@ const SIDE_EFFECT_SUFFIXES = ['/generate']
  */
 const PLATFORM_OWNED_PATHS = ['/admin/tenants/']
 
-const CALL = /http(?:Platform)?\.(get|post|put|patch|delete)(?:<[^>]*>)?\(\s*(`[^`]*`|'[^']*')/g
+/**
+ * 抓 api 层的 `http.get/post/...('<path>')`。
+ *
+ * <p><b>泛型那一截必须用 `[^(]*` 而不是 `[^>]*`</b>（2026-10-15 修的）：后端出参大多是分页，
+ * 于是调用长这样 —— {@code http.get<PageResult<RawTraceCode>>(`/admin/trace/codes`, …)}。
+ * 用 `[^>]*` 会在第一个 `>` 处停下，整条调用**一条都抓不到**：审计这条链路时实测
+ * `/admin/quality/labs`、`/admin/quality/inspections`、`/admin/trace/codes`
+ * 这些**页面真的在调**的端点全都不在清单里，于是"该段缺口为 0"可能是假的 ——
+ * 判据漏了最典型的那些路径，比不判还危险。改成贪婪匹配到 `(` 之前的最后一个 `>`，嵌套泛型也能吃掉。</p>
+ */
+/**
+ * 抓 api 层的 `http.get/post/...`。第一个参数支持三种写法：
+ * 模板字面量 `` `${BASE}/x` ``、单引号 `'/x'`、以及**常量名**。
+ *
+ * <p>最后一档是 2026-10-15 补的：`http.get<PageResult<SopLibraryItem>>(SOP_BASE, params)`
+ * 这种把路径放在常量里、直接传变量的写法，旧正则一条都抓不到 —— 而它是**活路径**
+ * （`GET /admin/sop` 就是"SOP 管理"页在用的），漏掉它等于给这一段发一张假的通行证。</p>
+ */
+const CALL = /http(?:Platform)?\.(get|post|put|patch|delete)\s*(?:<[^(]*>)?\s*\(\s*(`[^`]*`|'[^']*'|[A-Za-z_$][A-Za-z0-9_$.]*)/g
 const CONST = /const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*'([^']*)'/g
 
-/** 递归收集 .ts */
-function walk(dir, out = []) {
+/**
+ * 递归收集源码文件。
+ *
+ * <p>{@code exts} 必须显式给：扫 api 目录时只要 .ts，而统计"谁调用过这个函数"时
+ * **必须连 .tsx 一起收** —— 页面全是 .tsx，只收 .ts 的话每个只被页面使用的函数
+ * 都会被判成"没人调"，死函数判定于是把大量活路径误摘出去（第一次写就踩了：
+ * 150 条被误判，连"审批管理"页在用的 listApprovalFlows 都在里面）。</p>
+ */
+function walk(dir, exts, out = []) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name)
-    if (entry.isDirectory()) walk(full, out)
-    else if (entry.name.endsWith('.ts')) out.push(full)
+    if (entry.isDirectory()) walk(full, exts, out)
+    else if (exts.some((ext) => entry.name.endsWith(ext))) out.push(full)
   }
   return out
 }
 
+/**
+ * 一套「这个 api 函数到底有没有页面在调」的判定，用来把**死函数**从缺口里摘出去。
+ *
+ * <p>为什么必须分开算：缺口清单是静态扫 api 层得来的，而 api 层里常年躺着一批
+ * "定义了、没人调、后端也没实现"的函数（例如 api/trace.ts 的 listTraceScans、
+ * api/admin/trace.ts 里的 labs/recalls 增删改查）。它们不算"页面会碎"，
+ * 却会让某一段的缺口永远归不了零 —— 判据于是形同失效，而真正该修的那些路径混在里面也看不出来。</p>
+ *
+ * <p>判定方式：函数名在**整个前端 src** 里出现的次数。声明处算 1 次，
+ * 有页面 import/调用就会 ≥2 次；只在声明处出现 = 没有调用方。
+ * 之所以用"出现次数"而不是解析 import 图，是因为 import 的写法太多（别名、批量导出、动态 import），
+ * 而这里要的是"有没有人提过这个名字"，宽松一点反而不会把活的误判成死的。</p>
+ */
+function buildCallerIndex(srcRoot) {
+  const counts = new Map()
+  let files = []
+  try {
+    // 只走一次：重复遍历会把每个函数名的出现次数翻倍，于是"死函数"也被算成"有人提过"，
+    // 整条判定静默失效（第一次写就踩了，表现为死函数一条都没被摘出来）
+    files = walk(srcRoot, ['.ts', '.tsx'])
+  } catch {
+    return { counts, ok: false }
+  }
+  for (const file of files) {
+    let text = ''
+    try {
+      text = readFileSync(file, 'utf8')
+    } catch {
+      continue
+    }
+    for (const m of text.matchAll(/[A-Za-z_$][A-Za-z0-9_$]*/g)) {
+      counts.set(m[0], (counts.get(m[0]) ?? 0) + 1)
+    }
+  }
+  return { counts, ok: true }
+}
+
+/** 取某个字符下标之前最近的一个 `export function NAME` / `export async function NAME` */
+function enclosingFunctionName(text, index) {
+  const before = text.slice(0, index)
+  const matches = [...before.matchAll(/export\s+(?:async\s+)?function\s+([A-Za-z_$][A-Za-z0-9_$]*)/g)]
+  return matches.length === 0 ? null : matches[matches.length - 1][1]
+}
+
+/** api 目录的父目录就是前端 src（apiDir 形如 <前端>/src/api） */
+const SRC_ROOT = path.resolve(path.dirname(apiDir))
+const callerIndex = buildCallerIndex(SRC_ROOT)
+
 const seen = new Map()
-for (const file of walk(apiDir)) {
+/** 第一个参数既不是字面量、也不是本文件里的字符串常量 → 解析不出路径，单独记下来 */
+const unresolved = []
+for (const file of walk(apiDir, ['.ts'])) {
   const text = readFileSync(file, 'utf8')
   const consts = {}
   for (const m of text.matchAll(CONST)) consts[m[1]] = m[2]
   for (const m of text.matchAll(CALL)) {
     const method = m[1].toUpperCase()
-    const template = m[2].slice(1, -1)
+    const fnName = enclosingFunctionName(text, m.index ?? 0)
+    const raw = m[2]
+    const isLiteral = raw.startsWith('`') || raw.startsWith("'")
+    let template
+    if (isLiteral) {
+      template = raw.slice(1, -1)
+    } else {
+      // 常量名：只有它在本文件里被声明成字符串常量时才敢用，否则是拼接出来的运行时值
+      const name = raw.split('.')[0]
+      if (!Object.prototype.hasOwnProperty.call(consts, name)) {
+        unresolved.push({ file: path.relative(apiDir, file), method, raw: raw.slice(0, 40), fnName })
+        continue
+      }
+      template = consts[name]
+    }
     const resolved = template.replace(/\$\{([^}]+)\}/g, (_all, expr) => {
       const name = expr.trim()
       if (Object.prototype.hasOwnProperty.call(consts, name)) return consts[name]
@@ -106,7 +195,7 @@ for (const file of walk(apiDir)) {
     })
     if (!resolved.startsWith('/')) continue
     const key = `${method} ${resolved}`
-    if (!seen.has(key)) seen.set(key, { file: path.relative(apiDir, file), method, path: resolved })
+    if (!seen.has(key)) seen.set(key, { file: path.relative(apiDir, file), method, path: resolved, fnName })
   }
 }
 
@@ -171,8 +260,12 @@ const segmentOf = (p) => {
 
 /** 平台域路径从"缺口"里摘出来单列：它们本该留在平台侧，不计入本服务的切流判据。 */
 const isPlatformOwned = (p) => PLATFORM_OWNED_PATHS.some((prefix) => p.startsWith(prefix))
+/** 只有"死函数"会发出的路径（函数名在整个前端 src 里只出现在声明处）→ 不是缺口 */
+const isDeadOnly = (m) =>
+  callerIndex.ok && m.fnName != null && (callerIndex.counts.get(m.fnName) ?? 0) <= 1
+const deadOnly = missing.filter((m) => !isPlatformOwned(m.path) && isDeadOnly(m))
 const platformOwned = missing.filter((m) => isPlatformOwned(m.path))
-const realMissing = missing.filter((m) => !isPlatformOwned(m.path))
+const realMissing = missing.filter((m) => !isPlatformOwned(m.path) && !isDeadOnly(m))
 
 console.log(`== 前端会发出的请求：${list.length} 条（去重后） ==`)
 console.log(`== 缺口 ${realMissing.length} | 有处理器但本次调用未成功 ${handledButFailed.length} | 成功 ${ok.length} ==`)
@@ -181,6 +274,22 @@ if (platformOwned.length > 0) {
     `== 另 ${platformOwned.length} 条按口径不由本服务实现（平台域，应留在平台侧；不计入缺口）` +
       `：${PLATFORM_OWNED_PATHS.join('、')} ==`,
   )
+}
+if (deadOnly.length > 0) {
+  console.log(
+    `== 另 ${deadOnly.length} 条只由"没有页面调用"的 api 函数发出（不计入缺口）` +
+      `${callerIndex.ok ? '' : '；⚠️ 无法读取前端 src，本次未做死函数判定'} ==`,
+  )
+}
+if (unresolved.length > 0) {
+  // 不静默：解析不出路径的调用意味着**可能**有活路径没进清单，判据的完整性要打折
+  console.log(
+    `== ⚠️ 另有 ${unresolved.length} 处调用的 URL 不是字面量也不是本文件内的字符串常量，` +
+      `未能解析（清单可能不全；如需覆盖请把这类路径改成常量或模板字面量） ==`,
+  )
+  for (const u of unresolved.slice(0, 8)) {
+    console.log(`   · ${u.method} ${u.raw}${u.fnName ? '  ' + u.fnName + '()' : ''} [${u.file}]`)
+  }
 }
 if (skipped.length > 0) {
   const deletes = skipped.filter((c) => c.method === 'DELETE').length
@@ -196,20 +305,31 @@ if (skipped.length > 0) {
 
 const stats = new Map()
 for (const [kind, item] of [
-  ...missing.map((x) => ['missing', x]),
+  // 缺处理器一列只统计**计入缺口**的（真实缺口）：死函数与平台域路径单独一列，
+  // 否则这一列会把"没人调、后端也没实现"的路径混进来，看着像一大堆待办
+  ...realMissing.map((x) => ['missing', x]),
+  ...[...deadOnly, ...platformOwned].map((x) => ['excluded', x]),
   ...handledButFailed.map((x) => ['failed', x]),
   ...ok.map((x) => ['ok', x]),
 ]) {
   const seg = segmentOf(item.path)
-  const row = stats.get(seg) ?? { missing: 0, failed: 0, ok: 0 }
+  const row = stats.get(seg) ?? { missing: 0, excluded: 0, failed: 0, ok: 0 }
   row[kind] += 1
   stats.set(seg, row)
 }
 console.log('\n== 按路径段统计 ==')
-console.log('  ' + '段'.padEnd(20) + '缺处理器'.padStart(10) + '有处理器未成功'.padStart(16) + '成功'.padStart(8))
+console.log(
+  '  ' +
+    '段'.padEnd(18) +
+    '缺处理器'.padStart(10) +
+    '不计入缺口'.padStart(12) +
+    '有处理器未成功'.padStart(16) +
+    '成功'.padStart(8),
+)
 for (const [seg, row] of [...stats.entries()].sort((a, b) => b[1].missing - a[1].missing)) {
   console.log(
-    `  ${seg.padEnd(18)} ${String(row.missing).padStart(10)} ${String(row.failed).padStart(16)} ${String(row.ok).padStart(8)}`,
+    `  ${seg.padEnd(18)} ${String(row.missing).padStart(10)} ${String(row.excluded).padStart(12)}` +
+      ` ${String(row.failed).padStart(16)} ${String(row.ok).padStart(8)}`,
   )
 }
 
@@ -219,6 +339,16 @@ for (const m of realMissing) console.log(`  ${m.method.padEnd(6)} ${m.path.padEn
 if (platformOwned.length > 0) {
   console.log(`\n-- 不计入缺口的平台域路径（${platformOwned.length} 条；切 /admin/ 段时必须排除） --`)
   for (const m of platformOwned) console.log(`  ${m.method.padEnd(6)} ${m.path.padEnd(56)} [${m.file}]`)
+}
+
+if (deadOnly.length > 0) {
+  console.log(
+    `\n-- 只由无页面调用的 api 函数发出（${deadOnly.length} 条；不计入缺口）` +
+      `—— 要做这些功能就是新页面 + 新端点，届时把函数接上自然会重新计数 --`,
+  )
+  for (const m of deadOnly) {
+    console.log(`  ${m.method.padEnd(6)} ${m.path.padEnd(56)} [${m.file}] ${m.fnName ? m.fnName + '()' : ''}`)
+  }
 }
 
 console.log(`\n-- 有处理器但本次调用未成功（${handledButFailed.length} 条，探测用的占位参数所致者属正常） --`)

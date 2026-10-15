@@ -47,7 +47,10 @@ if (!apiDir || !gatewayBase || !coreBase || !token) {
   process.exit(2)
 }
 
-const CALL = /http(?:Platform)?\.(get|post|put|patch|delete)(?:<[^>]*>)?\(\s*(`[^`]*`|'[^']*')/g
+// 泛型截取用 [^(]*（贪婪到 `(` 前的最后一个 `>`）：像 http.get<PageResult<X>>(...) 这种
+// 嵌套泛型，用 [^>]* 会在第一个 `>` 停下、整条调用抓不到 —— 对照脚本会因此漏掉最典型的分页接口。
+// 与 probe-frontend-api.mjs 保持同一份正则，两个脚本的口径必须一致。
+const CALL = /http(?:Platform)?\.(get|post|put|patch|delete)\s*(?:<[^(]*>)?\s*\(\s*(`[^`]*`|'[^']*')/g
 const CONST = /const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*'([^']*)'/g
 
 /** 空体也会真改库的动作端点（后缀匹配）。新增发现往这里加，别每次手动去库里删。 */
