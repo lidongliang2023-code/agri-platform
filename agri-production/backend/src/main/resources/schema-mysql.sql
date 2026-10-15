@@ -599,13 +599,22 @@ remark TEXT,
 -- 教训（2026-10-15 实际踩到）：本文件每次启动都会跑，靠的是 farm_code 唯一键让 INSERT IGNORE 跳过；
 -- 只要把已有行的 farm_code 换成别的值，重启就会**再插一条**（那天多出 2 行"示范农场/绿色生态园"，
 -- 且不带平台标识，看起来像数据自己长出来的）。改演示行的唯一键值 = 改种子的幂等前提，两边要一起改。
-INSERT IGNORE INTO agri_prod_farm_info (farm_code, farm_name, platform_farm_id, tenant_id)
-    VALUES ('DEMO-FARMC-001', '【演示】华南绿色蔬菜示范农场', 'DEMO-FARM-001', '2001');
-INSERT IGNORE INTO agri_prod_farm_info (farm_code, farm_name, platform_farm_id, tenant_id)
-    VALUES ('DEMO-FARMC-002', '【演示】华东智慧稻田农场', 'DEMO-FARM-002', '2001');
-INSERT IGNORE INTO agri_prod_plot_info (plot_code, plot_name, farm_id, tenant_id) VALUES ('P001', 'A区-地块1', 1, '2001');
-INSERT IGNORE INTO agri_prod_plot_info (plot_code, plot_name, farm_id, tenant_id) VALUES ('P002', 'A区-地块2', 1, '2001');
-INSERT IGNORE INTO agri_prod_plot_info (plot_code, plot_name, farm_id, tenant_id) VALUES ('P003', 'B区-地块1', 2, '2001');
+-- 农场带所在地与面积：区域分布、种植面积排行都读这两组字段，缺了仪表盘上就只有"未标注区域"与 0。
+-- 取值与平台侧演示农场（agri_core.prod_farm_info）一致 —— 同一批农场两边不该有两套面积。
+INSERT IGNORE INTO agri_prod_farm_info
+    (farm_code, farm_name, platform_farm_id, tenant_id, province, city, district, total_area)
+    VALUES ('DEMO-FARMC-001', '【演示】华南绿色蔬菜示范农场', 'DEMO-FARM-001', '2001', '广东省', '广州市', '从化区', 1280.00);
+INSERT IGNORE INTO agri_prod_farm_info
+    (farm_code, farm_name, platform_farm_id, tenant_id, province, city, district, total_area)
+    VALUES ('DEMO-FARMC-002', '【演示】华东智慧稻田农场', 'DEMO-FARM-002', '2001', '江苏省', '盐城市', '射阳县', 3600.00);
+-- 地块带面积与在田作物：这两列曾经是空的，运营端仪表盘的「在田面积」与作物维度聚合因此恒为 0 /
+-- 只剩"未标注作物"。新库从种子就要带上（存量库走 schema-patch-demo-areas.sql）。
+INSERT IGNORE INTO agri_prod_plot_info (plot_code, plot_name, farm_id, tenant_id, area, current_crop)
+    VALUES ('P001', 'A区-地块1', 1, '2001', 8.50, '西红柿');
+INSERT IGNORE INTO agri_prod_plot_info (plot_code, plot_name, farm_id, tenant_id, area, current_crop)
+    VALUES ('P002', 'A区-地块2', 1, '2001', 12.00, '西红柿');
+INSERT IGNORE INTO agri_prod_plot_info (plot_code, plot_name, farm_id, tenant_id, area, current_crop)
+    VALUES ('P003', 'B区-地块1', 2, '2001', 4.50, '水稻');
 INSERT IGNORE INTO agri_prod_task_info (task_code, task_name, task_type, farm_id, plot_id, tenant_id) VALUES ('T001', '春季施肥', '施肥', 1, 1, '2001');
 INSERT IGNORE INTO agri_prod_task_info (task_code, task_name, task_type, farm_id, plot_id, tenant_id) VALUES ('T002', '病虫害防治', '防治', 1, 2, '2001');
 INSERT IGNORE INTO agri_prod_input_material (material_code, material_name, material_type, unit, tenant_id) VALUES ('M001', '有机肥料', 'FERTILIZER', 'kg', '2001');
