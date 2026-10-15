@@ -24,6 +24,17 @@
  *     http://localhost:8092/api/v1/production "$TOKEN"
  *
  * 退出码：0 = 没有缺口；1 = 有缺口（切流前应当归零）。
+ *
+ * ⚠️ **跑完要还原演示数据**。已知的两类残留副作用：
+ *   ① 空体 PUT 会刷新 audit 时间戳 —— 增量更新类的 PUT/POST 收到 `{}` 不报错，
+ *      字段全为 null 被忽略，只剩 MyBatis-Plus 的 update_time 填充落库。
+ *      实测一轮下来 7 张演示表的 id=1 行 update_time 变了（业务值没变），界面看不出来，但那仍是数据。
+ *      还原：`UPDATE <表> SET update_time = create_time WHERE update_time <> create_time;`
+ *      （这些演示行的 update_time 初始就等于 create_time。）
+ *   ② 个别创建类接口在目标服务上也可能落行 —— 跑完请对演示库做一次行级快照对比确认。
+ *      快照做法（整库行级、前后对比）：
+ *        mysql -uroot --batch agri_production -e "source <(show tables 生成的 SELECT '·', t.* FROM t 列表)"
+ */
  */
 import { readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
@@ -60,8 +71,19 @@ if (!apiDir || !baseUrl || !token) {
  * 与 DELETE 同样处理：默认跳过，避免"只是扫个雷"却留下演示数据。
  */
 const SIDE_EFFECT_PATHS = ['/trace/batches/']
-/** 同类的后缀匹配（如 /harvests/1/generate：给批次生成溯源码 + 落 prod.batch.harvested 事件） */
-const SIDE_EFFECT_SUFFIXES = ['/generate']
+/**
+ * 同类的后缀匹配（路径里已带全动作标识、空体也照样执行的动作端点）。
+ *
+ * <p>每一条都对应一次实测出来的副作用，不是猜的：</p>
+ * <ul>
+ *   <li>{@code /generate} —— POST /harvests/1/generate 给批次生成溯源码并落 prod.batch.harvested 事件；
+ *       POST /trace/batches/1/generate 生成溯源码；</li>
+ *   <li>{@code /accredit}、{@code /reject} —— 运营端检测机构准入：实测空体 POST 会把机构状态
+ *       从"合作中"改成"已终止"（跑前跑后对整库做行级快照才发现，页面看不出来）。</li>
+ * </ul>
+ * <p>新增同类端点就往这里加一条，并在注释里写上"空体会改什么"。</p>
+ */
+const SIDE_EFFECT_SUFFIXES = ['/generate', '/accredit', '/reject']
 
 /**
  * **按口径不由本服务实现**的路径（前缀匹配）——不计入"缺口"。

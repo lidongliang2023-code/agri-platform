@@ -27,12 +27,19 @@
  *   node scripts/diff-cutover-regressions.mjs agri-production/frontend/src/api \
  *     http://localhost/api/v1/production http://localhost:8093/api/v1/production "$TOKEN"
  *
- * ⚠️ 会真的改库的端点一律跳过（与 probe-frontend-api.mjs 同一份口径）：
- *   · DELETE —— 一发就是真删；
- *   · 路径里已经带全动作标识、空体也照样执行的 `/generate` 类端点 ——
- *     实测代价：POST /harvests/1/generate 会**真的**给批次生成溯源码并落一条
- *     prod.batch.harvested 事件，POST /trace/batches/1/generate 会真的生成溯源码。
- *     只是跑个对照，演示库里就多出一条码 + 一条事件，看起来像"数据自己长出来的"。
+ * ⚠️ **默认只对照 GET**（2026-10-15 改）。写方法要用 --include-writes 显式打开。
+ *
+ * <p>为什么改成默认不写：本脚本会对**两侧**都发请求，而平台侧（core-platform）的写接口校验宽松，
+ * 空体 `{}` 会被当成合法请求**真的建行**。实测（跑前跑后对整库做行级快照对比）：
+ * 一轮对照在 agri_core 里新增 24 行，散落在 prod_ai_diagnosis / prod_alert_rule /
+ * prod_farm_cert / prod_input_stock_flow / prod_input_usage / prod_inspection /
+ * prod_iot_device / prod_member / prod_quality_lab / prod_sys_setting / prod_task_record /
+ * prod_task_template / prod_plan_info / prod_plan_stage / prod_plot_soil / platform_outbox_message
+ * 十六张表上；同一轮在新服务侧只多了几条 audit 时间戳（新服务校验严，空体多半 400）。</p>
+ *
+ * <p>也就是说：**写请求的"对照"本来就没有信息量**（两侧拒绝的理由不同，结论无法比较），
+ * 却会往平台库里灌垃圾。写接口的覆盖交给另外两个脚本：probe-frontend-api.mjs 只打新服务
+ * （校验拒得住），check-write-validation.mjs 专门看空体该不该 4xx。DELETE 永远跳过 —— 一发就是真删。</p>
  *
  * 退出码：0 = 没有"新服务非 0 而平台侧 0"的路径；1 = 有（逐条分诊，别直接当回归）。
  */
@@ -41,9 +48,10 @@ import path from 'node:path'
 
 const args = process.argv.slice(2).filter((a) => !a.startsWith('--'))
 const includeSideEffects = process.argv.slice(2).includes('--include-side-effects')
+const includeWrites = process.argv.slice(2).includes('--include-writes')
 const [apiDir, gatewayBase, coreBase, token, placeholder = '1'] = args
 if (!apiDir || !gatewayBase || !coreBase || !token) {
-  console.error('用法：node scripts/diff-cutover-regressions.mjs <api 目录> <经网关 baseURL> <直连平台 baseURL> <访问令牌> [占位符] [--include-side-effects]')
+  console.error('用法：node scripts/diff-cutover-regressions.mjs <api 目录> <经网关 baseURL> <直连平台 baseURL> <访问令牌> [占位符] [--include-writes] [--include-side-effects]')
   process.exit(2)
 }
 
@@ -74,6 +82,8 @@ for (const file of walk(apiDir)) {
     const method = m[1].toUpperCase()
     // DELETE 一律跳过：对照脚本会对"经网关"这一侧真的发请求，DELETE 一发就是真删
     if (method === 'DELETE') continue
+    // 写方法默认跳过：见文件头说明（往平台库灌垃圾，且"对照"本身没有信息量）
+    if (!includeWrites && ['POST', 'PUT', 'PATCH'].includes(method)) continue
     const resolved = m[2].slice(1, -1).replace(/\$\{([^}]+)\}/g, (_all, expr) => {
       const name = expr.trim()
       if (Object.prototype.hasOwnProperty.call(consts, name)) return consts[name]

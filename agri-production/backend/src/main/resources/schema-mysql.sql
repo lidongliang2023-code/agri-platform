@@ -930,6 +930,9 @@ CREATE TABLE IF NOT EXISTS agri_prod_testing_lab (
     region VARCHAR(191),
     cert_no VARCHAR(191),
     status INT DEFAULT 1 COMMENT '1 合作中 / 0 已终止',
+    -- reject_reason 由 schema-patch-quality-lab-page.sql 补（旧库已有本表，CREATE IF NOT EXISTS 不会加列）。
+    -- 运营端「准入驳回」要落运营手填的原因，没有这一列就只能丢输入或假装成功。
+    reject_reason VARCHAR(500) COMMENT '准入驳回原因（驳回时由运营手填）',
     remark TEXT,
     tenant_id VARCHAR(191) NOT NULL,
     create_time DATETIME DEFAULT CURRENT_TIMESTAMP,

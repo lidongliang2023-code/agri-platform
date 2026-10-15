@@ -55,6 +55,15 @@ public class TestingLab {
     @TableField("status")
     private Integer status;
 
+    /**
+     * 准入驳回原因（运营端驳回时手填）。
+     *
+     * <p>列由 schema-patch-quality-lab-page.sql 补：没有它就没地方落用户填的原因，
+     * 只能丢掉输入或者假装成功 —— 两种都不行。</p>
+     */
+    @TableField("reject_reason")
+    private String rejectReason;
+
     @TableField("remark")
     private String remark;
 
