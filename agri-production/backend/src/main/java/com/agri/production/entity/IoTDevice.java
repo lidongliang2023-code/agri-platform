@@ -49,6 +49,10 @@ public class IoTDevice extends BaseEntity {
     @TableField("protocol")
     private String protocol;
 
+    /** 上报间隔（秒）。列本来就在表里（data_interval），此前没被映射 */
+    @TableField("data_interval")
+    private Integer dataInterval;
+
     @TableField("install_date")
     private java.time.LocalDateTime installDate;
 
@@ -75,4 +79,13 @@ public class IoTDevice extends BaseEntity {
 
     @TableField("is_enabled")
     private Integer isEnabled;
+
+    /**
+     * 最近一次重启指令下发时间（列见 schema-patch-monitor-page.sql）。
+     *
+     * <p>语义就是"指令已记录、待设备侧执行"——本部署没有设备网关，不会真去重启设备，
+     * 页面文案也是"重启指令已下发"，两边一致。</p>
+     */
+    @TableField("reboot_requested_at")
+    private java.time.LocalDateTime rebootRequestedAt;
 }

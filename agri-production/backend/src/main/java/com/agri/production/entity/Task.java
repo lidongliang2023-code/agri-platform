@@ -54,6 +54,18 @@ public class Task extends BaseEntity {
     @TableField("executor_name")
     private String executorName;
 
+    /** 累计催办次数（运营端监控页催办时递增；列见 schema-patch-monitor-page.sql） */
+    @TableField("urge_count")
+    private Integer urgeCount;
+
+    /** 最近一次催办时间 */
+    @TableField("last_urge_time")
+    private java.time.LocalDateTime lastUrgeTime;
+
+    /** 最近一次催办人 */
+    @TableField("last_urge_by")
+    private String lastUrgeBy;
+
     @TableField("plan_start_time")
     private java.time.LocalDateTime planStartTime;
 

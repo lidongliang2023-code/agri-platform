@@ -34,7 +34,14 @@
  *   ② 个别创建类接口在目标服务上也可能落行 —— 跑完请对演示库做一次行级快照对比确认。
  *      快照做法（整库行级、前后对比）：
  *        mysql -uroot --batch agri_production -e "source <(show tables 生成的 SELECT '·', t.* FROM t 列表)"
- */
+ *
+ *    ⚠️ 为什么"空体动作端点"不是一律跳过：那会让**缺处理器**这一列失真 ——
+ *    探针的价值就是"这条路径在新服务有没有处理器"，跳过的路径既不算活也不算缺。
+ *    所以只有"空体会造成不可逆后果"的（/generate 建数据、/accredit /reject 改机构状态）才跳过，
+ *    其余（如 /urge 催办、/reboot 记指令）照打，由**下面这条还原**负责收尾：
+ *
+ *      UPDATE agri_prod_task_info SET urge_count = 0, last_urge_time = NULL, last_urge_by = NULL;
+ *      UPDATE agri_prod_iot_device SET reboot_requested_at = NULL;
  */
 import { readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
@@ -217,7 +224,16 @@ for (const file of walk(apiDir, ['.ts'])) {
     })
     if (!resolved.startsWith('/')) continue
     const key = `${method} ${resolved}`
-    if (!seen.has(key)) seen.set(key, { file: path.relative(apiDir, file), method, path: resolved, fnName })
+    const existing = seen.get(key)
+    if (!existing) {
+      seen.set(key, { file: path.relative(apiDir, file), method, path: resolved, fnNames: [fnName] })
+    } else if (fnName && !existing.fnNames.includes(fnName)) {
+      // **同一个路径可能被多个 api 函数发出**（例：/admin/monitor/tasks 由 listMonitorTasks 与
+      // listMonitorTaskStatusStats 各发一次），要把所有发起者都记下来：
+      // 只记第一个的话，第一个恰好是死函数时，这条活路径会被误判成"没人调"而漏出缺口清单
+      // （实测就踩到了，/admin/monitor/tasks 是 MonitorCenter 在用的）。
+      existing.fnNames.push(fnName)
+    }
   }
 }
 
@@ -284,7 +300,10 @@ const segmentOf = (p) => {
 const isPlatformOwned = (p) => PLATFORM_OWNED_PATHS.some((prefix) => p.startsWith(prefix))
 /** 只有"死函数"会发出的路径（函数名在整个前端 src 里只出现在声明处）→ 不是缺口 */
 const isDeadOnly = (m) =>
-  callerIndex.ok && m.fnName != null && (callerIndex.counts.get(m.fnName) ?? 0) <= 1
+  callerIndex.ok &&
+  m.fnNames.length > 0 &&
+  // 只要有**任意一个**发起者被页面调用，这条路径就是活的
+  m.fnNames.every((name) => (callerIndex.counts.get(name) ?? 0) <= 1)
 const deadOnly = missing.filter((m) => !isPlatformOwned(m.path) && isDeadOnly(m))
 const platformOwned = missing.filter((m) => isPlatformOwned(m.path))
 const realMissing = missing.filter((m) => !isPlatformOwned(m.path) && !isDeadOnly(m))
@@ -369,7 +388,10 @@ if (deadOnly.length > 0) {
       `—— 要做这些功能就是新页面 + 新端点，届时把函数接上自然会重新计数 --`,
   )
   for (const m of deadOnly) {
-    console.log(`  ${m.method.padEnd(6)} ${m.path.padEnd(56)} [${m.file}] ${m.fnName ? m.fnName + '()' : ''}`)
+    console.log(
+      `  ${m.method.padEnd(6)} ${m.path.padEnd(56)} [${m.file}] ` +
+        m.fnNames.filter(Boolean).map((name) => name + '()').join(' / '),
+    )
   }
 }
 

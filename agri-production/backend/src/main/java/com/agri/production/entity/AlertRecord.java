@@ -55,6 +55,13 @@ public class AlertRecord extends BaseEntity {
     @TableField("value")
     private java.math.BigDecimal value;
 
+    /** 阈值下界 / 上界（列表与详情都要展示"实测值 vs 阈值"；列本来就在表里，此前没被映射） */
+    @TableField("threshold_min")
+    private java.math.BigDecimal thresholdMin;
+
+    @TableField("threshold_max")
+    private java.math.BigDecimal thresholdMax;
+
     @TableField("unit")
     private String unit;
 
