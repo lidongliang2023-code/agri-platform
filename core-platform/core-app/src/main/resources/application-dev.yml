@@ -14,6 +14,13 @@ agri:
       prod:
         - http://localhost/
         - http://127.0.0.1/
+        # 运营端独立入口（网关 70-admin-entry.conf 的 :8190）。少了这两条，
+        # 从 http://localhost:8190/ 打开运营端会被认证中心判为
+        # `redirect_uri 不在白名单：http://localhost:8190/sso/callback` ——
+        # 页面直接显示一段 JSON，运营端**根本登不进去**（实测 2026-10-15）。
+        # 注意白名单是**前缀**匹配：`http://localhost/` 只覆盖 :80，不含带端口的地址。
+        - http://localhost:8190/
+        - http://127.0.0.1:8190/
         - http://localhost:5173/
         - http://prod.agri.local/
       mdm:
