@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  应急预案的两条查询。
+
+  为什么要新建这个文件（2026-10-15）：EmergencyPlanMapper 声明了 selectByAlertLevel / selectByCode，
+  但既没有注解也没有 XML —— MyBatis 启动时不报错，**调用时才抛
+  "Invalid bound statement (not found)"**（HTTP 200 + code 500）。
+  AlertServiceImpl 在"预警命中级别后给记录关联预案"这一步就会调到它（selectByAlertLevel），
+  也就是说预警域的这条主流程本来一跑就 500。
+
+  列名说明：过滤用的是**旧一代列名** level / plan_code —— 实体已改为映射这两列
+  （见 EmergencyPlan 类注释），两边必须一致。
+-->
+<mapper namespace="com.agri.production.mapper.EmergencyPlanMapper">
+
+    <select id="selectByAlertLevel" resultType="com.agri.production.entity.EmergencyPlan">
+        SELECT * FROM agri_prod_emergency_plan
+        WHERE level = #{alertLevel} AND deleted = 0 AND is_enabled = 1
+        <if test="tenantId != null">AND tenant_id = #{tenantId}</if>
+        ORDER BY execute_count ASC, id ASC
+    </select>
+
+    <select id="selectByCode" resultType="com.agri.production.entity.EmergencyPlan">
+        SELECT * FROM agri_prod_emergency_plan
+        WHERE plan_code = #{planCode} AND deleted = 0
+        <if test="tenantId != null">AND tenant_id = #{tenantId}</if>
+        LIMIT 1
+    </select>
+
+</mapper>

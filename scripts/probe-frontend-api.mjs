@@ -63,6 +63,21 @@ const SIDE_EFFECT_PATHS = ['/trace/batches/']
 /** 同类的后缀匹配（如 /harvests/1/generate：给批次生成溯源码 + 落 prod.batch.harvested 事件） */
 const SIDE_EFFECT_SUFFIXES = ['/generate']
 
+/**
+ * **按口径不由本服务实现**的路径（前缀匹配）——不计入"缺口"。
+ *
+ * 为什么需要这份清单：判据是"切某段前该段缺口必须归零"，但有些路径**永远不该切给这个服务**，
+ * 它们留在平台侧才是对的。若不排除，脚本会把"平台域路径没在卫星服务里实现"一直算成缺口，
+ * 于是这条判据永远达不到 0，等于判据失效。
+ *
+ * 当前唯一一条：`/admin/tenants/**` —— 租户/市场主体是**平台域**数据（库在 agri_core），
+ * 而本服务的口径是"一主体一租户"：租户由平台下发（见 TenantContextService 解析逻辑），
+ * 本服务**不拥有**租户主数据。所以这里既不该建 agri_prod_tenant_info 表、也不该接这几个接口
+ * （2026-10-15 已把早先那套 Tenant 脚手架删掉：它对应的表根本不存在，当时 5 个接口一调就是 500）。
+ * 对应地，将来切 /admin/ 那一段时**必须把 /admin/tenants 排除在外**（见网关 20-prod.conf 的说明）。
+ */
+const PLATFORM_OWNED_PATHS = ['/admin/tenants/']
+
 const CALL = /http(?:Platform)?\.(get|post|put|patch|delete)(?:<[^>]*>)?\(\s*(`[^`]*`|'[^']*')/g
 const CONST = /const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*'([^']*)'/g
 
@@ -154,8 +169,19 @@ const segmentOf = (p) => {
   return p.startsWith('/admin/') ? `admin/${parts[1] ?? ''}` : (parts[0] ?? '')
 }
 
+/** 平台域路径从"缺口"里摘出来单列：它们本该留在平台侧，不计入本服务的切流判据。 */
+const isPlatformOwned = (p) => PLATFORM_OWNED_PATHS.some((prefix) => p.startsWith(prefix))
+const platformOwned = missing.filter((m) => isPlatformOwned(m.path))
+const realMissing = missing.filter((m) => !isPlatformOwned(m.path))
+
 console.log(`== 前端会发出的请求：${list.length} 条（去重后） ==`)
-console.log(`== 缺口 ${missing.length} | 有处理器但本次调用未成功 ${handledButFailed.length} | 成功 ${ok.length} ==`)
+console.log(`== 缺口 ${realMissing.length} | 有处理器但本次调用未成功 ${handledButFailed.length} | 成功 ${ok.length} ==`)
+if (platformOwned.length > 0) {
+  console.log(
+    `== 另 ${platformOwned.length} 条按口径不由本服务实现（平台域，应留在平台侧；不计入缺口）` +
+      `：${PLATFORM_OWNED_PATHS.join('、')} ==`,
+  )
+}
 if (skipped.length > 0) {
   const deletes = skipped.filter((c) => c.method === 'DELETE').length
   const effects = skipped.length - deletes
@@ -187,10 +213,16 @@ for (const [seg, row] of [...stats.entries()].sort((a, b) => b[1].missing - a[1]
   )
 }
 
-console.log(`\n-- 缺处理器的路径（${missing.length} 条） --`)
-for (const m of missing) console.log(`  ${m.method.padEnd(6)} ${m.path.padEnd(56)} [${m.file}]`)
+console.log(`\n-- 缺处理器的路径（${realMissing.length} 条） --`)
+for (const m of realMissing) console.log(`  ${m.method.padEnd(6)} ${m.path.padEnd(56)} [${m.file}]`)
+
+if (platformOwned.length > 0) {
+  console.log(`\n-- 不计入缺口的平台域路径（${platformOwned.length} 条；切 /admin/ 段时必须排除） --`)
+  for (const m of platformOwned) console.log(`  ${m.method.padEnd(6)} ${m.path.padEnd(56)} [${m.file}]`)
+}
 
 console.log(`\n-- 有处理器但本次调用未成功（${handledButFailed.length} 条，探测用的占位参数所致者属正常） --`)
 for (const m of handledButFailed) console.log(`  ${m.method.padEnd(6)} ${m.path.padEnd(56)} ${m.note}`)
 
-process.exit(missing.length > 0 ? 1 : 0)
+// 退出码只看**计入缺口**的那些：平台域路径不参与判据（见 PLATFORM_OWNED_PATHS 说明）
+process.exit(realMissing.length > 0 ? 1 : 0)

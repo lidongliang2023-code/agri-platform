@@ -307,13 +307,21 @@ status VARCHAR(255) DEFAULT 'unhandled',
 handle_time DATETIME,
 handle_user TEXT,
 handle_result TEXT,
+rule_code VARCHAR(64) COMMENT '规则编码（冗余，便于列表直接展示）',
+alert_type VARCHAR(64) COMMENT '预警类型；列表按此筛选',
+farm_id BIGINT COMMENT '所属农场',
+plot_id BIGINT COMMENT '所属地块',
+unit VARCHAR(32) COMMENT '指标单位（阈值/实测值共用）',
+remark TEXT COMMENT '备注',
+emergency_plan_id BIGINT COMMENT '命中的应急预案',
 tenant_id VARCHAR(191) NOT NULL,
 create_by TEXT,
 create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
 update_by TEXT,
 update_time DATETIME DEFAULT CURRENT_TIMESTAMP,
 deleted BIGINT DEFAULT 0,
-    INDEX `idx_alert_record_tenant_id` (tenant_id)
+    INDEX `idx_alert_record_tenant_id` (tenant_id),
+    INDEX `idx_alert_record_type` (alert_type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE IF NOT EXISTS agri_prod_emergency_plan (
 id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -329,6 +337,14 @@ contact_info TEXT,
 resources_required TEXT,
 execute_script TEXT,
 is_enabled BIGINT DEFAULT 1,
+-- 以下 4 列由 schema-patch-alert-page.sql 补（旧库已有本表，CREATE IF NOT EXISTS 不会加列）。
+-- 另注：实体还声明了 triggerCondition / alertLevel / steps / resourcesNeeded 四个字段，
+-- 它们**映射到上面的 trigger_conditions / level / response_steps / resources_required 旧列**，
+-- 不再新增同义列 —— 见 EmergencyPlan 类注释与补丁文件说明。
+steps_json TEXT COMMENT '处置步骤（结构化 JSON；与 response_steps 的纯文本互为两种形态）',
+related_parties TEXT COMMENT '联动单位/相关方',
+execute_count INT DEFAULT 0 COMMENT '已执行次数',
+last_execute_time DATETIME COMMENT '最近一次执行时间',
 tenant_id VARCHAR(191) NOT NULL,
 create_by TEXT,
 create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -447,6 +463,16 @@ duration BIGINT,
 required_tools TEXT,
 safety_notes TEXT,
 is_enabled BIGINT DEFAULT 1,
+-- 以下 7 列由 schema-patch-sop-page.sql 补（旧库已有本表，CREATE IF NOT EXISTS 不会加列）。
+-- 另注：实体还声明了 stepsText / estimatedDuration，它们**映射到上面的 steps / duration 旧列**，
+-- 不再新增同义列 —— 见 SopTemplate 类注释。
+category VARCHAR(64) COMMENT '标准分类',
+applicable_crops TEXT COMMENT '适用作物（多值）',
+applicable_seasons TEXT COMMENT '适用季节（多值）',
+steps_json TEXT COMMENT '步骤（结构化 JSON）；纯文本形态复用已有 steps 列',
+required_materials TEXT COMMENT '所需物料（与 required_tools 的"工具"区分开）',
+version INT DEFAULT 1 COMMENT '版本号',
+usage_count INT DEFAULT 0 COMMENT '被引用/下发次数',
 tenant_id VARCHAR(191) NOT NULL,
 create_by TEXT,
 create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -470,6 +496,15 @@ end_time DATETIME,
 status VARCHAR(255) DEFAULT 'pending',
 current_step BIGINT DEFAULT 0,
 execution_log TEXT,
+-- 以下 5 列由 schema-patch-sop-page.sql 补（旧库已有本表，CREATE IF NOT EXISTS 不会加列）。
+-- 另注：实体还声明了 executor / startedAt / completedAt / stepRecords / notes，
+-- 它们**映射到上面的 executor_name / start_time / end_time / execution_log / remark 旧列**，
+-- 不再新增同义列 —— 见 SopExecution 类注释。
+template_code VARCHAR(64) COMMENT '模板编码（冗余，便于按编码检索）',
+task_id BIGINT COMMENT '关联农事任务',
+total_steps INT DEFAULT 0 COMMENT '总步骤数（与 current_step 配对算进度）',
+actual_duration INT COMMENT '实际耗时（分钟）',
+attachments TEXT COMMENT '附件（图片/文件 URL 列表）',
 tenant_id VARCHAR(191) NOT NULL,
 create_by TEXT,
 create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
