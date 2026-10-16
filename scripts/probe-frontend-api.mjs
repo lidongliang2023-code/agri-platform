@@ -177,18 +177,13 @@ function* findHttpCalls(text) {
   for (const m of text.matchAll(CALL_METHOD)) {
     let i = (m.index ?? 0) + m[0].length
     while (i < text.length && /\s/.test(text[i])) i += 1
-    if (text[i] === '<') {
-      let depth = 0
-      for (; i < text.length; i += 1) {
-        if (text[i] === '<') depth += 1
-        else if (text[i] === '>') {
-          depth -= 1
-          if (depth === 0) { i += 1; break }
-        }
-      }
-    }
-    while (i < text.length && /\s/.test(text[i])) i += 1
-    if (text[i] !== '(') continue
+    // 不数泛型深度，直接找这条语句里的第一个 `(`：泛型参数里不可能出现 `;` 或换行，
+    // 所以"方法名到 `(` 之间没有分号/换行"就说明找到的是调用括号。
+    // 原先按 < > 配对计数，遇到写法稍异的嵌套泛型（实测 settings.ts 里 `http.get<PageResult<OperationLogItem>>(`）
+    // 会配对失败，整条调用被跳过 —— 这正是 GET /settings/logs 被判"缺处理器"的原因。
+    const paren = text.indexOf('(', i)
+    if (paren < 0 || /[;\n]/.test(text.slice(i, paren))) continue
+    i = paren
     i += 1
     while (i < text.length && /\s/.test(text[i])) i += 1
     if (text[i] === '`' || text[i] === "'") {
