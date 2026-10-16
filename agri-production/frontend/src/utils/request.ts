@@ -184,8 +184,18 @@ export function toPageResult<T>(raw: unknown, params: PageQueryLike = {}): PageD
 /** 业务成功码 */
 export const SUCCESS_CODE = 0
 
-/** 登录页地址 */
-const LOGIN_PATH = '/login'
+/**
+ * 登录页地址（按端取）。
+
+ *
+ * <p>改前这里写死 `/login`，而 `/login` 的按端分流规则是"**没有 `?end=user` 就落运营端登录页**" ——
+ * 于是在**用户端**页面收到 401 时，人会被弹到**运营端**登录页（2026-10-16 实测）。
+ * 现在按当前路径判断端：`/admin/**` 走运营端登录页，其余走用户端登录页。
+ * （`/login` 仍保留，兼容旧链接与外部跳转。）</p>
+ */
+function currentEndLoginPath(): string {
+  return window.location.pathname.startsWith('/admin') ? '/admin/login' : '/production/login'
+}
 
 /**
  * 业务域请求前缀（core-platform mod-produce）。
@@ -344,8 +354,10 @@ function installResponseInterceptor(instance: AxiosInstance): void {
     if (status === 401) {
       // 只清本地与平台会话：401 不代表 SSO 全局会话失效，跳 SSO 登出会把用户弹去再弹回
       useAuthStore.getState().logout({ sso: false })
-      if (!window.location.pathname.startsWith(LOGIN_PATH)) {
-        window.location.href = LOGIN_PATH
+      const loginPath = currentEndLoginPath()
+      // 已经在登录页就别再跳（否则会打断 SSO 交接页上的"立即跳转 / 改用本地账号"操作）
+      if (!window.location.pathname.endsWith('/login')) {
+        window.location.href = loginPath
       }
       return Promise.reject(new Error('登录已失效，请重新登录'))
     }
