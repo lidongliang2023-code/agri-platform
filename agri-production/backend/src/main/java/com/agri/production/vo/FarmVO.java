@@ -64,6 +64,15 @@ public class FarmVO {
     private LocalDateTime createTime;
 
     /**
+     * 农场负责人姓名（页面 farm list 的"负责人"列）。
+
+     *
+     * <p>平台侧没有这一列：本服务在出参处从团队成员台账里取该农场的 {@code member_type=OWNER}
+     * （见 FarmAllController 的说明）。取不到时留空，页面显示 "-" —— 不编一个名字。</p>
+     */
+    private String managerName;
+
+    /**
      * 页面口径的农场主键（字符串）—— 页面列表直接读 {@code record.farmId}，而本 VO 的主键字段叫 {@code id}。
      * 派生 getter，理由同 {@link PlotVO#getPlotId()}。
      */
