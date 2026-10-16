@@ -45,6 +45,19 @@ public class TenantContextService {
 
     private static volatile TenantContextService instance;
 
+    /** 解析结果的短 TTL 缓存：key = 访问令牌，value = 该令牌的主体绑定列表。 */
+    private static final long CACHE_TTL_MILLIS = 60_000L;
+    /** 缓存条目上限（防令牌无限增长把内存吃满；超了直接清空，最坏退化成"不缓存"）。 */
+    private static final int CACHE_MAX_ENTRIES = 500;
+    private final java.util.Map<String, CachedBindings> bindingsCache = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** 缓存条目：绑定列表 + 写入时刻。 */
+    private record CachedBindings(List<Map<String, Object>> bindings, long cachedAt) {
+        boolean fresh() {
+            return System.currentTimeMillis() - cachedAt < CACHE_TTL_MILLIS;
+        }
+    }
+
     private final RestTemplate restTemplate = new RestTemplate();
     private final String platformUrl;
 
@@ -88,12 +101,7 @@ public class TenantContextService {
 
         List<Map<String, Object>> bindings;
         try {
-            HttpHeaders headers = new HttpHeaders();
-            headers.set(HttpHeaders.AUTHORIZATION, "Bearer " + token);
-            ResponseEntity<Map> response = restTemplate.exchange(
-                    platformUrl + "/api/v1/platform/merchants/mine",
-                    HttpMethod.GET, new HttpEntity<>(headers), Map.class);
-            bindings = readBindings(response.getBody());
+            bindings = fetchBindings(token);
         } catch (Exception e) {
             log.warn("解析经营主体失败：{}", e.getMessage());
             throw new BusinessException(500, "无法解析你的经营主体（平台认证中心不可达），请稍后重试");
@@ -106,6 +114,45 @@ public class TenantContextService {
         String tenantId = pickTenant(bindings, request);
         request.setAttribute(REQUEST_ATTR, tenantId);
         return tenantId;
+    }
+
+    /**
+     * 取主体绑定：**短 TTL 缓存 + 失败重试一次**。
+
+     *
+     * <p>为什么必须加：原先每个请求都同步回源 core-platform，探测脚本连发数百请求时回源被打崩，
+     * 大批请求被自己判成"认证中心不可达"（实测 261 条 403/500，而同一时刻单发登录平台是 200）。
+     * 页面一次只发几个请求所以看不出来，但这属于"并发下自伤"，跟限流/抖动叠加就会让用户看到
+     * 「接口不可用」。缓存 TTL 只有 60 秒：账号绑定关系变化最多晚一分钟生效，换来的是回源量按访问频次
+     * 而不是按请求数增长。</p>
+     * <p>重试只做一次：回源失败往往是瞬时抖动（连接被拒/超时），重试一次能挡掉大部分；
+     * 连续两次失败仍如实报错，不静默放行（放行等于"看全部数据"，那是更严重的问题）。</p>
+     */
+    private List<Map<String, Object>> fetchBindings(String token) {
+        CachedBindings cached = bindingsCache.get(token);
+        if (cached != null && cached.fresh()) {
+            return cached.bindings();
+        }
+        RuntimeException last = null;
+        for (int attempt = 1; attempt <= 2; attempt++) {
+            try {
+                HttpHeaders headers = new HttpHeaders();
+                headers.set(HttpHeaders.AUTHORIZATION, "Bearer " + token);
+                ResponseEntity<Map> response = restTemplate.exchange(
+                        platformUrl + "/api/v1/platform/merchants/mine",
+                        HttpMethod.GET, new HttpEntity<>(headers), Map.class);
+                List<Map<String, Object>> bindings = readBindings(response.getBody());
+                if (bindingsCache.size() > CACHE_MAX_ENTRIES) {
+                    bindingsCache.clear();
+                }
+                bindingsCache.put(token, new CachedBindings(bindings, System.currentTimeMillis()));
+                return bindings;
+            } catch (RuntimeException e) {
+                last = e;
+                log.warn("解析经营主体第 {} 次失败：{}", attempt, e.getMessage());
+            }
+        }
+        throw last;
     }
 
     /**
