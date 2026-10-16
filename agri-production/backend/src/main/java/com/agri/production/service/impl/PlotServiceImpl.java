@@ -2,12 +2,15 @@ package com.agri.production.service.impl;
 
 import com.agri.production.dto.PlotPageDTO;
 import com.agri.production.dto.PlotSaveDTO;
+import com.agri.production.common.constant.PlanStatusDict;
 import com.agri.production.common.exception.BusinessException;
 import com.agri.production.entity.CropInfo;
+import com.agri.production.entity.PlantingPlan;
 import com.agri.production.entity.Plot;
 import com.agri.production.common.entity.PageResult;
 import com.agri.production.common.util.BeanCopyUtils;
 import com.agri.production.mapper.CropInfoMapper;
+import com.agri.production.mapper.PlantingPlanMapper;
 import com.agri.production.mapper.PlotMapper;
 import com.agri.production.service.IPlotService;
 import com.agri.production.vo.PlotVO;
@@ -19,15 +22,21 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class PlotServiceImpl extends ServiceImpl<PlotMapper, Plot> implements IPlotService {
 
     /** 作物主数据：地块的「当前作物」从这里选，落 crop_id + current_crop（名称）两列。 */
     private final CropInfoMapper cropMapper;
+    /** 计划台账：地块的「在种 / 空闲」由它决定（地块表本身只有启用与否）。 */
+    private final PlantingPlanMapper planMapper;
 
-    public PlotServiceImpl(CropInfoMapper cropMapper) {
+    public PlotServiceImpl(CropInfoMapper cropMapper, PlantingPlanMapper planMapper) {
         this.cropMapper = cropMapper;
+        this.planMapper = planMapper;
     }
 
     @Override
@@ -39,7 +48,7 @@ public class PlotServiceImpl extends ServiceImpl<PlotMapper, Plot> implements IP
         plot.setStatus("active");
         resolveCrop(plot, dto, tenantId);
         save(plot);
-        return BeanCopyUtils.copy(plot, PlotVO.class);
+        return PlotVO.of(plot, plantingPlotIds(tenantId));
     }
 
     @Override
@@ -52,7 +61,7 @@ public class PlotServiceImpl extends ServiceImpl<PlotMapper, Plot> implements IP
         BeanCopyUtils.copy(dto, plot);
         resolveCrop(plot, dto, tenantId);
         updateById(plot);
-        return BeanCopyUtils.copy(plot, PlotVO.class);
+        return PlotVO.of(plot, plantingPlotIds(tenantId));
     }
 
     /**
@@ -120,21 +129,21 @@ public class PlotServiceImpl extends ServiceImpl<PlotMapper, Plot> implements IP
         if (plot == null || !tenantId.equals(plot.getTenantId())) {
             throw new RuntimeException("地块不存在");
         }
-        return BeanCopyUtils.copy(plot, PlotVO.class);
+        return PlotVO.of(plot, plantingPlotIds(tenantId));
     }
 
     @Override
     public PageResult<PlotVO> pageQuery(PlotPageDTO dto, String tenantId) {
         Page<Plot> page = new Page<>(dto.getPageNum(), dto.getPageSize());
         IPage<Plot> result = baseMapper.pageQuery(page, dto, tenantId);
-        List<PlotVO> voList = BeanCopyUtils.copyList(result.getRecords(), PlotVO.class);
+        List<PlotVO> voList = PlotVO.listOf(result.getRecords(), plantingPlotIds(tenantId));
         return PageResult.of(voList, result.getTotal(), dto.getPageNum(), dto.getPageSize());
     }
 
     @Override
     public List<PlotVO> listByFarmId(Long farmId, String tenantId) {
         List<Plot> plots = baseMapper.selectByFarmId(farmId, tenantId);
-        return BeanCopyUtils.copyList(plots, PlotVO.class);
+        return PlotVO.listOf(plots, plantingPlotIds(tenantId));
     }
 
     @Override
@@ -143,7 +152,32 @@ public class PlotServiceImpl extends ServiceImpl<PlotMapper, Plot> implements IP
         if (plot == null) {
             throw new RuntimeException("地块不存在");
         }
-        return BeanCopyUtils.copy(plot, PlotVO.class);
+        return PlotVO.of(plot, plantingPlotIds(tenantId));
+    }
+
+    /**
+     * 当前租户下**有在种计划**的地块主键集合。
+
+     *
+     * <p>为什么要有它：地块表的状态列只有"启用 / 停用"，而页面要区分"空闲 / 在种"。
+     * 这个区分在本平台有权威口径 —— 计划的 {@code plan_status = 'active'}（进行中 / 在种），
+     * 计划模块自己的冲突校验（{@code assertNoGrowingConflict}）用的就是它（"同一地块同时段只允许一个在种计划"）。
+     * 所以这里照同一口径取集合，**不猜**：没有在种计划的地块就是空闲。</p>
+
+     *
+     * <p>按请求取一次、在内存里比对，避免"一页 29 个地块查 29 次"。</p>
+     *
+     * @param tenantId 当前租户
+     * @returns 地块主键集合
+     */
+    private Set<Long> plantingPlotIds(String tenantId) {
+        return planMapper.selectList(new LambdaQueryWrapper<PlantingPlan>()
+                        .eq(PlantingPlan::getTenantId, tenantId)
+                        .eq(PlantingPlan::getPlanStatus, PlanStatusDict.ACTIVE))
+                .stream()
+                .map(PlantingPlan::getPlotId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
     }
 
     private String generatePlotCode(String tenantId) {

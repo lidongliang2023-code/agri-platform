@@ -9,6 +9,11 @@
  *
  * <p>本脚本断言：① 表单里能从作物主数据选到作物；② 提交后落 {@code crop_id} + {@code current_crop}
  * 两列；③ 详情页「当前作物」显示的是它。</p>
+
+ *
+ * <p>2026-10-16 追加：地块列表的「状态」列曾经全是"未知" —— 接口给的是库里的文本
+ * {@code active}，而页面按数字枚举渲染。现在出参是数字码（0 已停用 / 1 空闲 / 2 在种），
+ * 脚本先在地块列表页把这一条钉住。</p>
  *
  * <p>登录态给法同 {@code scripts/e2e-plan-create.mjs}（同源静态文件 + HttpOnly Cookie + 非凭证界面态）。</p>
  *
@@ -128,6 +133,17 @@ try {
   }, { userInfo: login.data.user ?? {}, farmId: FARM_ID })
 
   // 1) 新增地块页（带上农场上下文，避免农场未选）
+  // 1.0) 先看列表：状态列必须渲染成中文标签，不能是"未知"
+  await page.goto(`${BASE_URL}/production/plots`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.waitForNetworkIdle({ idleTime: 600, timeout: 10000 }).catch(() => {})
+  const plotListText = await page.evaluate(() => {
+    const table = document.querySelector('.ant-table-tbody')
+    return table ? table.innerText : document.body.innerText
+  })
+  check(/空闲|在种/.test(plotListText), '地块列表「状态」列渲染出中文状态',
+    plotListText.replace(/\s+/g, ' ').slice(0, 100))
+  check(!plotListText.includes('未知'), '地块列表「状态」列不再出现"未知"')
+
   await page.goto(`${BASE_URL}/production/plots/create?farmId=${FARM_ID}`, {
     waitUntil: 'networkidle2', timeout: 60000,
   })
