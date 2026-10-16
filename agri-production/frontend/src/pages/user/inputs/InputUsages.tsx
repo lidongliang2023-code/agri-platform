@@ -47,6 +47,7 @@ import { createUsage, pageInputs, pageUsages, removeUsage } from '@/api/inputs'
 import type { InputInfo } from '@/api/inputs'
 import { listChainRecords, submitChain } from '@/api/blockchain'
 import type { InputUsageRecord, Member, Plot, Task } from '@/types'
+import { MISSING_VALUE_TEXT, MetricText } from '@/components/MetricStatistic'
 import {
   DOSAGE_UNIT_OPTIONS,
   USAGE_METHOD_OPTIONS,
@@ -108,6 +109,34 @@ interface CreateUsageForm {
 /** 日期归一：截取 yyyy-MM-dd 前缀 */
 function dateKey(value?: string): string {
   return (value ?? '').slice(0, 10)
+}
+
+/** 用量缺失时的提示语（dosage 为空不填 0，按全站缺失值口径显示「—」） */
+const DOSAGE_MISSING_TIP = '该记录未登记用量（dosage 为空），显示为「—」，不填 0'
+
+/**
+ * 用量数值判空。
+ *
+ * 后端 `InputUsageEntity.dosage` 是 BigDecimal，允许为 NULL。
+ *
+ * @param dosage 用量
+ * @returns 是否为缺失值
+ */
+function isDosageMissing(dosage?: number | null): boolean {
+  return dosage === undefined || dosage === null || Number.isNaN(dosage)
+}
+
+/**
+ * 用量纯文本（导出 CSV 等不能渲染 React 节点的位置使用）。
+ *
+ * @param dosage 用量
+ * @param unit 单位
+ * @returns 「1360.00 kg」，缺失时返回「—」
+ */
+function dosageText(dosage?: number | null, unit?: string | null): string {
+  if (isDosageMissing(dosage)) return MISSING_VALUE_TEXT
+  const unitPart = unit ? ` ${unit}` : ''
+  return `${fmtNumber(dosage)}${unitPart}`
 }
 
 /**
@@ -365,7 +394,7 @@ export default function InputUsages(): JSX.Element {
       [
         '使用日期',
         '投入品',
-        '分类',
+        '投入品类型',
         '地块',
         '关联任务',
         '用量',
@@ -382,7 +411,7 @@ export default function InputUsages(): JSX.Element {
         categoryMeta(row.input?.inputType).label,
         row.plotName,
         row.taskName,
-        fmtNumber(row.usage.dosage),
+        dosageText(row.usage.dosage, row.usage.unit),
         row.usage.unit ?? '',
         row.usage.method ?? '',
         row.usage.operatorId ?? '',
@@ -412,9 +441,9 @@ export default function InputUsages(): JSX.Element {
       ),
     },
     {
-      title: '分类',
+      title: '投入品类型',
       key: 'category',
-      width: 90,
+      width: 110,
       render: (_, record) => {
         const meta = categoryMeta(record.input?.inputType)
         return <Tag color={meta.color}>{meta.label}</Tag>
@@ -433,21 +462,33 @@ export default function InputUsages(): JSX.Element {
       key: 'dosage',
       width: 150,
       render: (_, record) => {
-        const text = `${fmtNumber(record.usage.dosage)} ${record.usage.unit ?? ''}`
+        const unit = record.usage.unit ?? ''
+        const suffix = unit ? ` ${unit}` : ''
+        const rawDosage = record.usage.dosage
+        const dosageValue: number | null =
+          rawDosage === undefined || rawDosage === null || Number.isNaN(rawDosage)
+            ? null
+            : rawDosage
+        const metric = (
+          <MetricText
+            value={dosageValue}
+            precision={2}
+            suffix={suffix}
+            missingTip={DOSAGE_MISSING_TIP}
+          />
+        )
         if (record.overdose) {
           return (
             <Tooltip
-              title={`超过登记上限 ${record.recommendMax ?? '-'} ${
-                record.usage.unit ?? ''
-              }，需农艺师确认（R-INPUT-04）`}
+              title={`超过登记上限 ${record.recommendMax ?? MISSING_VALUE_TEXT}${suffix}，需农艺师确认（R-INPUT-04）`}
             >
               <Typography.Text strong type="danger">
-                {text} ⚠️ 超量
+                {metric} ⚠️ 超量
               </Typography.Text>
             </Tooltip>
           )
         }
-        return <Typography.Text>{text}</Typography.Text>
+        return metric
       },
     },
     { title: '施用方式', key: 'method', width: 100, render: (_, record) => record.usage.method ?? '-' },

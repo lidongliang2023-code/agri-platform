@@ -391,6 +391,21 @@ try {
     '快捷入口跳到 /production/inputs（不是已删除的 /production/inputs/ledger）',
     page.url().replace(BASE_URL, ''))
 
+  // 1f) 投入品模块叫法统一（2026-10-16 第二刀）：同一个 inputType 之前一半叫「分类」一半叫「类型」，
+  //     而出入库页的「类型」筛的其实是 flowType（另一个字段）。
+  //     现在口径：inputType 一律「投入品类型」、flowType 一律「流水类型」，页面上不再出现裸「分类」。
+  const inputPageText = await page.evaluate(() => document.body.innerText)
+  check(!inputPageText.includes('分类'), '「投入品台账」页不再出现「分类」这个叫法',
+    inputPageText.includes('分类') ? '仍有「分类」字样' : '已全部改为「投入品类型」')
+  check(inputPageText.includes('投入品类型'), '「投入品台账」页有「投入品类型」列/筛选项')
+
+  await page.goto(`${BASE_URL}/production/inputs/stock`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.waitForNetworkIdle({ idleTime: 600, timeout: 10000 }).catch(() => {})
+  const stockPageText = await page.evaluate(() => document.body.innerText)
+  check(!stockPageText.includes('分类'), '「出入库管理」页不再出现「分类」这个叫法')
+  check(stockPageText.includes('投入品类型'), '「出入库管理」页用「投入品类型」指投入品字段')
+  check(stockPageText.includes('流水类型'), '「出入库管理」页用「流水类型」指流水动作（不再与投入品类型同名）')
+
   // 回到计划页（下面要在计划页开新增弹窗）
   await page.goto(`${BASE_URL}/production/plans`, { waitUntil: 'networkidle2', timeout: 60000 })
   await page.waitForNetworkIdle({ idleTime: 600, timeout: 10000 }).catch(() => {})

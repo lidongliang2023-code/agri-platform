@@ -9,7 +9,7 @@
  * - 入库与领用走后端 /stock-in、/consume，流水与库存原子联动
  * - 退回 / 盘点走 /stock-flows 写流水，并同步校正投入品库存
  * - 库存总览：按剩余量升序，低库存置顶，含预警阈值与库存状态
- * - 流水查询：按类型 / 批次号 / 日期区间筛选，支持导出
+ * - 流水查询：按流水类型 / 批次号 / 日期区间筛选，支持导出
  */
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -403,9 +403,9 @@ export default function InputStock(): JSX.Element {
       ),
     },
     {
-      title: '分类',
+      title: '投入品类型',
       key: 'inputType',
-      width: 90,
+      width: 110,
       render: (_, record) => {
         const meta = categoryMeta(record.inputType)
         return <Tag color={meta.color}>{meta.label}</Tag>
@@ -490,9 +490,9 @@ export default function InputStock(): JSX.Element {
       ),
     },
     {
-      title: '类型',
+      title: '流水类型',
       key: 'flowType',
-      width: 90,
+      width: 100,
       render: (_, record) => {
         const meta = flowTypeMeta(record.flowType)
         return <Tag color={meta.color}>{meta.label}</Tag>
@@ -555,7 +555,7 @@ export default function InputStock(): JSX.Element {
     }
     downloadCsv(
       '投入品出入库流水',
-      ['时间', '投入品', '类型', '数量', '批次号', '有效期至', '操作人', '关联任务', '备注'],
+      ['时间', '投入品', '流水类型', '数量', '批次号', '有效期至', '操作人', '关联任务', '备注'],
       flowRows.map((row) => [
         fmtDate(row.createdAt, 'YYYY-MM-DD HH:mm'),
         row.inputLabel,
@@ -678,10 +678,10 @@ export default function InputStock(): JSX.Element {
 
       <Card title="📋 出入库流水">
         <Form form={filterForm} layout="inline" style={{ rowGap: 12, marginBottom: 12 }}>
-          <Form.Item name="flowType" label="类型">
+          <Form.Item name="flowType" label="流水类型">
             <Select
               allowClear
-              placeholder="全部类型"
+              placeholder="全部流水类型"
               options={FLOW_TYPE_OPTIONS}
               style={{ width: 120 }}
             />
@@ -945,7 +945,7 @@ export default function InputStock(): JSX.Element {
               ]}
             />
           </Form.Item>
-          <Form.Item label="调整类型（默认按差异自动判定）" name="flowType">
+          <Form.Item label="调整流水类型（默认按差异自动判定）" name="flowType">
             <Select
               allowClear
               options={[

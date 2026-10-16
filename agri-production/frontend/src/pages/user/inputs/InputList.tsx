@@ -500,7 +500,7 @@ export default function InputList(): JSX.Element {
       '投入品导入模板',
       [
         '投入品名称',
-        '分类',
+        '投入品类型',
         '登记证号',
         '生产厂家',
         '规格',
@@ -524,7 +524,7 @@ export default function InputList(): JSX.Element {
         '投入品档案',
         [
           '投入品名称',
-          '分类',
+          '投入品类型',
           '登记证号',
           '生产厂家',
           '规格',
@@ -555,7 +555,7 @@ export default function InputList(): JSX.Element {
     }
     downloadCsv(
       '投入品使用台账',
-      ['日期', '投入品', '类型', '地块', '用量', '单位', '操作人', '合规结论'],
+      ['日期', '投入品', '投入品类型', '地块', '用量', '单位', '操作人', '合规结论'],
       ledgerRows.map((row) => [
         fmtDate(row.usage.usedAt),
         row.usage.inputName ?? row.input?.inputName ?? '-',
@@ -585,9 +585,9 @@ export default function InputList(): JSX.Element {
       ),
     },
     {
-      title: '分类',
+      title: '投入品类型',
       dataIndex: 'inputType',
-      width: 90,
+      width: 110,
       render: (_, record) => {
         const meta = categoryMeta(record.inputType)
         return <Tag color={meta.color}>{meta.label}</Tag>
@@ -719,9 +719,9 @@ export default function InputList(): JSX.Element {
       ),
     },
     {
-      title: '类型',
+      title: '投入品类型',
       key: 'category',
-      width: 90,
+      width: 110,
       render: (_, record) => {
         const meta = categoryMeta(record.input?.inputType)
         return <Tag color={meta.color}>{meta.label}</Tag>
@@ -812,10 +812,10 @@ export default function InputList(): JSX.Element {
               defaultValue="month"
             />
           </Form.Item>
-          <Form.Item name="category" label="类型">
+          <Form.Item name="category" label="投入品类型">
             <Select
               allowClear
-              placeholder="全部类型"
+              placeholder="全部投入品类型"
               options={INPUT_CATEGORY_OPTIONS}
               style={{ width: 120 }}
             />
@@ -999,8 +999,8 @@ export default function InputList(): JSX.Element {
           <Form.Item label="投入品名称" name="inputName" rules={[{ required: true }]}>
             <Input placeholder="请输入投入品名称" />
           </Form.Item>
-          <Form.Item label="分类" name="inputType">
-            <Select options={INPUT_CATEGORY_OPTIONS} placeholder="请选择分类" />
+          <Form.Item label="投入品类型" name="inputType">
+            <Select options={INPUT_CATEGORY_OPTIONS} placeholder="请选择投入品类型" />
           </Form.Item>
           <Form.Item label="登记证号" name="registrationNo">
             <Input placeholder="如 PD20180001 / 农肥(2018)准字1234号" />
@@ -1081,7 +1081,7 @@ export default function InputList(): JSX.Element {
       >
         <Space direction="vertical" size={12} style={{ width: '100%', marginTop: 12 }}>
           <Typography.Text type="secondary">
-            支持 CSV 文件，列顺序：投入品名称,分类,登记证号,生产厂家,规格,单位,安全间隔期,库存,预警阈值。
+            支持 CSV 文件，列顺序：投入品名称,投入品类型,登记证号,生产厂家,规格,单位,安全间隔期,库存,预警阈值。
           </Typography.Text>
           <Space>
             <Button onClick={downloadTemplate}>下载模板</Button>

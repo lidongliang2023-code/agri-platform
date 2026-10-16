@@ -6,7 +6,7 @@
  *
  * 还原要点：
  * - 头部「< 返回 {名称} · 投入品详情」+ 🔗 查看溯源链路
- * - 「📋 基本信息」：编号 / 名称 / 分类 / 登记证号 / 生产厂家 / 规格 / 单位 / 安全间隔期 / 库存 / 状态
+ * - 「📋 基本信息」：编号 / 名称 / 投入品类型 / 登记证号 / 生产厂家 / 规格 / 单位 / 安全间隔期 / 库存 / 状态
  * - 「✅ 合规校验结果」四项：禁用农药检查 / 用量合规检查 / 休药期检查 / 累计用量检查
  *   每项以「状态图标 + 结论 Tag + 说明」卡片呈现（通过绿、预警橙、违规红）
  * - 「🔗 区块链存证」：存证状态 / 存证编号 / 交易哈希 / 上链时间 + 上链与验证按钮
@@ -281,9 +281,9 @@ export default function InputDetail(): JSX.Element {
       render: (_, record) => fmtDate(record.createdAt, 'YYYY-MM-DD HH:mm'),
     },
     {
-      title: '类型',
+      title: '流水类型',
       key: 'flowType',
-      width: 90,
+      width: 100,
       render: (_, record) => {
         const meta = flowTypeMeta(record.flowType)
         return <Tag color={meta.color}>{meta.label}</Tag>
@@ -439,7 +439,7 @@ export default function InputDetail(): JSX.Element {
                 { key: 'name', label: '投入品名称', children: item?.inputName ?? '-' },
                 {
                   key: 'type',
-                  label: '类型',
+                  label: '投入品类型',
                   children: (
                     <Tag color={categoryMeta(item?.inputType).color}>
                       {categoryMeta(item?.inputType).label}
