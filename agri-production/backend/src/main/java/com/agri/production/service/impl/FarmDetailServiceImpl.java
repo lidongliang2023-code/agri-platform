@@ -100,7 +100,12 @@ public class FarmDetailServiceImpl {
         entity.setTenantId(tenantId);
         entity.setCertType(require(str(payload.get("certType")), "证照类型"));
         entity.setCertName(require(str(payload.get("certName")), "证照名称"));
-        entity.setCertNo(require(str(payload.get("certNo")), "证书编号"));
+        // 证书编号**不是必填**：新建农场页的「资质认证」只有一个多选框（页面 Create.tsx 的 certNames），
+        // 用户在建场时拿不到证书编号；此前这里 require 必填 → 该端点在页面唯一的调用点上恒 400
+        // （「证书编号为必填」），而页面用 Promise.allSettled 吞掉了失败，于是勾选的资质被静默丢弃。
+        // 口径：用户勾了「有机认证」就如实记一条 cert_name/cert_type，编号留空（库里本列可空），
+        // 等拿到真实编号再补 —— 不编造证书编号。
+        entity.setCertNo(str(payload.get("certNo")));
         entity.setIssuer(str(payload.get("issuer")));
         entity.setIssueDate(date(payload.get("issueDate"), "issueDate"));
         entity.setExpireDate(date(payload.get("expireDate"), "expireDate"));
