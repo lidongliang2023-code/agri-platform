@@ -1717,3 +1717,39 @@ deleted BIGINT DEFAULT 0,
     INDEX `idx_farm_cert_farm_id` (farm_id),
     INDEX `idx_farm_cert_status` (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 操作日志（页面「系统设置 → 操作日志」）。
+--
+-- 【按建议执行的口径】方案第七节给了两条路：逐个改造所有写路径（独立议题），或只记某几类动作。
+-- 这里走**第二种的加强版**：不在每个写接口里插一行代码，而是用一个 ResponseBodyAdvice 统一挂钩子 ——
+-- 所有非 GET 请求（POST/PUT/PATCH/DELETE）在本服务处理完都会落一条，覆盖"每个写接口"，又不改动任何写路径。
+-- 优点：新增写接口自动被覆盖，不会出现"某几个接口忘了记日志"的长期不一致。
+--
+-- 【诚实边界】operator 暂为占位说明：本服务只拿得到平台令牌对应的**主体**（租户），
+-- 拿不到平台用户档案（平台没有 /auth/me 之类端点）——把 userId 当姓名更具误导性，故如实写"未持有用户档案"。
+-- result 取业务结果码（ApiResponse.code）：只有 code=0 才算成功 —— 业务错误在本服务是 HTTP 200 + 非 0 码，
+-- 只看 HTTP 状态会把它们全记成"成功"。
+CREATE TABLE IF NOT EXISTS agri_prod_operate_log (
+id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+log_id VARCHAR(32) NOT NULL COMMENT '日志编号（业务主键，页面 logId）',
+operate_type VARCHAR(64) COMMENT '操作类型：新增/修改/删除 + 业务段（如 PUT tasks）',
+target VARCHAR(255) COMMENT '操作对象：请求方法与路径',
+business_code INT COMMENT '业务结果码（ApiResponse.code，0 为成功）',
+result TINYINT COMMENT '1 成功 0 失败（按业务码判定，不按 HTTP 状态）',
+operator VARCHAR(100) COMMENT '操作人（本服务暂不持有平台用户档案，为占位说明）',
+ip_address VARCHAR(64) COMMENT '来源 IP',
+cost_ms BIGINT COMMENT '处理耗时（毫秒）',
+detail VARCHAR(500) COMMENT '失败原因 / 补充说明',
+operate_at DATETIME COMMENT '操作时间',
+farm_id BIGINT COMMENT '所属农场（本服务农场主键，可空）',
+tenant_id VARCHAR(191) NOT NULL,
+create_by TEXT,
+create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+update_by TEXT,
+update_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+deleted BIGINT DEFAULT 0,
+    UNIQUE KEY `uk_operate_log_id` (log_id),
+    INDEX `idx_operate_log_tenant` (tenant_id),
+    INDEX `idx_operate_log_at` (operate_at),
+    INDEX `idx_operate_log_type` (operate_type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
