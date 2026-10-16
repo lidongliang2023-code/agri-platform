@@ -1,10 +1,13 @@
 package com.agri.production.vo;
 
+import com.agri.production.common.util.BeanCopyUtils;
+import com.agri.production.entity.Farm;
 import lombok.Data;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 public class FarmVO {
@@ -55,7 +58,20 @@ public class FarmVO {
 
     private String auditStatus;
 
-    private String status;
+    /**
+     * 农场状态，**页面口径的数值码**：1 运营中 / 0 已停用。
+
+     *
+     * <p>⚠️ 别直接序列化库里的文本：{@code agri_prod_farm_info.status} 存的是 {@code active / inactive}
+     * （启停接口 {@code PATCH /farms/{id}/status} 也是按 1/0 收进来、写库时转文本），
+     * 而页面通篇按数字读 —— {@code FARM_STATUS_META[status]} 取标签、{@code farm.status === 1}
+     * 决定卡片上的「启用/停用」与详情页的状态标签。切流前平台侧返回的也是数字 1。</p>
+
+     *
+     * <p>2026-10-16 实测的后果（都源自这一处形态不一致）：列表「状态」列恒显示"未知"、
+     * 详情页恒显示"已停用"、卡片菜单恒显示"启用农场"。</p>
+     */
+    private Integer status;
 
     private String remark;
 
@@ -98,4 +114,46 @@ public class FarmVO {
     }
 
     private LocalDateTime updateTime;
+
+    /**
+     * 由实体构造出参。
+     *
+     * <p>统一在这里把状态文本换算成数值码，避免每个调用点各写一遍（现在有 8 处构造 FarmVO）。
+     * {@code BeanCopyUtils.copy} 靠属性名 + 类型拷贝，String 状态列到 Integer 出参字段
+     * 类型不匹配会被自动跳过，所以不会拷错，只会漏 —— 漏了就在下面显式补上。</p>
+     *
+     * @param farm 农场实体（可为 null）
+     * @returns 出参对象（入参为 null 时返回 null）
+     */
+    public static FarmVO of(Farm farm) {
+        FarmVO vo = BeanCopyUtils.copy(farm, FarmVO.class);
+        if (vo == null) {
+            return null;
+        }
+        vo.setStatus(statusCode(farm.getStatus()));
+        return vo;
+    }
+
+    /**
+     * 批量构造出参，语义同 {@link #of(Farm)}。
+     *
+     * @param farms 农场实体列表（可为 null / 空）
+     * @returns 出参列表（入参为 null 时返回空列表，与 {@code BeanCopyUtils.copyList} 口径一致）
+     */
+    public static List<FarmVO> listOf(List<Farm> farms) {
+        return farms == null ? List.of() : farms.stream().map(FarmVO::of).toList();
+    }
+
+    /**
+     * 库内状态文本 → 页面口径数值码。
+     *
+     * @param text 库内文本（active / inactive）
+     * @returns 1 运营中 / 0 已停用；取不到时返回 null —— **不编状态**
+     */
+    private static Integer statusCode(String text) {
+        if (text == null) {
+            return null;
+        }
+        return "active".equalsIgnoreCase(text.trim()) ? 1 : 0;
+    }
 }

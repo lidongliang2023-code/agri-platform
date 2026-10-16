@@ -86,7 +86,7 @@ public class ProductionAdminController {
     public ApiResponse<PageResult<FarmVO>> getFarmList(FarmPageDTO dto) {
         Page<Farm> page = new Page<>(dto.getPageNum(), dto.getPageSize());
         IPage<Farm> result = farmMapper.pageQuery(page, dto, null);
-        List<FarmVO> voList = BeanCopyUtils.copyList(result.getRecords(), FarmVO.class);
+        List<FarmVO> voList = FarmVO.listOf(result.getRecords());
         return ApiResponse.success(PageResult.of(voList, result.getTotal(), dto.getPageNum(), dto.getPageSize()));
     }
 

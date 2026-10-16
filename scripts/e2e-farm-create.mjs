@@ -211,6 +211,23 @@ await page.waitForNetworkIdle({ idleTime: 800, timeout: 15000 }).catch(() => {})
 const listAgain = await page.evaluate(() => document.body.innerText)
 check(listAgain.includes(farmName), '列表中能查到新建的农场', farmName)
 
+// 6) 状态列：后端一度返回库里的文本 active/inactive，而页面按数字枚举渲染 → 列表「状态」列恒显示"未知"。
+//    这条断言就是那次反馈的回归守卫（同时覆盖卡片视图的标签与列表视图的列）。
+check(listAgain.includes('运营中'), '卡片视图状态标签显示「运营中」（不是"未知"）')
+const switched = await page.evaluate(() => {
+  const item = [...document.querySelectorAll('.ant-segmented-item')].find((el) => el.textContent.includes('列表视图'))
+  if (!item) return false
+  item.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+  item.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+  return true
+})
+check(switched, '能切到「列表视图」')
+await sleep(600)
+const tableText = await page.evaluate(() => document.querySelector('.ant-table-tbody')?.innerText ?? '')
+check(tableText.includes(farmName), '列表视图渲染出新建的农场', farmName)
+check(tableText.includes('运营中'), '列表视图「状态」列显示「运营中」')
+check(!tableText.includes('未知'), '列表视图「状态」列不再出现"未知"')
+
 check(badResponses.length === 0, '全链路没有 4xx/5xx 响应', badResponses.slice(0, 3).join(' | '))
 
 } finally {

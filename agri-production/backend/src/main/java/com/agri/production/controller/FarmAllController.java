@@ -41,7 +41,7 @@ public class FarmAllController {
         List<Farm> farms = farmMapper.selectList(new LambdaQueryWrapper<Farm>()
                 .eq(Farm::getTenantId, tenantId)
                 .orderByAsc(Farm::getId));
-        List<FarmVO> result = farms.stream().map(farm -> BeanCopyUtils.copy(farm, FarmVO.class)).toList();
+        List<FarmVO> result = FarmVO.listOf(farms);
         // 负责人：平台侧没有这一列，本服务从团队成员里取该农场的 OWNER（member_type=OWNER）——
         // 这是**有来源的派生**（成员台账里写着谁是农场负责人），比固定显示 "-" 有用，也不是编数据；
         // 该农场没有 OWNER 成员时留空，页面照旧显示 "-"。

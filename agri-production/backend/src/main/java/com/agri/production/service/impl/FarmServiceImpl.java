@@ -29,7 +29,7 @@ public class FarmServiceImpl extends ServiceImpl<FarmMapper, Farm> implements IF
         farm.setStatus("active");
         farm.setAuditStatus("pending");
         save(farm);
-        return BeanCopyUtils.copy(farm, FarmVO.class);
+        return FarmVO.of(farm);
     }
 
     @Override
@@ -42,7 +42,7 @@ public class FarmServiceImpl extends ServiceImpl<FarmMapper, Farm> implements IF
         }
         BeanCopyUtils.copy(dto, farm);
         updateById(farm);
-        return BeanCopyUtils.copy(farm, FarmVO.class);
+        return FarmVO.of(farm);
     }
 
     /**
@@ -80,14 +80,14 @@ public class FarmServiceImpl extends ServiceImpl<FarmMapper, Farm> implements IF
         if (farm == null || !tenantId.equals(farm.getTenantId())) {
             throw new RuntimeException("农场不存在");
         }
-        return BeanCopyUtils.copy(farm, FarmVO.class);
+        return FarmVO.of(farm);
     }
 
     @Override
     public PageResult<FarmVO> pageQuery(FarmPageDTO dto, String tenantId) {
         Page<Farm> page = new Page<>(dto.getPageNum(), dto.getPageSize());
         IPage<Farm> result = baseMapper.pageQuery(page, dto, tenantId);
-        List<FarmVO> voList = BeanCopyUtils.copyList(result.getRecords(), FarmVO.class);
+        List<FarmVO> voList = FarmVO.listOf(result.getRecords());
         return PageResult.of(voList, result.getTotal(), dto.getPageNum(), dto.getPageSize());
     }
 
@@ -97,7 +97,7 @@ public class FarmServiceImpl extends ServiceImpl<FarmMapper, Farm> implements IF
         if (farm == null) {
             throw new RuntimeException("农场不存在");
         }
-        return BeanCopyUtils.copy(farm, FarmVO.class);
+        return FarmVO.of(farm);
     }
 
     private String generateFarmCode(String tenantId) {
