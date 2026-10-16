@@ -17,13 +17,19 @@
  *   <li><b>schema</b>：扫"NOT NULL 且无默认值、但实体没映射"的列 —— 这类列一插入就 500，
  *       而列表页一切正常，光靠点页面发现不了（见 scripts/check-notnull-columns.mjs）。
  *       没设 MYSQL_PWD 或连不上库时跳过（CI 里没有数据库，属预期）。</li>
+ *   <li><b>mobile</b>：生产管理模块移动端（uni-app，小程序/H5 同源）的静态一致性 ——
+ *       页面清单与文件是否一一对应、底部 Tab 与页面内跳转目标是否都已登记、
+ *       接口层是否只打生产域（不许悄悄接上并不存在的 `/api/v1/mobile/**`）、
+ *       有 `dist/build/mp-weixin` 产物时再核对一遍产物页面。不需要网络与数据库。</li>
+ *   <li><b>mobile-e2e</b>：移动端真浏览器端到端（读链路 + 写链路两个脚本）。**默认跳过**，
+ *       加 `--mobile-e2e` 打开 —— 它需要生产栈与 H5 dev server 在跑，CI 里没有这些。</li>
  * </ul>
  *
  * <p><b>CI 的已知边界</b>：`agri-master-data/`、`agri-finance/`、`agri-s2b2c/` 这些目录目前
  * 尚未纳入版本控制，CI 检出后不存在，因此 CI 无法校验它们；CI 只覆盖已入库的部分
  * （共享包、网关配置、生产管理系统）。这不是配置疏漏，是依赖顺序问题 —— 等它们入库后自动被覆盖。</p>
  *
- * 用法：node ops/ci/verify.mjs [--build] [--only a,b] [--skip c]
+ * 用法：node ops/ci/verify.mjs [--build] [--mobile-e2e] [--only a,b] [--skip c]
  */
 import { existsSync } from 'node:fs'
 import { mkdir, readFile, readdir, stat } from 'node:fs/promises'
@@ -41,14 +47,18 @@ const BUCKET_DIR = path.join(GATEWAY_DIR, 'bucket')
 // 不允许不带 shell 执行它（EINVAL），而带 shell 又会把含中文/括号的路径交给 cmd.exe 去拼。
 // 直接调 vitest / vite 的 JS 入口，跨平台、无 shell、无引号地狱。
 
-const args = { only: null, skip: [], build: false }
+const args = { only: null, skip: [], build: false, mobileE2e: false }
 for (let i = 2; i < process.argv.length; i += 1) {
   const token = process.argv[i]
   if (token === '--build') args.build = true
+  else if (token === '--mobile-e2e') args.mobileE2e = true
   else if (token === '--only') args.only = (process.argv[++i] ?? '').split(',').filter(Boolean)
   else if (token === '--skip') args.skip = (process.argv[++i] ?? '').split(',').filter(Boolean)
   else if (token === '--help' || token === '-h') {
-    console.log('用法：node ops/ci/verify.mjs [--build] [--only workspace,shared,gateway,bucket,apps] [--skip shared]')
+    console.log(
+      '用法：node ops/ci/verify.mjs [--build] [--mobile-e2e] ' +
+        '[--only workspace,shared,gateway,bucket,apps,mobile,mobile-e2e,schema] [--skip shared]',
+    )
     process.exit(0)
   } else {
     console.error(`✗ 无法识别的参数：${token}`)
@@ -304,11 +314,188 @@ function checkSchema() {
   }
 }
 
+/** ---------- mobile：移动端工程（uni-app，小程序/H5 同源）静态一致性 ---------- */
+const MOBILE_DIR = path.join(REPO_ROOT, 'agri-production', 'miniprogram')
+const MOBILE_SRC = path.join(MOBILE_DIR, 'src')
+
+/**
+ * 递归收集 src/pages 下的页面路径（相对 src，去扩展名，如 `pages/tasks/tasks`）。
+ *
+ * @param dir 页面根目录
+ * @returns 页面路径数组
+ */
+async function collectMobilePages(dir) {
+  const out = []
+  const walk = async (current, prefix) => {
+    for (const entry of await readdir(current, { withFileTypes: true })) {
+      const full = path.join(current, entry.name)
+      const rel = `${prefix}/${entry.name}`
+      if (entry.isDirectory()) await walk(full, rel)
+      else if (entry.name.endsWith('.vue')) out.push(rel.replace(/\.vue$/, ''))
+    }
+  }
+  await walk(dir, 'pages')
+  return out.sort()
+}
+
+/**
+ * 收集源码里出现的所有页面引用（`/pages/...` 字面量）。
+ *
+ * <p>为什么扫"所有字面量"而不是只扫 `navigateTo({ url: ... })`：
+ * 跳转目标有的是**数据驱动**的（工作台的快捷入口就是一张 `{ path: '/pages/xxx' }` 表，
+ * 点击时再 `go(entry.path)`），只扫 url 位置会漏掉它们。
+ * 反过来，形如 `` `${base}?id=1` `` 这种由变量拼出来的目标天然不会被捕获 ——
+ * 但它真正的取值一定以字面量形式出现在**调用处**（如 `goDetail('/pages/tasks/detail', id)`），
+ * 那处会被扫到，所以不会漏检，也不会误报。</p>
+ *
+ * @param dir 源码根目录（src）
+ * @returns 去重后的页面路径（已去掉前导 `/` 与查询串）
+ */
+async function collectMobilePageRefs(dir) {
+  const targets = new Set()
+  const walk = async (current) => {
+    for (const entry of await readdir(current, { withFileTypes: true })) {
+      const full = path.join(current, entry.name)
+      if (entry.isDirectory()) {
+        await walk(full)
+        continue
+      }
+      if (!entry.name.endsWith('.vue') && !entry.name.endsWith('.ts')) continue
+      const text = await readFile(full, 'utf8')
+      for (const match of text.matchAll(/['"`](\/pages\/[a-z0-9_/-]+)/gi)) {
+        targets.add(match[1].replace(/^\//, ''))
+      }
+    }
+  }
+  await walk(dir)
+  return [...targets].sort()
+}
+
+/**
+ * 移动端静态检查：这类问题的共同点是"跑得起来、点下去才炸"，静态就能挡住。
+ *
+ * <p>具体查四件事：页面清单与文件是否一一对应、底部 Tab 是否都登记过、
+ * 页面内跳转目标是否都登记过（PC 端踩过"深链指向已删页面"的坑）、
+ * 接口层是否只打生产域/认证域（不许悄悄接上后端并不存在的 `/api/v1/mobile/**`）。</p>
+ */
+async function checkMobile() {
+  const pagesJson = path.join(MOBILE_SRC, 'pages.json')
+  if (!existsSync(pagesJson)) {
+    record('mobile', '移动端工程', 'skip', `未找到 ${path.relative(REPO_ROOT, pagesJson)}`)
+    return
+  }
+  let manifest
+  try {
+    manifest = JSON.parse(await readFile(pagesJson, 'utf8'))
+  } catch (err) {
+    record('mobile', 'pages.json 可解析', 'fail', String(err?.message ?? err).slice(0, 160))
+    return
+  }
+
+  const declared = (manifest.pages ?? []).map((page) => page.path).sort()
+  const files = await collectMobilePages(path.join(MOBILE_SRC, 'pages'))
+  const missingFile = declared.filter((p) => !files.includes(p))
+  const unregistered = files.filter((p) => !declared.includes(p))
+  record(
+    'mobile',
+    `页面清单与文件一致（${declared.length} 页）`,
+    missingFile.length === 0 && unregistered.length === 0 ? 'pass' : 'fail',
+    [
+      missingFile.length ? `已登记但没有文件：${missingFile.join(', ')}` : '',
+      unregistered.length ? `有文件但没登记：${unregistered.join(', ')}` : '',
+    ]
+      .filter(Boolean)
+      .join(' | '),
+  )
+
+  const tabs = (manifest.tabBar?.list ?? []).map((item) => item.pagePath)
+  const badTabs = tabs.filter((p) => !declared.includes(p))
+  record(
+    'mobile',
+    `底部 Tab 指向已登记页面（${tabs.length} 个）`,
+    tabs.length === 5 && badTabs.length === 0 ? 'pass' : 'fail',
+    badTabs.length > 0 ? `未登记：${badTabs.join(', ')}` : `Tab 数=${tabs.length}（PRD 3.1 要求 5 个）`,
+  )
+
+  const pageRefs = await collectMobilePageRefs(MOBILE_SRC)
+  const badNav = pageRefs.filter((p) => !declared.includes(p))
+  record(
+    'mobile',
+    `源码引用的页面都已登记（${pageRefs.length} 处）`,
+    badNav.length === 0 ? 'pass' : 'fail',
+    badNav.length > 0 ? `未登记：${badNav.join(', ')}` : '（含快捷入口等数据驱动的目标）',
+  )
+
+  const apiDir = path.join(MOBILE_SRC, 'api')
+  const offenders = []
+  const mobileOnly = []
+  if (existsSync(apiDir)) {
+    for (const entry of await readdir(apiDir, { withFileTypes: true })) {
+      if (!entry.name.endsWith('.ts')) continue
+      const text = await readFile(path.join(apiDir, entry.name), 'utf8')
+      for (const match of text.matchAll(/url:\s*[`'"]([^`'"]+)[`'"]/g)) {
+        const url = match[1]
+        if (url.includes('/api/v1/mobile/')) mobileOnly.push(url)
+        else if (!/^\/api\/v1\/(production|auth)\b/.test(url)) offenders.push(url)
+      }
+    }
+  }
+  record(
+    'mobile',
+    '接口层只打生产域/认证域端点',
+    offenders.length === 0 ? 'pass' : 'fail',
+    offenders.length ? offenders.join(', ') : '（全部 /api/v1/production 或 /api/v1/auth）',
+  )
+  record(
+    'mobile',
+    '不调用后端未接入的 /api/v1/mobile/**',
+    mobileOnly.length === 0 ? 'pass' : 'fail',
+    mobileOnly.length ? `发现：${mobileOnly.join(', ')}` : '（移动端专有接口后端尚未提供，前端不接）',
+  )
+
+  const mpAppJson = path.join(MOBILE_DIR, 'dist', 'build', 'mp-weixin', 'app.json')
+  if (!existsSync(mpAppJson)) {
+    record('mobile', '小程序产物页面清单', 'skip', '没有 dist/build/mp-weixin（未构建过，属预期）')
+  } else {
+    const mpApp = JSON.parse(await readFile(mpAppJson, 'utf8'))
+    const mpPages = (mpApp.pages ?? []).sort()
+    const diff = declared
+      .filter((p) => !mpPages.includes(p))
+      .concat(mpPages.filter((p) => !declared.includes(p)))
+    record(
+      'mobile',
+      `小程序产物页面清单与源码一致（${mpPages.length} 页）`,
+      diff.length === 0 ? 'pass' : 'fail',
+      diff.length === 0 ? `tabBar ${(mpApp.tabBar?.list ?? []).length} 个` : `差异：${diff.join(', ')}`,
+    )
+  }
+}
+
+/** ---------- mobile-e2e：移动端真浏览器端到端（默认关闭，需生产栈 + H5 dev server） ---------- */
+async function checkMobileE2E() {
+  for (const script of ['scripts/e2e-mobile-mvp.mjs', 'scripts/e2e-mobile-writes.mjs']) {
+    const result = run(process.execPath, [script])
+    const output = `${result.stdout ?? ''}${result.stderr ?? ''}`
+    const summary =
+      output
+        .split(/\r?\n/)
+        .filter((line) => line.includes('=='))
+        .slice(-1)[0]
+        ?.trim() ?? firstMeaningfulError(output)
+    record('mobile-e2e', script, result.status === 0 ? 'pass' : 'fail', summary.slice(0, 200))
+  }
+}
+
 // ---------------- 执行 ----------------
 if (enabled('workspace')) await checkWorkspace()
 if (enabled('shared')) checkShared()
 if (enabled('gateway')) await checkGateway()
 if (enabled('bucket')) await checkBucket()
+if (enabled('mobile')) await checkMobile()
+if (enabled('mobile-e2e')) {
+  if (args.mobileE2e) await checkMobileE2E()
+  else record('mobile-e2e', '移动端端到端（真浏览器）', 'skip', '加 --mobile-e2e 打开（需要生产栈与 H5 dev server 在跑）')
+}
 if (enabled('schema')) checkSchema()
 if (args.build && enabled('apps')) await checkApps()
 

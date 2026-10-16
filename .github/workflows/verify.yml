@@ -38,6 +38,8 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq nginx
 
-      # 门禁脚本内部直接调 vitest / vite 的 JS 入口（不经 pnpm 包装脚本，跨平台一致）
-      - name: 统一门禁（workspace 成员 / 共享包单测与覆盖率 / 网关配置 / 发布产物完整性）
+      # 门禁脚本内部直接调 vitest / vite 的 JS 入口（不经 pnpm 包装脚本，跨平台一致）。
+      # mobile 组只读文件（页面清单/Tab/跳转目标/接口域），CI 里无需额外依赖即可跑；
+      # mobile-e2e 需要生产栈与 H5 dev server，CI 里自动记为"跳过"。
+      - name: 统一门禁（workspace 成员 / 共享包单测与覆盖率 / 网关配置 / 发布产物完整性 / 移动端静态一致性）
         run: node ops/ci/verify.mjs
