@@ -89,5 +89,13 @@ public class FarmVO {
         return totalArea;
     }
 
+    /**
+     * 页面口径的联系电话（{@code managerPhone}）：落库列是 {@code contact_phone}，这里给别名。
+     * 理由同 {@code areaTotal} —— 页面读的是它自己的字段名。
+     */
+    public String getManagerPhone() {
+        return getContactPhone();
+    }
+
     private LocalDateTime updateTime;
 }

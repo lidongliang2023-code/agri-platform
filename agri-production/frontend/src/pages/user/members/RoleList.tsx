@@ -284,7 +284,7 @@ export default function RoleList(): JSX.Element {
           type="error"
           showIcon
           message="角色接口不可用，无法读取服务端角色"
-          description="GET /api/v1/admin/roles 请求失败，请确认后端平台服务已启动。下方列表不再显示任何本地示例角色。"
+          description="平台域 /api/v1/admin/roles 与本农场角色目录都读取失败。若只是平台域失败，页面会用本农场角色（成员台账聚合）兜底展示；两者都失败请确认后端服务是否已启动，当前账号是否具备平台角色读取权限（403 表示无权限，不是服务没起）。下方列表不显示任何本地示例角色。"
           action={
             <Button size="small" onClick={() => void platformRolesQuery.refetch()}>
               重试

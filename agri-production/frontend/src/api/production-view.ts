@@ -30,6 +30,7 @@ import {
   readValue,
 } from '@/utils/production-adapter'
 import type { DashboardOverview } from '@/utils/production-adapter'
+import { isTaskDone } from '@/types/task'
 import type {
   Alert,
   Member,
@@ -488,8 +489,39 @@ export interface PlatformRole {
  * @returns 平台角色列表
  */
 export async function fetchPlatformRoles(): Promise<PlatformRole[]> {
-  const raw = await httpPlatform.get<unknown>('/roles', undefined, { silent: true })
-  const list = Array.isArray(raw) ? raw : []
+  let list: unknown[]
+  try {
+    const raw = await httpPlatform.get<unknown>('/roles', undefined, { silent: true })
+    list = Array.isArray(raw) ? raw : []
+  } catch (error) {
+    /*
+     * 回退到生产域的「本农场角色目录」（GET /api/v1/production/members/roles/catalog）。
+     *
+     * 为什么需要这条回退（2026-10-16 产品口径）：平台域 `/api/v1/admin/roles` 是**平台角色全表**，
+     * 只允许平台超级管理员调用 —— 农场主（FARMER）拿到 403，页面原先显示
+     * 「角色接口不可用，请确认后端平台服务已启动」，把"无权限"说成"服务没起"，误导排查方向。
+     * 产品口径是"农场主应能在用户端看到自己农场里的角色"，所以这里降级到按成员台账聚合的
+     * 本农场角色目录：能给出角色编码与在职人数，**权限明细仍留空**（那是平台域数据，本账号无权读，
+     * 不编造）。若回退也失败，才把原始错误抛给页面（页面据此显示"接口不可用"并给重试）。
+     */
+    try {
+      const catalog = await http.get<unknown>('/members/roles/catalog', undefined, { silent: true })
+      const rows = Array.isArray(catalog) ? catalog : []
+      return rows.map((item, index) => {
+        const record = asRecord(item)
+        const code = readString(record, ['roleCode', 'code'], '')
+        return {
+          id: index,
+          code,
+          // 角色名称的权威数据在平台域，这里没有 —— 给编码，不编名字
+          name: readString(record, ['roleName', 'name'], '') || code,
+          permissions: [],
+        }
+      })
+    } catch {
+      throw error
+    }
+  }
   return list.map((item) => {
     const record = asRecord(item)
     const stored = readValue(record, ['permissions'])
@@ -1067,7 +1099,8 @@ export async function fetchCalendarEntries(params: {
           taskId: task.taskId,
           category: task.taskType,
           statusLabel: task.status,
-          done: ['accepted', 'done', 'completed'].includes(task.status),
+          // 「已完成」同时认 PRD 标准值 completed 与迁移前旧值 done
+          done: isTaskDone(task.status),
           assigneeId: task.assigneeId || undefined,
           assigneeName: task.assigneeName || undefined,
         })

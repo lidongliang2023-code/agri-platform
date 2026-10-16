@@ -563,6 +563,9 @@ plan_year BIGINT,
 plan_season VARCHAR(191),
 plan_status VARCHAR(255) DEFAULT 'draft',
 total_area DECIMAL(18,4),
+-- 农场负责人（页面字段名 managerName）：**页面上是用户手填的**，所以要有列来存。
+-- 没有它时详情/列表的"负责人"只能靠成员台账里 member_type=OWNER 反查，新农场还没成员就必然是空的。
+manager_name VARCHAR(100) COMMENT '农场负责人（页面 managerName）',
 total_budget DECIMAL(18,4),
 expected_output DECIMAL(18,4),
 expected_profit DECIMAL(18,4),

@@ -62,9 +62,15 @@ function currentPointerVersion() {
   }
 }
 
-/** 用本地二进制而不是 npx：仓库笔记记过 `npx tsc` 会抓到同名诱饵包、以 0 退出（假绿）。 */
+/**
+ * 直接调 JS 入口，不用 npx、也不用 .cmd 包装脚本。
+
+ * 仓库笔记记过两件事：① `npx tsc` 会抓到同名诱饵包、以 0 退出（假绿）；② 本仓库路径含中文与括号，
+ * 经 cmd.exe / shell 调 `.cmd` 会出现引号地狱（实测 2026-10-16：发布脚本第一次跑就是在调
+ * `node_modules/.bin/tsc.cmd` 时挂掉，且看不到有用报错）。用 node 直接执行入口，跨平台且无 shell。
+ */
 function run(command, commandArgs, cwd) {
-  execFileSync(command, commandArgs, { cwd, stdio: 'inherit', shell: process.platform === 'win32' })
+  execFileSync(process.execPath, [command, ...commandArgs], { cwd, stdio: 'inherit' })
 }
 
 const version = nextVersion()
@@ -81,8 +87,8 @@ if (dryRun) {
 }
 
 // 1) 构建：必须带 base，否则产物内部按根路径拼 chunk（2026-10-16 那次事故）
-const tsc = path.join(FRONTEND, 'node_modules', '.bin', process.platform === 'win32' ? 'tsc.cmd' : 'tsc')
-const vite = path.join(FRONTEND, 'node_modules', '.bin', process.platform === 'win32' ? 'vite.cmd' : 'vite')
+const tsc = path.join(FRONTEND, 'node_modules', 'typescript', 'bin', 'tsc')
+const vite = path.join(FRONTEND, 'node_modules', 'vite', 'bin', 'vite.js')
 run(tsc, ['-p', '.'], FRONTEND)
 run(vite, ['build', `--base=${base}`], FRONTEND)
 
@@ -113,8 +119,15 @@ if (skipPatrol) {
   console.log('[deploy] 已跳过发布后巡检（--skip-patrol）')
   process.exit(0)
 }
-run(process.execPath, [path.join(REPO_ROOT, 'scripts', 'page-patrol.mjs'),
-  '--base', 'http://localhost', '--mode', 'deep', '--only-user'], REPO_ROOT)
+// 巡检脚本"有页面报错"时自己会以非 0 退出，而 execFileSync 遇非 0 直接抛 —— 那会让发布脚本
+// 还没读到报告就死掉（实测 2026-10-16：构建与发布都成功了，却因为这个停在自检前）。
+// 所以这里显式忽略退出码：**判据是报告内容**，不是它的退出码。
+try {
+  execFileSync(process.execPath, [path.join(REPO_ROOT, 'scripts', 'page-patrol.mjs'),
+    '--base', 'http://localhost', '--mode', 'deep', '--only-user'], { cwd: REPO_ROOT, stdio: 'inherit' })
+} catch {
+  console.log('[deploy] 巡检脚本以非 0 退出（页面有报错时它就是这样），继续读报告判定')
+}
 const summary = JSON.parse(readFileSync(PATROL_REPORT, 'utf8')).summary ?? {}
 const bad = (summary.blank ?? 0) > 0 || (summary.withPageError ?? 0) > 0
   || (summary.withRealConsoleError ?? 0) > CONSOLE_ERROR_PAGE_BUDGET

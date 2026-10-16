@@ -70,6 +70,10 @@ public class Farm extends BaseEntity {
     @TableField("total_area")
     private BigDecimal totalArea;
 
+    /** 农场负责人（页面 managerName；用户手填，见 schema 里该列的注释）。 */
+    @TableField("manager_name")
+    private String managerName;
+
     @TableField("plot_count")
     private Integer plotCount;
 

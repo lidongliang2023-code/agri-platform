@@ -22,6 +22,7 @@ public class FarmServiceImpl extends ServiceImpl<FarmMapper, Farm> implements IF
     @Override
     @Transactional
     public FarmVO save(FarmSaveDTO dto, String tenantId) {
+        normalizePageAliases(dto);
         Farm farm = BeanCopyUtils.copy(dto, Farm.class);
         farm.setTenantId(tenantId);
         farm.setFarmCode(generateFarmCode(tenantId));
@@ -34,6 +35,7 @@ public class FarmServiceImpl extends ServiceImpl<FarmMapper, Farm> implements IF
     @Override
     @Transactional
     public FarmVO update(FarmSaveDTO dto, String tenantId) {
+        normalizePageAliases(dto);
         Farm farm = getById(dto.getId());
         if (farm == null || !tenantId.equals(farm.getTenantId())) {
             throw new RuntimeException("农场不存在");
@@ -41,6 +43,25 @@ public class FarmServiceImpl extends ServiceImpl<FarmMapper, Farm> implements IF
         BeanCopyUtils.copy(dto, farm);
         updateById(farm);
         return BeanCopyUtils.copy(farm, FarmVO.class);
+    }
+
+    /**
+     * 把页面口径的字段名归一成实体列名（不归一就会被静默丢掉：页面提示保存成功、值却没存上）。
+     *
+     * <p>2026-10-16 实测：新建农场表单发 {@code areaTotal / managerName / managerPhone}，
+     * 而实体列是 {@code total_area / manager_name / contact_phone} —— 详情页的面积、负责人、
+     * 联系电话因此全是空的。{@code managerName} 与实体同名，由 BeanCopyUtils 直接落列（新增列）。</p>
+     */
+    private void normalizePageAliases(FarmSaveDTO dto) {
+        if (dto == null) {
+            return;
+        }
+        if (dto.getAreaTotal() != null && dto.getTotalArea() == null) {
+            dto.setTotalArea(dto.getAreaTotal());
+        }
+        if (dto.getManagerPhone() != null && (dto.getContactPhone() == null || dto.getContactPhone().isBlank())) {
+            dto.setContactPhone(dto.getManagerPhone());
+        }
     }
 
     @Override
