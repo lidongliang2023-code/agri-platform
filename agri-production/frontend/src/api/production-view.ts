@@ -792,6 +792,49 @@ function toDateString(value: unknown): string | undefined {
  * @param payload 计划入参
  * @returns 新建计划 ID
  */
+/** 作物候选（本租户真实用过的作物） */
+export interface CropOption {
+  /** 作物名 —— 本平台**没有作物主数据表**，名称就是标识（落库进 crop_name） */
+  cropName: string
+  /** 在种养计划里用过几次 */
+  planCount: number
+  /** 在地块台账里登记了几块 */
+  plotCount: number
+}
+
+/**
+ * 查询作物候选（{@code GET /crops/options}）。
+
+ *
+ * <p>候选来自本租户的**真实数据**：种养计划的 {@code crop_name} ∪ 地块的 {@code current_crop}。
+ * 平台没有作物主数据（materdata 库里只有单位 / 租户类型这类字典），所以不编一份作物清单，
+ * 页面另外补上"输入即使用"的兜底项。</p>
+
+ *
+ * <p>拉取失败返回空数组：宁可让下拉空着、由用户输入，也不塞假候选。</p>
+ *
+ * @param params 可选的农场过滤
+ * @returns 作物候选（按用量降序）
+ */
+export async function fetchCropOptions(params?: { farmId?: string }): Promise<CropOption[]> {
+  try {
+    const raw = await http.get<unknown>('/crops/options', { farmId: params?.farmId }, { silent: true })
+    const list = Array.isArray(raw) ? raw : []
+    return list
+      .map((item) => {
+        const record = asRecord(item)
+        return {
+          cropName: readString(record, ['cropName'], ''),
+          planCount: readNumber(record, ['planCount'], 0),
+          plotCount: readNumber(record, ['plotCount'], 0),
+        }
+      })
+      .filter((item) => item.cropName !== '')
+  } catch {
+    return []
+  }
+}
+
 export async function createPlanInfo(payload: {
   planCode?: string
   planName: string

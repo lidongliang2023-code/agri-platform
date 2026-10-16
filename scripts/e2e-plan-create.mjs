@@ -51,6 +51,8 @@ const HEADFUL = process.argv.includes('--headful')
 const stamp = Date.now().toString().slice(-6)
 const planName = `联调计划-${stamp}`
 const cropName = '水稻'
+/** 候选之外的作物名：用来验"没有主数据也能输入新作物"这条兜底（下拉里会多一条"使用「…」"） */
+const newCropName = '西瓜'
 /** 期望被选中的地块名（取当前农场台账里的一条） */
 const targetPlotName = arg('plot', 'A区连栋大棚')
 const startDate = '2026-04-01'
@@ -168,13 +170,36 @@ const pickSelectOption = async (text) => {
  */
 const openSelect = async (fieldSelector) => {
   await page.click(fieldSelector)
-  await page.waitForFunction(
-    () =>
-      document.querySelectorAll('.ant-select-item-option').length > 0 ||
-      document.querySelectorAll('.ant-select-item-empty').length > 0,
-    { timeout: 20000 },
-  )
-  await sleep(400)
+  await waitForOptions()
+}
+
+/** 读当前展开下拉里的全部选项文案 */
+const readVisibleOptions = () =>
+  page.evaluate(() => {
+    const dropdowns = [...document.querySelectorAll('.ant-select-dropdown')]
+      .filter((d) => !d.classList.contains('ant-select-dropdown-hidden'))
+    return dropdowns
+      .flatMap((d) => [...d.querySelectorAll('.ant-select-item-option')])
+      .map((o) => o.textContent.trim())
+  })
+
+/**
+ * 轮询等下拉出选项。
+ *
+ * <p>选项多数是**异步拉的**（地块 / 成员 / 作物候选），下拉框本身先出现、选项后到；
+ * 只判断"下拉已展开"会读到空列表。超时也不抛错，交给调用方断言"列了几项"，
+ * 这样失败信息是"下拉是空的"而不是一个选择器超时堆栈。</p>
+ */
+const waitForOptions = async (timeoutMs = 15000) => {
+  const deadline = Date.now() + timeoutMs
+  for (;;) {
+    const labels = await readVisibleOptions()
+    if (labels.length > 0 || Date.now() > deadline) {
+      await sleep(200)
+      return labels
+    }
+    await sleep(300)
+  }
 }
 
 /**
@@ -279,11 +304,27 @@ try {
   check(memberPick.ok, '能选中该负责人')
   await sleep(400)
 
+  // 3c) 作物下拉：① 候选来自真实数据；② 候选之外可以直接输入使用（平台没有作物主数据，
+  //     硬校验会把"西红柿"这类真实作物挡在门外，所以保留输入即用）
+  await openSelect(inModal('#cropId'))
+  const cropCandidates = await readVisibleOptions()
+  check(cropCandidates.length > 0, '「作物」下拉列出了候选', `共 ${cropCandidates.length} 项`)
+  check(cropCandidates.some((text) => text.includes(cropName)),
+    `候选里含本租户用过的作物「${cropName}」`, cropCandidates.slice(0, 5).join(' / '))
+  await page.type(inModal('#cropId'), newCropName, { delay: 30 })
+  await sleep(500)
+  const typedCropPick = await pickSelectOption(`使用「${newCropName}」`)
+  check(typedCropPick.ok, `候选之外的「${newCropName}」可直接输入使用`,
+    typedCropPick.labels.join(' / '))
+  await sleep(300)
+  await openSelect(inModal('#cropId'))
+  const cropPick = await pickSelectOption(cropName)
+  check(cropPick.ok, `能选回候选作物「${cropName}」`)
+  await sleep(300)
+
   // 4) 填其余必填项
   await page.click(inModal('#planName'))
   await page.type(inModal('#planName'), planName, { delay: 10 })
-  await page.click(inModal('#cropId'))
-  await page.type(inModal('#cropId'), cropName, { delay: 10 })
   await page.click(inModal('#expectedYield'))
   await page.type(inModal('#expectedYield'), String(expectedYield), { delay: 20 })
   await page.click(inModal('#planArea'))

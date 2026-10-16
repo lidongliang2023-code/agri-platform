@@ -55,6 +55,37 @@ if (!apiDir || !gatewayBase || !coreBase || !token) {
   process.exit(2)
 }
 
+/**
+ * 跑前校验令牌有效期（2026-10-16 加，与 probe-frontend-api.mjs 同一道守卫）。
+ *
+ * <p>令牌过期时两侧都回 401/403，A/B 两段会**同时萎缩**，脚本却照常打印
+ * "A 段 0 条、B 段 3 条"——看着像"彻底没有回归了"，其实是一句空话。
+ * 实测踩过一次：用过期令牌跑出来 A=0/B=3，换新令牌后是 A=4/B=23。</p>
+ */
+function tokenExpiry(raw) {
+  const parts = raw.split('.')
+  if (parts.length !== 3) return null
+  try {
+    const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'))
+    return typeof payload.exp === 'number' ? payload.exp * 1000 : null
+  } catch {
+    return null
+  }
+}
+const expAt = tokenExpiry(token)
+if (expAt !== null) {
+  const leftMs = expAt - Date.now()
+  if (leftMs <= 0) {
+    console.error(`✗ 令牌已于 ${new Date(expAt).toLocaleString('zh-CN')} 过期（${Math.round(-leftMs / 60000)} 分钟前）。`)
+    console.error('  过期令牌会让两侧都回 401/403，A/B 两段同时萎缩成假象 —— 先换新令牌：')
+    console.error('  POST /api/v1/auth/login  {"username":"admin","password":"Admin@123","marketId":1} → data.accessToken')
+    process.exit(2)
+  }
+  if (leftMs < 5 * 60 * 1000) {
+    console.warn(`⚠ 令牌将在 ${Math.round(leftMs / 1000)} 秒后过期，本轮结果可能不可信。`)
+  }
+}
+
 // 泛型截取用 [^(]*（贪婪到 `(` 前的最后一个 `>`）：像 http.get<PageResult<X>>(...) 这种
 // 嵌套泛型，用 [^>]* 会在第一个 `>` 停下、整条调用抓不到 —— 对照脚本会因此漏掉最典型的分页接口。
 // 与 probe-frontend-api.mjs 保持同一份正则，两个脚本的口径必须一致。
