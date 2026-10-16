@@ -1,0 +1,104 @@
+{
+  "pages": [
+    {
+      "path": "pages/login/login",
+      "style": { "navigationBarTitleText": "登录" }
+    },
+    {
+      "path": "pages/workbench/workbench",
+      "style": { "navigationBarTitleText": "工作台" }
+    },
+    {
+      "path": "pages/plots/plots",
+      "style": { "navigationBarTitleText": "地块管理" }
+    },
+    {
+      "path": "pages/tasks/tasks",
+      "style": { "navigationBarTitleText": "农事任务" }
+    },
+    {
+      "path": "pages/harvests/harvests",
+      "style": { "navigationBarTitleText": "采收管理" }
+    },
+    {
+      "path": "pages/profile/profile",
+      "style": { "navigationBarTitleText": "我的" }
+    },
+    {
+      "path": "pages/messages/messages",
+      "style": { "navigationBarTitleText": "消息中心" }
+    },
+    {
+      "path": "pages/plots/detail",
+      "style": { "navigationBarTitleText": "地块详情" }
+    },
+    {
+      "path": "pages/plots/map",
+      "style": { "navigationBarTitleText": "地块地图" }
+    },
+    {
+      "path": "pages/tasks/detail",
+      "style": { "navigationBarTitleText": "任务详情" }
+    },
+    {
+      "path": "pages/tasks/create",
+      "style": { "navigationBarTitleText": "新建任务" }
+    },
+    {
+      "path": "pages/inputs/scan",
+      "style": { "navigationBarTitleText": "投入品录入" }
+    },
+    {
+      "path": "pages/inputs/detail",
+      "style": { "navigationBarTitleText": "投入品详情" }
+    },
+    {
+      "path": "pages/harvests/create",
+      "style": { "navigationBarTitleText": "新建采收" }
+    },
+    {
+      "path": "pages/harvests/detail",
+      "style": { "navigationBarTitleText": "采收详情" }
+    },
+    {
+      "path": "pages/inventory/inventory",
+      "style": { "navigationBarTitleText": "库存概览" }
+    },
+    {
+      "path": "pages/trace/scan",
+      "style": { "navigationBarTitleText": "扫码溯源" }
+    },
+    {
+      "path": "pages/alerts/alerts",
+      "style": { "navigationBarTitleText": "告警中心" }
+    },
+    {
+      "path": "pages/ai/pest-detection",
+      "style": { "navigationBarTitleText": "AI 拍照识病" }
+    },
+    {
+      "path": "pages/profile/settings",
+      "style": { "navigationBarTitleText": "设置" }
+    }
+  ],
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "农业生产管理",
+    "navigationBarBackgroundColor": "#ffffff",
+    "backgroundColor": "#f5f6f8",
+    "backgroundTextStyle": "dark"
+  },
+  "tabBar": {
+    "color": "#8c8c8c",
+    "selectedColor": "#13a05a",
+    "borderStyle": "black",
+    "backgroundColor": "#ffffff",
+    "list": [
+      { "pagePath": "pages/workbench/workbench", "text": "工作台" },
+      { "pagePath": "pages/plots/plots", "text": "农场" },
+      { "pagePath": "pages/tasks/tasks", "text": "农事" },
+      { "pagePath": "pages/harvests/harvests", "text": "采收" },
+      { "pagePath": "pages/profile/profile", "text": "我的" }
+    ]
+  }
+}
