@@ -66,6 +66,7 @@ import type { PlanStagePayload } from '@/api/production-view'
 import {
   TASK_TYPE_META,
   calcPlanProgress,
+  formatAreaNumber,
   formatNumber,
   planStatusMeta,
   priorityMeta,
@@ -74,6 +75,7 @@ import {
 } from '@/utils/production-adapter'
 import type { PlanStageView } from '@/api/production-view'
 import type { PlanStage, Task } from '@/types'
+import { isTaskDone } from '@/types/task'
 
 /** 阶段「默认任务类型」下拉选项 */
 const taskTypeOptions = Object.entries(TASK_TYPE_META).map(([value, label]) => ({
@@ -247,9 +249,8 @@ export default function PlanDetail(): JSX.Element {
 
   /** 任务完成度 */
   const taskStats = useMemo(() => {
-    const done = tasks.filter((task) =>
-      ['accepted', 'done', 'completed'].includes(task.status),
-    ).length
+    // 「已完成」同时认 PRD 标准值 completed 与迁移前旧值 done（isTaskDone）
+    const done = tasks.filter((task) => isTaskDone(task.status)).length
     return { done, total: tasks.length, rate: tasks.length ? Math.round((done / tasks.length) * 100) : 0 }
   }, [tasks])
 
@@ -476,7 +477,8 @@ export default function PlanDetail(): JSX.Element {
                 {formatNumber(plan.expectedYield)} kg
               </Descriptions.Item>
               <Descriptions.Item label="计划面积">
-                {plan.planArea > 0 ? `${formatNumber(plan.planArea)} 亩` : '-'}
+                {/* 面积保留最多 2 位小数：用 formatNumber（固定 0 位）会把 88.5 显示成 89 */}
+                {plan.planArea > 0 ? `${formatAreaNumber(plan.planArea)} 亩` : '-'}
               </Descriptions.Item>
               <Descriptions.Item label="更新时间">{plan.updatedAt || '-'}</Descriptions.Item>
               <Descriptions.Item label="备注" span={2}>

@@ -57,6 +57,10 @@ const startDate = '2026-04-01'
 const endDate = '2026-08-31'
 /** 预计产量（kg）：填一个数，用来证明确实落库并能原样查回来（不是只有文本字段才存得住） */
 const expectedYield = 12000
+/** 计划种养面积（亩）：同上，验数值字段落库回显 */
+const planArea = 88.5
+/** 期望被选中的负责人（本农场团队成员台账里的真实成员） */
+const targetManagerName = arg('manager', '陈志强')
 
 const failures = []
 const check = (ok, label, extra = '') => {
@@ -125,6 +129,53 @@ const clickButtonByText = async (label) => {
  * 甚至把计划名称填进搜索框里。全部限定在 `.ant-modal-content` 内。
  */
 const inModal = (id) => `.ant-modal-content ${id}`
+
+/**
+ * 在**当前展开**的下拉里按文案点一项。
+ *
+ * ⚠️ 只扫没被隐藏的 `.ant-select-dropdown`：antd 关掉下拉时不移除 DOM、只加
+ * `ant-select-dropdown-hidden`，全量扫描会把上一个下拉（比如地块）的选项也算进来。
+ *
+ * @param text 选项文案里要包含的文字
+ * @returns 是否点中，以及该下拉里所有选项的文案（用于断言"下拉真的列出来了"）
+ */
+const pickSelectOption = async (text) => {
+  return page.evaluate((label) => {
+    const dropdowns = [...document.querySelectorAll('.ant-select-dropdown')]
+      .filter((d) => !d.classList.contains('ant-select-dropdown-hidden'))
+    const options = dropdowns.flatMap((d) => [...d.querySelectorAll('.ant-select-item-option')])
+    const labels = options.map((o) => o.textContent.trim())
+    const hit = options.find((o) => o.textContent.includes(label))
+    if (!hit) return { ok: false, labels }
+    hit.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    hit.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    return { ok: true, labels }
+  }, text)
+}
+
+/**
+ * 打开一个 Select 下拉。
+ *
+ * ⚠️ 必须用**真实鼠标点击**：antd Select 展开挂在 React 的合成事件上，
+ * 手工 `dispatchEvent(new MouseEvent('mousedown'))` 打不开（临时探针实测：
+ * 派发之后下拉数量仍是 0，真点一下就有 7 个选项）。
+ *
+ * <p>等待条件也不能只认 `.ant-select-item-option`：选项是异步拉的（地块/成员列表），
+ * 没拉到时会渲染空状态，那样等待会一直超时。这里两种状态都接受，
+ * 空不空由调用方断言。</p>
+ *
+ * @param fieldSelector 表单字段选择器（如 `.ant-modal-content #plotId`）
+ */
+const openSelect = async (fieldSelector) => {
+  await page.click(fieldSelector)
+  await page.waitForFunction(
+    () =>
+      document.querySelectorAll('.ant-select-item-option').length > 0 ||
+      document.querySelectorAll('.ant-select-item-empty').length > 0,
+    { timeout: 20000 },
+  )
+  await sleep(400)
+}
 
 /**
  * 往列表搜索表单的某个字段里写值。
@@ -206,27 +257,26 @@ try {
   // 2) 打开「新增种养计划」弹窗
   await clickButtonByText('新增种养计划')
   await page.waitForSelector(inModal('#planName'), { timeout: 20000 })
+  // 等弹窗展开动画结束再点下面的控件，否则点击会落到还没定位好的位置上
+  await sleep(600)
   check(true, '「新增种养计划」弹窗已打开')
 
   // 3) 要点一：地块下拉里真的列得出本农场的地块
-  await page.click(inModal('#plotId'))
-  await page.waitForSelector('.ant-select-item-option', { timeout: 15000 })
+  await openSelect(inModal('#plotId'))
+  const plotPick = await pickSelectOption(targetPlotName)
+  check(plotPick.labels.length > 0, '「关联地块」下拉列出了可选地块', `共 ${plotPick.labels.length} 项`)
+  check(plotPick.labels.some((text) => text.includes(targetPlotName)),
+    `下拉里含目标地块「${targetPlotName}」`, plotPick.labels.slice(0, 3).join(' / '))
+  check(plotPick.ok, '能选中该地块')
   await sleep(400)
-  const options = await page.evaluate(() =>
-    [...document.querySelectorAll('.ant-select-item-option')].map((el) => el.textContent.trim()))
-  check(options.length > 0, '「关联地块」下拉列出了可选地块', `共 ${options.length} 项`)
-  check(options.some((text) => text.includes(targetPlotName)), `下拉里含目标地块「${targetPlotName}」`,
-    options.slice(0, 3).join(' / '))
 
-  const picked = await page.evaluate((label) => {
-    const hit = [...document.querySelectorAll('.ant-select-item-option')]
-      .find((el) => el.textContent.includes(label))
-    if (!hit) return false
-    hit.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
-    hit.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    return true
-  }, targetPlotName)
-  check(picked, '能选中该地块')
+  // 3b) 负责人下拉：同样要能列人、能选人（原先这一栏是自由文本框「负责人 ID」）
+  await openSelect(inModal('#ownerId'))
+  const memberPick = await pickSelectOption(targetManagerName)
+  check(memberPick.labels.length > 0, '「负责人」下拉列出了本农场成员', `共 ${memberPick.labels.length} 项`)
+  check(memberPick.labels.some((text) => text.includes(targetManagerName)),
+    `下拉里含目标负责人「${targetManagerName}」`, memberPick.labels.slice(0, 3).join(' / '))
+  check(memberPick.ok, '能选中该负责人')
   await sleep(400)
 
   // 4) 填其余必填项
@@ -236,6 +286,8 @@ try {
   await page.type(inModal('#cropId'), cropName, { delay: 10 })
   await page.click(inModal('#expectedYield'))
   await page.type(inModal('#expectedYield'), String(expectedYield), { delay: 20 })
+  await page.click(inModal('#planArea'))
+  await page.type(inModal('#planArea'), String(planArea), { delay: 20 })
   for (const [id, value] of [['#planStartDate', startDate], ['#planEndDate', endDate]]) {
     await page.click(inModal(id))
     await page.type(inModal(id), value, { delay: 20 })
@@ -280,6 +332,8 @@ try {
   check(rowText.includes(planName), '列表里能查到新建的计划', planName)
   check(rowText.includes(targetPlotName), '该行「地块」列显示地块名（不是 "-"）',
     rowText.replace(/\s+/g, ' ').slice(0, 120))
+  check(rowText.includes(String(planArea)), '该行「计划面积」列显示填写的面积', String(planArea))
+  check(rowText.includes(targetManagerName), '该行「负责人」列显示选中的成员姓名', targetManagerName)
 
   // 7) 查询侧之一：详情接口（GET /plans/{id}）
   const planId = createCall?.json?.data
@@ -293,6 +347,10 @@ try {
     check(detail.data?.plotName === targetPlotName, '详情接口回显地块名', `plotName=${detail.data?.plotName}`)
     check(Number(detail.data?.expectedYield) === expectedYield, '详情接口回显预计产量',
       `expectedYield=${detail.data?.expectedYield}`)
+    check(Number(detail.data?.planArea) === planArea, '详情接口回显计划种养面积',
+      `planArea=${detail.data?.planArea}`)
+    check(detail.data?.managerName === targetManagerName, '详情接口回显负责人姓名（不是 ID）',
+      `managerId=${detail.data?.managerId} managerName=${detail.data?.managerName}`)
     planCode = detail.data?.planNo ?? ''
   }
 
@@ -304,6 +362,8 @@ try {
   check(detailText.includes(targetPlotName), '详情页显示关联地块')
   check(detailText.includes(cropName), '详情页显示作物')
   check(detailText.includes(startDate), '详情页显示计划开始日期', startDate)
+  check(detailText.includes(targetManagerName), '详情页显示负责人', targetManagerName)
+  check(detailText.includes(String(planArea)), '详情页显示计划面积', String(planArea))
 
   // 9) 查询侧之三：列表检索（三个搜索框都必须真的把条件送到后端）
   const byName = await runSearch({ 计划名称: planName })

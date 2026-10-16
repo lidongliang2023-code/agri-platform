@@ -740,6 +740,7 @@ export function normalizeMember(raw: unknown): Member {
     roleIds.push(roleCode)
   }
   return {
+    id: readString(record, ['id'], ''),
     memberId: readString(record, ['memberId', 'id'], ''),
     userId: readString(record, ['userId'], ''),
     realName: readString(record, ['realName', 'memberName', 'userName'], '未命名成员'),
@@ -1315,4 +1316,22 @@ export function formatNumber(value: number, fractionDigits = 0): string {
     minimumFractionDigits: fractionDigits,
     maximumFractionDigits: fractionDigits,
   })
+}
+
+/**
+ * 格式化面积（亩）为**最多 2 位小数、不补零**的数字串（不含单位）。
+
+ *
+ * <p>为什么不直接用 {@link formatNumber}：它的 fractionDigits 同时是 min 与 max ——
+ * 传 0 会把 88.5 显示成 89（用户填进去的数与看到的数对不上，实测于计划面积），
+ * 传 2 又会把整数面积补成 88.00。面积属于"填多少就该看到多少"的量，
+ * 所以这里按"最多 2 位"处理。</p>
+ *
+ * @param value 面积数值（亩），可为 null / undefined / 非有限数
+ * @returns 格式化后的数字串；取不到时返回 '-'
+ */
+export function formatAreaNumber(value: number | null | undefined): string {
+  const num = Number(value)
+  if (value === null || value === undefined || !Number.isFinite(num)) return '-'
+  return num.toLocaleString('zh-CN', { maximumFractionDigits: 2 })
 }

@@ -802,6 +802,7 @@ export async function createPlanInfo(payload: {
   planStartDate: string
   planEndDate: string
   expectedYield?: number
+  planArea?: number
   ownerId?: string
   status?: number
 }): Promise<string> {
@@ -832,6 +833,7 @@ export async function updatePlanInfo(
     planStartDate: string
     planEndDate: string
     expectedYield: number
+    planArea: number
     ownerId: string
     status: number
   }>,

@@ -7,9 +7,11 @@ import com.agri.production.dto.PlantingPlanSaveDTO;
 import com.agri.production.entity.Farm;
 import com.agri.production.entity.PlantingPlan;
 import com.agri.production.entity.Plot;
+import com.agri.production.entity.TeamMember;
 import com.agri.production.mapper.FarmMapper;
 import com.agri.production.mapper.PlantingPlanMapper;
 import com.agri.production.mapper.PlotMapper;
+import com.agri.production.mapper.TeamMemberMapper;
 import com.agri.production.service.IPlantingPlanService;
 import com.agri.production.vo.PlantingPlanVO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -49,10 +51,13 @@ public class PlantingPlanServiceImpl extends ServiceImpl<PlantingPlanMapper, Pla
     private final PlotMapper plotMapper;
     /** 农场台账：同理补齐农场名称（计划详情页「所属农场」读的是 name 列）。 */
     private final FarmMapper farmMapper;
+    /** 成员台账：把负责人落到 manager_id（成员主键）+ manager_name（真实姓名）。 */
+    private final TeamMemberMapper memberMapper;
 
-    public PlantingPlanServiceImpl(PlotMapper plotMapper, FarmMapper farmMapper) {
+    public PlantingPlanServiceImpl(PlotMapper plotMapper, FarmMapper farmMapper, TeamMemberMapper memberMapper) {
         this.plotMapper = plotMapper;
         this.farmMapper = farmMapper;
+        this.memberMapper = memberMapper;
     }
 
     @Override
@@ -340,7 +345,6 @@ public class PlantingPlanServiceImpl extends ServiceImpl<PlantingPlanMapper, Pla
         applyIdOrName(dto.getFarmId(), dto.getFarmName(), plan::setFarmId, plan::setFarmName, create);
         applyIdOrName(dto.getPlotId(), dto.getPlotName(), plan::setPlotId, plan::setPlotName, create);
         applyIdOrName(dto.getCropId(), dto.getCropName(), plan::setCropId, plan::setCropName, create);
-        resolveReferenceNames(plan, dto, tenantId);
 
         if (dto.getCropVariety() != null) {
             plan.setCropVariety(trimToNull(dto.getCropVariety()));
@@ -389,6 +393,12 @@ public class PlantingPlanServiceImpl extends ServiceImpl<PlantingPlanMapper, Pla
         if (dto.getRemark() != null) {
             plan.setRemark(trimToNull(dto.getRemark()));
         }
+
+        // ⚠️ 引用解析（农场名 / 地块名 / 负责人）必须放在**所有 applyIdOrName 之后**：
+        // applyIdOrName 对"只给了 ID、没给 name"的字段会按新增语义把 name 清空，
+        // 放在它前面解析好的名称会被这一句覆盖回 null
+        // （写这版时实测到：负责人 manager_id=2 落库了，manager_name 却是空）。
+        resolveReferenceNames(plan, dto, tenantId);
 
         // 状态：先认前端码值，再认词表值；两个都没给就保持原样（新增场景由调用方补 draft）
         String word = dto.getStatus() != null
@@ -475,6 +485,16 @@ public class PlantingPlanServiceImpl extends ServiceImpl<PlantingPlanMapper, Pla
                 plan.setFarmName(farm.getFarmName());
             }
         }
+        // 三个引用各自独立处理：**不能**共用一个方法里的提前 return，
+        // 否则"只填负责人不选地块"时负责人会被整段跳过（写这版时先踩了一次）。
+        resolvePlotName(plan, dto, tenantId);
+        resolveManager(plan, dto, tenantId);
+    }
+
+    /**
+     * 地块：本次请求下发了地块就按台账补名称、并校验地块真实存在（口径见 {@link #resolveReferenceNames}）。
+     */
+    private void resolvePlotName(PlantingPlan plan, PlantingPlanSaveDTO dto, String tenantId) {
         if (trimToNull(dto.getPlotId()) == null) {
             return;
         }
@@ -495,6 +515,45 @@ public class PlantingPlanServiceImpl extends ServiceImpl<PlantingPlanMapper, Pla
         // （2026-10-16 实测：plot_id 238→239 后 plot_name 仍是「A区连栋大棚」，列表显示错误的地块）。
         if (isBlank(dto.getPlotName())) {
             plan.setPlotName(plot.getPlotName());
+        }
+    }
+
+    /**
+     * 把负责人落到「成员主键 + 真实姓名」。
+     *
+     * <p>为什么不能只靠 {@code applyIdOrName}：负责人列 {@code manager_id} 是 BIGINT，
+     * 而成员的业务标识是 {@code DEMO-MEM-001} 这种字符串 —— 直接下发只会被当成"自由文本"
+     * 落进 {@code manager_name}，页面上就会出现"负责人 = DEMO-MEM-001"。
+     * 这里按台账解析一次：给出的是成员主键（数字）或成员业务标识（字符串）都能认。</p>
+
+     *
+     * <p>口子与地块一致：本次请求真的下发了负责人才处理；本租户查不到 → 400
+     * （列表「负责人」列靠 {@code manager_name} 展示，挂个查不到的 ID 等于显示空白）。</p>
+     */
+    private void resolveManager(PlantingPlan plan, PlantingPlanSaveDTO dto, String tenantId) {
+        String raw = dto.getOwnerId() != null ? dto.getOwnerId() : dto.getManagerId();
+        String rawText = trimToNull(raw);
+        if (rawText == null) {
+            return;
+        }
+        // 数字 → 按成员主键查；否则 → 按成员业务标识查（页面/脚本两种下发方式都支持）
+        Long pk = toLong(rawText);
+        TeamMember member = pk == null
+                ? memberMapper.selectOne(new LambdaQueryWrapper<TeamMember>()
+                        .eq(TeamMember::getTenantId, tenantId)
+                        .eq(TeamMember::getMemberId, rawText)
+                        .last("LIMIT 1"))
+                : memberMapper.selectOne(new LambdaQueryWrapper<TeamMember>()
+                        .eq(TeamMember::getTenantId, tenantId)
+                        .eq(TeamMember::getId, pk)
+                        .last("LIMIT 1"));
+        if (member == null) {
+            throw new BusinessException(400, "负责人不存在（本租户内查不到该成员）：" + rawText);
+        }
+        plan.setManagerId(member.getId());
+        // 名称同样以台账为准（除非调用方显式给了 managerName），避免换了负责人名字还是旧的
+        if (isBlank(dto.getManagerName())) {
+            plan.setManagerName(member.getMemberName());
         }
     }
 

@@ -20,6 +20,16 @@ public class UserMemberVO {
 
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
+    /**
+     * 成员台账主键（本服务数字 ID）。
+
+     *
+     * <p>为什么要把主键暴露出去：种养计划的「负责人」是 BIGINT 列 {@code manager_id}，
+     * 页面下拉必须拿得到这个数字才能选人（{@code memberId} 是 {@code DEMO-MEM-001} 这种业务串，
+     * 塞进 BIGINT 列只能落到 name 列、显示成编码）。与地块下拉需要数字 plotId 同理。</p>
+     */
+    private Long id;
+
     private String memberId;
     private String userId;
     private String realName;
@@ -41,6 +51,7 @@ public class UserMemberVO {
             return null;
         }
         UserMemberVO vo = new UserMemberVO();
+        vo.id = entity.getId();
         vo.memberId = entity.getMemberId();
         vo.userId = entity.getUserId();
         vo.realName = entity.getMemberName();

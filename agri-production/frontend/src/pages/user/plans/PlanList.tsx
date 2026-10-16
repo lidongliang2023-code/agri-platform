@@ -35,6 +35,7 @@ import useFarmStore from '@/store/farm'
 import { listPlots } from '@/api/plots'
 import {
   createPlanInfo,
+  fetchMembers,
   fetchPlans,
   removePlan,
   startPlan,
@@ -44,6 +45,7 @@ import {
 import {
   PLAN_STATUS_OPTIONS,
   calcPlanProgress,
+  formatAreaNumber,
   formatNumber,
   planStatusMeta,
 } from '@/utils/production-adapter'
@@ -69,6 +71,8 @@ interface PlanFormValue {
   expectedYield?: number
   /** 负责人 */
   ownerId?: string
+  /** 计划种养面积（亩） */
+  planArea?: number
   /** 状态 */
   status?: number
   /** 备注 */
@@ -131,6 +135,7 @@ export default function PlanList(): JSX.Element {
         planStartDate: duplicating.startDate,
         planEndDate: duplicating.endDate,
         expectedYield: duplicating.expectedYield,
+        planArea: duplicating.planArea,
         status: 1,
       }
     }
@@ -180,6 +185,33 @@ export default function PlanList(): JSX.Element {
     }
   }
 
+  /**
+   * 「负责人」下拉选项：本农场团队成员台账。
+   *
+   * <p>原先这一栏是自由文本框「负责人 ID」，用户既不知道成员主键、填了也只落 ID 不落姓名。
+   * 现在列出团队成员供选择，value 用**成员主键**（后端 {@code manager_id} 是 BIGINT，
+   * 用它才能落到 ID 列；成员的 {@code memberId} 是 {@code DEMO-MEM-001} 这种业务串，
+   * 只适合展示）。后端仍会把姓名一并写进 {@code manager_name}，列表/详情显示的是姓名。</p>
+
+   *
+   * <p>拉不到就返回空列表：宁可让用户看到"没有可选人员"，也不塞假选项。</p>
+   *
+   * @returns 下拉选项（value = 成员主键，label = 姓名（岗位））
+   */
+  async function loadMemberOptions(): Promise<{ label: string; value: string }[]> {
+    try {
+      const page = await fetchMembers({ farmId: effectiveFarmId, pageNum: 1, pageSize: 200 })
+      return (page.list ?? [])
+        .filter((member) => Boolean(member.id))
+        .map((member) => ({
+          label: member.position ? `${member.realName}（${member.position}）` : member.realName,
+          value: member.id as string,
+        }))
+    } catch {
+      return []
+    }
+  }
+
   const createMutation = useMutation({
     mutationFn: (payload: PlanFormValue) =>
       createPlanInfo({
@@ -192,6 +224,7 @@ export default function PlanList(): JSX.Element {
         planStartDate: payload.planStartDate,
         planEndDate: payload.planEndDate,
         expectedYield: payload.expectedYield,
+        planArea: payload.planArea,
         ownerId: payload.ownerId,
         status: payload.status ?? 1,
       }),
@@ -214,6 +247,7 @@ export default function PlanList(): JSX.Element {
         planStartDate: payload.value.planStartDate,
         planEndDate: payload.value.planEndDate,
         expectedYield: payload.value.expectedYield,
+        planArea: payload.value.planArea,
         ownerId: payload.value.ownerId,
         status: payload.value.status,
       }),
@@ -331,6 +365,16 @@ export default function PlanList(): JSX.Element {
         hideInSearch: true,
         align: 'right',
         render: (_dom, entity) => formatNumber(entity.expectedYield),
+      },
+      {
+        title: '计划面积(亩)',
+        dataIndex: 'planArea',
+        width: 120,
+        hideInSearch: true,
+        align: 'right',
+        // 没填就显示 '-' —— 不拿地块面积顶替（地块面积是地块的属性，不是计划的打算种养面积）
+        // 用 formatAreaNumber 而不是 formatNumber：后者固定 0 位小数，会把 88.5 显示成 89
+        render: (_dom, entity) => (entity.planArea > 0 ? formatAreaNumber(entity.planArea) : '-'),
       },
       {
         title: '状态',
@@ -562,7 +606,22 @@ export default function PlanList(): JSX.Element {
           min={0}
           fieldProps={{ precision: 0 }}
         />
-        <ProFormText name="ownerId" label="负责人 ID" placeholder="关联团队成员" />
+        <ProFormDigit
+          name="planArea"
+          label="计划种养面积(亩)"
+          min={0}
+          fieldProps={{ precision: 2 }}
+          extra="本计划打算种养的面积；不填则留空（不拿地块面积顶替）"
+        />
+        <ProFormSelect
+          name="ownerId"
+          label="负责人"
+          placeholder="选择本农场团队成员（可不选）"
+          showSearch
+          allowClear
+          fieldProps={{ optionFilterProp: 'label' }}
+          request={loadMemberOptions}
+        />
         <ProFormSelect name="status" label="计划状态" options={PLAN_STATUS_OPTIONS} initialValue={1} />
         <ProFormTextArea name="remark" label="备注" placeholder="补充说明，200 字以内" />
       </ModalForm>
@@ -587,6 +646,7 @@ export default function PlanList(): JSX.Element {
                 planStartDate: editing.startDate,
                 planEndDate: editing.endDate,
                 expectedYield: editing.expectedYield,
+                planArea: editing.planArea,
                 ownerId: editing.managerId,
                 status: editing.status,
               }
@@ -618,7 +678,22 @@ export default function PlanList(): JSX.Element {
         <ProFormDatePicker name="planStartDate" label="计划开始日期" rules={[{ required: true, message: '请选择开始日期' }]} />
         <ProFormDatePicker name="planEndDate" label="计划结束日期" rules={[{ required: true, message: '请选择结束日期' }]} />
         <ProFormDigit name="expectedYield" label="预计产量(kg)" min={0} fieldProps={{ precision: 0 }} />
-        <ProFormText name="ownerId" label="负责人 ID" />
+        <ProFormDigit
+          name="planArea"
+          label="计划种养面积(亩)"
+          min={0}
+          fieldProps={{ precision: 2 }}
+          extra="本计划打算种养的面积；不填则留空（不拿地块面积顶替）"
+        />
+        <ProFormSelect
+          name="ownerId"
+          label="负责人"
+          placeholder="选择本农场团队成员（可不选）"
+          showSearch
+          allowClear
+          fieldProps={{ optionFilterProp: 'label' }}
+          request={loadMemberOptions}
+        />
         <ProFormSelect name="status" label="计划状态" options={PLAN_STATUS_OPTIONS} />
       </ModalForm>
     </>

@@ -8,6 +8,14 @@ export type MemberStatus = 0 | 1 | 2
 
 /** 团队成员 */
 export interface Member {
+  /**
+   * 成员台账主键（本服务的数字 ID）。
+   *
+   * <p>与 {@link memberId} 不同：`memberId` 是 `DEMO-MEM-001` 这类**业务标识**（用于展示 / 对外接口），
+   * `id` 是数据库主键，落 `manager_id` / `assignee_id` 这种 BIGINT 列时必须用它。
+   * 平台侧不返回该字段时为空，调用方要自行兜底。</p>
+   */
+  id?: string
   /** 成员 ID */
   memberId: string
   /** 用户 ID */
