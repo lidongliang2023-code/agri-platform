@@ -487,7 +487,7 @@ export default function Create(): JSX.Element {
             <Form.Item
               name="cropId"
               label="当前作物"
-              extra="取自作物主数据；没有想要的作物先去「作物管理」新增（品种请在下方单独填）"
+              extra="取自作物主数据（由平台运营维护）；缺作物请联系平台运营添加（品种请在下方单独填）"
             >
               <Select
                 allowClear

@@ -16,6 +16,7 @@ import {
   BlockOutlined,
   CalendarOutlined,
   DashboardOutlined,
+  DatabaseOutlined,
   ExperimentOutlined,
   HomeOutlined,
   InboxOutlined,
@@ -68,7 +69,6 @@ export const USER_MENU: MenuGroup[] = [
     children: [
       { key: '/production/farms', label: '农场列表' },
       { key: '/production/plots', label: '地块管理' },
-        { key: '/production/crops', label: '作物管理' },
       { key: '/production/members', label: '团队与人员' },
       { key: '/production/members/roles', label: '角色与权限' },
     ],
@@ -218,6 +218,14 @@ export const ADMIN_MENU: MenuGroup[] = [
       { key: '/admin/production/farms/map', label: 'GIS地图监管' },
       { key: '/admin/production/farms/compliance', label: '合规检查' },
     ],
+  },
+  {
+    // 基础数据：生产域的主数据由**平台运营**维护（2026-10-16 口径）。
+    // 农户在用户端只做选择（计划 / 地块的作物下拉），没有维护入口。
+    key: 'base-data',
+    label: '基础数据',
+    icon: <DatabaseOutlined />,
+    children: [{ key: '/admin/production/crops', label: '作物管理' }],
   },
   {
     key: 'monitor',

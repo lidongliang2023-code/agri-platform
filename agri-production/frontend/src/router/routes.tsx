@@ -42,7 +42,6 @@ const FarmList = lazy(() => import('@/pages/user/farms/FarmList'))
 const FarmDetail = lazy(() => import('@/pages/user/farms/FarmDetail'))
 const FarmCreate = lazy(() => import('@/pages/user/farms/Create'))
 const PlotList = lazy(() => import('@/pages/user/plots/PlotList'))
-const CropList = lazy(() => import('@/pages/user/crops/CropList'))
 const PlotDetail = lazy(() => import('@/pages/user/plots/PlotDetail'))
 const PlotCreate = lazy(() => import('@/pages/user/plots/Create'))
 const PlotSoilRecords = lazy(() => import('@/pages/user/plots/PlotSoilRecords'))
@@ -117,6 +116,9 @@ const TenantQuotas = lazy(() => import('@/pages/admin/tenants/TenantQuotas'))
 const TenantSegments = lazy(() => import('@/pages/admin/tenants/TenantSegments'))
 // 农场监管
 const FarmSupervisionList = lazy(() => import('@/pages/admin/farms/FarmSupervisionList'))
+// 作物主数据维护（运营端）：2026-10-16 产品口径 —— 作物放在生产管理模块，但由**运营端**维护，
+// 所以页面在 admin 侧、用户端只在下拉里选。
+const CropMasterList = lazy(() => import('@/pages/admin/production/crops/CropList'))
 const FarmSupervisionDetail = lazy(() => import('@/pages/admin/farms/FarmSupervisionDetail'))
 const FarmGisMap = lazy(() => import('@/pages/admin/farms/FarmGisMap'))
 const ComplianceCheck = lazy(() => import('@/pages/admin/farms/ComplianceCheck'))
@@ -241,16 +243,6 @@ export const USER_ROUTES: AppRoute[] = [
       path: '/production/plots/:plotId/soil',
       module: '农场数字化管理',
       prd: 'PRD 6.1 #8',
-    },
-  },
-  {
-    path: 'crops',
-    element: <CropList />,
-    meta: {
-      name: '作物管理',
-      path: '/production/crops',
-      module: '农场数字化管理',
-      prd: '原型补充（作物主数据）',
     },
   },
   {
@@ -786,6 +778,16 @@ export const ADMIN_ROUTES: AppRoute[] = [
       path: '/admin/production/farms',
       module: '农场监管',
       prd: 'PRD 6.2 #8',
+    },
+  },
+  {
+    path: 'crops',
+    element: <CropMasterList />,
+    meta: {
+      name: '作物管理',
+      path: '/admin/production/crops',
+      module: '基础数据',
+      prd: '原型补充（作物主数据，运营端维护）',
     },
   },
   {

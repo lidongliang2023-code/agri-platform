@@ -3,6 +3,7 @@ package com.agri.production.controller;
 import com.agri.production.common.entity.ApiResponse;
 import com.agri.production.common.entity.PageResult;
 import com.agri.production.common.constant.CropCategoryDict;
+import com.agri.common.rbac.OperatorOnly;
 import com.agri.production.entity.CropInfo;
 import com.agri.production.service.CropMasterService;
 import com.agri.production.service.TenantContextService;
@@ -25,8 +26,18 @@ import java.util.Map;
  * 作物主数据（{@code /api/v1/production/crops}）。
 
  *
- * <p>页面「作物管理」做增删改查与启停，种养计划 / 地块表单从 {@link #options()} 取下拉。
- * 主键路径都限定 {@code \d+}，免得 {@code /options} 被 {@code /{id}} 吃掉（与 /plots/stats 同法）。</p>
+ * <p><b>读写两侧的口径不一样（2026-10-16 产品口径）</b>：
+ * 作物主数据放在生产管理模块，但**由运营端维护** —— 农户只在计划 / 地块里选作物。
+ * 所以写接口（增删改 / 启停）挂 {@link OperatorOnly}（默认要求平台权限码
+ * {@code production:write}，市场运营与超管有、{@code FARMER} 没有），
+ * 而 {@link #options()} / {@link #categories()} / 分页这类**读**接口对用户端开放（下拉要用）。</p>
+
+ *
+ * <p>页面侧也对应：维护页在运营端 {@code /admin/production/crops}，用户端只有下拉。</p>
+
+ *
+ * <p>主键路径都限定 {@code \d+}，免得 {@code /options}、{@code /categories} 被 {@code /{id}} 吃掉
+ * （与 /plots/stats 同法）。</p>
  */
 @RestController
 @RequestMapping("/api/v1/production/crops")
@@ -83,6 +94,7 @@ public class CropController {
      * <p>返回**新作物主键字符串**：本服务所有 POST 的契约都是"直取 data 即 id"
      * （页面拿它跳详情 / 存关联，返回对象会拼出 {@code [object Object]}）。</p>
      */
+    @OperatorOnly
     @PostMapping
     public ApiResponse<String> create(@RequestBody(required = false) Map<String, Object> payload) {
         String tenantId = TenantContextService.currentTenantId();
@@ -91,6 +103,7 @@ public class CropController {
     }
 
     /** 修改作物（未下发的字段保持原值）。 */
+    @OperatorOnly
     @PutMapping("/{id:\\d+}")
     public ApiResponse<CropVO> update(@PathVariable Long id,
                                       @RequestBody(required = false) Map<String, Object> payload) {
@@ -99,6 +112,7 @@ public class CropController {
     }
 
     /** 启用 / 停用。 */
+    @OperatorOnly
     @PatchMapping("/{id:\\d+}/status")
     public ApiResponse<CropVO> changeStatus(@PathVariable Long id,
                                             @RequestParam(required = false) Integer status) {
@@ -107,6 +121,7 @@ public class CropController {
     }
 
     /** 删除（逻辑删除；已被计划引用则拒绝，改用停用）。 */
+    @OperatorOnly
     @DeleteMapping("/{id:\\d+}")
     public ApiResponse<Void> delete(@PathVariable Long id) {
         service.delete(id, TenantContextService.currentTenantId());

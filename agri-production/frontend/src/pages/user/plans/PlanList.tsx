@@ -113,9 +113,9 @@ export default function PlanList(): JSX.Element {
    * 「作物」下拉选项：**只从作物主数据来**（{@code GET /crops/options}，只含启用中的作物）。
 
    *
-   * <p>作物已经是租户级主数据（后端 {@code agri_prod_crop_info}），所以这里**不再**保留
-   * "输入即使用"：没有的作物先去「作物管理」新增，否则同名同物各行其是，统计又回到自由文本。
-   * 计划里落的是 {@code crop_id}（主数据主键）+ {@code crop_name}（名称）。</p>
+   * <p>作物是主数据、但**由平台运营在运营端维护**（2026-10-16 口径）：用户端只负责选。
+   * 所以这里既不保留"输入即使用"，也不给维护入口 —— 缺什么作物要找运营加，
+   * 否则同名同物各行其是，统计又回到自由文本。计划里落的是 {@code crop_id} + {@code crop_name}。</p>
 
    *
    * <p>声明位置必须早于用到它的 {@code createInitialValues}：那是 useMemo，回调在**本次渲染**里
@@ -633,7 +633,7 @@ export default function PlanList(): JSX.Element {
           rules={[{ required: true, message: '请选择或输入作物' }]}
           fieldProps={{ optionFilterProp: 'label' }}
           options={cropOptions}
-          extra="取自作物主数据；没有的作物先到「作物管理」里新增"
+          extra="取自作物主数据（由平台运营维护）；缺作物请联系平台运营添加"
         />
         <ProFormText name="cropVariety" label="作物品种" placeholder="如：中杂9号" />
         <ProFormSelect
@@ -728,7 +728,7 @@ export default function PlanList(): JSX.Element {
           rules={[{ required: true, message: '请选择或输入作物' }]}
           fieldProps={{ optionFilterProp: 'label' }}
           options={cropOptions}
-          extra="取自作物主数据；没有的作物先到「作物管理」里新增"
+          extra="取自作物主数据（由平台运营维护）；缺作物请联系平台运营添加"
         />
         <ProFormText name="cropVariety" label="作物品种" />
         <ProFormSelect
