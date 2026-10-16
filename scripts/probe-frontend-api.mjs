@@ -162,6 +162,49 @@ const CALL = /http(?:Platform)?\.(get|post|put|patch|delete)\s*(?:<[^(]*>)?\s*\(
 const CONST = /const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*'([^']*)'/g
 
 /**
+ * 扫描式提取 http 调用（2026-10-16 改）。
+ *
+ * 原先用一条正则抓「方法名 + 可选泛型 + 左括号 + 第一个实参」，但可选泛型那段 `(?:<[^(]*>)?` 是贪婪的：
+ * 遇到**嵌套泛型**（如 `http.get<PageResult<OperationLogItem>>(`）时会一路吞到后面某个 `>` + `(` 才收口，
+ * 结果是这条调用**整条被漏解析**。实测 settings.ts 里 20+ 个 http 调用只解析出 1 个，于是
+ * `GET /settings/logs` 被判成"缺处理器"——而它在服务侧明明返回 200 与真实数据。
+ *
+ * 这里改成扫描：定位方法名 → 跳过 `<>` 泛型（按嵌套深度配对）→ 定位 `(` → 取第一个实参
+ * （模板串 / 单引号串 / 标识符）。对嵌套泛型、换行、链式写法都稳。
+ */
+const CALL_METHOD = /http(?:Platform)?\.(get|post|put|patch|delete)\b/g
+function* findHttpCalls(text) {
+  for (const m of text.matchAll(CALL_METHOD)) {
+    let i = (m.index ?? 0) + m[0].length
+    while (i < text.length && /\s/.test(text[i])) i += 1
+    if (text[i] === '<') {
+      let depth = 0
+      for (; i < text.length; i += 1) {
+        if (text[i] === '<') depth += 1
+        else if (text[i] === '>') {
+          depth -= 1
+          if (depth === 0) { i += 1; break }
+        }
+      }
+    }
+    while (i < text.length && /\s/.test(text[i])) i += 1
+    if (text[i] !== '(') continue
+    i += 1
+    while (i < text.length && /\s/.test(text[i])) i += 1
+    if (text[i] === '`' || text[i] === "'") {
+      const quote = text[i]
+      const end = text.indexOf(quote, i + 1)
+      if (end < 0) continue
+      yield { method: m[1], raw: text.slice(i, end + 1), index: m.index ?? 0 }
+      continue
+    }
+    const identifier = /^[A-Za-z_$][A-Za-z0-9_$.]*/.exec(text.slice(i))
+    if (!identifier) continue
+    yield { method: m[1], raw: identifier[0], index: m.index ?? 0 }
+  }
+}
+
+/**
  * 递归收集源码文件。
  *
  * <p>{@code exts} 必须显式给：扫 api 目录时只要 .ts，而统计"谁调用过这个函数"时
@@ -233,10 +276,10 @@ for (const file of walk(apiDir, ['.ts'])) {
   const text = readFileSync(file, 'utf8')
   const consts = {}
   for (const m of text.matchAll(CONST)) consts[m[1]] = m[2]
-  for (const m of text.matchAll(CALL)) {
-    const method = m[1].toUpperCase()
-    const fnName = enclosingFunctionName(text, m.index ?? 0)
-    const raw = m[2]
+  for (const call of findHttpCalls(text)) {
+    const method = call.method.toUpperCase()
+    const fnName = enclosingFunctionName(text, call.index)
+    const raw = call.raw
     const isLiteral = raw.startsWith('`') || raw.startsWith("'")
     let template
     if (isLiteral) {
