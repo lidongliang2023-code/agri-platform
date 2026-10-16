@@ -71,8 +71,6 @@ export const USER_MENU: MenuGroup[] = [
     children: [
       { key: '/production/farms', label: '农场列表' },
       { key: '/production/plots', label: '地块管理' },
-      { key: '/production/members', label: '团队与人员' },
-      { key: '/production/members/roles', label: '角色与权限' },
     ],
   },
   {
@@ -183,6 +181,11 @@ export const USER_MENU: MenuGroup[] = [
       { key: '/production/analytics', label: '数据分析总览' },
       { key: '/production/analytics/reports', label: '生产报表' },
       { key: '/production/settings', label: '系统设置' },
+      // 2026-10-16 调整：从「农场数字化管理」挪过来的两个二级菜单。
+      // 它们管的是"人"（成员台账与角色权限），跟农场/地块这类地块资源不是一类，
+      // 更贴近"设置"这一层；放在这里也让农场那个分组回到纯"场地资源"的语义。
+      { key: '/production/members', label: '团队与人员' },
+      { key: '/production/members/roles', label: '角色与权限' },
     ],
   },
 ]

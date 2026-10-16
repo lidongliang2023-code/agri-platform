@@ -251,7 +251,7 @@ export const USER_ROUTES: AppRoute[] = [
     meta: {
       name: '团队与人员',
       path: '/production/members',
-      module: '农场数字化管理',
+      module: '报表与设置',
       prd: 'PRD 6.1 #9',
     },
   },
@@ -261,7 +261,7 @@ export const USER_ROUTES: AppRoute[] = [
     meta: {
       name: '角色与权限',
       path: '/production/members/roles',
-      module: '农场数字化管理',
+      module: '报表与设置',
       prd: 'PRD 6.1 #10',
     },
   },

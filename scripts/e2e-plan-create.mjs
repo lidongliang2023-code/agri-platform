@@ -103,6 +103,10 @@ const badResponses = []
 let createCall = null
 page.on('response', async (res) => {
   if (res.status() >= 400) {
+    // 「角色与权限」页会先问平台域 /api/v1/admin/roles（只有平台超管能调），
+    // 非超管账号必然 403 —— 页面随后按既定口径降级到生产域 /members/roles/catalog。
+    // 这是**预期内**的一次 403，不计入"链路错误"（否则本脚本一访问该页就必红）。
+    if (res.status() === 403 && /\/api\/v1\/admin\/roles/.test(res.url())) return
     let body = ''
     try { body = (await res.text()).slice(0, 120) } catch { /* 忽略 */ }
     badResponses.push(`${res.status()} ${res.request().method()} ${res.url().replace(BASE_URL, '')} ${body}`)
@@ -298,6 +302,19 @@ try {
   )
   check(taskCrumb.includes('智能种养'), '任务页面包屑归到「智能种养」（两组同属一个一级菜单）',
     taskCrumb || '（未找到面包屑）')
+
+  // 1c) 菜单归属（2026-10-16 调整）：团队与人员 / 角色与权限 从「农场数字化管理」挪到「报表与设置」。
+  //     面包屑读的就是菜单分组名，所以看面包屑即可确认真挂到了哪个一级菜单下。
+  const crumbs = []
+  for (const path of ['/production/members', '/production/members/roles']) {
+    await page.goto(`${BASE_URL}${path}`, { waitUntil: 'networkidle2', timeout: 60000 })
+    await page.waitForNetworkIdle({ idleTime: 600, timeout: 10000 }).catch(() => {})
+    const crumb = await page.evaluate(
+      () => document.querySelector('.ant-breadcrumb')?.innerText?.replace(/\s+/g, ' ') ?? '',
+    )
+    crumbs.push({ path, crumb })
+    check(crumb.includes('报表与设置'), `${path} 的面包屑归到「报表与设置」`, crumb || '（未找到面包屑）')
+  }
 
   // 回到计划页（下面要在计划页开新增弹窗）
   await page.goto(`${BASE_URL}/production/plans`, { waitUntil: 'networkidle2', timeout: 60000 })
