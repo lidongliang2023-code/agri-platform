@@ -53,8 +53,24 @@ public class AuthService {
      * @return 认证通过的身份与市场
      */
     public AuthenticatedUser authenticate(LoginRequest request) {
-        UserEntity user = userMapper.selectOne(new LambdaQueryWrapper<UserEntity>()
-                .eq(UserEntity::getUsername, request.username()));
+        // 账号标识二选一：username 优先，其次 phone（2026-10-16 加手机号登录）。
+        // 两个 @NotBlank 校验从 DTO 挪到这里 —— 两个字段都可能缺，注解判不了"至少一个"；
+        // password 也要显式判空：BCrypt 的 matches 对 null 明文会 NPE，不能靠它兜。
+        String username = request.username() == null ? null : request.username().trim();
+        String phone = request.phone() == null ? null : request.phone().trim();
+        if (request.password() == null || request.password().isEmpty()) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "密码不能为空");
+        }
+        if ((username == null || username.isEmpty()) && (phone == null || phone.isEmpty())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "请填写用户名或手机号");
+        }
+        LambdaQueryWrapper<UserEntity> query = new LambdaQueryWrapper<>();
+        if (username != null && !username.isEmpty()) {
+            query.eq(UserEntity::getUsername, username);
+        } else {
+            query.eq(UserEntity::getPhone, phone);
+        }
+        UserEntity user = userMapper.selectOne(query);
         if (user == null || !passwordEncoder.matches(request.password(), user.getPassword())) {
             throw new BusinessException(ErrorCode.USER_OR_PASSWORD_ERROR);
         }

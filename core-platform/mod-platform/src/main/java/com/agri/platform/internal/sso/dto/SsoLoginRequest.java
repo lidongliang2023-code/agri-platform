@@ -7,12 +7,22 @@ import jakarta.validation.constraints.NotBlank;
 // 上下文（client_id / redirect_uri / state / PKCE）随登录页一起带过来，登录成功后由服务端
 // 直接签码并回跳；登录页本身不参与签码 —— 前端只负责收集意图与跳转（V2.0 第 5.1 节要点 1）。
 public record SsoLoginRequest(
-        @NotBlank(message = "用户名不能为空") String username,
+        // 账号标识二选一（2026-10-16 加手机号登录）：username 或 phone，至少一个；
+        // 校验交给 AuthService.authenticate（两个字段都可能缺，注解判不了"至少一个"）。
+        String username,
         @NotBlank(message = "密码不能为空") String password,
         Long marketId,
+        /** 手机号（与 username 二选一；两个都给时以 username 为准） */
+        String phone,
         @NotBlank(message = "client_id 不能为空") String clientId,
         @NotBlank(message = "redirect_uri 不能为空") String redirectUri,
         String state,
         String codeChallenge,
         String codeChallengeMethod) {
+
+    /** 老调用方（只传 username/password/…）用的便捷构造，保持契约向后兼容。 */
+    public SsoLoginRequest(String username, String password, Long marketId, String clientId, String redirectUri,
+                           String state, String codeChallenge, String codeChallengeMethod) {
+        this(username, password, marketId, null, clientId, redirectUri, state, codeChallenge, codeChallengeMethod);
+    }
 }

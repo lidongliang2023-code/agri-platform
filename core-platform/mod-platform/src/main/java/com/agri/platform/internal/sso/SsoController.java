@@ -74,7 +74,8 @@ public class SsoController {
     public ApiResponse<SsoLoginResult> login(@Valid @RequestBody SsoLoginRequest request, HttpServletResponse response) {
         assertClient(request.clientId(), request.redirectUri());
         AuthService.AuthenticatedUser user =
-                authService.authenticate(new LoginRequest(request.username(), request.password(), request.marketId()));
+                authService.authenticate(new LoginRequest(request.username(), request.password(), request.marketId(),
+                        request.phone()));
         sessionService.create(user.userId(), user.marketId(), response);
         String code = codeService.issue(user.userId(), user.marketId(), request.clientId(), request.redirectUri(),
                 request.codeChallenge(), request.codeChallengeMethod());
