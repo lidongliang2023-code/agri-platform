@@ -42,6 +42,7 @@ const FarmList = lazy(() => import('@/pages/user/farms/FarmList'))
 const FarmDetail = lazy(() => import('@/pages/user/farms/FarmDetail'))
 const FarmCreate = lazy(() => import('@/pages/user/farms/Create'))
 const PlotList = lazy(() => import('@/pages/user/plots/PlotList'))
+const CropList = lazy(() => import('@/pages/user/crops/CropList'))
 const PlotDetail = lazy(() => import('@/pages/user/plots/PlotDetail'))
 const PlotCreate = lazy(() => import('@/pages/user/plots/Create'))
 const PlotSoilRecords = lazy(() => import('@/pages/user/plots/PlotSoilRecords'))
@@ -240,6 +241,16 @@ export const USER_ROUTES: AppRoute[] = [
       path: '/production/plots/:plotId/soil',
       module: '农场数字化管理',
       prd: 'PRD 6.1 #8',
+    },
+  },
+  {
+    path: 'crops',
+    element: <CropList />,
+    meta: {
+      name: '作物管理',
+      path: '/production/crops',
+      module: '农场数字化管理',
+      prd: '原型补充（作物主数据）',
     },
   },
   {
@@ -481,7 +492,9 @@ export const USER_ROUTES: AppRoute[] = [
     path: 'harvests/plan',
     element: <HarvestPlan />,
     meta: {
-      name: '采收计划',
+      // 后端 /harvests/plan 的语义是「按地块聚合采收记录」，不是采收计划，
+      // 名称按真实语义对齐（采收计划功能后端尚未实现）。
+      name: '地块采收记录',
       path: '/production/harvests/plan',
       module: '采收库存管理',
       prd: 'PRD 6.1 #31',

@@ -8,10 +8,12 @@ import com.agri.production.entity.Farm;
 import com.agri.production.entity.PlantingPlan;
 import com.agri.production.entity.Plot;
 import com.agri.production.entity.TeamMember;
+import com.agri.production.entity.CropInfo;
 import com.agri.production.mapper.FarmMapper;
 import com.agri.production.mapper.PlantingPlanMapper;
 import com.agri.production.mapper.PlotMapper;
 import com.agri.production.mapper.TeamMemberMapper;
+import com.agri.production.mapper.CropInfoMapper;
 import com.agri.production.service.IPlantingPlanService;
 import com.agri.production.vo.PlantingPlanVO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -53,11 +55,15 @@ public class PlantingPlanServiceImpl extends ServiceImpl<PlantingPlanMapper, Pla
     private final FarmMapper farmMapper;
     /** 成员台账：把负责人落到 manager_id（成员主键）+ manager_name（真实姓名）。 */
     private final TeamMemberMapper memberMapper;
+    /** 作物主数据：把作物落到 crop_id（主键）+ crop_name（名称）。 */
+    private final CropInfoMapper cropMapper;
 
-    public PlantingPlanServiceImpl(PlotMapper plotMapper, FarmMapper farmMapper, TeamMemberMapper memberMapper) {
+    public PlantingPlanServiceImpl(PlotMapper plotMapper, FarmMapper farmMapper, TeamMemberMapper memberMapper,
+                                   CropInfoMapper cropMapper) {
         this.plotMapper = plotMapper;
         this.farmMapper = farmMapper;
         this.memberMapper = memberMapper;
+        this.cropMapper = cropMapper;
     }
 
     @Override
@@ -489,6 +495,39 @@ public class PlantingPlanServiceImpl extends ServiceImpl<PlantingPlanMapper, Pla
         // 否则"只填负责人不选地块"时负责人会被整段跳过（写这版时先踩了一次）。
         resolvePlotName(plan, dto, tenantId);
         resolveManager(plan, dto, tenantId);
+        resolveCrop(plan, dto, tenantId);
+    }
+
+    /**
+     * 作物：落到 {@code crop_id}（主数据主键）+ {@code crop_name}（主数据名称）。
+
+     *
+     * <p>作物已经是主数据（{@code agri_prod_crop_info}），所以这里**必须解析得到**：
+     * 下发的是作物主键（数字）或作物名称，两者都按主数据台账认；认不出就 400 ——
+     * 作物是计划里唯一"必填且有权威口径"的字段，落一个主数据里没有的名字等于又回到自由文本。</p>
+
+     *
+     * <p>本次请求没下发作物就保持原值（编辑保存时不下发不会被清空）。</p>
+     */
+    private void resolveCrop(PlantingPlan plan, PlantingPlanSaveDTO dto, String tenantId) {
+        String raw = trimToNull(dto.getCropId());
+        String rawName = trimToNull(dto.getCropName());
+        if (raw == null && rawName == null) {
+            return;
+        }
+        Long pk = toLong(raw);
+        CropInfo crop = pk != null
+                ? cropMapper.selectById(pk)
+                : cropMapper.selectOne(new LambdaQueryWrapper<CropInfo>()
+                        .eq(CropInfo::getTenantId, tenantId)
+                        .eq(CropInfo::getCropName, raw != null ? raw : rawName)
+                        .last("LIMIT 1"));
+        if (crop == null || !tenantId.equals(crop.getTenantId())) {
+            throw new BusinessException(400, "作物不存在（请先在「作物管理」里维护）："
+                    + (raw != null ? raw : rawName));
+        }
+        plan.setCropId(crop.getId());
+        plan.setCropName(crop.getCropName());
     }
 
     /**

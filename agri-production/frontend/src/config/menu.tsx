@@ -68,6 +68,7 @@ export const USER_MENU: MenuGroup[] = [
     children: [
       { key: '/production/farms', label: '农场列表' },
       { key: '/production/plots', label: '地块管理' },
+        { key: '/production/crops', label: '作物管理' },
       { key: '/production/members', label: '团队与人员' },
       { key: '/production/members/roles', label: '角色与权限' },
     ],
@@ -134,7 +135,7 @@ export const USER_MENU: MenuGroup[] = [
     label: '采收库存管理',
     icon: <InboxOutlined />,
     children: [
-      { key: '/production/harvests/plan', label: '采收计划' },
+      { key: '/production/harvests/plan', label: '地块采收记录' },
       { key: '/production/harvests', label: '采收记录' },
       { key: '/production/harvests/inventory', label: '库存管理' },
     ],

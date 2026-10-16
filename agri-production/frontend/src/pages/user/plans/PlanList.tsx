@@ -33,8 +33,8 @@ import {
 } from '@ant-design/icons'
 import useFarmStore from '@/store/farm'
 import { listPlots } from '@/api/plots'
+import { listCropOptions } from '@/api/crops'
 import {
-  fetchCropOptions,
   createPlanInfo,
   fetchMembers,
   fetchPlans,
@@ -52,9 +52,6 @@ import {
 } from '@/utils/production-adapter'
 import { CROP_EMOJI_MAP } from '@/types'
 import type { Plan } from '@/types'
-
-/** 系统已登记的作物名（作物图标表的键就是本 APP 认得的作物清单） */
-const REGISTERED_CROPS: string[] = Object.keys(CROP_EMOJI_MAP)
 
 /** 计划表单值 */
 interface PlanFormValue {
@@ -112,6 +109,49 @@ export default function PlanList(): JSX.Element {
   /** 列表归属农场：URL 指定优先，否则取全局当前农场 */
   const effectiveFarmId = presetFarmId || farmId
 
+  /**
+   * 「作物」下拉选项：**只从作物主数据来**（{@code GET /crops/options}，只含启用中的作物）。
+
+   *
+   * <p>作物已经是租户级主数据（后端 {@code agri_prod_crop_info}），所以这里**不再**保留
+   * "输入即使用"：没有的作物先去「作物管理」新增，否则同名同物各行其是，统计又回到自由文本。
+   * 计划里落的是 {@code crop_id}（主数据主键）+ {@code crop_name}（名称）。</p>
+
+   *
+   * <p>声明位置必须早于用到它的 {@code createInitialValues}：那是 useMemo，回调在**本次渲染**里
+   * 就会执行，写在后面会撞上暂时性死区（TDZ）直接白屏。</p>
+   */
+  const cropOptionQuery = useQuery({
+    queryKey: ['crop-options'],
+    queryFn: () => listCropOptions(),
+  })
+  const cropOptions = useMemo(
+    () =>
+      (cropOptionQuery.data ?? []).map((item) => {
+        const emoji = CROP_EMOJI_MAP[item.cropName]
+        return {
+          label: emoji ? `${emoji} ${item.cropName}` : item.cropName,
+          value: item.cropId,
+          /** 仅用于下方回填时按名字找到主数据行（不参与 Select 渲染） */
+          cropName: item.cropName,
+        }
+      }),
+    [cropOptionQuery.data],
+  )
+  /**
+   * 计划的作物字段 → 下拉的 value（作物主键）。
+   *
+   * <p>历史计划（作物做成主数据之前建的）只存了 {@code crop_name}、{@code crop_id} 为空，
+   * 直接用会显示成空；这里按名字对到主数据行上。对不上（比如作物已被删除）就返回 undefined，
+   * 由用户重新选 —— 不编一个不存在的作物主键。</p>
+   */
+  const cropValueOf = (plan: Pick<Plan, 'cropId' | 'cropName'>): string | undefined => {
+    if (plan.cropId) {
+      return plan.cropId
+    }
+    return cropOptions.find((item) => item.cropName === plan.cropName)?.value
+  }
+
   useEffect(() => {
     if (!autoCreate || autoCreateConsumed.current) return
     autoCreateConsumed.current = true
@@ -135,9 +175,8 @@ export default function PlanList(): JSX.Element {
       return {
         planName: `${duplicating.planName}（副本）`,
         plotId: duplicating.plotId,
-        // 作物下拉的 value 是**作物名**（平台没有作物主数据，名称即标识），
-        // 而接口只在 crop_name 里有名字、crop_id 为空 —— 所以取 cropName 兜底 cropId
-        cropId: duplicating.cropName || duplicating.cropId,
+        // 作物下拉的 value 是**作物主键**：历史计划只有名字时按名字对到主数据行上
+        cropId: cropValueOf(duplicating),
         cropVariety: duplicating.cropVariety,
         planStartDate: duplicating.startDate,
         planEndDate: duplicating.endDate,
@@ -218,42 +257,6 @@ export default function PlanList(): JSX.Element {
       return []
     }
   }
-
-  /**
-   * 「作物」下拉选项。
-
-   *
-   * <p>构成：① 本租户**真实用过的**作物（计划 {@code crop_name} ∪ 地块 {@code current_crop}，
-   * 走 {@code GET /crops/options}）；② 系统已登记的作物（作物图标表的键）。
-   * 平台没有作物主数据表，所以不凭空造一份清单，只用这两处有来源的名字。</p>
-
-   *
-   * <p>另外保留"输入即使用"：输入候选之外的名字时，下拉里会出现一条
-   * `使用「xxx」`。**不做作物名校验** —— 没有主数据还硬校验，只会把"西红柿"这类真实作物挡在门外
-   * （地块台账里就登记着它，而已登记清单里没有）。</p>
-   */
-  const [cropKeyword, setCropKeyword] = useState<string>('')
-  const cropOptionQuery = useQuery({
-    queryKey: ['crop-options', effectiveFarmId],
-    queryFn: () => fetchCropOptions({ farmId: effectiveFarmId }),
-  })
-  const cropOptions = useMemo(() => {
-    const seen = new Set<string>()
-    const rows: { label: string; value: string }[] = []
-    const push = (name: string): void => {
-      const key = name?.trim()
-      if (!key || seen.has(key)) return
-      seen.add(key)
-      const emoji = CROP_EMOJI_MAP[key]
-      rows.push({ label: emoji ? `${emoji} ${key}` : key, value: key })
-    }
-    // 真实用过的排在前面（接口已按用量降序），再补系统已登记的
-    for (const item of cropOptionQuery.data ?? []) push(item.cropName)
-    for (const name of REGISTERED_CROPS) push(name)
-    const typed = cropKeyword.trim()
-    if (typed && !seen.has(typed)) rows.push({ label: `使用「${typed}」`, value: typed })
-    return rows
-  }, [cropOptionQuery.data, cropKeyword])
 
   const createMutation = useMutation({
     mutationFn: (payload: PlanFormValue) =>
@@ -624,20 +627,13 @@ export default function PlanList(): JSX.Element {
         <ProFormSelect
           name="cropId"
           label="作物"
-          placeholder="选择作物，或直接输入新作物名"
+          placeholder="从作物主数据里选择"
           showSearch
           allowClear
           rules={[{ required: true, message: '请选择或输入作物' }]}
-          fieldProps={{
-            optionFilterProp: 'label',
-            onSearch: (value: string) => setCropKeyword(value),
-            // 关掉下拉时清空输入关键字，免得上一轮的临时选项残留
-            onDropdownVisibleChange: (open: boolean) => {
-              if (!open) setCropKeyword('')
-            },
-          }}
+          fieldProps={{ optionFilterProp: 'label' }}
           options={cropOptions}
-          extra="候选来自本租户用过的作物与系统已登记的作物；没有的直接输入即可"
+          extra="取自作物主数据；没有的作物先到「作物管理」里新增"
         />
         <ProFormText name="cropVariety" label="作物品种" placeholder="如：中杂9号" />
         <ProFormSelect
@@ -701,7 +697,7 @@ export default function PlanList(): JSX.Element {
             ? {
                 planName: editing.planName,
                 plotId: editing.plotId,
-                cropId: editing.cropName || editing.cropId,
+                cropId: cropValueOf(editing),
                 cropVariety: editing.cropVariety,
                 planStartDate: editing.startDate,
                 planEndDate: editing.endDate,
@@ -726,19 +722,13 @@ export default function PlanList(): JSX.Element {
         <ProFormSelect
           name="cropId"
           label="作物"
-          placeholder="选择作物，或直接输入新作物名"
+          placeholder="从作物主数据里选择"
           showSearch
           allowClear
           rules={[{ required: true, message: '请选择或输入作物' }]}
-          fieldProps={{
-            optionFilterProp: 'label',
-            onSearch: (value: string) => setCropKeyword(value),
-            onDropdownVisibleChange: (open: boolean) => {
-              if (!open) setCropKeyword('')
-            },
-          }}
+          fieldProps={{ optionFilterProp: 'label' }}
           options={cropOptions}
-          extra="候选来自本租户用过的作物与系统已登记的作物；没有的直接输入即可"
+          extra="取自作物主数据；没有的作物先到「作物管理」里新增"
         />
         <ProFormText name="cropVariety" label="作物品种" />
         <ProFormSelect

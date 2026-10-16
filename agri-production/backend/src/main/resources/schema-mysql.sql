@@ -1756,3 +1756,38 @@ deleted BIGINT DEFAULT 0,
     INDEX `idx_operate_log_at` (operate_at),
     INDEX `idx_operate_log_type` (operate_type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 作物主数据（2026-10-16 加）：种养计划 / 地块的「作物」从这里选，不再让用户自由输入。
+--
+-- 【为什么有这张表】此前「作物」是自由文本，落库只进 crop_name、crop_id 恒空 —— 没有主数据就没有
+-- ID 可填，也就没法按作物做统计 / 关联（前端只能拿一份硬编码的作物图标表当候选，等于把口径钉在代码里）。
+-- 作物是**租户级**主数据（同一租户内共用一套作物），不挂在某个农场上：farm_id 列沿用 BaseEntity
+-- 的通用列但**不使用**（与 agri_prod_operate_log 同法）。
+--
+-- 唯一性：crop_code 在**同租户内**唯一（唯一索引建在 tenant_id + crop_code 上，不是全局唯一 ——
+-- 编码是租户自己的编号空间，两个租户各有一份 CROP-0001 是正常的）；
+-- **crop_name 不建唯一索引** —— 本服务的逻辑删除
+-- 不参与唯一索引，软删过的同名作物会挡死新行（plan_code 上踩过这个坑）。名称唯一性在服务层按
+-- "未删除行里不重名"校验。
+CREATE TABLE IF NOT EXISTS agri_prod_crop_info (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    crop_code VARCHAR(64) NOT NULL COMMENT '作物编码（业务主键，页面 cropCode，同租户内唯一）',
+    crop_name VARCHAR(100) NOT NULL COMMENT '作物名称（页面 cropName；计划/地块的作物列显示的就是它）',
+    crop_category VARCHAR(50) COMMENT '作物类别（如 粮食作物 / 蔬菜 / 果树；可空，不做枚举校验）',
+    growth_cycle_days INT COMMENT '生长周期（天，可空）',
+    measurement_unit VARCHAR(20) COMMENT '计量单位（如 kg / 株，可空）',
+    status TINYINT DEFAULT 1 COMMENT '1 启用 / 0 停用（停用后不在计划/地块的作物下拉里出现）',
+    sort_no INT DEFAULT 0 COMMENT '排序号（小的在前）',
+    remark VARCHAR(500) COMMENT '备注',
+    farm_id BIGINT COMMENT '本表不使用（租户级主数据，沿用通用列）',
+    tenant_id VARCHAR(191) NOT NULL,
+    create_by TEXT,
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    update_by TEXT,
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    deleted BIGINT DEFAULT 0,
+    UNIQUE KEY `uk_crop_tenant_code` (tenant_id, crop_code),
+    INDEX `idx_crop_tenant` (tenant_id),
+    INDEX `idx_crop_name` (crop_name),
+    INDEX `idx_crop_status` (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

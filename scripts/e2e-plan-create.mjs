@@ -51,8 +51,6 @@ const HEADFUL = process.argv.includes('--headful')
 const stamp = Date.now().toString().slice(-6)
 const planName = `联调计划-${stamp}`
 const cropName = '水稻'
-/** 候选之外的作物名：用来验"没有主数据也能输入新作物"这条兜底（下拉里会多一条"使用「…」"） */
-const newCropName = '西瓜'
 /** 期望被选中的地块名（取当前农场台账里的一条） */
 const targetPlotName = arg('plot', 'A区连栋大棚')
 const startDate = '2026-04-01'
@@ -304,22 +302,16 @@ try {
   check(memberPick.ok, '能选中该负责人')
   await sleep(400)
 
-  // 3c) 作物下拉：① 候选来自真实数据；② 候选之外可以直接输入使用（平台没有作物主数据，
-  //     硬校验会把"西红柿"这类真实作物挡在门外，所以保留输入即用）
+  // 3c) 作物下拉：候选来自**作物主数据**（不再是自由文本，也没有"输入即用"）
   await openSelect(inModal('#cropId'))
   const cropCandidates = await readVisibleOptions()
-  check(cropCandidates.length > 0, '「作物」下拉列出了候选', `共 ${cropCandidates.length} 项`)
+  check(cropCandidates.length > 0, '「作物」下拉列出了作物主数据', `共 ${cropCandidates.length} 项`)
   check(cropCandidates.some((text) => text.includes(cropName)),
-    `候选里含本租户用过的作物「${cropName}」`, cropCandidates.slice(0, 5).join(' / '))
-  await page.type(inModal('#cropId'), newCropName, { delay: 30 })
-  await sleep(500)
-  const typedCropPick = await pickSelectOption(`使用「${newCropName}」`)
-  check(typedCropPick.ok, `候选之外的「${newCropName}」可直接输入使用`,
-    typedCropPick.labels.join(' / '))
-  await sleep(300)
-  await openSelect(inModal('#cropId'))
+    `候选里含主数据里的「${cropName}」`, cropCandidates.slice(0, 5).join(' / '))
+  check(!cropCandidates.some((text) => text.includes('使用「')),
+    '下拉里不再出现"使用「…」"的自由输入项（作物已按主数据收口）')
   const cropPick = await pickSelectOption(cropName)
-  check(cropPick.ok, `能选回候选作物「${cropName}」`)
+  check(cropPick.ok, `能选中主数据作物「${cropName}」`)
   await sleep(300)
 
   // 4) 填其余必填项
@@ -392,6 +384,9 @@ try {
       `planArea=${detail.data?.planArea}`)
     check(detail.data?.managerName === targetManagerName, '详情接口回显负责人姓名（不是 ID）',
       `managerId=${detail.data?.managerId} managerName=${detail.data?.managerName}`)
+    check(Number(detail.data?.cropId) > 0 && detail.data?.cropName === cropName,
+      '计划的作物落的是主数据主键 + 名称（crop_id 不再为空）',
+      `cropId=${detail.data?.cropId} cropName=${detail.data?.cropName}`)
     planCode = detail.data?.planNo ?? ''
   }
 
@@ -419,6 +414,13 @@ try {
   const byNothing = await runSearch({ 作物: '不存在的作物ZZZ' })
   check(byNothing.count === 0, '按不存在的作物检索返回 0 行（过滤真的生效，不是摆设）',
     `rows=${byNothing.count}`)
+
+  // 10) 作物主数据页：列表要能看到刚种的这些作物（页面与接口同源）
+  await page.goto(`${BASE_URL}/production/crops`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.waitForNetworkIdle({ idleTime: 600, timeout: 10000 }).catch(() => {})
+  const cropPageText = await page.evaluate(() => document.body.innerText)
+  check(cropPageText.includes('作物'), '「作物管理」页已渲染')
+  check(cropPageText.includes(cropName), '作物主数据列表里有计划用到的作物', cropName)
 
   check(badResponses.length === 0, '全链路没有 4xx/5xx 响应', badResponses.slice(0, 3).join(' | '))
 } finally {
