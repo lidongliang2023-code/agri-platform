@@ -72,6 +72,40 @@ if (!apiDir || !baseUrl || !token) {
 }
 
 /**
+ * 跑前校验令牌有效期（2026-10-16 加）。
+ *
+ * <p>为什么必须有这道守卫：令牌过期时后端对每条请求都回 401/403，
+ * 探针把它们统统归到"有处理器但本次调用未成功"，于是打出来的 **缺口 0** 是一句谎话
+ * —— 实测踩过一次（261 条 403），当时据此以为只剩 `GET /farms/all` 一条口径问题。</p>
+ *
+ * <p>访问令牌是 JWT，`exp` 明文可解，不需要凭据就能判：已过期直接退出码 2，
+ * 剩不到 5 分钟则只警告（够跑完一轮）。非 JWT 令牌跳过这道检查，不误伤。</p>
+ */
+function tokenExpiry(token) {
+  const parts = token.split('.')
+  if (parts.length !== 3) return null
+  try {
+    const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'))
+    return typeof payload.exp === 'number' ? payload.exp * 1000 : null
+  } catch {
+    return null
+  }
+}
+const expAt = tokenExpiry(token)
+if (expAt !== null) {
+  const leftMs = expAt - Date.now()
+  if (leftMs <= 0) {
+    console.error(`✗ 令牌已于 ${new Date(expAt).toLocaleString('zh-CN')} 过期（${Math.round(-leftMs / 60000)} 分钟前）。`)
+    console.error('  过期令牌会让每条请求都回 401/403，探针会据此打出"缺口 0"的假象 —— 先换新令牌：')
+    console.error('  POST /api/v1/auth/login  {"username":"admin","password":"Admin@123","marketId":1} → data.accessToken')
+    process.exit(2)
+  }
+  if (leftMs < 5 * 60 * 1000) {
+    console.warn(`⚠ 令牌将在 ${Math.round(leftMs / 1000)} 秒后过期，本轮结果可能不可信。`)
+  }
+}
+
+/**
  * "不带请求体也会真的改库"的动作端点前缀。
  *
  * 判据：路径里已经把动作所需的标识给全了，空体只是走个过场 —— 探针一发就生效。
@@ -341,22 +375,41 @@ for (const c of probing) {
     status = -1
     body = String(error)
   }
-  if (/接口不存在/.test(body) || status === 404) {
+  /**
+   * 先解析响应体，再做判定。
+   *
+   * ⚠️ 不能拿 `body` 全文去匹配「接口不存在」（2026-10-16 修）：
+   * `GET /settings/logs` 返回的是**操作日志数据**，而日志行里本身就有 message 为「接口不存在」的
+   * 历史记录（探针自己早先打 404 留下的）。于是这条**健康**端点的响应体里含有该子串，
+   * 被判成"缺处理器"—— 缺口数因此长期挂着 1 条假阳性，改 URL 解析逻辑也修不掉，因为病根不在解析。
+   * 现在只认**结构化字段**：HTTP 404，或响应包装体的 `message` 里说「接口不存在」；
+   * 响应体不是 JSON（网关文本页）时才退回全文匹配。
+   *
+   * ⚠️ 别顺手把 `code === 404` 也加进来：业务码 404 是"**记录**不存在"（如 `/admin/approvals/1/approve`
+   * 的审批单 1 不存在），跟"**端点**没有处理器"是两码事 —— 实测加进去会让缺口从 1 虚增到 27 条。
+   */
+  let code = null
+  let message = ''
+  let isJson = true
+  try {
+    const parsed = JSON.parse(body)
+    code = typeof parsed.code === 'number' ? parsed.code : null
+    message = typeof parsed.message === 'string' ? parsed.message : ''
+  } catch {
+    isJson = false
+    message = '（响应不是 JSON）'
+  }
+  const notFound =
+    status === 404 ||
+    /接口不存在/.test(message) ||
+    (!isJson && /接口不存在/.test(body))
+  if (notFound) {
     missing.push({ ...c, status })
     continue
   }
   if (status >= 400 || status === -1) {
     handledButFailed.push({ ...c, status, note: body.slice(0, 130) })
     continue
-  }
-  let code = null
-  let message = ''
-  try {
-    const parsed = JSON.parse(body)
-    code = parsed.code
-    message = parsed.message ?? ''
-  } catch {
-    message = '（响应不是 JSON）'
   }
   if (code === 0) ok.push({ ...c, status })
   else handledButFailed.push({ ...c, status, note: `code=${code} ${message}`.slice(0, 150) })
@@ -446,7 +499,11 @@ for (const [seg, row] of [...stats.entries()].sort((a, b) => b[1].missing - a[1]
 }
 
 console.log(`\n-- 缺处理器的路径（${realMissing.length} 条） --`)
-for (const m of realMissing) console.log(`  ${m.method.padEnd(6)} ${m.path.padEnd(56)} [${m.file}]`)
+  // 把 HTTP 状态一并打出来：判「缺处理器」的规则是 404 或响应体含「接口不存在」，
+  // 只打路径时无法区分"真的没有处理器"和"本次调用碰巧 404"，排查要重放一遍才知道。
+  for (const m of realMissing) {
+    console.log(`  ${m.method.padEnd(6)} ${m.path.padEnd(56)} status=${m.status} [${m.file}]`)
+  }
 
 if (platformOwned.length > 0) {
   console.log(`\n-- 不计入缺口的平台域路径（${platformOwned.length} 条；切 /admin/ 段时必须排除） --`)
