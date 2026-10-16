@@ -62,7 +62,6 @@ const TaskAcceptance = lazy(() => import('@/pages/user/tasks/TaskAcceptance'))
 // 农资投入品管理
 const InputList = lazy(() => import('@/pages/user/inputs/InputList'))
 const InputCreate = lazy(() => import('@/pages/user/inputs/Create'))
-const InputLedger = lazy(() => import('@/pages/user/inputs/Ledger'))
 const InputDetail = lazy(() => import('@/pages/user/inputs/InputDetail'))
 const InputStock = lazy(() => import('@/pages/user/inputs/InputStock'))
 const InputUsages = lazy(() => import('@/pages/user/inputs/InputUsages'))
@@ -161,7 +160,12 @@ const ReportCenter = lazy(() => import('@/pages/admin/reports/ReportCenter'))
 const AdminProductionReport = lazy(() => import('@/pages/admin/reports/AdminProductionReport'))
 const AdminQualityReport = lazy(() => import('@/pages/admin/reports/AdminQualityReport'))
 
-/** 用户端路由（父级 /production），页面条数由下方 USER_PAGE_COUNT 派生 + 1 条索引重定向 */
+/**
+ * 用户端路由（父级 /production）。
+ *
+ * 页面条数由下方 USER_PAGE_COUNT 派生；另有 2 条重定向不是页面：
+ * 1 条索引重定向（无 path，{@link isPageRoute} 天然排除）+ 1 条旧链接回落（`inputs/ledger`，带 path 会计入条数）。
+ */
 export const USER_ROUTES: AppRoute[] = [
   {
     index: true,
@@ -353,10 +357,13 @@ export const USER_ROUTES: AppRoute[] = [
     },
   },
   {
+    // 2026-10-16：冗余页「投入品使用台账」（原型 P22）整页删除后的旧链接回落。
+    // 它的两张表分别与「投入品台账」的使用台账 Tab、「出入库管理」的流水 Tab 同列同义，
+    // 删页后若不拦，旧书签 / 外部链接会落进 `inputs/:inputId` 变成"投入品详情(id=ledger)"的假页面。
     path: 'inputs/ledger',
-    element: <InputLedger />,
+    element: <Navigate to="/production/inputs" replace />,
     meta: {
-      name: '投入品使用台账',
+      name: '投入品台账（旧链接回落）',
       path: '/production/inputs/ledger',
       module: '农资投入品管理',
       prd: '原型补充',

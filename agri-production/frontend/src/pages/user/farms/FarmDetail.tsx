@@ -101,7 +101,10 @@ const QUICK_ENTRIES: QuickEntry[] = [
   { key: 'plan', label: '🌱 新建种养计划', path: '/production/plans?create=1' },
   { key: 'tasks', label: '📋 农事任务', path: '/production/tasks' },
   { key: 'monitor', label: '📡 生产监控→', path: '/production/monitor' },
-  { key: 'ledger', label: '📦 投入品台账', path: '/production/inputs/ledger' },
+  // 2026-10-16：原指向 /production/inputs/ledger（投入品使用台账，与「投入品台账」页重复），
+  // 那一页已删除，改指权威页「投入品台账」（/production/inputs，含 档案 + 使用台账 两个 Tab）。
+  // 该页的农场上下文取自全局 farm store（页面顶部有农场切换），所以无需透传 farmId。
+  { key: 'inputs', label: '📦 投入品台账', path: '/production/inputs' },
   { key: 'trace', label: '🔗 溯源管理', path: '/production/trace' },
 ]
 

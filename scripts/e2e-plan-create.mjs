@@ -354,6 +354,43 @@ try {
   check(page.url().includes('/production/inputs/usages') && usageText.includes('投入品使用记录'),
     '从投入品台账页能进入「投入品使用记录」页', page.url().replace(BASE_URL, ''))
 
+  // 1e) 投入品整理（2026-10-16）：冗余页「投入品使用台账」(inputs/ledger) 整页删除。
+  //     它只剩两处深链（农场详情快捷入口、地块详情"查看投入品台账→"），都已改指权威页；
+  //     删页后旧链接若不拦会落进 `inputs/:inputId` 变成"投入品详情(id=ledger)"的假页面，
+  //     所以路由留了一条 replace 重定向回落 —— 这里逐条断言。
+  await page.goto(`${BASE_URL}/production/inputs/ledger`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.waitForNetworkIdle({ idleTime: 600, timeout: 10000 }).catch(() => {})
+  const ledgerFallbackText = await page.evaluate(() => document.body.innerText)
+  check(page.url().replace(BASE_URL, '').startsWith('/production/inputs') && !page.url().includes('/ledger'),
+    '旧链接 /production/inputs/ledger 回落到权威页（不再渲染同名冗余页）',
+    page.url().replace(BASE_URL, ''))
+  check(ledgerFallbackText.includes('投入概况'), '回落页就是「投入品台账」（页面正文含"投入概况"）')
+
+  // 农场详情快捷入口「📦 投入品台账」指向权威页（原指 inputs/ledger）。
+  // 只在正文里找按钮：侧边栏也有"投入品台账"这个菜单叶子，混进来会假过。
+  await page.goto(`${BASE_URL}/production/farms/${FARM.farmId}`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.waitForNetworkIdle({ idleTime: 600, timeout: 10000 }).catch(() => {})
+  const quickPoll = await page.evaluate(() => {
+    const content = document.querySelector('.ant-layout-content')
+    if (!content) return null
+    const el = [...content.querySelectorAll('button, a')].find((b) =>
+      (b.textContent ?? '').includes('投入品台账'),
+    )
+    return el ? el.textContent.trim() : null
+  })
+  check(Boolean(quickPoll), '农场详情正文里有「📦 投入品台账」快捷入口', quickPoll ?? '（未找到）')
+  await page.evaluate(() => {
+    const content = document.querySelector('.ant-layout-content')
+    const el = [...(content ?? document).querySelectorAll('button, a')].find((b) =>
+      (b.textContent ?? '').includes('投入品台账'),
+    )
+    el?.click()
+  })
+  await sleep(1200)
+  check(page.url().replace(BASE_URL, '') === '/production/inputs',
+    '快捷入口跳到 /production/inputs（不是已删除的 /production/inputs/ledger）',
+    page.url().replace(BASE_URL, ''))
+
   // 回到计划页（下面要在计划页开新增弹窗）
   await page.goto(`${BASE_URL}/production/plans`, { waitUntil: 'networkidle2', timeout: 60000 })
   await page.waitForNetworkIdle({ idleTime: 600, timeout: 10000 }).catch(() => {})

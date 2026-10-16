@@ -35,7 +35,7 @@ const PREFIX = {
  * @param {string} arrayName 导出的路由数组名（USER_ROUTES / ADMIN_ROUTES）
  * @returns {string[]} 完整路由路径（已补父级前缀）
  */
-function extractRoutePaths(arrayName) {
+function extractRouteEntries(arrayName) {
   const start = routesSrc.indexOf(`export const ${arrayName}: AppRoute[] = [`)
   if (start < 0) {
     throw new Error(`未在 routes.tsx 中找到数组 ${arrayName}`)
@@ -57,7 +57,24 @@ function extractRoutePaths(arrayName) {
   }
   const block = routesSrc.slice(open, end + 1)
   const prefix = PREFIX[arrayName]
-  return [...block.matchAll(/^ {4}path: '([^']+)',\r?$/gm)].map((m) => `${prefix}${m[1]}`)
+  // 元素之间以「2 空格缩进的 },」分隔；嵌套对象（如 meta / element 的 JSX）缩进更深，不会误切
+  return block
+    .split(/\r?\n {2}\},\r?\n/)
+    .map((chunk) => {
+      const pathHit = chunk.match(/^ {4}path: '([^']+)',$/m)
+      if (!pathHit) return null
+      return { path: `${prefix}${pathHit[1]}`, redirect: /element: <Navigate\b/.test(chunk) }
+    })
+    .filter(Boolean)
+}
+
+/**
+ * 抽取指定路由数组的元素层 path（完整路径）
+ * @param {string} arrayName 导出的路由数组名
+ * @returns {string[]} 完整路由路径
+ */
+function extractRoutePaths(arrayName) {
+  return extractRouteEntries(arrayName).map((entry) => entry.path)
 }
 
 /**
@@ -95,9 +112,12 @@ function extractMenuLeaves(constName) {
 /** 路由路径是否含动态段（如 :farmId） */
 const isDynamic = (path) => path.includes(':')
 
-const userRoutes = extractRoutePaths('USER_ROUTES')
-const adminRoutes = extractRoutePaths('ADMIN_ROUTES')
-const allRoutes = userRoutes.concat(adminRoutes)
+const routeEntries = extractRouteEntries('USER_ROUTES').concat(extractRouteEntries('ADMIN_ROUTES'))
+const allRoutes = routeEntries.map((entry) => entry.path)
+const userRoutes = extractRouteEntries('USER_ROUTES').map((entry) => entry.path)
+const adminRoutes = extractRouteEntries('ADMIN_ROUTES').map((entry) => entry.path)
+/** 纯重定向路由：不是页面，只是接住旧链接（如删页后的回落） */
+const redirectRoutes = new Set(routeEntries.filter((entry) => entry.redirect).map((entry) => entry.path))
 const staticRoutes = allRoutes.filter((p) => !isDynamic(p))
 
 const userMenu = extractMenuLeaves('USER_MENU')
@@ -113,14 +133,16 @@ console.log(
 const routeSet = new Set(allRoutes)
 const menuKeySet = new Set(allMenu.map((leaf) => leaf.key))
 
+
 /** 菜单 key 在路由表中找不到对应页面 —— 点了必然 404 */
 const deadMenu = allMenu.filter((leaf) => !routeSet.has(leaf.key))
 /**
  * 静态路由未进菜单。
  *
  * 预期两类：① create / detail 类子页面（由列表页按钮进入）；② **按口径收口过**的页面 ——
- * 例：投入品「使用台账」(inputs/ledger) 与「使用记录」(inputs/usages) 和「投入品台账」页重叠，
+ * 例：投入品「使用记录」(inputs/usages) 与「投入品台账」页的使用台账 Tab 重叠，
  * 菜单叶子已撤销，改由页面内入口 / 深链可达（见 config/menu.tsx 的注释）。
+ * 注：同源去重的「投入品使用台账」(inputs/ledger) 已整页删除，不再出现在本清单里。
  */
 const hiddenRoutes = staticRoutes.filter((p) => !menuKeySet.has(p))
 
@@ -137,7 +159,9 @@ deadMenu.forEach((leaf) => console.log(`  - ${leaf.key}（${leaf.label}）`))
 console.log(
   `\n[未挂菜单] 已注册静态路由但未进菜单（${hiddenRoutes.length}）：预期为 create / detail 类子页面`,
 )
-hiddenRoutes.forEach((p) => console.log(`  - ${p}`))
+hiddenRoutes.forEach((p) =>
+  console.log(`  - ${p}${redirectRoutes.has(p) ? '　← 纯重定向（旧链接回落，非页面）' : ''}`),
+)
 
 const problems = deadMenu.length
 console.log(

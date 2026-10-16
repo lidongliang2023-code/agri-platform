@@ -117,7 +117,6 @@ const PAGE_MANIFEST = [
   { name: 'Create', dir: 'user/farms', title: '新增农场', path: '/production/farms/create', module: '农场数字化管理', prd: '原型补充', proto: 'farm-create', kind: 'form', desc: '录入农场名称、类型、所在地区、经营面积与负责人信息，提交后完成农场创建。' },
   { name: 'Create', dir: 'user/plots', title: '新增地块', path: '/production/plots/create', module: '农场数字化管理', prd: '原型补充', proto: 'plot-create', kind: 'form', desc: '在当前农场下新建地块，维护地块编号、面积、土壤类型、灌溉方式并绘制地块边界。' },
   { name: 'Create', dir: 'user/inputs', title: '新建投入品', path: '/production/inputs/create', module: '农资投入品管理', prd: '原型补充', proto: 'input-create', kind: 'form', desc: '登记投入品档案：品类、名称、登记证号、生产厂家、有效成分、安全间隔期与初始库存。' },
-  { name: 'Ledger', dir: 'user/inputs', title: '投入品流转台账', path: '/production/inputs/ledger', module: '农资投入品管理', prd: '原型补充', proto: 'input-ledger', kind: 'table', desc: '按批次汇总投入品的入库、出库与使用流水，支持按投入品、地块与时间范围检索并对账。' },
   { name: 'Create', dir: 'user/harvests', title: '新建采收', path: '/production/harvests/create', module: '采收库存管理', prd: '原型补充', proto: 'harvest-create', kind: 'form', desc: '登记采收批次：采收地块、作物、采收数量、质量等级、采收人与采收时间，提交后生成批次编号。' },
   { name: 'Detail', dir: 'user/harvests', title: '采收详情', path: '/production/harvests/:harvestId', module: '采收库存管理', prd: '原型补充', proto: 'harvest-detail', kind: 'detail', desc: '展示采收批次的基础信息、等级分布、检测结论、关联溯源码与入库流向，支持编辑与作废。' },
   { name: 'InventoryCreate', dir: 'user/harvests', title: '新增库存', path: '/production/harvests/inventory/create', module: '采收库存管理', prd: '原型补充', proto: 'inventory-create', kind: 'form', desc: '为采收批次登记入库信息：仓库、库位、入库数量、存储温区与保质期，提交后生成库存流水。' },

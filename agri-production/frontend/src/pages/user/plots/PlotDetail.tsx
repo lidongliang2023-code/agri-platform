@@ -743,7 +743,8 @@ export default function PlotDetail(): JSX.Element {
         <Card
           title="💊 投入品使用统计"
           extra={
-            <Typography.Link onClick={() => navigate('/production/inputs/ledger')}>
+            /* 2026-10-16：原指向已删除的 /production/inputs/ledger，改指权威页「投入品台账」 */
+            <Typography.Link onClick={() => navigate('/production/inputs')}>
               查看投入品台账→
             </Typography.Link>
           }
