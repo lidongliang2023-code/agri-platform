@@ -1424,3 +1424,78 @@ deleted BIGINT DEFAULT 0,
     INDEX `idx_growth_record_date` (record_date),
     INDEX `idx_growth_pest_level` (pest_level)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 生产报表（用户端「数据分析 → 生产报表」的列表与导出）。
+--
+-- 【口径】`POST /analytics/reports` 是**即时聚合落库快照**，不是异步任务：按「类型 + 周期」当场从
+-- 已有表（任务 / 采收 / 投入品 / 检测 / 告警）聚合出一份摘要写进本表，status 落库即 2（已完成）。
+-- 页面上的"生成中"状态因此不会长时间停留 —— 与其做一个"永远转圈"的假异步，不如让数据立刻可用。
+--
+-- 【列为什么这样定】方案文档给的是 report_id/report_name/report_type/period_start/period_end/status/
+-- file_url/generated_at/generated_by/remark，这里在其之上补了页面契约与实现必需的四列：
+--   · period        —— 页面 ReportItem.period 是**周期标签**（如 2026-03），生成入参也只给一个日期，
+--                      period_start/period_end 由服务端按类型推导；两个都留，既能按标签展示也能按区间聚合；
+--   · summary_json  —— 聚合快照本体（页面只读元数据，快照用于导出与追溯"当时算出来是什么"）；
+--   · file_size     —— 页面要显示文件大小；由导出接口落盘后回填（未导出前为空）；
+--   · download_key  —— 导出文件要能被 window.open 打开，而 window.open **带不了 Authorization 头**，
+--                      所以用一次性下载令牌而不是把会话令牌拼进 URL（后者会进浏览器历史与访问日志）。
+CREATE TABLE IF NOT EXISTS agri_prod_report (
+id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+report_id VARCHAR(32) NOT NULL COMMENT '报表编号（业务主键，页面 reportId）',
+report_name VARCHAR(120) NOT NULL COMMENT '报表名称',
+report_type TINYINT NOT NULL COMMENT '1 日报 / 2 周报 / 3 月报 / 4 季报 / 5 年报',
+period VARCHAR(32) NOT NULL COMMENT '周期标签（日报 yyyy-MM-dd / 周报 yyyy-Www / 月报 yyyy-MM / 季报 yyyy-Qn / 年报 yyyy）',
+period_start DATE COMMENT '统计区间起（含）',
+period_end DATE COMMENT '统计区间止（含）',
+status TINYINT DEFAULT 2 COMMENT '1 生成中 / 2 已完成 / 3 失败',
+summary_json MEDIUMTEXT COMMENT '聚合快照（JSON）',
+file_url VARCHAR(255) COMMENT '导出地址（指向本服务的 /file 端点，带下载令牌）',
+file_size BIGINT COMMENT '导出文件字节数（未导出时为空）',
+download_key VARCHAR(64) COMMENT '导出下载令牌（window.open 无法带 Authorization 头，故用独立令牌）',
+generated_at DATETIME COMMENT '生成时间',
+generated_by VARCHAR(64) COMMENT '生成人（本服务拿不到平台用户档案，暂留空）',
+remark VARCHAR(500) COMMENT '备注',
+farm_id BIGINT COMMENT '所属农场（本服务农场主键，可空表示不限农场）',
+tenant_id VARCHAR(191) NOT NULL,
+create_by TEXT,
+create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+update_by TEXT,
+update_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+deleted BIGINT DEFAULT 0,
+    UNIQUE KEY `uk_report_report_id` (report_id),
+    INDEX `idx_report_tenant_id` (tenant_id),
+    INDEX `idx_report_type` (report_type),
+    INDEX `idx_report_period` (period),
+    INDEX `idx_report_generated_at` (generated_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 报表订阅（用户端「数据分析 → 生产报表」的订阅卡片）。
+--
+-- 【列名与方案文档的差异，写在最前面免得下一个人以为是笔误】
+-- 方案文档写的是 frequency(WEEKLY/MONTHLY) / receiver（单数）。页面契约不是这样：
+--   入参 period ∈ {daily, weekly, monthly, quarterly}，receivers 是**数组**（可填多个接收人）。
+-- 按文档那两个名字建列会立刻产生两处静默失真：daily/quarterly 无处安放、多个接收人只存得下第一个。
+-- 所以这里 period / receivers 按页面契约建列，channels 存 JSON 数组。
+--
+-- 【不写真投递】本部署没有任何消息通道（邮件/短信/微信都没接）。POST /reports/subscribe 只落一行，
+-- 响应里显式带 delivery = "not-configured"，last_pushed_at 永远为空 ——
+-- 让"订阅了但永远收不到"这件事在接口层就看得见，而不是让页面以为已经生效。
+CREATE TABLE IF NOT EXISTS agri_prod_report_subscription (
+id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+subscribe_id VARCHAR(32) NOT NULL COMMENT '订阅编号（业务主键）',
+report_type TINYINT COMMENT '报表类型 1~5',
+period VARCHAR(16) COMMENT '订阅周期：daily / weekly / monthly / quarterly',
+channels VARCHAR(64) COMMENT '接收渠道（JSON 数组，1 站内 2 邮件 3 微信）',
+receivers VARCHAR(500) COMMENT '接收人（JSON 数组，可多个）',
+status TINYINT DEFAULT 1 COMMENT '1 启用 0 停用',
+last_pushed_at DATETIME COMMENT '最近推送时间（本部署不推送，恒为空）',
+farm_id BIGINT COMMENT '所属农场（本服务农场主键）',
+tenant_id VARCHAR(191) NOT NULL,
+create_by TEXT,
+create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+update_by TEXT,
+update_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+deleted BIGINT DEFAULT 0,
+    UNIQUE KEY `uk_report_subscribe_id` (subscribe_id),
+    INDEX `idx_report_sub_tenant_id` (tenant_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
