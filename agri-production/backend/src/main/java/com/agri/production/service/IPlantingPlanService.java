@@ -42,12 +42,14 @@ public interface IPlantingPlanService extends IService<PlantingPlan> {
      * 分页查询（前端 {@code GET /plans}）。
      *
      * @param keyword   计划名称 / 计划编码模糊关键字（前端字段名是 keyword）
+     * @param cropKeyword 作物模糊关键字（前端「作物」列，名称或作物 ID；null / 空 = 不过滤）
      * @param status    前端契约码值 1..5
      * @param planStatus 直接给词表值（与 status 二者取其一）
      * @return 契约分页结果
      */
-    PageResult<PlantingPlanVO> pageByContract(int pageNum, int pageSize, String keyword, Integer status,
-                                             String planStatus, Long farmId, Integer planYear, String tenantId);
+    PageResult<PlantingPlanVO> pageByContract(int pageNum, int pageSize, String keyword, String cropKeyword,
+                                             Integer status, String planStatus, Long farmId, Integer planYear,
+                                             String tenantId);
 
     /** 详情（前端 {@code GET /plans/{id}}）。 */
     PlantingPlanVO detail(Long id, String tenantId);

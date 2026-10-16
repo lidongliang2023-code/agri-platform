@@ -699,6 +699,7 @@ export async function fetchPlans(params: {
   pageNum: number
   pageSize: number
   keyword?: string
+  crop?: string
   status?: number
   farmId?: string
 }): Promise<PageResult<Plan>> {
@@ -706,6 +707,7 @@ export async function fetchPlans(params: {
     '/plans',
     buildPageParams(params.pageNum, params.pageSize, {
       keyword: params.keyword,
+      crop: params.crop,
       status: params.status,
       farmId: params.farmId,
     }),

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 联调：用户端「新增种养计划 → 关联地块 → 列表可见」全链路（真浏览器 → 网关 → 生产服务 → MySQL）。
+ * 联调：用户端种养计划「新建 → 落库 → 查询」全链路（真浏览器 → 网关 → 生产服务 → MySQL）。
  *
  * <p>背景（2026-10-16 用户反馈"新增种养计划，能关联地块"）：新建弹窗里那一栏原先是一个
  * **自由文本框「关联地块 ID」** —— 用户不知道地块主键是几，也没法选；就算手填对了数字，
@@ -10,6 +10,12 @@
  *
  * <p>本脚本断言的就是这两件事：① 下拉里真的列得出本农场的地块；② 选中后提交，
  * 列表那一行的「地块」列显示的是地块名（而不是 "-" 或 ID）。</p>
+
+ *
+ * <p>查询侧同样覆盖：详情接口 {@code GET /plans/{id}} 的回显、详情页渲染，
+ * 以及列表三个搜索框（计划名称 / 计划编号 / 作物）是否**真的把条件送到后端** ——
+ * 原先只有「计划名称」转发到 keyword，另外两个填了等于没填；脚本最后还用
+ * "搜一个不存在的作物应返回 0 行"反向确认过滤不是摆设。</p>
  *
  * <p>登录态给法同 {@code scripts/e2e-farm-create.mjs}：落同源静态文件 → 页面上下文 POST /auth/login
  * 种下 HttpOnly Cookie → evaluateOnNewDocument 写非凭证界面态。这里额外写
@@ -49,6 +55,8 @@ const cropName = '水稻'
 const targetPlotName = arg('plot', 'A区连栋大棚')
 const startDate = '2026-04-01'
 const endDate = '2026-08-31'
+/** 预计产量（kg）：填一个数，用来证明确实落库并能原样查回来（不是只有文本字段才存得住） */
+const expectedYield = 12000
 
 const failures = []
 const check = (ok, label, extra = '') => {
@@ -118,6 +126,56 @@ const clickButtonByText = async (label) => {
  */
 const inModal = (id) => `.ant-modal-content ${id}`
 
+/**
+ * 往列表搜索表单的某个字段里写值。
+ *
+ * <p>走原生 value setter + input 事件，而不是 page.type：这些输入框是受控组件，
+ * 直接赋 value 不会触发 React 的 onChange，条件就带不出去（看着填了、其实没生效）。</p>
+ *
+ * @param label 搜索项的标签文案（计划名称 / 计划编号 / 作物）
+ * @param value 要写入的值
+ */
+const setSearchField = async (label, value) => {
+  const ok = await page.evaluate(({ text, val }) => {
+    const items = [...document.querySelectorAll('.ant-form-item')]
+    const item = items.find((el) => (el.innerText ?? '').startsWith(text))
+    const input = item?.querySelector('input')
+    if (!input) return false
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set
+    setter.call(input, val)
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    return true
+  }, { text: label, val: value })
+  if (!ok) throw new Error(`未找到搜索项「${label}」`)
+}
+
+/**
+ * 用给定条件检索一次列表，返回命中行数与该行的文本。
+ *
+ * <p>每次都先「重置」再填条件，避免上一轮的残留条件污染这一轮的结果。</p>
+ *
+ * @param fields 搜索条件（标签 → 值）
+ * @returns 命中行数与该行文本
+ */
+const runSearch = async (fields) => {
+  await page.goto(`${BASE_URL}/production/plans`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.waitForNetworkIdle({ idleTime: 600, timeout: 10000 }).catch(() => {})
+  await clickButtonByText('重置')
+  await page.waitForNetworkIdle({ idleTime: 600, timeout: 10000 }).catch(() => {})
+  for (const [label, value] of Object.entries(fields)) {
+    await setSearchField(label, value)
+  }
+  await clickButtonByText('查询')
+  await page.waitForNetworkIdle({ idleTime: 800, timeout: 15000 }).catch(() => {})
+  return page.evaluate(() => {
+    const rows = [...document.querySelectorAll('.ant-table-tbody tr.ant-table-row')]
+    return {
+      count: rows.length,
+      text: rows.map((r) => (r.innerText ?? '').replace(/\s+/g, ' ')).join(' || '),
+    }
+  })
+}
+
 try {
   await page.goto(`${BASE_URL}/prod/manifest.json`, { waitUntil: 'domcontentloaded', timeout: 20000 })
   await page.evaluate(async (creds) => {
@@ -176,6 +234,8 @@ try {
   await page.type(inModal('#planName'), planName, { delay: 10 })
   await page.click(inModal('#cropId'))
   await page.type(inModal('#cropId'), cropName, { delay: 10 })
+  await page.click(inModal('#expectedYield'))
+  await page.type(inModal('#expectedYield'), String(expectedYield), { delay: 20 })
   for (const [id, value] of [['#planStartDate', startDate], ['#planEndDate', endDate]]) {
     await page.click(inModal(id))
     await page.type(inModal(id), value, { delay: 20 })
@@ -220,6 +280,44 @@ try {
   check(rowText.includes(planName), '列表里能查到新建的计划', planName)
   check(rowText.includes(targetPlotName), '该行「地块」列显示地块名（不是 "-"）',
     rowText.replace(/\s+/g, ' ').slice(0, 120))
+
+  // 7) 查询侧之一：详情接口（GET /plans/{id}）
+  const planId = createCall?.json?.data
+  let planCode = ''
+  if (planId) {
+    const detail = await (await fetch(`${BASE_URL}/api/v1/production/plans/${planId}`, {
+      headers: { Authorization: `Bearer ${login.data.accessToken}` },
+    })).json()
+    check(detail.code === 0, '详情接口返回成功', `code=${detail.code}`)
+    check(detail.data?.planName === planName, '详情接口回显计划名称', `name=${detail.data?.planName}`)
+    check(detail.data?.plotName === targetPlotName, '详情接口回显地块名', `plotName=${detail.data?.plotName}`)
+    check(Number(detail.data?.expectedYield) === expectedYield, '详情接口回显预计产量',
+      `expectedYield=${detail.data?.expectedYield}`)
+    planCode = detail.data?.planNo ?? ''
+  }
+
+  // 8) 查询侧之二：详情页渲染
+  await page.goto(`${BASE_URL}/production/plans/${planId}`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.waitForNetworkIdle({ idleTime: 600, timeout: 10000 }).catch(() => {})
+  const detailText = await page.evaluate(() => document.body.innerText)
+  check(detailText.includes(planName), '详情页显示计划名称')
+  check(detailText.includes(targetPlotName), '详情页显示关联地块')
+  check(detailText.includes(cropName), '详情页显示作物')
+  check(detailText.includes(startDate), '详情页显示计划开始日期', startDate)
+
+  // 9) 查询侧之三：列表检索（三个搜索框都必须真的把条件送到后端）
+  const byName = await runSearch({ 计划名称: planName })
+  check(byName.count === 1 && byName.text.includes(planName), '按「计划名称」检索筛到这条计划',
+    `rows=${byName.count}`)
+  const byCode = await runSearch({ 计划编号: planCode })
+  check(byCode.count === 1 && byCode.text.includes(planName), '按「计划编号」检索筛到这条计划',
+    `rows=${byCode.count} code=${planCode}`)
+  const byCrop = await runSearch({ 作物: cropName })
+  check(byCrop.count >= 1 && byCrop.text.includes(planName), '按「作物」检索筛到这条计划',
+    `rows=${byCrop.count}`)
+  const byNothing = await runSearch({ 作物: '不存在的作物ZZZ' })
+  check(byNothing.count === 0, '按不存在的作物检索返回 0 行（过滤真的生效，不是摆设）',
+    `rows=${byNothing.count}`)
 
   check(badResponses.length === 0, '全链路没有 4xx/5xx 响应', badResponses.slice(0, 3).join(' | '))
 } finally {

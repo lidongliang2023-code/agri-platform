@@ -62,6 +62,7 @@ public class PlantingPlanController {
             @RequestParam(required = false) Integer pageSize,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String planName,
+            @RequestParam(required = false) String crop,
             @RequestParam(required = false) Integer status,
             @RequestParam(required = false) String planStatus,
             @RequestParam(required = false) String farmId,
@@ -72,6 +73,7 @@ public class PlantingPlanController {
         PageResult<PlantingPlanVO> result = plantingPlanService.pageByContract(
                 current, limit,
                 keyword != null ? keyword : planName,
+                crop,
                 status, planStatus,
                 // 农场筛选走解析。原先这里是 parseLong + "非数字不算错误 → 返回 null"，
                 // 于是 farmId=DEMO-FARM-010 时**过滤条件被丢掉、返回全量**：

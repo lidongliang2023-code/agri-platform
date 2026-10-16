@@ -483,7 +483,12 @@ export default function PlanList(): JSX.Element {
             const result = await fetchPlans({
               pageNum,
               pageSize,
-              keyword: params.planName as string | undefined,
+              // 「计划名称」与「计划编号」两个搜索框共用 keyword：后端 keyword 同时匹配 名称 与 编码
+              // （原先只转发 planName，「计划编号」框里输入的内容根本到不了后端 —— 搜了没反应）。
+              keyword:
+                (params.planName as string | undefined) || (params.planNo as string | undefined) || undefined,
+              // 「作物」列：既能填作物名也能填作物 ID，后端按名称模糊 + ID 精确匹配（原先同样没转发）
+              crop: params.cropId as string | undefined,
               status: params.status as number | undefined,
               farmId: effectiveFarmId,
             })

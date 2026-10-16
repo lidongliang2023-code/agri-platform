@@ -143,8 +143,9 @@ public class PlantingPlanServiceImpl extends ServiceImpl<PlantingPlanMapper, Pla
     /* ==================== 前端契约方法 ==================== */
 
     @Override
-    public PageResult<PlantingPlanVO> pageByContract(int pageNum, int pageSize, String keyword, Integer status,
-                                                    String planStatus, Long farmId, Integer planYear, String tenantId) {
+    public PageResult<PlantingPlanVO> pageByContract(int pageNum, int pageSize, String keyword, String cropKeyword,
+                                                    Integer status, String planStatus, Long farmId, Integer planYear,
+                                                    String tenantId) {
         LambdaQueryWrapper<PlantingPlan> wrapper = new LambdaQueryWrapper<>();
         // 租户过滤**必须**在：这是用户端页面，漏掉这一条等于所有人看到全平台计划
         wrapper.eq(PlantingPlan::getTenantId, tenantId);
@@ -154,6 +155,19 @@ public class PlantingPlanServiceImpl extends ServiceImpl<PlantingPlanMapper, Pla
             // 前端搜索框走 keyword；计划编码是主键级信息，一起匹配 ——
             // 免得"编号记得住、名字记不住"时搜不到
             wrapper.and(q -> q.like(PlantingPlan::getPlanName, kw).or().like(PlantingPlan::getPlanCode, kw));
+        }
+
+        if (cropKeyword != null && !cropKeyword.isBlank()) {
+            String ck = cropKeyword.trim();
+            // 「作物」列既能填作物名（"水稻"）也能填作物 ID（数字）：
+            // 名称走模糊匹配，纯数字再补一次 ID 精确匹配（ID 列是 BIGINT，不跟着模糊匹配，
+            // 否则填 1 会连 12、123 一起命中）。
+            if (ck.matches("\\d+")) {
+                Long cropId = Long.valueOf(ck);
+                wrapper.and(q -> q.like(PlantingPlan::getCropName, ck).or().eq(PlantingPlan::getCropId, cropId));
+            } else {
+                wrapper.like(PlantingPlan::getCropName, ck);
+            }
         }
 
         List<String> words = resolveStatusFilter(status, planStatus);
