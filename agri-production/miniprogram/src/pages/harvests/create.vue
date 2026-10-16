@@ -41,6 +41,7 @@
     <view class="card">
       <view class="card-title"><text>⏳ Step3 · 休药期校验</text></view>
       <view v-if="!form.plotId" class="muted">先选择地块，系统按该地块最近用药记录推算</view>
+      <view v-else-if="checkLoading" class="muted">正在向服务端校验休药期…</view>
       <view v-else-if="withdrawal.blocked" class="error-box" style="margin: 0">
         ❌ 休药期未过：{{ withdrawal.reason }}。最早可采收日 {{ withdrawal.earliest }}（还有 {{ withdrawal.remain }} 天）
       </view>
@@ -48,22 +49,27 @@
         ⚠️ 无法判定：{{ withdrawal.reason }}
       </view>
       <view v-else class="notice" style="margin: 0">
-        ✅ 休药期通过{{ withdrawal.earliest ? `（最近用药日出推算最早可采收 ${withdrawal.earliest}）` : '' }}
+        ✅ 休药期通过{{ withdrawal.earliest ? '（最早可采收 ' + withdrawal.earliest + '）' : '' }}{{ withdrawal.note ? '——' + withdrawal.note : '' }}
+      </view>
+      <!-- 结论来源写清楚：规则在服务端，与 PC 端同一份，前端不再自己算一套 -->
+      <view v-if="serverCheck || checkError" class="muted" style="margin-top: 8rpx">
+        结论来自服务端校验（规则与 PC 端同一份）。{{ withdrawal.basis || '' }}
       </view>
     </view>
 
     <view style="margin: 24rpx">
       <view
         class="btn-primary"
-        :style="withdrawal.blocked ? 'background-color:#d9d9d9' : ''"
+        :style="submitLabel !== '提交采收登记' ? 'background-color:#d9d9d9' : ''"
         @click="submit"
       >
-        {{ submitting ? '提交中…' : withdrawal.blocked ? '休药期未过，不可登记' : '提交采收登记' }}
+        {{ submitting ? '提交中…' : submitLabel }}
       </view>
     </view>
 
     <view class="muted" style="text-align: center; padding: 0 48rpx">
-      提交走 POST /api/v1/production/harvests；休药期未过时前端**硬拦截**（与 PRD 4.4.2 Step3 一致）。
+      提交走 POST /api/v1/production/harvests；休药期校验走服务端（GET /food-safety/pre-harvest-check），
+      结论为「未过」或**校验接口不可用**时都不放行（安全红线 fail-closed，与 PRD 4.4.2 Step3 的"拦截"一致）。
     </view>
   </view>
 </template>
@@ -73,20 +79,22 @@ import { computed, onMounted, ref } from 'vue'
 import {
   createHarvest,
   generateHarvestBatch,
-  listInputUsages,
   listMembers,
   listPlots,
+  preHarvestCheck,
 } from '@/api/production'
 import { currentFarm, currentUser } from '@/utils/auth-helper'
-import { addDays, daysBetween, today } from '@/utils/format'
+import { today } from '@/utils/format'
 
 /** 质量等级候选（与 PC 端采收登记同值域） */
 const grades = ['A', 'B', 'C', 'D', '待检']
 
 const plots = ref<any[]>([])
 const members = ref<any[]>([])
-/** 该地块的投入品使用记录，用于休药期推算 */
-const plotUsages = ref<any[]>([])
+/** 服务端休药期校验结果（规则在服务端，前端只展示） */
+const serverCheck = ref<any | null>(null)
+const checkLoading = ref(false)
+const checkError = ref('')
 const error = ref('')
 const submitting = ref(false)
 
@@ -111,58 +119,90 @@ const memberLabel = computed(
 )
 
 /**
- * 休药期判定（PRD 4.4.2 Step3 / 10.3）。
+ * 休药期结论（PRD 4.4.2 Step3 / §10.3）：**由服务端判定**，前端只做展示与拦截。
  *
- * <p>算法：取该地块**最近一次农药类使用记录**（含安全间隔期），
- * 最早可采收日 = 使用日 + 安全间隔期；采收日早于它 → 拦截。
- * 缺安全间隔期或没有用药记录时**不谎报通过**，而是标"无法判定"，由用户判断。</p>
+ * <p>三种"不能放行"的情形都算 blocked：服务端判定 block、校验接口报错（fail-closed，
+ * 安全红线不能因为接口挂了就放行）、以及服务端尚未返回结论（还没选地块或正在请求）。</p>
  */
 const withdrawal = computed(() => {
-  const blockedResult = { blocked: true, unknown: false, reason: '', earliest: '', remain: 0 }
-  const unknownResult = { blocked: false, unknown: true, reason: '', earliest: '', remain: 0 }
-  const passResult = { blocked: false, unknown: false, reason: '', earliest: '', remain: 0 }
-
-  const pesticideUsages = plotUsages.value
-    .filter((usage) => Boolean(usage.safetyIntervalDays) || Number(usage.safetyIntervalDays ?? 0) > 0)
-    .sort((a, b) => String(b.usedAt ?? '').localeCompare(String(a.usedAt ?? '')))
-  if (pesticideUsages.length === 0) {
-    return { ...unknownResult, reason: '该地块没有带安全间隔期的用药记录，无法推算休药期' }
+  const row = serverCheck.value
+  const empty = { blocked: true, unknown: false, reason: '', earliest: '', remain: 0, note: '', basis: '' }
+  if (checkError.value) {
+    return { ...empty, reason: '服务端校验不可用（' + checkError.value + '），按安全红线不放行' }
   }
-  const last = pesticideUsages[0]
-  const interval = Number(last.safetyIntervalDays ?? 0)
-  if (!interval) {
-    return { ...unknownResult, reason: '最近一次用药未登记安全间隔期，无法推算休药期' }
+  if (!row) {
+    return { ...empty, reason: '尚未取得服务端校验结论' }
   }
-  const earliest = addDays(String(last.usedAt), interval)
-  const remain = daysBetween(form.value.harvestDate, earliest) ?? 0
-  if (form.value.harvestDate < earliest) {
+  const basis = String(row.basis ?? '')
+  if (row.checkResult === 'block') {
+    const last = row.lastApplication ?? {}
+    const interval = last.preHarvestIntervalDays ?? '—'
     return {
-      ...blockedResult,
-      reason: `${String(last.usedAt).slice(0, 10)} 使用「${last.inputName ?? '农药'}」，安全间隔期 ${interval} 天`,
-      earliest,
-      remain,
+      ...empty,
+      reason: String(last.applicationDate ?? '') + ' 使用「' + String(last.productName ?? '农药')
+        + '」，安全间隔期 ' + interval + ' 天',
+      earliest: String(row.earliestHarvestDate ?? ''),
+      remain: Number(row.daysRemaining ?? 0),
+      basis,
     }
   }
-  return { ...passResult, earliest }
+  if (row.dataComplete === false) {
+    return { ...empty, blocked: false, unknown: true, reason: String(row.note ?? '该地块没有可判定的用药记录'), basis }
+  }
+  return {
+    ...empty,
+    blocked: false,
+    earliest: String(row.earliestHarvestDate ?? ''),
+    note: String(row.note ?? ''),
+    basis,
+  }
 })
 
-async function loadPlotUsages(plotId: string): Promise<void> {
+/**
+ * 提交按钮文案。
+ *
+ * <p>分三种不可提交的情形，文案要能区分"休药期没过"与"校验根本没用上"
+ * —— 两者都不放行，但用户该做的事不同。</p>
+ */
+const submitLabel = computed(() => {
+  if (checkLoading.value) return '正在校验休药期…'
+  if (!withdrawal.value.blocked) return '提交采收登记'
+  if (checkError.value || !serverCheck.value) return '校验不可用，不可登记'
+  return '休药期未过，不可登记'
+})
+
+/**
+ * 向服务端要一次休药期结论。
+ *
+ * @param plotId 地块主键
+ * @param plannedDate 计划采收日期（yyyy-MM-dd）
+ */
+async function loadWithdrawalCheck(plotId: string, plannedDate: string): Promise<void> {
+  if (!plotId) {
+    serverCheck.value = null
+    return
+  }
+  checkLoading.value = true
+  checkError.value = ''
   try {
-    const page = await listInputUsages({ plotId, pageSize: 50 })
-    plotUsages.value = page.list
-  } catch {
-    plotUsages.value = []
+    serverCheck.value = await preHarvestCheck({ plotId, plannedHarvestDate: plannedDate })
+  } catch (err: any) {
+    serverCheck.value = null
+    checkError.value = err?.message ?? '未知错误'
+  } finally {
+    checkLoading.value = false
   }
 }
 
 function onPlotChange(event: any): void {
   const plot = plots.value[Number(event.detail.value)]
   form.value.plotId = String(plot?.plotId ?? '')
-  void loadPlotUsages(form.value.plotId)
+  void loadWithdrawalCheck(form.value.plotId, form.value.harvestDate)
 }
 
 function onDateChange(event: any): void {
   form.value.harvestDate = String(event.detail.value)
+  void loadWithdrawalCheck(form.value.plotId, form.value.harvestDate)
 }
 
 function onGradeChange(event: any): void {
@@ -195,7 +235,7 @@ async function submit(): Promise<void> {
     return
   }
   if (withdrawal.value.blocked) {
-    error.value = '休药期未过，不能登记本次采收'
+    error.value = '不能登记本次采收：' + withdrawal.value.reason
     return
   }
   submitting.value = true

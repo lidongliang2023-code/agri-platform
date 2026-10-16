@@ -339,9 +339,54 @@ export function unreadMessageCount(): Promise<number> {
   return request<number>({ url: '/api/v1/production/messages/unread-count' })
 }
 
-/** 全部消息标为已读（后端 PATCH /messages/read-all，与 PC 端同一方法） */
+/**
+ * 全部消息标为已读。
+ *
+ * <p>用 **PUT** 而不是 PC 端的 PATCH：微信小程序的 `wx.request` 不支持 PATCH 方法
+ * （类型定义里也没有），真机上会直接失败。后端 {@code UserMessageController.read-all}
+ * 已同时开放 PATCH 与 PUT，落到同一实现，行为一致。</p>
+ */
 export function markAllMessagesRead(): Promise<boolean> {
-  return request<boolean>({ url: '/api/v1/production/messages/read-all', method: 'PATCH' })
+  return request<boolean>({ url: '/api/v1/production/messages/read-all', method: 'PUT' })
+}
+
+/* ==================== 食品安全校验（服务端口径，PC 与移动端共用同一份规则） ==================== */
+
+/**
+ * 采收前休药期校验。
+ *
+ * <p>规则在服务端（{@code /food-safety/pre-harvest-check}）：按地块最近一次带安全间隔期的
+ * 用药记录 + 该间隔期推算最早可采收日。移动端拿到结论直接展示，不再自己算一套
+ * —— 以前小程序与 PC 各算一遍，口径迟早会漂。</p>
+ *
+ * @param params plotId（单地块）或 plotIds（多地块逗号分隔）、plannedHarvestDate（默认今天）
+ */
+export function preHarvestCheck(params: {
+  plotId?: string
+  plotIds?: string
+  plannedHarvestDate?: string
+}): Promise<any> {
+  return request<any>({ url: '/api/v1/production/food-safety/pre-harvest-check', params })
+}
+
+/**
+ * 投入品使用前的四重校验（合规 / 交互 / 时机 / 成本，另附库存）。
+ *
+ * <p>服务端只对**有主数据支撑**的项给结论（时机、库存），其余三项返回 {@code UNKNOWN}
+ * 并写明原因；前端要把 UNKNOWN 显式画出来，不能把"没校验"当成"通过"。</p>
+ */
+export function complianceCheck(payload: {
+  inputId: string
+  plotId?: string
+  dosage?: number
+  unit?: string
+  usageDate?: string
+}): Promise<any> {
+  return request<any>({
+    url: '/api/v1/production/food-safety/compliance-check',
+    method: 'POST',
+    data: payload,
+  })
 }
 
 /* ==================== AI（后端未接入，如实透出 501） ==================== */

@@ -62,11 +62,26 @@
       </view>
 
       <view class="card">
-        <view class="card-title"><text>✅ 合规校验</text></view>
-        <view v-for="check in checks" :key="check.label" class="field">
-          <text class="field-label">{{ check.label }}</text>
-          <text class="field-value" :style="{ color: check.color }">{{ check.result }}</text>
-        </view>
+        <view class="card-title"><text>✅ 合规校验（服务端）</text></view>
+        <view v-if="complianceLoading" class="muted">正在向服务端校验…</view>
+        <view v-else-if="complianceError" class="error-box" style="margin: 0">{{ complianceError }}</view>
+        <view v-else-if="!compliance" class="muted">选中投入品后由服务端校验（改动地块或用量会重新校验）</view>
+        <template v-else>
+          <view class="field">
+            <text class="field-label">整体结论</text>
+            <text class="field-value" :style="{ color: resultMeta(compliance.overall).color }">
+              {{ resultMeta(compliance.overall).label }}
+            </text>
+          </view>
+          <view v-for="item in complianceItems" :key="item.label" class="field">
+            <text class="field-label">{{ item.label }}</text>
+            <view class="field-value" style="text-align: right">
+              <text :style="{ color: item.color }">{{ item.result }}</text>
+              <view class="muted" style="margin-top: 4rpx">{{ item.detail }}</view>
+            </view>
+          </view>
+          <view class="muted" style="margin-top: 12rpx">{{ compliance.note || '' }}</view>
+        </template>
       </view>
 
       <view style="margin: 24rpx">
@@ -77,11 +92,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { onMounted } from 'vue'
-import { createInputUsage, listInputs, listInputUsages, listPlots } from '@/api/production'
+import { computed, onMounted, ref, watch } from 'vue'
+import { complianceCheck, createInputUsage, listInputs, listPlots } from '@/api/production'
 import { currentFarm, currentUser } from '@/utils/auth-helper'
-import { addDays, daysBetween, fmtNumber, today } from '@/utils/format'
+import { fmtNumber, today } from '@/utils/format'
 
 /** 投入品分类字典（与 PC 端 INPUT_CATEGORIES 同值域） */
 const CATEGORY_LABEL: Record<string, string> = {
@@ -98,8 +112,12 @@ const searched = ref(false)
 const candidates = ref<any[]>([])
 const plots = ref<any[]>([])
 const selected = ref<any | null>(null)
-/** 该地块最近的农药使用记录（用于休药期校验） */
-const plotUsages = ref<any[]>([])
+/** 服务端四重校验结果（合规 / 交互 / 时机 / 成本 + 库存） */
+const compliance = ref<any | null>(null)
+const complianceLoading = ref(false)
+const complianceError = ref('')
+/** 输入里的用量会连着触发校验，做个简单防抖，避免每敲一个数字发一次请求 */
+let complianceTimer: ReturnType<typeof setTimeout> | null = null
 const error = ref('')
 const submitting = ref(false)
 
@@ -116,59 +134,78 @@ const plotLabel = computed(
   () => plots.value.find((plot) => String(plot.plotId) === String(form.value.plotId))?.plotName ?? '',
 )
 
-/**
- * 合规校验（只做**能用真实数据算出来**的项）。
- *
- * <p>禁用清单与用量上限需要后端的标准库接口（本部署未提供移动端可用的清单端点），
- * 因此这两项如实标注「未校验」，不谎报"通过"；库存与休药期用的是库里的真实数。</p>
- */
-const checks = computed(() => {
-  const item = selected.value
-  if (!item) return [] as { label: string; result: string; color: string }[]
-  const list: { label: string; result: string; color: string }[] = []
+/** 结论 → 文案与颜色（UNKNOWN 必须显式画出来，不能当成通过） */
+const RESULT_META: Record<string, { label: string; color: string }> = {
+  PASS: { label: '✅ 通过', color: '#13a05a' },
+  WARNING: { label: '⚠️ 预警', color: '#fa8c16' },
+  BLOCK: { label: '❌ 拦截', color: '#cf1322' },
+  UNKNOWN: { label: '⬜ 未校验', color: '#8c8c8c' },
+}
 
-  const dosage = Number(form.value.dosage || 0)
-  const stock = Number(item.stockQty ?? 0)
-  if (dosage > 0 && stock > 0) {
-    list.push(
-      dosage <= stock
-        ? { label: '库存校验', result: `通过（库存 ${fmtNumber(stock, item.unit)}）`, color: '#13a05a' }
-        : { label: '库存校验', result: `预警：超库存（库存 ${fmtNumber(stock, item.unit)}）`, color: '#fa8c16' },
-    )
-  } else {
-    list.push({ label: '库存校验', result: '未能校验（用量或库存缺失）', color: '#8c8c8c' })
-  }
+const resultMeta = (result: any) => RESULT_META[String(result)] ?? RESULT_META.UNKNOWN
 
-  if (item.inputType === 'PESTICIDE') {
-    const interval = Number(item.safetyInterval ?? 0)
-    list.push(
-      interval > 0
-        ? {
-            label: '安全间隔期',
-            result: `本次使用后 ${interval} 天内不可采收（最早 ${addDays(form.value.usedAt, interval)}）`,
-            color: '#0958d9',
-          }
-        : { label: '安全间隔期', result: '该农药未登记安全间隔期，无法计算休药期', color: '#fa8c16' },
-    )
-    const conflict = plotUsages.value.find((usage) => {
-      const gap = daysBetween(String(usage.usedAt), today())
-      return gap !== null && gap >= 0 && gap < interval
-    })
-    list.push(
-      conflict
-        ? {
-            label: '休药期冲突',
-            result: `该地块 ${String(conflict.usedAt).slice(0, 10)} 使用过农药，仍在休药期内`,
-            color: '#cf1322',
-          }
-        : { label: '休药期冲突', result: '未发现冲突', color: '#13a05a' },
-    )
-  }
-
-  list.push({ label: '禁用清单校验', result: '未校验（本部署未提供清单接口）', color: '#8c8c8c' })
-  list.push({ label: '用量标准校验', result: '未校验（本部署未提供用量标准接口）', color: '#8c8c8c' })
-  return list
+/** 把服务端返回的四项 + 库存摊成列表（顺序按 PRD §10.2：合规 / 交互 / 时机 / 成本） */
+const complianceItems = computed(() => {
+  const row = compliance.value
+  if (!row) return [] as { label: string; result: string; detail: string; color: string }[]
+  return [
+    { key: 'compliance', label: '禁用清单' },
+    { key: 'interaction', label: '复配交互' },
+    { key: 'timing', label: '用药时机 / 休药期' },
+    { key: 'cost', label: '成本替代' },
+    { key: 'stock', label: '库存' },
+  ].map(({ key, label }) => {
+    const item = row[key] ?? {}
+    const meta = resultMeta(item.result)
+    return { label, result: meta.label, detail: String(item.detail ?? ''), color: meta.color }
+  })
 })
+
+/**
+ * 向服务端要一次四重校验结论。
+ *
+ * <p>服务端只对有主数据支撑的项给结论（时机、库存），其余三项返回 UNKNOWN 并写明原因；
+ * 这里原样展示，不在前端补一个"通过"。</p>
+ */
+async function refreshCompliance(): Promise<void> {
+  const item = selected.value
+  if (!item) {
+    compliance.value = null
+    return
+  }
+  complianceLoading.value = true
+  complianceError.value = ''
+  try {
+    compliance.value = await complianceCheck({
+      inputId: item.inputId,
+      plotId: form.value.plotId || undefined,
+      dosage: form.value.dosage ? Number(form.value.dosage) : undefined,
+      unit: form.value.unit || item.unit || undefined,
+      usageDate: form.value.usedAt,
+    })
+  } catch (err: any) {
+    compliance.value = null
+    complianceError.value = err?.message ?? '合规校验失败'
+  } finally {
+    complianceLoading.value = false
+  }
+}
+
+/** 改动地块 / 用量后重算（防抖 400ms） */
+function scheduleCompliance(): void {
+  if (complianceTimer) clearTimeout(complianceTimer)
+  complianceTimer = setTimeout(() => {
+    void refreshCompliance()
+  }, 400)
+}
+
+// 用量是手输的：每敲一个数字都发请求太吵，防抖后再校验
+watch(
+  () => form.value.dosage,
+  () => {
+    if (selected.value) scheduleCompliance()
+  },
+)
 
 const categoryLabel = (type: string): string => CATEGORY_LABEL[type] ?? type ?? '其他'
 
@@ -204,28 +241,18 @@ function scan(): void {
 async function pick(item: any): Promise<void> {
   selected.value = item
   form.value.unit = item.unit ?? ''
-  if (form.value.plotId) {
-    await loadPlotUsages(form.value.plotId)
-  }
-}
-
-async function loadPlotUsages(plotId: string): Promise<void> {
-  try {
-    const page = await listInputUsages({ plotId, pageSize: 50 })
-    plotUsages.value = page.list
-  } catch {
-    plotUsages.value = []
-  }
+  await refreshCompliance()
 }
 
 function onPlotChange(event: any): void {
   const plot = plots.value[Number(event.detail.value)]
   form.value.plotId = String(plot?.plotId ?? '')
-  void loadPlotUsages(form.value.plotId)
+  void refreshCompliance()
 }
 
 function onDateChange(event: any): void {
   form.value.usedAt = String(event.detail.value)
+  void refreshCompliance()
 }
 
 /** 提交使用记录 */
@@ -240,6 +267,29 @@ async function submit(): Promise<void> {
   if (!form.value.dosage || Number(form.value.dosage) <= 0) {
     error.value = '请填写大于 0 的用量'
     return
+  }
+  // 服务端判定 BLOCK 时直接拦下；有未校验项时提示后再继续（不把"没校验"当成"通过"）
+  const overall = compliance.value?.overall
+  if (overall === 'BLOCK') {
+    error.value = '服务端校验拦截：' + String(compliance.value?.timing?.detail ?? '本次使用不合规')
+    return
+  }
+  if (overall === 'WARNING' || overall === 'UNKNOWN' || !compliance.value) {
+    const unknown = complianceItems.value
+      .filter((item) => item.result.indexOf('未校验') >= 0)
+      .map((item) => item.label)
+      .join('、')
+    const confirmed = await new Promise<boolean>((resolve) => {
+      uni.showModal({
+        title: '仍要登记吗',
+        content: unknown
+          ? '整体结论：' + String(overall ?? '未校验') + '。未校验项：' + unknown + '。确认继续登记？'
+          : '整体结论：' + String(overall ?? '未校验') + '。确认继续登记？',
+        success: (res) => resolve(Boolean(res.confirm)),
+        fail: () => resolve(false),
+      })
+    })
+    if (!confirmed) return
   }
   submitting.value = true
   try {

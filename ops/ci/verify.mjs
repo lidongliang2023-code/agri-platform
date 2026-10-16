@@ -448,10 +448,28 @@ async function checkMobile() {
   )
   record(
     'mobile',
-    '不调用后端未接入的 /api/v1/mobile/**',
+    '不调用 /api/v1/mobile/**（本部署未开该前缀）',
     mobileOnly.length === 0 ? 'pass' : 'fail',
-    mobileOnly.length ? `发现：${mobileOnly.join(', ')}` : '（移动端专有接口后端尚未提供，前端不接）',
+    mobileOnly.length
+      ? `发现：${mobileOnly.join(', ')}`
+      : '（PRD 6.3 的 /api/v1/mobile/production/** 已按要求落在 /api/v1/production/**；偏差见契约文档）',
   )
+
+  // 类型检查：uni/vite 的 build 只转译不做类型检查（实测能编过但类型是错的），
+  // 门禁里补一次 tsc —— 这一步刚上线时就抓到"微信小程序不支持 PATCH"这类真机问题
+  const tscBin = path.join(MOBILE_DIR, 'node_modules', 'typescript', 'bin', 'tsc')
+  if (!existsSync(tscBin)) {
+    record('mobile', 'tsc --noEmit（类型检查）', 'skip', '没有 node_modules（未装依赖，属预期）')
+  } else {
+    const tscResult = run(process.execPath, [tscBin, '--noEmit'], { cwd: MOBILE_DIR })
+    const tscOutput = `${tscResult.stdout ?? ''}${tscResult.stderr ?? ''}`.trim()
+    record(
+      'mobile',
+      'tsc --noEmit（类型检查）',
+      tscResult.status === 0 ? 'pass' : 'fail',
+      tscResult.status === 0 ? '0 错误' : tscOutput.split(/\r?\n/).slice(0, 3).join(' | ').slice(0, 220),
+    )
+  }
 
   const mpAppJson = path.join(MOBILE_DIR, 'dist', 'build', 'mp-weixin', 'app.json')
   if (!existsSync(mpAppJson)) {

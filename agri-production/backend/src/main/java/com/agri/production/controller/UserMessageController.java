@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -82,8 +83,17 @@ public class UserMessageController {
         return ApiResponse.success(messageService.markRead(TenantContextService.currentTenantId(), messageId));
     }
 
-    /** 全部标记已读，返回本次影响的条数。 */
+    /**
+     * 全部标记已读，返回本次影响的条数。
+
+     *
+     * <p>2026-10-17：同时开放 {@code PUT}（与 {@code PATCH} 等价）。原因不是"顺手加一个"：
+     * 微信小程序的 {@code wx.request} **不支持 PATCH 方法**（官方方法集合里没有它），
+     * 移动端（uni-app 小程序端）调这条接口只能走 PUT，否则真机上会直接报方法不支持。
+     * PC 端继续用 PATCH，两条路径落到同一个实现，行为一致。</p>
+     */
     @PatchMapping("/read-all")
+    @PutMapping("/read-all")
     public ApiResponse<Map<String, Object>> markAllRead() {
         int count = messageService.markAllRead(TenantContextService.currentTenantId());
         return ApiResponse.success(Map.of("updated", count));

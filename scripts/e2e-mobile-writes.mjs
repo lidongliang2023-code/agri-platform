@@ -74,6 +74,13 @@ const check = (ok, label, extra = '') => {
 }
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
+/** 今天（yyyy-MM-dd，本地时区） */
+const today = () => {
+  const now = new Date()
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+}
+
 const mysqlQuery = (sql) => {
   if (!MYSQL_BIN) return null
   try {
@@ -341,6 +348,29 @@ const clickButton = async (label) => {
 
 const bodyText = () => page.evaluate(() => document.body.innerText.replace(/\s+/g, ' '))
 
+/**
+ * 点掉 uni.showModal 的「确定」。
+ *
+ * <p>移动端在"整体结论未校验/预警"时会让用户确认一次再提交 —— 这是刻意的（不把未校验当通过），
+ * 脚本必须像用户一样确认，否则写请求根本不会发出。</p>
+ *
+ * @returns 是否点到了确定
+ */
+const confirmModal = async () => {
+  const clicked = await page.evaluate(() => {
+    const modal = document.querySelector('.uni-modal')
+    if (!modal) return false
+    const button = [...modal.querySelectorAll('div,button')].find(
+      (el) => (el.textContent ?? '').replace(/\s+/g, '') === '确定',
+    )
+    if (!button) return false
+    button.click()
+    return true
+  })
+  await sleep(600)
+  return clicked
+}
+
 const created = { usageId: '', batchId: '', taskId: '', plotId: '' }
 const plotName = `移动端联调地块-${stamp}`
 
@@ -373,12 +403,17 @@ try {
   await pickOption('使用地块', BLOCK_PLOT)
   await fillField('用量', String(usageDosage))
   await fillField('施用方式', usageMethod)
+  await sleep(1200) // 用量改动会防抖触发服务端校验，等它回来再断言
   const usageChecks = await bodyText()
-  check(usageChecks.includes('库存校验'), '选中投入品后出现合规校验区')
-  check(usageChecks.includes('未校验'), '禁用清单/用量标准两项如实标注「未校验」（不谎报通过）')
+  check(usageChecks.includes('合规校验（服务端）'), '选中投入品后出现服务端合规校验区')
+  check(usageChecks.includes('未校验'), '没有主数据的项如实标注「未校验」（不谎报通过）')
+  check(usageChecks.includes('整体结论'), '给出整体结论（UNKNOWN 也算结论，不当成通过）')
 
   const writesBefore = writes.length
   await clickButton('登记使用记录')
+  await sleep(1200)
+  const confirmed = await confirmModal()
+  check(confirmed, '「有未校验项」时弹出确认框（不谎报通过，也不静默放行）')
   await page.waitForNetworkIdle({ idleTime: 700, timeout: 20000 }).catch(() => {})
   await sleep(1200)
   const usageWrite = writes.slice(writesBefore).find((item) => item.includes('/inputs/usages'))
@@ -404,6 +439,51 @@ try {
     console.log('· 未配置 --mysql，跳过直连库校验')
   }
 
+  /* ==================== 1b) 服务端口径：两个食品安全校验接口的契约 ==================== */
+
+  const blockPlotId = await plotIdByName(BLOCK_PLOT)
+  const preHarvest = await api(
+    'GET',
+    `/food-safety/pre-harvest-check?plotId=${blockPlotId}&plannedHarvestDate=${today()}`,
+  )
+  check(preHarvest.json?.code === 0, '服务端休药期校验接口可用（GET /food-safety/pre-harvest-check）')
+  check(preHarvest.json?.data?.checkResult === 'block', '刚登记农药的地块被判为 block（真实数据算出来的）',
+    `checkResult=${preHarvest.json?.data?.checkResult}`)
+  check(preHarvest.json?.data?.aiAdjusted === false, '响应里写明 aiAdjusted=false（没有 AI 调整就别装作有）')
+  check(Boolean(preHarvest.json?.data?.lastApplication?.preHarvestIntervalDays),
+    '返回所依据的那次用药与安全间隔期',
+    `interval=${preHarvest.json?.data?.lastApplication?.preHarvestIntervalDays}`)
+  const multi = await api(
+    'GET',
+    `/food-safety/pre-harvest-check?plotIds=${blockPlotId},${await plotIdByName(OK_PLOT)}&plannedHarvestDate=${today()}`,
+  )
+  check(multi.json?.data?.plots?.length === 2, '多地块对比（PRD §10.3 的数据基础）一次可查多块地',
+    `plots=${multi.json?.data?.plots?.length}`)
+  check(multi.json?.data?.checkResult === 'block', '多地块里有一块被拦住，整组结论就是 block',
+    `checkResult=${multi.json?.data?.checkResult}`)
+
+  const compliance = await api('POST', '/food-safety/compliance-check', {
+    inputId: '102',
+    plotId: blockPlotId,
+    dosage: 2,
+    unit: '瓶',
+    usageDate: today(),
+  })
+  check(compliance.json?.code === 0, '服务端四重校验接口可用（POST /food-safety/compliance-check）')
+  const checks = compliance.json?.data ?? {}
+  check(checks.timing?.result === 'PASS', '时机项给了真实结论（按安全间隔期算出最早可采收日）',
+    `timing=${checks.timing?.result} ${checks.timing?.earliestHarvestDate ?? ''}`)
+  check(checks.stock?.result === 'PASS', '库存项给了真实结论', `stock=${checks.stock?.result}`)
+  check(checks.compliance?.result === 'UNKNOWN' && checks.interaction?.result === 'UNKNOWN'
+    && checks.cost?.result === 'UNKNOWN',
+    '没有主数据的三项如实返回 UNKNOWN', `compliance=${checks.compliance?.result}`)
+  check(checks.overall === 'UNKNOWN', '整体结论是 UNKNOWN 而不是 PASS（不把"没校验"算成通过）',
+    `overall=${checks.overall}`)
+
+  const aiStub = await api('POST', '/ai/verify', {})
+  check(aiStub.json?.code === 501 && /未接入/.test(String(aiStub.json?.message)),
+    'AI 能力按 501 占位并说明原因（契约先冻在代码里）', `code=${aiStub.json?.code}`)
+
   /* ==================== 2) 写链路②：同地块新建采收应被休药期拦截 ==================== */
 
   await open('pages/harvests/create', 1800)
@@ -413,6 +493,7 @@ try {
   check(blockedText.includes('休药期未过'), '同地块显示「休药期未过」（按最近用药 + 安全间隔期推算）',
     blockedText.slice(blockedText.indexOf('休药期校验'), blockedText.indexOf('休药期校验') + 80))
   check(blockedText.includes('不可登记'), '按钮文案切换为不可登记')
+  check(blockedText.includes('结论来自服务端校验'), '页面上写明结论来自服务端（规则与 PC 同一份，前端不再自算）')
 
   const beforeBlockedSubmit = writes.length
   await clickButton('休药期未过，不可登记').catch(() => {})

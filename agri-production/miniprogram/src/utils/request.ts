@@ -9,14 +9,15 @@
  * （开发者工具里勾选「不校验合法域名」；真机需在微信后台配置 https 域名）。</p>
  */
 
-// #ifdef H5
-/** H5：同源（开发期由 vite proxy 反代到 nginx 网关） */
-const BASE_URL = ''
-// #endif
-// #ifndef H5
-/** 小程序 / App：必须绝对地址 */
-const BASE_URL = 'http://localhost'
-// #endif
+/**
+ * 接口基址：**运行时判断**而不是 uni-app 条件编译。
+ *
+ * <p>一开始用的是 `// #ifdef H5` 条件编译，构建没问题，但 `tsc --noEmit` 会同时看到两个分支，
+ * 报 "Cannot redeclare block-scoped variable BASE_URL" —— 类型检查就永远过不去。
+ * 改成运行时判断：小程序/App 里没有 `window`（必须绝对地址，开发者工具要勾"不校验合法域名"），
+ * H5 用同源地址（开发期由 vite proxy 反代到网关）。</p>
+ */
+const BASE_URL = typeof window === 'undefined' ? 'http://localhost' : ''
 
 /** 后端统一响应体 */
 export interface ApiResponse<T> {
@@ -91,7 +92,9 @@ export function request<T = any>(options: RequestOptions): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     uni.request({
       url,
-      method: options.method || 'GET',
+      // uni 的类型定义里没有 PATCH（微信小程序的 wx.request 也不支持 PATCH），
+      // 这里强转一次；实际只有 /messages/read-all 会用到，且后端已同时开放 PUT（见 UserMessageController）。
+      method: (options.method || 'GET') as any,
       data: options.data,
       header,
       success: (res) => {
