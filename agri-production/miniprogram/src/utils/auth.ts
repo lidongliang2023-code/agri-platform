@@ -52,11 +52,13 @@ export async function login(payload: LoginPayload): Promise<MobileUser> {
   const token = data?.accessToken ?? data?.token
   if (!token) throw new Error('登录失败：认证中心未返回访问令牌')
   uni.setStorageSync(TOKEN_KEY, token)
+  // 姓名口径：统一认证中心返回的是 user.nickname（如「张农户」），
+  // 不是 realName；拿不到才退回账号名，避免界面上直接把登录名当姓名显示。
   const user: MobileUser = {
-    userId: data?.user?.userId ?? data?.userId,
+    userId: data?.user?.id ?? data?.user?.userId ?? data?.userId,
     username: data?.user?.username ?? payload.username,
-    realName: data?.user?.realName ?? data?.realName ?? payload.username,
-    phone: data?.user?.phone ?? data?.phone,
+    realName: data?.user?.nickname ?? data?.user?.realName ?? data?.realName ?? payload.username,
+    phone: data?.user?.phone ?? data?.phone ?? data?.user?.mobile,
     roles: data?.roles ?? data?.user?.roles ?? [],
   }
   uni.setStorageSync(USER_KEY, user)
