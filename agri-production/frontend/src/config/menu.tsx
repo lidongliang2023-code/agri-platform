@@ -90,7 +90,8 @@ export const USER_MENU: MenuGroup[] = [
       // 2026-10-16：改名为「农事任务」；「创建任务」入口撤掉（新建走列表页的按钮，
       // 不占一级菜单的一个叶子 —— 与 /production/farms/create、/production/plots/create 同处理）。
       { key: '/production/tasks', label: '农事任务' },
-      { key: '/production/tasks/templates', label: '任务模板库' },
+      // 「任务模板库」同日搬到运营端（模板是标准作业配置，由平台运营维护、租户使用），
+      // 见 ADMIN_MENU 的「基础数据」分组。
     ],
   },
   {
@@ -231,7 +232,11 @@ export const ADMIN_MENU: MenuGroup[] = [
     key: 'base-data',
     label: '基础数据',
     icon: <DatabaseOutlined />,
-    children: [{ key: '/admin/production/crops', label: '作物管理' }],
+    children: [
+      { key: '/admin/production/crops', label: '作物管理' },
+      // 从用户端搬过来的任务模板库：与作物管理同属"运营维护、租户使用"的基础数据
+      { key: '/admin/production/tasks/templates', label: '任务模板库' },
+    ],
   },
   {
     key: 'monitor',

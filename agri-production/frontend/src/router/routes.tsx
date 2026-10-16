@@ -55,7 +55,9 @@ const PlanCalendar = lazy(() => import('@/pages/user/plans/PlanCalendar'))
 const TaskList = lazy(() => import('@/pages/user/tasks/TaskList'))
 const TaskDetail = lazy(() => import('@/pages/user/tasks/TaskDetail'))
 const TaskCreate = lazy(() => import('@/pages/user/tasks/TaskCreate'))
-const TaskTemplates = lazy(() => import('@/pages/user/tasks/TaskTemplates'))
+// 任务模板库（运营端维护，2026-10-16 从用户端搬过来）：模板是"标准作业配置"，
+// 由平台运营维护、租户使用 —— 用户端只在新建任务的模板下拉里用。
+const TaskTemplates = lazy(() => import('@/pages/admin/production/tasks/TaskTemplates'))
 const TaskAcceptance = lazy(() => import('@/pages/user/tasks/TaskAcceptance'))
 // 农资投入品管理
 const InputList = lazy(() => import('@/pages/user/inputs/InputList'))
@@ -308,16 +310,6 @@ export const USER_ROUTES: AppRoute[] = [
       path: '/production/tasks/create',
       module: '农事任务管理',
       prd: 'PRD 6.1 #16',
-    },
-  },
-  {
-    path: 'tasks/templates',
-    element: <TaskTemplates />,
-    meta: {
-      name: '任务模板库',
-      path: '/production/tasks/templates',
-      module: '农事任务管理',
-      prd: 'PRD 6.1 #17',
     },
   },
   {
@@ -788,6 +780,17 @@ export const ADMIN_ROUTES: AppRoute[] = [
       path: '/admin/production/crops',
       module: '基础数据',
       prd: '原型补充（作物主数据，运营端维护）',
+    },
+  },
+  {
+    // 任务模板库（2026-10-16 从用户端搬过来）：与作物管理同属"运营维护的基础数据"
+    path: 'tasks/templates',
+    element: <TaskTemplates />,
+    meta: {
+      name: '任务模板库',
+      path: '/admin/production/tasks/templates',
+      module: '基础数据',
+      prd: 'PRD 6.1 #17',
     },
   },
   {

@@ -186,6 +186,17 @@ try {
   check(!userText.includes('新增作物'), '用户端 /production/crops 不再渲染维护页（入口已撤）',
     userText.replace(/\s+/g, ' ').slice(0, 80))
 
+  // 2c) 任务模板库（2026-10-16 从用户端搬到运营端，与作物管理同属"基础数据"）
+  await page.goto(`${BASE_URL}/admin/production/tasks/templates`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.waitForNetworkIdle({ idleTime: 800, timeout: 15000 }).catch(() => {})
+  const templateText = await page.evaluate(() => document.body.innerText)
+  const templateCrumb = await page.evaluate(
+    () => document.querySelector('.ant-breadcrumb')?.innerText?.replace(/\s+/g, ' ') ?? '',
+  )
+  check(templateText.includes('模板'), '运营端「任务模板库」页已渲染',
+    templateText.replace(/\s+/g, ' ').slice(0, 80))
+  check(templateCrumb.includes('基础数据'), '「任务模板库」面包屑归到「基础数据」', templateCrumb || '（未找到面包屑）')
+
   // 4) 用户端仍能从下拉读到作物（计划页的作物下拉）
   await page.goto(`${BASE_URL}/production/plans`, { waitUntil: 'networkidle2', timeout: 60000 })
   await page.waitForNetworkIdle({ idleTime: 600, timeout: 10000 }).catch(() => {})

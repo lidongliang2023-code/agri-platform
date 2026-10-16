@@ -683,9 +683,9 @@ export default function TaskList(): JSX.Element {
         <Button key="export" icon={<ExportOutlined />} onClick={handleExport}>
           导出
         </Button>,
-        <Button key="templates" onClick={() => navigate('/production/tasks/templates')}>
-          任务模板库
-        </Button>,
+        // 「任务模板库」按钮已撤（2026-10-16）：该页搬到运营端由平台运营维护。
+        // 用户端仍在「新建任务」的模板下拉里**使用**模板，只是不再有维护入口 ——
+        // 留着这个按钮会跳到用户端已不存在的路由（404）。
       ]}
     >
       <Card style={{ marginBottom: 16 }}>
