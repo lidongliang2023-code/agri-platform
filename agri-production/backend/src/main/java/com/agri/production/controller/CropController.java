@@ -2,6 +2,7 @@ package com.agri.production.controller;
 
 import com.agri.production.common.entity.ApiResponse;
 import com.agri.production.common.entity.PageResult;
+import com.agri.production.common.constant.CropCategoryDict;
 import com.agri.production.entity.CropInfo;
 import com.agri.production.service.CropMasterService;
 import com.agri.production.service.TenantContextService;
@@ -51,6 +52,18 @@ public class CropController {
                 firstNonNull(1, pageNum, page),
                 firstNonNull(10, pageSize, size),
                 keyword, status, tenantId));
+    }
+
+    /**
+     * 作物类别的受控取值。
+
+     *
+     * <p>出给页面做下拉选项：前端不再自己抄一份类别清单 —— 抄两份就是下一次"两边不一致"
+     * （本服务与页面不在同一个发布节奏里）。</p>
+     */
+    @GetMapping("/categories")
+    public ApiResponse<List<String>> categories() {
+        return ApiResponse.success(CropCategoryDict.values());
     }
 
     /**

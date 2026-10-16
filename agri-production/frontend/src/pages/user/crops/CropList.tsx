@@ -18,9 +18,16 @@ import {
   ProTable,
 } from '@ant-design/pro-components'
 import type { ActionType, ProColumns } from '@ant-design/pro-components'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CheckCircleOutlined, DeleteOutlined, EditOutlined, PlusOutlined, StopOutlined } from '@ant-design/icons'
-import { createCrop, deleteCrop, listCrops, updateCrop, updateCropStatus } from '@/api/crops'
+import {
+  createCrop,
+  deleteCrop,
+  listCropCategories,
+  listCrops,
+  updateCrop,
+  updateCropStatus,
+} from '@/api/crops'
 import type { Crop } from '@/api/crops'
 
 /** 新增 / 编辑作物表单值 */
@@ -35,9 +42,6 @@ interface CropFormValue {
   remark?: string
 }
 
-/** 作物类别候选（可空、不做枚举校验，这里只给常用值提示） */
-const CATEGORY_OPTIONS = ['粮食作物', '蔬菜', '果树', '经济作物', '饲料作物', '花卉']
-
 /**
  * 作物管理
  * @returns 页面内容
@@ -48,6 +52,21 @@ export default function CropList(): JSX.Element {
   const actionRef = useRef<ActionType>(null)
   const [createOpen, setCreateOpen] = useState<boolean>(false)
   const [editing, setEditing] = useState<Crop | null>(null)
+
+  /**
+   * 作物类别选项：取自后端字典（`GET /crops/categories`）。
+
+   * <p>不再在页面里抄一份清单 —— 后端会校验取值，抄两份迟早不一致（那边的列表带「其他」兜底项）。</p>
+   */
+  const categoryQuery = useQuery({
+    queryKey: ['crop-categories'],
+    queryFn: () => listCropCategories(),
+    staleTime: 5 * 60 * 1000,
+  })
+  const categoryOptions = useMemo(
+    () => (categoryQuery.data ?? []).map((item) => ({ value: item, label: item })),
+    [categoryQuery.data],
+  )
 
   /** 重载列表（同时让计划页的作物下拉失效，避免两边口径不一致） */
   async function reload(): Promise<void> {
@@ -245,7 +264,7 @@ export default function CropList(): JSX.Element {
           name="cropCategory"
           label="作物类别"
           placeholder="选填"
-          options={CATEGORY_OPTIONS.map((item) => ({ value: item, label: item }))}
+          options={categoryOptions}
           fieldProps={{ allowClear: true, showSearch: true }}
         />
         <ProFormDigit name="growthCycleDays" label="生长周期(天)" min={0} fieldProps={{ precision: 0 }} />
@@ -303,7 +322,7 @@ export default function CropList(): JSX.Element {
           name="cropCategory"
           label="作物类别"
           placeholder="选填"
-          options={CATEGORY_OPTIONS.map((item) => ({ value: item, label: item }))}
+          options={categoryOptions}
           fieldProps={{ allowClear: true, showSearch: true }}
         />
         <ProFormDigit name="growthCycleDays" label="生长周期(天)" min={0} fieldProps={{ precision: 0 }} />

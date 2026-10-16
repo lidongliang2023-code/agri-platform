@@ -58,6 +58,25 @@ export function listCrops(params: CropListParams): Promise<PageResult<Crop>> {
 }
 
 /**
+ * 作物类别的受控取值（后端字典 `CropCategoryDict`）。
+
+ *
+ * <p>页面不再自己维护一份类别清单：前端与服务不在同一个发布节奏里，抄两份迟早不一致
+ * （服务端为准，传了范围外的值会被 400 挡住）。拿不到就返回空数组 —— 页面会退化成
+ * "类别填不了"，而不是用一份过期的本地清单去撞校验。</p>
+ *
+ * @returns 可选类别（顺序即展示顺序）
+ */
+export async function listCropCategories(): Promise<string[]> {
+  try {
+    const raw = await http.get<unknown>(`${BASE}/categories`, undefined, { silent: true })
+    return Array.isArray(raw) ? (raw as string[]) : []
+  } catch {
+    return []
+  }
+}
+
+/**
  * 作物下拉选项（只给启用中的）。
 
  *

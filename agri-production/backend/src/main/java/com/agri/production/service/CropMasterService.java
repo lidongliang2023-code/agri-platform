@@ -2,6 +2,7 @@ package com.agri.production.service;
 
 import com.agri.production.common.entity.PageResult;
 import com.agri.production.common.exception.BusinessException;
+import com.agri.production.common.constant.CropCategoryDict;
 import com.agri.production.entity.CropInfo;
 import com.agri.production.entity.PlantingPlan;
 import com.agri.production.mapper.CropInfoMapper;
@@ -9,6 +10,7 @@ import com.agri.production.mapper.PlantingPlanMapper;
 import com.agri.production.vo.CropVO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,7 +18,6 @@ import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * 作物主数据（页面「作物管理」+ 种养计划的作物下拉）。
@@ -119,7 +120,20 @@ public class CropMasterService {
         crop.setCreateTime(LocalDateTime.now());
         crop.setUpdateTime(LocalDateTime.now());
         crop.setDeleted(0);
-        cropMapper.insert(crop);
+        // 并发下两个请求可能算出同一个 next：撞唯一索引就换下一个编号重试，不把 500 抛给用户
+        for (int attempt = 0; ; attempt++) {
+            try {
+                cropMapper.insert(crop);
+                break;
+            } catch (DuplicateKeyException e) {
+                if (attempt >= 4) {
+                    throw new BusinessException(409, "作物编码生成冲突，请重试");
+                }
+                crop.setId(null);
+                crop.setCropCode("CROP-" + String.format("%04d",
+                        System.currentTimeMillis() % 100000 + attempt));
+            }
+        }
         return crop;
     }
 
@@ -209,7 +223,7 @@ public class CropMasterService {
             }
         }
         if (payload.containsKey("cropCategory")) {
-            crop.setCropCategory(text(payload.get("cropCategory")));
+            crop.setCropCategory(category(payload.get("cropCategory")));
         }
         if (payload.containsKey("growthCycleDays")) {
             crop.setGrowthCycleDays(integer(payload.get("growthCycleDays"), "生长周期"));
@@ -246,21 +260,23 @@ public class CropMasterService {
         }
     }
 
-    /** 生成同租户内唯一的作物编码：CROP-0001 起顺序编号（含已删除行，避免编码被复用）。 */
+    /**
+     * 生成同租户内唯一的作物编码：CROP-0001 起顺序编号。
+
+     *
+     * <p>编号起点取"**含逻辑删除**的最大序号 + 1"（见 {@link CropInfoMapper#maxCropCodeSeq}）。
+     * 首版按"当前行数 + 1"生成，而 {@code selectCount} 会被 {@code @TableLogic} 加上 {@code deleted = 0}
+     * —— 软删一行后计数回退、编码撞上那条软删行的唯一索引，新增直接 500
+     * （实测：删掉 CROP-0004 后再新增报 {@code Duplicate entry '2001-CROP-0004'}）。</p>
+
+     *
+     * <p>并发下仍可能撞（两个请求同时算出同一个 next）：插入撞唯一索引就换下一个编号重试，
+     * 不把 500 抛给用户。</p>
+     */
     private String generateCode(String tenantId) {
-        for (int i = 0; i < 100; i++) {
-            long used = cropMapper.selectCount(new LambdaQueryWrapper<CropInfo>()
-                    .eq(CropInfo::getTenantId, tenantId));
-            String code = "CROP-" + String.format("%04d", used + 1 + i);
-            long exists = cropMapper.selectCount(new LambdaQueryWrapper<CropInfo>()
-                    .eq(CropInfo::getTenantId, tenantId)
-                    .eq(CropInfo::getCropCode, code));
-            if (exists == 0) {
-                return code;
-            }
-        }
-        // 兜底：极端并发下前面 100 个都撞了，用时间戳 + 随机数，保证不重
-        return "CROP-" + System.currentTimeMillis() % 100000000 + ThreadLocalRandom.current().nextInt(10);
+        Long used = cropMapper.maxCropCodeSeq(tenantId);
+        long next = (used == null ? 0L : used) + 1;
+        return "CROP-" + String.format("%04d", next);
     }
 
     private static String text(Object value) {
@@ -269,6 +285,23 @@ public class CropMasterService {
         }
         String str = String.valueOf(value).trim();
         return str.isEmpty() ? null : str;
+    }
+
+    /**
+     * 作物类别：受控取值（见 {@link CropCategoryDict}）。
+     *
+     * <p>可空；传了值就必须在受控范围内 —— 否则"蔬菜 / 蔬菜类 / 叶菜"会同时进库，
+     * 类别统计立刻失去意义（这正是引入这个字典的原因）。</p>
+     *
+     * @param value 前端下发的原值
+     * @returns 归一化后的类别；null = 不设置
+     */
+    private static String category(Object value) {
+        try {
+            return CropCategoryDict.normalize(value == null ? null : String.valueOf(value));
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(400, e.getMessage());
+        }
     }
 
     private static Integer integer(Object value, String field) {

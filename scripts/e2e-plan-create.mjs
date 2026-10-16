@@ -422,6 +422,20 @@ try {
   check(cropPageText.includes('作物'), '「作物管理」页已渲染')
   check(cropPageText.includes(cropName), '作物主数据列表里有计划用到的作物', cropName)
 
+  // 10b) 类别下拉必须来自后端字典：本地那份旧清单只有 6 项、没有「其他」兜底项，
+  //      所以"能看到「其他」"就是"选项来自服务端"的直接证据。
+  await page.evaluate(() => {
+    const btn = [...document.querySelectorAll('button')]
+      .find((b) => (b.textContent ?? '').replace(/\s+/g, '') === '新增作物')
+    btn?.click()
+  })
+  await page.waitForSelector('.ant-modal-content #cropName', { timeout: 20000 })
+  await sleep(600)
+  await openSelect('.ant-modal-content #cropCategory')
+  const categoryOptions = await readVisibleOptions()
+  check(categoryOptions.includes('蔬菜') && categoryOptions.includes('其他'),
+    '作物类别下拉来自后端字典（含「其他」兜底项）', categoryOptions.join(' / '))
+
   check(badResponses.length === 0, '全链路没有 4xx/5xx 响应', badResponses.slice(0, 3).join(' | '))
 } finally {
   await browser.close()
