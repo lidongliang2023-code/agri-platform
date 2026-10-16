@@ -44,6 +44,10 @@ public class Plot extends BaseEntity {
     @TableField("crop_variety")
     private String cropVariety;
 
+    /** 灌溉方式（页面 irrigationType）。列 irrigation_type 一直在表里，本轮补进实体才透得到出参。 */
+    @TableField("irrigation_type")
+    private String irrigationType;
+
     @TableField("area")
     private BigDecimal area;
 

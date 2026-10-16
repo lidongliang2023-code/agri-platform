@@ -33,6 +33,12 @@ public class PlotVO {
 
     private String soilType;
 
+    /** 作物品种（页面 cropVariety）：地块列表"作物"列的数据来源，实体同名属性由 BeanCopyUtils 自动带过来。 */
+    private String cropVariety;
+
+    /** 灌溉方式（页面 irrigationType）。 */
+    private String irrigationType;
+
     private BigDecimal soilPh;
 
     private BigDecimal soilOrganicMatter;
