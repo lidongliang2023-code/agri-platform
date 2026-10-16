@@ -1613,3 +1613,82 @@ deleted BIGINT DEFAULT 0,
     INDEX `idx_maintain_device_id` (device_id),
     INDEX `idx_maintain_at` (maintain_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- AI 诊断记录（页面「病虫害识别」列表，`GET /api/v1/production/ai`）。
+--
+-- 【口径】这一张表**只承载"别人做过的诊断记录"**，本服务不产生新的诊断结论：
+-- 本部署没有任何模型依赖（方案第五节），识别与预测类端点保持未实现。
+-- 演示行由平台侧 prod_ai_diagnosis 的 4 条 DEMO- 行机械转换而来（排除探针空体写入的 38 行垃圾）。
+-- confidence 的单位是**百分比**（如 92.50 表示 92.5%），与平台侧列注释一致 —— 单位错了页面会差 100 倍。
+CREATE TABLE IF NOT EXISTS agri_prod_ai_diagnosis (
+id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+diagnosis_id VARCHAR(32) NOT NULL COMMENT '诊断记录编号（业务主键）',
+plot_id VARCHAR(64) COMMENT '地块标识（页面口径，当前为平台侧 DEMO-PLOT-xxx）',
+crop_id VARCHAR(64) COMMENT '作物标识',
+crop_name VARCHAR(100) COMMENT '作物名称',
+image_url VARCHAR(500) COMMENT '识别图片地址',
+diagnosis_type VARCHAR(32) COMMENT 'PEST 病虫害 / GROWTH 长势 / MATURITY 成熟度',
+result_label VARCHAR(100) COMMENT '识别结果（病虫害名称 / 长势 / 成熟度结论）',
+confidence DECIMAL(5,2) COMMENT '置信度（%）',
+suggestion VARCHAR(500) COMMENT '处置建议',
+model_name VARCHAR(64) COMMENT '模型名称（本服务未接入任何模型，这里只是记录来源）',
+status VARCHAR(20) COMMENT 'PENDING / SUCCESS / FAILED',
+diagnosed_at DATETIME COMMENT '诊断时间',
+farm_id BIGINT COMMENT '所属农场（本服务农场主键）',
+tenant_id VARCHAR(191) NOT NULL,
+create_by TEXT,
+create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+update_by TEXT,
+update_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+deleted BIGINT DEFAULT 0,
+    UNIQUE KEY `uk_ai_diagnosis_id` (diagnosis_id),
+    INDEX `idx_ai_diagnosis_tenant_id` (tenant_id),
+    INDEX `idx_ai_diagnosis_plot_id` (plot_id),
+    INDEX `idx_ai_diagnosis_at` (diagnosed_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- AI 问答会话（页面「AI 助手」左栏）。
+--
+-- 【口径】本部署没有大模型，助手回复走**规则式应答**：从本服务已有数据里检索后如实回答
+-- （采收量 / 任务 / 告警 / 设备在线 / 长势 / 检测合格率 …），回复消息上标注 engine=rule-based。
+-- 认不出意图时明确说"答不了并列出能问什么"，**不编造答案**（详见 AiChatServiceImpl 的注释）。
+CREATE TABLE IF NOT EXISTS agri_prod_ai_session (
+id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+session_id VARCHAR(32) NOT NULL COMMENT '会话编号（业务主键）',
+title VARCHAR(200) NOT NULL COMMENT '会话标题（页面在左栏展示；新建时取名，重命名可改）',
+message_count INT DEFAULT 0 COMMENT '消息条数（列表页直接展示，省一次聚合）',
+farm_id BIGINT COMMENT '所属农场（本服务农场主键）',
+tenant_id VARCHAR(191) NOT NULL,
+create_by TEXT,
+create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+update_by TEXT,
+update_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+deleted BIGINT DEFAULT 0,
+    UNIQUE KEY `uk_ai_session_id` (session_id),
+    INDEX `idx_ai_session_tenant_id` (tenant_id),
+    INDEX `idx_ai_session_update_time` (update_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- AI 问答消息（页面「AI 助手」对话区）。
+--
+-- engine 落列是刻意的：同一张表里既可能有"规则式应答"，将来也可能有真模型回复，
+-- 不标出来的话，使用者无法判断一条回答的可信来源（这正是本项目一直在治的那类问题）。
+CREATE TABLE IF NOT EXISTS agri_prod_ai_message (
+id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+message_id VARCHAR(32) NOT NULL COMMENT '消息编号（业务主键）',
+session_id VARCHAR(32) NOT NULL COMMENT '所属会话（业务主键）',
+role VARCHAR(16) NOT NULL COMMENT 'user 提问 / assistant 回答',
+content TEXT NOT NULL COMMENT '消息内容',
+engine VARCHAR(32) COMMENT '回答来源：rule-based（本部署唯一取值）/ 将来接模型后为模型名',
+ref_doc_ids VARCHAR(500) COMMENT '引用数据来源（逗号分隔，如 growth-records,harvest-batches）',
+farm_id BIGINT COMMENT '所属农场（本服务农场主键）',
+tenant_id VARCHAR(191) NOT NULL,
+create_by TEXT,
+create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+update_by TEXT,
+update_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+deleted BIGINT DEFAULT 0,
+    UNIQUE KEY `uk_ai_message_id` (message_id),
+    INDEX `idx_ai_message_session_id` (session_id),
+    INDEX `idx_ai_message_tenant_id` (tenant_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
