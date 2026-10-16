@@ -119,8 +119,11 @@ const SIDE_EFFECT_SUFFIXES = ['/generate', '/accredit', '/reject']
  *    notify_methods）与页面 AlertRule 的契约（metric/operator/threshold/duration/scope/notifyChannels）
  *    对不上，硬映射等于编数据。网关里用一条**排在通用正则之前**的 location 把这一族交回平台侧
  *    （见 20-prod.conf），管理端那批规则端点当时也是这么处理的。
+ *
+ * 3. `/settings/tenant/**` —— 租户档案（2026-10-16 定）。同第 1 条的理由：租户/市场主体是平台域
+ *    主数据，本服务不拥有；参数配置（/settings、/by-key、/save）已切过来，唯独 profile 留在平台侧。
  */
-const PLATFORM_OWNED_PATHS = ['/admin/tenants/', '/alerts/rules']
+const PLATFORM_OWNED_PATHS = ['/admin/tenants/', '/alerts/rules', '/settings/tenant']
 
 /**
  * 抓 api 层的 `http.get/post/...('<path>')`。

@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.validation.BindException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -62,6 +63,21 @@ public class GlobalExceptionHandler {
             MissingServletRequestParameterException e) {
         log.error("缺少请求参数: {}", e.getMessage());
         return ApiResponse.fail(400, "缺少请求参数: " + e.getParameterName());
+    }
+
+    /**
+     * 请求体解析不了（JSON 语法错、类型对不上）→ **400**，而不是 500。
+     *
+     * <p>实测（2026-10-16）：body 里多一个反斜杠，本服务回的是
+     * {@code {"code":500,"message":"系统异常，请稍后再试"}} —— 调用方看到的是"服务挂了"，
+     * 实际只是自己 JSON 写错了；而平台侧同样的情况回 400「请求体格式错误」。
+     * 这条缺失让**每一个写接口**都把"参数写错"报成"系统故障"，排查方向直接被带偏。</p>
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiResponse<Void> handleHttpMessageNotReadableException(HttpMessageNotReadableException e) {
+        log.warn("请求体格式错误: {}", e.getMessage());
+        return ApiResponse.fail(400, "请求体格式错误");
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)

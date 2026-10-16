@@ -1336,3 +1336,34 @@ deleted BIGINT DEFAULT 0,
     INDEX `idx_member_role_code` (role_code),
     INDEX `idx_member_status` (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 系统配置项（用户端「报表与设置」→ 系统设置 → 参数配置）。
+--
+-- 列口径照抄平台侧 prod_sys_setting（setting_group / setting_key / setting_name / setting_value /
+-- default_value / value_type / status），结构上换成本服务的约定（自增主键 + 业务编号 setting_id、
+-- tenant_id varchar、create_time/update_time、deleted bigint）。
+--
+-- setting_key 上建唯一索引：本服务的保存语义是**按 key upsert**（与平台侧 saveSetting 一致），
+-- 没有这个约束，并发下同一个 key 会出现两行，而"读配置"永远只取一行 —— 那种不一致极难发现。
+CREATE TABLE IF NOT EXISTS agri_prod_sys_setting (
+id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+setting_id VARCHAR(32) NOT NULL COMMENT '配置编号（业务主键）',
+tenant_id VARCHAR(191) NOT NULL,
+farm_id VARCHAR(64) COMMENT '所属农场（本服务农场主键，字符串存；全局配置为空）',
+setting_group VARCHAR(32) COMMENT '分组：ALERT / TRACE / QUALITY …',
+setting_key VARCHAR(64) NOT NULL COMMENT '配置键（页面叫 configKey）',
+setting_name VARCHAR(100) COMMENT '配置名称',
+setting_value VARCHAR(500) COMMENT '配置值（页面叫 configValue）',
+default_value VARCHAR(500) COMMENT '默认值（用于页面"恢复默认"）',
+value_type VARCHAR(16) COMMENT '值类型：string / number / boolean / json',
+remark VARCHAR(200) COMMENT '说明（页面叫 description）',
+status TINYINT DEFAULT 1 COMMENT '1 启用 0 停用',
+create_by TEXT,
+create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+update_by TEXT,
+update_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+deleted BIGINT DEFAULT 0,
+    UNIQUE KEY `uk_setting_setting_id` (setting_id),
+    UNIQUE KEY `uk_setting_key` (tenant_id, setting_key),
+    INDEX `idx_setting_group` (setting_group)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
