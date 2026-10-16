@@ -100,7 +100,12 @@ export const USER_MENU: MenuGroup[] = [
     icon: <ExperimentOutlined />,
     children: [
       { key: '/production/inputs', label: '投入品台账' },
-      { key: '/production/inputs/ledger', label: '投入品使用台账' },
+      // 2026-10-16 只保留一个：「投入品使用台账」（/production/inputs/ledger，原型 P22）不再单独占菜单位。
+      // 理由：它和「投入品台账」（/production/inputs，原型 P10）标题都叫"投入品台账"、能力大面积重叠 ——
+      // 后者本身就是"投入概况 + 合规汇总 + **投入品档案增删改查** + 使用台账 Tab"的模块主页面；
+      // 反过来保留前者会丢掉**档案管理**这一面（那才是需要菜单入口的日常操作）。
+      // 页面与路由**保留**：农场详情（📦 投入品台账 快捷入口）与地块详情仍深链到它，
+      // 那里的"操作人 / 上链 / 出入库流水"更细，按需可达即可。
       { key: '/production/inputs/stock', label: '出入库管理' },
       { key: '/production/inputs/usages', label: '使用记录' },
     ],

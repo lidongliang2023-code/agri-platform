@@ -318,6 +318,25 @@ try {
     check(crumb.includes('报表与设置'), `${path} 的面包屑归到「报表与设置」`, crumb || '（未找到面包屑）')
   }
 
+  // 1d) 投入品菜单去重（2026-10-16）：只保留「投入品台账」。
+  //     ⚠️ 侧边栏的分组默认折叠、且这版布局里程序化展开不生效（antd 受控 openKeys），
+  //     所以这里用**面包屑**证明"保留的那个叶子仍在菜单里"；
+  //     "重复叶子已摘掉"由静态校验 scripts/check-menu-route-map.mjs 证明
+  //     （它会列出已注册但未进菜单的路由，摘掉后 /production/inputs/ledger 出现在该清单里）。
+  await page.goto(`${BASE_URL}/production/inputs`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.waitForNetworkIdle({ idleTime: 600, timeout: 10000 }).catch(() => {})
+  const inputCrumb = await page.evaluate(
+    () => document.querySelector('.ant-breadcrumb')?.innerText?.replace(/\s+/g, ' ') ?? '',
+  )
+  check(inputCrumb.includes('农资投入品管理') && inputCrumb.includes('投入品台账'),
+    '「投入品台账」仍在菜单里（面包屑可证）', inputCrumb || '（未找到面包屑）')
+  const ledgerText = await page.evaluate(() => document.body.innerText)
+  check(ledgerText.includes('投入品'), '「投入品台账」页已渲染', ledgerText.replace(/\s+/g, ' ').slice(0, 60))
+  // 打开 /production/inputs 时该分组会自动展开，所以整页文本里能看到兄弟叶子：
+  // 有「投入品台账」「出入库管理」「使用记录」，但**没有**「投入品使用台账」（2026-10-16 去重）。
+  check(ledgerText.includes('投入品台账') && !ledgerText.includes('投入品使用台账'),
+    '侧边栏该分组下已无重复的「投入品使用台账」')
+
   // 回到计划页（下面要在计划页开新增弹窗）
   await page.goto(`${BASE_URL}/production/plans`, { waitUntil: 'networkidle2', timeout: 60000 })
   await page.waitForNetworkIdle({ idleTime: 600, timeout: 10000 }).catch(() => {})
