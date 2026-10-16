@@ -89,8 +89,9 @@ export const USER_MENU: MenuGroup[] = [
     children: [
       { key: '/production/plans', label: '种养计划列表' },
       { key: '/production/plans/calendar', label: '农事日历' },
-      { key: '/production/tasks', label: '任务列表' },
-      { key: '/production/tasks/create', label: '创建任务' },
+      // 2026-10-16：改名为「农事任务」；「创建任务」入口撤掉（新建走列表页的按钮，
+      // 不占一级菜单的一个叶子 —— 与 /production/farms/create、/production/plots/create 同处理）。
+      { key: '/production/tasks', label: '农事任务' },
       { key: '/production/tasks/templates', label: '任务模板库' },
     ],
   },

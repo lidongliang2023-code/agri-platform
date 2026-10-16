@@ -176,9 +176,12 @@ export default function TaskCreate(): JSX.Element {
       description: values.description,
       farmId: values.farmId,
       status: 'pending',
-      // 后端计划起止为 LocalDate，提交日期部分（原型为 datetime-local，界面保留时分选择）
-      planStartDate: values.planStartDate ? dayjs(values.planStartDate).format('YYYY-MM-DD') : undefined,
-      planEndDate: values.planEndDate ? dayjs(values.planEndDate).format('YYYY-MM-DD') : undefined,
+      // 计划起止发**完整时间**：控件是 datetime-local、确认页也按 `YYYY-MM-DD HH:mm` 回显，
+      // 而库里 plan_start_time / plan_end_time 是 DATETIME。此前这里 format('YYYY-MM-DD')
+      // 把用户选的时分**静默丢掉**（注释还写着"后端是 LocalDate"，其实不是）。
+      // 后端入参同时容忍纯日期写法，见 TaskServiceImpl.parseDateTime。
+      planStartDate: values.planStartDate ? dayjs(values.planStartDate).format('YYYY-MM-DD HH:mm:ss') : undefined,
+      planEndDate: values.planEndDate ? dayjs(values.planEndDate).format('YYYY-MM-DD HH:mm:ss') : undefined,
     }
     createMutation.mutate(payload)
   }
@@ -250,8 +253,14 @@ export default function TaskCreate(): JSX.Element {
             taskType: 'fertilizing',
           }}
         >
-          {currentStep === 0 && (
-            <>
+          {/* ⚠️ 三步**必须全部保持挂载**，只用 display 隐藏：
+              原先写的是 {currentStep === 0 && (…)}，走到下一步就把上一步的控件卸载了，
+              而 antd Form 不会保留已卸载字段的值 —— 于是最后一步点「提交」时，
+              onFinish 拿到的只有当前步的字段，名称 / 类型 / 农场 / 地块 / 时段 / 执行人**全丢**，
+              后端回 400「农场ID不能为空, 任务名称不能为空, 任务类型不能为空」。
+              也就是说：**真实用户在这个页面根本建不出任务**（2026-10-16 联调实测）。
+              改成 display 切换后，字段一直挂载，值与分步校验（validateFields(STEP_FIELDS[n])）都不受影响。 */}
+          <div style={{ display: currentStep === 0 ? 'block' : 'none' }}>
               <ProFormText
                 name="taskName"
                 label="任务名称"
@@ -295,11 +304,9 @@ export default function TaskCreate(): JSX.Element {
                 options={plotOptions}
                 rules={[{ required: true, message: '请选择执行地块' }]}
               />
-            </>
-          )}
+          </div>
 
-          {currentStep === 1 && (
-            <>
+          <div style={{ display: currentStep === 1 ? 'block' : 'none' }}>
               <ProFormDateTimePicker
                 name="planStartDate"
                 label="计划开始"
@@ -351,11 +358,9 @@ export default function TaskCreate(): JSX.Element {
                   },
                 }}
               />
-            </>
-          )}
+          </div>
 
-          {currentStep === 2 && (
-            <>
+          <div style={{ display: currentStep === 2 ? 'block' : 'none' }}>
               <ProFormTextArea
                 name="description"
                 label="任务描述"
@@ -364,8 +369,7 @@ export default function TaskCreate(): JSX.Element {
               />
               <Typography.Title level={5}>信息确认</Typography.Title>
               {renderConfirm()}
-            </>
-          )}
+          </div>
         </ProForm>
 
         <Space style={{ marginTop: 16 }}>

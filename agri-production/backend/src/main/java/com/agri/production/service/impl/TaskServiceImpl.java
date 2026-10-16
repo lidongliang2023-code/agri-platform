@@ -5,10 +5,12 @@ import com.agri.production.dto.TaskSaveDTO;
 import com.agri.production.common.exception.BusinessException;
 import com.agri.production.entity.Task;
 import com.agri.production.entity.TaskRecord;
+import com.agri.production.entity.TeamMember;
 import com.agri.production.common.entity.PageResult;
 import com.agri.production.common.util.BeanCopyUtils;
 import com.agri.production.mapper.TaskMapper;
 import com.agri.production.mapper.TaskRecordMapper;
+import com.agri.production.mapper.TeamMemberMapper;
 import com.agri.production.service.ITaskService;
 import com.agri.production.vo.TaskVO;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -20,6 +22,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 
 @Service
@@ -27,10 +32,106 @@ import java.util.List;
 public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements ITaskService {
 
     private final TaskRecordMapper taskRecordMapper;
+    /** 成员台账：把页面的执行人（成员业务标识或主键）换成 executor_id + executor_name。 */
+    private final TeamMemberMapper memberMapper;
+
+    /** 计划时间接受的写法（页面发的是 datetime-local 的 {@code yyyy-MM-dd HH:mm:ss}，也容忍纯日期）。 */
+    private static final DateTimeFormatter DATE_TIME_MINUTE = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+    private static final DateTimeFormatter DATE_TIME_SECOND = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
+    /**
+     * 把**页面口径的字段名**归一成实体列名（不归一就会被静默丢掉：提示创建成功、值却不在库里）。
+
+     *
+     * <p>2026-10-16 实测：新建任务页发的是 {@code description / assigneeId / planStartDate / planEndDate}，
+     * 而入参 {@code TaskSaveDTO} 只有实体名 {@code taskDesc / executorId / planStartTime / planEndTime} ——
+     * 于是任务建出来了，却没有执行人、没有计划时段、没有描述（页面上还提示"任务创建成功"）。
+     * 出参侧早就有 {@code @JsonProperty} 做这层映射，入参侧一直是空的。</p>
+     *
+     * @param dto 请求体（就地改写）
+     * @param tenantId 当前租户
+     */
+    private void normalizePageAliases(TaskSaveDTO dto, String tenantId) {
+        if (dto == null) {
+            return;
+        }
+        // ① 描述：页面名 → 实体列
+        if (dto.getDescription() != null) {
+            dto.setTaskDesc(dto.getDescription());
+        }
+        // ② 执行人：成员业务标识 / 主键 → 成员主键 + 真实姓名
+        String rawAssignee = dto.getAssigneeId() == null ? null : dto.getAssigneeId().trim();
+        if (rawAssignee != null && !rawAssignee.isEmpty()) {
+            Long pk = parseLong(rawAssignee);
+            TeamMember member = pk != null
+                    ? memberMapper.selectOne(new LambdaQueryWrapper<TeamMember>()
+                            .eq(TeamMember::getTenantId, tenantId).eq(TeamMember::getId, pk).last("LIMIT 1"))
+                    : memberMapper.selectOne(new LambdaQueryWrapper<TeamMember>()
+                            .eq(TeamMember::getTenantId, tenantId)
+                            .eq(TeamMember::getMemberId, rawAssignee).last("LIMIT 1"));
+            if (member == null) {
+                throw new BusinessException(400, "执行人不存在（本租户内查不到该成员）：" + rawAssignee);
+            }
+            dto.setExecutorId(member.getId());
+            if (dto.getExecutorName() == null || dto.getExecutorName().isBlank()) {
+                dto.setExecutorName(member.getMemberName());
+            }
+        }
+        // ③ 计划起止：页面名 → 实体列（列是 DATETIME，页面可能只给到日期）
+        if (dto.getPlanStartDate() != null) {
+            dto.setPlanStartTime(parseDateTime(dto.getPlanStartDate(), "planStartDate"));
+        }
+        if (dto.getPlanEndDate() != null) {
+            dto.setPlanEndTime(parseDateTime(dto.getPlanEndDate(), "planEndDate"));
+        }
+    }
+
+    /**
+     * 解析计划时间：接受 {@code yyyy-MM-dd}、{@code yyyy-MM-dd HH:mm[:ss]} 与 ISO 的 {@code T} 分隔写法。
+
+     *
+     * <p>纯日期按当天 00:00 落库（不猜时刻）。列本身是 DATETIME，所以日期不会丢。</p>
+     *
+     * @param text 原始文本
+     * @param field 字段名（用于报错）
+     * @returns 解析结果；空文本返回 null
+     */
+    private static LocalDateTime parseDateTime(String text, String field) {
+        String value = text == null ? null : text.trim();
+        if (value == null || value.isEmpty()) {
+            return null;
+        }
+        String normalized = value.replace('T', ' ');
+        try {
+            if (normalized.length() == 10) {
+                return LocalDate.parse(normalized).atStartOfDay();
+            }
+            if (normalized.length() == 16) {
+                return LocalDateTime.parse(normalized, DATE_TIME_MINUTE);
+            }
+            // 带秒（也容忍毫秒：截到秒）
+            String trimmed = normalized.length() > 19 ? normalized.substring(0, 19) : normalized;
+            return LocalDateTime.parse(trimmed, DATE_TIME_SECOND);
+        } catch (DateTimeParseException e) {
+            throw new BusinessException(400, field + " 格式应为 yyyy-MM-dd 或 yyyy-MM-dd HH:mm[:ss]：" + value);
+        }
+    }
+
+    private static Long parseLong(String text) {
+        if (text.isEmpty() || !text.chars().allMatch(Character::isDigit)) {
+            return null;
+        }
+        try {
+            return Long.valueOf(text);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
 
     @Override
     @Transactional
     public TaskVO save(TaskSaveDTO dto, String tenantId) {
+        normalizePageAliases(dto, tenantId);
         Task task = BeanCopyUtils.copy(dto, Task.class);
         task.setTenantId(tenantId);
         task.setTaskCode(generateTaskCode(tenantId));
@@ -50,6 +151,7 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
         if (!"pending".equals(task.getStatus())) {
             throw new BusinessException(400, "任务已开始执行，无法修改");
         }
+        normalizePageAliases(dto, tenantId);
         BeanCopyUtils.copy(dto, task);
         updateById(task);
         return BeanCopyUtils.copy(task, TaskVO.class);

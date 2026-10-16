@@ -286,6 +286,9 @@ try {
   check(siderBefore.includes('智能种养'), '侧边栏出现合并后的一级菜单「智能种养」')
   check(!siderBefore.includes('农事任务管理'), '旧一级菜单「农事任务管理」已不在')
   check(!siderBefore.includes('智能种养计划'), '旧一级菜单「智能种养计划」已不在')
+  // 2026-10-16 二次调整：叶子「任务列表」改名为「农事任务」，「创建任务」入口撤掉
+  check(siderBefore.includes('农事任务'), '菜单叶子已改名为「农事任务」')
+  check(!siderBefore.includes('创建任务'), '菜单里不再有「创建任务」入口（新建走列表页按钮）')
   // 面包屑读的就是菜单分组名（buildBreadcrumb 用 group.label），所以"任务页的面包屑是智能种养"
   // 等于证明两组子项确实挂在同一个一级菜单下 —— 比展开子菜单查 DOM 稳（子菜单折叠时不在 DOM 里）。
   await page.goto(`${BASE_URL}/production/tasks`, { waitUntil: 'networkidle2', timeout: 60000 })

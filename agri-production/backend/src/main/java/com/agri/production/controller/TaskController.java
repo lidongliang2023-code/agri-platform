@@ -27,10 +27,14 @@ public class TaskController {
     }
 
     @PostMapping
-    public ApiResponse<TaskVO> create(@Valid @RequestBody TaskSaveDTO dto) {
+    public ApiResponse<String> create(@Valid @RequestBody TaskSaveDTO dto) {
         String tenantId = TenantContextService.currentTenantId();
         TaskVO vo = taskService.save(dto, tenantId);
-        return ApiResponse.success(vo);
+        // 契约是**返回新任务 id 字符串**（前端 api 的 createTask 声明就是 Promise<string>，
+        // 页面拿它跳 /production/tasks/{id}）。此前返回实体对象，页面虽然写了兼容分支
+        // （typeof raw === 'string' ? raw : raw?.taskId）没炸，但契约本身是错的 ——
+        // 与农场 / 计划那两处统一（它们各自踩过一次 `[object Object]`）。
+        return ApiResponse.success(vo.getId() == null ? null : String.valueOf(vo.getId()));
     }
 
     @PutMapping("/{id}")
