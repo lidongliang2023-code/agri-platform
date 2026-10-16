@@ -1692,3 +1692,28 @@ deleted BIGINT DEFAULT 0,
     INDEX `idx_ai_message_session_id` (session_id),
     INDEX `idx_ai_message_tenant_id` (tenant_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 农场资质证照台账（页面「农场详情 → 资质证照」）。列按页面 FarmCert 契约；演示数据见
+-- schema-patch-farm-cert-demo.sql（从平台侧 prod_farm_cert 机械转换，farm_id 换算成本地主键）。
+CREATE TABLE IF NOT EXISTS agri_prod_farm_cert (
+id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+cert_id VARCHAR(32) NOT NULL COMMENT '证照编号（业务主键，页面 certId）',
+farm_id BIGINT COMMENT '所属农场（本服务农场主键，页面 farmId）',
+cert_type VARCHAR(32) COMMENT '证照类型',
+cert_name VARCHAR(200) COMMENT '证照名称',
+cert_no VARCHAR(100) COMMENT '证书编号',
+issuer VARCHAR(200) COMMENT '发证机构',
+issue_date DATE COMMENT '发证日期',
+expire_date DATE COMMENT '有效期至',
+attach_url VARCHAR(500) COMMENT '附件地址（平台侧演示行多为 demo.example.com，加载会失败，属既有问题）',
+status TINYINT COMMENT '0 作废 / 1 有效 / 2 临期 / 3 过期（页面 FarmCertStatus）',
+tenant_id VARCHAR(191) NOT NULL,
+create_by TEXT,
+create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+update_by TEXT,
+update_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+deleted BIGINT DEFAULT 0,
+    UNIQUE KEY `uk_farm_cert_id` (cert_id),
+    INDEX `idx_farm_cert_farm_id` (farm_id),
+    INDEX `idx_farm_cert_status` (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
