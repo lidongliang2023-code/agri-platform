@@ -102,6 +102,17 @@ public class TenantContextService {
         List<Map<String, Object>> bindings;
         try {
             bindings = fetchBindings(token);
+        } catch (org.springframework.web.client.HttpClientErrorException e) {
+            // 平台明确拒绝（401/403）说明**是调用方的令牌过期或无效**，不是平台不可达。
+            // 原先这类失败被统一吞成 500「平台认证中心不可达」，页面只显示"加载失败"，
+            // 使用者完全看不出"重新登录一下就好" —— 实测（2026-10-16）令牌有效期 2 小时，
+            // 长时间停留后就会撞上。这里如实回 401，并把该做什么写在消息里。
+            if (e.getStatusCode().value() == 401 || e.getStatusCode().value() == 403) {
+                log.info("令牌被平台拒绝（HTTP {}），按登录过期处理", e.getStatusCode().value());
+                throw new BusinessException(401, "登录已过期或令牌无效，请重新登录");
+            }
+            log.warn("解析经营主体失败：{}", e.getMessage());
+            throw new BusinessException(500, "无法解析你的经营主体（平台认证中心返回 " + e.getStatusCode().value() + "），请稍后重试");
         } catch (Exception e) {
             log.warn("解析经营主体失败：{}", e.getMessage());
             throw new BusinessException(500, "无法解析你的经营主体（平台认证中心不可达），请稍后重试");
