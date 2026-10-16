@@ -2,13 +2,11 @@ package com.agri.production.service.impl;
 
 import com.agri.production.common.entity.PageResult;
 import com.agri.production.common.exception.BusinessException;
-import com.agri.production.entity.Harvest;
 import com.agri.production.entity.HarvestBatch;
 import com.agri.production.entity.Inventory;
 import com.agri.production.entity.InventoryFlow;
 import com.agri.production.entity.Plot;
 import com.agri.production.mapper.HarvestBatchMapper;
-import com.agri.production.mapper.HarvestMapper;
 import com.agri.production.mapper.InventoryFlowMapper;
 import com.agri.production.mapper.InventoryMapper;
 import com.agri.production.mapper.PlotMapper;
@@ -45,17 +43,15 @@ public class HarvestInventoryServiceImpl implements IHarvestInventoryService {
     private final HarvestBatchMapper batchMapper;
     private final InventoryMapper inventoryMapper;
     private final InventoryFlowMapper flowMapper;
-    private final HarvestMapper harvestRecordMapper;
     private final PlotMapper plotMapper;
     private final IDomainEventService domainEventService;
 
     public HarvestInventoryServiceImpl(HarvestBatchMapper batchMapper, InventoryMapper inventoryMapper,
-                                      InventoryFlowMapper flowMapper, HarvestMapper harvestRecordMapper,
-                                      PlotMapper plotMapper, IDomainEventService domainEventService) {
+                                      InventoryFlowMapper flowMapper, PlotMapper plotMapper,
+                                      IDomainEventService domainEventService) {
         this.batchMapper = batchMapper;
         this.inventoryMapper = inventoryMapper;
         this.flowMapper = flowMapper;
-        this.harvestRecordMapper = harvestRecordMapper;
         this.plotMapper = plotMapper;
         this.domainEventService = domainEventService;
     }
@@ -187,28 +183,42 @@ public class HarvestInventoryServiceImpl implements IHarvestInventoryService {
 
     @Override
     public PageResult<Map<String, Object>> pagePlotHarvestRecords(Long plotId, int pageNum, int pageSize, String tenantId) {
-        LambdaQueryWrapper<Harvest> w = new LambdaQueryWrapper<>();
-        w.eq(Harvest::getTenantId, tenantId);
-        if (plotId != null) w.eq(Harvest::getPlotId, plotId);
-        w.orderByDesc(Harvest::getHarvestDate).orderByDesc(Harvest::getId);
+        // 2026-10-16 取数口径修正：本端点原读**遗留表** agri_prod_harvest_record（实体 Harvest），
+        // 而「新建采收」POST /harvests 写的是 agri_prod_harvest_batch —— 于是从「地块采收记录」页
+        // 登记一条采收后，回本页（以及任何查本端点的页面）都查不到，看着像"没落库"。
+        // 实测：/harvests 3 条（batch 表）与 /harvests/plan 1 条（record 表，2024-01-15）互不相干。
+        // 现在统一读**写入侧那张表**，与 /harvests、/harvests/{id}、库存与溯源码同一数据源。
+        LambdaQueryWrapper<HarvestBatch> w = new LambdaQueryWrapper<>();
+        w.eq(HarvestBatch::getTenantId, tenantId);
+        if (plotId != null) w.eq(HarvestBatch::getPlotId, plotId);
+        w.orderByDesc(HarvestBatch::getHarvestDate).orderByDesc(HarvestBatch::getBatchId);
         int p = pageNum > 0 ? pageNum : 1;
         int s = pageSize > 0 ? pageSize : 10;
-        IPage<Harvest> r = harvestRecordMapper.selectPage(new Page<>(p, s), w);
+        IPage<HarvestBatch> r = batchMapper.selectPage(new Page<>(p, s), w);
         List<Map<String, Object>> rows = new ArrayList<>();
-        for (Harvest h : r.getRecords()) {
+        for (HarvestBatch b : r.getRecords()) {
             Map<String, Object> row = new LinkedHashMap<>();
-            row.put("recordId", h.getId());
-            row.put("plotId", h.getPlotId());
-            row.put("cropName", h.getCropName());
-            row.put("harvestDate", h.getHarvestDate());
-            // 采收记录表（旧设计）里产量落在 actual_quantity 上；cropVariety / remark 那两个字段
-            // 实体没有对应列，宁可不给（前端对缺失字段显示"—"），也不拿别的列冒充
-            row.put("quantity", h.getActualQuantity());
-            row.put("unit", h.getUnit());
-            row.put("grade", h.getQualityGrade());
-            row.put("weather", h.getWeatherCondition());
-            row.put("remark", h.getNotes());
-            row.put("createdAt", h.getCreateTime());
+            // recordId 保留旧名（前端既有契约），值就是批次主键；batchNo 另给，页面按批次编号展示。
+            row.put("recordId", b.getBatchId());
+            row.put("batchNo", b.getBatchNo());
+            row.put("plotId", b.getPlotId());
+            row.put("plotName", b.getPlotName());
+            row.put("planId", b.getPlanId());
+            row.put("cropId", b.getCropId());
+            row.put("cropName", b.getCropName());
+            row.put("cropVariety", b.getCropVariety());
+            row.put("harvestDate", b.getHarvestDate());
+            row.put("quantity", b.getQuantity());
+            row.put("unit", b.getUnit());
+            row.put("grade", b.getGrade());
+            row.put("operatorId", b.getOperatorId());
+            row.put("operatorName", b.getOperatorName());
+            // 入库状态（0 待入库 / 1 已入库 / 2 已出库）与批次库存状态（1 在库 … 5 归档）
+            // 是两个口径，都如实给出，前端按同一套字典展示，不在这一层做取舍。
+            row.put("inboundStatus", b.getInboundStatus());
+            row.put("status", b.getStatus());
+            row.put("remark", b.getRemark());
+            row.put("createdAt", b.getCreateTime());
             rows.add(row);
         }
         return PageResult.of(rows, r.getTotal(), p, s);

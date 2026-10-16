@@ -58,12 +58,21 @@ export function deleteHarvest(batchId: string): Promise<void> {
  *
  * ⚠️ 端点名带 plan，但语义是「**按地块聚合已发生的采收记录**」，不是「待执行的采收计划」；
  * 库里也没有 prod_harvest_plan 表。字段严格对齐后端返回，缺的字段前端显示「—」，不编造。
+ *
+ * 2026-10-16：后端取数口径已修正 —— 由遗留表 `agri_prod_harvest_record` 改为
+ * **`agri_prod_harvest_batch`**（即「新建采收」写的那张表），所以本结构现在与
+ * {@link HarvestBatch} 同源：多了 batchNo / cropVariety / operatorId / inboundStatus / status，
+ * 而 batch 表没有天气列（`weather` 保留仅为兼容历史响应，实际不会再返回）。
  */
 export interface PlotHarvestRecord {
   /** 记录 ID */
   recordId?: string
+  /** 批次编号（batch 表主键对应的业务编号，如 H20260601） */
+  batchNo?: string
   /** 地块 ID */
   plotId?: string
+  /** 地块名称（batch 表冗余列） */
+  plotName?: string
   /** 关联计划 ID */
   planId?: string
   /** 作物 ID */
@@ -82,11 +91,15 @@ export interface PlotHarvestRecord {
   grade?: string
   /** 采收人 ID */
   operatorId?: string
-  /** 天气 */
+  /** 采收人姓名（batch 表冗余列） */
+  operatorName?: string
+  /** 入库状态：0 待入库 / 1 已入库 / 2 已出库 */
+  inboundStatus?: number
+  /** 天气（batch 表无此列，历史字段，保留兼容） */
   weather?: string
   /** 备注 */
   remark?: string
-  /** 状态：1 有效 0 作废 */
+  /** 批次库存状态：1 在库 / 2 部分出库 / 3 清空 / 4 冻结 / 5 归档 */
   status?: number
   /** 登记时间 */
   createdAt?: string

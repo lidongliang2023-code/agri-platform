@@ -3,10 +3,14 @@
  * 路由路径：/production/harvests/plan
  * 所属模块：采收与库存管理
  *
- * ⚠️ 语义说明（2026-10-09 修正）：
- * 本页后端端点 `GET /harvests/plan` 虽然叫 plan，但语义是「**按地块聚合已发生的采收记录**」
- * （底层 `HarvestRecordService.listByPlot`，表 `prod_harvest_record`），
+ * ⚠️ 语义说明：
+ * 本页后端端点 `GET /harvests/plan` 虽然叫 plan，但语义是「**按地块聚合已发生的采收记录**」，
  * **不是**「待执行的采收计划」。库里不存在 `prod_harvest_plan` 表。
+ *
+ * 2026-10-16 取数口径修正：后端原读**遗留表** `agri_prod_harvest_record`，而「新建采收」写的是
+ * `agri_prod_harvest_batch` —— 于是本页登记完采收回来看不到，像"没落库"。现在两侧同源：
+ * 本页与「采收记录」页读同一张表，字段与状态标签也用同一套字典（INBOUND_STATUS_META /
+ * BATCH_STATUS_META），不再自造「有效/作废」这套后端并不存在的口径。
  *
  * 因此本页做两件事：
  * 1. 按后端真实语义展示地块采收记录，字段严格对齐 `HarvestRecordEntity`，
@@ -43,19 +47,18 @@ import { queryHarvestPlans } from '@/api/harvests'
 import type { PlotHarvestRecord } from '@/api/harvests'
 import { listMembers } from '@/api/members'
 import { listPlots } from '@/api/plots'
-import type { HarvestGrade, Member, Plot } from '@/types'
-import { GRADE_COLOR_MAP, GRADE_LABEL_MAP } from '@/types'
+import type { BatchStatus, HarvestGrade, InboundStatus, Member, Plot } from '@/types'
+import {
+  BATCH_STATUS_META,
+  GRADE_COLOR_MAP,
+  GRADE_LABEL_MAP,
+  INBOUND_STATUS_META,
+} from '@/types'
 
 /** 记录筛选条件：端点只认 plotId，不接受 farmId */
 interface RecordFilters {
   /** 地块 ID */
   plotId?: string
-}
-
-/** 采收记录状态：1 有效 0 作废 */
-const RECORD_STATUS_META: Record<number, { label: string; color: string }> = {
-  1: { label: '有效', color: 'green' },
-  0: { label: '作废', color: 'default' },
 }
 
 /**
@@ -142,7 +145,9 @@ export default function HarvestPlan(): JSX.Element {
   const memberNameOf = useMemo(() => {
     const map = new Map<string, string>()
     ;(memberQuery.data?.list ?? []).forEach((member: Member) =>
-      map.set(member.memberId, member.realName),
+      // 键必须是数字主键：批次里落的 operator_id 就是 `Member.id`
+      // （原用 memberId 当键，永远查不到，采收人列只能显示「—」）
+      map.set(member.id as string, member.realName),
     )
     return map
   }, [memberQuery.data])
@@ -159,21 +164,24 @@ export default function HarvestPlan(): JSX.Element {
     setFilters({})
   }
 
-  /** 表格列定义：字段全部取自 HarvestRecordEntity，缺失显示「—」 */
+  /** 表格列定义：字段全部取自后端返回（采收批次表），缺失显示「—」 */
   const columns: ProColumns<PlotHarvestRecord>[] = [
     {
-      title: '记录编号',
-      dataIndex: 'recordId',
+      // 2026-10-16：记录就是采收批次，优先展示业务编号（H20260601 这类），
+      // 批次号缺失时退回主键，两者都没有才显示「—」
+      title: '批次编号',
+      dataIndex: 'batchNo',
       width: 160,
-      render: (_, record) => record.recordId ?? '—',
+      render: (_, record) => record.batchNo ?? record.recordId ?? '—',
     },
     {
       title: '地块',
       dataIndex: 'plotId',
       width: 140,
       render: (_, record) => {
-        if (!record.plotId) return '—'
-        return plotNameOf.get(record.plotId) ?? record.plotId
+        if (record.plotId && plotNameOf.has(record.plotId)) return plotNameOf.get(record.plotId)
+        // 地块不在当前农场的下拉里（或没配地块主数据）时，用后端冗余的地块名，最后才退回 ID
+        return record.plotName ?? record.plotId ?? '—'
       },
     },
     {
@@ -196,6 +204,9 @@ export default function HarvestPlan(): JSX.Element {
       render: (_, record) => (
         <MetricText
           value={typeof record.quantity === 'number' ? record.quantity : null}
+          // 最多两位小数（不补零）：采收数量是实测量，别被抹成整数
+          // （原按默认 0 位显示，321.5 kg 会显示成 322 kg，与「采收记录」页的 321.5 kg 打架）
+          maxPrecision={2}
           suffix={record.unit ? ` ${record.unit}` : ''}
           missingTip="后端未返回 quantity，显示为「—」，不补 0"
         />
@@ -218,25 +229,38 @@ export default function HarvestPlan(): JSX.Element {
       dataIndex: 'operatorId',
       width: 120,
       render: (_, record) => {
-        if (!record.operatorId) return '—'
-        return memberNameOf.get(record.operatorId) ?? record.operatorId
+        if (record.operatorId && memberNameOf.has(record.operatorId)) {
+          return memberNameOf.get(record.operatorId)
+        }
+        return record.operatorName ?? record.operatorId ?? '—'
       },
     },
+    // 原「天气」列已删（2026-10-16）：采收批次表没有天气列，「新建采收」表单也不采集，
+    // 留着就是一列永远显示「—」的空列 —— 那是噪声不是信息。真需要时补表字段再加回。
     {
-      title: '天气',
-      dataIndex: 'weather',
-      width: 90,
-      render: (_, record) => record.weather ?? '—',
-    },
-    {
+      // 状态口径与「采收记录」页一致：入库状态（待入库/已入库/已出库）+ 批次库存状态（在库…）
       title: '状态',
-      dataIndex: 'status',
-      width: 90,
-      render: (_, record) => {
-        if (typeof record.status !== 'number') return '—'
-        const meta = RECORD_STATUS_META[record.status]
-        return <Tag color={meta?.color ?? 'default'}>{meta?.label ?? record.status}</Tag>
-      },
+      key: 'status',
+      width: 170,
+      render: (_, record) => (
+        <Space size={4} wrap>
+          {typeof record.inboundStatus === 'number' ? (
+            <Tag color={INBOUND_STATUS_META[record.inboundStatus as InboundStatus].color}>
+              <span style={{ color: INBOUND_STATUS_META[record.inboundStatus as InboundStatus].color }}>
+                ●
+              </span>{' '}
+              {INBOUND_STATUS_META[record.inboundStatus as InboundStatus].label}
+            </Tag>
+          ) : (
+            <Typography.Text type="secondary">—</Typography.Text>
+          )}
+          {typeof record.status === 'number' ? (
+            <Tag color={BATCH_STATUS_META[record.status as BatchStatus]?.color ?? 'default'}>
+              {BATCH_STATUS_META[record.status as BatchStatus]?.label ?? record.status}
+            </Tag>
+          ) : null}
+        </Space>
+      ),
     },
     {
       title: '备注',
@@ -283,7 +307,7 @@ export default function HarvestPlan(): JSX.Element {
         showIcon
         style={{ marginBottom: 16 }}
         message="本页展示「按地块聚合的已发生采收记录」，不是采收计划"
-        description="后端 GET /harvests/plan 的语义是按地块聚合采收记录（表 prod_harvest_record），系统当前没有 prod_harvest_plan 表。「采收计划」的创建、成熟度评估、人力安排三项后端尚未实现（无对应端点），因此本页不提供这些操作，待后端补齐后再上线。"
+        description="后端 GET /harvests/plan 的语义是按地块聚合已发生的采收记录，与「采收记录」页同读 agri_prod_harvest_batch，所以本页「新建采收」登记完立刻能在这里查到。系统当前没有 prod_harvest_plan 表，「采收计划」的创建、成熟度评估、人力安排三项后端尚未实现（无对应端点），因此本页不提供这些操作，待后端补齐后再上线。"
       />
       {overview.missingQtyCount > 0 ? (
         <Alert

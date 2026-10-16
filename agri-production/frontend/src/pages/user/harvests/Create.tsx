@@ -175,10 +175,16 @@ export default function Create(): JSX.Element {
   /** 采收人下拉选项 */
   const memberOptions = useMemo(
     () =>
-      (memberQuery.data?.list ?? []).map((member: Member) => ({
-        value: member.memberId,
-        label: member.realName,
-      })),
+      // 2026-10-16 修正：operator_id 是 BIGINT 列，必须提交**数字主键** `Member.id`。
+      // 原实现提交的是 `Member.memberId`（DEMO-MEM-001 这类业务标识），后端
+      // toLong("DEMO-MEM-001") 解析失败后**返回 null**（静默丢弃，不报错），
+      // 于是"采收人"选了却落不进库 —— 详情/列表里那一列永远空。规则见 agri-shared 的 Member 注释。
+      (memberQuery.data?.list ?? [])
+        .filter((member: Member) => Boolean(member.id))
+        .map((member: Member) => ({
+          value: member.id as string,
+          label: member.realName,
+        })),
     [memberQuery.data],
   )
 
@@ -268,7 +274,8 @@ export default function Create(): JSX.Element {
   const buildPayload = (): Partial<HarvestBatch> => {
     const values = form.getFieldsValue()
     const operator = (memberQuery.data?.list ?? []).find(
-      (member: Member) => member.memberId === values.operatorId,
+      // 与上面的下拉取值同源：按数字主键匹配（原来按 memberId 匹配，永远匹配不上）
+      (member: Member) => member.id === values.operatorId,
     )
     return {
       farmId,

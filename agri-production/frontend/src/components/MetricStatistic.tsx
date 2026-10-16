@@ -155,8 +155,17 @@ export function MetricNumber({
 export interface MetricTextProps {
   /** 指标值；null 表示后端未提供该数据源 */
   value: number | null
-  /** 小数位，缺省 0 */
+  /** 固定小数位，缺省 0 */
   precision?: number
+  /**
+   * 最多保留的小数位（与 {@link precision} 二选一）。
+   *
+   * <p>2026-10-16 新增：`precision` 是**min=max** 的定长格式，而有些指标是带小数的实测量
+   * （如采收数量 321.5 kg）—— 用默认 0 位会被抹成 322，看着像"数错了"。
+   * 这个选项按"最多 N 位、不补零"输出（321.5 → `321.5`，1250 → `1,250`），
+   * 既保住精度，也不给整数硬塞小数尾巴。传了它时忽略 `precision`。</p>
+   */
+  maxPrecision?: number
   /** 单位后缀 */
   suffix?: string
   /** 缺失时的自定义提示语 */
@@ -172,6 +181,7 @@ export interface MetricTextProps {
 export function MetricText({
   value,
   precision = 0,
+  maxPrecision,
   suffix = '',
   missingTip = MISSING_VALUE_TIP,
 }: MetricTextProps): JSX.Element {
@@ -187,10 +197,15 @@ export function MetricText({
   }
   return (
     <Typography.Text>
-      {value.toLocaleString('zh-CN', {
-        minimumFractionDigits: precision,
-        maximumFractionDigits: precision,
-      })}
+      {maxPrecision === undefined
+        ? value.toLocaleString('zh-CN', {
+            minimumFractionDigits: precision,
+            maximumFractionDigits: precision,
+          })
+        : value.toLocaleString('zh-CN', {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: maxPrecision,
+          })}
       {suffix}
     </Typography.Text>
   )
