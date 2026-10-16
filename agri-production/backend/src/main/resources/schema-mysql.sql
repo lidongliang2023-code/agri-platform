@@ -52,6 +52,9 @@ terrain TEXT,
 drainage TEXT,
 irrigation_type TEXT,
 current_crop TEXT,
+    -- 当前作物的主数据主键（作物名仍在 current_crop 里，给页面直接显示）。
+    -- 老库靠 schema-patch-plot-crop.sql 的守卫式 ALTER 补这一列，fresh install 由这里直接带上。
+    crop_id BIGINT,
 planting_date DATE,
 expected_harvest_date DATE,
 status VARCHAR(255) DEFAULT 'active',

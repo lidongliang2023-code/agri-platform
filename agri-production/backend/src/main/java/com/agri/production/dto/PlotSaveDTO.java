@@ -37,6 +37,15 @@ public class PlotSaveDTO {
 
     private String currentCrop;
 
+    /**
+     * 当前作物：作物主数据主键（页面作物下拉的 value）。
+
+     *
+     * <p>类型是 String 而不是 Long —— 页面 / 脚本下发的可能是主键、也可能是作物名，
+     * 服务层按"能不能解析成数字"分流（与种养计划的作物字段同一口径）。</p>
+     */
+    private String cropId;
+
     private java.time.LocalDate plantingDate;
 
     private java.time.LocalDate expectedHarvestDate;

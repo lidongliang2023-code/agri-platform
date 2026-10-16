@@ -74,6 +74,13 @@ export interface Plot {
   irrigationType: string
   /** 当前作物 ID */
   cropId?: string
+  /**
+   * 当前作物名称（地块列表 / 详情「当前作物」显示的就是它）。
+   *
+   * <p>与 {@link cropId} 成对：名称给页面直接显示，ID 用来关联作物主数据（{@code agri_prod_crop_info}）。
+   * 历史行可能只有名称没有 ID（作物做成主数据之前登记的）。</p>
+   */
+  currentCrop?: string
   /** 当前作物品种 */
   cropVariety?: string
   /** 当前种养计划 ID */

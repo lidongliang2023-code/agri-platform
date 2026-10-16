@@ -480,7 +480,9 @@ export default function PlotDetail(): JSX.Element {
 
   const statusMeta = PLOT_STATUS_META[plot.status] ?? { label: '未知', color: 'default' }
   const plan = planQuery.data
-  const cropName = plan?.cropName ?? plot.cropVariety ?? '-'
+  // 当前作物：计划里的作物优先（地块上种什么由计划决定），其次地块台账的 current_crop（主数据来的名称），
+  // 最后退回 cropVariety（历史行只有品种）
+  const cropName = plan?.cropName ?? plot.currentCrop ?? plot.cropVariety ?? '-'
   const variety = plot.cropVariety ?? plan?.cropVariety ?? '-'
   const stageText = latestGrowth?.growthStage
   const usages = Object.entries(usageStats.grouped)

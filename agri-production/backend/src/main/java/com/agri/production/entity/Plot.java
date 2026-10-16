@@ -75,6 +75,16 @@ public class Plot extends BaseEntity {
     @TableField("current_crop")
     private String currentCrop;
 
+    /**
+     * 当前作物的**主数据主键**（{@code agri_prod_crop_info.id}）。
+
+     *
+     * <p>与 {@code current_crop}（作物名，展示用）成对写入：名称给页面直接显示，
+     * ID 给"按作物统计 / 关联"用。列由 {@code schema-patch-plot-crop.sql} 的守卫式 ALTER 补齐。</p>
+     */
+    @TableField("crop_id")
+    private Long cropId;
+
     @TableField("planting_date")
     private java.time.LocalDate plantingDate;
 

@@ -980,6 +980,7 @@ export function normalizePlot(raw: unknown): Plot {
     soilType: readString(record, ['soilType'], '-'),
     irrigationType: readString(record, ['irrigationType'], '-'),
     cropId: readString(record, ['cropId'], ''),
+    currentCrop: readString(record, ['currentCrop'], ''),
     cropVariety: readString(record, ['cropVariety'], ''),
     currentPlanId: readString(record, ['currentPlanId'], ''),
     geoBoundary: readString(record, ['geoBoundary'], ''),

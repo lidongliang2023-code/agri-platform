@@ -45,6 +45,15 @@ public class PlotVO {
 
     private String currentCrop;
 
+    /**
+     * 当前作物的主数据主键（页面作物下拉回显用）。
+
+     *
+     * <p>与 {@code currentCrop}（名称）成对：页面下拉的 value 是主键、label 是名称。
+     * 历史行可能只有 {@code currentCrop} 没有 ID（作物做主数据之前登记的），此时为 null。</p>
+     */
+    private Long cropId;
+
     private LocalDate plantingDate;
 
     private LocalDate expectedHarvestDate;

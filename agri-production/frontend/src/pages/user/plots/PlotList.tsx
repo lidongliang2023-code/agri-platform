@@ -70,6 +70,21 @@ const PLANTING_TYPE_META: Record<number, { label: string; color: string }> = {
 /** 原型 P4 生长阶段取值 */
 const DEFAULT_STAGE_OPTIONS: string[] = ['苗期', '开花期', '结果期', '采收期']
 
+/**
+ * 地块的「作物」显示值。
+
+ *
+ * <p>优先 {@code currentCrop}（作物主数据来的名称，2026-10-16 起地块表单可选）；
+ * 历史行没有它时退回 {@code cropVariety} —— 平台侧的演示数据只有"品种"这一层
+ * （如"普罗旺斯"），当年就是拿它当作物显示的，列表里这些行不该突然变成"未种植"。</p>
+ *
+ * @param plot 地块（或任何带这两个字段的行）
+ * @returns 作物显示值；两者都没有时为空串
+ */
+function cropLabelOf(plot: Pick<Plot, 'currentCrop' | 'cropVariety'>): string {
+  return (plot.currentCrop || plot.cropVariety || '').trim()
+}
+
 /** 筛选条件 */
 interface PlotFilters {
   /** 所属农场 */
@@ -181,11 +196,16 @@ export default function PlotList(): JSX.Element {
     return map
   }, [growthQuery.data])
 
-  /** 作物下拉选项（取自真实数据） */
+  /**
+   * 拉页面当前作物名单。
+   *
+   * <p>优先用 {@code currentCrop}（作物主数据来的名称），历史行退回 {@code cropVariety}
+   * —— 演示数据里品种（如"普罗旺斯"）曾被当成作物显示过，列表里这类行不该突然变"未种植"。</p>
+   */
   const cropOptions = useMemo<string[]>(() => {
     const set = new Set<string>()
     ;(plotsQuery.data?.list ?? []).forEach((plot) => {
-      const crop = plot.cropVariety?.trim()
+      const crop = cropLabelOf(plot)
       if (crop) set.add(crop)
     })
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'zh-CN'))
@@ -205,7 +225,7 @@ export default function PlotList(): JSX.Element {
     const list = plotsQuery.data?.list ?? []
     return list.filter((plot) => {
       if (filters.farmId && plot.farmId !== filters.farmId) return false
-      if (filters.crop && (plot.cropVariety ?? '') !== filters.crop) return false
+      if (filters.crop && cropLabelOf(plot) !== filters.crop) return false
       if (filters.status !== undefined && plot.status !== filters.status) return false
       if (filters.stage && plotStageMap[plot.plotId] !== filters.stage) return false
       if (
@@ -317,15 +337,18 @@ export default function PlotList(): JSX.Element {
       title: '作物',
       key: 'crop',
       width: 120,
-      render: (_, record) =>
-        record.cropVariety ? (
+      render: (_, record) => {
+        // 作物取 currentCrop（主数据），历史行退回 cropVariety（见 cropLabelOf 的说明）
+        const crop = cropLabelOf(record)
+        return crop ? (
           <Space size={4}>
-            <span>{CROP_EMOJI_MAP[record.cropVariety] ?? '🌱'}</span>
-            <span>{record.cropVariety}</span>
+            <span>{CROP_EMOJI_MAP[crop] ?? '🌱'}</span>
+            <span>{crop}</span>
           </Space>
         ) : (
           <Typography.Text type="secondary">未种植</Typography.Text>
-        ),
+        )
+      },
     },
     {
       title: '生长阶段',
@@ -433,7 +456,8 @@ export default function PlotList(): JSX.Element {
               onClick={() => navigate(`/production/plots/${plot.plotId}`)}
               title={
                 <Space size={4}>
-                  <span>{CROP_EMOJI_MAP[plot.cropVariety ?? ''] ?? '🌱'}</span>
+                  {/* 与列表「作物」列同一口径：currentCrop 优先，历史行退回 cropVariety */}
+                  <span>{CROP_EMOJI_MAP[cropLabelOf(plot)] ?? '🌱'}</span>
                   <Typography.Text ellipsis style={{ maxWidth: 120 }}>
                     {plot.plotName}
                   </Typography.Text>

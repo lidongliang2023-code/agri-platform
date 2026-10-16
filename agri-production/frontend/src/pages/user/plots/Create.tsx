@@ -42,6 +42,8 @@ import {
 } from 'antd'
 import { createPlot, getPlot, listPlots, updatePlot } from '@/api/plots'
 import { getFarmSummary, listAllFarms } from '@/api/farms'
+import { listCropOptions } from '@/api/crops'
+import { CROP_EMOJI_MAP } from '@/types'
 
 /** 土壤类型选项（原型 P6） */
 const SOIL_TYPE_OPTIONS: string[] = ['壤土', '砂土', '黏土', '盐碱土']
@@ -102,6 +104,15 @@ interface PlotFormValues {
   plantingType: number
   /** 坡度 */
   slope: string
+  /**
+   * 当前作物：作物主数据主键（页面作物下拉的 value）。
+
+   *
+   * <p>作物是主数据（`/production/crops` 维护），地块这里选一个 —— 提交后落 `crop_id` +
+   * `current_crop`（名称，页面直接显示）。此前地块压根没有"当前作物"的录入入口，
+   * 库里的值只来自演示数据迁移。</p>
+   */
+  cropId?: string
   /** 经度 */
   longitude?: number
   /** 纬度 */
@@ -217,6 +228,8 @@ export default function Create(): JSX.Element {
       irrigationType: plot.irrigationType || '滴灌',
       plantingType: plot.plantingType ?? 1,
       slope: geometry?.slope ?? '平地',
+      // 作物下拉的 value 是主数据主键；历史行只有名字（crop_id 为空）时先留空
+      cropId: plot.cropId || undefined,
       longitude: geometry?.type === 'Point' ? geometry.coordinates[0] : undefined,
       latitude: geometry?.type === 'Point' ? geometry.coordinates[1] : undefined,
       polygonText: points
@@ -238,6 +251,25 @@ export default function Create(): JSX.Element {
     queryFn: () => getFarmSummary(farmId as string),
     retry: false,
   })
+
+  /**
+   * 作物主数据下拉（「当前作物」）。
+
+   * <p>只给启用中的作物；拉不到就是空列表 —— 页面上会提示"没有可选作物"，
+   * 不塞假选项（与计划 / 负责人下拉同口径）。没有想要的作物去 `/production/crops` 新增。</p>
+   */
+  const cropQuery = useQuery({
+    queryKey: ['crop-options'],
+    queryFn: () => listCropOptions(),
+  })
+  const cropOptions = useMemo(
+    () =>
+      (cropQuery.data ?? []).map((item) => ({
+        value: item.cropId,
+        label: CROP_EMOJI_MAP[item.cropName] ? `${CROP_EMOJI_MAP[item.cropName]} ${item.cropName}` : item.cropName,
+      })),
+    [cropQuery.data],
+  )
 
   /** 农场下地块（计算已用面积） */
   const plotsQuery = useQuery({
@@ -284,6 +316,8 @@ export default function Create(): JSX.Element {
         soilType: params.values.soilType,
         irrigationType: params.values.irrigationType,
         plantingType: params.values.plantingType as 1 | 2 | 3 | 4,
+        // 当前作物走作物主数据（主键）；后端据此落 crop_id + current_crop（名称）
+        cropId: params.values.cropId,
         geoBoundary: buildBoundary({ ...params.values, polygonText: params.polygonText }),
         status: 1 as 0 | 1 | 2 | 3 | 4,
       }
@@ -447,6 +481,21 @@ export default function Create(): JSX.Element {
                 options={PLANTING_TYPE_OPTIONS}
                 optionType="button"
                 buttonStyle="solid"
+              />
+            </Form.Item>
+
+            <Form.Item
+              name="cropId"
+              label="当前作物"
+              extra="取自作物主数据；没有想要的作物先去「作物管理」新增（品种请在下方单独填）"
+            >
+              <Select
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                placeholder={cropOptions.length > 0 ? '选择该地块当前种的作物（可不填）' : '作物主数据里还没有作物'}
+                options={cropOptions}
+                style={{ maxWidth: 360 }}
               />
             </Form.Item>
 
