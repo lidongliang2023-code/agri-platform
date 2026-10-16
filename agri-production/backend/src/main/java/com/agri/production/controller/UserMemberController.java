@@ -81,6 +81,19 @@ public class UserMemberController {
         return ApiResponse.success(memberService.roleHeadcount(TenantContextService.currentTenantId()));
     }
 
+    /**
+     * 本租户的角色目录（页面「角色与权限」的清单，农场主可见）。
+     *
+     * <p>与平台域 {@code GET /api/v1/admin/roles}（平台角色全表、仅超管）刻意分开：
+     * 这条只回答"我这个农场里有哪些角色、各几个人"，数据源是本服务成员台账，
+     * 不越权、也不把平台角色定义发给租户。前端「角色与权限」页在非超管账号下应改调这条
+     * （页面当前硬编码调平台域那条，属前端待改项）。</p>
+     */
+    @GetMapping("/roles/catalog")
+    public ApiResponse<List<Map<String, Object>>> roleCatalog() {
+        return ApiResponse.success(memberService.roleCatalog(TenantContextService.currentTenantId()));
+    }
+
     /* ==================== 参数小工具 ==================== */
 
     /**

@@ -181,6 +181,24 @@ public class UserMemberServiceImpl implements IUserMemberService {
         return result;
     }
 
+    @Override
+    public List<Map<String, Object>> roleCatalog(String tenantId) {
+        List<Map<String, Object>> headcount = roleHeadcount(tenantId);
+        List<Map<String, Object>> result = new java.util.ArrayList<>();
+        for (Map<String, Object> row : headcount) {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("roleCode", row.get("roleCode"));
+            // 角色名称的权威数据在平台域，本服务不持有 —— 留空，不拿编码冒充名称
+            item.put("roleName", null);
+            item.put("memberCount", row.get("memberCount"));
+            item.put("source", "tenant-members");
+            result.add(item);
+        }
+        result.sort((a, b) -> Integer.compare(((Number) b.get("memberCount")).intValue(),
+                ((Number) a.get("memberCount")).intValue()));
+        return result;
+    }
+
     /* ==================== 内部工具 ==================== */
 
     /**

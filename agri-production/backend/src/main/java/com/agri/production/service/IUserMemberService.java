@@ -51,6 +51,24 @@ public interface IUserMemberService {
     List<Map<String, Object>> roleHeadcount(String tenantId);
 
     /**
+     * 本租户的「角色目录」：**成员台账里实际在用的角色** + 在职人数。
+
+     *
+     * <p>与平台域 {@code GET /api/v1/admin/roles} 的区别（2026-10-16 定）：那条是**平台角色全表**、
+     * 只允许平台超级管理员调用，里面还含 SUPER_ADMIN 这类平台角色 —— 给农场主看既越权又不是他要的东西。
+     * 农场主关心的是"我这个农场里都有哪些角色、各几个人"，所以这里按成员台账聚合（数据源就是本服务的
+     * {@code agri_prod_member.role_code}），不引入平台角色档案。</p>
+     *
+     * <p>为什么 {@code roleName} 留空：角色**名称**的权威数据在平台域（本服务不持有），
+     * 拿编码当名字返回等于在页面上显示 "FARM_OWNER"，所以如实给 null，由页面按编码渲染 ——
+     * 与成员出参里的既有口径一致（既有 UserMemberVO 就刻意不编造 roleNames）。</p>
+     *
+     * @param tenantId 当前租户
+     * @return 每项 {@code {roleCode, roleName(null), memberCount, source:"tenant-members"}}，按人数倒序
+     */
+    List<Map<String, Object>> roleCatalog(String tenantId);
+
+    /**
      * 成员写操作的入参（页面按后端字段名发送：memberName / phone / memberType / postName /
      * roleCode / farmId / userId / joinDate / status）。
      *
