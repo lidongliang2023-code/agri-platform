@@ -115,7 +115,13 @@ const menuKeySet = new Set(allMenu.map((leaf) => leaf.key))
 
 /** 菜单 key 在路由表中找不到对应页面 —— 点了必然 404 */
 const deadMenu = allMenu.filter((leaf) => !routeSet.has(leaf.key))
-/** 静态路由未进菜单 —— 预期是 create / detail 类子页面 */
+/**
+ * 静态路由未进菜单。
+ *
+ * 预期两类：① create / detail 类子页面（由列表页按钮进入）；② **按口径收口过**的页面 ——
+ * 例：投入品「使用台账」(inputs/ledger) 与「使用记录」(inputs/usages) 和「投入品台账」页重叠，
+ * 菜单叶子已撤销，改由页面内入口 / 深链可达（见 config/menu.tsx 的注释）。
+ */
 const hiddenRoutes = staticRoutes.filter((p) => !menuKeySet.has(p))
 
 const dynamicRoutes = allRoutes.filter(isDynamic)
@@ -136,7 +142,7 @@ hiddenRoutes.forEach((p) => console.log(`  - ${p}`))
 const problems = deadMenu.length
 console.log(
   problems === 0
-    ? '\n菜单 ↔ 路由 校验通过 ✅（无死链；未挂菜单项均为 create / detail 子页面）'
+    ? '\n菜单 ↔ 路由 校验通过 ✅（无死链；未挂菜单项为 create/detail 类子页面或按口径收口过的页面）'
     : `\n菜单 ↔ 路由 校验发现 ${problems} 个死链 ❌`,
 )
 process.exit(problems === 0 ? 0 : 1)

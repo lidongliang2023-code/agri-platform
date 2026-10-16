@@ -336,6 +336,23 @@ try {
   // 有「投入品台账」「出入库管理」「使用记录」，但**没有**「投入品使用台账」（2026-10-16 去重）。
   check(ledgerText.includes('投入品台账') && !ledgerText.includes('投入品使用台账'),
     '侧边栏该分组下已无重复的「投入品使用台账」')
+  // 第三份也收口了（2026-10-16）：「使用记录」叶子撤销。侧边栏只会出现菜单标签，
+  // 页面正文里另有"使用记录"字样（合规汇总），所以这里只读侧边栏的文本。
+  const siderText = await page.evaluate(() => document.querySelector('.ant-layout-sider')?.innerText ?? '')
+  check(!siderText.includes('使用记录'), '侧边栏不再有「使用记录」叶子（第三份收口）',
+    siderText.replace(/\s+/g, ' ').slice(-70))
+  // 但那一页独有的能力（新建使用记录/合规校验/上链）不能跟着丢：入口挂在本页「使用台账」Tab 右上角
+  const hasEntry = await page.evaluate(() =>
+    [...document.querySelectorAll('button, a')].some((el) => (el.textContent ?? '').includes('登记使用记录')))
+  check(hasEntry, '保留页提供了「登记使用记录 →」入口（收口不砍功能）')
+  await page.evaluate(() => {
+    const el = [...document.querySelectorAll('button, a')].find((b) => (b.textContent ?? '').includes('登记使用记录'))
+    el?.click()
+  })
+  await sleep(1200)
+  const usageText = await page.evaluate(() => document.body.innerText)
+  check(page.url().includes('/production/inputs/usages') && usageText.includes('投入品使用记录'),
+    '从投入品台账页能进入「投入品使用记录」页', page.url().replace(BASE_URL, ''))
 
   // 回到计划页（下面要在计划页开新增弹窗）
   await page.goto(`${BASE_URL}/production/plans`, { waitUntil: 'networkidle2', timeout: 60000 })

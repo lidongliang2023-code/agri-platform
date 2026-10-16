@@ -914,6 +914,15 @@ export default function InputList(): JSX.Element {
             setTab(key as MainTab)
             setPageNum(1)
           }}
+          // 「登记使用记录」入口（2026-10-16 菜单收口配套）：
+          // 「使用记录」(/production/inputs/usages) 的菜单叶子已撤销（它与本页「使用台账」Tab 重叠），
+          // 但**新建使用记录 / 合规校验 / 上链 / 删除**是那一页独有的能力 —— 收口不能顺手砍功能，
+          // 所以把入口挂到最相关的这个 Tab 右上角，页面上仍然可达（不再单独占菜单位）。
+          tabBarExtraContent={
+            <Button type="link" onClick={() => navigate('/production/inputs/usages')}>
+              登记使用记录 →
+            </Button>
+          }
           items={[
             { key: 'archive', label: `投入品档案(${filteredInputs.length})` },
             { key: 'ledger', label: `使用台账(${ledgerRows.length})` },
