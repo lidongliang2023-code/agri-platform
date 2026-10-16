@@ -21,6 +21,16 @@ public class Plot extends BaseEntity {
     @TableField("plot_code")
     private String plotCode;
 
+    /**
+     * 平台侧地块标识（{@code prod_plot_info.plot_id}，形如 DEMO-PLOT-001）。
+
+     *
+     * <p>与农场的 platformFarmId 同法：页面/历史数据里出现的是平台侧标识，而本服务的地块主键是数字 id，
+     * 靠这一列换算（见 PlotIdResolver）。列由 schema-patch-plot-soil-demo.sql 的守卫式 ALTER 补齐。</p>
+     */
+    @TableField("platform_plot_id")
+    private String platformPlotId;
+
     @TableField("plot_name")
     private String plotName;
 
