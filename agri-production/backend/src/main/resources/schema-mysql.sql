@@ -1367,3 +1367,60 @@ deleted BIGINT DEFAULT 0,
     UNIQUE KEY `uk_setting_key` (tenant_id, setting_key),
     INDEX `idx_setting_group` (setting_group)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 生长监测记录（用户端「生长记录」「生长监测总览」）。
+--
+-- 【为什么建新表而不是复用平台侧 prod_growth_record 那套列】
+-- 页面 GrowthRecord 契约要的是 growthLevel（长势评级 1~4）、leafAreaIndex（叶面积指数）、
+-- pestInfo（病虫害描述）；平台侧的表只有 height / leaf_count / pest_level 三列能沾边。
+-- 若把这三列做成"由株高/叶数现场推算"，页面上的长势与叶面积指数就是**算出来的**而不是**记下来的**，
+-- 一旦被当成记录值使用（长势对比、评分），错误会被放大。所以按页面契约直接建列，由人工录入；
+-- 只有演示行才按固定规则推（规则写在 schema-patch-growth-demo.sql 的注释里，可被推翻）。
+--
+-- 【plot_id 为什么是 VARCHAR 而不是本地数字主键】
+-- 本服务的地块主数据（agri_prod_plot_info）与平台侧是**两份**，需要一个 platform_plot_id 映射才能
+-- 对齐 —— 而这条映射属于「farms/plots 主数据收敛」那一轮（见《生产管理模块_剩余缺口处置方案_2026-10-16》
+-- 第六节），本轮还没有。同时，页面上的地块下拉来自**仍留在平台侧的** GET /plots，回传的是
+-- DEMO-PLOT-001 这类平台标识。此刻若把 plot_id 定义成本地数字主键：
+--   · 机械转换演示数据时无映射可依，硬凑一个对应关系等于编数据；
+--   · 页面按地块筛选/对比/总览会一条都匹配不上（或报错），表现为"筛了跟没筛一样"——
+--     正是本项目一直在治的那类静默失效。
+-- 因此本阶段的 plot_id 存**页面口径的地块标识**（机械抄自平台侧演示数据），plot_name 冗余落地供页面直接展示。
+-- ⚠️ 第 6 轮地块主数据收敛时必须一并处理本表：给 agri_prod_plot_info 补 platform_plot_id 之后，
+--    按它把本表 plot_id 回填成本地主键，并让所有按地块的过滤走同一套换算（FarmIdResolver 同法）。
+CREATE TABLE IF NOT EXISTS agri_prod_growth_record (
+id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+record_id VARCHAR(64) NOT NULL COMMENT '记录编号（业务主键，页面 recordId）',
+plot_id VARCHAR(64) COMMENT '地块标识（当前为页面口径的平台侧标识，见上方说明）',
+plot_name VARCHAR(100) COMMENT '地块名称（冗余，页面直接展示；平台侧标识无法本地反查，故随行落地）',
+plan_id VARCHAR(64) COMMENT '种养计划标识（页面 planId，当前留空）',
+crop_id VARCHAR(64) COMMENT '作物标识（页面 cropId，当前留空）',
+crop_name VARCHAR(100) COMMENT '作物名称（页面 cropName）',
+growth_stage VARCHAR(32) COMMENT '生育期：苗期 / 开花期 / 结果期 / 采收期',
+record_date DATE COMMENT '记录日期',
+plant_height DECIMAL(8,2) COMMENT '株高（cm）',
+leaf_count INT COMMENT '叶片数',
+leaf_area_index DECIMAL(6,2) COMMENT '叶面积指数（页面 leafAreaIndex；人工录入或演示规则推算）',
+growth_level TINYINT COMMENT '长势评级 1 弱 / 2 偏弱 / 3 正常 / 4 旺盛',
+pest_level TINYINT COMMENT '病虫害等级 0 无 / 1 轻 / 2 中 / 3 重',
+pest_info VARCHAR(200) COMMENT '病虫害描述（页面 pestInfo）',
+weather VARCHAR(50) COMMENT '天气',
+photos TEXT COMMENT '现场照片（JSON 数组字符串；页面 resolveGrowthPhotos 两种形态都认）',
+recorder_id VARCHAR(64) COMMENT '记录人标识（页面未回传，留空）',
+recorder_name VARCHAR(100) COMMENT '记录人姓名（页面 recorderName）',
+remark VARCHAR(500) COMMENT '备注（全链路溯源用）',
+status TINYINT DEFAULT 1 COMMENT '1 有效 0 停用',
+farm_id BIGINT COMMENT '所属农场（本服务农场主键；页面传回的农场标识经 FarmIdResolver 换算）',
+tenant_id VARCHAR(191) NOT NULL,
+create_by TEXT,
+create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+update_by TEXT,
+update_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+deleted BIGINT DEFAULT 0,
+    UNIQUE KEY `uk_growth_record_id` (record_id),
+    INDEX `idx_growth_tenant_id` (tenant_id),
+    INDEX `idx_growth_plot_id` (plot_id),
+    INDEX `idx_growth_farm_id` (farm_id),
+    INDEX `idx_growth_record_date` (record_date),
+    INDEX `idx_growth_pest_level` (pest_level)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
