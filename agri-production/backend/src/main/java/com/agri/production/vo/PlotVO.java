@@ -52,4 +52,17 @@ public class PlotVO {
     private LocalDateTime createTime;
 
     private LocalDateTime updateTime;
+
+    /**
+     * 页面口径的地块主键（字符串）。
+
+     *
+     * <p>页面列表直接读 {@code record.plotId}（没有 normalize 层），而本 VO 的主键字段叫 {@code id} ——
+     * 切 /plots 段之前必须给出这个别名，否则页面上"行 id 是 undefined、点详情跳到 /undefined"，
+     * 而接口全是 200（iot 设备段踩过同一个坑）。用只读派生 getter 实现：不需要在构建处逐字段赋值，
+     * 也就不会出现"两个字段各自维护、某一处忘了同步"的情况。</p>
+     */
+    public String getPlotId() {
+        return id == null ? null : String.valueOf(id);
+    }
 }

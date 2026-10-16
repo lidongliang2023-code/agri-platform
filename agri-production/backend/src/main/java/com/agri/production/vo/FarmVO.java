@@ -63,5 +63,22 @@ public class FarmVO {
 
     private LocalDateTime createTime;
 
+    /**
+     * 页面口径的农场主键（字符串）—— 页面列表直接读 {@code record.farmId}，而本 VO 的主键字段叫 {@code id}。
+     * 派生 getter，理由同 {@link PlotVO#getPlotId()}。
+     */
+    public String getFarmId() {
+        return id == null ? null : String.valueOf(id);
+    }
+
+    /**
+     * 页面口径的在册面积字段名（{@code areaTotal}）；库里/本 VO 叫 {@code totalArea}。
+     *
+     * <p>只做改名别名，不做换算：页面要的就是"农场在册总面积"这一个数。</p>
+     */
+    public java.math.BigDecimal getAreaTotal() {
+        return totalArea;
+    }
+
     private LocalDateTime updateTime;
 }
