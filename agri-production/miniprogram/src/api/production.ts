@@ -57,6 +57,16 @@ export function getPlot(plotId: string): Promise<any> {
 }
 
 /**
+ * 新增地块，返回新地块主键（后端 `POST /plots` 返回 `ApiResponse<String>`）。
+ *
+ * <p>可写字段以后端 {@code PlotSaveDTO} 为准：地块名称与 farmId 必填；
+ * 面积 / 土壤类型 / 灌溉方式 / 作物品种 / 经纬度 / 种植与预计采收日期 / 备注选填。</p>
+ */
+export function createPlot(payload: Record<string, any>): Promise<string> {
+  return request<string>({ url: '/api/v1/production/plots', method: 'POST', data: payload })
+}
+
+/**
  * 地块最新土壤记录。
  *
  * <p>没有记录时后端返回 404，这里**吞掉成 null**：页面对"没测过土壤"显示「—」，

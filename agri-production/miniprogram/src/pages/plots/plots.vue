@@ -10,6 +10,8 @@
       </picker>
       <view class="divider" />
       <input v-model="keyword" class="input" style="text-align: left" placeholder="搜索地块名称 / 编号" @confirm="load" />
+      <view class="divider" />
+      <view class="btn-ghost" @click="goCreate">＋ 新增地块</view>
     </view>
 
     <view v-if="error" class="error-box">{{ error }}</view>
@@ -97,6 +99,10 @@ function onFarmChange(event: any): void {
 
 function goDetail(plotId: string): void {
   uni.navigateTo({ url: `/pages/plots/detail?id=${plotId}` })
+}
+
+function goCreate(): void {
+  uni.navigateTo({ url: '/pages/plots/create' })
 }
 
 onShow(() => {

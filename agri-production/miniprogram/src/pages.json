@@ -37,6 +37,10 @@
       "style": { "navigationBarTitleText": "地块地图" }
     },
     {
+      "path": "pages/plots/create",
+      "style": { "navigationBarTitleText": "新增地块" }
+    },
+    {
       "path": "pages/tasks/detail",
       "style": { "navigationBarTitleText": "任务详情" }
     },

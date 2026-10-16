@@ -341,7 +341,8 @@ const clickButton = async (label) => {
 
 const bodyText = () => page.evaluate(() => document.body.innerText.replace(/\s+/g, ' '))
 
-const created = { usageId: '', batchId: '', taskId: '' }
+const created = { usageId: '', batchId: '', taskId: '', plotId: '' }
+const plotName = `移动端联调地块-${stamp}`
 
 try {
   /* ==================== 0) 登录 ==================== */
@@ -503,12 +504,82 @@ try {
     check(!(taskRow ?? '').split(/\s+/)[3]?.startsWith('NULL'), '库里执行人落的是主键（不是 NULL）',
       `executor_id=${(taskRow ?? '').split(/\s+/)[3]}`)
   }
+
+  /* ==================== 5) 写链路⑤：新增地块（PRD §4.2.3 三步表单） ==================== */
+
+  await open('pages/plots/create', 1500)
+  const stepOneText = await bodyText()
+  check(stepOneText.includes('Step1 · 基础信息'), '新增地块页渲染 Step1')
+  check(stepOneText.includes('基础信息') && stepOneText.includes('位置定位') && stepOneText.includes('作物信息'),
+    '三步指示器齐全')
+
+  await fillField('地块名称', plotName)
+  await fillField('面积(亩)', '9.9')
+  // 枚举走滚轮：4 项列表一次 -100px 落到末项（壤砂土），5 项列表落到末项（其他）
+  await pickOption('土壤类型', '壤砂土')
+  await pickOption('灌溉方式', '其他')
+  await clickButton('下一步')
+  await sleep(400)
+  check((await bodyText()).includes('Step2 · 位置定位'), '进入 Step2 位置定位')
+
+  await fillField('经度', '113.61')
+  await fillField('纬度', '23.52')
+  await clickButton('下一步')
+  await sleep(400)
+  check((await bodyText()).includes('Step3 · 作物信息'), '进入 Step3 作物信息')
+
+  await fillField('当前作物', '番茄')
+  await fillField('作物品种', '中杂9号')
+  const beforePlot = writes.length
+  await clickButton('提交')
+  await page.waitForNetworkIdle({ idleTime: 800, timeout: 20000 }).catch(() => {})
+  await sleep(2000)
+  const plotWrite = writes.slice(beforePlot).find((item) => /POST .*\/plots$/.test(item))
+  check(Boolean(plotWrite), '页面发出 POST /plots', plotWrite ?? writes.slice(beforePlot).join(' | '))
+  check((await bodyText()).includes('地块已创建'), '提交后进入成功页')
+
+  // 成功页 URL 不带主键（是 redirectTo 之前的页），按唯一地块名回查主键
+  const plotList = await api('GET', '/plots?farmId=1&pageNum=1&pageSize=200')
+  const newPlot = (plotList.json?.data?.records ?? []).find((row) => row.plotName === plotName)
+  created.plotId = newPlot ? String(newPlot.id) : ''
+  check(Boolean(created.plotId), '能按地块名查回刚建的地块', `id=${created.plotId}`)
+
+  if (created.plotId) {
+    const detail = await api('GET', `/plots/${created.plotId}`)
+    const plot = detail.json?.data ?? {}
+    check(detail.json?.code === 0, '地块详情接口返回成功')
+    check(plot.plotName === plotName, '详情回显地块名', String(plot.plotName))
+    check(Number(plot.area) === 9.9, '详情回显面积', String(plot.area))
+    check(plot.soilType === '壤砂土', '详情回显土壤类型（滚轮选的那项）', String(plot.soilType))
+    // 这两项是本轮才补进后端 DTO 的：此前提交上去会被静默丢弃
+    check(plot.irrigationType === '其他', '详情回显灌溉方式（此前后端 DTO 缺该字段、选了什么都会丢）',
+      String(plot.irrigationType))
+    check(plot.cropVariety === '中杂9号', '详情回显作物品种（同样此前会丢）', String(plot.cropVariety))
+    check(Number(plot.centerLongitude) === 113.61, '详情回显经度', String(plot.centerLongitude))
+  }
+
+  if (MYSQL_BIN && created.plotId) {
+    const plotRow = mysqlQuery(
+      `SELECT plot_code, plot_name, area, soil_type, irrigation_type, crop_variety, center_longitude, deleted ` +
+        `FROM ${DB}.agri_prod_plot_info WHERE id = ${created.plotId};`,
+    )
+    const cells = (plotRow ?? '').split(/\s+/)
+    check(Boolean(plotRow) && !String(plotRow).startsWith('SQL_ERROR'), 'MySQL 里落了地块', plotRow ?? '（查不到）')
+    check(cells[1] === plotName, '库里地块名与提交一致', `plot_name=${cells[1]}`)
+    check(Number(cells[2]) === 9.9, '库里面积与提交一致', `area=${cells[2]}`)
+    check(cells[3] === '壤砂土' && cells[4] === '其他', '库里土壤类型/灌溉方式都落了',
+      `soil_type=${cells[3]} irrigation_type=${cells[4]}`)
+    check(cells[5] === '中杂9号', '库里作物品种落了', `crop_variety=${cells[5]}`)
+    check(Number(cells[6]) === 113.61, '库里经度落了', `center_longitude=${cells[6]}`)
+    check(cells[7] === '0', '库里 deleted=0（在库）', `deleted=${cells[7]}`)
+  }
   check(pageErrors.length === 0, '没有未捕获的前端异常', pageErrors.slice(0, 2).join(' | '))
   check(badResponses.length === 0, '写链路全程没有意外的 4xx/5xx', badResponses.slice(0, 3).join(' | '))
 } finally {
   /* ==================== 清理（放在 finally：中途断言失败也不留脏数据） ==================== */
 
   for (const [label, path] of [
+    ['地块', created.plotId ? `/plots/${created.plotId}` : ''],
     ['采收批次', created.batchId ? `/harvests/${created.batchId}` : ''],
     ['任务', created.taskId ? `/tasks/${created.taskId}` : ''],
     ['使用记录', created.usageId ? `/inputs/usages/${created.usageId}` : ''],
@@ -521,13 +592,14 @@ try {
       check(false, `清理：删除本轮造的${label}`, String(err?.message ?? err))
     }
   }
-  if (MYSQL_BIN && created.batchId && created.taskId && created.usageId) {
+  if (MYSQL_BIN && created.batchId && created.taskId && created.usageId && created.plotId) {
     const flags = mysqlQuery(
       `SELECT (SELECT deleted FROM ${DB}.agri_prod_harvest_batch WHERE id=${created.batchId}), ` +
         `(SELECT deleted FROM ${DB}.agri_prod_task_info WHERE id=${created.taskId}), ` +
-        `(SELECT deleted FROM ${DB}.agri_prod_input_usage WHERE id=${created.usageId});`,
+        `(SELECT deleted FROM ${DB}.agri_prod_input_usage WHERE id=${created.usageId}), ` +
+        `(SELECT deleted FROM ${DB}.agri_prod_plot_info WHERE id=${created.plotId});`,
     )
-    check(flags === '1\t1\t1', '三处清理都是软删（库里留痕 deleted=1）', `deleted 标记=${flags}`)
+    check(flags === '1\t1\t1\t1', '四处清理都是软删（库里留痕 deleted=1）', `deleted 标记=${flags}`)
   }
   await browser.close()
 }

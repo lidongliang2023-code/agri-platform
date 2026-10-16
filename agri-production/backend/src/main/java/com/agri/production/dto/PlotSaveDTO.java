@@ -31,6 +31,23 @@ public class PlotSaveDTO {
 
     private String soilType;
 
+    /**
+     * 灌溉方式（如 滴灌 / 喷灌 / 漫灌）。
+     *
+     * <p>2026-10-17 补：表 {@code agri_prod_plot_info.irrigation_type} 与实体 {@code Plot} 都有这一列，
+     * PC 端新增地块表单也一直在提交它，但 DTO 里缺这一项 —— 意味着**选了也不落库**（静默丢弃）。
+     * 移动端「新增地块」的 Step1 要编辑这一项，故补上；服务层是 {@code BeanCopyUtils.copy(dto, plot)}，
+     * 字段同名即自动映射。</p>
+     */
+    private String irrigationType;
+
+    /**
+     * 作物品种（如 中杂9号）。
+     *
+     * <p>2026-10-17 补：同上，列与实体都有、页面要显示与录入，DTO 缺失就写不进去。</p>
+     */
+    private String cropVariety;
+
     private BigDecimal soilPh;
 
     private BigDecimal soilOrganicMatter;
