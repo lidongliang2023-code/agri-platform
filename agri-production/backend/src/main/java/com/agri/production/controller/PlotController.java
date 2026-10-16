@@ -29,7 +29,7 @@ public class PlotController {
         return ApiResponse.success(vo);
     }
 
-    @PutMapping("/{id}")
+    @PutMapping("/{id:\\d+}")
     public ApiResponse<PlotVO> update(@PathVariable Long id, @Valid @RequestBody PlotSaveDTO dto) {
         dto.setId(id);
         String tenantId = TenantContextService.currentTenantId();
@@ -37,14 +37,14 @@ public class PlotController {
         return ApiResponse.success(vo);
     }
 
-    @DeleteMapping("/{id}")
+    @DeleteMapping("/{id:\\d+}")
     public ApiResponse<Void> delete(@PathVariable Long id) {
         String tenantId = TenantContextService.currentTenantId();
         plotService.delete(id, tenantId);
         return ApiResponse.success();
     }
 
-    @GetMapping("/{id}")
+    @GetMapping("/{id:\\d+}")
     public ApiResponse<PlotVO> getById(@PathVariable Long id) {
         String tenantId = TenantContextService.currentTenantId();
         PlotVO vo = plotService.getById(id, tenantId);

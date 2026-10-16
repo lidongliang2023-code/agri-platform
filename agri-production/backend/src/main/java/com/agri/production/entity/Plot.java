@@ -40,6 +40,10 @@ public class Plot extends BaseEntity {
     @TableField("farm_code")
     private String farmCode;
 
+    /** 作物品种（页面 cropVariety；列由 schema-patch-plot-variety.sql 的守卫式 ALTER 补上并从平台侧回填）。 */
+    @TableField("crop_variety")
+    private String cropVariety;
+
     @TableField("area")
     private BigDecimal area;
 

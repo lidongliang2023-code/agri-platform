@@ -27,7 +27,7 @@ public class FarmController {
         return ApiResponse.success(vo);
     }
 
-    @PutMapping("/{id}")
+    @PutMapping("/{id:\\d+}")
     public ApiResponse<FarmVO> update(@PathVariable Long id, @Valid @RequestBody FarmSaveDTO dto) {
         dto.setId(id);
         String tenantId = TenantContextService.currentTenantId();
@@ -35,14 +35,14 @@ public class FarmController {
         return ApiResponse.success(vo);
     }
 
-    @DeleteMapping("/{id}")
+    @DeleteMapping("/{id:\\d+}")
     public ApiResponse<Void> delete(@PathVariable Long id) {
         String tenantId = TenantContextService.currentTenantId();
         farmService.delete(id, tenantId);
         return ApiResponse.success();
     }
 
-    @GetMapping("/{id}")
+    @GetMapping("/{id:\\d+}")
     public ApiResponse<FarmVO> getById(@PathVariable Long id) {
         String tenantId = TenantContextService.currentTenantId();
         FarmVO vo = farmService.getById(id, tenantId);
