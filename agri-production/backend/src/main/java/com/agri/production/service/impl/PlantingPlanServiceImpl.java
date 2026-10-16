@@ -4,8 +4,12 @@ import com.agri.production.common.constant.PlanStatusDict;
 import com.agri.production.common.entity.PageResult;
 import com.agri.production.common.exception.BusinessException;
 import com.agri.production.dto.PlantingPlanSaveDTO;
+import com.agri.production.entity.Farm;
 import com.agri.production.entity.PlantingPlan;
+import com.agri.production.entity.Plot;
+import com.agri.production.mapper.FarmMapper;
 import com.agri.production.mapper.PlantingPlanMapper;
+import com.agri.production.mapper.PlotMapper;
 import com.agri.production.service.IPlantingPlanService;
 import com.agri.production.vo.PlantingPlanVO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -40,6 +44,16 @@ public class PlantingPlanServiceImpl extends ServiceImpl<PlantingPlanMapper, Pla
 
     private static final DateTimeFormatter MONTH = DateTimeFormatter.ofPattern("yyyy-MM");
     private static final DateTimeFormatter CODE_DAY = DateTimeFormatter.ofPattern("yyyyMMdd");
+
+    /** 地块台账：只给地块 ID 时用来补齐地块名称、并校验该地块真实存在。 */
+    private final PlotMapper plotMapper;
+    /** 农场台账：同理补齐农场名称（计划详情页「所属农场」读的是 name 列）。 */
+    private final FarmMapper farmMapper;
+
+    public PlantingPlanServiceImpl(PlotMapper plotMapper, FarmMapper farmMapper) {
+        this.plotMapper = plotMapper;
+        this.farmMapper = farmMapper;
+    }
 
     @Override
     public IPage<PlantingPlan> queryPage(Page<PlantingPlan> page, Long farmId, String planName, Integer planYear, String planStatus) {
@@ -177,7 +191,7 @@ public class PlantingPlanServiceImpl extends ServiceImpl<PlantingPlanMapper, Pla
         }
         PlantingPlan plan = new PlantingPlan();
         plan.setTenantId(tenantId);
-        applyDto(plan, dto, true);
+        applyDto(plan, dto, true, tenantId);
         if (isBlank(plan.getPlanName())) {
             throw new BusinessException(400, "计划名称不能为空");
         }
@@ -210,7 +224,7 @@ public class PlantingPlanServiceImpl extends ServiceImpl<PlantingPlanMapper, Pla
         }
         // 在已加载的实体上就地改：编辑弹窗只下发其中一部分字段，
         // new 一个空实体再 updateById 会把没下发的列**清成 null**
-        applyDto(plan, dto, false);
+        applyDto(plan, dto, false, tenantId);
         if (isBlank(plan.getPlanName())) {
             throw new BusinessException(400, "计划名称不能为空");
         }
@@ -301,7 +315,7 @@ public class PlantingPlanServiceImpl extends ServiceImpl<PlantingPlanMapper, Pla
      *
      * @param create true = 新增（未下发的字段留空）；false = 编辑（未下发的字段保持原值）
      */
-    private void applyDto(PlantingPlan plan, PlantingPlanSaveDTO dto, boolean create) {
+    private void applyDto(PlantingPlan plan, PlantingPlanSaveDTO dto, boolean create, String tenantId) {
         if (dto.getPlanCode() != null && !dto.getPlanCode().isBlank()) {
             plan.setPlanCode(dto.getPlanCode().trim());
         }
@@ -312,6 +326,7 @@ public class PlantingPlanServiceImpl extends ServiceImpl<PlantingPlanMapper, Pla
         applyIdOrName(dto.getFarmId(), dto.getFarmName(), plan::setFarmId, plan::setFarmName, create);
         applyIdOrName(dto.getPlotId(), dto.getPlotName(), plan::setPlotId, plan::setPlotName, create);
         applyIdOrName(dto.getCropId(), dto.getCropName(), plan::setCropId, plan::setCropName, create);
+        resolveReferenceNames(plan, dto, tenantId);
 
         if (dto.getCropVariety() != null) {
             plan.setCropVariety(trimToNull(dto.getCropVariety()));
@@ -410,6 +425,63 @@ public class PlantingPlanServiceImpl extends ServiceImpl<PlantingPlanMapper, Pla
         }
         String word = PlanStatusDict.normalize(planStatus);
         return word == null ? Collections.emptyList() : Collections.singletonList(word);
+    }
+
+    /**
+     * 按 ID 补齐农场 / 地块的名称列（页面列表与详情读的是 name 列）。
+     *
+     * <p>为什么要补：实体里 ID 与名称是两列，页面展示走名称。此前只下发 ID 时名称留空，
+     * 计划列表的「地块」列、详情页的「关联地块 / 所属农场」就都显示 "-"，看着像"没关联上"
+     * （2026-10-16 实测：{@code POST /plans {"plotId":"238"}} → {@code plot_id=238} /
+     * {@code plot_name=NULL}）。名称取自本服务的地块 / 农场台账，是**有来源的派生**，不是编数据。</p>
+
+     *
+     * <p>两边校验口径**故意不同**：</p>
+     * <ul>
+     *   <li><b>地块</b>：本次请求真的下发了地块 ID 而本租户查不到 → 400。悬空关联会让
+     *       "关联地块"变成一句空话（列表点进去没有地），宁可当场报错。</li>
+     *   <li><b>农场</b>：查不到不拦，只留空 name。农场 ID 是页面按当前农场上下文自动带上的，
+     *       历史数据里也存在指向演示农场的行，不该因为"补不出名字"就拦住保存。</li>
+     * </ul>
+     *
+     * <p>注意：只在**本次请求下发了该字段**时才处理。编辑弹窗不下发地块时保持原值 ——
+     * 否则旧数据里已存在的悬空 ID 会让"只改个名字"都存不回去。</p>
+     *
+     * @param plan 正在组装的实体
+     * @param dto 请求体（用来判断本次是否下发了该字段）
+     * @param tenantId 当前租户
+     */
+    private void resolveReferenceNames(PlantingPlan plan, PlantingPlanSaveDTO dto, String tenantId) {
+        if (trimToNull(dto.getFarmId()) != null && plan.getFarmId() != null && isBlank(dto.getFarmName())) {
+            Farm farm = farmMapper.selectOne(new LambdaQueryWrapper<Farm>()
+                    .eq(Farm::getTenantId, tenantId)
+                    .eq(Farm::getId, plan.getFarmId())
+                    .last("LIMIT 1"));
+            if (farm != null) {
+                plan.setFarmName(farm.getFarmName());
+            }
+        }
+        if (trimToNull(dto.getPlotId()) == null) {
+            return;
+        }
+        Long plotId = plan.getPlotId();
+        if (plotId == null) {
+            // 下发的是"水稻"这类业务文本：applyIdOrName 已把它落进 name 列，没有 ID 可校验
+            return;
+        }
+        Plot plot = plotMapper.selectOne(new LambdaQueryWrapper<Plot>()
+                .eq(Plot::getTenantId, tenantId)
+                .eq(Plot::getId, plotId)
+                .last("LIMIT 1"));
+        if (plot == null) {
+            throw new BusinessException(400, "地块不存在（本租户内查不到该地块）：" + plotId);
+        }
+        // 以台账为准覆盖名称（调用方没显式给名称时）。**不能**只判断"当前名称为空"：
+        // 编辑时实体的 plot_name 是上一次的旧值，改成空判断会让"换了地块、名字还是旧地块的"
+        // （2026-10-16 实测：plot_id 238→239 后 plot_name 仍是「A区连栋大棚」，列表显示错误的地块）。
+        if (isBlank(dto.getPlotName())) {
+            plan.setPlotName(plot.getPlotName());
+        }
     }
 
     /**

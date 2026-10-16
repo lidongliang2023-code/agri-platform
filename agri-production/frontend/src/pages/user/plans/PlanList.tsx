@@ -32,6 +32,7 @@ import {
   StopOutlined,
 } from '@ant-design/icons'
 import useFarmStore from '@/store/farm'
+import { listPlots } from '@/api/plots'
 import {
   createPlanInfo,
   fetchPlans,
@@ -151,6 +152,32 @@ export default function PlanList(): JSX.Element {
   async function reload(): Promise<void> {
     await queryClient.invalidateQueries({ queryKey: ['plan-list'] })
     actionRef.current?.reload()
+  }
+
+  /**
+   * 「关联地块」下拉选项：本农场地块台账。
+   *
+   * <p>为什么不再让用户手填 ID：原先这里是自由文本框「关联地块 ID」——用户既不知道地块主键，
+   * 填对了也只落 {@code plot_id}、不落 {@code plot_name}，列表「地块」列照样显示 "-"
+   * （2026-10-16 实测），看着就像没关联上。现在直接列出台账里的地块，选谁就是谁。</p>
+
+   *
+   * <p>拉不到就返回空列表：宁可让用户看到"没有可选地块"，也不塞假选项。</p>
+   *
+   * @returns 下拉选项（value = 地块 ID，label = 地块名 + 面积）
+   */
+  async function loadPlotOptions(): Promise<{ label: string; value: string }[]> {
+    try {
+      const page = await listPlots({ farmId: effectiveFarmId, pageNum: 1, pageSize: 200 })
+      return (page.list ?? [])
+        .filter((plot) => Boolean(plot.plotId))
+        .map((plot) => ({
+          label: plot.area ? `${plot.plotName}（${plot.area} 亩）` : plot.plotName,
+          value: plot.plotId,
+        }))
+    } catch {
+      return []
+    }
   }
 
   const createMutation = useMutation({
@@ -504,7 +531,16 @@ export default function PlanList(): JSX.Element {
         <ProFormText name="planCode" label="计划编码" placeholder="留空由系统自动生成（同租户内唯一）" />
         <ProFormText name="cropId" label="作物" placeholder="如：tomato / 番茄" rules={[{ required: true, message: '请填写作物' }]} />
         <ProFormText name="cropVariety" label="作物品种" placeholder="如：中杂9号" />
-        <ProFormText name="plotId" label="关联地块 ID" placeholder="关联地块，用于计划落地到具体田块" />
+        <ProFormSelect
+          name="plotId"
+          label="关联地块"
+          placeholder="选择地块（可不选）"
+          showSearch
+          allowClear
+          fieldProps={{ optionFilterProp: 'label' }}
+          request={loadPlotOptions}
+          extra="取自本农场地块台账；同一地块同一时期只允许一个在种计划"
+        />
         <ProFormDatePicker
           name="planStartDate"
           label="计划开始日期"
@@ -564,7 +600,16 @@ export default function PlanList(): JSX.Element {
         <ProFormText name="planName" label="计划名称" rules={[{ required: true, message: '请输入计划名称' }]} />
         <ProFormText name="cropId" label="作物" rules={[{ required: true, message: '请填写作物' }]} />
         <ProFormText name="cropVariety" label="作物品种" />
-        <ProFormText name="plotId" label="关联地块 ID" />
+        <ProFormSelect
+          name="plotId"
+          label="关联地块"
+          placeholder="选择地块（可不选）"
+          showSearch
+          allowClear
+          fieldProps={{ optionFilterProp: 'label' }}
+          request={loadPlotOptions}
+          extra="取自本农场地块台账；同一地块同一时期只允许一个在种计划"
+        />
         <ProFormDatePicker name="planStartDate" label="计划开始日期" rules={[{ required: true, message: '请选择开始日期' }]} />
         <ProFormDatePicker name="planEndDate" label="计划结束日期" rules={[{ required: true, message: '请选择结束日期' }]} />
         <ProFormDigit name="expectedYield" label="预计产量(kg)" min={0} fieldProps={{ precision: 0 }} />
