@@ -8,7 +8,11 @@ import com.agri.platform.internal.auth.dto.LoginVO;
 import com.agri.platform.internal.auth.dto.RefreshRequest;
 import com.agri.platform.internal.sso.dto.SsoLoginRequest;
 import com.agri.platform.internal.sso.dto.SsoLoginResult;
+import com.agri.platform.internal.sso.dto.SmsCodeRequest;
+import com.agri.platform.internal.sso.dto.SmsLoginRequest;
+import com.agri.platform.internal.sso.dto.SmsRegisterRequest;
 import com.agri.platform.internal.sso.dto.SsoTokenRequest;
+import com.agri.platform.internal.user.UserEntity;
 import com.agri.shared.exception.BusinessException;
 import com.agri.shared.exception.ErrorCode;
 import com.agri.shared.result.ApiResponse;
@@ -48,6 +52,8 @@ public class SsoController {
     private final AuthorizationCodeService codeService;
     private final SsoProperties properties;
     private final RefreshCookieSupport cookieSupport;
+    /** 手机验证码登录 / 注册（2026-10-16）。 */
+    private final SmsAuthService smsAuthService;
 
     /** 授权端点：有登录态则发码回跳，无则转登录页 */
     @GetMapping("/authorize")
@@ -80,6 +86,59 @@ public class SsoController {
         String code = codeService.issue(user.userId(), user.marketId(), request.clientId(), request.redirectUri(),
                 request.codeChallenge(), request.codeChallengeMethod());
         return ApiResponse.ok(new SsoLoginResult(callback(request.redirectUri(), code, request.state())));
+    }
+
+    /**
+     * 发送手机验证码（登录 / 注册共用）。
+
+     *
+     * <p>短信通道未配置真实服务商时（{@code agri.auth.sms.mode=none}）**直接拒绝**并说明原因；
+     * dev 模式下验证码只写**后端日志**，不回响应体 —— 页面流程与生产一致，不会把验证码漏给前端。</p>
+     */
+    @PostMapping("/sms/code")
+    public ApiResponse<SmsCodeSentResult> sendSmsCode(@Valid @RequestBody SmsCodeRequest request) {
+        smsAuthService.send(request.phone(), request.scene());
+        return ApiResponse.ok(new SmsCodeSentResult(true, smsAuthService.devMode(),
+                smsAuthService.devMode() ? "开发模式：验证码已写入后端日志（不回传、不入库明文）"
+                        : "验证码已发送"));
+    }
+
+    /** 手机验证码登录：凭据是「手机号 + 短信验证码」，其余与密码登录同一套授权上下文。 */
+    @PostMapping("/login-by-sms")
+    public ApiResponse<SsoLoginResult> loginBySms(@Valid @RequestBody SmsLoginRequest request,
+                                                 HttpServletResponse response) {
+        assertClient(request.clientId(), request.redirectUri());
+        smsAuthService.verify(request.phone(), "login", request.code());
+        UserEntity user = smsAuthService.requireUserByPhone(request.phone());
+        Long marketId = request.marketId() == null ? 1L : request.marketId();
+        return ApiResponse.ok(signIn(user.getId(), marketId, request.clientId(), request.redirectUri(),
+                request.state(), request.codeChallenge(), request.codeChallengeMethod(), response));
+    }
+
+    /**
+     * 手机号验证码注册：注册成功即登录（同一授权上下文签码回跳，用户不必再登一次）。
+
+     *
+     * <p>账号建好但**不绑定经营主体** —— 绑定到哪家主体、什么身份是产品口径；
+     * 未绑定账号进业务域会收到可读的"还没有绑定经营主体"提示（见 {@code SmsAuthService.registerByPhone}）。</p>
+     */
+    @PostMapping("/register-by-sms")
+    public ApiResponse<SsoLoginResult> registerBySms(@Valid @RequestBody SmsRegisterRequest request,
+                                                    HttpServletResponse response) {
+        assertClient(request.clientId(), request.redirectUri());
+        smsAuthService.verify(request.phone(), "register", request.code());
+        Long marketId = request.marketId() == null ? 1L : request.marketId();
+        UserEntity user = smsAuthService.registerByPhone(request.phone(), request.nickname(), marketId);
+        return ApiResponse.ok(signIn(user.getId(), marketId, request.clientId(), request.redirectUri(),
+                request.state(), request.codeChallenge(), request.codeChallengeMethod(), response));
+    }
+
+    /** 建全局会话 → 签授权码 → 拼回跳地址（密码登录 / 验证码登录 / 注册共用这一段）。 */
+    private SsoLoginResult signIn(Long userId, Long marketId, String clientId, String redirectUri, String state,
+                                  String codeChallenge, String codeChallengeMethod, HttpServletResponse response) {
+        sessionService.create(userId, marketId, response);
+        String code = codeService.issue(userId, marketId, clientId, redirectUri, codeChallenge, codeChallengeMethod);
+        return new SsoLoginResult(callback(redirectUri, code, state));
     }
 
     /** 换票端点：code + PKCE → 平台令牌（访问令牌在响应体，刷新令牌进 HttpOnly Cookie） */

@@ -19,14 +19,20 @@ import { useState } from 'react'
 //     所以这里如实说明依赖，**不放一个点了必然失败的按钮**，也不伪造二维码或"验证码已发送"。
 
 /** 登录方式 */
-type LoginMode = 'phone' | 'account' | 'wechat'
+type LoginMode = 'sms' | 'phone' | 'account' | 'wechat'
 
 export default function App(): JSX.Element {
   const params = new URLSearchParams(window.location.search)
   const clientId = params.get('client_id') ?? ''
   const redirectUri = params.get('redirect_uri') ?? ''
 
-  const [mode, setMode] = useState<LoginMode>('phone')
+  const [mode, setMode] = useState<LoginMode>('sms')
+  /** 验证码 Tab 下的子模式：登录 / 注册（注册成功即登录） */
+  const [registerMode, setRegisterMode] = useState(false)
+  const [smsCode, setSmsCode] = useState('')
+  const [nickname, setNickname] = useState('')
+  const [sending, setSending] = useState(false)
+  const [hint, setHint] = useState('')
   const [phone, setPhone] = useState('')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -41,6 +47,31 @@ export default function App(): JSX.Element {
     setBusy(true)
     setError('')
     try {
+      // 验证码登录 / 注册：走 sso 的 login-by-sms / register-by-sms
+      if (mode === 'sms') {
+        const context = {
+          phone,
+          code: smsCode,
+          marketId: Number(marketId),
+          clientId,
+          redirectUri,
+          state: params.get('state'),
+          codeChallenge: params.get('code_challenge'),
+          codeChallengeMethod: params.get('code_challenge_method'),
+        }
+        const response = await fetch(`/api/v1/sso/${registerMode ? 'register-by-sms' : 'login-by-sms'}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(registerMode ? { ...context, nickname } : context),
+        })
+        const body = await response.json()
+        if (!response.ok || body.code !== 0) {
+          setError(body.message ?? (registerMode ? '注册失败，请重试' : '登录失败，请重试'))
+          return
+        }
+        window.location.href = body.data.redirect
+        return
+      }
       const response = await fetch('/api/v1/sso/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -71,6 +102,31 @@ export default function App(): JSX.Element {
     }
   }
 
+  /** 发送短信验证码（登录 / 注册场景不同，码不通用） */
+  async function sendCode(): Promise<void> {
+    setSending(true)
+    setError('')
+    setHint('')
+    try {
+      const response = await fetch('/api/v1/sso/sms/code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, scene: registerMode ? 'register' : 'login' }),
+      })
+      const body = await response.json()
+      if (!response.ok || body.code !== 0) {
+        setError(body.message ?? '验证码发送失败')
+        return
+      }
+      // 验证码**不会**回到这里（dev 通道也只写后端日志）—— 如实告诉使用者去哪儿取
+      setHint(body.data?.hint ?? '验证码已发送')
+    } catch {
+      setError('无法联系认证服务，请确认后端已启动')
+    } finally {
+      setSending(false)
+    }
+  }
+
   return (
     <div className="sso-page">
       <form className="sso-card" onSubmit={submit}>
@@ -86,7 +142,8 @@ export default function App(): JSX.Element {
         >
           {(
             [
-              { key: 'phone', label: '手机号登录' },
+              { key: 'sms', label: '验证码登录' },
+              { key: 'phone', label: '手机号密码' },
               { key: 'account', label: '账号密码' },
               { key: 'wechat', label: '微信扫码' },
             ] as { key: LoginMode; label: string }[]
@@ -140,6 +197,70 @@ export default function App(): JSX.Element {
           </label>
         )}
 
+        {mode === 'sms' && (
+          <>
+            <label className="sso-label">
+              手机号
+              <input
+                className="sso-input"
+                value={phone}
+                onChange={(event) => setPhone(event.target.value)}
+                autoComplete="tel"
+                inputMode="numeric"
+                placeholder="如 13800000001"
+                required
+              />
+            </label>
+            <label className="sso-label">
+              短信验证码
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  className="sso-input"
+                  value={smsCode}
+                  onChange={(event) => setSmsCode(event.target.value)}
+                  inputMode="numeric"
+                  maxLength={6}
+                  placeholder="6 位数字"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => void sendCode()}
+                  disabled={sending || phone.length !== 11}
+                  style={{ whiteSpace: 'nowrap', padding: '0 12px', cursor: 'pointer' }}
+                >
+                  {sending ? '发送中…' : '发送验证码'}
+                </button>
+              </div>
+            </label>
+            {hint !== '' && <div className="sso-hint">{hint}</div>}
+            <label className="sso-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <input
+                type="checkbox"
+                checked={registerMode}
+                onChange={(event) => {
+                  setRegisterMode(event.target.checked)
+                  setError('')
+                  setHint('登录与注册的验证码不通用，切换后请重新获取')
+                }}
+                style={{ width: 'auto', margin: 0 }}
+              />
+              没有账号？用这个手机号注册（注册成功即登录）
+            </label>
+            {registerMode && (
+              <label className="sso-label">
+                昵称（选填）
+                <input
+                  className="sso-input"
+                  value={nickname}
+                  onChange={(event) => setNickname(event.target.value)}
+                  placeholder="留空则用「用户+手机尾号」"
+                />
+              </label>
+            )}
+          </>
+        )}
+
         {mode === 'account' && (
           <label className="sso-label">
             用户名
@@ -153,17 +274,22 @@ export default function App(): JSX.Element {
           </label>
         )}
 
-        <label className="sso-label">
-          密码
-          <input
-            className="sso-input"
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            autoComplete="current-password"
-            required
-          />
-        </label>
+            {/* 密码只在两个"密码类" Tab 上出现（2026-10-16）：
+                它原先是无条件渲染的，于是「验证码登录」Tab 上也挂着这个 required 输入框，
+                空着提交会被浏览器拦下 —— 表现为"点了登录什么都不发生"（真浏览器联调实测踩到）。 */}
+            {(mode === 'phone' || mode === 'account') && (
+              <label className="sso-label">
+                密码
+                <input
+                  className="sso-input"
+                  type="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  autoComplete="current-password"
+                  required
+                />
+              </label>
+            )}
         <label className="sso-label">
           市场 ID
           <input
@@ -178,7 +304,7 @@ export default function App(): JSX.Element {
 
         {mode !== 'wechat' && (
           <button className="sso-button" type="submit" disabled={busy || contextMissing}>
-            {busy ? '登录中…' : '登 录'}
+            {busy ? '处理中…' : mode === 'sms' && registerMode ? '注 册 并 登 录' : '登 录'}
           </button>
         )}
 

@@ -46,6 +46,11 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             "/api/v1/sso/login",
             "/api/v1/sso/token",
             "/api/v1/sso/logout",
+            // 手机验证码 与 手机号注册（2026-10-16）：同样发生在"拿令牌之前"，
+            // 不放行会让发送验证码/注册直接 401（登录流程又卡在鸡生蛋上）。
+            "/api/v1/sso/sms/code",
+            "/api/v1/sso/login-by-sms",
+            "/api/v1/sso/register-by-sms",
             // 公开行情（数据分级 L1）——卫星服务 satellite-quote-push 拉取数据源亦复用此口径
             "/api/v1/quotes/**",
             "/v3/api-docs/**",
