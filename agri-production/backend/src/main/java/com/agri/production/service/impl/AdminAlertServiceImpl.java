@@ -1,6 +1,7 @@
 package com.agri.production.service.impl;
 
 import com.agri.production.common.entity.PageResult;
+import com.agri.production.common.constant.AlertDict;
 import com.agri.production.common.exception.BusinessException;
 import com.agri.production.entity.AlertRecord;
 import com.agri.production.entity.EmergencyPlan;
@@ -119,21 +120,16 @@ public class AdminAlertServiceImpl implements IAdminAlertService {
      * 所以一律用 IN 两套写法，不用单值 EQ。</p>
      */
     private static List<String> statusTexts(int statusCode) {
-        return switch (statusCode) {
-            case 2 -> List.of("HANDLING", "handling", "processing");
-            case 3 -> List.of("HANDLED", "handled", "closed");
-            case 4 -> List.of("IGNORED", "ignored");
-            default -> List.of("PENDING", "pending", "unhandled");
-        };
+        // 词表搬到 common/constant/AlertDict：用户端告警中心要用同一套（两边读同一张表，
+        // 各写一份必然有一天只改一边）。这里保留方法名，只做转发。
+        return AlertDict.statusValuesOf(statusCode);
     }
 
     private static List<String> levelTexts(int levelCode) {
-        return switch (levelCode) {
-            case 1 -> List.of("info", "INFO", "提示");
-            case 3 -> List.of("important", "IMPORTANT", "error", "high", "重要", "严重");
-            case 4 -> List.of("urgent", "URGENT", "critical", "紧急");
-            default -> List.of("normal", "NORMAL", "warning", "warn", "medium", "一般");
-        };
+        // 口径统一到 AlertDict：'critical' 由"紧急(4)"改为"严重(3)" —— 库内这批 critical 行
+        // 来自平台侧演示集，平台自己的口径就是 CRITICAL→严重，以数据来源为准。
+        // 影响：管理端按"严重"筛选现在能筛出这 2 条（此前筛不出），按"紧急"筛不再包含它们。
+        return AlertDict.levelValuesOf(levelCode);
     }
 
     @Override

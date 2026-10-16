@@ -106,13 +106,21 @@ const SIDE_EFFECT_SUFFIXES = ['/generate', '/accredit', '/reject']
  * 它们留在平台侧才是对的。若不排除，脚本会把"平台域路径没在卫星服务里实现"一直算成缺口，
  * 于是这条判据永远达不到 0，等于判据失效。
  *
- * 当前唯一一条：`/admin/tenants/**` —— 租户/市场主体是**平台域**数据（库在 agri_core），
- * 而本服务的口径是"一主体一租户"：租户由平台下发（见 TenantContextService 解析逻辑），
- * 本服务**不拥有**租户主数据。所以这里既不该建 agri_prod_tenant_info 表、也不该接这几个接口
- * （2026-10-15 已把早先那套 Tenant 脚手架删掉：它对应的表根本不存在，当时 5 个接口一调就是 500）。
- * 对应地，将来切 /admin/ 那一段时**必须把 /admin/tenants 排除在外**（见网关 20-prod.conf 的说明）。
+ * 目前两条：
+ *
+ * 1. `/admin/tenants/**` —— 租户/市场主体是**平台域**数据（库在 agri_core），
+ *    而本服务的口径是"一主体一租户"：租户由平台下发（见 TenantContextService 解析逻辑），
+ *    本服务**不拥有**租户主数据。所以这里既不该建 agri_prod_tenant_info 表、也不该接这几个接口
+ *    （2026-10-15 已把早先那套 Tenant 脚手架删掉：它对应的表根本不存在，当时 5 个接口一调就是 500）。
+ *    对应地，将来切 /admin/ 那一段时**必须把 /admin/tenants 排除在外**（见网关 20-prod.conf 的说明）。
+ *
+ * 2. `/alerts/rules/**` —— 告警**规则**（2026-10-16 定）。告警记录那一半已经切到本服务，
+ *    但规则不切：本服务的规则表列（rule_name/alert_type/condition_expression/threshold_min|max/
+ *    notify_methods）与页面 AlertRule 的契约（metric/operator/threshold/duration/scope/notifyChannels）
+ *    对不上，硬映射等于编数据。网关里用一条**排在通用正则之前**的 location 把这一族交回平台侧
+ *    （见 20-prod.conf），管理端那批规则端点当时也是这么处理的。
  */
-const PLATFORM_OWNED_PATHS = ['/admin/tenants/']
+const PLATFORM_OWNED_PATHS = ['/admin/tenants/', '/alerts/rules']
 
 /**
  * 抓 api 层的 `http.get/post/...('<path>')`。
