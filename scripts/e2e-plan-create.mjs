@@ -17,6 +17,10 @@
  * 原先只有「计划名称」转发到 keyword，另外两个填了等于没填；脚本最后还用
  * "搜一个不存在的作物应返回 0 行"反向确认过滤不是摆设。</p>
  *
+ * <p>作物主数据页的断言**不在这里**：那一页已按产品口径搬到运营端
+ * （{@code /admin/production/crops}，由运营账号维护），由 {@code scripts/e2e-crop-master-ops.mjs}
+ * 用运营身份覆盖 —— 本脚本是用户身份，跑到那儿只会拿到 404（2026-10-16 踩过）。</p>
+ *
  * <p>登录态给法同 {@code scripts/e2e-farm-create.mjs}：落同源静态文件 → 页面上下文 POST /auth/login
  * 种下 HttpOnly Cookie → evaluateOnNewDocument 写非凭证界面态。这里额外写
  * {@code agri_current_farm}，因为计划列表 / 地块下拉都以「当前农场」为作用域。</p>
@@ -277,6 +281,25 @@ try {
   const listText = await page.evaluate(() => document.body.innerText)
   check(listText.includes('种养计划'), '计划列表页已登录并渲染')
 
+  // 1b) 菜单结构（2026-10-16 合并）：「智能种养计划」+「农事任务管理」→ 一级菜单「智能种养」
+  const siderBefore = await page.evaluate(() => document.querySelector('.ant-layout-sider')?.innerText ?? '')
+  check(siderBefore.includes('智能种养'), '侧边栏出现合并后的一级菜单「智能种养」')
+  check(!siderBefore.includes('农事任务管理'), '旧一级菜单「农事任务管理」已不在')
+  check(!siderBefore.includes('智能种养计划'), '旧一级菜单「智能种养计划」已不在')
+  // 面包屑读的就是菜单分组名（buildBreadcrumb 用 group.label），所以"任务页的面包屑是智能种养"
+  // 等于证明两组子项确实挂在同一个一级菜单下 —— 比展开子菜单查 DOM 稳（子菜单折叠时不在 DOM 里）。
+  await page.goto(`${BASE_URL}/production/tasks`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.waitForNetworkIdle({ idleTime: 600, timeout: 10000 }).catch(() => {})
+  const taskCrumb = await page.evaluate(
+    () => document.querySelector('.ant-breadcrumb')?.innerText?.replace(/\s+/g, ' ') ?? '',
+  )
+  check(taskCrumb.includes('智能种养'), '任务页面包屑归到「智能种养」（两组同属一个一级菜单）',
+    taskCrumb || '（未找到面包屑）')
+
+  // 回到计划页（下面要在计划页开新增弹窗）
+  await page.goto(`${BASE_URL}/production/plans`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.waitForNetworkIdle({ idleTime: 600, timeout: 10000 }).catch(() => {})
+
   // 2) 打开「新增种养计划」弹窗
   await clickButtonByText('新增种养计划')
   await page.waitForSelector(inModal('#planName'), { timeout: 20000 })
@@ -414,27 +437,6 @@ try {
   const byNothing = await runSearch({ 作物: '不存在的作物ZZZ' })
   check(byNothing.count === 0, '按不存在的作物检索返回 0 行（过滤真的生效，不是摆设）',
     `rows=${byNothing.count}`)
-
-  // 10) 作物主数据页：列表要能看到刚种的这些作物（页面与接口同源）
-  await page.goto(`${BASE_URL}/production/crops`, { waitUntil: 'networkidle2', timeout: 60000 })
-  await page.waitForNetworkIdle({ idleTime: 600, timeout: 10000 }).catch(() => {})
-  const cropPageText = await page.evaluate(() => document.body.innerText)
-  check(cropPageText.includes('作物'), '「作物管理」页已渲染')
-  check(cropPageText.includes(cropName), '作物主数据列表里有计划用到的作物', cropName)
-
-  // 10b) 类别下拉必须来自后端字典：本地那份旧清单只有 6 项、没有「其他」兜底项，
-  //      所以"能看到「其他」"就是"选项来自服务端"的直接证据。
-  await page.evaluate(() => {
-    const btn = [...document.querySelectorAll('button')]
-      .find((b) => (b.textContent ?? '').replace(/\s+/g, '') === '新增作物')
-    btn?.click()
-  })
-  await page.waitForSelector('.ant-modal-content #cropName', { timeout: 20000 })
-  await sleep(600)
-  await openSelect('.ant-modal-content #cropCategory')
-  const categoryOptions = await readVisibleOptions()
-  check(categoryOptions.includes('蔬菜') && categoryOptions.includes('其他'),
-    '作物类别下拉来自后端字典（含「其他」兜底项）', categoryOptions.join(' / '))
 
   check(badResponses.length === 0, '全链路没有 4xx/5xx 响应', badResponses.slice(0, 3).join(' | '))
 } finally {

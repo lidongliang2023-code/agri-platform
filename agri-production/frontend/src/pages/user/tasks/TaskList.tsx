@@ -1,7 +1,7 @@
 /**
  * 页面名称：任务列表（看板）
  * 路由路径：/production/tasks
- * 所属模块：农事任务管理
+ * 所属模块：智能种养
  * PRD 序号：PRD 6.1 #14
  * 原型来源：用户端原型 P7 tasks（看板视图）
  *
@@ -50,9 +50,12 @@ import { listMembers } from '@/api/members'
 import { listPlots } from '@/api/plots'
 import type { Member, Plot, Task, TaskStatus } from '@/types'
 import {
+  isTaskDone,
+  isTaskExecuting,
   isTaskOverdue,
   OVERDUE_DERIVED_NOTICE,
   TASK_ACCEPT_PENDING,
+  TASK_STATUS_DOING,
   TASK_STATUS_DONE,
 } from '@/types/task'
 import {
@@ -73,19 +76,11 @@ type ViewMode = 'table' | 'kanban'
 /**
  * 状态 Tab 键值。
  *
- * `doing` / `done` 是后端真值（旧代码的 `executing` / `accepted` 后端不存在，
- * 导致「执行中」「已完成」两个 Tab 恒为 0 条）。
+ * `doing` / `done` 仅作为稳定的 UI 内部 key，不直接等同服务端 status。迁移窗口内，执行中同时
+ * 匹配 `executing / doing`，已完成同时匹配 `completed / done`；下压查询时使用 PRD 标准值。
  * `overdue` 不是后端状态，走本地推导。
  *
- * ⚠️ `acceptPending`（待验收）**不是** `status` 取值。
- * 旧代码把它写成 `status === 'submitted'` —— PRD 8.1.1 与后端 status 枚举里都没有这个
- * 值（后端 14 条任务零命中），所以它恒为 0 条、纯属编造，已被删除。
- * 「待验收」这个业务状态真实存在，但挂在 `acceptStatus === 0` 上：后端
- * `TaskInfoService.submit()` 置 `status="done"` + `acceptStatus=0`（实测
- * `POST /tasks/DEMO-TASK-010/submit` → `{status:"done", acceptStatus:0}`）。
- * 因此本 Tab 的判据是 **`status === 'done' && acceptStatus === TASK_ACCEPT_PENDING`**，
- * 与「已完成」Tab（`status === 'done'`）是**包含关系**，不是互斥 —— 和「已逾期」
- * 与其他 Tab 的关系同理。
+ * `acceptPending`（待验收）也不是 status 取值，而由「完成态 + acceptStatus === 0」表达。
  */
 type TabKey = 'all' | 'pending' | 'doing' | 'acceptPending' | 'done' | 'rejected' | 'overdue'
 
@@ -130,11 +125,14 @@ interface BoardColumn {
   statuses: TaskStatus[]
 }
 
-/** 看板列配置（statuses 一律用后端真值；后端状态全集 pending/assigned/doing/done/rejected） */
+/** 看板列配置：标准值与迁移前别名归入同一列，避免同一业务状态重复展示 */
 const BOARD_COLUMNS: BoardColumn[] = [
   { key: 'pending', title: '待执行', color: '#1677ff', statuses: ['pending', 'assigned'] },
-  { key: 'doing', title: '执行中', color: '#fa8c16', statuses: ['doing'] },
-  { key: 'done', title: '已完成', color: '#52c41a', statuses: ['done'] },
+  { key: 'doing', title: '执行中', color: '#fa8c16', statuses: ['executing', 'doing'] },
+  { key: 'done', title: '已完成', color: '#52c41a', statuses: ['completed', 'done'] },
+  { key: 'suspended', title: '已暂停', color: '#d4b106', statuses: ['suspended'] },
+  { key: 'cancelled', title: '已取消', color: '#8c8c8c', statuses: ['cancelled'] },
+  { key: 'expired', title: '已过期', color: '#fa541c', statuses: ['expired'] },
   { key: 'rejected', title: '已驳回', color: '#ff4d4f', statuses: ['rejected'] },
 ]
 
@@ -163,14 +161,16 @@ function matchTab(task: Task, tab: TabKey): boolean {
       return true
     case 'pending':
       return task.status === 'pending' || task.status === 'assigned'
+    case 'doing':
+      return isTaskExecuting(task.status)
+    case 'done':
+      return isTaskDone(task.status)
+    case 'rejected':
+      return task.status === 'rejected'
     case 'overdue':
       return isOverdue(task)
     case 'acceptPending':
-      // 验收维度：已提交（status=done）但还没验收（acceptStatus=0）。
-      // 注意这里用的是 acceptStatus，不是某个 status 值 —— 后端没有 'submitted'。
-      return task.status === TASK_STATUS_DONE && task.acceptStatus === TASK_ACCEPT_PENDING
-    default:
-      return task.status === tab
+      return isTaskDone(task.status) && task.acceptStatus === TASK_ACCEPT_PENDING
   }
 }
 
@@ -179,12 +179,12 @@ function matchTab(task: Task, tab: TabKey): boolean {
  * 待执行（pending + assigned）与已逾期为复合条件，交由前端过滤，故不传 status。
  */
 function toServerStatus(tab: TabKey): string | undefined {
-  // 只有与后端 status 取值一一对应的 Tab 才能下压到服务端；
-  // `pending`（两值合并）、`overdue`（派生）、`acceptPending`（另一维度）都不行，
+  // 迁移窗口内后端仍按旧词检索，故下压 doing / done；数据切换验证完成后改为标准值（需单独提单）。
+  if (tab === 'doing') return TASK_STATUS_DOING
+  if (tab === 'done') return TASK_STATUS_DONE
+  if (tab === 'rejected') return 'rejected'
+  // pending（两值合并）、overdue（派生）、acceptPending（另一维度）都不行，
   // 统一返回 undefined，由 {@link CLIENT_ONLY_TABS} 标记改用本地筛选。
-  if (tab === 'doing' || tab === 'done' || tab === 'rejected') {
-    return tab
-  }
   return undefined
 }
 
@@ -290,8 +290,8 @@ export default function TaskList(): JSX.Element {
     }
     allTasks.forEach((task) => {
       if (task.status === 'pending' || task.status === 'assigned') counts.pending += 1
-      if (task.status === 'doing') counts.doing += 1
-      if (task.status === 'done') {
+      if (isTaskExecuting(task.status)) counts.doing += 1
+      if (isTaskDone(task.status)) {
         counts.done += 1
         // 待验收是「已完成」里还没验收的那一批（验收维度，非 status 维度）
         if (task.acceptStatus === TASK_ACCEPT_PENDING) counts.acceptPending += 1

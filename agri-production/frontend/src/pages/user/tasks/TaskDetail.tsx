@@ -1,7 +1,7 @@
 /**
  * 页面名称：任务详情
  * 路由路径：/production/tasks/:taskId
- * 所属模块：农事任务管理
+ * 所属模块：智能种养
  * PRD 序号：PRD 6.1 #15
  * 原型来源：用户端原型 P9 task-detail
  *
@@ -75,6 +75,7 @@ import {
   TASK_STATUS_LABEL_MAP,
   TASK_TYPE_LABEL_MAP,
 } from '@/types'
+import { isTaskDone, isTaskExecuting } from '@/types/task'
 
 /** 执行记录类型文本 */
 const RECORD_TYPE_TEXT: Record<number, string> = {
@@ -462,7 +463,7 @@ export default function TaskDetail(): JSX.Element {
           key="start"
           type="primary"
           icon={<PlayCircleOutlined />}
-          disabled={task.status === 'doing' || task.status === 'done'}
+          disabled={isTaskExecuting(task.status) || isTaskDone(task.status)}
           loading={startMutation.isPending}
           onClick={() => startMutation.mutate()}
         >
@@ -568,14 +569,14 @@ export default function TaskDetail(): JSX.Element {
           <Button
             type="primary"
             icon={<PlayCircleOutlined />}
-            disabled={task.status === 'doing' || task.status === 'done'}
+            disabled={isTaskExecuting(task.status) || isTaskDone(task.status)}
             loading={startMutation.isPending}
             onClick={() => startMutation.mutate()}
           >
             开始执行
           </Button>
           <Button
-            disabled={task.status !== 'doing'}
+            disabled={!isTaskExecuting(task.status)}
             loading={submitMutation.isPending}
             onClick={() => submitMutation.mutate()}
           >

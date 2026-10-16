@@ -1,7 +1,7 @@
 /**
  * 页面名称：任务验收
  * 路由路径：/production/tasks/:taskId/acceptance
- * 所属模块：农事任务管理
+ * 所属模块：智能种养
  * PRD 序号：PRD 6.1 #18（TASK-06 任务验收）
  *
  * 原型无此页，按 PRD 设计：
@@ -42,7 +42,7 @@ import {
   TASK_STATUS_LABEL_MAP,
   TASK_TYPE_LABEL_MAP,
 } from '@/types'
-import { TASK_ACCEPT_PENDING, TASK_STATUS_DOING } from '@/types/task'
+import { isTaskExecuting, TASK_ACCEPT_PENDING } from '@/types/task'
 
 /** 执行记录类型文本 */
 const RECORD_TYPE_TEXT: Record<number, string> = {
@@ -260,10 +260,8 @@ export default function TaskAcceptance(): JSX.Element {
     )
   }
 
-  // 后端「执行中」真值是 doing（旧代码的 executing 后端不存在）。
-  // 「已提交待验收」不体现为 status，而是 acceptStatus === 0
-  // （TaskInfoService.java:144-151 的 submit() 置 status=done + acceptStatus=0）。
-  const canReview = task.acceptStatus === TASK_ACCEPT_PENDING || task.status === TASK_STATUS_DOING
+  // 「已提交待验收」以 acceptStatus === 0 表达；执行态同时兼容 executing / doing。
+  const canReview = task.acceptStatus === TASK_ACCEPT_PENDING || isTaskExecuting(task.status)
 
   return (
     <PageContainer

@@ -1,7 +1,10 @@
 /**
  * 侧边栏菜单配置
  *
- * 用户端按 PRD 十二个一级模块分组，并补充原型独有的「生长监测与IoT」分组；
+ * 用户端按 PRD 一级模块分组，并补充原型独有的「生长监测与IoT」分组；
+ * （2026-10-16 调整：原「智能种养计划」与「农事任务管理」合并为一级菜单「智能种养」——
+ *   两者是同一条业务链，详见该分组上的注释。分组数不再等于 PRD 模块数。）
+ *
  * 运营端按 PRD 一级模块 + 原型补充的「食品安全」「AI与知识中心」两个分组组织。
  * 本文件是「菜单 - 路由」的唯一映射源，布局与面包屑均从此派生。
  * 说明：create / detail 类子页面由列表页跳转进入，仅注册路由、不出现在菜单中，
@@ -25,7 +28,6 @@ import {
   RobotOutlined,
   SafetyCertificateOutlined,
   SafetyOutlined,
-  ScheduleOutlined,
   TeamOutlined,
 } from '@ant-design/icons'
 import type { ReactNode } from 'react'
@@ -74,19 +76,19 @@ export const USER_MENU: MenuGroup[] = [
     ],
   },
   {
-    key: 'plan',
-    label: '智能种养计划',
+    // 2026-10-16 合并：原「智能种养计划」+「农事任务管理」两个一级菜单。
+    // 两者本来就是一条链上的东西 —— 计划定阶段 → 阶段生成任务 → 任务回填计划进度，
+    // 页面之间互相跳（计划详情里就是任务列表、农事日历里"任务"与"计划阶段"并列展示）。
+    // 拆成两个一级菜单只会让"计划 ↔ 任务"的来回切换要跨菜单找。
+    //
+    // 叶子路径与数量都没变（5 条），所以 USER_MENU_LEAF_COUNT 与菜单↔路由校验不受影响；
+    // 面包屑读的是 group.label（buildBreadcrumb），这两组页面下一律显示「智能种养」。
+    key: 'smart-farming',
+    label: '智能种养',
     icon: <CalendarOutlined />,
     children: [
       { key: '/production/plans', label: '种养计划列表' },
       { key: '/production/plans/calendar', label: '农事日历' },
-    ],
-  },
-  {
-    key: 'task',
-    label: '农事任务管理',
-    icon: <ScheduleOutlined />,
-    children: [
       { key: '/production/tasks', label: '任务列表' },
       { key: '/production/tasks/create', label: '创建任务' },
       { key: '/production/tasks/templates', label: '任务模板库' },

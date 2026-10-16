@@ -153,6 +153,32 @@ try {
   const listAfter = await page.evaluate(() => document.body.innerText)
   check(listAfter.includes(cropName), '新增的作物出现在运营端列表里', cropName)
 
+  // 2b) 类别下拉必须来自后端字典：本地那份旧清单只有 6 项、没有「其他」兜底项，
+  //     所以"能看到「其他」"就是"选项来自服务端"的直接证据（这条原先在计划脚本里，
+  //     页面搬到运营端后跟着搬过来）。
+  await clickButtonByText('新增作物')
+  await page.waitForSelector('.ant-modal-content #cropName', { timeout: 20000 })
+  await sleep(600)
+  await page.click('.ant-modal-content #cropCategory')
+  await page.waitForFunction(
+    () => document.querySelectorAll('.ant-select-item-option').length > 0,
+    { timeout: 15000 },
+  )
+  await sleep(300)
+  const categoryOptions = await page.evaluate(() =>
+    [...document.querySelectorAll('.ant-select-item-option')].map((el) => el.textContent.trim()))
+  check(categoryOptions.includes('蔬菜') && categoryOptions.includes('其他'),
+    '作物类别下拉来自后端字典（含「其他」兜底项）', categoryOptions.join(' / '))
+  // 关掉弹窗，避免留下未提交的表单
+  await page.keyboard.press('Escape')
+  await sleep(300)
+  await page.evaluate(() => {
+    const btn = [...document.querySelectorAll('.ant-modal-footer button')]
+      .find((b) => (b.textContent ?? '').replace(/\s+/g, '') === '取消')
+    btn?.click()
+  })
+  await sleep(400)
+
   // 3) 用户端不再有维护入口
   await page.goto(`${BASE_URL}/production/crops`, { waitUntil: 'networkidle2', timeout: 60000 })
   await page.waitForNetworkIdle({ idleTime: 600, timeout: 10000 }).catch(() => {})
