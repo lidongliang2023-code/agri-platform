@@ -122,8 +122,23 @@ const SIDE_EFFECT_SUFFIXES = ['/generate', '/accredit', '/reject']
  *
  * 3. `/settings/tenant/**` —— 租户档案（2026-10-16 定）。同第 1 条的理由：租户/市场主体是平台域
  *    主数据，本服务不拥有；参数配置（/settings、/by-key、/save）已切过来，唯独 profile 留在平台侧。
+ *
+ * 4. `/roles`、`/roles/**` —— **这是本脚本的一个偏差，不是真的缺口**（2026-10-16 查清并记在这里）：
+ *    页面的角色与权限走的是**平台域**客户端 `httpPlatform`（baseURL `/api/v1/admin`，
+ *    见 utils/request.ts），实际请求是 `GET /api/v1/admin/roles`、
+ *    `GET|PUT /api/v1/admin/roles/{code}/permissions`。而本脚本的抓取只认 `http.xxx('<path>')`，
+ *    `httpPlatform.xxx('/roles')` 里的路径被当成**生产域**路径收了进来，于是凭空多出 3 条"缺口"。
+ *    证据：`/api/v1/admin/roles` 返回平台 9 个角色（200）；`/api/v1/production/roles` 在两侧都不存在
+ *    （新服务 404；平台侧回 `{"code":500,"message":"系统繁忙"}`，即 `NoResourceFoundException` 的
+ *    老写法，与"请求一个确定不存在的路径"完全一致）。
+ *
+ *    ⚠️ 因此**不要**去实现 `/api/v1/production/roles` —— 那是把平台 RBAC 复制一份，
+ *    两个库的角色数据必然分叉。根治办法是让抓取器识别 `httpPlatform` 并给路径补上
+ *    `/api/v1/admin` 前缀（届时这几条会自动落进"平台域"分类，本清单里的 `/roles` 就可以删掉）。
+ *    在根治之前，这里先按前缀豁免，并记下这条**豁免是有前提的**：如果哪天生产域真的要自带角色端点，
+ *    必须先把它从本清单删掉，否则它的缺口会被静默放行。
  */
-const PLATFORM_OWNED_PATHS = ['/admin/tenants/', '/alerts/rules', '/settings/tenant']
+const PLATFORM_OWNED_PATHS = ['/admin/tenants/', '/alerts/rules', '/settings/tenant', '/roles']
 
 /**
  * 抓 api 层的 `http.get/post/...('<path>')`。
