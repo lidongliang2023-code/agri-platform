@@ -23,10 +23,11 @@ public class PlotController {
     }
 
     @PostMapping
-    public ApiResponse<PlotVO> create(@Valid @RequestBody PlotSaveDTO dto) {
+    public ApiResponse<String> create(@Valid @RequestBody PlotSaveDTO dto) {
         String tenantId = TenantContextService.currentTenantId();
         PlotVO vo = plotService.save(dto, tenantId);
-        return ApiResponse.success(vo);
+        // 同 FarmController.create：契约是返回新地块 id 字符串（页面拿它继续建土壤档案/跳详情）
+        return ApiResponse.success(vo.getId() == null ? null : String.valueOf(vo.getId()));
     }
 
     @PutMapping("/{id:\\d+}")

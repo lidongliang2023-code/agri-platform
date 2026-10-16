@@ -21,10 +21,14 @@ public class FarmController {
     }
 
     @PostMapping
-    public ApiResponse<FarmVO> create(@Valid @RequestBody FarmSaveDTO dto) {
+    public ApiResponse<String> create(@Valid @RequestBody FarmSaveDTO dto) {
         String tenantId = TenantContextService.currentTenantId();
         FarmVO vo = farmService.save(dto, tenantId);
-        return ApiResponse.success(vo);
+        // 契约是**返回新农场 id 字符串**（前端 api 注释与平台侧实现都是这个），不是实体对象：
+        // 页面拿到之后会直接用它跳转 `/production/farms/<id>`。返回对象时页面的 id 变成
+        // "[object Object]"，跳过去之后详情页那一批请求会全部失败（实测 2026-10-16：
+        // 农场详情页出现 5 条 400，就是这条契约不一致引起的）。
+        return ApiResponse.success(vo.getId() == null ? null : String.valueOf(vo.getId()));
     }
 
     @PutMapping("/{id:\\d+}")
