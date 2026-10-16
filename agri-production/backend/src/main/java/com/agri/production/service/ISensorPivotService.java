@@ -3,6 +3,7 @@ package com.agri.production.service;
 import com.agri.production.common.entity.PageResult;
 import com.agri.production.vo.EnvTrendVO;
 import com.agri.production.vo.EnvironmentDataVO;
+import com.agri.production.vo.IotReadingVO;
 
 import java.util.List;
 
@@ -47,6 +48,30 @@ public interface ISensorPivotService {
      */
     EnvTrendVO history(String tenantId, String plotId, String deviceId, String metrics,
                        String startDate, String endDate);
+
+    /**
+     * 设备最新一条读数（窄表行，不透视）。
+     *
+     * @param tenantId 当前租户
+     * @param deviceId 设备标识（数字主键或设备编码）
+     * @return 最新读数；该设备没有任何读数时返回 null（前端契约允许 null，页面显示空态）
+     */
+    IotReadingVO latest(String tenantId, String deviceId);
+
+    /**
+     * 设备读数时序（窄表行，按采集时间升序）。
+     *
+     * <p>与宽表透视的分工：这里要的是"一行一指标"的原始读数（画曲线时自己做聚合），
+     * 而 {@link #environmentPage} 要的是"同一时刻多指标合成一行"的宽表。</p>
+     *
+     * @param tenantId  当前租户
+     * @param deviceId  设备标识（数字主键或设备编码）
+     * @param metric    指标筛选，可为空（规范码 / camelCase / 常用别名）
+     * @param startDate 起始日期 yyyy-MM-dd（含），可为空
+     * @param endDate   结束日期 yyyy-MM-dd（含），可为空
+     */
+    List<IotReadingVO> series(String tenantId, String deviceId, String metric,
+                              String startDate, String endDate);
 
     /**
      * 指标别名 → 规范 snake_case 码。

@@ -16,7 +16,13 @@ public interface IIoTService {
 
     IoTDevice getDeviceById(Long id);
 
-    PageResult<?> listDevices(String deviceName, String deviceType, String status, Integer pageNum, Integer pageSize, String tenantId);
+    /**
+     * 设备分页。
+     *
+     * @param farmId 本服务农场主键（页面传回的农场标识由控制器用 FarmIdResolver 换算），可为空
+     */
+    PageResult<?> listDevices(String deviceName, String deviceType, String status, Integer pageNum,
+                              Integer pageSize, String tenantId, Long farmId);
 
     void enableDevice(Long id, boolean enable);
 

@@ -55,9 +55,10 @@ public class IoTServiceImpl implements IIoTService {
     }
 
     @Override
-    public PageResult<?> listDevices(String deviceName, String deviceType, String status, Integer pageNum, Integer pageSize, String tenantId) {
+    public PageResult<?> listDevices(String deviceName, String deviceType, String status, Integer pageNum,
+                                     Integer pageSize, String tenantId, Long farmId) {
         Page<IoTDevice> page = new Page<>(pageNum, pageSize);
-        IPage<IoTDevice> result = ioTDeviceMapper.pageQuery(page, deviceName, deviceType, status, tenantId);
+        IPage<IoTDevice> result = ioTDeviceMapper.pageQuery(page, deviceName, deviceType, status, tenantId, farmId);
         return PageResult.of(result.getRecords(), result.getTotal(), pageNum, pageSize);
     }
 

@@ -11,6 +11,7 @@ import com.agri.production.mapper.SensorDataMapper;
 import com.agri.production.service.ISensorPivotService;
 import com.agri.production.vo.EnvTrendVO;
 import com.agri.production.vo.EnvironmentDataVO;
+import com.agri.production.vo.IotReadingVO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -114,6 +115,125 @@ public class SensorPivotServiceImpl implements ISensorPivotService {
     @Override
     public List<String> canonicalMetrics() {
         return CANONICAL;
+    }
+
+    @Override
+    public IotReadingVO latest(String tenantId, String deviceId) {
+        if (tenantId == null || tenantId.isBlank()) {
+            throw new BusinessException(500, "租户上下文为空，无法查询设备读数");
+        }
+        Resolution resolution = resolveDevice(deviceId);
+        if (resolution.unresolved != null) {
+            log.warn("设备标识无法换算成本地主键，按无读数处理：{}", resolution.unresolved);
+            return null;
+        }
+        LambdaQueryWrapper<SensorData> w = new LambdaQueryWrapper<SensorData>()
+                .eq(SensorData::getTenantId, tenantId)
+                .eq(resolution.key != null, SensorData::getDeviceId, resolution.key)
+                .isNotNull(SensorData::getDataTime)
+                .orderByDesc(SensorData::getDataTime)
+                // 同一时刻的多指标读数没有天然先后，按主键升序兜底：否则"设备最新读数"会在
+                // 温度/湿度/光照之间随机跳（同一次采集里 4 行 data_time 完全相同），
+                // 而页面只有一张"最新读数"卡片 —— 随机跳会让人以为数据在乱变。
+                .orderByAsc(SensorData::getId)
+                .last("LIMIT 1");
+        List<SensorData> rows = sensorDataMapper.selectList(w);
+        return rows.isEmpty() ? null : toReading(rows.get(0));
+    }
+
+    @Override
+    public List<IotReadingVO> series(String tenantId, String deviceId, String metric,
+                                     String startDate, String endDate) {
+        if (tenantId == null || tenantId.isBlank()) {
+            throw new BusinessException(500, "租户上下文为空，无法查询设备读数");
+        }
+        Resolution resolution = resolveDevice(deviceId);
+        if (resolution.unresolved != null) {
+            log.warn("设备标识无法换算成本地主键，按空序列处理：{}", resolution.unresolved);
+            return Collections.emptyList();
+        }
+        LocalDate from = parseDate(startDate, "startDate");
+        LocalDate to = parseDate(endDate, "endDate");
+        LambdaQueryWrapper<SensorData> w = new LambdaQueryWrapper<SensorData>()
+                .eq(SensorData::getTenantId, tenantId)
+                .eq(resolution.key != null, SensorData::getDeviceId, resolution.key)
+                .isNotNull(SensorData::getDataTime)
+                .orderByAsc(SensorData::getDataTime);
+        if (from != null) {
+            w.ge(SensorData::getDataTime, from.atStartOfDay());
+        }
+        if (to != null) {
+            w.lt(SensorData::getDataTime, to.plusDays(1).atStartOfDay());
+        }
+        // 指标筛选：库里存的是原始写法，按"能映射到目标规范码的原始名"过滤
+        String canonical = canonicalMetric(metric);
+        if (metric != null && !metric.isBlank()) {
+            if (canonical == null) {
+                // 认不出的指标名 → 空序列（页面显示"暂无数据"），并且日志里留痕；
+                // 不能退回"不过滤"，那会把全部指标当成请求的那一个画进同一张图。
+                log.warn("读数时序：指标名无法识别，按空序列处理：{}", metric.trim());
+                return Collections.emptyList();
+            }
+            Set<String> rawNames = new LinkedHashSet<>();
+            for (Map.Entry<String, String> entry : ALIAS.entrySet()) {
+                if (entry.getValue().equals(canonical)) {
+                    rawNames.add(entry.getKey());
+                }
+            }
+            w.in(SensorData::getSensorType, rawNames);
+        }
+        List<SensorData> rows = sensorDataMapper.selectList(w.last("LIMIT " + PIVOT_SOURCE_LIMIT));
+        List<IotReadingVO> result = new ArrayList<>(rows.size());
+        for (SensorData row : rows) {
+            result.add(toReading(row));
+        }
+        return result;
+    }
+
+    /**
+     * 长表行 → 读数出参。
+     *
+     * <p>指标码优先给规范码；**认不出的类型按原文返回**而不是丢弃 —— 读数端点的语义是"这台设备上报了什么"，
+     * 丢掉未知类型会让"设备上报了数据、页面上没有"变成无声的（宽表透视那边必须丢，因为页面列是固定的，
+     * 两处口径不同是有意的）。</p>
+     */
+    private IotReadingVO toReading(SensorData row) {
+        IotReadingVO vo = new IotReadingVO();
+        vo.setReadingId(row.getId() == null ? null : String.valueOf(row.getId()));
+        vo.setDeviceId(row.getDeviceId() == null ? null : String.valueOf(row.getDeviceId()));
+        vo.setDeviceCode(row.getDeviceCode());
+        vo.setPlotId(row.getPlotId() == null ? null : String.valueOf(row.getPlotId()));
+        String canonical = canonicalMetric(row.getSensorType());
+        vo.setMetric(canonical != null ? canonical : blankToNull(row.getSensorType()));
+        vo.setMetricValue(row.getValue());
+        vo.setUnit(row.getUnit());
+        vo.setReadTime(row.getDataTime() == null ? null : DATETIME.format(row.getDataTime()));
+        vo.setQualityFlag(qualityFlagOf(row.getQualityFlag()));
+        return vo;
+    }
+
+    /**
+     * 数据质量标记：库内是文本（good/bad/…），页面契约是 1 正常 / 0 异常。
+     *
+     * <p>空值返回 null（"不知道质量"），不默认 1 —— 把未知标成"正常"会让脏数据看起来干净。</p>
+     */
+    private static Integer qualityFlagOf(String raw) {
+        String text = blankToNull(raw);
+        if (text == null) {
+            return null;
+        }
+        return switch (text.toLowerCase(Locale.ROOT)) {
+            case "good", "normal", "ok", "valid", "1" -> 1;
+            default -> 0;
+        };
+    }
+
+    private static String blankToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     @Override

@@ -423,6 +423,14 @@ farm_id BIGINT,
 plot_id BIGINT,
 status VARCHAR(255) DEFAULT 'offline',
 last_connect_time DATETIME,
+-- 平台侧设备标识（prod_iot_device.device_id，形如 DEMO-DEV-001）：
+-- 与农场表的 platform_farm_id 同法，用于把平台侧标识（绑定/指令/维修记录、页面回传值）换算成本地主键。
+-- 存量库没有这一列，用 schema-patch-iot-demo.sql 里的守卫式 ALTER 补上。
+platform_device_id VARCHAR(64) COMMENT '平台侧设备标识（DEMO-DEV-xxx）',
+-- 地块标识（页面口径）：设备列表要显示"关联地块"，而页面用 device.plotId 去它的地块名映射里查 ——
+-- 映射的键是平台侧地块标识（DEMO-PLOT-xxx）。本服务的 plot_id 是数字主键，两边未收敛前用这一列承载
+-- 平台侧标识（与绑定表的 bind_target_id 同源），否则设备列表的"关联地块"永远是"未绑定"。
+plot_ref VARCHAR(64) COMMENT '地块标识（页面口径，如 DEMO-PLOT-001）',
 ip_address TEXT,
 protocol TEXT,
 data_interval BIGINT DEFAULT 60,
@@ -434,7 +442,8 @@ update_by TEXT,
 update_time DATETIME DEFAULT CURRENT_TIMESTAMP,
 deleted BIGINT DEFAULT 0,
 remark TEXT,
-    INDEX `idx_iot_device_tenant_id` (tenant_id)
+    INDEX `idx_iot_device_tenant_id` (tenant_id),
+    UNIQUE KEY `uk_iot_device_platform_id` (platform_device_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE IF NOT EXISTS agri_prod_sensor_data (
 id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -1498,4 +1507,109 @@ update_time DATETIME DEFAULT CURRENT_TIMESTAMP,
 deleted BIGINT DEFAULT 0,
     UNIQUE KEY `uk_report_subscribe_id` (subscribe_id),
     INDEX `idx_report_sub_tenant_id` (tenant_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- IoT 设备绑定关系（用户端「IoT 设备管理 → 设备绑定」）。
+--
+-- 【口径】列按**页面契约**建（对齐 @agri/shared/types/iot.ts 的 IotBinding）：
+-- binding_id / device_id / device_code / device_name / bind_type / bind_target_id / bind_target_name /
+-- metrics / frequency / status / bound_at，外加 unbound_at（页面不显示，但"解绑了什么时间"是运维事实）。
+-- 方案文档写的是「device_id ↔ plot_id，含绑定时间/解绑时间/状态」—— 那是这个契约在"只绑地块"时的特例；
+-- 页面的 bindType 有 PLOT / GREENHOUSE / FARM 三种，只建 plot_id 会让大棚/农场绑定无处安放。
+--
+-- 【为什么 device_code / device_name / bind_target_name 冗余落列】
+-- 与平台侧的 prod_iot_binding 同法：绑定列表要显示设备名与对象名，而设备/地块主数据在本服务与平台侧
+-- 尚未收敛（见 docs/生产管理模块_剩余缺口处置方案_2026-10-16.md 第六节），逐行回查会查不到、
+-- 显示成一串标识。冗余列在绑定时落库，之后即使主数据改名也不影响历史行。
+--
+-- 【metrics / frequency 的类型】metrics 存逗号分隔字符串（页面既发逗号串也给数组，服务端统一存串、
+-- 出参转数组）；frequency 是采集频率（分钟），未设置时为 NULL —— 不默认填 30：那是编出来的采集周期。
+CREATE TABLE IF NOT EXISTS agri_prod_iot_binding (
+id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+binding_id VARCHAR(32) NOT NULL COMMENT '绑定编号（业务主键，页面 bindingId）',
+device_id VARCHAR(64) NOT NULL COMMENT '设备标识（页面口径；本服务设备主键或设备编码）',
+device_code VARCHAR(64) COMMENT '设备编码（冗余）',
+device_name VARCHAR(191) COMMENT '设备名称（冗余）',
+bind_type VARCHAR(16) NOT NULL COMMENT '绑定对象类型：PLOT 地块 / GREENHOUSE 大棚 / FARM 农场',
+bind_target_id VARCHAR(64) COMMENT '绑定对象标识（地块/大棚/农场）',
+bind_target_name VARCHAR(191) COMMENT '绑定对象名称（冗余）',
+metrics VARCHAR(500) COMMENT '采集指标（逗号分隔；出参转数组）',
+frequency INT COMMENT '采集频率（分钟），未设置为空',
+status VARCHAR(16) NOT NULL DEFAULT 'BOUND' COMMENT 'BOUND 已绑定 / UNBOUND 已解绑 / PAUSED 已暂停',
+bound_at DATETIME COMMENT '绑定时间',
+unbound_at DATETIME COMMENT '解绑时间（解绑时写入）',
+remark VARCHAR(500) COMMENT '备注',
+farm_id BIGINT COMMENT '所属农场（本服务农场主键）',
+tenant_id VARCHAR(191) NOT NULL,
+create_by TEXT,
+create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+update_by TEXT,
+update_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+deleted BIGINT DEFAULT 0,
+    UNIQUE KEY `uk_binding_binding_id` (binding_id),
+    INDEX `idx_binding_tenant_id` (tenant_id),
+    INDEX `idx_binding_device_id` (device_id),
+    INDEX `idx_binding_target` (bind_type, bind_target_id),
+    INDEX `idx_binding_status` (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- IoT 指令记录（用户端「设备详情 → 指令下发」）。
+--
+-- 【关键口径：本部署没有下发通道，指令只记录不真下发】
+-- 平台侧的实现会"按设备在线状态判终态"（在线→SUCCESS、离线→FAILED）。本服务**不这么做**：
+-- 没有真实通道却写 SUCCESS，等于告诉使用者"指令已送达"——那是编出来的执行结果。
+-- 这里统一落 status=ISSUED（页面按 status 渲染 Tag 时会显示原样文案），回执里写明未送达，
+-- 响应体另带 delivery="record-only"。等接入真实下发通道时，再由通道回执把状态推进到 SUCCESS/FAILED。
+CREATE TABLE IF NOT EXISTS agri_prod_iot_command (
+id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+command_id VARCHAR(32) NOT NULL COMMENT '指令编号（业务主键，页面 commandId）',
+device_id VARCHAR(64) NOT NULL COMMENT '设备标识（页面口径）',
+device_code VARCHAR(64) COMMENT '设备编码（冗余）',
+command_type VARCHAR(64) NOT NULL COMMENT '指令类型（如 VALVE_SWITCH / REBOOT / READING）',
+params VARCHAR(1000) COMMENT '指令参数（JSON 文本）',
+operator VARCHAR(64) COMMENT '操作人',
+status VARCHAR(20) NOT NULL DEFAULT 'ISSUED' COMMENT 'ISSUED 已记录（本部署无下发通道）/ 通道接入后为 PENDING|SUCCESS|FAILED',
+receipt VARCHAR(500) COMMENT '回执说明',
+send_at DATETIME COMMENT '下发（记录）时间',
+receipt_at DATETIME COMMENT '回执时间（本部署恒为空）',
+farm_id BIGINT COMMENT '所属农场（本服务农场主键）',
+tenant_id VARCHAR(191) NOT NULL,
+create_by TEXT,
+create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+update_by TEXT,
+update_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+deleted BIGINT DEFAULT 0,
+    UNIQUE KEY `uk_command_command_id` (command_id),
+    INDEX `idx_command_tenant_id` (tenant_id),
+    INDEX `idx_command_device_id` (device_id),
+    INDEX `idx_command_send_at` (send_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- IoT 设备维修/保养记录（用户端「设备详情 → 维修记录」）。
+--
+-- 列按页面契约（IotMaintenance）：maintain_id / device_id / device_code / maintain_type / content /
+-- operator / maintain_at / result；另补 next_maintain_at（方案文档要求的"下次保养日期"，
+-- 当前页面没有这个字段，先落列不落值 —— 需要页面配合才能录入）。
+CREATE TABLE IF NOT EXISTS agri_prod_iot_maintenance (
+id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+maintain_id VARCHAR(32) NOT NULL COMMENT '维修记录编号（业务主键）',
+device_id VARCHAR(64) NOT NULL COMMENT '设备标识（页面口径）',
+device_code VARCHAR(64) COMMENT '设备编码（冗余）',
+maintain_type VARCHAR(32) COMMENT 'INSPECT 巡检 / REPAIR 维修 / REPLACE 更换 / CALIBRATE 校准 / UPGRADE 升级',
+content VARCHAR(1000) COMMENT '维修/保养内容',
+operator VARCHAR(64) COMMENT '操作人',
+maintain_at DATETIME COMMENT '维修时间',
+result VARCHAR(500) COMMENT '维修结果',
+next_maintain_at DATETIME COMMENT '下次保养日期（页面暂无此字段，预留给保养计划）',
+farm_id BIGINT COMMENT '所属农场（本服务农场主键）',
+tenant_id VARCHAR(191) NOT NULL,
+create_by TEXT,
+create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+update_by TEXT,
+update_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+deleted BIGINT DEFAULT 0,
+    UNIQUE KEY `uk_maintain_maintain_id` (maintain_id),
+    INDEX `idx_maintain_tenant_id` (tenant_id),
+    INDEX `idx_maintain_device_id` (device_id),
+    INDEX `idx_maintain_at` (maintain_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

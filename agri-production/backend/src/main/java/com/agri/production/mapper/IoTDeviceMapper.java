@@ -10,7 +10,9 @@ import org.apache.ibatis.annotations.Param;
 @Mapper
 public interface IoTDeviceMapper extends BaseMapper<IoTDevice> {
 
-    IPage<IoTDevice> pageQuery(Page<IoTDevice> page, @Param("deviceName") String deviceName, @Param("deviceType") String deviceType, @Param("status") String status, @Param("tenantId") String tenantId);
+    IPage<IoTDevice> pageQuery(Page<IoTDevice> page, @Param("deviceName") String deviceName,
+                               @Param("deviceType") String deviceType, @Param("status") String status,
+                               @Param("tenantId") String tenantId, @Param("farmId") Long farmId);
 
     long countByStatus(@Param("status") String status, @Param("tenantId") String tenantId);
 }

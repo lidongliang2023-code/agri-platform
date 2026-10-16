@@ -17,6 +17,9 @@
         </if>
         <if test="deviceType != null and deviceType != ''">AND device_type = #{deviceType}</if>
         <if test="status != null and status != ''">AND status = #{status}</if>
+        <!-- 页面按"当前农场"筛设备：不接这个条件，切换农场时设备列表一动不动（看起来像筛选坏了）；
+             本服务本地农场主键由 FarmIdResolver 从页面口径的平台标识换算而来 -->
+        <if test="farmId != null">AND farm_id = #{farmId}</if>
         ORDER BY create_time DESC
     </select>
 
