@@ -46,6 +46,22 @@ export function updatePlot(plotId: string, payload: PlotPayload): Promise<Plot> 
 }
 
 /**
+ * 启用 / 停用地块。
+
+ *
+ * <p>状态口径与页面一致：{@code 1 启用 / 0 停用}（库内落 {@code active / inactive}）。
+ * **地块上有在种计划时停用会被后端拒**（400，消息里带计划名与 ID），
+ * 调用方要把这条消息原样透给用户 —— 别吞掉，否则用户只知道"没成功"。</p>
+ *
+ * @param plotId 地块 ID
+ * @param status 1 启用 / 0 停用
+ * @returns 更新后的地块
+ */
+export function updatePlotStatus(plotId: string, status: number): Promise<Plot> {
+  return http.patch<Plot>(`${BASE}/${plotId}/status?status=${status}`)
+}
+
+/**
  * 删除地块（DELETE /plots/{plotId}）。
  *
  * 后端返回 `ApiResponse<Void>`（data 为 null），成功与否由拦截器 reject 表达。

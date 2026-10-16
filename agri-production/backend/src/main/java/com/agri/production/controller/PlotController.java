@@ -45,6 +45,21 @@ public class PlotController {
         return ApiResponse.success();
     }
 
+    /**
+     * 启用 / 停用地块（页面地块列表的行内操作）。
+
+     *
+     * <p>状态码与页面口径一致：{@code 1 启用 / 0 停用}（库内落 {@code active / inactive}）。
+     * 停用时若该地块上还有**在种计划**会被拒（{@link com.agri.production.common.exception.BusinessException}
+     * 400，消息里给出计划名与 id），把"正在种的地被停掉、计划却还挂着"这条脏路径堵在写入端。</p>
+     */
+    @PatchMapping("/{id:\\d+}/status")
+    public ApiResponse<PlotVO> changeStatus(@PathVariable Long id,
+                                            @RequestParam(required = false) Integer status) {
+        String tenantId = TenantContextService.currentTenantId();
+        return ApiResponse.success(plotService.changeStatus(id, status, tenantId));
+    }
+
     @GetMapping("/{id:\\d+}")
     public ApiResponse<PlotVO> getById(@PathVariable Long id) {
         String tenantId = TenantContextService.currentTenantId();

@@ -14,6 +14,10 @@
  * <p>2026-10-16 追加：地块列表的「状态」列曾经全是"未知" —— 接口给的是库里的文本
  * {@code active}，而页面按数字枚举渲染。现在出参是数字码（0 已停用 / 1 空闲 / 2 在种），
  * 脚本先在地块列表页把这一条钉住。</p>
+
+ *
+ * <p>同日再追加：地块支持**停用 / 启用**。停用的口径是"地块上有在种计划时不允许停用"，
+ * 脚本两头都验：有在种计划的地块停用被拒（接口层），新建的空闲地块能停能启（页面层）。</p>
  *
  * <p>登录态给法同 {@code scripts/e2e-plan-create.mjs}（同源静态文件 + HttpOnly Cookie + 非凭证界面态）。</p>
  *
@@ -112,6 +116,46 @@ const pickSelectOption = async (text) =>
     return { ok: true, labels: options.map((o) => o.textContent.trim()) }
   }, text)
 
+/**
+ * 在地块列表里对某一行做启用 / 停用，返回操作后该行的文本。
+
+ *
+ * <p>停用走 Popconfirm：先点行内的「停用」，再点弹层里的「确认停用」。
+ * 行定位按地块名匹配（列表按创建时间倒序，刚建的地块在第一页）。</p>
+ *
+ * @param name 地块名
+ * @param action '停用' 或 '启用'
+ * @returns 操作后该行的文本（用于断言状态标签）
+ */
+const togglePlotStatus = async (name, action) => {
+  const clicked = await page.evaluate(({ plotName, label }) => {
+    const row = [...document.querySelectorAll('.ant-table-tbody tr.ant-table-row')]
+      .find((tr) => (tr.innerText ?? '').includes(plotName))
+    if (!row) return false
+    const link = [...row.querySelectorAll('a, button, .ant-typography')]
+      .find((el) => (el.textContent ?? '').replace(/\s+/g, '') === label)
+    if (!link) return false
+    link.click()
+    return true
+  }, { plotName: name, label: action })
+  if (!clicked) throw new Error(`列表里没找到「${name}」这一行的「${action}」`)
+  if (action === '停用') {
+    await sleep(400)
+    await page.evaluate(() => {
+      const btn = [...document.querySelectorAll('.ant-popover button')]
+        .find((b) => (b.textContent ?? '').replace(/\s+/g, '') === '确认停用')
+      btn?.click()
+    })
+  }
+  await page.waitForNetworkIdle({ idleTime: 800, timeout: 15000 }).catch(() => {})
+  await sleep(800)
+  return page.evaluate((plotName) => {
+    const row = [...document.querySelectorAll('.ant-table-tbody tr.ant-table-row')]
+      .find((tr) => (tr.innerText ?? '').includes(plotName))
+    return row ? (row.innerText ?? '').replace(/\s+/g, ' ') : ''
+  }, name)
+}
+
 try {
   await page.goto(`${BASE_URL}/prod/manifest.json`, { waitUntil: 'domcontentloaded', timeout: 20000 })
   await page.evaluate(async (creds) => {
@@ -203,6 +247,24 @@ try {
     check(detailText.includes(plotName), '详情页显示地块名称', plotName)
     check(detailText.includes(cropName), '详情页「当前作物」显示所选作物', cropName)
   }
+
+  // 6) 停用口径：有在种计划的地块不能在接口层被停用（plot 1 上挂着 plan id=3 的在种计划）
+  const guardRes = await (await fetch(`${BASE_URL}/api/v1/production/plots/1/status?status=0`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${login.data.accessToken}` },
+  })).json()
+  check(guardRes.code === 400 && /在种计划/.test(guardRes.message ?? ''),
+    '有在种计划的地块停用被拒（400 且说明原因）', `code=${guardRes.code} msg=${guardRes.message}`)
+
+  // 7) 页面层：新建的空闲地块能停能启
+  await page.goto(`${BASE_URL}/production/plots`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.waitForNetworkIdle({ idleTime: 600, timeout: 10000 }).catch(() => {})
+  const rowAfterDisable = await togglePlotStatus(plotName, '停用')
+  check(rowAfterDisable.includes('已停用'), '列表里停用后该行状态变成「已停用」',
+    rowAfterDisable.slice(0, 100))
+  const rowAfterEnable = await togglePlotStatus(plotName, '启用')
+  check(!rowAfterEnable.includes('已停用'), '重新启用后该行不再是「已停用」',
+    rowAfterEnable.slice(0, 100))
 
   check(badResponses.length === 0, '全链路没有 4xx/5xx 响应', badResponses.slice(0, 3).join(' | '))
 } finally {

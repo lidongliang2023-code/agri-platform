@@ -48,7 +48,7 @@ import {
   message,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { deletePlot, listPlots } from '@/api/plots'
+import { deletePlot, listPlots, updatePlotStatus } from '@/api/plots'
 import { listAllFarms } from '@/api/farms'
 import { listGrowthRecords } from '@/api/growth'
 import type { Plot } from '@/types'
@@ -160,6 +160,22 @@ export default function PlotList(): JSX.Element {
       setSelectedRowKeys([])
       void invalidatePlots()
     },
+  })
+
+  /**
+   * 启用 / 停用地块。
+
+   * <p>停用时后端会拦"地块上还有在种计划"的情况（400，消息里带计划名与 ID）——
+   * 这里把后端给的原因原样弹出来，不写一句笼统的"操作失败"（用户得知道该先去终止哪条计划）。</p>
+   */
+  const statusMutation = useMutation({
+    mutationFn: (params: { plotId: string; status: number }) =>
+      updatePlotStatus(params.plotId, params.status),
+    onSuccess: (_data, variables) => {
+      message.success(variables.status === 1 ? '地块已启用' : '地块已停用')
+      void invalidatePlots()
+    },
+    onError: (error: Error) => message.error(error.message || '操作失败'),
   })
 
   /** 批量删除 */
@@ -385,6 +401,21 @@ export default function PlotList(): JSX.Element {
           >
             土壤档案
           </Typography.Link>
+          {record.status === 0 ? (
+            <Typography.Link onClick={() => statusMutation.mutate({ plotId: record.plotId, status: 1 })}>
+              启用
+            </Typography.Link>
+          ) : (
+            <Popconfirm
+              title="确认停用该地块？"
+              description="停用后该地块不再出现在新建计划的选地列表里；地块上还有在种计划时不允许停用。"
+              okText="确认停用"
+              cancelText="取消"
+              onConfirm={() => statusMutation.mutate({ plotId: record.plotId, status: 0 })}
+            >
+              <Typography.Link type="warning">停用</Typography.Link>
+            </Popconfirm>
+          )}
           <Popconfirm
             title="确认删除该地块？"
             okText="确认删除"

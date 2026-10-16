@@ -24,4 +24,14 @@ public interface IPlotService extends IService<Plot> {
     List<PlotVO> listByFarmId(Long farmId, String tenantId);
 
     PlotVO getByCode(String plotCode, String tenantId);
+
+    /**
+     * 启用 / 停用地块。
+     *
+     * @param id 地块主键
+     * @param status 1 启用 / 0 停用
+     * @param tenantId 当前租户
+     * @returns 变更后的地块出参（状态已是页面口径的数字码）
+     */
+    PlotVO changeStatus(Long id, Integer status, String tenantId);
 }

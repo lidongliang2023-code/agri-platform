@@ -219,7 +219,9 @@ export default function PlanList(): JSX.Element {
    */
   async function loadPlotOptions(): Promise<{ label: string; value: string }[]> {
     try {
-      const page = await listPlots({ farmId: effectiveFarmId, pageNum: 1, pageSize: 200 })
+      // 只列**启用中**的地块：停用地块不该再被选来种东西（地块列表页新增了启停操作）。
+      // status=1 由后端换算成库内的 active（PlotPageDTO.setStatus）。
+      const page = await listPlots({ farmId: effectiveFarmId, pageNum: 1, pageSize: 200, status: 1 })
       return (page.list ?? [])
         .filter((plot) => Boolean(plot.plotId))
         .map((plot) => ({
@@ -644,7 +646,7 @@ export default function PlanList(): JSX.Element {
           allowClear
           fieldProps={{ optionFilterProp: 'label' }}
           request={loadPlotOptions}
-          extra="取自本农场地块台账；同一地块同一时期只允许一个在种计划"
+          extra="取自本农场启用中的地块；同一地块同一时期只允许一个在种计划"
         />
         <ProFormDatePicker
           name="planStartDate"
@@ -739,7 +741,7 @@ export default function PlanList(): JSX.Element {
           allowClear
           fieldProps={{ optionFilterProp: 'label' }}
           request={loadPlotOptions}
-          extra="取自本农场地块台账；同一地块同一时期只允许一个在种计划"
+          extra="取自本农场启用中的地块；同一地块同一时期只允许一个在种计划"
         />
         <ProFormDatePicker name="planStartDate" label="计划开始日期" rules={[{ required: true, message: '请选择开始日期' }]} />
         <ProFormDatePicker name="planEndDate" label="计划结束日期" rules={[{ required: true, message: '请选择结束日期' }]} />

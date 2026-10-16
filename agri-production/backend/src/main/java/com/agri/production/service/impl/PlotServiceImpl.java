@@ -156,6 +156,50 @@ public class PlotServiceImpl extends ServiceImpl<PlotMapper, Plot> implements IP
     }
 
     /**
+     * 启用 / 停用地块。
+
+     *
+     * <p><b>停用的前置条件：该地块上没有"在种"计划</b>（{@code plan_status = 'active'}）。
+     * 否则等于把正在种的地停掉、计划还挂着一块不再种植的地 —— 后续任务 / 采收 / 统计都会对着一块"停用地块"。
+     * 所以这里直接拒（400，消息带上计划名让用户知道该先去终止哪条计划），
+     * 而不是"允许但提示"或"顺手把计划也终止了"（后者更危险：用户只是想停块地，结果计划被终止）。
+     * 这条口径若要改，改这里一处即可。</p>
+     *
+     * @param id 地块主键
+     * @param status 1 启用 / 0 停用
+     * @param tenantId 当前租户
+     * @returns 变更后的出参
+     */
+    @Override
+    @Transactional
+    public PlotVO changeStatus(Long id, Integer status, String tenantId) {
+        if (status == null || (status != 0 && status != 1)) {
+            throw new BusinessException(400, "地块状态应为 1 启用 / 0 停用：" + status);
+        }
+        Plot plot = getById(id);
+        if (plot == null || !tenantId.equals(plot.getTenantId())) {
+            throw new BusinessException(404, "地块不存在：" + id);
+        }
+        if (status == 0) {
+            List<PlantingPlan> activePlans = planMapper.selectList(new LambdaQueryWrapper<PlantingPlan>()
+                    .eq(PlantingPlan::getTenantId, tenantId)
+                    .eq(PlantingPlan::getPlotId, id)
+                    .eq(PlantingPlan::getPlanStatus, PlanStatusDict.ACTIVE)
+                    .last("LIMIT 1"));
+            if (!activePlans.isEmpty()) {
+                PlantingPlan plan = activePlans.get(0);
+                throw new BusinessException(400, "该地块上有在种计划，不能停用："
+                        + plan.getPlanName() + "（planId=" + plan.getId() + "）；请先终止该计划或等它结束");
+            }
+        }
+        // 库内是文本口径（active / inactive），页面给的是 1 / 0 —— 换算在这里收口
+        plot.setStatus(status == 1 ? "active" : "inactive");
+        plot.setUpdateTime(java.time.LocalDateTime.now());
+        updateById(plot);
+        return PlotVO.of(plot, plantingPlotIds(tenantId));
+    }
+
+    /**
      * 当前租户下**有在种计划**的地块主键集合。
 
      *

@@ -319,7 +319,9 @@ export default function Create(): JSX.Element {
         // 当前作物走作物主数据（主键）；后端据此落 crop_id + current_crop（名称）
         cropId: params.values.cropId,
         geoBoundary: buildBoundary({ ...params.values, polygonText: params.polygonText }),
-        status: 1 as 0 | 1 | 2 | 3 | 4,
+        // 这里原先固定发 status: 1，但后端 PlotSaveDTO **根本没有这个字段**（新增的地块统一是
+        // active/启用，状态变更是走 PATCH /plots/{id}/status）。留着它会让人以为"表单能设状态"，
+        // 更糟的是若哪天后端收下这个字段，编辑一个已停用地块时会被这一行**静默重新启用**。
       }
       if (editingPlotId) {
         await updatePlot(editingPlotId, payload)
