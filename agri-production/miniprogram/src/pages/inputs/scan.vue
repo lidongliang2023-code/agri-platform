@@ -93,6 +93,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { onLoad } from '@dcloudio/uni-app'
 import { complianceCheck, createInputUsage, listInputs, listPlots } from '@/api/production'
 import { currentFarm, currentUser } from '@/utils/auth-helper'
 import { fmtNumber, today } from '@/utils/format'
@@ -127,6 +128,18 @@ const form = ref({
   dosage: '',
   unit: '',
   method: '',
+})
+
+/**
+ * 深链预选地块（`?plotId=`）。
+ *
+ * <p>PRD 的地块详情/休药期对比都会"带着地块去登记"，有它就少一次滚轮选择；
+ * 同时这也是联调脚本能稳定复现的前提（滚轮交互受机器负载影响太大）。</p>
+ */
+const presetPlotId = ref('')
+
+onLoad((options) => {
+  presetPlotId.value = String(options?.plotId ?? '')
 })
 
 const plotNames = computed(() => plots.value.map((plot) => plot.plotName))
@@ -329,6 +342,9 @@ onMounted(async () => {
       ...plot,
       plotId: String(plot.plotId ?? plot.id ?? ''),
     }))
+    if (presetPlotId.value && plots.value.some((plot) => String(plot.plotId) === presetPlotId.value)) {
+      form.value.plotId = presetPlotId.value
+    }
     await search()
   } catch (err: any) {
     error.value = err?.message ?? '地块加载失败'

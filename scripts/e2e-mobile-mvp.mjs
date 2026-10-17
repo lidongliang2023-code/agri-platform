@@ -49,6 +49,19 @@ const asset404 = []
 /** 页面发起的、打到生产域的接口调用（用来证明页面真的取数了，不是空壳） */
 const apiCalls = []
 
+// 先确认 H5 预览服务在跑：否则 puppeteer 只会抛 ERR_CONNECTION_REFUSED 的栈，
+// 看不出"其实只是开发服务器没开"。
+try {
+  const probe = await fetch(`${BASE_URL}/`, { signal: AbortSignal.timeout(5000) })
+  if (!probe.ok) throw new Error(`HTTP ${probe.status}`)
+} catch (err) {
+  console.error(
+    `✗ 连不上 ${BASE_URL}（${err?.message ?? err}）。先启动 H5 预览：\n` +
+      '  cd agri-production/miniprogram && npm run dev:h5',
+  )
+  process.exit(2)
+}
+
 const browser = await puppeteer.launch({ headless: HEADFUL ? false : 'new', args: ['--no-sandbox'] })
 const page = await browser.newPage()
 await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true, deviceScaleFactor: 2 })

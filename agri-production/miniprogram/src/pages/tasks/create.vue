@@ -67,6 +67,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { onLoad } from '@dcloudio/uni-app'
 import { createTask, listMembers, listPlots } from '@/api/production'
 import { currentFarm, currentUser } from '@/utils/auth-helper'
 import { addDays, today } from '@/utils/format'
@@ -97,6 +98,13 @@ const form = ref({
   planStartDate: today(),
   planEndDate: addDays(today(), 1),
   description: '',
+})
+
+/** 深链预选地块（`?plotId=`）：从地块详情/休药期对比"去建任务"时少一次选择 */
+const presetPlotId = ref('')
+
+onLoad((options) => {
+  presetPlotId.value = String(options?.plotId ?? '')
 })
 
 const plotNames = computed(() => plots.value.map((plot) => plot.plotName))
@@ -214,6 +222,9 @@ onMounted(async () => {
       ...plot,
       plotId: String(plot.plotId ?? plot.id ?? ''),
     }))
+    if (presetPlotId.value && plots.value.some((plot) => String(plot.plotId) === presetPlotId.value)) {
+      form.value.plotId = presetPlotId.value
+    }
     members.value = memberList
   } catch (err: any) {
     error.value = err?.message ?? '地块 / 人员加载失败'

@@ -49,8 +49,13 @@ const BLOCK_PLOT = arg('plot-block', 'E区休耕地')
 const OK_PLOT = arg('plot-ok', 'A区-地块2')
 /** 农药名（安全间隔期 21 天，库里真实存在） */
 const PESTICIDE = arg('pesticide', '稻瘟灵乳油')
-/** 采收人（本农场成员） */
-const OPERATOR = arg('operator', '陈志强')
+/**
+ * 采收人 / 执行人（本农场成员）。
+ *
+ * <p>取成员列表的**第一项**（黄大军）：滚轮的当前项默认就在第一项，不需要拖动 ——
+ * 这条用例要证明的是"人员以数字主键落库"，不是"滚轮能滚"。</p>
+ */
+const OPERATOR = arg('operator', '黄大军')
 const MYSQL_BIN = arg(
   'mysql',
   existsSync('C:\\Program Files\\MySQL\\MySQL Server 8.4\\bin\\mysql.exe')
@@ -132,6 +137,21 @@ const plotIdByName = async (name) => {
   return hit ? String(hit.id ?? hit.plotId) : ''
 }
 
+// 先确认 H5 预览与网关都在：否则只会看到 puppeteer/undici 的连接栈，看不出真正的缺口
+for (const [label, url, hint] of [
+  ['H5 预览', `${BASE_URL}/`, 'cd agri-production/miniprogram && npm run dev:h5'],
+  ['网关', `${API_URL}/api/v1/auth/login`, 'powershell -File ops/local/start-production-stack.ps1'],
+]) {
+  try {
+    // 网关用 POST 探活会被当成登录请求，这里只要求"能连上"（4xx 也算连上）
+    const res = await fetch(url, { method: 'GET', signal: AbortSignal.timeout(5000) })
+    if (res.status >= 500) throw new Error(`HTTP ${res.status}`)
+  } catch (err) {
+    console.error(`✗ ${label}不可用（${url}）：${err?.message ?? err}\n  先启动：${hint}`)
+    process.exit(2)
+  }
+}
+
 const browser = await puppeteer.launch({ headless: HEADFUL ? false : 'new', args: ['--no-sandbox'] })
 const page = await browser.newPage()
 await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true, deviceScaleFactor: 2 })
@@ -153,7 +173,17 @@ page.on('response', (res) => {
 })
 
 const open = async (route, settleMs = 1500) => {
+  // ⚠️ hash 路由下"同路径、不同查询串"只是同文档导航：组件不会重新挂载，
+  // onLoad(plotId) 也就不会重新执行（实测：换地块后页面仍显示上一块地）。
+  // 因此路径相同时强制 reload 一次，让页面真正按新参数重新初始化。
+  const samePath = await page.evaluate(
+    (target) => location.hash.split('?')[0] === '#' + '/' + target,
+    route.split('?')[0],
+  )
   await page.goto(`${BASE_URL}/#/${route}`, { waitUntil: 'domcontentloaded', timeout: 60000 })
+  if (samePath) {
+    await page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 })
+  }
   await page.waitForNetworkIdle({ idleTime: 500, timeout: 15000 }).catch(() => {})
   await sleep(settleMs)
 }
@@ -283,22 +313,37 @@ const pickOption = async (fieldLabel, optionText) => {
    * 而是**每步固定 -100px，拖一次读一次选中项**。7 项的地块列表按 +4 步进正好能遍历所有索引，
    * 3 项的成员列表一次就落到末尾项。</p>
    */
-  const STEP_PX = -100
-  const dragOnce = async () => {
-    const startY = box.y - STEP_PX / 2
+  /**
+   * 快甩一下滚轮。
+   *
+   * <p>实测结论（都踩过）：位移小于约 90px **完全不生效**（手势阈值）；慢速拖（20 步 × 40ms）
+   * 会被当成点击、也不生效；**快甩 120-170px** 才会滚动，而且会按惯性多走几项。
+   * 所以策略是"固定距离快甩 + 每甩一次读回选中项 + 方向由差值决定"。
+   * 本脚本里需要滚轮的只有「土壤类型 / 灌溉方式」，目标都是列表**末项**，一次快甩即可到位；
+   * 若将来目标在中间，循环会双向逼近（到底会停住，不会越界）。</p>
+   *
+   * @param direction 1 = 向上甩（索引增大）；-1 = 向下甩
+   */
+  const FLICK_PX = 130
+  const flick = async (direction) => {
+    const delta = -direction * FLICK_PX
+    const startY = box.y - delta / 2
     await page.mouse.move(box.x, startY)
     await page.mouse.down()
-    for (let i = 1; i <= 8; i += 1) {
-      await page.mouse.move(box.x, startY + (STEP_PX * i) / 8)
-      await sleep(20)
+    for (let i = 1; i <= 10; i += 1) {
+      await page.mouse.move(box.x, startY + (delta * i) / 10)
+      await sleep(15)
     }
     await page.mouse.up()
-    await sleep(650)
+    // 等惯性停稳再读，否则会读到上一帧的值、误判"没动"而多甩一次
+    await sleep(900)
   }
-  for (let attempt = 0; attempt < 8; attempt += 1) {
+  for (let attempt = 0; attempt < 6; attempt += 1) {
     const state = await readPickerState()
     if (!state || state.selected === targetItem) break
-    await dragOnce()
+    const from = state.items.indexOf(state.selected)
+    const to = state.items.indexOf(targetItem)
+    await flick(to >= from ? 1 : -1)
   }
 
   const finalState = await readPickerState()
@@ -348,6 +393,51 @@ const clickButton = async (label) => {
 
 const bodyText = () => page.evaluate(() => document.body.innerText.replace(/\s+/g, ' '))
 
+/** 读某个 `.field` 的右侧文案（用于确认预选/选择是否已生效） */
+const fieldValueOf = (label) =>
+  page.evaluate((text) => {
+    const field = [...document.querySelectorAll('#app .field')].find((el) =>
+      (el.textContent ?? '').replace(/\s+/g, '').startsWith(text.replace(/\s+/g, '')),
+    )
+    return (field?.querySelector('.field-value')?.textContent ?? '').trim()
+  }, label)
+
+/**
+ * 等字段显示出期望值。
+ *
+ * <p>页面是异步的：先拉地块/人员，再向服务端要休药期结论。固定 sleep 在机器忙时不够，
+ * 这里轮询到出现为止（默认 12s），超时再交给断言报错。</p>
+ *
+ * @param label 字段标签
+ * @param expected 期望文案
+ * @param timeoutMs 超时
+ * @returns 是否在超时前出现
+ */
+const waitForFieldValue = async (label, expected, timeoutMs = 12000) => {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if ((await fieldValueOf(label)) === expected) return true
+    await sleep(300)
+  }
+  return false
+}
+
+/** 等某个按钮出现（文案按去空白比较） */
+const waitForButton = async (label, timeoutMs = 15000) => {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    const exists = await page.evaluate((text) => {
+      const norm = (s) => (s ?? '').replace(/\s+/g, '')
+      return [...document.querySelectorAll('#app .btn-primary, #app .btn-ghost, #app button')].some(
+        (node) => norm(node.textContent) === norm(text),
+      )
+    }, label)
+    if (exists) return true
+    await sleep(300)
+  }
+  return false
+}
+
 /**
  * 点掉 uni.showModal 的「确定」。
  *
@@ -388,7 +478,10 @@ try {
 
   /* ==================== 1) 写链路①：登记一条农药使用记录 ==================== */
 
-  await open('pages/inputs/scan', 1800)
+  // 地块用深链预选（`?plotId=`）：滚轮交互受机器负载影响太大，写入路径不该被它拖垮
+  const blockPlotId = await plotIdByName(BLOCK_PLOT)
+  check(Boolean(blockPlotId), `解析出「${BLOCK_PLOT}」的主键`, blockPlotId)
+  await open(`pages/inputs/scan?plotId=${blockPlotId}`, 1800)
   const pickedInput = await page.evaluate((name) => {
     const card = [...document.querySelectorAll('#app .card')].find((el) =>
       (el.textContent ?? '').includes(name),
@@ -400,7 +493,8 @@ try {
   check(pickedInput, `投入品检索结果里选中「${PESTICIDE}」`)
   await sleep(800)
 
-  await pickOption('使用地块', BLOCK_PLOT)
+  const scanPlotReady = await waitForFieldValue('使用地块', BLOCK_PLOT)
+  check(scanPlotReady, '深链把使用地块预选好了', await fieldValueOf('使用地块'))
   await fillField('用量', String(usageDosage))
   await fillField('施用方式', usageMethod)
   await sleep(1200) // 用量改动会防抖触发服务端校验，等它回来再断言
@@ -441,7 +535,6 @@ try {
 
   /* ==================== 1b) 服务端口径：两个食品安全校验接口的契约 ==================== */
 
-  const blockPlotId = await plotIdByName(BLOCK_PLOT)
   const preHarvest = await api(
     'GET',
     `/food-safety/pre-harvest-check?plotId=${blockPlotId}&plannedHarvestDate=${today()}`,
@@ -486,9 +579,9 @@ try {
 
   /* ==================== 2) 写链路②：同地块新建采收应被休药期拦截 ==================== */
 
-  await open('pages/harvests/create', 1800)
-  await pickOption('采收地块', BLOCK_PLOT)
-  await sleep(1200)
+  await open(`pages/harvests/create?plotId=${blockPlotId}`, 1800)
+  const blockPlotReady = await waitForFieldValue('采收地块', BLOCK_PLOT)
+  check(blockPlotReady, '新建采收页深链预选了同一块地', await fieldValueOf('采收地块'))
   const blockedText = await bodyText()
   check(blockedText.includes('休药期未过'), '同地块显示「休药期未过」（按最近用药 + 安全间隔期推算）',
     blockedText.slice(blockedText.indexOf('休药期校验'), blockedText.indexOf('休药期校验') + 80))
@@ -503,8 +596,10 @@ try {
 
   /* ==================== 3) 写链路③：换地块放行并落库 ==================== */
 
-  await pickOption('采收地块', OK_PLOT)
-  await sleep(1200)
+  const okPlotId = await plotIdByName(OK_PLOT)
+  await open(`pages/harvests/create?plotId=${okPlotId}`, 1800)
+  const okPlotReady = await waitForFieldValue('采收地块', OK_PLOT)
+  check(okPlotReady, '换成合格地块后深链预选生效', await fieldValueOf('采收地块'))
   await fillField('采收数量', String(harvestQuantity))
   await fillField('备注', harvestRemark)
   await pickOption('质量等级', 'A')
@@ -512,6 +607,8 @@ try {
   await sleep(300)
 
   const beforeOk = writes.length
+  const submitReady = await waitForButton('提交采收登记')
+  check(submitReady, '休药期校验通过后出现「提交采收登记」按钮', (await bodyText()).slice(-80))
   await clickButton('提交采收登记')
   await page.waitForNetworkIdle({ idleTime: 800, timeout: 20000 }).catch(() => {})
   await sleep(2000)
@@ -542,11 +639,11 @@ try {
 
   /* ==================== 4) 写链路④：新建任务 ==================== */
 
-  await open('pages/tasks/create', 1800)
+  await open(`pages/tasks/create?plotId=${okPlotId}`, 1800)
   await fillField('任务名称', taskName)
-  await pickOption('关联地块', OK_PLOT)
-  // 任务类型同样是滚轮：7 项列表从索引 0 只能走到 0 / 4 / 6，故选「除草」（索引 4）
-  await pickOption('任务类型', '除草')
+  check(await waitForFieldValue('关联地块', OK_PLOT), '新建任务页深链预选地块', await fieldValueOf('关联地块'))
+  // 任务类型取列表第一项「施肥」：滚轮默认就在第一项，不需要拖动
+  await pickOption('任务类型', '施肥')
   await pickOption('执行人', OPERATOR)
   // 「优先级」不驱动滚轮：4 项列表按 +4 步进会原地打转（0→末项→末项），
   // 而该页默认就是「普通」，这里改为断言"默认值原样落库"，一样能证明字段没丢。

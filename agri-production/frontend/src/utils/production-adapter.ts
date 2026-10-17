@@ -976,14 +976,21 @@ export function normalizePlot(raw: unknown): Plot {
     farmId: readString(record, ['farmId'], ''),
     farmName: readString(record, ['farmName'], ''),
     area: readNumber(record, ['area'], 0),
-    plantingType: (readNumber(record, ['plantingType'], 1) as Plot['plantingType']),
+    // 2026-10-17：plot 表里没有 planting_type 列，后端从不返回该字段。
+    // 原来默认给 1，列表/看板于是把每块地都显示成「露天」—— 现在没有就不给，界面显示「—」。
+    plantingType: (readNumber(record, ['plantingType'], Number.NaN) || undefined) as Plot['plantingType'],
     soilType: readString(record, ['soilType'], '-'),
     irrigationType: readString(record, ['irrigationType'], '-'),
     cropId: readString(record, ['cropId'], ''),
     currentCrop: readString(record, ['currentCrop'], ''),
     cropVariety: readString(record, ['cropVariety'], ''),
     currentPlanId: readString(record, ['currentPlanId'], ''),
-    geoBoundary: readString(record, ['geoBoundary'], ''),
+    // 后端真实的列叫 boundary；geoBoundary 是历史前端自造的键（后端从不返回），
+    // 两个都认是为了兼容老响应，但优先取 boundary。
+    geoBoundary: readString(record, ['geoBoundary', 'boundary'], ''),
+    centerLongitude: readNumber(record, ['centerLongitude'], Number.NaN) || undefined,
+    centerLatitude: readNumber(record, ['centerLatitude'], Number.NaN) || undefined,
+    boundary: readString(record, ['boundary'], ''),
     status: (readNumber(record, ['status'], 1) as Plot['status']),
     createdAt: readString(record, ['createdAt'], ''),
     updatedAt: readString(record, ['updatedAt'], ''),

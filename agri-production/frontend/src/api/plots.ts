@@ -12,6 +12,12 @@ export interface PlotListParams extends PageQuery {
   farmId?: string
   plotName?: string
   plantingType?: number
+  /** 地块中心经度（后端 center_longitude 列；此前前端一直没映射，位置信息因此丢失） */
+  centerLongitude?: number
+  /** 地块中心纬度（后端 center_latitude 列） */
+  centerLatitude?: number
+  /** 边界 GeoJSON 字符串（后端 boundary 列） */
+  boundary?: string
   status?: number
 }
 

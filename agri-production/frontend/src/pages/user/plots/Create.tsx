@@ -12,10 +12,14 @@
  * - 「地块边界（可选）」：`📐 绘制多边形边界` + 当前面积提示
  * - 底部按钮：`取消`、`保存`、`保存并添加作物`
  *
- * 实现说明：
- * - 后端 PlotInfoEntity 无经度 / 纬度 / 坡度字段，统一序列化到 geoBoundary：
- *   点为 `{"type":"Point","coordinates":[lng,lat],"slope":"平地"}`，
- *   边界为 `{"type":"Polygon","coordinates":[[[lng,lat],...]]}`
+ * 实现说明（2026-10-17 修正）：
+ * - **经度 / 纬度落真实列** `center_longitude` / `center_latitude`；多边形边界落 `boundary`（GeoJSON）。
+ *   此前这里把它们打包成一个自造的 `geoBoundary` 键 —— 后端 PlotSaveDTO 并不接受，
+ *   于是新增/编辑地块时填的位置**一直没落库**，编辑回填也永远是空（后端返回的是 `boundary`）。
+ * - 坡度仍作为 GeoJSON 的扩展属性（`slope`）存在 `boundary` 里：库里没有坡度列，
+ *   这样至少不会丢；将来补列时迁移这一处即可。
+ * - 「种植类型」表单字段已移除：plot 表没有 `planting_type` 列、后端也从不返回，
+ *   留着等于"选了也白选"。要支持需先加列（terrain/drainage 不是同一个概念）。
  * - 支持 `?plotId=` 编辑态与 `?farmId=` 预选农场
  */
 import { useEffect, useMemo, useState } from 'react'
@@ -53,14 +57,6 @@ const IRRIGATION_OPTIONS: string[] = ['滴灌', '喷灌', '微喷', '漫灌']
 
 /** 坡度选项（原型 P6） */
 const SLOPE_OPTIONS: string[] = ['平地', '缓坡', '陡坡']
-
-/** 种植类型（后端枚举 1 露天 2 大棚 3 水田 4 山地） */
-const PLANTING_TYPE_OPTIONS: { value: number; label: string }[] = [
-  { value: 1, label: '露天' },
-  { value: 2, label: '大棚' },
-  { value: 3, label: '水田' },
-  { value: 4, label: '山地' },
-]
 
 /** 坐标点：[经度, 纬度] */
 type Coordinate = [number, number]
@@ -100,8 +96,6 @@ interface PlotFormValues {
   soilType: string
   /** 灌溉方式 */
   irrigationType: string
-  /** 种植类型 */
-  plantingType: number
   /** 坡度 */
   slope: string
   /**
@@ -226,12 +220,12 @@ export default function Create(): JSX.Element {
       area: Number(plot.area) || 0,
       soilType: plot.soilType || '壤土',
       irrigationType: plot.irrigationType || '滴灌',
-      plantingType: plot.plantingType ?? 1,
       slope: geometry?.slope ?? '平地',
       // 作物下拉的 value 是主数据主键；历史行只有名字（crop_id 为空）时先留空
       cropId: plot.cropId || undefined,
-      longitude: geometry?.type === 'Point' ? geometry.coordinates[0] : undefined,
-      latitude: geometry?.type === 'Point' ? geometry.coordinates[1] : undefined,
+      // 点型边界 → 用几何里的坐标；多边形/无边界 → 用后端真实的中心点列
+      longitude: geometry?.type === 'Point' ? geometry.coordinates[0] : plot.centerLongitude,
+      latitude: geometry?.type === 'Point' ? geometry.coordinates[1] : plot.centerLatitude,
       polygonText: points
         ? points
             .slice(0, points.length - 1)
@@ -307,18 +301,19 @@ export default function Create(): JSX.Element {
       polygonText: string
     }) => {
       // 字段映射约定（后端 PlotInfoEntity 无经度 / 纬度 / 坡度 / 边界等独立列）：
-      // 坡度、经度、纬度、多边形边界统一序列化写入 geoBoundary —— Point/Polygon GeoJSON + slope 扩展属性。
-      // 后端未来补这些列时需同步迁移此处与编辑回填逻辑（parseBoundary / buildBoundary）。
+      // 位置按后端真实字段提交：中心点两列 + 边界一列（GeoJSON）。
+      // 坡度没有独立列，作为 GeoJSON 的 slope 扩展属性随 boundary 一起存。
       const payload = {
         farmId: params.values.farmId,
         plotName: params.values.plotName,
         area: Number(params.values.area) || 0,
         soilType: params.values.soilType,
         irrigationType: params.values.irrigationType,
-        plantingType: params.values.plantingType as 1 | 2 | 3 | 4,
         // 当前作物走作物主数据（主键）；后端据此落 crop_id + current_crop（名称）
         cropId: params.values.cropId,
-        geoBoundary: buildBoundary({ ...params.values, polygonText: params.polygonText }),
+        boundary: buildBoundary({ ...params.values, polygonText: params.polygonText }),
+        centerLongitude: params.values.longitude,
+        centerLatitude: params.values.latitude,
         // 这里原先固定发 status: 1，但后端 PlotSaveDTO **根本没有这个字段**（新增的地块统一是
         // active/启用，状态变更是走 PATCH /plots/{id}/status）。留着它会让人以为"表单能设状态"，
         // 更糟的是若哪天后端收下这个字段，编辑一个已停用地块时会被这一行**静默重新启用**。
@@ -402,7 +397,6 @@ export default function Create(): JSX.Element {
           initialValues={{
             soilType: '壤土',
             irrigationType: '滴灌',
-            plantingType: 1,
             slope: '平地',
             farmId: presetFarmId ?? undefined,
           }}
@@ -477,14 +471,6 @@ export default function Create(): JSX.Element {
                 </Form.Item>
               </Col>
             </Row>
-
-            <Form.Item name="plantingType" label="种植类型">
-              <Radio.Group
-                options={PLANTING_TYPE_OPTIONS}
-                optionType="button"
-                buttonStyle="solid"
-              />
-            </Form.Item>
 
             <Form.Item
               name="cropId"

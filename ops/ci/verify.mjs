@@ -490,7 +490,66 @@ async function checkMobile() {
 }
 
 /** ---------- mobile-e2e：移动端真浏览器端到端（默认关闭，需生产栈 + H5 dev server） ---------- */
+/** 移动端 H5 预览服务端口（vite dev server） */
+const MOBILE_DEV_PORT = 5300
+
+/** 探测 H5 dev server 是否可用 */
+async function mobileDevServerUp() {
+  try {
+    const res = await fetch(`http://localhost:${MOBILE_DEV_PORT}/`, { signal: AbortSignal.timeout(3000) })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
+/**
+ * 确保移动端 H5 预览服务在跑。
+
+ *
+ * <p>本机的后台进程会被系统回收（实测一个会话里掉过三次），而 e2e 依赖它。
+ * 这里先探活，没起来就**自己拉一个**（detached + 隐藏窗口），最多等 45s；
+ * 仍起不来返回 false，由调用方记为 skip 并说明怎么手动起 —— 环境没就绪不算代码失败。</p>
+ *
+ * @returns 可用返回 true
+ */
+async function ensureMobileDevServer() {
+  if (await mobileDevServerUp()) return true
+  // Windows 上 Node 20+ 不允许不带 shell 执行 .cmd（EINVAL），这里显式走 cmd /c；
+  // cwd 通过 spawn 选项传，不拼进命令行，避免中文路径被 cmd 转义搞坏。
+  const isWin = process.platform === 'win32'
+  try {
+    const { spawn } = await import('node:child_process')
+    const args = isWin ? ['/c', 'npm run dev:h5'] : ['run', 'dev:h5']
+    const proc = spawn(isWin ? 'cmd.exe' : 'npm', args, {
+      cwd: MOBILE_DIR,
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: true,
+      shell: false,
+    })
+    proc.unref()
+  } catch {
+    return false
+  }
+  for (let i = 0; i < 45; i += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+    if (await mobileDevServerUp()) return true
+  }
+  return false
+}
+
 async function checkMobileE2E() {
+  const devUp = await ensureMobileDevServer()
+  if (!devUp) {
+    record(
+      'mobile-e2e',
+      '移动端端到端（真浏览器）',
+      'skip',
+      `H5 dev server 未就绪（http://localhost:${MOBILE_DEV_PORT}）；手动起：cd agri-production/miniprogram && npm run dev:h5`,
+    )
+    return
+  }
   for (const script of ['scripts/e2e-mobile-mvp.mjs', 'scripts/e2e-mobile-writes.mjs']) {
     const result = run(process.execPath, [script])
     const output = `${result.stdout ?? ''}${result.stderr ?? ''}`

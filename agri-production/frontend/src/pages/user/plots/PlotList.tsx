@@ -476,8 +476,10 @@ export default function PlotList(): JSX.Element {
     <Row gutter={[12, 12]}>
       {pagePlots.map((plot) => {
         const statusMeta = PLOT_STATUS_META[plot.status] ?? { label: '未知', color: 'default' }
-        const plantingMeta = PLANTING_TYPE_META[plot.plantingType] ?? {
-          label: '未知',
+        // 种植类型：plot 表没有 planting_type 列（后端从不返回），没值就显示「—」，
+        // 不再用默认值 1 把每块地都说成「露天」
+        const plantingMeta = (plot.plantingType ? PLANTING_TYPE_META[plot.plantingType] : undefined) ?? {
+          label: '—',
           color: 'default',
         }
         return (

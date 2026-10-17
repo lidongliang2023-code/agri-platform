@@ -20,7 +20,8 @@
  * - 长势评分由最新生长记录的 growthLevel 折算（真实）；NDVI / 异常区域当前无遥感数据源，
  *   展示原型示例值并显式标注「示例」
  * - 字段映射（后端无独立列，勿在详情页另行读取，统一由 /production/plots/create 维护）：
- *   地块「经度 / 纬度 / 坡度 / 边界」序列化存放于 geoBoundary（Point/Polygon GeoJSON + slope）；
+ *   地块边界存 `boundary`（GeoJSON，坡度作为 slope 扩展属性）；中心点存 `center_longitude` / `center_latitude`。
+ *   2026-10-17 修正：此前前端自造的 `geoBoundary` 键后端不收，位置信息实际没落库。
  *   农场「海拔 / 简介 / 业务类型」序列化存放于 Farm.remark。后端补列后需同步迁移读写两侧。
  */
 import { useMemo } from 'react'

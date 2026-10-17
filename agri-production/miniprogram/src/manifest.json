@@ -18,6 +18,7 @@
     }
   },
   "mp-weixin": {
+    "_comment_appid": "留空：本机 CLI 打开项目时 touristappid 会被判「不存在此 AppID」。验收时在开发者工具界面用「测试号」导入，或填入已备案的小程序 appid（并在微信后台配 https 合法域名）",
     "appid": "",
     "setting": {
       "urlCheck": false

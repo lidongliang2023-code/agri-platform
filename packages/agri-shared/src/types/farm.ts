@@ -66,8 +66,14 @@ export interface Plot {
   farmName?: string
   /** 面积（亩） */
   area: number
-  /** 种植类型：1 露天 2 大棚 3 水田 4 山地 */
-  plantingType: PlantingType
+  /**
+   * 种植类型：1 露天 2 大棚 3 水田 4 山地。
+   *
+   * <p>2026-10-17 改为可选：服务端 plot 表**没有 planting_type 列**，也从不返回该字段。
+   * 前端以前给默认值 1，列表于是把每块地都显示成「露天」；现在没有就显示「—」。
+   * 要真正支持，需要后端先加列（`terrain` 是地形、`drainage` 是排水，不是同一个概念）。</p>
+   */
+  plantingType?: PlantingType
   /** 土壤类型 */
   soilType: string
   /** 灌溉方式 */
@@ -87,6 +93,12 @@ export interface Plot {
   currentPlanId?: string
   /** 地块边界 GeoJSON 字符串 */
   geoBoundary?: string
+  /** 地块边界 GeoJSON（后端真实列 `boundary`；与 geoBoundary 并存，前者是历史自造键） */
+  boundary?: string
+  /** 地块中心经度（后端 `center_longitude`） */
+  centerLongitude?: number
+  /** 地块中心纬度（后端 `center_latitude`） */
+  centerLatitude?: number
   /** 状态：1 空闲 2 在种 3 采收期 4 休耕 0 停用 */
   status: PlotStatus
   /** 创建时间 */
