@@ -76,6 +76,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { onLoad } from '@dcloudio/uni-app'
 import {
   createHarvest,
   generateHarvestBatch,
@@ -107,6 +108,13 @@ const form = ref({
   operatorId: '',
   operatorName: '',
   remark: '',
+})
+
+/** 从「休药期对比」页带过来的地块（PRD §10.3 的"仅采收合格地块"落地：带地块直达登记） */
+const presetPlotId = ref('')
+
+onLoad((options) => {
+  presetPlotId.value = String(options?.plotId ?? '')
 })
 
 const plotNames = computed(() => plots.value.map((plot) => plot.plotName))
@@ -291,6 +299,11 @@ onMounted(async () => {
       plotId: String(plot.plotId ?? plot.id ?? ''),
     }))
     members.value = memberList
+    // 从休药期对比页带着地块进来：预选并立刻向服务端校验一次
+    if (presetPlotId.value && plots.value.some((plot) => String(plot.plotId) === presetPlotId.value)) {
+      form.value.plotId = presetPlotId.value
+      await loadWithdrawalCheck(form.value.plotId, form.value.harvestDate)
+    }
     // 默认采收人 = 当前登录人（团队成员里能对上就用对上的那条主键）
     const me = currentUser()
     const mine = memberList.find((member: any) => String(member.realName) === String(me.realName))

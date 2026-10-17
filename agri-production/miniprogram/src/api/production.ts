@@ -407,3 +407,60 @@ export function pestDetection(payload: Record<string, any>): Promise<any> {
     data: payload,
   })
 }
+
+/* 以下 AI 端点后端均为 501 占位（见 AiNotAvailableController）：函数照契约写好，
+   页面调用后把后端原文展示给用户。将来接口真接入时，页面只需补"有结果"的分支。 */
+
+/** AI 农艺师对话（PRD §11.2）。 */
+export function aiChat(payload: Record<string, any>): Promise<any> {
+  return request<any>({ url: '/api/v1/production/ai/assistant/chat', method: 'POST', data: payload })
+}
+
+/** AI 种植处方列表（PRD §11.3）。 */
+export function aiPrescriptions(plotId?: string): Promise<any> {
+  return request<any>({ url: '/api/v1/production/ai/prescription/list', params: { plotId } })
+}
+
+/** AI 种植处方详情（PRD §11.3）。 */
+export function aiPrescription(prescriptionId: string): Promise<any> {
+  return request<any>({ url: '/api/v1/production/ai/prescription/' + prescriptionId })
+}
+
+/** AI 种植处方执行跟踪（PRD §11.3）。 */
+export function aiPrescriptionTracking(prescriptionId: string): Promise<any> {
+  return request<any>({ url: '/api/v1/production/ai/prescription/' + prescriptionId + '/tracking' })
+}
+
+/** AI 预测性预警列表（PRD §11.5）。 */
+export function aiAlerts(plotId?: string): Promise<any> {
+  return request<any>({ url: '/api/v1/production/ai/alert/list', params: { plotId } })
+}
+
+/** AI 预警详情（PRD §11.5）。 */
+export function aiAlert(alertId: string): Promise<any> {
+  return request<any>({ url: '/api/v1/production/ai/alert/' + alertId })
+}
+
+/** AI 建议行动一键执行（PRD §11.5）。 */
+export function aiAlertExecute(alertId: string, actionIndex: number): Promise<any> {
+  return request<any>({
+    url: '/api/v1/production/ai/alert/' + alertId + '/execute',
+    method: 'POST',
+    data: { actionIndex, confirm: true },
+  })
+}
+
+/** 消费者 AI 验真（PRD §10.4）。 */
+export function aiVerify(payload: Record<string, any>): Promise<any> {
+  return request<any>({ url: '/api/v1/production/ai/verify', method: 'POST', data: payload })
+}
+
+/** AI 遥感监测（PRD §11.4）。 */
+export function aiRemoteSensing(plotId: string): Promise<any> {
+  return request<any>({ url: '/api/v1/production/ai/remote-sensing/plot/' + plotId })
+}
+
+/** AI 产量预测（PRD §11）。 */
+export function aiYieldForecast(plotId: string): Promise<any> {
+  return request<any>({ url: '/api/v1/production/ai/yield-forecast/plot/' + plotId })
+}

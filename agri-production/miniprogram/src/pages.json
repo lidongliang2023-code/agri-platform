@@ -81,6 +81,38 @@
       "style": { "navigationBarTitleText": "AI 拍照识病" }
     },
     {
+      "path": "pages/ai/prescription",
+      "style": { "navigationBarTitleText": "AI 种植处方" }
+    },
+    {
+      "path": "pages/ai/assistant",
+      "style": { "navigationBarTitleText": "AI 农艺师" }
+    },
+    {
+      "path": "pages/ai/remote-sensing",
+      "style": { "navigationBarTitleText": "AI 遥感监测" }
+    },
+    {
+      "path": "pages/ai/alerts",
+      "style": { "navigationBarTitleText": "AI 预警中心" }
+    },
+    {
+      "path": "pages/ai/yield-forecast",
+      "style": { "navigationBarTitleText": "AI 产量预测" }
+    },
+    {
+      "path": "pages/food-safety/harvest-block",
+      "style": { "navigationBarTitleText": "采收休药期拦截" }
+    },
+    {
+      "path": "pages/food-safety/input-ai-check",
+      "style": { "navigationBarTitleText": "投入品合规校验" }
+    },
+    {
+      "path": "pages/food-safety/ai-verify",
+      "style": { "navigationBarTitleText": "消费者 AI 验真" }
+    },
+    {
       "path": "pages/profile/settings",
       "style": { "navigationBarTitleText": "设置" }
     }

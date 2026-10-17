@@ -41,6 +41,15 @@
       </view>
     </view>
 
+    <!-- 智能能力入口：页面都在，能力未接入时页面会展示后端原文与替代路径（不藏起来、也不假装能用） -->
+    <view class="card">
+      <view class="card-title"><text>🤖 智能能力</text></view>
+      <view v-for="item in aiEntries" :key="item.path" class="field" @click="goAi(item.path)">
+        <text class="field-label">{{ item.label }}</text>
+        <text class="field-value link">{{ item.badge }} →</text>
+      </view>
+    </view>
+
     <view class="muted" style="text-align: center; padding: 24rpx">
       离线数据同步（POST /api/v1/mobile/sync）后端尚未提供，本轮不展示“已缓存 N 条”这类假状态。
     </view>
@@ -106,6 +115,19 @@ const goAlerts = (): void => {
 }
 const goSettings = (): void => {
   uni.navigateTo({ url: '/pages/profile/settings' })
+}
+
+/** 5 个 AI 能力页（PRD §4.7）；badge 提前说明"未接入"，点进去能看到后端原文与替代路径 */
+const aiEntries = [
+  { label: 'AI 农艺师对话', badge: '未接入', path: '/pages/ai/assistant' },
+  { label: 'AI 种植处方', badge: '未接入', path: '/pages/ai/prescription' },
+  { label: 'AI 遥感监测', badge: '未接入', path: '/pages/ai/remote-sensing' },
+  { label: 'AI 产量预测', badge: '未接入', path: '/pages/ai/yield-forecast' },
+  { label: '消费者 AI 验真', badge: '未接入', path: '/pages/food-safety/ai-verify' },
+]
+
+const goAi = (path: string): void => {
+  uni.navigateTo({ url: path })
 }
 
 function goLogout(): void {

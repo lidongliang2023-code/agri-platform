@@ -256,6 +256,55 @@ try {
   check(inventoryText.includes('库存') || inventoryText.includes('暂无库存记录'), '库存概览页渲染')
   await shot('11-inventory')
 
+  /* ==================== 6b) PRD §4.7 的 V1.1 页面 ==================== */
+
+  // (1) 采收休药期拦截（多地块对比）—— 这块有真数据支撑
+  await open('pages/food-safety/harvest-block', 2200)
+  const blockText = await pageText()
+  check(blockText.includes('计划采收日期'), '休药期对比页渲染日期选择')
+  check(/✅|❌|⚠️/.test(blockText), '按地块逐个给出休药期状态（✅/❌/⚠️）',
+    blockText.replace(/\s+/g, ' ').slice(0, 80))
+  check(blockText.includes('块地'), '给出可采收/休药期内的计数')
+  await shot('14-harvest-block')
+
+  // (2) 投入品 AI 合规校验 —— 也是真接口（四重校验）
+  await open('pages/food-safety/input-ai-check', 2200)
+  check((await pageText()).includes('投入品 AI 合规校验'), '投入品合规校验页渲染')
+  const pickedInput = await page.evaluate(() => {
+    const card = [...document.querySelectorAll('#app .card')].find((el) =>
+      (el.textContent ?? '').includes('库存'),
+    )
+    if (!card) return false
+    card.click()
+    return true
+  })
+  check(pickedInput, '合规校验页列出了可选的投入品')
+  await page.waitForNetworkIdle({ idleTime: 600, timeout: 15000 }).catch(() => {})
+  await sleep(1500)
+  const checkedText = await pageText()
+  check(checkedText.includes('整体结论') && checkedText.includes('未校验'),
+    '选中后给出整体结论，且未校验项如实标注', checkedText.replace(/\s+/g, ' ').slice(0, 80))
+  await shot('15-input-check')
+
+  // (3~8) 六个 AI 页面：都接真接口、如实展示 501 原文并给替代路径
+  const aiPages = [
+    ['pages/ai/assistant', 'AI 农艺师'],
+    ['pages/ai/prescription', 'AI 种植处方'],
+    ['pages/ai/remote-sensing', 'AI 遥感监测'],
+    ['pages/ai/alerts', 'AI 预警中心'],
+    ['pages/ai/yield-forecast', 'AI 产量预测'],
+    ['pages/food-safety/ai-verify', '消费者 AI 验真'],
+  ]
+  for (const [route, label] of aiPages) {
+    await open(route, 1600)
+    const text = await pageText()
+    check(
+      text.includes('未接入') && text.includes('可用的替代路径'),
+      `${label} 页展示后端「未接入」原文 + 替代路径`,
+      text.replace(/\s+/g, ' ').slice(0, 60),
+    )
+  }
+
   /* ==================== 7) 溯源 / AI / 消息 / 告警 ==================== */
 
   await open('pages/trace/scan', 1200)

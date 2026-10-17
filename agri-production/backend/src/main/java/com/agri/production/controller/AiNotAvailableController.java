@@ -139,4 +139,11 @@ public class AiNotAvailableController {
         throw new BusinessException(501, "AI 遥感监测未接入：本部署没有遥感影像源。" + REASON
                 + "可用的替代：地块台账（/plots/{id}）与土壤记录（/plots/{id}/soil/latest）。");
     }
+
+    /** AI 产量预测（PRD §11 移动端按地块口径）。 */
+    @GetMapping("/yield-forecast/plot/{plotId}")
+    public ApiResponse<Map<String, Object>> yieldForecastByPlot() {
+        throw new BusinessException(501, "产量预测未接入。" + REASON
+                + "可用的替代：采收台账里的实际产量（/harvests）与地块面积（/plots）。");
+    }
 }

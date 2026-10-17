@@ -52,7 +52,10 @@
       <view class="btn-primary" @click="goCreate">＋ 新建采收</view>
     </view>
     <view style="margin: 0 24rpx 40rpx">
-      <view class="btn-ghost" @click="goInventory">库存概览</view>
+      <view style="display: flex; gap: 20rpx">
+        <view class="btn-ghost" style="flex: 1" @click="goBlockCheck">休药期对比</view>
+        <view class="btn-ghost" style="flex: 1" @click="goInventory">库存概览</view>
+      </view>
     </view>
   </view>
 </template>
@@ -152,6 +155,11 @@ const goCreate = (): void => {
 }
 const goInventory = (): void => {
   uni.navigateTo({ url: '/pages/inventory/inventory' })
+}
+
+/** PRD §10.3：多地块休药期状态对比（服务端一次查多块地） */
+const goBlockCheck = (): void => {
+  uni.navigateTo({ url: '/pages/food-safety/harvest-block' })
 }
 
 onShow(() => {

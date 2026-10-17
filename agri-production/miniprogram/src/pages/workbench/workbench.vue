@@ -125,11 +125,18 @@ const recentOps = computed(() => {
   return ops.filter((op) => op.time !== '—').slice(0, 5)
 })
 
-/** 快捷入口（PRD 4.1.1 六格） */
+/**
+ * 快捷入口（对齐 PRD 4.1.1 与 V2 原型的八格）。
+ *
+ * <p>其中「AI 预警」与原型一致；「休药期对比」是 PRD §10.3 的入口，
+ * 它背后是**真数据**（服务端多地块休药期校验），不是占位。</p>
+ */
 const quickEntries = [
   { icon: '📷', label: 'AI 识病', path: '/pages/ai/pest-detection' },
   { icon: '📋', label: '新建任务', path: '/pages/tasks/create' },
   { icon: '📦', label: '新建采收', path: '/pages/harvests/create' },
+  { icon: '⏳', label: '休药期对比', path: '/pages/food-safety/harvest-block' },
+  { icon: '🤖', label: 'AI 预警', path: '/pages/ai/alerts' },
   { icon: '📖', label: '扫码溯源', path: '/pages/trace/scan' },
   { icon: '📍', label: '地块地图', path: '/pages/plots/map' },
   { icon: '💊', label: '投入品', path: '/pages/inputs/scan' },
