@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>供应链金融 · 农产云</title>
+<link rel="stylesheet" href="../assets/css/theme.css" />
+</head>
+<body>
+
+<!-- 顶部通栏 -->
+<div class="topbar">
+  <div class="container">
+    <span>农产云 · 农业产业互联网平台 · 交易引擎</span>
+    <span>
+      <a href="../trade/member.html">会员中心</a><span class="sep">·</span>
+      <a href="../trade/publish.html">发布需求</a><span class="sep">·</span>
+      <a href="../index.html">产品原型总览</a>
+    </span>
+  </div>
+</div>
+
+<!-- 站点头部 -->
+<header class="site-header">
+  <div class="container">
+    <a class="brand" href="../portal/index.html">
+      <span class="logo" data-icon="seed" data-size="20"></span>
+      <span>农产云<small>AGRI · CLOUD</small></span>
+    </a>
+    <nav class="main-nav">
+      <a href="../portal/index.html">首页</a>
+      <a href="../trade/index.html">交易大厅</a>
+      <a href="finance.html" class="active">供应链金融</a>
+      <a href="service.html">综合服务</a>
+      <a href="supervision.html">政府监管</a>
+      <a href="info.html">信息资讯</a>
+    </nav>
+    <div class="header-search">
+      <input placeholder="搜索商品 / 供应商 / 需求" />
+      <button>搜索</button>
+    </div>
+  </div>
+</header>
+
+<!-- 面包屑 -->
+<div style="background:#fff;border-bottom:1px solid var(--line)">
+  <div class="container" style="padding:12px 0">
+    <div class="crumb">
+      <a href="../portal/index.html">首页</a>
+      <span class="sep">/</span>
+      <span>供应链金融</span>
+    </div>
+  </div>
+</div>
+
+<!-- 模块横幅 -->
+<section style="background:linear-gradient(135deg,#0A3A25,#12764A 60%,#0C7BA8);color:#fff;position:relative;overflow:hidden">
+  <div class="container" style="padding:40px 24px 36px;display:grid;grid-template-columns:1.3fr .7fr;gap:36px;align-items:center;position:relative;z-index:2">
+    <div>
+      <div class="row wrap center gap-8 mb-12">
+        <span class="tag" style="background:rgba(255,255,255,.14);color:#EAFFF5"><span data-icon="money" data-size="13"></span>交易引擎 · 供应链金融</span>
+        <span class="tag" style="background:rgba(255,255,255,.14);color:#EAFFF5"><span data-icon="shield" data-size="13"></span>产业链信用 · 三角链风控</span>
+      </div>
+      <h1 style="font-size:32px;font-weight:800;line-height:1.3">供应链金融</h1>
+      <p style="color:rgba(255,255,255,.8);margin-top:12px;max-width:640px">
+        以产业链信用为核心，为核心企业、供应商、经销商提供全场景融资与支付服务。</p>
+      <div style="margin-top:22px;display:flex;gap:12px;flex-wrap:wrap">
+        <a class="btn btn-lg" style="background:#fff;color:#0E5233" href="#apply"><span data-icon="money"></span>申请融资</a>
+        <a class="btn btn-lg btn-outline" style="background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.5);color:#fff" href="#calc"><span data-icon="target"></span>额度测算</a>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);border-radius:14px;padding:14px 18px;backdrop-filter:blur(6px)">
+        <div style="font-size:12px;color:rgba(255,255,255,.7)"><span data-icon="money" data-size="13"></span> 累计放款</div>
+        <div class="mono" style="font-size:24px;font-weight:800;margin-top:4px">¥ 86.5<span style="font-size:13px;font-weight:500"> 亿</span></div>
+      </div>
+      <div style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);border-radius:14px;padding:14px 18px;backdrop-filter:blur(6px)">
+        <div style="font-size:12px;color:rgba(255,255,255,.7)"><span data-icon="users" data-size="13"></span> 服务企业</div>
+        <div class="mono" style="font-size:24px;font-weight:800;margin-top:4px">12,800<span style="font-size:13px;font-weight:500"> 家</span></div>
+      </div>
+      <div style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);border-radius:14px;padding:14px 18px;backdrop-filter:blur(6px)">
+        <div style="font-size:12px;color:rgba(255,255,255,.7)"><span data-icon="zap" data-size="13"></span> 平均放款时效</div>
+        <div class="mono" style="font-size:24px;font-weight:800;margin-top:4px">T+0</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 金融产品四卡 -->
+<section class="section">
+  <div class="container">
+    <div class="section-head">
+      <div>
+        <div class="bar-title">金融产品</div>
+        <div class="sub">覆盖订单、收货、支付、信用全场景的产业链融资工具</div>
+      </div>
+      <span class="tag tag-ghost">四类标准产品</span>
+    </div>
+    <div class="grid grid-4">
+      <div class="card card-hover"><div class="card-b">
+        <div class="row between center mb-12"><div class="stat-icon"><span data-icon="clipboard" data-size="20"></span></div><span class="tag">备货融资</span></div>
+        <div class="strong t-lg">订单融</div>
+        <div class="muted t-sm mt-8">凭采购订单提前预支货款，解决备货资金压力。</div>
+        <a class="btn btn-sm btn-primary mt-16" href="#apply">立即申请</a>
+      </div></div>
+      <div class="card card-hover"><div class="card-b">
+        <div class="row between center mb-12"><div class="stat-icon tech"><span data-icon="box" data-size="20"></span></div><span class="tag tag-tech">货权质押</span></div>
+        <div class="strong t-lg">收货融</div>
+        <div class="muted t-sm mt-8">货物入库即放款，以仓单与货权质押获取流动资金。</div>
+        <a class="btn btn-sm btn-primary mt-16" href="#apply">立即申请</a>
+      </div></div>
+      <div class="card card-hover"><div class="card-b">
+        <div class="row between center mb-12"><div class="stat-icon amber"><span data-icon="money" data-size="20"></span></div><span class="tag tag-amber">账期支付</span></div>
+        <div class="strong t-lg">折扣付</div>
+        <div class="muted t-sm mt-8">核心企业账期折扣支付，供应商提前回款降本增效。</div>
+        <a class="btn btn-sm btn-primary mt-16" href="#apply">立即申请</a>
+      </div></div>
+      <div class="card card-hover"><div class="card-b">
+        <div class="row between center mb-12"><div class="stat-icon"><span data-icon="shield" data-size="20"></span></div><span class="tag">纯信用</span></div>
+        <div class="strong t-lg">信用付</div>
+        <div class="muted t-sm mt-8">基于产业链交易信用授予额度，无需抵押随借随还。</div>
+        <a class="btn btn-sm btn-primary mt-16" href="#apply">立即申请</a>
+      </div></div>
+    </div>
+  </div>
+</section>
+
+<!-- 授信概览 + 额度测算 + 风控 -->
+<section class="section" style="padding-top:0">
+  <div class="container">
+    <div class="grid" style="grid-template-columns:1.3fr 1fr;gap:24px;align-items:start">
+
+      <!-- 左栏 -->
+      <div style="display:flex;flex-direction:column;gap:24px">
+
+        <!-- 企业授信概览 -->
+        <div class="card">
+          <div class="card-h">
+            <h3><span data-icon="award" data-size="18"></span>企业授信概览</h3>
+            <span class="more">授信有效期至 2027-06-30</span>
+          </div>
+          <div class="card-b">
+            <div class="grid grid-2" style="gap:14px">
+              <div class="stat">
+                <div class="k"><span data-icon="money" data-size="14"></span>可用授信</div>
+                <div class="v">¥3,000,000</div>
+                <div class="d">总额度 ¥4,120,000</div>
+              </div>
+              <div class="stat">
+                <div class="k"><span data-icon="chart" data-size="14"></span>已用额度</div>
+                <div class="v">¥1,120,000</div>
+                <div class="d">额度使用率 <span class="mono">27.2%</span></div>
+              </div>
+              <div class="stat tech">
+                <div class="k"><span data-icon="activity" data-size="14"></span>年化利率</div>
+                <div class="v">6.8<span class="unit">%</span></div>
+                <div class="d">按日计息 · 随借随还</div>
+              </div>
+              <div class="stat">
+                <div class="k"><span data-icon="shield" data-size="14"></span>还款状态</div>
+                <div class="v" style="font-size:24px"><span class="dot"></span> 正常</div>
+                <div class="d">近 24 期无逾期记录</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 融资额度测算 -->
+        <div class="card" id="calc">
+          <div class="card-h">
+            <h3><span data-icon="target" data-size="18"></span>融资额度测算</h3>
+            <span class="more">模拟测算 · 结果仅供参考</span>
+          </div>
+          <div class="card-b">
+            <div class="form-grid">
+              <div class="form-item">
+                <label class="req">企业类型</label>
+                <select class="select">
+                  <option>核心企业</option>
+                  <option>上游供应商</option>
+                  <option>下游经销商</option>
+                </select>
+              </div>
+              <div class="form-item">
+                <label class="req">账期</label>
+                <select class="select">
+                  <option>30 天</option>
+                  <option selected>60 天</option>
+                  <option>90 天</option>
+                  <option>120 天</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-grid">
+              <div class="form-item">
+                <label class="req">订单金额（元）</label>
+                <input class="input mono" value="2,000,000" />
+              </div>
+              <div class="form-item">
+                <label class="req">核心企业</label>
+                <input class="input" value="中粮集团（粮油板块）" />
+              </div>
+            </div>
+            <button type="button" class="btn btn-primary btn-block"><span data-icon="target"></span>测算额度</button>
+            <div style="margin-top:16px;background:var(--green-050);border:1px dashed var(--green-300);border-radius:10px;padding:14px 16px" class="row between center wrap gap-12">
+              <div>
+                <div class="muted t-sm">预计可融额度（订单金额 × 80%）</div>
+                <div class="muted t-xs mt-8">按当前授信与风控模型测算，实际以审批结果为准</div>
+              </div>
+              <span class="price" style="font-size:24px"><span class="cur">¥</span>1,600,000</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- 右栏 -->
+      <div style="display:flex;flex-direction:column;gap:24px">
+
+        <!-- 三角链风控 -->
+        <div class="card">
+          <div class="card-h">
+            <h3><span data-icon="shield" data-size="18"></span>三角链风控</h3>
+            <span class="more">Core · Upstream · Downstream</span>
+          </div>
+          <div class="card-b">
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div style="border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:var(--bg-alt)">
+                <div class="row center gap-10">
+                  <div class="stat-icon tech" style="width:36px;height:36px"><span data-icon="box" data-size="18"></span></div>
+                  <div><div class="strong">上游供应商</div><div class="muted t-xs">以应收账款确权，获取订单融资</div></div>
+                </div>
+              </div>
+              <div class="tc muted"><span data-icon="arrow" data-size="18" style="display:inline-block;transform:rotate(90deg)"></span></div>
+              <div style="border:1px solid var(--green-300);border-radius:10px;padding:12px 14px;background:var(--green-050)">
+                <div class="row center gap-10">
+                  <div class="stat-icon" style="width:36px;height:36px"><span data-icon="factory" data-size="18"></span></div>
+                  <div><div class="strong">核心企业</div><div class="muted t-xs">信用锚点 · 确权与付款兜底</div></div>
+                </div>
+              </div>
+              <div class="tc muted"><span data-icon="arrow" data-size="18" style="display:inline-block;transform:rotate(90deg)"></span></div>
+              <div style="border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:var(--bg-alt)">
+                <div class="row center gap-10">
+                  <div class="stat-icon amber" style="width:36px;height:36px"><span data-icon="cart" data-size="18"></span></div>
+                  <div><div class="strong">下游经销商</div><div class="muted t-xs">以采购订单授信，账期内采购</div></div>
+                </div>
+              </div>
+            </div>
+            <div style="margin-top:18px;display:flex;flex-direction:column;gap:14px">
+              <div class="row gap-12">
+                <div class="stat-icon" style="width:34px;height:34px;flex:none"><span data-icon="check" data-size="16"></span></div>
+                <div><div class="strong t-sm">数据校验</div><div class="muted t-xs">订单、发票、物流、资金四流交叉核验，确保贸易背景真实。</div></div>
+              </div>
+              <div class="row gap-12">
+                <div class="stat-icon tech" style="width:34px;height:34px;flex:none"><span data-icon="wifi" data-size="16"></span></div>
+                <div><div class="strong t-sm">资金闭环</div><div class="muted t-xs">放款与回款定向流转，货款直达受托账户，防止资金挪用。</div></div>
+              </div>
+              <div class="row gap-12">
+                <div class="stat-icon amber" style="width:34px;height:34px;flex:none"><span data-icon="user" data-size="16"></span></div>
+                <div><div class="strong t-sm">信用画像</div><div class="muted t-xs">融合经营、履约与交易活跃度构建动态信用画像与预授信。</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 信用评估 -->
+        <div class="card">
+          <div class="card-h">
+            <h3><span data-icon="star" data-size="18"></span>信用评估</h3>
+            <span class="tag">AAA 级</span>
+          </div>
+          <div class="card-b">
+            <div class="row between center">
+              <div>
+                <div class="muted t-sm">综合信用评分</div>
+                <div class="mono" style="font-size:38px;font-weight:800;color:var(--green-700);line-height:1.1">782</div>
+              </div>
+              <div class="tr">
+                <div class="muted t-sm">平台排名</div>
+                <div class="mono strong" style="font-size:18px">前 5%</div>
+              </div>
+            </div>
+            <div style="margin-top:18px;display:flex;flex-direction:column;gap:14px">
+              <div>
+                <div class="row between center t-sm mb-8"><span>经营数据</span><span class="mono strong">92</span></div>
+                <div class="progress"><i style="width:92%"></i></div>
+              </div>
+              <div>
+                <div class="row between center t-sm mb-8"><span>履约记录</span><span class="mono strong">88</span></div>
+                <div class="progress"><i style="width:88%"></i></div>
+              </div>
+              <div>
+                <div class="row between center t-sm mb-8"><span>交易活跃度</span><span class="mono strong">76</span></div>
+                <div class="progress"><i style="width:76%"></i></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 融资申请记录 -->
+<section class="section" style="padding-top:0" id="apply">
+  <div class="container">
+    <div class="card">
+      <div class="card-h">
+        <h3><span data-icon="clipboard" data-size="18"></span>融资申请记录</h3>
+        <a class="more" href="#apply">全部记录 →</a>
+      </div>
+      <div class="card-b" style="padding:0">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>申请单号</th>
+              <th>融资产品</th>
+              <th style="text-align:right">申请金额</th>
+              <th>关联订单</th>
+              <th>账期</th>
+              <th>状态</th>
+              <th>申请时间</th>
+              <th style="text-align:right">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="mono">FQ20261018-0081</td>
+              <td>订单融</td>
+              <td class="tr"><span class="price"><span class="cur">¥</span>600,000</span></td>
+              <td class="mono">PO-20261012-233</td>
+              <td>60 天</td>
+              <td><span class="tag tag-amber">审核中</span></td>
+              <td class="mono t-xs">2026-10-18 10:24</td>
+              <td class="tr"><a class="link" href="#apply">查看</a></td>
+            </tr>
+            <tr>
+              <td class="mono">FQ20261017-0075</td>
+              <td>收货融</td>
+              <td class="tr"><span class="price"><span class="cur">¥</span>800,000</span></td>
+              <td class="mono">PO-20261008-118</td>
+              <td>45 天</td>
+              <td><span class="tag">已放款</span></td>
+              <td class="mono t-xs">2026-10-17 15:03</td>
+              <td class="tr"><a class="link" href="#apply">查看</a></td>
+            </tr>
+            <tr>
+              <td class="mono">FQ20261016-0069</td>
+              <td>折扣付</td>
+              <td class="tr"><span class="price"><span class="cur">¥</span>1,200,000</span></td>
+              <td class="mono">PO-20261005-096</td>
+              <td>90 天</td>
+              <td><span class="tag">已放款</span></td>
+              <td class="mono t-xs">2026-10-16 09:41</td>
+              <td class="tr"><a class="link" href="#apply">查看</a></td>
+            </tr>
+            <tr>
+              <td class="mono">FQ20261014-0058</td>
+              <td>信用付</td>
+              <td class="tr"><span class="price"><span class="cur">¥</span>250,000</span></td>
+              <td class="muted">—</td>
+              <td>30 天</td>
+              <td><span class="tag tag-tech">已结清</span></td>
+              <td class="mono t-xs">2026-10-14 14:22</td>
+              <td class="tr"><a class="link" href="#apply">查看</a></td>
+            </tr>
+            <tr>
+              <td class="mono">FQ20261013-0052</td>
+              <td>订单融</td>
+              <td class="tr"><span class="price"><span class="cur">¥</span>420,000</span></td>
+              <td class="mono">PO-20261009-140</td>
+              <td>60 天</td>
+              <td><span class="tag tag-red">已拒绝</span></td>
+              <td class="mono t-xs">2026-10-13 11:08</td>
+              <td class="tr"><a class="link" href="#apply">查看</a></td>
+            </tr>
+            <tr>
+              <td class="mono">FQ20261012-0047</td>
+              <td>收货融</td>
+              <td class="tr"><span class="price"><span class="cur">¥</span>680,000</span></td>
+              <td class="mono">PO-20261002-071</td>
+              <td>45 天</td>
+              <td><span class="tag tag-tech">已结清</span></td>
+              <td class="mono t-xs">2026-10-12 16:35</td>
+              <td class="tr"><a class="link" href="#apply">查看</a></td>
+            </tr>
+          </tbody>
+        </table>
+        <div style="padding:14px 20px">
+          <div class="pager">
+            <button>上一页</button>
+            <button class="on">1</button>
+            <button>2</button>
+            <button>3</button>
+            <button>下一页</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 还款计划 -->
+<section class="section" style="padding-top:0">
+  <div class="container">
+    <div class="card">
+      <div class="card-h">
+        <h3><span data-icon="activity" data-size="18"></span>还款计划</h3>
+        <span class="more">当前在贷：订单融 FQ20261017-0075 · 本金 ¥800,000</span>
+      </div>
+      <div class="card-b" style="padding:0">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>期数</th>
+              <th>应还日期</th>
+              <th style="text-align:right">应还本金</th>
+              <th style="text-align:right">应还利息</th>
+              <th>状态</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>第 1 期</td>
+              <td class="mono">2026-10-18</td>
+              <td class="tr"><span class="price"><span class="cur">¥</span>200,000</span></td>
+              <td class="tr mono">¥3,400</td>
+              <td><span class="tag tag-tech">已还</span></td>
+            </tr>
+            <tr>
+              <td>第 2 期</td>
+              <td class="mono">2026-11-18</td>
+              <td class="tr"><span class="price"><span class="cur">¥</span>200,000</span></td>
+              <td class="tr mono">¥3,400</td>
+              <td><span class="tag tag-amber">待还</span></td>
+            </tr>
+            <tr>
+              <td>第 3 期</td>
+              <td class="mono">2026-12-18</td>
+              <td class="tr"><span class="price"><span class="cur">¥</span>200,000</span></td>
+              <td class="tr mono">¥3,400</td>
+              <td><span class="tag tag-amber">待还</span></td>
+            </tr>
+            <tr>
+              <td>第 4 期</td>
+              <td class="mono">2027-01-18</td>
+              <td class="tr"><span class="price"><span class="cur">¥</span>200,000</span></td>
+              <td class="tr mono">¥3,400</td>
+              <td><span class="tag tag-amber">待还</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 页脚 -->
+<footer class="site-footer">
+  <div class="container">
+    <div class="grid grid-4">
+      <div>
+        <div class="brand" style="color:#fff"><span class="logo" data-icon="seed" data-size="20"></span><span>农产云</span></div>
+        <p style="margin-top:14px;font-size:13px;color:rgba(255,255,255,.6);max-width:280px">农业产业互联网平台，连接生产、加工、流通、销售全环节。</p>
+      </div>
+      <div><h4>关于平台</h4><a>平台介绍</a><a>联系方式</a><a>加入我们</a><a>帮助中心</a></div>
+      <div><h4>金融服务</h4><a href="finance.html">订单融</a><a href="finance.html">收货融</a><a href="finance.html">折扣付</a><a href="finance.html">信用付</a></div>
+      <div><h4>相关模块</h4><a href="../trade/index.html">交易大厅</a><a href="service.html">综合服务</a><a href="supervision.html">政府监管</a><a href="info.html">信息资讯</a></div>
+    </div>
+    <div class="bottom">
+      <span>© 2026 农业产业互联网平台 · 本页为产品原型演示，非真实业务系统</span>
+      <span>交易引擎 · 供应链金融</span>
+    </div>
+  </div>
+</footer>
+
+<script src="../assets/js/app.js"></script>
+</body>
+</html>

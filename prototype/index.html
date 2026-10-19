@@ -33,7 +33,7 @@
       <a href="portal/index.html">官网门户</a>
       <a href="trade/index.html">交易大厅</a>
       <a href="production/dashboard.html">生产监测</a>
-      <a href="production/manage.html">生产管理</a>
+      <a href="#modules">业务模块</a>
       <a href="mobile/index.html">移动端</a>
       <a href="mobile/ai.html">AI 买手</a>
     </nav>
@@ -95,48 +95,48 @@
           <!-- 交易引擎 -->
           <div class="engine e-trade">
             <div class="t">交易引擎</div>
-            <div class="mod">
+            <a class="mod" href="trade/index.html">
               <div class="n">交易撮合</div>
               <div class="d">智能大宗交易 + Sales Agent</div>
-            </div>
-            <div class="mod">
+            </a>
+            <a class="mod" href="trade/index.html">
               <div class="n">S2B2C</div>
               <div class="d">小程序端 / 多租户 PC 端</div>
-            </div>
-            <div class="mod">
+            </a>
+            <a class="mod" href="module/finance.html">
               <div class="n">供应链金融</div>
               <div class="d">产业链信用 · 三角链风控</div>
-            </div>
+            </a>
           </div>
 
           <!-- 生产引擎 -->
           <div class="engine e-prod">
             <div class="t">生产引擎</div>
-            <div class="mod">
+            <a class="mod" href="production/manage.html">
               <div class="n">生产管理</div>
               <div class="d">AI 核心引擎 · 资产安全 + AI</div>
-            </div>
-            <div class="mod">
+            </a>
+            <a class="mod" href="production/dashboard.html">
               <div class="n">物联网管理</div>
               <div class="d">数据采集 · 监测-补偿处理</div>
-            </div>
+            </a>
           </div>
 
           <!-- 服务引擎 -->
           <div class="engine e-serv">
             <div class="t">服务引擎</div>
-            <div class="mod">
+            <a class="mod" href="module/info.html">
               <div class="n">信息资讯</div>
               <div class="d">决策智能中枢</div>
-            </div>
-            <div class="mod">
+            </a>
+            <a class="mod" href="module/service.html">
               <div class="n">综合服务</div>
               <div class="d">产业数据服务</div>
-            </div>
-            <div class="mod">
+            </a>
+            <a class="mod" href="module/supervision.html">
               <div class="n">政府监管</div>
               <div class="d">产业互联网地标</div>
-            </div>
+            </a>
           </div>
         </div>
 
@@ -169,12 +169,12 @@
 </section>
 
 <!-- 终端入口原型 -->
-<section class="section" style="background:var(--bg-alt)">
+<section class="section" id="modules" style="background:var(--bg-alt);scroll-margin-top:70px">
   <div class="container container-wide">
     <div class="section-head">
       <div>
         <div class="bar-title">可交互原型入口</div>
-        <div class="sub">点击卡片进入对应终端的高保真原型页面</div>
+        <div class="sub">点击卡片进入对应终端与业务模块的高保真原型页面</div>
       </div>
     </div>
     <div class="grid grid-4">
@@ -224,6 +224,30 @@
         <div class="ic" style="background:linear-gradient(135deg,#0C7BA8,#12764A)"><span data-icon="user" data-size="22"></span></div>
         <h4>会员中心</h4>
         <p>采购订单 · 销售订单 · 资金账户 · 在线签章 · 售后与评价</p>
+        <span class="go">进入原型 <span data-icon="arrow" data-size="15"></span></span>
+      </a>
+      <a class="entry-card" href="module/finance.html">
+        <div class="ic" style="background:linear-gradient(135deg,#0C7BA8,#12764A)"><span data-icon="money" data-size="22"></span></div>
+        <h4>供应链金融</h4>
+        <p>订单融 / 收货融 / 折扣付 / 信用付 · 授信测算 · 三角链风控</p>
+        <span class="go">进入原型 <span data-icon="arrow" data-size="15"></span></span>
+      </a>
+      <a class="entry-card" href="module/service.html">
+        <div class="ic" style="background:linear-gradient(135deg,#155E3C,#0EA5E9)"><span data-icon="truck" data-size="22"></span></div>
+        <h4>综合服务</h4>
+        <p>物流跟踪 · 仓储冷链 · 质量溯源 · 农技服务 · VR 云工厂</p>
+        <span class="go">进入原型 <span data-icon="arrow" data-size="15"></span></span>
+      </a>
+      <a class="entry-card" href="module/supervision.html">
+        <div class="ic" style="background:linear-gradient(135deg,#0E5233,#159A5E)"><span data-icon="shield" data-size="22"></span></div>
+        <h4>政府监管</h4>
+        <p>数据上报 · 统计分析 · 预警执法 · 监管一张图</p>
+        <span class="go">进入原型 <span data-icon="arrow" data-size="15"></span></span>
+      </a>
+      <a class="entry-card" href="module/info.html">
+        <div class="ic" style="background:linear-gradient(135deg,#B45309,#F59E0B)"><span data-icon="file" data-size="22"></span></div>
+        <h4>信息资讯</h4>
+        <p>行情数据 · 政策法规 · 行业动态 · 市场分析报告</p>
         <span class="go">进入原型 <span data-icon="arrow" data-size="15"></span></span>
       </a>
     </div>
