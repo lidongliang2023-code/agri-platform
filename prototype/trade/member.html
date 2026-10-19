@@ -18,14 +18,14 @@
     </a>
     <nav class="side-nav">
       <div class="group">会员中心</div>
-      <a href="member.html" class="active"><span data-icon="home"></span>首页概览</a>
-      <a href="#"><span data-icon="cart"></span>采购订单</a>
-      <a href="#"><span data-icon="box"></span>销售订单</a>
-      <a href="#"><span data-icon="money"></span>资金账户</a>
-      <a href="#"><span data-icon="file"></span>在线签章</a>
-      <a href="#"><span data-icon="truck"></span>售后跟踪</a>
-      <a href="#"><span data-icon="star"></span>评价管理</a>
-      <a href="#"><span data-icon="user"></span>企业资料</a>
+      <a href="javascript:void(0)" class="active" data-tab="overview" data-tab-group="member" data-icon="home"><span data-icon="home"></span>首页概览</a>
+      <a href="javascript:void(0)" data-tab="purchase" data-tab-group="member"><span data-icon="cart"></span>采购订单</a>
+      <a href="javascript:void(0)" data-tab="sales" data-tab-group="member"><span data-icon="box"></span>销售订单</a>
+      <a href="javascript:void(0)" data-tab="fund" data-tab-group="member"><span data-icon="money"></span>资金账户</a>
+      <a href="javascript:void(0)" data-tab="seal" data-tab-group="member"><span data-icon="file"></span>在线签章</a>
+      <a href="javascript:void(0)" data-tab="after" data-tab-group="member"><span data-icon="truck"></span>售后跟踪</a>
+      <a href="javascript:void(0)" data-tab="rate" data-tab-group="member"><span data-icon="star"></span>评价管理</a>
+      <a href="javascript:void(0)" data-tab="profile" data-tab-group="member"><span data-icon="user"></span>企业资料</a>
 
       <div class="group">生产 / 其他</div>
       <a href="../production/dashboard.html"><span data-icon="activity"></span>生产监测</a>
@@ -48,6 +48,8 @@
     </header>
 
     <div class="app-body">
+      <div data-panels="member">
+      <div data-tabpanel="overview">
 
       <!-- 待办 KPI -->
       <div class="grid grid-4">
@@ -112,7 +114,7 @@
       <div class="card mt-20">
         <div class="card-h">
           <h3><span data-icon="cart" data-size="18"></span>最近订单</h3>
-          <a class="more" href="#">查看全部订单 →</a>
+          <a class="more" href="#purchase">查看全部订单 →</a>
         </div>
         <div style="overflow-x:auto">
           <table class="data-table">
@@ -137,7 +139,7 @@
                 <td><span class="price"><span class="cur">¥</span>920000</span></td>
                 <td><span class="tag tag-amber">待付款</span></td>
                 <td class="mono t-xs">2026-10-18 09:24</td>
-                <td><a class="link" href="#">确认</a></td>
+                <td><a class="link" href="#purchase">确认</a></td>
               </tr>
               <tr>
                 <td class="mono">NO20261017042</td>
@@ -147,7 +149,7 @@
                 <td><span class="price"><span class="cur">¥</span>2260000</span></td>
                 <td><span class="tag tag-tech">待发货</span></td>
                 <td class="mono t-xs">2026-10-17 15:08</td>
-                <td><a class="link" href="#">查看</a></td>
+                <td><a class="link" href="#purchase">查看</a></td>
               </tr>
               <tr>
                 <td class="mono">NO20261016033</td>
@@ -157,7 +159,7 @@
                 <td><span class="price"><span class="cur">¥</span>873600</span></td>
                 <td><span class="tag tag-amber">待发货</span></td>
                 <td class="mono t-xs">2026-10-16 11:32</td>
-                <td><a class="link" href="#">查看</a></td>
+                <td><a class="link" href="#purchase">查看</a></td>
               </tr>
               <tr>
                 <td class="mono">NO20261015018</td>
@@ -167,7 +169,7 @@
                 <td><span class="price"><span class="cur">¥</span>69600</span></td>
                 <td><span class="tag tag-tech">待收货</span></td>
                 <td class="mono t-xs">2026-10-15 08:47</td>
-                <td><a class="link" href="#">查看</a></td>
+                <td><a class="link" href="#purchase">查看</a></td>
               </tr>
               <tr>
                 <td class="mono">NO20261014009</td>
@@ -177,7 +179,7 @@
                 <td><span class="price"><span class="cur">¥</span>520200</span></td>
                 <td><span class="tag">已完成</span></td>
                 <td class="mono t-xs">2026-10-14 16:20</td>
-                <td><a class="link" href="#">评价</a></td>
+                <td><a class="link" href="#rate">评价</a></td>
               </tr>
               <tr>
                 <td class="mono">NO20261013005</td>
@@ -187,7 +189,7 @@
                 <td><span class="price"><span class="cur">¥</span>142800</span></td>
                 <td><span class="tag tag-red">售后中</span></td>
                 <td class="mono t-xs">2026-10-13 10:05</td>
-                <td><a class="link" href="#">跟踪</a></td>
+                <td><a class="link" href="#after">跟踪</a></td>
               </tr>
             </tbody>
           </table>
@@ -204,21 +206,163 @@
           <div class="strong">发布需求</div>
           <div class="muted t-sm mt-8">发布采购 / 供应需求，AI 智能匹配</div>
         </div></a>
-        <a class="card card-hover" href="#"><div class="card-b">
+        <a href="javascript:void(0)" onclick="alert('原型演示：跳转到在线签章模块')" class="card card-hover"><div class="card-b">
           <div class="stat-icon tech mb-12"><span data-icon="file" data-size="20"></span></div>
           <div class="strong">在线签章</div>
           <div class="muted t-sm mt-8">电子合同在线签署，具备法律效力</div>
         </div></a>
-        <a class="card card-hover" href="#"><div class="card-b">
+        <a href="javascript:void(0)" onclick="alert('原型演示：跳转到售后跟踪模块')" class="card card-hover"><div class="card-b">
           <div class="stat-icon amber mb-12"><span data-icon="truck" data-size="20"></span></div>
           <div class="strong">售后申请</div>
           <div class="muted t-sm mt-8">退货 / 换货 / 质量申诉快速发起</div>
         </div></a>
-        <a class="card card-hover" href="#"><div class="card-b">
+        <a href="javascript:void(0)" onclick="alert('原型演示：跳转到发票管理模块')" class="card card-hover"><div class="card-b">
           <div class="stat-icon tech mb-12"><span data-icon="money" data-size="20"></span></div>
           <div class="strong">发票管理</div>
           <div class="muted t-sm mt-8">开票信息维护与历史发票查询</div>
         </div></a>
+      </div>
+      </div>
+
+      <div data-tabpanel="purchase" class="hide">
+        <div class="toolbar mb-16">
+          <div class="row center gap-8"><span class="muted t-sm">状态</span>
+            <div class="chips"><span class="chip on">全部</span><span class="chip">待付款</span><span class="chip">待发货</span><span class="chip">待收货</span><span class="chip">已完成</span><span class="chip">售后中</span></div>
+          </div>
+          <div class="row center gap-8"><span class="muted t-sm">时间</span>
+            <div class="chips"><span class="chip on">近 7 天</span><span class="chip">近 30 天</span><span class="chip">今年</span></div>
+          </div>
+          <span class="spacer"></span>
+          <a class="btn btn-outline" href="publish.html"><span data-icon="clipboard"></span>发起新采购</a>
+        </div>
+        <table class="data-table">
+          <thead><tr><th>订单号</th><th>商品</th><th>数量</th><th style="text-align:right">金额</th><th>供应方</th><th>状态</th><th>下单时间</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">NO20261018001</td><td>富硒大米</td><td class="mono">200 吨</td><td class="tr"><span class="price"><span class="cur">¥</span>920,000</span></td><td>五常市稻香米业</td><td><span class="tag tag-amber">待付款</span></td><td class="mono t-xs">2026-10-18</td></tr>
+            <tr><td class="mono">NO20261016033</td><td>一级压榨菜籽油</td><td class="mono">80 吨</td><td class="tr"><span class="price"><span class="cur">¥</span>873,600</span></td><td>湖北荆楚粮油</td><td><span class="tag tag-amber">待发货</span></td><td class="mono t-xs">2026-10-16</td></tr>
+            <tr><td class="mono">NO20261015018</td><td>赣南脐橙（75+）</td><td class="mono">1200 箱</td><td class="tr"><span class="price"><span class="cur">¥</span>69,600</span></td><td>赣南脐橙合作社</td><td><span class="tag tag-tech">待收货</span></td><td class="mono t-xs">2026-10-15</td></tr>
+            <tr><td class="mono">NO20261014009</td><td>豆粕 43% 蛋白</td><td class="mono">150 吨</td><td class="tr"><span class="price"><span class="cur">¥</span>520,200</span></td><td>日照港粮油贸易</td><td><span class="tag">已完成</span></td><td class="mono t-xs">2026-10-14</td></tr>
+            <tr><td class="mono">NO20261013005</td><td>复合微生物肥</td><td class="mono">60 吨</td><td class="tr"><span class="price"><span class="cur">¥</span>142,800</span></td><td>金正大生态工程</td><td><span class="tag tag-red">售后中</span></td><td class="mono t-xs">2026-10-13</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div data-tabpanel="sales" class="hide">
+        <div class="toolbar mb-16">
+          <div class="row center gap-8"><span class="muted t-sm">状态</span>
+            <div class="chips"><span class="chip on">全部</span><span class="chip">待发货</span><span class="chip">运输中</span><span class="chip">已签收</span><span class="chip">售后中</span></div>
+          </div>
+          <span class="spacer"></span>
+          <a class="btn btn-outline" href="publish.html"><span data-icon="clipboard"></span>发布供应</a>
+        </div>
+        <table class="data-table">
+          <thead><tr><th>订单号</th><th>商品</th><th>数量</th><th style="text-align:right">金额</th><th>采购方</th><th>状态</th><th>下单时间</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">NO20261017042</td><td>五常稻花香2号</td><td class="mono">500 吨</td><td class="tr"><span class="price"><span class="cur">¥</span>2,260,000</span></td><td>河北邢台粮油</td><td><span class="tag tag-tech">待发货</span></td><td class="mono t-xs">2026-10-17</td></tr>
+            <tr><td class="mono">NO20261012019</td><td>富硒大米 25kg/袋</td><td class="mono">1200 吨</td><td class="tr"><span class="price"><span class="cur">¥</span>5,520,000</span></td><td>江苏苏州粮油连锁</td><td><span class="tag tag-tech">运输中</span></td><td class="mono t-xs">2026-10-12</td></tr>
+            <tr><td class="mono">NO20261008007</td><td>有机红米</td><td class="mono">60 吨</td><td class="tr"><span class="price"><span class="cur">¥</span>576,000</span></td><td>上海盒马鲜生</td><td><span class="tag">已签收</span></td><td class="mono t-xs">2026-10-08</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div data-tabpanel="fund" class="hide">
+        <div class="row gap-20 mb-16 wrap">
+          <div class="stat" style="flex:1;min-width:200px"><div class="k"><span data-icon="money" data-size="15"></span>账户余额</div><div class="v" style="font-size:26px">¥1,286,500</div><div class="d">可提现额度 <span class="mono">¥1,286,500</span></div></div>
+          <div class="stat tech" style="flex:1;min-width:200px"><div class="k"><span data-icon="shield" data-size="15"></span>可用授信</div><div class="v" style="font-size:26px">¥3,000,000</div><div class="d">授信总额 ¥5,000,000 · 已用 ¥2,000,000</div></div>
+          <div class="stat amber" style="flex:1;min-width:200px"><div class="k"><span data-icon="alert" data-size="15"></span>冻结保证金</div><div class="v" style="font-size:26px">¥120,000</div><div class="d">在途订单保证金 · 履约完成原路退还</div></div>
+        </div>
+        <div class="card">
+          <div class="card-h"><h3><span data-icon="repo" data-size="18"></span>资金流水</h3><span class="more">近 30 天</span></div>
+          <div class="card-b" style="padding:0">
+            <table class="data-table">
+              <thead><tr><th>流水号</th><th>类型</th><th>说明</th><th style="text-align:right">金额</th><th>时间</th></tr></thead>
+              <tbody>
+                <tr><td class="mono">TX20261018</td><td><span class="tag tag-tech">收入</span></td><td>销售订单 NO20261017042 货款到账</td><td class="tr"><span class="price" style="color:var(--green-700);font-weight:700">+¥2,260,000</span></td><td class="mono t-xs">2026-10-18 10:21</td></tr>
+                <tr><td class="mono">TX20261016</td><td><span class="tag">支出</span></td><td>采购订单 NO20261018001 付款</td><td class="tr"><span class="price" style="color:#B91C1C">−¥920,000</span></td><td class="mono t-xs">2026-10-16 14:38</td></tr>
+                <tr><td class="mono">TX20261015</td><td><span class="tag tag-amber">冻结</span></td><td>订单 NO20261015018 保证金</td><td class="tr"><span class="price" style="color:#B45309">−¥6,960</span></td><td class="mono t-xs">2026-10-15 08:47</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div data-tabpanel="seal" class="hide">
+        <div class="toolbar mb-16"><span class="muted t-sm">电子合同在线签署 · CA 实名认证 · 区块链存证</span><span class="spacer"></span><span class="tag tag-tech"><span data-icon="file" data-size="13"></span>待签合同 2 份</span></div>
+        <div class="grid grid-2">
+          <div class="card card-hover">
+            <div class="card-h"><h3><span data-icon="file" data-size="16"></span>菜籽油采购合同</h3><span class="tag tag-amber">待我方签署</span></div>
+            <div class="card-b">
+              <div class="muted t-sm">合同编号 <span class="mono">HT20261019-003</span></div>
+              <div class="muted t-sm mt-8">甲方：湖北荆州江汉粮贸（我方）<br>乙方：湖北金穗粮油</div>
+              <div class="mt-12">标的 100 吨 / 单价 ¥10,800 / 总价 ¥1,080,000 / 3 天交付</div>
+              <div class="row gap-12 mt-16"><button class="btn btn-primary flex-1"><span data-icon="zap"></span>立即签署</button><button class="btn btn-outline flex-1"><span data-icon="file"></span>查看合同</button></div>
+            </div>
+          </div>
+          <div class="card card-hover">
+            <div class="card-h"><h3><span data-icon="file" data-size="16"></span>五常大米销售合同</h3><span class="tag tag-ghost">待对方签署</span></div>
+            <div class="card-b">
+              <div class="muted t-sm">合同编号 <span class="mono">HT20261018-007</span></div>
+              <div class="muted t-sm mt-8">甲方：我方<br>乙方：河北邢台粮油</div>
+              <div class="mt-12">标的 500 吨 / 单价 ¥4,520 / 总价 ¥2,260,000</div>
+              <div class="row gap-12 mt-16"><button class="btn btn-outline flex-1"><span data-icon="file"></span>查看合同</button><button class="btn btn-ghost flex-1"><span data-icon="clock"></span>催促签署</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div data-tabpanel="after" class="hide">
+        <div class="card">
+          <div class="card-h"><h3><span data-icon="truck" data-size="18"></span>售后与争议</h3><span class="tag tag-red">售后中 2 笔</span></div>
+          <div class="card-b" style="padding:0">
+            <table class="data-table">
+              <thead><tr><th>售后单号</th><th>关联订单</th><th>类型</th><th>问题描述</th><th>提交方</th><th>状态</th><th>提交时间</th></tr></thead>
+              <tbody>
+                <tr><td class="mono">AS20261014</td><td class="mono">NO20261013005</td><td><span class="tag tag-red">质量申诉</span></td><td>微生物肥结块率超 5%</td><td>我方（采购）</td><td><span class="tag tag-amber">平台仲裁中</span></td><td class="mono t-xs">2026-10-14</td></tr>
+                <tr><td class="mono">AS20261010</td><td class="mono">NO20261005012</td><td><span class="tag tag-red">发货延迟</span></td><td>约定 5 天实际 11 天，申请违约金</td><td>对方（销售）</td><td><span class="tag tag-tech">供应商举证中</span></td><td class="mono t-xs">2026-10-10</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div data-tabpanel="rate" class="hide">
+        <div class="toolbar mb-16"><span class="muted t-sm">采购评价 / 店铺评分</span><span class="spacer"></span><span class="tag tag-tech">待评价 12 笔</span></div>
+        <table class="data-table">
+          <thead><tr><th>订单号</th><th>商品</th><th>数量</th><th>供应方</th><th>供应方评分</th><th>状态</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">NO20261014009</td><td>豆粕 43% 蛋白</td><td class="mono">150 吨</td><td>日照港粮油贸易</td><td><span class="row center gap-4"><span class="star" style="color:#F59E0B">★★★★☆</span><span class="mono">4.6</span></span></td><td><span class="tag tag-amber">待评价</span></td></tr>
+            <tr><td class="mono">NO20261008022</td><td>优质玉米</td><td class="mono">300 吨</td><td>河南豫丰农业</td><td><span class="row center gap-4"><span style="color:#F59E0B">★★★★★</span><span class="mono">5.0</span></span></td><td><span class="tag">已评价</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div data-tabpanel="profile" class="hide">
+        <div class="grid grid-2 gap-20">
+          <div class="card"><div class="card-h"><h3><span data-icon="user" data-size="18"></span>企业基本信息</h3><a class="more" href="javascript:void(0)" onclick="alert('原型演示：正式系统可编辑企业资料')">编辑 →</a></div>
+            <div class="card-b">
+              <dl class="kv" style="display:grid;grid-template-columns:92px 1fr;gap:10px 14px;font-size:13px">
+                <dt class="muted">企业名称</dt><dd class="strong">黑龙江五常粮油合作社</dd>
+                <dt class="muted">统一信用代码</dt><dd class="mono">91230184MA1WXXXX0X</dd>
+                <dt class="muted">主营品类</dt><dd>大米、面粉、豆类</dd>
+                <dt class="muted">企业类型</dt><dd>生产加工 + 贸易</dd>
+                <dt class="muted">注册资本</dt><dd>1,200 万元人民币</dd>
+                <dt class="muted">信用等级</dt><dd><span class="tag tag-tech">AAA</span> · 平台认证</dd>
+              </dl>
+            </div>
+          </div>
+          <div class="card"><div class="card-h"><h3><span data-icon="repo" data-size="18"></span>资质证照</h3><span class="more">已上传 6 / 6</span></div>
+            <div class="card-b"><div class="grid grid-3">
+              <div style="text-align:center;padding:12px;border:1px dashed var(--green-300);border-radius:10px;background:var(--green-050)"><div class="stat-icon" style="margin:0 auto"><span data-icon="file" data-size="20"></span></div><div class="t-xs mt-8 muted">营业执照</div></div>
+              <div style="text-align:center;padding:12px;border:1px dashed var(--green-300);border-radius:10px;background:var(--green-050)"><div class="stat-icon" style="margin:0 auto"><span data-icon="file" data-size="20"></span></div><div class="t-xs mt-8 muted">食品经营许可证</div></div>
+              <div style="text-align:center;padding:12px;border:1px dashed var(--green-300);border-radius:10px;background:var(--green-050)"><div class="stat-icon" style="margin:0 auto"><span data-icon="file" data-size="20"></span></div><div class="t-xs mt-8 muted">ISO 22000 认证</div></div>
+              <div style="text-align:center;padding:12px;border:1px dashed var(--green-300);border-radius:10px;background:var(--green-050)"><div class="stat-icon amber" style="margin:0 auto"><span data-icon="file" data-size="20"></span></div><div class="t-xs mt-8 muted">原产地地理标志</div></div>
+              <div style="text-align:center;padding:12px;border:1px dashed var(--green-300);border-radius:10px;background:var(--green-050)"><div class="stat-icon" style="margin:0 auto"><span data-icon="file" data-size="20"></span></div><div class="t-xs mt-8 muted">银行开户许可证</div></div>
+              <div style="text-align:center;padding:12px;border:1px solid var(--amber);border-radius:10px;background:var(--amber-100)"><div class="stat-icon amber" style="margin:0 auto"><span data-icon="alert" data-size="20"></span></div><div class="t-xs mt-8 muted">最新年报 · 待上传</div></div>
+            </div></div>
+          </div>
+        </div>
+      </div>
+
       </div>
 
     </div>
