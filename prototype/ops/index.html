@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>平台运营总览 · 农产云运营端</title>
+<link rel="stylesheet" href="../assets/css/theme.css" />
+</head>
+<body>
+
+<div class="app-shell">
+
+  <!-- 侧边栏 -->
+  <aside class="app-side">
+    <a class="brand" href="../index.html">
+      <span class="logo" data-icon="seed" data-size="20"></span>
+      <span>农产云<small>运营端</small></span>
+    </a>
+    <nav class="side-nav">
+      <div class="group">数据基座</div>
+      <a href="index.html" class="active"><span data-icon="activity"></span>运营总览</a>
+      <a href="masterdata.html"><span data-icon="user"></span>统一用户</a>
+      <a href="masterdata.html"><span data-icon="shield"></span>统一权限</a>
+      <a href="masterdata.html"><span data-icon="box"></span>统一商品</a>
+      <a href="masterdata.html"><span data-icon="users"></span>客户管理</a>
+      <a href="masterdata.html"><span data-icon="award"></span>供应商管理</a>
+      <a href="masterdata.html"><span data-icon="file"></span>数据治理</a>
+
+      <div class="group">返回入口</div>
+      <a href="../portal/index.html"><span data-icon="globe"></span>官网门户</a>
+      <a href="../trade/index.html"><span data-icon="cart"></span>交易大厅</a>
+      <a href="../production/dashboard.html"><span data-icon="layers"></span>生产监测</a>
+      <a href="../index.html"><span data-icon="home"></span>原型总览</a>
+    </nav>
+  </aside>
+
+  <!-- 主区 -->
+  <div class="app-main">
+
+    <header class="app-top">
+      <div class="crumb">
+        <a href="index.html">运营端</a><span class="sep">/</span>平台运营总览
+      </div>
+      <div class="row center gap-16">
+        <span data-icon="bell" style="color:var(--ink-500)"></span>
+        <div class="row center gap-12">
+          <div class="avatar">运</div>
+          <span class="t-sm strong">平台运营管理员</span>
+        </div>
+      </div>
+    </header>
+
+    <div class="app-body">
+
+      <!-- 顶部快捷入口 -->
+      <div class="toolbar mb-20">
+        <button class="btn btn-primary btn-sm"><span data-icon="plus"></span>发布公告</button>
+        <button class="btn btn-outline btn-sm"><span data-icon="check"></span>审核中心</button>
+        <button class="btn btn-outline btn-sm"><span data-icon="chart"></span>数据看板</button>
+        <button class="btn btn-ghost btn-sm"><span data-icon="settings"></span>系统配置</button>
+        <div class="spacer"></div>
+        <span class="muted t-sm">数据更新于 <span class="mono">2026-10-19 14:26</span></span>
+      </div>
+
+      <!-- KPI 卡片 -->
+      <div class="grid grid-5">
+        <div class="stat">
+          <div class="k"><span data-icon="user" style="color:var(--green-600)"></span>注册用户</div>
+          <div class="v"><span class="js-count" data-to="38.6" data-dec="1">38.6</span><span class="unit">万家</span></div>
+          <div class="d">较上月 <span class="up">+2.4%</span></div>
+        </div>
+        <div class="stat">
+          <div class="k"><span data-icon="box" style="color:var(--green-600)"></span>在售商品</div>
+          <div class="v"><span class="js-count" data-to="186" data-dec="0">186</span><span class="unit">万个</span></div>
+          <div class="d">本周新增 <span class="up">+1.2 万</span></div>
+        </div>
+        <div class="stat tech">
+          <div class="k"><span data-icon="money" style="color:var(--tech-600)"></span>近一年 GMV</div>
+          <div class="v"><span class="js-count" data-to="1268" data-dec="0">1268</span><span class="unit">亿元</span></div>
+          <div class="d">同比 <span class="up">+16.8%</span></div>
+        </div>
+        <div class="stat">
+          <div class="k"><span data-icon="award" style="color:var(--green-600)"></span>活跃供应商</div>
+          <div class="v"><span class="js-count" data-to="7.2" data-dec="1">7.2</span><span class="unit">万家</span></div>
+          <div class="d">认证率 <span class="up">96.5%</span></div>
+        </div>
+        <div class="stat tech">
+          <div class="k"><span data-icon="cpu" style="color:var(--tech-600)"></span>物联网接入设备</div>
+          <div class="v"><span class="js-count" data-to="12.6" data-dec="1">12.6</span><span class="unit">万台</span></div>
+          <div class="d">在线率 <span class="up">98.6%</span></div>
+        </div>
+      </div>
+
+      <!-- 趋势 + 健康度 -->
+      <div class="grid grid-2 mt-20">
+
+        <!-- 近 7 日平台交易趋势 -->
+        <div class="card">
+          <div class="card-h">
+            <h3><span data-icon="chart" data-size="18"></span>近 7 日平台交易趋势</h3>
+            <div class="row center gap-16">
+              <span class="row center gap-8 t-xs muted"><span class="dot"></span>订单量</span>
+              <span class="row center gap-8 t-xs muted"><span class="dot" style="background:var(--tech-500)"></span>成交额</span>
+            </div>
+          </div>
+          <div class="card-b">
+            <div class="spark">
+              <i style="height:45%"></i>
+              <i style="height:58%"></i>
+              <i style="height:52%"></i>
+              <i style="height:70%"></i>
+              <i style="height:64%"></i>
+              <i style="height:82%;background:linear-gradient(180deg,var(--tech-500),rgba(14,165,233,.15))"></i>
+              <i style="height:100%;background:linear-gradient(180deg,var(--tech-500),rgba(14,165,233,.15))"></i>
+            </div>
+            <div class="row between t-xs muted mt-8">
+              <span class="mono">10-13</span><span class="mono">10-14</span><span class="mono">10-15</span>
+              <span class="mono">10-16</span><span class="mono">10-17</span><span class="mono">10-18</span><span class="mono">10-19</span>
+            </div>
+            <div class="grid grid-3 mt-20" style="gap:12px">
+              <div><div class="muted t-xs">今日订单量</div><div class="mono strong t-lg mt-8">18,642 <span class="t-xs muted">笔</span></div></div>
+              <div><div class="muted t-xs">今日成交额</div><div class="price t-lg mt-8"><span class="cur">¥</span>4.86<span class="unit">亿</span></div></div>
+              <div><div class="muted t-xs">环比昨日</div><div class="mt-8"><span class="tag">+8.4%</span></div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 业务模块健康度 -->
+        <div class="card">
+          <div class="card-h">
+            <h3><span data-icon="shield" data-size="18"></span>业务模块健康度</h3>
+            <span class="more">近 24 小时</span>
+          </div>
+          <div class="card-b">
+            <div class="col gap-16">
+              <div>
+                <div class="row between t-sm mb-8"><span>交易撮合</span><span class="mono strong">99.97%</span></div>
+                <div class="progress"><i style="width:99.97%"></i></div>
+              </div>
+              <div>
+                <div class="row between t-sm mb-8"><span>S2B2C 商城</span><span class="mono strong">99.92%</span></div>
+                <div class="progress"><i style="width:99.92%"></i></div>
+              </div>
+              <div>
+                <div class="row between t-sm mb-8"><span>供应链金融</span><span class="mono strong">99.85%</span></div>
+                <div class="progress"><i style="width:99.85%"></i></div>
+              </div>
+              <div>
+                <div class="row between t-sm mb-8"><span>生产管理</span><span class="mono strong">99.96%</span></div>
+                <div class="progress"><i style="width:99.96%"></i></div>
+              </div>
+              <div>
+                <div class="row between t-sm mb-8"><span>物联网管理</span><span class="mono strong">99.81%</span></div>
+                <div class="progress"><i style="width:99.81%"></i></div>
+              </div>
+              <div>
+                <div class="row between t-sm mb-8"><span>信息资讯</span><span class="mono strong">99.99%</span></div>
+                <div class="progress"><i style="width:99.99%"></i></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- 待办与审核 + 最新平台公告 -->
+      <div class="grid grid-2 mt-20" style="align-items:start">
+
+        <!-- 待办与审核 -->
+        <div class="card">
+          <div class="card-h">
+            <h3><span data-icon="clipboard" data-size="18"></span>待办与审核</h3>
+            <a class="more" href="#">全部待办 →</a>
+          </div>
+          <div class="card-b tight">
+            <table class="data-table">
+              <thead>
+                <tr><th>待办事项</th><th>数量</th><th>优先级</th><th>操作</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>供应商入驻审核</td><td class="mono">128</td>
+                  <td><span class="tag tag-amber">高</span></td><td><a class="link">去处理</a></td>
+                </tr>
+                <tr>
+                  <td>商品上架审核</td><td class="mono">342</td>
+                  <td><span class="tag tag-amber">高</span></td><td><a class="link">去处理</a></td>
+                </tr>
+                <tr>
+                  <td>企业实名认证</td><td class="mono">76</td>
+                  <td><span class="tag tag-tech">中</span></td><td><a class="link">去处理</a></td>
+                </tr>
+                <tr>
+                  <td>融资申请复核</td><td class="mono">41</td>
+                  <td><span class="tag tag-red">紧急</span></td><td><a class="link">去处理</a></td>
+                </tr>
+                <tr>
+                  <td>内容合规巡检</td><td class="mono">23</td>
+                  <td><span class="tag tag-ghost">低</span></td><td><a class="link">去处理</a></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 最新平台公告 -->
+        <div class="card">
+          <div class="card-h">
+            <h3><span data-icon="bell" data-size="18"></span>最新平台公告</h3>
+            <a class="more" href="#">全部公告 →</a>
+          </div>
+          <div class="card-b">
+            <ul style="display:flex;flex-direction:column;gap:2px">
+              <li style="display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px dashed var(--line)">
+                <span class="tag tag-red">通知</span><span class="ellipsis">2026 年秋粮集中收购期间平台交易规则调整公告</span>
+                <span class="mono t-xs muted" style="margin-left:auto;flex:none">10-18</span></li>
+              <li style="display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px dashed var(--line)">
+                <span class="tag tag-tech">业务</span><span class="ellipsis">关于平台上线物联网设备「地块绑定」功能的公告</span>
+                <span class="mono t-xs muted" style="margin-left:auto;flex:none">10-16</span></li>
+              <li style="display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px dashed var(--line)">
+                <span class="tag tag-amber">招募</span><span class="ellipsis">面向全国征集优质农产品供应商入驻的公告</span>
+                <span class="mono t-xs muted" style="margin-left:auto;flex:none">10-12</span></li>
+              <li style="display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px dashed var(--line)">
+                <span class="tag tag-tech">业务</span><span class="ellipsis">平台 S2B2C 商城「产地直发」频道上线通知</span>
+                <span class="mono t-xs muted" style="margin-left:auto;flex:none">10-10</span></li>
+              <li style="display:flex;align-items:center;gap:8px;padding:10px 0">
+                <span class="tag tag-red">通知</span><span class="ellipsis">平台 10 月 20 日系统升级维护安排的通知</span>
+                <span class="mono t-xs muted" style="margin-left:auto;flex:none">10-08</span></li>
+            </ul>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="../assets/js/app.js"></script>
+</body>
+</html>

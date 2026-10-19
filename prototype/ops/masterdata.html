@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>数据基座 · 主数据管理 · 农产云运营端</title>
+<link rel="stylesheet" href="../assets/css/theme.css" />
+</head>
+<body>
+
+<div class="app-shell">
+
+  <!-- 侧边栏 -->
+  <aside class="app-side">
+    <a class="brand" href="../index.html">
+      <span class="logo" data-icon="seed" data-size="20"></span>
+      <span>农产云<small>运营端</small></span>
+    </a>
+    <nav class="side-nav">
+      <div class="group">数据基座</div>
+      <a href="index.html"><span data-icon="activity"></span>运营总览</a>
+      <a href="masterdata.html" class="active"><span data-icon="user"></span>统一用户</a>
+      <a href="masterdata.html"><span data-icon="shield"></span>统一权限</a>
+      <a href="masterdata.html"><span data-icon="box"></span>统一商品</a>
+      <a href="masterdata.html"><span data-icon="users"></span>客户管理</a>
+      <a href="masterdata.html"><span data-icon="award"></span>供应商管理</a>
+      <a href="masterdata.html"><span data-icon="file"></span>数据治理</a>
+
+      <div class="group">返回入口</div>
+      <a href="../portal/index.html"><span data-icon="globe"></span>官网门户</a>
+      <a href="../trade/index.html"><span data-icon="cart"></span>交易大厅</a>
+      <a href="../production/dashboard.html"><span data-icon="layers"></span>生产监测</a>
+      <a href="../index.html"><span data-icon="home"></span>原型总览</a>
+    </nav>
+  </aside>
+
+  <!-- 主区 -->
+  <div class="app-main">
+
+    <header class="app-top">
+      <div class="crumb">
+        <a href="index.html">运营端</a><span class="sep">/</span>数据基座 · 主数据管理
+      </div>
+      <div class="row center gap-16">
+        <span data-icon="bell" style="color:var(--ink-500)"></span>
+        <div class="row center gap-12">
+          <div class="avatar">运</div>
+          <span class="t-sm strong">平台运营管理员</span>
+        </div>
+      </div>
+    </header>
+
+    <div class="app-body">
+
+      <!-- 顶部统计 -->
+      <div class="grid grid-5">
+        <div class="stat">
+          <div class="k"><span data-icon="user" style="color:var(--green-600)"></span>用户总数</div>
+          <div class="v">386,420<span class="unit">人</span></div>
+          <div class="d">本月新增 <span class="up">+2,186</span></div>
+        </div>
+        <div class="stat">
+          <div class="k"><span data-icon="shield" style="color:var(--green-600)"></span>角色数</div>
+          <div class="v">28<span class="unit">个</span></div>
+          <div class="d">系统内置 12 · 自定义 16</div>
+        </div>
+        <div class="stat tech">
+          <div class="k"><span data-icon="box" style="color:var(--tech-600)"></span>商品 SKU</div>
+          <div class="v">1,862,300<span class="unit">个</span></div>
+          <div class="d">在售率 <span class="up">92.4%</span></div>
+        </div>
+        <div class="stat">
+          <div class="k"><span data-icon="users" style="color:var(--green-600)"></span>客户数</div>
+          <div class="v">96,800<span class="unit">家</span></div>
+          <div class="d">本月活跃 <span class="up">+3.1%</span></div>
+        </div>
+        <div class="stat">
+          <div class="k"><span data-icon="award" style="color:var(--green-600)"></span>供应商数</div>
+          <div class="v">72,100<span class="unit">家</span></div>
+          <div class="d">认证通过率 <span class="up">96.5%</span></div>
+        </div>
+      </div>
+
+      <!-- 主数据功能面板 -->
+      <div class="card mt-20">
+        <div class="card-h" style="padding:0 16px">
+          <div class="tabs" data-tabscope="md" style="border-bottom:none">
+            <button data-tab="users" data-tab-group="md" class="on">统一用户</button>
+            <button data-tab="roles" data-tab-group="md">统一权限</button>
+            <button data-tab="goods" data-tab-group="md">统一商品</button>
+            <button data-tab="partners" data-tab-group="md">客户 / 供应商</button>
+            <button data-tab="govern" data-tab-group="md">数据治理</button>
+          </div>
+          <span class="more">主数据同步于 <span class="mono">2026-10-19 14:26</span></span>
+        </div>
+
+        <div class="card-b" data-panels="md">
+
+          <!-- 1) 统一用户 -->
+          <div data-tabpanel="users">
+            <div class="toolbar">
+              <input class="input" style="width:220px" placeholder="搜索用户ID / 用户名 / 手机号" />
+              <div class="chips">
+                <span class="chip on">全部</span><span class="chip">农户</span><span class="chip">合作社</span>
+                <span class="chip">供应商</span><span class="chip">采购商</span><span class="chip">平台管理员</span>
+              </div>
+              <div class="spacer"></div>
+              <button class="btn btn-primary btn-sm"><span data-icon="plus"></span>新增用户</button>
+              <button class="btn btn-outline btn-sm"><span data-icon="file"></span>导出</button>
+            </div>
+
+            <table class="data-table mt-16">
+              <thead>
+                <tr>
+                  <th>用户ID</th><th>用户名</th><th>姓名 / 企业</th><th>手机号</th><th>所属组织</th>
+                  <th>角色</th><th>状态</th><th>最近登录</th><th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="mono">U-100238</td><td class="mono">zhang1968</td><td>张建国</td><td class="mono">138****6210</td>
+                  <td>五常市水稻种植户</td><td>农户</td><td><span class="tag">正常</span></td>
+                  <td class="mono">10-19 09:12</td><td><a class="link">查看</a> · <a class="link">编辑</a></td>
+                </tr>
+                <tr>
+                  <td class="mono">U-100241</td><td class="mono">ljcoop</td><td>李家村水稻种植合作社</td><td class="mono">139****8802</td>
+                  <td>李家村合作社</td><td>合作社管理员</td><td><span class="tag">正常</span></td>
+                  <td class="mono">10-19 08:47</td><td><a class="link">查看</a> · <a class="link">编辑</a></td>
+                </tr>
+                <tr>
+                  <td class="mono">U-100305</td><td class="mono">fukangfood</td><td>福康粮油食品有限公司</td><td class="mono">137****3345</td>
+                  <td>福康粮油（供应商）</td><td>供应商</td><td><span class="tag">正常</span></td>
+                  <td class="mono">10-19 10:35</td><td><a class="link">查看</a> · <a class="link">编辑</a></td>
+                </tr>
+                <tr>
+                  <td class="mono">U-100412</td><td class="mono">gxscm01</td><td>广厦供应链管理有限公司</td><td class="mono">136****7719</td>
+                  <td>广厦供应链（采购商）</td><td>采购商</td><td><span class="tag tag-tech">已认证</span></td>
+                  <td class="mono">10-19 11:20</td><td><a class="link">查看</a> · <a class="link">编辑</a></td>
+                </tr>
+                <tr>
+                  <td class="mono">U-100088</td><td class="mono">admin_ops</td><td>平台运营中心</td><td class="mono">135****0001</td>
+                  <td>平台总部</td><td>平台管理员</td><td><span class="tag">正常</span></td>
+                  <td class="mono">10-19 14:20</td><td><a class="link">查看</a> · <a class="link">编辑</a></td>
+                </tr>
+                <tr>
+                  <td class="mono">U-100190</td><td class="mono">chen_orchard</td><td>陈志远</td><td class="mono">133****5590</td>
+                  <td>赣州脐橙家庭农场</td><td>农户</td><td><span class="tag tag-amber">待认证</span></td>
+                  <td class="mono">10-18 20:11</td><td><a class="link">查看</a> · <a class="link">编辑</a></td>
+                </tr>
+                <tr>
+                  <td class="mono">U-100521</td><td class="mono">zhongsheng</td><td>中生农牧科技股份有限公司</td><td class="mono">131****2277</td>
+                  <td>中生农牧（供应商）</td><td>供应商</td><td><span class="tag tag-red">已冻结</span></td>
+                  <td class="mono">10-15 16:03</td><td><a class="link">查看</a> · <a class="link">编辑</a></td>
+                </tr>
+                <tr>
+                  <td class="mono">U-100644</td><td class="mono">wang_tea</td><td>王雪梅</td><td class="mono">130****6634</td>
+                  <td>临沧有机茶园</td><td>合作社管理员</td><td><span class="tag">正常</span></td>
+                  <td class="mono">10-19 07:58</td><td><a class="link">查看</a> · <a class="link">编辑</a></td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div class="pager">
+              <button>上一页</button><button class="on">1</button><button>2</button><button>3</button><button>下一页</button>
+            </div>
+          </div>
+
+          <!-- 2) 统一权限 -->
+          <div data-tabpanel="roles" class="hide">
+            <div class="toolbar">
+              <input class="input" style="width:220px" placeholder="搜索角色名 / 编码" />
+              <select class="select" style="width:150px">
+                <option>全部数据范围</option><option>全平台</option><option>本组织</option><option>仅本人</option>
+              </select>
+              <div class="spacer"></div>
+              <button class="btn btn-primary btn-sm"><span data-icon="plus"></span>新增角色</button>
+              <button class="btn btn-outline btn-sm"><span data-icon="file"></span>导出</button>
+            </div>
+
+            <table class="data-table mt-16">
+              <thead>
+                <tr><th>角色名</th><th>编码</th><th>数据范围</th><th>人数</th><th>状态</th><th>操作</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>平台管理员</td><td class="mono">ROLE_PLATFORM_ADMIN</td><td>全平台</td><td class="mono">12</td>
+                  <td><span class="tag">启用</span></td><td><a class="link">配置权限</a> · <a class="link">编辑</a></td>
+                </tr>
+                <tr>
+                  <td>运营专员</td><td class="mono">ROLE_OPS_STAFF</td><td>全平台</td><td class="mono">48</td>
+                  <td><span class="tag">启用</span></td><td><a class="link">配置权限</a> · <a class="link">编辑</a></td>
+                </tr>
+                <tr>
+                  <td>供应商管理员</td><td class="mono">ROLE_SUPPLIER_ADMIN</td><td>本组织</td><td class="mono">72,100</td>
+                  <td><span class="tag">启用</span></td><td><a class="link">配置权限</a> · <a class="link">编辑</a></td>
+                </tr>
+                <tr>
+                  <td>采购商管理员</td><td class="mono">ROLE_BUYER_ADMIN</td><td>本组织</td><td class="mono">96,800</td>
+                  <td><span class="tag">启用</span></td><td><a class="link">配置权限</a> · <a class="link">编辑</a></td>
+                </tr>
+                <tr>
+                  <td>合作社管理员</td><td class="mono">ROLE_COOP_ADMIN</td><td>本组织</td><td class="mono">8,642</td>
+                  <td><span class="tag">启用</span></td><td><a class="link">配置权限</a> · <a class="link">编辑</a></td>
+                </tr>
+                <tr>
+                  <td>农户</td><td class="mono">ROLE_FARMER</td><td>仅本人</td><td class="mono">286,420</td>
+                  <td><span class="tag tag-tech">启用</span></td><td><a class="link">配置权限</a> · <a class="link">编辑</a></td>
+                </tr>
+                <tr>
+                  <td>内容审核员</td><td class="mono">ROLE_CONTENT_AUDIT</td><td>全平台</td><td class="mono">16</td>
+                  <td><span class="tag tag-amber">停用</span></td><td><a class="link">配置权限</a> · <a class="link">编辑</a></td>
+                </tr>
+              </tbody>
+            </table>
+
+            <!-- 菜单权限树 -->
+            <div class="mt-20">
+              <div class="bar-title t-lg" style="font-size:16px">菜单权限树 · 运营专员</div>
+              <ul class="mt-16" style="font-size:13px">
+                <li style="padding:6px 0">
+                  <span style="display:inline-flex;align-items:center;gap:8px">
+                    <span style="width:14px;height:14px;border:1px solid var(--green-500);border-radius:4px;background:var(--green-600);display:inline-block;position:relative"></span>
+                    <span class="strong">运营总览</span>
+                  </span>
+                </li>
+                <li style="padding:6px 0 6px 22px">
+                  <span style="display:inline-flex;align-items:center;gap:8px">
+                    <span style="width:14px;height:14px;border:1px solid var(--green-500);border-radius:4px;background:var(--green-600);display:inline-block"></span>
+                    <span>数据看板</span>
+                  </span>
+                </li>
+                <li style="padding:6px 0">
+                  <span style="display:inline-flex;align-items:center;gap:8px">
+                    <span style="width:14px;height:14px;border:1px solid var(--green-500);border-radius:4px;background:var(--green-600);display:inline-block"></span>
+                    <span class="strong">数据基座</span>
+                  </span>
+                </li>
+                <li style="padding:6px 0 6px 22px">
+                  <span style="display:inline-flex;align-items:center;gap:8px">
+                    <span style="width:14px;height:14px;border:1px solid var(--green-500);border-radius:4px;background:var(--green-600);display:inline-block"></span>
+                    <span>统一用户</span>
+                  </span>
+                </li>
+                <li style="padding:6px 0 6px 22px">
+                  <span style="display:inline-flex;align-items:center;gap:8px">
+                    <span style="width:14px;height:14px;border:1px solid var(--line-strong);border-radius:4px;background:#fff;display:inline-block"></span>
+                    <span>统一权限</span>
+                  </span>
+                </li>
+                <li style="padding:6px 0 6px 22px">
+                  <span style="display:inline-flex;align-items:center;gap:8px">
+                    <span style="width:14px;height:14px;border:1px solid var(--line-strong);border-radius:4px;background:#fff;display:inline-block"></span>
+                    <span>统一商品</span>
+                  </span>
+                </li>
+                <li style="padding:6px 0 6px 44px">
+                  <span style="display:inline-flex;align-items:center;gap:8px">
+                    <span style="width:14px;height:14px;border:1px solid var(--green-500);border-radius:4px;background:var(--green-600);display:inline-block"></span>
+                    <span>商品审核</span>
+                  </span>
+                </li>
+                <li style="padding:6px 0 6px 44px">
+                  <span style="display:inline-flex;align-items:center;gap:8px">
+                    <span style="width:14px;height:14px;border:1px solid var(--line-strong);border-radius:4px;background:#fff;display:inline-block"></span>
+                    <span>品类管理</span>
+                  </span>
+                </li>
+                <li style="padding:6px 0 6px 22px">
+                  <span style="display:inline-flex;align-items:center;gap:8px">
+                    <span style="width:14px;height:14px;border:1px solid var(--line-strong);border-radius:4px;background:#fff;display:inline-block"></span>
+                    <span>数据治理</span>
+                  </span>
+                </li>
+              </ul>
+            </div>
+
+            <div class="pager">
+              <button>上一页</button><button class="on">1</button><button>2</button><button>下一页</button>
+            </div>
+          </div>
+
+          <!-- 3) 统一商品 -->
+          <div data-tabpanel="goods" class="hide">
+            <div class="toolbar">
+              <input class="input" style="width:220px" placeholder="搜索商品编码 / 名称" />
+              <select class="select" style="width:150px">
+                <option>全部品类</option><option>粮油</option><option>果蔬</option><option>畜禽</option><option>茶药</option><option>饲料农资</option><option>水产</option>
+              </select>
+              <div class="chips">
+                <span class="chip on">全部</span><span class="chip">在售</span><span class="chip">待审核</span><span class="chip">已下架</span>
+              </div>
+              <div class="spacer"></div>
+              <button class="btn btn-primary btn-sm"><span data-icon="plus"></span>新增商品</button>
+              <button class="btn btn-outline btn-sm"><span data-icon="file"></span>导出</button>
+            </div>
+
+            <table class="data-table mt-16">
+              <thead>
+                <tr>
+                  <th>商品编码</th><th>商品名称</th><th>所属品类</th><th>规格</th><th>产地</th>
+                  <th>供应商</th><th>价格</th><th>上架状态</th><th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="mono">SPU-100011</td><td>富硒大米</td><td>粮油</td><td>25kg/袋</td><td>黑龙江·五常</td>
+                  <td>福康粮油</td><td class="price"><span class="cur">¥</span>4680<span class="unit">/吨</span></td>
+                  <td><span class="tag">在售</span></td><td><a class="link">查看</a> · <a class="link">编辑</a></td>
+                </tr>
+                <tr>
+                  <td class="mono">SPU-100024</td><td>一级压榨菜籽油</td><td>粮油</td><td>5L×4桶/箱</td><td>湖北·荆州</td>
+                  <td>中粮油脂</td><td class="price"><span class="cur">¥</span>10920<span class="unit">/吨</span></td>
+                  <td><span class="tag">在售</span></td><td><a class="link">查看</a> · <a class="link">编辑</a></td>
+                </tr>
+                <tr>
+                  <td class="mono">SPU-100038</td><td>豆粕 43% 蛋白</td><td>饲料农资</td><td>散装</td><td>山东·日照港</td>
+                  <td>日照蛋白</td><td class="price"><span class="cur">¥</span>3468<span class="unit">/吨</span></td>
+                  <td><span class="tag">在售</span></td><td><a class="link">查看</a> · <a class="link">编辑</a></td>
+                </tr>
+                <tr>
+                  <td class="mono">SPU-100052</td><td>赣南脐橙（果径75+）</td><td>果蔬</td><td>20斤/箱</td><td>江西·赣州</td>
+                  <td>赣南果业</td><td class="price"><span class="cur">¥</span>58<span class="unit">/箱</span></td>
+                  <td><span class="tag tag-amber">待审核</span></td><td><a class="link">查看</a> · <a class="link">审核</a></td>
+                </tr>
+                <tr>
+                  <td class="mono">SPU-100067</td><td>有机红茶 · 一芽一叶</td><td>茶药</td><td>500g/罐</td><td>云南·临沧</td>
+                  <td>临沧有机茶</td><td class="price"><span class="cur">¥</span>286<span class="unit">/罐</span></td>
+                  <td><span class="tag">在售</span></td><td><a class="link">查看</a> · <a class="link">编辑</a></td>
+                </tr>
+                <tr>
+                  <td class="mono">SPU-100075</td><td>冷鲜猪肉（白条）</td><td>畜禽</td><td>冷链直发</td><td>河南·牧原</td>
+                  <td>中生生猪</td><td class="price"><span class="cur">¥</span>19.8<span class="unit">/kg</span></td>
+                  <td><span class="tag tag-red">已下架</span></td><td><a class="link">查看</a> · <a class="link">编辑</a></td>
+                </tr>
+                <tr>
+                  <td class="mono">SPU-100083</td><td>南美白对虾（冻）</td><td>水产</td><td>净重20kg/箱</td><td>广东·湛江</td>
+                  <td>湛江水产</td><td class="price"><span class="cur">¥</span>52<span class="unit">/kg</span></td>
+                  <td><span class="tag">在售</span></td><td><a class="link">查看</a> · <a class="link">编辑</a></td>
+                </tr>
+                <tr>
+                  <td class="mono">SPU-100094</td><td>复合微生物肥</td><td>饲料农资</td><td>40kg/袋</td><td>山东·金正大</td>
+                  <td>金正大生态</td><td class="price"><span class="cur">¥</span>2380<span class="unit">/吨</span></td>
+                  <td><span class="tag">在售</span></td><td><a class="link">查看</a> · <a class="link">编辑</a></td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div class="pager">
+              <button>上一页</button><button class="on">1</button><button>2</button><button>3</button><button>下一页</button>
+            </div>
+          </div>
+
+          <!-- 4) 客户 / 供应商 -->
+          <div data-tabpanel="partners" class="hide">
+            <div class="grid grid-2" style="align-items:start">
+
+              <!-- 客户 -->
+              <div>
+                <div class="toolbar">
+                  <input class="input" style="width:200px" placeholder="搜索客户企业 / 信用代码" />
+                  <div class="spacer"></div>
+                  <button class="btn btn-primary btn-sm"><span data-icon="plus"></span>新增客户</button>
+                </div>
+                <h3 class="strong mt-16 mb-12" style="font-size:15px"><span data-icon="users" data-size="16" style="vertical-align:-3px"></span> 客户</h3>
+                <table class="data-table">
+                  <thead>
+                    <tr><th>企业名</th><th>统一社会信用代码</th><th>联系人</th><th>合作等级</th><th>状态</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>广厦供应链管理有限公司</td><td class="mono">91330100MA2K8L4X7R</td><td>陈立</td>
+                      <td><span class="tag tag-tech">战略客户</span></td><td><span class="tag">正常</span></td>
+                    </tr>
+                    <tr>
+                      <td>万家惠连锁超市有限公司</td><td class="mono">91320500MA1C7H2N9P</td><td>刘敏</td>
+                      <td><span class="tag tag-tech">战略客户</span></td><td><span class="tag">正常</span></td>
+                    </tr>
+                    <tr>
+                      <td>天天鲜生鲜电商（上海）</td><td class="mono">91310115MA1K3T6B4E</td><td>赵磊</td>
+                      <td><span class="tag">核心客户</span></td><td><span class="tag">正常</span></td>
+                    </tr>
+                    <tr>
+                      <td>蓉城餐饮集团采购中心</td><td class="mono">91510100MA6C2J8M5D</td><td>周芳</td>
+                      <td><span class="tag">核心客户</span></td><td><span class="tag tag-amber">待认证</span></td>
+                    </tr>
+                    <tr>
+                      <td>华中粮油批发贸易有限公司</td><td class="mono">91420100MA4L9F1K2H</td><td>吴刚</td>
+                      <td><span class="tag tag-ghost">普通客户</span></td><td><span class="tag">正常</span></td>
+                    </tr>
+                    <tr>
+                      <td>京冠食品工业有限公司</td><td class="mono">91110108MA0K7D3P6T</td><td>孙倩</td>
+                      <td><span class="tag tag-ghost">普通客户</span></td><td><span class="tag tag-red">已冻结</span></td>
+                    </tr>
+                  </tbody>
+                </table>
+                <div class="pager"><button>上一页</button><button class="on">1</button><button>2</button><button>下一页</button></div>
+              </div>
+
+              <!-- 供应商 -->
+              <div>
+                <div class="toolbar">
+                  <input class="input" style="width:200px" placeholder="搜索供应商 / 信用代码" />
+                  <div class="spacer"></div>
+                  <button class="btn btn-primary btn-sm"><span data-icon="plus"></span>新增供应商</button>
+                </div>
+                <h3 class="strong mt-16 mb-12" style="font-size:15px"><span data-icon="award" data-size="16" style="vertical-align:-3px"></span> 供应商</h3>
+                <table class="data-table">
+                  <thead>
+                    <tr><th>企业名</th><th>统一社会信用代码</th><th>联系人</th><th>合作等级</th><th>状态</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>福康粮油食品有限公司</td><td class="mono">91230100MA1B6R8C3W</td><td>张伟</td>
+                      <td><span class="tag tag-tech">金牌供应商</span></td><td><span class="tag">正常</span></td>
+                    </tr>
+                    <tr>
+                      <td>中粮油脂（湖北）有限公司</td><td class="mono">91421000MA4K2H9L7Y</td><td>李娜</td>
+                      <td><span class="tag tag-tech">金牌供应商</span></td><td><span class="tag">正常</span></td>
+                    </tr>
+                    <tr>
+                      <td>赣南果业发展有限公司</td><td class="mono">91360700MA2F5T1M4K</td><td>黄强</td>
+                      <td><span class="tag">优质供应商</span></td><td><span class="tag tag-amber">待认证</span></td>
+                    </tr>
+                    <tr>
+                      <td>临沧有机茶业有限公司</td><td class="mono">91530900MA6D8L3N2Q</td><td>王雪梅</td>
+                      <td><span class="tag">优质供应商</span></td><td><span class="tag">正常</span></td>
+                    </tr>
+                    <tr>
+                      <td>湛江远洋水产有限公司</td><td class="mono">91440800MA5C1P7B6J</td><td>何俊</td>
+                      <td><span class="tag tag-ghost">普通供应商</span></td><td><span class="tag">正常</span></td>
+                    </tr>
+                    <tr>
+                      <td>中生农牧科技有限公司</td><td class="mono">91411300MA3H9K2D8L</td><td>郑涛</td>
+                      <td><span class="tag tag-ghost">普通供应商</span></td><td><span class="tag tag-red">已冻结</span></td>
+                    </tr>
+                  </tbody>
+                </table>
+                <div class="pager"><button>上一页</button><button class="on">1</button><button>2</button><button>下一页</button></div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- 5) 数据治理 -->
+          <div data-tabpanel="govern" class="hide">
+            <div class="toolbar">
+              <input class="input" style="width:220px" placeholder="搜索标准 / 规则 / 字典名称" />
+              <div class="chips">
+                <span class="chip on">全部</span><span class="chip">数据标准</span><span class="chip">质量规则</span><span class="chip">主数据字典</span>
+              </div>
+              <div class="spacer"></div>
+              <button class="btn btn-primary btn-sm"><span data-icon="plus"></span>新建治理项</button>
+              <button class="btn btn-outline btn-sm"><span data-icon="file"></span>导出</button>
+            </div>
+
+            <table class="data-table mt-16">
+              <thead>
+                <tr><th>名称</th><th>类型</th><th>覆盖率</th><th>异常数</th><th>最近校验时间</th><th>状态</th><th>操作</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>商品品类标准 v2.3</td><td><span class="tag tag-tech">数据标准</span></td>
+                  <td><span class="mono">98.6%</span></td><td class="mono">1,286</td><td class="mono">2026-10-19 03:00</td>
+                  <td><span class="tag">正常</span></td><td><a class="link">查看</a> · <a class="link">校验</a></td>
+                </tr>
+                <tr>
+                  <td>产地编码字典</td><td><span class="tag tag-tech">主数据字典</span></td>
+                  <td><span class="mono">99.2%</span></td><td class="mono">642</td><td class="mono">2026-10-19 03:00</td>
+                  <td><span class="tag">正常</span></td><td><a class="link">查看</a> · <a class="link">校验</a></td>
+                </tr>
+                <tr>
+                  <td>企业实名规则</td><td><span class="tag tag-amber">质量规则</span></td>
+                  <td><span class="mono">96.5%</span></td><td class="mono">3,418</td><td class="mono">2026-10-19 02:30</td>
+                  <td><span class="tag tag-amber">需关注</span></td><td><a class="link">查看</a> · <a class="link">校验</a></td>
+                </tr>
+                <tr>
+                  <td>计量单位标准</td><td><span class="tag tag-tech">数据标准</span></td>
+                  <td><span class="mono">99.8%</span></td><td class="mono">126</td><td class="mono">2026-10-18 03:00</td>
+                  <td><span class="tag">正常</span></td><td><a class="link">查看</a> · <a class="link">校验</a></td>
+                </tr>
+                <tr>
+                  <td>供应商资质校验规则</td><td><span class="tag tag-amber">质量规则</span></td>
+                  <td><span class="mono">94.1%</span></td><td class="mono">4,052</td><td class="mono">2026-10-19 02:30</td>
+                  <td><span class="tag tag-red">异常</span></td><td><a class="link">查看</a> · <a class="link">校验</a></td>
+                </tr>
+                <tr>
+                  <td>行政区划代码字典</td><td><span class="tag tag-tech">主数据字典</span></td>
+                  <td><span class="mono">100%</span></td><td class="mono">0</td><td class="mono">2026-10-19 03:00</td>
+                  <td><span class="tag">正常</span></td><td><a class="link">查看</a> · <a class="link">校验</a></td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div class="pager">
+              <button>上一页</button><button class="on">1</button><button>2</button><button>下一页</button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="../assets/js/app.js"></script>
+</body>
+</html>
