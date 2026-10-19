@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     启动交易撮合后端（agri-trade，默认端口 8089，连 MySQL 的 agri_trade 库）。
 
@@ -90,7 +90,15 @@ $staleCp = (-not (Test-Path $cpFile)) -or
 if ($staleCp) {
     Write-Host "解析依赖 classpath…"
     Remove-Item -LiteralPath $cpFile -Force -ErrorAction SilentlyContinue
-    & mvn -o -q dependency:build-classpath "-Dmdep.outputFile=target\cp.txt" @mavenArgs[1..($mavenArgs.Count-1)]
+    # ⚠️ `@mavenArgs[1..n]` 在 PowerShell 5.1 里是**语法错误**（SplattingNotPermitted：
+    # 展开运算符只能作用于整个变量，不能带下标）。必须先把参数数组算好、再 @ 整个变量。
+    # 这里第一次真正走到该分支时才会暴露 —— 之前 cp.txt 存在就跳过了，属于"没触发过"的坏代码。
+    $cpArgs = @('-o', '-q')
+    if (Test-Path $mavenSettings) {
+        $cpArgs += @('-s', $mavenSettings)
+    }
+    $cpArgs += @('dependency:build-classpath', '-Dmdep.outputFile=target\cp.txt')
+    & mvn @cpArgs
     if (-not (Test-Path $cpFile)) {
         throw "无法生成依赖 classpath（$cpFile）"
     }
