@@ -18,8 +18,9 @@
  *   于是新增/编辑地块时填的位置**一直没落库**，编辑回填也永远是空（后端返回的是 `boundary`）。
  * - 坡度仍作为 GeoJSON 的扩展属性（`slope`）存在 `boundary` 里：库里没有坡度列，
  *   这样至少不会丢；将来补列时迁移这一处即可。
- * - 「种植类型」表单字段已移除：plot 表没有 `planting_type` 列、后端也从不返回，
- *   留着等于"选了也白选"。要支持需先加列（terrain/drainage 不是同一个概念）。
+ * - 「种植类型」走真实列 `planting_type`（2026-10-19 补列）：此前表里没有该列，
+ *   表单提交了也被丢弃、列表用默认值 1 把整片农场都说成「露天」；现在存量行保持 NULL（不猜）、
+ *   新建/编辑由表单写入。
  * - 支持 `?plotId=` 编辑态与 `?farmId=` 预选农场
  */
 import { useEffect, useMemo, useState } from 'react'
@@ -57,6 +58,14 @@ const IRRIGATION_OPTIONS: string[] = ['滴灌', '喷灌', '微喷', '漫灌']
 
 /** 坡度选项（原型 P6） */
 const SLOPE_OPTIONS: string[] = ['平地', '缓坡', '陡坡']
+
+/** 种植类型（后端枚举 1 露天 2 大棚 3 水田 4 山地） */
+const PLANTING_TYPE_OPTIONS: { value: number; label: string }[] = [
+  { value: 1, label: '露天' },
+  { value: 2, label: '大棚' },
+  { value: 3, label: '水田' },
+  { value: 4, label: '山地' },
+]
 
 /** 坐标点：[经度, 纬度] */
 type Coordinate = [number, number]
@@ -96,6 +105,8 @@ interface PlotFormValues {
   soilType: string
   /** 灌溉方式 */
   irrigationType: string
+  /** 种植类型 */
+  plantingType: number
   /** 坡度 */
   slope: string
   /**
@@ -220,6 +231,8 @@ export default function Create(): JSX.Element {
       area: Number(plot.area) || 0,
       soilType: plot.soilType || '壤土',
       irrigationType: plot.irrigationType || '滴灌',
+      // 存量行没有这一列（补列前建的），不猜；表单默认露天只在新建时生效
+      plantingType: plot.plantingType ?? 1,
       slope: geometry?.slope ?? '平地',
       // 作物下拉的 value 是主数据主键；历史行只有名字（crop_id 为空）时先留空
       cropId: plot.cropId || undefined,
@@ -309,6 +322,7 @@ export default function Create(): JSX.Element {
         area: Number(params.values.area) || 0,
         soilType: params.values.soilType,
         irrigationType: params.values.irrigationType,
+        plantingType: params.values.plantingType as 1 | 2 | 3 | 4,
         // 当前作物走作物主数据（主键）；后端据此落 crop_id + current_crop（名称）
         cropId: params.values.cropId,
         boundary: buildBoundary({ ...params.values, polygonText: params.polygonText }),
@@ -397,6 +411,7 @@ export default function Create(): JSX.Element {
           initialValues={{
             soilType: '壤土',
             irrigationType: '滴灌',
+            plantingType: 1,
             slope: '平地',
             farmId: presetFarmId ?? undefined,
           }}
@@ -471,6 +486,14 @@ export default function Create(): JSX.Element {
                 </Form.Item>
               </Col>
             </Row>
+
+            <Form.Item name="plantingType" label="种植类型">
+              <Radio.Group
+                options={PLANTING_TYPE_OPTIONS}
+                optionType="button"
+                buttonStyle="solid"
+              />
+            </Form.Item>
 
             <Form.Item
               name="cropId"

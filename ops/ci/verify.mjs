@@ -551,6 +551,11 @@ async function checkMobileE2E() {
     return
   }
   for (const script of ['scripts/e2e-mobile-mvp.mjs', 'scripts/e2e-mobile-writes.mjs']) {
+    // 每个脚本前都再确保一次：本机后台进程会被系统回收，跑完一个掉一个是常态
+    if (!(await ensureMobileDevServer())) {
+      record('mobile-e2e', script, 'skip', 'H5 dev server 中途掉线且未能自动拉起')
+      continue
+    }
     const result = run(process.execPath, [script])
     const output = `${result.stdout ?? ''}${result.stderr ?? ''}`
     const summary =

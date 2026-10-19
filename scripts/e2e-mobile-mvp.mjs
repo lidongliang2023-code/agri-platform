@@ -19,6 +19,7 @@ import { createRequire } from 'node:module'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
+import { ensureMobileDevServer } from './lib/mobile-dev-server.mjs'
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const require2 = createRequire(path.join(REPO_ROOT, 'agri-production/frontend/package.json'))
@@ -49,14 +50,12 @@ const asset404 = []
 /** 页面发起的、打到生产域的接口调用（用来证明页面真的取数了，不是空壳） */
 const apiCalls = []
 
-// 先确认 H5 预览服务在跑：否则 puppeteer 只会抛 ERR_CONNECTION_REFUSED 的栈，
-// 看不出"其实只是开发服务器没开"。
-try {
-  const probe = await fetch(`${BASE_URL}/`, { signal: AbortSignal.timeout(5000) })
-  if (!probe.ok) throw new Error(`HTTP ${probe.status}`)
-} catch (err) {
+// 先确认 H5 预览服务在跑（没跑就自己拉起来）：否则 puppeteer 只会抛 ERR_CONNECTION_REFUSED 的栈，
+// 看不出"其实只是开发服务器没开"。本机后台进程会被系统回收，所以每个脚本都自己确保。
+const devPort = Number(new URL(BASE_URL).port || 5300)
+if (!(await ensureMobileDevServer({ root: path.join(REPO_ROOT, 'agri-production/miniprogram'), port: devPort }))) {
   console.error(
-    `✗ 连不上 ${BASE_URL}（${err?.message ?? err}）。先启动 H5 预览：\n` +
+    `✗ H5 预览服务不可用（${BASE_URL}）。手动启动：\n` +
       '  cd agri-production/miniprogram && npm run dev:h5',
   )
   process.exit(2)

@@ -164,6 +164,16 @@ try {
   await setInput('#area', 3.3)
   await setInput('#longitude', longitude)
   await setInput('#latitude', latitude)
+  // 种植类型是 Radio.Group（按钮式），点「大棚」即可（值 2）
+  const pickedPlanting = await page.evaluate(() => {
+    const label = [...document.querySelectorAll('.ant-radio-button-wrapper')].find(
+      (el) => (el.textContent ?? '').trim() === '大棚',
+    )
+    if (!label) return false
+    label.click()
+    return true
+  })
+  check(pickedPlanting, '选择种植类型「大棚」')
   await sleep(400)
   const validationErrors = await page.evaluate(() =>
     [...document.querySelectorAll('.ant-form-item-explain-error')].map((el) => el.textContent.trim()),
@@ -188,6 +198,7 @@ try {
   const payload = createBody ? JSON.parse(createBody) : {}
   check(Number(payload.centerLongitude) === longitude, '请求体带 centerLongitude', String(payload.centerLongitude))
   check(Number(payload.centerLatitude) === latitude, '请求体带 centerLatitude', String(payload.centerLatitude))
+  check(payload.plantingType === 2, '请求体带 plantingType=2（大棚）', String(payload.plantingType))
   check(!('geoBoundary' in payload), '请求体不再出现后端不认的 geoBoundary 键')
   check(Boolean(payload.boundary), '请求体带 boundary（GeoJSON）', String(payload.boundary ?? '').slice(0, 60))
 
@@ -204,15 +215,17 @@ try {
     })).json()
     check(Number(detail?.data?.centerLongitude) === longitude, '详情接口回显经度', String(detail?.data?.centerLongitude))
     check(Number(detail?.data?.centerLatitude) === latitude, '详情接口回显纬度', String(detail?.data?.centerLatitude))
+    check(detail?.data?.plantingType === 2, '详情接口回显种植类型（大棚）', String(detail?.data?.plantingType))
   }
   if (MYSQL_BIN && plotId) {
     const db = mysqlQuery(
-      `SELECT center_longitude, center_latitude, boundary FROM agri_production.agri_prod_plot_info WHERE id = ${plotId};`,
+      `SELECT center_longitude, center_latitude, boundary, planting_type FROM agri_production.agri_prod_plot_info WHERE id = ${plotId};`,
     )
     const cells = String(db ?? '').split(/\s+/)
     check(Number(cells[0]) === longitude, 'MySQL 里 center_longitude 落了', `lng=${cells[0]}`)
     check(Number(cells[1]) === latitude, 'MySQL 里 center_latitude 落了', `lat=${cells[1]}`)
     check(Boolean(cells[2]) && cells[2] !== 'NULL', 'MySQL 里 boundary 落了', String(cells[2] ?? '').slice(0, 40))
+    check(cells[3] === '2', 'MySQL 里 planting_type 落了（大棚=2）', `planting_type=${cells[3]}`)
   }
   check(badResponses.length === 0, '没有意外的 4xx/5xx', badResponses.slice(0, 2).join(' | '))
 } finally {

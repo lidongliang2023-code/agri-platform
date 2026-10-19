@@ -56,7 +56,7 @@ public class PlotServiceImpl extends ServiceImpl<PlotMapper, Plot> implements IP
     public PlotVO update(PlotSaveDTO dto, String tenantId) {
         Plot plot = getById(dto.getId());
         if (plot == null || !tenantId.equals(plot.getTenantId())) {
-            throw new RuntimeException("地块不存在");
+            throw new BusinessException(404, "地块不存在：" + dto.getId());
         }
         BeanCopyUtils.copy(dto, plot);
         resolveCrop(plot, dto, tenantId);
@@ -118,7 +118,9 @@ public class PlotServiceImpl extends ServiceImpl<PlotMapper, Plot> implements IP
     public void delete(Long id, String tenantId) {
         Plot plot = getById(id);
         if (plot == null || !tenantId.equals(plot.getTenantId())) {
-            throw new RuntimeException("地块不存在");
+            // 2026-10-19：原来抛 RuntimeException，全局处理器只能映射成 500「系统繁忙」——
+            // 软删后按旧 id 访问时，调用方分不清"数据没了"和"服务挂了"。改回 404。
+            throw new BusinessException(404, "地块不存在：" + id);
         }
         removeById(id);
     }
@@ -127,7 +129,7 @@ public class PlotServiceImpl extends ServiceImpl<PlotMapper, Plot> implements IP
     public PlotVO getById(Long id, String tenantId) {
         Plot plot = getById(id);
         if (plot == null || !tenantId.equals(plot.getTenantId())) {
-            throw new RuntimeException("地块不存在");
+            throw new BusinessException(404, "地块不存在：" + id);
         }
         return PlotVO.of(plot, plantingPlotIds(tenantId));
     }
@@ -150,7 +152,7 @@ public class PlotServiceImpl extends ServiceImpl<PlotMapper, Plot> implements IP
     public PlotVO getByCode(String plotCode, String tenantId) {
         Plot plot = baseMapper.selectByCode(plotCode, tenantId);
         if (plot == null) {
-            throw new RuntimeException("地块不存在");
+            throw new BusinessException(404, "地块不存在：" + plotCode);
         }
         return PlotVO.of(plot, plantingPlotIds(tenantId));
     }

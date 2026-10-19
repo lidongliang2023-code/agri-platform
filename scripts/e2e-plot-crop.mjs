@@ -156,6 +156,15 @@ const togglePlotStatus = async (name, action) => {
   }, name)
 }
 
+/**
+ * 本轮新建的地块主键。
+ *
+ * <p>提到 try 外面，是为了让 finally 能清理 —— 之前只在 try 里 `let plotId`，
+ * 一旦中途断言抛错，finally 就看不到它，测试地块会永久留在演示农场里
+ * （实测留下过一块「联调地块-266013」）。</p>
+ */
+let createdPlotId = ''
+
 try {
   await page.goto(`${BASE_URL}/prod/manifest.json`, { waitUntil: 'domcontentloaded', timeout: 20000 })
   await page.evaluate(async (creds) => {
@@ -224,6 +233,7 @@ try {
     check(createCall.status === 200 && createCall.json?.code === 0, '新增地块接口返回成功',
       `HTTP ${createCall.status} code=${createCall.json?.code} ${createCall.json?.message ?? ''}`)
     plotId = String(createCall.json?.data ?? '')
+    createdPlotId = plotId
     check(/^\d+$/.test(plotId), '返回的是 id 字符串（契约要求）', `data=${JSON.stringify(createCall.json?.data)}`)
   }
 
@@ -268,6 +278,30 @@ try {
 
   check(badResponses.length === 0, '全链路没有 4xx/5xx 响应', badResponses.slice(0, 3).join(' | '))
 } finally {
+  /* ---------------- 清理：无论断言是否失败，都把本轮造的地块软删掉 ---------------- */
+
+  if (createdPlotId) {
+    try {
+      const del = await fetch(`${BASE_URL}/api/v1/production/plots/${createdPlotId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${login.data.accessToken}` },
+      })
+      const delBody = await del.json().catch(() => ({}))
+      check(del.status === 200 && delBody.code === 0, '清理：删除本轮新建的地块',
+        `HTTP ${del.status} code=${delBody.code ?? '?'}`)
+      // 软删后按主键再查一次：应当查不到（404），以此证明清理真的生效
+      const after = await fetch(`${BASE_URL}/api/v1/production/plots/${createdPlotId}`, {
+        headers: { Authorization: `Bearer ${login.data.accessToken}` },
+      })
+      const afterBody = await after.json().catch(() => ({}))
+      check(after.status !== 200 || afterBody.code !== 0, '清理后按主键查不到该地块',
+        `HTTP ${after.status} code=${afterBody.code ?? '?'}`)
+    } catch (err) {
+      check(false, '清理：删除本轮新建的地块', String(err?.message ?? err))
+    }
+  } else {
+    console.log('· 本轮没有创建地块（或创建失败），无需清理')
+  }
   await browser.close()
 }
 

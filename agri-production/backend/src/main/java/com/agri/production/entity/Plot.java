@@ -48,6 +48,10 @@ public class Plot extends BaseEntity {
     @TableField("irrigation_type")
     private String irrigationType;
 
+    /** 种植类型：1 露天 2 大棚 3 水田 4 山地（页面 plantingType；存量行可能为 NULL） */
+    @TableField("planting_type")
+    private Integer plantingType;
+
     @TableField("area")
     private BigDecimal area;
 

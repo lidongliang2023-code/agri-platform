@@ -51,6 +51,8 @@ soil_type TEXT,
 terrain TEXT,
 drainage TEXT,
 irrigation_type TEXT,
+    -- 种植类型：1 露天 2 大棚 3 水田 4 山地（老库由 schema-patch-plot-planting-type.sql 补列）
+    planting_type TINYINT,
 current_crop TEXT,
     -- 当前作物的主数据主键（作物名仍在 current_crop 里，给页面直接显示）。
     -- 老库靠 schema-patch-plot-crop.sql 的守卫式 ALTER 补这一列，fresh install 由这里直接带上。

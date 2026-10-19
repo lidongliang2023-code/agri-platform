@@ -42,6 +42,15 @@ public class PlotSaveDTO {
     private String irrigationType;
 
     /**
+     * 种植类型：1 露天 2 大棚 3 水田 4 山地。
+     *
+     * <p>2026-10-19 补列（{@code schema-patch-plot-planting-type.sql}）：此前表里没有这一列，
+     * 表单提交了也被丢弃、列表用默认值 1 把整片农场都说成「露天」。现在落真实列，
+     * 存量行保持 NULL（不猜），页面显示「—」。</p>
+     */
+    private Integer plantingType;
+
+    /**
      * 作物品种（如 中杂9号）。
      *
      * <p>2026-10-17 补：同上，列与实体都有、页面要显示与录入，DTO 缺失就写不进去。</p>

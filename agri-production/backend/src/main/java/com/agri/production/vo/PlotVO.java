@@ -39,6 +39,9 @@ public class PlotVO {
     /** 灌溉方式（页面 irrigationType）。 */
     private String irrigationType;
 
+    /** 种植类型：1 露天 2 大棚 3 水田 4 山地（存量行可能为 NULL，页面显示「—」） */
+    private Integer plantingType;
+
     private BigDecimal soilPh;
 
     private BigDecimal soilOrganicMatter;

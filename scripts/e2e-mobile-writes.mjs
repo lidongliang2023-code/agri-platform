@@ -23,6 +23,7 @@ import { createRequire } from 'node:module'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
+import { ensureMobileDevServer } from './lib/mobile-dev-server.mjs'
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const require2 = createRequire(path.join(REPO_ROOT, 'agri-production/frontend/package.json'))
@@ -137,19 +138,20 @@ const plotIdByName = async (name) => {
   return hit ? String(hit.id ?? hit.plotId) : ''
 }
 
-// 先确认 H5 预览与网关都在：否则只会看到 puppeteer/undici 的连接栈，看不出真正的缺口
-for (const [label, url, hint] of [
-  ['H5 预览', `${BASE_URL}/`, 'cd agri-production/miniprogram && npm run dev:h5'],
-  ['网关', `${API_URL}/api/v1/auth/login`, 'powershell -File ops/local/start-production-stack.ps1'],
-]) {
-  try {
-    // 网关用 POST 探活会被当成登录请求，这里只要求"能连上"（4xx 也算连上）
-    const res = await fetch(url, { method: 'GET', signal: AbortSignal.timeout(5000) })
-    if (res.status >= 500) throw new Error(`HTTP ${res.status}`)
-  } catch (err) {
-    console.error(`✗ ${label}不可用（${url}）：${err?.message ?? err}\n  先启动：${hint}`)
-    process.exit(2)
-  }
+// 先确保 H5 预览在跑（没跑自己拉起来）；再确认网关可达，否则只会看到连接栈
+if (!(await ensureMobileDevServer({ root: path.join(REPO_ROOT, 'agri-production/miniprogram'), port: Number(new URL(BASE_URL).port || 5300) }))) {
+  console.error(`✗ H5 预览服务不可用（${BASE_URL}）。手动启动：cd agri-production/miniprogram && npm run dev:h5`)
+  process.exit(2)
+}
+try {
+  // 网关用 GET 探活（405/4xx 也算连上，只要不是 5xx）
+  const res = await fetch(`${API_URL}/api/v1/auth/login`, { method: 'GET', signal: AbortSignal.timeout(5000) })
+  if (res.status >= 500) throw new Error(`HTTP ${res.status}`)
+} catch (err) {
+  console.error(
+    `✗ 网关不可用（${API_URL}）：${err?.message ?? err}\n  先启动：powershell -File ops/local/start-production-stack.ps1`,
+  )
+  process.exit(2)
 }
 
 const browser = await puppeteer.launch({ headless: HEADFUL ? false : 'new', args: ['--no-sandbox'] })
