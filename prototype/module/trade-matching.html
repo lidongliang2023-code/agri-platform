@@ -5,6 +5,42 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>交易撮合 · 农产云</title>
 <link rel="stylesheet" href="../assets/css/theme.css" />
+<style>
+  /* —— 撮合流程步骤条 —— */
+  .flow-steps{display:grid;grid-template-columns:repeat(5,1fr);gap:14px}
+  .fs-step{padding:16px;border:1px solid var(--line);border-radius:12px;background:var(--bg-alt);cursor:pointer;transition:.2s}
+  .fs-step:hover{border-color:var(--green-300);background:#fff;transform:translateY(-2px)}
+  .fs-step.on{border-color:var(--green-500);background:#fff;box-shadow:var(--shadow-green)}
+  .fs-head{display:flex;align-items:center;gap:10px}
+  .fs-no{width:28px;height:28px;flex:none;border-radius:50%;background:linear-gradient(135deg,var(--green-600),var(--green-500));color:#fff;display:grid;place-items:center;font-weight:800;font-size:13px}
+  .fs-step.on .fs-no{background:linear-gradient(135deg,var(--tech-600),var(--tech-500))}
+  .fs-t{font-weight:700;font-size:14px}
+  .fs-d{font-size:12px;color:var(--ink-500);margin-top:10px;line-height:1.65}
+  .fs-detail{margin-top:16px;border:1px dashed var(--green-300);background:var(--green-050);border-radius:12px;padding:16px 18px}
+  .fs-detail h4{font-size:14px;font-weight:800;color:var(--green-800);display:flex;align-items:center;gap:8px}
+  .fs-detail .kv{display:grid;grid-template-columns:92px 1fr;gap:10px 14px;margin-top:12px;font-size:13px}
+  .fs-detail .kv dt{color:var(--ink-500)}
+  .fs-detail .kv dd{color:var(--ink-800);line-height:1.6}
+  @media(max-width:980px){.flow-steps{grid-template-columns:1fr 1fr}}
+  @media(max-width:640px){.flow-steps{grid-template-columns:1fr}}
+
+  /* —— 工作台报价表可选中 —— */
+  .data-table tr.sup-row{cursor:pointer}
+  .data-table tr.sup-row.sel{background:var(--green-050)}
+  .data-table tr.sup-row.sel td{border-bottom-color:var(--green-300)}
+
+  /* —— AI 议价逐条播放 —— */
+  #agentChat .chat-msg{opacity:0;transform:translateY(8px);transition:.35s ease}
+  #agentChat .chat-msg.show{opacity:1;transform:none}
+  .round-label{font-size:11px;color:var(--ink-400);margin:4px 0 10px 46px;letter-spacing:.3px}
+
+  /* —— Toast 轻提示 —— */
+  .toast{position:fixed;left:50%;bottom:34px;transform:translate(-50%,20px);background:var(--green-800);color:#fff;padding:12px 20px;border-radius:var(--r-pill);font-size:13.5px;font-weight:600;box-shadow:var(--shadow-md);opacity:0;pointer-events:none;transition:.28s;z-index:99;display:flex;align-items:center;gap:8px}
+  .toast.show{opacity:1;transform:translate(-50%,0)}
+
+  /* —— 走势柱状过渡 —— */
+  #trendBars > div{transition:height .5s ease}
+</style>
 </head>
 <body>
 
@@ -133,6 +169,169 @@
   </div>
 </section>
 
+<!-- 撮合流程与规则 -->
+<section class="section" style="padding-top:0" id="flow">
+  <div class="container">
+    <div class="section-head">
+      <div>
+        <div class="bar-title">撮合流程与规则</div>
+        <div class="sub">从需求发布到履约结算的 5 步标准链路，以及撮合引擎的匹配模型与风控规则</div>
+      </div>
+      <span class="tag tag-ghost">业务规则</span>
+    </div>
+
+    <!-- 流程步骤条 -->
+    <div class="card mb-24">
+      <div class="card-h">
+        <h3><span data-icon="activity" data-size="18"></span>撮合全流程</h3>
+        <span class="more">点击步骤查看规则详情</span>
+      </div>
+      <div class="card-b">
+        <div class="flow-steps" id="flowSteps">
+          <div class="fs-step on" data-step="0">
+            <div class="fs-head"><span class="fs-no">1</span><span class="fs-t">需求发布</span></div>
+            <div class="fs-d">买方发布采购需求，系统校验资质与预算，生成需求单进入撮合池。</div>
+          </div>
+          <div class="fs-step" data-step="1">
+            <div class="fs-head"><span class="fs-no">2</span><span class="fs-t">智能匹配</span></div>
+            <div class="fs-d">按评分模型加权打分，输出 TOP 候选货源并定向推送供应方。</div>
+          </div>
+          <div class="fs-step" data-step="2">
+            <div class="fs-head"><span class="fs-no">3</span><span class="fs-t">议价 / 竞价</span></div>
+            <div class="fs-d">AI 代理议价或多轮竞价，在限价区间内锁定成交价与交期。</div>
+          </div>
+          <div class="fs-step" data-step="3">
+            <div class="fs-head"><span class="fs-no">4</span><span class="fs-t">合同签署</span></div>
+            <div class="fs-d">生成标准电子合同，双方在线签章上链，关键条款锁定。</div>
+          </div>
+          <div class="fs-step" data-step="4">
+            <div class="fs-head"><span class="fs-no">5</span><span class="fs-t">履约结算</span></div>
+            <div class="fs-d">货款平台托管，发货验货做四流核验，按约放款完成结算。</div>
+          </div>
+        </div>
+
+        <div class="fs-detail" id="fsDetail">
+          <h4><span data-icon="clipboard" data-size="16"></span>第 1 步 · 需求发布</h4>
+          <dl class="kv">
+            <dt>触发条件</dt><dd>买方企业资质已通过审核，且账户余额 / 授信额度 ≥ 本次采购预算</dd>
+            <dt>责任主体</dt><dd>采购方</dd>
+            <dt>系统动作</dt><dd>生成需求单（品类 / 数量 / 期望价 / 交期 / 交货地 / 结算方式），完成预算校验后写入撮合池并订阅同品类货源</dd>
+            <dt>时限</dt><dd>实时生效，需求有效期默认 7 天</dd>
+            <dt>异常处理</dt><dd>预算不足 → 提示充值或申请订单融资；资质缺失 → 引导线上认证</dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid" style="grid-template-columns:1.15fr 1fr;gap:24px;align-items:start">
+
+      <!-- 匹配评分模型 -->
+      <div class="card">
+        <div class="card-h">
+          <h3><span data-icon="target" data-size="18"></span>匹配评分模型</h3>
+          <span class="tag tag-tech">加权算法</span>
+        </div>
+        <div class="card-b">
+          <div style="background:var(--bg-alt);border:1px solid var(--line);border-radius:10px;padding:14px 16px">
+            <div class="muted t-xs">综合匹配度 =</div>
+            <div class="mono strong mt-8" style="font-size:15px;color:var(--green-700)">价格×40% + 交期×25% + 信用×20% + 库存×15%</div>
+          </div>
+
+          <div class="mt-20" style="display:flex;flex-direction:column;gap:14px">
+            <div>
+              <div class="row between center t-sm mb-8"><span class="strong">价格匹配 <span class="muted">· 权重 40%</span></span><span class="mono strong">40</span></div>
+              <div class="progress"><i style="width:40%"></i></div>
+              <div class="form-hint">报价与期望价、市场均价的偏离度，越接近期望价得分越高</div>
+            </div>
+            <div>
+              <div class="row between center t-sm mb-8"><span class="strong">交期匹配 <span class="muted">· 权重 25%</span></span><span class="mono strong">25</span></div>
+              <div class="progress"><i style="width:25%"></i></div>
+              <div class="form-hint">承诺交货天数 vs 需求交期上限（本单 ≤ 5 天）</div>
+            </div>
+            <div>
+              <div class="row between center t-sm mb-8"><span class="strong">信用匹配 <span class="muted">· 权重 20%</span></span><span class="mono strong">20</span></div>
+              <div class="progress"><i style="width:20%"></i></div>
+              <div class="form-hint">企业信用评分、历史履约率与纠纷记录</div>
+            </div>
+            <div>
+              <div class="row between center t-sm mb-8"><span class="strong">库存匹配 <span class="muted">· 权重 15%</span></span><span class="mono strong">15</span></div>
+              <div class="progress"><i style="width:15%"></i></div>
+              <div class="form-hint">可交付量 / 需求量的覆盖倍数，现货充足优先</div>
+            </div>
+          </div>
+
+          <div class="row wrap center gap-8 mt-20">
+            <span class="tag tag-ghost">匹配度 &lt; 80 不推送</span>
+            <span class="tag">≥ 90 标记「优质货源」</span>
+            <span class="tag tag-tech">同分按价格优先</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 交易规则与风控 -->
+      <div class="card">
+        <div class="card-h">
+          <h3><span data-icon="shield" data-size="18"></span>交易规则与风控</h3>
+          <span class="tag tag-amber">平台保障</span>
+        </div>
+        <div class="card-b">
+          <div style="display:flex;flex-direction:column;gap:14px">
+            <div class="row gap-12">
+              <span class="stat-icon amber" style="width:34px;height:34px;flex:none"><span data-icon="money" data-size="16"></span></span>
+              <div>
+                <div class="strong t-sm">履约保证金 5%</div>
+                <div class="muted t-xs mt-4">卖方成交需缴纳成交额 5% 保证金，履约完成原路退还</div>
+              </div>
+            </div>
+            <div class="row gap-12">
+              <span class="stat-icon" style="width:34px;height:34px;flex:none"><span data-icon="shield" data-size="16"></span></span>
+              <div>
+                <div class="strong t-sm">单笔限额分级</div>
+                <div class="muted t-xs mt-4">新入驻企业单笔上限 ¥50 万；信用 AAA 企业可提额至 ¥500 万</div>
+              </div>
+            </div>
+            <div class="row gap-12">
+              <span class="stat-icon tech" style="width:34px;height:34px;flex:none"><span data-icon="award" data-size="16"></span></span>
+              <div>
+                <div class="strong t-sm">资金第三方托管</div>
+                <div class="muted t-xs mt-4">货款进入平台托管账户，验货确认后按约放款，钱货两清</div>
+              </div>
+            </div>
+            <div class="row gap-12">
+              <span class="stat-icon amber" style="width:34px;height:34px;flex:none"><span data-icon="alert" data-size="16"></span></span>
+              <div>
+                <div class="strong t-sm">违约与仲裁</div>
+                <div class="muted t-xs mt-4">逾期交货按日 0.05% 计违约金，累计超 15% 平台介入仲裁</div>
+              </div>
+            </div>
+            <div class="row gap-12">
+              <span class="stat-icon" style="width:34px;height:34px;flex:none"><span data-icon="repo" data-size="16"></span></span>
+              <div>
+                <div class="strong t-sm">四流交叉核验</div>
+                <div class="muted t-xs mt-4">订单、物流、发票、资金四流比对，异常订单冻结转风控复核</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="border-top:1px dashed var(--line);margin-top:18px;padding-top:16px">
+            <div class="muted t-xs mb-8">订单状态流转</div>
+            <div class="row wrap center gap-4">
+              <span class="tag tag-ghost">待撮合</span><span class="muted t-xs">→</span>
+              <span class="tag tag-amber">议价中</span><span class="muted t-xs">→</span>
+              <span class="tag tag-amber">待签约</span><span class="muted t-xs">→</span>
+              <span class="tag tag-tech">履约中</span><span class="muted t-xs">→</span>
+              <span class="tag">已完成</span>
+              <span class="muted t-xs" style="margin-left:8px">异常分支 →</span>
+              <span class="tag tag-red">已取消</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
 <!-- 撮合工作台 -->
 <section class="section" style="padding-top:0" id="workbench">
   <div class="container">
@@ -195,10 +394,10 @@
         <div class="card">
           <div class="card-h">
             <h3><span data-icon="spark" data-size="18"></span>AI 智能匹配</h3>
-            <span class="more">已聚合 6 家供应商报价 · 展示 TOP 4</span>
+            <span class="more">已聚合 6 家供应商报价 · 展示 TOP 4 · 点击行选定</span>
           </div>
           <div class="card-b" style="padding:0">
-            <table class="data-table">
+            <table class="data-table" id="supTable">
               <thead>
                 <tr>
                   <th>供应商</th>
@@ -207,43 +406,49 @@
                   <th>库存</th>
                   <th>交期</th>
                   <th style="text-align:right">匹配度</th>
+                  <th style="text-align:right">操作</th>
                 </tr>
               </thead>
               <tbody>
-                <tr>
+                <tr class="sup-row" data-name="湖北金穗粮油" data-place="湖北荆州" data-price="10780" data-lead="5" data-stock="420" data-p="98" data-l="95" data-c="90" data-s="100">
                   <td class="row center gap-8"><span class="dot"></span><span class="strong">湖北金穗粮油</span></td>
                   <td class="tr"><span class="price"><span class="cur">¥</span>10,780<span class="unit">/吨</span></span></td>
                   <td>湖北荆州</td>
                   <td class="mono">420 吨</td>
                   <td class="mono">5 天</td>
-                  <td class="tr"><span class="tag">96%</span></td>
+                  <td class="tr"><span class="tag mscore">—</span></td>
+                  <td class="tr"><button type="button" class="btn btn-sm btn-ghost pick">选定</button></td>
                 </tr>
-                <tr>
+                <tr class="sup-row" data-name="中垦粮油（荆州）" data-place="湖北荆门" data-price="10850" data-lead="3" data-stock="260" data-p="95" data-l="98" data-c="88" data-s="90">
                   <td class="row center gap-8"><span class="dot"></span><span class="strong">中垦粮油（荆州）</span></td>
                   <td class="tr"><span class="price"><span class="cur">¥</span>10,850<span class="unit">/吨</span></span></td>
                   <td>湖北荆门</td>
                   <td class="mono">260 吨</td>
                   <td class="mono">3 天</td>
-                  <td class="tr"><span class="tag">92%</span></td>
+                  <td class="tr"><span class="tag mscore">—</span></td>
+                  <td class="tr"><button type="button" class="btn btn-sm btn-ghost pick">选定</button></td>
                 </tr>
-                <tr>
+                <tr class="sup-row" data-name="苏北油脂集团" data-place="江苏泰州" data-price="10920" data-lead="7" data-stock="600" data-p="92" data-l="70" data-c="86" data-s="100">
                   <td class="row center gap-8"><span class="dot gray"></span><span class="strong">苏北油脂集团</span></td>
                   <td class="tr"><span class="price"><span class="cur">¥</span>10,920<span class="unit">/吨</span></span></td>
                   <td>江苏泰州</td>
                   <td class="mono">600 吨</td>
                   <td class="mono">7 天</td>
-                  <td class="tr"><span class="tag tag-ghost">88%</span></td>
+                  <td class="tr"><span class="tag mscore">—</span></td>
+                  <td class="tr"><button type="button" class="btn btn-sm btn-ghost pick">选定</button></td>
                 </tr>
-                <tr>
+                <tr class="sup-row" data-name="川东佳禾农业" data-place="四川达州" data-price="10980" data-lead="6" data-stock="150" data-p="90" data-l="74" data-c="82" data-s="70">
                   <td class="row center gap-8"><span class="dot gray"></span><span class="strong">川东佳禾农业</span></td>
                   <td class="tr"><span class="price"><span class="cur">¥</span>10,980<span class="unit">/吨</span></span></td>
                   <td>四川达州</td>
                   <td class="mono">150 吨</td>
                   <td class="mono">6 天</td>
-                  <td class="tr"><span class="tag tag-ghost">85%</span></td>
+                  <td class="tr"><span class="tag mscore">—</span></td>
+                  <td class="tr"><button type="button" class="btn btn-sm btn-ghost pick">选定</button></td>
                 </tr>
               </tbody>
             </table>
+            <div class="form-hint" style="padding:0 20px 14px">匹配度由「价格 40% + 交期 25% + 信用 20% + 库存 15%」加权计算，实时随选定货源更新。</div>
           </div>
         </div>
 
@@ -253,65 +458,69 @@
       <div style="display:flex;flex-direction:column;gap:24px">
 
         <!-- 撮合结论 -->
-        <div class="card">
+        <div class="card" id="conclusion">
           <div class="card-h">
             <h3><span data-icon="target" data-size="18"></span>撮合结论</h3>
-            <span class="tag">推荐成交</span>
+            <span class="tag" id="recTag">推荐成交</span>
           </div>
           <div class="card-b">
             <div style="background:var(--green-050);border:1px dashed var(--green-300);border-radius:10px;padding:14px 16px">
-              <div class="row center gap-8 strong c-green"><span data-icon="check" data-size="16"></span>推荐成交方案</div>
-              <div class="strong mt-8">湖北金穗粮油</div>
-              <div class="muted t-sm mt-8">报价 <span class="price"><span class="cur">¥</span>10,780<span class="unit">/吨</span></span> · 湖北荆州 · 5 天交货 · 库存充足</div>
+              <div class="row center gap-8 strong c-green"><span data-icon="check" data-size="16"></span><span id="recHead">推荐成交方案</span></div>
+              <div class="strong mt-8" id="recName">湖北金穗粮油</div>
+              <div class="muted t-sm mt-8" id="recDesc">报价 ¥10,780/吨 · 湖北荆州 · 5 天交货 · 库存充足</div>
             </div>
 
             <div class="mt-20" style="display:flex;flex-direction:column;gap:14px">
               <div>
-                <div class="row between center t-sm mb-8"><span class="muted">价格匹配</span><span class="mono strong">97</span></div>
-                <div class="progress"><i style="width:97%"></i></div>
+                <div class="row between center t-sm mb-8"><span class="muted">价格匹配</span><span class="mono strong" id="vPrice">98</span></div>
+                <div class="progress"><i id="bPrice" style="width:98%"></i></div>
               </div>
               <div>
-                <div class="row between center t-sm mb-8"><span class="muted">交期匹配</span><span class="mono strong">94</span></div>
-                <div class="progress"><i style="width:94%"></i></div>
+                <div class="row between center t-sm mb-8"><span class="muted">交期匹配</span><span class="mono strong" id="vLead">95</span></div>
+                <div class="progress"><i id="bLead" style="width:95%"></i></div>
               </div>
               <div>
-                <div class="row between center t-sm mb-8"><span class="muted">信用匹配</span><span class="mono strong">90</span></div>
-                <div class="progress"><i style="width:90%"></i></div>
+                <div class="row between center t-sm mb-8"><span class="muted">信用匹配</span><span class="mono strong" id="vCredit">90</span></div>
+                <div class="progress"><i id="bCredit" style="width:90%"></i></div>
+              </div>
+              <div>
+                <div class="row between center t-sm mb-8"><span class="muted">库存匹配</span><span class="mono strong" id="vStock">100</span></div>
+                <div class="progress"><i id="bStock" style="width:100%"></i></div>
               </div>
             </div>
 
             <div class="row between center mt-20">
               <span class="muted t-sm">综合得分</span>
-              <span class="mono strong" style="font-size:22px;color:var(--green-700)">96</span>
+              <span class="mono strong" id="recScore" style="font-size:22px;color:var(--green-700)">96</span>
             </div>
 
             <div class="row gap-12 mt-16">
-              <button type="button" class="btn btn-outline flex-1"><span data-icon="spark"></span>发起议价</button>
-              <button type="button" class="btn btn-primary flex-1"><span data-icon="cart"></span>一键下单</button>
+              <button type="button" class="btn btn-outline flex-1" id="btnBargain"><span data-icon="spark"></span>发起议价</button>
+              <button type="button" class="btn btn-primary flex-1" id="btnOrder"><span data-icon="cart"></span>一键下单</button>
             </div>
           </div>
         </div>
 
-        <!-- 撮合实时数据 -->
+        <!-- 成交预估 -->
         <div class="card">
           <div class="card-h">
             <h3><span data-icon="activity" data-size="18"></span>成交预估</h3>
-            <span class="more">实时测算</span>
+            <span class="more">按当前选定货源实时测算</span>
           </div>
           <div class="card-b">
             <div class="grid grid-2" style="gap:14px">
               <div class="stat">
                 <div class="k"><span data-icon="money" data-size="14"></span>预估总价</div>
-                <div class="v" style="font-size:22px">¥1,078,000</div>
-                <div class="d">按推荐报价测算</div>
+                <div class="v" id="estTotal" style="font-size:22px">¥1,078,000</div>
+                <div class="d">100 吨 × 当前报价</div>
               </div>
               <div class="stat tech">
                 <div class="k"><span data-icon="chart" data-size="14"></span>较预算节省</div>
-                <div class="v" style="font-size:22px">¥12,000</div>
-                <div class="d">低于期望价上限 <span class="mono">1.1%</span></div>
+                <div class="v" id="estSave" style="font-size:22px">¥12,000</div>
+                <div class="d" id="estSavePct">低于期望价上限 <span class="mono">1.1%</span></div>
               </div>
             </div>
-            <div class="form-hint">以上为撮合引擎实时测算结果，最终以双方议价及合同为准。</div>
+            <div class="form-hint">预算上限 ¥10,900/吨 × 100 吨 = ¥1,090,000；最终以双方议价及合同为准。</div>
           </div>
         </div>
 
@@ -334,38 +543,44 @@
     <div class="card">
       <div class="card-h">
         <h3><span data-icon="spark" data-size="18"></span>采购代理 × 湖北金穗粮油</h3>
-        <span class="tag"><span class="dot-pulse" style="width:7px;height:7px"></span>议价进行中</span>
+        <div class="row center gap-12">
+          <span class="tag"><span class="dot-pulse" style="width:7px;height:7px"></span>议价进行中</span>
+          <button type="button" class="btn btn-sm btn-outline" id="btnReplay"><span data-icon="zap" data-size="14"></span>重新演示</button>
+        </div>
       </div>
       <div class="card-b" style="background:var(--bg-alt)">
         <div style="max-width:680px;margin:0 auto">
-          <div class="chat" style="background:#fff;border:1px solid var(--line);border-radius:12px">
+          <div class="chat" id="agentChat" style="background:#fff;border:1px solid var(--line);border-radius:12px">
 
+            <div class="round-label">第 1 轮 · 采购代理首轮出价</div>
             <!-- AI 采购代理（左） -->
-            <div class="msg ai">
+            <div class="msg ai chat-msg show">
               <div class="av" data-icon="spark" data-size="16"></div>
               <div class="bubble">你好，我是本次采购的 AI 代理。目标：100 吨一级压榨菜籽油，出价 <span class="price"><span class="cur">¥</span>10,750</span>/吨，要求本周内（≤5 天）发货，支持全额预付。</div>
             </div>
 
             <!-- 供应商（右） -->
-            <div class="msg me">
+            <div class="msg me chat-msg show">
               <div class="av">供</div>
               <div class="bubble">湖北金穗粮油：本周发货排产较紧，最低可让至 <span class="mono" style="color:#fff">¥10,820</span>/吨，交期需 5 天。</div>
             </div>
 
+            <div class="round-label">第 2 轮 · 让步并锁定交期</div>
             <!-- AI 采购代理 -->
-            <div class="msg ai">
+            <div class="msg ai chat-msg show">
               <div class="av" data-icon="spark" data-size="16"></div>
               <div class="bubble">我可以接受 <span class="price"><span class="cur">¥</span>10,800</span>/吨，但需 3 天内交付；货款可全额预付并经平台托管。</div>
             </div>
 
             <!-- 供应商 -->
-            <div class="msg me">
+            <div class="msg me chat-msg show">
               <div class="av">供</div>
               <div class="bubble">同意，成交价 <span class="mono" style="color:#fff">¥10,800</span>/吨，3 天内发货，按标准合同签署。</div>
             </div>
 
+            <div class="round-label">系统裁定 · 生成待签合同</div>
             <!-- 系统结论 -->
-            <div class="msg ai">
+            <div class="msg ai chat-msg show">
               <div class="av" data-icon="check" data-size="16"></div>
               <div class="bubble" style="max-width:260px">
                 议价达成，生成待签合同
@@ -378,7 +593,7 @@
                     <span class="t-xs muted">较首轮出价让利</span>
                     <span class="mono t-xs strong">+¥50/吨</span>
                   </div>
-                  <button class="btn btn-sm btn-primary btn-block" style="margin-top:10px"><span data-icon="file"></span>查看待签合同</button>
+                  <button type="button" class="btn btn-sm btn-primary btn-block" style="margin-top:10px" id="btnContract"><span data-icon="file"></span>查看待签合同</button>
                 </div>
               </div>
             </div>
@@ -399,7 +614,33 @@
         <a class="more" href="#workbench">全部记录 →</a>
       </div>
       <div class="card-b" style="padding:0">
-        <table class="data-table">
+        <div class="toolbar" style="padding:16px 20px 6px;gap:18px">
+          <div class="row center gap-8">
+            <span class="muted t-sm" style="flex:none">状态</span>
+            <div class="chips" data-filter="status">
+              <span class="chip on" data-val="all">全部</span>
+              <span class="chip" data-val="待撮合">待撮合</span>
+              <span class="chip" data-val="议价中">议价中</span>
+              <span class="chip" data-val="待签约">待签约</span>
+              <span class="chip" data-val="履约中">履约中</span>
+              <span class="chip" data-val="已完成">已完成</span>
+              <span class="chip" data-val="已取消">已取消</span>
+            </div>
+          </div>
+          <div class="row center gap-8">
+            <span class="muted t-sm" style="flex:none">撮合方式</span>
+            <div class="chips" data-filter="method">
+              <span class="chip on" data-val="all">全部</span>
+              <span class="chip" data-val="ai">AI 议价</span>
+              <span class="chip" data-val="smart">智能撮合</span>
+              <span class="chip" data-val="bid">竞价成交</span>
+            </div>
+          </div>
+          <span class="spacer"></span>
+          <span class="muted t-sm" id="recCount">共 10 条</span>
+        </div>
+
+        <table class="data-table" id="recTable">
           <thead>
             <tr>
               <th>成交单号</th>
@@ -414,7 +655,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr>
+            <tr data-status="待签约" data-method="ai">
               <td class="mono">TM20261019-0182</td>
               <td>一级压榨菜籽油</td>
               <td class="mono">100 吨</td>
@@ -425,7 +666,7 @@
               <td><span class="tag tag-amber">待签约</span></td>
               <td class="mono t-xs">2026-10-19 10:24</td>
             </tr>
-            <tr>
+            <tr data-status="已完成" data-method="smart">
               <td class="mono">TM20261019-0176</td>
               <td>优质玉米</td>
               <td class="mono">500 吨</td>
@@ -433,10 +674,21 @@
               <td>山东临沂粮油购销</td>
               <td>河南豫丰农业</td>
               <td><span class="tag">智能撮合</span></td>
-              <td><span class="tag">已成交</span></td>
+              <td><span class="tag">已完成</span></td>
               <td class="mono t-xs">2026-10-19 09:11</td>
             </tr>
-            <tr>
+            <tr data-status="议价中" data-method="bid">
+              <td class="mono">TM20261019-0173</td>
+              <td>小麦（普麦）</td>
+              <td class="mono">800 吨</td>
+              <td class="tr"><span class="price"><span class="cur">¥</span>2,620<span class="unit">/吨</span></span></td>
+              <td>河北邯郸面业</td>
+              <td>河南新乡粮油</td>
+              <td><span class="tag tag-violet">竞价成交</span></td>
+              <td><span class="tag tag-amber">议价中</span></td>
+              <td class="mono t-xs">2026-10-19 08:40</td>
+            </tr>
+            <tr data-status="履约中" data-method="bid">
               <td class="mono">TM20261018-0169</td>
               <td>豆粕（43% 蛋白）</td>
               <td class="mono">300 吨</td>
@@ -447,7 +699,7 @@
               <td><span class="tag tag-tech">履约中</span></td>
               <td class="mono t-xs">2026-10-18 16:47</td>
             </tr>
-            <tr>
+            <tr data-status="已完成" data-method="ai">
               <td class="mono">TM20261018-0154</td>
               <td>一级压榨菜籽油</td>
               <td class="mono">200 吨</td>
@@ -455,10 +707,21 @@
               <td>四川川东油脂</td>
               <td>苏北油脂集团</td>
               <td><span class="tag tag-tech">AI 议价</span></td>
-              <td><span class="tag">已成交</span></td>
+              <td><span class="tag">已完成</span></td>
               <td class="mono t-xs">2026-10-18 14:03</td>
             </tr>
-            <tr>
+            <tr data-status="待签约" data-method="smart">
+              <td class="mono">TM20261018-0150</td>
+              <td>稻谷（粳稻）</td>
+              <td class="mono">450 吨</td>
+              <td class="tr"><span class="price"><span class="cur">¥</span>2,880<span class="unit">/吨</span></span></td>
+              <td>江苏盐城米业</td>
+              <td>黑龙江北大荒</td>
+              <td><span class="tag">智能撮合</span></td>
+              <td><span class="tag tag-amber">待签约</span></td>
+              <td class="mono t-xs">2026-10-18 11:20</td>
+            </tr>
+            <tr data-status="履约中" data-method="smart">
               <td class="mono">TM20261017-0148</td>
               <td>一级压榨菜籽油</td>
               <td class="mono">80 吨</td>
@@ -469,7 +732,7 @@
               <td><span class="tag tag-tech">履约中</span></td>
               <td class="mono t-xs">2026-10-17 11:26</td>
             </tr>
-            <tr>
+            <tr data-status="已完成" data-method="bid">
               <td class="mono">TM20261017-0141</td>
               <td>优质玉米</td>
               <td class="mono">350 吨</td>
@@ -477,19 +740,35 @@
               <td>安徽阜阳饲料厂</td>
               <td>河南豫丰农业</td>
               <td><span class="tag tag-violet">竞价成交</span></td>
-              <td><span class="tag">已成交</span></td>
+              <td><span class="tag">已完成</span></td>
               <td class="mono t-xs">2026-10-17 09:52</td>
+            </tr>
+            <tr data-status="待撮合" data-method="ai">
+              <td class="mono">TM20261017-0136</td>
+              <td>生猪（外三元）</td>
+              <td class="mono">120 吨</td>
+              <td class="tr"><span class="price"><span class="cur">¥</span>15,600<span class="unit">/吨</span></span></td>
+              <td>四川眉山食品</td>
+              <td>湖北襄大农牧</td>
+              <td><span class="tag tag-tech">AI 议价</span></td>
+              <td><span class="tag tag-ghost">待撮合</span></td>
+              <td class="mono t-xs">2026-10-17 09:05</td>
+            </tr>
+            <tr data-status="已取消" data-method="smart">
+              <td class="mono">TM20261016-0129</td>
+              <td>一级压榨菜籽油</td>
+              <td class="mono">150 吨</td>
+              <td class="tr"><span class="price"><span class="cur">¥</span>10,950<span class="unit">/吨</span></span></td>
+              <td>江西赣州油脂</td>
+              <td>苏北油脂集团</td>
+              <td><span class="tag">智能撮合</span></td>
+              <td><span class="tag tag-red">已取消</span></td>
+              <td class="mono t-xs">2026-10-16 15:10</td>
             </tr>
           </tbody>
         </table>
-        <div style="padding:14px 20px">
-          <div class="pager">
-            <button>上一页</button>
-            <button class="on">1</button>
-            <button>2</button>
-            <button>3</button>
-            <button>下一页</button>
-          </div>
+        <div style="padding:6px 20px 16px">
+          <div class="pager" id="recPager"></div>
         </div>
       </div>
     </div>
@@ -502,18 +781,20 @@
     <div class="card">
       <div class="card-h">
         <h3><span data-icon="activity" data-size="18"></span>撮合成交走势</h3>
-        <span class="more">近 7 日撮合成交量（吨）</span>
+        <span class="more" id="trendMore">近 7 日撮合成交量（吨）</span>
       </div>
       <div class="card-b">
-        <div class="chips mb-16">
-          <span class="chip on">成交量</span><span class="chip">成交金额</span><span class="chip">撮合成功率</span>
+        <div class="chips mb-16" id="trendChips">
+          <span class="chip on" data-series="vol">成交量</span>
+          <span class="chip" data-series="amount">成交金额</span>
+          <span class="chip" data-series="rate">撮合成功率</span>
         </div>
-        <div style="display:flex;align-items:flex-end;gap:10px;height:150px;padding:0 4px">
-          <div style="flex:1;height:56%;background:linear-gradient(180deg,#2FB877,#C9E9D8);border-radius:4px 4px 0 0"></div>
-          <div style="flex:1;height:68%;background:linear-gradient(180deg,#2FB877,#C9E9D8);border-radius:4px 4px 0 0"></div>
-          <div style="flex:1;height:60%;background:linear-gradient(180deg,#2FB877,#C9E9D8);border-radius:4px 4px 0 0"></div>
-          <div style="flex:1;height:79%;background:linear-gradient(180deg,#2FB877,#C9E9D8);border-radius:4px 4px 0 0"></div>
-          <div style="flex:1;height:75%;background:linear-gradient(180deg,#2FB877,#C9E9D8);border-radius:4px 4px 0 0"></div>
+        <div id="trendBars" style="display:flex;align-items:flex-end;gap:10px;height:150px;padding:0 4px">
+          <div style="flex:1;height:74%;background:linear-gradient(180deg,#2FB877,#C9E9D8);border-radius:4px 4px 0 0"></div>
+          <div style="flex:1;height:81%;background:linear-gradient(180deg,#2FB877,#C9E9D8);border-radius:4px 4px 0 0"></div>
+          <div style="flex:1;height:77%;background:linear-gradient(180deg,#2FB877,#C9E9D8);border-radius:4px 4px 0 0"></div>
+          <div style="flex:1;height:89%;background:linear-gradient(180deg,#2FB877,#C9E9D8);border-radius:4px 4px 0 0"></div>
+          <div style="flex:1;height:85%;background:linear-gradient(180deg,#2FB877,#C9E9D8);border-radius:4px 4px 0 0"></div>
           <div style="flex:1;height:90%;background:linear-gradient(180deg,#159A5E,#2FB877);border-radius:4px 4px 0 0"></div>
           <div style="flex:1;height:100%;background:linear-gradient(180deg,#0EA5E9,#7DD3FC);border-radius:4px 4px 0 0"></div>
         </div>
@@ -526,8 +807,8 @@
           <div class="tc mono t-xs muted flex-1">10/18</div>
           <div class="tc mono t-xs strong c-tech flex-1">10/19</div>
         </div>
-        <table class="data-table mt-16">
-          <thead><tr><th>日期</th><th>撮合需求</th><th style="text-align:right">成交量</th><th style="text-align:right">环比</th></tr></thead>
+        <table class="data-table mt-16" id="trendTable">
+          <thead><tr><th>日期</th><th>撮合需求</th><th style="text-align:right" id="trendCol">成交量</th><th style="text-align:right">环比</th></tr></thead>
           <tbody>
             <tr><td class="mono">10/19</td><td class="mono">3,860 条</td><td class="tr mono">3,860 吨</td><td class="tr mono" style="color:var(--green-600)">+11.6%</td></tr>
             <tr><td class="mono">10/18</td><td class="mono">3,120 条</td><td class="tr mono">3,460 吨</td><td class="tr mono" style="color:var(--green-600)">+20.1%</td></tr>
@@ -560,6 +841,263 @@
   </div>
 </footer>
 
+<script>
+/* ================= 交易撮合 · 页面业务交互逻辑 ================= */
+(function () {
+  "use strict";
+  function $(s, r){ return (r || document).querySelector(s); }
+  function $$(s, r){ return Array.prototype.slice.call((r || document).querySelectorAll(s)); }
+  function money(n){ return "¥" + n.toLocaleString("en-US"); }
+
+  document.addEventListener("DOMContentLoaded", function () {
+
+    /* ---------- 0. Toast 轻提示 ---------- */
+    var toast = document.createElement("div");
+    toast.className = "toast";
+    document.body.appendChild(toast);
+    var toastTimer;
+    function showToast(html){
+      toast.innerHTML = html;
+      if (window.PROTO) window.PROTO.hydrateIcons(toast);
+      toast.classList.add("show");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(function(){ toast.classList.remove("show"); }, 2400);
+    }
+
+    /* ================= 1. 撮合流程步骤（点击查看规则） ================= */
+    var FLOW = [
+      { t:"需求发布", icon:"clipboard", rows:[
+        ["触发条件","买方企业资质已通过审核，且账户余额 / 授信额度 ≥ 本次采购预算"],
+        ["责任主体","采购方"],
+        ["系统动作","生成需求单（品类 / 数量 / 期望价 / 交期 / 交货地 / 结算方式），完成预算校验后写入撮合池并订阅同品类货源"],
+        ["时限","实时生效，需求有效期默认 7 天"],
+        ["异常处理","预算不足 → 提示充值或申请订单融资；资质缺失 → 引导线上认证"] ] },
+      { t:"智能匹配", icon:"target", rows:[
+        ["触发条件","撮合池内存在同品类且匹配度 ≥ 80 的有效货源"],
+        ["责任主体","撮合引擎"],
+        ["系统动作","按「价格 40% + 交期 25% + 信用 20% + 库存 15%」加权评分，取 TOP N 定向推送供应方"],
+        ["时限","需求发布后 5 分钟内完成首轮推送"],
+        ["异常处理","24h 内无供应方响应 → 自动扩池至邻近产地并放宽交期"] ] },
+      { t:"议价 / 竞价", icon:"spark", rows:[
+        ["触发条件","至少 2 家供应方给出有效报价"],
+        ["责任主体","买卖双方 + AI Sales Agent"],
+        ["系统动作","AI 代理在【限价下限, 期望价上限】区间内博弈（最多 6 轮）；竞价模式 30 分钟倒计时、价优者得"],
+        ["时限","议价 24h 内达成 / 竞价 30 分钟"],
+        ["异常处理","未达成一致 → 保留报价记录，退回撮合池二次匹配"] ] },
+      { t:"合同签署", icon:"file", rows:[
+        ["触发条件","议价或竞价达成一致价"],
+        ["责任主体","买卖双方"],
+        ["系统动作","生成标准合同（锁定价格 / 数量 / 交期 / 交货地），CA 在线签章 + 区块链存证"],
+        ["时限","达成后 2 小时内完成签署"],
+        ["异常处理","超时未签 → 订单回退「议价中」并释放货源库存"] ] },
+      { t:"履约结算", icon:"truck", rows:[
+        ["触发条件","买卖双方完成在线签章"],
+        ["责任主体","平台 + 买卖双方"],
+        ["系统动作","买方货款进入第三方托管账户；卖方发货、买方验货，系统做订单 / 物流 / 发票 / 资金四流交叉核验后按约放款"],
+        ["时限","收货确认后 24h 内放款"],
+        ["异常处理","验货异议 → 冻结货款转仲裁；超期未发货 → 按日计违约金"] ] }
+    ];
+    var fsDetail = $("#fsDetail");
+    function renderFlow(i){
+      var s = FLOW[i];
+      var rows = s.rows.map(function(r){ return "<dt>" + r[0] + "</dt><dd>" + r[1] + "</dd>"; }).join("");
+      fsDetail.innerHTML = '<h4><span data-icon="' + s.icon + '" data-size="16"></span>第 ' + (i+1) + ' 步 · ' + s.t + '</h4><dl class="kv">' + rows + '</dl>';
+      if (window.PROTO) window.PROTO.hydrateIcons(fsDetail);
+    }
+    $$("#flowSteps .fs-step").forEach(function(step){
+      step.addEventListener("click", function(){
+        $$("#flowSteps .fs-step").forEach(function(x){ x.classList.remove("on"); });
+        step.classList.add("on");
+        renderFlow(parseInt(step.getAttribute("data-step"), 10));
+      });
+    });
+
+    /* ================= 2. 报价表选中 → 撮合结论实时联动 ================= */
+    var W = [0.4, 0.25, 0.2, 0.15];     // 价格 / 交期 / 信用 / 库存
+    var QTY = 100, BUDGET = 10900;      // 采购吨数 / 期望价上限（元/吨）
+    var supRows = $$("#supTable tbody tr.sup-row");
+    var rowData = supRows.map(function(tr){
+      var d = tr.dataset;
+      var p = +d.p, l = +d.l, c = +d.c, s = +d.s;
+      return { tr:tr, name:d.name, place:d.place, price:+d.price, lead:+d.lead, stock:+d.stock,
+               p:p, l:l, c:c, s:s,
+               total: Math.round(p*W[0] + l*W[1] + c*W[2] + s*W[3]) };
+    });
+    var topTotal = rowData.reduce(function(m, x){ return Math.max(m, x.total); }, 0);
+
+    rowData.forEach(function(x){
+      var tag = x.tr.querySelector(".mscore");
+      tag.textContent = x.total + "%";
+      tag.className = "tag mscore" + (x.total < 90 ? " tag-ghost" : "");
+    });
+
+    var elRecTag = $("#recTag"), elRecHead = $("#recHead"), elRecName = $("#recName"),
+        elRecDesc = $("#recDesc"), elScore = $("#recScore"),
+        elTotal = $("#estTotal"), elSave = $("#estSave"), elSavePct = $("#estSavePct");
+    var curRow = null;
+
+    function setBar(id, v){
+      $("#" + id).textContent = v;
+      $("#b" + id.slice(1)).style.width = v + "%";
+    }
+
+    function selectRow(x){
+      curRow = x;
+      supRows.forEach(function(r){ r.classList.remove("sel"); });
+      x.tr.classList.add("sel");
+
+      var isTop = x.total >= topTotal;
+      elRecTag.textContent = isTop ? "推荐成交" : "手动选定";
+      elRecTag.className = isTop ? "tag" : "tag tag-amber";
+      elRecHead.textContent = isTop ? "推荐成交方案" : "手动选定方案";
+      elRecName.textContent = x.name;
+      elRecDesc.textContent = "报价 ¥" + x.price.toLocaleString("en-US") + "/吨 · " + x.place +
+        " · " + x.lead + " 天交货 · 库存 " + x.stock + " 吨 · 匹配度 " + x.total + "%";
+
+      setBar("vPrice", x.p); setBar("vLead", x.l);
+      setBar("vCredit", x.c); setBar("vStock", x.s);
+      elScore.textContent = x.total;
+
+      var total = x.price * QTY;
+      elTotal.textContent = money(total);
+      var diff = BUDGET * QTY - total;                 // 正数 = 低于预算
+      if (diff >= 0){
+        elSave.style.color = "";
+        elSave.textContent = money(diff);
+        elSavePct.innerHTML = '低于期望价上限 <span class="mono">' + (diff / (BUDGET*QTY) * 100).toFixed(2) + '%</span>';
+      } else {
+        elSave.style.color = "var(--red)";
+        elSave.textContent = "超预算 " + money(-diff);
+        elSavePct.innerHTML = '高于期望价上限 <span class="mono">' + (-diff / (BUDGET*QTY) * 100).toFixed(2) + '%</span>';
+      }
+    }
+
+    supRows.forEach(function(tr){
+      tr.addEventListener("click", function(){
+        selectRow(rowData.filter(function(r){ return r.tr === tr; })[0]);
+      });
+    });
+    // 默认选中匹配度最高的货源
+    selectRow(rowData.reduce(function(a, b){ return b.total > a.total ? b : a; }, rowData[0]));
+
+    $("#btnBargain").addEventListener("click", function(){
+      document.getElementById("agent").scrollIntoView({ behavior:"smooth" });
+      replayChat();
+    });
+    $("#btnOrder").addEventListener("click", function(){
+      if (!curRow) return;
+      showToast('<span data-icon="check" data-size="16"></span>已按「' + curRow.name + '」生成订单草稿，待双方在线签约');
+    });
+
+    /* ================= 3. AI Sales Agent 议价逐条播放 ================= */
+    var msgs = $$("#agentChat .chat-msg");
+    var playing = false;
+    function replayChat(){
+      if (playing) return;
+      playing = true;
+      msgs.forEach(function(m){ m.classList.remove("show"); });
+      msgs.forEach(function(m, i){
+        setTimeout(function(){
+          m.classList.add("show");
+          if (i === msgs.length - 1) playing = false;
+        }, 340 * i + 120);
+      });
+    }
+    $("#btnReplay").addEventListener("click", replayChat);
+    $("#btnContract").addEventListener("click", function(){
+      showToast('<span data-icon="file" data-size="16"></span>已生成待签合同 · 双方 CA 在线签章后生效');
+    });
+
+    /* ================= 4. 成交记录：状态 / 方式筛选 + 客户端分页 ================= */
+    var filterStatus = "all", filterMethod = "all";
+    var allRec = $$("#recTable tbody tr");
+    var PAGE_SIZE = 5, curPage = 1;
+    var recPager = $("#recPager"), recCount = $("#recCount");
+
+    var emptyRow = document.createElement("tr");
+    emptyRow.innerHTML = '<td colspan="9" class="tc muted" style="padding:36px">暂无符合条件的撮合记录</td>';
+    emptyRow.style.display = "none";
+    $("#recTable tbody").appendChild(emptyRow);
+
+    function matched(){
+      return allRec.filter(function(tr){
+        var okS = filterStatus === "all" || tr.getAttribute("data-status") === filterStatus;
+        var okM = filterMethod === "all" || tr.getAttribute("data-method") === filterMethod;
+        return okS && okM;
+      });
+    }
+    function renderRec(){
+      var list = matched();
+      var pages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+      if (curPage > pages) curPage = pages;
+      allRec.forEach(function(tr){ tr.style.display = "none"; });
+      list.slice((curPage - 1) * PAGE_SIZE, curPage * PAGE_SIZE).forEach(function(tr){ tr.style.display = ""; });
+      emptyRow.style.display = list.length ? "none" : "";
+      recCount.textContent = "共 " + list.length + " 条";
+
+      var html = '<button type="button" data-page="prev">上一页</button>';
+      for (var i = 1; i <= pages; i++){
+        html += '<button type="button" data-page="' + i + '" class="' + (i === curPage ? "on" : "") + '">' + i + '</button>';
+      }
+      html += '<button type="button" data-page="next">下一页</button>';
+      recPager.innerHTML = html;
+    }
+    recPager.addEventListener("click", function(e){
+      var b = e.target.closest("button"); if (!b) return;
+      e.stopPropagation();                              // 避免与全局分页脚本冲突
+      var pages = Math.max(1, Math.ceil(matched().length / PAGE_SIZE));
+      var p = b.getAttribute("data-page");
+      if (p === "prev") curPage = Math.max(1, curPage - 1);
+      else if (p === "next") curPage = Math.min(pages, curPage + 1);
+      else curPage = parseInt(p, 10);
+      renderRec();
+    });
+    $$(".chips[data-filter]").forEach(function(group){
+      group.addEventListener("click", function(e){
+        var chip = e.target.closest(".chip"); if (!chip) return;
+        if (group.getAttribute("data-filter") === "status") filterStatus = chip.getAttribute("data-val");
+        else filterMethod = chip.getAttribute("data-val");
+        curPage = 1;
+        renderRec();
+      });
+    });
+    renderRec();
+
+    /* ================= 5. 走势图：指标切换 ================= */
+    var SERIES = {
+      vol: { more:"近 7 日撮合成交量（吨）", col:"成交量", bars:[74,81,77,89,85,90,100],
+        rows:[["10/19","3,860 条","3,860 吨","+11.6%",1],["10/18","3,120 条","3,460 吨","+20.1%",1],
+              ["10/17","2,680 条","2,880 吨","-5.6%",0],["10/16","2,910 条","3,050 吨","+31.5%",1],
+              ["10/15","2,240 条","2,320 吨","-12.1%",0]] },
+      amount: { more:"近 7 日撮合成交金额（万元）", col:"成交金额", bars:[70,79,74,86,82,88,100],
+        rows:[["10/19","3,860 条","4,055 万","+8.4%",1],["10/18","3,120 条","3,741 万","+11.3%",1],
+              ["10/17","2,680 条","3,362 万","-4.1%",0],["10/16","2,910 条","3,506 万","+24.7%",1],
+              ["10/15","2,240 条","2,812 万","-9.8%",0]] },
+      rate: { more:"近 7 日撮合成功率（%）", col:"撮合成功率", bars:[58,72,64,80,74,85,95],
+        rows:[["10/19","3,860 条","88%","+2.3pt",1],["10/18","3,120 条","86%","+1.2pt",1],
+              ["10/17","2,680 条","85%","-0.7pt",0],["10/16","2,910 条","86%","+1.8pt",1],
+              ["10/15","2,240 条","84%","-0.5pt",0]] }
+    };
+    var bars = $$("#trendBars > div");
+    function renderTrend(key){
+      var s = SERIES[key];
+      $("#trendMore").textContent = s.more;
+      $("#trendCol").textContent = s.col;
+      bars.forEach(function(b, i){ b.style.height = s.bars[i] + "%"; });
+      $("#trendTable tbody").innerHTML = s.rows.map(function(r){
+        return '<tr><td class="mono">' + r[0] + '</td><td class="mono">' + r[1] + '</td><td class="tr mono">' + r[2] +
+          '</td><td class="tr mono" style="color:' + (r[4] ? "var(--green-600)" : "var(--red)") + '">' + r[3] + '</td></tr>';
+      }).join("");
+    }
+    $("#trendChips").addEventListener("click", function(e){
+      var chip = e.target.closest(".chip"); if (!chip) return;
+      renderTrend(chip.getAttribute("data-series"));
+    });
+    renderTrend("vol");
+
+  });
+})();
+</script>
 <script src="../assets/js/app.js"></script>
 </body>
 </html>
