@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>个人实名认证 · 农产云</title>
+<link rel="stylesheet" href="../assets/css/theme.css" />
+<style>
+  /* —— 步骤条 —— */
+  .steps-bar{display:grid;grid-template-columns:repeat(3,1fr);gap:0;margin-bottom:6px}
+  .sb{display:flex;align-items:center;gap:10px;padding:0 0 14px;border-bottom:2px solid var(--line);color:var(--ink-400)}
+  .sb .n{width:28px;height:28px;border-radius:50%;flex:none;display:grid;place-items:center;font-weight:800;font-size:13px;background:var(--bg-alt);color:var(--ink-500);transition:.2s}
+  .sb .t{font-size:13.5px;font-weight:600}
+  .sb.done{border-bottom-color:var(--green-300);color:var(--green-700)}
+  .sb.done .n{background:linear-gradient(135deg,var(--green-600),var(--green-500));color:#fff}
+  .sb.on{border-bottom-color:var(--green-500);color:var(--ink-800)}
+  .sb.on .n{background:linear-gradient(135deg,var(--tech-600),var(--tech-500));color:#fff;box-shadow:0 0 0 4px rgba(14,165,233,.15)}
+  .sb[data-lock] .n{opacity:.65}
+
+  .step-panel{display:none}
+  .step-panel.on{display:block}
+
+  /* —— 上传证件 —— */
+  .up-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .up-tile{position:relative;border:1.5px dashed var(--line-strong);border-radius:12px;background:var(--bg-alt);min-height:150px;display:grid;place-items:center;text-align:center;padding:18px;cursor:pointer;transition:.18s;overflow:hidden}
+  .up-tile:hover{border-color:var(--green-400);background:var(--green-050)}
+  .up-tile .idle{color:var(--ink-500)}
+  .up-tile .idle .t{font-weight:700;font-size:13.5px;color:var(--ink-700);margin-top:10px}
+  .up-tile .idle .d{font-size:11.5px;color:var(--ink-400);margin-top:4px}
+  .up-tile .pic{width:100%;height:92px;border-radius:8px;background:
+      linear-gradient(135deg,rgba(21,154,94,.16),rgba(14,165,233,.16));
+      border:1px solid var(--line-strong);display:grid;place-items:center;color:var(--green-700)}
+  .up-bar{position:absolute;left:0;right:0;bottom:0;height:4px;background:var(--line);display:none}
+  .up-bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--green-500),var(--tech-500));transition:width .18s linear}
+  .up-tile.busy{cursor:progress}
+  .up-tile.busy .up-bar{display:block}
+  .up-tile.ok{border-style:solid;border-color:var(--green-300);background:#fff}
+  .up-ok{display:none;width:100%}
+  .up-tile.ok .up-ok{display:block}
+  .up-tile.ok .idle{display:none}
+  .up-ok .fn{font-size:12.5px;font-weight:700;color:var(--ink-800);margin-top:10px;word-break:break-all}
+  .up-ok .sub{font-size:11.5px;color:var(--green-700);margin-top:4px}
+  .up-ok .ops{display:flex;gap:12px;justify-content:center;margin-top:10px;font-size:12px;font-weight:600}
+  .up-ok .ops a{color:var(--tech-600)}
+  .up-ok .ops a:hover{text-decoration:underline}
+
+  /* —— 人脸核验 —— */
+  .face{display:grid;grid-template-columns:190px 1fr;gap:22px;align-items:center;border:1px solid var(--line);border-radius:12px;padding:20px;background:#fff}
+  .face-frame{width:170px;height:150px;border-radius:14px;background:linear-gradient(180deg,#0A3A25,#06281A);display:grid;place-items:center;color:rgba(255,255,255,.5);position:relative;overflow:hidden}
+  .face-frame .scan{position:absolute;left:0;right:0;height:2px;background:var(--green-300);box-shadow:0 0 12px var(--green-400);top:0;opacity:0}
+  .face.running .face-frame .scan{opacity:1;animation:scanmove 1.6s linear infinite}
+  @keyframes scanmove{0%{top:4%}50%{top:92%}100%{top:4%}}
+  .face-steps{display:flex;flex-direction:column;gap:10px;margin-top:14px}
+  .face-steps .fi{display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--ink-400)}
+  .face-steps .fi .ic{width:20px;height:20px;border-radius:50%;background:var(--bg-alt);display:grid;place-items:center;flex:none}
+  .face-steps .fi.run{color:var(--tech-700)}
+  .face-steps .fi.run .ic{background:var(--tech-100);color:var(--tech-700)}
+  .face-steps .fi.pass{color:var(--green-700)}
+  .face-steps .fi.pass .ic{background:var(--green-100);color:var(--green-700)}
+
+  /* —— 结果页 —— */
+  .result{text-align:center;padding:18px 0 6px}
+  .result .cert-badge{width:84px;height:84px;border-radius:50%;background:linear-gradient(135deg,var(--green-500),var(--green-600));color:#fff;display:grid;place-items:center;margin:0 auto 20px;box-shadow:0 10px 26px rgba(21,154,94,.32)}
+  .result h3{font-size:22px;font-weight:800;color:var(--ink-900)}
+  .result .sub{color:var(--ink-500);font-size:13px;margin-top:8px}
+
+  .side-card + .side-card{margin-top:16px}
+  .side-note{background:var(--green-050);border:1px dashed var(--green-300);border-radius:10px;padding:12px 14px;font-size:12.5px;color:var(--ink-600);line-height:1.7}
+
+  /* —— Toast —— */
+  .toast{position:fixed;left:50%;bottom:34px;transform:translate(-50%,20px);background:var(--green-800);color:#fff;padding:12px 20px;border-radius:var(--r-pill);font-size:13.5px;font-weight:600;box-shadow:var(--shadow-md);opacity:0;pointer-events:none;transition:.28s;z-index:99;display:flex;align-items:center;gap:8px}
+  .toast.show{opacity:1;transform:translate(-50%,0)}
+
+  @media(max-width:980px){
+    .up-grid{grid-template-columns:1fr}
+    .face{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+
+<!-- 顶部通栏 -->
+<div class="topbar">
+  <div class="container">
+    <span>个人实名认证 · 身份证 + 人脸活体核验，全程线上办理</span>
+    <span>
+      <a href="certify.html">认证中心</a><span class="sep">·</span>
+      <a href="certify-enterprise.html">企业认证</a><span class="sep">·</span>
+      <a href="../trade/member.html">会员中心</a><span class="sep">·</span>
+      <a href="../index.html">产品原型总览</a><a href="login.html"><span data-icon="user" data-size="12" style="vertical-align:-2px;margin-right:3px"></span>登录</a><span class="sep">·</span><a href="register.html"><span data-icon="plus" data-size="12" style="vertical-align:-2px;margin-right:3px"></span>免费注册</a></span>
+  </div>
+</div>
+
+<!-- 站点头部 -->
+<header class="site-header">
+  <div class="container">
+    <a class="brand" href="index.html">
+      <span class="logo" data-icon="seed" data-size="20"></span>
+      <span>农产云<small>AGRI · CLOUD</small></span>
+    </a>
+    <nav class="main-nav">
+      <a href="index.html">首页</a>
+      <a href="../trade/index.html">交易大厅</a>
+      <a href="../trade/publish.html">发布需求</a>
+      <a href="../trade/member.html">会员中心</a>
+      <a href="certify.html">认证中心</a>
+      <a href="certify-personal.html" class="active">个人认证</a>
+      <a href="certify-enterprise.html">企业认证</a>
+    </nav>
+    <div class="header-search">
+      <input placeholder="搜索商品 / 供应商 / 需求" />
+      <button>搜索</button>
+    </div>
+  </div>
+</header>
+
+<div class="container" style="padding-top:20px;padding-bottom:8px">
+
+  <!-- 面包屑 -->
+  <div class="crumb mb-16">
+    <a href="index.html">首页</a><span class="sep">/</span>
+    <a href="certify.html">认证中心</a><span class="sep">/</span><span>个人实名认证</span>
+  </div>
+
+  <div class="section-head" style="margin-bottom:14px">
+    <div>
+      <div class="bar-title" style="font-size:26px">个人实名认证</div>
+      <div class="muted t-sm mt-8">用于确认自然人身份，适用于家庭农场、合作社、个体采购户与经纪人；完成后可下单采购与发布需求</div>
+    </div>
+    <div class="row center gap-8">
+      <span class="tag tag-tech"><span data-icon="shield" data-size="13"></span>信息加密存储</span>
+      <span class="tag"><span data-icon="activity" data-size="13"></span>实时核验通过</span>
+    </div>
+  </div>
+
+</div>
+
+<section class="section" style="padding-top:0">
+  <div class="container">
+    <div class="grid" style="grid-template-columns:1.7fr 1fr;gap:24px;align-items:start">
+
+      <!-- 左：向导 -->
+      <div>
+        <div class="card" id="wizardCard">
+          <div class="card-h">
+            <h3><span data-icon="user" data-size="18"></span>实名认证办理</h3>
+            <span class="muted t-sm">共 3 步 · 约需 2 分钟</span>
+          </div>
+          <div class="card-b">
+
+            <!-- 步骤条 -->
+            <div class="steps-bar">
+              <div class="sb on" data-sb="1"><span class="n">1</span><span class="t">实名信息</span></div>
+              <div class="sb" data-sb="2" data-lock><span class="n">2</span><span class="t">证件与人脸核验</span></div>
+              <div class="sb" data-sb="3" data-lock><span class="n">3</span><span class="t">确认提交</span></div>
+            </div>
+
+            <!-- 第 1 步 -->
+            <div class="step-panel on" data-panel-step="1">
+              <div class="mt-20">
+                <div class="form-grid">
+                  <div class="form-item">
+                    <label class="req">真实姓名</label>
+                    <input class="input" type="text" id="pfName" placeholder="与身份证一致" />
+                  </div>
+                  <div class="form-item">
+                    <label class="req">身份证号</label>
+                    <input class="input" type="text" id="pfId" maxlength="18" placeholder="18 位身份证号" />
+                  </div>
+                </div>
+                <div class="form-grid">
+                  <div class="form-item">
+                    <label class="req">证件有效期起</label>
+                    <input class="input" type="date" id="pfStart" value="2016-08-20" />
+                  </div>
+                  <div class="form-item">
+                    <label class="req">证件有效期止</label>
+                    <input class="input" type="date" id="pfEnd" value="2036-08-20" />
+                  </div>
+                </div>
+                <div class="form-item">
+                  <label class="req">手机号（银行预留）</label>
+                  <div style="display:grid;grid-template-columns:1fr 132px;gap:10px">
+                    <input class="input" type="tel" id="pfPhone" maxlength="11" placeholder="11 位手机号" />
+                    <button type="button" class="btn btn-outline" id="btnCode"><span data-icon="zap"></span>获取验证码</button>
+                  </div>
+                  <div class="form-hint">该手机号将用于接收验证码与交易通知，需为本人实名认证号码</div>
+                </div>
+                <div class="form-item">
+                  <label class="req">短信验证码</label>
+                  <input class="input" type="text" id="pfCode" maxlength="6" placeholder="6 位验证码" style="max-width:240px" />
+                </div>
+                <div class="form-item">
+                  <label>常住地址</label>
+                  <input class="input" type="text" id="pfAddr" placeholder="省 / 市 / 区 / 详细地址" />
+                </div>
+                <div class="form-item">
+                  <label>经营类型</label>
+                  <select class="select" id="pfType" style="max-width:280px">
+                    <option>家庭农场</option><option>农民专业合作社</option>
+                    <option>个体采购户</option><option>农产品经纪人</option><option>其他</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- 第 2 步 -->
+            <div class="step-panel" data-panel-step="2">
+              <div class="mt-20">
+                <div class="row between center mb-12">
+                  <div class="strong">身份证照片上传</div>
+                  <span class="muted t-xs">支持 JPG / PNG，单张 ≤ 5MB</span>
+                </div>
+                <div class="up-grid">
+                  <div class="up-tile" id="upFront">
+                    <div class="idle">
+                      <span data-icon="plus" data-size="22"></span>
+                      <div class="t">上传身份证人像面</div>
+                      <div class="d">四角完整 · 无反光 · 不遮挡</div>
+                    </div>
+                    <div class="up-ok">
+                      <div class="pic"><span data-icon="user" data-size="30"></span></div>
+                      <div class="fn">身份证-人像面.jpg</div>
+                      <div class="sub"><span data-icon="check" data-size="12" style="vertical-align:-1px"></span> 已上传 · OCR 识别一致</div>
+                      <div class="ops"><a href="javascript:void(0)" data-op="view">查看</a><a href="javascript:void(0)" data-op="reselect">重新上传</a></div>
+                    </div>
+                    <div class="up-bar"><i></i></div>
+                  </div>
+                  <div class="up-tile" id="upBack">
+                    <div class="idle">
+                      <span data-icon="plus" data-size="22"></span>
+                      <div class="t">上传身份证国徽面</div>
+                      <div class="d">用于核验有效期与签发机关</div>
+                    </div>
+                    <div class="up-ok">
+                      <div class="pic" style="background:linear-gradient(135deg,rgba(14,165,233,.16),rgba(124,58,237,.14))"><span data-icon="shield" data-size="30"></span></div>
+                      <div class="fn">身份证-国徽面.jpg</div>
+                      <div class="sub"><span data-icon="check" data-size="12" style="vertical-align:-1px"></span> 已上传 · 有效期校验通过</div>
+                      <div class="ops"><a href="javascript:void(0)" data-op="view">查看</a><a href="javascript:void(0)" data-op="reselect">重新上传</a></div>
+                    </div>
+                    <div class="up-bar"><i></i></div>
+                  </div>
+                </div>
+
+                <div class="strong mt-24 mb-12">人脸活体核验</div>
+                <div class="face" id="faceBox">
+                  <div class="face-frame">
+                    <span data-icon="user" data-size="46"></span>
+                    <div class="scan"></div>
+                  </div>
+                  <div>
+                    <div class="muted t-sm">请在光线充足的环境下正对屏幕，按提示完成活体动作，系统将与证件照片自动比对。</div>
+                    <div class="face-steps" id="faceSteps">
+                      <div class="fi" data-fi="1"><span class="ic"><span data-icon="sun" data-size="12"></span></span>环境光线检测</div>
+                      <div class="fi" data-fi="2"><span class="ic"><span data-icon="target" data-size="12"></span></span>活体动作检测（点头 / 眨眼）</div>
+                      <div class="fi" data-fi="3"><span class="ic"><span data-icon="check" data-size="12"></span></span>人脸特征与证件比对</div>
+                    </div>
+                    <div class="mt-16">
+                      <button type="button" class="btn btn-primary" id="btnFace"><span data-icon="spark"></span>开始人脸核验</button>
+                      <span class="tag hide" id="facePass" style="margin-left:12px"><span data-icon="check" data-size="12"></span>核验通过</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 第 3 步 -->
+            <div class="step-panel" data-panel-step="3">
+              <div class="mt-20">
+                <div class="row between center mb-12">
+                  <div class="strong">请确认认证信息</div>
+                  <a class="muted t-sm" href="javascript:void(0)" id="backEdit">返回修改 →</a>
+                </div>
+                <dl style="display:grid;grid-template-columns:110px 1fr;gap:12px 16px;font-size:13.5px;background:var(--bg-alt);border:1px solid var(--line);border-radius:12px;padding:18px 20px">
+                  <dt class="muted">真实姓名</dt><dd class="strong" id="sumName">—</dd>
+                  <dt class="muted">身份证号</dt><dd class="mono" id="sumId">—</dd>
+                  <dt class="muted">证件有效期</dt><dd class="mono" id="sumValid">—</dd>
+                  <dt class="muted">手机号</dt><dd class="mono" id="sumPhone">—</dd>
+                  <dt class="muted">经营类型</dt><dd id="sumType">—</dd>
+                  <dt class="muted">常住地址</dt><dd id="sumAddr">—</dd>
+                  <dt class="muted">证件材料</dt><dd>身份证人像面、国徽面 · <span id="sumFace" class="c-green strong">人脸核验通过</span></dd>
+                </dl>
+                <label style="display:flex;align-items:flex-start;gap:8px;font-size:12.5px;color:var(--ink-500);margin-top:18px">
+                  <input type="checkbox" id="pfAgree" style="margin-top:3px" />
+                  <span>本人承诺所填信息与上传证件真实有效，并授权平台用于实名核验与电子签约，已阅读
+                    <a href="javascript:void(0)" onclick="alert('原型演示：实名认证服务协议')" style="color:var(--tech-700);font-weight:600">《实名认证服务协议》</a>。</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- 结果面板 -->
+            <div class="step-panel" data-panel-step="ok">
+              <div class="result mt-20">
+                <div class="cert-badge"><span data-icon="check" data-size="40"></span></div>
+                <h3>实名认证已通过</h3>
+                <div class="sub">您已完成个人实名认证，平台权益已即时解锁</div>
+
+                <dl style="display:grid;grid-template-columns:110px 1fr;gap:12px 16px;font-size:13.5px;background:var(--green-050);border:1px dashed var(--green-300);border-radius:12px;padding:18px 20px;text-align:left;margin-top:22px">
+                  <dt class="muted">认证编号</dt><dd class="mono">ID2026101900417</dd>
+                  <dt class="muted">认证主体</dt><dd class="strong" id="okName">—</dd>
+                  <dt class="muted">核验方式</dt><dd>身份证 OCR + 人脸活体核验 + 手机号三要素</dd>
+                  <dt class="muted">认证时间</dt><dd class="mono">2026-10-19 15:42</dd>
+                  <dt class="muted">证件有效期</dt><dd class="mono" id="okValid">—</dd>
+                </dl>
+
+                <div class="grid grid-3 mt-20" style="gap:12px">
+                  <div class="stat"><div class="k"><span data-icon="cart" data-size="15"></span>已解锁</div><div class="strong mt-8">下单采购</div><div class="d">可提交采购需求并参与议价</div></div>
+                  <div class="stat"><div class="k"><span data-icon="clipboard" data-size="15"></span>已解锁</div><div class="strong mt-8">发布需求</div><div class="d">可发布供应与采购信息</div></div>
+                  <div class="stat tech"><div class="k"><span data-icon="shield" data-size="15"></span>已解锁</div><div class="strong mt-8">电子签约</div><div class="d">具备法律效力的在线签约</div></div>
+                </div>
+
+                <div class="row gap-12 center mt-24" style="justify-content:center">
+                  <a class="btn btn-outline" href="certify.html"><span data-icon="award"></span>返回认证中心</a>
+                  <a class="btn btn-outline" href="certify-enterprise.html"><span data-icon="factory"></span>继续企业认证</a>
+                  <a class="btn btn-primary" href="../trade/index.html"><span data-icon="cart"></span>去交易大厅</a>
+                </div>
+              </div>
+            </div>
+
+            <!-- 底部操作 -->
+            <div class="row between center mt-24" id="wizFoot">
+              <button type="button" class="btn btn-ghost" id="btnPrev"><span data-icon="arrow" style="transform:rotate(180deg)"></span>上一步</button>
+              <div class="row center gap-12">
+                <span class="muted t-xs">第 <span id="stepNow">1</span> / 3 步</span>
+                <button type="button" class="btn btn-primary" id="btnNext">下一步<span data-icon="arrow"></span></button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- 右：说明 -->
+      <aside>
+        <div class="card side-card">
+          <div class="card-h"><h3><span data-icon="shield" data-size="18"></span>为什么需要实名认证</h3></div>
+          <div class="card-b">
+            <div class="col gap-14" style="display:flex;flex-direction:column;gap:14px">
+              <div class="row gap-12"><span class="stat-icon" style="width:34px;height:34px;flex:none"><span data-icon="check" data-size="16"></span></span><div><div class="strong t-sm">交易合规</div><div class="muted t-xs">根据平台规则，下单、签约、结算均需完成实名认证。</div></div></div>
+              <div class="row gap-12"><span class="stat-icon tech" style="width:34px;height:34px;flex:none"><span data-icon="money" data-size="16"></span></span><div><div class="strong t-sm">资金与账户安全</div><div class="muted t-xs">提现、开票、账户变更等操作需核验身份后办理。</div></div></div>
+              <div class="row gap-12"><span class="stat-icon amber" style="width:34px;height:34px;flex:none"><span data-icon="award" data-size="16"></span></span><div><div class="strong t-sm">信用积累</div><div class="muted t-xs">实名信息关联平台信用分，影响询单与授信额度。</div></div></div>
+            </div>
+            <div class="side-note mt-16">
+              <span data-icon="shield" data-size="13" style="vertical-align:-2px"></span>
+              证件影像经 AES-256 加密存储，仅用于认证核验，平台不会对外展示完整证件号码。
+            </div>
+          </div>
+        </div>
+
+        <div class="card side-card">
+          <div class="card-h"><h3><span data-icon="file" data-size="18"></span>证件拍摄要求</h3></div>
+          <div class="card-b">
+            <ul style="display:flex;flex-direction:column;gap:10px;font-size:12.5px;color:var(--ink-600)">
+              <li>· 证件四角完整，不切边、不遮挡</li>
+              <li>· 光线均匀，避免反光与阴影</li>
+              <li>· 文字清晰可辨，无涂改痕迹</li>
+              <li>· 证件须在有效期内</li>
+              <li>· 支持 JPG / PNG，单张 ≤ 5MB</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="card side-card">
+          <div class="card-h"><h3><span data-icon="phone" data-size="18"></span>需要协助？</h3></div>
+          <div class="card-b">
+            <div class="muted t-sm">认证专员在线时间</div>
+            <div class="strong mt-8">工作日 9:00 - 18:00</div>
+            <div class="muted t-sm mt-12">客服热线</div>
+            <div class="mono strong mt-8" style="font-size:18px">400-800-2668</div>
+            <button class="btn btn-outline btn-block mt-16" onclick="alert('原型演示：接入在线客服')"><span data-icon="spark"></span>在线咨询认证专员</button>
+          </div>
+        </div>
+      </aside>
+
+    </div>
+  </div>
+</section>
+
+<!-- 页脚 -->
+<footer class="site-footer">
+  <div class="container">
+    <div class="bottom" style="border-top:none;margin-top:0;justify-content:center">
+      <span>© 2026 农业产业互联网平台 · 产品原型演示（本页为原型演示，非真实业务系统）</span>
+    </div>
+  </div>
+</footer>
+
+<div class="toast" id="toast"></div>
+
+<script src="../assets/js/app.js"></script>
+<script>
+(function () {
+  "use strict";
+  var $ = function (s) { return document.querySelector(s); };
+  var $$ = function (s) { return document.querySelectorAll(s); };
+
+  function showToast(html) {
+    var t = $("#toast");
+    t.innerHTML = html;
+    if (window.PROTO) PROTO.hydrateIcons(t);
+    t.classList.add("show");
+    clearTimeout(window.__toastT);
+    window.__toastT = setTimeout(function () { t.classList.remove("show"); }, 2200);
+  }
+
+  /* ===== 步骤控制 ===== */
+  var step = 1, facePassed = false;
+
+  function renderStep() {
+    $$(".step-panel").forEach(function (p) {
+      p.classList.toggle("on", p.getAttribute("data-panel-step") === (step === 4 ? "ok" : String(step)));
+    });
+    $$(".sb").forEach(function (b) {
+      var n = +b.getAttribute("data-sb");
+      b.classList.remove("on", "done");
+      if (step === 4) { b.classList.add("done"); return; }
+      if (n < step) b.classList.add("done");
+      else if (n === step) b.classList.add("on");
+    });
+    $("#stepNow").textContent = Math.min(step, 3);
+    $("#btnPrev").style.visibility = (step === 1 || step === 4) ? "hidden" : "visible";
+    $("#btnNext").style.display = (step === 4) ? "none" : "inline-flex";
+    $("#btnNext").innerHTML = (step === 3)
+      ? '<span data-icon="check"></span>提交认证'
+      : '下一步<span data-icon="arrow"></span>';
+    $("#wizFoot").style.display = (step === 4) ? "none" : "flex";
+    if (window.PROTO) PROTO.hydrateIcons($("#wizFoot"));
+    window.scrollTo({ top: $("#wizardCard").offsetTop - 80, behavior: "smooth" });
+  }
+
+  /* 步骤条可点击回退（已完成的步骤） */
+  $$(".sb").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var n = +b.getAttribute("data-sb");
+      if (n < step && step <= 3) { step = n; renderStep(); }
+      else if (n > step) showToast("请先完成当前步骤");
+    });
+  });
+
+  /* ===== 验证码倒计时 ===== */
+  var codeBtn = $("#btnCode"), codeTimer = null;
+  codeBtn.addEventListener("click", function () {
+    var phone = $("#pfPhone").value.trim();
+    if (!/^1\d{10}$/.test(phone)) { showToast("请先填写正确的手机号"); return; }
+    showToast("验证码已发送到 " + phone + "（原型演示：123456）");
+    var t = 60;
+    codeBtn.disabled = true;
+    codeBtn.innerHTML = "重新获取（" + t + "s）";
+    codeTimer = setInterval(function () {
+      t--;
+      if (t <= 0) {
+        clearInterval(codeTimer);
+        codeBtn.disabled = false;
+        codeBtn.innerHTML = '<span data-icon="zap"></span>获取验证码';
+        if (window.PROTO) PROTO.hydrateIcons(codeBtn);
+      } else codeBtn.innerHTML = "重新获取（" + t + "s）";
+    }, 1000);
+  });
+
+  /* ===== 证件上传（模拟进度） ===== */
+  function bindUpload(tile) {
+    var bar = tile.querySelector(".up-bar i");
+    tile.addEventListener("click", function (e) {
+      if (e.target.closest("[data-op]")) {
+        var op = e.target.closest("[data-op]").getAttribute("data-op");
+        if (op === "view") { showToast("原型演示：预览证件影像"); return; }
+        tile.classList.remove("ok", "busy");
+        return;
+      }
+      if (tile.classList.contains("ok") || tile.classList.contains("busy")) return;
+      tile.classList.add("busy");
+      var w = 0;
+      var timer = setInterval(function () {
+        w += Math.random() * 22 + 8;
+        if (w >= 100) {
+          w = 100;
+          bar.style.width = "100%";
+          clearInterval(timer);
+          setTimeout(function () {
+            tile.classList.remove("busy");
+            tile.classList.add("ok");
+            bar.style.width = "0";
+            showToast("证件上传完成 · 系统已自动 OCR 识别");
+          }, 220);
+        } else {
+          bar.style.width = w + "%";
+        }
+      }, 120);
+    });
+  }
+  bindUpload($("#upFront"));
+  bindUpload($("#upBack"));
+
+  /* ===== 人脸核验（模拟） ===== */
+  var faceBtn = $("#btnFace");
+  faceBtn.addEventListener("click", function () {
+    if (facePassed) return;
+    var box = $("#faceBox");
+    box.classList.add("running");
+    faceBtn.disabled = true;
+    faceBtn.innerHTML = "核验中…";
+    var items = $$("#faceSteps .fi");
+    var i = 0;
+    function nextItem() {
+      if (i > 0) items[i - 1].classList.remove("run");
+      if (i > 0) items[i - 1].classList.add("pass");
+      if (i >= items.length) {
+        facePassed = true;
+        box.classList.remove("running");
+        faceBtn.style.display = "none";
+        $("#facePass").classList.remove("hide");
+        if (window.PROTO) PROTO.hydrateIcons($("#facePass"));
+        $("#sumFace").textContent = "人脸核验通过";
+        showToast("<span data-icon='check' data-size='15'></span>人脸核验通过");
+        return;
+      }
+      items[i].classList.add("run");
+      i++;
+      setTimeout(nextItem, 900);
+    }
+    nextItem();
+  });
+
+  /* ===== 校验与下一步 ===== */
+  function maskId(v) {
+    if (v.length < 8) return v;
+    return v.slice(0, 6) + "********" + v.slice(-4);
+  }
+
+  function fillSummary() {
+    $("#sumName").textContent = $("#pfName").value.trim() || "—";
+    $("#sumId").textContent = maskId($("#pfId").value.trim()) || "—";
+    $("#sumValid").textContent = ($("#pfStart").value || "—") + " 至 " + ($("#pfEnd").value || "—");
+    $("#sumPhone").textContent = $("#pfPhone").value.trim() || "—";
+    $("#sumType").textContent = $("#pfType").value;
+    $("#sumAddr").textContent = $("#pfAddr").value.trim() || "—";
+    $("#okName").textContent = $("#pfName").value.trim() || "—";
+    $("#okValid").textContent = ($("#pfStart").value || "—") + " 至 " + ($("#pfEnd").value || "—");
+  }
+
+  function validate1() {
+    var n = $("#pfName").value.trim();
+    var id = $("#pfId").value.trim();
+    var phone = $("#pfPhone").value.trim();
+    var code = $("#pfCode").value.trim();
+    if (!n) { showToast("请填写真实姓名"); return false; }
+    if (!/^\d{17}[\dXx]$/.test(id)) { showToast("请填写正确的 18 位身份证号"); return false; }
+    if (!$("#pfStart").value || !$("#pfEnd").value) { showToast("请选择证件有效期"); return false; }
+    if (!/^1\d{10}$/.test(phone)) { showToast("请填写正确的手机号"); return false; }
+    if (!/^\d{4,6}$/.test(code)) { showToast("请输入短信验证码"); return false; }
+    return true;
+  }
+
+  function validate2() {
+    if (!$("#upFront").classList.contains("ok")) { showToast("请上传身份证人像面"); return false; }
+    if (!$("#upBack").classList.contains("ok")) { showToast("请上传身份证国徽面"); return false; }
+    if (!facePassed) { showToast("请完成人脸活体核验"); return false; }
+    return true;
+  }
+
+  $("#btnNext").addEventListener("click", function () {
+    if (step === 1) { if (!validate1()) return; step = 2; renderStep(); return; }
+    if (step === 2) { if (!validate2()) return; step = 3; fillSummary(); renderStep(); return; }
+    if (step === 3) {
+      if (!$("#pfAgree").checked) { showToast("请先阅读并同意实名认证服务协议"); return; }
+      step = 4; renderStep();
+      showToast("<span data-icon='check' data-size='15'></span>实名认证已通过");
+    }
+  });
+  $("#btnPrev").addEventListener("click", function () { if (step > 1) { step--; renderStep(); } });
+  $("#backEdit").addEventListener("click", function () { step = 1; renderStep(); });
+
+  renderStep();
+})();
+</script>
+</body>
+</html>

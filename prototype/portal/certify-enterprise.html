@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>企业认证 · 农产云</title>
+<link rel="stylesheet" href="../assets/css/theme.css" />
+<style>
+  /* —— 步骤条 —— */
+  .steps-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:0;margin-bottom:6px}
+  .sb{display:flex;align-items:center;gap:9px;padding:0 0 14px;border-bottom:2px solid var(--line);color:var(--ink-400)}
+  .sb .n{width:28px;height:28px;border-radius:50%;flex:none;display:grid;place-items:center;font-weight:800;font-size:13px;background:var(--bg-alt);color:var(--ink-500);transition:.2s}
+  .sb .t{font-size:13px;font-weight:600}
+  .sb.done{border-bottom-color:var(--green-300);color:var(--green-700)}
+  .sb.done .n{background:linear-gradient(135deg,var(--green-600),var(--green-500));color:#fff}
+  .sb.on{border-bottom-color:var(--green-500);color:var(--ink-800)}
+  .sb.on .n{background:linear-gradient(135deg,var(--tech-600),var(--tech-500));color:#fff;box-shadow:0 0 0 4px rgba(14,165,233,.15)}
+
+  .step-panel{display:none}
+  .step-panel.on{display:block}
+
+  /* —— 上传 —— */
+  .up-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+  .up-grid.three{grid-template-columns:repeat(3,1fr)}
+  .up-tile{position:relative;border:1.5px dashed var(--line-strong);border-radius:12px;background:var(--bg-alt);min-height:140px;display:grid;place-items:center;text-align:center;padding:16px;cursor:pointer;transition:.18s;overflow:hidden}
+  .up-tile:hover{border-color:var(--green-400);background:var(--green-050)}
+  .up-tile .idle .t{font-weight:700;font-size:13px;color:var(--ink-700);margin-top:10px}
+  .up-tile .idle .d{font-size:11.5px;color:var(--ink-400);margin-top:4px}
+  .up-tile .opt{position:absolute;right:10px;top:10px;font-size:11px;color:var(--ink-400)}
+  .up-tile .pic{width:100%;height:82px;border-radius:8px;background:linear-gradient(135deg,rgba(21,154,94,.16),rgba(14,165,233,.16));border:1px solid var(--line-strong);display:grid;place-items:center;color:var(--green-700)}
+  .up-bar{position:absolute;left:0;right:0;bottom:0;height:4px;background:var(--line);display:none}
+  .up-bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--green-500),var(--tech-500));transition:width .18s linear}
+  .up-tile.busy{cursor:progress}
+  .up-tile.busy .up-bar{display:block}
+  .up-tile.ok{border-style:solid;border-color:var(--green-300);background:#fff}
+  .up-ok{display:none;width:100%}
+  .up-tile.ok .up-ok{display:block}
+  .up-tile.ok .idle{display:none}
+  .up-ok .fn{font-size:12.5px;font-weight:700;color:var(--ink-800);margin-top:9px;word-break:break-all}
+  .up-ok .sub{font-size:11.5px;color:var(--green-700);margin-top:3px}
+  .up-ok .ops{display:flex;gap:12px;justify-content:center;margin-top:9px;font-size:12px;font-weight:600}
+  .up-ok .ops a{color:var(--tech-600)}
+  .up-ok .ops a:hover{text-decoration:underline}
+
+  /* —— 核验块 —— */
+  .verify{border:1px solid var(--line);border-radius:12px;padding:18px;background:#fff}
+  .verify + .verify{margin-top:16px}
+  .verify-h{display:flex;align-items:center;gap:9px;font-weight:700;font-size:14px;margin-bottom:14px}
+  .verify-h .ic{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;background:var(--green-100);color:var(--green-700);flex:none}
+
+  .face{display:grid;grid-template-columns:170px 1fr;gap:20px;align-items:center}
+  .face-frame{width:160px;height:132px;border-radius:14px;background:linear-gradient(180deg,#0A3A25,#06281A);display:grid;place-items:center;color:rgba(255,255,255,.5);position:relative;overflow:hidden}
+  .face-frame .scan{position:absolute;left:0;right:0;height:2px;background:var(--green-300);box-shadow:0 0 12px var(--green-400);top:0;opacity:0}
+  .face.running .face-frame .scan{opacity:1;animation:scanmove 1.6s linear infinite}
+  @keyframes scanmove{0%{top:4%}50%{top:92%}100%{top:4%}}
+  .face-steps{display:flex;flex-direction:column;gap:9px;margin-top:12px}
+  .face-steps .fi{display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--ink-400)}
+  .face-steps .fi .ic{width:20px;height:20px;border-radius:50%;background:var(--bg-alt);display:grid;place-items:center;flex:none}
+  .face-steps .fi.run{color:var(--tech-700)}
+  .face-steps .fi.run .ic{background:var(--tech-100);color:var(--tech-700)}
+  .face-steps .fi.pass{color:var(--green-700)}
+  .face-steps .fi.pass .ic{background:var(--green-100);color:var(--green-700)}
+
+  /* —— 结果时间轴 —— */
+  .tl{position:relative;padding-left:26px}
+  .tl::before{content:"";position:absolute;left:7px;top:6px;bottom:8px;width:2px;background:var(--line)}
+  .tl-i{position:relative;padding-bottom:20px}
+  .tl-i:last-child{padding-bottom:0}
+  .tl-i .d{position:absolute;left:-26px;top:3px;width:16px;height:16px;border-radius:50%;background:#fff;border:2px solid var(--line-strong)}
+  .tl-i.done .d{background:var(--green-500);border-color:var(--green-500)}
+  .tl-i.cur .d{background:#fff;border-color:var(--tech-500);box-shadow:0 0 0 4px rgba(14,165,233,.16)}
+  .tl-i .t{font-weight:700;font-size:13.5px}
+  .tl-i .m{font-size:12px;color:var(--ink-500);margin-top:3px}
+
+  .side-card + .side-card{margin-top:16px}
+  .side-note{background:var(--green-050);border:1px dashed var(--green-300);border-radius:10px;padding:12px 14px;font-size:12.5px;color:var(--ink-600);line-height:1.7}
+
+  .toast{position:fixed;left:50%;bottom:34px;transform:translate(-50%,20px);background:var(--green-800);color:#fff;padding:12px 20px;border-radius:var(--r-pill);font-size:13.5px;font-weight:600;box-shadow:var(--shadow-md);opacity:0;pointer-events:none;transition:.28s;z-index:99;display:flex;align-items:center;gap:8px}
+  .toast.show{opacity:1;transform:translate(-50%,0)}
+
+  @media(max-width:980px){
+    .steps-bar{grid-template-columns:1fr 1fr}
+    .up-grid,.up-grid.three{grid-template-columns:1fr}
+    .face{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+
+<!-- 顶部通栏 -->
+<div class="topbar">
+  <div class="container">
+    <span>企业认证 · 营业执照 + 法人核验 + 对公账户验证，认证通过后即可开展大宗交易</span>
+    <span>
+      <a href="certify.html">认证中心</a><span class="sep">·</span>
+      <a href="certify-personal.html">个人认证</a><span class="sep">·</span>
+      <a href="../trade/member.html">会员中心</a><span class="sep">·</span>
+      <a href="../index.html">产品原型总览</a><a href="login.html"><span data-icon="user" data-size="12" style="vertical-align:-2px;margin-right:3px"></span>登录</a><span class="sep">·</span><a href="register.html"><span data-icon="plus" data-size="12" style="vertical-align:-2px;margin-right:3px"></span>免费注册</a></span>
+  </div>
+</div>
+
+<!-- 站点头部 -->
+<header class="site-header">
+  <div class="container">
+    <a class="brand" href="index.html">
+      <span class="logo" data-icon="seed" data-size="20"></span>
+      <span>农产云<small>AGRI · CLOUD</small></span>
+    </a>
+    <nav class="main-nav">
+      <a href="index.html">首页</a>
+      <a href="../trade/index.html">交易大厅</a>
+      <a href="../trade/publish.html">发布需求</a>
+      <a href="../trade/member.html">会员中心</a>
+      <a href="certify.html">认证中心</a>
+      <a href="certify-personal.html">个人认证</a>
+      <a href="certify-enterprise.html" class="active">企业认证</a>
+    </nav>
+    <div class="header-search">
+      <input placeholder="搜索商品 / 供应商 / 需求" />
+      <button>搜索</button>
+    </div>
+  </div>
+</header>
+
+<div class="container" style="padding-top:20px;padding-bottom:8px">
+
+  <div class="crumb mb-16">
+    <a href="index.html">首页</a><span class="sep">/</span>
+    <a href="certify.html">认证中心</a><span class="sep">/</span><span>企业认证</span>
+  </div>
+
+  <div class="section-head" style="margin-bottom:14px">
+    <div>
+      <div class="bar-title" style="font-size:26px">企业认证</div>
+      <div class="muted t-sm mt-8">以营业执照主体为单位认证，通过后可开启大宗交易、在线议价、电子签约与供应链金融</div>
+    </div>
+    <div class="row center gap-8">
+      <span class="tag tag-tech"><span data-icon="shield" data-size="13"></span>对公账户打款验证</span>
+      <span class="tag tag-amber"><span data-icon="activity" data-size="13"></span>审核中 1-3 个工作日</span>
+    </div>
+  </div>
+
+</div>
+
+<section class="section" style="padding-top:0">
+  <div class="container">
+    <div class="grid" style="grid-template-columns:1.75fr 1fr;gap:24px;align-items:start">
+
+      <!-- 左：向导 -->
+      <div>
+        <div class="card" id="wizardCard">
+          <div class="card-h">
+            <h3><span data-icon="factory" data-size="18"></span>企业认证办理</h3>
+            <span class="muted t-sm">共 4 步 · 约需 8 分钟</span>
+          </div>
+          <div class="card-b">
+
+            <div class="steps-bar">
+              <div class="sb on" data-sb="1"><span class="n">1</span><span class="t">企业基本信息</span></div>
+              <div class="sb" data-sb="2"><span class="n">2</span><span class="t">资质材料上传</span></div>
+              <div class="sb" data-sb="3"><span class="n">3</span><span class="t">法人及账户核验</span></div>
+              <div class="sb" data-sb="4"><span class="n">4</span><span class="t">确认提交</span></div>
+            </div>
+
+            <!-- ========== 第 1 步 ========== -->
+            <div class="step-panel on" data-panel-step="1">
+              <div class="mt-20">
+                <div class="form-grid">
+                  <div class="form-item">
+                    <label class="req">企业名称</label>
+                    <input class="input" type="text" id="enName" value="黑龙江五常粮油合作社" />
+                    <div class="form-hint">须与营业执照完全一致</div>
+                  </div>
+                  <div class="form-item">
+                    <label class="req">统一社会信用代码</label>
+                    <input class="input" type="text" id="enCode" maxlength="18" value="91230184MA1WXXXX0X" />
+                  </div>
+                </div>
+                <div class="form-grid">
+                  <div class="form-item">
+                    <label class="req">企业类型</label>
+                    <select class="select" id="enKind">
+                      <option>农民专业合作社</option><option>有限责任公司</option>
+                      <option>股份有限公司</option><option>合伙企业</option>
+                      <option>个人独资企业</option><option>其他</option>
+                    </select>
+                  </div>
+                  <div class="form-item">
+                    <label class="req">所属行业</label>
+                    <select class="select" id="enIndustry">
+                      <option>粮油产业</option><option>果蔬产业</option><option>畜禽产业</option>
+                      <option>茶药产业</option><option>饲料农资</option><option>水产产业</option>
+                      <option>流通贸易</option><option>加工制造</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="form-grid">
+                  <div class="form-item">
+                    <label class="req">成立日期</label>
+                    <input class="input" type="date" id="enFound" value="2018-06-12" />
+                  </div>
+                  <div class="form-item">
+                    <label class="req">注册资本（万元）</label>
+                    <input class="input" type="text" id="enCapital" value="1200" placeholder="请输入数字" />
+                  </div>
+                </div>
+                <div class="form-item">
+                  <label class="req">注册地址</label>
+                  <input class="input" type="text" id="enAddr" value="黑龙江省哈尔滨市五常市稻香路 88 号" />
+                </div>
+                <div class="form-item">
+                  <label>经营范围</label>
+                  <textarea class="textarea" id="enScope" placeholder="请填写营业执照登记的经营范围">水稻种植、收购、加工、销售；粮食仓储；农产品初加工；农业技术推广服务；预包装食品销售。</textarea>
+                  <div class="form-hint">经营范围将用于与主营品类进行匹配校验，超经营范围可能导致审核驳回</div>
+                </div>
+
+                <div style="font-size:13px;font-weight:700;color:var(--ink-700);margin:20px 0 12px;padding-left:10px;border-left:3px solid var(--green-400)">企业联系人信息</div>
+                <div class="form-grid">
+                  <div class="form-item">
+                    <label class="req">联系人姓名</label>
+                    <input class="input" type="text" id="enContact" value="王建国" />
+                  </div>
+                  <div class="form-item">
+                    <label class="req">联系人职务</label>
+                    <select class="select" id="enDuty">
+                      <option>法定代表人</option><option>总经理</option>
+                      <option>业务负责人</option><option>财务负责人</option><option>其他</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="form-grid">
+                  <div class="form-item">
+                    <label class="req">联系人手机号</label>
+                    <input class="input" type="tel" id="enPhone" maxlength="11" value="13866216621" />
+                  </div>
+                  <div class="form-item">
+                    <label>联系邮箱</label>
+                    <input class="input" type="email" id="enMail" value="hrb@wuchang-agri.com" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- ========== 第 2 步 ========== -->
+            <div class="step-panel" data-panel-step="2">
+              <div class="mt-20">
+                <div class="row between center mb-12">
+                  <div class="strong">必传材料（3 项）</div>
+                  <span class="muted t-xs">JPG / PNG / PDF，单张 ≤ 5MB，需加盖公章</span>
+                </div>
+                <div class="up-grid three">
+                  <div class="up-tile" id="upLic">
+                    <div class="idle"><span data-icon="plus" data-size="20"></span>
+                      <div class="t">营业执照副本</div><div class="d">需在有效期内</div></div>
+                    <div class="up-ok"><div class="pic"><span data-icon="file" data-size="26"></span></div>
+                      <div class="fn">营业执照-副本.pdf</div><div class="sub"><span data-icon="check" data-size="12" style="vertical-align:-1px"></span> 已上传 · 工商信息匹配</div>
+                      <div class="ops"><a data-op="view" href="javascript:void(0)">查看</a><a data-op="reselect" href="javascript:void(0)">重新上传</a></div></div>
+                    <div class="up-bar"><i></i></div>
+                  </div>
+                  <div class="up-tile" id="upLegalFront">
+                    <div class="idle"><span data-icon="plus" data-size="20"></span>
+                      <div class="t">法人身份证人像面</div><div class="d">四角完整、无反光</div></div>
+                    <div class="up-ok"><div class="pic"><span data-icon="user" data-size="26"></span></div>
+                      <div class="fn">法人-身份证-人像面.jpg</div><div class="sub"><span data-icon="check" data-size="12" style="vertical-align:-1px"></span> 已上传</div>
+                      <div class="ops"><a data-op="view" href="javascript:void(0)">查看</a><a data-op="reselect" href="javascript:void(0)">重新上传</a></div></div>
+                    <div class="up-bar"><i></i></div>
+                  </div>
+                  <div class="up-tile" id="upLegalBack">
+                    <div class="idle"><span data-icon="plus" data-size="20"></span>
+                      <div class="t">法人身份证国徽面</div><div class="d">核验有效期</div></div>
+                    <div class="up-ok"><div class="pic" style="background:linear-gradient(135deg,rgba(14,165,233,.16),rgba(124,58,237,.14))"><span data-icon="shield" data-size="26"></span></div>
+                      <div class="fn">法人-身份证-国徽面.jpg</div><div class="sub"><span data-icon="check" data-size="12" style="vertical-align:-1px"></span> 已上传</div>
+                      <div class="ops"><a data-op="view" href="javascript:void(0)">查看</a><a data-op="reselect" href="javascript:void(0)">重新上传</a></div></div>
+                    <div class="up-bar"><i></i></div>
+                  </div>
+                </div>
+
+                <div class="row between center mb-12 mt-24">
+                  <div class="strong">银行与资质材料</div>
+                  <span class="muted t-xs">开户许可必传，其余按经营品类选传</span>
+                </div>
+                <div class="up-grid three">
+                  <div class="up-tile" id="upBank">
+                    <div class="idle"><span data-icon="plus" data-size="20"></span>
+                      <div class="t">开户许可证</div><div class="d">或银行开户证明</div></div>
+                    <div class="up-ok"><div class="pic"><span data-icon="repo" data-size="26"></span></div>
+                      <div class="fn">开户许可证.pdf</div><div class="sub"><span data-icon="check" data-size="12" style="vertical-align:-1px"></span> 已上传</div>
+                      <div class="ops"><a data-op="view" href="javascript:void(0)">查看</a><a data-op="reselect" href="javascript:void(0)">重新上传</a></div></div>
+                    <div class="up-bar"><i></i></div>
+                  </div>
+                  <div class="up-tile" id="upFood"><span class="opt">选填</span>
+                    <div class="idle"><span data-icon="plus" data-size="20"></span>
+                      <div class="t">食品经营许可证</div><div class="d">食品类主体建议提供</div></div>
+                    <div class="up-ok"><div class="pic"><span data-icon="file" data-size="26"></span></div>
+                      <div class="fn">食品经营许可证.jpg</div><div class="sub"><span data-icon="check" data-size="12" style="vertical-align:-1px"></span> 已上传</div>
+                      <div class="ops"><a data-op="view" href="javascript:void(0)">查看</a><a data-op="reselect" href="javascript:void(0)">重新上传</a></div></div>
+                    <div class="up-bar"><i></i></div>
+                  </div>
+                  <div class="up-tile" id="upOther"><span class="opt">选填</span>
+                    <div class="idle"><span data-icon="plus" data-size="20"></span>
+                      <div class="t">其他资质证明</div><div class="d">ISO / 地理标志 / 绿色食品</div></div>
+                    <div class="up-ok"><div class="pic"><span data-icon="award" data-size="26"></span></div>
+                      <div class="fn">绿色食品认证证书.pdf</div><div class="sub"><span data-icon="check" data-size="12" style="vertical-align:-1px"></span> 已上传</div>
+                      <div class="ops"><a data-op="view" href="javascript:void(0)">查看</a><a data-op="reselect" href="javascript:void(0)">重新上传</a></div></div>
+                    <div class="up-bar"><i></i></div>
+                  </div>
+                </div>
+
+                <div class="side-note mt-20">
+                  <span data-icon="alert" data-size="13" style="vertical-align:-2px"></span>
+                  常见驳回原因：营业执照未加盖公章、证件照片反光模糊、开户主体与营业执照不一致、证件已过期。上传后可在此页随时「重新上传」修正。
+                </div>
+              </div>
+            </div>
+
+            <!-- ========== 第 3 步 ========== -->
+            <div class="step-panel" data-panel-step="3">
+              <div class="mt-20">
+
+                <!-- 法人身份核验 -->
+                <div class="verify">
+                  <div class="verify-h"><span class="ic"><span data-icon="user" data-size="15"></span></span>法定代表人身份核验</div>
+                  <div class="form-grid">
+                    <div class="form-item">
+                      <label class="req">法人姓名</label>
+                      <input class="input" type="text" id="lgName" value="王建国" />
+                    </div>
+                    <div class="form-item">
+                      <label class="req">法人身份证号</label>
+                      <input class="input" type="text" id="lgId" maxlength="18" placeholder="18 位身份证号" />
+                    </div>
+                  </div>
+                  <div class="form-item">
+                    <label class="req">法人手机号（银行预留）</label>
+                    <div style="display:grid;grid-template-columns:1fr 132px;gap:10px;max-width:480px">
+                      <input class="input" type="tel" id="lgPhone" maxlength="11" value="13866216621" />
+                      <button type="button" class="btn btn-outline" id="btnLgCode"><span data-icon="zap"></span>获取验证码</button>
+                    </div>
+                  </div>
+                  <div class="form-item" style="margin-bottom:0">
+                    <label class="req">短信验证码</label>
+                    <input class="input" type="text" id="lgCode" maxlength="6" placeholder="6 位验证码" style="max-width:240px" />
+                  </div>
+                </div>
+
+                <!-- 人脸核验 -->
+                <div class="verify">
+                  <div class="verify-h"><span class="ic"><span data-icon="target" data-size="15"></span></span>法人人脸活体核验</div>
+                  <div class="face" id="faceBox">
+                    <div class="face-frame">
+                      <span data-icon="user" data-size="42"></span>
+                      <div class="scan"></div>
+                    </div>
+                    <div>
+                      <div class="muted t-sm">需由法定代表人本人完成，系统将与人脸信息与证件照片自动比对。</div>
+                      <div class="face-steps" id="faceSteps">
+                        <div class="fi" data-fi="1"><span class="ic"><span data-icon="sun" data-size="12"></span></span>环境光线检测</div>
+                        <div class="fi" data-fi="2"><span class="ic"><span data-icon="target" data-size="12"></span></span>活体动作检测（点头 / 眨眼）</div>
+                        <div class="fi" data-fi="3"><span class="ic"><span data-icon="check" data-size="12"></span></span>与证件照片比对</div>
+                      </div>
+                      <div class="mt-16">
+                        <button type="button" class="btn btn-primary" id="btnFace"><span data-icon="spark"></span>开始人脸核验</button>
+                        <span class="tag hide" id="facePass" style="margin-left:12px"><span data-icon="check" data-size="12"></span>核验通过</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 对公账户打款验证 -->
+                <div class="verify">
+                  <div class="verify-h"><span class="ic" style="background:var(--tech-100);color:var(--tech-700)"><span data-icon="money" data-size="15"></span></span>对公账户打款验证</div>
+                  <div class="form-grid">
+                    <div class="form-item">
+                      <label class="req">开户名称</label>
+                      <input class="input" type="text" id="bkName" value="黑龙江五常粮油合作社" />
+                    </div>
+                    <div class="form-item">
+                      <label class="req">开户银行</label>
+                      <input class="input" type="text" id="bkBank" value="中国农业银行五常支行" />
+                    </div>
+                  </div>
+                  <div class="form-item">
+                    <label class="req">对公账号</label>
+                    <input class="input mono" type="text" id="bkNo" value="0823 0104 0006 8821" />
+                    <div class="form-hint">平台将向该账户打款一笔小额验证金额（0.10 - 0.99 元）</div>
+                  </div>
+                  <div class="row center gap-12 wrap" style="border-top:1px dashed var(--line);padding-top:16px">
+                    <button type="button" class="btn btn-tech" id="btnPay"><span data-icon="money"></span>发起打款验证</button>
+                    <div style="display:grid;grid-template-columns:1fr 96px;gap:8px;align-items:center">
+                      <input class="input mono" type="text" id="bkAmount" placeholder="回填到账金额，如 0.37" style="width:240px" />
+                      <span class="muted t-xs">元</span>
+                    </div>
+                    <span class="tag hide" id="payPass"><span data-icon="check" data-size="12"></span>账户验证通过</span>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            <!-- ========== 第 4 步 ========== -->
+            <div class="step-panel" data-panel-step="4">
+              <div class="mt-20">
+                <div class="row between center mb-12">
+                  <div class="strong">请确认认证信息</div>
+                  <a class="muted t-sm" href="javascript:void(0)" id="backEdit">返回修改 →</a>
+                </div>
+                <dl style="display:grid;grid-template-columns:110px 1fr;gap:12px 16px;font-size:13.5px;background:var(--bg-alt);border:1px solid var(--line);border-radius:12px;padding:18px 20px">
+                  <dt class="muted">企业名称</dt><dd class="strong" id="sumName">—</dd>
+                  <dt class="muted">统一信用代码</dt><dd class="mono" id="sumCode">—</dd>
+                  <dt class="muted">企业类型</dt><dd id="sumKind">—</dd>
+                  <dt class="muted">所属行业</dt><dd id="sumIndustry">—</dd>
+                  <dt class="muted">注册地址</dt><dd id="sumAddr">—</dd>
+                  <dt class="muted">联系人</dt><dd id="sumContact">—</dd>
+                  <dt class="muted">法定代表人</dt><dd id="sumLegal">—</dd>
+                  <dt class="muted">对公账户</dt><dd class="mono" id="sumBank">—</dd>
+                  <dt class="muted">资质材料</dt><dd>营业执照、法人身份证、开户许可证<span id="sumExtra"> 等 3 份</span></dd>
+                  <dt class="muted">核验结果</dt><dd><span class="c-green strong">法人人脸核验通过 · 对公账户验证通过</span></dd>
+                </dl>
+                <label style="display:flex;align-items:flex-start;gap:8px;font-size:12.5px;color:var(--ink-500);margin-top:18px">
+                  <input type="checkbox" id="enAgree" style="margin-top:3px" />
+                  <span>本单位承诺所提交的企业信息与资质材料真实、合法、有效，并授权平台核验工商、司法、失信等信息，已阅读
+                    <a href="javascript:void(0)" onclick="alert('原型演示：企业认证服务协议')" style="color:var(--tech-700);font-weight:600">《企业认证服务协议》</a> 与
+                    <a href="javascript:void(0)" onclick="alert('原型演示：企业入驻规则')" style="color:var(--tech-700);font-weight:600">《企业入驻规则》</a>。</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- ========== 审核中结果 ========== -->
+            <div class="step-panel" data-panel-step="ok">
+              <div class="mt-20" style="text-align:center">
+                <div style="width:84px;height:84px;border-radius:50%;background:linear-gradient(135deg,var(--amber),#FBBF24);color:#fff;display:grid;place-items:center;margin:0 auto 20px;box-shadow:0 10px 26px rgba(245,158,11,.32)">
+                  <span data-icon="activity" data-size="40"></span>
+                </div>
+                <div style="font-size:22px;font-weight:800;color:var(--ink-900)">认证申请已提交，正在审核</div>
+                <div class="muted t-sm mt-8">我们已收到您的企业认证材料，审核结果将通过短信与站内信同步</div>
+
+                <dl style="display:grid;grid-template-columns:110px 1fr;gap:12px 16px;font-size:13.5px;background:var(--amber-100);border:1px dashed var(--amber);border-radius:12px;padding:18px 20px;text-align:left;margin-top:22px">
+                  <dt class="muted">受理编号</dt><dd class="mono">RV202610190031</dd>
+                  <dt class="muted">申请主体</dt><dd class="strong" id="okName">黑龙江五常粮油合作社</dd>
+                  <dt class="muted">提交时间</dt><dd class="mono">2026-10-19 15:48</dd>
+                  <dt class="muted">预计完成</dt><dd>1-3 个工作日（约 2026-10-21 前）</dd>
+                  <dt class="muted">当前状态</dt><dd><span class="tag tag-amber"><span data-icon="activity" data-size="12"></span>人工复审中</span></dd>
+                </dl>
+
+                <div class="mt-24" style="text-align:left;background:#fff;border:1px solid var(--line);border-radius:12px;padding:20px">
+                  <div class="row between center mb-16">
+                    <div class="strong">审核进度</div>
+                    <div class="muted t-xs">已完成 2 / 4 环节</div>
+                  </div>
+                  <div class="progress mb-20"><i style="width:52%"></i></div>
+                  <div class="tl">
+                    <div class="tl-i done"><span class="d"></span>
+                      <div class="t">提交认证资料</div><div class="m">2026-10-19 15:48 · 材料 6 份已入库</div></div>
+                    <div class="tl-i done"><span class="d"></span>
+                      <div class="t">系统自动校验</div><div class="m">工商三要素、法人人脸、对公账户打款验证均通过</div></div>
+                    <div class="tl-i cur"><span class="d"></span>
+                      <div class="t">人工复审（进行中）</div><div class="m">审核员正在核验经营范围与主营品类匹配度，预计 1 个工作日内完成</div></div>
+                    <div class="tl-i"><span class="d"></span>
+                      <div class="t">认证完成</div><div class="m">认证标识生效，交易、金融与溯源权益自动解锁</div></div>
+                  </div>
+                </div>
+
+                <div class="row gap-12 center mt-24" style="justify-content:center">
+                  <a class="btn btn-outline" href="certify.html"><span data-icon="award"></span>返回认证中心</a>
+                  <a class="btn btn-outline" href="certify-enterprise.html"><span data-icon="clipboard"></span>补充 / 修正材料</a>
+                  <a class="btn btn-primary" href="../trade/member.html"><span data-icon="user"></span>前往会员中心</a>
+                </div>
+              </div>
+            </div>
+
+            <!-- 底部操作 -->
+            <div class="row between center mt-24" id="wizFoot">
+              <button type="button" class="btn btn-ghost" id="btnPrev"><span data-icon="arrow" style="transform:rotate(180deg)"></span>上一步</button>
+              <div class="row center gap-12">
+                <span class="muted t-xs">第 <span id="stepNow">1</span> / 4 步</span>
+                <button type="button" class="btn btn-primary" id="btnNext">下一步<span data-icon="arrow"></span></button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- 右：说明 -->
+      <aside>
+        <div class="card side-card">
+          <div class="card-h"><h3><span data-icon="clipboard" data-size="18"></span>所需材料与要点</h3></div>
+          <div class="card-b">
+            <ul class="mat" style="display:flex;flex-direction:column;gap:10px">
+              <li style="display:flex;gap:10px;align-items:flex-start;font-size:13px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg-alt)">
+                <span class="stat-icon" style="width:22px;height:22px;flex:none;border-radius:6px"><span data-icon="check" data-size="12"></span></span>
+                <span><strong>营业执照副本</strong><small class="muted t-xs" style="display:block;margin-top:2px">须加盖公章且在有效期内</small></span>
+              </li>
+              <li style="display:flex;gap:10px;align-items:flex-start;font-size:13px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg-alt)">
+                <span class="stat-icon tech" style="width:22px;height:22px;flex:none;border-radius:6px"><span data-icon="user" data-size="12"></span></span>
+                <span><strong>法定代表人身份证</strong><small class="muted t-xs" style="display:block;margin-top:2px">人像面 + 国徽面，用于人脸比对</small></span>
+              </li>
+              <li style="display:flex;gap:10px;align-items:flex-start;font-size:13px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg-alt)">
+                <span class="stat-icon amber" style="width:22px;height:22px;flex:none;border-radius:6px"><span data-icon="money" data-size="12"></span></span>
+                <span><strong>对公账户资料</strong><small class="muted t-xs" style="display:block;margin-top:2px">开户许可证 + 打款金额回填验证</small></span>
+              </li>
+            </ul>
+            <div class="side-note mt-16">
+              <span data-icon="shield" data-size="13" style="vertical-align:-2px"></span>
+              平台对认证材料仅用于资质核验，全程加密传输与存储，不会向第三方披露。
+            </div>
+          </div>
+        </div>
+
+        <div class="card side-card">
+          <div class="card-h"><h3><span data-icon="activity" data-size="18"></span>审核规则与时效</h3></div>
+          <div class="card-b">
+            <div class="col" style="display:flex;flex-direction:column;gap:12px;font-size:12.5px;color:var(--ink-600)">
+              <div class="row between center"><span>系统自动初审</span><span class="mono strong">约 10 分钟</span></div>
+              <div class="row between center"><span>人工复审</span><span class="mono strong">1-3 个工作日</span></div>
+              <div class="row between center"><span>平均审核时长</span><span class="mono strong">4.2 小时</span></div>
+              <div class="row between center"><span>驳回后可重新提交</span><span class="mono strong">不限次数</span></div>
+            </div>
+            <div class="progress mt-16"><i style="width:52%"></i></div>
+            <div class="muted t-xs mt-8">当前申请进度 52% · 人工复审进行中</div>
+          </div>
+        </div>
+
+        <div class="card side-card">
+          <div class="card-h"><h3><span data-icon="phone" data-size="18"></span>认证专员协助</h3></div>
+          <div class="card-b">
+            <div class="muted t-sm">协助材料准备与经营范围确认</div>
+            <div class="row center gap-8 mt-12">
+              <span class="stat-icon tech" style="width:34px;height:34px;flex:none"><span data-icon="phone" data-size="16"></span></span>
+              <div><div class="mono strong" style="font-size:17px">400-800-2668</div><div class="muted t-xs">工作日 9:00 - 18:00</div></div>
+            </div>
+            <button class="btn btn-outline btn-block mt-16" onclick="alert('原型演示：接入在线客服')"><span data-icon="spark"></span>在线咨询认证专员</button>
+          </div>
+        </div>
+      </aside>
+
+    </div>
+  </div>
+</section>
+
+<!-- 页脚 -->
+<footer class="site-footer">
+  <div class="container">
+    <div class="bottom" style="border-top:none;margin-top:0;justify-content:center">
+      <span>© 2026 农业产业互联网平台 · 产品原型演示（本页为原型演示，非真实业务系统）</span>
+    </div>
+  </div>
+</footer>
+
+<div class="toast" id="toast"></div>
+
+<script src="../assets/js/app.js"></script>
+<script>
+(function () {
+  "use strict";
+  var $ = function (s) { return document.querySelector(s); };
+  var $$ = function (s) { return document.querySelectorAll(s); };
+
+  function showToast(html) {
+    var t = $("#toast");
+    t.innerHTML = html;
+    if (window.PROTO) PROTO.hydrateIcons(t);
+    t.classList.add("show");
+    clearTimeout(window.__toastT);
+    window.__toastT = setTimeout(function () { t.classList.remove("show"); }, 2200);
+  }
+
+  /* ===== 步骤控制 ===== */
+  var step = 1, facePassed = false, payPassed = false;
+
+  function renderStep() {
+    $$(".step-panel").forEach(function (p) {
+      p.classList.toggle("on", p.getAttribute("data-panel-step") === (step === 5 ? "ok" : String(step)));
+    });
+    $$(".sb").forEach(function (b) {
+      var n = +b.getAttribute("data-sb");
+      b.classList.remove("on", "done");
+      if (step === 5) { b.classList.add("done"); return; }
+      if (n < step) b.classList.add("done");
+      else if (n === step) b.classList.add("on");
+    });
+    $("#stepNow").textContent = Math.min(step, 4);
+    $("#btnPrev").style.visibility = (step === 1 || step === 5) ? "hidden" : "visible";
+    $("#btnNext").style.display = (step === 5) ? "none" : "inline-flex";
+    $("#btnNext").innerHTML = (step === 4)
+      ? '<span data-icon="check"></span>提交认证'
+      : '下一步<span data-icon="arrow"></span>';
+    $("#wizFoot").style.display = (step === 5) ? "none" : "flex";
+    if (window.PROTO) PROTO.hydrateIcons($("#wizFoot"));
+    window.scrollTo({ top: $("#wizardCard").offsetTop - 80, behavior: "smooth" });
+  }
+
+  $$(".sb").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var n = +b.getAttribute("data-sb");
+      if (n < step && step <= 4) { step = n; renderStep(); }
+      else if (n > step) showToast("请先完成当前步骤");
+    });
+  });
+
+  /* ===== 短信验证码（法人） ===== */
+  var lgBtn = $("#btnLgCode"), lgTimer = null;
+  lgBtn.addEventListener("click", function () {
+    var phone = $("#lgPhone").value.trim();
+    if (!/^1\d{10}$/.test(phone)) { showToast("请先填写法人手机号"); return; }
+    showToast("验证码已发送至法人手机 " + phone + "（原型演示：123456）");
+    var t = 60;
+    lgBtn.disabled = true;
+    lgBtn.innerHTML = "重新获取（" + t + "s）";
+    lgTimer = setInterval(function () {
+      t--;
+      if (t <= 0) {
+        clearInterval(lgTimer);
+        lgBtn.disabled = false;
+        lgBtn.innerHTML = '<span data-icon="zap"></span>获取验证码';
+        if (window.PROTO) PROTO.hydrateIcons(lgBtn);
+      } else lgBtn.innerHTML = "重新获取（" + t + "s）";
+    }, 1000);
+  });
+
+  /* ===== 文件上传（模拟进度） ===== */
+  function bindUpload(id) {
+    var tile = $(id);
+    if (!tile) return;
+    var bar = tile.querySelector(".up-bar i");
+    tile.addEventListener("click", function (e) {
+      var opEl = e.target.closest("[data-op]");
+      if (opEl) {
+        if (opEl.getAttribute("data-op") === "view") { showToast("原型演示：预览材料影像"); return; }
+        tile.classList.remove("ok", "busy");
+        bar.style.width = "0";
+        return;
+      }
+      if (tile.classList.contains("ok") || tile.classList.contains("busy")) return;
+      tile.classList.add("busy");
+      var w = 0;
+      var timer = setInterval(function () {
+        w += Math.random() * 20 + 10;
+        if (w >= 100) {
+          w = 100;
+          bar.style.width = "100%";
+          clearInterval(timer);
+          setTimeout(function () {
+            tile.classList.remove("busy");
+            tile.classList.add("ok");
+            bar.style.width = "0";
+            showToast("材料上传完成 · 已进入自动校验证队列");
+          }, 200);
+        } else bar.style.width = w + "%";
+      }, 120);
+    });
+  }
+  ["#upLic", "#upLegalFront", "#upLegalBack", "#upBank", "#upFood", "#upOther"].forEach(bindUpload);
+
+  /* ===== 法人人脸核验 ===== */
+  $("#btnFace").addEventListener("click", function () {
+    if (facePassed) return;
+    var box = $("#faceBox"), btn = this;
+    box.classList.add("running");
+    btn.disabled = true;
+    btn.innerHTML = "核验中…";
+    var items = $$("#faceSteps .fi"), i = 0;
+    function tick() {
+      if (i > 0) { items[i - 1].classList.remove("run"); items[i - 1].classList.add("pass"); }
+      if (i >= items.length) {
+        facePassed = true;
+        box.classList.remove("running");
+        btn.style.display = "none";
+        $("#facePass").classList.remove("hide");
+        if (window.PROTO) PROTO.hydrateIcons($("#facePass"));
+        showToast("<span data-icon='check' data-size='15'></span>法人人脸核验通过");
+        return;
+      }
+      items[i].classList.add("run");
+      i++;
+      setTimeout(tick, 900);
+    }
+    tick();
+  });
+
+  /* ===== 对公账户打款验证 ===== */
+  $("#btnPay").addEventListener("click", function () {
+    var bank = $("#bkBank").value.trim(), no = $("#bkNo").value.trim(), name = $("#bkName").value.trim();
+    if (!name || !bank) { showToast("请填写开户名称与开户银行"); return; }
+    if (!no) { showToast("请填写对公账号"); return; }
+    showToast("已向对公账户打款 ¥0.37，请查询到账金额后回填（原型演示）");
+    $("#bkAmount").value = "";
+    $("#bkAmount").focus();
+  });
+
+  $("#bkAmount").addEventListener("input", function () {
+    var v = this.value.trim().replace(/[^\d.]/g, "");
+    this.value = v;
+    if (v === "0.37") {
+      payPassed = true;
+      $("#payPass").classList.remove("hide");
+      if (window.PROTO) PROTO.hydrateIcons($("#payPass"));
+      showToast("<span data-icon='check' data-size='15'></span>对公账户验证通过");
+    } else if (v && v.length >= 4) {
+      payPassed = false;
+      $("#payPass").classList.add("hide");
+    }
+  });
+
+  /* ===== 摘要 ===== */
+  function fillSummary() {
+    $("#sumName").textContent = $("#enName").value.trim() || "—";
+    $("#sumCode").textContent = $("#enCode").value.trim() || "—";
+    $("#sumKind").textContent = $("#enKind").value;
+    $("#sumIndustry").textContent = $("#enIndustry").value;
+    $("#sumAddr").textContent = $("#enAddr").value.trim() || "—";
+    $("#sumContact").textContent = ($("#enContact").value.trim() || "—") + " · " + $("#enPhone").value.trim();
+    $("#sumLegal").textContent = ($("#lgName").value.trim() || "—") + "（法人）";
+    $("#sumBank").textContent = ($("#bkBank").value.trim() || "—") + " · " + ($("#bkNo").value.trim() || "—");
+    var n = 3;
+    if ($("#upFood").classList.contains("ok")) n++;
+    if ($("#upOther").classList.contains("ok")) n++;
+    $("#sumExtra").textContent = " 等 " + n + " 份";
+    $("#okName").textContent = $("#enName").value.trim() || "—";
+  }
+
+  function validate1() {
+    if (!$("#enName").value.trim()) { showToast("请填写企业名称"); return false; }
+    if (!/^\w{15,18}$/.test($("#enCode").value.trim())) { showToast("请填写正确的统一社会信用代码"); return false; }
+    if (!/^\d+(\.\d+)?$/.test($("#enCapital").value.trim())) { showToast("注册资本请填写数字"); return false; }
+    if (!$("#enAddr").value.trim()) { showToast("请填写注册地址"); return false; }
+    if (!$("#enContact").value.trim()) { showToast("请填写联系人姓名"); return false; }
+    if (!/^1\d{10}$/.test($("#enPhone").value.trim())) { showToast("请填写正确的联系人手机号"); return false; }
+    return true;
+  }
+
+  function validate2() {
+    if (!$("#upLic").classList.contains("ok")) { showToast("请上传营业执照副本"); return false; }
+    if (!$("#upLegalFront").classList.contains("ok")) { showToast("请上传法人身份证人像面"); return false; }
+    if (!$("#upLegalBack").classList.contains("ok")) { showToast("请上传法人身份证国徽面"); return false; }
+    if (!$("#upBank").classList.contains("ok")) { showToast("请上传开户许可证 / 开户证明"); return false; }
+    return true;
+  }
+
+  function validate3() {
+    if (!$("#lgName").value.trim()) { showToast("请填写法定代表人姓名"); return false; }
+    if (!/^\d{17}[\dXx]$/.test($("#lgId").value.trim())) { showToast("请填写正确的法人身份证号"); return false; }
+    if (!/^1\d{10}$/.test($("#lgPhone").value.trim())) { showToast("请填写法人手机号"); return false; }
+    if (!/^\d{4,6}$/.test($("#lgCode").value.trim())) { showToast("请输入法人手机收到的验证码"); return false; }
+    if (!facePassed) { showToast("请完成法人人脸活体核验"); return false; }
+    if (!payPassed) { showToast("请完成对公账户打款验证"); return false; }
+    return true;
+  }
+
+  $("#btnNext").addEventListener("click", function () {
+    if (step === 1) { if (!validate1()) return; step = 2; renderStep(); return; }
+    if (step === 2) { if (!validate2()) return; step = 3; renderStep(); return; }
+    if (step === 3) { if (!validate3()) return; step = 4; fillSummary(); renderStep(); return; }
+    if (step === 4) {
+      if (!$("#enAgree").checked) { showToast("请先阅读并同意企业认证服务协议"); return; }
+      step = 5;
+      renderStep();
+      showToast("<span data-icon='check' data-size='15'></span>认证申请已提交，进入审核流程");
+    }
+  });
+  $("#btnPrev").addEventListener("click", function () { if (step > 1) { step--; renderStep(); } });
+  $("#backEdit").addEventListener("click", function () { step = 1; renderStep(); });
+
+  renderStep();
+})();
+</script>
+</body>
+</html>

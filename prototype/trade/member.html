@@ -16,7 +16,7 @@
       <span class="logo" data-icon="seed" data-size="20"></span>
       <span>农产云<small>AGRI · CLOUD</small></span>
     </a>
-    <nav class="side-nav">
+    <nav class="side-nav" data-tabscope="member">
       <div class="group">会员中心</div>
       <a href="javascript:void(0)" class="active" data-tab="overview" data-tab-group="member" data-icon="home"><span data-icon="home"></span>首页概览</a>
       <a href="javascript:void(0)" data-tab="purchase" data-tab-group="member"><span data-icon="cart"></span>采购订单</a>
@@ -343,6 +343,20 @@
       </div>
 
       <div data-tabpanel="profile" class="hide">
+
+        <!-- 认证状态 -->
+        <div class="card mb-16" style="border-left:3px solid var(--green-500)">
+          <div class="card-b row center gap-16">
+            <div class="stat-icon"><span data-icon="shield" data-size="20"></span></div>
+            <div style="flex:1;min-width:0">
+              <div class="strong">企业实名认证 <span class="tag">已认证</span></div>
+              <div class="muted t-sm mt-4">统一信用代码已核验 · 对公账户打款验证通过 · 有效期至 2027-06-30</div>
+            </div>
+            <a class="btn btn-outline btn-sm" href="../portal/certify.html"><span data-icon="shield"></span>认证中心</a>
+            <a class="btn btn-ghost btn-sm" href="../portal/certify-enterprise.html"><span data-icon="clipboard"></span>查看 / 更新材料</a>
+          </div>
+        </div>
+
         <div class="grid grid-2 gap-20">
           <div class="card"><div class="card-h"><h3><span data-icon="user" data-size="18"></span>企业基本信息</h3><a class="more" href="javascript:void(0)" onclick="alert('原型演示：正式系统可编辑企业资料')">编辑 →</a></div>
             <div class="card-b">

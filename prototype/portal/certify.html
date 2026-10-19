@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>认证中心 · 农产云</title>
+<link rel="stylesheet" href="../assets/css/theme.css" />
+<style>
+  /* —— 认证等级进度 —— */
+  .lv-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .lv-track{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:16px}
+  .lv-node{text-align:center}
+  .lv-node .c{width:34px;height:34px;border-radius:50%;margin:0 auto;display:grid;place-items:center;background:var(--bg-alt);color:var(--ink-400);font-weight:800;font-size:13px;border:2px solid var(--line);transition:.2s}
+  .lv-node.done .c{background:linear-gradient(135deg,var(--green-600),var(--green-500));color:#fff;border-color:transparent}
+  .lv-node.cur .c{background:linear-gradient(135deg,var(--tech-600),var(--tech-500));color:#fff;border-color:transparent;box-shadow:0 0 0 4px rgba(14,165,233,.16)}
+  .lv-node .t{font-size:12.5px;font-weight:700;margin-top:9px}
+  .lv-node .d{font-size:11px;color:var(--ink-400);margin-top:2px}
+  .lv-node.lock .t{color:var(--ink-400)}
+
+  /* —— 账号卡 —— */
+  .acc{display:flex;gap:16px;align-items:flex-start}
+  .acc .ava{width:58px;height:58px;border-radius:16px;flex:none;background:linear-gradient(135deg,var(--green-500),var(--tech-500));color:#fff;display:grid;place-items:center;font-size:22px;font-weight:800;box-shadow:var(--shadow-green)}
+
+  /* —— 认证入口卡 —— */
+  .cert-card{background:#fff;border:1px solid var(--line);border-radius:var(--r-md);padding:22px;transition:.2s}
+  .cert-card:hover{box-shadow:var(--shadow-md);border-color:var(--green-300)}
+  .cert-card .prog-mini{max-width:200px}
+
+  /* —— 权益卡 —— */
+  .bft{background:#fff;border:1px solid var(--line);border-radius:var(--r-md);padding:18px;transition:.2s;position:relative}
+  .bft.locked{opacity:.5;filter:grayscale(.35)}
+  .bft .lock{position:absolute;right:14px;top:14px;color:var(--ink-400)}
+  .bft .bf-ic{width:40px;height:40px;border-radius:10px;display:grid;place-items:center;background:var(--green-100);color:var(--green-700)}
+  .bft .bf-ic.tech{background:var(--tech-100);color:var(--tech-700)}
+  .bft .bf-ic.amber{background:var(--amber-100);color:#B45309}
+  .bft .bf-ic.violet{background:var(--violet-100);color:#6D28D9}
+
+  /* —— 认证流程步骤 —— */
+  .flow{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  .flow .st{padding:16px;border:1px solid var(--line);border-radius:12px;background:var(--bg-alt)}
+  .flow .st .no{width:26px;height:26px;border-radius:50%;background:#fff;border:1px solid var(--line-strong);color:var(--ink-600);display:grid;place-items:center;font-weight:800;font-size:12px}
+  .flow .st .h{display:flex;align-items:center;gap:9px}
+  .flow .st .t{font-weight:700;font-size:13.5px}
+  .flow .st .d{font-size:12px;color:var(--ink-500);margin-top:10px;line-height:1.65}
+  .flow .st .s{font-size:11px;color:var(--green-700);margin-top:8px;font-weight:600}
+
+  /* —— 材料清单 —— */
+  .mat{display:flex;flex-direction:column;gap:10px}
+  .mat li{display:flex;align-items:flex-start;gap:10px;font-size:13px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg-alt)}
+  .mat li .ic{width:22px;height:22px;border-radius:6px;flex:none;display:grid;place-items:center;background:var(--green-100);color:var(--green-700);margin-top:1px}
+  .mat li .txt small{display:block;font-size:11.5px;color:var(--ink-500);margin-top:2px}
+  .mat li .req{margin-left:auto;flex:none;font-size:11px;color:#B91C1C;font-weight:700}
+
+  /* —— FAQ 折叠 —— */
+  .faq{border:1px solid var(--line);border-radius:var(--r-md);overflow:hidden;background:#fff}
+  .faq-item + .faq-item{border-top:1px solid var(--line)}
+  .faq-q{width:100%;display:flex;align-items:center;gap:10px;padding:15px 20px;font-size:14px;font-weight:600;color:var(--ink-800);text-align:left;transition:.16s}
+  .faq-q:hover{background:var(--green-050);color:var(--green-800)}
+  .faq-q .mk{margin-left:auto;flex:none;color:var(--ink-400);transition:.25s}
+  .faq-item.open .faq-q .mk{transform:rotate(45deg);color:var(--green-600)}
+  .faq-a{max-height:0;overflow:hidden;transition:max-height .28s ease}
+  .faq-item.open .faq-a{max-height:260px}
+  .faq-a .in{padding:0 20px 18px 20px;font-size:13px;color:var(--ink-600);line-height:1.8}
+
+  /* —— 演示状态切换 —— */
+  .demo-pick{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink-400)}
+
+  @media(max-width:980px){
+    .lv-track{grid-template-columns:1fr 1fr}
+    .flow{grid-template-columns:1fr 1fr}
+  }
+  @media(max-width:640px){.flow{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<!-- 顶部通栏 -->
+<div class="topbar">
+  <div class="container">
+    <span>您好，欢迎来到农产云认证中心！企业认证 · 个人实名认证，一站完成，认证后即可开启交易</span>
+    <span>
+      <a href="../trade/member.html">会员中心</a><span class="sep">·</span>
+      <a href="certify-enterprise.html">企业认证</a><span class="sep">·</span>
+      <a href="certify-personal.html">个人认证</a><span class="sep">·</span>
+      <a href="../index.html">产品原型总览</a><a href="login.html"><span data-icon="user" data-size="12" style="vertical-align:-2px;margin-right:3px"></span>登录</a><span class="sep">·</span><a href="register.html"><span data-icon="plus" data-size="12" style="vertical-align:-2px;margin-right:3px"></span>免费注册</a></span>
+  </div>
+</div>
+
+<!-- 站点头部 -->
+<header class="site-header">
+  <div class="container">
+    <a class="brand" href="index.html">
+      <span class="logo" data-icon="seed" data-size="20"></span>
+      <span>农产云<small>AGRI · CLOUD</small></span>
+    </a>
+    <nav class="main-nav">
+      <a href="index.html">首页</a>
+      <a href="index.html#chains">产业链</a>
+      <a href="../trade/index.html">交易大厅</a>
+      <a href="../trade/publish.html">发布需求</a>
+      <a href="../trade/member.html">会员中心</a>
+      <a href="certify.html" class="active">认证中心</a>
+      <a href="../production/dashboard.html">生产监测</a>
+    </nav>
+    <div class="header-search">
+      <input placeholder="搜索商品 / 供应商 / 需求" />
+      <button>搜索</button>
+    </div>
+  </div>
+</header>
+
+<div class="container" style="padding-top:20px;padding-bottom:4px">
+
+  <!-- 面包屑 -->
+  <div class="crumb mb-16">
+    <a href="index.html">首页</a><span class="sep">/</span>
+    <a href="../trade/member.html">会员中心</a><span class="sep">/</span><span>认证中心</span>
+  </div>
+
+  <!-- 页面标题区 -->
+  <div class="section-head" style="margin-bottom:14px">
+    <div>
+      <div class="bar-title" style="font-size:26px">认证中心</div>
+      <div class="muted t-sm mt-8">完成个人实名认证与企业认证，解锁交易、发布、金融与溯源等全部平台能力</div>
+    </div>
+    <div class="row center gap-8">
+      <span class="tag tag-tech"><span data-icon="shield" data-size="13"></span>平台认证</span>
+      <span class="tag"><span data-icon="check" data-size="13"></span>已认证 12,800+ 家企业</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- 认证状态总览 -->
+<section class="section" style="padding-top:0">
+  <div class="container">
+    <div class="card">
+      <div class="card-h">
+        <h3><span data-icon="award" data-size="18"></span>我的认证状态</h3>
+        <div class="demo-pick">
+          演示：切换认证状态
+          <div class="chips" id="stateChips">
+            <span class="chip" data-state="none">未认证</span>
+            <span class="chip on" data-state="review">审核中</span>
+            <span class="chip" data-state="done">已认证</span>
+          </div>
+        </div>
+      </div>
+      <div class="card-b">
+        <div class="grid" style="grid-template-columns:1fr 1.35fr;gap:28px;align-items:start">
+
+          <!-- 账号信息 -->
+          <div class="acc">
+            <div class="ava">农</div>
+            <div class="flex-1">
+              <div class="strong t-lg">黑龙江五常粮油合作社</div>
+              <div class="row center gap-8 mt-8">
+                <span class="tag">企业会员</span>
+                <span class="tag tag-ghost">注册于 2026-03-12</span>
+              </div>
+              <div class="muted t-xs mt-12">统一社会信用代码</div>
+              <div class="mono t-sm">91230184MA1W****0X</div>
+              <div class="muted t-xs mt-12">账号主体</div>
+              <div class="t-sm">王建国 · 法定代表人 · 138****6621</div>
+            </div>
+          </div>
+
+          <!-- 认证等级 -->
+          <div>
+            <div class="lv-head">
+              <div>
+                <div class="muted t-xs">认证等级</div>
+                <div class="strong t-lg mt-8" id="lvName">实名认证 · 企业认证审核中</div>
+              </div>
+              <div class="tr">
+                <div class="muted t-xs">完成度</div>
+                <div class="mono t-xl strong c-green mt-8"><span id="lvPct">75</span>%</div>
+              </div>
+            </div>
+            <div class="progress mt-12"><i id="lvBar" style="width:75%"></i></div>
+
+            <div class="lv-track">
+              <div class="lv-node done" data-lv="1">
+                <div class="c"><span data-icon="check" data-size="14"></span></div>
+                <div class="t">账号注册</div><div class="d">2026-03-12</div>
+              </div>
+              <div class="lv-node done" data-lv="2">
+                <div class="c"><span data-icon="check" data-size="14"></span></div>
+                <div class="t">个人实名</div><div class="d">2026-03-13</div>
+              </div>
+              <div class="lv-node cur" data-lv="3">
+                <div class="c">3</div>
+                <div class="t">企业认证</div><div class="d" id="lvEntState">审核中</div>
+              </div>
+              <div class="lv-node lock" data-lv="4">
+                <div class="c">4</div>
+                <div class="t">优选供应商</div><div class="d">需企业认证</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 认证入口 -->
+<section class="section" style="padding-top:0">
+  <div class="container">
+    <div class="section-head">
+      <div>
+        <div class="bar-title">认证入口</div>
+        <div class="sub">企业用户需完成企业认证后方可交易；个人用户（合作社 / 家庭农场 / 个体户）完成实名认证即可下单</div>
+      </div>
+    </div>
+
+    <div class="grid grid-2">
+
+      <!-- 个人实名认证 -->
+      <div class="cert-card">
+        <div class="row between center">
+          <div class="row center gap-12">
+            <div class="stat-icon tech" style="width:46px;height:46px;border-radius:12px"><span data-icon="user" data-size="22"></span></div>
+            <div>
+              <div class="strong t-xl">个人实名认证</div>
+              <div class="muted t-sm">身份证 + 人脸核验，1 分钟完成</div>
+            </div>
+          </div>
+          <span class="tag"><span data-icon="check" data-size="12"></span>已认证</span>
+        </div>
+        <div class="progress mt-16"><i style="width:100%"></i></div>
+        <div class="muted t-xs mt-8">认证编号 <span class="mono">ID2026031300296</span> · 认证时间 2026-03-13</div>
+        <div class="row gap-12 mt-16">
+          <a class="btn btn-outline flex-1" href="certify-personal.html"><span data-icon="file"></span>查看认证信息</a>
+          <a class="btn btn-ghost flex-1" href="certify-personal.html"><span data-icon="check"></span>更新证件有效期</a>
+        </div>
+      </div>
+
+      <!-- 企业认证 -->
+      <div class="cert-card">
+        <div class="row between center">
+          <div class="row center gap-12">
+            <div class="stat-icon" style="width:46px;height:46px;border-radius:12px"><span data-icon="factory" data-size="22"></span></div>
+            <div>
+              <div class="strong t-xl">企业认证</div>
+              <div class="muted t-sm">营业执照 + 法人核验 + 对公账户</div>
+            </div>
+          </div>
+          <span class="tag tag-amber" id="entTag"><span data-icon="activity" data-size="12"></span>审核中</span>
+        </div>
+        <div class="progress mt-16"><i id="entBar" style="width:60%"></i></div>
+        <div class="muted t-xs mt-8" id="entDesc">受理编号 <span class="mono">RV202610190031</span> · 预计 1-3 个工作日完成审核</div>
+        <div class="row gap-12 mt-16">
+          <a class="btn btn-primary flex-1" href="certify-enterprise.html" id="entBtn"><span data-icon="zap"></span>查看审核进度</a>
+          <a class="btn btn-ghost flex-1" href="certify-enterprise.html"><span data-icon="clipboard"></span>补充资质材料</a>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- 认证权益 -->
+<section class="section" style="background:var(--bg-alt)">
+  <div class="container">
+    <div class="section-head">
+      <div>
+        <div class="bar-title">认证后解锁的权益</div>
+        <div class="sub">认证状态发生变化时，以下权益将自动同步解锁</div>
+      </div>
+    </div>
+    <div class="grid grid-4">
+      <div class="bft" data-bft>
+        <span class="lock" data-lock><span data-icon="shield" data-size="15"></span></span>
+        <div class="bf-ic mb-12"><span data-icon="cart" data-size="20"></span></div>
+        <div class="strong">交易与报价权限</div>
+        <div class="muted t-sm mt-8">发布采购 / 供应需求，参与撮合并在线议价签约</div>
+      </div>
+      <div class="bft" data-bft>
+        <span class="lock" data-lock><span data-icon="shield" data-size="15"></span></span>
+        <div class="bf-ic tech mb-12"><span data-icon="award" data-size="20"></span></div>
+        <div class="strong">店铺「已认证」标识</div>
+        <div class="muted t-sm mt-8">搜索与推荐加权，采购商信任度提升，询单量平均 +38%</div>
+      </div>
+      <div class="bft" data-bft>
+        <span class="lock" data-lock><span data-icon="shield" data-size="15"></span></span>
+        <div class="bf-ic amber mb-12"><span data-icon="money" data-size="20"></span></div>
+        <div class="strong">供应链金融额度</div>
+        <div class="muted t-sm mt-8">订单融 / 收货融 / 信用付等产品申请资格与授信测算</div>
+      </div>
+      <div class="bft" data-bft>
+        <span class="lock" data-lock><span data-icon="shield" data-size="15"></span></span>
+        <div class="bf-ic violet mb-12"><span data-icon="truck" data-size="20"></span></div>
+        <div class="strong">物流溯源与云工厂</div>
+        <div class="muted t-sm mt-8">冷链仓储、质量溯源、VR 云工厂参观与农技指导服务</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 认证流程 -->
+<section class="section">
+  <div class="container">
+    <div class="section-head">
+      <div>
+        <div class="bar-title">认证流程</div>
+        <div class="sub">从提交材料到认证完成，全程线上办理并可在认证中心实时查询进度</div>
+      </div>
+      <span class="tag tag-ghost">平均审核时长 4.2 小时</span>
+    </div>
+    <div class="flow">
+      <div class="st">
+        <div class="h"><span class="no">1</span><span class="t">提交认证资料</span></div>
+        <div class="d">在线填写主体信息并上传营业执照、法人证件、开户许可等材料，系统自动做格式与清晰度校验。</div>
+        <div class="s">即时提交</div>
+      </div>
+      <div class="st">
+        <div class="h"><span class="no">2</span><span class="t">平台系统初审</span></div>
+        <div class="d">工商三要素、法人人脸、对公账户打款与失信名单自动核验，异常项转人工复核。</div>
+        <div class="s">约 10 分钟</div>
+      </div>
+      <div class="st">
+        <div class="h"><span class="no">3</span><span class="t">人工复审</span></div>
+        <div class="d">运营审核员核验经营范围与主营品类匹配度，必要时电话回访确认经营真实性。</div>
+        <div class="s">1-3 个工作日</div>
+      </div>
+      <div class="st">
+        <div class="h"><span class="no">4</span><span class="t">认证完成</span></div>
+        <div class="d">认证标识生效并同步至店铺与商品页，权益自动解锁，可在认证中心查看认证等级。</div>
+        <div class="s">短信 + 站内信通知</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 材料清单 -->
+<section class="section" style="padding-top:0">
+  <div class="container">
+    <div class="section-head">
+      <div>
+        <div class="bar-title">所需材料清单</div>
+        <div class="sub">提前准备材料可显著缩短审核时间，支持图片（JPG / PNG，单张 ≤ 5MB）与 PDF</div>
+      </div>
+    </div>
+    <div class="grid grid-2">
+
+      <div class="card">
+        <div class="card-h">
+          <h3><span data-icon="factory" data-size="18"></span>企业认证材料</h3>
+          <span class="tag tag-amber">待补齐 1 项</span>
+        </div>
+        <div class="card-b">
+          <ul class="mat">
+            <li><span class="ic"><span data-icon="check" data-size="13"></span></span>
+              <span class="txt">营业执照（副本）<small>需在有效期内，加盖公章并确保统一社会信用代码清晰可读</small></span><span class="req">已上传</span></li>
+            <li><span class="ic"><span data-icon="check" data-size="13"></span></span>
+              <span class="txt">法定代表人身份证<small>人像面与国徽面各一张，四角完整、无反光遮挡</small></span><span class="req">已上传</span></li>
+            <li><span class="ic"><span data-icon="check" data-size="13"></span></span>
+              <span class="txt">对公账户开户许可 / 银行开户证明<small>用于对公账户打款验证，需与营业执照主体一致</small></span><span class="req">已上传</span></li>
+            <li><span class="ic"><span data-icon="file" data-size="13"></span></span>
+              <span class="txt">食品经营许可证 / 生产许可（选填）<small>涉及食品、饲料、农资经营的主体建议提供</small></span><span class="req" style="color:var(--ink-400)">选填</span></li>
+            <li><span class="ic"><span data-icon="file" data-size="13"></span></span>
+              <span class="txt">授权委托书（选填）<small>非法人本人办理时需提供，附经办人身份证</small></span><span class="req" style="color:var(--ink-400)">选填</span></li>
+            <li><span class="ic"><span data-icon="alert" data-size="13"></span></span>
+              <span class="txt">最新年度报告<small>用于核验企业经营存续状态，可在国家企业信用信息公示系统下载</small></span><span class="req">待上传</span></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-h">
+          <h3><span data-icon="user" data-size="18"></span>个人实名认证材料</h3>
+          <span class="tag"><span data-icon="check" data-size="12"></span>材料齐备</span>
+        </div>
+        <div class="card-b">
+          <ul class="mat">
+            <li><span class="ic"><span data-icon="check" data-size="13"></span></span>
+              <span class="txt">本人二代身份证<small>人像面与国徽面，需与填写姓名、证件号完全一致</small></span><span class="req">已上传</span></li>
+            <li><span class="ic"><span data-icon="check" data-size="13"></span></span>
+              <span class="txt">人脸活体核验<small>在光线充足环境下按提示完成点头、眨眼动作</small></span><span class="req">已通过</span></li>
+            <li><span class="ic"><span data-icon="check" data-size="13"></span></span>
+              <span class="txt">手机号实名核验<small>银行预留手机号，用于接收验证码与交易通知</small></span><span class="req">已通过</span></li>
+            <li><span class="ic"><span data-icon="file" data-size="13"></span></span>
+              <span class="txt">经营证明（选填）<small>家庭农场 / 合作社可提供承包合同或合作社登记证书</small></span><span class="req" style="color:var(--ink-400)">选填</span></li>
+          </ul>
+          <div class="mt-16" style="background:var(--green-050);border:1px dashed var(--green-300);border-radius:10px;padding:12px 14px">
+            <div class="t-sm c-green strong"><span data-icon="shield" data-size="14" style="vertical-align:-2px"></span> 信息加密说明</div>
+            <div class="muted t-xs mt-8">证件信息经 AES-256 加密存储，仅用于认证核验与电子签约，平台不会对外展示完整证件号。</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- 常见问题 -->
+<section class="section" style="padding-top:0">
+  <div class="container">
+    <div class="section-head">
+      <div>
+        <div class="bar-title">常见问题</div>
+        <div class="sub">关于企业认证与个人实名认证的高频疑问</div>
+      </div>
+    </div>
+    <div class="faq">
+      <div class="faq-item">
+        <button type="button" class="faq-q">个人认证与企业认证有什么区别？<span class="mk" data-icon="plus" data-size="16"></span></button>
+        <div class="faq-a"><div class="in">个人实名认证用于确认自然人身份，完成后可进行小额采购与需求发布；企业认证以营业执照主体为单位，完成后才能使用大宗交易的在线议价、电子签约、供应链金融与店铺经营等能力。</div></div>
+      </div>
+      <div class="faq-item">
+        <button type="button" class="faq-q">企业认证审核需要多久？可以加急吗？<span class="mk" data-icon="plus" data-size="16"></span></button>
+        <div class="faq-a"><div class="in">系统初审约 10 分钟完成，人工复审通常 1-3 个工作日。秋粮集中收购等业务高峰期，平台对采购商与粮油类供应主体开通绿色通道，可联系专属客户经理申请加急。</div></div>
+      </div>
+      <div class="faq-item">
+        <button type="button" class="faq-q">对公账户打款验证是什么？金额会退还吗？<span class="mk" data-icon="plus" data-size="16"></span></button>
+        <div class="faq-a"><div class="in">平台会向您填写的对公账户随机打款一笔小额金额（通常 0.10-0.99 元）用于验证账户归属，您需在页面回填该金额完成验证。款项无需退还，将留存于您的账户余额中。</div></div>
+      </div>
+      <div class="faq-item">
+        <button type="button" class="faq-q">认证被驳回后如何重新提交？<span class="mk" data-icon="plus" data-size="16"></span></button>
+        <div class="faq-a"><div class="in">驳回时会同步告知具体原因（材料不清晰、证件过期、主体信息不一致、超经营范围等）。在认证中心点击「补充资质材料」按提示修正后重新提交，重新提交不限制次数，且已通过的校验项无需重做。</div></div>
+      </div>
+      <div class="faq-item">
+        <button type="button" class="faq-q">证件有效期或企业信息变更了怎么办？<span class="mk" data-icon="plus" data-size="16"></span></button>
+        <div class="faq-a"><div class="in">企业名称、法人、注册地址等关键信息变更属于「资质变更」，需重新提交变更后的营业执照与开户资料审核；仅证件有效期更新可在认证中心直接重新上传，系统自动复核。</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="section" style="padding-top:0">
+  <div class="container">
+    <div class="card" style="background:linear-gradient(135deg,var(--green-800),var(--green-600) 55%,var(--tech-600));border:none;color:#fff;overflow:hidden">
+      <div class="card-b" style="padding:30px 32px;display:flex;align-items:center;justify-content:space-between;gap:24px;flex-wrap:wrap">
+        <div>
+          <div class="strong" style="font-size:22px">还没有完成认证？现在开始，3 步搞定</div>
+          <div style="color:rgba(255,255,255,.8);font-size:13px;margin-top:8px">认证专员 1v1 协助材料准备 · 工作日 9:00-18:00 在线 · 客服热线 400-800-2668</div>
+        </div>
+        <div class="row gap-12 wrap">
+          <a class="btn btn-lg" style="background:#fff;color:var(--green-700)" href="certify-enterprise.html"><span data-icon="factory"></span>开始企业认证</a>
+          <a class="btn btn-lg" style="background:rgba(255,255,255,.12);color:#fff;border-color:rgba(255,255,255,.4)" href="certify-personal.html"><span data-icon="user"></span>开始个人认证</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 页脚 -->
+<footer class="site-footer">
+  <div class="container">
+    <div class="grid grid-4">
+      <div>
+        <div class="brand" style="color:#fff"><span class="logo" data-icon="seed" data-size="20"></span><span>农产云</span></div>
+        <p style="margin-top:14px;font-size:13px;color:rgba(255,255,255,.6);max-width:280px">
+          农业产业互联网平台，让每一亩农田都接入数字网络。</p>
+      </div>
+      <div><h4>认证服务</h4>
+        <a href="certify-enterprise.html">企业认证</a><a href="certify-personal.html">个人实名认证</a>
+        <a href="certify.html">认证中心</a><a href="certify.html">认证材料清单</a>
+      </div>
+      <div><h4>会员服务</h4>
+        <a href="../trade/member.html">会员中心</a><a href="../trade/publish.html">发布需求</a>
+        <a href="../trade/index.html">交易大厅</a><a href="../module/finance.html">供应链金融</a>
+      </div>
+      <div><h4>帮助与支持</h4>
+        <a href="javascript:void(0)" onclick="alert('原型演示：认证帮助中心')">认证帮助中心</a>
+        <a href="javascript:void(0)" onclick="alert('原型演示：联系认证专员')">联系认证专员</a>
+        <a href="javascript:void(0)" onclick="alert('原型演示：常见问题')">常见问题</a>
+        <a href="../index.html">产品原型总览</a>
+      </div>
+    </div>
+    <div class="bottom">
+      <span>© 2026 农业产业互联网平台 · 产品原型演示（本页为原型演示，非真实业务系统）</span>
+      <span>Prototype v1.0 · 农业绿 + 数据科技风</span>
+    </div>
+  </div>
+</footer>
+
+<script src="../assets/js/app.js"></script>
+<script>
+(function () {
+  "use strict";
+  var $ = function (s) { return document.querySelector(s); };
+
+  /* ===== FAQ 折叠 ===== */
+  document.querySelectorAll(".faq-q").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var item = btn.parentElement;
+      var open = item.classList.contains("open");
+      document.querySelectorAll(".faq-item").forEach(function (i) { i.classList.remove("open"); });
+      if (!open) item.classList.add("open");
+    });
+  });
+
+  /* ===== 认证状态演示切换 ===== */
+  var STATES = {
+    none: {
+      lvName: "仅完成账号注册，尚未认证",
+      lvPct: "20",
+      entState: "未认证",
+      entTag: '<span data-icon="alert" data-size="12"></span>未认证',
+      entTagClass: "tag tag-ghost",
+      entBar: "10%",
+      entDesc: '尚未提交企业认证材料 · 提交后 1-3 个工作日完成审核',
+      entBtn: '<span data-icon="zap"></span>立即认证',
+      chain: 1, bftLocked: true
+    },
+    review: {
+      lvName: "实名认证 · 企业认证审核中",
+      lvPct: "75",
+      entState: "审核中",
+      entTag: '<span data-icon="activity" data-size="12"></span>审核中',
+      entTagClass: "tag tag-amber",
+      entBar: "60%",
+      entDesc: '受理编号 <span class="mono">RV202610190031</span> · 预计 1-3 个工作日完成审核',
+      entBtn: '<span data-icon="zap"></span>查看审核进度',
+      chain: 2, bftLocked: true
+    },
+    done: {
+      lvName: "实名认证 · 企业认证（基础等级）",
+      lvPct: "100",
+      entState: "已认证",
+      entTag: '<span data-icon="check" data-size="12"></span>已认证',
+      entTagClass: "tag",
+      entBar: "100%",
+      entDesc: '认证编号 <span class="mono">ENT2026101900088</span> · 有效期至 2027-10-18',
+      entBtn: '<span data-icon="file"></span>查看认证详情',
+      chain: 3, bftLocked: false
+    }
+  };
+
+  function applyState(key) {
+    var s = STATES[key];
+    if (!s) return;
+    $("#lvName").textContent = s.lvName;
+    $("#lvPct").textContent = s.lvPct;
+    $("#lvBar").style.width = s.lvPct + "%";
+    $("#entBar").style.width = s.entBar;
+    $("#entDesc").innerHTML = s.entDesc;
+
+    var lvEnt = $('#lvEntState');
+    if (lvEnt) lvEnt.textContent = s.entState;
+
+    var tag = $("#entTag");
+    tag.className = s.entTagClass;
+    tag.innerHTML = s.entTag;
+    if (window.PROTO) PROTO.hydrateIcons(tag);
+
+    var btn = $("#entBtn");
+    btn.innerHTML = s.entBtn;
+    if (window.PROTO) PROTO.hydrateIcons(btn);
+
+    /* 认证等级节点 */
+    document.querySelectorAll(".lv-node").forEach(function (n) {
+      var lv = +n.getAttribute("data-lv");
+      n.classList.remove("done", "cur", "lock");
+      if (lv < s.chain) n.classList.add("done");
+      else if (lv === s.chain) n.classList.add("cur");
+      else n.classList.add("lock");
+    });
+
+    /* 权益锁定态 */
+    document.querySelectorAll("[data-bft]").forEach(function (c) {
+      c.classList.toggle("locked", s.bftLocked);
+      var lock = c.querySelector("[data-lock]");
+      if (lock) {
+        lock.innerHTML = s.bftLocked
+          ? '<span data-icon="shield" data-size="15"></span>'
+          : '<span data-icon="check" data-size="15" style="color:var(--green-600)"></span>';
+      }
+    });
+    if (window.PROTO) window.PROTO.hydrateIcons(document);
+  }
+
+  var chips = document.querySelectorAll("#stateChips .chip");
+  for (var i = 0; i < chips.length; i++) {
+    chips[i].addEventListener("click", function () { applyState(this.getAttribute("data-state")); });
+  }
+
+  applyState("review");
+})();
+</script>
+</body>
+</html>
