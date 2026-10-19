@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>交易撮合 · 农产云</title>
+<link rel="stylesheet" href="../assets/css/theme.css" />
+</head>
+<body>
+
+<!-- 顶部通栏 -->
+<div class="topbar">
+  <div class="container">
+    <span>农产云 · 农业产业互联网平台 · 交易引擎</span>
+    <span>
+      <a href="../trade/publish.html">发布需求</a><span class="sep">·</span>
+      <a href="trade-matching.html">我的撮合</a><span class="sep">·</span>
+      <a href="../index.html">产品原型总览</a>
+    </span>
+  </div>
+</div>
+
+<!-- 站点头部 -->
+<header class="site-header">
+  <div class="container">
+    <a class="brand" href="../portal/index.html">
+      <span class="logo" data-icon="seed" data-size="20"></span>
+      <span>农产云<small>AGRI · CLOUD</small></span>
+    </a>
+    <nav class="main-nav">
+      <a href="../portal/index.html">首页</a>
+      <a href="../trade/index.html">交易大厅</a>
+      <a href="trade-matching.html" class="active">交易撮合</a>
+      <a href="s2b2c.html">S2B2C</a>
+      <a href="finance.html">供应链金融</a>
+      <a href="service.html">综合服务</a>
+      <a href="supervision.html">政府监管</a>
+      <a href="info.html">信息资讯</a>
+    </nav>
+    <div class="header-search">
+      <input placeholder="搜索商品 / 供应商 / 需求" />
+      <button>搜索</button>
+    </div>
+  </div>
+</header>
+
+<!-- 面包屑 -->
+<div style="background:#fff;border-bottom:1px solid var(--line)">
+  <div class="container" style="padding:12px 0">
+    <div class="crumb">
+      <a href="../portal/index.html">首页</a>
+      <span class="sep">/</span>
+      <span>交易撮合</span>
+    </div>
+  </div>
+</div>
+
+<!-- 模块横幅 -->
+<section style="background:linear-gradient(135deg,#0A3A25,#12764A 60%,#0C7BA8);color:#fff;position:relative;overflow:hidden">
+  <div class="container" style="padding:40px 24px 36px;display:grid;grid-template-columns:1.3fr .7fr;gap:36px;align-items:center;position:relative;z-index:2">
+    <div>
+      <div class="row wrap center gap-8 mb-12">
+        <span class="tag" style="background:rgba(255,255,255,.14);color:#EAFFF5"><span data-icon="spark" data-size="13"></span>交易引擎 · 交易撮合</span>
+        <span class="tag" style="background:rgba(255,255,255,.14);color:#EAFFF5"><span data-icon="cpu" data-size="13"></span>智能大宗交易 + Sales Agent</span>
+      </div>
+      <h1 style="font-size:32px;font-weight:800;line-height:1.3">交易撮合</h1>
+      <p style="color:rgba(255,255,255,.8);margin-top:12px;max-width:660px">
+        智能大宗交易 + AI Sales Agent：自动撮合买卖需求、智能议价、一键成交，让大宗交易更快更省。</p>
+      <div style="margin-top:22px;display:flex;gap:12px;flex-wrap:wrap">
+        <a class="btn btn-lg" style="background:#fff;color:#0E5233" href="#workbench"><span data-icon="search"></span>进入撮合工作台</a>
+        <a class="btn btn-lg btn-outline" style="background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.5);color:#fff" href="#agent"><span data-icon="spark"></span>了解 AI 议价</a>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);border-radius:14px;padding:14px 18px;backdrop-filter:blur(6px)">
+        <div style="font-size:12px;color:rgba(255,255,255,.7)"><span data-icon="activity" data-size="13"></span> 日撮合需求</div>
+        <div class="mono" style="font-size:24px;font-weight:800;margin-top:4px">3,860<span style="font-size:13px;font-weight:500"> 条</span></div>
+      </div>
+      <div style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);border-radius:14px;padding:14px 18px;backdrop-filter:blur(6px)">
+        <div style="font-size:12px;color:rgba(255,255,255,.7)"><span data-icon="check" data-size="13"></span> 撮合成功率</div>
+        <div class="mono" style="font-size:24px;font-weight:800;margin-top:4px">86<span style="font-size:13px;font-weight:500"> %</span></div>
+      </div>
+      <div style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);border-radius:14px;padding:14px 18px;backdrop-filter:blur(6px)">
+        <div style="font-size:12px;color:rgba(255,255,255,.7)"><span data-icon="zap" data-size="13"></span> 平均成交周期</div>
+        <div class="mono" style="font-size:24px;font-weight:800;margin-top:4px">2.3<span style="font-size:13px;font-weight:500"> 天</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 撮合能力卡 -->
+<section class="section">
+  <div class="container">
+    <div class="section-head">
+      <div>
+        <div class="bar-title">撮合能力</div>
+        <div class="sub">从需求解析、智能匹配到议价成交、合同签署的一站式大宗交易引擎</div>
+      </div>
+      <span class="tag tag-ghost">六项核心能力</span>
+    </div>
+    <div class="grid grid-4">
+      <div class="card card-hover"><div class="card-b">
+        <div class="row between center mb-12"><div class="stat-icon"><span data-icon="target" data-size="20"></span></div><span class="tag">AI 引擎</span></div>
+        <div class="strong t-lg">智能需求匹配</div>
+        <div class="muted t-sm mt-8">解析买卖双方的品类、产地、价格、交期与信用，多维加权一键匹配最优货源。</div>
+      </div></div>
+      <div class="card card-hover"><div class="card-b">
+        <div class="row between center mb-12"><div class="stat-icon tech"><span data-icon="spark" data-size="20"></span></div><span class="tag tag-tech">Sales Agent</span></div>
+        <div class="strong t-lg">AI 议价助手</div>
+        <div class="muted t-sm mt-8">AI 代理买卖双方自动出价、还价与博弈，7×24 小时促成最优成交价格。</div>
+      </div></div>
+      <div class="card card-hover"><div class="card-b">
+        <div class="row between center mb-12"><div class="stat-icon amber"><span data-icon="chart" data-size="20"></span></div><span class="tag tag-amber">多轮竞价</span></div>
+        <div class="strong t-lg">竞价 / 招标撮合</div>
+        <div class="muted t-sm mt-8">支持公开竞价、定向邀标与反向拍卖，价高者得、价优者得，成交更透明。</div>
+      </div></div>
+      <div class="card card-hover"><div class="card-b">
+        <div class="row between center mb-12"><div class="stat-icon"><span data-icon="file" data-size="20"></span></div><span class="tag">电子合同</span></div>
+        <div class="strong t-lg">合同在线签署</div>
+        <div class="muted t-sm mt-8">撮合达成即生成标准合同，在线签署、上链存证与履约跟踪一体化闭环。</div>
+      </div></div>
+      <div class="card card-hover"><div class="card-b">
+        <div class="row between center mb-12"><div class="stat-icon tech"><span data-icon="shield" data-size="20"></span></div><span class="tag tag-violet">四流核验</span></div>
+        <div class="strong t-lg">撮合风控</div>
+        <div class="muted t-sm mt-8">校验交易双方资质、信用与真实贸易背景，订单、发票、物流、资金交叉验证。</div>
+      </div></div>
+      <div class="card card-hover"><div class="card-b">
+        <div class="row between center mb-12"><div class="stat-icon amber"><span data-icon="award" data-size="20"></span></div><span class="tag tag-ghost">资金托管</span></div>
+        <div class="strong t-lg">成交保障</div>
+        <div class="muted t-sm mt-8">货款第三方托管、验货放款，保障买卖双方资金与货物安全，履约无忧。</div>
+      </div></div>
+    </div>
+  </div>
+</section>
+
+<!-- 撮合工作台 -->
+<section class="section" style="padding-top:0" id="workbench">
+  <div class="container">
+    <div class="section-head">
+      <div>
+        <div class="bar-title">撮合工作台</div>
+        <div class="sub">一条采购需求，实时汇聚供应商报价并给出智能撮合结论</div>
+      </div>
+      <span class="tag tag-tech"><span data-icon="activity" data-size="13"></span>实时撮合中</span>
+    </div>
+
+    <div class="grid" style="grid-template-columns:1.5fr 1fr;gap:24px;align-items:start">
+
+      <!-- 左栏 -->
+      <div style="display:flex;flex-direction:column;gap:24px">
+
+        <!-- 采购需求卡 -->
+        <div class="card">
+          <div class="card-h">
+            <h3><span data-icon="clipboard" data-size="18"></span>采购需求</h3>
+            <span class="tag tag-amber">待撮合</span>
+          </div>
+          <div class="card-b">
+            <div class="row between center mb-16 wrap gap-12">
+              <div class="row center gap-12">
+                <div class="stat-icon" style="width:44px;height:44px"><span data-icon="factory" data-size="20"></span></div>
+                <div>
+                  <div class="strong t-lg">湖北荆州江汉粮贸</div>
+                  <div class="muted t-xs">采购方 · 平台认证企业 · 信用 AAA</div>
+                </div>
+              </div>
+              <div class="tr">
+                <div class="muted t-xs">需求编号</div>
+                <div class="mono strong">DEM20261019-0368</div>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div style="border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:var(--bg-alt)">
+                <div class="muted t-xs">采购品类</div>
+                <div class="strong mt-8">一级压榨菜籽油</div>
+              </div>
+              <div style="border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:var(--bg-alt)">
+                <div class="muted t-xs">采购数量</div>
+                <div class="strong mt-8"><span class="mono">100</span> 吨</div>
+              </div>
+              <div style="border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:var(--bg-alt)">
+                <div class="muted t-xs">期望单价</div>
+                <div class="mt-8"><span class="muted">≤</span> <span class="price"><span class="cur">¥</span>10,900<span class="unit">/吨</span></span></div>
+              </div>
+              <div style="border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:var(--bg-alt)">
+                <div class="muted t-xs">交货地</div>
+                <div class="strong mt-8 row center gap-8"><span data-icon="location" data-size="14"></span>湖北荆州</div>
+              </div>
+            </div>
+            <div class="form-hint">需求方期望本周内（≤5 天）交付，接受全额预付款并支持平台资金托管。</div>
+          </div>
+        </div>
+
+        <!-- AI 匹配供应商报价 -->
+        <div class="card">
+          <div class="card-h">
+            <h3><span data-icon="spark" data-size="18"></span>AI 智能匹配</h3>
+            <span class="more">已聚合 6 家供应商报价 · 展示 TOP 4</span>
+          </div>
+          <div class="card-b" style="padding:0">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>供应商</th>
+                  <th style="text-align:right">报价</th>
+                  <th>产地</th>
+                  <th>库存</th>
+                  <th>交期</th>
+                  <th style="text-align:right">匹配度</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="row center gap-8"><span class="dot"></span><span class="strong">湖北金穗粮油</span></td>
+                  <td class="tr"><span class="price"><span class="cur">¥</span>10,780<span class="unit">/吨</span></span></td>
+                  <td>湖北荆州</td>
+                  <td class="mono">420 吨</td>
+                  <td class="mono">5 天</td>
+                  <td class="tr"><span class="tag">96%</span></td>
+                </tr>
+                <tr>
+                  <td class="row center gap-8"><span class="dot"></span><span class="strong">中垦粮油（荆州）</span></td>
+                  <td class="tr"><span class="price"><span class="cur">¥</span>10,850<span class="unit">/吨</span></span></td>
+                  <td>湖北荆门</td>
+                  <td class="mono">260 吨</td>
+                  <td class="mono">3 天</td>
+                  <td class="tr"><span class="tag">92%</span></td>
+                </tr>
+                <tr>
+                  <td class="row center gap-8"><span class="dot gray"></span><span class="strong">苏北油脂集团</span></td>
+                  <td class="tr"><span class="price"><span class="cur">¥</span>10,920<span class="unit">/吨</span></span></td>
+                  <td>江苏泰州</td>
+                  <td class="mono">600 吨</td>
+                  <td class="mono">7 天</td>
+                  <td class="tr"><span class="tag tag-ghost">88%</span></td>
+                </tr>
+                <tr>
+                  <td class="row center gap-8"><span class="dot gray"></span><span class="strong">川东佳禾农业</span></td>
+                  <td class="tr"><span class="price"><span class="cur">¥</span>10,980<span class="unit">/吨</span></span></td>
+                  <td>四川达州</td>
+                  <td class="mono">150 吨</td>
+                  <td class="mono">6 天</td>
+                  <td class="tr"><span class="tag tag-ghost">85%</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- 右栏 -->
+      <div style="display:flex;flex-direction:column;gap:24px">
+
+        <!-- 撮合结论 -->
+        <div class="card">
+          <div class="card-h">
+            <h3><span data-icon="target" data-size="18"></span>撮合结论</h3>
+            <span class="tag">推荐成交</span>
+          </div>
+          <div class="card-b">
+            <div style="background:var(--green-050);border:1px dashed var(--green-300);border-radius:10px;padding:14px 16px">
+              <div class="row center gap-8 strong c-green"><span data-icon="check" data-size="16"></span>推荐成交方案</div>
+              <div class="strong mt-8">湖北金穗粮油</div>
+              <div class="muted t-sm mt-8">报价 <span class="price"><span class="cur">¥</span>10,780<span class="unit">/吨</span></span> · 湖北荆州 · 5 天交货 · 库存充足</div>
+            </div>
+
+            <div class="mt-20" style="display:flex;flex-direction:column;gap:14px">
+              <div>
+                <div class="row between center t-sm mb-8"><span class="muted">价格匹配</span><span class="mono strong">97</span></div>
+                <div class="progress"><i style="width:97%"></i></div>
+              </div>
+              <div>
+                <div class="row between center t-sm mb-8"><span class="muted">交期匹配</span><span class="mono strong">94</span></div>
+                <div class="progress"><i style="width:94%"></i></div>
+              </div>
+              <div>
+                <div class="row between center t-sm mb-8"><span class="muted">信用匹配</span><span class="mono strong">90</span></div>
+                <div class="progress"><i style="width:90%"></i></div>
+              </div>
+            </div>
+
+            <div class="row between center mt-20">
+              <span class="muted t-sm">综合得分</span>
+              <span class="mono strong" style="font-size:22px;color:var(--green-700)">96</span>
+            </div>
+
+            <div class="row gap-12 mt-16">
+              <button type="button" class="btn btn-outline flex-1"><span data-icon="spark"></span>发起议价</button>
+              <button type="button" class="btn btn-primary flex-1"><span data-icon="cart"></span>一键下单</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 撮合实时数据 -->
+        <div class="card">
+          <div class="card-h">
+            <h3><span data-icon="activity" data-size="18"></span>成交预估</h3>
+            <span class="more">实时测算</span>
+          </div>
+          <div class="card-b">
+            <div class="grid grid-2" style="gap:14px">
+              <div class="stat">
+                <div class="k"><span data-icon="money" data-size="14"></span>预估总价</div>
+                <div class="v" style="font-size:22px">¥1,078,000</div>
+                <div class="d">按推荐报价测算</div>
+              </div>
+              <div class="stat tech">
+                <div class="k"><span data-icon="chart" data-size="14"></span>较预算节省</div>
+                <div class="v" style="font-size:22px">¥12,000</div>
+                <div class="d">低于期望价上限 <span class="mono">1.1%</span></div>
+              </div>
+            </div>
+            <div class="form-hint">以上为撮合引擎实时测算结果，最终以双方议价及合同为准。</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- AI Sales Agent 议价 demo -->
+<section class="section" style="padding-top:0" id="agent">
+  <div class="container">
+    <div class="section-head">
+      <div>
+        <div class="bar-title">AI Sales Agent 议价</div>
+        <div class="sub">AI 代理采购方与供应商自动议价，直接锁定可接受的价格与交期</div>
+      </div>
+      <span class="tag tag-tech"><span data-icon="cpu" data-size="13"></span>自动议价 · 无需人工盯盘</span>
+    </div>
+
+    <div class="card">
+      <div class="card-h">
+        <h3><span data-icon="spark" data-size="18"></span>采购代理 × 湖北金穗粮油</h3>
+        <span class="tag"><span class="dot-pulse" style="width:7px;height:7px"></span>议价进行中</span>
+      </div>
+      <div class="card-b" style="background:var(--bg-alt)">
+        <div style="max-width:680px;margin:0 auto">
+          <div class="chat" style="background:#fff;border:1px solid var(--line);border-radius:12px">
+
+            <!-- AI 采购代理（左） -->
+            <div class="msg ai">
+              <div class="av" data-icon="spark" data-size="16"></div>
+              <div class="bubble">你好，我是本次采购的 AI 代理。目标：100 吨一级压榨菜籽油，出价 <span class="price"><span class="cur">¥</span>10,750</span>/吨，要求本周内（≤5 天）发货，支持全额预付。</div>
+            </div>
+
+            <!-- 供应商（右） -->
+            <div class="msg me">
+              <div class="av">供</div>
+              <div class="bubble">湖北金穗粮油：本周发货排产较紧，最低可让至 <span class="mono" style="color:#fff">¥10,820</span>/吨，交期需 5 天。</div>
+            </div>
+
+            <!-- AI 采购代理 -->
+            <div class="msg ai">
+              <div class="av" data-icon="spark" data-size="16"></div>
+              <div class="bubble">我可以接受 <span class="price"><span class="cur">¥</span>10,800</span>/吨，但需 3 天内交付；货款可全额预付并经平台托管。</div>
+            </div>
+
+            <!-- 供应商 -->
+            <div class="msg me">
+              <div class="av">供</div>
+              <div class="bubble">同意，成交价 <span class="mono" style="color:#fff">¥10,800</span>/吨，3 天内发货，按标准合同签署。</div>
+            </div>
+
+            <!-- 系统结论 -->
+            <div class="msg ai">
+              <div class="av" data-icon="check" data-size="16"></div>
+              <div class="bubble" style="max-width:260px">
+                议价达成，生成待签合同
+                <div class="ai-result">
+                  <div class="row between center gap-8">
+                    <span class="strong" style="font-size:12.5px">成交价</span>
+                    <span class="price"><span class="cur">¥</span>10,800<span class="unit">/吨</span></span>
+                  </div>
+                  <div class="row between center gap-8" style="margin-top:6px">
+                    <span class="t-xs muted">较首轮出价让利</span>
+                    <span class="mono t-xs strong">+¥50/吨</span>
+                  </div>
+                  <button class="btn btn-sm btn-primary btn-block" style="margin-top:10px"><span data-icon="file"></span>查看待签合同</button>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 成交记录 -->
+<section class="section" style="padding-top:0">
+  <div class="container">
+    <div class="card">
+      <div class="card-h">
+        <h3><span data-icon="clipboard" data-size="18"></span>撮合成交记录</h3>
+        <a class="more" href="#workbench">全部记录 →</a>
+      </div>
+      <div class="card-b" style="padding:0">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>成交单号</th>
+              <th>品类</th>
+              <th>数量</th>
+              <th style="text-align:right">成交价</th>
+              <th>需求方</th>
+              <th>供应方</th>
+              <th>撮合方式</th>
+              <th>状态</th>
+              <th>成交时间</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="mono">TM20261019-0182</td>
+              <td>一级压榨菜籽油</td>
+              <td class="mono">100 吨</td>
+              <td class="tr"><span class="price"><span class="cur">¥</span>10,800<span class="unit">/吨</span></span></td>
+              <td>湖北荆州江汉粮贸</td>
+              <td>湖北金穗粮油</td>
+              <td><span class="tag tag-tech">AI 议价</span></td>
+              <td><span class="tag tag-amber">待签约</span></td>
+              <td class="mono t-xs">2026-10-19 10:24</td>
+            </tr>
+            <tr>
+              <td class="mono">TM20261019-0176</td>
+              <td>优质玉米</td>
+              <td class="mono">500 吨</td>
+              <td class="tr"><span class="price"><span class="cur">¥</span>2,460<span class="unit">/吨</span></span></td>
+              <td>山东临沂粮油购销</td>
+              <td>河南豫丰农业</td>
+              <td><span class="tag">智能撮合</span></td>
+              <td><span class="tag">已成交</span></td>
+              <td class="mono t-xs">2026-10-19 09:11</td>
+            </tr>
+            <tr>
+              <td class="mono">TM20261018-0169</td>
+              <td>豆粕（43% 蛋白）</td>
+              <td class="mono">300 吨</td>
+              <td class="tr"><span class="price"><span class="cur">¥</span>3,280<span class="unit">/吨</span></span></td>
+              <td>广东温氏饲料</td>
+              <td>中垦粮油（东莞）</td>
+              <td><span class="tag tag-violet">竞价成交</span></td>
+              <td><span class="tag tag-tech">履约中</span></td>
+              <td class="mono t-xs">2026-10-18 16:47</td>
+            </tr>
+            <tr>
+              <td class="mono">TM20261018-0154</td>
+              <td>一级压榨菜籽油</td>
+              <td class="mono">200 吨</td>
+              <td class="tr"><span class="price"><span class="cur">¥</span>10,920<span class="unit">/吨</span></span></td>
+              <td>四川川东油脂</td>
+              <td>苏北油脂集团</td>
+              <td><span class="tag tag-tech">AI 议价</span></td>
+              <td><span class="tag">已成交</span></td>
+              <td class="mono t-xs">2026-10-18 14:03</td>
+            </tr>
+            <tr>
+              <td class="mono">TM20261017-0148</td>
+              <td>一级压榨菜籽油</td>
+              <td class="mono">80 吨</td>
+              <td class="tr"><span class="price"><span class="cur">¥</span>10,880<span class="unit">/吨</span></span></td>
+              <td>湖南湘粮控股</td>
+              <td>湖北金穗粮油</td>
+              <td><span class="tag">智能撮合</span></td>
+              <td><span class="tag tag-tech">履约中</span></td>
+              <td class="mono t-xs">2026-10-17 11:26</td>
+            </tr>
+            <tr>
+              <td class="mono">TM20261017-0141</td>
+              <td>优质玉米</td>
+              <td class="mono">350 吨</td>
+              <td class="tr"><span class="price"><span class="cur">¥</span>2,505<span class="unit">/吨</span></span></td>
+              <td>安徽阜阳饲料厂</td>
+              <td>河南豫丰农业</td>
+              <td><span class="tag tag-violet">竞价成交</span></td>
+              <td><span class="tag">已成交</span></td>
+              <td class="mono t-xs">2026-10-17 09:52</td>
+            </tr>
+          </tbody>
+        </table>
+        <div style="padding:14px 20px">
+          <div class="pager">
+            <button>上一页</button>
+            <button class="on">1</button>
+            <button>2</button>
+            <button>3</button>
+            <button>下一页</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 撮合成交走势 -->
+<section class="section" style="padding-top:0">
+  <div class="container">
+    <div class="card">
+      <div class="card-h">
+        <h3><span data-icon="activity" data-size="18"></span>撮合成交走势</h3>
+        <span class="more">近 7 日撮合成交量（吨）</span>
+      </div>
+      <div class="card-b">
+        <div class="chips mb-16">
+          <span class="chip on">成交量</span><span class="chip">成交金额</span><span class="chip">撮合成功率</span>
+        </div>
+        <div style="display:flex;align-items:flex-end;gap:10px;height:150px;padding:0 4px">
+          <div style="flex:1;height:56%;background:linear-gradient(180deg,#2FB877,#C9E9D8);border-radius:4px 4px 0 0"></div>
+          <div style="flex:1;height:68%;background:linear-gradient(180deg,#2FB877,#C9E9D8);border-radius:4px 4px 0 0"></div>
+          <div style="flex:1;height:60%;background:linear-gradient(180deg,#2FB877,#C9E9D8);border-radius:4px 4px 0 0"></div>
+          <div style="flex:1;height:79%;background:linear-gradient(180deg,#2FB877,#C9E9D8);border-radius:4px 4px 0 0"></div>
+          <div style="flex:1;height:75%;background:linear-gradient(180deg,#2FB877,#C9E9D8);border-radius:4px 4px 0 0"></div>
+          <div style="flex:1;height:90%;background:linear-gradient(180deg,#159A5E,#2FB877);border-radius:4px 4px 0 0"></div>
+          <div style="flex:1;height:100%;background:linear-gradient(180deg,#0EA5E9,#7DD3FC);border-radius:4px 4px 0 0"></div>
+        </div>
+        <div style="display:flex;gap:10px;padding:8px 4px 0">
+          <div class="tc mono t-xs muted flex-1">10/13</div>
+          <div class="tc mono t-xs muted flex-1">10/14</div>
+          <div class="tc mono t-xs muted flex-1">10/15</div>
+          <div class="tc mono t-xs muted flex-1">10/16</div>
+          <div class="tc mono t-xs muted flex-1">10/17</div>
+          <div class="tc mono t-xs muted flex-1">10/18</div>
+          <div class="tc mono t-xs strong c-tech flex-1">10/19</div>
+        </div>
+        <table class="data-table mt-16">
+          <thead><tr><th>日期</th><th>撮合需求</th><th style="text-align:right">成交量</th><th style="text-align:right">环比</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">10/19</td><td class="mono">3,860 条</td><td class="tr mono">3,860 吨</td><td class="tr mono" style="color:var(--green-600)">+11.6%</td></tr>
+            <tr><td class="mono">10/18</td><td class="mono">3,120 条</td><td class="tr mono">3,460 吨</td><td class="tr mono" style="color:var(--green-600)">+20.1%</td></tr>
+            <tr><td class="mono">10/17</td><td class="mono">2,680 条</td><td class="tr mono">2,880 吨</td><td class="tr mono" style="color:var(--red)">-5.6%</td></tr>
+            <tr><td class="mono">10/16</td><td class="mono">2,910 条</td><td class="tr mono">3,050 吨</td><td class="tr mono" style="color:var(--green-600)">+31.5%</td></tr>
+            <tr><td class="mono">10/15</td><td class="mono">2,240 条</td><td class="tr mono">2,320 吨</td><td class="tr mono" style="color:var(--red)">-12.1%</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 页脚 -->
+<footer class="site-footer">
+  <div class="container">
+    <div class="grid grid-4">
+      <div>
+        <div class="brand" style="color:#fff"><span class="logo" data-icon="seed" data-size="20"></span><span>农产云</span></div>
+        <p style="margin-top:14px;font-size:13px;color:rgba(255,255,255,.6);max-width:280px">农业产业互联网平台，连接生产、加工、流通、销售全环节。</p>
+      </div>
+      <div><h4>关于平台</h4><a>平台介绍</a><a>联系方式</a><a>加入我们</a><a>帮助中心</a></div>
+      <div><h4>交易引擎</h4><a href="../trade/index.html">交易大厅</a><a href="trade-matching.html">交易撮合</a><a href="s2b2c.html">S2B2C</a><a href="finance.html">供应链金融</a></div>
+      <div><h4>相关模块</h4><a href="service.html">综合服务</a><a href="supervision.html">政府监管</a><a href="info.html">信息资讯</a><a href="../index.html">产品原型总览</a></div>
+    </div>
+    <div class="bottom">
+      <span>© 2026 农业产业互联网平台 · 本页为产品原型演示，非真实业务系统</span>
+      <span>交易引擎 · 交易撮合</span>
+    </div>
+  </div>
+</footer>
+
+<script src="../assets/js/app.js"></script>
+</body>
+</html>
