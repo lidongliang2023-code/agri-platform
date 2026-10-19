@@ -157,7 +157,115 @@
     });
   }
 
-  window.PROTO = { hydrateIcons: hydrateIcons, ICONS: ICONS };
+  /* ---------- 登录态（localStorage） ---------- */
+  var AUTH_KEY = "agri_cloud_user";
+  function Auth() {
+    try { return JSON.parse(localStorage.getItem(AUTH_KEY) || "null"); }
+    catch (e) { return null; }
+  }
+  function setAuth(u) {
+    if (u) localStorage.setItem(AUTH_KEY, JSON.stringify(u));
+    else localStorage.removeItem(AUTH_KEY);
+  }
+  function loginUser(u) {
+    if (!u || !u.name) u = { name: "农产云用户", phone: "", identity: "enterprise", time: Date.now() };
+    u.time = Date.now();
+    setAuth(u);
+  }
+  function logoutUser() { setAuth(null); }
+  function isLoggedIn() { return !!Auth(); }
+
+  /* 依据当前页面 script src 推导原型根相对前缀 */
+  function topbarPrefix() {
+    var s = document.querySelector('script[src*="assets/js/app.js"]');
+    if (!s) return "portal/";
+    var src = s.getAttribute("src");
+    // 去掉末尾 assets/js/app.js 后的部分
+    var prefix = src.replace(/assets\/js\/app\.js.*$/, "");
+    // topbar 里已有 "portal/login.html" 这种引用：如果当前在 portal/ 下，prefix 是 "../"，要替换成 "../portal/"
+    // 最简单：把旧 href 里的 "portal/" 替换为空（同级），否则用 "../portal/"
+    // 这里统一：入口链接相对于 portal/ 目录，所以从根路径开始写 portal/login.html，从子路径 (trade/) 写 ../portal/login.html
+    return prefix;
+  }
+
+  /* ---------- 顶部通栏登录入口自动渲染 ----------
+     所有 .topbar 都带一个带 data-auth-placeholder 的容器，
+     初始静态 HTML 里保留 <a href="...">登录</a> 和 <a href="...">免费注册</a>，
+     本函数在 DOMContentLoaded 时：
+       - 未登录 → 保留静态内容即可（做兜底，把 placeholder 替换成标准入口）
+       - 已登录 → 替换为 头像 + 用户名 + 退出
+  */
+  function renderTopbarAuth() {
+    var prefix = topbarPrefix();
+    // 登录/注册链接的相对路径：
+    //   - 根目录 index.html: prefix="" → "portal/login.html"
+    //   - portal/*.html: prefix="../" → "../portal/login.html" (但 portal 目录内应该是同级)
+    //   - trade/*.html / module/*.html / mobile/*.html / production/*.html: prefix="../" → "../portal/login.html"
+    // portal/ 目录内没有 .topbar，所以统一用 prefix + "portal/login.html" 不对
+    // 方案：读现有 topbar 中登录入口的 href，用它作为基准
+    var placeholders = document.querySelectorAll(".topbar");
+    for (var i = 0; i < placeholders.length; i++) {
+      var bar = placeholders[i];
+      // 找 bar 内最后一个 <span> 容器（里面放了入口）
+      var container = null;
+      var spans = bar.querySelectorAll(".container > span");
+      // 取包含 "登录" 或 "login" 文本的那个 span
+      for (var j = 0; j < spans.length; j++) {
+        if (/login|登录/i.test(spans[j].textContent) || /register|注册/i.test(spans[j].textContent)) {
+          container = spans[j]; break;
+        }
+      }
+      if (!container) continue;
+
+      var user = Auth();
+      if (user) {
+        // 已登录 → 头像 + 用户名 + 会员中心 + 退出
+        var initial = (user.name || "农").trim().charAt(0);
+        var html = '<a href="' + prefix + 'trade/member.html" style="display:inline-flex;align-items:center;gap:6px">' +
+          '<span style="width:20px;height:20px;border-radius:50%;background:linear-gradient(135deg,#2FB877,#0EA5E9);color:#fff;display:grid;place-items:center;font-size:11px;font-weight:700">' + initial + '</span>' +
+          '<span style="max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + user.name + '</span>' +
+          '</a>' +
+          '<span class="sep">·</span>' +
+          '<a href="' + prefix + 'trade/member.html">会员中心</a>' +
+          '<span class="sep">·</span>' +
+          '<a href="javascript:void(0)" data-auth-action="logout" style="color:#FFD166">退出</a>';
+        container.innerHTML = html;
+      } else {
+        // 未登录：确保入口存在（兜底）
+        if (!/login|登录/i.test(container.textContent)) {
+          container.innerHTML += '<span class="sep">·</span>' +
+            '<a href="' + prefix + 'portal/login.html" data-icon="user" data-size="12" style="vertical-align:-2px;margin-right:3px"></span>' +
+            '<a href="' + prefix + 'portal/login.html"><span data-icon="user" data-size="12" style="vertical-align:-2px;margin-right:3px"></span>登录</a>' +
+            '<span class="sep">·</span>' +
+            '<a href="' + prefix + 'portal/register.html"><span data-icon="plus" data-size="12" style="vertical-align:-2px;margin-right:3px"></span>免费注册</a>';
+          hydrateIcons(container);
+        }
+      }
+    }
+  }
+
+  /* 全局委托：退出按钮 */
+  document.addEventListener("click", function (e) {
+    var a = e.target.closest("[data-auth-action='logout']");
+    if (a) {
+      e.preventDefault();
+      logoutUser();
+      try { localStorage.removeItem(AUTH_KEY); } catch (err) {}
+      // 刷新当前页以渲染未登录态
+      location.reload();
+    }
+  });
+
+  window.PROTO = {
+    hydrateIcons: hydrateIcons,
+    ICONS: ICONS,
+    Auth: {
+      get: Auth,
+      login: loginUser,
+      logout: logoutUser,
+      isLoggedIn: isLoggedIn
+    }
+  };
 
   document.addEventListener("DOMContentLoaded", function () {
     hydrateIcons();
@@ -167,5 +275,8 @@
     bindChips();
     bindPager();
     bindSearch();
+    renderTopbarAuth();
+    // renderTopbarAuth 重写 innerHTML 后需要再 hydrate 一次
+    hydrateIcons();
   });
 })();

@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>登录 · 农产云</title>
+<link rel="stylesheet" href="../assets/css/theme.css" />
+<style>
+  /* ===== 登录页专用布局 ===== */
+  body{min-height:100vh;display:flex;flex-direction:column}
+  .l-wrap{flex:1;display:grid;grid-template-columns:1fr 440px;background:#fff}
+  .l-hero{position:relative;overflow:hidden;background:linear-gradient(135deg,var(--green-800) 0%,var(--green-600) 55%,var(--tech-600) 100%);color:#fff;padding:64px 72px;display:flex;flex-direction:column;justify-content:center}
+  .l-hero::before{content:"";position:absolute;inset:0;background:radial-gradient(600px 400px at 20% 20%,rgba(47,184,119,.3),transparent 60%),radial-gradient(500px 300px at 80% 80%,rgba(14,165,233,.25),transparent 60%)}
+  .l-hero > *{position:relative;z-index:2}
+  .l-hero .hero-title{font-size:34px;font-weight:800;letter-spacing:.5px;line-height:1.3}
+  .l-hero .hero-sub{margin-top:14px;font-size:15px;opacity:.82;max-width:480px;line-height:1.8}
+  .l-hero .hero-tags{display:flex;gap:8px;margin-top:28px;flex-wrap:wrap}
+  .l-hero .hero-tags span{padding:5px 12px;border:1px solid rgba(255,255,255,.28);border-radius:20px;font-size:12px;background:rgba(255,255,255,.08);backdrop-filter:blur(4px)}
+  .l-hero .hero-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:40px;max-width:520px}
+  .l-hero .hero-stats .item .n{font-size:26px;font-weight:800;font-family:var(--mono)}
+  .l-hero .hero-stats .item .d{font-size:12px;opacity:.72;margin-top:4px}
+
+  .l-form{padding:48px 48px;display:flex;flex-direction:column}
+  .l-form .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:17px;color:var(--green-800)}
+  .l-form .brand .logo{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,var(--green-500),var(--tech-500));color:#fff;display:grid;place-items:center}
+  .l-form .sub{color:var(--ink-500);font-size:13px;margin-top:4px}
+  .l-form .form-title{font-size:22px;font-weight:800;color:var(--ink-900);margin-top:28px}
+  .l-form .tabs{margin-top:20px;border-bottom:1px solid var(--line)}
+  .l-form .tabs button{padding:10px 0;margin-right:28px;font-size:14px;font-weight:600;color:var(--ink-500);border-bottom:2px solid transparent;margin-bottom:-1px}
+  .l-form .tabs button.on{color:var(--green-700);border-bottom-color:var(--green-500)}
+  .l-form .form-body{margin-top:20px}
+  .l-form .form-item{margin-bottom:18px}
+  .l-form label{display:block;font-size:13px;font-weight:600;color:var(--ink-700);margin-bottom:7px}
+  .l-form .input,.l-form .select{width:100%;height:42px;border:1px solid var(--line);border-radius:10px;padding:0 14px;font-size:14px;background:#fff;transition:.15s}
+  .l-form .input:focus,.l-form .select:focus{border-color:var(--green-500);box-shadow:0 0 0 3px rgba(21,154,94,.12);outline:none}
+  .l-form .split-row{display:grid;grid-template-columns:1fr 110px;gap:10px}
+  .l-form .btn-code{height:42px;border:1px solid var(--green-500);color:var(--green-700);border-radius:10px;font-weight:600;font-size:13px;background:#fff;transition:.15s}
+  .l-form .btn-code:hover{background:var(--green-050)}
+  .l-form .btn-code[disabled]{color:var(--ink-400);border-color:var(--line);cursor:not-allowed}
+  .l-form .btn-submit{width:100%;height:46px;background:linear-gradient(135deg,var(--green-600),var(--green-500));color:#fff;border-radius:10px;font-weight:700;font-size:15px;letter-spacing:1px;box-shadow:0 4px 14px rgba(21,154,94,.28);transition:.15s;display:flex;align-items:center;justify-content:center;gap:6px}
+  .l-form .btn-submit:hover{filter:brightness(1.06);transform:translateY(-1px)}
+  .l-form .row-between{display:flex;justify-content:space-between;align-items:center;margin-top:14px;font-size:12.5px;color:var(--ink-500)}
+  .l-form .row-between a{color:var(--tech-700);font-weight:600}
+  .l-form .row-between a:hover{text-decoration:underline}
+  .l-form .row-between label{display:flex;align-items:center;gap:6px;font-weight:500;color:var(--ink-600);cursor:pointer}
+  .l-form .third-line{display:flex;align-items:center;gap:10px;margin:26px 0 18px;color:var(--ink-400);font-size:12px}
+  .l-form .third-line::before,.l-form .third-line::after{content:"";flex:1;height:1px;background:var(--line)}
+  .l-form .third-icons{display:flex;gap:14px;justify-content:center}
+  .l-form .third-icons button{width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:#fff;display:grid;place-items:center;transition:.15s}
+  .l-form .third-icons button:hover{transform:translateY(-2px);box-shadow:var(--shadow-md)}
+  .l-form .third-icons .t-wechat{color:#07C160}
+  .l-form .third-icons .t-alipay{color:#1677FF}
+  .l-form .third-icons .t-gov{color:#C8352A}
+
+  .l-foot{margin-top:auto;padding-top:24px;text-align:center;color:var(--ink-500);font-size:12.5px}
+  .l-foot a{color:var(--green-700);font-weight:600}
+
+  @media(max-width:980px){
+    .l-wrap{grid-template-columns:1fr}
+    .l-hero{display:none}
+    .l-form{padding:36px 24px}
+  }
+
+  /* ===== 顶部条 ===== */
+  .l-topbar{background:#fff;border-bottom:1px solid var(--line);height:48px;display:flex;align-items:center;padding:0 28px;gap:14px}
+  .l-topbar a.back{font-size:13px;color:var(--ink-500);display:flex;align-items:center;gap:4px}
+  .l-topbar a.back:hover{color:var(--green-700)}
+
+  /* ===== Toast ===== */
+  .toast{position:fixed;left:50%;bottom:34px;transform:translate(-50%,20px);background:var(--green-800);color:#fff;padding:12px 20px;border-radius:20px;font-size:13.5px;font-weight:600;box-shadow:var(--shadow-md);opacity:0;pointer-events:none;transition:.28s;z-index:99;display:flex;align-items:center;gap:8px}
+  .toast.show{opacity:1;transform:translate(-50%,0)}
+</style>
+</head>
+<body>
+
+<div class="l-topbar">
+  <a class="back" href="index.html"><span data-icon="arrow-left" data-size="14"></span>返回首页</a>
+  <span class="muted t-xs" style="margin-left:auto">产品原型演示 · 登录仅做交互演示</span>
+</div>
+
+<div class="l-wrap">
+  <!-- 左：品牌与价值陈述 -->
+  <aside class="l-hero">
+    <div class="row gap-12 center" style="margin-bottom:14px">
+      <span class="logo" style="width:40px;height:40px;border-radius:12px;background:rgba(255,255,255,.18);display:grid;place-items:center"><span data-icon="seed" data-size="22" style="color:#fff"></span></span>
+      <div class="strong" style="font-size:20px">农产云 · AGRI CLOUD</div>
+    </div>
+    <div class="hero-title">让每一笔大宗交易<br>都走向数字化</div>
+    <div class="hero-sub">连接粮油、果蔬、畜禽、茶药、水产、农资六大产业链，智能撮合 + AI Sales Agent 在线议价，让采购与销售效率提升 10 倍。</div>
+
+    <div class="hero-tags">
+      <span>平台质检 · 资金担保</span>
+      <span>区块链存证 · 电子合同</span>
+      <span>三角链风控 · 四流核验</span>
+      <span>AI 智能匹配 · 7×24 议价</span>
+    </div>
+
+    <div class="hero-stats">
+      <div class="item"><div class="n">12,800+</div><div class="d">认证企业</div></div>
+      <div class="item"><div class="n">480 万吨</div><div class="d">年撮合交易量</div></div>
+      <div class="item"><div class="n">86%</div><div class="d">撮合成功率</div></div>
+    </div>
+  </aside>
+
+  <!-- 右：登录卡 -->
+  <main class="l-form">
+    <div class="brand"><span class="logo"><span data-icon="seed" data-size="20"></span></span>农产云</div>
+    <div class="sub">农业产业互联网平台 · 一站式产业链服务</div>
+
+    <div class="form-title">欢迎回来</div>
+    <div class="sub">登录以查看订单、使用 AI 撮合与议价、申请供应链金融</div>
+
+    <!-- 登录方式切换 -->
+    <div class="tabs" id="loginTabs">
+      <button class="on" data-login="sms">手机号 + 验证码</button>
+      <button data-login="pwd">账号 + 密码</button>
+    </div>
+
+    <div class="form-body">
+      <!-- 身份选择 -->
+      <div class="form-item">
+        <label>登录身份</label>
+        <div class="row gap-12">
+          <label style="flex:1"><input type="radio" name="identity" value="enterprise" checked style="margin-right:6px">企业会员</label>
+          <label style="flex:1"><input type="radio" name="identity" value="personal" style="margin-right:6px">个人会员</label>
+        </div>
+      </div>
+
+      <!-- SMS 登录 -->
+      <div data-login-panel="sms">
+        <div class="form-item">
+          <label>手机号</label>
+          <input class="input" type="tel" id="phone" placeholder="请输入 11 位手机号" maxlength="11" />
+        </div>
+        <div class="form-item">
+          <label>验证码</label>
+          <div class="split-row">
+            <input class="input" type="text" id="smsCode" placeholder="请输入 6 位验证码" maxlength="6" />
+            <button type="button" class="btn-code" id="btnCode"><span data-icon="zap" data-size="14"></span>获取验证码</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 密码登录 -->
+      <div data-login-panel="pwd" style="display:none">
+        <div class="form-item">
+          <label>账号</label>
+          <input class="input" type="text" id="account" placeholder="手机号 / 邮箱 / 企业统一信用代码" />
+        </div>
+        <div class="form-item">
+          <label>密码</label>
+          <input class="input" type="password" id="password" placeholder="请输入登录密码" />
+        </div>
+      </div>
+
+      <div class="form-item" style="margin-bottom:10px">
+        <button type="button" class="btn-submit" id="btnLogin"><span data-icon="check" data-size="16"></span>登 录</button>
+      </div>
+
+      <div class="row-between">
+        <label><input type="checkbox" id="remember" checked />7 天内自动登录</label>
+        <a href="javascript:void(0)" onclick="alert('原型演示：跳转到找回密码页')">忘记密码？</a>
+      </div>
+
+      <div class="third-line">其他登录方式</div>
+      <div class="third-icons">
+        <button type="button" onclick="alert('原型演示：微信扫码登录')" class="t-wechat" title="微信扫码"><span data-icon="globe" data-size="20"></span></button>
+        <button type="button" onclick="alert('原型演示：支付宝扫码登录')" class="t-alipay" title="支付宝"><span data-icon="money" data-size="20"></span></button>
+        <button type="button" onclick="alert('原型演示：国家政务服务平台统一登录')" class="t-gov" title="国家政务服务平台"><span data-icon="shield" data-size="20"></span></button>
+      </div>
+    </div>
+
+    <div class="l-foot">
+      还没有账号？<a href="register.html">立即免费注册 →</a>
+    </div>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="../assets/js/app.js"></script>
+<script>
+(function(){
+  "use strict";
+  var $ = function(s){ return document.querySelector(s); };
+  function showToast(html){
+    var t = $("#toast"); t.innerHTML = html;
+    if (window.PROTO) window.PROTO.hydrateIcons(t);
+    t.classList.add("show");
+    clearTimeout(window.__toastT);
+    window.__toastT = setTimeout(function(){ t.classList.remove("show"); }, 2200);
+  }
+
+  /* ===== 登录方式切换 ===== */
+  var tabs = document.querySelectorAll("#loginTabs button");
+  tabs.forEach(function(b){
+    b.addEventListener("click", function(){
+      tabs.forEach(function(x){ x.classList.remove("on"); });
+      b.classList.add("on");
+      var key = b.getAttribute("data-login");
+      document.querySelectorAll("[data-login-panel]").forEach(function(p){
+        p.style.display = (p.getAttribute("data-login-panel") === key) ? "" : "none";
+      });
+    });
+  });
+
+  /* ===== 获取验证码（倒计时） ===== */
+  var codeBtn = $("#btnCode");
+  var codeTimer = null;
+  codeBtn.addEventListener("click", function(){
+    var phone = $("#phone").value.trim();
+    if (!/^1\d{10}$/.test(phone)) { showToast("请输入正确的手机号"); return; }
+    showToast("验证码已发送到 " + phone + "（原型演示）");
+    var t = 60;
+    codeBtn.disabled = true;
+    codeBtn.innerHTML = "重新获取（" + t + "s）";
+    codeTimer = setInterval(function(){
+      t--;
+      if (t <= 0){ clearInterval(codeTimer); codeBtn.disabled = false; codeBtn.innerHTML = '<span data-icon="zap" data-size="14"></span>获取验证码'; if (window.PROTO) PROTO.hydrateIcons(codeBtn); }
+      else codeBtn.innerHTML = "重新获取（" + t + "s）";
+    }, 1000);
+  });
+
+  /* ===== 登录提交 ===== */
+  $("#btnLogin").addEventListener("click", function(){
+    var key = document.querySelector("#loginTabs button.on").getAttribute("data-login");
+    var identity = document.querySelector('input[name="identity"]:checked').value;
+    var userInfo = {};
+    if (key === "sms"){
+      var p = $("#phone").value.trim(), c = $("#smsCode").value.trim();
+      if (!/^1\d{10}$/.test(p)) { showToast("请输入正确的手机号"); return; }
+      if (!/^\d{4,6}$/.test(c)) { showToast("请输入 6 位验证码"); return; }
+      userInfo = { name: "用户" + p.slice(-4), phone: p, identity: identity };
+    } else {
+      var a = $("#account").value.trim(), pw = $("#password").value;
+      if (!a) { showToast("请输入账号"); return; }
+      if (!pw || pw.length < 6) { showToast("密码至少 6 位"); return; }
+      userInfo = { name: a, phone: "", identity: identity };
+    }
+    /* 写入登录态 */
+    if (window.PROTO && PROTO.Auth) PROTO.Auth.login(userInfo);
+    showToast("<span data-icon='check' data-size='16'></span>登录成功，正在进入平台...");
+    setTimeout(function(){ location.href = "index.html"; }, 900);
+  });
+})();
+</script>
+</body>
+</html>
