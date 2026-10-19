@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AI 找助手 · 智能寻源 · 农产云</title>
+<link rel="stylesheet" href="../assets/css/theme.css" />
+</head>
+<body>
+
+<!-- 顶部通栏 -->
+<div class="topbar">
+  <div class="container container-wide">
+    <span>农业产业互联网平台 · AI 找助手原型演示</span>
+    <span>
+      <a href="../portal/index.html">官网品牌站</a><span class="sep">·</span>
+      <a href="../trade/index.html">交易大厅</a><span class="sep">·</span>
+      <a href="../index.html">产品原型总览</a>
+    </span>
+  </div>
+</div>
+
+<!-- 站点头部 -->
+<header class="site-header">
+  <div class="container container-wide">
+    <a class="brand" href="../index.html">
+      <span class="logo" data-icon="seed" data-size="20"></span>
+      <span>农产云<small>AGRI · CLOUD</small></span>
+    </a>
+    <nav class="main-nav">
+      <a href="../portal/index.html">首页</a>
+      <a href="../trade/index.html">交易大厅</a>
+      <a href="../production/dashboard.html">生产监测</a>
+      <a href="index.html">移动端</a>
+      <a href="ai.html" class="active">AI 买手</a>
+    </nav>
+    <div class="header-search">
+      <input placeholder="搜索商品 / 供应商 / 需求" />
+      <button>搜索</button>
+    </div>
+  </div>
+</header>
+
+<!-- 标题区 -->
+<section class="section" style="padding-bottom:0">
+  <div class="container container-wide">
+    <div class="bar-title">AI 找助手 · 智能寻源</div>
+    <p class="sub muted mt-8">用自然语言描述采购需求，AI 自动匹配商品与供应商，一键发起询价</p>
+  </div>
+</section>
+
+<!-- 主区 -->
+<section class="section" style="padding-top:20px">
+  <div class="container container-wide">
+    <div style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap">
+
+      <!-- ============ 左栏 · 手机聊天界面 ============ -->
+      <div style="flex:none;width:380px;display:flex;justify-content:center">
+        <div class="phone">
+          <div class="screen-area">
+            <div class="statusbar"><span>9:41</span><span>▮▮▮ 100%</span></div>
+
+            <div class="m-topbar" style="padding-bottom:12px">
+              <div style="display:flex;align-items:center;gap:10px">
+                <a href="index.html" style="color:#fff;display:grid;place-items:center"><span data-icon="arrow" data-size="18" style="transform:rotate(180deg)"></span></a>
+                <span class="strong" style="font-size:15px;flex:1">AI 找助手</span>
+                <span data-icon="spark" data-size="18"></span>
+              </div>
+            </div>
+
+            <div class="m-scroll" style="overflow-y:auto">
+              <div class="chat">
+
+                <!-- 1) AI 欢迎 -->
+                <div class="msg ai">
+                  <div class="av" data-icon="spark" data-size="16"></div>
+                  <div class="bubble">你好，我是农产云 AI 找助手。告诉我你要采购什么，我来帮你找货源、比价、推荐供应商。</div>
+                </div>
+
+                <!-- 2) 用户 -->
+                <div class="msg me">
+                  <div class="av">我</div>
+                  <div class="bubble">帮我在山东找 100 吨一级压榨菜籽油，要求非转基因，本周内能发货。</div>
+                </div>
+
+                <!-- 3) AI 匹配结果 -->
+                <div class="msg ai">
+                  <div class="av" data-icon="spark" data-size="16"></div>
+                  <div class="bubble">
+                    已为你匹配到 3 家山东供应商，均支持非转基因一级菜籽油，含税报价如下：
+                    <div class="ai-result">
+                      <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
+                        <span class="strong" style="font-size:12.5px">山东鲁花集团</span>
+                        <span class="tag" style="font-size:10px;flex:none">匹配 96%</span>
+                      </div>
+                      <div class="t-xs muted" style="margin-top:4px">¥10920/吨 · 山东莱阳 · 库存 320 吨</div>
+                      <div class="progress mt-8" style="height:5px"><i style="width:96%"></i></div>
+                      <button class="btn btn-sm btn-outline" style="margin-top:8px;padding:4px 10px;font-size:11px">立即询价</button>
+                    </div>
+                    <div class="ai-result">
+                      <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
+                        <span class="strong" style="font-size:12.5px">日照粮油</span>
+                        <span class="tag" style="font-size:10px;flex:none">匹配 92%</span>
+                      </div>
+                      <div class="t-xs muted" style="margin-top:4px">¥10880/吨 · 山东日照 · 库存 500 吨</div>
+                      <div class="progress mt-8" style="height:5px"><i style="width:92%"></i></div>
+                      <button class="btn btn-sm btn-outline" style="margin-top:8px;padding:4px 10px;font-size:11px">立即询价</button>
+                    </div>
+                    <div class="ai-result">
+                      <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
+                        <span class="strong" style="font-size:12.5px">德州植物油厂</span>
+                        <span class="tag" style="font-size:10px;flex:none">匹配 88%</span>
+                      </div>
+                      <div class="t-xs muted" style="margin-top:4px">¥11050/吨 · 山东德州 · 库存 180 吨</div>
+                      <div class="progress mt-8" style="height:5px"><i style="width:88%"></i></div>
+                      <button class="btn btn-sm btn-outline" style="margin-top:8px;padding:4px 10px;font-size:11px">立即询价</button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 4) 用户 -->
+                <div class="msg me">
+                  <div class="av">我</div>
+                  <div class="bubble">帮我对比一下价格和交期。</div>
+                </div>
+
+                <!-- 5) AI 对比结论 -->
+                <div class="msg ai">
+                  <div class="av" data-icon="spark" data-size="16"></div>
+                  <div class="bubble">三家报价区间 10880–11050 元/吨，价差约 170 元/吨；交期分别为 5 天 / 3 天 / 7 天。<br><span class="c-green strong">推荐第 2 家：价格最低且可 3 天发货。</span></div>
+                </div>
+
+                <!-- 6) 正在输入 -->
+                <div class="msg ai">
+                  <div class="av" data-icon="spark" data-size="16"></div>
+                  <div class="bubble typing"><i></i><i></i><i></i></div>
+                </div>
+
+              </div>
+            </div>
+
+            <!-- 底部输入区 -->
+            <div style="height:60px;background:#fff;border-top:1px solid var(--line);display:flex;align-items:center;gap:8px;padding:0 12px">
+              <div style="flex:1;background:var(--bg-alt);border-radius:999px;padding:9px 14px;font-size:12.5px;color:var(--ink-400)">继续描述你的需求…</div>
+              <button class="btn btn-primary" style="width:38px;height:38px;border-radius:50%;padding:0"><span data-icon="arrow" data-size="16"></span></button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ 右栏 · AI 能力说明 ============ -->
+      <div class="card" style="flex:1;min-width:320px">
+        <div class="card-h">
+          <h3><span data-icon="spark" data-size="18"></span>AI 能力说明</h3>
+          <span class="tag tag-tech">AI 中台</span>
+        </div>
+        <div class="card-b">
+
+          <div style="display:flex;flex-direction:column;gap:16px">
+            <div style="display:flex;gap:12px">
+              <div class="stat-icon tech" style="flex:none"><span data-icon="search" data-size="20"></span></div>
+              <div><div class="strong t-md">智能寻源</div><div class="t-xs muted" style="margin-top:2px">自然语言解析采购意图，从海量商品与供应商中精准定位可交付货源。</div></div>
+            </div>
+            <div style="display:flex;gap:12px">
+              <div class="stat-icon tech" style="flex:none"><span data-icon="money" data-size="20"></span></div>
+              <div><div class="strong t-md">智能比价</div><div class="t-xs muted" style="margin-top:2px">聚合多渠道含税报价，横向对比价差、交期与库存，给出性价比排序。</div></div>
+            </div>
+            <div style="display:flex;gap:12px">
+              <div class="stat-icon tech" style="flex:none"><span data-icon="target" data-size="20"></span></div>
+              <div><div class="strong t-md">需求匹配</div><div class="t-xs muted" style="margin-top:2px">按品类、产地、规格、资质等条件自动匹配，输出可解释的匹配度评分。</div></div>
+            </div>
+            <div style="display:flex;gap:12px">
+              <div class="stat-icon tech" style="flex:none"><span data-icon="users" data-size="20"></span></div>
+              <div><div class="strong t-md">供应商推荐</div><div class="t-xs muted" style="margin-top:2px">结合履约记录、信用评级与产能，推荐稳定可靠的供应商伙伴。</div></div>
+            </div>
+            <div style="display:flex;gap:12px">
+              <div class="stat-icon tech" style="flex:none"><span data-icon="chart" data-size="20"></span></div>
+              <div><div class="strong t-md">议价参谋</div><div class="t-xs muted" style="margin-top:2px">基于行情指数与历史成交价，给出目标价与谈判要点建议。</div></div>
+            </div>
+          </div>
+
+          <!-- 推荐提问 -->
+          <div class="strong t-md" style="margin-top:22px">推荐提问</div>
+          <div class="chips mt-12" style="gap:8px">
+            <span class="chip">找 50 吨优质蛋白玉米</span>
+            <span class="chip">对比豆粕43%报价</span>
+            <span class="chip">推荐冷链物流</span>
+            <span class="chip">找有机红茶供应商</span>
+          </div>
+
+          <!-- 核心流程 -->
+          <div class="strong t-md" style="margin-top:22px">核心流程</div>
+          <div style="display:flex;flex-direction:column;gap:10px;margin-top:12px">
+            <div style="display:flex;gap:10px;align-items:center"><span style="width:22px;height:22px;border-radius:50%;background:var(--green-100);color:var(--green-700);display:grid;place-items:center;font-size:11px;font-weight:700;flex:none">1</span><span class="t-sm">描述需求 —— 用一句话说明品类、数量、产地与要求</span></div>
+            <div style="display:flex;gap:10px;align-items:center"><span style="width:22px;height:22px;border-radius:50%;background:var(--green-100);color:var(--green-700);display:grid;place-items:center;font-size:11px;font-weight:700;flex:none">2</span><span class="t-sm">AI 解析 —— 识别采购要素并生成检索条件</span></div>
+            <div style="display:flex;gap:10px;align-items:center"><span style="width:22px;height:22px;border-radius:50%;background:var(--green-100);color:var(--green-700);display:grid;place-items:center;font-size:11px;font-weight:700;flex:none">3</span><span class="t-sm">匹配供应商 —— 多维度打分并输出候选清单</span></div>
+            <div style="display:flex;gap:10px;align-items:center"><span style="width:22px;height:22px;border-radius:50%;background:var(--green-100);color:var(--green-700);display:grid;place-items:center;font-size:11px;font-weight:700;flex:none">4</span><span class="t-sm">一键询价 —— 批量发送询价单并跟踪回执</span></div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<div class="container container-wide" style="padding-bottom:40px">
+  <p class="muted t-sm tc">本页为产品原型演示，移动端界面以手机外框形式展示。</p>
+</div>
+
+<script src="../assets/js/app.js"></script>
+</body>
+</html>

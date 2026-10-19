@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>移动端 H5 原型 · 农产云</title>
+<link rel="stylesheet" href="../assets/css/theme.css" />
+</head>
+<body>
+
+<!-- 顶部通栏 -->
+<div class="topbar">
+  <div class="container container-wide">
+    <span>农业产业互联网平台 · 移动端 H5 原型演示</span>
+    <span>
+      <a href="../portal/index.html">官网品牌站</a><span class="sep">·</span>
+      <a href="../trade/index.html">交易大厅</a><span class="sep">·</span>
+      <a href="../index.html">产品原型总览</a>
+    </span>
+  </div>
+</div>
+
+<!-- 站点头部 -->
+<header class="site-header">
+  <div class="container container-wide">
+    <a class="brand" href="../index.html">
+      <span class="logo" data-icon="seed" data-size="20"></span>
+      <span>农产云<small>AGRI · CLOUD</small></span>
+    </a>
+    <nav class="main-nav">
+      <a href="../portal/index.html">首页</a>
+      <a href="../trade/index.html">交易大厅</a>
+      <a href="../production/dashboard.html">生产监测</a>
+      <a href="index.html" class="active">移动端</a>
+      <a href="ai.html">AI 买手</a>
+    </nav>
+    <div class="header-search">
+      <input placeholder="搜索商品 / 供应商 / 需求" />
+      <button>搜索</button>
+    </div>
+  </div>
+</header>
+
+<!-- 标题区 -->
+<section class="section" style="padding-bottom:0">
+  <div class="container container-wide">
+    <div class="bar-title">移动端 H5 原型</div>
+    <p class="sub muted mt-8">触屏适配 · 8 大功能屏，从左到右依次为：首页 → 商品列表 → 商品详情 → 我的</p>
+  </div>
+</section>
+
+<!-- 手机多屏展示 -->
+<section class="section" style="padding-top:0">
+  <div class="container container-wide">
+    <div class="phone-wrap">
+
+      <!-- ============ 屏幕 1 · 首页 ============ -->
+      <div style="display:flex;flex-direction:column;align-items:center">
+        <div class="phone">
+          <div class="screen-area">
+            <div class="statusbar"><span>9:41</span><span>▮▮▮ 100%</span></div>
+
+            <div class="m-topbar">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+                <div>
+                  <div class="strong" style="font-size:15px">农产云 · 首页</div>
+                  <div style="font-size:11px;opacity:.85;margin-top:2px">早上好，五常粮油合作社</div>
+                </div>
+                <span data-icon="bell" data-size="18"></span>
+              </div>
+              <div class="m-search"><span data-icon="search" data-size="14"></span><span>搜索商品 / 供应商</span></div>
+            </div>
+
+            <div class="m-scroll" style="overflow-y:auto">
+              <div style="padding:14px 16px 20px">
+
+                <!-- 产业链 9 宫格入口 -->
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px 6px">
+                  <div style="text-align:center"><div class="stat-icon" style="margin:0 auto;width:44px;height:44px;border-radius:12px"><span data-icon="seed" data-size="20"></span></div><div class="t-xs muted" style="margin-top:6px">粮油</div></div>
+                  <div style="text-align:center"><div class="stat-icon" style="margin:0 auto;width:44px;height:44px;border-radius:12px"><span data-icon="leaf" data-size="20"></span></div><div class="t-xs muted" style="margin-top:6px">果蔬</div></div>
+                  <div style="text-align:center"><div class="stat-icon" style="margin:0 auto;width:44px;height:44px;border-radius:12px"><span data-icon="box" data-size="20"></span></div><div class="t-xs muted" style="margin-top:6px">畜禽</div></div>
+                  <div style="text-align:center"><div class="stat-icon" style="margin:0 auto;width:44px;height:44px;border-radius:12px"><span data-icon="sun" data-size="20"></span></div><div class="t-xs muted" style="margin-top:6px">茶药</div></div>
+                  <div style="text-align:center"><div class="stat-icon" style="margin:0 auto;width:44px;height:44px;border-radius:12px"><span data-icon="layers" data-size="20"></span></div><div class="t-xs muted" style="margin-top:6px">饲料</div></div>
+                  <div style="text-align:center"><div class="stat-icon" style="margin:0 auto;width:44px;height:44px;border-radius:12px"><span data-icon="drop" data-size="20"></span></div><div class="t-xs muted" style="margin-top:6px">水产</div></div>
+                  <div style="text-align:center"><div class="stat-icon" style="margin:0 auto;width:44px;height:44px;border-radius:12px"><span data-icon="cart" data-size="20"></span></div><div class="t-xs muted" style="margin-top:6px">预制菜</div></div>
+                  <div style="text-align:center"><div class="stat-icon" style="margin:0 auto;width:44px;height:44px;border-radius:12px"><span data-icon="thermo" data-size="20"></span></div><div class="t-xs muted" style="margin-top:6px">冷链</div></div>
+                  <div style="text-align:center"><div class="stat-icon" style="margin:0 auto;width:44px;height:44px;border-radius:12px"><span data-icon="plus" data-size="20"></span></div><div class="t-xs muted" style="margin-top:6px">更多</div></div>
+                </div>
+
+                <!-- 热销优选 -->
+                <div style="display:flex;align-items:center;justify-content:space-between;margin:18px 0 10px">
+                  <div class="strong" style="font-size:14px">热销优选</div>
+                  <span class="t-xs muted">更多 ›</span>
+                </div>
+                <div style="display:flex;gap:10px;overflow-x:auto;padding-bottom:4px">
+                  <div style="flex:none;width:118px;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden">
+                    <div style="height:74px;background:linear-gradient(135deg,var(--green-100),var(--tech-100));display:grid;place-items:center;color:var(--green-600)"><span data-icon="seed" data-size="26"></span></div>
+                    <div style="padding:8px"><div class="t-xs strong ellipsis">富硒大米</div><div class="price" style="font-size:14px;margin-top:4px">¥4680<span class="unit">/吨</span></div></div>
+                  </div>
+                  <div style="flex:none;width:118px;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden">
+                    <div style="height:74px;background:linear-gradient(135deg,var(--amber-100),var(--green-100));display:grid;place-items:center;color:var(--amber)"><span data-icon="drop" data-size="26"></span></div>
+                    <div style="padding:8px"><div class="t-xs strong ellipsis">一级菜籽油</div><div class="price" style="font-size:14px;margin-top:4px">¥10920<span class="unit">/吨</span></div></div>
+                  </div>
+                  <div style="flex:none;width:118px;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden">
+                    <div style="height:74px;background:linear-gradient(135deg,var(--green-100),var(--tech-100));display:grid;place-items:center;color:var(--green-600)"><span data-icon="leaf" data-size="26"></span></div>
+                    <div style="padding:8px"><div class="t-xs strong ellipsis">赣南脐橙</div><div class="price" style="font-size:14px;margin-top:4px">¥58<span class="unit">/箱</span></div></div>
+                  </div>
+                </div>
+
+                <!-- 采购需求 -->
+                <div class="strong" style="font-size:14px;margin:18px 0 10px">采购需求</div>
+                <div style="display:flex;flex-direction:column;gap:8px">
+                  <div style="background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 12px">
+                    <div style="display:flex;justify-content:space-between;gap:8px">
+                      <span class="strong t-sm ellipsis">求购 一级菜籽油 100 吨</span>
+                      <span class="tag" style="font-size:10px;flex:none">求购</span>
+                    </div>
+                    <div class="t-xs muted" style="margin-top:4px">山东 · 本周内发货 · 含税报价</div>
+                  </div>
+                  <div style="background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 12px">
+                    <div style="display:flex;justify-content:space-between;gap:8px">
+                      <span class="strong t-sm ellipsis">求购 豆粕 43% 蛋白 60 吨</span>
+                      <span class="tag" style="font-size:10px;flex:none">求购</span>
+                    </div>
+                    <div class="t-xs muted" style="margin-top:4px">江苏 · 长期采购 · 月结</div>
+                  </div>
+                </div>
+
+                <!-- AI 智能寻源入口 -->
+                <a href="ai.html" style="display:flex;align-items:center;gap:10px;margin-top:18px;padding:12px 14px;border-radius:12px;background:linear-gradient(135deg,var(--green-600),var(--tech-500));color:#fff;box-shadow:var(--shadow-green)">
+                  <span data-icon="spark" data-size="22"></span>
+                  <span style="flex:1;min-width:0">
+                    <span class="strong" style="display:block;font-size:14px">AI 智能寻源</span>
+                    <span style="display:block;font-size:11px;opacity:.9;margin-top:2px">一句话说出需求，自动匹配货源与供应商</span>
+                  </span>
+                  <span data-icon="arrow" data-size="16"></span>
+                </a>
+
+              </div>
+            </div>
+
+            <div class="m-bottom">
+              <a class="on"><span data-icon="home" data-size="20"></span>首页</a>
+              <a><span data-icon="layers" data-size="20"></span>分类</a>
+              <a><span data-icon="bell" data-size="20"></span>消息</a>
+              <a><span data-icon="user" data-size="20"></span>我的</a>
+            </div>
+          </div>
+        </div>
+        <div class="m-cap">① 首页</div>
+      </div>
+
+      <!-- ============ 屏幕 2 · 商品列表 ============ -->
+      <div style="display:flex;flex-direction:column;align-items:center">
+        <div class="phone">
+          <div class="screen-area">
+            <div class="statusbar"><span>9:41</span><span>▮▮▮ 100%</span></div>
+
+            <div class="m-topbar">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+                <div class="strong" style="font-size:15px">交易大厅</div>
+                <span data-icon="cart" data-size="18"></span>
+              </div>
+              <div class="m-search"><span data-icon="search" data-size="14"></span><span>搜索商品 / 供应商</span></div>
+            </div>
+
+            <div class="m-scroll" style="overflow-y:auto">
+              <div style="padding:12px 16px 20px">
+
+                <!-- 筛选 chips -->
+                <div class="chips" style="gap:6px">
+                  <span class="chip on">综合</span>
+                  <span class="chip">价格</span>
+                  <span class="chip">销量</span>
+                  <span class="chip">产地</span>
+                </div>
+
+                <!-- 商品卡列表 -->
+                <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px">
+
+                  <div style="display:flex;gap:10px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px">
+                    <div style="flex:none;width:68px;height:68px;border-radius:8px;background:linear-gradient(135deg,var(--green-100),var(--tech-100));display:grid;place-items:center;color:var(--green-600)"><span data-icon="seed" data-size="26"></span></div>
+                    <div style="flex:1;min-width:0">
+                      <div class="strong t-sm ellipsis">富硒大米</div>
+                      <div class="t-xs muted ellipsis" style="margin-top:3px">黑龙江 · 五常</div>
+                      <div class="price" style="font-size:15px;margin-top:6px">¥4680<span class="unit">/吨</span></div>
+                    </div>
+                  </div>
+
+                  <div style="display:flex;gap:10px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px">
+                    <div style="flex:none;width:68px;height:68px;border-radius:8px;background:linear-gradient(135deg,var(--amber-100),var(--green-100));display:grid;place-items:center;color:var(--amber)"><span data-icon="layers" data-size="26"></span></div>
+                    <div style="flex:1;min-width:0">
+                      <div class="strong t-sm ellipsis">豆粕 43% 蛋白</div>
+                      <div class="t-xs muted ellipsis" style="margin-top:3px">江苏 · 南通</div>
+                      <div class="price" style="font-size:15px;margin-top:6px">¥3860<span class="unit">/吨</span></div>
+                    </div>
+                  </div>
+
+                  <div style="display:flex;gap:10px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px">
+                    <div style="flex:none;width:68px;height:68px;border-radius:8px;background:linear-gradient(135deg,var(--green-100),var(--tech-100));display:grid;place-items:center;color:var(--green-600)"><span data-icon="leaf" data-size="26"></span></div>
+                    <div style="flex:1;min-width:0">
+                      <div class="strong t-sm ellipsis">有机红茶</div>
+                      <div class="t-xs muted ellipsis" style="margin-top:3px">云南 · 临沧</div>
+                      <div class="price" style="font-size:15px;margin-top:6px">¥126<span class="unit">/斤</span></div>
+                    </div>
+                  </div>
+
+                  <div style="display:flex;gap:10px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px">
+                    <div style="flex:none;width:68px;height:68px;border-radius:8px;background:linear-gradient(135deg,var(--tech-100),var(--green-100));display:grid;place-items:center;color:var(--tech-600)"><span data-icon="box" data-size="26"></span></div>
+                    <div style="flex:1;min-width:0">
+                      <div class="strong t-sm ellipsis">冷鲜猪肉</div>
+                      <div class="t-xs muted ellipsis" style="margin-top:3px">河南 · 漯河</div>
+                      <div class="price" style="font-size:15px;margin-top:6px">¥22.6<span class="unit">/kg</span></div>
+                    </div>
+                  </div>
+
+                  <div style="display:flex;gap:10px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px">
+                    <div style="flex:none;width:68px;height:68px;border-radius:8px;background:linear-gradient(135deg,var(--tech-100),var(--green-100));display:grid;place-items:center;color:var(--tech-600)"><span data-icon="drop" data-size="26"></span></div>
+                    <div style="flex:1;min-width:0">
+                      <div class="strong t-sm ellipsis">南美白对虾</div>
+                      <div class="t-xs muted ellipsis" style="margin-top:3px">广东 · 湛江</div>
+                      <div class="price" style="font-size:15px;margin-top:6px">¥36.8<span class="unit">/斤</span></div>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+            </div>
+
+            <div class="m-bottom">
+              <a><span data-icon="home" data-size="20"></span>首页</a>
+              <a class="on"><span data-icon="layers" data-size="20"></span>分类</a>
+              <a><span data-icon="bell" data-size="20"></span>消息</a>
+              <a><span data-icon="user" data-size="20"></span>我的</a>
+            </div>
+          </div>
+        </div>
+        <div class="m-cap">② 商品列表</div>
+      </div>
+
+      <!-- ============ 屏幕 3 · 商品详情 ============ -->
+      <div style="display:flex;flex-direction:column;align-items:center">
+        <div class="phone">
+          <div class="screen-area">
+            <div class="statusbar"><span>9:41</span><span>▮▮▮ 100%</span></div>
+
+            <div class="m-topbar">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+                <span data-icon="arrow" data-size="18" style="transform:rotate(180deg)"></span>
+                <span class="strong" style="font-size:15px;flex:1">商品详情</span>
+                <span data-icon="star" data-size="18"></span>
+              </div>
+              <div class="m-search"><span data-icon="search" data-size="14"></span><span>搜索商品 / 供应商</span></div>
+            </div>
+
+            <div class="m-scroll" style="overflow-y:auto">
+              <div>
+                <!-- 大图占位 -->
+                <div style="height:180px;background:linear-gradient(135deg,var(--green-100),var(--tech-100));display:grid;place-items:center;color:var(--green-600)"><span data-icon="seed" data-size="56"></span></div>
+
+                <div style="padding:14px 16px 20px">
+                  <div class="strong" style="font-size:17px">富硒大米</div>
+                  <div class="price" style="font-size:22px;margin-top:6px">¥4680<span class="unit" style="font-size:13px">/吨</span></div>
+
+                  <!-- 产地/规格/库存 -->
+                  <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px">
+                    <span class="tag tag-ghost"><span data-icon="location" data-size="13"></span>黑龙江 五常</span>
+                    <span class="tag tag-ghost">规格 25kg / 袋</span>
+                    <span class="tag tag-ghost">库存 320 吨</span>
+                  </div>
+
+                  <!-- 供应商条 -->
+                  <div style="display:flex;align-items:center;gap:10px;margin-top:16px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 12px">
+                    <div class="avatar" style="width:38px;height:38px;font-size:13px">五常</div>
+                    <div style="flex:1;min-width:0">
+                      <div class="strong t-sm ellipsis">五常粮油合作社</div>
+                      <div class="t-xs muted ellipsis">金牌供应商 · 实名认证 · 48h 发货</div>
+                    </div>
+                    <span data-icon="arrow" data-size="16"></span>
+                  </div>
+
+                  <!-- 商品说明 -->
+                  <div class="strong" style="font-size:13px;margin:16px 0 8px">商品说明</div>
+                  <p class="t-xs muted" style="line-height:1.7">产地直供富硒粳米，当季新粮，低温仓储。支持第三方质检、产地溯源，大批量可协商账期与冷链配送。</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- 底部固定操作栏 -->
+            <div class="m-bottom" style="gap:10px;padding:0 12px;align-items:center">
+              <button class="btn btn-outline" style="flex:1">加入询价单</button>
+              <button class="btn btn-primary" style="flex:1">立即议价</button>
+            </div>
+          </div>
+        </div>
+        <div class="m-cap">③ 商品详情</div>
+      </div>
+
+      <!-- ============ 屏幕 4 · 我的 ============ -->
+      <div style="display:flex;flex-direction:column;align-items:center">
+        <div class="phone">
+          <div class="screen-area">
+            <div class="statusbar"><span>9:41</span><span>▮▮▮ 100%</span></div>
+
+            <div class="m-topbar">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+                <div class="strong" style="font-size:15px">我的</div>
+                <span data-icon="settings" data-size="18"></span>
+              </div>
+              <div class="m-search"><span data-icon="search" data-size="14"></span><span>搜索商品 / 供应商</span></div>
+            </div>
+
+            <div class="m-scroll" style="overflow-y:auto">
+              <div style="padding-bottom:20px">
+                <!-- 用户信息 -->
+                <div style="display:flex;align-items:center;gap:12px;padding:16px;background:linear-gradient(135deg,var(--green-700),var(--green-500));color:#fff">
+                  <div class="avatar" style="width:46px;height:46px;font-size:16px;background:rgba(255,255,255,.22)">五常</div>
+                  <div style="min-width:0">
+                    <div class="strong" style="font-size:15px">五常粮油合作社</div>
+                    <div style="font-size:11px;opacity:.85;margin-top:3px">金牌供应商 · 实名认证</div>
+                  </div>
+                </div>
+
+                <!-- 订单宫格 -->
+                <div style="background:#fff;margin:12px 14px 0;border:1px solid var(--line);border-radius:12px;padding:14px">
+                  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center">
+                    <div><div class="mono strong" style="font-size:18px;color:var(--green-700)">2</div><div class="t-xs muted" style="margin-top:4px">待付款</div></div>
+                    <div><div class="mono strong" style="font-size:18px;color:var(--green-700)">3</div><div class="t-xs muted" style="margin-top:4px">待发货</div></div>
+                    <div><div class="mono strong" style="font-size:18px;color:var(--green-700)">1</div><div class="t-xs muted" style="margin-top:4px">待收货</div></div>
+                    <div><div class="mono strong" style="font-size:18px;color:var(--green-700)">0</div><div class="t-xs muted" style="margin-top:4px">待评价</div></div>
+                  </div>
+                </div>
+
+                <!-- 功能列表 -->
+                <div style="background:#fff;margin:12px 14px 0;border:1px solid var(--line);border-radius:12px;overflow:hidden">
+                  <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line)"><div class="stat-icon" style="width:32px;height:32px;border-radius:8px"><span data-icon="clipboard" data-size="16"></span></div><span class="t-sm strong" style="flex:1">我的订单</span><span data-icon="arrow" data-size="15" style="color:var(--ink-400)"></span></div>
+                  <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line)"><div class="stat-icon" style="width:32px;height:32px;border-radius:8px"><span data-icon="money" data-size="16"></span></div><span class="t-sm strong" style="flex:1">资金账户</span><span data-icon="arrow" data-size="15" style="color:var(--ink-400)"></span></div>
+                  <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line)"><div class="stat-icon" style="width:32px;height:32px;border-radius:8px"><span data-icon="plus" data-size="16"></span></div><span class="t-sm strong" style="flex:1">发布需求</span><span data-icon="arrow" data-size="15" style="color:var(--ink-400)"></span></div>
+                  <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line)"><div class="stat-icon" style="width:32px;height:32px;border-radius:8px"><span data-icon="shield" data-size="16"></span></div><span class="t-sm strong" style="flex:1">在线签章</span><span data-icon="arrow" data-size="15" style="color:var(--ink-400)"></span></div>
+                  <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line)"><div class="stat-icon" style="width:32px;height:32px;border-radius:8px"><span data-icon="star" data-size="16"></span></div><span class="t-sm strong" style="flex:1">我的收藏</span><span data-icon="arrow" data-size="15" style="color:var(--ink-400)"></span></div>
+                  <div style="display:flex;align-items:center;gap:10px;padding:12px 14px"><div class="stat-icon" style="width:32px;height:32px;border-radius:8px"><span data-icon="settings" data-size="16"></span></div><span class="t-sm strong" style="flex:1">设置</span><span data-icon="arrow" data-size="15" style="color:var(--ink-400)"></span></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="m-bottom">
+              <a><span data-icon="home" data-size="20"></span>首页</a>
+              <a><span data-icon="layers" data-size="20"></span>分类</a>
+              <a><span data-icon="bell" data-size="20"></span>消息</a>
+              <a class="on"><span data-icon="user" data-size="20"></span>我的</a>
+            </div>
+          </div>
+        </div>
+        <div class="m-cap">④ 我的</div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<div class="container container-wide" style="padding-bottom:40px">
+  <p class="muted t-sm tc">本页为产品原型演示，移动端界面以手机外框形式展示。</p>
+</div>
+
+<script src="../assets/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>生产管理后台 · 农业产业互联网平台</title>
+<link rel="stylesheet" href="../assets/css/theme.css" />
+</head>
+<body>
+
+<div class="app-shell">
+
+  <!-- 侧边栏 -->
+  <aside class="app-side">
+    <a class="brand" href="../index.html">
+      <span class="logo" data-icon="seed" data-size="20"></span>
+      <span>农产云<small>生产管理</small></span>
+    </a>
+    <nav class="side-nav">
+      <div class="group">生产管理</div>
+      <a href="dashboard.html"><span data-icon="activity"></span>监测概览</a>
+      <a href="manage.html" class="active"><span data-icon="layers"></span>地块管理</a>
+      <a href="manage.html"><span data-icon="cpu"></span>设备管理</a>
+      <a href="manage.html"><span data-icon="settings"></span>设备类型</a>
+      <a href="manage.html"><span data-icon="alert"></span>告警中心</a>
+      <a href="manage.html"><span data-icon="clipboard"></span>生产计划</a>
+      <a href="manage.html"><span data-icon="zap"></span>OTA 升级</a>
+      <a href="manage.html"><span data-icon="repo"></span>固件管理</a>
+
+      <div class="group">返回</div>
+      <a href="../portal/index.html"><span data-icon="globe"></span>官网门户</a>
+      <a href="../trade/index.html"><span data-icon="cart"></span>交易大厅</a>
+      <a href="../trade/member.html"><span data-icon="user"></span>会员中心</a>
+      <a href="../index.html"><span data-icon="home"></span>原型总览</a>
+    </nav>
+  </aside>
+
+  <!-- 主区 -->
+  <div class="app-main">
+
+    <header class="app-top">
+      <div class="crumb">
+        <a href="../index.html">生产管理</a><span class="sep">/</span>地块管理
+      </div>
+      <div class="row center gap-16">
+        <div class="row center gap-12">
+          <div class="avatar">农</div>
+          <span class="t-sm strong">五常基地管理员</span>
+        </div>
+        <span data-icon="bell" style="color:var(--ink-500)"></span>
+      </div>
+    </header>
+
+    <div class="app-body">
+
+      <!-- 概览统计 -->
+      <div class="grid grid-4">
+        <div class="stat">
+          <div class="k"><span data-icon="layers" style="color:var(--green-600)"></span>管理地块</div>
+          <div class="v"><span class="js-count" data-to="128" data-dec="0">128</span><span class="unit">个</span></div>
+          <div class="d">覆盖 4 大基地 · 较上月 <span class="up">+6</span></div>
+        </div>
+        <div class="stat">
+          <div class="k"><span data-icon="cpu" style="color:var(--green-600)"></span>接入设备</div>
+          <div class="v"><span class="js-count" data-to="486" data-dec="0">486</span><span class="unit">台</span></div>
+          <div class="d">在线 479 · 离线 7</div>
+        </div>
+        <div class="stat tech">
+          <div class="k"><span data-icon="wifi" style="color:var(--tech-600)"></span>今日在线率</div>
+          <div class="v"><span class="js-count" data-to="98.6" data-dec="1">98.6</span><span class="unit">%</span></div>
+          <div class="d">较昨日 <span class="up">+0.4%</span></div>
+        </div>
+        <div class="stat">
+          <div class="k"><span data-icon="alert" style="color:var(--amber)"></span>待处理告警</div>
+          <div class="v"><span class="js-count" data-to="7" data-dec="0">7</span><span class="unit">条</span></div>
+          <div class="d">紧急 2 · 重要 2 · 一般 3</div>
+        </div>
+      </div>
+
+      <!-- 功能面板 -->
+      <div class="card mt-20">
+        <div class="card-h" style="padding:0 16px">
+          <div class="tabs" data-tabscope="prod" style="border-bottom:none">
+            <button data-tab="land" data-tab-group="prod" class="on">地块管理</button>
+            <button data-tab="dev" data-tab-group="prod">设备管理</button>
+            <button data-tab="alarm" data-tab-group="prod">告警中心</button>
+          </div>
+          <span class="more">数据更新于 <span class="mono">2026-10-19 14:26</span></span>
+        </div>
+
+        <div class="card-b" data-panels="prod">
+
+          <!-- 地块管理 -->
+          <div data-tabpanel="land">
+            <div class="toolbar">
+              <input class="input" style="width:220px" placeholder="搜索地块编号 / 名称" />
+              <select class="select" style="width:150px">
+                <option>全部基地</option><option>五常基地</option><option>寿光基地</option><option>赣州基地</option><option>湛江基地</option>
+              </select>
+              <select class="select" style="width:130px">
+                <option>全部状态</option><option>正常</option><option>预警</option>
+              </select>
+              <div class="spacer"></div>
+              <button class="btn btn-primary btn-sm"><span data-icon="plus"></span>新增地块</button>
+              <button class="btn btn-outline btn-sm"><span data-icon="file"></span>导出</button>
+            </div>
+
+            <table class="data-table mt-16">
+              <thead>
+                <tr>
+                  <th>地块编号</th><th>地块名称</th><th>所属基地</th><th>面积(亩)</th><th>作物类型</th>
+                  <th>绑定设备数</th><th>土壤类型</th><th>状态</th><th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="mono">SC-001</td><td>五常基地-富硒水稻田</td><td>五常基地</td><td class="mono">320</td><td>水稻</td>
+                  <td class="mono">6</td><td>黑土</td><td><span class="tag">正常</span></td>
+                  <td><a class="link">查看</a> · <a class="link">编辑</a></td>
+                </tr>
+                <tr>
+                  <td class="mono">SC-002</td><td>五常基地-有机稻田</td><td>五常基地</td><td class="mono">210</td><td>水稻</td>
+                  <td class="mono">4</td><td>黑土</td><td><span class="tag">正常</span></td>
+                  <td><a class="link">查看</a> · <a class="link">编辑</a></td>
+                </tr>
+                <tr>
+                  <td class="mono">SC-003</td><td>寿光基地-设施番茄棚</td><td>寿光基地</td><td class="mono">45</td><td>番茄</td>
+                  <td class="mono">8</td><td>壤土</td><td><span class="tag">正常</span></td>
+                  <td><a class="link">查看</a> · <a class="link">编辑</a></td>
+                </tr>
+                <tr>
+                  <td class="mono">SC-004</td><td>寿光基地-黄瓜示范棚</td><td>寿光基地</td><td class="mono">38</td><td>黄瓜</td>
+                  <td class="mono">7</td><td>壤土</td><td><span class="tag tag-amber">预警</span></td>
+                  <td><a class="link">查看</a> · <a class="link">编辑</a></td>
+                </tr>
+                <tr>
+                  <td class="mono">SC-005</td><td>赣州基地-脐橙园</td><td>赣州基地</td><td class="mono">460</td><td>脐橙</td>
+                  <td class="mono">5</td><td>红壤</td><td><span class="tag">正常</span></td>
+                  <td><a class="link">查看</a> · <a class="link">编辑</a></td>
+                </tr>
+                <tr>
+                  <td class="mono">SC-006</td><td>赣州基地-高山茶园</td><td>赣州基地</td><td class="mono">280</td><td>茶叶</td>
+                  <td class="mono">4</td><td>红壤</td><td><span class="tag">正常</span></td>
+                  <td><a class="link">查看</a> · <a class="link">编辑</a></td>
+                </tr>
+                <tr>
+                  <td class="mono">SC-007</td><td>湛江基地-南美白对虾塘</td><td>湛江基地</td><td class="mono">180</td><td>南美白对虾</td>
+                  <td class="mono">6</td><td>淤泥质</td><td><span class="tag">正常</span></td>
+                  <td><a class="link">查看</a> · <a class="link">编辑</a></td>
+                </tr>
+                <tr>
+                  <td class="mono">SC-008</td><td>湛江基地-金鲳鱼网箱</td><td>湛江基地</td><td class="mono">120</td><td>金鲳鱼</td>
+                  <td class="mono">5</td><td>海水</td><td><span class="tag tag-amber">预警</span></td>
+                  <td><a class="link">查看</a> · <a class="link">编辑</a></td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div class="pager">
+              <button>上一页</button><button class="on">1</button><button>2</button><button>3</button><button>下一页</button>
+            </div>
+          </div>
+
+          <!-- 设备管理 -->
+          <div data-tabpanel="dev" class="hide">
+            <div class="toolbar">
+              <input class="input" style="width:220px" placeholder="搜索设备编号 / 名称" />
+              <select class="select" style="width:140px">
+                <option>全部类型</option><option>环境传感器</option><option>土壤传感器</option><option>灌溉控制</option><option>植保监测</option><option>水产传感器</option>
+              </select>
+              <select class="select" style="width:130px">
+                <option>全部协议</option><option>MQTT</option><option>Modbus</option><option>LoRa</option>
+              </select>
+              <div class="spacer"></div>
+              <button class="btn btn-primary btn-sm"><span data-icon="plus"></span>新增设备</button>
+              <button class="btn btn-outline btn-sm"><span data-icon="file"></span>导出</button>
+            </div>
+
+            <table class="data-table mt-16">
+              <thead>
+                <tr>
+                  <th>设备编号</th><th>设备名称</th><th>设备类型</th><th>所属地块</th><th>通信协议</th>
+                  <th>在线状态</th><th>固件版本</th><th>最近上报</th><th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="mono">DEV-1001</td><td>空气温湿度传感器</td><td>环境传感器</td><td>SC-003 设施番茄棚</td><td><span class="tag tag-tech">MQTT</span></td>
+                  <td><span class="dot"></span> 在线</td><td class="mono">v2.3.1</td><td class="mono">10-19 14:26</td>
+                  <td><a class="link">查看</a> · <a class="link">OTA</a></td>
+                </tr>
+                <tr>
+                  <td class="mono">DEV-1002</td><td>土壤墒情监测站</td><td>土壤传感器</td><td>SC-001 富硒水稻田</td><td><span class="tag tag-tech">LoRa</span></td>
+                  <td><span class="dot"></span> 在线</td><td class="mono">v1.8.4</td><td class="mono">10-19 14:25</td>
+                  <td><a class="link">查看</a> · <a class="link">OTA</a></td>
+                </tr>
+                <tr>
+                  <td class="mono">DEV-1003</td><td>智能水肥一体机</td><td>灌溉控制</td><td>SC-004 黄瓜示范棚</td><td><span class="tag tag-tech">Modbus</span></td>
+                  <td><span class="dot gray"></span> 离线</td><td class="mono">v3.0.2</td><td class="mono">10-19 13:22</td>
+                  <td><a class="link">查看</a> · <a class="link">OTA</a></td>
+                </tr>
+                <tr>
+                  <td class="mono">DEV-1004</td><td>虫情测报灯</td><td>植保监测</td><td>SC-005 脐橙园</td><td><span class="tag tag-tech">MQTT</span></td>
+                  <td><span class="dot"></span> 在线</td><td class="mono">v1.4.0</td><td class="mono">10-19 14:20</td>
+                  <td><a class="link">查看</a> · <a class="link">OTA</a></td>
+                </tr>
+                <tr>
+                  <td class="mono">DEV-1005</td><td>智能气象站</td><td>气象监测</td><td>SC-002 有机稻田</td><td><span class="tag tag-tech">LoRa</span></td>
+                  <td><span class="dot"></span> 在线</td><td class="mono">v2.0.7</td><td class="mono">10-19 14:24</td>
+                  <td><a class="link">查看</a> · <a class="link">OTA</a></td>
+                </tr>
+                <tr>
+                  <td class="mono">DEV-1006</td><td>水产溶氧传感器</td><td>水产传感器</td><td>SC-007 南美白对虾塘</td><td><span class="tag tag-tech">Modbus</span></td>
+                  <td><span class="dot amber"></span> 告警</td><td class="mono">v1.2.3</td><td class="mono">10-19 13:58</td>
+                  <td><a class="link">查看</a> · <a class="link">OTA</a></td>
+                </tr>
+                <tr>
+                  <td class="mono">DEV-1007</td><td>大棚卷帘控制器</td><td>环境控制</td><td>SC-003 设施番茄棚</td><td><span class="tag tag-tech">Modbus</span></td>
+                  <td><span class="dot"></span> 在线</td><td class="mono">v1.1.5</td><td class="mono">10-19 14:18</td>
+                  <td><a class="link">查看</a> · <a class="link">OTA</a></td>
+                </tr>
+                <tr>
+                  <td class="mono">DEV-1008</td><td>土壤 EC/pH 一体探头</td><td>土壤传感器</td><td>SC-006 高山茶园</td><td><span class="tag tag-tech">LoRa</span></td>
+                  <td><span class="dot"></span> 在线</td><td class="mono">v1.6.1</td><td class="mono">10-19 14:22</td>
+                  <td><a class="link">查看</a> · <a class="link">OTA</a></td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div class="pager">
+              <button>上一页</button><button class="on">1</button><button>2</button><button>3</button><button>下一页</button>
+            </div>
+          </div>
+
+          <!-- 告警中心 -->
+          <div data-tabpanel="alarm" class="hide">
+            <div class="toolbar">
+              <input class="input" style="width:220px" placeholder="搜索告警编号 / 内容" />
+              <div class="chips">
+                <span class="chip on">全部</span><span class="chip">紧急</span><span class="chip">重要</span><span class="chip">一般</span>
+              </div>
+              <div class="spacer"></div>
+              <button class="btn btn-primary btn-sm"><span data-icon="check"></span>批量处理</button>
+              <button class="btn btn-outline btn-sm"><span data-icon="file"></span>导出</button>
+            </div>
+
+            <table class="data-table mt-16">
+              <thead>
+                <tr>
+                  <th>告警编号</th><th>时间</th><th>地块 / 设备</th><th>告警内容</th><th>等级</th><th>状态</th><th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="mono">ALM-1001</td><td class="mono">10-19 14:26</td><td>SC-001 土壤墒情监测站</td><td>土壤湿度低于阈值 52%</td>
+                  <td><span class="tag tag-amber">重要</span></td><td><span class="tag tag-ghost">待处理</span></td><td><a class="link">处理</a></td>
+                </tr>
+                <tr>
+                  <td class="mono">ALM-1002</td><td class="mono">10-19 14:12</td><td>SC-003 空气温湿度传感器</td><td>棚内温度过高 38.5℃</td>
+                  <td><span class="tag tag-red">紧急</span></td><td><span class="tag tag-ghost">处理中</span></td><td><a class="link">处理</a></td>
+                </tr>
+                <tr>
+                  <td class="mono">ALM-1003</td><td class="mono">10-19 13:58</td><td>SC-007 水产溶氧传感器</td><td>水温过高 32.4℃</td>
+                  <td><span class="tag tag-red">紧急</span></td><td><span class="tag tag-ghost">待处理</span></td><td><a class="link">处理</a></td>
+                </tr>
+                <tr>
+                  <td class="mono">ALM-1004</td><td class="mono">10-19 13:40</td><td>SC-005 虫情测报灯</td><td>虫情密度超阈值</td>
+                  <td><span class="tag tag-amber">重要</span></td><td><span class="tag tag-ghost">处理中</span></td><td><a class="link">处理</a></td>
+                </tr>
+                <tr>
+                  <td class="mono">ALM-1005</td><td class="mono">10-19 13:22</td><td>SC-004 智能水肥一体机</td><td>设备离线超 30 分钟</td>
+                  <td><span class="tag tag-ghost">一般</span></td><td><span class="tag tag-ghost">待处理</span></td><td><a class="link">处理</a></td>
+                </tr>
+                <tr>
+                  <td class="mono">ALM-1006</td><td class="mono">10-19 12:55</td><td>SC-002 智能气象站</td><td>阵风预警 8 级</td>
+                  <td><span class="tag tag-ghost">一般</span></td><td><span class="tag">已恢复</span></td><td><a class="link">处理</a></td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div class="pager">
+              <button>上一页</button><button class="on">1</button><button>2</button><button>下一页</button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="../assets/js/app.js"></script>
+</body>
+</html>

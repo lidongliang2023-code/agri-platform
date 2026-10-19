@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>农业产业互联网平台 · 产品原型总览</title>
+<link rel="stylesheet" href="assets/css/theme.css" />
+</head>
+<body>
+
+<!-- 顶部通栏 -->
+<div class="topbar">
+  <div class="container container-wide">
+    <span>农业产业互联网平台 · 产品原型 v1.0（演示版）</span>
+    <span>
+      <a href="portal/index.html">官网品牌站</a><span class="sep">·</span>
+      <a href="trade/index.html">交易用户端</a><span class="sep">·</span>
+      <a href="production/dashboard.html">生产监测</a><span class="sep">·</span>
+      <a href="mobile/index.html">移动端 H5</a>
+    </span>
+  </div>
+</div>
+
+<!-- 站点头部 -->
+<header class="site-header">
+  <div class="container container-wide">
+    <a class="brand" href="index.html">
+      <span class="logo" data-icon="seed" data-size="20"></span>
+      <span>农产云<small>AGRI · CLOUD</small></span>
+    </a>
+    <nav class="main-nav">
+      <a href="index.html" class="active">产品矩阵</a>
+      <a href="portal/index.html">官网门户</a>
+      <a href="trade/index.html">交易大厅</a>
+      <a href="production/dashboard.html">生产监测</a>
+      <a href="production/manage.html">生产管理</a>
+      <a href="mobile/index.html">移动端</a>
+      <a href="mobile/ai.html">AI 买手</a>
+    </nav>
+    <div class="header-search">
+      <input placeholder="搜索商品 / 供应商 / 需求" />
+      <button>搜索</button>
+    </div>
+  </div>
+</header>
+
+<!-- Hero -->
+<section class="hero">
+  <div class="container container-wide">
+    <div class="tag-row">
+      <span class="tag">P0 核心业务层</span>
+      <span class="tag">9 大业务模块</span>
+      <span class="tag">终端入口层 5 端</span>
+      <span class="tag">技术支持层 5 中台</span>
+    </div>
+    <h1 class="mt-20">农业产业互联网平台<br/>产品矩阵与交互原型</h1>
+    <p>连接农业生产、加工、流通、销售全环节，以「交易引擎 + 生产引擎 + 服务引擎」三大引擎驱动，
+      以数据基座统一用户、权限、商品与客户供应商，构建覆盖官网、交易端、生产端、移动端与 AI 买手的全链路数字化平台。</p>
+    <div class="hero-actions">
+      <a class="btn btn-lg btn-primary" href="portal/index.html"><span data-icon="globe"></span>进入官网品牌站</a>
+      <a class="btn btn-lg btn-outline" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.4);color:#fff" href="trade/index.html"><span data-icon="cart"></span>进入交易大厅</a>
+    </div>
+  </div>
+</section>
+
+<!-- 产品矩阵 -->
+<section class="section">
+  <div class="container container-wide">
+    <div class="section-head">
+      <div>
+        <div class="bar-title">产品矩阵全景</div>
+        <div class="sub">三层架构：终端入口层 → 核心业务层（9 大模块）→ 技术支持层</div>
+      </div>
+      <span class="tag tag-ghost">依据产品矩阵全景架构图绘制</span>
+    </div>
+
+    <div class="matrix-board">
+      <!-- 终端入口层 -->
+      <div class="matrix-layer layer-entry">
+        <div class="layer-label">终端入口层 · TERMINAL ENTRY</div>
+        <div class="matrix-cards mc-entry">
+          <a class="mod-chip" href="portal/index.html">官网品牌站<small>品牌展示 / 门户</small></a>
+          <a class="mod-chip" href="trade/index.html">PC 用户端<small>交易 / 生产</small></a>
+          <a class="mod-chip" href="production/manage.html">PC 运营端<small>后台管理</small></a>
+          <a class="mod-chip" href="mobile/index.html">移动端 H5<small>触屏适配</small></a>
+          <a class="mod-chip" href="mobile/ai.html">AI 找助手<small>小程序 MVP</small></a>
+        </div>
+      </div>
+
+      <!-- 核心业务层 -->
+      <div class="matrix-layer layer-core">
+        <div class="layer-label">核心业务层 · 9 大模块</div>
+
+        <div class="engines">
+          <!-- 交易引擎 -->
+          <div class="engine e-trade">
+            <div class="t">交易引擎</div>
+            <div class="mod">
+              <div class="n">交易撮合</div>
+              <div class="d">智能大宗交易 + Sales Agent</div>
+            </div>
+            <div class="mod">
+              <div class="n">S2B2C</div>
+              <div class="d">小程序端 / 多租户 PC 端</div>
+            </div>
+            <div class="mod">
+              <div class="n">供应链金融</div>
+              <div class="d">产业链信用 · 三角链风控</div>
+            </div>
+          </div>
+
+          <!-- 生产引擎 -->
+          <div class="engine e-prod">
+            <div class="t">生产引擎</div>
+            <div class="mod">
+              <div class="n">生产管理</div>
+              <div class="d">AI 核心引擎 · 资产安全 + AI</div>
+            </div>
+            <div class="mod">
+              <div class="n">物联网管理</div>
+              <div class="d">数据采集 · 监测-补偿处理</div>
+            </div>
+          </div>
+
+          <!-- 服务引擎 -->
+          <div class="engine e-serv">
+            <div class="t">服务引擎</div>
+            <div class="mod">
+              <div class="n">信息资讯</div>
+              <div class="d">决策智能中枢</div>
+            </div>
+            <div class="mod">
+              <div class="n">综合服务</div>
+              <div class="d">产业数据服务</div>
+            </div>
+            <div class="mod">
+              <div class="n">政府监管</div>
+              <div class="d">产业互联网地标</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 数据基座 -->
+        <div class="data-foundation">
+          <div class="layer-label">数据基座 · 主数据管理（第 9 大模块）· MASTER DATA</div>
+          <div class="df-cards">
+            <div class="mod-chip">统一用户<small>账号体系</small></div>
+            <div class="mod-chip">统一权限<small>角色 / 菜单</small></div>
+            <div class="mod-chip">统一商品<small>品类 / 商品库</small></div>
+            <div class="mod-chip">客户 / 供应商<small>伙伴档案</small></div>
+            <div class="mod-chip">数据治理<small>标准 / 质量</small></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 技术支持层 -->
+      <div class="matrix-layer layer-tech" style="margin-bottom:0">
+        <div class="layer-label">技术支持层 · TECH PLATFORM</div>
+        <div class="matrix-cards mc-tech">
+          <div class="mod-chip">数据中台<small>Data Platform</small></div>
+          <div class="mod-chip">AI 中台<small>AI Platform</small></div>
+          <div class="mod-chip">物联网平台<small>IoT Platform</small></div>
+          <div class="mod-chip">运营平台<small>Ops Platform</small></div>
+          <div class="mod-chip">技术平台<small>Dev Platform</small></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 终端入口原型 -->
+<section class="section" style="background:var(--bg-alt)">
+  <div class="container container-wide">
+    <div class="section-head">
+      <div>
+        <div class="bar-title">可交互原型入口</div>
+        <div class="sub">点击卡片进入对应终端的高保真原型页面</div>
+      </div>
+    </div>
+    <div class="grid grid-4">
+      <a class="entry-card" href="portal/index.html">
+        <div class="ic" style="background:linear-gradient(135deg,#12764A,#2FB877)"><span data-icon="globe" data-size="22"></span></div>
+        <h4>官网品牌站</h4>
+        <p>门户首页 · 产业链频道 · 热销商品 · 价格指数 · 产业资讯 · 平台数据</p>
+        <span class="go">进入原型 <span data-icon="arrow" data-size="15"></span></span>
+      </a>
+      <a class="entry-card" href="trade/index.html">
+        <div class="ic" style="background:linear-gradient(135deg,#0C7BA8,#38BDF8)"><span data-icon="cart" data-size="22"></span></div>
+        <h4>交易用户端</h4>
+        <p>交易大厅 · 商品详情与在线议价 · 发布采购/供应需求 · 订单与资金中心</p>
+        <span class="go">进入原型 <span data-icon="arrow" data-size="15"></span></span>
+      </a>
+      <a class="entry-card" href="production/dashboard.html">
+        <div class="ic" style="background:linear-gradient(135deg,#0E5233,#159A5E)"><span data-icon="activity" data-size="22"></span></div>
+        <h4>生产监测大屏</h4>
+        <p>物联网实时数据 · 环境曲线 · 地块分布 · 设备在线率 · 实时告警</p>
+        <span class="go">进入原型 <span data-icon="arrow" data-size="15"></span></span>
+      </a>
+      <a class="entry-card" href="production/manage.html">
+        <div class="ic" style="background:linear-gradient(135deg,#155E3C,#0EA5E9)"><span data-icon="layers" data-size="22"></span></div>
+        <h4>生产管理后台</h4>
+        <p>地块管理 · 设备管理 · 告警中心 · 种植/养殖计划 · OTA 固件升级</p>
+        <span class="go">进入原型 <span data-icon="arrow" data-size="15"></span></span>
+      </a>
+      <a class="entry-card" href="mobile/index.html">
+        <div class="ic" style="background:linear-gradient(135deg,#6D28D9,#38BDF8)"><span data-icon="phone" data-size="22"></span></div>
+        <h4>移动端 H5</h4>
+        <p>触屏适配：首页 · 商品列表 · 商品详情 · 我的，多屏联动展示</p>
+        <span class="go">进入原型 <span data-icon="arrow" data-size="15"></span></span>
+      </a>
+      <a class="entry-card" href="mobile/ai.html">
+        <div class="ic" style="background:linear-gradient(135deg,#12764A,#0EA5E9)"><span data-icon="spark" data-size="22"></span></div>
+        <h4>AI 找助手</h4>
+        <p>自然语言寻源 · 智能匹配供应商与商品 · 大宗采购一键询价</p>
+        <span class="go">进入原型 <span data-icon="arrow" data-size="15"></span></span>
+      </a>
+      <a class="entry-card" href="trade/publish.html">
+        <div class="ic" style="background:linear-gradient(135deg,#B45309,#F59E0B)"><span data-icon="clipboard" data-size="22"></span></div>
+        <h4>发布需求</h4>
+        <p>采购 / 供应需求发布 · 智能匹配 · 在线议价洽谈</p>
+        <span class="go">进入原型 <span data-icon="arrow" data-size="15"></span></span>
+      </a>
+      <a class="entry-card" href="trade/member.html">
+        <div class="ic" style="background:linear-gradient(135deg,#0C7BA8,#12764A)"><span data-icon="user" data-size="22"></span></div>
+        <h4>会员中心</h4>
+        <p>采购订单 · 销售订单 · 资金账户 · 在线签章 · 售后与评价</p>
+        <span class="go">进入原型 <span data-icon="arrow" data-size="15"></span></span>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- 页脚 -->
+<footer class="site-footer">
+  <div class="container container-wide">
+    <div class="grid grid-4">
+      <div>
+        <div class="brand" style="color:#fff"><span class="logo" data-icon="seed" data-size="20"></span><span>农产云</span></div>
+        <p style="margin-top:14px;font-size:13px;color:rgba(255,255,255,.6);max-width:280px">
+          农业产业互联网平台，让每一亩农田都接入数字网络。</p>
+      </div>
+      <div><h4>终端入口</h4>
+        <a href="portal/index.html">官网品牌站</a><a href="trade/index.html">交易用户端</a>
+        <a href="production/manage.html">运营管理端</a><a href="mobile/index.html">移动端 H5</a>
+      </div>
+      <div><h4>核心业务</h4>
+        <a href="trade/index.html">交易撮合</a><a href="trade/publish.html">发布需求</a>
+        <a href="production/dashboard.html">物联网管理</a><a href="trade/member.html">供应链金融</a>
+      </div>
+      <div><h4>技术支持</h4>
+        <a>数据中台</a><a>AI 中台</a><a>物联网平台</a><a>运营平台</a>
+      </div>
+    </div>
+    <div class="bottom">
+      <span>© 2026 农业产业互联网平台 · 产品原型演示（本页为原型演示，非真实业务系统）</span>
+      <span>Prototype v1.0 · 农业绿 + 数据科技风</span>
+    </div>
+  </div>
+</footer>
+
+<script src="assets/js/app.js"></script>
+</body>
+</html>

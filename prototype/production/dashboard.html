@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>生产监测中心 · 农业产业互联网平台</title>
+<link rel="stylesheet" href="../assets/css/theme.css" />
+</head>
+<body>
+
+<div class="screen">
+
+  <!-- 顶部 -->
+  <div class="screen-top">
+    <a class="back" href="../index.html">← 返回原型总览</a>
+    <h1>农业产业互联网平台 · 生产监测中心</h1>
+    <div style="margin-top:8px;font-size:12.5px;letter-spacing:2px;color:rgba(220,239,228,.55)">
+      物联网实时数据 · 环境 / 土壤 / 设备 / 告警 全域监测
+    </div>
+    <span class="time js-clock"></span>
+    <div class="line"></div>
+  </div>
+
+  <!-- 主体：12 列网格 -->
+  <div class="screen-grid">
+
+    <!-- 1) KPI 行：4 × 3 -->
+    <div class="panel" style="grid-column: span 3">
+      <div class="panel-h"><h3>在线设备</h3><span style="font-size:12px;color:rgba(220,239,228,.45)">实时</span></div>
+      <div class="panel-b">
+        <div class="kpi-screen">
+          <div class="ic" data-icon="cpu" data-size="24"></div>
+          <div>
+            <div class="v">12,846<span class="u">台</span></div>
+            <div class="k">接入物联网终端总量</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" style="grid-column: span 3">
+      <div class="panel-h"><h3>设备在线率</h3><span style="font-size:12px;color:rgba(220,239,228,.45)">近 24h</span></div>
+      <div class="panel-b">
+        <div class="kpi-screen">
+          <div class="ic" data-icon="wifi" data-size="24"></div>
+          <div>
+            <div class="v"><span class="js-count" data-to="98.6" data-dec="1">98.6</span><span class="u">%</span></div>
+            <div class="k">通信链路健康度</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" style="grid-column: span 3">
+      <div class="panel-h"><h3>今日告警</h3><span style="font-size:12px;color:rgba(220,239,228,.45)">未处理</span></div>
+      <div class="panel-b">
+        <div class="kpi-screen">
+          <div class="ic" data-icon="alert" data-size="24"></div>
+          <div>
+            <div class="v"><span class="js-count" data-to="7" data-dec="0">7</span><span class="u">条</span></div>
+            <div class="k">紧急 2 · 重要 2 · 一般 3</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" style="grid-column: span 3">
+      <div class="panel-h"><h3>今日采集数据点</h3><span style="font-size:12px;color:rgba(220,239,228,.45)">累计</span></div>
+      <div class="panel-b">
+        <div class="kpi-screen">
+          <div class="ic" data-icon="activity" data-size="24"></div>
+          <div>
+            <div class="v">3,268<span class="u">万</span></div>
+            <div class="k">IoT 数据平台入库量</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2) 环境监测趋势（6 列） -->
+    <div class="panel" style="grid-column: span 6">
+      <div class="panel-h">
+        <h3>环境监测趋势（24h）</h3>
+        <div class="row gap-12" style="font-size:12px;color:rgba(220,239,228,.7)">
+          <span class="row center gap-4"><i style="width:9px;height:9px;border-radius:2px;background:#2FB877;display:inline-block"></i>温度 26.4℃</span>
+          <span class="row center gap-4"><i style="width:9px;height:9px;border-radius:2px;background:#38BDF8;display:inline-block"></i>湿度 62%</span>
+          <span class="row center gap-4"><i style="width:9px;height:9px;border-radius:2px;background:#F59E0B;display:inline-block"></i>光照 38 klx</span>
+        </div>
+      </div>
+      <div class="panel-b">
+        <div class="row center gap-12 mt-8">
+          <span style="width:56px;font-size:12px;color:rgba(220,239,228,.55)">温度</span>
+          <div class="spark flex-1" style="height:56px">
+            <i style="height:42%"></i><i style="height:38%"></i><i style="height:34%"></i><i style="height:32%"></i><i style="height:34%"></i><i style="height:40%"></i>
+            <i style="height:52%"></i><i style="height:64%"></i><i style="height:74%"></i><i style="height:82%"></i><i style="height:88%"></i><i style="height:92%"></i>
+            <i style="height:94%"></i><i style="height:90%"></i><i style="height:86%"></i><i style="height:80%"></i><i style="height:72%"></i><i style="height:66%"></i>
+            <i style="height:60%"></i><i style="height:54%"></i><i style="height:50%"></i><i style="height:46%"></i><i style="height:44%"></i><i style="height:42%"></i>
+          </div>
+        </div>
+        <div class="row center gap-12 mt-16">
+          <span style="width:56px;font-size:12px;color:rgba(220,239,228,.55)">湿度</span>
+          <div class="spark flex-1" style="height:56px">
+            <i style="height:76%;background:linear-gradient(180deg,#38BDF8,rgba(56,189,248,.12))"></i><i style="height:80%;background:linear-gradient(180deg,#38BDF8,rgba(56,189,248,.12))"></i><i style="height:82%;background:linear-gradient(180deg,#38BDF8,rgba(56,189,248,.12))"></i><i style="height:84%;background:linear-gradient(180deg,#38BDF8,rgba(56,189,248,.12))"></i><i style="height:80%;background:linear-gradient(180deg,#38BDF8,rgba(56,189,248,.12))"></i><i style="height:72%;background:linear-gradient(180deg,#38BDF8,rgba(56,189,248,.12))"></i>
+            <i style="height:62%;background:linear-gradient(180deg,#38BDF8,rgba(56,189,248,.12))"></i><i style="height:52%;background:linear-gradient(180deg,#38BDF8,rgba(56,189,248,.12))"></i><i style="height:46%;background:linear-gradient(180deg,#38BDF8,rgba(56,189,248,.12))"></i><i style="height:42%;background:linear-gradient(180deg,#38BDF8,rgba(56,189,248,.12))"></i><i style="height:40%;background:linear-gradient(180deg,#38BDF8,rgba(56,189,248,.12))"></i><i style="height:38%;background:linear-gradient(180deg,#38BDF8,rgba(56,189,248,.12))"></i>
+            <i style="height:36%;background:linear-gradient(180deg,#38BDF8,rgba(56,189,248,.12))"></i><i style="height:38%;background:linear-gradient(180deg,#38BDF8,rgba(56,189,248,.12))"></i><i style="height:42%;background:linear-gradient(180deg,#38BDF8,rgba(56,189,248,.12))"></i><i style="height:46%;background:linear-gradient(180deg,#38BDF8,rgba(56,189,248,.12))"></i><i style="height:50%;background:linear-gradient(180deg,#38BDF8,rgba(56,189,248,.12))"></i><i style="height:56%;background:linear-gradient(180deg,#38BDF8,rgba(56,189,248,.12))"></i>
+            <i style="height:62%;background:linear-gradient(180deg,#38BDF8,rgba(56,189,248,.12))"></i><i style="height:68%;background:linear-gradient(180deg,#38BDF8,rgba(56,189,248,.12))"></i><i style="height:72%;background:linear-gradient(180deg,#38BDF8,rgba(56,189,248,.12))"></i><i style="height:74%;background:linear-gradient(180deg,#38BDF8,rgba(56,189,248,.12))"></i><i style="height:76%;background:linear-gradient(180deg,#38BDF8,rgba(56,189,248,.12))"></i><i style="height:78%;background:linear-gradient(180deg,#38BDF8,rgba(56,189,248,.12))"></i>
+          </div>
+        </div>
+        <div class="row center gap-12 mt-16">
+          <span style="width:56px;font-size:12px;color:rgba(220,239,228,.55)">光照</span>
+          <div class="spark flex-1" style="height:56px">
+            <i style="height:4%;background:linear-gradient(180deg,#F59E0B,rgba(245,158,11,.12))"></i><i style="height:3%;background:linear-gradient(180deg,#F59E0B,rgba(245,158,11,.12))"></i><i style="height:3%;background:linear-gradient(180deg,#F59E0B,rgba(245,158,11,.12))"></i><i style="height:3%;background:linear-gradient(180deg,#F59E0B,rgba(245,158,11,.12))"></i><i style="height:3%;background:linear-gradient(180deg,#F59E0B,rgba(245,158,11,.12))"></i><i style="height:7%;background:linear-gradient(180deg,#F59E0B,rgba(245,158,11,.12))"></i>
+            <i style="height:18%;background:linear-gradient(180deg,#F59E0B,rgba(245,158,11,.12))"></i><i style="height:34%;background:linear-gradient(180deg,#F59E0B,rgba(245,158,11,.12))"></i><i style="height:56%;background:linear-gradient(180deg,#F59E0B,rgba(245,158,11,.12))"></i><i style="height:76%;background:linear-gradient(180deg,#F59E0B,rgba(245,158,11,.12))"></i><i style="height:90%;background:linear-gradient(180deg,#F59E0B,rgba(245,158,11,.12))"></i><i style="height:98%;background:linear-gradient(180deg,#F59E0B,rgba(245,158,11,.12))"></i>
+            <i style="height:100%;background:linear-gradient(180deg,#F59E0B,rgba(245,158,11,.12))"></i><i style="height:92%;background:linear-gradient(180deg,#F59E0B,rgba(245,158,11,.12))"></i><i style="height:80%;background:linear-gradient(180deg,#F59E0B,rgba(245,158,11,.12))"></i><i style="height:62%;background:linear-gradient(180deg,#F59E0B,rgba(245,158,11,.12))"></i><i style="height:42%;background:linear-gradient(180deg,#F59E0B,rgba(245,158,11,.12))"></i><i style="height:24%;background:linear-gradient(180deg,#F59E0B,rgba(245,158,11,.12))"></i>
+            <i style="height:12%;background:linear-gradient(180deg,#F59E0B,rgba(245,158,11,.12))"></i><i style="height:5%;background:linear-gradient(180deg,#F59E0B,rgba(245,158,11,.12))"></i><i style="height:3%;background:linear-gradient(180deg,#F59E0B,rgba(245,158,11,.12))"></i><i style="height:3%;background:linear-gradient(180deg,#F59E0B,rgba(245,158,11,.12))"></i><i style="height:3%;background:linear-gradient(180deg,#F59E0B,rgba(245,158,11,.12))"></i><i style="height:3%;background:linear-gradient(180deg,#F59E0B,rgba(245,158,11,.12))"></i>
+          </div>
+        </div>
+        <div class="row between mt-12" style="font-size:11px;color:rgba(220,239,228,.4)">
+          <span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3) 土壤墒情（3 列） -->
+    <div class="panel" style="grid-column: span 3">
+      <div class="panel-h"><h3>土壤墒情</h3><span style="font-size:12px;color:rgba(220,239,228,.45)">五常·A3</span></div>
+      <div class="panel-b">
+        <div class="gauge" style="position:relative">
+          <svg width="150" height="150" viewBox="0 0 150 150">
+            <circle cx="75" cy="75" r="60" stroke="rgba(47,184,119,.18)" stroke-width="12" fill="none"></circle>
+            <circle cx="75" cy="75" r="60" stroke="#2FB877" stroke-width="12" fill="none" stroke-linecap="round" stroke-dasharray="219 377"></circle>
+          </svg>
+          <div class="lbl"><div class="n">58%</div><div class="t">土壤湿度</div></div>
+        </div>
+        <div class="grid grid-3 mt-16" style="gap:10px">
+          <div style="text-align:center">
+            <div class="mono" style="font-size:17px;font-weight:800;color:#EAFFF5">6.8</div>
+            <div style="font-size:11px;color:rgba(220,239,228,.5)">pH 值</div>
+          </div>
+          <div style="text-align:center">
+            <div class="mono" style="font-size:17px;font-weight:800;color:#EAFFF5">1.2</div>
+            <div style="font-size:11px;color:rgba(220,239,228,.5)">EC mS/cm</div>
+          </div>
+          <div style="text-align:center">
+            <div class="mono" style="font-size:17px;font-weight:800;color:#6FD6A2">均衡</div>
+            <div style="font-size:11px;color:rgba(220,239,228,.5)">氮磷钾</div>
+          </div>
+        </div>
+        <div class="mt-16" style="font-size:11.5px;color:rgba(220,239,228,.5);line-height:1.9">
+          速效氮 <span class="mono" style="color:#DCEFE4">86 mg/kg</span> · 有效磷 <span class="mono" style="color:#DCEFE4">32 mg/kg</span> · 速效钾 <span class="mono" style="color:#DCEFE4">115 mg/kg</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4) 设备状态分布（3 列） -->
+    <div class="panel" style="grid-column: span 3">
+      <div class="panel-h"><h3>设备状态分布</h3><span style="font-size:12px;color:rgba(220,239,228,.45)">12,853 台</span></div>
+      <div class="panel-b">
+        <div class="row between" style="font-size:12.5px;color:rgba(220,239,228,.7);margin-bottom:6px">
+          <span class="row center gap-4"><i class="dot"></i>在线</span>
+          <span class="mono" style="color:#EAFFF5">12,654 · 98.45%</span>
+        </div>
+        <div class="progress" style="background:rgba(255,255,255,.08)"><i style="width:98.45%"></i></div>
+
+        <div class="row between mt-20" style="font-size:12.5px;color:rgba(220,239,228,.7);margin-bottom:6px">
+          <span class="row center gap-4"><i class="dot gray"></i>离线</span>
+          <span class="mono" style="color:#EAFFF5">192 · 1.49%</span>
+        </div>
+        <div class="progress" style="background:rgba(255,255,255,.08)"><i style="width:1.49%;background:#93A29A"></i></div>
+
+        <div class="row between mt-20" style="font-size:12.5px;color:rgba(220,239,228,.7);margin-bottom:6px">
+          <span class="row center gap-4"><i class="dot amber"></i>告警</span>
+          <span class="mono" style="color:#EAFFF5">7 · 0.05%</span>
+        </div>
+        <div class="progress" style="background:rgba(255,255,255,.08)"><i style="width:2%;background:#F59E0B"></i></div>
+
+        <div class="mt-20" style="font-size:11.5px;color:rgba(220,239,228,.45);border-top:1px dashed rgba(47,184,119,.2);padding-top:12px">
+          统计口径：近 5 分钟心跳上报设备，数据每 30 秒刷新一次。
+        </div>
+      </div>
+    </div>
+
+    <!-- 5) 地块分布地图（5 列） -->
+    <div class="panel" style="grid-column: span 5">
+      <div class="panel-h"><h3>地块分布地图</h3><span style="font-size:12px;color:rgba(220,239,228,.45)">全国 4 大基地</span></div>
+      <div class="panel-b">
+        <div style="position:relative;height:210px;border-radius:12px;border:1px solid rgba(47,184,119,.22);overflow:hidden;
+             background-color:#03120d;
+             background-image:radial-gradient(500px 260px at 70% 20%, rgba(21,154,94,.22), transparent 70%),linear-gradient(rgba(47,184,119,.1) 1px,transparent 1px),linear-gradient(90deg,rgba(47,184,119,.1) 1px,transparent 1px);
+             background-size:auto,34px 34px,34px 34px">
+          <div class="dot-pulse" style="position:absolute;left:34%;top:30%"></div>
+          <div class="dot-pulse" style="position:absolute;left:46%;top:22%"></div>
+          <div class="dot-pulse" style="position:absolute;left:72%;top:38%"></div>
+          <div style="position:absolute;left:60%;top:62%;width:9px;height:9px;border-radius:50%;background:#F59E0B;box-shadow:0 0 0 6px rgba(245,158,11,.18)"></div>
+          <div style="position:absolute;left:30%;top:66%;width:9px;height:9px;border-radius:50%;background:#38BDF8;box-shadow:0 0 0 6px rgba(56,189,248,.16)"></div>
+          <div style="position:absolute;left:24%;top:44%;width:5px;height:5px;border-radius:50%;background:#2FB877"></div>
+          <div style="position:absolute;left:52%;top:48%;width:5px;height:5px;border-radius:50%;background:#2FB877"></div>
+          <div style="position:absolute;left:66%;top:52%;width:5px;height:5px;border-radius:50%;background:#2FB877"></div>
+          <div style="position:absolute;left:80%;top:70%;width:5px;height:5px;border-radius:50%;background:#2FB877"></div>
+          <span style="position:absolute;left:11%;top:10px;font-size:11px;color:rgba(220,239,228,.45);letter-spacing:1px">GEO · 基地地块热力</span>
+          <div style="position:absolute;right:12px;bottom:10px;display:flex;gap:12px;font-size:10.5px;color:rgba(220,239,228,.55)">
+            <span class="row center gap-4"><i class="dot-pulse" style="width:7px;height:7px"></i>在线设备</span>
+            <span class="row center gap-4"><i style="width:7px;height:7px;border-radius:50%;background:#F59E0B;display:inline-block"></i>告警</span>
+            <span class="row center gap-4"><i style="width:7px;height:7px;border-radius:50%;background:#38BDF8;display:inline-block"></i>待升级</span>
+          </div>
+        </div>
+
+        <div class="mt-16" style="display:grid;gap:8px">
+          <div class="row between" style="padding:9px 12px;border-radius:8px;background:rgba(21,154,94,.1);border:1px solid rgba(47,184,119,.16)">
+            <span style="color:#EAFFF5;font-size:13px">五常基地 <span style="font-size:11px;color:rgba(220,239,228,.5)">东北 · 水稻</span></span>
+            <span class="mono" style="font-size:12px;color:rgba(220,239,228,.7)">38 地块 · 8,600 亩 · 在线 142 台</span>
+          </div>
+          <div class="row between" style="padding:9px 12px;border-radius:8px;background:rgba(21,154,94,.1);border:1px solid rgba(47,184,119,.16)">
+            <span style="color:#EAFFF5;font-size:13px">寿光基地 <span style="font-size:11px;color:rgba(220,239,228,.5)">山东 · 设施蔬菜</span></span>
+            <span class="mono" style="font-size:12px;color:rgba(220,239,228,.7)">48 地块 · 3,200 亩 · 在线 186 台</span>
+          </div>
+          <div class="row between" style="padding:9px 12px;border-radius:8px;background:rgba(21,154,94,.1);border:1px solid rgba(47,184,119,.16)">
+            <span style="color:#EAFFF5;font-size:13px">赣州基地 <span style="font-size:11px;color:rgba(220,239,228,.5)">江西 · 脐橙</span></span>
+            <span class="mono" style="font-size:12px;color:rgba(220,239,228,.7)">26 地块 · 5,400 亩 · 在线 96 台</span>
+          </div>
+          <div class="row between" style="padding:9px 12px;border-radius:8px;background:rgba(21,154,94,.1);border:1px solid rgba(47,184,119,.16)">
+            <span style="color:#EAFFF5;font-size:13px">湛江基地 <span style="font-size:11px;color:rgba(220,239,228,.5)">广东 · 水产养殖</span></span>
+            <span class="mono" style="font-size:12px;color:rgba(220,239,228,.7)">16 地块 · 2,800 亩 · 在线 62 台</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6) 实时告警（4 列） -->
+    <div class="panel" style="grid-column: span 4">
+      <div class="panel-h"><h3>实时告警</h3><span style="font-size:12px;color:rgba(220,239,228,.45)">今日 7 条</span></div>
+      <div class="panel-b" style="padding:6px 10px">
+        <table class="screen-table">
+          <thead>
+            <tr><th>时间</th><th>基地 / 设备</th><th>告警内容</th><th>等级</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="mono">14:26</td><td>五常·土壤墒情站</td><td>土壤湿度低于阈值 52%</td><td><span class="tag tag-amber">重要</span></td></tr>
+            <tr><td class="mono">14:12</td><td>寿光·空气温湿度</td><td>棚内温度过高 38.5℃</td><td><span class="tag tag-red">紧急</span></td></tr>
+            <tr><td class="mono">13:58</td><td>湛江·溶氧传感器</td><td>溶解氧偏低 3.2 mg/L</td><td><span class="tag tag-red">紧急</span></td></tr>
+            <tr><td class="mono">13:40</td><td>赣州·虫情测报灯</td><td>虫情密度超阈值</td><td><span class="tag tag-amber">重要</span></td></tr>
+            <tr><td class="mono">13:22</td><td>寿光·水肥一体机</td><td>设备离线超 30 分钟</td><td><span class="tag tag-ghost">一般</span></td></tr>
+            <tr><td class="mono">12:55</td><td>五常·智能气象站</td><td>阵风预警 8 级</td><td><span class="tag tag-ghost">一般</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 7) 设备排行 / 能耗（3 列） -->
+    <div class="panel" style="grid-column: span 3">
+      <div class="panel-h"><h3>Top 设备数据量</h3><span style="font-size:12px;color:rgba(220,239,228,.45)">今日</span></div>
+      <div class="panel-b" style="padding:6px 10px">
+        <table class="screen-table">
+          <thead>
+            <tr><th>#</th><th>设备类型</th><th>在线</th><th>数据量</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="mono">1</td><td>空气温湿度传感器</td><td class="mono">486</td><td class="mono" style="color:#6FD6A2">1,024 万</td></tr>
+            <tr><td class="mono">2</td><td>土壤墒情监测站</td><td class="mono">412</td><td class="mono" style="color:#6FD6A2">862 万</td></tr>
+            <tr><td class="mono">3</td><td>虫情测报灯</td><td class="mono">268</td><td class="mono" style="color:#6FD6A2">516 万</td></tr>
+            <tr><td class="mono">4</td><td>智能水肥一体机</td><td class="mono">196</td><td class="mono" style="color:#6FD6A2">438 万</td></tr>
+            <tr><td class="mono">5</td><td>智能气象站</td><td class="mono">154</td><td class="mono" style="color:#6FD6A2">402 万</td></tr>
+          </tbody>
+        </table>
+        <div class="mt-12" style="font-size:11.5px;color:rgba(220,239,228,.45);padding:0 10px">
+          单位：万条 / 日 · 采集频率 5 分钟
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="../assets/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>发布需求 · 农产云</title>
+<link rel="stylesheet" href="../assets/css/theme.css" />
+</head>
+<body>
+
+<!-- 顶部通栏 -->
+<div class="topbar">
+  <div class="container">
+    <span>您好，欢迎来到农产云！一站式农业产业链交易与服务平台</span>
+    <span>
+      <a href="index.html">我是买家</a><span class="sep">·</span>
+      <a href="publish.html">我是卖家</a><span class="sep">·</span>
+      <a href="member.html">会员中心</a><span class="sep">·</span>
+      <a href="../index.html">产品原型总览</a>
+    </span>
+  </div>
+</div>
+
+<!-- 站点头部 -->
+<header class="site-header">
+  <div class="container">
+    <a class="brand" href="../index.html">
+      <span class="logo" data-icon="seed" data-size="20"></span>
+      <span>农产云<small>AGRI · CLOUD</small></span>
+    </a>
+    <nav class="main-nav">
+      <a href="../portal/index.html">首页</a>
+      <a href="../portal/index.html#chains">产业链</a>
+      <a href="index.html">交易大厅</a>
+      <a href="publish.html" class="active">发布需求</a>
+      <a href="member.html">会员中心</a>
+      <a href="../production/dashboard.html">生产监测</a>
+    </nav>
+    <div class="header-search">
+      <input placeholder="搜索商品 / 供应商 / 需求" />
+      <button>搜索</button>
+    </div>
+  </div>
+</header>
+
+<!-- 面包屑 -->
+<div class="container" style="padding-top:20px">
+  <div class="crumb">
+    首页 <span class="sep">/</span>
+    <a href="index.html">交易大厅</a> <span class="sep">/</span>
+    <span class="strong">发布需求</span>
+  </div>
+</div>
+
+<!-- 需求类型 Tab -->
+<div class="container" style="margin-top:14px">
+  <div class="card">
+    <div class="card-b" style="padding:0 20px">
+      <div class="tabs" data-tabscope="pub">
+        <button class="on" data-tab="buy" data-tab-group="pub">采购需求</button>
+        <button data-tab="sell" data-tab-group="pub">供应需求</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 主体两栏 -->
+<div class="container" style="margin-top:20px">
+  <div data-panels="pub" style="display:flex;gap:20px;align-items:flex-start">
+
+    <!-- ============ 采购需求面板 ============ -->
+    <div data-tabpanel="buy" style="flex:1;min-width:0">
+      <div class="row" style="gap:20px;align-items:flex-start">
+        <div style="flex:1;min-width:0">
+          <div class="card">
+            <div class="card-h">
+              <h3><span data-icon="clipboard" data-size="18"></span>填写需求信息</h3>
+              <span class="tag tag-tech">采购需求</span>
+            </div>
+            <div class="card-b">
+              <div class="form-grid">
+                <div class="form-item">
+                  <label class="req">所需品类</label>
+                  <select class="select">
+                    <option>粮油</option>
+                    <option>果蔬</option>
+                    <option>畜禽</option>
+                    <option>茶药</option>
+                    <option>饲料农资</option>
+                    <option>水产</option>
+                  </select>
+                </div>
+                <div class="form-item">
+                  <label class="req">商品名称</label>
+                  <input class="input" value="富硒大米" placeholder="请输入商品名称" />
+                </div>
+              </div>
+
+              <div class="form-grid">
+                <div class="form-item">
+                  <label class="req">采购数量</label>
+                  <div class="row gap-8">
+                    <input class="input flex-1 mono" value="200" placeholder="请输入数量" />
+                    <select class="select" style="width:96px;flex:none">
+                      <option>吨</option>
+                      <option>件</option>
+                      <option>箱</option>
+                      <option>kg</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="form-item">
+                  <label class="req">期望单价</label>
+                  <input class="input mono" value="4600" placeholder="请输入期望单价" />
+                  <div class="form-hint">单位：元/吨 · 含税到岸价</div>
+                </div>
+              </div>
+
+              <div class="form-grid">
+                <div class="form-item">
+                  <label>产地要求</label>
+                  <input class="input" value="黑龙江 · 五常产区" placeholder="如：黑龙江五常 / 全国不限" />
+                </div>
+                <div class="form-item">
+                  <label>规格质量要求</label>
+                  <select class="select">
+                    <option>含水率 ≤ 14.5%，一级粳稻米</option>
+                    <option>颗粒完整度 ≥ 95%，无杂质</option>
+                    <option>符合 GB/T 1354 标准</option>
+                    <option>自定义规格（见需求描述）</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-grid">
+                <div class="form-item">
+                  <label class="req">交货时间</label>
+                  <input class="input" type="date" value="2026-11-15" />
+                </div>
+                <div class="form-item">
+                  <label class="req">交货地点</label>
+                  <input class="input" value="辽宁省 · 沈阳市浑南仓储中心" placeholder="请输入交货地点" />
+                </div>
+              </div>
+
+              <div class="form-grid">
+                <div class="form-item">
+                  <label class="req">结算方式</label>
+                  <select class="select">
+                    <option>货到付款</option>
+                    <option>预付定金</option>
+                    <option>账期结算</option>
+                  </select>
+                </div>
+                <div class="form-item">
+                  <label class="req">联系人</label>
+                  <input class="input" value="王建国" placeholder="请输入联系人" />
+                </div>
+              </div>
+
+              <div class="form-grid">
+                <div class="form-item">
+                  <label class="req">联系电话</label>
+                  <input class="input mono" value="13800001234" placeholder="请输入联系电话" />
+                </div>
+                <div class="form-item">
+                  <label>需求有效期</label>
+                  <input class="input" type="date" value="2026-10-30" />
+                </div>
+              </div>
+
+              <div class="form-item">
+                <label>需求描述</label>
+                <textarea class="textarea" placeholder="请补充说明包装规格、质检报告、发票要求等信息">采购富硒大米 200 吨，要求一级粳稻米、含水率≤14.5%，需提供产地证明与第三方质检报告，报价含税含运费，货到沈阳仓储中心验收合格后付款。</textarea>
+              </div>
+
+              <div class="row gap-12" style="margin-top:8px">
+                <button class="btn btn-primary btn-lg"><span data-icon="check" data-size="16"></span>立即发布</button>
+                <button class="btn btn-outline">存为草稿</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 智能匹配侧栏 -->
+        <aside style="width:360px;flex:none">
+          <div class="card">
+            <div class="card-h">
+              <h3><span data-icon="spark" data-size="18"></span>AI 智能匹配</h3>
+              <span class="tag tag-tech">实时推荐</span>
+            </div>
+            <div class="card-b" style="padding:14px">
+
+              <div style="border:1px solid var(--line);border-radius:var(--r-sm);padding:14px" class="mb-12">
+                <div class="row between center">
+                  <span class="strong">黑龙江五常金穗米业</span>
+                  <span class="tag">基地直供</span>
+                </div>
+                <div class="row between center mt-8">
+                  <span class="price"><span class="cur">¥</span>4580<span class="unit">/吨</span></span>
+                  <span class="muted t-xs">黑龙江 · 五常</span>
+                </div>
+                <div class="row center gap-8 mt-12">
+                  <div class="progress flex-1"><i style="width:96%"></i></div>
+                  <span class="mono t-xs strong c-green">96%</span>
+                </div>
+                <button class="btn btn-sm btn-outline btn-block mt-12">立即询价</button>
+              </div>
+
+              <div style="border:1px solid var(--line);border-radius:var(--r-sm);padding:14px" class="mb-12">
+                <div class="row between center">
+                  <span class="strong">吉林松原丰源粮油</span>
+                  <span class="tag tag-ghost">企业认证</span>
+                </div>
+                <div class="row between center mt-8">
+                  <span class="price"><span class="cur">¥</span>4620<span class="unit">/吨</span></span>
+                  <span class="muted t-xs">吉林 · 松原</span>
+                </div>
+                <div class="row center gap-8 mt-12">
+                  <div class="progress flex-1"><i style="width:92%"></i></div>
+                  <span class="mono t-xs strong c-green">92%</span>
+                </div>
+                <button class="btn btn-sm btn-outline btn-block mt-12">立即询价</button>
+              </div>
+
+              <div style="border:1px solid var(--line);border-radius:var(--r-sm);padding:14px" class="mb-12">
+                <div class="row between center">
+                  <span class="strong">江苏兴化稻香合作社</span>
+                  <span class="tag tag-tech">产地直发</span>
+                </div>
+                <div class="row between center mt-8">
+                  <span class="price"><span class="cur">¥</span>4710<span class="unit">/吨</span></span>
+                  <span class="muted t-xs">江苏 · 兴化</span>
+                </div>
+                <div class="row center gap-8 mt-12">
+                  <div class="progress flex-1"><i style="width:88%"></i></div>
+                  <span class="mono t-xs strong c-green">88%</span>
+                </div>
+                <button class="btn btn-sm btn-outline btn-block mt-12">立即询价</button>
+              </div>
+
+              <div style="border:1px solid var(--line);border-radius:var(--r-sm);padding:14px">
+                <div class="row between center">
+                  <span class="strong">湖北荆州江汉粮贸</span>
+                  <span class="tag tag-amber">支持账期</span>
+                </div>
+                <div class="row between center mt-8">
+                  <span class="price"><span class="cur">¥</span>4650<span class="unit">/吨</span></span>
+                  <span class="muted t-xs">湖北 · 荆州</span>
+                </div>
+                <div class="row center gap-8 mt-12">
+                  <div class="progress flex-1"><i style="width:85%"></i></div>
+                  <span class="mono t-xs strong c-green">85%</span>
+                </div>
+                <button class="btn btn-sm btn-outline btn-block mt-12">立即询价</button>
+              </div>
+
+            </div>
+            <div style="border-top:1px solid var(--line);padding:12px 20px;font-size:12px;color:var(--ink-500)">
+              <span class="dot"></span> 根据需求标签实时推荐 · 已为你匹配到 <span class="mono strong">12</span> 家供应商
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+
+    <!-- ============ 供应需求面板 ============ -->
+    <div data-tabpanel="sell" class="hide" style="flex:1;min-width:0">
+      <div class="row" style="gap:20px;align-items:flex-start">
+        <div style="flex:1;min-width:0">
+          <div class="card">
+            <div class="card-h">
+              <h3><span data-icon="box" data-size="18"></span>填写供货信息</h3>
+              <span class="tag tag-amber">供应需求</span>
+            </div>
+            <div class="card-b">
+              <div class="form-grid">
+                <div class="form-item">
+                  <label class="req">供货品类</label>
+                  <select class="select">
+                    <option>粮油</option>
+                    <option>果蔬</option>
+                    <option>畜禽</option>
+                    <option>茶药</option>
+                    <option>饲料农资</option>
+                    <option>水产</option>
+                  </select>
+                </div>
+                <div class="form-item">
+                  <label class="req">商品名称</label>
+                  <input class="input" value="五常稻花香2号大米" placeholder="请输入商品名称" />
+                </div>
+              </div>
+
+              <div class="form-grid">
+                <div class="form-item">
+                  <label class="req">可供数量</label>
+                  <div class="row gap-8">
+                    <input class="input flex-1 mono" value="500" placeholder="请输入可供数量" />
+                    <select class="select" style="width:96px;flex:none">
+                      <option>吨</option>
+                      <option>件</option>
+                      <option>箱</option>
+                      <option>kg</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="form-item">
+                  <label class="req">报价</label>
+                  <input class="input mono" value="4520" placeholder="请输入报价" />
+                  <div class="form-hint">单位：元/吨 · 基地出厂价</div>
+                </div>
+              </div>
+
+              <div class="form-grid">
+                <div class="form-item">
+                  <label class="req">产地 / 基地</label>
+                  <input class="input" value="黑龙江 · 五常市 · 拉林河基地" placeholder="请输入产地或基地信息" />
+                </div>
+                <div class="form-item">
+                  <label>认证资质</label>
+                  <select class="select">
+                    <option>绿色食品认证 + 地理标志</option>
+                    <option>有机产品认证</option>
+                    <option>无公害农产品认证</option>
+                    <option>暂无认证</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-grid">
+                <div class="form-item">
+                  <label class="req">可发货时间</label>
+                  <input class="input" type="date" value="2026-11-01" />
+                </div>
+                <div class="form-item">
+                  <label class="req">发货方式</label>
+                  <select class="select">
+                    <option>基地自提</option>
+                    <option>物流配送</option>
+                    <option>冷链配送</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-grid">
+                <div class="form-item">
+                  <label class="req">结算方式</label>
+                  <select class="select">
+                    <option>货到付款</option>
+                    <option>预付定金</option>
+                    <option>账期结算</option>
+                  </select>
+                </div>
+                <div class="form-item">
+                  <label class="req">联系人</label>
+                  <input class="input" value="李春梅" placeholder="请输入联系人" />
+                </div>
+              </div>
+
+              <div class="form-grid">
+                <div class="form-item">
+                  <label class="req">联系电话</label>
+                  <input class="input mono" value="13900005678" placeholder="请输入联系电话" />
+                </div>
+                <div class="form-item">
+                  <label>供货周期</label>
+                  <input class="input" type="date" value="2026-12-30" />
+                </div>
+              </div>
+
+              <div class="form-item">
+                <label>供货描述</label>
+                <textarea class="textarea" placeholder="请补充说明加工工艺、库存、包装规格、检测报告等信息">基地直供五常稻花香2号，可供 500 吨，一级粳稻米、含水率≤14.5%，具备绿色食品与地理标志认证，支持大货整车发运，可提供第三方质检报告。</textarea>
+              </div>
+
+              <div class="row gap-12" style="margin-top:8px">
+                <button class="btn btn-primary btn-lg"><span data-icon="check" data-size="16"></span>立即发布</button>
+                <button class="btn btn-outline">存为草稿</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 供应智能匹配侧栏 -->
+        <aside style="width:360px;flex:none">
+          <div class="card">
+            <div class="card-h">
+              <h3><span data-icon="spark" data-size="18"></span>AI 智能匹配</h3>
+              <span class="tag tag-tech">求购线索</span>
+            </div>
+            <div class="card-b" style="padding:14px">
+
+              <div style="border:1px solid var(--line);border-radius:var(--r-sm);padding:14px" class="mb-12">
+                <div class="row between center">
+                  <span class="strong">沈阳惠农粮油贸易有限公司</span>
+                  <span class="tag">求购中</span>
+                </div>
+                <div class="row between center mt-8">
+                  <span class="price"><span class="cur">¥</span>4600<span class="unit">/吨 期望</span></span>
+                  <span class="muted t-xs">采购 200 吨</span>
+                </div>
+                <div class="row center gap-8 mt-12">
+                  <div class="progress flex-1"><i style="width:94%"></i></div>
+                  <span class="mono t-xs strong c-green">94%</span>
+                </div>
+                <button class="btn btn-sm btn-outline btn-block mt-12">立即报价</button>
+              </div>
+
+              <div style="border:1px solid var(--line);border-radius:var(--r-sm);padding:14px" class="mb-12">
+                <div class="row between center">
+                  <span class="strong">北京优鲜连锁超市供应链</span>
+                  <span class="tag tag-tech">长期采购</span>
+                </div>
+                <div class="row between center mt-8">
+                  <span class="price"><span class="cur">¥</span>4650<span class="unit">/吨 期望</span></span>
+                  <span class="muted t-xs">采购 500 吨</span>
+                </div>
+                <div class="row center gap-8 mt-12">
+                  <div class="progress flex-1"><i style="width:90%"></i></div>
+                  <span class="mono t-xs strong c-green">90%</span>
+                </div>
+                <button class="btn btn-sm btn-outline btn-block mt-12">立即报价</button>
+              </div>
+
+              <div style="border:1px solid var(--line);border-radius:var(--r-sm);padding:14px" class="mb-12">
+                <div class="row between center">
+                  <span class="strong">广州华南食品加工集团</span>
+                  <span class="tag tag-amber">可账期</span>
+                </div>
+                <div class="row between center mt-8">
+                  <span class="price"><span class="cur">¥</span>4580<span class="unit">/吨 期望</span></span>
+                  <span class="muted t-xs">采购 800 吨</span>
+                </div>
+                <div class="row center gap-8 mt-12">
+                  <div class="progress flex-1"><i style="width:87%"></i></div>
+                  <span class="mono t-xs strong c-green">87%</span>
+                </div>
+                <button class="btn btn-sm btn-outline btn-block mt-12">立即报价</button>
+              </div>
+
+              <div style="border:1px solid var(--line);border-radius:var(--r-sm);padding:14px">
+                <div class="row between center">
+                  <span class="strong">成都蜀丰餐饮供应链</span>
+                  <span class="tag tag-ghost">企业认证</span>
+                </div>
+                <div class="row between center mt-8">
+                  <span class="price"><span class="cur">¥</span>4620<span class="unit">/吨 期望</span></span>
+                  <span class="muted t-xs">采购 150 吨</span>
+                </div>
+                <div class="row center gap-8 mt-12">
+                  <div class="progress flex-1"><i style="width:83%"></i></div>
+                  <span class="mono t-xs strong c-green">83%</span>
+                </div>
+                <button class="btn btn-sm btn-outline btn-block mt-12">立即报价</button>
+              </div>
+
+            </div>
+            <div style="border-top:1px solid var(--line);padding:12px 20px;font-size:12px;color:var(--ink-500)">
+              <span class="dot"></span> 根据供货标签实时推荐 · 已为你匹配到 <span class="mono strong">18</span> 条求购线索
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- 页脚 -->
+<footer class="site-footer">
+  <div class="container">
+    <div class="grid grid-4">
+      <div>
+        <div class="brand" style="color:#fff"><span class="logo" data-icon="seed" data-size="20"></span><span>农产云</span></div>
+        <p style="margin-top:14px;font-size:13px;color:rgba(255,255,255,.6);max-width:280px">农业产业互联网平台，连接生产、加工、流通、销售全环节。</p>
+      </div>
+      <div><h4>关于平台</h4><a>平台介绍</a><a>联系方式</a><a>加入我们</a><a>帮助中心</a></div>
+      <div><h4>买家服务</h4><a href="index.html">采购大厅</a><a href="publish.html">发布询价</a><a href="member.html">订单管理</a><a href="member.html">资金管理</a></div>
+      <div><h4>卖家服务</h4><a href="publish.html">发布供应</a><a href="member.html">店铺管理</a><a href="../production/dashboard.html">物联网接入</a><a href="../index.html">产品矩阵</a></div>
+    </div>
+    <div class="bottom">
+      <span>© 2026 农业产业互联网平台 · 本页为产品原型演示，非真实业务系统</span>
+      <span>Prototype v1.0 · 农产云</span>
+    </div>
+  </div>
+</footer>
+
+<script src="../assets/js/app.js"></script>
+</body>
+</html>

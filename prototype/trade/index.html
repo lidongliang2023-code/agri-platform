@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>交易大厅 · 农产云</title>
+<link rel="stylesheet" href="../assets/css/theme.css" />
+</head>
+<body>
+
+<!-- 顶部通栏 -->
+<div class="topbar">
+  <div class="container">
+    <span>您好，欢迎来到农产云交易大厅！智能大宗交易 · 平台撮合 · 支持在线议价</span>
+    <span>
+      <a href="member.html">我是买家</a><span class="sep">·</span>
+      <a href="publish.html">我是卖家</a><span class="sep">·</span>
+      <a href="member.html">会员中心</a><span class="sep">·</span>
+      <a href="../index.html">产品原型总览</a>
+    </span>
+  </div>
+</div>
+
+<!-- 站点头部 -->
+<header class="site-header">
+  <div class="container">
+    <a class="brand" href="../index.html">
+      <span class="logo" data-icon="seed" data-size="20"></span>
+      <span>农产云<small>AGRI · CLOUD</small></span>
+    </a>
+    <nav class="main-nav">
+      <a href="../portal/index.html">首页</a>
+      <a href="../portal/index.html#chains">产业链</a>
+      <a href="index.html" class="active">交易大厅</a>
+      <a href="publish.html">发布需求</a>
+      <a href="member.html">会员中心</a>
+      <a href="../production/dashboard.html">生产监测</a>
+    </nav>
+    <div class="header-search">
+      <input placeholder="搜索商品 / 供应商 / 需求" />
+      <button>搜索</button>
+    </div>
+  </div>
+</header>
+
+<div class="container" style="padding-top:20px;padding-bottom:8px">
+
+  <!-- 面包屑 -->
+  <div class="crumb mb-16">
+    <a href="../portal/index.html">首页</a><span class="sep">/</span><span>交易大厅</span>
+  </div>
+
+  <!-- 页面标题区 -->
+  <div class="section-head" style="margin-bottom:14px">
+    <div>
+      <div class="bar-title" style="font-size:26px">交易大厅</div>
+      <div class="muted t-sm mt-8">智能大宗交易 · 平台撮合 · 支持在线议价</div>
+    </div>
+    <div class="row center gap-8">
+      <span class="tag tag-tech"><span data-icon="shield" data-size="13"></span>平台质检</span>
+      <span class="tag"><span data-icon="zap" data-size="13"></span>资金担保</span>
+    </div>
+  </div>
+
+  <!-- 顶部 Tabs -->
+  <div class="tabs" data-tabscope="trade">
+    <button class="on" data-tab="supply" data-tab-group="trade">供应大厅</button>
+    <button data-tab="purchase" data-tab-group="trade">采购需求</button>
+  </div>
+
+  <!-- Tab 面板 -->
+  <div data-panels="trade" style="margin-top:20px">
+
+    <!-- ========== 供应大厅 ========== -->
+    <div data-tabpanel="supply">
+      <div style="display:flex;gap:20px;align-items:flex-start">
+
+        <!-- 左侧筛选栏 -->
+        <aside class="card" style="width:240px;flex:none">
+          <div class="card-h"><h3><span data-icon="settings" data-size="16"></span>筛选条件</h3></div>
+          <div class="card-b tight">
+            <div class="form-item">
+              <label>产业链</label>
+              <div class="chips">
+                <span class="chip on">粮油</span><span class="chip">果蔬</span><span class="chip">畜禽</span>
+                <span class="chip">茶药</span><span class="chip">饲料农资</span><span class="chip">水产</span>
+              </div>
+            </div>
+            <div class="form-item">
+              <label>产地</label>
+              <div class="chips">
+                <span class="chip on">山东</span><span class="chip">河南</span><span class="chip">湖北</span>
+                <span class="chip">黑龙江</span><span class="chip">江西</span><span class="chip">广东</span>
+              </div>
+            </div>
+            <div class="form-item">
+              <label>价格区间（元/吨）</label>
+              <div class="chips">
+                <span class="chip on">不限</span><span class="chip">≤3000</span><span class="chip">3000-8000</span>
+                <span class="chip">8000-15000</span><span class="chip">≥15000</span>
+              </div>
+            </div>
+            <div class="form-item">
+              <label>交易方式</label>
+              <div class="chips">
+                <span class="chip on">现货</span><span class="chip">期货</span><span class="chip">竞价</span>
+              </div>
+            </div>
+            <div class="form-item">
+              <label>起订量（吨）</label>
+              <input class="input" placeholder="最小值 - 最大值" />
+            </div>
+            <div class="form-item" style="margin-bottom:0">
+              <label>排序</label>
+              <select class="select">
+                <option>综合排序</option>
+                <option>最新发布</option>
+                <option>价格从低到高</option>
+                <option>成交最多</option>
+              </select>
+            </div>
+          </div>
+        </aside>
+
+        <!-- 右侧商品列表 -->
+        <div class="flex-1" style="min-width:0">
+
+          <!-- 排序工具条 -->
+          <div class="card mb-16">
+            <div class="card-b tight">
+              <div class="toolbar">
+                <span class="muted t-sm">共 <b class="mono">27</b> 个在售商品（当前第 1 页，展示前 9 条）</span>
+                <span class="spacer"></span>
+                <span class="muted t-sm">排序：</span>
+                <div class="chips">
+                  <span class="chip on">综合</span>
+                  <span class="chip">最新发布</span>
+                  <span class="chip">价格从低到高</span>
+                  <span class="chip">成交最多</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 商品网格 -->
+          <div class="grid grid-3">
+
+            <a class="card card-hover" href="detail.html"><div class="card-b">
+              <div style="height:150px;border-radius:10px;background:linear-gradient(135deg,#E4F6EC,#C9E9D8);display:grid;place-items:center;color:var(--green-700)"><span data-icon="seed" data-size="48"></span></div>
+              <div class="row between center mt-12"><span class="strong ellipsis">富硒大米</span><span class="tag">基地直供</span></div>
+              <div class="muted t-xs mt-8">黑龙江 · 五常基地 · 25kg/袋</div>
+              <div class="row between center mt-12"><span class="price"><span class="cur">¥</span>4680<span class="unit">/吨</span></span></div>
+              <div class="muted t-xs mt-8 ellipsis">起订量 1 吨 · 五常市稻香米业</div>
+            </div></a>
+
+            <a class="card card-hover" href="detail.html"><div class="card-b">
+              <div style="height:150px;border-radius:10px;background:linear-gradient(135deg,#FEF3C7,#FCE7B6);display:grid;place-items:center;color:#B45309"><span data-icon="drop" data-size="48"></span></div>
+              <div class="row between center mt-12"><span class="strong ellipsis">一级压榨菜籽油</span><span class="tag tag-amber">非转基因</span></div>
+              <div class="muted t-xs mt-8">湖北 · 荆州 · 5L×4桶/箱</div>
+              <div class="row between center mt-12"><span class="price"><span class="cur">¥</span>10920<span class="unit">/吨</span></span></div>
+              <div class="muted t-xs mt-8 ellipsis">起订量 5 吨 · 湖北荆楚粮油</div>
+            </div></a>
+
+            <a class="card card-hover" href="detail.html"><div class="card-b">
+              <div style="height:150px;border-radius:10px;background:linear-gradient(135deg,#E0F2FE,#BAE6FD);display:grid;place-items:center;color:var(--tech-700)"><span data-icon="box" data-size="48"></span></div>
+              <div class="row between center mt-12"><span class="strong ellipsis">豆粕 43% 蛋白</span><span class="tag tag-tech">港口现货</span></div>
+              <div class="muted t-xs mt-8">山东 · 日照港 · 散装</div>
+              <div class="row between center mt-12"><span class="price"><span class="cur">¥</span>3468<span class="unit">/吨</span></span></div>
+              <div class="muted t-xs mt-8 ellipsis">起订量 10 吨 · 日照港粮油贸易</div>
+            </div></a>
+
+            <a class="card card-hover" href="detail.html"><div class="card-b">
+              <div style="height:150px;border-radius:10px;background:linear-gradient(135deg,#FFE4D6,#FFD2BC);display:grid;place-items:center;color:#D9541E"><span data-icon="sun" data-size="48"></span></div>
+              <div class="row between center mt-12"><span class="strong ellipsis">赣南脐橙（果径75+）</span><span class="tag tag-red">当季鲜果</span></div>
+              <div class="muted t-xs mt-8">江西 · 赣州 · 20斤/箱</div>
+              <div class="row between center mt-12"><span class="price"><span class="cur">¥</span>58<span class="unit">/箱</span></span></div>
+              <div class="muted t-xs mt-8 ellipsis">起订量 100 箱 · 赣南脐橙合作社</div>
+            </div></a>
+
+            <a class="card card-hover" href="detail.html"><div class="card-b">
+              <div style="height:150px;border-radius:10px;background:linear-gradient(135deg,#E4F6EC,#C9E9D8);display:grid;place-items:center;color:var(--green-700)"><span data-icon="leaf" data-size="48"></span></div>
+              <div class="row between center mt-12"><span class="strong ellipsis">有机红茶 · 一芽一叶</span><span class="tag">有机认证</span></div>
+              <div class="muted t-xs mt-8">云南 · 临沧 · 500g/罐</div>
+              <div class="row between center mt-12"><span class="price"><span class="cur">¥</span>286<span class="unit">/罐</span></span></div>
+              <div class="muted t-xs mt-8 ellipsis">起订量 50 罐 · 临沧滇红茶业</div>
+            </div></a>
+
+            <a class="card card-hover" href="detail.html"><div class="card-b">
+              <div style="height:150px;border-radius:10px;background:linear-gradient(135deg,#FDECD9,#FBD9B5);display:grid;place-items:center;color:#B45309"><span data-icon="activity" data-size="48"></span></div>
+              <div class="row between center mt-12"><span class="strong ellipsis">冷鲜猪肉（白条）</span><span class="tag tag-tech">冷链配送</span></div>
+              <div class="muted t-xs mt-8">河南 · 牧原基地 · 冷链直发</div>
+              <div class="row between center mt-12"><span class="price"><span class="cur">¥</span>19.8<span class="unit">/kg</span></span></div>
+              <div class="muted t-xs mt-8 ellipsis">起订量 500 kg · 牧原食品股份</div>
+            </div></a>
+
+            <a class="card card-hover" href="detail.html"><div class="card-b">
+              <div style="height:150px;border-radius:10px;background:linear-gradient(135deg,#E0F2FE,#BAE6FD);display:grid;place-items:center;color:var(--tech-700)"><span data-icon="drop" data-size="48"></span></div>
+              <div class="row between center mt-12"><span class="strong ellipsis">南美白对虾（冻）</span><span class="tag tag-tech">出口级</span></div>
+              <div class="muted t-xs mt-8">广东 · 湛江 · 净重20kg/箱</div>
+              <div class="row between center mt-12"><span class="price"><span class="cur">¥</span>52<span class="unit">/kg</span></span></div>
+              <div class="muted t-xs mt-8 ellipsis">起订量 200 kg · 湛江国联水产</div>
+            </div></a>
+
+            <a class="card card-hover" href="detail.html"><div class="card-b">
+              <div style="height:150px;border-radius:10px;background:linear-gradient(135deg,#E4F6EC,#C9E9D8);display:grid;place-items:center;color:var(--green-700)"><span data-icon="box" data-size="48"></span></div>
+              <div class="row between center mt-12"><span class="strong ellipsis">复合微生物肥</span><span class="tag">减施增效</span></div>
+              <div class="muted t-xs mt-8">山东 · 金正大 · 40kg/袋</div>
+              <div class="row between center mt-12"><span class="price"><span class="cur">¥</span>2380<span class="unit">/吨</span></span></div>
+              <div class="muted t-xs mt-8 ellipsis">起订量 2 吨 · 金正大生态工程</div>
+            </div></a>
+
+            <a class="card card-hover" href="detail.html"><div class="card-b">
+              <div style="height:150px;border-radius:10px;background:linear-gradient(135deg,#FDECD9,#FBD9B5);display:grid;place-items:center;color:#B45309"><span data-icon="seed" data-size="48"></span></div>
+              <div class="row between center mt-12"><span class="strong ellipsis">优质蛋白玉米</span><span class="tag tag-amber">高蛋白</span></div>
+              <div class="muted t-xs mt-8">吉林 · 长春 · 散装</div>
+              <div class="row between center mt-12"><span class="price"><span class="cur">¥</span>2560<span class="unit">/吨</span></span></div>
+              <div class="muted t-xs mt-8 ellipsis">起订量 20 吨 · 吉林云天化农业</div>
+            </div></a>
+
+          </div>
+
+          <!-- 分页 -->
+          <div class="pager">
+            <button>上一页</button>
+            <button class="on">1</button>
+            <button>2</button>
+            <button>3</button>
+            <button>下一页</button>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- 优质供应商推荐 -->
+      <div class="card mt-24">
+        <div class="card-h">
+          <h3><span data-icon="award" data-size="16"></span>优质供应商推荐</h3>
+          <a class="more" href="../portal/index.html#chains">查看全部供应商 →</a>
+        </div>
+        <div class="card-b">
+          <div class="grid grid-5">
+            <div style="background:var(--green-050);border:1px solid var(--line);border-radius:10px;padding:14px;text-align:center">
+              <div class="stat-icon" style="margin:0 auto"><span data-icon="factory" data-size="18"></span></div>
+              <div class="strong t-sm mt-8">五常市稻香米业</div>
+              <div class="muted t-xs mt-8">大米 · 评分 <span class="mono">4.9</span></div>
+            </div>
+            <div style="background:var(--green-050);border:1px solid var(--line);border-radius:10px;padding:14px;text-align:center">
+              <div class="stat-icon tech" style="margin:0 auto"><span data-icon="drop" data-size="18"></span></div>
+              <div class="strong t-sm mt-8">湖北荆楚粮油</div>
+              <div class="muted t-xs mt-8">油脂 · 评分 <span class="mono">4.8</span></div>
+            </div>
+            <div style="background:var(--green-050);border:1px solid var(--line);border-radius:10px;padding:14px;text-align:center">
+              <div class="stat-icon amber" style="margin:0 auto"><span data-icon="truck" data-size="18"></span></div>
+              <div class="strong t-sm mt-8">牧原食品股份</div>
+              <div class="muted t-xs mt-8">畜禽 · 评分 <span class="mono">4.9</span></div>
+            </div>
+            <div style="background:var(--green-050);border:1px solid var(--line);border-radius:10px;padding:14px;text-align:center">
+              <div class="stat-icon tech" style="margin:0 auto"><span data-icon="box" data-size="18"></span></div>
+              <div class="strong t-sm mt-8">金正大生态工程</div>
+              <div class="muted t-xs mt-8">农资 · 评分 <span class="mono">4.7</span></div>
+            </div>
+            <div style="background:var(--green-050);border:1px solid var(--line);border-radius:10px;padding:14px;text-align:center">
+              <div class="stat-icon" style="margin:0 auto"><span data-icon="leaf" data-size="18"></span></div>
+              <div class="strong t-sm mt-8">临沧滇红茶业</div>
+              <div class="muted t-xs mt-8">茶叶 · 评分 <span class="mono">4.8</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ========== 采购需求 ========== -->
+    <div data-tabpanel="purchase" class="hide">
+      <div class="card">
+        <div class="card-h">
+          <h3><span data-icon="clipboard" data-size="16"></span>采购需求大厅</h3>
+          <span class="more">共 <span class="mono">6</span> 条需求 · 报价后进入在线议价</span>
+        </div>
+        <div class="card-b" style="padding:0">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>需求方</th><th>品类</th><th>数量</th><th>期望价</th>
+                <th>交货地</th><th>发布时间</th><th style="text-align:right">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="strong">华润万家采购中心</td><td>优质蛋白玉米</td>
+                <td class="mono">500 吨</td><td class="mono">¥2500/吨</td>
+                <td>吉林 · 长春</td><td class="mono t-sm">10-18</td>
+                <td class="tr"><button class="btn btn-sm btn-outline">报价</button></td>
+              </tr>
+              <tr>
+                <td class="strong">海底捞供应链</td><td>有机蔬菜（供港基地）</td>
+                <td class="mono">20 吨/周</td><td class="mono">¥8/kg</td>
+                <td>广东 · 广州</td><td class="mono t-sm">10-18</td>
+                <td class="tr"><button class="btn btn-sm btn-outline">报价</button></td>
+              </tr>
+              <tr>
+                <td class="strong">中粮油脂</td><td>一级压榨菜籽油</td>
+                <td class="mono">200 吨</td><td class="mono">¥10800/吨</td>
+                <td>湖北 · 武汉</td><td class="mono t-sm">10-17</td>
+                <td class="tr"><button class="btn btn-sm btn-outline">报价</button></td>
+              </tr>
+              <tr>
+                <td class="strong">永辉超市</td><td>赣南脐橙</td>
+                <td class="mono">3000 箱</td><td class="mono">¥55/箱</td>
+                <td>江西 · 南昌</td><td class="mono t-sm">10-17</td>
+                <td class="tr"><button class="btn btn-sm btn-outline">报价</button></td>
+              </tr>
+              <tr>
+                <td class="strong">某饲料加工厂</td><td>豆粕 43% 蛋白</td>
+                <td class="mono">800 吨</td><td class="mono">¥3400/吨</td>
+                <td>山东 · 青岛</td><td class="mono t-sm">10-16</td>
+                <td class="tr"><button class="btn btn-sm btn-outline">报价</button></td>
+              </tr>
+              <tr>
+                <td class="strong">连锁餐饮集团</td><td>冷鲜猪肉（白条）</td>
+                <td class="mono">30 吨/月</td><td class="mono">¥19.5/kg</td>
+                <td>河南 · 郑州</td><td class="mono t-sm">10-15</td>
+                <td class="tr"><button class="btn btn-sm btn-outline">报价</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="grid grid-3 mt-20">
+        <div class="card card-hover"><div class="card-b">
+          <div class="row center gap-12 mb-12"><div class="stat-icon"><span data-icon="target" data-size="18"></span></div><div class="strong">精准匹配</div></div>
+          <div class="muted t-sm">发布采购需求后，平台按品类、产地与价格自动匹配优质供应商并推送报价。</div>
+        </div></div>
+        <div class="card card-hover"><div class="card-b">
+          <div class="row center gap-12 mb-12"><div class="stat-icon tech"><span data-icon="money" data-size="18"></span></div><div class="strong">在线议价</div></div>
+          <div class="muted t-sm">买卖双方在需求下实时议价、留痕，价格与交期达成一致后一键下单。</div>
+        </div></div>
+        <div class="card card-hover"><div class="card-b">
+          <div class="row center gap-12 mb-12"><div class="stat-icon amber"><span data-icon="shield" data-size="18"></span></div><div class="strong">资金担保</div></div>
+          <div class="muted t-sm">平台托管货款，收货验收确认后放款，保障买卖双方交易安全。</div>
+        </div></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- 页脚 -->
+<footer class="site-footer">
+  <div class="container">
+    <div class="grid grid-4">
+      <div>
+        <div class="brand" style="color:#fff"><span class="logo" data-icon="seed" data-size="20"></span><span>农产云</span></div>
+        <p style="margin-top:14px;font-size:13px;color:rgba(255,255,255,.6);max-width:280px">农业产业互联网平台，连接生产、加工、流通、销售全环节。</p>
+      </div>
+      <div><h4>关于平台</h4><a>平台介绍</a><a>联系方式</a><a>加入我们</a><a>帮助中心</a></div>
+      <div><h4>买家服务</h4><a href="index.html">采购大厅</a><a href="publish.html">发布询价</a><a href="member.html">订单管理</a><a href="member.html">资金管理</a></div>
+      <div><h4>卖家服务</h4><a href="publish.html">发布供应</a><a href="member.html">店铺管理</a><a href="../production/dashboard.html">物联网接入</a><a href="../index.html">产品矩阵</a></div>
+    </div>
+    <div class="bottom">
+      <span>© 2026 农业产业互联网平台 · 产品原型演示（非真实业务系统）</span>
+      <span>本页为产品原型演示，非真实业务系统</span>
+    </div>
+  </div>
+</footer>
+
+<script src="../assets/js/app.js"></script>
+</body>
+</html>
