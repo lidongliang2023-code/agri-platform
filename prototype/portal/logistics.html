@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>物流服务中心 · 农产云 · 农业产业互联网平台</title>
+<link rel="stylesheet" href="../assets/css/theme.css" />
+<style>
+  .track { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; position: relative }
+  .track::before { content:""; position:absolute; left:10px; top:26px; bottom:-4px; width:2px; background:var(--line) }
+  .track:last-child::before { display: none }
+  .track .d { width: 22px; height: 22px; border-radius: 50%; background: #fff; border: 2px solid var(--line-strong); display: grid; place-items: center; flex: none; font-size: 12px; font-weight: 700; color: var(--ink-500); position: relative; z-index: 1 }
+  .track.done::before { background: var(--green-400) }
+  .track.done .d { background: var(--green-500); border-color: var(--green-500); color: #fff }
+  .track.cur .d { background: var(--tech-500); border-color: var(--tech-500); color: #fff; box-shadow: 0 0 0 4px rgba(14,165,233,.18) }
+  .track .t { font-weight: 700; color: var(--ink-800); font-size: 13.5px }
+  .track .m { font-size: 11.5px; color: var(--ink-500); margin-top: 2px }
+</style>
+</head>
+<body>
+
+<!-- 顶部通栏 -->
+<div class="topbar">
+  <div class="container">
+    <span>您好，欢迎来到农产云！一站式农业产业链交易与服务平台</span>
+    <span>
+      <a href="../trade/member.html">我是买家</a><span class="sep">·</span>
+      <a href="../trade/member-seller.html">我是卖家</a><span class="sep">·</span>
+      <a href="../trade/member.html">会员中心</a><span class="sep">·</span>
+      <a href="../index.html">产品原型总览</a><a href="login.html"><span data-icon="user" data-size="12" style="vertical-align:-2px;margin-right:3px"></span>登录</a><span class="sep">·</span><a href="register.html"><span data-icon="plus" data-size="12" style="vertical-align:-2px;margin-right:3px"></span>免费注册</a></span>
+  </div>
+</div>
+
+<!-- 站点头部 -->
+<header class="site-header">
+  <div class="container">
+    <a class="brand" href="index.html">
+      <span class="logo" data-icon="seed" data-size="20"></span>
+      <span>农产云<small>AGRI · CLOUD</small></span>
+    </a>
+    <nav class="main-nav">
+      <a href="index.html">首页</a>
+      <a href="chains.html">产业链</a>
+      <a href="../trade/index.html">交易大厅</a>
+      <a href="logistics.html" class="active">物流服务</a>
+      <a href="finance.html">供应链金融</a>
+      <a href="#news">产业资讯</a>
+    </nav>
+    <div class="header-search">
+      <input placeholder="搜索商品 / 供应商 / 需求" />
+      <button>搜索</button>
+    </div>
+  </div>
+</header>
+
+<!-- Hero 横幅 · 物流服务 -->
+<section style="background:linear-gradient(135deg,#0C3A2E 0%,#0C7BA8 55%,#0E5233 100%);color:#fff;position:relative;overflow:hidden">
+  <div class="container" style="padding:56px 24px 52px;display:grid;grid-template-columns:1.1fr .9fr;gap:48px;align-items:center;position:relative;z-index:2">
+    <div>
+      <div style="display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);border-radius:20px;padding:4px 14px;font-size:12px;margin-bottom:18px">
+        <span data-icon="truck" data-size="13"></span> 全国农业产地 · 销地一体化物流网络
+      </div>
+      <h1 style="font-size:36px;font-weight:800;line-height:1.35">从田间到餐桌<br/>全程温控可追溯</h1>
+      <p style="color:rgba(255,255,255,.82);margin-top:14px;max-width:520px;font-size:14.5px;line-height:1.7">
+        整合产地专线、冷链物流、城配末端、监管仓四大网络，全程 GPS + 温湿度监控 + 区块链存证，让每一件农产品从采收、运输到上架都可追溯。
+      </p>
+      <div style="margin-top:28px;display:flex;gap:12px;flex-wrap:wrap">
+        <a class="btn btn-lg" style="background:#fff;color:#0C7BA8" href="#quote">在线询价</a>
+        <a class="btn btn-lg btn-outline" style="background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.5);color:#fff" href="../trade/member.html">查看我的物流</a>
+        <a class="btn btn-lg btn-outline" style="background:transparent;border-color:rgba(255,255,255,.35);color:rgba(255,255,255,.85)" href="#network">网络覆盖</a>
+      </div>
+      <div style="margin-top:28px;display:flex;gap:24px;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:rgba(255,255,255,.75)"><span style="width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,.2);display:grid;place-items:center"><span data-icon="check" data-size="12"></span></span> 全国 34 省覆盖</div>
+        <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:rgba(255,255,255,.75)"><span style="width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,.2);display:grid;place-items:center"><span data-icon="check" data-size="12"></span></span> 全程温控 · 区块链存证</div>
+        <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:rgba(255,255,255,.75)"><span style="width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,.2);display:grid;place-items:center"><span data-icon="check" data-size="12"></span></span> T+1 时效达 82%</div>
+      </div>
+    </div>
+    <!-- Hero 右侧：实时轨迹 demo -->
+    <div style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);border-radius:14px;padding:20px;backdrop-filter:blur(6px)">
+      <div class="row center mb-16">
+        <span class="tag tag-tech" style="background:rgba(56,189,248,.2);border-color:rgba(56,189,248,.4);color:#67E8F9">LIVE · 实时追踪</span>
+      </div>
+      <div class="strong" style="font-size:13px">运单号 YD-20261020-004862 · 五常 → 上海</div>
+      <div class="muted t-xs mt-4">货主：五常粮油合作社 · 收货：中粮上海仓库 · 富硒大米 24 吨</div>
+      <div class="track done"><div class="d">1</div><div><div class="t">五常基地装车完成</div><div class="m">10-20 09:20 · 司机 张师傅 · 黑 A·D3821</div></div></div>
+      <div class="track done"><div class="d">2</div><div><div class="t">哈尔滨集散中心 已入库</div><div class="m">10-20 16:02 · 温湿度 8℃ / 55% 正常</div></div></div>
+      <div class="track cur"><div class="d">3</div><div><div class="t">G1 高速 · 沈阳段行驶中</div><div class="m">10-21 08:45 · 距上海 1,248 km · 预计明日 14:30 到达</div></div></div>
+      <div class="track"><div class="d">4</div><div><div class="t">上海监管仓 待入库</div><div class="m">预计 10-22 14:30</div></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- 平台数据条 -->
+<section style="background:#fff;border-bottom:1px solid var(--line)">
+  <div class="container" style="display:grid;grid-template-columns:repeat(5,1fr);gap:0;padding:22px 0">
+    <div style="text-align:center;border-right:1px solid var(--line)">
+      <div class="mono" style="font-size:26px;font-weight:800;color:var(--green-700)">12.8<span style="font-size:14px;font-weight:600"> 万车</span></div>
+      <div class="muted t-sm mt-6">近一年运输车次</div>
+    </div>
+    <div style="text-align:center;border-right:1px solid var(--line)">
+      <div class="mono" style="font-size:26px;font-weight:800;color:var(--green-700)">3.8<span style="font-size:14px;font-weight:600"> 亿吨公里</span></div>
+      <div class="muted t-sm mt-6">累计货物流转</div>
+    </div>
+    <div style="text-align:center;border-right:1px solid var(--line)">
+      <div class="mono" style="font-size:26px;font-weight:800;color:var(--green-700)">82<span style="font-size:14px;font-weight:600"> %</span></div>
+      <div class="muted t-sm mt-6">T+1 次日达率</div>
+    </div>
+    <div style="text-align:center;border-right:1px solid var(--line)">
+      <div class="mono" style="font-size:26px;font-weight:800;color:var(--green-700)">99.2<span style="font-size:14px;font-weight:600"> %</span></div>
+      <div class="muted t-sm mt-6">温控达标率</div>
+    </div>
+    <div style="text-align:center">
+      <div class="mono" style="font-size:26px;font-weight:800;color:var(--green-700)">1,240<span style="font-size:14px;font-weight:600"> 个</span></div>
+      <div class="muted t-sm mt-6">合作网点 + 监管仓</div>
+    </div>
+  </div>
+</section>
+
+<!-- 物流服务矩阵 -->
+<section class="section" style="padding-top:48px">
+  <div class="container">
+    <div style="text-align:center;margin-bottom:32px">
+      <div class="tag tag-tech" style="display:inline-block;margin-bottom:12px">服务矩阵</div>
+      <h2 style="font-size:28px;font-weight:800">四大物流服务 · 覆盖从产地到餐桌全链路</h2>
+      <p class="muted" style="margin-top:8px">产地专线 + 冷链物流 + 城配末端 + 监管仓，任一段都有农产云专属方案</p>
+    </div>
+
+    <div class="grid grid-4">
+      <div class="card card-hover">
+        <div class="card-b">
+          <div style="width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,#0E5233,#155E3C);display:grid;place-items:center;color:#fff;font-size:22px"><span data-icon="truck"></span></div>
+          <h3 style="margin-top:14px;font-size:17px;font-weight:800">产地专线</h3>
+          <p class="muted t-sm" style="margin-top:6px">从五常、寿光、赣州、湛江等核心产地直发全国销地，单程 5-15 吨整车，比市价低 15%。</p>
+          <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
+            <span class="tag">东北专线</span><span class="tag">山东专线</span><span class="tag">两广专线</span><span class="tag">华中专线</span>
+          </div>
+          <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center">
+            <span class="mono strong" style="color:var(--green-700)">¥ 0.35<span style="font-size:12px;color:var(--ink-500);font-weight:500">/吨公里 起</span></span>
+            <a href="#quote" class="btn btn-sm btn-primary">询价</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="card card-hover">
+        <div class="card-b">
+          <div style="width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,#0C7BA8,#0EA5E9);display:grid;place-items:center;color:#fff;font-size:22px"><span data-icon="snowflake"></span></div>
+          <h3 style="margin-top:14px;font-size:17px;font-weight:800">冷链物流</h3>
+          <p class="muted t-sm" style="margin-top:6px">蔬果 0-4℃ · 肉类 -18℃ · 水产 2-8℃ · 全程 GPS + 温湿度监控 · 异常自动报警。</p>
+          <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
+            <span class="tag">冷藏</span><span class="tag">冷冻</span><span class="tag tag-tech">温控</span><span class="tag tag-tech">全程可视</span>
+          </div>
+          <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center">
+            <span class="mono strong" style="color:var(--green-700)">¥ 0.98<span style="font-size:12px;color:var(--ink-500);font-weight:500">/吨公里 起</span></span>
+            <a href="#quote" class="btn btn-sm btn-primary">询价</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="card card-hover">
+        <div class="card-b">
+          <div style="width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,#12764A,#10B981);display:grid;place-items:center;color:#fff;font-size:22px"><span data-icon="home"></span></div>
+          <h3 style="margin-top:14px;font-size:17px;font-weight:800">城配末端</h3>
+          <p class="muted t-sm" style="margin-top:6px">与本地生鲜配送网络合作，覆盖全国 280+ 地级市，T+1 送达城市超市与农贸批发市场。</p>
+          <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
+            <span class="tag">280+ 城市</span><span class="tag tag-tech">T+1 达</span><span class="tag">超市直供</span><span class="tag">批发市场</span>
+          </div>
+          <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center">
+            <span class="mono strong" style="color:var(--green-700)">¥ 48<span style="font-size:12px;color:var(--ink-500);font-weight:500">/票 起</span></span>
+            <a href="#quote" class="btn btn-sm btn-primary">询价</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="card card-hover">
+        <div class="card-b">
+          <div style="width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,#7E22CE,#A855F7);display:grid;place-items:center;color:#fff;font-size:22px"><span data-icon="box"></span></div>
+          <h3 style="margin-top:14px;font-size:17px;font-weight:800">监管仓服务</h3>
+          <p class="muted t-sm" style="margin-top:6px">产地 + 销地双向监管仓 · 视频监控 + 称重 + 质量抽检 · 可做融资质押物。</p>
+          <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
+            <span class="tag">126 个仓</span><span class="tag tag-tech">融资质押</span><span class="tag">智能抽检</span>
+          </div>
+          <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center">
+            <span class="mono strong" style="color:var(--green-700)">¥ 2.5<span style="font-size:12px;color:var(--ink-500);font-weight:500">/吨·天 起</span></span>
+            <a href="#quote" class="btn btn-sm btn-primary">询价</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 全程可视追踪 -->
+<section class="section" id="track" style="background:var(--bg-alt)">
+  <div class="container">
+    <div style="text-align:center;margin-bottom:32px">
+      <div class="tag" style="display:inline-block;margin-bottom:12px">全程可视</div>
+      <h2 style="font-size:28px;font-weight:800">GPS + 温湿度 + 区块链 · 让每一件货都在视线内</h2>
+      <p class="muted" style="margin-top:8px">所有运输车辆实时上报位置、温湿度数据；节点自动触发区块链交易，不可篡改</p>
+    </div>
+
+    <div class="grid" style="grid-template-columns:1.1fr .9fr;gap:24px">
+      <!-- 追踪 demo -->
+      <div class="card"><div class="card-b">
+        <div class="row center mb-16">
+          <h3 style="font-size:18px;font-weight:800;margin:0">运单追踪 · YD-20261020-004862</h3>
+          <span class="tag tag-tech ml-auto">区块链已上链 · 0x8f3a...2d61</span>
+        </div>
+        <div class="kv" style="grid-template-columns:100px 1fr">
+          <span class="kv-k">货主</span><span class="kv-v">五常粮油合作社</span>
+          <span class="kv-k">收货方</span><span class="kv-v">中粮集团 · 上海嘉定仓库</span>
+          <span class="kv-k">货物</span><span class="kv-v">富硒大米 24 吨 / 1,200 袋 / 5kg 装</span>
+          <span class="kv-k">承运方</span><span class="kv-v">农产云产地专线 · 东北-华东线</span>
+          <span class="kv-k">司机</span><span class="kv-v">张师傅 · 黑 A·D3821 · 驾龄 12 年</span>
+        </div>
+        <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--line)">
+          <div class="track done"><div class="d">1</div><div><div class="t">五常基地装车完成 · 封签 FA-004862</div><div class="m">2026-10-20 09:20 · 智能称重 24.08 吨 · 照片 12 张上链</div></div></div>
+          <div class="track done"><div class="d">2</div><div><div class="t">哈尔滨集散中心 入库分拣</div><div class="m">2026-10-20 16:02 · 抽检 5kg 样本 · 水分 14.2% 合格 · 温控 8℃ / 55% 正常</div></div></div>
+          <div class="track cur"><div class="d">3</div><div><div class="t">G1 高速 · 沈阳段行驶中</div><div class="m">2026-10-21 08:45 · 实时定位 (41.8°N, 123.4°E) · 车速 82 km/h · 距上海 1,248 km</div></div></div>
+          <div class="track"><div class="d">4</div><div><div class="t">上海监管仓 待入库</div><div class="m">预计 2026-10-22 14:30 · 入库质检 + 区块链二次存证</div></div></div>
+          <div class="track"><div class="d">5</div><div><div class="t">中粮嘉定仓库 签收完成</div><div class="m">预计 2026-10-22 16:00 · 收货方扫码签收</div></div></div>
+        </div>
+      </div></div>
+      <!-- 能力说明 -->
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div class="card card-hover"><div class="card-b" style="display:flex;gap:14px;align-items:flex-start">
+          <div style="width:40px;height:40px;border-radius:10px;background:var(--green-100);color:var(--green-700);display:grid;place-items:center;font-size:18px;flex:none"><span data-icon="cpu"></span></div>
+          <div><div class="strong">GPS + 北斗 双模定位</div><p class="muted t-sm mt-4">每 30 秒上报一次位置 · 精度 ≤ 10 米 · 偏离路线自动触发预警</p></div>
+        </div></div>
+        <div class="card card-hover"><div class="card-b" style="display:flex;gap:14px;align-items:flex-start">
+          <div style="width:40px;height:40px;border-radius:10px;background:var(--tech-100);color:var(--tech-700);display:grid;place-items:center;font-size:18px;flex:none"><span data-icon="activity"></span></div>
+          <div><div class="strong">温湿度实时监控</div><p class="muted t-sm mt-4">每 60 秒上报一次车厢温湿度 · 超限自动报警给司机 + 调度中心 + 货主</p></div>
+        </div></div>
+        <div class="card card-hover"><div class="card-b" style="display:flex;gap:14px;align-items:flex-start">
+          <div style="width:40px;height:40px;border-radius:10px;background:rgba(126,34,206,.1);color:var(--purple-700);display:grid;place-items:center;font-size:18px;flex:none"><span data-icon="shield"></span></div>
+          <div><div class="strong">区块链节点存证</div><p class="muted t-sm mt-4">装车 · 分拣 · 过检 · 签收 每个节点自动上链 · 不可篡改 · 支持溯源码查询</p></div>
+        </div></div>
+        <div class="card card-hover"><div class="card-b" style="display:flex;gap:14px;align-items:flex-start">
+          <div style="width:40px;height:40px;border-radius:10px;background:rgba(245,158,11,.1);color:#B45309;display:grid;place-items:center;font-size:18px;flex:none"><span data-icon="alert"></span></div>
+          <div><div class="strong">异常自动响应</div><p class="muted t-sm mt-4">温湿度超限 / 超时 / 位置异常 自动派单最近救援点 · 避免货物损失</p></div>
+        </div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 在线询价 -->
+<section class="section" id="quote">
+  <div class="container">
+    <div class="grid" style="grid-template-columns:1fr 1.1fr;gap:24px">
+      <!-- 左侧询价表单 -->
+      <div class="card"><div class="card-b">
+        <div class="strong t-md">在线询价 · 10 秒返回报价</div>
+        <p class="muted t-sm mt-6">填写货物信息，系统自动匹配最优路线与承运方，报价 5 分钟内下发至您的会员中心</p>
+        <div style="margin-top:18px;display:flex;flex-direction:column;gap:14px">
+          <div>
+            <label class="t-xs muted" style="display:block;margin-bottom:4px">发货地</label>
+            <div style="display:flex;gap:8px">
+              <input class="input" style="flex:1" placeholder="省 / 市 / 区 或 基地名（如 五常基地）" value="黑龙江 哈尔滨 五常市" />
+              <input class="input" style="flex:1" placeholder="详细地址" value="五常镇兴农街 128 号" />
+            </div>
+          </div>
+          <div>
+            <label class="t-xs muted" style="display:block;margin-bottom:4px">收货地</label>
+            <div style="display:flex;gap:8px">
+              <input class="input" style="flex:1" placeholder="省 / 市 / 区" value="上海 嘉定区" />
+              <input class="input" style="flex:1" placeholder="详细地址" value="中粮集团嘉定仓库" />
+            </div>
+          </div>
+          <div>
+            <label class="t-xs muted" style="display:block;margin-bottom:4px">货物类型</label>
+            <div class="chips" style="margin:0">
+              <span class="chip on">粮油（常温）</span><span class="chip">果蔬（冷藏）</span><span class="chip">肉类（冷冻）</span><span class="chip">水产</span><span class="chip">农资</span>
+            </div>
+          </div>
+          <div>
+            <label class="t-xs muted" style="display:block;margin-bottom:4px">货物重量</label>
+            <div style="display:flex;gap:8px;align-items:center">
+              <input class="input" style="width:160px" value="24" />
+              <select class="select" style="width:100px"><option>吨</option><option>千克</option></select>
+              <span class="muted t-sm">或</span>
+              <select class="select" style="width:140px"><option>整车（5-15 吨）</option><option>零担</option></select>
+            </div>
+          </div>
+          <div>
+            <label class="t-xs muted" style="display:block;margin-bottom:4px">期望发货时间</label>
+            <div style="display:flex;gap:8px">
+              <input class="input" style="flex:1" value="2026-10-22" />
+              <select class="select" style="width:140px"><option>上午 8:00 前</option><option>下午 14:00 前</option><option>时间不限</option></select>
+            </div>
+          </div>
+          <button class="btn btn-primary btn-lg" style="width:100%;justify-content:center"><span data-icon="zap"></span> 立即询价 · 预计报价 ¥ 18,200 起</button>
+        </div>
+      </div></div>
+      <!-- 右侧预估报价 + 承运方 -->
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div class="card" style="background:linear-gradient(135deg,#0E5233,#0C7BA8);color:#fff;border:none"><div class="card-b">
+          <div class="muted t-sm" style="color:rgba(255,255,255,.7);font-weight:500">系统预估报价（仅参考 · 最终以下单为准）</div>
+          <div class="mono" style="font-size:38px;font-weight:800;margin-top:6px">¥ 18,200</div>
+          <div class="muted t-xs" style="color:rgba(255,255,255,.65);margin-top:6px">运价 ¥ 0.36 / 吨公里 × 5,050 吨公里 · 含保险 · 含装卸</div>
+          <div style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,.2);display:flex;gap:16px;flex-wrap:wrap">
+            <div><span class="muted t-xs" style="color:rgba(255,255,255,.6)">预计时效</span><div class="mono" style="font-size:15px;font-weight:700;margin-top:2px">2.5 天</div></div>
+            <div><span class="muted t-xs" style="color:rgba(255,255,255,.6)">里程</span><div class="mono" style="font-size:15px;font-weight:700;margin-top:2px">2,525 km</div></div>
+            <div><span class="muted t-xs" style="color:rgba(255,255,255,.6)">保险</span><div class="mono" style="font-size:15px;font-weight:700;margin-top:2px">已含 1%</div></div>
+            <div><span class="muted t-xs" style="color:rgba(255,255,255,.6)">温控</span><div class="mono" style="font-size:15px;font-weight:700;margin-top:2px">常温车厢</div></div>
+          </div>
+        </div></div>
+        <div class="card"><div class="card-b">
+          <div class="row between"><div class="strong">推荐承运方</div><span class="muted t-xs">实时匹配 · 按评分排序</span></div>
+          <div style="margin-top:12px;display:flex;flex-direction:column;gap:10px">
+            <div style="padding:12px;border:1px solid var(--line);border-radius:10px;display:flex;gap:12px;align-items:center">
+              <div style="width:40px;height:40px;border-radius:10px;background:var(--green-050);color:var(--green-700);display:grid;place-items:center;font-weight:800;font-size:14px">东</div>
+              <div style="flex:1">
+                <div class="strong t-sm">东北快线 · 农产云认证承运方</div>
+                <div class="muted t-xs">¥ 17,800 · 时效 2 天 · 评分 <span style="color:#B45309">4.9</span> · 近 90 天运输 1,248 次</div>
+              </div>
+              <span class="tag tag-tech">首选</span>
+            </div>
+            <div style="padding:12px;border:1px solid var(--line);border-radius:10px;display:flex;gap:12px;align-items:center">
+              <div style="width:40px;height:40px;border-radius:10px;background:var(--tech-100);color:var(--tech-700);display:grid;place-items:center;font-weight:800;font-size:14px">顺</div>
+              <div style="flex:1">
+                <div class="strong t-sm">顺丰重货 · 冷链可选</div>
+                <div class="muted t-xs">¥ 19,600 · 时效 1.8 天 · 评分 <span style="color:#B45309">4.8</span></div>
+              </div>
+              <span class="tag">备选</span>
+            </div>
+            <div style="padding:12px;border:1px solid var(--line);border-radius:10px;display:flex;gap:12px;align-items:center">
+              <div style="width:40px;height:40px;border-radius:10px;background:rgba(126,34,206,.1);color:#7E22CE;display:grid;place-items:center;font-weight:800;font-size:14px">中</div>
+              <div style="flex:1">
+                <div class="strong t-sm">中粮物流 · 自有车队</div>
+                <div class="muted t-xs">¥ 18,400 · 时效 2.5 天 · 评分 <span style="color:#B45309">4.7</span> · 签收直接进监管仓</div>
+              </div>
+              <span class="tag">备选</span>
+            </div>
+          </div>
+        </div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 网络覆盖 -->
+<section class="section" id="network" style="background:var(--bg-alt)">
+  <div class="container">
+    <div style="text-align:center;margin-bottom:32px">
+      <div class="tag tag-tech" style="display:inline-block;margin-bottom:12px">网络覆盖</div>
+      <h2 style="font-size:28px;font-weight:800">全国 34 省 · 1,240 网点 · 126 监管仓</h2>
+      <p class="muted" style="margin-top:8px">主产地专线 + 销地监管仓 + 末端城配三级网络 · 已覆盖农产云全部 4 大核心基地</p>
+    </div>
+
+    <div class="grid grid-4" style="gap:14px">
+      <div class="card"><div class="card-b" style="text-align:center">
+        <div style="font-size:36px;font-weight:800;color:var(--green-700)">480</div>
+        <div class="muted t-sm mt-4">产地直发网点</div>
+        <div class="muted t-xs mt-2">覆盖五常 / 寿光 / 赣州 / 湛江 4 大基地</div>
+      </div></div>
+      <div class="card"><div class="card-b" style="text-align:center">
+        <div style="font-size:36px;font-weight:800;color:var(--tech-700)">126</div>
+        <div class="muted t-sm mt-4">销地监管仓</div>
+        <div class="muted t-xs mt-2">北上广深 + 省会城市 · 可做融资质押</div>
+      </div></div>
+      <div class="card"><div class="card-b" style="text-align:center">
+        <div style="font-size:36px;font-weight:800;color:#7E22CE">280+</div>
+        <div class="muted t-sm mt-4">城配末端城市</div>
+        <div class="muted t-xs mt-2">市区超市 + 农贸批发市场 T+1 达</div>
+      </div></div>
+      <div class="card"><div class="card-b" style="text-align:center">
+        <div style="font-size:36px;font-weight:800;color:#B45309">3,820</div>
+        <div class="muted t-sm mt-4">认证承运车辆</div>
+        <div class="muted t-xs mt-2">全部装 GPS + 温控 · 全程可视</div>
+      </div></div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section style="background:linear-gradient(135deg,#0C3A2E,#0C7BA8);color:#fff;padding:44px 0">
+  <div class="container" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:20px">
+    <div>
+      <h3 style="font-size:24px;font-weight:800">注册农产云，享受专属物流优惠</h3>
+      <p style="color:rgba(255,255,255,.75);margin-top:6px">平台用户专属折扣 · 新用户首单立减 20% · 产地会员免费上门取货</p>
+    </div>
+    <div style="display:flex;gap:12px">
+      <a class="btn btn-lg" style="background:#fff;color:#0C7BA8" href="register.html">立即注册享受优惠</a>
+      <a class="btn btn-lg btn-outline" style="border-color:rgba(255,255,255,.5);color:#fff" href="../portal/certify-enterprise.html">企业认证</a>
+    </div>
+  </div>
+</section>
+
+<!-- 页脚 -->
+<footer class="site-footer">
+  <div class="container">
+    <div class="grid grid-4">
+      <div>
+        <div class="brand" style="color:#fff"><span class="logo" data-icon="seed" data-size="20"></span><span>农产云</span></div>
+        <p style="margin-top:14px;font-size:13px;color:rgba(255,255,255,.6);max-width:280px">农业产业互联网平台，连接生产、加工、流通、销售全环节。</p>
+      </div>
+      <div><h4>关于平台</h4><a>平台介绍</a><a>联系方式</a><a>加入我们</a><a>帮助中心</a></div>
+      <div><h4>买家服务</h4><a href="../trade/index.html">采购大厅</a><a href="../trade/publish.html">发布询价</a><a href="../trade/member.html">订单管理</a><a href="finance.html">供应链金融</a></div>
+      <div><h4>卖家服务</h4><a href="../trade/publish.html">发布供应</a><a href="../trade/member-seller.html">店铺管理</a><a href="../production/dashboard.html">物联网接入</a><a href="logistics.html">物流服务</a></div>
+    </div>
+    <div class="bottom">
+      <span>© 2026 农业产业互联网平台 · 产品原型演示（非真实业务系统）</span>
+      <span>Produced for prototype demo</span>
+    </div>
+  </div>
+</footer>
+
+<script src="../assets/js/app.js"></script>
+</body>
+</html>
