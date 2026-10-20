@@ -34,7 +34,13 @@ export interface TradeProductVO {
   specification: string
   unit: string
   price: number
+  priceMin?: number
+  priceMax?: number
   stockQuantity: number
+  specLevel?: string
+  specSize?: string
+  viewCount?: number
+  inquiryCount?: number
   publishStatus: string
   createTime: string
   updateTime: string

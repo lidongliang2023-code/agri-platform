@@ -22,7 +22,7 @@ export function PortalLayout({ children, active = '/' }: { children: ReactNode; 
           <span className="portal-top-actions">
             <a href={tradeUrl('/')} target="_blank" rel="noreferrer">我是买家</a><span className="sep">·</span>
             <a href={tradeUrl('/product/create')} target="_blank" rel="noreferrer">我是卖家</a><span className="sep">·</span>
-            <a href={tradeUrl('/mine')} target="_blank" rel="noreferrer">会员中心</a><span className="sep">·</span>
+            <a href={tradeUrl('/member/buyer')} target="_blank" rel="noreferrer">会员中心</a><span className="sep">·</span>
             <a href={productionLogin()}><Icon name="user" size={12} />登录</a><span className="sep">·</span>
             <a href={ssoRegister()}><Icon name="plus" size={12} />免费注册</a>
           </span>

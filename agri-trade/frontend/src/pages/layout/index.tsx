@@ -14,6 +14,8 @@ import {
   BankOutlined,
   SafetyCertificateOutlined,
   IdcardOutlined,
+  ShopOutlined,
+  ShoppingOutlined,
 } from '@ant-design/icons'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 
@@ -21,7 +23,9 @@ const { Sider, Content, Header } = AntLayout
 
 const menuItems = [
   { key: '', label: '首页', icon: <HomeOutlined /> },
-  { key: 'mine', label: '我的看板', icon: <FundOutlined /> },
+  { key: 'member/buyer', label: '买家中心', icon: <ShoppingOutlined /> },
+  { key: 'member/seller', label: '卖家中心', icon: <ShopOutlined /> },
+  { key: 'board', label: '经营看板', icon: <FundOutlined /> },
   { key: 'my-guarantee', label: '我的保证金', icon: <BankOutlined /> },
   { key: 'my-compensation', label: '我的获赔', icon: <SafetyCertificateOutlined /> },
   { key: 'my-identity', label: '实名认证', icon: <IdcardOutlined /> },
@@ -40,8 +44,12 @@ const menuItems = [
 function Layout() {
   const navigate = useNavigate()
   const location = useLocation()
-  const path = location.pathname.split('/')[1] || ''
-  const currentKey = path === '' ? '' : path
+  const currentKey = location.pathname.replace(/^\//, '')
+
+  // 买家/卖家中心有自己的一整套侧栏与顶部栏（按原型），不再套交易后台的深色导航。
+  if (location.pathname.startsWith('/member')) {
+    return <Outlet />
+  }
 
   const handleMenuClick = (e: { key: string }) => {
     navigate(`/${e.key}`)

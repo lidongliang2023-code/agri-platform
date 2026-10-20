@@ -142,7 +142,10 @@ public class OrderController {
             @RequestParam(defaultValue = "10") Integer pageSize,
             @RequestParam(required = false) String orderStatus,
             @RequestParam(required = false) String orderNo,
-            @RequestParam(required = false) String paymentStatus) {
+            @RequestParam(required = false) String paymentStatus,
+            // 会员中心按端拆分：buyer 只看我作为买方的单，seller 只看我作为卖方的单。
+            // 不传时保持原口径（我是买方或卖方都返回），范围仍由服务端从令牌推导。
+            @RequestParam(required = false) String side) {
         // 参与方范围**由服务端从令牌推导**，前端不再传（第 2 步的收口）。
         // 之前是前端把登录用户 id 当 participantId 传上来：既查不到（两套号不是一个域），
         // 又能靠改这个参数看别人的单据 —— 范围是调用方自报的，等于没有范围。
@@ -161,7 +164,13 @@ public class OrderController {
         wrapper.eq(TradeOrder::getDelFlag, 0);
         // 我名下的主体只要是买方或卖方就与我有关。全平台查询归运营端（/api/trade/admin/order/page）。
         List<Long> mine = scope.merchantIds();
-        wrapper.and(w -> w.in(TradeOrder::getBuyerId, mine).or().in(TradeOrder::getSellerId, mine));
+        if ("buyer".equalsIgnoreCase(side)) {
+            wrapper.in(TradeOrder::getBuyerId, mine);
+        } else if ("seller".equalsIgnoreCase(side)) {
+            wrapper.in(TradeOrder::getSellerId, mine);
+        } else {
+            wrapper.and(w -> w.in(TradeOrder::getBuyerId, mine).or().in(TradeOrder::getSellerId, mine));
+        }
         if (orderStatus != null) wrapper.eq(TradeOrder::getOrderStatus, orderStatus);
         if (paymentStatus != null) wrapper.eq(TradeOrder::getPaymentStatus, paymentStatus);
         if (orderNo != null && !orderNo.isEmpty()) wrapper.like(TradeOrder::getOrderNo, orderNo);

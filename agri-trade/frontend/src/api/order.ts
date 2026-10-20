@@ -6,6 +6,8 @@ export interface OrderQuery {
   orderNo?: string
   orderStatus?: string
   paymentStatus?: string
+  /** buyer / seller：会员中心按端筛选，范围仍由服务端按登录身份推导 */
+  side?: 'buyer' | 'seller'
 }
 
 export interface TradeOrderVO {

@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import Layout from '@/pages/layout'
 import Login from '@/pages/login'
 import Home from '@/pages/home'
@@ -18,6 +18,8 @@ import LogisticsList from '@/pages/logistics/list'
 import EvaluationList from '@/pages/evaluation/list'
 import DisputeList from '@/pages/dispute/list'
 import MineDashboardPage from '@/pages/mine'
+import BuyerCenter from '@/pages/member-center/BuyerCenter'
+import SellerCenter from '@/pages/member-center/SellerCenter'
 import MyGuarantee from '@/pages/mine-guarantee'
 import MyCompensation from '@/pages/mine-compensation'
 import MyIdentity from '@/pages/mine-identity'
@@ -49,7 +51,10 @@ import { SSO_CALLBACK_PATH } from '@/utils/sso'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   // 登录态从内存里的会话读，不再读 localStorage —— 令牌放 localStorage 会被任何一处 XSS 拿走
-  return isLoggedIn() ? <>{children}</> : <Navigate to="/login" replace />
+  const location = useLocation()
+  // 带上原路径：从会员中心/订单页被弹去登录后，登录成功要回到原页面，而不是统一回首页。
+  const redirect = encodeURIComponent(`${location.pathname}${location.search}`)
+  return isLoggedIn() ? <>{children}</> : <Navigate to={`/login?redirect=${redirect}`} replace />
 }
 
 function AppRouter() {
@@ -93,7 +98,12 @@ function AppRouter() {
         </PrivateRoute>
       }>
         <Route index element={<Home />} />
-        <Route path="mine" element={<MineDashboardPage />} />
+        {/* 原型「买家会员中心 / 卖家会员中心」两套独立布局 */}
+        <Route path="member/buyer" element={<BuyerCenter />} />
+        <Route path="member/seller" element={<SellerCenter />} />
+        {/* 旧的「我的看板」保留为经营看板；会员中心入口指向买家中心 */}
+        <Route path="mine" element={<Navigate to="/member/buyer" replace />} />
+        <Route path="board" element={<MineDashboardPage />} />
         <Route path="my-guarantee" element={<MyGuarantee />} />
         <Route path="my-compensation" element={<MyCompensation />} />
         <Route path="my-identity" element={<MyIdentity />} />

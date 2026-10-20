@@ -34,6 +34,8 @@ public class EvaluationController {
             @RequestParam(defaultValue = "10") Integer pageSize,
             @RequestParam(required = false) Long orderId,
             @RequestParam(required = false) Long evaluateeId,
+            // 买家中心要看"我发出的评价"：只允许查自己名下主体发出的评价。
+            @RequestParam(required = false) Long evaluatorId,
             // 列表页的搜索框与评分下拉一直在，但后端从来没收过这两个参数 —— 输了字、选了星级都没反应。
             @RequestParam(required = false) String evaluationNo,
             @RequestParam(required = false) BigDecimal ratingOverall) {
@@ -42,6 +44,16 @@ public class EvaluationController {
         wrapper.eq(Evaluation::getDelFlag, 0);
         if (orderId != null) wrapper.eq(Evaluation::getOrderId, orderId);
         if (evaluateeId != null) wrapper.eq(Evaluation::getEvaluateeId, evaluateeId);
+        if (evaluatorId != null) {
+            PlatformIdentityService.MerchantScope scope = identityService.currentScope();
+            if (!scope.resolved()) {
+                return ApiResponse.error(scope.error());
+            }
+            if (!scope.merchantIds().contains(evaluatorId)) {
+                return ApiResponse.error("只能查看自己发出的评价");
+            }
+            wrapper.eq(Evaluation::getEvaluatorId, evaluatorId);
+        }
         if (evaluationNo != null && !evaluationNo.isEmpty()) {
             wrapper.like(Evaluation::getEvaluationNo, evaluationNo);
         }
