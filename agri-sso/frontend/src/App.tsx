@@ -228,6 +228,7 @@ export default function App(): JSX.Element {
     confirm: '',
     agree: false,
   })
+  const [regStep, setRegStep] = useState<1 | 2 | 3>(1)
 
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -269,6 +270,63 @@ export default function App(): JSX.Element {
 
   const switchView = (path: '/login' | '/register'): void => {
     window.location.href = path + (window.location.search || '')
+  }
+
+  function validateAccountStep(): boolean {
+    setError('')
+    if (!/^1[3-9]\d{9}$/.test(reg.phone)) {
+      setError('请填写正确的 11 位手机号')
+      return false
+    }
+    if (!/^\d{6}$/.test(reg.code)) {
+      setError('请输入 6 位短信验证码')
+      return false
+    }
+    if (reg.password.length < 8 || reg.password.length > 20) {
+      setError('密码长度应为 8-20 位')
+      return false
+    }
+    if (!/[a-zA-Z]/.test(reg.password) || !/\d/.test(reg.password)) {
+      setError('密码需同时包含字母和数字')
+      return false
+    }
+    if (reg.password !== reg.confirm) {
+      setError('两次输入的密码不一致')
+      return false
+    }
+    return true
+  }
+
+  function validateSubjectStep(): boolean {
+    setError('')
+    if (reg.identity === 'enterprise') {
+      if (!reg.companyName.trim()) {
+        setError('请填写企业名称')
+        return false
+      }
+      if (!/^[0-9A-Za-z]{15,18}$/.test(reg.creditCode.trim())) {
+        setError('请填写 15-18 位统一社会信用代码')
+        return false
+      }
+    } else {
+      if (!reg.realName.trim()) {
+        setError('请填写真实姓名')
+        return false
+      }
+      if (!reg.idCard.trim()) {
+        setError('请填写身份证号，个人实名认证将随注册提交')
+        return false
+      }
+      if (!/^\d{17}[\dXx]$/.test(reg.idCard.trim())) {
+        setError('身份证号应为 18 位（末位可为 X）')
+        return false
+      }
+    }
+    if (!reg.contactName.trim()) {
+      setError('请填写联系人姓名')
+      return false
+    }
+    return true
   }
 
   async function requestCode(scene: 'login' | 'register', targetPhone: string, kind: 'login' | 'register'): Promise<void> {
@@ -358,51 +416,7 @@ export default function App(): JSX.Element {
     setError('')
     setNotice('')
     setHint('')
-    if (reg.identity === 'enterprise') {
-      if (!reg.companyName.trim()) {
-        setError('请填写企业名称')
-        return
-      }
-      if (!/^[0-9A-Za-z]{15,18}$/.test(reg.creditCode.trim())) {
-        setError('请填写 15-18 位统一社会信用代码')
-        return
-      }
-    } else {
-      if (!reg.realName.trim()) {
-        setError('请填写真实姓名')
-        return
-      }
-      if (!reg.idCard.trim()) {
-        setError('请填写身份证号，个人实名认证将随注册提交')
-        return
-      }
-    }
-    if (reg.idCard.trim() && !/^\d{17}[\dXx]$/.test(reg.idCard.trim())) {
-      setError('身份证号应为 18 位（末位可为 X）')
-      return
-    }
-    if (!reg.contactName.trim()) {
-      setError('请填写联系人姓名')
-      return
-    }
-    if (!/^1[3-9]\d{9}$/.test(reg.phone)) {
-      setError('请填写正确的 11 位手机号')
-      return
-    }
-    if (!/^\d{6}$/.test(reg.code)) {
-      setError('请输入 6 位短信验证码')
-      return
-    }
-    if (reg.password.length < 8 || reg.password.length > 20) {
-      setError('密码长度应为 8-20 位')
-      return
-    }
-    if (!/[a-zA-Z]/.test(reg.password) || !/\d/.test(reg.password)) {
-      setError('密码需同时包含字母和数字')
-      return
-    }
-    if (reg.password !== reg.confirm) {
-      setError('两次输入的密码不一致')
+    if (!validateAccountStep() || !validateSubjectStep()) {
       return
     }
     if (!reg.agree) {
@@ -560,169 +574,214 @@ export default function App(): JSX.Element {
       <div className="form-sub">填写账号、短信验证码与主体会员资料，提交后进入平台认证审核</div>
 
       <div className="steps">
-        <div className="step on">1 注册账号</div>
-        <div className="step on">2 创建主体</div>
-        <div className="step">3 认证开通</div>
+        <div className={`step${regStep >= 1 ? ' on' : ''}`}>1 注册账号</div>
+        <div className={`step${regStep >= 2 ? ' on' : ''}`}>2 创建主体</div>
+        <div className={`step${regStep >= 3 ? ' on' : ''}`}>3 认证开通</div>
       </div>
 
-      <form className="auth-form" onSubmit={(event) => void submitRegister(event)}>
-        <div className="form-section">账号信息<small>用于登录、接收审核结果与交易通知</small></div>
-
-        <label className="auth-field">
-          联系电话<span className="req">*</span>
-          <input className="auth-input" type="tel" value={reg.phone} maxLength={11} inputMode="numeric"
-            autoComplete="tel" placeholder="请输入 11 位手机号"
-            onChange={(event) => patchReg({ phone: event.target.value.replace(/\D/g, '') })} />
-        </label>
-
-        <label className="auth-field">
-          短信验证码<span className="req">*</span>
-          <div className="code-row">
-            <input className="auth-input" value={reg.code} maxLength={6} inputMode="numeric"
-              placeholder="6 位验证码"
-              onChange={(event) => patchReg({ code: event.target.value.replace(/\D/g, '') })} />
-            <button type="button" className="btn-code" disabled={sending !== null || registerLeft > 0}
-              onClick={() => void requestCode('register', reg.phone, 'register')}>
-              {sending === 'register' ? '发送中…' : registerLeft > 0 ? `重新获取（${registerLeft}s）` : '获取验证码'}
-            </button>
-          </div>
-        </label>
-
-        <div className="form-grid">
-          <label className="auth-field">
-            设置密码<span className="req">*</span>
-            <input className="auth-input" type="password" value={reg.password} maxLength={20}
-              autoComplete="new-password" placeholder="8-20 位字母+数字"
-              onChange={(event) => patchReg({ password: event.target.value })} />
-            <span className={`pwd-meter ${strength}`}><i /><i /><i /></span>
-          </label>
-          <label className="auth-field">
-            确认密码<span className="req">*</span>
-            <input className="auth-input" type="password" value={reg.confirm} maxLength={20}
-              autoComplete="new-password" placeholder="再次输入密码"
-              onChange={(event) => patchReg({ confirm: event.target.value })} />
-          </label>
-        </div>
-
-        <label className="auth-field">
-          称呼 <small className="muted">选填</small>
-          <input className="auth-input" value={reg.nickname} maxLength={20}
-            placeholder="如：王经理（用于平台内展示，可后续修改）"
-            onChange={(event) => patchReg({ nickname: event.target.value })} />
-        </label>
-
-        <div className="form-section">主体会员<small>选择企业或个人，资料随账号一并提交审核</small></div>
-
-        <div className="auth-field">
-          <span>注册身份</span>
-          <div className="identity-cards">
-            <label className={`identity-card${reg.identity === 'enterprise' ? ' on' : ''}`}>
-              <input type="radio" name="register-identity" checked={reg.identity === 'enterprise'}
-                onChange={() => patchReg({ identity: 'enterprise' })} />
-              <span className="ic"><Icon name="factory" size={18} /></span>
-              <span><strong>企业会员</strong><small>支持采购 / 供应 / 金融，需资质认证</small></span>
-            </label>
-            <label className={`identity-card${reg.identity === 'personal' ? ' on' : ''}`}>
-              <input type="radio" name="register-identity" checked={reg.identity === 'personal'}
-                onChange={() => patchReg({ identity: 'personal' })} />
-              <span className="ic"><Icon name="user" size={18} /></span>
-              <span><strong>个人会员</strong><small>合作社 / 家庭农场 / 采购个体户</small></span>
-            </label>
-          </div>
-        </div>
-
-        {reg.identity === 'enterprise' ? (
+      <form
+        className="auth-form"
+        onSubmit={(event) => {
+          if (regStep === 1) {
+            event.preventDefault()
+            if (validateAccountStep()) setRegStep(2)
+            return
+          }
+          if (regStep === 2) {
+            event.preventDefault()
+            if (validateSubjectStep()) setRegStep(3)
+            return
+          }
+          void submitRegister(event)
+        }}
+      >
+        {regStep === 1 && (
           <>
+            <div className="form-section">1. 注册账号<small>手机号、验证码与登录密码</small></div>
+
+            <label className="auth-field">
+              联系电话<span className="req">*</span>
+              <input className="auth-input" type="tel" value={reg.phone} maxLength={11} inputMode="numeric"
+                autoComplete="tel" placeholder="请输入 11 位手机号"
+                onChange={(event) => patchReg({ phone: event.target.value.replace(/\D/g, '') })} />
+            </label>
+
+            <label className="auth-field">
+              短信验证码<span className="req">*</span>
+              <div className="code-row">
+                <input className="auth-input" value={reg.code} maxLength={6} inputMode="numeric"
+                  placeholder="6 位验证码"
+                  onChange={(event) => patchReg({ code: event.target.value.replace(/\D/g, '') })} />
+                <button type="button" className="btn-code" disabled={sending !== null || registerLeft > 0}
+                  onClick={() => void requestCode('register', reg.phone, 'register')}>
+                  {sending === 'register' ? '发送中…' : registerLeft > 0 ? `重新获取（${registerLeft}s）` : '获取验证码'}
+                </button>
+              </div>
+            </label>
+
             <div className="form-grid">
               <label className="auth-field">
-                企业名称<span className="req">*</span>
-                <input className="auth-input" value={reg.companyName} placeholder="与营业执照一致"
-                  onChange={(event) => patchReg({ companyName: event.target.value })} />
+                设置密码<span className="req">*</span>
+                <input className="auth-input" type="password" value={reg.password} maxLength={20}
+                  autoComplete="new-password" placeholder="8-20 位字母+数字"
+                  onChange={(event) => patchReg({ password: event.target.value })} />
+                <span className={`pwd-meter ${strength}`}><i /><i /><i /></span>
               </label>
               <label className="auth-field">
-                统一社会信用代码<span className="req">*</span>
-                <input className="auth-input" value={reg.creditCode} maxLength={18}
-                  placeholder="15-18 位字母数字"
-                  onChange={(event) => patchReg({ creditCode: event.target.value.replace(/\s/g, '') })} />
+                确认密码<span className="req">*</span>
+                <input className="auth-input" type="password" value={reg.confirm} maxLength={20}
+                  autoComplete="new-password" placeholder="再次输入密码"
+                  onChange={(event) => patchReg({ confirm: event.target.value })} />
               </label>
             </div>
-            <div className="form-grid">
-              <label className="auth-field">
-                所属行业
-                <select className="auth-input auth-select" value={reg.industry}
-                  onChange={(event) => patchReg({ industry: event.target.value })}>
-                  {INDUSTRIES.map((item) => <option key={item}>{item}</option>)}
-                </select>
-              </label>
-              <label className="auth-field">
-                企业规模
-                <select className="auth-input auth-select" value={reg.companySize}
-                  onChange={(event) => patchReg({ companySize: event.target.value })}>
-                  {COMPANY_SIZES.map((item) => <option key={item}>{item}</option>)}
-                </select>
-              </label>
-            </div>
+
             <label className="auth-field">
-              注册地址
-              <input className="auth-input" value={reg.address} placeholder="省 / 市 / 区 / 详细地址"
-                onChange={(event) => patchReg({ address: event.target.value })} />
+              称呼 <small className="muted">选填</small>
+              <input className="auth-input" value={reg.nickname} maxLength={20}
+                placeholder="如：王经理（用于平台内展示，可后续修改）"
+                onChange={(event) => patchReg({ nickname: event.target.value })} />
             </label>
-          </>
-        ) : (
-          <>
-            <label className="auth-field">
-              真实姓名<span className="req">*</span>
-              <input className="auth-input" value={reg.realName} placeholder="请输入真实姓名"
-                onChange={(event) => patchReg({ realName: event.target.value })} />
-            </label>
-            <label className="auth-field">
-              身份证号<span className="req">*</span>
-              <input className="auth-input" value={reg.idCard} maxLength={18}
-                placeholder="18 位身份证号（仅存掩码与摘要）"
-                onChange={(event) => patchReg({ idCard: event.target.value.replace(/\s/g, '') })} />
-            </label>
-            <label className="auth-field">
-              经营类型
-              <select className="auth-input auth-select" value={reg.businessType}
-                onChange={(event) => patchReg({ businessType: event.target.value })}>
-                {BUSINESS_TYPES.map((item) => <option key={item}>{item}</option>)}
-              </select>
-            </label>
+
+            <div className="auth-notice">验证码将在最终提交时校验，请及时完成主体与认证开通步骤。</div>
+            <button type="submit" className="auth-submit" style={{ marginTop: 18 }}>下一步：创建主体</button>
           </>
         )}
 
-        <label className="auth-field">
-          联系人姓名<span className="req">*</span>
-          <input className="auth-input" value={reg.contactName} placeholder="用于接收重要通知"
-            onChange={(event) => patchReg({ contactName: event.target.value })} />
-        </label>
+        {regStep === 2 && (
+          <>
+            <div className="form-section">2. 创建主体<small>选择企业或个人会员，登记经营主体</small></div>
 
-        <label className="agreement">
-          <input type="checkbox" checked={reg.agree} onChange={(event) => patchReg({ agree: event.target.checked })} />
-          <span>
-            我已阅读并同意
-            <a href="#protocol" onClick={(event) => {
-              event.preventDefault()
-              setNotice('《农产云用户服务协议》全文尚未在本页发布，请联系平台运营获取正式文本。')
-            }}>《农产云用户服务协议》</a>、
-            <a href="#privacy" onClick={(event) => {
-              event.preventDefault()
-              setNotice('《隐私政策》全文尚未在本页发布，请联系平台运营获取正式文本。')
-            }}>《隐私政策》</a> 及
-            <a href="#rules" onClick={(event) => {
-              event.preventDefault()
-              setNotice('《企业入驻规则》全文尚未在本页发布，请联系平台运营获取正式文本。')
-            }}>《企业入驻规则》</a>
-          </span>
-        </label>
+            <div className="auth-field">
+              <span>注册身份</span>
+              <div className="identity-cards">
+                <label className={`identity-card${reg.identity === 'enterprise' ? ' on' : ''}`}>
+                  <input type="radio" name="register-identity" checked={reg.identity === 'enterprise'}
+                    onChange={() => patchReg({ identity: 'enterprise' })} />
+                  <span className="ic"><Icon name="factory" size={18} /></span>
+                  <span><strong>企业会员</strong><small>支持采购 / 供应 / 金融，需资质认证</small></span>
+                </label>
+                <label className={`identity-card${reg.identity === 'personal' ? ' on' : ''}`}>
+                  <input type="radio" name="register-identity" checked={reg.identity === 'personal'}
+                    onChange={() => patchReg({ identity: 'personal' })} />
+                  <span className="ic"><Icon name="user" size={18} /></span>
+                  <span><strong>个人会员</strong><small>合作社 / 家庭农场 / 采购个体户</small></span>
+                </label>
+              </div>
+            </div>
 
-        <button type="submit" className="auth-submit" style={{ marginTop: 18 }} disabled={busy}>
-          {busy ? '提交中…' : '提交注册并进入审核'}
-        </button>
+            {reg.identity === 'enterprise' ? (
+              <>
+                <div className="form-grid">
+                  <label className="auth-field">
+                    企业名称<span className="req">*</span>
+                    <input className="auth-input" value={reg.companyName} placeholder="与营业执照一致"
+                      onChange={(event) => patchReg({ companyName: event.target.value })} />
+                  </label>
+                  <label className="auth-field">
+                    统一社会信用代码<span className="req">*</span>
+                    <input className="auth-input" value={reg.creditCode} maxLength={18}
+                      placeholder="15-18 位字母数字"
+                      onChange={(event) => patchReg({ creditCode: event.target.value.replace(/\s/g, '') })} />
+                  </label>
+                </div>
+                <div className="form-grid">
+                  <label className="auth-field">
+                    所属行业
+                    <select className="auth-input auth-select" value={reg.industry}
+                      onChange={(event) => patchReg({ industry: event.target.value })}>
+                      {INDUSTRIES.map((item) => <option key={item}>{item}</option>)}
+                    </select>
+                  </label>
+                  <label className="auth-field">
+                    企业规模
+                    <select className="auth-input auth-select" value={reg.companySize}
+                      onChange={(event) => patchReg({ companySize: event.target.value })}>
+                      {COMPANY_SIZES.map((item) => <option key={item}>{item}</option>)}
+                    </select>
+                  </label>
+                </div>
+                <label className="auth-field">
+                  注册地址
+                  <input className="auth-input" value={reg.address} placeholder="省 / 市 / 区 / 详细地址"
+                    onChange={(event) => patchReg({ address: event.target.value })} />
+                </label>
+              </>
+            ) : (
+              <>
+                <label className="auth-field">
+                  真实姓名<span className="req">*</span>
+                  <input className="auth-input" value={reg.realName} placeholder="请输入真实姓名"
+                    onChange={(event) => patchReg({ realName: event.target.value })} />
+                </label>
+                <label className="auth-field">
+                  身份证号<span className="req">*</span>
+                  <input className="auth-input" value={reg.idCard} maxLength={18}
+                    placeholder="18 位身份证号（仅存掩码与摘要）"
+                    onChange={(event) => patchReg({ idCard: event.target.value.replace(/\s/g, '') })} />
+                </label>
+                <label className="auth-field">
+                  经营类型
+                  <select className="auth-input auth-select" value={reg.businessType}
+                    onChange={(event) => patchReg({ businessType: event.target.value })}>
+                    {BUSINESS_TYPES.map((item) => <option key={item}>{item}</option>)}
+                  </select>
+                </label>
+              </>
+            )}
 
-        <div className="auth-notice">
-          提交后将同时创建登录账号、经营主体与待审核认证记录；审核通过后认证状态才会生效。
-        </div>
+            <label className="auth-field">
+              联系人姓名<span className="req">*</span>
+              <input className="auth-input" value={reg.contactName} placeholder="用于接收重要通知"
+                onChange={(event) => patchReg({ contactName: event.target.value })} />
+            </label>
+
+            <div className="auth-step-actions">
+              <button type="button" className="auth-back" onClick={() => setRegStep(1)}>上一步</button>
+              <button type="submit" className="auth-submit">下一步：认证开通</button>
+            </div>
+          </>
+        )}
+
+        {regStep === 3 && (
+          <>
+            <div className="form-section">3. 认证开通<small>确认资料并提交平台审核</small></div>
+            <div className="reg-summary">
+              <div><span>登录账号</span><b>{reg.phone || '—'}</b><small>{reg.nickname || '未填写称呼'}</small></div>
+              <div><span>会员主体</span><b>{reg.identity === 'enterprise' ? '企业会员' : '个人会员'}</b><small>{reg.identity === 'enterprise' ? (reg.companyName || '—') : (reg.realName || '—')}</small></div>
+              <div><span>认证方式</span><b>{reg.identity === 'enterprise' ? '企业资质认证' : '个人实名认证'}</b><small>提交后进入平台审核，通过后生效</small></div>
+            </div>
+
+            <label className="agreement">
+              <input type="checkbox" checked={reg.agree} onChange={(event) => patchReg({ agree: event.target.checked })} />
+              <span>
+                我确认所填账号与主体信息真实有效，并同意
+                <a href="#protocol" onClick={(event) => {
+                  event.preventDefault()
+                  setNotice('《农产云用户服务协议》全文尚未在本页发布，请联系平台运营获取正式文本。')
+                }}>《农产云用户服务协议》</a>、
+                <a href="#privacy" onClick={(event) => {
+                  event.preventDefault()
+                  setNotice('《隐私政策》全文尚未在本页发布，请联系平台运营获取正式文本。')
+                }}>《隐私政策》</a> 及
+                <a href="#rules" onClick={(event) => {
+                  event.preventDefault()
+                  setNotice('《企业入驻规则》全文尚未在本页发布，请联系平台运营获取正式文本。')
+                }}>《企业入驻规则》</a>
+              </span>
+            </label>
+
+            <div className="auth-step-actions">
+              <button type="button" className="auth-back" onClick={() => setRegStep(2)}>上一步</button>
+              <button type="submit" className="auth-submit" disabled={busy}>
+                {busy ? '提交中…' : '提交注册并进入审核'}
+              </button>
+            </div>
+            <div className="auth-notice">
+              提交后将同时创建登录账号、经营主体与待审核认证记录；审核通过后认证状态才会生效。
+            </div>
+          </>
+        )}
+
         {contextMissing && <div className="auth-notice">当前为独立注册：账号会正常创建并登录认证中心，完成后请从子系统入口进入。</div>}
         {error !== '' && <div className="auth-error">{error}</div>}
         {hint !== '' && <div className="auth-hint">{hint}</div>}

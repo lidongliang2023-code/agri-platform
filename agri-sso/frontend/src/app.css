@@ -662,6 +662,72 @@ body {
   font-weight: 600;
 }
 
+.auth-step-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.auth-step-actions .auth-submit {
+  flex: 1;
+}
+
+.auth-back {
+  flex: none;
+  min-width: 108px;
+  height: 50px;
+  padding: 0 18px;
+  border: 1px solid var(--auth-line);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--auth-ink-600);
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.auth-back:hover {
+  border-color: var(--auth-green-300);
+  background: var(--auth-green-050);
+  color: var(--auth-green-700);
+}
+
+.reg-summary {
+  display: grid;
+  gap: 10px;
+  margin: 4px 0 18px;
+}
+
+.reg-summary > div {
+  padding: 13px 15px;
+  border: 1px solid var(--auth-line);
+  border-radius: 12px;
+  background: var(--auth-green-050);
+}
+
+.reg-summary span,
+.reg-summary b,
+.reg-summary small {
+  display: block;
+}
+
+.reg-summary span {
+  color: var(--auth-ink-500);
+  font-size: 11.5px;
+}
+
+.reg-summary b {
+  margin-top: 4px;
+  color: var(--auth-ink-900);
+  font-size: 14px;
+}
+
+.reg-summary small {
+  margin-top: 3px;
+  color: var(--auth-ink-500);
+  font-size: 11.5px;
+}
+
 .form-section {
   margin: 6px 0 14px;
   padding-top: 14px;
