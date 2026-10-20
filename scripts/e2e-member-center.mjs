@@ -128,13 +128,17 @@ try {
   check(profile.includes('实名认证'), '实名认证已并入店铺资料页')
   check(sellerErrors.length === 0, '卖家中心无未捕获脚本异常', sellerErrors.slice(0, 2).join(' | '))
 
-  // 全局交易后台菜单收敛 + 旧入口重定向
+  // 全局交易后台已删除：根路径直接进买家中心，旧菜单页不再存在
   await seller.goto(`${TRADE}/`, { waitUntil: 'networkidle2' })
   await sleep(600)
-  const globalMenu = await seller.evaluate(() => document.querySelector('.ant-menu')?.textContent ?? '')
-  check(globalMenu.includes('买家中心') && globalMenu.includes('卖家中心') && globalMenu.includes('经营看板')
-    && !globalMenu.includes('订单管理') && !globalMenu.includes('商品管理') && !globalMenu.includes('报价管理'),
-    '交易后台菜单收敛为首页/买家中心/卖家中心/经营看板', globalMenu.replace(/\s+/g, ' ').slice(0, 80))
+  const rootText = await seller.evaluate(() => document.body.innerText)
+  check(seller.url().includes('/member/buyer') && rootText.includes('买家中心'),
+    '交易端根路径直接进入买家中心', seller.url())
+  check(!rootText.includes('交易撮合管理系统') && !(await seller.$('.ant-menu')),
+    '全局交易后台菜单与首页已删除')
+  await seller.goto(`${TRADE}/board`, { waitUntil: 'networkidle2' })
+  await sleep(500)
+  check(seller.url().includes('/member/buyer'), '旧 /board 经营看板页已删除并回落到买家中心', seller.url())
   await seller.goto(`${TRADE}/order`, { waitUntil: 'networkidle2' })
   await sleep(500)
   check(seller.url().includes('/member/buyer') && seller.url().includes('tab=purchase'),

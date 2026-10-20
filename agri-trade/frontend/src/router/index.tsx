@@ -1,7 +1,5 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
-import Layout from '@/pages/layout'
 import Login from '@/pages/login'
-import Home from '@/pages/home'
 import OrderDetail from '@/pages/order/detail'
 import OrderConfirm from '@/pages/order/confirm'
 import OrderCreate from '@/pages/order/create'
@@ -10,7 +8,6 @@ import ProductDetail from '@/pages/product/detail'
 import ShopDetail from '@/pages/shop/detail'
 import DemandCreate from '@/pages/demand/create'
 import DemandDetail from '@/pages/demand/detail'
-import MineDashboardPage from '@/pages/mine'
 import BuyerCenter from '@/pages/member-center/BuyerCenter'
 import SellerCenter from '@/pages/member-center/SellerCenter'
 import SsoCallback from '@/pages/sso/callback'
@@ -79,47 +76,38 @@ function AppRouter() {
         <Route path="carrier" element={<AdminCarrier />} />
         <Route path="identity" element={<AdminIdentity />} />
       </Route>
-      <Route path="/" element={
-        <PrivateRoute>
-          <Layout />
-        </PrivateRoute>
-      }>
-        <Route index element={<Home />} />
-        {/* 原型「买家会员中心 / 卖家会员中心」两套独立布局 */}
-        <Route path="member/buyer" element={<BuyerCenter />} />
-        <Route path="member/seller" element={<SellerCenter />} />
-        {/* 旧的「我的看板」保留为经营看板；会员中心入口指向买家中心 */}
-        <Route path="mine" element={<Navigate to="/member/buyer" replace />} />
-        <Route path="board" element={<MineDashboardPage />} />
-        <Route path="my-guarantee" element={<Navigate to="/member/buyer?tab=fund" replace />} />
-        <Route path="my-compensation" element={<Navigate to="/member/buyer?tab=fund" replace />} />
-        <Route path="my-identity" element={<Navigate to="/member/buyer?tab=profile" replace />} />
-      {/*
-        兜底：没有匹配到的路径回首页。
-        原先没有任何兜底路由，点了一个过期/写错的链接（例如 /order/7601，
-        真实路径是 /order/detail/7601）会渲染成一张白屏，看不出是网址错了。
-      */}
-      <Route path="*" element={<Navigate to="/" replace />} />
-        {/* 交易功能已并入会员中心：旧入口保留为重定向，深链详情仍直达 */}
-        <Route path="order" element={<Navigate to="/member/buyer?tab=purchase" replace />} />
-        <Route path="order/detail/:id" element={<OrderDetail />} />
-        <Route path="order/confirm" element={<OrderConfirm />} />
-        <Route path="order/create" element={<OrderCreate />} />
-        <Route path="product" element={<Navigate to="/member/seller?tab=goods" replace />} />
-        <Route path="product/create" element={<ProductCreate />} />
-        <Route path="product/detail/:id" element={<ProductDetail />} />
-        <Route path="shop/:sellerId" element={<ShopDetail />} />
-        <Route path="demand" element={<Navigate to="/member/buyer?tab=inquiry" replace />} />
-        <Route path="demand/create" element={<DemandCreate />} />
-        <Route path="demand/detail/:id" element={<DemandDetail />} />
-        <Route path="quote" element={<Navigate to="/member/seller?tab=trade" replace />} />
-        <Route path="match" element={<Navigate to="/member/seller?tab=trade" replace />} />
-        <Route path="price" element={<Navigate to="/member/seller?tab=trade" replace />} />
-        <Route path="contract" element={<Navigate to="/member/buyer?tab=contract" replace />} />
-        <Route path="logistics" element={<Navigate to="/member/seller?tab=ship" replace />} />
-        <Route path="evaluation" element={<Navigate to="/member/buyer?tab=rate" replace />} />
-        <Route path="dispute" element={<Navigate to="/member/buyer?tab=after" replace />} />
-      </Route>
+      {/* 交易端只剩买家中心 / 卖家中心；没有全局后台菜单与首页 */}
+      <Route path="/member/buyer" element={<PrivateRoute><BuyerCenter /></PrivateRoute>} />
+      <Route path="/member/seller" element={<PrivateRoute><SellerCenter /></PrivateRoute>} />
+
+      {/* 深链详情/创建页保留，直接进入对应业务页 */}
+      <Route path="/order/detail/:id" element={<PrivateRoute><OrderDetail /></PrivateRoute>} />
+      <Route path="/order/confirm" element={<PrivateRoute><OrderConfirm /></PrivateRoute>} />
+      <Route path="/order/create" element={<PrivateRoute><OrderCreate /></PrivateRoute>} />
+      <Route path="/product/create" element={<PrivateRoute><ProductCreate /></PrivateRoute>} />
+      <Route path="/product/detail/:id" element={<PrivateRoute><ProductDetail /></PrivateRoute>} />
+      <Route path="/shop/:sellerId" element={<PrivateRoute><ShopDetail /></PrivateRoute>} />
+      <Route path="/demand/create" element={<PrivateRoute><DemandCreate /></PrivateRoute>} />
+      <Route path="/demand/detail/:id" element={<PrivateRoute><DemandDetail /></PrivateRoute>} />
+
+      {/* 旧入口只保留重定向，不再渲染旧菜单页 */}
+      <Route path="/order" element={<Navigate to="/member/buyer?tab=purchase" replace />} />
+      <Route path="/product" element={<Navigate to="/member/seller?tab=goods" replace />} />
+      <Route path="/demand" element={<Navigate to="/member/buyer?tab=inquiry" replace />} />
+      <Route path="/quote" element={<Navigate to="/member/seller?tab=trade" replace />} />
+      <Route path="/match" element={<Navigate to="/member/seller?tab=trade" replace />} />
+      <Route path="/price" element={<Navigate to="/member/seller?tab=trade" replace />} />
+      <Route path="/contract" element={<Navigate to="/member/buyer?tab=contract" replace />} />
+      <Route path="/logistics" element={<Navigate to="/member/seller?tab=ship" replace />} />
+      <Route path="/evaluation" element={<Navigate to="/member/buyer?tab=rate" replace />} />
+      <Route path="/dispute" element={<Navigate to="/member/buyer?tab=after" replace />} />
+      <Route path="/my-guarantee" element={<Navigate to="/member/buyer?tab=fund" replace />} />
+      <Route path="/my-compensation" element={<Navigate to="/member/buyer?tab=fund" replace />} />
+      <Route path="/my-identity" element={<Navigate to="/member/buyer?tab=profile" replace />} />
+      <Route path="/mine" element={<Navigate to="/member/buyer" replace />} />
+
+      <Route path="/" element={<Navigate to="/member/buyer" replace />} />
+      <Route path="*" element={<Navigate to="/member/buyer" replace />} />
     </Routes>
   )
 }
