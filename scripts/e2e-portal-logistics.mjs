@@ -30,6 +30,16 @@ try {
 
   const text = await page.evaluate(() => document.body.innerText)
   check(text.includes('从田间到餐桌') && text.includes('全程温控可追溯'), '物流服务 Hero 已渲染')
+  const logiHeroBackground = await page.$eval('.logi-hero', (element) => getComputedStyle(element).backgroundImage)
+  const logiButtonColor = await page.$eval('.logi-btn-light', (element) => getComputedStyle(element).color)
+  const homePage = await browser.newPage()
+  await homePage.setViewport({ width: 1440, height: 1000 })
+  await homePage.goto(BASE, { waitUntil: 'networkidle2', timeout: 60000 })
+  const portalHeroBackground = await homePage.$eval('.portal-hero', (element) => getComputedStyle(element).backgroundImage)
+  const portalButtonColor = await homePage.$eval('.portal-btn-light', (element) => getComputedStyle(element).color)
+  await homePage.close()
+  check(logiHeroBackground === portalHeroBackground, '物流 Hero 与首页使用同一品牌渐变')
+  check(logiButtonColor === portalButtonColor, '物流页主按钮与首页使用同一绿色主色', `${logiButtonColor} / ${portalButtonColor}`)
   check(text.includes('物流服务') && (await page.$$eval('.main-nav a.active', (items) => items.map((item) => item.textContent))).some((item) => item.includes('物流服务')),
     '门户导航「物流服务」处于选中态')
   check((await page.$$eval('.logi-service', (items) => items.length)) === 4, '四大物流服务卡片已展示')
