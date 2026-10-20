@@ -41,7 +41,7 @@ export function PortalLayout({ children, active = '/' }: { children: ReactNode; 
             <a href={hallUrl()} target="_blank" rel="noreferrer">交易大厅</a>
             <a href="#/?scroll=price">价格指数</a>
             <a href="#/?scroll=news">产业资讯</a>
-            <a href={tradeUrl('/member/seller?tab=fund')} target="_blank" rel="noreferrer">供应链金融</a>
+            <a href="#/finance" className={active === '/finance' ? 'active' : ''}>供应链金融</a>
             <a href="#/logistics" className={active === '/logistics' ? 'active' : ''}>物流服务</a>
           </nav>
           <form className="header-search" onSubmit={search}>
@@ -82,6 +82,7 @@ export function PortalLayout({ children, active = '/' }: { children: ReactNode; 
               <a href="#/chains">产业链频道</a>
               <a href={hallUrl()} target="_blank" rel="noreferrer">交易大厅</a>
               <a href="#/logistics">物流服务</a>
+              <a href="#/finance">供应链金融</a>
               <a href={productionLogin()}>生产管理</a>
             </div>
             <div>
