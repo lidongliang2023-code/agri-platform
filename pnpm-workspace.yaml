@@ -26,10 +26,13 @@ packages:
   - 'agri-s2b2c/frontend-supplier'
   # 统一认证中心登录页（sso 子域）：判据①「登录页部署于 sso 子域」的载体。
   - 'agri-sso/frontend'
+  # 官网门户（首页 / 产业链 / 认证中心）：静态托管在网关 bucket，独立流水线。
+  - 'agri-portal/frontend'
 # pnpm >=10 默认拦截依赖的构建脚本。esbuild 的 postinstall 负责把平台二进制就位，
 # 被拦掉时 pnpm install 会直接以 ERR_PNPM_IGNORED_BUILDS 失败（已实测），vite 少了它跑不起来。
 # 按「最小允许清单」只放 esbuild：以后新增依赖的构建脚本同样在此显式登记，而不是关掉整个机制。
 allowBuilds:
   '@parcel/watcher': true
+  core-js: true
   esbuild: true
   vue-demi: true

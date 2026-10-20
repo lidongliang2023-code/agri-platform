@@ -1,0 +1,1141 @@
+/* 官网门户专属布局与组件（基础设计令牌/通用类来自 theme.css）。 */
+
+.portal-root {
+  min-height: 100vh;
+  background: var(--bg);
+}
+
+.portal-root main {
+  min-height: 50vh;
+}
+
+.portal-top-actions {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.portal-top-actions a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.portal-channelbar {
+  background: #fff;
+  border-bottom: 1px solid var(--line);
+}
+
+.portal-channelbar .container {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 46px;
+  overflow-x: auto;
+}
+
+.portal-channelbar .chip {
+  flex: none;
+  white-space: nowrap;
+}
+
+.portal-all-channel {
+  flex: none;
+  gap: 5px;
+}
+
+/* ---------------- Hero ---------------- */
+.portal-hero {
+  position: relative;
+  overflow: hidden;
+  color: #fff;
+  background:
+    radial-gradient(760px 520px at 88% 8%, rgba(56, 189, 248, .3), transparent 60%),
+    radial-gradient(680px 480px at 6% 108%, rgba(111, 214, 162, .22), transparent 62%),
+    linear-gradient(135deg, #0a3a25, #12764a 60%, #0c7ba8);
+}
+
+.portal-hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, .05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, .05) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(circle at 50% 30%, #000, transparent 78%);
+}
+
+.portal-hero-inner {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: 1.15fr .85fr;
+  gap: 44px;
+  align-items: center;
+  padding-top: 48px;
+  padding-bottom: 44px;
+}
+
+.portal-hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .12);
+  border: 1px solid rgba(255, 255, 255, .2);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.portal-hero h1 {
+  margin-top: 16px;
+  font-size: 36px;
+  font-weight: 800;
+  line-height: 1.3;
+  letter-spacing: .5px;
+}
+
+.portal-hero p {
+  margin-top: 14px;
+  max-width: 560px;
+  color: rgba(255, 255, 255, .8);
+  line-height: 1.8;
+}
+
+.portal-hero-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+  flex-wrap: wrap;
+}
+
+.portal-btn-light {
+  background: #fff;
+  color: #0e5233;
+  border: 1px solid #fff;
+}
+
+.portal-btn-light:hover {
+  background: #f1fbf5;
+  transform: translateY(-1px);
+}
+
+.portal-btn-ghost {
+  background: rgba(255, 255, 255, .1);
+  border-color: rgba(255, 255, 255, .42);
+  color: #fff;
+}
+
+.portal-btn-ghost:hover {
+  background: rgba(255, 255, 255, .18);
+}
+
+.portal-hot-search {
+  margin-top: 20px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, .68);
+}
+
+.portal-hot-search a {
+  color: #6fd6a2;
+  margin: 0 3px;
+}
+
+.portal-hot-search a:hover {
+  text-decoration: underline;
+}
+
+.portal-hero-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.portal-hero-metric {
+  padding: 20px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .1);
+  border: 1px solid rgba(255, 255, 255, .18);
+  backdrop-filter: blur(6px);
+}
+
+.portal-hero-metric > span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, .74);
+}
+
+.portal-hero-metric strong {
+  display: block;
+  margin-top: 8px;
+  font-family: var(--mono);
+  font-size: 27px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.portal-hero-metric strong small {
+  font-size: 13px;
+  font-weight: 500;
+  margin-left: 3px;
+}
+
+.portal-hero-metric em {
+  display: block;
+  margin-top: 7px;
+  font-style: normal;
+  font-size: 12px;
+  color: rgba(255, 255, 255, .62);
+}
+
+/* ---------------- 数据条 ---------------- */
+.portal-statbar {
+  background: #fff;
+  border-bottom: 1px solid var(--line);
+}
+
+.portal-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  padding-top: 24px;
+  padding-bottom: 24px;
+}
+
+.portal-stat-grid > div {
+  text-align: center;
+  border-right: 1px solid var(--line);
+}
+
+.portal-stat-grid > div:last-child {
+  border-right: none;
+}
+
+.portal-stat-grid strong {
+  display: block;
+  color: var(--green-700);
+  font-family: var(--mono);
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.portal-stat-grid strong small {
+  font-size: 13px;
+  margin-left: 3px;
+}
+
+.portal-stat-grid span {
+  display: block;
+  margin-top: 6px;
+  color: var(--ink-500);
+  font-size: 13px;
+}
+
+/* ---------------- 通用区块 ---------------- */
+.portal-section-tight {
+  padding-bottom: 0;
+}
+
+.portal-section-alt {
+  background: var(--bg-alt);
+}
+
+.portal-last-section {
+  padding-top: 0;
+}
+
+.portal-two-line {
+  min-height: 40px;
+}
+
+.portal-more-link:hover {
+  color: var(--green-700);
+}
+
+.portal-data-note {
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: #fffbe6;
+  border: 1px solid #ffe58f;
+  color: #874d00;
+  font-size: 12.5px;
+  line-height: 1.7;
+}
+
+.portal-data-note a {
+  color: var(--green-700);
+  font-weight: 600;
+}
+
+.portal-wrap {
+  flex-wrap: wrap;
+}
+
+/* ---------------- 商品卡 ---------------- */
+.portal-thumb {
+  height: 140px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+}
+
+.portal-thumb.theme-g {
+  background: linear-gradient(135deg, #e4f6ec, #c9e9d8);
+  color: var(--green-700);
+}
+
+.portal-thumb.theme-a {
+  background: linear-gradient(135deg, #fef3c7, #fce7b6);
+  color: #b45309;
+}
+
+.portal-thumb.theme-t {
+  background: linear-gradient(135deg, #e0f2fe, #bae6fd);
+  color: var(--tech-700);
+}
+
+.portal-thumb.theme-o {
+  background: linear-gradient(135deg, #ffe4d6, #ffd2bc);
+  color: #d9541e;
+}
+
+.portal-thumb.theme-v {
+  background: linear-gradient(135deg, #ede9fe, #ddd6fe);
+  color: #6d28d9;
+}
+
+.portal-inquiry {
+  color: var(--ink-500);
+}
+
+/* ---------------- 价格 / 资讯 ---------------- */
+.portal-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  align-items: stretch;
+}
+
+.portal-price-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 120px;
+  padding: 0 4px;
+}
+
+.portal-price-chart i {
+  flex: 1;
+  border-radius: 4px 4px 0 0;
+  background: linear-gradient(180deg, #2fb877, #c9e9d8);
+  transition: height .25s ease;
+}
+
+.portal-price-chart i.last {
+  background: linear-gradient(180deg, #0ea5e9, #7dd3fc);
+}
+
+.portal-news-list li {
+  padding: 10px 0;
+  border-bottom: 1px dashed var(--line);
+}
+
+.portal-news-list li:last-child {
+  border-bottom: none;
+}
+
+.portal-news-list a {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.portal-news-list a:hover .portal-news-title {
+  color: var(--green-700);
+}
+
+.portal-news-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.portal-news-date {
+  flex: none;
+}
+
+/* ---------------- 公告 / 入驻 ---------------- */
+.portal-announce-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 24px;
+}
+
+.portal-announce-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0;
+  border-bottom: 1px dashed var(--line);
+}
+
+.portal-announce-row:last-child {
+  border-bottom: none;
+}
+
+.portal-announce-row .ellipsis {
+  flex: 1;
+}
+
+.portal-join-card {
+  background: linear-gradient(135deg, #0e5233, #12764a);
+  border: none;
+  color: #fff;
+}
+
+.portal-join-card .card-b {
+  padding: 26px;
+}
+
+.portal-join-card p {
+  margin-top: 10px;
+  color: rgba(255, 255, 255, .8);
+}
+
+/* ---------------- 产业链频道 ---------------- */
+.portal-chain-hero {
+  color: #fff;
+  background:
+    radial-gradient(640px 380px at 88% 0%, rgba(56, 189, 248, .26), transparent 62%),
+    linear-gradient(135deg, #0a3a25, #12764a);
+  padding: 38px 0 34px;
+}
+
+.portal-chain-hero .tag {
+  background: rgba(255, 255, 255, .14);
+  color: #d9fff0;
+}
+
+.portal-chain-hero h1 {
+  margin-top: 14px;
+  font-size: 32px;
+  font-weight: 800;
+}
+
+.portal-chain-hero p {
+  margin-top: 10px;
+  max-width: 760px;
+  color: rgba(255, 255, 255, .76);
+}
+
+.portal-chain-body {
+  padding-top: 22px;
+  padding-bottom: 12px;
+}
+
+.portal-trail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--green-050);
+  font-size: 13px;
+}
+
+.portal-trail a {
+  color: var(--green-700);
+  font-weight: 600;
+}
+
+.portal-filter-row {
+  display: grid;
+  grid-template-columns: 76px 1fr;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px dashed var(--line);
+}
+
+.portal-filter-row.portal-filter-last {
+  border-bottom: none;
+}
+
+.portal-filter-label {
+  padding-top: 5px;
+  color: var(--ink-500);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.portal-province-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.portal-province-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.portal-province-group > span {
+  width: 42px;
+  color: var(--ink-400);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+.portal-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 20px 0 12px;
+  flex-wrap: wrap;
+}
+
+.portal-list-head .strong {
+  margin-right: 12px;
+}
+
+.portal-product-grid {
+  margin-top: 4px;
+}
+
+/* ---------------- 认证中心 ---------------- */
+.portal-cert-hero {
+  color: #fff;
+  background:
+    radial-gradient(680px 400px at 92% 0%, rgba(56, 189, 248, .28), transparent 62%),
+    linear-gradient(135deg, #06281a, #0e5233 64%, #0c7ba8);
+  padding: 40px 0 36px;
+}
+
+.portal-cert-hero-small {
+  padding: 32px 0 30px;
+}
+
+.portal-cert-hero-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 32px;
+}
+
+.portal-cert-hero .tag {
+  background: rgba(255, 255, 255, .14);
+  color: #d9fff0;
+}
+
+.portal-cert-hero h1 {
+  margin-top: 12px;
+  font-size: 32px;
+  font-weight: 800;
+}
+
+.portal-cert-hero p {
+  margin-top: 8px;
+  max-width: 680px;
+  color: rgba(255, 255, 255, .76);
+}
+
+.portal-cert-hero-stats {
+  display: flex;
+  gap: 28px;
+  flex: none;
+}
+
+.portal-cert-hero-stats strong {
+  display: block;
+  font-family: var(--mono);
+  font-size: 25px;
+  font-weight: 800;
+}
+
+.portal-cert-hero-stats span {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, .62);
+}
+
+.portal-cert-body {
+  padding-top: 22px;
+  padding-bottom: 20px;
+}
+
+.portal-status-body {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 32px;
+  align-items: center;
+}
+
+.portal-status-track {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.portal-status-node {
+  position: relative;
+  padding: 14px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.portal-status-node > span {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--bg-alt);
+  color: var(--ink-500);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.portal-status-node.done > span {
+  background: var(--green-100);
+  color: var(--green-700);
+}
+
+.portal-status-node strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+.portal-status-node small {
+  display: block;
+  margin-top: 3px;
+  color: var(--ink-500);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.portal-cert-head {
+  margin-top: 30px;
+}
+
+.portal-entry-card {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.portal-cert-section {
+  padding-bottom: 0;
+}
+
+.portal-process {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+}
+
+.portal-process-step {
+  position: relative;
+  padding: 18px 14px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid var(--line);
+}
+
+.portal-process-no {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--green-600), var(--green-500));
+  color: #fff;
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.portal-process-step strong {
+  display: block;
+  margin-top: 12px;
+  font-size: 13.5px;
+}
+
+.portal-process-step p {
+  margin-top: 6px;
+  color: var(--ink-500);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.portal-material-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 0;
+  color: var(--ink-600);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.portal-material-list li svg {
+  flex: none;
+  margin-top: 3px;
+  color: var(--green-600);
+}
+
+.portal-security-note {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--green-050);
+  color: var(--green-700);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.portal-faq {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.portal-faq-item {
+  border-bottom: 1px solid var(--line);
+}
+
+.portal-faq-item:last-child {
+  border-bottom: none;
+}
+
+.portal-faq-item > button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 15px 18px;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-800);
+}
+
+.portal-faq-item > button:hover {
+  background: var(--green-050);
+}
+
+.portal-faq-item > p {
+  padding: 0 18px 16px;
+  color: var(--ink-600);
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+.portal-cert-cta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin: 34px 0 10px;
+  padding: 26px 28px;
+  border-radius: 16px;
+  color: #fff;
+  background:
+    radial-gradient(420px 220px at 92% 0%, rgba(56, 189, 248, .3), transparent 62%),
+    linear-gradient(135deg, #0e5233, #12764a);
+}
+
+.portal-cert-cta strong {
+  display: block;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.portal-cert-cta span {
+  display: block;
+  margin-top: 6px;
+  color: rgba(255, 255, 255, .75);
+  font-size: 13px;
+}
+
+/* ---------------- 认证办理 ---------------- */
+.portal-wizard-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 22px;
+  align-items: start;
+}
+
+.portal-wizard-steps {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--line);
+  background: var(--green-050);
+}
+
+.portal-wizard-step {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 1;
+  color: var(--ink-500);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.portal-wizard-step > span {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  border: 1px solid var(--line);
+  font-size: 11px;
+}
+
+.portal-wizard-step.on {
+  color: var(--green-700);
+}
+
+.portal-wizard-step.on > span {
+  background: var(--green-600);
+  border-color: var(--green-600);
+  color: #fff;
+}
+
+.portal-wizard-step.done > span {
+  background: var(--green-100);
+  border-color: var(--green-300);
+  color: var(--green-700);
+}
+
+.portal-form-body {
+  min-height: 260px;
+}
+
+.portal-info-box {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-top: 8px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--tech-100);
+  color: var(--tech-700);
+  font-size: 12.5px;
+  line-height: 1.7;
+}
+
+.portal-info-box svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+.portal-info-box p {
+  margin-top: 3px;
+}
+
+.portal-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 20px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 4px 16px;
+  margin-bottom: 16px;
+}
+
+.portal-summary > div {
+  padding: 11px 0;
+  border-bottom: 1px dashed var(--line);
+}
+
+.portal-summary dt {
+  color: var(--ink-500);
+  font-size: 12px;
+}
+
+.portal-summary dd {
+  margin: 4px 0 0;
+  font-size: 13.5px;
+  word-break: break-all;
+}
+
+.portal-agree {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--ink-600);
+  font-size: 12.5px;
+  line-height: 1.7;
+  cursor: pointer;
+}
+
+.portal-agree input {
+  margin-top: 3px;
+  accent-color: var(--green-600);
+}
+
+.portal-draft-result {
+  margin-top: 16px;
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid var(--green-300);
+  background: var(--green-050);
+}
+
+.portal-draft-result strong {
+  color: var(--green-700);
+}
+
+.portal-draft-result p {
+  margin: 8px 0 12px;
+  color: var(--ink-600);
+  font-size: 12.5px;
+  line-height: 1.7;
+}
+
+.portal-form-error {
+  margin-top: 14px;
+  padding: 10px 14px;
+  border-radius: 9px;
+  background: #fff2f0;
+  border: 1px solid #ffccc7;
+  color: #cf1322;
+  font-size: 12.5px;
+}
+
+.portal-save-hint {
+  margin-top: 12px;
+  color: var(--green-700);
+  font-size: 12px;
+}
+
+.portal-wizard-aside {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ---------------- 页脚 ---------------- */
+.portal-footer-grid {
+  grid-template-columns: 1.4fr 1fr 1fr 1fr;
+}
+
+.portal-footer-brand {
+  color: #fff;
+}
+
+.portal-footer-desc {
+  margin-top: 14px;
+  max-width: 280px;
+  color: rgba(255, 255, 255, .6);
+  font-size: 13px;
+}
+
+/* ---------------- 响应式 ---------------- */
+@media (max-width: 1100px) {
+  .site-header .container {
+    gap: 14px;
+  }
+
+  .main-nav a {
+    padding: 8px 9px;
+  }
+
+  .header-search {
+    width: 230px;
+  }
+
+  .portal-hero-inner {
+    grid-template-columns: 1fr;
+  }
+
+  .portal-hero-metrics {
+    max-width: 620px;
+  }
+
+  .portal-two-col,
+  .portal-announce-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .portal-process {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .portal-wizard-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .portal-wizard-aside {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 860px) {
+  .grid-4,
+  .grid-3 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .site-header {
+    position: relative;
+  }
+
+  .site-header .container {
+    height: auto;
+    flex-wrap: wrap;
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+
+  .main-nav {
+    order: 3;
+    width: 100%;
+    overflow-x: auto;
+    flex: none;
+  }
+
+  .main-nav a {
+    white-space: nowrap;
+  }
+
+  .header-search {
+    margin-left: auto;
+  }
+
+  .portal-hero h1,
+  .portal-chain-hero h1,
+  .portal-cert-hero h1 {
+    font-size: 28px;
+  }
+
+  .portal-stat-grid {
+    grid-template-columns: repeat(2, 1fr);
+    row-gap: 18px;
+  }
+
+  .portal-stat-grid > div:nth-child(2) {
+    border-right: none;
+  }
+
+  .portal-cert-hero-inner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .portal-status-body {
+    grid-template-columns: 1fr;
+  }
+
+  .portal-status-track {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .portal-process,
+  .portal-wizard-aside,
+  .portal-footer-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .grid-2,
+  .grid-3,
+  .grid-4 {
+    grid-template-columns: 1fr;
+  }
+
+  .container {
+    padding: 0 16px;
+  }
+
+  .portal-top-actions {
+    display: none;
+  }
+
+  .topbar .container {
+    justify-content: center;
+    text-align: center;
+  }
+
+  .portal-hero-inner {
+    padding-top: 32px;
+    padding-bottom: 30px;
+    gap: 26px;
+  }
+
+  .portal-hero-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .portal-hero h1 {
+    font-size: 26px;
+  }
+
+  .portal-stat-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .portal-filter-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .portal-list-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .portal-process,
+  .portal-wizard-aside,
+  .portal-footer-grid,
+  .portal-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .portal-status-track {
+    grid-template-columns: 1fr;
+  }
+
+  .portal-cert-cta {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .portal-wizard-steps {
+    padding: 12px;
+  }
+
+  .portal-wizard-step {
+    font-size: 11px;
+  }
+
+  .portal-wizard-step > span {
+    width: 20px;
+    height: 20px;
+  }
+}

@@ -45,6 +45,7 @@ const APPS = {
   'mall-supplier': { frontendDir: path.join('agri-s2b2c', 'frontend-supplier'), title: 'S2B2C 商城（供应商端）' },
   'mall-channel': { frontendDir: path.join('agri-s2b2c', 'frontend-channel'), title: 'S2B2C 商城（渠道端）' },
   sso: { frontendDir: path.join('agri-sso', 'frontend'), title: '统一认证中心登录页' },
+  portal: { frontendDir: path.join('agri-portal', 'frontend'), title: '农产云官网门户' },
   // 注意：agri-s2b2c/frontend-platform 未登记 —— 它当前构建不过（既有源码缺陷，见 ops/workspace/README.md），
   // 发布器对「未登记子系统」会直接拒绝，这里保持拒绝状态而不是登记一个发布不出来的应用。
 }

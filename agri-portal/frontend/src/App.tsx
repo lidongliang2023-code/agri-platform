@@ -1,0 +1,47 @@
+import { useEffect } from 'react'
+import { PortalLayout } from './components/PortalLayout'
+import { Home } from './pages/Home'
+import { Chains } from './pages/Chains'
+import { Certify } from './pages/Certify'
+import { CertifyEnterprise } from './pages/CertifyEnterprise'
+import { CertifyPersonal } from './pages/CertifyPersonal'
+import { useHashRoute } from './utils'
+
+function NotFound(): JSX.Element {
+  return (
+    <section className="section container">
+      <div className="card empty">
+        <div className="strong t-xl">页面不存在</div>
+        <div className="muted t-sm mt-8">请从首页或产业链频道继续浏览。</div>
+        <a className="btn btn-primary mt-16" href="#/">回到首页</a>
+      </div>
+    </section>
+  )
+}
+
+export default function App(): JSX.Element {
+  const route = useHashRoute()
+
+  useEffect(() => {
+    window.scrollTo({ top: 0 })
+  }, [route.path])
+
+  let page: JSX.Element
+  let active = '/'
+  if (route.path === '/' || route.path === '') {
+    page = <Home />
+  } else if (route.path === '/chains') {
+    page = <Chains />
+    active = '/chains'
+  } else if (route.path === '/certify') {
+    page = <Certify />
+  } else if (route.path === '/certify/enterprise') {
+    page = <CertifyEnterprise />
+  } else if (route.path === '/certify/personal') {
+    page = <CertifyPersonal />
+  } else {
+    page = <NotFound />
+  }
+
+  return <PortalLayout active={active}>{page}</PortalLayout>
+}
