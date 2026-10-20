@@ -22,16 +22,13 @@ import AdminCompensation from '@/pages/admin/compensation'
 import AdminBindings from '@/pages/admin/bindings'
 import AdminSettlement from '@/pages/admin/settlement'
 import AdminCredit from '@/pages/admin/credit'
-import AdminCatalog from '@/pages/admin/catalog'
-import AdminCertification from '@/pages/admin/certification'
-import CertificationReview from '@/pages/admin/certification-review'
 import AdminConfig from '@/pages/admin/config'
 import AdminRisk from '@/pages/admin/risk'
 import AdminReport from '@/pages/admin/report'
 import AdminGuarantee from '@/pages/admin/guarantee'
 import AdminContractTemplate from '@/pages/admin/contract-template'
 import AdminCarrier from '@/pages/admin/carrier'
-import AdminIdentity from '@/pages/admin/identity'
+import ExternalRedirect from '@/pages/admin/external-redirect'
 import { isLoggedIn } from '@/utils/session'
 import { SSO_CALLBACK_PATH } from '@/utils/sso'
 
@@ -68,16 +65,16 @@ function AppRouter() {
         <Route path="bindings" element={<AdminBindings />} />
         <Route path="settlement" element={<AdminSettlement />} />
         <Route path="credit" element={<AdminCredit />} />
-        <Route path="catalog" element={<AdminCatalog />} />
-        <Route path="certification" element={<AdminCertification />} />
-        <Route path="certification-review" element={<CertificationReview />} />
+        <Route path="catalog" element={<ExternalRedirect path="/product/catalog" />} />
+        <Route path="certification" element={<ExternalRedirect path="/user/audit" />} />
+        <Route path="certification-review" element={<ExternalRedirect path="/user/audit" />} />
         <Route path="config" element={<AdminConfig />} />
         <Route path="risk" element={<AdminRisk />} />
         <Route path="report" element={<AdminReport />} />
         <Route path="guarantee" element={<AdminGuarantee />} />
         <Route path="contract-template" element={<AdminContractTemplate />} />
         <Route path="carrier" element={<AdminCarrier />} />
-        <Route path="identity" element={<AdminIdentity />} />
+        <Route path="identity" element={<ExternalRedirect path="/user/audit" />} />
       </Route>
       {/* 交易端只剩买家中心 / 卖家中心；没有全局后台菜单与首页 */}
       <Route path="/hall" element={<TradeHall />} />

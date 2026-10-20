@@ -5,7 +5,7 @@ import { getMyPermissions, hasPermission, type MyPermission } from '@/api/permis
 import {
   AppstoreOutlined, AuditOutlined, FileSearchOutlined, SwapOutlined, TeamOutlined, RollbackOutlined,
   SafetyCertificateOutlined, ApartmentOutlined, AccountBookOutlined, SafetyOutlined, AppstoreAddOutlined,
-  IdcardOutlined, SettingOutlined, AlertOutlined, BarChartOutlined, BankOutlined, FileTextOutlined,
+  SettingOutlined, AlertOutlined, BarChartOutlined, BankOutlined, FileTextOutlined,
   CarOutlined, ShopOutlined
 } from '@ant-design/icons'
 import './admin-layout.css'
@@ -14,12 +14,10 @@ const { Sider, Header, Content } = Layout
 
 const MENU_LABELS: Record<string, string> = {
   '/admin/trade/dashboard': '交易大盘',
-  '/admin/trade/certification-review': '认证审核',
   '/admin/trade/product': '货源审核',
   '/admin/trade/refund': '退款审核',
   '/admin/trade/order': '订单监管',
   '/admin/trade/settlement': '结算与分账',
-  '/admin/trade/catalog': '商品与品类',
   '/admin/trade/dispute': '纠纷仲裁',
   '/admin/trade/credit': '信用管理',
   '/admin/trade/compensation': '赔付执行',
@@ -129,7 +127,13 @@ export default function AdminLayout() {
           selectedKeys={[location.pathname]}
           defaultOpenKeys={['audit-center']}
           className="admin-menu"
-          onClick={({ key }) => navigate(key)}
+          onClick={({ key }) => {
+            if (key === 'external-catalog') {
+              window.location.href = `${window.location.protocol}//${window.location.hostname}:8080/product/catalog`
+              return
+            }
+            navigate(key)
+          }}
           items={[
             { key: '/admin/trade/dashboard', icon: <AppstoreOutlined />, label: '交易大盘' },
             {
@@ -137,14 +141,13 @@ export default function AdminLayout() {
               icon: <AuditOutlined />,
               label: '审核中心',
               children: [
-                { key: '/admin/trade/certification-review', icon: <IdcardOutlined />, label: '认证审核' },
                 { key: '/admin/trade/product', icon: <AuditOutlined />, label: '货源审核' },
                 { key: '/admin/trade/refund', icon: <RollbackOutlined />, label: '退款审核' },
               ],
             },
             { key: '/admin/trade/order', icon: <FileSearchOutlined />, label: '订单监管' },
             { key: '/admin/trade/settlement', icon: <AccountBookOutlined />, label: '结算与分账' },
-            { key: '/admin/trade/catalog', icon: <AppstoreAddOutlined />, label: '商品与品类' },
+            { key: 'external-catalog', icon: <AppstoreAddOutlined />, label: '商品与分类（主数据）' },
             { key: '/admin/trade/dispute', icon: <TeamOutlined />, label: '纠纷仲裁' },
             { key: '/admin/trade/credit', icon: <SafetyOutlined />, label: '信用管理' },
             { key: '/admin/trade/compensation', icon: <SafetyCertificateOutlined />, label: '赔付执行' },

@@ -148,7 +148,8 @@ const menuItems = [
     label: '商品管理', 
     icon: '📦',
     children: [
-      { path: '/product/list', label: '商品列表' }
+      { path: '/product/list', label: '商品列表' },
+      { path: '/product/catalog', label: '商品与分类' }
     ]
   },
   { 
@@ -195,6 +196,7 @@ const currentLocation = computed(() => {
     '/quality/issue': '问题工单',
     '/distribution/list': '分发监控',
     '/product/list': '商品列表',
+    '/product/catalog': '商品与分类',
     '/customer/list': '客户管理',
     '/supplier/list': '供应商管理',
     '/system/params': '参数配置',

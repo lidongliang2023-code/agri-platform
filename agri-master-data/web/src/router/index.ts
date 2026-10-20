@@ -80,6 +80,7 @@ const ADMIN_ROUTES: RouteSpec[] = [
 
   { path: '/distribution/list', view: 'distribution/DistributionList' },
   { path: '/product/list', view: 'product/ProductList' },
+  { path: '/product/catalog', view: 'product/CatalogList' },
   { path: '/customer/list', view: 'customer/CustomerList' },
   { path: '/supplier/list', view: 'customer/SupplierList' },
 

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * 运营端认证审核联调（2026-10-20）。
+ * 主数据管理 · 认证审核联调（2026-10-20）。
  *
- * 覆盖：企业认证 + 个人实名合并列表、类型/状态筛选、搜索、详情抽屉、
+ * 覆盖：用户管理 → 认证审核入口、企业/个人合并列表、KPI、搜索、详情、
  * 企业通过、个人驳回、数据库状态落库。
  *
  * 测试数据使用 ASCII 名称，结束后删除；不会改动真实申请。
@@ -17,7 +17,7 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..
 const require2 = createRequire(path.join(REPO_ROOT, 'agri-production/frontend/package.json'))
 const puppeteer = require2('puppeteer')
 const MYSQL = 'C:\\Program Files\\MySQL\\MySQL Server 8.4\\bin\\mysql.exe'
-const BASE = 'http://localhost:8086'
+const MDM = 'http://localhost:8080'
 const HEADFUL = process.argv.includes('--headful')
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -55,7 +55,7 @@ const clickText = async (page, text, selector = 'button') => {
 
 const clickRowButton = async (page, rowText, buttonText) => {
   await page.evaluate(({ row, btn }) => {
-    const tr = [...document.querySelectorAll('.ant-table-tbody tr')]
+    const tr = [...document.querySelectorAll('.data-table tbody tr')]
       .find((el) => (el.textContent ?? '').includes(row))
     if (!tr) throw new Error(`未找到申请行 ${row}`)
     const button = [...tr.querySelectorAll('button')]
@@ -99,14 +99,14 @@ const cleanup = () => {
 }
 
 async function loginAndOpen(page) {
-  await page.goto(`${BASE}/admin/trade/certification-review`, { waitUntil: 'networkidle2', timeout: 60000 })
-  if (page.url().includes('/login')) {
-    await clickText(page, '前往平台认证中心登录')
-    for (let i = 0; i < 24; i++) {
-      await sleep(500)
-      if (page.url().includes(':8090/')) break
-    }
-    await page.waitForSelector('.auth-card', { timeout: 20000 })
+  await page.goto(`${MDM}/user/audit`, { waitUntil: 'networkidle2', timeout: 60000 })
+  for (let i = 0; i < 30; i++) {
+    await sleep(500)
+    if (page.url().includes(':8090') || page.url().includes('/login')) break
+    if (await page.$('.user-audit')) break
+  }
+  if (page.url().includes(':8090') || page.url().includes('/login')) {
+    await page.waitForSelector('.auth-card', { timeout: 25000 })
     await page.evaluate(() => {
       const tab = [...document.querySelectorAll('button[role="tab"]')].find((el) => (el.textContent ?? '').includes('账号 + 密码'))
       tab?.click()
@@ -117,13 +117,13 @@ async function loginAndOpen(page) {
     await page.click('.auth-submit')
     for (let i = 0; i < 40; i++) {
       await sleep(700)
-      if (page.url().includes('8086') && !page.url().includes('/login')) break
+      if (page.url().includes('8080') && !page.url().includes('/login')) break
     }
-    if (!page.url().includes('certification-review')) {
-      await page.goto(`${BASE}/admin/trade/certification-review`, { waitUntil: 'networkidle2' })
+    if (!page.url().includes('/user/audit')) {
+      await page.goto(`${MDM}/user/audit`, { waitUntil: 'networkidle2' })
     }
   }
-  await page.waitForSelector('.cr-page', { timeout: 30000 })
+  await page.waitForSelector('.user-audit', { timeout: 30000 })
   await page.waitForNetworkIdle({ idleTime: 600, timeout: 15000 }).catch(() => {})
   await sleep(500)
 }
@@ -138,38 +138,22 @@ try {
   await loginAndOpen(page)
 
   const text = await page.evaluate(() => document.body.innerText)
-  check(text.includes('认证审核工作台') && text.includes('企业与个人实名认证统一审核'), '认证审核工作台已渲染')
-  const visual = await page.evaluate(() => ({
-    side: getComputedStyle(document.querySelector('.admin-side')).backgroundImage,
-    header: getComputedStyle(document.querySelector('.admin-header')).height,
-    content: getComputedStyle(document.querySelector('.admin-content')).backgroundColor,
-    selected: getComputedStyle(document.querySelector('.ant-menu-item-selected')).backgroundImage
-  }))
-  check(visual.side.includes('gradient') && visual.header === '60px'
-    && visual.content === 'rgb(244, 247, 245)' && visual.selected.includes('gradient'),
-    '运营端视觉与买家/卖家中心一致', `${visual.header} / ${visual.content}`)
+  check(text.includes('认证审核') && text.includes('企业与个人实名认证统一审核'), '主数据端认证审核页已渲染')
+  check(text.includes('用户管理') && text.includes('认证审核'), '认证审核入口位于主数据「用户管理」菜单')
   check(text.includes('待审核') && text.includes('企业待审') && text.includes('个人待审'), '审核 KPI 已展示')
-  const menuPlacement = await page.evaluate(() => {
-    const submenu = [...document.querySelectorAll('.ant-menu-submenu')]
-      .find((el) => (el.textContent ?? '').includes('审核中心'))
-    const selected = submenu?.querySelector('.ant-menu-item-selected')?.textContent ?? ''
-    return { submenu: submenu?.textContent ?? '', selected }
-  })
-  check(menuPlacement.submenu.includes('认证审核') && menuPlacement.selected.includes('认证审核'),
-    '认证审核位于运营端「审核中心」菜单', menuPlacement.selected.trim())
 
-  await fill(page, 'input[placeholder*="搜索主体名称"]', 'CERT-TEST')
+  await fill(page, '.search-input', 'CERT-TEST')
   await sleep(500)
-  const rowsText = await page.evaluate(() => document.querySelector('.ant-table-tbody')?.innerText ?? '')
+  const rowsText = await page.evaluate(() => document.querySelector('.data-table tbody')?.innerText ?? '')
   check(rowsText.includes('CERT-TEST-ENTERPRISE') && rowsText.includes('CERT-TEST-PERSON'),
     '企业与个人申请合并显示')
 
   // 企业通过
   await clickRowButton(page, 'CERT-TEST-ENTERPRISE', '审核')
-  await page.waitForSelector('.ant-drawer-content', { timeout: 10000 })
-  const drawerText = await page.evaluate(() => document.querySelector('.ant-drawer-content')?.innerText ?? '')
-  check(drawerText.includes('CERT-TEST-ENTERPRISE') && drawerText.includes('E2E materials'), '企业详情抽屉展示主体与材料说明')
-  await clickText(page, '审核通过', '.ant-drawer-content button')
+  await page.waitForSelector('.audit-detail', { timeout: 10000 })
+  const detailText = await page.evaluate(() => document.querySelector('.audit-detail')?.innerText ?? '')
+  check(detailText.includes('CERT-TEST-ENTERPRISE') && detailText.includes('E2E materials'), '企业详情展示主体与材料说明')
+  await clickText(page, '审核通过', '.audit-detail .modal-footer button')
   await sleep(1500)
   const certStatus = sql("SELECT cert_status FROM platform_merchant_certification WHERE id=9801;")
   const merchantStatus = sql("SELECT verify_status FROM platform_merchant WHERE id=9701;")
@@ -177,26 +161,26 @@ try {
 
   // 个人驳回
   await clickRowButton(page, 'CERT-TEST-PERSON', '审核')
-  await page.waitForSelector('.ant-drawer-content', { timeout: 10000 })
-  await clickText(page, '驳回申请', '.ant-drawer-content button')
-  await page.waitForSelector('.ant-modal-content textarea', { timeout: 10000 })
-  await fill(page, '.ant-modal-content textarea', 'E2E reject reason')
-  await clickText(page, '确认驳回', '.ant-modal-footer button')
+  await page.waitForSelector('.audit-detail', { timeout: 10000 })
+  await clickText(page, '驳回申请', '.audit-detail .modal-footer button')
+  await page.waitForSelector('.modal-content .form-textarea', { timeout: 10000 })
+  await fill(page, '.modal-content .form-textarea', 'E2E reject reason')
+  await clickText(page, '确认驳回', '.modal-content .modal-footer button')
   await sleep(1800)
   const identityStatus = sql("SELECT status FROM platform_user_identity WHERE id=9802;")
   const identityRemark = sql("SELECT review_remark FROM platform_user_identity WHERE id=9802;")
   check(identityStatus === 'rejected' && identityRemark.includes('E2E reject reason'),
     '个人实名驳回并落库审核意见', `${identityStatus}/${identityRemark}`)
 
-  // 筛选
-  await clickText(page, '企业认证', '.cr-chips button')
+  // 类型筛选
+  await clickText(page, '企业认证', '.type-btn')
   await sleep(300)
-  const enterpriseOnly = await page.evaluate(() => document.querySelector('.ant-table-tbody')?.innerText ?? '')
+  const enterpriseOnly = await page.evaluate(() => document.querySelector('.data-table tbody')?.innerText ?? '')
   check(enterpriseOnly.includes('CERT-TEST-ENTERPRISE') && !enterpriseOnly.includes('CERT-TEST-PERSON'),
     '类型筛选只显示企业认证')
 
   await page.screenshot({
-    path: path.join('C:/Users/71502/.codex/visualizations/2026/10/16/01a14244-ead8-7ab0-8c7c-df7abac44648', 'certification-review.png'),
+    path: path.join('C:/Users/71502/.codex/visualizations/2026/10/16/01a14244-ead8-7ab0-8c7c-df7abac44648', 'mdm-certification-review.png'),
     fullPage: true
   })
   check(errors.length === 0, '认证审核页面无未捕获脚本异常', errors.slice(0, 2).join(' | '))

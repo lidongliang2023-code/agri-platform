@@ -103,7 +103,9 @@ function gotoLogin(): void {
   }
   redirecting = true
   if (!window.location.pathname.startsWith(LOGIN_PATH)) {
-    window.location.href = LOGIN_PATH
+    // 带上当前页面：从“认证审核”被 401 弹去登录后，登录成功要回到审核页，而不是统一回首页。
+    const current = `${window.location.pathname}${window.location.search}`
+    window.location.href = `${LOGIN_PATH}?redirect=${encodeURIComponent(current)}`
   }
 }
 

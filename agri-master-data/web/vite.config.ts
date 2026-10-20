@@ -21,6 +21,10 @@ export default defineConfig({
   server: {
     port: 5177,
     proxy: {
+      '/api/trade': {
+        target: 'http://localhost:8089',
+        changeOrigin: true,
+      },
       '/api': {
         target: 'http://localhost:8083',
         changeOrigin: true,
