@@ -74,13 +74,10 @@ function contextOf(): {
   }
 }
 
-function homeUrlOf(redirectUri: string): string {
-  try {
-    return new URL(redirectUri).origin + '/'
-  } catch {
-    // 直接访问认证中心时没有 redirect_uri：回平台门户根地址，而不是又回到登录页
-    return window.location.origin + '/'
-  }
+function homeUrlOf(_redirectUri: string): string {
+  // “返回首页”统一回官网门户，不从 redirect_uri 推导（它通常指向 /sso/callback，
+  // 推导出来只会回到业务入口或认证中心，不是用户理解的官网首页）。
+  return `${window.location.protocol}//${window.location.hostname}:8098/portal/#/`
 }
 
 /** 独立注册 / 直接登录后的默认落点：生产管理模块的用户端入口。 */
