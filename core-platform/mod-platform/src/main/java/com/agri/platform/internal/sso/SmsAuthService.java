@@ -27,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -209,6 +210,343 @@ public class SmsAuthService {
             String idCard,
             String businessType,
             String contactName) {
+    }
+
+    /** 分步注册：第 2 步提交的主体资料。 */
+    public record SubjectProfile(
+            String identity,
+            String companyName,
+            String creditCode,
+            String industry,
+            String companySize,
+            String address,
+            String realName,
+            String idCard,
+            String businessType,
+            String contactName) {
+    }
+
+    /** 当前账号的开通阶段。 */
+    public record OnboardingStatus(
+            String stage,
+            String phone,
+            String nickname,
+            String identity,
+            Long merchantId,
+            String subjectName,
+            String certificationStatus,
+            String certificationNo) {
+    }
+
+    /**
+     * 第 1 步：只创建登录账号与 FARMER 角色，不创建经营主体。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public UserEntity registerAccountByPhone(String phone, String password, String nickname, Long marketId) {
+        String normalized = normalizePhone(phone);
+        Long market = marketId == null ? 1L : marketId;
+        UserEntity exists = userMapper.selectOne(new LambdaQueryWrapper<UserEntity>()
+                .eq(UserEntity::getPhone, normalized));
+        if (exists != null) {
+            throw new BusinessException(ErrorCode.CONFLICT, "该手机号已注册，请直接登录");
+        }
+        if (password == null || password.length() < 8 || password.length() > 20
+                || !password.matches(".*[A-Za-z].*") || !password.matches(".*\\d.*")) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "密码应为 8-20 位，且同时包含字母和数字");
+        }
+        LocalDateTime now = LocalDateTime.now();
+        UserEntity user = new UserEntity();
+        user.setUsername(normalized);
+        user.setPassword(passwordEncoder.encode(password));
+        user.setPhone(normalized);
+        user.setNickname(trimToNull(nickname) == null ? "用户" + normalized.substring(7) : nickname.trim());
+        user.setStatus(1);
+        user.setCreatedAt(now);
+        user.setUpdatedAt(now);
+        userMapper.insert(user);
+
+        RoleEntity farmer = roleMapper.selectOne(new LambdaQueryWrapper<RoleEntity>()
+                .eq(RoleEntity::getCode, "FARMER"));
+        if (farmer == null) {
+            log.warn("平台没有 FARMER 角色，注册用户 {} 未授任何角色", user.getId());
+        } else {
+            UserRoleEntity binding = new UserRoleEntity();
+            binding.setUserId(user.getId());
+            binding.setRoleId(farmer.getId());
+            binding.setMarketId(market);
+            userRoleMapper.insert(binding);
+        }
+        log.info("账号注册成功：user={} phone={}（等待创建主体）", user.getId(), mask(normalized));
+        return user;
+    }
+
+    /** 查询当前账号的开通阶段，供登录后自动分流与注册页恢复步骤。 */
+    public OnboardingStatus onboardingStatus(Long userId, Long marketId) {
+        UserEntity user = userMapper.selectById(userId);
+        if (user == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "账号不存在");
+        }
+        Long market = marketId == null ? 1L : marketId;
+        Long merchantId = myMerchantIds(userId, market).stream().findFirst().orElse(null);
+        if (merchantId == null) {
+            return new OnboardingStatus("subject", user.getPhone(), user.getNickname(), null,
+                    null, null, null, null);
+        }
+        MerchantEntity merchant = merchantMapper.selectById(merchantId);
+        String identity = merchant == null ? null : merchant.getMemberType();
+        // 历史账号的主体没有 member_type：不能因为新流程上线就把老账号拦在开通向导里。
+        if (merchant == null || identity == null || identity.isBlank()) {
+            return new OnboardingStatus("done", user.getPhone(), user.getNickname(), identity,
+                    merchantId, merchant == null ? null : merchant.getName(),
+                    merchant == null ? null : merchant.getVerifyStatus(), null);
+        }
+        if ("enterprise".equalsIgnoreCase(identity)) {
+            MerchantCertificationEntity cert = latestCertification(merchantId);
+            String certStatus = cert == null ? null : cert.getCertStatus();
+            String stage = certStatus == null || "draft".equals(certStatus) || "rejected".equals(certStatus)
+                    ? "certification" : "pending".equals(certStatus) ? "pending" : "done";
+            return new OnboardingStatus(stage, user.getPhone(), user.getNickname(), identity,
+                    merchantId, merchant.getName(), certStatus, cert == null ? null : cert.getCertNo());
+        }
+        UserIdentityEntity identityRecord = latestIdentity(userId);
+        String identityStatus = identityRecord == null ? null : identityRecord.getStatus();
+        String stage = identityStatus == null || "draft".equals(identityStatus) || "rejected".equals(identityStatus)
+                ? "certification" : "pending".equals(identityStatus) ? "pending" : "done";
+        return new OnboardingStatus(stage, user.getPhone(), user.getNickname(), identity,
+                merchantId, merchant == null ? null : merchant.getName(), identityStatus,
+                identityRecord == null ? null : identityRecord.getIdentityNo());
+    }
+
+    /**
+     * 第 2 步：创建（或继续编辑）经营主体，并生成不可审核的 draft 认证草稿。
+     * 只有第 3 步激活后，申请才会进入运营审核列表。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public OnboardingStatus createSubject(Long userId, Long marketId, SubjectProfile profile) {
+        if (profile == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "主体资料不能为空");
+        }
+        Long market = marketId == null ? 1L : marketId;
+        String identity = profile.identity() == null ? "" : profile.identity().trim().toLowerCase();
+        if (!"enterprise".equals(identity) && !"personal".equals(identity)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "主体类型只能是 enterprise 或 personal");
+        }
+        UserEntity user = userMapper.selectById(userId);
+        if (user == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "账号不存在");
+        }
+        String companyName = trimToNull(profile.companyName());
+        String creditCode = trimToNull(profile.creditCode());
+        String realName = trimToNull(profile.realName());
+        String contactName = trimToNull(profile.contactName());
+        String idCard = trimToNull(profile.idCard());
+        if ("enterprise".equals(identity)) {
+            if (companyName == null) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "企业名称不能为空");
+            }
+            if (creditCode == null || !creditCode.matches("[0-9A-Za-z]{15,18}")) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "统一社会信用代码应为 15-18 位字母数字");
+            }
+        } else {
+            if (realName == null) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "真实姓名不能为空");
+            }
+            if (idCard == null) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "个人会员必须填写身份证号");
+            }
+        }
+
+        Long merchantId = myMerchantIds(userId, market).stream().findFirst().orElse(null);
+        MerchantEntity merchant;
+        LocalDateTime now = LocalDateTime.now();
+        if (merchantId == null) {
+            merchant = new MerchantEntity();
+            merchant.setMarketId(market);
+            merchant.setCode("REG" + userId);
+            merchant.setName("enterprise".equals(identity) ? companyName : realName);
+            merchant.setType("BOTH");
+            merchant.setMemberType(identity);
+            merchant.setContactName(contactName == null
+                    ? ("enterprise".equals(identity) ? companyName : realName) : contactName);
+            merchant.setContactPhone(user.getPhone());
+            merchant.setStatus(1);
+            merchant.setVerifyStatus("unverified");
+            merchant.setIndustry("enterprise".equals(identity) ? trimToNull(profile.industry()) : null);
+            merchant.setCompanySize("enterprise".equals(identity) ? trimToNull(profile.companySize()) : null);
+            merchant.setAddress("enterprise".equals(identity) ? trimToNull(profile.address()) : null);
+            merchant.setBusinessType("enterprise".equals(identity) ? null : trimToNull(profile.businessType()));
+            merchant.setCreditCode("enterprise".equals(identity) ? creditCode : null);
+            merchantMapper.insert(merchant);
+
+            UserMerchantEntity membership = new UserMerchantEntity();
+            membership.setUserId(userId);
+            membership.setMerchantId(merchant.getId());
+            membership.setMarketId(market);
+            membership.setRoleInMerchant("owner");
+            membership.setStatus(1);
+            membership.setCreatedAt(now);
+            membership.setUpdatedAt(now);
+            userMerchantMapper.insert(membership);
+        } else {
+            merchant = merchantMapper.selectById(merchantId);
+            if (merchant == null) {
+                throw new BusinessException(ErrorCode.NOT_FOUND, "经营主体不存在");
+            }
+            if (merchant.getMemberType() != null && !merchant.getMemberType().isBlank()
+                    && !identity.equalsIgnoreCase(merchant.getMemberType())) {
+                throw new BusinessException(ErrorCode.CONFLICT, "主体类型创建后不可更改");
+            }
+            merchant.setName("enterprise".equals(identity) ? companyName : realName);
+            merchant.setMemberType(identity);
+            merchant.setContactName(contactName == null
+                    ? ("enterprise".equals(identity) ? companyName : realName) : contactName);
+            merchant.setIndustry("enterprise".equals(identity) ? trimToNull(profile.industry()) : null);
+            merchant.setCompanySize("enterprise".equals(identity) ? trimToNull(profile.companySize()) : null);
+            merchant.setAddress("enterprise".equals(identity) ? trimToNull(profile.address()) : null);
+            merchant.setBusinessType("enterprise".equals(identity) ? null : trimToNull(profile.businessType()));
+            merchant.setCreditCode("enterprise".equals(identity) ? creditCode : null);
+            merchantMapper.updateById(merchant);
+        }
+
+        if ("enterprise".equals(identity)) {
+            Long sameCredit = merchantMapper.selectCount(new LambdaQueryWrapper<MerchantEntity>()
+                    .eq(MerchantEntity::getCreditCode, creditCode)
+                    .ne(MerchantEntity::getId, merchant.getId()));
+            if (sameCredit != null && sameCredit > 0) {
+                throw new BusinessException(ErrorCode.CONFLICT, "该统一社会信用代码已登记");
+            }
+            MerchantCertificationEntity cert = latestCertification(merchant.getId());
+            if (cert == null || "draft".equals(cert.getCertStatus()) || "rejected".equals(cert.getCertStatus())) {
+                if (cert == null || "rejected".equals(cert.getCertStatus())) {
+                    cert = new MerchantCertificationEntity();
+                    cert.setMerchantId(merchant.getId());
+                    cert.setMerchantName(merchant.getName());
+                    cert.setCertNo("CT" + System.currentTimeMillis()
+                            + String.format("%03d", ThreadLocalRandom.current().nextInt(1000)));
+                    cert.setCertStatus("draft");
+                    // 表字段 NOT NULL；draft 不属于审核队列，提交时间会在激活时覆盖。
+                    cert.setSubmitTime(now);
+                }
+                cert.setCompanyName(companyName);
+                cert.setCreditCode(creditCode);
+                cert.setContactName(merchant.getContactName());
+                cert.setContactPhone(user.getPhone());
+                cert.setAttachNote("分步注册：主体资料已保存，等待认证开通步骤提交审核。");
+                if (cert.getId() == null) {
+                    certificationMapper.insert(cert);
+                } else {
+                    certificationMapper.updateById(cert);
+                }
+            }
+        } else {
+            String idNo = IdNumberUtil.validate(idCard);
+            UserIdentityEntity latest = latestIdentity(userId);
+            UserIdentityEntity draft = latest;
+            if (latest == null || "draft".equals(latest.getStatus()) || "rejected".equals(latest.getStatus())) {
+                if (latest == null || "rejected".equals(latest.getStatus())) {
+                    draft = new UserIdentityEntity();
+                    draft.setUserId(userId);
+                    draft.setMarketId(market);
+                    draft.setIdentityNo("ID" + System.currentTimeMillis()
+                            + String.format("%03d", ThreadLocalRandom.current().nextInt(1000)));
+                    draft.setStatus("draft");
+                    // 表字段 NOT NULL；draft 不属于审核队列，提交时间会在激活时覆盖。
+                    draft.setSubmitTime(now);
+                    draft.setCreatedAt(now);
+                }
+                String salt = draft.getIdNoSalt() == null ? IdNumberUtil.newSalt() : draft.getIdNoSalt();
+                draft.setRealName(realName);
+                draft.setIdNoMasked(IdNumberUtil.mask(idNo));
+                draft.setIdNoHash(IdNumberUtil.hash(idNo, salt));
+                draft.setIdNoSalt(salt);
+                draft.setUpdatedAt(now);
+                if (draft.getId() == null) {
+                    userIdentityMapper.insert(draft);
+                } else {
+                    userIdentityMapper.updateById(draft);
+                }
+            }
+        }
+        return onboardingStatus(userId, market);
+    }
+
+    /** 第 3 步：把 draft 认证激活为 pending，进入运营审核队列。 */
+    @Transactional(rollbackFor = Exception.class)
+    public OnboardingStatus activateCertification(Long userId, Long marketId) {
+        Long market = marketId == null ? 1L : marketId;
+        Long merchantId = myMerchantIds(userId, market).stream().findFirst()
+                .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "请先完成主体创建"));
+        MerchantEntity merchant = merchantMapper.selectById(merchantId);
+        if (merchant == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "经营主体不存在");
+        }
+        LocalDateTime now = LocalDateTime.now();
+        if ("enterprise".equalsIgnoreCase(merchant.getMemberType())) {
+            MerchantCertificationEntity cert = latestCertification(merchantId);
+            if (cert == null) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "认证资料不存在，请返回主体步骤重新填写");
+            }
+            if ("approved".equals(cert.getCertStatus())) {
+                return onboardingStatus(userId, market);
+            }
+            if ("draft".equals(cert.getCertStatus()) || "rejected".equals(cert.getCertStatus())) {
+                cert.setCertStatus("pending");
+                cert.setSubmitTime(now);
+                cert.setReviewer(null);
+                cert.setReviewTime(null);
+                cert.setReviewRemark(null);
+                certificationMapper.updateById(cert);
+            }
+        } else {
+            UserIdentityEntity identity = latestIdentity(userId);
+            if (identity == null) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "实名资料不存在，请返回主体步骤重新填写");
+            }
+            if ("verified".equals(identity.getStatus())) {
+                return onboardingStatus(userId, market);
+            }
+            if ("draft".equals(identity.getStatus()) || "rejected".equals(identity.getStatus())) {
+                identity.setStatus("pending");
+                identity.setSubmitTime(now);
+                identity.setUpdatedAt(now);
+                identity.setReviewerId(null);
+                identity.setReviewerName(null);
+                identity.setReviewTime(null);
+                identity.setReviewRemark(null);
+                userIdentityMapper.updateById(identity);
+            }
+        }
+        merchant.setVerifyStatus("pending");
+        merchant.setVerifyRemark(null);
+        merchantMapper.updateById(merchant);
+        return onboardingStatus(userId, market);
+    }
+
+    private List<Long> myMerchantIds(Long userId, Long marketId) {
+        LambdaQueryWrapper<UserMerchantEntity> wrapper = new LambdaQueryWrapper<UserMerchantEntity>()
+                .eq(UserMerchantEntity::getUserId, userId)
+                .eq(UserMerchantEntity::getStatus, 1);
+        if (marketId != null) {
+            wrapper.eq(UserMerchantEntity::getMarketId, marketId);
+        }
+        return userMerchantMapper.selectList(wrapper).stream()
+                .map(UserMerchantEntity::getMerchantId)
+                .distinct()
+                .toList();
+    }
+
+    private MerchantCertificationEntity latestCertification(Long merchantId) {
+        return certificationMapper.selectOne(new LambdaQueryWrapper<MerchantCertificationEntity>()
+                .eq(MerchantCertificationEntity::getMerchantId, merchantId)
+                .orderByDesc(MerchantCertificationEntity::getId)
+                .last("LIMIT 1"));
+    }
+
+    private UserIdentityEntity latestIdentity(Long userId) {
+        return userIdentityMapper.selectOne(new LambdaQueryWrapper<UserIdentityEntity>()
+                .eq(UserIdentityEntity::getUserId, userId)
+                .orderByDesc(UserIdentityEntity::getId)
+                .last("LIMIT 1"));
     }
 
     @Transactional(rollbackFor = Exception.class)

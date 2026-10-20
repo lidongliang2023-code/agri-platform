@@ -39,6 +39,12 @@ interface SsoBody {
   data?: {
     redirect?: string
     hint?: string
+    stage?: string
+    phone?: string
+    nickname?: string
+    identity?: string
+    subjectName?: string
+    status?: string
   }
 }
 
@@ -238,6 +244,8 @@ export default function App(): JSX.Element {
   const [loginLeft, setLoginLeft] = useState(0)
   const [registerLeft, setRegisterLeft] = useState(0)
   const [success, setSuccess] = useState<{ redirect: string | null; identity: Identity; hasIdCard: boolean } | null>(null)
+  const [accountCreated, setAccountCreated] = useState(false)
+  const [onboardingStage, setOnboardingStage] = useState('')
 
   useEffect(() => {
     if (loginLeft <= 0) return undefined
@@ -250,6 +258,32 @@ export default function App(): JSX.Element {
     const timer = window.setTimeout(() => setRegisterLeft(registerLeft - 1), 1000)
     return () => window.clearTimeout(timer)
   }, [registerLeft])
+
+  useEffect(() => {
+    if (!isRegister) return
+    let cancelled = false
+    void fetch('/api/v1/sso/onboarding/status', { credentials: 'include' })
+      .then(async (response) => ({ ok: response.ok, body: await response.json() as SsoBody }))
+      .then(({ ok, body }) => {
+        if (cancelled || !ok || body.code !== 0 || !body.data) return
+        const data = body.data
+        const stage = data.stage ?? ''
+        setOnboardingStage(stage)
+        setAccountCreated(true)
+        if (stage === 'subject') setRegStep(2)
+        if (stage === 'certification' || stage === 'pending' || stage === 'done') setRegStep(3)
+        setReg((previous) => ({
+          ...previous,
+          phone: data.phone ?? previous.phone,
+          nickname: data.nickname ?? previous.nickname,
+          identity: data.identity === 'personal' ? 'personal' : previous.identity,
+          companyName: data.identity === 'enterprise' ? (data.subjectName ?? previous.companyName) : previous.companyName,
+          realName: data.identity === 'personal' ? (data.subjectName ?? previous.realName) : previous.realName,
+        }))
+      })
+      .catch(() => { /* 无 SSO 会话：从第 1 步开始 */ })
+    return () => { cancelled = true }
+  }, [isRegister])
 
   const patchReg = (patch: Partial<RegisterForm>): void => {
     setReg((previous) => ({ ...previous, ...patch }))
@@ -398,6 +432,13 @@ export default function App(): JSX.Element {
         setError(body.message ?? '登录失败，请重试')
         return
       }
+      const stage = body.data?.stage
+      if (stage && stage !== 'done') {
+        const query = window.location.search || ''
+        const separator = query ? '&' : '?'
+        window.location.href = `/register${query}${separator}step=${stage === 'subject' ? 2 : 3}`
+        return
+      }
       const redirect = body.data?.redirect
       if (!redirect) {
         setError('认证中心未返回回跳地址，请联系平台运营')
@@ -411,31 +452,50 @@ export default function App(): JSX.Element {
     }
   }
 
-  async function submitRegister(event: FormEvent): Promise<void> {
-    event.preventDefault()
+  async function registerAccountStep(): Promise<void> {
+    if (!validateAccountStep()) return
+    setBusy(true)
     setError('')
     setNotice('')
-    setHint('')
-    if (!validateAccountStep() || !validateSubjectStep()) {
-      return
-    }
-    if (!reg.agree) {
-      setError('请先阅读并同意用户服务协议、隐私政策与企业入驻规则')
-      return
-    }
-
-    setBusy(true)
     try {
-      const response = await fetch('/api/v1/sso/register-by-sms', {
+      const response = await fetch('/api/v1/sso/register-account', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           phone: reg.phone,
           code: reg.code,
-          nickname: reg.nickname.trim()
-            || (reg.identity === 'enterprise' ? reg.companyName.trim() : reg.realName.trim()),
-          marketId: 1,
           password: reg.password,
+          nickname: reg.nickname.trim(),
+          marketId: 1,
+          remember: true,
+        }),
+      })
+      const body = (await response.json()) as SsoBody
+      if (!response.ok || body.code !== 0) {
+        setError(body.message ?? '账号创建失败')
+        return
+      }
+      setAccountCreated(true)
+      setOnboardingStage(body.data?.stage ?? 'subject')
+      setRegStep(2)
+      setNotice('登录账号已创建，请继续登记经营主体。')
+    } catch {
+      setError('无法联系认证服务，请确认后端已启动')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function createSubjectStep(): Promise<void> {
+    if (!validateSubjectStep()) return
+    setBusy(true)
+    setError('')
+    setNotice('')
+    try {
+      const response = await fetch('/api/v1/sso/onboarding/subject', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           identity: reg.identity,
           companyName: reg.companyName.trim(),
           creditCode: reg.creditCode.trim(),
@@ -446,6 +506,38 @@ export default function App(): JSX.Element {
           idCard: reg.idCard.trim(),
           businessType: reg.identity === 'personal' ? reg.businessType : '',
           contactName: reg.contactName.trim(),
+        }),
+      })
+      const body = (await response.json()) as SsoBody
+      if (!response.ok || body.code !== 0) {
+        setError(body.message ?? '主体创建失败')
+        return
+      }
+      setOnboardingStage(body.data?.stage ?? 'certification')
+      setRegStep(3)
+      setNotice('经营主体已创建，请确认认证资料并提交审核。')
+    } catch {
+      setError('无法联系认证服务，请确认后端已启动')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function activateCertification(event: FormEvent): Promise<void> {
+    event.preventDefault()
+    setError('')
+    setNotice('')
+    setHint('')
+    if (!reg.agree) {
+      setError('请先阅读并同意用户服务协议、隐私政策与企业入驻规则')
+      return
+    }
+    setBusy(true)
+    try {
+      const response = await fetch('/api/v1/sso/onboarding/certification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           clientId: ctx.clientId,
           redirectUri: ctx.redirectUri,
           state: ctx.state,
@@ -455,9 +547,10 @@ export default function App(): JSX.Element {
       })
       const body = (await response.json()) as SsoBody
       if (!response.ok || body.code !== 0) {
-        setError(body.message ?? '注册失败，请重试')
+        setError(body.message ?? '认证提交失败')
         return
       }
+      setOnboardingStage(body.data?.stage ?? 'pending')
       setSuccess({
         redirect: body.data?.redirect ?? null,
         identity: reg.identity,
@@ -584,15 +677,15 @@ export default function App(): JSX.Element {
         onSubmit={(event) => {
           if (regStep === 1) {
             event.preventDefault()
-            if (validateAccountStep()) setRegStep(2)
+            void registerAccountStep()
             return
           }
           if (regStep === 2) {
             event.preventDefault()
-            if (validateSubjectStep()) setRegStep(3)
+            void createSubjectStep()
             return
           }
-          void submitRegister(event)
+          void activateCertification(event)
         }}
       >
         {regStep === 1 && (
@@ -736,7 +829,7 @@ export default function App(): JSX.Element {
             </label>
 
             <div className="auth-step-actions">
-              <button type="button" className="auth-back" onClick={() => setRegStep(1)}>上一步</button>
+              {!accountCreated && <button type="button" className="auth-back" onClick={() => setRegStep(1)}>上一步</button>}
               <button type="submit" className="auth-submit">下一步：认证开通</button>
             </div>
           </>
@@ -751,34 +844,45 @@ export default function App(): JSX.Element {
               <div><span>认证方式</span><b>{reg.identity === 'enterprise' ? '企业资质认证' : '个人实名认证'}</b><small>提交后进入平台审核，通过后生效</small></div>
             </div>
 
-            <label className="agreement">
-              <input type="checkbox" checked={reg.agree} onChange={(event) => patchReg({ agree: event.target.checked })} />
-              <span>
-                我确认所填账号与主体信息真实有效，并同意
-                <a href="#protocol" onClick={(event) => {
-                  event.preventDefault()
-                  setNotice('《农产云用户服务协议》全文尚未在本页发布，请联系平台运营获取正式文本。')
-                }}>《农产云用户服务协议》</a>、
-                <a href="#privacy" onClick={(event) => {
-                  event.preventDefault()
-                  setNotice('《隐私政策》全文尚未在本页发布，请联系平台运营获取正式文本。')
-                }}>《隐私政策》</a> 及
-                <a href="#rules" onClick={(event) => {
-                  event.preventDefault()
-                  setNotice('《企业入驻规则》全文尚未在本页发布，请联系平台运营获取正式文本。')
-                }}>《企业入驻规则》</a>
-              </span>
-            </label>
+            {onboardingStage === 'pending' ? (
+              <div className="auth-notice">认证申请已提交，平台正在审核中；审核通过后认证状态会自动生效，无需重复提交。</div>
+            ) : onboardingStage === 'done' ? (
+              <div className="auth-notice">
+                当前账号已完成认证。
+                <button type="button" className="link-button" onClick={() => switchView('/login')}>返回登录 →</button>
+              </div>
+            ) : (
+              <>
+                <label className="agreement">
+                  <input type="checkbox" checked={reg.agree} onChange={(event) => patchReg({ agree: event.target.checked })} />
+                  <span>
+                    我确认所填账号与主体信息真实有效，并同意
+                    <a href="#protocol" onClick={(event) => {
+                      event.preventDefault()
+                      setNotice('《农产云用户服务协议》全文尚未在本页发布，请联系平台运营获取正式文本。')
+                    }}>《农产云用户服务协议》</a>、
+                    <a href="#privacy" onClick={(event) => {
+                      event.preventDefault()
+                      setNotice('《隐私政策》全文尚未在本页发布，请联系平台运营获取正式文本。')
+                    }}>《隐私政策》</a> 及
+                    <a href="#rules" onClick={(event) => {
+                      event.preventDefault()
+                      setNotice('《企业入驻规则》全文尚未在本页发布，请联系平台运营获取正式文本。')
+                    }}>《企业入驻规则》</a>
+                  </span>
+                </label>
 
-            <div className="auth-step-actions">
-              <button type="button" className="auth-back" onClick={() => setRegStep(2)}>上一步</button>
-              <button type="submit" className="auth-submit" disabled={busy}>
-                {busy ? '提交中…' : '提交注册并进入审核'}
-              </button>
-            </div>
-            <div className="auth-notice">
-              提交后将同时创建登录账号、经营主体与待审核认证记录；审核通过后认证状态才会生效。
-            </div>
+                <div className="auth-step-actions">
+                  <button type="button" className="auth-back" onClick={() => setRegStep(2)}>上一步</button>
+                  <button type="submit" className="auth-submit" disabled={busy}>
+                    {busy ? '提交中…' : '提交认证并开通'}
+                  </button>
+                </div>
+                <div className="auth-notice">
+                  第 2 步已保存主体与认证草稿；本步提交后生成待审核记录，审核通过后认证状态才会生效。
+                </div>
+              </>
+            )}
           </>
         )}
 

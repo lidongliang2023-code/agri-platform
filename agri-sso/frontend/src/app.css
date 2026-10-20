@@ -728,6 +728,20 @@ body {
   font-size: 11.5px;
 }
 
+.link-button {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--auth-green-700);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.link-button:hover {
+  text-decoration: underline;
+}
+
 .form-section {
   margin: 6px 0 14px;
   padding-top: 14px;

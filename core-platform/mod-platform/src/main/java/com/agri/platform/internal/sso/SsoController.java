@@ -92,6 +92,10 @@ public class SsoController {
                         request.phone()));
         assertIdentity(user.userId(), request.identity());
         sessionService.create(user.userId(), user.marketId(), Boolean.TRUE.equals(request.remember()), response);
+        SmsAuthService.OnboardingStatus onboarding = smsAuthService.onboardingStatus(user.userId(), user.marketId());
+        if (!"done".equals(onboarding.stage())) {
+            return ApiResponse.ok(new SsoLoginResult(null, onboarding.stage()));
+        }
         String code = codeService.issue(user.userId(), user.marketId(), request.clientId(), request.redirectUri(),
                 request.codeChallenge(), request.codeChallengeMethod());
         return ApiResponse.ok(new SsoLoginResult(callback(request.redirectUri(), code, request.state())));
@@ -161,11 +165,80 @@ public class SsoController {
                 request.state(), request.codeChallenge(), request.codeChallengeMethod(), false, response));
     }
 
+    /** 分步注册第 1 步：只创建登录账号，随后返回主体创建阶段。 */
+    @PostMapping("/register-account")
+    public ApiResponse<SmsAuthService.OnboardingStatus> registerAccount(
+            @RequestBody AccountRegisterRequest request, HttpServletResponse response) {
+        if (request == null || request.phone() == null || request.code() == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "手机号与验证码不能为空");
+        }
+        smsAuthService.verify(request.phone(), "register", request.code());
+        Long marketId = request.marketId() == null ? 1L : request.marketId();
+        UserEntity user = smsAuthService.registerAccountByPhone(request.phone(), request.password(),
+                request.nickname(), marketId);
+        sessionService.create(user.getId(), marketId, !Boolean.FALSE.equals(request.remember()), response);
+        return ApiResponse.ok(smsAuthService.onboardingStatus(user.getId(), marketId));
+    }
+
+    /** 当前账号的开通阶段（注册页刷新后恢复步骤）。 */
+    @GetMapping("/onboarding/status")
+    public ApiResponse<SmsAuthService.OnboardingStatus> onboardingStatus(HttpServletRequest request) {
+        long[] session = requireSession(request);
+        return ApiResponse.ok(smsAuthService.onboardingStatus(session[0], session[1]));
+    }
+
+    /** 分步注册第 2 步：创建经营主体并保存 draft 认证资料。 */
+    @PostMapping("/onboarding/subject")
+    public ApiResponse<SmsAuthService.OnboardingStatus> createSubject(
+            @RequestBody SmsAuthService.SubjectProfile request, HttpServletRequest httpRequest) {
+        long[] session = requireSession(httpRequest);
+        return ApiResponse.ok(smsAuthService.createSubject(session[0], session[1], request));
+    }
+
+    /** 分步注册第 3 步：激活 draft 认证为 pending，并可选签发回跳授权码。 */
+    @PostMapping("/onboarding/certification")
+    public ApiResponse<ActivateCertificationResult> activateCertification(
+            @RequestBody(required = false) CertificationContext request, HttpServletRequest httpRequest) {
+        long[] session = requireSession(httpRequest);
+        SmsAuthService.OnboardingStatus status = smsAuthService.activateCertification(session[0], session[1]);
+        String redirect = null;
+        if (request != null && trimToNull(request.clientId()) != null && trimToNull(request.redirectUri()) != null) {
+            assertClient(request.clientId(), request.redirectUri());
+            String code = codeService.issue(session[0], session[1], request.clientId(), request.redirectUri(),
+                    request.codeChallenge(), request.codeChallengeMethod());
+            redirect = callback(request.redirectUri(), code, request.state());
+        }
+        return ApiResponse.ok(new ActivateCertificationResult(status.stage(), redirect));
+    }
+
+    private long[] requireSession(HttpServletRequest request) {
+        long[] session = sessionService.resolve(request);
+        if (session == null) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED, "登录会话已失效，请重新登录");
+        }
+        return session;
+    }
+
+    public record AccountRegisterRequest(String phone, String code, String password, String nickname,
+                                         Long marketId, Boolean remember) {
+    }
+
+    public record CertificationContext(String clientId, String redirectUri, String state,
+                                       String codeChallenge, String codeChallengeMethod) {
+    }
+
+    public record ActivateCertificationResult(String stage, String redirect) {
+    }
+
     /** 建全局会话 → 签授权码 → 拼回跳地址（密码登录 / 验证码登录 / 注册共用这一段）。 */
     private SsoLoginResult signIn(Long userId, Long marketId, String clientId, String redirectUri, String state,
                                   String codeChallenge, String codeChallengeMethod, boolean remember,
                                   HttpServletResponse response) {
         sessionService.create(userId, marketId, remember, response);
+        SmsAuthService.OnboardingStatus onboarding = smsAuthService.onboardingStatus(userId, marketId);
+        if (!"done".equals(onboarding.stage())) {
+            return new SsoLoginResult(null, onboarding.stage());
+        }
         String code = codeService.issue(userId, marketId, clientId, redirectUri, codeChallenge, codeChallengeMethod);
         return new SsoLoginResult(callback(redirectUri, code, state));
     }
