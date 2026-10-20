@@ -21,6 +21,68 @@
   gap: 4px;
 }
 
+.portal-login-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.72);
+  font: inherit;
+  cursor: pointer;
+}
+
+.portal-login-trigger:hover {
+  color: #fff;
+}
+
+.portal-logged-user {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.portal-user-avatar {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--green-500), #0ea5e9);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.portal-user-status {
+  color: var(--green-300);
+  font-size: 11px;
+}
+
+.portal-logged-user b {
+  max-width: 150px;
+  overflow: hidden;
+  color: #fff;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.portal-logged-user button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.5);
+  font: inherit;
+  cursor: pointer;
+}
+
+.portal-logged-user button:hover {
+  color: #ffd6d6;
+}
+
 .portal-channelbar {
   background: #fff;
   border-bottom: 1px solid var(--line);

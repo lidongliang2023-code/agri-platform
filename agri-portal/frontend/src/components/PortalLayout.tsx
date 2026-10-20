@@ -1,12 +1,47 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import { Icon } from './Icon'
+import { PortalLoginModal } from './PortalLoginModal'
+import type { PortalUser } from './PortalLoginModal'
 import { go, hallUrl, productionLogin, ssoRegister, tradeUrl } from '../utils'
 
 const CHANNELS = ['粮油产业', '果蔬产业', '畜禽产业', '茶药产业', '饲料农资', '水产产业', '预制菜', '冷链物流']
 
 export function PortalLayout({ children, active = '/' }: { children: ReactNode; active?: string }): JSX.Element {
   const [keyword, setKeyword] = useState('')
+  const [user, setUser] = useState<PortalUser | null>(null)
+  const [loginOpen, setLoginOpen] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    void fetch('/api/v1/sso/onboarding/status', { credentials: 'include' })
+      .then(async (response) => ({ ok: response.ok, body: await response.json() as {
+        code?: number
+        data?: { phone?: string; nickname?: string; stage?: string }
+      } }))
+      .then(({ ok, body }) => {
+        if (cancelled || !ok || body.code !== 0 || !body.data) return
+        setUser({
+          nickname: body.data.nickname,
+          phone: body.data.phone,
+        })
+      })
+      .catch(() => { /* 未登录门户是正常状态 */ })
+    return () => { cancelled = true }
+  }, [])
+
+  async function logout(): Promise<void> {
+    try {
+      await fetch('/api/v1/sso/logout', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      })
+    } finally {
+      setUser(null)
+    }
+  }
 
   const search = (event: FormEvent): void => {
     event.preventDefault()
@@ -23,8 +58,24 @@ export function PortalLayout({ children, active = '/' }: { children: ReactNode; 
             <a href={tradeUrl('/member/buyer')} target="_blank" rel="noreferrer">我是买家</a><span className="sep">·</span>
             <a href={tradeUrl('/member/seller')} target="_blank" rel="noreferrer">我是卖家</a><span className="sep">·</span>
             <a href={tradeUrl('/member/buyer')} target="_blank" rel="noreferrer">会员中心</a><span className="sep">·</span>
-            <a href={productionLogin()}><Icon name="user" size={12} />登录</a><span className="sep">·</span>
-            <a href={ssoRegister()}><Icon name="plus" size={12} />免费注册</a>
+            {user ? (
+              <span className="portal-logged-user">
+                <span className="portal-user-avatar">{(user.nickname || user.username || user.phone || '用').slice(0, 1)}</span>
+                <span className="portal-user-status">已登录</span>
+                <b>{user.nickname || user.username || user.phone || '农产云用户'}</b>
+                <button type="button" onClick={() => void logout()}>退出</button>
+              </span>
+            ) : (
+              <button className="portal-login-trigger" type="button" onClick={() => setLoginOpen(true)}>
+                <Icon name="user" size={12} />登录
+              </button>
+            )}
+            {!user && (
+              <>
+                <span className="sep">·</span>
+                <a href={ssoRegister()}><Icon name="plus" size={12} />免费注册</a>
+              </>
+            )}
           </span>
         </div>
       </div>
@@ -106,6 +157,14 @@ export function PortalLayout({ children, active = '/' }: { children: ReactNode; 
           </div>
         </div>
       </footer>
+      <PortalLoginModal
+        open={loginOpen}
+        onClose={() => setLoginOpen(false)}
+        onSuccess={(nextUser) => {
+          setUser(nextUser)
+          setLoginOpen(false)
+        }}
+      />
     </div>
   )
 }

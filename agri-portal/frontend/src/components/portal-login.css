@@ -1,0 +1,200 @@
+.portal-login-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(4, 22, 14, 0.56);
+  backdrop-filter: blur(4px);
+}
+
+.portal-login-card {
+  width: min(440px, 100%);
+  padding: 26px;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 34px 76px -26px rgba(11, 26, 18, 0.45);
+  color: var(--ink-900);
+}
+
+.portal-login-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.portal-login-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: var(--green-050);
+  color: var(--green-700);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.portal-login-head h2 {
+  margin: 12px 0 0;
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.portal-login-head p {
+  margin: 8px 0 0;
+  color: var(--ink-500);
+  font-size: 12.5px;
+  line-height: 1.7;
+}
+
+.portal-login-close {
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--bg-alt);
+  color: var(--ink-500);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.portal-login-tabs {
+  display: flex;
+  gap: 24px;
+  margin-top: 22px;
+  border-bottom: 1px solid var(--line);
+}
+
+.portal-login-tabs button {
+  padding: 11px 0;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--ink-500);
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.portal-login-tabs button.on {
+  border-bottom-color: var(--green-500);
+  color: var(--green-700);
+}
+
+.portal-login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  margin-top: 20px;
+}
+
+.portal-login-form > label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  color: var(--ink-700);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.portal-login-form input {
+  width: 100%;
+  height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  outline: none;
+  background: #fff;
+  color: var(--ink-900);
+  font-size: 14px;
+}
+
+.portal-login-form input:focus {
+  border-color: var(--green-500);
+  box-shadow: 0 0 0 4px rgba(21, 154, 94, 0.1);
+}
+
+.portal-code-row {
+  display: grid;
+  grid-template-columns: 1fr 126px;
+  gap: 10px;
+}
+
+.portal-code-row button {
+  border: 1px solid var(--green-500);
+  border-radius: 11px;
+  background: #fff;
+  color: var(--green-700);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.portal-code-row button:disabled {
+  border-color: var(--line);
+  color: var(--ink-400);
+  cursor: not-allowed;
+}
+
+.portal-login-options {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--ink-500);
+  font-size: 12px;
+}
+
+.portal-login-options label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.portal-login-options input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  accent-color: var(--green-600);
+}
+
+.portal-login-submit {
+  height: 48px;
+  border: 0;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--green-600), var(--green-500));
+  box-shadow: 0 8px 22px rgba(21, 154, 94, 0.25);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  cursor: pointer;
+}
+
+.portal-login-submit:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.portal-login-error,
+.portal-login-notice {
+  padding: 9px 11px;
+  border-radius: 9px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.portal-login-error {
+  background: #fff1f0;
+  color: #b42318;
+}
+
+.portal-login-notice {
+  background: var(--green-050);
+  color: var(--green-700);
+}

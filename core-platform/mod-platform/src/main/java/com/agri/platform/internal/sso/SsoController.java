@@ -5,6 +5,7 @@ import com.agri.platform.internal.auth.AuthService;
 import com.agri.platform.internal.auth.dto.AuthOutcome;
 import com.agri.platform.internal.auth.dto.LoginRequest;
 import com.agri.platform.internal.auth.dto.LoginVO;
+import com.agri.platform.internal.auth.dto.UserVO;
 import com.agri.platform.internal.auth.dto.RefreshRequest;
 import com.agri.platform.internal.merchant.MerchantEntity;
 import com.agri.platform.internal.merchant.MerchantMapper;
@@ -171,7 +172,7 @@ public class SsoController {
                     || role.equals("MARKET_OPS") || role.endsWith("ADMIN") || role.endsWith("OPS"));
             redirect = ops ? "/admin/production/dashboard" : "/production/dashboard";
         }
-        return new StandaloneLoginResult(stage, redirect);
+        return new StandaloneLoginResult(stage, redirect, login.user());
     }
 
     /**
@@ -274,7 +275,7 @@ public class SsoController {
     public record StandaloneSmsLoginRequest(String phone, String code, Long marketId, Boolean remember) {
     }
 
-    public record StandaloneLoginResult(String stage, String redirect) {
+    public record StandaloneLoginResult(String stage, String redirect, UserVO user) {
     }
 
     public record CertificationContext(String clientId, String redirectUri, String state,
