@@ -88,14 +88,13 @@ export default function AdminLayout() {
             // 它决定"谁能看到哪些数据"，所以单独放在交易监管各项之后。
             // 将来若有独立的平台管理端，这一项整体迁过去即可。
             { key: '/admin/trade/bindings', icon: <ApartmentOutlined />, label: '用户-主体绑定' },
-            { key: '/admin/trade/certification', icon: <IdcardOutlined />, label: '认证管理' },
+            { key: '/admin/trade/certification-review', icon: <IdcardOutlined />, label: '认证审核' },
             { key: '/admin/trade/config', icon: <SettingOutlined />, label: '系统配置' },
             { key: '/admin/trade/risk', icon: <AlertOutlined />, label: '风控管理' },
             { key: '/admin/trade/report', icon: <BarChartOutlined />, label: '报表' },
             { key: '/admin/trade/guarantee', icon: <BankOutlined />, label: '保证金管理' },
             { key: '/admin/trade/contract-template', icon: <FileTextOutlined />, label: '合同模板' },
-            { key: '/admin/trade/carrier', icon: <CarOutlined />, label: '承运商管理' },
-            { key: '/admin/trade/identity', icon: <IdcardOutlined />, label: '实名认证审核' }
+            { key: '/admin/trade/carrier', icon: <CarOutlined />, label: '承运商管理' }
           ]}
         />
       </Sider>

@@ -24,6 +24,7 @@ import AdminSettlement from '@/pages/admin/settlement'
 import AdminCredit from '@/pages/admin/credit'
 import AdminCatalog from '@/pages/admin/catalog'
 import AdminCertification from '@/pages/admin/certification'
+import CertificationReview from '@/pages/admin/certification-review'
 import AdminConfig from '@/pages/admin/config'
 import AdminRisk from '@/pages/admin/risk'
 import AdminReport from '@/pages/admin/report'
@@ -69,6 +70,7 @@ function AppRouter() {
         <Route path="credit" element={<AdminCredit />} />
         <Route path="catalog" element={<AdminCatalog />} />
         <Route path="certification" element={<AdminCertification />} />
+        <Route path="certification-review" element={<CertificationReview />} />
         <Route path="config" element={<AdminConfig />} />
         <Route path="risk" element={<AdminRisk />} />
         <Route path="report" element={<AdminReport />} />
