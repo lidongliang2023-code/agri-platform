@@ -84,6 +84,10 @@
             <button data-tab="land" data-tab-group="prod" class="on">地块管理</button>
             <button data-tab="dev" data-tab-group="prod">设备管理</button>
             <button data-tab="alarm" data-tab-group="prod">告警中心</button>
+            <button data-tab="type" data-tab-group="prod">设备类型</button>
+            <button data-tab="plan" data-tab-group="prod">生产计划</button>
+            <button data-tab="ota" data-tab-group="prod">OTA 升级</button>
+            <button data-tab="fw" data-tab-group="prod">固件管理</button>
           </div>
           <span class="more">数据更新于 <span class="mono">2026-10-19 14:26</span></span>
         </div>
@@ -281,6 +285,114 @@
             <div class="pager">
               <button>上一页</button><button class="on">1</button><button>2</button><button>下一页</button>
             </div>
+          </div>
+
+          <!-- 设备类型 -->
+          <div data-tabpanel="type" class="hide">
+            <div class="grid grid-4">
+              <div class="stat"><div class="k"><span data-icon="cpu" style="color:var(--green-600)"></span>已注册类型</div><div class="v mono">18<span class="unit">类</span></div><div class="d">环境 5 · 土壤 3 · 灌溉 2 · 植保 2 · 水产 2 · 气象 2 · 其他 2</div></div>
+              <div class="stat tech"><div class="k"><span data-icon="wifi" style="color:var(--tech-600)"></span>活跃类型</div><div class="v mono">15<span class="unit">类</span></div><div class="d">3 类本月 0 台在线</div></div>
+              <div class="stat"><div class="k"><span data-icon="activity" style="color:var(--green-600)"></span>新增类型（近 30 天）</div><div class="v mono">2</div><div class="d">水产浮标 · 无人机</div></div>
+              <div class="stat"><div class="k"><span data-icon="file" style="color:var(--green-600)"></span>协议覆盖</div><div class="v mono">4<span class="unit">种</span></div><div class="d">MQTT / Modbus / LoRa / NB-IoT</div></div>
+            </div>
+            <div class="toolbar mt-20">
+              <input class="input" style="width:220px" placeholder="搜索类型名称 / 协议" />
+              <select class="select" style="width:140px"><option>全部分类</option><option>环境监测</option><option>土壤监测</option><option>灌溉控制</option><option>植保监测</option><option>水产监测</option><option>气象监测</option></select>
+              <div class="spacer"></div>
+              <button class="btn btn-primary btn-sm"><span data-icon="plus"></span>新增类型</button>
+              <button class="btn btn-outline btn-sm"><span data-icon="file"></span>导出</button>
+            </div>
+            <table class="data-table mt-16">
+              <thead><tr><th>类型编号</th><th>类型名称</th><th>分类</th><th>通信协议</th><th>协议版本</th><th>当前在线台数</th><th>单位台</th><th>数据上报周期</th><th>状态</th><th>操作</th></tr></thead>
+              <tbody>
+                <tr><td class="mono">TYP-001</td><td>空气温湿度传感器</td><td><span class="tag">环境监测</span></td><td><span class="tag tag-tech">MQTT</span></td><td class="mono">v2.3</td><td class="mono">186</td><td class="mono">486</td><td class="mono">60s</td><td><span class="tag">启用</span></td><td><a class="link">编辑</a></td></tr>
+                <tr><td class="mono">TYP-002</td><td>土壤墒情监测站</td><td><span class="tag">土壤监测</span></td><td><span class="tag tag-tech">LoRa</span></td><td class="mono">v1.8</td><td class="mono">98</td><td class="mono">122</td><td class="mono">300s</td><td><span class="tag">启用</span></td><td><a class="link">编辑</a></td></tr>
+                <tr><td class="mono">TYP-003</td><td>智能水肥一体机</td><td><span class="tag">灌溉控制</span></td><td><span class="tag tag-tech">Modbus</span></td><td class="mono">v3.0</td><td class="mono">24</td><td class="mono">38</td><td class="mono">控制型</td><td><span class="tag">启用</span></td><td><a class="link">编辑</a></td></tr>
+                <tr><td class="mono">TYP-004</td><td>虫情测报灯</td><td><span class="tag">植保监测</span></td><td><span class="tag tag-tech">MQTT</span></td><td class="mono">v1.4</td><td class="mono">42</td><td class="mono">58</td><td class="mono">整点</td><td><span class="tag">启用</span></td><td><a class="link">编辑</a></td></tr>
+                <tr><td class="mono">TYP-014</td><td>水产浮标水质监测</td><td><span class="tag">水产监测</span></td><td><span class="tag tag-tech">NB-IoT</span></td><td class="mono">v1.0</td><td class="mono">12</td><td class="mono">12</td><td class="mono">300s</td><td><span class="tag tag-tech">新上线</span></td><td><a class="link">编辑</a></td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- 生产计划 -->
+          <div data-tabpanel="plan" class="hide">
+            <div class="grid grid-4">
+              <div class="stat"><div class="k"><span data-icon="clipboard" style="color:var(--green-600)"></span>进行中计划</div><div class="v mono">14<span class="unit">条</span></div><div class="d">五常 4 · 寿光 3 · 赣州 4 · 湛江 3</div></div>
+              <div class="stat tech"><div class="k"><span data-icon="activity" style="color:var(--tech-600)"></span>本月完成率</div><div class="v mono">92.8<span class="unit">%</span></div><div class="d">较上月 <span class="up">+3.2%</span></div></div>
+              <div class="stat"><div class="k"><span data-icon="layers" style="color:var(--green-600)"></span>覆盖地块</div><div class="v mono">112<span class="unit">块</span></div><div class="d">占管理地块 87.5%</div></div>
+              <div class="stat"><div class="k"><span data-icon="box" style="color:var(--green-600)"></span>计划总产量</div><div class="v mono" style="font-size:24px">2.4<span class="unit">万吨</span></div><div class="d">预计 10-31 前收齐</div></div>
+            </div>
+            <div class="toolbar mt-20">
+              <input class="input" style="width:220px" placeholder="搜索计划编号 / 作物" />
+              <select class="select" style="width:140px"><option>全部状态</option><option>进行中</option><option>已完成</option><option>待启动</option><option>已中止</option></select>
+              <div class="spacer"></div>
+              <button class="btn btn-primary btn-sm"><span data-icon="plus"></span>新建计划</button>
+              <button class="btn btn-outline btn-sm"><span data-icon="file"></span>导出</button>
+            </div>
+            <table class="data-table mt-16">
+              <thead><tr><th>计划编号</th><th>作物 / 品种</th><th>覆盖地块</th><th>计划总产量</th><th>当前进度</th><th>开始时间</th><th>预计结束</th><th>状态</th><th>操作</th></tr></thead>
+              <tbody>
+                <tr><td class="mono">PL-2026-09</td><td>富硒水稻 · 稻花香 2 号</td><td>五常基地 · SC-001/002</td><td class="mono">480 吨</td><td><div class="progress" style="width:140px"><i style="width:72%"></i></div>72%</td><td class="mono">2026-04-15</td><td class="mono">2026-10-31</td><td><span class="tag tag-tech">进行中</span></td><td><a class="link">详情</a></td></tr>
+                <tr><td class="mono">PL-2026-08</td><td>设施番茄 · 齐达利</td><td>寿光基地 · SC-003/004</td><td class="mono">220 吨</td><td><div class="progress" style="width:140px"><i style="width:86%"></i></div>86%</td><td class="mono">2026-07-01</td><td class="mono">2026-11-15</td><td><span class="tag tag-tech">进行中</span></td><td><a class="link">详情</a></td></tr>
+                <tr><td class="mono">PL-2026-07</td><td>有机脐橙 · 纽荷尔</td><td>赣州基地 · SC-005</td><td class="mono">780 吨</td><td><div class="progress" style="width:140px"><i style="width:52%"></i></div>52%</td><td class="mono">2026-05-20</td><td class="mono">2026-11-25</td><td><span class="tag tag-tech">进行中</span></td><td><a class="link">详情</a></td></tr>
+                <tr><td class="mono">PL-2026-06</td><td>南美白对虾</td><td>湛江基地 · SC-007</td><td class="mono">96 吨</td><td><div class="progress" style="width:140px"><i style="width:95%"></i></div>95%</td><td class="mono">2026-03-10</td><td class="mono">2026-10-25</td><td><span class="tag tag-tech">进行中</span></td><td><a class="link">详情</a></td></tr>
+                <tr><td class="mono">PL-2026-05</td><td>高山绿茶 · 炒青</td><td>赣州基地 · SC-006</td><td class="mono">82 吨</td><td><div class="progress" style="width:140px"><i style="width:100%"></i></div>100%</td><td class="mono">2026-02-28</td><td class="mono">2026-09-30</td><td><span class="tag">已完成</span></td><td><a class="link">详情</a></td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- OTA 升级 -->
+          <div data-tabpanel="ota" class="hide">
+            <div class="grid grid-4">
+              <div class="stat"><div class="k"><span data-icon="zap" style="color:var(--green-600)"></span>可升级设备</div><div class="v mono">38<span class="unit">台</span></div><div class="d">占设备总数 7.8%</div></div>
+              <div class="stat tech"><div class="k"><span data-icon="cpu" style="color:var(--tech-600)"></span>正在升级</div><div class="v mono">12<span class="unit">台</span></div><div class="d">进行中 12 · 预计 8 分钟</div></div>
+              <div class="stat"><div class="k"><span data-icon="check" style="color:var(--green-600)"></span>本月升级成功率</div><div class="v mono">99.2<span class="unit">%</span></div><div class="d">失败 4 台 · 已自动回滚</div></div>
+              <div class="stat"><div class="k"><span data-icon="repo" style="color:var(--green-600)"></span>待发布版本</div><div class="v mono">3</div><div class="d">v2.4.0 / v1.9.0 / v3.1.0</div></div>
+            </div>
+            <div class="toolbar mt-20">
+              <div class="chips">
+                <span class="chip on">全部 (486)</span><span class="chip">最新版本 (448)</span><span class="chip">可升级 (38)</span><span class="chip">升级中 (12)</span><span class="chip">升级失败 (4)</span>
+              </div>
+              <div class="spacer"></div>
+              <button class="btn btn-primary btn-sm"><span data-icon="zap"></span>批量 OTA</button>
+              <button class="btn btn-outline btn-sm"><span data-icon="repo"></span>固件仓库</button>
+            </div>
+            <table class="data-table mt-16">
+              <thead><tr><th>设备编号</th><th>设备类型</th><th>当前版本</th><th>目标版本</th><th>升级进度</th><th>预计耗时</th><th>状态</th><th>操作</th></tr></thead>
+              <tbody>
+                <tr><td class="mono">DEV-1002</td><td>土壤墒情监测站</td><td class="mono">v1.8.3</td><td class="mono">v1.8.4</td><td><div class="progress" style="width:160px"><i style="width:78%"></i></div>78%</td><td class="mono">剩余 2min</td><td><span class="tag tag-tech">升级中</span></td><td><a class="link">详情</a></td></tr>
+                <tr><td class="mono">DEV-1003</td><td>智能水肥一体机</td><td class="mono">v3.0.1</td><td class="mono">v3.0.2</td><td><div class="progress" style="width:160px"><i style="width:32%"></i></div>32%</td><td class="mono">剩余 6min</td><td><span class="tag tag-tech">升级中</span></td><td><a class="link">详情</a></td></tr>
+                <tr><td class="mono">DEV-1001</td><td>空气温湿度传感器</td><td class="mono">v2.3.0</td><td class="mono">v2.3.1</td><td><div class="progress" style="width:160px"><i style="width:0%"></i></div>—</td><td class="mono">—</td><td><span class="tag">待升级</span></td><td><a class="link">触发</a></td></tr>
+                <tr><td class="mono">DEV-1006</td><td>水产溶氧传感器</td><td class="mono">v1.2.0</td><td class="mono">v1.2.3</td><td><div class="progress" style="width:160px"><i style="width:100%"></i></div>—</td><td class="mono">—</td><td><span class="tag tag-red">失败待回滚</span></td><td><a class="link">重试</a></td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- 固件管理 -->
+          <div data-tabpanel="fw" class="hide">
+            <div class="grid grid-4">
+              <div class="stat"><div class="k"><span data-icon="repo" style="color:var(--green-600)"></span>固件版本总数</div><div class="v mono">42<span class="unit">个</span></div><div class="d">环境 14 · 土壤 8 · 灌溉 6 · 植保 6 · 水产 4 · 气象 4</div></div>
+              <div class="stat tech"><div class="k"><span data-icon="activity" style="color:var(--tech-600)"></span>本月新增</div><div class="v mono">4</div><div class="d">v2.4.0 / v1.9.0 / v3.1.0 / v1.3.0</div></div>
+              <div class="stat"><div class="k"><span data-icon="shield" style="color:var(--green-600)"></span>已签名</div><div class="v mono">42 / 42</div><div class="d">全部通过签名校验</div></div>
+              <div class="stat"><div class="k"><span data-icon="file" style="color:var(--green-600)"></span>固件仓库大小</div><div class="v mono">682<span class="unit">MB</span></div><div class="d">含增量包 · 差分压缩</div></div>
+            </div>
+            <div class="toolbar mt-20">
+              <input class="input" style="width:220px" placeholder="搜索固件版本 / 适用类型" />
+              <select class="select" style="width:140px"><option>全部分类</option><option>环境监测</option><option>土壤监测</option><option>灌溉控制</option><option>植保监测</option><option>水产监测</option></select>
+              <div class="spacer"></div>
+              <button class="btn btn-primary btn-sm"><span data-icon="plus"></span>上传固件</button>
+              <button class="btn btn-outline btn-sm"><span data-icon="file"></span>导出清单</button>
+            </div>
+            <table class="data-table mt-16">
+              <thead><tr><th>固件编号</th><th>版本</th><th>适用设备类型</th><th>分类</th><th>文件大小</th><th>签名状态</th><th>发布时间</th><th>状态</th><th>操作</th></tr></thead>
+              <tbody>
+                <tr><td class="mono">FW-042</td><td class="mono strong">v2.4.0</td><td>空气温湿度传感器</td><td><span class="tag">环境监测</span></td><td class="mono">4.2 MB</td><td><span class="tag tag-tech">已签名</span></td><td class="mono">2026-10-18</td><td><span class="tag tag-amber">灰度发布</span></td><td><a class="link">详情</a> · <a class="link">发布</a></td></tr>
+                <tr><td class="mono">FW-041</td><td class="mono strong">v1.9.0</td><td>土壤墒情监测站</td><td><span class="tag">土壤监测</span></td><td class="mono">3.8 MB</td><td><span class="tag tag-tech">已签名</span></td><td class="mono">2026-10-15</td><td><span class="tag">全量发布</span></td><td><a class="link">详情</a></td></tr>
+                <tr><td class="mono">FW-040</td><td class="mono strong">v3.1.0</td><td>智能水肥一体机</td><td><span class="tag">灌溉控制</span></td><td class="mono">12.6 MB</td><td><span class="tag tag-tech">已签名</span></td><td class="mono">2026-10-12</td><td><span class="tag">全量发布</span></td><td><a class="link">详情</a></td></tr>
+                <tr><td class="mono">FW-039</td><td class="mono strong">v1.3.0</td><td>水产浮标水质监测</td><td><span class="tag">水产监测</span></td><td class="mono">3.1 MB</td><td><span class="tag tag-tech">已签名</span></td><td class="mono">2026-10-08</td><td><span class="tag tag-tech">新上线</span></td><td><a class="link">详情</a> · <a class="link">发布</a></td></tr>
+                <tr><td class="mono">FW-038</td><td class="mono">v2.0.7</td><td>智能气象站</td><td><span class="tag">气象监测</span></td><td class="mono">5.2 MB</td><td><span class="tag tag-tech">已签名</span></td><td class="mono">2026-09-28</td><td><span class="tag">稳定版本</span></td><td><a class="link">详情</a></td></tr>
+              </tbody>
+            </table>
           </div>
 
         </div>
