@@ -1,7 +1,11 @@
 package com.agri.trade.controller;
 
 import com.agri.trade.common.entity.ApiResponse;
+import com.agri.trade.entity.Demand;
+import com.agri.trade.entity.TradeProductCategory;
 import com.agri.trade.entity.TradeProduct;
+import com.agri.trade.mapper.DemandMapper;
+import com.agri.trade.mapper.TradeProductCategoryMapper;
 import com.agri.trade.mapper.TradeProductMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -32,6 +36,8 @@ public class PortalPublicController {
     private static final int MAX_LIMIT = 24;
 
     private final TradeProductMapper productMapper;
+    private final TradeProductCategoryMapper categoryMapper;
+    private final DemandMapper demandMapper;
 
     /** 门户展示用的已发布商品（按发布时间倒序）。 */
     @GetMapping("/products")
@@ -46,6 +52,93 @@ public class PortalPublicController {
                 .map(PortalPublicController::toView)
                 .collect(Collectors.toList());
         return ApiResponse.success(items);
+    }
+
+    /** 交易大厅商品分页（公开只读）。 */
+    @GetMapping("/hall/products")
+    public ApiResponse<PublicPage<PortalProductView>> hallProducts(
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(defaultValue = "9") Integer pageSize,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) List<Long> categoryIds,
+            @RequestParam(required = false) String categoryName,
+            @RequestParam(required = false) String province,
+            @RequestParam(required = false) BigDecimal minPrice,
+            @RequestParam(required = false) BigDecimal maxPrice,
+            @RequestParam(required = false) String sort) {
+        int size = Math.min(Math.max(pageSize == null ? 9 : pageSize, 1), MAX_LIMIT);
+        Page<TradeProduct> page = new Page<>(Math.max(pageNum == null ? 1 : pageNum, 1), size);
+        LambdaQueryWrapper<TradeProduct> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(TradeProduct::getDelFlag, 0)
+                .eq(TradeProduct::getPublishStatus, "published");
+        if (keyword != null && !keyword.isBlank()) {
+            String value = keyword.trim();
+            wrapper.and(w -> w.like(TradeProduct::getProductName, value)
+                    .or().like(TradeProduct::getSellerName, value)
+                    .or().like(TradeProduct::getVariety, value));
+        }
+        if ((categoryIds != null && !categoryIds.isEmpty()) || (categoryName != null && !categoryName.isBlank())) {
+            wrapper.and(w -> {
+                if (categoryIds != null && !categoryIds.isEmpty()) {
+                    w.in(TradeProduct::getCategoryId, categoryIds);
+                }
+                if (categoryName != null && !categoryName.isBlank()) {
+                    if (categoryIds != null && !categoryIds.isEmpty()) {
+                        w.or().eq(TradeProduct::getCategoryName, categoryName.trim());
+                    } else {
+                        w.eq(TradeProduct::getCategoryName, categoryName.trim());
+                    }
+                }
+            });
+        }
+        if (province != null && !province.isBlank()) {
+            wrapper.eq(TradeProduct::getOriginProvince, province.trim());
+        }
+        if (minPrice != null) wrapper.ge(TradeProduct::getPrice, minPrice);
+        if (maxPrice != null) wrapper.le(TradeProduct::getPrice, maxPrice);
+        if ("priceAsc".equals(sort)) {
+            wrapper.orderByAsc(TradeProduct::getPrice);
+        } else if ("priceDesc".equals(sort)) {
+            wrapper.orderByDesc(TradeProduct::getPrice);
+        } else if ("sales".equals(sort)) {
+            wrapper.orderByDesc(TradeProduct::getSalesVolume);
+        } else {
+            wrapper.orderByDesc(TradeProduct::getCreateTime);
+        }
+        Page<TradeProduct> result = productMapper.selectPage(page, wrapper);
+        List<PortalProductView> records = result.getRecords().stream()
+                .map(PortalPublicController::toView)
+                .collect(Collectors.toList());
+        return ApiResponse.success(new PublicPage<>(records, result.getTotal(), result.getCurrent(), result.getSize()));
+    }
+
+    /** 公开分类树（大厅筛选）。 */
+    @GetMapping("/categories")
+    public ApiResponse<List<PublicCategoryView>> categories() {
+        return ApiResponse.success(categoryMapper.selectList(new LambdaQueryWrapper<TradeProductCategory>()
+                        .eq(TradeProductCategory::getDelFlag, 0)
+                        .eq(TradeProductCategory::getStatus, 1)
+                        .orderByAsc(TradeProductCategory::getLevel)
+                        .orderByAsc(TradeProductCategory::getSortOrder))
+                .stream()
+                .map(item -> new PublicCategoryView(item.getId(), item.getParentId(), item.getCategoryName(), item.getLevel()))
+                .collect(Collectors.toList()));
+    }
+
+    /** 采购需求大厅（公开只读，隐藏联系方式）。 */
+    @GetMapping("/demands")
+    public ApiResponse<List<PublicDemandView>> demands() {
+        return ApiResponse.success(demandMapper.selectList(new LambdaQueryWrapper<Demand>()
+                        .eq(Demand::getDelFlag, 0)
+                        .in(Demand::getDemandStatus, List.of("pending", "matching", "quoted"))
+                        .orderByDesc(Demand::getCreateTime)
+                        .last("LIMIT 50"))
+                .stream()
+                .map(item -> new PublicDemandView(item.getId(), item.getDemandNo(), item.getDemandName(),
+                        item.getBuyerName(), item.getProductName(), item.getVariety(), item.getQuantity(), item.getUnit(),
+                        item.getPriceMin(), item.getPriceMax(), item.getDeliveryProvince(), item.getDeliveryCity(),
+                        item.getDemandStatus(), item.getResponseCount(), item.getCreateTime()))
+                .collect(Collectors.toList()));
     }
 
     private static PortalProductView toView(TradeProduct product) {
@@ -63,7 +156,12 @@ public class PortalPublicController {
                 product.getUnit(),
                 product.getPrice(),
                 product.getPriceMin(),
-                product.getPriceMax());
+                product.getPriceMax(),
+                product.getMinOrderQuantity(),
+                product.getStockQuantity(),
+                product.getSalesVolume(),
+                product.getOriginProvince(),
+                product.getCategoryId());
     }
 
     private static String firstNonBlank(String... values) {
@@ -91,6 +189,35 @@ public class PortalPublicController {
             String unit,
             BigDecimal price,
             BigDecimal priceMin,
-            BigDecimal priceMax) {
+            BigDecimal priceMax,
+            BigDecimal minOrderQuantity,
+            BigDecimal stockQuantity,
+            Integer salesVolume,
+            String province,
+            Long categoryId) {
+    }
+
+    public record PublicPage<T>(List<T> records, long total, long pageNum, long pageSize) {
+    }
+
+    public record PublicCategoryView(Long id, Long parentId, String categoryName, Integer level) {
+    }
+
+    public record PublicDemandView(
+            Long id,
+            String demandNo,
+            String demandName,
+            String buyerName,
+            String productName,
+            String variety,
+            BigDecimal quantity,
+            String unit,
+            BigDecimal priceMin,
+            BigDecimal priceMax,
+            String deliveryProvince,
+            String deliveryCity,
+            String demandStatus,
+            Integer responseCount,
+            java.util.Date createTime) {
     }
 }

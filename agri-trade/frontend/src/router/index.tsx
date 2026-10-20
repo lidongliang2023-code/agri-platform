@@ -10,6 +10,7 @@ import DemandCreate from '@/pages/demand/create'
 import DemandDetail from '@/pages/demand/detail'
 import BuyerCenter from '@/pages/member-center/BuyerCenter'
 import SellerCenter from '@/pages/member-center/SellerCenter'
+import TradeHall from '@/pages/hall'
 import SsoCallback from '@/pages/sso/callback'
 import AdminLayout from '@/pages/admin/layout'
 import AdminDashboard from '@/pages/admin/dashboard'
@@ -77,6 +78,7 @@ function AppRouter() {
         <Route path="identity" element={<AdminIdentity />} />
       </Route>
       {/* 交易端只剩买家中心 / 卖家中心；没有全局后台菜单与首页 */}
+      <Route path="/hall" element={<TradeHall />} />
       <Route path="/member/buyer" element={<PrivateRoute><BuyerCenter /></PrivateRoute>} />
       <Route path="/member/seller" element={<PrivateRoute><SellerCenter /></PrivateRoute>} />
 

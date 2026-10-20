@@ -29,6 +29,11 @@ export function tradeUrl(path = '/'): string {
   return `${protocol}//${hostname}:8086${path}`
 }
 
+/** 公开交易大厅（无需登录即可浏览）。 */
+export function hallUrl(): string {
+  return tradeUrl('/hall')
+}
+
 /** 生产管理用户端登录入口（会经统一认证中心）。 */
 export function productionLogin(): string {
   return `${protocol}//${hostname}/production/login`

@@ -59,7 +59,7 @@ export function MemberCenterShell({ role, active, navItems, merchantName, onNavi
             <span className="mc-nav-icon"><SwapOutlined /></span>
             <span>{role === 'buyer' ? '发布采购需求' : '发布供应'}</span>
           </a>
-          <a href="/">
+          <a href="/hall">
             <span className="mc-nav-icon"><ShopOutlined /></span>
             <span>交易大厅</span>
           </a>

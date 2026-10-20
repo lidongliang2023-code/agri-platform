@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import { Icon } from './Icon'
-import { go, productionLogin, ssoRegister, tradeUrl } from '../utils'
+import { go, hallUrl, productionLogin, ssoRegister, tradeUrl } from '../utils'
 
 const CHANNELS = ['粮油产业', '果蔬产业', '畜禽产业', '茶药产业', '饲料农资', '水产产业', '预制菜', '冷链物流']
 
@@ -20,8 +20,8 @@ export function PortalLayout({ children, active = '/' }: { children: ReactNode; 
         <div className="container">
           <span>您好，欢迎来到农产云！一站式农业产业链交易与服务平台</span>
           <span className="portal-top-actions">
-            <a href={tradeUrl('/')} target="_blank" rel="noreferrer">我是买家</a><span className="sep">·</span>
-            <a href={tradeUrl('/product/create')} target="_blank" rel="noreferrer">我是卖家</a><span className="sep">·</span>
+            <a href={tradeUrl('/member/buyer')} target="_blank" rel="noreferrer">我是买家</a><span className="sep">·</span>
+            <a href={tradeUrl('/member/seller')} target="_blank" rel="noreferrer">我是卖家</a><span className="sep">·</span>
             <a href={tradeUrl('/member/buyer')} target="_blank" rel="noreferrer">会员中心</a><span className="sep">·</span>
             <a href={productionLogin()}><Icon name="user" size={12} />登录</a><span className="sep">·</span>
             <a href={ssoRegister()}><Icon name="plus" size={12} />免费注册</a>
@@ -38,10 +38,10 @@ export function PortalLayout({ children, active = '/' }: { children: ReactNode; 
           <nav className="main-nav">
             <a href="#/" className={active === '/' ? 'active' : ''}>首页</a>
             <a href="#/chains" className={active === '/chains' ? 'active' : ''}>产业链</a>
-            <a href={tradeUrl('/')} target="_blank" rel="noreferrer">交易大厅</a>
+            <a href={hallUrl()} target="_blank" rel="noreferrer">交易大厅</a>
             <a href="#/?scroll=price">价格指数</a>
             <a href="#/?scroll=news">产业资讯</a>
-            <a href={tradeUrl('/my-guarantee')} target="_blank" rel="noreferrer">供应链金融</a>
+            <a href={tradeUrl('/member/seller?tab=fund')} target="_blank" rel="noreferrer">供应链金融</a>
           </nav>
           <form className="header-search" onSubmit={search}>
             <input
@@ -79,20 +79,20 @@ export function PortalLayout({ children, active = '/' }: { children: ReactNode; 
               <h4>关于平台</h4>
               <a href="#/certify">认证中心</a>
               <a href="#/chains">产业链频道</a>
-              <a href={tradeUrl('/')} target="_blank" rel="noreferrer">交易大厅</a>
+              <a href={hallUrl()} target="_blank" rel="noreferrer">交易大厅</a>
               <a href={productionLogin()}>生产管理</a>
             </div>
             <div>
               <h4>买家服务</h4>
-              <a href={tradeUrl('/product')} target="_blank" rel="noreferrer">采购大厅</a>
+              <a href={hallUrl()} target="_blank" rel="noreferrer">采购大厅</a>
               <a href={tradeUrl('/demand/create')} target="_blank" rel="noreferrer">发布询价</a>
-              <a href={tradeUrl('/order')} target="_blank" rel="noreferrer">订单管理</a>
-              <a href={tradeUrl('/my-guarantee')} target="_blank" rel="noreferrer">资金管理</a>
+              <a href={tradeUrl('/member/buyer?tab=purchase')} target="_blank" rel="noreferrer">订单管理</a>
+              <a href={tradeUrl('/member/buyer?tab=fund')} target="_blank" rel="noreferrer">资金管理</a>
             </div>
             <div>
               <h4>卖家服务</h4>
               <a href={tradeUrl('/product/create')} target="_blank" rel="noreferrer">发布供应</a>
-              <a href={tradeUrl('/mine')} target="_blank" rel="noreferrer">店铺管理</a>
+              <a href={tradeUrl('/member/seller?tab=profile')} target="_blank" rel="noreferrer">店铺管理</a>
               <a href={productionLogin()}>物联网接入</a>
               <a href="#/certify/enterprise">企业认证</a>
             </div>
