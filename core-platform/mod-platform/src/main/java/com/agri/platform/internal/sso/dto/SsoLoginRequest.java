@@ -18,11 +18,16 @@ public record SsoLoginRequest(
         @NotBlank(message = "redirect_uri 不能为空") String redirectUri,
         String state,
         String codeChallenge,
-        String codeChallengeMethod) {
+        String codeChallengeMethod,
+        /** 登录身份 enterprise / personal（2026-10-20 原型字段；为空时不做身份校验） */
+        String identity,
+        /** 「7 天内自动登录」：true 时会话与 Cookie 用 7 天，否则用平台默认时长 */
+        Boolean remember) {
 
     /** 老调用方（只传 username/password/…）用的便捷构造，保持契约向后兼容。 */
     public SsoLoginRequest(String username, String password, Long marketId, String clientId, String redirectUri,
                            String state, String codeChallenge, String codeChallengeMethod) {
-        this(username, password, marketId, null, clientId, redirectUri, state, codeChallenge, codeChallengeMethod);
+        this(username, password, marketId, null, clientId, redirectUri, state, codeChallenge, codeChallengeMethod,
+                null, null);
     }
 }

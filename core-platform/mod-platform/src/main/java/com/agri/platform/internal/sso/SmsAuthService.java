@@ -2,6 +2,15 @@ package com.agri.platform.internal.sso;
 
 import com.agri.platform.internal.permission.RoleEntity;
 import com.agri.platform.internal.permission.RoleMapper;
+import com.agri.platform.internal.identity.IdNumberUtil;
+import com.agri.platform.internal.identity.UserIdentityEntity;
+import com.agri.platform.internal.identity.UserIdentityMapper;
+import com.agri.platform.internal.merchant.MerchantCertificationEntity;
+import com.agri.platform.internal.merchant.MerchantCertificationMapper;
+import com.agri.platform.internal.merchant.MerchantEntity;
+import com.agri.platform.internal.merchant.MerchantMapper;
+import com.agri.platform.internal.merchant.UserMerchantEntity;
+import com.agri.platform.internal.merchant.UserMerchantMapper;
 import com.agri.platform.internal.user.UserEntity;
 import com.agri.platform.internal.user.UserMapper;
 import com.agri.platform.internal.user.UserRoleEntity;
@@ -14,9 +23,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
@@ -55,18 +66,27 @@ public class SmsAuthService {
     private final UserMapper userMapper;
     private final UserRoleMapper userRoleMapper;
     private final RoleMapper roleMapper;
+    private final MerchantMapper merchantMapper;
+    private final UserMerchantMapper userMerchantMapper;
+    private final MerchantCertificationMapper certificationMapper;
+    private final UserIdentityMapper userIdentityMapper;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
     /** 短信通道模式：none（默认，未配置服务商）/ dev（验证码写日志，仅联调用） */
     private final String mode;
 
     public SmsAuthService(StringRedisTemplate redis, UserMapper userMapper, UserRoleMapper userRoleMapper,
-                          RoleMapper roleMapper,
+                          RoleMapper roleMapper, MerchantMapper merchantMapper, UserMerchantMapper userMerchantMapper,
+                          MerchantCertificationMapper certificationMapper, UserIdentityMapper userIdentityMapper,
                           @Value("${agri.auth.sms.mode:none}") String mode) {
         this.redis = redis;
         this.userMapper = userMapper;
         this.userRoleMapper = userRoleMapper;
         this.roleMapper = roleMapper;
+        this.merchantMapper = merchantMapper;
+        this.userMerchantMapper = userMerchantMapper;
+        this.certificationMapper = certificationMapper;
+        this.userIdentityMapper = userIdentityMapper;
         this.mode = mode == null ? "none" : mode.trim().toLowerCase();
         if ("dev".equals(this.mode)) {
             log.warn("短信通道运行在 [dev] 模式：验证码只写日志，不会真正发送短信。生产环境请把 "
@@ -134,6 +154,9 @@ public class SmsAuthService {
         // 一次性：验过即删，防重放
         redis.delete(key);
         redis.delete(ATTEMPT_KEY + scene + ":" + normalized);
+        // 验证成功后解除重发冷却：此时号码已证明可接收，留着冷却只会让
+        // "刚登录完、马上换账号再登"的人面对一条已失效的验证码干等 60 秒。
+        redis.delete(COOLDOWN_KEY + normalized);
     }
 
     /**
@@ -174,7 +197,23 @@ public class SmsAuthService {
      * @param marketId 进入的市场（缺省 1）
      * @returns 新建账号实体
      */
-    public UserEntity registerByPhone(String phone, String nickname, Long marketId) {
+    public record RegistrationProfile(
+            String nickname,
+            String password,
+            String identity,
+            String companyName,
+            String creditCode,
+            String industry,
+            String companySize,
+            String address,
+            String realName,
+            String idCard,
+            String businessType,
+            String contactName) {
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public UserEntity registerByPhone(String phone, RegistrationProfile profile, Long marketId) {
         String normalized = normalizePhone(phone);
         Long market = marketId == null ? 1L : marketId;
         UserEntity exists = userMapper.selectOne(new LambdaQueryWrapper<UserEntity>()
@@ -182,17 +221,54 @@ public class SmsAuthService {
         if (exists != null) {
             throw new BusinessException(ErrorCode.CONFLICT, "该手机号已注册，请直接登录");
         }
+
+        String identity = profile.identity() == null || profile.identity().isBlank()
+                ? "enterprise" : profile.identity().trim().toLowerCase();
+        if (!"enterprise".equals(identity) && !"personal".equals(identity)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "注册身份只能是 enterprise 或 personal");
+        }
+
+        String companyName = trimToNull(profile.companyName());
+        String creditCode = trimToNull(profile.creditCode());
+        String realName = trimToNull(profile.realName());
+        String contactName = trimToNull(profile.contactName());
+        if ("enterprise".equals(identity)) {
+            if (companyName == null) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "企业名称不能为空");
+            }
+            if (creditCode == null || !creditCode.matches("[0-9A-Za-z]{15,18}")) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "统一社会信用代码应为 15-18 位字母数字");
+            }
+            Long sameCredit = merchantMapper.selectCount(new LambdaQueryWrapper<MerchantEntity>()
+                    .eq(MerchantEntity::getCreditCode, creditCode));
+            if (sameCredit != null && sameCredit > 0) {
+                throw new BusinessException(ErrorCode.CONFLICT, "该统一社会信用代码已登记，请直接登录或联系平台运营");
+            }
+        } else if (realName == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "真实姓名不能为空");
+        }
+
+        String rawPassword = profile.password();
+        if (rawPassword != null && !rawPassword.isBlank()) {
+            if (rawPassword.length() < 8 || rawPassword.length() > 20
+                    || !rawPassword.matches(".*[A-Za-z].*") || !rawPassword.matches(".*\\d.*")) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "密码应为 8-20 位，且同时包含字母和数字");
+            }
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        String displayName = "enterprise".equals(identity) ? companyName : realName;
         UserEntity user = new UserEntity();
         user.setUsername(normalized);
-        // 没有密码：随机串占位，密码登录（username/phone + password）对它是登不进去的
-        user.setPassword(passwordEncoder.encode(java.util.UUID.randomUUID().toString()));
+        user.setPassword(passwordEncoder.encode(rawPassword == null || rawPassword.isBlank()
+                ? UUID.randomUUID().toString() : rawPassword));
         user.setPhone(normalized);
-        user.setNickname(nickname == null || nickname.isBlank()
-                ? "用户" + normalized.substring(normalized.length() - 4)
-                : nickname.trim());
+        user.setNickname(trimToNull(profile.nickname()) != null
+                ? profile.nickname().trim()
+                : displayName);
         user.setStatus(1);
-        user.setCreatedAt(LocalDateTime.now());
-        user.setUpdatedAt(LocalDateTime.now());
+        user.setCreatedAt(now);
+        user.setUpdatedAt(now);
         userMapper.insert(user);
 
         RoleEntity farmer = roleMapper.selectOne(new LambdaQueryWrapper<RoleEntity>()
@@ -206,8 +282,80 @@ public class SmsAuthService {
             binding.setMarketId(market);
             userRoleMapper.insert(binding);
         }
-        log.info("手机号注册成功：user={} phone={}（未建经营主体绑定，等运营开通）", user.getId(), mask(normalized));
+
+        MerchantEntity merchant = new MerchantEntity();
+        merchant.setMarketId(market);
+        merchant.setCode("REG" + user.getId());
+        merchant.setName(displayName);
+        merchant.setType("BOTH");
+        merchant.setMemberType(identity);
+        // 只存该身份对应的档案字段：个人会员不继承企业表单的行业/规模/地址默认值
+        boolean enterprise = "enterprise".equals(identity);
+        merchant.setIndustry(enterprise ? trimToNull(profile.industry()) : null);
+        merchant.setCompanySize(enterprise ? trimToNull(profile.companySize()) : null);
+        merchant.setAddress(enterprise ? trimToNull(profile.address()) : null);
+        merchant.setBusinessType(enterprise ? null : trimToNull(profile.businessType()));
+        merchant.setCreditCode("enterprise".equals(identity) ? creditCode : null);
+        merchant.setContactName(contactName == null ? displayName : contactName);
+        merchant.setContactPhone(normalized);
+        merchant.setStatus(1);
+        merchant.setVerifyStatus("enterprise".equals(identity) ? "pending" : "unverified");
+        merchantMapper.insert(merchant);
+
+        UserMerchantEntity membership = new UserMerchantEntity();
+        membership.setUserId(user.getId());
+        membership.setMerchantId(merchant.getId());
+        membership.setMarketId(market);
+        membership.setRoleInMerchant("owner");
+        membership.setStatus(1);
+        membership.setCreatedAt(now);
+        membership.setUpdatedAt(now);
+        userMerchantMapper.insert(membership);
+
+        if ("enterprise".equals(identity)) {
+            MerchantCertificationEntity certification = new MerchantCertificationEntity();
+            certification.setMarketId(market);
+            certification.setMerchantId(merchant.getId());
+            certification.setMerchantName(displayName);
+            certification.setCertNo("CT" + System.currentTimeMillis()
+                    + String.format("%03d", ThreadLocalRandom.current().nextInt(1000)));
+            certification.setCompanyName(companyName);
+            certification.setCreditCode(creditCode);
+            certification.setContactName(contactName == null ? displayName : contactName);
+            certification.setContactPhone(normalized);
+            certification.setAttachNote("统一认证中心自注册提交；所属行业、企业规模与注册地址已登记在经营主体档案。");
+            certification.setCertStatus("pending");
+            certification.setSubmitTime(now);
+            certificationMapper.insert(certification);
+        } else if (trimToNull(profile.idCard()) != null) {
+            String idNo = IdNumberUtil.validate(profile.idCard());
+            String salt = IdNumberUtil.newSalt();
+            UserIdentityEntity realNameRecord = new UserIdentityEntity();
+            realNameRecord.setUserId(user.getId());
+            realNameRecord.setMarketId(market);
+            realNameRecord.setIdentityNo("ID" + System.currentTimeMillis()
+                    + String.format("%03d", ThreadLocalRandom.current().nextInt(1000)));
+            realNameRecord.setRealName(realName);
+            realNameRecord.setIdNoMasked(IdNumberUtil.mask(idNo));
+            realNameRecord.setIdNoHash(IdNumberUtil.hash(idNo, salt));
+            realNameRecord.setIdNoSalt(salt);
+            realNameRecord.setStatus("pending");
+            realNameRecord.setSubmitTime(now);
+            realNameRecord.setCreatedAt(now);
+            realNameRecord.setUpdatedAt(now);
+            userIdentityMapper.insert(realNameRecord);
+        }
+
+        log.info("注册成功：user={} phone={} identity={} merchant={}", user.getId(), mask(normalized),
+                identity, merchant.getId());
         return user;
+    }
+
+    private static String trimToNull(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
     }
 
     private static void assertScene(String scene) {

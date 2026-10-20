@@ -1,15 +1,16 @@
 #!/usr/bin/env node
 /**
- * 联调：**统一认证中心**的登录方式（2026-10-16）。
+ * 联调：**统一认证中心**的登录方式（2026-10-20 按 portal 原型收敛为两个 Tab）。
  *
- * <p>本轮落地：登录页四个 Tab（验证码登录 / 手机号密码 / 账号密码 / 微信扫码），其中</p>
+ * <p>登录页严格对齐原型：只有「手机号 + 验证码」「账号 + 密码」两个 Tab；
+ * 微信 / 支付宝 / 国家政务服务平台收进「其他登录方式」图标。其中</p>
  * <ul>
- *   <li><b>手机验证码登录</b>（含手机号注册）可用：验证码走「可插拔通道」，本机是 dev 通道 ——
+ *   <li><b>手机验证码登录</b>可用：验证码走「可插拔通道」，本机是 dev 通道 ——
  *       验证码<b>只写后端日志</b>，不回响应体、不落库明文；联调时由脚本直接从 Redis 取值
  *       （页面刻意拿不到码，这样页面流程与生产一致，也不存在"验证码漏给前端"的口子）；</li>
- *   <li><b>手机号 + 密码</b>登录可用（账号表 phone 列 + AuthService 按手机号查账号）；</li>
- *   <li><b>微信扫码</b>与「微信扫码注册」<b>未接入</b>：需要微信开放平台 AppID/AppSecret 与可回调的公网地址，
- *       页面上如实说明依赖，不放点了必然失败的按钮、不伪造二维码。</li>
+ *   <li><b>账号 + 密码</b>登录可用（账号表 username / phone + AuthService）；</li>
+ *   <li><b>微信 / 支付宝 / 政务平台扫码</b><b>未接入</b>：需要开放平台凭据与可回调的公网地址，
+ *       页面上如实说明依赖，不伪造二维码。</li>
  * </ul>
 
  *
@@ -108,22 +109,29 @@ try {
   check(ssoUrl.includes(':8090/'), '登录入口把访客送到统一认证中心', ssoUrl)
   const ssoText = await pageA.evaluate(() => document.body.innerText)
   check(ssoText.includes('统一认证中心'), '认证中心登录页已渲染')
+  const tabLabels = await pageA.$$eval('button[role="tab"]', (els) => els.map((el) => (el.textContent ?? '').trim()))
   check(
-    ssoText.includes('验证码登录') && ssoText.includes('手机号密码')
-      && ssoText.includes('账号密码') && ssoText.includes('微信扫码'),
-    '登录页有四个 Tab：验证码登录 / 手机号密码 / 账号密码 / 微信扫码',
+    tabLabels.length === 2 && tabLabels[0].includes('手机号 + 验证码') && tabLabels[1].includes('账号 + 密码'),
+    '登录页严格按原型只有两个 Tab：手机号 + 验证码 / 账号 + 密码',
+    JSON.stringify(tabLabels),
   )
+  check(ssoText.includes('其他登录方式'), '微信 / 支付宝 / 政务平台收进「其他登录方式」')
 
-  await clickTab(pageA, '微信扫码')
+  await pageA.evaluate(() => {
+    const btn = [...document.querySelectorAll('.third-icons button')]
+      .find((el) => (el.getAttribute('title') ?? '').includes('微信'))
+    btn?.click()
+  })
+  await sleep(300)
   const wechatText = await pageA.evaluate(() => document.body.innerText)
   check(wechatText.includes('尚未接入') && wechatText.includes('AppID'),
     '「微信扫码」如实说明依赖（未配置凭据）、不伪造二维码',
     wechatText.replace(/\s+/g, ' ').slice(-80))
 
-  await clickTab(pageA, '验证码登录')
+  await clickTab(pageA, '手机号 + 验证码')
   await fill(pageA, 'input[autocomplete="tel"]', PHONE)
   await pageA.evaluate(() => {
-    const btn = [...document.querySelectorAll('button')].find((b) => (b.textContent ?? '').includes('发送验证码'))
+    const btn = [...document.querySelectorAll('button')].find((b) => (b.textContent ?? '').includes('获取验证码'))
     btn?.click()
   })
   await sleep(1500)
@@ -152,15 +160,19 @@ try {
   }
   check(smsLanded.startsWith(BASE_URL) && !smsLanded.includes('login') && !smsLanded.includes(':8090'),
     '验证码登录后回跳到子系统业务页（SSO 链路打通）', smsLanded)
+  const ssoCookie = (await pageA.cookies()).find((cookie) => cookie.name === 'agri_sso_session')
+  check(Boolean(ssoCookie) && ssoCookie.expires > Date.now() / 1000 + 6 * 24 * 3600,
+    '「7 天内自动登录」真实生效（SSO 会话 Cookie 有效期 ≥ 6 天）',
+    ssoCookie ? `expires=${new Date(ssoCookie.expires * 1000).toISOString()}` : '未拿到会话 Cookie')
   await ctxA.close()
 
-  // ---------- 场景 B：手机号 + 密码登录（独立上下文，避免 SSO 会话串味）----------
+  // ---------- 场景 B：账号 + 密码登录（独立上下文，避免 SSO 会话串味）----------
   const ctxB = await browser.createBrowserContext()
   const pageB = await ctxB.newPage()
   await pageB.setViewport({ width: 1440, height: 900 })
   await openSsoLoginPage(pageB)
-  await clickTab(pageB, '手机号密码')
-  await fill(pageB, 'input[autocomplete="tel"]', PHONE)
+  await clickTab(pageB, '账号 + 密码')
+  await fill(pageB, 'input[placeholder*="请输入账号"]', PHONE)
   await fill(pageB, 'input[type="password"]', PASSWORD)
   await pageB.evaluate(() => {
     const btn = [...document.querySelectorAll('button[type="submit"]')]
@@ -169,7 +181,7 @@ try {
   })
   const pwdLanded = await waitLanded(pageB)
   check(pwdLanded.startsWith(BASE_URL) && !pwdLanded.includes('login') && !pwdLanded.includes(':8090'),
-    '手机号+密码登录后回跳到子系统业务页', pwdLanded)
+    '账号+密码登录后回跳到子系统业务页', pwdLanded)
   const appText = await pageB.evaluate(() => document.body.innerText)
   check(appText.length > 50 && !appText.includes('正在跳转到统一认证中心'),
     '子系统页面已按登录态渲染', appText.replace(/\s+/g, ' ').slice(0, 70))

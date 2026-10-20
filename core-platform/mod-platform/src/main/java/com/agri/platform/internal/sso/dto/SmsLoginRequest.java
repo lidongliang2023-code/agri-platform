@@ -23,5 +23,9 @@ public record SmsLoginRequest(
         @NotBlank(message = "redirect_uri 不能为空") String redirectUri,
         String state,
         String codeChallenge,
-        String codeChallengeMethod) {
+        String codeChallengeMethod,
+        /** 登录身份 enterprise / personal（2026-10-20 原型字段；为空时不做身份校验） */
+        String identity,
+        /** 「7 天内自动登录」：true 时会话与 Cookie 用 7 天，否则用平台默认时长 */
+        Boolean remember) {
 }

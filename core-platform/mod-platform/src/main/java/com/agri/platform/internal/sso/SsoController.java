@@ -6,6 +6,10 @@ import com.agri.platform.internal.auth.dto.AuthOutcome;
 import com.agri.platform.internal.auth.dto.LoginRequest;
 import com.agri.platform.internal.auth.dto.LoginVO;
 import com.agri.platform.internal.auth.dto.RefreshRequest;
+import com.agri.platform.internal.merchant.MerchantEntity;
+import com.agri.platform.internal.merchant.MerchantMapper;
+import com.agri.platform.internal.merchant.UserMerchantEntity;
+import com.agri.platform.internal.merchant.UserMerchantMapper;
 import com.agri.platform.internal.sso.dto.SsoLoginRequest;
 import com.agri.platform.internal.sso.dto.SsoLoginResult;
 import com.agri.platform.internal.sso.dto.SmsCodeRequest;
@@ -16,6 +20,7 @@ import com.agri.platform.internal.user.UserEntity;
 import com.agri.shared.exception.BusinessException;
 import com.agri.shared.exception.ErrorCode;
 import com.agri.shared.result.ApiResponse;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -33,6 +38,7 @@ import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.stream.Collectors;
 
 // SSO 中心端点（V2.0 第 5.2 节：授权码模式 + PKCE；第 5.4 节：单点登出）。
 //
@@ -54,6 +60,8 @@ public class SsoController {
     private final RefreshCookieSupport cookieSupport;
     /** 手机验证码登录 / 注册（2026-10-16）。 */
     private final SmsAuthService smsAuthService;
+    private final MerchantMapper merchantMapper;
+    private final UserMerchantMapper userMerchantMapper;
 
     /** 授权端点：有登录态则发码回跳，无则转登录页 */
     @GetMapping("/authorize")
@@ -82,7 +90,8 @@ public class SsoController {
         AuthService.AuthenticatedUser user =
                 authService.authenticate(new LoginRequest(request.username(), request.password(), request.marketId(),
                         request.phone()));
-        sessionService.create(user.userId(), user.marketId(), response);
+        assertIdentity(user.userId(), request.identity());
+        sessionService.create(user.userId(), user.marketId(), Boolean.TRUE.equals(request.remember()), response);
         String code = codeService.issue(user.userId(), user.marketId(), request.clientId(), request.redirectUri(),
                 request.codeChallenge(), request.codeChallengeMethod());
         return ApiResponse.ok(new SsoLoginResult(callback(request.redirectUri(), code, request.state())));
@@ -110,9 +119,11 @@ public class SsoController {
         assertClient(request.clientId(), request.redirectUri());
         smsAuthService.verify(request.phone(), "login", request.code());
         UserEntity user = smsAuthService.requireUserByPhone(request.phone());
+        assertIdentity(user.getId(), request.identity());
         Long marketId = request.marketId() == null ? 1L : request.marketId();
         return ApiResponse.ok(signIn(user.getId(), marketId, request.clientId(), request.redirectUri(),
-                request.state(), request.codeChallenge(), request.codeChallengeMethod(), response));
+                request.state(), request.codeChallenge(), request.codeChallengeMethod(),
+                Boolean.TRUE.equals(request.remember()), response));
     }
 
     /**
@@ -128,15 +139,21 @@ public class SsoController {
         assertClient(request.clientId(), request.redirectUri());
         smsAuthService.verify(request.phone(), "register", request.code());
         Long marketId = request.marketId() == null ? 1L : request.marketId();
-        UserEntity user = smsAuthService.registerByPhone(request.phone(), request.nickname(), marketId);
+        UserEntity user = smsAuthService.registerByPhone(request.phone(),
+                new SmsAuthService.RegistrationProfile(request.nickname(), request.password(), request.identity(),
+                        request.companyName(), request.creditCode(), request.industry(), request.companySize(),
+                        request.address(), request.realName(), request.idCard(), request.businessType(),
+                        request.contactName()),
+                marketId);
         return ApiResponse.ok(signIn(user.getId(), marketId, request.clientId(), request.redirectUri(),
-                request.state(), request.codeChallenge(), request.codeChallengeMethod(), response));
+                request.state(), request.codeChallenge(), request.codeChallengeMethod(), false, response));
     }
 
     /** 建全局会话 → 签授权码 → 拼回跳地址（密码登录 / 验证码登录 / 注册共用这一段）。 */
     private SsoLoginResult signIn(Long userId, Long marketId, String clientId, String redirectUri, String state,
-                                  String codeChallenge, String codeChallengeMethod, HttpServletResponse response) {
-        sessionService.create(userId, marketId, response);
+                                  String codeChallenge, String codeChallengeMethod, boolean remember,
+                                  HttpServletResponse response) {
+        sessionService.create(userId, marketId, remember, response);
         String code = codeService.issue(userId, marketId, clientId, redirectUri, codeChallenge, codeChallengeMethod);
         return new SsoLoginResult(callback(redirectUri, code, state));
     }
@@ -180,6 +197,45 @@ public class SsoController {
         sessionService.destroy(request, response);
         // 回到该客户端注册在案的第一个来源（取自配置白名单，不是请求参数 —— 避免开放重定向）
         return redirect(allowed.get(0) + "?logout=1");
+    }
+
+    /**
+     * 登录身份校验（2026-10-20 按原型补的「企业会员 / 个人会员」）。
+     *
+     * <p>注册时会把会员身份写到经营主体（member_type）。登录时若该账号名下
+     * <b>已有带身份的</b>经营主体，则要求所选身份至少匹配其中一家；
+     * 历史账号的主体没有这个字段，保持原样放行 —— 不能因为补了一个新字段把老账号挡在门外。</p>
+     */
+    private void assertIdentity(Long userId, String identity) {
+        if (identity == null || identity.isBlank()) {
+            return;
+        }
+        String wanted = identity.trim().toLowerCase();
+        if (!"enterprise".equals(wanted) && !"personal".equals(wanted)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "登录身份只能是 enterprise 或 personal");
+        }
+        List<Long> merchantIds = userMerchantMapper.selectList(new LambdaQueryWrapper<UserMerchantEntity>()
+                        .eq(UserMerchantEntity::getUserId, userId)
+                        .eq(UserMerchantEntity::getStatus, 1))
+                .stream().map(UserMerchantEntity::getMerchantId).collect(Collectors.toList());
+        if (merchantIds.isEmpty()) {
+            return;
+        }
+        List<MerchantEntity> merchants = merchantMapper.selectList(new LambdaQueryWrapper<MerchantEntity>()
+                .in(MerchantEntity::getId, merchantIds));
+        List<MerchantEntity> typed = merchants.stream()
+                .filter(item -> item.getMemberType() != null && !item.getMemberType().isBlank())
+                .collect(Collectors.toList());
+        if (typed.isEmpty()) {
+            return;
+        }
+        boolean matched = typed.stream().anyMatch(item -> wanted.equalsIgnoreCase(item.getMemberType()));
+        if (!matched) {
+            String registered = typed.get(0).getMemberType();
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "该账号注册身份为「" + ("personal".equalsIgnoreCase(registered) ? "个人会员" : "企业会员")
+                            + "」，请切换登录身份后重试");
+        }
     }
 
     // client_id 与 redirect_uri 必须成对匹配注册在案的前缀。

@@ -20,6 +20,8 @@ import java.util.UUID;
 public class SsoSessionService {
 
     private static final String KEY_PREFIX = "agri:sso:session:";
+    /** 「7 天内自动登录」勾选后的会话有效期 */
+    private static final long REMEMBER_SECONDS = 7L * 24 * 3600;
 
     private final StringRedisTemplate redis;
     private final SsoProperties properties;
@@ -30,10 +32,21 @@ public class SsoSessionService {
      * @return 会话 ID（同时是浏览器侧 Cookie 的值）
      */
     public String create(Long userId, Long marketId, HttpServletResponse response) {
+        return create(userId, marketId, false, response);
+    }
+
+    /**
+     * 建立会话并写 Cookie。
+     *
+     * @param remember 勾选「7 天内自动登录」时为 true：会话与 Cookie 都用 7 天；
+     *                 否则沿用配置的默认时长（本机 8 小时）
+     */
+    public String create(Long userId, Long marketId, boolean remember, HttpServletResponse response) {
         String sid = UUID.randomUUID().toString().replace("-", "");
+        long seconds = remember ? REMEMBER_SECONDS : properties.getSessionTtlHours() * 3600;
         redis.opsForValue().set(KEY_PREFIX + sid, userId + ":" + marketId,
-                Duration.ofHours(properties.getSessionTtlHours()));
-        response.addHeader("Set-Cookie", cookie(sid, properties.getSessionTtlHours() * 3600));
+                Duration.ofSeconds(seconds));
+        response.addHeader("Set-Cookie", cookie(sid, seconds));
         return sid;
     }
 
