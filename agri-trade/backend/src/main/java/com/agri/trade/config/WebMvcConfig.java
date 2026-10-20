@@ -31,7 +31,9 @@ public class WebMvcConfig implements WebMvcConfigurer {
                         "/webjars/**",
                         "/doc.html",
                         "/favicon.ico",
-                        "/error"
+                        "/error",
+                        // 官网门户公开只读接口：仅返回已发布商品的展示字段
+                        "/api/trade/public/**"
                 );
     }
 }

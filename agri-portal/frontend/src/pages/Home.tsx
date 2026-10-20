@@ -8,6 +8,7 @@ interface LiveProduct {
   id: number
   productName: string
   sellerName?: string
+  origin?: string
   specification?: string
   unit?: string
   price?: number
@@ -55,7 +56,8 @@ const ICONS = ['seed', 'drop', 'box', 'sun', 'leaf', 'activity', 'factory', 'tru
 function liveCard(product: LiveProduct, index: number): ProductCard {
   return {
     name: product.productName,
-    meta: [product.sellerName, product.specification].filter(Boolean).join(' · ') || product.categoryName || '平台在售',
+    meta: [product.sellerName, product.origin, product.specification].filter(Boolean).join(' · ')
+      || product.categoryName || '平台在售',
     price: product.price != null ? String(product.price) : '询价',
     unit: product.price != null ? `/ ${product.unit || '件'}` : '',
     tag: '平台在售',
@@ -104,12 +106,14 @@ export function Home(): JSX.Element {
 
   useEffect(() => {
     let cancelled = false
-    fetch('/api/trade/product/page?pageNum=1&pageSize=8&publishStatus=published')
+    fetch('/api/trade/public/products?limit=8')
       .then((response) => response.json())
-      .then((body: { code?: number; data?: { records?: LiveProduct[] } }) => {
+      .then((body: { code?: number; data?: LiveProduct[] | { records?: LiveProduct[] } }) => {
         if (cancelled) return
-        if (body.code === 0 && body.data?.records && body.data.records.length > 0) {
-          setLive(body.data.records)
+        // 交易域 ApiResponse 的 code 是 200（认证域是 0），两种都接受
+        const records = Array.isArray(body.data) ? body.data : body.data?.records
+        if ((body.code === 0 || body.code === 200) && records && records.length > 0) {
+          setLive(records)
         }
       })
       .catch(() => { /* 交易服务未启动：回退示例数据并标注 */ })

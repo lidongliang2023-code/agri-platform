@@ -80,8 +80,20 @@ try {
   const homeText = await page.evaluate(() => document.body.innerText)
   check(homeText.includes('从田间到餐桌') && homeText.includes('产业链频道') && homeText.includes('价格指数')
     && homeText.includes('产业资讯') && homeText.includes('平台公告'), '首页五个核心区块齐全')
-  check(homeText.includes('原型示例货源') && homeText.includes('演示行情'),
-    '交易服务未启动时，货源与行情明确标注为示例数据')
+  const liveApi = await page.evaluate(async () => {
+    try {
+      const response = await fetch('/api/trade/public/products?limit=1')
+      return await response.json()
+    } catch {
+      return null
+    }
+  })
+  const hasLive = liveApi?.code === 200 && Array.isArray(liveApi.data) && liveApi.data.length > 0
+  check(homeText.includes('演示行情') && (hasLive ? homeText.includes('实时在售') : homeText.includes('原型示例货源')),
+    hasLive ? '交易域有数据时首页展示「实时在售」并保留行情演示标注' : '交易服务不可用时货源与行情明确标注为示例数据')
+  if (hasLive) {
+    check(homeText.includes(liveApi.data[0].productName), '首页展示交易域真实已发布商品', liveApi.data[0].productName)
+  }
   const loginHref = await page.evaluate(() => [...document.querySelectorAll('.portal-top-actions a')]
     .find((el) => (el.textContent ?? '').includes('登录'))?.getAttribute('href'))
   const registerHref = await page.evaluate(() => [...document.querySelectorAll('.portal-top-actions a')]
