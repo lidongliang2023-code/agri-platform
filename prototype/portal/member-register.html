@@ -154,7 +154,7 @@
     </div>
 
     <div class="a-title">选择您的<br>会员主体类型</div>
-    <div class="a-sub">账号已创建成功。接下来登记会员主体，主体决定您可以使用的交易身份与经营权限。</div>
+    <div class="a-sub">登记会员主体，主体决定您可以使用的交易身份与经营权限。此步骤可随时进行，认证也能稍后提交。</div>
 
     <div class="acc-chip">
       <div class="lb">当前登录账号</div>
@@ -172,7 +172,7 @@
   <!-- 右侧 -->
   <main class="l-form">
     <div class="form-title">创建主体会员</div>
-    <div class="sub">请选择主体类型并填写主体信息，提交后进入认证审核环节</div>
+    <div class="sub">请选择主体类型并填写主体信息；创建后可稍后提交认证，不影响主体登记</div>
 
     <div class="steps">
       <div class="st done"><div class="d"><span data-icon="check" data-size="11"></span></div><div class="l">注册账号</div></div>
@@ -309,12 +309,12 @@
       </label>
 
       <div class="btn-row">
-        <button type="button" class="btn-main" id="btnCreate"><span data-icon="arrow-right" data-size="15"></span>创建主体并去认证</button>
+        <button type="button" class="btn-main" id="btnCreate"><span data-icon="check" data-size="15"></span>创建主体会员</button>
         <button type="button" class="btn-skip" id="btnSkip"><span data-icon="clock" data-size="14"></span>暂不创建</button>
       </div>
     </div>
 
-    <div class="l-foot">主体创建后进入认证环节 · 认证通过即可解锁全部交易能力</div>
+    <div class="l-foot">主体创建后可随时提交认证 · 认证通过即自动解锁对应功能权限</div>
   </main>
   </div>
 </div>
@@ -347,10 +347,10 @@
     $("#accPhone").textContent = account.phone.slice(0, 3) + "****" + account.phone.slice(-4);
   }
 
-  /* 已有主体 → 直接进入认证/状态页 */
+  /* 已有主体 → 回到开通进度，可继续认证或进入会员中心 */
   var existed = PROTO.Auth.getSubject();
   if (existed) {
-    location.replace(PROTO.Auth.nextPage());
+    location.replace("member-status.html");
     return;
   }
 
@@ -414,14 +414,14 @@
     acc.subjectName = subject.displayName;
     PROTO.Auth.login(acc);
 
-    showToast("<span data-icon='check' data-size='16'></span>主体创建成功，正在进入认证...");
-    setTimeout(function () { location.href = "certify.html"; }, 900);
+    showToast("<span data-icon='check' data-size='16'></span>主体创建成功，认证可稍后提交");
+    setTimeout(function () { location.href = "member-status.html"; }, 900);
   });
 
   /* ===== 暂不创建 ===== */
   $("#btnSkip").addEventListener("click", function () {
-    showToast("已跳过主体创建，功能权限将受到限制（可随时补建）");
-    setTimeout(function () { location.href = "index.html"; }, 1100);
+    showToast("已跳过主体创建，可稍后在开通进度中补建");
+    setTimeout(function () { location.href = "member-status.html"; }, 1100);
   });
 })();
 </script>

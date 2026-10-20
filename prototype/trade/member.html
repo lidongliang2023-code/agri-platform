@@ -72,7 +72,7 @@
             <div class="strong" id="certBannerTitle">交易类功能暂未开通</div>
             <div class="muted t-sm mt-4" id="certBannerDesc">完成主体认证并通过审核后，下单采购、询价议价与在线签约等能力将自动开通。</div>
           </div>
-          <a class="btn btn-primary btn-sm" href="../portal/member-status.html"><span data-icon="shield"></span>查看开通进度</a>
+          <a class="btn btn-primary btn-sm" href="../portal/member-status.html" id="certBannerBtn"><span data-icon="shield"></span>查看开通进度</a>
         </div>
       </div>
 
@@ -493,12 +493,11 @@
   if (!acc) return; /* 未登录时保留静态演示内容 */
 
   var st = PROTO.Auth.stage();
-  /* 未创建主体 / 未提交认证 → 引导回对应环节 */
-  if (st === "subject") { location.replace("../portal/member-register.html"); return; }
-  if (st === "certify") { location.replace("../portal/certify.html"); return; }
+  /* 尚未创建主体 → 回到开通进度（可在此创建）；认证未提交仍可浏览会员中心 */
+  if (st === "subject") { location.replace("../portal/member-status.html"); return; }
 
   var subj = PROTO.Auth.getSubject() || {};
-  var cert = PROTO.Auth.getCert() || {};
+  var cert = PROTO.Auth.getCert() || { status: "none" };
   var isEnt = subj.type !== "personal";
   var name = subj.displayName || subj.name || acc.name || "农产云用户";
 
@@ -524,15 +523,24 @@
     bTitle.textContent = "认证审核中，交易类功能暂未开通";
     bDesc.textContent = "平台正在核验主体材料。审核通过后，下单采购、询价议价与在线签约等能力将自动开通。";
     banner.classList.remove("hide");
-  } else {
+  } else if (cert.status === "rejected") {
     tag.className = "tag tag-red";
     tag.innerHTML = '<span data-icon="alert" data-size="12"></span>已驳回';
     desc.textContent = "认证未通过，请查看驳回原因并修正材料后重新提交";
     bTitle.textContent = "认证未通过，交易类功能受限";
     bDesc.textContent = "请按驳回原因修正材料并重新提交，认证通过后交易权限将自动开通。";
     banner.classList.remove("hide");
+  } else {
+    tag.className = "tag tag-ghost";
+    tag.innerHTML = '<span data-icon="clock" data-size="12"></span>未认证';
+    desc.textContent = "主体已登记，尚未提交认证 · 提交并通过审核后自动开通功能权限";
+    bTitle.textContent = "尚未提交认证，交易类功能暂未开通";
+    bDesc.textContent = "主体信息已登记。提交认证材料并通过审核后，下单采购、询价议价与在线签约等能力将自动开通。";
+    banner.classList.remove("hide");
+    $("#certBannerBtn").setAttribute("href", "../portal/certify.html");
+    $("#certBannerBtn").innerHTML = '<span data-icon="arrow-right"></span>去提交认证';
   }
-  if (window.PROTO) PROTO.hydrateIcons($("#certTag"));
+  if (window.PROTO) PROTO.hydrateIcons(document);
 
   /* 交易类入口在未认证时给出提示 */
   if (cert.status !== "approved") {

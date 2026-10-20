@@ -145,8 +145,8 @@
 <body>
 
 <div class="l-topbar">
-  <a class="back" href="../trade/member.html"><span data-icon="arrow-left" data-size="14"></span>会员中心</a>
-  <span class="muted t-xs" style="margin-left:auto">第 3 步 / 共 3 步 · 认证审核与权限开通</span>
+  <a class="back" href="../trade/member.html" id="topLink"><span data-icon="arrow-left" data-size="14"></span>会员中心</a>
+  <span class="muted t-xs" style="margin-left:auto" id="topStep">开通进度 · 各步骤可分次完成</span>
 </div>
 
 <div class="l-wrap">
@@ -159,8 +159,8 @@
       <span>农产云<small>AGRI · CLOUD</small></span>
     </div>
 
-    <div class="a-title">认证审核通过<br>自动开通功能权限</div>
-    <div class="a-sub">认证结果由平台运营审核。审核通过后，交易、金融、物流与溯源等能力将按主体类型自动开通，无需再次申请。</div>
+    <div class="a-title">注册、主体与认证<br>可分步完成</div>
+    <div class="a-sub">账号注册、主体登记、认证审核彼此独立，可随时回来继续。审核通过后，交易、金融、物流与溯源等能力将按主体类型自动开通。</div>
 
     <div class="acc-chip">
       <div class="lb" id="subjectLabel">当前主体会员</div>
@@ -176,7 +176,7 @@
           <div class="dd">登录凭证已创建</div>
         </div>
       </div>
-      <div class="fi done">
+      <div class="fi done" id="flowSubjectStep">
         <span class="n"><span data-icon="check" data-size="12"></span></span>
         <div>
           <div class="tt">创建主体会员</div>
@@ -270,7 +270,7 @@
       <button type="button" class="btn-line" id="btnReject" style="display:none"><span data-icon="close" data-size="14"></span>模拟驳回</button>
     </div>
 
-    <div class="demo-note">
+    <div class="demo-note" id="demoNote">
       <div class="chips" id="demoChips">
         <span class="chip" data-st="review">审核中</span>
         <span class="chip" data-st="approved">已通过</span>
@@ -299,27 +299,12 @@
     window.__toastT = setTimeout(function () { t.classList.remove("show"); }, 2200);
   }
 
-  /* ===== 前置校验：账号 → 主体 → 认证 ===== */
+  /* ===== 前置校验：仅要求已登录；主体、认证可分步完成 ===== */
   var acc = PROTO.Auth.get();
   if (!acc) { location.replace("login.html"); return; }
   var subj = PROTO.Auth.getSubject();
-  if (!subj) { location.replace("member-register.html"); return; }
   var cert = PROTO.Auth.getCert();
-  if (!cert || cert.status === "none") { location.replace("certify.html"); return; }
-
-  var isEnt = subj.type !== "personal";
-
-  /* ===== 回填主体信息 ===== */
-  $("#subjectLabel").textContent = isEnt ? "当前企业会员" : "当前个人会员";
-  $("#subjectName").textContent = subj.displayName || subj.name || "—";
-  $("#subjectCode").textContent = isEnt ? (subj.code || "—") : (subj.idCard || "—");
-
-  $("#mType").textContent = subj.subjectLabel || (isEnt ? "企业会员" : "个人会员");
-  $("#mName").textContent = subj.displayName || subj.name || "—";
-  $("#mCodeLabel").textContent = isEnt ? "统一社会信用代码" : "身份证号";
-  $("#mCode").textContent = isEnt ? (subj.code || "—") : (subj.idCard || "—");
-  $("#mIndustry").textContent = isEnt ? (subj.industry || "—") : ((subj.perType || "—") + " · " + (subj.category || "—"));
-  $("#flowSubject").textContent = (subj.subjectLabel || "主体会员") + " · " + (subj.displayName || subj.name || "已登记");
+  var isEnt = !!(subj && subj.type !== "personal");
 
   function fmt(ts) {
     if (!ts) return "—";
@@ -328,12 +313,85 @@
     return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + " " +
       p(d.getHours()) + ":" + p(d.getMinutes());
   }
-  var submitAt = cert.submittedAt || subj.createdAt || Date.now();
-  $("#mSubmit").textContent = fmt(submitAt);
-  $("#tlSubmit").textContent = "提交于 " + fmt(submitAt);
+  function maskPhone(p) {
+    return p ? p.slice(0, 3) + "****" + p.slice(-4) : "—";
+  }
+
+  /* ===== 回填账号 / 主体信息 ===== */
+  if (subj) {
+    $("#subjectLabel").textContent = isEnt ? "当前企业会员" : "当前个人会员";
+    $("#subjectName").textContent = subj.displayName || subj.name || "—";
+    $("#subjectCode").textContent = isEnt ? (subj.code || "—") : (subj.idCard || "—");
+    $("#mType").textContent = subj.subjectLabel || (isEnt ? "企业会员" : "个人会员");
+    $("#mName").textContent = subj.displayName || subj.name || "—";
+    $("#mCodeLabel").textContent = isEnt ? "统一社会信用代码" : "身份证号";
+    $("#mCode").textContent = isEnt ? (subj.code || "—") : (subj.idCard || "—");
+    $("#mIndustry").textContent = isEnt ? (subj.industry || "—") : ((subj.perType || "—") + " · " + (subj.category || "—"));
+    $("#flowSubject").textContent = (subj.subjectLabel || "主体会员") + " · " + (subj.displayName || subj.name || "已登记");
+    $("#mReviewer").textContent = cert && cert.status !== "none" ? "平台运营 · 审核组" : "—";
+  } else {
+    $("#subjectLabel").textContent = "当前登录账号";
+    $("#subjectName").textContent = acc.name || "农产云用户";
+    $("#subjectCode").textContent = maskPhone(acc.phone);
+    $("#mType").textContent = "未创建主体";
+    $("#mName").textContent = acc.name || "农产云用户";
+    $("#mCodeLabel").textContent = "登录手机号";
+    $("#mCode").textContent = maskPhone(acc.phone);
+    $("#mIndustry").textContent = "—";
+    $("#mReviewer").textContent = "—";
+    $("#flowSubject").textContent = "尚未创建主体会员";
+  }
+
+  var submitAt = (cert && cert.submittedAt) || (subj && subj.createdAt) || null;
+  $("#mSubmit").textContent = submitAt ? fmt(submitAt) : "—";
 
   /* ===== 状态渲染 ===== */
   var STATES = {
+    account: {
+      title: "尚未创建主体会员",
+      tag: '<span data-icon="clock" data-size="12"></span>待创建',
+      tagClass: "tag tag-ghost",
+      heroClass: "",
+      heroIcon: "user",
+      desc: "登录账号已创建。创建企业或个人主体会员后，才能提交认证并开通经营权限；此步骤可稍后完成。",
+      hint: "主体登记尚未完成",
+      permHint: "创建主体并认证后开通",
+      unlocked: false,
+      flowStep2: "cur",
+      flowDesc: "创建主体后开放认证",
+      primary: { href: "member-register.html", icon: "plus", label: "创建主体会员" },
+      secondary: { href: "index.html", icon: "clock", label: "先去逛逛" },
+      showApprove: false, showReject: false,
+      timeline: [
+        { t: "注册 / 登录账号", d: "账号已创建", s: "done" },
+        { t: "创建主体会员", d: "等待登记企业或个人主体", s: "cur" },
+        { t: "提交认证材料", d: "创建主体后可提交", s: "" },
+        { t: "审核与权限开通", d: "审核通过后自动开通", s: "" }
+      ]
+    },
+    certify: {
+      title: "主体已登记，待提交认证",
+      tag: '<span data-icon="clock" data-size="12"></span>待认证',
+      tagClass: "tag tag-amber",
+      heroClass: "",
+      heroIcon: "shield",
+      desc: "主体信息已登记，可随时提交认证材料。提交后由平台运营审核，审核通过即自动开通对应功能权限。",
+      hint: "尚未提交认证",
+      permHint: "认证通过后自动开通",
+      unlocked: false,
+      flow: "cur",
+      flowStep2: "done",
+      flowDesc: "主体已登记 · 待提交认证",
+      primary: { href: "certify.html", icon: "arrow-right", label: "提交认证" },
+      secondary: { href: "index.html", icon: "clock", label: "稍后再说" },
+      showApprove: false, showReject: false,
+      timeline: [
+        { t: "注册 / 登录账号", d: "账号已创建", s: "done" },
+        { t: "创建主体会员", d: "主体信息已登记于 " + fmt(subj && subj.createdAt), s: "done" },
+        { t: "提交认证材料", d: "待提交 · 可随时继续", s: "cur" },
+        { t: "审核与权限开通", d: "审核通过后自动开通", s: "" }
+      ]
+    },
     review: {
       title: "认证审核中",
       tag: '<span data-icon="activity" data-size="12"></span>审核中',
@@ -345,9 +403,17 @@
       permHint: "认证通过后自动开通",
       unlocked: false,
       flow: "cur",
+      flowStep2: "done",
       flowDesc: "审核中 · 预计 1-3 个工作日",
+      primary: { href: "../trade/member.html", icon: "home", label: "进入会员中心" },
+      secondary: { href: "certify.html", icon: "shield", label: "查看认证材料" },
       showApprove: true, showReject: true,
-      resultDone: false
+      timeline: [
+        { t: "主体信息登记", d: "提交于 " + fmt(submitAt), s: "done" },
+        { t: "材料自动校验", d: "工商 / 身份信息一致性校验完成", s: "done" },
+        { t: "运营人工审核", d: "核验经营范围、资质证照与主体真实性", s: "cur" },
+        { t: "审核结果与权限开通", d: "通过后自动开通对应功能权限", s: "" }
+      ]
     },
     approved: {
       title: "认证已通过",
@@ -360,9 +426,17 @@
       permHint: "已全部开通",
       unlocked: true,
       flow: "done",
+      flowStep2: "done",
       flowDesc: "已认证 · 功能权限已开通",
+      primary: { href: "../trade/member.html", icon: "home", label: "进入会员中心" },
+      secondary: { href: "certify.html", icon: "shield", label: "查看认证材料" },
       showApprove: false, showReject: false,
-      resultDone: true
+      timeline: [
+        { t: "主体信息登记", d: "提交于 " + fmt(submitAt), s: "done" },
+        { t: "材料自动校验", d: "工商 / 身份信息一致性校验完成", s: "done" },
+        { t: "运营人工审核", d: "主体真实性与经营范围核验通过", s: "done" },
+        { t: "审核通过 · 权限已开通", d: "于 " + fmt(cert && cert.reviewedAt) + " 完成", s: "done" }
+      ]
     },
     rejected: {
       title: "认证未通过",
@@ -375,9 +449,17 @@
       permHint: "权限暂未开通",
       unlocked: false,
       flow: "err",
+      flowStep2: "done",
       flowDesc: "已驳回 · 请修正材料后重新提交",
+      primary: { href: "certify.html", icon: "arrow-right", label: "重新提交认证" },
+      secondary: { href: "../trade/member.html", icon: "home", label: "进入会员中心" },
       showApprove: true, showReject: false,
-      resultDone: false
+      timeline: [
+        { t: "主体信息登记", d: "提交于 " + fmt(submitAt), s: "done" },
+        { t: "材料自动校验", d: "工商 / 身份信息一致性校验完成", s: "done" },
+        { t: "运营人工审核", d: "于 " + fmt(cert && cert.reviewedAt) + " 完成审核", s: "done" },
+        { t: "审核未通过", d: "请按驳回原因修正材料后重新提交", s: "cur" }
+      ]
     }
   };
 
@@ -394,18 +476,26 @@
     $("#tlHint").textContent = s.hint;
     $("#permHint").textContent = s.permHint;
 
-    /* 链路第三步 */
+    /* 链路第二步：主体登记 */
+    var f2 = $("#flowSubjectStep");
+    f2.className = "fi " + (s.flowStep2 || "");
+    f2.querySelector(".n").innerHTML = s.flowStep2 === "done"
+      ? '<span data-icon="check" data-size="12"></span>'
+      : "2";
+
+    /* 链路第三步：认证审核 */
     var f = $("#flowCert");
-    f.className = "fi " + s.flow;
+    f.className = "fi " + (s.flow || "");
     f.querySelector(".n").innerHTML = s.flow === "done"
       ? '<span data-icon="check" data-size="12"></span>'
       : (s.flow === "err" ? '<span data-icon="close" data-size="12"></span>' : "3");
     $("#flowCertDesc").textContent = s.flowDesc;
 
-    /* 审核时间线 */
-    $("#tlReview").className = "ti done";
-    $("#tlResult").className = "ti " + (st === "review" ? "" : (s.resultDone ? "done" : "cur"));
-    $("#tlResult").querySelector(".tt").textContent = s.resultDone ? "审核通过 · 权限已开通" : "审核结果与权限开通";
+    /* 开通时间线 */
+    $("#timeline").innerHTML = (s.timeline || []).map(function (it) {
+      return '<div class="ti ' + (it.s || "") + '"><span class="d"></span><div>' +
+        '<div class="tt">' + it.t + '</div><div class="dd">' + it.d + '</div></div></div>';
+    }).join("");
 
     /* 权限矩阵 */
     $$("#perms [data-perm]").forEach(function (p) {
@@ -415,9 +505,27 @@
         : '<span data-icon="lock" data-size="15"></span>';
     });
 
-    /* 操作按钮 */
+    /* 主 / 次操作：随当前环节指向不同动作 */
+    var btnP = $("#btnMember"), btnS = $("#btnCert");
+    btnP.setAttribute("href", s.primary.href);
+    btnP.innerHTML = '<span data-icon="' + s.primary.icon + '" data-size="15"></span>' + s.primary.label;
+    btnS.setAttribute("href", s.secondary.href);
+    btnS.innerHTML = '<span data-icon="' + s.secondary.icon + '" data-size="14"></span>' + s.secondary.label;
+
+    /* 顶部返回入口与步骤提示 */
+    var top = $("#topLink");
+    top.setAttribute("href", st === "account" ? "index.html" : "../trade/member.html");
+    top.innerHTML = '<span data-icon="arrow-left" data-size="14"></span>' + (st === "account" ? "返回官网" : "会员中心");
+    $("#topStep").textContent = st === "account"
+      ? "开通进度 · 第 2 步可稍后完成"
+      : st === "certify"
+        ? "开通进度 · 第 3 步可稍后完成"
+        : "开通进度 · 可随时回来查看";
+
+    /* 操作按钮与演示开关 */
     $("#btnApprove").style.display = s.showApprove ? "inline-flex" : "none";
     $("#btnReject").style.display = s.showReject ? "inline-flex" : "none";
+    $("#demoNote").style.display = (st === "account" || st === "certify") ? "none" : "flex";
 
     /* 演示 chips */
     $$("#demoChips .chip").forEach(function (c) {
@@ -428,6 +536,7 @@
   }
 
   function save(st) {
+    if (!subj) return;
     PROTO.Auth.setCert({
       status: st,
       subjectType: subj.type,
@@ -437,7 +546,11 @@
     render(st);
   }
 
-  var cur = cert.status === "approved" ? "approved" : (cert.status === "rejected" ? "rejected" : "review");
+  var cur = !subj ? "account"
+    : (!cert || cert.status === "none") ? "certify"
+    : cert.status === "approved" ? "approved"
+    : cert.status === "rejected" ? "rejected"
+    : "review";
   render(cur);
 
   /* ===== 演示切换 ===== */

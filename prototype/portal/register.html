@@ -240,12 +240,12 @@
       </label>
 
       <div class="form-item" style="margin-top:16px;margin-bottom:0">
-        <button type="button" class="btn-submit" id="btnRegister"><span data-icon="arrow-right" data-size="16"></span>注册并进入下一步</button>
+        <button type="button" class="btn-submit" id="btnRegister"><span data-icon="arrow-right" data-size="16"></span>创建账号</button>
       </div>
 
       <div class="next-tip">
         <span class="ic"><span data-icon="activity" data-size="14"></span></span>
-        <span>下一步将创建<b>主体会员</b>：选择「企业会员」或「个人会员」，登记营业执照 / 身份信息。此步骤不影响账号创建。</span>
+        <span>注册只创建<b>登录账号</b>。主体会员登记与认证<b>可分步完成</b>，也可稍后登录，在「开通进度」中随时继续。</span>
       </div>
     </div>
 
@@ -327,8 +327,8 @@
       PROTO.Auth.setCert(null);
     }
 
-    showToast("<span data-icon='check' data-size='16'></span>账号创建成功，正在进入主体登记...");
-    setTimeout(function () { location.href = "member-register.html"; }, 900);
+    showToast("<span data-icon='check' data-size='16'></span>账号创建成功，主体登记可稍后完成");
+    setTimeout(function () { location.href = "member-status.html"; }, 900);
   });
 })();
 </script>

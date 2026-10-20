@@ -311,14 +311,16 @@
     /* 写入账号层登录态 */
     PROTO.Auth.login(userInfo);
 
-    /* 按当前环节自动跳转：主体登记 → 认证 → 状态/会员中心 */
+    /* 认证已完成 → 会员中心；其余环节 → 开通进度（可随时分步继续） */
     var st = PROTO.Auth.stage();
-    var tip = st === "subject" ? "登录成功，请先创建主体会员"
-            : st === "certify" ? "登录成功，请完成认证以开通权限"
+    var tip = st === "subject" ? "登录成功，主体登记可稍后完成"
+            : st === "certify" ? "登录成功，认证可稍后提交"
             : st === "pending" ? "登录成功，认证审核中"
             : "登录成功，正在进入会员中心";
     showToast("<span data-icon='check' data-size='16'></span>" + tip);
-    setTimeout(function(){ location.href = PROTO.Auth.nextPage(); }, 900);
+    setTimeout(function(){
+      location.href = st === "done" ? "../trade/member.html" : "member-status.html";
+    }, 900);
   });
 })();
 </script>

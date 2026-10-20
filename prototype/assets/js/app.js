@@ -281,6 +281,8 @@
           '<span class="sep">·</span>' +
           '<a href="' + prefix + 'trade/member.html">会员中心</a>' +
           '<span class="sep">·</span>' +
+          '<a href="' + prefix + 'portal/member-status.html">开通进度</a>' +
+          '<span class="sep">·</span>' +
           '<a href="javascript:void(0)" data-auth-action="logout" style="color:#FFD166">退出</a>';
         container.innerHTML = html;
       } else {
