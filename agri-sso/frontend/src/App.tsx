@@ -16,6 +16,7 @@ type Identity = 'enterprise' | 'personal'
 
 interface RegisterForm {
   identity: Identity
+  nickname: string
   companyName: string
   creditCode: string
   industry: string
@@ -127,15 +128,24 @@ function LoginAside(): JSX.Element {
         <span>农产云<small>AGRI · CLOUD</small></span>
       </div>
       <div className="aside-body">
-        <div className="aside-title">让每一笔大宗交易<br />都走向数字化</div>
+        <div className="aside-title">登录农产云<br />继续您的产业协作</div>
         <div className="aside-sub">
-          连接粮油、果蔬、畜禽、茶药、水产、农资六大产业链，智能撮合 + AI Sales Agent 在线议价，
-          让采购与销售效率提升 10 倍。
+          登录后系统会自动识别您所处的环节：未创建主体将引导登记，未认证将引导提交材料，
+          已认证则直接进入会员中心。
         </div>
-        <div className="aside-feats">
-          <div className="f"><span className="ic"><Icon name="shield" /></span><div><strong>平台质检 · 资金担保</strong><small>质检担保、区块链存证，交易全程可追溯</small></div></div>
-          <div className="f"><span className="ic"><Icon name="zap" /></span><div><strong>AI 智能撮合 · 7×24 议价</strong><small>智能匹配供应商，在线议价更高效</small></div></div>
-          <div className="f"><span className="ic"><Icon name="money" /></span><div><strong>供应链金融 · 极速放款</strong><small>订单融资、收货融资、折扣付等多种产品</small></div></div>
+        <div className="flow-list">
+          <div className="flow-item on">
+            <span className="n">1</span>
+            <div><strong>注册账号 / 登录账号</strong><small>手机号 + 验证码 / 账号密码，仅用于身份登录</small></div>
+          </div>
+          <div className="flow-item">
+            <span className="n">2</span>
+            <div><strong>创建主体会员</strong><small>登录后登记企业或个人主体，取得交易身份</small></div>
+          </div>
+          <div className="flow-item">
+            <span className="n">3</span>
+            <div><strong>认证审核 · 开通权限</strong><small>审核通过后自动开通交易 / 金融 / 溯源等功能</small></div>
+          </div>
         </div>
         <div className="aside-stats">
           <div><div className="n">12,800+</div><div className="d">认证企业</div></div>
@@ -155,20 +165,29 @@ function RegisterAside(): JSX.Element {
         <span>农产云<small>AGRI · CLOUD</small></span>
       </div>
       <div className="aside-body">
-        <div className="aside-title">免费注册<br />即刻开启数字化交易</div>
+        <div className="aside-title">先创建账号<br />再开通会员能力</div>
         <div className="aside-sub">
-          注册成为农产云会员，享受大宗交易撮合、AI 智能议价、供应链金融与物联网溯源等全链路服务。
+          农产云采用「账号 → 主体 → 认证」三段式开通流程。本页将一次收集账号与主体资料，
+          提交后进入平台认证审核。
         </div>
-        <div className="aside-feats">
-          <div className="f"><span className="ic"><Icon name="cart" /></span><div><strong>免费开店 · 精准询单</strong><small>AI 智能匹配供应商，7×24 在线议价更高效</small></div></div>
-          <div className="f"><span className="ic"><Icon name="box" /></span><div><strong>拓客无忧 · 订单直达</strong><small>12,800+ 认证采购商精准询单，订单直接推送</small></div></div>
-          <div className="f"><span className="ic"><Icon name="money" /></span><div><strong>资金保障 · 供应链金融</strong><small>订单融资、收货融资、折扣付等多种金融产品</small></div></div>
-          <div className="f"><span className="ic"><Icon name="shield" /></span><div><strong>交易安全 · 平台担保</strong><small>质检担保、区块链存证、四流核验机制</small></div></div>
+        <div className="flow-list">
+          <div className="flow-item on">
+            <span className="n">1</span>
+            <div><strong>注册账号 / 登录账号</strong><small>手机号 + 验证码 + 密码，创建登录凭证</small></div>
+          </div>
+          <div className="flow-item">
+            <span className="n">2</span>
+            <div><strong>创建主体会员</strong><small>选择企业或个人类型，登记主体信息</small></div>
+          </div>
+          <div className="flow-item">
+            <span className="n">3</span>
+            <div><strong>认证审核 · 开通权限</strong><small>材料审核通过后，自动开通交易 / 金融 / 溯源能力</small></div>
+          </div>
         </div>
         <div className="aside-stats">
-          <div><div className="n">38万+</div><div className="d">注册用户</div></div>
-          <div><div className="n">12,800+</div><div className="d">认证采购商</div></div>
-          <div><div className="n">96.5%</div><div className="d">认证通过率</div></div>
+          <div><div className="n">38万+</div><div className="d">注册账号</div></div>
+          <div><div className="n">12,800+</div><div className="d">认证主体</div></div>
+          <div><div className="n">4.2h</div><div className="d">平均审核时长</div></div>
         </div>
       </div>
     </aside>
@@ -185,7 +204,6 @@ export default function App(): JSX.Element {
   const contextMissing = ctx.clientId === '' || ctx.redirectUri === ''
 
   const [tab, setTab] = useState<LoginTab>('sms')
-  const [identity, setIdentity] = useState<Identity>('enterprise')
   const [phone, setPhone] = useState('')
   const [smsCode, setSmsCode] = useState('')
   const [account, setAccount] = useState('')
@@ -194,6 +212,7 @@ export default function App(): JSX.Element {
 
   const [reg, setReg] = useState<RegisterForm>({
     identity: 'enterprise',
+    nickname: '',
     companyName: '',
     creditCode: '',
     industry: INDUSTRIES[0],
@@ -300,7 +319,6 @@ export default function App(): JSX.Element {
         state: ctx.state,
         codeChallenge: ctx.codeChallenge,
         codeChallengeMethod: ctx.codeChallengeMethod,
-        identity,
         remember,
       }
       const response = await fetch(tab === 'sms' ? '/api/v1/sso/login-by-sms' : '/api/v1/sso/login', {
@@ -400,7 +418,8 @@ export default function App(): JSX.Element {
         body: JSON.stringify({
           phone: reg.phone,
           code: reg.code,
-          nickname: reg.identity === 'enterprise' ? reg.companyName.trim() : reg.realName.trim(),
+          nickname: reg.nickname.trim()
+            || (reg.identity === 'enterprise' ? reg.companyName.trim() : reg.realName.trim()),
           marketId: 1,
           password: reg.password,
           identity: reg.identity,
@@ -440,7 +459,7 @@ export default function App(): JSX.Element {
   const loginView = (
     <>
       <div className="form-title">欢迎回来</div>
-      <div className="form-sub">登录以查看订单、使用 AI 撮合与议价、申请供应链金融</div>
+      <div className="form-sub">登录后将自动识别您所处的账号环节，并引导至对应页面</div>
 
       <div className="auth-tabs" role="tablist" aria-label="登录方式">
         <button type="button" role="tab" aria-selected={tab === 'sms'} className={tab === 'sms' ? 'on' : ''}
@@ -454,16 +473,6 @@ export default function App(): JSX.Element {
       </div>
 
       <form className="auth-form" onSubmit={(event) => void submitLogin(event)}>
-        <div className="auth-field">
-          <span>登录身份</span>
-          <div className="identity-inline">
-            <label><input type="radio" name="login-identity" checked={identity === 'enterprise'}
-              onChange={() => setIdentity('enterprise')} />企业会员</label>
-            <label><input type="radio" name="login-identity" checked={identity === 'personal'}
-              onChange={() => setIdentity('personal')} />个人会员</label>
-          </div>
-        </div>
-
         {tab === 'sms' ? (
           <>
             <label className="auth-field">
@@ -490,7 +499,7 @@ export default function App(): JSX.Element {
             <label className="auth-field">
               账号
               <input className="auth-input" value={account} autoComplete="username"
-                placeholder={identity === 'enterprise' ? '请输入账号（手机号 / 用户名）' : '请输入手机号 / 用户名'}
+                placeholder="请输入手机号 / 用户名"
                 onChange={(event) => { setAccount(event.target.value); setError('') }} />
             </label>
             <label className="auth-field">
@@ -547,16 +556,63 @@ export default function App(): JSX.Element {
 
   const registerView = (
     <>
-      <div className="form-title">创建账号</div>
-      <div className="form-sub">加入 38 万+ 注册用户，开启产业数字化协作</div>
+      <div className="form-title">创建登录账号</div>
+      <div className="form-sub">填写账号、短信验证码与主体会员资料，提交后进入平台认证审核</div>
 
       <div className="steps">
-        <div className="step on">① 填写信息</div>
-        <div className="step">② 提交审核</div>
-        <div className="step">③ 完成入驻</div>
+        <div className="step on">1 注册账号</div>
+        <div className="step on">2 创建主体</div>
+        <div className="step">3 认证开通</div>
       </div>
 
       <form className="auth-form" onSubmit={(event) => void submitRegister(event)}>
+        <div className="form-section">账号信息<small>用于登录、接收审核结果与交易通知</small></div>
+
+        <label className="auth-field">
+          联系电话<span className="req">*</span>
+          <input className="auth-input" type="tel" value={reg.phone} maxLength={11} inputMode="numeric"
+            autoComplete="tel" placeholder="请输入 11 位手机号"
+            onChange={(event) => patchReg({ phone: event.target.value.replace(/\D/g, '') })} />
+        </label>
+
+        <label className="auth-field">
+          短信验证码<span className="req">*</span>
+          <div className="code-row">
+            <input className="auth-input" value={reg.code} maxLength={6} inputMode="numeric"
+              placeholder="6 位验证码"
+              onChange={(event) => patchReg({ code: event.target.value.replace(/\D/g, '') })} />
+            <button type="button" className="btn-code" disabled={sending !== null || registerLeft > 0}
+              onClick={() => void requestCode('register', reg.phone, 'register')}>
+              {sending === 'register' ? '发送中…' : registerLeft > 0 ? `重新获取（${registerLeft}s）` : '获取验证码'}
+            </button>
+          </div>
+        </label>
+
+        <div className="form-grid">
+          <label className="auth-field">
+            设置密码<span className="req">*</span>
+            <input className="auth-input" type="password" value={reg.password} maxLength={20}
+              autoComplete="new-password" placeholder="8-20 位字母+数字"
+              onChange={(event) => patchReg({ password: event.target.value })} />
+            <span className={`pwd-meter ${strength}`}><i /><i /><i /></span>
+          </label>
+          <label className="auth-field">
+            确认密码<span className="req">*</span>
+            <input className="auth-input" type="password" value={reg.confirm} maxLength={20}
+              autoComplete="new-password" placeholder="再次输入密码"
+              onChange={(event) => patchReg({ confirm: event.target.value })} />
+          </label>
+        </div>
+
+        <label className="auth-field">
+          称呼 <small className="muted">选填</small>
+          <input className="auth-input" value={reg.nickname} maxLength={20}
+            placeholder="如：王经理（用于平台内展示，可后续修改）"
+            onChange={(event) => patchReg({ nickname: event.target.value })} />
+        </label>
+
+        <div className="form-section">主体会员<small>选择企业或个人，资料随账号一并提交审核</small></div>
+
         <div className="auth-field">
           <span>注册身份</span>
           <div className="identity-cards">
@@ -635,50 +691,11 @@ export default function App(): JSX.Element {
           </>
         )}
 
-        <div className="form-section">联系人 &amp; 登录信息<small>用于账号登录、订单与审核通知</small></div>
-
-        <div className="form-grid">
-          <label className="auth-field">
-            联系人姓名<span className="req">*</span>
-            <input className="auth-input" value={reg.contactName} placeholder="用于接收重要通知"
-              onChange={(event) => patchReg({ contactName: event.target.value })} />
-          </label>
-          <label className="auth-field">
-            联系电话<span className="req">*</span>
-            <input className="auth-input" type="tel" value={reg.phone} maxLength={11} inputMode="numeric"
-              placeholder="11 位手机号"
-              onChange={(event) => patchReg({ phone: event.target.value.replace(/\D/g, '') })} />
-          </label>
-        </div>
-
         <label className="auth-field">
-          短信验证码<span className="req">*</span>
-          <div className="code-row">
-            <input className="auth-input" value={reg.code} maxLength={6} inputMode="numeric"
-              placeholder="6 位验证码"
-              onChange={(event) => patchReg({ code: event.target.value.replace(/\D/g, '') })} />
-            <button type="button" className="btn-code" disabled={sending !== null || registerLeft > 0}
-              onClick={() => void requestCode('register', reg.phone, 'register')}>
-              {sending === 'register' ? '发送中…' : registerLeft > 0 ? `重新获取（${registerLeft}s）` : '获取验证码'}
-            </button>
-          </div>
+          联系人姓名<span className="req">*</span>
+          <input className="auth-input" value={reg.contactName} placeholder="用于接收重要通知"
+            onChange={(event) => patchReg({ contactName: event.target.value })} />
         </label>
-
-        <div className="form-grid">
-          <label className="auth-field">
-            设置密码<span className="req">*</span>
-            <input className="auth-input" type="password" value={reg.password} maxLength={20}
-              placeholder="8-20 位字母+数字"
-              onChange={(event) => patchReg({ password: event.target.value })} />
-            <span className={`pwd-meter ${strength}`}><i /><i /><i /></span>
-          </label>
-          <label className="auth-field">
-            确认密码<span className="req">*</span>
-            <input className="auth-input" type="password" value={reg.confirm} maxLength={20}
-              placeholder="再次输入密码"
-              onChange={(event) => patchReg({ confirm: event.target.value })} />
-          </label>
-        </div>
 
         <label className="agreement">
           <input type="checkbox" checked={reg.agree} onChange={(event) => patchReg({ agree: event.target.checked })} />
@@ -700,9 +717,12 @@ export default function App(): JSX.Element {
         </label>
 
         <button type="submit" className="auth-submit" style={{ marginTop: 18 }} disabled={busy}>
-          {busy ? '提交中…' : '免费注册'}
+          {busy ? '提交中…' : '提交注册并进入审核'}
         </button>
 
+        <div className="auth-notice">
+          提交后将同时创建登录账号、经营主体与待审核认证记录；审核通过后认证状态才会生效。
+        </div>
         {contextMissing && <div className="auth-notice">当前为独立注册：账号会正常创建并登录认证中心，完成后请从子系统入口进入。</div>}
         {error !== '' && <div className="auth-error">{error}</div>}
         {hint !== '' && <div className="auth-hint">{hint}</div>}
