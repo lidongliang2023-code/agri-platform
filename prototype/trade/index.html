@@ -92,10 +92,7 @@
             </div>
             <div class="form-item">
               <label>产地</label>
-              <div class="chips">
-                <span class="chip on">山东</span><span class="chip">河南</span><span class="chip">湖北</span>
-                <span class="chip">黑龙江</span><span class="chip">江西</span><span class="chip">广东</span>
-              </div>
+              <div class="chips" id="fprov"></div>
             </div>
             <div class="form-item">
               <label>价格区间（元/吨）</label>
@@ -133,7 +130,7 @@
           <div class="card mb-16">
             <div class="card-b tight">
               <div class="toolbar">
-                <span class="muted t-sm">共 <b class="mono">27</b> 个在售商品（当前第 1 页，展示前 9 条）</span>
+                <span class="muted t-sm">共 <b class="mono" id="prodCount">9</b> 个在售商品（当前第 1 页，展示前 9 条）</span>
                 <span class="spacer"></span>
                 <span class="muted t-sm">排序：</span>
                 <div class="chips">
@@ -147,9 +144,9 @@
           </div>
 
           <!-- 商品网格 -->
-          <div class="grid grid-3">
+          <div class="grid grid-3" id="prodGrid">
 
-            <a class="card card-hover" href="detail.html"><div class="card-b">
+            <a class="card card-hover" href="detail.html" data-loc="黑龙江"><div class="card-b">
               <div style="height:150px;border-radius:10px;background:linear-gradient(135deg,#E4F6EC,#C9E9D8);display:grid;place-items:center;color:var(--green-700)"><span data-icon="seed" data-size="48"></span></div>
               <div class="row between center mt-12"><span class="strong ellipsis">富硒大米</span><span class="tag">基地直供</span></div>
               <div class="muted t-xs mt-8">黑龙江 · 五常基地 · 25kg/袋</div>
@@ -157,7 +154,7 @@
               <div class="muted t-xs mt-8 ellipsis">起订量 1 吨 · 五常市稻香米业</div>
             </div></a>
 
-            <a class="card card-hover" href="detail.html"><div class="card-b">
+            <a class="card card-hover" href="detail.html" data-loc="湖北"><div class="card-b">
               <div style="height:150px;border-radius:10px;background:linear-gradient(135deg,#FEF3C7,#FCE7B6);display:grid;place-items:center;color:#B45309"><span data-icon="drop" data-size="48"></span></div>
               <div class="row between center mt-12"><span class="strong ellipsis">一级压榨菜籽油</span><span class="tag tag-amber">非转基因</span></div>
               <div class="muted t-xs mt-8">湖北 · 荆州 · 5L×4桶/箱</div>
@@ -165,7 +162,7 @@
               <div class="muted t-xs mt-8 ellipsis">起订量 5 吨 · 湖北荆楚粮油</div>
             </div></a>
 
-            <a class="card card-hover" href="detail.html"><div class="card-b">
+            <a class="card card-hover" href="detail.html" data-loc="山东"><div class="card-b">
               <div style="height:150px;border-radius:10px;background:linear-gradient(135deg,#E0F2FE,#BAE6FD);display:grid;place-items:center;color:var(--tech-700)"><span data-icon="box" data-size="48"></span></div>
               <div class="row between center mt-12"><span class="strong ellipsis">豆粕 43% 蛋白</span><span class="tag tag-tech">港口现货</span></div>
               <div class="muted t-xs mt-8">山东 · 日照港 · 散装</div>
@@ -173,7 +170,7 @@
               <div class="muted t-xs mt-8 ellipsis">起订量 10 吨 · 日照港粮油贸易</div>
             </div></a>
 
-            <a class="card card-hover" href="detail.html"><div class="card-b">
+            <a class="card card-hover" href="detail.html" data-loc="江西"><div class="card-b">
               <div style="height:150px;border-radius:10px;background:linear-gradient(135deg,#FFE4D6,#FFD2BC);display:grid;place-items:center;color:#D9541E"><span data-icon="sun" data-size="48"></span></div>
               <div class="row between center mt-12"><span class="strong ellipsis">赣南脐橙（果径75+）</span><span class="tag tag-red">当季鲜果</span></div>
               <div class="muted t-xs mt-8">江西 · 赣州 · 20斤/箱</div>
@@ -181,7 +178,7 @@
               <div class="muted t-xs mt-8 ellipsis">起订量 100 箱 · 赣南脐橙合作社</div>
             </div></a>
 
-            <a class="card card-hover" href="detail.html"><div class="card-b">
+            <a class="card card-hover" href="detail.html" data-loc="云南"><div class="card-b">
               <div style="height:150px;border-radius:10px;background:linear-gradient(135deg,#E4F6EC,#C9E9D8);display:grid;place-items:center;color:var(--green-700)"><span data-icon="leaf" data-size="48"></span></div>
               <div class="row between center mt-12"><span class="strong ellipsis">有机红茶 · 一芽一叶</span><span class="tag">有机认证</span></div>
               <div class="muted t-xs mt-8">云南 · 临沧 · 500g/罐</div>
@@ -189,7 +186,7 @@
               <div class="muted t-xs mt-8 ellipsis">起订量 50 罐 · 临沧滇红茶业</div>
             </div></a>
 
-            <a class="card card-hover" href="detail.html"><div class="card-b">
+            <a class="card card-hover" href="detail.html" data-loc="河南"><div class="card-b">
               <div style="height:150px;border-radius:10px;background:linear-gradient(135deg,#FDECD9,#FBD9B5);display:grid;place-items:center;color:#B45309"><span data-icon="activity" data-size="48"></span></div>
               <div class="row between center mt-12"><span class="strong ellipsis">冷鲜猪肉（白条）</span><span class="tag tag-tech">冷链配送</span></div>
               <div class="muted t-xs mt-8">河南 · 牧原基地 · 冷链直发</div>
@@ -197,7 +194,7 @@
               <div class="muted t-xs mt-8 ellipsis">起订量 500 kg · 牧原食品股份</div>
             </div></a>
 
-            <a class="card card-hover" href="detail.html"><div class="card-b">
+            <a class="card card-hover" href="detail.html" data-loc="广东"><div class="card-b">
               <div style="height:150px;border-radius:10px;background:linear-gradient(135deg,#E0F2FE,#BAE6FD);display:grid;place-items:center;color:var(--tech-700)"><span data-icon="drop" data-size="48"></span></div>
               <div class="row between center mt-12"><span class="strong ellipsis">南美白对虾（冻）</span><span class="tag tag-tech">出口级</span></div>
               <div class="muted t-xs mt-8">广东 · 湛江 · 净重20kg/箱</div>
@@ -205,7 +202,7 @@
               <div class="muted t-xs mt-8 ellipsis">起订量 200 kg · 湛江国联水产</div>
             </div></a>
 
-            <a class="card card-hover" href="detail.html"><div class="card-b">
+            <a class="card card-hover" href="detail.html" data-loc="山东"><div class="card-b">
               <div style="height:150px;border-radius:10px;background:linear-gradient(135deg,#E4F6EC,#C9E9D8);display:grid;place-items:center;color:var(--green-700)"><span data-icon="box" data-size="48"></span></div>
               <div class="row between center mt-12"><span class="strong ellipsis">复合微生物肥</span><span class="tag">减施增效</span></div>
               <div class="muted t-xs mt-8">山东 · 金正大 · 40kg/袋</div>
@@ -213,7 +210,7 @@
               <div class="muted t-xs mt-8 ellipsis">起订量 2 吨 · 金正大生态工程</div>
             </div></a>
 
-            <a class="card card-hover" href="detail.html"><div class="card-b">
+            <a class="card card-hover" href="detail.html" data-loc="吉林"><div class="card-b">
               <div style="height:150px;border-radius:10px;background:linear-gradient(135deg,#FDECD9,#FBD9B5);display:grid;place-items:center;color:#B45309"><span data-icon="seed" data-size="48"></span></div>
               <div class="row between center mt-12"><span class="strong ellipsis">优质蛋白玉米</span><span class="tag tag-amber">高蛋白</span></div>
               <div class="muted t-xs mt-8">吉林 · 长春 · 散装</div>
@@ -371,11 +368,12 @@
 
 <script src="../assets/js/app.js"></script>
 <script>
-/* 交易大厅 · 产业链三级分类级联筛选 */
+/* 交易大厅 · 产业链三级分类 + 全国 34 省产地筛选 */
 (function () {
   "use strict";
-  var T = (window.PROTO && window.PROTO.TAXONOMY) || {};
-  var st = { l1: "", l2: "", l3: "" };
+  var T   = (window.PROTO && window.PROTO.TAXONOMY)   || {};
+  var PROV= (window.PROTO && window.PROTO.PROVINCES) || [];
+  var st = { l1: "", l2: "", l3: "", loc: "" };
 
   function esc(s) {
     return String(s).replace(/[&<>"]/g, function (c) {
@@ -388,6 +386,7 @@
   }
   function hint(t) { return '<span class="muted t-xs" style="padding:4px 0">' + t + "</span>"; }
 
+  /* ---------- 三级产业链 ---------- */
   function render1() {
     var h = chip("1", "", "全部", st.l1 === "");
     for (var k in T) h += chip("1", k, k, st.l1 === k);
@@ -408,11 +407,46 @@
     b.innerHTML = h;
   }
 
-  /* 深链：?l1=粮油产业&l2=稻谷·大米&l3=富硒大米 */
+  /* ---------- 全国 34 省产地（按大区分组 + 官方行政区划代码顺序） ---------- */
+  function renderProv() {
+    var groups = {}, i, g, h = chip("loc", "", "全部省份", st.loc === "");
+    for (i = 0; i < PROV.length; i++) {
+      g = PROV[i].group;
+      if (!groups[g]) groups[g] = [];
+      groups[g].push(PROV[i]);
+    }
+    var groupOrder = ["华北", "东北", "华东", "华中", "华南", "西南", "西北", "港澳台"];
+    for (var gi = 0; gi < groupOrder.length; gi++) {
+      var grp = groupOrder[gi];
+      if (!groups[grp]) continue;
+      h += '<div style="width:100%;font-size:11px;color:var(--ink-400);font-weight:600;letter-spacing:2px;margin-top:6px">' + grp + '</div>';
+      for (var j = 0; j < groups[grp].length; j++) {
+        h += chip("loc", groups[grp][j].name, groups[grp][j].name, st.loc === groups[grp][j].name);
+      }
+    }
+    document.getElementById("fprov").innerHTML = h;
+  }
+
+  /* ---------- 右侧商品卡过滤（产地联动） ---------- */
+  function paintProducts() {
+    var cards = document.querySelectorAll("#prodGrid > .card");
+    var visible = 0, i;
+    for (i = 0; i < cards.length; i++) {
+      var loc = cards[i].getAttribute("data-loc") || "";
+      var show = !st.loc || loc === st.loc;
+      cards[i].style.display = show ? "" : "none";
+      if (show) visible++;
+    }
+    var c = document.getElementById("prodCount");
+    if (c) c.textContent = visible;
+  }
+
+  /* ---------- 深链 ---------- */
   function fromQuery() {
     try {
       var q = new URLSearchParams(location.search);
       var a = q.get("l1") || "", b = q.get("l2") || "", c = q.get("l3") || "";
+      var loc = q.get("loc") || "";
       if (a && T[a]) {
         st.l1 = a;
         if (b && T[a].l2[b]) {
@@ -420,22 +454,27 @@
           if (c && T[a].l2[b].indexOf(c) >= 0) st.l3 = c;
         }
       }
+      var validProv = false;
+      for (var i = 0; i < PROV.length; i++) if (PROV[i].name === loc) { validProv = true; break; }
+      if (validProv) st.loc = loc;
     } catch (err) { /* 忽略非法参数 */ }
   }
 
-  /* 点击级联：仅重绘下级，保留被点层级原节点，
-     以便全局 bindChips 完成高亮 */
+  /* ---------- 点击事件委托 ---------- */
   document.addEventListener("click", function (e) {
     var c = e.target.closest("[data-level]");
     if (!c) return;
     var lvl = c.getAttribute("data-level"), val = c.getAttribute("data-value") || "";
-    if (lvl === "1") { st.l1 = val; st.l2 = ""; st.l3 = ""; render2(); render3(); }
-    else if (lvl === "2") { if (!st.l1) return; st.l2 = val; st.l3 = ""; render3(); }
-    else if (lvl === "3") { if (!st.l2) return; st.l3 = val; }
+    if (lvl === "1") { st.l1 = val; st.l2 = ""; st.l3 = ""; render1(); render2(); render3(); }
+    else if (lvl === "2") { if (!st.l1) return; st.l2 = val; st.l3 = ""; render2(); render3(); }
+    else if (lvl === "3") { if (!st.l2) return; st.l3 = val; render3(); }
+    else if (lvl === "loc") { st.loc = val; renderProv(); paintProducts(); }
   });
 
   fromQuery();
   render1(); render2(); render3();
+  renderProv();
+  paintProducts();
 })();
 </script>
 </body>

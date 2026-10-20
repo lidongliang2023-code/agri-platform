@@ -120,6 +120,10 @@
         <div class="fl">三级分类<small>品种 / 规格</small></div>
         <div class="lv-chips" id="lv3"></div>
       </div>
+      <div class="filter-row">
+        <div class="fl">产地<small>全国 34 省市</small></div>
+        <div class="lv-chips" id="lvprov"></div>
+      </div>
     </div>
   </div>
 </section>
@@ -247,8 +251,10 @@
     };
   });
 
+  var PROVINCES = (window.PROTO && window.PROTO.PROVINCES) || [];
+
   var PAGE_SIZE = 8;
-  var state = { l1: "", l2: "", l3: "", sort: "综合", page: 1 };
+  var state = { l1: "", l2: "", l3: "", loc: "", sort: "综合", page: 1 };
 
   function esc(s) {
     return String(s).replace(/[&<>"]/g, function (c) {
@@ -281,25 +287,54 @@
     for (i = 0; i < l3.length; i++) h += chip("3", l3[i], l3[i], state.l3 === l3[i]);
     box.innerHTML = h;
   }
+  function renderProv() {
+    var box = document.getElementById("lvprov");
+    var groups = {}, i, g;
+    for (i = 0; i < PROVINCES.length; i++) {
+      g = PROVINCES[i].group;
+      if (!groups[g]) groups[g] = [];
+      groups[g].push(PROVINCES[i]);
+    }
+    var h = chip("loc", "", "全部省份", state.loc === "");
+    var groupOrder = ["华北", "东北", "华东", "华中", "华南", "西南", "西北", "港澳台"];
+    for (var gi = 0; gi < groupOrder.length; gi++) {
+      var grp = groupOrder[gi];
+      if (!groups[grp]) continue;
+      h += '<div style="width:100%;font-size:11px;color:var(--ink-400);font-weight:600;letter-spacing:2px;margin-top:8px">' + grp + '</div>';
+      for (var j = 0; j < groups[grp].length; j++) {
+        h += chip("loc", groups[grp][j].name, groups[grp][j].name, state.loc === groups[grp][j].name);
+      }
+    }
+    box.innerHTML = h;
+  }
   function renderTrail() {
     var box = document.getElementById("trail");
-    if (!state.l1) {
+    var count = filtered().length;
+    if (!state.l1 && !state.loc) {
       box.innerHTML = '<span class="muted t-sm">当前：全部产业链 · 共 ' + PRODUCTS.length + ' 个优质货源</span>';
       return;
     }
     var h = '<a href="javascript:void(0)" data-level="1" data-value="" class="strong" style="color:var(--green-700)">全部产业链</a>' +
-      '<span class="tsep">/</span><span class="strong">' + esc(state.l1) + "</span>";
+      '<span class="tsep">/</span><span class="strong">' + esc(state.l1 || "全部产业") + "</span>";
     if (state.l2) h += '<span class="tsep">/</span><span class="strong">' + esc(state.l2) + "</span>";
     if (state.l3) h += '<span class="tsep">/</span><span style="color:var(--green-700);font-weight:600">' + esc(state.l3) + "</span>";
+    if (state.loc) h += '<span class="tsep">·</span><span class="strong" style="color:var(--tech-600)">产地：' + esc(state.loc) + "</span>";
+    h += '<span class="tsep">·</span><span class="muted">匹配 <b class="mono" style="color:var(--green-700)">' + count + '</b> 个货源</span>';
     box.innerHTML = h;
   }
 
   /* ---------- 过滤 / 排序 / 分页 ---------- */
   function filtered() {
     var arr = PRODUCTS.filter(function (p) {
+      var locHit = true;
+      if (state.loc) {
+        // loc 形如 "黑龙江·五常"，检查省名前缀
+        locHit = (p.loc === state.loc) || p.loc.indexOf(state.loc) === 0 ||
+                 p.loc.indexOf(state.loc + "·") === 0 || p.loc.indexOf(state.loc + " ") === 0;
+      }
       return (!state.l1 || p.l1 === state.l1) &&
         (!state.l2 || p.l2 === state.l2) &&
-        (!state.l3 || p.l3 === state.l3);
+        (!state.l3 || p.l3 === state.l3) && locHit;
     });
     if (state.sort === "价格从低到高") {
       arr.sort(function (a, b) {
@@ -379,6 +414,7 @@
       if (lvl === "1") { state.l1 = val; state.l2 = ""; state.l3 = ""; state.page = 1; renderL1(); renderL2(); renderL3(); renderTrail(); paint(true); }
       else if (lvl === "2") { if (!state.l1) return; state.l2 = val; state.l3 = ""; state.page = 1; renderL2(); renderL3(); renderTrail(); paint(true); }
       else if (lvl === "3") { if (!state.l2) return; state.l3 = val; state.page = 1; renderL3(); renderTrail(); paint(true); }
+      else if (lvl === "loc") { state.loc = val; state.page = 1; renderProv(); renderTrail(); paint(true); }
       return;
     }
     var s = e.target.closest("[data-sort]");
@@ -396,16 +432,16 @@
     }
 
     if (e.target.closest("#clear")) {
-      state.l1 = ""; state.l2 = ""; state.l3 = ""; state.sort = "综合"; state.page = 1;
-      renderL1(); renderL2(); renderL3(); renderTrail(); resetSort(); paint(true);
+      state.l1 = ""; state.l2 = ""; state.l3 = ""; state.loc = ""; state.sort = "综合"; state.page = 1;
+      renderL1(); renderL2(); renderL3(); renderProv(); renderTrail(); resetSort(); paint(true);
     }
   });
 
-  /* ---------- 深链：?l1=果蔬产业&l2=柑橘 ---------- */
+  /* ---------- 深链：?l1=果蔬产业&l2=柑橘&loc=江西 ---------- */
   function fromQuery() {
     try {
       var q = new URLSearchParams(location.search);
-      var l1 = q.get("l1") || "", l2 = q.get("l2") || "", l3 = q.get("l3") || "";
+      var l1 = q.get("l1") || "", l2 = q.get("l2") || "", l3 = q.get("l3") || "", loc = q.get("loc") || "";
       if (l1 && TAXONOMY[l1]) {
         state.l1 = l1;
         if (l2 && TAXONOMY[l1].l2[l2]) {
@@ -413,12 +449,15 @@
           if (l3 && TAXONOMY[l1].l2[l2].indexOf(l3) >= 0) state.l3 = l3;
         }
       }
+      for (var i = 0; i < PROVINCES.length; i++) {
+        if (PROVINCES[i].name === loc) { state.loc = loc; break; }
+      }
     } catch (err) { /* 忽略非法参数 */ }
   }
 
   function init() {
     fromQuery();
-    renderL1(); renderL2(); renderL3(); renderTrail();
+    renderL1(); renderL2(); renderL3(); renderProv(); renderTrail();
     paint(true);
   }
 

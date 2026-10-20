@@ -305,10 +305,58 @@
     } }
   };
 
+  /* ---------- 全国 34 省级行政区（按官方行政区划代码顺序） ----------
+     group：大区分组，便于 UI 折叠分组显示 */
+  var PROVINCES = [
+    /* 华北 */
+    { code: 11, name: "北京", group: "华北" },
+    { code: 12, name: "天津", group: "华北" },
+    { code: 13, name: "河北", group: "华北" },
+    { code: 14, name: "山西", group: "华北" },
+    { code: 15, name: "内蒙古", group: "华北" },
+    /* 东北 */
+    { code: 21, name: "辽宁", group: "东北" },
+    { code: 22, name: "吉林", group: "东北" },
+    { code: 23, name: "黑龙江", group: "东北" },
+    /* 华东 */
+    { code: 31, name: "上海", group: "华东" },
+    { code: 32, name: "江苏", group: "华东" },
+    { code: 33, name: "浙江", group: "华东" },
+    { code: 34, name: "安徽", group: "华东" },
+    { code: 35, name: "福建", group: "华东" },
+    { code: 36, name: "江西", group: "华东" },
+    { code: 37, name: "山东", group: "华东" },
+    /* 华中 */
+    { code: 41, name: "河南", group: "华中" },
+    { code: 42, name: "湖北", group: "华中" },
+    { code: 43, name: "湖南", group: "华中" },
+    /* 华南 */
+    { code: 44, name: "广东", group: "华南" },
+    { code: 45, name: "广西", group: "华南" },
+    { code: 46, name: "海南", group: "华南" },
+    /* 西南 */
+    { code: 50, name: "重庆", group: "西南" },
+    { code: 51, name: "四川", group: "西南" },
+    { code: 52, name: "贵州", group: "西南" },
+    { code: 53, name: "云南", group: "西南" },
+    { code: 54, name: "西藏", group: "西南" },
+    /* 西北 */
+    { code: 61, name: "陕西", group: "西北" },
+    { code: 62, name: "甘肃", group: "西北" },
+    { code: 63, name: "青海", group: "西北" },
+    { code: 64, name: "宁夏", group: "西北" },
+    { code: 65, name: "新疆", group: "西北" },
+    /* 港澳台 */
+    { code: 71, name: "台湾", group: "港澳台" },
+    { code: 81, name: "香港", group: "港澳台" },
+    { code: 82, name: "澳门", group: "港澳台" }
+  ];
+
   window.PROTO = {
     hydrateIcons: hydrateIcons,
     ICONS: ICONS,
     TAXONOMY: TAXONOMY,
+    PROVINCES: PROVINCES,
     Auth: {
       get: Auth,
       login: loginUser,
