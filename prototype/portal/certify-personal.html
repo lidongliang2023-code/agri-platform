@@ -331,7 +331,7 @@
 
                 <div class="row gap-12 center mt-24" style="justify-content:center">
                   <a class="btn btn-outline" href="certify.html"><span data-icon="award"></span>返回认证中心</a>
-                  <a class="btn btn-outline" href="certify-enterprise.html"><span data-icon="factory"></span>继续企业认证</a>
+                  <a class="btn btn-outline" href="certify-enterprise.html" id="btnToEnt"><span data-icon="factory"></span>继续企业认证</a>
                   <a class="btn btn-primary" href="../trade/index.html"><span data-icon="cart"></span>去交易大厅</a>
                 </div>
               </div>
@@ -354,7 +354,7 @@
 
                 <div class="row gap-12 center mt-24" style="justify-content:center">
                   <a class="btn btn-outline" href="certify.html"><span data-icon="award"></span>返回认证中心</a>
-                  <a class="btn btn-outline" href="../trade/index.html"><span data-icon="cart"></span>先去交易大厅</a>
+                  <a class="btn btn-primary" href="member-status.html"><span data-icon="shield"></span>查看审核与权限开通</a>
                 </div>
               </div>
             </div>
@@ -517,7 +517,21 @@
     window.scrollTo({ top: $("#wizardCard").offsetTop - 80, behavior: "smooth" });
   }
 
-  function showResult(kind) { resultView = kind; renderStep(); }
+  function showResult(kind) {
+    resultView = kind;
+    /* 同步认证状态到账号（供会员中心 / 权限开通页读取） */
+    if (window.PROTO && PROTO.Auth) {
+      var map = { review: "review", done: "approved", reject: "rejected" };
+      var prev = PROTO.Auth.getCert() || {};
+      PROTO.Auth.setCert({
+        status: map[kind] || "none",
+        subjectType: "personal",
+        submittedAt: prev.submittedAt || (kind === "review" ? Date.now() : null),
+        reviewedAt: kind === "done" || kind === "reject" ? Date.now() : null
+      });
+    }
+    renderStep();
+  }
   function backToForm() { resultView = null; step = 1; renderStep(); showToast("请按驳回原因修正证件与核验信息后重新提交"); }
 
   /* 步骤条可点击回退（已完成的步骤） */
@@ -659,8 +673,8 @@
     if (step === 3) {
       if (!$("#pfAgree").checked) { showToast("请先阅读并同意实名认证服务协议"); return; }
       fillSummary();
-      showResult("done");
-      showToast("<span data-icon='check' data-size='15'></span>实名认证已通过");
+      showResult("review");
+      showToast("<span data-icon='check' data-size='15'></span>实名认证申请已提交，进入审核流程");
     }
   });
   $("#btnPrev").addEventListener("click", function () { if (step > 1) { step--; renderStep(); } });
@@ -673,7 +687,31 @@
   var resubmit = $("#btnResubmit");
   if (resubmit) resubmit.addEventListener("click", backToForm);
 
-  renderStep();
+  /* 回填阶段 2 登记的个人主体信息 */
+  (function prefillSubject() {
+    if (!window.PROTO || !PROTO.Auth) return;
+    var s = PROTO.Auth.getSubject(), a = PROTO.Auth.get();
+    if (!s || s.type !== "personal") return;
+    if ($("#pfName") && s.name) $("#pfName").value = s.name;
+    if ($("#pfId") && s.idCard) $("#pfId").value = s.idCard;
+    if ($("#pfPhone") && a && a.phone) $("#pfPhone").value = a.phone;
+    var el = $("#pfType");
+    if (el && s.perType) {
+      for (var i = 0; i < el.options.length; i++) {
+        if (el.options[i].text === s.perType) { el.selectedIndex = i; break; }
+      }
+    }
+    /* 个人主体已完成类型选择，不再引导企业认证 */
+    if ($("#btnToEnt")) $("#btnToEnt").style.display = "none";
+  })();
+
+  /* 进入页面时按已保存的认证状态展示对应结果态 */
+  (function initView() {
+    var cert = window.PROTO ? PROTO.Auth.getCert() : null;
+    if (cert && cert.status === "approved") { showResult("done"); return; }
+    if (cert && cert.status === "review") { showResult("review"); return; }
+    renderStep();
+  })();
 })();
 </script>
 </body>

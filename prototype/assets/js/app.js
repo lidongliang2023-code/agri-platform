@@ -23,6 +23,11 @@
     settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
     plus: '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
     arrow: '<line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>',
+    "arrow-left": '<line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>',
+    "arrow-right": '<line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>',
+    clock: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+    lock: '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+    unlock: '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/>',
     location: '<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>',
     phone: '<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/>',
     bell: '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
@@ -181,6 +186,48 @@
   function logoutUser() { setAuth(null); }
   function isLoggedIn() { return !!Auth(); }
 
+  /* ---------- 会员主体与认证状态（三步链路） ----------
+     ① 账号注册/登录  →  ② 创建主体会员（企业/个人）  →  ③ 认证审核并开通权限
+     SUBJECT：主体会员信息   CERT：认证状态 { status: none|review|rejected|approved, ... } */
+  var SUBJECT_KEY = "agri_cloud_subject";
+  var CERT_KEY = "agri_cloud_cert";
+
+  function getSubject() {
+    try { return JSON.parse(localStorage.getItem(SUBJECT_KEY) || "null"); }
+    catch (e) { return null; }
+  }
+  function setSubject(s) {
+    if (s) localStorage.setItem(SUBJECT_KEY, JSON.stringify(s));
+    else localStorage.removeItem(SUBJECT_KEY);
+  }
+  function getCert() {
+    try { return JSON.parse(localStorage.getItem(CERT_KEY) || "null"); }
+    catch (e) { return null; }
+  }
+  function setCert(c) {
+    if (c) localStorage.setItem(CERT_KEY, JSON.stringify(c));
+    else localStorage.removeItem(CERT_KEY);
+  }
+  /* 当前账号所处环节：login → subject → certify → pending → done */
+  function currentStage() {
+    if (!Auth()) return "login";
+    if (!getSubject()) return "subject";
+    var c = getCert();
+    if (!c || c.status === "none") return "certify";
+    if (c.status === "rejected") return "certify";
+    if (c.status === "review") return "pending";
+    return "done";
+  }
+  /* 登录/注册完成后的自动跳转地址（相对 portal/ 目录） */
+  function nextPage() {
+    var st = currentStage();
+    if (st === "login") return "login.html";
+    if (st === "subject") return "member-register.html";
+    if (st === "certify") return "certify.html";
+    if (st === "pending") return "member-status.html";
+    return "member-status.html";
+  }
+
   /* 依据当前页面 script src 推导原型根相对前缀 */
   function topbarPrefix() {
     var s = document.querySelector('script[src*="assets/js/app.js"]');
@@ -240,7 +287,6 @@
         // 未登录：确保入口存在（兜底）
         if (!/login|登录/i.test(container.textContent)) {
           container.innerHTML += '<span class="sep">·</span>' +
-            '<a href="' + prefix + 'portal/login.html" data-icon="user" data-size="12" style="vertical-align:-2px;margin-right:3px"></span>' +
             '<a href="' + prefix + 'portal/login.html"><span data-icon="user" data-size="12" style="vertical-align:-2px;margin-right:3px"></span>登录</a>' +
             '<span class="sep">·</span>' +
             '<a href="' + prefix + 'portal/register.html"><span data-icon="plus" data-size="12" style="vertical-align:-2px;margin-right:3px"></span>免费注册</a>';
@@ -367,7 +413,13 @@
       get: Auth,
       login: loginUser,
       logout: logoutUser,
-      isLoggedIn: isLoggedIn
+      isLoggedIn: isLoggedIn,
+      getSubject: getSubject,
+      setSubject: setSubject,
+      getCert: getCert,
+      setCert: setCert,
+      stage: currentStage,
+      nextPage: nextPage
     }
   };
 

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>免费注册 · 农产云</title>
+<title>注册账号 · 农产云</title>
 <link rel="stylesheet" href="../assets/css/theme.css" />
 <style>
   /* ===== 认证页共享布局：沉浸式背景 + 悬浮双栏卡片 ===== */
@@ -20,21 +20,18 @@
     -webkit-mask-image:radial-gradient(circle at 50% 40%,#000 0%,transparent 72%);
     mask-image:radial-gradient(circle at 50% 40%,#000 0%,transparent 72%)}
 
-  /* ===== 顶部条 ===== */
   .l-topbar{position:relative;z-index:3;height:58px;display:flex;align-items:center;padding:0 34px;gap:14px}
   .l-topbar a.back{font-size:13px;color:var(--ink-600);display:flex;align-items:center;gap:6px;font-weight:600}
   .l-topbar a.back:hover{color:var(--green-700)}
 
-  /* ===== 居中容器 ===== */
-  .l-wrap{position:relative;z-index:2;flex:1;display:flex;align-items:center;justify-content:center;padding:30px 30px 46px}
+  .l-wrap{position:relative;z-index:2;flex:1;display:flex;align-items:center;justify-content:center;padding:26px 30px 42px}
 
-  /* ===== 悬浮卡片 ===== */
-  .auth-card{width:100%;max-width:1020px;display:grid;grid-template-columns:1fr 1.12fr;background:#fff;
+  .auth-card{width:100%;max-width:1020px;display:grid;grid-template-columns:1fr 1.05fr;background:#fff;
     border-radius:28px;overflow:hidden;border:1px solid rgba(255,255,255,.7);
     box-shadow:0 34px 76px -26px rgba(11,26,18,.34),0 14px 34px -20px rgba(11,26,18,.16)}
 
   /* ===== 左侧品牌栏 ===== */
-  .auth-aside{position:relative;overflow:hidden;color:#fff;padding:56px 48px;display:flex;flex-direction:column;
+  .auth-aside{position:relative;overflow:hidden;color:#fff;padding:52px 46px;display:flex;flex-direction:column;
     background:linear-gradient(155deg,var(--green-800) 0%,var(--green-600) 52%,var(--tech-600) 100%)}
   .auth-aside::before{content:"";position:absolute;inset:0;background:
     radial-gradient(430px 320px at 12% 6%,rgba(111,214,162,.36),transparent 62%),
@@ -49,64 +46,68 @@
   .auth-aside .a-brand .logo{width:44px;height:44px;border-radius:13px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);display:grid;place-items:center;flex:none}
   .auth-aside .a-brand small{display:block;font-size:10px;font-weight:600;letter-spacing:2.5px;opacity:.7;margin-top:3px}
   .auth-aside .a-body{margin:auto 0}
-  .auth-aside .a-title{font-size:33px;font-weight:800;line-height:1.32;letter-spacing:.6px}
-  .auth-aside .a-sub{margin-top:16px;font-size:14px;line-height:1.9;opacity:.85;max-width:390px}
-  .auth-aside .a-feats{margin-top:26px;display:flex;flex-direction:column;gap:16px}
-  .auth-aside .a-feats .f{display:flex;align-items:flex-start;gap:13px}
-  .auth-aside .a-feats .f .ic{width:36px;height:36px;border-radius:11px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.22);display:grid;place-items:center;flex:none;backdrop-filter:blur(4px)}
-  .auth-aside .a-feats .f strong{font-size:13.5px;display:block;letter-spacing:.2px}
-  .auth-aside .a-feats .f small{font-size:11.5px;opacity:.72;line-height:1.6;display:block;margin-top:3px}
-  .auth-aside .a-stats{margin-top:28px;padding-top:24px;border-top:1px solid rgba(255,255,255,.18);display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
-  .auth-aside .a-stats .n{font-size:23px;font-weight:800;font-family:var(--mono);letter-spacing:.5px}
+  .auth-aside .a-title{font-size:31px;font-weight:800;line-height:1.34;letter-spacing:.6px}
+  .auth-aside .a-sub{margin-top:15px;font-size:13.5px;line-height:1.9;opacity:.85;max-width:390px}
+
+  /* 三步链路（左侧） */
+  .flow-list{margin-top:28px;display:flex;flex-direction:column;gap:0}
+  .flow-list .fi{display:flex;gap:14px;position:relative;padding-bottom:22px}
+  .flow-list .fi:last-child{padding-bottom:0}
+  .flow-list .fi::before{content:"";position:absolute;left:13px;top:30px;bottom:2px;width:1.5px;background:rgba(255,255,255,.22)}
+  .flow-list .fi:last-child::before{display:none}
+  .flow-list .fi .n{width:27px;height:27px;border-radius:50%;flex:none;display:grid;place-items:center;
+    background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.3);font-size:12px;font-weight:800;position:relative;z-index:1}
+  .flow-list .fi.cur .n{background:#fff;color:var(--green-700);border-color:#fff;box-shadow:0 0 0 5px rgba(255,255,255,.16)}
+  .flow-list .fi .tt{font-size:13.5px;font-weight:700;line-height:1.4}
+  .flow-list .fi .dd{font-size:11.5px;opacity:.72;line-height:1.65;margin-top:4px}
+  .flow-list .fi.cur .tt{color:#fff}
+  .flow-list .fi:not(.cur) .tt{opacity:.72}
+
+  .auth-aside .a-stats{margin-top:26px;padding-top:22px;border-top:1px solid rgba(255,255,255,.18);display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  .auth-aside .a-stats .n{font-size:22px;font-weight:800;font-family:var(--mono);letter-spacing:.5px}
   .auth-aside .a-stats .d{font-size:11px;opacity:.72;margin-top:5px}
 
   /* ===== 右侧表单栏 ===== */
-  .l-form{padding:48px 52px 40px;display:flex;flex-direction:column;background:#fff}
+  .l-form{padding:44px 50px 36px;display:flex;flex-direction:column;background:#fff}
   .l-form .brand{display:none;align-items:center;gap:11px;font-weight:800;font-size:17px;color:var(--green-800)}
   .l-form .brand .logo{width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,var(--green-500),var(--tech-500));color:#fff;display:grid;place-items:center}
-  .l-form .form-title{font-size:26px;font-weight:800;color:var(--ink-900);letter-spacing:.4px}
-  .l-form .sub{color:var(--ink-500);font-size:13px;margin-top:8px}
-  .l-form .steps{display:flex;align-items:center;gap:12px;margin-top:20px;font-size:12.5px}
-  .l-form .steps .step{flex:1;height:4px;border-radius:3px;background:var(--line);position:relative}
-  .l-form .steps .step.on{background:linear-gradient(90deg,var(--green-500),var(--tech-500))}
-  .l-form .steps .step::after{content:attr(data-label);position:absolute;top:11px;left:0;font-size:11px;color:var(--ink-500);white-space:nowrap}
-  .l-form .steps .step.on::after{color:var(--green-700);font-weight:600}
+  .l-form .form-title{font-size:25px;font-weight:800;color:var(--ink-900);letter-spacing:.4px}
+  .l-form .sub{color:var(--ink-500);font-size:13px;margin-top:8px;line-height:1.7}
 
-  .l-form .form-body{margin-top:30px}
-  .l-form .form-item{margin-bottom:20px}
-  .l-form .form-section{margin:28px 0 16px;padding-left:12px;border-left:3px solid var(--green-500);font-size:14px;font-weight:700;color:var(--ink-800);letter-spacing:.3px}
-  .l-form .form-section small{display:block;margin-top:3px;font-size:11.5px;font-weight:500;color:var(--ink-400);letter-spacing:0}
-  .l-form label{display:block;font-size:13.5px;font-weight:600;color:var(--ink-700);margin-bottom:9px}
-  .l-form .input,.l-form .select,.l-form .textarea{width:100%;height:46px;border:1px solid var(--line);border-radius:12px;padding:0 16px;font-size:14.5px;background:#fff;transition:.18s}
-  .l-form .input::placeholder,.l-form .textarea::placeholder{color:var(--ink-400)}
-  .l-form .textarea{height:88px;padding:12px 16px;resize:none}
-  .l-form .input:focus,.l-form .select:focus,.l-form .textarea:focus{border-color:var(--green-500);box-shadow:0 0 0 4px rgba(21,154,94,.1);outline:none}
+  /* 三步进度条 */
+  .steps{display:flex;align-items:flex-start;gap:0;margin-top:22px}
+  .steps .st{flex:1;position:relative;text-align:center}
+  .steps .st::before{content:"";position:absolute;left:0;right:50%;top:11px;height:2px;background:var(--line)}
+  .steps .st:first-child::before{display:none}
+  .steps .st::after{content:"";position:absolute;left:50%;right:0;top:11px;height:2px;background:var(--line)}
+  .steps .st:last-child::after{display:none}
+  .steps .st.on::before,.steps .st.on::after{background:linear-gradient(90deg,var(--green-400),var(--green-500))}
+  .steps .st .d{width:23px;height:23px;border-radius:50%;margin:0 auto;display:grid;place-items:center;
+    background:#fff;border:2px solid var(--line-strong);color:var(--ink-400);font-size:11px;font-weight:800;position:relative;z-index:1}
+  .steps .st.on .d{background:linear-gradient(135deg,var(--green-600),var(--green-500));border-color:transparent;color:#fff;box-shadow:0 0 0 4px rgba(21,154,94,.13)}
+  .steps .st .l{margin-top:8px;font-size:11.5px;font-weight:600;color:var(--ink-400)}
+  .steps .st.on .l{color:var(--green-700)}
+
+  .l-form .form-body{margin-top:26px}
+  .l-form .form-item{margin-bottom:19px}
+  .l-form label{display:block;font-size:13.5px;font-weight:600;color:var(--ink-700);margin-bottom:8px}
+  .l-form .input,.l-form .select{width:100%;height:46px;border:1px solid var(--line);border-radius:12px;padding:0 16px;font-size:14.5px;background:#fff;transition:.18s}
+  .l-form .input::placeholder{color:var(--ink-400)}
+  .l-form .input:focus,.l-form .select:focus{border-color:var(--green-500);box-shadow:0 0 0 4px rgba(21,154,94,.1);outline:none}
   .l-form .form-hint{font-size:11.5px;color:var(--ink-400);margin-top:6px}
   .l-form .split-row{display:grid;grid-template-columns:1fr 136px;gap:12px}
   .l-form .btn-code{height:46px;border:1px solid var(--green-500);color:var(--green-700);border-radius:12px;font-weight:600;font-size:13px;background:#fff;transition:.15s;white-space:nowrap}
   .l-form .btn-code:hover{background:var(--green-050)}
   .l-form .btn-code[disabled]{color:var(--ink-400);border-color:var(--line);cursor:not-allowed}
   .l-form .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 18px}
-  .l-form .identity-pick{display:flex;gap:12px;margin-top:6px}
-  .l-form .identity-pick label{flex:1;height:62px;border:1.5px solid var(--line);border-radius:12px;display:flex;align-items:center;gap:12px;padding:0 16px;cursor:pointer;transition:.18s;margin-bottom:0}
-  .l-form .identity-pick input{display:none}
-  .l-form .identity-pick label .ic{width:34px;height:34px;border-radius:9px;background:var(--green-100);color:var(--green-700);display:grid;place-items:center;flex:none}
-  .l-form .identity-pick label:hover{border-color:var(--green-300);background:var(--green-050)}
-  .l-form .identity-pick input:checked + label{border-color:var(--green-500);background:var(--green-050);box-shadow:0 0 0 4px rgba(21,154,94,.1)}
-  .l-form .identity-pick input:checked + label .ic{background:linear-gradient(135deg,var(--green-500),var(--tech-500));color:#fff}
-  .l-form .identity-pick .txt strong{display:block;font-size:13.5px;color:var(--ink-800)}
-  .l-form .identity-pick .txt small{font-size:11px;color:var(--ink-400)}
 
-  .l-form .form-panels{margin-top:4px}
-  .l-form .form-panel{display:none}
-  .l-form .form-panel.on{display:block}
+  .l-form .pwd-meter{display:flex;gap:4px;margin-top:8px}
+  .l-form .pwd-meter i{flex:1;height:3px;border-radius:3px;background:var(--line);transition:.2s}
+  .l-form .pwd-meter.lv1 i:nth-child(1){background:#EF4444}
+  .l-form .pwd-meter.lv2 i:nth-child(-n+2){background:#F59E0B}
+  .l-form .pwd-meter.lv3 i{background:var(--green-500)}
 
-  .l-form .password-weak,.l-form .password-fair,.l-form .password-strong{height:4px;border-radius:4px;margin-top:9px;background:var(--line);display:flex;gap:3px}
-  .l-form .password-weak.on i:first-child{background:var(--red);border-radius:4px;width:33%;height:100%}
-  .l-form .password-fair.on i{background:var(--amber);width:33%;height:100%;border-radius:4px}
-  .l-form .password-strong.on i{background:var(--green-500);width:33%;height:100%;border-radius:4px}
-
-  .l-form .agreement{font-size:12.5px;color:var(--ink-500);margin-top:8px;display:flex;align-items:flex-start;gap:8px;line-height:1.7}
+  .l-form .agreement{font-size:12.5px;color:var(--ink-500);margin-top:6px;display:flex;align-items:flex-start;gap:8px;line-height:1.7}
   .l-form .agreement input{margin-top:3px}
   .l-form .agreement a{color:var(--tech-700);font-weight:600;white-space:nowrap}
   .l-form .agreement a:hover{text-decoration:underline}
@@ -114,181 +115,113 @@
   .l-form .btn-submit{width:100%;height:52px;background:linear-gradient(135deg,var(--green-600),var(--green-500));color:#fff;border-radius:12px;font-weight:700;font-size:16px;letter-spacing:1.5px;box-shadow:0 8px 22px rgba(21,154,94,.3);transition:.18s;display:flex;align-items:center;justify-content:center;gap:8px}
   .l-form .btn-submit:hover{filter:brightness(1.06);transform:translateY(-1px)}
 
-  .l-foot{margin-top:auto;padding-top:24px;text-align:center;color:var(--ink-500);font-size:12.5px}
+  .l-form .next-tip{margin-top:14px;padding:11px 14px;background:var(--green-050);border:1px dashed var(--green-300);border-radius:10px;font-size:12px;color:var(--green-800);line-height:1.65;display:flex;gap:8px;align-items:flex-start}
+  .l-form .next-tip .ic{flex:none;color:var(--green-700);margin-top:1px}
+
+  .l-foot{margin-top:auto;padding-top:22px;text-align:center;color:var(--ink-500);font-size:12.5px}
   .l-foot a{color:var(--green-700);font-weight:600}
 
-  /* ===== 响应式 ===== */
   @media(max-width:1040px){
-    .auth-card{max-width:600px;grid-template-columns:1fr}
+    .auth-card{max-width:560px;grid-template-columns:1fr}
     .auth-aside{display:none}
     .l-form .brand{display:flex;margin-bottom:18px}
   }
   @media(max-width:600px){
     .l-wrap{padding:16px}
     .auth-card{border-radius:20px}
-    .l-form{padding:34px 22px}
+    .l-form{padding:32px 22px}
     .l-topbar{padding:0 20px}
     .l-form .form-grid{grid-template-columns:1fr;gap:0}
-    .l-form .identity-pick{flex-direction:column}
+    .steps .st .l{font-size:10.5px}
   }
 
-  /* ===== Toast ===== */
   .toast{position:fixed;left:50%;bottom:34px;transform:translate(-50%,20px);background:var(--green-800);color:#fff;padding:12px 20px;border-radius:20px;font-size:13.5px;font-weight:600;box-shadow:var(--shadow-md);opacity:0;pointer-events:none;transition:.28s;z-index:99;display:flex;align-items:center;gap:8px}
   .toast.show{opacity:1;transform:translate(-50%,0)}
-
-  /* ===== 成功弹窗 ===== */
-  .success-modal{position:fixed;inset:0;background:rgba(11,26,18,.45);display:none;align-items:center;justify-content:center;z-index:100;backdrop-filter:blur(2px)}
-  .success-modal.show{display:flex}
-  .success-modal .card{width:380px;background:#fff;border-radius:18px;padding:36px 28px;text-align:center;box-shadow:var(--shadow-lg)}
-  .success-modal .check-icon{width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,var(--green-500),var(--green-600));color:#fff;display:grid;place-items:center;margin:0 auto 18px;box-shadow:0 8px 22px rgba(21,154,94,.3)}
-  .success-modal h3{font-size:20px;font-weight:800;color:var(--ink-900)}
-  .success-modal p{font-size:13px;color:var(--ink-500);margin-top:8px}
-  .success-modal .btn-row{display:flex;gap:10px;margin-top:22px}
 </style>
 </head>
 <body>
 
 <div class="l-topbar">
   <a class="back" href="index.html"><span data-icon="arrow-left" data-size="14"></span>返回首页</a>
-  <span class="muted t-xs" style="margin-left:auto">产品原型演示 · 注册仅做交互演示</span>
+  <span class="muted t-xs" style="margin-left:auto">第 1 步 / 共 3 步 · 产品原型演示</span>
 </div>
 
 <div class="l-wrap">
   <div class="auth-card">
-  <!-- 左：品牌与价值陈述 -->
+  <!-- 左：品牌与三步链路 -->
   <aside class="auth-aside">
     <div class="a-brand">
       <span class="logo"><span data-icon="seed" data-size="22" style="color:#fff"></span></span>
       <span>农产云<small>AGRI · CLOUD</small></span>
     </div>
     <div class="a-body">
-      <div class="a-title">免费注册<br>即刻开启数字化交易</div>
-      <div class="a-sub">注册成为农产云会员，享受大宗交易撮合、AI 智能议价、供应链金融与物联网溯源等全链路服务。</div>
+      <div class="a-title">先创建账号<br>再开通会员能力</div>
+      <div class="a-sub">农产云采用「账号 → 主体 → 认证」三段式开通流程，账号只负责登录，主体会员才具备交易与经营资格。</div>
 
-      <div class="a-feats">
-        <div class="f"><span class="ic"><span data-icon="cart" data-size="16"></span></span><div><strong>免费开店 · 精准询单</strong><small>AI 智能匹配供应商，7×24 在线议价更高效</small></div></div>
-        <div class="f"><span class="ic"><span data-icon="box" data-size="16"></span></span><div><strong>拓客无忧 · 订单直达</strong><small>12,800+ 认证采购商精准询单，订单直接推送</small></div></div>
-        <div class="f"><span class="ic"><span data-icon="money" data-size="16"></span></span><div><strong>资金保障 · 供应链金融</strong><small>订单融资、收货融资、折扣付等多种金融产品</small></div></div>
-        <div class="f"><span class="ic"><span data-icon="shield" data-size="16"></span></span><div><strong>交易安全 · 平台担保</strong><small>质检担保、区块链存证、四流核验机制</small></div></div>
+      <div class="flow-list">
+        <div class="fi cur">
+          <span class="n">1</span>
+          <div>
+            <div class="tt">注册账号 / 登录账号</div>
+            <div class="dd">手机号 + 验证码 + 密码，仅创建登录凭证</div>
+          </div>
+        </div>
+        <div class="fi">
+          <span class="n">2</span>
+          <div>
+            <div class="tt">创建主体会员</div>
+            <div class="dd">登录后选择企业或个人类型，登记主体信息</div>
+          </div>
+        </div>
+        <div class="fi">
+          <span class="n">3</span>
+          <div>
+            <div class="tt">认证审核 · 开通权限</div>
+            <div class="dd">材料审核通过后，自动开通交易 / 金融 / 溯源能力</div>
+          </div>
+        </div>
       </div>
 
       <div class="a-stats">
-        <div><div class="n">38万+</div><div class="d">注册用户</div></div>
-        <div><div class="n">12,800+</div><div class="d">认证采购商</div></div>
-        <div><div class="n">96.5%</div><div class="d">认证通过率</div></div>
+        <div><div class="n">38万+</div><div class="d">注册账号</div></div>
+        <div><div class="n">12,800+</div><div class="d">认证主体</div></div>
+        <div><div class="n">4.2h</div><div class="d">平均审核时长</div></div>
       </div>
     </div>
   </aside>
 
-  <!-- 右：注册卡 -->
+  <!-- 右：账号注册 -->
   <main class="l-form">
     <div class="brand"><span class="logo"><span data-icon="seed" data-size="20"></span></span>农产云</div>
-    <div class="form-title">创建账号</div>
-    <div class="sub">加入 38 万+ 注册用户，开启产业数字化协作</div>
+    <div class="form-title">创建登录账号</div>
+    <div class="sub">只需手机号与密码即可创建账号，主体会员信息在下一步填写</div>
 
-    <!-- 进度 step -->
     <div class="steps">
-      <div class="step on" data-label="① 填写信息"></div>
-      <div class="step" data-label="② 提交审核"></div>
-      <div class="step" data-label="③ 完成入驻"></div>
+      <div class="st on"><div class="d">1</div><div class="l">注册账号</div></div>
+      <div class="st"><div class="d">2</div><div class="l">创建主体</div></div>
+      <div class="st"><div class="d">3</div><div class="l">认证开通</div></div>
     </div>
 
     <div class="form-body">
-      <!-- 身份选择 -->
       <div class="form-item">
-        <label>注册身份</label>
-        <div class="identity-pick" id="identityPick">
-          <input type="radio" id="idEnt" name="identity" value="enterprise" checked />
-          <label for="idEnt"><span class="ic"><span data-icon="factory" data-size="16"></span></span>
-            <span class="txt"><strong>企业会员</strong><small>支持采购 / 供应 / 金融，需资质认证</small></span></label>
-          <input type="radio" id="idPer" name="identity" value="personal" />
-          <label for="idPer"><span class="ic"><span data-icon="user" data-size="16"></span></span>
-            <span class="txt"><strong>个人会员</strong><small>合作社 / 家庭农场 / 采购个体户</small></span></label>
-        </div>
+        <label>手机号 <span style="color:var(--red)">*</span></label>
+        <input class="input" type="tel" id="phone" placeholder="请输入 11 位手机号" maxlength="11" autocomplete="tel" />
+        <div class="form-hint">用于登录、接收审核结果与交易通知，注册后不可修改</div>
       </div>
 
-      <!-- 企业 / 个人 切换面板 -->
-      <div class="form-panels" id="regPanels">
-        <!-- 企业 -->
-        <div class="form-panel on" data-panel="enterprise">
-          <div class="form-grid">
-            <div class="form-item">
-              <label>企业名称 <span style="color:var(--red)">*</span></label>
-              <input class="input" type="text" id="entName" placeholder="与营业执照一致" />
-            </div>
-            <div class="form-item">
-              <label>统一社会信用代码 <span style="color:var(--red)">*</span></label>
-              <input class="input" type="text" id="entCode" placeholder="18 位字母数字" maxlength="18" />
-            </div>
-          </div>
-          <div class="form-grid">
-            <div class="form-item">
-              <label>所属行业</label>
-              <select class="select" id="entIndustry">
-                <option>粮油产业</option><option>果蔬产业</option><option>畜禽产业</option>
-                <option>茶药产业</option><option>饲料农资</option><option>水产产业</option>
-                <option>流通贸易</option><option>加工制造</option><option>其他</option>
-              </select>
-            </div>
-            <div class="form-item">
-              <label>企业规模</label>
-              <select class="select" id="entSize">
-                <option>微型（20人以下）</option><option>小型（20-100人）</option>
-                <option>中型（100-500人）</option><option>大型（500人以上）</option>
-              </select>
-            </div>
-          </div>
-          <div class="form-item">
-            <label>注册地址</label>
-            <input class="input" type="text" id="entAddr" placeholder="省 / 市 / 区 / 详细地址" />
-          </div>
-        </div>
-
-        <!-- 个人 -->
-        <div class="form-panel" data-panel="personal">
-          <div class="form-item">
-            <label>真实姓名 <span style="color:var(--red)">*</span></label>
-            <input class="input" type="text" id="perName" placeholder="请输入真实姓名" />
-          </div>
-          <div class="form-item">
-            <label>身份证号</label>
-            <input class="input" type="text" id="perIdCard" placeholder="18 位身份证号（脱敏展示）" maxlength="18" />
-          </div>
-          <div class="form-item">
-            <label>经营类型</label>
-            <select class="select" id="perType">
-              <option>家庭农场</option><option>农民专业合作社</option>
-              <option>个体采购户</option><option>经纪人</option><option>其他</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      <!-- 联系人（两种身份都要） -->
-      <div class="form-section">联系人 &amp; 登录信息<small>用于账号登录、订单与审核通知</small></div>
-
-      <div class="form-grid">
-        <div class="form-item">
-          <label>联系人姓名 <span style="color:var(--red)">*</span></label>
-          <input class="input" type="text" id="contactName" placeholder="用于接收重要通知" />
-        </div>
-        <div class="form-item">
-          <label>联系电话 <span style="color:var(--red)">*</span></label>
-          <input class="input" type="tel" id="contactPhone" placeholder="11 位手机号" maxlength="11" />
-        </div>
-      </div>
       <div class="form-item">
         <label>短信验证码 <span style="color:var(--red)">*</span></label>
         <div class="split-row">
-          <input class="input" type="text" id="smsCode" placeholder="6 位验证码" maxlength="6" />
+          <input class="input" type="text" id="smsCode" placeholder="请输入 6 位验证码" maxlength="6" />
           <button type="button" class="btn-code" id="btnCode"><span data-icon="zap" data-size="14"></span>获取验证码</button>
         </div>
       </div>
+
       <div class="form-grid">
         <div class="form-item">
           <label>设置密码 <span style="color:var(--red)">*</span></label>
-          <input class="input" type="password" id="pwd" placeholder="8-20 位，包含字母和数字" />
-          <div class="password-weak" id="pwdLevel"><i></i><i></i><i></i></div>
+          <input class="input" type="password" id="pwd" placeholder="8-20 位，含字母和数字" />
+          <div class="pwd-meter" id="pwdMeter"><i></i><i></i><i></i></div>
         </div>
         <div class="form-item">
           <label>确认密码 <span style="color:var(--red)">*</span></label>
@@ -296,14 +229,23 @@
         </div>
       </div>
 
+      <div class="form-item">
+        <label>称呼 <span class="muted t-xs" style="font-weight:500">选填</span></label>
+        <input class="input" type="text" id="nickname" placeholder="如：王经理（用于平台内展示，可后续修改）" maxlength="20" />
+      </div>
+
       <label class="agreement"><input type="checkbox" id="agree" />
-        我已阅读并同意 <a href="javascript:void(0)" onclick="alert('原型演示：用户注册协议')">《农产云用户服务协议》</a>、
-        <a href="javascript:void(0)" onclick="alert('原型演示：隐私政策')">《隐私政策》</a> 及
-        <a href="javascript:void(0)" onclick="alert('原型演示：企业入驻规则')">《企业入驻规则》</a>
+        我已阅读并同意 <a href="javascript:void(0)" onclick="alert('原型演示：用户服务协议')">《农产云用户服务协议》</a> 与
+        <a href="javascript:void(0)" onclick="alert('原型演示：隐私政策')">《隐私政策》</a>，并授权平台在认证环节核验主体信息
       </label>
 
-      <div class="form-item" style="margin-top:18px">
-        <button type="button" class="btn-submit" id="btnRegister"><span data-icon="check" data-size="16"></span>免费注册</button>
+      <div class="form-item" style="margin-top:16px;margin-bottom:0">
+        <button type="button" class="btn-submit" id="btnRegister"><span data-icon="arrow-right" data-size="16"></span>注册并进入下一步</button>
+      </div>
+
+      <div class="next-tip">
+        <span class="ic"><span data-icon="activity" data-size="14"></span></span>
+        <span>下一步将创建<b>主体会员</b>：选择「企业会员」或「个人会员」，登记营业执照 / 身份信息。此步骤不影响账号创建。</span>
       </div>
     </div>
 
@@ -316,131 +258,77 @@
 
 <div class="toast" id="toast"></div>
 
-<!-- 注册成功弹窗 -->
-<div class="success-modal" id="successModal">
-  <div class="card">
-    <div class="check-icon"><span data-icon="check" data-size="36"></span></div>
-    <h3>注册成功！</h3>
-    <p id="smTip">欢迎加入农产云，您的账号已创建完成<br>企业会员需完成资质认证后方可进行交易</p>
-    <div class="btn-row">
-      <a class="btn btn-outline btn-sm btn-block" href="certify.html" id="goMember" style="flex:1">去完成认证</a>
-      <a class="btn btn-sm btn-block" href="index.html" style="flex:1;background:linear-gradient(135deg,var(--green-600),var(--green-500));color:#fff">进入首页</a>
-    </div>
-  </div>
-</div>
-
 <script src="../assets/js/app.js"></script>
 <script>
-(function(){
+(function () {
   "use strict";
-  var $ = function(s){ return document.querySelector(s); };
+  var $ = function (s) { return document.querySelector(s); };
 
-  function showToast(html){
+  function showToast(html) {
     var t = $("#toast"); t.innerHTML = html;
-    if (window.PROTO) window.PROTO.hydrateIcons(t);
+    if (window.PROTO) PROTO.hydrateIcons(t);
     t.classList.add("show");
     clearTimeout(window.__toastT);
-    window.__toastT = setTimeout(function(){ t.classList.remove("show"); }, 2200);
+    window.__toastT = setTimeout(function () { t.classList.remove("show"); }, 2200);
   }
 
-  /* ===== 身份切换 ===== */
-  document.querySelectorAll("#identityPick input").forEach(function(inp){
-    inp.addEventListener("change", function(){
-      var val = inp.value;
-      document.querySelectorAll("#regPanels .form-panel").forEach(function(p){
-        p.classList.toggle("on", p.getAttribute("data-panel") === val);
-      });
-    });
-  });
-
-  /* ===== 验证码 ===== */
-  var codeBtn = $("#btnCode");
-  var codeTimer = null;
-  codeBtn.addEventListener("click", function(){
-    var phone = $("#contactPhone").value.trim();
+  /* ===== 验证码倒计时 ===== */
+  var codeBtn = $("#btnCode"), codeTimer = null;
+  codeBtn.addEventListener("click", function () {
+    var phone = $("#phone").value.trim();
     if (!/^1\d{10}$/.test(phone)) { showToast("请先填写正确的手机号"); return; }
-    showToast("验证码已发送到 " + phone + "（原型演示）");
+    showToast("验证码已发送到 " + phone + "（原型演示：任意 4-6 位数字）");
     var t = 60;
     codeBtn.disabled = true;
-    codeBtn.innerHTML = "重新获取（" + t + "s）";
-    codeTimer = setInterval(function(){
+    codeBtn.textContent = "重新获取（" + t + "s）";
+    codeTimer = setInterval(function () {
       t--;
-      if (t <= 0){ clearInterval(codeTimer); codeBtn.disabled = false; codeBtn.innerHTML = '<span data-icon="zap" data-size="14"></span>获取验证码'; if (window.PROTO) PROTO.hydrateIcons(codeBtn); }
-      else codeBtn.innerHTML = "重新获取（" + t + "s）";
+      if (t <= 0) {
+        clearInterval(codeTimer);
+        codeBtn.disabled = false;
+        codeBtn.innerHTML = '<span data-icon="zap" data-size="14"></span>获取验证码';
+        if (window.PROTO) PROTO.hydrateIcons(codeBtn);
+      } else codeBtn.textContent = "重新获取（" + t + "s）";
     }, 1000);
   });
 
   /* ===== 密码强度 ===== */
-  var pwd = $("#pwd");
-  pwd.addEventListener("input", function(){
-    var v = pwd.value;
-    var hasLower = /[a-z]/.test(v), hasUpper = /[A-Z]/.test(v), hasNum = /\d/.test(v), hasOther = /[^a-zA-Z0-9]/.test(v);
+  $("#pwd").addEventListener("input", function () {
+    var v = this.value, meter = $("#pwdMeter");
     var score = 0;
     if (v.length >= 8) score++;
-    if (hasLower || hasUpper) score++;
-    if (hasNum) score++;
-    if (hasOther) score++;
-    var level = $("#pwdLevel");
-    level.className = "password-weak";
-    level.innerHTML = "<i></i><i></i><i></i>";
-    if (score >= 2 && v.length >= 8) { level.classList.remove("password-weak"); level.classList.add("password-fair"); }
-    if (score >= 3 && v.length >= 10) { level.classList.remove("password-fair"); level.classList.add("password-strong"); }
+    if (/[a-zA-Z]/.test(v) && /\d/.test(v)) score++;
+    if (v.length >= 12 || /[^a-zA-Z0-9]/.test(v)) score++;
+    meter.className = "pwd-meter" + (v ? " lv" + Math.max(1, score) : "");
   });
 
-  /* ===== 注册提交 ===== */
-  $("#btnRegister").addEventListener("click", function(){
-    var identity = document.querySelector("#identityPick input:checked").value;
-
-    // 企业校验
-    if (identity === "enterprise") {
-      var n = $("#entName").value.trim(), c = $("#entCode").value.trim();
-      if (!n) { showToast("请填写企业名称"); return; }
-      if (!/^\w{15,18}$/.test(c)) { showToast("请填写正确的统一社会信用代码"); return; }
-    } else {
-      var pn = $("#perName").value.trim();
-      if (!pn) { showToast("请填写真实姓名"); return; }
-    }
-
-    // 联系人
-    var contact = $("#contactName").value.trim();
-    var phone = $("#contactPhone").value.trim();
+  /* ===== 注册（仅账号层） ===== */
+  $("#btnRegister").addEventListener("click", function () {
+    var phone = $("#phone").value.trim();
     var code = $("#smsCode").value.trim();
-    if (!contact) { showToast("请填写联系人姓名"); return; }
-    if (!/^1\d{10}$/.test(phone)) { showToast("请填写正确的手机号"); return; }
+    var pwd = $("#pwd").value, pwd2 = $("#pwd2").value;
+    var nick = $("#nickname").value.trim();
+
+    if (!/^1\d{10}$/.test(phone)) { showToast("请输入正确的手机号"); return; }
     if (!/^\d{4,6}$/.test(code)) { showToast("请输入验证码"); return; }
+    if (pwd.length < 8) { showToast("密码至少 8 位"); return; }
+    if (!/[a-zA-Z]/.test(pwd) || !/\d/.test(pwd)) { showToast("密码需同时包含字母和数字"); return; }
+    if (pwd !== pwd2) { showToast("两次输入的密码不一致"); return; }
+    if (!$("#agree").checked) { showToast("请先阅读并同意用户协议"); return; }
 
-    // 密码
-    var pw = $("#pwd").value, pw2 = $("#pwd2").value;
-    if (!pw || pw.length < 8) { showToast("密码至少 8 位"); return; }
-    if (!/[a-zA-Z]/.test(pw) || !/\d/.test(pw)) { showToast("密码需包含字母和数字"); return; }
-    if (pw !== pw2) { showToast("两次输入的密码不一致"); return; }
-
-    // 协议
-    if (!$("#agree").checked) { showToast("请先同意用户协议"); return; }
-
-    /* 写入登录态 */
-    var uName = identity === "enterprise"
-      ? $("#entName").value.trim()
-      : $("#perName").value.trim();
+    /* 账号层登录态：不含主体信息 */
     if (window.PROTO && PROTO.Auth) {
       PROTO.Auth.login({
-        name: uName,
+        name: nick || ("用户" + phone.slice(-4)),
         phone: phone,
-        identity: identity,
-        time: Date.now()
+        accountCreated: true
       });
+      PROTO.Auth.setSubject(null);
+      PROTO.Auth.setCert(null);
     }
 
-    /* 成功弹窗 */
-    var modal = $("#successModal");
-    modal.classList.add("show");
-    if (window.PROTO) PROTO.hydrateIcons(modal);
-    showToast("<span data-icon='check' data-size='16'></span>注册成功");
-  });
-
-  /* 遮罩点击关闭 */
-  document.querySelector("#successModal").addEventListener("click", function(e){
-    if (e.target.id === "successModal") e.currentTarget.classList.remove("show");
+    showToast("<span data-icon='check' data-size='16'></span>账号创建成功，正在进入主体登记...");
+    setTimeout(function () { location.href = "member-register.html"; }, 900);
   });
 })();
 </script>

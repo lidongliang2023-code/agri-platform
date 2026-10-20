@@ -152,7 +152,7 @@
     </div>
     <div class="row center gap-8">
       <span class="tag tag-tech"><span data-icon="shield" data-size="13"></span>对公账户打款验证</span>
-      <span class="tag tag-amber"><span data-icon="activity" data-size="13"></span>审核中 1-3 个工作日</span>
+      <span class="tag tag-amber" id="headCertTag"><span data-icon="activity" data-size="13"></span>审核中 1-3 个工作日</span>
     </div>
   </div>
 
@@ -458,9 +458,9 @@
                 <div class="muted t-sm mt-8">我们已收到您的企业认证材料，审核结果将通过短信与站内信同步</div>
 
                 <dl style="display:grid;grid-template-columns:110px 1fr;gap:12px 16px;font-size:13.5px;background:var(--amber-100);border:1px dashed var(--amber);border-radius:12px;padding:18px 20px;text-align:left;margin-top:22px">
-                  <dt class="muted">受理编号</dt><dd class="mono">RV202610190031</dd>
+                  <dt class="muted">受理编号</dt><dd class="mono" id="rvNo">RV202610190031</dd>
                   <dt class="muted">申请主体</dt><dd class="strong" id="okName">黑龙江五常粮油合作社</dd>
-                  <dt class="muted">提交时间</dt><dd class="mono">2026-10-19 15:48</dd>
+                  <dt class="muted">提交时间</dt><dd class="mono" id="rvSubmitTime">2026-10-19 15:48</dd>
                   <dt class="muted">预计完成</dt><dd>1-3 个工作日（约 2026-10-21 前）</dd>
                   <dt class="muted">当前状态</dt><dd><span class="tag tag-amber"><span data-icon="activity" data-size="12"></span>人工复审中</span></dd>
                 </dl>
@@ -473,7 +473,7 @@
                   <div class="progress mb-20"><i style="width:52%"></i></div>
                   <div class="tl">
                     <div class="tl-i done"><span class="d"></span>
-                      <div class="t">提交认证资料</div><div class="m">2026-10-19 15:48 · 材料 6 份已入库</div></div>
+                      <div class="t">提交认证资料</div><div class="m" id="tlSubmitTime">2026-10-19 15:48 · 材料 6 份已入库</div></div>
                     <div class="tl-i done"><span class="d"></span>
                       <div class="t">系统自动校验</div><div class="m">工商三要素、法人人脸、对公账户打款验证均通过</div></div>
                     <div class="tl-i cur"><span class="d"></span>
@@ -486,7 +486,7 @@
                 <div class="row gap-12 center mt-24" style="justify-content:center">
                   <a class="btn btn-outline" href="certify.html"><span data-icon="award"></span>返回认证中心</a>
                   <button type="button" class="btn btn-outline" id="btnFixFromReview"><span data-icon="clipboard"></span>补充 / 修正材料</button>
-                  <a class="btn btn-primary" href="../trade/member.html"><span data-icon="user"></span>前往会员中心</a>
+                  <a class="btn btn-primary" href="member-status.html"><span data-icon="shield"></span>查看审核与权限开通</a>
                 </div>
               </div>
             </div>
@@ -499,7 +499,7 @@
                 <div class="muted t-sm mt-8">认证标识已生效并同步至店铺与商品页，交易、金融与溯源权益已自动解锁</div>
 
                 <dl class="res-dl green">
-                  <dt class="muted">认证编号</dt><dd class="mono">ENT2026101900088</dd>
+                  <dt class="muted">认证编号</dt><dd class="mono" id="doneNo">ENT2026101900088</dd>
                   <dt class="muted">申请主体</dt><dd class="strong" id="doneName">黑龙江五常粮油合作社</dd>
                   <dt class="muted">认证等级</dt><dd>基础认证 · 有效期至 2027-10-19</dd>
                   <dt class="muted">完成时间</dt><dd class="mono">2026-10-19 16:05</dd>
@@ -526,7 +526,7 @@
 
                 <div class="row gap-12 center mt-24" style="justify-content:center">
                   <a class="btn btn-outline" href="certify.html"><span data-icon="award"></span>返回认证中心</a>
-                  <a class="btn btn-primary" href="../trade/member.html"><span data-icon="user"></span>前往会员中心</a>
+                  <a class="btn btn-primary" href="member-status.html"><span data-icon="shield"></span>查看审核与权限开通</a>
                 </div>
               </div>
             </div>
@@ -539,7 +539,7 @@
                 <div class="muted t-sm mt-8">很抱歉，本次申请存在不符合项，请按驳回原因整改后重新提交</div>
 
                 <dl class="res-dl red">
-                  <dt class="muted">受理编号</dt><dd class="mono">RV202610190031</dd>
+                  <dt class="muted">受理编号</dt><dd class="mono" id="rvNoRej">RV202610190031</dd>
                   <dt class="muted">申请主体</dt><dd class="strong" id="rejName">黑龙江五常粮油合作社</dd>
                   <dt class="muted">审核时间</dt><dd class="mono">2026-10-19 16:20</dd>
                   <dt class="muted">审核员</dt><dd>平台运营 · 王审核</dd>
@@ -614,8 +614,8 @@
               <div class="row between center"><span>平均审核时长</span><span class="mono strong">4.2 小时</span></div>
               <div class="row between center"><span>驳回后可重新提交</span><span class="mono strong">不限次数</span></div>
             </div>
-            <div class="progress mt-16"><i style="width:52%"></i></div>
-            <div class="muted t-xs mt-8">当前申请进度 52% · 人工复审进行中</div>
+            <div class="progress mt-16"><i id="applyBar" style="width:0%"></i></div>
+            <div class="muted t-xs mt-8" id="applyProgress">尚未提交认证 · 提交后进入审核</div>
           </div>
         </div>
 
@@ -663,6 +663,69 @@
     window.__toastT = setTimeout(function () { t.classList.remove("show"); }, 2200);
   }
 
+  /* ===== 认证状态与主体信息回填 ===== */
+  function syncHead() {
+    var cert = (window.PROTO && PROTO.Auth.getCert()) || null;
+    var tag = $("#headCertTag"), bar = $("#applyBar"), txt = $("#applyProgress");
+    if (!cert || cert.status === "none") {
+      tag.className = "tag tag-ghost";
+      tag.innerHTML = '<span data-icon="alert" data-size="13"></span>未认证';
+      bar.style.width = "0%";
+      txt.textContent = "尚未提交认证 · 提交后进入审核";
+    } else if (cert.status === "approved") {
+      tag.className = "tag";
+      tag.innerHTML = '<span data-icon="check" data-size="13"></span>已认证';
+      bar.style.width = "100%";
+      txt.textContent = "认证已完成 · 功能权限已开通";
+    } else if (cert.status === "rejected") {
+      tag.className = "tag tag-red";
+      tag.innerHTML = '<span data-icon="alert" data-size="13"></span>已驳回';
+      bar.style.width = "45%";
+      txt.textContent = "认证被驳回 · 请修正材料后重新提交";
+    } else {
+      tag.className = "tag tag-amber";
+      tag.innerHTML = '<span data-icon="activity" data-size="13"></span>审核中 1-3 个工作日';
+      bar.style.width = "52%";
+      txt.textContent = "当前申请进度 52% · 人工复审进行中";
+    }
+    if (window.PROTO) PROTO.hydrateIcons(tag);
+
+    if (cert && cert.submittedAt) {
+      var d = new Date(cert.submittedAt);
+      var p = function (n) { return (n < 10 ? "0" : "") + n; };
+      var dateStr = "" + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate());
+      var timeStr = d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + " " + p(d.getHours()) + ":" + p(d.getMinutes());
+      var no = "RV" + dateStr + "0031";
+      if ($("#rvNo")) $("#rvNo").textContent = no;
+      if ($("#rvNoRej")) $("#rvNoRej").textContent = no;
+      if ($("#rvSubmitTime")) $("#rvSubmitTime").textContent = timeStr;
+      if ($("#tlSubmitTime")) $("#tlSubmitTime").textContent = timeStr + " · 材料 6 份已入库";
+    }
+  }
+
+  /* 回填阶段 2 登记的主体信息，保证认证材料与主体一致 */
+  (function prefillSubject() {
+    if (!window.PROTO || !PROTO.Auth) return;
+    var s = PROTO.Auth.getSubject(), a = PROTO.Auth.get();
+    if (!s || s.type === "personal") return;
+    function setVal(id, v) { var el = $(id); if (el && v) el.value = v; }
+    function setSel(id, v) {
+      var el = $(id); if (!el || !v) return;
+      for (var i = 0; i < el.options.length; i++) {
+        if (el.options[i].text === v) { el.selectedIndex = i; return; }
+      }
+    }
+    setVal("#enName", s.name);
+    setVal("#enCode", s.code);
+    setVal("#enAddr", s.address);
+    setVal("#enContact", s.legalPerson);
+    setVal("#lgName", s.legalPerson);
+    setVal("#bkName", s.name);
+    if (a && a.phone) { setVal("#enPhone", a.phone); setVal("#lgPhone", a.phone); }
+    setSel("#enKind", s.entType);
+    setSel("#enIndustry", s.industry);
+  })();
+
   /* ===== 步骤控制 ===== */
   var step = 1, facePassed = false, payPassed = false, resultView = null;
 
@@ -701,7 +764,23 @@
     window.scrollTo({ top: $("#wizardCard").offsetTop - 80, behavior: "smooth" });
   }
 
-  function showResult(kind) { resultView = kind; renderStep(); }
+  function showResult(kind) {
+    resultView = kind;
+    /* 同步认证状态到账号（供会员中心 / 权限开通页读取） */
+    if (window.PROTO && PROTO.Auth) {
+      var map = { review: "review", done: "approved", reject: "rejected" };
+      var prev = PROTO.Auth.getCert() || {};
+      var subj = PROTO.Auth.getSubject() || {};
+      PROTO.Auth.setCert({
+        status: map[kind] || "none",
+        subjectType: subj.type || "enterprise",
+        submittedAt: prev.submittedAt || (kind === "review" ? Date.now() : null),
+        reviewedAt: kind === "done" || kind === "reject" ? Date.now() : null
+      });
+    }
+    syncHead();
+    renderStep();
+  }
   function backToForm() { resultView = null; step = 1; renderStep(); showToast("请按驳回原因修正材料后重新提交认证"); }
 
   $$(".sb").forEach(function (b) {
@@ -887,7 +966,14 @@
   var fixReview = $("#btnFixFromReview");
   if (fixReview) fixReview.addEventListener("click", backToForm);
 
-  renderStep();
+  /* 进入页面时按已保存的认证状态展示对应结果态 */
+  (function initView() {
+    var cert = window.PROTO ? PROTO.Auth.getCert() : null;
+    if (cert && cert.status === "approved") { showResult("done"); return; }
+    if (cert && cert.status === "review") { showResult("review"); return; }
+    syncHead();
+    renderStep();
+  })();
 })();
 </script>
 </body>

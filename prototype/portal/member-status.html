@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>认证审核与权限开通 · 农产云</title>
+<link rel="stylesheet" href="../assets/css/theme.css" />
+<style>
+  *{box-sizing:border-box}
+  body{min-height:100vh;display:flex;flex-direction:column;position:relative;overflow-x:hidden;
+    background:linear-gradient(160deg,#F3FBF7 0%,#EAF5FF 100%)}
+  body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;background:
+    radial-gradient(720px 520px at 6% -10%,rgba(47,184,119,.20),transparent 62%),
+    radial-gradient(680px 520px at 104% 2%,rgba(14,165,233,.16),transparent 62%),
+    radial-gradient(760px 640px at 52% 126%,rgba(21,154,94,.12),transparent 66%)}
+  body::after{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+    background-image:linear-gradient(rgba(11,26,18,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(11,26,18,.035) 1px,transparent 1px);
+    background-size:44px 44px;
+    -webkit-mask-image:radial-gradient(circle at 50% 40%,#000 0%,transparent 72%);
+    mask-image:radial-gradient(circle at 50% 40%,#000 0%,transparent 72%)}
+
+  .l-topbar{position:relative;z-index:3;height:58px;display:flex;align-items:center;padding:0 34px;gap:14px}
+  .l-topbar a.back{font-size:13px;color:var(--ink-600);display:flex;align-items:center;gap:6px;font-weight:600}
+  .l-topbar a.back:hover{color:var(--green-700)}
+
+  .l-wrap{position:relative;z-index:2;flex:1;display:flex;align-items:flex-start;justify-content:center;padding:20px 30px 40px}
+
+  .auth-card{width:100%;max-width:1140px;display:grid;grid-template-columns:.84fr 1.16fr;background:#fff;
+    border-radius:26px;overflow:hidden;border:1px solid rgba(255,255,255,.7);
+    box-shadow:0 34px 76px -26px rgba(11,26,18,.34),0 14px 34px -20px rgba(11,26,18,.16)}
+
+  /* ===== 左侧 ===== */
+  .auth-aside{position:relative;overflow:hidden;color:#fff;padding:42px 36px;display:flex;flex-direction:column;
+    background:linear-gradient(155deg,var(--green-800) 0%,var(--green-600) 52%,var(--tech-600) 100%)}
+  .auth-aside::before{content:"";position:absolute;inset:0;background:
+    radial-gradient(430px 320px at 12% 6%,rgba(111,214,162,.36),transparent 62%),
+    radial-gradient(400px 320px at 94% 94%,rgba(56,189,248,.30),transparent 62%)}
+  .auth-aside::after{content:"";position:absolute;inset:0;opacity:.5;
+    background-image:linear-gradient(rgba(255,255,255,.09) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.09) 1px,transparent 1px);
+    background-size:40px 40px;
+    -webkit-mask-image:linear-gradient(180deg,#000,transparent 90%);
+    mask-image:linear-gradient(180deg,#000,transparent 90%)}
+  .auth-aside > *{position:relative;z-index:2}
+  .a-brand{display:flex;align-items:center;gap:12px;font-size:18px;font-weight:800}
+  .a-brand .logo{width:42px;height:42px;border-radius:12px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);display:grid;place-items:center;flex:none}
+  .a-brand small{display:block;font-size:10px;font-weight:600;letter-spacing:2.5px;opacity:.7;margin-top:3px}
+  .a-title{font-size:25px;font-weight:800;line-height:1.4;margin-top:30px}
+  .a-sub{margin-top:12px;font-size:13px;line-height:1.85;opacity:.84}
+
+  .acc-chip{margin-top:24px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.24);border-radius:14px;padding:14px 16px;backdrop-filter:blur(6px)}
+  .acc-chip .lb{font-size:10.5px;letter-spacing:1.2px;opacity:.65;text-transform:uppercase;font-weight:600}
+  .acc-chip .nm{font-size:14px;font-weight:700;margin-top:6px;display:flex;align-items:center;gap:8px}
+  .acc-chip .nm .dot{width:7px;height:7px;border-radius:50%;background:#6FEA9E;box-shadow:0 0 0 3px rgba(111,234,158,.22);flex:none}
+  .acc-chip .ph{font-size:11.5px;opacity:.7;margin-top:5px;font-family:var(--mono);word-break:break-all}
+
+  /* 三步链路 */
+  .flow-list{margin-top:26px;display:flex;flex-direction:column;gap:0}
+  .flow-list .fi{display:flex;gap:14px;position:relative;padding-bottom:20px}
+  .flow-list .fi:last-child{padding-bottom:0}
+  .flow-list .fi::before{content:"";position:absolute;left:13px;top:30px;bottom:2px;width:1.5px;background:rgba(255,255,255,.22)}
+  .flow-list .fi:last-child::before{display:none}
+  .flow-list .fi .n{width:27px;height:27px;border-radius:50%;flex:none;display:grid;place-items:center;
+    background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.3);font-size:12px;font-weight:800;position:relative;z-index:1}
+  .flow-list .fi.cur .n{background:#fff;color:var(--green-700);border-color:#fff;box-shadow:0 0 0 5px rgba(255,255,255,.16)}
+  .flow-list .fi.done .n{background:rgba(111,234,158,.9);color:#064E3B;border-color:transparent}
+  .flow-list .fi.err .n{background:#FCA5A5;color:#7F1D1D;border-color:transparent}
+  .flow-list .fi .tt{font-size:13px;font-weight:700;line-height:1.4}
+  .flow-list .fi .dd{font-size:11.5px;opacity:.72;line-height:1.65;margin-top:3px}
+  .flow-list .fi:not(.cur):not(.done) .tt{opacity:.7}
+
+  /* ===== 右侧 ===== */
+  .l-main{padding:36px 42px 30px;display:flex;flex-direction:column;background:#fff;min-width:0}
+  .m-head{display:flex;align-items:flex-start;gap:14px}
+  .hero-ic{width:54px;height:54px;border-radius:16px;flex:none;display:grid;place-items:center;
+    background:var(--amber-100);color:#B45309;transition:.2s}
+  .hero-ic.ok{background:var(--green-100);color:var(--green-700)}
+  .hero-ic.bad{background:#FEE2E2;color:#B91C1C}
+  .m-title{font-size:22px;font-weight:800;color:var(--ink-900);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .m-desc{font-size:12.5px;color:var(--ink-500);line-height:1.7;margin-top:6px}
+
+  .meta{margin-top:18px;display:grid;grid-template-columns:1fr 1fr;gap:10px 18px;padding:14px 16px;background:var(--bg-alt);border:1px solid var(--line);border-radius:12px}
+  .meta .kv{font-size:12px;min-width:0}
+  .meta .kv .k{color:var(--ink-400);font-size:11px}
+  .meta .kv .v{font-weight:600;color:var(--ink-800);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+  .sec-t{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:22px 0 12px}
+  .sec-t .tt{font-size:13.5px;font-weight:800;color:var(--ink-800);display:flex;align-items:center;gap:8px}
+  .sec-t .tt .ic{width:22px;height:22px;border-radius:6px;background:var(--green-100);color:var(--green-700);display:grid;place-items:center}
+  .sec-t .hint{font-size:11.5px;color:var(--ink-400)}
+
+  /* 权限矩阵 */
+  .perms{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .perm{display:flex;gap:11px;align-items:flex-start;border:1px solid var(--line);border-radius:11px;padding:12px 13px;transition:.2s}
+  .perm .pi{width:32px;height:32px;border-radius:9px;flex:none;display:grid;place-items:center;background:var(--green-100);color:var(--green-700)}
+  .perm .pi.tech{background:var(--tech-100);color:var(--tech-700)}
+  .perm .pi.amber{background:var(--amber-100);color:#B45309}
+  .perm .pi.violet{background:var(--violet-100);color:#6D28D9}
+  .perm .nm{font-size:12.5px;font-weight:700;color:var(--ink-800);display:flex;align-items:center;gap:6px}
+  .perm .ds{font-size:11px;color:var(--ink-500);line-height:1.55;margin-top:3px}
+  .perm .st{margin-left:auto;flex:none;color:var(--green-600)}
+  .perm.locked{background:var(--bg-alt);border-style:dashed}
+  .perm.locked .pi{filter:grayscale(.7);opacity:.6}
+  .perm.locked .nm{color:var(--ink-500)}
+  .perm.locked .st{color:var(--ink-400)}
+
+  /* 审核时间线 */
+  .tl{margin-top:6px;display:flex;flex-direction:column;gap:0}
+  .tl .ti{display:flex;gap:11px;position:relative;padding-bottom:13px;font-size:12px}
+  .tl .ti:last-child{padding-bottom:0}
+  .tl .ti::before{content:"";position:absolute;left:6px;top:16px;bottom:0;width:1.5px;background:var(--line)}
+  .tl .ti:last-child::before{display:none}
+  .tl .ti .d{width:13px;height:13px;border-radius:50%;flex:none;margin-top:2px;background:#fff;border:2px solid var(--line-strong)}
+  .tl .ti.done .d{background:var(--green-500);border-color:var(--green-500)}
+  .tl .ti.cur .d{background:var(--amber);border-color:var(--amber);box-shadow:0 0 0 3px rgba(245,158,11,.15)}
+  .tl .ti .tt{font-weight:600;color:var(--ink-700)}
+  .tl .ti .dd{font-size:11px;color:var(--ink-400);margin-top:2px}
+
+  /* 操作区 */
+  .act-row{display:flex;gap:10px;margin-top:22px;flex-wrap:wrap}
+  .btn-main{height:46px;padding:0 22px;background:linear-gradient(135deg,var(--green-600),var(--green-500));color:#fff;border-radius:11px;font-weight:700;font-size:14px;box-shadow:0 8px 20px rgba(21,154,94,.26);border:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:.18s;text-decoration:none}
+  .btn-main:hover{filter:brightness(1.06);transform:translateY(-1px)}
+  .btn-line{height:46px;padding:0 20px;border:1px solid var(--line-strong);border-radius:11px;background:#fff;color:var(--ink-600);font-weight:600;font-size:13.5px;display:inline-flex;align-items:center;gap:6px;cursor:pointer;text-decoration:none;transition:.18s}
+  .btn-line:hover{border-color:var(--green-400);color:var(--green-700);background:var(--green-050)}
+
+  .demo-note{margin-top:auto;padding-top:16px;border-top:1px dashed var(--line);font-size:11.5px;color:var(--ink-400);line-height:1.7;display:flex;gap:7px;align-items:flex-start}
+  .demo-note .chips{display:flex;gap:6px;flex:none;flex-wrap:wrap}
+  .demo-note .chip{font-size:11px;padding:2px 9px;border-radius:20px;border:1px solid var(--line);cursor:pointer;color:var(--ink-600);background:#fff}
+  .demo-note .chip.on{background:var(--green-600);border-color:var(--green-600);color:#fff}
+
+  @media(max-width:1080px){
+    .auth-card{max-width:640px;grid-template-columns:1fr}
+    .auth-aside{display:none}
+  }
+  @media(max-width:640px){
+    .l-wrap{padding:14px}
+    .l-main{padding:26px 20px}
+    .perms,.meta{grid-template-columns:1fr}
+    .l-topbar{padding:0 20px}
+  }
+
+  .toast{position:fixed;left:50%;bottom:34px;transform:translate(-50%,20px);background:var(--green-800);color:#fff;padding:12px 20px;border-radius:20px;font-size:13.5px;font-weight:600;box-shadow:var(--shadow-md);opacity:0;pointer-events:none;transition:.28s;z-index:99;display:flex;align-items:center;gap:8px}
+  .toast.show{opacity:1;transform:translate(-50%,0)}
+</style>
+</head>
+<body>
+
+<div class="l-topbar">
+  <a class="back" href="../trade/member.html"><span data-icon="arrow-left" data-size="14"></span>会员中心</a>
+  <span class="muted t-xs" style="margin-left:auto">第 3 步 / 共 3 步 · 认证审核与权限开通</span>
+</div>
+
+<div class="l-wrap">
+  <div class="auth-card">
+
+  <!-- 左侧：链路与主体 -->
+  <aside class="auth-aside">
+    <div class="a-brand">
+      <span class="logo"><span data-icon="seed" data-size="21" style="color:#fff"></span></span>
+      <span>农产云<small>AGRI · CLOUD</small></span>
+    </div>
+
+    <div class="a-title">认证审核通过<br>自动开通功能权限</div>
+    <div class="a-sub">认证结果由平台运营审核。审核通过后，交易、金融、物流与溯源等能力将按主体类型自动开通，无需再次申请。</div>
+
+    <div class="acc-chip">
+      <div class="lb" id="subjectLabel">当前主体会员</div>
+      <div class="nm"><span class="dot"></span><span id="subjectName">—</span></div>
+      <div class="ph" id="subjectCode">—</div>
+    </div>
+
+    <div class="flow-list" id="flowList">
+      <div class="fi done">
+        <span class="n"><span data-icon="check" data-size="12"></span></span>
+        <div>
+          <div class="tt">注册账号 / 登录账号</div>
+          <div class="dd">登录凭证已创建</div>
+        </div>
+      </div>
+      <div class="fi done">
+        <span class="n"><span data-icon="check" data-size="12"></span></span>
+        <div>
+          <div class="tt">创建主体会员</div>
+          <div class="dd" id="flowSubject">主体信息已登记</div>
+        </div>
+      </div>
+      <div class="fi cur" id="flowCert">
+        <span class="n">3</span>
+        <div>
+          <div class="tt">认证审核 · 开通权限</div>
+          <div class="dd" id="flowCertDesc">等待提交认证材料</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- 右侧：状态与权限 -->
+  <main class="l-main">
+    <div class="m-head">
+      <div class="hero-ic" id="heroIc"><span data-icon="clock" data-size="24"></span></div>
+      <div style="flex:1;min-width:0">
+        <div class="m-title"><span id="stTitle">认证审核中</span><span class="tag tag-amber" id="stTag"><span data-icon="activity" data-size="12"></span>审核中</span></div>
+        <div class="m-desc" id="stDesc">平台正在核验您提交的主体材料，预计 1-3 个工作日完成审核。</div>
+      </div>
+    </div>
+
+    <!-- 主体信息 -->
+    <div class="meta">
+      <div class="kv"><div class="k">主体类型</div><div class="v" id="mType">—</div></div>
+      <div class="kv"><div class="k">主体名称</div><div class="v" id="mName">—</div></div>
+      <div class="kv"><div class="k" id="mCodeLabel">统一社会信用代码</div><div class="v" id="mCode">—</div></div>
+      <div class="kv"><div class="k">所属产业 / 经营类型</div><div class="v" id="mIndustry">—</div></div>
+      <div class="kv"><div class="k">提交时间</div><div class="v" id="mSubmit">—</div></div>
+      <div class="kv"><div class="k">审核员</div><div class="v" id="mReviewer">平台运营 · 审核组</div></div>
+    </div>
+
+    <!-- 审核进度 -->
+    <div class="sec-t">
+      <div class="tt"><span class="ic"><span data-icon="activity" data-size="13"></span></span>审核进度</div>
+      <div class="hint" id="tlHint">预计 1-3 个工作日</div>
+    </div>
+    <div class="tl" id="timeline">
+      <div class="ti done"><span class="d"></span><div><div class="tt">主体信息登记</div><div class="dd" id="tlSubmit">—</div></div></div>
+      <div class="ti done"><span class="d"></span><div><div class="tt">材料自动校验</div><div class="dd">工商 / 身份信息一致性校验完成</div></div></div>
+      <div class="ti cur" id="tlReview"><span class="d"></span><div><div class="tt">运营人工审核</div><div class="dd">核验经营范围、资质证照与主体真实性</div></div></div>
+      <div class="ti" id="tlResult"><span class="d"></span><div><div class="tt">审核结果与权限开通</div><div class="dd">通过后自动开通对应功能权限</div></div></div>
+    </div>
+
+    <!-- 权限 -->
+    <div class="sec-t">
+      <div class="tt"><span class="ic"><span data-icon="unlock" data-size="13"></span></span>功能权限</div>
+      <div class="hint" id="permHint">认证通过后自动开通</div>
+    </div>
+    <div class="perms" id="perms">
+      <div class="perm" data-perm>
+        <span class="pi"><span data-icon="cart" data-size="16"></span></span>
+        <div><div class="nm">交易撮合与在线议价</div><div class="ds">下单、报价、撮合、电子签约</div></div>
+        <span class="st" data-pi><span data-icon="lock" data-size="15"></span></span>
+      </div>
+      <div class="perm" data-perm>
+        <span class="pi tech"><span data-icon="clipboard" data-size="16"></span></span>
+        <div><div class="nm">发布采购 / 供应需求</div><div class="ds">需求发布、询价响应与商机推荐</div></div>
+        <span class="st" data-pi><span data-icon="lock" data-size="15"></span></span>
+      </div>
+      <div class="perm" data-perm>
+        <span class="pi amber"><span data-icon="money" data-size="16"></span></span>
+        <div><div class="nm">供应链金融</div><div class="ds">订单融、收货融、信用付授信测算</div></div>
+        <span class="st" data-pi><span data-icon="lock" data-size="15"></span></span>
+      </div>
+      <div class="perm" data-perm>
+        <span class="pi violet"><span data-icon="truck" data-size="16"></span></span>
+        <div><div class="nm">物流与冷链服务</div><div class="ds">运力匹配、冷链仓储与在途跟踪</div></div>
+        <span class="st" data-pi><span data-icon="lock" data-size="15"></span></span>
+      </div>
+      <div class="perm" data-perm>
+        <span class="pi"><span data-icon="shield" data-size="16"></span></span>
+        <div><div class="nm">质量溯源与认证标识</div><div class="ds">一物一码溯源、店铺「已认证」标识</div></div>
+        <span class="st" data-pi><span data-icon="lock" data-size="15"></span></span>
+      </div>
+      <div class="perm" data-perm>
+        <span class="pi tech"><span data-icon="chart" data-size="16"></span></span>
+        <div><div class="nm">价格指数与产业数据</div><div class="ds">行情订阅、价格预警与数据看板</div></div>
+        <span class="st" data-pi><span data-icon="lock" data-size="15"></span></span>
+      </div>
+    </div>
+
+    <div class="act-row">
+      <a class="btn-main" href="../trade/member.html" id="btnMember"><span data-icon="home" data-size="15"></span>进入会员中心</a>
+      <a class="btn-line" href="certify.html" id="btnCert"><span data-icon="shield" data-size="14"></span>查看认证材料</a>
+      <button type="button" class="btn-line" id="btnApprove" style="display:none"><span data-icon="check" data-size="14"></span>模拟审核通过</button>
+      <button type="button" class="btn-line" id="btnReject" style="display:none"><span data-icon="close" data-size="14"></span>模拟驳回</button>
+    </div>
+
+    <div class="demo-note">
+      <div class="chips" id="demoChips">
+        <span class="chip" data-st="review">审核中</span>
+        <span class="chip" data-st="approved">已通过</span>
+        <span class="chip" data-st="rejected">已驳回</span>
+      </div>
+      <span>原型演示：切换审核结果可查看权限开通/锁定效果，状态会同步到会员中心与认证中心。</span>
+    </div>
+  </main>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="../assets/js/app.js"></script>
+<script>
+(function () {
+  "use strict";
+  var $ = function (s) { return document.querySelector(s); };
+  var $$ = function (s) { return document.querySelectorAll(s); };
+
+  function showToast(html) {
+    var t = $("#toast"); t.innerHTML = html;
+    if (window.PROTO) PROTO.hydrateIcons(t);
+    t.classList.add("show");
+    clearTimeout(window.__toastT);
+    window.__toastT = setTimeout(function () { t.classList.remove("show"); }, 2200);
+  }
+
+  /* ===== 前置校验：账号 → 主体 → 认证 ===== */
+  var acc = PROTO.Auth.get();
+  if (!acc) { location.replace("login.html"); return; }
+  var subj = PROTO.Auth.getSubject();
+  if (!subj) { location.replace("member-register.html"); return; }
+  var cert = PROTO.Auth.getCert();
+  if (!cert || cert.status === "none") { location.replace("certify.html"); return; }
+
+  var isEnt = subj.type !== "personal";
+
+  /* ===== 回填主体信息 ===== */
+  $("#subjectLabel").textContent = isEnt ? "当前企业会员" : "当前个人会员";
+  $("#subjectName").textContent = subj.displayName || subj.name || "—";
+  $("#subjectCode").textContent = isEnt ? (subj.code || "—") : (subj.idCard || "—");
+
+  $("#mType").textContent = subj.subjectLabel || (isEnt ? "企业会员" : "个人会员");
+  $("#mName").textContent = subj.displayName || subj.name || "—";
+  $("#mCodeLabel").textContent = isEnt ? "统一社会信用代码" : "身份证号";
+  $("#mCode").textContent = isEnt ? (subj.code || "—") : (subj.idCard || "—");
+  $("#mIndustry").textContent = isEnt ? (subj.industry || "—") : ((subj.perType || "—") + " · " + (subj.category || "—"));
+  $("#flowSubject").textContent = (subj.subjectLabel || "主体会员") + " · " + (subj.displayName || subj.name || "已登记");
+
+  function fmt(ts) {
+    if (!ts) return "—";
+    var d = new Date(ts);
+    var p = function (n) { return (n < 10 ? "0" : "") + n; };
+    return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + " " +
+      p(d.getHours()) + ":" + p(d.getMinutes());
+  }
+  var submitAt = cert.submittedAt || subj.createdAt || Date.now();
+  $("#mSubmit").textContent = fmt(submitAt);
+  $("#tlSubmit").textContent = "提交于 " + fmt(submitAt);
+
+  /* ===== 状态渲染 ===== */
+  var STATES = {
+    review: {
+      title: "认证审核中",
+      tag: '<span data-icon="activity" data-size="12"></span>审核中',
+      tagClass: "tag tag-amber",
+      heroClass: "",
+      heroIcon: "clock",
+      desc: "平台正在核验您提交的主体材料，预计 1-3 个工作日完成审核，结果将通过短信与站内通知推送。",
+      hint: "预计 1-3 个工作日",
+      permHint: "认证通过后自动开通",
+      unlocked: false,
+      flow: "cur",
+      flowDesc: "审核中 · 预计 1-3 个工作日",
+      showApprove: true, showReject: true,
+      resultDone: false
+    },
+    approved: {
+      title: "认证已通过",
+      tag: '<span data-icon="check" data-size="12"></span>已认证',
+      tagClass: "tag",
+      heroClass: "ok",
+      heroIcon: "check",
+      desc: "恭喜，主体认证已通过，平台功能权限已按会员类型自动开通，可直接进入会员中心开展交易。",
+      hint: "审核已完成",
+      permHint: "已全部开通",
+      unlocked: true,
+      flow: "done",
+      flowDesc: "已认证 · 功能权限已开通",
+      showApprove: false, showReject: false,
+      resultDone: true
+    },
+    rejected: {
+      title: "认证未通过",
+      tag: '<span data-icon="alert" data-size="12"></span>已驳回',
+      tagClass: "tag tag-red",
+      heroClass: "bad",
+      heroIcon: "alert",
+      desc: "材料存在不符合项，请按驳回原因修正后重新提交。已通过的核验项无需重做。",
+      hint: "需重新提交材料",
+      permHint: "权限暂未开通",
+      unlocked: false,
+      flow: "err",
+      flowDesc: "已驳回 · 请修正材料后重新提交",
+      showApprove: true, showReject: false,
+      resultDone: false
+    }
+  };
+
+  function render(st) {
+    var s = STATES[st];
+    if (!s) return;
+
+    $("#stTitle").textContent = s.title;
+    $("#stDesc").textContent = s.desc;
+    $("#stTag").className = s.tagClass;
+    $("#stTag").innerHTML = s.tag;
+    $("#heroIc").className = "hero-ic " + s.heroClass;
+    $("#heroIc").innerHTML = '<span data-icon="' + s.heroIcon + '" data-size="24"></span>';
+    $("#tlHint").textContent = s.hint;
+    $("#permHint").textContent = s.permHint;
+
+    /* 链路第三步 */
+    var f = $("#flowCert");
+    f.className = "fi " + s.flow;
+    f.querySelector(".n").innerHTML = s.flow === "done"
+      ? '<span data-icon="check" data-size="12"></span>'
+      : (s.flow === "err" ? '<span data-icon="close" data-size="12"></span>' : "3");
+    $("#flowCertDesc").textContent = s.flowDesc;
+
+    /* 审核时间线 */
+    $("#tlReview").className = "ti done";
+    $("#tlResult").className = "ti " + (st === "review" ? "" : (s.resultDone ? "done" : "cur"));
+    $("#tlResult").querySelector(".tt").textContent = s.resultDone ? "审核通过 · 权限已开通" : "审核结果与权限开通";
+
+    /* 权限矩阵 */
+    $$("#perms [data-perm]").forEach(function (p) {
+      p.classList.toggle("locked", !s.unlocked);
+      p.querySelector("[data-pi]").innerHTML = s.unlocked
+        ? '<span data-icon="unlock" data-size="15" style="color:var(--green-600)"></span>'
+        : '<span data-icon="lock" data-size="15"></span>';
+    });
+
+    /* 操作按钮 */
+    $("#btnApprove").style.display = s.showApprove ? "inline-flex" : "none";
+    $("#btnReject").style.display = s.showReject ? "inline-flex" : "none";
+
+    /* 演示 chips */
+    $$("#demoChips .chip").forEach(function (c) {
+      c.classList.toggle("on", c.getAttribute("data-st") === st);
+    });
+
+    if (window.PROTO) PROTO.hydrateIcons(document);
+  }
+
+  function save(st) {
+    PROTO.Auth.setCert({
+      status: st,
+      subjectType: subj.type,
+      submittedAt: submitAt,
+      reviewedAt: st === "review" ? null : Date.now()
+    });
+    render(st);
+  }
+
+  var cur = cert.status === "approved" ? "approved" : (cert.status === "rejected" ? "rejected" : "review");
+  render(cur);
+
+  /* ===== 演示切换 ===== */
+  $$("#demoChips .chip").forEach(function (c) {
+    c.addEventListener("click", function () {
+      var st = this.getAttribute("data-st");
+      save(st);
+      showToast(st === "approved"
+        ? "<span data-icon='check' data-size='16'></span>审核通过，功能权限已自动开通"
+        : st === "rejected"
+          ? "<span data-icon='alert' data-size='16'></span>已驳回，功能权限保持锁定"
+          : "<span data-icon='clock' data-size='16'></span>已切换为审核中状态");
+    });
+  });
+
+  $("#btnApprove").addEventListener("click", function () {
+    save("approved");
+    showToast("<span data-icon='check' data-size='16'></span>审核通过，6 项功能权限已开通");
+  });
+  $("#btnReject").addEventListener("click", function () {
+    save("rejected");
+    showToast("<span data-icon='alert' data-size='16'></span>已驳回，请修正材料后重新提交");
+  });
+})();
+</script>
+</body>
+</html>

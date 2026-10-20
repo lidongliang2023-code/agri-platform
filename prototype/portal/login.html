@@ -61,7 +61,7 @@
   .auth-aside .a-stats .d{font-size:11px;opacity:.72;margin-top:5px}
 
   /* ===== 右侧表单栏 ===== */
-  .l-form{padding:56px 54px 44px;display:flex;flex-direction:column;background:#fff}
+  .l-form{padding:52px 54px 42px;display:flex;flex-direction:column;background:#fff}
   .l-form .brand{display:none;align-items:center;gap:11px;font-weight:800;font-size:17px;color:var(--green-800)}
   .l-form .brand .logo{width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,var(--green-500),var(--tech-500));color:#fff;display:grid;place-items:center}
   .l-form .form-title{font-size:26px;font-weight:800;color:var(--ink-900);letter-spacing:.4px}
@@ -93,6 +93,19 @@
   .l-form .third-icons .t-wechat{color:#07C160}
   .l-form .third-icons .t-alipay{color:#1677FF}
   .l-form .third-icons .t-gov{color:#C8352A}
+
+  /* ===== 三步链路（左侧） ===== */
+  .flow-list{margin-top:28px;display:flex;flex-direction:column;gap:0}
+  .flow-list .fi{display:flex;gap:14px;position:relative;padding-bottom:21px}
+  .flow-list .fi:last-child{padding-bottom:0}
+  .flow-list .fi::before{content:"";position:absolute;left:13px;top:30px;bottom:2px;width:1.5px;background:rgba(255,255,255,.22)}
+  .flow-list .fi:last-child::before{display:none}
+  .flow-list .fi .n{width:27px;height:27px;border-radius:50%;flex:none;display:grid;place-items:center;
+    background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.3);font-size:12px;font-weight:800;position:relative;z-index:1}
+  .flow-list .fi.cur .n{background:#fff;color:var(--green-700);border-color:#fff;box-shadow:0 0 0 5px rgba(255,255,255,.16)}
+  .flow-list .fi .tt{font-size:13.5px;font-weight:700;line-height:1.4}
+  .flow-list .fi .dd{font-size:11.5px;opacity:.72;line-height:1.65;margin-top:4px}
+  .flow-list .fi:not(.cur) .tt{opacity:.72}
 
   .l-foot{margin-top:auto;padding-top:26px;text-align:center;color:var(--ink-500);font-size:12.5px}
   .l-foot a{color:var(--green-700);font-weight:600}
@@ -131,13 +144,31 @@
       <span>农产云<small>AGRI · CLOUD</small></span>
     </div>
     <div class="a-body">
-      <div class="a-title">让每一笔大宗交易<br>都走向数字化</div>
-      <div class="a-sub">连接粮油、果蔬、畜禽、茶药、水产、农资六大产业链，智能撮合 + AI Sales Agent 在线议价，让采购与销售效率提升 10 倍。</div>
+      <div class="a-title">登录农产云<br>继续您的产业协作</div>
+      <div class="a-sub">登录后系统会自动识别您所处的环节：未创建主体将引导登记，未认证将引导提交材料，已认证则直接进入会员中心。</div>
 
-      <div class="a-feats">
-        <div class="f"><span class="ic"><span data-icon="shield" data-size="16"></span></span><div><strong>平台质检 · 资金担保</strong><small>质检担保、区块链存证，交易全程可追溯</small></div></div>
-        <div class="f"><span class="ic"><span data-icon="zap" data-size="16"></span></span><div><strong>AI 智能撮合 · 7×24 议价</strong><small>智能匹配供应商，在线议价更高效</small></div></div>
-        <div class="f"><span class="ic"><span data-icon="money" data-size="16"></span></span><div><strong>供应链金融 · 极速放款</strong><small>订单融资、收货融资、折扣付等多种产品</small></div></div>
+      <div class="flow-list">
+        <div class="fi cur">
+          <span class="n">1</span>
+          <div>
+            <div class="tt">注册账号 / 登录账号</div>
+            <div class="dd">手机号 + 验证码 / 账号密码，仅用于身份登录</div>
+          </div>
+        </div>
+        <div class="fi">
+          <span class="n">2</span>
+          <div>
+            <div class="tt">创建主体会员</div>
+            <div class="dd">登录后登记企业或个人主体，取得交易身份</div>
+          </div>
+        </div>
+        <div class="fi">
+          <span class="n">3</span>
+          <div>
+            <div class="tt">认证审核 · 开通权限</div>
+            <div class="dd">审核通过后自动开通交易 / 金融 / 溯源等功能</div>
+          </div>
+        </div>
       </div>
 
       <div class="a-stats">
@@ -152,7 +183,7 @@
   <main class="l-form">
     <div class="brand"><span class="logo"><span data-icon="seed" data-size="20"></span></span>农产云</div>
     <div class="form-title">欢迎回来</div>
-    <div class="sub">登录以查看订单、使用 AI 撮合与议价、申请供应链金融</div>
+    <div class="sub">登录后将自动识别您所处的账号环节，并引导至对应页面</div>
 
     <!-- 登录方式切换 -->
     <div class="tabs" id="loginTabs">
@@ -161,15 +192,6 @@
     </div>
 
     <div class="form-body">
-      <!-- 身份选择 -->
-      <div class="form-item">
-        <label>登录身份</label>
-        <div class="row gap-12">
-          <label style="flex:1"><input type="radio" name="identity" value="enterprise" checked style="margin-right:6px">企业会员</label>
-          <label style="flex:1"><input type="radio" name="identity" value="personal" style="margin-right:6px">个人会员</label>
-        </div>
-      </div>
-
       <!-- SMS 登录 -->
       <div data-login-panel="sms">
         <div class="form-item">
@@ -189,7 +211,7 @@
       <div data-login-panel="pwd" style="display:none">
         <div class="form-item">
           <label>账号</label>
-          <input class="input" type="text" id="account" placeholder="手机号 / 邮箱 / 企业统一信用代码" />
+          <input class="input" type="text" id="account" placeholder="手机号 / 邮箱" />
         </div>
         <div class="form-item">
           <label>密码</label>
@@ -269,23 +291,34 @@
   /* ===== 登录提交 ===== */
   $("#btnLogin").addEventListener("click", function(){
     var key = document.querySelector("#loginTabs button.on").getAttribute("data-login");
-    var identity = document.querySelector('input[name="identity"]:checked').value;
     var userInfo = {};
     if (key === "sms"){
       var p = $("#phone").value.trim(), c = $("#smsCode").value.trim();
       if (!/^1\d{10}$/.test(p)) { showToast("请输入正确的手机号"); return; }
       if (!/^\d{4,6}$/.test(c)) { showToast("请输入 6 位验证码"); return; }
-      userInfo = { name: "用户" + p.slice(-4), phone: p, identity: identity };
+      userInfo = { name: "用户" + p.slice(-4), phone: p };
     } else {
       var a = $("#account").value.trim(), pw = $("#password").value;
       if (!a) { showToast("请输入账号"); return; }
       if (!pw || pw.length < 6) { showToast("密码至少 6 位"); return; }
-      userInfo = { name: a, phone: "", identity: identity };
+      userInfo = { name: a, phone: "" };
     }
-    /* 写入登录态 */
-    if (window.PROTO && PROTO.Auth) PROTO.Auth.login(userInfo);
-    showToast("<span data-icon='check' data-size='16'></span>登录成功，正在进入平台...");
-    setTimeout(function(){ location.href = "index.html"; }, 900);
+
+    /* 保留已有的账号信息（称呼 / 主体名称），避免登录覆盖 */
+    var prev = PROTO.Auth.get();
+    if (prev && prev.phone && prev.phone === userInfo.phone && prev.name) userInfo.name = prev.name;
+
+    /* 写入账号层登录态 */
+    PROTO.Auth.login(userInfo);
+
+    /* 按当前环节自动跳转：主体登记 → 认证 → 状态/会员中心 */
+    var st = PROTO.Auth.stage();
+    var tip = st === "subject" ? "登录成功，请先创建主体会员"
+            : st === "certify" ? "登录成功，请完成认证以开通权限"
+            : st === "pending" ? "登录成功，认证审核中"
+            : "登录成功，正在进入会员中心";
+    showToast("<span data-icon='check' data-size='16'></span>" + tip);
+    setTimeout(function(){ location.href = PROTO.Auth.nextPage(); }, 900);
   });
 })();
 </script>

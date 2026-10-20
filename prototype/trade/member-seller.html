@@ -60,13 +60,25 @@
           <a href="member.html">买家中心</a>
           <a class="on" href="member-seller.html">卖家中心</a>
         </div>
-        <span class="avatar">稻</span>
-        <span class="strong">五常市稻香米业</span>
+        <span class="avatar" id="hdAva">稻</span>
+        <span class="strong" id="hdName">五常市稻香米业</span>
         <button class="btn btn-ghost btn-sm"><span data-icon="bell" data-size="16"></span></button>
       </div>
     </header>
 
     <div class="app-body">
+      <!-- 认证未通过时的经营权限提示（由脚本按认证状态渲染） -->
+      <div id="certBanner" class="card mb-16 hide" style="border-left:3px solid var(--amber);background:var(--amber-100)">
+        <div class="card-b row center gap-16">
+          <div class="stat-icon amber"><span data-icon="alert" data-size="20"></span></div>
+          <div style="flex:1;min-width:0">
+            <div class="strong" id="certBannerTitle">经营类功能暂未开通</div>
+            <div class="muted t-sm mt-4" id="certBannerDesc">完成主体认证并通过审核后，销售订单、商品管理、供应发布等能力将自动开通。</div>
+          </div>
+          <a class="btn btn-primary btn-sm" href="../portal/member-status.html"><span data-icon="shield"></span>查看开通进度</a>
+        </div>
+      </div>
+
       <div data-panels="member">
 
       <!-- ================= 首页概览 ================= -->
@@ -483,11 +495,11 @@
           <div class="card-b row center gap-16">
             <div class="stat-icon"><span data-icon="shield" data-size="20"></span></div>
             <div style="flex:1;min-width:0">
-              <div class="strong">企业实名认证 <span class="tag">已认证</span></div>
-              <div class="muted t-sm mt-4">统一信用代码已核验 · 对公账户打款验证通过 · 有效期至 2027-06-30</div>
+              <div class="strong"><span id="certName">企业实名认证</span> <span class="tag" id="certTag">已认证</span></div>
+              <div class="muted t-sm mt-4" id="certDesc">统一信用代码已核验 · 对公账户打款验证通过 · 有效期至 2027-06-30</div>
             </div>
-            <a class="btn btn-outline btn-sm" href="../portal/certify.html"><span data-icon="shield"></span>认证中心</a>
-            <a class="btn btn-ghost btn-sm" href="../portal/certify-enterprise.html"><span data-icon="clipboard"></span>查看 / 更新材料</a>
+            <a class="btn btn-outline btn-sm" href="../portal/member-status.html" id="certStatusLink"><span data-icon="shield"></span>开通状态</a>
+            <a class="btn btn-ghost btn-sm" href="../portal/certify.html" id="certMaterialLink"><span data-icon="clipboard"></span>查看 / 更新材料</a>
           </div>
         </div>
 
@@ -495,12 +507,12 @@
           <div class="card"><div class="card-h"><h3><span data-icon="user" data-size="18"></span>店铺基本信息</h3><a class="more" href="javascript:void(0)" onclick="alert('原型演示：正式系统可编辑店铺资料')">编辑 →</a></div>
             <div class="card-b">
               <dl class="kv" style="display:grid;grid-template-columns:92px 1fr;gap:10px 14px;font-size:13px">
-                <dt class="muted">店铺名称</dt><dd class="strong">五常市稻香米业</dd>
-                <dt class="muted">统一信用代码</dt><dd class="mono">91230184MA1WXXXX0X</dd>
+                <dt class="muted">店铺名称</dt><dd class="strong" id="pdName">五常市稻香米业</dd>
+                <dt class="muted">统一信用代码</dt><dd class="mono" id="pdCode">91230184MA1WXXXX0X</dd>
                 <dt class="muted">主营品类</dt><dd>大米、杂粮、面粉</dd>
                 <dt class="muted">所在产地</dt><dd>黑龙江·五常</dd>
                 <dt class="muted">店铺等级</dt><dd><span class="tag tag-tech">金牌卖家</span> · 信用分 96</dd>
-                <dt class="muted">认证状态</dt><dd><span class="tag">已认证</span> · 平台认证供应商</dd>
+                <dt class="muted">认证状态</dt><dd><span class="tag" id="pdCertState">已认证</span> · 平台认证供应商</dd>
               </dl>
             </div>
           </div>
@@ -530,5 +542,93 @@
 </div>
 
 <script src="../assets/js/app.js"></script>
+<script>
+(function () {
+  "use strict";
+  var $ = function (s) { return document.querySelector(s); };
+  if (!window.PROTO || !PROTO.Auth) return;
+
+  var acc = PROTO.Auth.get();
+  if (!acc) return; /* 未登录时保留静态演示内容 */
+
+  /* 未创建主体 / 未提交认证 → 引导回对应环节 */
+  var st = PROTO.Auth.stage();
+  if (st === "login") { location.replace("../portal/login.html"); return; }
+  if (st === "subject") { location.replace("../portal/member-register.html"); return; }
+  if (st === "certify") { location.replace("../portal/certify.html"); return; }
+
+  var subj = PROTO.Auth.getSubject() || {};
+  var cert = PROTO.Auth.getCert() || {};
+  var isEnt = subj.type !== "personal";
+  var name = subj.displayName || subj.name || acc.name || "农产云用户";
+
+  /* 头部与店铺资料回填 */
+  $("#hdName").textContent = name;
+  $("#hdAva").textContent = name.trim().charAt(0);
+  $("#pdName").textContent = name;
+  $("#pdCode").textContent = isEnt ? (subj.code || "—") : (subj.idCard || "—");
+  $("#certName").textContent = isEnt ? "企业实名认证" : "个人实名认证";
+  $("#certMaterialLink").setAttribute("href", isEnt ? "../portal/certify-enterprise.html" : "../portal/certify-personal.html");
+
+  /* 认证状态渲染 */
+  var tag = $("#certTag"), desc = $("#certDesc"), pd = $("#pdCertState");
+  var banner = $("#certBanner"), bTitle = $("#certBannerTitle"), bDesc = $("#certBannerDesc");
+
+  if (cert.status === "approved") {
+    tag.className = "tag";
+    tag.innerHTML = '<span data-icon="check" data-size="12"></span>已认证';
+    desc.textContent = (isEnt ? "统一信用代码已核验 · 对公账户打款验证通过" : "身份证已核验 · 人脸活体核验通过") + " · 经营权限已全部开通";
+    pd.className = "tag";
+    pd.innerHTML = '<span data-icon="check" data-size="12"></span>已认证';
+    banner.classList.add("hide");
+  } else if (cert.status === "review") {
+    tag.className = "tag tag-amber";
+    tag.innerHTML = '<span data-icon="activity" data-size="12"></span>审核中';
+    desc.textContent = "认证材料已提交，平台审核中 · 预计 1-3 个工作日 · 审核通过后自动开通经营权限";
+    pd.className = "tag tag-amber";
+    pd.innerHTML = '<span data-icon="activity" data-size="12"></span>审核中';
+    bTitle.textContent = "认证审核中，经营类功能暂未开通";
+    bDesc.textContent = "平台正在核验主体材料。审核通过后，销售订单、商品管理、供应发布等能力将自动开通。";
+    banner.classList.remove("hide");
+  } else {
+    tag.className = "tag tag-red";
+    tag.innerHTML = '<span data-icon="alert" data-size="12"></span>已驳回';
+    desc.textContent = "认证未通过，请查看驳回原因并修正材料后重新提交";
+    pd.className = "tag tag-red";
+    pd.innerHTML = '<span data-icon="alert" data-size="12"></span>已驳回';
+    bTitle.textContent = "认证未通过，经营类功能受限";
+    bDesc.textContent = "请按驳回原因修正材料并重新提交，认证通过后经营权限将自动开通。";
+    banner.classList.remove("hide");
+  }
+
+  /* 未认证：锁定经营类入口 */
+  if (cert.status !== "approved") {
+    var lockedTabs = ["sales", "goods", "supply", "ship", "after", "fund", "customer", "iot"];
+    var tip = function () {
+      alert("原型演示：该功能需主体认证通过后自动开通。当前状态：" +
+        (cert.status === "review" ? "认证审核中" : "未认证 / 已驳回"));
+    };
+    document.querySelectorAll(".side-nav a[data-tab]").forEach(function (a) {
+      if (lockedTabs.indexOf(a.getAttribute("data-tab")) < 0) return;
+      a.style.opacity = ".55";
+      a.insertAdjacentHTML("beforeend", '<span data-icon="lock" data-size="12" style="margin-left:auto;opacity:.8"></span>');
+      a.addEventListener("click", function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        tip();
+      });
+    });
+    document.querySelectorAll('.side-nav a[href="publish.html"]').forEach(function (a) {
+      a.addEventListener("click", function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        tip();
+      });
+    });
+  }
+
+  if (window.PROTO) PROTO.hydrateIcons(document);
+})();
+</script>
 </body>
 </html>

@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>创建主体会员 · 农产云</title>
+<link rel="stylesheet" href="../assets/css/theme.css" />
+<style>
+  *{box-sizing:border-box}
+  body{min-height:100vh;display:flex;flex-direction:column;position:relative;overflow-x:hidden;
+    background:linear-gradient(160deg,#F3FBF7 0%,#EAF5FF 100%)}
+  body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;background:
+    radial-gradient(720px 520px at 6% -10%,rgba(47,184,119,.20),transparent 62%),
+    radial-gradient(680px 520px at 104% 2%,rgba(14,165,233,.16),transparent 62%),
+    radial-gradient(760px 640px at 52% 126%,rgba(21,154,94,.12),transparent 66%)}
+  body::after{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+    background-image:linear-gradient(rgba(11,26,18,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(11,26,18,.035) 1px,transparent 1px);
+    background-size:44px 44px;
+    -webkit-mask-image:radial-gradient(circle at 50% 40%,#000 0%,transparent 72%);
+    mask-image:radial-gradient(circle at 50% 40%,#000 0%,transparent 72%)}
+
+  .l-topbar{position:relative;z-index:3;height:58px;display:flex;align-items:center;padding:0 34px;gap:14px}
+  .l-topbar a.back{font-size:13px;color:var(--ink-600);display:flex;align-items:center;gap:6px;font-weight:600}
+  .l-topbar a.back:hover{color:var(--green-700)}
+
+  .l-wrap{position:relative;z-index:2;flex:1;display:flex;align-items:flex-start;justify-content:center;padding:24px 30px 44px}
+
+  .auth-card{width:100%;max-width:1120px;display:grid;grid-template-columns:.82fr 1.18fr;background:#fff;
+    border-radius:26px;overflow:hidden;border:1px solid rgba(255,255,255,.7);
+    box-shadow:0 34px 76px -26px rgba(11,26,18,.34),0 14px 34px -20px rgba(11,26,18,.16)}
+
+  /* ===== 左侧 ===== */
+  .auth-aside{position:relative;overflow:hidden;color:#fff;padding:44px 38px;display:flex;flex-direction:column;
+    background:linear-gradient(155deg,var(--green-800) 0%,var(--green-600) 52%,var(--tech-600) 100%)}
+  .auth-aside::before{content:"";position:absolute;inset:0;background:
+    radial-gradient(430px 320px at 12% 6%,rgba(111,214,162,.36),transparent 62%),
+    radial-gradient(400px 320px at 94% 94%,rgba(56,189,248,.30),transparent 62%)}
+  .auth-aside::after{content:"";position:absolute;inset:0;opacity:.5;
+    background-image:linear-gradient(rgba(255,255,255,.09) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.09) 1px,transparent 1px);
+    background-size:40px 40px;
+    -webkit-mask-image:linear-gradient(180deg,#000,transparent 90%);
+    mask-image:linear-gradient(180deg,#000,transparent 90%)}
+  .auth-aside > *{position:relative;z-index:2}
+  .auth-aside .a-brand{display:flex;align-items:center;gap:12px;font-size:18px;font-weight:800}
+  .auth-aside .a-brand .logo{width:42px;height:42px;border-radius:12px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);display:grid;place-items:center;flex:none}
+  .auth-aside .a-brand small{display:block;font-size:10px;font-weight:600;letter-spacing:2.5px;opacity:.7;margin-top:3px}
+  .auth-aside .a-title{font-size:26px;font-weight:800;line-height:1.38;margin-top:32px}
+  .auth-aside .a-sub{margin-top:12px;font-size:13px;line-height:1.85;opacity:.84}
+
+  /* 已登录账号卡 */
+  .acc-chip{margin-top:26px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.24);border-radius:14px;padding:14px 16px;backdrop-filter:blur(6px)}
+  .acc-chip .lb{font-size:10.5px;letter-spacing:1.2px;opacity:.65;text-transform:uppercase;font-weight:600}
+  .acc-chip .nm{font-size:14px;font-weight:700;margin-top:6px;display:flex;align-items:center;gap:8px}
+  .acc-chip .nm .dot{width:7px;height:7px;border-radius:50%;background:#6FEA9E;box-shadow:0 0 0 3px rgba(111,234,158,.22)}
+  .acc-chip .ph{font-size:11.5px;opacity:.7;margin-top:5px;font-family:var(--mono)}
+
+  /* 主体类型对比 */
+  .cmp{margin-top:26px;display:flex;flex-direction:column;gap:10px}
+  .cmp .it{display:flex;gap:10px;align-items:flex-start;font-size:12px;line-height:1.65;opacity:.9}
+  .cmp .it .ic{width:18px;height:18px;border-radius:5px;background:rgba(255,255,255,.16);display:grid;place-items:center;flex:none;margin-top:1px}
+
+  /* ===== 右侧 ===== */
+  .l-form{padding:38px 44px 34px;display:flex;flex-direction:column;background:#fff}
+  .form-title{font-size:24px;font-weight:800;color:var(--ink-900)}
+  .sub{color:var(--ink-500);font-size:13px;margin-top:7px;line-height:1.7}
+
+  /* 三步进度条 */
+  .steps{display:flex;align-items:flex-start;margin-top:20px}
+  .steps .st{flex:1;position:relative;text-align:center}
+  .steps .st::before{content:"";position:absolute;left:0;right:50%;top:11px;height:2px;background:var(--line)}
+  .steps .st:first-child::before{display:none}
+  .steps .st::after{content:"";position:absolute;left:50%;right:0;top:11px;height:2px;background:var(--line)}
+  .steps .st:last-child::after{display:none}
+  .steps .st.done::before,.steps .st.done::after,.steps .st.on::before{background:var(--green-400)}
+  .steps .st .d{width:23px;height:23px;border-radius:50%;margin:0 auto;display:grid;place-items:center;
+    background:#fff;border:2px solid var(--line-strong);color:var(--ink-400);font-size:11px;font-weight:800;position:relative;z-index:1}
+  .steps .st.done .d{background:var(--green-500);border-color:transparent;color:#fff}
+  .steps .st.on .d{background:linear-gradient(135deg,var(--green-600),var(--green-500));border-color:transparent;color:#fff;box-shadow:0 0 0 4px rgba(21,154,94,.13)}
+  .steps .st .l{margin-top:8px;font-size:11.5px;font-weight:600;color:var(--ink-400)}
+  .steps .st.on .l,.steps .st.done .l{color:var(--green-700)}
+
+  /* 主体类型选择 */
+  .type-pick{margin-top:24px;display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .type-pick input{display:none}
+  .type-pick label{border:1.5px solid var(--line);border-radius:14px;padding:16px 16px 14px;cursor:pointer;transition:.18s;display:block}
+  .type-pick label:hover{border-color:var(--green-300);background:var(--green-050)}
+  .type-pick input:checked + label{border-color:var(--green-500);background:var(--green-050);box-shadow:0 0 0 4px rgba(21,154,94,.09)}
+  .type-pick .tp-h{display:flex;align-items:center;gap:10px}
+  .type-pick .tp-h .ic{width:36px;height:36px;border-radius:10px;background:var(--bg-alt);color:var(--green-700);display:grid;place-items:center;flex:none;transition:.18s}
+  .type-pick input:checked + label .tp-h .ic{background:linear-gradient(135deg,var(--green-600),var(--green-500));color:#fff}
+  .type-pick .tp-h .nm{font-size:14px;font-weight:800;color:var(--ink-900)}
+  .type-pick .tp-h .bd{margin-left:auto;font-size:10.5px;color:var(--ink-400)}
+  .type-pick .tp-d{font-size:11.5px;color:var(--ink-500);line-height:1.65;margin-top:10px}
+  .type-pick .tp-tags{display:flex;gap:5px;flex-wrap:wrap;margin-top:9px}
+  .type-pick .tp-tags span{font-size:10.5px;background:#fff;border:1px solid var(--line);border-radius:4px;padding:1px 6px;color:var(--ink-600)}
+
+  /* 表单 */
+  .form-body{margin-top:22px}
+  .form-item{margin-bottom:17px}
+  .form-section{margin:24px 0 14px;padding-left:11px;border-left:3px solid var(--green-500);font-size:13.5px;font-weight:700;color:var(--ink-800)}
+  .form-section small{display:block;margin-top:2px;font-size:11px;font-weight:500;color:var(--ink-400)}
+  label.fl{display:block;font-size:13px;font-weight:600;color:var(--ink-700);margin-bottom:7px}
+  .input,.select,.textarea{width:100%;height:44px;border:1px solid var(--line);border-radius:11px;padding:0 14px;font-size:14px;background:#fff;transition:.18s}
+  .input::placeholder,.textarea::placeholder{color:var(--ink-400)}
+  .textarea{height:76px;padding:11px 14px;resize:none}
+  .input:focus,.select:focus,.textarea:focus{border-color:var(--green-500);box-shadow:0 0 0 4px rgba(21,154,94,.1);outline:none}
+  .form-hint{font-size:11.5px;color:var(--ink-400);margin-top:5px}
+  .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}
+  .form-panel{display:none}
+  .form-panel.on{display:block}
+
+  .agree{font-size:12px;color:var(--ink-500);margin-top:6px;display:flex;align-items:flex-start;gap:8px;line-height:1.7}
+  .agree input{margin-top:3px}
+  .agree a{color:var(--tech-700);font-weight:600}
+
+  .btn-row{display:flex;gap:12px;margin-top:18px}
+  .btn-main{flex:1;height:50px;background:linear-gradient(135deg,var(--green-600),var(--green-500));color:#fff;border-radius:12px;font-weight:700;font-size:15.5px;letter-spacing:1px;box-shadow:0 8px 22px rgba(21,154,94,.28);transition:.18s;display:flex;align-items:center;justify-content:center;gap:8px;border:none;cursor:pointer}
+  .btn-main:hover{filter:brightness(1.06);transform:translateY(-1px)}
+  .btn-skip{height:50px;padding:0 20px;border:1px solid var(--line-strong);border-radius:12px;background:#fff;color:var(--ink-600);font-weight:600;font-size:13.5px;display:flex;align-items:center;justify-content:center;gap:6px;transition:.18s;cursor:pointer}
+  .btn-skip:hover{border-color:var(--green-400);color:var(--green-700);background:var(--green-050)}
+
+  .l-foot{margin-top:auto;padding-top:18px;text-align:center;color:var(--ink-400);font-size:12px}
+  .l-foot a{color:var(--green-700);font-weight:600}
+
+  @media(max-width:1080px){
+    .auth-card{max-width:620px;grid-template-columns:1fr}
+    .auth-aside{display:none}
+  }
+  @media(max-width:620px){
+    .l-wrap{padding:14px}
+    .l-form{padding:28px 20px}
+    .form-grid{grid-template-columns:1fr;gap:0}
+    .type-pick{grid-template-columns:1fr}
+  }
+
+  .toast{position:fixed;left:50%;bottom:34px;transform:translate(-50%,20px);background:var(--green-800);color:#fff;padding:12px 20px;border-radius:20px;font-size:13.5px;font-weight:600;box-shadow:var(--shadow-md);opacity:0;pointer-events:none;transition:.28s;z-index:99;display:flex;align-items:center;gap:8px}
+  .toast.show{opacity:1;transform:translate(-50%,0)}
+</style>
+</head>
+<body>
+
+<div class="l-topbar">
+  <a class="back" href="register.html"><span data-icon="arrow-left" data-size="14"></span>返回上一步</a>
+  <span class="muted t-xs" style="margin-left:auto">第 2 步 / 共 3 步 · 产品原型演示</span>
+</div>
+
+<div class="l-wrap">
+  <div class="auth-card">
+  <!-- 左侧 -->
+  <aside class="auth-aside">
+    <div class="a-brand">
+      <span class="logo"><span data-icon="seed" data-size="21" style="color:#fff"></span></span>
+      <span>农产云<small>AGRI · CLOUD</small></span>
+    </div>
+
+    <div class="a-title">选择您的<br>会员主体类型</div>
+    <div class="a-sub">账号已创建成功。接下来登记会员主体，主体决定您可以使用的交易身份与经营权限。</div>
+
+    <div class="acc-chip">
+      <div class="lb">当前登录账号</div>
+      <div class="nm"><span class="dot"></span><span id="accName">用户 6621</span></div>
+      <div class="ph" id="accPhone">138****6621</div>
+    </div>
+
+    <div class="cmp">
+      <div class="it"><span class="ic"><span data-icon="factory" data-size="11"></span></span><span><b>企业会员</b>：以营业执照主体经营，可开店铺、大宗交易、申请供应链金融</span></div>
+      <div class="it"><span class="ic"><span data-icon="user" data-size="11"></span></span><span><b>个人会员</b>：合作社 / 家庭农场 / 个体户 / 经纪人，可小额采购与发布需求</span></div>
+      <div class="it"><span class="ic"><span data-icon="shield" data-size="11"></span></span><span>每个账号可创建 1 个主体，主体创建后不可更改类型</span></div>
+    </div>
+  </aside>
+
+  <!-- 右侧 -->
+  <main class="l-form">
+    <div class="form-title">创建主体会员</div>
+    <div class="sub">请选择主体类型并填写主体信息，提交后进入认证审核环节</div>
+
+    <div class="steps">
+      <div class="st done"><div class="d"><span data-icon="check" data-size="11"></span></div><div class="l">注册账号</div></div>
+      <div class="st on"><div class="d">2</div><div class="l">创建主体</div></div>
+      <div class="st"><div class="d">3</div><div class="l">认证开通</div></div>
+    </div>
+
+    <!-- 主体类型选择 -->
+    <div class="type-pick" id="typePick">
+      <input type="radio" id="tpEnt" name="subjectType" value="enterprise" checked />
+      <label for="tpEnt">
+        <div class="tp-h">
+          <span class="ic"><span data-icon="factory" data-size="17"></span></span>
+          <span class="nm">企业会员</span>
+          <span class="bd">推荐</span>
+        </div>
+        <div class="tp-d">以营业执照登记的企业、合作社、加工厂、贸易商等经营性主体</div>
+        <div class="tp-tags"><span>开店铺</span><span>大宗交易</span><span>供应链金融</span><span>溯源</span></div>
+      </label>
+
+      <input type="radio" id="tpPer" name="subjectType" value="personal" />
+      <label for="tpPer">
+        <div class="tp-h">
+          <span class="ic"><span data-icon="user" data-size="17"></span></span>
+          <span class="nm">个人会员</span>
+          <span class="bd">轻量</span>
+        </div>
+        <div class="tp-d">家庭农场主、个体采购户、农产品经纪人、农业技术员等自然人</div>
+        <div class="tp-tags"><span>小额采购</span><span>发布需求</span><span>农技服务</span></div>
+      </label>
+    </div>
+
+    <div class="form-body">
+      <!-- 企业主体 -->
+      <div class="form-panel on" data-panel="enterprise">
+        <div class="form-section">企业主体信息<small>须与营业执照完全一致，认证时将自动比对工商数据</small></div>
+        <div class="form-item">
+          <label class="fl">企业全称 <span style="color:var(--red)">*</span></label>
+          <input class="input" id="entName" placeholder="如：黑龙江五常粮油专业合作社" />
+        </div>
+        <div class="form-grid">
+          <div class="form-item">
+            <label class="fl">统一社会信用代码 <span style="color:var(--red)">*</span></label>
+            <input class="input" id="entCode" placeholder="18 位字母数字" maxlength="18" />
+          </div>
+          <div class="form-item">
+            <label class="fl">企业类型</label>
+            <select class="select" id="entType">
+              <option>有限责任公司</option><option>股份有限公司</option>
+              <option>农民专业合作社</option><option>合伙企业</option>
+              <option>个体工商户</option><option>其他</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-grid">
+          <div class="form-item">
+            <label class="fl">所属产业 <span style="color:var(--red)">*</span></label>
+            <select class="select" id="entIndustry">
+              <option>粮油产业</option><option>果蔬产业</option><option>畜禽产业</option>
+              <option>茶药产业</option><option>饲料农资</option><option>水产产业</option>
+              <option>预制菜</option><option>冷链物流</option><option>其他</option>
+            </select>
+          </div>
+          <div class="form-item">
+            <label class="fl">企业规模</label>
+            <select class="select" id="entSize">
+              <option>微型（20 人以下）</option><option>小型（20-100 人）</option>
+              <option>中型（100-500 人）</option><option>大型（500 人以上）</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-item">
+          <label class="fl">注册地址 <span style="color:var(--red)">*</span></label>
+          <input class="input" id="entAddr" placeholder="省 / 市 / 区（县）/ 详细地址" />
+        </div>
+        <div class="form-grid">
+          <div class="form-item">
+            <label class="fl">法定代表人 <span style="color:var(--red)">*</span></label>
+            <input class="input" id="entLegal" placeholder="与营业执照一致" />
+          </div>
+          <div class="form-item">
+            <label class="fl">经营年限</label>
+            <select class="select" id="entYears">
+              <option>1 年以内</option><option>1-3 年</option><option>3-5 年</option><option>5 年以上</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- 个人主体 -->
+      <div class="form-panel" data-panel="personal">
+        <div class="form-section">个人主体信息<small>用于实名认证与交易身份核验，信息加密存储</small></div>
+        <div class="form-grid">
+          <div class="form-item">
+            <label class="fl">真实姓名 <span style="color:var(--red)">*</span></label>
+            <input class="input" id="perName" placeholder="请输入身份证上的姓名" />
+          </div>
+          <div class="form-item">
+            <label class="fl">身份证号 <span style="color:var(--red)">*</span></label>
+            <input class="input" id="perIdCard" placeholder="18 位身份证号" maxlength="18" />
+          </div>
+        </div>
+        <div class="form-grid">
+          <div class="form-item">
+            <label class="fl">经营类型 <span style="color:var(--red)">*</span></label>
+            <select class="select" id="perType">
+              <option>家庭农场</option><option>农民专业合作社成员</option>
+              <option>个体采购户</option><option>农产品经纪人</option>
+              <option>农业技术员</option><option>其他</option>
+            </select>
+          </div>
+          <div class="form-item">
+            <label class="fl">主要经营品类</label>
+            <select class="select" id="perCategory">
+              <option>粮油</option><option>果蔬</option><option>畜禽</option>
+              <option>茶药</option><option>水产</option><option>农资饲料</option><option>其他</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-item">
+          <label class="fl">所在地区 <span style="color:var(--red)">*</span></label>
+          <input class="input" id="perRegion" placeholder="省 / 市 / 区（县）" />
+          <div class="form-hint">用于匹配本地供需与物流网点，可后续修改</div>
+        </div>
+        <div class="form-item">
+          <label class="fl">经营规模说明 <span class="muted t-xs" style="font-weight:500">选填</span></label>
+          <textarea class="textarea" id="perDesc" placeholder="如：自有耕地 120 亩，年产水稻 60 吨；或年采购量 500 吨"></textarea>
+        </div>
+      </div>
+
+      <label class="agree" style="margin-top:14px"><input type="checkbox" id="agree" />
+        我确认所填主体信息真实有效，并同意 <a href="javascript:void(0)" onclick="alert('原型演示：主体登记规则')">《主体登记规则》</a> 与
+        <a href="javascript:void(0)" onclick="alert('原型演示：隐私政策')">《隐私政策》</a>
+      </label>
+
+      <div class="btn-row">
+        <button type="button" class="btn-main" id="btnCreate"><span data-icon="arrow-right" data-size="15"></span>创建主体并去认证</button>
+        <button type="button" class="btn-skip" id="btnSkip"><span data-icon="clock" data-size="14"></span>暂不创建</button>
+      </div>
+    </div>
+
+    <div class="l-foot">主体创建后进入认证环节 · 认证通过即可解锁全部交易能力</div>
+  </main>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="../assets/js/app.js"></script>
+<script>
+(function () {
+  "use strict";
+  var $ = function (s) { return document.querySelector(s); };
+
+  function showToast(html) {
+    var t = $("#toast"); t.innerHTML = html;
+    if (window.PROTO) PROTO.hydrateIcons(t);
+    t.classList.add("show");
+    clearTimeout(window.__toastT);
+    window.__toastT = setTimeout(function () { t.classList.remove("show"); }, 2200);
+  }
+
+  /* ===== 回填已登录账号 ===== */
+  var account = window.PROTO && PROTO.Auth ? PROTO.Auth.get() : null;
+  if (!account) {
+    // 未登录直接访问本页 → 回到登录
+    location.replace("login.html");
+    return;
+  }
+  $("#accName").textContent = account.name || "农产云用户";
+  if (account.phone) {
+    $("#accPhone").textContent = account.phone.slice(0, 3) + "****" + account.phone.slice(-4);
+  }
+
+  /* 已有主体 → 直接进入认证/状态页 */
+  var existed = PROTO.Auth.getSubject();
+  if (existed) {
+    location.replace(PROTO.Auth.nextPage());
+    return;
+  }
+
+  /* ===== 主体类型切换 ===== */
+  document.querySelectorAll("#typePick input").forEach(function (inp) {
+    inp.addEventListener("change", function () {
+      document.querySelectorAll(".form-panel").forEach(function (p) {
+        p.classList.toggle("on", p.getAttribute("data-panel") === inp.value);
+      });
+    });
+  });
+
+  /* ===== 创建主体 ===== */
+  $("#btnCreate").addEventListener("click", function () {
+    var type = document.querySelector("#typePick input:checked").value;
+    var subject = { type: type, createdAt: Date.now() };
+
+    if (type === "enterprise") {
+      var name = $("#entName").value.trim();
+      var code = $("#entCode").value.trim();
+      var addr = $("#entAddr").value.trim();
+      var legal = $("#entLegal").value.trim();
+      if (!name) { showToast("请填写企业全称"); return; }
+      if (!/^[0-9A-Za-z]{15,18}$/.test(code)) { showToast("请填写正确的统一社会信用代码"); return; }
+      if (!addr) { showToast("请填写注册地址"); return; }
+      if (!legal) { showToast("请填写法定代表人"); return; }
+      subject.name = name;
+      subject.code = code;
+      subject.entType = $("#entType").value;
+      subject.industry = $("#entIndustry").value;
+      subject.size = $("#entSize").value;
+      subject.address = addr;
+      subject.legalPerson = legal;
+      subject.years = $("#entYears").value;
+      subject.displayName = name;
+      subject.subjectLabel = "企业会员";
+    } else {
+      var pn = $("#perName").value.trim();
+      var idc = $("#perIdCard").value.trim();
+      var region = $("#perRegion").value.trim();
+      if (!pn) { showToast("请填写真实姓名"); return; }
+      if (!/^\d{17}[\dXx]$/.test(idc)) { showToast("请填写 18 位身份证号"); return; }
+      if (!region) { showToast("请填写所在地区"); return; }
+      subject.name = pn;
+      subject.idCard = idc;
+      subject.perType = $("#perType").value;
+      subject.category = $("#perCategory").value;
+      subject.region = region;
+      subject.desc = $("#perDesc").value.trim();
+      subject.displayName = pn;
+      subject.subjectLabel = "个人会员";
+    }
+
+    if (!$("#agree").checked) { showToast("请先确认信息真实有效并同意规则"); return; }
+
+    PROTO.Auth.setSubject(subject);
+    PROTO.Auth.setCert({ status: "none", submittedAt: null });
+    /* 同步账号上的主体标识（不覆盖注册时填写的称呼） */
+    var acc = PROTO.Auth.get();
+    acc.identity = type;
+    acc.subjectName = subject.displayName;
+    PROTO.Auth.login(acc);
+
+    showToast("<span data-icon='check' data-size='16'></span>主体创建成功，正在进入认证...");
+    setTimeout(function () { location.href = "certify.html"; }, 900);
+  });
+
+  /* ===== 暂不创建 ===== */
+  $("#btnSkip").addEventListener("click", function () {
+    showToast("已跳过主体创建，功能权限将受到限制（可随时补建）");
+    setTimeout(function () { location.href = "index.html"; }, 1100);
+  });
+})();
+</script>
+</body>
+</html>
