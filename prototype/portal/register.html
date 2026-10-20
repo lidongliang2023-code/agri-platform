@@ -8,7 +8,7 @@
 <style>
   /* ===== 注册页专用布局（与登录页同风格） ===== */
   body{min-height:100vh;display:flex;flex-direction:column}
-  .l-wrap{flex:1;display:grid;grid-template-columns:1fr 480px;background:#fff}
+  .l-wrap{flex:1;display:grid;grid-template-columns:1fr 560px;background:#fff}
   .l-hero{position:relative;overflow:hidden;background:linear-gradient(135deg,var(--green-800) 0%,var(--green-600) 55%,var(--tech-600) 100%);color:#fff;padding:64px 72px;display:flex;flex-direction:column;justify-content:center}
   .l-hero::before{content:"";position:absolute;inset:0;background:radial-gradient(600px 400px at 20% 20%,rgba(47,184,119,.3),transparent 60%),radial-gradient(500px 300px at 80% 80%,rgba(14,165,233,.25),transparent 60%)}
   .l-hero > *{position:relative;z-index:2}
@@ -21,62 +21,66 @@
   .l-hero .hero-benefits div strong{display:block;font-size:13.5px;margin-bottom:4px}
   .l-hero .hero-benefits div small{font-size:11.5px;opacity:.72;line-height:1.6}
 
-  .l-form{padding:38px 44px;display:flex;flex-direction:column}
-  .l-form .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:17px;color:var(--green-800)}
-  .l-form .brand .logo{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,var(--green-500),var(--tech-500));color:#fff;display:grid;place-items:center}
-  .l-form .sub{color:var(--ink-500);font-size:13px;margin-top:4px}
-  .l-form .form-title{font-size:22px;font-weight:800;color:var(--ink-900);margin-top:20px}
-  .l-form .steps{display:flex;align-items:center;gap:10px;margin-top:14px;font-size:12.5px}
-  .l-form .steps .step{flex:1;height:3px;border-radius:3px;background:var(--line);position:relative}
+  .l-form{padding:52px 56px;display:flex;flex-direction:column}
+  .l-form .brand{display:flex;align-items:center;gap:12px;font-weight:800;font-size:18px;color:var(--green-800)}
+  .l-form .brand .logo{width:40px;height:40px;border-radius:11px;background:linear-gradient(135deg,var(--green-500),var(--tech-500));color:#fff;display:grid;place-items:center}
+  .l-form .sub{color:var(--ink-500);font-size:13px;margin-top:6px}
+  .l-form .form-title{font-size:26px;font-weight:800;color:var(--ink-900);margin-top:28px;letter-spacing:.5px}
+  .l-form .steps{display:flex;align-items:center;gap:12px;margin-top:20px;font-size:12.5px}
+  .l-form .steps .step{flex:1;height:4px;border-radius:3px;background:var(--line);position:relative}
   .l-form .steps .step.on{background:linear-gradient(90deg,var(--green-500),var(--tech-500))}
-  .l-form .steps .step::after{content:attr(data-label);position:absolute;top:8px;left:0;font-size:11px;color:var(--ink-500);white-space:nowrap}
+  .l-form .steps .step::after{content:attr(data-label);position:absolute;top:11px;left:0;font-size:11px;color:var(--ink-500);white-space:nowrap}
   .l-form .steps .step.on::after{color:var(--green-700);font-weight:600}
 
-  .l-form .form-body{margin-top:26px}
-  .l-form .form-item{margin-bottom:16px}
-  .l-form label{display:block;font-size:13px;font-weight:600;color:var(--ink-700);margin-bottom:7px}
-  .l-form .input,.l-form .select,.l-form .textarea{width:100%;height:40px;border:1px solid var(--line);border-radius:10px;padding:0 14px;font-size:14px;background:#fff;transition:.15s}
-  .l-form .textarea{height:72px;padding:10px 14px;resize:none}
-  .l-form .input:focus,.l-form .select:focus,.l-form .textarea:focus{border-color:var(--green-500);box-shadow:0 0 0 3px rgba(21,154,94,.12);outline:none}
-  .l-form .form-hint{font-size:11.5px;color:var(--ink-400);margin-top:5px}
-  .l-form .split-row{display:grid;grid-template-columns:1fr 110px;gap:10px}
-  .l-form .btn-code{height:40px;border:1px solid var(--green-500);color:var(--green-700);border-radius:10px;font-weight:600;font-size:13px;background:#fff;transition:.15s}
+  .l-form .form-body{margin-top:34px}
+  .l-form .form-item{margin-bottom:22px}
+  .l-form .form-section{margin:30px 0 18px;padding-left:12px;border-left:3px solid var(--green-500);font-size:14px;font-weight:700;color:var(--ink-800);letter-spacing:.3px}
+  .l-form .form-section small{display:block;margin-top:3px;font-size:11.5px;font-weight:500;color:var(--ink-400);letter-spacing:0}
+  .l-form label{display:block;font-size:13.5px;font-weight:600;color:var(--ink-700);margin-bottom:9px}
+  .l-form .input,.l-form .select,.l-form .textarea{width:100%;height:46px;border:1px solid var(--line);border-radius:12px;padding:0 16px;font-size:14.5px;background:#fff;transition:.18s}
+  .l-form .input::placeholder,.l-form .textarea::placeholder{color:var(--ink-400)}
+  .l-form .textarea{height:88px;padding:12px 16px;resize:none}
+  .l-form .input:focus,.l-form .select:focus,.l-form .textarea:focus{border-color:var(--green-500);box-shadow:0 0 0 4px rgba(21,154,94,.1);outline:none}
+  .l-form .form-hint{font-size:11.5px;color:var(--ink-400);margin-top:6px}
+  .l-form .split-row{display:grid;grid-template-columns:1fr 136px;gap:12px}
+  .l-form .btn-code{height:46px;border:1px solid var(--green-500);color:var(--green-700);border-radius:12px;font-weight:600;font-size:13px;background:#fff;transition:.15s;white-space:nowrap}
   .l-form .btn-code:hover{background:var(--green-050)}
   .l-form .btn-code[disabled]{color:var(--ink-400);border-color:var(--line);cursor:not-allowed}
-  .l-form .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
-  .l-form .identity-pick{display:flex;gap:10px;margin-top:4px}
-  .l-form .identity-pick label{flex:1;height:54px;border:1.5px solid var(--line);border-radius:10px;display:flex;align-items:center;gap:10px;padding:0 14px;cursor:pointer;transition:.15s;margin-bottom:0}
+  .l-form .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 18px}
+  .l-form .identity-pick{display:flex;gap:12px;margin-top:6px}
+  .l-form .identity-pick label{flex:1;height:62px;border:1.5px solid var(--line);border-radius:12px;display:flex;align-items:center;gap:12px;padding:0 16px;cursor:pointer;transition:.18s;margin-bottom:0}
   .l-form .identity-pick input{display:none}
-  .l-form .identity-pick label .ic{width:30px;height:30px;border-radius:8px;background:var(--green-100);color:var(--green-700);display:grid;place-items:center;flex:none}
-  .l-form .identity-pick input:checked + label{border-color:var(--green-500);background:var(--green-050);box-shadow:0 0 0 3px rgba(21,154,94,.1)}
+  .l-form .identity-pick label .ic{width:34px;height:34px;border-radius:9px;background:var(--green-100);color:var(--green-700);display:grid;place-items:center;flex:none}
+  .l-form .identity-pick label:hover{border-color:var(--green-300);background:var(--green-050)}
+  .l-form .identity-pick input:checked + label{border-color:var(--green-500);background:var(--green-050);box-shadow:0 0 0 4px rgba(21,154,94,.1)}
   .l-form .identity-pick input:checked + label .ic{background:linear-gradient(135deg,var(--green-500),var(--tech-500));color:#fff}
-  .l-form .identity-pick .txt strong{display:block;font-size:13px;color:var(--ink-800)}
+  .l-form .identity-pick .txt strong{display:block;font-size:13.5px;color:var(--ink-800)}
   .l-form .identity-pick .txt small{font-size:11px;color:var(--ink-400)}
 
   .l-form .form-panels{margin-top:4px}
   .l-form .form-panel{display:none}
   .l-form .form-panel.on{display:block}
 
-  .l-form .password-weak,.l-form .password-fair,.l-form .password-strong{height:4px;border-radius:4px;margin-top:7px;background:var(--line);display:flex;gap:3px}
+  .l-form .password-weak,.l-form .password-fair,.l-form .password-strong{height:4px;border-radius:4px;margin-top:9px;background:var(--line);display:flex;gap:3px}
   .l-form .password-weak.on i:first-child{background:var(--red);border-radius:4px;width:33%;height:100%}
   .l-form .password-fair.on i{background:var(--amber);width:33%;height:100%;border-radius:4px}
   .l-form .password-strong.on i{background:var(--green-500);width:33%;height:100%;border-radius:4px}
 
-  .l-form .agreement{font-size:12px;color:var(--ink-500);margin-top:4px;display:flex;align-items:flex-start;gap:6px}
+  .l-form .agreement{font-size:12.5px;color:var(--ink-500);margin-top:8px;display:flex;align-items:flex-start;gap:8px;line-height:1.7}
   .l-form .agreement input{margin-top:3px}
-  .l-form .agreement a{color:var(--tech-700);font-weight:600}
+  .l-form .agreement a{color:var(--tech-700);font-weight:600;white-space:nowrap}
   .l-form .agreement a:hover{text-decoration:underline}
 
-  .l-form .btn-submit{width:100%;height:46px;background:linear-gradient(135deg,var(--green-600),var(--green-500));color:#fff;border-radius:10px;font-weight:700;font-size:15px;letter-spacing:1px;box-shadow:0 4px 14px rgba(21,154,94,.28);transition:.15s;display:flex;align-items:center;justify-content:center;gap:6px;margin-top:6px}
+  .l-form .btn-submit{width:100%;height:52px;background:linear-gradient(135deg,var(--green-600),var(--green-500));color:#fff;border-radius:12px;font-weight:700;font-size:16px;letter-spacing:1.5px;box-shadow:0 8px 22px rgba(21,154,94,.3);transition:.18s;display:flex;align-items:center;justify-content:center;gap:8px;margin-top:8px}
   .l-form .btn-submit:hover{filter:brightness(1.06);transform:translateY(-1px)}
 
-  .l-foot{margin-top:auto;padding-top:18px;text-align:center;color:var(--ink-500);font-size:12.5px}
+  .l-foot{margin-top:auto;padding-top:24px;text-align:center;color:var(--ink-500);font-size:12.5px}
   .l-foot a{color:var(--green-700);font-weight:600}
 
   @media(max-width:980px){
     .l-wrap{grid-template-columns:1fr}
     .l-hero{display:none}
-    .l-form{padding:30px 22px}
+    .l-form{padding:36px 24px}
   }
 
   /* ===== 顶部条 ===== */
@@ -217,7 +221,7 @@
       </div>
 
       <!-- 联系人（两种身份都要） -->
-      <div style="font-size:13px;font-weight:700;color:var(--ink-700);margin:16px 0 10px;padding-left:10px;border-left:3px solid var(--green-400)">联系人 & 登录信息</div>
+      <div class="form-section">联系人 &amp; 登录信息<small>用于账号登录、订单与审核通知</small></div>
 
       <div class="form-grid">
         <div class="form-item">
