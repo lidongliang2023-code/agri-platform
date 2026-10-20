@@ -571,6 +571,12 @@
   background: var(--mc-green-050);
 }
 
+.mc-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: none;
+}
+
 .mc-section-title {
   margin: 20px 0 10px;
   font-size: 16px;

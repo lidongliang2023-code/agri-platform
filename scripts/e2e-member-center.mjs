@@ -109,7 +109,9 @@ try {
   const rate = await openTab(seller, '店铺评价与信用')
   check(rate.includes('4.0') && rate.includes('米质没问题'), '店铺评价显示真实评价与均分')
   const fund = await openTab(seller, '资金结算')
-  check(fund.includes('保证金账户') && fund.includes('结算流水'), '资金结算显示保证金与结算口径')
+  check(fund.includes('待结算订单') && fund.includes('已结算记录') && fund.includes('保证金账户'),
+    '资金结算显示待结算、已结算与保证金')
+  check(fund.includes('T20261013005') && fund.includes('卖家应收'), '资金结算显示真实待结算订单与分账金额')
   const customer = await openTab(seller, '客户管理')
   check(customer.includes('北京新发地批发市场'), '客户管理由真实订单聚合出采购商')
   const iot = await openTab(seller, '生产接入')
@@ -139,8 +141,22 @@ try {
   check(buyerAfter.includes('售后与争议工单'), '买家售后页可打开')
   const buyerRate = await openTab(buyer, '采购评价')
   check(buyerRate.includes('米质没问题'), '采购评价显示我发出的真实评价')
-  const buyerFund = await openTab(buyer, '资金与发票')
-  check(buyerFund.includes('发票模块尚未接入'), '资金与发票如实标注未接入')
+  let buyerFund = await openTab(buyer, '资金与发票')
+  check(buyerFund.includes('发票申请与记录') && buyerFund.includes('申请开票'),
+    '资金与发票提供真实开票申请入口')
+  if (!buyerFund.includes('待开票')) {
+    await clickText(buyer, '申请开票')
+    await sleep(600)
+    await buyer.evaluate(() => {
+      const btn = [...document.querySelectorAll('.ant-modal-footer button')]
+        .find((el) => (el.textContent ?? '').includes('提交申请'))
+      btn?.click()
+    })
+    await sleep(1800)
+    buyerFund = await buyer.evaluate(() => document.body.innerText)
+  }
+  check(buyerFund.includes('待开票') && buyerFund.includes('T20261013005'),
+    '开票申请落库并在列表显示待开票')
   const favorite = await openTab(buyer, '收藏与关注')
   check(favorite.includes('收藏与关注尚未接入'), '收藏与关注如实标注未接入')
   const buyerProfile = await openTab(buyer, '企业资料与认证')

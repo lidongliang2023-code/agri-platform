@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Modal, message } from 'antd'
+import { Form, Input, Modal, Select, message } from 'antd'
 import {
   AlertOutlined,
   CheckCircleOutlined,
@@ -15,6 +15,7 @@ import {
   UserOutlined,
 } from '@ant-design/icons'
 import { updateOrderStatus } from '@/api/order'
+import { applyInvoice, getMyInvoices, type InvoiceRow } from '@/api/invoice'
 import { MemberCenterShell, type MemberNavItem } from './MemberCenterShell'
 import {
   EmptyState,
@@ -89,6 +90,22 @@ export default function BuyerCenter(): JSX.Element {
   const disputes = useDisputes()
   const evaluations = useEvaluations({ evaluatorId: buyerId ?? undefined })
   const guarantees = useGuarantees()
+  const [invoices, setInvoices] = useState<InvoiceRow[]>([])
+  const [invoiceOpen, setInvoiceOpen] = useState(false)
+  const [invoiceSubmitting, setInvoiceSubmitting] = useState(false)
+  const [invoiceForm] = Form.useForm<{ orderId: number; invoiceType: string; title: string; taxNo?: string; remark?: string }>()
+
+  const loadInvoices = useCallback(() => {
+    getMyInvoices()
+      .then((body) => {
+        if (body?.code === 200) setInvoices(Array.isArray(body.data) ? body.data : [])
+      })
+      .catch(() => { /* 页面显示未接入/重试提示 */ })
+  }, [])
+
+  useEffect(() => {
+    loadInvoices()
+  }, [loadInvoices])
 
   useEffect(() => {
     setPage(1)
@@ -112,6 +129,33 @@ export default function BuyerCenter(): JSX.Element {
   const myDisputes = disputes.rows.filter((item) => base.merchantIds.includes(Number(item.complainantId)))
   const evaluatedOrderIds = new Set(evaluations.rows.map((item) => item.orderId))
   const pendingEvaluations = allOrders.rows.filter((item) => item.orderStatus === 'completed' && !evaluatedOrderIds.has(item.id))
+  const invoicedOrderIds = new Set(invoices.map((item) => item.orderId))
+  const eligibleInvoiceOrders = allOrders.rows.filter((item) =>
+    ['paid', 'shipped', 'received', 'completed'].includes(item.orderStatus) && !invoicedOrderIds.has(item.id))
+
+  const openInvoice = (): void => {
+    setInvoiceOpen(true)
+  }
+
+  const submitInvoice = async (): Promise<void> => {
+    try {
+      const values = await invoiceForm.validateFields()
+      setInvoiceSubmitting(true)
+      const body = await applyInvoice(values)
+      if (body?.code === 200) {
+        message.success('开票申请已提交')
+        setInvoiceOpen(false)
+        loadInvoices()
+      } else {
+        message.error(body?.message ?? '提交开票申请失败')
+      }
+    } catch (error) {
+      if (error && typeof error === 'object' && 'errorFields' in error) return
+      message.error('提交开票申请失败（请检查后端是否在运行）')
+    } finally {
+      setInvoiceSubmitting(false)
+    }
+  }
 
   const confirmReceive = (order: OrderRow): void => {
     Modal.confirm({
@@ -405,8 +449,71 @@ export default function BuyerCenter(): JSX.Element {
         )}
       </Panel>
       <Panel title="发票申请与记录">
-        <EmptyState title="发票模块尚未接入" desc="当前交易域没有发票接口，页面不展示伪造的发票记录；开票请先联系平台运营。" />
+        <div className="mc-toolbar">
+          <span className="mc-toolbar-muted">已付款订单可申请开票；一笔订单仅一张申请。</span>
+          <span className="mc-spacer" />
+          <button type="button" className="mc-btn" onClick={openInvoice} disabled={eligibleInvoiceOrders.length === 0}>
+            申请开票
+          </button>
+        </div>
+        {invoices.length === 0 ? (
+          <EmptyState title="还没有开票申请" desc={eligibleInvoiceOrders.length ? '选择一笔已付款订单申请开票。' : '暂无可开票订单。'}
+            action={eligibleInvoiceOrders.length ? <button type="button" className="mc-btn" onClick={openInvoice}>申请开票</button> : undefined} />
+        ) : (
+          <div className="mc-table-wrap">
+            <table className="mc-table">
+              <thead><tr><th>申请单号</th><th>订单号</th><th>开票金额</th><th>类型</th><th>抬头</th><th>状态</th><th>申请时间</th></tr></thead>
+              <tbody>
+                {invoices.map((row) => (
+                  <tr key={row.id}>
+                    <td className="mc-mono">{row.invoiceNo}</td>
+                    <td className="mc-mono">{row.orderNo}</td>
+                    <td className="mc-price">{money(row.amount)}</td>
+                    <td>{row.invoiceType}</td>
+                    <td className="mc-wrap-text">{row.title}</td>
+                    <td><span className={`mc-tag ${row.invoiceStatus === 'issued' ? 'green' : row.invoiceStatus === 'rejected' ? 'red' : 'amber'}`}>{invoiceStatusText(row.invoiceStatus)}</span></td>
+                    <td className="mc-mono mc-xs">{shortDate(row.applyTime)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Panel>
+      <Modal title="申请开票" open={invoiceOpen} onCancel={() => setInvoiceOpen(false)}
+        onOk={() => void submitInvoice()} confirmLoading={invoiceSubmitting} okText="提交申请" cancelText="取消"
+        destroyOnClose afterOpenChange={(open) => {
+          if (open) {
+            invoiceForm.setFieldsValue({
+              orderId: eligibleInvoiceOrders[0]?.id,
+              invoiceType: '增值税专用发票',
+              title: buyerMerchant?.merchantName ?? '',
+              taxNo: '',
+              remark: '',
+            })
+          }
+        }}>
+        <Form form={invoiceForm} layout="vertical" preserve={false}>
+          <Form.Item name="orderId" label="采购订单" rules={[{ required: true, message: '请选择订单' }]}>
+            <Select placeholder="选择已付款订单" options={eligibleInvoiceOrders.map((order) => ({
+              value: order.id,
+              label: `${order.orderNo} · ${order.productName || order.categoryName || '订单商品'} · ${money(order.totalAmount)}`,
+            }))} />
+          </Form.Item>
+          <Form.Item name="invoiceType" label="发票类型" rules={[{ required: true, message: '请选择发票类型' }]}>
+            <Select options={['增值税专用发票', '增值税普通发票', '电子普通发票'].map((value) => ({ value, label: value }))} />
+          </Form.Item>
+          <Form.Item name="title" label="发票抬头" rules={[{ required: true, message: '请填写发票抬头' }]}>
+            <Input placeholder="与企业营业执照一致" />
+          </Form.Item>
+          <Form.Item name="taxNo" label="纳税人识别号">
+            <Input placeholder="统一社会信用代码" />
+          </Form.Item>
+          <Form.Item name="remark" label="备注">
+            <Input.TextArea rows={2} placeholder="选填" />
+          </Form.Item>
+        </Form>
+      </Modal>
     </>
   )
 
@@ -519,4 +626,11 @@ function realNameText(record: { status: string } | null): string {
   if (record.status === 'pending') return '审核中'
   if (record.status === 'rejected') return '已驳回'
   return record.status
+}
+
+function invoiceStatusText(status: string): string {
+  if (status === 'issued') return '已开票'
+  if (status === 'rejected') return '已驳回'
+  if (status === 'pending') return '待开票'
+  return status
 }

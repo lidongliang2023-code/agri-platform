@@ -964,6 +964,37 @@ CREATE TABLE IF NOT EXISTS `agri_trade_settlement` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='订单结算分账表';
 
 -- ===========================================================================
+-- 买家开票申请（2026-10-20）
+-- 一笔订单只允许一张有效申请；开票状态由运营/财务推进。
+-- ===========================================================================
+CREATE TABLE IF NOT EXISTS `agri_trade_invoice` (
+    `id` BIGINT NOT NULL COMMENT '主键ID',
+    `invoice_no` VARCHAR(64) NOT NULL COMMENT '申请单号',
+    `order_id` BIGINT NOT NULL COMMENT '关联订单ID',
+    `order_no` VARCHAR(64) NULL COMMENT '订单号快照',
+    `buyer_id` BIGINT NOT NULL COMMENT '购买方（经营主体）',
+    `buyer_name` VARCHAR(128) NULL COMMENT '购买方名称',
+    `seller_id` BIGINT NULL COMMENT '销售方（经营主体）',
+    `seller_name` VARCHAR(128) NULL COMMENT '销售方名称',
+    `amount` DECIMAL(18,2) NOT NULL COMMENT '开票金额',
+    `invoice_type` VARCHAR(32) NOT NULL COMMENT '增值税专用发票 / 增值税普通发票',
+    `title` VARCHAR(128) NOT NULL COMMENT '发票抬头',
+    `tax_no` VARCHAR(64) NULL COMMENT '纳税人识别号',
+    `invoice_status` VARCHAR(32) NOT NULL DEFAULT 'pending' COMMENT 'pending 待开票 / issued 已开票 / rejected 已驳回',
+    `apply_time` DATETIME NULL COMMENT '申请时间',
+    `issue_time` DATETIME NULL COMMENT '开票时间',
+    `remark` VARCHAR(500) NULL COMMENT '备注',
+    `del_flag` TINYINT NOT NULL DEFAULT 0,
+    `create_time` DATETIME NULL,
+    `update_time` DATETIME NULL,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_invoice_no` (`invoice_no`),
+    UNIQUE KEY `uk_invoice_order` (`order_id`),
+    KEY `idx_invoice_buyer` (`buyer_id`),
+    KEY `idx_invoice_status` (`invoice_status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='买家开票申请';
+
+-- ===========================================================================
 -- 商品违规处置（运营端）
 --
 -- 为什么单独建表，而不是只把货源的 publish_status 改成"下架"：

@@ -17,6 +17,7 @@ import {
   UserOutlined,
 } from '@ant-design/icons'
 import { updateOrderStatus } from '@/api/order'
+import { getMySettlement, type SellerSettlementView } from '@/api/settlement'
 import { MemberCenterShell, type MemberNavItem } from './MemberCenterShell'
 import {
   EmptyState,
@@ -98,6 +99,17 @@ export default function SellerCenter(): JSX.Element {
   const guarantees = useGuarantees()
   const inquiries = useReceivedInquiries()
   const [goodsStatus, setGoodsStatus] = useState('all')
+  const [settlement, setSettlement] = useState<SellerSettlementView | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    getMySettlement()
+      .then((body) => {
+        if (!cancelled && body?.code === 200) setSettlement(body.data ?? null)
+      })
+      .catch(() => { /* 结算接口不可用时页面显示未接入说明 */ })
+    return () => { cancelled = true }
+  }, [])
 
   useEffect(() => {
     setPage(1)
@@ -424,10 +436,59 @@ export default function SellerCenter(): JSX.Element {
   const renderFund = (): JSX.Element => (
     <>
       <div className="mc-grid mc-grid-3">
-        <Kpi label="累计成交额" value={money(base.dashboard?.seller?.totalRevenue ?? 0)} desc="不含已取消订单" />
-        <Kpi label="可用保证金" value={money(guaranteeAvailable)} desc={`冻结 ${money(guaranteeFrozen)}`} tone="tech" />
-        <Kpi label="已完成订单" value={base.dashboard?.seller?.completedOrders ?? 0} unit="笔" desc="结算以平台结算单为准" tone="amber" />
+        <Kpi label="待结算金额" value={money(settlement?.summary.pendingAmount ?? 0)}
+          desc={`${settlement?.summary.pendingCount ?? 0} 笔 · 预估应收 ${money(settlement?.summary.pendingReceivable ?? 0)}`} />
+        <Kpi label="已结算应收" value={money(settlement?.summary.settledReceivable ?? 0)}
+          desc={`${settlement?.summary.settledCount ?? 0} 笔 · 平台服务费 ${money(settlement?.summary.settledFee ?? 0)}`} tone="tech" />
+        <Kpi label="可用保证金" value={money(guaranteeAvailable)} desc={`冻结 ${money(guaranteeFrozen)}`} tone="amber" />
       </div>
+      <Panel title="待结算订单" extra={<span className="mc-toolbar-muted">确认收货且已付款，尚未生成结算单</span>}>
+        {!settlement || settlement.pending.length === 0 ? (
+          <EmptyState title="没有待结算订单" desc="订单确认收货并完成付款后，会进入待结算。" />
+        ) : (
+          <div className="mc-table-wrap">
+            <table className="mc-table">
+              <thead><tr><th>订单号</th><th>采购方</th><th>订单金额</th><th>平台服务费</th><th>卖家应收</th><th>状态</th></tr></thead>
+              <tbody>
+                {settlement.pending.map((row) => (
+                  <tr key={row.orderId}>
+                    <td className="mc-mono">{row.orderNo}</td>
+                    <td>{row.buyerName ?? '—'}</td>
+                    <td className="mc-price">{money(row.totalAmount)}</td>
+                    <td>{money(row.platformFee)} <span className="mc-xs">({(Number(row.platformFeeRate) * 100).toFixed(2)}%)</span></td>
+                    <td className="mc-price">{money(row.sellerReceivable)}</td>
+                    <td><span className="mc-tag amber">待结算</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
+      <Panel title="已结算记录" extra={<span className="mc-toolbar-muted">按平台结算单展示</span>}>
+        {!settlement || settlement.settled.length === 0 ? (
+          <EmptyState title="还没有已结算记录" desc="运营端完成结算后，分账金额与平台服务费会在这里展示。" />
+        ) : (
+          <div className="mc-table-wrap">
+            <table className="mc-table">
+              <thead><tr><th>结算单号</th><th>订单号</th><th>采购方</th><th>订单金额</th><th>平台服务费</th><th>卖家应收</th><th>结算时间</th></tr></thead>
+              <tbody>
+                {settlement.settled.map((row) => (
+                  <tr key={row.id}>
+                    <td className="mc-mono">{row.settlementNo}</td>
+                    <td className="mc-mono">{row.orderNo}</td>
+                    <td>{row.buyerName ?? '—'}</td>
+                    <td className="mc-price">{money(row.totalAmount)}</td>
+                    <td>{money(row.platformFee)}</td>
+                    <td className="mc-price">{money(row.sellerReceivable)}</td>
+                    <td className="mc-mono mc-xs">{shortDate(row.settleTime)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
       <Panel title="保证金账户" extra={<a className="mc-link" href="/my-guarantee">查看流水 →</a>}>
         {guarantees.length === 0 ? (
           <EmptyState title="还没有保证金账户" desc="参与平台担保交易后，保证金账户与流水会在这里展示。" />
@@ -451,8 +512,8 @@ export default function SellerCenter(): JSX.Element {
           </div>
         )}
       </Panel>
-      <Panel title="结算流水">
-        <EmptyState title="商家结算流水接口尚未开放" desc="交易域目前只提供运营端结算接口；卖家侧结算请以平台结算单为准。" />
+      <Panel title="提现申请">
+        <EmptyState title="提现申请尚未开放" desc="当前只提供结算单与应收金额查询；提现涉及打款，需接入资金通道与审批流后再开放。" />
       </Panel>
     </>
   )

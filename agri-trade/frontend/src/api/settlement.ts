@@ -74,3 +74,47 @@ export async function settleOrder(orderId: number) {
   const response = await axios.post(`/api/trade/admin/settlement/${orderId}/settle`)
   return response.data
 }
+
+/* ------------------------------ 卖家侧 ------------------------------ */
+
+export interface SellerSettlementSummary {
+  pendingCount: number
+  settledCount: number
+  pendingAmount: number
+  pendingFee: number
+  pendingReceivable: number
+  settledAmount: number
+  settledFee: number
+  settledReceivable: number
+}
+
+export interface SellerPendingSettlementRow {
+  orderId: number
+  orderNo: string
+  sellerId: number
+  sellerName: string
+  buyerName: string
+  totalAmount: number
+  platformFeeRate: number
+  platformFee: number
+  sellerReceivable: number
+  orderStatus: string
+}
+
+export interface SellerSettlementView {
+  summary: SellerSettlementSummary
+  pending: SellerPendingSettlementRow[]
+  settled: SettlementRow[]
+}
+
+export interface SellerSettlementResult {
+  code: number
+  message?: string
+  data?: SellerSettlementView
+}
+
+/** 我的结算（范围由服务端按登录身份推导）。 */
+export async function getMySettlement(): Promise<SellerSettlementResult> {
+  const response = await axios.get('/api/trade/settlement/mine')
+  return response.data
+}
