@@ -1,0 +1,12 @@
+.portal-hall-embed {
+  width: 100%;
+  background: #f4f7f5;
+}
+
+.portal-hall-embed iframe {
+  display: block;
+  width: 100%;
+  min-height: 900px;
+  border: 0;
+  background: #f4f7f5;
+}

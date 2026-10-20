@@ -64,6 +64,7 @@ interface PublicDemand {
 const PORTAL = `${window.location.protocol}//${window.location.hostname}:8098/portal/`
 const SSO_REGISTER = `${window.location.protocol}//${window.location.hostname}:8090/register`
 const PAGE_SIZE = 9
+const EMBEDDED = new URLSearchParams(window.location.search).get('embed') === '1'
 
 const money = (value: number | null | undefined): string =>
   value == null ? '询价' : `¥${Number(value).toLocaleString('zh-CN', { maximumFractionDigits: 2 })}`
@@ -87,6 +88,55 @@ export default function TradeHall(): JSX.Element {
   const [demands, setDemands] = useState<PublicDemand[]>([])
   const [recommendations, setRecommendations] = useState<HallProduct[]>([])
   const [demandLoading, setDemandLoading] = useState(false)
+
+  useEffect(() => {
+    if (!EMBEDDED) {
+      window.location.replace(`${PORTAL}#/hall`)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!EMBEDDED) return undefined
+    let base = document.querySelector('base')
+    if (!base) {
+      base = document.createElement('base')
+      document.head.appendChild(base)
+    }
+    base.setAttribute('target', '_top')
+    const reportHeight = (): void => {
+      const main = document.querySelector('.hall-main') as HTMLElement | null
+      const contentHeight = main
+        ? main.offsetTop + main.offsetHeight + 24
+        : document.documentElement.scrollHeight
+      window.parent.postMessage(
+        { type: 'agri-hall-height', height: Math.ceil(contentHeight) },
+        '*',
+      )
+    }
+    reportHeight()
+    const observer = new ResizeObserver(reportHeight)
+    observer.observe(document.body)
+    window.addEventListener('resize', reportHeight)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', reportHeight)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!EMBEDDED) return undefined
+    const timer = window.setTimeout(() => {
+      const main = document.querySelector('.hall-main') as HTMLElement | null
+      const contentHeight = main
+        ? main.offsetTop + main.offsetHeight + 24
+        : document.documentElement.scrollHeight
+      window.parent.postMessage(
+        { type: 'agri-hall-height', height: Math.ceil(contentHeight) },
+        '*',
+      )
+    }, 80)
+    return () => window.clearTimeout(timer)
+  }, [tab, products.length, demands.length, loading, demandLoading])
 
   useEffect(() => {
     fetch('/api/trade/public/products?limit=24')
@@ -181,6 +231,10 @@ export default function TradeHall(): JSX.Element {
 
   const quote = (demand: PublicDemand): void => {
     const target = `/member/seller?tab=trade`
+    if (EMBEDDED) {
+      window.top?.location.assign(target)
+      return
+    }
     if (isLoggedIn()) {
       window.location.href = target
     } else {
@@ -192,8 +246,8 @@ export default function TradeHall(): JSX.Element {
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
   return (
-    <div className="hall-root">
-      <div className="topbar">
+    <div className={EMBEDDED ? 'hall-root hall-embed' : 'hall-root'}>
+      <div className="topbar" style={EMBEDDED ? { display: 'none' } : undefined}>
         <div className="hall-container">
           <span>您好，欢迎来到农产云交易大厅！智能大宗交易 · 平台撮合 · 支持在线议价</span>
           <span className="topbar-actions">
@@ -206,7 +260,7 @@ export default function TradeHall(): JSX.Element {
         </div>
       </div>
 
-      <header className="site-header">
+      <header className="site-header" style={EMBEDDED ? { display: 'none' } : undefined}>
         <div className="hall-container">
           <a className="hall-brand" href={PORTAL}>
             <span className="hall-logo"><AppstoreOutlined /></span>
@@ -424,7 +478,7 @@ export default function TradeHall(): JSX.Element {
         )}
       </main>
 
-      <footer className="hall-footer">
+      <footer className="hall-footer" style={EMBEDDED ? { display: 'none' } : undefined}>
         <div className="hall-container">
           <span>© 2026 农业产业互联网平台 · 农产云交易大厅</span>
           <span>商品详情与下单需登录；大厅商品来自交易域实时在售数据。</span>

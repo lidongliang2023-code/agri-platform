@@ -6,6 +6,7 @@ import { Certify } from './pages/Certify'
 import { CertifyEnterprise } from './pages/CertifyEnterprise'
 import { CertifyPersonal } from './pages/CertifyPersonal'
 import { Finance } from './pages/Finance'
+import { Hall } from './pages/Hall'
 import { Logistics } from './pages/Logistics'
 import { useHashRoute } from './utils'
 
@@ -43,6 +44,9 @@ export default function App(): JSX.Element {
   } else if (route.path === '/finance') {
     page = <Finance />
     active = '/finance'
+  } else if (route.path === '/hall') {
+    page = <Hall />
+    active = '/hall'
   } else if (route.path === '/certify/enterprise') {
     page = <CertifyEnterprise />
   } else if (route.path === '/certify/personal') {

@@ -3,7 +3,7 @@ import type { FormEvent, ReactNode } from 'react'
 import { Icon } from './Icon'
 import { PortalLoginModal } from './PortalLoginModal'
 import type { PortalUser } from './PortalLoginModal'
-import { go, hallUrl, productionLogin, ssoRegister, tradeUrl } from '../utils'
+import { go, productionLogin, ssoRegister, tradeUrl } from '../utils'
 
 const CHANNELS = ['粮油产业', '果蔬产业', '畜禽产业', '茶药产业', '饲料农资', '水产产业', '预制菜', '冷链物流']
 
@@ -157,7 +157,7 @@ export function PortalLayout({ children, active = '/' }: { children: ReactNode; 
           <nav className="main-nav">
             <a href="#/" className={active === '/' ? 'active' : ''}>首页</a>
             <a href="#/chains" className={active === '/chains' ? 'active' : ''}>产业链</a>
-            <a href={hallUrl()} target="_blank" rel="noreferrer">交易大厅</a>
+            <a href="#/hall" className={active === '/hall' ? 'active' : ''}>交易大厅</a>
             <a href="#/?scroll=price">价格指数</a>
             <a href="#/?scroll=news">产业资讯</a>
             <a href="#/finance" className={active === '/finance' ? 'active' : ''}>供应链金融</a>
@@ -199,14 +199,14 @@ export function PortalLayout({ children, active = '/' }: { children: ReactNode; 
               <h4>关于平台</h4>
               <a href="#/certify">认证中心</a>
               <a href="#/chains">产业链频道</a>
-              <a href={hallUrl()} target="_blank" rel="noreferrer">交易大厅</a>
+              <a href="#/hall">交易大厅</a>
               <a href="#/logistics">物流服务</a>
               <a href="#/finance">供应链金融</a>
               <a href={productionLogin()}>生产管理</a>
             </div>
             <div>
               <h4>买家服务</h4>
-              <a href={hallUrl()} target="_blank" rel="noreferrer">采购大厅</a>
+              <a href="#/hall">采购大厅</a>
               <a href={tradeUrl('/demand/create')} target="_blank" rel="noreferrer">发布询价</a>
               <a href={tradeUrl('/member/buyer?tab=purchase')} target="_blank" rel="noreferrer">订单管理</a>
               <a href={tradeUrl('/member/buyer?tab=fund')} target="_blank" rel="noreferrer">资金管理</a>

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Icon } from '../components/Icon'
 import { ANNOUNCEMENTS, NEWS, PRICE_COMMODITIES, PRODUCTS } from '../data/portal'
 import type { NewsItem, PortalProduct } from '../data/portal'
-import { hallUrl, useHashRoute, ssoRegister, tradeUrl } from '../utils'
+import { useHashRoute, ssoRegister, tradeUrl } from '../utils'
 
 interface LiveProduct {
   id: number
@@ -78,7 +78,7 @@ function sampleCard(product: PortalProduct): ProductCard {
     tagCls: product.tagCls,
     icon: product.icon,
     theme: product.theme,
-    href: hallUrl(),
+    href: '#/hall',
   }
 }
 
@@ -146,7 +146,7 @@ export function Home(): JSX.Element {
               让产销对接更高效、更透明。
             </p>
             <div className="portal-hero-actions">
-              <a className="btn btn-lg portal-btn-light" href={hallUrl()} target="_blank" rel="noreferrer">我要采购</a>
+              <a className="btn btn-lg portal-btn-light" href="#/hall">我要采购</a>
               <a className="btn btn-lg btn-outline portal-btn-ghost" href={tradeUrl('/product/create')} target="_blank" rel="noreferrer">我要供货</a>
             </div>
             <div className="portal-hot-search">
@@ -193,7 +193,9 @@ export function Home(): JSX.Element {
                   </div>
                   <div className="strong t-lg">{item.title}</div>
                   <div className="muted t-sm mt-8 portal-two-line">{item.desc}</div>
-                  <a className="btn btn-sm btn-outline mt-16" href={item.href} target="_blank" rel="noreferrer">立即进入</a>
+                  <a className="btn btn-sm btn-outline mt-16" href={item.href}
+                    target={item.href.startsWith('#') ? undefined : '_blank'}
+                    rel={item.href.startsWith('#') ? undefined : 'noreferrer'}>立即进入</a>
                 </div>
               </div>
             ))}
@@ -240,7 +242,7 @@ export function Home(): JSX.Element {
             </div>
             <div className="row center gap-8">
               <span className={`tag ${live ? '' : 'tag-amber'}`}>{live ? '实时在售' : '示例数据'}</span>
-              <a className="t-sm muted portal-more-link" href={hallUrl()} target="_blank" rel="noreferrer">查看更多商品 →</a>
+              <a className="t-sm muted portal-more-link" href="#/hall">查看更多商品 →</a>
             </div>
           </div>
           {!live && (

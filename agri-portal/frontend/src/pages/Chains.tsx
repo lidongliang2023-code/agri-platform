@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Icon } from '../components/Icon'
 import { PRODUCTS, PROVINCES, TAXONOMY } from '../data/portal'
 import type { PortalProduct } from '../data/portal'
-import { hallUrl, useHashRoute } from '../utils'
+import { useHashRoute } from '../utils'
 
 const PAGE_SIZE = 8
 const PROVINCE_GROUPS = ['华北', '东北', '华东', '华中', '华南', '西南', '西北', '港澳台']
@@ -41,7 +41,7 @@ function ProvinceChips({ state, onPick }: { state: FilterState; onPick: (value: 
 
 function ProductCard({ product }: { product: PortalProduct }): JSX.Element {
   return (
-    <a className="card card-hover" href={hallUrl()} target="_blank" rel="noreferrer">
+    <a className="card card-hover" href="#/hall">
       <div className="card-b">
         <div className={`portal-thumb theme-${product.theme}`}><Icon name={product.icon} size={44} /></div>
         <div className="row between center mt-12 gap-8">
@@ -217,7 +217,7 @@ export function Chains(): JSX.Element {
 
         <div className="portal-data-note">
           本页货源为原型目录示例，用于展示分类与筛选能力；实时库存、报价与供应商信息请进入
-          <a href={hallUrl()} target="_blank" rel="noreferrer"> 交易大厅 </a>查看。
+          <a href="#/hall"> 交易大厅 </a>查看。
         </div>
 
         {visible.length === 0 ? (
