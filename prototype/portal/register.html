@@ -6,35 +6,75 @@
 <title>免费注册 · 农产云</title>
 <link rel="stylesheet" href="../assets/css/theme.css" />
 <style>
-  /* ===== 注册页专用布局（与登录页同风格） ===== */
-  body{min-height:100vh;display:flex;flex-direction:column}
-  .l-wrap{flex:1;display:grid;grid-template-columns:1fr 560px;background:#fff}
-  .l-hero{position:relative;overflow:hidden;background:linear-gradient(135deg,var(--green-800) 0%,var(--green-600) 55%,var(--tech-600) 100%);color:#fff;padding:64px 72px;display:flex;flex-direction:column;justify-content:center}
-  .l-hero::before{content:"";position:absolute;inset:0;background:radial-gradient(600px 400px at 20% 20%,rgba(47,184,119,.3),transparent 60%),radial-gradient(500px 300px at 80% 80%,rgba(14,165,233,.25),transparent 60%)}
-  .l-hero > *{position:relative;z-index:2}
-  .l-hero .hero-title{font-size:34px;font-weight:800;letter-spacing:.5px;line-height:1.3}
-  .l-hero .hero-sub{margin-top:14px;font-size:15px;opacity:.82;max-width:500px;line-height:1.8}
-  .l-hero .hero-tags{display:flex;gap:8px;margin-top:28px;flex-wrap:wrap}
-  .l-hero .hero-tags span{padding:5px 12px;border:1px solid rgba(255,255,255,.28);border-radius:20px;font-size:12px;background:rgba(255,255,255,.08);backdrop-filter:blur(4px)}
-  .l-hero .hero-benefits{margin-top:34px;display:grid;grid-template-columns:1fr 1fr;gap:14px;max-width:520px}
-  .l-hero .hero-benefits div{padding:14px 16px;border-radius:12px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);backdrop-filter:blur(4px)}
-  .l-hero .hero-benefits div strong{display:block;font-size:13.5px;margin-bottom:4px}
-  .l-hero .hero-benefits div small{font-size:11.5px;opacity:.72;line-height:1.6}
+  /* ===== 认证页共享布局：沉浸式背景 + 悬浮双栏卡片 ===== */
+  *{box-sizing:border-box}
+  body{min-height:100vh;display:flex;flex-direction:column;position:relative;overflow-x:hidden;
+    background:linear-gradient(160deg,#F3FBF7 0%,#EAF5FF 100%)}
+  body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;background:
+    radial-gradient(720px 520px at 6% -10%,rgba(47,184,119,.20),transparent 62%),
+    radial-gradient(680px 520px at 104% 2%,rgba(14,165,233,.16),transparent 62%),
+    radial-gradient(760px 640px at 52% 126%,rgba(21,154,94,.12),transparent 66%)}
+  body::after{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+    background-image:linear-gradient(rgba(11,26,18,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(11,26,18,.035) 1px,transparent 1px);
+    background-size:44px 44px;
+    -webkit-mask-image:radial-gradient(circle at 50% 40%,#000 0%,transparent 72%);
+    mask-image:radial-gradient(circle at 50% 40%,#000 0%,transparent 72%)}
 
-  .l-form{padding:52px 56px;display:flex;flex-direction:column}
-  .l-form .brand{display:flex;align-items:center;gap:12px;font-weight:800;font-size:18px;color:var(--green-800)}
-  .l-form .brand .logo{width:40px;height:40px;border-radius:11px;background:linear-gradient(135deg,var(--green-500),var(--tech-500));color:#fff;display:grid;place-items:center}
-  .l-form .sub{color:var(--ink-500);font-size:13px;margin-top:6px}
-  .l-form .form-title{font-size:26px;font-weight:800;color:var(--ink-900);margin-top:28px;letter-spacing:.5px}
+  /* ===== 顶部条 ===== */
+  .l-topbar{position:relative;z-index:3;height:58px;display:flex;align-items:center;padding:0 34px;gap:14px}
+  .l-topbar a.back{font-size:13px;color:var(--ink-600);display:flex;align-items:center;gap:6px;font-weight:600}
+  .l-topbar a.back:hover{color:var(--green-700)}
+
+  /* ===== 居中容器 ===== */
+  .l-wrap{position:relative;z-index:2;flex:1;display:flex;align-items:center;justify-content:center;padding:30px 30px 46px}
+
+  /* ===== 悬浮卡片 ===== */
+  .auth-card{width:100%;max-width:1020px;display:grid;grid-template-columns:1fr 1.12fr;background:#fff;
+    border-radius:28px;overflow:hidden;border:1px solid rgba(255,255,255,.7);
+    box-shadow:0 34px 76px -26px rgba(11,26,18,.34),0 14px 34px -20px rgba(11,26,18,.16)}
+
+  /* ===== 左侧品牌栏 ===== */
+  .auth-aside{position:relative;overflow:hidden;color:#fff;padding:56px 48px;display:flex;flex-direction:column;
+    background:linear-gradient(155deg,var(--green-800) 0%,var(--green-600) 52%,var(--tech-600) 100%)}
+  .auth-aside::before{content:"";position:absolute;inset:0;background:
+    radial-gradient(430px 320px at 12% 6%,rgba(111,214,162,.36),transparent 62%),
+    radial-gradient(400px 320px at 94% 94%,rgba(56,189,248,.30),transparent 62%)}
+  .auth-aside::after{content:"";position:absolute;inset:0;opacity:.5;
+    background-image:linear-gradient(rgba(255,255,255,.09) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.09) 1px,transparent 1px);
+    background-size:40px 40px;
+    -webkit-mask-image:linear-gradient(180deg,#000,transparent 90%);
+    mask-image:linear-gradient(180deg,#000,transparent 90%)}
+  .auth-aside > *{position:relative;z-index:2}
+  .auth-aside .a-brand{display:flex;align-items:center;gap:13px;font-size:19px;font-weight:800;letter-spacing:.4px}
+  .auth-aside .a-brand .logo{width:44px;height:44px;border-radius:13px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);display:grid;place-items:center;flex:none}
+  .auth-aside .a-brand small{display:block;font-size:10px;font-weight:600;letter-spacing:2.5px;opacity:.7;margin-top:3px}
+  .auth-aside .a-body{margin:auto 0}
+  .auth-aside .a-title{font-size:33px;font-weight:800;line-height:1.32;letter-spacing:.6px}
+  .auth-aside .a-sub{margin-top:16px;font-size:14px;line-height:1.9;opacity:.85;max-width:390px}
+  .auth-aside .a-feats{margin-top:26px;display:flex;flex-direction:column;gap:16px}
+  .auth-aside .a-feats .f{display:flex;align-items:flex-start;gap:13px}
+  .auth-aside .a-feats .f .ic{width:36px;height:36px;border-radius:11px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.22);display:grid;place-items:center;flex:none;backdrop-filter:blur(4px)}
+  .auth-aside .a-feats .f strong{font-size:13.5px;display:block;letter-spacing:.2px}
+  .auth-aside .a-feats .f small{font-size:11.5px;opacity:.72;line-height:1.6;display:block;margin-top:3px}
+  .auth-aside .a-stats{margin-top:28px;padding-top:24px;border-top:1px solid rgba(255,255,255,.18);display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  .auth-aside .a-stats .n{font-size:23px;font-weight:800;font-family:var(--mono);letter-spacing:.5px}
+  .auth-aside .a-stats .d{font-size:11px;opacity:.72;margin-top:5px}
+
+  /* ===== 右侧表单栏 ===== */
+  .l-form{padding:48px 52px 40px;display:flex;flex-direction:column;background:#fff}
+  .l-form .brand{display:none;align-items:center;gap:11px;font-weight:800;font-size:17px;color:var(--green-800)}
+  .l-form .brand .logo{width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,var(--green-500),var(--tech-500));color:#fff;display:grid;place-items:center}
+  .l-form .form-title{font-size:26px;font-weight:800;color:var(--ink-900);letter-spacing:.4px}
+  .l-form .sub{color:var(--ink-500);font-size:13px;margin-top:8px}
   .l-form .steps{display:flex;align-items:center;gap:12px;margin-top:20px;font-size:12.5px}
   .l-form .steps .step{flex:1;height:4px;border-radius:3px;background:var(--line);position:relative}
   .l-form .steps .step.on{background:linear-gradient(90deg,var(--green-500),var(--tech-500))}
   .l-form .steps .step::after{content:attr(data-label);position:absolute;top:11px;left:0;font-size:11px;color:var(--ink-500);white-space:nowrap}
   .l-form .steps .step.on::after{color:var(--green-700);font-weight:600}
 
-  .l-form .form-body{margin-top:34px}
-  .l-form .form-item{margin-bottom:22px}
-  .l-form .form-section{margin:30px 0 18px;padding-left:12px;border-left:3px solid var(--green-500);font-size:14px;font-weight:700;color:var(--ink-800);letter-spacing:.3px}
+  .l-form .form-body{margin-top:30px}
+  .l-form .form-item{margin-bottom:20px}
+  .l-form .form-section{margin:28px 0 16px;padding-left:12px;border-left:3px solid var(--green-500);font-size:14px;font-weight:700;color:var(--ink-800);letter-spacing:.3px}
   .l-form .form-section small{display:block;margin-top:3px;font-size:11.5px;font-weight:500;color:var(--ink-400);letter-spacing:0}
   .l-form label{display:block;font-size:13.5px;font-weight:600;color:var(--ink-700);margin-bottom:9px}
   .l-form .input,.l-form .select,.l-form .textarea{width:100%;height:46px;border:1px solid var(--line);border-radius:12px;padding:0 16px;font-size:14.5px;background:#fff;transition:.18s}
@@ -71,22 +111,26 @@
   .l-form .agreement a{color:var(--tech-700);font-weight:600;white-space:nowrap}
   .l-form .agreement a:hover{text-decoration:underline}
 
-  .l-form .btn-submit{width:100%;height:52px;background:linear-gradient(135deg,var(--green-600),var(--green-500));color:#fff;border-radius:12px;font-weight:700;font-size:16px;letter-spacing:1.5px;box-shadow:0 8px 22px rgba(21,154,94,.3);transition:.18s;display:flex;align-items:center;justify-content:center;gap:8px;margin-top:8px}
+  .l-form .btn-submit{width:100%;height:52px;background:linear-gradient(135deg,var(--green-600),var(--green-500));color:#fff;border-radius:12px;font-weight:700;font-size:16px;letter-spacing:1.5px;box-shadow:0 8px 22px rgba(21,154,94,.3);transition:.18s;display:flex;align-items:center;justify-content:center;gap:8px}
   .l-form .btn-submit:hover{filter:brightness(1.06);transform:translateY(-1px)}
 
   .l-foot{margin-top:auto;padding-top:24px;text-align:center;color:var(--ink-500);font-size:12.5px}
   .l-foot a{color:var(--green-700);font-weight:600}
 
-  @media(max-width:980px){
-    .l-wrap{grid-template-columns:1fr}
-    .l-hero{display:none}
-    .l-form{padding:36px 24px}
+  /* ===== 响应式 ===== */
+  @media(max-width:1040px){
+    .auth-card{max-width:600px;grid-template-columns:1fr}
+    .auth-aside{display:none}
+    .l-form .brand{display:flex;margin-bottom:18px}
   }
-
-  /* ===== 顶部条 ===== */
-  .l-topbar{background:#fff;border-bottom:1px solid var(--line);height:48px;display:flex;align-items:center;padding:0 28px;gap:14px}
-  .l-topbar a.back{font-size:13px;color:var(--ink-500);display:flex;align-items:center;gap:4px}
-  .l-topbar a.back:hover{color:var(--green-700)}
+  @media(max-width:600px){
+    .l-wrap{padding:16px}
+    .auth-card{border-radius:20px}
+    .l-form{padding:34px 22px}
+    .l-topbar{padding:0 20px}
+    .l-form .form-grid{grid-template-columns:1fr;gap:0}
+    .l-form .identity-pick{flex-direction:column}
+  }
 
   /* ===== Toast ===== */
   .toast{position:fixed;left:50%;bottom:34px;transform:translate(-50%,20px);background:var(--green-800);color:#fff;padding:12px 20px;border-radius:20px;font-size:13.5px;font-weight:600;box-shadow:var(--shadow-md);opacity:0;pointer-events:none;transition:.28s;z-index:99;display:flex;align-items:center;gap:8px}
@@ -110,35 +154,35 @@
 </div>
 
 <div class="l-wrap">
+  <div class="auth-card">
   <!-- 左：品牌与价值陈述 -->
-  <aside class="l-hero">
-    <div class="row gap-12 center" style="margin-bottom:14px">
-      <span class="logo" style="width:40px;height:40px;border-radius:12px;background:rgba(255,255,255,.18);display:grid;place-items:center"><span data-icon="seed" data-size="22" style="color:#fff"></span></span>
-      <div class="strong" style="font-size:20px">农产云 · AGRI CLOUD</div>
+  <aside class="auth-aside">
+    <div class="a-brand">
+      <span class="logo"><span data-icon="seed" data-size="22" style="color:#fff"></span></span>
+      <span>农产云<small>AGRI · CLOUD</small></span>
     </div>
-    <div class="hero-title">免费注册<br>即刻开启数字化交易</div>
-    <div class="hero-sub">注册成为农产云会员，享受大宗交易撮合、AI 智能议价、供应链金融与物联网溯源等全链路服务。</div>
+    <div class="a-body">
+      <div class="a-title">免费注册<br>即刻开启数字化交易</div>
+      <div class="a-sub">注册成为农产云会员，享受大宗交易撮合、AI 智能议价、供应链金融与物联网溯源等全链路服务。</div>
 
-    <div class="hero-tags">
-      <span>免费开店 · 精准询单</span>
-      <span>平台质检 · 资金担保</span>
-      <span>电子合同 · 区块链存证</span>
-      <span>供应链金融 · 极速放款</span>
-    </div>
+      <div class="a-feats">
+        <div class="f"><span class="ic"><span data-icon="cart" data-size="16"></span></span><div><strong>免费开店 · 精准询单</strong><small>AI 智能匹配供应商，7×24 在线议价更高效</small></div></div>
+        <div class="f"><span class="ic"><span data-icon="box" data-size="16"></span></span><div><strong>拓客无忧 · 订单直达</strong><small>12,800+ 认证采购商精准询单，订单直接推送</small></div></div>
+        <div class="f"><span class="ic"><span data-icon="money" data-size="16"></span></span><div><strong>资金保障 · 供应链金融</strong><small>订单融资、收货融资、折扣付等多种金融产品</small></div></div>
+        <div class="f"><span class="ic"><span data-icon="shield" data-size="16"></span></span><div><strong>交易安全 · 平台担保</strong><small>质检担保、区块链存证、四流核验机制</small></div></div>
+      </div>
 
-    <div class="hero-benefits">
-      <div><strong><span data-icon="cart" data-size="14" style="vertical-align:-1px"></span> 采购便利</strong><small>AI 智能匹配供应商，7×24 在线议价，比价更高效</small></div>
-      <div><strong><span data-icon="box" data-size="14" style="vertical-align:-1px"></span> 拓客无忧</strong><small>12,800+ 认证采购商精准询单，订单直接推送</small></div>
-      <div><strong><span data-icon="money" data-size="14" style="vertical-align:-1px"></span> 资金保障</strong><small>订单融资、收货融资、折扣付等多种金融产品</small></div>
-      <div><strong><span data-icon="shield" data-size="14" style="vertical-align:-1px"></span> 交易安全</strong><small>平台质检担保、区块链存证、四流核验机制</small></div>
+      <div class="a-stats">
+        <div><div class="n">38万+</div><div class="d">注册用户</div></div>
+        <div><div class="n">12,800+</div><div class="d">认证采购商</div></div>
+        <div><div class="n">96.5%</div><div class="d">认证通过率</div></div>
+      </div>
     </div>
   </aside>
 
   <!-- 右：注册卡 -->
   <main class="l-form">
     <div class="brand"><span class="logo"><span data-icon="seed" data-size="20"></span></span>农产云</div>
-    <div class="sub">农业产业互联网平台 · 一站式产业链服务</div>
-
     <div class="form-title">创建账号</div>
     <div class="sub">加入 38 万+ 注册用户，开启产业数字化协作</div>
 
@@ -267,6 +311,7 @@
       已有账号？<a href="login.html">直接登录 →</a>
     </div>
   </main>
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>
