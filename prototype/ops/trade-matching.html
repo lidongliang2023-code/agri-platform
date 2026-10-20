@@ -174,6 +174,298 @@
         </div>
       </div>
 
+      <!-- ================= 撮合总览 ================= -->
+      <div data-tabpanel="overview">
+
+        <!-- 时间范围切换 -->
+        <div class="row between mb-16">
+          <div class="strong t-lg">撮合运营大盘 · <span class="muted t-sm" style="font-weight:500">实时监控平台核心撮合数据</span></div>
+          <div class="chips" style="margin:0">
+            <span class="chip">今日</span><span class="chip on">昨日</span><span class="chip">近 7 天</span><span class="chip">近 30 天</span>
+          </div>
+        </div>
+
+        <!-- 第一层：4 KPI（参考页样式 + 同比环比） -->
+        <div class="grid grid-4">
+          <div class="stat">
+            <div class="k"><span data-icon="money" data-size="15"></span>本月撮合成交额</div>
+            <div class="v mono">¥ 18.4<span class="unit">亿</span></div>
+            <div class="d">较上月 <span class="up">↑ 22.6%</span> · 同比 <span class="up">↑ 58%</span></div>
+          </div>
+          <div class="stat tech">
+            <div class="k"><span data-icon="clipboard" data-size="15"></span>活跃撮合队列</div>
+            <div class="v mono">412<span class="unit">条</span></div>
+            <div class="d">采购 186 · 供应 226 · 等待匹配</div>
+          </div>
+          <div class="stat">
+            <div class="k"><span data-icon="activity" data-size="15"></span>平均撮合时长</div>
+            <div class="v mono">3.8<span class="unit">小时</span></div>
+            <div class="d">AI 自动匹配 82% · 人工介入 18%</div>
+          </div>
+          <div class="stat red">
+            <div class="k"><span data-icon="alert" data-size="15"></span>争议 / 仲裁中</div>
+            <div class="v mono" style="color:#DC2626">7</div>
+            <div class="d">较上月 <span class="down">↓ 2</span> · 争议率 0.32%</div>
+          </div>
+        </div>
+
+        <!-- 第二层：实时交易趋势（SVG 折线图）+ 品类分布（环形图）+ 区域 TOP5 -->
+        <div class="grid" style="grid-template-columns:1.6fr 1fr 1fr;gap:20px;margin-top:20px">
+
+          <!-- 实时交易趋势（参考页"实时交易趋势"） -->
+          <div class="card">
+            <div class="card-h"><h3><span data-icon="activity" data-size="18"></span>实时交易趋势</h3><span class="tag">近 24 小时 · 按小时</span></div>
+            <div class="card-b">
+              <!-- 手绘 SVG 折线图 + 面积填充 -->
+              <svg viewBox="0 0 560 200" preserveAspectRatio="none" style="width:100%;height:200px">
+                <!-- Y 轴网格 -->
+                <g stroke="#E5E7EB" stroke-dasharray="3 3">
+                  <line x1="40" y1="20" x2="540" y2="20"/>
+                  <line x1="40" y1="60" x2="540" y2="60"/>
+                  <line x1="40" y1="100" x2="540" y2="100"/>
+                  <line x1="40" y1="140" x2="540" y2="140"/>
+                  <line x1="40" y1="180" x2="540" y2="180"/>
+                </g>
+                <!-- Y 轴标签 -->
+                <g font-size="10" fill="#9CA3AF" text-anchor="end">
+                  <text x="36" y="24">8000</text>
+                  <text x="36" y="64">6000</text>
+                  <text x="36" y="104">4000</text>
+                  <text x="36" y="144">2000</text>
+                  <text x="36" y="184">0</text>
+                </g>
+                <!-- 面积填充 -->
+                <defs>
+                  <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#155E3C" stop-opacity="0.28"/>
+                    <stop offset="100%" stop-color="#155E3C" stop-opacity="0"/>
+                  </linearGradient>
+                  <linearGradient id="lineGrad" x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0%" stop-color="#155E3C"/>
+                    <stop offset="100%" stop-color="#0EA5E9"/>
+                  </linearGradient>
+                </defs>
+                <path d="M40,150 L86,130 L132,140 L178,100 L224,110 L270,80 L316,90 L362,50 L408,60 L454,40 L500,55 L540,45 L540,180 L40,180 Z" fill="url(#areaGrad)"/>
+                <!-- 主折线 -->
+                <path d="M40,150 L86,130 L132,140 L178,100 L224,110 L270,80 L316,90 L362,50 L408,60 L454,40 L500,55 L540,45" fill="none" stroke="url(#lineGrad)" stroke-width="2.5" stroke-linejoin="round"/>
+                <!-- 数据点 -->
+                <g fill="#155E3C">
+                  <circle cx="40" cy="150" r="3.5"/><circle cx="86" cy="130" r="3.5"/><circle cx="132" cy="140" r="3.5"/>
+                  <circle cx="178" cy="100" r="3.5"/><circle cx="224" cy="110" r="3.5"/><circle cx="270" cy="80" r="3.5"/>
+                  <circle cx="316" cy="90" r="3.5"/><circle cx="362" cy="50" r="3.5"/><circle cx="408" cy="60" r="3.5"/>
+                  <circle cx="454" cy="40" r="4.5" fill="#0EA5E9" stroke="#fff" stroke-width="1.5"/>
+                  <circle cx="500" cy="55" r="3.5"/><circle cx="540" cy="45" r="3.5"/>
+                </g>
+                <!-- X 轴时间标签 -->
+                <g font-size="10" fill="#9CA3AF" text-anchor="middle">
+                  <text x="40" y="196">00:00</text>
+                  <text x="178" y="196">04:00</text>
+                  <text x="316" y="196">08:00</text>
+                  <text x="454" y="196">12:00</text>
+                  <text x="540" y="196">14:00</text>
+                </g>
+              </svg>
+              <!-- 图例 -->
+              <div class="row center gap-16 mt-8">
+                <span class="t-xs muted"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:linear-gradient(135deg,#155E3C,#0EA5E9);margin-right:4px;vertical-align:middle"></span>撮合笔数</span>
+                <span class="t-xs muted"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#0EA5E9;margin-right:4px;vertical-align:middle"></span>当前峰值 4,540 笔/小时</span>
+                <span class="t-xs muted">峰值时段 14:00-15:00</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 品类分布（参考页"品类分布"环形图） -->
+          <div class="card">
+            <div class="card-h"><h3><span data-icon="spark" data-size="18"></span>品类撮合占比</h3><span class="more">本月</span></div>
+            <div class="card-b" style="display:flex;flex-direction:column;gap:14px">
+              <!-- 环形图 -->
+              <div style="display:flex;align-items:center;gap:16px">
+                <svg viewBox="0 0 120 120" width="120" height="120">
+                  <!-- 背景圈 -->
+                  <circle cx="60" cy="60" r="48" fill="none" stroke="#F3F4F6" stroke-width="14"/>
+                  <!-- 粮食加工 37% -->
+                  <circle cx="60" cy="60" r="48" fill="none" stroke="#155E3C" stroke-width="14" stroke-dasharray="111.5 301.6" stroke-dashoffset="0" transform="rotate(-90 60 60)"/>
+                  <!-- 水果蔬菜 23% -->
+                  <circle cx="60" cy="60" r="48" fill="none" stroke="#0EA5E9" stroke-width="14" stroke-dasharray="69.4 301.6" stroke-dashoffset="-111.5" transform="rotate(-90 60 60)"/>
+                  <!-- 粮油批发 16% -->
+                  <circle cx="60" cy="60" r="48" fill="none" stroke="#38BDF8" stroke-width="14" stroke-dasharray="48.3 301.6" stroke-dashoffset="-180.9" transform="rotate(-90 60 60)"/>
+                  <!-- 畜牧饲料 14% -->
+                  <circle cx="60" cy="60" r="48" fill="none" stroke="#10B981" stroke-width="14" stroke-dasharray="42.2 301.6" stroke-dashoffset="-229.2" transform="rotate(-90 60 60)"/>
+                  <!-- 水产 10% -->
+                  <circle cx="60" cy="60" r="48" fill="none" stroke="#FBBF24" stroke-width="14" stroke-dasharray="30.2 301.6" stroke-dashoffset="-271.4" transform="rotate(-90 60 60)"/>
+                  <!-- 中心文本 -->
+                  <text x="60" y="55" text-anchor="middle" font-size="18" font-weight="800" fill="#0F2619">18.4亿</text>
+                  <text x="60" y="72" text-anchor="middle" font-size="9" fill="#6B7280">本月成交总额</text>
+                </svg>
+                <div style="flex:1;display:flex;flex-direction:column;gap:8px">
+                  <div class="row between t-xs"><span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#155E3C;margin-right:6px"></span>粮食加工</span><span class="mono strong">37% · ¥ 6.8 亿</span></div>
+                  <div class="row between t-xs"><span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#0EA5E9;margin-right:6px"></span>水果蔬菜</span><span class="mono strong">23% · ¥ 4.2 亿</span></div>
+                  <div class="row between t-xs"><span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#38BDF8;margin-right:6px"></span>粮油批发</span><span class="mono strong">16% · ¥ 3.0 亿</span></div>
+                  <div class="row between t-xs"><span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#10B981;margin-right:6px"></span>畜牧饲料</span><span class="mono strong">14% · ¥ 2.6 亿</span></div>
+                  <div class="row between t-xs"><span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#FBBF24;margin-right:6px"></span>水产</span><span class="mono strong">10% · ¥ 1.8 亿</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 区域 TOP5（参考页"区域TOP5"） -->
+          <div class="card">
+            <div class="card-h"><h3><span data-icon="layers" data-size="18"></span>区域撮合 TOP5</h3><span class="more">近 30 天</span></div>
+            <div class="card-b" style="display:flex;flex-direction:column;gap:12px">
+              <div>
+                <div class="row between t-xs mb-6"><span><b style="color:#0F2619">黑龙江</b> · 五常基地</span><span class="mono">¥ 4.28 亿 · 2,614 笔</span></div>
+                <div class="progress"><i style="width:95%"></i></div>
+              </div>
+              <div>
+                <div class="row between t-xs mb-6"><span><b style="color:#0F2619">山东</b> · 寿光基地</span><span class="mono">¥ 3.62 亿 · 3,182 笔</span></div>
+                <div class="progress"><i style="width:80%"></i></div>
+              </div>
+              <div>
+                <div class="row between t-xs mb-6"><span><b style="color:#0F2619">广东</b> · 湛江基地</span><span class="mono">¥ 2.14 亿 · 1,428 笔</span></div>
+                <div class="progress"><i style="width:47%"></i></div>
+              </div>
+              <div>
+                <div class="row between t-xs mb-6"><span><b style="color:#0F2619">江西</b> · 赣州基地</span><span class="mono">¥ 1.96 亿 · 1,086 笔</span></div>
+                <div class="progress"><i style="width:43%"></i></div>
+              </div>
+              <div>
+                <div class="row between t-xs mb-6"><span><b style="color:#0F2619">四川</b> · 成都平原</span><span class="mono">¥ 1.58 亿 · 942 笔</span></div>
+                <div class="progress"><i style="width:35%"></i></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 第三层：撮合引擎状态（原业务面板）+ 异常预警 + 实时动态 feed -->
+        <div class="grid" style="grid-template-columns:1.4fr 1fr 1fr;gap:20px;margin-top:20px">
+
+          <!-- 撮合引擎状态（保留原业务面板，融合参考页简洁风格） -->
+          <div class="card">
+            <div class="card-h"><h3><span data-icon="cpu" data-size="18"></span>撮合引擎状态</h3><span class="tag tag-tech">在线 · v2.4.1</span></div>
+            <div class="card-b">
+              <div class="grid grid-3" style="gap:14px">
+                <div class="stat"><div class="k">AI 自动匹配率</div><div class="v mono" style="font-size:22px;color:var(--green-700)">82.4<span class="unit">%</span></div><div class="d">历史均值 76.2% · <span class="up">↑ 优化</span></div></div>
+                <div class="stat tech"><div class="k">匹配准确率</div><div class="v mono" style="font-size:22px">96.1<span class="unit">%</span></div><div class="d">近 30 天成交回溯验证</div></div>
+                <div class="stat"><div class="k">人工介入率</div><div class="v mono" style="font-size:22px">17.6<span class="unit">%</span></div><div class="d">非标品 / 大单 / 争议链路</div></div>
+              </div>
+              <div class="mt-16">
+                <div class="strong t-sm mb-8">匹配权重（当前生效配置 · v2.4.1）</div>
+                <div class="progress-row"><span class="label">品类匹配</span><div class="bar"><i style="width:92%"></i></div><span class="val">权重 35%</span></div>
+                <div class="progress-row"><span class="label">价格接近</span><div class="bar"><i style="width:74%"></i></div><span class="val">权重 25%</span></div>
+                <div class="progress-row amber"><span class="label">品质等级</span><div class="bar"><i style="width:58%"></i></div><span class="val">权重 18%</span></div>
+                <div class="progress-row"><span class="label">地域物流</span><div class="bar"><i style="width:44%"></i></div><span class="val">权重 12%</span></div>
+                <div class="progress-row"><span class="label">历史交易</span><div class="bar"><i style="width:40%"></i></div><span class="val">权重 10%</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 异常预警（参考页"异常预警"） -->
+          <div class="card">
+            <div class="card-h"><h3><span data-icon="alert" data-size="18"></span>异常预警</h3><a class="more" href="javascript:void(0)" data-tab="dispute" data-tab-group="ops-match">全部 →</a></div>
+            <div class="card-b" style="display:flex;flex-direction:column;gap:0;padding:0">
+              <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line)">
+                <div style="width:8px;height:8px;border-radius:50%;background:#DC2626;flex:none"></div>
+                <div style="flex:1">
+                  <div class="t-sm strong">大单价格差异 18% 挂起</div>
+                  <div class="muted t-xs">MT20261020-0038 · 百果园 × 梧州砂糖橘</div>
+                </div>
+                <span class="muted t-xs">5 min 前</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line)">
+                <div style="width:8px;height:8px;border-radius:50%;background:#F59E0B;flex:none"></div>
+                <div style="flex:1">
+                  <div class="t-sm strong">人工介入队列超时 11 条</div>
+                  <div class="muted t-xs">待分配撮合代理 · 最高超时 2h</div>
+                </div>
+                <span class="muted t-xs">22 min 前</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line)">
+                <div style="width:8px;height:8px;border-radius:50%;background:#F59E0B;flex:none"></div>
+                <div style="flex:1">
+                  <div class="t-sm strong">AI 自动匹配率低于阈值</div>
+                  <div class="muted t-xs">寿光基地品类异常 · 当前 78% < 阈值 80%</div>
+                </div>
+                <span class="muted t-xs">1 h 前</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line)">
+                <div style="width:8px;height:8px;border-radius:50%;background:#DC2626;flex:none"></div>
+                <div style="flex:1">
+                  <div class="t-sm strong">争议仲裁超时 1 条</div>
+                  <div class="muted t-xs">五常 × 中粮 · ¥ 42,000 · 仲裁员待分配</div>
+                </div>
+                <span class="muted t-xs">2 h 前</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px;padding:12px 16px">
+                <div style="width:8px;height:8px;border-radius:50%;background:#10B981;flex:none"></div>
+                <div style="flex:1">
+                  <div class="t-sm strong">撮合引擎 v2.4.1 灰度发布成功</div>
+                  <div class="muted t-xs">匹配准确率提升至 96.1% · p-value 0.031</div>
+                </div>
+                <span class="muted t-xs">4 h 前</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 实时动态 feed（参考页"实时动态"） -->
+          <div class="card">
+            <div class="card-h"><h3><span data-icon="activity" data-size="18"></span>实时动态</h3><span class="tag tag-tech">LIVE</span></div>
+            <div class="card-b" style="display:flex;flex-direction:column;gap:0;padding:0">
+              <div style="display:flex;align-items:flex-start;gap:10px;padding:12px 16px;border-bottom:1px dashed var(--line)">
+                <div style="width:24px;height:24px;border-radius:6px;background:#DCFCE7;color:#166534;display:grid;place-items:center;flex:none;font-size:12px;font-weight:800"><span data-icon="cart" data-size="14"></span></div>
+                <div style="flex:1">
+                  <div class="t-sm"><b>新订单</b> · 盒马鲜生发布采购需求 · 有机黄瓜 20 吨 · ¥ 76 万</div>
+                  <div class="muted t-xs mt-2">刚刚 · 待 AI 匹配</div>
+                </div>
+              </div>
+              <div style="display:flex;align-items:flex-start;gap:10px;padding:12px 16px;border-bottom:1px dashed var(--line)">
+                <div style="width:24px;height:24px;border-radius:6px;background:#DBEAFE;color:#1D4ED8;display:grid;place-items:center;flex:none;font-size:12px;font-weight:800"><span data-icon="spark" data-size="14"></span></div>
+                <div style="flex:1">
+                  <div class="t-sm"><b>撮合成功</b> · 通威集团 × 四川新希望饲料 · 玉米蛋白粉 600 吨 · ¥ 280 万</div>
+                  <div class="muted t-xs mt-2">3 min 前 · AI 自动匹配 · 匹配分 97</div>
+                </div>
+              </div>
+              <div style="display:flex;align-items:flex-start;gap:10px;padding:12px 16px;border-bottom:1px dashed var(--line)">
+                <div style="width:24px;height:24px;border-radius:6px;background:#FEF3C7;color:#92400E;display:grid;place-items:center;flex:none;font-size:12px;font-weight:800"><span data-icon="target" data-size="14"></span></div>
+                <div style="flex:1">
+                  <div class="t-sm"><b>议价中</b> · 寿光黄瓜示范棚水肥一体机离线 · 智能介入第 2 轮</div>
+                  <div class="muted t-xs mt-2">8 min 前 · 运营刘撮合介入 · 建议中位价 6,900/吨</div>
+                </div>
+              </div>
+              <div style="display:flex;align-items:flex-start;gap:10px;padding:12px 16px;border-bottom:1px dashed var(--line)">
+                <div style="width:24px;height:24px;border-radius:6px;background:#F3E8FF;color:#7E22CE;display:grid;place-items:center;flex:none;font-size:12px;font-weight:800"><span data-icon="money" data-size="14"></span></div>
+                <div style="flex:1">
+                  <div class="t-sm"><b>资金放款</b> · 农行产业贷向五常粮油合作社放款 · ¥ 500 万 · 订单融 FQ20261017-0075</div>
+                  <div class="muted t-xs mt-2">15 min 前 · 金融运营联动</div>
+                </div>
+              </div>
+              <div style="display:flex;align-items:flex-start;gap:10px;padding:12px 16px">
+                <div style="width:24px;height:24px;border-radius:6px;background:#E0E7FF;color:#3730A3;display:grid;place-items:center;flex:none;font-size:12px;font-weight:800"><span data-icon="check" data-size="14"></span></div>
+                <div style="flex:1">
+                  <div class="t-sm"><b>资质通过</b> · 五常粮油合作社企业资质续期审核通过</div>
+                  <div class="muted t-xs mt-2">28 min 前 · 认证审核工作台</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 第四层：今日撮合摘要（保留原业务表） -->
+        <div class="card mt-20">
+          <div class="card-h"><h3><span data-icon="clipboard" data-size="18"></span>今日撮合摘要</h3><a class="more" href="javascript:void(0)" data-tab="queue" data-tab-group="ops-match">进入撮合队列 →</a></div>
+          <div class="card-b" style="padding:0">
+            <table class="data-table">
+              <thead><tr><th>撮合单号</th><th>采购方</th><th>供应方</th><th>品类</th><th style="text-align:right">意向金额</th><th>撮合引擎</th><th>状态</th><th style="text-align:right">操作</th></tr></thead>
+              <tbody>
+                <tr><td class="mono">MT20261020-0042</td><td>北京中粮粮油</td><td>五常粮油合作社</td><td>五常稻花香 2 号</td><td class="tr"><span class="price"><span class="cur">¥</span>680,000</span></td><td><span class="tag tag-tech">AI 自动</span></td><td><span class="tag tag-tech">已成交</span></td><td class="tr"><a class="link">详情</a></td></tr>
+                <tr><td class="mono">MT20261020-0041</td><td>盒马鲜生</td><td>寿光蔬菜批发</td><td>有机黄瓜 / 西红柿</td><td class="tr"><span class="price"><span class="cur">¥</span>1,240,000</span></td><td><span class="tag tag-amber">人工介入</span></td><td><span class="tag tag-amber">议价中</span></td><td class="tr"><a class="link" href="javascript:void(0)" onclick="document.getElementById('dr-mask').classList.add('open');document.getElementById('dr').classList.add('open')">介入</a></td></tr>
+                <tr><td class="mono">MT20261020-0040</td><td>通威集团</td><td>四川新希望饲料</td><td>玉米蛋白粉</td><td class="tr"><span class="price"><span class="cur">¥</span>2,800,000</span></td><td><span class="tag">AI 自动</span></td><td><span class="tag tag-tech">已成交</span></td><td class="tr"><a class="link">详情</a></td></tr>
+                <tr><td class="mono">MT20261020-0038</td><td>百果园</td><td>梧州砂糖橘合作社</td><td>优质砂糖橘 3 级</td><td class="tr"><span class="price"><span class="cur">¥</span>460,000</span></td><td><span class="tag tag-amber">人工介入</span></td><td><span class="tag tag-red">高风险待审</span></td><td class="tr"><a class="link">介入</a></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
       <!-- ================= 活跃撮合队列 ================= -->
       <div class="hide" data-tabpanel="queue">
         <div class="toolbar">
