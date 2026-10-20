@@ -66,6 +66,8 @@ interface MetricCard {
   suffix: string
   /** 主色 */
   color: string
+  /** 卡片强调色：默认绿色，其它仅用于技术/预警语义 */
+  tone: 'default' | 'tech' | 'amber' | 'danger'
   /** 图标 */
   icon: JSX.Element
   /** 副标题 */
@@ -120,7 +122,8 @@ export default function DashboardHome(): JSX.Element {
         value: overview.plantingArea,
         precision: 0,
         suffix: '亩',
-        color: '#13a05a',
+        color: '#0e5233',
+        tone: 'default',
         icon: <EnvironmentOutlined />,
         footer: `地块 ${metricText(overview.plotCount, 0, ' 个')} · 在田作物 ${metricText(
           overview.cropCount,
@@ -134,7 +137,8 @@ export default function DashboardHome(): JSX.Element {
         value: overview.yieldTotal,
         precision: 0,
         suffix: 'kg',
-        color: '#1677ff',
+        color: '#0b5e86',
+        tone: 'tech',
         icon: <CheckCircleOutlined />,
         footer: `合格率 ${metricText(overview.passRate, 1, '%')} · 亩均成本 ${metricText(
           overview.avgCostPerMu,
@@ -148,7 +152,8 @@ export default function DashboardHome(): JSX.Element {
         value: overview.pendingTaskCount,
         precision: 0,
         suffix: '条',
-        color: '#fa8c16',
+        color: '#b45309',
+        tone: 'amber',
         icon: <FieldTimeOutlined />,
         footer: '含待执行 / 执行中',
       },
@@ -158,7 +163,8 @@ export default function DashboardHome(): JSX.Element {
         value: overview.alertCount,
         precision: 0,
         suffix: '条',
-        color: '#ff4d4f',
+        color: '#dc2626',
+        tone: 'danger',
         icon: <WarningOutlined />,
         footer: '未处置告警，进入告警中心处理',
       },
@@ -168,7 +174,8 @@ export default function DashboardHome(): JSX.Element {
         value: overview.monthHarvestQty,
         precision: 0,
         suffix: 'kg',
-        color: '#52c41a',
+        color: '#12764a',
+        tone: 'default',
         icon: <ExperimentOutlined />,
         footer: `已接入指标 ${metricText(overview.metricCount, 0, ' 项')}`,
       },
@@ -178,7 +185,8 @@ export default function DashboardHome(): JSX.Element {
         value: overview.activeDeviceCount,
         precision: 0,
         suffix: '台',
-        color: '#722ed1',
+        color: '#0b5e86',
+        tone: 'tech',
         icon: <DashboardOutlined />,
         footer: `溯源码累计 ${formatNumber(overview.traceCodeCount ?? 0)} 个`,
       },
@@ -221,8 +229,8 @@ export default function DashboardHome(): JSX.Element {
   /**
    * 任务状态流转（开始执行）。
    *
-   * ⚠️ 状态值必须是后端真值：后端只认 `doing`（旧代码写 `executing`，
-   * 后端不存在该值，等于写了一个永远不会出现的状态）。
+   * 迁移窗口内后端与库里仍是旧词，故本轮继续写 `doing`；
+   * 后端数据切换完成并验证后应改为写 PRD 标准值 `executing`，属数据切换那一轮的工作，需单独提单。
    */
   const startMutation = useMutation({
     mutationFn: (taskId: string) => updateTask(taskId, { status: TASK_STATUS_DOING }),
@@ -238,6 +246,10 @@ export default function DashboardHome(): JSX.Element {
   const overviewUnavailable = overview?.available === false
   /** 后端未提供数据源的指标清单 */
   const missingFields = overview?.missingFields ?? []
+  /** 后端尚未接入的指标（键都不存在） */
+  const unwiredFields = overview?.unwiredFields ?? []
+  /** 已接入但当前无数据的指标（键存在、值为 null） */
+  const emptyFields = overview?.emptyFields ?? []
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
@@ -280,8 +292,18 @@ export default function DashboardHome(): JSX.Element {
           <AntAlert
             type="warning"
             showIcon
-            message="本页部分指标后端暂未提供数据源，显示为「—」"
-            description={`暂无数据源的指标：${missingFields.join('、')}。带 ⓘ 图标的数值即为后端未接入项，接口补齐后自动填充。`}
+            message="本页部分指标显示为「—」"
+            description={
+              <>
+                {unwiredFields.length > 0
+                  ? `后端尚未接入的指标：${unwiredFields.join('、')}，接口补齐后自动填充。`
+                  : null}
+                {emptyFields.length > 0
+                  ? `已接入但当前无数据的指标：${emptyFields.join('、')}——这不是接口缺失，而是当前农场 / 当前月份确实没有对应数据。`
+                  : null}
+                两种情况下本页都不会用示例值回填。
+              </>
+            }
           />
         ) : null}
       </Card>
@@ -298,9 +320,9 @@ export default function DashboardHome(): JSX.Element {
           : metrics.map((metric) => (
               <Col key={metric.key} xs={24} sm={12} md={8} xl={4}>
                 <Card
+                  className={`prod-metric-card tone-${metric.tone}`}
                   hoverable
                   styles={{ body: { padding: 16 } }}
-                  style={{ borderLeft: `3px solid ${metric.color}` }}
                 >
                   <div
                     style={{

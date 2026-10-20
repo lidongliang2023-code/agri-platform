@@ -21,6 +21,7 @@ import {
 } from 'antd'
 import {
   BellOutlined,
+  ExperimentOutlined,
   LogoutOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
@@ -34,9 +35,10 @@ import { listAllFarms } from '@/api/farms'
 import useAuthStore from '@/store/auth'
 import useFarmStore from '@/store/farm'
 import { ADMIN_MENU, USER_MENU, buildBreadcrumb, matchMenu } from '@/config/menu'
-import { BRAND_COLOR, LAYOUT_SIZE } from '@agri/shared'
 
-const { Header, Sider, Content } = Layout
+const { Header, Sider, Content, Footer: LayoutFooter } = Layout
+const SIDER_WIDTH = 224
+const SIDER_COLLAPSED_WIDTH = 72
 
 /** 布局变体 */
 export type LayoutVariant = 'user' | 'admin'
@@ -142,29 +144,22 @@ export default function BasicLayout({ variant, title }: BasicLayoutProps): JSX.E
         collapsible
         collapsed={collapsed}
         trigger={null}
-        theme="light"
-        width={LAYOUT_SIZE.siderWidth}
-        collapsedWidth={LAYOUT_SIZE.siderCollapsedWidth}
+        theme="dark"
+        width={SIDER_WIDTH}
+        collapsedWidth={SIDER_COLLAPSED_WIDTH}
       >
-        <div
-          style={{
-            height: LAYOUT_SIZE.headerHeight,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: collapsed ? 'center' : 'flex-start',
-            padding: collapsed ? 0 : '0 16px',
-            color: BRAND_COLOR,
-            fontWeight: 600,
-            fontSize: 16,
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-          }}
-        >
-          {collapsed ? '农' : title}
+        <div className={`agri-brand${collapsed ? ' is-collapsed' : ''}`}>
+          <span className="agri-brand-logo"><ExperimentOutlined /></span>
+          {!collapsed && (
+            <span className="agri-brand-text">
+              <strong>农产云</strong>
+              <small>{isAdmin ? '生产运营平台' : '农业生产管理'}</small>
+            </span>
+          )}
         </div>
         <Menu
           mode="inline"
-          theme="light"
+          theme="dark"
           items={menuItems}
           selectedKeys={matched ? [matched.leaf.key] : []}
           defaultOpenKeys={matched ? [matched.group.key] : []}
@@ -172,7 +167,7 @@ export default function BasicLayout({ variant, title }: BasicLayoutProps): JSX.E
         />
       </Sider>
 
-      <Layout style={{ marginLeft: collapsed ? LAYOUT_SIZE.siderCollapsedWidth : LAYOUT_SIZE.siderWidth }}>
+      <Layout style={{ marginLeft: collapsed ? SIDER_COLLAPSED_WIDTH : SIDER_WIDTH }}>
         <Header className="agri-header">
           <div className="agri-header-left">
             <Button
@@ -181,9 +176,7 @@ export default function BasicLayout({ variant, title }: BasicLayoutProps): JSX.E
               icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
               onClick={() => setCollapsed(!collapsed)}
             />
-            <Typography.Text strong style={{ fontSize: 15 }}>
-              {title}
-            </Typography.Text>
+            <Breadcrumb items={breadcrumb.map((text) => ({ title: text }))} />
           </div>
 
           <div className="agri-header-right">
@@ -218,8 +211,8 @@ export default function BasicLayout({ variant, title }: BasicLayoutProps): JSX.E
             <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
               <Space style={{ cursor: 'pointer' }}>
                 <Avatar
+                  className="agri-avatar"
                   size="small"
-                  style={{ backgroundColor: BRAND_COLOR }}
                   icon={<UserOutlined />}
                   src={userInfo?.avatar}
                 />
@@ -230,11 +223,13 @@ export default function BasicLayout({ variant, title }: BasicLayoutProps): JSX.E
         </Header>
 
         <Content className="agri-content">
-          <Breadcrumb className="agri-breadcrumb" items={breadcrumb.map((text) => ({ title: text }))} />
           <Suspense fallback={<PageLoading />}>
             <Outlet />
           </Suspense>
         </Content>
+        <LayoutFooter className="agri-footer">
+          © 2026 农业产业互联网平台 · {title}
+        </LayoutFooter>
       </Layout>
     </Layout>
   )

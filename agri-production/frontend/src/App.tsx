@@ -7,10 +7,11 @@ import { App as AntdApp, ConfigProvider, Spin } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
 import { RouterProvider } from 'react-router-dom'
 import router from '@/router'
-import { antdTheme } from '@agri/shared'
 import { bootstrapAuthRefresh, installAuthRefreshInterceptor } from '@/api/auth'
 import useAuthStore from '@/store/auth'
+import { productionTheme } from '@/styles/productionTheme'
 import '@agri/shared/styles/global.less'
+import '@/styles/production-member-theme.css'
 
 /**
  * 令牌续期装配：请求拦截器在访问令牌临近过期时用 HttpOnly Cookie 里的刷新令牌静默换新；
@@ -31,7 +32,7 @@ void bootstrapAuthRefresh()
 export default function App(): JSX.Element {
   const authReady = useAuthStore((state) => state.authReady)
   return (
-    <ConfigProvider locale={zhCN} theme={antdTheme}>
+    <ConfigProvider locale={zhCN} theme={productionTheme}>
       <AntdApp>
         {authReady ? (
           <RouterProvider router={router} />
