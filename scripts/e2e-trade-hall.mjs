@@ -2,8 +2,8 @@
 /**
  * 交易大厅联调（2026-10-20）。
  *
- * 覆盖：公开浏览、关键词搜索、分类/产地筛选、价格排序、采购需求列表、
- * 未登录报价与商品详情的登录回跳。
+ * 覆盖：门户导航复用、公开浏览、关键词搜索、分类/产地筛选、价格排序、
+ * 采购需求列表、未登录报价与商品详情的登录回跳。
  */
 import { createRequire } from 'node:module'
 import path from 'node:path'
@@ -65,12 +65,17 @@ try {
   await page.waitForSelector('.hall-product', { timeout: 20000 })
   const text = await page.evaluate(() => document.body.innerText)
   check(text.includes('交易大厅') && text.includes('供应大厅') && text.includes('采购需求'), '交易大厅公开页面已渲染')
-  const navLabels = await page.$$eval('.hall-nav a', (items) => items.map((item) => (item.textContent ?? '').trim()))
-  check(JSON.stringify(navLabels) === JSON.stringify(['首页', '产业链', '交易大厅', '价格指数', '产业资讯', '供应链金融']),
-    '交易大厅顶部导航与门户保持一致', navLabels.join(' / '))
-  const underlines = await page.$$eval('.hall-nav a', (items) => items.map((item) => getComputedStyle(item).textDecorationLine))
+  const navLabels = await page.$$eval('.main-nav a', (items) => items.map((item) => (item.textContent ?? '').trim()))
+  const portalPage = await browser.newPage()
+  await portalPage.setViewport({ width: 1440, height: 1000 })
+  await portalPage.goto('http://localhost:8098/portal/', { waitUntil: 'networkidle2', timeout: 60000 })
+  const portalNavLabels = await portalPage.$$eval('.main-nav a', (items) => items.map((item) => (item.textContent ?? '').trim()))
+  await portalPage.close()
+  check(JSON.stringify(navLabels) === JSON.stringify(portalNavLabels) && navLabels.includes('物流服务'),
+    '交易大厅直接复用门户导航菜单', navLabels.join(' / '))
+  const underlines = await page.$$eval('.main-nav a', (items) => items.map((item) => getComputedStyle(item).textDecorationLine))
   check(underlines.every((value) => value === 'none'), '交易大厅导航项没有下划线', underlines.join(' / '))
-  const activeLine = await page.$eval('.hall-nav a.on', (item) => getComputedStyle(item, '::after').height)
+  const activeLine = await page.$eval('.main-nav a.active', (item) => getComputedStyle(item, '::after').height)
   check(activeLine === '2px', '当前菜单「交易大厅」保留下划线', activeLine)
   check((await productNames(page)).length === 5, '供应大厅显示 5 条真实在售商品')
   const filterText = await page.evaluate(() => document.querySelector('.hall-filter-card')?.innerText ?? '')
@@ -80,8 +85,8 @@ try {
   check(filterRows === 4 && !(await page.$('.hall-layout')), '筛选条件采用产业链页的整行卡片布局', `${filterRows} 行`)
 
   // 搜索
-  await fill(page, '.hall-search input', '苹果')
-  await page.click('.hall-search button')
+  await fill(page, '.header-search input', '苹果')
+  await page.click('.header-search button')
   let names = await waitProducts(page, 1)
   check(names.length === 1 && names[0].includes('苹果'), '关键词搜索「苹果」命中洛川苹果', names.join('、'))
 

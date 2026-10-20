@@ -193,34 +193,35 @@ export default function TradeHall(): JSX.Element {
 
   return (
     <div className="hall-root">
-      <div className="hall-topbar">
+      <div className="topbar">
         <div className="hall-container">
           <span>您好，欢迎来到农产云交易大厅！智能大宗交易 · 平台撮合 · 支持在线议价</span>
-          <span className="hall-top-links">
-            <a href="/member/buyer">我是买家</a><i>·</i>
-            <a href="/member/seller">我是卖家</a><i>·</i>
-            <a href="/member/buyer">会员中心</a><i>·</i>
-            <a href="/login"><UserOutlined />登录</a><i>·</i>
+          <span className="topbar-actions">
+            <a href="/member/buyer">我是买家</a><span className="sep">·</span>
+            <a href="/member/seller">我是卖家</a><span className="sep">·</span>
+            <a href="/member/buyer">会员中心</a><span className="sep">·</span>
+            <a href="/login"><UserOutlined />登录</a><span className="sep">·</span>
             <a href={SSO_REGISTER}>免费注册</a>
           </span>
         </div>
       </div>
 
-      <header className="hall-header">
+      <header className="site-header">
         <div className="hall-container">
           <a className="hall-brand" href={PORTAL}>
             <span className="hall-logo"><AppstoreOutlined /></span>
             <span>农产云<small>AGRI · CLOUD</small></span>
           </a>
-          <nav className="hall-nav">
+          <nav className="main-nav">
             <a href={PORTAL}>首页</a>
             <a href={`${PORTAL}#/chains`}>产业链</a>
-            <a className="on" href="/hall">交易大厅</a>
+            <a className="active" href="/hall">交易大厅</a>
             <a href={`${PORTAL}#/?scroll=price`}>价格指数</a>
             <a href={`${PORTAL}#/?scroll=news`}>产业资讯</a>
             <a href="/member/seller?tab=fund">供应链金融</a>
+            <a href={`${PORTAL}#/logistics`}>物流服务</a>
           </nav>
-          <form className="hall-search" onSubmit={submitSearch}>
+          <form className="header-search" onSubmit={submitSearch}>
             <input value={searchInput} onChange={(event) => setSearchInput(event.target.value)}
               placeholder="搜索商品 / 供应商 / 需求" />
             <button type="submit"><SearchOutlined />搜索</button>
