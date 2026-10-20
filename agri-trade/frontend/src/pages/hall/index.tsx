@@ -62,7 +62,6 @@ interface PublicDemand {
 }
 
 const PORTAL = `${window.location.protocol}//${window.location.hostname}:8098/portal/`
-const PRODUCTION = `${window.location.protocol}//${window.location.hostname}/production/dashboard`
 const SSO_REGISTER = `${window.location.protocol}//${window.location.hostname}:8090/register`
 const PAGE_SIZE = 9
 
@@ -232,9 +231,9 @@ export default function TradeHall(): JSX.Element {
             <a href={PORTAL}>首页</a>
             <a href={`${PORTAL}#/chains`}>产业链</a>
             <a className="on" href="/hall">交易大厅</a>
-            <a href="/demand/create">发布需求</a>
-            <a href="/member/buyer">会员中心</a>
-            <a href={PRODUCTION}>生产监测</a>
+            <a href={`${PORTAL}#/?scroll=price`}>价格指数</a>
+            <a href={`${PORTAL}#/?scroll=news`}>产业资讯</a>
+            <a href="/member/seller?tab=fund">供应链金融</a>
           </nav>
           <form className="hall-search" onSubmit={submitSearch}>
             <input value={searchInput} onChange={(event) => setSearchInput(event.target.value)}

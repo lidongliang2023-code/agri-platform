@@ -65,6 +65,9 @@ try {
   await page.waitForSelector('.hall-product', { timeout: 20000 })
   const text = await page.evaluate(() => document.body.innerText)
   check(text.includes('交易大厅') && text.includes('供应大厅') && text.includes('采购需求'), '交易大厅公开页面已渲染')
+  const navLabels = await page.$$eval('.hall-nav a', (items) => items.map((item) => (item.textContent ?? '').trim()))
+  check(JSON.stringify(navLabels) === JSON.stringify(['首页', '产业链', '交易大厅', '价格指数', '产业资讯', '供应链金融']),
+    '交易大厅顶部导航与门户保持一致', navLabels.join(' / '))
   check((await productNames(page)).length === 5, '供应大厅显示 5 条真实在售商品')
 
   // 搜索
