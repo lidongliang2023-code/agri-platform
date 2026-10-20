@@ -705,6 +705,30 @@
   line-height: 1.75;
 }
 
+.mc-embedded {
+  margin-top: 16px;
+}
+
+.mc-embedded-first {
+  margin-top: 0;
+}
+
+.mc-embedded .ant-card {
+  margin-bottom: 14px;
+}
+
+.mc-embedded .ant-tabs-nav {
+  margin-bottom: 12px;
+}
+
+.mc-embedded .ant-table-wrapper {
+  overflow-x: auto;
+}
+
+.mc-embedded .ant-table table {
+  min-width: 900px;
+}
+
 .mc-profile-card {
   border: 1px solid var(--mc-line);
   border-radius: 12px;

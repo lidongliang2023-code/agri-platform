@@ -2,30 +2,17 @@ import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import Layout from '@/pages/layout'
 import Login from '@/pages/login'
 import Home from '@/pages/home'
-import OrderList from '@/pages/order/list'
 import OrderDetail from '@/pages/order/detail'
 import OrderConfirm from '@/pages/order/confirm'
 import OrderCreate from '@/pages/order/create'
-import ProductList from '@/pages/product/list'
 import ProductCreate from '@/pages/product/create'
 import ProductDetail from '@/pages/product/detail'
 import ShopDetail from '@/pages/shop/detail'
-import DemandList from '@/pages/demand/list'
 import DemandCreate from '@/pages/demand/create'
 import DemandDetail from '@/pages/demand/detail'
-import ContractList from '@/pages/contract/list'
-import LogisticsList from '@/pages/logistics/list'
-import EvaluationList from '@/pages/evaluation/list'
-import DisputeList from '@/pages/dispute/list'
 import MineDashboardPage from '@/pages/mine'
 import BuyerCenter from '@/pages/member-center/BuyerCenter'
 import SellerCenter from '@/pages/member-center/SellerCenter'
-import MyGuarantee from '@/pages/mine-guarantee'
-import MyCompensation from '@/pages/mine-compensation'
-import MyIdentity from '@/pages/mine-identity'
-import MatchList from '@/pages/match/list'
-import PriceList from '@/pages/price/list'
-import QuoteList from '@/pages/quote/list'
 import SsoCallback from '@/pages/sso/callback'
 import AdminLayout from '@/pages/admin/layout'
 import AdminDashboard from '@/pages/admin/dashboard'
@@ -104,33 +91,34 @@ function AppRouter() {
         {/* 旧的「我的看板」保留为经营看板；会员中心入口指向买家中心 */}
         <Route path="mine" element={<Navigate to="/member/buyer" replace />} />
         <Route path="board" element={<MineDashboardPage />} />
-        <Route path="my-guarantee" element={<MyGuarantee />} />
-        <Route path="my-compensation" element={<MyCompensation />} />
-        <Route path="my-identity" element={<MyIdentity />} />
+        <Route path="my-guarantee" element={<Navigate to="/member/buyer?tab=fund" replace />} />
+        <Route path="my-compensation" element={<Navigate to="/member/buyer?tab=fund" replace />} />
+        <Route path="my-identity" element={<Navigate to="/member/buyer?tab=profile" replace />} />
       {/*
         兜底：没有匹配到的路径回首页。
         原先没有任何兜底路由，点了一个过期/写错的链接（例如 /order/7601，
         真实路径是 /order/detail/7601）会渲染成一张白屏，看不出是网址错了。
       */}
       <Route path="*" element={<Navigate to="/" replace />} />
-        <Route path="order" element={<OrderList />} />
+        {/* 交易功能已并入会员中心：旧入口保留为重定向，深链详情仍直达 */}
+        <Route path="order" element={<Navigate to="/member/buyer?tab=purchase" replace />} />
         <Route path="order/detail/:id" element={<OrderDetail />} />
         <Route path="order/confirm" element={<OrderConfirm />} />
         <Route path="order/create" element={<OrderCreate />} />
-        <Route path="product" element={<ProductList />} />
+        <Route path="product" element={<Navigate to="/member/seller?tab=goods" replace />} />
         <Route path="product/create" element={<ProductCreate />} />
         <Route path="product/detail/:id" element={<ProductDetail />} />
         <Route path="shop/:sellerId" element={<ShopDetail />} />
-        <Route path="demand" element={<DemandList />} />
+        <Route path="demand" element={<Navigate to="/member/buyer?tab=inquiry" replace />} />
         <Route path="demand/create" element={<DemandCreate />} />
         <Route path="demand/detail/:id" element={<DemandDetail />} />
-        <Route path="quote" element={<QuoteList />} />
-        <Route path="match" element={<MatchList />} />
-        <Route path="price" element={<PriceList />} />
-        <Route path="contract" element={<ContractList />} />
-        <Route path="logistics" element={<LogisticsList />} />
-        <Route path="evaluation" element={<EvaluationList />} />
-        <Route path="dispute" element={<DisputeList />} />
+        <Route path="quote" element={<Navigate to="/member/seller?tab=trade" replace />} />
+        <Route path="match" element={<Navigate to="/member/seller?tab=trade" replace />} />
+        <Route path="price" element={<Navigate to="/member/seller?tab=trade" replace />} />
+        <Route path="contract" element={<Navigate to="/member/buyer?tab=contract" replace />} />
+        <Route path="logistics" element={<Navigate to="/member/seller?tab=ship" replace />} />
+        <Route path="evaluation" element={<Navigate to="/member/buyer?tab=rate" replace />} />
+        <Route path="dispute" element={<Navigate to="/member/buyer?tab=after" replace />} />
       </Route>
     </Routes>
   )

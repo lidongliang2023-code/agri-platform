@@ -16,6 +16,13 @@ import {
 } from '@ant-design/icons'
 import { updateOrderStatus } from '@/api/order'
 import { applyInvoice, getMyInvoices, type InvoiceRow } from '@/api/invoice'
+import ContractList from '@/pages/contract/list'
+import DisputeList from '@/pages/dispute/list'
+import EvaluationList from '@/pages/evaluation/list'
+import LogisticsList from '@/pages/logistics/list'
+import MyCompensation from '@/pages/mine-compensation'
+import MyGuarantee from '@/pages/mine-guarantee'
+import MyIdentity from '@/pages/mine-identity'
 import { MemberCenterShell, type MemberNavItem } from './MemberCenterShell'
 import {
   EmptyState,
@@ -39,6 +46,7 @@ const NAV: MemberNavItem[] = [
   { key: 'inquiry', label: '我的询价', icon: <FileSearchOutlined /> },
   { key: 'after', label: '收货与售后', icon: <TruckOutlined /> },
   { key: 'rate', label: '采购评价', icon: <StarOutlined /> },
+  { key: 'contract', label: '合同管理', icon: <FileTextOutlined /> },
   { key: 'fund', label: '资金与发票', icon: <DollarOutlined /> },
   { key: 'favorite', label: '收藏与关注', icon: <HeartOutlined /> },
   { key: 'profile', label: '企业资料与认证', icon: <UserOutlined /> },
@@ -360,6 +368,8 @@ export default function BuyerCenter(): JSX.Element {
           </div>
         )}
       </Panel>
+      <div className="mc-embedded"><DisputeList /></div>
+      <div className="mc-embedded"><LogisticsList /></div>
     </>
   )
 
@@ -415,7 +425,12 @@ export default function BuyerCenter(): JSX.Element {
           </div>
         )}
       </Panel>
+      <div className="mc-embedded"><EvaluationList /></div>
     </>
+  )
+
+  const renderContract = (): JSX.Element => (
+    <div className="mc-embedded mc-embedded-first"><ContractList /></div>
   )
 
   const renderFund = (): JSX.Element => (
@@ -425,29 +440,8 @@ export default function BuyerCenter(): JSX.Element {
         <Kpi label="可用保证金" value={money(guaranteeAvailable)} desc={`冻结 ${money(guaranteeFrozen)}`} tone="tech" />
         <Kpi label="平均客单价" value={money(base.dashboard?.buyer?.avgOrderValue ?? 0)} desc="按真实订单计算" tone="amber" />
       </div>
-      <Panel title="保证金账户" extra={<a className="mc-link" href="/my-guarantee">查看流水 →</a>}>
-        {guarantees.length === 0 ? (
-          <EmptyState title="还没有保证金账户" desc="参与平台担保交易后，保证金账户与流水会在这里展示。" />
-        ) : (
-          <div className="mc-table-wrap">
-            <table className="mc-table">
-              <thead><tr><th>保证金编号</th><th>主体</th><th>总额</th><th>可用</th><th>冻结</th><th>状态</th></tr></thead>
-              <tbody>
-                {guarantees.map((row) => (
-                  <tr key={row.id}>
-                    <td className="mc-mono">{row.guaranteeNo}</td>
-                    <td>{row.merchantName}</td>
-                    <td className="mc-price">{money(row.totalAmount)}</td>
-                    <td>{money(row.availableAmount)}</td>
-                    <td>{money(row.frozenAmount)}</td>
-                    <td><span className="mc-tag green">{row.guaranteeStatus}</span></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Panel>
+      <div className="mc-embedded"><MyGuarantee /></div>
+      <div className="mc-embedded"><MyCompensation /></div>
       <Panel title="发票申请与记录">
         <div className="mc-toolbar">
           <span className="mc-toolbar-muted">已付款订单可申请开票；一笔订单仅一张申请。</span>
@@ -553,6 +547,7 @@ export default function BuyerCenter(): JSX.Element {
         <EmptyState title="证照文件不在交易域" desc="交易域只保存经营主体绑定关系；营业执照、许可证等材料请到认证中心查看或更新。"
           action={<a className="mc-btn" href={`${window.location.protocol}//${window.location.hostname}:8098/portal/#/certify/enterprise`} target="_blank" rel="noreferrer">去认证中心</a>} />
       </Panel>
+      <div className="mc-embedded"><MyIdentity /></div>
     </>
   )
 
@@ -560,10 +555,11 @@ export default function BuyerCenter(): JSX.Element {
     : active === 'inquiry' ? renderInquiry()
       : active === 'after' ? renderAfter()
         : active === 'rate' ? renderRate()
-          : active === 'fund' ? renderFund()
-            : active === 'favorite' ? renderFavorite()
-              : active === 'profile' ? renderProfile()
-                : renderOverview()
+          : active === 'contract' ? renderContract()
+            : active === 'fund' ? renderFund()
+              : active === 'favorite' ? renderFavorite()
+                : active === 'profile' ? renderProfile()
+                  : renderOverview()
 
   return (
     <MemberCenterShell role="buyer" active={active} navItems={NAV}

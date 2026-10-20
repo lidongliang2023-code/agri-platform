@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Modal, message } from 'antd'
+import { Modal, Tabs, message } from 'antd'
 import {
   AlertOutlined,
   ApiOutlined,
@@ -18,6 +18,16 @@ import {
 } from '@ant-design/icons'
 import { updateOrderStatus } from '@/api/order'
 import { getMySettlement, type SellerSettlementView } from '@/api/settlement'
+import ContractList from '@/pages/contract/list'
+import DisputeList from '@/pages/dispute/list'
+import EvaluationList from '@/pages/evaluation/list'
+import LogisticsList from '@/pages/logistics/list'
+import MatchList from '@/pages/match/list'
+import MyCompensation from '@/pages/mine-compensation'
+import MyGuarantee from '@/pages/mine-guarantee'
+import MyIdentity from '@/pages/mine-identity'
+import PriceList from '@/pages/price/list'
+import QuoteList from '@/pages/quote/list'
 import { MemberCenterShell, type MemberNavItem } from './MemberCenterShell'
 import {
   EmptyState,
@@ -41,9 +51,11 @@ const NAV: MemberNavItem[] = [
   { key: 'sales', label: '销售订单', icon: <ShopOutlined /> },
   { key: 'goods', label: '商品管理', icon: <AppstoreOutlined /> },
   { key: 'supply', label: '供应发布', icon: <AppstoreAddOutlined /> },
+  { key: 'trade', label: '报价与撮合', icon: <StarOutlined /> },
   { key: 'ship', label: '发货与物流', icon: <TruckOutlined /> },
   { key: 'after', label: '售后处理', icon: <AlertOutlined /> },
   { key: 'rate', label: '店铺评价与信用', icon: <StarOutlined /> },
+  { key: 'contract', label: '合同管理', icon: <FileTextOutlined /> },
   { key: 'fund', label: '资金结算', icon: <DollarOutlined /> },
   { key: 'customer', label: '客户管理', icon: <TeamOutlined /> },
   { key: 'iot', label: '生产接入', icon: <ApiOutlined /> },
@@ -244,6 +256,23 @@ export default function SellerCenter(): JSX.Element {
     </>
   )
 
+  const renderTrade = (): JSX.Element => (
+    <div className="mc-embedded mc-embedded-first">
+      <Tabs
+        defaultActiveKey="quote"
+        items={[
+          { key: 'quote', label: '报价管理', children: <QuoteList /> },
+          { key: 'match', label: '智能匹配', children: <MatchList /> },
+          { key: 'price', label: '价格推荐', children: <PriceList /> },
+        ]}
+      />
+    </div>
+  )
+
+  const renderContract = (): JSX.Element => (
+    <div className="mc-embedded mc-embedded-first"><ContractList /></div>
+  )
+
   const renderGoods = (): JSX.Element => (
     <>
       <div className="mc-toolbar">
@@ -360,6 +389,7 @@ export default function SellerCenter(): JSX.Element {
           </div>
         )}
       </Panel>
+      <div className="mc-embedded"><LogisticsList /></div>
     </>
   )
 
@@ -386,7 +416,7 @@ export default function SellerCenter(): JSX.Element {
                     <td className="mc-wrap-text">{row.disputeDescription ?? row.disputeReason ?? '—'}</td>
                     <td className="mc-mono">{row.claimAmount != null ? money(row.claimAmount) : '—'}</td>
                     <td><span className="mc-tag amber">{row.disputeStatus ?? '处理中'}</span></td>
-                    <td><a className="mc-link" href="/dispute">处理</a></td>
+                    <td><a className="mc-link" href="/member/seller?tab=after">处理</a></td>
                   </tr>
                 ))}
               </tbody>
@@ -394,6 +424,7 @@ export default function SellerCenter(): JSX.Element {
           </div>
         )}
       </Panel>
+      <div className="mc-embedded"><DisputeList /></div>
     </>
   )
 
@@ -430,6 +461,7 @@ export default function SellerCenter(): JSX.Element {
       <Panel title="信用分与等级说明" extra={<span className="mc-tag amber">信用分接口待接入</span>}>
         <div className="mc-note">当前交易域只提供真实评价均分，没有独立的信用分字段；页面不展示编造的“96 分 / 金牌卖家”。</div>
       </Panel>
+      <div className="mc-embedded"><EvaluationList /></div>
     </>
   )
 
@@ -489,29 +521,8 @@ export default function SellerCenter(): JSX.Element {
           </div>
         )}
       </Panel>
-      <Panel title="保证金账户" extra={<a className="mc-link" href="/my-guarantee">查看流水 →</a>}>
-        {guarantees.length === 0 ? (
-          <EmptyState title="还没有保证金账户" desc="参与平台担保交易后，保证金账户与流水会在这里展示。" />
-        ) : (
-          <div className="mc-table-wrap">
-            <table className="mc-table">
-              <thead><tr><th>保证金编号</th><th>主体</th><th>总额</th><th>可用</th><th>冻结</th><th>状态</th></tr></thead>
-              <tbody>
-                {guarantees.map((row) => (
-                  <tr key={row.id}>
-                    <td className="mc-mono">{row.guaranteeNo}</td>
-                    <td>{row.merchantName}</td>
-                    <td className="mc-price">{money(row.totalAmount)}</td>
-                    <td>{money(row.availableAmount)}</td>
-                    <td>{money(row.frozenAmount)}</td>
-                    <td><span className="mc-tag green">{row.guaranteeStatus}</span></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Panel>
+      <div className="mc-embedded"><MyGuarantee /></div>
+      <div className="mc-embedded"><MyCompensation /></div>
       <Panel title="提现申请">
         <EmptyState title="提现申请尚未开放" desc="当前只提供结算单与应收金额查询；提现涉及打款，需接入资金通道与审批流后再开放。" />
       </Panel>
@@ -600,20 +611,23 @@ export default function SellerCenter(): JSX.Element {
         <EmptyState title="证照文件不在交易域" desc="营业执照、生产许可证等材料请到认证中心查看或更新。"
           action={<a className="mc-btn" href={`${window.location.protocol}//${window.location.hostname}:8098/portal/#/certify/enterprise`} target="_blank" rel="noreferrer">去认证中心</a>} />
       </Panel>
+      <div className="mc-embedded"><MyIdentity /></div>
     </>
   )
 
   const content = active === 'sales' ? renderSales()
     : active === 'goods' ? renderGoods()
       : active === 'supply' ? renderSupply()
-        : active === 'ship' ? renderShip()
-          : active === 'after' ? renderAfter()
-            : active === 'rate' ? renderRate()
-              : active === 'fund' ? renderFund()
-                : active === 'customer' ? renderCustomer()
-                  : active === 'iot' ? renderIot()
-                    : active === 'profile' ? renderProfile()
-                      : renderOverview()
+        : active === 'trade' ? renderTrade()
+          : active === 'ship' ? renderShip()
+            : active === 'after' ? renderAfter()
+              : active === 'rate' ? renderRate()
+                : active === 'contract' ? renderContract()
+                  : active === 'fund' ? renderFund()
+                    : active === 'customer' ? renderCustomer()
+                      : active === 'iot' ? renderIot()
+                        : active === 'profile' ? renderProfile()
+                          : renderOverview()
 
   return (
     <MemberCenterShell role="seller" active={active} navItems={NAV}
