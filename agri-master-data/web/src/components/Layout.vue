@@ -86,6 +86,7 @@ const userEntry = `${window.location.protocol}//${window.location.hostname}:8086
 
 const menuItems = [
   { path: '/dashboard', label: '运营总览', icon: '📊' },
+  { path: '/masterdata/center', label: '主数据运营', icon: '🗂️' },
   { 
     path: '/tenant', 
     label: '租户管理', 
@@ -187,6 +188,7 @@ const menuItems = [
 const currentLocation = computed(() => {
   const pathNames = {
     '/dashboard': '运营总览',
+    '/masterdata/center': '主数据运营',
     '/tenant/list': '租户管理',
     '/tenant/quota': '配额管理',
     '/tenant/package': '套餐配置',
@@ -612,6 +614,35 @@ onMounted(() => {
 
   .user-email {
     display: none;
+  }
+}
+
+@media (max-width: 700px) {
+  .top-header {
+    height: auto;
+    min-height: 60px;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  .header-left {
+    flex: 1 1 100%;
+  }
+
+  .breadcrumb {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .header-right {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .role-switch {
+    margin-right: auto;
   }
 }
 

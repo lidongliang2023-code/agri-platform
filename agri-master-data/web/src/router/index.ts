@@ -52,6 +52,7 @@ interface RouteSpec {
  */
 const ADMIN_ROUTES: RouteSpec[] = [
   { path: '/dashboard', view: 'Dashboard' },
+  { path: '/masterdata/center', view: 'masterdata/MasterDataCenter' },
 
   { path: '/tenant/list', view: 'tenant/TenantList' },
   { path: '/tenant/quota', view: 'tenant/TenantQuota' },
