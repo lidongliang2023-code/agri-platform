@@ -248,68 +248,81 @@ export default function TradeHall(): JSX.Element {
 
         {tab === 'supply' ? (
           <>
-            <div className="hall-layout">
+            <div className="hall-supply">
               <aside className="hall-filter-card">
-                <div className="hall-card-head"><h3><ShopOutlined />筛选条件</h3></div>
+                <div className="hall-card-head">
+                  <h3><ShopOutlined />筛选条件</h3>
+                  <div className="hall-filter-actions">
+                    <span className="hall-tag tech">支持三级分类</span>
+                    <button type="button" className="hall-reset" onClick={resetFilters}>清空筛选</button>
+                  </div>
+                </div>
                 <div className="hall-filter-body">
-                  <label>一级产业</label>
-                  <div className="hall-chips">
-                    <button type="button" className={l1 === '' ? 'on' : ''} onClick={() => { setL1(''); setL2(''); setL3(''); setPage(1) }}>全部产业</button>
-                    {level1.map((item) => (
-                      <button type="button" key={item} className={l1 === item ? 'on' : ''}
-                        onClick={() => { setL1(item); setL2(''); setL3(''); setPage(1) }}>{item}</button>
-                    ))}
+                  <div className="hall-trail">
+                    <button type="button" onClick={resetFilters}>全部产业链</button>
+                    {l1 && <><span>/</span><strong>{l1}</strong></>}
+                    {l2 && <><span>/</span><strong>{l2}</strong></>}
+                    {l3 && <><span>/</span><strong>{l3}</strong></>}
+                    {province && <><span>·</span><strong>产地：{province}</strong></>}
+                    <span>·</span><span>匹配 <b>{total}</b> 个货源</span>
                   </div>
-                  <label>二级品类</label>
-                  <div className="hall-chips">
-                    {!level2.length && <span className="hall-hint">请选择一级产业</span>}
-                    {level2.map((item) => (
-                      <button type="button" key={item} className={l2 === item ? 'on' : ''}
-                        onClick={() => { setL2(item); setL3(''); setPage(1) }}>{item}</button>
-                    ))}
-                  </div>
-                  <label>三级品种</label>
-                  <div className="hall-chips">
-                    {!level3.length && <span className="hall-hint">请选择二级品类</span>}
-                    {level3.map((item) => (
-                      <button type="button" key={item} className={l3 === item ? 'on' : ''}
-                        onClick={() => { setL3(item); setPage(1) }}>{item}</button>
-                    ))}
-                  </div>
-                  <label>产地</label>
-                  <div className="hall-province-groups">
+                  <div className="hall-filter-row">
+                    <span className="hall-filter-label">一级产业</span>
                     <div className="hall-chips">
-                      <button type="button" className={province === '' ? 'on' : ''} onClick={() => { setProvince(''); setPage(1) }}>全部省份</button>
+                      <button type="button" className={l1 === '' ? 'on' : ''} onClick={() => { setL1(''); setL2(''); setL3(''); setPage(1) }}>全部产业</button>
+                      {level1.map((item) => (
+                        <button type="button" key={item} className={l1 === item ? 'on' : ''}
+                          onClick={() => { setL1(item); setL2(''); setL3(''); setPage(1) }}>{item}</button>
+                      ))}
                     </div>
-                    {PROVINCE_GROUPS.map((group) => {
-                      const items = HALL_PROVINCES.filter((item) => item.group === group)
-                      if (!items.length) return null
-                      return (
-                        <div className="hall-province-group" key={group}>
-                          <span>{group}</span>
-                          <div className="hall-chips">
-                            {items.map((item) => (
-                              <button type="button" key={item.name} className={province === item.name ? 'on' : ''}
-                                onClick={() => { setProvince(item.name); setPage(1) }}>{item.name}</button>
-                            ))}
-                          </div>
-                        </div>
-                      )
-                    })}
                   </div>
-                  <button type="button" className="hall-reset" onClick={resetFilters}>清空筛选</button>
+                  <div className="hall-filter-row">
+                    <span className="hall-filter-label">二级品类</span>
+                    <div className="hall-chips">
+                      {!level2.length && <span className="hall-hint">请选择一级产业</span>}
+                      {level2.map((item) => (
+                        <button type="button" key={item} className={l2 === item ? 'on' : ''}
+                          onClick={() => { setL2(item); setL3(''); setPage(1) }}>{item}</button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="hall-filter-row">
+                    <span className="hall-filter-label">三级品种</span>
+                    <div className="hall-chips">
+                      {!level3.length && <span className="hall-hint">请选择二级品类</span>}
+                      {level3.map((item) => (
+                        <button type="button" key={item} className={l3 === item ? 'on' : ''}
+                          onClick={() => { setL3(item); setPage(1) }}>{item}</button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="hall-filter-row">
+                    <span className="hall-filter-label">产地</span>
+                    <div className="hall-province-groups">
+                      <div className="hall-chips">
+                        <button type="button" className={province === '' ? 'on' : ''} onClick={() => { setProvince(''); setPage(1) }}>全部省份</button>
+                      </div>
+                      {PROVINCE_GROUPS.map((group) => {
+                        const items = HALL_PROVINCES.filter((item) => item.group === group)
+                        if (!items.length) return null
+                        return (
+                          <div className="hall-province-group" key={group}>
+                            <span>{group}</span>
+                            <div className="hall-chips">
+                              {items.map((item) => (
+                                <button type="button" key={item.name} className={province === item.name ? 'on' : ''}
+                                  onClick={() => { setProvince(item.name); setPage(1) }}>{item.name}</button>
+                              ))}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
                 </div>
               </aside>
 
               <section className="hall-list">
-                <div className="hall-trail">
-                  <button type="button" onClick={resetFilters}>全部产业链</button>
-                  {l1 && <><span>/</span><strong>{l1}</strong></>}
-                  {l2 && <><span>/</span><strong>{l2}</strong></>}
-                  {l3 && <><span>/</span><strong>{l3}</strong></>}
-                  {province && <><span>·</span><strong>产地：{province}</strong></>}
-                  <span>·</span><span>匹配 <b>{total}</b> 个货源</span>
-                </div>
                 <div className="hall-toolbar">
                   <span>共 <b>{total}</b> 个在售商品{total > 0 ? `（第 ${page} / ${pages} 页）` : ''}</span>
                   <div className="hall-chips">

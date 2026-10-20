@@ -70,10 +70,14 @@ try {
     '交易大厅顶部导航与门户保持一致', navLabels.join(' / '))
   const underlines = await page.$$eval('.hall-nav a', (items) => items.map((item) => getComputedStyle(item).textDecorationLine))
   check(underlines.every((value) => value === 'none'), '交易大厅导航项没有下划线', underlines.join(' / '))
+  const activeLine = await page.$eval('.hall-nav a.on', (item) => getComputedStyle(item, '::after').height)
+  check(activeLine === '2px', '当前菜单「交易大厅」保留下划线', activeLine)
   check((await productNames(page)).length === 5, '供应大厅显示 5 条真实在售商品')
   const filterText = await page.evaluate(() => document.querySelector('.hall-filter-card')?.innerText ?? '')
   check(filterText.includes('一级产业') && filterText.includes('二级品类') && filterText.includes('三级品种')
     && filterText.includes('产地') && !filterText.includes('价格区间'), '筛选结构与产业链页面一致')
+  const filterRows = await page.$$eval('.hall-filter-row', (rows) => rows.length)
+  check(filterRows === 4 && !(await page.$('.hall-layout')), '筛选条件采用产业链页的整行卡片布局', `${filterRows} 行`)
 
   // 搜索
   await fill(page, '.hall-search input', '苹果')
@@ -82,21 +86,21 @@ try {
   check(names.length === 1 && names[0].includes('苹果'), '关键词搜索「苹果」命中洛川苹果', names.join('、'))
 
   // 分类筛选
-  await clickText(page, '清空筛选', '.hall-filter-body button')
+  await clickText(page, '清空筛选', '.hall-reset')
   await waitProducts(page, 5)
   await clickText(page, '粮油产业', '.hall-filter-body .hall-chips button')
   names = await waitProducts(page, 1)
   check(names.length === 1 && names[0].includes('五常大米'), '一级产业「粮油产业」筛选出五常大米', names.join('、'))
 
   // 产地筛选
-  await clickText(page, '清空筛选', '.hall-filter-body button')
+  await clickText(page, '清空筛选', '.hall-reset')
   await waitProducts(page, 5)
   await clickText(page, '江苏', '.hall-filter-body .hall-chips button')
   names = await waitProducts(page, 1)
   check(names.length === 1 && names[0].includes('大闸蟹'), '产地「江苏」筛选出大闸蟹', names.join('、'))
 
   // 价格排序
-  await clickText(page, '清空筛选', '.hall-filter-body button')
+  await clickText(page, '清空筛选', '.hall-reset')
   await waitProducts(page, 5)
   await clickText(page, '价格从低到高', '.hall-toolbar .hall-chips button')
   names = await waitProducts(page, 5)

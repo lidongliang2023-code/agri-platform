@@ -125,6 +125,7 @@
 }
 
 .hall-nav a {
+  position: relative;
   padding: 7px 12px;
   border-radius: 8px;
   color: var(--h-ink-700);
@@ -141,6 +142,17 @@
 .hall-nav a.on {
   color: var(--h-green-700);
   font-weight: 700;
+}
+
+.hall-nav a.on::after {
+  content: '';
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--h-green-500);
 }
 
 .hall-search {
@@ -264,6 +276,28 @@
   align-items: start;
 }
 
+.hall-filter-card {
+  width: 100%;
+  margin-bottom: 14px;
+}
+
+.hall-supply {
+  display: block;
+}
+
+.hall-filter-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hall-filter-actions .hall-reset {
+  margin-top: 0;
+  width: auto;
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+
 .hall-filter-card,
 .hall-suppliers,
 .hall-demand-card {
@@ -301,11 +335,24 @@
   padding: 14px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 0;
 }
 
-.hall-filter-body > label {
-  margin-top: 4px;
+.hall-filter-row {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 10px 0;
+  border-bottom: 1px dashed var(--h-line);
+}
+
+.hall-filter-row:last-of-type {
+  border-bottom: none;
+}
+
+.hall-filter-label {
+  padding-top: 4px;
   color: var(--h-ink-600);
   font-size: 12.5px;
   font-weight: 600;
@@ -315,6 +362,7 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
+  width: 100%;
 }
 
 .hall-province-group {
@@ -340,7 +388,7 @@
   align-items: center;
   gap: 7px;
   flex-wrap: wrap;
-  margin-bottom: 10px;
+  margin: 0 0 8px;
   padding: 9px 12px;
   border-radius: 9px;
   background: var(--h-green-050);
@@ -452,7 +500,7 @@
 
 .hall-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
 }
 
@@ -736,10 +784,8 @@
     grid-template-columns: 1fr;
   }
 
-  .hall-filter-body {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px 18px;
+  .hall-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .hall-supplier-grid {
@@ -793,8 +839,9 @@
     grid-template-columns: 1fr;
   }
 
-  .hall-filter-body {
+  .hall-filter-row {
     grid-template-columns: 1fr;
+    gap: 5px;
   }
 
   .hall-supplier-grid {
