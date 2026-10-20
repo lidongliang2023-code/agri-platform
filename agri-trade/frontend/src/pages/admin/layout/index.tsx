@@ -1,15 +1,64 @@
 import { useEffect, useState } from 'react'
-import { Button, Layout, Menu, Result, Spin, Typography } from 'antd'
+import { Button, ConfigProvider, Layout, Menu, Result, Spin } from 'antd'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { getMyPermissions, hasPermission, type MyPermission } from '@/api/permission'
 import {
   AppstoreOutlined, AuditOutlined, FileSearchOutlined, SwapOutlined, TeamOutlined, RollbackOutlined,
   SafetyCertificateOutlined, ApartmentOutlined, AccountBookOutlined, SafetyOutlined, AppstoreAddOutlined,
   IdcardOutlined, SettingOutlined, AlertOutlined, BarChartOutlined, BankOutlined, FileTextOutlined,
-  CarOutlined
+  CarOutlined, ShopOutlined
 } from '@ant-design/icons'
+import './admin-layout.css'
 
 const { Sider, Header, Content } = Layout
+
+const MENU_LABELS: Record<string, string> = {
+  '/admin/trade/dashboard': '交易大盘',
+  '/admin/trade/certification-review': '认证审核',
+  '/admin/trade/product': '货源审核',
+  '/admin/trade/refund': '退款审核',
+  '/admin/trade/order': '订单监管',
+  '/admin/trade/settlement': '结算与分账',
+  '/admin/trade/catalog': '商品与品类',
+  '/admin/trade/dispute': '纠纷仲裁',
+  '/admin/trade/credit': '信用管理',
+  '/admin/trade/compensation': '赔付执行',
+  '/admin/trade/bindings': '用户-主体绑定',
+  '/admin/trade/config': '系统配置',
+  '/admin/trade/risk': '风控管理',
+  '/admin/trade/report': '报表',
+  '/admin/trade/guarantee': '保证金管理',
+  '/admin/trade/contract-template': '合同模板',
+  '/admin/trade/carrier': '承运商管理'
+}
+
+const adminTheme = {
+  token: {
+    colorPrimary: '#12764a',
+    colorLink: '#0e5233',
+    colorSuccess: '#159a5e',
+    colorBgLayout: '#f4f7f5',
+    borderRadius: 10
+  },
+  components: {
+    Menu: {
+      darkItemBg: '#0a3a25',
+      darkSubMenuItemBg: '#06281a',
+      darkItemSelectedBg: '#12764a',
+      darkItemColor: 'rgba(255,255,255,.76)',
+      darkItemHoverBg: 'rgba(255,255,255,.08)',
+      darkItemSelectedColor: '#fff'
+    },
+    Card: {
+      borderRadiusLG: 12
+    },
+    Table: {
+      headerBg: '#f4f7f5',
+      headerColor: '#4b5d53',
+      rowHoverBg: '#f1fbf5'
+    }
+  }
+}
 
 /**
  * 运营端布局。
@@ -40,40 +89,46 @@ export default function AdminLayout() {
 
   if (loading) {
     return (
-      <div style={{ padding: 80, textAlign: 'center' }}>
-        <Spin />
-      </div>
+      <ConfigProvider theme={adminTheme}>
+        <div className="admin-loading"><Spin /></div>
+      </ConfigProvider>
     )
   }
 
   if (!hasPermission(perm ?? undefined, 'trade:read')) {
     return (
-      <Result
-        status="403"
-        title="无权访问运营端"
-        subTitle="运营端需要平台运营权限（trade:read）。当前账号没有该权限，请用运营账号登录，或联系平台运营开通。"
-        extra={
-          <Button type="primary" onClick={() => navigate('/')}>
-            返回用户端
-          </Button>
-        }
-      />
+      <ConfigProvider theme={adminTheme}>
+        <div className="admin-shell">
+          <Result
+            status="403"
+            title="无权访问运营端"
+            subTitle="运营端需要平台运营权限（trade:read）。当前账号没有该权限，请用运营账号登录，或联系平台运营开通。"
+            extra={
+              <Button type="primary" onClick={() => navigate('/')}>
+                返回用户端
+              </Button>
+            }
+          />
+        </div>
+      </ConfigProvider>
     )
   }
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
-      <Sider width={200} style={{ background: '#0f2547' }}>
-        <div style={{ padding: '20px 16px', color: '#fff' }}>
-          <Typography.Text style={{ color: '#fff', fontWeight: 600 }}>平台运营中心</Typography.Text>
-          <div style={{ color: '#7f9cc4', fontSize: 12, marginTop: 4 }}>农业产业互联网平台</div>
+    <ConfigProvider theme={adminTheme}>
+    <Layout className="admin-shell">
+      <Sider width={224} className="admin-side">
+        <div className="admin-brand">
+          <span className="admin-brand-logo"><ShopOutlined /></span>
+          <span className="admin-brand-text">农产云<small>OPS CENTER</small></span>
         </div>
+        <div className="admin-side-title">平台运营中心</div>
         <Menu
           theme="dark"
           mode="inline"
           selectedKeys={[location.pathname]}
           defaultOpenKeys={['audit-center']}
-          style={{ background: '#0f2547' }}
+          className="admin-menu"
           onClick={({ key }) => navigate(key)}
           items={[
             { key: '/admin/trade/dashboard', icon: <AppstoreOutlined />, label: '交易大盘' },
@@ -105,26 +160,27 @@ export default function AdminLayout() {
             { key: '/admin/trade/carrier', icon: <CarOutlined />, label: '承运商管理' }
           ]}
         />
+        <div className="admin-side-foot">平台运营 · 审核与交易监管</div>
       </Sider>
       <Layout>
-        <Header
-          style={{
-            background: '#fff',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            paddingInline: 24
-          }}
-        >
-          <Typography.Text strong>运营中心 · 审核与交易监管</Typography.Text>
-          <a onClick={() => navigate('/')}>
-            <SwapOutlined /> 切到用户端
-          </a>
+        <Header className="admin-header">
+          <div className="admin-crumb">
+            <span>平台运营中心</span><b>/</b><strong>{MENU_LABELS[location.pathname] ?? '运营中心'}</strong>
+          </div>
+          <div className="admin-header-right">
+            <div className="admin-role-switch">
+              <span className="on">运营中心</span>
+              <a onClick={() => navigate('/')}><SwapOutlined /> 用户端</a>
+            </div>
+            <span className="admin-avatar">运</span>
+            <span className="admin-user">平台运营</span>
+          </div>
         </Header>
-        <Content style={{ background: '#f5f7fa' }}>
+        <Content className="admin-content">
           <Outlet />
         </Content>
       </Layout>
     </Layout>
+    </ConfigProvider>
   )
 }

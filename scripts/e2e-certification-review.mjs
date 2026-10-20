@@ -139,6 +139,15 @@ try {
 
   const text = await page.evaluate(() => document.body.innerText)
   check(text.includes('认证审核工作台') && text.includes('企业与个人实名认证统一审核'), '认证审核工作台已渲染')
+  const visual = await page.evaluate(() => ({
+    side: getComputedStyle(document.querySelector('.admin-side')).backgroundImage,
+    header: getComputedStyle(document.querySelector('.admin-header')).height,
+    content: getComputedStyle(document.querySelector('.admin-content')).backgroundColor,
+    selected: getComputedStyle(document.querySelector('.ant-menu-item-selected')).backgroundImage
+  }))
+  check(visual.side.includes('gradient') && visual.header === '60px'
+    && visual.content === 'rgb(244, 247, 245)' && visual.selected.includes('gradient'),
+    '运营端视觉与买家/卖家中心一致', `${visual.header} / ${visual.content}`)
   check(text.includes('待审核') && text.includes('企业待审') && text.includes('个人待审'), '审核 KPI 已展示')
   const menuPlacement = await page.evaluate(() => {
     const submenu = [...document.querySelectorAll('.ant-menu-submenu')]

@@ -243,7 +243,7 @@ export default function CertificationReview(): JSX.Element {
         <div>
           <div className="cr-detail-no">{detail.no}</div>
           <Space style={{ marginTop: 8 }}>
-            <Tag color={detail.type === 'enterprise' ? 'blue' : 'cyan'}>
+            <Tag color={detail.type === 'enterprise' ? 'green' : 'cyan'}>
               {detail.type === 'enterprise' ? '企业认证' : '个人实名认证'}
             </Tag>
             <Tag color={STATUS_TEXT[detail.status].color}>{STATUS_TEXT[detail.status].text}</Tag>
@@ -380,7 +380,7 @@ export default function CertificationReview(): JSX.Element {
             { title: '申请编号', dataIndex: 'no', width: 170, render: (value: string) => <span className="cr-mono">{value}</span> },
             {
               title: '类型', dataIndex: 'type', width: 130,
-              render: (value: ReviewType) => <Tag color={value === 'enterprise' ? 'blue' : 'cyan'}>{value === 'enterprise' ? '企业认证' : '个人实名'}</Tag>
+              render: (value: ReviewType) => <Tag color={value === 'enterprise' ? 'green' : 'cyan'}>{value === 'enterprise' ? '企业认证' : '个人实名'}</Tag>
             },
             { title: '主体 / 姓名', dataIndex: 'name', width: 180 },
             { title: '证件 / 信用代码', dataIndex: 'idNumber', width: 190, render: (value: string) => <span className="cr-mono">{value}</span> },
