@@ -8,14 +8,14 @@ import {
   UserOutlined,
 } from '@ant-design/icons'
 import { isLoggedIn } from '@/utils/session'
+import {
+  HALL_PROVINCES,
+  HALL_TAXONOMY,
+  L1_KEYWORDS,
+  L2_KEYWORDS,
+  PROVINCE_GROUPS,
+} from './taxonomy'
 import './hall.css'
-
-interface Category {
-  id: number
-  parentId: number | null
-  categoryName: string
-  level: number
-}
 
 interface HallProduct {
   id: number
@@ -65,15 +65,6 @@ const PORTAL = `${window.location.protocol}//${window.location.hostname}:8098/po
 const SSO_REGISTER = `${window.location.protocol}//${window.location.hostname}:8090/register`
 const PAGE_SIZE = 9
 
-const PROVINCES = ['黑龙江省', '山东省', '陕西省', '内蒙古自治区', '江苏省', '云南省', '湖北省', '江西省', '吉林省', '河南省', '广东省']
-const PRICE_RANGES = [
-  { key: 'all', label: '不限', min: undefined, max: undefined },
-  { key: 'low', label: '≤ 100', min: undefined, max: 100 },
-  { key: 'mid', label: '100 - 300', min: 100, max: 300 },
-  { key: 'high', label: '300 - 1000', min: 300, max: 1000 },
-  { key: 'vip', label: '≥ 1000', min: 1000, max: undefined },
-]
-
 const money = (value: number | null | undefined): string =>
   value == null ? '询价' : `¥${Number(value).toLocaleString('zh-CN', { maximumFractionDigits: 2 })}`
 
@@ -81,7 +72,6 @@ const shortDate = (value: string): string => value?.slice(0, 10) ?? '—'
 
 export default function TradeHall(): JSX.Element {
   const [tab, setTab] = useState<'supply' | 'purchase'>('supply')
-  const [categories, setCategories] = useState<Category[]>([])
   const [products, setProducts] = useState<HallProduct[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -89,22 +79,16 @@ export default function TradeHall(): JSX.Element {
   const [error, setError] = useState('')
   const [keyword, setKeyword] = useState('')
   const [searchInput, setSearchInput] = useState('')
-  const [l1, setL1] = useState<number | null>(null)
-  const [l2, setL2] = useState<number | null>(null)
+  const [l1, setL1] = useState('')
+  const [l2, setL2] = useState('')
+  const [l3, setL3] = useState('')
   const [province, setProvince] = useState('')
-  const [priceKey, setPriceKey] = useState('all')
-  const [sort, setSort] = useState('latest')
+  const [sort, setSort] = useState('default')
   const [demands, setDemands] = useState<PublicDemand[]>([])
   const [recommendations, setRecommendations] = useState<HallProduct[]>([])
   const [demandLoading, setDemandLoading] = useState(false)
 
   useEffect(() => {
-    fetch('/api/trade/public/categories')
-      .then((response) => response.json())
-      .then((body: { code?: number; data?: Category[] }) => {
-        if (body.code === 200) setCategories(Array.isArray(body.data) ? body.data : [])
-      })
-      .catch(() => { /* 分类加载失败时仍可按关键词搜索 */ })
     fetch('/api/trade/public/products?limit=24')
       .then((response) => response.json())
       .then((body: { code?: number; data?: HallProduct[] }) => {
@@ -121,27 +105,28 @@ export default function TradeHall(): JSX.Element {
       .finally(() => setDemandLoading(false))
   }, [])
 
-  const level1 = categories.filter((item) => item.level === 1)
-  const level2 = l1 == null ? [] : categories.filter((item) => item.level === 2 && Number(item.parentId) === l1)
+  const level1 = Object.keys(HALL_TAXONOMY)
+  const level2 = l1 ? Object.keys(HALL_TAXONOMY[l1] ?? {}) : []
+  const level3 = l1 && l2 ? HALL_TAXONOMY[l1]?.[l2] ?? [] : []
 
   useEffect(() => {
     let cancelled = false
     setLoading(true)
     setError('')
-    const params = new URLSearchParams({ pageNum: String(page), pageSize: String(PAGE_SIZE), sort })
+    const params = new URLSearchParams({
+      pageNum: String(page),
+      pageSize: String(PAGE_SIZE),
+      sort: sort === 'default' ? 'latest' : sort,
+    })
     if (keyword.trim()) params.set('keyword', keyword.trim())
-    if (l2 != null) {
-      params.append('categoryIds', String(l2))
-    } else if (l1 != null) {
-      const childIds = categories.filter((item) => item.level === 2 && Number(item.parentId) === l1).map((item) => item.id)
-      childIds.forEach((id) => params.append('categoryIds', String(id)))
-      const current = categories.find((item) => item.id === l1)
-      if (current) params.set('categoryName', current.categoryName)
+    if (l3) {
+      params.set('varietyKeyword', l3)
+    } else if (l2) {
+      for (const value of L2_KEYWORDS[l2] ?? []) params.append('categoryKeywords', value)
+    } else if (l1) {
+      for (const value of L1_KEYWORDS[l1] ?? []) params.append('categoryKeywords', value)
     }
     if (province) params.set('province', province)
-    const range = PRICE_RANGES.find((item) => item.key === priceKey)
-    if (range?.min != null) params.set('minPrice', String(range.min))
-    if (range?.max != null) params.set('maxPrice', String(range.max))
     fetch(`/api/trade/public/hall/products?${params.toString()}`)
       .then((response) => response.json())
       .then((body: { code?: number; data?: PublicPage; message?: string }) => {
@@ -164,7 +149,7 @@ export default function TradeHall(): JSX.Element {
       })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [page, keyword, l1, l2, province, priceKey, sort, categories])
+  }, [page, keyword, l1, l2, l3, province, sort])
 
   const suppliers = useMemo(() => {
     const map = new Map<string, { name: string; count: number }>()
@@ -184,11 +169,11 @@ export default function TradeHall(): JSX.Element {
   }
 
   const resetFilters = (): void => {
-    setL1(null)
-    setL2(null)
+    setL1('')
+    setL2('')
+    setL3('')
     setProvince('')
-    setPriceKey('all')
-    setSort('latest')
+    setSort('default')
     setKeyword('')
     setSearchInput('')
     setPage(1)
@@ -269,51 +254,71 @@ export default function TradeHall(): JSX.Element {
                 <div className="hall-filter-body">
                   <label>一级产业</label>
                   <div className="hall-chips">
-                    <button type="button" className={l1 == null ? 'on' : ''} onClick={() => { setL1(null); setL2(null); setPage(1) }}>全部</button>
+                    <button type="button" className={l1 === '' ? 'on' : ''} onClick={() => { setL1(''); setL2(''); setL3(''); setPage(1) }}>全部产业</button>
                     {level1.map((item) => (
-                      <button type="button" key={item.id} className={l1 === item.id ? 'on' : ''}
-                        onClick={() => { setL1(item.id); setL2(null); setPage(1) }}>{item.categoryName}</button>
+                      <button type="button" key={item} className={l1 === item ? 'on' : ''}
+                        onClick={() => { setL1(item); setL2(''); setL3(''); setPage(1) }}>{item}</button>
                     ))}
                   </div>
                   <label>二级品类</label>
                   <div className="hall-chips">
                     {!level2.length && <span className="hall-hint">请选择一级产业</span>}
                     {level2.map((item) => (
-                      <button type="button" key={item.id} className={l2 === item.id ? 'on' : ''}
-                        onClick={() => { setL2(item.id); setPage(1) }}>{item.categoryName}</button>
+                      <button type="button" key={item} className={l2 === item ? 'on' : ''}
+                        onClick={() => { setL2(item); setL3(''); setPage(1) }}>{item}</button>
+                    ))}
+                  </div>
+                  <label>三级品种</label>
+                  <div className="hall-chips">
+                    {!level3.length && <span className="hall-hint">请选择二级品类</span>}
+                    {level3.map((item) => (
+                      <button type="button" key={item} className={l3 === item ? 'on' : ''}
+                        onClick={() => { setL3(item); setPage(1) }}>{item}</button>
                     ))}
                   </div>
                   <label>产地</label>
-                  <div className="hall-chips">
-                    <button type="button" className={province === '' ? 'on' : ''} onClick={() => { setProvince(''); setPage(1) }}>全部</button>
-                    {PROVINCES.map((item) => (
-                      <button type="button" key={item} className={province === item ? 'on' : ''}
-                        onClick={() => { setProvince(item); setPage(1) }}>{item.replace(/省|自治区/g, '')}</button>
-                    ))}
+                  <div className="hall-province-groups">
+                    <div className="hall-chips">
+                      <button type="button" className={province === '' ? 'on' : ''} onClick={() => { setProvince(''); setPage(1) }}>全部省份</button>
+                    </div>
+                    {PROVINCE_GROUPS.map((group) => {
+                      const items = HALL_PROVINCES.filter((item) => item.group === group)
+                      if (!items.length) return null
+                      return (
+                        <div className="hall-province-group" key={group}>
+                          <span>{group}</span>
+                          <div className="hall-chips">
+                            {items.map((item) => (
+                              <button type="button" key={item.name} className={province === item.name ? 'on' : ''}
+                                onClick={() => { setProvince(item.name); setPage(1) }}>{item.name}</button>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
-                  <label>价格区间（元）</label>
-                  <div className="hall-chips">
-                    {PRICE_RANGES.map((item) => (
-                      <button type="button" key={item.key} className={priceKey === item.key ? 'on' : ''}
-                        onClick={() => { setPriceKey(item.key); setPage(1) }}>{item.label}</button>
-                    ))}
-                  </div>
-                  <label>排序</label>
-                  <select className="hall-select" value={sort} onChange={(event) => { setSort(event.target.value); setPage(1) }}>
-                    <option value="latest">最新发布</option>
-                    <option value="priceAsc">价格从低到高</option>
-                    <option value="priceDesc">价格从高到低</option>
-                    <option value="sales">成交最多</option>
-                  </select>
                   <button type="button" className="hall-reset" onClick={resetFilters}>清空筛选</button>
                 </div>
               </aside>
 
               <section className="hall-list">
+                <div className="hall-trail">
+                  <button type="button" onClick={resetFilters}>全部产业链</button>
+                  {l1 && <><span>/</span><strong>{l1}</strong></>}
+                  {l2 && <><span>/</span><strong>{l2}</strong></>}
+                  {l3 && <><span>/</span><strong>{l3}</strong></>}
+                  {province && <><span>·</span><strong>产地：{province}</strong></>}
+                  <span>·</span><span>匹配 <b>{total}</b> 个货源</span>
+                </div>
                 <div className="hall-toolbar">
                   <span>共 <b>{total}</b> 个在售商品{total > 0 ? `（第 ${page} / ${pages} 页）` : ''}</span>
                   <div className="hall-chips">
-                    {[{ key: 'latest', label: '最新发布' }, { key: 'priceAsc', label: '价格从低到高' }, { key: 'priceDesc', label: '价格从高到低' }, { key: 'sales', label: '成交最多' }].map((item) => (
+                    {[
+                      { key: 'default', label: '综合' },
+                      { key: 'latest', label: '最新发布' },
+                      { key: 'priceAsc', label: '价格从低到高' },
+                      { key: 'priceDesc', label: '价格从高到低' },
+                    ].map((item) => (
                       <button type="button" key={item.key} className={sort === item.key ? 'on' : ''}
                         onClick={() => { setSort(item.key); setPage(1) }}>{item.label}</button>
                     ))}

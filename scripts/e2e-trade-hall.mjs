@@ -68,7 +68,12 @@ try {
   const navLabels = await page.$$eval('.hall-nav a', (items) => items.map((item) => (item.textContent ?? '').trim()))
   check(JSON.stringify(navLabels) === JSON.stringify(['首页', '产业链', '交易大厅', '价格指数', '产业资讯', '供应链金融']),
     '交易大厅顶部导航与门户保持一致', navLabels.join(' / '))
+  const underlines = await page.$$eval('.hall-nav a', (items) => items.map((item) => getComputedStyle(item).textDecorationLine))
+  check(underlines.every((value) => value === 'none'), '交易大厅导航项没有下划线', underlines.join(' / '))
   check((await productNames(page)).length === 5, '供应大厅显示 5 条真实在售商品')
+  const filterText = await page.evaluate(() => document.querySelector('.hall-filter-card')?.innerText ?? '')
+  check(filterText.includes('一级产业') && filterText.includes('二级品类') && filterText.includes('三级品种')
+    && filterText.includes('产地') && !filterText.includes('价格区间'), '筛选结构与产业链页面一致')
 
   // 搜索
   await fill(page, '.hall-search input', '苹果')
@@ -79,9 +84,9 @@ try {
   // 分类筛选
   await clickText(page, '清空筛选', '.hall-filter-body button')
   await waitProducts(page, 5)
-  await clickText(page, '粮食', '.hall-filter-body .hall-chips button')
+  await clickText(page, '粮油产业', '.hall-filter-body .hall-chips button')
   names = await waitProducts(page, 1)
-  check(names.length === 1 && names[0].includes('五常大米'), '一级产业「粮食」筛选出五常大米', names.join('、'))
+  check(names.length === 1 && names[0].includes('五常大米'), '一级产业「粮油产业」筛选出五常大米', names.join('、'))
 
   // 产地筛选
   await clickText(page, '清空筛选', '.hall-filter-body button')

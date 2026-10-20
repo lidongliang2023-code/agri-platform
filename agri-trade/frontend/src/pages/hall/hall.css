@@ -22,6 +22,12 @@
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
 }
 
+.hall-root a,
+.hall-root a:visited,
+.hall-root a:hover {
+  text-decoration: none;
+}
+
 .hall-container {
   width: 100%;
   max-width: 1280px;
@@ -303,6 +309,61 @@
   color: var(--h-ink-600);
   font-size: 12.5px;
   font-weight: 600;
+}
+
+.hall-province-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.hall-province-group {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.hall-province-group > span {
+  flex: none;
+  width: 30px;
+  padding-top: 4px;
+  color: var(--h-ink-400);
+  font-size: 10.5px;
+}
+
+.hall-province-group .hall-chips {
+  flex: 1;
+}
+
+.hall-trail {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+  padding: 9px 12px;
+  border-radius: 9px;
+  background: var(--h-green-050);
+  color: var(--h-ink-500);
+  font-size: 12px;
+}
+
+.hall-trail button {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--h-green-700);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.hall-trail strong {
+  color: var(--h-ink-700);
+}
+
+.hall-trail b {
+  color: var(--h-green-700);
 }
 
 .hall-chips {

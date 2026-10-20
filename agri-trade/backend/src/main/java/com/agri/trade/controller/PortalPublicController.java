@@ -62,6 +62,8 @@ public class PortalPublicController {
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) List<Long> categoryIds,
             @RequestParam(required = false) String categoryName,
+            @RequestParam(required = false) List<String> categoryKeywords,
+            @RequestParam(required = false) String varietyKeyword,
             @RequestParam(required = false) String province,
             @RequestParam(required = false) BigDecimal minPrice,
             @RequestParam(required = false) BigDecimal maxPrice,
@@ -91,8 +93,37 @@ public class PortalPublicController {
                 }
             });
         }
+        if (categoryKeywords != null && !categoryKeywords.isEmpty()) {
+            List<String> values = categoryKeywords.stream()
+                    .filter(item -> item != null && !item.isBlank())
+                    .map(String::trim)
+                    .distinct()
+                    .collect(Collectors.toList());
+            if (!values.isEmpty()) {
+                wrapper.and(w -> {
+                    for (int i = 0; i < values.size(); i++) {
+                        String value = values.get(i);
+                        if (i == 0) {
+                            w.and(x -> x.like(TradeProduct::getCategoryName, value)
+                                    .or().like(TradeProduct::getProductName, value)
+                                    .or().like(TradeProduct::getVariety, value));
+                        } else {
+                            w.or(x -> x.like(TradeProduct::getCategoryName, value)
+                                    .or().like(TradeProduct::getProductName, value)
+                                    .or().like(TradeProduct::getVariety, value));
+                        }
+                    }
+                });
+            }
+        }
+        if (varietyKeyword != null && !varietyKeyword.isBlank()) {
+            String value = varietyKeyword.trim();
+            wrapper.and(w -> w.like(TradeProduct::getProductName, value)
+                    .or().like(TradeProduct::getVariety, value)
+                    .or().like(TradeProduct::getCategoryName, value));
+        }
         if (province != null && !province.isBlank()) {
-            wrapper.eq(TradeProduct::getOriginProvince, province.trim());
+            wrapper.like(TradeProduct::getOriginProvince, province.trim());
         }
         if (minPrice != null) wrapper.ge(TradeProduct::getPrice, minPrice);
         if (maxPrice != null) wrapper.le(TradeProduct::getPrice, maxPrice);
