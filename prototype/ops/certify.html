@@ -10,7 +10,7 @@
   .drawer-mask { position: fixed; inset: 0; background: rgba(11,26,18,.45); opacity: 0; visibility: hidden; transition: .28s; z-index: 90; }
   .drawer-mask.open { opacity: 1; visibility: visible; }
   .drawer {
-    position: fixed; right: 0; top: 0; height: 100vh; width: 520px; max-width: 94vw;
+    position: fixed; right: 0; top: 0; height: 100vh; width: 540px; max-width: 94vw;
     background: var(--surface); box-shadow: var(--shadow-lg);
     transform: translateX(100%); transition: transform .28s; z-index: 100;
     display: flex; flex-direction: column;
@@ -23,7 +23,7 @@
   .drawer-sec { margin-bottom: 22px; }
   .drawer-sec-t { font-size: 13px; font-weight: 700; color: var(--ink-800); display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
   .drawer-sec-t::before { content: ""; width: 3px; height: 14px; border-radius: 2px; background: linear-gradient(var(--green-500), var(--tech-500)); }
-  .kv { display: grid; grid-template-columns: 100px 1fr; gap: 9px 12px; font-size: 13px; }
+  .kv { display: grid; grid-template-columns: 120px 1fr; gap: 9px 12px; font-size: 13px; }
   .kv-k { color: var(--ink-500); }
   .kv-v { color: var(--ink-800); word-break: break-all; }
   .check-item { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px dashed var(--line); font-size: 13px; }
@@ -34,9 +34,22 @@
   .thumb {
     border: 1px dashed var(--line-strong); border-radius: var(--r-sm); height: 62px;
     display: flex; align-items: center; gap: 8px; padding: 0 12px;
-    background: var(--bg-alt); color: var(--ink-500); font-size: 12px;
+    background: var(--bg-alt); color: var(--ink-500); font-size: 12px; transition: .16s; cursor: pointer;
   }
+  .thumb:hover { border-color: var(--green-400); color: var(--green-700); background: var(--green-050); }
   .drawer-f { padding: 14px 20px; border-top: 1px solid var(--line); display: flex; gap: 10px; background: var(--surface); }
+  /* 审核历史时间轴 */
+  .tl { position: relative; padding-left: 24px; }
+  .tl::before { content: ""; position: absolute; left: 6px; top: 6px; bottom: 10px; width: 2px; background: var(--line); }
+  .tl-i { position: relative; padding-bottom: 16px; }
+  .tl-i:last-child { padding-bottom: 0; }
+  .tl-i .d { position: absolute; left: -24px; top: 3px; width: 14px; height: 14px; border-radius: 50%; background: #fff; border: 2px solid var(--line-strong); }
+  .tl-i.done .d { background: var(--green-500); border-color: var(--green-500); }
+  .tl-i.cur .d { background: #fff; border-color: var(--tech-500); box-shadow: 0 0 0 4px rgba(14,165,233,.16); }
+  .tl-i.bad .d { background: var(--red); border-color: var(--red); }
+  .tl-i .t { font-weight: 700; font-size: 13px; }
+  .tl-i .m { font-size: 11.5px; color: var(--ink-500); margin-top: 2px; }
+  .sel-note { font-size: 12px; color: var(--ink-500); margin-right: 4px; }
   /* Toast */
   #toast {
     position: fixed; left: 50%; bottom: 44px; transform: translate(-50%, 18px);
@@ -46,6 +59,8 @@
     z-index: 200; display: flex; align-items: center; gap: 8px; max-width: 90vw;
   }
   #toast.show { opacity: 1; visibility: visible; transform: translate(-50%, 0); }
+  #toast.err { background: linear-gradient(135deg, #B91C1C, #DC2626); }
+  .empty-row td { text-align: center; color: var(--ink-400); padding: 34px 0; font-size: 13px; }
 </style>
 </head>
 <body>
@@ -113,27 +128,27 @@
       <div class="grid grid-5">
         <div class="stat">
           <div class="k"><span data-icon="clipboard" style="color:var(--green-600)"></span>待初审</div>
-          <div class="v"><span class="js-count" data-to="76" data-dec="0" id="kpiPending">76</span><span class="unit">笔</span></div>
+          <div class="v"><span id="kpiFirst" class="mono">0</span><span class="unit">笔</span></div>
           <div class="d">较昨日 <span class="up">+12</span> 笔</div>
         </div>
         <div class="stat tech">
           <div class="k"><span data-icon="layers" style="color:var(--tech-600)"></span>待复审</div>
-          <div class="v"><span class="js-count" data-to="18" data-dec="0">18</span><span class="unit">笔</span></div>
+          <div class="v"><span id="kpiSecond" class="mono">0</span><span class="unit">笔</span></div>
           <div class="d">其中 <span class="down">3 笔</span>超 24h 未处理</div>
         </div>
         <div class="stat">
           <div class="k"><span data-icon="check" style="color:var(--green-600)"></span>今日通过</div>
-          <div class="v"><span class="js-count" data-to="42" data-dec="0">42</span><span class="unit">笔</span></div>
+          <div class="v"><span id="kpiPass" class="mono">42</span><span class="unit">笔</span></div>
           <div class="d">较昨日 <span class="up">+8</span> 笔</div>
         </div>
         <div class="stat">
-          <div class="k"><span data-icon="close" style="color:var(--green-600)"></span>今日驳回</div>
-          <div class="v"><span class="js-count" data-to="6" data-dec="0">6</span><span class="unit">笔</span></div>
+          <div class="k"><span data-icon="close" style="color:var(--red)"></span>今日驳回</div>
+          <div class="v"><span id="kpiReject" class="mono">6</span><span class="unit">笔</span></div>
           <div class="d">较昨日 <span class="down">+2</span> 笔</div>
         </div>
         <div class="stat tech">
           <div class="k"><span data-icon="thermo" style="color:var(--tech-600)"></span>平均审核时长</div>
-          <div class="v"><span class="js-count" data-to="4.2" data-dec="1">4.2</span><span class="unit">小时</span></div>
+          <div class="v"><span class="mono">4.2</span><span class="unit">小时</span></div>
           <div class="d">较上周 <span class="up">-0.6h</span></div>
         </div>
       </div>
@@ -142,28 +157,35 @@
       <div class="card mt-20">
         <div class="card-h">
           <h3><span data-icon="clipboard" data-size="18"></span>待审核申请列表</h3>
-          <span class="more">共 <span class="mono">1,286</span> 笔申请 · 当前筛选 10 条</span>
+          <span class="more">共 <span class="mono">1,286</span> 笔申请 · 当前筛选 <span class="mono" id="shownCount">0</span> 条</span>
         </div>
         <div class="card-b">
-          <div class="toolbar">
-            <div class="chips">
-              <span class="chip on">全部</span><span class="chip">企业认证</span>
-              <span class="chip">个人实名认证</span><span class="chip">资质变更</span>
+          <div class="toolbar wrap">
+            <div class="chips" id="typeChips">
+              <span class="chip on" data-type="all">全部类型</span>
+              <span class="chip" data-type="enterprise">企业认证</span>
+              <span class="chip" data-type="personal">个人实名认证</span>
+              <span class="chip" data-type="change">资质变更</span>
             </div>
             <span class="muted" style="color:var(--line-strong)">|</span>
-            <div class="chips">
-              <span class="chip">待初审</span><span class="chip">待复审</span>
-              <span class="chip">已通过</span><span class="chip">已驳回</span>
+            <div class="chips" id="statusChips">
+              <span class="chip on" data-status="all">全部状态</span>
+              <span class="chip" data-status="first">待初审</span>
+              <span class="chip" data-status="second">待复审</span>
+              <span class="chip" data-status="passed">已通过</span>
+              <span class="chip" data-status="rejected">已驳回</span>
             </div>
             <div class="spacer"></div>
+            <span class="sel-note">已选 <span class="mono strong" id="selCount">0</span> 项</span>
             <button class="btn btn-outline btn-sm" id="batchPass"><span data-icon="check"></span>批量通过</button>
-            <input class="input" style="width:230px" placeholder="搜索主体名称 / 申请编号" />
+            <button class="btn btn-outline btn-sm" id="batchReject" style="border-color:var(--red);color:var(--red)"><span data-icon="close"></span>批量驳回</button>
+            <input class="input" id="kw" style="width:220px" placeholder="搜索主体名称 / 申请编号" />
           </div>
 
           <table class="data-table mt-16">
             <thead>
               <tr>
-                <th style="width:36px"><input type="checkbox" /></th>
+                <th style="width:36px"><input type="checkbox" id="checkAll" /></th>
                 <th>申请编号</th>
                 <th>申请主体</th>
                 <th>类型</th>
@@ -175,128 +197,7 @@
                 <th>操作</th>
               </tr>
             </thead>
-            <tbody>
-              <tr>
-                <td><input type="checkbox" /></td>
-                <td class="mono">RV202610190031</td>
-                <td>黑龙江五常金穗粮油有限公司</td>
-                <td><span class="tag">企业认证</span></td>
-                <td>优选</td>
-                <td class="mono t-xs">2026-10-19 09:12</td>
-                <td><div class="row center gap-8"><div class="progress" style="width:64px"><i style="width:98%"></i></div><span class="mono t-xs">98%</span></div></td>
-                <td><span class="tag">无</span></td>
-                <td><span class="tag tag-amber">待初审</span></td>
-                <td><button class="btn btn-sm btn-outline" data-review="RV202610190031">审核</button></td>
-              </tr>
-              <tr>
-                <td><input type="checkbox" /></td>
-                <td class="mono">RV202610190032</td>
-                <td>赣南脐橙种植专业合作社</td>
-                <td><span class="tag">企业认证</span></td>
-                <td>标准</td>
-                <td class="mono t-xs">2026-10-19 09:38</td>
-                <td><div class="row center gap-8"><div class="progress" style="width:64px"><i style="width:92%"></i></div><span class="mono t-xs">92%</span></div></td>
-                <td><span class="tag tag-amber">经营范围待核实</span></td>
-                <td><span class="tag tag-amber">待初审</span></td>
-                <td><button class="btn btn-sm btn-outline" data-review="RV202610190032">审核</button></td>
-              </tr>
-              <tr>
-                <td><input type="checkbox" /></td>
-                <td class="mono">RV202610190033</td>
-                <td>山东寿光蔬菜产业集团</td>
-                <td><span class="tag">企业认证</span></td>
-                <td>优选</td>
-                <td class="mono t-xs">2026-10-19 08:05</td>
-                <td><div class="row center gap-8"><div class="progress" style="width:64px"><i style="width:100%"></i></div><span class="mono t-xs">100%</span></div></td>
-                <td><span class="tag">无</span></td>
-                <td><span class="tag tag-tech">待复审</span></td>
-                <td><button class="btn btn-sm btn-outline" data-review="RV202610190033">审核</button></td>
-              </tr>
-              <tr>
-                <td><input type="checkbox" /></td>
-                <td class="mono">RV202610190034</td>
-                <td>湖北荆楚粮油贸易有限公司</td>
-                <td><span class="tag">企业认证</span></td>
-                <td>标准</td>
-                <td class="mono t-xs">2026-10-19 08:47</td>
-                <td><div class="row center gap-8"><div class="progress" style="width:64px"><i style="width:86%"></i></div><span class="mono t-xs">86%</span></div></td>
-                <td><span class="tag tag-red">信用异常</span></td>
-                <td><span class="tag tag-amber">待初审</span></td>
-                <td><button class="btn btn-sm btn-outline" data-review="RV202610190034">审核</button></td>
-              </tr>
-              <tr>
-                <td><input type="checkbox" /></td>
-                <td class="mono">RV202610190035</td>
-                <td>内蒙古乌兰察布马铃薯种业</td>
-                <td><span class="tag">企业认证</span></td>
-                <td>标准</td>
-                <td class="mono t-xs">2026-10-18 17:26</td>
-                <td><div class="row center gap-8"><div class="progress" style="width:64px"><i style="width:95%"></i></div><span class="mono t-xs">95%</span></div></td>
-                <td><span class="tag">无</span></td>
-                <td><span class="tag tag-amber">待初审</span></td>
-                <td><button class="btn btn-sm btn-outline" data-review="RV202610190035">审核</button></td>
-              </tr>
-              <tr>
-                <td><input type="checkbox" /></td>
-                <td class="mono">RV202610190036</td>
-                <td>云南普洱茶叶合作社</td>
-                <td><span class="tag">企业认证</span></td>
-                <td>优选</td>
-                <td class="mono t-xs">2026-10-18 16:03</td>
-                <td><div class="row center gap-8"><div class="progress" style="width:64px"><i style="width:100%"></i></div><span class="mono t-xs">100%</span></div></td>
-                <td><span class="tag">无</span></td>
-                <td><span class="tag tag-tech">待复审</span></td>
-                <td><button class="btn btn-sm btn-outline" data-review="RV202610190036">审核</button></td>
-              </tr>
-              <tr>
-                <td><input type="checkbox" /></td>
-                <td class="mono">RV202610190037</td>
-                <td>河南豫丰农业发展有限公司</td>
-                <td><span class="tag">企业认证</span></td>
-                <td>标准</td>
-                <td class="mono t-xs">2026-10-18 14:52</td>
-                <td><div class="row center gap-8"><div class="progress" style="width:64px"><i style="width:90%"></i></div><span class="mono t-xs">90%</span></div></td>
-                <td><span class="tag tag-amber">经营范围待核实</span></td>
-                <td><span class="tag tag-amber">待初审</span></td>
-                <td><button class="btn btn-sm btn-outline" data-review="RV202610190037">审核</button></td>
-              </tr>
-              <tr>
-                <td><input type="checkbox" /></td>
-                <td class="mono">RV202610190038</td>
-                <td>江苏苏州阳澄湖水产养殖合作社</td>
-                <td><span class="tag">企业认证</span></td>
-                <td>基础</td>
-                <td class="mono t-xs">2026-10-18 11:19</td>
-                <td><div class="row center gap-8"><div class="progress" style="width:64px"><i style="width:74%"></i></div><span class="mono t-xs">74%</span></div></td>
-                <td><span class="tag">无</span></td>
-                <td><span class="tag">已通过</span></td>
-                <td><button class="btn btn-sm btn-outline" data-review="RV202610190038">审核</button></td>
-              </tr>
-              <tr>
-                <td><input type="checkbox" /></td>
-                <td class="mono">RV202610190039</td>
-                <td>王振海</td>
-                <td><span class="tag tag-tech">个人实名认证</span></td>
-                <td>基础</td>
-                <td class="mono t-xs">2026-10-19 10:21</td>
-                <td><div class="row center gap-8"><div class="progress" style="width:64px"><i style="width:88%"></i></div><span class="mono t-xs">88%</span></div></td>
-                <td><span class="tag">无</span></td>
-                <td><span class="tag tag-amber">待初审</span></td>
-                <td><button class="btn btn-sm btn-outline" data-review="RV202610190039">审核</button></td>
-              </tr>
-              <tr>
-                <td><input type="checkbox" /></td>
-                <td class="mono">RV202610190040</td>
-                <td>陈桂芳</td>
-                <td><span class="tag tag-tech">个人实名认证</span></td>
-                <td>基础</td>
-                <td class="mono t-xs">2026-10-18 20:47</td>
-                <td><div class="row center gap-8"><div class="progress" style="width:64px"><i style="width:68%"></i></div><span class="mono t-xs">68%</span></div></td>
-                <td><span class="tag tag-red">信用异常</span></td>
-                <td><span class="tag tag-red">已驳回</span></td>
-                <td><button class="btn btn-sm btn-outline" data-review="RV202610190040">审核</button></td>
-              </tr>
-            </tbody>
+            <tbody id="tbody"></tbody>
           </table>
 
           <div class="pager">
@@ -325,168 +226,440 @@
     <button class="drawer-x" id="drawerClose" aria-label="关闭"><span data-icon="close"></span></button>
   </div>
 
-  <div class="drawer-b">
+  <div class="drawer-b" id="drawerBody"></div>
 
-    <!-- 主体信息 -->
-    <div class="drawer-sec">
-      <div class="drawer-sec-t">主体信息</div>
-      <div class="kv">
-        <div class="kv-k">企业名称</div><div class="kv-v" id="dcName">黑龙江五常金穗粮油有限公司</div>
-        <div class="kv-k">统一社会信用代码</div><div class="kv-v mono">91230184MA1B6R8C3W</div>
-        <div class="kv-k">法定代表人</div><div class="kv-v">李金穗</div>
-        <div class="kv-k">所属行业</div><div class="kv-v">粮油种植与贸易</div>
-        <div class="kv-k">注册资本</div><div class="kv-v mono">人民币 1,200 万元</div>
-        <div class="kv-k">注册地址</div><div class="kv-v">黑龙江省哈尔滨市五常市水稻大道 88 号</div>
-        <div class="kv-k">联系人及电话</div><div class="kv-v mono">李金穗 · 138****6210</div>
-        <div class="kv-k">认证等级</div><div class="kv-v">标准认证</div>
-      </div>
-    </div>
-
-    <!-- 系统自动校验 -->
-    <div class="drawer-sec">
-      <div class="drawer-sec-t">系统自动校验</div>
-      <div class="col">
-        <div class="check-item">
-          <span class="check-ic"><span data-icon="shield" data-size="15"></span></span>
-          <span class="flex-1">工商三要素校验</span>
-          <span class="tag">通过</span>
-        </div>
-        <div class="check-item">
-          <span class="check-ic"><span data-icon="user" data-size="15"></span></span>
-          <span class="flex-1">法人人脸核验</span>
-          <span class="tag">通过</span>
-        </div>
-        <div class="check-item">
-          <span class="check-ic"><span data-icon="money" data-size="15"></span></span>
-          <span class="flex-1">对公账户打款验证</span>
-          <span class="tag">通过 · ¥0.37</span>
-        </div>
-        <div class="check-item">
-          <span class="check-ic"><span data-icon="alert" data-size="15"></span></span>
-          <span class="flex-1">黑名单与失信比对</span>
-          <span class="tag">通过</span>
-        </div>
-        <div class="check-item">
-          <span class="check-ic amber"><span data-icon="target" data-size="15"></span></span>
-          <span class="flex-1">经营范围与主营品类匹配</span>
-          <span class="tag tag-amber">待人工核实</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- 上传资质 -->
-    <div class="drawer-sec">
-      <div class="drawer-sec-t">上传资质</div>
-      <div class="thumb-grid">
-        <div class="thumb"><span data-icon="file" data-size="18"></span>营业执照</div>
-        <div class="thumb"><span data-icon="user" data-size="18"></span>法定代表人身份证</div>
-        <div class="thumb"><span data-icon="clipboard" data-size="18"></span>开户许可证</div>
-        <div class="thumb"><span data-icon="award" data-size="18"></span>食品经营许可证</div>
-      </div>
-    </div>
-
-    <!-- 审核意见 -->
-    <div class="drawer-sec">
-      <div class="drawer-sec-t">审核意见</div>
-      <textarea class="textarea" placeholder="请填写审核意见..."></textarea>
-      <div class="form-item mt-12 mb-8">
-        <label>驳回原因</label>
-        <select class="select">
-          <option>材料不清晰</option>
-          <option>证件已过期</option>
-          <option>主体信息不一致</option>
-          <option>超经营范围</option>
-          <option>其他</option>
-        </select>
-      </div>
-    </div>
-
-  </div>
-
-  <div class="drawer-f">
-    <button class="btn btn-primary btn-block" id="btnPass">通过认证</button>
-    <button class="btn btn-outline btn-block" id="btnReject" style="border-color:var(--red);color:var(--red)">驳回申请</button>
-  </div>
+  <div class="drawer-f" id="drawerFoot"></div>
 </aside>
 
 <!-- Toast -->
-<div id="toast"><span data-icon="check" data-size="16"></span><span id="toastMsg">认证已通过</span></div>
+<div id="toast"><span data-icon="check" data-size="16" id="toastIc"></span><span id="toastMsg">认证已通过</span></div>
 
 <script src="../assets/js/app.js"></script>
 <script>
 (function () {
   "use strict";
-  var mask = document.getElementById("drawerMask");
-  var drawer = document.getElementById("drawer");
-  var toast = document.getElementById("toast");
-  var toastMsg = document.getElementById("toastMsg");
-  var curRow = null;
-  var timer = null;
+  var $ = function (s) { return document.querySelector(s); };
 
-  function openDrawer() { mask.classList.add("open"); drawer.classList.add("open"); drawer.setAttribute("aria-hidden", "false"); }
-  function closeDrawer() { mask.classList.remove("open"); drawer.classList.remove("open"); drawer.setAttribute("aria-hidden", "true"); curRow = null; }
+  /* ================= 数据模型 ================= */
+  var TYPES = {
+    enterprise: { label: "企业认证", cls: "tag" },
+    personal:   { label: "个人实名认证", cls: "tag tag-tech" },
+    change:     { label: "资质变更", cls: "tag tag-amber" }
+  };
+  var STATUS = {
+    first:    { label: "待初审", cls: "tag tag-amber" },
+    second:   { label: "待复审", cls: "tag tag-tech" },
+    passed:   { label: "已通过", cls: "tag" },
+    rejected: { label: "已驳回", cls: "tag tag-red" }
+  };
 
-  function showToast(msg) {
-    toastMsg.textContent = msg;
-    toast.classList.add("show");
-    clearTimeout(timer);
-    timer = setTimeout(function () { toast.classList.remove("show"); }, 2200);
+  /* 每行：kvs=[键,值,是否等宽]；checks=[图标,文案,状态 ok|pending|fail]；mats=[材料名,图标] */
+  var ENT_DETAIL = function (o) {
+    return {
+      kvs: [
+        ["企业名称", o.name, false],
+        ["统一社会信用代码", o.code, true],
+        ["法定代表人", o.legal, false],
+        ["所属行业", o.industry, false],
+        ["注册资本", o.capital, true],
+        ["注册地址", o.addr, false],
+        ["联系人及电话", o.contact + " · " + o.phone, true],
+        ["对公账户", o.bank, true],
+        ["认证等级", o.level + "认证", false]
+      ],
+      checks: [
+        ["shield", "工商三要素校验", "ok"],
+        ["user", "法人人脸核验", "ok"],
+        ["money", "对公账户打款验证", "ok"],
+        ["alert", "黑名单与失信比对", o.creditRisk ? "fail" : "ok"],
+        ["target", "经营范围与主营品类匹配", o.scopeRisk ? "pending" : "ok"]
+      ],
+      mats: [["营业执照", "file"], ["法定代表人身份证", "user"], ["开户许可证", "money"], ["食品经营许可证", "award"]]
+    };
+  };
+  var PER_DETAIL = function (o) {
+    return {
+      kvs: [
+        ["真实姓名", o.name, false],
+        ["身份证号", o.maskId, true],
+        ["手机号", o.phone, true],
+        ["经营类型", o.industry, false],
+        ["常住地址", o.addr, false],
+        ["证件有效期", o.valid, true],
+        ["核验方式", "身份证 OCR + 人脸活体 + 手机号三要素", false]
+      ],
+      checks: [
+        ["file", "身份证 OCR 识别", "ok"],
+        ["user", "人脸活体核验", "ok"],
+        ["phone", "手机号三要素核验", "ok"],
+        ["alert", "涉诉失信比对", o.creditRisk ? "fail" : "ok"]
+      ],
+      mats: [["身份证人像面", "user"], ["身份证国徽面", "shield"], ["经营证明（选填）", "file"]]
+    };
+  };
+  var CHG_DETAIL = function (o) {
+    return {
+      kvs: [
+        ["申请主体", o.name, false],
+        ["统一社会信用代码", o.code, true],
+        ["变更事项", o.changeKind, false],
+        ["变更前", o.before, true],
+        ["变更后", o.after, true],
+        ["变更生效日期", o.effective, true],
+        ["认证等级", o.level + "认证", false]
+      ],
+      checks: [
+        ["shield", "变更决议文件核验", "ok"],
+        ["user", "新任负责人任职资格核验", "ok"],
+        ["money", "对公账户主体一致性核验", o.bankCheck ? "pending" : "ok"],
+        ["alert", "历史变更频次与风险核验", "ok"]
+      ],
+      mats: [["变更后营业执照", "file"], ["股东会 / 理事会决议", "clipboard"], ["新任负责人身份证", "user"]]
+    };
+  };
+
+  var APPLIES = [
+    { id: "RV202610190031", type: "enterprise", status: "first", level: "优选", time: "2026-10-19 09:12", mat: 98, risk: "", name: "黑龙江五常金穗粮油有限公司",
+      code: "91230184MA1B6R8C3W", legal: "李金穗", industry: "粮油种植与贸易", capital: "人民币 1,200 万元",
+      addr: "黑龙江省哈尔滨市五常市水稻大道 88 号", contact: "李金穗", phone: "138****6210", bank: "中国农业银行五常支行 · 0823****8821", scopeRisk: true },
+    { id: "RV202610190032", type: "enterprise", status: "first", level: "标准", time: "2026-10-19 09:38", mat: 92, risk: "经营范围待核实", name: "赣南脐橙种植专业合作社",
+      code: "91360702MA3D9F2L7K", legal: "钟明德", industry: "果蔬种植与销售", capital: "人民币 500 万元",
+      addr: "江西省赣州市信丰县脐橙产业园 12 号", contact: "钟明德", phone: "139****3307", bank: "中国银行赣州分行 · 0421****2093", scopeRisk: true },
+    { id: "RV202610190033", type: "enterprise", status: "second", level: "优选", time: "2026-10-19 08:05", mat: 100, risk: "", name: "山东寿光蔬菜产业集团",
+      code: "91370783MA2C4H8N9P", legal: "王乐义", industry: "蔬菜种植与流通", capital: "人民币 8,600 万元",
+      addr: "山东省潍坊市寿光市蔬菜大厦 1 号", contact: "李春晓", phone: "138****6621", bank: "中国农业银行寿光支行 · 0722****1188" },
+    { id: "RV202610190034", type: "enterprise", status: "first", level: "标准", time: "2026-10-19 08:47", mat: 86, risk: "信用异常", name: "湖北荆楚粮油贸易有限公司",
+      code: "91420106MA4K7B3X8R", legal: "陈汉生", industry: "粮油贸易", capital: "人民币 2,000 万元",
+      addr: "湖北省武汉市江夏区粮油产业园 6 号", contact: "陈汉生", phone: "137****2098", bank: "中国工商银行武汉分行 · 0311****7766", creditRisk: true },
+    { id: "RV202610190035", type: "enterprise", status: "first", level: "标准", time: "2026-10-18 17:26", mat: 95, risk: "", name: "内蒙古乌兰察布马铃薯种业",
+      code: "91150902MA0W5J6T4Y", legal: "巴根那", industry: "种薯繁育与销售", capital: "人民币 1,500 万元",
+      addr: "内蒙古自治区乌兰察布市察右前旗农业科技园", contact: "巴根那", phone: "136****4412", bank: "中国建设银行乌兰察布分行 · 0555****3321" },
+    { id: "RV202610190036", type: "enterprise", status: "second", level: "优选", time: "2026-10-18 16:03", mat: 100, risk: "", name: "云南普洱茶叶合作社",
+      code: "91530802MA6M1P9L2Q", legal: "岩温", industry: "茶叶种植与加工", capital: "人民币 800 万元",
+      addr: "云南省普洱市思茅区茶马大道 66 号", contact: "玉南", phone: "135****8899", bank: "中国农业银行普洱分行 · 0611****4432" },
+    { id: "RV202610190037", type: "enterprise", status: "first", level: "标准", time: "2026-10-18 14:52", mat: 90, risk: "经营范围待核实", name: "河南豫丰农业发展有限公司",
+      code: "91410100MA44X7C5W2", legal: "张丰年", industry: "粮食收购与贸易", capital: "人民币 3,200 万元",
+      addr: "河南省郑州市中牟县万邦物流园 A 区", contact: "张丰年", phone: "133****7712", bank: "中国农业发展银行郑州分行 · 0211****9987", scopeRisk: true },
+    { id: "RV202610190038", type: "enterprise", status: "passed", level: "基础", time: "2026-10-18 11:19", mat: 74, risk: "", name: "江苏苏州阳澄湖水产养殖合作社",
+      code: "91320507MA1T6K8R3M", legal: "沈阿六", industry: "水产养殖与销售", capital: "人民币 300 万元",
+      addr: "江苏省苏州市相城区阳澄湖镇渔业路 9 号", contact: "沈阿六", phone: "132****6651", bank: "江苏银行苏州分行 · 0112****3345" },
+    { id: "RV202610190039", type: "personal", status: "first", level: "基础", time: "2026-10-19 10:21", mat: 88, risk: "", name: "王振海",
+      maskId: "2201**********0037", phone: "139****8821", industry: "家庭农场", addr: "吉林省长春市农安县合隆镇兴农路 21 号",
+      valid: "2018-05-10 至 2038-05-10" },
+    { id: "RV202610190040", type: "personal", status: "rejected", level: "基础", time: "2026-10-18 20:47", mat: 68, risk: "信用异常", name: "陈桂芳",
+      maskId: "4101**********5624", phone: "135****2286", industry: "个体采购户", addr: "河南省郑州市惠济区江山路 156 号",
+      valid: "2015-03-16 至 2035-03-16", creditRisk: true },
+    { id: "RV202610190041", type: "personal", status: "first", level: "基础", time: "2026-10-19 11:05", mat: 94, risk: "", name: "李秀兰",
+      maskId: "5101**********8843", phone: "138****5567", industry: "农民专业合作社", addr: "四川省成都市郫都区唐昌镇战旗村 3 组",
+      valid: "2017-09-01 至 2037-09-01" },
+    { id: "RV202610190042", type: "change", status: "second", level: "标准", time: "2026-10-19 10:40", mat: 100, risk: "", name: "广西南宁糖业集团股份有限公司",
+      code: "91450100MA5K8N2P6X", changeKind: "法定代表人变更", before: "黄志强（法定代表人）", after: "韦国强（法定代表人）",
+      effective: "2026-10-25", bankCheck: true }
+  ];
+
+  function detailOf(a) {
+    if (a.type === "enterprise") return ENT_DETAIL(a);
+    if (a.type === "personal") return PER_DETAIL(a);
+    return CHG_DETAIL(a);
   }
 
-  function decPending() {
-    var el = document.getElementById("kpiPending");
-    if (!el) return;
-    var n = parseInt(el.textContent, 10) || 0;
-    if (n > 0) el.textContent = String(n - 1);
+  /* ================= 状态与计数 ================= */
+  function countStatus(s) { return APPLIES.filter(function (a) { return a.status === s; }).length; }
+  function refreshKpi() {
+    $("#kpiFirst").textContent = String(countStatus("first"));
+    $("#kpiSecond").textContent = String(countStatus("second"));
   }
 
-  document.querySelectorAll("[data-review]").forEach(function (btn) {
-    btn.addEventListener("click", function () {
-      var tr = btn.closest("tr");
-      if (!tr) return;
-      curRow = tr;
-      var c = tr.cells;
-      var srcType = c[3].querySelector(".tag");
-      var srcStatus = c[8].querySelector(".tag");
+  /* ================= 列表渲染 ================= */
+  var filterType = "all", filterStatus = "all", keyword = "";
+  var tb = $("#tbody");
 
-      document.getElementById("dcId").textContent = btn.getAttribute("data-review");
-      document.getElementById("dcName").textContent = c[2].textContent.trim();
+  function statusTag(s) { var m = STATUS[s]; return '<span class="' + m.cls + '">' + m.label + "</span>"; }
 
-      var tEl = document.getElementById("dcType");
-      tEl.textContent = srcType.textContent.trim();
-      tEl.className = srcType.className;
+  function riskTag(r) {
+    if (!r) return '<span class="tag">无</span>';
+    if (r.indexOf("信用") >= 0 || r.indexOf("异常") >= 0) return '<span class="tag tag-red">' + r + "</span>";
+    return '<span class="tag tag-amber">' + r + "</span>";
+  }
 
-      var sEl = document.getElementById("dcStatus");
-      sEl.textContent = srcStatus.textContent.trim();
-      sEl.className = srcStatus.className;
+  function matches(a) {
+    if (filterType !== "all" && a.type !== filterType) return false;
+    if (filterStatus !== "all" && a.status !== filterStatus) return false;
+    if (keyword) {
+      var k = keyword.toLowerCase();
+      if (a.name.toLowerCase().indexOf(k) < 0 && a.id.toLowerCase().indexOf(k) < 0) return false;
+    }
+    return true;
+  }
 
-      openDrawer();
+  function render() {
+    var list = APPLIES.filter(matches);
+    $("#shownCount").textContent = String(list.length);
+    if (!list.length) {
+      tb.innerHTML = '<tr class="empty-row"><td colspan="10">没有符合筛选条件的申请，试试调整筛选或清空搜索</td></tr>';
+      updateSel();
+      return;
+    }
+    tb.innerHTML = list.map(function (a) {
+      var finished = a.status === "passed" || a.status === "rejected";
+      return '<tr data-id="' + a.id + '">' +
+        '<td><input type="checkbox" class="rowCheck" /></td>' +
+        '<td class="mono">' + a.id + '</td>' +
+        '<td>' + a.name + '</td>' +
+        '<td><span class="' + TYPES[a.type].cls + '">' + TYPES[a.type].label + '</span></td>' +
+        '<td>' + a.level + '</td>' +
+        '<td class="mono t-xs">' + a.time + '</td>' +
+        '<td><div class="row center gap-8"><div class="progress" style="width:64px"><i style="width:' + a.mat + '%"></i></div><span class="mono t-xs">' + a.mat + '%</span></div></td>' +
+        '<td>' + riskTag(a.risk) + '</td>' +
+        '<td class="js-status">' + statusTag(a.status) + '</td>' +
+        '<td><button class="btn btn-sm btn-outline" data-review="' + a.id + '">' + (finished ? "查看" : "审核") + '</button></td>' +
+        '</tr>';
+    }).join("");
+    $("#checkAll").checked = false;
+    updateSel();
+  }
+
+  function checkedIds() {
+    var ids = [];
+    tb.querySelectorAll("tr[data-id]").forEach(function (tr) {
+      var c = tr.querySelector(".rowCheck");
+      if (c && c.checked) ids.push(tr.getAttribute("data-id"));
     });
+    return ids;
+  }
+  function updateSel() {
+    var n = checkedIds().length;
+    $("#selCount").textContent = String(n);
+    $("#checkAll").checked = n > 0 && n === tb.querySelectorAll("tr[data-id]").length;
+  }
+
+  function findApply(id) {
+    for (var i = 0; i < APPLIES.length; i++) if (APPLIES[i].id === id) return APPLIES[i];
+    return null;
+  }
+
+  /* ================= 审核抽屉 ================= */
+  var mask = $("#drawerMask"), drawer = $("#drawer"), cur = null;
+
+  function checkTag(state) {
+    if (state === "ok") return '<span class="tag">通过</span>';
+    if (state === "fail") return '<span class="tag tag-red">未通过</span>';
+    return '<span class="tag tag-amber">待人工核实</span>';
+  }
+
+  function historyOf(a) {
+    var items = [
+      { t: "提交认证资料", m: a.time + " · 申请主体在线提交", s: "done" },
+      { t: "系统自动校验", m: "工商 / 证件 / 账户 / 失信名单自动核验完成", s: "done" }
+    ];
+    if (a.status === "first") items.push({ t: "人工初审（进行中）", m: "审核员正在核验主体信息与资质材料", s: "cur" });
+    else items.push({ t: "人工初审（已通过）", m: "主体信息与材料核验通过，转复审", s: "done" });
+
+    if (a.status === "second") items.push({ t: "人工复审（进行中）", m: "核验经营范围与主营品类匹配度，必要时电话回访", s: "cur" });
+    else if (a.status === "passed") items.push({ t: "人工复审（已通过）", m: "复审通过，认证标识生效并同步至店铺", s: "done" });
+    else if (a.status === "rejected") items.push({ t: "人工审核（已驳回）", m: "存在不符合项，已通知申请主体补充材料后重新提交", s: "bad" });
+
+    if (a.status === "passed") items.push({ t: "认证完成", m: "权益自动解锁", s: "done" });
+    else if (a.status !== "rejected") items.push({ t: "认证完成", m: "审核通过后自动生效", s: "" });
+
+    return '<div class="tl">' + items.map(function (it) {
+      return '<div class="tl-i ' + it.s + '"><span class="d"></span><div class="t">' + it.t + '</div><div class="m">' + it.m + '</div></div>';
+    }).join("") + "</div>";
+  }
+
+  function renderDrawer(a) {
+    var d = detailOf(a);
+    var t = TYPES[a.type], s = STATUS[a.status];
+    $("#dcId").textContent = a.id;
+    $("#dcType").textContent = t.label;
+    $("#dcType").className = t.cls;
+    $("#dcStatus").textContent = s.label;
+    $("#dcStatus").className = s.cls;
+
+    var kvs = d.kvs.map(function (k) {
+      return '<div class="kv-k">' + k[0] + '</div><div class="kv-v' + (k[2] ? " mono" : "") + '">' + k[1] + "</div>";
+    }).join("");
+
+    var checks = d.checks.map(function (c) {
+      var amber = c[2] !== "ok";
+      return '<div class="check-item">' +
+        '<span class="check-ic' + (amber ? " amber" : "") + '"><span data-icon="' + c[0] + '" data-size="15"></span></span>' +
+        '<span class="flex-1">' + c[1] + '</span>' + checkTag(c[2]) + "</div>";
+    }).join("");
+
+    var mats = d.mats.map(function (m) {
+      return '<div class="thumb" data-mat="' + m[0] + '"><span data-icon="' + m[1] + '" data-size="18"></span>' + m[0] + "</div>";
+    }).join("");
+
+    $("#drawerBody").innerHTML =
+      '<div class="drawer-sec"><div class="drawer-sec-t">主体信息</div><div class="kv">' + kvs + "</div></div>" +
+      '<div class="drawer-sec"><div class="drawer-sec-t">系统自动校验</div><div class="col">' + checks + "</div></div>" +
+      '<div class="drawer-sec"><div class="drawer-sec-t">上传资质材料</div><div class="thumb-grid">' + mats + "</div></div>" +
+      '<div class="drawer-sec"><div class="drawer-sec-t">审核历史</div>' + historyOf(a) + "</div>" +
+      '<div class="drawer-sec" id="opinionSec"><div class="drawer-sec-t">审核意见</div>' +
+        '<textarea class="textarea" id="opinion" placeholder="请填写审核意见，驳回时须说明具体原因..."></textarea>' +
+        '<div class="form-item mt-12 mb-8"><label>驳回原因（驳回时必选）</label>' +
+          '<select class="select" id="reasonType">' +
+            '<option value="">请选择驳回原因</option>' +
+            '<option>材料不清晰</option><option>证件已过期</option>' +
+            '<option>主体信息不一致</option><option>超经营范围</option>' +
+            '<option>对公账户核验不通过</option><option>失信或涉诉风险</option><option>其他</option>' +
+          '</select></div>' +
+        '<div class="muted t-xs">审核意见与驳回原因将同步至申请主体，并作为重新提交时的整改指引。</div>' +
+      "</div>";
+
+    renderFoot(a);
+    if (window.PROTO) PROTO.hydrateIcons($("#drawerBody"));
+  }
+
+  function renderFoot(a) {
+    var pending = a.status === "first" || a.status === "second";
+    if (!pending) {
+      $("#drawerFoot").innerHTML = '<button class="btn btn-primary btn-block" id="btnDone">已处理 · 关闭</button>';
+      $("#btnDone").addEventListener("click", closeDrawer);
+      if (window.PROTO) PROTO.hydrateIcons($("#drawerFoot"));
+      return;
+    }
+    var passLabel = a.status === "first" ? "通过初审" : "通过复审";
+    $("#drawerFoot").innerHTML =
+      '<button class="btn btn-primary btn-block" id="btnPass">' + passLabel + "</button>" +
+      '<button class="btn btn-outline btn-block" id="btnReject" style="border-color:var(--red);color:var(--red)">驳回申请</button>';
+    if (window.PROTO) PROTO.hydrateIcons($("#drawerFoot"));
+    $("#btnPass").addEventListener("click", doPass);
+    $("#btnReject").addEventListener("click", doReject);
+  }
+
+  function openDrawer(a) {
+    cur = a;
+    renderDrawer(a);
+    mask.classList.add("open");
+    drawer.classList.add("open");
+    drawer.setAttribute("aria-hidden", "false");
+  }
+  function closeDrawer() {
+    mask.classList.remove("open");
+    drawer.classList.remove("open");
+    drawer.setAttribute("aria-hidden", "true");
+    cur = null;
+  }
+
+  /* ================= 审核动作 ================= */
+  var toastTimer = null;
+  function showToast(msg, isErr) {
+    $("#toastMsg").textContent = msg;
+    $("#toastIc").setAttribute("data-icon", isErr ? "alert" : "check");
+    if (window.PROTO) PROTO.hydrateIcons($("#toast"));
+    $("#toast").classList.toggle("err", !!isErr);
+    $("#toast").classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { $("#toast").classList.remove("show"); }, 2400);
+  }
+
+  function bump(id, delta) {
+    var el = $(id);
+    el.textContent = String((parseInt(el.textContent, 10) || 0) + delta);
+  }
+
+  /* 初审→复审→通过；驳回 */
+  function advance(a) {
+    if (a.status === "first") { a.status = "second"; return "初审通过，已流转至复审"; }
+    if (a.status === "second") { a.status = "passed"; return "复审通过，认证已生效"; }
+    return "";
+  }
+
+  function doPass() {
+    if (!cur) return;
+    var msg = advance(cur);
+    if (!msg) { closeDrawer(); return; }
+    bump("#kpiPass", 1);
+    refreshKpi();
+    closeDrawer();
+    render();
+    showToast(msg + "，已通知申请主体");
+  }
+
+  function doReject() {
+    if (!cur) return;
+    var reason = $("#reasonType") ? $("#reasonType").value : "";
+    var opinion = $("#opinion") ? $("#opinion").value.trim() : "";
+    if (!reason) { showToast("请选择驳回原因", true); return; }
+    if (opinion.length < 5) { showToast("请填写不少于 5 个字的审核意见", true); return; }
+    cur.status = "rejected";
+    cur.risk = cur.risk || (reason === "失信或涉诉风险" ? "信用异常" : "待整改");
+    bump("#kpiReject", 1);
+    refreshKpi();
+    closeDrawer();
+    render();
+    showToast("已驳回（" + reason + "），整改指引已同步至申请主体");
+  }
+
+  function batchPass() {
+    var ids = checkedIds();
+    if (!ids.length) { showToast("请先勾选需要处理的申请", true); return; }
+    var n = 0;
+    ids.forEach(function (id) { var a = findApply(id); if (a && advance(a)) n++; });
+    bump("#kpiPass", n);
+    refreshKpi();
+    render();
+    showToast(n > 0 ? "已批量通过 " + n + " 笔申请" : "勾选的申请均已处理，无需重复审核");
+  }
+
+  function batchReject() {
+    var ids = checkedIds();
+    if (!ids.length) { showToast("请先勾选需要处理的申请", true); return; }
+    var n = 0;
+    ids.forEach(function (id) {
+      var a = findApply(id);
+      if (a && (a.status === "first" || a.status === "second")) { a.status = "rejected"; a.risk = a.risk || "待整改"; n++; }
+    });
+    bump("#kpiReject", n);
+    refreshKpi();
+    render();
+    showToast(n > 0 ? "已批量驳回 " + n + " 笔申请，请补充驳回原因" : "勾选的申请均已处理");
+  }
+
+  /* ================= 事件绑定 ================= */
+  tb.addEventListener("click", function (e) {
+    var btn = e.target.closest("[data-review]");
+    if (!btn) return;
+    var a = findApply(btn.getAttribute("data-review"));
+    if (a) openDrawer(a);
   });
+  tb.addEventListener("change", function (e) {
+    if (e.target.classList.contains("rowCheck")) updateSel();
+  });
+  $("#checkAll").addEventListener("change", function () {
+    var on = this.checked;
+    tb.querySelectorAll(".rowCheck").forEach(function (c) { c.checked = on; });
+    updateSel();
+  });
+
+  $("#typeChips").addEventListener("click", function (e) {
+    var chip = e.target.closest(".chip"); if (!chip) return;
+    filterType = chip.getAttribute("data-type"); render();
+  });
+  $("#statusChips").addEventListener("click", function (e) {
+    var chip = e.target.closest(".chip"); if (!chip) return;
+    filterStatus = chip.getAttribute("data-status"); render();
+  });
+  $("#kw").addEventListener("input", function () { keyword = this.value.trim(); render(); });
+
+  $("#batchPass").addEventListener("click", batchPass);
+  $("#batchReject").addEventListener("click", batchReject);
 
   mask.addEventListener("click", closeDrawer);
-  document.getElementById("drawerClose").addEventListener("click", closeDrawer);
+  $("#drawerClose").addEventListener("click", closeDrawer);
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape" && drawer.classList.contains("open")) closeDrawer(); });
 
-  document.getElementById("btnPass").addEventListener("click", function () {
-    if (curRow) {
-      curRow.cells[8].innerHTML = '<span class="tag">已通过</span>';
-      decPending();
-    }
-    closeDrawer();
-    showToast("认证已通过，已通知申请主体");
+  /* 材料缩略图点击预览 */
+  $("#drawerBody").addEventListener("click", function (e) {
+    var th = e.target.closest(".thumb");
+    if (th) showToast("原型演示：预览「" + th.getAttribute("data-mat") + "」材料影像");
   });
 
-  document.getElementById("btnReject").addEventListener("click", function () {
-    if (curRow) {
-      curRow.cells[8].innerHTML = '<span class="tag tag-red">已驳回</span>';
-    }
-    closeDrawer();
-    showToast("已驳回，驳回原因将同步至申请主体");
-  });
-
-  document.getElementById("batchPass").addEventListener("click", function () {
-    showToast("原型演示：批量通过需先勾选申请");
-  });
+  /* ================= 初始化 ================= */
+  render();
+  refreshKpi();
 })();
 </script>
 </body>

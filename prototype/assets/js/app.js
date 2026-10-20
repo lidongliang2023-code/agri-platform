@@ -107,8 +107,14 @@
       var sel = btn.getAttribute("data-tab");
       var scope = group ? document.querySelector('[data-tabscope="' + group + '"]') : document;
       if (!scope) return;
-      scope.querySelectorAll("[data-tab]").forEach(function (b) { b.classList.remove("on"); });
+      /* 侧边栏导航沿用 .active 高亮，普通标签栏沿用 .on，二者同步切换 */
+      var inNav = scope.classList && scope.classList.contains("side-nav");
+      scope.querySelectorAll("[data-tab]").forEach(function (b) {
+        b.classList.remove("on");
+        if (inNav) b.classList.remove("active");
+      });
       btn.classList.add("on");
+      if (inNav) btn.classList.add("active");
       var panels = (group ? document.querySelector('[data-panels="' + group + '"]') : document)
         .querySelectorAll("[data-tabpanel]");
       panels.forEach(function (p) {

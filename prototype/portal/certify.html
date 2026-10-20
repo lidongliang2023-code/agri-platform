@@ -65,6 +65,14 @@
   /* —— 演示状态切换 —— */
   .demo-pick{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink-400)}
 
+  /* —— 驳回原因提示 —— */
+  .reject-note{margin-top:22px;background:#FFF7F7;border:1px solid var(--red);border-radius:12px;padding:18px 20px}
+  .reject-note .rn-ic{width:34px;height:34px;border-radius:10px;flex:none;display:grid;place-items:center;background:#FEE2E2;color:#B91C1C}
+  .reject-note .rn-body{border-top:1px dashed #F3C6C6;margin-top:14px;padding-top:14px}
+  .reject-note .rn-list{display:flex;flex-direction:column;gap:8px;font-size:13px;color:var(--ink-700)}
+  .reject-note .rn-list li{display:flex;align-items:flex-start;gap:8px}
+  .reject-note .rn-list li span{color:var(--red);flex:none;margin-top:2px}
+
   @media(max-width:980px){
     .lv-track{grid-template-columns:1fr 1fr}
     .flow{grid-template-columns:1fr 1fr}
@@ -142,6 +150,7 @@
           <div class="chips" id="stateChips">
             <span class="chip" data-state="none">未认证</span>
             <span class="chip on" data-state="review">审核中</span>
+            <span class="chip" data-state="rejected">已驳回</span>
             <span class="chip" data-state="done">已认证</span>
           </div>
         </div>
@@ -196,6 +205,33 @@
                 <div class="c">4</div>
                 <div class="t">优选供应商</div><div class="d">需企业认证</div>
               </div>
+            </div>
+          </div>
+
+          <!-- 驳回原因提示（演示：已驳回状态时显示） -->
+          <div class="reject-note hide" id="rejectNote">
+            <div class="row between center wrap gap-12">
+              <div class="row center gap-12">
+                <span class="rn-ic"><span data-icon="alert" data-size="16"></span></span>
+                <div>
+                  <div class="strong">企业认证未通过（受理编号 <span class="mono">RV202610190031</span>）</div>
+                  <div class="muted t-xs mt-8">审核时间 2026-10-19 16:20 · 审核员 平台运营 · 王审核</div>
+                </div>
+              </div>
+              <span class="tag tag-red">已驳回</span>
+            </div>
+            <div class="rn-body">
+              <div class="muted t-xs mb-8">驳回原因</div>
+              <ul class="rn-list">
+                <li><span data-icon="close" data-size="12"></span>营业执照副本未加盖公章，无法核验主体真实性</li>
+                <li><span data-icon="close" data-size="12"></span>经营范围未包含「粮食收购」，与主营粮油品类不匹配</li>
+              </ul>
+              <div class="muted t-xs mt-12">整改后可重新提交，已通过的核验项无需重做，重新提交不限制次数。</div>
+            </div>
+            <div class="row gap-12 mt-16 wrap">
+              <a class="btn btn-primary" href="certify-enterprise.html"><span data-icon="zap"></span>重新提交企业认证</a>
+              <a class="btn btn-outline" href="certify-enterprise.html"><span data-icon="clipboard"></span>查看驳回详情</a>
+              <button class="btn btn-ghost" type="button" onclick="alert('原型演示：联系认证专员申诉')">联系认证专员申诉</button>
             </div>
           </div>
 
@@ -528,6 +564,17 @@
       entDesc: '认证编号 <span class="mono">ENT2026101900088</span> · 有效期至 2027-10-18',
       entBtn: '<span data-icon="file"></span>查看认证详情',
       chain: 3, bftLocked: false
+    },
+    rejected: {
+      lvName: "实名认证 · 企业认证未通过",
+      lvPct: "45",
+      entState: "已驳回",
+      entTag: '<span data-icon="alert" data-size="12"></span>已驳回',
+      entTagClass: "tag tag-red",
+      entBar: "42%",
+      entDesc: '受理编号 <span class="mono">RV202610190031</span> · 因材料存在不符合项被驳回，请查看驳回原因后重新提交',
+      entBtn: '<span data-icon="zap"></span>重新提交认证',
+      chain: 3, bftLocked: true
     }
   };
 
@@ -572,6 +619,10 @@
       }
     });
     if (window.PROTO) window.PROTO.hydrateIcons(document);
+
+    /* 已驳回：显示驳回原因入口 */
+    var rn = document.getElementById("rejectNote");
+    if (rn) rn.classList.toggle("hide", key !== "rejected");
   }
 
   var chips = document.querySelectorAll("#stateChips .chip");

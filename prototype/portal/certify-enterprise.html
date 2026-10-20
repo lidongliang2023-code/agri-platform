@@ -75,6 +75,22 @@
   .side-card + .side-card{margin-top:16px}
   .side-note{background:var(--green-050);border:1px dashed var(--green-300);border-radius:10px;padding:12px 14px;font-size:12.5px;color:var(--ink-600);line-height:1.7}
 
+  /* —— 结果态 —— */
+  .result-chips{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink-400)}
+  .result-badge{width:84px;height:84px;border-radius:50%;display:grid;place-items:center;margin:0 auto 20px;color:#fff}
+  .rb-amber{background:linear-gradient(135deg,var(--amber),#FBBF24);box-shadow:0 10px 26px rgba(245,158,11,.32)}
+  .rb-green{background:linear-gradient(135deg,var(--green-500),var(--green-600));box-shadow:0 10px 26px rgba(21,154,94,.32)}
+  .rb-red{background:linear-gradient(135deg,#DC2626,#B91C1C);box-shadow:0 10px 26px rgba(185,28,28,.30)}
+  .rb-title{font-size:22px;font-weight:800;color:var(--ink-900)}
+  .res-dl{display:grid;grid-template-columns:110px 1fr;gap:12px 16px;font-size:13.5px;border-radius:12px;padding:18px 20px;text-align:left;margin-top:22px}
+  .res-dl.amber{background:var(--amber-100);border:1px dashed var(--amber)}
+  .res-dl.green{background:var(--green-050);border:1px dashed var(--green-300)}
+  .res-dl.red{background:#FFF7F7;border:1px solid var(--red)}
+  .rej-box{margin-top:24px;text-align:left;background:#FFF7F7;border:1px solid var(--red);border-radius:12px;padding:20px}
+  .rej-list{display:flex;flex-direction:column;gap:10px;font-size:13px;color:var(--ink-700)}
+  .rej-list li{display:flex;align-items:flex-start;gap:9px;line-height:1.6}
+  .rej-list li .x{width:18px;height:18px;border-radius:50%;flex:none;margin-top:2px;display:grid;place-items:center;background:#FEE2E2;color:#B91C1C}
+
   .toast{position:fixed;left:50%;bottom:34px;transform:translate(-50%,20px);background:var(--green-800);color:#fff;padding:12px 20px;border-radius:var(--r-pill);font-size:13.5px;font-weight:600;box-shadow:var(--shadow-md);opacity:0;pointer-events:none;transition:.28s;z-index:99;display:flex;align-items:center;gap:8px}
   .toast.show{opacity:1;transform:translate(-50%,0)}
 
@@ -151,7 +167,14 @@
         <div class="card" id="wizardCard">
           <div class="card-h">
             <h3><span data-icon="factory" data-size="18"></span>企业认证办理</h3>
-            <span class="muted t-sm">共 4 步 · 约需 8 分钟</span>
+            <div class="result-chips">
+              演示：查看审核结果
+              <div class="chips" id="resultChips">
+                <span class="chip" data-result="review">审核中</span>
+                <span class="chip" data-result="done">已通过</span>
+                <span class="chip" data-result="reject">已驳回</span>
+              </div>
+            </div>
           </div>
           <div class="card-b">
 
@@ -425,10 +448,10 @@
               </div>
             </div>
 
-            <!-- ========== 审核中结果 ========== -->
-            <div class="step-panel" data-panel-step="ok">
+            <!-- ========== 结果态：审核中 ========== -->
+            <div class="step-panel" data-result="review">
               <div class="mt-20" style="text-align:center">
-                <div style="width:84px;height:84px;border-radius:50%;background:linear-gradient(135deg,var(--amber),#FBBF24);color:#fff;display:grid;place-items:center;margin:0 auto 20px;box-shadow:0 10px 26px rgba(245,158,11,.32)">
+                <div class="result-badge rb-amber">
                   <span data-icon="activity" data-size="40"></span>
                 </div>
                 <div style="font-size:22px;font-weight:800;color:var(--ink-900)">认证申请已提交，正在审核</div>
@@ -462,8 +485,83 @@
 
                 <div class="row gap-12 center mt-24" style="justify-content:center">
                   <a class="btn btn-outline" href="certify.html"><span data-icon="award"></span>返回认证中心</a>
-                  <a class="btn btn-outline" href="certify-enterprise.html"><span data-icon="clipboard"></span>补充 / 修正材料</a>
+                  <button type="button" class="btn btn-outline" id="btnFixFromReview"><span data-icon="clipboard"></span>补充 / 修正材料</button>
                   <a class="btn btn-primary" href="../trade/member.html"><span data-icon="user"></span>前往会员中心</a>
+                </div>
+              </div>
+            </div>
+
+            <!-- ========== 结果态：已通过 ========== -->
+            <div class="step-panel" data-result="done">
+              <div class="mt-20" style="text-align:center">
+                <div class="result-badge rb-green"><span data-icon="check" data-size="40"></span></div>
+                <div class="rb-title">企业认证已通过</div>
+                <div class="muted t-sm mt-8">认证标识已生效并同步至店铺与商品页，交易、金融与溯源权益已自动解锁</div>
+
+                <dl class="res-dl green">
+                  <dt class="muted">认证编号</dt><dd class="mono">ENT2026101900088</dd>
+                  <dt class="muted">申请主体</dt><dd class="strong" id="doneName">黑龙江五常粮油合作社</dd>
+                  <dt class="muted">认证等级</dt><dd>基础认证 · 有效期至 2027-10-19</dd>
+                  <dt class="muted">完成时间</dt><dd class="mono">2026-10-19 16:05</dd>
+                  <dt class="muted">当前状态</dt><dd><span class="tag"><span data-icon="check" data-size="12"></span>已认证</span></dd>
+                </dl>
+
+                <div class="mt-24" style="text-align:left;background:#fff;border:1px solid var(--line);border-radius:12px;padding:20px">
+                  <div class="row between center mb-16">
+                    <div class="strong">审核进度</div>
+                    <div class="muted t-xs">已完成 4 / 4 环节</div>
+                  </div>
+                  <div class="progress mb-20"><i style="width:100%"></i></div>
+                  <div class="tl">
+                    <div class="tl-i done"><span class="d"></span>
+                      <div class="t">提交认证资料</div><div class="m">材料 6 份已入库</div></div>
+                    <div class="tl-i done"><span class="d"></span>
+                      <div class="t">系统自动校验</div><div class="m">工商三要素、法人人脸、对公账户打款验证均通过</div></div>
+                    <div class="tl-i done"><span class="d"></span>
+                      <div class="t">人工初审与复审</div><div class="m">主体信息、资质材料与经营范围核验通过</div></div>
+                    <div class="tl-i done"><span class="d"></span>
+                      <div class="t">认证完成</div><div class="m">认证标识生效，交易、金融与溯源权益自动解锁</div></div>
+                  </div>
+                </div>
+
+                <div class="row gap-12 center mt-24" style="justify-content:center">
+                  <a class="btn btn-outline" href="certify.html"><span data-icon="award"></span>返回认证中心</a>
+                  <a class="btn btn-primary" href="../trade/member.html"><span data-icon="user"></span>前往会员中心</a>
+                </div>
+              </div>
+            </div>
+
+            <!-- ========== 结果态：已驳回 ========== -->
+            <div class="step-panel" data-result="reject">
+              <div class="mt-20" style="text-align:center">
+                <div class="result-badge rb-red"><span data-icon="close" data-size="38"></span></div>
+                <div class="rb-title">企业认证未通过</div>
+                <div class="muted t-sm mt-8">很抱歉，本次申请存在不符合项，请按驳回原因整改后重新提交</div>
+
+                <dl class="res-dl red">
+                  <dt class="muted">受理编号</dt><dd class="mono">RV202610190031</dd>
+                  <dt class="muted">申请主体</dt><dd class="strong" id="rejName">黑龙江五常粮油合作社</dd>
+                  <dt class="muted">审核时间</dt><dd class="mono">2026-10-19 16:20</dd>
+                  <dt class="muted">审核员</dt><dd>平台运营 · 王审核</dd>
+                  <dt class="muted">当前状态</dt><dd><span class="tag tag-red"><span data-icon="alert" data-size="12"></span>已驳回</span></dd>
+                </dl>
+
+                <div class="rej-box">
+                  <div class="strong mb-12">驳回原因</div>
+                  <ul class="rej-list">
+                    <li><span class="x"><span data-icon="close" data-size="11"></span></span>营业执照副本未加盖公章，无法核验主体真实性</li>
+                    <li><span class="x"><span data-icon="close" data-size="11"></span></span>经营范围未包含「粮食收购」，与主营粮油品类不匹配</li>
+                  </ul>
+                  <div class="side-note mt-16" style="background:#fff;border-color:#F3C6C6">
+                    <span data-icon="shield" data-size="13" style="vertical-align:-2px"></span>
+                    整改提示：重新提交不限次数，已通过的核验项（工商三要素、法人人脸、对公账户）无需重做，仅需修正被驳回项。
+                  </div>
+                </div>
+
+                <div class="row gap-12 center mt-24" style="justify-content:center">
+                  <button type="button" class="btn btn-primary" id="btnResubmit"><span data-icon="zap"></span>重新提交认证</button>
+                  <a class="btn btn-outline" href="certify.html"><span data-icon="award"></span>返回认证中心</a>
+                  <button type="button" class="btn btn-ghost" onclick="alert('原型演示：联系认证专员申诉')">联系专员申诉</button>
                 </div>
               </div>
             </div>
@@ -566,29 +664,45 @@
   }
 
   /* ===== 步骤控制 ===== */
-  var step = 1, facePassed = false, payPassed = false;
+  var step = 1, facePassed = false, payPassed = false, resultView = null;
+
+  function syncChips() {
+    $$("#resultChips .chip").forEach(function (c) {
+      c.classList.toggle("on", !!resultView && c.getAttribute("data-result") === resultView);
+    });
+  }
 
   function renderStep() {
     $$(".step-panel").forEach(function (p) {
-      p.classList.toggle("on", p.getAttribute("data-panel-step") === (step === 5 ? "ok" : String(step)));
+      var rs = p.getAttribute("data-result");
+      if (resultView) { p.classList.toggle("on", rs === resultView); return; }
+      if (rs) { p.classList.remove("on"); return; }
+      p.classList.toggle("on", p.getAttribute("data-panel-step") === String(step));
     });
     $$(".sb").forEach(function (b) {
       var n = +b.getAttribute("data-sb");
       b.classList.remove("on", "done");
-      if (step === 5) { b.classList.add("done"); return; }
+      if (resultView) { b.classList.add("done"); return; }
       if (n < step) b.classList.add("done");
       else if (n === step) b.classList.add("on");
     });
+    var inWizard = !resultView;
+    $(".steps-bar").style.display = inWizard ? "grid" : "none";
     $("#stepNow").textContent = Math.min(step, 4);
-    $("#btnPrev").style.visibility = (step === 1 || step === 5) ? "hidden" : "visible";
-    $("#btnNext").style.display = (step === 5) ? "none" : "inline-flex";
-    $("#btnNext").innerHTML = (step === 4)
-      ? '<span data-icon="check"></span>提交认证'
-      : '下一步<span data-icon="arrow"></span>';
-    $("#wizFoot").style.display = (step === 5) ? "none" : "flex";
-    if (window.PROTO) PROTO.hydrateIcons($("#wizFoot"));
+    $("#wizFoot").style.display = inWizard ? "flex" : "none";
+    if (inWizard) {
+      $("#btnPrev").style.visibility = (step === 1) ? "hidden" : "visible";
+      $("#btnNext").innerHTML = (step === 4)
+        ? '<span data-icon="check"></span>提交认证'
+        : '下一步<span data-icon="arrow"></span>';
+      if (window.PROTO) PROTO.hydrateIcons($("#wizFoot"));
+    }
+    syncChips();
     window.scrollTo({ top: $("#wizardCard").offsetTop - 80, behavior: "smooth" });
   }
+
+  function showResult(kind) { resultView = kind; renderStep(); }
+  function backToForm() { resultView = null; step = 1; renderStep(); showToast("请按驳回原因修正材料后重新提交认证"); }
 
   $$(".sb").forEach(function (b) {
     b.addEventListener("click", function () {
@@ -716,7 +830,10 @@
     if ($("#upFood").classList.contains("ok")) n++;
     if ($("#upOther").classList.contains("ok")) n++;
     $("#sumExtra").textContent = " 等 " + n + " 份";
-    $("#okName").textContent = $("#enName").value.trim() || "—";
+    var nm = $("#enName").value.trim() || "—";
+    $("#okName").textContent = nm;
+    if ($("#doneName")) $("#doneName").textContent = nm;
+    if ($("#rejName")) $("#rejName").textContent = nm;
   }
 
   function validate1() {
@@ -753,13 +870,22 @@
     if (step === 3) { if (!validate3()) return; step = 4; fillSummary(); renderStep(); return; }
     if (step === 4) {
       if (!$("#enAgree").checked) { showToast("请先阅读并同意企业认证服务协议"); return; }
-      step = 5;
-      renderStep();
+      fillSummary();
+      showResult("review");
       showToast("<span data-icon='check' data-size='15'></span>认证申请已提交，进入审核流程");
     }
   });
   $("#btnPrev").addEventListener("click", function () { if (step > 1) { step--; renderStep(); } });
   $("#backEdit").addEventListener("click", function () { step = 1; renderStep(); });
+
+  /* ===== 审核结果态演示切换 / 重新提交 ===== */
+  $$("#resultChips .chip").forEach(function (c) {
+    c.addEventListener("click", function () { showResult(this.getAttribute("data-result")); });
+  });
+  var resubmit = $("#btnResubmit");
+  if (resubmit) resubmit.addEventListener("click", backToForm);
+  var fixReview = $("#btnFixFromReview");
+  if (fixReview) fixReview.addEventListener("click", backToForm);
 
   renderStep();
 })();
