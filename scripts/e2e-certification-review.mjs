@@ -140,6 +140,14 @@ try {
   const text = await page.evaluate(() => document.body.innerText)
   check(text.includes('认证审核工作台') && text.includes('企业与个人实名认证统一审核'), '认证审核工作台已渲染')
   check(text.includes('待审核') && text.includes('企业待审') && text.includes('个人待审'), '审核 KPI 已展示')
+  const menuPlacement = await page.evaluate(() => {
+    const submenu = [...document.querySelectorAll('.ant-menu-submenu')]
+      .find((el) => (el.textContent ?? '').includes('审核中心'))
+    const selected = submenu?.querySelector('.ant-menu-item-selected')?.textContent ?? ''
+    return { submenu: submenu?.textContent ?? '', selected }
+  })
+  check(menuPlacement.submenu.includes('认证审核') && menuPlacement.selected.includes('认证审核'),
+    '认证审核位于运营端「审核中心」菜单', menuPlacement.selected.trim())
 
   await fill(page, 'input[placeholder*="搜索主体名称"]', 'CERT-TEST')
   await sleep(500)
