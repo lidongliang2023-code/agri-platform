@@ -214,7 +214,8 @@ export default function App(): JSX.Element {
   const [remember, setRemember] = useState(true)
 
   const [reg, setReg] = useState<RegisterForm>({
-    identity: 'enterprise',
+    identity: new URLSearchParams(window.location.search).get('identity') === 'personal'
+      ? 'personal' : 'enterprise',
     nickname: '',
     companyName: '',
     creditCode: '',

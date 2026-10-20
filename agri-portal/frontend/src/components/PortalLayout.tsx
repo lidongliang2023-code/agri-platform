@@ -11,22 +11,42 @@ export function PortalLayout({ children, active = '/' }: { children: ReactNode; 
   const [keyword, setKeyword] = useState('')
   const [user, setUser] = useState<PortalUser | null>(null)
   const [loginOpen, setLoginOpen] = useState(false)
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false)
+
+  async function sessionUser(): Promise<PortalUser | null> {
+    try {
+      const response = await fetch('/api/v1/sso/onboarding/status', { credentials: 'include' })
+      const body = await response.json() as {
+        code?: number
+        data?: {
+          phone?: string
+          nickname?: string
+          stage?: string
+          identity?: string
+          subjectName?: string
+          certificationStatus?: string
+        }
+      }
+      if (!response.ok || body.code !== 0 || !body.data) return null
+      return {
+        nickname: body.data.nickname,
+        phone: body.data.phone,
+        stage: body.data.stage,
+        identity: body.data.identity,
+        subjectName: body.data.subjectName,
+        certificationStatus: body.data.certificationStatus,
+      }
+    } catch {
+      return null
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
-    void fetch('/api/v1/sso/onboarding/status', { credentials: 'include' })
-      .then(async (response) => ({ ok: response.ok, body: await response.json() as {
-        code?: number
-        data?: { phone?: string; nickname?: string; stage?: string }
-      } }))
-      .then(({ ok, body }) => {
-        if (cancelled || !ok || body.code !== 0 || !body.data) return
-        setUser({
-          nickname: body.data.nickname,
-          phone: body.data.phone,
-        })
+    void sessionUser()
+      .then((nextUser) => {
+        if (!cancelled && nextUser) setUser(nextUser)
       })
-      .catch(() => { /* 未登录门户是正常状态 */ })
     return () => { cancelled = true }
   }, [])
 
@@ -40,8 +60,13 @@ export function PortalLayout({ children, active = '/' }: { children: ReactNode; 
       })
     } finally {
       setUser(null)
+      setAccountMenuOpen(false)
     }
   }
+
+  const registerBase = `${window.location.protocol}//${window.location.hostname}:8090/register`
+  const identityEntry = (identity: 'enterprise' | 'personal'): string =>
+    `${registerBase}?step=2&identity=${identity}`
 
   const search = (event: FormEvent): void => {
     event.preventDefault()
@@ -61,9 +86,52 @@ export function PortalLayout({ children, active = '/' }: { children: ReactNode; 
             {user ? (
               <span className="portal-logged-user">
                 <span className="portal-user-avatar">{(user.nickname || user.username || user.phone || '用').slice(0, 1)}</span>
-                <span className="portal-user-status">已登录</span>
-                <b>{user.nickname || user.username || user.phone || '农产云用户'}</b>
-                <button type="button" onClick={() => void logout()}>退出</button>
+                <button className="portal-user-menu-trigger" type="button" onClick={() => setAccountMenuOpen(!accountMenuOpen)}>
+                  <span className="portal-user-status">已登录</span>
+                  <b>{user.nickname || user.username || user.phone || '农产云用户'}</b>
+                  <i>▾</i>
+                </button>
+                <button className="portal-user-logout" type="button" onClick={() => void logout()}>退出</button>
+                {accountMenuOpen && (
+                  <div className="portal-account-menu">
+                    <div className="portal-account-head">
+                      <span>主体与认证</span>
+                      <small>
+                        {user.stage === 'done' ? '已完成认证'
+                          : user.stage === 'pending' ? '认证审核中'
+                            : user.stage === 'certification' ? '待提交认证'
+                              : '待创建主体'}
+                      </small>
+                    </div>
+                    {(!user.stage || user.stage === 'subject') && (
+                      <>
+                        <p>请选择主体类型，完成主体注册与认证。</p>
+                        <a href={identityEntry('enterprise')} onClick={(event) => { event.preventDefault(); window.location.href = identityEntry('enterprise') }}>
+                          <Icon name="factory" size={15} /><span><b>企业主体</b><small>企业、合作社、加工厂、贸易商</small></span>
+                        </a>
+                        <a href={identityEntry('personal')} onClick={(event) => { event.preventDefault(); window.location.href = identityEntry('personal') }}>
+                          <Icon name="user" size={15} /><span><b>个人主体</b><small>家庭农场、个体户、经纪人</small></span>
+                        </a>
+                      </>
+                    )}
+                    {user.stage === 'certification' && (
+                      <a href={`${registerBase}?step=3`}>
+                        <Icon name="shield" size={15} /><span><b>继续提交认证</b><small>主体已创建，等待认证开通</small></span>
+                      </a>
+                    )}
+                    {user.stage === 'pending' && (
+                      <a href={`${registerBase}?step=3`}>
+                        <Icon name="activity" size={15} /><span><b>查看认证进度</b><small>资料已提交，平台审核中</small></span>
+                      </a>
+                    )}
+                    {user.stage === 'done' && (
+                      <div className="portal-account-done">
+                        <Icon name="check" size={16} />
+                        <span><b>{user.identity === 'personal' ? '个人主体' : '企业主体'}已认证</b><small>{user.subjectName || '认证状态已生效'}</small></span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </span>
             ) : (
               <button className="portal-login-trigger" type="button" onClick={() => setLoginOpen(true)}>
@@ -163,6 +231,9 @@ export function PortalLayout({ children, active = '/' }: { children: ReactNode; 
         onSuccess={(nextUser) => {
           setUser(nextUser)
           setLoginOpen(false)
+          void sessionUser().then((fresh) => {
+            if (fresh) setUser(fresh)
+          })
         }}
       />
     </div>

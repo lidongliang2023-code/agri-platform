@@ -8,6 +8,10 @@ export interface PortalUser {
   username?: string
   nickname?: string
   phone?: string
+  stage?: string
+  identity?: string
+  subjectName?: string
+  certificationStatus?: string
 }
 
 interface PortalLoginModalProps {
@@ -129,6 +133,7 @@ export function PortalLoginModal({ open, onClose, onSuccess }: PortalLoginModalP
         username: body.data?.user?.username,
         nickname: body.data?.user?.nickname,
         phone: tab === 'sms' ? phone : undefined,
+        stage: body.data?.stage,
       }
       onSuccess(user)
       setPassword('')

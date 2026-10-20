@@ -1,5 +1,10 @@
 /* 官网门户专属布局与组件（基础设计令牌/通用类来自 theme.css）。 */
 
+.topbar {
+  position: relative;
+  z-index: 90;
+}
+
 .portal-root {
   min-height: 100vh;
   background: var(--bg);
@@ -38,6 +43,7 @@
 }
 
 .portal-logged-user {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -70,7 +76,25 @@
   white-space: nowrap;
 }
 
-.portal-logged-user button {
+.portal-user-menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.82);
+  font: inherit;
+  cursor: pointer;
+}
+
+.portal-user-menu-trigger i {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 10px;
+  font-style: normal;
+}
+
+.portal-user-logout {
   padding: 0;
   border: 0;
   background: transparent;
@@ -79,8 +103,83 @@
   cursor: pointer;
 }
 
-.portal-logged-user button:hover {
+.portal-user-logout:hover {
   color: #ffd6d6;
+}
+
+.portal-account-menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 120;
+  width: 320px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 24px 60px -20px rgba(11, 26, 18, 0.4);
+  color: var(--ink-900);
+}
+
+.portal-account-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px 10px;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.portal-account-head small {
+  color: var(--green-700);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.portal-account-menu > p {
+  margin: 10px 8px 8px;
+  color: var(--ink-500);
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+.portal-account-menu a,
+.portal-account-done {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 9px;
+  border-radius: 9px;
+  color: var(--ink-700);
+  text-decoration: none;
+}
+
+.portal-account-menu a:hover {
+  background: var(--green-050);
+}
+
+.portal-account-menu a > span,
+.portal-account-done > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.portal-account-menu b {
+  color: var(--ink-900);
+  font-size: 12.5px;
+}
+
+.portal-account-menu small {
+  color: var(--ink-500);
+  font-size: 11px;
+}
+
+.portal-account-done {
+  margin-top: 8px;
+  background: var(--green-050);
+  color: var(--green-700);
 }
 
 .portal-channelbar {
