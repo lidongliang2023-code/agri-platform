@@ -4,8 +4,8 @@
       <div class="logo-section">
         <div class="logo-icon">🌾</div>
         <div class="logo-text">
-          <h1>主数据管理</h1>
-          <p>Master Data System</p>
+          <h1>农产云</h1>
+          <p>MASTER DATA</p>
         </div>
       </div>
       <nav class="nav-menu">
@@ -30,16 +30,23 @@
           </li>
         </ul>
       </nav>
+      <div class="sidebar-foot">平台运营 · 主数据管理</div>
     </aside>
     <main class="main-content">
       <header class="top-header">
         <div class="header-left">
-          <span class="current-location">{{ currentLocation }}</span>
+          <div class="breadcrumb">
+            <span>主数据管理</span><b>/</b><strong>{{ currentLocation }}</strong>
+          </div>
         </div>
         <div class="header-right">
+          <div class="role-switch">
+            <span class="on">运营中心</span>
+            <a :href="userEntry">用户端</a>
+          </div>
           <button class="notification-btn">🔔</button>
           <div class="user-info">
-            <div class="user-avatar">👤</div>
+            <div class="user-avatar">{{ (userInfo.nickname || userInfo.username || '管').slice(0, 1) }}</div>
             <div class="user-detail">
               <span class="user-name">{{ userInfo.nickname || userInfo.username || '管理员' }}</span>
               <!-- 原来这里写死 admin@masterdata.com：一个真实的界面上不该出现编造的邮箱 -->
@@ -74,6 +81,8 @@ const session = useSessionStore()
 const userInfo = computed(() => session.user ?? { username: '', nickname: '', roles: [] })
 const currentPath = ref('/dashboard')
 const expandedMenu = ref(null)
+/** 用户端入口（买家中心）；运营端与用户端共用平台 SSO。 */
+const userEntry = `${window.location.protocol}//${window.location.hostname}:8086/member/buyer`
 
 const menuItems = [
   { path: '/dashboard', label: '运营总览', icon: '📊' },
@@ -259,12 +268,12 @@ onMounted(() => {
 .layout-container {
   display: flex;
   min-height: 100vh;
-  background: #f5f7fa;
+  background: #f4f7f5;
 }
 
 .sidebar {
-  width: 200px;
-  background: #2d3748;
+  width: 224px;
+  background: linear-gradient(180deg, #06281a, #05301f);
   color: #fff;
   position: fixed;
   left: 0;
@@ -277,27 +286,38 @@ onMounted(() => {
 }
 
 .logo-section {
-  padding: 20px;
-  background: linear-gradient(135deg, #238636 0%, #2ea043 100%);
+  padding: 18px;
+  background: transparent;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  flex: none;
 }
 
 .logo-icon {
-  font-size: 28px;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, #159a5e, #0c7ba8);
+  font-size: 17px;
+  flex: none;
 }
 
 .logo-text h1 {
   margin: 0;
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
 }
 
 .logo-text p {
-  margin: 4px 0 0;
-  font-size: 10px;
-  opacity: 0.8;
+  margin: 2px 0 0;
+  font-size: 9px;
+  opacity: 0.55;
+  letter-spacing: 2.4px;
 }
 
 .nav-menu {
@@ -314,29 +334,29 @@ onMounted(() => {
 }
 
 .nav-menu > ul > li {
-  margin: 4px 8px;
-  border-radius: 6px;
+  margin: 2px 10px;
+  border-radius: 8px;
 }
 
 .nav-menu > ul > li > a {
   display: flex;
   align-items: center;
-  padding: 10px 16px;
-  color: #a0aec0;
+  padding: 9px 12px;
+  color: rgba(255, 255, 255, 0.76);
   text-decoration: none;
   transition: all 0.2s;
-  font-size: 14px;
+  font-size: 13.5px;
 }
 
 .nav-menu > ul > li:hover > a {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.08);
   color: #fff;
 }
 
 .nav-menu > ul > li.active > a {
-  background: #238636;
+  background: linear-gradient(135deg, #12764a, #159a5e);
   color: #fff;
-  border-radius: 6px;
+  box-shadow: 0 8px 22px rgba(21, 154, 94, 0.28);
 }
 
 .nav-icon {
@@ -347,7 +367,7 @@ onMounted(() => {
 .expand-icon {
   margin-left: auto;
   font-size: 10px;
-  color: #a0aec0;
+  color: rgba(255, 255, 255, 0.4);
   transition: transform 0.2s;
 }
 
@@ -356,50 +376,61 @@ onMounted(() => {
 }
 
 .sub-menu {
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(0, 0, 0, 0.16);
   margin: 4px 8px;
-  border-radius: 6px;
+  border-radius: 8px;
   overflow: hidden;
 }
 
 .sub-menu li {
-  padding: 6px 0;
+  padding: 2px 0;
 }
 
 .sub-menu li a {
   display: block;
-  padding: 8px 16px 8px 44px;
-  color: #a0aec0;
+  padding: 8px 14px 8px 42px;
+  color: rgba(255, 255, 255, 0.65);
   text-decoration: none;
-  font-size: 13px;
+  font-size: 12.5px;
   transition: all 0.2s;
 }
 
 .sub-menu li:hover a {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.08);
   color: #fff;
 }
 
 .sub-menu li.active a {
-  color: #238636;
-  font-weight: 500;
+  color: #6fd6a2;
+  background: rgba(21, 154, 94, 0.16);
+  font-weight: 600;
+}
+
+.sidebar-foot {
+  flex: none;
+  padding: 14px 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 10.5px;
+  text-align: center;
 }
 
 .main-content {
   flex: 1;
-  margin-left: 200px;
+  min-width: 0;
+  margin-left: 224px;
   display: flex;
   flex-direction: column;
 }
 
 .top-header {
   background: #fff;
-  padding: 0 20px;
+  padding: 0 24px;
   height: 60px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border-bottom: 1px solid #e3eae5;
   position: sticky;
   top: 0;
   z-index: 99;
@@ -409,56 +440,96 @@ onMounted(() => {
   flex: 1;
 }
 
-.current-location {
-  font-size: 16px;
-  font-weight: 600;
-  color: #2d3748;
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #6b7c72;
+  font-size: 13px;
+}
+
+.breadcrumb b {
+  color: #bac6be;
+  font-weight: 400;
+}
+
+.breadcrumb strong {
+  color: #0b1a12;
 }
 
 .header-right {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
+}
+
+.role-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid #e3eae5;
+  border-radius: 999px;
+  background: #eef3f0;
+}
+
+.role-switch span,
+.role-switch a {
+  padding: 4px 12px;
+  border-radius: 999px;
+  color: #6b7c72;
+  font-size: 12.5px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.role-switch a:hover {
+  color: #0e5233;
+}
+
+.role-switch .on {
+  background: #12764a;
+  color: #fff;
 }
 
 .notification-btn {
-  background: none;
+  background: #f4f7f5;
   border: none;
-  font-size: 18px;
+  font-size: 16px;
   cursor: pointer;
-  padding: 8px;
-  border-radius: 6px;
-  transition: background 0.2s;
+  padding: 6px 8px;
+  border-radius: 8px;
 }
 
 .notification-btn:hover {
-  background: #f0f0f0;
+  background: #e4f6ec;
 }
 
 .user-info {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 6px 12px;
-  border-radius: 6px;
+  padding: 4px 8px;
+  border-radius: 8px;
   cursor: pointer;
-  transition: background 0.2s;
 }
 
 .user-info:hover {
-  background: #f0f0f0;
+  background: #f4f7f5;
 }
 
 .user-avatar {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #238636 0%, #2ea043 100%);
+  background: linear-gradient(135deg, #159a5e, #0ea5e9);
   display: flex;
   align-items: center;
   justify-content: center;
   color: #fff;
-  font-size: 14px;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .user-detail {
@@ -468,18 +539,80 @@ onMounted(() => {
 
 .user-name {
   font-size: 13px;
-  font-weight: 500;
-  color: #2d3748;
+  font-weight: 600;
+  color: #33453b;
 }
 
 .user-email {
-  font-size: 11px;
-  color: #a0aec0;
+  font-size: 10.5px;
+  color: #93a29a;
 }
 
 .content-wrapper {
   flex: 1;
-  padding: 20px;
+  padding: 20px 24px 34px;
+  background: #f4f7f5;
+}
+
+/* 页面公共控件向会员中心的绿色系收口 */
+.content-wrapper .add-btn,
+.content-wrapper .btn-primary {
+  background: linear-gradient(135deg, #12764a, #159a5e) !important;
+}
+
+.content-wrapper .search-btn {
+  color: #12764a;
+}
+
+.content-wrapper .status-badge.active,
+.content-wrapper .type-badge.enterprise {
+  background: rgba(18, 118, 74, 0.1);
+  color: #12764a;
+}
+
+.content-wrapper .table-card {
+  border: 1px solid #e3eae5;
+  box-shadow: none;
+}
+
+.content-wrapper .header-left h1 {
+  color: #0b1a12;
+}
+
+@media (max-width: 900px) {
+  .layout-container {
+    display: block;
+  }
+
+  .sidebar {
+    position: relative;
+    width: 100%;
+    bottom: auto;
+  }
+
+  .main-content {
+    margin-left: 0;
+  }
+
+  .nav-menu {
+    max-height: 320px;
+  }
+
+  .sidebar-foot {
+    display: none;
+  }
+
+  .top-header {
+    padding: 0 14px;
+  }
+
+  .content-wrapper {
+    padding: 14px;
+  }
+
+  .user-email {
+    display: none;
+  }
 }
 
 .nav-menu::-webkit-scrollbar {
