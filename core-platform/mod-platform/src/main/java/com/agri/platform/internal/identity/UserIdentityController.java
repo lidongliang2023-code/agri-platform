@@ -1,6 +1,10 @@
 package com.agri.platform.internal.identity;
 
 import com.agri.core.infra.web.MarketContext;
+import com.agri.platform.internal.merchant.MerchantEntity;
+import com.agri.platform.internal.merchant.MerchantMapper;
+import com.agri.platform.internal.merchant.UserMerchantEntity;
+import com.agri.platform.internal.merchant.UserMerchantMapper;
 import com.agri.shared.exception.BusinessException;
 import com.agri.shared.exception.ErrorCode;
 import com.agri.shared.result.ApiResponse;
@@ -9,6 +13,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -37,6 +42,8 @@ import java.util.Map;
 public class UserIdentityController {
 
     private final UserIdentityMapper identityMapper;
+    private final UserMerchantMapper userMerchantMapper;
+    private final MerchantMapper merchantMapper;
 
     // ------------------------------ 当事人侧 ------------------------------
 
@@ -116,6 +123,7 @@ public class UserIdentityController {
 
     /** 运营端：审核（通过 / 驳回）。驳回必须给原因。 */
     @PostMapping("/api/v1/admin/user-identities/{id}/review")
+    @Transactional(rollbackFor = Exception.class)
     public ApiResponse<Map<String, Object>> review(@PathVariable Long id,
                                                    @RequestBody ReviewRequest request) {
         UserIdentityEntity entity = identityMapper.selectById(id);
@@ -142,6 +150,9 @@ public class UserIdentityController {
         entity.setReviewRemark(approved ? trim(request.getRemark()) : request.getRemark().trim());
         entity.setUpdatedAt(LocalDateTime.now());
         identityMapper.updateById(entity);
+        if (approved) {
+            syncPersonalMerchant(entity, reviewerName);
+        }
         return ApiResponse.ok(toView(entity, null));
     }
 
@@ -152,6 +163,40 @@ public class UserIdentityController {
                 .eq(UserIdentityEntity::getUserId, userId)
                 .orderByDesc(UserIdentityEntity::getSubmitTime)
                 .last("LIMIT 1"));
+    }
+
+    /**
+     * 个人实名通过后同步个人经营主体的认证状态。
+     *
+     * <p>个人会员注册时会创建一条 `member_type=personal` 的经营主体，初始为
+     * `unverified`；若只把实名记录改成 `verified` 而不更新主体，业务侧读取主体认证状态时
+     * 仍会认为该用户“未认证”。这里只同步个人主体，不触碰其可能同时拥有的企业主体。</p>
+     */
+    private void syncPersonalMerchant(UserIdentityEntity identity, String reviewerName) {
+        List<UserMerchantEntity> memberships = userMerchantMapper.selectList(
+                new LambdaQueryWrapper<UserMerchantEntity>()
+                        .eq(UserMerchantEntity::getUserId, identity.getUserId())
+                        .eq(UserMerchantEntity::getStatus, 1));
+        if (memberships.isEmpty()) {
+            return;
+        }
+        List<Long> merchantIds = memberships.stream()
+                .map(UserMerchantEntity::getMerchantId)
+                .distinct()
+                .toList();
+        List<MerchantEntity> merchants = merchantMapper.selectList(
+                new LambdaQueryWrapper<MerchantEntity>().in(MerchantEntity::getId, merchantIds));
+        LocalDateTime now = LocalDateTime.now();
+        for (MerchantEntity merchant : merchants) {
+            if (!"personal".equalsIgnoreCase(merchant.getMemberType())) {
+                continue;
+            }
+            merchant.setVerifyStatus("approved");
+            merchant.setVerifyRemark("个人实名认证审核通过"
+                    + (reviewerName == null ? "" : "（" + reviewerName + "）"));
+            merchant.setVerifyTime(now);
+            merchantMapper.updateById(merchant);
+        }
     }
 
     /**

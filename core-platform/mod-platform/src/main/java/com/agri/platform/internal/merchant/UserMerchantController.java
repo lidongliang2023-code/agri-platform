@@ -134,6 +134,9 @@ public class UserMerchantController {
         view.put("merchantId", entity.getMerchantId());
         view.put("merchantName", merchant == null ? null : merchant.getName());
         view.put("merchantType", merchant == null ? null : merchant.getType());
+        view.put("memberType", merchant == null ? null : merchant.getMemberType());
+        view.put("verifyStatus", merchant == null ? null : merchant.getVerifyStatus());
+        view.put("verifyTime", merchant == null ? null : merchant.getVerifyTime());
         view.put("roleInMerchant", entity.getRoleInMerchant());
         view.put("status", entity.getStatus());
         view.put("createdAt", entity.getCreatedAt());

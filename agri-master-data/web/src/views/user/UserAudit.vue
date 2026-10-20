@@ -38,7 +38,7 @@
 
     <div class="audit-toolbar">
       <span>已选 <b>{{ selectedKeys.length }}</b> 项</span>
-      <button class="action-btn approve" :disabled="!selectedKeys.length || saving" @click="batchApprove">批量通过</button>
+      <button class="action-btn approve" :disabled="!selectedKeys.length || saving" @click="batchApprove">批量通过并生效</button>
       <button class="action-btn reject" :disabled="!selectedKeys.length || saving" @click="batchReject">批量驳回</button>
       <span class="spacer"></span>
       <span>当前加载 {{ rows.length }} 条 · 筛选后 {{ filtered.length }} 条</span>
@@ -114,7 +114,7 @@
         <div class="modal-footer">
           <button class="btn btn-cancel" @click="detail = null">关闭</button>
           <template v-if="detail.status === 'pending'">
-            <button class="btn btn-success" :disabled="saving" @click="approveOne(detail)">审核通过</button>
+            <button class="btn btn-success" :disabled="saving" @click="approveOne(detail)">审核通过并生效</button>
             <button class="btn btn-danger" :disabled="saving" @click="openReject([detail])">驳回申请</button>
           </template>
         </div>
@@ -296,7 +296,9 @@ const approveOne = async (item) => {
   saving.value = true
   try {
     if (await approveItem(item)) {
-      message.success('已通过')
+      message.success(item.type === 'personal'
+        ? '实名认证已通过，个人经营主体认证状态已同步'
+        : '企业认证已通过，经营主体认证状态已生效')
       detail.value = null
       await loadData()
     }
@@ -317,7 +319,7 @@ const batchApprove = async () => {
     for (const item of targets) {
       if (await approveItem(item)) success += 1
     }
-    message.success(`已通过 ${success} 笔，失败 ${targets.length - success} 笔`)
+    message.success(`已通过并生效 ${success} 笔，失败 ${targets.length - success} 笔`)
     selectedKeys.value = []
     await loadData()
   } finally {

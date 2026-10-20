@@ -349,9 +349,15 @@ export default function App(): JSX.Element {
         setError('请填写 15-18 位统一社会信用代码')
         return
       }
-    } else if (!reg.realName.trim()) {
-      setError('请填写真实姓名')
-      return
+    } else {
+      if (!reg.realName.trim()) {
+        setError('请填写真实姓名')
+        return
+      }
+      if (!reg.idCard.trim()) {
+        setError('请填写身份证号，个人实名认证将随注册提交')
+        return
+      }
     }
     if (reg.idCard.trim() && !/^\d{17}[\dXx]$/.test(reg.idCard.trim())) {
       setError('身份证号应为 18 位（末位可为 X）')
@@ -614,7 +620,7 @@ export default function App(): JSX.Element {
                 onChange={(event) => patchReg({ realName: event.target.value })} />
             </label>
             <label className="auth-field">
-              身份证号
+              身份证号<span className="req">*</span>
               <input className="auth-input" value={reg.idCard} maxLength={18}
                 placeholder="18 位身份证号（仅存掩码与摘要）"
                 onChange={(event) => patchReg({ idCard: event.target.value.replace(/\s/g, '') })} />

@@ -22,7 +22,7 @@ import jakarta.validation.constraints.NotBlank;
  * @param companySize 企业规模
  * @param address 注册地址
  * @param realName 真实姓名（个人必填）
- * @param idCard 身份证号（个人可空；只落掩码与加盐摘要）
+ * @param idCard 身份证号（个人必填；只落掩码与加盐摘要）
  * @param businessType 个人经营类型
  * @param contactName 联系人姓名
  * @param clientId 子系统标识

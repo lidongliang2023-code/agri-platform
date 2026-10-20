@@ -48,8 +48,8 @@ import java.util.concurrent.ThreadLocalRandom;
  * <p>验证码存 Redis：TTL 5 分钟、同一手机号 60 秒内不重发、最多校验 5 次（错满即作废）。</p>
 
  *
- * <p><b>注册只建账号与平台角色，不建经营主体绑定</b>：绑定在哪家主体、什么身份，是产品口径
- * （见类尾注释）。未绑定的账号登录后由各业务域如实提示"还没有绑定经营主体"。</p>
+ * <p><b>注册会一次建齐账号、平台角色、经营主体与 owner 绑定</b>：企业会员同时生成待审核的
+ * 主体认证申请；个人会员必须提供身份证号，并生成服务端只保存掩码与加盐摘要的待审核实名记录。</p>
  */
 @Slf4j
 @Service
@@ -184,13 +184,12 @@ public class SmsAuthService {
      * 手机号验证码注册：手机号即账号，授予平台 {@code FARMER} 角色。
 
      *
-     * <p>账号初始**没有密码**（随机 BCrypt 串占位）：注册走的是验证码，密码登录要等用户自己设密码，
-     * 不能给个能猜到的默认口令。</p>
+     * <p>页面提供了密码时使用用户设置的密码；旧调用方未提供密码时使用随机 BCrypt 串占位，
+     * 不会产生可猜测的默认口令。</p>
 
      *
-     * <p><b>不建经营主体绑定</b>：绑定到哪家主体、以什么身份，是产品口径 —— 自注册常见两种做法：
-     * ①"注册即开通自己的经营主体"（为每个注册者建一家主体）；②"先注册、等运营开通"。
-     * 本实现取②，未绑定账号登录后由业务域如实提示缺绑定（403 且消息可读），不擅自把新用户塞进任何既有主体。</p>
+     * <p>注册会为当前用户创建独立经营主体和 owner 绑定；企业会员的主体认证与个人会员的实名记录
+     * 都以 pending 状态进入运营端审核，审核通过后才对业务生效。</p>
      *
      * @param phone 手机号（同时作为登录账号名）
      * @param nickname 昵称（可空，默认"用户+手机号后四位"）
@@ -244,8 +243,14 @@ public class SmsAuthService {
             if (sameCredit != null && sameCredit > 0) {
                 throw new BusinessException(ErrorCode.CONFLICT, "该统一社会信用代码已登记，请直接登录或联系平台运营");
             }
-        } else if (realName == null) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "真实姓名不能为空");
+        } else {
+            if (realName == null) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "真实姓名不能为空");
+            }
+            if (trimToNull(profile.idCard()) == null) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST,
+                        "个人会员注册必须填写身份证号，用于生成实名认证待审记录");
+            }
         }
 
         String rawPassword = profile.password();
@@ -327,7 +332,7 @@ public class SmsAuthService {
             certification.setCertStatus("pending");
             certification.setSubmitTime(now);
             certificationMapper.insert(certification);
-        } else if (trimToNull(profile.idCard()) != null) {
+        } else {
             String idNo = IdNumberUtil.validate(profile.idCard());
             String salt = IdNumberUtil.newSalt();
             UserIdentityEntity realNameRecord = new UserIdentityEntity();
