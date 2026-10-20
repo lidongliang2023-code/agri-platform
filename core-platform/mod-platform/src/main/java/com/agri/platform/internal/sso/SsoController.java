@@ -136,7 +136,14 @@ public class SsoController {
     @PostMapping("/register-by-sms")
     public ApiResponse<SsoLoginResult> registerBySms(@Valid @RequestBody SmsRegisterRequest request,
                                                     HttpServletResponse response) {
-        assertClient(request.clientId(), request.redirectUri());
+        // 从子系统进入时带授权上下文；直接从认证中心 /register 进入时没有上下文，
+        // 此时仍然允许注册（公开自助注册），只建会话、不签授权码。
+        String clientId = trimToNull(request.clientId());
+        String redirectUri = trimToNull(request.redirectUri());
+        boolean hasContext = clientId != null && redirectUri != null;
+        if (hasContext) {
+            assertClient(clientId, redirectUri);
+        }
         smsAuthService.verify(request.phone(), "register", request.code());
         Long marketId = request.marketId() == null ? 1L : request.marketId();
         UserEntity user = smsAuthService.registerByPhone(request.phone(),
@@ -145,7 +152,12 @@ public class SsoController {
                         request.address(), request.realName(), request.idCard(), request.businessType(),
                         request.contactName()),
                 marketId);
-        return ApiResponse.ok(signIn(user.getId(), marketId, request.clientId(), request.redirectUri(),
+        if (!hasContext) {
+            // 独立注册：建全局会话，之后从任一子系统入口进入都无需再输密码
+            sessionService.create(user.getId(), marketId, true, response);
+            return ApiResponse.ok(new SsoLoginResult(null));
+        }
+        return ApiResponse.ok(signIn(user.getId(), marketId, clientId, redirectUri,
                 request.state(), request.codeChallenge(), request.codeChallengeMethod(), false, response));
     }
 
@@ -264,5 +276,12 @@ public class SsoController {
 
     private ResponseEntity<Void> redirect(String location) {
         return ResponseEntity.status(HttpStatus.FOUND).location(URI.create(location)).build();
+    }
+
+    private static String trimToNull(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
     }
 }

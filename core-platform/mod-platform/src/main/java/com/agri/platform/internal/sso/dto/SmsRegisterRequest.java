@@ -47,8 +47,10 @@ public record SmsRegisterRequest(
         String idCard,
         String businessType,
         String contactName,
-        @NotBlank(message = "client_id 不能为空") String clientId,
-        @NotBlank(message = "redirect_uri 不能为空") String redirectUri,
+        /** 子系统标识；直接从认证中心访问注册页时为空（只注册、不签授权码） */
+        String clientId,
+        /** 回跳地址；为空时返回 redirect=null，页面引导用户去子系统登录 */
+        String redirectUri,
         String state,
         String codeChallenge,
         String codeChallengeMethod) {

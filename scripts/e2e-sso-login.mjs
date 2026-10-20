@@ -172,7 +172,7 @@ try {
   await pageB.setViewport({ width: 1440, height: 900 })
   await openSsoLoginPage(pageB)
   await clickTab(pageB, '账号 + 密码')
-  await fill(pageB, 'input[placeholder*="请输入账号"]', PHONE)
+  await fill(pageB, 'input[autocomplete="username"]', PHONE)
   await fill(pageB, 'input[type="password"]', PASSWORD)
   await pageB.evaluate(() => {
     const btn = [...document.querySelectorAll('button[type="submit"]')]
@@ -186,6 +186,97 @@ try {
   check(appText.length > 50 && !appText.includes('正在跳转到统一认证中心'),
     '子系统页面已按登录态渲染', appText.replace(/\s+/g, ' ').slice(0, 70))
   await ctxB.close()
+
+  // ---------- 场景 C：直接从 /register 独立注册（无 client_id/redirect_uri）----------
+  // 用户在浏览器地址栏直接打开认证中心注册页时没有授权上下文；这条链路必须也能注册落库，
+  // 并且注册后能从子系统入口免登进入。
+  const registerPhone = `139${String(Date.now()).slice(-8)}`
+  const registerPassword = 'Agri2026test'
+  const ctxC = await browser.createBrowserContext()
+  const pageC = await ctxC.newPage()
+  await pageC.setViewport({ width: 1440, height: 1000 })
+  let standaloneRegisterBody = null
+  pageC.on('response', async (res) => {
+    if (/\/api\/v1\/sso\/register-by-sms$/.test(res.url())) {
+      try {
+        standaloneRegisterBody = { status: res.status(), json: await res.json() }
+      } catch { /* ignore */ }
+    }
+  })
+  await pageC.goto(`${BASE_URL}:8090/register`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await pageC.waitForSelector('.identity-cards', { timeout: 15000 })
+  const standaloneText = await pageC.evaluate(() => document.body.innerText)
+  const registerDisabled = await pageC.evaluate(() => {
+    const btn = [...document.querySelectorAll('button[type="submit"]')].find((b) => (b.textContent ?? '').includes('免费注册'))
+    return btn ? btn.disabled : true
+  })
+  check(standaloneText.includes('当前为独立注册') && !registerDisabled,
+    '直接打开 /register（无授权上下文）时提交按钮可用')
+
+  await pageC.evaluate(() => {
+    const card = [...document.querySelectorAll('.identity-card')].find((el) => (el.textContent ?? '').includes('个人会员'))
+    card?.click()
+  })
+  await sleep(300)
+  await fill(pageC, 'input[placeholder="请输入真实姓名"]', '独立注册联调')
+  await fill(pageC, 'input[placeholder="用于接收重要通知"]', '独立注册联系人')
+  await fill(pageC, 'input[placeholder="11 位手机号"]', registerPhone)
+  await pageC.evaluate(() => {
+    const btn = [...document.querySelectorAll('button')].find((b) => (b.textContent ?? '').includes('获取验证码'))
+    btn?.click()
+  })
+  await sleep(1200)
+  const registerCode = execFileSync('C:\\Redis\\redis-cli.exe',
+    ['-n', '0', 'GET', `agri:sms:code:register:${registerPhone}`], { encoding: 'utf8' }).trim()
+  check(/^\d{6}$/.test(registerCode), '独立注册：短信验证码已发送', `手机 ${registerPhone}`)
+  await fill(pageC, 'input[placeholder="6 位验证码"]', registerCode)
+  await fill(pageC, 'input[placeholder="8-20 位字母+数字"]', registerPassword)
+  await fill(pageC, 'input[placeholder="再次输入密码"]', registerPassword)
+  await pageC.evaluate(() => document.querySelector('.agreement input[type="checkbox"]')?.click())
+  await pageC.evaluate(() => {
+    const btn = [...document.querySelectorAll('button[type="submit"]')].find((b) => (b.textContent ?? '').includes('免费注册'))
+    btn?.click()
+  })
+  await pageC.waitForSelector('.success-mask', { visible: true, timeout: 20000 })
+  const standaloneSuccess = await pageC.evaluate(() => document.querySelector('.success-mask').innerText)
+  check(standaloneSuccess.includes('注册成功') && standaloneSuccess.includes('已登录认证中心'),
+    '独立注册：页面展示成功并说明已登录认证中心', standaloneSuccess.replace(/\s+/g, ' ').slice(0, 90))
+  check(standaloneRegisterBody?.status === 200 && standaloneRegisterBody?.json?.code === 0
+    && standaloneRegisterBody?.json?.data?.redirect === null,
+    '独立注册：接口返回 redirect=null（不伪造子系统回跳）',
+    JSON.stringify(standaloneRegisterBody?.json?.data ?? {}).slice(0, 60))
+
+  await pageC.evaluate(() => {
+    const btn = [...document.querySelectorAll('.success-actions button')].find((b) => (b.textContent ?? '').includes('进入生产管理'))
+    btn?.click()
+  })
+  const standaloneLanded = await waitLanded(pageC)
+  check(standaloneLanded.startsWith(BASE_URL) && !standaloneLanded.includes(':8090') && !standaloneLanded.includes('/login'),
+    '独立注册后从子系统入口进入可自动登录', standaloneLanded)
+  await ctxC.close()
+
+  // ---------- 场景 D：新会话用独立注册的账号 + 密码登录 ----------
+  const ctxD = await browser.createBrowserContext()
+  const pageD = await ctxD.newPage()
+  await pageD.setViewport({ width: 1440, height: 1000 })
+  await openSsoLoginPage(pageD)
+  await clickTab(pageD, '账号 + 密码')
+  // 场景 C 注册的是个人会员；登录身份要与注册身份一致（服务端会校验 member_type）
+  await pageD.evaluate(() => {
+    const label = [...document.querySelectorAll('.identity-inline label')].find((el) => (el.textContent ?? '').includes('个人会员'))
+    label?.click()
+  })
+  await sleep(300)
+  await fill(pageD, 'input[autocomplete="username"]', registerPhone)
+  await fill(pageD, 'input[type="password"]', registerPassword)
+  await pageD.evaluate(() => {
+    const btn = [...document.querySelectorAll('button[type="submit"]')].find((b) => (b.textContent ?? '').includes('登'))
+    btn?.click()
+  })
+  const registerPasswordLanded = await waitLanded(pageD)
+  check(registerPasswordLanded.startsWith(BASE_URL) && !registerPasswordLanded.includes(':8090') && !registerPasswordLanded.includes('/login'),
+    '独立注册的账号可用手机号 + 密码登录', registerPasswordLanded)
+  await ctxD.close()
 } catch (error) {
   check(false, '脚本执行未抛异常', String(error).slice(0, 160))
 } finally {

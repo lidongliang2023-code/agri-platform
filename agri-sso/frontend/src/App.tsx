@@ -71,8 +71,14 @@ function homeUrlOf(redirectUri: string): string {
   try {
     return new URL(redirectUri).origin + '/'
   } catch {
-    return '/'
+    // 直接访问认证中心时没有 redirect_uri：回平台门户根地址，而不是又回到登录页
+    return window.location.origin + '/'
   }
+}
+
+/** 独立注册 / 直接登录后的默认落点：生产管理模块的用户端入口。 */
+function platformEntry(): string {
+  return `${window.location.protocol}//${window.location.hostname}/production/login`
 }
 
 function Icon({ name, size = 16 }: { name: string; size?: number }): JSX.Element {
@@ -211,7 +217,7 @@ export default function App(): JSX.Element {
   const [sending, setSending] = useState<'login' | 'register' | null>(null)
   const [loginLeft, setLoginLeft] = useState(0)
   const [registerLeft, setRegisterLeft] = useState(0)
-  const [success, setSuccess] = useState<{ redirect: string; identity: Identity; hasIdCard: boolean } | null>(null)
+  const [success, setSuccess] = useState<{ redirect: string | null; identity: Identity; hasIdCard: boolean } | null>(null)
 
   useEffect(() => {
     if (loginLeft <= 0) return undefined
@@ -334,10 +340,6 @@ export default function App(): JSX.Element {
     setError('')
     setNotice('')
     setHint('')
-    if (contextMissing) {
-      setError('缺少授权上下文，请从登录页点击「立即免费注册」进入')
-      return
-    }
     if (reg.identity === 'enterprise') {
       if (!reg.companyName.trim()) {
         setError('请填写企业名称')
@@ -418,7 +420,7 @@ export default function App(): JSX.Element {
         return
       }
       setSuccess({
-        redirect: body.data?.redirect ?? homeUrl,
+        redirect: body.data?.redirect ?? null,
         identity: reg.identity,
         hasIdCard: reg.idCard.trim() !== '',
       })
@@ -691,11 +693,11 @@ export default function App(): JSX.Element {
           </span>
         </label>
 
-        <button type="submit" className="auth-submit" style={{ marginTop: 18 }} disabled={busy || contextMissing}>
+        <button type="submit" className="auth-submit" style={{ marginTop: 18 }} disabled={busy}>
           {busy ? '提交中…' : '免费注册'}
         </button>
 
-        {contextMissing && <div className="auth-notice">缺少授权上下文。请先回到登录页，再点击「立即免费注册」。</div>}
+        {contextMissing && <div className="auth-notice">当前为独立注册：账号会正常创建并登录认证中心，完成后请从子系统入口进入。</div>}
         {error !== '' && <div className="auth-error">{error}</div>}
         {hint !== '' && <div className="auth-hint">{hint}</div>}
         {notice !== '' && <div className="auth-notice">{notice}</div>}
@@ -730,7 +732,8 @@ export default function App(): JSX.Element {
             <div className="check-icon"><Icon name="check" size={34} /></div>
             <h3>注册成功！</h3>
             <p>
-              欢迎加入农产云，您的{IDENTITY_LABEL[success.identity]}账号已创建并自动登录。
+              欢迎加入农产云，您的{IDENTITY_LABEL[success.identity]}账号已创建
+              {success.redirect ? '并自动登录。' : '，并已登录认证中心。'}
               {success.identity === 'enterprise'
                 ? '企业资质认证已随注册提交，平台审核通过后即可开展交易。'
                 : success.hasIdCard
@@ -738,12 +741,25 @@ export default function App(): JSX.Element {
                   : '未填写身份证号，实名认证尚未提交，可联系平台运营补充。'}
             </p>
             <div className="success-actions">
-              <button type="button" className="ghost" onClick={() => { window.location.href = success.redirect }}>
-                查看认证进度
-              </button>
-              <button type="button" className="primary" onClick={() => { window.location.href = success.redirect }}>
-                进入首页
-              </button>
+              {success.redirect ? (
+                <>
+                  <button type="button" className="ghost" onClick={() => { window.location.href = success.redirect ?? homeUrl }}>
+                    查看认证进度
+                  </button>
+                  <button type="button" className="primary" onClick={() => { window.location.href = success.redirect ?? homeUrl }}>
+                    进入首页
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button type="button" className="ghost" onClick={() => switchView('/login')}>
+                    返回登录
+                  </button>
+                  <button type="button" className="primary" onClick={() => { window.location.href = platformEntry() }}>
+                    进入生产管理
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
