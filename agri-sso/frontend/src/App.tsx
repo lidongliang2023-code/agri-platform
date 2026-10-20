@@ -398,10 +398,6 @@ export default function App(): JSX.Element {
     setError('')
     setNotice('')
     setHint('')
-    if (contextMissing) {
-      setError('缺少授权上下文，请从您要访问的子系统入口重新进入')
-      return
-    }
     setBusy(true)
     try {
       const common = {
@@ -413,19 +409,32 @@ export default function App(): JSX.Element {
         codeChallengeMethod: ctx.codeChallengeMethod,
         remember,
       }
-      const response = await fetch(tab === 'sms' ? '/api/v1/sso/login-by-sms' : '/api/v1/sso/login', {
+      const loginUrl = contextMissing
+        ? (tab === 'sms' ? '/api/v1/sso/login-standalone-by-sms' : '/api/v1/sso/login-standalone')
+        : (tab === 'sms' ? '/api/v1/sso/login-by-sms' : '/api/v1/sso/login')
+      const response = await fetch(loginUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(tab === 'sms'
-          ? { ...common, phone, code: smsCode }
-          : {
+          ? (contextMissing
+              ? { phone, code: smsCode, marketId: 1, remember }
+              : { ...common, phone, code: smsCode })
+          : (contextMissing
+              ? {
+                  username: /^1[3-9]\d{9}$/.test(account.trim()) ? undefined : account.trim(),
+                  phone: /^1[3-9]\d{9}$/.test(account.trim()) ? account.trim() : undefined,
+                  password,
+                  marketId: 1,
+                  remember,
+                }
+              : {
               ...common,
               // 账号框既接受用户名也接受手机号：11 位手机号走 phone 字段，
               // 其余按 username 查（两个都传时服务端以 username 为准，所以只传一个）
               username: /^1[3-9]\d{9}$/.test(account.trim()) ? undefined : account.trim(),
               phone: /^1[3-9]\d{9}$/.test(account.trim()) ? account.trim() : undefined,
               password,
-            }),
+            })),
       })
       const body = (await response.json()) as SsoBody
       if (!response.ok || body.code !== 0) {
@@ -444,7 +453,11 @@ export default function App(): JSX.Element {
         setError('认证中心未返回回跳地址，请联系平台运营')
         return
       }
-      window.location.href = redirect
+      // 独立登录返回的是站内路径（/production/... 或 /admin/...），
+      // 必须切到平台根域，不能留在 :8090 的认证中心 origin 下。
+      window.location.href = contextMissing && redirect.startsWith('/')
+        ? `${window.location.protocol}//${window.location.hostname}${redirect}`
+        : redirect
     } catch {
       setError('无法联系认证服务，请确认后端已启动')
     } finally {
@@ -618,7 +631,7 @@ export default function App(): JSX.Element {
           </>
         )}
 
-        <button type="submit" className="auth-submit" disabled={busy || contextMissing}>
+        <button type="submit" className="auth-submit" disabled={busy}>
           {busy ? '登录中…' : '登 录'}
         </button>
 
@@ -632,7 +645,7 @@ export default function App(): JSX.Element {
           </button>
         </div>
 
-        {contextMissing && <div className="auth-notice">缺少授权上下文。请从生产管理、交易撮合等子系统的登录入口进入，认证中心才能把您送回原页面。</div>}
+        {contextMissing && <div className="auth-notice">当前为独立登录：登录后会按账号开通阶段进入对应页面；如需返回原子系统，请从子系统入口登录。</div>}
         {error !== '' && <div className="auth-error">{error}</div>}
         {hint !== '' && <div className="auth-hint">{hint}</div>}
         {notice !== '' && <div className="auth-notice">{notice}</div>}

@@ -131,6 +131,50 @@ public class SsoController {
     }
 
     /**
+     * 独立认证中心登录：没有子系统 client_id/redirect_uri 时也能用账号密码登录。
+     * 建立 SSO 会话并下发平台令牌，随后按开通阶段或角色返回站内跳转地址。
+     */
+    @PostMapping("/login-standalone")
+    public ApiResponse<StandaloneLoginResult> loginStandalone(
+            @RequestBody StandaloneLoginRequest request, HttpServletResponse response) {
+        AuthOutcome outcome = authService.login(new LoginRequest(request.username(), request.password(),
+                request.marketId(), request.phone()));
+        LoginVO login = outcome.body();
+        Long marketId = request.marketId() == null ? 1L : request.marketId();
+        sessionService.create(login.user().id(), marketId, !Boolean.FALSE.equals(request.remember()), response);
+        cookieSupport.write(response, outcome.refreshToken());
+        return ApiResponse.ok(standaloneResult(login, marketId));
+    }
+
+    /** 独立认证中心的手机验证码登录。 */
+    @PostMapping("/login-standalone-by-sms")
+    public ApiResponse<StandaloneLoginResult> loginStandaloneBySms(
+            @RequestBody StandaloneSmsLoginRequest request, HttpServletResponse response) {
+        smsAuthService.verify(request.phone(), "login", request.code());
+        UserEntity user = smsAuthService.requireUserByPhone(request.phone());
+        Long marketId = request.marketId() == null ? 1L : request.marketId();
+        AuthOutcome outcome = authService.issueTokens(user.getId(), marketId);
+        sessionService.create(user.getId(), marketId, !Boolean.FALSE.equals(request.remember()), response);
+        cookieSupport.write(response, outcome.refreshToken());
+        return ApiResponse.ok(standaloneResult(outcome.body(), marketId));
+    }
+
+    private StandaloneLoginResult standaloneResult(LoginVO login, Long marketId) {
+        SmsAuthService.OnboardingStatus onboarding = smsAuthService.onboardingStatus(login.user().id(), marketId);
+        String stage = onboarding.stage();
+        String redirect;
+        if (!"done".equals(stage)) {
+            redirect = "/register?step=" + ("subject".equals(stage) ? 2 : 3);
+        } else {
+            List<String> roles = login.user().roles() == null ? List.of() : login.user().roles();
+            boolean ops = roles.stream().anyMatch(role -> role.equals("SUPER_ADMIN")
+                    || role.equals("MARKET_OPS") || role.endsWith("ADMIN") || role.endsWith("OPS"));
+            redirect = ops ? "/admin/production/dashboard" : "/production/dashboard";
+        }
+        return new StandaloneLoginResult(stage, redirect);
+    }
+
+    /**
      * 手机号验证码注册：注册成功即登录（同一授权上下文签码回跳，用户不必再登一次）。
 
      *
@@ -221,6 +265,16 @@ public class SsoController {
 
     public record AccountRegisterRequest(String phone, String code, String password, String nickname,
                                          Long marketId, Boolean remember) {
+    }
+
+    public record StandaloneLoginRequest(String username, String phone, String password,
+                                         Long marketId, Boolean remember) {
+    }
+
+    public record StandaloneSmsLoginRequest(String phone, String code, Long marketId, Boolean remember) {
+    }
+
+    public record StandaloneLoginResult(String stage, String redirect) {
     }
 
     public record CertificationContext(String clientId, String redirectUri, String state,
