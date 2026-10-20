@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>产业链频道 · 农产云</title>
+<link rel="stylesheet" href="../assets/css/theme.css" />
+<style>
+  /* ===== 产业链频道页专用 ===== */
+  .hero-band{background:linear-gradient(135deg,#0A3A25,#12764A 58%,#0C7BA8);color:#fff;position:relative;overflow:hidden}
+  .hero-band::after{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.05) 1px,transparent 1px);background-size:40px 40px;pointer-events:none}
+  .hero-band .container{position:relative;z-index:2}
+  .hero-band .crumb{color:rgba(255,255,255,.7)}
+  .hero-band .crumb a{color:rgba(255,255,255,.9)}
+  .hero-band .crumb a:hover{color:#fff}
+  .hero-band .crumb .sep{color:rgba(255,255,255,.4)}
+  .hero-band .hstat{display:flex;gap:34px;flex-wrap:wrap;margin-top:24px}
+  .hero-band .hstat .n{font-family:var(--mono);font-size:24px;font-weight:800;line-height:1}
+  .hero-band .hstat .d{font-size:12px;color:rgba(255,255,255,.72);margin-top:6px}
+
+  /* 三级分类筛选 */
+  .filter-row{display:grid;grid-template-columns:96px 1fr;gap:16px;align-items:start;padding:14px 0;border-bottom:1px dashed var(--line)}
+  .filter-row:last-child{border-bottom:none;padding-bottom:0}
+  .filter-row:first-child{padding-top:0}
+  .filter-row .fl{font-size:13px;font-weight:700;color:var(--ink-700);padding-top:6px}
+  .filter-row .fl small{display:block;font-weight:500;color:var(--ink-400);font-size:11px;margin-top:2px}
+  .lv-chips{display:flex;flex-wrap:wrap;gap:8px}
+  .lv-chips .chip{max-width:100%}
+  .trail{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px}
+  .trail .tsep{color:var(--ink-300)}
+
+  /* 商品卡缩略图 */
+  .thumb{height:132px;border-radius:10px;display:grid;place-items:center}
+  .thumb.g{background:linear-gradient(135deg,#E4F6EC,#C9E9D8);color:var(--green-700)}
+  .thumb.a{background:linear-gradient(135deg,#FEF3C7,#FCE7B6);color:#B45309}
+  .thumb.t{background:linear-gradient(135deg,#E0F2FE,#BAE6FD);color:var(--tech-700)}
+  .thumb.o{background:linear-gradient(135deg,#FFE4D6,#FFD2BC);color:#D9541E}
+  .thumb.v{background:linear-gradient(135deg,#EDE9FE,#DDD6FE);color:#6D28D9}
+
+  @media(max-width:860px){ .filter-row{grid-template-columns:1fr;gap:8px} .filter-row .fl{padding-top:0} }
+  @media(max-width:600px){ #grid{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+
+<!-- 顶部通栏 -->
+<div class="topbar">
+  <div class="container">
+    <span>您好，欢迎来到农产云！一站式农业产业链交易与服务平台</span>
+    <span>
+      <a href="../trade/member.html">我是买家</a><span class="sep">·</span>
+      <a href="../trade/publish.html">我是卖家</a><span class="sep">·</span>
+      <a href="../trade/member.html">会员中心</a><span class="sep">·</span>
+      <a href="../index.html">产品原型总览</a><a href="login.html"><span data-icon="user" data-size="12" style="vertical-align:-2px;margin-right:3px"></span>登录</a><span class="sep">·</span><a href="register.html"><span data-icon="plus" data-size="12" style="vertical-align:-2px;margin-right:3px"></span>免费注册</a></span>
+  </div>
+</div>
+
+<!-- 站点头部 -->
+<header class="site-header">
+  <div class="container">
+    <a class="brand" href="index.html">
+      <span class="logo" data-icon="seed" data-size="20"></span>
+      <span>农产云<small>AGRI · CLOUD</small></span>
+    </a>
+    <nav class="main-nav">
+      <a href="index.html">首页</a>
+      <a href="chains.html" class="active">产业链</a>
+      <a href="../trade/index.html">交易大厅</a>
+      <a href="index.html#price">价格指数</a>
+      <a href="index.html#news">产业资讯</a>
+      <a href="../trade/member.html">供应链金融</a>
+    </nav>
+    <div class="header-search">
+      <input placeholder="搜索商品 / 供应商 / 需求" />
+      <button>搜索</button>
+    </div>
+  </div>
+</header>
+
+<!-- Hero 横幅 -->
+<section class="hero-band">
+  <div class="container" style="padding:36px 24px 34px">
+    <div class="crumb">
+      <a href="index.html">首页</a><span class="sep">/</span><span>产业链频道</span>
+    </div>
+    <h1 style="font-size:32px;font-weight:800;margin-top:14px;letter-spacing:.5px">产业链频道</h1>
+    <p style="color:rgba(255,255,255,.82);margin-top:12px;max-width:660px;line-height:1.8">
+      按「一级产业 → 二级品类 → 三级品种」三级分类精准定位货源，聚合全国优质供应商与实时供需信息。</p>
+    <div class="hstat">
+      <div><div class="n">8</div><div class="d">一级产业链</div></div>
+      <div><div class="n">28</div><div class="d">二级品类</div></div>
+      <div><div class="n">96</div><div class="d">三级品种</div></div>
+      <div><div class="n">12,800+</div><div class="d">认证供应商</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- 三级分类筛选 -->
+<section class="container" style="padding-top:22px">
+  <div class="card">
+    <div class="card-h">
+      <h3><span data-icon="settings" data-size="16"></span>产业链筛选</h3>
+      <div class="row center gap-8">
+        <span class="tag tag-tech"><span data-icon="layers" data-size="13"></span>支持三级分类</span>
+        <button class="btn btn-ghost btn-sm" id="clear"><span data-icon="close" data-size="13"></span>清空筛选</button>
+      </div>
+    </div>
+    <div class="card-b">
+      <div class="trail mb-16" id="trail"></div>
+
+      <div class="filter-row">
+        <div class="fl">一级分类<small>产业链频道</small></div>
+        <div class="lv-chips" id="lv1"></div>
+      </div>
+      <div class="filter-row">
+        <div class="fl">二级分类<small>品类</small></div>
+        <div class="lv-chips" id="lv2"></div>
+      </div>
+      <div class="filter-row">
+        <div class="fl">三级分类<small>品种 / 规格</small></div>
+        <div class="lv-chips" id="lv3"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 结果工具条 -->
+<section class="container" style="padding-top:18px">
+  <div class="card mb-16">
+    <div class="card-b tight">
+      <div class="toolbar">
+        <span class="muted t-sm" id="count">共 <b class="mono">0</b> 个在售商品</span>
+        <span class="spacer"></span>
+        <span class="muted t-sm">排序：</span>
+        <div class="chips">
+          <span class="chip on" data-sort="综合">综合</span>
+          <span class="chip" data-sort="最新发布">最新发布</span>
+          <span class="chip" data-sort="价格从低到高">价格从低到高</span>
+          <span class="chip" data-sort="价格从高到低">价格从高到低</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 商品网格（JS 渲染） -->
+  <div class="grid grid-4" id="grid"></div>
+
+  <!-- 分页 -->
+  <div class="pager" id="pager"></div>
+</section>
+
+<!-- 底部 CTA -->
+<section class="container" style="padding-top:18px">
+  <div class="card" style="background:linear-gradient(135deg,#0E5233,#12764A);color:#fff;border:none">
+    <div class="card-b" style="padding:26px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
+      <div>
+        <div class="t-xl" style="font-weight:800">没找到合适的品类？</div>
+        <p style="color:rgba(255,255,255,.8);margin-top:8px">发布采购需求，平台按品类、产地与价格自动匹配优质供应商并推送报价。</p>
+      </div>
+      <div class="row center gap-10">
+        <a class="btn" style="background:#fff;color:#0E5233" href="../trade/publish.html">发布采购需求</a>
+        <a class="btn btn-outline" style="background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.5);color:#fff" href="../trade/index.html">进入交易大厅</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 页脚 -->
+<footer class="site-footer">
+  <div class="container">
+    <div class="grid grid-4">
+      <div>
+        <div class="brand" style="color:#fff"><span class="logo" data-icon="seed" data-size="20"></span><span>农产云</span></div>
+        <p style="margin-top:14px;font-size:13px;color:rgba(255,255,255,.6);max-width:280px">农业产业互联网平台，连接生产、加工、流通、销售全环节。</p>
+      </div>
+      <div><h4>关于平台</h4><a>平台介绍</a><a>联系方式</a><a>加入我们</a><a>帮助中心</a></div>
+      <div><h4>买家服务</h4><a href="../trade/index.html">采购大厅</a><a href="../trade/publish.html">发布询价</a><a href="../trade/member.html">订单管理</a><a href="../trade/member.html">资金管理</a></div>
+      <div><h4>卖家服务</h4><a href="../trade/publish.html">发布供应</a><a href="../trade/member.html">店铺管理</a><a href="../production/dashboard.html">物联网接入</a><a href="../index.html">产品矩阵</a></div>
+    </div>
+    <div class="bottom">
+      <span>© 2026 农业产业互联网平台 · 产品原型演示（非真实业务系统）</span>
+      <span>Produced for prototype demo</span>
+    </div>
+  </div>
+</footer>
+
+<script src="../assets/js/app.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  /* ---------- 三级分类体系：一级产业 → 二级品类 → 三级品种（来自共享脚本 PROTO.TAXONOMY） ---------- */
+  var TAXONOMY = (window.PROTO && window.PROTO.TAXONOMY) || {};
+
+  /* ---------- 商品数据 ----------
+     [名称, 一级, 二级, 三级, 产地, 规格, 价格数字, 单位, 价格数值(null=询价), 标签, 标签样式, 图标, 主题] */
+  var RAW = [
+    ["富硒大米", "粮油产业", "稻谷·大米", "富硒大米", "黑龙江·五常", "25kg/袋", "4680", "/吨", 4680, "基地直供", "", "seed", "g"],
+    ["有机大米", "粮油产业", "稻谷·大米", "有机大米", "吉林·延边", "10kg/袋", "6800", "/吨", 6800, "有机认证", "", "seed", "g"],
+    ["粳稻谷", "粮油产业", "稻谷·大米", "粳稻谷", "黑龙江·建三江", "散装", "2760", "/吨", 2760, "国标二等", "tag-ghost", "seed", "g"],
+    ["强筋小麦", "粮油产业", "小麦·面粉", "强筋小麦", "河南·新乡", "散装", "2860", "/吨", 2860, "高筋", "tag-amber", "seed", "a"],
+    ["高筋面粉", "粮油产业", "小麦·面粉", "高筋面粉", "山东·德州", "25kg/袋", "3980", "/吨", 3980, "面包专用", "tag-amber", "box", "a"],
+    ["优质蛋白玉米", "粮油产业", "玉米", "优质蛋白玉米", "吉林·长春", "散装", "2560", "/吨", 2560, "高蛋白", "tag-amber", "seed", "a"],
+    ["黄大豆", "粮油产业", "大豆", "黄大豆", "黑龙江·绥化", "散装", "4920", "/吨", 4920, "非转基因", "", "seed", "g"],
+    ["一级菜籽油", "粮油产业", "油脂", "一级菜籽油", "湖北·荆州", "5L×4桶/箱", "10920", "/吨", 10920, "非转基因", "tag-amber", "drop", "a"],
+    ["一级大豆油", "粮油产业", "油脂", "一级大豆油", "山东·日照", "20L/桶", "9280", "/吨", 9280, "港口现货", "tag-tech", "drop", "t"],
+
+    ["赣南脐橙", "果蔬产业", "柑橘", "赣南脐橙", "江西·赣州", "20斤/箱", "58", "/箱", 58, "当季鲜果", "tag-red", "sun", "o"],
+    ["砂糖橘", "果蔬产业", "柑橘", "砂糖橘", "广西·桂林", "10斤/箱", "42", "/箱", 42, "甜度高", "tag-red", "sun", "o"],
+    ["洛川苹果", "果蔬产业", "苹果", "洛川苹果", "陕西·洛川", "20斤/箱", "96", "/箱", 96, "脆甜多汁", "tag-red", "sun", "o"],
+    ["番茄", "果蔬产业", "设施蔬菜", "番茄", "山东·寿光", "15kg/箱", "6.8", "/kg", 6.8, "硬粉", "", "leaf", "g"],
+    ["香菇", "果蔬产业", "食用菌", "香菇", "福建·古田", "5kg/箱", "12", "/kg", 12, "鲜菇冷链", "", "leaf", "g"],
+
+    ["冷鲜猪肉（白条）", "畜禽产业", "生猪", "冷鲜猪肉(白条)", "河南·牧原", "冷链直发", "19.8", "/kg", 19.8, "冷链配送", "tag-tech", "activity", "a"],
+    ["冷鲜牛肉", "畜禽产业", "肉牛", "冷鲜牛肉", "内蒙古·通辽", "冷链直发", "46", "/kg", 46, "排酸牛肉", "tag-tech", "activity", "a"],
+    ["白羽肉鸡", "畜禽产业", "家禽", "白羽肉鸡", "山东·潍坊", "冷冻分割", "8.6", "/kg", 8.6, "分割鸡", "tag-ghost", "activity", "a"],
+    ["鲜鸡蛋", "畜禽产业", "蛋奶", "鲜鸡蛋", "河北·石家庄", "360枚/箱", "4.9", "/kg", 4.9, "无抗蛋", "", "box", "a"],
+
+    ["有机红茶", "茶药产业", "茶叶", "有机红茶", "云南·临沧", "500g/罐", "286", "/罐", 286, "有机认证", "", "leaf", "g"],
+    ["福鼎白茶", "茶药产业", "茶叶", "福鼎白茶", "福建·福鼎", "350g/饼", "468", "/饼", 468, "三年陈", "", "leaf", "g"],
+    ["三七", "茶药产业", "中药材", "三七", "云南·文山", "20头", "860", "/kg", 860, "道地药材", "tag-amber", "leaf", "g"],
+
+    ["豆粕 43% 蛋白", "饲料农资", "饲料", "豆粕43%", "山东·日照港", "散装", "3468", "/吨", 3468, "港口现货", "tag-tech", "box", "t"],
+    ["尿素", "饲料农资", "化肥", "尿素", "山西·晋城", "50kg/袋", "2280", "/吨", 2280, "46% 氮", "tag-amber", "box", "a"],
+    ["复合微生物肥", "饲料农资", "化肥", "复合微生物肥", "山东·临沂", "40kg/袋", "2380", "/吨", 2380, "减施增效", "", "box", "g"],
+    ["杂交玉米种", "饲料农资", "种子", "杂交玉米种", "辽宁·沈阳", "4000粒/袋", "68", "/袋", 68, "高产抗倒", "", "seed", "g"],
+
+    ["加州鲈鱼", "水产产业", "淡水鱼", "加州鲈鱼", "广东·佛山", "活鲜", "36", "/kg", 36, "活鲜配送", "tag-tech", "drop", "t"],
+    ["大黄鱼", "水产产业", "海水养殖", "大黄鱼", "福建·宁德", "冰鲜", "68", "/kg", 68, "深海养殖", "tag-tech", "drop", "t"],
+    ["南美白对虾（冻）", "水产产业", "虾蟹", "南美白对虾", "广东·湛江", "净重20kg/箱", "52", "/kg", 52, "出口级", "tag-tech", "drop", "t"],
+    ["大闸蟹", "水产产业", "虾蟹", "大闸蟹", "江苏·阳澄湖", "3.5两公蟹", "198", "/只", 198, "礼盒装", "tag-red", "drop", "t"],
+
+    ["调味牛排", "预制菜", "即烹", "调味牛排", "上海", "150g×10片", "89", "/盒", 89, "即烹", "tag-violet", "factory", "v"],
+    ["自热米饭", "预制菜", "即食", "自热米饭", "湖南·长沙", "270g×6盒", "49", "/箱", 49, "即食", "tag-violet", "factory", "v"],
+    ["免洗蔬菜", "预制菜", "净菜", "免洗蔬菜", "山东·寿光", "5kg/箱", "9.8", "/kg", 9.8, "净菜", "tag-violet", "factory", "v"],
+
+    ["冷库租赁", "冷链物流", "冷链仓储", "冷库租赁", "山东·青岛", "-18℃ 临港", "询价", "", null, "全程温控", "tag-tech", "truck", "t"],
+    ["冷藏干线运输", "冷链物流", "冷链运输", "冷藏干线", "全国", "整车 / 零担", "询价", "", null, "全程温控", "tag-tech", "truck", "t"],
+    ["冷藏车（4.2 米）", "冷链物流", "冷链设备", "冷藏车", "江苏·苏州", "新能源", "询价", "", null, "可租可售", "tag-tech", "truck", "t"]
+  ];
+
+  var PRODUCTS = RAW.map(function (r) {
+    return {
+      name: r[0], l1: r[1], l2: r[2], l3: r[3], loc: r[4], spec: r[5],
+      priceNum: r[6], unit: r[7], priceVal: r[8], tag: r[9], tagCls: r[10],
+      icon: r[11], theme: r[12]
+    };
+  });
+
+  var PAGE_SIZE = 8;
+  var state = { l1: "", l2: "", l3: "", sort: "综合", page: 1 };
+
+  function esc(s) {
+    return String(s).replace(/[&<>"]/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
+    });
+  }
+  function chip(level, value, label, on) {
+    return '<span class="chip' + (on ? " on" : "") + '" data-level="' + level +
+      '" data-value="' + esc(value) + '">' + esc(label) + "</span>";
+  }
+  function hint(txt) { return '<span class="muted t-sm" style="padding:5px 0">' + txt + "</span>"; }
+
+  /* ---------- 三级联动渲染 ---------- */
+  function renderL1() {
+    var h = chip("1", "", "全部产业", state.l1 === "");
+    for (var k in TAXONOMY) h += chip("1", k, k, state.l1 === k);
+    document.getElementById("lv1").innerHTML = h;
+  }
+  function renderL2() {
+    var box = document.getElementById("lv2");
+    if (!state.l1) { box.innerHTML = hint("请先选择一级分类"); return; }
+    var l2 = TAXONOMY[state.l1].l2, h = chip("2", "", "全部品类", state.l2 === "");
+    for (var k in l2) h += chip("2", k, k, state.l2 === k);
+    box.innerHTML = h;
+  }
+  function renderL3() {
+    var box = document.getElementById("lv3");
+    if (!state.l2) { box.innerHTML = hint("请先选择二级分类"); return; }
+    var l3 = TAXONOMY[state.l1].l2[state.l2], i, h = chip("3", "", "全部品种", state.l3 === "");
+    for (i = 0; i < l3.length; i++) h += chip("3", l3[i], l3[i], state.l3 === l3[i]);
+    box.innerHTML = h;
+  }
+  function renderTrail() {
+    var box = document.getElementById("trail");
+    if (!state.l1) {
+      box.innerHTML = '<span class="muted t-sm">当前：全部产业链 · 共 ' + PRODUCTS.length + ' 个优质货源</span>';
+      return;
+    }
+    var h = '<a href="javascript:void(0)" data-level="1" data-value="" class="strong" style="color:var(--green-700)">全部产业链</a>' +
+      '<span class="tsep">/</span><span class="strong">' + esc(state.l1) + "</span>";
+    if (state.l2) h += '<span class="tsep">/</span><span class="strong">' + esc(state.l2) + "</span>";
+    if (state.l3) h += '<span class="tsep">/</span><span style="color:var(--green-700);font-weight:600">' + esc(state.l3) + "</span>";
+    box.innerHTML = h;
+  }
+
+  /* ---------- 过滤 / 排序 / 分页 ---------- */
+  function filtered() {
+    var arr = PRODUCTS.filter(function (p) {
+      return (!state.l1 || p.l1 === state.l1) &&
+        (!state.l2 || p.l2 === state.l2) &&
+        (!state.l3 || p.l3 === state.l3);
+    });
+    if (state.sort === "价格从低到高") {
+      arr.sort(function (a, b) {
+        return (a.priceVal == null ? Infinity : a.priceVal) - (b.priceVal == null ? Infinity : b.priceVal);
+      });
+    } else if (state.sort === "价格从高到低") {
+      arr.sort(function (a, b) {
+        return (b.priceVal == null ? -Infinity : b.priceVal) - (a.priceVal == null ? -Infinity : a.priceVal);
+      });
+    }
+    return arr;
+  }
+
+  function cardHTML(p) {
+    var price = p.priceVal == null
+      ? '<span class="price t-md" style="color:var(--ink-500)">询价</span>'
+      : '<span class="price"><span class="cur">¥</span>' + p.priceNum + '<span class="unit">' + p.unit + "</span></span>";
+    return '<a class="card card-hover" href="../trade/detail.html"><div class="card-b">' +
+      '<div class="thumb ' + p.theme + '"><span data-icon="' + p.icon + '" data-size="44"></span></div>' +
+      '<div class="row between center mt-12"><span class="strong ellipsis">' + esc(p.name) + '</span><span class="tag ' + p.tagCls + '">' + esc(p.tag) + "</span></div>" +
+      '<div class="muted t-xs mt-8">' + esc(p.loc) + " · " + esc(p.spec) + "</div>" +
+      '<div class="row between center mt-12">' + price + "</div>" +
+      '<div class="muted t-xs mt-8 ellipsis">' + esc(p.l1) + " / " + esc(p.l2) + " / " + esc(p.l3) + "</div>" +
+      "</div></a>";
+  }
+
+  function renderPager(pages) {
+    var p = document.getElementById("pager");
+    if (pages <= 1) { p.innerHTML = ""; return; }
+    var i, h = '<button data-page="prev">上一页</button>';
+    for (i = 1; i <= pages; i++) h += '<button data-page="' + i + '"' + (i === state.page ? ' class="on"' : "") + ">" + i + "</button>";
+    h += '<button data-page="next">下一页</button>';
+    p.innerHTML = h;
+  }
+  function setPagerOn() {
+    var btns = document.querySelectorAll("#pager button");
+    for (var i = 0; i < btns.length; i++) btns[i].classList.toggle("on", btns[i].getAttribute("data-page") === String(state.page));
+  }
+
+  function paint(updatePager) {
+    var arr = filtered(), total = arr.length, pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    if (state.page > pages) state.page = pages;
+    if (state.page < 1) state.page = 1;
+    var slice = arr.slice((state.page - 1) * PAGE_SIZE, state.page * PAGE_SIZE);
+
+    var grid = document.getElementById("grid");
+    if (!total) {
+      grid.className = "grid";
+      grid.innerHTML = '<div class="empty" style="grid-column:1/-1">' +
+        '<span data-icon="search" data-size="34" style="color:var(--ink-300)"></span>' +
+        '<div class="mt-12 strong">没有匹配的货源</div>' +
+        '<div class="muted t-sm mt-8">试试更换分类，或发布采购需求由平台智能匹配</div></div>';
+    } else {
+      grid.className = "grid grid-4";
+      var i, h = "";
+      for (i = 0; i < slice.length; i++) h += cardHTML(slice[i]);
+      grid.innerHTML = h;
+    }
+    if (window.PROTO && window.PROTO.hydrateIcons) window.PROTO.hydrateIcons(grid);
+
+    document.getElementById("count").innerHTML = '共 <b class="mono">' + total + "</b> 个在售商品" +
+      (pages > 1 ? "（第 " + state.page + " / " + pages + " 页）" : "");
+
+    if (updatePager) renderPager(pages); else setPagerOn();
+  }
+
+  function resetSort() {
+    var cs = document.querySelectorAll("[data-sort]");
+    for (var i = 0; i < cs.length; i++) cs[i].classList.toggle("on", cs[i].getAttribute("data-sort") === "综合");
+  }
+
+  /* ---------- 事件委托 ---------- */
+  document.addEventListener("click", function (e) {
+    var c = e.target.closest("[data-level]");
+    if (c) {
+      var lvl = c.getAttribute("data-level"), val = c.getAttribute("data-value") || "";
+      if (lvl === "1") { state.l1 = val; state.l2 = ""; state.l3 = ""; state.page = 1; renderL1(); renderL2(); renderL3(); renderTrail(); paint(true); }
+      else if (lvl === "2") { if (!state.l1) return; state.l2 = val; state.l3 = ""; state.page = 1; renderL2(); renderL3(); renderTrail(); paint(true); }
+      else if (lvl === "3") { if (!state.l2) return; state.l3 = val; state.page = 1; renderL3(); renderTrail(); paint(true); }
+      return;
+    }
+    var s = e.target.closest("[data-sort]");
+    if (s) { state.sort = s.getAttribute("data-sort"); state.page = 1; paint(true); return; }
+
+    var pg = e.target.closest("#pager button");
+    if (pg) {
+      var pages = Math.max(1, Math.ceil(filtered().length / PAGE_SIZE));
+      var v = pg.getAttribute("data-page");
+      if (v === "prev") state.page = Math.max(1, state.page - 1);
+      else if (v === "next") state.page = Math.min(pages, state.page + 1);
+      else state.page = parseInt(v, 10) || 1;
+      paint(false);
+      return;
+    }
+
+    if (e.target.closest("#clear")) {
+      state.l1 = ""; state.l2 = ""; state.l3 = ""; state.sort = "综合"; state.page = 1;
+      renderL1(); renderL2(); renderL3(); renderTrail(); resetSort(); paint(true);
+    }
+  });
+
+  /* ---------- 深链：?l1=果蔬产业&l2=柑橘 ---------- */
+  function fromQuery() {
+    try {
+      var q = new URLSearchParams(location.search);
+      var l1 = q.get("l1") || "", l2 = q.get("l2") || "", l3 = q.get("l3") || "";
+      if (l1 && TAXONOMY[l1]) {
+        state.l1 = l1;
+        if (l2 && TAXONOMY[l1].l2[l2]) {
+          state.l2 = l2;
+          if (l3 && TAXONOMY[l1].l2[l2].indexOf(l3) >= 0) state.l3 = l3;
+        }
+      }
+    } catch (err) { /* 忽略非法参数 */ }
+  }
+
+  function init() {
+    fromQuery();
+    renderL1(); renderL2(); renderL3(); renderTrail();
+    paint(true);
+  }
+
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+  else init();
+})();
+</script>
+</body>
+</html>

@@ -29,7 +29,7 @@
     </a>
     <nav class="main-nav">
       <a href="../portal/index.html">首页</a>
-      <a href="../portal/index.html#chains">产业链</a>
+      <a href="../portal/chains.html">产业链</a>
       <a href="index.html" class="active">交易大厅</a>
       <a href="publish.html">发布需求</a>
       <a href="member.html">会员中心</a>
@@ -79,11 +79,16 @@
           <div class="card-h"><h3><span data-icon="settings" data-size="16"></span>筛选条件</h3></div>
           <div class="card-b tight">
             <div class="form-item">
-              <label>产业链</label>
-              <div class="chips">
-                <span class="chip on">粮油</span><span class="chip">果蔬</span><span class="chip">畜禽</span>
-                <span class="chip">茶药</span><span class="chip">饲料农资</span><span class="chip">水产</span>
-              </div>
+              <label>一级产业</label>
+              <div class="chips" id="f1"></div>
+            </div>
+            <div class="form-item">
+              <label>二级品类</label>
+              <div class="chips" id="f2"></div>
+            </div>
+            <div class="form-item">
+              <label>三级品种</label>
+              <div class="chips" id="f3"></div>
             </div>
             <div class="form-item">
               <label>产地</label>
@@ -234,7 +239,7 @@
       <div class="card mt-24">
         <div class="card-h">
           <h3><span data-icon="award" data-size="16"></span>优质供应商推荐</h3>
-          <a class="more" href="../portal/index.html#chains">查看全部供应商 →</a>
+          <a class="more" href="../portal/chains.html">查看全部供应商 →</a>
         </div>
         <div class="card-b">
           <div class="grid grid-5">
@@ -365,5 +370,73 @@
 </footer>
 
 <script src="../assets/js/app.js"></script>
+<script>
+/* 交易大厅 · 产业链三级分类级联筛选 */
+(function () {
+  "use strict";
+  var T = (window.PROTO && window.PROTO.TAXONOMY) || {};
+  var st = { l1: "", l2: "", l3: "" };
+
+  function esc(s) {
+    return String(s).replace(/[&<>"]/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
+    });
+  }
+  function chip(level, value, label, on) {
+    return '<span class="chip' + (on ? " on" : "") + '" data-level="' + level +
+      '" data-value="' + esc(value) + '">' + esc(label) + "</span>";
+  }
+  function hint(t) { return '<span class="muted t-xs" style="padding:4px 0">' + t + "</span>"; }
+
+  function render1() {
+    var h = chip("1", "", "全部", st.l1 === "");
+    for (var k in T) h += chip("1", k, k, st.l1 === k);
+    document.getElementById("f1").innerHTML = h;
+  }
+  function render2() {
+    var b = document.getElementById("f2");
+    if (!st.l1) { b.innerHTML = hint("请先选择一级产业"); return; }
+    var l2 = T[st.l1].l2, h = chip("2", "", "全部", st.l2 === "");
+    for (var k in l2) h += chip("2", k, k, st.l2 === k);
+    b.innerHTML = h;
+  }
+  function render3() {
+    var b = document.getElementById("f3");
+    if (!st.l2) { b.innerHTML = hint("请先选择二级品类"); return; }
+    var l3 = T[st.l1].l2[st.l2], h = chip("3", "", "全部", st.l3 === ""), i;
+    for (i = 0; i < l3.length; i++) h += chip("3", l3[i], l3[i], st.l3 === l3[i]);
+    b.innerHTML = h;
+  }
+
+  /* 深链：?l1=粮油产业&l2=稻谷·大米&l3=富硒大米 */
+  function fromQuery() {
+    try {
+      var q = new URLSearchParams(location.search);
+      var a = q.get("l1") || "", b = q.get("l2") || "", c = q.get("l3") || "";
+      if (a && T[a]) {
+        st.l1 = a;
+        if (b && T[a].l2[b]) {
+          st.l2 = b;
+          if (c && T[a].l2[b].indexOf(c) >= 0) st.l3 = c;
+        }
+      }
+    } catch (err) { /* 忽略非法参数 */ }
+  }
+
+  /* 点击级联：仅重绘下级，保留被点层级原节点，
+     以便全局 bindChips 完成高亮 */
+  document.addEventListener("click", function (e) {
+    var c = e.target.closest("[data-level]");
+    if (!c) return;
+    var lvl = c.getAttribute("data-level"), val = c.getAttribute("data-value") || "";
+    if (lvl === "1") { st.l1 = val; st.l2 = ""; st.l3 = ""; render2(); render3(); }
+    else if (lvl === "2") { if (!st.l1) return; st.l2 = val; st.l3 = ""; render3(); }
+    else if (lvl === "3") { if (!st.l2) return; st.l3 = val; }
+  });
+
+  fromQuery();
+  render1(); render2(); render3();
+})();
+</script>
 </body>
 </html>
