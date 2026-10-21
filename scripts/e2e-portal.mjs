@@ -89,8 +89,32 @@ try {
     }
   })
   const hasLive = liveApi?.code === 200 && Array.isArray(liveApi.data) && liveApi.data.length > 0
-  check(homeText.includes('演示行情') && (hasLive ? homeText.includes('实时在售') : homeText.includes('原型示例货源')),
-    hasLive ? '交易域有数据时首页展示「实时在售」并保留行情演示标注' : '交易服务不可用时货源与行情明确标注为示例数据')
+  const quoteApi = await page.evaluate(async () => {
+    try {
+      return await (await fetch('/api/v1/quotes?size=20')).json()
+    } catch {
+      return null
+    }
+  })
+  const quoteRecords = quoteApi?.code === 0 ? quoteApi.data?.records ?? [] : []
+  check(hasLive ? homeText.includes('实时在售') : homeText.includes('暂无在售'),
+    hasLive ? '交易域有数据时首页展示「实时在售」' : '交易域无数据时首页展示无在售空态')
+  check(quoteRecords.length > 0
+    ? homeText.includes('平台行情') && homeText.includes(quoteRecords[0].productName)
+    : homeText.includes('暂无行情'),
+  quoteRecords.length > 0 ? '首页价格指数展示后台真实行情' : '行情为空时首页不展示模拟价格')
+  const newsApi = await page.evaluate(async () => {
+    try {
+      return await (await fetch('/api/v1/public/news?size=6')).json()
+    } catch {
+      return null
+    }
+  })
+  check(newsApi?.code === 0, '产业资讯使用公开只读后端接口')
+  check(homeText.includes('平台公告'), '平台公告区块已渲染并读取后端数据')
+  if (Number(newsApi?.data?.total ?? 0) === 0) {
+    check(homeText.includes('暂无平台公告'), '无已发布资讯时公告展示空态而非模拟内容')
+  }
   if (hasLive) {
     check(homeText.includes(liveApi.data[0].productName), '首页展示交易域真实已发布商品', liveApi.data[0].productName)
   }
@@ -106,32 +130,32 @@ try {
   check(registerHref?.includes(':8090/register'), '首页注册入口指向统一认证中心注册页', registerHref ?? '')
 
   // ---------- 搜索 ----------
-  await fill(page, '.header-search input', '脐橙')
+  await fill(page, '.header-search input', '大闸蟹')
   await page.click('.header-search button')
   await page.waitForFunction(() => location.hash.includes('/chains?q='), { timeout: 10000 })
   await sleep(400)
-  check((await counts(page)) === 1, '站内搜索「脐橙」过滤出 1 个货源')
+  check((await counts(page)) === 1, '站内搜索「大闸蟹」过滤出 1 个货源')
   const searchText = await page.evaluate(() => document.body.innerText)
-  check(searchText.includes('赣南脐橙'), '搜索结果包含赣南脐橙')
+  check(searchText.includes('阳澄湖大闸蟹'), '搜索结果包含交易域真实大闸蟹货源')
 
   // ---------- 筛选 + 排序 ----------
   await page.goto(`${BASE}/portal/#/chains`, { waitUntil: 'networkidle2' })
   await sleep(300)
   await clickText(page, '果蔬产业', '.portal-filter-row .chip')
-  check((await counts(page)) === 5, '一级产业「果蔬产业」过滤出 5 个货源')
-  await clickText(page, '柑橘', '.portal-filter-row .chip')
-  check((await counts(page)) === 2, '二级品类「柑橘」过滤出 2 个货源')
-  await clickText(page, '江西', '.portal-province-chips .chip')
-  check((await counts(page)) === 1, '产地「江西」过滤出 1 个货源')
+  check((await counts(page)) === 2, '一级产业「果蔬产业」过滤出 2 个真实货源')
+  await clickText(page, '苹果', '.portal-filter-row .chip')
+  check((await counts(page)) === 1, '二级品类「苹果」过滤出 1 个真实货源')
+  await clickText(page, '陕西', '.portal-province-chips .chip')
+  check((await counts(page)) === 1, '产地「陕西」过滤出 1 个货源')
   const chainText = await page.evaluate(() => document.body.innerText)
-  check(chainText.includes('赣南脐橙') && chainText.includes('产地：江西'), '筛选后面包屑与结果一致', chainText.replace(/\s+/g, ' ').slice(0, 70))
+  check(chainText.includes('洛川红富士苹果') && chainText.includes('产地：陕西'), '筛选后面包屑与真实结果一致', chainText.replace(/\s+/g, ' ').slice(0, 70))
 
   await page.goto(`${BASE}/portal/#/chains`, { waitUntil: 'networkidle2' })
   await sleep(300)
   await clickText(page, '清空筛选')
   await clickText(page, '价格从低到高', '.portal-list-head .chip')
   const firstProduct = await page.evaluate(() => document.querySelector('.portal-product-grid .card .strong')?.textContent?.trim())
-  check(firstProduct === '鲜鸡蛋', '价格从低到高排序首项为 4.9 元/kg 的鲜鸡蛋', firstProduct ?? '')
+  check(firstProduct === '有机大白菜 5kg/件', '价格从低到高排序首项为 18.8 元/件的有机大白菜', firstProduct ?? '')
 
   // ---------- 认证中心 FAQ ----------
   await page.goto(`${BASE}/portal/#/certify`, { waitUntil: 'networkidle2' })

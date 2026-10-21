@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Icon } from '../components/Icon'
-import { ANNOUNCEMENTS, NEWS, PRICE_COMMODITIES, PRODUCTS } from '../data/portal'
-import type { NewsItem, PortalProduct } from '../data/portal'
 import { useHashRoute, ssoRegister, tradeUrl } from '../utils'
 
 interface LiveProduct {
@@ -25,6 +23,30 @@ interface ProductCard {
   icon: string
   theme: string
   href: string
+}
+
+interface LiveQuote {
+  id: string | number
+  productName: string
+  category?: string
+  price: number
+  changePct?: number
+  source?: string
+  quotedAt?: string
+}
+
+interface LiveNews {
+  id: string | number
+  title: string
+  summary?: string
+  publishedAt?: string
+}
+
+interface NewsItem {
+  tag: string
+  tagCls: string
+  title: string
+  date: string
 }
 
 const SERVICES = [
@@ -68,20 +90,6 @@ function liveCard(product: LiveProduct, index: number): ProductCard {
   }
 }
 
-function sampleCard(product: PortalProduct): ProductCard {
-  return {
-    name: product.name,
-    meta: `${product.loc} · ${product.spec}`,
-    price: product.priceNum,
-    unit: product.priceVal == null ? '' : product.unit,
-    tag: product.tag,
-    tagCls: product.tagCls,
-    icon: product.icon,
-    theme: product.theme,
-    href: '#/hall',
-  }
-}
-
 function NewsList({ items }: { items: NewsItem[] }): JSX.Element {
   return (
     <ul className="portal-news-list">
@@ -101,8 +109,13 @@ function NewsList({ items }: { items: NewsItem[] }): JSX.Element {
 export function Home(): JSX.Element {
   const route = useHashRoute()
   const [newsTab, setNewsTab] = useState<'policy' | 'market' | 'agri'>('policy')
-  const [priceName, setPriceName] = useState(PRICE_COMMODITIES[0].name)
+  const [priceId, setPriceId] = useState<string | number>('')
   const [live, setLive] = useState<LiveProduct[] | null>(null)
+  const [quotes, setQuotes] = useState<LiveQuote[]>([])
+  const [news, setNews] = useState<LiveNews[]>([])
+  const [announcements, setAnnouncements] = useState<LiveNews[]>([])
+  const [newsLoading, setNewsLoading] = useState(true)
+  const [quoteLoading, setQuoteLoading] = useState(true)
 
   useEffect(() => {
     let cancelled = false
@@ -114,9 +127,52 @@ export function Home(): JSX.Element {
         const records = Array.isArray(body.data) ? body.data : body.data?.records
         if ((body.code === 0 || body.code === 200) && records && records.length > 0) {
           setLive(records)
+        } else {
+          setLive([])
         }
       })
-      .catch(() => { /* 交易服务未启动：回退示例数据并标注 */ })
+      .catch(() => { if (!cancelled) setLive([]) })
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    setQuoteLoading(true)
+    fetch('/api/v1/quotes?size=20')
+      .then((response) => response.json())
+      .then((body: { code?: number; data?: { records?: LiveQuote[] } }) => {
+        if (cancelled || body.code !== 0) return
+        const records = body.data?.records ?? []
+        setQuotes(records)
+        if (records.length > 0) setPriceId(records[0].id)
+      })
+      .catch(() => { if (!cancelled) setQuotes([]) })
+      .finally(() => { if (!cancelled) setQuoteLoading(false) })
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    const keyword = newsTab === 'policy' ? '政策' : newsTab === 'market' ? '行情' : '农技'
+    setNewsLoading(true)
+    fetch(`/api/v1/public/news?size=6&keyword=${encodeURIComponent(keyword)}`)
+      .then((response) => response.json())
+      .then((body: { code?: number; data?: { records?: LiveNews[] } }) => {
+        if (!cancelled && body.code === 0) setNews(body.data?.records ?? [])
+      })
+      .catch(() => { if (!cancelled) setNews([]) })
+      .finally(() => { if (!cancelled) setNewsLoading(false) })
+    return () => { cancelled = true }
+  }, [newsTab])
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/v1/public/news?size=5&keyword=%E5%85%AC%E5%91%8A')
+      .then((response) => response.json())
+      .then((body: { code?: number; data?: { records?: LiveNews[] } }) => {
+        if (!cancelled && body.code === 0) setAnnouncements(body.data?.records ?? [])
+      })
+      .catch(() => { if (!cancelled) setAnnouncements([]) })
     return () => { cancelled = true }
   }, [])
 
@@ -128,11 +184,21 @@ export function Home(): JSX.Element {
   }, [route])
 
   const cards = useMemo<ProductCard[]>(() => {
-    if (live && live.length > 0) return live.map(liveCard)
-    return PRODUCTS.slice(0, 8).map(sampleCard)
+    return live?.slice(0, 8).map(liveCard) ?? []
   }, [live])
 
-  const price = PRICE_COMMODITIES.find((item) => item.name === priceName) ?? PRICE_COMMODITIES[0]
+  const newsItems: NewsItem[] = news.map((item) => ({
+    tag: newsTab === 'policy' ? '政策' : newsTab === 'market' ? '行情' : '农技',
+    tagCls: newsTab === 'market' ? 'tag-tech' : newsTab === 'policy' ? 'tag-red' : '',
+    title: item.title,
+    date: item.publishedAt ? item.publishedAt.slice(5, 10).replace('-', '/') : '',
+  }))
+  const announcementItems: NewsItem[] = announcements.map((item) => ({
+    tag: '公告',
+    tagCls: 'tag-tech',
+    title: item.title,
+    date: item.publishedAt ? item.publishedAt.slice(5, 10).replace('-', '/') : '',
+  }))
 
   return (
     <>
@@ -241,32 +307,42 @@ export function Home(): JSX.Element {
               <div className="sub">基地直供 · 平台质检 · 支持大宗议价</div>
             </div>
             <div className="row center gap-8">
-              <span className={`tag ${live ? '' : 'tag-amber'}`}>{live ? '实时在售' : '示例数据'}</span>
+              <span className={`tag ${live && live.length > 0 ? '' : 'tag-amber'}`}>
+                {live && live.length > 0 ? '实时在售' : '暂无在售'}
+              </span>
               <a className="t-sm muted portal-more-link" href="#/hall">查看更多商品 →</a>
             </div>
           </div>
-          {!live && (
+          {live && live.length === 0 && (
             <div className="portal-data-note">
-              交易服务当前未返回实时商品，以下为原型示例货源，仅用于展示门户布局；真实在售商品请进入交易大厅。
+              交易服务当前没有已发布商品。供应商发布并审核上架后，商品会自动展示在此处。
             </div>
           )}
-          <div className="grid grid-4">
-            {cards.map((card) => (
-              <a className="card card-hover" key={`${card.name}-${card.href}`} href={card.href} target="_blank" rel="noreferrer">
-                <div className="card-b">
-                  <div className={`portal-thumb theme-${card.theme}`}><Icon name={card.icon} size={46} /></div>
-                  <div className="row between center mt-12 gap-8">
-                    <span className="strong ellipsis">{card.name}</span>
-                    <span className={`tag ${card.tagCls}`}>{card.tag}</span>
+          {cards.length > 0 ? (
+            <div className="grid grid-4">
+              {cards.map((card) => (
+                <a className="card card-hover" key={`${card.name}-${card.href}`} href={card.href} target="_blank" rel="noreferrer">
+                  <div className="card-b">
+                    <div className={`portal-thumb theme-${card.theme}`}><Icon name={card.icon} size={46} /></div>
+                    <div className="row between center mt-12 gap-8">
+                      <span className="strong ellipsis">{card.name}</span>
+                      <span className={`tag ${card.tagCls}`}>{card.tag}</span>
+                    </div>
+                    <div className="muted t-xs mt-8 ellipsis">{card.meta}</div>
+                    <div className="row between center mt-12">
+                      <span className="price"><span className="cur">¥</span>{card.price}<span className="unit">{card.unit}</span></span>
+                    </div>
                   </div>
-                  <div className="muted t-xs mt-8 ellipsis">{card.meta}</div>
-                  <div className="row between center mt-12">
-                    <span className="price"><span className="cur">¥</span>{card.price}<span className="unit">{card.unit}</span></span>
-                  </div>
-                </div>
-              </a>
-            ))}
-          </div>
+                </a>
+              ))}
+            </div>
+          ) : live && (
+            <div className="card empty">
+              <Icon name="box" size={34} />
+              <div className="strong mt-12">暂无在售商品</div>
+              <div className="muted t-sm mt-8">可先到交易大厅浏览采购需求，或发布供应商品。</div>
+            </div>
+          )}
         </div>
       </section>
 
@@ -275,33 +351,43 @@ export function Home(): JSX.Element {
           <div className="card" id="price">
             <div className="card-h">
               <h3><Icon name="chart" size={18} />价格指数</h3>
-              <span className="tag tag-amber">演示行情</span>
+              <span className={`tag ${quotes.length > 0 ? '' : 'tag-amber'}`}>{quotes.length > 0 ? '平台行情' : '暂无行情'}</span>
             </div>
             <div className="card-b">
-              <p className="muted t-sm mb-16">为您提供精准、高效、专业的农业产业交易大数据服务（接入行情源后自动切换真实数据）。</p>
-              <div className="chips mb-16">
-                {PRICE_COMMODITIES.map((item) => (
-                  <button type="button" className={`chip${item.name === priceName ? ' on' : ''}`} key={item.name}
-                    onClick={() => setPriceName(item.name)}>{item.name}</button>
-                ))}
-              </div>
-              <div className="portal-price-chart" aria-label={`${price.name}价格走势图`}>
-                {price.series.map((height, index) => (
-                  <i key={index} style={{ height: `${height}%` }} className={index === price.series.length - 1 ? 'last' : ''} />
-                ))}
-              </div>
-              <table className="data-table mt-16">
-                <thead><tr><th>日期</th><th>指数（{price.unit}）</th><th className="tr">涨跌</th></tr></thead>
-                <tbody>
-                  {price.rows.map((row) => (
-                    <tr key={row.date}>
-                      <td>{row.date}</td>
-                      <td className="mono">{row.value}</td>
-                      <td className={`tr mono${row.down ? ' c-red' : row.up ? ' c-green' : ''}`}>{row.change}</td>
-                    </tr>
+              <p className="muted t-sm mb-16">展示平台已发布的行情报价；没有运营发布记录时保持空态，不使用模拟价格。</p>
+              {quotes.length > 0 && (
+                <div className="chips mb-16">
+                  {quotes.map((item) => (
+                    <button type="button" className={`chip${item.id === priceId ? ' on' : ''}`} key={item.id}
+                      onClick={() => setPriceId(item.id)}>{item.productName}</button>
                   ))}
-                </tbody>
-              </table>
+                </div>
+              )}
+              {quoteLoading ? (
+                <div className="empty"><div className="muted t-sm">正在读取行情…</div></div>
+              ) : quotes.length > 0 ? (
+                <table className="data-table">
+                  <thead><tr><th>商品</th><th>最新价</th><th className="tr">涨跌</th><th>来源 / 日期</th></tr></thead>
+                  <tbody>
+                    {quotes.filter((item) => item.id === priceId).map((item) => (
+                      <tr key={item.id}>
+                        <td>{item.productName}<div className="muted t-xs">{item.category || '平台行情'}</div></td>
+                        <td className="mono">¥{Number(item.price).toFixed(2)}</td>
+                        <td className={`tr mono${(item.changePct ?? 0) < 0 ? ' c-red' : (item.changePct ?? 0) > 0 ? ' c-green' : ''}`}>
+                          {item.changePct == null ? '—' : `${item.changePct > 0 ? '+' : ''}${item.changePct}%`}
+                        </td>
+                        <td>{item.source || '平台发布'}<div className="muted t-xs">{item.quotedAt?.slice(0, 10) || '—'}</div></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div className="empty">
+                  <Icon name="chart" size={30} />
+                  <div className="strong mt-12">暂无已发布行情</div>
+                  <div className="muted t-sm mt-8">运营端发布报价后自动展示。</div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -316,7 +402,11 @@ export function Home(): JSX.Element {
                 <button type="button" className={newsTab === 'market' ? 'on' : ''} onClick={() => setNewsTab('market')}>市场行情</button>
                 <button type="button" className={newsTab === 'agri' ? 'on' : ''} onClick={() => setNewsTab('agri')}>农技服务</button>
               </div>
-              <NewsList items={NEWS[newsTab]} />
+              {newsLoading
+                ? <div className="empty"><div className="muted t-sm">正在读取资讯…</div></div>
+                : newsItems.length > 0
+                  ? <NewsList items={newsItems} />
+                  : <div className="empty"><div className="strong">暂无相关资讯</div><div className="muted t-sm mt-8">运营端发布后自动同步到门户。</div></div>}
             </div>
           </div>
         </div>
@@ -347,15 +437,15 @@ export function Home(): JSX.Element {
       <section className="section portal-last-section">
         <div className="container portal-announce-grid">
           <div className="card">
-            <div className="card-h"><h3><Icon name="bell" size={18} />平台公告</h3><span className="tag tag-ghost">示例内容</span></div>
+            <div className="card-h"><h3><Icon name="bell" size={18} />平台公告</h3><span className="tag tag-ghost">平台发布</span></div>
             <div className="card-b">
-              {ANNOUNCEMENTS.map((item) => (
+              {announcementItems.length > 0 ? announcementItems.map((item) => (
                 <div className="portal-announce-row" key={item.title}>
                   <span className={`tag ${item.tagCls}`}>{item.tag}</span>
                   <span className="ellipsis">{item.title}</span>
                   <span className="mono t-xs muted">{item.date}</span>
                 </div>
-              ))}
+              )) : <div className="empty"><div className="muted t-sm">暂无平台公告</div></div>}
             </div>
           </div>
           <div className="card portal-join-card">

@@ -103,6 +103,7 @@ class CoreAppStartupSmokeTest {
             "/api/v1/sso/onboarding/subject",
             "/api/v1/sso/onboarding/certification",
             "/api/v1/public/logistics-inquiries",
+            "/api/v1/public/news",
             "/api/v1/quotes/**",
             "/v3/api-docs/**",
             "/swagger-ui/**",

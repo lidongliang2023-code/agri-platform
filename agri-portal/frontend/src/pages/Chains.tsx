@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Icon } from '../components/Icon'
-import { PRODUCTS, PROVINCES, TAXONOMY } from '../data/portal'
-import type { PortalProduct } from '../data/portal'
-import { useHashRoute } from '../utils'
+import { PROVINCES, TAXONOMY } from '../data/portal'
+import { tradeUrl, useHashRoute } from '../utils'
 
 const PAGE_SIZE = 8
 const PROVINCE_GROUPS = ['华北', '东北', '华东', '华中', '华南', '西南', '西北', '港澳台']
@@ -15,6 +14,84 @@ interface FilterState {
   sort: string
   page: number
   q: string
+}
+
+interface LiveProduct {
+  id: number
+  productName: string
+  sellerName?: string
+  categoryName?: string
+  origin?: string
+  province?: string
+  specification?: string
+  price?: number
+  unit?: string
+}
+
+interface ChainProduct {
+  id: number
+  name: string
+  l1: string
+  l2: string
+  l3: string
+  loc: string
+  spec: string
+  priceNum: string
+  unit: string
+  priceVal: number | null
+  tag: string
+  tagCls: string
+  icon: string
+  theme: string
+  href: string
+}
+
+const CATEGORY_MAP: Record<string, { l1: string; l2: string }> = {
+  大米: { l1: '粮油产业', l2: '稻谷·大米' },
+  稻谷: { l1: '粮油产业', l2: '稻谷·大米' },
+  小麦: { l1: '粮油产业', l2: '小麦·面粉' },
+  玉米: { l1: '粮油产业', l2: '玉米' },
+  苹果: { l1: '果蔬产业', l2: '苹果' },
+  柑橘: { l1: '果蔬产业', l2: '柑橘' },
+  大白菜: { l1: '果蔬产业', l2: '设施蔬菜' },
+  蔬菜: { l1: '果蔬产业', l2: '设施蔬菜' },
+  牛肉: { l1: '畜禽产业', l2: '肉牛' },
+  猪肉: { l1: '畜禽产业', l2: '生猪' },
+  禽蛋: { l1: '畜禽产业', l2: '蛋奶' },
+  大闸蟹: { l1: '水产产业', l2: '虾蟹' },
+  水产: { l1: '水产产业', l2: '淡水鱼' },
+  茶叶: { l1: '茶药产业', l2: '茶叶' },
+  饲料: { l1: '饲料农资', l2: '饲料' },
+}
+
+function mapProduct(product: LiveProduct): ChainProduct {
+  const category = product.categoryName || ''
+  const taxonomy = CATEGORY_MAP[category]
+    ?? Object.entries(CATEGORY_MAP).find(([key]) => category.includes(key))?.[1]
+    ?? { l1: '粮油产业', l2: '稻谷·大米' }
+  return {
+    id: product.id,
+    name: product.productName,
+    l1: taxonomy.l1,
+    l2: taxonomy.l2,
+    l3: category || product.productName,
+    loc: product.origin || product.province || '产地待补充',
+    spec: product.specification || '规格待补充',
+    priceNum: product.price == null ? '' : String(product.price),
+    unit: product.unit ? ` / ${product.unit}` : '',
+    priceVal: product.price == null ? null : Number(product.price),
+    tag: product.sellerName || '平台在售',
+    tagCls: '',
+    icon: taxonomy.l1 === '水产产业' ? 'drop'
+      : taxonomy.l1 === '畜禽产业' ? 'activity'
+        : taxonomy.l1 === '果蔬产业' ? 'sun'
+          : taxonomy.l1 === '茶药产业' ? 'leaf' : 'seed',
+    theme: taxonomy.l1 === '水产产业' ? 't'
+      : taxonomy.l1 === '畜禽产业' ? 'a'
+        : taxonomy.l1 === '果蔬产业' ? 'o'
+          : taxonomy.l1 === '茶药产业' ? 'g' : 'g',
+    href: tradeUrl(`/product/detail/${product.id}`),
+  }
 }
 
 function ProvinceChips({ state, onPick }: { state: FilterState; onPick: (value: string) => void }): JSX.Element {
@@ -39,16 +116,16 @@ function ProvinceChips({ state, onPick }: { state: FilterState; onPick: (value: 
   )
 }
 
-function ProductCard({ product }: { product: PortalProduct }): JSX.Element {
+function ProductCard({ product }: { product: ChainProduct }): JSX.Element {
   return (
-    <a className="card card-hover" href="#/hall">
+    <a className="card card-hover" href={product.href} target="_blank" rel="noreferrer">
       <div className="card-b">
         <div className={`portal-thumb theme-${product.theme}`}><Icon name={product.icon} size={44} /></div>
         <div className="row between center mt-12 gap-8">
           <span className="strong ellipsis">{product.name}</span>
           <span className={`tag ${product.tagCls}`}>{product.tag}</span>
         </div>
-        <div className="muted t-xs mt-8">{product.loc} · {product.spec}</div>
+        <div className="muted t-xs mt-8 ellipsis">{product.loc} · {product.spec}</div>
         <div className="row between center mt-12">
           {product.priceVal == null ? (
             <span className="price t-md portal-inquiry">询价</span>
@@ -64,9 +141,37 @@ function ProductCard({ product }: { product: PortalProduct }): JSX.Element {
 
 export function Chains(): JSX.Element {
   const route = useHashRoute()
+  const [products, setProducts] = useState<ChainProduct[]>([])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [state, setState] = useState<FilterState>({
     l1: '', l2: '', l3: '', loc: '', sort: '综合', page: 1, q: '',
   })
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    setLoadError('')
+    fetch('/api/trade/public/products?limit=100')
+      .then((response) => response.json())
+      .then((body: { code?: number; data?: LiveProduct[] | { records?: LiveProduct[] } }) => {
+        if (cancelled) return
+        const records = Array.isArray(body.data) ? body.data : body.data?.records
+        if ((body.code === 0 || body.code === 200) && records) {
+          setProducts(records.map(mapProduct))
+        } else {
+          setProducts([])
+          setLoadError(body.code === 0 || body.code === 200 ? '' : '交易服务未返回可用商品')
+        }
+      })
+      .catch(() => {
+        if (cancelled) return
+        setProducts([])
+        setLoadError('交易服务暂时不可用')
+      })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [])
 
   // 首页产业链卡片 / 频道栏通过 hash query 深链进来时同步筛选条件
   useEffect(() => {
@@ -88,9 +193,8 @@ export function Chains(): JSX.Element {
 
   const filtered = useMemo(() => {
     const keyword = state.q.trim().toLowerCase()
-    const list = PRODUCTS.filter((product) => {
-      const locHit = !state.loc || product.loc === state.loc
-        || product.loc.startsWith(`${state.loc}·`) || product.loc.startsWith(`${state.loc} `)
+    const list = products.filter((product) => {
+      const locHit = !state.loc || product.loc.startsWith(state.loc)
       const keywordHit = !keyword || [product.name, product.l1, product.l2, product.l3, product.loc, product.spec]
         .some((value) => value.toLowerCase().includes(keyword))
       return (!state.l1 || product.l1 === state.l1)
@@ -98,13 +202,15 @@ export function Chains(): JSX.Element {
         && (!state.l3 || product.l3 === state.l3)
         && locHit && keywordHit
     })
-    if (state.sort === '价格从低到高') {
+    if (state.sort === '最新发布') {
+      list.sort((a, b) => Number(b.id) - Number(a.id))
+    } else if (state.sort === '价格从低到高') {
       list.sort((a, b) => (a.priceVal ?? Number.POSITIVE_INFINITY) - (b.priceVal ?? Number.POSITIVE_INFINITY))
     } else if (state.sort === '价格从高到低') {
       list.sort((a, b) => (b.priceVal ?? Number.NEGATIVE_INFINITY) - (a.priceVal ?? Number.NEGATIVE_INFINITY))
     }
     return list
-  }, [state])
+  }, [products, state])
 
   const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const currentPage = Math.min(state.page, pages)
@@ -216,15 +322,22 @@ export function Chains(): JSX.Element {
         </div>
 
         <div className="portal-data-note">
-          本页货源为原型目录示例，用于展示分类与筛选能力；实时库存、报价与供应商信息请进入
-          <a href="#/hall"> 交易大厅 </a>查看。
+          {loading
+            ? '正在从交易平台读取已发布货源…'
+            : loadError
+              ? `${loadError}，当前不展示示例货源。`
+              : `已连接交易平台，展示 ${products.length} 条已发布在售货源。库存、报价与供应商信息以交易记录为准。`}
         </div>
 
-        {visible.length === 0 ? (
+        {loading ? (
+          <div className="empty card"><div className="muted t-sm">正在读取货源…</div></div>
+        ) : visible.length === 0 ? (
           <div className="empty card">
             <Icon name="search" size={34} />
-            <div className="mt-12 strong">没有匹配的货源</div>
-            <div className="muted t-sm mt-8">试试更换分类或产地，或到交易大厅发布采购需求由平台智能匹配。</div>
+            <div className="mt-12 strong">{products.length === 0 ? '暂无在售货源' : '没有匹配的货源'}</div>
+            <div className="muted t-sm mt-8">
+              {products.length === 0 ? '供应商发布商品后会实时展示；本页不使用模拟货源。' : '试试更换分类或产地，或到交易大厅发布采购需求。'}
+            </div>
           </div>
         ) : (
           <div className="grid grid-4 portal-product-grid">
