@@ -146,6 +146,13 @@ export function AccountCenter(): JSX.Element {
   const [businessResults, setBusinessResults] = useState<BusinessResult[]>([])
   const [joinRole, setJoinRole] = useState('buyer')
   const [joinMessage, setJoinMessage] = useState('')
+  const [createBusinessOpen, setCreateBusinessOpen] = useState(false)
+  const [createIdentity, setCreateIdentity] = useState<'enterprise' | 'personal'>('enterprise')
+  const [createBusinessForm, setCreateBusinessForm] = useState({
+    companyName: '', creditCode: '', industry: '', companySize: '', realName: '', idCard: '',
+    businessType: '', address: '', contactName: '', contactPhone: '', legalPerson: '',
+    validStart: '', validEnd: '', email: '',
+  })
   const [busy, setBusy] = useState(false)
 
   const load = async (): Promise<void> => {
@@ -351,6 +358,34 @@ export function AccountCenter(): JSX.Element {
     await load()
   }
 
+  const openCreateBusiness = (identity: 'enterprise' | 'personal'): void => {
+    setCreateIdentity(identity)
+    setCreateBusinessForm((current) => ({
+      ...current,
+      contactName: current.contactName || summary?.nickname || '',
+      contactPhone: current.contactPhone || summary?.phone || '',
+      email: current.email || summary?.email || '',
+    }))
+    setCreateBusinessOpen(true)
+  }
+
+  const createBusiness = async (event: FormEvent): Promise<void> => {
+    event.preventDefault()
+    setBusy(true)
+    try {
+      const result = await api('/api/v1/sso/account/businesses', {
+        method: 'POST',
+        body: JSON.stringify({ ...createBusinessForm, identity: createIdentity }),
+      })
+      if (result.code !== 0) return setError(result.message ?? '主体创建失败')
+      setCreateBusinessOpen(false)
+      flash(createIdentity === 'enterprise' ? '企业主体已创建' : '个人主体已创建')
+      await load()
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const reviewJoin = async (id: string, approved: boolean): Promise<void> => {
     const result = await api(`/api/v1/sso/account/businesses/join-requests/${id}/review`, {
       method: 'POST',
@@ -541,11 +576,18 @@ export function AccountCenter(): JSX.Element {
           </div>
 
           <div className="card account-card">
-            <div className="account-card-head"><h2>我的经营主体</h2><span>{summary.merchants.length} 个</span></div>
+            <div className="account-card-head">
+              <h2>我的经营主体</h2>
+              <div className="account-form-actions">
+                <span>{summary.merchants.length} 个</span>
+                <button className="btn btn-outline btn-sm" onClick={() => openCreateBusiness('enterprise')}>创建企业主体</button>
+                <button className="btn btn-outline btn-sm" onClick={() => openCreateBusiness('personal')}>创建个人主体</button>
+              </div>
+            </div>
             {summary.merchants.length === 0 ? (
               <div className="account-business-empty">
                 <p>当前账号还没有经营主体，可注册个人或企业主体，也可以申请加入已有主体。</p>
-                <div><a className="btn btn-primary" href="http://localhost:8090/register?step=2&identity=personal">创建个人主体</a><a className="btn btn-outline" href="http://localhost:8090/register?step=2&identity=enterprise">创建企业主体</a></div>
+                <div><button className="btn btn-primary" onClick={() => openCreateBusiness('personal')}>创建个人主体</button><button className="btn btn-outline" onClick={() => openCreateBusiness('enterprise')}>创建企业主体</button></div>
               </div>
             ) : (
               <div className="merchant-list">
@@ -598,6 +640,44 @@ export function AccountCenter(): JSX.Element {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+          {createBusinessOpen && (
+            <div className="account-modal-mask" onClick={() => setCreateBusinessOpen(false)}>
+              <form className="account-modal" onClick={(event) => event.stopPropagation()} onSubmit={(event) => void createBusiness(event)}>
+                <div className="account-card-head">
+                  <h2>{createIdentity === 'enterprise' ? '创建企业主体' : '创建个人主体'}</h2>
+                  <button type="button" className="account-modal-close" onClick={() => setCreateBusinessOpen(false)}>×</button>
+                </div>
+                <div className="account-form-grid">
+                  {createIdentity === 'enterprise' ? (
+                    <>
+                      <label>企业名称<input className="input" value={createBusinessForm.companyName} onChange={(event) => setCreateBusinessForm({ ...createBusinessForm, companyName: event.target.value })} /></label>
+                      <label>统一社会信用代码<input className="input" value={createBusinessForm.creditCode} onChange={(event) => setCreateBusinessForm({ ...createBusinessForm, creditCode: event.target.value.toUpperCase() })} /></label>
+                      <label>所属行业<input className="input" value={createBusinessForm.industry} onChange={(event) => setCreateBusinessForm({ ...createBusinessForm, industry: event.target.value })} /></label>
+                      <label>企业规模<input className="input" value={createBusinessForm.companySize} onChange={(event) => setCreateBusinessForm({ ...createBusinessForm, companySize: event.target.value })} /></label>
+                      <label>法定代表人<input className="input" value={createBusinessForm.legalPerson} onChange={(event) => setCreateBusinessForm({ ...createBusinessForm, legalPerson: event.target.value })} /></label>
+                    </>
+                  ) : (
+                    <>
+                      <label>真实姓名<input className="input" value={createBusinessForm.realName} onChange={(event) => setCreateBusinessForm({ ...createBusinessForm, realName: event.target.value })} /></label>
+                      <label>身份证号<input className="input" value={createBusinessForm.idCard} onChange={(event) => setCreateBusinessForm({ ...createBusinessForm, idCard: event.target.value.toUpperCase() })} /></label>
+                      <label>经营类型<input className="input" value={createBusinessForm.businessType} placeholder="家庭农场 / 个体户 / 经纪人" onChange={(event) => setCreateBusinessForm({ ...createBusinessForm, businessType: event.target.value })} /></label>
+                      <label>证件有效期起<input className="input" type="date" value={createBusinessForm.validStart} onChange={(event) => setCreateBusinessForm({ ...createBusinessForm, validStart: event.target.value })} /></label>
+                      <label>证件有效期止<input className="input" type="date" value={createBusinessForm.validEnd} onChange={(event) => setCreateBusinessForm({ ...createBusinessForm, validEnd: event.target.value })} /></label>
+                    </>
+                  )}
+                  <label>联系人<input className="input" value={createBusinessForm.contactName} onChange={(event) => setCreateBusinessForm({ ...createBusinessForm, contactName: event.target.value })} /></label>
+                  <label>联系电话<input className="input" value={createBusinessForm.contactPhone} onChange={(event) => setCreateBusinessForm({ ...createBusinessForm, contactPhone: event.target.value })} /></label>
+                  <label>联系邮箱<input className="input" value={createBusinessForm.email} onChange={(event) => setCreateBusinessForm({ ...createBusinessForm, email: event.target.value })} /></label>
+                </div>
+                <label>主体地址<input className="input" value={createBusinessForm.address} onChange={(event) => setCreateBusinessForm({ ...createBusinessForm, address: event.target.value })} /></label>
+                <p className="muted">创建后主体会出现在“我的经营主体”中；企业主体还需进入认证流程提交审核。</p>
+                <div className="account-form-actions">
+                  <button className="btn btn-primary" disabled={busy}>{busy ? '创建中…' : '创建主体'}</button>
+                  <button type="button" className="btn btn-ghost" onClick={() => setCreateBusinessOpen(false)}>取消</button>
+                </div>
+              </form>
             </div>
           )}
         </div>

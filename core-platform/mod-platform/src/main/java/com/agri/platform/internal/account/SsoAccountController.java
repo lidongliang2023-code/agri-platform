@@ -310,6 +310,44 @@ public class SsoAccountController {
         return ApiResponse.ok(rows);
     }
 
+    /** 已登录账号创建新的企业或个人经营主体。 */
+    @PostMapping("/businesses")
+    public ApiResponse<Void> createBusiness(@RequestBody CreateBusinessRequest body,
+                                            HttpServletRequest request) {
+        long[] session = requireSession(request);
+        UserEntity user = requireUser(session[0]);
+        if (body == null || body.getIdentity() == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "请选择主体类型");
+        }
+        String identity = body.getIdentity().trim().toLowerCase();
+        String address = trim(body.getAddress());
+        String contactName = trim(body.getContactName());
+        String contactPhone = trim(body.getContactPhone());
+        if (address == null || contactName == null || contactPhone == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "联系人和主体地址不能为空");
+        }
+        SmsAuthService.SubjectProfile profile = new SmsAuthService.SubjectProfile(
+                identity,
+                trim(body.getCompanyName()),
+                trim(body.getCreditCode()),
+                trim(body.getIndustry()),
+                trim(body.getCompanySize()),
+                address,
+                trim(body.getRealName()),
+                trim(body.getIdCard()),
+                trim(body.getBusinessType()),
+                contactName,
+                contactPhone,
+                trim(body.getLegalPerson()),
+                trim(body.getLicenseNo()),
+                trim(body.getAttachNote()),
+                trim(body.getValidStart()),
+                trim(body.getValidEnd()),
+                trim(body.getEmail()));
+        smsAuthService.createAdditionalSubject(user.getId(), session[1], profile);
+        return ApiResponse.ok();
+    }
+
     @PostMapping("/businesses/join-requests")
     public ApiResponse<Map<String, Object>> requestJoin(@RequestBody JoinRequest body,
                                                         HttpServletRequest request) {
@@ -635,6 +673,27 @@ public class SsoAccountController {
         private Long merchantId;
         private String roleInMerchant;
         private String message;
+    }
+
+    @Data
+    public static class CreateBusinessRequest {
+        private String identity;
+        private String companyName;
+        private String creditCode;
+        private String industry;
+        private String companySize;
+        private String realName;
+        private String idCard;
+        private String businessType;
+        private String address;
+        private String contactName;
+        private String contactPhone;
+        private String legalPerson;
+        private String licenseNo;
+        private String attachNote;
+        private String validStart;
+        private String validEnd;
+        private String email;
     }
 
     @Data

@@ -181,6 +181,28 @@ try {
   check(realName.code === 0 && afterRealName.data?.realName?.status === 'pending',
     '企业账号也可提交账号级个人实名认证')
 
+  const beforeCreate = await request('/api/v1/sso/account/summary')
+  const createSubject = await request('/api/v1/sso/account/businesses', {
+    method: 'POST',
+    body: JSON.stringify({
+      identity: 'personal',
+      realName: '账号中心新增主体',
+      idCard: validId(),
+      businessType: '家庭农场',
+      address: '山东省潍坊市寿光市主体创建路 2 号',
+      contactName: '账号中心新增主体',
+      contactPhone: account.phone,
+      email: 'account-center@example.com',
+      validStart: '2020-01-01',
+      validEnd: '2040-01-01',
+    }),
+  })
+  const afterCreate = await request('/api/v1/sso/account/summary')
+  const addedMerchant = (afterCreate.data?.merchants ?? []).find((item) =>
+    !(beforeCreate.data?.merchants ?? []).some((old) => old.merchantId === item.merchantId))
+  check(createSubject.code === 0 && addedMerchant?.memberType === 'personal',
+    '已有主体账号仍可创建新的个人主体', addedMerchant?.merchantName ?? '')
+
   const search = await request('/api/v1/sso/account/businesses/search?keyword=%E7%BB%BF%E6%BA%90')
   const business = (search.data ?? []).find((item) => !item.alreadyJoined)
   check(search.code === 0 && Boolean(business), '可搜索待加入的经营主体', business?.name ?? '')
@@ -205,6 +227,16 @@ try {
   await page.waitForSelector('.account-tabs button', { timeout: 20000 })
   await page.evaluate(() => {
     const button = [...document.querySelectorAll('.account-tabs button')]
+      .find((item) => item.textContent?.includes('实名与主体'))
+    button?.click()
+  })
+  await page.waitForFunction(() => {
+    const text = document.body.innerText
+    return text.includes('创建企业主体') && text.includes('创建个人主体')
+  }, { timeout: 10000 })
+  check(true, '登录后始终显示创建企业/个人主体入口')
+  await page.evaluate(() => {
+    const button = [...document.querySelectorAll('.account-tabs button')]
       .find((item) => item.textContent?.includes('地址管理'))
     button?.click()
   })
@@ -223,6 +255,15 @@ try {
   if (joinId) {
     const cancel = await request(`/api/v1/sso/account/businesses/join-requests/${joinId}`, { method: 'DELETE' })
     check(cancel.code === 0, '加入主体申请可撤回')
+  }
+  if (addedMerchant?.merchantId) {
+    execFileSync(
+      'C:\\Program Files\\MySQL\\MySQL Server 8.4\\bin\\mysql.exe',
+      ['-uroot', '--batch', '-e',
+        `DELETE FROM agri_core.platform_user_merchant WHERE user_id=(SELECT id FROM agri_core.platform_user WHERE phone='${account.phone}') AND merchant_id=${addedMerchant.merchantId}; DELETE FROM agri_core.platform_merchant WHERE id=${addedMerchant.merchantId};`],
+      { env: { ...process.env, MYSQL_PWD: 'root' } },
+    )
+    check(true, '主体创建测试数据已清理')
   }
   check(errors.length === 0, '个人中心无未捕获脚本异常', errors.slice(0, 2).join(' | '))
 

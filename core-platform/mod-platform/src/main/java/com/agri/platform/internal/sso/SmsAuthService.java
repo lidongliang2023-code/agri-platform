@@ -330,6 +330,21 @@ public class SmsAuthService {
      */
     @Transactional(rollbackFor = Exception.class)
     public OnboardingStatus createSubject(Long userId, Long marketId, SubjectProfile profile) {
+        return createSubject(userId, marketId, profile, false);
+    }
+
+    /**
+     * 已登录账号追加创建另一个经营主体。
+     *
+     * <p>与注册向导的 createSubject 不同，这里不复用账号已有主体，而是新建一条
+     * platform_merchant 和 owner 绑定，因此用户可在个人中心同时拥有企业/个人主体。</p>
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public OnboardingStatus createAdditionalSubject(Long userId, Long marketId, SubjectProfile profile) {
+        return createSubject(userId, marketId, profile, true);
+    }
+
+    private OnboardingStatus createSubject(Long userId, Long marketId, SubjectProfile profile, boolean forceNewMerchant) {
         if (profile == null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "主体资料不能为空");
         }
@@ -364,13 +379,16 @@ public class SmsAuthService {
             }
         }
 
-        Long merchantId = myMerchantIds(userId, market).stream().findFirst().orElse(null);
+        Long merchantId = forceNewMerchant
+                ? null : myMerchantIds(userId, market).stream().findFirst().orElse(null);
         MerchantEntity merchant;
         LocalDateTime now = LocalDateTime.now();
         if (merchantId == null) {
             merchant = new MerchantEntity();
             merchant.setMarketId(market);
-            merchant.setCode("REG" + userId);
+            merchant.setCode(forceNewMerchant
+                    ? "REG" + Long.toString(System.currentTimeMillis(), 36).toUpperCase()
+                    : "REG" + userId);
             merchant.setName("enterprise".equals(identity) ? companyName : realName);
             merchant.setType("BOTH");
             merchant.setMemberType(identity);
