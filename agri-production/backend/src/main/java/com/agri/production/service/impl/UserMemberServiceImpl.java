@@ -6,6 +6,7 @@ import com.agri.production.entity.TeamMember;
 import com.agri.production.mapper.TeamMemberMapper;
 import com.agri.production.service.FarmIdResolver;
 import com.agri.production.service.IUserMemberService;
+import com.agri.production.service.ProductionRoleService;
 import com.agri.production.vo.UserMemberVO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
@@ -42,10 +43,13 @@ public class UserMemberServiceImpl implements IUserMemberService {
 
     private final TeamMemberMapper memberMapper;
     private final FarmIdResolver farmIdResolver;
+    private final ProductionRoleService roleService;
 
-    public UserMemberServiceImpl(TeamMemberMapper memberMapper, FarmIdResolver farmIdResolver) {
+    public UserMemberServiceImpl(TeamMemberMapper memberMapper, FarmIdResolver farmIdResolver,
+                                 ProductionRoleService roleService) {
         this.memberMapper = memberMapper;
         this.farmIdResolver = farmIdResolver;
+        this.roleService = roleService;
     }
 
     @Override
@@ -87,6 +91,7 @@ public class UserMemberServiceImpl implements IUserMemberService {
         String phone = requirePhone(payload.phone());
         String memberType = normalizeMemberType(payload.memberType());
         String postName = optionalText(payload.postName(), "岗位", POST_MAX_LENGTH);
+        roleService.requireRoleCode(tenantId, payload.roleCode());
         LocalDate joinDate = parseDate(payload.joinDate(), "加入日期");
         Integer status = payload.status() == null ? STATUS_ACTIVE : requireStatus(payload.status());
 
@@ -130,6 +135,7 @@ public class UserMemberServiceImpl implements IUserMemberService {
             member.setPostName(optionalText(payload.postName(), "岗位", POST_MAX_LENGTH));
         }
         if (payload.roleCode() != null) {
+            roleService.requireRoleCode(tenantId, payload.roleCode());
             member.setRoleCode(optionalText(payload.roleCode(), "角色编码", 32));
         }
         if (payload.joinDate() != null) {

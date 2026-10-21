@@ -5,6 +5,7 @@ import { PortalLoginModal } from './PortalLoginModal'
 import type { PortalUser } from './PortalLoginModal'
 import { BrandMark } from './BrandMark'
 import { go, productionLogin, ssoRegister, tradeUrl } from '../utils'
+import { clearPlatformAccessToken } from '../utils/platformToken'
 
 const CHANNELS = ['粮油产业', '果蔬产业', '畜禽产业', '茶药产业', '饲料农资', '水产产业', '预制菜', '冷链物流']
 
@@ -60,6 +61,7 @@ export function PortalLayout({ children, active = '/' }: { children: ReactNode; 
         body: '{}',
       })
     } finally {
+      clearPlatformAccessToken()
       setUser(null)
       setAccountMenuOpen(false)
     }

@@ -1,0 +1,42 @@
+.account-team-panel { display:grid; gap:16px; }
+.account-subject-strip { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:14px 18px; border:1px solid #cde6d8; border-radius:12px; background:linear-gradient(135deg,#f5fbf7,#eaf7ef); }
+.account-subject-strip > div { display:flex; align-items:center; gap:10px; min-width:0; }
+.account-subject-strip span { color:#6b7c72; font-size:11px; }
+.account-subject-strip strong { overflow:hidden; color:#174e34; font-size:16px; text-overflow:ellipsis; white-space:nowrap; }
+.account-subject-strip small { color:#71837a; font-size:10.5px; }
+.account-team-table-wrap { overflow:auto; border:1px solid #e3eae5; border-radius:10px; }
+.account-team-table { width:100%; min-width:900px; border-collapse:collapse; font-size:11.5px; }
+.account-team-table th { padding:10px 12px; color:#64766b; background:#f5f9f6; font-size:10.5px; font-weight:650; text-align:left; white-space:nowrap; }
+.account-team-table td { padding:11px 12px; border-top:1px solid #edf1ee; color:#405248; }
+.account-team-table tbody tr:hover { background:#fbfdfb; }
+.account-team-actions { display:flex; gap:8px; white-space:nowrap; }
+.account-team-actions button { padding:0; border:0; color:#12764a; background:transparent; font-size:10.5px; cursor:pointer; }
+.account-team-actions .danger { color:#c53030; }
+.account-team-empty { padding:38px 20px; color:#829188; text-align:center; }
+.account-team-modal { width:min(700px,96vw); }
+.account-role-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+.account-role-card { display:flex; flex-direction:column; gap:7px; min-width:0; padding:13px; border:1px solid #e0e9e3; border-radius:10px; color:#405248; background:#fff; cursor:pointer; text-align:left; }
+.account-role-card:hover,.account-role-card.on { border-color:#82c19f; background:#f3fbf6; box-shadow:inset 3px 0 0 #159a5e; }
+.account-role-card > span { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.account-role-card strong { color:#243a2f; font-size:13px; }
+.account-role-card small { color:#87978e; font-size:9.5px; }
+.account-role-card b { color:#12764a; font-size:10.5px; font-weight:600; }
+.account-role-card em { overflow:hidden; color:#718178; font-size:10px; font-style:normal; line-height:1.5; text-overflow:ellipsis; white-space:nowrap; }
+.account-scope-select { width:160px; min-height:34px; }
+.account-permission-toolbar { display:flex; align-items:center; gap:10px; margin-bottom:12px; padding:9px 11px; border-radius:8px; background:#f4f8f5; color:#617269; font-size:11px; }
+.account-permission-toolbar button { border:0; color:#12764a; background:transparent; font-size:10.5px; cursor:pointer; }
+.account-permission-groups { display:grid; gap:12px; }
+.account-permission-group { padding:14px; border:1px solid #e0e9e3; border-radius:10px; }
+.account-permission-group h3 { display:flex; align-items:center; gap:8px; margin:0 0 10px; color:#243a2f; font-size:13px; }
+.account-permission-group h3 small { color:#87978e; font-size:9.5px; font-weight:400; }
+.account-permission-actions { display:flex; gap:6px; margin-bottom:8px; }
+.account-permission-actions span { padding:2px 7px; border-radius:999px; color:#12764a; background:#e6f5ec; font-size:9.5px; }
+.account-permission-resources { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px 14px; }
+.account-permission-resources > div { display:flex; align-items:center; justify-content:space-between; gap:8px; min-width:0; padding:7px 9px; border-radius:7px; background:#f8faf9; }
+.account-permission-resources strong { overflow:hidden; color:#405248; font-size:10.5px; font-weight:600; text-overflow:ellipsis; white-space:nowrap; }
+.account-permission-resources span { display:flex; flex-wrap:wrap; gap:4px 8px; }
+.account-permission-resources label { display:flex; align-items:center; gap:3px; color:#6b7c72; font-size:9.5px; white-space:nowrap; }
+.account-permission-resources input { accent-color:#159a5e; }
+.account-permission-batch { display:flex; flex-wrap:wrap; gap:6px; margin-top:9px; padding-top:9px; border-top:1px dashed #e0e9e3; }
+.account-permission-batch button { border:0; color:#12764a; background:transparent; font-size:9.5px; cursor:pointer; }
+@media(max-width:760px){.account-subject-strip{align-items:flex-start;flex-direction:column}.account-role-grid,.account-permission-resources{grid-template-columns:1fr}.account-permission-toolbar{align-items:flex-start;flex-wrap:wrap}.account-card-head{align-items:flex-start;flex-wrap:wrap}}

@@ -15,6 +15,7 @@ export default defineConfig({
   server: {
     port: 5190,
     proxy: {
+      '/api/v1/production': { target: 'http://localhost:8092', changeOrigin: true },
       '/api/v1': { target: 'http://localhost:8093', changeOrigin: true },
       '/api/trade': { target: 'http://localhost:8089', changeOrigin: true },
     },

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Icon } from '../components/Icon'
+import { RolesPermissions } from './account/RolesPermissions'
+import { TeamMembers } from './account/TeamMembers'
 import './account-center.css'
 
 interface MerchantRow {
@@ -105,13 +107,15 @@ interface BusinessResult {
   alreadyJoined: boolean
 }
 
-type Tab = 'profile' | 'security' | 'addresses' | 'business'
+type Tab = 'profile' | 'security' | 'addresses' | 'business' | 'team' | 'roles'
 
 const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: 'profile', label: '账号资料', icon: 'user' },
   { key: 'security', label: '账号安全', icon: 'shield' },
   { key: 'addresses', label: '地址管理', icon: 'location' },
   { key: 'business', label: '主体资料与认证', icon: 'factory' },
+  { key: 'team', label: '团队与成员', icon: 'users' },
+  { key: 'roles', label: '角色与权限', icon: 'shield' },
 ]
 
 const INDUSTRIES = ['粮油产业', '果蔬产业', '畜禽产业', '茶药产业', '饲料农资', '水产产业', '流通贸易', '加工制造', '其他']
@@ -161,7 +165,7 @@ function tone(value: string | null | undefined): string {
 
 export function AccountCenter({ initialTab }: { initialTab?: string | null }): JSX.Element {
   const [tab, setTab] = useState<Tab>(() => (
-    ['profile', 'security', 'addresses', 'business'].includes(initialTab ?? '')
+    ['profile', 'security', 'addresses', 'business', 'team', 'roles'].includes(initialTab ?? '')
       ? initialTab as Tab : 'profile'
   ))
   const [summary, setSummary] = useState<Summary | null>(null)
@@ -992,6 +996,24 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
             </div>
           )}
         </div>
+      )}
+
+      {tab === 'team' && (
+        <TeamMembers
+          merchantId={activeMerchant?.merchantId ?? null}
+          merchantName={activeMerchant?.merchantName ?? null}
+          onNotice={flash}
+          onError={setError}
+        />
+      )}
+
+      {tab === 'roles' && (
+        <RolesPermissions
+          merchantId={activeMerchant?.merchantId ?? null}
+          merchantName={activeMerchant?.merchantName ?? null}
+          onNotice={flash}
+          onError={setError}
+        />
       )}
     </section>
   )

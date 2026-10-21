@@ -1354,6 +1354,33 @@ deleted BIGINT DEFAULT 0,
     INDEX `idx_member_status` (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- 主体级角色与权限。
+--
+-- 原先用户端角色页读的是平台全局 platform_role，所有经营主体看到同一套角色，
+-- 且普通主体负责人无法修改。角色必须与经营主体（tenant_id = 当前主体 ID）绑定，
+-- 因而在个人中心每个主体下维护独立角色、权限点和数据范围。
+CREATE TABLE IF NOT EXISTS agri_prod_role (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  role_id VARCHAR(32) NOT NULL COMMENT '角色业务编号',
+  tenant_id VARCHAR(191) NOT NULL COMMENT '经营主体 ID',
+  role_code VARCHAR(32) NOT NULL COMMENT '主体内唯一角色编码',
+  role_name VARCHAR(64) NOT NULL COMMENT '角色名称',
+  description VARCHAR(255) COMMENT '职责说明',
+  permissions TEXT NOT NULL COMMENT '权限码 JSON 数组',
+  data_scope VARCHAR(20) NOT NULL DEFAULT 'TENANT' COMMENT 'SELF/PLOT/FARM/TENANT',
+  built_in TINYINT NOT NULL DEFAULT 0 COMMENT '是否系统内置角色',
+  status TINYINT NOT NULL DEFAULT 1 COMMENT '1 启用 / 0 停用',
+  create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+  update_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+  deleted BIGINT DEFAULT 0,
+  UNIQUE KEY `uk_role_role_id` (role_id),
+  UNIQUE KEY `uk_role_tenant_code` (tenant_id, role_code),
+  INDEX `idx_role_tenant` (tenant_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 已运行环境同样修正列宽：CREATE TABLE IF NOT EXISTS 不会修改既有列。
+ALTER TABLE agri_prod_role MODIFY permissions TEXT NOT NULL COMMENT '权限码 JSON 数组';
+
 -- 系统配置项（用户端「报表与设置」→ 系统设置 → 参数配置）。
 --
 -- 列口径照抄平台侧 prod_sys_setting（setting_group / setting_key / setting_name / setting_value /

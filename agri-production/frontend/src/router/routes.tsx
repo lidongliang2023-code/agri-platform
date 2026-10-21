@@ -45,8 +45,6 @@ const PlotList = lazy(() => import('@/pages/user/plots/PlotList'))
 const PlotDetail = lazy(() => import('@/pages/user/plots/PlotDetail'))
 const PlotCreate = lazy(() => import('@/pages/user/plots/Create'))
 const PlotSoilRecords = lazy(() => import('@/pages/user/plots/PlotSoilRecords'))
-const MemberList = lazy(() => import('@/pages/user/members/MemberList'))
-const RoleList = lazy(() => import('@/pages/user/members/RoleList'))
 // 智能种养计划
 const PlanList = lazy(() => import('@/pages/user/plans/PlanList'))
 const PlanDetail = lazy(() => import('@/pages/user/plans/PlanDetail'))
@@ -244,26 +242,6 @@ export const USER_ROUTES: AppRoute[] = [
       path: '/production/plots/:plotId/soil',
       module: '农场数字化管理',
       prd: 'PRD 6.1 #8',
-    },
-  },
-  {
-    path: 'members',
-    element: <MemberList />,
-    meta: {
-      name: '团队与人员',
-      path: '/production/members',
-      module: '报表与设置',
-      prd: 'PRD 6.1 #9',
-    },
-  },
-  {
-    path: 'members/roles',
-    element: <RoleList />,
-    meta: {
-      name: '角色与权限',
-      path: '/production/members/roles',
-      module: '报表与设置',
-      prd: 'PRD 6.1 #10',
     },
   },
   {

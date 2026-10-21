@@ -58,8 +58,8 @@ try {
   await page.goto(`${PORTAL}#/account`, { waitUntil: 'networkidle2', timeout: 60000 })
   await page.waitForSelector('.account-page', { timeout: 20000 })
   await page.waitForSelector('.account-tabs button', { timeout: 20000 })
-  check((await page.$$eval('.account-tabs button', (items) => items.length)) === 4,
-    '个人中心四个功能分区齐全')
+  check((await page.$$eval('.account-tabs button', (items) => items.length)) === 6,
+    '个人中心六个功能分区齐全')
 
   const request = async (path, init = {}) => page.evaluate(async ({ url, options }) => {
     const response = await fetch(url, {

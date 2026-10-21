@@ -3,6 +3,7 @@ package com.agri.production.controller;
 import com.agri.production.common.entity.ApiResponse;
 import com.agri.production.common.entity.PageResult;
 import com.agri.production.service.IUserMemberService;
+import com.agri.production.service.ProductionRoleService;
 import com.agri.production.service.TenantContextService;
 import com.agri.production.vo.UserMemberVO;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -33,9 +34,11 @@ import java.util.Map;
 public class UserMemberController {
 
     private final IUserMemberService memberService;
+    private final ProductionRoleService roleService;
 
-    public UserMemberController(IUserMemberService memberService) {
+    public UserMemberController(IUserMemberService memberService, ProductionRoleService roleService) {
         this.memberService = memberService;
+        this.roleService = roleService;
     }
 
     /** 成员分页（keyword / status / farmId 可选）。 */
@@ -77,8 +80,31 @@ public class UserMemberController {
 
     /** 按角色聚合在职人数（页面「角色与权限」的"在职人数"列）。 */
     @GetMapping("/roles")
-    public ApiResponse<List<Map<String, Object>>> roleHeadcount() {
-        return ApiResponse.success(memberService.roleHeadcount(TenantContextService.currentTenantId()));
+    public ApiResponse<List<ProductionRoleService.RoleView>> roles() {
+        return ApiResponse.success(roleService.list(TenantContextService.currentTenantId()));
+    }
+
+    /** 读取主体内角色的已配置权限。 */
+    @GetMapping("/roles/{roleId}/permissions")
+    public ApiResponse<List<String>> rolePermissions(@PathVariable String roleId) {
+        String tenantId = TenantContextService.currentTenantId();
+        return ApiResponse.success(roleService.list(tenantId).stream()
+                .filter(role -> role.roleId().equals(roleId))
+                .findFirst()
+                .orElseThrow(() -> new com.agri.production.common.exception.BusinessException(
+                        404, "角色不存在或不属于当前主体"))
+                .permissions());
+    }
+
+    /** 保存主体内角色权限和数据范围。 */
+    @PutMapping("/roles/{roleId}/permissions")
+    public ApiResponse<ProductionRoleService.RoleView> saveRolePermissions(
+            @PathVariable String roleId, @RequestBody(required = false) Map<String, Object> body) {
+        List<String> permissions = stringList(body == null ? null : body.get("permissions"));
+        String dataScope = body == null || body.get("dataScope") == null
+                ? null : String.valueOf(body.get("dataScope"));
+        return ApiResponse.success(roleService.savePermissions(
+                TenantContextService.currentTenantId(), roleId, permissions, dataScope));
     }
 
     /**
@@ -90,8 +116,8 @@ public class UserMemberController {
      * （页面当前硬编码调平台域那条，属前端待改项）。</p>
      */
     @GetMapping("/roles/catalog")
-    public ApiResponse<List<Map<String, Object>>> roleCatalog() {
-        return ApiResponse.success(memberService.roleCatalog(TenantContextService.currentTenantId()));
+    public ApiResponse<List<ProductionRoleService.RoleView>> roleCatalog() {
+        return ApiResponse.success(roleService.list(TenantContextService.currentTenantId()));
     }
 
     /* ==================== 参数小工具 ==================== */
@@ -142,6 +168,17 @@ public class UserMemberController {
         } catch (NumberFormatException e) {
             throw new com.agri.production.common.exception.BusinessException(400, "成员状态应为整数：" + text);
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<String> stringList(Object value) {
+        if (!(value instanceof List<?> list)) {
+            return List.of();
+        }
+        return ((List<Object>) list).stream()
+                .filter(item -> item != null && !String.valueOf(item).isBlank())
+                .map(item -> String.valueOf(item).trim())
+                .toList();
     }
 
     private static int firstNonNull(Integer... values) {
