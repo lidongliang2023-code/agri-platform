@@ -83,6 +83,7 @@ export function PortalLayout({ children, active = '/' }: { children: ReactNode; 
             <a href={tradeUrl('/member/buyer')} target="_blank" rel="noreferrer">我是买家</a><span className="sep">·</span>
             <a href={tradeUrl('/member/seller')} target="_blank" rel="noreferrer">我是卖家</a><span className="sep">·</span>
             <a href={tradeUrl('/member/buyer')} target="_blank" rel="noreferrer">会员中心</a><span className="sep">·</span>
+            {user && <><a href="#/account">个人中心</a><span className="sep">·</span></>}
             {user ? (
               <span className="portal-logged-user">
                 <span className="portal-user-avatar">{(user.nickname || user.username || user.phone || '用').slice(0, 1)}</span>
@@ -94,6 +95,9 @@ export function PortalLayout({ children, active = '/' }: { children: ReactNode; 
                 <button className="portal-user-logout" type="button" onClick={() => void logout()}>退出</button>
                 {accountMenuOpen && (
                   <div className="portal-account-menu">
+                    <a href="#/account" onClick={() => setAccountMenuOpen(false)}>
+                      <Icon name="user" size={15} /><span><b>个人中心</b><small>资料、安全、实名、地址与经营主体</small></span>
+                    </a>
                     <div className="portal-account-head">
                       <span>主体与认证</span>
                       <small>

@@ -24,6 +24,7 @@ public class UserEntity {
     private String password;
     private String nickname;
     private String phone;
+    private String email;
 
     /** 1=启用 0=禁用 */
     private Integer status;

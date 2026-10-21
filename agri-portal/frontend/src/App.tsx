@@ -8,6 +8,7 @@ import { CertifyPersonal } from './pages/CertifyPersonal'
 import { Finance } from './pages/Finance'
 import { Hall } from './pages/Hall'
 import { Logistics } from './pages/Logistics'
+import { AccountCenter } from './pages/AccountCenter'
 import { useHashRoute } from './utils'
 
 function NotFound(): JSX.Element {
@@ -51,6 +52,8 @@ export default function App(): JSX.Element {
     page = <CertifyEnterprise />
   } else if (route.path === '/certify/personal') {
     page = <CertifyPersonal />
+  } else if (route.path === '/account') {
+    page = <AccountCenter />
   } else {
     page = <NotFound />
   }

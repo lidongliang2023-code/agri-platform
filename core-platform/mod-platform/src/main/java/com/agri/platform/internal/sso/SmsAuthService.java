@@ -105,7 +105,7 @@ public class SmsAuthService {
 
      *
      * @param phone 手机号（11 位）
-     * @param scene 场景：login 登录 / register 注册（不同场景的码不通用）
+     * @param scene 场景：login 登录 / register 注册 / change_phone 更换手机（不同场景的码不通用）
      */
     public void send(String phone, String scene) {
         String normalized = normalizePhone(phone);
@@ -721,8 +721,8 @@ public class SmsAuthService {
     }
 
     private static void assertScene(String scene) {
-        if (!"login".equals(scene) && !"register".equals(scene)) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "场景只能是 login 或 register");
+        if (!"login".equals(scene) && !"register".equals(scene) && !"change_phone".equals(scene)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "场景只能是 login、register 或 change_phone");
         }
     }
 
