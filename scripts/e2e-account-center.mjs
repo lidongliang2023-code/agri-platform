@@ -73,6 +73,27 @@ try {
   await page.waitForFunction(() => window.location.hash === '#/account/profile', { timeout: 10000 })
   check((await page.evaluate(() => document.querySelector('.account-content-head h2')?.textContent))
     === '账号资料', '浏览器返回恢复上一个个人中心页面')
+  await page.waitForSelector('.account-profile-overview', { timeout: 10000 })
+  check((await page.evaluate(() => document.body.innerText)).includes('账号概况')
+    && !(await page.$('.account-profile-edit')), '账号资料菜单默认显示只读账号概况')
+  await page.screenshot({ path: path.join(OUT, 'account-profile-overview.png'), fullPage: true })
+  await page.evaluate(() => {
+    const button = [...document.querySelectorAll('.account-profile-overview button')]
+      .find((item) => item.textContent?.includes('编辑账号资料'))
+    button?.click()
+  })
+  await page.waitForFunction(() => window.location.hash === '#/account/profile/edit', { timeout: 10000 })
+  await page.waitForSelector('.account-profile-edit', { timeout: 10000 })
+  check(true, '点击编辑进入独立的账号资料页面')
+  await page.screenshot({ path: path.join(OUT, 'account-profile-edit.png'), fullPage: true })
+  await page.evaluate(() => {
+    const button = [...document.querySelectorAll('.account-profile-edit button')]
+      .find((item) => item.textContent?.trim() === '取消')
+    button?.click()
+  })
+  await page.waitForFunction(() => window.location.hash === '#/account/profile', { timeout: 10000 })
+  await page.waitForSelector('.account-profile-overview', { timeout: 10000 })
+  check(true, '取消编辑返回账号概况页面')
 
   const request = async (path, init = {}) => page.evaluate(async ({ url, options }) => {
     const response = await fetch(url, {

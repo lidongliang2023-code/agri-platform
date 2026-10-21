@@ -170,7 +170,9 @@ function tone(value: string | null | undefined): string {
 }
 
 export function AccountCenter({ initialTab }: { initialTab?: string | null }): JSX.Element {
+  const initialProfileEdit = initialTab === 'profile/edit'
   const [tab, setTab] = useState<Tab>(() => normalizeAccountTab(initialTab))
+  const [profileEditing, setProfileEditing] = useState(initialProfileEdit)
   const [summary, setSummary] = useState<Summary | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -241,11 +243,19 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
   }, [])
 
   useEffect(() => {
+    if (initialTab === 'profile/edit') {
+      setTab('profile')
+      setProfileEditing(true)
+      return
+    }
     setTab(normalizeAccountTab(initialTab))
+    setProfileEditing(false)
   }, [initialTab])
 
   useEffect(() => {
-    const canonical = `#/account/${tab}`
+    const canonical = initialProfileEdit
+      ? '#/account/profile/edit'
+      : `#/account/${normalizeAccountTab(initialTab)}`
     if (window.location.hash !== canonical) {
       window.history.replaceState(null, '', canonical)
     }
@@ -263,11 +273,19 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
   }
 
   const openTab = (next: Tab): void => {
+    setProfileEditing(false)
     setTab(next)
     const target = `#/account/${next}`
     if (window.location.hash !== target) {
       window.location.hash = target
     }
+  }
+
+  const openProfileEdit = (): void => {
+    setTab('profile')
+    setProfileEditing(true)
+    const target = '#/account/profile/edit'
+    if (window.location.hash !== target) window.location.hash = target
   }
 
   const saveProfile = async (event: FormEvent): Promise<void> => {
@@ -281,6 +299,7 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
       if (result.code !== 0) return setError(result.message ?? '资料保存失败')
       flash('账号资料已保存')
       await load()
+      openTab('profile')
     } finally {
       setBusy(false)
     }
@@ -614,6 +633,10 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
   const activeMerchant = summary.merchants.find((merchant) =>
     merchant.merchantId === summary.activeMerchantId) ?? null
   const activeTabMeta = TABS.find((item) => item.key === tab) ?? TABS[0]
+  const pageTitle = tab === 'profile' && profileEditing ? '编辑账号资料' : activeTabMeta.label
+  const pageDescription = tab === 'profile' && profileEditing
+    ? '修改昵称与邮箱，登录账号和手机号请在账号安全中维护'
+    : activeTabMeta.description
 
   return (
     <section className="section account-page">
@@ -658,35 +681,53 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
         <main className="account-content">
           <div className="account-content-head">
             <div>
-              <span>个人中心 / {activeTabMeta.label}</span>
-              <h2>{activeTabMeta.label}</h2>
+              <span>个人中心 / {activeTabMeta.label}{profileEditing ? ' / 编辑' : ''}</span>
+              <h2>{pageTitle}</h2>
             </div>
-            <p>{activeTabMeta.description}</p>
+            <p>{pageDescription}</p>
           </div>
           {notice && <div className="account-notice">{notice}</div>}
           {error && <div className="account-error">{error}</div>}
 
-      {tab === 'profile' && (
-        <div className="account-grid">
-          <form className="card account-card" onSubmit={(event) => void saveProfile(event)}>
-            <div className="account-card-head"><h2>账号资料</h2><span>登录账号不可修改</span></div>
-            <label>登录账号<input className="input" value={summary.username} disabled /></label>
-            <label>手机号<input className="input" value={summary.phone || ''} disabled /></label>
-            <label>昵称<input className="input" value={profile.nickname} maxLength={64} onChange={(event) => setProfile({ ...profile, nickname: event.target.value })} /></label>
-            <label>邮箱<input className="input" type="email" value={profile.email} onChange={(event) => setProfile({ ...profile, email: event.target.value })} /></label>
-            <button className="btn btn-primary" disabled={busy}>{busy ? '保存中…' : '保存资料'}</button>
-          </form>
+      {tab === 'profile' && !profileEditing && (
+        <div className="account-profile-overview">
           <div className="card account-card">
-            <div className="account-card-head"><h2>账号概况</h2></div>
-            <div className="account-info-list">
+            <div className="account-card-head">
+              <div><h2>账号概况</h2><small>账号信息与当前使用情况</small></div>
+              <button className="btn btn-outline" onClick={openProfileEdit}>编辑账号资料</button>
+            </div>
+            <div className="account-profile-primary">
+              <div className="account-profile-avatar">{(summary.nickname || summary.username || summary.phone).slice(0, 1)}</div>
+              <div><strong>{summary.nickname || '未设置昵称'}</strong><span>{summary.email || '未绑定邮箱'}</span></div>
+            </div>
+            <div className="account-profile-facts">
+              <div><span>登录账号</span><strong>{summary.username}</strong></div>
+              <div><span>绑定手机</span><strong>{summary.phone || '未绑定'}</strong></div>
               <div><span>账号状态</span><strong>{summary.status === 1 ? '正常' : '停用'}</strong></div>
               <div><span>个人实名</span><strong>{statusText(summary.realName?.status)}</strong></div>
-              <div><span>经营主体</span><strong>{summary.merchants.length} 个</strong></div>
               <div><span>当前登录主体</span><strong>{activeMerchant?.merchantName || '未选择'}</strong></div>
+              <div><span>经营主体数量</span><strong>{summary.merchants.length} 个</strong></div>
               <div><span>收货地址</span><strong>{addresses.length} 个</strong></div>
+              <div><span>注册时间</span><strong>{String(summary.createdAt).slice(0, 10)}</strong></div>
             </div>
           </div>
         </div>
+      )}
+
+      {tab === 'profile' && profileEditing && (
+        <form className="card account-card account-profile-edit" onSubmit={(event) => void saveProfile(event)}>
+          <div className="account-card-head"><h2>账号资料</h2><span>登录账号和手机号不可在此修改</span></div>
+          <div className="account-form-grid">
+            <label>登录账号<input className="input" value={summary.username} disabled /></label>
+            <label>绑定手机号<input className="input" value={summary.phone || ''} disabled /></label>
+            <label>昵称<input className="input" value={profile.nickname} maxLength={64} onChange={(event) => setProfile({ ...profile, nickname: event.target.value })} /></label>
+            <label>邮箱<input className="input" type="email" value={profile.email} onChange={(event) => setProfile({ ...profile, email: event.target.value })} /></label>
+          </div>
+          <div className="account-form-actions">
+            <button className="btn btn-primary" disabled={busy}>{busy ? '保存中…' : '保存资料'}</button>
+            <button type="button" className="btn btn-ghost" onClick={() => openTab('profile')}>取消</button>
+          </div>
+        </form>
       )}
 
       {tab === 'security' && (
