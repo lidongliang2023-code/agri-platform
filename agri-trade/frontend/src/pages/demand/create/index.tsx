@@ -82,6 +82,7 @@ export default function DemandCreate() {
             categoryId: p.categoryId,
             categoryName: p.categoryName,
             unit: p.unit,
+            quantity: Number(params.get('quantity')) > 0 ? Number(params.get('quantity')) : undefined,
             priceMin: p.priceMin,
             priceMax: p.priceMax
           })
@@ -89,7 +90,7 @@ export default function DemandCreate() {
         }
       })
       .catch(() => undefined)
-  }, [productId, form])
+  }, [productId, params, form])
 
   /** 自然语言 → 结构化字段（后端 POST /api/trade/nlp/parse） */
   const handleParse = async () => {

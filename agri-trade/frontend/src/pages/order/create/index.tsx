@@ -40,7 +40,11 @@ export default function OrderCreate() {
   useEffect(() => {
     const productId = params.get('productId')
     if (productId) {
-      form.setFieldsValue({ productId: Number(productId) })
+      const quantity = Number(params.get('quantity'))
+      form.setFieldsValue({
+        productId: Number(productId),
+        quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : undefined,
+      })
     }
   }, [params, form])
 

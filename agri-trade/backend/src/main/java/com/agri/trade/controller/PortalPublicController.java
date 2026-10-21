@@ -2,15 +2,18 @@ package com.agri.trade.controller;
 
 import com.agri.trade.common.entity.ApiResponse;
 import com.agri.trade.entity.Demand;
+import com.agri.trade.entity.ProductImage;
 import com.agri.trade.entity.TradeProductCategory;
 import com.agri.trade.entity.TradeProduct;
 import com.agri.trade.mapper.DemandMapper;
+import com.agri.trade.mapper.ProductImageMapper;
 import com.agri.trade.mapper.TradeProductCategoryMapper;
 import com.agri.trade.mapper.TradeProductMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -38,6 +41,7 @@ public class PortalPublicController {
     private final TradeProductMapper productMapper;
     private final TradeProductCategoryMapper categoryMapper;
     private final DemandMapper demandMapper;
+    private final ProductImageMapper productImageMapper;
 
     /** 门户展示用的已发布商品（按发布时间倒序）。 */
     @GetMapping("/products")
@@ -52,6 +56,37 @@ public class PortalPublicController {
                 .map(PortalPublicController::toView)
                 .collect(Collectors.toList());
         return ApiResponse.success(items);
+    }
+
+    /** 已发布商品详情：只开放买家购买决策所需的展示字段。 */
+    @GetMapping("/products/{id}")
+    public ApiResponse<PortalProductDetailView> product(@PathVariable Long id) {
+        TradeProduct product = productMapper.selectById(id);
+        if (product == null || Integer.valueOf(1).equals(product.getDelFlag())
+                || !"published".equals(product.getPublishStatus())) {
+            return ApiResponse.error("商品不存在或已下架");
+        }
+        return ApiResponse.success(toDetailView(product));
+    }
+
+    /** 已发布商品图库。 */
+    @GetMapping("/products/{id}/images")
+    public ApiResponse<List<PublicProductImageView>> productImages(@PathVariable Long id) {
+        TradeProduct product = productMapper.selectById(id);
+        if (product == null || Integer.valueOf(1).equals(product.getDelFlag())
+                || !"published".equals(product.getPublishStatus())) {
+            return ApiResponse.error("商品不存在或已下架");
+        }
+        List<PublicProductImageView> images = productImageMapper.selectList(
+                        new LambdaQueryWrapper<ProductImage>()
+                                .eq(ProductImage::getDelFlag, 0)
+                                .eq(ProductImage::getProductId, id)
+                                .orderByAsc(ProductImage::getSortOrder))
+                .stream()
+                .map(item -> new PublicProductImageView(item.getId(), item.getImageUrl(),
+                        item.getImageType(), item.getSortOrder()))
+                .collect(Collectors.toList());
+        return ApiResponse.success(images);
     }
 
     /** 交易大厅商品分页（公开只读）。 */
@@ -195,6 +230,43 @@ public class PortalPublicController {
                 product.getCategoryId());
     }
 
+    private static PortalProductDetailView toDetailView(TradeProduct product) {
+        return new PortalProductDetailView(
+                product.getId(),
+                product.getProductCode(),
+                product.getProductName(),
+                product.getCategoryId(),
+                product.getCategoryName(),
+                product.getSellerId(),
+                product.getSellerName(),
+                product.getVariety(),
+                product.getOriginProvince(),
+                product.getOriginCity(),
+                product.getOriginDistrict(),
+                product.getOriginAddress(),
+                product.getSpecLevel(),
+                product.getQualityLevel(),
+                product.getSpecSize(),
+                product.getUnit(),
+                product.getStockQuantity(),
+                product.getPrice(),
+                product.getPriceMin(),
+                product.getPriceMax(),
+                product.getPriceType(),
+                product.getMinOrderQuantity(),
+                product.getHarvestBatchNo(),
+                product.getCertificationJson(),
+                product.getQualityReportUrl(),
+                product.getDescription(),
+                product.getVideoUrl(),
+                product.getViewCount(),
+                product.getFavoriteCount(),
+                product.getInquiryCount(),
+                product.getSalesVolume(),
+                product.getPublishStatus(),
+                product.getCreateTime());
+    }
+
     private static String firstNonBlank(String... values) {
         for (String value : values) {
             if (value != null && !value.isBlank()) {
@@ -226,6 +298,46 @@ public class PortalPublicController {
             Integer salesVolume,
             String province,
             Long categoryId) {
+    }
+
+    /** 公开详情字段白名单：不含成本、内部审核、租户与联系人等数据。 */
+    public record PortalProductDetailView(
+            Long id,
+            String productCode,
+            String productName,
+            Long categoryId,
+            String categoryName,
+            Long sellerId,
+            String sellerName,
+            String variety,
+            String originProvince,
+            String originCity,
+            String originDistrict,
+            String originAddress,
+            String specLevel,
+            String qualityLevel,
+            String specSize,
+            String unit,
+            BigDecimal stockQuantity,
+            BigDecimal price,
+            BigDecimal priceMin,
+            BigDecimal priceMax,
+            String priceType,
+            BigDecimal minOrderQuantity,
+            String harvestBatchNo,
+            String certificationJson,
+            String qualityReportUrl,
+            String description,
+            String videoUrl,
+            Integer viewCount,
+            Integer favoriteCount,
+            Integer inquiryCount,
+            Integer salesVolume,
+            String publishStatus,
+            java.util.Date createTime) {
+    }
+
+    public record PublicProductImageView(Long id, String imageUrl, String imageType, Integer sortOrder) {
     }
 
     public record PublicPage<T>(List<T> records, long total, long pageNum, long pageSize) {

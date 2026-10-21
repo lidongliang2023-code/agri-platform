@@ -46,6 +46,43 @@ export interface TradeProductVO {
   updateTime: string
 }
 
+/** 门户公开商品详情（后端 PortalPublicController 的字段白名单）。 */
+export interface PublicProductDetail {
+  id: number
+  productCode: string
+  productName: string
+  categoryId: number | null
+  categoryName: string | null
+  sellerId: number
+  sellerName: string | null
+  variety: string | null
+  originProvince: string | null
+  originCity: string | null
+  originDistrict: string | null
+  originAddress: string | null
+  specLevel: string | null
+  qualityLevel: string | null
+  specSize: string | null
+  unit: string
+  stockQuantity: number | null
+  price: number | null
+  priceMin: number | null
+  priceMax: number | null
+  priceType: string | null
+  minOrderQuantity: number | null
+  harvestBatchNo: string | null
+  certificationJson: string | null
+  qualityReportUrl: string | null
+  description: string | null
+  videoUrl: string | null
+  viewCount: number | null
+  favoriteCount: number | null
+  inquiryCount: number | null
+  salesVolume: number | null
+  publishStatus: string
+  createTime: string
+}
+
 export async function getProductList(params: ProductQuery) {
   // 后端注册的是 /page（MyBatis-Plus 分页），没有 /list —— 原先调 /list 必然 404。
   const response = await axios.get('/api/trade/product/page', { params })
@@ -59,6 +96,17 @@ export async function getProductById(id: number) {
 
 export async function getProductImages(id: number | string) {
   const response = await axios.get(`/api/trade/product/${id}/images`)
+  return response.data
+}
+
+/** 匿名可读的已发布商品详情与图库。 */
+export async function getPublicProductById(id: number | string) {
+  const response = await axios.get(`/api/trade/public/products/${id}`)
+  return response.data
+}
+
+export async function getPublicProductImages(id: number | string) {
+  const response = await axios.get(`/api/trade/public/products/${id}/images`)
   return response.data
 }
 

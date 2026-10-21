@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url'
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const require2 = createRequire(path.join(REPO_ROOT, 'agri-production/frontend/package.json'))
 const puppeteer = require2('puppeteer')
-const HALL = 'http://localhost:8086/hall'
+const HALL = 'http://localhost:8086/hall?embed=1'
 const HEADFUL = process.argv.includes('--headful')
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -65,18 +65,19 @@ try {
   await page.waitForSelector('.hall-product', { timeout: 20000 })
   const text = await page.evaluate(() => document.body.innerText)
   check(text.includes('交易大厅') && text.includes('供应大厅') && text.includes('采购需求'), '交易大厅公开页面已渲染')
-  const navLabels = await page.$$eval('.main-nav a', (items) => items.map((item) => (item.textContent ?? '').trim()))
   const portalPage = await browser.newPage()
   await portalPage.setViewport({ width: 1440, height: 1000 })
-  await portalPage.goto('http://localhost:8098/portal/', { waitUntil: 'networkidle2', timeout: 60000 })
+  await portalPage.goto('http://localhost:8098/portal/#/hall', { waitUntil: 'networkidle2', timeout: 60000 })
+  await portalPage.waitForSelector('.portal-hall-embed iframe', { timeout: 20000 })
+  const navLabels = await portalPage.$$eval('.main-nav a', (items) => items.map((item) => (item.textContent ?? '').trim()))
   const portalNavLabels = await portalPage.$$eval('.main-nav a', (items) => items.map((item) => (item.textContent ?? '').trim()))
-  await portalPage.close()
   check(JSON.stringify(navLabels) === JSON.stringify(portalNavLabels) && navLabels.includes('物流服务'),
     '交易大厅直接复用门户导航菜单', navLabels.join(' / '))
-  const underlines = await page.$$eval('.main-nav a', (items) => items.map((item) => getComputedStyle(item).textDecorationLine))
+  const underlines = await portalPage.$$eval('.main-nav a', (items) => items.map((item) => getComputedStyle(item).textDecorationLine))
   check(underlines.every((value) => value === 'none'), '交易大厅导航项没有下划线', underlines.join(' / '))
-  const activeLine = await page.$eval('.main-nav a.active', (item) => getComputedStyle(item, '::after').height)
+  const activeLine = await portalPage.$eval('.main-nav a.active', (item) => getComputedStyle(item, '::after').height)
   check(activeLine === '2px', '当前菜单「交易大厅」保留下划线', activeLine)
+  await portalPage.close()
   check((await productNames(page)).length === 5, '供应大厅显示 5 条真实在售商品')
   const filterText = await page.evaluate(() => document.querySelector('.hall-filter-card')?.innerText ?? '')
   check(filterText.includes('一级产业') && filterText.includes('二级品类') && filterText.includes('三级品种')
@@ -86,7 +87,7 @@ try {
 
   // 搜索
   await fill(page, '.header-search input', '苹果')
-  await page.click('.header-search button')
+  await page.evaluate(() => document.querySelector('.header-search button')?.click())
   let names = await waitProducts(page, 1)
   check(names.length === 1 && names[0].includes('苹果'), '关键词搜索「苹果」命中洛川苹果', names.join('、'))
 
@@ -125,16 +126,17 @@ try {
   check(page.url().includes('/login') && page.url().includes('redirect'),
     '未登录点击报价会跳到登录并携带回跳地址', page.url())
 
-  // 商品详情需要登录
+  // 商品详情公开，写操作才需要登录
   const ctx2 = await browser.createBrowserContext()
   const page2 = await ctx2.newPage()
   await page2.setViewport({ width: 390, height: 844 })
   await page2.goto(HALL, { waitUntil: 'networkidle2', timeout: 60000 })
   await page2.waitForSelector('.hall-product', { timeout: 20000 })
   await page2.evaluate(() => document.querySelector('.hall-product')?.click())
-  await sleep(1200)
-  check(page2.url().includes('/login') && page2.url().includes('product%2Fdetail'),
-    '未登录点击商品会跳到登录并保留详情回跳', page2.url())
+  await page2.waitForFunction(() => location.pathname.startsWith('/product/detail/'), { timeout: 10000 })
+  await page2.waitForSelector('.pd-hero', { timeout: 20000 })
+  check(page2.url().includes('/product/detail/') && !page2.url().includes('/login'),
+    '未登录点击商品可公开进入详情页', page2.url())
   await page2.goto(HALL, { waitUntil: 'networkidle2' })
   await page2.waitForSelector('.hall-product', { timeout: 20000 })
   await page2.screenshot({ path: path.join('C:/Users/71502/.codex/visualizations/2026/10/16/01a14244-ead8-7ab0-8c7c-df7abac44648', 'trade-hall-mobile.png'), fullPage: true })
