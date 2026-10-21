@@ -65,3 +65,6 @@ __tmpout/
 # ============================================================================
 agri-production/backend/data/
 *.sqlite
+
+# 用户上传的商品图片（运行时数据，部署时由上传接口创建）
+agri-trade/backend/uploads/

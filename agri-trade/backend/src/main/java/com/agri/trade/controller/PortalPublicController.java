@@ -234,6 +234,7 @@ public class PortalPublicController {
         return new PortalProductDetailView(
                 product.getId(),
                 product.getProductCode(),
+                product.getRemark(),
                 product.getProductName(),
                 product.getCategoryId(),
                 product.getCategoryName(),
@@ -304,6 +305,7 @@ public class PortalPublicController {
     public record PortalProductDetailView(
             Long id,
             String productCode,
+            String barcode,
             String productName,
             Long categoryId,
             String categoryName,

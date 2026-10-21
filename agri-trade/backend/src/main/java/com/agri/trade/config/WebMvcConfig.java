@@ -1,9 +1,14 @@
 package com.agri.trade.config;
 
 import com.agri.trade.common.security.AuthenticationInterceptor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
+import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 /**
  * 注册认证拦截器。
@@ -15,9 +20,12 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 public class WebMvcConfig implements WebMvcConfigurer {
 
     private final AuthenticationInterceptor authenticationInterceptor;
+    private final String uploadDir;
 
-    public WebMvcConfig(AuthenticationInterceptor authenticationInterceptor) {
+    public WebMvcConfig(AuthenticationInterceptor authenticationInterceptor,
+                        @Value("${agri.trade.upload-dir:uploads}") String uploadDir) {
         this.authenticationInterceptor = authenticationInterceptor;
+        this.uploadDir = uploadDir;
     }
 
     @Override
@@ -32,8 +40,21 @@ public class WebMvcConfig implements WebMvcConfigurer {
                         "/doc.html",
                         "/favicon.ico",
                         "/error",
+                        // 运营端上传的商品图片是公开展示资源；文件名为服务端 UUID，不含经营数据。
+                        "/uploads/trade/**",
                         // 官网门户公开只读接口：仅返回已发布商品的展示字段
                         "/api/trade/public/**"
                 );
+    }
+
+    @Override
+    public void addResourceHandlers(ResourceHandlerRegistry registry) {
+        Path root = Paths.get(uploadDir, "trade").toAbsolutePath().normalize();
+        String location = root.toUri().toString();
+        if (!location.endsWith("/")) {
+            location += "/";
+        }
+        registry.addResourceHandler("/uploads/trade/**")
+                .addResourceLocations(location);
     }
 }

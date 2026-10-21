@@ -50,6 +50,7 @@ export interface TradeProductVO {
 export interface PublicProductDetail {
   id: number
   productCode: string
+  barcode: string | null
   productName: string
   categoryId: number | null
   categoryName: string | null

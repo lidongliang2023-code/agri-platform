@@ -61,7 +61,9 @@ try {
   })
   await sleep(200)
   const specText = await page.evaluate(() => document.querySelector('.pd-tab-panel')?.textContent ?? '')
-  check(specText.includes(product.productName) && specText.includes('商品编码'), '规格参数页签读取真实商品资料')
+  check(specText.includes(product.productName) && specText.includes('商品编码')
+    && (!product.barcode || specText.includes(product.barcode)),
+  '规格参数页签读取真实商品资料与条码')
 
   await page.evaluate(() => {
     const button = [...document.querySelectorAll('.pd-tabs button')].find((item) => item.textContent?.includes('供应商信息'))

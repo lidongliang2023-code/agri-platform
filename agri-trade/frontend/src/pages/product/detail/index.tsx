@@ -432,10 +432,13 @@ export default function ProductDetail(): JSX.Element {
                 <div><SafetyCertificateOutlined /><strong>质量资料</strong><span>{product.qualityLevel || (certifications.length ? certifications.join('、') : '以供应商上传资料为准')}</span></div>
                 <div><TruckOutlined /><strong>供应能力</strong><span>{stock > 0 ? `当前库存 ${stock} ${product.unit}` : '库存待确认'}</span></div>
               </div>
-              {(product.qualityReportUrl || certifications.length > 0) && (
+              {(product.qualityReportUrl || product.videoUrl || certifications.length > 0) && (
                 <div className="pd-proof-row">
                   {product.qualityReportUrl && (
                     <a href={product.qualityReportUrl} target="_blank" rel="noreferrer"><FileTextOutlined />查看质量报告</a>
+                  )}
+                  {product.videoUrl && (
+                    <a href={product.videoUrl} target="_blank" rel="noreferrer"><FileTextOutlined />查看商品视频</a>
                   )}
                   {certifications.map((item) => <span key={item}><CheckCircleOutlined />{item}</span>)}
                 </div>
@@ -448,8 +451,9 @@ export default function ProductDetail(): JSX.Element {
               <table className="pd-spec-table">
                 <tbody>
                   <tr><th>产品名称</th><td>{product.productName}</td><th>商品编码</th><td>{product.productCode}</td></tr>
-                  <tr><th>品类</th><td>{valueOr(product.categoryName)}</td><th>品种</th><td>{valueOr(product.variety)}</td></tr>
-                  <tr><th>规格</th><td>{valueOr(product.specSize)}</td><th>等级</th><td>{valueOr(product.specLevel || product.qualityLevel)}</td></tr>
+                  <tr><th>条码</th><td>{valueOr(product.barcode)}</td><th>品类</th><td>{valueOr(product.categoryName)}</td></tr>
+                  <tr><th>品种</th><td>{valueOr(product.variety)}</td><th>规格</th><td>{valueOr(product.specSize)}</td></tr>
+                  <tr><th>等级</th><td>{valueOr(product.specLevel)}</td><th>质量等级</th><td>{valueOr(product.qualityLevel)}</td></tr>
                   <tr><th>产地</th><td>{valueOr(originFull)}</td><th>发货批次</th><td>{valueOr(product.harvestBatchNo)}</td></tr>
                   <tr><th>起订量</th><td>{minOrder} {product.unit}</td><th>库存</th><td>{stock || '—'} {product.unit}</td></tr>
                   <tr><th>报价类型</th><td>{product.priceType || '平台报价'}</td><th>发布时间</th><td>{dateText(product.createTime)}</td></tr>

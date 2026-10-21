@@ -89,6 +89,16 @@ try {
     }
   })
   const hasLive = liveApi?.code === 200 && Array.isArray(liveApi.data) && liveApi.data.length > 0
+  const liveAll = await page.evaluate(async () => {
+    try {
+      return await (await fetch('/api/trade/public/products?limit=24')).json()
+    } catch {
+      return null
+    }
+  })
+  const liveProducts = liveAll?.code === 200 && Array.isArray(liveAll.data) ? liveAll.data : []
+  const fruitCount = liveProducts.filter((item) =>
+    ['大白菜', '蔬菜', '苹果', '柑橘', '水果'].some((key) => (item.categoryName ?? '').includes(key))).length
   const quoteApi = await page.evaluate(async () => {
     try {
       return await (await fetch('/api/v1/quotes?size=20')).json()
@@ -142,7 +152,7 @@ try {
   await page.goto(`${BASE}/portal/#/chains`, { waitUntil: 'networkidle2' })
   await sleep(300)
   await clickText(page, '果蔬产业', '.portal-filter-row .chip')
-  check((await counts(page)) === 2, '一级产业「果蔬产业」过滤出 2 个真实货源')
+  check((await counts(page)) === fruitCount, `一级产业「果蔬产业」过滤出 ${fruitCount} 个真实货源`)
   await clickText(page, '苹果', '.portal-filter-row .chip')
   check((await counts(page)) === 1, '二级品类「苹果」过滤出 1 个真实货源')
   await clickText(page, '陕西', '.portal-province-chips .chip')

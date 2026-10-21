@@ -348,6 +348,32 @@ export const updateProductStatus = (id: number | string, status: string) =>
 export const getProductStatistics = (params?: QueryParams) =>
   get(`${BASE}/product/statistics`, params)
 
+/* ------------------------ 官网上架商品（交易域真实商品） ------------------------ */
+
+const TRADE_PRODUCT_BASE = '/api/trade/admin/product'
+
+export const getTradeProductManageList = (params?: QueryParams) =>
+  get(`${TRADE_PRODUCT_BASE}/manage/page`, params)
+export const getTradeProductManageDetail = (id: number | string) =>
+  get(`${TRADE_PRODUCT_BASE}/manage/${id}`)
+export const createTradeProduct = (data: unknown) => post(TRADE_PRODUCT_BASE, data)
+export const updateTradeProduct = (id: number | string, data: unknown) =>
+  put(`${TRADE_PRODUCT_BASE}/manage/${id}`, data)
+export const updateTradeProductStatus = (id: number | string, status: number) =>
+  put(`${TRADE_PRODUCT_BASE}/manage/${id}/status`, null, { status })
+export const getTradeCategoryOptions = () => get('/api/trade/product/category/list')
+export const getTradeSellerOptions = () =>
+  get(`${TRADE_PRODUCT_BASE}/manage/page`, { pageNum: 1, pageSize: 100 })
+export const uploadTradeProductImage = (file: File) => {
+  const data = new FormData()
+  data.append('file', file)
+  return request.post<unknown, ApiBody<{ url: string; originalName?: string }>>(
+    `${TRADE_PRODUCT_BASE}/image`,
+    data,
+    { headers: { 'Content-Type': 'multipart/form-data' } },
+  )
+}
+
 /* -------------------------------- 客户 / 供应商 -------------------------------- */
 
 export const getCustomerList = (params?: QueryParams) => get(`${BASE}/customer/list`, params)

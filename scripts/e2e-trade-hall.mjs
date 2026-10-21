@@ -55,6 +55,9 @@ const waitProducts = async (page, count) => {
   return productNames(page)
 }
 
+const hallApi = await (await fetch('http://localhost:8086/api/trade/public/hall/products?pageNum=1&pageSize=24')).json()
+const expectedProductCount = hallApi?.code === 200 ? hallApi.data?.records?.length ?? 0 : 0
+
 const browser = await puppeteer.launch({ headless: HEADFUL ? false : 'new', args: ['--no-sandbox'] })
 try {
   const page = await browser.newPage()
@@ -78,7 +81,8 @@ try {
   const activeLine = await portalPage.$eval('.main-nav a.active', (item) => getComputedStyle(item, '::after').height)
   check(activeLine === '2px', '当前菜单「交易大厅」保留下划线', activeLine)
   await portalPage.close()
-  check((await productNames(page)).length === 5, '供应大厅显示 5 条真实在售商品')
+  check((await productNames(page)).length === expectedProductCount,
+    `供应大厅显示 ${expectedProductCount} 条真实在售商品`)
   const filterText = await page.evaluate(() => document.querySelector('.hall-filter-card')?.innerText ?? '')
   check(filterText.includes('一级产业') && filterText.includes('二级品类') && filterText.includes('三级品种')
     && filterText.includes('产地') && !filterText.includes('价格区间'), '筛选结构与产业链页面一致')
@@ -93,23 +97,23 @@ try {
 
   // 分类筛选
   await clickText(page, '清空筛选', '.hall-reset')
-  await waitProducts(page, 5)
+  await waitProducts(page, expectedProductCount)
   await clickText(page, '粮油产业', '.hall-filter-body .hall-chips button')
   names = await waitProducts(page, 1)
   check(names.length === 1 && names[0].includes('五常大米'), '一级产业「粮油产业」筛选出五常大米', names.join('、'))
 
   // 产地筛选
   await clickText(page, '清空筛选', '.hall-reset')
-  await waitProducts(page, 5)
+  await waitProducts(page, expectedProductCount)
   await clickText(page, '江苏', '.hall-filter-body .hall-chips button')
   names = await waitProducts(page, 1)
   check(names.length === 1 && names[0].includes('大闸蟹'), '产地「江苏」筛选出大闸蟹', names.join('、'))
 
   // 价格排序
   await clickText(page, '清空筛选', '.hall-reset')
-  await waitProducts(page, 5)
+  await waitProducts(page, expectedProductCount)
   await clickText(page, '价格从低到高', '.hall-toolbar .hall-chips button')
-  names = await waitProducts(page, 5)
+  names = await waitProducts(page, expectedProductCount)
   check(names[0]?.includes('有机大白菜'), '价格升序首项为 18.8 元的大白菜', names[0] ?? '')
 
   // 采购需求

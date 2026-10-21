@@ -110,6 +110,7 @@ if (Test-Port 8089) {
     $tradeDir = Split-Path -Parent $tradeApp
     $env:MYSQL_USERNAME = 'root'
     $env:MYSQL_PASSWORD = $MysqlRootPassword
+    $env:AGRI_TRADE_UPLOAD_DIR = Join-Path $RepoRoot 'agri-trade\backend\uploads'
     Start-Process -FilePath 'java' `
         -ArgumentList @('-jar', $tradeApp, '--server.port=8089') `
         -WorkingDirectory $tradeDir -WindowStyle Hidden `

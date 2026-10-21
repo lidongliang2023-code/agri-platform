@@ -8,6 +8,10 @@ server:
 spring:
   application:
     name: agri-trade
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 10MB
   profiles:
     # 默认走 MySQL —— 平台基线：九个前台共用一个 MySQL 实例、各用各的库（架构文档 V2.0）。
     #
