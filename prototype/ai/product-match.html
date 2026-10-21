@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>产品智能匹配 Agent · AI 中台 · 农产云</title>
+<link rel="stylesheet" href="../assets/css/theme.css" />
+<style>
+  body{background:var(--bg)}
+  .app-side{background:linear-gradient(180deg,#1E1B4B,#312E81)}
+  .app-side .brand{color:#fff;border-bottom-color:rgba(255,255,255,.1)}
+  .app-side .brand small{color:rgba(255,255,255,.5)}
+  .side-nav .group{color:rgba(255,255,255,.35)}
+  .side-nav a{color:rgba(255,255,255,.78)}
+  .side-nav a.active{background:linear-gradient(135deg,#6D28D9,#8B5CF6);color:#fff}
+  .ai-badge{display:inline-flex;align-items:center;gap:5px;background:rgba(167,139,250,.18);color:#6D28D9;border:1px solid #C4B5FD;border-radius:var(--r-pill);padding:3px 10px;font-size:12px;font-weight:600}
+  .chat-col{background:#fff;border:1px solid var(--line);border-radius:var(--r-md);display:flex;flex-direction:column;overflow:hidden}
+  .chat-h{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#6D28D9,#8B5CF6);color:#fff}
+  .chat-b{flex:1;overflow-y:auto;padding:18px;display:flex;flex-direction:column;gap:16px;min-height:420px;max-height:520px;background:var(--bg-alt)}
+  .chat-f{padding:12px 14px;border-top:1px solid var(--line);background:#fff;display:flex;gap:8px;align-items:center}
+  .msg{display:flex;gap:10px;align-items:flex-start}
+  .msg .bubble{padding:11px 14px;border-radius:14px;font-size:13px;line-height:1.6;max-width:80%}
+  .msg.ai{align-self:flex-start}
+  .msg.ai .bubble{background:#fff;border:1px solid var(--line);border-top-left-radius:4px;box-shadow:var(--shadow-xs)}
+  .msg.me{align-self:flex-end;flex-direction:row-reverse}
+  .msg.me .bubble{background:linear-gradient(135deg,#6D28D9,#8B5CF6);color:#fff;border-top-right-radius:4px}
+  .msg .av{width:32px;height:32px;border-radius:9px;flex:none;display:grid;place-items:center;font-size:12px;font-weight:700}
+  .msg.ai .av{background:linear-gradient(135deg,#6D28D9,#0C7BA8);color:#fff}
+  .msg.me .av{display:none}
+  .rec-card{border:1px solid var(--line);border-radius:10px;padding:14px;margin-top:10px;background:#fff;transition:.18s}
+  .rec-card.top{border-color:#6D28D9;background:linear-gradient(135deg,rgba(109,40,217,.06),rgba(139,92,246,.04))}
+  .rec-card .score{font-family:var(--mono);font-weight:800;font-size:18px}
+  .rec-card .score.high{color:#6D28D9}
+  .rec-card .score.mid{color:var(--tech-600)}
+  .rec-card .score.low{color:var(--amber)}
+  .product-name{font-weight:700;font-size:14px;color:var(--ink-800)}
+  .meta{font-size:12px;color:var(--ink-500);margin-top:6px;line-height:1.8}
+  .compare-table{width:100%;font-size:12.5px;border-collapse:collapse}
+  .compare-table th{text-align:left;padding:10px 12px;background:var(--bg-alt);color:var(--ink-600);font-weight:600;border-bottom:1px solid var(--line)}
+  .compare-table td{padding:10px 12px;border-bottom:1px solid var(--line)}
+  .compare-table tr.highlight td{background:var(--green-050);font-weight:700}
+  .profile-item{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px dashed var(--line);font-size:13px}
+  .profile-item:last-child{border-bottom:none}
+  .profile-item .k{color:var(--ink-500)}
+  .profile-item .v{font-weight:600;color:var(--ink-800)}
+  .hist-item{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:8px;margin-bottom:8px;font-size:12.5px}
+  .hist-item .st{font-size:11px}
+</style>
+</head>
+<body>
+<div class="app-shell">
+  <aside class="app-side">
+    <a class="brand" href="index.html"><span class="logo" data-icon="cpu" data-size="20" style="background:linear-gradient(135deg,#8B5CF6,#6D28D9)"></span><span>农产云<small>AI 中台</small></span></a>
+    <nav class="side-nav" data-tabscope="ai-nav">
+      <div class="group">AI 中台</div><a href="index.html"><span data-icon="activity"></span>AI 能力总览</a>
+      <div class="group">P0 核心场景</div>
+      <a href="credit.html"><span data-icon="star"></span>智能信用评估</a>
+      <a href="risk.html"><span data-icon="shield"></span>风控 Agent 集群</a>
+      <a href="iot-warning.html"><span data-icon="alert"></span>IoT 贷后预警</a>
+      <div class="group">P1 重要场景</div>
+      <a href="product-match.html" class="active"><span data-icon="target"></span>产品智能匹配</a>
+      <a href="aigc-doc.html"><span data-icon="file"></span>AIGC 文档自动化</a>
+      <a href="pledge-rate.html"><span data-icon="box"></span>动态质押率</a>
+      <div class="group">返回入口</div>
+      <a href="../index.html"><span data-icon="home"></span>原型总览</a>
+      <a href="../ops/finance.html"><span data-icon="money"></span>金融运营</a>
+    </nav>
+    <div style="padding:14px 12px;border-top:1px solid rgba(255,255,255,.08);margin-top:auto"><div style="font-size:11px;color:rgba(255,255,255,.4);text-align:center">产品匹配 v1.8.2<br/>意图识别 · RAG · CSP · RL</div></div>
+  </aside>
+
+  <div class="app-main">
+    <header class="app-top">
+      <div class="crumb"><a href="index.html">AI 中台</a><span class="sep">/</span><span class="strong">产品智能匹配</span></div>
+      <div class="row center gap-12">
+        <span class="ai-badge"><span data-icon="spark" data-size="12"></span>模型 v1.8.2</span>
+        <span class="ai-badge" style="background:#E4F6EC;color:var(--green-700);border-color:var(--green-300)"><span data-icon="check" data-size="12"></span>运行中</span>
+        <span class="avatar" style="background:linear-gradient(135deg,#8B5CF6,#6D28D9)">业</span>
+        <span class="strong">业务拓展 · 陈经理</span>
+      </div>
+    </header>
+
+    <div class="app-body">
+      <div style="display:grid;grid-template-columns:1fr 1.15fr;gap:20px;align-items:start">
+
+        <!-- 左：对话 -->
+        <div class="chat-col">
+          <div class="chat-h">
+            <div class="row center gap-10"><span data-icon="target" data-size="18"></span><span class="strong">产品匹配 Agent</span><span class="tag" style="background:rgba(255,255,255,.2);color:#fff;font-size:11px">对话式</span></div>
+            <span style="font-size:12px;opacity:.8">转化率 68.5% · 满意度 94.2%</span>
+          </div>
+          <div class="chat-b">
+            <div class="msg ai"><div class="av" data-icon="spark" data-size="16"></div><div class="bubble">你好，请用一句话描述您的融资需求（品类、环节、金额、期限偏好），我将为您智能匹配最优融资产品。</div></div>
+            <div class="msg me"><div class="av">我</div><div class="bubble">我是水稻种植户，春耕备耕需要 30 万资金。</div></div>
+            <div class="msg ai"><div class="av" data-icon="spark" data-size="16"></div><div class="bubble">正在分析您的需求，匹配产品知识库…<div style="margin-top:6px;font-size:11px;color:var(--ink-400)">需求解析：品类=水稻 · 环节=春耕备耕 · 金额=30万 · 期限偏好=随种植周期</div></div></div>
+            <div class="msg ai">
+              <div class="av" data-icon="spark" data-size="16"></div>
+              <div class="bubble">
+                根据您的情况，为您找到 <b>3 个匹配产品</b>，按综合匹配度排序：
+                <div class="rec-card top">
+                  <div class="row between center"><span class="product-name">⭐ 农资贷（春耕专项）</span><span class="score high">95%</span></div>
+                  <div class="meta">额度：¥200,000 - 500,000<br/>利率：年化 4.35%（贴息后 3.5%）<br/>期限：6-12 个月（随种植周期）<br/>还款方式：按月付息，到期还本</div>
+                  <div class="row gap-8 mt-10"><button class="btn btn-sm btn-primary">立即申请</button><button class="btn btn-sm btn-outline">查看详情</button></div>
+                </div>
+                <div class="rec-card">
+                  <div class="row between center"><span class="product-name">农机购置贷</span><span class="score mid">78%</span></div>
+                  <div class="meta">额度：¥100,000 - 300,000<br/>期限：12-36 个月 · 首付 10%-30%</div>
+                  <button class="btn btn-sm btn-outline mt-10">查看详情</button>
+                </div>
+                <div class="rec-card">
+                  <div class="row between center"><span class="product-name">收购贷</span><span class="score low">65%</span></div>
+                  <div class="meta">额度：¥1,000,000 - 20,000,000<br/>质押率 60%-80% · 期限 1-6 个月</div>
+                  <button class="btn btn-sm btn-outline mt-10">查看详情</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="chat-f">
+            <input class="input" placeholder="描述您的融资需求，如：我是苹果种植户，收购季需要 200 万…" />
+            <button class="btn btn-ghost btn-sm" title="上传经营数据"><span data-icon="file" data-size="16"></span></button>
+            <button class="btn btn-primary btn-sm" onclick="alert('已发起新一轮产品匹配')">匹配</button>
+          </div>
+        </div>
+
+        <!-- 右：结果 -->
+        <div style="display:flex;flex-direction:column;gap:20px">
+          <div class="card">
+            <div class="card-h"><h3><span data-icon="target" data-size="18"></span>方案对比</h3><span class="more">3 个候选产品</span></div>
+            <div class="card-b" style="padding:0">
+              <table class="compare-table">
+                <thead><tr><th>指标</th><th>农资贷 ⭐</th><th>农机购置贷</th><th>收购贷</th></tr></thead>
+                <tbody>
+                  <tr class="highlight"><td>匹配度</td><td style="color:#6D28D9;font-weight:800">95%</td><td>78%</td><td>65%</td></tr>
+                  <tr><td>额度上限</td><td>50 万</td><td>30 万</td><td>80 万</td></tr>
+                  <tr><td>年化利率</td><td>4.35%</td><td>5.2%</td><td>4.8%</td></tr>
+                  <tr><td>期限</td><td>6-12 月</td><td>12-36 月</td><td>1-6 月</td></tr>
+                  <tr><td>放款周期</td><td>3 天</td><td>5 天</td><td>7 天</td></tr>
+                  <tr><td>担保方式</td><td>信用/保证</td><td>设备抵押</td><td>存货质押</td></tr>
+                  <tr><td>贴息政策</td><td>春耕贴息</td><td>农机补贴</td><td>—</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-h"><h3><span data-icon="user" data-size="18"></span>需求画像</h3></div>
+            <div class="card-b">
+              <div class="profile-item"><span class="k">需求品类</span><span class="v">水稻</span></div>
+              <div class="profile-item"><span class="k">需求环节</span><span class="v">春耕备耕</span></div>
+              <div class="profile-item"><span class="k">需求金额</span><span class="v">¥ 300,000</span></div>
+              <div class="profile-item"><span class="k">期望期限</span><span class="v">12 个月</span></div>
+              <div class="profile-item"><span class="k">匹配产品数</span><span class="v" style="color:#6D28D9">3 个</span></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-h"><h3><span data-icon="clock" data-size="18"></span>历史匹配记录</h3></div>
+            <div class="card-b">
+              <div class="hist-item"><div><b>2026-06-01</b> · 农资贷（春耕专项）</div><span class="st tag" style="background:var(--green-100);color:var(--green-700)">已申请</span></div>
+              <div class="hist-item"><div><b>2026-05-15</b> · 销售贷</div><span class="st tag tag-red">被拒绝</span></div>
+              <div class="hist-item"><div><b>2026-04-20</b> · 收购贷 ¥150,000</div><span class="st tag tag-tech">已放款</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AI能力说明 -->
+      <div class="grid grid-2 mt-20">
+        <div class="card">
+          <div class="card-h"><h3><span data-icon="cpu" data-size="18"></span>AI 能力说明</h3></div>
+          <div class="card-b">
+            <div class="row gap-12 mb-14"><div class="stat-icon" style="flex:none;background:#EDE9FE;color:#6D28D9"><span data-icon="spark" data-size="20"></span></div><div><div class="strong t-sm">LLM 意图识别</div><div class="muted t-xs">BERT 解析自然语言需求，提取品类/环节/金额/期限</div></div></div>
+            <div class="row gap-12 mb-14"><div class="stat-icon" style="flex:none;background:#EDE9FE;color:#6D28D9"><span data-icon="layers" data-size="20"></span></div><div><div class="strong t-sm">RAG 产品知识库</div><div class="muted t-xs">检索 5 大融资产品知识库，实时匹配准入条件</div></div></div>
+            <div class="row gap-12 mb-14"><div class="stat-icon" style="flex:none;background:#EDE9FE;color:#6D28D9"><span data-icon="target" data-size="20"></span></div><div><div class="strong t-sm">CSP 约束求解</div><div class="muted t-xs">在额度/利率/期限约束下求解最优产品组合</div></div></div>
+            <div class="row gap-12"><div class="stat-icon" style="flex:none;background:#EDE9FE;color:#6D28D9"><span data-icon="activity" data-size="20"></span></div><div><div class="strong t-sm">强化学习定价</div><div class="muted t-xs">基于用户画像动态定价，个性化利率推荐</div></div></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-h"><h3><span data-icon="chart" data-size="18"></span>匹配效果</h3></div>
+          <div class="card-b">
+            <div class="grid grid-4" style="gap:10px;text-align:center">
+              <div style="padding:12px;background:var(--bg-alt);border-radius:10px"><div class="mono strong" style="font-size:20px;color:#6D28D9">8,956</div><div class="t-xs muted">匹配次数</div></div>
+              <div style="padding:12px;background:var(--bg-alt);border-radius:10px"><div class="mono strong" style="font-size:20px;color:var(--green-700)">68.5%</div><div class="t-xs muted">转化率</div></div>
+              <div style="padding:12px;background:var(--bg-alt);border-radius:10px"><div class="mono strong" style="font-size:20px;color:var(--tech-600)">94.2%</div><div class="t-xs muted">满意度</div></div>
+              <div style="padding:12px;background:var(--bg-alt);border-radius:10px"><div class="mono strong" style="font-size:20px">12s</div><div class="t-xs muted">平均用时</div></div>
+            </div>
+            <div style="margin-top:16px;padding:12px;background:var(--green-050);border:1px dashed var(--green-300);border-radius:10px;font-size:12.5px;color:var(--green-700)"><b>核心指标：</b>准确匹配 89.3% · 误匹配 2.1% · 未能匹配 8.6%</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+<script src="../assets/js/app.js"></script>
+</body>
+</html>

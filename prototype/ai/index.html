@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AI 中台 · 能力总览 · 农产云</title>
+<link rel="stylesheet" href="../assets/css/theme.css" />
+<style>
+  body{background:var(--bg);}
+  .app-body{background:#F4F7F5;}
+  .ai-hero{background:linear-gradient(135deg,#2E1065,#6D28D9 55%,#0C7BA8);color:#fff;padding:28px 30px;border-radius:var(--r-lg);position:relative;overflow:hidden;box-shadow:0 18px 48px rgba(109,40,217,.28)}
+  .ai-hero::after{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.05) 1px,transparent 1px);background-size:38px 38px;pointer-events:none}
+  .ai-hero .z{position:relative;z-index:2}
+  .agent-card{background:#fff;border:1px solid var(--line);border-radius:var(--r-md);padding:18px;transition:.2s;position:relative}
+  .agent-card:hover{box-shadow:var(--shadow-md);transform:translateY(-2px);border-color:#C4B5FD}
+  .agent-card .ico{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;color:#fff;margin-bottom:12px}
+  .agent-card .pr{position:absolute;top:14px;right:14px;font-size:11px;font-weight:700;padding:2px 8px;border-radius:var(--r-pill)}
+  .pr.p0{background:#FEE2E2;color:#B91C1C}
+  .pr.p1{background:#FEF3C7;color:#B45309}
+  .pr.p2{background:#EDE9FE;color:#6D28D9}
+  .status-dot{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600}
+  .status-dot::before{content:"";width:8px;height:8px;border-radius:50%;background:#22C55E;box-shadow:0 0 0 3px rgba(34,197,94,.18)}
+  .status-dot.warn::before{background:#F59E0B;box-shadow:0 0 0 3px rgba(245,158,11,.18)}
+  .status-dot.off::before{background:#94A3B8;box-shadow:none}
+  .kv-mini{display:flex;justify-content:space-between;font-size:12px;color:var(--ink-500);margin-top:6px}
+  .kv-mini b{color:var(--ink-800);font-family:var(--mono)}
+  .spark-row{display:flex;align-items:flex-end;gap:2px;height:36px;margin-top:10px}
+  .spark-row i{flex:1;background:linear-gradient(180deg,#A78BFA,#6D28D9);border-radius:2px 2px 0 0;opacity:.85}
+  .dark-panel{background:linear-gradient(180deg,#1E1B4B,#312E81);color:#E0E7FF;border-radius:var(--r-md);border:1px solid rgba(167,139,250,.25);padding:20px}
+  .dark-panel h3{color:#fff;display:flex;align-items:center;gap:8px;font-size:15px}
+  .dark-panel h3::before{content:"";width:3px;height:14px;background:#A78BFA;border-radius:2px}
+  .trend-bar{height:120px;display:flex;align-items:flex-end;gap:4px;padding:10px 0}
+  .trend-bar i{flex:1;background:linear-gradient(180deg,#A78BFA,rgba(167,139,250,.15));border-radius:3px 3px 0 0;position:relative}
+  .trend-bar i span{position:absolute;top:-18px;left:50%;transform:translateX(-50%);font-size:10px;color:#C4B5FD;font-family:var(--mono);opacity:0}
+  .trend-bar i:hover span{opacity:1}
+  .dist-bar{display:flex;align-items:center;gap:8px;margin:6px 0;font-size:12px}
+  .dist-bar .lbl{width:60px;color:#C4B5FD;flex:none}
+  .dist-bar .bar{flex:1;height:10px;background:rgba(255,255,255,.08);border-radius:var(--r-pill);overflow:hidden}
+  .dist-bar .bar i{display:block;height:100%;background:linear-gradient(90deg,#A78BFA,#818CF8);border-radius:var(--r-pill)}
+  .dist-bar .v{width:40px;text-align:right;color:#fff;font-family:var(--mono)}
+  .side-nav .group{color:rgba(255,255,255,.35)}
+  .side-nav a{color:rgba(255,255,255,.78)}
+  .side-nav a.active{background:linear-gradient(135deg,#6D28D9,#8B5CF6);color:#fff}
+  .ai-badge{display:inline-flex;align-items:center;gap:5px;background:rgba(167,139,250,.18);color:#C4B5FD;border:1px solid rgba(167,139,250,.35);border-radius:var(--r-pill);padding:3px 10px;font-size:12px;font-weight:600}
+</style>
+</head>
+<body>
+
+<div class="app-shell">
+
+  <!-- 侧边栏 -->
+  <aside class="app-side" style="background:linear-gradient(180deg,#1E1B4B,#312E81)">
+    <a class="brand" href="index.html" style="color:#fff;border-bottom-color:rgba(255,255,255,.1)">
+      <span class="logo" data-icon="cpu" data-size="20" style="background:linear-gradient(135deg,#8B5CF6,#6D28D9)"></span>
+      <span>农产云<small style="color:rgba(255,255,255,.5)">AI 中台</small></span>
+    </a>
+    <nav class="side-nav" data-tabscope="ai-nav">
+      <div class="group">AI 中台</div>
+      <a href="index.html" class="active"><span data-icon="activity"></span>AI 能力总览</a>
+
+      <div class="group">P0 核心场景</div>
+      <a href="credit.html"><span data-icon="star"></span>智能信用评估</a>
+      <a href="risk.html"><span data-icon="shield"></span>风控 Agent 集群</a>
+      <a href="iot-warning.html"><span data-icon="alert"></span>IoT 贷后预警</a>
+
+      <div class="group">P1 重要场景</div>
+      <a href="product-match.html"><span data-icon="target"></span>产品智能匹配</a>
+      <a href="aigc-doc.html"><span data-icon="file"></span>AIGC 文档自动化</a>
+      <a href="pledge-rate.html"><span data-icon="box"></span>动态质押率</a>
+
+      <div class="group">P2 扩展场景</div>
+      <a href="javascript:void(0)" style="opacity:.55"><span data-icon="clipboard"></span>智能核保审批<small style="margin-left:auto;color:rgba(255,255,255,.4)">规划中</small></a>
+      <a href="javascript:void(0)" style="opacity:.55"><span data-icon="money"></span>资金方智能对接<small style="margin-left:auto;color:rgba(255,255,255,.4)">规划中</small></a>
+      <a href="javascript:void(0)" style="opacity:.55"><span data-icon="zap"></span>保险期货联动<small style="margin-left:auto;color:rgba(255,255,255,.4)">规划中</small></a>
+      <a href="javascript:void(0)" style="opacity:.55"><span data-icon="user"></span>农户数字金融助手<small style="margin-left:auto;color:rgba(255,255,255,.4)">规划中</small></a>
+
+      <div class="group">其他</div>
+      <a href="javascript:void(0)" style="opacity:.55"><span data-icon="settings"></span>AI 配置中心<small style="margin-left:auto;color:rgba(255,255,255,.4)">规划中</small></a>
+
+      <div class="group">返回入口</div>
+      <a href="../index.html"><span data-icon="home"></span>原型总览</a>
+      <a href="../ops/finance.html"><span data-icon="money"></span>金融运营</a>
+      <a href="../module/finance.html"><span data-icon="layers"></span>供应链金融</a>
+    </nav>
+    <div style="padding:14px 12px;border-top:1px solid rgba(255,255,255,.08);margin-top:auto">
+      <div style="font-size:11px;color:rgba(255,255,255,.4);text-align:center">农产云 AI 中台 · v2.3.1<br/>专业版 · 7/10 Agent 已启用</div>
+    </div>
+  </aside>
+
+  <!-- 主区域 -->
+  <div class="app-main">
+    <header class="app-top">
+      <div class="crumb"><a href="index.html">AI 中台</a><span class="sep">/</span><span class="strong">能力总览</span></div>
+      <div class="row center gap-12">
+        <span class="ai-badge"><span data-icon="spark" data-size="12"></span>模型 v2.3.1 · 专业版</span>
+        <span class="avatar" style="background:linear-gradient(135deg,#8B5CF6,#6D28D9)">AI</span>
+        <span class="strong">风控总监 · 李智能</span>
+      </div>
+    </header>
+
+    <div class="app-body">
+
+      <!-- Hero KPI -->
+      <div class="ai-hero">
+        <div class="z">
+          <div class="row between center wrap gap-16">
+            <div>
+              <div class="row center gap-10 mb-10">
+                <span class="ai-badge" style="background:rgba(255,255,255,.14);color:#fff;border-color:rgba(255,255,255,.3)"><span data-icon="cpu" data-size="12"></span>Multi-Agent 协调层 + 实时流处理</span>
+                <span class="ai-badge" style="background:rgba(255,255,255,.14);color:#fff;border-color:rgba(255,255,255,.3)">WebSocket 实时推送</span>
+              </div>
+              <h1 style="font-size:28px;font-weight:800;color:#fff">AI 能力总览</h1>
+              <p style="color:rgba(255,255,255,.75);margin-top:8px;max-width:620px">聚合 10 大 AI Agent 运行数据，实时计算 KPI 指标，智能检测异常波动，驱动供应链金融全链路智能化。</p>
+            </div>
+            <div class="row gap-16 wrap">
+              <div style="text-align:center"><div class="mono" style="font-size:34px;font-weight:800;color:#fff">128,456</div><div style="font-size:12px;color:rgba(255,255,255,.65)">今日调用量 · <span style="color:#86EFAC">↑12.3%</span></div></div>
+              <div style="text-align:center"><div class="mono" style="font-size:34px;font-weight:800;color:#fff">23</div><div style="font-size:12px;color:rgba(255,255,255,.65)">活跃 Agent · <span style="color:#86EFAC">+2</span></div></div>
+              <div style="text-align:center"><div class="mono" style="font-size:34px;font-weight:800;color:#fff">94.7%</div><div style="font-size:12px;color:rgba(255,255,255,.65)">模型精度 · <span style="color:#86EFAC">+0.8%</span></div></div>
+              <div style="text-align:center"><div class="mono" style="font-size:34px;font-weight:800;color:#fff">1.2<span style="font-size:18px">s</span></div><div style="font-size:12px;color:rgba(255,255,255,.65)">平均响应 · <span style="color:#86EFAC">↓0.3s</span></div></div>
+              <div style="text-align:center"><div class="mono" style="font-size:34px;font-weight:800;color:#fff">156<span style="font-size:18px">人</span></div><div style="font-size:12px;color:rgba(255,255,255,.65)">等效节省人力</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 10 大 Agent 运行状态 -->
+      <div class="section-head mt-24"><div><div class="bar-title">10 大 Agent 运行状态</div><div class="sub">按 P0 / P1 / P2 优先级分组，点击卡片进入对应场景详情</div></div><span class="tag tag-violet">实时 · WebSocket</span></div>
+
+      <!-- P0 -->
+      <div class="mb-12"><span class="tag" style="background:#FEE2E2;color:#B91C1C">P0 核心 Agent</span></div>
+      <div class="grid grid-3" style="margin-bottom:24px">
+        <a href="credit.html" class="agent-card" style="text-decoration:none">
+          <span class="pr p0">P0</span>
+          <div class="ico" style="background:linear-gradient(135deg,#159A5E,#0C7BA8)"><span data-icon="star" data-size="22"></span></div>
+          <div class="strong t-lg">智能信用评估 Agent</div>
+          <div class="muted t-sm mt-6">LLM+RAG · GNN · 联邦学习 · 多模态融合</div>
+          <div class="row between center mt-12">
+            <span class="status-dot">运行中</span>
+            <span class="mono strong">45,231 次</span>
+          </div>
+          <div class="kv-mini"><span>延迟</span><b>0.8s</b></div>
+          <div class="kv-mini"><span>精度</span><b>96.2%</b></div>
+          <div class="spark-row"><i style="height:40%"></i><i style="height:60%"></i><i style="height:50%"></i><i style="height:80%"></i><i style="height:65%"></i><i style="height:90%"></i><i style="height:75%"></i></div>
+        </a>
+        <a href="risk.html" class="agent-card" style="text-decoration:none">
+          <span class="pr p0">P0</span>
+          <div class="ico" style="background:linear-gradient(135deg,#DC2626,#B91C1C)"><span data-icon="shield" data-size="22"></span></div>
+          <div class="strong t-lg">风控 Agent 集群</div>
+          <div class="muted t-sm mt-6">Multi-Agent · D-S 证据融合 · GNN 反欺诈</div>
+          <div class="row between center mt-12">
+            <span class="status-dot">运行中</span>
+            <span class="mono strong">32,156 次</span>
+          </div>
+          <div class="kv-mini"><span>延迟</span><b>1.2s</b></div>
+          <div class="kv-mini"><span>精度</span><b>94.8%</b></div>
+          <div class="spark-row"><i style="height:55%"></i><i style="height:70%"></i><i style="height:60%"></i><i style="height:85%"></i><i style="height:72%"></i><i style="height:68%"></i><i style="height:80%"></i></div>
+        </a>
+        <a href="iot-warning.html" class="agent-card" style="text-decoration:none">
+          <span class="pr p0">P0</span>
+          <div class="ico" style="background:linear-gradient(135deg,#F59E0B,#D97706)"><span data-icon="alert" data-size="22"></span></div>
+          <div class="strong t-lg">IoT 贷后预警 Agent</div>
+          <div class="muted t-sm mt-6">IoT 平台 · 边缘 AI · 时序异常检测 · 多目标预测</div>
+          <div class="row between center mt-12">
+            <span class="status-dot">运行中</span>
+            <span class="mono strong">21,089 次</span>
+          </div>
+          <div class="kv-mini"><span>延迟</span><b>0.6s</b></div>
+          <div class="kv-mini"><span>精度</span><b>93.1%</b></div>
+          <div class="spark-row"><i style="height:30%"></i><i style="height:45%"></i><i style="height:55%"></i><i style="height:70%"></i><i style="height:60%"></i><i style="height:85%"></i><i style="height:78%"></i></div>
+        </a>
+      </div>
+
+      <!-- P1 -->
+      <div class="mb-12"><span class="tag" style="background:#FEF3C7;color:#B45309">P1 重要 Agent</span></div>
+      <div class="grid grid-3" style="margin-bottom:24px">
+        <a href="product-match.html" class="agent-card" style="text-decoration:none">
+          <span class="pr p1">P1</span>
+          <div class="ico" style="background:linear-gradient(135deg,#6D28D9,#8B5CF6)"><span data-icon="target" data-size="22"></span></div>
+          <div class="strong t-lg">产品智能匹配 Agent</div>
+          <div class="muted t-sm mt-6">意图识别 · RAG 产品库 · CSP 求解 · 强化学习定价</div>
+          <div class="row between center mt-12">
+            <span class="status-dot">运行中</span>
+            <span class="mono strong">18,742 次</span>
+          </div>
+          <div class="kv-mini"><span>延迟</span><b>0.9s</b></div>
+          <div class="kv-mini"><span>转化率</span><b>68.5%</b></div>
+          <div class="spark-row"><i style="height:50%"></i><i style="height:65%"></i><i style="height:58%"></i><i style="height:72%"></i><i style="height:68%"></i><i style="height:80%"></i><i style="height:74%"></i></div>
+        </a>
+        <a href="aigc-doc.html" class="agent-card" style="text-decoration:none">
+          <span class="pr p1">P1</span>
+          <div class="ico" style="background:linear-gradient(135deg,#0C7BA8,#0EA5E9)"><span data-icon="file" data-size="22"></span></div>
+          <div class="strong t-lg">AIGC 文档 Agent</div>
+          <div class="muted t-sm mt-6">合同生成 · 模板知识库 · 规则合规检查 · LLM</div>
+          <div class="row between center mt-12">
+            <span class="status-dot">运行中</span>
+            <span class="mono strong">9,876 次</span>
+          </div>
+          <div class="kv-mini"><span>延迟</span><b>2.1s</b></div>
+          <div class="kv-mini"><span>合规通过率</span><b>97.3%</b></div>
+          <div class="spark-row"><i style="height:40%"></i><i style="height:55%"></i><i style="height:48%"></i><i style="height:62%"></i><i style="height:70%"></i><i style="height:65%"></i><i style="height:78%"></i></div>
+        </a>
+        <a href="pledge-rate.html" class="agent-card" style="text-decoration:none">
+          <span class="pr p1">P1</span>
+          <div class="ico" style="background:linear-gradient(135deg,#0E5233,#159A5E)"><span data-icon="box" data-size="22"></span></div>
+          <div class="strong t-lg">动态质押率 Agent</div>
+          <div class="muted t-sm mt-6">XGBoost-LSTM · IoT · 智能合约 · 蒙特卡罗模拟</div>
+          <div class="row between center mt-12">
+            <span class="status-dot warn">维护中</span>
+            <span class="mono strong">6,543 次</span>
+          </div>
+          <div class="kv-mini"><span>估值 MAPE</span><b>8.7%</b></div>
+          <div class="kv-mini"><span>调整准确率</span><b>94.2%</b></div>
+          <div class="spark-row"><i style="height:60%"></i><i style="height:72%"></i><i style="height:68%"></i><i style="height:75%"></i><i style="height:70%"></i><i style="height:82%"></i><i style="height:76%"></i></div>
+        </a>
+      </div>
+
+      <!-- P2 -->
+      <div class="mb-12"><span class="tag" style="background:#EDE9FE;color:#6D28D9">P2 扩展 Agent</span></div>
+      <div class="grid grid-4" style="margin-bottom:24px">
+        <div class="agent-card" style="opacity:.7">
+          <span class="pr p2">P2</span>
+          <div class="ico" style="background:linear-gradient(135deg,#94A3B8,#64748B)"><span data-icon="clipboard" data-size="22"></span></div>
+          <div class="strong t-md">智能核保审批 Agent</div>
+          <div class="muted t-xs mt-6">多模态 OCR · LangGraph · RPA · 人脸识别</div>
+          <div class="row between center mt-12"><span class="status-dot">运行中</span><span class="mono strong">4,231 次</span></div>
+          <div class="muted t-xs mt-4" style="color:#6D28D9">80%+ 案例自动通过 · 时效 8 分钟</div>
+        </div>
+        <div class="agent-card" style="opacity:.7">
+          <span class="pr p2">P2</span>
+          <div class="ico" style="background:linear-gradient(135deg,#94A3B8,#64748B)"><span data-icon="money" data-size="22"></span></div>
+          <div class="strong t-md">资金方智能对接</div>
+          <div class="muted t-xs mt-6">资产画像 · 偏好匹配 · 实时竞价 · 分发追踪</div>
+          <div class="row between center mt-12"><span class="status-dot">运行中</span><span class="mono strong">3,120 次</span></div>
+          <div class="muted t-xs mt-4" style="color:#6D28D9">28 家合作资金方 · 匹配成功率 95.7%</div>
+        </div>
+        <div class="agent-card" style="opacity:.7">
+          <span class="pr p2">P2</span>
+          <div class="ico" style="background:linear-gradient(135deg,#94A3B8,#64748B)"><span data-icon="zap" data-size="22"></span></div>
+          <div class="strong t-md">保险期货联动定价</div>
+          <div class="muted t-xs mt-6">价格预测 · 风险对冲 · 联动定价 · 理赔触发</div>
+          <div class="row between center mt-12"><span class="status-dot">运行中</span><span class="mono strong">1,876 次</span></div>
+          <div class="muted t-xs mt-4" style="color:#6D28D9">覆盖 6 大品类 · 对冲效率 82%</div>
+        </div>
+        <div class="agent-card" style="opacity:.7">
+          <span class="pr p2">P2</span>
+          <div class="ico" style="background:linear-gradient(135deg,#94A3B8,#64748B)"><span data-icon="user" data-size="22"></span></div>
+          <div class="strong t-md">农户数字金融助手</div>
+          <div class="muted t-xs mt-6">对话式 · 方言识别 · 授信查询 · 还款提醒</div>
+          <div class="row between center mt-12"><span class="status-dot">运行中</span><span class="mono strong">8,956 次</span></div>
+          <div class="muted t-xs mt-4" style="color:#6D28D9">满意度 94.2% · 支持 8 种方言</div>
+        </div>
+      </div>
+
+      <!-- 底部双栏：实时趋势 + 分布 -->
+      <div class="grid" style="grid-template-columns:1.4fr 1fr;gap:20px">
+        <div class="dark-panel">
+          <div class="row between center mb-12">
+            <h3>实时调用趋势</h3>
+            <div class="chips" style="gap:6px">
+              <span class="chip on" style="background:rgba(167,139,250,.3);color:#fff;font-size:11px;padding:3px 10px">实时</span>
+              <span class="chip" style="background:rgba(255,255,255,.08);color:#C4B5FD;font-size:11px;padding:3px 10px">今日</span>
+              <span class="chip" style="background:rgba(255,255,255,.08);color:#C4B5FD;font-size:11px;padding:3px 10px">本周</span>
+            </div>
+          </div>
+          <div class="trend-bar">
+            <i style="height:35%"><span>28k</span></i>
+            <i style="height:52%"><span>36k</span></i>
+            <i style="height:48%"><span>33k</span></i>
+            <i style="height:68%"><span>42k</span></i>
+            <i style="height:75%"><span>45k</span></i>
+            <i style="height:62%"><span>40k</span></i>
+            <i style="height:80%"><span>48k</span></i>
+            <i style="height:72%"><span>43k</span></i>
+            <i style="height:88%"><span>52k</span></i>
+            <i style="height:78%"><span>46k</span></i>
+            <i style="height:65%"><span>41k</span></i>
+            <i style="height:92%"><span>55k</span></i>
+          </div>
+          <div class="row between" style="font-size:11px;color:rgba(196,181,253,.6);margin-top:6px">
+            <span>08:00</span><span>10:00</span><span>12:00</span><span>14:00</span><span>16:00</span><span>18:00</span><span>当前</span>
+          </div>
+          <div class="row gap-20 mt-16" style="font-size:12px">
+            <div><span style="color:#C4B5FD">峰值</span> <b class="mono" style="color:#fff">55,231</b></div>
+            <div><span style="color:#C4B5FD">均值</span> <b class="mono" style="color:#fff">41,876</b></div>
+            <div><span style="color:#C4B5FD">同比</span> <b style="color:#86EFAC">↑ 18.4%</b></div>
+          </div>
+        </div>
+
+        <div class="grid" style="gap:20px">
+          <div class="dark-panel">
+            <h3 class="mb-12">场景分布</h3>
+            <div class="dist-bar"><span class="lbl">信用评估</span><div class="bar"><i style="width:45%"></i></div><span class="v">45%</span></div>
+            <div class="dist-bar"><span class="lbl">风控集群</span><div class="bar"><i style="width:25%"></i></div><span class="v">25%</span></div>
+            <div class="dist-bar"><span class="lbl">贷后预警</span><div class="bar"><i style="width:15%"></i></div><span class="v">15%</span></div>
+            <div class="dist-bar"><span class="lbl">产品匹配</span><div class="bar"><i style="width:10%"></i></div><span class="v">10%</span></div>
+            <div class="dist-bar"><span class="lbl">其他</span><div class="bar"><i style="width:5%"></i></div><span class="v">5%</span></div>
+          </div>
+          <div class="dark-panel">
+            <h3 class="mb-12">错误分布</h3>
+            <div class="dist-bar"><span class="lbl">超时</span><div class="bar"><i style="width:23%;background:linear-gradient(90deg,#F59E0B,#FB923C)"></i></div><span class="v">23%</span></div>
+            <div class="dist-bar"><span class="lbl">解析错误</span><div class="bar"><i style="width:8%"></i></div><span class="v">8%</span></div>
+            <div class="dist-bar"><span class="lbl">数据缺失</span><div class="bar"><i style="width:5%"></i></div><span class="v">5%</span></div>
+            <div class="dist-bar"><span class="lbl">其他</span><div class="bar"><i style="width:64%;background:rgba(255,255,255,.15)"></i></div><span class="v">64%</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AI 能力技术栈说明 -->
+      <div class="card mt-24">
+        <div class="card-h"><h3><span data-icon="cpu" data-size="18"></span>AI 能力技术栈</h3><span class="more">6 大核心技术 · 10 大应用场景</span></div>
+        <div class="card-b">
+          <div class="grid grid-3">
+            <div class="row gap-12"><div class="stat-icon" style="flex:none;background:#EDE9FE;color:#6D28D9"><span data-icon="spark" data-size="20"></span></div><div><div class="strong">LLM + RAG</div><div class="muted t-xs">大语言模型（DeepSeek/通义千问）+ 检索增强生成</div></div></div>
+            <div class="row gap-12"><div class="stat-icon tech" style="flex:none"><span data-icon="layers" data-size="20"></span></div><div><div class="strong">GNN 图神经网络</div><div class="muted t-xs">Neo4j 知识图谱 · 关联交易/团伙欺诈识别</div></div></div>
+            <div class="row gap-12"><div class="stat-icon amber" style="flex:none"><span data-icon="shield" data-size="20"></span></div><div><div class="strong">FL 联邦学习</div><div class="muted t-xs">PySyft/FATE · 跨机构数据隐私建模</div></div></div>
+            <div class="row gap-12"><div class="stat-icon" style="flex:none"><span data-icon="box" data-size="20"></span></div><div><div class="strong">CV 计算机视觉</div><div class="muted t-xs">图像识别 · 目标检测 · 病虫害识别</div></div></div>
+            <div class="row gap-12"><div class="stat-icon tech" style="flex:none"><span data-icon="activity" data-size="20"></span></div><div><div class="strong">TS 时序模型</div><div class="muted t-xs">LSTM/Transformer · 价格预测 · 异常检测</div></div></div>
+            <div class="row gap-12"><div class="stat-icon amber" style="flex:none"><span data-icon="target" data-size="20"></span></div><div><div class="strong">XAI 可解释 AI</div><div class="muted t-xs">SHAP/LIME · 风险解释 · 决策可追溯</div></div></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="../assets/js/app.js"></script>
+</body>
+</html>

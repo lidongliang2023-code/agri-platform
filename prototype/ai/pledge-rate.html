@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>动态质押率面板 · AI 中台 · 农产云</title>
+<link rel="stylesheet" href="../assets/css/theme.css" />
+<style>
+  body{background:#06231A}
+  .app-side{background:linear-gradient(180deg,#04150F,#06231A);border-right:1px solid rgba(47,184,119,.18)}
+  .app-side .brand{color:#EAFFF5;border-bottom-color:rgba(47,184,119,.15)}
+  .app-side .brand small{color:rgba(220,239,228,.5)}
+  .side-nav .group{color:rgba(47,184,119,.4)}
+  .side-nav a{color:rgba(220,239,228,.78)}
+  .side-nav a:hover{background:rgba(47,184,119,.1);color:#EAFFF5}
+  .side-nav a.active{background:linear-gradient(135deg,var(--green-600),var(--green-500));color:#fff}
+  .app-main{background:radial-gradient(1200px 500px at 50% -10%,rgba(14,165,233,.12),transparent 70%),linear-gradient(180deg,#06231A,#04150F 70%,#020B08)}
+  .app-top{background:rgba(6,35,26,.85);border-bottom:1px solid rgba(47,184,119,.15);backdrop-filter:blur(8px)}
+  .app-top .crumb,.app-top .crumb a{color:rgba(220,239,228,.6)}
+  .app-top .strong{color:#EAFFF5}
+  .panel{background:linear-gradient(180deg,rgba(12,52,38,.86),rgba(6,30,22,.86));border:1px solid rgba(47,184,119,.25);border-radius:var(--r-md)}
+  .panel-h{padding:14px 18px;border-bottom:1px solid rgba(47,184,119,.16);display:flex;align-items:center;justify-content:space-between}
+  .panel-h h3{font-size:15px;font-weight:700;color:#EAFFF5;display:flex;align-items:center;gap:8px}
+  .panel-h h3::before{content:"";width:3px;height:14px;background:var(--green-400);border-radius:2px;box-shadow:0 0 10px var(--green-400)}
+  .panel-b{padding:16px 18px;color:#DCEFE4}
+  .kpi{padding:16px;border-radius:var(--r-md);background:rgba(12,52,38,.6);border:1px solid rgba(47,184,119,.2)}
+  .kpi .k{font-size:12.5px;color:rgba(220,239,228,.62)}
+  .kpi .v{font-family:var(--mono);font-size:24px;font-weight:800;color:#EAFFF5;margin-top:6px}
+  .kpi .v .u{font-size:13px;color:rgba(220,239,228,.55);font-weight:500;margin-left:3px}
+  .kpi.warn .v{color:#FCD34D}
+  .cat-bar{display:flex;align-items:center;gap:8px;margin:8px 0;font-size:12px}
+  .cat-bar .lbl{width:56px;color:rgba(220,239,228,.65);flex:none}
+  .cat-bar .bar{flex:1;height:8px;background:rgba(255,255,255,.06);border-radius:var(--r-pill);overflow:hidden}
+  .cat-bar .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--green-400),var(--tech-400));border-radius:var(--r-pill)}
+  .cat-bar .v{width:36px;text-align:right;font-family:var(--mono)}
+  .warn-stat{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+  .ws{padding:12px;border-radius:10px;text-align:center}
+  .ws .n{font-family:var(--mono);font-size:22px;font-weight:800}
+  .ws .l{font-size:11px;opacity:.65;margin-top:2px}
+  .ws.w1{background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.25)}
+  .ws.w1 .n{color:#FCD34D}
+  .ws.w2{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25)}
+  .ws.w2 .n{color:#FCA5A5}
+  .ws.w3{background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.25)}
+  .ws.w3 .n{color:#86EFAC}
+  .ws.w4{background:rgba(14,165,233,.1);border:1px solid rgba(14,165,233,.25)}
+  .ws.w4 .n{color:#7DD3FC}
+  .rate-curve{position:relative;height:160px;margin-top:10px}
+  .rate-curve svg{width:100%;height:100%}
+  .rate-curve .labels{position:absolute;left:0;right:0;bottom:-6px;display:flex;justify-content:space-between;font-size:10px;color:rgba(220,239,228,.4)}
+  .rate-curve .y-labels{position:absolute;left:-4px;top:0;bottom:14px;display:flex;flex-direction:column;justify-content:space-between;font-size:10px;color:rgba(220,239,228,.4)}
+  .val-box{padding:14px;border-radius:10px;background:rgba(12,52,38,.6);border:1px solid rgba(47,184,119,.2)}
+  .val-row{display:flex;justify-content:space-between;padding:6px 0;font-size:13px;border-bottom:1px dashed rgba(47,184,119,.1)}
+  .val-row:last-child{border-bottom:none}
+  .val-row .v{font-family:var(--mono);font-weight:700;color:#EAFFF5}
+  .val-row .v.green{color:#86EFAC}
+  .val-row .v.warn{color:#FCD34D}
+  .rule-item{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px dashed rgba(47,184,119,.1);font-size:13px}
+  .rule-item:last-child{border-bottom:none}
+  .rule-item .v{font-family:var(--mono)}
+  .rule-item .v.up{color:#FCA5A5}
+  .rule-item .v.down{color:#86EFAC}
+  .pulse-dot{width:8px;height:8px;border-radius:50%;background:var(--green-400);box-shadow:0 0 0 0 rgba(47,184,119,.7);animation:pulse 1.8s infinite;display:inline-block}
+  @keyframes pulse{70%{box-shadow:0 0 0 8px rgba(47,184,119,0)}100%{box-shadow:0 0 0 0 rgba(47,184,119,0)}}
+  .mini-table{width:100%;font-size:12px}
+  .mini-table th{text-align:left;padding:8px 10px;color:rgba(220,239,228,.5);border-bottom:1px solid rgba(47,184,119,.12);font-weight:500}
+  .mini-table td{padding:8px 10px;border-bottom:1px solid rgba(47,184,119,.08);color:#DCEFE4}
+</style>
+</head>
+<body>
+<div class="app-shell">
+  <aside class="app-side">
+    <a class="brand" href="index.html"><span class="logo" data-icon="cpu" data-size="20" style="background:linear-gradient(135deg,var(--green-500),var(--tech-500))"></span><span>农产云<small>AI 中台</small></span></a>
+    <nav class="side-nav" data-tabscope="ai-nav">
+      <div class="group">AI 中台</div><a href="index.html"><span data-icon="activity"></span>AI 能力总览</a>
+      <div class="group">P0 核心场景</div>
+      <a href="credit.html"><span data-icon="star"></span>智能信用评估</a>
+      <a href="risk.html"><span data-icon="shield"></span>风控 Agent 集群</a>
+      <a href="iot-warning.html"><span data-icon="alert"></span>IoT 贷后预警</a>
+      <div class="group">P1 重要场景</div>
+      <a href="product-match.html"><span data-icon="target"></span>产品智能匹配</a>
+      <a href="aigc-doc.html"><span data-icon="file"></span>AIGC 文档自动化</a>
+      <a href="pledge-rate.html" class="active"><span data-icon="box"></span>动态质押率</a>
+      <div class="group">返回入口</div>
+      <a href="../index.html"><span data-icon="home"></span>原型总览</a>
+      <a href="../ops/finance.html"><span data-icon="money"></span>金融运营</a>
+    </nav>
+    <div style="padding:14px 12px;border-top:1px solid rgba(47,184,119,.12);margin-top:auto"><div style="font-size:11px;color:rgba(47,184,119,.5);text-align:center">质押率 v1.2.0<br/>XGBoost-LSTM · IoT · 蒙特卡罗</div></div>
+  </aside>
+
+  <div class="app-main">
+    <header class="app-top">
+      <div class="crumb"><a href="index.html">AI 中台</a><span class="sep">/</span><span class="strong">动态质押率</span></div>
+      <div class="row center gap-12">
+        <span style="display:inline-flex;align-items:center;gap:6px;color:var(--green-300);font-size:13px;font-weight:600"><span class="pulse-dot"></span>实时</span>
+        <button class="btn btn-ghost btn-sm" style="background:rgba(47,184,119,.1);color:var(--green-300)"><span data-icon="file" data-size="14"></span>导出</button>
+        <span class="avatar">仓</span>
+        <span class="strong" style="color:#EAFFF5">仓储风控 · 孙估值</span>
+      </div>
+    </header>
+
+    <div class="app-body">
+      <!-- KPI -->
+      <div class="grid grid-4" style="margin-bottom:18px">
+        <div class="kpi"><div class="k"><span data-icon="box" data-size="13"></span> 在押存货总价值</div><div class="v">¥5,680<span class="u">万</span></div></div>
+        <div class="kpi"><div class="k"><span data-icon="money" data-size="13"></span> 质押余额</div><div class="v">¥3,980<span class="u">万</span></div></div>
+        <div class="kpi warn"><div class="k"><span data-icon="activity" data-size="13"></span> 平均质押率</div><div class="v">70.1<span class="u">%</span></div></div>
+        <div class="kpi warn"><div class="k"><span data-icon="alert" data-size="13"></span> 警戒占比</div><div class="v">12.3<span class="u">%</span></div></div>
+      </div>
+
+      <div class="grid" style="grid-template-columns:1fr 1.3fr;gap:18px;margin-bottom:18px">
+        <!-- 左列 -->
+        <div style="display:flex;flex-direction:column;gap:18px">
+          <div class="panel">
+            <div class="panel-h"><h3>品类分布</h3></div>
+            <div class="panel-b">
+              <div class="cat-bar"><span class="lbl">玉米</span><div class="bar"><i style="width:35%"></i></div><span class="v">35%</span></div>
+              <div class="cat-bar"><span class="lbl">小麦</span><div class="bar"><i style="width:25%"></i></div><span class="v">25%</span></div>
+              <div class="cat-bar"><span class="lbl">生猪</span><div class="bar"><i style="width:20%"></i></div><span class="v">20%</span></div>
+              <div class="cat-bar"><span class="lbl">大豆</span><div class="bar"><i style="width:15%"></i></div><span class="v">15%</span></div>
+              <div class="cat-bar"><span class="lbl">其他</span><div class="bar"><i style="width:5%"></i></div><span class="v">5%</span></div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-h"><h3>预警统计</h3></div>
+            <div class="panel-b">
+              <div class="warn-stat">
+                <div class="ws w1"><div class="n">5</div><div class="l">警戒线触发</div></div>
+                <div class="ws w2"><div class="n">1</div><div class="l">平仓线触发</div></div>
+                <div class="ws w3"><div class="n">3</div><div class="l">补货完成</div></div>
+                <div class="ws w4"><div class="n">0</div><div class="l">自动处置</div></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-h"><h3>智能仓库</h3></div>
+            <div class="panel-b">
+              <div class="row between center" style="padding:8px 0">
+                <div class="row center gap-10"><span data-icon="box" data-size="18" style="color:var(--green-300)"></span><span>在线仓库</span></div>
+                <span class="mono strong" style="color:#86EFAC">12</span>
+              </div>
+              <div class="row between center" style="padding:8px 0;border-top:1px dashed rgba(47,184,119,.1)">
+                <div class="row center gap-10"><span data-icon="wifi" data-size="18" style="color:#FCA5A5"></span><span>离线仓库</span></div>
+                <span class="mono strong" style="color:#FCA5A5">1</span>
+              </div>
+              <div class="row between center" style="padding:8px 0;border-top:1px dashed rgba(47,184,119,.1)">
+                <div class="row center gap-10"><span data-icon="activity" data-size="18" style="color:#7DD3FC"></span><span>估值 MAPE</span></div>
+                <span class="mono strong" style="color:#7DD3FC">8.7%</span>
+              </div>
+              <div class="row between center" style="padding:8px 0;border-top:1px dashed rgba(47,184,119,.1)">
+                <div class="row center gap-10"><span data-icon="target" data-size="18" style="color:var(--green-300)"></span><span>调整准确率</span></div>
+                <span class="mono strong" style="color:var(--green-300)">94.2%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 右列 -->
+        <div style="display:flex;flex-direction:column;gap:18px">
+          <div class="panel">
+            <div class="panel-h"><h3>质押率实时曲线</h3><span style="font-size:12px;color:var(--green-300)">当前 70.1%</span></div>
+            <div class="panel-b">
+              <div class="rate-curve">
+                <svg viewBox="0 0 500 160" preserveAspectRatio="none">
+                  <defs><linearGradient id="rcg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#2FB877"/><stop offset="100%" stop-color="rgba(47,184,119,.1)"/></linearGradient></defs>
+                  <!-- 警戒线 75% -->
+                  <line x1="0" y1="40" x2="500" y2="40" stroke="#F59E0B" stroke-width="1" stroke-dasharray="6 4"/>
+                  <text x="440" y="36" fill="#FCD34D" font-size="10">警戒线 75%</text>
+                  <!-- 平仓线 80% -->
+                  <line x1="0" y1="24" x2="500" y2="24" stroke="#EF4444" stroke-width="1" stroke-dasharray="6 4"/>
+                  <text x="430" y="20" fill="#FCA5A5" font-size="10">平仓线 80%</text>
+                  <!-- 曲线 -->
+                  <path d="M 0,80 Q 40,72 80,68 T 160,52 T 240,60 T 320,48 T 400,56 T 500,44" fill="none" stroke="#2FB877" stroke-width="2.5"/>
+                  <path d="M 0,80 Q 40,72 80,68 T 160,52 T 240,60 T 320,48 T 400,56 T 500,44 L 500,160 L 0,160 Z" fill="url(#rcg)" opacity=".4"/>
+                  <!-- 当前点 -->
+                  <circle cx="500" cy="44" r="5" fill="#2FB877" stroke="#fff" stroke-width="2"/>
+                </svg>
+                <div class="y-labels"><span>80%</span><span>75%</span><span>70%</span><span>65%</span></div>
+                <div class="labels"><span>08:00</span><span>10:00</span><span>12:00</span><span>14:00</span><span>16:00</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-h"><h3>实时估值 · 玉米</h3><span style="font-size:12px;color:rgba(220,239,228,.5)">500 吨 · 某地粮库 A</span></div>
+            <div class="panel-b">
+              <div class="val-box">
+                <div class="val-row"><span>市场价格</span><span class="v">¥2,850/吨</span></div>
+                <div class="val-row"><span>AI 估值</span><span class="v warn">¥2,820/吨</span></div>
+                <div class="val-row"><span>当前估值总额</span><span class="v green">¥1,410,000</span></div>
+                <div class="val-row"><span>当前质押率</span><span class="v green">70%</span></div>
+                <div class="val-row"><span>警戒线 / 平仓线</span><span class="v" style="color:#FCD34D">75% / 80%</span></div>
+              </div>
+              <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+                <span class="tag" style="background:rgba(34,197,94,.15);color:#86EFAC;font-size:11px">玉米期货 ↑1.2% 稳定</span>
+                <span class="tag" style="background:rgba(47,184,119,.15);color:var(--green-300);font-size:11px">7日上涨概率 65%</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-h"><h3>补货 / 追保记录</h3></div>
+            <div class="panel-b" style="padding:0">
+              <table class="mini-table">
+                <thead><tr><th>时间</th><th>客户</th><th>触发原因</th><th>状态</th></tr></thead>
+                <tbody>
+                  <tr><td>14:30</td><td>XXX 合作社</td><td>质押率超 75%</td><td><span style="color:#FCD34D">待处理</span></td></tr>
+                  <tr><td>11:20</td><td>YYY 公司</td><td>质押率超 75%</td><td><span style="color:#86EFAC">✅ 已补货</span></td></tr>
+                  <tr><td>09:15</td><td>ZZZ 粮库</td><td>价格下跌</td><td><span style="color:#86EFAC">✅ 已追保</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-h"><h3>质押率调整规则</h3></div>
+            <div class="panel-b">
+              <div class="rule-item"><span>基础质押率</span><span class="v">70%</span></div>
+              <div class="rule-item"><span>价格波动调整（波动率 > 15%）</span><span class="v down">-2%</span></div>
+              <div class="rule-item"><span>存储风险调整（IoT 监控正常）</span><span class="v up">+1%</span></div>
+              <div class="rule-item"><span>主体信用调整（信用评分 750）</span><span class="v">0%</span></div>
+              <div class="rule-item" style="border-top:2px solid rgba(47,184,119,.3);padding-top:12px;margin-top:4px"><span style="font-weight:700;color:#EAFFF5">实际质押率</span><span class="v" style="font-size:16px;color:var(--green-300)">69%</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AI能力说明 -->
+      <div class="panel">
+        <div class="panel-b">
+          <div class="grid grid-3" style="gap:16px">
+            <div class="row gap-12"><div class="ic" style="width:40px;height:40px;border-radius:10px;background:rgba(47,184,119,.16);color:var(--green-300);display:grid;place-items:center;flex:none"><span data-icon="activity" data-size="20"></span></div><div><div class="strong" style="color:#EAFFF5">XGBoost-LSTM 融合</div><div class="t-xs" style="color:rgba(220,239,228,.5)">价格预测 MAPE = 8.7%</div></div></div>
+            <div class="row gap-12"><div class="ic" style="width:40px;height:40px;border-radius:10px;background:rgba(14,165,233,.16);color:#7DD3FC;display:grid;place-items:center;flex:none"><span data-icon="box" data-size="20"></span></div><div><div class="strong" style="color:#EAFFF5">IoT + 智能合约</div><div class="t-xs" style="color:rgba(220,239,228,.5)">品质衰减模型 · 变现折扣模型</div></div></div>
+            <div class="row gap-12"><div class="ic" style="width:40px;height:40px;border-radius:10px;background:rgba(245,158,11,.16);color:#FCD34D;display:grid;place-items:center;flex:none"><span data-icon="target" data-size="20"></span></div><div><div class="strong" style="color:#EAFFF5">蒙特卡罗模拟</div><div class="t-xs" style="color:rgba(220,239,228,.5)">实时公允价值 · 动态质押率自动调整</div></div></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+<script src="../assets/js/app.js"></script>
+</body>
+</html>

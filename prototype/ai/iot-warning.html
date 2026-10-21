@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>IoT 贷后预警中心 · AI 中台 · 农产云</title>
+<link rel="stylesheet" href="../assets/css/theme.css" />
+<style>
+  body{background:#06231A}
+  .app-side{background:linear-gradient(180deg,#04150F,#06231A);border-right:1px solid rgba(47,184,119,.18)}
+  .app-side .brand{color:#EAFFF5;border-bottom-color:rgba(47,184,119,.15)}
+  .app-side .brand small{color:rgba(220,239,228,.5)}
+  .side-nav .group{color:rgba(47,184,119,.4)}
+  .side-nav a{color:rgba(220,239,228,.78)}
+  .side-nav a:hover{background:rgba(47,184,119,.1);color:#EAFFF5}
+  .side-nav a.active{background:linear-gradient(135deg,var(--green-600),var(--green-500));color:#fff}
+  .app-main{background:radial-gradient(1200px 500px at 50% -10%,rgba(245,158,11,.12),transparent 70%),linear-gradient(180deg,#06231A,#04150F 70%,#020B08)}
+  .app-top{background:rgba(6,35,26,.85);border-bottom:1px solid rgba(47,184,119,.15);backdrop-filter:blur(8px)}
+  .app-top .crumb,.app-top .crumb a{color:rgba(220,239,228,.6)}
+  .app-top .strong{color:#EAFFF5}
+  .panel{background:linear-gradient(180deg,rgba(12,52,38,.86),rgba(6,30,22,.86));border:1px solid rgba(47,184,119,.25);border-radius:var(--r-md)}
+  .panel-h{padding:14px 18px;border-bottom:1px solid rgba(47,184,119,.16);display:flex;align-items:center;justify-content:space-between}
+  .panel-h h3{font-size:15px;font-weight:700;color:#EAFFF5;display:flex;align-items:center;gap:8px}
+  .panel-h h3::before{content:"";width:3px;height:14px;background:var(--green-400);border-radius:2px;box-shadow:0 0 10px var(--green-400)}
+  .panel-b{padding:16px 18px;color:#DCEFE4}
+  .alert-ov{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  .ao{padding:16px;border-radius:var(--r-md);text-align:center;border:1px solid}
+  .ao .n{font-family:var(--mono);font-size:30px;font-weight:800}
+  .ao .l{font-size:12px;margin-top:4px;opacity:.7}
+  .ao.n1{background:rgba(34,197,94,.1);border-color:rgba(34,197,94,.3);color:#86EFAC}
+  .ao.n2{background:rgba(245,158,11,.1);border-color:rgba(245,158,11,.3);color:#FCD34D}
+  .ao.n3{background:rgba(249,115,22,.1);border-color:rgba(249,115,22,.3);color:#FDBA74}
+  .ao.n4{background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.3);color:#FCA5A5}
+  .device-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+  .dev{background:rgba(12,52,38,.6);border:1px solid rgba(47,184,119,.2);border-radius:10px;padding:10px 8px;text-align:center;position:relative}
+  .dev.off{border-color:rgba(239,68,68,.4);background:rgba(239,68,68,.08)}
+  .dev.warn{border-color:rgba(245,158,11,.4);background:rgba(245,158,11,.08)}
+  .dev .v{font-family:var(--mono);font-size:18px;font-weight:800;color:#EAFFF5}
+  .dev .u{font-size:10px;opacity:.6}
+  .dev .t{font-size:10px;color:rgba(220,239,228,.5);margin-top:3px}
+  .dev .ic{width:28px;height:28px;border-radius:8px;margin:0 auto 6px;display:grid;place-items:center;font-size:14px}
+  .event{padding:12px 14px;border-left:3px solid;border-radius:0 10px 10px 0;margin-bottom:10px;background:rgba(12,52,38,.5)}
+  .event.e1{border-color:#22C55E}
+  .event.e2{border-color:#F59E0B}
+  .event.e3{border-color:#F97316}
+  .event.e4{border-color:#EF4444}
+  .event .head{display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:700;color:#EAFFF5}
+  .event .desc{font-size:12px;color:rgba(220,239,228,.65);margin-top:6px;line-height:1.6}
+  .event .acts{margin-top:10px;display:flex;gap:8px}
+  .event .acts button{padding:4px 12px;border-radius:var(--r-pill);font-size:12px;font-weight:600;border:1px solid}
+  .risk-forecast{padding:16px;background:rgba(12,52,38,.6);border:1px solid rgba(245,158,11,.25);border-radius:var(--r-md)}
+  .rf-item{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px dashed rgba(47,184,119,.12)}
+  .rf-item:last-child{border-bottom:none}
+  .rf-item .v{font-family:var(--mono);font-size:20px;font-weight:800;color:#FCD34D}
+  .rf-item .v.up::after{content:" ↑";color:#FCA5A5;font-size:12px}
+  .cat-bar{display:flex;align-items:center;gap:8px;margin:7px 0;font-size:12px}
+  .cat-bar .lbl{width:70px;color:rgba(220,239,228,.6);flex:none}
+  .cat-bar .bar{flex:1;height:8px;background:rgba(255,255,255,.06);border-radius:var(--r-pill);overflow:hidden}
+  .cat-bar .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--green-400),var(--tech-400));border-radius:var(--r-pill)}
+  .cat-bar .v{width:38px;text-align:right;font-family:var(--mono)}
+  .pulse-dot{width:8px;height:8px;border-radius:50%;background:var(--green-400);box-shadow:0 0 0 0 rgba(47,184,119,.7);animation:pulse 1.8s infinite;display:inline-block}
+  @keyframes pulse{70%{box-shadow:0 0 0 8px rgba(47,184,119,0)}100%{box-shadow:0 0 0 0 rgba(47,184,119,0)}}
+</style>
+</head>
+<body>
+<div class="app-shell">
+  <aside class="app-side">
+    <a class="brand" href="index.html"><span class="logo" data-icon="cpu" data-size="20" style="background:linear-gradient(135deg,var(--green-500),var(--tech-500))"></span><span>农产云<small>AI 中台</small></span></a>
+    <nav class="side-nav" data-tabscope="ai-nav">
+      <div class="group">AI 中台</div>
+      <a href="index.html"><span data-icon="activity"></span>AI 能力总览</a>
+      <div class="group">P0 核心场景</div>
+      <a href="credit.html"><span data-icon="star"></span>智能信用评估</a>
+      <a href="risk.html"><span data-icon="shield"></span>风控 Agent 集群</a>
+      <a href="iot-warning.html" class="active"><span data-icon="alert"></span>IoT 贷后预警</a>
+      <div class="group">P1 重要场景</div>
+      <a href="product-match.html"><span data-icon="target"></span>产品智能匹配</a>
+      <a href="aigc-doc.html"><span data-icon="file"></span>AIGC 文档自动化</a>
+      <a href="pledge-rate.html"><span data-icon="box"></span>动态质押率</a>
+      <div class="group">返回入口</div>
+      <a href="../index.html"><span data-icon="home"></span>原型总览</a>
+      <a href="../ops/finance.html"><span data-icon="money"></span>金融运营</a>
+    </nav>
+    <div style="padding:14px 12px;border-top:1px solid rgba(47,184,119,.12);margin-top:auto"><div style="font-size:11px;color:rgba(47,184,119,.5);text-align:center">贷后预警 v1.5.0<br/>IoT · 边缘 AI · 时序预测</div></div>
+  </aside>
+
+  <div class="app-main">
+    <header class="app-top">
+      <div class="crumb"><a href="index.html">AI 中台</a><span class="sep">/</span><span class="strong">IoT 贷后预警</span></div>
+      <div class="row center gap-12">
+        <span style="display:inline-flex;align-items:center;gap:6px;color:var(--green-300);font-size:13px;font-weight:600"><span class="pulse-dot"></span>实时监控中</span>
+        <button class="btn btn-ghost btn-sm" style="background:rgba(47,184,119,.1);color:var(--green-300)"><span data-icon="bell" data-size="14"></span>暂停</button>
+        <button class="btn btn-ghost btn-sm" style="background:rgba(47,184,119,.1);color:var(--green-300)"><span data-icon="file" data-size="14"></span>导出</button>
+        <span class="avatar">贷</span>
+        <span class="strong" style="color:#EAFFF5">贷后经理 · 赵监控</span>
+      </div>
+    </header>
+
+    <div class="app-body">
+      <!-- 预警概览 -->
+      <div class="alert-ov" style="margin-bottom:18px">
+        <div class="ao n1"><div class="n">1,234</div><div class="l">🟢 正常</div></div>
+        <div class="ao n2"><div class="n">89</div><div class="l">🟡 关注</div></div>
+        <div class="ao n3"><div class="n">23</div><div class="l">🟠 警告</div></div>
+        <div class="ao n4"><div class="n">5</div><div class="l">🔴 紧急</div></div>
+      </div>
+
+      <div class="grid" style="grid-template-columns:1fr 1.4fr;gap:18px;margin-bottom:18px">
+        <!-- 左列 -->
+        <div style="display:flex;flex-direction:column;gap:18px">
+          <div class="panel">
+            <div class="panel-h"><h3>风险预测</h3><span style="font-size:12px;color:rgba(220,239,228,.5)">AI 多目标预测</span></div>
+            <div class="panel-b">
+              <div class="risk-forecast">
+                <div class="rf-item"><span>7 天风险笔数</span><span class="v up">12</span></div>
+                <div class="rf-item"><span>30 天风险笔数</span><span class="v up">45</span></div>
+                <div class="rf-item"><span>90 天风险笔数</span><span class="v up">89</span></div>
+                <div class="rf-item"><span>早干预成功率</span><span class="v" style="color:#86EFAC;font-size:16px">89.6%</span></div>
+              </div>
+              <div style="margin-top:12px;font-size:12px;color:rgba(220,239,228,.6);line-height:1.7">
+                <b style="color:#FCD34D">预测依据：</b>高温天气持续 + 猪价下跌趋势，建议加强巡查并通知农户防范。
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-h"><h3>品类分布</h3></div>
+            <div class="panel-b">
+              <div class="cat-bar"><span class="lbl">生猪养殖</span><div class="bar"><i style="width:45%"></i></div><span class="v">45%</span></div>
+              <div class="cat-bar"><span class="lbl">粮食仓储</span><div class="bar"><i style="width:30%"></i></div><span class="v">30%</span></div>
+              <div class="cat-bar"><span class="lbl">果蔬大棚</span><div class="bar"><i style="width:20%"></i></div><span class="v">20%</span></div>
+              <div class="cat-bar"><span class="lbl">其他</span><div class="bar"><i style="width:5%"></i></div><span class="v">5%</span></div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-h"><h3>今日处置</h3></div>
+            <div class="panel-b">
+              <div class="grid grid-3" style="gap:10px;text-align:center">
+                <div style="padding:12px;background:rgba(245,158,11,.1);border-radius:10px;border:1px solid rgba(245,158,11,.2)"><div class="mono" style="font-size:24px;font-weight:800;color:#FCD34D">28</div><div style="font-size:11px;color:rgba(220,239,228,.5)">待处置</div></div>
+                <div style="padding:12px;background:rgba(14,165,233,.1);border-radius:10px;border:1px solid rgba(14,165,233,.2)"><div class="mono" style="font-size:24px;font-weight:800;color:#7DD3FC">12</div><div style="font-size:11px;color:rgba(220,239,228,.5)">处置中</div></div>
+                <div style="padding:12px;background:rgba(34,197,94,.1);border-radius:10px;border:1px solid rgba(34,197,94,.2)"><div class="mono" style="font-size:24px;font-weight:800;color:#86EFAC">45</div><div style="font-size:11px;color:rgba(220,239,228,.5)">已处置</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 右列：IoT设备 + 事件流 -->
+        <div style="display:flex;flex-direction:column;gap:18px">
+          <div class="panel">
+            <div class="panel-h"><h3>IoT 设备状态</h3><span style="font-size:12px;color:rgba(220,239,228,.5)">总数 2,456 · 在线 2,389 · 离线 67</span></div>
+            <div class="panel-b">
+              <div class="device-grid">
+                <div class="dev"><div class="ic" style="background:rgba(34,197,94,.15);color:#86EFAC"><span data-icon="thermo" data-size="16"></span></div><div class="v">36</div><div class="u">°C</div><div class="t">温度 ✅</div></div>
+                <div class="dev"><div class="ic" style="background:rgba(34,197,94,.15);color:#86EFAC"><span data-icon="thermo" data-size="16"></span></div><div class="v">28</div><div class="u">°C</div><div class="t">温度 ✅</div></div>
+                <div class="dev"><div class="ic" style="background:rgba(34,197,94,.15);color:#86EFAC"><span data-icon="drop" data-size="16"></span></div><div class="v">62</div><div class="u">%</div><div class="t">湿度 ✅</div></div>
+                <div class="dev"><div class="ic" style="background:rgba(34,197,94,.15);color:#86EFAC"><span data-icon="thermo" data-size="16"></span></div><div class="v">25</div><div class="u">°C</div><div class="t">温度 ✅</div></div>
+                <div class="dev warn"><div class="ic" style="background:rgba(245,158,11,.2);color:#FCD34D"><span data-icon="thermo" data-size="16"></span></div><div class="v" style="color:#FCD34D">38</div><div class="u">°C</div><div class="t">温度 ⚠️</div></div>
+                <div class="dev off"><div class="ic" style="background:rgba(239,68,68,.2);color:#FCA5A5"><span data-icon="wifi" data-size="16"></span></div><div class="v" style="color:#FCA5A5">--</div><div class="u">离线</div><div class="t">告警 🔴</div></div>
+                <div class="dev"><div class="ic" style="background:rgba(34,197,94,.15);color:#86EFAC"><span data-icon="drop" data-size="16"></span></div><div class="v">78</div><div class="u">%</div><div class="t">湿度 ⚠️</div></div>
+                <div class="dev"><div class="ic" style="background:rgba(34,197,94,.15);color:#86EFAC"><span data-icon="sun" data-size="16"></span></div><div class="v">24k</div><div class="u">lux</div><div class="t">光照 ✅</div></div>
+                <div class="dev"><div class="ic" style="background:rgba(34,197,94,.15);color:#86EFAC"><span data-icon="wifi" data-size="16"></span></div><div class="v">98</div><div class="u">%</div><div class="t">在线 ✅</div></div>
+                <div class="dev"><div class="ic" style="background:rgba(34,197,94,.15);color:#86EFAC"><span data-icon="thermo" data-size="16"></span></div><div class="v">32</div><div class="u">°C</div><div class="t">温度 ✅</div></div>
+                <div class="dev"><div class="ic" style="background:rgba(34,197,94,.15);color:#86EFAC"><span data-icon="drop" data-size="16"></span></div><div class="v">55</div><div class="u">%</div><div class="t">湿度 ✅</div></div>
+                <div class="dev"><div class="ic" style="background:rgba(34,197,94,.15);color:#86EFAC"><span data-icon="activity" data-size="16"></span></div><div class="v">6.8</div><div class="u">pH</div><div class="t">土壤 ✅</div></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-h"><h3>预警事件流</h3><span style="font-size:12px;color:var(--green-300)">实时推送</span></div>
+            <div class="panel-b" style="max-height:340px;overflow-y:auto">
+              <div class="event e4">
+                <div class="head"><span>🔴 张三种猪场 · 温度异常超阈值</span><span class="mono" style="font-size:11px;color:rgba(220,239,228,.4)">14:32</span></div>
+                <div class="desc">当前 38°C，阈值 35°C，已持续 15 分钟。室外气温 36°C，预计高温持续 3 小时。</div>
+                <div class="acts"><button style="background:rgba(239,68,68,.15);border-color:rgba(239,68,68,.4);color:#FCA5A5">立即处置</button><button style="background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.3);color:#FCD34D">关注</button><button style="background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.15);color:rgba(220,239,228,.6)">忽略</button></div>
+              </div>
+              <div class="event e3">
+                <div class="head"><span>🟠 李四粮食仓库 · 湿度偏高</span><span class="mono" style="font-size:11px;color:rgba(220,239,228,.4)">14:15</span></div>
+                <div class="desc">湿度 78%，建议通风降湿，防止粮食霉变。</div>
+                <div class="acts"><button style="background:rgba(239,68,68,.15);border-color:rgba(239,68,68,.4);color:#FCA5A5">处置</button><button style="background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.3);color:#FCD34D">关注</button><button style="background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.15);color:rgba(220,239,228,.6)">忽略</button></div>
+              </div>
+              <div class="event e2">
+                <div class="head"><span>🟡 王五果园 · 土壤墒情偏低</span><span class="mono" style="font-size:11px;color:rgba(220,239,228,.4)">13:58</span></div>
+                <div class="desc">土壤湿度 18%，低于适宜区间 25%-40%，建议灌溉。</div>
+                <div class="acts"><button style="background:rgba(239,68,68,.15);border-color:rgba(239,68,68,.4);color:#FCA5A5">处置</button><button style="background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.3);color:#FCD34D">关注</button><button style="background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.15);color:rgba(220,239,228,.6)">忽略</button></div>
+              </div>
+              <div class="event e2">
+                <div class="head"><span>🟡 赵六养鸡场 · 氨气超标</span><span class="mono" style="font-size:11px;color:rgba(220,239,228,.4)">12:30</span></div>
+                <div class="desc">氨气浓度 28ppm，超过安全阈值 20ppm，建议加强通风。</div>
+                <div class="acts"><button style="background:rgba(239,68,68,.15);border-color:rgba(239,68,68,.4);color:#FCA5A5">处置</button><button style="background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.3);color:#FCD34D">关注</button><button style="background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.15);color:rgba(220,239,228,.6)">忽略</button></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-h"><h3>市场风险监控</h3></div>
+            <div class="panel-b">
+              <div class="row between center" style="padding:10px 0;border-bottom:1px dashed rgba(47,184,119,.12)">
+                <div><span data-icon="money" data-size="16" style="color:#FCA5A5;vertical-align:-3px"></span> <b style="color:#EAFFF5">生猪价格</b> <span class="mono" style="margin-left:8px">¥14.5/kg</span></div>
+                <span style="color:#FCA5A5;font-size:12px">↓ 2.3% 下跌趋势 ⚠️</span>
+              </div>
+              <div class="row between center" style="padding:10px 0">
+                <div><span data-icon="money" data-size="16" style="color:#86EFAC;vertical-align:-3px"></span> <b style="color:#EAFFF5">玉米价格</b> <span class="mono" style="margin-left:8px">¥2.8/kg</span></div>
+                <span style="color:#86EFAC;font-size:12px">↑ 0.5% 稳定 ✅</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AI能力说明 -->
+      <div class="panel">
+        <div class="panel-b">
+          <div class="grid grid-3" style="gap:16px">
+            <div class="row gap-12"><div class="ic" style="width:40px;height:40px;border-radius:10px;background:rgba(47,184,119,.16);color:var(--green-300);display:grid;place-items:center;flex:none"><span data-icon="wifi" data-size="20"></span></div><div><div class="strong" style="color:#EAFFF5">IoT 平台</div><div class="t-xs" style="color:rgba(220,239,228,.5)">MQTT/LoRaWAN · 24/7 实时采集</div></div></div>
+            <div class="row gap-12"><div class="ic" style="width:40px;height:40px;border-radius:10px;background:rgba(14,165,233,.16);color:#7DD3FC;display:grid;place-items:center;flex:none"><span data-icon="activity" data-size="20"></span></div><div><div class="strong" style="color:#EAFFF5">时序异常检测</div><div class="t-xs" style="color:rgba(220,239,228,.5)">Isolation Forest + LSTM 时序预测</div></div></div>
+            <div class="row gap-12"><div class="ic" style="width:40px;height:40px;border-radius:10px;background:rgba(245,158,11,.16);color:#FCD34D;display:grid;place-items:center;flex:none"><span data-icon="target" data-size="20"></span></div><div><div class="strong" style="color:#EAFFF5">多目标预测</div><div class="t-xs" style="color:rgba(220,239,228,.5)">风险识别时效 7.3 天 → 15 分钟</div></div></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+<script src="../assets/js/app.js"></script>
+</body>
+</html>

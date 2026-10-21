@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AIGC 文档自动化 · AI 中台 · 农产云</title>
+<link rel="stylesheet" href="../assets/css/theme.css" />
+<style>
+  body{background:var(--bg)}
+  .app-side{background:linear-gradient(180deg,#1E1B4B,#312E81)}
+  .app-side .brand{color:#fff;border-bottom-color:rgba(255,255,255,.1)}
+  .app-side .brand small{color:rgba(255,255,255,.5)}
+  .side-nav .group{color:rgba(255,255,255,.35)}
+  .side-nav a{color:rgba(255,255,255,.78)}
+  .side-nav a.active{background:linear-gradient(135deg,#6D28D9,#8B5CF6);color:#fff}
+  .ai-badge{display:inline-flex;align-items:center;gap:5px;background:rgba(167,139,250,.18);color:#6D28D9;border:1px solid #C4B5FD;border-radius:var(--r-pill);padding:3px 10px;font-size:12px;font-weight:600}
+  .doc-type{display:flex;flex-direction:column;gap:6px}
+  .doc-type .dt{padding:10px 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;transition:.16s;border:1px solid var(--line);background:#fff;display:flex;align-items:center;gap:8px}
+  .doc-type .dt:hover{border-color:#C4B5FD;background:#F5F3FF}
+  .doc-type .dt.on{background:linear-gradient(135deg,#6D28D9,#8B5CF6);color:#fff;border-color:transparent}
+  .doc-type .dt .ic{width:24px;height:24px;border-radius:6px;display:grid;place-items:center;flex:none}
+  .doc-preview{background:#fff;border:1px solid var(--line);border-radius:var(--r-md);padding:30px;font-family:"SimSun",serif;font-size:13.5px;line-height:2;color:var(--ink-800)}
+  .doc-preview h2{text-align:center;font-size:18px;font-weight:700;margin-bottom:16px}
+  .doc-preview .field{color:#6D28D9;font-weight:700;border-bottom:1px dashed #C4B5FD}
+  .gen-status{display:flex;flex-direction:column;gap:8px}
+  .gs-item{display:flex;align-items:center;gap:10px;font-size:13px;padding:8px 0}
+  .gs-item .dot{width:18px;height:18px;border-radius:50%;display:grid;place-items:center;font-size:11px;flex:none}
+  .gs-item.ok .dot{background:var(--green-100);color:var(--green-700)}
+  .gs-item.run .dot{background:#EDE9FE;color:#6D28D9;animation:spin 1.2s linear infinite}
+  .gs-item .bar{flex:1;height:4px;background:var(--bg-alt);border-radius:var(--r-pill);overflow:hidden}
+  .gs-item .bar i{display:block;height:100%;background:linear-gradient(90deg,#6D28D9,#8B5CF6);border-radius:var(--r-pill)}
+  @keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+  .compliance{padding:14px;border-radius:10px;border-left:3px solid;margin-bottom:10px;font-size:12.5px;line-height:1.6}
+  .compliance.warn{border-color:#F59E0B;background:#FEF3C7;color:#92400E}
+  .compliance.info{border-color:var(--tech-500);background:var(--tech-100);color:var(--tech-700)}
+  .tpl-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;margin-bottom:8px;cursor:pointer;transition:.16s}
+  .tpl-item:hover{border-color:#C4B5FD;background:#F5F3FF}
+  .tpl-item.on{border-color:#6D28D9;background:#F5F3FF}
+  .tpl-item .ic{width:32px;height:32px;border-radius:8px;display:grid;place-items:center;flex:none;background:#EDE9FE;color:#6D28D9}
+</style>
+</head>
+<body>
+<div class="app-shell">
+  <aside class="app-side">
+    <a class="brand" href="index.html"><span class="logo" data-icon="cpu" data-size="20" style="background:linear-gradient(135deg,#8B5CF6,#6D28D9)"></span><span>农产云<small>AI 中台</small></span></a>
+    <nav class="side-nav" data-tabscope="ai-nav">
+      <div class="group">AI 中台</div><a href="index.html"><span data-icon="activity"></span>AI 能力总览</a>
+      <div class="group">P0 核心场景</div>
+      <a href="credit.html"><span data-icon="star"></span>智能信用评估</a>
+      <a href="risk.html"><span data-icon="shield"></span>风控 Agent 集群</a>
+      <a href="iot-warning.html"><span data-icon="alert"></span>IoT 贷后预警</a>
+      <div class="group">P1 重要场景</div>
+      <a href="product-match.html"><span data-icon="target"></span>产品智能匹配</a>
+      <a href="aigc-doc.html" class="active"><span data-icon="file"></span>AIGC 文档自动化</a>
+      <a href="pledge-rate.html"><span data-icon="box"></span>动态质押率</a>
+      <div class="group">返回入口</div>
+      <a href="../index.html"><span data-icon="home"></span>原型总览</a>
+      <a href="../ops/finance.html"><span data-icon="money"></span>金融运营</a>
+    </nav>
+    <div style="padding:14px 12px;border-top:1px solid rgba(255,255,255,.08);margin-top:auto"><div style="font-size:11px;color:rgba(255,255,255,.4);text-align:center">AIGC 文档 v2.1.0<br/>合同生成 · 合规检查</div></div>
+  </aside>
+
+  <div class="app-main">
+    <header class="app-top">
+      <div class="crumb"><a href="index.html">AI 中台</a><span class="sep">/</span><span class="strong">AIGC 文档自动化</span></div>
+      <div class="row center gap-12">
+        <span class="ai-badge"><span data-icon="spark" data-size="12"></span>模型 v2.1.0</span>
+        <span class="ai-badge" style="background:#E4F6EC;color:var(--green-700);border-color:var(--green-300)"><span data-icon="check" data-size="12"></span>运行中</span>
+        <span class="avatar" style="background:linear-gradient(135deg,#8B5CF6,#6D28D9)">法</span>
+        <span class="strong">法务专员 · 周文档</span>
+      </div>
+    </header>
+
+    <div class="app-body">
+      <div style="display:grid;grid-template-columns:1fr 1.3fr;gap:20px;align-items:start">
+
+        <!-- 左：配置 -->
+        <div style="display:flex;flex-direction:column;gap:20px">
+          <div class="card">
+            <div class="card-h"><h3><span data-icon="file" data-size="18"></span>文档类型</h3></div>
+            <div class="card-b">
+              <div class="doc-type" data-tabscope="dtype">
+                <div class="dt on" data-tab="loan" data-tab-group="dtype"><span class="ic" style="background:rgba(255,255,255,.2)"><span data-icon="money" data-size="14"></span></span>融资合同</div>
+                <div class="dt" data-tab="guarantee" data-tab-group="dtype"><span class="ic"><span data-icon="shield" data-size="14"></span></span>担保协议</div>
+                <div class="dt" data-tab="pledge" data-tab-group="dtype"><span class="ic"><span data-icon="box" data-size="14"></span></span>质押合同</div>
+                <div class="dt" data-tab="report" data-tab-group="dtype"><span class="ic"><span data-icon="chart" data-size="14"></span></span>风控报告</div>
+                <div class="dt" data-tab="cert" data-tab-group="dtype"><span class="ic"><span data-icon="check" data-size="14"></span></span>合规证明</div>
+                <div class="dt" data-tab="notice" data-tab-group="dtype"><span class="ic"><span data-icon="bell" data-size="14"></span></span>通知函</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-h"><h3><span data-icon="clipboard" data-size="18"></span>融资方案参数</h3></div>
+            <div class="card-b">
+              <div class="form-grid">
+                <div class="form-item"><label class="req">借款人</label><input class="input" value="张三种猪养殖合作社" /></div>
+                <div class="form-item"><label class="req">出借人</label><input class="input" value="农业银行 · 产业贷专项" /></div>
+              </div>
+              <div class="form-grid">
+                <div class="form-item"><label class="req">借款金额（元）</label><input class="input mono" value="500,000" /></div>
+                <div class="form-item"><label class="req">借款期限</label><select class="select"><option>3 个月</option><option>6 个月</option><option selected>12 个月</option><option>24 个月</option></select></div>
+              </div>
+              <div class="form-grid">
+                <div class="form-item"><label class="req">年化利率</label><input class="input mono" value="4.35%" /></div>
+                <div class="form-item"><label class="req">还款方式</label><select class="select"><option selected>到期还本付息</option><option>按月付息到期还本</option><option>等额本息</option></select></div>
+              </div>
+              <div class="form-grid">
+                <div class="form-item"><label>担保方式</label><select class="select"><option selected>保证担保</option><option>抵押担保</option><option>质押担保</option><option>信用贷款</option></select></div>
+                <div class="form-item"><label>担保人</label><input class="input" value="李四（核心企业法定代表人）" /></div>
+              </div>
+              <div class="form-item"><label>借款用途</label><textarea class="textarea" rows="2">用于购买农药、化肥、仔猪等春耕物资，保障春季农业生产顺利开展。</textarea></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-h"><h3><span data-icon="settings" data-size="18"></span>条款定制选项</h3></div>
+            <div class="card-b" style="display:flex;flex-direction:column;gap:12px">
+              <label class="row center gap-10" style="cursor:pointer"><input type="checkbox" checked /><span>自动填充历史交易数据</span></label>
+              <label class="row center gap-10" style="cursor:pointer"><input type="checkbox" checked /><span>启用合规检查</span></label>
+              <label class="row center gap-10" style="cursor:pointer"><input type="checkbox" /><span>启用特殊条款（提前还款违约金等）</span></label>
+              <label class="row center gap-10" style="cursor:pointer"><input type="checkbox" /><span>方言版合同（涉农口语化）</span></label>
+              <div class="row gap-10 mt-12">
+                <button class="btn btn-primary btn-block"><span data-icon="spark"></span>开始生成</button>
+                <button class="btn btn-outline"><span data-icon="refresh"></span>重置</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-h"><h3><span data-icon="file" data-size="18"></span>模板推荐</h3></div>
+            <div class="card-b">
+              <div class="tpl-item on"><div class="ic"><span data-icon="file" data-size="16"></span></div><div style="flex:1"><div class="strong t-sm">标准融资合同 ⭐</div><div class="muted t-xs">适用通用借款场景 · 使用 8,642 次</div></div><span class="tag">默认</span></div>
+              <div class="tpl-item"><div class="ic"><span data-icon="file" data-size="16"></span></div><div style="flex:1"><div class="strong t-sm">简化版合同</div><div class="muted t-xs">小额快速放款 · 使用 2,103 次</div></div></div>
+              <div class="tpl-item"><div class="ic"><span data-icon="file" data-size="16"></span></div><div style="flex:1"><div class="strong t-sm">涉农专项合同</div><div class="muted t-xs">含贴息/补贴条款 · 使用 3,567 次</div></div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 右：预览 + 状态 + 合规 -->
+        <div style="display:flex;flex-direction:column;gap:20px">
+          <div class="card">
+            <div class="card-h"><h3><span data-icon="file" data-size="18"></span>文档预览</h3>
+              <div class="row gap-8">
+                <button class="btn btn-outline btn-sm"><span data-icon="file"></span>下载</button>
+                <button class="btn btn-outline btn-sm"><span data-icon="check"></span>提交审核</button>
+                <button class="btn btn-ghost btn-sm"><span data-icon="refresh"></span>重新生成</button>
+              </div>
+            </div>
+            <div class="card-b">
+              <div class="doc-preview">
+                <h2>借 款 合 同</h2>
+                <div style="text-align:right;margin-bottom:16px">编号：<span class="field">LRD-20260605-0045</span></div>
+                <p>甲方（借款人）：<span class="field">张三种猪养殖合作社</span></p>
+                <p>乙方（出借人）：<span class="field">农业银行 · 产业贷专项</span></p>
+                <p>丙方（担保人）：<span class="field">李四（核心企业法定代表人）</span></p>
+                <p style="margin-top:14px"><b>第一条 借款金额</b></p>
+                <p>甲方向乙方借款人民币 <span class="field">伍拾万元整（¥500,000）</span>。</p>
+                <p style="margin-top:14px"><b>第二条 借款用途</b></p>
+                <p>本借款用于 <span class="field">购买农药、化肥、仔猪等春耕物资</span>，未经乙方书面同意不得挪作他用。</p>
+                <p style="margin-top:14px"><b>第三条 借款利率</b></p>
+                <p>借款年利率为 <span class="field">4.35%</span>，按日计息，借款期限为 <span class="field">12 个月</span>。</p>
+                <p style="margin-top:14px"><b>第四条 还款方式</b></p>
+                <p>甲方应于借款到期日一次性偿还本金及利息（<span class="field">到期还本付息</span>）。</p>
+                <p style="margin-top:14px"><b>第五条 担保条款</b></p>
+                <p>丙方为本合同项下借款提供 <span class="field">保证担保</span>，承担连带保证责任。</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-h"><h3><span data-icon="spark" data-size="18"></span>AI 生成状态</h3></div>
+            <div class="card-b">
+              <div class="gen-status">
+                <div class="gs-item ok"><span class="dot">✓</span><span>基础信息填充完成</span><div class="bar"><i style="width:100%"></i></div></div>
+                <div class="gs-item ok"><span class="dot">✓</span><span>交易背景验证通过</span><div class="bar"><i style="width:100%"></i></div></div>
+                <div class="gs-item ok"><span class="dot">✓</span><span>合规审查通过（3 条建议）</span><div class="bar"><i style="width:100%"></i></div></div>
+                <div class="gs-item run"><span class="dot">⚙</span><span>文档生成中… 85%</span><div class="bar"><i style="width:85%"></i></div></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-h"><h3><span data-icon="shield" data-size="18"></span>合规建议</h3><span class="more">AI 自动识别 · 3 条</span></div>
+            <div class="card-b">
+              <div class="compliance warn"><b>⚠️ 建议明确约定提前还款违约金条款</b><div class="mt-4">当前合同未约定提前还款的违约金计算方式，建议补充条款以降低资金方收益波动风险。</div></div>
+              <div class="compliance warn"><b>⚠️ 建议补充不可抗力条款</b><div class="mt-4">涉农贷款受自然灾害影响较大，建议增加不可抗力情形下的还款宽限期约定。</div></div>
+              <div class="compliance info"><b>ℹ️ 建议根据最新法规调整仲裁条款</b><div class="mt-4">依据《民事诉讼法》最新修订，建议明确约定管辖法院为借款人住所地人民法院。</div></div>
+              <button class="btn btn-primary btn-sm mt-8"><span data-icon="check"></span>一键采纳建议</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AI能力说明 -->
+      <div class="card mt-20">
+        <div class="card-h"><h3><span data-icon="cpu" data-size="18"></span>AI 能力说明</h3><span class="more">合规通过率 97.3%</span></div>
+        <div class="card-b">
+          <div class="grid grid-3">
+            <div class="row gap-12"><div class="stat-icon" style="flex:none;background:#EDE9FE;color:#6D28D9"><span data-icon="spark" data-size="20"></span></div><div><div class="strong t-sm">AIGC 合同生成</div><div class="muted t-xs">DeepSeek 大模型 · 模板 RAG 检索 · 定制化生成</div></div></div>
+            <div class="row gap-12"><div class="stat-icon" style="flex:none;background:#EDE9FE;color:#6D28D9"><span data-icon="shield" data-size="20"></span></div><div><div class="strong t-sm">合规条款检查</div><div class="muted t-xs">规则引擎 + RAG · 法律风险识别 · 条款优化建议</div></div></div>
+            <div class="row gap-12"><div class="stat-icon" style="flex:none;background:#EDE9FE;color:#6D28D9"><span data-icon="target" data-size="20"></span></div><div><div class="strong t-sm">RLHF 优化</div><div class="muted t-xs">基于人工反馈持续优化生成质量与合规性</div></div></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+<script src="../assets/js/app.js"></script>
+</body>
+</html>

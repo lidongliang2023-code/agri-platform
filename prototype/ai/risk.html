@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>风控 Agent 集群 · AI 中台 · 农产云</title>
+<link rel="stylesheet" href="../assets/css/theme.css" />
+<style>
+  body{background:#06231A}
+  .app-side{background:linear-gradient(180deg,#04150F,#06231A);border-right:1px solid rgba(47,184,119,.18)}
+  .app-side .brand{color:#EAFFF5;border-bottom-color:rgba(47,184,119,.15)}
+  .app-side .brand small{color:rgba(220,239,228,.5)}
+  .side-nav .group{color:rgba(47,184,119,.4)}
+  .side-nav a{color:rgba(220,239,228,.78)}
+  .side-nav a:hover{background:rgba(47,184,119,.1);color:#EAFFF5}
+  .side-nav a.active{background:linear-gradient(135deg,var(--green-600),var(--green-500));color:#fff}
+  .app-main{background:radial-gradient(1200px 500px at 50% -10%,rgba(21,154,94,.18),transparent 70%),linear-gradient(180deg,#06231A,#04150F 70%,#020B08)}
+  .app-top{background:rgba(6,35,26,.85);border-bottom:1px solid rgba(47,184,119,.15);backdrop-filter:blur(8px)}
+  .app-top .crumb,.app-top .crumb a{color:rgba(220,239,228,.6)}
+  .app-top .strong{color:#EAFFF5}
+  .panel{background:linear-gradient(180deg,rgba(12,52,38,.86),rgba(6,30,22,.86));border:1px solid rgba(47,184,119,.25);border-radius:var(--r-md);box-shadow:inset 0 0 40px rgba(21,154,94,.06)}
+  .panel-h{padding:14px 18px;border-bottom:1px solid rgba(47,184,119,.16);display:flex;align-items:center;justify-content:space-between}
+  .panel-h h3{font-size:15px;font-weight:700;color:#EAFFF5;display:flex;align-items:center;gap:8px}
+  .panel-h h3::before{content:"";width:3px;height:14px;background:var(--green-400);border-radius:2px;box-shadow:0 0 10px var(--green-400)}
+  .panel-b{padding:16px 18px;color:#DCEFE4}
+  .kpi{display:flex;align-items:center;gap:14px;padding:14px;background:rgba(12,52,38,.6);border:1px solid rgba(47,184,119,.2);border-radius:var(--r-md)}
+  .kpi .ic{width:48px;height:48px;border-radius:12px;display:grid;place-items:center;background:rgba(21,154,94,.16);border:1px solid rgba(47,184,119,.35);color:var(--green-300);flex:none}
+  .kpi .v{font-family:var(--mono);font-size:26px;font-weight:800;color:#EAFFF5;line-height:1}
+  .kpi .k{font-size:12.5px;color:rgba(220,239,228,.62);margin-top:5px}
+  .stage-tabs{display:flex;gap:4px;margin-bottom:16px}
+  .stage-tabs button{padding:8px 18px;border-radius:var(--r-sm);background:rgba(47,184,119,.08);border:1px solid rgba(47,184,119,.2);color:rgba(220,239,228,.7);font-size:13px;font-weight:600}
+  .stage-tabs button.on{background:linear-gradient(135deg,var(--green-600),var(--green-500));color:#fff;border-color:transparent;box-shadow:var(--shadow-green)}
+  .agent-status{display:flex;gap:10px;flex-wrap:wrap}
+  .as-item{flex:1;min-width:100px;padding:14px;border-radius:var(--r-md);background:rgba(12,52,38,.6);border:1px solid rgba(47,184,119,.2);text-align:center}
+  .as-item .n{font-family:var(--mono);font-size:28px;font-weight:800;color:#EAFFF5}
+  .as-item .l{font-size:12px;color:rgba(220,239,228,.6);margin-top:4px}
+  .as-item.on .n{color:var(--green-300)}
+  .as-item.wait .n{color:#F59E0B}
+  .as-item.err .n{color:#EF4444}
+  .flow{display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px}
+  .flow-row{display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap}
+  .fnode{padding:10px 16px;border-radius:10px;font-size:13px;font-weight:600;background:rgba(12,52,38,.8);border:1px solid rgba(47,184,119,.3);color:#DCEFE4;display:flex;align-items:center;gap:6px}
+  .fnode.ok{border-color:var(--green-400);background:rgba(21,154,94,.15);color:var(--green-300)}
+  .fnode.core{border-color:var(--tech-500);background:rgba(14,165,233,.12);color:#7DD3FC}
+  .fnode.pass{border-color:var(--green-400);background:rgba(21,154,94,.2);color:var(--green-300)}
+  .fnode.manual{border-color:#F59E0B;background:rgba(245,158,11,.12);color:#FCD34D}
+  .farrow{color:rgba(47,184,119,.5);font-size:18px}
+  .ds-box{padding:14px;border-radius:10px;background:rgba(21,154,94,.08);border:1px dashed rgba(47,184,119,.3)}
+  .risk-bar{display:flex;align-items:flex-end;gap:3px;height:100px;margin-top:12px}
+  .risk-bar i{flex:1;background:linear-gradient(180deg,var(--green-400),rgba(47,184,119,.1));border-radius:2px 2px 0 0}
+  .stat-row{display:flex;justify-content:space-between;padding:7px 0;font-size:13px;border-bottom:1px dashed rgba(47,184,119,.1)}
+  .stat-row:last-child{border-bottom:none}
+  .stat-row .v{font-family:var(--mono);font-weight:700;color:#EAFFF5}
+  .pulse-dot{width:8px;height:8px;border-radius:50%;background:var(--green-400);box-shadow:0 0 0 0 rgba(47,184,119,.7);animation:pulse 1.8s infinite;display:inline-block}
+  @keyframes pulse{70%{box-shadow:0 0 0 8px rgba(47,184,119,0)}100%{box-shadow:0 0 0 0 rgba(47,184,119,0)}}
+</style>
+</head>
+<body>
+<div class="app-shell">
+  <aside class="app-side">
+    <a class="brand" href="index.html"><span class="logo" data-icon="cpu" data-size="20" style="background:linear-gradient(135deg,var(--green-500),var(--tech-500))"></span><span>农产云<small>AI 中台</small></span></a>
+    <nav class="side-nav" data-tabscope="ai-nav">
+      <div class="group">AI 中台</div>
+      <a href="index.html"><span data-icon="activity"></span>AI 能力总览</a>
+      <div class="group">P0 核心场景</div>
+      <a href="credit.html"><span data-icon="star"></span>智能信用评估</a>
+      <a href="risk.html" class="active"><span data-icon="shield"></span>风控 Agent 集群</a>
+      <a href="iot-warning.html"><span data-icon="alert"></span>IoT 贷后预警</a>
+      <div class="group">P1 重要场景</div>
+      <a href="product-match.html"><span data-icon="target"></span>产品智能匹配</a>
+      <a href="aigc-doc.html"><span data-icon="file"></span>AIGC 文档自动化</a>
+      <a href="pledge-rate.html"><span data-icon="box"></span>动态质押率</a>
+      <div class="group">P2 扩展场景</div>
+      <a href="javascript:void(0)" style="opacity:.5"><span data-icon="clipboard"></span>智能核保审批<small style="margin-left:auto;color:rgba(220,239,228,.4)">规划中</small></a>
+      <a href="javascript:void(0)" style="opacity:.5"><span data-icon="money"></span>资金方智能对接<small style="margin-left:auto;color:rgba(220,239,228,.4)">规划中</small></a>
+      <div class="group">返回入口</div>
+      <a href="../index.html"><span data-icon="home"></span>原型总览</a>
+      <a href="../ops/finance.html"><span data-icon="money"></span>金融运营</a>
+    </nav>
+    <div style="padding:14px 12px;border-top:1px solid rgba(47,184,119,.12);margin-top:auto"><div style="font-size:11px;color:rgba(47,184,119,.5);text-align:center">风控集群 v1.8.2<br/>D-S 融合 · GNN · LSTM</div></div>
+  </aside>
+
+  <div class="app-main">
+    <header class="app-top">
+      <div class="crumb"><a href="index.html">AI 中台</a><span class="sep">/</span><span class="strong">风控 Agent 集群</span></div>
+      <div class="row center gap-12">
+        <span style="display:inline-flex;align-items:center;gap:6px;color:var(--green-300);font-size:13px;font-weight:600"><span class="pulse-dot"></span>实时监控中</span>
+        <span class="avatar">风</span>
+        <span class="strong" style="color:#EAFFF5">风控总监 · 李智能</span>
+      </div>
+    </header>
+
+    <div class="app-body">
+      <!-- KPI -->
+      <div class="grid grid-4" style="margin-bottom:18px">
+        <div class="kpi"><div class="ic"><span data-icon="shield" data-size="22"></span></div><div><div class="v">1,256</div><div class="k">今日审核 · <span style="color:var(--green-300)">↑12%</span></div></div></div>
+        <div class="kpi"><div class="ic" style="background:rgba(245,158,11,.16);border-color:rgba(245,158,11,.35);color:#FCD34D"><span data-icon="check" data-size="22"></span></div><div><div class="v" style="color:var(--green-300)">87%</div><div class="k">自动通过率</div></div></div>
+        <div class="kpi"><div class="ic" style="background:rgba(239,68,68,.16);border-color:rgba(239,68,68,.35);color:#FCA5A5"><span data-icon="alert" data-size="22"></span></div><div><div class="v" style="color:#FCA5A5">3</div><div class="k">欺诈概率 > 0.5</div></div></div>
+        <div class="kpi"><div class="ic" style="background:rgba(14,165,233,.16);border-color:rgba(14,165,233,.35);color:#7DD3FC"><span data-icon="cpu" data-size="22"></span></div><div><div class="v">0.23</div><div class="k">平均风险评分</div></div></div>
+      </div>
+
+      <!-- 阶段切换 -->
+      <div class="stage-tabs" data-tabscope="risk-stage">
+        <button class="on" data-tab="pre" data-tab-group="risk-stage">◉ 贷前</button>
+        <button data-tab="mid" data-tab-group="risk-stage">贷中</button>
+        <button data-tab="post" data-tab-group="risk-stage">贷后</button>
+        <span style="margin-left:auto;color:rgba(220,239,228,.5);font-size:12px;align-self:center">D-S 证据理论融合 · 冲突阈值 0.3</span>
+      </div>
+
+      <div data-panels="risk-stage">
+        <div data-tabpanel="pre">
+          <div class="grid" style="grid-template-columns:1fr 1.3fr;gap:18px;margin-bottom:18px">
+            <!-- Agent 状态总览 -->
+            <div class="panel">
+              <div class="panel-h"><h3>Agent 状态总览</h3><span style="font-size:12px;color:rgba(220,239,228,.5)">贷前阶段 · 14 个 Agent</span></div>
+              <div class="panel-b">
+                <div class="agent-status">
+                  <div class="as-item on"><div class="n">12</div><div class="l">🟢 在线</div></div>
+                  <div class="as-item wait"><div class="n">2</div><div class="l">🟡 等待</div></div>
+                  <div class="as-item err"><div class="n">0</div><div class="l">🔴 异常</div></div>
+                </div>
+                <div class="mt-16" style="font-size:12.5px;line-height:2">
+                  <div class="stat-row"><span>身份核验 Agent</span><span class="v" style="color:var(--green-300)">在线 · 0.4s</span></div>
+                  <div class="stat-row"><span>征信评估 Agent</span><span class="v" style="color:var(--green-300)">在线 · 0.6s</span></div>
+                  <div class="stat-row"><span>订单确权 Agent</span><span class="v" style="color:var(--green-300)">在线 · 0.5s</span></div>
+                  <div class="stat-row"><span>物流核验 Agent</span><span class="v" style="color:var(--green-300)">在线 · 0.3s</span></div>
+                  <div class="stat-row"><span>仓储核验 Agent</span><span class="v" style="color:var(--green-300)">在线 · 0.4s</span></div>
+                  <div class="stat-row"><span>反欺诈 Agent (GNN)</span><span class="v" style="color:var(--green-300)">在线 · 0.9s</span></div>
+                  <div class="stat-row"><span>合规审查 Agent</span><span class="v" style="color:#FCD34D">等待 · 排队 2</span></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 决策链路可视化 -->
+            <div class="panel">
+              <div class="panel-h"><h3>决策链路可视化</h3><span style="font-size:12px;color:rgba(220,239,228,.5)">D-S 证据融合</span></div>
+              <div class="panel-b">
+                <div class="flow">
+                  <div class="flow-row">
+                    <div class="fnode ok"><span data-icon="file" data-size="14"></span>融资申请</div>
+                    <span class="farrow">→</span>
+                    <div class="fnode ok"><span data-icon="user" data-size="14"></span>征信评估</div>
+                    <span class="farrow">→</span>
+                    <div class="fnode ok"><span data-icon="clipboard" data-size="14"></span>订单确权</div>
+                  </div>
+                  <div class="flow-row" style="margin-top:6px">
+                    <div class="fnode ok"><span data-icon="truck" data-size="14"></span>物流核验</div>
+                    <span class="farrow">→</span>
+                    <div class="fnode ok"><span data-icon="box" data-size="14"></span>仓储核验</div>
+                    <span class="farrow">→</span>
+                    <div class="fnode ok"><span data-icon="shield" data-size="14"></span>反欺诈</div>
+                  </div>
+                  <div style="color:rgba(47,184,119,.4);font-size:20px;margin:4px 0">↓</div>
+                  <div class="ds-box" style="text-align:center;width:60%;margin:0 auto">
+                    <div style="font-size:13px;font-weight:700;color:var(--green-300)"><span data-icon="cpu" data-size="14"></span> D-S 证据融合</div>
+                    <div style="font-size:11px;color:rgba(220,239,228,.5);margin-top:4px">融合策略：D-S 理论 · 冲突阈值 0.3</div>
+                  </div>
+                  <div class="flow-row" style="margin-top:6px">
+                    <div class="fnode pass"><span data-icon="check" data-size="14"></span>自动通过 · 39 笔</div>
+                    <span class="farrow" style="margin:0 20px">/</span>
+                    <div class="fnode manual"><span data-icon="user" data-size="14"></span>转人工复核 · 6 笔</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid" style="grid-template-columns:1fr 1fr 1fr;gap:18px">
+            <!-- 今日决策统计 -->
+            <div class="panel">
+              <div class="panel-h"><h3>今日决策统计</h3></div>
+              <div class="panel-b">
+                <div class="stat-row"><span>审核总数</span><span class="v">1,256 件</span></div>
+                <div class="stat-row"><span>自动通过</span><span class="v" style="color:var(--green-300)">1,089 件 (87%)</span></div>
+                <div class="stat-row"><span>拒绝</span><span class="v" style="color:#FCA5A5">89 件 (7%)</span></div>
+                <div class="stat-row"><span>转人工</span><span class="v" style="color:#FCD34D">78 件 (6%)</span></div>
+                <div class="stat-row"><span>平均决策耗时</span><span class="v">1.2s</span></div>
+              </div>
+            </div>
+            <!-- 风险评分分布 -->
+            <div class="panel">
+              <div class="panel-h"><h3>风险评分分布</h3></div>
+              <div class="panel-b">
+                <div class="risk-bar">
+                  <i style="height:95%"></i><i style="height:80%"></i><i style="height:65%"></i><i style="height:50%"></i>
+                  <i style="height:38%"></i><i style="height:28%"></i><i style="height:20%"></i><i style="height:14%"></i><i style="height:8%"></i>
+                </div>
+                <div class="row between" style="font-size:10px;color:rgba(220,239,228,.4);margin-top:6px">
+                  <span>0</span><span>0.1</span><span>0.2</span><span>0.3</span><span>0.4</span><span>0.5</span><span>0.6</span><span>0.7</span>
+                </div>
+                <div style="margin-top:12px;font-size:12px;color:rgba(220,239,228,.6)"><span style="color:var(--green-300)">●</span> 低风险 (0-0.3): 78% &nbsp; <span style="color:#FCD34D">●</span> 中风险 (0.3-0.5): 15% &nbsp; <span style="color:#FCA5A5">●</span> 高风险 (>0.5): 7%</div>
+              </div>
+            </div>
+            <!-- D-S 融合配置 -->
+            <div class="panel">
+              <div class="panel-h"><h3>D-S 融合配置</h3></div>
+              <div class="panel-b">
+                <div class="stat-row"><span>融合策略</span><span class="v">D-S 证据理论</span></div>
+                <div class="stat-row"><span>冲突阈值</span><span class="v">0.3</span></div>
+                <div class="stat-row"><span>决策阈值</span><span class="v">0.5</span></div>
+                <div class="stat-row"><span>启用 GNN</span><span class="v" style="color:var(--green-300)">已启用</span></div>
+                <div class="stat-row"><span>启用联邦学习</span><span class="v" style="color:var(--green-300)">已启用</span></div>
+                <button class="btn btn-outline btn-sm mt-12" style="width:100%;border-color:rgba(47,184,119,.3);color:var(--green-300)"><span data-icon="settings" data-size="14"></span>调整配置</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="hide" data-tabpanel="mid">
+          <div class="panel"><div class="panel-b" style="text-align:center;padding:60px 20px;color:rgba(220,239,228,.6)"><span data-icon="activity" data-size="48" style="color:var(--green-300)"></span><div class="strong t-lg mt-12" style="color:#EAFFF5">贷中监控</div><div class="mt-8">贷中阶段 Agent 集群：交易监控 · 资金流向 · 关联交易识别</div><div class="mt-16"><span class="tag" style="background:rgba(47,184,119,.15);color:var(--green-300)">7 个 Agent 在线</span></div></div></div>
+        </div>
+        <div class="hide" data-tabpanel="post">
+          <div class="panel"><div class="panel-b" style="text-align:center;padding:60px 20px;color:rgba(220,239,228,.6)"><span data-icon="alert" data-size="48" style="color:#FCD34D"></span><div class="strong t-lg mt-12" style="color:#EAFFF5">贷后预警</div><div class="mt-8">贷后阶段请前往 <a href="iot-warning.html" style="color:var(--green-300)">IoT 贷后预警中心</a></div></div></div>
+        </div>
+      </div>
+
+      <!-- AI 能力说明 -->
+      <div class="panel mt-18">
+        <div class="panel-b">
+          <div class="grid grid-3" style="gap:16px">
+            <div class="row gap-12"><div class="ic" style="width:40px;height:40px;border-radius:10px;background:rgba(47,184,119,.16);color:var(--green-300);display:grid;place-items:center;flex:none"><span data-icon="cpu" data-size="20"></span></div><div><div class="strong" style="color:#EAFFF5">Multi-Agent 框架</div><div class="t-xs" style="color:rgba(220,239,228,.5)">LangChain/AutoGen · 贷前-贷中-贷后全流程协同</div></div></div>
+            <div class="row gap-12"><div class="ic" style="width:40px;height:40px;border-radius:10px;background:rgba(14,165,233,.16);color:#7DD3FC;display:grid;place-items:center;flex:none"><span data-icon="layers" data-size="20"></span></div><div><div class="strong" style="color:#EAFFF5">D-S 证据理论</div><div class="t-xs" style="color:rgba(220,239,228,.5)">多 Agent 评分融合 · 冲突阈值 0.3</div></div></div>
+            <div class="row gap-12"><div class="ic" style="width:40px;height:40px;border-radius:10px;background:rgba(245,158,11,.16);color:#FCD34D;display:grid;place-items:center;flex:none"><span data-icon="shield" data-size="20"></span></div><div><div class="strong" style="color:#EAFFF5">GNN 反欺诈</div><div class="t-xs" style="color:rgba(220,239,228,.5)">图神经网络识别关联交易/团伙欺诈 · 目标欺诈率 < 0.1%</div></div></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+<script src="../assets/js/app.js"></script>
+</body>
+</html>
