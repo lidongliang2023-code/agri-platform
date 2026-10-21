@@ -7,9 +7,19 @@ interface MerchantRow {
   bindingId: string
   merchantId: string
   merchantName: string | null
+  merchantCode: string | null
   memberType: string | null
   industry: string | null
+  companySize: string | null
+  businessType: string | null
+  creditCodeMasked: string | null
+  contactName: string | null
+  contactPhone: string | null
+  address: string | null
+  status: number | null
   verifyStatus: string | null
+  verifyTime: string | null
+  verifyRemark: string | null
   roleInMerchant: string
 }
 
@@ -80,7 +90,7 @@ const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: 'profile', label: '账号资料', icon: 'user' },
   { key: 'security', label: '账号安全', icon: 'shield' },
   { key: 'addresses', label: '地址管理', icon: 'location' },
-  { key: 'business', label: '实名与主体', icon: 'factory' },
+  { key: 'business', label: '主体资料与认证', icon: 'factory' },
 ]
 
 const INDUSTRIES = ['粮油产业', '果蔬产业', '畜禽产业', '茶药产业', '饲料农资', '水产产业', '流通贸易', '加工制造', '其他']
@@ -128,8 +138,11 @@ function tone(value: string | null | undefined): string {
   return 'ghost'
 }
 
-export function AccountCenter(): JSX.Element {
-  const [tab, setTab] = useState<Tab>('profile')
+export function AccountCenter({ initialTab }: { initialTab?: string | null }): JSX.Element {
+  const [tab, setTab] = useState<Tab>(() => (
+    ['profile', 'security', 'addresses', 'business'].includes(initialTab ?? '')
+      ? initialTab as Tab : 'profile'
+  ))
   const [summary, setSummary] = useState<Summary | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -626,7 +639,24 @@ export function AccountCenter(): JSX.Element {
               <div className="merchant-list">
                 {summary.merchants.map((merchant) => (
                   <div className="merchant-row" key={merchant.bindingId}>
-                    <div><strong>{merchant.merchantName}</strong><span>{merchant.memberType === 'personal' ? '个人主体' : '企业主体'} · {merchant.roleInMerchant}</span></div>
+                    <div className="merchant-main">
+                      <div className="merchant-title">
+                        <strong>{merchant.merchantName}</strong>
+                        <span>{merchant.memberType === 'personal' ? '个人主体' : '企业主体'} · {merchant.roleInMerchant}</span>
+                      </div>
+                      <div className="merchant-detail-grid">
+                        <div><span>主体编码</span><b>{merchant.merchantCode || '—'}</b></div>
+                        <div><span>经营主体 ID</span><b>{merchant.merchantId}</b></div>
+                        <div><span>{merchant.memberType === 'personal' ? '经营类型' : '所属行业'}</span><b>{merchant.memberType === 'personal' ? (merchant.businessType || '—') : (merchant.industry || '—')}</b></div>
+                        <div><span>{merchant.memberType === 'personal' ? '身份证号' : '统一社会信用代码'}</span><b>{merchant.creditCodeMasked || '—'}</b></div>
+                        <div><span>联系人</span><b>{merchant.contactName || '—'}</b></div>
+                        <div><span>联系电话</span><b>{merchant.contactPhone || '—'}</b></div>
+                        {merchant.memberType !== 'personal' && <div><span>企业规模</span><b>{merchant.companySize || '—'}</b></div>}
+                        <div><span>主体状态</span><b>{merchant.status === 0 ? '停用' : '正常'}</b></div>
+                      </div>
+                      {merchant.address && <p className="merchant-address">注册地址：{merchant.address}</p>}
+                      {merchant.verifyRemark && <p className="merchant-review">审核意见：{merchant.verifyRemark}</p>}
+                    </div>
                     <div className="merchant-row-actions">
                       <span className={`account-status ${tone(merchant.verifyStatus)}`}>{statusText(merchant.verifyStatus)}</span>
                       {merchant.verifyStatus !== 'approved' && merchant.verifyStatus !== 'pending' && (

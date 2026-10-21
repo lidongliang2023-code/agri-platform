@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import Login from '@/pages/login'
 import OrderDetail from '@/pages/order/detail'
@@ -38,6 +39,16 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
   // 带上原路径：从会员中心/订单页被弹去登录后，登录成功要回到原页面，而不是统一回首页。
   const redirect = encodeURIComponent(`${location.pathname}${location.search}`)
   return isLoggedIn() ? <>{children}</> : <Navigate to={`/login?redirect=${redirect}`} replace />
+}
+
+/** 交易端主体资料与认证已迁移到门户个人中心。 */
+function PortalAccountRedirect(): JSX.Element {
+  useEffect(() => {
+    window.location.replace(
+      `${window.location.protocol}//${window.location.hostname}:8098/portal/#/account?tab=business`,
+    )
+  }, [])
+  return <div style={{ padding: 40, color: '#6b7c72' }}>正在前往丰链云个人中心…</div>
 }
 
 function AppRouter() {
@@ -106,7 +117,7 @@ function AppRouter() {
       <Route path="/dispute" element={<Navigate to="/member/buyer?tab=after" replace />} />
       <Route path="/my-guarantee" element={<Navigate to="/member/buyer?tab=fund" replace />} />
       <Route path="/my-compensation" element={<Navigate to="/member/buyer?tab=fund" replace />} />
-      <Route path="/my-identity" element={<Navigate to="/member/buyer?tab=profile" replace />} />
+      <Route path="/my-identity" element={<PortalAccountRedirect />} />
       <Route path="/mine" element={<Navigate to="/member/buyer" replace />} />
 
       <Route path="/" element={<Navigate to="/member/buyer" replace />} />

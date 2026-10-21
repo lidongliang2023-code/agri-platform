@@ -529,9 +529,19 @@ public class SsoAccountController {
             row.put("bindingId", String.valueOf(binding.getId()));
             row.put("merchantId", String.valueOf(binding.getMerchantId()));
             row.put("merchantName", merchant == null ? null : merchant.getName());
+            row.put("merchantCode", merchant == null ? null : merchant.getCode());
             row.put("memberType", merchant == null ? null : merchant.getMemberType());
             row.put("industry", merchant == null ? null : merchant.getIndustry());
+            row.put("companySize", merchant == null ? null : merchant.getCompanySize());
+            row.put("businessType", merchant == null ? null : merchant.getBusinessType());
+            row.put("creditCodeMasked", merchant == null ? null : maskCreditCode(merchant.getCreditCode()));
+            row.put("contactName", merchant == null ? null : merchant.getContactName());
+            row.put("contactPhone", merchant == null ? null : merchant.getContactPhone());
+            row.put("address", merchant == null ? null : merchant.getAddress());
+            row.put("status", merchant == null ? null : merchant.getStatus());
             row.put("verifyStatus", merchant == null ? null : merchant.getVerifyStatus());
+            row.put("verifyTime", merchant == null ? null : merchant.getVerifyTime());
+            row.put("verifyRemark", merchant == null ? null : merchant.getVerifyRemark());
             row.put("roleInMerchant", binding.getRoleInMerchant());
             rows.add(row);
         }

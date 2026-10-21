@@ -263,7 +263,7 @@ try {
   await page.waitForSelector('.account-tabs button', { timeout: 20000 })
   await page.evaluate(() => {
     const button = [...document.querySelectorAll('.account-tabs button')]
-      .find((item) => item.textContent?.includes('实名与主体'))
+      .find((item) => item.textContent?.includes('主体资料与认证'))
     button?.click()
   })
   await page.waitForFunction(() => {
@@ -271,6 +271,11 @@ try {
     return text.includes('创建企业主体') && text.includes('创建个人主体')
   }, { timeout: 10000 })
   check(true, '登录后始终显示创建企业/个人主体入口')
+  const merchantDetails = await page.evaluate(() =>
+    document.querySelector('.merchant-detail-grid')?.innerText ?? '')
+  check(['主体编码', '经营主体 ID', '联系人', '联系电话', '主体状态']
+    .every((label) => merchantDetails.includes(label)),
+  '个人中心展示经营主体完整资料')
   await page.evaluate(() => {
     const button = [...document.querySelectorAll('button')]
       .find((item) => item.textContent?.trim() === '创建企业主体')

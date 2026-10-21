@@ -22,7 +22,7 @@ interface Props {
 }
 
 const ROLE_TEXT = { buyer: '买家中心', seller: '卖家中心' }
-const PORTAL_CERTIFY = `${window.location.protocol}//${window.location.hostname}:8098/portal/#/certify`
+const PERSONAL_CENTER = `${window.location.protocol}//${window.location.hostname}:8098/portal/#/account?tab=business`
 
 export function MemberCenterShell({ role, active, navItems, merchantName, onNavigate, children }: Props): JSX.Element {
   const navigate = useNavigate()
@@ -64,9 +64,9 @@ export function MemberCenterShell({ role, active, navItems, merchantName, onNavi
             <span className="mc-nav-icon"><ShopOutlined /></span>
             <span>交易大厅</span>
           </a>
-          <a href={PORTAL_CERTIFY} target="_blank" rel="noreferrer">
+          <a href={PERSONAL_CENTER} target="_blank" rel="noreferrer">
             <span className="mc-nav-icon"><SwapOutlined /></span>
-            <span>认证中心</span>
+            <span>个人中心</span>
           </a>
         </nav>
         <div className="mc-side-foot">

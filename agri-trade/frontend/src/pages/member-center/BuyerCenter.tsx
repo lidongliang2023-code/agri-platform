@@ -3,7 +3,6 @@ import { useSearchParams } from 'react-router-dom'
 import { Form, Input, Modal, Select, message } from 'antd'
 import {
   AlertOutlined,
-  CheckCircleOutlined,
   DollarOutlined,
   FileSearchOutlined,
   FileTextOutlined,
@@ -12,7 +11,6 @@ import {
   ShoppingCartOutlined,
   StarOutlined,
   TruckOutlined,
-  UserOutlined,
 } from '@ant-design/icons'
 import { updateOrderStatus } from '@/api/order'
 import { applyInvoice, getMyInvoices, type InvoiceRow } from '@/api/invoice'
@@ -22,7 +20,6 @@ import EvaluationList from '@/pages/evaluation/list'
 import LogisticsList from '@/pages/logistics/list'
 import MyCompensation from '@/pages/mine-compensation'
 import MyGuarantee from '@/pages/mine-guarantee'
-import MyIdentity from '@/pages/mine-identity'
 import { MemberCenterShell, type MemberNavItem } from './MemberCenterShell'
 import {
   EmptyState,
@@ -49,8 +46,9 @@ const NAV: MemberNavItem[] = [
   { key: 'contract', label: '合同管理', icon: <FileTextOutlined /> },
   { key: 'fund', label: '资金与发票', icon: <DollarOutlined /> },
   { key: 'favorite', label: '收藏与关注', icon: <HeartOutlined /> },
-  { key: 'profile', label: '企业资料与认证', icon: <UserOutlined /> },
 ]
+
+const PERSONAL_CENTER = `${window.location.protocol}//${window.location.hostname}:8098/portal/#/account?tab=business`
 
 const BUYER_STATUS = [
   { value: '', label: '全部' },
@@ -86,6 +84,9 @@ export default function BuyerCenter(): JSX.Element {
   }
 
   const base = useMemberBase()
+  useEffect(() => {
+    if (active === 'profile') window.location.replace(PERSONAL_CENTER)
+  }, [active])
   // 同一账号可能同时绑定多个主体：买家中心优先用 buyer 角色的主体展示与筛选需求。
   const buyerMerchant = base.merchants.find((item) => item.roleInMerchant === 'buyer') ?? base.primary
   const buyerId = buyerMerchant ? String(buyerMerchant.merchantId) : null
@@ -518,39 +519,6 @@ export default function BuyerCenter(): JSX.Element {
     </Panel>
   )
 
-  const renderProfile = (): JSX.Element => (
-    <>
-      <Panel title="企业资料与认证" extra={<a className="mc-btn ghost" href={`${window.location.protocol}//${window.location.hostname}:8098/portal/#/certify`} target="_blank" rel="noreferrer">认证中心</a>}>
-        {base.merchants.length === 0 ? (
-          <EmptyState title="当前账号还没有绑定经营主体" desc={base.error || '请先完成企业注册或联系平台运营绑定主体。'} />
-        ) : (
-          <div className="mc-grid mc-grid-2">
-            {base.merchants.map((merchant) => (
-              <div className="mc-profile-card" key={merchant.id}>
-                <div className="mc-profile-head">
-                  <CheckCircleOutlined />
-                  <strong>{merchant.merchantName}</strong>
-                  <span className="mc-tag green">{merchant.roleInMerchant || '成员'}</span>
-                </div>
-                <dl>
-                  <dt>经营主体 ID</dt><dd className="mc-mono">{merchant.merchantId}</dd>
-                  <dt>主体类型</dt><dd>{merchant.merchantType || '—'}</dd>
-                  <dt>绑定状态</dt><dd>{merchant.status === 1 ? '正常' : '停用'}</dd>
-                  <dt>个人实名</dt><dd>{realNameText(base.realName)}</dd>
-                </dl>
-              </div>
-            ))}
-          </div>
-        )}
-      </Panel>
-      <Panel title="资质证照">
-        <EmptyState title="证照文件不在交易域" desc="交易域只保存经营主体绑定关系；营业执照、许可证等材料请到认证中心查看或更新。"
-          action={<a className="mc-btn" href={`${window.location.protocol}//${window.location.hostname}:8098/portal/#/certify/enterprise`} target="_blank" rel="noreferrer">去认证中心</a>} />
-      </Panel>
-      <div className="mc-embedded"><MyIdentity /></div>
-    </>
-  )
-
   const content = active === 'purchase' ? renderPurchase()
     : active === 'inquiry' ? renderInquiry()
       : active === 'after' ? renderAfter()
@@ -558,8 +526,7 @@ export default function BuyerCenter(): JSX.Element {
           : active === 'contract' ? renderContract()
             : active === 'fund' ? renderFund()
               : active === 'favorite' ? renderFavorite()
-                : active === 'profile' ? renderProfile()
-                  : renderOverview()
+                : renderOverview()
 
   return (
     <MemberCenterShell role="buyer" active={active} navItems={NAV}
@@ -614,14 +581,6 @@ function demandStatusText(status: string | undefined): string {
     closed: '已关闭',
   }
   return status ? map[status] ?? status : '—'
-}
-
-function realNameText(record: { status: string } | null): string {
-  if (!record) return '未提交'
-  if (record.status === 'verified') return '已认证'
-  if (record.status === 'pending') return '审核中'
-  if (record.status === 'rejected') return '已驳回'
-  return record.status
 }
 
 function invoiceStatusText(status: string): string {

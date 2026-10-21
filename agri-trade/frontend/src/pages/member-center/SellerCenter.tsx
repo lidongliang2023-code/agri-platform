@@ -5,7 +5,6 @@ import {
   AlertOutlined,
   ApiOutlined,
   AppstoreOutlined,
-  CheckCircleOutlined,
   DollarOutlined,
   FileTextOutlined,
   HomeOutlined,
@@ -14,7 +13,6 @@ import {
   StarOutlined,
   TeamOutlined,
   TruckOutlined,
-  UserOutlined,
 } from '@ant-design/icons'
 import { updateOrderStatus } from '@/api/order'
 import { updateSellerProductStatus } from '@/api/product'
@@ -26,7 +24,6 @@ import LogisticsList from '@/pages/logistics/list'
 import MatchList from '@/pages/match/list'
 import MyCompensation from '@/pages/mine-compensation'
 import MyGuarantee from '@/pages/mine-guarantee'
-import MyIdentity from '@/pages/mine-identity'
 import PriceList from '@/pages/price/list'
 import QuoteList from '@/pages/quote/list'
 import { MemberCenterShell, type MemberNavItem } from './MemberCenterShell'
@@ -60,8 +57,9 @@ const NAV: MemberNavItem[] = [
   { key: 'fund', label: '资金结算', icon: <DollarOutlined /> },
   { key: 'customer', label: '客户管理', icon: <TeamOutlined /> },
   { key: 'iot', label: '生产接入', icon: <ApiOutlined /> },
-  { key: 'profile', label: '店铺资料与认证', icon: <UserOutlined /> },
 ]
+
+const PERSONAL_CENTER = `${window.location.protocol}//${window.location.hostname}:8098/portal/#/account?tab=business`
 
 const SELLER_STATUS = [
   { value: '', label: '全部' },
@@ -97,6 +95,9 @@ export default function SellerCenter(): JSX.Element {
   }
 
   const base = useMemberBase()
+  useEffect(() => {
+    if (active === 'profile') window.location.replace(PERSONAL_CENTER)
+  }, [active])
   // 卖家中心优先用 owner / seller 角色的主体展示商品与评价。
   const sellerMerchant = base.merchants.find((item) => item.roleInMerchant === 'owner' || item.roleInMerchant === 'seller')
     ?? base.primary
@@ -625,39 +626,6 @@ export default function SellerCenter(): JSX.Element {
     </Panel>
   )
 
-  const renderProfile = (): JSX.Element => (
-    <>
-      <Panel title="店铺资料与认证" extra={<a className="mc-btn ghost" href={`${window.location.protocol}//${window.location.hostname}:8098/portal/#/certify/enterprise`} target="_blank" rel="noreferrer">认证中心</a>}>
-        {base.merchants.length === 0 ? (
-          <EmptyState title="当前账号还没有绑定经营主体" desc={base.error || '请先完成企业注册或联系平台运营绑定主体。'} />
-        ) : (
-          <div className="mc-grid mc-grid-2">
-            {base.merchants.map((merchant) => (
-              <div className="mc-profile-card" key={merchant.id}>
-                <div className="mc-profile-head">
-                  <CheckCircleOutlined />
-                  <strong>{merchant.merchantName}</strong>
-                  <span className="mc-tag green">{merchant.roleInMerchant || '成员'}</span>
-                </div>
-                <dl>
-                  <dt>经营主体 ID</dt><dd className="mc-mono">{merchant.merchantId}</dd>
-                  <dt>主体类型</dt><dd>{merchant.merchantType || '—'}</dd>
-                  <dt>绑定状态</dt><dd>{merchant.status === 1 ? '正常' : '停用'}</dd>
-                  <dt>个人实名</dt><dd>{realNameText(base.realName)}</dd>
-                </dl>
-              </div>
-            ))}
-          </div>
-        )}
-      </Panel>
-      <Panel title="资质证照">
-        <EmptyState title="证照文件不在交易域" desc="营业执照、生产许可证等材料请到认证中心查看或更新。"
-          action={<a className="mc-btn" href={`${window.location.protocol}//${window.location.hostname}:8098/portal/#/certify/enterprise`} target="_blank" rel="noreferrer">去认证中心</a>} />
-      </Panel>
-      <div className="mc-embedded"><MyIdentity /></div>
-    </>
-  )
-
   const content = active === 'sales' ? renderSales()
     : active === 'goods' ? renderGoods()
       : active === 'supply' ? renderSupply()
@@ -669,8 +637,7 @@ export default function SellerCenter(): JSX.Element {
                   : active === 'fund' ? renderFund()
                     : active === 'customer' ? renderCustomer()
                       : active === 'iot' ? renderIot()
-                        : active === 'profile' ? renderProfile()
-                          : renderOverview()
+                        : renderOverview()
 
   return (
     <MemberCenterShell role="seller" active={active} navItems={NAV}
@@ -724,14 +691,6 @@ function publishText(status: string | undefined): string {
 function logisticsText(status: string | undefined): string {
   const map: Record<string, string> = { pending: '待揽收', picked: '已揽收', in_transit: '运输中', delivered: '已签收', cancelled: '已取消' }
   return status ? map[status] ?? status : '—'
-}
-
-function realNameText(record: { status: string } | null): string {
-  if (!record) return '未提交'
-  if (record.status === 'verified') return '已认证'
-  if (record.status === 'pending') return '审核中'
-  if (record.status === 'rejected') return '已驳回'
-  return record.status
 }
 
 function avgMetric(rows: { ratingQuality: number; ratingService: number; ratingDelivery: number }[], key: 'ratingQuality' | 'ratingService' | 'ratingDelivery'): string {

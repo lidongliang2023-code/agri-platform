@@ -58,6 +58,14 @@
 .merchant-list,.join-list,.business-results { display:grid; gap:9px; }
 .merchant-row,.business-result,.join-row { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:12px; border:1px solid #e3eae5; border-radius:9px; }
 .merchant-row div,.business-result div,.join-row div { display:flex; flex-direction:column; gap:4px; min-width:0; }
+.merchant-row .merchant-main { flex:1; }
+.merchant-title { flex-direction:row !important; align-items:center; flex-wrap:wrap; }
+.merchant-detail-grid { display:grid !important; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px 16px !important; margin-top:8px; }
+.merchant-detail-grid > div { display:flex !important; flex-direction:column; gap:2px !important; padding:8px 10px; border-radius:8px; background:#f7faf8; }
+.merchant-detail-grid span { color:#7b8a82; font-size:10.5px; }
+.merchant-detail-grid b { color:#273b31; font-size:11.5px; font-weight:600; word-break:break-all; }
+.merchant-address,.merchant-review { margin:8px 0 0; color:#526359; font-size:11px; line-height:1.6; }
+.merchant-review { color:#a16207; }
 .merchant-row-actions { align-items:flex-end; flex:none; }
 .merchant-row span,.business-result span,.join-row span { color:#6b7c72; font-size:11px; }
 .join-row p { margin:5px 0 0; color:#526359; font-size:11px; }
@@ -70,4 +78,4 @@
 .account-login-required { padding:60px; text-align:center; }
 .account-login-required h2 { margin:12px 0 8px; }
 .account-login-required p { color:#6b7c72; }
-@media(max-width:760px){.account-page{padding:14px}.account-hero{align-items:flex-start;flex-wrap:wrap}.account-hero-status{width:100%;align-items:flex-start}.account-grid,.account-form-grid{grid-template-columns:1fr}.account-address,.business-result,.join-row{align-items:flex-start;flex-direction:column}.account-address-actions{width:100%;justify-content:flex-end}.account-business-search{flex-direction:column}}
+@media(max-width:760px){.account-page{padding:14px}.account-hero{align-items:flex-start;flex-wrap:wrap}.account-hero-status{width:100%;align-items:flex-start}.account-grid,.account-form-grid,.merchant-detail-grid{grid-template-columns:1fr}.account-address,.merchant-row,.business-result,.join-row{align-items:flex-start;flex-direction:column}.account-address-actions,.merchant-row-actions{width:100%;justify-content:flex-end}.account-business-search{flex-direction:column}}

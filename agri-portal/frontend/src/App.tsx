@@ -53,7 +53,7 @@ export default function App(): JSX.Element {
   } else if (route.path === '/certify/personal') {
     page = <CertifyPersonal />
   } else if (route.path === '/account') {
-    page = <AccountCenter />
+    page = <AccountCenter initialTab={route.query.get('tab')} />
   } else {
     page = <NotFound />
   }
