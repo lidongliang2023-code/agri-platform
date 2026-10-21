@@ -45,7 +45,7 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
 function PortalAccountRedirect(): JSX.Element {
   useEffect(() => {
     window.location.replace(
-      `${window.location.protocol}//${window.location.hostname}:8098/portal/#/account?tab=business`,
+      `${window.location.protocol}//${window.location.hostname}:8098/portal/#/account/business`,
     )
   }, [])
   return <div style={{ padding: 40, color: '#6b7c72' }}>正在前往丰链云个人中心…</div>

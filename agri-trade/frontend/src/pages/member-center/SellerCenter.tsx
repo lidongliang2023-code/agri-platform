@@ -59,7 +59,7 @@ const NAV: MemberNavItem[] = [
   { key: 'iot', label: '生产接入', icon: <ApiOutlined /> },
 ]
 
-const PERSONAL_CENTER = `${window.location.protocol}//${window.location.hostname}:8098/portal/#/account?tab=business`
+const PERSONAL_CENTER = `${window.location.protocol}//${window.location.hostname}:8098/portal/#/account/business`
 
 const SELLER_STATUS = [
   { value: '', label: '全部' },

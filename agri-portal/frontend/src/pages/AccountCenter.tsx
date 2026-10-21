@@ -109,14 +109,20 @@ interface BusinessResult {
 
 type Tab = 'profile' | 'security' | 'addresses' | 'business' | 'team' | 'roles'
 
-const TABS: { key: Tab; label: string; icon: string }[] = [
-  { key: 'profile', label: '账号资料', icon: 'user' },
-  { key: 'security', label: '账号安全', icon: 'shield' },
-  { key: 'addresses', label: '地址管理', icon: 'location' },
-  { key: 'business', label: '主体资料与认证', icon: 'factory' },
-  { key: 'team', label: '团队与成员', icon: 'users' },
-  { key: 'roles', label: '角色与权限', icon: 'shield' },
+const TABS: { key: Tab; label: string; icon: string; description: string }[] = [
+  { key: 'profile', label: '账号资料', icon: 'user', description: '维护昵称、邮箱与账号概况' },
+  { key: 'security', label: '账号安全', icon: 'shield', description: '修改密码与绑定手机号' },
+  { key: 'addresses', label: '地址管理', icon: 'location', description: '维护收货地址与默认地址' },
+  { key: 'business', label: '主体资料与认证', icon: 'factory', description: '创建、认证并切换经营主体' },
+  { key: 'team', label: '团队与成员', icon: 'users', description: '管理当前主体的团队成员' },
+  { key: 'roles', label: '角色与权限', icon: 'shield', description: '配置当前主体的角色与权限' },
 ]
+
+const ACCOUNT_TAB_KEYS: Tab[] = ['profile', 'security', 'addresses', 'business', 'team', 'roles']
+
+function normalizeAccountTab(value: string | null | undefined): Tab {
+  return ACCOUNT_TAB_KEYS.includes(value as Tab) ? value as Tab : 'profile'
+}
 
 const INDUSTRIES = ['粮油产业', '果蔬产业', '畜禽产业', '茶药产业', '饲料农资', '水产产业', '流通贸易', '加工制造', '其他']
 const COMPANY_SIZES = ['微型（20人以下）', '小型（20-100人）', '中型（100-500人）', '大型（500人以上）']
@@ -164,10 +170,7 @@ function tone(value: string | null | undefined): string {
 }
 
 export function AccountCenter({ initialTab }: { initialTab?: string | null }): JSX.Element {
-  const [tab, setTab] = useState<Tab>(() => (
-    ['profile', 'security', 'addresses', 'business', 'team', 'roles'].includes(initialTab ?? '')
-      ? initialTab as Tab : 'profile'
-  ))
+  const [tab, setTab] = useState<Tab>(() => normalizeAccountTab(initialTab))
   const [summary, setSummary] = useState<Summary | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -238,6 +241,17 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
   }, [])
 
   useEffect(() => {
+    setTab(normalizeAccountTab(initialTab))
+  }, [initialTab])
+
+  useEffect(() => {
+    const canonical = `#/account/${tab}`
+    if (window.location.hash !== canonical) {
+      window.history.replaceState(null, '', canonical)
+    }
+  }, [])
+
+  useEffect(() => {
     if (codeLeft <= 0) return undefined
     const timer = window.setTimeout(() => setCodeLeft(codeLeft - 1), 1000)
     return () => window.clearTimeout(timer)
@@ -246,6 +260,14 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
   const flash = (message: string): void => {
     setNotice(message)
     window.setTimeout(() => setNotice(''), 3500)
+  }
+
+  const openTab = (next: Tab): void => {
+    setTab(next)
+    const target = `#/account/${next}`
+    if (window.location.hash !== target) {
+      window.location.hash = target
+    }
   }
 
   const saveProfile = async (event: FormEvent): Promise<void> => {
@@ -591,6 +613,7 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
 
   const activeMerchant = summary.merchants.find((merchant) =>
     merchant.merchantId === summary.activeMerchantId) ?? null
+  const activeTabMeta = TABS.find((item) => item.key === tab) ?? TABS[0]
 
   return (
     <section className="section account-page">
@@ -610,16 +633,38 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
         </div>
       </div>
 
-      {notice && <div className="account-notice">{notice}</div>}
-      {error && <div className="account-error">{error}</div>}
+      <div className="account-shell">
+        <aside className="account-sidebar">
+          <div className="account-sidebar-head">
+            <span>个人中心</span>
+            <strong>账号与主体管理</strong>
+          </div>
+          <nav className="account-menu" aria-label="个人中心菜单">
+            {TABS.map((item) => (
+              <button type="button" key={item.key} className={tab === item.key ? 'on' : ''} onClick={() => openTab(item.key)}>
+                <span className="account-menu-icon"><Icon name={item.icon} size={16} /></span>
+                <span>{item.label}</span>
+                <i>›</i>
+              </button>
+            ))}
+          </nav>
+          <div className="account-sidebar-subject">
+            <span>当前登录主体</span>
+            <strong>{activeMerchant?.merchantName || '暂未选择'}</strong>
+            <small>{activeMerchant ? `${activeMerchant.memberType === 'personal' ? '个人主体' : '企业主体'} · ${activeMerchant.roleInMerchant}` : '请先创建经营主体'}</small>
+          </div>
+        </aside>
 
-      <div className="account-tabs">
-        {TABS.map((item) => (
-          <button type="button" key={item.key} className={tab === item.key ? 'on' : ''} onClick={() => setTab(item.key)}>
-            <Icon name={item.icon} size={15} />{item.label}
-          </button>
-        ))}
-      </div>
+        <main className="account-content">
+          <div className="account-content-head">
+            <div>
+              <span>个人中心 / {activeTabMeta.label}</span>
+              <h2>{activeTabMeta.label}</h2>
+            </div>
+            <p>{activeTabMeta.description}</p>
+          </div>
+          {notice && <div className="account-notice">{notice}</div>}
+          {error && <div className="account-error">{error}</div>}
 
       {tab === 'profile' && (
         <div className="account-grid">
@@ -1015,6 +1060,8 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
           onError={setError}
         />
       )}
+        </main>
+      </div>
     </section>
   )
 }

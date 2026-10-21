@@ -57,9 +57,22 @@ try {
 
   await page.goto(`${PORTAL}#/account`, { waitUntil: 'networkidle2', timeout: 60000 })
   await page.waitForSelector('.account-page', { timeout: 20000 })
-  await page.waitForSelector('.account-tabs button', { timeout: 20000 })
-  check((await page.$$eval('.account-tabs button', (items) => items.length)) === 6,
+  await page.waitForSelector('.account-menu button', { timeout: 20000 })
+  check((await page.$$eval('.account-menu button', (items) => items.length)) === 6,
     '个人中心六个功能分区齐全')
+  check(page.url().includes('#/account/profile'), '个人中心默认进入账号资料独立页面')
+  await page.evaluate(() => {
+    const button = [...document.querySelectorAll('.account-menu button')]
+      .find((item) => item.textContent?.includes('账号安全'))
+    button?.click()
+  })
+  await page.waitForFunction(() => window.location.hash === '#/account/security', { timeout: 10000 })
+  check((await page.evaluate(() => document.querySelector('.account-content-head h2')?.textContent))
+    === '账号安全', '左侧菜单进入账号安全页面')
+  await page.goBack()
+  await page.waitForFunction(() => window.location.hash === '#/account/profile', { timeout: 10000 })
+  check((await page.evaluate(() => document.querySelector('.account-content-head h2')?.textContent))
+    === '账号资料', '浏览器返回恢复上一个个人中心页面')
 
   const request = async (path, init = {}) => page.evaluate(async ({ url, options }) => {
     const response = await fetch(url, {
@@ -277,9 +290,9 @@ try {
     // 主体是 API 新建的，当前 SPA 的内存摘要不会自动感知；强制刷新才能按真实后端状态渲染。
     await page.goto(`${PORTAL}#/account?tab=business`, { waitUntil: 'networkidle2', timeout: 60000 })
     await page.reload({ waitUntil: 'networkidle2', timeout: 60000 })
-    await page.waitForSelector('.account-tabs button', { timeout: 20000 })
+    await page.waitForSelector('.account-menu button', { timeout: 20000 })
     await page.evaluate(() => {
-      const button = [...document.querySelectorAll('.account-tabs button')]
+      const button = [...document.querySelectorAll('.account-menu button')]
         .find((item) => item.textContent?.includes('主体资料与认证'))
       button?.click()
     })
@@ -516,9 +529,9 @@ try {
   }
 
   await page.reload({ waitUntil: 'networkidle2' })
-  await page.waitForSelector('.account-tabs button', { timeout: 20000 })
+  await page.waitForSelector('.account-menu button', { timeout: 20000 })
   await page.evaluate(() => {
-    const button = [...document.querySelectorAll('.account-tabs button')]
+    const button = [...document.querySelectorAll('.account-menu button')]
       .find((item) => item.textContent?.includes('主体资料与认证'))
     button?.click()
   })
@@ -579,7 +592,7 @@ try {
   check((await page.evaluate(() => document.body.innerText)).includes('去实名认证'),
     '未认证个人主体显示认证入口')
   await page.evaluate(() => {
-    const button = [...document.querySelectorAll('.account-tabs button')]
+    const button = [...document.querySelectorAll('.account-menu button')]
       .find((item) => item.textContent?.includes('地址管理'))
     button?.click()
   })
@@ -588,7 +601,7 @@ try {
   await page.screenshot({ path: path.join(OUT, 'account-center.png'), fullPage: true })
   await page.setViewport({ width: 390, height: 844 })
   await page.goto(`${PORTAL}#/account`, { waitUntil: 'networkidle2', timeout: 60000 })
-  await page.waitForSelector('.account-tabs button', { timeout: 20000 })
+  await page.waitForSelector('.account-menu button', { timeout: 20000 })
   const mobileOverflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
   check(mobileOverflow <= 1, '个人中心 390px 无横向溢出', String(mobileOverflow))
   await page.screenshot({ path: path.join(OUT, 'account-center-mobile.png'), fullPage: true })

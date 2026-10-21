@@ -68,7 +68,7 @@ try {
   await page.goto(`${BASE}:8086/member/buyer?tab=profile`, { waitUntil: 'networkidle2', timeout: 60000 })
   await login(page)
   const buyerUrl = await waitForPersonalCenter(page)
-  check(buyerUrl.includes('#/account?tab=business'), '买家旧企业资料页自动跳转个人中心', buyerUrl)
+  check(buyerUrl.includes('#/account/business'), '买家旧企业资料页自动跳转个人中心', buyerUrl)
   let text = await page.evaluate(() => document.body.innerText)
   check(text.includes('主体资料与认证') && text.includes('经营主体 ID'),
     '个人中心已承接企业资料与认证')
@@ -76,7 +76,7 @@ try {
 
   await page.goto(`${BASE}:8086/member/seller?tab=profile`, { waitUntil: 'networkidle2', timeout: 60000 })
   const sellerUrl = await waitForPersonalCenter(page)
-  check(sellerUrl.includes('#/account?tab=business'), '卖家旧店铺资料页自动跳转个人中心', sellerUrl)
+  check(sellerUrl.includes('#/account/business'), '卖家旧店铺资料页自动跳转个人中心', sellerUrl)
   text = await page.evaluate(() => document.body.innerText)
   check(text.includes('主体资料与认证') && text.includes('认证'),
     '个人中心已承接店铺主体资料与认证状态')

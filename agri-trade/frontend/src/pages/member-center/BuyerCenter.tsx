@@ -48,7 +48,7 @@ const NAV: MemberNavItem[] = [
   { key: 'favorite', label: '收藏与关注', icon: <HeartOutlined /> },
 ]
 
-const PERSONAL_CENTER = `${window.location.protocol}//${window.location.hostname}:8098/portal/#/account?tab=business`
+const PERSONAL_CENTER = `${window.location.protocol}//${window.location.hostname}:8098/portal/#/account/business`
 
 const BUYER_STATUS = [
   { value: '', label: '全部' },

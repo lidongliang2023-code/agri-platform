@@ -22,7 +22,7 @@ interface Props {
 }
 
 const ROLE_TEXT = { buyer: '买家中心', seller: '卖家中心' }
-const PERSONAL_CENTER = `${window.location.protocol}//${window.location.hostname}:8098/portal/#/account?tab=business`
+const PERSONAL_CENTER = `${window.location.protocol}//${window.location.hostname}:8098/portal/#/account/business`
 
 export function MemberCenterShell({ role, active, navItems, merchantName, onNavigate, children }: Props): JSX.Element {
   const navigate = useNavigate()

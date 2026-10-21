@@ -52,8 +52,11 @@ export default function App(): JSX.Element {
     page = <CertifyEnterprise />
   } else if (route.path === '/certify/personal') {
     page = <CertifyPersonal />
-  } else if (route.path === '/account') {
-    page = <AccountCenter initialTab={route.query.get('tab')} />
+  } else if (route.path === '/account' || route.path.startsWith('/account/')) {
+    const tab = route.path.startsWith('/account/')
+      ? route.path.slice('/account/'.length)
+      : route.query.get('tab')
+    page = <AccountCenter initialTab={tab} />
   } else {
     page = <NotFound />
   }

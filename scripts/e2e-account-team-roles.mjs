@@ -35,7 +35,7 @@ const fill = async (page, selector, value) => {
 
 const clickTab = async (page, label) => {
   await page.evaluate((text) => {
-    const button = [...document.querySelectorAll('.account-tabs button')]
+    const button = [...document.querySelectorAll('.account-menu button')]
       .find((item) => item.textContent?.includes(text))
     if (!button) throw new Error(`未找到页签 ${text}`)
     button.click()
