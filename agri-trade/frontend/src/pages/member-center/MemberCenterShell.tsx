@@ -30,7 +30,7 @@ export function MemberCenterShell({ role, active, navItems, merchantName, onNavi
 
   const logout = (): void => {
     clearSession()
-    window.location.href = ssoLogoutUrl()
+    window.location.href = ssoLogoutUrl('portal')
   }
 
   return (

@@ -29,7 +29,9 @@ public class SsoProperties {
             // 交易撮合模块（agri-trade）：网关虚拟主机在 8086，前端 dev server 在 3002。
             // 不登记这里的后果很直接 —— 未注册的 client_id 会被 SSO 直接 400 拒绝，
             // 前端连登录页都进不去（实测报 "未注册的 client_id：trade"）。
-            "trade", List.of("http://localhost:8086/", "http://localhost:3002/", "http://trade.agri.local/")));
+            "trade", List.of("http://localhost:8086/", "http://localhost:3002/", "http://trade.agri.local/"),
+            // 官网门户仅用于统一登出后的安全回跳（不参与授权码登录）。
+            "portal", List.of("http://localhost:8098/portal/", "http://127.0.0.1:8098/portal/")));
 
     /** 授权码有效期（秒）：一次性、短时效 —— 它是"凭证"，不是会话 */
     private long codeTtlSeconds = 60;

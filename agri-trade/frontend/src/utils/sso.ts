@@ -146,7 +146,12 @@ export async function refreshAccessToken(): Promise<SsoLoginResult | null> {
   }
 }
 
-/** 认证中心登出地址（整页导航用：全局会话 Cookie 只存在于认证中心自己的域上）。 */
-export function ssoLogoutUrl(): string {
-  return `${resolveSsoOrigin()}/logout?client_id=${encodeURIComponent(SSO_CLIENT_ID)}`
+/**
+ * 认证中心登出地址（整页导航用：全局会话 Cookie 只存在于认证中心自己的域上）。
+ *
+ * <p>`logoutClientId` 决定认证中心销毁会话后的白名单回跳目标。卖家/买家中心退出后
+ * 统一回官网门户，而不是回交易根路径再次进入会员中心。</p>
+ */
+export function ssoLogoutUrl(logoutClientId = SSO_CLIENT_ID): string {
+  return `${resolveSsoOrigin()}/logout?client_id=${encodeURIComponent(logoutClientId)}`
 }

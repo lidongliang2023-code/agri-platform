@@ -39,6 +39,9 @@ agri:
         - http://localhost:8086/
         - http://localhost:3002/
         - http://trade.agri.local/
+      portal:
+        - http://localhost:8098/portal/
+        - http://127.0.0.1:8098/portal/
 
 logging:
   level:
