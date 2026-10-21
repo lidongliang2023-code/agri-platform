@@ -9,7 +9,8 @@
 
     顺序（依赖在前）：
       MySQL(3306) → Redis(6379) → core-platform(8093) → agri-trade(8089)
-      → agri-production(8092) → nginx(80/8086/8090/8098/8180/8190)
+      → agri-masterdata(8083) → agri-production(8092)
+      → nginx(80/8080/8086/8090/8098/8180/8190)
 
     踩过的坑（脚本里都处理了）：
       1. MySQL 不是服务，要用 my.ini 启动；`--defaults-file` 的路径带空格，
@@ -64,7 +65,7 @@ function Wait-Port([int]$Port, [int]$TimeoutSec, [string]$What) {
     return $false
 }
 
-Write-Host '== 1/6 MySQL（:3306）=='
+Write-Host '== 1/7 MySQL（:3306）=='
 if (Test-Port 3306) {
     Write-Host '  · 已在运行，跳过'
 } else {
@@ -76,7 +77,7 @@ if (Test-Port 3306) {
     [void](Wait-Port 3306 30 'MySQL')
 }
 
-Write-Host '== 2/6 Redis（:6379）=='
+Write-Host '== 2/7 Redis（:6379）=='
 if (Test-Port 6379) {
     Write-Host '  · 已在运行，跳过'
 } else {
@@ -84,7 +85,7 @@ if (Test-Port 6379) {
     [void](Wait-Port 6379 15 'Redis')
 }
 
-Write-Host '== 3/6 core-platform（:8093，认证与平台域）=='
+Write-Host '== 3/7 core-platform（:8093，认证与平台域）=='
 if (Test-Port 8093) {
     Write-Host '  · 已在运行，跳过'
 } else {
@@ -98,7 +99,7 @@ if (Test-Port 8093) {
     [void](Wait-Port 8093 90 'core-platform')
 }
 
-Write-Host '== 4/6 agri-trade（:8089，交易、商品详情与大厅）=='
+Write-Host '== 4/7 agri-trade（:8089，交易、商品详情与大厅）=='
 if (Test-Port 8089) {
     Write-Host '  · 已在运行，跳过'
 } else {
@@ -117,7 +118,26 @@ if (Test-Port 8089) {
     [void](Wait-Port 8089 90 'agri-trade')
 }
 
-Write-Host '== 5/6 agri-production（:8092，生产管理模块后端）=='
+Write-Host '== 5/7 agri-masterdata（:8083，主数据管理运营后端）=='
+if (Test-Port 8083) {
+    Write-Host '  · 已在运行，跳过'
+} else {
+    $mdmApp = Join-Path $RepoRoot 'agri-master-data\backend\target\agri-master-data-1.0.0.jar'
+    if (-not (Test-Path $mdmApp)) {
+        throw "主数据后端 JAR 不存在：$mdmApp（先执行 Maven package）"
+    }
+    $mdmDir = Split-Path -Parent $mdmApp
+    $env:SPRING_DATASOURCE_USERNAME = 'root'
+    $env:SPRING_DATASOURCE_PASSWORD = $MysqlRootPassword
+    Start-Process -FilePath 'java' `
+        -ArgumentList @('-jar', $mdmApp, '--server.port=8083') `
+        -WorkingDirectory $mdmDir -WindowStyle Hidden `
+        -RedirectStandardOutput "$env:TEMP\agri-masterdata-8083.out.log" `
+        -RedirectStandardError "$env:TEMP\agri-masterdata-8083.err.log"
+    [void](Wait-Port 8083 90 'agri-masterdata')
+}
+
+Write-Host '== 6/7 agri-production（:8092，生产管理模块后端）=='
 if (Test-Port 8092) {
     Write-Host '  · 已在运行，跳过'
 } else {
@@ -130,7 +150,7 @@ if (Test-Port 8092) {
     [void](Wait-Port 8092 90 'agri-production')
 }
 
-Write-Host '== 6/6 统一网关 nginx（:80 / :8086 / :8090 / :8098 / :8180 / :8190）=='
+Write-Host '== 7/7 统一网关 nginx（:80 / :8080 / :8086 / :8090 / :8098 / :8180 / :8190）=='
 if (Test-Port 80) {
     Write-Host '  · 已在运行，跳过'
 } else {
@@ -151,6 +171,7 @@ Write-Host '  商品详情        http://localhost:8086/product/detail/7005'
 Write-Host '  买家中心        http://localhost:8086/member/buyer'
 Write-Host '  卖家中心        http://localhost:8086/member/seller'
 Write-Host '  统一认证        http://localhost:8090/login'
+Write-Host '  主数据运营端    http://localhost:8080/user/list'
 Write-Host '  用户端（农户）  http://localhost:8180/    → 登录后 http://localhost/production/login'
 Write-Host '  运营端（平台）  http://localhost:8190/    → 登录后 http://localhost:8190/admin/login'
 Write-Host '  后端直连（调试）http://localhost:8092/api/v1/production'
