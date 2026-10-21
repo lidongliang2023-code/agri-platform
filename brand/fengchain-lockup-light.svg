@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 360" role="img" aria-labelledby="title desc">
+  <title id="title">丰链云品牌组合标识</title>
+  <desc id="desc">丰链云，农业产业互联网平台</desc>
+  <defs>
+    <linearGradient id="lock-bg" x1="80" y1="54" x2="282" y2="306" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0B4A35"/>
+      <stop offset="0.58" stop-color="#087A50"/>
+      <stop offset="1" stop-color="#16B978"/>
+    </linearGradient>
+    <linearGradient id="lock-gold" x1="150" y1="220" x2="220" y2="294" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFE08A"/>
+      <stop offset="1" stop-color="#F4B93D"/>
+    </linearGradient>
+  </defs>
+  <rect x="55" y="55" width="250" height="250" rx="70" fill="url(#lock-bg)"/>
+  <g fill="#FFFFFF">
+    <path d="M179 245V160" fill="none" stroke="#FFFFFF" stroke-width="16" stroke-linecap="round"/>
+    <path d="M177 207C153 209 134 193 129 167C154 165 173 181 177 207Z"/>
+    <path d="M184 183C187 156 205 141 232 143C230 170 211 185 184 183Z"/>
+  </g>
+  <path d="M123 259C143 282 160 291 179 291C198 291 215 282 235 259" fill="none" stroke="url(#lock-gold)" stroke-width="8" stroke-linecap="round"/>
+  <g fill="url(#lock-gold)">
+    <circle cx="123" cy="259" r="13"/>
+    <circle cx="179" cy="291" r="15"/>
+    <circle cx="235" cy="259" r="13"/>
+  </g>
+  <text x="350" y="175" fill="#12372A" font-family="'Microsoft YaHei','PingFang SC',sans-serif" font-size="104" font-weight="800" letter-spacing="4">丰链云</text>
+  <text x="354" y="235" fill="#0B7A50" font-family="Arial,sans-serif" font-size="31" font-weight="700" letter-spacing="11">FENGCHAIN</text>
+  <text x="356" y="277" fill="#68766F" font-family="'Microsoft YaHei','PingFang SC',sans-serif" font-size="27" letter-spacing="4">农业产业互联网平台</text>
+</svg>

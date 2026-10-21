@@ -59,9 +59,8 @@
   width: 34px;
   height: 34px;
   border-radius: 10px;
-  background: linear-gradient(135deg, var(--prod-green-500), #0c7ba8);
-  color: #fff;
-  font-size: 17px;
+  background: transparent;
+  overflow: hidden;
 }
 
 .agri-brand-text {

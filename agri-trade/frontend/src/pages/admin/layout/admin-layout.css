@@ -39,9 +39,8 @@
   border-radius: 10px;
   display: grid;
   place-items: center;
-  background: linear-gradient(135deg, #159a5e, #0c7ba8);
-  color: #fff;
-  font-size: 17px;
+  background: transparent;
+  overflow: hidden;
 }
 
 .admin-brand-text {

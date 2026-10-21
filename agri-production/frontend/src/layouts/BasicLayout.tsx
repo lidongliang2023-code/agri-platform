@@ -21,7 +21,6 @@ import {
 } from 'antd'
 import {
   BellOutlined,
-  ExperimentOutlined,
   LogoutOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
@@ -30,6 +29,7 @@ import {
 } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import PageLoading from '@/components/PageLoading'
+import { BrandMark } from '@/components/BrandMark'
 import { getUnreadCount } from '@/api/messages'
 import { listAllFarms } from '@/api/farms'
 import useAuthStore from '@/store/auth'
@@ -149,10 +149,10 @@ export default function BasicLayout({ variant, title }: BasicLayoutProps): JSX.E
         collapsedWidth={SIDER_COLLAPSED_WIDTH}
       >
         <div className={`agri-brand${collapsed ? ' is-collapsed' : ''}`}>
-          <span className="agri-brand-logo"><ExperimentOutlined /></span>
+          <span className="agri-brand-logo"><BrandMark size={34} /></span>
           {!collapsed && (
             <span className="agri-brand-text">
-              <strong>农产云</strong>
+              <strong>丰链云</strong>
               <small>{isAdmin ? '生产运营平台' : '农业生产管理'}</small>
             </span>
           )}

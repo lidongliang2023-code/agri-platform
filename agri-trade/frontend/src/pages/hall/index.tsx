@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import {
-  AppstoreOutlined,
   SearchOutlined,
   ShopOutlined,
   SwapOutlined,
   UserOutlined,
 } from '@ant-design/icons'
 import { isLoggedIn } from '@/utils/session'
+import { BrandMark } from '@/components/BrandMark'
 import {
   HALL_PROVINCES,
   HALL_TAXONOMY,
@@ -249,7 +249,7 @@ export default function TradeHall(): JSX.Element {
     <div className={EMBEDDED ? 'hall-root hall-embed' : 'hall-root'}>
       <div className="topbar" style={EMBEDDED ? { display: 'none' } : undefined}>
         <div className="hall-container">
-          <span>您好，欢迎来到农产云交易大厅！智能大宗交易 · 平台撮合 · 支持在线议价</span>
+          <span>您好，欢迎来到丰链云交易大厅！智能大宗交易 · 平台撮合 · 支持在线议价</span>
           <span className="topbar-actions">
             <a href="/member/buyer">我是买家</a><span className="sep">·</span>
             <a href="/member/seller">我是卖家</a><span className="sep">·</span>
@@ -263,8 +263,8 @@ export default function TradeHall(): JSX.Element {
       <header className="site-header" style={EMBEDDED ? { display: 'none' } : undefined}>
         <div className="hall-container">
           <a className="hall-brand" href={PORTAL}>
-            <span className="hall-logo"><AppstoreOutlined /></span>
-            <span>农产云<small>AGRI · CLOUD</small></span>
+            <span className="hall-logo"><BrandMark size={36} /></span>
+            <span>丰链云<small>FENGCHAIN · AGRI</small></span>
           </a>
           <nav className="main-nav">
             <a href={PORTAL}>首页</a>
@@ -480,7 +480,7 @@ export default function TradeHall(): JSX.Element {
 
       <footer className="hall-footer" style={EMBEDDED ? { display: 'none' } : undefined}>
         <div className="hall-container">
-          <span>© 2026 农业产业互联网平台 · 农产云交易大厅</span>
+          <span>© 2026 农业产业互联网平台 · 丰链云交易大厅</span>
           <span>商品详情与下单需登录；大厅商品来自交易域实时在售数据。</span>
         </div>
       </footer>

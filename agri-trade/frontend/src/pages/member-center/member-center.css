@@ -62,8 +62,8 @@
   border-radius: 10px;
   display: grid;
   place-items: center;
-  background: linear-gradient(135deg, var(--mc-green-500), #0c7ba8);
-  font-size: 17px;
+  background: transparent;
+  overflow: hidden;
 }
 
 .mc-brand small {

@@ -134,11 +134,11 @@ table { border-collapse: collapse; width: 100%; }
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 19px; color: var(--green-800); letter-spacing: .2px; }
 .brand .logo {
   width: 36px; height: 36px; border-radius: 10px; flex: none;
-  background: linear-gradient(135deg, var(--green-500), var(--tech-500));
+  background: transparent;
   display: grid; place-items: center; color: #fff;
-  box-shadow: var(--shadow-green);
+  box-shadow: none; overflow: hidden;
 }
-.brand .logo svg { width: 20px; height: 20px; }
+.brand .logo svg { width: 36px; height: 36px; }
 .brand small { display: block; font-size: 10px; font-weight: 500; color: var(--ink-500); letter-spacing: 3px; }
 
 .main-nav { display: flex; align-items: center; gap: 4px; flex: 1; }

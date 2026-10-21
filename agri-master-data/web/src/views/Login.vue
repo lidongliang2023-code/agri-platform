@@ -14,10 +14,10 @@
     <div class="login-box">
       <div class="login-header">
         <div class="logo-section">
-          <div class="logo-icon">🌾</div>
+          <BrandMark :size="44" />
           <div class="logo-text">
-            <h2>主数据管理运营系统</h2>
-            <p>Master Data Management System</p>
+            <h2>丰链云 · 主数据管理</h2>
+            <p>FENGCHAIN MASTER DATA</p>
           </div>
         </div>
       </div>
@@ -51,6 +51,7 @@
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { redirectToSso } from '@/utils/sso'
+import BrandMark from '@/components/BrandMark.vue'
 
 const route = useRoute()
 const redirecting = ref(false)

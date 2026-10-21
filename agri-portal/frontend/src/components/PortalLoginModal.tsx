@@ -146,12 +146,12 @@ export function PortalLoginModal({ open, onClose, onSuccess }: PortalLoginModalP
   }
 
   return (
-    <div className="portal-login-mask" role="dialog" aria-modal="true" aria-label="登录农产云" onClick={onClose}>
+    <div className="portal-login-mask" role="dialog" aria-modal="true" aria-label="登录丰链云" onClick={onClose}>
       <div className="portal-login-card" onClick={(event) => event.stopPropagation()}>
         <div className="portal-login-head">
           <div>
             <span className="portal-login-badge"><Icon name="shield" size={13} />统一认证</span>
-            <h2>登录农产云</h2>
+            <h2>登录丰链云</h2>
             <p>登录后停留在官网，点击生产管理、交易大厅等入口时再进入对应子系统。</p>
           </div>
           <button className="portal-login-close" type="button" aria-label="关闭" onClick={onClose}>×</button>

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
+import { BrandMark } from './BrandMark'
 
 /**
  * 统一认证中心 · 登录 / 注册页（按 portal 原型重做，2026-10-20）。
@@ -127,11 +128,11 @@ function LoginAside(): JSX.Element {
   return (
     <aside className="auth-aside">
       <div className="aside-brand">
-        <span className="logo"><Icon name="seed" size={22} /></span>
-        <span>农产云<small>AGRI · CLOUD</small></span>
+        <span className="logo"><BrandMark size={44} /></span>
+        <span>丰链云<small>FENGCHAIN · AGRI</small></span>
       </div>
       <div className="aside-body">
-        <div className="aside-title">登录农产云<br />继续您的产业协作</div>
+        <div className="aside-title">登录丰链云<br />继续您的产业协作</div>
         <div className="aside-sub">
           登录后系统会自动识别您所处的环节：未创建主体将引导登记，未认证将引导提交材料，
           已认证则直接进入会员中心。
@@ -164,13 +165,13 @@ function RegisterAside(): JSX.Element {
   return (
     <aside className="auth-aside">
       <div className="aside-brand">
-        <span className="logo"><Icon name="seed" size={22} /></span>
-        <span>农产云<small>AGRI · CLOUD</small></span>
+        <span className="logo"><BrandMark size={44} /></span>
+        <span>丰链云<small>FENGCHAIN · AGRI</small></span>
       </div>
       <div className="aside-body">
         <div className="aside-title">先创建账号<br />再开通会员能力</div>
         <div className="aside-sub">
-          农产云采用「账号 → 主体 → 认证」三段式开通流程。本页将一次收集账号与主体资料，
+          丰链云采用「账号 → 主体 → 认证」三段式开通流程。本页将一次收集账号与主体资料，
           提交后进入平台认证审核。
         </div>
         <div className="flow-list">
@@ -997,8 +998,8 @@ export default function App(): JSX.Element {
                     我确认所填账号与主体信息真实有效，并同意
                     <a href="#protocol" onClick={(event) => {
                       event.preventDefault()
-                      setNotice('《农产云用户服务协议》全文尚未在本页发布，请联系平台运营获取正式文本。')
-                    }}>《农产云用户服务协议》</a>、
+                      setNotice('《丰链云用户服务协议》全文尚未在本页发布，请联系平台运营获取正式文本。')
+                    }}>《丰链云用户服务协议》</a>、
                     <a href="#privacy" onClick={(event) => {
                       event.preventDefault()
                       setNotice('《隐私政策》全文尚未在本页发布，请联系平台运营获取正式文本。')
@@ -1047,7 +1048,7 @@ export default function App(): JSX.Element {
         <div className="auth-card">
           {isRegister ? <RegisterAside /> : <LoginAside />}
           <main className="auth-main">
-            <div className="mobile-brand"><span className="logo"><Icon name="seed" size={20} /></span>农产云</div>
+            <div className="mobile-brand"><span className="logo"><BrandMark size={30} /></span>丰链云</div>
             {isRegister ? registerView : loginView}
           </main>
         </div>
@@ -1059,7 +1060,7 @@ export default function App(): JSX.Element {
             <div className="check-icon"><Icon name="check" size={34} /></div>
             <h3>注册成功！</h3>
             <p>
-              欢迎加入农产云，您的{IDENTITY_LABEL[success.identity]}账号已创建
+              欢迎加入丰链云，您的{IDENTITY_LABEL[success.identity]}账号已创建
               {success.redirect ? '并自动登录。' : '，并已登录认证中心。'}
               {success.identity === 'enterprise'
                 ? '企业资质认证已随注册提交，平台审核通过后即可开展交易。'

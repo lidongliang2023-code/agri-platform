@@ -4,9 +4,9 @@
       <div class="login-card">
         <div class="card-header">
           <div class="logo-section">
-            <span class="logo-icon">🌾</span>
-            <h1>主数据平台</h1>
-            <p>用户端系统</p>
+            <BrandMark :size="44" />
+            <h1>丰链云</h1>
+            <p>主数据用户端</p>
           </div>
         </div>
         
@@ -86,6 +86,7 @@
 <script setup>
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import BrandMark from '@/components/BrandMark.vue'
 
 const router = useRouter()
 const isLoading = ref(false)

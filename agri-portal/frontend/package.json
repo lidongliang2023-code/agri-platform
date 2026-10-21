@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "农产云官网门户（首页、产业链频道、认证中心）",
+  "description": "丰链云官网门户（首页、产业链频道、认证中心）",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",

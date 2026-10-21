@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react'
 import { Button, ConfigProvider, Layout, Menu, Result, Spin } from 'antd'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { getMyPermissions, hasPermission, type MyPermission } from '@/api/permission'
+import { BrandMark } from '@/components/BrandMark'
 import {
   AppstoreOutlined, AuditOutlined, FileSearchOutlined, SwapOutlined, TeamOutlined, RollbackOutlined,
   SafetyCertificateOutlined, ApartmentOutlined, AccountBookOutlined, SafetyOutlined, AppstoreAddOutlined,
   SettingOutlined, AlertOutlined, BarChartOutlined, BankOutlined, FileTextOutlined,
-  CarOutlined, ShopOutlined
+  CarOutlined
 } from '@ant-design/icons'
 import './admin-layout.css'
 
@@ -117,8 +118,8 @@ export default function AdminLayout() {
     <Layout className="admin-shell">
       <Sider width={224} className="admin-side">
         <div className="admin-brand">
-          <span className="admin-brand-logo"><ShopOutlined /></span>
-          <span className="admin-brand-text">农产云<small>OPS CENTER</small></span>
+          <span className="admin-brand-logo"><BrandMark size={34} /></span>
+          <span className="admin-brand-text">丰链云<small>OPS CENTER</small></span>
         </div>
         <div className="admin-side-title">平台运营中心</div>
         <Menu

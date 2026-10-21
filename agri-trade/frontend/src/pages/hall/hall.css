@@ -111,9 +111,8 @@
   border-radius: 11px;
   display: grid;
   place-items: center;
-  color: #fff;
-  background: linear-gradient(135deg, var(--h-green-500), #0c7ba8);
-  font-size: 18px;
+  background: transparent;
+  overflow: hidden;
 }
 
 .main-nav {

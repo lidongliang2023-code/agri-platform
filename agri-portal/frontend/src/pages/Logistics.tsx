@@ -197,7 +197,7 @@ export function Logistics(): JSX.Element {
           <div className="logi-section-head">
             <span className="tag tag-tech">服务矩阵</span>
             <h2>四大物流服务 · 覆盖从产地到餐桌全链路</h2>
-            <p>产地专线 + 冷链物流 + 城配末端 + 监管仓，任一段都有农产云专属方案</p>
+            <p>产地专线 + 冷链物流 + 城配末端 + 监管仓，任一段都有丰链云专属方案</p>
           </div>
           <div className="grid grid-4">
             {SERVICES.map((service) => (
@@ -236,7 +236,7 @@ export function Logistics(): JSX.Element {
                   <dt>货主</dt><dd>五常粮油合作社</dd>
                   <dt>收货方</dt><dd>中粮集团 · 上海嘉定仓库</dd>
                   <dt>货物</dt><dd>富硒大米 24 吨 / 1,200 袋 / 5kg 装</dd>
-                  <dt>承运方</dt><dd>农产云产地专线 · 东北-华东线</dd>
+                  <dt>承运方</dt><dd>丰链云产地专线 · 东北-华东线</dd>
                   <dt>司机</dt><dd>张师傅 · 黑 A·D3821 · 驾龄 12 年</dd>
                 </dl>
                 <div className="logi-timeline">
@@ -325,7 +325,7 @@ export function Logistics(): JSX.Element {
               <div className="card-b">
                 <div className="logi-carrier-head"><b>推荐承运方</b><span>示例 · 按评分排序</span></div>
                 {[
-                  { short: '东', name: '东北快线 · 农产云认证承运方', meta: '¥17,800 · 时效 2 天 · 评分 4.9', tag: '首选' },
+                  { short: '东', name: '东北快线 · 丰链云认证承运方', meta: '¥17,800 · 时效 2 天 · 评分 4.9', tag: '首选' },
                   { short: '顺', name: '顺丰冷运 · 华东干线', meta: '¥18,600 · 时效 1.5 天 · 评分 4.8', tag: '冷链' },
                   { short: '京', name: '京东冷链 · 上海落地配', meta: '¥18,200 · 时效 2 天 · 评分 4.8', tag: '城配' },
                 ].map((carrier) => (
@@ -361,7 +361,7 @@ export function Logistics(): JSX.Element {
       <section className="logi-cta">
         <div className="container">
           <div>
-            <h3>注册农产云，享受专属物流优惠</h3>
+            <h3>注册丰链云，享受专属物流优惠</h3>
             <p>平台认证承运方、在线询价、全程温控与区块链存证，一站式完成。</p>
           </div>
           <div className="logi-cta-actions">

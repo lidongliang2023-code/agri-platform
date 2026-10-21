@@ -21,7 +21,7 @@ export function Hall(): JSX.Element {
     <section className="portal-hall-embed">
       <iframe
         src={tradeUrl('/hall?embed=1')}
-        title="农产云交易大厅"
+        title="丰链云交易大厅"
         style={{ height }}
         scrolling="no"
         onLoad={(event) => {

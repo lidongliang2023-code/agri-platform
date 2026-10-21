@@ -2,10 +2,10 @@
   <div class="layout-container">
     <aside class="sidebar">
       <div class="logo-section">
-        <div class="logo-icon">🌾</div>
+        <BrandMark :size="42" />
         <div class="logo-text">
-          <h1>农产云</h1>
-          <p>MASTER DATA</p>
+          <h1>丰链云</h1>
+          <p>主数据管理</p>
         </div>
       </div>
       <nav class="nav-menu">
@@ -67,6 +67,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSessionStore } from '@/stores/session'
 import { ssoLogoutUrl } from '@/utils/sso'
+import BrandMark from '@/components/BrandMark.vue'
 
 const router = useRouter()
 /**
@@ -294,17 +295,6 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 10px;
-  flex: none;
-}
-
-.logo-icon {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  display: grid;
-  place-items: center;
-  background: linear-gradient(135deg, #159a5e, #0c7ba8);
-  font-size: 17px;
   flex: none;
 }
 

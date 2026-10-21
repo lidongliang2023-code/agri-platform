@@ -3,7 +3,6 @@ import type { FormEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Empty, InputNumber, Spin, message } from 'antd'
 import {
-  AppstoreOutlined,
   CheckCircleOutlined,
   EnvironmentOutlined,
   FileTextOutlined,
@@ -21,6 +20,7 @@ import {
   type PublicProductDetail,
 } from '@/api/product'
 import { isLoggedIn } from '@/utils/session'
+import { BrandMark } from '@/components/BrandMark'
 import '../../hall/hall.css'
 import './product-detail.css'
 
@@ -240,7 +240,7 @@ export default function ProductDetail(): JSX.Element {
     <div className="hall-root">
       <div className="topbar">
         <div className="hall-container">
-          <span>您好，欢迎来到农产云交易大厅！智能大宗交易 · 平台撮合 · 支持在线议价</span>
+          <span>您好，欢迎来到丰链云交易大厅！智能大宗交易 · 平台撮合 · 支持在线议价</span>
           <span className="topbar-actions">
             <a href="/member/buyer">我是买家</a><span className="sep">·</span>
             <a href="/member/seller">我是卖家</a><span className="sep">·</span>
@@ -254,8 +254,8 @@ export default function ProductDetail(): JSX.Element {
       <header className="site-header">
         <div className="hall-container">
           <a className="hall-brand" href={PORTAL}>
-            <span className="hall-logo"><AppstoreOutlined /></span>
-            <span>农产云<small>AGRI · CLOUD</small></span>
+            <span className="hall-logo"><BrandMark size={36} /></span>
+            <span>丰链云<small>FENGCHAIN · AGRI</small></span>
           </a>
           <nav className="main-nav">
             <a href={PORTAL}>首页</a>
@@ -515,7 +515,7 @@ export default function ProductDetail(): JSX.Element {
 
       <footer className="hall-footer">
         <div className="hall-container">
-          <span>© 2026 农业产业互联网平台 · 农产云商品详情</span>
+          <span>© 2026 农业产业互联网平台 · 丰链云商品详情</span>
           <span>商品、库存与价格来自交易域实时记录；下单与议价需登录。</span>
         </div>
       </footer>

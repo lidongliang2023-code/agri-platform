@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { BellOutlined, LogoutOutlined, ShopOutlined, SwapOutlined } from '@ant-design/icons'
 import { clearSession } from '@/utils/session'
 import { ssoLogoutUrl } from '@/utils/sso'
+import { BrandMark } from '@/components/BrandMark'
 import './member-center.css'
 
 export interface MemberNavItem {
@@ -37,8 +38,8 @@ export function MemberCenterShell({ role, active, navItems, merchantName, onNavi
     <div className="mc-shell">
       <aside className="mc-side">
         <a className="mc-brand" href="/">
-          <span className="mc-brand-logo"><ShopOutlined /></span>
-          <span>农产云<small>AGRI · CLOUD</small></span>
+          <span className="mc-brand-logo"><BrandMark size={34} /></span>
+          <span>丰链云<small>FENGCHAIN · AGRI</small></span>
         </a>
         <div className="mc-side-group">{ROLE_TEXT[role]}</div>
         <nav className="mc-side-nav">
@@ -72,7 +73,7 @@ export function MemberCenterShell({ role, active, navItems, merchantName, onNavi
           <button type="button" className="mc-logout" onClick={logout}>
             <LogoutOutlined />退出登录
           </button>
-          <span>农产云 · 会员中心</span>
+          <span>丰链云 · 会员中心</span>
         </div>
       </aside>
 

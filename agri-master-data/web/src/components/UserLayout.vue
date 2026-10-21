@@ -3,8 +3,8 @@
     <header class="user-header">
       <div class="header-left">
         <div class="logo">
-          <span class="logo-icon">🌾</span>
-          <span class="logo-text">主数据平台</span>
+          <BrandMark :size="34" />
+          <span class="logo-text">丰链云 · 主数据</span>
         </div>
       </div>
       <nav class="header-nav">
@@ -59,6 +59,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import BrandMark from '@/components/BrandMark.vue'
 
 const router = useRouter()
 const currentPath = ref('/user/home')
@@ -124,10 +125,6 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 10px;
-}
-
-.logo-icon {
-  font-size: 24px;
 }
 
 .logo-text {

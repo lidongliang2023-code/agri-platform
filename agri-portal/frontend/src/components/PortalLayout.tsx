@@ -3,6 +3,7 @@ import type { FormEvent, ReactNode } from 'react'
 import { Icon } from './Icon'
 import { PortalLoginModal } from './PortalLoginModal'
 import type { PortalUser } from './PortalLoginModal'
+import { BrandMark } from './BrandMark'
 import { go, productionLogin, ssoRegister, tradeUrl } from '../utils'
 
 const CHANNELS = ['粮油产业', '果蔬产业', '畜禽产业', '茶药产业', '饲料农资', '水产产业', '预制菜', '冷链物流']
@@ -78,7 +79,7 @@ export function PortalLayout({ children, active = '/' }: { children: ReactNode; 
     <div className="portal-root">
       <div className="topbar">
         <div className="container">
-          <span>您好，欢迎来到农产云！一站式农业产业链交易与服务平台</span>
+          <span>您好，欢迎来到丰链云！一站式农业产业链交易与服务平台</span>
           <span className="portal-top-actions">
             <a href={tradeUrl('/member/buyer')} target="_blank" rel="noreferrer">我是买家</a><span className="sep">·</span>
             <a href={tradeUrl('/member/seller')} target="_blank" rel="noreferrer">我是卖家</a><span className="sep">·</span>
@@ -89,7 +90,7 @@ export function PortalLayout({ children, active = '/' }: { children: ReactNode; 
                 <span className="portal-user-avatar">{(user.nickname || user.username || user.phone || '用').slice(0, 1)}</span>
                 <button className="portal-user-menu-trigger" type="button" onClick={() => setAccountMenuOpen(!accountMenuOpen)}>
                   <span className="portal-user-status">已登录</span>
-                  <b>{user.nickname || user.username || user.phone || '农产云用户'}</b>
+                  <b>{user.nickname || user.username || user.phone || '丰链云用户'}</b>
                   <i>▾</i>
                 </button>
                 <button className="portal-user-logout" type="button" onClick={() => void logout()}>退出</button>
@@ -155,8 +156,8 @@ export function PortalLayout({ children, active = '/' }: { children: ReactNode; 
       <header className="site-header">
         <div className="container">
           <a className="brand" href="#/">
-            <span className="logo"><Icon name="seed" size={20} /></span>
-            <span>农产云<small>AGRI · CLOUD</small></span>
+            <span className="logo"><BrandMark size={36} /></span>
+            <span>丰链云<small>FENGCHAIN · AGRI</small></span>
           </a>
           <nav className="main-nav">
             <a href="#/" className={active === '/' ? 'active' : ''}>首页</a>
@@ -195,7 +196,7 @@ export function PortalLayout({ children, active = '/' }: { children: ReactNode; 
           <div className="grid portal-footer-grid">
             <div>
               <div className="brand portal-footer-brand">
-                <span className="logo"><Icon name="seed" size={20} /></span><span>农产云</span>
+                <span className="logo"><BrandMark size={36} /></span><span>丰链云</span>
               </div>
               <p className="portal-footer-desc">农业产业互联网平台，连接生产、加工、流通、销售全环节。</p>
             </div>
@@ -224,7 +225,7 @@ export function PortalLayout({ children, active = '/' }: { children: ReactNode; 
             </div>
           </div>
           <div className="bottom">
-            <span>© 2026 农业产业互联网平台 · 农产云官网门户</span>
+            <span>© 2026 农业产业互联网平台 · 丰链云官网门户</span>
             <span>生产、交易、金融、溯源一体化服务</span>
           </div>
         </div>
