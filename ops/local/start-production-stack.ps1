@@ -1,6 +1,6 @@
 ﻿<#
 .SYNOPSIS
-    本地一键启动「生产管理模块」整套运行环境（依赖 + 后端 + 网关）。
+    本地一键启动交易、门户与生产管理依赖的整套运行环境（依赖 + 后端 + 网关）。
 
 .DESCRIPTION
     本机这套东西**没有**做成 Windows 服务（除 Redis 有服务注册但常起不来），
@@ -8,7 +8,8 @@
     已经在跑的组件直接跳过，只补没起来的。
 
     顺序（依赖在前）：
-      MySQL(3306) → Redis(6379) → core-platform(8093) → agri-production(8092) → nginx(80/8180/8190)
+      MySQL(3306) → Redis(6379) → core-platform(8093) → agri-trade(8089)
+      → agri-production(8092) → nginx(80/8086/8090/8098/8180/8190)
 
     踩过的坑（脚本里都处理了）：
       1. MySQL 不是服务，要用 my.ini 启动；`--defaults-file` 的路径带空格，
@@ -41,7 +42,17 @@ $redisConf = 'C:\Redis\redis.windows.conf'
 $nginxExe = 'C:\nginx\nginx.exe'
 
 function Test-Port([int]$Port) {
-    return [bool](Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue)
+    # 不依赖 NetTCPIP 模块：部分受限 PowerShell/Windows 环境里
+    # Get-NetTCPConnection 会被策略禁用，导致"端口明明在监听却反复启动第二份进程"。
+    $client = New-Object System.Net.Sockets.TcpClient
+    try {
+        $async = $client.BeginConnect('127.0.0.1', $Port, $null, $null)
+        return $async.AsyncWaitHandle.WaitOne(350) -and $client.Connected
+    } catch {
+        return $false
+    } finally {
+        $client.Dispose()
+    }
 }
 
 function Wait-Port([int]$Port, [int]$TimeoutSec, [string]$What) {
@@ -53,7 +64,7 @@ function Wait-Port([int]$Port, [int]$TimeoutSec, [string]$What) {
     return $false
 }
 
-Write-Host '== 1/5 MySQL（:3306）=='
+Write-Host '== 1/6 MySQL（:3306）=='
 if (Test-Port 3306) {
     Write-Host '  · 已在运行，跳过'
 } else {
@@ -65,7 +76,7 @@ if (Test-Port 3306) {
     [void](Wait-Port 3306 30 'MySQL')
 }
 
-Write-Host '== 2/5 Redis（:6379）=='
+Write-Host '== 2/6 Redis（:6379）=='
 if (Test-Port 6379) {
     Write-Host '  · 已在运行，跳过'
 } else {
@@ -73,7 +84,7 @@ if (Test-Port 6379) {
     [void](Wait-Port 6379 15 'Redis')
 }
 
-Write-Host '== 3/5 core-platform（:8093，认证与平台域）=='
+Write-Host '== 3/6 core-platform（:8093，认证与平台域）=='
 if (Test-Port 8093) {
     Write-Host '  · 已在运行，跳过'
 } else {
@@ -87,7 +98,26 @@ if (Test-Port 8093) {
     [void](Wait-Port 8093 90 'core-platform')
 }
 
-Write-Host '== 4/5 agri-production（:8092，生产管理模块后端）=='
+Write-Host '== 4/6 agri-trade（:8089，交易、商品详情与大厅）=='
+if (Test-Port 8089) {
+    Write-Host '  · 已在运行，跳过'
+} else {
+    $tradeApp = Join-Path $RepoRoot 'agri-trade\backend\target\agri-trade-1.0.0-SNAPSHOT.jar'
+    if (-not (Test-Path $tradeApp)) {
+        throw "交易后端 JAR 不存在：$tradeApp（先执行 Maven package）"
+    }
+    $tradeDir = Split-Path -Parent $tradeApp
+    $env:MYSQL_USERNAME = 'root'
+    $env:MYSQL_PASSWORD = $MysqlRootPassword
+    Start-Process -FilePath 'java' `
+        -ArgumentList @('-jar', $tradeApp, '--server.port=8089') `
+        -WorkingDirectory $tradeDir -WindowStyle Hidden `
+        -RedirectStandardOutput "$env:TEMP\agri-trade-8089.out.log" `
+        -RedirectStandardError "$env:TEMP\agri-trade-8089.err.log"
+    [void](Wait-Port 8089 90 'agri-trade')
+}
+
+Write-Host '== 5/6 agri-production（:8092，生产管理模块后端）=='
 if (Test-Port 8092) {
     Write-Host '  · 已在运行，跳过'
 } else {
@@ -100,7 +130,7 @@ if (Test-Port 8092) {
     [void](Wait-Port 8092 90 'agri-production')
 }
 
-Write-Host '== 5/5 统一网关 nginx（:80 / :8080 / :8180 / :8190）=='
+Write-Host '== 6/6 统一网关 nginx（:80 / :8086 / :8090 / :8098 / :8180 / :8190）=='
 if (Test-Port 80) {
     Write-Host '  · 已在运行，跳过'
 } else {
@@ -115,6 +145,12 @@ if (Test-Port 80) {
 
 Write-Host ''
 Write-Host '启动完成，访问地址：'
+Write-Host '  官网门户        http://localhost:8098/portal/'
+Write-Host '  交易大厅        http://localhost:8098/portal/#/hall'
+Write-Host '  商品详情        http://localhost:8086/product/detail/7005'
+Write-Host '  买家中心        http://localhost:8086/member/buyer'
+Write-Host '  卖家中心        http://localhost:8086/member/seller'
+Write-Host '  统一认证        http://localhost:8090/login'
 Write-Host '  用户端（农户）  http://localhost:8180/    → 登录后 http://localhost/production/login'
 Write-Host '  运营端（平台）  http://localhost:8190/    → 登录后 http://localhost:8190/admin/login'
 Write-Host '  后端直连（调试）http://localhost:8092/api/v1/production'
