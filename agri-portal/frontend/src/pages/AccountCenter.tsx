@@ -12,6 +12,7 @@ interface MerchantRow {
   industry: string | null
   companySize: string | null
   businessType: string | null
+  creditCode: string | null
   creditCodeMasked: string | null
   contactName: string | null
   contactPhone: string | null
@@ -21,6 +22,22 @@ interface MerchantRow {
   verifyTime: string | null
   verifyRemark: string | null
   roleInMerchant: string
+  certification: {
+    id: string
+    certNo: string
+    companyName: string
+    creditCode: string
+    legalPerson: string | null
+    licenseNo: string | null
+    contactName: string
+    contactPhone: string
+    attachNote: string | null
+    status: string
+    submitTime: string
+    reviewer: string | null
+    reviewTime: string | null
+    reviewRemark: string | null
+  } | null
 }
 
 interface AddressRow {
@@ -164,6 +181,11 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
   const [joinRole, setJoinRole] = useState('buyer')
   const [joinMessage, setJoinMessage] = useState('')
   const [createBusinessOpen, setCreateBusinessOpen] = useState(false)
+  const [certificationTarget, setCertificationTarget] = useState<MerchantRow | null>(null)
+  const [certificationForm, setCertificationForm] = useState({
+    companyName: '', creditCode: '', legalPerson: '', licenseNo: '',
+    contactName: '', contactPhone: '', attachNote: '',
+  })
   const [createIdentity, setCreateIdentity] = useState<'enterprise' | 'personal'>('enterprise')
   const [createBusinessForm, setCreateBusinessForm] = useState({
     companyName: '', creditCode: '', industry: INDUSTRIES[0], companySize: COMPANY_SIZES[0],
@@ -412,19 +434,46 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
     }
   }
 
-  const startCertification = async (merchant: MerchantRow): Promise<void> => {
+  const startCertification = (merchant: MerchantRow): void => {
     if (merchant.memberType === 'personal') {
       setRealNameOpen(true)
       setTab('business')
       window.setTimeout(() => window.scrollTo({ top: 260, behavior: 'smooth' }), 50)
       return
     }
+    const cert = merchant.certification
+    setCertificationTarget(merchant)
+    setCertificationForm({
+      companyName: cert?.companyName || merchant.merchantName || '',
+      creditCode: cert?.creditCode || merchant.creditCode || '',
+      legalPerson: cert?.legalPerson || '',
+      licenseNo: cert?.licenseNo || '',
+      contactName: cert?.contactName || merchant.contactName || '',
+      contactPhone: cert?.contactPhone || merchant.contactPhone || '',
+      attachNote: cert?.attachNote || '',
+    })
+  }
+
+  const submitEnterpriseCertification = async (event: FormEvent): Promise<void> => {
+    event.preventDefault()
+    if (!certificationTarget) return
+    if (!certificationForm.companyName.trim()) return setError('请填写企业名称')
+    if (!/^[0-9A-Za-z]{15,18}$/.test(certificationForm.creditCode.trim())) {
+      return setError('统一社会信用代码应为 15-18 位字母数字')
+    }
+    if (!certificationForm.legalPerson.trim()) return setError('请填写法定代表人')
+    if (!certificationForm.contactName.trim()) return setError('请填写联系人姓名')
+    if (!/^1[3-9]\d{9}$/.test(certificationForm.contactPhone.trim())) {
+      return setError('请填写正确的 11 位联系电话')
+    }
     setBusy(true)
     try {
-      const result = await api(`/api/v1/sso/account/businesses/${merchant.merchantId}/submit-certification`, {
+      const result = await api(`/api/v1/sso/account/businesses/${certificationTarget.merchantId}/submit-certification`, {
         method: 'POST',
+        body: JSON.stringify(certificationForm),
       })
       if (result.code !== 0) return setError(result.message ?? '认证提交失败')
+      setCertificationTarget(null)
       flash('企业认证已提交平台审核')
       await load()
     } finally {
@@ -656,6 +705,14 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
                       </div>
                       {merchant.address && <p className="merchant-address">注册地址：{merchant.address}</p>}
                       {merchant.verifyRemark && <p className="merchant-review">审核意见：{merchant.verifyRemark}</p>}
+                      {merchant.certification && (
+                        <div className="certification-track">
+                          <span>认证单号</span><b>{merchant.certification.certNo}</b>
+                          <span>提交时间</span><b>{String(merchant.certification.submitTime).replace('T', ' ').slice(0, 16)}</b>
+                          {merchant.certification.legalPerson && <><span>法定代表人</span><b>{merchant.certification.legalPerson}</b></>}
+                          {merchant.certification.reviewTime && <><span>审核时间</span><b>{String(merchant.certification.reviewTime).replace('T', ' ').slice(0, 16)}</b></>}
+                        </div>
+                      )}
                     </div>
                     <div className="merchant-row-actions">
                       <span className={`account-status ${tone(merchant.verifyStatus)}`}>{statusText(merchant.verifyStatus)}</span>
@@ -741,6 +798,34 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
                 <div className="account-form-actions">
                   <button className="btn btn-primary" disabled={busy}>{busy ? '创建中…' : '创建主体'}</button>
                   <button type="button" className="btn btn-ghost" onClick={() => setCreateBusinessOpen(false)}>取消</button>
+                </div>
+              </form>
+            </div>
+          )}
+          {certificationTarget && (
+            <div className="account-modal-mask" onClick={() => setCertificationTarget(null)}>
+              <form className="account-modal" onClick={(event) => event.stopPropagation()}
+                onSubmit={(event) => void submitEnterpriseCertification(event)}>
+                <div className="account-card-head">
+                  <h2>企业主体认证</h2>
+                  <button type="button" className="account-modal-close" onClick={() => setCertificationTarget(null)}>×</button>
+                </div>
+                {certificationTarget.verifyStatus === 'rejected' && (
+                  <div className="account-error">上次认证被驳回，请根据审核意见修改后重新提交。</div>
+                )}
+                <div className="account-form-grid">
+                  <label>企业名称<span className="account-required">*</span><input className="input" value={certificationForm.companyName} onChange={(event) => setCertificationForm({ ...certificationForm, companyName: event.target.value })} /></label>
+                  <label>统一社会信用代码<span className="account-required">*</span><input className="input" maxLength={18} value={certificationForm.creditCode} onChange={(event) => setCertificationForm({ ...certificationForm, creditCode: event.target.value.replace(/\s/g, '').toUpperCase() })} /></label>
+                  <label>法定代表人<span className="account-required">*</span><input className="input" value={certificationForm.legalPerson} placeholder="请输入法定代表人或经营者姓名" onChange={(event) => setCertificationForm({ ...certificationForm, legalPerson: event.target.value })} /></label>
+                  <label>营业执照号<input className="input" value={certificationForm.licenseNo} placeholder="如与统一社会信用代码相同可留空" onChange={(event) => setCertificationForm({ ...certificationForm, licenseNo: event.target.value })} /></label>
+                  <label>联系人姓名<span className="account-required">*</span><input className="input" value={certificationForm.contactName} onChange={(event) => setCertificationForm({ ...certificationForm, contactName: event.target.value })} /></label>
+                  <label>联系电话<span className="account-required">*</span><input className="input" maxLength={11} value={certificationForm.contactPhone} onChange={(event) => setCertificationForm({ ...certificationForm, contactPhone: event.target.value.replace(/\D/g, '') })} /></label>
+                </div>
+                <label>认证材料说明<textarea className="input account-textarea" value={certificationForm.attachNote} placeholder="可填写经营范围、资质说明及需平台核验的材料信息" onChange={(event) => setCertificationForm({ ...certificationForm, attachNote: event.target.value })} /></label>
+                <p className="muted">提交后进入平台审核；审核通过前不会改变主体已有业务权限。</p>
+                <div className="account-form-actions">
+                  <button className="btn btn-primary" disabled={busy}>{busy ? '提交中…' : '提交认证审核'}</button>
+                  <button type="button" className="btn btn-ghost" onClick={() => setCertificationTarget(null)}>取消</button>
                 </div>
               </form>
             </div>

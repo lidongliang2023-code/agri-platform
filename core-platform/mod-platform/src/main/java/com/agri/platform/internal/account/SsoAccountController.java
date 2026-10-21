@@ -355,6 +355,7 @@ public class SsoAccountController {
     /** 将指定企业主体当前草稿/驳回认证提交为待审核。 */
     @PostMapping("/businesses/{merchantId}/submit-certification")
     public ApiResponse<Void> submitEnterpriseCertification(@PathVariable Long merchantId,
+                                                           @RequestBody(required = false) CertificationSubmitRequest body,
                                                            HttpServletRequest request) {
         long[] session = requireSession(request);
         if (!merchantIdsOfUser(session[0]).contains(merchantId)) {
@@ -364,27 +365,70 @@ public class SsoAccountController {
         if (merchant == null || "personal".equalsIgnoreCase(merchant.getMemberType())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "该主体不是企业主体");
         }
+        String companyName = trim(body == null ? null : body.getCompanyName());
+        String creditCode = trim(body == null ? null : body.getCreditCode());
+        String legalPerson = trim(body == null ? null : body.getLegalPerson());
+        String contactName = trim(body == null ? null : body.getContactName());
+        String contactPhone = trim(body == null ? null : body.getContactPhone());
+        String licenseNo = trim(body == null ? null : body.getLicenseNo());
+        String attachNote = trim(body == null ? null : body.getAttachNote());
+        if (companyName == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "企业认证必须填写企业名称");
+        }
+        if (creditCode == null || !creditCode.matches("[0-9A-Za-z]{15,18}")) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "统一社会信用代码应为 15-18 位字母数字");
+        }
+        if (legalPerson == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "企业认证必须填写法定代表人");
+        }
+        if (contactName == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "企业认证必须填写联系人姓名");
+        }
+        if (contactPhone == null || !contactPhone.matches("^1[3-9]\\d{9}$")) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "企业认证联系电话格式不正确");
+        }
+        Long duplicateCredit = merchantMapper.selectCount(new LambdaQueryWrapper<MerchantEntity>()
+                .eq(MerchantEntity::getCreditCode, creditCode)
+                .ne(MerchantEntity::getId, merchantId));
+        if (duplicateCredit != null && duplicateCredit > 0) {
+            throw new BusinessException(ErrorCode.CONFLICT, "该统一社会信用代码已绑定其他经营主体");
+        }
         MerchantCertificationEntity cert = certificationMapper.selectOne(
                 new LambdaQueryWrapper<MerchantCertificationEntity>()
                         .eq(MerchantCertificationEntity::getMerchantId, merchantId)
                         .orderByDesc(MerchantCertificationEntity::getId)
                         .last("LIMIT 1"));
         LocalDateTime now = LocalDateTime.now();
-        if (cert == null) {
+        if ("pending".equals(cert == null ? null : cert.getCertStatus())) {
+            throw new BusinessException(ErrorCode.CONFLICT, "该企业主体已有待审核认证，请等待审核结果");
+        }
+        if ("approved".equals(cert == null ? null : cert.getCertStatus())) {
+            throw new BusinessException(ErrorCode.CONFLICT, "该企业主体已经认证通过");
+        }
+        if (cert == null || "rejected".equals(cert.getCertStatus())) {
             cert = new MerchantCertificationEntity();
             cert.setMerchantId(merchantId);
-            cert.setMerchantName(merchant.getName());
-            cert.setCompanyName(merchant.getName());
-            cert.setCreditCode(merchant.getCreditCode());
-            cert.setContactName(merchant.getContactName());
-            cert.setContactPhone(merchant.getContactPhone());
+            cert.setMerchantName(companyName);
+            cert.setCompanyName(companyName);
+            cert.setCreditCode(creditCode);
+            cert.setLegalPerson(legalPerson);
+            cert.setLicenseNo(licenseNo);
+            cert.setContactName(contactName);
+            cert.setContactPhone(contactPhone);
+            cert.setAttachNote(attachNote);
             cert.setCertNo("CT" + System.currentTimeMillis());
             cert.setCertStatus("draft");
             cert.setSubmitTime(now);
             certificationMapper.insert(cert);
-        }
-        if ("approved".equals(cert.getCertStatus())) {
-            throw new BusinessException(ErrorCode.CONFLICT, "该企业主体已经认证通过");
+        } else {
+            cert.setMerchantName(companyName);
+            cert.setCompanyName(companyName);
+            cert.setCreditCode(creditCode);
+            cert.setLegalPerson(legalPerson);
+            cert.setLicenseNo(licenseNo);
+            cert.setContactName(contactName);
+            cert.setContactPhone(contactPhone);
+            cert.setAttachNote(attachNote);
         }
         cert.setCertStatus("pending");
         cert.setSubmitTime(now);
@@ -392,6 +436,10 @@ public class SsoAccountController {
         cert.setReviewTime(null);
         cert.setReviewRemark(null);
         certificationMapper.updateById(cert);
+        merchant.setName(companyName);
+        merchant.setCreditCode(creditCode);
+        merchant.setContactName(contactName);
+        merchant.setContactPhone(contactPhone);
         merchant.setVerifyStatus("pending");
         merchant.setVerifyRemark("企业认证已提交，等待平台审核");
         merchantMapper.updateById(merchant);
@@ -522,6 +570,18 @@ public class SsoAccountController {
                 new LambdaQueryWrapper<UserMerchantEntity>()
                         .eq(UserMerchantEntity::getUserId, userId)
                         .eq(UserMerchantEntity::getStatus, 1));
+        List<Long> merchantIds = bindings.stream().map(UserMerchantEntity::getMerchantId).toList();
+        Map<Long, MerchantCertificationEntity> certifications = new LinkedHashMap<>();
+        if (!merchantIds.isEmpty()) {
+            List<MerchantCertificationEntity> records = certificationMapper.selectList(
+                    new LambdaQueryWrapper<MerchantCertificationEntity>()
+                            .in(MerchantCertificationEntity::getMerchantId, merchantIds)
+                            .orderByDesc(MerchantCertificationEntity::getSubmitTime)
+                            .orderByDesc(MerchantCertificationEntity::getId));
+            for (MerchantCertificationEntity record : records) {
+                certifications.putIfAbsent(record.getMerchantId(), record);
+            }
+        }
         List<Map<String, Object>> rows = new ArrayList<>();
         for (UserMerchantEntity binding : bindings) {
             MerchantEntity merchant = merchantMapper.selectById(binding.getMerchantId());
@@ -534,6 +594,7 @@ public class SsoAccountController {
             row.put("industry", merchant == null ? null : merchant.getIndustry());
             row.put("companySize", merchant == null ? null : merchant.getCompanySize());
             row.put("businessType", merchant == null ? null : merchant.getBusinessType());
+            row.put("creditCode", merchant == null ? null : merchant.getCreditCode());
             row.put("creditCodeMasked", merchant == null ? null : maskCreditCode(merchant.getCreditCode()));
             row.put("contactName", merchant == null ? null : merchant.getContactName());
             row.put("contactPhone", merchant == null ? null : merchant.getContactPhone());
@@ -543,9 +604,30 @@ public class SsoAccountController {
             row.put("verifyTime", merchant == null ? null : merchant.getVerifyTime());
             row.put("verifyRemark", merchant == null ? null : merchant.getVerifyRemark());
             row.put("roleInMerchant", binding.getRoleInMerchant());
+            MerchantCertificationEntity certification = certifications.get(binding.getMerchantId());
+            row.put("certification", certification == null ? null : certificationView(certification));
             rows.add(row);
         }
         return rows;
+    }
+
+    private Map<String, Object> certificationView(MerchantCertificationEntity entity) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("id", String.valueOf(entity.getId()));
+        row.put("certNo", entity.getCertNo());
+        row.put("companyName", entity.getCompanyName());
+        row.put("creditCode", entity.getCreditCode());
+        row.put("legalPerson", entity.getLegalPerson());
+        row.put("licenseNo", entity.getLicenseNo());
+        row.put("contactName", entity.getContactName());
+        row.put("contactPhone", entity.getContactPhone());
+        row.put("attachNote", entity.getAttachNote());
+        row.put("status", entity.getCertStatus());
+        row.put("submitTime", entity.getSubmitTime());
+        row.put("reviewer", entity.getReviewer());
+        row.put("reviewTime", entity.getReviewTime());
+        row.put("reviewRemark", entity.getReviewRemark());
+        return row;
     }
 
     private List<Map<String, Object>> addressRows(Long userId) {
@@ -754,6 +836,17 @@ public class SsoAccountController {
         private String validStart;
         private String validEnd;
         private String email;
+    }
+
+    @Data
+    public static class CertificationSubmitRequest {
+        private String companyName;
+        private String creditCode;
+        private String legalPerson;
+        private String licenseNo;
+        private String contactName;
+        private String contactPhone;
+        private String attachNote;
     }
 
     @Data

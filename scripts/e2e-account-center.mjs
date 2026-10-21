@@ -226,17 +226,59 @@ try {
   check(createEnterprise.code === 0 && addedEnterprise?.memberType === 'enterprise'
     && addedEnterprise?.verifyStatus !== 'approved',
   '已有主体账号可创建待认证企业主体', addedEnterprise?.merchantName ?? '')
+  if (addedEnterprise?.merchantName) {
+    await page.goto(`${PORTAL}#/account?tab=business`, { waitUntil: 'networkidle2', timeout: 60000 })
+    await page.waitForSelector('.account-tabs button', { timeout: 20000 })
+    await page.evaluate(() => {
+      const button = [...document.querySelectorAll('.account-tabs button')]
+        .find((item) => item.textContent?.includes('主体资料与认证'))
+      button?.click()
+    })
+    await page.waitForSelector('.merchant-row', { timeout: 15000 })
+    const openedCertification = await page.evaluate((name) => {
+      const rows = [...document.querySelectorAll('.merchant-row')]
+      const namedRow = rows.find((item) => (item.textContent ?? '').includes(name))
+      const fallbackRow = rows.find((item) => [...item.querySelectorAll('button')]
+        .some((button) => (button.textContent ?? '').trim() === '去认证'))
+      const row = namedRow ?? fallbackRow
+      const button = [...(row?.querySelectorAll('button') ?? [])]
+        .find((item) => (item.textContent ?? '').trim() === '去认证')
+      button?.click()
+      return Boolean(button)
+    }, addedEnterprise.merchantName)
+    check(openedCertification, '待认证企业主体显示去认证操作')
+    await page.waitForSelector('.account-modal', { timeout: 10000 })
+    const certificationText = await page.evaluate(() => document.querySelector('.account-modal')?.innerText ?? '')
+    check(['企业名称', '统一社会信用代码', '法定代表人', '营业执照号', '联系人姓名', '联系电话', '认证材料说明']
+      .every((label) => certificationText.includes(label)),
+    '个人中心企业认证弹窗包含完整认证字段')
+    await page.click('.account-modal-close')
+  }
   let enterpriseCertified = { code: -1 }
   if (addedEnterprise?.merchantId) {
     enterpriseCertified = await request(
       `/api/v1/sso/account/businesses/${addedEnterprise.merchantId}/submit-certification`,
-      { method: 'POST' },
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          companyName: addedEnterprise.merchantName,
+          creditCode: '91370783MA3C8ACC01',
+          legalPerson: '企业认证法人',
+          licenseNo: 'BL-ACCOUNT-CENTER-001',
+          contactName: '企业主体联系人',
+          contactPhone: account.phone,
+          attachNote: '个人中心企业认证联调材料说明',
+        }),
+      },
     )
     const certifiedSummary = await request('/api/v1/sso/account/summary')
     const certifiedMerchant = certifiedSummary.data?.merchants
       ?.find((item) => item.merchantId === addedEnterprise.merchantId)
     check(enterpriseCertified.code === 0 && certifiedMerchant?.verifyStatus === 'pending',
       '未认证企业主体可从入口提交认证审核')
+    check(certifiedMerchant?.certification?.legalPerson === '企业认证法人'
+      && certifiedMerchant?.certification?.status === 'pending',
+    '企业认证资料完整落库并显示认证单号')
   }
 
   const search = await request('/api/v1/sso/account/businesses/search?keyword=%E7%BB%BF%E6%BA%90')
