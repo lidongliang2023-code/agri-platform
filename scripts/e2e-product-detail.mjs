@@ -95,12 +95,10 @@ try {
     const button = [...document.querySelectorAll('.pd-actions button')].find((item) => item.textContent?.includes('立即下单'))
     button?.click()
   })
-  await page.waitForFunction(() => location.pathname === '/login', { timeout: 10000 })
-  const loginRedirect = new URL(page.url()).searchParams.get('redirect') ?? ''
-  check(loginRedirect.includes('/order/create')
-    && loginRedirect.includes(`productId=${product.id}`)
-    && loginRedirect.includes('quantity='),
-  '未登录下单跳转登录并携带下单页与数量回跳地址', loginRedirect)
+  await page.waitForFunction(() => window.location.port === '8090', { timeout: 15000 })
+  check(page.url().includes(':8090/') && page.url().includes('/login')
+    && !page.url().includes(':8086/login'),
+  '未登录下单直接进入统一认证登录页', page.url())
   check(errors.length === 0, '商品详情页无未捕获脚本异常', errors.slice(0, 2).join(' | '))
 } catch (error) {
   check(false, '商品详情回归脚本未抛异常', String(error).slice(0, 240))

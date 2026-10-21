@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import Login from '@/pages/login'
 import OrderDetail from '@/pages/order/detail'
@@ -31,14 +31,24 @@ import AdminContractTemplate from '@/pages/admin/contract-template'
 import AdminCarrier from '@/pages/admin/carrier'
 import ExternalRedirect from '@/pages/admin/external-redirect'
 import { isLoggedIn } from '@/utils/session'
-import { SSO_CALLBACK_PATH } from '@/utils/sso'
+import { redirectToSso, SSO_CALLBACK_PATH } from '@/utils/sso'
+
+function LoginRedirect({ returnTo }: { returnTo: string }): JSX.Element {
+  const started = useRef(false)
+  useEffect(() => {
+    if (started.current) return
+    started.current = true
+    void redirectToSso(returnTo)
+  }, [returnTo])
+  return <div style={{ padding: 40, color: '#6b7c72' }}>正在前往平台认证中心登录…</div>
+}
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   // 登录态从内存里的会话读，不再读 localStorage —— 令牌放 localStorage 会被任何一处 XSS 拿走
   const location = useLocation()
   // 带上原路径：从会员中心/订单页被弹去登录后，登录成功要回到原页面，而不是统一回首页。
-  const redirect = encodeURIComponent(`${location.pathname}${location.search}`)
-  return isLoggedIn() ? <>{children}</> : <Navigate to={`/login?redirect=${redirect}`} replace />
+  const returnTo = `${location.pathname}${location.search}`
+  return isLoggedIn() ? <>{children}</> : <LoginRedirect returnTo={returnTo} />
 }
 
 /** 交易端主体资料与认证已迁移到门户个人中心。 */

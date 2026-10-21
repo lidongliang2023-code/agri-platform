@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { Empty, InputNumber, Spin, message } from 'antd'
 import {
   CheckCircleOutlined,
@@ -20,6 +20,7 @@ import {
   type PublicProductDetail,
 } from '@/api/product'
 import { isLoggedIn } from '@/utils/session'
+import { redirectToSso } from '@/utils/sso'
 import { BrandMark } from '@/components/BrandMark'
 import '../../hall/hall.css'
 import './product-detail.css'
@@ -119,7 +120,6 @@ function InfoLine({ label, value }: { label: string; value: string }): JSX.Eleme
 
 export default function ProductDetail(): JSX.Element {
   const { id } = useParams()
-  const navigate = useNavigate()
   const [product, setProduct] = useState<PublicProductDetail | null>(null)
   const [images, setImages] = useState<DetailImage[]>([])
   const [similar, setSimilar] = useState<SimilarProduct[]>([])
@@ -212,10 +212,10 @@ export default function ProductDetail(): JSX.Element {
 
   const goProtected = (path: string): void => {
     if (!isLoggedIn()) {
-      navigate(`/login?redirect=${encodeURIComponent(path)}`)
+      void redirectToSso(path)
       return
     }
-    navigate(path)
+    window.location.href = path
   }
 
   if (loading) {
@@ -245,7 +245,7 @@ export default function ProductDetail(): JSX.Element {
             <a href="/member/buyer">我是买家</a><span className="sep">·</span>
             <a href="/member/seller">我是卖家</a><span className="sep">·</span>
             <a href="/member/buyer">会员中心</a><span className="sep">·</span>
-            <a href="/login"><UserOutlined />登录</a><span className="sep">·</span>
+            <a href="#platform-login" onClick={(event) => { event.preventDefault(); void redirectToSso(`${window.location.pathname}${window.location.search}`) }}><UserOutlined />登录</a><span className="sep">·</span>
             <a href={SSO_REGISTER}>免费注册</a>
           </span>
         </div>

@@ -4,7 +4,7 @@ import { BrowserRouter } from 'react-router-dom'
 import axios from 'axios'
 import App from './App'
 import { getAccessToken } from './utils/session'
-import { refreshAccessToken, LOGIN_PATH, SSO_CALLBACK_PATH } from './utils/sso'
+import { redirectToSso, refreshAccessToken, LOGIN_PATH, SSO_CALLBACK_PATH } from './utils/sso'
 import './index.css'
 
 /**
@@ -28,9 +28,15 @@ axios.interceptors.response.use(
   (error) => {
     // 401 = 没登录或令牌过期：清掉会话并送回登录页（登录页与回跳页自身除外，否则会死循环）
     if (error?.response?.status === 401) {
-      const { pathname } = window.location
-      if (pathname !== LOGIN_PATH && pathname !== SSO_CALLBACK_PATH) {
-        window.location.href = `${LOGIN_PATH}?redirect=${encodeURIComponent(pathname)}`
+      const { pathname, search, hash } = window.location
+      const headers = (error.config as {
+        headers?: Record<string, unknown> & { get?: (name: string) => unknown }
+      } | undefined)?.headers
+      const silent = headers?.get?.('X-Skip-Auth-Redirect') === '1'
+        || headers?.['X-Skip-Auth-Redirect'] === '1'
+        || headers?.['x-skip-auth-redirect'] === '1'
+      if (!silent && pathname !== LOGIN_PATH && pathname !== SSO_CALLBACK_PATH) {
+        void redirectToSso(`${pathname}${search}${hash}`)
       }
     }
     return Promise.reject(error)

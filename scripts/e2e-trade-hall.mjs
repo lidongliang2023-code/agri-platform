@@ -126,9 +126,9 @@ try {
 
   // 未登录报价 → 登录回跳
   await page.evaluate(() => document.querySelector('.hall-quote')?.click())
-  await sleep(1200)
-  check(page.url().includes('/login') && page.url().includes('redirect'),
-    '未登录点击报价会跳到登录并携带回跳地址', page.url())
+  await page.waitForFunction(() => window.location.port === '8090', { timeout: 15000 })
+  check(page.url().includes(':8090/') && page.url().includes('/login'),
+    '未登录点击报价直达统一认证登录页', page.url())
 
   // 商品详情公开，写操作才需要登录
   const ctx2 = await browser.createBrowserContext()

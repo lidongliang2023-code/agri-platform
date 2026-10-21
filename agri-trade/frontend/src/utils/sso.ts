@@ -36,6 +36,7 @@ function resolveSsoOrigin(): string {
 const VERIFIER_KEY = 'agri_trade_code_verifier'
 const STATE_KEY = 'agri_trade_state'
 const RETURN_KEY = 'agri_trade_return'
+let redirectingToSso = false
 
 function base64Url(bytes: Uint8Array): string {
   let binary = ''
@@ -57,21 +58,28 @@ async function codeChallengeOf(verifier: string): Promise<string> {
 
 /** 跳转到认证中心授权端点。verifier 与 state 是本次跳转的短期状态，放 sessionStorage。 */
 export async function redirectToSso(returnTo?: string): Promise<void> {
-  const verifier = randomBase64Url()
-  const state = randomBase64Url(16)
-  sessionStorage.setItem(VERIFIER_KEY, verifier)
-  sessionStorage.setItem(STATE_KEY, state)
-  if (returnTo) {
-    sessionStorage.setItem(RETURN_KEY, returnTo)
+  if (redirectingToSso) return
+  redirectingToSso = true
+  try {
+    const verifier = randomBase64Url()
+    const state = randomBase64Url(16)
+    sessionStorage.setItem(VERIFIER_KEY, verifier)
+    sessionStorage.setItem(STATE_KEY, state)
+    if (returnTo) {
+      sessionStorage.setItem(RETURN_KEY, returnTo)
+    }
+    const params = new URLSearchParams({
+      client_id: SSO_CLIENT_ID,
+      redirect_uri: `${window.location.origin}${SSO_CALLBACK_PATH}`,
+      state,
+      code_challenge: await codeChallengeOf(verifier),
+      code_challenge_method: 'S256',
+    })
+    window.location.href = `${resolveSsoOrigin()}/authorize?${params.toString()}`
+  } catch (error) {
+    redirectingToSso = false
+    throw error
   }
-  const params = new URLSearchParams({
-    client_id: SSO_CLIENT_ID,
-    redirect_uri: `${window.location.origin}${SSO_CALLBACK_PATH}`,
-    state,
-    code_challenge: await codeChallengeOf(verifier),
-    code_challenge_method: 'S256',
-  })
-  window.location.href = `${resolveSsoOrigin()}/authorize?${params.toString()}`
 }
 
 /** 回跳后要去的页面 */
@@ -131,7 +139,11 @@ export async function refreshAccessToken(): Promise<SsoLoginResult | null> {
     const response = await axios.post(
       '/api/v1/auth/refresh',
       {},
-      { timeout: 20000, withCredentials: true },
+      {
+        timeout: 20000,
+        withCredentials: true,
+        headers: { 'X-Skip-Auth-Redirect': '1' },
+      },
     )
     const body = response.data
     if (!body || body.code !== 0 || !body.data) {

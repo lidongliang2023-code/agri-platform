@@ -7,6 +7,7 @@ import {
   UserOutlined,
 } from '@ant-design/icons'
 import { isLoggedIn } from '@/utils/session'
+import { redirectToSso } from '@/utils/sso'
 import { BrandMark } from '@/components/BrandMark'
 import {
   HALL_PROVINCES,
@@ -238,7 +239,7 @@ export default function TradeHall(): JSX.Element {
     if (isLoggedIn()) {
       window.location.href = target
     } else {
-      window.location.href = `/login?redirect=${encodeURIComponent(target)}`
+      void redirectToSso(target)
     }
     void demand
   }
@@ -254,7 +255,7 @@ export default function TradeHall(): JSX.Element {
             <a href="/member/buyer">我是买家</a><span className="sep">·</span>
             <a href="/member/seller">我是卖家</a><span className="sep">·</span>
             <a href="/member/buyer">会员中心</a><span className="sep">·</span>
-            <a href="/login"><UserOutlined />登录</a><span className="sep">·</span>
+            <a href="#platform-login" onClick={(event) => { event.preventDefault(); void redirectToSso(`${window.location.pathname}${window.location.search}`) }}><UserOutlined />登录</a><span className="sep">·</span>
             <a href={SSO_REGISTER}>免费注册</a>
           </span>
         </div>

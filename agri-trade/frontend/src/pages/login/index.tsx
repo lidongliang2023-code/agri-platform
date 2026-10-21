@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Button, Card } from 'antd'
 import { MessageOutlined } from '@ant-design/icons'
 import { useSearchParams } from 'react-router-dom'
@@ -15,15 +15,25 @@ import { redirectToSso } from '../../utils/sso'
 export default function Login() {
   const [params] = useSearchParams()
   const [redirecting, setRedirecting] = useState(false)
+  const [error, setError] = useState('')
+  const started = useRef(false)
 
   const handleLogin = async () => {
     setRedirecting(true)
+    setError('')
     try {
       await redirectToSso(params.get('redirect') ?? undefined)
     } catch {
       setRedirecting(false)
+      setError('无法连接统一认证中心，请稍后重试')
     }
   }
+
+  useEffect(() => {
+    if (started.current) return
+    started.current = true
+    void handleLogin()
+  }, [])
 
   return (
     <div
@@ -40,7 +50,7 @@ export default function Login() {
         <h2 style={{ margin: '16px 0 4px' }}>交易撮合平台</h2>
         <p style={{ color: '#999', margin: 0 }}>农业产业互联网平台</p>
         <p style={{ color: '#999', fontSize: 13, marginTop: 24 }}>
-          使用平台统一账号登录，本系统不保存你的密码
+          {error || '正在前往平台统一认证中心，本系统不保存你的密码'}
         </p>
         <Button
           type="primary"
@@ -50,7 +60,7 @@ export default function Login() {
           onClick={handleLogin}
           style={{ height: 44, fontSize: 16, marginTop: 8 }}
         >
-          前往平台认证中心登录
+          {redirecting ? '正在前往认证中心…' : '重新前往平台认证中心'}
         </Button>
       </Card>
     </div>
