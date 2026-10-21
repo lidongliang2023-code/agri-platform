@@ -7,7 +7,8 @@ import jakarta.validation.constraints.NotBlank;
 
  *
  * @param phone 手机号
- * @param scene 场景：{@code login} 登录 / {@code register} 注册 / {@code change_phone} 更换手机（场景码互不通用）
+ * @param scene 场景：{@code login} 登录 / {@code register} 注册 /
+ *              {@code change_phone} 更换手机 / {@code reset_password} 找回密码（场景码互不通用）
  */
 public record SmsCodeRequest(
         @NotBlank(message = "手机号不能为空") String phone,

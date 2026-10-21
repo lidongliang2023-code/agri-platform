@@ -125,9 +125,14 @@ public class AuthService {
             // 取不到用户：登录本就在过期/伪造令牌状态下登出，无需再做全端吊销
             return;
         }
+        revokeAllSessions(userId);
+    }
+
+    /** 吊销某用户全部刷新令牌与访问令牌（登出、密码重置等安全事件共用）。 */
+    public void revokeAllSessions(Long userId) {
         int refreshRevoked = tokenService.revokeAllForUser(userId);
         int accessRevoked = revocationService.revokeAllForUser(userId);
-        log.info("登出全端联动：用户 {} 吊销刷新令牌 {} 枚、访问令牌 {} 枚", userId, refreshRevoked, accessRevoked);
+        log.info("用户 {} 全端令牌吊销：刷新令牌 {} 枚、访问令牌 {} 枚", userId, refreshRevoked, accessRevoked);
     }
 
     public UserVO me() {

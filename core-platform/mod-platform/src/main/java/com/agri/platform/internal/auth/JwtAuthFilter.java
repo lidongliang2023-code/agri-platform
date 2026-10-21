@@ -53,6 +53,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             "/api/v1/sso/login-standalone",
             "/api/v1/sso/login-standalone-by-sms",
             "/api/v1/sso/register-by-sms",
+            "/api/v1/sso/password-reset",
             // 分步注册：前三个发生在拿令牌之前；status 用 SSO HttpOnly 会话校验，
             // controller 内会拒绝无会话请求，不能再要求浏览器携带访问令牌。
             "/api/v1/sso/register-account",

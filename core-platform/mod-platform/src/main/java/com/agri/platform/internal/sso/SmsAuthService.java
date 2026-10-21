@@ -105,7 +105,8 @@ public class SmsAuthService {
 
      *
      * @param phone 手机号（11 位）
-     * @param scene 场景：login 登录 / register 注册 / change_phone 更换手机（不同场景的码不通用）
+     * @param scene 场景：login 登录 / register 注册 / change_phone 更换手机 /
+     *              reset_password 找回密码（不同场景的码不通用）
      */
     public void send(String phone, String scene) {
         String normalized = normalizePhone(phone);
@@ -179,6 +180,29 @@ public class SmsAuthService {
             throw new BusinessException(ErrorCode.USER_DISABLED);
         }
         return user;
+    }
+
+    /**
+     * 手机验证码自助重置密码。
+     *
+     * <p>验证码成功校验后立即作废；密码规则与注册、修改密码保持一致。
+     * 调用方随后必须吊销该用户已有令牌与 SSO 会话。</p>
+     *
+     * @return 被重置密码的用户 ID
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public Long resetPassword(String phone, String code, String newPassword) {
+        if (newPassword == null || newPassword.length() < 8 || newPassword.length() > 20
+                || !newPassword.matches(".*[A-Za-z].*") || !newPassword.matches(".*\\d.*")) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "密码应为 8-20 位，且同时包含字母和数字");
+        }
+        verify(phone, "reset_password", code);
+        UserEntity user = requireUserByPhone(phone);
+        user.setPassword(passwordEncoder.encode(newPassword));
+        user.setUpdatedAt(LocalDateTime.now());
+        userMapper.updateById(user);
+        log.info("用户 {} 已通过短信验证码重置登录密码", user.getId());
+        return user.getId();
     }
 
     /**
@@ -739,8 +763,10 @@ public class SmsAuthService {
     }
 
     private static void assertScene(String scene) {
-        if (!"login".equals(scene) && !"register".equals(scene) && !"change_phone".equals(scene)) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "场景只能是 login、register 或 change_phone");
+        if (!"login".equals(scene) && !"register".equals(scene) && !"change_phone".equals(scene)
+                && !"reset_password".equals(scene)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "场景只能是 login、register、change_phone 或 reset_password");
         }
     }
 

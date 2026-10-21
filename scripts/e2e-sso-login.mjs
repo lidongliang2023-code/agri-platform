@@ -196,31 +196,30 @@ try {
   const pageC = await ctxC.newPage()
   await pageC.setViewport({ width: 1440, height: 1000 })
   let standaloneRegisterBody = null
+  let standaloneCertificationBody = null
   pageC.on('response', async (res) => {
-    if (/\/api\/v1\/sso\/register-by-sms$/.test(res.url())) {
+    if (/\/api\/v1\/sso\/register-account$/.test(res.url())) {
       try {
         standaloneRegisterBody = { status: res.status(), json: await res.json() }
       } catch { /* ignore */ }
     }
+    if (/\/api\/v1\/sso\/onboarding\/certification$/.test(res.url())) {
+      try {
+        standaloneCertificationBody = { status: res.status(), json: await res.json() }
+      } catch { /* ignore */ }
+    }
   })
   await pageC.goto(`${BASE_URL}:8090/register`, { waitUntil: 'networkidle2', timeout: 60000 })
-  await pageC.waitForSelector('.identity-cards', { timeout: 15000 })
+  await pageC.waitForSelector('input[placeholder="8-20 位字母+数字"]', { timeout: 15000 })
   const standaloneText = await pageC.evaluate(() => document.body.innerText)
   const registerDisabled = await pageC.evaluate(() => {
-    const btn = [...document.querySelectorAll('button[type="submit"]')].find((b) => (b.textContent ?? '').includes('免费注册'))
+    const btn = [...document.querySelectorAll('button[type="submit"]')].find((b) => (b.textContent ?? '').includes('下一步：创建主体'))
     return btn ? btn.disabled : true
   })
   check(standaloneText.includes('当前为独立注册') && !registerDisabled,
     '直接打开 /register（无授权上下文）时提交按钮可用')
 
-  await pageC.evaluate(() => {
-    const card = [...document.querySelectorAll('.identity-card')].find((el) => (el.textContent ?? '').includes('个人会员'))
-    card?.click()
-  })
-  await sleep(300)
-  await fill(pageC, 'input[placeholder="请输入真实姓名"]', '独立注册联调')
-  await fill(pageC, 'input[placeholder="用于接收重要通知"]', '独立注册联系人')
-  await fill(pageC, 'input[placeholder="11 位手机号"]', registerPhone)
+  await fill(pageC, 'input[placeholder="请输入 11 位手机号"]', registerPhone)
   await pageC.evaluate(() => {
     const btn = [...document.querySelectorAll('button')].find((b) => (b.textContent ?? '').includes('获取验证码'))
     btn?.click()
@@ -232,9 +231,29 @@ try {
   await fill(pageC, 'input[placeholder="6 位验证码"]', registerCode)
   await fill(pageC, 'input[placeholder="8-20 位字母+数字"]', registerPassword)
   await fill(pageC, 'input[placeholder="再次输入密码"]', registerPassword)
+  await pageC.evaluate(() => {
+    const btn = [...document.querySelectorAll('button[type="submit"]')].find((b) => (b.textContent ?? '').includes('下一步：创建主体'))
+    btn?.click()
+  })
+  await pageC.waitForSelector('.identity-cards', { timeout: 15000 })
+  await pageC.evaluate(() => {
+    const card = [...document.querySelectorAll('.identity-card')].find((el) => (el.textContent ?? '').includes('个人会员'))
+    card?.click()
+  })
+  await sleep(300)
+  await fill(pageC, 'input[placeholder="请输入真实姓名"]', '独立注册联调')
+  await fill(pageC, 'input[placeholder="18 位身份证号（仅存掩码与摘要）"]', '11010519491231002X')
+  await fill(pageC, 'input[placeholder="用于接收重要通知"]', '独立注册联系人')
+  await pageC.evaluate(() => {
+    const btn = [...document.querySelectorAll('button[type="submit"]')]
+      .find((b) => (b.textContent ?? '').includes('下一步：认证开通'))
+    btn?.click()
+  })
+  await pageC.waitForSelector('.agreement input[type="checkbox"]', { timeout: 15000 })
   await pageC.evaluate(() => document.querySelector('.agreement input[type="checkbox"]')?.click())
   await pageC.evaluate(() => {
-    const btn = [...document.querySelectorAll('button[type="submit"]')].find((b) => (b.textContent ?? '').includes('免费注册'))
+    const btn = [...document.querySelectorAll('button[type="submit"]')]
+      .find((b) => (b.textContent ?? '').includes('提交认证并开通'))
     btn?.click()
   })
   await pageC.waitForSelector('.success-mask', { visible: true, timeout: 20000 })
@@ -242,9 +261,12 @@ try {
   check(standaloneSuccess.includes('注册成功') && standaloneSuccess.includes('已登录认证中心'),
     '独立注册：页面展示成功并说明已登录认证中心', standaloneSuccess.replace(/\s+/g, ' ').slice(0, 90))
   check(standaloneRegisterBody?.status === 200 && standaloneRegisterBody?.json?.code === 0
-    && standaloneRegisterBody?.json?.data?.redirect === null,
-    '独立注册：接口返回 redirect=null（不伪造子系统回跳）',
-    JSON.stringify(standaloneRegisterBody?.json?.data ?? {}).slice(0, 60))
+    && standaloneRegisterBody?.json?.data?.stage === 'subject',
+    '独立注册：第 1 步只创建账号并进入主体阶段')
+  check(standaloneCertificationBody?.status === 200 && standaloneCertificationBody?.json?.code === 0
+    && standaloneCertificationBody?.json?.data?.redirect === null,
+    '独立注册：认证开通返回 redirect=null（不伪造子系统回跳）',
+    JSON.stringify(standaloneCertificationBody?.json?.data ?? {}).slice(0, 60))
 
   await pageC.evaluate(() => {
     const btn = [...document.querySelectorAll('.success-actions button')].find((b) => (b.textContent ?? '').includes('进入生产管理'))
@@ -274,8 +296,10 @@ try {
     btn?.click()
   })
   const registerPasswordLanded = await waitLanded(pageD)
-  check(registerPasswordLanded.startsWith(BASE_URL) && !registerPasswordLanded.includes(':8090') && !registerPasswordLanded.includes('/login'),
-    '独立注册的账号可用手机号 + 密码登录', registerPasswordLanded)
+  const pendingText = await pageD.evaluate(() => document.body.innerText)
+  check(registerPasswordLanded.includes(':8090/register') && registerPasswordLanded.includes('step=3')
+    && pendingText.includes('平台正在审核中'),
+  '独立注册的账号可用手机号 + 密码登录并进入认证进度', registerPasswordLanded)
   await ctxD.close()
 } catch (error) {
   check(false, '脚本执行未抛异常', String(error).slice(0, 160))

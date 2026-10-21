@@ -538,6 +538,19 @@ body {
   text-decoration: underline;
 }
 
+.auth-reset-back {
+  align-self: flex-start;
+  margin: 4px 0 16px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--auth-green-700);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+
 .auth-error {
   margin-top: 14px;
   padding: 10px 14px;

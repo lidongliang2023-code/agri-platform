@@ -117,6 +117,26 @@ public class SsoController {
                         : "验证码已发送"));
     }
 
+    /**
+     * 手机号验证码自助重置密码。
+     *
+     * <p>该端点在未登录时调用。重置成功后吊销该用户全部平台令牌与 SSO 会话，
+     * 防止旧会话在修改密码后继续使用。</p>
+     */
+    @PostMapping("/password-reset")
+    public ApiResponse<Void> resetPassword(@RequestBody PasswordResetRequest request) {
+        if (request == null || trimToNull(request.phone()) == null || trimToNull(request.code()) == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "手机号与验证码不能为空");
+        }
+        if (request.newPassword() == null || !request.newPassword().equals(request.confirmPassword())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "两次输入的密码不一致");
+        }
+        Long userId = smsAuthService.resetPassword(request.phone(), request.code(), request.newPassword());
+        sessionService.revokeAllForUser(userId);
+        authService.revokeAllSessions(userId);
+        return ApiResponse.ok();
+    }
+
     /** 手机验证码登录：凭据是「手机号 + 短信验证码」，其余与密码登录同一套授权上下文。 */
     @PostMapping("/login-by-sms")
     public ApiResponse<SsoLoginResult> loginBySms(@Valid @RequestBody SmsLoginRequest request,
@@ -266,6 +286,9 @@ public class SsoController {
 
     public record AccountRegisterRequest(String phone, String code, String password, String nickname,
                                          Long marketId, Boolean remember) {
+    }
+
+    public record PasswordResetRequest(String phone, String code, String newPassword, String confirmPassword) {
     }
 
     public record StandaloneLoginRequest(String username, String phone, String password,

@@ -8,6 +8,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
+import java.util.Set;
 import java.util.UUID;
 
 // SSO 全局会话（V2.0 第 5.1 节：「浏览器侧 SSO 域 HttpOnly 会话 Cookie + 服务端会话」）。
@@ -20,6 +21,7 @@ import java.util.UUID;
 public class SsoSessionService {
 
     private static final String KEY_PREFIX = "agri:sso:session:";
+    private static final String USER_INDEX_PREFIX = "agri:sso:user-sessions:";
     /** 「7 天内自动登录」勾选后的会话有效期 */
     private static final long REMEMBER_SECONDS = 7L * 24 * 3600;
 
@@ -46,6 +48,9 @@ public class SsoSessionService {
         long seconds = remember ? REMEMBER_SECONDS : properties.getSessionTtlHours() * 3600;
         redis.opsForValue().set(KEY_PREFIX + sid, userId + ":" + marketId,
                 Duration.ofSeconds(seconds));
+        String userIndex = USER_INDEX_PREFIX + userId;
+        redis.opsForSet().add(userIndex, sid);
+        redis.expire(userIndex, Duration.ofDays(7));
         response.addHeader("Set-Cookie", cookie(sid, seconds));
         return sid;
     }
@@ -72,9 +77,39 @@ public class SsoSessionService {
     public void destroy(HttpServletRequest request, HttpServletResponse response) {
         String sid = readSid(request);
         if (sid != null) {
+            String value = redis.opsForValue().get(KEY_PREFIX + sid);
             redis.delete(KEY_PREFIX + sid);
+            removeFromUserIndex(sid, value);
         }
         response.addHeader("Set-Cookie", cookie("", 0L));
+    }
+
+    /**
+     * 吊销某用户全部 SSO 浏览器会话。
+     *
+     * <p>密码重置后使用：仅吊销访问令牌还不够，旧 SSO Cookie 仍可通过授权端点换到新令牌。</p>
+     */
+    public int revokeAllForUser(Long userId) {
+        String userIndex = USER_INDEX_PREFIX + userId;
+        Set<String> sessions = redis.opsForSet().members(userIndex);
+        int revoked = 0;
+        if (sessions != null) {
+            for (String sid : sessions) {
+                if (Boolean.TRUE.equals(redis.delete(KEY_PREFIX + sid))) {
+                    revoked++;
+                }
+            }
+        }
+        redis.delete(userIndex);
+        return revoked;
+    }
+
+    private void removeFromUserIndex(String sid, String sessionValue) {
+        if (sessionValue == null || !sessionValue.contains(":")) {
+            return;
+        }
+        String userId = sessionValue.substring(0, sessionValue.indexOf(':'));
+        redis.opsForSet().remove(USER_INDEX_PREFIX + userId, sid);
     }
 
     private String readSid(HttpServletRequest request) {

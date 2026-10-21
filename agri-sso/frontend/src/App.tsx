@@ -212,6 +212,8 @@ export default function App(): JSX.Element {
   const [account, setAccount] = useState('')
   const [password, setPassword] = useState('')
   const [remember, setRemember] = useState(true)
+  const [forgotOpen, setForgotOpen] = useState(false)
+  const [resetForm, setResetForm] = useState({ phone: '', code: '', password: '', confirm: '' })
 
   const [reg, setReg] = useState<RegisterForm>({
     identity: new URLSearchParams(window.location.search).get('identity') === 'personal'
@@ -238,9 +240,10 @@ export default function App(): JSX.Element {
   const [notice, setNotice] = useState('')
   const [hint, setHint] = useState('')
   const [busy, setBusy] = useState(false)
-  const [sending, setSending] = useState<'login' | 'register' | null>(null)
+  const [sending, setSending] = useState<'login' | 'register' | 'reset' | null>(null)
   const [loginLeft, setLoginLeft] = useState(0)
   const [registerLeft, setRegisterLeft] = useState(0)
+  const [resetLeft, setResetLeft] = useState(0)
   const [success, setSuccess] = useState<{ redirect: string | null; identity: Identity; hasIdCard: boolean } | null>(null)
   const [accountCreated, setAccountCreated] = useState(false)
   const [onboardingStage, setOnboardingStage] = useState('')
@@ -256,6 +259,12 @@ export default function App(): JSX.Element {
     const timer = window.setTimeout(() => setRegisterLeft(registerLeft - 1), 1000)
     return () => window.clearTimeout(timer)
   }, [registerLeft])
+
+  useEffect(() => {
+    if (resetLeft <= 0) return undefined
+    const timer = window.setTimeout(() => setResetLeft(resetLeft - 1), 1000)
+    return () => window.clearTimeout(timer)
+  }, [resetLeft])
 
   useEffect(() => {
     if (!isRegister) return
@@ -361,7 +370,11 @@ export default function App(): JSX.Element {
     return true
   }
 
-  async function requestCode(scene: 'login' | 'register', targetPhone: string, kind: 'login' | 'register'): Promise<void> {
+  async function requestCode(
+    scene: 'login' | 'register' | 'reset_password',
+    targetPhone: string,
+    kind: 'login' | 'register' | 'reset',
+  ): Promise<void> {
     setError('')
     setHint('')
     setNotice('')
@@ -383,11 +396,65 @@ export default function App(): JSX.Element {
       }
       setHint(body.data?.hint ?? '验证码已发送')
       if (kind === 'login') setLoginLeft(60)
-      else setRegisterLeft(60)
+      else if (kind === 'register') setRegisterLeft(60)
+      else setResetLeft(60)
     } catch {
       setError('无法联系认证服务，请确认后端已启动')
     } finally {
       setSending(null)
+    }
+  }
+
+  async function submitPasswordReset(event: FormEvent): Promise<void> {
+    event.preventDefault()
+    setError('')
+    setNotice('')
+    setHint('')
+    if (!/^1[3-9]\d{9}$/.test(resetForm.phone)) {
+      setError('请输入正确的 11 位手机号')
+      return
+    }
+    if (!/^\d{6}$/.test(resetForm.code)) {
+      setError('请输入 6 位短信验证码')
+      return
+    }
+    if (resetForm.password.length < 8 || resetForm.password.length > 20
+      || !/[a-zA-Z]/.test(resetForm.password) || !/\d/.test(resetForm.password)) {
+      setError('密码应为 8-20 位，且同时包含字母和数字')
+      return
+    }
+    if (resetForm.password !== resetForm.confirm) {
+      setError('两次输入的密码不一致')
+      return
+    }
+    setBusy(true)
+    try {
+      const response = await fetch('/api/v1/sso/password-reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone: resetForm.phone,
+          code: resetForm.code,
+          newPassword: resetForm.password,
+          confirmPassword: resetForm.confirm,
+        }),
+      })
+      const body = (await response.json()) as SsoBody
+      if (!response.ok || body.code !== 0) {
+        setError(body.message ?? '密码重置失败，请重试')
+        return
+      }
+      setForgotOpen(false)
+      setTab('pwd')
+      setAccount(resetForm.phone)
+      setPhone(resetForm.phone)
+      setPassword('')
+      setResetForm({ phone: resetForm.phone, code: '', password: '', confirm: '' })
+      setNotice('密码已重置，请使用新密码登录')
+    } catch {
+      setError('无法联系认证服务，请确认后端已启动')
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -574,7 +641,59 @@ export default function App(): JSX.Element {
     }
   }
 
-  const loginView = (
+  const loginView = forgotOpen ? (
+    <>
+      <div className="form-title">找回密码</div>
+      <div className="form-sub">通过注册手机号验证身份后设置新密码，已有登录会话将全部失效</div>
+      <button type="button" className="auth-reset-back"
+        onClick={() => { setForgotOpen(false); setError(''); setHint('') }}>
+        ← 返回登录
+      </button>
+      <form className="auth-form" onSubmit={(event) => void submitPasswordReset(event)}>
+        <label className="auth-field">
+          注册手机号
+          <input className="auth-input" type="tel" value={resetForm.phone} maxLength={11} inputMode="numeric"
+            autoComplete="tel" placeholder="请输入 11 位手机号"
+            onChange={(event) => {
+              setResetForm({ ...resetForm, phone: event.target.value.replace(/\D/g, '') })
+              setError('')
+            }} />
+        </label>
+        <label className="auth-field">
+          短信验证码
+          <div className="code-row">
+            <input className="auth-input" value={resetForm.code} maxLength={6} inputMode="numeric"
+              placeholder="请输入 6 位验证码"
+              onChange={(event) => {
+                setResetForm({ ...resetForm, code: event.target.value.replace(/\D/g, '') })
+                setError('')
+              }} />
+            <button type="button" className="btn-code" disabled={sending !== null || resetLeft > 0}
+              onClick={() => void requestCode('reset_password', resetForm.phone, 'reset')}>
+              {sending === 'reset' ? '发送中…' : resetLeft > 0 ? `重新获取（${resetLeft}s）` : '获取验证码'}
+            </button>
+          </div>
+        </label>
+        <label className="auth-field">
+          新密码
+          <input className="auth-input" type="password" value={resetForm.password}
+            autoComplete="new-password" placeholder="8-20 位，同时包含字母和数字"
+            onChange={(event) => { setResetForm({ ...resetForm, password: event.target.value }); setError('') }} />
+        </label>
+        <label className="auth-field">
+          确认新密码
+          <input className="auth-input" type="password" value={resetForm.confirm}
+            autoComplete="new-password" placeholder="请再次输入新密码"
+            onChange={(event) => { setResetForm({ ...resetForm, confirm: event.target.value }); setError('') }} />
+        </label>
+        <button type="submit" className="auth-submit" disabled={busy}>
+          {busy ? '重置中…' : '确认重置密码'}
+        </button>
+        {error !== '' && <div className="auth-error">{error}</div>}
+        {hint !== '' && <div className="auth-hint">{hint}</div>}
+      </form>
+    </>
+  ) : (
     <>
       <div className="form-title">欢迎回来</div>
       <div className="form-sub">登录后将自动识别您所处的账号环节，并引导至对应页面</div>
@@ -636,8 +755,16 @@ export default function App(): JSX.Element {
         <div className="auth-row">
           <label><input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} />7 天内自动登录</label>
           <button type="button" onClick={() => {
-            setNotice('当前未开放自助找回密码，请联系平台运营重置；也可以切到「手机号 + 验证码」直接登录。')
+            setForgotOpen(true)
+            setResetForm({
+              phone: /^1[3-9]\d{9}$/.test(account.trim()) ? account.trim() : phone,
+              code: '',
+              password: '',
+              confirm: '',
+            })
             setError('')
+            setHint('')
+            setNotice('')
           }}>
             忘记密码？
           </button>
