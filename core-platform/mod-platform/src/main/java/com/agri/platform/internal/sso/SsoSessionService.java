@@ -1,5 +1,6 @@
 package com.agri.platform.internal.sso;
 
+import com.agri.platform.internal.merchant.ActiveMerchantService;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -27,6 +28,7 @@ public class SsoSessionService {
 
     private final StringRedisTemplate redis;
     private final SsoProperties properties;
+    private final ActiveMerchantService activeMerchantService;
 
     /**
      * 建立会话并写 Cookie。
@@ -46,6 +48,7 @@ public class SsoSessionService {
     public String create(Long userId, Long marketId, boolean remember, HttpServletResponse response) {
         String sid = UUID.randomUUID().toString().replace("-", "");
         long seconds = remember ? REMEMBER_SECONDS : properties.getSessionTtlHours() * 3600;
+        activeMerchantService.ensure(userId, marketId);
         redis.opsForValue().set(KEY_PREFIX + sid, userId + ":" + marketId,
                 Duration.ofSeconds(seconds));
         String userIndex = USER_INDEX_PREFIX + userId;
@@ -80,6 +83,7 @@ public class SsoSessionService {
             String value = redis.opsForValue().get(KEY_PREFIX + sid);
             redis.delete(KEY_PREFIX + sid);
             removeFromUserIndex(sid, value);
+            clearActiveMerchant(value);
         }
         response.addHeader("Set-Cookie", cookie("", 0L));
     }
@@ -110,6 +114,21 @@ public class SsoSessionService {
         }
         String userId = sessionValue.substring(0, sessionValue.indexOf(':'));
         redis.opsForSet().remove(USER_INDEX_PREFIX + userId, sid);
+    }
+
+    private void clearActiveMerchant(String sessionValue) {
+        if (sessionValue == null || !sessionValue.contains(":")) {
+            return;
+        }
+        String[] parts = sessionValue.split(":");
+        if (parts.length < 2) {
+            return;
+        }
+        try {
+            activeMerchantService.clear(Long.valueOf(parts[0]), Long.valueOf(parts[1]));
+        } catch (NumberFormatException ignored) {
+            // 会话值异常由登录流程重新建立，不在退出时扩大故障面。
+        }
     }
 
     private String readSid(HttpServletRequest request) {

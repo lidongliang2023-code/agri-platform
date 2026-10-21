@@ -87,6 +87,7 @@ interface Summary {
     submitTime: string
     reviewRemark: string | null
   } | null
+  activeMerchantId: string | null
   merchants: MerchantRow[]
   addresses: AddressRow[]
   sentJoinRequests: JoinRow[]
@@ -197,6 +198,7 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
     realName: '', idCard: '', businessType: BUSINESS_TYPES[0], address: '', contactName: '',
   })
   const [busy, setBusy] = useState(false)
+  const [switchingMerchantId, setSwitchingMerchantId] = useState<string | null>(null)
 
   const load = async (): Promise<void> => {
     setLoading(true)
@@ -439,6 +441,23 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
     }
   }
 
+  const activateMerchant = async (merchant: MerchantRow): Promise<void> => {
+    if (merchant.merchantId === summary?.activeMerchantId) return
+    setSwitchingMerchantId(merchant.merchantId)
+    setError('')
+    try {
+      const result = await api<{ activeMerchantId: string; merchantName: string }>(
+        `/api/v1/sso/account/businesses/${merchant.merchantId}/activate`,
+        { method: 'POST' },
+      )
+      if (result.code !== 0) return setError(result.message ?? '主体切换失败')
+      flash(`已切换为「${result.data?.merchantName || merchant.merchantName || '当前主体'}」`)
+      await load()
+    } finally {
+      setSwitchingMerchantId(null)
+    }
+  }
+
   const startCertification = (merchant: MerchantRow): void => {
     if (merchant.memberType === 'personal') {
       setRealNameOpen(true)
@@ -566,6 +585,9 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
     )
   }
 
+  const activeMerchant = summary.merchants.find((merchant) =>
+    merchant.merchantId === summary.activeMerchantId) ?? null
+
   return (
     <section className="section account-page">
       <div className="account-hero">
@@ -577,7 +599,10 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
         </div>
         <div className="account-hero-status">
           <span className={`account-status ${tone(summary.realName?.status)}`}>{statusText(summary.realName?.status)}</span>
-          <small>{summary.merchants.length} 个经营主体</small>
+          <small>
+            {activeMerchant ? `当前主体：${activeMerchant.merchantName}` : '当前无登录主体'}
+            {' · '}共 {summary.merchants.length} 个
+          </small>
         </div>
       </div>
 
@@ -608,6 +633,7 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
               <div><span>账号状态</span><strong>{summary.status === 1 ? '正常' : '停用'}</strong></div>
               <div><span>个人实名</span><strong>{statusText(summary.realName?.status)}</strong></div>
               <div><span>经营主体</span><strong>{summary.merchants.length} 个</strong></div>
+              <div><span>当前登录主体</span><strong>{activeMerchant?.merchantName || '未选择'}</strong></div>
               <div><span>收货地址</span><strong>{addresses.length} 个</strong></div>
             </div>
           </div>
@@ -738,12 +764,21 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
               </div>
             ) : (
               <div className="merchant-list">
+                <p className="merchant-active-note">
+                  同一时间仅有一个主体处于登录状态；切换后交易、生产管理等业务数据范围同步切换。
+                </p>
                 {summary.merchants.map((merchant) => (
-                  <div className="merchant-row" key={merchant.bindingId}>
+                  <div
+                    className={`merchant-row ${merchant.merchantId === summary.activeMerchantId ? 'active' : ''}`}
+                    key={merchant.bindingId}
+                  >
                     <div className="merchant-main">
                       <div className="merchant-title">
                         <strong>{merchant.merchantName}</strong>
                         <span>{merchant.memberType === 'personal' ? '个人主体' : '企业主体'} · {merchant.roleInMerchant}</span>
+                        {merchant.merchantId === summary.activeMerchantId && (
+                          <span className="merchant-active-badge">当前登录主体</span>
+                        )}
                       </div>
                       <div className="merchant-detail-grid">
                         <div><span>主体编码</span><b>{merchant.merchantCode || '—'}</b></div>
@@ -768,6 +803,15 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
                     </div>
                     <div className="merchant-row-actions">
                       <span className={`account-status ${tone(merchant.verifyStatus)}`}>{statusText(merchant.verifyStatus)}</span>
+                      {merchant.merchantId !== summary.activeMerchantId && (
+                        <button
+                          className="btn btn-outline btn-sm"
+                          disabled={busy || Boolean(switchingMerchantId) || merchant.status === 0}
+                          onClick={() => void activateMerchant(merchant)}
+                        >
+                          {switchingMerchantId === merchant.merchantId ? '切换中…' : '切换为此主体'}
+                        </button>
+                      )}
                       {merchant.verifyStatus !== 'approved' && merchant.verifyStatus !== 'pending' && (
                         <button className="btn btn-primary btn-sm" disabled={busy} onClick={() => void startCertification(merchant)}>
                           {merchant.memberType === 'personal' ? '去实名认证' : merchant.verifyStatus === 'rejected' ? '重新认证' : '去认证'}

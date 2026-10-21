@@ -39,6 +39,7 @@ public class UserMerchantController {
 
     private final UserMerchantMapper userMerchantMapper;
     private final MerchantMapper merchantMapper;
+    private final ActiveMerchantService activeMerchantService;
 
     /** 当前登录用户绑定的经营主体（子系统据此解析数据范围）。 */
     @GetMapping("/api/v1/platform/merchants/mine")
@@ -47,7 +48,18 @@ public class UserMerchantController {
         if (userId == null) {
             return ApiResponse.fail(ErrorCode.UNAUTHORIZED);
         }
-        return ApiResponse.ok(listByUser(userId));
+        Long activeMerchantId = activeMerchantService.resolve(userId,
+                com.agri.core.infra.web.MarketContext.currentMarketId());
+        if (activeMerchantId == null) {
+            return ApiResponse.ok(List.of());
+        }
+        UserMerchantEntity active = userMerchantMapper.selectOne(
+                new LambdaQueryWrapper<UserMerchantEntity>()
+                        .eq(UserMerchantEntity::getUserId, userId)
+                        .eq(UserMerchantEntity::getMerchantId, activeMerchantId)
+                        .eq(UserMerchantEntity::getStatus, 1)
+                        .last("LIMIT 1"));
+        return ApiResponse.ok(active == null ? List.of() : List.of(toView(active)));
     }
 
     /** 运营端：绑定列表（可按用户 / 主体筛）。 */

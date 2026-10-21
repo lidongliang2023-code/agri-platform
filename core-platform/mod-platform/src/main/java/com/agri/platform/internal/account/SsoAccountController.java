@@ -4,6 +4,7 @@ import com.agri.platform.internal.identity.UserIdentityEntity;
 import com.agri.platform.internal.identity.UserIdentityMapper;
 import com.agri.platform.internal.identity.IdNumberUtil;
 import com.agri.platform.internal.merchant.MerchantEntity;
+import com.agri.platform.internal.merchant.ActiveMerchantService;
 import com.agri.platform.internal.merchant.MerchantCertificationEntity;
 import com.agri.platform.internal.merchant.MerchantCertificationFileService;
 import com.agri.platform.internal.merchant.MerchantCertificationMapper;
@@ -43,6 +44,7 @@ public class SsoAccountController {
     private final UserMerchantMapper userMerchantMapper;
     private final MerchantMapper merchantMapper;
     private final MerchantCertificationMapper certificationMapper;
+    private final ActiveMerchantService activeMerchantService;
     private final MerchantCertificationFileService certificationFileService;
     private final UserIdentityMapper identityMapper;
     private final UserAddressMapper addressMapper;
@@ -66,7 +68,9 @@ public class SsoAccountController {
 
         UserIdentityEntity identity = latestIdentity(userId);
         result.put("realName", identity == null ? null : identityView(identity));
-        result.put("merchants", merchantRows(userId));
+        Long activeMerchantId = activeMerchantService.resolve(userId, marketId);
+        result.put("activeMerchantId", activeMerchantId == null ? null : String.valueOf(activeMerchantId));
+        result.put("merchants", merchantRows(userId, activeMerchantId));
         result.put("addresses", addressRows(userId));
         result.put("sentJoinRequests", joinRows(userId, null, true));
         List<Long> ownedMerchantIds = ownedMerchantIds(userId);
@@ -354,6 +358,18 @@ public class SsoAccountController {
         return ApiResponse.ok();
     }
 
+    /** 切换当前登录主体。一个账号可绑定多家，但任一时刻只允许一家处于登录态。 */
+    @PostMapping("/businesses/{merchantId}/activate")
+    public ApiResponse<Map<String, Object>> activateBusiness(@PathVariable Long merchantId,
+                                                             HttpServletRequest request) {
+        long[] session = requireSession(request);
+        MerchantEntity merchant = activeMerchantService.switchTo(session[0], session[1], merchantId);
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("activeMerchantId", String.valueOf(merchant.getId()));
+        result.put("merchantName", merchant.getName());
+        return ApiResponse.ok(result);
+    }
+
     /** 将指定企业主体当前草稿/驳回认证提交为待审核。 */
     @PostMapping("/businesses/{merchantId}/submit-certification")
     public ApiResponse<Void> submitEnterpriseCertification(@PathVariable Long merchantId,
@@ -582,7 +598,7 @@ public class SsoAccountController {
                 .last("LIMIT 1"));
     }
 
-    private List<Map<String, Object>> merchantRows(Long userId) {
+    private List<Map<String, Object>> merchantRows(Long userId, Long activeMerchantId) {
         List<UserMerchantEntity> bindings = userMerchantMapper.selectList(
                 new LambdaQueryWrapper<UserMerchantEntity>()
                         .eq(UserMerchantEntity::getUserId, userId)
@@ -621,6 +637,7 @@ public class SsoAccountController {
             row.put("verifyTime", merchant == null ? null : merchant.getVerifyTime());
             row.put("verifyRemark", merchant == null ? null : merchant.getVerifyRemark());
             row.put("roleInMerchant", binding.getRoleInMerchant());
+            row.put("active", binding.getMerchantId().equals(activeMerchantId));
             MerchantCertificationEntity certification = certifications.get(binding.getMerchantId());
             row.put("certification", certification == null ? null : certificationView(certification));
             rows.add(row);

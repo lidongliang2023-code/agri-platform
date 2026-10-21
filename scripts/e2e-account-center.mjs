@@ -100,6 +100,22 @@ try {
 
   const original = await request('/api/v1/sso/account/summary')
   check(original.code === 0 && original.data?.username === account.phone, '账号摘要读取真实平台用户')
+  const initialActiveMerchantId = original.data?.activeMerchantId
+  check(Boolean(initialActiveMerchantId)
+    && original.data?.merchants?.filter((item) => item.merchantId === initialActiveMerchantId).length === 1,
+  '登录会话只解析出一个当前主体', initialActiveMerchantId ?? '')
+
+  const refreshedSession = await page.evaluate(async () => {
+    const response = await fetch('/api/v1/auth/refresh', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    })
+    return await response.json()
+  })
+  const accessToken = refreshedSession.data?.accessToken
+  check(refreshedSession.code === 0 && Boolean(accessToken), '可获取平台访问令牌用于主体范围验证')
 
   const testNickname = `账号中心测试${Date.now().toString().slice(-6)}`
   const profileSave = await request('/api/v1/sso/account/profile', {
@@ -332,6 +348,88 @@ try {
       fs.rmSync(documentDir, { recursive: true, force: true })
     }
     await page.click('.account-modal-close')
+
+    const clickedSwitch = await page.evaluate((name) => {
+      const row = [...document.querySelectorAll('.merchant-row')]
+        .find((item) => (item.textContent ?? '').includes(name))
+      const button = [...(row?.querySelectorAll('button') ?? [])]
+        .find((item) => (item.textContent ?? '').includes('切换为此主体'))
+      button?.click()
+      return Boolean(button)
+    }, addedEnterprise.merchantName)
+    check(clickedSwitch, '个人中心为目标主体显示切换入口')
+    await page.waitForFunction((merchantId) => {
+      const active = document.querySelector('.merchant-row.active')
+      return active?.textContent?.includes(merchantId)
+    }, { timeout: 10000 }, addedEnterprise.merchantId)
+    await page.screenshot({
+      path: path.join(OUT, 'account-active-merchant.png'),
+      fullPage: true,
+    })
+    const afterSwitch = await request('/api/v1/sso/account/summary')
+    check(afterSwitch.data?.activeMerchantId === addedEnterprise.merchantId,
+      '页面切换后当前登录主体已更新')
+    const scopedMerchants = await page.evaluate(async (token) => {
+      const response = await fetch('/api/v1/platform/merchants/mine', {
+        credentials: 'include',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      return await response.json()
+    }, accessToken)
+    check(scopedMerchants.code === 0 && scopedMerchants.data?.length === 1
+      && scopedMerchants.data[0]?.merchantId === addedEnterprise.merchantId,
+    '业务侧主体范围只返回当前这一家')
+    const productionScoped = await fetch(
+      'http://localhost:8092/api/v1/production/members?pageNum=1&pageSize=10',
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    ).then((response) => response.json())
+    check([0, 200].includes(productionScoped.code) && productionScoped.data?.total === 0,
+      '生产管理模块切换到新主体后查询新主体的空数据范围')
+    const productionCreate = await fetch(
+      'http://localhost:8092/api/v1/production/members',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          memberName: '主体切换测试成员',
+          phone: '13700008888',
+          memberType: 'OPERATOR',
+          postName: '测试操作员',
+          joinDate: '2026-10-21',
+          status: 1,
+        }),
+      },
+    ).then((response) => response.json())
+    const productionMemberId = productionCreate.data
+    const productionAfterCreate = await fetch(
+      'http://localhost:8092/api/v1/production/members?pageNum=1&pageSize=10',
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    ).then((response) => response.json())
+    check([0, 200].includes(productionCreate.code) && Boolean(productionMemberId)
+      && productionAfterCreate.data?.records?.some((item) => item.memberId === productionMemberId),
+    '生产管理模块的数据新增与查询均落在切换后的主体')
+    if (productionMemberId) {
+      const productionDelete = await fetch(
+        `http://localhost:8092/api/v1/production/members/${encodeURIComponent(productionMemberId)}`,
+        {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${accessToken}` },
+        },
+      ).then((response) => response.json())
+      check([0, 200].includes(productionDelete.code), '主体切换测试成员已删除')
+      execFileSync(
+        'C:\\Program Files\\MySQL\\MySQL Server 8.4\\bin\\mysql.exe',
+        ['-uroot', '--batch', '-e',
+          `DELETE FROM agri_production.agri_prod_member WHERE member_id='${productionMemberId}';`],
+        { env: { ...process.env, MYSQL_PWD: 'root' } },
+      )
+    }
+    const forbiddenSwitch = await request('/api/v1/sso/account/businesses/2001/activate',
+      { method: 'POST' })
+    check(forbiddenSwitch.code === 403, '不能切换到自己未绑定的经营主体')
   }
   if (addedEnterprise?.merchantId) {
     const incomplete = await request(
@@ -497,6 +595,20 @@ try {
 
   const addressDelete = await request(`/api/v1/sso/account/addresses/${addressId}`, { method: 'DELETE' })
   check(addressDelete.code === 0, '收货地址删除可用')
+  if (initialActiveMerchantId) {
+    const restored = await request(
+      `/api/v1/sso/account/businesses/${initialActiveMerchantId}/activate`,
+      { method: 'POST' },
+    )
+    check(restored.code === 0, '切换测试后恢复原当前主体')
+    await sleep(2300)
+    const restoredProduction = await fetch(
+      'http://localhost:8092/api/v1/production/members?pageNum=1&pageSize=10',
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    ).then((response) => response.json())
+    check([0, 200].includes(restoredProduction.code),
+      '恢复主体后生产管理模块继续可用')
+  }
   if (joinId) {
     const cancel = await request(`/api/v1/sso/account/businesses/join-requests/${joinId}`, { method: 'DELETE' })
     check(cancel.code === 0, '加入主体申请可撤回')
@@ -526,6 +638,27 @@ try {
     }
     check(true, '企业认证测试数据已清理')
   }
+  const activeKey = `agri:active-merchant:${original.data.userId}:1`
+  const activeBeforeLogout = execFileSync(
+    'C:\\Redis\\redis-cli.exe',
+    ['--raw', 'GET', activeKey],
+    { encoding: 'utf8' },
+  ).trim()
+  await page.evaluate(async () => {
+    await fetch('/api/v1/sso/logout', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    })
+  })
+  const activeAfterLogout = execFileSync(
+    'C:\\Redis\\redis-cli.exe',
+    ['--raw', 'EXISTS', activeKey],
+    { encoding: 'utf8' },
+  ).trim()
+  check(activeBeforeLogout === initialActiveMerchantId && activeAfterLogout === '0',
+    '退出登录后清除当前主体状态')
   check(errors.length === 0, '个人中心无未捕获脚本异常', errors.slice(0, 2).join(' | '))
 
   console.log('\n个人中心地址：http://localhost:8098/portal/#/account')

@@ -7,6 +7,7 @@ import com.agri.platform.internal.identity.UserIdentityEntity;
 import com.agri.platform.internal.identity.UserIdentityMapper;
 import com.agri.platform.internal.merchant.MerchantCertificationEntity;
 import com.agri.platform.internal.merchant.MerchantCertificationMapper;
+import com.agri.platform.internal.merchant.ActiveMerchantService;
 import com.agri.platform.internal.merchant.MerchantEntity;
 import com.agri.platform.internal.merchant.MerchantMapper;
 import com.agri.platform.internal.merchant.UserMerchantEntity;
@@ -70,6 +71,7 @@ public class SmsAuthService {
     private final MerchantMapper merchantMapper;
     private final UserMerchantMapper userMerchantMapper;
     private final MerchantCertificationMapper certificationMapper;
+    private final ActiveMerchantService activeMerchantService;
     private final UserIdentityMapper userIdentityMapper;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
@@ -78,7 +80,9 @@ public class SmsAuthService {
 
     public SmsAuthService(StringRedisTemplate redis, UserMapper userMapper, UserRoleMapper userRoleMapper,
                           RoleMapper roleMapper, MerchantMapper merchantMapper, UserMerchantMapper userMerchantMapper,
-                          MerchantCertificationMapper certificationMapper, UserIdentityMapper userIdentityMapper,
+                          MerchantCertificationMapper certificationMapper,
+                          ActiveMerchantService activeMerchantService,
+                          UserIdentityMapper userIdentityMapper,
                           @Value("${agri.auth.sms.mode:none}") String mode) {
         this.redis = redis;
         this.userMapper = userMapper;
@@ -87,6 +91,7 @@ public class SmsAuthService {
         this.merchantMapper = merchantMapper;
         this.userMerchantMapper = userMerchantMapper;
         this.certificationMapper = certificationMapper;
+        this.activeMerchantService = activeMerchantService;
         this.userIdentityMapper = userIdentityMapper;
         this.mode = mode == null ? "none" : mode.trim().toLowerCase();
         if ("dev".equals(this.mode)) {
@@ -318,7 +323,7 @@ public class SmsAuthService {
             throw new BusinessException(ErrorCode.NOT_FOUND, "账号不存在");
         }
         Long market = marketId == null ? 1L : marketId;
-        Long merchantId = myMerchantIds(userId, market).stream().findFirst().orElse(null);
+        Long merchantId = activeMerchantService.resolve(userId, market);
         if (merchantId == null) {
             return new OnboardingStatus("subject", user.getPhone(), user.getNickname(), null,
                     null, null, null, null);
@@ -535,8 +540,10 @@ public class SmsAuthService {
     @Transactional(rollbackFor = Exception.class)
     public OnboardingStatus activateCertification(Long userId, Long marketId) {
         Long market = marketId == null ? 1L : marketId;
-        Long merchantId = myMerchantIds(userId, market).stream().findFirst()
-                .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "请先完成主体创建"));
+        Long merchantId = activeMerchantService.resolve(userId, market);
+        if (merchantId == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "请先完成主体创建");
+        }
         MerchantEntity merchant = merchantMapper.selectById(merchantId);
         if (merchant == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND, "经营主体不存在");

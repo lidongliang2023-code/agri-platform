@@ -45,8 +45,13 @@ public class TenantContextService {
 
     private static volatile TenantContextService instance;
 
-    /** 解析结果的短 TTL 缓存：key = 访问令牌，value = 该令牌的主体绑定列表。 */
-    private static final long CACHE_TTL_MILLIS = 60_000L;
+    /**
+     * 解析结果的短 TTL 缓存：key = 访问令牌，value = 该令牌的主体绑定列表。
+     *
+     * 当前主体可能在门户个人中心即时切换，缓存只用于合并同一页面并发请求。
+     * 保持很短，避免切换后旧主体继续承载数据写入。
+     */
+    private static final long CACHE_TTL_MILLIS = 2_000L;
     /** 缓存条目上限（防令牌无限增长把内存吃满；超了直接清空，最坏退化成"不缓存"）。 */
     private static final int CACHE_MAX_ENTRIES = 500;
     private final java.util.Map<String, CachedBindings> bindingsCache = new java.util.concurrent.ConcurrentHashMap<>();
