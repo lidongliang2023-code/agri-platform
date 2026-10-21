@@ -2,17 +2,17 @@
   <div class="tenant-quota">
     <div class="page-header">
       <div class="header-left">
-        <h1>租户配额管理</h1>
-        <p>管理租户资源配额配置</p>
+        <h1>主体配额管理</h1>
+        <p>管理主体资源配额配置</p>
       </div>
     </div>
 
     <div class="search-bar">
       <div class="search-group">
-        <input 
-          type="text" 
-          v-model="searchForm.keyword" 
-          placeholder="搜索租户名称..." 
+        <input
+          type="text"
+          v-model="searchForm.keyword"
+          placeholder="搜索主体名称..."
           class="search-input"
         />
         <button class="search-btn" @click="handleSearch">搜索</button>
@@ -23,8 +23,8 @@
       <table class="data-table">
         <thead>
           <tr>
-            <th>租户名称</th>
-            <th>租户类型</th>
+            <th>主体名称</th>
+            <th>主体类型</th>
             <th>用户配额</th>
             <th>组织配额</th>
             <th>商品配额</th>
@@ -103,12 +103,12 @@
     <div class="modal-overlay" v-if="showEditModal" @click="closeEditModal">
       <div class="modal-content" @click.stop>
         <div class="modal-header">
-          <h3>编辑租户配额</h3>
+          <h3>编辑主体配额</h3>
           <button class="close-btn" @click="closeEditModal">×</button>
         </div>
         <div class="modal-body" v-if="editForm">
           <div class="form-group">
-            <label>租户名称</label>
+            <label>主体名称</label>
             <input type="text" :value="editForm.name" disabled class="form-input" />
           </div>
           <div class="form-group">
@@ -156,9 +156,9 @@ const BYTES_PER_GB = 1024 * 1024 * 1024
 const toGb = (bytes) => (bytes == null ? 0 : Math.round((bytes / BYTES_PER_GB) * 10) / 10)
 const toBytes = (gb) => Math.round(Number(gb || 0) * BYTES_PER_GB)
 
-/** 租户类型展示名。原来只判断 ENTERPRISE/其它两种，合作社与个体经营都会被显示成"个人租户"。 */
+/** 主体类型展示名。原来只判断 ENTERPRISE/其它两种，合作社与个体经营都会被显示成"个人主体"。 */
 const TENANT_TYPE_LABELS = {
-  ENTERPRISE: '企业租户',
+  ENTERPRISE: '企业主体',
   COOPERATIVE: '合作社',
   INDIVIDUAL: '个体经营',
   FARM: '农场',
@@ -310,13 +310,13 @@ const saveQuota = () => {
 const viewQuotaDetail = (tenant) => {
   if (!tenant.hasQuota) {
     Modal.info({
-      title: `租户 ${tenant.name}`,
-      content: '该租户尚未配置配额记录。可在「编辑配额」中补齐各项限额。'
+      title: `主体 ${tenant.name}`,
+      content: '该主体尚未配置配额记录。可在「编辑配额」中补齐各项限额。'
     })
     return
   }
   Modal.info({
-    title: `租户 ${tenant.name} 的配额用量`,
+    title: `主体 ${tenant.name} 的配额用量`,
     content: [
       `用户：${tenant.userUsed} / ${tenant.userLimit}（${tenant.userUsagePercent.toFixed(1)}%）`,
       `组织：${tenant.orgUsed} / ${tenant.orgLimit}（${tenant.orgUsagePercent.toFixed(1)}%）`,

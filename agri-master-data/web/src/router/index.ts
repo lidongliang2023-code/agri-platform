@@ -54,6 +54,13 @@ const ADMIN_ROUTES: RouteSpec[] = [
   { path: '/dashboard', view: 'Dashboard' },
   { path: '/masterdata/center', view: 'masterdata/MasterDataCenter' },
 
+  { path: '/subject/list', view: 'tenant/TenantList' },
+  { path: '/subject/quota', view: 'tenant/TenantQuota' },
+  { path: '/subject/package', view: 'tenant/TenantPackage' },
+  { path: '/subject/statistics', view: 'tenant/TenantStatistics' },
+  { path: '/subject/detail/:id', view: 'tenant/TenantDetail' },
+
+  // 兼容历史书签；新菜单统一使用 /subject/*。
   { path: '/tenant/list', view: 'tenant/TenantList' },
   { path: '/tenant/quota', view: 'tenant/TenantQuota' },
   { path: '/tenant/package', view: 'tenant/TenantPackage' },

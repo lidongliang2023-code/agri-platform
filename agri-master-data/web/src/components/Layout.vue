@@ -87,18 +87,18 @@ const userEntry = `${window.location.protocol}//${window.location.hostname}:8086
 const menuItems = [
   { path: '/dashboard', label: '运营总览', icon: '📊' },
   { path: '/masterdata/center', label: '主数据运营', icon: '🗂️' },
-  { 
-    path: '/tenant', 
-    label: '租户管理', 
+  {
+    path: '/subject',
+    label: '主体管理',
     icon: '🏢',
     children: [
-      { path: '/tenant/list', label: '租户列表' },
-      { path: '/tenant/quota', label: '配额管理' },
-      { path: '/tenant/package', label: '套餐配置' },
-      { path: '/tenant/statistics', label: '数据统计' }
+      { path: '/subject/list', label: '企业与个人主体' },
+      { path: '/subject/quota', label: '主体资源配额' },
+      { path: '/subject/package', label: '服务套餐' },
+      { path: '/subject/statistics', label: '主体数据统计' }
     ]
   },
-  { 
+  {
     path: '/user', 
     label: '用户管理', 
     icon: '👥',
@@ -189,10 +189,10 @@ const currentLocation = computed(() => {
   const pathNames = {
     '/dashboard': '运营总览',
     '/masterdata/center': '主数据运营',
-    '/tenant/list': '租户管理',
-    '/tenant/quota': '配额管理',
-    '/tenant/package': '套餐配置',
-    '/tenant/statistics': '数据统计',
+    '/subject/list': '企业与个人主体',
+    '/subject/quota': '主体资源配额',
+    '/subject/package': '服务套餐',
+    '/subject/statistics': '主体数据统计',
     '/user/list': '用户管理',
     '/user/audit': '认证审核',
     '/org/list': '组织管理',

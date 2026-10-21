@@ -56,7 +56,7 @@ const TaskList = lazy(() => import('@/pages/user/tasks/TaskList'))
 const TaskDetail = lazy(() => import('@/pages/user/tasks/TaskDetail'))
 const TaskCreate = lazy(() => import('@/pages/user/tasks/TaskCreate'))
 // 任务模板库（运营端维护，2026-10-16 从用户端搬过来）：模板是"标准作业配置"，
-// 由平台运营维护、租户使用 —— 用户端只在新建任务的模板下拉里用。
+// 由平台运营维护、主体使用 —— 用户端只在新建任务的模板下拉里用。
 const TaskTemplates = lazy(() => import('@/pages/admin/production/tasks/TaskTemplates'))
 const TaskAcceptance = lazy(() => import('@/pages/user/tasks/TaskAcceptance'))
 // 农资投入品管理
@@ -110,7 +110,7 @@ const SystemSettings = lazy(() => import('@/pages/user/settings/SystemSettings')
 const OpsDashboard = lazy(() => import('@/pages/admin/dashboard/OpsDashboard'))
 const OpsProductionOverview = lazy(() => import('@/pages/admin/dashboard/OpsProductionOverview'))
 const OpsDataScreen = lazy(() => import('@/pages/admin/dashboard/OpsDataScreen'))
-// 租户管理
+// 主体管理
 const TenantList = lazy(() => import('@/pages/admin/tenants/TenantList'))
 const TenantDetail = lazy(() => import('@/pages/admin/tenants/TenantDetail'))
 const TenantQuotas = lazy(() => import('@/pages/admin/tenants/TenantQuotas'))
@@ -735,9 +735,50 @@ export const ADMIN_ROUTES: AppRoute[] = [
     },
   },
   {
+    path: 'subjects',
+    element: <TenantList />,
+    meta: {
+      name: '企业与个人主体',
+      path: '/admin/production/subjects',
+      module: '主体管理',
+      prd: 'PRD 6.2 #4',
+    },
+  },
+  {
+    path: 'subjects/quotas',
+    element: <TenantQuotas />,
+    meta: {
+      name: '主体资源配额',
+      path: '/admin/production/subjects/quotas',
+      module: '主体管理',
+      prd: 'PRD 6.2 #6',
+    },
+  },
+  {
+    path: 'subjects/segments',
+    element: <TenantSegments />,
+    meta: {
+      name: '主体分层运营',
+      path: '/admin/production/subjects/segments',
+      module: '主体管理',
+      prd: 'PRD 6.2 #7',
+    },
+  },
+  {
+    path: 'subjects/:tenantId',
+    element: <TenantDetail />,
+    meta: {
+      name: '主体详情',
+      path: '/admin/production/subjects/:tenantId',
+      module: '主体管理',
+      prd: 'PRD 6.2 #5',
+    },
+  },
+  // 兼容历史书签；新菜单统一使用 /admin/production/subjects。
+  {
     path: 'tenants',
     element: <TenantList />,
-    meta: { name: '租户列表', path: '/admin/production/tenants', module: '租户管理', prd: 'PRD 6.2 #4' },
+    meta: { name: '企业与个人主体', path: '/admin/production/tenants', module: '主体管理', prd: 'PRD 6.2 #4' },
   },
   {
     path: 'tenants/quotas',
@@ -745,7 +786,7 @@ export const ADMIN_ROUTES: AppRoute[] = [
     meta: {
       name: '配额管理',
       path: '/admin/production/tenants/quotas',
-      module: '租户管理',
+      module: '主体管理',
       prd: 'PRD 6.2 #6',
     },
   },
@@ -753,9 +794,9 @@ export const ADMIN_ROUTES: AppRoute[] = [
     path: 'tenants/segments',
     element: <TenantSegments />,
     meta: {
-      name: '租户分层运营',
+      name: '主体分层运营',
       path: '/admin/production/tenants/segments',
-      module: '租户管理',
+      module: '主体管理',
       prd: 'PRD 6.2 #7',
     },
   },
@@ -763,9 +804,9 @@ export const ADMIN_ROUTES: AppRoute[] = [
     path: 'tenants/:tenantId',
     element: <TenantDetail />,
     meta: {
-      name: '租户详情',
+      name: '主体详情',
       path: '/admin/production/tenants/:tenantId',
-      module: '租户管理',
+      module: '主体管理',
       prd: 'PRD 6.2 #5',
     },
   },

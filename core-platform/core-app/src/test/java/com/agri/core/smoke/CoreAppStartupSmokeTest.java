@@ -98,6 +98,7 @@ class CoreAppStartupSmokeTest {
             "/api/v1/sso/login-standalone",
             "/api/v1/sso/login-standalone-by-sms",
             "/api/v1/sso/register-by-sms",
+            "/api/v1/sso/password-reset",
             "/api/v1/sso/register-account",
             "/api/v1/sso/onboarding/status",
             "/api/v1/sso/onboarding/subject",

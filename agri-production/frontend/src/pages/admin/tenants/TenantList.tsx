@@ -1,9 +1,9 @@
 /**
- * 页面名称：租户列表
+ * 页面名称：主体列表
  * 路由路径：/admin/production/tenants
- * 所属模块：租户管理
+ * 所属模块：主体管理
  * PRD 序号：PRD 6.2 #4
- * 原型来源：P2 tenants — 租户列表
+ * 原型来源：P2 tenants — 主体列表
  *
  * 数据来源约定（硬规矩：不造数据源；可以降级，不能骗人）：
  * - 列表数据全部来自后端 `GET /admin/tenants`（MyBatis-Plus 分页，支持 page / size / status 三个参数）；
@@ -41,12 +41,12 @@ import type { ProColumns } from '@ant-design/pro-components'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import type { TenantOverview } from '@/api/admin/tenants'
-import { getTenantOverview, listOpsTenantRows, updateTenant, updateTenantQuotaLimits } from '@/api/admin/tenants'
+import { getTenantOverview, listOpsTenantRows, updateTenantQuotaLimits, updateTenantStatus } from '@/api/admin/tenants'
 import type { TenantStatus } from '@/types'
 
 const { Text } = Typography
 
-/** 租户状态（后端 TenantQuotaEntity.status：1 正常 / 0 停用） */
+/** 主体状态（经营主体 status：1 正常 / 0 停用） */
 const STATUS_TEXT: Record<number, string> = {
   1: '正常',
   0: '停用',
@@ -59,35 +59,36 @@ const STATUS_COLOR: Record<string, string> = {
 }
 
 /**
- * 租户列表行（与后端 `TenantQuotaEntity` 返回字段一一对应）。
- *
- * 说明：库内没有独立的租户主表，租户以配额记录为载体（见 TenantQuotaService 注释），
- * 因此这里的「租户标识」取的是后端配额主键 `quotaId`。
+ * 主体列表行（经营主体主档 + 配额配置）。
  */
 interface TenantRow {
-  /** 租户标识（后端配额主键 quotaId） */
+  /** 经营主体 ID，也是主体 ID */
   tenantId: string
-  /** 租户编码 */
+  /** 主体编码 */
   tenantCode: string
-  /** 租户名称 */
+  /** 主体名称 */
   tenantName: string
+  memberType: 'enterprise' | 'personal'
+  industry?: string | null
+  contactName?: string | null
+  contactPhone?: string | null
   /** 农场数上限（未配置时为 null） */
   farmLimit: number | null
   /** 已用农场数（真实用量列 used_farm_count） */
   usedFarmCount: number
-  /** 租户状态：1 正常 / 0 停用 */
+  /** 主体状态：1 正常 / 0 停用 */
   status: number
   /** 创建时间（后端可能为 null） */
   createdAt?: string | null
 }
 
 /**
- * 租户展示名：后端未提供租户名称时兜底展示租户 ID，避免出现空白列。
+ * 主体展示名：后端未提供主体名称时兜底展示主体 ID，避免出现空白列。
  *
  * 判空覆盖 undefined / null / '' / 纯空白串（'   ' 视为空）。
  *
  * @param row 含 tenantId 与 tenantName 的行数据
- * @returns 用于展示的租户标识
+ * @returns 用于展示的主体标识
  */
 function resolveTenantName(row: { tenantId: string; tenantName?: string }): string {
   const name = row.tenantName?.trim()
@@ -100,7 +101,7 @@ function resolveTenantName(row: { tenantId: string; tenantName?: string }): stri
  * 分子分母均为后端真实字段；分母缺失（未配置配额）时无法计算，返回 null 由调用方展示「—」，
  * 不返回 0——0 会让用户误以为「真实用量就是 0」。
  *
- * @param row 租户行
+ * @param row 主体行
  * @returns 使用率百分比；无分母时为 null
  */
 function resolveFarmUsageRate(row: TenantRow): number | null {
@@ -134,9 +135,9 @@ interface QuotaFormValues {
 }
 
 /**
- * 租户列表
+ * 主体列表
  *
- * 业务职责：全平台 SaaS 租户台账，支持按状态筛选，
+ * 业务职责：全平台 SaaS 主体台账，支持按状态筛选，
  * 并提供查看、配额调整、停用 / 启用与批量冻结能力。
  *
  * 后端 `GET /admin/tenants` 目前仅支持 page / size / status 三个参数。
@@ -156,21 +157,21 @@ export default function TenantList(): JSX.Element {
   const [selectedRows, setSelectedRows] = useState<TenantRow[]>([])
   /** 表格刷新标识（配合 mutations 触发重新拉取） */
   const [tableKey, setTableKey] = useState<number>(0)
-  /** 配额调整弹窗的目标租户 */
+  /** 配额调整弹窗的目标主体 */
   const [quotaTarget, setQuotaTarget] = useState<TenantRow | null>(null)
   /** 配额表单 */
   const [quotaForm] = Form.useForm<QuotaFormValues>()
   /** 列表加载失败原因；非空时顶部显式告警，绝不静默降级为本地数据 */
   const [loadError, setLoadError] = useState<string>('')
-  /** 后端租户概览（统计卡数据；null 表示尚未取到，展示「—」而不是 0） */
+  /** 后端主体概览（统计卡数据；null 表示尚未取到，展示「—」而不是 0） */
   const [overview, setOverview] = useState<TenantOverview | null>(null)
 
-  /** 停用 / 启用租户（后端无 PATCH /{id}/status，走 PUT /admin/tenants/{id} 局部更新） */
+  /** 停用 / 启用主体（后端无 PATCH /{id}/status，走 PUT /admin/tenants/{id} 局部更新） */
   const statusMutation = useMutation({
     mutationFn: (payload: { tenantId: string; status: TenantStatus }) =>
-      updateTenant(payload.tenantId, { status: payload.status }),
+      updateTenantStatus(payload.tenantId, payload.status),
     onSuccess: (_data, variables) => {
-      message.success(variables.status === 1 ? '租户已启用' : '租户已停用')
+      message.success(variables.status === 1 ? '主体已启用' : '主体已停用')
       void queryClient.invalidateQueries({ queryKey: ['admin', 'tenants'] })
       setTableKey((prev) => prev + 1)
     },
@@ -197,9 +198,9 @@ export default function TenantList(): JSX.Element {
     Array<{ key: string; title: string; value: number | null; color: string }>
   >(
     () => [
-      { key: 'total', title: '租户总数', value: overview?.tenantTotal ?? null, color: '#1677ff' },
-      { key: 'active', title: '活跃租户', value: overview?.activeTenantCount ?? null, color: '#52c41a' },
-      { key: 'disabled', title: '停用租户', value: overview?.disabledTenantCount ?? null, color: '#ff4d4f' },
+      { key: 'total', title: '主体总数', value: overview?.tenantTotal ?? null, color: '#1677ff' },
+      { key: 'active', title: '活跃主体', value: overview?.activeTenantCount ?? null, color: '#52c41a' },
+      { key: 'disabled', title: '停用主体', value: overview?.disabledTenantCount ?? null, color: '#ff4d4f' },
       {
         key: 'unregistered',
         title: '未登记配额',
@@ -213,7 +214,7 @@ export default function TenantList(): JSX.Element {
   /** 表格列（仅展示后端真实返回的字段） */
   const columns: ProColumns<TenantRow>[] = [
     {
-      title: '租户编号',
+      title: '主体编号',
       dataIndex: 'tenantCode',
       width: 140,
       hideInSearch: true,
@@ -221,12 +222,41 @@ export default function TenantList(): JSX.Element {
       render: (_dom, entity) => entity.tenantCode ?? '—',
     },
     {
-      title: '租户名称',
+      title: '主体名称',
       dataIndex: 'tenantName',
       width: 220,
       ellipsis: true,
       hideInSearch: true,
       render: (_dom, entity) => <span>{resolveTenantName(entity)}</span>,
+    },
+    {
+      title: '主体类型',
+      dataIndex: 'memberType',
+      width: 110,
+      valueType: 'select',
+      valueEnum: {
+        enterprise: { text: '企业主体' },
+        personal: { text: '个人主体' },
+      },
+      render: (_dom, entity) => (
+        <Tag color={entity.memberType === 'personal' ? 'blue' : 'green'}>
+          {entity.memberType === 'personal' ? '个人主体' : '企业主体'}
+        </Tag>
+      ),
+    },
+    {
+      title: '联系人',
+      dataIndex: 'contactName',
+      width: 130,
+      hideInSearch: true,
+      render: (_dom, entity) => entity.contactName || '—',
+    },
+    {
+      title: '联系电话',
+      dataIndex: 'contactPhone',
+      width: 140,
+      hideInSearch: true,
+      render: (_dom, entity) => entity.contactPhone || '—',
     },
     {
       title: '已用农场数',
@@ -288,7 +318,7 @@ export default function TenantList(): JSX.Element {
       hideInSearch: true,
       render: (_dom, entity) => (
         <Space size={4}>
-          <Button type="link" size="small" onClick={() => navigate(`/admin/production/tenants/${entity.tenantId}`)}>
+          <Button type="link" size="small" onClick={() => navigate(`/admin/production/subjects/${entity.tenantId}`)}>
             查看
           </Button>
           <Button
@@ -305,7 +335,7 @@ export default function TenantList(): JSX.Element {
           </Button>
           {entity.status === 0 ? (
             <Popconfirm
-              title="确认启用该租户？"
+              title="确认启用该主体？"
               okText="启用"
               cancelText="取消"
               onConfirm={() => statusMutation.mutate({ tenantId: entity.tenantId, status: 1 })}
@@ -316,7 +346,7 @@ export default function TenantList(): JSX.Element {
             </Popconfirm>
           ) : (
             <Popconfirm
-              title="确认停用该租户？停用后其所有农场将禁止上报生产数据。"
+              title="确认停用该主体？停用后其所有农场将禁止上报生产数据。"
               okText="停用"
               cancelText="取消"
               onConfirm={() => statusMutation.mutate({ tenantId: entity.tenantId, status: 0 })}
@@ -334,13 +364,13 @@ export default function TenantList(): JSX.Element {
   /** 批量冻结 */
   const handleBatchFreeze = async (): Promise<void> => {
     if (selectedRows.length === 0) {
-      message.warning('请先选择需要冻结的租户')
+      message.warning('请先选择需要冻结的主体')
       return
     }
     await Promise.all(
-      selectedRows.map((row) => updateTenant(row.tenantId, { status: 0 })),
+      selectedRows.map((row) => updateTenantStatus(row.tenantId, 0)),
     )
-    message.success(`已冻结 ${selectedRows.length} 个租户`)
+    message.success(`已冻结 ${selectedRows.length} 个主体`)
     setSelectedRowKeys([])
     setSelectedRows([])
     setTableKey((prev) => prev + 1)
@@ -350,10 +380,10 @@ export default function TenantList(): JSX.Element {
   const handleExport = (): void => {
     const rows = selectedRows.length > 0 ? selectedRows : []
     if (rows.length === 0) {
-      message.warning('请先勾选需要导出的租户')
+      message.warning('请先勾选需要导出的主体')
       return
     }
-    const header = ['租户编号', '租户名称', '已用农场数', '农场配额使用率(%)', '创建时间', '状态']
+    const header = ['主体编号', '主体名称', '已用农场数', '农场配额使用率(%)', '创建时间', '状态']
     const body = rows.map((row) => [
       row.tenantCode ?? '',
       resolveTenantName(row),
@@ -367,7 +397,7 @@ export default function TenantList(): JSX.Element {
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = `租户列表_${new Date().toISOString().slice(0, 10)}.csv`
+    link.download = `主体列表_${new Date().toISOString().slice(0, 10)}.csv`
     link.click()
     URL.revokeObjectURL(url)
     message.success(`已导出 ${rows.length} 条记录`)
@@ -399,7 +429,7 @@ export default function TenantList(): JSX.Element {
           type="error"
           showIcon
           style={{ marginBottom: 12 }}
-          message={`租户数据加载失败：${loadError}`}
+          message={`主体数据加载失败：${loadError}`}
           description="页面不会用任何本地示例数据兜底。请确认后端服务与 /admin/tenants 接口可用后重试。"
         />
       )}
@@ -408,7 +438,7 @@ export default function TenantList(): JSX.Element {
         key={tableKey}
         rowKey="tenantId"
         size="small"
-        headerTitle="租户列表"
+        headerTitle="主体列表"
         scroll={{ x: 1100 }}
         search={{ labelWidth: 100, defaultCollapsed: false }}
         columns={columns}
@@ -425,7 +455,7 @@ export default function TenantList(): JSX.Element {
           </span>,
           <Popconfirm
             key="freeze"
-            title={`确认冻结已选 ${selectedRowKeys.length} 个租户？`}
+            title={`确认冻结已选 ${selectedRowKeys.length} 个主体？`}
             okText="确认冻结"
             cancelText="取消"
             onConfirm={() => void handleBatchFreeze()}
@@ -447,15 +477,17 @@ export default function TenantList(): JSX.Element {
           const pageNum = params.current ?? 1
           const pageSize = params.pageSize ?? 20
           try {
-            // 后端 GET /admin/tenants 仅支持 status 过滤；其它参数后端不支持，故不传
-            const status =
-              params.status === undefined || params.status === null || params.status === ''
-                ? undefined
-                : Number(params.status)
+            const status = params.status === undefined || params.status === null || params.status === ''
+              ? undefined : Number(params.status)
+            const memberType = params.memberType === 'enterprise' || params.memberType === 'personal'
+              ? params.memberType : undefined
             const result = await listOpsTenantRows({
               pageNum,
               pageSize,
               status: Number.isFinite(status) ? status : undefined,
+              memberType,
+              keyword: typeof params.tenantName === 'string' && params.tenantName.trim()
+                ? params.tenantName.trim() : undefined,
             })
             setLoadError('')
             void getTenantOverview()
@@ -463,9 +495,13 @@ export default function TenantList(): JSX.Element {
               .catch(() => setOverview(null))
 
             const rows: TenantRow[] = result.list.map((item) => ({
-              tenantId: String(item.quotaId ?? ''),
+              tenantId: String(item.tenantId),
               tenantCode: String(item.tenantCode ?? ''),
               tenantName: String(item.tenantName ?? ''),
+              memberType: item.memberType === 'personal' ? 'personal' : 'enterprise',
+              industry: item.industry,
+              contactName: item.contactName,
+              contactPhone: item.contactPhone,
               farmLimit: toIntOrNull(item.farmLimit),
               usedFarmCount: toIntOrNull(item.usedFarmCount) ?? 0,
               status: toIntOrNull(item.status) ?? 1,
@@ -486,11 +522,10 @@ export default function TenantList(): JSX.Element {
       />
 
       <Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: 12 }}>
-        提示：农场配额使用率 ≥ 80% 的租户已标红，建议尽快调整配额以免影响业务。
+        提示：农场配额使用率 ≥ 80% 的主体已标红，建议尽快调整配额以免影响业务。
         <br />
-        数据说明：列表与统计卡均为后端真实返回值。后端暂未提供租户等级、在田面积、活跃度、
-        区域与联系人等字段的数据源，这些列已移除（既不用本地算，也不填 0）；
-        后端 `GET /admin/tenants` 仅支持按「状态」过滤，故此处未提供名称 / 等级 / 注册时间的筛选。
+        数据说明：列表与统计卡均为后端真实返回值。主体主档来自企业/个人经营主体，
+        主体 ID 与主体 ID 相同；配额仅作为主体附属资源配置，不再把配额记录当成主体。
       </Text>
 
       <Modal

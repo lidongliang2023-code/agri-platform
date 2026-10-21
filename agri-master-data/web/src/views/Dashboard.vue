@@ -39,14 +39,14 @@
     <div class="main-content">
       <div class="chart-section">
         <div class="section-header small">
-          <h3>租户活跃度排行</h3>
-          <span class="section-note">按启用状态租户，展示各租户下的启用用户数</span>
+          <h3>主体活跃度排行</h3>
+          <span class="section-note">按启用状态经营主体，展示各主体下的启用用户数</span>
         </div>
-        <div v-if="activities.length === 0" class="empty-state">暂无租户数据</div>
+        <div v-if="activities.length === 0" class="empty-state">暂无主体数据</div>
         <div v-else class="rank-list">
           <div v-for="item in activities" :key="item.tenantId" class="rank-item">
             <span class="rank-no">{{ item.rank }}</span>
-            <span class="rank-name">{{ item.tenantName || '未命名租户' }}</span>
+            <span class="rank-name">{{ item.tenantName || '未命名主体' }}</span>
             <span class="rank-type">{{ item.tenantType || '—' }}</span>
             <span class="rank-value">{{ item.userCount ?? '—' }} 用户</span>
           </div>
@@ -102,7 +102,7 @@
                 <th>级别</th>
                 <th>标题</th>
                 <th>内容</th>
-                <th>租户</th>
+                <th>经营主体</th>
                 <th>时间</th>
               </tr>
             </thead>
@@ -136,7 +136,7 @@ const loadError = ref('')
 const show = (value) => (value === null || value === undefined ? '—' : value)
 
 const stats = computed(() => [
-  { label: '租户总数', value: show(metrics.value?.tenantCount), icon: '🏢' },
+  { label: '主体总数', value: show(metrics.value?.tenantCount), icon: '🏢' },
   { label: '用户总数', value: show(metrics.value?.userCount), icon: '👥' },
   { label: '组织总数', value: show(metrics.value?.orgCount), icon: '🏠' },
   { label: '待认证用户', value: show(audit.value?.userCertCount), icon: '🪪' },

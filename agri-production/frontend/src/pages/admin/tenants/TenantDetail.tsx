@@ -1,18 +1,18 @@
 /**
- * 页面名称：租户详情
+ * 页面名称：主体详情
  * 路由路径：/admin/production/tenants/:tenantId
- * 所属模块：租户管理
+ * 所属模块：主体管理
  * PRD 序号：PRD 6.2 #5
- * 原型来源：P3 tenant-detail — 租户详情（基本信息 / 农场列表 / 配额详情 / 操作日志）
+ * 原型来源：P3 tenant-detail — 主体详情（基本信息 / 农场列表 / 配额详情 / 操作日志）
  *
  * ⚠️ 契约错位（2026-10-10 实测，后端 8096）：
- * 后端 AdminTenantController 没有租户主表，租户以**配额记录**为载体，
+ * 后端 AdminTenantController 没有主体主表，主体以**配额记录**为载体，
  * GET /admin/tenants/{id} 返回 TenantQuotaEntity，实测键为
  *   marketId, tenantId, createBy, updateBy, createdAt, updatedAt, deleted, quotaId,
  *   tenantCode, tenantName, farmLimit, plotLimit, deviceLimit, userLimit,
  *   storageLimitGb, traceCodeLimit, apiCallLimit, usedFarmCount, status
  * 因此 PRD 原型里的「统一社会信用代码 / 法定代表人 / 注册地址 / 经营范围 / 所属区域 /
- * 联系人 / 联系电话 / 到期时间 / 租户等级 / 成员数量 / 在田面积 / 活跃度」**后端均无此列**。
+ * 联系人 / 联系电话 / 到期时间 / 主体等级 / 成员数量 / 在田面积 / 活跃度」**后端均无此列**。
  *
  * 此前本页用 FALLBACK_TENANT 原型档案（张三 / 138****5678 / 河南省郑州市 / 91410100MA45XXXX /
  * 在田面积 12500 / 配额使用率 96.4 …）与后端返回值合并，后端没给的字段全部由原型补位，
@@ -110,17 +110,17 @@ const NO_SOURCE_TIP = '后端暂无该维度的用量数据源，无法统计，
  * 溯源码维度的提示文案。
  *
  * 后端确实有溯源码统计端点（/trace/codes/stats），但生产域 prod_trace_code 等表
- * tenant_id 全为 0，只有平台口径、没有租户维度，因此不能按租户（本租户）展示用量。
+ * tenant_id 全为 0，只有平台口径、没有主体维度，因此不能按主体（本主体）展示用量。
  */
 const NO_SOURCE_TIP_TRACE =
-  '后端仅有平台口径的溯源码统计（/trace/codes/stats），无租户维度；不能按租户展示用量，故显示「—」'
+  '后端仅有平台口径的溯源码统计（/trace/codes/stats），无主体维度；不能按主体展示用量，故显示「—」'
 
 /** 后端无此列的档案字段统一提示 */
 const NO_COLUMN_TIP =
-  '后端 TenantQuotaEntity（库内以配额记录承载租户）无此列，显示为「—」，后端补齐字段后自动填充'
+  '后端 TenantQuotaEntity（库内以配额记录承载主体）无此列，显示为「—」，后端补齐字段后自动填充'
 
 /** 无聚合数据源的统计字段提示 */
-const NO_STAT_TIP = '后端未提供该租户此统计项的数据源，显示为「—」，接口补齐后自动填充'
+const NO_STAT_TIP = '后端未提供该主体此统计项的数据源，显示为「—」，接口补齐后自动填充'
 
 /** 农场 / 日志端点缺失说明 */
 const FARMS_ENDPOINT_TIP =
@@ -138,7 +138,7 @@ interface QuotaFormValues {
   apiLimit: number
 }
 
-/** 租户编辑表单（仅后端真实存在的字段） */
+/** 主体编辑表单（仅后端真实存在的字段） */
 interface TenantFormValues {
   tenantName: string
 }
@@ -177,10 +177,10 @@ function formatNumber(value: number, precision: number): string {
 }
 
 /**
- * 租户展示名：后端未提供租户名称时兜底展示租户编号 / 标识，避免出现空白。
+ * 主体展示名：后端未提供主体名称时兜底展示主体编号 / 标识，避免出现空白。
  *
  * @param tenant 后端配额记录
- * @returns 用于展示的租户标识
+ * @returns 用于展示的主体标识
  */
 function resolveTenantName(tenant: OpsTenantRow | null, tenantId: string): string {
   const name = tenant?.tenantName?.trim()
@@ -191,10 +191,10 @@ function resolveTenantName(tenant: OpsTenantRow | null, tenantId: string): strin
 }
 
 /**
- * 租户详情
+ * 主体详情
  *
- * 业务职责：展示单个租户的档案信息、下属农场、配额使用情况与操作日志，
- * 支持编辑租户、停用 / 启用与配额调整。
+ * 业务职责：展示单个主体的档案信息、下属农场、配额使用情况与操作日志，
+ * 支持编辑主体、停用 / 启用与配额调整。
  *
  * @returns 页面内容
  */
@@ -219,7 +219,7 @@ export default function TenantDetail(): JSX.Element {
   /** 日志分页 */
   const [logPage, setLogPage] = useState<{ pageNum: number; pageSize: number }>({ pageNum: 1, pageSize: 10 })
 
-  /** 租户档案（后端 TenantQuotaEntity，无数据就是 null，不用原型档案补位） */
+  /** 主体档案（后端 TenantQuotaEntity，无数据就是 null，不用原型档案补位） */
   const tenantQuery = useQuery({
     queryKey: ['admin', 'tenants', tenantId],
     queryFn: () => getTenant(tenantId),
@@ -231,7 +231,7 @@ export default function TenantDetail(): JSX.Element {
   const tenant: OpsTenantRow | null = tenantQuery.data ?? null
 
   /**
-   * 单租户概览（真实聚合值）。
+   * 单主体概览（真实聚合值）。
    *
    * 入参必须是 Long（详情里的 tenantId），传 quotaId 后端返回 400，故用正则先判纯数字。
    */
@@ -279,7 +279,7 @@ export default function TenantDetail(): JSX.Element {
    * 打开配额弹窗时回填当前配额上限。
    *
    * 只用后端返回的真实上限：后端没给就留空（由 InputNumber 的 placeholder 提示量级），
-   * 不再用原型示例数字回填，避免把示例值当成该租户的真实配额。
+   * 不再用原型示例数字回填，避免把示例值当成该主体的真实配额。
    */
   useEffect(() => {
     if (quotaOpen) {
@@ -293,18 +293,18 @@ export default function TenantDetail(): JSX.Element {
     }
   }, [quotaOpen, quotaForm, quotasQuery.data])
 
-  /** 更新租户（PUT /admin/tenants/{id}，真实端点） */
+  /** 更新主体（PUT /admin/tenants/{id}，真实端点） */
   const editMutation = useMutation({
     mutationFn: (payload: TenantFormValues) => updateTenant(tenantId, payload),
     onSuccess: () => {
-      message.success('租户名称已更新')
+      message.success('主体名称已更新')
       setEditOpen(false)
       void queryClient.invalidateQueries({ queryKey: ['admin', 'tenants', tenantId] })
     },
   })
 
   /**
-   * 停用 / 启用租户。
+   * 停用 / 启用主体。
    *
    * 走真实端点 `PUT /admin/tenants/{id}`（请求体为 TenantQuotaEntity）。
    * 后端 **没有** `PATCH /admin/tenants/{id}/status` 映射（AdminTenantController 无此方法），
@@ -313,7 +313,7 @@ export default function TenantDetail(): JSX.Element {
   const statusMutation = useMutation({
     mutationFn: (status: TenantStatus) => updateTenant(tenantId, { status }),
     onSuccess: (_, status) => {
-      message.success(status === 1 ? '租户已启用' : '租户已停用')
+      message.success(status === 1 ? '主体已启用' : '主体已停用')
       void queryClient.invalidateQueries({ queryKey: ['admin', 'tenants', tenantId] })
     },
     onError: (error: Error) => {
@@ -364,7 +364,7 @@ export default function TenantDetail(): JSX.Element {
    *
    * 后端无数据就是空（渲染空态 + 说明），不再用原型示例配额兜底——
    * 原 FALLBACK_QUOTAS 里的 used（85000 / 6.2 / 48200）是编造的用量，
-   * 展示出来会让用户以为该租户真的用了这么多。
+   * 展示出来会让用户以为该主体真的用了这么多。
    */
   const quotas: OpsQuotaItem[] = useMemo<OpsQuotaItem[]>(() => quotasQuery.data ?? [], [quotasQuery.data])
 
@@ -431,20 +431,20 @@ export default function TenantDetail(): JSX.Element {
 
   return (
     <div>
-      {/* 契约错位必须让用户看见：后端返回的是配额记录，不是租户档案 */}
+      {/* 契约错位必须让用户看见：后端返回的是配额记录，不是主体档案 */}
       <Alert
         type="warning"
         showIcon
         style={{ marginBottom: 12 }}
-        message="后端暂无「租户档案」实体，本页按配额记录（TenantQuotaEntity）真实字段展示"
+        message="后端暂无「主体档案」实体，本页按配额记录（TenantQuotaEntity）真实字段展示"
         description={
           '实测 GET /admin/tenants/{id} 只返回配额记录字段（tenantCode / tenantName / 七项配额上限 / ' +
           'usedFarmCount / status / 时间列）。原型档案里的联系人、联系电话、所属区域、统一社会信用代码、' +
-          '法定代表人、注册地址、经营范围、到期时间、租户等级、成员数量、在田面积、活跃度后端均无此列，' +
+          '法定代表人、注册地址、经营范围、到期时间、主体等级、成员数量、在田面积、活跃度后端均无此列，' +
           '统一显示「—」（此前用原型示例值补位，属编造）。农场数量 / 设备数量 / 配额使用率取自真实端点 ' +
           'GET /admin/tenants/overview/{tenantId}。注意：当前种子数据所有配额记录的 tenantId 恒为 "0" ' +
-          '（后端工单 BT-09），所以这三个值目前是「同一租户口径」，不同配额记录会显示相同数字；' +
-          'BT-09 修复后才具备真正的租户级口径。'
+          '（后端工单 BT-09），所以这三个值目前是「同一主体口径」，不同配额记录会显示相同数字；' +
+          'BT-09 修复后才具备真正的主体级口径。'
         }
       />
 
@@ -453,10 +453,10 @@ export default function TenantDetail(): JSX.Element {
         <Col>
           <Space>
             <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/admin/production/tenants')}>
-              返回租户列表
+              返回主体列表
             </Button>
             <Title level={4} style={{ margin: 0 }}>
-              租户详情
+              主体详情
             </Title>
           </Space>
         </Col>
@@ -467,7 +467,7 @@ export default function TenantDetail(): JSX.Element {
             </Button>
             {tenant?.status === 1 ? (
               <Popconfirm
-                title="确认停用该租户？"
+                title="确认停用该主体？"
                 okText="停用"
                 cancelText="取消"
                 onConfirm={() => statusMutation.mutate(0)}
@@ -478,7 +478,7 @@ export default function TenantDetail(): JSX.Element {
               </Popconfirm>
             ) : (
               <Popconfirm
-                title="确认启用该租户？"
+                title="确认启用该主体？"
                 okText="启用"
                 cancelText="取消"
                 onConfirm={() => statusMutation.mutate(1)}
@@ -492,7 +492,7 @@ export default function TenantDetail(): JSX.Element {
         </Col>
       </Row>
 
-      {/* 租户头卡 */}
+      {/* 主体头卡 */}
       <Card size="small" style={{ marginBottom: 12 }}>
         {tenantQuery.isLoading ? (
           <Skeleton active paragraph={{ rows: 3 }} />
@@ -507,14 +507,14 @@ export default function TenantDetail(): JSX.Element {
                       {resolveTenantName(tenant, tenantId)}
                     </Text>
                   </div>
-                  <Text type="secondary">租户编号：{tenant?.tenantCode ?? '—'}</Text>
+                  <Text type="secondary">主体编号：{tenant?.tenantCode ?? '—'}</Text>
                 </div>
               </Space>
             </Col>
             <Col xs={12} md={4}>
               <Text type="secondary">等级</Text>
               <div>
-                <MissingText tip="后端 TenantQuotaEntity 无租户等级列（tenantLevel），显示为「—」" />
+                <MissingText tip="后端 TenantQuotaEntity 无主体等级列（tenantLevel），显示为「—」" />
               </div>
             </Col>
             <Col xs={12} md={4}>
@@ -571,7 +571,7 @@ export default function TenantDetail(): JSX.Element {
                   column={{ xs: 1, sm: 2, md: 3 }}
                   items={[
                     { key: 'name', label: '企业名称', children: resolveTenantName(tenant, tenantId) },
-                    { key: 'code', label: '租户编号', children: tenant?.tenantCode ?? '—' },
+                    { key: 'code', label: '主体编号', children: tenant?.tenantCode ?? '—' },
                     {
                       key: 'quotaId',
                       label: '配额记录号',
@@ -665,7 +665,7 @@ export default function TenantDetail(): JSX.Element {
                     type="warning"
                     showIcon
                     style={{ marginBottom: 12 }}
-                    message="后端暂无该租户的农场列表端点"
+                    message="后端暂无该主体的农场列表端点"
                     description={FARMS_ENDPOINT_TIP}
                   />
                   <Table<TenantFarmItem>
@@ -695,10 +695,10 @@ export default function TenantDetail(): JSX.Element {
                   <Row justify="space-between" align="middle" style={{ marginBottom: 12 }}>
                     <Text type="secondary">
                       {quotas.length > 0
-                        ? '数据来源：租户配额实时用量（仅「农场数」有真实用量数据源，其余三项显示「—」）'
+                        ? '数据来源：主体配额实时用量（仅「农场数」有真实用量数据源，其余三项显示「—」）'
                         : quotasQuery.isError
                           ? `配额数据加载失败：${(quotasQuery.error as Error | null)?.message ?? '未知错误'}`
-                          : '该租户暂无配额数据（后端未返回配额记录）'}
+                          : '该主体暂无配额数据（后端未返回配额记录）'}
                     </Text>
                     <Space>
                       <Popconfirm
@@ -721,7 +721,7 @@ export default function TenantDetail(): JSX.Element {
                       description={
                         quotasQuery.isError
                           ? '配额数据加载失败，未展示任何配额（不使用示例数据兜底）'
-                          : '该租户暂无配额数据'
+                          : '该主体暂无配额数据'
                       }
                     />
                   ) : (
@@ -808,7 +808,7 @@ export default function TenantDetail(): JSX.Element {
                     type="warning"
                     showIcon
                     style={{ marginBottom: 12 }}
-                    message="后端暂无该租户的操作日志端点"
+                    message="后端暂无该主体的操作日志端点"
                     description={LOGS_ENDPOINT_TIP}
                   />
                   <Table<TenantOperationLog>
@@ -835,10 +835,10 @@ export default function TenantDetail(): JSX.Element {
         />
       </Card>
 
-      {/* 编辑租户弹窗：只保留后端 TenantQuotaEntity 真实存在的字段 */}
+      {/* 编辑主体弹窗：只保留后端 TenantQuotaEntity 真实存在的字段 */}
       <Modal
         open={editOpen}
-        title="编辑租户"
+        title="编辑主体"
         onCancel={() => setEditOpen(false)}
         okText="保存"
         cancelText="取消"
@@ -858,7 +858,7 @@ export default function TenantDetail(): JSX.Element {
           type="info"
           showIcon
           style={{ marginBottom: 12 }}
-          message="后端 TenantQuotaEntity 仅「租户名称」可编辑"
+          message="后端 TenantQuotaEntity 仅「主体名称」可编辑"
           description="联系人 / 联系电话 / 所属区域 / 经营范围等字段后端无对应列，提交也不会落库，因此不在本表单中提供（避免「填了没用」的假动作）。"
         />
         <Form<TenantFormValues> form={editForm} layout="vertical" preserve={false}>

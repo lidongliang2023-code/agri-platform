@@ -12,11 +12,12 @@ export const dashboardAPI = {
 
 export const tenantAPI = {
   list: (params: any) => request.get('/admin/masterdata/tenant', { params }),
-  get: (id: number) => request.get(`/admin/masterdata/tenant/${id}`),
+  get: (id: number | string) => request.get(`/admin/masterdata/tenant/${id}`),
   create: (data: any) => request.post('/admin/masterdata/tenant', data),
-  update: (id: number, data: any) => request.put(`/admin/masterdata/tenant/${id}`, data),
-  delete: (id: number) => request.delete(`/admin/masterdata/tenant/${id}`),
-  updateStatus: (id: number, status: string) => request.put(`/admin/masterdata/tenant/${id}/status`, { status }),
+  update: (id: number | string, data: any) => request.put(`/admin/masterdata/tenant/${id}`, data),
+  delete: (id: number | string) => request.delete(`/admin/masterdata/tenant/${id}`),
+  updateStatus: (id: number | string, status: number) =>
+    request.put(`/admin/masterdata/tenant/${id}/status`, { status }),
 }
 
 export const userAPI = {

@@ -1,10 +1,10 @@
 /**
- * 页面名称：租户分层运营
+ * 页面名称：主体分层运营
  * 路由路径：/admin/production/tenants/segments
- * 所属模块：租户管理
+ * 所属模块：主体管理
  * PRD 序号：PRD 6.2 #7
- * 说明：原型无此页，按 PRD「租户画像、分层标签、差异化策略」实现，
- * 分层口径沿用原型 4.1 的租户等级（钻石 / 金牌 / 银牌 / 普通）。
+ * 说明：原型无此页，按 PRD「主体画像、分层标签、差异化策略」实现，
+ * 分层口径沿用原型 4.1 的主体等级（钻石 / 金牌 / 银牌 / 普通）。
  *
  * 数据来源约定（硬规矩：可以降级，不能骗人）：
  * - **后端当前没有对应端点**：`AdminTenantController` 未提供
@@ -78,7 +78,7 @@ const TAG_OPTIONS: TenantTag[] = ['重点客户', '高潜成长', '续费预警'
 const SEGMENT_POOL: TenantSegmentLevel[] = ['钻石', '金牌', '银牌', '普通']
 
 /** 后端缺失端点时的统一提示口径 */
-const BACKEND_UNAVAILABLE_TITLE = '后端暂未提供租户分层数据'
+const BACKEND_UNAVAILABLE_TITLE = '后端暂未提供主体分层数据'
 
 /**
  * 分层指标缺失提示。
@@ -105,12 +105,12 @@ interface ProfileFormValues {
 }
 
 /**
- * 租户展示名：后端未提供租户名称时兜底展示租户 ID，避免出现空白列。
+ * 主体展示名：后端未提供主体名称时兜底展示主体 ID，避免出现空白列。
  *
  * 判空覆盖 undefined / null / '' / 纯空白串（'   ' 视为空）。
  *
- * @param profile 租户画像数据
- * @returns 用于展示的租户标识
+ * @param profile 主体画像数据
+ * @returns 用于展示的主体标识
  */
 function resolveTenantName(profile: { tenantId: string; tenantName?: string }): string {
   const name = profile.tenantName?.trim()
@@ -118,9 +118,9 @@ function resolveTenantName(profile: { tenantId: string; tenantName?: string }): 
 }
 
 /**
- * 租户分层运营
+ * 主体分层运营
  *
- * 业务职责：按规模与贡献度对租户分层（钻石 / 金牌 / 银牌 / 普通），
+ * 业务职责：按规模与贡献度对主体分层（钻石 / 金牌 / 银牌 / 普通），
  * 维护运营标签与差异化策略配置，并支持从列表直接调整。
  *
  * @returns 页面内容
@@ -149,7 +149,7 @@ export default function TenantSegments(): JSX.Element {
     retry: false,
   })
 
-  /** 租户画像列表（后端当前无此端点，查询会失败 / 返回空，页面据此展示空态） */
+  /** 主体画像列表（后端当前无此端点，查询会失败 / 返回空，页面据此展示空态） */
   const profilesQuery = useQuery({
     queryKey: ['admin', 'tenants', 'profiles', page.pageNum, page.pageSize, searchKeyword, segmentFilter],
     queryFn: () =>
@@ -171,7 +171,7 @@ export default function TenantSegments(): JSX.Element {
         strategy: payload.values.strategy,
       }),
     onSuccess: () => {
-      message.success('租户分层信息已更新')
+      message.success('主体分层信息已更新')
       setEditTarget(null)
       void queryClient.invalidateQueries({ queryKey: ['admin', 'tenants', 'profiles'] })
     },
@@ -187,7 +187,7 @@ export default function TenantSegments(): JSX.Element {
     [summaryQuery.data],
   )
 
-  /** 租户画像数据：只用后端返回值，不用示例数据兜底 */
+  /** 主体画像数据：只用后端返回值，不用示例数据兜底 */
   const profiles: TenantSegmentProfile[] = useMemo<TenantSegmentProfile[]>(
     () => profilesQuery.data?.list ?? [],
     [profilesQuery.data],
@@ -198,13 +198,13 @@ export default function TenantSegments(): JSX.Element {
 
   /** 表格列定义 */
   const columns: ColumnsType<TenantSegmentProfile> = [
-    { title: '租户编号', dataIndex: 'tenantCode', width: 130 },
+    { title: '主体编号', dataIndex: 'tenantCode', width: 130 },
     {
-      title: '租户名称',
+      title: '主体名称',
       dataIndex: 'tenantName',
       width: 220,
       ellipsis: true,
-      // 后端未返回租户名称时兜底展示租户 ID，避免出现空白列
+      // 后端未返回主体名称时兜底展示主体 ID，避免出现空白列
       render: (_dom, entity) => <span>{resolveTenantName(entity)}</span>,
     },
     {
@@ -342,7 +342,7 @@ export default function TenantSegments(): JSX.Element {
                   <div style={{ fontSize: 20, fontWeight: 600 }}>
                     <MetricNumber value={item.tenantCount} missingTip={SEGMENT_METRIC_MISSING_TIP} />
                   </div>
-                  <Text type="secondary" style={{ fontSize: 12 }}>租户数</Text>
+                  <Text type="secondary" style={{ fontSize: 12 }}>主体数</Text>
                 </Col>
                 <Col span={12}>
                   <div style={{ fontSize: 20, fontWeight: 600 }}>
@@ -375,13 +375,13 @@ export default function TenantSegments(): JSX.Element {
       {/* 检索区 + 列表 */}
       <Card
         size="small"
-        title="租户分层明细"
+        title="主体分层明细"
         extra={
           <Space>
             <Input.Search
               style={{ width: 220 }}
               allowClear
-              placeholder="租户名称 / 编号"
+              placeholder="主体名称 / 编号"
               value={keyword}
               onChange={(event) => setKeyword(event.target.value)}
               onSearch={(value) => {
@@ -471,8 +471,8 @@ export default function TenantSegments(): JSX.Element {
         <Form<ProfileFormValues> form={profileForm} layout="vertical" preserve={false}>
           <Form.Item
             name="segment"
-            label="租户分层"
-            rules={[{ required: true, message: '请选择租户分层' }]}
+            label="主体分层"
+            rules={[{ required: true, message: '请选择主体分层' }]}
           >
             <Select
               options={SEGMENT_POOL.map((item) => ({

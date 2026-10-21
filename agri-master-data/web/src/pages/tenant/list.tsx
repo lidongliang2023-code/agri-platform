@@ -1,103 +1,128 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Card, Table, Button, Input, Select, Space, Modal, Form, message } from 'antd'
-import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, CheckCircleOutlined, ClockCircleOutlined } from '@ant-design/icons'
+import { Card, Table, Button, Input, Select, Space, Modal, Form, message, Tag, Typography } from 'antd'
+import { EditOutlined, SearchOutlined, CheckCircleOutlined, ClockCircleOutlined } from '@ant-design/icons'
 import { tenantAPI } from '@/api'
+
+interface TenantRow {
+  id: string
+  tenantName: string
+  tenantCode: string
+  tenantType?: string
+  status: number
+  contactPerson?: string
+  contactPhone?: string
+  createTime?: string
+}
+
+interface TenantPage {
+  data: {
+    list?: TenantRow[]
+    records?: TenantRow[]
+    total: number
+  }
+}
+
+const { Text } = Typography
 
 function TenantList() {
   const [searchText, setSearchText] = useState('')
   const [status, setStatus] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [modalVisible, setModalVisible] = useState(false)
   const [form] = Form.useForm()
 
-  const { data: tenantData, refetch } = useQuery<{ data: { list: { id: number; name: string; code: string; status: string; contactName: string; contactPhone: string; createTime: string }[]; total: number } }>({
-    queryKey: ['tenants'],
-    queryFn: () => tenantAPI.list({ name: searchText, status }),
-    initialData: {
-      data: {
-        list: [
-          { id: 1, name: '阳光农场', code: 'T001', status: 'active', contactName: '张三', contactPhone: '13800138001', createTime: '2024-01-10 10:00' },
-          { id: 2, name: '绿色生态农场', code: 'T002', status: 'active', contactName: '李四', contactPhone: '13800138002', createTime: '2024-01-08 14:30' },
-          { id: 3, name: '丰收农庄', code: 'T003', status: 'inactive', contactName: '王五', contactPhone: '13800138003', createTime: '2024-01-05 09:00' },
-        ],
-        total: 3,
-      },
-    },
+  const { data: tenantData, refetch, isLoading } = useQuery<TenantPage>({
+    queryKey: ['tenants', searchText, status],
+    queryFn: () => tenantAPI.list({
+      pageNum: 1,
+      pageSize: 100,
+      keyword: searchText || undefined,
+      tenantStatus: status || undefined,
+    }),
   })
+  const rows = tenantData?.data?.list ?? tenantData?.data?.records ?? []
 
-  const handleAdd = () => {
-    form.resetFields()
+  const handleEdit = (record: TenantRow) => {
+    setEditingId(record.id)
+    form.setFieldsValue({
+      tenantName: record.tenantName,
+      contactName: record.contactPerson,
+      contactPhone: record.contactPhone,
+    })
     setModalVisible(true)
-  }
-
-  const handleEdit = (record: any) => {
-    form.setFieldsValue(record)
-    setModalVisible(true)
-  }
-
-  const handleDelete = async (id: number) => {
-    try {
-      await tenantAPI.delete(id)
-      message.success('删除成功')
-      refetch()
-    } catch {
-      message.error('删除失败')
-    }
   }
 
   const handleSubmit = async () => {
     const values = await form.validateFields()
+    if (editingId === null) return
     try {
-      await tenantAPI.create(values)
-      message.success('创建成功')
+      await tenantAPI.update(editingId, {
+        tenantName: values.tenantName,
+        contactName: values.contactName,
+        contactPerson: values.contactName,
+        contactPhone: values.contactPhone,
+      })
+      message.success('经营主体主体资料已更新')
       setModalVisible(false)
-      refetch()
+      await refetch()
     } catch {
-      message.error('操作失败')
+      message.error('更新失败')
     }
   }
 
-  const handleStatusChange = async (id: number, currentStatus: string) => {
+  const handleStatusChange = async (record: TenantRow) => {
     try {
-      const newStatus = currentStatus === 'active' ? 'inactive' : 'active'
-      await tenantAPI.updateStatus(id, newStatus)
-      message.success('状态更新成功')
-      refetch()
+      await tenantAPI.updateStatus(record.id, record.status === 1 ? 0 : 1)
+      message.success(record.status === 1 ? '主体已停用' : '主体已启用')
+      await refetch()
     } catch {
-      message.error('操作失败')
+      message.error('状态更新失败')
     }
   }
 
   const columns = [
-    { title: '租户名称', dataIndex: 'name', key: 'name' },
-    { title: '租户编码', dataIndex: 'code', key: 'code' },
+    { title: '主体 / 主体名称', dataIndex: 'tenantName', key: 'tenantName' },
+    { title: '主体编码', dataIndex: 'tenantCode', key: 'tenantCode' },
+    {
+      title: '主体类型',
+      dataIndex: 'tenantType',
+      key: 'tenantType',
+      render: (value: string) => (
+        <Tag color={value === 'INDIVIDUAL' ? 'blue' : 'green'}>
+          {value === 'INDIVIDUAL' ? '个人主体' : '企业主体'}
+        </Tag>
+      ),
+    },
     {
       title: '状态',
       dataIndex: 'status',
       key: 'status',
-      render: (text: string, record: any) => (
+      render: (value: number, record: TenantRow) => (
         <Space>
-          <span style={{ color: text === 'active' ? '#10b981' : '#9ca3af', display: 'flex', alignItems: 'center', gap: 4 }}>
-            {text === 'active' ? <CheckCircleOutlined /> : <ClockCircleOutlined />}
-            {text === 'active' ? '启用' : '停用'}
+          <span style={{
+            color: value === 1 ? '#10b981' : '#9ca3af',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+          }}>
+            {value === 1 ? <CheckCircleOutlined /> : <ClockCircleOutlined />}
+            {value === 1 ? '启用' : '停用'}
           </span>
-          <Button size="small" onClick={() => handleStatusChange(record.id, text)}>
-            {text === 'active' ? '停用' : '启用'}
+          <Button size="small" onClick={() => void handleStatusChange(record)}>
+            {value === 1 ? '停用' : '启用'}
           </Button>
         </Space>
       ),
     },
-    { title: '联系人', dataIndex: 'contactName', key: 'contactName' },
+    { title: '联系人', dataIndex: 'contactPerson', key: 'contactPerson' },
     { title: '联系电话', dataIndex: 'contactPhone', key: 'contactPhone' },
     { title: '创建时间', dataIndex: 'createTime', key: 'createTime' },
     {
       title: '操作',
       key: 'action',
-      render: (_: any, record: any) => (
-        <Space>
-          <Button icon={<EditOutlined />} onClick={() => handleEdit(record)} />
-          <Button icon={<DeleteOutlined />} danger onClick={() => handleDelete(record.id)} />
-        </Space>
+      render: (_: unknown, record: TenantRow) => (
+        <Button icon={<EditOutlined />} onClick={() => handleEdit(record)}>编辑</Button>
       ),
     },
   ]
@@ -106,20 +131,20 @@ function TenantList() {
     <div>
       <div style={styles.pageHeader}>
         <div>
-          <h2 style={styles.pageTitle}>租户管理</h2>
-          <p style={styles.pageDesc}>管理系统租户信息</p>
+          <h2 style={styles.pageTitle}>经营主体主体</h2>
+          <p style={styles.pageDesc}>
+            一个企业或个人经营主体就是一个主体。主体由统一认证注册产生，本页不再单独新建主体。
+          </p>
         </div>
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd} style={styles.addBtn}>
-          添加租户
-        </Button>
       </div>
       <Card style={styles.tableCard}>
         <div style={styles.filterSection}>
           <Input
-            placeholder="搜索租户名称"
+            placeholder="搜索主体名称 / 编码 / 联系人"
             prefix={<SearchOutlined />}
             value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
+            allowClear
+            onChange={(event) => setSearchText(event.target.value)}
             style={styles.searchInput}
           />
           <Select
@@ -129,24 +154,32 @@ function TenantList() {
             style={styles.selectInput}
             options={[
               { value: '', label: '全部' },
-              { value: 'active', label: '启用' },
-              { value: 'inactive', label: '停用' },
+              { value: 'ACTIVE', label: '启用' },
+              { value: 'INACTIVE', label: '停用' },
             ]}
           />
         </div>
-        <Table columns={columns} dataSource={tenantData?.data?.list} rowKey="id" />
+        <Table
+          columns={columns}
+          dataSource={rows}
+          rowKey="id"
+          loading={isLoading}
+          pagination={{ pageSize: 20, showSizeChanger: true }}
+        />
+        <Text type="secondary">
+          主体 ID 与服务端的经营主体 ID 相同；配额、生产数据和交易数据均以该 ID 归属。
+        </Text>
       </Card>
       <Modal
-        title="添加租户"
-        visible={modalVisible}
+        title="编辑经营主体主体"
+        open={modalVisible}
         onCancel={() => setModalVisible(false)}
-        onOk={handleSubmit}
+        onOk={() => void handleSubmit()}
+        okText="保存"
+        cancelText="取消"
       >
         <Form form={form} layout="vertical">
-          <Form.Item name="name" label="租户名称" rules={[{ required: true, message: '请输入租户名称' }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item name="code" label="租户编码" rules={[{ required: true, message: '请输入租户编码' }]}>
+          <Form.Item name="tenantName" label="主体 / 主体名称" rules={[{ required: true, message: '请输入名称' }]}>
             <Input />
           </Form.Item>
           <Form.Item name="contactName" label="联系人">
@@ -155,6 +188,7 @@ function TenantList() {
           <Form.Item name="contactPhone" label="联系电话">
             <Input />
           </Form.Item>
+          <Text type="secondary">主体编码与主体类型来自注册身份，不允许在主体资料中改写。</Text>
         </Form>
       </Modal>
     </div>
@@ -180,11 +214,6 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#6b7280',
     margin: 0,
   },
-  addBtn: {
-    background: '#10b981',
-    borderColor: '#10b981',
-    borderRadius: 8,
-  },
   tableCard: {
     borderRadius: 10,
     boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
@@ -195,7 +224,7 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: 16,
   },
   searchInput: {
-    width: 220,
+    width: 280,
     borderRadius: 8,
   },
   selectInput: {

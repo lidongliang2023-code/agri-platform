@@ -1,7 +1,7 @@
 /**
  * 页面名称：配额管理
  * 路由路径：/admin/production/tenants/quotas
- * 所属模块：租户管理
+ * 所属模块：主体管理
  * PRD 序号：PRD 6.2 #6
  * 说明：原型无此页，按 PRD「溯源码/存储/AI调用配额分配与调整」实现，
  * 配额项沿用原型 P3「配额详情」的 4 项口径（农场数 / 溯源码 / 存储空间 / API 调用）。
@@ -12,7 +12,7 @@
  * - 后端 OpsQuotaItem.source 标记用量数据来源：仅「农场数」为 COLUMN，
  *   溯源码 / 存储空间 / API 调用为 NONE，前端必须展示「—」而不是 0；
  * - 三者「没有」的原因不同，文案必须区分：溯源码后端有平台口径统计（/trace/codes/stats）
- *   但生产域表 tenant_id 全为 0、无租户维度；存储空间 / API 调用后端暂无任何用量数据源。
+ *   但生产域表 tenant_id 全为 0、无主体维度；存储空间 / API 调用后端暂无任何用量数据源。
  */
 import { useState } from 'react'
 import {
@@ -64,11 +64,11 @@ const NO_SOURCE_TIP = '后端暂无该维度的用量数据源，无法统计，
  * 溯源码维度的提示文案。
  *
  * 与存储 / API 调用不同：后端确实有溯源码统计端点（/trace/codes/stats），
- * 但生产域 prod_trace_code 等表 tenant_id 全为 0，只有平台口径、没有租户维度，
- * 因此不能按租户展示用量——把平台合计填到每行租户头上仍是假数据。
+ * 但生产域 prod_trace_code 等表 tenant_id 全为 0，只有平台口径、没有主体维度，
+ * 因此不能按主体展示用量——把平台合计填到每行主体头上仍是假数据。
  */
 const NO_SOURCE_TIP_TRACE =
-  '后端仅有平台口径的溯源码统计（/trace/codes/stats），无租户维度；不能按租户展示用量，故显示「—」'
+  '后端仅有平台口径的溯源码统计（/trace/codes/stats），无主体维度；不能按主体展示用量，故显示「—」'
 
 /** 配额调整表单 */
 interface QuotaFormValues {
@@ -79,12 +79,12 @@ interface QuotaFormValues {
 }
 
 /**
- * 租户展示名：后端未提供租户名称时兜底展示租户 ID，避免出现空白列。
+ * 主体展示名：后端未提供主体名称时兜底展示主体 ID，避免出现空白列。
  *
  * 判空覆盖 undefined / null / '' / 纯空白串（'   ' 视为空）。
  *
  * @param row 配额行数据
- * @returns 用于展示的租户标识
+ * @returns 用于展示的主体标识
  */
 function resolveTenantName(row: { tenantId: string; tenantName?: string }): string {
   const name = row.tenantName?.trim()
@@ -163,8 +163,8 @@ function renderQuota(
 /**
  * 配额管理
  *
- * 业务职责：全平台租户配额一览（农场数 / 溯源码 / 存储空间 / API 调用），
- * 支持按租户名称检索、仅看告警，单行调整、批量调整与按实际数据重算已用配额。
+ * 业务职责：全平台主体配额一览（农场数 / 溯源码 / 存储空间 / API 调用），
+ * 支持按主体名称检索、仅看告警，单行调整、批量调整与按实际数据重算已用配额。
  *
  * @returns 页面内容
  */
@@ -180,7 +180,7 @@ export default function TenantQuotas(): JSX.Element {
   const [onlyWarning, setOnlyWarning] = useState<boolean>(false)
   /** 表格刷新标识 */
   const [tableKey, setTableKey] = useState<number>(0)
-  /** 当前调整目标：单个租户或批量 */
+  /** 当前调整目标：单个主体或批量 */
   const [adjustTarget, setAdjustTarget] = useState<OpsTenantQuotaRow[] | null>(null)
   /** 配额表单 */
   const [quotaForm] = Form.useForm<QuotaFormValues>()
@@ -189,7 +189,7 @@ export default function TenantQuotas(): JSX.Element {
   /** 列表加载失败原因；非空时顶部显式告警，绝不静默降级为本地数据 */
   const [loadError, setLoadError] = useState<string>('')
 
-  /** 调整单个租户配额 */
+  /** 调整单个主体配额 */
   const updateMutation = useMutation({
     mutationFn: (payload: { tenantId: string; values: QuotaFormValues }) =>
       updateTenantQuotaLimits(payload.tenantId, payload.values),
@@ -205,7 +205,7 @@ export default function TenantQuotas(): JSX.Element {
     mutationFn: (payload: { tenantIds: string[]; values: QuotaFormValues }) =>
       batchUpdateQuotaLimits({ tenantIds: payload.tenantIds, ...payload.values }),
     onSuccess: (_data, variables) => {
-      message.success(`已批量调整 ${variables.tenantIds.length} 个租户的配额`)
+      message.success(`已批量调整 ${variables.tenantIds.length} 个主体的配额`)
       setAdjustTarget(null)
       setSelectedRowKeys([])
       setSelectedRows([])
@@ -244,7 +244,7 @@ export default function TenantQuotas(): JSX.Element {
   /** 打开调整弹窗 */
   const openAdjustModal = (target: OpsTenantQuotaRow[]): void => {
     if (target.length === 0) {
-      message.warning('请先选择需要调整配额的租户')
+      message.warning('请先选择需要调整配额的主体')
       return
     }
     setAdjustTarget(target)
@@ -277,18 +277,18 @@ export default function TenantQuotas(): JSX.Element {
   /** 表格列定义 */
   const columns: ProColumns<OpsTenantQuotaRow>[] = [
     {
-      title: '租户编号',
+      title: '主体编号',
       dataIndex: 'tenantCode',
       width: 120,
       copyable: true,
     },
     {
-      title: '租户名称',
+      title: '主体名称',
       dataIndex: 'tenantName',
       width: 200,
       ellipsis: true,
-      fieldProps: { placeholder: '请输入租户名称' },
-      // 后端未返回租户名称时兜底展示租户 ID，避免出现空白列
+      fieldProps: { placeholder: '请输入主体名称' },
+      // 后端未返回主体名称时兜底展示主体 ID，避免出现空白列
       render: (_dom, entity) => <span>{resolveTenantName(entity)}</span>,
     },
     {
@@ -358,7 +358,7 @@ export default function TenantQuotas(): JSX.Element {
             调整
           </Button>
           <Popconfirm
-            title="按实际业务数据重算该租户的已用配额？"
+            title="按实际业务数据重算该主体的已用配额？"
             okText="重算"
             cancelText="取消"
             onConfirm={() => resetMutation.mutate(entity)}
@@ -375,17 +375,17 @@ export default function TenantQuotas(): JSX.Element {
   return (
     <div>
       {/*
-        口径说明（接后端工单 BT-09）：本页「租户」的标识取自**配额记录**，不是后端的 tenant_id。
+        口径说明（接后端工单 BT-09）：本页「主体」的标识取自**配额记录**，不是后端的 tenant_id。
         实测 prod_tenant_quota.tenant_id 与 prod_farm_info.tenant_id 当前全库为 0（6 个农场、
-        COUNT(DISTINCT tenant_id)=1、min=max=0），因此「租户编号」列实际显示的是配额记录 ID
-        （quotaId），「重算」也是按 quotaId 提交的。不说明的话，使用者会把这一列当成真的租户 ID。
+        COUNT(DISTINCT tenant_id)=1、min=max=0），因此「主体编号」列实际显示的是配额记录 ID
+        （quotaId），「重算」也是按 quotaId 提交的。不说明的话，使用者会把这一列当成真的主体 ID。
       */}
       <Alert
         type="info"
         showIcon
         style={{ marginBottom: 12 }}
-        message="租户标识口径：当前取自配额记录（quotaId）"
-        description="后端 tenant_id 字段全库为 0、暂不可用，所以本页「租户编号」列显示的是配额记录 ID（quotaId），「重算」也按 quotaId 提交。等后端工单 BT-09 明确口径（回填 tenant_id，或统一以 quotaId 作为租户标识，二选一）后，本页口径会同步调整。"
+        message="主体标识口径：当前取自配额记录（quotaId）"
+        description="后端 tenant_id 字段全库为 0、暂不可用，所以本页「主体编号」列显示的是配额记录 ID（quotaId），「重算」也按 quotaId 提交。等后端工单 BT-09 明确口径（回填 tenant_id，或统一以 quotaId 作为主体标识，二选一）后，本页口径会同步调整。"
       />
 
       {/* 顶部统计：只展示后端真实返回的配额记录总数，无任何虚构数字 */}
@@ -418,7 +418,7 @@ export default function TenantQuotas(): JSX.Element {
         key={tableKey}
         rowKey="tenantId"
         size="small"
-        headerTitle="全平台租户配额一览"
+        headerTitle="全平台主体配额一览"
         scroll={{ x: 1400 }}
         search={{ labelWidth: 90 }}
         columns={columns}
@@ -481,10 +481,10 @@ export default function TenantQuotas(): JSX.Element {
       />
 
       <Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: 12 }}>
-        {`提示：配额使用率 ≥ ${WARNING_THRESHOLD}% 会自动标红（与后端预警阈值一致）；「重算」会按租户实际农场 / 用量数据重新统计已用配额。`}
+        {`提示：配额使用率 ≥ ${WARNING_THRESHOLD}% 会自动标红（与后端预警阈值一致）；「重算」会按主体实际农场 / 用量数据重新统计已用配额。`}
         <br />
         数据说明：仅「农场数」有真实用量数据源（取自配额表用量列 used_farm_count）；
-        溯源码后端仅有平台口径统计、无租户维度（不按租户展示，避免把平台合计当成租户用量）；
+        溯源码后端仅有平台口径统计、无主体维度（不按主体展示，避免把平台合计当成主体用量）；
         存储空间 / API 调用后端暂无用量数据源。后三项用量显示为「—」，并非用量为 0。
         分层（钻石 / 金牌 / 银牌 / 普通）后端无数据源，已移除该列与对应筛选。
       </Text>
@@ -494,7 +494,7 @@ export default function TenantQuotas(): JSX.Element {
         open={adjustTarget !== null}
         title={
           adjustTarget && adjustTarget.length > 1
-            ? `批量调整配额（已选 ${adjustTarget.length} 个租户）`
+            ? `批量调整配额（已选 ${adjustTarget.length} 个主体）`
             : `调整配额 - ${adjustTarget?.[0] ? resolveTenantName(adjustTarget[0]) : ''}`
         }
         onCancel={() => setAdjustTarget(null)}
@@ -546,7 +546,7 @@ export default function TenantQuotas(): JSX.Element {
             <InputNumber style={{ width: '100%' }} min={1000} step={1000} placeholder="如 50000" />
           </Form.Item>
           {adjustTarget && adjustTarget.length > 1 && (
-            <Text type="warning">批量调整将把上述 4 项上限应用到所有已选租户，请确认后再提交。</Text>
+            <Text type="warning">批量调整将把上述 4 项上限应用到所有已选主体，请确认后再提交。</Text>
           )}
         </Form>
       </Modal>

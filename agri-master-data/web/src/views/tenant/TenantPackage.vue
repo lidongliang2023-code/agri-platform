@@ -2,8 +2,8 @@
   <div class="tenant-package">
     <div class="page-header">
       <div class="header-left">
-        <h1>租户套餐配置</h1>
-        <p>管理租户套餐定义与定价</p>
+        <h1>主体套餐配置</h1>
+        <p>管理主体套餐定义与定价</p>
       </div>
       <button class="add-btn" @click="showAddModal = true">+ 新建套餐</button>
     </div>

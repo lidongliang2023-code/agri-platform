@@ -2,8 +2,8 @@
   <div class="tenant-statistics">
     <div class="page-header">
       <div class="header-left">
-        <h1>租户数据统计</h1>
-        <p>租户数据分析与对比报表</p>
+        <h1>主体数据统计</h1>
+        <p>主体数据分析与对比报表</p>
       </div>
       <div class="date-filter">
         <select v-model="timeRange" class="date-select" @change="loadData">
@@ -20,7 +20,7 @@
         <div class="stat-icon">🏢</div>
         <div class="stat-info">
           <div class="stat-value">{{ display(summary.totalTenants) }}</div>
-          <div class="stat-label">租户总数</div>
+          <div class="stat-label">主体总数</div>
         </div>
       </div>
       <div class="stat-card">
@@ -41,7 +41,7 @@
         <div class="stat-icon">⏳</div>
         <div class="stat-info">
           <div class="stat-value">{{ display(summary.expiredTenants) }}</div>
-          <div class="stat-label">已到期租户</div>
+          <div class="stat-label">已到期主体</div>
         </div>
       </div>
     </div>
@@ -49,7 +49,7 @@
     <div class="chart-section">
       <div class="chart-card">
         <div class="chart-header">
-          <h3>租户增长趋势</h3>
+          <h3>主体增长趋势</h3>
         </div>
         <div class="chart-content">
           <div class="line-chart">
@@ -73,20 +73,20 @@
           </div>
           <p v-if="!trends.length" class="chart-empty">暂无数据</p>
           <p v-else-if="totalNewInRange === 0" class="chart-empty">
-            所选区间内没有新增租户（当前库里的租户都是更早创建的）
+            所选区间内没有新增主体（当前库里的主体都是更早创建的）
           </p>
           <p class="chart-note">
-            仅统计新增租户。区间内的活跃租户数与流失租户数需要租户活跃度日志 / 状态变更历史，暂未接入。
+            仅统计新增主体。区间内的活跃主体数与流失主体数需要主体活跃度日志 / 状态变更历史，暂未接入。
           </p>
         </div>
       </div>
 
       <div class="chart-card">
         <div class="chart-header">
-          <h3>租户类型分布</h3>
+          <h3>主体类型分布</h3>
         </div>
         <div class="chart-content">
-          <!-- 原来这里是一个只画"企业 / 个人"两段的甜甜圈，而库里实际有四种租户类型
+          <!-- 原来这里是一个只画"企业 / 个人"两段的甜甜圈，而库里实际有四种主体类型
                （企业 / 个人 / 合作社 / 系统），两段圆环表达不了，且百分比是写死的。
                改成按类型逐行列出：有几类就画几行，比例由真实计数算出来。 -->
           <div class="location-list">
@@ -109,7 +109,7 @@
     <div class="chart-section">
       <div class="chart-card full-width">
         <div class="chart-header">
-          <h3>租户活跃度排行</h3>
+          <h3>主体活跃度排行</h3>
           <button class="export-btn" @click="exportRankings">导出报表</button>
         </div>
         <div class="chart-content">
@@ -117,7 +117,7 @@
             <thead>
               <tr>
                 <th>排名</th>
-                <th>租户名称</th>
+                <th>主体名称</th>
                 <th>类型</th>
                 <th>用户数</th>
                 <th>组织数</th>
@@ -140,10 +140,10 @@
               </tr>
             </tbody>
           </table>
-          <p v-if="!rankings.length" class="chart-empty">暂无租户数据</p>
+          <p v-if="!rankings.length" class="chart-empty">暂无主体数据</p>
         </div>
         <p class="chart-note">
-          按租户下的用户数排序。"数据质量得分"与"数据变更次数"没有数据来源（缺按租户汇总得分与变更计数的表），
+          按主体下的用户数排序。"数据质量得分"与"数据变更次数"没有数据来源（缺按主体汇总得分与变更计数的表），
           因此未展示；原先那两列是随机数。
         </p>
       </div>
@@ -157,14 +157,14 @@
         <div class="chart-content">
           <!-- 这里原本画的是"基础版 65 / 专业版 48 / 企业版 15"三个写死的数字。
                现在没有任何真实来源：agri_md_tenant_package 只是套餐定义表，
-               租户表上没有套餐字段、也没有"租户-套餐"明细表，所以统计不出分布。
+               主体表上没有套餐字段、也没有"主体-套餐"明细表，所以统计不出分布。
                如实说明缺什么，而不是留一张看起来很饱满的假图。 -->
           <p class="chart-empty">
-            未接入：租户与套餐之间没有关联数据
+            未接入：主体与套餐之间没有关联数据
           </p>
           <p class="chart-note">
-            要画出这个分布，需要先给 agri_md_tenant 加套餐字段（或建一张租户-套餐明细表），
-            并在开通/变更套餐时写入。当前只有套餐定义（租户套餐页），没有"哪个租户用哪个套餐"。
+            要画出这个分布，需要先给 agri_md_tenant 加套餐字段（或建一张主体-套餐明细表），
+            并在开通/变更套餐时写入。当前只有套餐定义（主体套餐页），没有"哪个主体用哪个套餐"。
           </p>
         </div>
       </div>
@@ -187,7 +187,7 @@
             </div>
           </div>
           <p v-if="!regions.length" class="chart-empty">暂无数据</p>
-          <p v-else class="chart-note">按租户登记的省份统计，"未填写"表示该租户没有填省份。</p>
+          <p v-else class="chart-note">按主体登记的省份统计，"未填写"表示该主体没有填省份。</p>
         </div>
       </div>
     </div>
@@ -196,18 +196,18 @@
 
 <script setup>
 /**
- * 租户数据统计。
+ * 主体数据统计。
  *
  * <p>这个页面此前<b>整页都是写死的</b>：统计卡片是 128 / 12568 / 78.5% / ¥1258000，
- * 增长曲线是 5 个常量，类型分布 70%/30%，排行榜 10 个编出来的租户名，
+ * 增长曲线是 5 个常量，类型分布 70%/30%，排行榜 10 个编出来的主体名，
  * 地域分布 8 个省份。而后端接口其实是有的（GET /tenant/statistics），只是从来没被调用过 ——
  * "页面能打开"和"数据是真的"完完全全是两回事。</p>
  *
  * <p>现在全部来自 /tenant/statistics：summary 是库里的真实计数，trends 按
- * agri_md_tenant.create_time 分桶，rankings 按租户下的用户数排序，
+ * agri_md_tenant.create_time 分桶，rankings 按主体下的用户数排序，
  * tenantTypes / regions 是真实的分组统计。</p>
  *
- * <p>没有数据来源的部分（套餐分布、质量得分、数据变更次数、活跃/流失租户）
+ * <p>没有数据来源的部分（套餐分布、质量得分、数据变更次数、活跃/流失主体）
  * 不再拿假数字填满，改为在页面上写清楚缺什么。</p>
  */
 import { ref, reactive, computed, onMounted } from 'vue'
@@ -233,7 +233,7 @@ const typeRows = ref([])
 const display = (value) =>
   value === null || value === undefined ? '—' : Number(value).toLocaleString()
 
-/** 启用中占比。租户总数为 0 时不给百分比（0/0 无意义），显示"—"。 */
+/** 启用中占比。主体总数为 0 时不给百分比（0/0 无意义），显示"—"。 */
 const activeRate = computed(() => {
   const total = summary.totalTenants
   if (!total) {
@@ -269,10 +269,10 @@ const ratio = (value, total) => {
 }
 
 const TENANT_TYPE_LABELS = {
-  ENTERPRISE: '企业租户',
-  INDIVIDUAL: '个人租户',
+  ENTERPRISE: '企业主体',
+  INDIVIDUAL: '个人主体',
   COOPERATIVE: '合作社',
-  SYSTEM: '系统租户'
+  SYSTEM: '系统主体'
 }
 
 const tenantTypeLabel = (type) =>
@@ -305,7 +305,7 @@ const loadData = async () => {
     // 接口失败时**不再**退回一份写着假数字的页面：那会让人以为数据没问题，
     // 而实际上看到的是一份和库里毫无关系的报表。
     loadError.value =
-      '加载租户统计失败：' + (error instanceof Error ? error.message : String(error))
+      '加载主体统计失败：' + (error instanceof Error ? error.message : String(error))
     trends.value = []
     rankings.value = []
     regions.value = []
@@ -315,7 +315,7 @@ const loadData = async () => {
 
 /** 导出报表：把当前排行榜导成 CSV（真实数据，不再是一个点了没反应的按钮）。 */
 const exportRankings = () => {
-  const header = '排名,租户编码,租户名称,类型,用户数,组织数,状态'
+  const header = '排名,主体编码,主体名称,类型,用户数,组织数,状态'
   const rows = rankings.value.map((item) =>
     [
       item.rank,
@@ -333,7 +333,7 @@ const exportRankings = () => {
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  link.download = `租户活跃度排行_${new Date().toISOString().slice(0, 10)}.csv`
+  link.download = `主体活跃度排行_${new Date().toISOString().slice(0, 10)}.csv`
   link.click()
   URL.revokeObjectURL(url)
 }

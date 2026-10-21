@@ -1,5 +1,6 @@
 package com.agri.produce.internal.admin;
 
+import com.agri.core.infra.tenant.TenantSubjectProvider;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -48,6 +49,9 @@ class TenantQuotaServiceTest {
 
     @Mock
     private TraceCodeMapper traceCodeMapper;
+
+    @Mock
+    private TenantSubjectProvider tenantSubjectProvider;
 
     @InjectMocks
     private TenantQuotaService service;

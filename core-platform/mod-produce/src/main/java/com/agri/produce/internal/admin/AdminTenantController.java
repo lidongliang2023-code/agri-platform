@@ -2,6 +2,7 @@ package com.agri.produce.internal.admin;
 
 import com.agri.shared.result.ApiResponse;
 import com.agri.shared.result.PageResult;
+import com.agri.core.infra.tenant.TenantSubjectProvider;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
@@ -20,12 +21,13 @@ import org.springframework.web.bind.annotation.RestController;
  * 运营端：租户与配额管理。
  */
 @RestController
-@RequestMapping("/api/v1/production/admin/tenants")
+@RequestMapping({"/api/v1/production/admin/subjects", "/api/v1/production/admin/tenants"})
 @RequiredArgsConstructor
 public class AdminTenantController {
 
     private final TenantQuotaService tenantQuotaService;
     private final TenantOverviewService tenantOverviewService;
+    private final TenantSubjectService tenantSubjectService;
 
     /** 平台级租户概览（汇总卡片 + 逐租户明细） */
     @GetMapping("/overview")
@@ -40,31 +42,47 @@ public class AdminTenantController {
     }
 
     @GetMapping
-    public ApiResponse<PageResult<TenantQuotaEntity>> page(@RequestParam(defaultValue = "1") long page,
-                                                           @RequestParam(defaultValue = "10") long size,
-                                                           @RequestParam(required = false) Integer status) {
-        return ApiResponse.ok(tenantQuotaService.page(page, size, status));
+    public ApiResponse<PageResult<OpsTenantSubjectRow>> page(
+            @RequestParam(defaultValue = "1") long page,
+            @RequestParam(defaultValue = "20") long size,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Integer status,
+            @RequestParam(required = false) String memberType) {
+        return ApiResponse.ok(tenantSubjectService.page(page, size, keyword, status, memberType));
     }
 
     @GetMapping("/{id}")
-    public ApiResponse<TenantQuotaEntity> detail(@PathVariable String id) {
-        return ApiResponse.ok(tenantQuotaService.detail(id));
+    public ApiResponse<OpsTenantSubjectRow> detail(@PathVariable Long id) {
+        return ApiResponse.ok(tenantSubjectService.detail(id));
     }
 
     @PostMapping
-    public ApiResponse<String> create(@RequestBody TenantQuotaEntity entity) {
-        return ApiResponse.ok(tenantQuotaService.create(entity).getQuotaId());
+    public ApiResponse<Void> create() {
+        throw new com.agri.shared.exception.BusinessException(
+                com.agri.shared.exception.ErrorCode.BAD_REQUEST,
+                "经营主体由统一认证注册产生，不能在主体管理中单独新建");
     }
 
     @PutMapping("/{id}")
-    public ApiResponse<TenantQuotaEntity> update(@PathVariable String id, @RequestBody TenantQuotaEntity entity) {
-        return ApiResponse.ok(tenantQuotaService.update(id, entity));
+    public ApiResponse<OpsTenantSubjectRow> update(
+            @PathVariable Long id,
+            @RequestBody TenantSubjectProvider.TenantSubjectUpdate entity) {
+        return ApiResponse.ok(tenantSubjectService.update(id, entity));
+    }
+
+    @PutMapping("/{id}/status")
+    public ApiResponse<OpsTenantSubjectRow> updateStatus(
+            @PathVariable Long id,
+            @RequestBody TenantStatusRequest request) {
+        return ApiResponse.ok(tenantSubjectService.update(id,
+                new TenantSubjectProvider.TenantSubjectUpdate(null, null, null, null, null, request.status())));
     }
 
     @DeleteMapping("/{id}")
-    public ApiResponse<Void> delete(@PathVariable String id) {
-        tenantQuotaService.delete(id);
-        return ApiResponse.ok();
+    public ApiResponse<Void> delete(@PathVariable Long id) {
+        throw new com.agri.shared.exception.BusinessException(
+                com.agri.shared.exception.ErrorCode.BAD_REQUEST,
+                "经营主体不能在这里单独删除；请在统一认证或主体管理流程中处理主体状态");
     }
 
     /** 配额使用率 */
@@ -165,5 +183,9 @@ public class AdminTenantController {
     public record BatchQuotaLimitRequest(List<String> tenantIds, Integer farmLimit,
                                          Integer traceCodeLimit, BigDecimal storageLimit,
                                          Integer apiLimit) {
+    }
+
+    /** 租户启停请求。 */
+    public record TenantStatusRequest(Integer status) {
     }
 }

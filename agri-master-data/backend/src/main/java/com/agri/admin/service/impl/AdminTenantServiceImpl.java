@@ -1,6 +1,7 @@
 package com.agri.admin.service.impl;
 
 import com.agri.admin.dto.TenantCreateDTO;
+import com.agri.admin.client.CoreTenantSubjectClient;
 import com.agri.admin.dto.TenantPackageDTO;
 import com.agri.admin.dto.TenantQuotaAdjustDTO;
 import com.agri.admin.service.IAdminTenantService;
@@ -63,6 +64,7 @@ public class AdminTenantServiceImpl implements IAdminTenantService {
     private final ITenantService tenantService;
     private final ITenantQuotaService tenantQuotaService;
     private final IUserService userService;
+    private final CoreTenantSubjectClient coreTenantSubjectClient;
     private final TenantMapper tenantMapper;
     private final TenantPackageMapper tenantPackageMapper;
     private final TenantQuotaMapper tenantQuotaMapper;
@@ -73,57 +75,42 @@ public class AdminTenantServiceImpl implements IAdminTenantService {
 
     @Override
     public PageResult<TenantVO> getTenantList(Integer pageNum, Integer pageSize, String tenantStatus, String tenantType, String keyword) {
-        IPage<Tenant> page = new Page<>(pageNum, pageSize);
-        LambdaQueryWrapper<Tenant> wrapper = new LambdaQueryWrapper<>();
-        
-        if (tenantStatus != null && !tenantStatus.isEmpty()) {
-            // status 是 INT，直接 eq(String "ACTIVE") 会被 MySQL 隐式转成 0 ——
-            // 于是"启用"筛出 status=0 的行、"禁用"几乎筛不出任何行，两个筛选项都错。
-            //
-            // 这里按 StatusEnum 的口径（1=启用 / 0=禁用）翻译，同时接受前端可能传来的
-            // "ACTIVE"/"1" 两种写法，避免前后端口径切换期间出现静默空列表。
-            wrapper.eq(Tenant::getStatus, parseTenantStatus(tenantStatus));
+        Integer status = tenantStatus == null || tenantStatus.isBlank()
+                ? null : parseTenantStatus(tenantStatus);
+        String memberType = null;
+        if ("ENTERPRISE".equalsIgnoreCase(tenantType)) {
+            memberType = "enterprise";
+        } else if ("INDIVIDUAL".equalsIgnoreCase(tenantType)
+                || "PERSONAL".equalsIgnoreCase(tenantType)) {
+            memberType = "personal";
         }
-        if (tenantType != null && !tenantType.isEmpty()) {
-            wrapper.eq(Tenant::getTenantType, tenantType);
-        }
-        if (keyword != null && !keyword.isEmpty()) {
-            wrapper.and(w -> w.like(Tenant::getTenantName, keyword)
-                    .or().like(Tenant::getTenantCode, keyword)
-                    .or().like(Tenant::getContactName, keyword));
-        }
-        
-        page = tenantMapper.selectPage(page, wrapper);
-        
-        List<TenantVO> records = new ArrayList<>();
-        for (Tenant tenant : page.getRecords()) {
-            records.add(tenantService.convertToVO(tenant));
-        }
-        
-        return new PageResult<>(records, page.getTotal(), pageNum, pageSize);
+        CoreTenantSubjectClient.CoreApiResponse<CoreTenantSubjectClient.CorePageResult<
+                CoreTenantSubjectClient.CoreTenantSubject>> response =
+                coreTenantSubjectClient.page(pageNum, pageSize, keyword, status, memberType);
+        requireSuccess(response.code(), response.message());
+        CoreTenantSubjectClient.CorePageResult<CoreTenantSubjectClient.CoreTenantSubject> data = response.data();
+        List<TenantVO> records = data == null || data.records() == null
+                ? List.of() : data.records().stream().map(this::toTenantVO).toList();
+        long total = data == null ? 0 : data.total();
+        return new PageResult<>(records, total, pageNum.longValue(), pageSize.longValue());
     }
 
     @Override
     public TenantDetailVO getTenantDetail(Long id) {
-        Tenant tenant = tenantMapper.selectById(id);
-        if (tenant == null) {
-            throw new BusinessException("租户不存在");
-        }
+        CoreTenantSubjectClient.CoreApiResponse<CoreTenantSubjectClient.CoreTenantSubject> response =
+                coreTenantSubjectClient.detail(id);
+        requireSuccess(response.code(), response.message());
+        CoreTenantSubjectClient.CoreTenantSubject subject = response.data();
         
         TenantDetailVO vo = new TenantDetailVO();
-        vo.setId(tenant.getId());
-        vo.setTenantCode(tenant.getTenantCode());
-        vo.setTenantName(tenant.getTenantName());
-        vo.setTenantType(tenant.getTenantType());
-        vo.setContactName(tenant.getContactName());
-        vo.setPhone(tenant.getContactPhone());
-        vo.setEmail(tenant.getEmail());
-        vo.setProvince(tenant.getProvince());
-        vo.setCity(tenant.getCity());
-        vo.setDistrict(tenant.getDistrict());
-        vo.setAddress(tenant.getAddress());
-        vo.setStatus(tenant.getStatus());
-        vo.setCreateTime(tenant.getCreateTime() != null ? tenant.getCreateTime().toString() : null);
+        vo.setId(subject.tenantId());
+        vo.setTenantCode(subject.tenantCode());
+        vo.setTenantName(subject.tenantName());
+        vo.setTenantType("personal".equalsIgnoreCase(subject.memberType()) ? "INDIVIDUAL" : "ENTERPRISE");
+        vo.setContactName(subject.contactName());
+        vo.setPhone(subject.contactPhone());
+        vo.setStatus(subject.status());
+        vo.setCreateTime(subject.createdAt() != null ? subject.createdAt().toString() : null);
         vo.setQuotaInfo(getTenantQuota(id));
         vo.setUserOrgStats(getUserOrgStats(id));
         vo.setQualityScore(getQualityScore(id));
@@ -135,59 +122,28 @@ public class AdminTenantServiceImpl implements IAdminTenantService {
     @Override
     @Transactional
     public void createTenant(TenantCreateDTO dto) {
-        Tenant tenant = new Tenant();
-        tenant.setTenantCode(dto.getCode() != null && !dto.getCode().isEmpty() ? dto.getCode() : "T" + System.currentTimeMillis());
-        tenant.setTenantName(dto.getName());
-        tenant.setContactName(dto.getContactPerson());
-        tenant.setContactPhone(dto.getContactPhone());
-        // 统一到 StatusEnum：1=启用、0=禁用。原实现是反的（ACTIVE→0），
-        // 与共享包 StatusEnum 以及本模块其它统计口径互相矛盾。
-        tenant.setStatus(parseTenantStatus(dto.getStatus()));
-        
-        tenantMapper.insert(tenant);
+        throw new BusinessException("租户与企业/个人经营主体一一对应，请从统一认证中心注册主体；本页不单独新建租户");
     }
 
     @Override
     public void updateTenant(Long id, TenantUpdateDTO dto) {
-        Tenant tenant = tenantMapper.selectById(id);
-        if (tenant == null) {
-            throw new BusinessException("租户不存在");
-        }
-        
-        tenant.setTenantName(dto.getTenantName());
-        tenant.setContactName(dto.getContactName());
-        tenant.setContactPhone(dto.getContactPhone());
-        tenant.setEmail(dto.getEmail());
-        tenant.setProvince(dto.getProvince());
-        tenant.setCity(dto.getCity());
-        tenant.setDistrict(dto.getDistrict());
-        tenant.setAddress(dto.getAddress());
-        
-        tenantMapper.updateById(tenant);
+        String contactName = dto.getContactName() != null ? dto.getContactName() : dto.getContactPerson();
+        CoreTenantSubjectClient.CoreApiResponse<CoreTenantSubjectClient.CoreTenantSubject> response =
+                coreTenantSubjectClient.update(id, new CoreTenantSubjectClient.TenantSubjectUpdate(
+                        dto.getTenantName(), null, null, contactName, dto.getContactPhone(), dto.getStatus()));
+        requireSuccess(response.code(), response.message());
     }
 
     @Override
     public void deleteTenant(Long id) {
-        Tenant tenant = tenantMapper.selectById(id);
-        if (tenant == null) {
-            throw new BusinessException("租户不存在");
-        }
-        
-        // 逻辑删除走 del_flag（MyBatis-Plus 已配 logic-delete-field=delFlag，deleteById 会自动置 1）。
-        // 原实现把 status 置成 -1：既绕过了框架的逻辑删除，又让列表照旧能查到这条记录
-        // （列表不按 del_flag 过滤）——"删了还在"就是这么来的。
-        tenantMapper.deleteById(id);
+        throw new BusinessException("租户与经营主体一一对应，不能单独删除；请在经营主体流程中处理");
     }
 
     @Override
     public void updateTenantStatus(Long id, Integer status) {
-        Tenant tenant = tenantMapper.selectById(id);
-        if (tenant == null) {
-            throw new BusinessException("租户不存在");
-        }
-        
-        tenant.setStatus(status);
-        tenantMapper.updateById(tenant);
+        CoreTenantSubjectClient.CoreApiResponse<CoreTenantSubjectClient.CoreTenantSubject> response =
+                coreTenantSubjectClient.updateStatus(id, new CoreTenantSubjectClient.TenantStatusUpdate(status));
+        requireSuccess(response.code(), response.message());
     }
 
     @Override
@@ -690,6 +646,37 @@ public class AdminTenantServiceImpl implements IAdminTenantService {
             rankings.add(rank);
         }
         return rankings;
+    }
+
+    private TenantVO toTenantVO(CoreTenantSubjectClient.CoreTenantSubject subject) {
+        return TenantVO.builder()
+                .id(subject.tenantId())
+                .tenantCode(subject.tenantCode())
+                .tenantName(subject.tenantName())
+                .tenantType("personal".equalsIgnoreCase(subject.memberType()) ? "INDIVIDUAL" : "ENTERPRISE")
+                .contactPerson(subject.contactName())
+                .contactPhone(subject.contactPhone())
+                .status(subject.status())
+                .createTime(parsePlatformTime(subject.createdAt()))
+                .updateTime(parsePlatformTime(subject.createdAt()))
+                .build();
+    }
+
+    private static LocalDateTime parsePlatformTime(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String normalized = value.trim().replace('T', ' ');
+        return normalized.length() > 19 ? LocalDateTime.parse(normalized.substring(0, 19),
+                DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")) : LocalDateTime.parse(normalized,
+                DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+    }
+
+    private static void requireSuccess(Integer code, String message) {
+        if (code == null || code != 0) {
+            throw new BusinessException(message == null || message.isBlank()
+                    ? "核心平台租户主档暂不可用" : message);
+        }
     }
 
     private static Map<String, Long> groupedCount(List<Map<String, Object>> rows, String keyColumn) {

@@ -6,15 +6,15 @@
         <span>返回</span>
       </button>
       <div class="header-left">
-        <h1>租户详情</h1>
-        <p>查看租户详细信息</p>
+        <h1>主体详情</h1>
+        <p>查看主体详细信息</p>
       </div>
 
     </div>
 
     <p v-if="loadError" class="load-error">{{ loadError }}</p>
     <div class="detail-card" v-else-if="!tenantData">
-      <p class="section-empty">正在加载租户详情…</p>
+      <p class="section-empty">正在加载主体详情…</p>
     </div>
 
     <div v-else class="detail-card">
@@ -22,17 +22,17 @@
         <h3 class="section-title">基本信息</h3>
         <div class="info-grid">
           <div class="info-item">
-            <span class="label">租户编码</span>
+            <span class="label">主体编码</span>
             <span class="value">{{ tenantData.tenantCode }}</span>
           </div>
           <div class="info-item">
-            <span class="label">租户名称</span>
+            <span class="label">主体名称</span>
             <span class="value">{{ tenantData.tenantName }}</span>
           </div>
           <div class="info-item">
-            <span class="label">租户类型</span>
+            <span class="label">主体类型</span>
             <!-- 原先只认小写 'enterprise'，而库里存的是 'ENTERPRISE'，
-                 于是所有企业租户都被显示成"个人"；合作社/系统租户更是直接没有对应文案。 -->
+                 于是所有企业主体都被显示成"个人"；合作社/系统主体更是直接没有对应文案。 -->
             <span class="value">{{ tenantTypeLabel(tenantData.tenantType) }}</span>
           </div>
           <div class="info-item">
@@ -54,7 +54,7 @@
           <div class="info-item">
             <span class="label">状态</span>
             <!-- 状态判断原先写反了：库口径是 1=启用 / 0=停用（StatusEnum），
-                 页面却按 0=正常 判断，于是每个启用中的租户都显示"禁用"。 -->
+                 页面却按 0=正常 判断，于是每个启用中的主体都显示"禁用"。 -->
             <span class="status-badge" :class="tenantData.status === 1 ? 'active' : 'inactive'">
               {{ tenantData.status === 1 ? '启用中' : '已停用' }}
             </span>
@@ -122,9 +122,9 @@
           </div>
         </div>
         <!-- 没有数据来源时如实说明。原先这里显示的是后端写死的 99.2 / 99.5 / …，
-             换个租户点进来数字纹丝不动，却是页面上最显眼的一块。 -->
+             换个主体点进来数字纹丝不动，却是页面上最显眼的一块。 -->
         <p v-else class="section-empty">
-          未接入：没有"按租户汇总主数据质量得分"的数据。需要先有质量得分汇总表
+          未接入：没有"按主体汇总主数据质量得分"的数据。需要先有质量得分汇总表
           （数据质量模块目前只有问题工单），并在每次检测后回写，才能给出真实评分。
         </p>
       </div>
@@ -158,8 +158,8 @@
           </div>
         </div>
         <p class="section-note">
-          用户与组织按租户编码统计；"已实名认证 / 待认证"取用户认证记录，"已认证 / 待审核"取组织认证状态。
-          0 表示该租户确实没有对应记录。
+          用户与组织按主体编码统计；"已实名认证 / 待认证"取用户认证记录，"已认证 / 待审核"取组织认证状态。
+          0 表示该主体确实没有对应记录。
         </p>
       </div>
 
@@ -184,8 +184,8 @@
           </tbody>
         </table>
         <p v-else class="section-empty">
-          这个租户还没有操作记录。留痕从运营端"操作日志"接入后开始产生：
-          对该租户的每一次写操作（改资料 / 停启用 / 调配额 / 换套餐）都会记在这里。
+          这个主体还没有操作记录。留痕从运营端"操作日志"接入后开始产生：
+          对该主体的每一次写操作（改资料 / 停启用 / 调配额 / 换套餐）都会记在这里。
         </p>
       </div>
     </div>
@@ -216,12 +216,12 @@ const loadDetail = async () => {
     tenantData.value = response.data
     loadError.value = ''
   } catch (error) {
-    console.error('加载租户详情失败', error)
+    console.error('加载主体详情失败', error)
     // 这里原先会退回一份 mockTenantData（"阳光农场 / 张三 / 13800138001"这些编好的值）。
     // 接口一挂就显示一份看着很正常的假资料，比报错危险得多 —— 没人会去核对一个"能打开的页面"。
     tenantData.value = null
     loadError.value =
-      '加载租户详情失败：' + (error instanceof Error ? error.message : String(error))
+      '加载主体详情失败：' + (error instanceof Error ? error.message : String(error))
   }
 }
 
@@ -242,10 +242,10 @@ const countText = (value) =>
   value === null || value === undefined ? '—' : Number(value).toLocaleString()
 
 const TENANT_TYPE_LABELS = {
-  ENTERPRISE: '企业租户',
-  INDIVIDUAL: '个人租户',
+  ENTERPRISE: '企业主体',
+  INDIVIDUAL: '个人主体',
   COOPERATIVE: '合作社',
-  SYSTEM: '系统租户'
+  SYSTEM: '系统主体'
 }
 
 const tenantTypeLabel = (type) =>

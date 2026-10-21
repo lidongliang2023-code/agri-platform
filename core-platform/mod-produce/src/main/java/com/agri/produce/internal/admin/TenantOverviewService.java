@@ -1,5 +1,6 @@
 package com.agri.produce.internal.admin;
 
+import com.agri.core.infra.tenant.TenantSubjectProvider;
 import com.agri.produce.internal.alert.AlertInfoMapper;
 import com.agri.produce.internal.farm.FarmInfoMapper;
 import com.agri.produce.internal.iot.IotDeviceMapper;
@@ -52,6 +53,7 @@ public class TenantOverviewService {
     private static final String UNREGISTERED_NAME = "未登记租户";
 
     private final TenantQuotaMapper tenantQuotaMapper;
+    private final TenantSubjectProvider tenantSubjectProvider;
     private final FarmInfoMapper farmInfoMapper;
     private final PlotInfoMapper plotInfoMapper;
     private final IotDeviceMapper iotDeviceMapper;
@@ -65,6 +67,10 @@ public class TenantOverviewService {
      */
     public TenantOverview overview() {
         Map<Long, TenantQuotaEntity> quotaByTenant = loadQuotaByTenant();
+        Map<Long, TenantSubjectProvider.TenantSubject> subjectByTenant = new HashMap<>();
+        for (TenantSubjectProvider.TenantSubject subject : tenantSubjectProvider.listAll()) {
+            subjectByTenant.put(subject.tenantId(), subject);
+        }
 
         Map<Long, Long> farmCount = countByTenant(farmInfoMapper, null);
         Map<Long, Long> plotCount = countByTenant(plotInfoMapper, null);
@@ -79,17 +85,15 @@ public class TenantOverviewService {
         Map<Long, Long> growingPlanCount =
                 countByTenant(planInfoMapper, wrapper -> wrapper.in("status", PlanInfoService.GROWING_STATUSES));
 
-        Set<Long> tenantIds = new LinkedHashSet<>(quotaByTenant.keySet());
-        tenantIds.addAll(farmCount.keySet());
-        tenantIds.addAll(plotCount.keySet());
-        tenantIds.addAll(deviceCount.keySet());
-        tenantIds.addAll(pendingAlertCount.keySet());
-        tenantIds.addAll(growingPlanCount.keySet());
+        // 租户主档只认经营主体。资源表里的 tenant_id 只有能对应到主体时才是租户，
+        // tenant_id=0 或历史未绑定桶不能伪装成一个“未登记租户”。
+        Set<Long> tenantIds = new LinkedHashSet<>(subjectByTenant.keySet());
+        tenantIds.retainAll(subjectByTenant.keySet());
 
         List<TenantOverviewRow> rows = new ArrayList<>(tenantIds.size());
         TenantOverview overview = new TenantOverview();
         for (Long tenantId : tenantIds) {
-            TenantOverviewRow row = buildRow(tenantId, quotaByTenant.get(tenantId),
+            TenantOverviewRow row = buildRow(tenantId, subjectByTenant.get(tenantId), quotaByTenant.get(tenantId),
                     farmCount, plotCount, deviceCount, deviceOnlineCount,
                     pendingAlertCount, growingPlanCount);
             rows.add(row);
@@ -152,6 +156,7 @@ public class TenantOverviewService {
      * @return 明细行
      */
     private TenantOverviewRow buildRow(Long tenantId,
+                                       TenantSubjectProvider.TenantSubject subject,
                                        TenantQuotaEntity quota,
                                        Map<Long, Long> farmCount,
                                        Map<Long, Long> plotCount,
@@ -161,6 +166,13 @@ public class TenantOverviewService {
                                        Map<Long, Long> growingPlanCount) {
         TenantOverviewRow row = new TenantOverviewRow();
         row.setTenantId(tenantId);
+        row.setTenantCode(subject.tenantCode());
+        row.setTenantName(subject.tenantName());
+        row.setMemberType(subject.memberType());
+        row.setIndustry(subject.industry());
+        row.setContactName(subject.contactName());
+        row.setContactPhone(subject.contactPhone());
+        row.setStatus(subject.status());
         row.setFarmCount(countOf(farmCount, tenantId));
         row.setPlotCount(countOf(plotCount, tenantId));
         row.setDeviceCount(countOf(deviceCount, tenantId));
@@ -170,9 +182,6 @@ public class TenantOverviewService {
 
         if (quota == null) {
             row.setRegistered(false);
-            row.setTenantCode(UNREGISTERED_CODE_PREFIX + tenantId);
-            row.setTenantName(UNREGISTERED_NAME);
-            row.setStatus(null);
             row.setFarmLimit(null);
             row.setFarmUsageRate(BigDecimal.ZERO);
             row.setQuotaWarning(false);
@@ -180,9 +189,12 @@ public class TenantOverviewService {
         }
 
         row.setRegistered(true);
-        row.setTenantCode(quota.getTenantCode());
-        row.setTenantName(quota.getTenantName());
-        row.setStatus(quota.getStatus());
+        if (row.getTenantCode() == null || row.getTenantCode().isBlank()) {
+            row.setTenantCode(UNREGISTERED_CODE_PREFIX + tenantId);
+        }
+        if (row.getTenantName() == null || row.getTenantName().isBlank()) {
+            row.setTenantName(UNREGISTERED_NAME);
+        }
         row.setFarmLimit(quota.getFarmLimit());
         row.setFarmUsageRate(usageRate(row.getFarmCount(), quota.getFarmLimit()));
         row.setQuotaWarning(row.getFarmUsageRate().compareTo(WARNING_USAGE_RATE) >= 0);
@@ -196,13 +208,12 @@ public class TenantOverviewService {
      * @param row     明细行
      */
     private void accumulate(TenantOverview overview, TenantOverviewRow row) {
-        if (row.isRegistered()) {
-            if (Integer.valueOf(1).equals(row.getStatus())) {
-                overview.setActiveTenantCount(overview.getActiveTenantCount() + 1);
-            } else if (Integer.valueOf(0).equals(row.getStatus())) {
-                overview.setDisabledTenantCount(overview.getDisabledTenantCount() + 1);
-            }
-        } else {
+        if (Integer.valueOf(1).equals(row.getStatus())) {
+            overview.setActiveTenantCount(overview.getActiveTenantCount() + 1);
+        } else if (Integer.valueOf(0).equals(row.getStatus())) {
+            overview.setDisabledTenantCount(overview.getDisabledTenantCount() + 1);
+        }
+        if (!row.isRegistered()) {
             overview.setUnregisteredTenantCount(overview.getUnregisteredTenantCount() + 1);
         }
         overview.setFarmTotal(overview.getFarmTotal() + row.getFarmCount());

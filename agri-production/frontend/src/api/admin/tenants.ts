@@ -1,9 +1,9 @@
 /**
- * 运营端 - 租户管理 API（含配额与分层）
+ * 运营端 - 主体管理 API（含配额与分层）
  */
 import { http } from '@/utils/request'
 import type { BizId, PageQuery, PageResult } from '@/types'
-import type { Tenant, TenantQuota, TenantSegment } from '@/types'
+import type { Tenant, TenantQuota, TenantSegment, TenantStatus } from '@/types'
 import type {
   OpsQuotaItem,
   OpsTenant,
@@ -14,53 +14,70 @@ import type {
   TenantSegmentSummary,
 } from '@/types'
 
-const BASE = '/admin/tenants'
+const BASE = '/admin/subjects'
 
-/** 租户列表查询参数 */
+/** 主体列表查询参数 */
 export interface TenantListParams extends PageQuery {
   tenantName?: string
+  keyword?: string
+  memberType?: 'enterprise' | 'personal'
   tenantLevel?: number
   status?: number
 }
 
-/** 分页查询租户列表 */
+/** 分页查询主体列表 */
 export function listTenants(params: TenantListParams): Promise<PageResult<Tenant>> {
   return http.get<PageResult<Tenant>>(BASE, params)
 }
 
 /**
- * 查询租户详情（GET /admin/tenants/{id}）。
+ * 查询主体详情（GET /admin/tenants/{id}）。
  *
  * ⚠️ 后端 `AdminTenantController#detail` 返回的是 **`TenantQuotaEntity`（配额记录）**，
- * 不是「租户档案实体」——库内没有租户主表，租户以配额记录为载体。
+ * 不是「主体档案实体」——库内没有主体主表，主体以配额记录为载体。
  * 实测（2026-10-10，端口 8096，code=0）返回键为：
  * `marketId, tenantId, createBy, updateBy, createdAt, updatedAt, deleted, quotaId,
  *  tenantCode, tenantName, farmLimit, plotLimit, deviceLimit, userLimit,
  *  storageLimitGb, traceCodeLimit, apiCallLimit, usedFarmCount, status`。
  *
  * 因此**没有**联系人 / 联系电话 / 区域 / 统一社会信用代码 / 法定代表人 / 地址 /
- * 经营范围 / 租户等级 / 成员数 / 设备数（实际值）/ 在田面积 / 活跃度 / 到期时间等字段。
+ * 经营范围 / 主体等级 / 成员数 / 设备数（实际值）/ 在田面积 / 活跃度 / 到期时间等字段。
  * 此前这里声明返回 `Tenant`（把上面这些字段标成必填或可选），
  * 前端于是用原型示例值补齐——页面上每一个"档案字段"都是编造的。
  *
- * @param tenantId 租户标识（后端 `quotaId`）
+ * @param tenantId 主体标识（后端 `quotaId`）
  * @returns 后端配额记录真实形态
  */
 export function getTenant(tenantId: BizId): Promise<OpsTenantRow> {
   return http.get<OpsTenantRow>(`${BASE}/${tenantId}`)
 }
 
-/** 新增租户 */
+/** 新增主体 */
 export function createTenant(payload: Partial<Tenant>): Promise<string> {
   return http.post<string>(BASE, payload)
 }
 
-/** 更新租户 */
-export function updateTenant(tenantId: BizId, payload: Partial<Tenant>): Promise<Tenant> {
-  return http.put<Tenant>(`${BASE}/${tenantId}`, payload)
+/** 主体运营字段；主体 ID、编码和主体类型由经营主体注册决定，不可在此改写。 */
+export interface TenantSubjectUpdate {
+  tenantName?: string
+  industry?: string
+  businessType?: string
+  contactName?: string
+  contactPhone?: string
+  status?: TenantStatus
 }
 
-/** 删除租户 */
+/** 更新经营主体主体资料 */
+export function updateTenant(tenantId: BizId, payload: TenantSubjectUpdate): Promise<OpsTenantRow> {
+  return http.put<OpsTenantRow>(`${BASE}/${tenantId}`, payload)
+}
+
+/** 启用 / 停用经营主体主体 */
+export function updateTenantStatus(tenantId: BizId, status: TenantStatus): Promise<OpsTenantRow> {
+  return http.put<OpsTenantRow>(`${BASE}/${tenantId}/status`, { status })
+}
+
+/** 删除主体 */
 export function deleteTenant(tenantId: BizId): Promise<void> {
   return http.delete<void>(`${BASE}/${tenantId}`)
 }
@@ -74,18 +91,18 @@ export function deleteTenant(tenantId: BizId): Promise<void> {
  *   （`AdminTenantController` 只有 `PUT /{id}`，没有任何 `/{id}/status` 映射。）
  * - 调用方实测 0 处：全仓 grep `updateTenantStatus` 只命中本声明本身。
  *
- * 留着只会让人误以为"租户冻结/解冻有接口，只是暂时没接"。
+ * 留着只会让人误以为"主体冻结/解冻有接口，只是暂时没接"。
  * 后端真做了该能力时再重新引入，并同步补 `PUT /{id}` 之外的语义。
  */
 
-/** 分页查询租户配额 */
+/** 分页查询主体配额 */
 export function listTenantQuotas(
   params: PageQuery & { tenantId?: string; quotaType?: number },
 ): Promise<PageResult<TenantQuota>> {
   return http.get<PageResult<TenantQuota>>(`${BASE}/quotas`, params)
 }
 
-/** 调整租户配额 */
+/** 调整主体配额 */
 export function updateTenantQuota(
   quotaId: BizId,
   payload: Partial<TenantQuota>,
@@ -93,19 +110,19 @@ export function updateTenantQuota(
   return http.put<TenantQuota>(`${BASE}/quotas/${quotaId}`, payload)
 }
 
-/** 分页查询租户分层 */
+/** 分页查询主体分层 */
 export function listTenantSegments(
   params: PageQuery & { segmentName?: string },
 ): Promise<PageResult<TenantSegment>> {
   return http.get<PageResult<TenantSegment>>(`${BASE}/segments`, params)
 }
 
-/** 新增租户分层 */
+/** 新增主体分层 */
 export function createTenantSegment(payload: Partial<TenantSegment>): Promise<TenantSegment> {
   return http.post<TenantSegment>(`${BASE}/segments`, payload)
 }
 
-/** 更新租户分层 */
+/** 更新主体分层 */
 export function updateTenantSegment(
   segmentId: BizId,
   payload: Partial<TenantSegment>,
@@ -113,7 +130,7 @@ export function updateTenantSegment(
   return http.put<TenantSegment>(`${BASE}/segments/${segmentId}`, payload)
 }
 
-/** 删除租户分层 */
+/** 删除主体分层 */
 export function deleteTenantSegment(segmentId: BizId): Promise<boolean> {
   return http.delete<boolean>(`${BASE}/segments/${segmentId}`)
 }
@@ -122,11 +139,13 @@ export function deleteTenantSegment(segmentId: BizId): Promise<boolean> {
 /* 说明：读接口统一 silent，后端未就绪时页面降级到原型示例数据；
  * 写接口保持默认行为（错误需显式提示用户）。 */
 
-/** 运营端租户列表查询参数（对齐原型 P2 筛选项） */
+/** 运营端主体列表查询参数（对齐原型 P2 筛选项） */
 export interface OpsTenantListParams extends PageQuery {
-  /** 租户名称 / 编号关键字 */
-  tenantName?: string
-  /** 租户等级：1 普通 2 银牌 3 金牌 4 钻石 */
+  /** 主体名称 / 编号 / 联系人关键字 */
+  keyword?: string
+  /** 经营主体类型 */
+  memberType?: 'enterprise' | 'personal'
+  /** 主体等级：1 普通 2 银牌 3 金牌 4 钻石 */
   tenantLevel?: number
   /** 状态：1 正常 2 待审核 3 已冻结 */
   status?: number
@@ -180,7 +199,7 @@ function normalizeOpsPage<T>(
   }
 }
 
-/** 分页查询运营端租户列表 */
+/** 分页查询运营端主体列表 */
 export function listOpsTenants(params: OpsTenantListParams): Promise<PageResult<OpsTenant>> {
   return http
     .get<RawOpsPageResult<OpsTenant>>(BASE, params, { silent: true })
@@ -188,28 +207,27 @@ export function listOpsTenants(params: OpsTenantListParams): Promise<PageResult<
 }
 
 /**
- * 运营端租户列表原始行（后端 `TenantQuotaEntity` 形态）。
- *
- * 库内没有租户主表，租户以配额记录为载体（见 `TenantQuotaService` 类注释），
- * 所以「租户标识」就是后端配额主键 `quotaId`，而不是 `OpsTenant.tenantId`。
- *
- * 后端**未提供**租户等级 / 区域 / 联系人 / 在田面积 / 活跃度等字段，
- * 因此这里不声明它们——声明一个后端不会返回的字段，会让调用方误以为有数据源。
+ * 运营端主体行：经营主体主档 + 可选配额配置。
+ * 一个企业或个人经营主体就是一个主体，`tenantId` 等于 `platform_merchant.id`。
  */
 export interface OpsTenantRow {
-  /** 租户标识（后端配额主键 quotaId） */
-  quotaId: string
-  /**
-   * 租户 ID（后端 `prod_tenant_quota.tenant_id`，Long 全局序列化为字符串）。
-   *
-   * 单租户概览 `GET /admin/tenants/overview/{tenantId}` 的入参是 **Long**，
-   * 只能传这个值；传 `quotaId` 会返回 code=400。
-   */
-  tenantId?: string | null
-  /** 租户编码 */
+  /** 经营主体 ID，也是主体 ID */
+  tenantId: string
+  /** 经营主体编码，也是主体编码 */
   tenantCode?: string | null
-  /** 租户名称 */
+  /** 经营主体名称，也是主体名称 */
   tenantName?: string | null
+  /** enterprise 企业 / personal 个人 */
+  memberType?: 'enterprise' | 'personal' | null
+  industry?: string | null
+  businessType?: string | null
+  contactName?: string | null
+  contactPhone?: string | null
+  verifyStatus?: string | null
+  /** 配额记录 ID；主体尚未配置配额时为空 */
+  quotaId?: string | null
+  /** 是否已建立配额配置 */
+  quotaRegistered?: boolean
   /** 农场数上限 */
   farmLimit?: number | null
   /** 地块数上限 */
@@ -235,7 +253,7 @@ export interface OpsTenantRow {
 }
 
 /**
- * 分页查询运营端租户列表（返回后端 `TenantQuotaEntity` 原始形态）。
+ * 分页查询运营端主体列表（返回后端 `TenantQuotaEntity` 原始形态）。
  *
  * 与 {@link listOpsTenants} 的区别：本函数不做任何字段改名 / 补位，
  * 后端返回什么就用什么，避免在类型层凭空造出后端没有的字段。
@@ -249,7 +267,7 @@ export function listOpsTenantRows(params: OpsTenantListParams): Promise<PageResu
     .then((raw) => normalizeOpsPage<OpsTenantRow>(raw, params.pageNum, params.pageSize))
 }
 
-/** 分页查询租户农场列表（租户详情 Tab2） */
+/** 分页查询主体农场列表（主体详情 Tab2） */
 export function listTenantFarms(
   tenantId: string,
   params: PageQuery,
@@ -259,7 +277,7 @@ export function listTenantFarms(
     .then((raw) => normalizeOpsPage<TenantFarmItem>(raw, params.pageNum, params.pageSize))
 }
 
-/** 分页查询租户操作日志（租户详情 Tab4） */
+/** 分页查询主体操作日志（主体详情 Tab4） */
 export function listTenantOperationLogs(
   tenantId: string,
   params: PageQuery,
@@ -269,12 +287,12 @@ export function listTenantOperationLogs(
     .then((raw) => normalizeOpsPage<TenantOperationLog>(raw, params.pageNum, params.pageSize))
 }
 
-/** 查询租户配额概览（原型 4 项） */
+/** 查询主体配额概览（原型 4 项） */
 export function getTenantQuotaOverview(tenantId: string): Promise<OpsQuotaItem[]> {
   return http.get<OpsQuotaItem[]>(`${BASE}/${tenantId}/quota-overview`, undefined, { silent: true })
 }
 
-/** 调整租户配额（整体提交 4 项上限） */
+/** 调整主体配额（整体提交 4 项上限） */
 export function updateTenantQuotaLimits(
   tenantId: string,
   payload: {
@@ -288,7 +306,7 @@ export function updateTenantQuotaLimits(
   return http.put<boolean>(`${BASE}/${tenantId}/quota-limits`, payload)
 }
 
-/** 批量调整租户配额（配额管理页批量操作） */
+/** 批量调整主体配额（配额管理页批量操作） */
 export function batchUpdateQuotaLimits(payload: {
   tenantIds: string[]
   farmLimit?: number
@@ -301,7 +319,7 @@ export function batchUpdateQuotaLimits(payload: {
 }
 
 /**
- * 重置租户已用配额（按实际业务数据重算）。
+ * 重置主体已用配额（按实际业务数据重算）。
  *
  * ⚠️ 路径曾写错：原实现打 `POST /admin/tenants/{tenantId}/quota-usage/reset`，
  * 而真端点是 `AdminTenantController` 的 `POST /admin/tenants/{quotaId}/reset-usage`
@@ -325,7 +343,7 @@ export function resetTenantQuotaUsage(quotaId: string): Promise<boolean> {
 }
 
 /**
- * 分页查询全平台租户配额一览（配额管理页）。
+ * 分页查询全平台主体配额一览（配额管理页）。
  *
  * 说明：后端 `GET /admin/tenants/quota-overview` 仅支持 `page` / `size` / `tenantName` / `onlyWarning`，
  * **不支持 `segment` 参数**（后端 OpsTenantQuotaRow.segment 恒为 null，无分层数据源），
@@ -339,7 +357,7 @@ export function listOpsQuotaOverview(
     .then((raw) => normalizeOpsPage<OpsTenantQuotaRow>(raw, params.pageNum, params.pageSize))
 }
 
-/** 分页查询租户分层画像（分层运营页） */
+/** 分页查询主体分层画像（分层运营页） */
 export function listTenantProfiles(
   params: PageQuery & { tenantName?: string; segment?: string; tag?: string },
 ): Promise<PageResult<TenantSegmentProfile>> {
@@ -348,7 +366,7 @@ export function listTenantProfiles(
     .then((raw) => normalizeOpsPage<TenantSegmentProfile>(raw, params.pageNum, params.pageSize))
 }
 
-/** 更新租户分层与运营标签 */
+/** 更新主体分层与运营标签 */
 export function updateTenantProfile(
   tenantId: string,
   payload: { segment?: string; tags?: string[]; strategy?: string },
@@ -361,15 +379,15 @@ export function listTenantSegmentSummary(): Promise<TenantSegmentSummary[]> {
   return http.get<TenantSegmentSummary[]>(`${BASE}/segment-summary`, undefined, { silent: true })
 }
 
-/* ==================== 租户概览（后端 TenantOverviewService） ==================== */
+/* ==================== 主体概览（后端 TenantOverviewService） ==================== */
 
-/** 租户概览：单租户明细行 */
+/** 主体概览：单主体明细行 */
 export interface TenantOverviewRow {
-  /** 租户 ID（后端 Long 全局序列化为字符串，故用 BizId） */
+  /** 主体 ID（后端 Long 全局序列化为字符串，故用 BizId） */
   tenantId: BizId
-  /** 租户编码，未登记配额时为 TENANT-<id> */
+  /** 主体编码，未登记配额时为 TENANT-<id> */
   tenantCode: string
-  /** 租户名称，未登记配额时为「未登记租户」 */
+  /** 主体名称，未登记配额时为「未登记主体」 */
   tenantName: string
   /** 配额状态：1 正常 / 0 停用 / null 未登记 */
   status: number | null
@@ -392,12 +410,12 @@ export interface TenantOverviewRow {
   quotaWarning: boolean
 }
 
-/** 租户概览：平台级汇总卡片 + 逐租户明细 */
+/** 主体概览：平台级汇总卡片 + 逐主体明细 */
 export interface TenantOverview {
   tenantTotal: number
   activeTenantCount: number
   disabledTenantCount: number
-  /** 有业务数据但未登记配额的租户数 */
+  /** 有业务数据但未登记配额的主体数 */
   unregisteredTenantCount: number
   farmTotal: number
   plotTotal: number
@@ -410,12 +428,12 @@ export interface TenantOverview {
   rows: TenantOverviewRow[]
 }
 
-/** 查询平台级租户概览（GET /admin/tenants/overview） */
+/** 查询平台级主体概览（GET /admin/tenants/overview） */
 export function getTenantOverview(): Promise<TenantOverview> {
   return http.get<TenantOverview>(`${BASE}/overview`, undefined, { silent: true })
 }
 
-/** 查询单租户概览（GET /admin/tenants/overview/{tenantId}） */
+/** 查询单主体概览（GET /admin/tenants/overview/{tenantId}） */
 export function getTenantOverviewById(tenantId: BizId): Promise<TenantOverviewRow> {
   return http.get<TenantOverviewRow>(`${BASE}/overview/${tenantId}`, undefined, { silent: true })
 }

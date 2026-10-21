@@ -20,6 +20,10 @@ public class TenantOverviewRow {
 
     /** 租户名称，未登记配额时为「未登记租户」 */
     private String tenantName;
+    private String memberType;
+    private String industry;
+    private String contactName;
+    private String contactPhone;
 
     /** 配额状态：1 正常 / 0 停用 / null 未登记 */
     private Integer status;

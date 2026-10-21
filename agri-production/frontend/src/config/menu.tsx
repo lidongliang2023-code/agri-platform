@@ -90,7 +90,7 @@ export const USER_MENU: MenuGroup[] = [
       // 2026-10-16：改名为「农事任务」；「创建任务」入口撤掉（新建走列表页的按钮，
       // 不占一级菜单的一个叶子 —— 与 /production/farms/create、/production/plots/create 同处理）。
       { key: '/production/tasks', label: '农事任务' },
-      // 「任务模板库」同日搬到运营端（模板是标准作业配置，由平台运营维护、租户使用），
+      // 「任务模板库」同日搬到运营端（模板是标准作业配置，由平台运营维护、主体使用），
       // 见 ADMIN_MENU 的「基础数据」分组。
     ],
   },
@@ -217,13 +217,13 @@ export const ADMIN_MENU: MenuGroup[] = [
     ],
   },
   {
-    key: 'tenant',
-    label: '租户管理',
+    key: 'subject',
+    label: '主体管理',
     icon: <TeamOutlined />,
     children: [
-      { key: '/admin/production/tenants', label: '租户列表' },
-      { key: '/admin/production/tenants/quotas', label: '配额管理' },
-      { key: '/admin/production/tenants/segments', label: '租户分层运营' },
+      { key: '/admin/production/subjects', label: '企业与个人主体' },
+      { key: '/admin/production/subjects/quotas', label: '主体资源配额' },
+      { key: '/admin/production/subjects/segments', label: '主体分层运营' },
     ],
   },
   {
@@ -244,7 +244,7 @@ export const ADMIN_MENU: MenuGroup[] = [
     icon: <DatabaseOutlined />,
     children: [
       { key: '/admin/production/crops', label: '作物管理' },
-      // 从用户端搬过来的任务模板库：与作物管理同属"运营维护、租户使用"的基础数据
+      // 从用户端搬过来的任务模板库：与作物管理同属"运营维护、主体使用"的基础数据
       { key: '/admin/production/tasks/templates', label: '任务模板库' },
     ],
   },

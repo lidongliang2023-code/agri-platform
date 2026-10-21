@@ -166,35 +166,35 @@ export const getTenantActivity = (limit = 10) => get(`${BASE}/dashboard/tenant-a
 export const getDashboardAlerts = (limit = 5) => get(`${BASE}/dashboard/alerts`, { limit })
 export const getPendingAudit = () => get(`${BASE}/dashboard/pending-audit`)
 
-/* ---------------------------------- 租户管理 ---------------------------------- */
+/* ---------------------------------- 主体管理 ---------------------------------- */
 
-export const getTenantList = (params?: QueryParams) => get(`${BASE}/tenant/list`, params)
-export const getTenantDetail = (id: number | string) => get(`${BASE}/tenant/detail/${id}`)
-export const createTenant = (data: unknown) => post(`${BASE}/tenant`, data)
-export const updateTenant = (id: number | string, data: unknown) => put(`${BASE}/tenant/${id}`, data)
-export const deleteTenant = (id: number | string) => del(`${BASE}/tenant/${id}`)
-/** 启停租户：后端是 `@RequestParam Integer status`，走 query 而不是请求体 */
+export const getTenantList = (params?: QueryParams) => get(`${BASE}/subject/list`, params)
+export const getTenantDetail = (id: number | string) => get(`${BASE}/subject/detail/${id}`)
+export const createTenant = (data: unknown) => post(`${BASE}/subject`, data)
+export const updateTenant = (id: number | string, data: unknown) => put(`${BASE}/subject/${id}`, data)
+export const deleteTenant = (id: number | string) => del(`${BASE}/subject/${id}`)
+/** 启停经营主体：后端接收 JSON 请求体 `{ status }`。 */
 export const updateTenantStatus = (id: number | string, status: number | string) =>
-  put(`${BASE}/tenant/${id}/status`, null, { status })
-export const getTenantQuota = (id: number | string) => get(`${BASE}/tenant/${id}/quota`)
+  put(`${BASE}/subject/${id}/status`, { status })
+export const getTenantQuota = (id: number | string) => get(`${BASE}/subject/${id}/quota`)
 /**
- * 配额总览（租户 + 其配额用量，一行一个租户）。
+ * 配额总览（经营主体 + 其配额用量，一行一个主体）。
  *
  * <p>存储字段单位是**字节**，与 `TenantPackageVO` 一致；页面按 GB 展示时自行换算。</p>
  */
 export const getTenantQuotaOverview = (params?: QueryParams) =>
-  get(`${BASE}/tenant/quota/list`, params)
+  get(`${BASE}/subject/quota/list`, params)
 export const adjustTenantQuota = (id: number | string, data: unknown) =>
-  put(`${BASE}/tenant/${id}/quota`, data)
+  put(`${BASE}/subject/${id}/quota`, data)
 export const setTenantQuotaAlertThreshold = (id: number | string, threshold: number) =>
-  put(`${BASE}/tenant/${id}/quota/alert-threshold`, null, { threshold })
-export const getTenantPackageList = () => get(`${BASE}/tenant/package/list`)
-export const createTenantPackage = (data: unknown) => post(`${BASE}/tenant/package`, data)
+  put(`${BASE}/subject/${id}/quota/alert-threshold`, null, { threshold })
+export const getTenantPackageList = () => get(`${BASE}/subject/package/list`)
+export const createTenantPackage = (data: unknown) => post(`${BASE}/subject/package`, data)
 export const updateTenantPackage = (id: number | string, data: unknown) =>
-  put(`${BASE}/tenant/package/${id}`, data)
-export const deleteTenantPackage = (id: number | string) => del(`${BASE}/tenant/package/${id}`)
-export const getTenantStatistics = (params?: QueryParams) => get(`${BASE}/tenant/statistics`, params)
-export const getTenantStatisticsSummary = () => get(`${BASE}/tenant/statistics/summary`)
+  put(`${BASE}/subject/package/${id}`, data)
+export const deleteTenantPackage = (id: number | string) => del(`${BASE}/subject/package/${id}`)
+export const getTenantStatistics = (params?: QueryParams) => get(`${BASE}/subject/statistics`, params)
+export const getTenantStatisticsSummary = () => get(`${BASE}/subject/statistics/summary`)
 
 /* ---------------------------------- 用户管理 ---------------------------------- */
 

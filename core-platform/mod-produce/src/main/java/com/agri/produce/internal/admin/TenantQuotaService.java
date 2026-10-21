@@ -1,5 +1,6 @@
 package com.agri.produce.internal.admin;
 
+import com.agri.core.infra.tenant.TenantSubjectProvider;
 import com.agri.produce.internal.common.ProduceIds;
 import com.agri.produce.internal.farm.FarmInfoEntity;
 import com.agri.produce.internal.farm.FarmInfoMapper;
@@ -77,6 +78,7 @@ public class TenantQuotaService {
     private static final double WARNING_THRESHOLD = 80D;
 
     private final TenantQuotaMapper tenantQuotaMapper;
+    private final TenantSubjectProvider tenantSubjectProvider;
     private final FarmInfoMapper farmInfoMapper;
     private final TraceCodeMapper traceCodeMapper;
 
@@ -242,10 +244,33 @@ public class TenantQuotaService {
                 new LambdaQueryWrapper<TenantQuotaEntity>()
                         .eq(TenantQuotaEntity::getTenantCode, tenantId)
                         .last("LIMIT 1"));
-        if (byCode == null) {
-            throw new BusinessException(ErrorCode.NOT_FOUND, "租户不存在：" + tenantId);
+        if (byCode != null) {
+            return byCode;
         }
-        return byCode;
+        try {
+            Long subjectId = Long.valueOf(tenantId);
+            TenantSubjectProvider.TenantSubject subject = tenantSubjectProvider.findById(subjectId);
+            TenantQuotaEntity bySubject = tenantQuotaMapper.selectOne(
+                    new LambdaQueryWrapper<TenantQuotaEntity>()
+                            .eq(TenantQuotaEntity::getTenantId, subjectId)
+                            .orderByDesc(TenantQuotaEntity::getCreatedAt)
+                            .last("LIMIT 1"));
+            if (bySubject != null) {
+                return bySubject;
+            }
+            TenantQuotaEntity created = new TenantQuotaEntity();
+            created.setQuotaId("TENANT-" + subjectId);
+            created.setTenantId(subjectId);
+            created.setTenantCode(subject.tenantCode());
+            created.setTenantName(subject.tenantName());
+            created.setStatus(subject.status());
+            created.setUsedFarmCount(0);
+            tenantQuotaMapper.insert(created);
+            return created;
+        } catch (NumberFormatException ignored) {
+            // 非雪花 ID 继续按“租户不存在”处理。
+        }
+        throw new BusinessException(ErrorCode.NOT_FOUND, "租户不存在：" + tenantId);
     }
 
     /**

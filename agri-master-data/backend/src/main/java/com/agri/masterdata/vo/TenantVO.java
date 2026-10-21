@@ -1,6 +1,8 @@
 package com.agri.masterdata.vo;
 
 import com.agri.masterdata.entity.Tenant;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -15,6 +17,7 @@ import java.util.Date;
 @AllArgsConstructor
 public class TenantVO {
 
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long id;
 
     private String tenantCode;

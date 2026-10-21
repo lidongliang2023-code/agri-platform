@@ -22,7 +22,7 @@ import java.util.List;
 
 @Tag(name = "租户管理")
 @RestController
-@RequestMapping("/admin/masterdata/tenant")
+@RequestMapping({"/admin/masterdata/subject", "/admin/masterdata/tenant"})
 @RequiredArgsConstructor
 public class AdminTenantController {
 
@@ -68,8 +68,8 @@ public class AdminTenantController {
 
     @Operation(summary = "停用/启用租户")
     @PutMapping("/{id}/status")
-    public ApiResponse<Void> updateTenantStatus(@PathVariable Long id, @RequestParam Integer status) {
-        adminTenantService.updateTenantStatus(id, status);
+    public ApiResponse<Void> updateTenantStatus(@PathVariable Long id, @RequestBody TenantStatusRequest request) {
+        adminTenantService.updateTenantStatus(id, request.status());
         return ApiResponse.success();
     }
 
@@ -141,5 +141,8 @@ public class AdminTenantController {
     @GetMapping("/statistics/summary")
     public ApiResponse<TenantStatisticsVO.Summary> getTenantSummary() {
         return ApiResponse.success(adminTenantService.getTenantSummary());
+    }
+
+    public record TenantStatusRequest(Integer status) {
     }
 }
