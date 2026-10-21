@@ -17,6 +17,7 @@ import {
   UserOutlined,
 } from '@ant-design/icons'
 import { updateOrderStatus } from '@/api/order'
+import { updateSellerProductStatus } from '@/api/product'
 import { getMySettlement, type SellerSettlementView } from '@/api/settlement'
 import ContractList from '@/pages/contract/list'
 import DisputeList from '@/pages/dispute/list'
@@ -99,7 +100,10 @@ export default function SellerCenter(): JSX.Element {
   // 卖家中心优先用 owner / seller 角色的主体展示商品与评价。
   const sellerMerchant = base.merchants.find((item) => item.roleInMerchant === 'owner' || item.roleInMerchant === 'seller')
     ?? base.primary
-  const sellerId = sellerMerchant ? Number(sellerMerchant.merchantId) : null
+  const sellerId = sellerMerchant ? String(sellerMerchant.merchantId) : null
+  const productCreateHref = sellerId ? `/product/create?sellerId=${sellerId}` : '/product/create'
+  const productEditHref = (id: number): string =>
+    sellerId ? `/product/edit/${id}?sellerId=${sellerId}` : `/product/edit/${id}`
   const allOrders = useOrders('seller', '', 1, 100)
   const [status, setStatus] = useState('')
   const [page, setPage] = useState(1)
@@ -130,7 +134,7 @@ export default function SellerCenter(): JSX.Element {
   const sellerOrders = allOrders.rows
   const sellerOrderIds = useMemo(() => new Set(sellerOrders.map((item) => item.id)), [sellerOrders])
   const myLogistics = logistics.rows.filter((item) => sellerOrderIds.has(Number(item.orderId)))
-  const myDisputes = disputes.rows.filter((item) => base.merchantIds.includes(Number(item.respondentId)))
+  const myDisputes = disputes.rows.filter((item) => base.merchantIds.includes(String(item.respondentId)))
   const openDisputes = myDisputes.filter((item) => !/closed|resolved|已解决/i.test(item.disputeStatus ?? ''))
   const avgRating = evaluations.rows.length
     ? evaluations.rows.reduce((sum, item) => sum + Number(item.ratingOverall ?? 0), 0) / evaluations.rows.length
@@ -154,8 +158,23 @@ export default function SellerCenter(): JSX.Element {
 
   const filteredProducts = products.rows.filter((item) => {
     if (goodsStatus === 'all') return true
+    if (goodsStatus === 'soldout') return Number(item.stockQuantity ?? 0) <= 0
     return item.publishStatus === goodsStatus
   })
+
+  const toggleProductStatus = async (productId: number, currentStatus: number): Promise<void> => {
+    try {
+      const body = await updateSellerProductStatus(productId, currentStatus === 1 ? 0 : 1)
+      if (body?.code === 200) {
+        message.success(currentStatus === 1 ? '商品已下架' : '商品已上架')
+        products.reload()
+      } else {
+        message.error(body?.message ?? '商品状态更新失败')
+      }
+    } catch {
+      message.error('商品状态更新失败')
+    }
+  }
 
   const shipOrder = (order: OrderRow): void => {
     Modal.confirm({
@@ -216,7 +235,7 @@ export default function SellerCenter(): JSX.Element {
       <div className="mc-section-title">快捷入口</div>
       <div className="mc-grid mc-grid-4">
         {[
-          { icon: <FileTextOutlined />, title: '发布供应', desc: '发布供应信息，精准触达采购商', href: '/product/create' },
+          { icon: <FileTextOutlined />, title: '发布供应', desc: '发布供应信息，精准触达采购商', href: productCreateHref },
           { icon: <AppstoreOutlined />, title: '商品管理', desc: '上架商品、维护规格与库存', tab: 'goods' },
           { icon: <TruckOutlined />, title: '发货管理', desc: '发货、查看在途物流与签收状态', tab: 'ship' },
           { icon: <TeamOutlined />, title: '客户管理', desc: '采购商档案、成交与复购', tab: 'customer' },
@@ -243,7 +262,7 @@ export default function SellerCenter(): JSX.Element {
           ))}
         </div>
         <span className="mc-spacer" />
-        <a className="mc-btn ghost" href="/product/create">发布供应</a>
+        <a className="mc-btn ghost" href={productCreateHref}>发布供应</a>
       </div>
       <Panel>
         {renderSellerOrders(pagedOrders.rows, pagedOrders.loading, pagedOrders.error, orderActions)}
@@ -278,32 +297,50 @@ export default function SellerCenter(): JSX.Element {
       <div className="mc-toolbar">
         <span className="mc-toolbar-label">状态</span>
         <div className="mc-chips">
-          {[{ value: 'all', label: '全部' }, { value: 'published', label: '在售' }, { value: 'pending', label: '待审核' }, { value: 'soldout', label: '已售罄' }].map((item) => (
+          {[{ value: 'all', label: '全部' }, { value: 'published', label: '在售' }, { value: 'pending', label: '待审核' }, { value: 'draft', label: '草稿' }, { value: 'rejected', label: '已驳回' }, { value: 'soldout', label: '已售罄' }].map((item) => (
             <button type="button" key={item.value} className={goodsStatus === item.value ? 'on' : ''}
               onClick={() => setGoodsStatus(item.value)}>{item.label}</button>
           ))}
         </div>
         <span className="mc-spacer" />
-        <a className="mc-btn" href="/product/create">上架新商品</a>
+        <a className="mc-btn" href={productCreateHref}>上架新商品</a>
       </div>
       <Panel title="商品管理">
-        {filteredProducts.length === 0 ? (
+        {products.loading ? (
+          <EmptyState title="正在读取当前卖家的商品…" />
+        ) : products.error ? (
+          <EmptyState title="商品加载失败" desc={products.error} />
+        ) : filteredProducts.length === 0 ? (
           <EmptyState title="没有符合条件的商品" desc="上架新商品后会出现在这里。"
-            action={<a className="mc-btn" href="/product/create">上架新商品</a>} />
+            action={<a className="mc-btn" href={productCreateHref}>上架新商品</a>} />
         ) : (
           <div className="mc-table-wrap">
             <table className="mc-table">
-              <thead><tr><th>商品名</th><th>品类</th><th>规格</th><th>单价</th><th>库存</th><th>状态</th><th>操作</th></tr></thead>
+              <thead><tr><th>图片</th><th>商品</th><th>品类</th><th>规格</th><th>单价</th><th>库存</th><th>发布状态</th><th>启停</th><th>操作</th></tr></thead>
               <tbody>
                 {filteredProducts.map((item) => (
                   <tr key={item.id}>
-                    <td>{item.productName}</td>
+                    <td>
+                      {item.images?.[0]
+                        ? <img src={item.images[0]} alt={item.productName} style={{ width: 42, height: 42, borderRadius: 7, objectFit: 'cover' }} />
+                        : <span className="mc-tag ghost">无图</span>}
+                    </td>
+                    <td><strong>{item.productName}</strong><div className="mc-toolbar-muted">{item.productCode}</div></td>
                     <td>{item.categoryName ?? '—'}</td>
-                    <td>{item.specification ?? item.specLevel ?? '—'}</td>
+                    <td>{item.specSize ?? item.specLevel ?? '—'}</td>
                     <td className="mc-price">{money(item.price)}<span className="mc-unit">/{item.unit}</span></td>
                     <td className="mc-mono">{item.stockQuantity ?? '—'} {item.unit}</td>
                     <td><span className={`mc-tag ${item.publishStatus === 'published' ? 'green' : item.publishStatus === 'pending' ? 'amber' : 'ghost'}`}>{publishText(item.publishStatus)}</span></td>
-                    <td><a className="mc-link" href={`/product/detail/${item.id}`}>查看</a></td>
+                    <td><span className={`mc-tag ${item.status === 1 ? 'green' : 'ghost'}`}>{item.status === 1 ? '启用' : '停用'}</span></td>
+                    <td>
+                      <div className="mc-actions">
+                        {item.publishStatus === 'published' && <a className="mc-link" href={`/product/detail/${item.id}`}>官网详情</a>}
+                        <a className="mc-link" href={productEditHref(item.id)}>编辑</a>
+                        <button type="button" className="mc-link" onClick={() => void toggleProductStatus(item.id, item.status)}>
+                          {item.status === 1 ? '下架' : '上架'}
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -319,12 +356,12 @@ export default function SellerCenter(): JSX.Element {
       <div className="mc-toolbar">
         <span className="mc-toolbar-muted">我发布的供应信息 · 浏览与询单情况</span>
         <span className="mc-spacer" />
-        <a className="mc-btn" href="/product/create">发布新供应</a>
+        <a className="mc-btn" href={productCreateHref}>发布新供应</a>
       </div>
       <Panel title="供应信息">
         {products.rows.length === 0 ? (
           <EmptyState title="还没有发布供应" desc="发布货源后会在这里看到浏览与询单数据。"
-            action={<a className="mc-btn" href="/product/create">发布供应</a>} />
+            action={<a className="mc-btn" href={productCreateHref}>发布供应</a>} />
         ) : (
           <div className="mc-table-wrap">
             <table className="mc-table">
@@ -338,7 +375,13 @@ export default function SellerCenter(): JSX.Element {
                     <td className="mc-mono">{money(item.price)}/{item.unit}</td>
                     <td className="mc-mono">{item.viewCount ?? 0} / {item.inquiryCount ?? 0}</td>
                     <td><span className={`mc-tag ${item.publishStatus === 'published' ? 'tech' : 'ghost'}`}>{publishText(item.publishStatus)}</span></td>
-                    <td><a className="mc-link" href={`/product/detail/${item.id}`}>管理</a></td>
+                    <td>
+                      <div className="mc-actions">
+                        <a className="mc-link" href={productEditHref(item.id)}>编辑</a>
+                        {item.publishStatus === 'published'
+                          && <a className="mc-link" href={`/product/detail/${item.id}`}>官网详情</a>}
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>

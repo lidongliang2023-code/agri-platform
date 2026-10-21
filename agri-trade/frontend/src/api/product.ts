@@ -26,7 +26,7 @@ export interface TradeProductVO {
   id: number
   productCode: string
   productName: string
-  sellerId: number
+  sellerId: string
   sellerName: string
   categoryId: number
   categoryName: string
@@ -54,7 +54,7 @@ export interface PublicProductDetail {
   productName: string
   categoryId: number | null
   categoryName: string | null
-  sellerId: number
+  sellerId: string
   sellerName: string | null
   variety: string | null
   originProvince: string | null
@@ -84,6 +84,15 @@ export interface PublicProductDetail {
   createTime: string
 }
 
+/** 卖家中心可编辑商品（主体范围由后端令牌强制限制）。 */
+export interface SellerProductDetail extends PublicProductDetail {
+  sellerId: string
+  certifications: string[]
+  images: string[]
+  portalUrl: string
+  status: number
+}
+
 export async function getProductList(params: ProductQuery) {
   // 后端注册的是 /page（MyBatis-Plus 分页），没有 /list —— 原先调 /list 必然 404。
   const response = await axios.get('/api/trade/product/page', { params })
@@ -108,6 +117,45 @@ export async function getPublicProductById(id: number | string) {
 
 export async function getPublicProductImages(id: number | string) {
   const response = await axios.get(`/api/trade/public/products/${id}/images`)
+  return response.data
+}
+
+export async function getSellerProductList(params: {
+  pageNum: number
+  pageSize: number
+  sellerId?: number | string
+  keyword?: string
+  publishStatus?: string
+  status?: number
+}) {
+  const response = await axios.get('/api/trade/seller/product/mine/page', { params })
+  return response.data
+}
+
+export async function getSellerProductById(id: number | string) {
+  const response = await axios.get(`/api/trade/seller/product/mine/${id}`)
+  return response.data
+}
+
+export async function createSellerProduct(data: Record<string, unknown>) {
+  const response = await axios.post('/api/trade/seller/product/mine', data)
+  return response.data
+}
+
+export async function updateSellerProduct(id: number | string, data: Record<string, unknown>) {
+  const response = await axios.put(`/api/trade/seller/product/mine/${id}`, data)
+  return response.data
+}
+
+export async function updateSellerProductStatus(id: number | string, status: number) {
+  const response = await axios.put(`/api/trade/seller/product/mine/${id}/status`, null, { params: { status } })
+  return response.data
+}
+
+export async function uploadSellerProductImage(file: File) {
+  const data = new FormData()
+  data.append('file', file)
+  const response = await axios.post('/api/trade/seller/product/image', data)
   return response.data
 }
 

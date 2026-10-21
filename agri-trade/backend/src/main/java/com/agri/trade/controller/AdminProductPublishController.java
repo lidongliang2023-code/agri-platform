@@ -94,7 +94,7 @@ public class AdminProductPublishController {
             String productName,
             Long categoryId,
             String categoryName,
-            Long sellerId,
+            String sellerId,
             String sellerName,
             String barcode,
             String variety,
@@ -352,7 +352,8 @@ public class AdminProductPublishController {
             }
         }
         return new ProductView(product.getId(), product.getProductCode(), product.getProductName(),
-                product.getCategoryId(), product.getCategoryName(), product.getSellerId(), product.getSellerName(),
+                product.getCategoryId(), product.getCategoryName(),
+                product.getSellerId() == null ? null : String.valueOf(product.getSellerId()), product.getSellerName(),
                 product.getRemark(), product.getVariety(), product.getOriginProvince(), product.getOriginCity(),
                 product.getOriginDistrict(), product.getOriginAddress(), product.getSpecLevel(), product.getQualityLevel(),
                 product.getSpecSize(), product.getUnit(), product.getStockQuantity(), product.getPrice(),

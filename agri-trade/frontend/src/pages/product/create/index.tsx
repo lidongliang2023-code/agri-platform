@@ -1,244 +1,237 @@
-import { useState } from 'react'
-import { Form, Input, Select, DatePicker, Checkbox, Button, Card, Row, Col, Upload, Image } from 'antd'
-import { PlusOutlined, UploadOutlined } from '@ant-design/icons'
-import { useNavigate } from 'react-router-dom'
-import { createProduct } from '@/api/product'
+import { useEffect, useState } from 'react'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import {
+  Button,
+  Card,
+  Col,
+  Form,
+  Image,
+  Input,
+  InputNumber,
+  Row,
+  Select,
+  Space,
+  Spin,
+  Typography,
+  Upload,
+  message,
+} from 'antd'
+import { DeleteOutlined, PlusOutlined, UploadOutlined } from '@ant-design/icons'
+import {
+  createSellerProduct,
+  getCategoryList,
+  getSellerProductById,
+  updateSellerProduct,
+  uploadSellerProductImage,
+  type SellerProductDetail,
+} from '@/api/product'
 
-const { Option } = Select
 const { TextArea } = Input
 
-function ProductCreate() {
+interface CategoryRow {
+  id: number
+  parentId?: number | null
+  categoryName: string
+  level?: number
+}
+
+/**
+ * 卖家商品新增/编辑。
+ *
+ * <p>与主数据运营端共用交易商品表与全部商品字段。卖家主体由后端从 SSO 令牌推导，
+ * 页面只传当前选择的 `sellerId` 用于多主体账号确认归属，不能借此写入其他卖家。</p>
+ */
+export default function ProductCreate(): JSX.Element {
+  const { id } = useParams()
+  const [params] = useSearchParams()
   const navigate = useNavigate()
   const [form] = Form.useForm()
+  const [categories, setCategories] = useState<CategoryRow[]>([])
   const [images, setImages] = useState<string[]>([])
+  const [loading, setLoading] = useState(Boolean(id))
+  const [submitting, setSubmitting] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const isEdit = Boolean(id)
+  const requestedSellerId = params.get('sellerId') || undefined
 
-  const handleImageUpload = (file: any) => {
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      setImages([...images, e.target?.result as string])
+  useEffect(() => {
+    getCategoryList()
+      .then((body: { code?: number; data?: CategoryRow[] }) => {
+        if (body?.code === 200) setCategories(body.data ?? [])
+      })
+      .catch(() => message.error('加载商品分类失败'))
+  }, [])
+
+  useEffect(() => {
+    if (!id) {
+      form.setFieldsValue({ status: 1, priceType: 'fixed', unit: 'kg', minOrderQuantity: 1 })
+      return
     }
-    reader.readAsDataURL(file)
-    return false
+    let cancelled = false
+    setLoading(true)
+    getSellerProductById(id)
+      .then((body: { code?: number; data?: SellerProductDetail; message?: string }) => {
+        if (cancelled) return
+        if (body?.code !== 200 || !body.data) {
+          message.error(body?.message ?? '商品不存在')
+          return
+        }
+        const item = body.data
+        setImages(item.images ?? [])
+        form.setFieldsValue({
+          ...item,
+          certificationsText: (item.certifications ?? []).join(','),
+        })
+      })
+      .catch(() => message.error('加载商品失败'))
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [id, form])
+
+  const uploadFile = async (file: File): Promise<void> => {
+    if (images.length >= 9) {
+      message.warning('商品图片最多 9 张')
+      return
+    }
+    setUploading(true)
+    try {
+      const body = await uploadSellerProductImage(file)
+      if (body?.code !== 200 || !body.data?.url) throw new Error(body?.message || '上传失败')
+      setImages((previous) => [...previous, body.data.url])
+      message.success('图片上传成功')
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '图片上传失败')
+    } finally {
+      setUploading(false)
+    }
   }
 
-  const onFinish = async (values: any) => {
-    await createProduct({ ...values, images })
-    navigate('/product')
+  const removeImage = (index: number): void => {
+    setImages((previous) => previous.filter((_, current) => current !== index))
+  }
+
+  const onFinish = async (values: Record<string, unknown>): Promise<void> => {
+    if (!images.length) {
+      message.warning('请至少上传一张商品图片')
+      return
+    }
+    const category = categories.find((item) => Number(item.id) === Number(values.categoryId))
+    const payload = {
+      ...values,
+      sellerId: requestedSellerId,
+      categoryName: category?.categoryName,
+      certifications: String(values.certificationsText ?? '')
+        .split(/[,，]/)
+        .map((item) => item.trim())
+        .filter(Boolean),
+      images,
+    }
+    setSubmitting(true)
+    try {
+      const body = isEdit
+        ? await updateSellerProduct(id!, payload)
+        : await createSellerProduct(payload)
+      if (body?.code !== 200) {
+        message.error(body?.message ?? '保存商品失败')
+        return
+      }
+      message.success(isEdit ? '商品已更新，内容与主数据管理同步' : '商品已提交，主数据端可立即查看')
+      navigate('/member/seller?tab=goods', { replace: true })
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '保存商品失败')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  if (loading) {
+    return <div style={{ padding: 80, textAlign: 'center' }}><Spin size="large" /></div>
   }
 
   return (
-    <Card title="发布货源" extra={<Button type="link" onClick={() => navigate('/product')}>返回列表</Button>}>
-      <Form form={form} layout="vertical" onFinish={onFinish}>
-        <Card title="商品信息" style={{ marginBottom: 24 }}>
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item
-                label="农产品品类"
-                name="category"
-                rules={[{ required: true, message: '请选择品类' }]}
-              >
-                <Select placeholder="请选择品类">
-                  <Option value="vegetable">蔬菜</Option>
-                  <Option value="fruit">水果</Option>
-                  <Option value="grain">粮油</Option>
-                  <Option value="meat">肉类</Option>
-                  <Option value="seafood">海鲜</Option>
-                </Select>
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item
-                label="品种名称"
-                name="productName"
-                rules={[{ required: true, message: '请输入品种名称' }]}
-              >
-                <Input placeholder="请输入品种名称" />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Row gutter={16}>
-            <Col span={8}>
-              <Form.Item
-                label="产地-省份"
-                name="province"
-                rules={[{ required: true, message: '请选择省份' }]}
-              >
-                <Select placeholder="请选择省份">
-                  <Option value="sd">山东省</Option>
-                  <Option value="hn">河南省</Option>
-                  <Option value="js">江苏省</Option>
-                  <Option value="gd">广东省</Option>
-                  <Option value="sc">四川省</Option>
-                </Select>
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item
-                label="产地-城市"
-                name="city"
-                rules={[{ required: true, message: '请选择城市' }]}
-              >
-                <Select placeholder="请选择城市">
-                  <Option value="jinan">济南市</Option>
-                  <Option value="qingdao">青岛市</Option>
-                  <Option value="zhengzhou">郑州市</Option>
-                  <Option value="nanjing">南京市</Option>
-                  <Option value="guangzhou">广州市</Option>
-                </Select>
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item
-                label="产地-区县"
-                name="district"
-                rules={[{ required: true, message: '请选择区县' }]}
-              >
-                <Select placeholder="请选择区县">
-                  <Option value="shouguang">寿光市</Option>
-                  <Option value="qingzhou">青州市</Option>
-                  <Option value="zhongmou">中牟县</Option>
-                  <Option value="gaoyou">高邮市</Option>
-                  <Option value="conghua">从化区</Option>
-                </Select>
-              </Form.Item>
-            </Col>
-          </Row>
-        </Card>
+    <div style={{ padding: 20 }}>
+      <Card
+        title={isEdit ? '编辑我的商品' : '上架新商品'}
+        extra={<Button onClick={() => navigate('/member/seller?tab=goods')}>返回卖家中心</Button>}
+      >
+        <Typography.Paragraph type="secondary">
+          与主数据运营端使用同一张交易商品表和完整字段；保存后运营端可查看，审核通过的已发布商品会同步到官网。
+        </Typography.Paragraph>
+        <Form form={form} layout="vertical" onFinish={(values) => void onFinish(values)}>
+          <Card title="基础信息" size="small" style={{ marginBottom: 18 }}>
+            <Row gutter={16}>
+              <Col xs={24} md={12} lg={8}><Form.Item name="productName" label="商品名称" rules={[{ required: true }]}><Input placeholder="如：赣南脐橙 10kg 箱装" /></Form.Item></Col>
+              <Col xs={24} md={12} lg={8}><Form.Item name="productCode" label="商品编码"><Input placeholder="留空自动生成" disabled={isEdit} /></Form.Item></Col>
+              <Col xs={24} md={12} lg={8}><Form.Item name="barcode" label="条码"><Input /></Form.Item></Col>
+              <Col xs={24} md={12} lg={8}><Form.Item name="categoryId" label="商品分类" rules={[{ required: true }]}><Select showSearch optionFilterProp="label" options={categories.map((item) => ({ value: item.id, label: `${'　'.repeat(Math.max(0, Number(item.level ?? 1) - 1))}${item.categoryName}` }))} /></Form.Item></Col>
+              <Col xs={24} md={12} lg={8}><Form.Item name="variety" label="品种"><Input placeholder="如：纽荷尔脐橙" /></Form.Item></Col>
+              <Col xs={24} md={12} lg={8}><Form.Item name="status" label="商品启停"><Select options={[{ value: 1, label: '启用' }, { value: 0, label: '停用' }]} /></Form.Item></Col>
+            </Row>
+          </Card>
 
-        <Card title="规格信息" style={{ marginBottom: 24 }}>
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item label="单果规格" name="singleSpec">
-                <Input placeholder="如80#以上（直径80mm以上）" />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item label="包装规格" name="packaging">
-                <Select placeholder="请选择包装规格">
-                  <Option value="10jin">10斤装/箱</Option>
-                  <Option value="20jin">20斤装/箱</Option>
-                  <Option value="50kg">50kg/袋</Option>
-                  <Option value="custom">自定义</Option>
-                </Select>
-              </Form.Item>
-            </Col>
-          </Row>
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item label="等级" name="grade">
-                <Select placeholder="请选择等级">
-                  <Option value="premium">优等</Option>
-                  <Option value="first">一级</Option>
-                  <Option value="second">二级</Option>
-                </Select>
-              </Form.Item>
-            </Col>
-          </Row>
-        </Card>
+          <Card title="产地与规格" size="small" style={{ marginBottom: 18 }}>
+            <Row gutter={16}>
+              <Col xs={24} md={12} lg={6}><Form.Item name="originProvince" label="产地省份"><Input /></Form.Item></Col>
+              <Col xs={24} md={12} lg={6}><Form.Item name="originCity" label="产地城市"><Input /></Form.Item></Col>
+              <Col xs={24} md={12} lg={6}><Form.Item name="originDistrict" label="区县"><Input /></Form.Item></Col>
+              <Col xs={24} md={12} lg={6}><Form.Item name="originAddress" label="详细产地"><Input /></Form.Item></Col>
+              <Col xs={24} md={12} lg={6}><Form.Item name="specLevel" label="规格等级"><Input placeholder="一级/特级" /></Form.Item></Col>
+              <Col xs={24} md={12} lg={6}><Form.Item name="qualityLevel" label="质量等级"><Input /></Form.Item></Col>
+              <Col xs={24} md={12} lg={6}><Form.Item name="specSize" label="规格尺寸"><Input placeholder="75-85mm / 10kg箱" /></Form.Item></Col>
+              <Col xs={24} md={12} lg={6}><Form.Item name="harvestBatchNo" label="采收批次"><Input /></Form.Item></Col>
+            </Row>
+          </Card>
 
-        <Card title="库存与价格" style={{ marginBottom: 24 }}>
-          <Row gutter={16}>
-            <Col span={8}>
-              <Form.Item
-                label="可供货量"
-                name="quantity"
-                rules={[{ required: true, message: '请输入可供货量' }]}
-              >
-                <Input placeholder="请输入数量" />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item
-                label="数量单位"
-                name="unit"
-                rules={[{ required: true, message: '请选择单位' }]}
-              >
-                <Select placeholder="请选择单位">
-                  <Option value="ton">吨</Option>
-                  <Option value="kg">千克</Option>
-                  <Option value="piece">件</Option>
-                </Select>
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item label="日均可供货量" name="dailyQuantity">
-                <Input placeholder="日均供货能力" />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item
-                label="单价"
-                name="price"
-                rules={[{ required: true, message: '请输入单价' }]}
-              >
-                <Input placeholder="元/斤或元/件" />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item label="价格有效期" name="priceValidDate">
-                <DatePicker style={{ width: '100%' }} />
-              </Form.Item>
-            </Col>
-          </Row>
-        </Card>
+          <Card title="价格与库存" size="small" style={{ marginBottom: 18 }}>
+            <Row gutter={16}>
+              <Col xs={24} md={12} lg={6}><Form.Item name="price" label="销售单价" rules={[{ required: true }]}><InputNumber min={0.01} precision={2} style={{ width: '100%' }} /></Form.Item></Col>
+              <Col xs={24} md={12} lg={6}><Form.Item name="priceMin" label="参考最低价"><InputNumber min={0} precision={2} style={{ width: '100%' }} /></Form.Item></Col>
+              <Col xs={24} md={12} lg={6}><Form.Item name="priceMax" label="参考最高价"><InputNumber min={0} precision={2} style={{ width: '100%' }} /></Form.Item></Col>
+              <Col xs={24} md={12} lg={6}><Form.Item name="priceType" label="价格类型"><Select options={[{ value: 'fixed', label: '固定价' }, { value: 'negotiable', label: '可议价' }]} /></Form.Item></Col>
+              <Col xs={24} md={12} lg={6}><Form.Item name="stockQuantity" label="库存数量" rules={[{ required: true }]}><InputNumber min={0} precision={3} style={{ width: '100%' }} /></Form.Item></Col>
+              <Col xs={24} md={12} lg={6}><Form.Item name="unit" label="计量单位" rules={[{ required: true }]}><Input placeholder="箱 / kg / 吨" /></Form.Item></Col>
+              <Col xs={24} md={12} lg={6}><Form.Item name="minOrderQuantity" label="起订量" rules={[{ required: true }]}><InputNumber min={0.001} precision={3} style={{ width: '100%' }} /></Form.Item></Col>
+            </Row>
+          </Card>
 
-        <Card title="品质信息" style={{ marginBottom: 24 }}>
-          <Form.Item label="认证信息" name="certifications">
-            <Checkbox.Group options={[
-              { label: '绿色食品', value: 'green' },
-              { label: '有机认证', value: 'organic' },
-              { label: '地理标志', value: 'geographic' },
-            ]} />
-          </Form.Item>
-          <Form.Item label="检测报告" name="testReport">
-            <Upload.Dragger accept=".jpg,.png,.pdf" beforeUpload={() => false}>
-              <p className="ant-upload-drag-icon">
-                <UploadOutlined />
-              </p>
-              <p className="ant-upload-text">点击或拖拽上传检测报告</p>
-            </Upload.Dragger>
-          </Form.Item>
-        </Card>
+          <Card title="品质与详情" size="small" style={{ marginBottom: 18 }}>
+            <Row gutter={16}>
+              <Col xs={24} lg={12}><Form.Item name="certificationsText" label="认证信息"><Input placeholder="绿色食品,地理标志" /></Form.Item></Col>
+              <Col xs={24} lg={12}><Form.Item name="qualityReportUrl" label="质量报告地址"><Input placeholder="https://..." /></Form.Item></Col>
+              <Col span={24}><Form.Item name="description" label="商品描述" rules={[{ required: true }]}><TextArea rows={4} /></Form.Item></Col>
+              <Col span={24}><Form.Item name="videoUrl" label="视频地址"><Input placeholder="可选，https://..." /></Form.Item></Col>
+            </Row>
+          </Card>
 
-        <Card title="商品展示" style={{ marginBottom: 24 }}>
-          <Form.Item label="商品图片" rules={[{ required: true, message: '请上传商品图片' }]}>
-            <Upload.Dragger accept=".jpg,.png" beforeUpload={handleImageUpload}>
-              <p className="ant-upload-drag-icon">
-                <UploadOutlined />
-              </p>
-              <p className="ant-upload-text">点击或拖拽上传商品图片（最多9张）</p>
-              <p className="ant-upload-hint">建议包含：整体图/细节图/包装图</p>
-            </Upload.Dragger>
-            {images.length > 0 && (
-              <div style={{ marginTop: 16, display: 'flex', gap: 12 }}>
-                {images.map((img, index) => (
-                  <Image key={index} src={img} width={100} height={100} />
-                ))}
-              </div>
-            )}
-          </Form.Item>
-          <Form.Item
-            label="产品描述"
-            name="description"
-            rules={[{ required: true, message: '请输入产品描述' }]}
-          >
-            <TextArea rows={4} placeholder="详细描述产品特点和优势" />
-          </Form.Item>
-        </Card>
+          <Card title="商品图片（首张为主图）" size="small" style={{ marginBottom: 18 }}>
+            <Space wrap>
+              <Upload accept="image/jpeg,image/png,image/webp" showUploadList={false}
+                beforeUpload={(file) => { void uploadFile(file as File); return false }}>
+                <Button icon={<UploadOutlined />} loading={uploading}>上传图片</Button>
+              </Upload>
+              <Typography.Text type="secondary">最多 9 张，单张不超过 5MB</Typography.Text>
+            </Space>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 14 }}>
+              {images.map((image, index) => (
+                <div key={image} style={{ position: 'relative', border: index === 0 ? '2px solid #159a5e' : '1px solid #e3eae5', borderRadius: 8, overflow: 'hidden' }}>
+                  <Image src={image} width={110} height={90} style={{ objectFit: 'cover' }} />
+                  <Button size="small" danger type="text" icon={<DeleteOutlined />}
+                    style={{ position: 'absolute', right: 2, top: 2 }} onClick={() => removeImage(index)} />
+                  {index === 0 && <span style={{ position: 'absolute', left: 5, bottom: 5, padding: '2px 6px', borderRadius: 4, background: '#0e5233', color: '#fff', fontSize: 10 }}>主图</span>}
+                </div>
+              ))}
+              {!images.length && <Typography.Text type="secondary">尚未上传图片</Typography.Text>}
+            </div>
+          </Card>
 
-        <Form.Item>
-          <Button type="primary" htmlType="submit" icon={<PlusOutlined />}>
-            发布货源
-          </Button>
-          <Button style={{ marginLeft: 8 }} onClick={() => navigate('/product')}>
-            取消
-          </Button>
-        </Form.Item>
-      </Form>
-    </Card>
+          <Space>
+            <Button type="primary" htmlType="submit" icon={<PlusOutlined />} loading={submitting} disabled={uploading}>
+              {isEdit ? '保存商品' : '提交上架'}
+            </Button>
+            <Button onClick={() => navigate('/member/seller?tab=goods')}>取消</Button>
+          </Space>
+        </Form>
+      </Card>
+    </div>
   )
 }
-
-export default ProductCreate

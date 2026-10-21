@@ -88,7 +88,7 @@ export default function BuyerCenter(): JSX.Element {
   const base = useMemberBase()
   // 同一账号可能同时绑定多个主体：买家中心优先用 buyer 角色的主体展示与筛选需求。
   const buyerMerchant = base.merchants.find((item) => item.roleInMerchant === 'buyer') ?? base.primary
-  const buyerId = buyerMerchant ? Number(buyerMerchant.merchantId) : null
+  const buyerId = buyerMerchant ? String(buyerMerchant.merchantId) : null
   const allOrders = useOrders('buyer', '', 1, 100)
   const [status, setStatus] = useState('')
   const [page, setPage] = useState(1)
@@ -134,7 +134,7 @@ export default function BuyerCenter(): JSX.Element {
   const guaranteeAvailable = guarantees.reduce((sum, item) => sum + Number(item.availableAmount ?? 0), 0)
   const guaranteeFrozen = guarantees.reduce((sum, item) => sum + Number(item.frozenAmount ?? 0), 0)
 
-  const myDisputes = disputes.rows.filter((item) => base.merchantIds.includes(Number(item.complainantId)))
+  const myDisputes = disputes.rows.filter((item) => base.merchantIds.includes(String(item.complainantId)))
   const evaluatedOrderIds = new Set(evaluations.rows.map((item) => item.orderId))
   const pendingEvaluations = allOrders.rows.filter((item) => item.orderStatus === 'completed' && !evaluatedOrderIds.has(item.id))
   const invoicedOrderIds = new Set(invoices.map((item) => item.orderId))

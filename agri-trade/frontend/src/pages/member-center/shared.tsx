@@ -5,7 +5,7 @@ import { getOrderList, type OrderQuery } from '@/api/order'
 import { getDemandList, type DemandVO } from '@/api/demand'
 import { getEvaluationList, type EvaluationVO } from '@/api/evaluation'
 import { getDisputeList, type DisputeVO } from '@/api/dispute'
-import { getProductList, type TradeProductVO } from '@/api/product'
+import { getSellerProductList, type SellerProductDetail } from '@/api/product'
 import { getLogisticsList, type LogisticsVO } from '@/api/logistics'
 import { getMyGuarantees, type GuaranteeRow } from '@/api/guarantee'
 import { getMyInquiries, getReceivedInquiries, type InquiryVO } from '@/api/inquiry'
@@ -108,7 +108,7 @@ export function useMemberBase(): {
   loading: boolean
   error: string
   merchants: MyMerchant[]
-  merchantIds: number[]
+  merchantIds: string[]
   primary: MyMerchant | null
   dashboard: MineDashboard | null
   realName: RealNameRecord | null
@@ -144,7 +144,7 @@ export function useMemberBase(): {
     return () => { cancelled = true }
   }, [tick])
 
-  const merchantIds = merchants.map((item) => Number(item.merchantId))
+  const merchantIds = merchants.map((item) => String(item.merchantId))
   return {
     loading,
     error,
@@ -190,7 +190,7 @@ export function useOrders(side: 'buyer' | 'seller', status: string, pageNum = 1,
   return { rows, total, loading, error, reload: () => setTick((value) => value + 1) }
 }
 
-export function useDemands(buyerId: number | null): { rows: DemandVO[]; loading: boolean; error: string } {
+export function useDemands(buyerId: string | null): { rows: DemandVO[]; loading: boolean; error: string } {
   const [rows, setRows] = useState<DemandVO[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -246,7 +246,7 @@ export function useReceivedInquiries(): InquiryVO[] {
   return rows
 }
 
-export function useEvaluations(params: { evaluatorId?: number; evaluateeId?: number }): {
+export function useEvaluations(params: { evaluatorId?: number | string; evaluateeId?: number | string }): {
   rows: EvaluationVO[]
   loading: boolean
   error: string
@@ -299,20 +299,22 @@ export function useDisputes(): { rows: DisputeVO[]; loading: boolean; error: str
   return { rows, loading, error }
 }
 
-export function useProducts(sellerId: number | null): {
-  rows: TradeProductVO[]
+export function useProducts(sellerId: string | null): {
+  rows: SellerProductDetail[]
   loading: boolean
   error: string
+  reload: () => void
 } {
-  const [rows, setRows] = useState<TradeProductVO[]>([])
+  const [rows, setRows] = useState<SellerProductDetail[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [tick, setTick] = useState(0)
   useEffect(() => {
     if (!sellerId) { setRows([]); return }
     let cancelled = false
     setLoading(true)
-    getProductList({ pageNum: 1, pageSize: 100, sellerId })
-      .then((body: ApiResult<PageResult<TradeProductVO>>) => {
+    getSellerProductList({ pageNum: 1, pageSize: 100, sellerId })
+      .then((body: ApiResult<PageResult<SellerProductDetail>>) => {
         if (cancelled) return
         const result = pageOf(body)
         setRows(result.rows)
@@ -321,8 +323,8 @@ export function useProducts(sellerId: number | null): {
       .catch(() => { if (!cancelled) setError('加载商品失败') })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [sellerId])
-  return { rows, loading, error }
+  }, [sellerId, tick])
+  return { rows, loading, error, reload: () => setTick((value) => value + 1) }
 }
 
 export function useLogistics(): { rows: LogisticsVO[]; loading: boolean; error: string } {
