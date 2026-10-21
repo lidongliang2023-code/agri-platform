@@ -271,6 +271,50 @@ try {
     return text.includes('创建企业主体') && text.includes('创建个人主体')
   }, { timeout: 10000 })
   check(true, '登录后始终显示创建企业/个人主体入口')
+  await page.evaluate(() => {
+    const button = [...document.querySelectorAll('button')]
+      .find((item) => item.textContent?.trim() === '创建企业主体')
+    button?.click()
+  })
+  await page.waitForSelector('.account-modal', { timeout: 10000 })
+  const enterpriseFields = await page.evaluate(() => (
+    [...document.querySelectorAll('.account-modal .account-form-grid > label')]
+      .map((label) => label.childNodes[0]?.textContent?.trim())
+  ))
+  check(JSON.stringify(enterpriseFields) === JSON.stringify(
+    ['企业名称', '统一社会信用代码', '所属行业', '企业规模', '注册地址', '联系人姓名']),
+  '企业主体创建字段与注册向导一致')
+  const enterpriseSizes = await page.evaluate(() => {
+    const labels = [...document.querySelectorAll('.account-modal label')]
+    const sizeLabel = labels.find((item) => item.textContent?.includes('企业规模'))
+    return [...(sizeLabel?.querySelectorAll('option') ?? [])].map((item) => item.textContent?.trim())
+  })
+  check(JSON.stringify(enterpriseSizes) === JSON.stringify(
+    ['微型（20人以下）', '小型（20-100人）', '中型（100-500人）', '大型（500人以上）']),
+  '企业规模选项与注册向导一致')
+  await page.click('.account-modal-close')
+  await page.evaluate(() => {
+    const button = [...document.querySelectorAll('button')]
+      .find((item) => item.textContent?.trim() === '创建个人主体')
+    button?.click()
+  })
+  await page.waitForSelector('.account-modal', { timeout: 10000 })
+  const personalFields = await page.evaluate(() => (
+    [...document.querySelectorAll('.account-modal .account-form-grid > label')]
+      .map((label) => label.childNodes[0]?.textContent?.trim())
+  ))
+  check(JSON.stringify(personalFields) === JSON.stringify(
+    ['真实姓名', '身份证号', '经营类型', '联系人姓名']),
+  '个人主体创建字段与注册向导一致')
+  const businessTypes = await page.evaluate(() => {
+    const labels = [...document.querySelectorAll('.account-modal label')]
+    const typeLabel = labels.find((item) => item.textContent?.includes('经营类型'))
+    return [...(typeLabel?.querySelectorAll('option') ?? [])].map((item) => item.textContent?.trim())
+  })
+  check(JSON.stringify(businessTypes) === JSON.stringify(
+    ['家庭农场', '农民专业合作社', '个体采购户', '经纪人', '其他']),
+  '个人经营类型选项与注册向导一致')
+  await page.click('.account-modal-close')
   check((await page.evaluate(() => document.body.innerText)).includes('去实名认证'),
     '未认证个人主体显示认证入口')
   await page.evaluate(() => {

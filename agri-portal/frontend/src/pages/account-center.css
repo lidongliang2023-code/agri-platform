@@ -44,6 +44,7 @@
 .account-address-form { margin-top:18px; padding-top:18px; border-top:1px solid #e3eae5; }
 .account-address-form h3 { margin:0 0 14px; }
 .account-form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.account-required { margin-left:3px; color:#d94a4a; }
 .account-check { flex-direction:row !important; align-items:center; }
 .account-form-actions { display:flex; gap:9px; }
 .account-business-layout { display:grid; gap:16px; }

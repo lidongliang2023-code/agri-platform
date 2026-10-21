@@ -325,9 +325,10 @@ public class SsoAccountController {
         String identity = body.getIdentity().trim().toLowerCase();
         String address = trim(body.getAddress());
         String contactName = trim(body.getContactName());
-        String contactPhone = trim(body.getContactPhone());
-        if (address == null || contactName == null || contactPhone == null) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "联系人和主体地址不能为空");
+        String contactPhone = trim(body.getContactPhone()) == null
+                ? user.getPhone() : trim(body.getContactPhone());
+        if (contactName == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "联系人姓名不能为空");
         }
         SmsAuthService.SubjectProfile profile = new SmsAuthService.SubjectProfile(
                 identity,

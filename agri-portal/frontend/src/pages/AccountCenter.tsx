@@ -83,6 +83,10 @@ const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: 'business', label: '实名与主体', icon: 'factory' },
 ]
 
+const INDUSTRIES = ['粮油产业', '果蔬产业', '畜禽产业', '茶药产业', '饲料农资', '水产产业', '流通贸易', '加工制造', '其他']
+const COMPANY_SIZES = ['微型（20人以下）', '小型（20-100人）', '中型（100-500人）', '大型（500人以上）']
+const BUSINESS_TYPES = ['家庭农场', '农民专业合作社', '个体采购户', '经纪人', '其他']
+
 const emptyAddress = {
   receiverName: '',
   contactPhone: '',
@@ -149,9 +153,8 @@ export function AccountCenter(): JSX.Element {
   const [createBusinessOpen, setCreateBusinessOpen] = useState(false)
   const [createIdentity, setCreateIdentity] = useState<'enterprise' | 'personal'>('enterprise')
   const [createBusinessForm, setCreateBusinessForm] = useState({
-    companyName: '', creditCode: '', industry: '', companySize: '', realName: '', idCard: '',
-    businessType: '', address: '', contactName: '', contactPhone: '', legalPerson: '',
-    validStart: '', validEnd: '', email: '',
+    companyName: '', creditCode: '', industry: INDUSTRIES[0], companySize: COMPANY_SIZES[0],
+    realName: '', idCard: '', businessType: BUSINESS_TYPES[0], address: '', contactName: '',
   })
   const [busy, setBusy] = useState(false)
 
@@ -363,14 +366,24 @@ export function AccountCenter(): JSX.Element {
     setCreateBusinessForm((current) => ({
       ...current,
       contactName: current.contactName || summary?.nickname || '',
-      contactPhone: current.contactPhone || summary?.phone || '',
-      email: current.email || summary?.email || '',
     }))
     setCreateBusinessOpen(true)
   }
 
   const createBusiness = async (event: FormEvent): Promise<void> => {
     event.preventDefault()
+    if (createIdentity === 'enterprise') {
+      if (!createBusinessForm.companyName.trim()) return setError('请填写企业名称')
+      if (!/^[0-9A-Za-z]{15,18}$/.test(createBusinessForm.creditCode.trim())) {
+        return setError('请填写 15-18 位统一社会信用代码')
+      }
+    } else {
+      if (!createBusinessForm.realName.trim()) return setError('请填写真实姓名')
+      if (!/^\d{17}[\dXx]$/.test(createBusinessForm.idCard.trim())) {
+        return setError('身份证号应为 18 位（末位可为 X）')
+      }
+    }
+    if (!createBusinessForm.contactName.trim()) return setError('请填写联系人姓名')
     setBusy(true)
     try {
       const result = await api('/api/v1/sso/account/businesses', {
@@ -679,26 +692,21 @@ export function AccountCenter(): JSX.Element {
                 <div className="account-form-grid">
                   {createIdentity === 'enterprise' ? (
                     <>
-                      <label>企业名称<input className="input" value={createBusinessForm.companyName} onChange={(event) => setCreateBusinessForm({ ...createBusinessForm, companyName: event.target.value })} /></label>
-                      <label>统一社会信用代码<input className="input" value={createBusinessForm.creditCode} onChange={(event) => setCreateBusinessForm({ ...createBusinessForm, creditCode: event.target.value.toUpperCase() })} /></label>
-                      <label>所属行业<input className="input" value={createBusinessForm.industry} onChange={(event) => setCreateBusinessForm({ ...createBusinessForm, industry: event.target.value })} /></label>
-                      <label>企业规模<input className="input" value={createBusinessForm.companySize} onChange={(event) => setCreateBusinessForm({ ...createBusinessForm, companySize: event.target.value })} /></label>
-                      <label>法定代表人<input className="input" value={createBusinessForm.legalPerson} onChange={(event) => setCreateBusinessForm({ ...createBusinessForm, legalPerson: event.target.value })} /></label>
+                      <label>企业名称<span className="account-required">*</span><input className="input" value={createBusinessForm.companyName} placeholder="与营业执照一致" onChange={(event) => setCreateBusinessForm({ ...createBusinessForm, companyName: event.target.value })} /></label>
+                      <label>统一社会信用代码<span className="account-required">*</span><input className="input" value={createBusinessForm.creditCode} maxLength={18} placeholder="15-18 位字母数字" onChange={(event) => setCreateBusinessForm({ ...createBusinessForm, creditCode: event.target.value.replace(/\s/g, '').toUpperCase() })} /></label>
+                      <label>所属行业<select className="select" value={createBusinessForm.industry} onChange={(event) => setCreateBusinessForm({ ...createBusinessForm, industry: event.target.value })}>{INDUSTRIES.map((item) => <option key={item}>{item}</option>)}</select></label>
+                      <label>企业规模<select className="select" value={createBusinessForm.companySize} onChange={(event) => setCreateBusinessForm({ ...createBusinessForm, companySize: event.target.value })}>{COMPANY_SIZES.map((item) => <option key={item}>{item}</option>)}</select></label>
+                      <label>注册地址<input className="input" value={createBusinessForm.address} placeholder="省 / 市 / 区 / 详细地址" onChange={(event) => setCreateBusinessForm({ ...createBusinessForm, address: event.target.value })} /></label>
                     </>
                   ) : (
                     <>
-                      <label>真实姓名<input className="input" value={createBusinessForm.realName} onChange={(event) => setCreateBusinessForm({ ...createBusinessForm, realName: event.target.value })} /></label>
-                      <label>身份证号<input className="input" value={createBusinessForm.idCard} onChange={(event) => setCreateBusinessForm({ ...createBusinessForm, idCard: event.target.value.toUpperCase() })} /></label>
-                      <label>经营类型<input className="input" value={createBusinessForm.businessType} placeholder="家庭农场 / 个体户 / 经纪人" onChange={(event) => setCreateBusinessForm({ ...createBusinessForm, businessType: event.target.value })} /></label>
-                      <label>证件有效期起<input className="input" type="date" value={createBusinessForm.validStart} onChange={(event) => setCreateBusinessForm({ ...createBusinessForm, validStart: event.target.value })} /></label>
-                      <label>证件有效期止<input className="input" type="date" value={createBusinessForm.validEnd} onChange={(event) => setCreateBusinessForm({ ...createBusinessForm, validEnd: event.target.value })} /></label>
+                      <label>真实姓名<span className="account-required">*</span><input className="input" value={createBusinessForm.realName} placeholder="请输入真实姓名" onChange={(event) => setCreateBusinessForm({ ...createBusinessForm, realName: event.target.value })} /></label>
+                      <label>身份证号<span className="account-required">*</span><input className="input" value={createBusinessForm.idCard} maxLength={18} placeholder="18 位身份证号（仅存掩码与摘要）" onChange={(event) => setCreateBusinessForm({ ...createBusinessForm, idCard: event.target.value.replace(/\s/g, '').toUpperCase() })} /></label>
+                      <label>经营类型<select className="select" value={createBusinessForm.businessType} onChange={(event) => setCreateBusinessForm({ ...createBusinessForm, businessType: event.target.value })}>{BUSINESS_TYPES.map((item) => <option key={item}>{item}</option>)}</select></label>
                     </>
                   )}
-                  <label>联系人<input className="input" value={createBusinessForm.contactName} onChange={(event) => setCreateBusinessForm({ ...createBusinessForm, contactName: event.target.value })} /></label>
-                  <label>联系电话<input className="input" value={createBusinessForm.contactPhone} onChange={(event) => setCreateBusinessForm({ ...createBusinessForm, contactPhone: event.target.value })} /></label>
-                  <label>联系邮箱<input className="input" value={createBusinessForm.email} onChange={(event) => setCreateBusinessForm({ ...createBusinessForm, email: event.target.value })} /></label>
+                  <label>联系人姓名<span className="account-required">*</span><input className="input" value={createBusinessForm.contactName} placeholder="用于接收重要通知" onChange={(event) => setCreateBusinessForm({ ...createBusinessForm, contactName: event.target.value })} /></label>
                 </div>
-                <label>主体地址<input className="input" value={createBusinessForm.address} onChange={(event) => setCreateBusinessForm({ ...createBusinessForm, address: event.target.value })} /></label>
                 <p className="muted">创建后主体会出现在“我的经营主体”中；企业主体还需进入认证流程提交审核。</p>
                 <div className="account-form-actions">
                   <button className="btn btn-primary" disabled={busy}>{busy ? '创建中…' : '创建主体'}</button>
