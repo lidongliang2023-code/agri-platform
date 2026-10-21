@@ -70,6 +70,21 @@
 .certification-track span { color:#71837a; }
 .certification-track b { color:#294238; font-weight:600; word-break:break-all; }
 .account-textarea { min-height:88px; padding:10px; resize:vertical; line-height:1.6; }
+.certification-documents { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin:2px 0 14px; }
+.certification-document { display:flex; flex-direction:column; gap:9px; min-width:0; padding:11px; border:1px solid #dce9e1; border-radius:10px; background:#f8fcfa; }
+.certification-document-head { display:flex; flex-direction:column; gap:4px; }
+.certification-document-head strong { color:#294238; font-size:12px; }
+.certification-document-head small { color:#7a8c81; font-size:10px; line-height:1.45; }
+.certification-upload,.certification-document-preview { margin:0 !important; }
+.certification-upload { position:relative; align-items:center !important; justify-content:center; min-height:112px; padding:12px; border:1px dashed #96c8aa; border-radius:8px; color:#12764a !important; background:#fff; cursor:pointer; text-align:center; }
+.certification-upload input,.certification-replace input { position:absolute; width:1px; height:1px; opacity:0; pointer-events:none; }
+.certification-upload span { font-size:12px; font-weight:650; }
+.certification-upload small { color:#819087; font-size:9.5px; font-weight:400; }
+.certification-document-preview { overflow:hidden; border:1px solid #d7e6dd; border-radius:8px; background:#fff; }
+.certification-document-preview img { display:block; width:100%; height:86px; object-fit:cover; background:#edf2ef; }
+.certification-document-preview > div { display:flex; align-items:center; justify-content:space-between; gap:6px; padding:7px 8px; }
+.certification-document-preview span { color:#12764a; font-size:10px; font-weight:650; }
+.certification-replace { position:relative; margin:0 !important; color:#12764a !important; font-size:10px !important; cursor:pointer; }
 .merchant-row-actions { align-items:flex-end; flex:none; }
 .merchant-row span,.business-result span,.join-row span { color:#6b7c72; font-size:11px; }
 .join-row p { margin:5px 0 0; color:#526359; font-size:11px; }
@@ -82,4 +97,4 @@
 .account-login-required { padding:60px; text-align:center; }
 .account-login-required h2 { margin:12px 0 8px; }
 .account-login-required p { color:#6b7c72; }
-@media(max-width:760px){.account-page{padding:14px}.account-hero{align-items:flex-start;flex-wrap:wrap}.account-hero-status{width:100%;align-items:flex-start}.account-grid,.account-form-grid,.merchant-detail-grid,.certification-track{grid-template-columns:1fr}.account-address,.merchant-row,.business-result,.join-row{align-items:flex-start;flex-direction:column}.account-address-actions,.merchant-row-actions{width:100%;justify-content:flex-end}.account-business-search{flex-direction:column}}
+@media(max-width:760px){.account-page{padding:14px}.account-hero{align-items:flex-start;flex-wrap:wrap}.account-hero-status{width:100%;align-items:flex-start}.account-grid,.account-form-grid,.merchant-detail-grid,.certification-track,.certification-documents{grid-template-columns:1fr}.account-address,.merchant-row,.business-result,.join-row{align-items:flex-start;flex-direction:column}.account-address-actions,.merchant-row-actions{width:100%;justify-content:flex-end}.account-business-search{flex-direction:column}}

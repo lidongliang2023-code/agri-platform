@@ -2,6 +2,8 @@
 /** 官网门户个人中心全链路回归（2026-10-21）。 */
 import { createRequire } from 'node:module'
 import { execFileSync } from 'node:child_process'
+import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
@@ -67,6 +69,34 @@ try {
     })
     return await response.json()
   }, { url: path, options: init })
+
+  const uploadCertificationDocument = async (merchantId, kind, invalid = false) => page.evaluate(
+    async ({ targetMerchantId, documentKind, invalidImage }) => {
+      let blob
+      if (invalidImage) {
+        blob = new Blob(['not-an-image'], { type: 'image/png' })
+      } else {
+        const canvas = document.createElement('canvas')
+        canvas.width = 480
+        canvas.height = 300
+        const context = canvas.getContext('2d')
+        context.fillStyle = documentKind === 'business_license' ? '#e6f4ec' : '#fff5d6'
+        context.fillRect(0, 0, canvas.width, canvas.height)
+        context.fillStyle = '#174e34'
+        context.font = 'bold 32px sans-serif'
+        context.fillText(documentKind, 28, 150)
+        blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'))
+      }
+      const body = new FormData()
+      body.append('file', new File([blob], `${documentKind}.png`, { type: blob.type }))
+      const response = await fetch(
+        `/api/v1/sso/account/businesses/${targetMerchantId}/certification-files?kind=${encodeURIComponent(documentKind)}`,
+        { method: 'POST', credentials: 'include', body },
+      )
+      return { status: response.status, ...(await response.json()) }
+    },
+    { targetMerchantId: merchantId, documentKind: kind, invalidImage: invalid },
+  )
 
   const original = await request('/api/v1/sso/account/summary')
   check(original.code === 0 && original.data?.username === account.phone, '账号摘要读取真实平台用户')
@@ -226,8 +256,11 @@ try {
   check(createEnterprise.code === 0 && addedEnterprise?.memberType === 'enterprise'
     && addedEnterprise?.verifyStatus !== 'approved',
   '已有主体账号可创建待认证企业主体', addedEnterprise?.merchantName ?? '')
+  let uploadedDocuments = null
   if (addedEnterprise?.merchantName) {
+    // 主体是 API 新建的，当前 SPA 的内存摘要不会自动感知；强制刷新才能按真实后端状态渲染。
     await page.goto(`${PORTAL}#/account?tab=business`, { waitUntil: 'networkidle2', timeout: 60000 })
+    await page.reload({ waitUntil: 'networkidle2', timeout: 60000 })
     await page.waitForSelector('.account-tabs button', { timeout: 20000 })
     await page.evaluate(() => {
       const button = [...document.querySelectorAll('.account-tabs button')]
@@ -249,13 +282,87 @@ try {
     check(openedCertification, '待认证企业主体显示去认证操作')
     await page.waitForSelector('.account-modal', { timeout: 10000 })
     const certificationText = await page.evaluate(() => document.querySelector('.account-modal')?.innerText ?? '')
-    check(['企业名称', '统一社会信用代码', '法定代表人', '营业执照号', '联系人姓名', '联系电话', '认证材料说明']
+    check(['企业名称', '统一社会信用代码', '法定代表人', '营业执照号', '营业执照照片', '法人身份证人像面', '法人身份证国徽面', '联系人姓名', '联系电话', '认证材料说明']
       .every((label) => certificationText.includes(label)),
     '个人中心企业认证弹窗包含完整认证字段')
+    await page.screenshot({
+      path: path.join(OUT, 'account-certification-upload-form.png'),
+      fullPage: false,
+    })
+
+    const documentDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agri-certification-docs-'))
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+      'base64',
+    )
+    const filePaths = [
+      'business-license.png',
+      'legal-person-front.png',
+      'legal-person-back.png',
+    ].map((filename) => {
+      const filePath = path.join(documentDir, filename)
+      fs.writeFileSync(filePath, png)
+      return filePath
+    })
+    try {
+      for (let index = 0; index < filePaths.length; index += 1) {
+        const inputs = await page.$$('.certification-upload input[type="file"]')
+        if (!inputs.length) throw new Error('认证材料文件选择框不存在')
+        await inputs[0].uploadFile(filePaths[index])
+        await page.waitForFunction(
+          (expected) => document.querySelectorAll('.certification-document-preview img').length >= expected,
+          { timeout: 10000 },
+          index + 1,
+        )
+      }
+      const previewUrls = await page.$$eval('.certification-document-preview img',
+        (images) => images.map((image) => image.getAttribute('src')))
+      uploadedDocuments = {
+        businessLicenseUrl: previewUrls[0],
+        legalPersonIdFrontUrl: previewUrls[1],
+        legalPersonIdBackUrl: previewUrls[2],
+      }
+      check(previewUrls.length === 3 && previewUrls.every((url) => url?.includes('/certification-files/')),
+        '浏览器选择三张图片后均显示缩略图')
+      await page.screenshot({
+        path: path.join(OUT, 'account-certification-files.png'),
+        fullPage: false,
+      })
+    } finally {
+      fs.rmSync(documentDir, { recursive: true, force: true })
+    }
     await page.click('.account-modal-close')
   }
-  let enterpriseCertified = { code: -1 }
   if (addedEnterprise?.merchantId) {
+    const incomplete = await request(
+      `/api/v1/sso/account/businesses/${addedEnterprise.merchantId}/submit-certification`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          companyName: addedEnterprise.merchantName,
+          creditCode: '91370783MA3C8ACC01',
+          legalPerson: '企业认证法人',
+          contactName: '企业主体联系人',
+          contactPhone: account.phone,
+        }),
+      },
+    )
+    check(incomplete.code === 400 && String(incomplete.message).includes('营业执照'),
+      '缺少认证材料时提交被后端拦截')
+
+    const invalid = await uploadCertificationDocument(
+      addedEnterprise.merchantId, 'business_license', true)
+    check(invalid.code === 400, '伪装成图片的非法文件被拒绝')
+
+    const preview = await page.evaluate(async (url) => {
+      const response = await fetch(url, { credentials: 'include' })
+      return { status: response.status, type: response.headers.get('content-type'), size: (await response.arrayBuffer()).byteLength }
+    }, uploadedDocuments.businessLicenseUrl)
+    check(preview.status === 200 && preview.type?.startsWith('image/') && preview.size > 0,
+      '申请人可读取已上传材料且返回真实图片流')
+  }
+  let enterpriseCertified = { code: -1 }
+  if (addedEnterprise?.merchantId && uploadedDocuments) {
     enterpriseCertified = await request(
       `/api/v1/sso/account/businesses/${addedEnterprise.merchantId}/submit-certification`,
       {
@@ -268,6 +375,7 @@ try {
           contactName: '企业主体联系人',
           contactPhone: account.phone,
           attachNote: '个人中心企业认证联调材料说明',
+          ...uploadedDocuments,
         }),
       },
     )
@@ -279,6 +387,14 @@ try {
     check(certifiedMerchant?.certification?.legalPerson === '企业认证法人'
       && certifiedMerchant?.certification?.status === 'pending',
     '企业认证资料完整落库并显示认证单号')
+    const persistedUrls = execFileSync(
+      'C:\\Program Files\\MySQL\\MySQL Server 8.4\\bin\\mysql.exe',
+      ['-uroot', '-N', '--batch', '-e',
+        `SELECT CONCAT_WS('|', business_license_url, legal_person_id_front_url, legal_person_id_back_url) FROM agri_core.platform_merchant_certification WHERE merchant_id=${addedEnterprise.merchantId} ORDER BY id DESC LIMIT 1;`],
+      { encoding: 'utf8', env: { ...process.env, MYSQL_PWD: 'root' } },
+    ).trim()
+    check(persistedUrls.split('|').length === 3 && persistedUrls.includes('business_license'),
+      '三张企业认证材料地址已真实落库')
   }
 
   const search = await request('/api/v1/sso/account/businesses/search?keyword=%E7%BB%BF%E6%BA%90')
@@ -401,6 +517,13 @@ try {
         `DELETE FROM agri_core.platform_merchant_certification WHERE merchant_id=${addedEnterprise.merchantId}; DELETE FROM agri_core.platform_user_merchant WHERE user_id=(SELECT id FROM agri_core.platform_user WHERE phone='${account.phone}') AND merchant_id=${addedEnterprise.merchantId}; DELETE FROM agri_core.platform_merchant WHERE id=${addedEnterprise.merchantId};`],
       { env: { ...process.env, MYSQL_PWD: 'root' } },
     )
+    if (/^\d+$/.test(String(addedEnterprise.merchantId))) {
+      fs.rmSync(path.join(
+        REPO_ROOT,
+        'core-platform/uploads/platform/certification',
+        String(addedEnterprise.merchantId),
+      ), { recursive: true, force: true })
+    }
     check(true, '企业认证测试数据已清理')
   }
   check(errors.length === 0, '个人中心无未捕获脚本异常', errors.slice(0, 2).join(' | '))

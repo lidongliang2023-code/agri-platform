@@ -38,8 +38,17 @@ public class MerchantCertificationEntity extends BaseEntity {
 
     private String contactPhone;
 
-    /** 材料说明（当前阶段只登记说明文本，不存文件） */
+    /** 材料说明 */
     private String attachNote;
+
+    /** 营业执照照片（服务端生成的受控地址） */
+    private String businessLicenseUrl;
+
+    /** 法人身份证人像面照片 */
+    private String legalPersonIdFrontUrl;
+
+    /** 法人身份证国徽面照片 */
+    private String legalPersonIdBackUrl;
 
     /** pending 待审核 / approved 已通过 / rejected 已驳回 */
     private String certStatus;

@@ -32,6 +32,9 @@ interface MerchantRow {
     contactName: string
     contactPhone: string
     attachNote: string | null
+    businessLicenseUrl: string | null
+    legalPersonIdFrontUrl: string | null
+    legalPersonIdBackUrl: string | null
     status: string
     submitTime: string
     reviewer: string | null
@@ -185,7 +188,9 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
   const [certificationForm, setCertificationForm] = useState({
     companyName: '', creditCode: '', legalPerson: '', licenseNo: '',
     contactName: '', contactPhone: '', attachNote: '',
+    businessLicenseUrl: '', legalPersonIdFrontUrl: '', legalPersonIdBackUrl: '',
   })
+  const [certificationUploading, setCertificationUploading] = useState<string | null>(null)
   const [createIdentity, setCreateIdentity] = useState<'enterprise' | 'personal'>('enterprise')
   const [createBusinessForm, setCreateBusinessForm] = useState({
     companyName: '', creditCode: '', industry: INDUSTRIES[0], companySize: COMPANY_SIZES[0],
@@ -451,7 +456,51 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
       contactName: cert?.contactName || merchant.contactName || '',
       contactPhone: cert?.contactPhone || merchant.contactPhone || '',
       attachNote: cert?.attachNote || '',
+      businessLicenseUrl: cert?.businessLicenseUrl || '',
+      legalPersonIdFrontUrl: cert?.legalPersonIdFrontUrl || '',
+      legalPersonIdBackUrl: cert?.legalPersonIdBackUrl || '',
     })
+  }
+
+  const uploadCertificationDocument = async (kind: string, file: File): Promise<void> => {
+    if (!certificationTarget) return
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setError('仅支持 JPG、PNG、WEBP 图片')
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError('单张图片不能超过 5MB')
+      return
+    }
+    setCertificationUploading(kind)
+    setError('')
+    try {
+      const body = new FormData()
+      body.append('file', file)
+      const response = await fetch(
+        `/api/v1/sso/account/businesses/${certificationTarget.merchantId}/certification-files?kind=${encodeURIComponent(kind)}`,
+        { method: 'POST', credentials: 'include', body },
+      )
+      const result = await response.json() as {
+        code: number
+        message?: string
+        data?: { url: string }
+      }
+      if (!response.ok || result.code !== 0 || !result.data?.url) {
+        setError(result.message ?? '图片上传失败，请重试')
+        return
+      }
+      const field = {
+        business_license: 'businessLicenseUrl',
+        legal_person_id_front: 'legalPersonIdFrontUrl',
+        legal_person_id_back: 'legalPersonIdBackUrl',
+      }[kind] as 'businessLicenseUrl' | 'legalPersonIdFrontUrl' | 'legalPersonIdBackUrl' | undefined
+      if (field) setCertificationForm((current) => ({ ...current, [field]: result.data!.url }))
+    } catch {
+      setError('图片上传失败，请检查网络后重试')
+    } finally {
+      setCertificationUploading(null)
+    }
   }
 
   const submitEnterpriseCertification = async (event: FormEvent): Promise<void> => {
@@ -466,6 +515,9 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
     if (!/^1[3-9]\d{9}$/.test(certificationForm.contactPhone.trim())) {
       return setError('请填写正确的 11 位联系电话')
     }
+    if (!certificationForm.businessLicenseUrl) return setError('请上传营业执照照片')
+    if (!certificationForm.legalPersonIdFrontUrl) return setError('请上传法人身份证人像面照片')
+    if (!certificationForm.legalPersonIdBackUrl) return setError('请上传法人身份证国徽面照片')
     setBusy(true)
     try {
       const result = await api(`/api/v1/sso/account/businesses/${certificationTarget.merchantId}/submit-certification`, {
@@ -821,10 +873,75 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
                   <label>联系人姓名<span className="account-required">*</span><input className="input" value={certificationForm.contactName} onChange={(event) => setCertificationForm({ ...certificationForm, contactName: event.target.value })} /></label>
                   <label>联系电话<span className="account-required">*</span><input className="input" maxLength={11} value={certificationForm.contactPhone} onChange={(event) => setCertificationForm({ ...certificationForm, contactPhone: event.target.value.replace(/\D/g, '') })} /></label>
                 </div>
-                <label>认证材料说明<textarea className="input account-textarea" value={certificationForm.attachNote} placeholder="可填写经营范围、资质说明及需平台核验的材料信息" onChange={(event) => setCertificationForm({ ...certificationForm, attachNote: event.target.value })} /></label>
+                  <div className="certification-documents">
+                    {[
+                      {
+                        kind: 'business_license', title: '营业执照照片',
+                        hint: '请上传完整、清晰且在有效期内的营业执照',
+                        url: certificationForm.businessLicenseUrl,
+                        field: 'businessLicenseUrl' as const,
+                      },
+                      {
+                        kind: 'legal_person_id_front', title: '法人身份证人像面',
+                        hint: '证件信息清晰可见，仅用于主体实名认证',
+                        url: certificationForm.legalPersonIdFrontUrl,
+                        field: 'legalPersonIdFrontUrl' as const,
+                      },
+                      {
+                        kind: 'legal_person_id_back', title: '法人身份证国徽面',
+                        hint: '请上传身份证背面，确保有效期限清晰',
+                        url: certificationForm.legalPersonIdBackUrl,
+                        field: 'legalPersonIdBackUrl' as const,
+                      },
+                    ].map((document) => (
+                      <div className="certification-document" key={document.kind}>
+                        <div className="certification-document-head">
+                          <strong>{document.title}<span className="account-required">*</span></strong>
+                          <small>{document.hint}</small>
+                        </div>
+                        {document.url ? (
+                          <div className="certification-document-preview">
+                            <img src={document.url} alt={document.title} />
+                            <div>
+                              <span>已上传</span>
+                              <label className="certification-replace">
+                                {certificationUploading === document.kind ? '上传中…' : '重新上传'}
+                                <input
+                                  type="file"
+                                  accept="image/jpeg,image/png,image/webp"
+                                  disabled={busy || Boolean(certificationUploading)}
+                                  onChange={(event) => {
+                                    const file = event.target.files?.[0]
+                                    if (file) void uploadCertificationDocument(document.kind, file)
+                                    event.currentTarget.value = ''
+                                  }}
+                                />
+                              </label>
+                            </div>
+                          </div>
+                        ) : (
+                          <label className="certification-upload">
+                            <span>{certificationUploading === document.kind ? '正在上传…' : '选择图片'}</span>
+                            <small>JPG / PNG / WEBP，不超过 5MB</small>
+                            <input
+                              type="file"
+                              accept="image/jpeg,image/png,image/webp"
+                              disabled={busy || Boolean(certificationUploading)}
+                              onChange={(event) => {
+                                const file = event.target.files?.[0]
+                                if (file) void uploadCertificationDocument(document.kind, file)
+                                event.currentTarget.value = ''
+                              }}
+                            />
+                          </label>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <label>认证材料说明<textarea className="input account-textarea" value={certificationForm.attachNote} placeholder="可填写经营范围、资质说明及需平台核验的其他信息" onChange={(event) => setCertificationForm({ ...certificationForm, attachNote: event.target.value })} /></label>
                 <p className="muted">提交后进入平台审核；审核通过前不会改变主体已有业务权限。</p>
                 <div className="account-form-actions">
-                  <button className="btn btn-primary" disabled={busy}>{busy ? '提交中…' : '提交认证审核'}</button>
+                  <button className="btn btn-primary" disabled={busy || Boolean(certificationUploading)}>{busy ? '提交中…' : certificationUploading ? '图片上传中…' : '提交认证审核'}</button>
                   <button type="button" className="btn btn-ghost" onClick={() => setCertificationTarget(null)}>取消</button>
                 </div>
               </form>

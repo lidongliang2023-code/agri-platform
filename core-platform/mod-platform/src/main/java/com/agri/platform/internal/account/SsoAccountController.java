@@ -5,6 +5,7 @@ import com.agri.platform.internal.identity.UserIdentityMapper;
 import com.agri.platform.internal.identity.IdNumberUtil;
 import com.agri.platform.internal.merchant.MerchantEntity;
 import com.agri.platform.internal.merchant.MerchantCertificationEntity;
+import com.agri.platform.internal.merchant.MerchantCertificationFileService;
 import com.agri.platform.internal.merchant.MerchantCertificationMapper;
 import com.agri.platform.internal.merchant.MerchantMapper;
 import com.agri.platform.internal.merchant.UserMerchantEntity;
@@ -42,6 +43,7 @@ public class SsoAccountController {
     private final UserMerchantMapper userMerchantMapper;
     private final MerchantMapper merchantMapper;
     private final MerchantCertificationMapper certificationMapper;
+    private final MerchantCertificationFileService certificationFileService;
     private final UserIdentityMapper identityMapper;
     private final UserAddressMapper addressMapper;
     private final MerchantJoinRequestMapper joinRequestMapper;
@@ -372,6 +374,15 @@ public class SsoAccountController {
         String contactPhone = trim(body == null ? null : body.getContactPhone());
         String licenseNo = trim(body == null ? null : body.getLicenseNo());
         String attachNote = trim(body == null ? null : body.getAttachNote());
+        String businessLicenseUrl = certificationFileService.requireOwnedUrl(merchantId,
+                MerchantCertificationFileService.BUSINESS_LICENSE,
+                body == null ? null : body.getBusinessLicenseUrl());
+        String legalPersonIdFrontUrl = certificationFileService.requireOwnedUrl(merchantId,
+                MerchantCertificationFileService.LEGAL_PERSON_ID_FRONT,
+                body == null ? null : body.getLegalPersonIdFrontUrl());
+        String legalPersonIdBackUrl = certificationFileService.requireOwnedUrl(merchantId,
+                MerchantCertificationFileService.LEGAL_PERSON_ID_BACK,
+                body == null ? null : body.getLegalPersonIdBackUrl());
         if (companyName == null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "企业认证必须填写企业名称");
         }
@@ -416,6 +427,9 @@ public class SsoAccountController {
             cert.setContactName(contactName);
             cert.setContactPhone(contactPhone);
             cert.setAttachNote(attachNote);
+            cert.setBusinessLicenseUrl(businessLicenseUrl);
+            cert.setLegalPersonIdFrontUrl(legalPersonIdFrontUrl);
+            cert.setLegalPersonIdBackUrl(legalPersonIdBackUrl);
             cert.setCertNo("CT" + System.currentTimeMillis());
             cert.setCertStatus("draft");
             cert.setSubmitTime(now);
@@ -429,6 +443,9 @@ public class SsoAccountController {
             cert.setContactName(contactName);
             cert.setContactPhone(contactPhone);
             cert.setAttachNote(attachNote);
+            cert.setBusinessLicenseUrl(businessLicenseUrl);
+            cert.setLegalPersonIdFrontUrl(legalPersonIdFrontUrl);
+            cert.setLegalPersonIdBackUrl(legalPersonIdBackUrl);
         }
         cert.setCertStatus("pending");
         cert.setSubmitTime(now);
@@ -622,6 +639,9 @@ public class SsoAccountController {
         row.put("contactName", entity.getContactName());
         row.put("contactPhone", entity.getContactPhone());
         row.put("attachNote", entity.getAttachNote());
+        row.put("businessLicenseUrl", entity.getBusinessLicenseUrl());
+        row.put("legalPersonIdFrontUrl", entity.getLegalPersonIdFrontUrl());
+        row.put("legalPersonIdBackUrl", entity.getLegalPersonIdBackUrl());
         row.put("status", entity.getCertStatus());
         row.put("submitTime", entity.getSubmitTime());
         row.put("reviewer", entity.getReviewer());
@@ -847,6 +867,9 @@ public class SsoAccountController {
         private String contactName;
         private String contactPhone;
         private String attachNote;
+        private String businessLicenseUrl;
+        private String legalPersonIdFrontUrl;
+        private String legalPersonIdBackUrl;
     }
 
     @Data

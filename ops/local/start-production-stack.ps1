@@ -91,6 +91,7 @@ if (Test-Port 8093) {
 } else {
     # 口令必须是本机 MySQL 的真实口令：core-app 的默认值是 root123，本机是 root
     $env:MYSQL_PASSWORD = $MysqlRootPassword
+    $env:AGRI_CERTIFICATION_UPLOAD_DIR = Join-Path $RepoRoot 'core-platform\uploads\platform\certification'
     $coreApp = Join-Path $RepoRoot 'core-platform\core-app\target'
     Start-Process -FilePath 'java' -ArgumentList @('-jar', 'core-app-1.0.0.jar', '--server.port=8093') `
         -WorkingDirectory $coreApp -WindowStyle Hidden `

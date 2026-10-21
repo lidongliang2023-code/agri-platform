@@ -9,6 +9,7 @@
  */
 import { createRequire } from 'node:module'
 import { execFileSync } from 'node:child_process'
+import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
@@ -67,6 +68,21 @@ const clickRowButton = async (page, rowText, buttonText) => {
 }
 
 const setup = () => {
+  const documentDirectory = path.join(
+    REPO_ROOT, 'core-platform/uploads/platform/certification/9701')
+  fs.mkdirSync(documentDirectory, { recursive: true })
+  const png = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+    'base64',
+  )
+  const fileIds = {
+    businessLicense: '11111111111111111111111111111111.png',
+    legalPersonFront: '22222222222222222222222222222222.png',
+    legalPersonBack: '33333333333333333333333333333333.png',
+  }
+  Object.values(fileIds).forEach((fileId) => fs.writeFileSync(path.join(documentDirectory, fileId), png))
+  const documentUrl = (kind, fileId) =>
+    `/api/v1/sso/account/businesses/9701/certification-files/${kind}/${fileId}`
   sql(`
     DELETE FROM platform_merchant_certification WHERE id=9801;
     DELETE FROM platform_merchant WHERE id=9701;
@@ -76,9 +92,13 @@ const setup = () => {
       VALUES (9701, 1, 0, 'CERTTEST9701', 'CERT-TEST-ENTERPRISE', 'BOTH', 'enterprise', 1, 'pending', NOW(), NOW(), 0);
     INSERT INTO platform_merchant_certification
       (id, market_id, tenant_id, merchant_id, merchant_name, cert_no, company_name, credit_code,
-       legal_person, contact_name, contact_phone, attach_note, cert_status, submit_time, deleted, created_at, updated_at)
+       legal_person, contact_name, contact_phone, attach_note, business_license_url,
+       legal_person_id_front_url, legal_person_id_back_url, cert_status, submit_time, deleted, created_at, updated_at)
       VALUES (9801, 1, 0, 9701, 'CERT-TEST-ENTERPRISE', 'CTTEST9801', 'CERT-TEST-ENTERPRISE',
        '91370700CERTTEST01', 'Test Legal', 'Test Contact', '13900009999', 'E2E materials',
+       '${documentUrl('business_license', fileIds.businessLicense)}',
+       '${documentUrl('legal_person_id_front', fileIds.legalPersonFront)}',
+       '${documentUrl('legal_person_id_back', fileIds.legalPersonBack)}',
        'pending', NOW(), 0, NOW(), NOW());
     INSERT INTO platform_user_identity
       (id, user_id, market_id, identity_no, real_name, id_no_masked, id_no_hash, id_no_salt,
@@ -95,6 +115,11 @@ const cleanup = () => {
       DELETE FROM platform_merchant WHERE id=9701;
       DELETE FROM platform_user_identity WHERE id=9802;
     `)
+  } catch { /* 清理失败不覆盖主结论 */ }
+  try {
+    fs.rmSync(path.join(
+      REPO_ROOT, 'core-platform/uploads/platform/certification/9701'),
+    { recursive: true, force: true })
   } catch { /* 清理失败不覆盖主结论 */ }
 }
 
@@ -153,6 +178,21 @@ try {
   await page.waitForSelector('.audit-detail', { timeout: 10000 })
   const detailText = await page.evaluate(() => document.querySelector('.audit-detail')?.innerText ?? '')
   check(detailText.includes('CERT-TEST-ENTERPRISE') && detailText.includes('E2E materials'), '企业详情展示主体与材料说明')
+  await page.waitForFunction(
+    () => [...document.querySelectorAll('.material-gallery img')].length === 3
+      && [...document.querySelectorAll('.material-gallery img')].every((img) => img.naturalWidth > 0),
+    { timeout: 10000 },
+  ).catch(() => {})
+  const materials = await page.evaluate(() =>
+    [...document.querySelectorAll('.material-gallery img')]
+      .map((img) => ({ width: img.naturalWidth, alt: img.alt })))
+  check(materials.length === 3 && materials.every((item) => item.width > 0),
+    '审核详情可鉴权加载营业执照与法人身份证正反面', JSON.stringify(materials))
+  await page.screenshot({
+    path: path.join('C:/Users/71502/.codex/visualizations/2026/10/16/01a14244-ead8-7ab0-8c7c-df7abac44648',
+      'mdm-certification-files.png'),
+    fullPage: false,
+  })
   await clickText(page, '审核通过', '.audit-detail .modal-footer button')
   await sleep(1500)
   const certStatus = sql("SELECT cert_status FROM platform_merchant_certification WHERE id=9801;")

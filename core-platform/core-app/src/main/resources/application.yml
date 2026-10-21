@@ -30,6 +30,10 @@ spring:
       password: ${REDIS_PASSWORD:}
   jackson:
     time-zone: Asia/Shanghai
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
 
 mybatis-plus:
   configuration:
@@ -69,6 +73,8 @@ agri:
     settlement:
       enabled: true
       cron: "0 0 1 * * ?"
+  platform:
+    certification-upload-dir: ${AGRI_CERTIFICATION_UPLOAD_DIR:uploads/platform/certification}
   cors:
     # 精确来源白名单：生产环境必须经 AGRI_CORS_ORIGINS 注入，禁止出现通配符。
     allowed-origins: ${AGRI_CORS_ORIGINS:http://localhost:5173,http://localhost:3000}

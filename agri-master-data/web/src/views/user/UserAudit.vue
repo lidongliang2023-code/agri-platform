@@ -99,6 +99,25 @@
             <div class="detail-row"><span class="detail-label">联系人</span><span class="detail-value">{{ detail.raw.contactName || '—' }}</span></div>
             <div class="detail-row"><span class="detail-label">联系电话</span><span class="detail-value mono">{{ detail.raw.contactPhone || '—' }}</span></div>
             <div class="detail-row"><span class="detail-label">材料说明</span><span class="detail-value">{{ detail.raw.attachNote || '—' }}</span></div>
+            <div class="detail-row material-detail-row">
+              <span class="detail-label">认证材料</span>
+              <div class="material-gallery">
+                <figure v-for="item in enterpriseDocuments" :key="item.key">
+                  <div class="material-image-wrap">
+                    <img
+                      v-if="documentPreviews[item.key]"
+                      :src="documentPreviews[item.key]"
+                      :alt="item.label"
+                      @click="openDocument(documentPreviews[item.key])"
+                    />
+                    <div v-else class="material-empty">
+                      {{ documentLoading ? '材料加载中…' : (item.url ? '材料加载失败' : '未上传') }}
+                    </div>
+                  </div>
+                  <figcaption>{{ item.label }}</figcaption>
+                </figure>
+              </div>
+            </div>
           </template>
           <template v-else>
             <div class="detail-row"><span class="detail-label">真实姓名</span><span class="detail-value">{{ detail.raw.realName }}</span></div>
@@ -144,11 +163,12 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import '@/styles/admin-page.css'
 import {
   auditMerchantCertification,
+  getMerchantCertificationDocument,
   getMerchantCertifications,
   getUserIdentities,
   reviewUserIdentity,
@@ -164,6 +184,53 @@ const selectedKeys = ref([])
 const detail = ref(null)
 const rejectTargets = ref([])
 const rejectReason = ref('')
+const documentPreviews = ref({})
+const documentLoading = ref(false)
+
+const enterpriseDocuments = computed(() => {
+  const raw = detail.value?.raw
+  if (!raw || detail.value?.type !== 'enterprise') return []
+  return [
+    { key: 'businessLicense', label: '营业执照', url: raw.businessLicenseUrl },
+    { key: 'legalPersonIdFront', label: '法人身份证人像面', url: raw.legalPersonIdFrontUrl },
+    { key: 'legalPersonIdBack', label: '法人身份证国徽面', url: raw.legalPersonIdBackUrl },
+  ]
+})
+
+const clearDocumentPreviews = () => {
+  Object.values(documentPreviews.value).forEach((url) => URL.revokeObjectURL(String(url)))
+  documentPreviews.value = {}
+}
+
+const loadDocumentPreviews = async (row) => {
+  clearDocumentPreviews()
+  if (!row || row.type !== 'enterprise' || !row.raw?.merchantId) return
+  documentLoading.value = true
+  try {
+    for (const item of enterpriseDocuments.value) {
+      if (!item.url) continue
+      try {
+        const blob = await getMerchantCertificationDocument(row.raw.merchantId, item.url)
+        if (detail.value?.key !== row.key) return
+        documentPreviews.value = {
+          ...documentPreviews.value,
+          [item.key]: URL.createObjectURL(blob),
+        }
+      } catch {
+        if (detail.value?.key === row.key) message.warning(`${item.label}加载失败`)
+      }
+    }
+  } finally {
+    if (detail.value?.key === row.key) documentLoading.value = false
+  }
+}
+
+const openDocument = (url) => {
+  if (url) window.open(url, '_blank', 'noopener,noreferrer')
+}
+
+watch(detail, (row) => void loadDocumentPreviews(row))
+onBeforeUnmount(clearDocumentPreviews)
 
 const statusMap = {
   pending: '待审核',
@@ -459,6 +526,60 @@ onMounted(loadData)
   font-family: "DIN Alternate", "Roboto Mono", ui-monospace, monospace;
 }
 
+.material-detail-row {
+  align-items: flex-start;
+}
+
+.material-gallery {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+  width: calc(100% - 112px);
+}
+
+.material-gallery figure {
+  min-width: 0;
+  margin: 0;
+  padding: 7px;
+  border: 1px solid #e3eae5;
+  border-radius: 9px;
+  background: #f8fbf9;
+}
+
+.material-image-wrap {
+  overflow: hidden;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: 6px;
+  background: #edf3ef;
+}
+
+.material-image-wrap img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  cursor: zoom-in;
+}
+
+.material-empty {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  color: #8a9a91;
+  font-size: 11px;
+}
+
+.material-gallery figcaption {
+  margin-top: 6px;
+  overflow: hidden;
+  color: #526359;
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 @media (max-width: 1100px) {
   .audit-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
@@ -466,5 +587,6 @@ onMounted(loadData)
 @media (max-width: 700px) {
   .audit-kpis { grid-template-columns: 1fr 1fr; }
   .audit-detail { width: calc(100vw - 24px); }
+  .material-gallery { width: 100%; grid-template-columns: 1fr; }
 }
 </style>

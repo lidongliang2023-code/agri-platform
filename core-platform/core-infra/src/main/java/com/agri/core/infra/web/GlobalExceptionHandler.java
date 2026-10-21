@@ -12,6 +12,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 /**
  * 全局异常处理：客户端只看到规范化错误结构，绝不返回堆栈或内部细节（输出规范）。
@@ -47,6 +48,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler({HttpMessageNotReadableException.class, MethodArgumentTypeMismatchException.class})
     public ApiResponse<Void> handleUnreadable(Exception e) {
         return new ApiResponse<>(ErrorCode.BAD_REQUEST.getCode(), "请求体格式错误", null, traceId());
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ApiResponse<Void> handleUploadTooLarge(MaxUploadSizeExceededException e) {
+        return new ApiResponse<>(ErrorCode.BAD_REQUEST.getCode(), "单张图片不能超过 5MB", null, traceId());
     }
 
     @ExceptionHandler(Exception.class)

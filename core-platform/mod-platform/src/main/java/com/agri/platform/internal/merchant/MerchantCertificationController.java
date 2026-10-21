@@ -10,6 +10,11 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.core.io.Resource;
+import org.springframework.http.CacheControl;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -38,6 +43,7 @@ import java.util.stream.Collectors;
 public class MerchantCertificationController {
 
     private final MerchantCertificationMapper certificationMapper;
+    private final MerchantCertificationFileService certificationFileService;
     private final MerchantMapper merchantMapper;
     private final UserMerchantMapper userMerchantMapper;
 
@@ -85,6 +91,14 @@ public class MerchantCertificationController {
         entity.setContactName(trim(request.getContactName()));
         entity.setContactPhone(trim(request.getContactPhone()));
         entity.setAttachNote(trim(request.getAttachNote()));
+        entity.setBusinessLicenseUrl(certificationFileService.requireOwnedUrl(merchantId,
+                MerchantCertificationFileService.BUSINESS_LICENSE, request.getBusinessLicenseUrl()));
+        entity.setLegalPersonIdFrontUrl(certificationFileService.requireOwnedUrl(merchantId,
+                MerchantCertificationFileService.LEGAL_PERSON_ID_FRONT,
+                request.getLegalPersonIdFrontUrl()));
+        entity.setLegalPersonIdBackUrl(certificationFileService.requireOwnedUrl(merchantId,
+                MerchantCertificationFileService.LEGAL_PERSON_ID_BACK,
+                request.getLegalPersonIdBackUrl()));
         entity.setCertStatus("pending");
         entity.setSubmitTime(now);
         certificationMapper.insert(entity);
@@ -178,6 +192,19 @@ public class MerchantCertificationController {
         return ApiResponse.ok();
     }
 
+    /** 运营端读取认证材料。JWT 过滤器已在进入本方法前完成运营角色校验。 */
+    @GetMapping("/api/v1/admin/merchant-certifications/{merchantId}/certification-files/{kind}/{fileId}")
+    public ResponseEntity<Resource> document(@PathVariable Long merchantId,
+                                             @PathVariable String kind,
+                                             @PathVariable String fileId) {
+        Resource resource = certificationFileService.load(merchantId, kind, fileId);
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(certificationFileService.mediaType(fileId)))
+                .cacheControl(CacheControl.noStore())
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline")
+                .body(resource);
+    }
+
     // ------------------------------ 内部 ------------------------------
 
     /** 请求里点了名就用点名的（必须是自己绑定的），没点名则只有一个绑定时自动用；多家时报错不猜。 */
@@ -220,6 +247,9 @@ public class MerchantCertificationController {
         private String contactName;
         private String contactPhone;
         private String attachNote;
+        private String businessLicenseUrl;
+        private String legalPersonIdFrontUrl;
+        private String legalPersonIdBackUrl;
     }
 
     @Data
