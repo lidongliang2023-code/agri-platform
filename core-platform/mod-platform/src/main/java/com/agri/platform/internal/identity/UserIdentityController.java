@@ -209,6 +209,12 @@ public class UserIdentityController {
         view.put("identityNo", entity.getIdentityNo());
         view.put("realName", entity.getRealName());
         view.put("idNoMasked", entity.getIdNoMasked());
+        view.put("validStart", entity.getValidStart());
+        view.put("validEnd", entity.getValidEnd());
+        view.put("contactPhone", entity.getContactPhone());
+        view.put("address", entity.getAddress());
+        view.put("email", entity.getEmail());
+        view.put("businessType", entity.getBusinessType());
         view.put("status", entity.getStatus());
         view.put("submitTime", entity.getSubmitTime());
         view.put("reviewerName", entity.getReviewerName());

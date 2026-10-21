@@ -27,6 +27,13 @@ public class UserIdentityEntity {
     private String idNoMasked;
     private String idNoHash;
     private String idNoSalt;
+    /** 身份证有效期、联系信息与个人经营资料（分步注册/门户认证表单）。 */
+    private String validStart;
+    private String validEnd;
+    private String contactPhone;
+    private String address;
+    private String email;
+    private String businessType;
     /** pending / verified / rejected */
     private String status;
     private LocalDateTime submitTime;

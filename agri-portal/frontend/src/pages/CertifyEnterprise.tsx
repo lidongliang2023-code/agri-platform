@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Icon } from '../components/Icon'
-import { productionLogin, ssoRegister } from '../utils'
+import { activateCertification, saveSubject } from '../utils/onboarding'
 
-const DRAFT_KEY = 'agri.portal.cert.enterprise'
 const INDUSTRIES = ['粮油产业', '果蔬产业', '畜禽产业', '茶药产业', '饲料农资', '水产产业', '流通贸易', '加工制造', '其他']
 const KINDS = ['有限责任公司', '股份有限公司', '农民专业合作社', '合伙企业', '个体工商户', '其他']
 
@@ -28,22 +27,13 @@ const EMPTY: EnterpriseForm = {
   contactName: '', contactPhone: '', email: '', legalPerson: '', agree: false,
 }
 
-function loadDraft(): EnterpriseForm {
-  try {
-    const raw = window.localStorage.getItem(DRAFT_KEY)
-    if (!raw) return EMPTY
-    return { ...EMPTY, ...(JSON.parse(raw) as Partial<EnterpriseForm>) }
-  } catch {
-    return EMPTY
-  }
-}
-
 export function CertifyEnterprise(): JSX.Element {
   const [step, setStep] = useState(1)
-  const [form, setForm] = useState<EnterpriseForm>(loadDraft)
+  const [form, setForm] = useState<EnterpriseForm>(EMPTY)
   const [error, setError] = useState('')
   const [savedAt, setSavedAt] = useState('')
   const [done, setDone] = useState(false)
+  const [busy, setBusy] = useState(false)
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -54,9 +44,43 @@ export function CertifyEnterprise(): JSX.Element {
     setError('')
   }
 
-  const saveDraft = (): void => {
-    window.localStorage.setItem(DRAFT_KEY, JSON.stringify(form))
-    setSavedAt(new Date().toLocaleTimeString('zh-CN', { hour12: false }))
+  const profile = () => ({
+    identity: 'enterprise' as const,
+    companyName: form.companyName.trim(),
+    creditCode: form.creditCode.trim(),
+    industry: form.industry,
+    address: form.address.trim(),
+    contactName: form.contactName.trim(),
+    contactPhone: form.contactPhone.trim(),
+    legalPerson: form.legalPerson.trim(),
+    attachNote: [
+      `企业类型：${form.companyKind}`,
+      form.foundDate ? `成立日期：${form.foundDate}` : '',
+      form.capital ? `注册资本：${form.capital} 万元` : '',
+      form.scope ? `经营范围：${form.scope}` : '',
+      form.email ? `联系邮箱：${form.email}` : '',
+      '门户企业认证表单提交',
+    ].filter(Boolean).join('；'),
+  })
+
+  const saveDraft = async (): Promise<boolean> => {
+    if (!validate(step)) return false
+    setBusy(true)
+    setError('')
+    try {
+      const result = await saveSubject(profile())
+      if (result.code !== 0) {
+        setError(result.message ?? '主体草稿保存失败，请先登录后重试')
+        return false
+      }
+      setSavedAt(new Date().toLocaleTimeString('zh-CN', { hour12: false }))
+      return true
+    } catch {
+      setError('无法连接平台接口，请确认后端已启动')
+      return false
+    } finally {
+      setBusy(false)
+    }
   }
 
   const validate = (target: number): boolean => {
@@ -79,14 +103,25 @@ export function CertifyEnterprise(): JSX.Element {
 
   const next = (): void => {
     if (!validate(step)) return
-    saveDraft()
     setStep(Math.min(3, step + 1))
   }
 
-  const submit = (): void => {
+  const submit = async (): Promise<void> => {
     if (!validate(3)) return
-    saveDraft()
-    setDone(true)
+    if (!await saveDraft()) return
+    setBusy(true)
+    try {
+      const result = await activateCertification()
+      if (result.code !== 0) {
+        setError(result.message ?? '认证提交失败，请稍后重试')
+        return
+      }
+      setDone(true)
+    } catch {
+      setError('无法连接平台接口，请确认后端已启动')
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
@@ -220,11 +255,10 @@ export function CertifyEnterprise(): JSX.Element {
                 </label>
                 {done && (
                   <div className="portal-draft-result">
-                    <div className="row center gap-8"><Icon name="check" size={18} /><strong>资料已保存到本机浏览器</strong></div>
-                    <p>尚未提交至平台。正式提交需要登录后上传资质材料、完成身份核验与对公账户验证。</p>
+                    <div className="row center gap-8"><Icon name="check" size={18} /><strong>认证申请已提交平台审核</strong></div>
+                    <p>企业主体与认证草稿已落库并激活为待审核状态。营业执照、法人证件等补充材料可在后续审核环节按运营要求补交。</p>
                     <div className="row gap-8 portal-wrap">
-                      <a className="btn btn-primary" href={productionLogin()}>登录后继续办理</a>
-                      <a className="btn btn-outline" href={ssoRegister()}>没有账号，先注册</a>
+                      <a className="btn btn-primary" href={`${window.location.protocol}//${window.location.hostname}:8090/register?step=3`}>查看认证进度</a>
                       <a className="btn btn-ghost" href="#/certify">返回认证中心</a>
                     </div>
                   </div>
@@ -233,17 +267,17 @@ export function CertifyEnterprise(): JSX.Element {
             )}
 
             {error && <div className="portal-form-error">{error}</div>}
-            {savedAt && !done && <div className="portal-save-hint">草稿已保存到本机 · {savedAt}</div>}
+            {savedAt && !done && <div className="portal-save-hint">平台草稿已保存 · {savedAt}</div>}
 
             <div className="row between center mt-24">
               <button type="button" className="btn btn-ghost" disabled={step === 1} onClick={() => setStep(step - 1)}>
                 <Icon name="arrow" size={14} />上一步
               </button>
               <div className="row center gap-8">
-                <button type="button" className="btn btn-outline" onClick={saveDraft}>保存草稿</button>
+                <button type="button" className="btn btn-outline" disabled={busy} onClick={() => void saveDraft()}>保存到平台</button>
                 {step < 3
                   ? <button type="button" className="btn btn-primary" onClick={next}>下一步<Icon name="arrow" size={14} /></button>
-                  : <button type="button" className="btn btn-primary" onClick={submit} disabled={done}>保存并去登录提交</button>}
+                  : <button type="button" className="btn btn-primary" onClick={() => void submit()} disabled={done || busy}>{busy ? '提交中…' : '提交认证审核'}</button>}
               </div>
             </div>
           </div>

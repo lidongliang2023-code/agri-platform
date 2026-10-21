@@ -59,6 +59,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             "/api/v1/sso/onboarding/status",
             "/api/v1/sso/onboarding/subject",
             "/api/v1/sso/onboarding/certification",
+            "/api/v1/public/logistics-inquiries",
             // 公开行情（数据分级 L1）——卫星服务 satellite-quote-push 拉取数据源亦复用此口径
             "/api/v1/quotes/**",
             "/v3/api-docs/**",

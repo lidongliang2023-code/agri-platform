@@ -91,19 +91,53 @@ const scrollTo = (id: string): void => {
 export function Logistics(): JSX.Element {
   const [form, setForm] = useState<QuoteForm>(INITIAL_QUOTE)
   const [notice, setNotice] = useState('')
+  const [busy, setBusy] = useState(false)
 
   const patch = (next: Partial<QuoteForm>): void => {
     setForm((previous) => ({ ...previous, ...next }))
     setNotice('')
   }
 
-  const submitQuote = (event: FormEvent): void => {
+  const submitQuote = async (event: FormEvent): Promise<void> => {
     event.preventDefault()
     if (!form.origin.trim() || !form.destination.trim() || !form.weight.trim()) {
       setNotice('请填写发货地、收货地和货物重量后再提交询价。')
       return
     }
-    setNotice('询价信息已在本页校验通过，但当前门户尚未接入物流报价接口，不会生成正式运单。请登录后到会员中心「发货与物流」联系承运方确认报价。')
+    setBusy(true)
+    setNotice('')
+    try {
+      const response = await fetch('/api/v1/public/logistics-inquiries', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          origin: form.origin.trim(),
+          originDetail: form.originDetail.trim(),
+          destination: form.destination.trim(),
+          destinationDetail: form.destinationDetail.trim(),
+          cargoType: form.cargoType,
+          weight: form.weight,
+          unit: form.unit,
+          truckType: form.truck,
+          expectedDate: form.date,
+          expectedTime: form.time,
+        }),
+      })
+      const body = await response.json() as {
+        code?: number
+        message?: string
+        data?: { inquiryNo?: string }
+      }
+      if (!response.ok || body.code !== 0) {
+        setNotice(body.message ?? '询价提交失败，请稍后重试')
+        return
+      }
+      setNotice(`询价已提交，单号 ${body.data?.inquiryNo ?? '—'}。平台运营或承运方将根据联系方式与您确认报价。`)
+    } catch {
+      setNotice('无法连接物流询价服务，请确认后端已启动')
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
@@ -239,8 +273,8 @@ export function Logistics(): JSX.Element {
           <div className="card logi-quote-card">
             <div className="card-b">
               <h3>在线询价 · 收集运输需求</h3>
-              <p>填写货物信息，当前页面会校验完整性；正式报价与承运方确认需登录后办理。</p>
-              <form className="logi-quote-form" onSubmit={submitQuote}>
+              <p>填写货物信息并提交后生成正式询价单，由平台运营或承运方联系确认报价。</p>
+              <form className="logi-quote-form" onSubmit={(event) => void submitQuote(event)}>
                 <div className="logi-form-row">
                   <label>发货地<input className="input" value={form.origin} onChange={(event) => patch({ origin: event.target.value })} placeholder="省 / 市 / 区 或 基地名" /></label>
                   <label>详细地址<input className="input" value={form.originDetail} onChange={(event) => patch({ originDetail: event.target.value })} placeholder="详细地址" /></label>
@@ -267,7 +301,9 @@ export function Logistics(): JSX.Element {
                   <label>期望发货日期<input className="input" type="date" value={form.date} onChange={(event) => patch({ date: event.target.value })} /></label>
                   <label>期望时段<select className="select" value={form.time} onChange={(event) => patch({ time: event.target.value })}><option>上午 8:00 前</option><option>下午 14:00 前</option><option>时间不限</option></select></label>
                 </div>
-                <button type="submit" className="btn btn-primary logi-quote-submit">提交询价意向</button>
+                <button type="submit" className="btn btn-primary logi-quote-submit" disabled={busy}>
+                  {busy ? '提交中…' : '提交询价意向'}
+                </button>
                 {notice && <div className="logi-notice">{notice}</div>}
               </form>
             </div>

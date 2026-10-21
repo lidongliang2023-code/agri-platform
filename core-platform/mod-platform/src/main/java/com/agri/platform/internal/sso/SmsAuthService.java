@@ -223,7 +223,14 @@ public class SmsAuthService {
             String realName,
             String idCard,
             String businessType,
-            String contactName) {
+            String contactName,
+            String contactPhone,
+            String legalPerson,
+            String licenseNo,
+            String attachNote,
+            String validStart,
+            String validEnd,
+            String email) {
     }
 
     /** 当前账号的开通阶段。 */
@@ -339,6 +346,7 @@ public class SmsAuthService {
         String creditCode = trimToNull(profile.creditCode());
         String realName = trimToNull(profile.realName());
         String contactName = trimToNull(profile.contactName());
+        String contactPhone = trimToNull(profile.contactPhone());
         String idCard = trimToNull(profile.idCard());
         if ("enterprise".equals(identity)) {
             if (companyName == null) {
@@ -368,12 +376,12 @@ public class SmsAuthService {
             merchant.setMemberType(identity);
             merchant.setContactName(contactName == null
                     ? ("enterprise".equals(identity) ? companyName : realName) : contactName);
-            merchant.setContactPhone(user.getPhone());
+            merchant.setContactPhone(contactPhone == null ? user.getPhone() : contactPhone);
             merchant.setStatus(1);
             merchant.setVerifyStatus("unverified");
             merchant.setIndustry("enterprise".equals(identity) ? trimToNull(profile.industry()) : null);
             merchant.setCompanySize("enterprise".equals(identity) ? trimToNull(profile.companySize()) : null);
-            merchant.setAddress("enterprise".equals(identity) ? trimToNull(profile.address()) : null);
+            merchant.setAddress(trimToNull(profile.address()));
             merchant.setBusinessType("enterprise".equals(identity) ? null : trimToNull(profile.businessType()));
             merchant.setCreditCode("enterprise".equals(identity) ? creditCode : null);
             merchantMapper.insert(merchant);
@@ -400,9 +408,10 @@ public class SmsAuthService {
             merchant.setMemberType(identity);
             merchant.setContactName(contactName == null
                     ? ("enterprise".equals(identity) ? companyName : realName) : contactName);
+            merchant.setContactPhone(contactPhone == null ? user.getPhone() : contactPhone);
             merchant.setIndustry("enterprise".equals(identity) ? trimToNull(profile.industry()) : null);
             merchant.setCompanySize("enterprise".equals(identity) ? trimToNull(profile.companySize()) : null);
-            merchant.setAddress("enterprise".equals(identity) ? trimToNull(profile.address()) : null);
+            merchant.setAddress(trimToNull(profile.address()));
             merchant.setBusinessType("enterprise".equals(identity) ? null : trimToNull(profile.businessType()));
             merchant.setCreditCode("enterprise".equals(identity) ? creditCode : null);
             merchantMapper.updateById(merchant);
@@ -430,8 +439,12 @@ public class SmsAuthService {
                 cert.setCompanyName(companyName);
                 cert.setCreditCode(creditCode);
                 cert.setContactName(merchant.getContactName());
-                cert.setContactPhone(user.getPhone());
-                cert.setAttachNote("分步注册：主体资料已保存，等待认证开通步骤提交审核。");
+                cert.setContactPhone(merchant.getContactPhone());
+                cert.setLegalPerson(trimToNull(profile.legalPerson()));
+                cert.setLicenseNo(trimToNull(profile.licenseNo()));
+                cert.setAttachNote(trimToNull(profile.attachNote()) == null
+                        ? "分步注册：主体资料已保存，等待认证开通步骤提交审核。"
+                        : profile.attachNote().trim());
                 if (cert.getId() == null) {
                     certificationMapper.insert(cert);
                 } else {
@@ -459,6 +472,12 @@ public class SmsAuthService {
                 draft.setIdNoMasked(IdNumberUtil.mask(idNo));
                 draft.setIdNoHash(IdNumberUtil.hash(idNo, salt));
                 draft.setIdNoSalt(salt);
+                draft.setValidStart(trimToNull(profile.validStart()));
+                draft.setValidEnd(trimToNull(profile.validEnd()));
+                draft.setContactPhone(contactPhone == null ? user.getPhone() : contactPhone);
+                draft.setAddress(trimToNull(profile.address()));
+                draft.setEmail(trimToNull(profile.email()));
+                draft.setBusinessType(trimToNull(profile.businessType()));
                 draft.setUpdatedAt(now);
                 if (draft.getId() == null) {
                     userIdentityMapper.insert(draft);

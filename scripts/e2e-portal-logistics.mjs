@@ -62,8 +62,8 @@ try {
   })
   await page.waitForSelector('.logi-notice', { timeout: 10000 })
   const notice = await page.evaluate(() => document.querySelector('.logi-notice')?.textContent ?? '')
-  check(notice.includes('尚未接入物流报价接口') && notice.includes('不会生成正式运单'),
-    '询价提交后如实说明报价接口未接入', notice.slice(0, 80))
+  check(notice.includes('询价已提交') && notice.includes('LG'),
+    '物流询价提交后生成正式询价单号', notice.slice(0, 80))
 
   await page.screenshot({ path: path.join('C:/Users/71502/.codex/visualizations/2026/10/16/01a14244-ead8-7ab0-8c7c-df7abac44648', 'portal-logistics.png'), fullPage: true })
 

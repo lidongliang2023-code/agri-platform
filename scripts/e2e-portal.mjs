@@ -7,8 +7,8 @@
  *   2. 站内搜索 → 产业链页关键词过滤；
  *   3. 一级/二级/产地筛选与价格排序；
  *   4. 认证中心 FAQ；
- *   5. 企业认证资料登记：必填校验 → 分步填写 → 本机草稿；
- *   6. 个人实名：身份证校验位 → 分步填写 → 本机草稿。
+ *   5. 企业认证资料登记：必填校验 → 分步填写 → 未登录提交拦截；
+ *   6. 个人实名：身份证校验位 → 分步填写 → 未登录提交拦截。
  *
  * 用法：node scripts/e2e-portal.mjs [--base=http://localhost:8098] [--headful]
  */
@@ -94,11 +94,15 @@ try {
   if (hasLive) {
     check(homeText.includes(liveApi.data[0].productName), '首页展示交易域真实已发布商品', liveApi.data[0].productName)
   }
-  const loginHref = await page.evaluate(() => [...document.querySelectorAll('.portal-top-actions a')]
-    .find((el) => (el.textContent ?? '').includes('登录'))?.getAttribute('href'))
+  const loginButton = await page.evaluate(() => [...document.querySelectorAll('.portal-top-actions button')]
+    .find((el) => (el.textContent ?? '').includes('登录'))?.textContent?.trim())
   const registerHref = await page.evaluate(() => [...document.querySelectorAll('.portal-top-actions a')]
     .find((el) => (el.textContent ?? '').includes('免费注册'))?.getAttribute('href'))
-  check(loginHref?.includes('/production/login'), '首页登录入口指向生产管理用户端登录', loginHref ?? '')
+  check(loginButton?.includes('登录'), '首页登录入口可在门户内打开登录弹窗', loginButton ?? '')
+  await clickText(page, '登录')
+  const loginDialogVisible = await page.evaluate(() => Boolean(document.querySelector('.portal-login-card')))
+  check(loginDialogVisible, '门户登录弹窗已渲染')
+  await page.click('.portal-login-close')
   check(registerHref?.includes(':8090/register'), '首页注册入口指向统一认证中心注册页', registerHref ?? '')
 
   // ---------- 搜索 ----------
@@ -145,7 +149,6 @@ try {
   // ---------- 企业认证资料登记 ----------
   await page.goto(`${BASE}/portal/#/certify/enterprise`, { waitUntil: 'networkidle2' })
   await sleep(300)
-  await page.evaluate(() => localStorage.removeItem('agri.portal.cert.enterprise'))
   await clickText(page, '下一步')
   const entError = await page.evaluate(() => document.querySelector('.portal-form-error')?.textContent ?? '')
   check(entError.includes('企业名称'), '企业认证：空表提交被必填校验拦下')
@@ -159,17 +162,14 @@ try {
   await fill(page, 'input[placeholder="11 位手机号"]', '13900001111')
   await clickText(page, '下一步')
   await page.evaluate(() => document.querySelector('.portal-agree input')?.click())
-  await clickText(page, '保存并去登录提交')
-  const entResult = await page.evaluate(() => document.querySelector('.portal-draft-result')?.textContent ?? '')
-  const entDraft = await page.evaluate(() => localStorage.getItem('agri.portal.cert.enterprise'))
-  check(entResult.includes('已保存到本机浏览器') && entResult.includes('尚未提交至平台'),
-    '企业认证：保存草稿并如实提示尚未提交')
-  check(Boolean(entDraft) && entDraft.includes('联调测试农业科技有限公司'), '企业认证：草稿写入 localStorage')
+  await clickText(page, '提交认证审核')
+  const entErrorText = await page.evaluate(() => document.querySelector('.portal-form-error')?.textContent ?? '')
+  check(entErrorText.includes('登录') || entErrorText.includes('会话'),
+    '企业认证：未登录时不写本地草稿，提示先登录', entErrorText.slice(0, 40))
 
   // ---------- 个人实名资料登记 ----------
   await page.goto(`${BASE}/portal/#/certify/personal`, { waitUntil: 'networkidle2' })
   await sleep(300)
-  await page.evaluate(() => localStorage.removeItem('agri.portal.cert.personal'))
   await fill(page, 'input[placeholder="与身份证一致"]', '联调实名用户')
   await fill(page, 'input[placeholder="18 位身份证号"]', '110105199001010011')
   await clickText(page, '下一步')
@@ -181,17 +181,10 @@ try {
   await fill(page, 'input[placeholder="省 / 市 / 区 / 详细地址"]', '山东省潍坊市寿光市测试路 99 号')
   await clickText(page, '下一步')
   await page.evaluate(() => document.querySelector('.portal-agree input')?.click())
-  await clickText(page, '保存并去登录提交')
-  const personalResult = await page.evaluate(() => document.querySelector('.portal-draft-result')?.textContent ?? '')
-  const personalDraft = await page.evaluate(() => localStorage.getItem('agri.portal.cert.personal'))
-  check(personalResult.includes('尚未提交至平台') && personalResult.includes('人脸核验'),
-    '个人实名：保存草稿并说明需登录后人脸核验')
-  check(Boolean(personalDraft) && personalDraft.includes('联调实名用户'), '个人实名：草稿写入 localStorage')
-
-  await page.evaluate(() => {
-    localStorage.removeItem('agri.portal.cert.enterprise')
-    localStorage.removeItem('agri.portal.cert.personal')
-  })
+  await clickText(page, '提交实名认证')
+  const personalErrorText = await page.evaluate(() => document.querySelector('.portal-form-error')?.textContent ?? '')
+  check(personalErrorText.includes('登录') || personalErrorText.includes('会话'),
+    '个人实名：未登录时不写本地草稿，提示先登录', personalErrorText.slice(0, 40))
   check(pageErrors.length === 0, '门户页面无未捕获脚本异常', pageErrors.slice(0, 2).join(' | '))
 } catch (error) {
   check(false, '门户联调脚本未抛异常', String(error).slice(0, 200))
