@@ -203,6 +203,42 @@ try {
   check(createSubject.code === 0 && addedMerchant?.memberType === 'personal',
     '已有主体账号仍可创建新的个人主体', addedMerchant?.merchantName ?? '')
 
+  const enterpriseName = `账号中心创建企业主体${Date.now().toString().slice(-6)}`
+  const beforeEnterprise = await request('/api/v1/sso/account/summary')
+  const createEnterprise = await request('/api/v1/sso/account/businesses', {
+    method: 'POST',
+    body: JSON.stringify({
+      identity: 'enterprise',
+      companyName: enterpriseName,
+      creditCode: `913707${String(Date.now()).padStart(12, '0').slice(-12)}`,
+      industry: '果蔬产业',
+      companySize: '10-50人',
+      address: '山东省潍坊市寿光市企业总部路 3 号',
+      contactName: '企业主体联系人',
+      contactPhone: account.phone,
+      legalPerson: '企业主体法人',
+      email: 'account-center@example.com',
+    }),
+  })
+  const afterEnterprise = await request('/api/v1/sso/account/summary')
+  const addedEnterprise = (afterEnterprise.data?.merchants ?? []).find((item) =>
+    !(beforeEnterprise.data?.merchants ?? []).some((old) => old.merchantId === item.merchantId))
+  check(createEnterprise.code === 0 && addedEnterprise?.memberType === 'enterprise'
+    && addedEnterprise?.verifyStatus !== 'approved',
+  '已有主体账号可创建待认证企业主体', addedEnterprise?.merchantName ?? '')
+  let enterpriseCertified = { code: -1 }
+  if (addedEnterprise?.merchantId) {
+    enterpriseCertified = await request(
+      `/api/v1/sso/account/businesses/${addedEnterprise.merchantId}/submit-certification`,
+      { method: 'POST' },
+    )
+    const certifiedSummary = await request('/api/v1/sso/account/summary')
+    const certifiedMerchant = certifiedSummary.data?.merchants
+      ?.find((item) => item.merchantId === addedEnterprise.merchantId)
+    check(enterpriseCertified.code === 0 && certifiedMerchant?.verifyStatus === 'pending',
+      '未认证企业主体可从入口提交认证审核')
+  }
+
   const search = await request('/api/v1/sso/account/businesses/search?keyword=%E7%BB%BF%E6%BA%90')
   const business = (search.data ?? []).find((item) => !item.alreadyJoined)
   check(search.code === 0 && Boolean(business), '可搜索待加入的经营主体', business?.name ?? '')
@@ -235,6 +271,8 @@ try {
     return text.includes('创建企业主体') && text.includes('创建个人主体')
   }, { timeout: 10000 })
   check(true, '登录后始终显示创建企业/个人主体入口')
+  check((await page.evaluate(() => document.body.innerText)).includes('去实名认证'),
+    '未认证个人主体显示认证入口')
   await page.evaluate(() => {
     const button = [...document.querySelectorAll('.account-tabs button')]
       .find((item) => item.textContent?.includes('地址管理'))
@@ -264,6 +302,15 @@ try {
       { env: { ...process.env, MYSQL_PWD: 'root' } },
     )
     check(true, '主体创建测试数据已清理')
+  }
+  if (addedEnterprise?.merchantId) {
+    execFileSync(
+      'C:\\Program Files\\MySQL\\MySQL Server 8.4\\bin\\mysql.exe',
+      ['-uroot', '--batch', '-e',
+        `DELETE FROM agri_core.platform_merchant_certification WHERE merchant_id=${addedEnterprise.merchantId}; DELETE FROM agri_core.platform_user_merchant WHERE user_id=(SELECT id FROM agri_core.platform_user WHERE phone='${account.phone}') AND merchant_id=${addedEnterprise.merchantId}; DELETE FROM agri_core.platform_merchant WHERE id=${addedEnterprise.merchantId};`],
+      { env: { ...process.env, MYSQL_PWD: 'root' } },
+    )
+    check(true, '企业认证测试数据已清理')
   }
   check(errors.length === 0, '个人中心无未捕获脚本异常', errors.slice(0, 2).join(' | '))
 

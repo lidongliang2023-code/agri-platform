@@ -386,6 +386,26 @@ export function AccountCenter(): JSX.Element {
     }
   }
 
+  const startCertification = async (merchant: MerchantRow): Promise<void> => {
+    if (merchant.memberType === 'personal') {
+      setRealNameOpen(true)
+      setTab('business')
+      window.setTimeout(() => window.scrollTo({ top: 260, behavior: 'smooth' }), 50)
+      return
+    }
+    setBusy(true)
+    try {
+      const result = await api(`/api/v1/sso/account/businesses/${merchant.merchantId}/submit-certification`, {
+        method: 'POST',
+      })
+      if (result.code !== 0) return setError(result.message ?? '认证提交失败')
+      flash('企业认证已提交平台审核')
+      await load()
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const reviewJoin = async (id: string, approved: boolean): Promise<void> => {
     const result = await api(`/api/v1/sso/account/businesses/join-requests/${id}/review`, {
       method: 'POST',
@@ -594,7 +614,14 @@ export function AccountCenter(): JSX.Element {
                 {summary.merchants.map((merchant) => (
                   <div className="merchant-row" key={merchant.bindingId}>
                     <div><strong>{merchant.merchantName}</strong><span>{merchant.memberType === 'personal' ? '个人主体' : '企业主体'} · {merchant.roleInMerchant}</span></div>
-                    <span className={`account-status ${tone(merchant.verifyStatus)}`}>{statusText(merchant.verifyStatus)}</span>
+                    <div className="merchant-row-actions">
+                      <span className={`account-status ${tone(merchant.verifyStatus)}`}>{statusText(merchant.verifyStatus)}</span>
+                      {merchant.verifyStatus !== 'approved' && merchant.verifyStatus !== 'pending' && (
+                        <button className="btn btn-primary btn-sm" disabled={busy} onClick={() => void startCertification(merchant)}>
+                          {merchant.memberType === 'personal' ? '去实名认证' : merchant.verifyStatus === 'rejected' ? '重新认证' : '去认证'}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>

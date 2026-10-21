@@ -4,6 +4,8 @@ import com.agri.platform.internal.identity.UserIdentityEntity;
 import com.agri.platform.internal.identity.UserIdentityMapper;
 import com.agri.platform.internal.identity.IdNumberUtil;
 import com.agri.platform.internal.merchant.MerchantEntity;
+import com.agri.platform.internal.merchant.MerchantCertificationEntity;
+import com.agri.platform.internal.merchant.MerchantCertificationMapper;
 import com.agri.platform.internal.merchant.MerchantMapper;
 import com.agri.platform.internal.merchant.UserMerchantEntity;
 import com.agri.platform.internal.merchant.UserMerchantMapper;
@@ -39,6 +41,7 @@ public class SsoAccountController {
     private final UserMapper userMapper;
     private final UserMerchantMapper userMerchantMapper;
     private final MerchantMapper merchantMapper;
+    private final MerchantCertificationMapper certificationMapper;
     private final UserIdentityMapper identityMapper;
     private final UserAddressMapper addressMapper;
     private final MerchantJoinRequestMapper joinRequestMapper;
@@ -345,6 +348,52 @@ public class SsoAccountController {
                 trim(body.getValidEnd()),
                 trim(body.getEmail()));
         smsAuthService.createAdditionalSubject(user.getId(), session[1], profile);
+        return ApiResponse.ok();
+    }
+
+    /** 将指定企业主体当前草稿/驳回认证提交为待审核。 */
+    @PostMapping("/businesses/{merchantId}/submit-certification")
+    public ApiResponse<Void> submitEnterpriseCertification(@PathVariable Long merchantId,
+                                                           HttpServletRequest request) {
+        long[] session = requireSession(request);
+        if (!merchantIdsOfUser(session[0]).contains(merchantId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "无权认证该经营主体");
+        }
+        MerchantEntity merchant = merchantMapper.selectById(merchantId);
+        if (merchant == null || "personal".equalsIgnoreCase(merchant.getMemberType())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "该主体不是企业主体");
+        }
+        MerchantCertificationEntity cert = certificationMapper.selectOne(
+                new LambdaQueryWrapper<MerchantCertificationEntity>()
+                        .eq(MerchantCertificationEntity::getMerchantId, merchantId)
+                        .orderByDesc(MerchantCertificationEntity::getId)
+                        .last("LIMIT 1"));
+        LocalDateTime now = LocalDateTime.now();
+        if (cert == null) {
+            cert = new MerchantCertificationEntity();
+            cert.setMerchantId(merchantId);
+            cert.setMerchantName(merchant.getName());
+            cert.setCompanyName(merchant.getName());
+            cert.setCreditCode(merchant.getCreditCode());
+            cert.setContactName(merchant.getContactName());
+            cert.setContactPhone(merchant.getContactPhone());
+            cert.setCertNo("CT" + System.currentTimeMillis());
+            cert.setCertStatus("draft");
+            cert.setSubmitTime(now);
+            certificationMapper.insert(cert);
+        }
+        if ("approved".equals(cert.getCertStatus())) {
+            throw new BusinessException(ErrorCode.CONFLICT, "该企业主体已经认证通过");
+        }
+        cert.setCertStatus("pending");
+        cert.setSubmitTime(now);
+        cert.setReviewer(null);
+        cert.setReviewTime(null);
+        cert.setReviewRemark(null);
+        certificationMapper.updateById(cert);
+        merchant.setVerifyStatus("pending");
+        merchant.setVerifyRemark("企业认证已提交，等待平台审核");
+        merchantMapper.updateById(merchant);
         return ApiResponse.ok();
     }
 
