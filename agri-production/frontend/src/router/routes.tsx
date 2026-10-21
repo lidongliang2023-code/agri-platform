@@ -110,11 +110,6 @@ const SystemSettings = lazy(() => import('@/pages/user/settings/SystemSettings')
 const OpsDashboard = lazy(() => import('@/pages/admin/dashboard/OpsDashboard'))
 const OpsProductionOverview = lazy(() => import('@/pages/admin/dashboard/OpsProductionOverview'))
 const OpsDataScreen = lazy(() => import('@/pages/admin/dashboard/OpsDataScreen'))
-// 主体管理
-const TenantList = lazy(() => import('@/pages/admin/tenants/TenantList'))
-const TenantDetail = lazy(() => import('@/pages/admin/tenants/TenantDetail'))
-const TenantQuotas = lazy(() => import('@/pages/admin/tenants/TenantQuotas'))
-const TenantSegments = lazy(() => import('@/pages/admin/tenants/TenantSegments'))
 // 农场监管
 const FarmSupervisionList = lazy(() => import('@/pages/admin/farms/FarmSupervisionList'))
 // 作物主数据维护（运营端）：2026-10-16 产品口径 —— 作物放在生产管理模块，但由**运营端**维护，
@@ -736,78 +731,42 @@ export const ADMIN_ROUTES: AppRoute[] = [
   },
   {
     path: 'subjects',
-    element: <TenantList />,
+    element: <Navigate to="/admin/production/dashboard" replace />,
     meta: {
-      name: '企业与个人主体',
+      name: '主体管理入口已移除',
       path: '/admin/production/subjects',
-      module: '主体管理',
-      prd: 'PRD 6.2 #4',
+      module: '运营仪表盘',
+      prd: '架构调整',
     },
   },
   {
-    path: 'subjects/quotas',
-    element: <TenantQuotas />,
+    path: 'subjects/*',
+    element: <Navigate to="/admin/production/dashboard" replace />,
     meta: {
-      name: '主体资源配额',
-      path: '/admin/production/subjects/quotas',
-      module: '主体管理',
-      prd: 'PRD 6.2 #6',
+      name: '主体管理入口已移除',
+      path: '/admin/production/subjects/*',
+      module: '运营仪表盘',
+      prd: '架构调整',
     },
   },
-  {
-    path: 'subjects/segments',
-    element: <TenantSegments />,
-    meta: {
-      name: '主体分层运营',
-      path: '/admin/production/subjects/segments',
-      module: '主体管理',
-      prd: 'PRD 6.2 #7',
-    },
-  },
-  {
-    path: 'subjects/:tenantId',
-    element: <TenantDetail />,
-    meta: {
-      name: '主体详情',
-      path: '/admin/production/subjects/:tenantId',
-      module: '主体管理',
-      prd: 'PRD 6.2 #5',
-    },
-  },
-  // 兼容历史书签；新菜单统一使用 /admin/production/subjects。
   {
     path: 'tenants',
-    element: <TenantList />,
-    meta: { name: '企业与个人主体', path: '/admin/production/tenants', module: '主体管理', prd: 'PRD 6.2 #4' },
-  },
-  {
-    path: 'tenants/quotas',
-    element: <TenantQuotas />,
+    element: <Navigate to="/admin/production/dashboard" replace />,
     meta: {
-      name: '配额管理',
-      path: '/admin/production/tenants/quotas',
-      module: '主体管理',
-      prd: 'PRD 6.2 #6',
+      name: '历史管理入口已移除',
+      path: '/admin/production/tenants',
+      module: '运营仪表盘',
+      prd: '架构调整',
     },
   },
   {
-    path: 'tenants/segments',
-    element: <TenantSegments />,
+    path: 'tenants/*',
+    element: <Navigate to="/admin/production/dashboard" replace />,
     meta: {
-      name: '主体分层运营',
-      path: '/admin/production/tenants/segments',
-      module: '主体管理',
-      prd: 'PRD 6.2 #7',
-    },
-  },
-  {
-    path: 'tenants/:tenantId',
-    element: <TenantDetail />,
-    meta: {
-      name: '主体详情',
-      path: '/admin/production/tenants/:tenantId',
-      module: '主体管理',
-      prd: 'PRD 6.2 #5',
+      name: '历史管理入口已移除',
+      path: '/admin/production/tenants/*',
+      module: '运营仪表盘',
+      prd: '架构调整',
     },
   },
   {

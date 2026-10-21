@@ -59,32 +59,15 @@ try {
 
   await page.goto(`${BASE}/admin/production/dashboard`, { waitUntil: 'networkidle2', timeout: 60000 })
   await page.waitForNetworkIdle({ idleTime: 800, timeout: 15000 }).catch(() => {})
-  await page.evaluate(() => {
-    const group = [...document.querySelectorAll('a, button, div')]
-      .find((node) => (node.textContent ?? '').trim() === '主体管理')
-    group?.click()
-  })
-  await sleep(400)
-  await page.evaluate(() => {
-    const item = [...document.querySelectorAll('a, button')]
-      .find((node) => (node.textContent ?? '').trim() === '企业与个人主体')
-    item?.click()
-  })
-  for (let i = 0; i < 20; i += 1) {
-    await sleep(300)
-    if (page.url().includes('/admin/production/subjects')) break
-  }
-  if (!page.url().includes('/admin/production/subjects')) {
-    // 部分布局在路由初始化完成后才激活菜单链接；认证已建立时直接进入同一页面。
-    await page.goto(`${BASE}/admin/production/subjects`, { waitUntil: 'networkidle2', timeout: 60000 })
-  }
-  await page.waitForNetworkIdle({ idleTime: 800, timeout: 15000 }).catch(() => {})
   const productionText = await page.evaluate(() => document.body.innerText)
-  check(productionText.includes('企业与个人主体'), '生产运营端显示「企业与个人主体」页面',
-    `${page.url()} ${productionText.replace(/\s+/g, ' ').slice(0, 100)}`)
-  check(productionText.includes('主体类型') && productionText.includes('主体名称'),
-    '生产运营端按企业主体/个人主体展示主体类型')
-  check(!productionText.includes('租户'), '生产运营端页面不再出现“租户”')
+  check(!productionText.includes('主体管理') && !productionText.includes('企业与个人主体'),
+    '生产管理运营端不再提供主体/租户管理入口')
+  check(!productionText.includes('租户'), '生产管理运营端导航不再出现“租户”')
+
+  await page.goto(`${BASE}/admin/production/subjects`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await sleep(2000)
+  check(page.url().includes('/admin/production/dashboard'),
+    '生产端历史主体管理地址已重定向运营大盘', page.url())
 
   await page.goto(`${BASE}:8080/subject/list`, { waitUntil: 'networkidle2', timeout: 60000 })
   await page.waitForNetworkIdle({ idleTime: 800, timeout: 15000 }).catch(() => {})
@@ -101,27 +84,27 @@ try {
   })
   const login = await loginResponse.json()
   const headers = { Authorization: `Bearer ${login.data.accessToken}` }
-  const [production, master] = await Promise.all([
-    fetch(`${BASE}:8093/api/v1/production/admin/subjects?page=1&size=100`, { headers }).then((res) => res.json()),
+  const [subjects, master] = await Promise.all([
+    fetch(`${BASE}:8093/api/v1/admin/subjects?page=1&size=100`, { headers }).then((res) => res.json()),
     fetch(`${BASE}:8083/admin/masterdata/subject/list?pageNum=1&pageSize=100`, { headers }).then((res) => res.json()),
   ])
-  const productionIds = new Set(production.data.records.map((row) => String(row.tenantId)))
+  const subjectIds = new Set(subjects.data.records.map((row) => String(row.tenantId)))
   const masterIds = new Set(master.data.list.map((row) => String(row.id)))
-  const sameIds = productionIds.size === masterIds.size
-    && [...productionIds].every((id) => masterIds.has(id))
-  check(Number(production.data.total) === Number(master.data.total) && sameIds,
-    '两端经营主体数量与主体 ID 完全一致',
-    `生产 ${productionIds.size} / 主数据 ${masterIds.size}`)
-  check(production.data.records.every((row) => row.memberType === 'enterprise' || row.memberType === 'personal'),
-    '生产运营端每行都是企业主体或个人主体')
+  const sameIds = subjectIds.size === masterIds.size
+    && [...subjectIds].every((id) => masterIds.has(id))
+  check(Number(subjects.data.total) === Number(master.data.total) && sameIds,
+    '核心平台与主数据端的主体数量及 ID 完全一致',
+    `核心 ${subjectIds.size} / 主数据 ${masterIds.size}`)
+  check(subjects.data.records.every((row) => row.memberType === 'enterprise' || row.memberType === 'personal'),
+    '主体主档只包含企业主体或个人主体')
 
-  const target = production.data.records.find((row) => String(row.tenantId) === '2001')
-    ?? production.data.records[0]
+  const target = subjects.data.records.find((row) => String(row.tenantId) === '2001')
+    ?? subjects.data.records[0]
   const targetId = String(target.tenantId)
   const originalStatus = Number(target.status)
   const toggledStatus = originalStatus === 1 ? 0 : 1
   const updateResponse = await fetch(
-    `${BASE}:8093/api/v1/production/admin/subjects/${targetId}/status`,
+    `${BASE}:8093/api/v1/admin/subjects/${targetId}/status`,
     {
       method: 'PUT',
       headers: { ...headers, 'Content-Type': 'application/json' },
@@ -136,7 +119,7 @@ try {
     '主体停启用操作在主数据端实时同源可见', `${target.tenantName} → ${toggledStatus}`)
 
   const restoreResponse = await fetch(
-    `${BASE}:8093/api/v1/production/admin/subjects/${targetId}/status`,
+    `${BASE}:8093/api/v1/admin/subjects/${targetId}/status`,
     {
       method: 'PUT',
       headers: { ...headers, 'Content-Type': 'application/json' },

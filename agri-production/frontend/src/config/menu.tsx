@@ -28,7 +28,6 @@ import {
   RobotOutlined,
   SafetyCertificateOutlined,
   SafetyOutlined,
-  TeamOutlined,
 } from '@ant-design/icons'
 import type { ReactNode } from 'react'
 
@@ -214,16 +213,6 @@ export const ADMIN_MENU: MenuGroup[] = [
       { key: '/admin/production/dashboard', label: '运营管理大盘' },
       { key: '/admin/production/dashboard/overview', label: '生产总览' },
       { key: '/admin/production/dashboard/screen', label: '数据大屏驾驶舱' },
-    ],
-  },
-  {
-    key: 'subject',
-    label: '主体管理',
-    icon: <TeamOutlined />,
-    children: [
-      { key: '/admin/production/subjects', label: '企业与个人主体' },
-      { key: '/admin/production/subjects/quotas', label: '主体资源配额' },
-      { key: '/admin/production/subjects/segments', label: '主体分层运营' },
     ],
   },
   {
