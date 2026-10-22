@@ -108,6 +108,7 @@ interface BusinessResult {
 }
 
 type Tab = 'profile' | 'security' | 'addresses' | 'business' | 'team' | 'roles'
+type SecurityPage = 'password' | 'phone'
 
 const TABS: { key: Tab; label: string; icon: string; description: string }[] = [
   { key: 'profile', label: '账号资料', icon: 'user', description: '维护昵称、邮箱与账号概况' },
@@ -122,6 +123,10 @@ const ACCOUNT_TAB_KEYS: Tab[] = ['profile', 'security', 'addresses', 'business',
 
 function normalizeAccountTab(value: string | null | undefined): Tab {
   return ACCOUNT_TAB_KEYS.includes(value as Tab) ? value as Tab : 'profile'
+}
+
+function normalizeSecurityPage(value: string | null | undefined): SecurityPage {
+  return value === 'security/phone' ? 'phone' : 'password'
 }
 
 const INDUSTRIES = ['粮油产业', '果蔬产业', '畜禽产业', '茶药产业', '饲料农资', '水产产业', '流通贸易', '加工制造', '其他']
@@ -171,8 +176,11 @@ function tone(value: string | null | undefined): string {
 
 export function AccountCenter({ initialTab }: { initialTab?: string | null }): JSX.Element {
   const initialProfileEdit = initialTab === 'profile/edit'
+  const initialSecurityPage = normalizeSecurityPage(initialTab)
   const [tab, setTab] = useState<Tab>(() => normalizeAccountTab(initialTab))
   const [profileEditing, setProfileEditing] = useState(initialProfileEdit)
+  const [securityPage, setSecurityPage] = useState<SecurityPage>(initialSecurityPage)
+  const [securityMenuOpen, setSecurityMenuOpen] = useState(Boolean(initialTab?.startsWith('security')))
   const [summary, setSummary] = useState<Summary | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -243,6 +251,13 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
   }, [])
 
   useEffect(() => {
+    if (initialTab?.startsWith('security')) {
+      setTab('security')
+      setSecurityPage(normalizeSecurityPage(initialTab))
+      setSecurityMenuOpen(true)
+      setProfileEditing(false)
+      return
+    }
     if (initialTab === 'profile/edit') {
       setTab('profile')
       setProfileEditing(true)
@@ -255,7 +270,9 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
   useEffect(() => {
     const canonical = initialProfileEdit
       ? '#/account/profile/edit'
-      : `#/account/${normalizeAccountTab(initialTab)}`
+      : initialTab?.startsWith('security')
+        ? `#/account/security/${normalizeSecurityPage(initialTab)}`
+        : `#/account/${normalizeAccountTab(initialTab)}`
     if (window.location.hash !== canonical) {
       window.history.replaceState(null, '', canonical)
     }
@@ -273,12 +290,30 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
   }
 
   const openTab = (next: Tab): void => {
+    if (next === 'security') {
+      openSecurity(securityPage)
+      return
+    }
     setProfileEditing(false)
+    setSecurityMenuOpen(false)
     setTab(next)
     const target = `#/account/${next}`
     if (window.location.hash !== target) {
       window.location.hash = target
     }
+  }
+
+  const openSecurity = (next: SecurityPage): void => {
+    setTab('security')
+    setSecurityPage(next)
+    setSecurityMenuOpen(true)
+    setProfileEditing(false)
+    const target = `#/account/security/${next}`
+    if (window.location.hash !== target) window.location.hash = target
+  }
+
+  const toggleSecurityMenu = (): void => {
+    setSecurityMenuOpen((current) => !current)
   }
 
   const openProfileEdit = (): void => {
@@ -633,10 +668,16 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
   const activeMerchant = summary.merchants.find((merchant) =>
     merchant.merchantId === summary.activeMerchantId) ?? null
   const activeTabMeta = TABS.find((item) => item.key === tab) ?? TABS[0]
-  const pageTitle = tab === 'profile' && profileEditing ? '编辑账号资料' : activeTabMeta.label
+  const securityTitle = securityPage === 'password' ? '修改密码' : '变更手机号'
+  const securityDescription = securityPage === 'password'
+    ? '设置新的登录密码'
+    : '通过短信验证更换绑定手机号'
+  const pageTitle = tab === 'profile' && profileEditing
+    ? '编辑账号资料'
+    : tab === 'security' ? securityTitle : activeTabMeta.label
   const pageDescription = tab === 'profile' && profileEditing
     ? '修改昵称与邮箱，登录账号和手机号请在账号安全中维护'
-    : activeTabMeta.description
+    : tab === 'security' ? securityDescription : activeTabMeta.description
 
   return (
     <section className="section account-page">
@@ -663,8 +704,31 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
             <strong>账号与主体管理</strong>
           </div>
           <nav className="account-menu" aria-label="个人中心菜单">
-            {TABS.map((item) => (
-              <button type="button" key={item.key} className={tab === item.key ? 'on' : ''} onClick={() => openTab(item.key)}>
+            {TABS.map((item) => item.key === 'security' ? (
+              <div className="account-menu-group" key={item.key}>
+                <button
+                  type="button"
+                  className={`account-menu-top ${tab === 'security' ? 'on' : ''}`}
+                  aria-expanded={securityMenuOpen}
+                  onClick={toggleSecurityMenu}
+                >
+                  <span className="account-menu-icon"><Icon name={item.icon} size={16} /></span>
+                  <span>{item.label}</span>
+                  <i className={securityMenuOpen ? 'expanded' : ''}>›</i>
+                </button>
+                {securityMenuOpen && (
+                  <div className="account-submenu">
+                    <button type="button" className={tab === 'security' && securityPage === 'password' ? 'on' : ''} onClick={() => openSecurity('password')}>
+                      <span className="account-submenu-dot" />修改密码
+                    </button>
+                    <button type="button" className={tab === 'security' && securityPage === 'phone' ? 'on' : ''} onClick={() => openSecurity('phone')}>
+                      <span className="account-submenu-dot" />变更手机号
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <button type="button" key={item.key} className={`account-menu-top ${tab === item.key ? 'on' : ''}`} onClick={() => openTab(item.key)}>
                 <span className="account-menu-icon"><Icon name={item.icon} size={16} /></span>
                 <span>{item.label}</span>
                 <i>›</i>
@@ -681,7 +745,7 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
         <main className="account-content">
           <div className="account-content-head">
             <div>
-              <span>个人中心 / {activeTabMeta.label}{profileEditing ? ' / 编辑' : ''}</span>
+              <span>个人中心 / {activeTabMeta.label}{profileEditing ? ' / 编辑' : tab === 'security' ? ` / ${securityTitle}` : ''}</span>
               <h2>{pageTitle}</h2>
             </div>
             <p>{pageDescription}</p>
@@ -730,16 +794,18 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
         </form>
       )}
 
-      {tab === 'security' && (
-        <div className="account-grid">
-          <form className="card account-card" onSubmit={(event) => void changePassword(event)}>
+      {tab === 'security' && securityPage === 'password' && (
+        <form className="card account-card account-security-page" onSubmit={(event) => void changePassword(event)}>
             <div className="account-card-head"><h2>修改密码</h2><span>8-20 位，包含字母和数字</span></div>
             <label>当前密码<input className="input" type="password" value={passwords.currentPassword} onChange={(event) => setPasswords({ ...passwords, currentPassword: event.target.value })} /></label>
             <label>新密码<input className="input" type="password" value={passwords.newPassword} onChange={(event) => setPasswords({ ...passwords, newPassword: event.target.value })} /></label>
             <label>确认新密码<input className="input" type="password" value={passwords.confirmPassword} onChange={(event) => setPasswords({ ...passwords, confirmPassword: event.target.value })} /></label>
             <button className="btn btn-primary" disabled={busy}>{busy ? '提交中…' : '修改密码'}</button>
-          </form>
-          <form className="card account-card" onSubmit={(event) => void changePhone(event)}>
+        </form>
+      )}
+
+      {tab === 'security' && securityPage === 'phone' && (
+        <form className="card account-card account-security-page" onSubmit={(event) => void changePhone(event)}>
             <div className="account-card-head"><h2>变更手机号</h2><span>当前：{summary.phone || '未绑定'}</span></div>
             <label>新手机号<input className="input" value={phoneForm.phone} maxLength={11} onChange={(event) => setPhoneForm({ ...phoneForm, phone: event.target.value.replace(/\D/g, '') })} /></label>
             <label>短信验证码
@@ -751,8 +817,7 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
               </div>
             </label>
             <button className="btn btn-primary" disabled={busy}>{busy ? '提交中…' : '确认变更'}</button>
-          </form>
-        </div>
+        </form>
       )}
 
       {tab === 'addresses' && (

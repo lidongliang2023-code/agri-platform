@@ -57,18 +57,39 @@ try {
 
   await page.goto(`${PORTAL}#/account`, { waitUntil: 'networkidle2', timeout: 60000 })
   await page.waitForSelector('.account-page', { timeout: 20000 })
-  await page.waitForSelector('.account-menu button', { timeout: 20000 })
-  check((await page.$$eval('.account-menu button', (items) => items.length)) === 6,
+  await page.waitForSelector('.account-menu-top', { timeout: 20000 })
+  check((await page.$$eval('.account-menu-top', (items) => items.length)) === 6,
     '个人中心六个功能分区齐全')
   check(page.url().includes('#/account/profile'), '个人中心默认进入账号资料独立页面')
   await page.evaluate(() => {
-    const button = [...document.querySelectorAll('.account-menu button')]
+    const button = [...document.querySelectorAll('.account-menu-top')]
       .find((item) => item.textContent?.includes('账号安全'))
     button?.click()
   })
-  await page.waitForFunction(() => window.location.hash === '#/account/security', { timeout: 10000 })
+  await page.waitForSelector('.account-submenu button', { timeout: 10000 })
+  check((await page.$$eval('.account-submenu button', (items) => items.map((item) => item.textContent?.trim()))).join('|')
+    === '修改密码|变更手机号', '账号安全包含修改密码与变更手机号子菜单')
+  await page.screenshot({ path: path.join(OUT, 'account-security-menu.png'), fullPage: true })
+  await page.evaluate(() => {
+    const button = [...document.querySelectorAll('.account-submenu button')]
+      .find((item) => item.textContent?.includes('修改密码'))
+    button?.click()
+  })
+  await page.waitForFunction(() => window.location.hash === '#/account/security/password', { timeout: 10000 })
   check((await page.evaluate(() => document.querySelector('.account-content-head h2')?.textContent))
-    === '账号安全', '左侧菜单进入账号安全页面')
+    === '修改密码', '账号安全子菜单进入修改密码页面')
+  await page.screenshot({ path: path.join(OUT, 'account-security-password.png'), fullPage: true })
+  await page.evaluate(() => {
+    const button = [...document.querySelectorAll('.account-submenu button')]
+      .find((item) => item.textContent?.includes('变更手机号'))
+    button?.click()
+  })
+  await page.waitForFunction(() => window.location.hash === '#/account/security/phone', { timeout: 10000 })
+  check((await page.evaluate(() => document.querySelector('.account-content-head h2')?.textContent))
+    === '变更手机号', '账号安全子菜单进入变更手机号页面')
+  await page.screenshot({ path: path.join(OUT, 'account-security-phone.png'), fullPage: true })
+  await page.goBack()
+  await page.waitForFunction(() => window.location.hash === '#/account/security/password', { timeout: 10000 })
   await page.goBack()
   await page.waitForFunction(() => window.location.hash === '#/account/profile', { timeout: 10000 })
   check((await page.evaluate(() => document.querySelector('.account-content-head h2')?.textContent))
