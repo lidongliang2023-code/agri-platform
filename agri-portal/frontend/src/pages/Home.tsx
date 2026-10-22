@@ -51,7 +51,7 @@ interface NewsItem {
 
 const SERVICES = [
   { icon: 'cart', title: '我要买', tag: '买家', desc: '发布采购需求 · 点选商品 · 淘供应商 · 共享库存', href: tradeUrl('/member/buyer?tab=publish') },
-  { icon: 'box', title: '我要卖', tag: '卖家', desc: '询单订阅 · 业绩认证 · 我要报名 · 开店推广', href: tradeUrl('/product/create'), tech: true },
+  { icon: 'box', title: '我要卖', tag: '卖家', desc: '发布商品 · 询单订阅 · 业绩认证 · 开店推广', href: tradeUrl('/member/seller?tab=publish'), tech: true },
   { icon: 'truck', title: '我要物流', tag: '物流', desc: '物流服务 · 仓储服务 · 冷链配送 · 物流商加盟', href: '#/logistics', amber: true },
   { icon: 'money', title: '我要资金', tag: '金融', desc: '订单融 · 收货融 · 折扣付 · 信用付', href: '#/finance' },
 ]
@@ -213,7 +213,7 @@ export function Home(): JSX.Element {
             </p>
             <div className="portal-hero-actions">
               <a className="btn btn-lg portal-btn-light" href="#/hall">我要采购</a>
-              <a className="btn btn-lg btn-outline portal-btn-ghost" href={tradeUrl('/product/create')} target="_blank" rel="noreferrer">我要供货</a>
+              <a className="btn btn-lg btn-outline portal-btn-ghost" href={tradeUrl('/member/seller?tab=publish')} target="_blank" rel="noreferrer">我要供货</a>
             </div>
             <div className="portal-hot-search">
               热搜：

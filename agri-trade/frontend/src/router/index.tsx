@@ -1,10 +1,9 @@
 import { useEffect, useRef } from 'react'
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom'
 import Login from '@/pages/login'
 import OrderDetail from '@/pages/order/detail'
 import OrderConfirm from '@/pages/order/confirm'
 import OrderCreate from '@/pages/order/create'
-import ProductCreate from '@/pages/product/create'
 import ProductDetail from '@/pages/product/detail'
 import ShopDetail from '@/pages/shop/detail'
 import DemandDetail from '@/pages/demand/detail'
@@ -67,6 +66,15 @@ function DemandPublishRedirect(): JSX.Element {
   return <Navigate to={`/member/buyer?${query.toString()}`} replace />
 }
 
+function ProductPublishRedirect(): JSX.Element {
+  const location = useLocation()
+  const params = useParams()
+  const query = new URLSearchParams(location.search)
+  query.set('tab', 'publish')
+  if (params.id) query.set('id', params.id)
+  return <Navigate to={`/member/seller?${query.toString()}`} replace />
+}
+
 function AppRouter() {
   return (
     <Routes>
@@ -112,8 +120,8 @@ function AppRouter() {
       <Route path="/order/detail/:id" element={<PrivateRoute><OrderDetail /></PrivateRoute>} />
       <Route path="/order/confirm" element={<PrivateRoute><OrderConfirm /></PrivateRoute>} />
       <Route path="/order/create" element={<PrivateRoute><OrderCreate /></PrivateRoute>} />
-      <Route path="/product/create" element={<PrivateRoute><ProductCreate /></PrivateRoute>} />
-      <Route path="/product/edit/:id" element={<PrivateRoute><ProductCreate /></PrivateRoute>} />
+      <Route path="/product/create" element={<PrivateRoute><ProductPublishRedirect /></PrivateRoute>} />
+      <Route path="/product/edit/:id" element={<PrivateRoute><ProductPublishRedirect /></PrivateRoute>} />
       {/* 商品详情公开可浏览；下单、议价、店铺等操作在页面内触发登录。 */}
       <Route path="/product/detail/:id" element={<ProductDetail />} />
       <Route path="/shop/:sellerId" element={<PrivateRoute><ShopDetail /></PrivateRoute>} />

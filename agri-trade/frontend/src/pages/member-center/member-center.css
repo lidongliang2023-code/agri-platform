@@ -755,6 +755,33 @@
   box-shadow: 0 0 0 2px rgba(21, 154, 94, 0.1) !important;
 }
 
+.product-create-page.is-embedded > .ant-card {
+  border-radius: 12px;
+}
+
+.product-create-page.is-embedded .ant-btn-primary {
+  border-color: var(--mc-green-600);
+  background: var(--mc-green-600);
+  box-shadow: none;
+}
+
+.product-create-page.is-embedded .ant-btn-primary:hover {
+  border-color: var(--mc-green-700) !important;
+  background: var(--mc-green-700) !important;
+}
+
+.product-create-page.is-embedded .ant-btn-link {
+  color: var(--mc-green-600);
+}
+
+.product-create-page.is-embedded .ant-input:focus,
+.product-create-page.is-embedded .ant-input-focused,
+.product-create-page.is-embedded .ant-input-number-focused,
+.product-create-page.is-embedded .ant-select-focused .ant-select-selector {
+  border-color: var(--mc-green-500) !important;
+  box-shadow: 0 0 0 2px rgba(21, 154, 94, 0.1) !important;
+}
+
 .mc-profile-card {
   border: 1px solid var(--mc-line);
   border-radius: 12px;

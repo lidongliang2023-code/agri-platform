@@ -26,6 +26,7 @@ import MyCompensation from '@/pages/mine-compensation'
 import MyGuarantee from '@/pages/mine-guarantee'
 import PriceList from '@/pages/price/list'
 import QuoteList from '@/pages/quote/list'
+import ProductCreate from '@/pages/product/create'
 import { MemberCenterShell, type MemberNavItem } from './MemberCenterShell'
 import {
   EmptyState,
@@ -46,6 +47,7 @@ import {
 
 const NAV: MemberNavItem[] = [
   { key: 'overview', label: '首页概览', icon: <HomeOutlined /> },
+  { key: 'publish', label: '发布新商品', icon: <AppstoreAddOutlined /> },
   { key: 'sales', label: '销售订单', icon: <ShopOutlined /> },
   { key: 'goods', label: '商品管理', icon: <AppstoreOutlined /> },
   { key: 'supply', label: '供应发布', icon: <AppstoreAddOutlined /> },
@@ -102,9 +104,6 @@ export default function SellerCenter(): JSX.Element {
   const sellerMerchant = base.merchants.find((item) => item.roleInMerchant === 'owner' || item.roleInMerchant === 'seller')
     ?? base.primary
   const sellerId = sellerMerchant ? String(sellerMerchant.merchantId) : null
-  const productCreateHref = sellerId ? `/product/create?sellerId=${sellerId}` : '/product/create'
-  const productEditHref = (id: number): string =>
-    sellerId ? `/product/edit/${id}?sellerId=${sellerId}` : `/product/edit/${id}`
   const allOrders = useOrders('seller', '', 1, 100)
   const [status, setStatus] = useState('')
   const [page, setPage] = useState(1)
@@ -236,13 +235,13 @@ export default function SellerCenter(): JSX.Element {
       <div className="mc-section-title">快捷入口</div>
       <div className="mc-grid mc-grid-4">
         {[
-          { icon: <FileTextOutlined />, title: '发布供应', desc: '发布供应信息，精准触达采购商', href: productCreateHref },
+          { icon: <FileTextOutlined />, title: '发布新商品', desc: '发布供应商品，精准触达采购商', tab: 'publish' },
           { icon: <AppstoreOutlined />, title: '商品管理', desc: '上架商品、维护规格与库存', tab: 'goods' },
           { icon: <TruckOutlined />, title: '发货管理', desc: '发货、查看在途物流与签收状态', tab: 'ship' },
           { icon: <TeamOutlined />, title: '客户管理', desc: '采购商档案、成交与复购', tab: 'customer' },
         ].map((item) => (
-          <a className="mc-quick" key={item.title} href={item.href ?? '#'}
-            onClick={(event) => { if (item.tab) { event.preventDefault(); setActive(item.tab) } }}>
+          <a className="mc-quick" key={item.title} href="#"
+            onClick={(event) => { event.preventDefault(); setActive(item.tab) }}>
             <span className="mc-quick-icon">{item.icon}</span>
             <strong>{item.title}</strong>
             <small>{item.desc}</small>
@@ -263,7 +262,7 @@ export default function SellerCenter(): JSX.Element {
           ))}
         </div>
         <span className="mc-spacer" />
-        <a className="mc-btn ghost" href={productCreateHref}>发布供应</a>
+        <button type="button" className="mc-btn ghost" onClick={() => setActive('publish')}>发布新商品</button>
       </div>
       <Panel>
         {renderSellerOrders(pagedOrders.rows, pagedOrders.loading, pagedOrders.error, orderActions)}
@@ -304,7 +303,7 @@ export default function SellerCenter(): JSX.Element {
           ))}
         </div>
         <span className="mc-spacer" />
-        <a className="mc-btn" href={productCreateHref}>上架新商品</a>
+        <button type="button" className="mc-btn" onClick={() => setActive('publish')}>上架新商品</button>
       </div>
       <Panel title="商品管理">
         {products.loading ? (
@@ -313,7 +312,7 @@ export default function SellerCenter(): JSX.Element {
           <EmptyState title="商品加载失败" desc={products.error} />
         ) : filteredProducts.length === 0 ? (
           <EmptyState title="没有符合条件的商品" desc="上架新商品后会出现在这里。"
-            action={<a className="mc-btn" href={productCreateHref}>上架新商品</a>} />
+            action={<button type="button" className="mc-btn" onClick={() => setActive('publish')}>上架新商品</button>} />
         ) : (
           <div className="mc-table-wrap">
             <table className="mc-table">
@@ -336,7 +335,13 @@ export default function SellerCenter(): JSX.Element {
                     <td>
                       <div className="mc-actions">
                         {item.publishStatus === 'published' && <a className="mc-link" href={`/product/detail/${item.id}`}>官网详情</a>}
-                        <a className="mc-link" href={productEditHref(item.id)}>编辑</a>
+                        <button type="button" className="mc-link" onClick={() => {
+                          const next = new URLSearchParams(params)
+                          next.set('tab', 'publish')
+                          next.set('id', String(item.id))
+                          if (sellerId) next.set('sellerId', sellerId)
+                          setParams(next, { replace: true })
+                        }}>编辑</button>
                         <button type="button" className="mc-link" onClick={() => void toggleProductStatus(item.id, item.status)}>
                           {item.status === 1 ? '下架' : '上架'}
                         </button>
@@ -357,12 +362,12 @@ export default function SellerCenter(): JSX.Element {
       <div className="mc-toolbar">
         <span className="mc-toolbar-muted">我发布的供应信息 · 浏览与询单情况</span>
         <span className="mc-spacer" />
-        <a className="mc-btn" href={productCreateHref}>发布新供应</a>
+        <button type="button" className="mc-btn" onClick={() => setActive('publish')}>发布新商品</button>
       </div>
       <Panel title="供应信息">
         {products.rows.length === 0 ? (
           <EmptyState title="还没有发布供应" desc="发布货源后会在这里看到浏览与询单数据。"
-            action={<a className="mc-btn" href={productCreateHref}>发布供应</a>} />
+            action={<button type="button" className="mc-btn" onClick={() => setActive('publish')}>发布新商品</button>} />
         ) : (
           <div className="mc-table-wrap">
             <table className="mc-table">
@@ -378,7 +383,13 @@ export default function SellerCenter(): JSX.Element {
                     <td><span className={`mc-tag ${item.publishStatus === 'published' ? 'tech' : 'ghost'}`}>{publishText(item.publishStatus)}</span></td>
                     <td>
                       <div className="mc-actions">
-                        <a className="mc-link" href={productEditHref(item.id)}>编辑</a>
+                        <button type="button" className="mc-link" onClick={() => {
+                          const next = new URLSearchParams(params)
+                          next.set('tab', 'publish')
+                          next.set('id', String(item.id))
+                          if (sellerId) next.set('sellerId', sellerId)
+                          setParams(next, { replace: true })
+                        }}>编辑</button>
                         {item.publishStatus === 'published'
                           && <a className="mc-link" href={`/product/detail/${item.id}`}>官网详情</a>}
                       </div>
@@ -626,7 +637,8 @@ export default function SellerCenter(): JSX.Element {
     </Panel>
   )
 
-  const content = active === 'sales' ? renderSales()
+  const content = active === 'publish' ? <ProductCreate embedded />
+    : active === 'sales' ? renderSales()
     : active === 'goods' ? renderGoods()
       : active === 'supply' ? renderSupply()
         : active === 'trade' ? renderTrade()

@@ -220,7 +220,7 @@ export function PortalLayout({ children, active = '/' }: { children: ReactNode; 
             </div>
             <div>
               <h4>卖家服务</h4>
-              <a href={tradeUrl('/product/create')} target="_blank" rel="noreferrer">发布供应</a>
+              <a href={tradeUrl('/member/seller?tab=publish')} target="_blank" rel="noreferrer">发布新商品</a>
               <a href={tradeUrl('/member/seller?tab=profile')} target="_blank" rel="noreferrer">店铺管理</a>
               <a href={productionLogin()}>物联网接入</a>
               <a href="#/certify/enterprise">企业认证</a>

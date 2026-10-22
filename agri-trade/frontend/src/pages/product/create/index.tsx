@@ -41,9 +41,10 @@ interface CategoryRow {
  * <p>与主数据运营端共用交易商品表与全部商品字段。卖家主体由后端从 SSO 令牌推导，
  * 页面只传当前选择的 `sellerId` 用于多主体账号确认归属，不能借此写入其他卖家。</p>
  */
-export default function ProductCreate(): JSX.Element {
-  const { id } = useParams()
+export default function ProductCreate({ embedded = false }: { embedded?: boolean }): JSX.Element {
+  const { id: routeId } = useParams()
   const [params] = useSearchParams()
+  const id = routeId || params.get('id') || undefined
   const navigate = useNavigate()
   const [form] = Form.useForm()
   const [categories, setCategories] = useState<CategoryRow[]>([])
@@ -53,6 +54,7 @@ export default function ProductCreate(): JSX.Element {
   const [uploading, setUploading] = useState(false)
   const isEdit = Boolean(id)
   const requestedSellerId = params.get('sellerId') || undefined
+  const returnPath = '/member/seller?tab=goods'
 
   useEffect(() => {
     getCategoryList()
@@ -136,7 +138,7 @@ export default function ProductCreate(): JSX.Element {
         return
       }
       message.success(isEdit ? '商品已更新，内容与主数据管理同步' : '商品已提交，主数据端可立即查看')
-      navigate('/member/seller?tab=goods', { replace: true })
+      navigate(returnPath, { replace: true })
     } catch (error) {
       message.error(error instanceof Error ? error.message : '保存商品失败')
     } finally {
@@ -149,10 +151,10 @@ export default function ProductCreate(): JSX.Element {
   }
 
   return (
-    <div style={{ padding: 20 }}>
+    <div className={embedded ? 'product-create-page is-embedded' : 'product-create-page'} style={embedded ? undefined : { padding: 20 }}>
       <Card
         title={isEdit ? '编辑我的商品' : '上架新商品'}
-        extra={<Button onClick={() => navigate('/member/seller?tab=goods')}>返回卖家中心</Button>}
+        extra={<Button onClick={() => navigate(returnPath)}>{embedded ? '返回商品管理' : '返回卖家中心'}</Button>}
       >
         <Typography.Paragraph type="secondary">
           与主数据运营端使用同一张交易商品表和完整字段；保存后运营端可查看，审核通过的已发布商品会同步到官网。
@@ -228,7 +230,7 @@ export default function ProductCreate(): JSX.Element {
             <Button type="primary" htmlType="submit" icon={<PlusOutlined />} loading={submitting} disabled={uploading}>
               {isEdit ? '保存商品' : '提交上架'}
             </Button>
-            <Button onClick={() => navigate('/member/seller?tab=goods')}>取消</Button>
+            <Button onClick={() => navigate(returnPath)}>取消</Button>
           </Space>
         </Form>
       </Card>

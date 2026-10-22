@@ -56,7 +56,7 @@ export function MemberCenterShell({ role, active, navItems, merchantName, onNavi
         </nav>
         <div className="mc-side-group">常用入口</div>
         <nav className="mc-side-nav">
-          <a href={role === 'buyer' ? '/member/buyer?tab=publish' : '/product/create'}>
+          <a href={role === 'buyer' ? '/member/buyer?tab=publish' : '/member/seller?tab=publish'}>
             <span className="mc-nav-icon"><SwapOutlined /></span>
             <span>{role === 'buyer' ? '发布采购需求' : '发布供应'}</span>
           </a>
