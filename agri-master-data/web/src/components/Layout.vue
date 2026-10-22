@@ -16,7 +16,7 @@
               @click.prevent="handleMenuClick(item)"
               class="menu-link"
             >
-              <span class="nav-icon">{{ item.icon }}</span>
+              <span class="nav-icon"><MenuIcon :name="item.icon" /></span>
               <span class="nav-label">{{ item.label }}</span>
               <span v-if="item.children" class="expand-icon" :class="{ expanded: expandedMenu === item.path }">▶</span>
             </a>
@@ -68,6 +68,7 @@ import { useRouter } from 'vue-router'
 import { useSessionStore } from '@/stores/session'
 import { ssoLogoutUrl } from '@/utils/sso'
 import BrandMark from '@/components/BrandMark.vue'
+import MenuIcon from '@/components/MenuIcon.vue'
 
 const router = useRouter()
 /**
@@ -86,12 +87,12 @@ const expandedMenu = ref(null)
 const userEntry = `${window.location.protocol}//${window.location.hostname}:8086/member/buyer`
 
 const menuItems = [
-  { path: '/dashboard', label: '运营总览', icon: '📊' },
-  { path: '/masterdata/center', label: '主数据运营', icon: '🗂️' },
+  { path: '/dashboard', label: '运营总览', icon: 'dashboard' },
+  { path: '/masterdata/center', label: '主数据运营', icon: 'masterdata' },
   {
     path: '/subject',
     label: '主体管理',
-    icon: '🏢',
+    icon: 'subject',
     children: [
       { path: '/subject/list', label: '企业与个人主体' },
       { path: '/subject/quota', label: '主体资源配额' },
@@ -102,7 +103,7 @@ const menuItems = [
   {
     path: '/user', 
     label: '用户管理', 
-    icon: '👥',
+    icon: 'user',
     children: [
       { path: '/user/list', label: '用户列表' },
       { path: '/user/audit', label: '认证审核' }
@@ -111,7 +112,7 @@ const menuItems = [
   { 
     path: '/org', 
     label: '组织管理', 
-    icon: '🏠',
+    icon: 'org',
     children: [
       { path: '/org/list', label: '组织列表' }
     ]
@@ -119,7 +120,7 @@ const menuItems = [
   { 
     path: '/permission', 
     label: '权限审计', 
-    icon: '🔒',
+    icon: 'permission',
     children: [
       { path: '/permission/role', label: '角色管理' },
       { path: '/permission/log', label: '操作日志' }
@@ -128,7 +129,7 @@ const menuItems = [
   { 
     path: '/datastandard', 
     label: '数据标准', 
-    icon: '📋',
+    icon: 'standard',
     children: [
       { path: '/datastandard/dict', label: '数据字典' },
       { path: '/datastandard/code-rule', label: '编码规则' }
@@ -137,7 +138,7 @@ const menuItems = [
   { 
     path: '/quality', 
     label: '数据质量', 
-    icon: '✅',
+    icon: 'quality',
     children: [
       { path: '/quality/dashboard', label: '质量仪表盘' },
       { path: '/quality/list', label: '质量监控' },
@@ -149,7 +150,7 @@ const menuItems = [
   { 
     path: '/distribution', 
     label: '数据分发', 
-    icon: '📤',
+    icon: 'distribution',
     children: [
       { path: '/distribution/list', label: '分发监控' }
     ]
@@ -157,7 +158,7 @@ const menuItems = [
   { 
     path: '/product', 
     label: '商品管理', 
-    icon: '📦',
+    icon: 'product',
     children: [
       { path: '/product/list', label: '商品列表' },
       { path: '/product/catalog', label: '商品与分类' }
@@ -166,7 +167,7 @@ const menuItems = [
   { 
     path: '/customer', 
     label: '客户供应商', 
-    icon: '🤝',
+    icon: 'customer',
     children: [
       { path: '/customer/list', label: '客户列表' },
       { path: '/supplier/list', label: '供应商列表' }
@@ -176,7 +177,7 @@ const menuItems = [
   { 
     path: '/system', 
     label: '系统配置', 
-    icon: '⚙️',
+    icon: 'system',
     children: [
       { path: '/system/params', label: '参数配置' },
       { path: '/system/template', label: '通知模板' },
@@ -352,8 +353,27 @@ onMounted(() => {
 }
 
 .nav-icon {
+  width: 18px;
+  height: 18px;
   margin-right: 10px;
-  font-size: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.68);
+  transition: color 0.2s ease;
+}
+
+.nav-menu > ul > li:hover > a .nav-icon {
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.nav-menu > ul > li.active > a .nav-icon {
+  color: #fff;
+}
+
+.menu-icon-svg {
+  display: block;
+  flex: none;
 }
 
 .expand-icon {
