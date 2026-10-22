@@ -31,13 +31,14 @@ interface CategoryRow {
  *
  * <p>三种入口：新建、编辑（?id=）、从商品详情带着货源来（?productId=）。</p>
  */
-export default function DemandCreate() {
+export default function DemandCreate({ embedded = false }: { embedded?: boolean }) {
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const [form] = Form.useForm()
   const editingId = params.get('id')
   const productId = params.get('productId')
   const isEdit = Boolean(editingId)
+  const returnPath = embedded ? '/member/buyer?tab=inquiry' : '/demand'
 
   const [categories, setCategories] = useState<CategoryRow[]>([])
   const [nlpText, setNlpText] = useState('')
@@ -173,7 +174,7 @@ export default function DemandCreate() {
         : await createDemand(payload)
       if (res?.code === 200) {
         message.success(isEdit ? '需求已更新' : '需求已发布')
-        navigate(isEdit ? `/demand/detail/${editingId}` : '/demand')
+        navigate(isEdit ? `/demand/detail/${editingId}` : returnPath)
       } else {
         message.error(res?.message ?? '保存失败')
       }
@@ -185,10 +186,10 @@ export default function DemandCreate() {
   }
 
   return (
-    <div style={{ padding: 20 }}>
+    <div className={embedded ? 'demand-create-page is-embedded' : 'demand-create-page'} style={embedded ? undefined : { padding: 20 }}>
       <Card
         title={isEdit ? '编辑采购需求' : '发布采购需求'}
-        extra={<Button type="link" onClick={() => navigate(isEdit ? `/demand/detail/${editingId}` : '/demand')}>返回</Button>}
+        extra={<Button type="link" onClick={() => navigate(isEdit ? `/demand/detail/${editingId}` : returnPath)}>{embedded ? '返回采购需求管理' : '返回'}</Button>}
       >
         {!isEdit && (
           <Card size="small" style={{ marginBottom: 24, background: '#f8fafc' }}>

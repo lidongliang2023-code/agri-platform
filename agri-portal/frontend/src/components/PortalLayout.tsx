@@ -214,7 +214,7 @@ export function PortalLayout({ children, active = '/' }: { children: ReactNode; 
             <div>
               <h4>买家服务</h4>
               <a href="#/hall">采购大厅</a>
-              <a href={tradeUrl('/demand/create')} target="_blank" rel="noreferrer">发布询价</a>
+              <a href={tradeUrl('/member/buyer?tab=publish')} target="_blank" rel="noreferrer">发布采购需求</a>
               <a href={tradeUrl('/member/buyer?tab=purchase')} target="_blank" rel="noreferrer">订单管理</a>
               <a href={tradeUrl('/member/buyer?tab=fund')} target="_blank" rel="noreferrer">资金管理</a>
             </div>

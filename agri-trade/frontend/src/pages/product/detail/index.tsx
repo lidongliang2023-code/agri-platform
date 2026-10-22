@@ -370,7 +370,7 @@ export default function ProductDetail(): JSX.Element {
                 <ThunderboltOutlined />立即下单
               </button>
               <button type="button" className="pd-outline" disabled={!quantityValid}
-                onClick={() => goProtected(`/demand/create?productId=${product.id}&quantity=${quantity}`)}>
+                onClick={() => goProtected(`/member/buyer?tab=publish&productId=${product.id}&quantity=${quantity}`)}>
                 <ShoppingCartOutlined />发布采购需求
               </button>
               <button type="button" className="pd-ghost"
@@ -406,7 +406,7 @@ export default function ProductDetail(): JSX.Element {
               </div>
             ))}
             <button type="button" className="pd-outline"
-              onClick={() => goProtected(`/demand/create?productId=${product.id}&quantity=${quantity}`)}>
+              onClick={() => goProtected(`/member/buyer?tab=publish&productId=${product.id}&quantity=${quantity}`)}>
               发起真实议价
             </button>
           </div>

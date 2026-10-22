@@ -20,6 +20,7 @@ import EvaluationList from '@/pages/evaluation/list'
 import LogisticsList from '@/pages/logistics/list'
 import MyCompensation from '@/pages/mine-compensation'
 import MyGuarantee from '@/pages/mine-guarantee'
+import DemandCreate from '@/pages/demand/create'
 import { MemberCenterShell, type MemberNavItem } from './MemberCenterShell'
 import {
   EmptyState,
@@ -39,6 +40,7 @@ import {
 
 const NAV: MemberNavItem[] = [
   { key: 'overview', label: '首页概览', icon: <HomeOutlined /> },
+  { key: 'publish', label: '发布采购需求', icon: <FileTextOutlined /> },
   { key: 'purchase', label: '采购订单', icon: <ShoppingCartOutlined /> },
   { key: 'inquiry', label: '我的询价', icon: <FileSearchOutlined /> },
   { key: 'after', label: '收货与售后', icon: <TruckOutlined /> },
@@ -212,7 +214,7 @@ export default function BuyerCenter(): JSX.Element {
 
       <Panel
         title="资金账户概览"
-        extra={<><a className="mc-btn ghost" href="/my-guarantee">保证金账户</a><a className="mc-btn" href="/demand/create">发起采购</a></>}
+        extra={<><a className="mc-btn ghost" href="/my-guarantee">保证金账户</a><button type="button" className="mc-btn" onClick={() => setActive('publish')}>发起采购</button></>}
       >
         <div className="mc-grid mc-grid-4">
           <Kpi label="累计采购额" value={money(base.dashboard?.buyer?.totalSpent ?? 0)} desc="不含已取消订单" />
@@ -229,7 +231,7 @@ export default function BuyerCenter(): JSX.Element {
       <div className="mc-section-title">快捷入口</div>
       <div className="mc-grid mc-grid-4">
         {[
-          { icon: <FileTextOutlined />, title: '发布采购需求', desc: '发布需求，平台智能匹配供应方', href: '/demand/create' },
+          { icon: <FileTextOutlined />, title: '发布采购需求', desc: '发布需求，平台智能匹配供应方', tab: 'publish' },
           { icon: <FileSearchOutlined />, title: '我的询价', desc: '查看报价进展与在线议价', tab: 'inquiry' },
           { icon: <TruckOutlined />, title: '收货与售后', desc: '确认收货 / 退货换货 / 质量申诉', tab: 'after' },
           { icon: <DollarOutlined />, title: '保证金账户', desc: '查看冻结、可用与流水明细', href: '/my-guarantee' },
@@ -265,7 +267,7 @@ export default function BuyerCenter(): JSX.Element {
           ))}
         </div>
         <span className="mc-spacer" />
-        <a className="mc-btn ghost" href="/demand/create">发起新采购</a>
+        <button type="button" className="mc-btn ghost" onClick={() => setActive('publish')}>发起新采购</button>
       </div>
       <Panel>
         {renderOrdersTable(pagedOrders.rows, pagedOrders.loading, pagedOrders.error, orderActions)}
@@ -283,20 +285,21 @@ export default function BuyerCenter(): JSX.Element {
       <div className="mc-toolbar">
         <span className="mc-toolbar-muted">我发布的采购需求 · 供应方报价进展</span>
         <span className="mc-spacer" />
-        <a className="mc-btn" href="/demand/create">发布新采购需求</a>
+        <button type="button" className="mc-btn" onClick={() => setActive('publish')}>发布新采购需求</button>
       </div>
       <Panel title="采购需求">
         {demands.rows.length === 0 ? (
           <EmptyState title="还没有采购需求" desc="发布需求后，供应方的报价会汇总到这里。"
-            action={<a className="mc-btn" href="/demand/create">发布采购需求</a>} />
+            action={<button type="button" className="mc-btn" onClick={() => setActive('publish')}>发布采购需求</button>} />
         ) : (
           <div className="mc-table-wrap">
             <table className="mc-table">
-              <thead><tr><th>需求编号</th><th>品类 / 品种</th><th>采购量</th><th>期望价</th><th>报价数</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead>
+              <thead><tr><th>需求编号</th><th>需求名称</th><th>品类 / 品种</th><th>采购量</th><th>期望价</th><th>报价数</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead>
               <tbody>
                 {demands.rows.map((row) => (
                   <tr key={row.id}>
                     <td className="mc-mono">{row.demandNo}</td>
+                    <td>{row.demandName || '—'}</td>
                     <td>{row.categoryName ?? '—'} / {row.variety ?? '—'}</td>
                     <td className="mc-mono">{row.quantity ?? '—'}</td>
                     <td className="mc-mono">{row.priceMin != null || row.priceMax != null
@@ -519,14 +522,15 @@ export default function BuyerCenter(): JSX.Element {
     </Panel>
   )
 
-  const content = active === 'purchase' ? renderPurchase()
-    : active === 'inquiry' ? renderInquiry()
+  const content = active === 'publish' ? <DemandCreate embedded />
+    : active === 'purchase' ? renderPurchase()
+      : active === 'inquiry' ? renderInquiry()
       : active === 'after' ? renderAfter()
         : active === 'rate' ? renderRate()
           : active === 'contract' ? renderContract()
             : active === 'fund' ? renderFund()
               : active === 'favorite' ? renderFavorite()
-                : renderOverview()
+                  : renderOverview()
 
   return (
     <MemberCenterShell role="buyer" active={active} navItems={NAV}

@@ -184,7 +184,7 @@ export default function DemandDetail() {
         <Button type="primary" icon={<ThunderboltOutlined />} loading={matching} onClick={handleMatch}>
           触发智能撮合
         </Button>
-        <Button onClick={() => navigate(`/demand/create?id=${demand.id}`)}>编辑需求</Button>
+        <Button onClick={() => navigate(`/member/buyer?tab=publish&id=${demand.id}`)}>编辑需求</Button>
         <Popconfirm title="确认下架这条需求？" onConfirm={handleDelete}>
           <Button danger>下架需求</Button>
         </Popconfirm>

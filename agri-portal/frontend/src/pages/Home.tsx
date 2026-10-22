@@ -50,7 +50,7 @@ interface NewsItem {
 }
 
 const SERVICES = [
-  { icon: 'cart', title: '我要买', tag: '买家', desc: '发布询价 · 点选商品 · 淘供应商 · 共享库存', href: tradeUrl('/demand/create') },
+  { icon: 'cart', title: '我要买', tag: '买家', desc: '发布采购需求 · 点选商品 · 淘供应商 · 共享库存', href: tradeUrl('/member/buyer?tab=publish') },
   { icon: 'box', title: '我要卖', tag: '卖家', desc: '询单订阅 · 业绩认证 · 我要报名 · 开店推广', href: tradeUrl('/product/create'), tech: true },
   { icon: 'truck', title: '我要物流', tag: '物流', desc: '物流服务 · 仓储服务 · 冷链配送 · 物流商加盟', href: '#/logistics', amber: true },
   { icon: 'money', title: '我要资金', tag: '金融', desc: '订单融 · 收货融 · 折扣付 · 信用付', href: '#/finance' },

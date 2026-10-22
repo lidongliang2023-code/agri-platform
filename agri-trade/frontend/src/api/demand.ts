@@ -14,6 +14,8 @@ export interface DemandQuery {
 export interface DemandVO {
   id: number
   demandNo: string
+  demandName: string
+  productName?: string | null
   buyerId: number
   buyerName: string
   categoryId: number

@@ -7,7 +7,6 @@ import OrderCreate from '@/pages/order/create'
 import ProductCreate from '@/pages/product/create'
 import ProductDetail from '@/pages/product/detail'
 import ShopDetail from '@/pages/shop/detail'
-import DemandCreate from '@/pages/demand/create'
 import DemandDetail from '@/pages/demand/detail'
 import BuyerCenter from '@/pages/member-center/BuyerCenter'
 import SellerCenter from '@/pages/member-center/SellerCenter'
@@ -61,6 +60,13 @@ function PortalAccountRedirect(): JSX.Element {
   return <div style={{ padding: 40, color: '#6b7c72' }}>正在前往丰链云个人中心…</div>
 }
 
+function DemandPublishRedirect(): JSX.Element {
+  const location = useLocation()
+  const query = new URLSearchParams(location.search)
+  query.set('tab', 'publish')
+  return <Navigate to={`/member/buyer?${query.toString()}`} replace />
+}
+
 function AppRouter() {
   return (
     <Routes>
@@ -111,7 +117,7 @@ function AppRouter() {
       {/* 商品详情公开可浏览；下单、议价、店铺等操作在页面内触发登录。 */}
       <Route path="/product/detail/:id" element={<ProductDetail />} />
       <Route path="/shop/:sellerId" element={<PrivateRoute><ShopDetail /></PrivateRoute>} />
-      <Route path="/demand/create" element={<PrivateRoute><DemandCreate /></PrivateRoute>} />
+      <Route path="/demand/create" element={<PrivateRoute><DemandPublishRedirect /></PrivateRoute>} />
       <Route path="/demand/detail/:id" element={<PrivateRoute><DemandDetail /></PrivateRoute>} />
 
       {/* 旧入口只保留重定向，不再渲染旧菜单页 */}
