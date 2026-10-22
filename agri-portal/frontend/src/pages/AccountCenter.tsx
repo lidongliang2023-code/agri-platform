@@ -757,41 +757,100 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
         <div className="account-profile-overview">
           <div className="card account-card">
             <div className="account-card-head">
-              <div><h2>账号概况</h2><small>账号信息与当前使用情况</small></div>
+              <div><h2>账号概况</h2><small>登录账号与基础资料</small></div>
               <button className="btn btn-outline" onClick={openProfileEdit}>编辑账号资料</button>
             </div>
             <div className="account-profile-primary">
               <div className="account-profile-avatar">{(summary.nickname || summary.username || summary.phone).slice(0, 1)}</div>
-              <div><strong>{summary.nickname || '未设置昵称'}</strong><span>{summary.email || '未绑定邮箱'}</span></div>
+              <div>
+                <strong>{summary.nickname || '未设置昵称'}</strong>
+                <span>{summary.username} · {summary.phone || '未绑定手机'}</span>
+              </div>
+              <span className="account-profile-state">
+                <i className={summary.status === 1 ? 'online' : ''} />
+                {summary.status === 1 ? '账号正常' : '账号停用'}
+              </span>
             </div>
-            <div className="account-profile-facts">
+            <div className="account-profile-detail-grid">
               <div><span>登录账号</span><strong>{summary.username}</strong></div>
               <div><span>绑定手机</span><strong>{summary.phone || '未绑定'}</strong></div>
-              <div><span>账号状态</span><strong>{summary.status === 1 ? '正常' : '停用'}</strong></div>
-              <div><span>个人实名</span><strong>{statusText(summary.realName?.status)}</strong></div>
-              <div><span>当前登录主体</span><strong>{activeMerchant?.merchantName || '未选择'}</strong></div>
-              <div><span>经营主体数量</span><strong>{summary.merchants.length} 个</strong></div>
-              <div><span>收货地址</span><strong>{addresses.length} 个</strong></div>
+              <div><span>联系邮箱</span><strong>{summary.email || '未绑定'}</strong></div>
               <div><span>注册时间</span><strong>{String(summary.createdAt).slice(0, 10)}</strong></div>
+            </div>
+          </div>
+
+          <div className="card account-card">
+            <div className="account-card-head">
+              <div><h2>账号关联概况</h2><small>实名、主体与地址使用情况</small></div>
+            </div>
+            <div className="account-profile-related-grid">
+              <div>
+                <span className={`account-status ${tone(summary.realName?.status)}`}>{statusText(summary.realName?.status)}</span>
+                <strong>个人实名认证</strong>
+                <small>{summary.realName?.realName || '尚未提交实名信息'}</small>
+              </div>
+              <div>
+                <span className="account-profile-related-icon"><Icon name="factory" size={17} /></span>
+                <strong>当前登录主体</strong>
+                <small>{activeMerchant?.merchantName || '暂未选择经营主体'}</small>
+              </div>
+              <div>
+                <span className="account-profile-related-icon"><Icon name="layers" size={17} /></span>
+                <strong>经营主体</strong>
+                <small>共 {summary.merchants.length} 个，可在主体资料中切换</small>
+              </div>
+              <div>
+                <span className="account-profile-related-icon"><Icon name="location" size={17} /></span>
+                <strong>收货地址</strong>
+                <small>已维护 {addresses.length} 个收货地址</small>
+              </div>
             </div>
           </div>
         </div>
       )}
 
       {tab === 'profile' && profileEditing && (
-        <form className="card account-card account-profile-edit" onSubmit={(event) => void saveProfile(event)}>
-          <div className="account-card-head"><h2>账号资料</h2><span>登录账号和手机号不可在此修改</span></div>
-          <div className="account-form-grid">
-            <label>登录账号<input className="input" value={summary.username} disabled /></label>
-            <label>绑定手机号<input className="input" value={summary.phone || ''} disabled /></label>
-            <label>昵称<input className="input" value={profile.nickname} maxLength={64} onChange={(event) => setProfile({ ...profile, nickname: event.target.value })} /></label>
-            <label>邮箱<input className="input" type="email" value={profile.email} onChange={(event) => setProfile({ ...profile, email: event.target.value })} /></label>
+        <div className="account-profile-edit-layout">
+          <form className="card account-card account-profile-edit" onSubmit={(event) => void saveProfile(event)}>
+            <div className="account-card-head">
+              <div><h2>编辑账号资料</h2><small>修改后点击保存立即生效</small></div>
+            </div>
+            <section className="account-profile-form-section">
+              <div className="account-profile-form-title">
+                <h3>基本资料</h3>
+                <p>昵称会显示在门户和会员中心；邮箱用于接收平台通知。</p>
+              </div>
+              <div className="account-form-grid">
+                <label>昵称<span className="account-required">*</span><input className="input" value={profile.nickname} maxLength={64} onChange={(event) => setProfile({ ...profile, nickname: event.target.value })} /></label>
+                <label>联系邮箱<input className="input" type="email" value={profile.email} onChange={(event) => setProfile({ ...profile, email: event.target.value })} /></label>
+              </div>
+            </section>
+            <div className="account-form-actions account-profile-form-actions">
+              <button className="btn btn-primary" disabled={busy}>{busy ? '保存中…' : '保存资料'}</button>
+              <button type="button" className="btn btn-ghost" onClick={() => openTab('profile')}>取消</button>
+            </div>
+          </form>
+
+          <div className="card account-card account-profile-readonly">
+            <div className="account-card-head">
+              <div><h2>账号与绑定信息</h2><small>以下信息不可在此页面修改</small></div>
+            </div>
+            <div className="account-info-list">
+              <div><span>登录账号</span><strong>{summary.username}</strong></div>
+              <div><span>绑定手机</span><strong>{summary.phone || '未绑定'}</strong></div>
+            </div>
+            <div className="account-profile-security-entry">
+              <div>
+                <strong>需要修改登录信息？</strong>
+                <p>密码和手机号统一在账号安全中维护。</p>
+              </div>
+              <div className="account-form-actions">
+                <button type="button" className="btn btn-outline btn-sm" onClick={() => openSecurity('password')}>修改密码</button>
+                <button type="button" className="btn btn-outline btn-sm" onClick={() => openSecurity('phone')}>变更手机号</button>
+              </div>
+            </div>
           </div>
-          <div className="account-form-actions">
-            <button className="btn btn-primary" disabled={busy}>{busy ? '保存中…' : '保存资料'}</button>
-            <button type="button" className="btn btn-ghost" onClick={() => openTab('profile')}>取消</button>
-          </div>
-        </form>
+        </div>
       )}
 
       {tab === 'security' && securityPage === 'password' && (
