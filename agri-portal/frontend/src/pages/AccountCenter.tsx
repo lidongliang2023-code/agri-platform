@@ -821,7 +821,10 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
                 <p>昵称会显示在门户和会员中心；邮箱用于接收平台通知。</p>
               </div>
               <div className="account-form-grid">
-                <label>昵称<span className="account-required">*</span><input className="input" value={profile.nickname} maxLength={64} onChange={(event) => setProfile({ ...profile, nickname: event.target.value })} /></label>
+                <label>
+                  <span className="account-form-label-row">昵称<span className="account-required">*</span></span>
+                  <input className="input" value={profile.nickname} maxLength={64} onChange={(event) => setProfile({ ...profile, nickname: event.target.value })} />
+                </label>
                 <label>联系邮箱<input className="input" type="email" value={profile.email} onChange={(event) => setProfile({ ...profile, email: event.target.value })} /></label>
               </div>
             </section>

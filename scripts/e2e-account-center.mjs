@@ -106,6 +106,10 @@ try {
   await page.waitForFunction(() => window.location.hash === '#/account/profile/edit', { timeout: 10000 })
   await page.waitForSelector('.account-profile-edit', { timeout: 10000 })
   check(true, '点击编辑进入独立的账号资料页面')
+  const editInputTops = await page.$$eval('.account-profile-edit .account-form-grid input',
+    (inputs) => inputs.map((input) => Math.round(input.getBoundingClientRect().top)))
+  check(editInputTops.length === 2 && Math.max(...editInputTops) - Math.min(...editInputTops) <= 1,
+    '编辑账号资料字段输入框顶部对齐', editInputTops.join('/'))
   await page.screenshot({ path: path.join(OUT, 'account-profile-edit.png'), fullPage: true })
   await page.evaluate(() => {
     const button = [...document.querySelectorAll('.account-profile-edit button')]
