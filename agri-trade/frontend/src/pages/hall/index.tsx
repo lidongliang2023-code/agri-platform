@@ -21,6 +21,7 @@ import './hall.css'
 interface HallProduct {
   id: number
   productName: string
+  sellerId: number | string
   sellerName: string | null
   categoryName: string | null
   variety: string | null
@@ -203,12 +204,13 @@ export default function TradeHall(): JSX.Element {
   }, [page, keyword, l1, l2, l3, province, sort])
 
   const suppliers = useMemo(() => {
-    const map = new Map<string, { name: string; count: number }>()
+    const map = new Map<string, { sellerId: string; name: string; count: number }>()
     recommendations.forEach((item) => {
-      if (!item.sellerName) return
-      const current = map.get(item.sellerName) ?? { name: item.sellerName, count: 0 }
+      if (!item.sellerName || item.sellerId == null) return
+      const sellerId = String(item.sellerId)
+      const current = map.get(sellerId) ?? { sellerId, name: item.sellerName, count: 0 }
       current.count += 1
-      map.set(item.sellerName, current)
+      map.set(sellerId, current)
     })
     return Array.from(map.values()).sort((a, b) => b.count - a.count).slice(0, 5)
   }, [recommendations])
@@ -431,11 +433,12 @@ export default function TradeHall(): JSX.Element {
               <div className="hall-card-head"><h3>优质供应商推荐</h3><span>按在售货源数</span></div>
               <div className="hall-supplier-grid">
                 {suppliers.map((item, index) => (
-                  <div className="hall-supplier" key={item.name}>
+                  <a className="hall-supplier" key={item.sellerId} href={`/shop/${item.sellerId}`}>
                     <span className={`hall-supplier-icon tone-${index % 4}`}><SwapOutlined /></span>
                     <strong>{item.name}</strong>
                     <small>在售 {item.count} 个货源</small>
-                  </div>
+                    <em>进入主页 ›</em>
+                  </a>
                 ))}
                 {!suppliers.length && <div className="hall-state">暂无供应商数据</div>}
               </div>

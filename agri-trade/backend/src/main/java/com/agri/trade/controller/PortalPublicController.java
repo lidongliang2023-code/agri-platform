@@ -178,6 +178,31 @@ public class PortalPublicController {
         return ApiResponse.success(new PublicPage<>(records, result.getTotal(), result.getCurrent(), result.getSize()));
     }
 
+    /** 公开供应商主页：仅返回已发布货源和展示字段。 */
+    @GetMapping("/sellers/{sellerId}")
+    public ApiResponse<PublicSellerView> seller(@PathVariable Long sellerId) {
+        List<TradeProduct> products = productMapper.selectList(new LambdaQueryWrapper<TradeProduct>()
+                .eq(TradeProduct::getDelFlag, 0)
+                .eq(TradeProduct::getPublishStatus, "published")
+                .eq(TradeProduct::getSellerId, sellerId)
+                .orderByDesc(TradeProduct::getCreateTime)
+                .last("LIMIT 100"));
+        if (products.isEmpty()) {
+            return ApiResponse.error("供应商不存在或暂无在售货源");
+        }
+        TradeProduct first = products.get(0);
+        List<PortalProductView> views = products.stream()
+                .map(PortalPublicController::toView)
+                .collect(Collectors.toList());
+        return ApiResponse.success(new PublicSellerView(
+                String.valueOf(sellerId),
+                first.getSellerName(),
+                first.getOriginProvince(),
+                first.getOriginCity(),
+                views.size(),
+                views));
+    }
+
     /** 公开分类树（大厅筛选）。 */
     @GetMapping("/categories")
     public ApiResponse<List<PublicCategoryView>> categories() {
@@ -214,6 +239,7 @@ public class PortalPublicController {
         return new PortalProductView(
                 product.getId(),
                 product.getProductName(),
+                product.getSellerId(),
                 product.getSellerName(),
                 product.getCategoryName(),
                 product.getVariety(),
@@ -285,6 +311,7 @@ public class PortalPublicController {
     public record PortalProductView(
             Long id,
             String productName,
+            Long sellerId,
             String sellerName,
             String categoryName,
             String variety,
@@ -299,6 +326,15 @@ public class PortalPublicController {
             Integer salesVolume,
             String province,
             Long categoryId) {
+    }
+
+    public record PublicSellerView(
+            String sellerId,
+            String sellerName,
+            String province,
+            String city,
+            int productCount,
+            List<PortalProductView> products) {
     }
 
     /** 公开详情字段白名单：不含成本、内部审核、租户与联系人等数据。 */

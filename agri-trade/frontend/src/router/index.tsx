@@ -124,7 +124,7 @@ function AppRouter() {
       <Route path="/product/edit/:id" element={<PrivateRoute><ProductPublishRedirect /></PrivateRoute>} />
       {/* 商品详情公开可浏览；下单、议价、店铺等操作在页面内触发登录。 */}
       <Route path="/product/detail/:id" element={<ProductDetail />} />
-      <Route path="/shop/:sellerId" element={<PrivateRoute><ShopDetail /></PrivateRoute>} />
+      <Route path="/shop/:sellerId" element={<ShopDetail />} />
       <Route path="/demand/create" element={<PrivateRoute><DemandPublishRedirect /></PrivateRoute>} />
       <Route path="/demand/detail/:id" element={<PrivateRoute><DemandDetail /></PrivateRoute>} />
 

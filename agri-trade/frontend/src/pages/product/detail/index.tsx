@@ -374,7 +374,7 @@ export default function ProductDetail(): JSX.Element {
                 <ShoppingCartOutlined />发布采购需求
               </button>
               <button type="button" className="pd-ghost"
-                onClick={() => goProtected(`/shop/${product.sellerId}`)}>
+                onClick={() => { window.location.href = `/shop/${product.sellerId}` }}>
                 <ShopOutlined />进入店铺询价
               </button>
               <button type="button" className="pd-text-action"
@@ -470,7 +470,7 @@ export default function ProductDetail(): JSX.Element {
                   <h3>{product.sellerName || '平台供应商'}</h3>
                   <p><EnvironmentOutlined /> {originFull || '所在地待补充'} · 当前商品共 {stock || '—'} {product.unit} 可供</p>
                 </div>
-                <button type="button" className="pd-outline" onClick={() => goProtected(`/shop/${product.sellerId}`)}>查看店铺</button>
+                <button type="button" className="pd-outline" onClick={() => { window.location.href = `/shop/${product.sellerId}` }}>查看店铺</button>
               </div>
               <div className="pd-supplier-data">
                 <InfoLine label="主营品类" value={valueOr(product.categoryName)} />

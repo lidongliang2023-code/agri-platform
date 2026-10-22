@@ -58,7 +58,11 @@ const waitProducts = async (page, count) => {
 const hallApi = await (await fetch('http://localhost:8086/api/trade/public/hall/products?pageNum=1&pageSize=24')).json()
 const expectedProductCount = hallApi?.code === 200 ? hallApi.data?.records?.length ?? 0 : 0
 
-const browser = await puppeteer.launch({ headless: HEADFUL ? false : 'new', args: ['--no-sandbox'] })
+const browser = await puppeteer.launch({
+  executablePath: 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+  headless: HEADFUL ? false : 'new',
+  args: ['--no-sandbox'],
+})
 try {
   const page = await browser.newPage()
   const errors = []

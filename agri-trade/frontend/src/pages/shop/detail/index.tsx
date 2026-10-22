@@ -1,24 +1,29 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Button, Card, Empty, Space, Spin, Table, Tag, Typography, message } from 'antd'
-import { ArrowLeftOutlined } from '@ant-design/icons'
-import { getProductList } from '@/api/product'
+import { Alert, Button, Card, Empty, Space, Spin, Table, Tag, Typography } from 'antd'
+import { ArrowLeftOutlined, ShopOutlined } from '@ant-design/icons'
 
 interface ProductRow {
   id: number
-  productCode: string
   productName: string
   categoryName: string
   variety: string
-  specSize: string
+  origin: string
+  specification: string
   unit: string
   price: number
   stockQuantity: number
-  publishStatus: string
-  sellerId: number
+  sellerId: number | string
   sellerName: string
-  originProvince: string
-  originCity: string
+}
+
+interface SellerHome {
+  sellerId: string
+  sellerName: string
+  province: string | null
+  city: string | null
+  productCount: number
+  products: ProductRow[]
 }
 
 /**
@@ -33,45 +38,66 @@ export default function ShopDetail() {
   const { sellerId } = useParams()
   const navigate = useNavigate()
   const [rows, setRows] = useState<ProductRow[]>([])
+  const [seller, setSeller] = useState<SellerHome | null>(null)
+  const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     if (!sellerId) return
     setLoading(true)
-    getProductList({ pageNum: 1, pageSize: 100, sellerId })
-      .then((res: { code: number; data?: { records?: ProductRow[] }; message?: string }) => {
-        if (res?.code === 200) {
-          setRows(res.data?.records ?? [])
+    setError('')
+    fetch(`/api/trade/public/sellers/${encodeURIComponent(sellerId)}`)
+      .then((response) => response.json())
+      .then((body: { code: number; data?: SellerHome; message?: string }) => {
+        if (body.code === 200 && body.data) {
+          setSeller(body.data)
+          setRows(body.data.products ?? [])
         } else {
-          message.error(res?.message ?? '加载店铺货源失败')
+          setSeller(null)
+          setRows([])
+          setError(body.message || '供应商不存在或暂无在售货源')
         }
       })
-      .catch(() => message.error('加载店铺货源失败（检查后端是否在运行）'))
+      .catch(() => setError('加载供应商主页失败，请稍后重试'))
       .finally(() => setLoading(false))
   }, [sellerId])
 
-  const sellerName = rows[0]?.sellerName
-  const location = rows[0] ? [rows[0].originProvince, rows[0].originCity].filter(Boolean).join(' ') : ''
+  const sellerName = seller?.sellerName ?? rows[0]?.sellerName
+  const location = seller
+    ? [seller.province, seller.city].filter(Boolean).join(' ')
+    : ''
 
   return (
     <div style={{ padding: 20 }}>
       <Space style={{ marginBottom: 16 }}>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/product')}>
-          返回商品列表
+        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/hall')}>
+          返回交易大厅
         </Button>
       </Space>
 
       <Card style={{ marginBottom: 16 }}>
-        <Typography.Title level={4} style={{ margin: 0 }}>
-          🏬 {sellerName ?? '供应商店铺'}
-        </Typography.Title>
-        <div style={{ color: '#718096', marginTop: 8 }}>
-          {location && <span>所在地：{location}　</span>}
-          在架货源：{rows.length} 个
+        <Space align="start" size={14}>
+          <span style={{ width: 46, height: 46, borderRadius: 12, display: 'grid', placeItems: 'center', background: '#e4f6ec', color: '#12764a' }}>
+            <ShopOutlined style={{ fontSize: 22 }} />
+          </span>
+          <div>
+            <Typography.Title level={4} style={{ margin: 0 }}>
+              {sellerName ?? '供应商主页'}
+            </Typography.Title>
+            <div style={{ color: '#718096', marginTop: 6 }}>
+              {location && <span>所在地：{location}　</span>}
+              在售货源：{seller?.productCount ?? rows.length} 个
+            </div>
+          </div>
+        </Space>
+        <div style={{ marginTop: 14, color: '#718096', fontSize: 12 }}>
+          以下展示该供应商公开发布的货源，具体交付与价格以商品详情和订单确认为准。
         </div>
       </Card>
 
-      <Card title="店铺货源">
+      {error && <Alert showIcon type="warning" message={error} style={{ marginBottom: 16 }} />}
+
+      <Card title="在售货源">
         {loading ? (
           <div style={{ padding: 40, textAlign: 'center' }}>
             <Spin />
@@ -84,29 +110,24 @@ export default function ShopDetail() {
             dataSource={rows}
             pagination={false}
             columns={[
-              { title: '商品编码', dataIndex: 'productCode' },
               {
                 title: '商品名称',
                 dataIndex: 'productName',
                 render: (text: string, row: ProductRow) => (
-                  <a onClick={() => navigate(`/product/detail/${row.id}`)}>{text}</a>
+                  <a href={`/product/detail/${row.id}`}>{text}</a>
                 )
               },
               { title: '品类', dataIndex: 'categoryName' },
               { title: '品种', dataIndex: 'variety' },
-              { title: '规格', dataIndex: 'specSize' },
+              { title: '规格', dataIndex: 'specification' },
+              { title: '产地', dataIndex: 'origin' },
               {
                 title: '单价',
                 dataIndex: 'price',
                 render: (val: number, row: ProductRow) => `¥${val}/${row.unit}`
               },
               { title: '库存', dataIndex: 'stockQuantity' },
-              {
-                title: '状态',
-                dataIndex: 'publishStatus',
-                render: (val: string) =>
-                  val === 'published' ? <Tag color="success">已发布</Tag> : <Tag>{val}</Tag>
-              }
+              { title: '状态', render: () => <Tag color="success">在售</Tag> },
             ]}
           />
         )}
