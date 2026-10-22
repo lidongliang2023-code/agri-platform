@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>运营平台 · 运营中台总览</title>
+<link rel="stylesheet" href="../assets/css/theme.css" />
+<style>
+.app-side { width: 200px; }
+.user-segment { display:grid;grid-template-columns:repeat(4,1fr);gap:14px; }
+.segment { text-align:center;padding:18px 10px;border-radius:12px;background:var(--bg-alt);border:1px solid var(--line); }
+.segment .n { font-size:24px;font-weight:800;font-family:var(--mono); }
+.segment .l { font-size:12px;color:var(--ink-500);margin-top:4px; }
+.segment.new .n { color:var(--tech-600); }
+.segment.active .n { color:var(--green-600); }
+.segment.sleep .n { color:var(--amber); }
+.segment.lost .n { color:var(--red); }
+.msg-row { display:flex;align-items:center;gap:14px;padding:12px 0;border-bottom:1px dashed var(--line); }
+.msg-row:last-child { border-bottom:none; }
+.msg-icon { width:38px;height:38px;border-radius:10px;display:grid;place-items:center;background:var(--green-100);color:var(--green-700); }
+.msg-icon.tech { background:var(--tech-100);color:var(--tech-700); }
+.msg-icon.amber { background:var(--amber-100);color:#B45309; }
+.msg-info { flex:1; }
+.msg-info .t { font-weight:600;font-size:13.5px; }
+.msg-info .d { font-size:12px;color:var(--ink-500);margin-top:2px; }
+.msg-val { text-align:right; }
+.msg-val .v { font-size:18px;font-weight:800;font-family:var(--mono);color:var(--ink-800); }
+.msg-val .r { font-size:12px;color:var(--green-600); }
+</style>
+</head>
+<body>
+
+<div class="app-shell">
+
+  <!-- 侧边栏 -->
+  <aside class="app-side">
+    <a class="brand" href="../index.html">
+      <span class="logo" data-icon="seed" data-size="20"></span>
+      <span>农产云<small>运营中台</small></span>
+    </a>
+    <nav class="side-nav">
+      <div class="group">运营中心</div>
+      <a href="ops.html" class="active"><span data-icon="activity"></span>运营总览</a>
+      <a href="#"><span data-icon="user"></span>用户运营</a>
+      <a href="#"><span data-icon="file"></span>内容运营</a>
+      <a href="#"><span data-icon="award"></span>活动运营</a>
+      <a href="#"><span data-icon="bell"></span>消息推送</a>
+      <a href="#"><span data-icon="chart"></span>数据报表</a>
+      <a href="#"><span data-icon="settings"></span>系统配置</a>
+
+      <div class="group">返回入口</div>
+      <a href="../index.html"><span data-icon="home"></span>原型总览</a>
+      <a href="../portal/index.html"><span data-icon="globe"></span>官网门户</a>
+      <a href="../trade/index.html"><span data-icon="cart"></span>交易大厅</a>
+      <a href="../production/dashboard.html"><span data-icon="layers"></span>生产监测</a>
+    </nav>
+  </aside>
+
+  <!-- 主区 -->
+  <div class="app-main">
+
+    <header class="app-top">
+      <div class="crumb">
+        <a href="ops.html">运营平台</a><span class="sep">/</span>运营中台总览
+      </div>
+      <div class="row center gap-16">
+        <span data-icon="bell" style="color:var(--ink-500)"></span>
+        <div class="row center gap-12">
+          <div class="avatar">运</div>
+          <span class="t-sm strong">平台运营管理员</span>
+        </div>
+      </div>
+    </header>
+
+    <div class="app-body">
+
+      <!-- 快捷操作 -->
+      <div class="toolbar mb-20">
+        <button class="btn btn-primary btn-sm"><span data-icon="plus"></span>发公告</button>
+        <button class="btn btn-outline btn-sm"><span data-icon="award"></span>建活动</button>
+        <button class="btn btn-tech btn-sm"><span data-icon="bell"></span>推消息</button>
+        <button class="btn btn-ghost btn-sm"><span data-icon="chart"></span>看报表</button>
+        <div class="spacer"></div>
+        <span class="muted t-sm">数据更新于 <span class="mono">2026-10-22 09:30</span></span>
+      </div>
+
+      <!-- KPI 卡片 -->
+      <div class="grid grid-5">
+        <div class="stat">
+          <div class="k"><span data-icon="activity" style="color:var(--green-600)"></span>DAU</div>
+          <div class="v"><span class="js-count" data-to="86.4" data-dec="1">86.4</span><span class="unit">万</span></div>
+          <div class="d">较昨日 <span class="up">+5.2%</span></div>
+        </div>
+        <div class="stat">
+          <div class="k"><span data-icon="user" style="color:var(--green-600)"></span>新增用户</div>
+          <div class="v"><span class="js-count" data-to="4.28" data-dec="2">4.28</span><span class="unit">万</span></div>
+          <div class="d">本周累计 <span class="up">+12.8%</span></div>
+        </div>
+        <div class="stat">
+          <div class="k"><span data-icon="award" style="color:var(--green-600)"></span>活跃供应商</div>
+          <div class="v"><span class="js-count" data-to="7.8" data-dec="1">7.8</span><span class="unit">万家</span></div>
+          <div class="d">环比 <span class="up">+3.1%</span></div>
+        </div>
+        <div class="stat tech">
+          <div class="k"><span data-icon="money" style="color:var(--tech-600)"></span>GMV</div>
+          <div class="v"><span class="cur" style="font-size:16px;font-weight:600">¥</span><span class="js-count" data-to="3.26" data-dec="2">3.26</span><span class="unit">亿</span></div>
+          <div class="d">较昨日 <span class="up">+8.6%</span></div>
+        </div>
+        <div class="stat tech">
+          <div class="k"><span data-icon="box" style="color:var(--tech-600)"></span>订单量</div>
+          <div class="v"><span class="js-count" data-to="21.6" data-dec="1">21.6</span><span class="unit">万笔</span></div>
+          <div class="d">成交转化率 <span class="up">4.8%</span></div>
+        </div>
+      </div>
+
+      <!-- 用户增长趋势 + 用户分层 -->
+      <div class="grid grid-2 mt-20">
+
+        <div class="card">
+          <div class="card-h">
+            <h3><span data-icon="chart" data-size="18"></span>用户增长趋势</h3>
+            <span class="more">近 7 日</span>
+          </div>
+          <div class="card-b">
+            <div class="spark" style="height:72px">
+              <i style="height:42%"></i><i style="height:55%"></i><i style="height:48%"></i>
+              <i style="height:62%"></i><i style="height:58%"></i><i style="height:74%"></i>
+              <i style="height:100%;background:linear-gradient(180deg,var(--green-500),rgba(21,154,94,.15))"></i>
+            </div>
+            <div class="row between t-xs muted mt-8">
+              <span class="mono">10-16</span><span class="mono">10-17</span><span class="mono">10-18</span>
+              <span class="mono">10-19</span><span class="mono">10-20</span><span class="mono">10-21</span><span class="mono">10-22</span>
+            </div>
+            <div class="grid grid-3 mt-20" style="gap:12px">
+              <div><div class="muted t-xs">今日新增</div><div class="mono strong t-lg mt-8">4.28 <span class="t-xs muted">万</span></div></div>
+              <div><div class="muted t-xs">7 日累计</div><div class="mono strong t-lg mt-8">38.6 <span class="t-xs muted">万</span></div></div>
+              <div><div class="muted t-xs">日均增长</div><div class="mt-8"><span class="tag">+6.1%</span></div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-h">
+            <h3><span data-icon="users" data-size="18"></span>用户分层</h3>
+            <span class="more">全量用户</span>
+          </div>
+          <div class="card-b">
+            <div class="user-segment">
+              <div class="segment new">
+                <div class="n">28%</div>
+                <div class="l">新用户</div>
+              </div>
+              <div class="segment active">
+                <div class="n">45%</div>
+                <div class="l">活跃用户</div>
+              </div>
+              <div class="segment sleep">
+                <div class="n">19%</div>
+                <div class="l">沉睡用户</div>
+              </div>
+              <div class="segment lost">
+                <div class="n">8%</div>
+                <div class="l">流失用户</div>
+              </div>
+            </div>
+            <div class="mt-20" style="padding:14px;border-radius:10px;background:var(--bg-alt)">
+              <div class="row between t-sm mb-8"><span>活跃用户占比</span><span class="mono strong">45%</span></div>
+              <div class="progress"><i style="width:45%"></i></div>
+              <div class="row between t-sm mt-12 mb-8"><span>可召回沉睡用户</span><span class="mono strong">19%</span></div>
+              <div class="progress"><i style="width:19%;background:linear-gradient(90deg,var(--amber),var(--red))"></i></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- 运营活动列表 + 消息触达 -->
+      <div class="grid grid-2 mt-20" style="align-items:start">
+
+        <div class="card">
+          <div class="card-h">
+            <h3><span data-icon="award" data-size="18"></span>运营活动列表</h3>
+            <a class="more" href="#">全部活动 →</a>
+          </div>
+          <div class="card-b tight">
+            <table class="data-table">
+              <thead>
+                <tr><th>活动名称</th><th>类型</th><th>时间</th><th>参与人数</th><th>状态</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>秋粮丰收节大促</td><td>促销</td><td class="mono">10.18-10.25</td>
+                  <td class="mono">128,640</td><td><span class="tag">进行中</span></td>
+                </tr>
+                <tr>
+                  <td>新用户首单立减</td><td>拉新</td><td class="mono">10.15-10.31</td>
+                  <td class="mono">86,420</td><td><span class="tag">进行中</span></td>
+                </tr>
+                <tr>
+                  <td>供应商秋冬备货节</td><td>招商</td><td class="mono">10.20-11.05</td>
+                  <td class="mono">12,380</td><td><span class="tag tag-tech">预热</span></td>
+                </tr>
+                <tr>
+                  <td>产地直播带货周</td><td>内容</td><td class="mono">10.22-10.28</td>
+                  <td class="mono">45,200</td><td><span class="tag">进行中</span></td>
+                </tr>
+                <tr>
+                  <td>沉睡用户召回</td><td>唤醒</td><td class="mono">10.10-10.20</td>
+                  <td class="mono">32,150</td><td><span class="tag tag-ghost">已结束</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-h">
+            <h3><span data-icon="bell" data-size="18"></span>消息触达</h3>
+            <span class="more">近 24h</span>
+          </div>
+          <div class="card-b">
+            <div class="msg-row">
+              <div class="msg-icon"><span data-icon="phone" data-size="18"></span></div>
+              <div class="msg-info">
+                <div class="t">短信发送</div>
+                <div class="d">营销 / 验证码 / 通知</div>
+              </div>
+              <div class="msg-val">
+                <div class="v">86.4 万</div>
+                <div class="r">打开率 12.8%</div>
+              </div>
+            </div>
+            <div class="msg-row">
+              <div class="msg-icon tech"><span data-icon="cloud" data-size="18"></span></div>
+              <div class="msg-info">
+                <div class="t">App 推送</div>
+                <div class="d">活动 / 订单 / 告警</div>
+              </div>
+              <div class="msg-val">
+                <div class="v">152.6 万</div>
+                <div class="r">打开率 18.6%</div>
+              </div>
+            </div>
+            <div class="msg-row">
+              <div class="msg-icon amber"><span data-icon="bell" data-size="18"></span></div>
+              <div class="msg-info">
+                <div class="t">站内信</div>
+                <div class="d">公告 / 私信 / 系统通知</div>
+              </div>
+              <div class="msg-val">
+                <div class="v">64.2 万</div>
+                <div class="r">阅读率 34.2%</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="../assets/js/app.js"></script>
+</body>
+</html>

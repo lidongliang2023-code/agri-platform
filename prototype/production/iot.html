@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>物联网管理平台 · 数据采集枢纽</title>
+<link rel="stylesheet" href="../assets/css/theme.css" />
+</head>
+<body>
+
+<div class="screen">
+
+  <!-- 顶部 -->
+  <div class="screen-top">
+    <a class="back" href="../index.html">← 返回原型总览</a>
+    <h1>物联网管理平台 · 数据采集枢纽</h1>
+    <div style="margin-top:8px;font-size:12.5px;letter-spacing:2px;color:rgba(220,239,228,.55)">
+      设备接入 · 协议管理 · 规则引擎 · 实时监控
+    </div>
+    <span class="time js-clock"></span>
+    <div class="line"></div>
+  </div>
+
+  <!-- 主体：12 列网格 -->
+  <div class="screen-grid">
+
+    <!-- 1) KPI 行：4 × 3 -->
+    <div class="panel" style="grid-column: span 3">
+      <div class="panel-h"><h3>接入设备总数</h3><span style="font-size:12px;color:rgba(220,239,228,.45)">累计</span></div>
+      <div class="panel-b">
+        <div class="kpi-screen">
+          <div class="ic" data-icon="cpu" data-size="24"></div>
+          <div>
+            <div class="v"><span class="js-count" data-to="12846" data-dec="0">12,846</span><span class="u">台</span></div>
+            <div class="k">物联网终端全域接入</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" style="grid-column: span 3">
+      <div class="panel-h"><h3>设备在线率</h3><span style="font-size:12px;color:rgba(220,239,228,.45)">实时</span></div>
+      <div class="panel-b">
+        <div class="kpi-screen">
+          <div class="ic" data-icon="wifi" data-size="24"></div>
+          <div>
+            <div class="v"><span class="js-count" data-to="98.6" data-dec="1">98.6</span><span class="u">%</span></div>
+            <div class="k">通信链路健康度良好</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" style="grid-column: span 3">
+      <div class="panel-h"><h3>今日消息量</h3><span style="font-size:12px;color:rgba(220,239,228,.45)">累计</span></div>
+      <div class="panel-b">
+        <div class="kpi-screen">
+          <div class="ic" data-icon="activity" data-size="24"></div>
+          <div>
+            <div class="v"><span class="js-count" data-to="3268" data-dec="0">3,268</span><span class="u">万</span></div>
+            <div class="k">平台消息总入站量</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" style="grid-column: span 3">
+      <div class="panel-h"><h3>活跃规则数</h3><span style="font-size:12px;color:rgba(220,239,228,.45)">运行中</span></div>
+      <div class="panel-b">
+        <div class="kpi-screen">
+          <div class="ic" data-icon="settings" data-size="24"></div>
+          <div>
+            <div class="v"><span class="js-count" data-to="86" data-dec="0">86</span><span class="u">条</span></div>
+            <div class="k">数据转发 / 告警 / 清洗</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2) 设备协议分布（4 列） -->
+    <div class="panel" style="grid-column: span 4">
+      <div class="panel-h"><h3>设备协议分布</h3><span style="font-size:12px;color:rgba(220,239,228,.45)">接入占比</span></div>
+      <div class="panel-b">
+        <div class="row between" style="font-size:12.5px;color:rgba(220,239,228,.7);margin-bottom:6px">
+          <span class="row center gap-4"><i class="dot"></i>MQTT</span>
+          <span class="mono" style="color:#EAFFF5">5,138 · 40%</span>
+        </div>
+        <div class="progress" style="background:rgba(255,255,255,.08)"><i style="width:40%"></i></div>
+
+        <div class="row between mt-16" style="font-size:12.5px;color:rgba(220,239,228,.7);margin-bottom:6px">
+          <span class="row center gap-4"><i class="dot amber"></i>CoAP</span>
+          <span class="mono" style="color:#EAFFF5">2,569 · 20%</span>
+        </div>
+        <div class="progress" style="background:rgba(255,255,255,.08)"><i style="width:20%;background:linear-gradient(90deg,var(--amber),rgba(245,158,11,.5))"></i></div>
+
+        <div class="row between mt-16" style="font-size:12.5px;color:rgba(220,239,228,.7);margin-bottom:6px">
+          <span class="row center gap-4"><i class="dot" style="background:var(--tech-500)"></i>HTTP</span>
+          <span class="mono" style="color:#EAFFF5">2,055 · 16%</span>
+        </div>
+        <div class="progress" style="background:rgba(255,255,255,.08)"><i style="width:16%;background:linear-gradient(90deg,var(--tech-500),rgba(14,165,233,.5))"></i></div>
+
+        <div class="row between mt-16" style="font-size:12.5px;color:rgba(220,239,228,.7);margin-bottom:6px">
+          <span class="row center gap-4"><i class="dot" style="background:var(--violet)"></i>Modbus</span>
+          <span class="mono" style="color:#EAFFF5">1,799 · 14%</span>
+        </div>
+        <div class="progress" style="background:rgba(255,255,255,.08)"><i style="width:14%;background:linear-gradient(90deg,var(--violet),rgba(124,58,237,.5))"></i></div>
+
+        <div class="row between mt-16" style="font-size:12.5px;color:rgba(220,239,228,.7);margin-bottom:6px">
+          <span class="row center gap-4"><i class="dot" style="background:var(--cyan)"></i>LoraWAN</span>
+          <span class="mono" style="color:#EAFFF5">1,285 · 10%</span>
+        </div>
+        <div class="progress" style="background:rgba(255,255,255,.08)"><i style="width:10%;background:linear-gradient(90deg,var(--cyan),rgba(6,182,212,.5))"></i></div>
+      </div>
+    </div>
+
+    <!-- 3) 设备地理分布（5 列） -->
+    <div class="panel" style="grid-column: span 5">
+      <div class="panel-h"><h3>设备地理分布</h3><span style="font-size:12px;color:rgba(220,239,228,.45)">全国 4 大基地</span></div>
+      <div class="panel-b">
+        <div style="position:relative;height:210px;border-radius:12px;border:1px solid rgba(47,184,119,.22);overflow:hidden;
+             background-color:#03120d;
+             background-image:radial-gradient(500px 260px at 70% 20%, rgba(21,154,94,.22), transparent 70%),linear-gradient(rgba(47,184,119,.1) 1px,transparent 1px),linear-gradient(90deg,rgba(47,184,119,.1) 1px,transparent 1px);
+             background-size:auto,34px 34px,34px 34px">
+          <div class="dot-pulse" style="position:absolute;left:34%;top:30%"></div>
+          <div class="dot-pulse" style="position:absolute;left:46%;top:22%"></div>
+          <div class="dot-pulse" style="position:absolute;left:72%;top:38%"></div>
+          <div style="position:absolute;left:60%;top:62%;width:9px;height:9px;border-radius:50%;background:#F59E0B;box-shadow:0 0 0 6px rgba(245,158,11,.18)"></div>
+          <div style="position:absolute;left:24%;top:44%;width:5px;height:5px;border-radius:50%;background:#2FB877"></div>
+          <div style="position:absolute;left:52%;top:48%;width:5px;height:5px;border-radius:50%;background:#2FB877"></div>
+          <div style="position:absolute;left:66%;top:52%;width:5px;height:5px;border-radius:50%;background:#2FB877"></div>
+          <div style="position:absolute;left:80%;top:70%;width:5px;height:5px;border-radius:50%;background:#2FB877"></div>
+          <span style="position:absolute;left:11%;top:10px;font-size:11px;color:rgba(220,239,228,.45);letter-spacing:1px">GEO · 设备接入热力</span>
+          <div style="position:absolute;right:12px;bottom:10px;display:flex;gap:12px;font-size:10.5px;color:rgba(220,239,228,.55)">
+            <span class="row center gap-4"><i class="dot-pulse" style="width:7px;height:7px"></i>在线设备</span>
+            <span class="row center gap-4"><i style="width:7px;height:7px;border-radius:50%;background:#F59E0B;display:inline-block"></i>告警</span>
+          </div>
+        </div>
+
+        <div class="mt-16" style="display:grid;gap:8px">
+          <div class="row between" style="padding:9px 12px;border-radius:8px;background:rgba(21,154,94,.1);border:1px solid rgba(47,184,119,.16)">
+            <span style="color:#EAFFF5;font-size:13px">五常基地 <span style="font-size:11px;color:rgba(220,239,228,.5)">东北 · 水稻</span></span>
+            <span class="mono" style="font-size:12px;color:rgba(220,239,228,.7)">在线 142 台 · MQTT</span>
+          </div>
+          <div class="row between" style="padding:9px 12px;border-radius:8px;background:rgba(21,154,94,.1);border:1px solid rgba(47,184,119,.16)">
+            <span style="color:#EAFFF5;font-size:13px">寿光基地 <span style="font-size:11px;color:rgba(220,239,228,.5)">山东 · 设施蔬菜</span></span>
+            <span class="mono" style="font-size:12px;color:rgba(220,239,228,.7)">在线 186 台 · CoAP</span>
+          </div>
+          <div class="row between" style="padding:9px 12px;border-radius:8px;background:rgba(21,154,94,.1);border:1px solid rgba(47,184,119,.16)">
+            <span style="color:#EAFFF5;font-size:13px">赣州基地 <span style="font-size:11px;color:rgba(220,239,228,.5)">江西 · 脐橙</span></span>
+            <span class="mono" style="font-size:12px;color:rgba(220,239,228,.7)">在线 96 台 · LoraWAN</span>
+          </div>
+          <div class="row between" style="padding:9px 12px;border-radius:8px;background:rgba(21,154,94,.1);border:1px solid rgba(47,184,119,.16)">
+            <span style="color:#EAFFF5;font-size:13px">湛江基地 <span style="font-size:11px;color:rgba(220,239,228,.5)">广东 · 水产养殖</span></span>
+            <span class="mono" style="font-size:12px;color:rgba(220,239,228,.7)">在线 62 台 · Modbus</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4) 规则引擎（3 列） -->
+    <div class="panel" style="grid-column: span 3">
+      <div class="panel-h"><h3>规则引擎</h3><span style="font-size:12px;color:rgba(220,239,228,.45)">运行中 3 条</span></div>
+      <div class="panel-b" style="padding:6px 10px">
+        <table class="screen-table">
+          <thead>
+            <tr><th>规则</th><th>触发</th><th>动作</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="row center gap-4"><span data-icon="thermo" data-size="14" style="color:var(--amber)"></span>温度告警</td>
+              <td>&gt;35℃</td>
+              <td><span class="tag tag-amber">钉钉告警</span></td>
+            </tr>
+            <tr>
+              <td class="row center gap-4"><span data-icon="alert" data-size="14" style="color:#EF4444"></span>离线告警</td>
+              <td>&gt;30min</td>
+              <td><span class="tag tag-red">短信告警</span></td>
+            </tr>
+            <tr>
+              <td class="row center gap-4"><span data-icon="settings" data-size="14" style="color:var(--tech-400)"></span>数据清洗</td>
+              <td>异常值</td>
+              <td><span class="tag tag-tech">转发中台</span></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="mt-12" style="font-size:11.5px;color:rgba(220,239,228,.45);padding:0 10px">
+          规则命中：今日 1,247 次，执行成功率 99.8%。
+        </div>
+      </div>
+    </div>
+
+    <!-- 5) 实时数据流（7 列） -->
+    <div class="panel" style="grid-column: span 7">
+      <div class="panel-h"><h3>实时数据流</h3><span style="font-size:12px;color:rgba(220,239,228,.45)">最近上报</span></div>
+      <div class="panel-b" style="padding:6px 10px">
+        <table class="screen-table">
+          <thead>
+            <tr><th>时间</th><th>设备 ID</th><th>基地</th><th>类型</th><th>值</th><th>状态</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="mono">14:28:36</td><td class="mono">DEV-2024-8861</td><td>寿光</td><td>空气温度</td><td class="mono">26.4℃</td><td><span class="tag">正常</span></td></tr>
+            <tr><td class="mono">14:28:31</td><td class="mono">DEV-2024-5402</td><td>五常</td><td>土壤湿度</td><td class="mono">58.2%</td><td><span class="tag">正常</span></td></tr>
+            <tr><td class="mono">14:28:29</td><td class="mono">DEV-2024-1103</td><td>湛江</td><td>溶解氧</td><td class="mono">3.8 mg/L</td><td><span class="tag tag-amber">偏低</span></td></tr>
+            <tr><td class="mono">14:28:24</td><td class="mono">DEV-2024-7721</td><td>赣州</td><td>光照强度</td><td class="mono">42 klx</td><td><span class="tag">正常</span></td></tr>
+            <tr><td class="mono">14:28:18</td><td class="mono">DEV-2024-3309</td><td>寿光</td><td>棚内湿度</td><td class="mono">71.6%</td><td><span class="tag">正常</span></td></tr>
+            <tr><td class="mono">14:28:12</td><td class="mono">DEV-2024-4450</td><td>五常</td><td>pH 值</td><td class="mono">6.7</td><td><span class="tag">正常</span></td></tr>
+            <tr><td class="mono">14:28:06</td><td class="mono">DEV-2024-6612</td><td>湛江</td><td>水温</td><td class="mono">29.2℃</td><td><span class="tag tag-amber">偏高</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 6) 设备型号管理（5 列） -->
+    <div class="panel" style="grid-column: span 5">
+      <div class="panel-h"><h3>设备型号管理</h3><span style="font-size:12px;color:rgba(220,239,228,.45)">已接入型号</span></div>
+      <div class="panel-b" style="padding:6px 10px">
+        <table class="screen-table">
+          <thead>
+            <tr><th>型号</th><th>厂商</th><th>协议</th><th>接入数</th><th>状态</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>TH-100</td><td>绿联传感</td><td>MQTT</td><td class="mono">3,420</td><td><span class="tag">量产</span></td></tr>
+            <tr><td>SM-200</td><td>云智联</td><td>CoAP</td><td class="mono">2,156</td><td><span class="tag">量产</span></td></tr>
+            <tr><td>DO-50</td><td>智感科技</td><td>Modbus</td><td class="mono">1,680</td><td><span class="tag">量产</span></td></tr>
+            <tr><td>LW-80</td><td>广域物联</td><td>LoraWAN</td><td class="mono">1,040</td><td><span class="tag">量产</span></td></tr>
+            <tr><td>WS-300</td><td>海纳仪表</td><td>HTTP</td><td class="mono">892</td><td><span class="tag tag-ghost">试产</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="../assets/js/app.js"></script>
+</body>
+</html>

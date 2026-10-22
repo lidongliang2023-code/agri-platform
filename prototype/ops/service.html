@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>服务运营工作台 · 农产云运营端</title>
+<link rel="stylesheet" href="../assets/css/theme.css" />
+<style>
+  .category-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; }
+  .category-item { background: var(--bg-alt); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 14px; text-align: center; transition: .18s; }
+  .category-item:hover { border-color: var(--green-300); background: var(--green-050); }
+  .category-item .n { font-size: 22px; font-weight: 800; font-family: var(--mono); color: var(--green-800); }
+  .category-item .p { font-size: 12px; color: var(--ink-500); margin-top: 4px; }
+  .category-item .t { font-size: 13px; font-weight: 600; color: var(--ink-700); margin-top: 8px; }
+  .category-item .ic { width: 36px; height: 36px; border-radius: 10px; background: #fff; color: var(--green-600); display: grid; place-items: center; margin: 0 auto 10px; border: 1px solid var(--line); }
+  .order-flow { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; }
+  .flow-step { flex: 1; text-align: center; padding: 14px 8px; background: var(--bg-alt); border-radius: var(--r-sm); border: 1px solid var(--line); }
+  .flow-step .num { font-size: 24px; font-weight: 800; font-family: var(--mono); color: var(--green-800); }
+  .flow-step .lbl { font-size: 13px; color: var(--ink-600); margin-top: 4px; }
+  .flow-step.active { background: var(--green-050); border-color: var(--green-400); }
+  .flow-arrow { color: var(--ink-300); }
+  .review-list { display: flex; flex-direction: column; gap: 12px; }
+  .review-item { display: flex; gap: 12px; padding-bottom: 12px; border-bottom: 1px dashed var(--line); }
+  .review-item:last-child { padding-bottom: 0; border-bottom: none; }
+  .review-item .av { width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, var(--green-500), var(--tech-500)); color: #fff; display: grid; place-items: center; font-size: 12px; font-weight: 700; flex: none; }
+  .review-item .info { flex: 1; min-width: 0; }
+  .review-item .hd { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .review-item .nm { font-weight: 600; font-size: 13px; }
+  .review-item .svc { font-size: 12px; color: var(--ink-500); }
+  .review-item .txt { font-size: 13px; color: var(--ink-700); margin-top: 6px; line-height: 1.5; }
+  .stars { color: var(--amber); font-size: 12px; letter-spacing: 1px; }
+  @media (max-width: 1100px) {
+    .category-grid { grid-template-columns: repeat(3, 1fr); }
+  }
+  @media (max-width: 860px) {
+    .category-grid { grid-template-columns: repeat(2, 1fr); }
+    .order-flow { flex-wrap: wrap; }
+    .flow-step { flex: 1 1 40%; }
+    .flow-arrow { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app-shell">
+
+  <!-- 侧边栏 -->
+  <aside class="app-side">
+    <a class="brand" href="../index.html">
+      <span class="logo" data-icon="seed" data-size="20"></span>
+      <span>农产云<small>运营端</small></span>
+    </a>
+    <nav class="side-nav">
+      <div class="group">工作台</div>
+      <a href="index.html"><span data-icon="activity"></span>运营总览</a>
+      <a href="service.html" class="active"><span data-icon="layers"></span>服务运营工作台</a>
+      <a href="supervision.html"><span data-icon="shield"></span>政府监管工作台</a>
+
+      <div class="group">服务管理</div>
+      <a href="service.html"><span data-icon="box"></span>服务类目</a>
+      <a href="service.html"><span data-icon="users"></span>服务商管理</a>
+      <a href="service.html"><span data-icon="clipboard"></span>服务订单</a>
+      <a href="service.html"><span data-icon="target"></span>溯源管理</a>
+      <a href="service.html"><span data-icon="leaf"></span>农技问答</a>
+
+      <div class="group">数据</div>
+      <a href="service.html"><span data-icon="chart"></span>服务报表</a>
+      <a href="service.html"><span data-icon="star"></span>用户评价</a>
+
+      <div class="group">返回入口</div>
+      <a href="../portal/index.html"><span data-icon="globe"></span>官网门户</a>
+      <a href="../trade/index.html"><span data-icon="cart"></span>交易大厅</a>
+      <a href="../production/dashboard.html"><span data-icon="layers"></span>生产监测</a>
+      <a href="../index.html"><span data-icon="home"></span>原型总览</a>
+    </nav>
+  </aside>
+
+  <!-- 主区 -->
+  <div class="app-main">
+
+    <header class="app-top">
+      <div class="crumb">
+        <a href="index.html">运营端</a><span class="sep">/</span>服务运营工作台
+      </div>
+      <div class="row center gap-16">
+        <span data-icon="bell" style="color:var(--ink-500)"></span>
+        <div class="row center gap-12">
+          <div class="avatar">服</div>
+          <span class="t-sm strong">服务运营管理员</span>
+        </div>
+      </div>
+    </header>
+
+    <div class="app-body">
+
+      <!-- 顶部快捷入口 -->
+      <div class="toolbar mb-20">
+        <button class="btn btn-primary btn-sm"><span data-icon="plus"></span>新增服务商</button>
+        <a class="btn btn-outline btn-sm" href="service.html"><span data-icon="clipboard"></span>服务订单</a>
+        <button class="btn btn-outline btn-sm"><span data-icon="target"></span>溯源批次</button>
+        <button class="btn btn-ghost btn-sm"><span data-icon="star"></span>评价管理</button>
+        <div class="spacer"></div>
+        <span class="muted t-sm">数据更新于 <span class="mono">2026-10-22 09:30</span></span>
+      </div>
+
+      <!-- KPI 卡片 -->
+      <div class="grid grid-5">
+        <div class="stat">
+          <div class="k"><span data-icon="users" style="color:var(--green-600)"></span>接入服务商</div>
+          <div class="v"><span class="js-count" data-to="846" data-dec="0">846</span><span class="unit">家</span></div>
+          <div class="d">本月新增 <span class="up">+38 家</span></div>
+        </div>
+        <div class="stat tech">
+          <div class="k"><span data-icon="clipboard" style="color:var(--tech-600)"></span>在途服务订单</div>
+          <div class="v"><span class="js-count" data-to="1247" data-dec="0">1247</span><span class="unit">笔</span></div>
+          <div class="d">较昨日 <span class="up">+5.2%</span></div>
+        </div>
+        <div class="stat">
+          <div class="k"><span data-icon="target" style="color:var(--green-600)"></span>溯源批次</div>
+          <div class="v"><span class="js-count" data-to="3862" data-dec="0">3862</span><span class="unit">批</span></div>
+          <div class="d">本月新增 <span class="up">+412 批</span></div>
+        </div>
+        <div class="stat tech">
+          <div class="k"><span data-icon="leaf" style="color:var(--tech-600)"></span>农技问题数</div>
+          <div class="v"><span class="js-count" data-to="5236" data-dec="0">5236</span><span class="unit">个</span></div>
+          <div class="d">已解决率 <span class="up">92.8%</span></div>
+        </div>
+        <div class="stat">
+          <div class="k"><span data-icon="money" style="color:var(--green-600)"></span>服务GMV</div>
+          <div class="v"><span class="js-count" data-to="7.85" data-dec="2">7.85</span><span class="unit">亿元</span></div>
+          <div class="d">同比 <span class="up">+24.6%</span></div>
+        </div>
+      </div>
+
+      <!-- 服务类目分布 -->
+      <div class="card mt-20">
+        <div class="card-h">
+          <h3><span data-icon="box" data-size="18"></span>服务类目分布</h3>
+          <span class="more">共 6 大类</span>
+        </div>
+        <div class="card-b">
+          <div class="category-grid">
+            <div class="category-item">
+              <div class="ic"><span data-icon="truck" data-size="18"></span></div>
+              <div class="n">186</div>
+              <div class="p">占比 22.0%</div>
+              <div class="t">物流</div>
+            </div>
+            <div class="category-item">
+              <div class="ic"><span data-icon="box" data-size="18"></span></div>
+              <div class="n">142</div>
+              <div class="p">占比 16.8%</div>
+              <div class="t">仓储</div>
+            </div>
+            <div class="category-item">
+              <div class="ic"><span data-icon="thermo" data-size="18"></span></div>
+              <div class="n">98</div>
+              <div class="p">占比 11.6%</div>
+              <div class="t">冷链</div>
+            </div>
+            <div class="category-item">
+              <div class="ic"><span data-icon="target" data-size="18"></span></div>
+              <div class="n">215</div>
+              <div class="p">占比 25.4%</div>
+              <div class="t">溯源</div>
+            </div>
+            <div class="category-item">
+              <div class="ic"><span data-icon="leaf" data-size="18"></span></div>
+              <div class="n">156</div>
+              <div class="p">占比 18.4%</div>
+              <div class="t">农技</div>
+            </div>
+            <div class="category-item">
+              <div class="ic"><span data-icon="factory" data-size="18"></span></div>
+              <div class="n">49</div>
+              <div class="p">占比 5.8%</div>
+              <div class="t">VR云工厂</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 服务商列表 + 服务订单状态流转 -->
+      <div class="grid grid-2 mt-20" style="align-items:start">
+
+        <div class="card">
+          <div class="card-h">
+            <h3><span data-icon="users" data-size="18"></span>服务商列表</h3>
+            <a class="more" href="service.html">全部服务商 →</a>
+          </div>
+          <div class="card-b tight">
+            <table class="data-table">
+              <thead>
+                <tr><th>服务商</th><th>服务类型</th><th>评分</th><th>订单数</th><th>状态</th><th>操作</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>赣南冷链物流有限公司</td>
+                  <td>冷链/物流</td>
+                  <td><span class="stars">★★★★★</span> 4.9</td>
+                  <td class="mono">3,286</td>
+                  <td><span class="tag">正常</span></td>
+                  <td><a class="link" href="service.html">详情</a></td>
+                </tr>
+                <tr>
+                  <td>绿丰农资服务站</td>
+                  <td>农技/农资</td>
+                  <td><span class="stars">★★★★☆</span> 4.7</td>
+                  <td class="mono">1,842</td>
+                  <td><span class="tag">正常</span></td>
+                  <td><a class="link" href="service.html">详情</a></td>
+                </tr>
+                <tr>
+                  <td>云仓智慧仓储</td>
+                  <td>仓储/物流</td>
+                  <td><span class="stars">★★★★★</span> 4.8</td>
+                  <td class="mono">2,156</td>
+                  <td><span class="tag tag-amber">整改</span></td>
+                  <td><a class="link" href="service.html">详情</a></td>
+                </tr>
+                <tr>
+                  <td>溯源科技（华东）</td>
+                  <td>溯源/VR云工厂</td>
+                  <td><span class="stars">★★★★★</span> 4.9</td>
+                  <td class="mono">986</td>
+                  <td><span class="tag">正常</span></td>
+                  <td><a class="link" href="service.html">详情</a></td>
+                </tr>
+                <tr>
+                  <td>农博士在线</td>
+                  <td>农技问答</td>
+                  <td><span class="stars">★★★★☆</span> 4.6</td>
+                  <td class="mono">4,521</td>
+                  <td><span class="tag">正常</span></td>
+                  <td><a class="link" href="service.html">详情</a></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-h">
+            <h3><span data-icon="clipboard" data-size="18"></span>服务订单状态流转</h3>
+            <span class="more">近 30 天</span>
+          </div>
+          <div class="card-b">
+            <div class="order-flow">
+              <div class="flow-step active">
+                <div class="num">286</div>
+                <div class="lbl">待接单</div>
+              </div>
+              <span class="flow-arrow" data-icon="arrow-right" data-size="16"></span>
+              <div class="flow-step active">
+                <div class="num">542</div>
+                <div class="lbl">进行中</div>
+              </div>
+              <span class="flow-arrow" data-icon="arrow-right" data-size="16"></span>
+              <div class="flow-step">
+                <div class="num">3,864</div>
+                <div class="lbl">已完成</div>
+              </div>
+              <span class="flow-arrow" data-icon="arrow-right" data-size="16"></span>
+              <div class="flow-step">
+                <div class="num">38</div>
+                <div class="lbl">售后</div>
+              </div>
+            </div>
+            <div class="mt-20" style="display:flex;gap:16px;flex-wrap:wrap">
+              <div style="flex:1;min-width:140px;background:var(--bg-alt);border-radius:var(--r-sm);padding:14px">
+                <div class="muted t-xs">本月成交订单</div>
+                <div class="mono strong t-lg mt-8">4,692 <span class="t-xs muted">笔</span></div>
+              </div>
+              <div style="flex:1;min-width:140px;background:var(--bg-alt);border-radius:var(--r-sm);padding:14px">
+                <div class="muted t-xs">平均履约时长</div>
+                <div class="mono strong t-lg mt-8">2.4 <span class="t-xs muted">天</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- 用户评价 Top5 -->
+      <div class="card mt-20">
+        <div class="card-h">
+          <h3><span data-icon="star" data-size="18"></span>用户评价 Top5</h3>
+          <a class="more" href="service.html">全部评价 →</a>
+        </div>
+        <div class="card-b">
+          <div class="review-list">
+            <div class="review-item">
+              <div class="av">张</div>
+              <div class="info">
+                <div class="hd">
+                  <span class="nm">张建军</span>
+                  <span class="stars">★★★★★</span>
+                </div>
+                <div class="svc">服务：赣南脐橙冷链干线运输</div>
+                <div class="txt">全程温控可视化，到货新鲜度很高，物流时效比预期提前了半天，非常满意。</div>
+              </div>
+            </div>
+            <div class="review-item">
+              <div class="av">李</div>
+              <div class="info">
+                <div class="hd">
+                  <span class="nm">李秀英</span>
+                  <span class="stars">★★★★★</span>
+                </div>
+                <div class="svc">服务：小麦病虫害在线问诊</div>
+                <div class="txt">农博士专家回复很及时，给出的用药建议也很接地气，已经按方案执行了。</div>
+              </div>
+            </div>
+            <div class="review-item">
+              <div class="av">王</div>
+              <div class="info">
+                <div class="hd">
+                  <span class="nm">王大鹏</span>
+                  <span class="stars">★★★★☆</span>
+                </div>
+                <div class="svc">服务：原产地溯源码定制</div>
+                <div class="txt">溯源页面展示效果不错，如果能再多一些视频素材模板就更完美了。</div>
+              </div>
+            </div>
+            <div class="review-item">
+              <div class="av">陈</div>
+              <div class="info">
+                <div class="hd">
+                  <span class="nm">陈丽华</span>
+                  <span class="stars">★★★★★</span>
+                </div>
+                <div class="svc">服务：VR云工厂产地直播</div>
+                <div class="txt">直播画面清晰，客户反馈很好，帮助我们提升了品牌信任度。</div>
+              </div>
+            </div>
+            <div class="review-item">
+              <div class="av">赵</div>
+              <div class="info">
+                <div class="hd">
+                  <span class="nm">赵志刚</span>
+                  <span class="stars">★★★★☆</span>
+                </div>
+                <div class="svc">服务：气调仓储租赁</div>
+                <div class="txt">仓储环境稳定，出入库流程规范，希望后续能增加短租灵活方案。</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="../assets/js/app.js"></script>
+</body>
+</html>

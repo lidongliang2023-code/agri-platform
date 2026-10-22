@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>数据中台 · 农业产业互联网</title>
+<link rel="stylesheet" href="../assets/css/theme.css" />
+</head>
+<body>
+
+<div class="screen">
+
+  <!-- 顶部 -->
+  <div class="screen-top">
+    <a class="back" href="../index.html">← 返回原型总览</a>
+    <h1>数据中台 · 农业产业互联网</h1>
+    <div style="margin-top:8px;font-size:12.5px;letter-spacing:2px;color:rgba(220,239,228,.55)">
+      数据接入 · 数据治理 · 数据服务 · 资产运营
+    </div>
+    <span class="time js-clock"></span>
+    <div class="line"></div>
+  </div>
+
+  <!-- 主体：12 列网格 -->
+  <div class="screen-grid">
+
+    <!-- 1) KPI 行：2+2+2+3+3 -->
+    <div class="panel" style="grid-column: span 2">
+      <div class="panel-h"><h3>数据源总数</h3><span style="font-size:12px;color:rgba(220,239,228,.45)">接入</span></div>
+      <div class="panel-b">
+        <div class="kpi-screen">
+          <div class="ic" data-icon="layers" data-size="22"></div>
+          <div>
+            <div class="v"><span class="js-count" data-to="68" data-dec="0">68</span><span class="u">个</span></div>
+            <div class="k">业务 / IoT / 外部</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" style="grid-column: span 2">
+      <div class="panel-h"><h3>数据资产数</h3><span style="font-size:12px;color:rgba(220,239,228,.45)">注册</span></div>
+      <div class="panel-b">
+        <div class="kpi-screen">
+          <div class="ic" data-icon="repo" data-size="22"></div>
+          <div>
+            <div class="v"><span class="js-count" data-to="324" data-dec="0">324</span><span class="u">项</span></div>
+            <div class="k">主题域 / 指标 / 标签</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" style="grid-column: span 2">
+      <div class="panel-h"><h3>日处理量</h3><span style="font-size:12px;color:rgba(220,239,228,.45)">T+0</span></div>
+      <div class="panel-b">
+        <div class="kpi-screen">
+          <div class="ic" data-icon="activity" data-size="22"></div>
+          <div>
+            <div class="v"><span class="js-count" data-to="12.8" data-dec="1">12.8</span><span class="u">TB</span></div>
+            <div class="k">批流一体计算</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" style="grid-column: span 3">
+      <div class="panel-h"><h3>数据质量评分</h3><span style="font-size:12px;color:rgba(220,239,228,.45)">综合</span></div>
+      <div class="panel-b">
+        <div class="kpi-screen">
+          <div class="ic" data-icon="check" data-size="22" style="background:rgba(47,184,119,.16)"></div>
+          <div>
+            <div class="v" style="color:var(--green-300)"><span class="js-count" data-to="96.4" data-dec="1">96.4</span><span class="u">分</span></div>
+            <div class="k">五维质量模型评估</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" style="grid-column: span 3">
+      <div class="panel-h"><h3>API 调用量</h3><span style="font-size:12px;color:rgba(220,239,228,.45)">今日</span></div>
+      <div class="panel-b">
+        <div class="kpi-screen">
+          <div class="ic" data-icon="cloud" data-size="22"></div>
+          <div>
+            <div class="v"><span class="js-count" data-to="856" data-dec="0">856</span><span class="u">万</span></div>
+            <div class="k">开放接口总调用</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2) 数据接入来源分布（4 列） -->
+    <div class="panel" style="grid-column: span 4">
+      <div class="panel-h"><h3>数据接入来源分布</h3><span style="font-size:12px;color:rgba(220,239,228,.45)">来源占比</span></div>
+      <div class="panel-b" style="display:flex;align-items:center;gap:20px">
+        <div style="position:relative;width:150px;height:150px;flex:none">
+          <svg width="150" height="150" viewBox="0 0 150 150" style="transform:rotate(-90deg)">
+            <circle cx="75" cy="75" r="60" fill="none" stroke="rgba(47,184,119,.12)" stroke-width="22"></circle>
+            <circle cx="75" cy="75" r="60" fill="none" stroke="#2FB877" stroke-width="22" stroke-dasharray="105.5 271.5" stroke-linecap="round"></circle>
+            <circle cx="75" cy="75" r="60" fill="none" stroke="#38BDF8" stroke-width="22" stroke-dasharray="90.5 286.5" stroke-dashoffset="-105.5" stroke-linecap="round"></circle>
+            <circle cx="75" cy="75" r="60" fill="none" stroke="#F59E0B" stroke-width="22" stroke-dasharray="67.8 309.2" stroke-dashoffset="-196" stroke-linecap="round"></circle>
+            <circle cx="75" cy="75" r="60" fill="none" stroke="#7C3AED" stroke-width="22" stroke-dasharray="52.8 324.2" stroke-dashoffset="-263.8" stroke-linecap="round"></circle>
+            <circle cx="75" cy="75" r="60" fill="none" stroke="#06B6D4" stroke-width="22" stroke-dasharray="37.7 339.3" stroke-dashoffset="-316.6" stroke-linecap="round"></circle>
+            <circle cx="75" cy="75" r="60" fill="none" stroke="#EF4444" stroke-width="22" stroke-dasharray="22.6 354.4" stroke-dashoffset="-354.3" stroke-linecap="round"></circle>
+          </svg>
+          <div style="position:absolute;inset:0;display:grid;place-items:center;text-align:center">
+            <div><div class="mono" style="font-size:22px;font-weight:800;color:#EAFFF5">68</div><div style="font-size:11px;color:rgba(220,239,228,.5)">数据源</div></div>
+          </div>
+        </div>
+        <div style="flex:1;display:grid;gap:8px;font-size:12px">
+          <div class="row between" style="color:rgba(220,239,228,.7)"><span class="row center gap-4"><i class="dot" style="width:9px;height:9px"></i>交易</span><span class="mono" style="color:#EAFFF5">28%</span></div>
+          <div class="row between" style="color:rgba(220,239,228,.7)"><span class="row center gap-4"><i class="dot" style="width:9px;height:9px;background:#38BDF8"></i>生产</span><span class="mono" style="color:#EAFFF5">24%</span></div>
+          <div class="row between" style="color:rgba(220,239,228,.7)"><span class="row center gap-4"><i class="dot" style="width:9px;height:9px;background:#F59E0B"></i>IoT</span><span class="mono" style="color:#EAFFF5">18%</span></div>
+          <div class="row between" style="color:rgba(220,239,228,.7)"><span class="row center gap-4"><i class="dot" style="width:9px;height:9px;background:#7C3AED"></i>金融</span><span class="mono" style="color:#EAFFF5">14%</span></div>
+          <div class="row between" style="color:rgba(220,239,228,.7)"><span class="row center gap-4"><i class="dot" style="width:9px;height:9px;background:#06B6D4"></i>物流</span><span class="mono" style="color:#EAFFF5">10%</span></div>
+          <div class="row between" style="color:rgba(220,239,228,.7)"><span class="row center gap-4"><i class="dot" style="width:9px;height:9px;background:#EF4444"></i>政府</span><span class="mono" style="color:#EAFFF5">6%</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3) 数据治理质量（4 列） -->
+    <div class="panel" style="grid-column: span 4">
+      <div class="panel-h"><h3>数据治理质量</h3><span style="font-size:12px;color:rgba(220,239,228,.45)">五维评分</span></div>
+      <div class="panel-b">
+        <div class="row between" style="font-size:12.5px;color:rgba(220,239,228,.7);margin-bottom:6px">
+          <span class="row center gap-4"><i class="dot"></i>完整性</span>
+          <span class="mono" style="color:#EAFFF5">98.2</span>
+        </div>
+        <div class="progress" style="background:rgba(255,255,255,.08)"><i style="width:98.2%"></i></div>
+
+        <div class="row between mt-16" style="font-size:12.5px;color:rgba(220,239,228,.7);margin-bottom:6px">
+          <span class="row center gap-4"><i class="dot" style="background:#38BDF8"></i>准确性</span>
+          <span class="mono" style="color:#EAFFF5">96.5</span>
+        </div>
+        <div class="progress" style="background:rgba(255,255,255,.08)"><i style="width:96.5%;background:linear-gradient(90deg,#38BDF8,rgba(56,189,248,.5))"></i></div>
+
+        <div class="row between mt-16" style="font-size:12.5px;color:rgba(220,239,228,.7);margin-bottom:6px">
+          <span class="row center gap-4"><i class="dot" style="background:#F59E0B"></i>一致性</span>
+          <span class="mono" style="color:#EAFFF5">94.8</span>
+        </div>
+        <div class="progress" style="background:rgba(255,255,255,.08)"><i style="width:94.8%;background:linear-gradient(90deg,var(--amber),rgba(245,158,11,.5))"></i></div>
+
+        <div class="row between mt-16" style="font-size:12.5px;color:rgba(220,239,228,.7);margin-bottom:6px">
+          <span class="row center gap-4"><i class="dot" style="background:#7C3AED"></i>及时性</span>
+          <span class="mono" style="color:#EAFFF5">97.1</span>
+        </div>
+        <div class="progress" style="background:rgba(255,255,255,.08)"><i style="width:97.1%;background:linear-gradient(90deg,var(--violet),rgba(124,58,237,.5))"></i></div>
+
+        <div class="row between mt-16" style="font-size:12.5px;color:rgba(220,239,228,.7);margin-bottom:6px">
+          <span class="row center gap-4"><i class="dot" style="background:#06B6D4"></i>唯一性</span>
+          <span class="mono" style="color:#EAFFF5">95.4</span>
+        </div>
+        <div class="progress" style="background:rgba(255,255,255,.08)"><i style="width:95.4%;background:linear-gradient(90deg,var(--cyan),rgba(6,182,212,.5))"></i></div>
+      </div>
+    </div>
+
+    <!-- 4) 数据链路健康度（4 列） -->
+    <div class="panel" style="grid-column: span 4">
+      <div class="panel-h"><h3>数据链路健康度</h3><span style="font-size:12px;color:rgba(220,239,228,.45)">实时监控</span></div>
+      <div class="panel-b" style="padding:6px 10px">
+        <table class="screen-table">
+          <thead>
+            <tr><th>链路</th><th>状态</th><th>延迟</th><th>异常</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="row center gap-4"><span data-icon="truck" data-size="14"></span>物流数据接入</td><td><span class="tag">在线</span></td><td class="mono">24 ms</td><td class="mono">0</td></tr>
+            <tr><td class="row center gap-4"><span data-icon="money" data-size="14"></span>金融数据接入</td><td><span class="tag">在线</span></td><td class="mono">31 ms</td><td class="mono">0</td></tr>
+            <tr><td class="row center gap-4"><span data-icon="cpu" data-size="14"></span>IoT 实时接入</td><td><span class="tag">在线</span></td><td class="mono">18 ms</td><td class="mono">1</td></tr>
+            <tr><td class="row center gap-4"><span data-icon="box" data-size="14"></span>仓储数据接入</td><td><span class="tag">在线</span></td><td class="mono">27 ms</td><td class="mono">0</td></tr>
+            <tr><td class="row center gap-4"><span data-icon="file" data-size="14"></span>政府数据接入</td><td><span class="tag tag-amber">延迟</span></td><td class="mono">1,240 ms</td><td class="mono">2</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 5) 数据资产目录（7 列） -->
+    <div class="panel" style="grid-column: span 7">
+      <div class="panel-h"><h3>数据资产目录</h3><span style="font-size:12px;color:rgba(220,239,228,.45)">Top 6</span></div>
+      <div class="panel-b" style="padding:6px 10px">
+        <table class="screen-table">
+          <thead>
+            <tr><th>资产名称</th><th>所属主题</th><th>数据量</th><th>更新频率</th><th>使用次数</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>全量商品主数据</td><td>交易域</td><td class="mono">128 GB</td><td>每日</td><td class="mono" style="color:#6FD6A2">12,580</td></tr>
+            <tr><td>基地 IoT 时序库</td><td>生产域</td><td class="mono">86 TB</td><td>实时</td><td class="mono" style="color:#6FD6A2">9,620</td></tr>
+            <tr><td>企业信用评估宽表</td><td>金融域</td><td class="mono">42 GB</td><td>每周</td><td class="mono" style="color:#6FD6A2">7,840</td></tr>
+            <tr><td>物流在途轨迹</td><td>物流域</td><td class="mono">320 GB</td><td>每小时</td><td class="mono" style="color:#6FD6A2">6,150</td></tr>
+            <tr><td>会员统一视图</td><td>用户域</td><td class="mono">15 GB</td><td>每日</td><td class="mono" style="color:#6FD6A2">5,310</td></tr>
+            <tr><td>农产品溯源档案</td><td>监管域</td><td class="mono">58 GB</td><td>每日</td><td class="mono" style="color:#6FD6A2">4,980</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 6) 热门 API 服务 Top5（5 列） -->
+    <div class="panel" style="grid-column: span 5">
+      <div class="panel-h"><h3>热门 API 服务 Top5</h3><span style="font-size:12px;color:rgba(220,239,228,.45)">今日</span></div>
+      <div class="panel-b" style="padding:6px 10px">
+        <table class="screen-table">
+          <thead>
+            <tr><th>#</th><th>API 名称</th><th>调用量</th><th>成功率</th><th>状态</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="mono">1</td><td>企业信用查询</td><td class="mono">182 万</td><td class="mono" style="color:#6FD6A2">99.98%</td><td><span class="tag">稳定</span></td></tr>
+            <tr><td class="mono">2</td><td>IoT 实时数据</td><td class="mono">156 万</td><td class="mono" style="color:#6FD6A2">99.95%</td><td><span class="tag">稳定</span></td></tr>
+            <tr><td class="mono">3</td><td>物流轨迹查询</td><td class="mono">124 万</td><td class="mono" style="color:#6FD6A2">99.92%</td><td><span class="tag">稳定</span></td></tr>
+            <tr><td class="mono">4</td><td>商品溯源验真</td><td class="mono">98 万</td><td class="mono" style="color:#6FD6A2">99.90%</td><td><span class="tag">稳定</span></td></tr>
+            <tr><td class="mono">5</td><td>价格行情指数</td><td class="mono">76 万</td><td class="mono" style="color:#FCD34D">99.50%</td><td><span class="tag tag-amber">关注</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="../assets/js/app.js"></script>
+</body>
+</html>

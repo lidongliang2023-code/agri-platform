@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>政府监管工作台 · 农产云运营端</title>
+<link rel="stylesheet" href="../assets/css/theme.css" />
+<style>
+  .dashboard-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  .dash-card { background: var(--bg-alt); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 18px; }
+  .dash-card h4 { font-size: 14px; font-weight: 700; color: var(--ink-700); margin-bottom: 14px; display: flex; align-items: center; gap: 6px; }
+  .compliance { display: grid; place-items: center; padding: 10px 0; }
+  .compliance .ring { width: 120px; height: 120px; border-radius: 50%; background: conic-gradient(var(--green-500) 0% 96.2%, var(--line) 96.2% 100%); display: grid; place-items: center; }
+  .compliance .ring::before { content: ""; width: 94px; height: 94px; border-radius: 50%; background: #fff; }
+  .compliance .txt { position: absolute; text-align: center; }
+  .compliance .txt .n { font-size: 28px; font-weight: 800; font-family: var(--mono); color: var(--green-800); }
+  .compliance .txt .l { font-size: 12px; color: var(--ink-500); }
+  .dist-list { display: flex; flex-direction: column; gap: 10px; }
+  .dist-row { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+  .dist-row .bar { flex: 1; height: 10px; background: var(--line); border-radius: var(--r-pill); overflow: hidden; }
+  .dist-row .bar i { display: block; height: 100%; border-radius: var(--r-pill); background: linear-gradient(90deg, var(--green-500), var(--tech-500)); }
+  .dist-row .pct { width: 42px; text-align: right; font-family: var(--mono); }
+  .region-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+  .region-tags span { padding: 5px 12px; border-radius: var(--r-pill); background: #fff; border: 1px solid var(--line); font-size: 12px; color: var(--ink-700); }
+  .region-tags span strong { color: var(--green-700); margin-left: 4px; }
+  .warning-list { display: flex; flex-direction: column; gap: 12px; }
+  .warning-item { display: flex; gap: 12px; padding: 14px; background: var(--red-100); border: 1px solid rgba(239,68,68,.18); border-radius: var(--r-sm); }
+  .warning-item .ic { width: 36px; height: 36px; border-radius: 10px; background: var(--red); color: #fff; display: grid; place-items: center; flex: none; }
+  .warning-item .info { flex: 1; min-width: 0; }
+  .warning-item .tt { font-weight: 700; font-size: 14px; color: var(--ink-900); }
+  .warning-item .desc { font-size: 13px; color: var(--ink-700); margin-top: 4px; }
+  .warning-item .meta { font-size: 12px; color: var(--ink-500); margin-top: 6px; }
+  .warning-item .act { margin-top: 8px; }
+  .warning-item .act .btn-sm { padding: 4px 10px; font-size: 12px; }
+  .submit-status.done { background: var(--green-100); color: var(--green-700); }
+  .submit-status.pending { background: var(--amber-100); color: #B45309; }
+  @media (max-width: 1100px) {
+    .dashboard-grid { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 860px) {
+    .dashboard-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app-shell">
+
+  <!-- 侧边栏 -->
+  <aside class="app-side">
+    <a class="brand" href="../index.html">
+      <span class="logo" data-icon="seed" data-size="20"></span>
+      <span>农产云<small>运营端</small></span>
+    </a>
+    <nav class="side-nav">
+      <div class="group">工作台</div>
+      <a href="index.html"><span data-icon="activity"></span>运营总览</a>
+      <a href="service.html"><span data-icon="layers"></span>服务运营工作台</a>
+      <a href="supervision.html" class="active"><span data-icon="shield"></span>政府监管工作台</a>
+
+      <div class="group">监管</div>
+      <a href="supervision.html"><span data-icon="factory"></span>企业监管</a>
+      <a href="supervision.html"><span data-icon="clipboard"></span>产品抽检</a>
+      <a href="supervision.html"><span data-icon="target"></span>溯源核查</a>
+      <a href="supervision.html"><span data-icon="money"></span>补贴申报</a>
+      <a href="supervision.html"><span data-icon="file"></span>数据报送</a>
+
+      <div class="group">数据</div>
+      <a href="supervision.html"><span data-icon="chart"></span>监管报表</a>
+      <a href="supervision.html"><span data-icon="alert"></span>风险预警</a>
+
+      <div class="group">返回入口</div>
+      <a href="../portal/index.html"><span data-icon="globe"></span>官网门户</a>
+      <a href="../trade/index.html"><span data-icon="cart"></span>交易大厅</a>
+      <a href="../production/dashboard.html"><span data-icon="layers"></span>生产监测</a>
+      <a href="../index.html"><span data-icon="home"></span>原型总览</a>
+    </nav>
+  </aside>
+
+  <!-- 主区 -->
+  <div class="app-main">
+
+    <header class="app-top">
+      <div class="crumb">
+        <a href="index.html">运营端</a><span class="sep">/</span>政府监管工作台
+      </div>
+      <div class="row center gap-16">
+        <span data-icon="bell" style="color:var(--ink-500)"></span>
+        <div class="row center gap-12">
+          <div class="avatar">监</div>
+          <span class="t-sm strong">政府监管管理员</span>
+        </div>
+      </div>
+    </header>
+
+    <div class="app-body">
+
+      <!-- 顶部快捷入口 -->
+      <div class="toolbar mb-20">
+        <button class="btn btn-primary btn-sm"><span data-icon="clipboard"></span>新建抽检任务</button>
+        <a class="btn btn-outline btn-sm" href="supervision.html"><span data-icon="target"></span>溯源核查</a>
+        <button class="btn btn-outline btn-sm"><span data-icon="file"></span>数据报送</button>
+        <button class="btn btn-ghost btn-sm"><span data-icon="alert"></span>风险预警</button>
+        <div class="spacer"></div>
+        <span class="muted t-sm">数据更新于 <span class="mono">2026-10-22 09:30</span></span>
+      </div>
+
+      <!-- KPI 卡片 -->
+      <div class="grid grid-5">
+        <div class="stat">
+          <div class="k"><span data-icon="shield" style="color:var(--green-600)"></span>入驻监管部门</div>
+          <div class="v"><span class="js-count" data-to="42" data-dec="0">42</span><span class="unit">个</span></div>
+          <div class="d">覆盖 <span class="up">31 省市</span></div>
+        </div>
+        <div class="stat">
+          <div class="k"><span data-icon="factory" style="color:var(--green-600)"></span>监管企业数</div>
+          <div class="v"><span class="js-count" data-to="8650" data-dec="0">8650</span><span class="unit">家</span></div>
+          <div class="d">较上月 <span class="up">+326 家</span></div>
+        </div>
+        <div class="stat tech">
+          <div class="k"><span data-icon="clipboard" style="color:var(--tech-600)"></span>本月抽检批次</div>
+          <div class="v"><span class="js-count" data-to="1286" data-dec="0">1286</span><span class="unit">批</span></div>
+          <div class="d">较上月 <span class="up">+12.4%</span></div>
+        </div>
+        <div class="stat tech">
+          <div class="k"><span data-icon="check" style="color:var(--tech-600)"></span>合格率</div>
+          <div class="v"><span class="js-count" data-to="96.2" data-dec="1">96.2</span><span class="unit">%</span></div>
+          <div class="d">同比 <span class="up">+1.1%</span></div>
+        </div>
+        <div class="stat">
+          <div class="k"><span data-icon="alert" style="color:var(--green-600)"></span>待处理预警</div>
+          <div class="v"><span class="js-count" data-to="17" data-dec="0">17</span><span class="unit">条</span></div>
+          <div class="d">紧急 <span class="up">3 条</span></div>
+        </div>
+      </div>
+
+      <!-- 监管数据看板 -->
+      <div class="card mt-20">
+        <div class="card-h">
+          <h3><span data-icon="chart" data-size="18"></span>监管数据看板</h3>
+          <span class="more">本月</span>
+        </div>
+        <div class="card-b">
+          <div class="dashboard-grid">
+            <div class="dash-card">
+              <h4><span data-icon="shield" data-size="16"></span>企业合规率</h4>
+              <div class="compliance">
+                <div class="ring"></div>
+                <div class="txt"><div class="n">96.2%</div><div class="l">合规企业</div></div>
+              </div>
+              <div class="row between t-xs muted mt-12">
+                <span>合规 8,321 家</span>
+                <span>异常 329 家</span>
+              </div>
+            </div>
+            <div class="dash-card">
+              <h4><span data-icon="clipboard" data-size="16"></span>产品抽检结果分布</h4>
+              <div class="dist-list mt-8">
+                <div class="dist-row">
+                  <span style="width:60px">合格</span>
+                  <div class="bar"><i style="width:96.2%"></i></div>
+                  <span class="pct">96.2%</span>
+                </div>
+                <div class="dist-row">
+                  <span style="width:60px">农残超标</span>
+                  <div class="bar"><i style="width:2.1%;background:var(--red)"></i></div>
+                  <span class="pct">2.1%</span>
+                </div>
+                <div class="dist-row">
+                  <span style="width:60px">重金属</span>
+                  <div class="bar"><i style="width:0.9%;background:var(--amber)"></i></div>
+                  <span class="pct">0.9%</span>
+                </div>
+                <div class="dist-row">
+                  <span style="width:60px">待复检</span>
+                  <div class="bar"><i style="width:0.8%;background:var(--tech-500)"></i></div>
+                  <span class="pct">0.8%</span>
+                </div>
+              </div>
+            </div>
+            <div class="dash-card">
+              <h4><span data-icon="location" data-size="16"></span>区域分布</h4>
+              <div class="region-tags mt-8">
+                <span>华东<strong>2,856</strong></span>
+                <span>华中<strong>1,642</strong></span>
+                <span>华南<strong>1,438</strong></span>
+                <span>华北<strong>1,205</strong></span>
+                <span>西南<strong>982</strong></span>
+                <span>东北<strong>527</strong></span>
+              </div>
+              <div class="mt-16" style="background:#fff;border:1px solid var(--line);border-radius:var(--r-sm);padding:12px">
+                <div class="row between t-sm mb-8"><span>监管覆盖率</span><span class="mono strong">87.4%</span></div>
+                <div class="progress"><i style="width:87.4%"></i></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 抽检任务列表 + 风险预警 -->
+      <div class="grid grid-2 mt-20" style="align-items:start">
+
+        <div class="card">
+          <div class="card-h">
+            <h3><span data-icon="clipboard" data-size="18"></span>抽检任务列表</h3>
+            <a class="more" href="supervision.html">全部任务 →</a>
+          </div>
+          <div class="card-b tight">
+            <table class="data-table">
+              <thead>
+                <tr><th>任务名称</th><th>品类</th><th>抽样数</th><th>合格率</th><th>状态</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>2026 秋粮入市专项抽检</td>
+                  <td>大米/小麦</td>
+                  <td class="mono">320</td>
+                  <td class="mono">98.4%</td>
+                  <td><span class="tag tag-tech">进行中</span></td>
+                </tr>
+                <tr>
+                  <td>柑橘农残快检行动</td>
+                  <td>柑橘类</td>
+                  <td class="mono">256</td>
+                  <td class="mono">95.7%</td>
+                  <td><span class="tag tag-tech">进行中</span></td>
+                </tr>
+                <tr>
+                  <td>畜禽产品兽药残留监测</td>
+                  <td>猪肉/禽蛋</td>
+                  <td class="mono">180</td>
+                  <td class="mono">97.2%</td>
+                  <td><span class="tag">已完成</span></td>
+                </tr>
+                <tr>
+                  <td>水产品质量安全抽检</td>
+                  <td>淡水鱼/虾蟹</td>
+                  <td class="mono">142</td>
+                  <td class="mono">93.7%</td>
+                  <td><span class="tag tag-amber">待整改</span></td>
+                </tr>
+                <tr>
+                  <td>蔬菜基地例行监测</td>
+                  <td>叶菜/茄果</td>
+                  <td class="mono">388</td>
+                  <td class="mono">96.9%</td>
+                  <td><span class="tag">已完成</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-h">
+            <h3><span data-icon="alert" data-size="18"></span>风险预警</h3>
+            <a class="more" href="supervision.html">全部预警 →</a>
+          </div>
+          <div class="card-b">
+            <div class="warning-list">
+              <div class="warning-item">
+                <div class="ic"><span data-icon="factory" data-size="18"></span></div>
+                <div class="info">
+                  <div class="tt">企业异常经营预警</div>
+                  <div class="desc">某某食品公司连续 30 天未上报生产台账，疑似停产异常。</div>
+                  <div class="meta">风险等级：高 · 触发时间：10-21 16:30</div>
+                  <div class="act"><button class="btn btn-sm btn-warn">立即核查</button></div>
+                </div>
+              </div>
+              <div class="warning-item">
+                <div class="ic"><span data-icon="alert" data-size="18"></span></div>
+                <div class="info">
+                  <div class="tt">农残超标预警</div>
+                  <div class="desc">华南某基地批次橙子检测到啶虫脒残留超出国家标准 0.3 倍。</div>
+                  <div class="meta">风险等级：高 · 触发时间：10-21 11:20</div>
+                  <div class="act"><button class="btn btn-sm btn-warn">启动召回</button></div>
+                </div>
+              </div>
+              <div class="warning-item">
+                <div class="ic"><span data-icon="file" data-size="18"></span></div>
+                <div class="info">
+                  <div class="tt">证照到期预警</div>
+                  <div class="desc">23 家入驻企业食品经营许可证将在 30 天内到期，请及时提醒换证。</div>
+                  <div class="meta">风险等级：中 · 触发时间：10-20 09:00</div>
+                  <div class="act"><button class="btn btn-sm btn-outline">批量通知</button></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- 数据报送记录 -->
+      <div class="card mt-20">
+        <div class="card-h">
+          <h3><span data-icon="file" data-size="18"></span>数据报送记录</h3>
+          <a class="more" href="supervision.html">全部记录 →</a>
+        </div>
+        <div class="card-b tight">
+          <table class="data-table">
+            <thead>
+              <tr><th>报送主题</th><th>接收单位</th><th>报送时间</th><th>状态</th><th>操作</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>10 月农产品质量安全月报</td>
+                <td>农业农村部监管司</td>
+                <td class="mono">2026-10-22 08:30</td>
+                <td><span class="tag submit-status done">已送达</span></td>
+                <td><a class="link" href="supervision.html">查看</a></td>
+              </tr>
+              <tr>
+                <td>溯源数据对接情况统计</td>
+                <td>省市场监管局</td>
+                <td class="mono">2026-10-21 15:00</td>
+                <td><span class="tag submit-status done">已送达</span></td>
+                <td><a class="link" href="supervision.html">查看</a></td>
+              </tr>
+              <tr>
+                <td>秋粮收购进度及价格监测</td>
+                <td>国家粮食和物资储备局</td>
+                <td class="mono">2026-10-20 10:20</td>
+                <td><span class="tag submit-status pending">报送中</span></td>
+                <td><a class="link" href="supervision.html">跟踪</a></td>
+              </tr>
+              <tr>
+                <td>农产品抽检不合格处置台账</td>
+                <td>市农业农村局</td>
+                <td class="mono">2026-10-18 14:50</td>
+                <td><span class="tag submit-status done">已确认</span></td>
+                <td><a class="link" href="supervision.html">查看</a></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="../assets/js/app.js"></script>
+</body>
+</html>

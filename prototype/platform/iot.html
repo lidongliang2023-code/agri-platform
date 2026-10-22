@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>物联网平台 · 技术支撑层</title>
+<link rel="stylesheet" href="../assets/css/theme.css" />
+<style>
+.lifecycle-flow { display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 0; }
+.lifecycle-flow .step { flex:1;text-align:center; }
+.lifecycle-flow .node { display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 12px;border-radius:999px;background:rgba(21,154,94,.18);border:1px solid rgba(47,184,119,.45);color:#EAFFF5;font-size:12.5px;white-space:nowrap; }
+.lifecycle-flow .arrow { color:rgba(220,239,228,.35); }
+.model-card { padding:14px;border-radius:12px;background:rgba(21,154,94,.1);border:1px solid rgba(47,184,119,.2); }
+.model-card .t { display:flex;align-items:center;gap:8px;color:#EAFFF5;font-weight:700;font-size:14px;margin-bottom:10px; }
+.model-card .props { display:flex;flex-wrap:wrap;gap:6px; }
+.model-card .props span { padding:4px 8px;border-radius:999px;background:rgba(6,30,22,.7);border:1px solid rgba(47,184,119,.18);font-size:11.5px;color:rgba(220,239,228,.75); }
+.rule-chain { display:flex;align-items:center;gap:12px; }
+.rule-node { flex:1;text-align:center;padding:12px 8px;border-radius:10px;background:rgba(14,165,233,.12);border:1px solid rgba(56,189,248,.35);color:#EAFFF5;font-size:12.5px; }
+.rule-node .n { font-weight:700;margin-bottom:4px; }
+.rule-node .d { font-size:11px;color:rgba(220,239,228,.55); }
+.rule-arrow { color:var(--green-300); }
+.ota-row { display:flex;align-items:center;gap:14px;margin-bottom:12px; }
+.ota-row .lbl { width:80px;font-size:12.5px;color:rgba(220,239,228,.6); }
+.ota-row .progress { flex:1;height:10px;background:rgba(255,255,255,.08); }
+.ota-row .progress i { background:linear-gradient(90deg,var(--tech-400),var(--green-400)); }
+.ota-row .val { width:70px;text-align:right;font-family:var(--mono);font-size:13px;color:#EAFFF5; }
+</style>
+</head>
+<body>
+
+<div class="screen">
+
+  <!-- 顶部 -->
+  <div class="screen-top">
+    <a class="back" href="../index.html">← 返回原型总览</a>
+    <h1>物联网平台 · 技术支撑层</h1>
+    <div style="margin-top:8px;font-size:12.5px;letter-spacing:2px;color:rgba(220,239,228,.55)">
+      设备影子 · 规则引擎 · OTA升级 · 边缘计算
+    </div>
+    <span class="time js-clock"></span>
+    <div class="line"></div>
+  </div>
+
+  <!-- 主体 -->
+  <div class="screen-grid">
+
+    <!-- 5 个 KPI -->
+    <div class="panel" style="grid-column: span 3">
+      <div class="panel-h"><h3>注册设备数</h3><span style="font-size:12px;color:rgba(220,239,228,.45)">累计</span></div>
+      <div class="panel-b">
+        <div class="kpi-screen">
+          <div class="ic" data-icon="cpu" data-size="24"></div>
+          <div>
+            <div class="v"><span class="js-count" data-to="128.6" data-dec="1">128.6</span><span class="u">万台</span></div>
+            <div class="k">全平台已注册物联网终端</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" style="grid-column: span 3">
+      <div class="panel-h"><h3>在线设备数</h3><span style="font-size:12px;color:rgba(220,239,228,.45)">实时</span></div>
+      <div class="panel-b">
+        <div class="kpi-screen">
+          <div class="ic" data-icon="wifi" data-size="24"></div>
+          <div>
+            <div class="v"><span class="js-count" data-to="121.4" data-dec="1">121.4</span><span class="u">万台</span></div>
+            <div class="k">当前在线率 94.4%</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" style="grid-column: span 2">
+      <div class="panel-h"><h3>日消息量</h3><span style="font-size:12px;color:rgba(220,239,228,.45)">T+0</span></div>
+      <div class="panel-b">
+        <div class="kpi-screen">
+          <div class="ic" data-icon="activity" data-size="22"></div>
+          <div>
+            <div class="v"><span class="js-count" data-to="46.8" data-dec="1">46.8</span><span class="u">亿</span></div>
+            <div class="k">MQTT/HTTP 上行</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" style="grid-column: span 2">
+      <div class="panel-h"><h3>规则执行数</h3><span style="font-size:12px;color:rgba(220,239,228,.45)">今日</span></div>
+      <div class="panel-b">
+        <div class="kpi-screen">
+          <div class="ic" data-icon="zap" data-size="22"></div>
+          <div>
+            <div class="v"><span class="js-count" data-to="892" data-dec="0">892</span><span class="u">万次</span></div>
+            <div class="k">规则引擎触发</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" style="grid-column: span 2">
+      <div class="panel-h"><h3>边缘节点数</h3><span style="font-size:12px;color:rgba(220,239,228,.45)">接入</span></div>
+      <div class="panel-b">
+        <div class="kpi-screen">
+          <div class="ic" data-icon="cloud" data-size="22"></div>
+          <div>
+            <div class="v"><span class="js-count" data-to="326" data-dec="0">326</span><span class="u">个</span></div>
+            <div class="k">覆盖 4 大产区</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 设备生命周期 -->
+    <div class="panel" style="grid-column: span 7">
+      <div class="panel-h"><h3>设备生命周期</h3><span style="font-size:12px;color:rgba(220,239,228,.45)">状态流转</span></div>
+      <div class="panel-b">
+        <div class="lifecycle-flow">
+          <div class="step"><div class="node"><span data-icon="box" data-size="14"></span>注册</div></div>
+          <span class="arrow" data-icon="arrow-right" data-size="16"></span>
+          <div class="step"><div class="node"><span data-icon="check" data-size="14"></span>激活</div></div>
+          <span class="arrow" data-icon="arrow-right" data-size="16"></span>
+          <div class="step"><div class="node" style="background:rgba(47,184,119,.28);border-color:var(--green-300)"><span data-icon="wifi" data-size="14"></span>在线</div></div>
+          <span class="arrow" data-icon="arrow-right" data-size="16"></span>
+          <div class="step"><div class="node"><span data-icon="clock" data-size="14"></span>离线</div></div>
+          <span class="arrow" data-icon="arrow-right" data-size="16"></span>
+          <div class="step"><div class="node"><span data-icon="close" data-size="14"></span>注销</div></div>
+        </div>
+        <div class="mt-16" style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;font-size:11.5px;color:rgba(220,239,228,.55)">
+          <div style="text-align:center">创建三元组<br/>录入 SN</div>
+          <div style="text-align:center">首次连接<br/>校验证书</div>
+          <div style="text-align:center">心跳维持<br/>数据上报</div>
+          <div style="text-align:center">超时未上报<br/>进入静默</div>
+          <div style="text-align:center">清理影子<br/>释放资源</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 物模型管理 -->
+    <div class="panel" style="grid-column: span 5">
+      <div class="panel-h"><h3>物模型管理</h3><span style="font-size:12px;color:rgba(220,239,228,.45)">3 个标准模型</span></div>
+      <div class="panel-b">
+        <div class="col gap-12">
+          <div class="model-card">
+            <div class="t"><span data-icon="thermo" data-size="16"></span>温湿度传感器</div>
+            <div class="props">
+              <span>温度 ℃</span><span>湿度 %</span><span>电池 V</span><span>RSSI</span><span>上报周期 5min</span>
+            </div>
+          </div>
+          <div class="model-card">
+            <div class="t"><span data-icon="drop" data-size="16"></span>土壤墒情站</div>
+            <div class="props">
+              <span>土壤湿度 %</span><span>温度 ℃</span><span>EC mS/cm</span><span>pH</span><span>N/P/K</span>
+            </div>
+          </div>
+          <div class="model-card">
+            <div class="t"><span data-icon="sun" data-size="16"></span>智能气象站</div>
+            <div class="props">
+              <span>风速 m/s</span><span>风向 °</span><span>雨量 mm</span><span>光照 klx</span><span>气压 hPa</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 规则引擎可视化 -->
+    <div class="panel" style="grid-column: span 6">
+      <div class="panel-h"><h3>规则引擎</h3><span style="font-size:12px;color:rgba(220,239,228,.45)">if-then 规则链路</span></div>
+      <div class="panel-b">
+        <div class="rule-chain">
+          <div class="rule-node">
+            <div class="n">触发条件</div>
+            <div class="d">温度&gt;35℃</div>
+          </div>
+          <span class="rule-arrow" data-icon="arrow-right" data-size="18"></span>
+          <div class="rule-node">
+            <div class="n">过滤</div>
+            <div class="d">连续 3 次且<br/>非夜间模式</div>
+          </div>
+          <span class="rule-arrow" data-icon="arrow-right" data-size="18"></span>
+          <div class="rule-node">
+            <div class="n">动作</div>
+            <div class="d">APP 告警 +<br/>联动风机</div>
+          </div>
+        </div>
+        <div class="mt-16" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+          <div style="padding:10px;border-radius:8px;background:rgba(6,30,22,.7);border:1px solid rgba(47,184,119,.15)">
+            <div style="font-size:11px;color:rgba(220,239,228,.5)">生效规则</div>
+            <div class="mono" style="font-size:18px;font-weight:800;color:#EAFFF5;margin-top:4px">1,286</div>
+          </div>
+          <div style="padding:10px;border-radius:8px;background:rgba(6,30,22,.7);border:1px solid rgba(47,184,119,.15)">
+            <div style="font-size:11px;color:rgba(220,239,228,.5)">成功执行</div>
+            <div class="mono" style="font-size:18px;font-weight:800;color:#EAFFF5;margin-top:4px">891.4 万</div>
+          </div>
+          <div style="padding:10px;border-radius:8px;background:rgba(6,30,22,.7);border:1px solid rgba(47,184,119,.15)">
+            <div style="font-size:11px;color:rgba(220,239,228,.5)">平均延迟</div>
+            <div class="mono" style="font-size:18px;font-weight:800;color:#EAFFF5;margin-top:4px">18 ms</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- OTA 升级状态 -->
+    <div class="panel" style="grid-column: span 3">
+      <div class="panel-h"><h3>OTA 升级</h3><span style="font-size:12px;color:rgba(220,239,228,.45)">v2.4.6</span></div>
+      <div class="panel-b">
+        <div class="ota-row">
+          <span class="lbl">当前版本</span>
+          <span class="mono" style="flex:1;color:#EAFFF5;font-size:13px">V2.4.6-20261018</span>
+        </div>
+        <div class="ota-row">
+          <span class="lbl">设备范围</span>
+          <span style="flex:1;color:rgba(220,239,228,.75);font-size:13px">土壤墒情站 / 气象站</span>
+        </div>
+        <div class="ota-row">
+          <span class="lbl">升级进度</span>
+          <div class="progress"><i style="width:78%"></i></div>
+          <span class="val">78%</span>
+        </div>
+        <div class="ota-row" style="margin-bottom:0">
+          <span class="lbl">成功率</span>
+          <div class="progress"><i style="width:99.2%"></i></div>
+          <span class="val">99.2%</span>
+        </div>
+        <div class="mt-16" style="font-size:11.5px;color:rgba(220,239,228,.45)">
+          待升级 12,460 台 · 已完成 9,718 台 · 失败 94 台
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" style="grid-column: span 3">
+      <div class="panel-h"><h3>版本分发</h3><span style="font-size:12px;color:rgba(220,239,228,.45)">近 30 天</span></div>
+      <div class="panel-b" style="padding:6px 10px">
+        <table class="screen-table">
+          <thead><tr><th>版本</th><th>设备数</th><th>占比</th></tr></thead>
+          <tbody>
+            <tr><td>v2.4.6</td><td class="mono">86,420</td><td class="mono">67.2%</td></tr>
+            <tr><td>v2.4.5</td><td class="mono">32,180</td><td class="mono">25.0%</td></tr>
+            <tr><td>v2.4.4</td><td class="mono">8,640</td><td class="mono">6.7%</td></tr>
+            <tr><td>其他</td><td class="mono">1,410</td><td class="mono">1.1%</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 边缘节点列表 -->
+    <div class="panel" style="grid-column: span 12">
+      <div class="panel-h"><h3>边缘节点列表</h3><span style="font-size:12px;color:rgba(220,239,228,.45)">实时健康度</span></div>
+      <div class="panel-b" style="padding:6px 10px">
+        <table class="screen-table">
+          <thead>
+            <tr><th>节点名称</th><th>所属基地</th><th>状态</th><th>CPU</th><th>内存</th><th>延迟</th><th>在线设备</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Edge-WC-01</td><td>五常基地</td><td><span class="tag">在线</span></td>
+              <td class="mono">32%</td><td class="mono">4.2/8 GB</td><td class="mono">12 ms</td><td class="mono">1,842</td>
+            </tr>
+            <tr>
+              <td>Edge-SG-02</td><td>寿光基地</td><td><span class="tag">在线</span></td>
+              <td class="mono">41%</td><td class="mono">5.6/8 GB</td><td class="mono">9 ms</td><td class="mono">2,156</td>
+            </tr>
+            <tr>
+              <td>Edge-GZ-01</td><td>赣州基地</td><td><span class="tag">在线</span></td>
+              <td class="mono">28%</td><td class="mono">3.8/8 GB</td><td class="mono">15 ms</td><td class="mono">1,204</td>
+            </tr>
+            <tr>
+              <td>Edge-ZJ-03</td><td>湛江基地</td><td><span class="tag tag-amber">告警</span></td>
+              <td class="mono">78%</td><td class="mono">6.9/8 GB</td><td class="mono">34 ms</td><td class="mono">986</td>
+            </tr>
+            <tr>
+              <td>Edge-WC-02</td><td>五常基地</td><td><span class="tag">在线</span></td>
+              <td class="mono">25%</td><td class="mono">3.2/8 GB</td><td class="mono">11 ms</td><td class="mono">1,630</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="../assets/js/app.js"></script>
+</body>
+</html>

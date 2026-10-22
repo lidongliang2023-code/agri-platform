@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>S2B2C运营工作台 · 农产云运营端</title>
+<link rel="stylesheet" href="../assets/css/theme.css" />
+</head>
+<body>
+
+<div class="app-shell">
+
+  <!-- 侧边栏 -->
+  <aside class="app-side">
+    <a class="brand" href="../index.html">
+      <span class="logo" data-icon="seed" data-size="20"></span>
+      <span>农产云<small>运营端</small></span>
+    </a>
+    <nav class="side-nav">
+      <div class="group">工作台</div>
+      <a href="index.html"><span data-icon="activity"></span>运营总览</a>
+      <a href="s2b2c.html" class="active"><span data-icon="users"></span>S2B2C运营工作台</a>
+
+      <div class="group">店铺管理</div>
+      <a href="s2b2c.html"><span data-icon="factory"></span>供应商店铺</a>
+      <a href="s2b2c.html"><span data-icon="users"></span>渠道商店铺</a>
+      <a href="s2b2c.html"><span data-icon="check"></span>店铺审核</a>
+      <a href="s2b2c.html"><span data-icon="layers"></span>店铺装修</a>
+
+      <div class="group">营销</div>
+      <a href="s2b2c.html"><span data-icon="award"></span>分销管理</a>
+      <a href="s2b2c.html"><span data-icon="user"></span>会员管理</a>
+      <a href="s2b2c.html"><span data-icon="zap"></span>营销活动</a>
+      <a href="s2b2c.html"><span data-icon="money"></span>佣金结算</a>
+
+      <div class="group">数据</div>
+      <a href="s2b2c.html"><span data-icon="chart"></span>销售报表</a>
+      <a href="s2b2c.html"><span data-icon="globe"></span>分销报表</a>
+
+      <div class="group">返回入口</div>
+      <a href="../portal/index.html"><span data-icon="globe"></span>官网门户</a>
+      <a href="../trade/index.html"><span data-icon="cart"></span>交易大厅</a>
+      <a href="../production/dashboard.html"><span data-icon="layers"></span>生产监测</a>
+      <a href="../index.html"><span data-icon="home"></span>原型总览</a>
+    </nav>
+  </aside>
+
+  <!-- 主区 -->
+  <div class="app-main">
+
+    <header class="app-top">
+      <div class="crumb">
+        <a href="index.html">运营端</a><span class="sep">/</span>S2B2C运营工作台
+      </div>
+      <div class="row center gap-16">
+        <span data-icon="bell" style="color:var(--ink-500)"></span>
+        <div class="row center gap-12">
+          <div class="avatar">运</div>
+          <span class="t-sm strong">S2B2C运营管理员</span>
+        </div>
+      </div>
+    </header>
+
+    <div class="app-body">
+
+      <!-- 顶部快捷入口 -->
+      <div class="toolbar mb-20">
+        <button class="btn btn-primary btn-sm"><span data-icon="plus"></span>新增店铺</button>
+        <a class="btn btn-outline btn-sm" href="s2b2c.html"><span data-icon="check"></span>店铺审核</a>
+        <button class="btn btn-outline btn-sm"><span data-icon="zap"></span>新建活动</button>
+        <button class="btn btn-ghost btn-sm"><span data-icon="money"></span>佣金结算</button>
+        <div class="spacer"></div>
+        <span class="muted t-sm">数据更新于 <span class="mono">2026-10-22 09:30</span></span>
+      </div>
+
+      <!-- KPI 卡片 -->
+      <div class="grid grid-5">
+        <div class="stat">
+          <div class="k"><span data-icon="box" style="color:var(--green-600)"></span>店铺总数</div>
+          <div class="v"><span class="js-count" data-to="23860" data-dec="0">23860</span><span class="unit">家</span></div>
+          <div class="d">较上月 <span class="up">+5.2%</span></div>
+        </div>
+        <div class="stat">
+          <div class="k"><span data-icon="factory" style="color:var(--green-600)"></span>供应商数</div>
+          <div class="v"><span class="js-count" data-to="5200" data-dec="0">5200</span><span class="unit">家</span></div>
+          <div class="d">占比 <span class="up">21.8%</span></div>
+        </div>
+        <div class="stat">
+          <div class="k"><span data-icon="users" style="color:var(--green-600)"></span>渠道商数</div>
+          <div class="v"><span class="js-count" data-to="18600" data-dec="0">18600</span><span class="unit">家</span></div>
+          <div class="d">占比 <span class="up">78.0%</span></div>
+        </div>
+        <div class="stat tech">
+          <div class="k"><span data-icon="money" style="color:var(--tech-600)"></span>本月GMV</div>
+          <div class="v"><span class="js-count" data-to="4860" data-dec="0">4860</span><span class="unit">万元</span></div>
+          <div class="d">环比 <span class="up">+12.6%</span></div>
+        </div>
+        <div class="stat tech">
+          <div class="k"><span data-icon="cart" style="color:var(--tech-600)"></span>本月订单</div>
+          <div class="v"><span class="js-count" data-to="42" data-dec="0">42</span><span class="unit">万单</span></div>
+          <div class="d">环比 <span class="up">+8.3%</span></div>
+        </div>
+      </div>
+
+      <!-- 店铺类型分布 + 分销佣金结算 -->
+      <div class="grid grid-2 mt-20" style="align-items:start">
+
+        <!-- 店铺类型分布 -->
+        <div class="card">
+          <div class="card-h">
+            <h3><span data-icon="layers" data-size="18"></span>店铺类型分布</h3>
+            <span class="more">共 23,860 家店铺</span>
+          </div>
+          <div class="card-b">
+            <div class="grid grid-3" style="gap:14px">
+              <div style="background:var(--green-050);border:1px solid var(--line);border-radius:10px;padding:18px;text-align:center">
+                <div class="stat-icon" style="margin:0 auto"><span data-icon="factory" data-size="20"></span></div>
+                <div class="mono strong t-2xl mt-12" style="color:var(--green-700)">5,200</div>
+                <div class="muted t-sm mt-4">供应商店铺</div>
+                <div class="muted t-xs mt-8">占比 21.8%</div>
+              </div>
+              <div style="background:var(--tech-100);border:1px solid var(--line);border-radius:10px;padding:18px;text-align:center">
+                <div class="stat-icon tech" style="margin:0 auto"><span data-icon="users" data-size="20"></span></div>
+                <div class="mono strong t-2xl mt-12" style="color:var(--tech-700)">18,600</div>
+                <div class="muted t-sm mt-4">渠道商店铺</div>
+                <div class="muted t-xs mt-8">占比 78.0%</div>
+              </div>
+              <div style="background:var(--amber-100);border:1px solid var(--line);border-radius:10px;padding:18px;text-align:center">
+                <div class="stat-icon amber" style="margin:0 auto"><span data-icon="box" data-size="20"></span></div>
+                <div class="mono strong t-2xl mt-12" style="color:#B45309">60</div>
+                <div class="muted t-sm mt-4">门店/自提点</div>
+                <div class="muted t-xs mt-8">占比 0.2%</div>
+              </div>
+            </div>
+            <div style="margin-top:18px">
+              <div class="row between t-sm mb-8"><span>供应商</span><span class="mono strong">21.8%</span></div>
+              <div class="progress"><i style="width:21.8%"></i></div>
+            </div>
+            <div style="margin-top:12px">
+              <div class="row between t-sm mb-8"><span>渠道商</span><span class="mono strong">78.0%</span></div>
+              <div class="progress"><i style="width:78.0%"></i></div>
+            </div>
+            <div style="margin-top:12px">
+              <div class="row between t-sm mb-8"><span>门店/自提点</span><span class="mono strong">0.2%</span></div>
+              <div class="progress"><i style="width:0.2%"></i></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 分销佣金结算 -->
+        <div class="card">
+          <div class="card-h">
+            <h3><span data-icon="money" data-size="18"></span>分销佣金结算</h3>
+            <a class="more" href="s2b2c.html">结算明细 →</a>
+          </div>
+          <div class="card-b">
+            <div class="grid grid-2" style="gap:14px">
+              <div style="background:var(--amber-100);border:1px solid var(--line);border-radius:10px;padding:18px">
+                <div class="muted t-sm">待结算金额</div>
+                <div class="price t-3xl strong mt-8"><span class="cur">¥</span>324.00<span class="unit">万</span></div>
+                <div class="muted t-xs mt-8">待结算笔数 <span class="mono strong">1,860</span> 笔</div>
+              </div>
+              <div style="background:var(--green-050);border:1px solid var(--line);border-radius:10px;padding:18px">
+                <div class="muted t-sm">已结算金额</div>
+                <div class="price t-3xl strong mt-8"><span class="cur">¥</span>1,286.50<span class="unit">万</span></div>
+                <div class="muted t-xs mt-8">已结算笔数 <span class="mono strong">8,420</span> 笔</div>
+              </div>
+            </div>
+            <div class="mt-20">
+              <div class="row between t-sm mb-8"><span>本月结算进度</span><span class="mono strong">79.8%</span></div>
+              <div class="progress"><i style="width:79.8%"></i></div>
+            </div>
+            <div class="grid grid-2 mt-20" style="gap:12px">
+              <div><div class="muted t-xs">平均佣金率</div><div class="mono strong t-lg mt-8">12.5%</div></div>
+              <div><div class="muted t-xs">最高单笔佣金</div><div class="price t-lg mt-8"><span class="cur">¥</span>18,640</div></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- 待审核店铺列表 + 营销活动列表 -->
+      <div class="grid grid-2 mt-20" style="align-items:start">
+
+        <!-- 待审核店铺列表 -->
+        <div class="card">
+          <div class="card-h">
+            <h3><span data-icon="check" data-size="18"></span>待审核店铺</h3>
+            <a class="more" href="s2b2c.html">全部审核 →</a>
+          </div>
+          <div class="card-b tight" style="padding:0">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>店铺名称</th>
+                  <th>类型</th>
+                  <th>申请人</th>
+                  <th>申请时间</th>
+                  <th>状态</th>
+                  <th style="text-align:right">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="strong">赣南脐橙产地旗舰店</td>
+                  <td><span class="tag">供应商</span></td>
+                  <td>张建国</td>
+                  <td class="mono t-sm">2026-10-22 08:45</td>
+                  <td><span class="tag tag-amber">待审核</span></td>
+                  <td class="tr"><button class="btn btn-sm btn-primary">审核</button></td>
+                </tr>
+                <tr>
+                  <td class="strong">华中社区团购联盟</td>
+                  <td><span class="tag tag-tech">渠道商</span></td>
+                  <td>李秀芳</td>
+                  <td class="mono t-sm">2026-10-22 08:12</td>
+                  <td><span class="tag tag-amber">待审核</span></td>
+                  <td class="tr"><button class="btn btn-sm btn-primary">审核</button></td>
+                </tr>
+                <tr>
+                  <td class="strong">东北富硒大米专营店</td>
+                  <td><span class="tag">供应商</span></td>
+                  <td>王志强</td>
+                  <td class="mono t-sm">2026-10-21 17:30</td>
+                  <td><span class="tag tag-amber">待审核</span></td>
+                  <td class="tr"><button class="btn btn-sm btn-primary">审核</button></td>
+                </tr>
+                <tr>
+                  <td class="strong">岭南鲜果优选店</td>
+                  <td><span class="tag tag-tech">渠道商</span></td>
+                  <td>陈丽华</td>
+                  <td class="mono t-sm">2026-10-21 16:55</td>
+                  <td><span class="tag tag-ghost">补充材料</span></td>
+                  <td class="tr"><button class="btn btn-sm btn-outline">查看</button></td>
+                </tr>
+                <tr>
+                  <td class="strong">西部高原牦牛肉铺</td>
+                  <td><span class="tag">供应商</span></td>
+                  <td>刘德贵</td>
+                  <td class="mono t-sm">2026-10-21 14:20</td>
+                  <td><span class="tag tag-amber">待审核</span></td>
+                  <td class="tr"><button class="btn btn-sm btn-primary">审核</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 营销活动列表 -->
+        <div class="card">
+          <div class="card-h">
+            <h3><span data-icon="zap" data-size="18"></span>营销活动</h3>
+            <a class="more" href="s2b2c.html">全部活动 →</a>
+          </div>
+          <div class="card-b tight" style="padding:0">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>活动名称</th>
+                  <th>类型</th>
+                  <th>活动时间</th>
+                  <th>参与店铺</th>
+                  <th>状态</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="strong">秋粮丰收季 · 满减专场</td>
+                  <td><span class="tag tag-tech">满减</span></td>
+                  <td class="mono t-sm">10.20 - 10.31</td>
+                  <td class="mono">1,280 家</td>
+                  <td><span class="tag">进行中</span></td>
+                </tr>
+                <tr>
+                  <td class="strong">新渠道首单立减</td>
+                  <td><span class="tag tag-amber">拉新</span></td>
+                  <td class="mono t-sm">10.15 - 11.15</td>
+                  <td class="mono">860 家</td>
+                  <td><span class="tag">进行中</span></td>
+                </tr>
+                <tr>
+                  <td class="strong">赣南脐橙预售团</td>
+                  <td><span class="tag tag-violet">拼团</span></td>
+                  <td class="mono t-sm">10.18 - 10.25</td>
+                  <td class="mono">420 家</td>
+                  <td><span class="tag">进行中</span></td>
+                </tr>
+                <tr>
+                  <td class="strong">双十一爆款秒杀</td>
+                  <td><span class="tag tag-red">秒杀</span></td>
+                  <td class="mono t-sm">11.01 - 11.11</td>
+                  <td class="mono">2,000 家</td>
+                  <td><span class="tag tag-ghost">未开始</span></td>
+                </tr>
+                <tr>
+                  <td class="strong">分销佣金翻倍周</td>
+                  <td><span class="tag">分销</span></td>
+                  <td class="mono t-sm">10.01 - 10.07</td>
+                  <td class="mono">1,560 家</td>
+                  <td><span class="tag tag-ghost">已结束</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="../assets/js/app.js"></script>
+</body>
+</html>

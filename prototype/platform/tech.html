@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>技术平台 · 农业产业互联网 · 农产云</title>
+<link rel="stylesheet" href="../assets/css/theme.css" />
+<style>
+  body{background:#06231A}
+  .screen .panel{background:linear-gradient(180deg,rgba(12,52,38,.88),rgba(6,30,22,.88));border:1px solid rgba(47,184,119,.25);border-radius:var(--r-md);box-shadow:inset 0 0 40px rgba(21,154,94,.08),0 8px 30px rgba(0,0,0,.4)}
+  .screen .panel-h{padding:12px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(47,184,119,.16)}
+  .screen .panel-h h3{font-size:15px;font-weight:700;color:#EAFFF5;display:flex;align-items:center;gap:8px}
+  .screen .panel-h h3::before{content:"";width:3px;height:15px;background:var(--green-400);border-radius:2px;box-shadow:0 0 10px var(--green-400)}
+  .screen .panel-b{padding:16px;color:#DCEFE4}
+  .kpi{display:flex;align-items:center;gap:14px;padding:14px;background:rgba(12,52,38,.6);border:1px solid rgba(47,184,119,.2);border-radius:var(--r-md)}
+  .kpi .ic{width:48px;height:48px;border-radius:12px;display:grid;place-items:center;background:rgba(21,154,94,.16);border:1px solid rgba(47,184,119,.35);color:var(--green-300);flex:none}
+  .kpi .v{font-family:var(--mono);font-size:26px;font-weight:800;color:#EAFFF5;line-height:1}
+  .kpi .k{font-size:12.5px;color:rgba(220,239,228,.62);margin-top:5px}
+  .u{font-size:13px;color:rgba(220,239,228,.55);font-weight:500;margin-left:4px}
+  .topo{display:flex;flex-direction:column;align-items:center;gap:14px}
+  .topo-row{display:flex;gap:12px;align-items:center;justify-content:center;flex-wrap:wrap}
+  .tnode{padding:10px 16px;border-radius:10px;font-size:13px;font-weight:600;background:rgba(12,52,38,.8);border:1px solid rgba(47,184,119,.3);color:#DCEFE4;display:flex;align-items:center;gap:6px;min-width:92px;justify-content:center}
+  .tnode.core{border-color:var(--tech-500);background:rgba(14,165,233,.15);color:#7DD3FC}
+  .tnode.data{border-color:#A78BFA;background:rgba(124,58,237,.15);color:#C4B5FD}
+  .tnode.msg{border-color:#F59E0B;background:rgba(245,158,11,.12);color:#FCD34D}
+  .tnode.ok{border-color:var(--green-400);background:rgba(21,154,94,.2);color:var(--green-300)}
+  .tarrow{color:rgba(47,184,119,.45);font-size:18px}
+  .gw-legend{display:flex;align-items:center;gap:16px;justify-content:center;font-size:12px;color:rgba(220,239,228,.6);margin-top:12px}
+  .gw-legend span{display:inline-flex;align-items:center;gap:6px}
+  .gw-legend i{width:10px;height:10px;border-radius:2px;display:inline-block}
+  .bar-stack{display:flex;align-items:flex-end;gap:5px;height:110px;margin-top:8px}
+  .bar-stack i{flex:1;border-radius:3px 3px 0 0;background:linear-gradient(180deg,var(--green-400),rgba(47,184,119,.1));min-width:6px}
+  .bar-stack i.mid{background:linear-gradient(180deg,#F59E0B,rgba(245,158,11,.1))}
+  .bar-stack i.err{background:linear-gradient(180deg,#EF4444,rgba(239,68,68,.1))}
+  .mid-row{display:flex;align-items:center;gap:10px;padding:10px;border-radius:10px;background:rgba(21,154,94,.08);border:1px solid rgba(47,184,119,.18)}
+  .mid-row .s{width:42px;height:42px;border-radius:10px;display:grid;place-items:center;background:rgba(21,154,94,.14);border:1px solid rgba(47,184,119,.3);color:var(--green-300);flex:none}
+  .mid-row .n{font-family:var(--mono);font-size:18px;font-weight:800;color:#EAFFF5}
+  .mid-row .l{font-size:12px;color:rgba(220,239,228,.55)}
+  .screen-table{width:100%;font-size:12.5px}
+  .screen-table th{text-align:left;color:rgba(220,239,228,.5);font-weight:500;padding:8px 10px;border-bottom:1px solid rgba(47,184,119,.16)}
+  .screen-table td{padding:9px 10px;border-bottom:1px solid rgba(47,184,119,.08);color:#DCEFE4}
+  .screen-table tbody tr:hover{background:rgba(21,154,94,.1)}
+  .tag-d{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:var(--r-pill);font-size:11px;font-weight:600}
+  .tag-d.ok{background:rgba(21,154,94,.18);color:var(--green-300);border:1px solid rgba(47,184,119,.3)}
+  .tag-d.warn{background:rgba(245,158,11,.15);color:#FCD34D;border:1px solid rgba(245,158,11,.35)}
+  .tag-d.err{background:rgba(239,68,68,.15);color:#FCA5A5;border:1px solid rgba(239,68,68,.35)}
+  .status-dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:4px}
+  .status-dot.on{background:var(--green-400);box-shadow:0 0 6px var(--green-400)}
+  .status-dot.warn{background:#F59E0B;box-shadow:0 0 6px #F59E0B}
+  .status-dot.err{background:#EF4444;box-shadow:0 0 6px #EF4444}
+</style>
+</head>
+<body>
+<div class="screen">
+  <div class="screen-top">
+    <a class="back" href="../index.html"><span data-icon="arrow-left" data-size="14"></span> 返回原型总览</a>
+    <h1>技术平台 · 农业产业互联网</h1>
+    <div style="font-size:13px;color:rgba(220,239,228,.6);margin-top:6px">微服务网关 · DevOps · 容器云 · 中间件 · 监控告警</div>
+    <div class="time"><span class="js-clock">2026-10-22 00:00:00</span></div>
+    <div class="line"></div>
+  </div>
+
+  <div class="screen-grid" style="grid-template-columns:repeat(12,1fr)">
+    <!-- 5 KPI -->
+    <div class="panel" style="grid-column:span 12">
+      <div class="panel-b">
+        <div class="grid grid-5" style="gap:16px">
+          <div class="kpi"><div class="ic"><span data-icon="cpu" data-size="22"></span></div><div><div class="v">286</div><div class="k">服务实例数 · <span style="color:var(--green-300)">↑4</span></div></div></div>
+          <div class="kpi"><div class="ic" style="background:rgba(14,165,233,.16);border-color:rgba(14,165,233,.35);color:#7DD3FC"><span data-icon="activity" data-size="22"></span></div><div><div class="v">12.8<span class="u">k</span></div><div class="k">API网关QPS</div></div></div>
+          <div class="kpi"><div class="ic" style="background:rgba(124,58,237,.16);border-color:rgba(124,58,237,.35);color:#C4B5FD"><span data-icon="box" data-size="22"></span></div><div><div class="v">1,842</div><div class="k">容器Pod数</div></div></div>
+          <div class="kpi"><div class="ic" style="background:rgba(245,158,11,.16);border-color:rgba(245,158,11,.35);color:#FCD34D"><span data-icon="repo" data-size="22"></span></div><div><div class="v">37</div><div class="k">今日发布次数</div></div></div>
+          <div class="kpi"><div class="ic" style="background:rgba(239,68,68,.16);border-color:rgba(239,68,68,.35);color:#FCA5A5"><span data-icon="alert" data-size="22"></span></div><div><div class="v" style="color:#FCA5A5">5</div><div class="k">告警事件数</div></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 微服务拓扑 -->
+    <div class="panel" style="grid-column:span 7">
+      <div class="panel-h"><h3><span data-icon="layers" data-size="16"></span>微服务拓扑</h3><span style="font-size:12px;color:rgba(220,239,228,.5)">核心服务 · 在线率 99.95%</span></div>
+      <div class="panel-b">
+        <div class="topo">
+          <div class="topo-row">
+            <div class="tnode ok"><span data-icon="user" data-size="14"></span>用户服务</div>
+            <span class="tarrow">→</span>
+            <div class="tnode core"><span data-icon="money" data-size="14"></span>交易服务</div>
+            <span class="tarrow">→</span>
+            <div class="tnode core"><span data-icon="shield" data-size="14"></span>金融服务</div>
+          </div>
+          <div style="color:rgba(47,184,119,.4);font-size:20px">↓</div>
+          <div class="topo-row">
+            <div class="tnode data"><span data-icon="box" data-size="14"></span>生产服务</div>
+            <span class="tarrow">→</span>
+            <div class="tnode msg"><span data-icon="bell" data-size="14"></span>消息服务</div>
+            <span class="tarrow">→</span>
+            <div class="tnode core"><span data-icon="cpu" data-size="14"></span>AI服务</div>
+          </div>
+        </div>
+        <div class="grid grid-3 mt-16" style="gap:12px;margin-top:16px">
+          <div class="mid-row"><div class="s"><span data-icon="activity" data-size="18"></span></div><div><div class="n">99.95%</div><div class="l">服务可用性</div></div></div>
+          <div class="mid-row"><div class="s" style="background:rgba(14,165,233,.14);border-color:rgba(14,165,233,.3);color:#7DD3FC"><span data-icon="clock" data-size="18"></span></div><div><div class="n">46<span class="u">ms</span></div><div class="l">平均响应</div></div></div>
+          <div class="mid-row"><div class="s" style="background:rgba(245,158,11,.14);border-color:rgba(245,158,11,.3);color:#FCD34D"><span data-icon="arrow" data-size="18"></span></div><div><div class="n">12.3<span class="u">k</span></div><div class="l">调用/分钟</div></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- API网关监控 -->
+    <div class="panel" style="grid-column:span 5">
+      <div class="panel-h"><h3><span data-icon="chart" data-size="16"></span>API网关监控</h3><span style="font-size:12px;color:rgba(220,239,228,.5)">近24h</span></div>
+      <div class="panel-b">
+        <div style="font-size:12px;color:rgba(220,239,228,.6);margin-bottom:8px">请求趋势（万/min）</div>
+        <div class="bar-stack">
+          <i style="height:45%"></i><i style="height:52%"></i><i style="height:48%"></i><i style="height:60%"></i>
+          <i style="height:58%"></i><i style="height:74%"></i><i style="height:70%"></i><i style="height:82%"></i>
+          <i style="height:78%"></i><i style="height:90%"></i><i style="height:85%"></i><i style="height:100%"></i>
+        </div>
+        <div class="row between" style="font-size:10px;color:rgba(220,239,228,.4);margin-top:6px">
+          <span>00:00</span><span>04:00</span><span>08:00</span><span>12:00</span><span>16:00</span><span>20:00</span><span>24:00</span>
+        </div>
+        <div class="gw-legend">
+          <span><i style="background:var(--green-400)"></i>2xx 98.7%</span>
+          <span><i style="background:#F59E0B"></i>4xx 1.1%</span>
+          <span><i style="background:#EF4444"></i>5xx 0.2%</span>
+        </div>
+        <div class="bar-stack" style="height:18px;margin-top:12px;gap:0;border-radius:4px;overflow:hidden">
+          <i style="width:98.7%;height:100%;border-radius:0;background:var(--green-400)"></i>
+          <i class="mid" style="width:1.1%;height:100%;border-radius:0;background:#F59E0B"></i>
+          <i class="err" style="width:0.2%;height:100%;border-radius:0;background:#EF4444"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- 中间件健康 -->
+    <div class="panel" style="grid-column:span 4">
+      <div class="panel-h"><h3><span data-icon="box" data-size="16"></span>中间件健康</h3><span style="font-size:12px;color:rgba(220,239,228,.5)">实时状态</span></div>
+      <div class="panel-b" style="padding:10px 16px">
+        <div class="stat-row" style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px dashed rgba(47,184,119,.1)">
+          <span><span class="status-dot on"></span>MySQL</span>
+          <span style="font-family:var(--mono);font-size:12px;color:rgba(220,239,228,.7)">QPS 3.2k · 延迟 2ms</span>
+        </div>
+        <div class="stat-row" style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px dashed rgba(47,184,119,.1)">
+          <span><span class="status-dot on"></span>Redis</span>
+          <span style="font-family:var(--mono);font-size:12px;color:rgba(220,239,228,.7)">命中率 99.6%</span>
+        </div>
+        <div class="stat-row" style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px dashed rgba(47,184,119,.1)">
+          <span><span class="status-dot on"></span>Kafka</span>
+          <span style="font-family:var(--mono);font-size:12px;color:rgba(220,239,228,.7)">吞吐 85k/s</span>
+        </div>
+        <div class="stat-row" style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px dashed rgba(47,184,119,.1)">
+          <span><span class="status-dot on"></span>Elasticsearch</span>
+          <span style="font-family:var(--mono);font-size:12px;color:rgba(220,239,228,.7)">索引 142 · 健康绿</span>
+        </div>
+        <div class="stat-row" style="display:flex;justify-content:space-between;align-items:center;padding:10px 0">
+          <span><span class="status-dot warn"></span>Etcd</span>
+          <span style="font-family:var(--mono);font-size:12px;color:#FCD34D">Leader切换 1次</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 最近发布记录 -->
+    <div class="panel" style="grid-column:span 4">
+      <div class="panel-h"><h3><span data-icon="repo" data-size="16"></span>最近发布记录</h3><span style="font-size:12px;color:rgba(220,239,228,.5)">近24h</span></div>
+      <div class="panel-b" style="padding:10px 16px">
+        <table class="screen-table">
+          <thead><tr><th>应用</th><th>版本</th><th>发布人</th><th>时间</th><th>结果</th></tr></thead>
+          <tbody>
+            <tr><td>agri-trade-svc</td><td class="mono">v2.4.7</td><td>张工</td><td>14:32</td><td><span class="tag-d ok"><span data-icon="check" data-size="10"></span>成功</span></td></tr>
+            <tr><td>agri-finance-svc</td><td class="mono">v1.9.3</td><td>李工</td><td>13:10</td><td><span class="tag-d ok"><span data-icon="check" data-size="10"></span>成功</span></td></tr>
+            <tr><td>agri-ai-engine</td><td class="mono">v3.1.0</td><td>王工</td><td>11:45</td><td><span class="tag-d ok"><span data-icon="check" data-size="10"></span>成功</span></td></tr>
+            <tr><td>agri-gateway</td><td class="mono">v2.2.1</td><td>赵工</td><td>10:22</td><td><span class="tag-d warn"><span data-icon="clock" data-size="10"></span>回滚</span></td></tr>
+            <tr><td>agri-message-svc</td><td class="mono">v1.5.8</td><td>陈工</td><td>09:08</td><td><span class="tag-d ok"><span data-icon="check" data-size="10"></span>成功</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 告警事件列表 -->
+    <div class="panel" style="grid-column:span 4">
+      <div class="panel-h"><h3><span data-icon="alert" data-size="16"></span>告警事件列表</h3><span style="font-size:12px;color:rgba(220,239,228,.5)">近1h</span></div>
+      <div class="panel-b" style="padding:10px 16px">
+        <table class="screen-table">
+          <thead><tr><th>级别</th><th>内容</th><th>服务</th><th>时间</th><th>状态</th></tr></thead>
+          <tbody>
+            <tr><td><span class="tag-d err">P1</span></td><td>交易服务响应超时</td><td>agri-trade</td><td>14:38</td><td><span class="tag-d warn">处理中</span></td></tr>
+            <tr><td><span class="tag-d warn">P2</span></td><td>Kafka消费延迟上升</td><td>agri-message</td><td>14:25</td><td><span class="tag-d ok">已恢复</span></td></tr>
+            <tr><td><span class="tag-d warn">P2</span></td><td>Redis内存使用超80%</td><td>agri-cache</td><td>13:50</td><td><span class="tag-d ok">已恢复</span></td></tr>
+            <tr><td><span class="tag-d ok">P3</span></td><td>节点磁盘使用率超70%</td><td>node-k8s-07</td><td>13:12</td><td><span class="tag-d ok">已恢复</span></td></tr>
+            <tr><td><span class="tag-d warn">P2</span></td><td>API网关限流触发</td><td>agri-gateway</td><td>12:55</td><td><span class="tag-d warn">处理中</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="../assets/js/app.js"></script>
+</body>
+</html>

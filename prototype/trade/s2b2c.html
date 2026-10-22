@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>S2B2C 产地直供商城 · 农产云交易大厅</title>
+<link rel="stylesheet" href="../assets/css/theme.css" />
+</head>
+<body>
+
+<!-- 顶部通栏 -->
+<div class="topbar">
+  <div class="container">
+    <span>您好，欢迎来到农产云交易大厅！S2B2C 产地直供 · 多租户开店 · 分销分佣</span>
+    <span>
+      <a href="member.html">我是买家</a><span class="sep">·</span>
+      <a href="member-seller.html">我是卖家</a><span class="sep">·</span>
+      <a href="member.html">会员中心</a><span class="sep">·</span>
+      <a href="../index.html">产品原型总览</a><a href="../portal/login.html"><span data-icon="user" data-size="12" style="vertical-align:-2px;margin-right:3px"></span>登录</a><span class="sep">·</span><a href="../portal/register.html"><span data-icon="plus" data-size="12" style="vertical-align:-2px;margin-right:3px"></span>免费注册</a></span>
+  </div>
+</div>
+
+<!-- 站点头部 -->
+<header class="site-header">
+  <div class="container">
+    <a class="brand" href="../index.html">
+      <span class="logo" data-icon="seed" data-size="20"></span>
+      <span>农产云<small>AGRI · CLOUD</small></span>
+    </a>
+    <nav class="main-nav">
+      <a href="../portal/index.html">首页</a>
+      <a href="../portal/chains.html">产业链</a>
+      <a href="index.html">交易大厅</a>
+      <a href="../module/s2b2c.html" class="active">S2B2C</a>
+      <a href="publish.html">发布需求</a>
+      <a href="member.html">会员中心</a>
+      <a href="../production/dashboard.html">生产监测</a>
+    </nav>
+    <div class="header-search">
+      <input placeholder="搜索商品 / 供应商 / 需求" />
+      <button>搜索</button>
+    </div>
+  </div>
+</header>
+
+<!-- 面包屑 -->
+<div style="background:#fff;border-bottom:1px solid var(--line)">
+  <div class="container" style="padding:12px 0">
+    <div class="crumb">
+      <a href="../portal/index.html">首页</a>
+      <span class="sep">/</span>
+      <a href="index.html">交易大厅</a>
+      <span class="sep">/</span>
+      <span>S2B2C 产地直供商城</span>
+    </div>
+  </div>
+</div>
+
+<!-- 横幅区 -->
+<section style="background:linear-gradient(135deg,#0A3A25,#12764A 60%,#0C7BA8);color:#fff;position:relative;overflow:hidden">
+  <div class="container" style="padding:44px 24px 38px;display:grid;grid-template-columns:1.3fr .7fr;gap:36px;align-items:center;position:relative;z-index:2">
+    <div>
+      <div class="row wrap center gap-8 mb-12">
+        <span class="tag" style="background:rgba(255,255,255,.14);color:#EAFFF5"><span data-icon="globe" data-size="13"></span>交易大厅 · S2B2C</span>
+        <span class="tag" style="background:rgba(255,255,255,.14);color:#EAFFF5"><span data-icon="cloud" data-size="13"></span>产地直供 · 多租户 SaaS</span>
+      </div>
+      <h1 style="font-size:34px;font-weight:800;line-height:1.25">S2B2C 产地直供商城</h1>
+      <p style="color:rgba(255,255,255,.85);margin-top:14px;max-width:640px;font-size:15px">
+        平台(S)赋能产地供应商与渠道商(B)，直连终端消费者(C)。独立店铺、分销返佣、会员运营一站搞定。</p>
+      <div style="margin-top:24px;display:flex;gap:12px;flex-wrap:wrap">
+        <a class="btn btn-lg" style="background:#fff;color:#0E5233" href="#apply"><span data-icon="plus"></span>申请入驻</a>
+        <a class="btn btn-lg btn-outline" style="background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.5);color:#fff" href="#shop"><span data-icon="box"></span>我要开店</a>
+        <a class="btn btn-lg btn-outline" style="background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.5);color:#fff" href="#leaderboard"><span data-icon="users"></span>分销中心</a>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);border-radius:14px;padding:16px 18px;backdrop-filter:blur(6px)">
+        <div style="font-size:12px;color:rgba(255,255,255,.7)"><span data-icon="factory" data-size="13"></span> 入驻供应商</div>
+        <div class="mono" style="font-size:26px;font-weight:800;margin-top:6px">5,200<span style="font-size:13px;font-weight:500"> 家</span></div>
+      </div>
+      <div style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);border-radius:14px;padding:16px 18px;backdrop-filter:blur(6px)">
+        <div style="font-size:12px;color:rgba(255,255,255,.7)"><span data-icon="users" data-size="13"></span> 渠道商</div>
+        <div class="mono" style="font-size:26px;font-weight:800;margin-top:6px">18,600<span style="font-size:13px;font-weight:500"> 家</span></div>
+      </div>
+      <div style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);border-radius:14px;padding:16px 18px;backdrop-filter:blur(6px)">
+        <div style="font-size:12px;color:rgba(255,255,255,.7)"><span data-icon="cart" data-size="13"></span> 月订单</div>
+        <div class="mono" style="font-size:26px;font-weight:800;margin-top:6px">42<span style="font-size:13px;font-weight:500"> 万单</span></div>
+      </div>
+      <div style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);border-radius:14px;padding:16px 18px;backdrop-filter:blur(6px)">
+        <div style="font-size:12px;color:rgba(255,255,255,.7)"><span data-icon="money" data-size="13"></span> 分销佣金总额</div>
+        <div class="mono" style="font-size:26px;font-weight:800;margin-top:6px">¥1,286<span style="font-size:13px;font-weight:500"> 万</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 热销选品 -->
+<section class="section" id="shop">
+  <div class="container">
+    <div class="section-head">
+      <div>
+        <div class="bar-title">热销选品</div>
+        <div class="sub">产地直发 · 平台质检 · 一件代发</div>
+      </div>
+      <a class="more" href="index.html">去交易大厅选品 →</a>
+    </div>
+    <div class="grid grid-3">
+
+      <a class="card card-hover" href="detail.html"><div class="card-b">
+        <div style="height:150px;border-radius:10px;background:linear-gradient(135deg,#E4F6EC,#C9E9D8);display:grid;place-items:center;color:var(--green-700)"><span data-icon="seed" data-size="48"></span></div>
+        <div class="row between center mt-12"><span class="strong ellipsis">五常富硒大米</span><span class="tag">基地直供</span></div>
+        <div class="muted t-xs mt-8">黑龙江 · 五常基地 · 5kg/袋</div>
+        <div class="row between center mt-12"><span class="price"><span class="cur">¥</span>68<span class="unit">/袋</span></span><span class="muted t-xs">月销 1.2 万</span></div>
+      </div></a>
+
+      <a class="card card-hover" href="detail.html"><div class="card-b">
+        <div style="height:150px;border-radius:10px;background:linear-gradient(135deg,#FEF3C7,#FCE7B6);display:grid;place-items:center;color:#B45309"><span data-icon="drop" data-size="48"></span></div>
+        <div class="row between center mt-12"><span class="strong ellipsis">一级压榨菜籽油</span><span class="tag tag-amber">非转基因</span></div>
+        <div class="muted t-xs mt-8">湖北 · 荆州 · 5L/桶</div>
+        <div class="row between center mt-12"><span class="price"><span class="cur">¥</span>109<span class="unit">/桶</span></span><span class="muted t-xs">月销 8,600</span></div>
+      </div></a>
+
+      <a class="card card-hover" href="detail.html"><div class="card-b">
+        <div style="height:150px;border-radius:10px;background:linear-gradient(135deg,#FFE4D6,#FFD2BC);display:grid;place-items:center;color:#D9541E"><span data-icon="sun" data-size="48"></span></div>
+        <div class="row between center mt-12"><span class="strong ellipsis">赣南脐橙（果径75+）</span><span class="tag tag-red">当季鲜果</span></div>
+        <div class="muted t-xs mt-8">江西 · 赣州 · 10斤/箱</div>
+        <div class="row between center mt-12"><span class="price"><span class="cur">¥</span>58<span class="unit">/箱</span></span><span class="muted t-xs">月销 2.5 万</span></div>
+      </div></a>
+
+      <a class="card card-hover" href="detail.html"><div class="card-b">
+        <div style="height:150px;border-radius:10px;background:linear-gradient(135deg,#E0F2FE,#BAE6FD);display:grid;place-items:center;color:var(--tech-700)"><span data-icon="leaf" data-size="48"></span></div>
+        <div class="row between center mt-12"><span class="strong ellipsis">有机红茶 · 一芽一叶</span><span class="tag tag-tech">有机认证</span></div>
+        <div class="muted t-xs mt-8">云南 · 临沧 · 250g/罐</div>
+        <div class="row between center mt-12"><span class="price"><span class="cur">¥</span>168<span class="unit">/罐</span></span><span class="muted t-xs">月销 4,200</span></div>
+      </div></a>
+
+      <a class="card card-hover" href="detail.html"><div class="card-b">
+        <div style="height:150px;border-radius:10px;background:linear-gradient(135deg,#FDECD9,#FBD9B5);display:grid;place-items:center;color:#B45309"><span data-icon="box" data-size="48"></span></div>
+        <div class="row between center mt-12"><span class="strong ellipsis">冷鲜土鸡（整只）</span><span class="tag">冷链配送</span></div>
+        <div class="muted t-xs mt-8">河南 · 散养基地 · 1.2kg/只</div>
+        <div class="row between center mt-12"><span class="price"><span class="cur">¥</span>88<span class="unit">/只</span></span><span class="muted t-xs">月销 6,800</span></div>
+      </div></a>
+
+      <a class="card card-hover" href="detail.html"><div class="card-b">
+        <div style="height:150px;border-radius:10px;background:linear-gradient(135deg,#E4F6EC,#C9E9D8);display:grid;place-items:center;color:var(--green-700)"><span data-icon="drop" data-size="48"></span></div>
+        <div class="row between center mt-12"><span class="strong ellipsis">南美白对虾（冻）</span><span class="tag tag-tech">出口级</span></div>
+        <div class="muted t-xs mt-8">广东 · 湛江 · 净重2kg/盒</div>
+        <div class="row between center mt-12"><span class="price"><span class="cur">¥</span>128<span class="unit">/盒</span></span><span class="muted t-xs">月销 3,900</span></div>
+      </div></a>
+
+    </div>
+  </div>
+</section>
+
+<!-- 渠道商招募 -->
+<section class="section" style="padding-top:0" id="apply">
+  <div class="container">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start">
+
+      <!-- 加盟优势 -->
+      <div class="card">
+        <div class="card-h">
+          <h3><span data-icon="users" data-size="18"></span>渠道商招募</h3>
+          <span class="tag tag-tech">火热招募中</span>
+        </div>
+        <div class="card-b">
+          <div class="grid grid-2" style="gap:14px">
+            <div style="background:var(--green-050);border:1px solid var(--line);border-radius:10px;padding:16px">
+              <div class="stat-icon" style="margin-bottom:10px"><span data-icon="layers" data-size="20"></span></div>
+              <div class="strong t-lg">海量货源</div>
+              <div class="muted t-sm mt-8">5,200+ 产地供应商入驻，粮油果蔬禽畜全覆盖。</div>
+            </div>
+            <div style="background:var(--green-050);border:1px solid var(--line);border-radius:10px;padding:16px">
+              <div class="stat-icon tech" style="margin-bottom:10px"><span data-icon="box" data-size="20"></span></div>
+              <div class="strong t-lg">独立店铺</div>
+              <div class="muted t-sm mt-8">一键生成专属小程序店铺，可视化装修、自定义价格。</div>
+            </div>
+            <div style="background:var(--green-050);border:1px solid var(--line);border-radius:10px;padding:16px">
+              <div class="stat-icon amber" style="margin-bottom:10px"><span data-icon="money" data-size="20"></span></div>
+              <div class="strong t-lg">高额返佣</div>
+              <div class="muted t-sm mt-8">一级/二级分销体系，佣金比例最高可达 15%。</div>
+            </div>
+            <div style="background:var(--green-050);border:1px solid var(--line);border-radius:10px;padding:16px">
+              <div class="stat-icon" style="margin-bottom:10px"><span data-icon="truck" data-size="20"></span></div>
+              <div class="strong t-lg">云仓代发</div>
+              <div class="muted t-sm mt-8">平台统一质检、仓储与物流，渠道商零库存开店。</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 申请表单 -->
+      <div class="card">
+        <div class="card-h">
+          <h3><span data-icon="clipboard" data-size="18"></span>申请加盟</h3>
+          <span class="more">1 个工作日内回访</span>
+        </div>
+        <div class="card-b">
+          <form onsubmit="event.preventDefault();alert('原型演示：提交成功，运营人员将尽快与您联系');">
+            <div class="form-grid">
+              <div class="form-item">
+                <label class="req">姓名</label>
+                <input class="input" placeholder="请输入联系人姓名" required />
+              </div>
+              <div class="form-item">
+                <label class="req">手机号</label>
+                <input class="input" type="tel" placeholder="请输入手机号" required />
+              </div>
+            </div>
+            <div class="form-grid">
+              <div class="form-item">
+                <label class="req">所在区域</label>
+                <select class="select" required>
+                  <option value="">请选择区域</option>
+                  <option>华北</option>
+                  <option>东北</option>
+                  <option>华东</option>
+                  <option>华中</option>
+                  <option>华南</option>
+                  <option>西南</option>
+                  <option>西北</option>
+                </select>
+              </div>
+              <div class="form-item">
+                <label class="req">店铺类型</label>
+                <select class="select" required>
+                  <option value="">请选择类型</option>
+                  <option>社区团购团长</option>
+                  <option>便利店/商超</option>
+                  <option>经销商/批发商</option>
+                  <option>内容电商达人</option>
+                  <option>企业内购</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-item" style="margin-bottom:0">
+              <label>补充说明</label>
+              <textarea class="textarea" placeholder="可填写现有渠道资源、月销规模等"></textarea>
+            </div>
+            <button class="btn btn-primary btn-block mt-16" type="submit"><span data-icon="check"></span>提交申请</button>
+          </form>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- 分销排行榜 -->
+<section class="section" style="padding-top:0" id="leaderboard">
+  <div class="container">
+    <div class="card">
+      <div class="card-h">
+        <h3><span data-icon="award" data-size="18"></span>分销排行榜 Top5</h3>
+        <span class="more">本月累计佣金排名</span>
+      </div>
+      <div class="card-b" style="padding:0">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width:60px">排名</th>
+              <th>渠道商</th>
+              <th>类型</th>
+              <th style="text-align:right">本月销售额</th>
+              <th style="text-align:right">本月佣金</th>
+              <th style="text-align:center">下属门店</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="mono strong c-amber" style="font-size:16px">1</span></td>
+              <td class="strong">华东农联供应链有限公司</td>
+              <td><span class="tag tag-violet">钻石渠道</span></td>
+              <td class="tr price"><span class="cur">¥</span>856,420</td>
+              <td class="tr price"><span class="cur">¥</span>128,640</td>
+              <td class="tc mono">42</td>
+            </tr>
+            <tr>
+              <td><span class="mono strong" style="font-size:16px;color:var(--ink-400)">2</span></td>
+              <td class="strong">华中优品渠道服务商</td>
+              <td><span class="tag tag-amber">金牌渠道</span></td>
+              <td class="tr price"><span class="cur">¥</span>642,800</td>
+              <td class="tr price"><span class="cur">¥</span>96,420</td>
+              <td class="tc mono">28</td>
+            </tr>
+            <tr>
+              <td><span class="mono strong" style="font-size:16px;color:var(--ink-400)">3</span></td>
+              <td class="strong">华南鲜生分销中心</td>
+              <td><span class="tag tag-amber">金牌渠道</span></td>
+              <td class="tr price"><span class="cur">¥</span>521,000</td>
+              <td class="tr price"><span class="cur">¥</span>78,150</td>
+              <td class="tc mono">21</td>
+            </tr>
+            <tr>
+              <td><span class="mono strong" style="font-size:16px;color:var(--ink-400)">4</span></td>
+              <td class="strong">西南农创商贸有限公司</td>
+              <td><span class="tag tag-tech">银牌渠道</span></td>
+              <td class="tr price"><span class="cur">¥</span>304,000</td>
+              <td class="tr price"><span class="cur">¥</span>45,600</td>
+              <td class="tc mono">14</td>
+            </tr>
+            <tr>
+              <td><span class="mono strong" style="font-size:16px;color:var(--ink-400)">5</span></td>
+              <td class="strong">华北惠民供应链</td>
+              <td><span class="tag tag-tech">银牌渠道</span></td>
+              <td class="tr price"><span class="cur">¥</span>235,200</td>
+              <td class="tr price"><span class="cur">¥</span>35,280</td>
+              <td class="tc mono">9</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 页脚 -->
+<footer class="site-footer">
+  <div class="container">
+    <div class="grid grid-4">
+      <div>
+        <div class="brand" style="color:#fff"><span class="logo" data-icon="seed" data-size="20"></span><span>农产云</span></div>
+        <p style="margin-top:14px;font-size:13px;color:rgba(255,255,255,.6);max-width:280px">农业产业互联网平台，连接生产、加工、流通、销售全环节。</p>
+      </div>
+      <div><h4>关于平台</h4><a>平台介绍</a><a>联系方式</a><a>加入我们</a><a>帮助中心</a></div>
+      <div><h4>S2B2C 能力</h4><a href="../module/s2b2c.html">多租户 SaaS</a><a href="../module/s2b2c.html">分销体系</a><a href="../module/s2b2c.html">会员与积分</a><a href="../module/s2b2c.html">渠道管理</a></div>
+      <div><h4>相关模块</h4><a href="index.html">交易大厅</a><a href="../module/finance.html">供应链金融</a><a href="../module/service.html">综合服务</a><a href="../module/info.html">信息资讯</a></div>
+    </div>
+    <div class="bottom">
+      <span>© 2026 农业产业互联网平台 · 产品原型演示（非真实业务系统）</span>
+      <span>交易大厅 · S2B2C 产地直供商城</span>
+    </div>
+  </div>
+</footer>
+
+<script src="../assets/js/app.js"></script>
+</body>
+</html>
