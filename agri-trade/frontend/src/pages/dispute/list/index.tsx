@@ -1,41 +1,50 @@
-import { useState } from 'react'
-import { Alert, Table, Button, Card, Input, InputNumber, Select, Space, Tag, Modal, Form, Descriptions, message } from 'antd'
-import { SearchOutlined, EyeOutlined, SettingOutlined, PlusOutlined } from '@ant-design/icons'
+import { useMemo, useState } from 'react'
+import { Form, Input, InputNumber, Select, Spin, message } from 'antd'
+import {
+  AlertOutlined,
+  ArrowLeftOutlined,
+  CheckCircleOutlined,
+  ClockCircleOutlined,
+  EyeOutlined,
+  FileSearchOutlined,
+  PlusOutlined,
+  SafetyCertificateOutlined,
+  SearchOutlined,
+  SettingOutlined,
+} from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { createDispute, getDisputeList, resolveDispute, type DisputeQuery, type DisputeVO } from '@/api/dispute'
+import {
+  createDispute,
+  getDisputeById,
+  getDisputeList,
+  resolveDispute,
+  type DisputeQuery,
+  type DisputeVO,
+} from '@/api/dispute'
 import { getMyMerchants } from '@/api/identity'
 import { getOrderList } from '@/api/order'
+import { EmptyState, Panel, money, shortDate } from '../../member-center/shared'
+import './after-sales.css'
 
-/**
- * 纠纷状态词表（库里的真实取值）。
- *
- * <p>原先页面只判断 pending / mediating / arbitrating / resolved 四种，
- * 而库里实际存在 processing —— 落到 default 分支，页面上直接显示英文原文。</p>
- */
-const DISPUTE_STATUS: Record<string, { text: string; color: string }> = {
-  pending: { text: '待处理', color: 'warning' },
-  processing: { text: '处理中', color: 'processing' },
-  mediating: { text: '调解中', color: 'processing' },
-  arbitrating: { text: '仲裁中', color: 'purple' },
-  resolved: { text: '已解决', color: 'success' },
-  closed: { text: '已关闭', color: 'default' }
+type DisputePageMode = 'list' | 'detail' | 'create' | 'resolve'
+
+const DISPUTE_STATUS: Record<string, { text: string; tone: string }> = {
+  pending: { text: '待处理', tone: 'amber' },
+  processing: { text: '处理中', tone: 'tech' },
+  mediating: { text: '调解中', tone: 'tech' },
+  arbitrating: { text: '仲裁中', tone: 'red' },
+  resolved: { text: '已解决', tone: 'green' },
+  closed: { text: '已关闭', tone: 'ghost' },
 }
 
-/**
- * 纠纷阶段词表（库里的真实取值）。
- *
- * <p>process_stage 原先在两个页面都是原样打印，列表里显示的就是 "complain"、
- * "arbitration"、"resolved" 这些英文。发起的纠纷停在 complain 阶段，最显眼。</p>
- */
 const DISPUTE_STAGE: Record<string, string> = {
   complain: '申请中',
   mediation: '调解中',
   arbitration: '仲裁中',
   resolved: '已了结',
-  closed: '已关闭'
+  closed: '已关闭',
 }
 
-/** 纠纷类型（后端是自由字符串，这里给一组与业务对得上的常用值）。 */
 const DISPUTE_TYPE: Record<string, string> = {
   quality: '质量不符',
   delivery: '交付延误',
@@ -43,66 +52,99 @@ const DISPUTE_TYPE: Record<string, string> = {
   quantity: '数量短缺',
   price: '价格争议',
   payment: '货款结算',
-  other: '其他'
+  other: '其他',
 }
 
-function DisputeList() {
+function statusMeta(value: string): { text: string; tone: string } {
+  return DISPUTE_STATUS[value] ?? { text: value || '未知', tone: 'ghost' }
+}
+
+function StatusTag({ value }: { value: string }): JSX.Element {
+  const meta = statusMeta(value)
+  return <span className={`mc-tag ${meta.tone}`}>{meta.text}</span>
+}
+
+function PartyBadge({ side }: { side: 'buyer' | 'seller' }): JSX.Element {
+  return <span className={`after-party-badge ${side}`}>{side === 'buyer' ? '采' : '供'}</span>
+}
+
+/** 采购方和供货方共用的售后纠纷工作区。 */
+export default function DisputeList(): JSX.Element {
   const queryClient = useQueryClient()
-  // 只查"与我有关"的纠纷。范围由后端按登录令牌推导，前端不再自报参与方。
+  const [pageMode, setPageMode] = useState<DisputePageMode>('list')
+  const [activeDispute, setActiveDispute] = useState<DisputeVO | null>(null)
   const [query, setQuery] = useState<DisputeQuery>({ pageNum: 1, pageSize: 10 })
   const [draft, setDraft] = useState<{ disputeNo?: string; disputeStatus?: string }>({})
+  const [saving, setSaving] = useState(false)
+  const [resolveForm] = Form.useForm()
+  const [createForm] = Form.useForm()
 
   const { data, isLoading } = useQuery({
     queryKey: ['disputes', query],
-    queryFn: () => getDisputeList(query)
+    queryFn: () => getDisputeList(query),
   })
-  // 把"没有纠纷"和"没绑主体"分开显示，避免一张说不清的空表
   const { data: merchantData } = useQuery({ queryKey: ['my-merchants'], queryFn: getMyMerchants })
-  const merchants = merchantData?.code === 200 ? merchantData.data ?? [] : null
-  const identityError = merchantData && merchantData.code !== 200 ? merchantData.message ?? '无法解析你的经营主体' : null
-
-  const [resolving, setResolving] = useState<DisputeVO | null>(null)
-  const [saving, setSaving] = useState(false)
-  const [form] = Form.useForm()
-  const [viewing, setViewing] = useState<DisputeVO | null>(null)
-  const [creating, setCreating] = useState(false)
-  const [createForm] = Form.useForm()
-
-  // 发起纠纷时要选一张"与我有关"的订单。列表接口本来就只返回我参与过的订单，
-  // 所以这里不需要再过滤。
   const { data: orderData } = useQuery({
     queryKey: ['orders-for-dispute'],
-    queryFn: () => getOrderList({ pageNum: 1, pageSize: 100 })
+    queryFn: () => getOrderList({ pageNum: 1, pageSize: 100 }),
   })
+  const merchants = merchantData?.code === 200 ? merchantData.data ?? [] : []
+  const identityError = merchantData && merchantData.code !== 200
+    ? merchantData.message ?? '无法解析你的经营主体'
+    : ''
   const myOrders = orderData?.code === 200 ? orderData.data?.records ?? [] : []
+  const rows: DisputeVO[] = data?.data?.records ?? []
+  const total = Number(data?.data?.total ?? 0)
+  const currentPage = Number(data?.data?.current ?? query.pageNum ?? 1)
+  const pageCount = Math.max(1, Math.ceil(total / Number(query.pageSize ?? 10)))
+  const pageSummary = useMemo(() => ({
+    open: rows.filter((row) => row.disputeStatus !== 'resolved' && row.disputeStatus !== 'closed').length,
+    resolved: rows.filter((row) => row.disputeStatus === 'resolved' || row.disputeStatus === 'closed').length,
+    claim: rows.reduce((sum, row) => sum + Number(row.claimAmount ?? 0), 0),
+  }), [rows])
 
-  /**
-   * 发起纠纷。
-   *
-   * <p>这条路径此前是**整条死掉的**：页面上没有入口，而后端 POST /dispute 一旦被调用
-   * 就 500 —— 纠纷表里 applicant_id / applicant_name / dispute_content 三列是 NOT NULL
-   * 且没有默认值，实体既不映射也没人写，插入直接被 MySQL 拒掉。
-   * 也就是说"发起纠纷"从来没有成功过，演示库里的两条纠纷是直接写进去的。</p>
-   */
-  const submitCreate = async () => {
+  const showList = (): void => {
+    setPageMode('list')
+    setActiveDispute(null)
+  }
+
+  const showDetail = (row: DisputeVO): void => {
+    setActiveDispute(row)
+    setPageMode('detail')
+  }
+
+  const showCreate = (): void => {
+    createForm.resetFields()
+    if (merchants.length === 1) {
+      createForm.setFieldValue('complainantId', merchants[0].merchantId)
+    }
+    setPageMode('create')
+  }
+
+  const showResolve = (row: DisputeVO): void => {
+    setActiveDispute(row)
+    resolveForm.resetFields()
+    setPageMode('resolve')
+  }
+
+  const submitCreate = async (): Promise<void> => {
     const values = await createForm.validateFields()
     setSaving(true)
     try {
-      const res = await createDispute({
+      const response = await createDispute({
         orderId: values.orderId,
         complainantId: values.complainantId,
         disputeType: values.disputeType,
         disputeReason: values.disputeReason,
         disputeDescription: values.disputeDescription,
-        claimAmount: values.claimAmount
+        claimAmount: values.claimAmount,
       })
-      if (res?.code === 200) {
-        message.success('已发起纠纷，等运营调解或仲裁')
-        setCreating(false)
-        createForm.resetFields()
-        queryClient.invalidateQueries({ queryKey: ['disputes'] })
+      if (response?.code === 200) {
+        message.success('售后工单已发起')
+        await queryClient.invalidateQueries({ queryKey: ['disputes'] })
+        showList()
       } else {
-        message.error(res?.message ?? '发起失败')
+        message.error(response?.message ?? '发起失败')
       }
     } catch {
       message.error('发起失败（请检查后端是否在运行）')
@@ -111,25 +153,20 @@ function DisputeList() {
     }
   }
 
-  /**
-   * 当事人自行了结（和解 / 撤诉）。
-   *
-   * <p>与运营端的调解/仲裁是两条路：那两个由第三方介入给结论，这条是双方自己谈拢。
-   * 后端会校验"你必须是这单纠纷的当事人"，否则任何人都能替别人把纠纷了结掉。</p>
-   */
-  const submitResolve = async () => {
-    if (!resolving) return
-    const values = await form.validateFields()
+  const submitResolve = async (): Promise<void> => {
+    if (!activeDispute) return
+    const values = await resolveForm.validateFields()
     setSaving(true)
     try {
-      const res = await resolveDispute(resolving.id, values)
-      if (res?.code === 200) {
-        message.success('纠纷已了结')
-        setResolving(null)
-        form.resetFields()
-        queryClient.invalidateQueries({ queryKey: ['disputes'] })
+      const response = await resolveDispute(activeDispute.id, values)
+      if (response?.code === 200) {
+        message.success('售后工单已了结')
+        await queryClient.invalidateQueries({ queryKey: ['disputes'] })
+        const refreshed = await getDisputeById(activeDispute.id)
+        if (refreshed?.code === 200 && refreshed.data) setActiveDispute(refreshed.data)
+        setPageMode('detail')
       } else {
-        message.error(res?.message ?? '处理失败')
+        message.error(response?.message ?? '处理失败')
       }
     } catch {
       message.error('处理失败（请检查后端是否在运行）')
@@ -138,230 +175,293 @@ function DisputeList() {
     }
   }
 
-  const columns = [
-    { title: '纠纷编号', dataIndex: 'disputeNo', key: 'disputeNo' },
-    { title: '订单编号', dataIndex: 'orderId', key: 'orderId' },
-    // 纠纷表的申请人是 complainant*（不是 applicant*）；金额只有 claimAmount（索赔金额）
-    { title: '申请人', dataIndex: 'complainantName', key: 'complainantName' },
-    { title: '被申请人', dataIndex: 'respondentName', key: 'respondentName' },
-    {
-      title: '纠纷类型',
-      dataIndex: 'disputeType',
-      key: 'disputeType',
-      render: (val: string) => (val ? DISPUTE_TYPE[val] ?? val : '—')
-    },
-    { title: '索赔金额', dataIndex: 'claimAmount', key: 'claimAmount', render: (val: number) => (val == null ? '—' : `¥${val}`) },
-    { title: '纠纷内容', dataIndex: 'disputeDescription', key: 'disputeDescription', ellipsis: true },
-    {
-      title: '纠纷状态',
-      dataIndex: 'disputeStatus',
-      key: 'disputeStatus',
-      render: (status: string) => {
-        const hit = DISPUTE_STATUS[status]
-        return <Tag color={hit?.color ?? 'default'}>{hit?.text ?? status}</Tag>
-      }
-    },
-    {
-      title: '当前阶段',
-      dataIndex: 'processStage',
-      key: 'processStage',
-      render: (v: string) => (v ? DISPUTE_STAGE[v] ?? v : '—')
-    },
-    { title: '创建时间', dataIndex: 'createTime', key: 'createTime' },
-    {
-      title: '操作',
-      key: 'action',
-      width: 170,
-      render: (_: unknown, row: DisputeVO) => (
-        <Space size={0}>
-          <Button type="link" icon={<EyeOutlined />} onClick={() => setViewing(row)}>查看详情</Button>
-          {/*
-            只保留了"处理"：查看详情是真的，而"删除"后端没有这个接口，
-            并且纠纷单属于交易存证，本来也不该由当事人删掉。此前三个按钮都没有 onClick。
-            已了结的纠纷不再提供"处理"入口。
-          */}
-          {row.disputeStatus !== 'resolved' && row.disputeStatus !== 'closed' && (
-            <Button type="link" icon={<SettingOutlined />} onClick={() => setResolving(row)}>处理</Button>
+  if (pageMode === 'create') {
+    return (
+      <div className="after-workbench dispute-workbench">
+        <button type="button" className="after-back" onClick={showList}>
+          <ArrowLeftOutlined /> 返回售后工单
+        </button>
+        <section className="after-hero">
+          <span className="after-hero-icon"><PlusOutlined /></span>
+          <div><small>AFTER-SALES REQUEST</small><h2>发起售后纠纷</h2><p>仅可对当前主体参与的订单发起，被申请人由订单另一方自动确定。</p></div>
+        </section>
+        <div className="after-form-layout">
+          <Panel title="工单信息">
+            <Form form={createForm} layout="vertical" onFinish={() => void submitCreate()} className="after-form">
+              {merchants.length > 1 && (
+                <Form.Item name="complainantId" label="发起主体" rules={[{ required: true, message: '请选择主体' }]}>
+                  <Select options={merchants.map((item) => ({ value: item.merchantId, label: item.merchantName }))} />
+                </Form.Item>
+              )}
+              <Form.Item name="orderId" label="关联订单" rules={[{ required: true, message: '请选择订单' }]}>
+                <Select
+                  showSearch
+                  optionFilterProp="label"
+                  placeholder="选择当前主体参与的订单"
+                  options={myOrders.map((order: {
+                    id: number
+                    orderNo?: string
+                    productName?: string
+                    totalAmount?: number
+                  }) => ({
+                    value: order.id,
+                    label: `${order.orderNo ?? order.id} · ${order.productName ?? '订单商品'} · ¥${order.totalAmount ?? '—'}`,
+                  }))}
+                />
+              </Form.Item>
+              <div className="after-form-grid">
+                <Form.Item name="disputeType" label="纠纷类型" rules={[{ required: true, message: '请选择类型' }]}>
+                  <Select options={Object.entries(DISPUTE_TYPE).map(([value, label]) => ({ value, label }))} />
+                </Form.Item>
+                <Form.Item name="claimAmount" label="索赔金额（元）">
+                  <InputNumber min={0} precision={2} style={{ width: '100%' }} placeholder="可选" />
+                </Form.Item>
+              </div>
+              <Form.Item name="disputeReason" label="纠纷事由" rules={[{ required: true, message: '请填写事由' }]}>
+                <Input placeholder="例如：到货品质与约定不符" />
+              </Form.Item>
+              <Form.Item name="disputeDescription" label="详细说明">
+                <Input.TextArea rows={5} placeholder="请描述发生经过、已有沟通和期望处理方式" />
+              </Form.Item>
+              <div className="after-form-actions">
+                <button type="submit" className="mc-btn" disabled={saving}>{saving ? '正在提交…' : '提交售后工单'}</button>
+                <button type="button" className="mc-btn ghost" onClick={showList}>取消</button>
+              </div>
+            </Form>
+          </Panel>
+          <aside className="after-side-stack">
+            <Panel title="发起条件">
+              <ul className="after-guidance">
+                <li><CheckCircleOutlined /> 只能选择当前经营主体参与的订单。</li>
+                <li><CheckCircleOutlined /> 同一订单只能存在一条未结纠纷。</li>
+                <li><CheckCircleOutlined /> 平台运营负责调解、仲裁和赔付执行。</li>
+              </ul>
+            </Panel>
+            <Panel title="处理时效">
+              <div className="after-duration"><strong>48h</strong><span>建议响应时间</span><small>及时响应有助于维护店铺信用和采购方体验。</small></div>
+            </Panel>
+          </aside>
+        </div>
+      </div>
+    )
+  }
+
+  if (pageMode === 'resolve' && activeDispute) {
+    return (
+      <div className="after-workbench dispute-workbench">
+        <button type="button" className="after-back" onClick={() => setPageMode('detail')}>
+          <ArrowLeftOutlined /> 返回工单详情
+        </button>
+        <section className="after-hero">
+          <span className="after-hero-icon"><SettingOutlined /></span>
+          <div><small>DISPUTE RESOLUTION</small><h2>处理售后工单</h2><p>{activeDispute.disputeNo} · {DISPUTE_TYPE[activeDispute.disputeType] ?? activeDispute.disputeType}</p></div>
+          <StatusTag value={activeDispute.disputeStatus} />
+        </section>
+        <div className="after-form-layout">
+          <Panel title="双方处理结果">
+            <Form form={resolveForm} layout="vertical" onFinish={() => void submitResolve()} className="after-form">
+              <Form.Item name="result" label="处理结果" rules={[{ required: true, message: '请选择处理结果' }]}>
+                <Select options={[
+                  { value: 'agreed', label: '双方达成和解' },
+                  { value: 'withdrawn', label: '申请人撤回' },
+                ]} />
+              </Form.Item>
+              <Form.Item name="remark" label="处理说明">
+                <Input.TextArea rows={5} placeholder="填写和解方案、补偿方式或撤回原因" />
+              </Form.Item>
+              <div className="after-form-actions">
+                <button type="submit" className="mc-btn" disabled={saving}>{saving ? '正在处理…' : '确认了结'}</button>
+                <button type="button" className="mc-btn ghost" onClick={() => setPageMode('detail')}>取消</button>
+              </div>
+            </Form>
+          </Panel>
+          <aside className="after-side-stack">
+            <Panel title="处理说明">
+              <ul className="after-guidance">
+                <li><CheckCircleOutlined /> 这里用于双方自行和解或申请人撤回。</li>
+                <li><SafetyCertificateOutlined /> 需要平台介入时，请等待运营调解或仲裁。</li>
+              </ul>
+            </Panel>
+          </aside>
+        </div>
+      </div>
+    )
+  }
+
+  if (pageMode === 'detail' && activeDispute) {
+    return (
+      <div className="after-workbench dispute-workbench">
+        <button type="button" className="after-back" onClick={showList}>
+          <ArrowLeftOutlined /> 返回售后工单
+        </button>
+        <section className="after-hero">
+          <span className="after-hero-icon"><AlertOutlined /></span>
+          <div>
+            <small>AFTER-SALES CASE · {activeDispute.disputeNo}</small>
+            <h2>{DISPUTE_TYPE[activeDispute.disputeType] ?? activeDispute.disputeType}</h2>
+            <p>关联订单 {activeDispute.orderId} · 创建于 {shortDate(activeDispute.createTime)}</p>
+          </div>
+          <StatusTag value={activeDispute.disputeStatus} />
+          {activeDispute.disputeStatus !== 'resolved' && activeDispute.disputeStatus !== 'closed' && (
+            <button type="button" className="mc-btn" onClick={() => showResolve(activeDispute)}>
+              <SettingOutlined /> 处理工单
+            </button>
           )}
-        </Space>
-      )
-    }
-  ]
+        </section>
+        <div className="after-detail-layout">
+          <div className="after-detail-main">
+            <Panel title="争议双方">
+              <div className="after-party-grid">
+                <div><PartyBadge side="buyer" /><span>申请人</span><strong>{activeDispute.complainantName || '—'}</strong><small>主体 ID {String(activeDispute.complainantId ?? '—')}</small></div>
+                <div><PartyBadge side="seller" /><span>被申请人</span><strong>{activeDispute.respondentName || '—'}</strong><small>主体 ID {String(activeDispute.respondentId ?? '—')}</small></div>
+              </div>
+            </Panel>
+            <Panel title="售后诉求">
+              <div className="after-case-grid">
+                <div><span>纠纷类型</span><strong>{DISPUTE_TYPE[activeDispute.disputeType] ?? activeDispute.disputeType}</strong></div>
+                <div><span>索赔金额</span><strong className="after-amount">{activeDispute.claimAmount == null ? '—' : money(activeDispute.claimAmount)}</strong></div>
+                <div><span>当前阶段</span><strong>{DISPUTE_STAGE[activeDispute.processStage] ?? activeDispute.processStage}</strong></div>
+                <div><span>关联订单</span><strong>{activeDispute.orderId}</strong></div>
+              </div>
+              <div className="after-description">
+                <span>售后事由</span><strong>{activeDispute.disputeReason || '—'}</strong>
+                <p>{activeDispute.disputeDescription || '暂无详细说明'}</p>
+              </div>
+            </Panel>
+            <Panel title="处理记录">
+              <div className="after-result-list">
+                <div><span>调解结果</span><p>{activeDispute.mediationResult || '尚未形成调解结果'}</p></div>
+                <div><span>仲裁结果</span><p>{activeDispute.arbitrationResult || '尚未进入仲裁'}</p></div>
+                <div><span>了结说明</span><p>{activeDispute.closeReason || '工单处理中'}</p></div>
+              </div>
+            </Panel>
+          </div>
+          <aside className="after-detail-aside">
+            <Panel title="处理进度">
+              <div className="after-timeline">
+                <div className="on"><span><CheckCircleOutlined /></span><div><strong>工单已提交</strong><small>{shortDate(activeDispute.createTime)}</small></div></div>
+                <div className={activeDispute.processStage !== 'complain' ? 'on' : ''}><span><ClockCircleOutlined /></span><div><strong>平台处理中</strong><small>{DISPUTE_STAGE[activeDispute.processStage] ?? '等待响应'}</small></div></div>
+                <div className={activeDispute.disputeStatus === 'resolved' || activeDispute.disputeStatus === 'closed' ? 'on' : ''}><span><SafetyCertificateOutlined /></span><div><strong>工单了结</strong><small>{shortDate(activeDispute.closeTime)}</small></div></div>
+              </div>
+            </Panel>
+            <Panel title="处理建议">
+              <div className="after-advice">
+                <p><FileSearchOutlined /> 核对订单、商品交付记录和双方沟通证据。</p>
+                <p><CheckCircleOutlined /> 优先与对方协商和解，处理结果会写入交易留痕。</p>
+              </div>
+            </Panel>
+          </aside>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <Card
-      title="纠纷管理"
-      extra={
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => { createForm.resetFields(); setCreating(true) }}>
-          发起纠纷
-        </Button>
-      }
-    >
-      {identityError && (
-        <Alert type="error" showIcon style={{ marginBottom: 12 }} message="身份解析失败" description={identityError} />
+    <div className="after-workbench dispute-workbench">
+      {identityError && <div className="after-alert"><AlertOutlined />{identityError}</div>}
+      {!identityError && merchantData && merchants.length === 0 && (
+        <div className="after-alert"><AlertOutlined />当前账号尚未绑定经营主体，无法查询售后工单。</div>
       )}
-      {!identityError && merchants?.length === 0 && (
-        <Alert
-          type="warning"
-          showIcon
-          style={{ marginBottom: 12 }}
-          message="当前账号还没有绑定经营主体"
-          description="因此查询不到任何纠纷。请运营在「用户-主体绑定」里为你绑定经营主体后重试。"
-        />
-      )}
-      <div style={{ marginBottom: 16, display: 'flex', gap: 16 }}>
-        <Input
-          placeholder="纠纷编号"
-          prefix={<SearchOutlined />}
-          style={{ width: 200 }}
-          allowClear
-          onChange={(e) => setDraft((prev) => ({ ...prev, disputeNo: e.target.value || undefined }))}
-        />
-        <Select
-          placeholder="纠纷状态"
-          style={{ width: 150 }}
-          allowClear
-          onChange={(v) => setDraft((prev) => ({ ...prev, disputeStatus: v }))}
-          options={Object.entries(DISPUTE_STATUS).map(([value, item]) => ({ value, label: item.text }))}
-        />
-        <Button type="primary" onClick={() => setQuery((prev) => ({ ...prev, pageNum: 1, ...draft }))}>搜索</Button>
-        <Button onClick={() => { setDraft({}); setQuery({ pageNum: 1, pageSize: 10 }) }}>重置</Button>
-      </div>
-      <Table
-        columns={columns}
-        dataSource={data?.data?.records || []}
-        loading={isLoading}
-        rowKey="id"
-        scroll={{ x: 1300 }}
-        pagination={{
-          current: data?.data?.current,
-          total: data?.data?.total,
-          pageSize: query.pageSize,
-          onChange: (page, size) => setQuery((prev) => ({ ...prev, pageNum: page, pageSize: size }))
-        }}
-      />
+      <section className="after-overview">
+        <div className="after-overview-title">
+          <span className="after-overview-icon"><AlertOutlined /></span>
+          <div><small>AFTER-SALES CASES</small><h2>纠纷管理</h2><p>集中处理质量问题、交付延误、数量短缺与货款争议。</p></div>
+        </div>
+        <div className="after-overview-actions">
+          <button type="button" className="mc-btn" onClick={showCreate}><PlusOutlined /> 发起售后</button>
+        </div>
+        <div className="after-overview-stats">
+          <div><span>本页待处理</span><strong>{pageSummary.open}</strong></div>
+          <div><span>本页已了结</span><strong>{pageSummary.resolved}</strong></div>
+          <div><span>本页索赔金额</span><strong>{money(pageSummary.claim)}</strong></div>
+        </div>
+      </section>
 
-      <Modal
-        title={`了结纠纷${resolving ? ' · ' + resolving.disputeNo : ''}`}
-        open={!!resolving}
-        onCancel={() => setResolving(null)}
-        onOk={submitResolve}
-        confirmLoading={saving}
-        destroyOnClose
-      >
-        <Alert
-          type="info"
-          showIcon
-          style={{ marginBottom: 12 }}
-          message="这里处理的是「双方自己谈拢」"
-          description="需要第三方调解或仲裁的，请走运营端的纠纷仲裁页。这里了结后纠纷状态变为「已解决」，不能重复处理。"
-        />
-        <Form form={form} layout="vertical">
-          <Form.Item name="result" label="处理结果" rules={[{ required: true, message: '请选择处理结果' }]}>
-            <Select
-              placeholder="请选择"
-              options={[
-                { value: 'agreed', label: '双方达成和解' },
-                { value: 'withdrawn', label: '申请人撤回' }
-              ]}
-            />
-          </Form.Item>
-          <Form.Item name="remark" label="说明">
-            <Input.TextArea rows={3} placeholder="和解方案 / 撤回原因（可留空）" />
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      <Modal
-        title="发起纠纷"
-        open={creating}
-        onCancel={() => setCreating(false)}
-        onOk={submitCreate}
-        confirmLoading={saving}
-        destroyOnClose
-        width={640}
-      >
-        <Alert
-          type="info"
-          showIcon
-          style={{ marginBottom: 12 }}
-          message="只能对「自己参与的订单」发起纠纷"
-          description="被申请人由系统按订单的另一方自动判定。同一张订单只能有一条未结纠纷。"
-        />
-        <Form form={createForm} layout="vertical">
-          {merchants && merchants.length > 1 && (
-            <Form.Item name="complainantId" label="以哪家主体发起" rules={[{ required: true, message: '请选择主体' }]}>
-              <Select
-                placeholder="请选择"
-                options={merchants.map((m) => ({ value: m.merchantId, label: m.merchantName }))}
-              />
-            </Form.Item>
-          )}
-          <Form.Item name="orderId" label="关联订单" rules={[{ required: true, message: '请选择订单' }]}>
-            <Select
-              showSearch
-              optionFilterProp="label"
-              placeholder="选择你参与过的订单"
-              options={myOrders.map((o: { id: number; orderNo?: string; productName?: string; totalAmount?: number }) => ({
-                value: o.id,
-                label: `${o.orderNo ?? o.id}　${o.productName ?? ''}　¥${o.totalAmount ?? '—'}`
-              }))}
-            />
-          </Form.Item>
-          <Form.Item name="disputeType" label="纠纷类型" rules={[{ required: true, message: '请选择类型' }]}>
-            <Select
-              placeholder="请选择"
-              options={Object.entries(DISPUTE_TYPE).map(([value, label]) => ({ value, label }))}
-            />
-          </Form.Item>
-          <Form.Item name="disputeReason" label="纠纷事由" rules={[{ required: true, message: '请填写事由' }]}>
-            <Input placeholder="例如：到货品质与样品不符" />
-          </Form.Item>
-          <Form.Item name="disputeDescription" label="详细说明">
-            <Input.TextArea rows={4} placeholder="发生经过、已有的沟通与诉求（可留空）" />
-          </Form.Item>
-          <Form.Item name="claimAmount" label="索赔金额（元）">
-            <InputNumber style={{ width: '100%' }} min={0} precision={2} placeholder="可留空" />
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      <Modal
-        title="纠纷详情"
-        open={!!viewing}
-        onCancel={() => setViewing(null)}
-        footer={null}
-        width={720}
-      >
-        {viewing && (
-          <Descriptions bordered column={2} size="small">
-            <Descriptions.Item label="纠纷编号">{viewing.disputeNo}</Descriptions.Item>
-            <Descriptions.Item label="关联订单">{viewing.orderId}</Descriptions.Item>
-            <Descriptions.Item label="申请人">{viewing.complainantName ?? '—'}</Descriptions.Item>
-            <Descriptions.Item label="被申请人">{viewing.respondentName ?? '—'}</Descriptions.Item>
-            <Descriptions.Item label="纠纷类型">
-              {viewing.disputeType ? DISPUTE_TYPE[viewing.disputeType] ?? viewing.disputeType : '—'}
-            </Descriptions.Item>
-            <Descriptions.Item label="索赔金额">{viewing.claimAmount != null ? `¥${viewing.claimAmount}` : '—'}</Descriptions.Item>
-            <Descriptions.Item label="状态">
-              <Tag color={DISPUTE_STATUS[viewing.disputeStatus]?.color ?? 'default'}>
-                {DISPUTE_STATUS[viewing.disputeStatus]?.text ?? viewing.disputeStatus}
-              </Tag>
-            </Descriptions.Item>
-            <Descriptions.Item label="当前阶段">
-              {viewing.processStage ? DISPUTE_STAGE[viewing.processStage] ?? viewing.processStage : '—'}
-            </Descriptions.Item>
-            <Descriptions.Item label="纠纷事由" span={2}>{viewing.disputeReason ?? '—'}</Descriptions.Item>
-            <Descriptions.Item label="纠纷描述" span={2}>{viewing.disputeDescription ?? '—'}</Descriptions.Item>
-            <Descriptions.Item label="调解结果" span={2}>{viewing.mediationResult ?? '—'}</Descriptions.Item>
-            <Descriptions.Item label="仲裁结果" span={2}>{viewing.arbitrationResult ?? '—'}</Descriptions.Item>
-            <Descriptions.Item label="了结时间">{viewing.closeTime ?? '—'}</Descriptions.Item>
-            <Descriptions.Item label="了结说明">{viewing.closeReason ?? '—'}</Descriptions.Item>
-          </Descriptions>
+      <Panel title="售后工单" extra={<span className="after-count">共 {total} 条</span>}>
+        <div className="after-toolbar">
+          <Input
+            prefix={<SearchOutlined />}
+            allowClear
+            placeholder="输入纠纷编号"
+            value={draft.disputeNo}
+            onChange={(event) => setDraft((previous) => ({
+              ...previous,
+              disputeNo: event.target.value || undefined,
+            }))}
+          />
+          <Select
+            allowClear
+            placeholder="全部状态"
+            value={draft.disputeStatus}
+            onChange={(value) => setDraft((previous) => ({ ...previous, disputeStatus: value }))}
+            options={Object.entries(DISPUTE_STATUS).map(([value, item]) => ({ value, label: item.text }))}
+          />
+          <button type="button" className="mc-btn" onClick={() => setQuery((previous) => ({
+            ...previous,
+            pageNum: 1,
+            ...draft,
+          }))}>搜索</button>
+          <button type="button" className="mc-btn ghost" onClick={() => {
+            setDraft({})
+            setQuery({ pageNum: 1, pageSize: 10 })
+          }}>重置</button>
+        </div>
+        {isLoading ? (
+          <div className="after-loading"><Spin /><span>正在读取售后工单…</span></div>
+        ) : rows.length === 0 ? (
+          <EmptyState title="暂无售后工单" desc="采购方发起售后后会显示在这里。" />
+        ) : (
+          <>
+            <div className="mc-table-wrap">
+              <table className="mc-table after-table">
+                <thead><tr><th>工单 / 类型</th><th>关联订单</th><th>争议双方</th><th>诉求</th><th>状态</th><th>提交时间</th><th>操作</th></tr></thead>
+                <tbody>
+                  {rows.map((row) => (
+                    <tr key={row.id}>
+                      <td>
+                        <button type="button" className="after-name-link" onClick={() => showDetail(row)}>
+                          <strong>{DISPUTE_TYPE[row.disputeType] ?? row.disputeType}</strong>
+                          <span className="mc-mono">{row.disputeNo}</span>
+                        </button>
+                      </td>
+                      <td className="mc-mono">{row.orderId}</td>
+                      <td>
+                        <div className="after-parties-cell">
+                          <div><PartyBadge side="buyer" />{row.complainantName || '—'}</div>
+                          <div><PartyBadge side="seller" />{row.respondentName || '—'}</div>
+                        </div>
+                      </td>
+                      <td>
+                        <div className="after-claim-cell">
+                          <span>{row.claimAmount == null ? '未填写索赔金额' : money(row.claimAmount)}</span>
+                          <small>{row.disputeReason || row.disputeDescription || '—'}</small>
+                        </div>
+                      </td>
+                      <td><StatusTag value={row.disputeStatus} /><small className="after-stage">{DISPUTE_STAGE[row.processStage] ?? row.processStage}</small></td>
+                      <td className="mc-mono mc-xs">{shortDate(row.createTime)}</td>
+                      <td>
+                        <div className="mc-actions">
+                          <button type="button" className="mc-link after-action" onClick={() => showDetail(row)}><EyeOutlined /> 查看</button>
+                          {row.disputeStatus !== 'resolved' && row.disputeStatus !== 'closed' && (
+                            <button type="button" className="mc-link after-action" onClick={() => showResolve(row)}><SettingOutlined /> 处理</button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="mc-pager">
+              <button type="button" disabled={currentPage <= 1}
+                onClick={() => setQuery((previous) => ({ ...previous, pageNum: currentPage - 1 }))}>上一页</button>
+              <span>第 {currentPage} / {pageCount} 页 · 共 {total} 条</span>
+              <button type="button" disabled={currentPage >= pageCount}
+                onClick={() => setQuery((previous) => ({ ...previous, pageNum: currentPage + 1 }))}>下一页</button>
+            </div>
+          </>
         )}
-      </Modal>
-    </Card>
+      </Panel>
+    </div>
   )
 }
-
-export default DisputeList

@@ -11,3 +11,4 @@ public interface FirmwareMapper extends BaseMapper<Firmware> {
     IPage<FirmwareVO> selectPageList(Page<?> page, @Param("dto") FirmwareVO dto);
     FirmwareVO selectDetailById(@Param("id") Long id);
 }
+

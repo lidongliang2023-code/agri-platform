@@ -11,6 +11,9 @@ public interface IGuaranteeService extends IService<MerchantGuarantee> {
 
     MerchantGuarantee createGuarantee(Long merchantId, String merchantName, BigDecimal amount);
 
+    /** 提交待审核的开立申请，并写入开立流水。 */
+    boolean submitGuarantee(MerchantGuarantee guarantee, String operator);
+
     boolean freezeGuarantee(Long guaranteeId, BigDecimal amount);
 
     boolean unfreezeGuarantee(Long guaranteeId, BigDecimal amount);
@@ -45,4 +48,7 @@ public interface IGuaranteeService extends IService<MerchantGuarantee> {
     List<MerchantGuarantee> getGuaranteesByMerchant(Long merchantId);
 
     boolean transferToCompensation(Long guaranteeId, Long disputeId, BigDecimal amount);
+
+    /** 审核待开立账户，并同步可用余额与审核流水。 */
+    boolean verifyGuarantee(Long guaranteeId, String status, String operator, String remark);
 }

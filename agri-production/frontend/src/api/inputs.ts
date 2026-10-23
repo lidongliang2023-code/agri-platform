@@ -98,7 +98,7 @@ export type InputTypeCode = 'SEED' | 'FERTILIZER' | 'PESTICIDE' | 'FEED' | 'VET'
 export interface InputInfo {
   /** 投入品 ID */
   inputId: string
-  /** 投入品编码（租户内唯一） */
+  /** 投入品编码（主体内唯一） */
   inputCode?: string
   /** 投入品名称 */
   inputName?: string

@@ -24,3 +24,4 @@ public class DeviceGroupSaveDTO {
 
     private Boolean allowControl;
 }
+

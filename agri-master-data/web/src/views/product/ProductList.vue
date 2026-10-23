@@ -335,7 +335,7 @@ const saveProduct = async () => {
       priceMax: form.priceMax === '' ? null : Number(form.priceMax),
       minOrderQuantity: Number(form.minOrderQuantity),
       categoryId: Number(form.categoryId),
-      sellerId: Number(form.sellerId),
+      sellerId: form.sellerId,
       certifications: form.certificationsText.split(/[,，]/).map((item) => item.trim()).filter(Boolean),
     }
     const response = form.id ? await updateTradeProduct(form.id, payload) : await createTradeProduct(payload)

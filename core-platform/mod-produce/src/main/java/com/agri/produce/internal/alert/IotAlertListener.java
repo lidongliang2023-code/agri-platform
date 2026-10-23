@@ -42,7 +42,10 @@ public class IotAlertListener implements TopicListener {
         alert.setMetric(event.metric());
         alert.setValue(event.value());
         alert.setThreshold(event.threshold());
-        alert.setLevel(event.level());
+        // 入站归一化：上游 satellite-iot 写的是旧词表 CRITICAL/WARN，原样落库会让
+        // V18 迁完之后新数据继续灌旧值，"迁移完成"再次失效。统一归一到 PRD 8.1.2 词表。
+        // 无法识别的级别原样保留并打 warn（见 AlertDict#normalizeLevel），不做静默替换。
+        alert.setLevel(AlertDict.normalizeLevel(event.level()));
         alert.setMessage(event.message());
         if (event.marketId() != null) {
             alert.setMarketId(event.marketId());

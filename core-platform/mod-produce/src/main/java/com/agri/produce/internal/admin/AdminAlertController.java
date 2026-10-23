@@ -42,6 +42,12 @@ public class AdminAlertController {
      * 告警中心 {@code LEVEL_MAP['URGENT']} 取到 undefined 后访问 {@code .color} 抛错，
      * 整页白屏。
      *
+     * <p><b>库内级别串目前新旧两套并存。</b>迁移前是 {@code "URGENT"} 这类旧词表，
+     * 迁移（V19）后是 {@code "urgent"} 这类 PRD 8.1.2 词表，
+     * 但<b>对外数字编码恒为 1-4</b>，所以本契约不受迁移影响；
+     * 库内串的双向识别由 {@link com.agri.produce.internal.alert.AlertDict#codeOfLevel(String)}
+     * 收口（两套都认），查询一律走 {@code IN} 两套写法，不要用单值 EQ。
+     *
      * <p>{@code status} / {@code alertLevel} 接收前端数字编码，由 Service 经
      * {@link com.agri.produce.internal.alert.AlertDict} 转成库内英文枚举后再查，
      * 避免「传数字永远筛不中」。
@@ -98,6 +104,9 @@ public class AdminAlertController {
      * （{@code /admin/production/alerts/review}）与告警中心共用 {@code 1/2/3/4} 数字枚举映射，
      * 吐实体时 {@code alertLevel} 是 {@code "URGENT"}，前端映射取到 undefined 后访问
      * {@code .color} 抛错，页面崩溃。
+     *
+     * <p>注：枚举对齐后库内串会变成 {@code "urgent"}（PRD 8.1.2），
+     * 但本接口经 {@link AlertVO} 转数字，输出形状不变。
      */
     @GetMapping("/review")
     public ApiResponse<PageResult<AlertVO>> review(@RequestParam(defaultValue = "1") long page,

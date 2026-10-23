@@ -1,0 +1,61 @@
+export const financeProducts = [
+  {
+    key: 'agri',
+    name: '农资贷',
+    eyebrow: 'PRODUCTION INPUT',
+    description: '用于采购种子、化肥、农药等生产物资，按种植周期灵活还款。',
+    amount: '最高 80 万元',
+    rate: '5.68% 起',
+    term: '3-12 个月',
+    tags: ['随借随还', '按季付息'],
+    tone: 'green',
+  },
+  {
+    key: 'purchase',
+    name: '收购贷',
+    eyebrow: 'PURCHASE FINANCE',
+    description: '围绕收购订单和仓单提供周转资金，匹配收购、仓储与销售周期。',
+    amount: '最高 300 万元',
+    rate: '5.92% 起',
+    term: '6-18 个月',
+    tags: ['仓单质押', '订单回款'],
+    tone: 'amber',
+  },
+  {
+    key: 'sales',
+    name: '销售贷',
+    eyebrow: 'RECEIVABLE FINANCE',
+    description: '基于已确权销售订单与应收账款，缓解账期占用。',
+    amount: '最高 200 万元',
+    rate: '5.78% 起',
+    term: '3-12 个月',
+    tags: ['订单确权', '回款闭环'],
+    tone: 'blue',
+  },
+  {
+    key: 'machine',
+    name: '农机贷',
+    eyebrow: 'EQUIPMENT FINANCE',
+    description: '支持农机具和智慧农业设备购置，可按设备使用周期分期。',
+    amount: '最高 100 万元',
+    rate: '6.20% 起',
+    term: '12-36 个月',
+    tags: ['设备抵押', '专项采购'],
+    tone: 'violet',
+  },
+  {
+    key: 'data',
+    name: '数据信用贷',
+    eyebrow: 'DATA CREDIT',
+    description: '结合交易、履约、生产与物联网数据，为经营主体提供纯信用额度。',
+    amount: '最高 80 万元',
+    rate: '5.68% 起',
+    term: '3-12 个月',
+    tags: ['纯信用', '快速预审'],
+    tone: 'teal',
+  },
+]
+
+export function productByKey(key) {
+  return financeProducts.find((item) => item.key === key) || financeProducts[0]
+}

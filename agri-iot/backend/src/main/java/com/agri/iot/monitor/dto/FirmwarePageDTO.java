@@ -11,3 +11,4 @@ public class FirmwarePageDTO {
     private String deviceType;
     private Integer isActive;
 }
+

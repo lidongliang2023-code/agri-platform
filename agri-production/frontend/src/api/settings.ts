@@ -187,11 +187,11 @@ export async function saveSettings(payload: SettingItem[]): Promise<boolean> {
   return true
 }
 
-/** 租户信息（系统设置 · 租户信息 Tab） */
+/** 主体信息（系统设置 · 主体信息 Tab） */
 export interface TenantProfile {
-  /** 租户名称 */
+  /** 主体名称 */
   tenantName: string
-  /** 租户编码 */
+  /** 主体编码 */
   tenantCode: string
   /** 统一社会信用代码 */
   creditCode?: string
@@ -207,33 +207,33 @@ export interface TenantProfile {
   address?: string
   /** 经营范围 */
   businessScope?: string
-  /** 租户等级：1 免费版 2 基础版 3 专业版 4 旗舰版 */
+  /** 主体等级：1 免费版 2 基础版 3 专业版 4 旗舰版 */
   tenantLevel?: number
   /** 到期时间 */
   expireAt?: string
 }
 
-/** 租户信息查询结果（附带「接口不可用」原因，供页面显式降级提示） */
+/** 主体信息查询结果（附带「接口不可用」原因，供页面显式降级提示） */
 export interface TenantProfileResult {
-  /** 租户档案，后端没有时为 null */
+  /** 主体档案，后端没有时为 null */
   profile: TenantProfile | null
   /**
    * 接口不可用原因。
    *
-   * 非空表示本次没有拿到任何真实租户档案，页面必须显式告知用户「未接入」，
+   * 非空表示本次没有拿到任何真实主体档案，页面必须显式告知用户「未接入」，
    * **不得**用农场名、农场编码或硬编码档案冒充——那会让用户以为平台里已经存在
-   * 一套真实的租户资料，进而拿它去做合同 / 发票 / 资质审核。
+   * 一套真实的主体资料，进而拿它去做合同 / 发票 / 资质审核。
    */
   unavailableReason?: string
 }
 
 /**
- * 查询租户信息。
+ * 查询主体信息。
  *
  * ⚠️ 实测（core-app :8098）：后端**没有** `GET /settings/tenant` 这个端点，该路径会被
  * `SettingController#detail` 的 `@GetMapping("/{id}")` 吞掉，返回
  * `code=404 资源不存在`（与请求 `/settings/zzz-not-exist` 完全一致，可据此判定是
- * 端点缺失而非"该租户没档案"）。因此本函数**不再静默回落到 null**，而是把不可用原因
+ * 端点缺失而非"该主体没档案"）。因此本函数**不再静默回落到 null**，而是把不可用原因
  * 一并返回，交由页面做醒目降级提示。
  *
  * @returns 查询结果，含可能的不可用原因
@@ -246,18 +246,18 @@ export async function getTenantProfile(): Promise<TenantProfileResult> {
     }
     return {
       profile: null,
-      unavailableReason: '后端 /settings/tenant 已请求成功，但未返回任何租户档案',
+      unavailableReason: '后端 /settings/tenant 已请求成功，但未返回任何主体档案',
     }
   } catch (error) {
     return {
       profile: null,
-      unavailableReason: `租户档案接口不可用：${(error as Error)?.message ?? '请求失败'}`,
+      unavailableReason: `主体档案接口不可用：${(error as Error)?.message ?? '请求失败'}`,
     }
   }
 }
 
 /**
- * 保存租户信息。
+ * 保存主体信息。
  *
  * ⚠️ 实测（core-app :8098）：后端**没有** `PUT /settings/tenant` 这个端点，该路径同样被
  * `@PutMapping("/{id}")` 吞掉，返回 `code=404 资源不存在`。也就是说本调用当前**必然失败**——
@@ -265,7 +265,7 @@ export async function getTenantProfile(): Promise<TenantProfileResult> {
  *
  * 失败提示交由调用方统一处理（`silent`），避免拦截器与页面重复弹提示。
  *
- * @param payload 租户信息
+ * @param payload 主体信息
  * @returns 保存是否成功
  */
 export function saveTenantProfile(payload: TenantProfile): Promise<boolean> {

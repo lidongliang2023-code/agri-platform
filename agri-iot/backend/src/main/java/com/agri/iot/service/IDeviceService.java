@@ -1,6 +1,6 @@
 package com.agri.iot.service;
 
-import com.agri.common.entity.PageResult;
+import com.agri.common.result.PageResult;
 import com.agri.iot.dto.DevicePageDTO;
 import com.agri.iot.dto.DeviceSaveDTO;
 import com.agri.iot.dto.DeviceUpdateDTO;

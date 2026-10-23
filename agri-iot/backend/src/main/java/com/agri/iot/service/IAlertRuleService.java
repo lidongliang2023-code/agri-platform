@@ -1,6 +1,6 @@
 package com.agri.iot.service;
 
-import com.agri.common.entity.PageResult;
+import com.agri.common.result.PageResult;
 import com.agri.iot.dto.AlertRulePageDTO;
 import com.agri.iot.dto.AlertRuleSaveDTO;
 import com.agri.iot.dto.AlertRuleUpdateDTO;

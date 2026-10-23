@@ -1,6 +1,6 @@
 package com.agri.iot.service.impl;
 
-import com.agri.common.entity.PageResult;
+import com.agri.common.result.PageResult;
 import com.agri.common.exception.BusinessException;
 import com.agri.iot.entity.AutomationRule;
 import com.agri.iot.mapper.AutomationRuleMapper;

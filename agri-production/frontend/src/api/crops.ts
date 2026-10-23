@@ -1,7 +1,7 @@
 /**
  * 作物主数据 API（页面「作物管理」+ 种养计划 / 地块的作物下拉）
  *
- * <p>作物是**租户级主数据**（同一租户共用一套），落库在后端 {@code agri_prod_crop_info}。
+ * <p>作物是**平台级主数据**（同一经营主体共用一套），落库在后端 {@code agri_prod_crop_info}。
  * 此前作物是自由文本，计划的 {@code crop_id} 恒空 —— 这个接口层就是为了把作物接成可选的主数据。</p>
  */
 import { http } from '@/utils/request'
@@ -13,7 +13,7 @@ const BASE = '/crops'
 export interface Crop {
   /** 作物主键（页面 cropId，字符串） */
   cropId: string
-  /** 作物编码（同租户内唯一，如 CROP-0001） */
+  /** 作物编码（同一经营主体内唯一，如 CROP-0001） */
   cropCode: string
   /** 作物名称（计划 / 地块的作物列显示的就是它） */
   cropName: string

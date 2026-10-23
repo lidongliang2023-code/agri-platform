@@ -8,7 +8,7 @@ const BASE = '/admin/dashboard'
 
 /** 运营大盘核心指标 */
 export interface OpsDashboardMetrics {
-  /** 租户总数 */
+  /** 主体总数 */
   tenantCount: number
   /** 农场总数 */
   farmCount: number
@@ -31,7 +31,7 @@ export function getOpsDashboard(): Promise<OpsDashboardMetrics> {
   return http.get<OpsDashboardMetrics>(BASE)
 }
 
-/** 查询生产总览（多租户聚合） */
+/** 查询生产总览（多主体聚合） */
 export function getOpsProductionOverview(params?: {
   startDate?: string
   endDate?: string
@@ -64,7 +64,7 @@ export interface OpsRegionStat {
   farmCount: number
   /** 在田面积（亩） */
   fieldArea: number
-  /** 活跃租户数 */
+  /** 活跃主体数 */
   tenantCount: number
   /** 活跃度分层：high 高活跃 / middle 中活跃 / low 低活跃 */
   activityLevel: 'high' | 'middle' | 'low'
@@ -104,7 +104,7 @@ export interface OpsTrendPoint {
 
 /** 生产总览维度统计行（PRD 6.2 #2） */
 export interface OpsOverviewRow {
-  /** 维度名称（区域 / 作物 / 租户） */
+  /** 维度名称（区域 / 作物 / 主体） */
   name: string
   /** 农场数量 */
   farmCount: number
@@ -124,7 +124,7 @@ export interface OpsRealtimeMetric {
   metricId: string
   /** 时间（HH:mm:ss） */
   time: string
-  /** 租户 / 农场名称 */
+  /** 主体 / 农场名称 */
   targetName: string
   /** 内容描述 */
   content: string

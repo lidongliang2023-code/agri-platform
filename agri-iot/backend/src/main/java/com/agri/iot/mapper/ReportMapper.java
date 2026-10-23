@@ -11,7 +11,7 @@ import java.util.List;
 @Mapper
 public interface ReportMapper {
 
-    List<ReportVO> selectReportList(@Param("tenantId") String tenantId);
+    List<ReportVO> selectReportList(@Param("tenantId") Long tenantId);
 
     ReportVO selectReportById(@Param("id") Long id);
 
@@ -21,3 +21,4 @@ public interface ReportMapper {
 
     void deleteById(@Param("id") Long id);
 }
+

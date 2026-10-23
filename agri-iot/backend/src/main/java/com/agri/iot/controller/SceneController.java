@@ -1,6 +1,6 @@
 package com.agri.iot.controller;
 
-import com.agri.common.entity.ApiResponse;
+import com.agri.common.result.ApiResponse;
 import com.agri.iot.entity.Scene;
 import com.agri.iot.service.ISceneService;
 import lombok.RequiredArgsConstructor;

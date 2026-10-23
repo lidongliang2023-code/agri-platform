@@ -33,3 +33,4 @@ public class PushNotification extends BaseEntity {
 
     private String channel;
 }
+

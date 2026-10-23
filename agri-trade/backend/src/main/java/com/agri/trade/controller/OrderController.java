@@ -6,18 +6,23 @@ import com.agri.trade.entity.OrderItem;
 import com.agri.trade.entity.PaymentRecord;
 import com.agri.trade.entity.RefundRecord;
 import com.agri.trade.entity.TradeProduct;
+import com.agri.trade.entity.Logistics;
+import com.agri.trade.entity.LogisticsTrace;
 import com.agri.trade.common.security.SecurityUtils;
 import com.agri.trade.mapper.TradeProductMapper;
 import com.agri.trade.mapper.TradeOrderMapper;
 import com.agri.trade.mapper.OrderItemMapper;
 import com.agri.trade.mapper.PaymentRecordMapper;
 import com.agri.trade.mapper.RefundRecordMapper;
+import com.agri.trade.mapper.LogisticsMapper;
+import com.agri.trade.mapper.LogisticsTraceMapper;
 import com.agri.trade.service.PlatformIdentityService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.Date;
@@ -34,6 +39,8 @@ public class OrderController {
     private final OrderItemMapper itemMapper;
     private final PaymentRecordMapper paymentMapper;
     private final RefundRecordMapper refundMapper;
+    private final LogisticsMapper logisticsMapper;
+    private final LogisticsTraceMapper logisticsTraceMapper;
     private final TradeProductMapper productMapper;
     private final PlatformIdentityService identityService;
 
@@ -66,6 +73,9 @@ public class OrderController {
         if (!"published".equals(product.getPublishStatus())) {
             return ApiResponse.error("该货源未上架，暂时不能下单");
         }
+        if (product.getStockQuantity() != null && product.getStockQuantity().compareTo(quantity) < 0) {
+            return ApiResponse.error("库存不足，当前可供数量：" + product.getStockQuantity() + " " + product.getUnit());
+        }
         BigDecimal unitPrice = product.getPrice() != null ? product.getPrice() : product.getPriceMin();
         if (unitPrice == null || unitPrice.signum() <= 0) {
             return ApiResponse.error("该货源没有可用价格（缺价格与起报价），请先补充");
@@ -91,6 +101,8 @@ public class OrderController {
         order.setSellerName(product.getSellerName());
         order.setCategoryId(product.getCategoryId());
         order.setCategoryName(product.getCategoryName());
+        order.setProductName(product.getProductName());
+        order.setTotalQuantity(quantity);
         order.setGoodsAmount(goods);
         order.setFreightAmount(freight);
         order.setDiscountAmount(BigDecimal.ZERO);
@@ -200,6 +212,29 @@ public class OrderController {
         return ApiResponse.success(itemMapper.selectList(wrapper));
     }
 
+    /** 当前采购主体发起的退款/售后记录，供买家中心“收货与售后”统一展示。 */
+    @GetMapping("/refund/mine")
+    public ApiResponse<List<RefundRecord>> myRefunds() {
+        PlatformIdentityService.MerchantScope scope = identityService.currentScope();
+        if (!scope.resolved()) return ApiResponse.error(scope.error());
+        if (!scope.hasBinding()) return ApiResponse.success(List.of());
+        List<Long> buyerOrderIds = orderMapper.selectList(new LambdaQueryWrapper<TradeOrder>()
+                        .eq(TradeOrder::getDelFlag, 0)
+                        .in(TradeOrder::getBuyerId, scope.merchantIds()))
+                .stream().map(TradeOrder::getId).toList();
+        LambdaQueryWrapper<RefundRecord> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(RefundRecord::getDelFlag, 0);
+        // 买卖双方都可能发起退款：采购方既要看到自己申请的，也要看到供应商针对自己订单发起的。
+        if (buyerOrderIds.isEmpty()) {
+            wrapper.in(RefundRecord::getApplicantId, scope.merchantIds());
+        } else {
+            wrapper.and(w -> w.in(RefundRecord::getApplicantId, scope.merchantIds())
+                    .or().in(RefundRecord::getOrderId, buyerOrderIds));
+        }
+        wrapper.orderByDesc(RefundRecord::getCreateTime);
+        return ApiResponse.success(refundMapper.selectList(wrapper));
+    }
+
     @PostMapping
     public ApiResponse<Boolean> createOrder(@RequestBody TradeOrder order) {
         // 买方身份不采信请求体：表单里带 buyerId 就能以别人名义建单。
@@ -226,11 +261,18 @@ public class OrderController {
         if (existing == null) return ApiResponse.error("订单不存在");
         String denied = denyIfNotParticipant(existing);
         if (denied != null) return ApiResponse.error(denied);
-        order.setId(id);
-        order.setBuyerId(null);
-        order.setSellerId(null);
-        order.setUpdateTime(new Date());
-        int result = orderMapper.updateById(order);
+        // 页面只能补收货信息与备注，不能通过“编辑订单”改金额、参与方或状态。
+        existing.setDeliveryProvince(order.getDeliveryProvince());
+        existing.setDeliveryCity(order.getDeliveryCity());
+        existing.setDeliveryDistrict(order.getDeliveryDistrict());
+        existing.setDeliveryAddress(order.getDeliveryAddress());
+        existing.setDeliveryContact(order.getDeliveryContact());
+        existing.setDeliveryPhone(order.getDeliveryPhone());
+        existing.setDeliveryDeadline(order.getDeliveryDeadline());
+        existing.setBuyerRemark(order.getBuyerRemark());
+        existing.setSellerRemark(order.getSellerRemark());
+        existing.setUpdateTime(new Date());
+        int result = orderMapper.updateById(existing);
         return result > 0 ? ApiResponse.success(true) : ApiResponse.error("更新失败");
     }
 
@@ -242,34 +284,39 @@ public class OrderController {
         if (denied != null) return ApiResponse.error(denied);
         
         String status = params.get("status");
-        order.setOrderStatus(status);
-        order.setUpdateTime(new Date());
-        
-        if ("paid".equals(status)) {
-            order.setPaymentStatus("paid");
-            order.setPaidAmount(order.getTotalAmount());
-        } else if ("shipped".equals(status)) {
-            order.setLogisticsStatus("picked");
-        } else if ("received".equals(status)) {
-            order.setBuyerConfirmed(1);
-            order.setBuyerConfirmTime(new Date());
-        } else if ("completed".equals(status)) {
-            // 这里原先顺手把 settle_status 置成 settled —— 那等于"订单完成 = 钱已经结给卖家"，
-            // 而结算是平台把钱放给卖家的动作，属于运营端职责（见 SettlementService）。
-            // 两者绑在一起的结果是：运营端永远没有"待结算"可处理，结算页无事可做。
-            // 现在只推进订单自身状态，是否结算由运营端显式操作。
+        if (!"cancelled".equals(status)) {
+            return ApiResponse.error("请使用支付、发货、确认收货等专用操作推进订单");
         }
-        
+        PlatformIdentityService.MerchantScope scope = identityService.currentScope();
+        if (!scope.resolved() || !scope.merchantIds().contains(order.getBuyerId())) {
+            return ApiResponse.error("只有采购方可以取消订单");
+        }
+        if (!List.of("pending_confirm", "pending").contains(order.getOrderStatus())
+                || !"unpaid".equals(order.getPaymentStatus())) {
+            return ApiResponse.error("已付款或已进入履约的订单不能直接取消");
+        }
+        order.setOrderStatus("cancelled");
+        order.setUpdateTime(new Date());
         int result = orderMapper.updateById(order);
-        return result > 0 ? ApiResponse.success(true) : ApiResponse.error("更新状态失败");
+        return result > 0 ? ApiResponse.success(true) : ApiResponse.error("取消失败");
     }
 
     @PostMapping("/{id}/pay")
+    @Transactional(rollbackFor = Exception.class)
     public ApiResponse<Boolean> payOrder(@PathVariable Long id, @RequestBody java.util.Map<String, Object> params) {
         TradeOrder order = orderMapper.selectById(id);
         if (order == null) return ApiResponse.error("订单不存在");
-        String denied = denyIfNotParticipant(order);
-        if (denied != null) return ApiResponse.error(denied);
+        PlatformIdentityService.MerchantScope scope = identityService.currentScope();
+        if (!scope.resolved()) return ApiResponse.error(scope.error());
+        if (!scope.hasBinding() || !scope.merchantIds().contains(order.getBuyerId())) {
+            return ApiResponse.error("只有采购方可以支付该订单");
+        }
+        if ("paid".equals(order.getPaymentStatus()) || "paid".equals(order.getOrderStatus())) {
+            return ApiResponse.success(true);
+        }
+        if (!List.of("pending_confirm", "pending").contains(order.getOrderStatus())) {
+            return ApiResponse.error("当前订单状态不能支付");
+        }
 
         PaymentRecord payment = new PaymentRecord();
         payment.setPaymentNo("PY" + System.currentTimeMillis());
@@ -277,12 +324,20 @@ public class OrderController {
         payment.setOrderNo(order.getOrderNo());
         payment.setPayerId(order.getBuyerId());
         payment.setPayerName(order.getBuyerName());
+        payment.setPayeeId(order.getSellerId());
+        payment.setPayeeName(order.getSellerName());
         payment.setAmount(order.getTotalAmount());
         payment.setActualAmount(order.getTotalAmount());
-        payment.setPaymentMethod((String) params.get("paymentMethod"));
+        Object rawMethod = params == null ? null : params.get("paymentMethod");
+        String paymentMethod = rawMethod == null || String.valueOf(rawMethod).isBlank()
+                ? "transfer" : String.valueOf(rawMethod);
+        if (!List.of("transfer", "wechat", "alipay", "bank").contains(paymentMethod)) {
+            return ApiResponse.error("不支持的支付方式");
+        }
+        payment.setPaymentMethod(paymentMethod);
         payment.setPaymentStatus("success");
         payment.setTransactionId("TX" + UUID.randomUUID().toString().substring(0, 20));
-        payment.setIdempotentKey("IDEMP-" + System.currentTimeMillis());
+        payment.setIdempotentKey("ORDER-PAY-" + id);
         payment.setPaymentTime(new Date());
         payment.setDelFlag(0);
         payment.setCreateTime(new Date());
@@ -292,11 +347,119 @@ public class OrderController {
             order.setPaymentStatus("paid");
             order.setPaidAmount(order.getTotalAmount());
             order.setOrderStatus("paid");
+            order.setPaymentMethod(paymentMethod);
             order.setUpdateTime(new Date());
             orderMapper.updateById(order);
             return ApiResponse.success(true);
         }
         return ApiResponse.error("支付失败");
+    }
+
+    /** 卖家发货：生成物流单、写入揽收轨迹并推进订单。 */
+    @PostMapping("/{id}/ship")
+    @Transactional(rollbackFor = Exception.class)
+    public ApiResponse<Logistics> shipOrder(@PathVariable Long id,
+                                            @RequestBody(required = false) Map<String, Object> params) {
+        TradeOrder order = orderMapper.selectById(id);
+        if (order == null) return ApiResponse.error("订单不存在");
+        PlatformIdentityService.MerchantScope scope = identityService.currentScope();
+        if (!scope.resolved()) return ApiResponse.error(scope.error());
+        if (!scope.hasBinding() || !scope.merchantIds().contains(order.getSellerId())) {
+            return ApiResponse.error("只有供货方可以发货");
+        }
+        if (!"paid".equals(order.getOrderStatus()) || !"paid".equals(order.getPaymentStatus())) {
+            return ApiResponse.error("订单尚未支付或已经进入下一环节，不能重复发货");
+        }
+
+        Date now = new Date();
+        Logistics logistics = logisticsMapper.selectOne(new LambdaQueryWrapper<Logistics>()
+                .eq(Logistics::getOrderId, id)
+                .eq(Logistics::getDelFlag, 0)
+                .orderByDesc(Logistics::getId)
+                .last("LIMIT 1"));
+        boolean created = logistics == null;
+        if (created) {
+            logistics = new Logistics();
+            logistics.setLogisticsNo("LG" + System.currentTimeMillis());
+            logistics.setOrderId(id);
+            logistics.setOrderNo(order.getOrderNo());
+            logistics.setDelFlag(0);
+            logistics.setCreateTime(now);
+        }
+        logistics.setCarrierName(strOr(params == null ? null : params.get("carrierName"), "平台物流"));
+        logistics.setCarrierNo(strOr(params == null ? null : params.get("carrierNo"), null));
+        logistics.setLogisticsType(strOr(params == null ? null : params.get("logisticsType"), "road"));
+        logistics.setSenderProvince(order.getSellerProvince());
+        logistics.setSenderCity(order.getSellerCity());
+        logistics.setSenderAddress(order.getSellerAddress());
+        logistics.setSenderContact(order.getSellerName());
+        logistics.setSenderPhone(order.getSellerPhone());
+        logistics.setReceiverProvince(order.getDeliveryProvince());
+        logistics.setReceiverCity(order.getDeliveryCity());
+        logistics.setReceiverDistrict(order.getDeliveryDistrict());
+        logistics.setReceiverAddress(order.getDeliveryAddress());
+        logistics.setReceiverContact(order.getDeliveryContact());
+        logistics.setReceiverPhone(order.getDeliveryPhone());
+        logistics.setGoodsName(order.getProductName() == null ? order.getCategoryName() : order.getProductName());
+        logistics.setGoodsCount(1);
+        logistics.setFreightAmount(order.getFreightAmount());
+        logistics.setPayMethod(order.getPaymentMethod());
+        logistics.setExpectDeliveryTime(order.getDeliveryDeadline());
+        logistics.setPickupTime(now);
+        logistics.setLogisticsStatus("picked");
+        logistics.setCurrentLocation(strOr(params == null ? null : params.get("location"), "供应商仓库"));
+        logistics.setUpdateTime(now);
+        if (created) logisticsMapper.insert(logistics);
+        else logisticsMapper.updateById(logistics);
+        addLogisticsTrace(logistics, "picked", logistics.getCurrentLocation());
+
+        order.setOrderStatus("shipped");
+        order.setLogisticsId(logistics.getId());
+        order.setLogisticsNo(logistics.getLogisticsNo());
+        order.setLogisticsStatus("picked");
+        order.setShipDeadline(now);
+        order.setUpdateTime(now);
+        orderMapper.updateById(order);
+        return ApiResponse.success(logistics);
+    }
+
+    /** 买家确认收货：同步物流签收与订单收货状态。 */
+    @PostMapping("/{id}/confirm-receipt")
+    @Transactional(rollbackFor = Exception.class)
+    public ApiResponse<Boolean> confirmReceipt(@PathVariable Long id,
+                                               @RequestBody(required = false) Map<String, Object> params) {
+        TradeOrder order = orderMapper.selectById(id);
+        if (order == null) return ApiResponse.error("订单不存在");
+        PlatformIdentityService.MerchantScope scope = identityService.currentScope();
+        if (!scope.resolved()) return ApiResponse.error(scope.error());
+        if (!scope.hasBinding() || !scope.merchantIds().contains(order.getBuyerId())) {
+            return ApiResponse.error("只有采购方可以确认收货");
+        }
+        if (!"shipped".equals(order.getOrderStatus())) {
+            return ApiResponse.error("当前订单不在待收货状态");
+        }
+        Date now = new Date();
+        order.setOrderStatus("received");
+        order.setBuyerConfirmed(1);
+        order.setBuyerConfirmTime(now);
+        order.setSignTime(now);
+        order.setLogisticsStatus("delivered");
+        order.setUpdateTime(now);
+        orderMapper.updateById(order);
+
+        Logistics logistics = order.getLogisticsId() == null ? null : logisticsMapper.selectById(order.getLogisticsId());
+        if (logistics != null) {
+            logistics.setLogisticsStatus("delivered");
+            logistics.setDeliveryTime(now);
+            logistics.setActualArrivalTime(now);
+            logistics.setSignTime(now);
+            logistics.setSignReceiver(strOr(params == null ? null : params.get("signReceiver"), order.getDeliveryContact()));
+            logistics.setCurrentLocation(order.getDeliveryAddress());
+            logistics.setUpdateTime(now);
+            logisticsMapper.updateById(logistics);
+            addLogisticsTrace(logistics, "delivered", order.getDeliveryAddress());
+        }
+        return ApiResponse.success(true);
     }
 
     @PostMapping("/{id}/refund")
@@ -356,7 +519,11 @@ public class OrderController {
         refund.setRefundNo("RF" + System.currentTimeMillis());
         refund.setOrderId(id);
         refund.setOrderNo(order.getOrderNo());
-        refund.setRefundType((String) params.get("refundType"));
+        String refundType = strOr(params.get("refundType"), "refund_only");
+        if (!List.of("full", "partial", "refund_only", "return_refund").contains(refundType)) {
+            return ApiResponse.error("不支持的退款类型");
+        }
+        refund.setRefundType(refundType);
         refund.setRefundAmount(amount);
         refund.setRefundReason((String) params.get("refundReason"));
         refund.setApplicantType(applicantId.equals(order.getBuyerId()) ? "buyer" : "seller");
@@ -365,6 +532,13 @@ public class OrderController {
         refund.setRefundStatus("pending");
         refund.setDelFlag(0);
         refund.setCreateTime(new Date());
+        PaymentRecord paidRecord = paymentMapper.selectOne(new LambdaQueryWrapper<PaymentRecord>()
+                .eq(PaymentRecord::getOrderId, id)
+                .eq(PaymentRecord::getPaymentStatus, "success")
+                .eq(PaymentRecord::getDelFlag, 0)
+                .orderByDesc(PaymentRecord::getId)
+                .last("LIMIT 1"));
+        refund.setPaymentId(paidRecord == null ? null : paidRecord.getId());
 
         int result = refundMapper.insert(refund);
         if (result > 0) {
@@ -378,6 +552,7 @@ public class OrderController {
 
     @PostMapping("/refund/{id}/audit")
     @com.agri.common.rbac.OperatorOnly
+    @Transactional(rollbackFor = Exception.class)
     public ApiResponse<Boolean> auditRefund(@PathVariable Long id, @RequestBody java.util.Map<String, String> params) {
         RefundRecord refund = refundMapper.selectById(id);
         if (refund == null) return ApiResponse.error("退款记录不存在");
@@ -397,6 +572,7 @@ public class OrderController {
         refund.setReviewTime(new Date());
         refund.setReviewRemark(params.get("remark"));
         refund.setUpdateTime(new Date());
+        refund.setFinishTime(new Date());
 
         int result = refundMapper.updateById(refund);
         if (result <= 0) {
@@ -414,6 +590,21 @@ public class OrderController {
                 order.setOrderStatus("refunded");
                 order.setUpdateTime(new Date());
                 orderMapper.updateById(order);
+                PaymentRecord payment = refund.getPaymentId() == null
+                        ? paymentMapper.selectOne(new LambdaQueryWrapper<PaymentRecord>()
+                                .eq(PaymentRecord::getOrderId, order.getId())
+                                .eq(PaymentRecord::getPaymentStatus, "success")
+                                .eq(PaymentRecord::getDelFlag, 0)
+                                .orderByDesc(PaymentRecord::getId)
+                                .last("LIMIT 1"))
+                        : paymentMapper.selectById(refund.getPaymentId());
+                if (payment != null) {
+                    payment.setPaymentStatus("refunded");
+                    payment.setUpdateTime(new Date());
+                    paymentMapper.updateById(payment);
+                }
+                refund.setRefundTime(new Date());
+                refundMapper.updateById(refund);
             }
             return ApiResponse.success(true);
         }
@@ -454,6 +645,26 @@ public class OrderController {
             return "shipped";
         }
         return "paid";
+    }
+
+    private String strOr(Object value, String fallback) {
+        if (value == null || String.valueOf(value).isBlank()) return fallback;
+        return String.valueOf(value);
+    }
+
+    private void addLogisticsTrace(Logistics logistics, String status, String location) {
+        LogisticsTrace trace = new LogisticsTrace();
+        trace.setLogisticsId(logistics.getId());
+        trace.setLogisticsNo(logistics.getLogisticsNo());
+        trace.setTraceNo("TR" + System.currentTimeMillis());
+        trace.setTraceTime(new Date());
+        trace.setTraceStatus(status);
+        trace.setTraceLocation(location);
+        trace.setTraceDescription("picked".equals(status) ? "供应商已发货，物流已揽收"
+                : "delivered".equals(status) ? "货物已送达并签收" : status);
+        trace.setDelFlag(0);
+        trace.setCreateTime(new Date());
+        logisticsTraceMapper.insert(trace);
     }
 
     /**

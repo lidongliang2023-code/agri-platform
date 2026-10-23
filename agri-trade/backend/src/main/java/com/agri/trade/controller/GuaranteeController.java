@@ -84,6 +84,12 @@ public class GuaranteeController {
         if (guarantee.getMerchantId() == null || !scope.merchantIds().contains(guarantee.getMerchantId())) {
             return ApiResponse.error("只能给自己的保证金账户补缴");
         }
+        if (!"active".equals(guarantee.getGuaranteeStatus())) {
+            return ApiResponse.error("只有生效中的保证金账户可以补缴");
+        }
+        if (guarantee.getExpireTime() != null && guarantee.getExpireTime().before(new Date())) {
+            return ApiResponse.error("保证金账户已到期，不能补缴");
+        }
         BigDecimal amount;
         try {
             amount = new BigDecimal(String.valueOf(params.get("amount")).trim());
@@ -124,30 +130,35 @@ public class GuaranteeController {
     @PostMapping
     @com.agri.common.rbac.OperatorOnly
     public ApiResponse<Boolean> createGuarantee(@RequestBody MerchantGuarantee guarantee) {
-        guarantee.setGuaranteeNo("GT" + System.currentTimeMillis());
-        guarantee.setDelFlag(0);
-        guarantee.setGuaranteeStatus("pending");
-        guarantee.setAvailableAmount(guarantee.getTotalAmount());
-        guarantee.setFrozenAmount(BigDecimal.ZERO);
-        guarantee.setUsedAmount(BigDecimal.ZERO);
-        guarantee.setApplyTime(new Date());
-        guarantee.setCreateTime(new Date());
-        guarantee.setUpdateTime(new Date());
-        int result = guaranteeMapper.insert(guarantee);
-        return result > 0 ? ApiResponse.success(true) : ApiResponse.error("创建失败");
+        if (guarantee.getTotalAmount() == null || guarantee.getTotalAmount().signum() <= 0) {
+            return ApiResponse.error("保证金总额必须大于 0");
+        }
+        if (guarantee.getMerchantId() == null) {
+            return ApiResponse.error("请选择保证金所属经营主体");
+        }
+        return guaranteeService.submitGuarantee(guarantee, SecurityUtils.getUsername())
+                ? ApiResponse.success(true) : ApiResponse.error("创建失败");
     }
 
     @PostMapping("/{id}/verify")
     @com.agri.common.rbac.OperatorOnly
-    public ApiResponse<Boolean> verifyGuarantee(@PathVariable Long id, @RequestBody java.util.Map<String, String> params) {
+    public ApiResponse<Boolean> verifyGuarantee(@PathVariable Long id,
+                                                @RequestBody java.util.Map<String, String> params) {
         MerchantGuarantee guarantee = guaranteeMapper.selectById(id);
         if (guarantee == null) return ApiResponse.error("保证金记录不存在");
-        guarantee.setGuaranteeStatus(params.get("status"));
-        guarantee.setVerifyTime(new Date());
-        guarantee.setVerifiedBy(params.get("auditor"));
-        guarantee.setUpdateTime(new Date());
-        int result = guaranteeMapper.updateById(guarantee);
-        return result > 0 ? ApiResponse.success(true) : ApiResponse.error("审核失败");
+        if (!"pending".equals(guarantee.getGuaranteeStatus())) {
+            return ApiResponse.error("该账户已经审核过了");
+        }
+        String status = params.get("status");
+        if (!"active".equals(status) && !"rejected".equals(status)) {
+            return ApiResponse.error("审核结论只支持 active（通过）或 rejected（驳回）");
+        }
+        String remark = params.get("remark");
+        if ("rejected".equals(status) && (remark == null || remark.trim().isEmpty())) {
+            return ApiResponse.error("驳回必须填写原因");
+        }
+        boolean updated = guaranteeService.verifyGuarantee(id, status, SecurityUtils.getUsername(), remark);
+        return updated ? ApiResponse.success(true) : ApiResponse.error("审核失败");
     }
 
     @GetMapping("/compensation/page")

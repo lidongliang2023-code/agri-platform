@@ -27,6 +27,43 @@
   font-size: 14px;
 }
 
+.mc-shell button:focus-visible,
+.mc-shell a:focus-visible {
+  outline: 2px solid rgba(21, 154, 94, 0.55);
+  outline-offset: 2px;
+}
+
+.mc-shell .ant-input:hover,
+.mc-shell .ant-input-affix-wrapper:hover,
+.mc-shell .ant-input-number:hover,
+.mc-shell .ant-picker:hover,
+.mc-shell .ant-select:not(.ant-select-disabled):hover .ant-select-selector {
+  border-color: #8fc8a7 !important;
+}
+
+.mc-shell .ant-input:focus,
+.mc-shell .ant-input-focused,
+.mc-shell .ant-input-affix-wrapper-focused,
+.mc-shell .ant-input-affix-wrapper:focus-within,
+.mc-shell .ant-input-number-focused,
+.mc-shell .ant-picker-focused,
+.mc-shell .ant-select-focused .ant-select-selector {
+  border-color: var(--mc-green-600) !important;
+  box-shadow: 0 0 0 3px rgba(18, 118, 74, 0.1) !important;
+}
+
+.mc-shell .ant-tabs-tab:hover .ant-tabs-tab-btn {
+  color: var(--mc-green-700);
+}
+
+.mc-shell .ant-tabs-tab.ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: var(--mc-green-700);
+}
+
+.mc-shell .ant-tabs-ink-bar {
+  background: var(--mc-green-600);
+}
+
 .mc-side {
   width: 224px;
   flex: none;
@@ -455,7 +492,7 @@
   border: none;
   background: transparent;
   padding: 0;
-  color: #0b5e86;
+  color: var(--mc-green-700);
   font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
@@ -464,6 +501,7 @@
 }
 
 .mc-link:hover {
+  color: var(--mc-green-500);
   text-decoration: underline;
 }
 
@@ -530,6 +568,7 @@
 }
 
 .mc-chips button:hover {
+  background: var(--mc-green-100);
   color: var(--mc-green-700);
 }
 
@@ -554,11 +593,15 @@
   cursor: pointer;
   text-decoration: none;
   white-space: nowrap;
+  transition: color .16s ease, background .16s ease, border-color .16s ease, box-shadow .16s ease, transform .16s ease;
 }
 
 .mc-btn:hover {
+  border-color: var(--mc-green-700);
+  background: linear-gradient(135deg, var(--mc-green-700), var(--mc-green-600));
   color: #fff;
-  filter: brightness(1.05);
+  box-shadow: 0 5px 14px rgba(18, 118, 74, .14);
+  transform: translateY(-1px);
 }
 
 .mc-btn.ghost {
@@ -567,8 +610,10 @@
 }
 
 .mc-btn.ghost:hover {
+  border-color: var(--mc-green-500);
   color: var(--mc-green-700);
   background: var(--mc-green-050);
+  box-shadow: none;
 }
 
 .mc-btn:disabled {
@@ -644,6 +689,13 @@
   padding: 4px 10px;
   cursor: pointer;
   font-size: 12px;
+  transition: color .16s ease, border-color .16s ease, background .16s ease;
+}
+
+.mc-pager button:hover:not(:disabled) {
+  border-color: var(--mc-green-500);
+  background: var(--mc-green-050);
+  color: var(--mc-green-700);
 }
 
 .mc-pager button:disabled {

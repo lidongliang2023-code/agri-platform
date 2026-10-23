@@ -1,20 +1,29 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Modal, Tabs, message } from 'antd'
+import { Modal, message } from 'antd'
 import {
   AlertOutlined,
   ApiOutlined,
   AppstoreOutlined,
+  ArrowRightOutlined,
+  BarChartOutlined,
+  CheckCircleFilled,
+  CloudServerOutlined,
+  CustomerServiceOutlined,
   DollarOutlined,
   FileTextOutlined,
   HomeOutlined,
   AppstoreAddOutlined,
+  RiseOutlined,
+  SafetyCertificateOutlined,
+  SendOutlined,
   ShopOutlined,
   StarOutlined,
   TeamOutlined,
   TruckOutlined,
+  WalletOutlined,
 } from '@ant-design/icons'
-import { updateOrderStatus } from '@/api/order'
+import { shipOrder as shipOrderRequest } from '@/api/order'
 import { updateSellerProductStatus } from '@/api/product'
 import { getMySettlement, type SellerSettlementView } from '@/api/settlement'
 import ContractList from '@/pages/contract/list'
@@ -28,6 +37,7 @@ import PriceList from '@/pages/price/list'
 import QuoteList from '@/pages/quote/list'
 import ProductCreate from '@/pages/product/create'
 import { MemberCenterShell, type MemberNavItem } from './MemberCenterShell'
+import './seller-center.css'
 import {
   EmptyState,
   Panel,
@@ -71,22 +81,6 @@ const SELLER_STATUS = [
   { value: 'completed', label: '已完成' },
 ]
 
-function Kpi({ label, value, unit, desc, tone = '' }: {
-  label: string
-  value: string | number
-  unit?: string
-  desc?: string
-  tone?: string
-}): JSX.Element {
-  return (
-    <div className={`mc-stat ${tone}`}>
-      <div className="mc-stat-k">{label}</div>
-      <div className="mc-stat-v">{value}<small>{unit}</small></div>
-      {desc && <div className="mc-stat-d">{desc}</div>}
-    </div>
-  )
-}
-
 export default function SellerCenter(): JSX.Element {
   const [params, setParams] = useSearchParams()
   const active = params.get('tab') || 'overview'
@@ -115,6 +109,7 @@ export default function SellerCenter(): JSX.Element {
   const guarantees = useGuarantees()
   const inquiries = useReceivedInquiries()
   const [goodsStatus, setGoodsStatus] = useState('all')
+  const [tradeTab, setTradeTab] = useState<'quote' | 'match' | 'price'>('quote')
   const [settlement, setSettlement] = useState<SellerSettlementView | null>(null)
 
   useEffect(() => {
@@ -184,7 +179,11 @@ export default function SellerCenter(): JSX.Element {
       cancelText: '取消',
       onOk: async () => {
         try {
-          const body = await updateOrderStatus(order.id, 'shipped')
+          const body = await shipOrderRequest(order.id, {
+            carrierName: '平台物流',
+            carrierNo: order.orderNo,
+            logisticsType: 'road',
+          })
           if (body?.code === 200) {
             message.success('已发货')
             allOrders.reload()
@@ -210,45 +209,97 @@ export default function SellerCenter(): JSX.Element {
   )
 
   const renderOverview = (): JSX.Element => (
-    <>
-      <div className="mc-grid mc-grid-4">
-        <Kpi label="待发货" value={sellerOrders.filter((item) => item.orderStatus === 'paid').length} unit="笔" desc="请在 24 小时内处理" />
-        <Kpi label="运输中" value={myLogistics.filter((item) => !/delivered|cancelled|已签收/i.test(item.logisticsStatus ?? '')).length}
-          unit="单" desc={`关联物流单 ${myLogistics.length} 单`} tone="tech" />
-        <Kpi label="待处理售后" value={openDisputes.length} unit="笔" desc="超时响应会影响店铺评分" tone={openDisputes.length ? 'amber' : ''} />
-        <Kpi label="收到询价" value={inquiries.length} unit="条" desc="供应方视角的询价单" />
-      </div>
-
-      <Panel title="店铺经营概览" extra={<span className="mc-toolbar-muted">数据来自交易单据与商品表</span>}>
-        <div className="mc-grid mc-grid-4">
-          <Kpi label="累计成交额" value={money(base.dashboard?.seller?.totalRevenue ?? 0)} desc="不含已取消订单" />
-          <Kpi label="今日成交额" value={money(base.dashboard?.seller?.todayRevenue ?? 0)} desc={`今日订单 ${base.dashboard?.seller?.todayOrders ?? 0} 笔`} tone="tech" />
-          <Kpi label="在架货源" value={base.dashboard?.seller?.activeProducts ?? 0} unit="个" desc={`货源总数 ${base.dashboard?.seller?.productCount ?? products.rows.length}`} />
-          <Kpi label="商品累计浏览" value={productViews} unit="次" desc={avgRating == null ? '暂无评价' : `平均评分 ${avgRating.toFixed(1)}`} tone="amber" />
+    <div className="seller-overview">
+      <section className="seller-overview-hero">
+        <span className="seller-overview-icon"><ShopOutlined /></span>
+        <div className="seller-overview-title">
+          <small>SELLER BUSINESS CENTER</small>
+          <h2>店铺经营工作台</h2>
+          <p>{sellerMerchant?.merchantName || '当前经营主体'} · 商品、报价、履约和结算进度集中管理</p>
         </div>
-      </Panel>
+        <div className="seller-overview-figures">
+          <div><span>累计成交额</span><strong>{money(base.dashboard?.seller?.totalRevenue ?? 0)}</strong></div>
+          <div><span>今日成交额</span><strong>{money(base.dashboard?.seller?.todayRevenue ?? 0)}</strong></div>
+          <div><span>在架货源</span><strong>{base.dashboard?.seller?.activeProducts ?? 0}<em>个</em></strong></div>
+        </div>
+        <div className="seller-overview-actions">
+          <button type="button" className="mc-btn" onClick={() => setActive('publish')}>
+            <AppstoreAddOutlined /> 发布商品
+          </button>
+          <button type="button" className="mc-btn ghost" onClick={() => setActive('trade')}>
+            报价与撮合 <ArrowRightOutlined />
+          </button>
+        </div>
+      </section>
 
-      <Panel title="最近销售订单" extra={<button type="button" className="mc-link" onClick={() => setActive('sales')}>查看全部订单 →</button>}>
-        {renderSellerOrders(sellerOrders.slice(0, 5), allOrders.loading, allOrders.error, orderActions)}
-      </Panel>
-
-      <div className="mc-section-title">快捷入口</div>
-      <div className="mc-grid mc-grid-4">
+      <section className="seller-task-grid">
         {[
-          { icon: <FileTextOutlined />, title: '发布新商品', desc: '发布供应商品，精准触达采购商', tab: 'publish' },
-          { icon: <AppstoreOutlined />, title: '商品管理', desc: '上架商品、维护规格与库存', tab: 'goods' },
-          { icon: <TruckOutlined />, title: '发货管理', desc: '发货、查看在途物流与签收状态', tab: 'ship' },
-          { icon: <TeamOutlined />, title: '客户管理', desc: '采购商档案、成交与复购', tab: 'customer' },
+          { label: '待发货', value: sellerOrders.filter((item) => item.orderStatus === 'paid').length, tone: 'amber', icon: <TruckOutlined />, desc: '付款订单等待履约', tab: 'ship' },
+          { label: '运输中', value: myLogistics.filter((item) => !/delivered|cancelled|已签收/i.test(item.logisticsStatus ?? '')).length, tone: 'tech', icon: <SendOutlined />, desc: '在途物流持续跟踪', tab: 'ship' },
+          { label: '待处理售后', value: openDisputes.length, tone: 'red', icon: <CustomerServiceOutlined />, desc: '及时处理维护信用', tab: 'after' },
+          { label: '收到询价', value: inquiries.length, tone: 'green', icon: <FileTextOutlined />, desc: '采购需求等待报价', tab: 'trade' },
         ].map((item) => (
-          <a className="mc-quick" key={item.title} href="#"
-            onClick={(event) => { event.preventDefault(); setActive(item.tab) }}>
-            <span className="mc-quick-icon">{item.icon}</span>
-            <strong>{item.title}</strong>
-            <small>{item.desc}</small>
-          </a>
+          <button type="button" className={`seller-task ${item.tone}`} key={item.label} onClick={() => setActive(item.tab)}>
+            <span className="seller-task-icon">{item.icon}</span>
+            <span><small>{item.label}</small><strong>{item.value}<em>项</em></strong><i>{item.desc}</i></span>
+            <ArrowRightOutlined />
+          </button>
         ))}
+      </section>
+
+      <div className="seller-overview-layout">
+        <div className="seller-overview-main">
+          <Panel title="最近销售订单" extra={
+            <button type="button" className="mc-link" onClick={() => setActive('sales')}>查看全部订单 <ArrowRightOutlined /></button>
+          }>
+            {renderSellerOrders(sellerOrders.slice(0, 5), allOrders.loading, allOrders.error, orderActions)}
+          </Panel>
+          <Panel title="经营线索">
+            <div className="seller-lead-grid">
+              <div><span className="seller-lead-icon"><AppstoreOutlined /></span><div><small>商品货源</small><strong>{products.rows.length}</strong><em>总浏览 {productViews} 次</em></div></div>
+              <div><span className="seller-lead-icon tech"><FileTextOutlined /></span><div><small>收到询价</small><strong>{inquiries.length}</strong><em>等待供应商响应</em></div></div>
+              <div><span className="seller-lead-icon amber"><StarOutlined /></span><div><small>店铺评分</small><strong>{avgRating == null ? '—' : avgRating.toFixed(1)}</strong><em>{evaluations.rows.length} 条真实评价</em></div></div>
+              <div><span className="seller-lead-icon green"><TeamOutlined /></span><div><small>成交客户</small><strong>{customers.length}</strong><em>来自真实销售订单</em></div></div>
+            </div>
+          </Panel>
+        </div>
+        <aside className="seller-overview-aside">
+          <Panel title="店铺信用">
+            <div className="seller-rating-card">
+              <strong>{avgRating == null ? '—' : avgRating.toFixed(1)}</strong>
+              <div><span>{avgRating == null ? '暂无评分' : '综合评分'}</span><em>{'★'.repeat(Math.round(avgRating ?? 0))}</em><small>{evaluations.rows.length} 条评价</small></div>
+            </div>
+            <div className="seller-rating-lines">
+              <div><span>描述相符</span><strong>{avgMetric(evaluations.rows, 'ratingQuality')}</strong></div>
+              <div><span>服务态度</span><strong>{avgMetric(evaluations.rows, 'ratingService')}</strong></div>
+              <div><span>发货速度</span><strong>{avgMetric(evaluations.rows, 'ratingDelivery')}</strong></div>
+            </div>
+          </Panel>
+          <Panel title="资金概况" extra={<button type="button" className="mc-link" onClick={() => setActive('fund')}>结算明细</button>}>
+            <div className="seller-fund-lines">
+              <div><span>待结算金额</span><strong>{money(settlement?.summary.pendingAmount ?? 0)}</strong></div>
+              <div><span>已结算应收</span><strong>{money(settlement?.summary.settledReceivable ?? 0)}</strong></div>
+              <div><span>可用保证金</span><strong>{money(guaranteeAvailable)}</strong></div>
+            </div>
+          </Panel>
+          <Panel title="快捷入口">
+            <div className="seller-quick-list">
+              {[
+                { icon: <AppstoreAddOutlined />, title: '发布新商品', tab: 'publish' },
+                { icon: <StarOutlined />, title: '报价与撮合', tab: 'trade' },
+                { icon: <StarOutlined />, title: '评价与信用', tab: 'rate' },
+                { icon: <TeamOutlined />, title: '客户管理', tab: 'customer' },
+                { icon: <ApiOutlined />, title: '生产接入', tab: 'iot' },
+              ].map((item) => (
+                <button type="button" key={item.title} onClick={() => setActive(item.tab)}>
+                  <span>{item.icon}</span><strong>{item.title}</strong><ArrowRightOutlined />
+                </button>
+              ))}
+            </div>
+          </Panel>
+        </aside>
       </div>
-    </>
+    </div>
   )
 
   const renderSales = (): JSX.Element => (
@@ -276,15 +327,30 @@ export default function SellerCenter(): JSX.Element {
   )
 
   const renderTrade = (): JSX.Element => (
-    <div className="mc-embedded mc-embedded-first">
-      <Tabs
-        defaultActiveKey="quote"
-        items={[
-          { key: 'quote', label: '报价管理', children: <QuoteList /> },
-          { key: 'match', label: '智能匹配', children: <MatchList /> },
-          { key: 'price', label: '价格推荐', children: <PriceList /> },
-        ]}
-      />
+    <div className="seller-workspace seller-trade-workspace">
+      <section className="seller-workspace-hero">
+        <span className="seller-workspace-icon"><StarOutlined /></span>
+        <div><small>QUOTATION & MATCHING</small><h2>报价与撮合</h2><p>响应采购询价、查看智能匹配并按市场数据优化报价。</p></div>
+        <div className="seller-workspace-stats">
+          <div><span>收到询价</span><strong>{inquiries.length}</strong></div>
+          <div><span>商品货源</span><strong>{products.rows.length}</strong></div>
+          <div><span>店铺评分</span><strong>{avgRating == null ? '—' : avgRating.toFixed(1)}</strong></div>
+        </div>
+      </section>
+      <div className="seller-switch-tabs">
+        <button type="button" className={tradeTab === 'quote' ? 'on' : ''} onClick={() => setTradeTab('quote')}>
+          <FileTextOutlined /><span><strong>报价管理</strong><small>询价响应与正式报价</small></span>
+        </button>
+        <button type="button" className={tradeTab === 'match' ? 'on' : ''} onClick={() => setTradeTab('match')}>
+          <RiseOutlined /><span><strong>智能匹配</strong><small>需求与货源撮合评分</small></span>
+        </button>
+        <button type="button" className={tradeTab === 'price' ? 'on' : ''} onClick={() => setTradeTab('price')}>
+          <BarChartOutlined /><span><strong>价格推荐</strong><small>市场价格与定价建议</small></span>
+        </button>
+      </div>
+      <div className="seller-embedded-workbench">
+        {tradeTab === 'quote' ? <QuoteList /> : tradeTab === 'match' ? <MatchList /> : <PriceList />}
+      </div>
     </div>
   )
 
@@ -406,129 +472,100 @@ export default function SellerCenter(): JSX.Element {
 
   const renderShip = (): JSX.Element => (
     <>
-      <div className="mc-toolbar">
-        <span className="mc-toolbar-muted">待发货订单与在途运单跟踪</span>
-        <span className="mc-spacer" />
-        <a className="mc-btn ghost" href="/logistics">物流管理</a>
-      </div>
-      <Panel title="发货与物流">
-        {!myLogistics.length && !sellerOrders.filter((item) => item.orderStatus === 'paid').length ? (
-          <EmptyState title="没有待发货或在途运单" desc="订单付款后会进入待发货，发货后这里会显示物流轨迹。" />
+      <Panel title="待发货订单" extra={<span className="mc-toolbar-muted">付款后请及时安排发货</span>}>
+        {sellerOrders.filter((item) => item.orderStatus === 'paid').length === 0 ? (
+          <EmptyState title="没有待发货订单" desc="订单付款后会进入待发货，完成发货后可在下方物流管理中跟踪。" />
         ) : (
           <div className="mc-table-wrap">
             <table className="mc-table">
-              <thead><tr><th>运单号</th><th>关联订单</th><th>物流方式</th><th>承运商</th><th>当前节点</th><th>状态</th><th>操作</th></tr></thead>
+              <thead><tr><th>订单号</th><th>商品</th><th>采购方</th><th>订单金额</th><th>状态</th><th>操作</th></tr></thead>
               <tbody>
                 {sellerOrders.filter((item) => item.orderStatus === 'paid').map((order) => (
                   <tr key={`pending-${order.id}`}>
-                    <td className="mc-mono">—</td>
                     <td className="mc-mono">{order.orderNo}</td>
-                    <td>待安排</td><td>—</td><td className="mc-toolbar-muted">待安排发货</td>
+                    <td>{order.productName || order.categoryName || '—'}</td>
+                    <td>{order.buyerName}</td>
+                    <td className="mc-price">{money(order.totalAmount)}</td>
                     <td><span className="mc-tag amber">待发货</span></td>
                     <td><button type="button" className="mc-link" onClick={() => shipOrder(order)}>去发货</button></td>
                   </tr>
                 ))}
-                {myLogistics.map((row) => (
-                  <tr key={row.id}>
-                    <td className="mc-mono">{row.logisticsNo}</td>
-                    <td className="mc-mono">{row.orderId}</td>
-                    <td>{row.logisticsType ?? '—'}</td>
-                    <td>{row.carrierName ?? '—'}</td>
-                    <td className="mc-wrap-text">{row.currentLocation ?? '—'}</td>
-                    <td><span className="mc-tag tech">{logisticsText(row.logisticsStatus)}</span></td>
-                    <td><a className="mc-link" href="/logistics">查看轨迹</a></td>
-                  </tr>
-                ))}
               </tbody>
             </table>
           </div>
         )}
       </Panel>
-      <div className="mc-embedded"><LogisticsList /></div>
+      <LogisticsList />
     </>
   )
 
-  const renderAfter = (): JSX.Element => (
-    <>
-      <div className="mc-toolbar">
-        <span className="mc-toolbar-muted">待处理售后工单 · 48 小时内响应可维护店铺评分</span>
-        <span className="mc-spacer" />
-        <span className="mc-tag red">待处理 {openDisputes.length} 笔</span>
-      </div>
-      <Panel title="售后工单">
-        {myDisputes.length === 0 ? (
-          <EmptyState title="没有售后工单" desc="采购方发起售后后会出现在这里。" />
-        ) : (
-          <div className="mc-table-wrap">
-            <table className="mc-table">
-              <thead><tr><th>工单号</th><th>关联订单</th><th>类型</th><th>问题</th><th>采购方诉求</th><th>状态</th><th>操作</th></tr></thead>
-              <tbody>
-                {myDisputes.map((row) => (
-                  <tr key={row.id}>
-                    <td className="mc-mono">{row.disputeNo}</td>
-                    <td className="mc-mono">{row.orderId}</td>
-                    <td>{row.disputeType ?? '—'}</td>
-                    <td className="mc-wrap-text">{row.disputeDescription ?? row.disputeReason ?? '—'}</td>
-                    <td className="mc-mono">{row.claimAmount != null ? money(row.claimAmount) : '—'}</td>
-                    <td><span className="mc-tag amber">{row.disputeStatus ?? '处理中'}</span></td>
-                    <td><a className="mc-link" href="/member/seller?tab=after">处理</a></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Panel>
-      <div className="mc-embedded"><DisputeList /></div>
-    </>
-  )
+  const renderAfter = (): JSX.Element => <DisputeList />
 
   const renderRate = (): JSX.Element => (
-    <>
-      <div className="mc-grid mc-grid-4">
-        <Kpi label="综合评分" value={avgRating == null ? '—' : avgRating.toFixed(1)} unit={avgRating == null ? '' : '分'} desc={`共 ${evaluations.rows.length} 条评价`} tone="tech" />
-        <Kpi label="描述相符" value={avgMetric(evaluations.rows, 'ratingQuality')} desc="来自真实评价" />
-        <Kpi label="服务态度" value={avgMetric(evaluations.rows, 'ratingService')} desc="来自真实评价" />
-        <Kpi label="发货速度" value={avgMetric(evaluations.rows, 'ratingDelivery')} desc="来自真实评价" />
+    <div className="seller-workspace seller-rating-workspace">
+      <section className="seller-workspace-hero seller-rating-hero">
+        <span className="seller-workspace-icon"><StarOutlined /></span>
+        <div><small>STORE REPUTATION</small><h2>店铺评价与信用</h2><p>基于真实成交评价展示店铺服务水平，可回复评价或发起申诉。</p></div>
+        <div className="seller-rating-score">
+          <strong>{avgRating == null ? '—' : avgRating.toFixed(1)}</strong>
+          <div><span>{avgRating == null ? '暂无评分' : '综合评分'}</span><em>{'★'.repeat(Math.round(avgRating ?? 0))}</em><small>{evaluations.rows.length} 条评价</small></div>
+        </div>
+      </section>
+      <div className="seller-rating-metrics">
+        <div><span>描述相符</span><strong>{avgMetric(evaluations.rows, 'ratingQuality')}</strong><em>商品与描述一致性</em></div>
+        <div><span>服务态度</span><strong>{avgMetric(evaluations.rows, 'ratingService')}</strong><em>沟通与售后响应</em></div>
+        <div><span>发货速度</span><strong>{avgMetric(evaluations.rows, 'ratingDelivery')}</strong><em>订单履约及时性</em></div>
+        <div><span>评价总数</span><strong>{evaluations.rows.length}</strong><em>全部来自真实订单</em></div>
       </div>
-      <Panel title="最新评价">
+      <Panel title="最新买家评价" extra={<span className="seller-section-note">展示最近公开评价</span>}>
         {evaluations.rows.length === 0 ? (
           <EmptyState title="还没有店铺评价" desc="订单完成后采购方可以评价，评价会展示在这里。" />
         ) : (
-          <div className="mc-table-wrap">
-            <table className="mc-table">
-              <thead><tr><th>订单</th><th>采购方</th><th>评分</th><th>评价内容</th><th>时间</th></tr></thead>
-              <tbody>
-                {evaluations.rows.map((row) => (
-                  <tr key={row.id}>
-                    <td className="mc-mono">{row.orderId}</td>
-                    <td>{row.evaluatorName}</td>
-                    <td><span className="mc-stars">{'★'.repeat(Math.round(row.ratingOverall))}</span> {row.ratingOverall}</td>
-                    <td className="mc-wrap-text">{row.evaluationContent ?? '—'}</td>
-                    <td className="mc-mono mc-xs">{shortDate(row.createTime)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="seller-review-grid">
+            {evaluations.rows.slice(0, 6).map((row) => (
+              <div className="seller-review-card" key={row.id}>
+                <div className="seller-review-head">
+                  <span className="seller-review-avatar">{row.evaluatorName?.slice(0, 1) || '客'}</span>
+                  <div><strong>{row.evaluatorName || '采购方'}</strong><small>订单 {row.orderId} · {shortDate(row.createTime)}</small></div>
+                  <em>{'★'.repeat(Math.round(row.ratingOverall))}</em>
+                </div>
+                <p>{row.evaluationContent || '未填写文字评价'}</p>
+                {row.replyContent && <div className="seller-review-reply">商家回复：{row.replyContent}</div>}
+                <div className="seller-review-tags"><span>{row.ratingOverall} 分</span><span>{row.isAnonymous === 1 ? '匿名评价' : '实名评价'}</span></div>
+              </div>
+            ))}
           </div>
         )}
       </Panel>
-      <Panel title="信用分与等级说明" extra={<span className="mc-tag amber">信用分接口待接入</span>}>
-        <div className="mc-note">当前交易域只提供真实评价均分，没有独立的信用分字段；页面不展示编造的“96 分 / 金牌卖家”。</div>
+      <Panel title="评价管理与申诉" extra={<span className="mc-tag amber">信用分接口待接入</span>}>
+        <div className="seller-credit-note">
+          当前交易域只提供真实评价均分，没有独立信用分字段；不展示虚构的信用分或等级。
+        </div>
+        <div className="seller-embedded-workbench">
+          <EvaluationList />
+        </div>
       </Panel>
-      <div className="mc-embedded"><EvaluationList /></div>
-    </>
+    </div>
   )
 
   const renderFund = (): JSX.Element => (
-    <>
-      <div className="mc-grid mc-grid-3">
-        <Kpi label="待结算金额" value={money(settlement?.summary.pendingAmount ?? 0)}
-          desc={`${settlement?.summary.pendingCount ?? 0} 笔 · 预估应收 ${money(settlement?.summary.pendingReceivable ?? 0)}`} />
-        <Kpi label="已结算应收" value={money(settlement?.summary.settledReceivable ?? 0)}
-          desc={`${settlement?.summary.settledCount ?? 0} 笔 · 平台服务费 ${money(settlement?.summary.settledFee ?? 0)}`} tone="tech" />
-        <Kpi label="可用保证金" value={money(guaranteeAvailable)} desc={`冻结 ${money(guaranteeFrozen)}`} tone="amber" />
+    <div className="seller-workspace seller-fund-workspace">
+      <section className="seller-workspace-hero">
+        <span className="seller-workspace-icon"><WalletOutlined /></span>
+        <div><small>SETTLEMENT & FINANCE</small><h2>资金结算</h2><p>查看订单应收、平台服务费、保证金、赔付与结算进度。</p></div>
+        <div className="seller-workspace-stats">
+          <div><span>待结算</span><strong>{money(settlement?.summary.pendingAmount ?? 0)}</strong></div>
+          <div><span>已结算应收</span><strong>{money(settlement?.summary.settledReceivable ?? 0)}</strong></div>
+          <div><span>可用保证金</span><strong>{money(guaranteeAvailable)}</strong></div>
+        </div>
+      </section>
+      <div className="seller-finance-metrics">
+        <div><span>待结算订单</span><strong>{settlement?.summary.pendingCount ?? 0}<em>笔</em></strong><small>预估应收 {money(settlement?.summary.pendingReceivable ?? 0)}</small></div>
+        <div><span>已结算订单</span><strong>{settlement?.summary.settledCount ?? 0}<em>笔</em></strong><small>累计应收 {money(settlement?.summary.settledReceivable ?? 0)}</small></div>
+        <div><span>平台服务费</span><strong>{money(settlement?.summary.settledFee ?? 0)}</strong><small>已结算订单累计</small></div>
+        <div><span>冻结保证金</span><strong>{money(guaranteeFrozen)}</strong><small>在途订单与纠纷占用</small></div>
       </div>
+      <div className="seller-finance-history">
       <Panel title="待结算订单" extra={<span className="mc-toolbar-muted">确认收货且已付款，尚未生成结算单</span>}>
         {!settlement || settlement.pending.length === 0 ? (
           <EmptyState title="没有待结算订单" desc="订单确认收货并完成付款后，会进入待结算。" />
@@ -576,65 +613,96 @@ export default function SellerCenter(): JSX.Element {
           </div>
         )}
       </Panel>
-      <div className="mc-embedded"><MyGuarantee /></div>
-      <div className="mc-embedded"><MyCompensation /></div>
+      </div>
+      <div className="seller-finance-support">
+        <div><MyGuarantee /></div>
+        <div><MyCompensation /></div>
+      </div>
       <Panel title="提现申请">
         <EmptyState title="提现申请尚未开放" desc="当前只提供结算单与应收金额查询；提现涉及打款，需接入资金通道与审批流后再开放。" />
       </Panel>
-    </>
+    </div>
   )
 
   const renderCustomer = (): JSX.Element => (
-    <>
-      <div className="mc-toolbar">
-        <span className="mc-toolbar-muted">采购商档案 · 由真实销售订单聚合</span>
+    <div className="seller-workspace seller-customer-workspace">
+      <section className="seller-workspace-hero">
+        <span className="seller-workspace-icon"><TeamOutlined /></span>
+        <div><small>CUSTOMER RELATIONSHIP</small><h2>客户管理</h2><p>采购商档案由真实销售订单聚合，展示成交规模与最近采购。</p></div>
+        <div className="seller-workspace-stats">
+          <div><span>成交客户</span><strong>{customers.length}</strong></div>
+          <div><span>客户订单</span><strong>{customers.reduce((sum, item) => sum + item.count, 0)}</strong></div>
+          <div><span>累计成交</span><strong>{money(customers.reduce((sum, item) => sum + item.total, 0))}</strong></div>
+        </div>
+      </section>
+      <div className="seller-customer-toolbar">
+        <div><strong>客户档案</strong><span>按累计采购额排序</span></div>
+        <a className="mc-btn ghost" href="/member/seller?tab=ship">查看待发货订单 <ArrowRightOutlined /></a>
       </div>
-      <Panel title="客户管理">
-        {customers.length === 0 ? (
-          <EmptyState title="还没有成交客户" desc="产生销售订单后，采购商会自动汇总到这里。" />
-        ) : (
-          <div className="mc-table-wrap">
-            <table className="mc-table">
-              <thead><tr><th>客户名称</th><th>累计采购额</th><th>订单数</th><th>最近下单</th><th>客户等级</th></tr></thead>
-              <tbody>
-                {customers.map((row) => (
-                  <tr key={row.id}>
-                    <td>{row.name}</td>
-                    <td className="mc-price">{money(row.total)}</td>
-                    <td className="mc-mono">{row.count}</td>
-                    <td className="mc-mono mc-xs">{shortDate(row.last)}</td>
-                    <td><span className={`mc-tag ${row.total >= 2000000 ? 'tech' : 'ghost'}`}>{row.total >= 2000000 ? '重点客户' : '普通客户'}</span></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Panel>
-    </>
+      {customers.length === 0 ? (
+        <Panel><EmptyState title="还没有成交客户" desc="产生销售订单后，采购商会自动汇总到这里。" /></Panel>
+      ) : (
+        <div className="seller-customer-grid">
+          {customers.map((row, index) => (
+            <div className={`seller-customer-card${row.total >= 2000000 ? ' vip' : ''}`} key={row.id}>
+              <div className="seller-customer-head">
+                <span className="seller-customer-avatar">{row.name?.slice(0, 1) || '客'}</span>
+                <div><small>采购主体 #{index + 1}</small><strong>{row.name}</strong></div>
+                <span className={`mc-tag ${row.total >= 2000000 ? 'tech' : 'ghost'}`}>
+                  {row.total >= 2000000 ? '重点客户' : '普通客户'}
+                </span>
+              </div>
+              <div className="seller-customer-figures">
+                <div><span>累计采购额</span><strong>{money(row.total)}</strong></div>
+                <div><span>订单数量</span><strong>{row.count}<em>笔</em></strong></div>
+              </div>
+              <div className="seller-customer-foot">
+                <span>最近下单</span><strong>{shortDate(row.last)}</strong>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   )
 
   const renderIot = (): JSX.Element => (
-    <Panel title="生产接入">
-      <div className="mc-note">
-        生产域（地块、设备、环境监测）独立部署在生产管理子系统，交易域没有设备接口。
-        请前往生产管理查看设备与地块数据，本页不展示未经来源的在线设备数。
-      </div>
-      <div className="mc-grid mc-grid-3" style={{ marginTop: 16 }}>
+    <div className="seller-workspace seller-iot-workspace">
+      <section className="seller-iot-hero">
+        <span className="seller-workspace-icon"><CloudServerOutlined /></span>
+        <div><small>PRODUCTION INTEGRATION</small><h2>生产接入</h2><p>将生产管理中的地块、设备和环境数据与交易货源关联，形成可追溯供应能力。</p></div>
+        <a className="mc-btn" href="/production/dashboard">前往生产管理 <ArrowRightOutlined /></a>
+      </section>
+      <div className="seller-iot-steps">
         {[
-          { title: '1. 设备登记', desc: '在生产管理登记设备型号与通信协议。' },
-          { title: '2. 地块绑定', desc: '把设备与地块绑定，建立采集点位。' },
-          { title: '3. 数据上云', desc: '实时数据支撑生产监测与溯源背书。' },
+          { num: '01', title: '设备登记', desc: '在生产管理登记设备型号、通信协议和接入参数。', icon: <ApiOutlined /> },
+          { num: '02', title: '地块绑定', desc: '把设备与生产基地、地块绑定，建立采集点位。', icon: <AppstoreOutlined /> },
+          { num: '03', title: '数据上云', desc: '环境与生产数据持续沉淀，为溯源和商品资料背书。', icon: <CloudServerOutlined /> },
         ].map((item) => (
-          <div className="mc-quick" key={item.title}>
-            <span className="mc-quick-icon"><ApiOutlined /></span>
+          <div className="seller-iot-step" key={item.num}>
+            <span>{item.num}</span>
+            <i>{item.icon}</i>
             <strong>{item.title}</strong>
-            <small>{item.desc}</small>
+            <p>{item.desc}</p>
           </div>
         ))}
       </div>
-      <a className="mc-btn" style={{ marginTop: 16 }} href="/production/dashboard">前往生产管理</a>
-    </Panel>
+      <div className="seller-iot-layout">
+        <Panel title="接入说明">
+          <div className="seller-iot-note">
+            <p><SafetyCertificateOutlined /> 生产域独立部署在生产管理子系统，交易域只展示有真实来源的数据。</p>
+            <p><CheckCircleFilled /> 完成地块与设备绑定后，可在商品资料中关联采收批次与溯源信息。</p>
+            <p><RiseOutlined /> 实时监测数据可以提升商品详情可信度，并支撑供应能力展示。</p>
+          </div>
+        </Panel>
+        <aside className="seller-iot-action">
+          <CloudServerOutlined />
+          <strong>进入生产管理工作台</strong>
+          <span>管理生产基地、地块、设备和环境监测</span>
+          <a className="mc-btn" href="/production/dashboard">立即前往</a>
+        </aside>
+      </div>
+    </div>
   )
 
   const content = active === 'publish' ? <ProductCreate embedded />
@@ -697,11 +765,6 @@ function renderSellerOrders(
 
 function publishText(status: string | undefined): string {
   const map: Record<string, string> = { published: '在售', pending: '待审核', soldout: '已售罄', offline: '已下架', rejected: '已驳回' }
-  return status ? map[status] ?? status : '—'
-}
-
-function logisticsText(status: string | undefined): string {
-  const map: Record<string, string> = { pending: '待揽收', picked: '已揽收', in_transit: '运输中', delivered: '已签收', cancelled: '已取消' }
   return status ? map[status] ?? status : '—'
 }
 

@@ -85,8 +85,46 @@ export async function payOrder(id: number | string, data: Record<string, unknown
   return response.data
 }
 
+/** 卖家发货，同时生成物流单与揽收轨迹。 */
+export async function shipOrder(id: number | string, data: Record<string, unknown> = {}) {
+  const response = await axios.post(`/api/trade/order/${id}/ship`, data)
+  return response.data
+}
+
+/** 买家确认收货，同时完成物流签收。 */
+export async function confirmReceipt(id: number | string, data: Record<string, unknown> = {}) {
+  const response = await axios.post(`/api/trade/order/${id}/confirm-receipt`, data)
+  return response.data
+}
+
 /** 申请退款 */
 export async function applyOrderRefund(id: number | string, data: Record<string, unknown>) {
   const response = await axios.post(`/api/trade/order/${id}/refund`, data)
+  return response.data
+}
+
+export interface RefundRow {
+  id: number
+  refundNo: string
+  orderId: number
+  orderNo: string
+  paymentId: number | null
+  refundType: string
+  refundAmount: number
+  refundReason: string
+  applicantType: string
+  applicantId: number
+  applicantName: string
+  reviewer: string | null
+  reviewTime: string | null
+  reviewRemark: string | null
+  refundStatus: string
+  refundTime: string | null
+  createTime: string
+}
+
+/** 当前采购方的退款/售后记录。 */
+export async function getMyRefunds() {
+  const response = await axios.get('/api/trade/order/refund/mine')
   return response.data
 }

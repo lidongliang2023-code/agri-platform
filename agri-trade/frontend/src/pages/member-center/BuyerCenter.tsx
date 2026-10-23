@@ -1,27 +1,34 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Form, Input, Modal, Select, message } from 'antd'
 import {
   AlertOutlined,
+  ArrowRightOutlined,
+  CheckCircleFilled,
+  ClockCircleOutlined,
   DollarOutlined,
   FileSearchOutlined,
   FileTextOutlined,
   HeartOutlined,
   HomeOutlined,
+  SafetyCertificateOutlined,
+  SendOutlined,
   ShoppingCartOutlined,
   StarOutlined,
   TruckOutlined,
+  WalletOutlined,
 } from '@ant-design/icons'
-import { updateOrderStatus } from '@/api/order'
+import { confirmReceipt, getMyRefunds, type RefundRow } from '@/api/order'
+import { acceptQuote, convertQuoteToOrder, getQuoteList, type QuoteVO } from '@/api/quote'
 import { applyInvoice, getMyInvoices, type InvoiceRow } from '@/api/invoice'
 import ContractList from '@/pages/contract/list'
 import DisputeList from '@/pages/dispute/list'
-import EvaluationList from '@/pages/evaluation/list'
 import LogisticsList from '@/pages/logistics/list'
 import MyCompensation from '@/pages/mine-compensation'
 import MyGuarantee from '@/pages/mine-guarantee'
 import DemandCreate from '@/pages/demand/create'
 import { MemberCenterShell, type MemberNavItem } from './MemberCenterShell'
+import './buyer-center.css'
 import {
   EmptyState,
   Panel,
@@ -54,30 +61,25 @@ const PERSONAL_CENTER = `${window.location.protocol}//${window.location.hostname
 
 const BUYER_STATUS = [
   { value: '', label: '全部' },
-  { value: 'pending', label: '待付款' },
+  { value: 'pending_confirm', label: '待付款' },
   { value: 'paid', label: '待发货' },
   { value: 'shipped', label: '待收货' },
+  { value: 'received', label: '已收货' },
+  { value: 'refunding', label: '退款中' },
+  { value: 'refunded', label: '已退款' },
   { value: 'completed', label: '已完成' },
 ]
 
-function Kpi({ label, value, unit, desc, tone = '' }: {
-  label: string
-  value: string | number
-  unit?: string
-  desc?: string
-  tone?: string
-}): JSX.Element {
-  return (
-    <div className={`mc-stat ${tone}`}>
-      <div className="mc-stat-k">{label}</div>
-      <div className="mc-stat-v">{value}<small>{unit}</small></div>
-      {desc && <div className="mc-stat-d">{desc}</div>}
-    </div>
-  )
+const REFUND_STATUS: Record<string, { text: string; tone: string }> = {
+  pending: { text: '待审核', tone: 'amber' },
+  approved: { text: '已退款', tone: 'green' },
+  rejected: { text: '已驳回', tone: 'red' },
+  cancelled: { text: '已撤销', tone: 'ghost' },
 }
 
 export default function BuyerCenter(): JSX.Element {
   const [params, setParams] = useSearchParams()
+  const navigate = useNavigate()
   const active = params.get('tab') || 'overview'
   const setActive = (key: string): void => {
     const next = new URLSearchParams(params)
@@ -102,6 +104,9 @@ export default function BuyerCenter(): JSX.Element {
   const evaluations = useEvaluations({ evaluatorId: buyerId ?? undefined })
   const guarantees = useGuarantees()
   const [invoices, setInvoices] = useState<InvoiceRow[]>([])
+  const [quotes, setQuotes] = useState<QuoteVO[]>([])
+  const [refunds, setRefunds] = useState<RefundRow[]>([])
+  const [quoteBusy, setQuoteBusy] = useState<number | null>(null)
   const [invoiceOpen, setInvoiceOpen] = useState(false)
   const [invoiceSubmitting, setInvoiceSubmitting] = useState(false)
   const [invoiceForm] = Form.useForm<{ orderId: number; invoiceType: string; title: string; taxNo?: string; remark?: string }>()
@@ -118,6 +123,34 @@ export default function BuyerCenter(): JSX.Element {
     loadInvoices()
   }, [loadInvoices])
 
+  const loadQuotes = useCallback(() => {
+    if (!buyerId) {
+      setQuotes([])
+      return
+    }
+    getQuoteList({ pageNum: 1, pageSize: 100, buyerId })
+      .then((body: { code: number; data?: { records?: QuoteVO[] } }) => {
+        if (body?.code === 200) setQuotes(body.data?.records ?? [])
+      })
+      .catch(() => setQuotes([]))
+  }, [buyerId])
+
+  const loadRefunds = useCallback(() => {
+    getMyRefunds()
+      .then((body: { code: number; data?: RefundRow[] }) => {
+        if (body?.code === 200) setRefunds(Array.isArray(body.data) ? body.data : [])
+      })
+      .catch(() => setRefunds([]))
+  }, [])
+
+  useEffect(() => {
+    loadQuotes()
+  }, [loadQuotes])
+
+  useEffect(() => {
+    loadRefunds()
+  }, [loadRefunds])
+
   useEffect(() => {
     setPage(1)
   }, [status])
@@ -129,7 +162,8 @@ export default function BuyerCenter(): JSX.Element {
       pendingPay: rows.filter((item) => item.orderStatus === 'pending' || item.orderStatus === 'pending_confirm').length,
       pendingShip: rows.filter((item) => item.orderStatus === 'paid').length,
       pendingReceive: rows.filter((item) => item.orderStatus === 'shipped').length,
-      pendingRate: rows.filter((item) => item.orderStatus === 'completed' && !evaluated.has(item.id)).length,
+      pendingRate: rows.filter((item) =>
+        ['received', 'completed'].includes(item.orderStatus) && !evaluated.has(item.id)).length,
     }
   }, [allOrders.rows, evaluations.rows])
 
@@ -139,7 +173,8 @@ export default function BuyerCenter(): JSX.Element {
 
   const myDisputes = disputes.rows.filter((item) => base.merchantIds.includes(String(item.complainantId)))
   const evaluatedOrderIds = new Set(evaluations.rows.map((item) => item.orderId))
-  const pendingEvaluations = allOrders.rows.filter((item) => item.orderStatus === 'completed' && !evaluatedOrderIds.has(item.id))
+  const pendingEvaluations = allOrders.rows.filter((item) =>
+    ['received', 'completed'].includes(item.orderStatus) && !evaluatedOrderIds.has(item.id))
   const invoicedOrderIds = new Set(invoices.map((item) => item.orderId))
   const eligibleInvoiceOrders = allOrders.rows.filter((item) =>
     ['paid', 'shipped', 'received', 'completed'].includes(item.orderStatus) && !invoicedOrderIds.has(item.id))
@@ -176,9 +211,9 @@ export default function BuyerCenter(): JSX.Element {
       cancelText: '取消',
       onOk: async () => {
         try {
-          const body = await updateOrderStatus(order.id, 'received')
+          const body = await confirmReceipt(order.id, { signReceiver: order.buyerName })
           if (body?.code === 200) {
-            message.success('已确认收货')
+            message.success('已确认收货，订单进入售后与评价阶段')
             allOrders.reload()
             pagedOrders.reload()
           } else {
@@ -197,63 +232,159 @@ export default function BuyerCenter(): JSX.Element {
       {order.orderStatus === 'shipped' && (
         <button type="button" className="mc-link" onClick={() => confirmReceive(order)}>确认收货</button>
       )}
-      {order.orderStatus === 'completed' && !evaluatedOrderIds.has(order.id) && (
+      {['received', 'completed'].includes(order.orderStatus) && !evaluatedOrderIds.has(order.id) && (
         <a className="mc-link" href="/evaluation">去评价</a>
       )}
     </div>
   )
 
+  const acceptBuyerQuote = async (quote: QuoteVO): Promise<void> => {
+    setQuoteBusy(quote.id)
+    try {
+      const accepted = await acceptQuote(quote.id)
+      if (accepted?.code !== 200) {
+        message.error(accepted?.message ?? '接受报价失败')
+        return
+      }
+      // accept 接口已完成受理与成单；convert 接口在这里作为幂等取订单入口。
+      const converted = await convertQuoteToOrder(quote.id)
+      if (converted?.code === 200 && converted.data?.id) {
+        message.success('已接受报价并生成采购订单')
+        loadQuotes()
+        demands.reload()
+        inquiries.reload()
+        allOrders.reload()
+        pagedOrders.reload()
+        navigate(`/order/confirm?orderId=${converted.data.id}`)
+      } else {
+        message.error(converted?.message ?? '报价已受理，但生成订单失败')
+      }
+    } catch {
+      message.error('接受报价失败（请检查后端是否在运行）')
+    } finally {
+      setQuoteBusy(null)
+    }
+  }
+
   const renderOverview = (): JSX.Element => (
-    <>
-      <div className="mc-grid mc-grid-4">
-        <Kpi label="待付款订单" value={orderStats.pendingPay} unit="笔" desc="待支付的采购订单" />
-        <Kpi label="待发货" value={orderStats.pendingShip} unit="笔" desc="供应方备货中" />
-        <Kpi label="待收货" value={orderStats.pendingReceive} unit="笔" desc="运输中或已到货" tone="tech" />
-        <Kpi label="待评价" value={orderStats.pendingRate} unit="笔" desc="已完成且尚未评价" />
-      </div>
-
-      <Panel
-        title="资金账户概览"
-        extra={<><a className="mc-btn ghost" href="/my-guarantee">保证金账户</a><button type="button" className="mc-btn" onClick={() => setActive('publish')}>发起采购</button></>}
-      >
-        <div className="mc-grid mc-grid-4">
-          <Kpi label="累计采购额" value={money(base.dashboard?.buyer?.totalSpent ?? 0)} desc="不含已取消订单" />
-          <Kpi label="今日采购额" value={money(base.dashboard?.buyer?.todaySpent ?? 0)} desc="按支付口径统计" tone="tech" />
-          <Kpi label="可用保证金" value={money(guaranteeAvailable)} desc={`保证金总额 ${money(guaranteeTotal)}`} />
-          <Kpi label="冻结保证金" value={money(guaranteeFrozen)} desc="在途订单占用" tone="amber" />
+    <div className="buyer-overview">
+      <section className="buyer-overview-hero">
+        <span className="buyer-overview-icon"><ShoppingCartOutlined /></span>
+        <div className="buyer-overview-title">
+          <small>BUYER PROCUREMENT CENTER</small>
+          <h2>采购工作台</h2>
+          <p>{buyerMerchant?.merchantName || '当前采购主体'} · 从需求发布到收货开票，进度统一跟踪</p>
         </div>
-      </Panel>
+        <div className="buyer-overview-figures">
+          <div><span>累计采购额</span><strong>{money(base.dashboard?.buyer?.totalSpent ?? 0)}</strong></div>
+          <div><span>今日采购额</span><strong>{money(base.dashboard?.buyer?.todaySpent ?? 0)}</strong></div>
+          <div><span>可用保证金</span><strong>{money(guaranteeAvailable)}</strong></div>
+        </div>
+        <div className="buyer-overview-actions">
+          <button type="button" className="mc-btn" onClick={() => setActive('publish')}>
+            <SendOutlined /> 发起采购
+          </button>
+          <a className="mc-btn ghost" href="/hall">交易大厅 <ArrowRightOutlined /></a>
+        </div>
+      </section>
 
-      <Panel title="最近采购订单" extra={<button type="button" className="mc-link" onClick={() => setActive('purchase')}>查看全部订单 →</button>}>
-        {renderOrdersTable(allOrders.rows.slice(0, 5), allOrders.loading, allOrders.error, orderActions)}
-      </Panel>
-
-      <div className="mc-section-title">快捷入口</div>
-      <div className="mc-grid mc-grid-4">
+      <section className="buyer-task-grid">
         {[
-          { icon: <FileTextOutlined />, title: '发布采购需求', desc: '发布需求，平台智能匹配供应方', tab: 'publish' },
-          { icon: <FileSearchOutlined />, title: '我的询价', desc: '查看报价进展与在线议价', tab: 'inquiry' },
-          { icon: <TruckOutlined />, title: '收货与售后', desc: '确认收货 / 退货换货 / 质量申诉', tab: 'after' },
-          { icon: <DollarOutlined />, title: '保证金账户', desc: '查看冻结、可用与流水明细', href: '/my-guarantee' },
+          { label: '待付款', value: orderStats.pendingPay, tone: 'amber', icon: <WalletOutlined />, desc: '完成支付后进入履约', status: 'pending_confirm' },
+          { label: '待发货', value: orderStats.pendingShip, tone: 'tech', icon: <ClockCircleOutlined />, desc: '供应方正在备货', status: 'paid' },
+          { label: '待收货', value: orderStats.pendingReceive, tone: 'tech', icon: <TruckOutlined />, desc: '物流运输与签收', status: 'shipped' },
+          { label: '待评价', value: orderStats.pendingRate, tone: 'green', icon: <StarOutlined />, desc: '收货后评价供应商', status: 'received' },
         ].map((item) => (
-          <a
-            className="mc-quick"
-            key={item.title}
-            href={item.href ?? '#'}
-            onClick={(event) => {
-              if (item.tab) {
-                event.preventDefault()
-                setActive(item.tab)
-              }
-            }}
-          >
-            <span className="mc-quick-icon">{item.icon}</span>
-            <strong>{item.title}</strong>
-            <small>{item.desc}</small>
-          </a>
+          <button type="button" className={`buyer-task ${item.tone}`} key={item.label}
+            onClick={() => {
+              setStatus(item.status)
+              setActive('purchase')
+            }}>
+            <span className="buyer-task-icon">{item.icon}</span>
+            <span><small>{item.label}</small><strong>{item.value}<em>笔</em></strong><i>{item.desc}</i></span>
+            <ArrowRightOutlined />
+          </button>
         ))}
+      </section>
+
+      <div className="buyer-overview-layout">
+        <div className="buyer-overview-main">
+          <Panel title="最近采购订单" extra={
+            <button type="button" className="mc-link" onClick={() => setActive('purchase')}>
+              查看全部订单 <ArrowRightOutlined />
+            </button>
+          }>
+            {renderOrdersTable(allOrders.rows.slice(0, 5), allOrders.loading, allOrders.error, orderActions)}
+          </Panel>
+
+          <Panel title="询价与报价进展" extra={
+            <button type="button" className="mc-link" onClick={() => setActive('inquiry')}>
+              进入我的询价 <ArrowRightOutlined />
+            </button>
+          }>
+            {quotes.length === 0 && demands.rows.length === 0 ? (
+              <EmptyState title="还没有采购需求或报价" desc="先发布采购需求，平台会辅助匹配供应商并接收正式报价。"
+                action={<button type="button" className="mc-btn" onClick={() => setActive('publish')}>发布采购需求</button>} />
+            ) : (
+              <div className="buyer-overview-pipeline">
+                <div className="buyer-pipeline-stat">
+                  <span className="buyer-pipeline-icon"><FileTextOutlined /></span>
+                  <div><small>采购需求</small><strong>{demands.rows.length}</strong><em>需求持续撮合中</em></div>
+                </div>
+                <div className="buyer-pipeline-stat">
+                  <span className="buyer-pipeline-icon tech"><FileSearchOutlined /></span>
+                  <div><small>询价单</small><strong>{inquiries.rows.length}</strong><em>等待供应商响应</em></div>
+                </div>
+                <div className="buyer-pipeline-stat">
+                  <span className="buyer-pipeline-icon amber"><CheckCircleFilled /></span>
+                  <div><small>待受理报价</small><strong>{quotes.filter((quote) => quote.quoteStatus === 'pending').length}</strong><em>比较后可直接成单</em></div>
+                </div>
+                <div className="buyer-pipeline-stat">
+                  <span className="buyer-pipeline-icon green"><StarOutlined /></span>
+                  <div><small>待评价交易</small><strong>{pendingEvaluations.length}</strong><em>评价供应方服务</em></div>
+                </div>
+              </div>
+            )}
+          </Panel>
+        </div>
+
+        <aside className="buyer-overview-aside">
+          <Panel title="资金账户" extra={<a className="mc-link" href="/my-guarantee">账户明细</a>}>
+            <div className="buyer-funds">
+              <div><span>可用保证金</span><strong>{money(guaranteeAvailable)}</strong></div>
+              <div><span>冻结金额</span><strong>{money(guaranteeFrozen)}</strong></div>
+              <div><span>保证金总额</span><strong>{money(guaranteeTotal)}</strong></div>
+            </div>
+            <div className="buyer-funds-foot">
+              <DollarOutlined />
+              <span>订单按规则占用保证金，完成后自动释放。</span>
+            </div>
+          </Panel>
+
+          <Panel title="快捷入口">
+            <div className="buyer-quick-list">
+              {[
+                { icon: <SendOutlined />, title: '发布采购需求', desc: '创建新的采购任务', tab: 'publish' },
+                { icon: <FileSearchOutlined />, title: '我的询价', desc: '查看报价与议价进展', tab: 'inquiry' },
+                { icon: <TruckOutlined />, title: '收货与售后', desc: '物流、退款与纠纷处理', tab: 'after' },
+                { icon: <DollarOutlined />, title: '资金与发票', desc: '保证金、发票与赔付', tab: 'fund' },
+              ].map((item) => (
+                <button type="button" key={item.title} onClick={() => setActive(item.tab)}>
+                  <span>{item.icon}</span>
+                  <div><strong>{item.title}</strong><small>{item.desc}</small></div>
+                  <ArrowRightOutlined />
+                </button>
+              ))}
+            </div>
+          </Panel>
+
+          <div className="buyer-trust-card">
+            <SafetyCertificateOutlined />
+            <div><strong>平台交易保障</strong><span>合同签署、支付、物流和售后全程留痕。</span></div>
+          </div>
+        </aside>
       </div>
-    </>
+    </div>
   )
 
   const renderPurchase = (): JSX.Element => (
@@ -339,6 +470,45 @@ export default function BuyerCenter(): JSX.Element {
           </div>
         )}
       </Panel>
+      <Panel title="供应商报价">
+        {quotes.length === 0 ? (
+          <EmptyState title="还没有供应商报价" desc="询价发起后，供应方提交的报价会在这里显示，可直接受理并生成采购订单。" />
+        ) : (
+          <div className="mc-table-wrap">
+            <table className="mc-table">
+              <thead><tr><th>报价单号</th><th>供应商</th><th>商品</th><th>单价</th><th>数量</th><th>运费</th><th>总价</th><th>状态</th><th>操作</th></tr></thead>
+              <tbody>
+                {quotes.map((quote) => (
+                  <tr key={quote.id}>
+                    <td className="mc-mono">{quote.quoteNo}</td>
+                    <td>{quote.sellerName ?? '—'}</td>
+                    <td>{quote.productName ?? '—'}</td>
+                    <td className="mc-price">{money(quote.unitPrice)}</td>
+                    <td className="mc-mono">{quote.quantity} {quote.unit ?? ''}</td>
+                    <td className="mc-price">{money(quote.freightAmount ?? 0)}</td>
+                    <td className="mc-price">{money(quote.totalAmount)}</td>
+                    <td>
+                      <span className={`mc-tag ${quote.quoteStatus === 'pending' ? 'amber' : quote.quoteStatus === 'rejected' ? 'red' : 'green'}`}>
+                        {quote.quoteStatus === 'pending' ? '待受理' : quote.quoteStatus === 'accepted' ? '已受理' : quote.quoteStatus === 'rejected' ? '已拒绝' : quote.quoteStatus}
+                      </span>
+                    </td>
+                    <td>
+                      {quote.quoteStatus === 'pending' ? (
+                        <button type="button" className="mc-link" disabled={quoteBusy === quote.id}
+                          onClick={() => void acceptBuyerQuote(quote)}>
+                          {quoteBusy === quote.id ? '处理中…' : '接受并生成订单'}
+                        </button>
+                      ) : quote.orderId ? (
+                        <a className="mc-link" href={`/order/detail/${quote.orderId}`}>查看订单</a>
+                      ) : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
     </>
   )
 
@@ -372,65 +542,106 @@ export default function BuyerCenter(): JSX.Element {
           </div>
         )}
       </Panel>
+      <Panel title="退款与售后进度">
+        {refunds.length === 0 ? (
+          <EmptyState title="暂无退款记录" desc="收货后如遇质量问题，可从订单详情发起退货退款；审核进度会显示在这里。" />
+        ) : (
+          <div className="mc-table-wrap">
+            <table className="mc-table">
+              <thead><tr><th>退款单号</th><th>订单号</th><th>类型</th><th>退款金额</th><th>原因</th><th>状态</th><th>审核意见</th><th>申请时间</th></tr></thead>
+              <tbody>
+                {refunds.map((row) => {
+                  const status = REFUND_STATUS[row.refundStatus] ?? { text: row.refundStatus, tone: 'ghost' }
+                  return (
+                    <tr key={row.id}>
+                      <td className="mc-mono">{row.refundNo}</td>
+                      <td className="mc-mono">{row.orderNo}</td>
+                      <td>{row.refundType === 'return_refund' ? '退货退款' : row.refundType === 'refund_only' ? '仅退款' : row.refundType}</td>
+                      <td className="mc-price">{money(row.refundAmount)}</td>
+                      <td className="mc-wrap-text">{row.refundReason ?? '—'}</td>
+                      <td><span className={`mc-tag ${status.tone}`}>{status.text}</span></td>
+                      <td className="mc-wrap-text">{row.reviewRemark ?? '—'}</td>
+                      <td className="mc-mono mc-xs">{shortDate(row.createTime)}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
       <div className="mc-embedded"><DisputeList /></div>
       <div className="mc-embedded"><LogisticsList /></div>
     </>
   )
 
   const renderRate = (): JSX.Element => (
-    <>
-      <div className="mc-toolbar">
-        <span className="mc-toolbar-muted">采购评价 · 供应方评分</span>
-        <span className="mc-spacer" />
-        <span className="mc-tag amber">待评价 {pendingEvaluations.length} 笔</span>
-      </div>
-      <Panel title="待评价订单">
-        {pendingEvaluations.length === 0 ? (
-          <EmptyState title="没有待评价订单" desc="订单完成后可以评价供应方，评价会公开展示。" />
-        ) : (
-          <div className="mc-table-wrap">
-            <table className="mc-table">
-              <thead><tr><th>订单号</th><th>商品</th><th>供应方</th><th>金额</th><th>完成时间</th><th>操作</th></tr></thead>
-              <tbody>
-                {pendingEvaluations.map((row) => (
-                  <tr key={row.id}>
-                    <td className="mc-mono">{row.orderNo}</td>
-                    <td>{row.productName}</td>
-                    <td>{row.sellerName}</td>
-                    <td className="mc-price">{money(row.totalAmount)}</td>
-                    <td className="mc-mono mc-xs">{shortDate(row.createTime)}</td>
-                    <td><a className="mc-link" href="/evaluation">去评价</a></td>
-                  </tr>
+    <div className="buyer-workspace buyer-rating-workspace">
+      <section className="buyer-workspace-hero">
+        <span className="buyer-workspace-icon"><StarOutlined /></span>
+        <div><small>PURCHASE REVIEWS</small><h2>采购评价</h2><p>记录真实采购体验，帮助平台沉淀供应商服务与履约质量。</p></div>
+        <div className="buyer-workspace-stats">
+          <div><span>待评价</span><strong>{pendingEvaluations.length}</strong></div>
+          <div><span>已评价</span><strong>{evaluations.rows.length}</strong></div>
+          <div><span>平均评分</span><strong>{evaluations.rows.length
+            ? (evaluations.rows.reduce((sum, item) => sum + Number(item.ratingOverall ?? 0), 0) / evaluations.rows.length).toFixed(1)
+            : '—'}</strong></div>
+        </div>
+      </section>
+      <div className="buyer-rating-layout">
+        <div className="buyer-workspace-main">
+          <Panel title={`待评价订单（${pendingEvaluations.length}）`} extra={<span className="buyer-section-note">收货后可评价供应方</span>}>
+            {pendingEvaluations.length === 0 ? (
+              <EmptyState title="没有待评价订单" desc="订单收货后可以评价供应方，评价会公开展示。" />
+            ) : (
+              <div className="buyer-review-pending-list">
+                {pendingEvaluations.map((order) => (
+                  <div className="buyer-review-pending" key={order.id}>
+                    <span className="buyer-review-order-icon"><ShoppingCartOutlined /></span>
+                    <div><small>{order.orderNo}</small><strong>{order.productName || order.categoryName || '采购商品'}</strong><p>{order.sellerName || '供应商'} · {money(order.totalAmount)}</p></div>
+                    <span className="mc-tag green">已收货</span>
+                    <a className="mc-btn" href={`/order/detail/${order.id}`}>去评价 <ArrowRightOutlined /></a>
+                  </div>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Panel>
-      <Panel title="我发出的评价">
-        {evaluations.rows.length === 0 ? (
-          <EmptyState title="还没有评价记录" desc="完成订单后可对供应方进行评价。" />
-        ) : (
-          <div className="mc-table-wrap">
-            <table className="mc-table">
-              <thead><tr><th>订单</th><th>被评价方</th><th>综合评分</th><th>评价内容</th><th>时间</th></tr></thead>
-              <tbody>
+              </div>
+            )}
+          </Panel>
+          <Panel title={`我发出的评价（${evaluations.rows.length}）`} extra={<span className="buyer-section-note">按时间倒序</span>}>
+            {evaluations.rows.length === 0 ? (
+              <EmptyState title="还没有评价记录" desc="完成订单后可对供应方进行评价。" />
+            ) : (
+              <div className="buyer-review-grid">
                 {evaluations.rows.map((row) => (
-                  <tr key={row.id}>
-                    <td className="mc-mono">{row.orderId}</td>
-                    <td>{row.evaluateeName}</td>
-                    <td><span className="mc-stars">{'★'.repeat(Math.round(row.ratingOverall))}</span> {row.ratingOverall}</td>
-                    <td className="mc-wrap-text">{row.evaluationContent ?? '—'}</td>
-                    <td className="mc-mono mc-xs">{shortDate(row.createTime)}</td>
-                  </tr>
+                  <div className="buyer-review-card" key={row.id}>
+                    <div className="buyer-review-head">
+                      <span>{row.evaluateeName?.slice(0, 1) || '供'}</span>
+                      <div><strong>{row.evaluateeName || '供应方'}</strong><small>订单 {row.orderId} · {shortDate(row.createTime)}</small></div>
+                      <em>{'★'.repeat(Math.round(row.ratingOverall))}</em>
+                    </div>
+                    <p>{row.evaluationContent || '未填写文字评价'}</p>
+                    {row.replyContent && <div className="buyer-review-reply">供应商回复：{row.replyContent}</div>}
+                    <div><span className="mc-tag green">{row.ratingOverall} 分</span><span className="mc-tag ghost">真实采购评价</span></div>
+                  </div>
                 ))}
-              </tbody>
-            </table>
+              </div>
+            )}
+          </Panel>
+        </div>
+        <aside className="buyer-workspace-aside">
+          <Panel title="评价说明">
+            <ul className="buyer-workspace-guide">
+              <li><CheckCircleFilled /> 只有当前采购主体参与的已收货订单可以评价。</li>
+              <li><StarOutlined /> 每个采购主体对同一订单只能评价一次。</li>
+              <li><SafetyCertificateOutlined /> 评价会公开用于供应商信用展示。</li>
+            </ul>
+          </Panel>
+          <div className="buyer-workspace-trust">
+            <SafetyCertificateOutlined />
+            <div><strong>真实交易评价</strong><span>评分和内容均绑定真实订单，不展示模拟评价。</span></div>
           </div>
-        )}
-      </Panel>
-      <div className="mc-embedded"><EvaluationList /></div>
-    </>
+        </aside>
+      </div>
+    </div>
   )
 
   const renderContract = (): JSX.Element => (
@@ -438,46 +649,55 @@ export default function BuyerCenter(): JSX.Element {
   )
 
   const renderFund = (): JSX.Element => (
-    <>
-      <div className="mc-grid mc-grid-3">
-        <Kpi label="累计采购支出" value={money(base.dashboard?.buyer?.totalSpent ?? 0)} desc="不含已取消订单" />
-        <Kpi label="可用保证金" value={money(guaranteeAvailable)} desc={`冻结 ${money(guaranteeFrozen)}`} tone="tech" />
-        <Kpi label="平均客单价" value={money(base.dashboard?.buyer?.avgOrderValue ?? 0)} desc="按真实订单计算" tone="amber" />
-      </div>
-      <div className="mc-embedded"><MyGuarantee /></div>
-      <div className="mc-embedded"><MyCompensation /></div>
-      <Panel title="发票申请与记录">
-        <div className="mc-toolbar">
-          <span className="mc-toolbar-muted">已付款订单可申请开票；一笔订单仅一张申请。</span>
-          <span className="mc-spacer" />
-          <button type="button" className="mc-btn" onClick={openInvoice} disabled={eligibleInvoiceOrders.length === 0}>
-            申请开票
-          </button>
+    <div className="buyer-workspace buyer-fund-workspace">
+      <section className="buyer-workspace-hero">
+        <span className="buyer-workspace-icon"><WalletOutlined /></span>
+        <div><small>FUNDS & INVOICES</small><h2>资金与发票</h2><p>查看采购支出、保证金、赔付到账与发票申请状态。</p></div>
+        <div className="buyer-workspace-stats">
+          <div><span>累计采购</span><strong>{money(base.dashboard?.buyer?.totalSpent ?? 0)}</strong></div>
+          <div><span>可用保证金</span><strong>{money(guaranteeAvailable)}</strong></div>
+          <div><span>发票申请</span><strong>{invoices.length}</strong></div>
         </div>
+      </section>
+      <div className="buyer-finance-metrics">
+        <div><span>累计采购支出</span><strong>{money(base.dashboard?.buyer?.totalSpent ?? 0)}</strong><small>不含已取消订单</small></div>
+        <div><span>平均客单价</span><strong>{money(base.dashboard?.buyer?.avgOrderValue ?? 0)}</strong><small>按真实采购订单</small></div>
+        <div><span>冻结保证金</span><strong>{money(guaranteeFrozen)}</strong><small>在途订单占用</small></div>
+        <div><span>待开票申请</span><strong>{invoices.filter((item) => item.invoiceStatus === 'pending').length}<em>笔</em></strong><small>已付款订单可申请</small></div>
+      </div>
+
+      <Panel title={`发票申请与记录（${invoices.length}）`} extra={
+        <button type="button" className="mc-btn" onClick={openInvoice} disabled={eligibleInvoiceOrders.length === 0}>
+          申请开票
+        </button>
+      }>
         {invoices.length === 0 ? (
           <EmptyState title="还没有开票申请" desc={eligibleInvoiceOrders.length ? '选择一笔已付款订单申请开票。' : '暂无可开票订单。'}
             action={eligibleInvoiceOrders.length ? <button type="button" className="mc-btn" onClick={openInvoice}>申请开票</button> : undefined} />
         ) : (
-          <div className="mc-table-wrap">
-            <table className="mc-table">
-              <thead><tr><th>申请单号</th><th>订单号</th><th>开票金额</th><th>类型</th><th>抬头</th><th>状态</th><th>申请时间</th></tr></thead>
-              <tbody>
-                {invoices.map((row) => (
-                  <tr key={row.id}>
-                    <td className="mc-mono">{row.invoiceNo}</td>
-                    <td className="mc-mono">{row.orderNo}</td>
-                    <td className="mc-price">{money(row.amount)}</td>
-                    <td>{row.invoiceType}</td>
-                    <td className="mc-wrap-text">{row.title}</td>
-                    <td><span className={`mc-tag ${row.invoiceStatus === 'issued' ? 'green' : row.invoiceStatus === 'rejected' ? 'red' : 'amber'}`}>{invoiceStatusText(row.invoiceStatus)}</span></td>
-                    <td className="mc-mono mc-xs">{shortDate(row.applyTime)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="buyer-invoice-list">
+            {invoices.map((row) => (
+              <div className="buyer-invoice-card" key={row.id}>
+                <span className="buyer-invoice-icon"><FileTextOutlined /></span>
+                <div><small>{row.invoiceNo}</small><strong>{row.title}</strong><p>{row.orderNo} · {row.invoiceType}</p></div>
+                <div><span>开票金额</span><strong>{money(row.amount)}</strong></div>
+                <span className={`mc-tag ${row.invoiceStatus === 'issued' ? 'green' : row.invoiceStatus === 'rejected' ? 'red' : 'amber'}`}>{invoiceStatusText(row.invoiceStatus)}</span>
+                <time>{shortDate(row.applyTime)}</time>
+              </div>
+            ))}
           </div>
         )}
       </Panel>
+
+      <div className="buyer-finance-subpage">
+        <div className="buyer-finance-subhead"><strong>保证金账户</strong><span>交易保证金与资金流水</span></div>
+        <MyGuarantee />
+      </div>
+      <div className="buyer-finance-subpage">
+        <div className="buyer-finance-subhead"><strong>获赔记录</strong><span>平台赔付与到账状态</span></div>
+        <MyCompensation />
+      </div>
+
       <Modal title="申请开票" open={invoiceOpen} onCancel={() => setInvoiceOpen(false)}
         onOk={() => void submitInvoice()} confirmLoading={invoiceSubmitting} okText="提交申请" cancelText="取消"
         destroyOnClose afterOpenChange={(open) => {
@@ -512,7 +732,7 @@ export default function BuyerCenter(): JSX.Element {
           </Form.Item>
         </Form>
       </Modal>
-    </>
+    </div>
   )
 
   const renderFavorite = (): JSX.Element => (

@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Alert, Button, Card, Col, DatePicker, Descriptions, Empty, Form, Input, Row, Space, Spin, Table, Typography, message } from 'antd'
 import dayjs, { Dayjs } from 'dayjs'
 import { getOrderById, getOrderItems, updateOrder } from '@/api/order'
+import ProvinceCityFields from '@/components/ProvinceCityFields'
 
 interface Order {
   id: number
@@ -170,16 +171,14 @@ export default function OrderConfirm() {
       <Card title="收货信息">
         <Form form={form} layout="vertical" onFinish={onFinish}>
           <Row gutter={16}>
-            <Col span={6}>
-              <Form.Item label="收货省份" name="deliveryProvince" rules={[{ required: true, message: '请填写收货省份' }]}>
-                <Input />
-              </Form.Item>
-            </Col>
-            <Col span={6}>
-              <Form.Item label="收货城市" name="deliveryCity" rules={[{ required: true, message: '请填写收货城市' }]}>
-                <Input />
-              </Form.Item>
-            </Col>
+            <ProvinceCityFields
+              form={form}
+              required
+              provinceLabel="收货省份"
+              cityLabel="收货城市"
+              provinceColProps={{ xs: 24, md: 6 }}
+              cityColProps={{ xs: 24, md: 6 }}
+            />
             <Col span={6}>
               <Form.Item label="收货人" name="deliveryContact" rules={[{ required: true, message: '请填写收货人' }]}>
                 <Input />

@@ -1,7 +1,7 @@
 
 package com.agri.iot.controller;
 
-import com.agri.common.entity.ApiResponse;
+import com.agri.common.result.ApiResponse;
 import com.agri.iot.dto.ReportSaveDTO;
 import com.agri.iot.service.IReportService;
 import com.agri.iot.vo.ReportVO;
@@ -60,3 +60,4 @@ public class ReportController {
         return ApiResponse.success();
     }
 }
+

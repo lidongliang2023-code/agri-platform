@@ -11,9 +11,9 @@ export interface ContractVO {
   id: number
   contractNo: string
   orderId: number
-  buyerId: number
+  buyerId: number | string
   buyerName: string
-  sellerId: number
+  sellerId: number | string
   sellerName: string
   /**
    * 合同表没有 goodsName / totalAmount / signStatus 这三个字段名 ——
@@ -28,11 +28,23 @@ export interface ContractVO {
   contractAmount: number
   buyerSignStatus: string
   sellerSignStatus: string
+  buyerSignTime?: string | null
+  sellerSignTime?: string | null
+  buyerSignature?: string | null
+  sellerSignature?: string | null
+  contractFileUrl?: string | null
+  contractContent?: string | null
+  deliveryAddress?: string | null
+  deliveryDate?: string | null
+  orderNo?: string | null
   contractStatus: string
   effectiveDate: string
   expireDate: string
   signDate: string
   archiveStatus: string
+  contractHash?: string | null
+  chainStatus?: string | null
+  chainTxHash?: string | null
   remark: string
   createTime: string
   updateTime: string
@@ -53,10 +65,30 @@ export async function createContract(data: any) {
   return response.data
 }
 
-export async function signContract(id: number) {
+export interface ContractSignRequest {
+  signMode: 'online' | 'offline'
+  signerName: string
+  evidenceUrl: string
+  confirmed: boolean
+}
+
+export async function uploadContractEvidence(
+  id: number,
+  signMode: 'online' | 'offline',
+  file: File,
+): Promise<{ code: number; message?: string; data?: { url: string; originalName: string; size: number } }> {
+  const form = new FormData()
+  form.append('file', file)
+  const response = await axios.post(`/api/trade/contract/${id}/evidence`, form, {
+    params: { signMode },
+  })
+  return response.data
+}
+
+export async function signContract(id: number, data: ContractSignRequest) {
   // 签署方由服务端按登录身份判定（不接受前端声明"我是买方还是卖方"），
-  // 所以这里不需要传任何参数。空对象是为了满足后端 @RequestBody 的读取。
-  const response = await axios.post(`/api/trade/contract/${id}/sign`, {})
+  // 前端只提交签署方式、签署人和上传后的证据 URL。
+  const response = await axios.post(`/api/trade/contract/${id}/sign`, data)
   return response.data
 }
 

@@ -1,34 +1,59 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { Empty, Form, Input, InputNumber, Modal, Rate, Select, Spin, message } from 'antd'
 import {
-  Button, Card, Descriptions, Empty, Form, Input, InputNumber, Modal, Popconfirm, Rate, Select, Space, Spin, Table, Tag, Typography, message
-} from 'antd'
-import { ArrowLeftOutlined } from '@ant-design/icons'
-import { applyOrderRefund, getOrderById, getOrderItems, payOrder, updateOrderStatus } from '@/api/order'
+  ArrowLeftOutlined,
+  CheckCircleOutlined,
+  ClockCircleOutlined,
+  CreditCardOutlined,
+  EnvironmentOutlined,
+  PhoneOutlined,
+  SafetyCertificateOutlined,
+  ShopOutlined,
+  ShoppingCartOutlined,
+  TruckOutlined,
+  UserOutlined,
+} from '@ant-design/icons'
+import {
+  applyOrderRefund,
+  confirmReceipt,
+  getOrderById,
+  getOrderItems,
+  payOrder,
+  shipOrder,
+} from '@/api/order'
 import { createEvaluation, getEvaluationList, type EvaluationVO } from '@/api/evaluation'
 import { getMyMerchants } from '@/api/identity'
+import { BrandMark } from '@/components/BrandMark'
+import { Panel, StatusTag, money, shortDate } from '../../member-center/shared'
+import './order-detail.css'
 
 interface Order {
   id: number
   orderNo: string
-  buyerId: number
+  buyerId: number | string
   buyerName: string
   buyerPhone: string
-  sellerId: number
+  sellerId: number | string
   sellerName: string
   sellerPhone: string
   categoryName: string
+  productName?: string
+  totalQuantity?: number
   goodsAmount: number
   freightAmount: number
   discountAmount: number
   totalAmount: number
   paidAmount: number
+  refundAmount?: number
   paymentStatus: string
   paymentMethod: string
   orderStatus: string
   deliveryProvince: string
   deliveryCity: string
   deliveryAddress: string
+  deliveryContact: string
+  deliveryPhone: string
   deliveryDeadline: string
   logisticsNo: string
   logisticsStatus: string
@@ -41,46 +66,43 @@ interface OrderItemRow {
   id: number
   productId: number
   productName: string
-  /** 实体是 specLevel（表里没有 spec_size，货源上的 specSize 存不进订单明细） */
   specLevel: string
   unit: string
   quantity: number
   unitPrice: number
-  /** 实体字段是 totalPrice（表里另有 amount 列，但实体没映射，读它恒空） */
   totalPrice: number
   traceCode: string
 }
 
-/** 订单状态机：与后端 updateOrderStatus 认的取值一一对应 */
-const STEPS = [
-  { status: 'pending_confirm', label: '待确认' },
-  { status: 'paid', label: '已付款' },
-  { status: 'shipped', label: '已发货' },
-  { status: 'received', label: '已收货' },
-  { status: 'completed', label: '已完成' }
-]
+const PAYMENT_METHOD: Record<string, string> = {
+  transfer: '平台转账',
+  wechat: '微信支付',
+  alipay: '支付宝',
+  bank: '银行转账',
+}
 
-const ORDER_STATUS: Record<string, { text: string; color: string }> = {
-  pending_confirm: { text: '待确认', color: 'warning' },
-  pending: { text: '待付款', color: 'warning' },
-  paid: { text: '已付款', color: 'processing' },
-  shipped: { text: '已发货', color: 'blue' },
-  received: { text: '已收货', color: 'cyan' },
-  completed: { text: '已完成', color: 'success' },
-  cancelled: { text: '已取消', color: 'default' },
-  refunded: { text: '已退款', color: 'default' }
+const PAYMENT_STATUS: Record<string, string> = {
+  unpaid: '未支付',
+  paid: '已支付',
+  refunded: '已退款',
+}
+
+const LOGISTICS_STATUS: Record<string, string> = {
+  pending: '待揽收',
+  picked: '已揽收',
+  in_transit: '运输中',
+  delivering: '派送中',
+  delivered: '已签收',
+  exception: '物流异常',
 }
 
 /**
- * 订单详情（原型"订单管理 → 订单详情"）。
+ * 采购订单详情工作台。
  *
- * <p>把订单状态机搬到页面上：待确认 → 已付款 → 已发货 → 已收货 → 已完成。
- * 每一步都调后端真实接口 POST /order/{id}/status（它顺带置已付金额、物流已揽收、
- * 买家已确认、已结算），不是前端自己改个标签了事。</p>
- *
- * <p>已收货/已完成的订单可以评价，走 POST /api/trade/evaluation。</p>
+ * 金额、订单明细和履约状态全部来自交易接口；支付、发货、收货和退款
+ * 继续使用各自的服务端状态机接口，不在页面上直接改状态。
  */
-export default function OrderDetail() {
+export default function OrderDetail(): JSX.Element {
   const { id } = useParams()
   const navigate = useNavigate()
   const [order, setOrder] = useState<Order | null>(null)
@@ -92,44 +114,42 @@ export default function OrderDetail() {
   const [refundOpen, setRefundOpen] = useState(false)
   const [refundForm] = Form.useForm()
   const [evaluations, setEvaluations] = useState<EvaluationVO[]>([])
-  const [myMerchantIds, setMyMerchantIds] = useState<number[]>([])
+  const [myMerchantIds, setMyMerchantIds] = useState<string[]>([])
 
-  // 这张订单上的评价（双向都可能各有一条）。判断"我评过没有"要用我绑定的主体对
-  // evaluatorId —— 前端自报身份没有意义，服务端也只认令牌。
   const loadEvaluations = useCallback(() => {
     if (!id) return
     getEvaluationList({ pageNum: 1, pageSize: 10, orderId: String(id) })
-      .then((res: { code: number; data?: { records?: EvaluationVO[] } }) => {
-        if (res?.code === 200) setEvaluations(res.data?.records ?? [])
+      .then((response: { code: number; data?: { records?: EvaluationVO[] } }) => {
+        if (response?.code === 200) setEvaluations(response.data?.records ?? [])
       })
       .catch(() => setEvaluations([]))
   }, [id])
 
   useEffect(() => {
     getMyMerchants()
-      .then((res) => {
-        if (res?.code === 200) setMyMerchantIds((res.data ?? []).map((m) => Number(m.merchantId)))
+      .then((response) => {
+        if (response?.code === 200) {
+          setMyMerchantIds((response.data ?? []).map((item) => String(item.merchantId)))
+        }
       })
       .catch(() => setMyMerchantIds([]))
   }, [])
-
-  const myEvaluation = evaluations.find((e) => myMerchantIds.includes(Number(e.evaluatorId))) ?? null
 
   const load = useCallback(() => {
     if (!id) return
     setLoading(true)
     getOrderById(Number(id))
-      .then((res: { code: number; data?: Order; message?: string }) => {
-        if (res?.code === 200) setOrder(res.data ?? null)
-        else message.error(res?.message ?? '订单不存在')
+      .then((response: { code: number; data?: Order; message?: string }) => {
+        if (response?.code === 200) setOrder(response.data ?? null)
+        else message.error(response?.message ?? '订单不存在')
       })
       .catch(() => message.error('加载订单失败'))
       .finally(() => setLoading(false))
     getOrderItems(id)
-      .then((res: { code: number; data?: OrderItemRow[] }) => {
-        if (res?.code === 200) setItems(res.data ?? [])
+      .then((response: { code: number; data?: OrderItemRow[] }) => {
+        if (response?.code === 200) setItems(response.data ?? [])
       })
-      .catch(() => undefined)
+      .catch(() => setItems([]))
     loadEvaluations()
   }, [id, loadEvaluations])
 
@@ -137,231 +157,293 @@ export default function OrderDetail() {
     load()
   }, [load])
 
-  const advance = async (status: string, label: string) => {
-    if (!id) return
+  const handlePay = async (): Promise<void> => {
+    if (!id || !order) return
+    if (!window.confirm(`确认支付订单 ${order.orderNo}，金额 ${money(order.totalAmount)}？`)) return
     setActing(true)
     try {
-      const res = await updateOrderStatus(Number(id), status)
-      if (res?.code === 200) {
-        message.success(`已${label}`)
-        load()
-      } else {
-        message.error(res?.message ?? '操作失败')
-      }
-    } finally {
-      setActing(false)
-    }
-  }
-
-  const handlePay = async () => {
-    if (!id) return
-    setActing(true)
-    try {
-      // 金额由订单总额决定，不由前端传 —— 让前端传金额等于把"付多少钱"交给浏览器。
-      const res = await payOrder(id, { paymentMethod: order?.paymentMethod ?? 'transfer' })
-      if (res?.code === 200) {
-        await updateOrderStatus(id, 'paid')
+      const response = await payOrder(id, { paymentMethod: order.paymentMethod ?? 'transfer' })
+      if (response?.code === 200) {
         message.success('支付成功')
         load()
       } else {
-        message.error(res?.message ?? '支付失败')
+        message.error(response?.message ?? '支付失败')
       }
     } finally {
       setActing(false)
     }
   }
 
-  const submitEvaluation = async (values: { ratingOverall: number; evaluationContent: string }) => {
-    if (!order) return
-    // 评价人与被评价人由服务端按订单推导 —— 前端不再自报（自报了也不采信）
-    const res = await createEvaluation({
-      orderId: order.id,
-      ratingOverall: values.ratingOverall,
-      evaluationContent: values.evaluationContent
-    })
-    if (res?.code === 200) {
-      message.success('评价已提交')
-      setEvalOpen(false)
-      evalForm.resetFields()
-      // 立刻把评价卡片刷新出来 —— 提交成功后自己这条要马上可见
-      loadEvaluations()
-    } else {
-      message.error(res?.message ?? '评价提交失败')
+  const handleShip = async (): Promise<void> => {
+    if (!id || !order) return
+    if (!window.confirm('确认发货并生成物流单？')) return
+    setActing(true)
+    try {
+      const response = await shipOrder(id, {
+        carrierName: '平台物流',
+        carrierNo: order.orderNo,
+        logisticsType: 'road',
+      })
+      if (response?.code === 200) {
+        message.success('已发货并生成物流单')
+        load()
+      } else {
+        message.error(response?.message ?? '发货失败')
+      }
+    } finally {
+      setActing(false)
     }
   }
 
-  /**
-   * 申请退款。
-   *
-   * <p>后端会把订单状态置为 refunding 并生成一条 pending 的退款单；
-   * 审核与打款属运营端（/order/refund/{id}/audit），用户端只负责发起。
-   * 金额默认带出订单已付金额，可改为部分退款。</p>
-   */
-  const submitRefund = async (values: { refundType: string; refundAmount: number; refundReason: string }) => {
+  const handleConfirmReceipt = async (): Promise<void> => {
+    if (!id || !order) return
+    if (!window.confirm('确认已经收到货物？')) return
+    setActing(true)
+    try {
+      const response = await confirmReceipt(id, { signReceiver: order.deliveryContact })
+      if (response?.code === 200) {
+        message.success('已确认收货，物流已签收')
+        load()
+      } else {
+        message.error(response?.message ?? '确认收货失败')
+      }
+    } finally {
+      setActing(false)
+    }
+  }
+
+  const submitEvaluation = async (values: { ratingOverall: number; evaluationContent: string }): Promise<void> => {
     if (!order) return
-    const res = await applyOrderRefund(order.id, {
-      refundType: values.refundType,
-      refundAmount: values.refundAmount,
-      refundReason: values.refundReason,
-      applicantType: 'buyer'
+    const response = await createEvaluation({
+      orderId: order.id,
+      ratingOverall: values.ratingOverall,
+      evaluationContent: values.evaluationContent,
     })
-    if (res?.code === 200) {
+    if (response?.code === 200) {
+      message.success('评价已提交')
+      setEvalOpen(false)
+      evalForm.resetFields()
+      loadEvaluations()
+    } else {
+      message.error(response?.message ?? '评价提交失败')
+    }
+  }
+
+  const submitRefund = async (values: {
+    refundType: string
+    refundAmount: number
+    refundReason: string
+  }): Promise<void> => {
+    if (!order) return
+    const response = await applyOrderRefund(order.id, {
+      ...values,
+      applicantType: 'buyer',
+    })
+    if (response?.code === 200) {
       message.success('退款申请已提交，等待平台审核')
       setRefundOpen(false)
       refundForm.resetFields()
       load()
     } else {
-      message.error(res?.message ?? '退款申请失败')
+      message.error(response?.message ?? '退款申请失败')
     }
   }
 
   if (loading) {
     return (
-      <div style={{ padding: 80, textAlign: 'center' }}>
-        <Spin size="large" />
+      <div className="order-detail-page order-detail-center">
+        <Spin size="large" /><span>正在读取订单详情…</span>
       </div>
     )
   }
   if (!order) {
-    return <Empty description="没有找到这笔订单" style={{ padding: 80 }} />
+    return (
+      <div className="order-detail-page order-detail-center">
+        <Empty description="没有找到这笔订单" />
+        <button type="button" className="mc-btn" onClick={() => navigate('/member/buyer?tab=purchase')}>
+          返回采购订单
+        </button>
+      </div>
+    )
   }
 
-  const status = ORDER_STATUS[order.orderStatus] ?? { text: order.orderStatus, color: 'default' }
-  const currentIndex = STEPS.findIndex((s) => s.status === order.orderStatus)
-  const nextStep = currentIndex >= 0 && currentIndex < STEPS.length - 1 ? STEPS[currentIndex + 1] : null
-  const canPay = order.orderStatus === 'pending_confirm' || order.orderStatus === 'pending'
+  const isBuyer = myMerchantIds.includes(String(order.buyerId))
+  const isSeller = myMerchantIds.includes(String(order.sellerId))
+  const canPay = isBuyer && ['pending_confirm', 'pending'].includes(order.orderStatus)
+  const canRefund = isBuyer && ['received', 'completed'].includes(order.orderStatus)
+  const canEvaluate = ['received', 'completed'].includes(order.orderStatus) && !evaluations.some(
+    (item) => myMerchantIds.includes(String(item.evaluatorId)),
+  )
+  const returnPath = isSeller ? '/member/seller?tab=sales' : '/member/buyer?tab=purchase'
+  const flowIndex = order.orderStatus === 'pending_confirm' || order.orderStatus === 'pending'
+    ? 0 : order.orderStatus === 'paid' ? 1 : order.orderStatus === 'shipped' ? 2
+      : ['received', 'completed', 'refunding', 'refunded'].includes(order.orderStatus) ? 3 : 0
+  const buyerEvaluation = evaluations.find((item) => String(item.evaluatorId) === String(order.buyerId))
+  const sellerEvaluation = evaluations.find((item) => String(item.evaluatorId) === String(order.sellerId))
 
   return (
-    <div style={{ padding: 20 }}>
-      <Space style={{ marginBottom: 16 }} wrap>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/order')}>
-          返回订单列表
-        </Button>
-        {canPay && (
-          <Button type="primary" loading={acting} onClick={handlePay}>
-            立即支付 ¥{order.totalAmount}
-          </Button>
-        )}
-        {!canPay && nextStep && (
-          <Popconfirm title={`确认推进到「${nextStep.label}」？`} onConfirm={() => advance(nextStep.status, nextStep.label)}>
-            <Button loading={acting}>推进到「{nextStep.label}」</Button>
-          </Popconfirm>
-        )}
-        {(order.orderStatus === 'received' || order.orderStatus === 'completed') && !myEvaluation && (
-          <Button onClick={() => setEvalOpen(true)}>评价这笔交易</Button>
-        )}
-        {(order.orderStatus === 'paid' || order.orderStatus === 'shipped' || order.orderStatus === 'received') && (
-          <Button
-            danger
-            onClick={() => {
-              refundForm.setFieldsValue({
-                refundType: 'full',
-                refundAmount: order.paidAmount ?? order.totalAmount
-              })
-              setRefundOpen(true)
-            }}
-          >
-            申请退款
-          </Button>
-        )}
-      </Space>
+    <div className="order-detail-page">
+      <header className="order-detail-topbar">
+        <a className="order-detail-brand" href="/">
+          <span><BrandMark size={32} /></span>
+          <strong>丰链云<small>FENGCHAIN · AGRI</small></strong>
+        </a>
+        <nav>
+          <a href={isSeller ? '/member/seller' : '/member/buyer'}>{isSeller ? '卖家中心' : '买家中心'}</a>
+          <span>/</span>
+          <strong>订单详情</strong>
+        </nav>
+        <a className="order-detail-back" href={returnPath}><ArrowLeftOutlined /> 返回订单列表</a>
+      </header>
 
-      <Card style={{ marginBottom: 16 }}>
-        <Space align="center" wrap>
-          <Typography.Title level={4} style={{ margin: 0 }}>
-            订单 {order.orderNo}
-          </Typography.Title>
-          <Tag color={status.color}>{status.text}</Tag>
-        </Space>
+      <main className="order-detail-main">
+        <section className="order-detail-hero">
+          <span className="order-detail-hero-icon"><ShoppingCartOutlined /></span>
+          <div className="order-detail-hero-title">
+            <small>PURCHASE ORDER · {order.orderNo}</small>
+            <h1>{order.productName || order.categoryName || '采购订单'}</h1>
+            <p>下单时间 {shortDate(order.createTime)} · {isBuyer ? '采购方' : isSeller ? '供货方' : '交易参与方'}视图</p>
+          </div>
+          <StatusTag status={order.orderStatus} side={isSeller ? 'seller' : 'buyer'} />
+          <div className="order-detail-actions">
+            {canPay && (
+              <button type="button" className="mc-btn" disabled={acting} onClick={() => void handlePay()}>
+                <CreditCardOutlined /> 立即支付 {money(order.totalAmount)}
+              </button>
+            )}
+            {isSeller && order.orderStatus === 'paid' && (
+              <button type="button" className="mc-btn" disabled={acting} onClick={() => void handleShip()}>
+                <TruckOutlined /> 确认发货
+              </button>
+            )}
+            {isBuyer && order.orderStatus === 'shipped' && (
+              <button type="button" className="mc-btn" disabled={acting} onClick={() => void handleConfirmReceipt()}>
+                <CheckCircleOutlined /> 确认收货
+              </button>
+            )}
+            {canEvaluate && (
+              <button type="button" className="mc-btn ghost" onClick={() => setEvalOpen(true)}>评价交易</button>
+            )}
+            {canRefund && (
+              <button type="button" className="mc-btn ghost order-detail-danger" onClick={() => {
+                refundForm.setFieldsValue({
+                  refundType: 'return_refund',
+                  refundAmount: order.paidAmount ?? order.totalAmount,
+                })
+                setRefundOpen(true)
+              }}>
+                申请退货退款
+              </button>
+            )}
+          </div>
+        </section>
 
-        <Descriptions column={{ xs: 1, sm: 2, md: 3 }} size="small" style={{ marginTop: 16 }} bordered>
-          <Descriptions.Item label="采购方">{order.buyerName ?? '—'}</Descriptions.Item>
-          <Descriptions.Item label="供货方">{order.sellerName ?? '—'}</Descriptions.Item>
-          <Descriptions.Item label="品类">{order.categoryName ?? '—'}</Descriptions.Item>
-          <Descriptions.Item label="货款">¥{order.goodsAmount ?? 0}</Descriptions.Item>
-          <Descriptions.Item label="运费">¥{order.freightAmount ?? 0}</Descriptions.Item>
-          <Descriptions.Item label="优惠">¥{order.discountAmount ?? 0}</Descriptions.Item>
-          <Descriptions.Item label="订单总额">
-            <span style={{ color: '#1565C0', fontWeight: 600 }}>¥{order.totalAmount}</span>
-          </Descriptions.Item>
-          <Descriptions.Item label="已付金额">{order.paidAmount ? `¥${order.paidAmount}` : '—'}</Descriptions.Item>
-          <Descriptions.Item label="支付方式">{order.paymentMethod ?? '—'}</Descriptions.Item>
-          <Descriptions.Item label="收货地址" span={2}>
-            {[order.deliveryProvince, order.deliveryCity, order.deliveryAddress].filter(Boolean).join(' ') || '—'}
-          </Descriptions.Item>
-          <Descriptions.Item label="期望交货">{order.deliveryDeadline ?? '—'}</Descriptions.Item>
-          <Descriptions.Item label="物流单号">{order.logisticsNo ?? '—'}</Descriptions.Item>
-          <Descriptions.Item label="物流状态">{order.logisticsStatus ?? '—'}</Descriptions.Item>
-          <Descriptions.Item label="买家已确认">{order.buyerConfirmed === 1 ? '是' : '否'}</Descriptions.Item>
-          <Descriptions.Item label="结算状态">{order.settleStatus ?? '—'}</Descriptions.Item>
-          <Descriptions.Item label="下单时间">{order.createTime ?? '—'}</Descriptions.Item>
-        </Descriptions>
-      </Card>
+        <div className="order-detail-layout">
+          <div className="order-detail-content">
+            <Panel title={`商品明细（${items.length}）`} extra={<span className="order-detail-muted">订单金额由服务端核算</span>}>
+              {items.length === 0 ? (
+                <Empty description="这笔订单没有商品明细" />
+              ) : (
+                <div className="order-detail-products">
+                  {items.map((item) => (
+                    <div className="order-detail-product" key={item.id}>
+                      <span className="order-detail-product-icon"><ShopOutlined /></span>
+                      <div>
+                        <strong>{item.productName}</strong>
+                        <small>{[item.specLevel, item.traceCode ? `溯源码 ${item.traceCode}` : ''].filter(Boolean).join(' · ') || '规格以订单约定为准'}</small>
+                      </div>
+                      <span>{item.quantity} {item.unit}</span>
+                      <span>{money(item.unitPrice)} / {item.unit}</span>
+                      <strong className="order-detail-price">{money(item.totalPrice)}</strong>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Panel>
 
-      <Card title={`订单明细（${items.length}）`}>
-        {items.length === 0 ? (
-          <Empty description="这笔订单没有明细行" />
-        ) : (
-          <Table
-            rowKey="id"
-            dataSource={items}
-            pagination={false}
-            columns={[
-              { title: '商品', dataIndex: 'productName' },
-              { title: '等级', dataIndex: 'specLevel', render: (val: string) => val || '—' },
-              {
-                title: '数量',
-                dataIndex: 'quantity',
-                render: (val: number, row: OrderItemRow) => `${val} ${row.unit ?? ''}`
-              },
-              { title: '单价', dataIndex: 'unitPrice', render: (val: number) => `¥${val}` },
-              { title: '金额', dataIndex: 'totalPrice', render: (val: number) => `¥${val}` },
-              { title: '溯源码', dataIndex: 'traceCode', render: (val: string) => val || '—' }
-            ]}
-          />
-        )}
-      </Card>
+            <Panel title="交付信息">
+              <div className="order-detail-info-grid">
+                <div><span><EnvironmentOutlined /> 收货地址</span><strong>{[order.deliveryProvince, order.deliveryCity, order.deliveryAddress].filter(Boolean).join(' ') || '—'}</strong></div>
+                <div><span><UserOutlined /> 收货人</span><strong>{order.deliveryContact || '—'}</strong></div>
+                <div><span><PhoneOutlined /> 联系电话</span><strong>{order.deliveryPhone || '—'}</strong></div>
+                <div><span><ClockCircleOutlined /> 期望交货</span><strong>{shortDate(order.deliveryDeadline)}</strong></div>
+              </div>
+            </Panel>
 
-      <Card title={`交易评价（${evaluations.length}）`} style={{ marginTop: 16 }}>
-        {evaluations.length === 0 ? (
-          <Empty
-            description={
-              order.orderStatus === 'received' || order.orderStatus === 'completed'
-                ? '这笔订单还没有评价 —— 买卖双方各可以评一次'
-                : '订单走到「已收货」之后才开放评价'
-            }
-          />
-        ) : (
-          <Space direction="vertical" style={{ width: '100%' }} size={12}>
-            {/* 双向评价：买家评卖家、卖家评买家，各一条、互不影响 */}
-            {[
-              { key: 'buyer', label: '买家评价', row: evaluations.find((e) => e.evaluatorId === order.buyerId) ?? null },
-              { key: 'seller', label: '卖家评价', row: evaluations.find((e) => e.evaluatorId === order.sellerId) ?? null }
-            ].map(({ key, label, row }) => (
-              <Card key={key} size="small" type="inner" title={`${label}${row && myMerchantIds.includes(Number(row.evaluatorId)) ? '（我方）' : ''}`}>
-                {row ? (
-                  <Space direction="vertical" style={{ width: '100%' }}>
-                    <Space>
-                      <Rate disabled value={row.ratingOverall} />
-                      <Typography.Text type="secondary">
-                        {row.evaluatorName} → {row.evaluateeName}　{row.createTime}
-                      </Typography.Text>
-                    </Space>
-                    <Typography.Text>{row.evaluationContent || '（未填写文字评价）'}</Typography.Text>
-                    {row.replyContent && (
-                      <Typography.Text type="secondary">被评价方回复：{row.replyContent}</Typography.Text>
-                    )}
-                  </Space>
-                ) : (
-                  <Typography.Text type="secondary">还没有评价</Typography.Text>
-                )}
-              </Card>
-            ))}
-          </Space>
-        )}
-      </Card>
+            <Panel title={`交易评价（${evaluations.length}）`}>
+              {evaluations.length === 0 ? (
+                <Empty description={canEvaluate ? '这笔订单还没有评价，可在订单收货后评价' : '订单进入已收货状态后可进行评价'} />
+              ) : (
+                <div className="order-detail-reviews">
+                  {[
+                    { key: 'buyer', label: '采购方评价', row: buyerEvaluation },
+                    { key: 'seller', label: '供货方评价', row: sellerEvaluation },
+                  ].map(({ key, label, row }) => (
+                    <div className="order-review-card" key={key}>
+                      <div><strong>{label}</strong>{row && <Rate disabled value={row.ratingOverall} />}</div>
+                      {row ? (
+                        <>
+                          <p>{row.evaluationContent || '未填写文字评价'}</p>
+                          <small>{row.evaluatorName} → {row.evaluateeName} · {shortDate(row.createTime)}</small>
+                          {row.replyContent && <em>回复：{row.replyContent}</em>}
+                        </>
+                      ) : <span className="order-detail-muted">尚未评价</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Panel>
+          </div>
+
+          <aside className="order-detail-aside">
+            <Panel title="订单金额">
+              <div className="order-amount-list">
+                <div><span>货款</span><strong>{money(order.goodsAmount)}</strong></div>
+                <div><span>运费</span><strong>{money(order.freightAmount)}</strong></div>
+                <div><span>优惠</span><strong>-{money(order.discountAmount)}</strong></div>
+                <div className="total"><span>订单总额</span><strong>{money(order.totalAmount)}</strong></div>
+                <div><span>已付金额</span><strong>{money(order.paidAmount)}</strong></div>
+                {Number(order.refundAmount ?? 0) > 0 && <div><span>已退金额</span><strong>{money(order.refundAmount)}</strong></div>}
+              </div>
+            </Panel>
+
+            <Panel title="履约进度">
+              <div className="order-flow">
+                {['订单创建', '支付完成', '供应方发货', '买家收货'].map((label, index) => (
+                  <div className={index <= flowIndex ? 'on' : ''} key={label}>
+                    <span>{index <= flowIndex ? <CheckCircleOutlined /> : index + 1}</span>
+                    <strong>{label}</strong>
+                  </div>
+                ))}
+              </div>
+            </Panel>
+
+            <Panel title="交易双方">
+              <div className="order-parties">
+                <div><span className="buyer">采</span><div><small>采购方</small><strong>{order.buyerName || '—'}</strong></div></div>
+                <div><span className="seller">供</span><div><small>供货方</small><strong>{order.sellerName || '—'}</strong></div></div>
+              </div>
+            </Panel>
+
+            <Panel title="物流与支付">
+              <div className="order-side-info">
+                <div><span>物流单号</span><strong className="mc-mono">{order.logisticsNo || '尚未生成'}</strong></div>
+                <div><span>物流状态</span><strong>{LOGISTICS_STATUS[order.logisticsStatus] ?? order.logisticsStatus ?? '—'}</strong></div>
+                <div><span>支付方式</span><strong>{PAYMENT_METHOD[order.paymentMethod] ?? order.paymentMethod ?? '—'}</strong></div>
+                <div><span>支付状态</span><strong>{PAYMENT_STATUS[order.paymentStatus] ?? order.paymentStatus ?? '—'}</strong></div>
+              </div>
+            </Panel>
+
+            <div className="order-detail-trust">
+              <SafetyCertificateOutlined />
+              <div><strong>交易数据已留痕</strong><span>订单、支付、物流与售后均可在会员中心追溯。</span></div>
+            </div>
+          </aside>
+        </div>
+      </main>
 
       <Modal
+        className="order-detail-modal"
         open={evalOpen}
         title="评价这笔交易"
         onCancel={() => setEvalOpen(false)}
@@ -373,12 +455,13 @@ export default function OrderDetail() {
             <Rate />
           </Form.Item>
           <Form.Item label="评价内容" name="evaluationContent">
-            <Input.TextArea rows={3} placeholder="说说这次交易的质量、服务、物流情况" />
+            <Input.TextArea rows={4} placeholder="说说商品质量、供应服务和物流情况" />
           </Form.Item>
         </Form>
       </Modal>
 
       <Modal
+        className="order-detail-modal"
         open={refundOpen}
         title="申请退款"
         onCancel={() => setRefundOpen(false)}
@@ -387,12 +470,10 @@ export default function OrderDetail() {
       >
         <Form form={refundForm} layout="vertical" onFinish={submitRefund}>
           <Form.Item label="退款类型" name="refundType" rules={[{ required: true, message: '请选择退款类型' }]}>
-            <Select
-              options={[
-                { value: 'full', label: '全额退款' },
-                { value: 'partial', label: '部分退款' }
-              ]}
-            />
+            <Select options={[
+              { value: 'return_refund', label: '退货退款' },
+              { value: 'refund_only', label: '仅退款（无需退货）' },
+            ]} />
           </Form.Item>
           <Form.Item label="退款金额（元）" name="refundAmount" rules={[{ required: true, message: '请填写退款金额' }]}>
             <InputNumber min={0.01} style={{ width: '100%' }} />

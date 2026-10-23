@@ -69,7 +69,7 @@ interface FarmDetailModel {
   farmCode: string
   /** 农场名称 */
   farmName: string
-  /** 所属租户 */
+  /** 所属主体 */
   tenantName: string
   /** 详细地址 */
   address: string
@@ -287,7 +287,7 @@ export default function FarmSupervisionDetail(): JSX.Element {
       farmId: String(farm.farmId),
       farmCode: farm.farmCode || String(farm.farmId),
       farmName: farm.farmName,
-      tenantName: farm.tenantId ? `租户 ${farm.tenantId}` : '—',
+      tenantName: farm.tenantId ? `主体 ${farm.tenantId}` : '—',
       address: farm.address || `${farm.province || ''}${farm.city || ''}${farm.district || ''}`,
       areaTotal: Number(farm.areaTotal) || 0,
       crops: '—',
@@ -721,7 +721,7 @@ export default function FarmSupervisionDetail(): JSX.Element {
                 <div style={{ marginTop: 4 }}>
                   <Space size={12} wrap>
                     <Text type="secondary">编号 {detail.farmCode}</Text>
-                    <Text type="secondary">租户 {detail.tenantName}</Text>
+                    <Text type="secondary">主体 {detail.tenantName}</Text>
                   </Space>
                 </div>
               </Col>

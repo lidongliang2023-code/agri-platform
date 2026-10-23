@@ -13,3 +13,4 @@ public interface IGatewayService {
     Result<Void> delete(Long id);
     Result<Void> heartbeat(Long id);
 }
+

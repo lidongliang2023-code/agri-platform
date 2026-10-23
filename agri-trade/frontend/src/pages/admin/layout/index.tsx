@@ -17,6 +17,7 @@ const MENU_LABELS: Record<string, string> = {
   '/admin/trade/dashboard': '交易大盘',
   '/admin/trade/product': '货源审核',
   '/admin/trade/refund': '退款审核',
+  '/admin/trade/invoice': '发票审核',
   '/admin/trade/order': '订单监管',
   '/admin/trade/settlement': '结算与分账',
   '/admin/trade/dispute': '纠纷仲裁',
@@ -144,6 +145,7 @@ export default function AdminLayout() {
               children: [
                 { key: '/admin/trade/product', icon: <AuditOutlined />, label: '货源审核' },
                 { key: '/admin/trade/refund', icon: <RollbackOutlined />, label: '退款审核' },
+                { key: '/admin/trade/invoice', icon: <FileTextOutlined />, label: '发票审核' },
               ],
             },
             { key: '/admin/trade/order', icon: <FileSearchOutlined />, label: '订单监管' },

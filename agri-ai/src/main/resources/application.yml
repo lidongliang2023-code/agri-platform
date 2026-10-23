@@ -1,0 +1,21 @@
+server:
+  port: 8085
+
+spring:
+  application:
+    name: agri-ai
+  profiles:
+    active: dev
+
+ai:
+  tongyi:
+    api-key: ${TONGYI_API_KEY:your-api-key}
+    base-url: https://dashscope.aliyuncs.com/api/v1
+  openai:
+    api-key: ${OPENAI_API_KEY:your-api-key}
+    base-url: https://api.openai.com/v1
+  provider: tongyi
+
+logging:
+  level:
+    com.agri.ai: DEBUG

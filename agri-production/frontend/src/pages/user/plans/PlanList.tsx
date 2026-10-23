@@ -625,7 +625,7 @@ export default function PlanList(): JSX.Element {
             { max: 50, message: '计划名称不超过 50 个字符' },
           ]}
         />
-        <ProFormText name="planCode" label="计划编码" placeholder="留空由系统自动生成（同租户内唯一）" />
+        <ProFormText name="planCode" label="计划编码" placeholder="留空由系统自动生成（同主体内唯一）" />
         <ProFormSelect
           name="cropId"
           label="作物"

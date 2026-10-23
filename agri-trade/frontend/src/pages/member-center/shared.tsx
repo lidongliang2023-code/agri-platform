@@ -190,10 +190,16 @@ export function useOrders(side: 'buyer' | 'seller', status: string, pageNum = 1,
   return { rows, total, loading, error, reload: () => setTick((value) => value + 1) }
 }
 
-export function useDemands(buyerId: string | null): { rows: DemandVO[]; loading: boolean; error: string } {
+export function useDemands(buyerId: string | null): {
+  rows: DemandVO[]
+  loading: boolean
+  error: string
+  reload: () => void
+} {
   const [rows, setRows] = useState<DemandVO[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [tick, setTick] = useState(0)
   useEffect(() => {
     if (!buyerId) { setRows([]); return }
     let cancelled = false
@@ -208,14 +214,20 @@ export function useDemands(buyerId: string | null): { rows: DemandVO[]; loading:
       .catch(() => { if (!cancelled) setError('加载采购需求失败') })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [buyerId])
-  return { rows, loading, error }
+  }, [buyerId, tick])
+  return { rows, loading, error, reload: () => setTick((value) => value + 1) }
 }
 
-export function useMyInquiryRows(): { rows: InquiryVO[]; loading: boolean; error: string } {
+export function useMyInquiryRows(): {
+  rows: InquiryVO[]
+  loading: boolean
+  error: string
+  reload: () => void
+} {
   const [rows, setRows] = useState<InquiryVO[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [tick, setTick] = useState(0)
   useEffect(() => {
     let cancelled = false
     setLoading(true)
@@ -228,8 +240,8 @@ export function useMyInquiryRows(): { rows: InquiryVO[]; loading: boolean; error
       .catch(() => { if (!cancelled) setError('加载询价失败') })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [])
-  return { rows, loading, error }
+  }, [tick])
+  return { rows, loading, error, reload: () => setTick((value) => value + 1) }
 }
 
 export function useReceivedInquiries(): InquiryVO[] {
@@ -353,7 +365,12 @@ export function useGuarantees(): GuaranteeRow[] {
   const load = useCallback(() => {
     getMyGuarantees()
       .then((body: ApiResult<GuaranteeRow[]>) => {
-        if (body?.code === 200 && Array.isArray(body.data)) setRows(body.data)
+        if (body?.code === 200 && Array.isArray(body.data)) {
+          const now = Date.now()
+          setRows(body.data.filter((row) =>
+            row.guaranteeStatus === 'active'
+            && (!row.expireTime || new Date(row.expireTime).getTime() > now)))
+        }
       })
       .catch(() => { /* 空列表 + 页面说明 */ })
   }, [])

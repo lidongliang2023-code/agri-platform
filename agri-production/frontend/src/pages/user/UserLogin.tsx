@@ -12,6 +12,8 @@ import { App, Button, Card, Form, Input, InputNumber, Space, Typography } from '
 import { LockOutlined, UserOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import useAuthStore from '@/store/auth'
+// 两端登录页的独立视觉（用户端农业绿明快渐变）；样式本体在 login.css 内按 body 标记生效
+import '@/pages/auth/login.css'
 import {
   USER_HOME_PATH,
   USER_LOGIN_PATH,
@@ -72,6 +74,12 @@ export default function UserLogin(): JSX.Element {
 
   const token = useAuthStore((state) => state.token)
   const roles = useAuthStore((state) => state.roles)
+
+  // 本页挂载期间给 body 打标记，卸载即移除 —— 避免这份"用户端气质"漏到其它页面
+  useEffect(() => {
+    document.body.classList.add('agri-login-user')
+    return () => document.body.classList.remove('agri-login-user')
+  }, [])
 
   /** 已登录时的落地页 */
   const homePath = useMemo(() => resolveHomePath(roles), [roles])

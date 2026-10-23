@@ -79,6 +79,10 @@ public class AdminFarmService {
         result.put("certCount", certs.size());
         result.put("certExpiring", expiring);
         result.put("certExpired", expired);
+        // ⚠️ 这里的 WARN 是「合规等级」词表（RISK/WARN/OK），与告警级别
+        // （INFO/WARN/CRITICAL/URGENT → info/normal/important/urgent）不是同一套。
+        // PRD 8.1.2 的枚举对齐**不涉及**本行，grep 到 WARN 时不要顺手改，
+        // 改了会把两套词表搅在一起。
         result.put("complianceLevel", expired > 0 ? "RISK" : (expiring > 0 ? "WARN" : "OK"));
         return result;
     }

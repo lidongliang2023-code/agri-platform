@@ -53,7 +53,7 @@ export interface RectifyTargetSummary {
   farmCode: string
   /** 农场名称 */
   farmName: string
-  /** 所属租户（可缺省） */
+  /** 所属主体（可缺省） */
   tenantName?: string
   /** 风险评分 */
   riskScore: number
@@ -234,7 +234,7 @@ export default function RectifyDispatchModal(props: RectifyDispatchModalProps): 
           <Row gutter={[0, 6]} style={{ marginBottom: 12 }}>
             <Col span={12}>农场编号：{target.farmCode}</Col>
             <Col span={12}>农场名称：{target.farmName}</Col>
-            <Col span={12}>所属租户：{target.tenantName || '—'}</Col>
+            <Col span={12}>所属主体：{target.tenantName || '—'}</Col>
             <Col span={12}>
               风险评分：
               <Tag color={RISK_BAND_META[resolveRiskLevel(target.riskScore)].tagColor}>

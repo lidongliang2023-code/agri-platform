@@ -25,3 +25,4 @@ public interface IDeviceGroupService {
 
     void batchControl(Long groupId, String command);
 }
+

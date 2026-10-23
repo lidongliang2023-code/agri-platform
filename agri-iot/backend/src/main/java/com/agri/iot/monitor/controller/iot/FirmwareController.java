@@ -56,3 +56,4 @@ public class FirmwareController {
         return firmwareService.activate(id);
     }
 }
+

@@ -230,7 +230,7 @@ export default function MonitorIndex(): JSX.Element {
   const deviceTotal = devices.length
   const onlineRate = deviceTotal > 0 ? Math.round((onlineDevices.length / deviceTotal) * 100) : 0
 
-  /** 今日任务统计（后端「已完成」真值是 done；旧判 accepted 后端不存在，导致完成率恒 0%） */
+  /** 今日任务统计（「已完成」同时认 completed 与 done，避免词表切换后完成率静默归零） */
   const taskTotal = tasks.length
   const taskDone = tasks.filter((item) => isTaskDone(item.status)).length
   const taskRate = taskTotal > 0 ? Math.round((taskDone / taskTotal) * 100) : 0

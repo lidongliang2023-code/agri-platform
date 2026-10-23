@@ -24,3 +24,4 @@ public class FirmwareVO {
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 }
+

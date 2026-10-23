@@ -65,7 +65,7 @@ const BIZ_TYPE_LABEL: Record<string, string> = {
   CERT: '认证申请',
   QUOTA: '配额调整',
   RECALL: '召回申请',
-  1: '租户注册',
+  1: '主体注册',
   2: '配额调整',
   3: '农场停用',
   4: '数据导出',
@@ -81,7 +81,7 @@ interface HistoryRow {
   approvalType: AdminApprovalType
   /** 申请人 */
   applicantName: string
-  /** 所属租户 */
+  /** 所属主体 */
   tenantName?: string
   /** 申请对象 */
   targetName?: string
@@ -216,7 +216,7 @@ export default function ApprovalHistory(): JSX.Element {
 
   /** 导出 CSV 报告 */
   const handleExport = (): void => {
-    const header = ['审批编号', '类型', '申请人', '所属租户', '审批结果', '审批人', '审批时间', '耗时(小时)', '审批意见']
+    const header = ['审批编号', '类型', '申请人', '所属主体', '审批结果', '审批人', '审批时间', '耗时(小时)', '审批意见']
     const body = rows.map((row) => [
       row.approvalNo,
       BIZ_TYPE_LABEL[row.approvalType] ?? row.approvalType,
@@ -253,7 +253,7 @@ export default function ApprovalHistory(): JSX.Element {
     },
     { title: '申请人', dataIndex: 'applicantName', width: 100 },
     {
-      title: '所属租户',
+      title: '所属主体',
       dataIndex: 'tenantName',
       width: 140,
       render: (_, row) => row.tenantName ?? '—',
@@ -444,7 +444,7 @@ export default function ApprovalHistory(): JSX.Element {
               {BIZ_TYPE_LABEL[detailRow.approvalType] ?? detailRow.approvalType}
             </Descriptions.Item>
             <Descriptions.Item label="申请人">{detailRow.applicantName}</Descriptions.Item>
-            <Descriptions.Item label="所属租户">{detailRow.tenantName ?? '—'}</Descriptions.Item>
+            <Descriptions.Item label="所属主体">{detailRow.tenantName ?? '—'}</Descriptions.Item>
             <Descriptions.Item label="业务摘要">{detailRow.bizSummary ?? '—'}</Descriptions.Item>
             <Descriptions.Item label="提交时间">{detailRow.submittedAt}</Descriptions.Item>
             <Descriptions.Item label="审批结果">

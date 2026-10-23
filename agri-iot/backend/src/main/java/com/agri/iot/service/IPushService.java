@@ -21,3 +21,4 @@ public interface IPushService {
 
     void sendNotification(String type, String level, String title, String content, String deviceId, String deviceName);
 }
+

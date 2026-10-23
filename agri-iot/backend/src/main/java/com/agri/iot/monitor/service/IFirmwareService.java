@@ -13,3 +13,4 @@ public interface IFirmwareService {
     Result<Void> delete(Long id);
     Result<Void> activate(Long id);
 }
+

@@ -13,11 +13,13 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import com.agri.produce.internal.task.TaskInfoEntity;
 import com.agri.produce.internal.task.TaskInfoMapper;
+import com.agri.produce.internal.task.TaskStatus;
 import com.agri.produce.internal.input.InputInfoEntity;
 import com.agri.produce.internal.input.InputInfoMapper;
 
@@ -95,14 +97,22 @@ public class AdminMonitorService {
         return list.isEmpty() ? null : list.get(0);
     }
 
-    /** 任务监控：按状态聚合 */
+    /**
+     * 任务监控：按状态聚合。
+     *
+     * <p><b>分组键保持旧词表</b>（{@link TaskStatus#monitorKeys()}）：前端 {@code TaskMonitor}
+     * 的筛选项与 {@code isTaskDone} 判定都按这些键取值，键换成新词表会让前端在不动的前提下
+     * 静默归零。因此键不动，计数范围由 {@link TaskStatus#valuesOf(String)} 覆盖新旧两套写法。
+     *
+     * @return [{@code status}, {@code count}]
+     */
     public List<Map<String, Object>> taskMonitor() {
-        List<Map<String, Object>> result = new java.util.ArrayList<>();
-        for (String status : List.of("pending", "assigned", "doing", "done", "rejected")) {
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (String status : TaskStatus.monitorKeys()) {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("status", status);
             row.put("count", taskInfoMapper.selectCount(new LambdaQueryWrapper<TaskInfoEntity>()
-                    .eq(TaskInfoEntity::getStatus, status)));
+                    .in(TaskInfoEntity::getStatus, TaskStatus.valuesOf(status))));
             result.add(row);
         }
         return result;

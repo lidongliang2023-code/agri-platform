@@ -70,6 +70,11 @@ public interface IQuoteService extends IService<Quote> {
     IPage<Quote> getQuotePage(int pageNum, int pageSize, String quoteStatus,
                               Long sellerId, Long buyerId, Collection<Long> scopeMerchantIds);
 
+    /** 带报价编号、产品名称关键词和身份范围的分页查询。 */
+    IPage<Quote> getQuotePage(int pageNum, int pageSize, String quoteStatus,
+                              Long sellerId, Long buyerId, Collection<Long> scopeMerchantIds,
+                              String quoteNo, String productName);
+
     /**
      * 报价转订单。
      *

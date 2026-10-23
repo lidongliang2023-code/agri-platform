@@ -25,3 +25,4 @@ public class DeviceGroup extends BaseEntity {
 
     private Integer deviceCount;
 }
+

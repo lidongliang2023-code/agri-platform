@@ -11,3 +11,4 @@ public class GatewayPageDTO {
     private Integer plotId;
     private Integer onlineStatus;
 }
+

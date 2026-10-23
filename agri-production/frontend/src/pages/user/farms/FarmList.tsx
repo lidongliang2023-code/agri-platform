@@ -159,7 +159,7 @@ function formatArea(value: number | undefined): string {
 /**
  * 农场列表页
  *
- * 业务职责：以卡片 / 列表双视图展示租户下全部农场，支持检索筛选、
+ * 业务职责：以卡片 / 列表双视图展示主体下全部农场，支持检索筛选、
  * 切换当前农场、启停、删除与 CSV 批量导入。
  *
  * @returns 页面内容

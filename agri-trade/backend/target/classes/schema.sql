@@ -189,11 +189,13 @@ CREATE TABLE IF NOT EXISTS `agri_trade_contract` (
     `seller_id` BIGINT NOT NULL COMMENT '卖方ID',
     `seller_name` VARCHAR(100) NOT NULL COMMENT '卖方名称',
     `seller_phone` VARCHAR(20) NULL COMMENT '卖方电话',
-    `goods_name` VARCHAR(200) NOT NULL COMMENT '商品名称',
-    `quantity` DECIMAL(18,4) NOT NULL COMMENT '数量',
-    `unit` VARCHAR(20) NOT NULL COMMENT '计量单位',
-    `unit_price` DECIMAL(18,4) NOT NULL COMMENT '单价',
-    `total_amount` DECIMAL(18,2) NOT NULL COMMENT '总金额',
+    -- 历史列（合同标的物）：实体改用了下面的 contract_name / contract_amount 一套，
+    -- 这几列没被任何实体映射，却还是 NOT NULL 且无默认值 —— POST /contract 会 500。
+    `goods_name` VARCHAR(200) NULL COMMENT '商品名称（历史列，实体未映射）',
+    `quantity` DECIMAL(18,4) NULL COMMENT '数量（历史列，实体未映射）',
+    `unit` VARCHAR(20) NULL COMMENT '计量单位（历史列，实体未映射）',
+    `unit_price` DECIMAL(18,4) NULL COMMENT '单价（历史列，实体未映射）',
+    `total_amount` DECIMAL(18,2) NULL COMMENT '总金额（历史列，实体改用 contract_amount）',
     `currency` VARCHAR(10) DEFAULT 'CNY' COMMENT '货币类型',
     `payment_method` VARCHAR(20) NULL COMMENT '付款方式',
     `payment_term` VARCHAR(100) NULL COMMENT '付款期限',
@@ -369,7 +371,9 @@ CREATE TABLE IF NOT EXISTS `agri_trade_evaluation` (
     `hide_reason` TEXT NULL COMMENT '实体字段补齐（2026-10-13）',
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_evaluation_no` (`evaluation_no`),
-    UNIQUE KEY `uk_order_id` (`order_id`),
+    -- 一张订单允许双向各评价一次（买家评卖家 / 卖家评买家）。
+    -- 原来这里是 uk_order_id（一单一条），先评的那方把位置占了，另一方再也评不了。
+    UNIQUE KEY `uk_order_evaluator` (`order_id`, `evaluator_id`),
     INDEX `idx_evaluator_id` (`evaluator_id`),
     INDEX `idx_evaluatee_id` (`evaluatee_id`),
     INDEX `idx_evaluation_status` (`evaluation_status`),
@@ -381,14 +385,17 @@ CREATE TABLE IF NOT EXISTS `agri_trade_dispute` (
     `dispute_no` VARCHAR(64) NOT NULL COMMENT '纠纷编号',
     `order_id` BIGINT NOT NULL COMMENT '订单ID',
     `contract_id` BIGINT NULL COMMENT '合同ID',
-    `applicant_id` BIGINT NOT NULL COMMENT '申请人ID',
-    `applicant_name` VARCHAR(100) NOT NULL COMMENT '申请人名称',
+    -- 历史列：实体与接口都改用下面的 complainant_*，这两列留着只为兼容旧数据。
+    -- 它们原先还是 NOT NULL 且无默认值 —— 实体不映射就没人写，插入直接
+    -- "Field 'applicant_id' doesn't have a default value"，发起纠纷从来没成功过。
+    `applicant_id` BIGINT NULL COMMENT '申请人ID（历史列，实体改用 complainant_id）',
+    `applicant_name` VARCHAR(100) NULL COMMENT '申请人名称（历史列，实体改用 complainant_name）',
     `respondent_id` BIGINT NOT NULL COMMENT '被申请人ID',
     `respondent_name` VARCHAR(100) NOT NULL COMMENT '被申请人名称',
     `dispute_type` VARCHAR(50) NULL COMMENT '纠纷类型',
     `dispute_amount` DECIMAL(18,2) NULL COMMENT '纠纷金额',
     `claim_amount` DECIMAL(18,2) NULL COMMENT '索赔金额',
-    `dispute_content` TEXT NOT NULL COMMENT '纠纷内容',
+    `dispute_content` TEXT NULL COMMENT '纠纷内容（历史列，实体改用 dispute_reason/dispute_description）',
     `evidence_json` TEXT NULL COMMENT '证据材料JSON',
     `dispute_status` VARCHAR(20) DEFAULT 'pending' COMMENT '纠纷状态',
     `respond_content` TEXT NULL COMMENT '答辩内容',
@@ -487,7 +494,11 @@ CREATE TABLE IF NOT EXISTS `agri_trade_order_item` (
     `unit` VARCHAR(20) NOT NULL COMMENT '计量单位',
     `quantity` DECIMAL(18,4) NOT NULL COMMENT '数量',
     `unit_price` DECIMAL(18,4) NOT NULL COMMENT '单价',
-    `amount` DECIMAL(18,2) NOT NULL COMMENT '金额',
+    -- 历史列：实体 OrderItem 映射的是 total_price，不再写这一列。
+    -- 原来是 NOT NULL 且无默认值 —— 于是任何经接口创建的订单明细都插不进去
+    -- （报 "Field 'amount' doesn't have a default value"）。改成可空，
+    -- 保留列不删是为了不动历史数据。
+    `amount` DECIMAL(18,2) NULL COMMENT '金额（历史列，实体已改用 total_price）',
     `batch_no` VARCHAR(64) NULL COMMENT '批次号',
     `trace_code` VARCHAR(64) NULL COMMENT '溯源码',
     `del_flag` TINYINT(1) DEFAULT 0 COMMENT '删除标记',
@@ -904,3 +915,227 @@ CREATE TABLE IF NOT EXISTS `agri_trade_evaluation_appeal` (
     UNIQUE KEY `uk_appeal_no` (`appeal_no`),
     INDEX `idx_evaluation_id` (`evaluation_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='评价申诉表';
+
+-- ===========================================================================
+-- 结算与分账（运营端）
+--
+-- 为什么单独建表而不是只改订单上的 settle_status：
+-- 订单上的 settle_status/settle_time 只能表达"结没结"，表达不了**分账口径** ——
+-- 平台服务费按什么费率、收了多少、卖家实收多少。这三样必须留痕，
+-- 否则事后对不上账，也没法向买卖双方解释"这笔钱为什么少了这些"。
+--
+-- 口径（本轮确定的）：
+--   · 结算时点：订单**确认收货之后**（order_status in received/completed）。
+--     平台主打"交易资金托管"，钱应当在买家验收之后才放给卖家；
+--   · 平台服务费：按**货款**计（不含运费），费率取配置项
+--     agri.trade.settlement.platform-fee-rate，默认 0.5%；
+--   · 卖家应收 = 订单总额 − 平台服务费。
+-- ===========================================================================
+CREATE TABLE IF NOT EXISTS `agri_trade_settlement` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `settlement_no` VARCHAR(64) NOT NULL COMMENT '结算单号',
+    `order_id` BIGINT NOT NULL COMMENT '订单ID',
+    `order_no` VARCHAR(64) NULL COMMENT '订单编号',
+    `buyer_id` BIGINT NULL COMMENT '采购方主体ID',
+    `buyer_name` VARCHAR(100) NULL COMMENT '采购方名称',
+    `seller_id` BIGINT NULL COMMENT '供应方主体ID',
+    `seller_name` VARCHAR(100) NULL COMMENT '供应方名称',
+    `goods_amount` DECIMAL(18,2) NULL COMMENT '货款金额',
+    `freight_amount` DECIMAL(18,2) NULL COMMENT '运费',
+    `total_amount` DECIMAL(18,2) NULL COMMENT '订单总额',
+    `platform_fee_rate` DECIMAL(8,4) NULL COMMENT '平台服务费率',
+    `platform_fee` DECIMAL(18,2) NULL COMMENT '平台服务费',
+    `seller_receivable` DECIMAL(18,2) NULL COMMENT '卖家应收（订单总额 − 平台服务费）',
+    `settle_status` VARCHAR(32) NULL DEFAULT 'settled' COMMENT '结算状态：settled 已结算',
+    `settle_time` DATETIME NULL COMMENT '结算时间',
+    `settle_by` VARCHAR(64) NULL COMMENT '结算操作人',
+    `remark` VARCHAR(500) NULL COMMENT '备注',
+    `del_flag` TINYINT(1) DEFAULT 0 COMMENT '删除标记',
+    `tenant_id` VARCHAR(64) NULL COMMENT '租户ID',
+    `create_by` VARCHAR(64) NULL COMMENT '创建人',
+    `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_by` VARCHAR(64) NULL COMMENT '更新人',
+    `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_settlement_no` (`settlement_no`),
+    UNIQUE KEY `uk_order_id` (`order_id`),
+    INDEX `idx_seller_id` (`seller_id`),
+    INDEX `idx_settle_time` (`settle_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='订单结算分账表';
+
+-- ===========================================================================
+-- 买家开票申请（2026-10-20）
+-- 一笔订单只允许一张有效申请；开票状态由运营/财务推进。
+-- ===========================================================================
+CREATE TABLE IF NOT EXISTS `agri_trade_invoice` (
+    `id` BIGINT NOT NULL COMMENT '主键ID',
+    `invoice_no` VARCHAR(64) NOT NULL COMMENT '申请单号',
+    `order_id` BIGINT NOT NULL COMMENT '关联订单ID',
+    `order_no` VARCHAR(64) NULL COMMENT '订单号快照',
+    `buyer_id` BIGINT NOT NULL COMMENT '购买方（经营主体）',
+    `buyer_name` VARCHAR(128) NULL COMMENT '购买方名称',
+    `seller_id` BIGINT NULL COMMENT '销售方（经营主体）',
+    `seller_name` VARCHAR(128) NULL COMMENT '销售方名称',
+    `amount` DECIMAL(18,2) NOT NULL COMMENT '开票金额',
+    `invoice_type` VARCHAR(32) NOT NULL COMMENT '增值税专用发票 / 增值税普通发票',
+    `title` VARCHAR(128) NOT NULL COMMENT '发票抬头',
+    `tax_no` VARCHAR(64) NULL COMMENT '纳税人识别号',
+    `invoice_status` VARCHAR(32) NOT NULL DEFAULT 'pending' COMMENT 'pending 待开票 / issued 已开票 / rejected 已驳回',
+    `apply_time` DATETIME NULL COMMENT '申请时间',
+    `issue_time` DATETIME NULL COMMENT '开票时间',
+    `remark` VARCHAR(500) NULL COMMENT '备注',
+    `del_flag` TINYINT NOT NULL DEFAULT 0,
+    `create_time` DATETIME NULL,
+    `update_time` DATETIME NULL,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_invoice_no` (`invoice_no`),
+    UNIQUE KEY `uk_invoice_order` (`order_id`),
+    KEY `idx_invoice_buyer` (`buyer_id`),
+    KEY `idx_invoice_status` (`invoice_status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='买家开票申请';
+
+-- ===========================================================================
+-- 商品违规处置（运营端）
+--
+-- 为什么单独建表，而不是只把货源的 publish_status 改成"下架"：
+-- 状态只说明"现在不在架"，说明不了**为什么**、**谁处理的**、**有没有申诉/恢复**。
+-- 违规处置是要能被追问的（商家会来问"我的货为什么没了"），所以每次处置留一条记录，
+-- 恢复时把原记录标记为已撤销，而不是把痕迹删掉。
+-- ===========================================================================
+CREATE TABLE IF NOT EXISTS `agri_trade_product_violation` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `violation_no` VARCHAR(64) NOT NULL COMMENT '处置单号',
+    `product_id` BIGINT NOT NULL COMMENT '货源ID',
+    `product_name` VARCHAR(128) NULL COMMENT '货源名称（留痕快照）',
+    `seller_id` BIGINT NULL COMMENT '供应商主体ID',
+    `seller_name` VARCHAR(100) NULL COMMENT '供应商名称',
+    `violation_type` VARCHAR(32) NULL COMMENT '违规类型：false_info 信息不实 / banned 禁售品 / price_fraud 价格欺诈 / quality 质量问题 / other 其它',
+    `reason` VARCHAR(500) NOT NULL COMMENT '处置原因',
+    `action` VARCHAR(32) NULL COMMENT '处置动作：offline 下架',
+    `violation_status` VARCHAR(32) NULL DEFAULT 'active' COMMENT '状态：active 生效中 / revoked 已撤销',
+    `previous_publish_status` VARCHAR(32) NULL COMMENT '处置前的上架状态（恢复时用）',
+    `operator` VARCHAR(64) NULL COMMENT '处理人',
+    `revoke_time` DATETIME NULL COMMENT '撤销时间',
+    `revoke_reason` VARCHAR(500) NULL COMMENT '撤销原因',
+    `del_flag` TINYINT(1) DEFAULT 0 COMMENT '删除标记',
+    `tenant_id` VARCHAR(64) NULL COMMENT '租户ID',
+    `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_violation_no` (`violation_no`),
+    INDEX `idx_product_id` (`product_id`),
+    INDEX `idx_violation_status` (`violation_status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='商品违规处置记录表';
+
+-- ===========================================================================
+-- 运营配置（系统配置）
+--
+-- 只放**真的有代码在读**的配置项，不放"看起来像配置"的空壳。
+-- 一个配置项只有在某处被读取、改了会真的改变系统行为时才有意义；
+-- 否则运营改了没反应，比没有这一页更糟（本项目在别处已经吃过这个亏）。
+--
+-- 取值优先级：这张表 > 配置文件（application.yml）。表里没有记录时用配置文件的值，
+-- 这样升级/换环境时行为不会因为"库里少一行"而变。
+-- ===========================================================================
+CREATE TABLE IF NOT EXISTS `agri_trade_config` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `config_key` VARCHAR(64) NOT NULL COMMENT '配置键',
+    `config_value` VARCHAR(255) NULL COMMENT '配置值（统一按字符串存，类型见 value_type）',
+    `value_type` VARCHAR(16) NULL DEFAULT 'string' COMMENT '值类型：string / number / boolean',
+    `config_group` VARCHAR(32) NULL COMMENT '分组：settlement 结算 / product 货源 / order 订单',
+    `config_name` VARCHAR(64) NULL COMMENT '展示名',
+    `description` VARCHAR(500) NULL COMMENT '说明（改了会影响什么）',
+    `editable` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否允许运营修改：1可改 0只读',
+    `del_flag` TINYINT(1) DEFAULT 0 COMMENT '删除标记',
+    `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_config_key` (`config_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='运营配置表';
+
+-- 种子配置：这两项**当前都有代码在读**，改了就真的改变行为
+INSERT IGNORE INTO `agri_trade_config`
+    (`config_key`, `config_value`, `value_type`, `config_group`, `config_name`, `description`, `editable`)
+VALUES
+    ('settlement.platform-fee-rate', '0.005', 'number', 'settlement', '平台服务费率',
+     '按货款（不含运费）计收，例：0.005 = 0.5%。卖家应收 = 订单总额 − 平台服务费。改动只影响之后新结算的订单，已结算记录里的费率是当时的快照。', 1),
+    ('product.publish-requires-audit', 'true', 'boolean', 'product', '货源发布需要审核',
+     'true：新发布的货源先进入「待审核」，由运营在货源审核页通过后才对买家可见；false：新货源直接上架。', 1);
+
+-- 风控阈值：三条规则各一个阈值，都由这一组配置驱动（改了下次扫描即生效）
+INSERT IGNORE INTO `agri_trade_config`
+    (`config_key`, `config_value`, `value_type`, `config_group`, `config_name`, `description`, `editable`)
+VALUES
+    ('risk.low-price-ratio', '0.7', 'number', 'risk', '异常低价阈值',
+     '在架货源单价低于「同品类其它在架货源均价 × 该比例」即预警。例：0.7 = 低于均价七成。同品类在架货源少于 2 个时不判定（均价没有意义）。', 1),
+    ('risk.low-rating-threshold', '3.0', 'number', 'risk', '差评均分阈值',
+     '主体在统计窗口内的平均星级低于该值、且评价条数达到下限时预警。', 1),
+    ('risk.low-rating-min-count', '2', 'number', 'risk', '差评条数下限',
+     '低于该条数不作判定 —— 只有一条差评就预警会把正常商家也打上风险。', 1),
+    ('risk.rating-window-days', '30', 'number', 'risk', '差评统计窗口（天）', '只统计最近这些天的评价。', 1),
+    ('risk.delivery-timeout-hours', '48', 'number', 'risk', '发货超时（小时）',
+     '订单已付款、状态仍是「已付款」且距付款时间超过该小时数即预警（说明一直没发货）。', 1);
+
+-- ===========================================================================
+-- 风控告警
+--
+-- 与"写死的假预警"的区别：每一条告警都是**扫描时用真实数据算出来的**，
+-- detail 里带着当时算出来的数字（例如"该货源 ¥12/吨，同品类在架均价 ¥128/吨"），
+-- 运营可以自己复核。规则与阈值都写在配置里，页面上能看到当期生效值。
+--
+-- 去重：同一条规则 + 同一个对象，未处理时只保留一条（否则每次扫描都刷一批重复告警）。
+-- 处理结果保留：办理人、时间、备注都要留痕（和违规处置同一套口径）。
+-- ===========================================================================
+CREATE TABLE IF NOT EXISTS `agri_trade_risk_alert` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `alert_no` VARCHAR(64) NOT NULL COMMENT '告警编号',
+    `rule_code` VARCHAR(32) NOT NULL COMMENT '规则编码：low_price 异常低价 / low_rating 差评集中 / delivery_timeout 发货超时',
+    `rule_name` VARCHAR(64) NULL COMMENT '规则名称（留痕快照）',
+    `alert_level` VARCHAR(16) NULL COMMENT '等级：high / medium / low',
+    `subject_type` VARCHAR(32) NULL COMMENT '对象类型：product 货源 / merchant 主体 / order 订单',
+    `subject_id` BIGINT NULL COMMENT '对象ID',
+    `subject_name` VARCHAR(160) NULL COMMENT '对象名称（留痕快照）',
+    `title` VARCHAR(128) NULL COMMENT '告警标题',
+    `detail` VARCHAR(500) NULL COMMENT '判定依据（含当时算出的数字，便于复核）',
+    `alert_status` VARCHAR(16) NOT NULL DEFAULT 'new' COMMENT 'new 待处理 / handled 已处理 / ignored 已忽略',
+    `handler` VARCHAR(64) NULL COMMENT '处理人',
+    `handle_time` DATETIME NULL COMMENT '处理时间',
+    `handle_remark` VARCHAR(500) NULL COMMENT '处理备注',
+    `detected_at` DATETIME NULL COMMENT '检出时间',
+    `del_flag` TINYINT(1) DEFAULT 0 COMMENT '删除标记',
+    `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_alert_no` (`alert_no`),
+    KEY `idx_rule_subject` (`rule_code`, `subject_type`, `subject_id`),
+    KEY `idx_alert_status` (`alert_status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='风控告警表';
+
+-- ===========================================================================
+-- 保证金流水
+--
+-- 为什么要这张表：保证金的冻结/解冻/补缴/扣划原先只改账户上的四个金额
+-- （总额/可用/冻结/已用），**不留任何记录**。钱动过而查不到"谁在什么时候因为什么动的"，
+-- 商家来问就只能对着一个净额猜。这里按"每一笔动作留一条"补上，
+-- 并把动作前后的可用与冻结额一并记下来，便于对账。
+-- ===========================================================================
+CREATE TABLE IF NOT EXISTS `agri_trade_guarantee_log` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `guarantee_id` BIGINT NOT NULL COMMENT '保证金账户ID',
+    `guarantee_no` VARCHAR(64) NULL COMMENT '保证金单号（快照）',
+    `merchant_id` BIGINT NULL COMMENT '经营主体ID',
+    `merchant_name` VARCHAR(100) NULL COMMENT '主体名称（快照）',
+    `action` VARCHAR(32) NOT NULL COMMENT '动作：create 开立 / verify 审核 / freeze 冻结 / unfreeze 解冻 / replenish 补缴 / deduct 扣划',
+    `amount` DECIMAL(18,2) NULL COMMENT '本次变动金额',
+    `available_before` DECIMAL(18,2) NULL COMMENT '变动前可用额',
+    `available_after` DECIMAL(18,2) NULL COMMENT '变动后可用额',
+    `frozen_before` DECIMAL(18,2) NULL COMMENT '变动前冻结额',
+    `frozen_after` DECIMAL(18,2) NULL COMMENT '变动后冻结额',
+    `operator` VARCHAR(64) NULL COMMENT '操作人',
+    `reason` VARCHAR(500) NULL COMMENT '原因（冻结/解冻/扣划必须填）',
+    `del_flag` TINYINT(1) DEFAULT 0 COMMENT '删除标记',
+    `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    PRIMARY KEY (`id`),
+    KEY `idx_guarantee_id` (`guarantee_id`),
+    KEY `idx_action` (`action`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='保证金流水表';

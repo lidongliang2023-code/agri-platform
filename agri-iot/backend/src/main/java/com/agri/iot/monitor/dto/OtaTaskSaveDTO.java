@@ -12,3 +12,4 @@ public class OtaTaskSaveDTO {
     private String scheduleTime;
     private String remark;
 }
+

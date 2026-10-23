@@ -38,3 +38,4 @@ public class PushConfigVO {
 
     private String silentEndHour;
 }
+

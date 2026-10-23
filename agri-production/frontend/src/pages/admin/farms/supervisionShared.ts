@@ -182,7 +182,7 @@ export interface SupervisedFarmRow {
   farmCode: string
   /** 农场名称 */
   farmName: string
-  /** 所属租户名称 */
+  /** 所属主体名称 */
   tenantName: string
   /** 省份 */
   province: string

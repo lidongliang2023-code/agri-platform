@@ -4,7 +4,15 @@
 
     <select id="pageQuery" resultType="com.agri.production.entity.Farm">
         SELECT * FROM agri_prod_farm_info
-        WHERE deleted = 0 AND tenant_id = #{tenantId}
+        WHERE deleted = 0
+        <!--
+            tenantId 为空时**不加租户条件**：运营端就是传 null 调这里的
+            （ProductionAdminController 的 /admin/farms），而原先写死
+            "AND tenant_id = #{tenantId}"，null 会变成 tenant_id = NULL —— 恒不成立，
+            于是运营端的农场列表永远是空的（实测 total=0，库里明明有数据）。
+            这个写法与 AlertRecordMapper 既有的 <if test="tenantId != null"> 一致。
+        -->
+        <if test="tenantId != null and tenantId != ''">AND tenant_id = #{tenantId}</if>
         <if test="dto.farmName != null and dto.farmName != ''">
             AND farm_name LIKE CONCAT('%', #{dto.farmName}, '%')
         </if>
@@ -28,7 +36,9 @@
 
     <select id="selectByCode" resultType="com.agri.production.entity.Farm">
         SELECT * FROM agri_prod_farm_info
-        WHERE farm_code = #{farmCode} AND tenant_id = #{tenantId} AND deleted = 0
+        WHERE farm_code = #{farmCode}
+        <if test="tenantId != null and tenantId != ''">AND tenant_id = #{tenantId}</if>
+        AND deleted = 0
     </select>
 
 </mapper>

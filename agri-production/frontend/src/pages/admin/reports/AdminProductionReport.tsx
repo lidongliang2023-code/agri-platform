@@ -7,7 +7,7 @@
  *
  * 交互说明（对照原型 P27）：
  * - 顶部按钮：下载PDF / 导出Excel / 返回报表中心；标题「生产日报 · {统计日期}」；
- * - 多维筛选：统计日期、区域、作物、租户；
+ * - 多维筛选：统计日期、区域、作物、主体；
  * - 指标卡：总产量(吨)、任务完成率、活跃农场、设备在线率；
  * - 图表：各区域产量对比（柱状图）、任务执行分布（饼图）；
  * - 明细表：区域产量明细、任务执行明细，支持导出 Excel(CSV)。
@@ -119,13 +119,13 @@ const CROP_OPTIONS: { value: string; label: string; factor: number }[] = [
 ]
 
 /**
- * 租户选项（factor 作用同上，仅缩放示例常量）。
+ * 主体选项（factor 作用同上，仅缩放示例常量）。
  *
- * ⚠️ 后端 `ReportTaskEntity` 没有 tenantId 字段，所选租户不会传给服务端，
- * 且这里的租户编号不是服务端真实租户数据。
+ * ⚠️ 后端 `ReportTaskEntity` 没有 tenantId 字段，所选主体不会传给服务端，
+ * 且这里的主体编号不是服务端真实主体数据。
  */
 const TENANT_OPTIONS: { value: string; label: string; factor: number }[] = [
-  { value: 'ALL', label: '全部租户', factor: 1 },
+  { value: 'ALL', label: '全部主体', factor: 1 },
   { value: 'T20250001', label: '绿源农业', factor: 0.28 },
   { value: 'T20250002', label: '丰达农场', factor: 0.22 },
   { value: 'T20250003', label: '大地种业', factor: 0.31 },
@@ -309,7 +309,7 @@ export default function AdminProductionReport(): JSX.Element {
 
   /** 统计日期文案 */
   const dateText = filters.date ? filters.date.format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD')
-  const tenantLabel = TENANT_OPTIONS.find((item) => item.value === filters.tenant)?.label ?? '全部租户'
+  const tenantLabel = TENANT_OPTIONS.find((item) => item.value === filters.tenant)?.label ?? '全部主体'
   const cropLabel = CROP_OPTIONS.find((item) => item.value === filters.crop)?.label ?? '全部作物'
   const regionLabel = filters.region === 'ALL' ? '全部区域' : filters.region
 
@@ -420,7 +420,7 @@ export default function AdminProductionReport(): JSX.Element {
               <Typography.Text strong>不代表任何真实业务统计，也不可用于经营决策</Typography.Text>。
             </Typography.Text>
             <Typography.Text>
-              页面顶部的日期 / 区域 / 作物 / 租户筛选<b>只作用于示例统计数据，不会下发到服务端</b>
+              页面顶部的日期 / 区域 / 作物 / 主体筛选<b>只作用于示例统计数据，不会下发到服务端</b>
               （报表任务接口不接受这些入参），因此筛选不会改变上方真实任务列表的内容。
             </Typography.Text>
           </Space>
@@ -450,8 +450,8 @@ export default function AdminProductionReport(): JSX.Element {
           </Form.Item>
           <Form.Item
             name="tenant"
-            label="租户"
-            tooltip="后端报表任务无租户字段，此处仅缩放示例统计数据，不会下发到服务端"
+            label="主体"
+            tooltip="后端报表任务无主体字段，此处仅缩放示例统计数据，不会下发到服务端"
           >
             <Select style={{ width: 160 }} options={TENANT_OPTIONS} />
           </Form.Item>

@@ -38,3 +38,4 @@ public class PushConfigUpdateDTO {
 
     private String silentEndHour;
 }
+

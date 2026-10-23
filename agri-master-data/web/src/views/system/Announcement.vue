@@ -129,7 +129,7 @@ const announcements = ref([])
 const mockAnnouncements = [
   { id: 1, title: '系统升级通知', type: 'maintenance', content: '系统将于2026年5月15日00:00-04:00进行升级维护，期间系统将暂停服务，请提前做好准备。', author: '管理员', publishTime: '2026-05-10 09:00:00', expireTime: '2026-05-16 00:00:00', status: 'published' },
   { id: 2, title: '数据质量检测规则更新', type: 'info', content: '新增身份证号验证规则和邮箱格式验证规则，请相关人员注意查看。', author: '管理员', publishTime: '2026-05-09 14:30:00', expireTime: '', status: 'published' },
-  { id: 3, title: '租户注册流程优化', type: 'info', content: '租户注册流程已优化，新增邮箱验证环节，请租户管理员注意。', author: '管理员', publishTime: '2026-05-08 10:00:00', expireTime: '', status: 'published' },
+  { id: 3, title: '主体注册流程优化', type: 'info', content: '主体注册流程已优化，新增邮箱验证环节，请主体管理员注意。', author: '管理员', publishTime: '2026-05-08 10:00:00', expireTime: '', status: 'published' },
   { id: 4, title: '安全提醒', type: 'warning', content: '近期发现异常登录尝试，请各用户注意账号安全，及时修改密码。', author: '管理员', publishTime: '2026-05-07 16:00:00', expireTime: '', status: 'published' },
   { id: 5, title: '新功能预告', type: 'info', content: '数据质量仪表盘功能即将上线，敬请期待。', author: '管理员', publishTime: '', expireTime: '', status: 'draft' }
 ]

@@ -41,6 +41,9 @@ PW_SRC="core-platform/mod-platform/src/main/java/com/agri/platform/internal/auth
 API_PREFIX="/api/v1/production"
 SHOW_BODY="${SHOW_BODY:-300}"
 PORT_RANGE="${PORT_RANGE:-8091 8099}"
+# 就绪预算（秒）。默认 300：高负载时（本机实测同时跑着十几个 java.exe）
+# core-app 冷启动远超 120s，给少了会超时退出，而超时会被误报成「口令错」。
+READY_TIMEOUT="${READY_TIMEOUT:-300}"
 
 # ---------------------------------------------------------------------------
 # 0. 前置检查
@@ -56,7 +59,9 @@ sleep 3
 JAR_SIZE2=$(wc -c <"$JAR")
 if [ "$JAR_SIZE" != "$JAR_SIZE2" ]; then
   echo "!! jar 体积在 3s 内从 ${JAR_SIZE} 变成 ${JAR_SIZE2}，说明正被并发构建覆盖写入"
-  echo "!! 现在跑出来的任何结论都不可信。请等构建方（当前是 se-harvest2 独占重建）报告完成后再跑。"
+  echo "!! 现在跑出来的任何结论都不可信。"
+  echo "!! 处置：确认没有人在跑 maven 后重试（当前团队纪律：禁止并发 mvn）。"
+  echo "!!       不要空等某个特定的人——构建方随时会换，‘等谁报告’这类文案当天就会过期。"
   exit 1
 fi
 echo "jar: $JAR (${JAR_SIZE} bytes，体积稳定)"
@@ -178,50 +183,115 @@ fi
 LOG="/tmp/probe_ep_${PORT}.log"
 BGPID=""
 
+# ⚠️ trap 必须在「启动 java」之前注册。
+#    曾出过事故：java 起来了、脚本在往后几行炸掉（那时是被人改坏多了一个 }），
+#    而 trap 还排在后面没执行到 → java 成孤儿、端点一个没探。
+#    bash 是在信号发生时才按名字找函数，所以这里可以先注册、函数定义在后面。
+trap cleanup EXIT INT TERM PIPE
+
+# jar 快照：并发 mvn 会原地重写 target/ 与共享仓库里的 jar，直接 java -jar
+# 会在 JVM 运行途中读到被覆盖的字节（实测 30,485 字节残片）。
+# 先 cp 一份到自己的临时目录锁住，全程只对快照操作。
+# （注意：core-app-1.0.0.jar.original 恒为 30,485 字节是 repackage 的正常产物，
+#   跟包好坏无关，别拿它当判据。）
+SNAP=""
+snapshot_jar() {
+  SNAP="/tmp/probe_ep_snap_${PORT}.jar"
+  rm -f "$SNAP" 2>/dev/null
+  cp "$JAR" "$SNAP" 2>/dev/null || { echo "!! jar 快照失败: $JAR"; return 1; }
+  local s
+  s=$(wc -c <"$SNAP" 2>/dev/null)
+  if [ "$s" != "$JAR_SIZE" ]; then
+    echo "!! 快照体积 ${s} 与采样体积 ${JAR_SIZE} 不一致（cp 期间源文件被改写），中止"
+    return 1
+  fi
+  echo "jar 快照: $SNAP (${s} bytes)"
+  return 0
+}
+
 start_app() {
   local pw="$1"
   # 只打印长度，不回显口令
   echo "--- 启动（MySQL 口令来自环境变量，长度 ${#pw}）"
   # 走 SPRING_DATASOURCE_PASSWORD 环境变量而不是 --spring.datasource.password=，
   # 后者会把口令暴露在进程命令行里（tasklist / wmic 能直接看到）。
-  SPRING_DATASOURCE_PASSWORD="$pw" java -jar "$JAR" \
+  SPRING_DATASOURCE_PASSWORD="$pw" java -jar "$SNAP" \
     --server.port="$PORT" \
     --spring.flyway.enabled=false >"$LOG" 2>&1 &
   BGPID=$!
 
   local i code
-  for ((i = 1; i <= 120; i++)); do
+  for ((i = 1; i <= READY_TIMEOUT; i++)); do
+    # 判据 1（主）：本项目启动完成标志。
+    #   ⚠️ 不能 grep 标准的 "Tomcat started on port(s): N (http)" —— 本项目实际
+    #   文案是 "Tomcat started on port N (http)"，没有 (s)。匹配标准版会永远
+    #   等不到，空转到超时，表现成「登录无响应 / TOKEN 长度 0」，极易被误判成
+    #   口令错或端点错（se-ai 卡死就是这条）。
+    if grep -q "Started CorePlatformApplication" "$LOG" 2>/dev/null; then
+      echo "    服务已就绪（${i}s，日志标志 Started CorePlatformApplication）"
+      return 0
+    fi
+    # 判据 2（兜底）：curl 探活。日志文案万一再变也不至于空等满预算。
     code=$(curl -s -o /dev/null -w '%{http_code}' --noproxy '*' -m 3 \
       "http://127.0.0.1:${PORT}/api/v1/auth/login" \
       -X POST -H 'Content-Type: application/json' -d '{}')
     if [ "$code" != "000" ]; then
-      echo "    服务已就绪（${i}s）"
+      echo "    服务已就绪（${i}s，curl 探活 HTTP=${code}）"
       return 0
     fi
-    # 启动期就因数据源失败退出的话，别白等
-    if grep -q "Access denied\|APPLICATION FAILED TO START" "$LOG" 2>/dev/null; then
+    # 真·口令问题：立即失败，不用等满预算
+    if grep -q "Access denied" "$LOG" 2>/dev/null; then
+      echo "    数据源认证失败（日志含 Access denied）——这是口令问题"
+      return 1
+    fi
+    if grep -q "APPLICATION FAILED TO START" "$LOG" 2>/dev/null; then
+      echo "    应用启动失败（日志含 APPLICATION FAILED TO START）"
       return 1
     fi
     sleep 1
   done
+  echo "    启动超时（预算 ${READY_TIMEOUT}s 耗尽）——这不是口令问题"
+  echo "    高负载时 core-app 冷启动实测可超过 120s。调大预算："
+  echo "      READY_TIMEOUT=600 MYSQL_PWD=... bash $0 ..."
   return 1
 }
+
+snapshot_jar || exit 1
 
 STARTED=0
 for pw in "${CANDIDATES[@]}"; do
   if start_app "$pw"; then STARTED=1; break; fi
-  echo "    数据源连不上，换下一个口令"
   [ -n "$BGPID" ] && kill "$BGPID" 2>/dev/null
   sleep 1
 done
 
 if [ "$STARTED" -ne 1 ]; then
-  echo "!! 启动失败，日志尾部:"; tail -20 "$LOG" 2>/dev/null
+  # 超时和口令失败必须分开报。共用一句「数据源连不上」会让人以为口令错了，
+  # 然后去改口令、往脚本里塞候选口令——正好违背「口令一律走环境变量」的纪律。
+  echo "!! 启动失败。判读："
+  if grep -q "Access denied" "$LOG" 2>/dev/null; then
+    echo "   日志含 Access denied  → 是 MySQL 口令问题，确认 MYSQL_PWD 后重试"
+  else
+    echo "   日志无 Access denied  → 不是口令问题，多半是启动超时或应用自身失败"
+    echo "   重试（加大预算）：READY_TIMEOUT=600 MYSQL_PWD=... bash $0 ..."
+  fi
+  echo "   日志尾部:"; tail -20 "$LOG" 2>/dev/null
   exit 1
 fi
 
 # 无论正常结束还是异常退出，只回收本脚本自己起的这个 PID
+CLEANUP_DONE=0
 cleanup() {
+  # 重入保护：cleanup 里的 echo 写向已被关闭的管道会再次触发 SIGPIPE，
+  # 若 trap 里挂了 PIPE 就会无限递归（实测跑飞 10 分钟不退出）。
+  # 有了这个闸门就可以同时挂 PIPE（保证 SIGPIPE 打断时也回收）而不递归。
+  [ "$CLEANUP_DONE" = "1" ] && return 0
+  CLEANUP_DONE=1
+
+  # 快照必须在所有 return 之前删，否则函数提前返回就漏删。
+  # 留着会占 /tmp，且握着 jar 副本不放会加重 Windows 文件锁竞争。
+  rm -f "$SNAP" 2>/dev/null
+
   [ -z "$BGPID" ] && return 0
   kill "$BGPID" 2>/dev/null
   sleep 2
@@ -240,18 +310,17 @@ cleanup() {
   done
   echo "!! 端口 ${PORT} 在 30s 内未释放，可能残留 PID ${BGPID}"
   echo "!! 请先用 tasklist /FI \"PID eq ${BGPID}\" 确认归属再处理，不要凭端口占用直接 kill"
+  return 0
 }
+
 #
-# 为什么是「忽略 PIPE」而不是「trap PIPE」：
-#   实测 `| head -12` 时 head 读满就关管道，脚本写 stdout 触发 SIGPIPE。
-#   方案 A（trap cleanup PIPE）会递归——cleanup 自己 echo 又写向已关闭的管道，
-#   再次触发 SIGPIPE 再进 cleanup，实测直接跑飞 10 分钟不退出。
-#   方案 B（忽略 SIGPIPE）才对：echo 只是返回失败，脚本正常走到结尾，
-#   EXIT trap 必定执行，java 必定被回收。代价是管道下游关闭后脚本会空转跑完。
+# trap 挂 PIPE 是必要的（SIGPIPE 打断时也要回收 java，否则留僵尸进程握着 jar
+# 触发 Windows 文件锁，全队 mvn 报 Unable to rename ... to ...jar.original）。
+# 但必须配上面的 CLEANUP_DONE 重入闸门：cleanup 自己 echo 到已关闭的管道会
+# 再次触发 SIGPIPE，无闸门时直接无限递归（实测跑飞 10 分钟不退出）。
 #
+# 注册点在「启动 java」之前（见第 4 节开头），这里不再重复注册。
 # 仍然建议：直接跑，或重定向到文件，别管道给 head/less。
-trap '' PIPE
-trap cleanup EXIT INT TERM
 
 # ---------------------------------------------------------------------------
 # 5. 登录 —— token 字段名是 accessToken，不是 token
@@ -260,13 +329,17 @@ trap cleanup EXIT INT TERM
 # 「服务已就绪」之后登录仍可能因为 -m 10 超时拿到空响应，
 # 空响应会被误判成「token 字段名写错」，把人引到错误的排查方向。
 LOGIN=""
+LOGIN_HTTP=""
 for i in 1 2 3; do
-  LOGIN=$(curl -s --noproxy '*' -m 25 -X POST \
+  # -w 参数不能以 @ 开头，否则会被当成「从文件读取格式」而静默失败
+  RAW_LOGIN=$(curl -s --noproxy '*' -m 25 -w $'\n__HTTP__%{http_code}' -X POST \
     "http://127.0.0.1:${PORT}/api/v1/auth/login" \
     -H 'Content-Type: application/json' \
     -d "{\"username\":\"admin\",\"password\":\"${ADMIN_PW}\"}")
+  LOGIN_HTTP=$(echo "$RAW_LOGIN" | grep -o '__HTTP__[0-9]*' | sed 's/.*__HTTP__//')
+  LOGIN=$(echo "$RAW_LOGIN" | sed 's/__HTTP__[0-9]*$//')
   [ -n "$LOGIN" ] && break
-  echo "    登录无响应（第 ${i} 次），等待重试"
+  echo "    登录无响应（第 ${i} 次，HTTP=${LOGIN_HTTP:-空}），等待重试"
   sleep 5
 done
 
@@ -274,7 +347,17 @@ TOKEN=$(echo "$LOGIN" | grep -o '"accessToken":"[^"]*"' | cut -d'"' -f4)
 
 # 自检：静默拿着空 token 往下跑会得出一堆假 401
 if [ "${#TOKEN}" -lt 100 ]; then
-  echo "!! TOKEN 未取到（长度 ${#TOKEN}），终止。登录响应: ${LOGIN:0:200}"
+  # 失败可读性：把 HTTP 状态码与响应体原文打印出来，
+  # 让下一个卡住的人一眼区分「端口没起 / 口令错 / 端点路径错」，
+  # 而不是像以前那样只看到一个空的登录响应、无从下手。
+  echo "!! TOKEN 未取到（长度 ${#TOKEN}），终止"
+  echo "   HTTP 状态码        : ${LOGIN_HTTP:-（无响应）}"
+  echo "   登录响应体(前300字) : ${LOGIN:0:300}"
+  echo "   管理员口令长度      : ${#ADMIN_PW}（不回显内容）"
+  echo "   登录端点            : http://127.0.0.1:${PORT}/api/v1/auth/login"
+  echo "   判读提示            : 本项目 GlobalExceptionHandler 的 catch-all 无 @ResponseStatus，"
+  echo "                         HTTP 恒为 200，成败只能看返回体里的 code 字段。"
+  echo "                         端点须为 /api/v1/auth/login（不是 /api/v1/platform/auth/login）。"
   tail -20 "$LOG" 2>/dev/null
   exit 1
 fi
@@ -284,8 +367,8 @@ echo "TOKEN_LEN=${#TOKEN} ✓"
 # 6. 逐个探测
 # ---------------------------------------------------------------------------
 echo
-printf "%-52s %-6s %-8s %s\n" "端点" "HTTP" "业务码" "返回体预览"
-printf '%s\n' "------------------------------------------------------------------------------------------------"
+printf "%-52s %-6s %-8s %-26s %s\n" "端点" "HTTP" "业务码" "初判" "返回体预览"
+printf '%s\n' "----------------------------------------------------------------------------------------------------------------"
 
 for ep in "${EPS[@]}"; do
   # 注意：curl 的 -w 参数不能以 @ 开头，否则会被当成「从文件读取格式」而静默失败
@@ -301,7 +384,24 @@ for ep in "${EPS[@]}"; do
   [ -z "$BIZ_CODE" ] && BIZ_CODE="-"
   PREVIEW=$(echo "$BODY" | tr -d '\n' | head -c "$SHOW_BODY")
 
-  printf "%-52s %-6s %-8s %s\n" "$ep" "$HTTP_CODE" "$BIZ_CODE" "$PREVIEW"
+  # 初判只覆盖「删兜底三条件」里的第①条：端点存在且返回真行。
+  # 第②条键名、第③条形状必须人工比对，脚本给不了 —— 所以业务码 0 一律标
+  # 「P3候选」而不是「可删」。标成「可删」会让人照着脚本输出直接删兜底，
+  # 得到静默空白或空壳行，比留着兜底更难发现。
+  case "$BIZ_CODE" in
+    0)
+      if echo "$BODY" | grep -q '"data":null\|"data":\[\]\|"data":""'; then
+        VERDICT="P0(条件①未过:无数据)"
+      else
+        VERDICT="P3候选(待验键名/形状)"
+      fi
+      ;;
+    404) VERDICT="P0(条件①未过:端点不存在)" ;;
+    500) VERDICT="P0(条件①未过:端点报错)" ;;
+    *) VERDICT="-" ;;
+  esac
+
+  printf "%-52s %-6s %-8s %-26s %s\n" "$ep" "$HTTP_CODE" "$BIZ_CODE" "$VERDICT" "$PREVIEW"
 done
 
 # ---------------------------------------------------------------------------
@@ -312,10 +412,19 @@ cat <<'NOTE'
 =============================================================================
 判读口径（本项目 utils/request.ts：code !== 0 时 reject）
 -----------------------------------------------------------------------------
-  业务码 0 且 data 非空  → 端点有数据，页面上的示例数据是死代码，可删
-  业务码 500            → 前端 catch → 落入 mock 兜底 → 用户正在看假数据（P0）
-  业务码 404            → 端点不存在 → 同上（P0），且补端点前要确认底层有没有数据源
-  HTTP 非 200           → 网络/路由层问题，与业务码分开看
+  本项目的 HTTP 恒为 200（catch-all 无 @ResponseStatus），
+  成败只能看返回体里的 code：0 成功 / 404 记录不存在 / 500 端点不存在或真异常。
+
+  删兜底必须三条同时满足（脚本只负责验第①条）：
+    ① 端点存在且返回真行   ← 「初判」列：P3候选 = 这条过了
+    ② 键名对得上           ← 后端 Entity 字段 vs 前端 type 字段，人工比对
+    ③ 形状对得上           ← 前端按 PageResult 解构的，后端就得返回 PageResult，
+                              不能是裸 List（实测 /admin/approvals/config、
+                              /admin/reports/quality、/analytics/reports 都是裸数组）
+
+  只凭①就删兜底，会得到两种比保留兜底更难发现的结果：
+    - 静默空白：形状不对，list/total 全 undefined → 空表
+    - 空壳行  ：键名不对，行能渲染但关键列全空，只剩 ID 和类型
 
 ⚠️ 最重要的一条陷阱
 -----------------------------------------------------------------------------

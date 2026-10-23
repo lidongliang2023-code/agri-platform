@@ -5,7 +5,7 @@
  * PRD 序号：PRD 6.1 #17（TASK-03 任务模板库）
  *
  * 2026-10-16 从**用户端**搬到运营端（产品口径）：模板是"标准作业配置"，
- * 由平台运营维护、租户使用 —— 用户端只在「新建任务」的模板下拉里用，没有维护入口。
+ * 由平台运营维护、主体使用 —— 用户端只在「新建任务」的模板下拉里用，没有维护入口。
  * 接口不变（仍在生产域 /api/v1/production/tasks/templates），页面只是换了个端的壳。
  *
  * 原型无此页，按 PRD 设计：
@@ -170,7 +170,7 @@ export default function TaskTemplates(): JSX.Element {
       dataIndex: 'isSystem',
       width: 100,
       render: (_, record) =>
-        record.isSystem ? <Tag color="purple">系统内置</Tag> : <Tag>租户自建</Tag>,
+        record.isSystem ? <Tag color="purple">系统内置</Tag> : <Tag>主体自建</Tag>,
     },
     {
       title: '状态',

@@ -61,7 +61,7 @@ public class AlertInfoService {
                 new LambdaQueryWrapper<AlertInfoEntity>()
                         .eq(farmId != null && !farmId.isBlank(), AlertInfoEntity::getFarmId, farmId)
                         .like(keyword != null && !keyword.isBlank(), AlertInfoEntity::getAlertTitle, keyword)
-                        .eq(alertLevel != null, AlertInfoEntity::getAlertLevel, AlertDict.levelOf(alertLevel))
+                        .in(alertLevel != null, AlertInfoEntity::getAlertLevel, AlertDict.levelValuesOf(alertLevel))
                         .eq(alertSource != null, AlertInfoEntity::getAlertSource, alertSource)
                         .eq(status != null, AlertInfoEntity::getStatus, AlertDict.statusOf(status))
                         .ge(from != null, AlertInfoEntity::getAlertTime, from)
@@ -221,7 +221,7 @@ public class AlertInfoService {
         for (int code = 1; code <= 4; code++) {
             long n = alertInfoMapper.selectCount(new LambdaQueryWrapper<AlertInfoEntity>()
                     .eq(farmId != null && !farmId.isBlank(), AlertInfoEntity::getFarmId, farmId)
-                    .eq(AlertInfoEntity::getAlertLevel, AlertDict.levelOf(code)));
+                    .in(AlertInfoEntity::getAlertLevel, AlertDict.levelValuesOf(code)));
             levelCounts.add(new AlertStatsVO.LevelCount(code, n));
         }
         vo.setLevelCounts(levelCounts);

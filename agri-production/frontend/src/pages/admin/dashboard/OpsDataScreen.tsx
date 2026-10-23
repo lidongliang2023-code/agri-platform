@@ -498,7 +498,7 @@ export default function OpsDataScreen(): JSX.Element {
         </div>
       </div>
 
-      {/* 底部：趋势 + 作物结构 + TOP 租户 */}
+      {/* 底部：趋势 + 作物结构 + TOP 主体 */}
       <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr', gap: 12 }}>
         <div style={panelStyle}>
           <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6, color: SCREEN_THEME.text }}>

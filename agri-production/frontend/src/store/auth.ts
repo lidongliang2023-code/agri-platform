@@ -54,11 +54,11 @@ export interface AuthUser {
   avatar?: string
   /** 手机号 */
   phone?: string
-  /** 所属租户 ID */
+  /** 所属主体 ID */
   tenantId: string
-  /** 租户名称 */
+  /** 主体名称 */
   tenantName?: string
-  /** 用户类型：1 平台运营 2 租户管理员 3 普通成员 */
+  /** 用户类型：1 平台运营 2 主体管理员 3 普通成员 */
   userType: 1 | 2 | 3
 }
 

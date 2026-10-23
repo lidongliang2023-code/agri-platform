@@ -11,3 +11,4 @@ public class GatewayQueryDTO {
     private Integer pageNum;
     private Integer pageSize;
 }
+

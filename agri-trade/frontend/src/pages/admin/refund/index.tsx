@@ -139,7 +139,12 @@ export default function AdminRefund() {
               title: '退款类型',
               dataIndex: 'refundType',
               width: 100,
-              render: (val: string) => (val === 'full' ? '全额' : val === 'partial' ? '部分' : val ?? '—')
+              render: (val: string) => ({
+                full: '全额退款',
+                partial: '部分退款',
+                refund_only: '仅退款',
+                return_refund: '退货退款',
+              } as Record<string, string>)[val] ?? val ?? '—'
             },
             { title: '退款金额', dataIndex: 'refundAmount', width: 120, render: (val: number) => `¥${val}` },
             {

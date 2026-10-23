@@ -11,3 +11,4 @@ public interface OtaTaskMapper extends BaseMapper<OtaTask> {
     IPage<OtaTaskVO> selectPageList(Page<?> page, @Param("dto") OtaTaskVO dto);
     OtaTaskVO selectDetailById(@Param("id") Long id);
 }
+

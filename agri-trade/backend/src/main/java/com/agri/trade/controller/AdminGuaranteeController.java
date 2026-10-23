@@ -83,15 +83,9 @@ public class AdminGuaranteeController {
         if ("rejected".equals(status) && (params.get("remark") == null || params.get("remark").isEmpty())) {
             return ApiResponse.error("驳回必须填写原因");
         }
-        guarantee.setGuaranteeStatus(status);
-        guarantee.setVerifyTime(new Date());
-        guarantee.setVerifiedBy(SecurityUtils.getUsername());
-        if (params.get("remark") != null) {
-            guarantee.setRemark(params.get("remark"));
-        }
-        guarantee.setUpdateTime(new Date());
-        guaranteeMapper.updateById(guarantee);
-        return ApiResponse.success(true);
+        boolean updated = guaranteeService.verifyGuarantee(id, status, SecurityUtils.getUsername(),
+                params.get("remark"));
+        return updated ? ApiResponse.success(true) : ApiResponse.error("审核失败");
     }
 
     /** 冻结保证金（风控动作）。必须给原因。 */

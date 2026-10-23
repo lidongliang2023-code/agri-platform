@@ -19,3 +19,4 @@ public class FirmwareSaveDTO {
     private Integer isActive;
     private String remark;
 }
+

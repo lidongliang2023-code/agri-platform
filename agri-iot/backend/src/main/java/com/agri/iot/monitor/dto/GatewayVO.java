@@ -23,3 +23,4 @@ public class GatewayVO {
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 }
+

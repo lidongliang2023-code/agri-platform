@@ -100,7 +100,7 @@ interface RegionStatItem {
   farmCount: number
   /** 在田面积（亩） */
   fieldArea: number
-  /** 活跃租户数 */
+  /** 活跃主体数 */
   tenantCount: number
   /** 活跃度分层 */
   activityLevel: 'high' | 'middle' | 'low'
@@ -220,7 +220,7 @@ export default function OpsDashboard(): JSX.Element {
     retry: false,
   })
 
-  /** 租户概览（/admin/tenants/overview，提供真实租户数） */
+  /** 主体概览（/admin/tenants/overview，提供真实主体数） */
   const overviewQuery = useQuery({
     queryKey: ['admin', 'tenants', 'overview'],
     queryFn: () => getTenantOverview(),
@@ -301,7 +301,7 @@ export default function OpsDashboard(): JSX.Element {
     return [
       {
         key: 'activeTenants',
-        title: '活跃租户',
+        title: '活跃主体',
         value: overview ? Number(overview.activeTenantCount) : null,
         suffix: '家',
         precision: 0,
@@ -443,7 +443,7 @@ export default function OpsDashboard(): JSX.Element {
       blocks.push('KPI 汇总（GET /admin/dashboard/overview 不可用）')
     }
     if (overviewQuery.isError) {
-      blocks.push('租户概览（GET /admin/tenants/overview 不可用）')
+      blocks.push('主体概览（GET /admin/tenants/overview 不可用）')
     }
     if (rankQuery.isError) {
       blocks.push('种植面积排行（GET /admin/dashboard/rank 不可用）')
@@ -744,7 +744,7 @@ export default function OpsDashboard(): JSX.Element {
                             <Text strong>{item.region}</Text>
                             <div>
                               <Text type="secondary" style={{ fontSize: 12 }}>
-                                农场 {item.farmCount} · 租户 {item.tenantCount}
+                                农场 {item.farmCount} · 主体 {item.tenantCount}
                               </Text>
                             </div>
                           </Col>

@@ -22,3 +22,4 @@ public class DeviceGroupUpdateDTO {
 
     private Boolean allowControl;
 }
+

@@ -10,6 +10,7 @@ import DemandDetail from '@/pages/demand/detail'
 import BuyerCenter from '@/pages/member-center/BuyerCenter'
 import SellerCenter from '@/pages/member-center/SellerCenter'
 import TradeHall from '@/pages/hall'
+import MobileTrade from '@/pages/mobile-trade'
 import SsoCallback from '@/pages/sso/callback'
 import AdminLayout from '@/pages/admin/layout'
 import AdminDashboard from '@/pages/admin/dashboard'
@@ -17,6 +18,7 @@ import AdminProductAudit from '@/pages/admin/product'
 import AdminOrderOversight from '@/pages/admin/order'
 import AdminDispute from '@/pages/admin/dispute'
 import AdminRefund from '@/pages/admin/refund'
+import AdminInvoice from '@/pages/admin/invoice'
 import AdminCompensation from '@/pages/admin/compensation'
 import AdminBindings from '@/pages/admin/bindings'
 import AdminSettlement from '@/pages/admin/settlement'
@@ -75,6 +77,11 @@ function ProductPublishRedirect(): JSX.Element {
   return <Navigate to={`/member/seller?${query.toString()}`} replace />
 }
 
+function RootEntry(): JSX.Element {
+  const mobile = window.matchMedia('(max-width: 768px)').matches
+  return <Navigate to={mobile ? '/mobile/trade' : '/member/buyer'} replace />
+}
+
 function AppRouter() {
   return (
     <Routes>
@@ -96,6 +103,7 @@ function AppRouter() {
         <Route path="order" element={<AdminOrderOversight />} />
         <Route path="dispute" element={<AdminDispute />} />
         <Route path="refund" element={<AdminRefund />} />
+        <Route path="invoice" element={<AdminInvoice />} />
         <Route path="compensation" element={<AdminCompensation />} />
         <Route path="bindings" element={<AdminBindings />} />
         <Route path="settlement" element={<AdminSettlement />} />
@@ -113,6 +121,9 @@ function AppRouter() {
       </Route>
       {/* 交易端只剩买家中心 / 卖家中心；没有全局后台菜单与首页 */}
       <Route path="/hall" element={<TradeHall />} />
+      <Route path="/mobile/trade" element={<MobileTrade />} />
+      <Route path="/mobile" element={<Navigate to="/mobile/trade" replace />} />
+      <Route path="/m" element={<Navigate to="/mobile/trade" replace />} />
       <Route path="/member/buyer" element={<PrivateRoute><BuyerCenter /></PrivateRoute>} />
       <Route path="/member/seller" element={<PrivateRoute><SellerCenter /></PrivateRoute>} />
 
@@ -144,7 +155,7 @@ function AppRouter() {
       <Route path="/my-identity" element={<PortalAccountRedirect />} />
       <Route path="/mine" element={<Navigate to="/member/buyer" replace />} />
 
-      <Route path="/" element={<Navigate to="/member/buyer" replace />} />
+      <Route path="/" element={<RootEntry />} />
       <Route path="*" element={<Navigate to="/member/buyer" replace />} />
     </Routes>
   )

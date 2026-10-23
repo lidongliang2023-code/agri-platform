@@ -22,3 +22,4 @@ public interface IReportService {
 
     Object getData(Long id, String startTime, String endTime);
 }
+

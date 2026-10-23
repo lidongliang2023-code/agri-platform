@@ -6,6 +6,8 @@ import com.agri.trade.entity.Demand;
 import com.agri.trade.entity.TradeProduct;
 import com.agri.trade.entity.TradeOrder;
 import com.agri.trade.entity.OrderItem;
+import com.agri.trade.entity.Contract;
+import com.agri.trade.mapper.ContractMapper;
 import com.agri.trade.mapper.InquiryMapper;
 import com.agri.trade.mapper.QuoteMapper;
 import com.agri.trade.mapper.DemandMapper;
@@ -33,6 +35,7 @@ public class InquiryServiceImpl extends ServiceImpl<InquiryMapper, Inquiry> impl
     private final QuoteMapper quoteMapper;
     private final TradeOrderMapper orderMapper;
     private final OrderItemMapper orderItemMapper;
+    private final ContractMapper contractMapper;
 
     @Override
     public Inquiry createInquiry(Long demandId, Long productId, java.util.Collection<Long> buyerScopeMerchantIds) {
@@ -202,6 +205,8 @@ public class InquiryServiceImpl extends ServiceImpl<InquiryMapper, Inquiry> impl
         order.setBuyerName(inquiry.getBuyerName());
         order.setSellerId(inquiry.getSellerId());
         order.setSellerName(inquiry.getSellerName());
+        order.setProductName(quote.getProductName());
+        order.setTotalQuantity(quote.getQuantity());
         order.setCategoryId(inquiry.getCategoryId());
         order.setCategoryName(inquiry.getCategoryName());
         // 金额一律按 0 兜底：运费/优惠在库里都允许为 NULL，直接参与运算会空指针
@@ -263,5 +268,48 @@ public class InquiryServiceImpl extends ServiceImpl<InquiryMapper, Inquiry> impl
         quote.setResponseTime(new Date());
         quote.setUpdateTime(new Date());
         quoteMapper.updateById(quote);
+
+        Demand demand = inquiry.getDemandId() == null ? null : demandMapper.selectById(inquiry.getDemandId());
+        if (demand != null) {
+            demand.setDemandStatus("completed");
+            demand.setUpdateTime(new Date());
+            demandMapper.updateById(demand);
+        }
+        ensureContract(order);
+    }
+
+    /** 报价成单后生成待签合同；同一订单已有合同时复用。 */
+    private void ensureContract(TradeOrder order) {
+        Contract existing = contractMapper.selectOne(new LambdaQueryWrapper<Contract>()
+                .eq(Contract::getOrderId, order.getId())
+                .eq(Contract::getDelFlag, 0)
+                .last("LIMIT 1"));
+        if (existing != null) return;
+
+        Date now = new Date();
+        Contract contract = new Contract();
+        contract.setContractNo("CO" + System.currentTimeMillis());
+        contract.setContractName((order.getProductName() == null ? "农产品" : order.getProductName()) + "采购合同");
+        contract.setContractType("sale");
+        contract.setOrderId(order.getId());
+        contract.setOrderNo(order.getOrderNo());
+        contract.setBuyerId(order.getBuyerId());
+        contract.setBuyerName(order.getBuyerName());
+        contract.setSellerId(order.getSellerId());
+        contract.setSellerName(order.getSellerName());
+        contract.setContractAmount(order.getTotalAmount());
+        contract.setDeliveryDate(order.getDeliveryDeadline());
+        contract.setDeliveryAddress(order.getDeliveryAddress());
+        contract.setContractContent("由询价报价成交自动生成。订单 " + order.getOrderNo()
+                + "，成交金额 " + order.getTotalAmount() + " 元。");
+        contract.setContractStatus("draft");
+        contract.setBuyerSignStatus("pending");
+        contract.setSellerSignStatus("pending");
+        contract.setArchiveStatus("pending");
+        contract.setChainStatus("pending");
+        contract.setDelFlag(0);
+        contract.setCreateTime(now);
+        contract.setUpdateTime(now);
+        contractMapper.insert(contract);
     }
 }

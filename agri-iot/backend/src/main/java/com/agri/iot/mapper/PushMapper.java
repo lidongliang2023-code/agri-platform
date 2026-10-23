@@ -26,3 +26,4 @@ public interface PushMapper {
 
     void markAllRead(@Param("userId") String userId);
 }
+

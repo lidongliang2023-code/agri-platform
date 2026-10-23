@@ -4,7 +4,9 @@
 
     <select id="pageQuery" resultType="com.agri.production.entity.TraceCode">
         SELECT t.* FROM agri_prod_trace_code t
-        WHERE t.deleted = 0 AND t.tenant_id = #{tenantId}
+        WHERE t.deleted = 0
+        <!-- 运营端传 null 时不做租户过滤（同 FarmMapper 的说明） -->
+        <if test="tenantId != null and tenantId != ''">AND t.tenant_id = #{tenantId}</if>
         <if test="dto.traceCode != null and dto.traceCode != ''">
             AND t.trace_code LIKE CONCAT('%', #{dto.traceCode}, '%')
         </if>
@@ -30,7 +32,9 @@
 
     <select id="selectByHarvestId" resultType="com.agri.production.entity.TraceCode">
         SELECT * FROM agri_prod_trace_code
-        WHERE harvest_id = #{harvestId} AND tenant_id = #{tenantId} AND deleted = 0
+        WHERE harvest_id = #{harvestId}
+        <if test="tenantId != null and tenantId != ''">AND tenant_id = #{tenantId}</if>
+        AND deleted = 0
         ORDER BY create_time DESC
     </select>
 

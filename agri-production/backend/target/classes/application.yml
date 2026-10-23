@@ -6,6 +6,10 @@ spring:
     name: agri-production
   profiles:
     active: dev
+  data:
+    redis:
+      host: localhost
+      port: 6379
 
 mybatis-plus:
   configuration:
@@ -21,3 +25,50 @@ mybatis-plus:
 logging:
   level:
     com.agri.production: debug
+
+# 运营端准入（平台 RBAC，V2.0 第 5.5 节）—— 组件来自 agri-common 的 com.agri.common.rbac，
+# 这里只声明"本服务的运营接口在哪、要什么权限码"。
+#
+# 注意：本服务原先不依赖 agri-common，这一步一并把依赖补上了（见 pom.xml）；
+# 运行时生效与否要看 operator-paths 配没配 —— 组件没配路径时装配会打 WARN，不会静默失效。
+platform:
+  rbac:
+    operator-paths:
+      - /api/v1/production/admin/**
+      - /api/production/admin/**
+    # 权限码刻意用 production:* 而不是已有的 produce:*：
+    # platform_role 里 FARMER 角色**也持有 produce:read/produce:write**（那是"生产数据"的权限，
+    # 农户本来就该有）。运营端如果用 produce:*，等于每个农户账号都能进生产管理运营端。
+    # 两个码字面相近、后果相反，这里写清楚免得下一个人想当然合并。
+    read-permission: production:read
+    write-permission: production:write
+    # 这个服务**没有自己的认证层**（全模块搜不到 OncePerRequestFilter / addInterceptors /
+    # sa-token 的任何用法），实测不带令牌调 /api/v1/production/admin/farms 返回 200。
+    # 所以必须在这里要求令牌，否则运营端接口对匿名请求敞开。
+    require-auth: true
+
+services:
+  platform:
+    url: http://localhost:8093
+
+# 领域事件投递（outbox 中继）—— 契约与平台 core-infra 的 outbox 一致：
+# NEW →（投递成功）SENT；失败指数退避重试，次数用尽转 DEAD（可用运营端 /admin/events 重放）。
+#
+# ⚠️ 目前**平台侧还没有 prod.* 的消费者**（实测 8093：POST /internal/events/prod.batch.harvested
+#    返回 {"code":404,"message":"资源不存在"} —— 入口在，监听器没有）。中继因此按
+#    **fail-closed** 处理：只有接收端明确 code=0 才置 SENT，code=404 会如实记在 last_error 上、
+#    并最终停在 DEAD。这样"没人接"是看得见的，而不是被记成"已投递"。
+#    消费端就位后：改 transport/关闭态都不需要，重放即可（POST /api/v1/production/admin/events/{id}/replay）。
+#
+# 关闭态写法：transport: none（此时中继一行都不投，状态也不动）。
+agri:
+  event:
+    transport: http
+    outbox:
+      relay-interval-ms: 5000
+      batch-size: 50
+      max-retry: 3
+      backoff-base-seconds: 30
+    http:
+      targets: http://localhost:8093
+      internal-token: ${AGRI_INTERNAL_TOKEN:dev-internal-token}

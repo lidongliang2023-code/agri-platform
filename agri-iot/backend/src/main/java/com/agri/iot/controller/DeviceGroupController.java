@@ -1,7 +1,7 @@
 
 package com.agri.iot.controller;
 
-import com.agri.common.entity.ApiResponse;
+import com.agri.common.result.ApiResponse;
 import com.agri.iot.dto.DeviceGroupSaveDTO;
 import com.agri.iot.dto.DeviceGroupUpdateDTO;
 import com.agri.iot.service.IDeviceGroupService;
@@ -65,3 +65,4 @@ public class DeviceGroupController {
         return ApiResponse.success();
     }
 }
+

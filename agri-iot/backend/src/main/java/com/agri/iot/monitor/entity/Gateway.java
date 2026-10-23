@@ -46,3 +46,4 @@ public class Gateway {
     @TableLogic
     private Integer deleted;
 }
+

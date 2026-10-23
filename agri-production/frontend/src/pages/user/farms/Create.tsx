@@ -6,7 +6,7 @@
  *
  * 还原要点（对照原型 P3）：
  * - 头部 `< 返回农场列表` ／ 新增农场
- * - 分节「农场基本信息」：农场名称（2-50 字符，租户内唯一校验）、农场类型（radio 六项，默认蔬菜种植）、
+ * - 分节「农场基本信息」：农场名称（2-50 字符，主体内唯一校验）、农场类型（radio 六项，默认蔬菜种植）、
  *   省/市/区三级联动、详细地址、面积（亩）、海拔（米）、负责人、联系电话、农场简介（500 字计数）
  * - 分节「资质信息（可选）」：无公害农产品 / 有机认证 / 绿色食品认证 / 地理标志认证 / GAP 认证（多选）
  * + 证书附件上传区：JPG、PNG、PDF，单个文件 ≤10MB，已选文件可预览与删除
@@ -485,7 +485,7 @@ export default function Create(): JSX.Element {
             <Form.Item
               name="farmName"
               label="农场名称"
-              extra="2-50 个字符，同一租户内唯一"
+              extra="2-50 个字符，同一主体内唯一"
               rules={[
                 { required: true, message: '请输入农场名称' },
                 { min: 2, max: 50, message: '农场名称需为 2-50 个字符' },
@@ -499,7 +499,7 @@ export default function Create(): JSX.Element {
                         (farm) => farm.farmName === value,
                       )
                       if (duplicated) {
-                        throw new Error('农场名称在当前租户内已存在，请更换')
+                        throw new Error('农场名称在当前主体内已存在，请更换')
                       }
                     } catch (error) {
                       // 校验接口不可用时放行，避免阻塞用户提交
@@ -511,7 +511,7 @@ export default function Create(): JSX.Element {
                 },
               ]}
             >
-              <Input placeholder="请输入农场名称（同租户内唯一）" style={{ maxWidth: 480 }} />
+              <Input placeholder="请输入农场名称（同主体内唯一）" style={{ maxWidth: 480 }} />
             </Form.Item>
 
             <Form.Item name="farmTypeLabel" label="农场类型" rules={[{ required: true, message: '请选择农场类型' }]}>

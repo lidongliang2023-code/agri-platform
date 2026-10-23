@@ -3,7 +3,7 @@ package com.agri.iot.service.impl;
 
 import com.agri.common.exception.BusinessException;
 import com.agri.common.security.SecurityUtils;
-import com.agri.common.util.BeanCopyUtils;
+import com.agri.common.utils.BeanCopyUtils;
 import com.agri.iot.dto.ReportSaveDTO;
 import com.agri.iot.entity.Report;
 import com.agri.iot.mapper.ReportMapper;
@@ -112,3 +112,4 @@ public class ReportServiceImpl implements IReportService {
         return null;
     }
 }
+

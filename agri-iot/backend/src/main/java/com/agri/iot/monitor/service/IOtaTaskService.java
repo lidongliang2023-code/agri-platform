@@ -14,3 +14,4 @@ public interface IOtaTaskService {
     Result<Void> execute(Long id);
     Result<Void> cancel(Long id);
 }
+

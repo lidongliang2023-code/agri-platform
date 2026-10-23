@@ -62,8 +62,8 @@ try {
   check(menu.some((item) => item.text === '发布新商品' && item.active),
     '卖家中心包含并选中发布新商品菜单')
   const text = await page.evaluate(() => document.body.innerText)
-  check(text.includes('上架新商品') && text.includes('基础信息')
-    && text.includes('价格与库存') && text.includes('商品图片（首张为主图）'),
+  check(text.includes('发布新商品') && text.includes('基础信息')
+    && text.includes('价格与库存') && text.includes('商品图片'),
   '独立菜单内加载完整商品发布功能')
   check((await page.$$eval('.product-create-page input', (items) => items.length)) > 5,
     '商品发布表单字段完整渲染')

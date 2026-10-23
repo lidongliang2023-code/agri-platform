@@ -74,3 +74,4 @@ public class GatewayServiceImpl extends ServiceImpl<GatewayMapper, Gateway> impl
         return Result.success();
     }
 }
+

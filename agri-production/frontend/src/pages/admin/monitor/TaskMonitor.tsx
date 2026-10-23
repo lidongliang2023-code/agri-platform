@@ -42,10 +42,13 @@ import { TASK_TYPE_LABEL_MAP } from '@/types'
 import type { Task } from '@/types'
 import {
   isTaskDone,
+  isTaskExecuting,
   isTaskOverdue,
   OVERDUE_DERIVED_NOTICE,
+  TASK_STATUS_COMPLETED,
   TASK_STATUS_DOING,
   TASK_STATUS_DONE,
+  TASK_STATUS_EXECUTING,
 } from '@/types/task'
 
 const { Text, Title } = Typography
@@ -56,13 +59,13 @@ const GANTT_START_HOUR = 6
 const GANTT_END_HOUR = 18
 
 /**
- * 说明：本页**已移除「租户」筛选**。
+ * 说明：本页**已移除「主体」筛选**。
  *
  * 后端 TaskInfoEntity 没有 farmId / farmName / tenantId 字段（/tasks 只返回
  * taskId / taskNo / plotId / taskType / taskName / 计划时间 / assigneeId / status 等），
- * 原先「租户 → 农场名称关键字」的客户端过滤读的是后端根本不返回的 item.farmName，
+ * 原先「主体 → 农场名称关键字」的客户端过滤读的是后端根本不返回的 item.farmName，
  * 结果必然筛出 0 行——列表空了，页面却把空态归因成「后端未返回数据」，属于静默空白 + 归因说谎。
- * 按「后端没有 → 不展示 / 显示未接入」的纪律，整个租户筛选链路（选项、状态、下拉、过滤）一并移除。
+ * 按「后端没有 → 不展示 / 显示未接入」的纪律，整个主体筛选链路（选项、状态、下拉、过滤）一并移除。
  */
 
 /** 任务类型下拉选项（原型：全部/施肥/灌溉/巡田/喷药） */
@@ -79,20 +82,45 @@ const TASK_TYPE_OPTIONS: Array<{ value: string; label: string }> = [
 /**
  * 状态下拉选项。
  *
- * 取值必须是后端真值：后端任务状态只有 `pending / assigned / doing / done / rejected`
- * （实测 `GET /tasks` 14 条，`TaskInfoService.java:103/122` 写入 `assigned` / `done` / `rejected`）。
- * 旧版的 `accepted` / `executing` 后端不存在，传过去恒返回 0 条。
+ * 只展示 PRD 标准词表，避免同一业务状态出现 `executing/已完成` 与 `doing/done` 两份重复选项。
+ * 后端兼容层会把标准值映射到迁移前旧值，列表与统计同时认两套词。
  * `overdue` 后端不存储，只能本地按 `planEndDate` 推导，**不能作为 status 传给后端**。
  */
 const STATUS_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'all', label: '全部' },
-  { value: TASK_STATUS_DONE, label: '已完成' },
-  { value: TASK_STATUS_DOING, label: '进行中' },
+  { value: TASK_STATUS_COMPLETED, label: '已完成' },
+  { value: TASK_STATUS_EXECUTING, label: '进行中' },
   { value: 'overdue', label: '超时（本地推导，非后端状态）' },
 ]
 
-/** 可作为参数传给后端 `status` 的状态（overdue 不在其中） */
-const SERVER_STATUS_VALUES: readonly string[] = ['all', TASK_STATUS_DONE, TASK_STATUS_DOING]
+/**
+ * 后端当前仍接受的「旧词」状态白名单。
+ *
+ * 口径与后端 `TaskStatus#monitorKeys()` 一致
+ * （`pending / assigned / doing / done / rejected`）——迁移窗口内库内与接口还是旧词，
+ * 后端也尚未完成新词入参的前向兼容，因此只放旧词。
+ *
+ * 用途：{@link toServerStatus} 仅把后端认得的词下压为 `status` 入参；其余值
+ * （本地派生值 `overdue`、以及后端暂不认的值）一律返回 undefined（不带该筛选），
+ * 否则会给后端塞一个它不认识的状态，静默查出 0 行却看不出错。
+ */
+const SERVER_STATUS_VALUES: readonly string[] = ['pending', 'assigned', 'doing', 'done', 'rejected']
+
+/**
+ * 下拉展示值 → 实际下压给后端的 `status` 入参。
+ *
+ * 迁移窗口内库里与接口仍是旧词，后端也尚未完成新词入参的前向兼容，
+ * 因此这里仍传 `doing` / `done`；数据切换验证完成后改为直接传标准值（需单独提单）。
+ *
+ * @param status 下拉选中的状态
+ * @returns 可直接作为 `status` 入参的值；不可下压时返回 undefined
+ */
+function toServerStatus(status: string): string | undefined {
+  if (status === 'all') return undefined
+  if (status === TASK_STATUS_COMPLETED) return TASK_STATUS_DONE
+  if (status === TASK_STATUS_EXECUTING) return TASK_STATUS_DOING
+  return SERVER_STATUS_VALUES.includes(status) ? status : undefined
+}
 
 /** 任务执行状态（甘特图图例口径） */
 type GanttStatus = 'done' | 'doing' | 'overdue' | 'waiting'
@@ -147,7 +175,7 @@ interface OverdueRow {
   owner: string
 }
 
-/** 已应用的筛选条件（无租户维度：后端任务表不含 farmId / farmName / tenantId） */
+/** 已应用的筛选条件（无主体维度：后端任务表不含 farmId / farmName / tenantId） */
 interface AppliedFilter {
   /** 日期 yyyy-MM-dd */
   date: string
@@ -237,7 +265,7 @@ const renderActualItem = makeRenderItem(1)
 /**
  * 任务执行监控
  *
- * 业务职责：按日期 / 租户 / 任务类型 / 状态监控全平台农事任务执行情况，
+ * 业务职责：按日期 / 主体 / 任务类型 / 状态监控全平台农事任务执行情况，
  * 以甘特图呈现计划 vs 实际的执行条，并输出超时任务与任务类型分布。
  * 数据优先取 /tasks 分页接口，接口无数据时降级到原型 P8 示例口径。
  *
@@ -253,7 +281,7 @@ export default function TaskMonitor(): JSX.Element {
   const [draftType, setDraftType] = useState<string>('all')
   /** 筛选草稿：状态 */
   const [draftStatus, setDraftStatus] = useState<string>('all')
-  /** 已应用的筛选条件（无租户维度：后端任务表不含 farmId / farmName / tenantId） */
+  /** 已应用的筛选条件（无主体维度：后端任务表不含 farmId / farmName / tenantId） */
   const [applied, setApplied] = useState<AppliedFilter>({
     date: dayjs().format('YYYY-MM-DD'),
     taskType: 'all',
@@ -270,10 +298,8 @@ export default function TaskMonitor(): JSX.Element {
         startDate: applied.date,
         endDate: applied.date,
         taskType: applied.taskType === 'all' ? undefined : applied.taskType,
-        // 只有后端真值才能当 status 传；overdue 是本地推导，传过去恒 0 条
-        status: SERVER_STATUS_VALUES.includes(applied.status) && applied.status !== 'all'
-          ? applied.status
-          : undefined,
+        // 只有后端能表达的状态才下压；overdue 是本地推导，传过去恒 0 条
+        status: toServerStatus(applied.status),
       }),
     retry: false,
   })
@@ -291,7 +317,7 @@ export default function TaskMonitor(): JSX.Element {
     },
   })
 
-  /** 任务列表：只用后端真实返回，不做任何客户端归属过滤（后端任务表无农场 / 租户维度） */
+  /** 任务列表：只用后端真实返回，不做任何客户端归属过滤（后端任务表无农场 / 主体维度） */
   const tasks: Task[] = useMemo(() => tasksQuery.data?.list ?? [], [tasksQuery.data])
 
   /** 指标卡数据：只按真实任务计算；无数据时各项为 null（卡片展示「—」） */
@@ -306,7 +332,7 @@ export default function TaskMonitor(): JSX.Element {
       }
     }
     const total = tasks.length
-    // 后端「已完成」的真值是 done；旧代码判 accepted（后端无此值）导致 doneCount 恒为 0、完成率恒 0%
+    // 「已完成」同时认 completed 与 done；只认单一值会导致完成率在词表切换后静默归零
     const doneCount = tasks.filter((item) => isTaskDone(item.status)).length
     const overdueCount = tasks.filter((item) => isTaskOverdue(item)).length
     const durationSum = tasks.reduce((sum, item) => {
@@ -332,7 +358,7 @@ export default function TaskMonitor(): JSX.Element {
       const planStart = dayjs(item.planStartDate).valueOf()
       const planEnd = dayjs(item.planEndDate).valueOf()
       const isDone = isTaskDone(item.status)
-      const isDoing = item.status === TASK_STATUS_DOING || item.status === 'assigned'
+      const isDoing = isTaskExecuting(item.status) || item.status === 'assigned'
       const isOverdue = isTaskOverdue(item)
       const status: GanttStatus = isDone ? 'done' : isDoing ? (isOverdue ? 'overdue' : 'doing') : isOverdue ? 'overdue' : 'waiting'
       return {
@@ -580,7 +606,7 @@ export default function TaskMonitor(): JSX.Element {
         </Col>
       </Row>
 
-      {/* 筛选器（原型 P8：日期 / 租户 / 任务类型 / 状态） */}
+      {/* 筛选器（原型 P8：日期 / 主体 / 任务类型 / 状态） */}
       <Card size="small" style={{ marginBottom: 12 }}>
         <Space wrap size={12}>
           <Space size={6}>
@@ -754,7 +780,7 @@ export default function TaskMonitor(): JSX.Element {
             ? `任务接口加载失败：${(tasksQuery.error as Error | null)?.message ?? '未知错误'}`
             : metrics.hasRealData
               ? `已加载 ${tasks.length} 条真实任务数据（日期：${applied.date}）`
-              : '后端未返回任务数据，甘特图、超时列表与类型分布均为空，指标卡显示「—」。任务表无 farmId / farmName / tenantId，故「租户」筛选已移除，农场 / 负责人列退到 plotId / assigneeId 展示。'
+              : '后端未返回任务数据，甘特图、超时列表与类型分布均为空，指标卡显示「—」。任务表无 farmId / farmName / tenantId，故「主体」筛选已移除，农场 / 负责人列退到 plotId / assigneeId 展示。'
         }
       />
     </div>

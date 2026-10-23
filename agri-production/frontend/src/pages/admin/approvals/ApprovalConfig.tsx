@@ -49,12 +49,12 @@ import { DemoDataAlert } from '@/components'
 import { hasNonEmptyTextFields } from '@/utils/shape-guard'
 import type { ApprovalFlowConfig, ApprovalNodeConfig } from '@/types'
 
-/** 运营端审批类型：1 租户注册 2 配额调整 3 农场停用 4 数据导出 */
+/** 运营端审批类型：1 主体注册 2 配额调整 3 农场停用 4 数据导出 */
 type AdminApprovalType = 1 | 2 | 3 | 4
 
 /** 审批类型文案 */
 const APPROVAL_TYPE_MAP: Record<AdminApprovalType, string> = {
-  1: '租户注册',
+  1: '主体注册',
   2: '配额调整',
   3: '农场停用',
   4: '数据导出',
@@ -119,7 +119,7 @@ interface TimeoutEscalation {
  * 流程配置扩展模型
  *
  * `approvalType` 用 `Omit` 摘掉后重新声明为**可选**：后端一旦没给审批类型，
- * 页面必须显示「未指定」，不能靠 `?? 1` 硬塞成「租户注册」——那是凭空造标签。
+ * 页面必须显示「未指定」，不能靠 `?? 1` 硬塞成「主体注册」——那是凭空造标签。
  */
 interface FlowRow extends Omit<ApprovalFlowConfig, 'approvalType'> {
   /** 审批类型；后端未返回有效值时为 undefined，页面显示「未指定」 */
@@ -134,7 +134,7 @@ interface FlowRow extends Omit<ApprovalFlowConfig, 'approvalType'> {
 const MOCK_FLOWS: FlowRow[] = [
   {
     flowId: 'FLOW-001',
-    flowName: '租户注册审核流程',
+    flowName: '主体注册审核流程',
     approvalType: 1,
     status: 1,
     updatedAt: '2025-07-10 10:12',
@@ -296,7 +296,7 @@ export default function ApprovalConfig(): JSX.Element {
           // 是否走真数据由「数据形状」决定，不是由「接口通不通」决定：
           // 接口通了但只给骨架，仍然算没有真数据，保持 demo: true，
           // 让 DemoDataAlert 横幅继续提示「非服务端真实数据」。
-          // 否则横幅消失、三条骨架被标成凭空的「租户注册」，比降级更骗人。
+          // 否则横幅消失、三条骨架被标成凭空的「主体注册」，比降级更骗人。
           const realFlows = list.filter((item) =>
             hasNonEmptyTextFields(item, ['flowId', 'flowName']),
           )
@@ -305,7 +305,7 @@ export default function ApprovalConfig(): JSX.Element {
               flows: realFlows.map<FlowRow>((item) => ({
                 ...item,
                 // 不认识的审批类型保持 undefined，由列渲染显示「未指定」，
-                // 绝不兜底成 1（那会把 CERT/RECALL/QUOTA 一律标成「租户注册」）
+                // 绝不兜底成 1（那会把 CERT/RECALL/QUOTA 一律标成「主体注册」）
                 approvalType: item.approvalType as AdminApprovalType | undefined,
                 conditionRoutes: [],
                 escalations: [],
@@ -601,7 +601,7 @@ export default function ApprovalConfig(): JSX.Element {
                 label="流程名称"
                 rules={[{ required: true, message: '请输入流程名称' }]}
               >
-                <Input placeholder="如：租户注册审核流程" maxLength={50} />
+                <Input placeholder="如：主体注册审核流程" maxLength={50} />
               </Form.Item>
             </Col>
             <Col span={6}>
@@ -612,7 +612,7 @@ export default function ApprovalConfig(): JSX.Element {
               >
                 <Select
                   options={[
-                    { value: 1, label: '租户注册' },
+                    { value: 1, label: '主体注册' },
                     { value: 2, label: '配额调整' },
                     { value: 3, label: '农场停用' },
                     { value: 4, label: '数据导出' },

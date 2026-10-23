@@ -1,0 +1,378 @@
+.credit-workbench {
+  display: grid;
+  gap: 13px;
+  min-width: 0;
+}
+
+.credit-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 1px 0;
+}
+
+.credit-list-head > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.credit-list-head strong {
+  color: #2b4c38;
+  font-size: 13px;
+}
+
+.credit-list-head span {
+  color: #899a90;
+  font-size: 9px;
+}
+
+.credit-toolbar {
+  display: grid;
+  grid-template-columns: minmax(190px, 300px) 150px auto auto;
+  gap: 9px;
+}
+
+.credit-toolbar .ant-input-affix-wrapper,
+.credit-toolbar .ant-select-selector {
+  min-height: 36px !important;
+  border-color: #d7e4dc !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+}
+
+.credit-toolbar .ant-select-selection-item {
+  line-height: 34px !important;
+}
+
+.credit-toolbar .ant-input-affix-wrapper:focus-within,
+.credit-toolbar .ant-select-focused .ant-select-selector {
+  border-color: var(--mc-green-600) !important;
+  box-shadow: 0 0 0 3px rgba(18, 118, 74, .08) !important;
+}
+
+.credit-loading {
+  display: flex;
+  min-height: 220px;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  color: #7c8f83;
+  font-size: 10px;
+}
+
+.credit-evaluation-list {
+  display: grid;
+  gap: 9px;
+}
+
+.credit-evaluation-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 14px;
+  border: 1px solid #e1ebe5;
+  border-radius: 10px;
+  background: #fbfdfc;
+}
+
+.credit-evaluation-main {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.credit-evaluation-avatar {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 9px;
+  background: #e4f3ea;
+  color: var(--mc-green-700);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.credit-evaluation-main > div {
+  min-width: 0;
+  flex: 1;
+}
+
+.credit-evaluation-meta {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.credit-evaluation-meta strong {
+  color: #365440;
+  font-size: 10px;
+}
+
+.credit-stars {
+  color: #f5a623;
+  font-size: 10px;
+  letter-spacing: 1px;
+}
+
+.credit-stars i {
+  color: #d8e0db;
+  font-style: normal;
+}
+
+.credit-evaluation-main p {
+  margin: 7px 0 5px;
+  color: #5f7567;
+  font-size: 9.5px;
+  line-height: 1.7;
+}
+
+.credit-evaluation-main small {
+  color: #8b9c92;
+  font-family: "Roboto Mono", ui-monospace, monospace;
+  font-size: 8px;
+}
+
+.credit-existing-reply {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  margin: 7px 0;
+  padding: 7px 9px;
+  border-radius: 7px;
+  background: #f0f8f3;
+  color: #6d8577;
+  font-size: 8.5px;
+  line-height: 1.55;
+}
+
+.credit-evaluation-actions {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.credit-back {
+  display: inline-flex;
+  width: max-content;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border: 1px solid #cfddd5;
+  border-radius: 8px;
+  background: #fff;
+  color: #456652;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.credit-back:hover {
+  border-color: var(--mc-green-500);
+  color: var(--mc-green-700);
+}
+
+.credit-action-hero {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 19px 21px;
+  border: 1px solid #dce9e0;
+  border-radius: 13px;
+  background:
+    radial-gradient(circle at 90% 10%, rgba(34, 153, 95, .1), transparent 15rem),
+    linear-gradient(135deg, #fbfefc, #f3faf6);
+}
+
+.credit-action-hero.appeal {
+  background:
+    radial-gradient(circle at 90% 10%, rgba(213, 91, 45, .08), transparent 15rem),
+    linear-gradient(135deg, #fffdfc, #fdf7f3);
+}
+
+.credit-action-icon {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 13px;
+  background: linear-gradient(135deg, var(--mc-green-600), var(--mc-green-500));
+  color: #fff;
+  font-size: 20px;
+  box-shadow: 0 8px 18px rgba(18, 118, 74, .17);
+}
+
+.credit-action-hero.appeal .credit-action-icon {
+  background: linear-gradient(135deg, #b84c3f, #d66b43);
+}
+
+.credit-action-hero > div {
+  min-width: 0;
+  flex: 1;
+}
+
+.credit-action-hero small {
+  color: #188454;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .1em;
+}
+
+.credit-action-hero.appeal small {
+  color: #b65a43;
+}
+
+.credit-action-hero h2 {
+  margin: 3px 0 0;
+  color: #123e29;
+  font-size: 20px;
+}
+
+.credit-action-hero p {
+  margin: 4px 0 0;
+  color: #7d9084;
+  font-size: 9px;
+}
+
+.credit-action-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 270px;
+  align-items: start;
+  gap: 13px;
+}
+
+.credit-action-aside {
+  display: grid;
+  gap: 13px;
+}
+
+.credit-form {
+  padding: 18px;
+}
+
+.credit-evaluation-quote {
+  margin-bottom: 16px;
+  padding: 13px;
+  border: 1px solid #e1ebe5;
+  border-radius: 9px;
+  background: #f8fcf9;
+}
+
+.credit-evaluation-quote > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.credit-evaluation-quote strong {
+  color: #3b5846;
+  font-size: 10px;
+}
+
+.credit-evaluation-quote p {
+  margin: 8px 0 0;
+  color: #617869;
+  font-size: 9.5px;
+  line-height: 1.7;
+}
+
+.credit-form .ant-form-item-label > label {
+  color: #4a6554;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.credit-form .ant-input,
+.credit-form .ant-select-selector {
+  border-color: #d7e4dc !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+}
+
+.credit-form .ant-select-selector {
+  min-height: 38px !important;
+}
+
+.credit-form .ant-select-selection-item {
+  line-height: 36px !important;
+}
+
+.credit-form .ant-input:focus,
+.credit-form .ant-select-focused .ant-select-selector {
+  border-color: var(--mc-green-600) !important;
+  box-shadow: 0 0 0 3px rgba(18, 118, 74, .08) !important;
+}
+
+.credit-action-buttons {
+  display: flex;
+  gap: 8px;
+  padding-top: 13px;
+  border-top: 1px solid #edf2ee;
+}
+
+.credit-guidance {
+  display: grid;
+  gap: 11px;
+  margin: 0;
+  padding: 16px;
+  list-style: none;
+}
+
+.credit-guidance li {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  color: #718579;
+  font-size: 9px;
+  line-height: 1.65;
+}
+
+.credit-guidance .anticon {
+  margin-top: 2px;
+  color: var(--mc-green-600);
+}
+
+@media (max-width: 900px) {
+  .credit-action-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 680px) {
+  .credit-toolbar {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .credit-toolbar .ant-input-affix-wrapper,
+  .credit-toolbar .ant-select {
+    grid-column: 1 / -1;
+  }
+
+  .credit-evaluation-card {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .credit-evaluation-actions {
+    width: 100%;
+  }
+
+  .credit-action-hero {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    padding: 16px;
+  }
+
+  .credit-action-buttons {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

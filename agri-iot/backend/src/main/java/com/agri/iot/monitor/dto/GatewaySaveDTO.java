@@ -17,3 +17,4 @@ public class GatewaySaveDTO {
     private String location;
     private String remark;
 }
+

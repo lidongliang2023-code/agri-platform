@@ -115,9 +115,12 @@ public class AdminAlertService {
         long total = alertInfoMapper.selectCount(new LambdaQueryWrapper<AlertInfoEntity>());
         long handled = alertInfoMapper.selectCount(new LambdaQueryWrapper<AlertInfoEntity>()
                 .eq(AlertInfoEntity::getStatus, AlertDict.STATUS_HANDLED));
-        for (String level : List.of("INFO", "WARN", "CRITICAL")) {
+        // 键保持旧词表（前端按键取值），计数范围覆盖新旧两套写法，迁移前后数字都对
+        for (String level : List.of(AlertDict.LEVEL_INFO_LEGACY,
+                AlertDict.LEVEL_WARN_LEGACY,
+                AlertDict.LEVEL_CRITICAL_LEGACY)) {
             result.put(level, alertInfoMapper.selectCount(new LambdaQueryWrapper<AlertInfoEntity>()
-                    .eq(AlertInfoEntity::getAlertLevel, level)));
+                    .in(AlertInfoEntity::getAlertLevel, AlertDict.levelValuesOfName(level))));
         }
         result.put("total", total);
         result.put("handled", handled);
@@ -179,8 +182,9 @@ public class AdminAlertService {
      * @return 紧急告警列表（对外视图）
      */
     public List<AlertVO> emergency(int minutes) {
+        // 3=严重：旧 CRITICAL / 新 important 都要命中，走 IN 而非 EQ
         List<AlertInfoEntity> entities = alertInfoMapper.selectList(new LambdaQueryWrapper<AlertInfoEntity>()
-                .eq(AlertInfoEntity::getAlertLevel, "CRITICAL")
+                .in(AlertInfoEntity::getAlertLevel, AlertDict.levelValuesOf(3))
                 .eq(AlertInfoEntity::getStatus, AlertDict.STATUS_PENDING)
                 .ge(AlertInfoEntity::getAlertTime, LocalDateTime.now().minusMinutes(minutes))
                 .orderByDesc(AlertInfoEntity::getAlertTime));

@@ -1,341 +1,445 @@
-import { useState, useEffect } from 'react'
-import { Table, Button, Card, Input, InputNumber, Select, Space, Tag, Modal, Form, Descriptions, message, Popconfirm } from 'antd'
-import { EditOutlined, DeleteOutlined, SearchOutlined, EyeOutlined, TruckOutlined } from '@ant-design/icons'
+import { useEffect, useMemo, useState } from 'react'
+import { Form, Input, InputNumber, Select, Spin, message } from 'antd'
+import {
+  ArrowLeftOutlined,
+  CheckCircleOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  EnvironmentOutlined,
+  EyeOutlined,
+  SearchOutlined,
+  ShopOutlined,
+  TruckOutlined,
+} from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  getLogisticsList, getLogisticsTraces, updateLogisticsStatus, deleteLogistics,
-  getCarriers, updateLogistics,
-  type CarrierVO, type LogisticsQuery, type LogisticsVO, type LogisticsTraceVO
+  deleteLogistics,
+  getCarriers,
+  getLogisticsById,
+  getLogisticsList,
+  getLogisticsTraces,
+  updateLogistics,
+  updateLogisticsStatus,
+  type CarrierVO,
+  type LogisticsQuery,
+  type LogisticsVO,
+  type LogisticsTraceVO,
 } from '@/api/logistics'
+import { EmptyState, Panel, money, shortDate } from '../../member-center/shared'
+import '../../dispute/list/after-sales.css'
 
-/**
- * 取值来自库里的真实词表（也是后端 LogisticsController 自己的映射表用的那套）：
- * 类型目前只有 cold_chain；状态 pending / picked / in_transit / delivering / delivered。
- * 原先两列直接把枚举原样打印（页面上是 "cold_chain"、"pending"）。
- */
+type LogisticsPageMode = 'list' | 'detail' | 'trace' | 'edit'
+
 const LOGISTICS_TYPE: Record<string, string> = {
-  cold_chain: '冷链',
+  cold_chain: '冷链运输',
   normal: '普通货运',
-  express: '快递',
-  self_pickup: '自提'
+  express: '快递配送',
+  self_pickup: '买家自提',
+  road: '公路运输',
 }
 
-const LOGISTICS_STATUS: Record<string, { text: string; color: string }> = {
-  pending: { text: '待揽收', color: 'warning' },
-  picked: { text: '已揽收', color: 'processing' },
-  in_transit: { text: '运输中', color: 'processing' },
-  delivering: { text: '派送中', color: 'processing' },
-  delivered: { text: '已签收', color: 'success' },
-  exception: { text: '异常', color: 'error' }
+const LOGISTICS_STATUS: Record<string, { text: string; tone: string }> = {
+  pending: { text: '待揽收', tone: 'amber' },
+  picked: { text: '已揽收', tone: 'tech' },
+  in_transit: { text: '运输中', tone: 'tech' },
+  delivering: { text: '派送中', tone: 'tech' },
+  delivered: { text: '已签收', tone: 'green' },
+  exception: { text: '运输异常', tone: 'red' },
 }
 
-const statusText = (value: string) => LOGISTICS_STATUS[value]?.text ?? value
+function logisticsStatus(value: string): { text: string; tone: string } {
+  return LOGISTICS_STATUS[value] ?? { text: value || '未知', tone: 'ghost' }
+}
 
-/**
- * 物流管理。
- *
- * <p>这一页原先四个操作按钮（跟踪/查看/编辑/删除）都没有 onClick —— 点了什么都不发生；
- * 搜索框与状态下拉也是摆设（后端连 logisticsNo 参数都没收）。
- * 现在：编辑 → 改承运商/类型/运费/收货信息（PUT /{id}）并单独改状态（POST /{id}/status，会写轨迹）、
- * 跟踪 → 看轨迹、查看 → 看单据详情、删除 → 软删（已签收的不允许删），
- * 搜索与状态筛选也真正参与查询。</p>
- *
- * <p>后端本轮同时按身份收口：列表只返回"我是买方或卖方"的订单的物流单，
- * 详情/轨迹/改状态/编辑/删除/新建都要求调用方是该订单的当事人。</p>
- */
-function LogisticsList() {
+function LogisticsTag({ value }: { value: string }): JSX.Element {
+  const meta = logisticsStatus(value)
+  return <span className={`mc-tag ${meta.tone}`}>{meta.text}</span>
+}
+
+/** 买卖双方共用的物流管理工作区。 */
+export default function LogisticsList(): JSX.Element {
   const queryClient = useQueryClient()
+  const [pageMode, setPageMode] = useState<LogisticsPageMode>('list')
+  const [active, setActive] = useState<LogisticsVO | null>(null)
   const [query, setQuery] = useState<LogisticsQuery>({ pageNum: 1, pageSize: 10 })
   const [draft, setDraft] = useState<{ logisticsNo?: string; logisticsStatus?: string }>({})
+  const [form] = Form.useForm()
+  const [saving, setSaving] = useState(false)
+  const [carriers, setCarriers] = useState<CarrierVO[]>([])
+  const [traces, setTraces] = useState<LogisticsTraceVO[]>([])
+  const [traceLoading, setTraceLoading] = useState(false)
 
   const { data, isLoading } = useQuery({
     queryKey: ['logistics', query],
-    queryFn: () => getLogisticsList(query)
+    queryFn: () => getLogisticsList(query),
   })
+  const rows: LogisticsVO[] = data?.data?.records ?? []
+  const total = Number(data?.data?.total ?? 0)
+  const currentPage = Number(data?.data?.current ?? query.pageNum ?? 1)
+  const pageCount = Math.max(1, Math.ceil(total / Number(query.pageSize ?? 10)))
+  const summary = useMemo(() => ({
+    transit: rows.filter((row) => ['picked', 'in_transit', 'delivering'].includes(row.logisticsStatus)).length,
+    delivered: rows.filter((row) => row.logisticsStatus === 'delivered').length,
+    exception: rows.filter((row) => row.logisticsStatus === 'exception').length,
+    freight: rows.reduce((sum, row) => sum + Number(row.freightAmount ?? 0), 0),
+  }), [rows])
 
-  const [editing, setEditing] = useState<LogisticsVO | null>(null)
-  const [saving, setSaving] = useState(false)
-  const [form] = Form.useForm()
-  const [carriers, setCarriers] = useState<CarrierVO[]>([])
-
-  // 承运商列表：物流单创建时若没选承运商，编辑时就选不出来了 —— 这才是"编辑"存在的意义
   useEffect(() => {
     getCarriers()
-      .then((res: { code: number; data?: CarrierVO[] }) => {
-        if (res?.code === 200) setCarriers(res.data ?? [])
+      .then((response: { code: number; data?: CarrierVO[] }) => {
+        if (response?.code === 200) setCarriers(response.data ?? [])
       })
       .catch(() => setCarriers([]))
   }, [])
 
-  const [traceRow, setTraceRow] = useState<LogisticsVO | null>(null)
-  const [traces, setTraces] = useState<LogisticsTraceVO[]>([])
-  const [traceLoading, setTraceLoading] = useState(false)
-
-  const [viewing, setViewing] = useState<LogisticsVO | null>(null)
-
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ['logistics'] })
-
-  const openEdit = (row: LogisticsVO) => {
-    setEditing(row)
-    form.setFieldsValue({
-      status: row.logisticsStatus,
-      location: row.currentLocation,
-      signReceiver: row.signReceiver,
-      carrierId: row.carrierId ?? undefined,
-      logisticsType: row.logisticsType ?? undefined,
-      freightAmount: row.freightAmount ?? undefined,
-      receiverContact: row.receiverContact ?? undefined,
-      receiverPhone: row.receiverPhone ?? undefined,
-      receiverAddress: row.receiverAddress ?? undefined
-    })
+  const showList = (): void => {
+    setPageMode('list')
+    setActive(null)
   }
 
-  const submitEdit = async () => {
-    if (!editing) return
-    const values = await form.validateFields()
-    setSaving(true)
-    try {
-      // 先改"安排运输"的字段（承运商/类型/运费/收货信息）
-      const basic = await updateLogistics(editing.id, {
-        carrierId: values.carrierId,
-        logisticsType: values.logisticsType,
-        freightAmount: values.freightAmount,
-        receiverContact: values.receiverContact,
-        receiverPhone: values.receiverPhone,
-        receiverAddress: values.receiverAddress
-      })
-      if (basic?.code !== 200) {
-        message.error(basic?.message ?? '保存失败')
-        return
-      }
-      // 状态单独走状态接口（它会顺带写一条轨迹）
-      const res = await updateLogisticsStatus(editing.id, values.status, {
-        location: values.location,
-        signReceiver: values.signReceiver
-      })
-      if (res?.code === 200) {
-        message.success('物流状态已更新')
-        setEditing(null)
-        refresh()
-      } else {
-        message.error(res?.message ?? '更新失败')
-      }
-    } catch {
-      message.error('更新失败（请检查后端是否在运行）')
-    } finally {
-      setSaving(false)
-    }
+  const showDetail = (row: LogisticsVO): void => {
+    setActive(row)
+    setPageMode('detail')
   }
 
-  const openTrace = async (row: LogisticsVO) => {
-    setTraceRow(row)
+  const openTrace = async (row: LogisticsVO): Promise<void> => {
+    setActive(row)
+    setPageMode('trace')
     setTraces([])
     setTraceLoading(true)
     try {
-      const res = await getLogisticsTraces(row.id)
-      if (res?.code === 200) {
-        setTraces(res.data ?? [])
-      } else {
-        message.error(res?.message ?? '加载轨迹失败')
-      }
+      const response = await getLogisticsTraces(row.id)
+      if (response?.code === 200) setTraces(response.data ?? [])
+      else message.error(response?.message ?? '加载物流轨迹失败')
     } catch {
-      message.error('加载轨迹失败')
+      message.error('加载物流轨迹失败（请检查后端是否在运行）')
     } finally {
       setTraceLoading(false)
     }
   }
 
-  const handleDelete = async (row: LogisticsVO) => {
+  const openEdit = (row: LogisticsVO): void => {
+    setActive(row)
+    setPageMode('edit')
+    form.setFieldsValue({
+      carrierId: row.carrierId ?? undefined,
+      logisticsType: row.logisticsType ?? undefined,
+      freightAmount: row.freightAmount ?? undefined,
+      status: row.logisticsStatus,
+      location: row.currentLocation ?? undefined,
+      signReceiver: row.signReceiver ?? undefined,
+      receiverContact: row.receiverContact ?? undefined,
+      receiverPhone: row.receiverPhone ?? undefined,
+      receiverAddress: row.receiverAddress ?? undefined,
+    })
+  }
+
+  const submitEdit = async (): Promise<void> => {
+    if (!active) return
+    const values = await form.validateFields()
+    setSaving(true)
     try {
-      const res = await deleteLogistics(row.id)
-      if (res?.code === 200) {
-        message.success('已删除')
-        refresh()
-      } else {
-        message.error(res?.message ?? '删除失败')
+      const basic = await updateLogistics(active.id, {
+        carrierId: values.carrierId,
+        logisticsType: values.logisticsType,
+        freightAmount: values.freightAmount,
+        receiverContact: values.receiverContact,
+        receiverPhone: values.receiverPhone,
+        receiverAddress: values.receiverAddress,
+      })
+      if (basic?.code !== 200) {
+        message.error(basic?.message ?? '物流信息保存失败')
+        return
       }
+      const status = await updateLogisticsStatus(active.id, values.status, {
+        location: values.location,
+        signReceiver: values.signReceiver,
+      })
+      if (status?.code !== 200) {
+        message.error(status?.message ?? '物流状态更新失败')
+        return
+      }
+      message.success('物流信息与状态已更新')
+      await queryClient.invalidateQueries({ queryKey: ['logistics'] })
+      const refreshed = await getLogisticsById(active.id)
+      if (refreshed?.code === 200 && refreshed.data) setActive(refreshed.data)
+      setPageMode('detail')
     } catch {
-      message.error('删除失败')
+      message.error('物流信息更新失败（请检查后端是否在运行）')
+    } finally {
+      setSaving(false)
     }
   }
 
-  const columns = [
-    { title: '物流单号', dataIndex: 'logisticsNo', key: 'logisticsNo' },
-    { title: '订单编号', dataIndex: 'orderId', key: 'orderId' },
-    { title: '承运商', dataIndex: 'carrierName', key: 'carrierName' },
-    {
-      title: '物流类型',
-      dataIndex: 'logisticsType',
-      key: 'logisticsType',
-      render: (value: string) => LOGISTICS_TYPE[value] ?? value
-    },
-    { title: '运费', dataIndex: 'freightAmount', key: 'freightAmount', render: (val: number) => `¥${val}` },
-    // 物流表用 sender_* / receiver_* 命名，没有 deliveryAddress（那是订单表的字段）
-    { title: '收货地址', dataIndex: 'receiverAddress', key: 'receiverAddress', ellipsis: true },
-    {
-      title: '物流状态',
-      dataIndex: 'logisticsStatus',
-      key: 'logisticsStatus',
-      render: (value: string) => <Tag color={LOGISTICS_STATUS[value]?.color ?? 'default'}>{statusText(value)}</Tag>
-    },
-    { title: '当前位置', dataIndex: 'currentLocation', key: 'currentLocation', ellipsis: true,
-      render: (v: string) => v ?? '—' },
-    { title: '创建时间', dataIndex: 'createTime', key: 'createTime' },
-    {
-      title: '操作',
-      key: 'action',
-      width: 230,
-      render: (_: unknown, row: LogisticsVO) => (
-        <Space size={0}>
-          <Button type="link" icon={<TruckOutlined />} onClick={() => openTrace(row)}>跟踪</Button>
-          <Button type="link" icon={<EyeOutlined />} onClick={() => setViewing(row)}>查看</Button>
-          <Button type="link" icon={<EditOutlined />} onClick={() => openEdit(row)}>编辑</Button>
-          <Popconfirm title="确定删除这条物流单吗？" okText="确 定" cancelText="取 消" onConfirm={() => handleDelete(row)}>
-            <Button type="link" danger icon={<DeleteOutlined />}>删除</Button>
-          </Popconfirm>
-        </Space>
-      )
+  const handleDelete = async (row: LogisticsVO): Promise<void> => {
+    if (!window.confirm(`确定删除物流单 ${row.logisticsNo}？已签收物流单不能删除。`)) return
+    try {
+      const response = await deleteLogistics(row.id)
+      if (response?.code === 200) {
+        message.success('物流单已删除')
+        await queryClient.invalidateQueries({ queryKey: ['logistics'] })
+        if (active?.id === row.id) showList()
+      } else {
+        message.error(response?.message ?? '删除失败')
+      }
+    } catch {
+      message.error('删除失败（请检查后端是否在运行）')
     }
-  ]
+  }
+
+  if (pageMode === 'trace' && active) {
+    return (
+      <div className="after-workbench logistics-workbench">
+        <button type="button" className="after-back" onClick={() => setPageMode('detail')}>
+          <ArrowLeftOutlined /> 返回物流详情
+        </button>
+        <section className="after-hero logistics-hero">
+          <span className="after-hero-icon"><TruckOutlined /></span>
+          <div><small>LOGISTICS TRACKING</small><h2>物流轨迹</h2><p>{active.logisticsNo} · {active.carrierName || '承运商待补充'}</p></div>
+          <LogisticsTag value={active.logisticsStatus} />
+        </section>
+        <Panel title="运输节点">
+          {traceLoading ? (
+            <div className="after-loading"><Spin /><span>正在加载物流轨迹…</span></div>
+          ) : traces.length === 0 ? (
+            <EmptyState title="暂无物流轨迹" desc="物流状态更新后，运输节点会显示在这里。" />
+          ) : (
+            <div className="logistics-trace-list">
+              {[...traces].sort((left, right) =>
+                String(right.traceTime).localeCompare(String(left.traceTime))).map((trace, index) => (
+                <div className={`logistics-trace-item ${index === 0 ? 'latest' : ''}`} key={trace.id}>
+                  <span className="logistics-trace-dot"><CheckCircleOutlined /></span>
+                  <div>
+                    <strong>{trace.traceDescription || logisticsStatus(trace.traceStatus).text}</strong>
+                    <p><EnvironmentOutlined /> {trace.traceLocation || '位置待更新'}</p>
+                    <small>{shortDate(trace.traceTime)}</small>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Panel>
+      </div>
+    )
+  }
+
+  if (pageMode === 'edit' && active) {
+    return (
+      <div className="after-workbench logistics-workbench">
+        <button type="button" className="after-back" onClick={() => setPageMode('detail')}>
+          <ArrowLeftOutlined /> 返回物流详情
+        </button>
+        <section className="after-hero logistics-hero">
+          <span className="after-hero-icon"><EditOutlined /></span>
+          <div><small>DELIVERY UPDATE</small><h2>编辑物流信息</h2><p>{active.logisticsNo} · 更新承运商、收货信息与物流节点</p></div>
+          <LogisticsTag value={active.logisticsStatus} />
+        </section>
+        <div className="after-form-layout">
+          <Panel title="物流与收发货信息">
+            <Form form={form} layout="vertical" onFinish={() => void submitEdit()} className="after-form">
+              <div className="after-form-grid">
+                <Form.Item name="carrierId" label="承运商">
+                  <Select allowClear options={carriers.map((item) => ({ value: item.id, label: item.carrierName }))} />
+                </Form.Item>
+                <Form.Item name="logisticsType" label="物流类型">
+                  <Select allowClear options={Object.entries(LOGISTICS_TYPE).map(([value, label]) => ({ value, label }))} />
+                </Form.Item>
+                <Form.Item name="freightAmount" label="运费（元）">
+                  <InputNumber min={0} precision={2} style={{ width: '100%' }} />
+                </Form.Item>
+                <Form.Item name="status" label="物流状态" rules={[{ required: true, message: '请选择物流状态' }]}>
+                  <Select options={Object.entries(LOGISTICS_STATUS).map(([value, item]) => ({ value, label: item.text }))} />
+                </Form.Item>
+              </div>
+              <div className="after-form-grid">
+                <Form.Item name="location" label="当前位置">
+                  <Input placeholder="例如：山东省潍坊市寒亭区" />
+                </Form.Item>
+                <Form.Item name="signReceiver" label="签收人">
+                  <Input placeholder="状态为已签收时填写" />
+                </Form.Item>
+                <Form.Item name="receiverContact" label="收货人">
+                  <Input />
+                </Form.Item>
+                <Form.Item name="receiverPhone" label="收货电话">
+                  <Input />
+                </Form.Item>
+              </div>
+              <Form.Item name="receiverAddress" label="收货地址">
+                <Input.TextArea rows={3} />
+              </Form.Item>
+              <div className="after-form-actions">
+                <button type="submit" className="mc-btn" disabled={saving}>{saving ? '正在保存…' : '保存物流信息'}</button>
+                <button type="button" className="mc-btn ghost" onClick={() => setPageMode('detail')}>取消</button>
+              </div>
+            </Form>
+          </Panel>
+          <aside className="after-side-stack">
+            <Panel title="操作说明">
+              <ul className="after-guidance">
+                <li><TruckOutlined /> 修改物流状态会自动追加一条运输轨迹。</li>
+                <li><CheckCircleOutlined /> 状态选择“已签收”时需要填写签收人。</li>
+                <li><ShopOutlined /> 收发货信息会同步展示在订单物流详情中。</li>
+              </ul>
+            </Panel>
+          </aside>
+        </div>
+      </div>
+    )
+  }
+
+  if (pageMode === 'detail' && active) {
+    return (
+      <div className="after-workbench logistics-workbench">
+        <button type="button" className="after-back" onClick={showList}>
+          <ArrowLeftOutlined /> 返回物流管理
+        </button>
+        <section className="after-hero logistics-hero">
+          <span className="after-hero-icon"><TruckOutlined /></span>
+          <div><small>LOGISTICS ORDER · {active.logisticsNo}</small><h2>{active.carrierName || '物流单详情'}</h2><p>关联订单 {active.orderId} · {LOGISTICS_TYPE[active.logisticsType] ?? active.logisticsType}</p></div>
+          <LogisticsTag value={active.logisticsStatus} />
+          <div className="logistics-hero-actions">
+            <button type="button" className="mc-btn" onClick={() => void openTrace(active)}><TruckOutlined /> 查看轨迹</button>
+            <button type="button" className="mc-btn ghost" onClick={() => openEdit(active)}><EditOutlined /> 编辑</button>
+          </div>
+        </section>
+        <Panel title="运输路线">
+          <div className="logistics-route">
+            <div><span><ShopOutlined /></span><small>发货地</small><strong>{active.senderAddress || '发货地址待补充'}</strong></div>
+            <div className="logistics-route-line"><i /><TruckOutlined /><i /></div>
+            <div><span><EnvironmentOutlined /></span><small>收货地</small><strong>{active.receiverAddress || '收货地址待补充'}</strong></div>
+          </div>
+        </Panel>
+        <div className="after-detail-layout">
+          <div className="after-detail-main">
+            <Panel title="物流信息">
+              <div className="after-case-grid logistics-facts">
+                <div><span>承运商</span><strong>{active.carrierName || '—'}</strong></div>
+                <div><span>物流类型</span><strong>{LOGISTICS_TYPE[active.logisticsType] ?? active.logisticsType}</strong></div>
+                <div><span>运费</span><strong className="after-amount">{money(active.freightAmount)}</strong></div>
+                <div><span>当前位置</span><strong>{active.currentLocation || '—'}</strong></div>
+                <div><span>收货人</span><strong>{active.receiverContact || '—'}</strong></div>
+                <div><span>联系电话</span><strong>{active.receiverPhone || '—'}</strong></div>
+              </div>
+            </Panel>
+            <Panel title="签收记录">
+              <div className="after-result-list">
+                <div><span>揽收时间</span><p>{shortDate(active.pickupTime)}</p></div>
+                <div><span>送达时间</span><p>{shortDate(active.deliveryTime)}</p></div>
+                <div><span>签收时间</span><p>{shortDate(active.signTime)}</p></div>
+                <div><span>签收人</span><p>{active.signReceiver || '尚未签收'}</p></div>
+              </div>
+            </Panel>
+          </div>
+          <aside className="after-detail-aside">
+            <Panel title="履约进度">
+              <div className="after-timeline">
+                <div className="on"><span><CheckCircleOutlined /></span><div><strong>物流单已创建</strong><small>{shortDate(active.createTime)}</small></div></div>
+                <div className={['picked', 'in_transit', 'delivering', 'delivered'].includes(active.logisticsStatus) ? 'on' : ''}><span><TruckOutlined /></span><div><strong>运输与派送</strong><small>{logisticsStatus(active.logisticsStatus).text}</small></div></div>
+                <div className={active.logisticsStatus === 'delivered' ? 'on' : ''}><span><CheckCircleOutlined /></span><div><strong>完成签收</strong><small>{shortDate(active.signTime)}</small></div></div>
+              </div>
+            </Panel>
+            <Panel title="快捷操作">
+              <div className="logistics-quick-actions">
+                <button type="button" className="mc-btn ghost" onClick={() => void openTrace(active)}>查看完整轨迹</button>
+                <button type="button" className="mc-btn ghost" onClick={() => openEdit(active)}>更新运输状态</button>
+                <button type="button" className="mc-link after-delete" onClick={() => void handleDelete(active)}><DeleteOutlined /> 删除物流单</button>
+              </div>
+            </Panel>
+          </aside>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <Card title="物流管理">
-      <div style={{ marginBottom: 16, display: 'flex', gap: 16 }}>
-        <Input
-          placeholder="物流单号"
-          prefix={<SearchOutlined />}
-          style={{ width: 200 }}
-          allowClear
-          onChange={(e) => setDraft((prev) => ({ ...prev, logisticsNo: e.target.value || undefined }))}
-        />
-        <Select
-          placeholder="物流状态"
-          style={{ width: 150 }}
-          allowClear
-          onChange={(v) => setDraft((prev) => ({ ...prev, logisticsStatus: v }))}
-          options={Object.entries(LOGISTICS_STATUS).map(([value, item]) => ({ value, label: item.text }))}
-        />
-        <Button type="primary" onClick={() => setQuery((prev) => ({ ...prev, pageNum: 1, ...draft }))}>搜索</Button>
-        <Button onClick={() => { setDraft({}); setQuery({ pageNum: 1, pageSize: 10 }) }}>重置</Button>
-      </div>
-      <Table
-        columns={columns}
-        dataSource={data?.data?.records || []}
-        loading={isLoading}
-        rowKey="id"
-        scroll={{ x: 1300 }}
-        pagination={{
-          current: data?.data?.current,
-          total: data?.data?.total,
-          pageSize: query.pageSize,
-          onChange: (page, size) => setQuery((prev) => ({ ...prev, pageNum: page, pageSize: size }))
-        }}
-      />
-
-      <Modal
-        title={`编辑物流单${editing ? ' · ' + editing.logisticsNo : ''}`}
-        open={!!editing}
-        onCancel={() => setEditing(null)}
-        onOk={submitEdit}
-        confirmLoading={saving}
-        destroyOnClose
-      >
-        <Form form={form} layout="vertical">
-          <Form.Item name="carrierId" label="承运商" extra="原先创建后承运商改不了，现在可以在这里改">
-            <Select
-              allowClear
-              placeholder="选择承运商"
-              options={carriers.map((c) => ({ value: c.id, label: c.carrierName }))}
-            />
-          </Form.Item>
-          <Form.Item name="logisticsType" label="物流类型">
-            <Select
-              allowClear
-              placeholder="选择物流类型"
-              options={Object.entries(LOGISTICS_TYPE).map(([value, label]) => ({ value, label }))}
-            />
-          </Form.Item>
-          <Form.Item name="freightAmount" label="运费">
-            <InputNumber style={{ width: '100%' }} min={0} precision={2} placeholder="可留空" />
-          </Form.Item>
-          <Form.Item name="status" label="物流状态" rules={[{ required: true, message: '请选择状态' }]}>
-            <Select options={Object.entries(LOGISTICS_STATUS).map(([value, item]) => ({ value, label: item.text }))} />
-          </Form.Item>
-          <Form.Item name="location" label="当前位置">
-            <Input placeholder="例如 山东省潍坊市寒亭区" />
-          </Form.Item>
-          <Form.Item name="signReceiver" label="签收人">
-            <Input placeholder="状态选到「已签收」时填写" />
-          </Form.Item>
-          <Form.Item name="receiverContact" label="收货人">
-            <Input placeholder="可留空" />
-          </Form.Item>
-          <Form.Item name="receiverPhone" label="收货电话">
-            <Input placeholder="可留空" />
-          </Form.Item>
-          <Form.Item name="receiverAddress" label="收货地址">
-            <Input.TextArea rows={2} placeholder="可留空" />
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      <Modal
-        title={`物流轨迹${traceRow ? ' · ' + traceRow.logisticsNo : ''}`}
-        open={!!traceRow}
-        onCancel={() => setTraceRow(null)}
-        footer={null}
-        width={700}
-      >
-        <Table
-          rowKey="id"
-          size="small"
-          loading={traceLoading}
-          dataSource={traces}
-          pagination={false}
-          locale={{ emptyText: '暂无轨迹记录' }}
-          columns={[
-            { title: '时间', dataIndex: 'traceTime', key: 'traceTime', width: 170 },
-            { title: '节点', dataIndex: 'traceDescription', key: 'traceDescription',
-              render: (v: string, row: LogisticsTraceVO) => v ?? statusText(row.traceStatus) },
-            { title: '位置', dataIndex: 'traceLocation', key: 'traceLocation',
-              render: (v: string) => v ?? '—' }
-          ]}
-        />
-      </Modal>
-
-      <Modal
-        title="物流单详情"
-        open={!!viewing}
-        onCancel={() => setViewing(null)}
-        footer={null}
-        width={700}
-      >
-        {viewing && (
-          <Descriptions bordered column={2} size="small">
-            <Descriptions.Item label="物流单号">{viewing.logisticsNo}</Descriptions.Item>
-            <Descriptions.Item label="订单编号">{viewing.orderId}</Descriptions.Item>
-            <Descriptions.Item label="承运商">{viewing.carrierName ?? '—'}</Descriptions.Item>
-            <Descriptions.Item label="物流类型">{LOGISTICS_TYPE[viewing.logisticsType] ?? viewing.logisticsType ?? '—'}</Descriptions.Item>
-            <Descriptions.Item label="运费">{viewing.freightAmount != null ? `¥${viewing.freightAmount}` : '—'}</Descriptions.Item>
-            <Descriptions.Item label="物流状态">
-              <Tag color={LOGISTICS_STATUS[viewing.logisticsStatus]?.color ?? 'default'}>
-                {statusText(viewing.logisticsStatus)}
-              </Tag>
-            </Descriptions.Item>
-            <Descriptions.Item label="发货地址" span={2}>{viewing.senderAddress ?? '—'}</Descriptions.Item>
-            <Descriptions.Item label="收货地址" span={2}>{viewing.receiverAddress ?? '—'}</Descriptions.Item>
-            <Descriptions.Item label="收货人">{viewing.receiverContact ?? '—'}</Descriptions.Item>
-            <Descriptions.Item label="联系电话">{viewing.receiverPhone ?? '—'}</Descriptions.Item>
-            <Descriptions.Item label="揽收时间">{viewing.pickupTime ?? '—'}</Descriptions.Item>
-            <Descriptions.Item label="送达时间">{viewing.deliveryTime ?? '—'}</Descriptions.Item>
-            <Descriptions.Item label="签收时间">{viewing.signTime ?? '—'}</Descriptions.Item>
-            <Descriptions.Item label="签收人">{viewing.signReceiver ?? '—'}</Descriptions.Item>
-            <Descriptions.Item label="当前位置" span={2}>{viewing.currentLocation ?? '—'}</Descriptions.Item>
-          </Descriptions>
+    <div className="after-workbench logistics-workbench">
+      <section className="after-overview">
+        <div className="after-overview-title">
+          <span className="after-overview-icon"><TruckOutlined /></span>
+          <div><small>LOGISTICS MANAGEMENT</small><h2>物流管理</h2><p>跟踪发货、运输、派送和签收节点，维护承运与收货信息。</p></div>
+        </div>
+        <div className="after-overview-stats">
+          <div><span>本页运输中</span><strong>{summary.transit}</strong></div>
+          <div><span>本页已签收</span><strong>{summary.delivered}</strong></div>
+          <div><span>本页异常</span><strong>{summary.exception}</strong></div>
+          <div><span>本页运费</span><strong>{money(summary.freight)}</strong></div>
+        </div>
+      </section>
+      <Panel title="物流单" extra={<span className="after-count">共 {total} 条</span>}>
+        <div className="after-toolbar">
+          <Input
+            prefix={<SearchOutlined />}
+            allowClear
+            placeholder="输入物流单号"
+            value={draft.logisticsNo}
+            onChange={(event) => setDraft((previous) => ({
+              ...previous,
+              logisticsNo: event.target.value || undefined,
+            }))}
+          />
+          <Select
+            allowClear
+            placeholder="全部物流状态"
+            value={draft.logisticsStatus}
+            onChange={(value) => setDraft((previous) => ({ ...previous, logisticsStatus: value }))}
+            options={Object.entries(LOGISTICS_STATUS).map(([value, item]) => ({ value, label: item.text }))}
+          />
+          <button type="button" className="mc-btn" onClick={() => setQuery((previous) => ({
+            ...previous,
+            pageNum: 1,
+            ...draft,
+          }))}>搜索</button>
+          <button type="button" className="mc-btn ghost" onClick={() => {
+            setDraft({})
+            setQuery({ pageNum: 1, pageSize: 10 })
+          }}>重置</button>
+        </div>
+        {isLoading ? (
+          <div className="after-loading"><Spin /><span>正在读取物流单…</span></div>
+        ) : rows.length === 0 ? (
+          <EmptyState title="暂无物流单" desc="卖家发货后会自动生成物流单和运输轨迹。" />
+        ) : (
+          <>
+            <div className="mc-table-wrap">
+              <table className="mc-table logistics-table">
+                <thead><tr><th>物流单号</th><th>关联订单</th><th>承运信息</th><th>收货信息</th><th>状态</th><th>当前位置</th><th>操作</th></tr></thead>
+                <tbody>
+                  {rows.map((row) => (
+                    <tr key={row.id}>
+                      <td>
+                        <button type="button" className="after-name-link" onClick={() => showDetail(row)}>
+                          <strong className="mc-mono">{row.logisticsNo}</strong>
+                          <span>{shortDate(row.createTime)}</span>
+                        </button>
+                      </td>
+                      <td className="mc-mono">{row.orderId}</td>
+                      <td><div className="logistics-carrier-cell"><TruckOutlined /><span>{row.carrierName || '承运商待补充'}</span><small>{LOGISTICS_TYPE[row.logisticsType] ?? row.logisticsType}</small></div></td>
+                      <td><div className="logistics-receiver-cell"><strong>{row.receiverContact || '—'}</strong><small>{row.receiverAddress || '地址待补充'}</small></div></td>
+                      <td><LogisticsTag value={row.logisticsStatus} /></td>
+                      <td className="logistics-location-cell">{row.currentLocation || '—'}</td>
+                      <td>
+                        <div className="mc-actions">
+                          <button type="button" className="mc-link after-action" onClick={() => void openTrace(row)}><TruckOutlined /> 跟踪</button>
+                          <button type="button" className="mc-link after-action" onClick={() => showDetail(row)}><EyeOutlined /> 查看</button>
+                          <button type="button" className="mc-link after-action" onClick={() => openEdit(row)}><EditOutlined /> 编辑</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="mc-pager">
+              <button type="button" disabled={currentPage <= 1}
+                onClick={() => setQuery((previous) => ({ ...previous, pageNum: currentPage - 1 }))}>上一页</button>
+              <span>第 {currentPage} / {pageCount} 页 · 共 {total} 条</span>
+              <button type="button" disabled={currentPage >= pageCount}
+                onClick={() => setQuery((previous) => ({ ...previous, pageNum: currentPage + 1 }))}>下一页</button>
+            </div>
+          </>
         )}
-      </Modal>
-    </Card>
+      </Panel>
+    </div>
   )
 }
-
-export default LogisticsList

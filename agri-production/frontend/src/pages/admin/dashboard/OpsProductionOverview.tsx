@@ -3,7 +3,7 @@
  * 路由路径：/admin/production/dashboard/overview
  * 所属模块：运营仪表盘
  * PRD 序号：PRD 6.2 #2
- * 说明：原型无此页（原型仅有运营管理大盘），按 PRD「多维度生产数据统计、区域分析、租户分析」实现。
+ * 说明：原型无此页（原型仅有运营管理大盘），按 PRD「多维度生产数据统计、区域分析、主体分析」实现。
  */
 import { useMemo, useState } from 'react'
 import {
@@ -86,7 +86,7 @@ const REGION_OPTIONS: Array<{ value: string; label: string }> = [
 /**
  * 生产总览
  *
- * 业务职责：按区域 / 作物 / 租户三个维度聚合展示全平台生产数据，
+ * 业务职责：按区域 / 作物 / 主体三个维度聚合展示全平台生产数据，
  * 支持时间范围与区域筛选、表格与图表两种展示方式。
  *
  * <p><b>数据口径（硬规矩：不造数据、可以降级但不能骗人）：</b>
@@ -211,7 +211,7 @@ export default function OpsProductionOverview(): JSX.Element {
   /** 表格列定义 */
   const columns: ColumnsType<OverviewRow> = [
     {
-      title: filter.dimension === 'tenant' ? '租户名称' : filter.dimension === 'crop' ? '作物' : '区域',
+      title: filter.dimension === 'tenant' ? '主体名称' : filter.dimension === 'crop' ? '作物' : '区域',
       dataIndex: 'name',
       key: 'name',
       width: 200,
@@ -252,7 +252,7 @@ export default function OpsProductionOverview(): JSX.Element {
     },
   ]
 
-  /** 图表配置：区域 / 租户用柱状图，作物用饼图 */
+  /** 图表配置：区域 / 主体用柱状图，作物用饼图 */
   const chartOption: EChartsOption = useMemo<EChartsOption>(() => {
     if (filter.dimension === 'crop') {
       return {
@@ -493,14 +493,14 @@ export default function OpsProductionOverview(): JSX.Element {
             options={[
               { label: '按区域', value: 'region' },
               { label: '按作物', value: 'crop' },
-              { label: '按租户', value: 'tenant' },
+              { label: '按主体', value: 'tenant' },
             ]}
           />
         }
         extra={
           <Text type="secondary">
             统计区间 {filter.startDate} ~ {filter.endDate} · 共 {rows.length} 个
-            {filter.dimension === 'tenant' ? '租户' : filter.dimension === 'crop' ? '作物' : '区域'}
+            {filter.dimension === 'tenant' ? '主体' : filter.dimension === 'crop' ? '作物' : '区域'}
           </Text>
         }
       >

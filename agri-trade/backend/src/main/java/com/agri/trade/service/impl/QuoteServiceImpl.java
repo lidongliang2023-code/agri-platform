@@ -2,9 +2,13 @@ package com.agri.trade.service.impl;
 
 import com.agri.trade.entity.Quote;
 import com.agri.trade.entity.Inquiry;
+import com.agri.trade.entity.Demand;
 import com.agri.trade.entity.TradeProduct;
 import com.agri.trade.entity.TradeOrder;
 import com.agri.trade.entity.OrderItem;
+import com.agri.trade.entity.Contract;
+import com.agri.trade.mapper.ContractMapper;
+import com.agri.trade.mapper.DemandMapper;
 import com.agri.trade.mapper.QuoteMapper;
 import com.agri.trade.mapper.InquiryMapper;
 import com.agri.trade.mapper.TradeProductMapper;
@@ -32,9 +36,11 @@ public class QuoteServiceImpl extends ServiceImpl<QuoteMapper, Quote> implements
     private static final int DEFAULT_VALID_DAYS = 7;
 
     private final InquiryMapper inquiryMapper;
+    private final DemandMapper demandMapper;
     private final TradeProductMapper productMapper;
     private final TradeOrderMapper tradeOrderMapper;
     private final OrderItemMapper orderItemMapper;
+    private final ContractMapper contractMapper;
 
     @Override
     @Transactional
@@ -72,6 +78,8 @@ public class QuoteServiceImpl extends ServiceImpl<QuoteMapper, Quote> implements
         order.setBuyerName(quote.getBuyerName());
         order.setSellerId(quote.getSellerId());
         order.setSellerName(quote.getSellerName());
+        order.setProductName(quote.getProductName());
+        order.setTotalQuantity(quote.getQuantity());
         if (product != null) {
             order.setCategoryId(product.getCategoryId());
             order.setCategoryName(product.getCategoryName());
@@ -121,6 +129,8 @@ public class QuoteServiceImpl extends ServiceImpl<QuoteMapper, Quote> implements
         quote.setUpdateTime(now);
         baseMapper.updateById(quote);
 
+        completeDemand(inquiry == null ? null : inquiry.getDemandId());
+        ensureContract(order);
         return order;
     }
 
@@ -132,6 +142,13 @@ public class QuoteServiceImpl extends ServiceImpl<QuoteMapper, Quote> implements
     @Override
     public IPage<Quote> getQuotePage(int pageNum, int pageSize, String quoteStatus,
                                      Long sellerId, Long buyerId, java.util.Collection<Long> scopeMerchantIds) {
+        return getQuotePage(pageNum, pageSize, quoteStatus, sellerId, buyerId, scopeMerchantIds, null, null);
+    }
+
+    @Override
+    public IPage<Quote> getQuotePage(int pageNum, int pageSize, String quoteStatus,
+                                     Long sellerId, Long buyerId, java.util.Collection<Long> scopeMerchantIds,
+                                     String quoteNo, String productName) {
         LambdaQueryWrapper<Quote> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Quote::getDelFlag, 0);
         // 数据范围：只返回"我参与的报价"（我是买方或卖方）。原先不给范围就返回全平台报价 ——
@@ -150,6 +167,12 @@ public class QuoteServiceImpl extends ServiceImpl<QuoteMapper, Quote> implements
         }
         if (buyerId != null) {
             wrapper.eq(Quote::getBuyerId, buyerId);
+        }
+        if (quoteNo != null && !quoteNo.isBlank()) {
+            wrapper.like(Quote::getQuoteNo, quoteNo.trim());
+        }
+        if (productName != null && !productName.isBlank()) {
+            wrapper.like(Quote::getProductName, productName.trim());
         }
         wrapper.orderByDesc(Quote::getCreateTime);
         return page(new Page<>(pageNum, pageSize), wrapper);
@@ -180,6 +203,7 @@ public class QuoteServiceImpl extends ServiceImpl<QuoteMapper, Quote> implements
         quote.setQuantity(quantity != null ? quantity : inquiry.getQuantity());
         quote.setUnit(inquiry.getUnit());
         quote.setTotalAmount(unitPrice.multiply(quote.getQuantity()));
+        quote.setQuoteAmount(quote.getTotalAmount());
         quote.setFreightAmount(freightAmount != null ? freightAmount : BigDecimal.ZERO);
         quote.setDiscountAmount(BigDecimal.ZERO);
         quote.setDeliveryAddress(inquiry.getDeliveryAddress());
@@ -204,9 +228,17 @@ public class QuoteServiceImpl extends ServiceImpl<QuoteMapper, Quote> implements
         baseMapper.insert(quote);
 
         inquiry.setReplyCount(inquiry.getReplyCount() != null ? inquiry.getReplyCount() + 1 : 1);
+        inquiry.setInquiryStatus("quoted");
         inquiry.setUpdateTime(new Date());
         inquiryMapper.updateById(inquiry);
 
+        Demand demand = inquiry.getDemandId() == null ? null : demandMapper.selectById(inquiry.getDemandId());
+        if (demand != null) {
+            demand.setResponseCount(demand.getResponseCount() == null ? 1 : demand.getResponseCount() + 1);
+            demand.setDemandStatus("quoted");
+            demand.setUpdateTime(new Date());
+            demandMapper.updateById(demand);
+        }
         return quote;
     }
 
@@ -319,6 +351,55 @@ public class QuoteServiceImpl extends ServiceImpl<QuoteMapper, Quote> implements
     private static Date validUntil(Integer validDays) {
         int days = (validDays == null || validDays < 1) ? DEFAULT_VALID_DAYS : Math.min(validDays, 365);
         return new Date(System.currentTimeMillis() + days * 24L * 60 * 60 * 1000);
+    }
+
+    /** 报价成单后，需求从"报价中"推进到"已成交"。 */
+    private void completeDemand(Long demandId) {
+        if (demandId == null) return;
+        Demand demand = demandMapper.selectById(demandId);
+        if (demand != null) {
+            demand.setDemandStatus("completed");
+            demand.setUpdateTime(new Date());
+            demandMapper.updateById(demand);
+        }
+    }
+
+    /**
+     * 成单即生成待签合同。合同以订单为唯一事实来源，双方随后在各自会员中心签署；
+     * 同一订单已有合同时直接复用，避免重复点击生成多份合同。
+     */
+    private void ensureContract(TradeOrder order) {
+        Contract existing = contractMapper.selectOne(new LambdaQueryWrapper<Contract>()
+                .eq(Contract::getOrderId, order.getId())
+                .eq(Contract::getDelFlag, 0)
+                .last("LIMIT 1"));
+        if (existing != null) return;
+
+        Date now = new Date();
+        Contract contract = new Contract();
+        contract.setContractNo("CO" + System.currentTimeMillis());
+        contract.setContractName((order.getProductName() == null ? "农产品" : order.getProductName()) + "采购合同");
+        contract.setContractType("sale");
+        contract.setOrderId(order.getId());
+        contract.setOrderNo(order.getOrderNo());
+        contract.setBuyerId(order.getBuyerId());
+        contract.setBuyerName(order.getBuyerName());
+        contract.setSellerId(order.getSellerId());
+        contract.setSellerName(order.getSellerName());
+        contract.setContractAmount(order.getTotalAmount());
+        contract.setDeliveryDate(order.getDeliveryDeadline());
+        contract.setDeliveryAddress(order.getDeliveryAddress());
+        contract.setContractContent("由询价报价成交自动生成。订单 " + order.getOrderNo()
+                + "，成交金额 " + order.getTotalAmount() + " 元。");
+        contract.setContractStatus("draft");
+        contract.setBuyerSignStatus("pending");
+        contract.setSellerSignStatus("pending");
+        contract.setArchiveStatus("pending");
+        contract.setChainStatus("pending");
+        contract.setDelFlag(0);
+        contract.setCreateTime(now);
+        contract.setUpdateTime(now);
+        contractMapper.insert(contract);
     }
 
     @Override

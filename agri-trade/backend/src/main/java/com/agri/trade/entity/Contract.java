@@ -5,6 +5,8 @@ import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 
 import java.math.BigDecimal;
 import java.util.Date;
@@ -35,6 +37,7 @@ public class Contract {
     private String orderNo;
 
     @TableField("buyer_id")
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long buyerId;
 
     @TableField("buyer_name")
@@ -53,6 +56,7 @@ public class Contract {
     private String buyerSignature;
 
     @TableField("seller_id")
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long sellerId;
 
     @TableField("seller_name")

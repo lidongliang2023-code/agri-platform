@@ -17,6 +17,7 @@ export interface QuoteQuery {
   quoteNo?: string
   productName?: string
   sellerId?: number
+  buyerId?: number | string
   quoteStatus?: string
 }
 
@@ -34,6 +35,8 @@ export interface QuoteVO {
   quantity: number
   unit: string
   totalAmount: number
+  freightAmount?: number
+  orderId?: number | null
   /**
    * 有效期至。
    *

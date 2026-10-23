@@ -12,7 +12,7 @@ import java.util.List;
 @Mapper
 public interface DeviceGroupMapper {
 
-    List<DeviceGroupVO> selectGroupList(@Param("tenantId") String tenantId);
+    List<DeviceGroupVO> selectGroupList(@Param("tenantId") Long tenantId);
 
     DeviceGroupVO selectGroupById(@Param("id") Long id);
 
@@ -36,3 +36,4 @@ public interface DeviceGroupMapper {
 
     int selectAlertCountByGroupId(@Param("groupId") Long groupId);
 }
+

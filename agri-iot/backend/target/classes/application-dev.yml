@@ -1,8 +1,15 @@
 server:
-  port: 8082
+  # 8082 是网关（nginx 的 mall-supplier 虚拟主机）在听的端口，生产管理后端也写 8082；
+  # 8085 也是网关的虚拟主机端口 —— 这两个都不能用。IoT 让到 8091（本机空闲）。
+  port: 8091
 
 spring:
   datasource:
+    # 注意：这是**占位配置**（example_db / admin / password），本机并没有这个库。
+    # 也就是说 dev 档下这个服务起不来（这也是它一直没有被真正跑起来的原因之一）。
+    # 要跑起来有两条路：① 换成本机真实的 MySQL 库；② 去掉这一段，让它回落到
+    # application.yml 里的 H2 内存库（配合 schema-iot.sql）。
+    # 本次 RBAC 验证走的是命令行覆盖（--spring.datasource.*），没有改动这里的取值。
     url: jdbc:mysql://localhost:3306/example_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowMultiQueries=true&useSSL=false&allowPublicKeyRetrieval=true
     username: admin
     password: password

@@ -62,3 +62,4 @@ public class OtaTaskController {
         return otaTaskService.cancel(id);
     }
 }
+

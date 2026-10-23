@@ -3,7 +3,7 @@ package com.agri.iot.service.impl;
 
 import com.agri.common.exception.BusinessException;
 import com.agri.common.security.SecurityUtils;
-import com.agri.common.util.BeanCopyUtils;
+import com.agri.common.utils.BeanCopyUtils;
 import com.agri.iot.dto.DeviceGroupSaveDTO;
 import com.agri.iot.dto.DeviceGroupUpdateDTO;
 import com.agri.iot.entity.DeviceGroup;
@@ -112,3 +112,4 @@ public class DeviceGroupServiceImpl implements IDeviceGroupService {
         }
     }
 }
+

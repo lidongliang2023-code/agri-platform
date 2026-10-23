@@ -45,3 +45,4 @@ public class Report extends BaseEntity {
 
     private Integer status;
 }
+

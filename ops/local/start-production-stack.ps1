@@ -8,7 +8,7 @@
     已经在跑的组件直接跳过，只补没起来的。
 
     顺序（依赖在前）：
-      MySQL(3306) → Redis(6379) → core-platform(8093) → agri-trade(8089)
+      MySQL(3306) → Redis(6379) → core-platform(8093) → agri-trade(8089) → agri-finance(8087)
       → agri-masterdata(8083) → agri-production(8092)
       → nginx(80/8080/8086/8090/8098/8180/8190)
 
@@ -65,7 +65,7 @@ function Wait-Port([int]$Port, [int]$TimeoutSec, [string]$What) {
     return $false
 }
 
-Write-Host '== 1/7 MySQL（:3306）=='
+Write-Host '== 1/8 MySQL（:3306）=='
 if (Test-Port 3306) {
     Write-Host '  · 已在运行，跳过'
 } else {
@@ -77,7 +77,7 @@ if (Test-Port 3306) {
     [void](Wait-Port 3306 30 'MySQL')
 }
 
-Write-Host '== 2/7 Redis（:6379）=='
+Write-Host '== 2/8 Redis（:6379）=='
 if (Test-Port 6379) {
     Write-Host '  · 已在运行，跳过'
 } else {
@@ -85,7 +85,7 @@ if (Test-Port 6379) {
     [void](Wait-Port 6379 15 'Redis')
 }
 
-Write-Host '== 3/7 core-platform（:8093，认证与平台域）=='
+Write-Host '== 3/8 core-platform（:8093，认证与平台域）=='
 if (Test-Port 8093) {
     Write-Host '  · 已在运行，跳过'
 } else {
@@ -100,7 +100,7 @@ if (Test-Port 8093) {
     [void](Wait-Port 8093 90 'core-platform')
 }
 
-Write-Host '== 4/7 agri-trade（:8089，交易、商品详情与大厅）=='
+Write-Host '== 4/8 agri-trade（:8089，交易、商品详情与大厅）=='
 if (Test-Port 8089) {
     Write-Host '  · 已在运行，跳过'
 } else {
@@ -120,7 +120,30 @@ if (Test-Port 8089) {
     [void](Wait-Port 8089 90 'agri-trade')
 }
 
-Write-Host '== 5/7 agri-masterdata（:8083，主数据管理运营后端）=='
+Write-Host '== 5/8 agri-finance（:8087，供应链金融后端）=='
+if (Test-Port 8087) {
+    Write-Host '  · 已在运行，跳过'
+} else {
+    $financeApp = Join-Path $RepoRoot 'agri-finance\backend\target\agri-finance-1.0.0-SNAPSHOT.jar'
+    if (-not (Test-Path $financeApp)) {
+        throw "供应链金融后端 JAR 不存在：$financeApp（先执行 Maven package）"
+    }
+    $financeDir = Join-Path $RepoRoot 'agri-finance\backend'
+    $env:SPRING_PROFILES_ACTIVE = 'mysql'
+    $env:MYSQL_HOST = 'localhost'
+    $env:MYSQL_PORT = '3306'
+    $env:MYSQL_DATABASE = 'agri_finance'
+    $env:MYSQL_USERNAME = 'root'
+    $env:MYSQL_PASSWORD = $MysqlRootPassword
+    Start-Process -FilePath 'java' `
+        -ArgumentList @('-jar', 'target\agri-finance-1.0.0-SNAPSHOT.jar', '--server.port=8087') `
+        -WorkingDirectory $financeDir -WindowStyle Hidden `
+        -RedirectStandardOutput "$env:TEMP\agri-finance-8087.out.log" `
+        -RedirectStandardError "$env:TEMP\agri-finance-8087.err.log"
+    [void](Wait-Port 8087 90 'agri-finance')
+}
+
+Write-Host '== 6/8 agri-masterdata（:8083，主数据管理运营后端）=='
 if (Test-Port 8083) {
     Write-Host '  · 已在运行，跳过'
 } else {
@@ -139,7 +162,7 @@ if (Test-Port 8083) {
     [void](Wait-Port 8083 90 'agri-masterdata')
 }
 
-Write-Host '== 6/7 agri-production（:8092，生产管理模块后端）=='
+Write-Host '== 7/8 agri-production（:8092，生产管理模块后端）=='
 if (Test-Port 8092) {
     Write-Host '  · 已在运行，跳过'
 } else {
@@ -152,7 +175,7 @@ if (Test-Port 8092) {
     [void](Wait-Port 8092 90 'agri-production')
 }
 
-Write-Host '== 7/7 统一网关 nginx（:80 / :8080 / :8086 / :8090 / :8098 / :8180 / :8190）=='
+Write-Host '== 8/8 统一网关 nginx（:80 / :8080 / :8086 / :8090 / :8098 / :8180 / :8190）=='
 if (Test-Port 80) {
     Write-Host '  · 已在运行，跳过'
 } else {
@@ -172,6 +195,7 @@ Write-Host '  交易大厅        http://localhost:8098/portal/#/hall'
 Write-Host '  商品详情        http://localhost:8086/product/detail/7005'
 Write-Host '  买家中心        http://localhost:8086/member/buyer'
 Write-Host '  卖家中心        http://localhost:8086/member/seller'
+Write-Host '  供应链金融      http://localhost:8081/finance/index.html'
 Write-Host '  统一认证        http://localhost:8090/login'
 Write-Host '  主数据运营端    http://localhost:8080/user/list'
 Write-Host '  用户端（农户）  http://localhost:8180/    → 登录后 http://localhost/production/login'

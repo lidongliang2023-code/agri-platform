@@ -5,19 +5,18 @@
          http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.agri</groupId>
-    <artifactId>agri-iot</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
-    <packaging>jar</packaging>
-    <name>Agri IoT Service</name>
-    <description>农业产业互联网平台 - 物联网管理模块（独立部署）</description>
-
     <parent>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.2.0</version>
-        <relativePath/>
+        <groupId>com.agri</groupId>
+        <artifactId>agri-platform</artifactId>
+        <version>1.0.0</version>
+        <relativePath>../../pom.xml</relativePath>
     </parent>
+
+    <artifactId>agri-iot-platform</artifactId>
+    <version>1.0.0</version>
+    <packaging>jar</packaging>
+    <name>agri-iot-platform</name>
+    <description>农业产业互联网平台 - 物联网管理模块</description>
 
     <properties>
         <java.version>17</java.version>
@@ -43,6 +42,12 @@
     </dependencyManagement>
 
     <dependencies>
+        <dependency>
+            <groupId>com.agri</groupId>
+            <artifactId>agri-common</artifactId>
+            <version>1.0.0</version>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
@@ -146,7 +151,15 @@
                             <artifactId>lombok</artifactId>
                         </exclude>
                     </excludes>
+                    <executable>true</executable>
                 </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>

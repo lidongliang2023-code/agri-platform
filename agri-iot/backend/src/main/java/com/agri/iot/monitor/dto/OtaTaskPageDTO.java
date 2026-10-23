@@ -11,3 +11,4 @@ public class OtaTaskPageDTO {
     private Integer taskType;
     private Integer taskStatus;
 }
+

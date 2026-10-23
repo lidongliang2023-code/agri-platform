@@ -22,7 +22,7 @@ function Dashboard() {
   const data = overviewData?.data || {}
 
   const activityChartOption = {
-    title: { text: '租户活跃度趋势', left: 'center', textStyle: { fontSize: 14, fontWeight: 500 } },
+    title: { text: '主体活跃度趋势', left: 'center', textStyle: { fontSize: 14, fontWeight: 500 } },
     tooltip: { trigger: 'axis' },
     grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
     xAxis: { type: 'category', data: ['周一', '周二', '周三', '周四', '周五', '周六', '周日'] },
@@ -38,14 +38,14 @@ function Dashboard() {
   ]
 
   const alerts = [
-    { id: 1, level: 'error', message: '租户T001数据同步失败', time: '5分钟前', module: '数据分发' },
+    { id: 1, level: 'error', message: '主体T001数据同步失败', time: '5分钟前', module: '数据分发' },
     { id: 2, level: 'warning', message: '数据质量评分低于阈值', time: '15分钟前', module: '数据质量' },
-    { id: 3, level: 'info', message: '新租户注册成功', time: '30分钟前', module: '租户管理' },
+    { id: 3, level: 'info', message: '新主体注册成功', time: '30分钟前', module: '主体管理' },
     { id: 4, level: 'warning', message: 'API调用次数接近上限', time: '1小时前', module: '系统监控' },
   ]
 
   const statCards = [
-    { title: '租户总数', value: data.tenantCount, icon: <BuildOutlined />, color: '#10b981' },
+    { title: '主体总数', value: data.tenantCount, icon: <BuildOutlined />, color: '#10b981' },
     { title: '用户总数', value: data.userCount, icon: <UserOutlined />, color: '#3b82f6' },
     { title: '组织总数', value: data.orgCount, icon: <TeamOutlined />, color: '#f59e0b' },
     { title: '商品总数', value: data.productCount, icon: <InboxOutlined />, color: '#8b5cf6' },

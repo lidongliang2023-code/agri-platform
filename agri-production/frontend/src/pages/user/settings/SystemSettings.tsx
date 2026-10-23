@@ -4,12 +4,12 @@
  * 所属模块：报表与设置
  * PRD 序号：PRD 6.1 #45
  *
- * 还原要点（PRD 6.1 #45「租户信息、参数配置、操作日志」）：
- * - Tab 1 租户信息：租户基础资料展示与编辑（名称 / 编码 / 信用代码 / 法人 / 联系人 / 地区 / 经营范围）
+ * 还原要点（PRD 6.1 #45「主体信息、参数配置、操作日志」）：
+ * - Tab 1 主体信息：主体基础资料展示与编辑（名称 / 编码 / 信用代码 / 法人 / 联系人 / 地区 / 经营范围）
  * - Tab 2 参数配置：系统参数目录（开关型 / 数值型 / 枚举型），支持在线改值、批量保存、重置与新增
  * - Tab 3 操作日志：操作人、操作类型、操作对象、操作时间、IP 与结果的查询表
  *
- * 数据来源：`/settings`（配置列表 / 新增 / 更新 / 批量保存）、`/settings/tenant`（租户信息）、
+ * 数据来源：`/settings`（配置列表 / 新增 / 更新 / 批量保存）、`/settings/tenant`（主体信息）、
  * `/settings/logs`（操作日志，当前后端为 404）。
  *
  * 纪律：`/settings/logs` 拿不到真实日志时**不再回落示例数据**，而是空表 + 醒目 Alert 横幅
@@ -81,7 +81,7 @@ function failureReasonOf(error: unknown): string {
   return detail || '网络异常，后端不可达'
 }
 
-/** 租户等级文案 */
+/** 主体等级文案 */
 const TENANT_LEVEL_LABEL: Record<number, string> = {
   1: '免费版',
   2: '基础版',
@@ -225,11 +225,11 @@ const OPERATE_TYPE_OPTIONS: { value: string; label: string }[] = [
   { value: '配置变更', label: '配置变更' },
 ]
 
-/** 租户信息表单字段 */
+/** 主体信息表单字段 */
 interface TenantFormValues {
-  /** 租户名称 */
+  /** 主体名称 */
   tenantName: string
-  /** 租户编码 */
+  /** 主体编码 */
   tenantCode: string
   /** 统一社会信用代码 */
   creditCode?: string
@@ -250,7 +250,7 @@ interface TenantFormValues {
 /**
  * 系统设置
  *
- * 业务职责：租户资料维护、系统参数配置与操作日志审计。
+ * 业务职责：主体资料维护、系统参数配置与操作日志审计。
  *
  * @returns 页面内容
  */
@@ -262,15 +262,15 @@ export default function SystemSettings(): JSX.Element {
   /** 当前 Tab */
   const [activeTab, setActiveTab] = useState<string>('tenant')
 
-  /* ---------------- 租户信息 ---------------- */
+  /* ---------------- 主体信息 ---------------- */
 
   /**
-   * 租户档案。
+   * 主体档案。
    *
    * 纪律：初始值**一律留空**，不回落到当前农场名 / 农场编码，也不预填任何硬编码档案
    * （统一社会信用代码、法人、联系人、地址、经营范围、等级、到期时间等）。
-   * 后端没有租户档案端点时空着显示「—」，比编一份"看起来很真实"的档案安全得多——
-   * 租户信息是要拿去做合同、发票与资质审核的。
+   * 后端没有主体档案端点时空着显示「—」，比编一份"看起来很真实"的档案安全得多——
+   * 主体信息是要拿去做合同、发票与资质审核的。
    */
   const [tenant, setTenant] = useState<TenantProfile>({
     tenantName: '',
@@ -280,13 +280,13 @@ export default function SystemSettings(): JSX.Element {
   const [tenantSaving, setTenantSaving] = useState<boolean>(false)
   const [tenantForm] = Form.useForm<TenantFormValues>()
 
-  /** 远程租户信息 */
+  /** 远程主体信息 */
   const tenantQuery = useQuery({
     queryKey: ['settings-tenant'],
     queryFn: () => getTenantProfile(),
   })
 
-  /** 租户档案「未接入」原因（非空表示本次没拿到任何真实档案） */
+  /** 主体档案「未接入」原因（非空表示本次没拿到任何真实档案） */
   const tenantUnavailableReason: string | undefined = tenantQuery.data?.unavailableReason
 
   useEffect(() => {
@@ -312,13 +312,13 @@ export default function SystemSettings(): JSX.Element {
     setTenantEditing(true)
   }
 
-  /** 提交租户信息 */
+  /** 提交主体信息 */
   const submitTenant = async (): Promise<void> => {
     let values: TenantFormValues
     try {
       values = await tenantForm.validateFields()
     } catch {
-      message.warning('请完整填写租户信息')
+      message.warning('请完整填写主体信息')
       return
     }
     const next: TenantProfile = { ...tenant, ...values }
@@ -327,16 +327,16 @@ export default function SystemSettings(): JSX.Element {
       await saveTenantProfile(next)
       // 同步写入配置中心，便于后端后续按 key 读取
       await saveSettings([
-        { configKey: 'tenant.profile', configValue: JSON.stringify(next), description: '租户信息' },
+        { configKey: 'tenant.profile', configValue: JSON.stringify(next), description: '主体信息' },
       ])
       setTenant(next)
       setTenantEditing(false)
-      message.success('租户信息已保存到服务端')
+      message.success('主体信息已保存到服务端')
     } catch (error) {
       // 保存失败：不写入 tenant 状态、不关闭弹窗。
       // 弹窗保持打开 = 用户填的内容还在（这就是"本地保留"），但页面不会把它当成
-      // 已保存的租户档案展示，也不会提示"已保存"。
-      message.error(`租户信息保存失败，未同步到服务端：${failureReasonOf(error)}`)
+      // 已保存的主体档案展示，也不会提示"已保存"。
+      message.error(`主体信息保存失败，未同步到服务端：${failureReasonOf(error)}`)
     }
     setTenantSaving(false)
   }
@@ -621,19 +621,19 @@ export default function SystemSettings(): JSX.Element {
           items={[
             {
               key: 'tenant',
-              label: '租户信息',
+              label: '主体信息',
               children: (
                 <Spin spinning={tenantQuery.isLoading}>
                   <Space direction="vertical" size={16} style={{ width: '100%' }}>
                     <Row justify="space-between" align="middle">
                       <Col>
                         <Text type="secondary">
-                          租户信息用于合同、发票与平台认证，变更后需重新提交资质审核
+                          主体信息用于合同、发票与平台认证，变更后需重新提交资质审核
                         </Text>
                       </Col>
                       <Col>
                         <Button icon={<EditOutlined />} onClick={openTenantEdit}>
-                          编辑租户信息
+                          编辑主体信息
                         </Button>
                       </Col>
                     </Row>
@@ -641,14 +641,14 @@ export default function SystemSettings(): JSX.Element {
                       <Alert
                         showIcon
                         type="warning"
-                        message="租户档案未接入：后端暂无 /settings/tenant 端点，本页不展示任何示例档案"
+                        message="主体档案未接入：后端暂无 /settings/tenant 端点，本页不展示任何示例档案"
                         description={
                           <span>
                             原因：{tenantUnavailableReason}。实测该路径会被后端的
                             <Text code>/settings/{'{id}'}</Text>
                             详情端点吞掉并返回「资源不存在」，与请求一个不存在的 id 完全一致，
-                            因此这是<strong>端点缺失</strong>而不是"该租户没有档案"。
-                            为避免把农场名或编造的档案当成真实租户资料，此处一律显示「-」；
+                            因此这是<strong>端点缺失</strong>而不是"该主体没有档案"。
+                            为避免把农场名或编造的档案当成真实主体资料，此处一律显示「-」；
                             <strong>保存同样不可用</strong>（PUT 走同一路径），点击保存会如实报错。
                             端点补齐已列入后端批次。
                           </span>
@@ -656,9 +656,9 @@ export default function SystemSettings(): JSX.Element {
                       />
                     )}
                     <Descriptions bordered column={2} size="small">
-                      <Descriptions.Item label="租户名称">{tenant.tenantName || '-'}</Descriptions.Item>
-                      <Descriptions.Item label="租户编码">{tenant.tenantCode || '-'}</Descriptions.Item>
-                      <Descriptions.Item label="租户等级">
+                      <Descriptions.Item label="主体名称">{tenant.tenantName || '-'}</Descriptions.Item>
+                      <Descriptions.Item label="主体编码">{tenant.tenantCode || '-'}</Descriptions.Item>
+                      <Descriptions.Item label="主体等级">
                         {tenant.tenantLevel && TENANT_LEVEL_LABEL[tenant.tenantLevel] ? (
                           <Tag color="gold">{TENANT_LEVEL_LABEL[tenant.tenantLevel]}</Tag>
                         ) : (
@@ -830,9 +830,9 @@ export default function SystemSettings(): JSX.Element {
         />
       </Card>
 
-      {/* 编辑租户信息 */}
+      {/* 编辑主体信息 */}
       <Modal
-        title="编辑租户信息"
+        title="编辑主体信息"
         open={tenantEditing}
         onCancel={() => setTenantEditing(false)}
         onOk={() => void submitTenant()}
@@ -844,8 +844,8 @@ export default function SystemSettings(): JSX.Element {
             <Col span={12}>
               <Form.Item
                 name="tenantName"
-                label="租户名称"
-                rules={[{ required: true, message: '请输入租户名称' }]}
+                label="主体名称"
+                rules={[{ required: true, message: '请输入主体名称' }]}
               >
                 <Input placeholder="如：阳光有机农场" />
               </Form.Item>
@@ -853,8 +853,8 @@ export default function SystemSettings(): JSX.Element {
             <Col span={12}>
               <Form.Item
                 name="tenantCode"
-                label="租户编码"
-                rules={[{ required: true, message: '请输入租户编码' }]}
+                label="主体编码"
+                rules={[{ required: true, message: '请输入主体编码' }]}
               >
                 <Input placeholder="如：TENANT-000001" />
               </Form.Item>

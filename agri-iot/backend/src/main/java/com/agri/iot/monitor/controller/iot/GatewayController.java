@@ -56,3 +56,4 @@ public class GatewayController {
         return gatewayService.heartbeat(id);
     }
 }
+

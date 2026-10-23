@@ -11,3 +11,4 @@ public class PlotQueryDTO {
     private Integer pageNum;
     private Integer pageSize;
 }
+

@@ -1,9 +1,9 @@
 package com.agri.iot.service.impl;
 
-import com.agri.common.entity.PageResult;
+import com.agri.common.result.PageResult;
 import com.agri.common.exception.BusinessException;
 import com.agri.common.security.SecurityUtils;
-import com.agri.common.util.BeanCopyUtils;
+import com.agri.common.utils.BeanCopyUtils;
 import com.agri.iot.dto.AlertRulePageDTO;
 import com.agri.iot.dto.AlertRuleSaveDTO;
 import com.agri.iot.dto.AlertRuleUpdateDTO;

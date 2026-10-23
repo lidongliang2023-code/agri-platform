@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.Date;
@@ -57,6 +58,7 @@ public class InvoiceController {
 
     /** 申请开票。 */
     @PostMapping
+    @Transactional(rollbackFor = Exception.class)
     public ApiResponse<Invoice> apply(@RequestBody ApplyRequest request) {
         PlatformIdentityService.MerchantScope scope = identityService.currentScope();
         if (!scope.resolved()) {

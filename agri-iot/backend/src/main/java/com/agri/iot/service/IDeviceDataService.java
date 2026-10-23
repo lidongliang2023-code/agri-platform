@@ -1,6 +1,6 @@
 package com.agri.iot.service;
 
-import com.agri.common.entity.PageResult;
+import com.agri.common.result.PageResult;
 import com.agri.iot.entity.DeviceData;
 import com.agri.iot.vo.DeviceDataVO;
 import com.agri.iot.vo.RealtimeDataVO;

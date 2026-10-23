@@ -74,7 +74,7 @@ function mapFarmToRow(farm: Farm, profile?: FarmComplianceProfile): SupervisedFa
     farmId: farm.farmId,
     farmCode: farm.farmCode || String(farm.farmId),
     farmName: farm.farmName,
-    tenantName: farm.tenantId ? `租户 ${farm.tenantId}` : '—',
+    tenantName: farm.tenantId ? `主体 ${farm.tenantId}` : '—',
     province: farm.province || '',
     city: farm.city || '',
     areaTotal: Number(farm.areaTotal) || 0,
@@ -90,11 +90,11 @@ function mapFarmToRow(farm: Farm, profile?: FarmComplianceProfile): SupervisedFa
 /**
  * 农场监管列表
  *
- * 业务职责：全平台农场监管台账，按名称 / 租户 / 省份 / 状态 / 风险等级检索，
+ * 业务职责：全平台农场监管台账，按名称 / 主体 / 省份 / 状态 / 风险等级检索，
  * 提供风险评分分档着色、整改下发与地图模式入口。
  *
  * 数据来源：`GET /admin/farms`（分页）与 `GET /admin/farms/compliance?limit`（合规画像）。
- * 后端暂未返回风险评分、所属租户名称与最近检查时间，页面使用「稳定派生 + 原型示例」两条兜底：
+ * 后端暂未返回风险评分、所属主体名称与最近检查时间，页面使用「稳定派生 + 原型示例」两条兜底：
  * - 风险评分：由合规画像等级 + 农场 ID 稳定哈希派生（见 supervisionShared.deriveRiskScore）
  * - 后端无数据时：整体降级为原型 P4 示例口径（5 条），保证页面可交互
  *
@@ -174,7 +174,7 @@ export default function FarmSupervisionList(): JSX.Element {
    */
   const sourceRows: SupervisedFarmRow[] = remoteRows
 
-  /** 本地二次过滤后的行（后端尚不支持租户 / 省份 / 风险筛选） */
+  /** 本地二次过滤后的行（后端尚不支持主体 / 省份 / 风险筛选） */
   const filteredRows = useMemo<SupervisedFarmRow[]>(
     () =>
       sourceRows.filter((row) => {
@@ -204,7 +204,7 @@ export default function FarmSupervisionList(): JSX.Element {
   /** 总条数（后端分页总量） */
   const totalCount: number = Number(farmsQuery.data?.total ?? 0)
 
-  /** 租户选项（去重，仅取真实档案） */
+  /** 主体选项（去重，仅取真实档案） */
   const tenantOptions = useMemo<string[]>(() => {
     const set = new Set<string>()
     remoteRows.forEach((row) => set.add(row.tenantName))
@@ -290,7 +290,7 @@ export default function FarmSupervisionList(): JSX.Element {
         </Button>
       ),
     },
-    { title: '所属租户', dataIndex: 'tenantName', width: 120 },
+    { title: '所属主体', dataIndex: 'tenantName', width: 120 },
     {
       title: '省市',
       width: 140,
@@ -364,7 +364,7 @@ export default function FarmSupervisionList(): JSX.Element {
     exportCsv<SupervisedFarmRow>('农场监管列表', filteredRows, [
       { title: '农场编号', render: (row) => row.farmCode },
       { title: '农场名称', render: (row) => row.farmName },
-      { title: '所属租户', render: (row) => row.tenantName },
+      { title: '所属主体', render: (row) => row.tenantName },
       { title: '省市', render: (row) => formatRegion(row.province, row.city) },
       { title: '面积(亩)', render: (row) => row.areaTotal },
       { title: '种植作物', render: (row) => row.crops },
@@ -460,7 +460,7 @@ export default function FarmSupervisionList(): JSX.Element {
           </Col>
           <Col xs={24} sm={12} md={4}>
             <div>
-              <Text type="secondary">所属租户：</Text>
+              <Text type="secondary">所属主体：</Text>
               <Select
                 allowClear
                 style={{ width: '100%' }}
@@ -570,7 +570,7 @@ export default function FarmSupervisionList(): JSX.Element {
           style={{ marginTop: 12 }}
           type="warning"
           showIcon
-          message="所属租户 / 省份 / 风险等级筛选暂由前端在当前页结果上二次过滤"
+          message="所属主体 / 省份 / 风险等级筛选暂由前端在当前页结果上二次过滤"
           description="后端 /admin/farms 目前仅支持关键字与状态过滤，已对返回结果做本地补充过滤。"
         />
       )}

@@ -19,7 +19,7 @@ const { Header, Sider, Content } = Layout
 
 const menuItems = [
   { key: '/dashboard', icon: <DashboardOutlined />, label: '数据概览' },
-  { key: '/tenants', icon: <BuildOutlined />, label: '租户管理' },
+  { key: '/tenants', icon: <BuildOutlined />, label: '主体管理' },
   { key: '/users', icon: <UserOutlined />, label: '用户管理' },
   { key: '/orgs', icon: <TeamOutlined />, label: '组织管理' },
   { key: '/roles', icon: <LockOutlined />, label: '角色管理' },

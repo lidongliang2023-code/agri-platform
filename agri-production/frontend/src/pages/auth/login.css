@@ -1,0 +1,59 @@
+/**
+ * 两端登录页的独立视觉 —— 同一套设计令牌，两种气质。
+ *
+ * 为什么两端要长得不一样：运营端是办公室里的管理岗，长时间在线、要"这是个正经后台"的观感；
+ * 用户端是田间地头的农户，多在手机上、要一眼看懂、要亲和。视觉区分不是审美问题，
+ * 而是让用户一眼确认"我进对了门"。
+ *
+ * 实现方式：由各页在挂载期间给 body 打标记（卸载即移除），这里按标记出样式。
+ * 之所以不逐个改 JSX：两页结构一致、只差气质，改样式比改结构风险小得多。
+ *
+ * 注意：antd v5 的样式是运行时注入的，普通选择器可能被它的同名类覆盖，故外观属性加 !important；
+ * 色值一律取设计令牌，不在这里另写品牌色。
+ */
+
+/* ---------- 运营端：墨绿深底、沉一点的卡片 ---------- */
+/* 只改 body 不够：登录页自己的容器带着背景色，会把 body 整个盖住，实测就是浅底没变化。
+ * 所以连容器一起覆盖；容器多半是内联样式，用 !important 压过它（规范允许的少数情形之一）。 */
+body.agri-login-admin,
+body.agri-login-admin #root,
+body.agri-login-admin #root > div {
+  background: #10221a !important;
+}
+
+/* 真正画底的是这一层：.ant-app 的直属 div 带着内联的 linear-gradient。
+ * 背景图会盖住背景色，所以必须同时把 background-image 清掉 —— 只改外层容器是白改（实测两次）。 */
+body.agri-login-admin .ant-app > div {
+  background-image: none !important;
+  background: #10221a !important;
+}
+
+body.agri-login-admin .ant-card {
+  border-radius: 10px !important;
+  border-top: 4px solid var(--agri-brand-color, #13a05a) !important;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.38) !important;
+}
+
+body.agri-login-admin .ant-typography-secondary,
+body.agri-login-admin .ant-form-item-explain {
+  color: rgba(255, 255, 255, 0.65) !important;
+}
+
+/* ---------- 用户端：农业绿明快渐变、圆润、控件更大 ---------- */
+body.agri-login-user {
+  background: linear-gradient(160deg, #eaf7ef 0%, #f7fbf8 45%, #e6f4ec 100%);
+}
+
+body.agri-login-user .ant-card {
+  border-radius: 16px !important;
+  border-top: 4px solid var(--agri-brand-color, #13a05a) !important;
+  box-shadow: 0 12px 32px rgba(19, 160, 90, 0.14) !important;
+}
+
+/* 农户多在手机上操作：把控件做大一号，减少误触 */
+body.agri-login-user .ant-input,
+body.agri-login-user .ant-input-number,
+body.agri-login-user .ant-btn {
+  height: 44px !important;
+  font-size: 16px !important;
+}

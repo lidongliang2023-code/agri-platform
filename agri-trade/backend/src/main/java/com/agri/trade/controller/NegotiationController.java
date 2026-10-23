@@ -112,6 +112,18 @@ public class NegotiationController {
 
     @GetMapping("/inquiry/{inquiryId}/quotes")
     public ApiResponse<List<Quote>> getInquiryQuotes(@PathVariable Long inquiryId) {
+        Inquiry inquiry = inquiryService.getById(inquiryId);
+        if (inquiry == null) {
+            return ApiResponse.error("询价单不存在");
+        }
+        PlatformIdentityService.MerchantScope scope = identityService.currentScope();
+        if (!scope.resolved()) {
+            return ApiResponse.error(scope.error());
+        }
+        if (!scope.merchantIds().contains(inquiry.getBuyerId())
+                && (inquiry.getSellerId() == null || !scope.merchantIds().contains(inquiry.getSellerId()))) {
+            return ApiResponse.error("只有询价单的采购方或供货方可以查看报价");
+        }
         List<Quote> quotes = inquiryService.getQuotesByInquiry(inquiryId);
         return ApiResponse.success(quotes);
     }
@@ -305,13 +317,16 @@ public class NegotiationController {
             @RequestParam(defaultValue = "10") Integer pageSize,
             @RequestParam(required = false) String quoteStatus,
             @RequestParam(required = false) Long sellerId,
-            @RequestParam(required = false) Long buyerId) {
+            @RequestParam(required = false) Long buyerId,
+            @RequestParam(required = false) String quoteNo,
+            @RequestParam(required = false) String productName) {
         PlatformIdentityService.MerchantScope scope = identityService.currentScope();
         if (!scope.resolved()) {
             return ApiResponse.error(scope.error());
         }
         return ApiResponse.success(
-                quoteService.getQuotePage(pageNum, pageSize, quoteStatus, sellerId, buyerId, scope.merchantIds()));
+                quoteService.getQuotePage(pageNum, pageSize, quoteStatus, sellerId, buyerId, scope.merchantIds(),
+                        quoteNo, productName));
     }
 
     @Operation(summary = "报价详情")

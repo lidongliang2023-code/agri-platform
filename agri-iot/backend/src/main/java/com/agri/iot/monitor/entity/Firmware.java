@@ -49,3 +49,4 @@ public class Firmware {
     @TableLogic
     private Integer deleted;
 }
+

@@ -2,7 +2,7 @@
  * 页面名称：作物管理
  * 路由路径：/production/crops
  * 所属模块：农场数字化管理
- * 原型补充（PRD 未列）：把「作物」从自由文本升级成租户级主数据后的维护入口。
+ * 原型补充（PRD 未列）：把「作物」从自由文本升级成平台主数据后的维护入口。
  *
  * 页面用途：作物主数据的查询 / 新增 / 编辑 / 启停 / 删除。种养计划与地块的作物列都从这里取。
  * 表格使用 ProTable + request 分页；新增 / 编辑使用 ModalForm；停用与删除需二次确认。
@@ -257,7 +257,7 @@ export default function CropList(): JSX.Element {
             { required: true, message: '请输入作物名称' },
             { max: 50, message: '作物名称不超过 50 个字符' },
           ]}
-          extra="同租户内不允许重名"
+          extra="同一经营主体内不允许重名"
         />
         <ProFormText name="cropCode" label="作物编码" placeholder="留空由系统自动生成（如 CROP-0001）" />
         <ProFormSelect

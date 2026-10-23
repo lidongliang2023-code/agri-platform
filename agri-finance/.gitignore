@@ -1,0 +1,5 @@
+# Local H2 database files (the default runtime now uses MySQL).
+backend/data/
+
+# Runtime uploads created by the finance service.
+backend/uploads/

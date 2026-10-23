@@ -58,6 +58,12 @@ __tmpout/
 .tmp-probe-*.sh
 *.timestamp-*.mjs
 
+# 本地代理快照与运行转储
+.workbuddy/
+dump.rdb
+err_user.txt
+out_user.json
+
 # ============================================================================
 # 本地数据库文件
 #   生产管理模块原先用 SQLite 文件库（agri-production/backend/data/*.sqlite），

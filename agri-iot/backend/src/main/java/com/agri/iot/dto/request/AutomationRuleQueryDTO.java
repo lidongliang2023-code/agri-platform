@@ -11,3 +11,4 @@ public class AutomationRuleQueryDTO {
     private Integer pageNum;
     private Integer pageSize;
 }
+

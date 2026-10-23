@@ -41,3 +41,4 @@ public class DeviceGroupVO {
 
     private List<DeviceVO> devices;
 }
+

@@ -1,7 +1,7 @@
 package com.agri.iot.controller;
 
-import com.agri.common.entity.ApiResponse;
-import com.agri.common.entity.PageResult;
+import com.agri.common.result.ApiResponse;
+import com.agri.common.result.PageResult;
 import com.agri.iot.entity.AutomationRule;
 import com.agri.iot.service.IAutomationRuleService;
 import lombok.RequiredArgsConstructor;

@@ -14,3 +14,4 @@ public interface IPlotService {
     Result<Void> update(Long id, PlotSaveDTO dto);
     Result<Void> delete(Long id);
 }
+

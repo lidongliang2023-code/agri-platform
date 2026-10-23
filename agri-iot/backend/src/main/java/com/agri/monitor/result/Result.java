@@ -29,3 +29,4 @@ public class Result<T> {
         return result;
     }
 }
+

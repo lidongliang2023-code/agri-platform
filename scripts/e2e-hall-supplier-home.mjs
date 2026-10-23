@@ -46,7 +46,7 @@ try {
   const firstSupplier = suppliers[0]
   await hallFrame.click('.hall-supplier')
   await page.waitForFunction(() => window.location.pathname.startsWith('/shop/'), { timeout: 20000 })
-  await page.waitForSelector('.ant-card', { timeout: 20000 })
+  await page.waitForSelector('.shop-hero', { timeout: 20000 })
   await page.waitForFunction((name) => document.body.innerText.includes(name),
     { timeout: 15000 }, firstSupplier.name)
   const pageText = await page.evaluate(() => document.body.innerText)
@@ -54,7 +54,40 @@ try {
     '点击推荐卡片免登录进入供应商主页', page.url())
   check(pageText.includes(firstSupplier.name),
     '供应商主页显示对应供应商信息', firstSupplier.name)
+  check(pageText.includes('供应商资料') && pageText.includes('交易保障') && pageText.includes('采购流程'),
+    '店铺主页包含供应商资料、交易保障与采购流程')
+  check(!(await page.$('.ant-table')), '供应商主页已由后台表格改为面向买家的商品卡片')
+  const productCards = await page.$$eval('.shop-product-card', (items) => items.map((item) => item.getAttribute('href')))
+  check(productCards.length > 0 && productCards.every((href) => /^\/product\/detail\/\d+$/.test(href ?? '')),
+    '在售货源以商品卡片展示并可进入商品详情', `${productCards.length} 款`)
+  const sharedStyle = await page.evaluate(() => ({
+    hasHallHeader: Boolean(document.querySelector('.site-header .hall-brand')),
+    hasBreadcrumb: Boolean(document.querySelector('.pd-crumb')),
+    heroRadius: getComputedStyle(document.querySelector('.shop-hero')).borderRadius,
+    pageBackground: getComputedStyle(document.querySelector('.shop-page')).backgroundColor,
+    primaryColor: getComputedStyle(document.querySelector('.shop-hero-action')).backgroundColor,
+  }))
+  check(sharedStyle.hasHallHeader && sharedStyle.hasBreadcrumb,
+    '店铺页复用商品详情的交易大厅导航和面包屑')
+  check(sharedStyle.heroRadius === '18px' && sharedStyle.primaryColor === 'rgb(18, 118, 74)',
+    '店铺页沿用商品详情的圆角卡片与绿色主色')
   await page.screenshot({ path: path.join(OUT, 'hall-supplier-home.png'), fullPage: true })
+
+  const firstProductUrl = productCards[0]
+  if (firstProductUrl) {
+    await page.goto(`http://localhost:8086${firstProductUrl}`, { waitUntil: 'networkidle2', timeout: 60000 })
+    await page.waitForSelector('.pd-hero', { timeout: 20000 })
+    check(page.url().includes(firstProductUrl), '店铺商品卡片可进入对应商品详情', firstProductUrl)
+    await page.goBack({ waitUntil: 'networkidle2', timeout: 60000 })
+    await page.waitForSelector('.shop-product-grid', { timeout: 20000 })
+  }
+
+  await page.setViewport({ width: 390, height: 844 })
+  await page.reload({ waitUntil: 'networkidle2', timeout: 60000 })
+  await page.waitForSelector('.shop-hero', { timeout: 20000 })
+  const noOverflow = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)
+  check(noOverflow, '390px 移动端店铺页无横向溢出')
+  await page.screenshot({ path: path.join(OUT, 'hall-supplier-home-mobile.png'), fullPage: true })
   check(errors.length === 0, '供应商主页跳转无未捕获脚本异常', errors.slice(0, 2).join(' | '))
 } catch (error) {
   check(false, '供应商主页回归未抛异常', String(error).slice(0, 280))

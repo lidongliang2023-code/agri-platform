@@ -1,7 +1,7 @@
 server:
   # 8082 已归生产管理后端（agri-production），两个服务原先都写 8082，本机只能起一个。
-  # IoT 让到 8085，并在 ops/gateway 的 upstream 里登记（见 10-upstreams.conf）。
-  port: 8085
+  # 8085 也是网关的虚拟主机端口，同样不能用；IoT 让到 8091（本机空闲，网关尚未登记它的 upstream）。
+  port: 8091
 
 spring:
   application:

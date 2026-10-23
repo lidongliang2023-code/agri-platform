@@ -17,3 +17,4 @@ public class PlotSaveDTO {
     private String irrigationType;
     private String remark;
 }
+

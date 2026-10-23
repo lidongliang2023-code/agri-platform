@@ -10,10 +10,21 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.security.MessageDigest;
 import java.util.Date;
+import java.util.HexFormat;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 @RestController
@@ -21,9 +32,14 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ContractController {
 
+    private static final long MAX_EVIDENCE_BYTES = 5L * 1024 * 1024;
+
     private final ContractMapper contractMapper;
     private final ContractTemplateMapper templateMapper;
     private final PlatformIdentityService identityService;
+
+    @Value("${agri.trade.upload-dir:uploads}")
+    private String uploadDir;
 
     @GetMapping("/template/page")
     public ApiResponse<IPage<ContractTemplate>> getTemplatePage(
@@ -89,6 +105,8 @@ public class ContractController {
     public ApiResponse<Contract> getContractById(@PathVariable Long id) {
         Contract contract = contractMapper.selectById(id);
         if (contract == null) return ApiResponse.error("合同不存在");
+        String denied = denyIfNotParty(contract);
+        if (denied != null) return ApiResponse.error(denied);
         return ApiResponse.success(contract);
     }
 
@@ -109,6 +127,7 @@ public class ContractController {
     }
 
     @PostMapping("/{id}/sign")
+    @Transactional(rollbackFor = Exception.class)
     public ApiResponse<Boolean> signContract(@PathVariable Long id,
                                              @RequestBody(required = false) java.util.Map<String, String> params) {
         Contract contract = contractMapper.selectById(id);
@@ -130,6 +149,18 @@ public class ContractController {
         if ("cancelled".equals(contract.getContractStatus())) {
             return ApiResponse.error("合同已取消，不能再签署");
         }
+        String signMode = params == null ? "online" : params.getOrDefault("signMode", "online");
+        if (!"online".equals(signMode) && !"offline".equals(signMode)) {
+            return ApiResponse.error("签署方式只能是 online（在线电子签章）或 offline（线下签署）");
+        }
+        String evidenceUrl = params == null ? null : params.get("evidenceUrl");
+        if (evidenceUrl == null || evidenceUrl.isBlank()
+                || !evidenceUrl.startsWith("/uploads/trade/contracts/")) {
+            return ApiResponse.error("请先上传" + ("online".equals(signMode) ? "电子签章" : "线下签署合同文件"));
+        }
+        if (params == null || !Boolean.parseBoolean(params.get("confirmed"))) {
+            return ApiResponse.error("请确认已核对合同内容并同意签署");
+        }
 
         // 挑一侧来签：优先挑"我有资格、且还没签"的那一侧。
         // 一个人同时是买卖双方时（同一主体自签），第一次会签买方，第二次自然落到卖方。
@@ -141,39 +172,96 @@ public class ContractController {
         } else {
             return ApiResponse.error("你这一方已经签署过了，不能重复签署");
         }
+        String signerName = params.get("signerName");
+        if (signerName == null || signerName.isBlank()) {
+            signerName = "buyer".equals(signatoryType) ? contract.getBuyerName() : contract.getSellerName();
+        }
+        if (signerName.length() > 80) {
+            return ApiResponse.error("签署人姓名不能超过 80 个字符");
+        }
 
         if ("buyer".equals(signatoryType)) {
             contract.setBuyerSignStatus("signed");
             contract.setBuyerSignTime(new Date());
             contract.setBuyerSignIp(clientIp());
-            contract.setBuyerSignature("SIGN-" + UUID.randomUUID().toString().substring(0, 32));
+            contract.setBuyerSignature(signatureEvidence(signMode, signerName, evidenceUrl));
         } else if ("seller".equals(signatoryType)) {
             contract.setSellerSignStatus("signed");
             contract.setSellerSignTime(new Date());
             // 签署 IP 取服务端看到的来源地址，不采信请求体（那是可以随便填的留痕）
             contract.setSellerSignIp(clientIp());
-            contract.setSellerSignature("SIGN-" + UUID.randomUUID().toString().substring(0, 32));
+            contract.setSellerSignature(signatureEvidence(signMode, signerName, evidenceUrl));
+        }
+        if ("offline".equals(signMode)) {
+            contract.setContractFileUrl(evidenceUrl);
         }
 
+        contract.setContractHash(contractContentHash(contract));
         if ("signed".equals(contract.getBuyerSignStatus()) && "signed".equals(contract.getSellerSignStatus())) {
             contract.setContractStatus("signed");
             contract.setSignDate(new Date());
             contract.setEffectiveDate(new Date());
             
             contract.setChainStatus("success");
-            // UUID 去掉横线是 32 位十六进制，取 64 位会越界（StringIndexOutOfBoundsException），
-            // 而这一行正好在"双方都签完"的那一刻执行 —— 也就是说：
-            // **双签走到最后一步必然 500，合同签署从来没有真正完成过。**
-            // 拼两个 UUID 凑满 64 位十六进制。
-            String hex = UUID.randomUUID().toString().replace("-", "")
-                    + UUID.randomUUID().toString().replace("-", "");
-            contract.setChainTxHash("0x" + hex.substring(0, 64));
+            contract.setChainTxHash(signatureHash(contract));
             contract.setChainTime(new Date());
         }
 
         contract.setUpdateTime(new Date());
         int result = contractMapper.updateById(contract);
         return result > 0 ? ApiResponse.success(true) : ApiResponse.error("签署失败");
+    }
+
+    /**
+     * 上传签署证据。在线签章限制为图片；线下签署允许 PDF、扫描件或照片。
+     * 文件先落盘，再由签署接口把 URL、签署人、方式一并写入合同。
+     */
+    @PostMapping("/{id}/evidence")
+    public ApiResponse<EvidenceView> uploadEvidence(@PathVariable Long id,
+                                                    @RequestParam String signMode,
+                                                    @RequestPart("file") MultipartFile file) throws IOException {
+        Contract contract = contractMapper.selectById(id);
+        if (contract == null) return ApiResponse.error("合同不存在");
+        String denied = denyIfNotParty(contract);
+        if (denied != null) return ApiResponse.error(denied);
+        if ("cancelled".equals(contract.getContractStatus())) {
+            return ApiResponse.error("合同已取消，不能上传签署证据");
+        }
+        if (file == null || file.isEmpty()) {
+            return ApiResponse.error("请选择签署文件");
+        }
+        if (file.getSize() > MAX_EVIDENCE_BYTES) {
+            return ApiResponse.error("签署文件不能超过 5MB");
+        }
+        if (!"online".equals(signMode) && !"offline".equals(signMode)) {
+            return ApiResponse.error("不支持的签署方式");
+        }
+        String originalName = file.getOriginalFilename() == null ? "" : file.getOriginalFilename();
+        String extension = "";
+        int dot = originalName.lastIndexOf('.');
+        if (dot >= 0) extension = originalName.substring(dot + 1).toLowerCase(Locale.ROOT);
+        boolean image = List.of("png", "jpg", "jpeg", "webp").contains(extension);
+        boolean document = image || "pdf".equals(extension);
+        if ("online".equals(signMode) && !image) {
+            return ApiResponse.error("在线电子签章请上传 PNG、JPG、JPEG 或 WEBP 图片");
+        }
+        if ("offline".equals(signMode) && !document) {
+            return ApiResponse.error("线下签署请上传 PDF 或图片扫描件");
+        }
+        Path directory = Paths.get(uploadDir, "trade", "contracts").toAbsolutePath().normalize();
+        Files.createDirectories(directory);
+        String filename = "contract-" + id + "-" + UUID.randomUUID().toString().replace("-", "")
+                + "." + extension;
+        Path target = directory.resolve(filename).normalize();
+        if (!target.startsWith(directory)) {
+            return ApiResponse.error("文件路径不合法");
+        }
+        file.transferTo(target.toFile());
+        return ApiResponse.success(new EvidenceView(
+                "/uploads/trade/contracts/" + filename, originalName, file.getSize(), signMode));
+    }
+
+    public record EvidenceView(String url, String originalName, long size, String signMode) {
     }
 
     @PostMapping("/{id}/archive")
@@ -209,5 +297,49 @@ public class ContractController {
             return forwarded.split(",")[0].trim();
         }
         return attributes.getRequest().getRemoteAddr();
+    }
+
+    /** 合同详情也只允许买卖双方查看。 */
+    private String denyIfNotParty(Contract contract) {
+        PlatformIdentityService.MerchantScope scope = identityService.currentScope();
+        if (!scope.resolved()) return scope.error();
+        if (!scope.hasBinding()) return "当前账号还没有绑定经营主体";
+        boolean party = (contract.getBuyerId() != null && scope.merchantIds().contains(contract.getBuyerId()))
+                || (contract.getSellerId() != null && scope.merchantIds().contains(contract.getSellerId()));
+        return party ? null : "只有合同当事人可以查看或签署该合同";
+    }
+
+    private static String signatureEvidence(String signMode, String signerName, String evidenceUrl) {
+        String value = signMode.toUpperCase(Locale.ROOT) + "|" + signerName.trim() + "|" + evidenceUrl;
+        return value.length() <= 255 ? value : value.substring(0, 255);
+    }
+
+    private static String contractContentHash(Contract contract) {
+        String content = String.join("|",
+                contract.getContractNo(),
+                contract.getOrderNo(),
+                String.valueOf(contract.getBuyerId()),
+                String.valueOf(contract.getSellerId()),
+                String.valueOf(contract.getContractAmount()),
+                String.valueOf(contract.getBuyerSignature()),
+                String.valueOf(contract.getSellerSignature()));
+        return sha256(content);
+    }
+
+    private static String signatureHash(Contract contract) {
+        return "0x" + sha256(String.join("|",
+                contract.getContractHash(),
+                String.valueOf(contract.getBuyerSignTime()),
+                String.valueOf(contract.getSellerSignTime())));
+    }
+
+    private static String sha256(String value) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(value.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(digest);
+        } catch (Exception e) {
+            throw new IllegalStateException("合同存证哈希计算失败", e);
+        }
     }
 }

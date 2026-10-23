@@ -44,7 +44,7 @@ import { approveApproval, batchApprove, listApprovals, rejectApproval } from '@/
 import { DemoDataAlert } from '@/components'
 import type { Approval, PageResult } from '@/types'
 
-/** 运营端审批类型：1 租户注册 2 配额调整 3 农场停用 4 数据导出 */
+/** 运营端审批类型：1 主体注册 2 配额调整 3 农场停用 4 数据导出 */
 type AdminApprovalType = 1 | 2 | 3 | 4
 
 /** 审批优先级：1 紧急 2 重要 3 一般 */
@@ -64,7 +64,7 @@ interface ApprovalRow extends Omit<Approval, 'approvalType'> {
 
 /** 审批类型文案 */
 const APPROVAL_TYPE_MAP: Record<AdminApprovalType, string> = {
-  1: '租户注册',
+  1: '主体注册',
   2: '配额调整',
   3: '农场停用',
   4: '数据导出',
@@ -92,7 +92,7 @@ const PROTOTYPE_ROWS: ApprovalRow[] = [
     approvalNo: 'APR20250714001',
     approvalType: 1,
     bizId: 'TENANT-20250714001',
-    bizSummary: '新租户提交企业资质，等待平台核验后开通 SaaS 账号',
+    bizSummary: '新主体提交企业资质，等待平台核验后开通 SaaS 账号',
     applicantName: '王六',
     enterpriseName: '鑫盛农业科技有限公司',
     status: 1,
@@ -147,7 +147,7 @@ const PROTOTYPE_ROWS: ApprovalRow[] = [
     approvalNo: 'APR20250713010',
     approvalType: 1,
     bizId: 'TENANT-20250713010',
-    bizSummary: '新租户注册，已完成营业执照 OCR 校验',
+    bizSummary: '新主体注册，已完成营业执照 OCR 校验',
     applicantName: '孙七',
     status: 1,
     priority: 3,
@@ -178,7 +178,7 @@ const EXTRA_APPLICANTS: string[] = [
   '施五',
 ]
 
-/** 演示数据补充用的租户池 */
+/** 演示数据补充用的主体池 */
 const EXTRA_TENANTS: string[] = [
   '绿源农业',
   '丰达农场',
@@ -439,7 +439,7 @@ export default function ApprovalPending(): JSX.Element {
     },
     { title: '申请人', dataIndex: 'applicantName', width: 100 },
     {
-      title: '所属租户',
+      title: '所属主体',
       dataIndex: 'tenantName',
       width: 140,
       render: (_, row) => row.tenantName ?? '—',
@@ -495,7 +495,7 @@ export default function ApprovalPending(): JSX.Element {
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
       {demoMode ? (
         <DemoDataAlert
-          scope="顶部「待审批总数 / 租户注册审核 / 配额调整 / 农场停用 / 数据导出」统计卡与下方待审批列表"
+          scope="顶部「待审批总数 / 主体注册审核 / 配额调整 / 农场停用 / 数据导出」统计卡与下方待审批列表"
           writeNote="通过 / 驳回等审批操作只会修改浏览器本地内存中的示例数据，未写入服务端，刷新页面后即失效。"
         />
       ) : null}
@@ -508,7 +508,7 @@ export default function ApprovalPending(): JSX.Element {
         </Col>
         <Col span={5}>
           <Card>
-            <Statistic title="租户注册审核" value={stats.tenantRegister} />
+            <Statistic title="主体注册审核" value={stats.tenantRegister} />
           </Card>
         </Col>
         <Col span={5}>
@@ -550,7 +550,7 @@ export default function ApprovalPending(): JSX.Element {
               placeholder="全部"
               style={{ width: 150 }}
               options={[
-                { value: 1, label: '租户注册' },
+                { value: 1, label: '主体注册' },
                 { value: 2, label: '配额调整' },
                 { value: 3, label: '农场停用' },
                 { value: 4, label: '数据导出' },
@@ -756,7 +756,7 @@ export default function ApprovalPending(): JSX.Element {
             <Descriptions.Item label="申请对象">
               {detailRow.enterpriseName ?? detailRow.tenantName ?? '—'}
             </Descriptions.Item>
-            <Descriptions.Item label="所属租户">{detailRow.tenantName ?? '—'}</Descriptions.Item>
+            <Descriptions.Item label="所属主体">{detailRow.tenantName ?? '—'}</Descriptions.Item>
             <Descriptions.Item label="提交时间">{detailRow.submittedAt}</Descriptions.Item>
             <Descriptions.Item label="优先级">
               <Tag color={PRIORITY_MAP[detailRow.priority].color}>

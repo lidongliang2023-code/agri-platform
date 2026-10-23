@@ -11,3 +11,4 @@ public interface GatewayMapper extends BaseMapper<Gateway> {
     IPage<GatewayVO> selectPageList(Page<?> page, @Param("dto") GatewayVO dto);
     GatewayVO selectDetailById(@Param("id") Long id);
 }
+

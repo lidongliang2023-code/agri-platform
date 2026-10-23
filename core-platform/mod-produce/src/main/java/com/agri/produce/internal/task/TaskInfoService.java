@@ -95,35 +95,53 @@ public class TaskInfoService {
         taskInfoMapper.deleteById(id);
     }
 
-    /** 派发任务：指定执行人并置为 assigned */
+    /**
+     * 派发任务：指定执行人并置为 assigned。
+     *
+     * <p>{@code assigned} 新旧词表同串，无需切换。
+     */
     @Transactional
     public TaskInfoEntity assign(String taskId, String assigneeId) {
         TaskInfoEntity task = detail(taskId);
         task.setAssigneeId(assigneeId);
-        task.setStatus("assigned");
+        task.setStatus(TaskStatus.ASSIGNED);
         taskInfoMapper.updateById(task);
         return task;
     }
 
-    /** 开始执行 */
+    /**
+     * 开始执行。
+     *
+     * <p><b>写入口径暂不切换</b>：仍写旧词表 {@link TaskStatus#DOING_LEGACY}。
+     * 原因：库内现存数据是旧值，若此刻改成写 {@link TaskStatus#DOING_PRD}，
+     * 新旧值会在库里并存，而前端（下一轮才做兼容）此刻只认旧值，会立刻归零。
+     * 正确顺序是「代码先全兼容 → 数据一次性切换」，
+     * 因此本处留到 V18 迁移那一轮再换成 {@link TaskStatus#DOING_PRD}，
+     * 查询侧（{@link TaskStatus#doingValues()}）已经提前兼容，届时无需再改。
+     */
     @Transactional
     public TaskInfoEntity start(String taskId) {
         TaskInfoEntity task = detail(taskId);
-        task.setStatus("doing");
+        task.setStatus(TaskStatus.DOING_LEGACY);
         taskInfoMapper.updateById(task);
         return task;
     }
 
-    /** 验收：通过 → done；驳回 → rejected 且驳回次数 +1 */
+    /**
+     * 验收：通过 → done；驳回 → rejected 且驳回次数 +1。
+     *
+     * <p>写入口径同 {@link #start(String)}：暂留旧词表 {@link TaskStatus#DONE_LEGACY}，
+     * V18 迁移时切 {@link TaskStatus#DONE_PRD}。
+     */
     @Transactional
     public TaskInfoEntity accept(String taskId, boolean pass, String opinion) {
         TaskInfoEntity task = detail(taskId);
         if (pass) {
-            task.setStatus("done");
+            task.setStatus(TaskStatus.DONE_LEGACY);
             task.setAcceptStatus(1);
             task.setCompletedAt(LocalDateTime.now());
         } else {
-            task.setStatus("rejected");
+            task.setStatus(TaskStatus.REJECTED);
             task.setAcceptStatus(2);
             task.setRejectCount(task.getRejectCount() == null ? 1 : task.getRejectCount() + 1);
         }
@@ -131,19 +149,29 @@ public class TaskInfoService {
         return task;
     }
 
-    /** 我的待办：按执行人过滤 */
+    /**
+     * 我的待办：按执行人过滤（已派工 / 执行中）。
+     *
+     * <p>状态范围取两套写法（{@link TaskStatus#todoValues()}），
+     * 迁移前后都能命中，不会静默归零。
+     */
     public List<TaskInfoEntity> listByAssignee(String assigneeId) {
         return taskInfoMapper.selectList(new LambdaQueryWrapper<TaskInfoEntity>()
                 .eq(TaskInfoEntity::getAssigneeId, assigneeId)
-                .in(TaskInfoEntity::getStatus, List.of("assigned", "doing"))
+                .in(TaskInfoEntity::getStatus, TaskStatus.todoValues())
                 .orderByAsc(TaskInfoEntity::getPlanEndDate));
     }
 
-    /** 提交验收：置为已完成且待验收 */
+    /**
+     * 提交验收：置为已完成且待验收。
+     *
+     * <p>写入口径同 {@link #start(String)}：暂留旧词表 {@link TaskStatus#DONE_LEGACY}，
+     * V18 迁移时切 {@link TaskStatus#DONE_PRD}。
+     */
     @Transactional
     public TaskInfoEntity submit(String taskId) {
         TaskInfoEntity task = detail(taskId);
-        task.setStatus("done");
+        task.setStatus(TaskStatus.DONE_LEGACY);
         task.setAcceptStatus(0);
         task.setCompletedAt(LocalDateTime.now());
         taskInfoMapper.updateById(task);

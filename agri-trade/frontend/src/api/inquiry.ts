@@ -1,4 +1,5 @@
 import axios from 'axios'
+import type { QuoteVO } from './quote'
 
 /**
  * 询价（采购方对某个货源问价）。
@@ -46,6 +47,16 @@ export async function getMyInquiries() {
 /** 我收到的询价（供应商视角，等我报价的）。 */
 export async function getReceivedInquiries() {
   const response = await axios.get('/api/trade/negotiation/inquiry/received')
+  return response.data
+}
+
+/** 某张询价单收到的报价（仅询价双方可查看）。 */
+export async function getInquiryQuotes(inquiryId: number | string): Promise<{
+  code: number
+  message?: string
+  data?: QuoteVO[]
+}> {
+  const response = await axios.get(`/api/trade/negotiation/inquiry/${inquiryId}/quotes`)
   return response.data
 }
 

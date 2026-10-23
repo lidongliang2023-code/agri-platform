@@ -45,3 +45,4 @@ public class PushConfig extends BaseEntity {
 
     private String silentEndHour;
 }
+

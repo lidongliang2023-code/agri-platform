@@ -466,13 +466,13 @@ export const ROLE_CATALOG: RoleCatalogItem[] = [
   {
     roleCode: 'farm_owner',
     roleName: '农场主',
-    description: '租户经营者，拥有租户内全部数据权限，负责经营决策、告警处置、对外授权',
+    description: '主体经营者，拥有主体内全部数据权限，负责经营决策、告警处置、对外授权',
     defaultScope: 'TENANT',
   },
   {
     roleCode: 'tenant_admin',
-    roleName: '租户管理员',
-    description: '租户系统管理员，负责账号开通、角色分配、系统配置',
+    roleName: '主体管理员',
+    description: '主体系统管理员，负责账号开通、角色分配、系统配置',
     defaultScope: 'TENANT',
   },
   {
@@ -516,7 +516,7 @@ export const DATA_SCOPE_OPTIONS: OptionLike<string>[] = [
   { value: 'SELF', label: '仅本人数据（SELF）' },
   { value: 'PLOT', label: '被分配地块（PLOT）' },
   { value: 'FARM', label: '所属农场（FARM）' },
-  { value: 'TENANT', label: '本租户全部（TENANT）' },
+  { value: 'TENANT', label: '本主体全部（TENANT）' },
   { value: 'DEPT', label: '所属部门（DEPT）' },
   { value: 'ORG', label: '所属机构（ORG）' },
   { value: 'REGION', label: '所属区域（REGION）' },

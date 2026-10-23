@@ -11,3 +11,4 @@ public interface PlotMapper extends BaseMapper<Plot> {
     IPage<PlotVO> selectPageList(Page<?> page, @Param("dto") PlotVO dto);
     PlotVO selectDetailById(@Param("id") Long id);
 }
+

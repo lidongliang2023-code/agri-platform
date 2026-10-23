@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { ConfigProvider } from 'antd'
 import { BellOutlined, LogoutOutlined, ShopOutlined, SwapOutlined } from '@ant-design/icons'
 import { clearSession } from '@/utils/session'
 import { ssoLogoutUrl } from '@/utils/sso'
@@ -23,6 +24,17 @@ interface Props {
 
 const ROLE_TEXT = { buyer: '买家中心', seller: '卖家中心' }
 const PERSONAL_CENTER = `${window.location.protocol}//${window.location.hostname}:8098/portal/#/account/business`
+const memberTheme = {
+  token: {
+    colorPrimary: '#12764a',
+    colorLink: '#0e5233',
+    colorLinkHover: '#159a5e',
+    colorSuccess: '#159a5e',
+    colorInfo: '#12764a',
+    borderRadius: 8,
+    controlOutline: 'rgba(18, 118, 74, 0.12)',
+  },
+}
 
 export function MemberCenterShell({ role, active, navItems, merchantName, onNavigate, children }: Props): JSX.Element {
   const navigate = useNavigate()
@@ -35,6 +47,7 @@ export function MemberCenterShell({ role, active, navItems, merchantName, onNavi
   }
 
   return (
+    <ConfigProvider theme={memberTheme}>
     <div className="mc-shell">
       <aside className="mc-side">
         <a className="mc-brand" href="/">
@@ -100,5 +113,6 @@ export function MemberCenterShell({ role, active, navItems, merchantName, onNavi
         <footer className="mc-foot">© 2026 农业产业互联网平台 · 交易撮合会员中心</footer>
       </div>
     </div>
+    </ConfigProvider>
   )
 }

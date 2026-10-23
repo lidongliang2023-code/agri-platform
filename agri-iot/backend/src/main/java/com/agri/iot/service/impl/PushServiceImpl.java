@@ -2,7 +2,7 @@
 package com.agri.iot.service.impl;
 
 import com.agri.common.security.SecurityUtils;
-import com.agri.common.util.BeanCopyUtils;
+import com.agri.common.utils.BeanCopyUtils;
 import com.agri.iot.dto.PushConfigUpdateDTO;
 import com.agri.iot.entity.PushConfig;
 import com.agri.iot.entity.PushNotification;
@@ -118,3 +118,4 @@ public class PushServiceImpl implements IPushService {
         return config;
     }
 }
+

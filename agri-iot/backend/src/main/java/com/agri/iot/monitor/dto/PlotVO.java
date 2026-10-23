@@ -23,3 +23,4 @@ public class PlotVO {
     private Integer deviceCount;
     private Integer onlineDeviceCount;
 }
+

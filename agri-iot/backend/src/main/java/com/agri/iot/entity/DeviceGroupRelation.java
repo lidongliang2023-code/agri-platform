@@ -15,3 +15,4 @@ public class DeviceGroupRelation extends BaseEntity {
 
     private Long deviceId;
 }
+

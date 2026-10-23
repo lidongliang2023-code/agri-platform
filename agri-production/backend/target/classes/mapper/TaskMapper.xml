@@ -4,15 +4,20 @@
 
     <select id="pageQuery" resultType="com.agri.production.entity.Task">
         SELECT t.* FROM agri_prod_task_info t
-        WHERE t.deleted = 0 AND t.tenant_id = #{tenantId}
+        WHERE t.deleted = 0
+        <!-- 运营端传 null 时不做租户过滤（同 FarmMapper 的说明：写死 tenant_id = #{tenantId} 会让运营端永远查不到数据） -->
+        <if test="tenantId != null and tenantId != ''">AND t.tenant_id = #{tenantId}</if>
         <if test="dto.taskName != null and dto.taskName != ''">
             AND t.task_name LIKE CONCAT('%', #{dto.taskName}, '%')
         </if>
         <if test="dto.taskType != null and dto.taskType != ''">
             AND t.task_type = #{dto.taskType}
         </if>
-        <if test="dto.farmId != null">
-            AND t.farm_id = #{dto.farmId}
+        <!-- 农场过滤用**解析后**的主键参数，不用 dto.farmId：
+             dto.farmId 是前端原值（可能是 DEMO-FARM-001 这种平台侧标识），
+             拿它跟 bigint 的 farm_id 比较会被 MySQL 当 0 处理 → 静默返回空。 -->
+        <if test="farmId != null">
+            AND t.farm_id = #{farmId}
         </if>
         <if test="dto.plotId != null">
             AND t.plot_id = #{dto.plotId}
@@ -37,19 +42,25 @@
 
     <select id="selectByFarmId" resultType="com.agri.production.entity.Task">
         SELECT * FROM agri_prod_task_info
-        WHERE farm_id = #{farmId} AND tenant_id = #{tenantId} AND deleted = 0
+        WHERE farm_id = #{farmId}
+        <if test="tenantId != null and tenantId != ''">AND tenant_id = #{tenantId}</if>
+        AND deleted = 0
         ORDER BY plan_start_time DESC
     </select>
 
     <select id="selectByExecutorId" resultType="com.agri.production.entity.Task">
         SELECT * FROM agri_prod_task_info
-        WHERE executor_id = #{executorId} AND tenant_id = #{tenantId} AND deleted = 0
+        WHERE executor_id = #{executorId}
+        <if test="tenantId != null and tenantId != ''">AND tenant_id = #{tenantId}</if>
+        AND deleted = 0
         ORDER BY plan_start_time DESC
     </select>
 
     <select id="selectByCode" resultType="com.agri.production.entity.Task">
         SELECT * FROM agri_prod_task_info
-        WHERE task_code = #{taskCode} AND tenant_id = #{tenantId} AND deleted = 0
+        WHERE task_code = #{taskCode}
+        <if test="tenantId != null and tenantId != ''">AND tenant_id = #{tenantId}</if>
+        AND deleted = 0
     </select>
 
 </mapper>

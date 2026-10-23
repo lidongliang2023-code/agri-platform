@@ -129,7 +129,7 @@ const form = reactive({
 const templateTypes = [
   { value: 'system', label: '系统通知' },
   { value: 'quality', label: '质量告警' },
-  { value: 'tenant', label: '租户通知' },
+  { value: 'tenant', label: '主体通知' },
   { value: 'audit', label: '审核通知' },
   { value: 'other', label: '其他' }
 ]
@@ -138,7 +138,7 @@ const templates = ref([])
 
 const mockTemplates = [
   { id: 1, name: '质量检测异常告警', type: 'quality', content: '【数据质量告警】检测到 ${count} 条数据不符合规则 "${rule}"，请及时处理。', variables: ['count', 'rule'], description: '当质量检测发现异常时发送', enabled: true },
-  { id: 2, name: '租户注册通知', type: 'tenant', content: '尊敬的 ${tenantName}，您的租户账号已创建成功，管理员账号：${username}。', variables: ['tenantName', 'username'], description: '租户注册成功后发送', enabled: true },
+  { id: 2, name: '主体注册通知', type: 'tenant', content: '尊敬的 ${tenantName}，您的主体账号已创建成功，管理员账号：${username}。', variables: ['tenantName', 'username'], description: '主体注册成功后发送', enabled: true },
   { id: 3, name: '用户审核通过', type: 'audit', content: '您好 ${name}，您的账号审核已通过，请登录系统。', variables: ['name'], description: '用户审核通过通知', enabled: true },
   { id: 4, name: '系统维护通知', type: 'system', content: '【系统维护】系统将于 ${time} 进行维护，预计时长 ${duration}，请提前做好准备。', variables: ['time', 'duration'], description: '系统维护前通知', enabled: false },
   { id: 5, name: '工单处理提醒', type: 'quality', content: '您有 ${count} 条质量问题工单待处理，请及时处理。', variables: ['count'], description: '工单待处理提醒', enabled: true }

@@ -11,3 +11,4 @@ public class PlotPageDTO {
     private String cropType;
     private Integer status;
 }
+

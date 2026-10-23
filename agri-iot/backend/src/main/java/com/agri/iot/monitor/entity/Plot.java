@@ -43,3 +43,4 @@ public class Plot {
     @TableLogic
     private Integer deleted;
 }
+

@@ -1,7 +1,7 @@
 
 package com.agri.iot.controller;
 
-import com.agri.common.entity.ApiResponse;
+import com.agri.common.result.ApiResponse;
 import com.agri.iot.dto.PushConfigUpdateDTO;
 import com.agri.iot.service.IPushService;
 import com.agri.iot.vo.PushConfigVO;
@@ -46,3 +46,4 @@ public class PushController {
         return ApiResponse.success();
     }
 }
+

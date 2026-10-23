@@ -1,5 +1,6 @@
 package com.agri.produce.internal.admin;
 
+import com.agri.produce.internal.alert.AlertDict;
 import com.agri.produce.internal.alert.AlertInfoEntity;
 import com.agri.produce.internal.alert.AlertInfoMapper;
 import com.agri.produce.internal.farm.FarmInfoEntity;
@@ -16,6 +17,7 @@ import com.agri.produce.internal.quality.InspectionEntity;
 import com.agri.produce.internal.quality.InspectionMapper;
 import com.agri.produce.internal.task.TaskInfoEntity;
 import com.agri.produce.internal.task.TaskInfoMapper;
+import com.agri.produce.internal.task.TaskStatus;
 import com.agri.shared.exception.BusinessException;
 import com.agri.shared.exception.ErrorCode;
 import com.agri.shared.result.PageResult;
@@ -80,7 +82,7 @@ public class AdminDashboardService {
         result.put("plotCount", plotInfoMapper.selectCount(new LambdaQueryWrapper<PlotInfoEntity>()
                 .ne(PlotInfoEntity::getStatus, 0)));
         result.put("taskPending", taskInfoMapper.selectCount(new LambdaQueryWrapper<TaskInfoEntity>()
-                .in(TaskInfoEntity::getStatus, List.of("pending", "assigned", "doing"))));
+                .in(TaskInfoEntity::getStatus, TaskStatus.unfinishedValues())));
         result.put("batchInStock", harvestBatchMapper.selectCount(new LambdaQueryWrapper<HarvestBatchEntity>()
                 .eq(HarvestBatchEntity::getStatus, 1)));
         result.put("inspectionPass", inspectionMapper.selectCount(new LambdaQueryWrapper<InspectionEntity>()
@@ -122,13 +124,19 @@ public class AdminDashboardService {
     /**
      * 告警级别分布趋势（看板饼图）。
      *
+     * <p><b>键保持旧词表（{@code INFO/WARN/CRITICAL}）不变</b>——前端按键取值，改键等于改契约。
+     * 计数范围取两套写法（{@link AlertDict#levelValuesOfName(String)}）走 {@code IN (...)}，
+     * 迁移前只有旧值、迁移后只有新值，两种情况下数字都对，不会静默归零。
+     *
      * @return 级别 → 数量
      */
     public Map<String, Object> alertTrend() {
         Map<String, Object> result = new LinkedHashMap<>();
-        for (String level : List.of("INFO", "WARN", "CRITICAL")) {
+        for (String level : List.of(AlertDict.LEVEL_INFO_LEGACY,
+                AlertDict.LEVEL_WARN_LEGACY,
+                AlertDict.LEVEL_CRITICAL_LEGACY)) {
             result.put(level, alertInfoMapper.selectCount(new LambdaQueryWrapper<AlertInfoEntity>()
-                    .eq(AlertInfoEntity::getAlertLevel, level)));
+                    .in(AlertInfoEntity::getAlertLevel, AlertDict.levelValuesOfName(level))));
         }
         return result;
     }
@@ -175,7 +183,7 @@ public class AdminDashboardService {
             LocalDate day = from.plusDays(i);
             long due = tasks.stream().filter(t -> day.equals(t.getPlanEndDate())).count();
             long done = tasks.stream()
-                    .filter(t -> day.equals(t.getPlanEndDate()) && "done".equals(t.getStatus()))
+                    .filter(t -> day.equals(t.getPlanEndDate()) && TaskStatus.isDone(t.getStatus()))
                     .count();
             long alertCount = alerts.stream()
                     .filter(a -> a.getAlertTime() != null && day.equals(a.getAlertTime().toLocalDate()))
@@ -300,7 +308,7 @@ public class AdminDashboardService {
             Set<String> farmIds = groupFarms.getOrDefault(key, Set.of());
             int taskTotal = (int) tasks.stream().filter(t -> plotIds.contains(t.getPlotId())).count();
             int taskDone = (int) tasks.stream()
-                    .filter(t -> plotIds.contains(t.getPlotId()) && "done".equals(t.getStatus()))
+                    .filter(t -> plotIds.contains(t.getPlotId()) && TaskStatus.isDone(t.getStatus()))
                     .count();
             int alertCount = (int) alerts.stream()
                     .filter(a -> farmIds.contains(a.getFarmId()) && inRange(a.getAlertTime(), startDate, endDate))
@@ -473,7 +481,7 @@ public class AdminDashboardService {
             items.add(item);
         }
         for (TaskInfoEntity task : taskInfoMapper.selectList(new LambdaQueryWrapper<TaskInfoEntity>()
-                .eq(TaskInfoEntity::getStatus, "done"))) {
+                .in(TaskInfoEntity::getStatus, TaskStatus.doneValues()))) {
             if (task.getCompletedAt() == null) {
                 continue;
             }

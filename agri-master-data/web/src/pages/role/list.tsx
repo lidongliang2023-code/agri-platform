@@ -16,7 +16,7 @@ function RoleList() {
       data: {
         list: [
           { id: 1, name: '系统管理员', code: 'ADMIN', description: '系统最高权限', status: 'active', createTime: '2024-01-10 10:00' },
-          { id: 2, name: '租户管理员', code: 'TENANT_ADMIN', description: '租户管理权限', status: 'active', createTime: '2024-01-08 14:30' },
+          { id: 2, name: '主体管理员', code: 'TENANT_ADMIN', description: '主体管理权限', status: 'active', createTime: '2024-01-08 14:30' },
           { id: 3, name: '普通用户', code: 'USER', description: '基础操作权限', status: 'active', createTime: '2024-01-05 09:00' },
         ],
         total: 3,
