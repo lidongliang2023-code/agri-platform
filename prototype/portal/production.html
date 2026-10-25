@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>生产管理中心 · 农产云 · 农业产业互联网平台</title>
+<link rel="stylesheet" href="../assets/css/theme.css" />
+<style>
+  /* ===== 生产管理页专用 ===== */
+  .hero-band{background:linear-gradient(135deg,#0A3A25 0%,#12764A 55%,#0C7BA8 100%);color:#fff;position:relative;overflow:hidden}
+  .hero-band::after{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.04) 1px,transparent 1px);background-size:40px 40px;pointer-events:none}
+  .hero-band .container{position:relative;z-index:2}
+  .hero-band .crumb{color:rgba(255,255,255,.7)}
+  .hero-band .crumb a{color:rgba(255,255,255,.9)}
+  .hero-band .crumb a:hover{color:#fff}
+  .hero-band .crumb .sep{color:rgba(255,255,255,.4)}
+
+  /* 实时监测 mini 看板 */
+  .live-card{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);border-radius:14px;padding:20px;backdrop-filter:blur(6px)}
+  .live-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.1)}
+  .live-row:last-child{border-bottom:none}
+  .live-row .lbl{font-size:13px;color:rgba(255,255,255,.75);display:flex;align-items:center;gap:8px}
+  .live-row .val{font-family:var(--mono);font-size:18px;font-weight:800;color:#EAFFF5}
+  .live-row .val .u{font-size:12px;font-weight:500;color:rgba(255,255,255,.55);margin-left:3px}
+  .spark-mini{display:flex;align-items:flex-end;gap:3px;height:28px}
+  .spark-mini i{flex:1;width:4px;border-radius:2px 2px 0 0;background:linear-gradient(180deg,#6FD6A2,rgba(111,214,162,.2))}
+
+  /* 能力卡片 */
+  .feat-card{transition:.2s}
+  .feat-card:hover{transform:translateY(-3px);box-shadow:0 12px 32px rgba(21,154,94,.12)}
+  .feat-card .fic{width:48px;height:48px;border-radius:12px;display:grid;place-items:center;color:#fff;font-size:22px}
+
+  /* 监测看板缩略图 */
+  .dash-thumb{height:170px;border-radius:12px;background:linear-gradient(135deg,#06231A,#0E5233);position:relative;overflow:hidden;padding:16px;color:#DCEFE4}
+  .dash-thumb .bar{display:flex;align-items:flex-end;gap:4px;height:80px;margin-top:14px}
+  .dash-thumb .bar i{flex:1;border-radius:3px 3px 0 0}
+
+  /* 场景卡 */
+  .scene-card{position:relative;overflow:hidden;border-radius:14px;padding:22px;color:#fff}
+  .scene-card::before{content:"";position:absolute;inset:0;background-image:radial-gradient(circle at 80% 20%,rgba(255,255,255,.15),transparent 60%)}
+
+  /* 流程步骤 */
+  .step-flow{display:flex;align-items:center;gap:0;flex-wrap:wrap}
+  .step-node{flex:1;min-width:160px;text-align:center;padding:18px 14px;background:var(--bg-alt);border:1px solid var(--line);border-radius:12px;position:relative}
+  .step-node .num{width:36px;height:36px;border-radius:50%;background:var(--green-500);color:#fff;display:grid;place-items:center;margin:0 auto 12px;font-family:var(--mono);font-weight:800}
+  .step-arrow{flex:none;color:var(--ink-300);padding:0 8px}
+
+  @media(max-width:900px){
+    .hero-band .container{grid-template-columns:1fr !important}
+    .step-flow{flex-direction:column;align-items:stretch}
+    .step-arrow{transform:rotate(90deg);align-self:center}
+  }
+</style>
+</head>
+<body>
+
+<!-- 顶部通栏 -->
+<div class="topbar">
+  <div class="container">
+    <span>您好，欢迎来到农产云！AI + 物联网驱动的智慧农业生产管理平台</span>
+    <span>
+      <a href="../trade/member.html">我是买家</a><span class="sep">·</span>
+      <a href="../trade/member-seller.html">我是卖家</a><span class="sep">·</span>
+      <a href="../trade/member.html">会员中心</a><span class="sep">·</span>
+      <a href="../index.html">产品原型总览</a><a href="login.html"><span data-icon="user" data-size="12" style="vertical-align:-2px;margin-right:3px"></span>登录</a><span class="sep">·</span><a href="register.html"><span data-icon="plus" data-size="12" style="vertical-align:-2px;margin-right:3px"></span>免费注册</a></span>
+  </div>
+</div>
+
+<!-- 站点头部 -->
+<header class="site-header">
+  <div class="container">
+    <a class="brand" href="index.html">
+      <span class="logo" data-icon="seed" data-size="20"></span>
+      <span>农产云<small>AGRI · CLOUD</small></span>
+    </a>
+    <nav class="main-nav">
+      <a href="index.html">首页</a>
+      <a href="chains.html">产业链</a>
+      <a href="../trade/index.html">交易大厅</a>
+      <a href="#price">价格指数</a>
+      <a href="#news">产业资讯</a>
+      <a href="finance.html">供应链金融</a>
+      <a href="logistics.html">物流服务</a>
+      <a href="production.html" class="active">生产管理</a>
+    </nav>
+    <div class="header-search">
+      <input placeholder="搜索商品 / 供应商 / 需求" />
+      <button>搜索</button>
+    </div>
+  </div>
+</header>
+
+<!-- Hero 横幅 -->
+<section class="hero-band">
+  <div class="container" style="padding:52px 24px 48px;display:grid;grid-template-columns:1.05fr .95fr;gap:48px;align-items:center">
+    <div>
+      <div style="display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);border-radius:20px;padding:4px 14px;font-size:12px;margin-bottom:18px">
+        <span data-icon="cpu" data-size="13"></span> AI 核心引擎 · 物联网实时监测 · 质量溯源
+      </div>
+      <h1 style="font-size:36px;font-weight:800;line-height:1.3">从田间到数字孪生<br/>让每一块土地看得见、管得好</h1>
+      <p style="color:rgba(255,255,255,.82);margin-top:14px;max-width:540px;font-size:14.5px;line-height:1.75">
+        以物联网设备 + AI 模型构建智慧农业生产管理中心，覆盖地块数字化、环境监测、生产计划、智能告警、质量溯源全流程，助力合作社与基地降本增效、提升农产品品质。
+      </p>
+      <div style="margin-top:28px;display:flex;gap:12px;flex-wrap:wrap">
+        <a class="btn btn-lg" style="background:#fff;color:#0E5233" href="#start">免费开通生产管理</a>
+        <a class="btn btn-lg btn-outline" style="background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.5);color:#fff" href="../production/dashboard.html">查看实时监测</a>
+        <a class="btn btn-lg btn-outline" style="background:transparent;border-color:rgba(255,255,255,.35);color:rgba(255,255,255,.85)" href="../production/manage.html">进入管理后台</a>
+      </div>
+      <div style="margin-top:28px;display:flex;gap:24px;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:rgba(255,255,255,.78)">
+          <span style="width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,.2);display:grid;place-items:center"><span data-icon="check" data-size="12"></span></span> 全国 3860 个基地接入
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:rgba(255,255,255,.78)">
+          <span style="width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,.2);display:grid;place-items:center"><span data-icon="check" data-size="12"></span></span> 12.8 万台物联网设备
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:rgba(255,255,255,.78)">
+          <span style="width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,.2);display:grid;place-items:center"><span data-icon="check" data-size="12"></span></span> 设备在线率 98.6%
+        </div>
+      </div>
+    </div>
+
+    <!-- Hero 右侧：实时监测 demo -->
+    <div class="live-card">
+      <div class="row center gap-8 mb-14">
+        <span class="tag tag-tech" style="background:rgba(56,189,248,.2);border-color:rgba(56,189,248,.4);color:#67E8F9"><span data-icon="activity" data-size="12"></span> LIVE · 实时监测</span>
+        <span class="muted" style="color:rgba(255,255,255,.55);font-size:12px">五常基地 · A3 地块</span>
+      </div>
+      <div class="live-row">
+        <span class="lbl"><span data-icon="thermo" data-size="14"></span> 空气温度</span>
+        <span class="val">26.4<span class="u">℃</span></span>
+      </div>
+      <div class="live-row">
+        <span class="lbl"><span data-icon="drop" data-size="14"></span> 空气湿度</span>
+        <span class="val">62<span class="u">%</span></span>
+      </div>
+      <div class="live-row">
+        <span class="lbl"><span data-icon="sun" data-size="14"></span> 光照强度</span>
+        <span class="val">38<span class="u">klx</span></span>
+      </div>
+      <div class="live-row">
+        <span class="lbl"><span data-icon="cpu" data-size="14"></span> 土壤湿度</span>
+        <span class="val">58<span class="u">%</span></span>
+      </div>
+      <div class="live-row">
+        <span class="lbl"><span data-icon="alert" data-size="14"></span> 今日告警</span>
+        <span class="val" style="color:#FCD34D">2<span class="u">条</span></span>
+      </div>
+      <div class="row between mt-12" style="padding-top:12px;border-top:1px solid rgba(255,255,255,.1)">
+        <span style="font-size:12px;color:rgba(255,255,255,.55)">24h 数据趋势</span>
+        <div class="spark-mini">
+          <i style="height:40%"></i><i style="height:46%"></i><i style="height:52%"></i><i style="height:48%"></i>
+          <i style="height:56%"></i><i style="height:64%"></i><i style="height:70%"></i><i style="height:76%"></i>
+          <i style="height:68%"></i><i style="height:60%"></i><i style="height:54%"></i><i style="height:50%"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 平台数据条 -->
+<section style="background:#fff;border-bottom:1px solid var(--line)">
+  <div class="container" style="display:grid;grid-template-columns:repeat(5,1fr);gap:0;padding:22px 0">
+    <div style="text-align:center;border-right:1px solid var(--line)">
+      <div class="mono" style="font-size:26px;font-weight:800;color:var(--green-700)">3,860<span style="font-size:14px;font-weight:600"> 个</span></div>
+      <div class="muted t-sm mt-6">接入农业基地</div>
+    </div>
+    <div style="text-align:center;border-right:1px solid var(--line)">
+      <div class="mono" style="font-size:26px;font-weight:800;color:var(--green-700)">12.8<span style="font-size:14px;font-weight:600"> 万台</span></div>
+      <div class="muted t-sm mt-6">物联网设备接入</div>
+    </div>
+    <div style="text-align:center;border-right:1px solid var(--line)">
+      <div class="mono" style="font-size:26px;font-weight:800;color:var(--green-700)">98.6<span style="font-size:14px;font-weight:600"> %</span></div>
+      <div class="muted t-sm mt-6">设备在线率</div>
+    </div>
+    <div style="text-align:center;border-right:1px solid var(--line)">
+      <div class="mono" style="font-size:26px;font-weight:800;color:var(--green-700)">3,268<span style="font-size:14px;font-weight:600"> 万</span></div>
+      <div class="muted t-sm mt-6">今日采集数据点</div>
+    </div>
+    <div style="text-align:center">
+      <div class="mono" style="font-size:26px;font-weight:800;color:var(--green-700)">96.4<span style="font-size:14px;font-weight:600"> %</span></div>
+      <div class="muted t-sm mt-6">溯源批次合格率</div>
+    </div>
+  </div>
+</section>
+
+<!-- 核心能力矩阵 -->
+<section class="section">
+  <div class="container">
+    <div class="section-head" style="margin-bottom:24px">
+      <div>
+        <div class="bar-title">六大核心能力</div>
+        <div class="sub">AI + 物联网 + 区块链，覆盖农业生产全链路数字化管理</div>
+      </div>
+      <span class="tag tag-tech"><span data-icon="zap" data-size="13"></span>一站式智慧农业</span>
+    </div>
+
+    <div class="grid grid-3">
+      <div class="card card-hover feat-card"><div class="card-b">
+        <div class="fic mb-16" style="background:linear-gradient(135deg,#159A5E,#0E5233)"><span data-icon="layers" data-size="24"></span></div>
+        <div class="strong t-lg">地块数字化管理</div>
+        <div class="muted t-sm mt-8">GIS 地图绑定地块，面积、土壤、作物、负责人一屏尽览，支持多基地统一管理。</div>
+        <a class="link mt-16" href="../production/manage.html">查看地块管理 →</a>
+      </div></div>
+
+      <div class="card card-hover feat-card"><div class="card-b">
+        <div class="fic mb-16" style="background:linear-gradient(135deg,#0C7BA8,#0891B2)"><span data-icon="cpu" data-size="24"></span></div>
+        <div class="strong t-lg">物联网设备接入</div>
+        <div class="muted t-sm mt-8">支持 MQTT / CoAP / Modbus 等协议，温湿度、土壤、气象、虫情等设备一键接入。</div>
+        <a class="link mt-16" href="../production/iot.html">查看物联网平台 →</a>
+      </div></div>
+
+      <div class="card card-hover feat-card"><div class="card-b">
+        <div class="fic mb-16" style="background:linear-gradient(135deg,#F59E0B,#D97706)"><span data-icon="activity" data-size="24"></span></div>
+        <div class="strong t-lg">环境实时监测</div>
+        <div class="muted t-sm mt-8">24 小时不间断采集环境数据，大屏可视化呈现，异常情况秒级推送。</div>
+        <a class="link mt-16" href="../production/dashboard.html">查看监测大屏 →</a>
+      </div></div>
+
+      <div class="card card-hover feat-card"><div class="card-b">
+        <div class="fic mb-16" style="background:linear-gradient(135deg,#6D28D9,#7C3AED)"><span data-icon="clipboard" data-size="24"></span></div>
+        <div class="strong t-lg">生产计划排程</div>
+        <div class="muted t-sm mt-8">作物种植计划、农资采购、农事作业排程，AI 推荐最优生产周期。</div>
+        <a class="link mt-16" href="../production/manage.html">查看生产计划 →</a>
+      </div></div>
+
+      <div class="card card-hover feat-card"><div class="card-b">
+        <div class="fic mb-16" style="background:linear-gradient(135deg,#DC2626,#EF4444)"><span data-icon="alert" data-size="24"></span></div>
+        <div class="strong t-lg">智能告警中心</div>
+        <div class="muted t-sm mt-8">阈值告警 + AI 异常检测，多渠道（短信 / 推送 / 站内信）即时通知，处置闭环。</div>
+        <a class="link mt-16" href="../production/dashboard.html">查看告警中心 →</a>
+      </div></div>
+
+      <div class="card card-hover feat-card"><div class="card-b">
+        <div class="fic mb-16" style="background:linear-gradient(135deg,#155E3C,#0A3A25)"><span data-icon="shield" data-size="24"></span></div>
+        <div class="strong t-lg">质量溯源体系</div>
+        <div class="muted t-sm mt-8">从种植、加工到流通全链路区块链存证，一物一码，让消费者买得放心。</div>
+        <a class="link mt-16" href="service.html">查看溯源服务 →</a>
+      </div></div>
+    </div>
+  </div>
+</section>
+
+<!-- 智能监测看板预览 -->
+<section class="section" style="padding-top:0">
+  <div class="container">
+    <div class="section-head" style="margin-bottom:24px">
+      <div>
+        <div class="bar-title">智能监测看板</div>
+        <div class="sub">环境数据 · 设备状态 · 告警事件 一屏掌控</div>
+      </div>
+      <a class="btn btn-outline btn-sm" href="../production/dashboard.html"><span data-icon="globe" data-size="14"></span>进入大屏</a>
+    </div>
+
+    <div class="grid" style="grid-template-columns:1.4fr 1fr;gap:24px">
+      <!-- 左侧：看板缩略图 -->
+      <div class="card"><div class="card-b tight">
+        <div class="dash-thumb">
+          <div class="row between">
+            <span style="font-size:13px;font-weight:700"><span data-icon="activity" data-size="14"></span> 五常基地 · 实时监测</span>
+            <span class="tag tag-tech" style="background:rgba(56,189,248,.2);color:#67E8F9">LIVE</span>
+          </div>
+          <div class="grid grid-4" style="gap:10px;margin-top:14px">
+            <div style="text-align:center">
+              <div style="font-size:22px;font-weight:800;font-family:var(--mono);color:#6FD6A2">26.4℃</div>
+              <div style="font-size:11px;color:rgba(220,239,228,.5);margin-top:4px">温度</div>
+            </div>
+            <div style="text-align:center">
+              <div style="font-size:22px;font-weight:800;font-family:var(--mono);color:#7DD3FC">62%</div>
+              <div style="font-size:11px;color:rgba(220,239,228,.5);margin-top:4px">湿度</div>
+            </div>
+            <div style="text-align:center">
+              <div style="font-size:22px;font-weight:800;font-family:var(--mono);color:#FCD34D">38klx</div>
+              <div style="font-size:11px;color:rgba(220,239,228,.5);margin-top:4px">光照</div>
+            </div>
+            <div style="text-align:center">
+              <div style="font-size:22px;font-weight:800;font-family:var(--mono);color:#C4B5FD">6.8</div>
+              <div style="font-size:11px;color:rgba(220,239,228,.5);margin-top:4px">pH</div>
+            </div>
+          </div>
+          <div class="bar">
+            <i style="height:42%"></i><i style="height:48%"></i><i style="height:56%"></i><i style="height:64%"></i>
+            <i style="height:72%"></i><i style="height:80%"></i><i style="height:88%"></i><i style="height:94%"></i>
+            <i style="height:86%"></i><i style="height:74%"></i><i style="height:62%"></i><i style="height:54%"></i>
+          </div>
+          <div class="row between" style="font-size:10px;color:rgba(220,239,228,.4);margin-top:6px">
+            <span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00</span>
+          </div>
+        </div>
+        <div class="row between mt-14" style="font-size:12.5px">
+          <span class="muted">数据每 5 分钟采集一次，实时入库</span>
+          <a class="link" href="../production/dashboard.html">查看完整大屏 →</a>
+        </div>
+      </div></div>
+
+      <!-- 右侧：告警事件 -->
+      <div class="card"><div class="card-b">
+        <div class="row between center mb-16">
+          <div class="strong t-lg"><span data-icon="alert" data-size="18" style="color:var(--red);vertical-align:-3px"></span> 今日告警事件</div>
+          <span class="tag tag-red">7 条</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div style="padding:12px 14px;border:1px solid rgba(239,68,68,.2);background:rgba(239,68,68,.06);border-radius:10px">
+            <div class="row between center">
+              <span class="strong t-sm"><span data-icon="thermo" data-size="14" style="color:var(--red);vertical-align:-2px"></span> 寿光基地 · 棚内温度过高</span>
+              <span class="tag tag-red">紧急</span>
+            </div>
+            <div class="muted t-xs mt-6">14:12 · 当前 38.5℃，阈值 35℃ · 已推送 3 人</div>
+          </div>
+          <div style="padding:12px 14px;border:1px solid rgba(239,68,68,.2);background:rgba(239,68,68,.06);border-radius:10px">
+            <div class="row between center">
+              <span class="strong t-sm"><span data-icon="drop" data-size="14" style="color:var(--red);vertical-align:-2px"></span> 湛江基地 · 溶氧偏低</span>
+              <span class="tag tag-red">紧急</span>
+            </div>
+            <div class="muted t-xs mt-6">13:58 · 当前 3.2 mg/L，阈值 5 mg/L</div>
+          </div>
+          <div style="padding:12px 14px;border:1px solid rgba(245,158,11,.2);background:rgba(245,158,11,.06);border-radius:10px">
+            <div class="row between center">
+              <span class="strong t-sm"><span data-icon="cpu" data-size="14" style="color:#B45309;vertical-align:-2px"></span> 寿光基地 · 水肥一体机离线</span>
+              <span class="tag tag-amber">重要</span>
+            </div>
+            <div class="muted t-xs mt-6">13:22 · 离线超 30 分钟</div>
+          </div>
+          <div style="padding:12px 14px;border:1px solid var(--line);background:var(--bg-alt);border-radius:10px">
+            <div class="row between center">
+              <span class="strong t-sm"><span data-icon="seed" data-size="14" style="color:var(--ink-400);vertical-align:-2px"></span> 五常基地 · 土壤湿度低于阈值</span>
+              <span class="tag tag-ghost">一般</span>
+            </div>
+            <div class="muted t-xs mt-6">14:26 · 当前 52%，阈值 55%</div>
+          </div>
+        </div>
+        <a class="link mt-16" href="../production/dashboard.html">查看全部告警 →</a>
+      </div></div>
+    </div>
+  </div>
+</section>
+
+<!-- 典型应用场景 -->
+<section class="section" style="padding-top:0">
+  <div class="container">
+    <div class="section-head" style="margin-bottom:24px">
+      <div>
+        <div class="bar-title">典型应用场景</div>
+        <div class="sub">覆盖粮油、果蔬、畜禽、水产四大产业场景</div>
+      </div>
+    </div>
+
+    <div class="grid grid-4">
+      <div class="scene-card" style="background:linear-gradient(135deg,#0E5233,#159A5E)">
+        <div class="fic mb-12" style="width:40px;height:40px;border-radius:10px;background:rgba(255,255,255,.2);display:grid;place-items:center"><span data-icon="seed" data-size="20"></span></div>
+        <div class="strong" style="font-size:17px">粮油种植</div>
+        <p style="font-size:12.5px;color:rgba(255,255,255,.8);margin-top:8px;line-height:1.6">水稻、小麦、玉米大田监测，气象站 + 墒情站 + 虫情灯，助力科学种植。</p>
+        <div class="mt-12 mono" style="font-size:13px;color:rgba(255,255,255,.9)">接入基地 1,240 · 设备 5.6 万台</div>
+      </div>
+
+      <div class="scene-card" style="background:linear-gradient(135deg,#0C7BA8,#0891B2)">
+        <div class="fic mb-12" style="width:40px;height:40px;border-radius:10px;background:rgba(255,255,255,.2);display:grid;place-items:center"><span data-icon="leaf" data-size="20"></span></div>
+        <div class="strong" style="font-size:17px">设施蔬菜</div>
+        <p style="font-size:12.5px;color:rgba(255,255,255,.8);margin-top:8px;line-height:1.6">大棚温湿度 + 水肥一体化 + 卷帘通风自动控制，精准农业降本增效。</p>
+        <div class="mt-12 mono" style="font-size:13px;color:rgba(255,255,255,.9)">接入基地 980 · 设备 3.8 万台</div>
+      </div>
+
+      <div class="scene-card" style="background:linear-gradient(135deg,#B45309,#D97706)">
+        <div class="fic mb-12" style="width:40px;height:40px;border-radius:10px;background:rgba(255,255,255,.2);display:grid;place-items:center"><span data-icon="box" data-size="20"></span></div>
+        <div class="strong" style="font-size:17px">畜禽养殖</div>
+        <p style="font-size:12.5px;color:rgba(255,255,255,.8);margin-top:8px;line-height:1.6">圈舍环境、饮水、饲喂智能监控，疫病预警，保障养殖安全与品质。</p>
+        <div class="mt-12 mono" style="font-size:13px;color:rgba(255,255,255,.9)">接入基地 860 · 设备 2.1 万台</div>
+      </div>
+
+      <div class="scene-card" style="background:linear-gradient(135deg,#0E7490,#0891B2)">
+        <div class="fic mb-12" style="width:40px;height:40px;border-radius:10px;background:rgba(255,255,255,.2);display:grid;place-items:center"><span data-icon="drop" data-size="20"></span></div>
+        <div class="strong" style="font-size:17px">水产养殖</div>
+        <p style="font-size:12.5px;color:rgba(255,255,255,.8);margin-top:8px;line-height:1.6">溶氧、pH、水温实时监测，自动增氧控制，降低养殖风险与损耗。</p>
+        <div class="mt-12 mono" style="font-size:13px;color:rgba(255,255,255,.9)">接入基地 780 · 设备 1.3 万台</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 接入流程 -->
+<section class="section" style="padding-top:0" id="start">
+  <div class="container">
+    <div class="section-head" style="margin-bottom:24px">
+      <div>
+        <div class="bar-title">四步开通，即刻使用</div>
+        <div class="sub">从注册到数据上屏，最快 1 个工作日完成接入</div>
+      </div>
+    </div>
+
+    <div class="step-flow">
+      <div class="step-node">
+        <div class="num">1</div>
+        <div class="strong t-sm">注册认证</div>
+        <div class="muted t-xs mt-6">提交企业/合作社资质，完成实名认证</div>
+      </div>
+      <div class="step-arrow"><span data-icon="arrow-right" data-size="20"></span></div>
+      <div class="step-node">
+        <div class="num">2</div>
+        <div class="strong t-sm">绑定地块</div>
+        <div class="muted t-xs mt-6">GIS 地图标注地块，录入作物与面积信息</div>
+      </div>
+      <div class="step-arrow"><span data-icon="arrow-right" data-size="20"></span></div>
+      <div class="step-node">
+        <div class="num">3</div>
+        <div class="strong t-sm">接入设备</div>
+        <div class="muted t-xs mt-6">扫码绑定物联网设备，配置采集规则与阈值</div>
+      </div>
+      <div class="step-arrow"><span data-icon="arrow-right" data-size="20"></span></div>
+      <div class="step-node">
+        <div class="num">4</div>
+        <div class="strong t-sm">数据上屏</div>
+        <div class="muted t-xs mt-6">实时监测大屏 + 告警推送 + 生产计划管理</div>
+      </div>
+    </div>
+
+    <div class="card mt-28" style="border:2px solid var(--green-400);background:linear-gradient(135deg,var(--green-050),#fff)">
+      <div class="card-b" style="display:flex;align-items:center;gap:24px;flex-wrap:wrap">
+        <div style="flex:1;min-width:260px">
+          <div class="strong t-lg"><span data-icon="zap" data-size="20" style="color:var(--green-600);vertical-align:-3px"></span> 立即开通智慧农业生产管理</div>
+          <div class="muted t-sm mt-8">新用户首年免费体验，提供 5 台设备接入额度与完整监测能力。</div>
+        </div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap">
+          <a class="btn btn-primary btn-lg" href="register.html"><span data-icon="plus"></span>免费注册开通</a>
+          <a class="btn btn-outline btn-lg" href="member-register.html"><span data-icon="phone"></span>联系客服咨询</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 页脚 -->
+<footer class="site-footer">
+  <div class="container">
+    <div class="grid grid-4">
+      <div>
+        <div class="brand" style="color:#fff"><span class="logo" data-icon="seed" data-size="20"></span><span>农产云</span></div>
+        <p style="margin-top:14px;font-size:13px;color:rgba(255,255,255,.6);max-width:280px">农业产业互联网平台，连接生产、加工、流通、销售全环节。</p>
+      </div>
+      <div><h4>关于平台</h4><a>平台介绍</a><a>联系方式</a><a>加入我们</a><a>帮助中心</a></div>
+      <div><h4>业务模块</h4><a href="chains.html">产业链</a><a href="finance.html">供应链金融</a><a href="logistics.html">物流服务</a><a href="production.html">生产管理</a></div>
+      <div><h4>相关入口</h4><a href="../trade/index.html">交易大厅</a><a href="../production/dashboard.html">生产监测大屏</a><a href="../production/manage.html">生产管理后台</a><a href="../index.html">产品矩阵</a></div>
+    </div>
+    <div class="bottom">
+      <span>© 2026 农业产业互联网平台 · 产品原型演示（非真实业务系统）</span>
+      <span>生产管理 · AI + 物联网 + 溯源</span>
+    </div>
+  </div>
+</footer>
+
+<script src="../assets/js/app.js"></script>
+</body>
+</html>
