@@ -50,8 +50,8 @@ import { toFiniteNumber } from '@/utils/metric-format'
 
 const { Text } = Typography
 
-/** 溯源码状态（前端展示口径，兼容后端 active / revoked） */
-type CodeStatusView = 'generated' | 'active' | 'scanned' | 'revoked'
+/** 溯源码状态（前端展示口径，兼容后端 active / revoked / expired） */
+type CodeStatusView = 'generated' | 'active' | 'scanned' | 'revoked' | 'expired'
 
 /** 状态 → 展示文案 */
 const STATUS_TEXT: Record<CodeStatusView, string> = {
@@ -59,6 +59,8 @@ const STATUS_TEXT: Record<CodeStatusView, string> = {
   active: '已激活',
   scanned: '已扫码',
   revoked: '已作废',
+  // 2026-11-02 溯源码有了到期扫描；这一档不加，过期码就会从统计卡与列表文案里凭空消失
+  expired: '已过期',
 }
 
 /** 状态 → Tag 颜色 */
@@ -67,6 +69,7 @@ const STATUS_COLOR: Record<CodeStatusView, string> = {
   active: 'blue',
   scanned: 'green',
   revoked: 'red',
+  expired: 'orange',
 }
 
 /**
@@ -95,10 +98,21 @@ interface TraceCodeRow {
   status: CodeStatusView | null
   /** 状态展示文案：已知枚举给中文，未知取值原样显示，缺失显示「—」 */
   statusText: string
+  /**
+   * 链上凭证（后端按存证表 agri_prod_chain_record 判定后给出）。
+   *
+   * 三个字段各自的含义不能混：{@code attested=false} 是"查过存证表，这条码没有记录"，
+   * {@code onChain=false && attested=true} 才是"有记录但没出块"（PENDING/FAILED）。
+   * 后端以前用溯源码表那个没人写的 blockchain_tx_hash 判 onChain，永远 false。
+   */
+  attested: boolean | null
+  onChain: boolean | null
+  chainStatus: string | null
+  recordNo: string | null
 }
 
 /** 后端已知的状态枚举（TraceService 写入的是这套小写值） */
-const KNOWN_STATUS: CodeStatusView[] = ['generated', 'active', 'scanned', 'revoked']
+const KNOWN_STATUS: CodeStatusView[] = ['generated', 'active', 'scanned', 'revoked', 'expired']
 
 /** 文本字段缺失提示语 */
 const TEXT_MISSING_TIP = '后端未返回该字段，显示为「—」，接口补齐后自动填充'
@@ -121,25 +135,42 @@ function renderTextOrMissing(value: string | null): JSX.Element {
     <Tooltip title={TEXT_MISSING_TIP}>
       <Typography.Text type="secondary" style={{ cursor: 'help' }}>
         {MISSING_VALUE_TEXT}
-        <InfoCircleOutlined style={{ fontSize: 11, color: '#faad14', marginLeft: 2 }} />
+        <InfoCircleOutlined style={{ fontSize: 12, color: '#faad14', marginLeft: 2 }} />
       </Typography.Text>
     </Tooltip>
   )
 }
 
 /** 筛选表单值 */
+/** 运营端列表筛选条件（全部发给后端，服务端生效） */
 interface FilterFormValues {
   /** 溯源码 */
   code?: string
   /** 批次号 */
   batchNo?: string
-  /** 产品 */
-  product?: string
   /** 状态 */
   status?: CodeStatusView
+  /** 链上状态 */
+  chain?: 'onChain' | 'unconfirmed' | 'none'
+  /** 有效期 */
+  expiry?: 'expired' | 'valid' | 'unset'
   /** 生成日期区间 */
   dateRange?: [Dayjs, Dayjs]
 }
+
+/** 链上状态筛选项（与列表列的三种显示一致） */
+const CHAIN_OPTIONS: { value: 'onChain' | 'unconfirmed' | 'none'; label: string }[] = [
+  { value: 'onChain', label: '已上链' },
+  { value: 'unconfirmed', label: '有存证但未成功' },
+  { value: 'none', label: '无存证记录' },
+]
+
+/** 有效期筛选项 */
+const EXPIRY_OPTIONS: { value: 'expired' | 'valid' | 'unset'; label: string }[] = [
+  { value: 'valid', label: '有效期内' },
+  { value: 'expired', label: '已过期' },
+  { value: 'unset', label: '未设置有效期' },
+]
 
 /** 批量生成表单值 */
 interface GenerateFormValues {
@@ -183,7 +214,7 @@ export default function AdminTraceCodeManage(): JSX.Element {
   /** 批量生成提交中 */
   const [generating, setGenerating] = useState<boolean>(false)
 
-  /** 溯源码分页数据 */
+  /** 溯源码分页数据（筛选条件全部发给后端，见 {@code fetchAdminTraceCodes}） */
   const listQuery = useQuery({
     queryKey: ['admin', 'trace', 'codes', pageNum, pageSize, filter],
     queryFn: () =>
@@ -191,6 +222,11 @@ export default function AdminTraceCodeManage(): JSX.Element {
         pageNum,
         pageSize,
         status: filter.status,
+        keyword: (filter.code ?? filter.batchNo ?? '').trim() || undefined,
+        chain: filter.chain,
+        expiry: filter.expiry,
+        from: filter.dateRange?.[0]?.format('YYYY-MM-DD'),
+        to: filter.dateRange?.[1]?.format('YYYY-MM-DD'),
       }),
     retry: false,
   })
@@ -205,7 +241,9 @@ export default function AdminTraceCodeManage(): JSX.Element {
 
   /** 激活溯源码 */
   const activateMutation = useMutation({
-    mutationFn: (code: string) => activateTraceCode(code, '运营管理员'),
+    // 不传 activatedBy：溯源码表没有这一列，后端只记日志、不落库。
+    // 以前页面写死传 '运营管理员'，看起来像"操作人已留痕"，实际库里什么都没记。
+    mutationFn: (code: string) => activateTraceCode(code),
     onSuccess: () => {
       message.success('溯源码已激活')
       void queryClient.invalidateQueries({ queryKey: ['admin', 'trace', 'codes'] })
@@ -246,29 +284,23 @@ export default function AdminTraceCodeManage(): JSX.Element {
         createdAt: item.createdAt ? String(item.createdAt).slice(0, 10) : null,
         scanCount,
         status,
+        attested: typeof item.attested === 'boolean' ? item.attested : null,
+        onChain: typeof item.onChain === 'boolean' ? item.onChain : null,
+        chainStatus: item.chainStatus ?? null,
+        recordNo: item.recordNo ?? null,
         // 枚举外的取值（如种子数据里的大写 ACTIVE / INACTIVE）原样显示，不冒充成已知状态
         statusText: status ? STATUS_TEXT[status] : rawStatus || MISSING_VALUE_TEXT,
       }
     })
-    /** 前端侧补充关键字过滤（后端 `/codes` 仅支持 status 过滤） */
-    const filtered = mapped.filter((row) => {
-      if (filter.code && !row.code.includes(filter.code)) {
-        return false
-      }
-      if (filter.batchNo && !(row.batchNo ?? '').includes(filter.batchNo)) {
-        return false
-      }
-      if (filter.dateRange && filter.dateRange.length === 2) {
-        const start = filter.dateRange[0].format('YYYY-MM-DD')
-        const end = filter.dateRange[1].format('YYYY-MM-DD')
-        if (row.createdAt && (row.createdAt < start || row.createdAt > end)) {
-          return false
-        }
-      }
-      return true
-    })
-    return { rows: filtered, total: remoteTotal }
-  }, [remoteRows, remoteTotal, filter])
+    /**
+     * 服务端已经按全部条件筛过了（{@code TraceCodeFilter}），这里不再本地二次过滤。
+     *
+     * 旧版这段是"前端侧补充关键字过滤（后端 /codes 仅支持 status 过滤）"——
+     * 它只在**当前这一页 10 行**里筛，所以搜一个在第 3 页的码会筛出空列表，
+     * 而分页器上的 total 还是服务端没筛的数，看起来就像"这个码不存在"。
+     */
+    return { rows: mapped, total: remoteTotal }
+  }, [remoteRows, remoteTotal])
 
   /**
    * 表格列（对齐原型 P12，**删掉「产品」「农场」两列**）。
@@ -311,6 +343,39 @@ export default function AdminTraceCodeManage(): JSX.Element {
       render: (value: CodeStatusView | null, record) => (
         <Tag color={value ? (STATUS_COLOR[value] ?? 'default') : 'default'}>{record.statusText}</Tag>
       ),
+    },
+    {
+      /**
+       * 链上状态：三态分开说，不合并成"是/否"。
+       * 已上链 = 存证 SUCCESS；存证未成功 = 有记录但 PENDING/FAILED；无存证记录 = 查过存证表没有。
+       * 最后一种不是"能力未接入"——存证域是通的，只是这条码没存过。
+       */
+      title: '链上状态',
+      key: 'chain',
+      width: 130,
+      render: (_value, record) => {
+        if (record.onChain === true) {
+          return (
+            <Tooltip title={record.recordNo ? `存证 ${record.recordNo}（模拟链 SUCCESS）` : '模拟链 SUCCESS'}>
+              <Tag color="green">🔗 已上链</Tag>
+            </Tooltip>
+          )
+        }
+        if (record.attested === true) {
+          return (
+            <Tooltip title={`存证记录 ${record.recordNo ?? '—'} 状态 ${record.chainStatus ?? '未知'}，尚未出块`}>
+              <Tag color={record.chainStatus === 'FAILED' ? 'red' : 'orange'}>
+                {record.chainStatus === 'FAILED' ? '存证失败' : '存证未出块'}
+              </Tag>
+            </Tooltip>
+          )
+        }
+        return (
+          <Tooltip title="已查询存证表 agri_prod_chain_record，这条溯源码没有链上存证记录">
+            <Tag>无存证记录</Tag>
+          </Tooltip>
+        )
+      },
     },
     {
       title: '操作',
@@ -377,7 +442,8 @@ export default function AdminTraceCodeManage(): JSX.Element {
     }
     let success = 0
     selectedCodes.forEach((code) => {
-      activateTraceCode(code, '运营管理员')
+      // 同单码激活：不传写死的操作人，表里没有这一列
+      activateTraceCode(code)
         .then(() => {
           success += 1
         })
@@ -515,8 +581,16 @@ export default function AdminTraceCodeManage(): JSX.Element {
                 { label: '已激活', value: 'active' },
                 { label: '已扫码', value: 'scanned' },
                 { label: '已作废', value: 'revoked' },
+                // 溯源码有到期扫描后新增的一档；不加就筛不到过期码，列表也解释不了总数为何少一档
+                { label: '已过期', value: 'expired' },
               ]}
             />
+          </Form.Item>
+          <Form.Item name="chain" label="链上状态">
+            <Select placeholder="全部" allowClear style={{ width: 170 }} options={CHAIN_OPTIONS} />
+          </Form.Item>
+          <Form.Item name="expiry" label="有效期">
+            <Select placeholder="全部" allowClear style={{ width: 150 }} options={EXPIRY_OPTIONS} />
           </Form.Item>
           <Form.Item name="dateRange" label="生成日期">
             <DatePicker.RangePicker

@@ -56,6 +56,60 @@ public class IotDeviceVO {
     private String createdAt;
     private String updatedAt;
 
+    /**
+     * 从物联网系统（{@code /api/v1/iot/app/devices}）的设备对象转换。
+     *
+     * <p>设备台账已收敛到物联网系统：生产管理不再维护 {@code agri_prod_iot_device} 这份副本，
+     * 设备列表/详情一律读物联网端。两边的字段命名体系不同（那边 {@code typeName} 是中文、
+     * {@code onlineStatus} 是 online/offline/alert），所以必须在这里做一次显式映射，
+     * 不能直接把 Map 丢给页面。</p>
+     *
+     * <p>物联网端没有的字段（型号 / 厂商 / 安装位置 / 采集频率 / 创建时间）留空 ——
+     * 用别的字段顶替会让页面显示一个"看起来对但其实是错的"值。</p>
+     */
+    public static IotDeviceVO ofIot(java.util.Map<String, Object> row) {
+        if (row == null) {
+            return null;
+        }
+        IotDeviceVO vo = new IotDeviceVO();
+        vo.deviceId = str(row.get("id"));
+        vo.deviceCode = str(row.get("deviceCode"));
+        vo.deviceName = str(row.get("deviceName"));
+        vo.deviceType = deviceTypeCode(str(row.get("typeName")));
+        vo.farmId = str(row.get("farmId"));
+        vo.onlineStatus = onlineStatusCode(str(row.get("onlineStatus")));
+        vo.battery = intOrNull(row.get("battery"));
+        vo.signal = intOrNull(row.get("rssi"));
+        // 物联网端的 lastReport 本身就是"30秒前"这种可读文案，直接透给页面
+        vo.lastHeartbeatAt = str(row.get("lastReport"));
+        vo.plotId = str(row.get("plotId"));
+        vo.protocol = str(row.get("protocol"));
+        vo.firmwareVersion = str(row.get("firmwareVersion"));
+        return vo;
+    }
+
+    private static String str(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String text = String.valueOf(value).trim();
+        return text.isEmpty() ? null : text;
+    }
+
+    private static Integer intOrNull(Object value) {
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        if (value == null) {
+            return null;
+        }
+        try {
+            return Integer.parseInt(String.valueOf(value).trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
     public static IotDeviceVO of(IoTDevice entity) {
         if (entity == null) {
             return null;
@@ -95,7 +149,10 @@ public class IotDeviceVO {
         if (raw == null || raw.isBlank()) {
             return null;
         }
-        return switch (raw.trim().toLowerCase(Locale.ROOT)) {
+        String text = raw.trim();
+        String lower = text.toLowerCase(Locale.ROOT);
+        // 先按精确值匹配（本服务自己的枚举写法）
+        Integer exact = switch (lower) {
             case "sensor", "1", "土壤监测", "soil" -> 1;
             case "camera", "video", "2", "视频监控" -> 2;
             case "controller", "irrigation", "3", "灌溉控制" -> 3;
@@ -103,6 +160,29 @@ public class IotDeviceVO {
             case "drone", "5", "无人机" -> 5;
             default -> null;
         };
+        if (exact != null) {
+            return exact;
+        }
+        // 物联网端的 type_name 是中文自由文本（「空气温湿度传感器」「温室风机」「高清球机摄像头」），
+        // 精确匹配认不出，只能按关键词归类。
+        if (text.contains("摄像") || text.contains("视频") || lower.contains("camera")) {
+            return 2;
+        }
+        if (text.contains("气象") || lower.contains("weather")) {
+            return 4;
+        }
+        if (text.contains("无人") || lower.contains("drone")) {
+            return 5;
+        }
+        if (text.contains("风机") || text.contains("阀") || text.contains("控制")
+                || text.contains("卷帘") || text.contains("泵") || lower.contains("control")) {
+            return 3;
+        }
+        if (text.contains("传感") || text.contains("监测") || text.contains("采集")
+                || text.contains("测报") || text.contains("浮标") || text.contains("站")) {
+            return 1;
+        }
+        return null;
     }
 
     /**
@@ -119,7 +199,8 @@ public class IotDeviceVO {
         String text = raw.trim().toLowerCase(Locale.ROOT);
         return switch (text) {
             case "online", "1", "正常" -> 1;
-            case "fault", "error", "3", "故障" -> 3;
+            // 物联网端把"告警中"记成 alert，语义上属于异常而不是离线
+            case "fault", "error", "alert", "3", "故障", "告警" -> 3;
             default -> 2;
         };
     }

@@ -67,7 +67,7 @@
 .order-detail-brand small {
   margin-top: 4px;
   color: #84958b;
-  font-size: 7px;
+  font-size: var(--agri-font-size-micro);
   font-weight: 500;
   letter-spacing: 1.7px;
 }
@@ -77,7 +77,7 @@
   align-items: center;
   gap: 7px;
   color: #8a9a91;
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .order-detail-topbar nav a {
@@ -94,7 +94,7 @@
   gap: 5px;
   margin-left: auto;
   color: #3e6650;
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .order-detail-main {
@@ -135,7 +135,7 @@
 
 .order-detail-hero-title small {
   color: #188454;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
   font-weight: 700;
   letter-spacing: .06em;
 }
@@ -152,7 +152,7 @@
 .order-detail-hero-title p {
   margin: 5px 0 0;
   color: #7f9186;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .order-detail-actions {
@@ -184,7 +184,7 @@
 
 .order-detail-muted {
   color: #8b9c91;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .order-detail-products {
@@ -224,7 +224,7 @@
 .order-detail-product > div strong {
   overflow: hidden;
   color: #2c4c39;
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -232,7 +232,7 @@
 .order-detail-product > div small,
 .order-detail-product > span {
   color: #83948a;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .order-detail-product .order-detail-price {
@@ -264,12 +264,12 @@
   align-items: center;
   gap: 5px;
   color: #87988e;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .order-detail-info-grid strong {
   color: #385542;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
   line-height: 1.6;
   word-break: break-word;
 }
@@ -298,19 +298,19 @@
 
 .order-review-card strong {
   color: #3d5c49;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .order-review-card p {
   margin: 10px 0 5px;
   color: #5e7567;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
   line-height: 1.7;
 }
 
 .order-review-card small {
   color: #8c9c92;
-  font-size: 8.5px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .order-review-card em {
@@ -319,7 +319,7 @@
   padding-top: 7px;
   border-top: 1px dashed #e1ebe5;
   color: #758a7d;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
   font-style: normal;
 }
 
@@ -334,12 +334,12 @@
   justify-content: space-between;
   gap: 10px;
   color: #7c8e83;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .order-amount-list strong {
   color: #405f4b;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .order-amount-list .total {
@@ -377,11 +377,11 @@
   border: 1px solid #dce7e0;
   border-radius: 50%;
   background: #fff;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .order-flow strong {
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
   font-weight: 500;
 }
 
@@ -413,7 +413,7 @@
   flex: 0 0 auto;
   place-items: center;
   border-radius: 8px;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
   font-weight: 800;
 }
 
@@ -436,13 +436,13 @@
 
 .order-parties small {
   color: #8a9b91;
-  font-size: 8px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .order-parties strong {
   overflow: hidden;
   color: #3e5b48;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -461,13 +461,13 @@
 
 .order-side-info span {
   color: #8b9c92;
-  font-size: 8.5px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .order-side-info strong {
   overflow-wrap: anywhere;
   color: #486452;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .order-detail-trust {
@@ -488,18 +488,18 @@
 
 .order-detail-trust strong {
   color: #3d5e49;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .order-detail-trust span {
   color: #82968a;
-  font-size: 8.5px;
+  font-size: var(--agri-font-size-micro);
   line-height: 1.5;
 }
 
 .order-detail-page .ant-empty-description {
   color: #889a8f;
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .order-detail-page .mc-panel {

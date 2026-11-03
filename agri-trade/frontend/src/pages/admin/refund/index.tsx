@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react'
 import { Button, Card, Col, Form, Input, Modal, Popconfirm, Row, Select, Space, Table, Tag, message } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
 import { auditRefund, getAdminRefundPage } from '@/api/admin'
-import { getCurrentUser } from '@/utils/session'
 
 interface RefundRow {
   id: number
@@ -65,8 +64,9 @@ export default function AdminRefund() {
   }, [load])
 
   const doAudit = async (row: RefundRow, approved: boolean, remark?: string) => {
-    const reviewer = getCurrentUser()?.nickname ?? getCurrentUser()?.username ?? '运营'
-    const res = await auditRefund(row.id, approved ? 'approved' : 'rejected', reviewer, remark)
+    // 审核人由后端从访问令牌取（以前这里拼当前昵称、取不到就写"运营"再传上去 ——
+    // 那种留痕谁都能填）。页面只把结论与备注交出去，回来后用库里的那份显示。
+    const res = await auditRefund(row.id, approved ? 'approved' : 'rejected', remark)
     if (res?.code === 200) {
       message.success(approved ? '已通过，订单将置为已退款' : '已驳回')
       setCurrent(null)

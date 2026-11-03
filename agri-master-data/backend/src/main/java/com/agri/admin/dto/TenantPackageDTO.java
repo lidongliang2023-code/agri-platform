@@ -26,4 +26,6 @@ public class TenantPackageDTO {
     private Double price;
     
     private Integer duration;
+
+    private Integer status;
 }

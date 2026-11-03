@@ -15,13 +15,18 @@ public class OperationLogVO {
 
     private Long id;
     private String username;
+    private String operatorId;
     private String operationType;
     private String operationDesc;
     private String module;
     private String targetId;
+    private String requestMethod;
+    private String requestUri;
+    private String params;
     private String ipAddress;
     private String result;
     private Long durationMs;
     private String errorMessage;
+    private String tenantId;
     private String createTime;
 }

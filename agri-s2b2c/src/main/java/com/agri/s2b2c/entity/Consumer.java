@@ -13,6 +13,8 @@ import java.time.LocalDateTime;
 public class Consumer {
     @TableId(type = IdType.ASSIGN_ID)
     private Long id;
+    /** 平台账号 ID（统一登录后建立映射） */
+    private Long userId;
     private String nickname;
     private String phone;
     private String avatar;

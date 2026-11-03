@@ -65,7 +65,7 @@
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.92);
   color: var(--h-green-700);
-  font-size: 11.5px;
+  font-size: var(--agri-font-size-micro);
   font-weight: 700;
   box-shadow: 0 5px 14px rgba(6, 40, 26, 0.1);
 }
@@ -158,6 +158,85 @@
   line-height: 1.75;
 }
 
+.pd-sku-picker {
+  display: grid;
+  gap: 9px;
+  margin-top: 16px;
+  padding: 13px 14px;
+  border: 1px solid #dce9e1;
+  border-radius: 10px;
+  background: #fbfdfc;
+}
+
+.pd-sku-picker-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.pd-sku-picker-label span {
+  color: #304f3d;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.pd-sku-picker-label small {
+  color: #87988f;
+  font-size: var(--agri-font-size-micro);
+}
+
+.pd-sku-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pd-sku-options button {
+  display: grid;
+  min-width: 108px;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid #d6e4db;
+  border-radius: 8px;
+  background: #fff;
+  color: #496355;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .16s ease, background .16s ease, box-shadow .16s ease;
+}
+
+.pd-sku-options button strong {
+  font-size: var(--agri-font-size-micro);
+}
+
+.pd-sku-options button span {
+  color: #75887c;
+  font-size: var(--agri-font-size-micro);
+}
+
+.pd-sku-options button:hover:not(:disabled) {
+  border-color: var(--mc-green-500, #159a5e);
+  background: #f2fbf6;
+}
+
+.pd-sku-options button.on {
+  border-color: #159a5e;
+  background: #eefaf3;
+  color: #0e6b42;
+  box-shadow: 0 0 0 2px rgba(21, 154, 94, .08);
+}
+
+.pd-sku-options button.on span {
+  color: #14764a;
+}
+
+.pd-sku-options button.disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
 .pd-price-panel {
   margin-top: 18px;
   padding: 18px;
@@ -222,7 +301,7 @@
 
 .pd-reference-grid span {
   color: var(--h-ink-500);
-  font-size: 10.5px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .pd-reference-grid strong {
@@ -234,7 +313,7 @@
 .pd-price-panel > p {
   margin: 12px 0 0;
   color: var(--h-ink-500);
-  font-size: 11.5px;
+  font-size: var(--agri-font-size-micro);
   line-height: 1.65;
 }
 
@@ -309,7 +388,7 @@
   margin-top: 4px;
   overflow: hidden;
   color: var(--h-ink-500);
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -325,7 +404,7 @@
   border-radius: 999px;
   background: var(--h-green-100);
   color: var(--h-green-700);
-  font-size: 10.5px;
+  font-size: var(--agri-font-size-micro);
   font-weight: 650;
 }
 
@@ -369,7 +448,7 @@
 .pd-quantity-hint {
   margin: 7px 0 0;
   color: var(--h-ink-500);
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .pd-quantity-hint.error {
@@ -435,6 +514,12 @@
   background: #fff;
 }
 
+.pd-ghost.favorite {
+  border-color: #f0b8b8;
+  color: #cf3f3f;
+  background: #fff7f7;
+}
+
 .pd-text-action {
   border: none;
   color: var(--h-green-700);
@@ -447,7 +532,7 @@
   flex-wrap: wrap;
   margin-top: 11px;
   color: var(--h-ink-500);
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .pd-card {
@@ -517,7 +602,7 @@
 .pd-step p {
   margin: 5px 0 0;
   color: var(--h-ink-500);
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
   line-height: 1.6;
 }
 
@@ -525,7 +610,7 @@
   margin: 0;
   padding: 0 20px 18px;
   color: var(--h-ink-500);
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .pd-tabs {
@@ -602,7 +687,7 @@
 .pd-feature-grid span {
   margin-top: 7px;
   color: var(--h-ink-500);
-  font-size: 11.5px;
+  font-size: var(--agri-font-size-micro);
   line-height: 1.65;
 }
 
@@ -623,7 +708,7 @@
   border-radius: 999px;
   background: var(--h-green-100);
   color: var(--h-green-700);
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
   font-weight: 650;
 }
 
@@ -685,7 +770,7 @@
 .pd-supplier-profile p {
   margin: 6px 0 0;
   color: var(--h-ink-500);
-  font-size: 11.5px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .pd-supplier-data {
@@ -775,7 +860,7 @@
 .pd-similar-card > span {
   margin-top: 6px;
   color: var(--h-ink-500);
-  font-size: 10.5px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .pd-similar-card > div:last-child {
@@ -793,14 +878,14 @@
 
 .pd-similar-card b small {
   color: var(--h-ink-500);
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
   font-weight: 400;
 }
 
 .pd-similar-card em {
   overflow: hidden;
   color: var(--h-ink-500);
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
   font-style: normal;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -882,6 +967,21 @@
   .pd-info-grid,
   .pd-supplier-data {
     grid-template-columns: 1fr;
+  }
+
+  .pd-sku-picker-label {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .pd-sku-options {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pd-sku-options button {
+    min-width: 0;
   }
 
   .pd-buybox,

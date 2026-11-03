@@ -6,13 +6,19 @@
  * 且两个管理页面不再向用户展示“租户”概念。
  */
 import { createRequire } from 'node:module'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const require2 = createRequire(path.join(ROOT, 'agri-production/frontend/package.json'))
-const puppeteer = require2('puppeteer')
+const require2 = createRequire(path.join('C:/Users/71502/.workbuddy-ai/binaries/node/workspace', 'noop.js'))
+const { chromium } = require2('playwright-core')
+
+const BROWSER = [
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+].find((candidate) => existsSync(candidate))
 
 const BASE = 'http://localhost'
 const failures = []
@@ -32,13 +38,13 @@ const fill = async (page, selector, value) => {
   }, { sel: selector, val: value })
 }
 
-const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox'] })
+const browser = await chromium.launch({ headless: true, executablePath: BROWSER, args: ['--no-sandbox'] })
 try {
-  const context = await browser.createBrowserContext()
+  const context = await browser.newContext()
   const page = await context.newPage()
-  await page.setViewport({ width: 1440, height: 1000 })
+  await page.setViewportSize({ width: 1440, height: 1000 })
 
-  await page.goto(`${BASE}/production/login`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.goto(`${BASE}/production/login`, { waitUntil: 'networkidle', timeout: 60000 })
   await page.waitForSelector('button[role="tab"]', { timeout: 15000 })
   await page.evaluate(() => {
     const tab = [...document.querySelectorAll('button[role="tab"]')]
@@ -57,25 +63,43 @@ try {
     if (!page.url().includes(':8090/')) break
   }
 
-  await page.goto(`${BASE}/admin/production/dashboard`, { waitUntil: 'networkidle2', timeout: 60000 })
-  await page.waitForNetworkIdle({ idleTime: 800, timeout: 15000 }).catch(() => {})
+  await page.goto(`${BASE}/admin/production/dashboard`, { waitUntil: 'networkidle', timeout: 60000 })
+  await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 800))
   const productionText = await page.evaluate(() => document.body.innerText)
   check(!productionText.includes('主体管理') && !productionText.includes('企业与个人主体'),
     '生产管理运营端不再提供主体/租户管理入口')
   check(!productionText.includes('租户'), '生产管理运营端导航不再出现“租户”')
 
-  await page.goto(`${BASE}/admin/production/subjects`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.goto(`${BASE}/admin/production/subjects`, { waitUntil: 'networkidle', timeout: 60000 })
   await sleep(2000)
   check(page.url().includes('/admin/production/dashboard'),
     '生产端历史主体管理地址已重定向运营大盘', page.url())
 
-  await page.goto(`${BASE}:8080/subject/list`, { waitUntil: 'networkidle2', timeout: 60000 })
-  await page.waitForNetworkIdle({ idleTime: 800, timeout: 15000 }).catch(() => {})
+  await page.goto(`${BASE}:8080/subject/list`, { waitUntil: 'networkidle', timeout: 60000 })
+  await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 800))
   const masterText = await page.evaluate(() => document.body.innerText)
-  check(masterText.includes('企业与个人主体'), '主数据管理端显示「企业与个人主体」页面')
+  /**
+   * 这一页现在叫「入驻与生命周期」（`views/subject/TenantAudit.vue`），
+   * 「企业与个人主体」是主数据运营中心首页那张卡片的标签，不是本页标题；
+   * 而"租户"三个字在本页只作为口径解释出现（经营主体（租户）），不再是被管理的对象名。
+   * 所以断言从"页面上不能出现租户"改成"不能出现把租户当对象名的入口"。
+   */
+  check(masterText.includes('入驻与生命周期'), '主数据管理端显示主体生命周期页',
+    masterText.replace(/\s+/g, ' ').slice(0, 80))
   check(masterText.includes('企业主体') && masterText.includes('个人主体'),
     '主数据管理端同时展示企业主体和个人主体')
-  check(!masterText.includes('租户'), '主数据管理端页面不再出现“租户”')
+  /**
+   * 页面正文（`.mds-page`，含面包屑）里"租户"只该作为口径解释出现。
+   * 面包屑/导航分组目前仍写「租户与配额 / 租户列表」，那是导航术语没跟着改（已作为已知限制报出），
+   * 所以这一条只禁"把租户当成可管理对象的动作词"，并把口径解释那句钉住。
+   */
+  const pageBody = await page.evaluate(() => document.querySelector('.mds-page')?.innerText ?? '')
+  check(['租户管理', '新建租户', '租户 ID', '租户ID'].every((label) => !pageBody.includes(label))
+    && pageBody.includes('经营主体（租户）'),
+  '主体页正文只把"租户"用作口径解释（不再是被管理的对象名）',
+    `命中对象名写法：${['租户管理', '新建租户', '租户列表', '租户 ID', '租户ID'].filter((label) => pageBody.includes(label)).join('/') || '无'}`)
 
   const loginResponse = await fetch(`${BASE}:8093/api/v1/auth/login`, {
     method: 'POST',

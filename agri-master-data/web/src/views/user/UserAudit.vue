@@ -1,12 +1,19 @@
 <template>
-  <div class="user-audit">
-    <div class="page-header">
-      <div class="header-left">
-        <h1>认证审核</h1>
-        <p>企业与个人实名认证统一审核 · 数据来自 core-platform</p>
-      </div>
-      <button class="search-btn" :disabled="loading" @click="loadData">刷新</button>
-    </div>
+  <div class="mds-page">
+    <PageHeader
+      title="认证审核"
+      subtitle="企业与个人实名认证台账：本页只做核对，审核动作由用户中心运营端办理。"
+      source="只读 · 用户中心主责"
+    >
+      <template #actions>
+        <button class="mds-btn" @click="openUserCenter">前往用户中心 · 认证审核</button>
+        <button class="mds-btn" :disabled="loading" @click="loadData">刷新</button>
+      </template>
+    </PageHeader>
+
+    <NoticeBar tone="info" title="只读视图：">
+      批量通过 / 驳回与按行审核已移除，认证结论统一在用户中心运营端录入，避免同一申请出现两套审核记录。
+    </NoticeBar>
 
     <div class="audit-kpis">
       <div class="audit-kpi"><span>待审核</span><strong>{{ counts.pending }}</strong><small>全部待处理申请</small></div>
@@ -37,30 +44,21 @@
     </div>
 
     <div class="audit-toolbar">
-      <span>已选 <b>{{ selectedKeys.length }}</b> 项</span>
-      <button class="action-btn approve" :disabled="!selectedKeys.length || saving" @click="batchApprove">批量通过并生效</button>
-      <button class="action-btn reject" :disabled="!selectedKeys.length || saving" @click="batchReject">批量驳回</button>
-      <span class="spacer"></span>
       <span>当前加载 {{ rows.length }} 条 · 筛选后 {{ filtered.length }} 条</span>
+      <span class="spacer"></span>
+      <button class="mds-btn mds-btn--sm" @click="openUserCenter">去用户中心办理审核</button>
     </div>
 
     <div class="table-card">
       <table class="data-table">
         <thead>
           <tr>
-            <th>
-              <input type="checkbox" :checked="allSelected" :disabled="!selectableRows.length" @change="toggleAll" />
-            </th>
             <th>申请编号</th><th>类型</th><th>主体 / 姓名</th><th>证件 / 信用代码</th>
             <th>联系人</th><th>手机号</th><th>状态</th><th>提交时间</th><th>操作</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="row in filtered" :key="row.key">
-            <td>
-              <input type="checkbox" :checked="selectedKeys.includes(row.key)" :disabled="row.status !== 'pending'"
-                @change="toggleRow(row.key)" />
-            </td>
             <td class="mono">{{ row.no }}</td>
             <td><span class="type-badge" :class="row.type">{{ row.type === 'enterprise' ? '企业认证' : '个人实名' }}</span></td>
             <td>{{ row.name }}</td>
@@ -71,11 +69,10 @@
             <td>{{ formatTime(row.submitTime) }}</td>
             <td class="action-cell">
               <button class="action-btn view" @click="detail = row">查看</button>
-              <button v-if="row.status === 'pending'" class="action-btn edit" @click="detail = row">审核</button>
             </td>
           </tr>
           <tr v-if="!filtered.length">
-            <td colspan="10" class="empty-cell">暂无认证申请</td>
+            <td colspan="9" class="empty-cell">暂无认证申请</td>
           </tr>
         </tbody>
       </table>
@@ -96,6 +93,11 @@
             <div class="detail-row"><span class="detail-label">统一信用代码</span><span class="detail-value mono">{{ detail.raw.creditCode }}</span></div>
             <div class="detail-row"><span class="detail-label">法定代表人</span><span class="detail-value">{{ detail.raw.legalPerson || '—' }}</span></div>
             <div class="detail-row"><span class="detail-label">营业执照编号</span><span class="detail-value">{{ detail.raw.licenseNo || '—' }}</span></div>
+            <div class="detail-row"><span class="detail-label">注册资本</span><span class="detail-value">{{ detail.raw.registeredCapital || '—' }}</span></div>
+            <div class="detail-row"><span class="detail-label">法人扫脸</span><span class="detail-value">{{ detail.raw.legalPersonFaceStatus === 'verified' ? '已通过' : '已提交待复核' }}</span></div>
+            <div class="detail-row"><span class="detail-label">对公账户</span><span class="detail-value">{{ detail.raw.corporateBankName || '—' }} · {{ detail.raw.corporateBankAccount || '—' }}</span></div>
+            <div class="detail-row"><span class="detail-label">对公打款</span><span class="detail-value">{{ detail.raw.corporateTransferAmount || '—' }} 元 · {{ detail.raw.corporateTransferReference || '—' }}</span></div>
+            <div class="detail-row"><span class="detail-label">认证方式</span><span class="detail-value">{{ detail.raw.verificationChannel || '法人扫脸 + 对公打款' }}</span></div>
             <div class="detail-row"><span class="detail-label">联系人</span><span class="detail-value">{{ detail.raw.contactName || '—' }}</span></div>
             <div class="detail-row"><span class="detail-label">联系电话</span><span class="detail-value mono">{{ detail.raw.contactPhone || '—' }}</span></div>
             <div class="detail-row"><span class="detail-label">材料说明</span><span class="detail-value">{{ detail.raw.attachNote || '—' }}</span></div>
@@ -122,6 +124,9 @@
           <template v-else>
             <div class="detail-row"><span class="detail-label">真实姓名</span><span class="detail-value">{{ detail.raw.realName }}</span></div>
             <div class="detail-row"><span class="detail-label">身份证号</span><span class="detail-value mono">{{ detail.raw.idNoMasked }}</span></div>
+            <div class="detail-row"><span class="detail-label">认证渠道</span><span class="detail-value">{{ detail.raw.verificationChannel || '公安二要素 + 活体' }}</span></div>
+            <div class="detail-row"><span class="detail-label">公安二要素</span><span class="detail-value">{{ detail.raw.policeVerified ? '已通过' : '待核验' }}</span></div>
+            <div class="detail-row"><span class="detail-label">人脸活体</span><span class="detail-value">{{ detail.raw.livenessVerified ? '已通过' : '待检测' }}</span></div>
             <div class="detail-row"><span class="detail-label">号码是否变更</span><span class="detail-value">{{ detail.raw.idNoChanged ? '与上次不一致' : '与上次一致' }}</span></div>
             <div class="detail-row"><span class="detail-label">说明</span><span class="detail-value">平台不保存身份证明文，运营只能看到掩码；三要素核验需接合规实名服务。</span></div>
           </template>
@@ -132,10 +137,6 @@
         </div>
         <div class="modal-footer">
           <button class="btn btn-cancel" @click="detail = null">关闭</button>
-          <template v-if="detail.status === 'pending'">
-            <button class="btn btn-success" :disabled="saving" @click="approveOne(detail)">审核通过并生效</button>
-            <button class="btn btn-danger" :disabled="saving" @click="openReject([detail])">驳回申请</button>
-          </template>
         </div>
       </div>
     </div>
@@ -165,6 +166,8 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
+import PageHeader from '@/components/ui/PageHeader.vue'
+import NoticeBar from '@/components/ui/NoticeBar.vue'
 import '@/styles/admin-page.css'
 import {
   auditMerchantCertification,
@@ -182,6 +185,10 @@ const statusFilter = ref('all')
 const keyword = ref('')
 const selectedKeys = ref([])
 const detail = ref(null)
+
+function openUserCenter() {
+  window.open(`${window.location.protocol}//${window.location.hostname}:8115/user-center-ops/`, '_blank', 'noopener')
+}
 const rejectTargets = ref([])
 const rejectReason = ref('')
 const documentPreviews = ref({})
@@ -192,8 +199,8 @@ const enterpriseDocuments = computed(() => {
   if (!raw || detail.value?.type !== 'enterprise') return []
   return [
     { key: 'businessLicense', label: '营业执照', url: raw.businessLicenseUrl },
-    { key: 'legalPersonIdFront', label: '法人身份证人像面', url: raw.legalPersonIdFrontUrl },
-    { key: 'legalPersonIdBack', label: '法人身份证国徽面', url: raw.legalPersonIdBackUrl },
+    { key: 'legalPersonFace', label: '法人扫脸', url: raw.legalPersonFaceUrl },
+    { key: 'corporateTransferProof', label: '对公打款凭证', url: raw.corporateTransferProofUrl },
   ]
 })
 
@@ -281,6 +288,16 @@ const normalizePersonal = (row) => ({
   raw: row,
 })
 
+/**
+ * 判断接口是否成功。
+ *
+ * <p>core-platform 的 {@code ApiResponse.ok()} 返回的是 {@code code: 0}，
+ * 不是 200 —— 本页原先按 {@code code === 200} 判定，结果**所有成功的响应都被当成失败**：
+ * 列表永远是空的、还挂着"加载失败"的提示，审核按钮也点不动。
+ * 两个都认，避免以后再被不同模块的成功码绊倒。</p>
+ */
+const isOk = (res) => res?.code === 0 || res?.code === 200
+
 const loadData = async () => {
   loading.value = true
   try {
@@ -289,11 +306,11 @@ const loadData = async () => {
       getUserIdentities({ pageNum: 1, pageSize: 200 }),
     ])
     const list = []
-    if (enterprise.code === 200) list.push(...(enterprise.data?.records ?? []).map(normalizeEnterprise))
-    if (personal.code === 200) list.push(...(personal.data?.records ?? []).map(normalizePersonal))
+    if (isOk(enterprise)) list.push(...(enterprise.data?.records ?? []).map(normalizeEnterprise))
+    if (isOk(personal)) list.push(...(personal.data?.records ?? []).map(normalizePersonal))
     list.sort((a, b) => String(b.submitTime ?? '').localeCompare(String(a.submitTime ?? '')))
     rows.value = list
-    if (enterprise.code !== 200 || personal.code !== 200) {
+    if (!isOk(enterprise) || !isOk(personal)) {
       message.warning('部分认证数据加载失败，请检查 core-platform')
     }
   } catch {
@@ -341,7 +358,7 @@ const approveItem = async (item) => {
   const res = item.type === 'enterprise'
     ? await auditMerchantCertification(item.id, 'approved', '材料齐全，审核通过')
     : await reviewUserIdentity(item.id, true, '材料齐全，审核通过')
-  if (res.code !== 200) {
+  if (!isOk(res)) {
     message.error(res.message || '审核失败')
     return false
   }
@@ -352,7 +369,7 @@ const rejectItem = async (item, reason) => {
   const res = item.type === 'enterprise'
     ? await auditMerchantCertification(item.id, 'rejected', reason)
     : await reviewUserIdentity(item.id, false, reason)
-  if (res.code !== 200) {
+  if (!isOk(res)) {
     message.error(res.message || '审核失败')
     return false
   }
@@ -465,7 +482,7 @@ onMounted(loadData)
   display: block;
   margin-top: 5px;
   color: #97a3b2;
-  font-size: 11.5px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .audit-kpi.tech strong { color: #0b5e86; }
@@ -568,14 +585,14 @@ onMounted(loadData)
   height: 100%;
   place-items: center;
   color: #8a9a91;
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .material-gallery figcaption {
   margin-top: 6px;
   overflow: hidden;
   color: #526359;
-  font-size: 10.5px;
+  font-size: var(--agri-font-size-micro);
   text-overflow: ellipsis;
   white-space: nowrap;
 }

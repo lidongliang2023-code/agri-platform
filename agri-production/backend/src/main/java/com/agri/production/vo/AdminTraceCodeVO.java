@@ -11,14 +11,17 @@ import java.time.format.DateTimeFormatter;
  * 运营端溯源码出参（前端 {@code RawTraceCode}，见 api/admin/trace.ts）。
  *
  * <p><b>为什么不复用用户端的 {@link TraceCodeContractVO}</b>：两个界面读的是**两套字段名**，
- * 而且都已经在各自的页面里用着 —— 用户端读 {@code batchNumber} / {@code queryCount}，
- * 运营端读 {@code batchNo} / {@code scanCount}，运营端还要 {@code batchId}（召回时把它回传）
- * 与 {@code createdAt}。列名只有一套，出参名有两套是既成事实；
- * 与其把四个别名塞进用户端契约（对它的调用方毫无用处），不如让运营端这份新契约直接说它要的名字。</p>
+ * 而且都已经在各自的页面里用着 —— 用户端读 {@code queryCount}，运营端读 {@code scanCount} /
+ * {@code createdAt}（批次键两边现在都叫 {@code batchNo} + {@code batchId}：
+ * 用户端那份以前叫 {@code batchNumber}，页面按 {@code batchNo} 取，结果「批次号」列与
+ * 「全链路→」跳转一起哑掉，2026-11-02 把名字对齐消费方）。列名只有一套，出参名有两套是既成事实；
+ * 与其把别名塞进另一份契约（对它的调用方毫无用处），不如让每份契约直接说它调用方要的名字。</p>
  *
  * <p>映射关系（一一对应，不派生）：{@code trace_code→code}、{@code harvest_id→batchId}、
  * {@code batch_number→batchNo}、{@code query_count→scanCount}、{@code quality_grade→grade}、
- * {@code blockchain_tx_hash→txHash}、{@code create_time→createdAt}。</p>
+ * {@code expiry_date→expireDate}、{@code create_time→createdAt}。
+ * 链上字段（{@code attested/onChain/chainStatus/txHash/recordNo}）**不来自本表**，
+ * 由服务层查存证表后调 {@link #applyEvidence} 贴上来。</p>
  */
 @Data
 public class AdminTraceCodeVO {
@@ -41,13 +44,35 @@ public class AdminTraceCodeVO {
     private String farmName;
     private String plotName;
     private LocalDate harvestDate;
+    /** 有效期至（表列 expiry_date；为空 = 未设置有效期） */
+    private LocalDate expireDate;
     private String activateTime;
     private String firstQueryTime;
+    /** 有没有链上存证记录（false = 存证表里没有这条码的记录） */
+    private Boolean attested;
+    /**
+     * 是否已上链 —— 由存证表判定（{@link #applyEvidence}），不再读
+     * {@code blockchain_tx_hash} 那个没人写的死列（那样会把有真实存证的码说成未上链）。
+     */
     private Boolean onChain;
+    /** 存证状态：PENDING / SUCCESS / FAILED */
+    private String chainStatus;
+    /** 上链交易哈希（SUCCESS 才有） */
     private String txHash;
+    /** 人读存证编号 */
+    private String recordNo;
     /** 激活操作人。表里**没有**这一列，恒为 null —— 不编一个"运营管理员"出来 */
     private String activatedBy;
     private String createdAt;
+
+    /** 贴链上凭证（服务层批量查存证表后调用）；{@code evidence} 为 null = 该码无存证记录。 */
+    public void applyEvidence(com.agri.production.entity.ChainRecord evidence) {
+        this.attested = evidence != null;
+        this.onChain = com.agri.production.service.ChainEvidenceRule.onChain(evidence);
+        this.chainStatus = evidence == null ? null : evidence.getChainStatus();
+        this.txHash = evidence == null ? null : evidence.getTxHash();
+        this.recordNo = evidence == null ? null : evidence.getRecordNo();
+    }
     private String updatedAt;
 
     public static AdminTraceCodeVO of(TraceCode entity) {
@@ -67,10 +92,11 @@ public class AdminTraceCodeVO {
         vo.farmName = entity.getFarmName();
         vo.plotName = entity.getPlotCode();
         vo.harvestDate = entity.getHarvestDate();
+        vo.expireDate = entity.getExpiryDate();
         vo.activateTime = format(entity.getActivateTime());
         vo.firstQueryTime = format(entity.getFirstQueryTime());
-        vo.txHash = entity.getBlockchainTxHash();
-        vo.onChain = entity.getBlockchainTxHash() != null && !entity.getBlockchainTxHash().isBlank();
+        // 链上字段留给 applyEvidence：blockchain_tx_hash 是没人写的死列，
+        // 拿它判 onChain 会把有真实 SUCCESS 存证的码显示成"未上链"。
         vo.activatedBy = null;
         vo.createdAt = format(entity.getCreateTime());
         vo.updatedAt = format(entity.getUpdateTime());

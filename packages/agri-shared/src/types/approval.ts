@@ -99,6 +99,10 @@ export interface ApprovalFlowConfig {
   status: 0 | 1
   /** 更新时间 */
   updatedAt: string
+  /** 条件路由（后端流程配置扩展） */
+  conditionRoutes?: unknown[]
+  /** 超时升级规则（后端流程配置扩展） */
+  escalations?: unknown[]
 }
 
 /** 合规检查结果：1 合规 2 限期整改 3 严重违规 */

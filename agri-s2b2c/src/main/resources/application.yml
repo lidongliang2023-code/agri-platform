@@ -1,18 +1,19 @@
 server:
   port: 8088
+  error:
+    # 能力/归属校验被拒时要让用户看到原因（默认 never 会把 message 吞掉）
+    include-message: always
 
 spring:
   application:
     name: agri-s2b2c
-  datasource:
-    url: jdbc:h2:mem:agri_s2b2c;MODE=MySQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
-    username: sa
-    password:
-    driver-class-name: org.h2.Driver
-  h2:
-    console:
-      enabled: true
-      path: /h2-console
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:mysql}
+  sql:
+    init:
+      mode: always
+      encoding: UTF-8
+      schema-locations: classpath:schema.sql
 
 mybatis-plus:
   configuration:
@@ -28,6 +29,30 @@ sa-token:
   is-concurrent: true
   is-share: true
   token-style: uuid
+
+agri:
+  # 能力校验（下单 / 上架商品）：调用核心平台内部接口
+  capability:
+    check-url: "${CORE_CAPABILITY_CHECK_URL:http://localhost:8093/api/v1/internal/capability-check}"
+    internal-token: "${AGRI_INTERNAL_TOKEN:agri-internal-dev}"
+  # 平台访问令牌校验参数（只读，与 core-platform 对齐）
+  jwt:
+    secret: "${AGRI_JWT_SECRET:agri-dev-secret-key-change-me-32bytes!}"
+    issuer: "${AGRI_JWT_ISSUER:agri-core-platform}"
+
+services:
+  platform:
+    url: http://localhost:8093
+
+# S2B2C 后端没有独立认证层，所有 /api 入口必须携带平台访问令牌。
+# 路径级权限使用通用读写权限，控制器的 @OperatorOnly 再收紧到角色权限。
+platform:
+  rbac:
+    operator-paths:
+      - /api/**
+    read-permission: s2b2c:read
+    write-permission: s2b2c:write
+    require-auth: true
 
 logging:
   level:

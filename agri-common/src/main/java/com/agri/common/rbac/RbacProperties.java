@@ -35,6 +35,14 @@ public class RbacProperties {
      */
     private List<String> operatorPaths = new ArrayList<>();
 
+    /**
+     * 公开路径（Ant 风格），命中即直接放行，不要求令牌也不要求权限。
+     *
+     * <p>用于官网门户这类"开放浏览、无需登录"的只读接口。注意：只应该放行
+     * 真正脱敏过的接口 —— 把业务接口整段挂进来，等于把私域数据也一起开放了。</p>
+     */
+    private List<String> publicPaths = new ArrayList<>();
+
     /** 运营端读权限码。 */
     private String readPermission = "platform:read";
 

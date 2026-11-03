@@ -74,3 +74,8 @@ agri-production/backend/data/
 
 # 用户上传的商品图片（运行时数据，部署时由上传接口创建）
 agri-trade/backend/uploads/
+
+# 运行时上传目录（证照/图片等用户产物，不入库）
+core-platform/uploads/
+core-platform/core-app/uploads/
+agri-service/backend/uploads/

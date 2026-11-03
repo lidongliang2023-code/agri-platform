@@ -10,6 +10,11 @@
         <if test="dto.taskName != null and dto.taskName != ''">
             AND t.task_name LIKE CONCAT('%', #{dto.taskName}, '%')
         </if>
+        <!-- 前端列表页的关键字搜索：任务名称或任务编号 -->
+        <if test="dto.keyword != null and dto.keyword != ''">
+            AND (t.task_name LIKE CONCAT('%', #{dto.keyword}, '%')
+                 OR t.task_code LIKE CONCAT('%', #{dto.keyword}, '%'))
+        </if>
         <if test="dto.taskType != null and dto.taskType != ''">
             AND t.task_type = #{dto.taskType}
         </if>
@@ -21,6 +26,12 @@
         </if>
         <if test="dto.plotId != null">
             AND t.plot_id = #{dto.plotId}
+        </if>
+        <if test="dto.planId != null">
+            AND t.plan_id = #{dto.planId}
+        </if>
+        <if test="dto.stageId != null">
+            AND t.stage_id = #{dto.stageId}
         </if>
         <if test="dto.executorId != null">
             AND t.executor_id = #{dto.executorId}

@@ -43,4 +43,7 @@ public class Customer extends BaseEntity {
     private Integer delFlag;
 
     private String tenantId;
+
+    /** 备注（表 agri_md_customer.remark 早已存在，实体此前漏映射） */
+    private String remark;
 }

@@ -22,20 +22,26 @@
  * 用运营身份覆盖 —— 本脚本是用户身份，跑到那儿只会拿到 404（2026-10-16 踩过）。</p>
  *
  * <p>登录态给法同 {@code scripts/e2e-farm-create.mjs}：落同源静态文件 → 页面上下文 POST /auth/login
- * 种下 HttpOnly Cookie → evaluateOnNewDocument 写非凭证界面态。这里额外写
+ * 种下 HttpOnly Cookie → addInitScript 写非凭证界面态。这里额外写
  * {@code agri_current_farm}，因为计划列表 / 地块下拉都以「当前农场」为作用域。</p>
  *
  * 用法：node scripts/e2e-plan-create.mjs [--user=farmer] [--base=http://localhost] [--farm=1] [--headful]
  * 退出码：0 = 全链路通过；1 = 有断言失败。
  */
 import { createRequire } from 'node:module'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const require2 = createRequire(path.join(REPO_ROOT, 'agri-production/frontend/package.json'))
-const puppeteer = require2('puppeteer')
+const require2 = createRequire(path.join('C:/Users/71502/.workbuddy-ai/binaries/node/workspace', 'noop.js'))
+const { chromium } = require2('playwright-core')
+
+const BROWSER = [
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+].find((candidate) => existsSync(candidate))
 
 const arg = (name, fallback) => {
   const hit = process.argv.slice(2).find((a) => a.startsWith(`--${name}=`))
@@ -95,9 +101,9 @@ try {
   /* 名称只影响断言里的展示，取不到不阻断 */
 }
 
-const browser = await puppeteer.launch({ headless: HEADFUL ? false : 'new', args: ['--no-sandbox'] })
-const page = await browser.newPage()
-await page.setViewport({ width: 1600, height: 1000 })
+const browser = await chromium.launch({ headless: !HEADFUL, executablePath: BROWSER, args: ['--no-sandbox'] })
+const page = await (await browser.newContext({ viewport: { width: 1440, height: 1000 } })).newPage()
+await page.setViewportSize({ width: 1600, height: 1000 })
 const badResponses = []
 /** 页面自己发出的 POST /plans 的响应体（用来核对契约） */
 let createCall = null
@@ -240,15 +246,18 @@ const setSearchField = async (label, value) => {
  * @returns 命中行数与该行文本
  */
 const runSearch = async (fields) => {
-  await page.goto(`${BASE_URL}/production/plans`, { waitUntil: 'networkidle2', timeout: 60000 })
-  await page.waitForNetworkIdle({ idleTime: 600, timeout: 10000 }).catch(() => {})
+  await page.goto(`${BASE_URL}/production/plans`, { waitUntil: 'networkidle', timeout: 60000 })
+  await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 600))
   await clickButtonByText('重置')
-  await page.waitForNetworkIdle({ idleTime: 600, timeout: 10000 }).catch(() => {})
+  await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 600))
   for (const [label, value] of Object.entries(fields)) {
     await setSearchField(label, value)
   }
   await clickButtonByText('查询')
-  await page.waitForNetworkIdle({ idleTime: 800, timeout: 15000 }).catch(() => {})
+  await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 800))
   return page.evaluate(() => {
     const rows = [...document.querySelectorAll('.ant-table-tbody tr.ant-table-row')]
     return {
@@ -269,7 +278,7 @@ try {
     } catch { /* 由后续页面表现反映 */ }
   }, { username: USER, password: PASSWORD, marketId: 1 })
 
-  await page.evaluateOnNewDocument((state) => {
+  await page.addInitScript((state) => {
     try {
       localStorage.setItem('agri_user_info', JSON.stringify(state.userInfo))
       localStorage.setItem('agri_roles', JSON.stringify(state.roles ?? []))
@@ -280,8 +289,9 @@ try {
   }, { userInfo: login.data.user ?? {}, roles: ['FARMER'], marketId: 1, farm: FARM })
 
   // 1) 计划列表页
-  await page.goto(`${BASE_URL}/production/plans`, { waitUntil: 'networkidle2', timeout: 60000 })
-  await page.waitForNetworkIdle({ idleTime: 600, timeout: 10000 }).catch(() => {})
+  await page.goto(`${BASE_URL}/production/plans`, { waitUntil: 'networkidle', timeout: 60000 })
+  await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 600))
   const listText = await page.evaluate(() => document.body.innerText)
   check(listText.includes('种养计划'), '计划列表页已登录并渲染')
 
@@ -297,69 +307,63 @@ try {
   check(!siderBefore.includes('任务模板库'), '用户端不再有「任务模板库」菜单（已搬到运营端）')
   // 面包屑读的就是菜单分组名（buildBreadcrumb 用 group.label），所以"任务页的面包屑是智能种养"
   // 等于证明两组子项确实挂在同一个一级菜单下 —— 比展开子菜单查 DOM 稳（子菜单折叠时不在 DOM 里）。
-  await page.goto(`${BASE_URL}/production/tasks`, { waitUntil: 'networkidle2', timeout: 60000 })
-  await page.waitForNetworkIdle({ idleTime: 600, timeout: 10000 }).catch(() => {})
+  await page.goto(`${BASE_URL}/production/tasks`, { waitUntil: 'networkidle', timeout: 60000 })
+  await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 600))
   const taskCrumb = await page.evaluate(
     () => document.querySelector('.ant-breadcrumb')?.innerText?.replace(/\s+/g, ' ') ?? '',
   )
   check(taskCrumb.includes('智能种养'), '任务页面包屑归到「智能种养」（两组同属一个一级菜单）',
     taskCrumb || '（未找到面包屑）')
 
-  // 1c) 菜单归属（2026-10-16 调整）：团队与人员 / 角色与权限 从「农场数字化管理」挪到「报表与设置」。
-  //     面包屑读的就是菜单分组名，所以看面包屑即可确认真挂到了哪个一级菜单下。
-  const crumbs = []
-  for (const path of ['/production/members', '/production/members/roles']) {
-    await page.goto(`${BASE_URL}${path}`, { waitUntil: 'networkidle2', timeout: 60000 })
-    await page.waitForNetworkIdle({ idleTime: 600, timeout: 10000 }).catch(() => {})
-    const crumb = await page.evaluate(
-      () => document.querySelector('.ant-breadcrumb')?.innerText?.replace(/\s+/g, ' ') ?? '',
-    )
-    crumbs.push({ path, crumb })
-    check(crumb.includes('报表与设置'), `${path} 的面包屑归到「报表与设置」`, crumb || '（未找到面包屑）')
-  }
+  // 1c) 团队成员 / 角色权限：2026-11-02 起已从生产域菜单撤走（人员与权限归用户中心与卖家中心管），
+  //     所以这里不再断言它们挂在哪个一级菜单下，而是钉住"生产端菜单里已经没有它们"。
+  const memberMenuText = await page.evaluate(
+    () => document.querySelector('.ant-layout-sider')?.innerText?.replace(/\s+/g, ' ') ?? '',
+  )
+  check(!memberMenuText.includes('团队成员') && !memberMenuText.includes('角色与权限'),
+    '生产端菜单已不再挂「团队成员 / 角色与权限」', memberMenuText.slice(0, 90))
 
-  // 1d) 投入品菜单去重（2026-10-16）：只保留「投入品台账」。
-  //     ⚠️ 侧边栏的分组默认折叠、且这版布局里程序化展开不生效（antd 受控 openKeys），
-  //     所以这里用**面包屑**证明"保留的那个叶子仍在菜单里"；
-  //     "重复叶子已摘掉"由静态校验 scripts/check-menu-route-map.mjs 证明
-  //     （它会列出已注册但未进菜单的路由，摘掉后 /production/inputs/ledger 出现在该清单里）。
-  await page.goto(`${BASE_URL}/production/inputs`, { waitUntil: 'networkidle2', timeout: 60000 })
-  await page.waitForNetworkIdle({ idleTime: 600, timeout: 10000 }).catch(() => {})
+  // 1d) 农资管理收口（2026-11-02）：投入品档案 + 出入库 + 使用记录合并成单页两个 Tab，
+  //     菜单只剩一个叶子「农资台账」，面包屑 = 一级菜单名 + 叶子名。
+  await page.goto(`${BASE_URL}/production/inputs`, { waitUntil: 'networkidle', timeout: 60000 })
+  await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 600))
   const inputCrumb = await page.evaluate(
     () => document.querySelector('.ant-breadcrumb')?.innerText?.replace(/\s+/g, ' ') ?? '',
   )
-  check(inputCrumb.includes('农资投入品管理') && inputCrumb.includes('投入品台账'),
-    '「投入品台账」仍在菜单里（面包屑可证）', inputCrumb || '（未找到面包屑）')
+  check(inputCrumb.includes('农资管理') && inputCrumb.includes('农资台账'),
+    '「农资台账」挂在一级菜单「农资管理」下', inputCrumb || '（未找到面包屑）')
   const ledgerText = await page.evaluate(() => document.body.innerText)
-  check(ledgerText.includes('投入品'), '「投入品台账」页已渲染', ledgerText.replace(/\s+/g, ' ').slice(0, 60))
-  // 打开 /production/inputs 时该分组会自动展开，所以整页文本里能看到兄弟叶子：
-  // 有「投入品台账」「出入库管理」「使用记录」，但**没有**「投入品使用台账」（2026-10-16 去重）。
-  check(ledgerText.includes('投入品台账') && !ledgerText.includes('投入品使用台账'),
-    '侧边栏该分组下已无重复的「投入品使用台账」')
-  // 第三份也收口了（2026-10-16）：「使用记录」叶子撤销。侧边栏只会出现菜单标签，
-  // 页面正文里另有"使用记录"字样（合规汇总），所以这里只读侧边栏的文本。
-  const siderText = await page.evaluate(() => document.querySelector('.ant-layout-sider')?.innerText ?? '')
-  check(!siderText.includes('使用记录'), '侧边栏不再有「使用记录」叶子（第三份收口）',
-    siderText.replace(/\s+/g, ' ').slice(-70))
-  // 但那一页独有的能力（新建使用记录/合规校验/上链）不能跟着丢：入口挂在本页「使用台账」Tab 右上角
-  const hasEntry = await page.evaluate(() =>
-    [...document.querySelectorAll('button, a')].some((el) => (el.textContent ?? '').includes('登记使用记录')))
-  check(hasEntry, '保留页提供了「登记使用记录 →」入口（收口不砍功能）')
-  await page.evaluate(() => {
-    const el = [...document.querySelectorAll('button, a')].find((b) => (b.textContent ?? '').includes('登记使用记录'))
-    el?.click()
-  })
-  await sleep(1200)
-  const usageText = await page.evaluate(() => document.body.innerText)
-  check(page.url().includes('/production/inputs/usages') && usageText.includes('投入品使用记录'),
-    '从投入品台账页能进入「投入品使用记录」页', page.url().replace(BASE_URL, ''))
-
+  check(ledgerText.includes('投入品') || ledgerText.includes('农资'), '「农资台账」页已渲染',
+    ledgerText.replace(/\s+/g, ' ').slice(0, 60))
+  const inputSiderText = await page.evaluate(
+    () => document.querySelector('.ant-layout-sider')?.innerText?.replace(/\s+/g, ' ') ?? '',
+  )
+  check(!inputSiderText.includes('投入品使用台账') && !inputSiderText.includes('使用记录')
+    && !inputSiderText.includes('出入库管理'),
+    '侧边栏不再有重复的投入品/使用记录/出入库叶子（三份并成一份）',
+    inputSiderText.match(/农资管理[\s\S]{0,40}/)?.[0] ?? inputSiderText.slice(-70))
+  // 功能没跟着丢：使用台账与出入库流水都在本页 Tab 里，旧深链 replace 到 ?tab=ledger。
+  await page.goto(`${BASE_URL}/production/inputs/usages`, { waitUntil: 'networkidle', timeout: 60000 })
+  await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 800))
+  const usageRedirect = page.url().replace(BASE_URL, '')
+  const usageTabText = await page.evaluate(() => document.body.innerText)
+  check(usageRedirect.includes('/production/inputs') && !usageRedirect.includes('/usages')
+    && usageTabText.includes('使用台账'),
+    '旧「使用记录」页深链回落到「农资台账」的使用台账 Tab', `${usageRedirect}｜${usageTabText.replace(/\s+/g, ' ').slice(0, 50)}`)
+  const flowColumn = await page.evaluate(() =>
+    [...document.querySelectorAll('th')].map((th) => (th.textContent ?? '').trim()))
+  check(flowColumn.some((title) => title.includes('台账类型')) && flowColumn.some((title) => title.includes('投入品类型')),
+    '使用台账流水列用「台账类型」指流水动作，与「投入品类型」分列', flowColumn.slice(0, 8).join('/'))
   // 1e) 投入品整理（2026-10-16）：冗余页「投入品使用台账」(inputs/ledger) 整页删除。
   //     它只剩两处深链（农场详情快捷入口、地块详情"查看投入品台账→"），都已改指权威页；
   //     删页后旧链接若不拦会落进 `inputs/:inputId` 变成"投入品详情(id=ledger)"的假页面，
   //     所以路由留了一条 replace 重定向回落 —— 这里逐条断言。
-  await page.goto(`${BASE_URL}/production/inputs/ledger`, { waitUntil: 'networkidle2', timeout: 60000 })
-  await page.waitForNetworkIdle({ idleTime: 600, timeout: 10000 }).catch(() => {})
+  await page.goto(`${BASE_URL}/production/inputs/ledger`, { waitUntil: 'networkidle', timeout: 60000 })
+  await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 600))
   const ledgerFallbackText = await page.evaluate(() => document.body.innerText)
   check(page.url().replace(BASE_URL, '').startsWith('/production/inputs') && !page.url().includes('/ledger'),
     '旧链接 /production/inputs/ledger 回落到权威页（不再渲染同名冗余页）',
@@ -368,8 +372,9 @@ try {
 
   // 农场详情快捷入口「📦 投入品台账」指向权威页（原指 inputs/ledger）。
   // 只在正文里找按钮：侧边栏也有"投入品台账"这个菜单叶子，混进来会假过。
-  await page.goto(`${BASE_URL}/production/farms/${FARM.farmId}`, { waitUntil: 'networkidle2', timeout: 60000 })
-  await page.waitForNetworkIdle({ idleTime: 600, timeout: 10000 }).catch(() => {})
+  await page.goto(`${BASE_URL}/production/farms/${FARM.farmId}`, { waitUntil: 'networkidle', timeout: 60000 })
+  await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 600))
   const quickPoll = await page.evaluate(() => {
     const content = document.querySelector('.ant-layout-content')
     if (!content) return null
@@ -399,16 +404,22 @@ try {
     inputPageText.includes('分类') ? '仍有「分类」字样' : '已全部改为「投入品类型」')
   check(inputPageText.includes('投入品类型'), '「投入品台账」页有「投入品类型」列/筛选项')
 
-  await page.goto(`${BASE_URL}/production/inputs/stock`, { waitUntil: 'networkidle2', timeout: 60000 })
-  await page.waitForNetworkIdle({ idleTime: 600, timeout: 10000 }).catch(() => {})
+  // 并入单页后，「投入品类型」在档案 Tab、「台账类型」在使用台账 Tab —— 默认落在档案 Tab 时
+  // 读不到流水列名，所以这里直接按 ?tab=ledger 进使用台账视图再判两个口径是否并存。
+  await page.goto(`${BASE_URL}/production/inputs?tab=ledger`, { waitUntil: 'networkidle', timeout: 60000 })
+  await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 800))
   const stockPageText = await page.evaluate(() => document.body.innerText)
   check(!stockPageText.includes('分类'), '「出入库管理」页不再出现「分类」这个叫法')
   check(stockPageText.includes('投入品类型'), '「出入库管理」页用「投入品类型」指投入品字段')
-  check(stockPageText.includes('流水类型'), '「出入库管理」页用「流水类型」指流水动作（不再与投入品类型同名）')
+  check(stockPageText.includes('台账类型') && stockPageText.includes('投入品类型'),
+    '并入单页后仍分「台账类型」与「投入品类型」两个口径',
+    stockPageText.replace(/\s+/g, ' ').slice(0, 70))
 
   // 回到计划页（下面要在计划页开新增弹窗）
-  await page.goto(`${BASE_URL}/production/plans`, { waitUntil: 'networkidle2', timeout: 60000 })
-  await page.waitForNetworkIdle({ idleTime: 600, timeout: 10000 }).catch(() => {})
+  await page.goto(`${BASE_URL}/production/plans`, { waitUntil: 'networkidle', timeout: 60000 })
+  await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 600))
 
   // 2) 打开「新增种养计划」弹窗
   await clickButtonByText('新增种养计划')
@@ -474,7 +485,8 @@ try {
     () => !document.querySelector('.ant-modal-content, .ant-modal'),
     { timeout: 20000 },
   ).catch(() => {})
-  await page.waitForNetworkIdle({ idleTime: 800, timeout: 15000 }).catch(() => {})
+  await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 800))
 
   const formErrors = await page.evaluate(() =>
     [...document.querySelectorAll('.ant-form-item-explain-error')].map((e) => e.textContent.trim()))
@@ -524,8 +536,9 @@ try {
   }
 
   // 8) 查询侧之二：详情页渲染
-  await page.goto(`${BASE_URL}/production/plans/${planId}`, { waitUntil: 'networkidle2', timeout: 60000 })
-  await page.waitForNetworkIdle({ idleTime: 600, timeout: 10000 }).catch(() => {})
+  await page.goto(`${BASE_URL}/production/plans/${planId}`, { waitUntil: 'networkidle', timeout: 60000 })
+  await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 600))
   const detailText = await page.evaluate(() => document.body.innerText)
   check(detailText.includes(planName), '详情页显示计划名称')
   check(detailText.includes(targetPlotName), '详情页显示关联地块')

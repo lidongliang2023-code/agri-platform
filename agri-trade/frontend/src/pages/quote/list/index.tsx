@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { DatePicker, Form, Input, InputNumber, Select, Spin, message } from 'antd'
 import {
+  AppstoreOutlined,
   ArrowLeftOutlined,
   CheckCircleOutlined,
   ClockCircleOutlined,
@@ -13,6 +14,7 @@ import {
   SendOutlined,
   ShopOutlined,
   TagOutlined,
+  UnorderedListOutlined,
 } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import dayjs from 'dayjs'
@@ -70,6 +72,7 @@ export default function QuoteList(): JSX.Element {
   const [quoteTarget, setQuoteTarget] = useState<InquiryVO | null>(null)
   const [myMerchantIds, setMyMerchantIds] = useState<string[]>([])
   const [received, setReceived] = useState<InquiryVO[]>([])
+  const [receivedView, setReceivedView] = useState<'card' | 'list'>('card')
   const [submitting, setSubmitting] = useState(false)
   const [standaloneForm] = Form.useForm()
   const [inquiryForm] = Form.useForm()
@@ -376,10 +379,24 @@ export default function QuoteList(): JSX.Element {
 
   return (
     <div className="quote-workbench">
-      <Panel title={`收到的询价（${received.length}）`} extra={<span className="quote-section-note">采购方询价等待响应</span>}>
+      <Panel title={`收到的询价（${received.length}）`} extra={(
+        <div className="quote-received-tools">
+          <span className="quote-section-note">采购方询价等待响应</span>
+          <div className="quote-view-toggle" role="group" aria-label="收到的询价展示方式">
+            <button type="button" className={receivedView === 'card' ? 'on' : ''}
+              aria-pressed={receivedView === 'card'} onClick={() => setReceivedView('card')}>
+              <AppstoreOutlined />卡片
+            </button>
+            <button type="button" className={receivedView === 'list' ? 'on' : ''}
+              aria-pressed={receivedView === 'list'} onClick={() => setReceivedView('list')}>
+              <UnorderedListOutlined />列表
+            </button>
+          </div>
+        </div>
+      )}>
         {received.length === 0 ? (
           <EmptyState title="暂无采购询价" desc="采购方针对你的货源发起询价后，会显示在这里。" />
-        ) : (
+        ) : receivedView === 'card' ? (
           <div className="quote-inquiry-grid">
             {received.map((inquiry) => {
               const meta = INQUIRY_STATUS[inquiry.inquiryStatus] ?? { text: inquiry.inquiryStatus, tone: 'ghost' }
@@ -402,6 +419,39 @@ export default function QuoteList(): JSX.Element {
                 </div>
               )
             })}
+          </div>
+        ) : (
+          <div className="mc-table-wrap quote-received-table">
+            <table className="mc-table">
+              <thead>
+                <tr><th>询价单号</th><th>商品</th><th>采购方</th><th>采购数量</th><th>期望价格</th><th>报价截止</th><th>已报价</th><th>状态</th><th>操作</th></tr>
+              </thead>
+              <tbody>
+                {received.map((inquiry) => {
+                  const meta = INQUIRY_STATUS[inquiry.inquiryStatus] ?? {
+                    text: inquiry.inquiryStatus || '未知',
+                    tone: 'ghost',
+                  }
+                  return (
+                    <tr key={inquiry.id}>
+                      <td className="mc-mono">{inquiry.inquiryNo}</td>
+                      <td><strong className="quote-received-product">{inquiry.productName || `商品 #${inquiry.productId}`}</strong></td>
+                      <td>{inquiry.buyerName || '采购方'}</td>
+                      <td className="mc-mono">{inquiry.quantity} {inquiry.unit}</td>
+                      <td className="mc-price">{money(inquiry.priceMin)} - {money(inquiry.priceMax)}</td>
+                      <td className="mc-mono mc-xs">{shortDate(inquiry.replyDeadline)}</td>
+                      <td className="mc-mono">{inquiry.replyCount ?? 0} 份</td>
+                      <td><span className={`mc-tag ${meta.tone}`}>{meta.text}</span></td>
+                      <td>
+                        <button type="button" className="mc-link" onClick={() => openInquiryQuote(inquiry)}>
+                          去报价
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </Panel>

@@ -1,6 +1,25 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Icon } from '../components/Icon'
 import { useHashRoute, ssoRegister, tradeUrl } from '../utils'
+import { infoPublicApi, dayLabel, type Article, type Channel, type Quote } from './info/infoApi'
+
+/**
+ * 官网门户首页。
+ *
+ * <p>四块业务数据全部来自后端的公开只读通道，本页不再有写死的业务数字：</p>
+ * <ul>
+ *   <li>在售货源与大盘指标 → 交易域 {@code /api/trade/public/*}</li>
+ *   <li>行情与资讯 → 资讯域 {@code /api/v1/info/public/*}（栏目由运营在资讯运营端维护）</li>
+ *   <li>平台公告 → 主数据域 {@code /api/master-data/public/announcements}</li>
+ * </ul>
+ *
+ * <p>改前的样子：大盘是「1268 亿 / 42 万笔 / 186 万件 / 38 万人」四个前端常量；资讯和公告读的是
+ * core-platform 的遗留表 {@code svc_news}（0 行），所以无论运营发多少内容，首页永远显示"暂无"；
+ * 行情读 {@code svc_quote}（只剩一条建库种子）。每条资讯的链接还统一指向认证说明页。
+ * 这些都属于"接口能通、数据是真的、页面却在说另一件事"，比直接报错更难发现。</p>
+ *
+ * <p>取不到数时明确写"暂时读不到 + 原因"，不退化成空态，也不回落到旧常量。</p>
+ */
 
 interface LiveProduct {
   id: number
@@ -25,28 +44,36 @@ interface ProductCard {
   href: string
 }
 
-interface LiveQuote {
-  id: string | number
-  productName: string
-  category?: string
-  price: number
-  changePct?: number
-  source?: string
-  quotedAt?: string
+interface PlatformStat {
+  tradeAmount?: number
+  dealCount?: number
+  participantCount?: number
+  publishedProductCount?: number
 }
 
-interface LiveNews {
-  id: string | number
+interface PortalAnnouncement {
+  id: string
   title: string
-  summary?: string
-  publishedAt?: string
+  type?: string
+  content?: string
+  publishTime?: string
 }
 
-interface NewsItem {
-  tag: string
-  tagCls: string
-  title: string
-  date: string
+interface Envelope<T> {
+  code?: number
+  message?: string
+  data?: T
+}
+
+/** 门户是匿名访问，公开接口出错时必须能让用户看出是"服务没响应"而不是"平台没内容"。 */
+async function readPublicJson<T>(url: string): Promise<T> {
+  const response = await fetch(url, { headers: { Accept: 'application/json' } })
+  if (!response.ok) throw new Error(`服务响应 HTTP ${response.status}`)
+  const body = (await response.json()) as Envelope<T>
+  // 认证域成功码是 0，交易/主数据/资讯域是 200
+  if (body.code !== 0 && body.code !== 200) throw new Error(body.message || '服务返回异常')
+  if (body.data === undefined || body.data === null) throw new Error('服务没有返回数据')
+  return body.data
 }
 
 const SERVICES = [
@@ -90,89 +117,114 @@ function liveCard(product: LiveProduct, index: number): ProductCard {
   }
 }
 
-function NewsList({ items }: { items: NewsItem[] }): JSX.Element {
-  return (
-    <ul className="portal-news-list">
-      {items.map((item) => (
-        <li key={item.title}>
-          <a href="#/certify">
-            <span className={`tag ${item.tagCls}`}>{item.tag}</span>
-            <span className="ellipsis portal-news-title">{item.title}</span>
-            <span className="mono t-xs muted portal-news-date">{item.date}</span>
-          </a>
-        </li>
-      ))}
-    </ul>
-  )
+/** 金额按真实量级换单位，不再把"元"当"亿"显示。 */
+function formatAmount(value?: number): { text: string; unit: string } {
+  if (value === undefined || value === null) return { text: '—', unit: '' }
+  if (value >= 1e8) return { text: (value / 1e8).toFixed(2), unit: '亿元' }
+  if (value >= 1e4) return { text: (value / 1e4).toFixed(2), unit: '万元' }
+  return { text: value.toFixed(2), unit: '元' }
+}
+
+function formatCount(value?: number, unit = ''): { text: string; unit: string } {
+  if (value === undefined || value === null) return { text: '—', unit: '' }
+  if (value >= 1e4) return { text: (value / 1e4).toFixed(1), unit: `万${unit}` }
+  return { text: String(value), unit }
+}
+
+const ANNOUNCEMENT_LABELS: Record<string, { label: string; tagCls: string }> = {
+  info: { label: '公告', tagCls: 'tag-tech' },
+  warning: { label: '提醒', tagCls: 'tag-amber' },
+  maintenance: { label: '维护', tagCls: '' },
+  emergency: { label: '紧急', tagCls: 'tag-red' },
+}
+
+function DataNote({ children }: { children: ReactNode }): JSX.Element {
+  return <div className="portal-data-note">{children}</div>
 }
 
 export function Home(): JSX.Element {
   const route = useHashRoute()
-  const [newsTab, setNewsTab] = useState<'policy' | 'market' | 'agri'>('policy')
-  const [priceId, setPriceId] = useState<string | number>('')
   const [live, setLive] = useState<LiveProduct[] | null>(null)
-  const [quotes, setQuotes] = useState<LiveQuote[]>([])
-  const [news, setNews] = useState<LiveNews[]>([])
-  const [announcements, setAnnouncements] = useState<LiveNews[]>([])
-  const [newsLoading, setNewsLoading] = useState(true)
-  const [quoteLoading, setQuoteLoading] = useState(true)
+  const [liveError, setLiveError] = useState('')
+  const [stat, setStat] = useState<PlatformStat | null>(null)
+  const [statError, setStatError] = useState('')
+  const [quotes, setQuotes] = useState<Quote[] | null>(null)
+  const [marketStats, setMarketStats] = useState<Record<string, number>>({})
+  const [marketError, setMarketError] = useState('')
+  const [channels, setChannels] = useState<Channel[]>([])
+  const [channelError, setChannelError] = useState('')
+  const [channelName, setChannelName] = useState('')
+  const [articles, setArticles] = useState<Article[] | null>(null)
+  const [articlesTotal, setArticlesTotal] = useState(0)
+  const [articlesLoading, setArticlesLoading] = useState(true)
+  const [articlesError, setArticlesError] = useState('')
+  const [announcements, setAnnouncements] = useState<PortalAnnouncement[] | null>(null)
+  const [announcementError, setAnnouncementError] = useState('')
+  const [openAnnouncement, setOpenAnnouncement] = useState('')
 
   useEffect(() => {
     let cancelled = false
-    fetch('/api/trade/public/products?limit=8')
-      .then((response) => response.json())
-      .then((body: { code?: number; data?: LiveProduct[] | { records?: LiveProduct[] } }) => {
+    readPublicJson<LiveProduct[]>('/api/trade/public/products?limit=8')
+      .then((records) => { if (!cancelled) { setLive(records); setLiveError('') } })
+      .catch((reason: Error) => { if (!cancelled) { setLive([]); setLiveError(reason.message) } })
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    readPublicJson<PlatformStat>('/api/trade/public/summary')
+      .then((data) => { if (!cancelled) { setStat(data); setStatError('') } })
+      .catch((reason: Error) => { if (!cancelled) { setStat(null); setStatError(reason.message) } })
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    infoPublicApi.markets()
+      .then((result) => {
         if (cancelled) return
-        // 交易域 ApiResponse 的 code 是 200（认证域是 0），两种都接受
-        const records = Array.isArray(body.data) ? body.data : body.data?.records
-        if ((body.code === 0 || body.code === 200) && records && records.length > 0) {
-          setLive(records)
-        } else {
-          setLive([])
-        }
+        setQuotes(result.quotes ?? [])
+        setMarketStats(result.stats ?? {})
+        setMarketError('')
       })
-      .catch(() => { if (!cancelled) setLive([]) })
+      .catch((reason: Error) => { if (!cancelled) { setQuotes([]); setMarketError(reason.message) } })
     return () => { cancelled = true }
   }, [])
 
   useEffect(() => {
     let cancelled = false
-    setQuoteLoading(true)
-    fetch('/api/v1/quotes?size=20')
-      .then((response) => response.json())
-      .then((body: { code?: number; data?: { records?: LiveQuote[] } }) => {
-        if (cancelled || body.code !== 0) return
-        const records = body.data?.records ?? []
-        setQuotes(records)
-        if (records.length > 0) setPriceId(records[0].id)
+    infoPublicApi.channels()
+      .then((list) => {
+        if (cancelled) return
+        setChannels(list)
+        setChannelError('')
+        if (list.length > 0) setChannelName((current) => current || list[0].name)
       })
-      .catch(() => { if (!cancelled) setQuotes([]) })
-      .finally(() => { if (!cancelled) setQuoteLoading(false) })
+      .catch((reason: Error) => { if (!cancelled) { setChannels([]); setChannelError(reason.message) } })
     return () => { cancelled = true }
   }, [])
 
   useEffect(() => {
+    if (!channelName) return undefined
     let cancelled = false
-    const keyword = newsTab === 'policy' ? '政策' : newsTab === 'market' ? '行情' : '农技'
-    setNewsLoading(true)
-    fetch(`/api/v1/public/news?size=6&keyword=${encodeURIComponent(keyword)}`)
-      .then((response) => response.json())
-      .then((body: { code?: number; data?: { records?: LiveNews[] } }) => {
-        if (!cancelled && body.code === 0) setNews(body.data?.records ?? [])
+    setArticlesLoading(true)
+    infoPublicApi.articles({ channel: channelName, size: 6 })
+      .then((result) => {
+        if (cancelled) return
+        setArticles(result.items ?? [])
+        setArticlesTotal(result.total ?? 0)
+        setArticlesError('')
       })
-      .catch(() => { if (!cancelled) setNews([]) })
-      .finally(() => { if (!cancelled) setNewsLoading(false) })
+      .catch((reason: Error) => { if (!cancelled) { setArticles([]); setArticlesTotal(0); setArticlesError(reason.message) } })
+      .finally(() => { if (!cancelled) setArticlesLoading(false) })
     return () => { cancelled = true }
-  }, [newsTab])
+  }, [channelName])
 
   useEffect(() => {
     let cancelled = false
-    fetch('/api/v1/public/news?size=5&keyword=%E5%85%AC%E5%91%8A')
-      .then((response) => response.json())
-      .then((body: { code?: number; data?: { records?: LiveNews[] } }) => {
-        if (!cancelled && body.code === 0) setAnnouncements(body.data?.records ?? [])
-      })
-      .catch(() => { if (!cancelled) setAnnouncements([]) })
+    readPublicJson<PortalAnnouncement[]>('/api/master-data/public/announcements?limit=5')
+      .then((list) => { if (!cancelled) { setAnnouncements(list); setAnnouncementError('') } })
+      .catch((reason: Error) => { if (!cancelled) { setAnnouncements([]); setAnnouncementError(reason.message) } })
     return () => { cancelled = true }
   }, [])
 
@@ -183,22 +235,13 @@ export function Home(): JSX.Element {
     }
   }, [route])
 
-  const cards = useMemo<ProductCard[]>(() => {
-    return live?.slice(0, 8).map(liveCard) ?? []
-  }, [live])
+  const cards = useMemo<ProductCard[]>(() => (live ?? []).slice(0, 8).map(liveCard), [live])
 
-  const newsItems: NewsItem[] = news.map((item) => ({
-    tag: newsTab === 'policy' ? '政策' : newsTab === 'market' ? '行情' : '农技',
-    tagCls: newsTab === 'market' ? 'tag-tech' : newsTab === 'policy' ? 'tag-red' : '',
-    title: item.title,
-    date: item.publishedAt ? item.publishedAt.slice(5, 10).replace('-', '/') : '',
-  }))
-  const announcementItems: NewsItem[] = announcements.map((item) => ({
-    tag: '公告',
-    tagCls: 'tag-tech',
-    title: item.title,
-    date: item.publishedAt ? item.publishedAt.slice(5, 10).replace('-', '/') : '',
-  }))
+  const amount = formatAmount(stat?.tradeAmount)
+  const deals = formatCount(stat?.dealCount, '笔')
+  const products = formatCount(stat?.publishedProductCount, '个')
+  const participants = formatCount(stat?.participantCount, '家')
+  const monitored = formatCount(marketStats.total, '个')
 
   return (
     <>
@@ -225,14 +268,14 @@ export function Home(): JSX.Element {
           </div>
           <div className="portal-hero-metrics">
             <div className="portal-hero-metric">
-              <span><Icon name="cart" size={14} /> 智能大宗交易</span>
-              <strong>¥ 1268<small>亿</small></strong>
-              <em>近一年成交金额（平台口径）</em>
+              <span><Icon name="cart" size={14} /> 累计成交金额</span>
+              <strong>{statError ? '—' : `¥ ${amount.text}`}<small>{statError ? '' : amount.unit}</small></strong>
+              <em>{statError ? `交易服务暂时读不到：${statError}` : '交易域实查，已取消订单不计入'}</em>
             </div>
             <div className="portal-hero-metric">
-              <span><Icon name="cpu" size={14} /> 物联网接入设备</span>
-              <strong>12.6<small>万台</small></strong>
-              <em>覆盖 3860 个基地</em>
+              <span><Icon name="chart" size={14} /> 行情监测品种</span>
+              <strong>{marketError ? '—' : monitored.text}<small>{marketError ? '' : monitored.unit}</small></strong>
+              <em>{marketError ? `资讯服务暂时读不到：${marketError}` : '资讯域已上架行情品种（含涨跌与产地）'}</em>
             </div>
           </div>
         </div>
@@ -240,11 +283,12 @@ export function Home(): JSX.Element {
 
       <section className="portal-statbar">
         <div className="container portal-stat-grid">
-          <div><strong>1268<small>亿</small></strong><span>近一年成交金额</span></div>
-          <div><strong>42<small>万笔</small></strong><span>近一年成交笔数</span></div>
-          <div><strong>186<small>万个</small></strong><span>上架商品数</span></div>
-          <div><strong>38<small>万家</small></strong><span>累计注册用户</span></div>
+          <div><strong>{statError ? '—' : <>{amount.text}<small>{amount.unit}</small></>}</strong><span>累计成交金额</span></div>
+          <div><strong>{statError ? '—' : <>{deals.text}<small>{deals.unit}</small></>}</strong><span>累计成交笔数</span></div>
+          <div><strong>{statError ? '—' : <>{products.text}<small>{products.unit}</small></>}</strong><span>在架货源数</span></div>
+          <div><strong>{statError ? '—' : <>{participants.text}<small>{participants.unit}</small></>}</strong><span>参与交易主体</span></div>
         </div>
+        {statError && <div className="container"><DataNote>大盘指标暂时读不到（{statError}）。此处显示「—」而不是历史数字，避免把故障说成平台规模。</DataNote></div>}
       </section>
 
       <section className="section portal-section-tight">
@@ -308,12 +352,13 @@ export function Home(): JSX.Element {
             </div>
             <div className="row center gap-8">
               <span className={`tag ${live && live.length > 0 ? '' : 'tag-amber'}`}>
-                {live && live.length > 0 ? '实时在售' : '暂无在售'}
+                {liveError ? '读取失败' : live && live.length > 0 ? '实时在售' : '暂无在售'}
               </span>
               <a className="t-sm muted portal-more-link" href="#/hall">查看更多商品 →</a>
             </div>
           </div>
-          {live && live.length === 0 && (
+          {liveError && <DataNote>交易服务暂时读不到（{liveError}），因此不展示商品，也不会用旧的演示列表兜底。</DataNote>}
+          {!liveError && live && live.length === 0 && (
             <div className="portal-data-note">
               交易服务当前没有已发布商品。供应商发布并审核上架后，商品会自动展示在此处。
             </div>
@@ -336,7 +381,7 @@ export function Home(): JSX.Element {
                 </a>
               ))}
             </div>
-          ) : live && (
+          ) : !liveError && (
             <div className="card empty">
               <Icon name="box" size={34} />
               <div className="strong mt-12">暂无在售商品</div>
@@ -351,41 +396,47 @@ export function Home(): JSX.Element {
           <div className="card" id="price">
             <div className="card-h">
               <h3><Icon name="chart" size={18} />价格指数</h3>
-              <span className={`tag ${quotes.length > 0 ? '' : 'tag-amber'}`}>{quotes.length > 0 ? '平台行情' : '暂无行情'}</span>
+              <span className={`tag ${marketError ? 'tag-red' : quotes && quotes.length > 0 ? '' : 'tag-amber'}`}>
+                {marketError ? '读取失败' : quotes && quotes.length > 0 ? '平台行情' : '暂无行情'}
+              </span>
             </div>
             <div className="card-b">
-              <p className="muted t-sm mb-16">展示平台已发布的行情报价；没有运营发布记录时保持空态，不使用模拟价格。</p>
-              {quotes.length > 0 && (
-                <div className="chips mb-16">
-                  {quotes.map((item) => (
-                    <button type="button" className={`chip${item.id === priceId ? ' on' : ''}`} key={item.id}
-                      onClick={() => setPriceId(item.id)}>{item.productName}</button>
-                  ))}
+              {marketError && <DataNote>资讯服务暂时读不到（{marketError}）。</DataNote>}
+              {!marketError && quotes && quotes.length > 0 && (
+                <div className="row center gap-12 mb-16 portal-wrap">
+                  <span className="t-sm muted">监测 {marketStats.total ?? 0} 个品种</span>
+                  <span className="tag tag-red">上涨 {marketStats.up ?? 0}</span>
+                  <span className="tag tag-tech">下跌 {marketStats.down ?? 0}</span>
+                  <span className="tag tag-ghost">持平 {marketStats.flat ?? 0}</span>
+                  {Number(marketStats.abnormal ?? 0) > 0 && <span className="tag tag-amber">异动 {marketStats.abnormal}</span>}
                 </div>
               )}
-              {quoteLoading ? (
-                <div className="empty"><div className="muted t-sm">正在读取行情…</div></div>
-              ) : quotes.length > 0 ? (
+              {quotes && quotes.length > 0 ? (
                 <table className="data-table">
-                  <thead><tr><th>商品</th><th>最新价</th><th className="tr">涨跌</th><th>来源 / 日期</th></tr></thead>
+                  <thead><tr><th>品种</th><th>最新价</th><th className="tr">涨跌</th><th>产地 / 来源</th></tr></thead>
                   <tbody>
-                    {quotes.filter((item) => item.id === priceId).map((item) => (
+                    {quotes.slice(0, 6).map((item) => (
                       <tr key={item.id}>
-                        <td>{item.productName}<div className="muted t-xs">{item.category || '平台行情'}</div></td>
-                        <td className="mono">¥{Number(item.price).toFixed(2)}</td>
-                        <td className={`tr mono${(item.changePct ?? 0) < 0 ? ' c-red' : (item.changePct ?? 0) > 0 ? ' c-green' : ''}`}>
-                          {item.changePct == null ? '—' : `${item.changePct > 0 ? '+' : ''}${item.changePct}%`}
+                        <td>
+                          <a href={`#/info/market/${item.id}`}>{item.name}</a>
+                          <div className="muted t-xs">{item.category || '平台行情'}</div>
                         </td>
-                        <td>{item.source || '平台发布'}<div className="muted t-xs">{item.quotedAt?.slice(0, 10) || '—'}</div></td>
+                        <td className="mono">¥{Number(item.price).toFixed(2)}<span className="muted t-xs"> {item.priceUnit || ''}</span></td>
+                        <td className={`tr mono${(item.changePct ?? 0) < 0 ? ' c-red' : (item.changePct ?? 0) > 0 ? ' c-green' : ''}`}>
+                          {item.changePct === undefined || item.changePct === null
+                            ? '—'
+                            : `${item.changePct > 0 ? '+' : ''}${item.changePct.toFixed(2)}%`}
+                        </td>
+                        <td>{item.origin || item.market || '全国'}<div className="muted t-xs">{item.source || '平台发布'} · {dayLabel(item.updatedAt)}</div></td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-              ) : (
+              ) : !marketError && (
                 <div className="empty">
                   <Icon name="chart" size={30} />
                   <div className="strong mt-12">暂无已发布行情</div>
-                  <div className="muted t-sm mt-8">运营端发布报价后自动展示。</div>
+                  <div className="muted t-sm mt-8">运营端在资讯运营后台上架行情品种后自动展示。</div>
                 </div>
               )}
             </div>
@@ -394,19 +445,46 @@ export function Home(): JSX.Element {
           <div className="card" id="news">
             <div className="card-h">
               <h3><Icon name="file" size={18} />产业资讯</h3>
-              <span className="more">决策智能中枢</span>
+              <a className="more" href="#/info">资讯首页 →</a>
             </div>
             <div className="card-b">
-              <div className="tabs mb-16">
-                <button type="button" className={newsTab === 'policy' ? 'on' : ''} onClick={() => setNewsTab('policy')}>政策法规</button>
-                <button type="button" className={newsTab === 'market' ? 'on' : ''} onClick={() => setNewsTab('market')}>市场行情</button>
-                <button type="button" className={newsTab === 'agri' ? 'on' : ''} onClick={() => setNewsTab('agri')}>农技服务</button>
-              </div>
-              {newsLoading
-                ? <div className="empty"><div className="muted t-sm">正在读取资讯…</div></div>
-                : newsItems.length > 0
-                  ? <NewsList items={newsItems} />
-                  : <div className="empty"><div className="strong">暂无相关资讯</div><div className="muted t-sm mt-8">运营端发布后自动同步到门户。</div></div>}
+              {channelError && <DataNote>栏目清单暂时读不到（{channelError}）。</DataNote>}
+              {!channelError && channels.length === 0 && <DataNote>运营端还没有启用中的资讯栏目，发布内容后此处自动出现分类。</DataNote>}
+              {channels.length > 0 && (
+                <div className="tabs mb-16">
+                  {channels.map((item) => (
+                    <button type="button" key={item.id} className={channelName === item.name ? 'on' : ''}
+                      onClick={() => setChannelName(item.name)}>
+                      {item.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {articlesLoading ? (
+                <div className="empty"><div className="muted t-sm">正在读取资讯…</div></div>
+              ) : articlesError ? (
+                <DataNote>该栏目内容暂时读不到（{articlesError}）。</DataNote>
+              ) : articles && articles.length > 0 ? (
+                <>
+                  <ul className="portal-news-list">
+                    {articles.map((item) => (
+                      <li key={item.id}>
+                        <a href={`#/info/news/${item.id}`}>
+                          <span className="tag">{channelName}</span>
+                          <span className="ellipsis portal-news-title">{item.title}</span>
+                          <span className="mono t-xs muted portal-news-date">{dayLabel(item.publishedAt)}</span>
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="muted t-xs mt-12">共 {articlesTotal} 篇已发布内容，按发布时间排序。</div>
+                </>
+              ) : (
+                <div className="empty">
+                  <div className="strong">该栏目暂无已发布内容</div>
+                  <div className="muted t-sm mt-8">运营端审核通过并发布后自动同步到门户。</div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -437,15 +515,30 @@ export function Home(): JSX.Element {
       <section className="section portal-last-section">
         <div className="container portal-announce-grid">
           <div className="card">
-            <div className="card-h"><h3><Icon name="bell" size={18} />平台公告</h3><span className="tag tag-ghost">平台发布</span></div>
+            <div className="card-h">
+              <h3><Icon name="bell" size={18} />平台公告</h3>
+              <span className="tag tag-ghost">运营发布</span>
+            </div>
             <div className="card-b">
-              {announcementItems.length > 0 ? announcementItems.map((item) => (
-                <div className="portal-announce-row" key={item.title}>
-                  <span className={`tag ${item.tagCls}`}>{item.tag}</span>
-                  <span className="ellipsis">{item.title}</span>
-                  <span className="mono t-xs muted">{item.date}</span>
-                </div>
-              )) : <div className="empty"><div className="muted t-sm">暂无平台公告</div></div>}
+              {announcementError && <DataNote>公告服务暂时读不到（{announcementError}）。</DataNote>}
+              {!announcementError && announcements && announcements.length === 0 && (
+                <div className="empty"><div className="muted t-sm">运营端暂无已发布的平台公告</div></div>
+              )}
+              {(announcements ?? []).map((item) => {
+                const meta = ANNOUNCEMENT_LABELS[item.type ?? ''] ?? { label: '公告', tagCls: '' }
+                const open = openAnnouncement === item.id
+                return (
+                  <div key={item.id}>
+                    <div className="portal-announce-row">
+                      <span className={`tag ${meta.tagCls}`}>{meta.label}</span>
+                      <button type="button" className="portal-announce-title ellipsis"
+                        onClick={() => setOpenAnnouncement(open ? '' : item.id)}>{item.title}</button>
+                      <span className="mono t-xs muted">{dayLabel(item.publishTime)}</span>
+                    </div>
+                    {open && <div className="portal-announce-body">{item.content || '（本公告没有正文）'}</div>}
+                  </div>
+                )
+              })}
             </div>
           </div>
           <div className="card portal-join-card">
@@ -463,4 +556,3 @@ export function Home(): JSX.Element {
     </>
   )
 }
-

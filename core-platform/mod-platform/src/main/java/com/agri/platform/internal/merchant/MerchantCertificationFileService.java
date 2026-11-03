@@ -33,6 +33,10 @@ public class MerchantCertificationFileService {
     public static final String BUSINESS_LICENSE = "business_license";
     public static final String LEGAL_PERSON_ID_FRONT = "legal_person_id_front";
     public static final String LEGAL_PERSON_ID_BACK = "legal_person_id_back";
+    public static final String LEGAL_PERSON_FACE = "legal_person_face";
+    public static final String CORPORATE_TRANSFER_PROOF = "corporate_transfer_proof";
+    /** 资质证照影像件：挂在主体下，但不属于企业认证材料（个人主体也能传） */
+    public static final String CERTIFICATE = "certificate";
 
     private static final Pattern SAFE_MERCHANT_ID = Pattern.compile("^[1-9]\\d{0,18}$");
     private static final Pattern SAFE_FILE_ID =
@@ -95,6 +99,38 @@ public class MerchantCertificationFileService {
         return url;
     }
 
+    /**
+     * 删除本服务生成的文件（证照删除 / 换图时清理孤儿文件）。
+     *
+     * <p>地址不是本服务生成的一律忽略并返回 false；IO 异常也不外抛 ——
+     * 文件清理失败不应该把"证照已经删掉"这件事回滚。</p>
+     */
+    public boolean deleteOwnedFile(Long merchantId, String kind, String url) {
+        try {
+            requireMerchantId(merchantId);
+            String normalizedKind = normalizeKind(kind);
+            if (url == null || url.isBlank()) {
+                return false;
+            }
+            String prefix = downloadPrefix(merchantId, normalizedKind);
+            if (!url.startsWith(prefix)) {
+                return false;
+            }
+            String fileId = url.substring(prefix.length());
+            if (!SAFE_FILE_ID.matcher(fileId).matches()) {
+                return false;
+            }
+            Path merchantDirectory = merchantDirectory(merchantId);
+            Path target = merchantDirectory.resolve(fileId).normalize();
+            if (!target.startsWith(merchantDirectory)) {
+                return false;
+            }
+            return Files.deleteIfExists(target);
+        } catch (IOException | RuntimeException e) {
+            return false;
+        }
+    }
+
     /** 读取材料文件；调用方必须先校验当前用户有权访问该主体。 */
     public Resource load(Long merchantId, String kind, String fileId) {
         requireMerchantId(merchantId);
@@ -144,7 +180,8 @@ public class MerchantCertificationFileService {
 
     private static String normalizeKind(String kind) {
         String value = kind == null ? "" : kind.trim().toLowerCase(Locale.ROOT);
-        if (!Arrays.asList(BUSINESS_LICENSE, LEGAL_PERSON_ID_FRONT, LEGAL_PERSON_ID_BACK).contains(value)) {
+        if (!Arrays.asList(BUSINESS_LICENSE, LEGAL_PERSON_ID_FRONT, LEGAL_PERSON_ID_BACK,
+                LEGAL_PERSON_FACE, CORPORATE_TRANSFER_PROOF, CERTIFICATE).contains(value)) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "认证材料类型无效");
         }
         return value;
@@ -155,6 +192,9 @@ public class MerchantCertificationFileService {
             case BUSINESS_LICENSE -> "请上传营业执照照片";
             case LEGAL_PERSON_ID_FRONT -> "请上传法人身份证人像面照片";
             case LEGAL_PERSON_ID_BACK -> "请上传法人身份证国徽面照片";
+            case LEGAL_PERSON_FACE -> "请完成法人扫脸";
+            case CORPORATE_TRANSFER_PROOF -> "请上传对公打款凭证";
+            case CERTIFICATE -> "请上传证照影像件";
             default -> "请上传认证材料";
         };
     }

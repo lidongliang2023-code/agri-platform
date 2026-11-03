@@ -6,10 +6,12 @@ import com.agri.trade.entity.OrderItem;
 import com.agri.trade.entity.PaymentRecord;
 import com.agri.trade.entity.RefundRecord;
 import com.agri.trade.entity.TradeProduct;
+import com.agri.trade.entity.ProductSku;
 import com.agri.trade.entity.Logistics;
 import com.agri.trade.entity.LogisticsTrace;
 import com.agri.trade.common.security.SecurityUtils;
 import com.agri.trade.mapper.TradeProductMapper;
+import com.agri.trade.mapper.ProductSkuMapper;
 import com.agri.trade.mapper.TradeOrderMapper;
 import com.agri.trade.mapper.OrderItemMapper;
 import com.agri.trade.mapper.PaymentRecordMapper;
@@ -17,6 +19,7 @@ import com.agri.trade.mapper.RefundRecordMapper;
 import com.agri.trade.mapper.LogisticsMapper;
 import com.agri.trade.mapper.LogisticsTraceMapper;
 import com.agri.trade.service.PlatformIdentityService;
+import com.agri.trade.service.IContractService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -42,7 +45,9 @@ public class OrderController {
     private final LogisticsMapper logisticsMapper;
     private final LogisticsTraceMapper logisticsTraceMapper;
     private final TradeProductMapper productMapper;
+    private final ProductSkuMapper productSkuMapper;
     private final PlatformIdentityService identityService;
+    private final IContractService contractService;
 
     /** 能发起退款的订单状态：钱已经在平台手里。待付款、已取消、已退款都没得退。 */
     private static final List<String> REFUNDABLE_ORDER_STATUS =
@@ -59,8 +64,10 @@ public class OrderController {
      * <p>买家取当前登录用户（平台令牌），卖家取货源上的供应商。</p>
      */
     @PostMapping("/from-product")
+    @Transactional(rollbackFor = Exception.class)
     public ApiResponse<TradeOrder> createOrderFromProduct(@RequestBody Map<String, Object> params) {
         Long productId = params.get("productId") == null ? null : Long.valueOf(params.get("productId").toString());
+        Long skuId = params.get("skuId") == null ? null : Long.valueOf(params.get("skuId").toString());
         BigDecimal quantity = params.get("quantity") == null ? null : new BigDecimal(params.get("quantity").toString());
         if (productId == null || quantity == null || quantity.signum() <= 0) {
             return ApiResponse.error("请选择货源并填写大于 0 的数量");
@@ -73,10 +80,38 @@ public class OrderController {
         if (!"published".equals(product.getPublishStatus())) {
             return ApiResponse.error("该货源未上架，暂时不能下单");
         }
-        if (product.getStockQuantity() != null && product.getStockQuantity().compareTo(quantity) < 0) {
-            return ApiResponse.error("库存不足，当前可供数量：" + product.getStockQuantity() + " " + product.getUnit());
+        List<ProductSku> skuRows = productSkuMapper.selectList(new LambdaQueryWrapper<ProductSku>()
+                .eq(ProductSku::getProductId, productId)
+                .eq(ProductSku::getDelFlag, 0)
+                .orderByAsc(ProductSku::getSortOrder)
+                .orderByAsc(ProductSku::getId));
+        List<ProductSku> skus = skuRows.stream()
+                .filter(item -> Integer.valueOf(1).equals(item.getStatus()))
+                .toList();
+        if (!skuRows.isEmpty() && skus.isEmpty()) {
+            return ApiResponse.error("该货源暂无可售规格");
         }
-        BigDecimal unitPrice = product.getPrice() != null ? product.getPrice() : product.getPriceMin();
+        ProductSku sku = null;
+        if (skuId != null) {
+            sku = skus.stream().filter(item -> skuId.equals(item.getId())).findFirst().orElse(null);
+            if (sku == null) return ApiResponse.error("所选商品规格不存在或已停用");
+        } else if (skus.size() == 1) {
+            sku = skus.get(0);
+        } else if (skus.size() > 1) {
+            return ApiResponse.error("请选择商品规格后再下单");
+        }
+        BigDecimal availableStock = sku == null ? product.getStockQuantity() : sku.getStockQuantity();
+        BigDecimal minOrderQuantity = sku == null ? product.getMinOrderQuantity() : sku.getMinOrderQuantity();
+        String unit = sku == null ? product.getUnit() : sku.getUnit();
+        if (minOrderQuantity != null && quantity.compareTo(minOrderQuantity) < 0) {
+            return ApiResponse.error("采购数量不能低于起订量 " + minOrderQuantity + " " + unit);
+        }
+        if (availableStock != null && availableStock.compareTo(quantity) < 0) {
+            return ApiResponse.error("库存不足，当前可供数量：" + availableStock + " " + unit);
+        }
+        BigDecimal unitPrice = sku == null
+                ? (product.getPrice() != null ? product.getPrice() : product.getPriceMin())
+                : sku.getPrice();
         if (unitPrice == null || unitPrice.signum() <= 0) {
             return ApiResponse.error("该货源没有可用价格（缺价格与起报价），请先补充");
         }
@@ -129,9 +164,9 @@ public class OrderController {
         item.setCategoryId(product.getCategoryId());
         item.setCategoryName(product.getCategoryName());
         item.setVariety(product.getVariety());
-        // OrderItem 实体只有 specLevel，没有 specSize（货源上有 specSize 但订单明细存不下它）
-        item.setSpecLevel(product.getSpecLevel());
-        item.setUnit(product.getUnit());
+        // 订单明细用 specLevel 留存本次成交的 SKU 名称，订单查看时能区分具体规格。
+        item.setSpecLevel(sku == null ? product.getSpecLevel() : sku.getSkuName());
+        item.setUnit(unit);
         item.setQuantity(quantity);
         item.setUnitPrice(unitPrice);
         // 实体映射的是 totalPrice（表里那个 amount 列实体不写）
@@ -141,6 +176,7 @@ public class OrderController {
         item.setCreateTime(now);
         itemMapper.insert(item);
 
+        ensureContract(order);
         return ApiResponse.success(order);
     }
 
@@ -236,6 +272,7 @@ public class OrderController {
     }
 
     @PostMapping
+    @Transactional(rollbackFor = Exception.class)
     public ApiResponse<Boolean> createOrder(@RequestBody TradeOrder order) {
         // 买方身份不采信请求体：表单里带 buyerId 就能以别人名义建单。
         PlatformIdentityService.MerchantSelection mine = identityService.selectMerchant(order.getBuyerId());
@@ -252,7 +289,15 @@ public class OrderController {
         order.setUpdateTime(new Date());
         
         int result = orderMapper.insert(order);
+        if (result > 0) ensureContract(order);
         return result > 0 ? ApiResponse.success(true) : ApiResponse.error("创建失败");
+    }
+
+    /** 交易订单生成后立即建立待签合同；已有合同直接复用。 */
+    private void ensureContract(TradeOrder order) {
+        if (order == null || order.getId() == null) return;
+        if (contractService.getContractByOrder(order.getId()) != null) return;
+        contractService.createContractFromOrder(order.getId(), null);
     }
 
     @PutMapping("/{id}")
@@ -566,11 +611,21 @@ public class OrderController {
         if (!"pending".equals(refund.getRefundStatus())) {
             return ApiResponse.error("这条退款申请已经处理过了（" + refund.getRefundStatus() + "），不能重复审核");
         }
+        String remark = params.get("remark");
+        if ("rejected".equals(status) && (remark == null || remark.trim().isEmpty())) {
+            return ApiResponse.error("驳回退款必须填写原因（申请人要看得懂为什么被驳回）");
+        }
+        // 审核人取自令牌：原先读请求体的 reviewer（前端拼当前登录人的昵称，取不到就写"运营"）。
+        // 那种留痕谁都能填 —— 退出去一笔钱而答不出是谁批的，事后对不上账也追不到人。
+        String reviewer = SecurityUtils.getUsername();
+        if (reviewer == null || reviewer.isEmpty()) {
+            return ApiResponse.error("取不到当前操作人，无法留下审核痕迹，请重新登录");
+        }
 
         refund.setRefundStatus(status);
-        refund.setReviewer(params.get("reviewer"));
+        refund.setReviewer(reviewer);
         refund.setReviewTime(new Date());
-        refund.setReviewRemark(params.get("remark"));
+        refund.setReviewRemark(remark);
         refund.setUpdateTime(new Date());
         refund.setFinishTime(new Date());
 

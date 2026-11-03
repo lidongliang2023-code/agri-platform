@@ -37,6 +37,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { platformApi } from '../api'
 
 const router = useRouter()
@@ -67,15 +68,31 @@ const goBack = () => {
 }
 
 const audit = async (status) => {
-  const opinion = status === 'REJECTED' ? prompt('请输入审核意见') : ''
-  const res = await platformApi.auditSupplier({
-    id: route.params.id,
-    auditStatus: status,
-    auditOpinion: opinion
-  })
-  if (res.success) {
-    alert('审核成功')
-    loadSupplier()
+  try {
+    let opinion = ''
+    if (status === 'REJECTED') {
+      const result = await ElMessageBox.prompt('请输入拒绝原因', '拒绝供应商', {
+        inputPattern: /\S+/, inputErrorMessage: '请填写拒绝原因',
+      })
+      opinion = result.value
+    } else {
+      await ElMessageBox.confirm('确认通过该供应商的入驻申请？', '通过供应商', {
+        confirmButtonText: '通过', cancelButtonText: '取消', type: 'warning',
+      })
+    }
+    const res = await platformApi.auditSupplier({
+      id: route.params.id,
+      auditStatus: status,
+      auditOpinion: opinion
+    })
+    if (res?.success === false) {
+      ElMessage.error(res.message || '审核失败')
+      return
+    }
+    ElMessage.success('审核已提交')
+    await loadSupplier()
+  } catch (e) {
+    if (e !== 'cancel' && e !== 'close') ElMessage.error(e?.message || '审核失败')
   }
 }
 </script>

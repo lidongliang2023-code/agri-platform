@@ -53,12 +53,13 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
+import { ElMessage } from 'element-plus'
 import { supplierApi } from '../api'
 
 const formRef = ref(null)
 
 const form = reactive({
-  id: 1,
+  id: '',
   shopName: '',
   shopDesc: '',
   companyName: '',
@@ -86,7 +87,13 @@ onMounted(() => {
 })
 
 const loadProfile = async () => {
-  const res = await supplierApi.getDetail(1)
+  const profile = await supplierApi.getProfile()
+  if (!profile?.applied) {
+    ElMessage.warning('请先提交入驻申请')
+    return
+  }
+  form.id = profile.id
+  const res = await supplierApi.getDetail(profile.id)
   Object.assign(form, res)
 }
 

@@ -37,6 +37,13 @@ public class Product {
     private String certifications;
     private String traceabilityInfo;
     private String status;
+    /** 是否允许渠道投放 */
+    private Boolean distributionEnabled;
+    /** 最大授权渠道数，0=不限 */
+    private Integer maxChannels;
+    /** 渠道最低/最高零售价，空=不限制 */
+    private java.math.BigDecimal minRetailPrice;
+    private java.math.BigDecimal maxRetailPrice;
     private LocalDateTime auditTime;
     private String auditOpinion;
     private Integer sales;

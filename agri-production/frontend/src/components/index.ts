@@ -6,6 +6,10 @@ export type { PagePlaceholderProps, PlaceholderKind } from './PagePlaceholder'
 export { default as PageLoading } from './PageLoading'
 export { default as DemoDataAlert } from './DemoDataAlert'
 export type { DemoDataAlertProps } from './DemoDataAlert'
+export { default as DetailInfoGrid } from './DetailInfoGrid'
+export type { DetailInfoItem, DetailInfoGridProps } from './DetailInfoGrid'
+export { default as DetailMetricGrid } from './DetailMetricGrid'
+export type { DetailMetricItem, DetailMetricGridProps } from './DetailMetricGrid'
 export {
   default as MetricStatistic,
   MetricText,

@@ -2,14 +2,20 @@
 /** 交易撮合移动端公开浏览、登录、采购发布和主要页面回归。 */
 import { execFileSync } from 'node:child_process'
 import { createRequire } from 'node:module'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const require2 = createRequire(path.join(ROOT, 'agri-production/frontend/package.json'))
-const puppeteer = require2('puppeteer')
-const BASE = 'http://localhost:8086'
+const require2 = createRequire(path.join('C:/Users/71502/.workbuddy-ai/binaries/node/workspace', 'noop.js'))
+const { chromium } = require2('playwright-core')
+
+const BROWSER = [
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+].find((candidate) => existsSync(candidate))
+const BASE = 'http://localhost:8181'
 const OUT = 'C:/Users/71502/.codex/visualizations/2026/10/16/01a14244-ead8-7ab0-8c7c-df7abac44648'
 const MYSQL = 'C:/Program Files/MySQL/MySQL Server 8.4/bin/mysql.exe'
 const marker = `MOBILE-TRADE-E2E-${Date.now()}`
@@ -44,23 +50,24 @@ const clickByText = async (page, selector, text) => page.evaluate(({ target, con
   element.click()
 }, { target: selector, content: text })
 
-const browser = await puppeteer.launch({
-  executablePath: 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
-  headless: 'new',
+const browser = await chromium.launch({
+  headless: true,
+  executablePath: BROWSER,
   args: ['--no-sandbox'],
 })
 
 try {
-  const page = await browser.newPage()
+  const page = await (await browser.newContext({ viewport: { width: 1440, height: 1000 } })).newPage()
   const errors = []
   page.on('pageerror', (error) => errors.push(String(error)))
-  await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 })
-  await page.goto(`${BASE}/mobile/trade`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.setViewportSize({ width: 390, height: 844, deviceScaleFactor: 1 })
+  await page.goto(`${BASE}/`, { waitUntil: 'networkidle', timeout: 60000 })
   await page.waitForSelector('.mt-app', { timeout: 30000 })
-  await page.waitForNetworkIdle({ idleTime: 700, timeout: 15000 }).catch(() => {})
+  await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 700))
 
   const initialUrl = page.url()
-  check(/\/mobile\/trade$/.test(initialUrl), '未登录用户可直接进入移动端交易首页', initialUrl)
+  check(/^http:\/\/localhost:8181\/$/.test(initialUrl), '未登录用户可直接进入独立移动端交易首页', initialUrl)
   check(await page.$$eval('.mt-tabbar button', (buttons) => buttons.length === 5),
     '底部导航包含首页、市场、智能撮合、订单、我的')
   check((await page.evaluate(() => document.body.innerText)).includes('好货源，找丰链云'),
@@ -97,7 +104,7 @@ try {
   await page.screenshot({ path: path.join(OUT, 'mobile-trade-product.png'), fullPage: true })
 
   await clickByText(page, '.mt-detail-actions button', '立即采购')
-  await page.waitForFunction(() => window.location.port === '8090', { timeout: 20000 })
+  await page.waitForFunction(() => window.location.port === '8090', undefined, { timeout: 20000 })
   await page.waitForSelector('button[role="tab"]', { timeout: 20000 })
   await page.evaluate(() => {
     const tab = [...document.querySelectorAll('button[role="tab"]')]
@@ -113,17 +120,19 @@ try {
   })
   for (let i = 0; i < 80; i += 1) {
     await sleep(400)
-    if (page.url().includes(':8086/mobile/trade')) break
+    if (page.url().includes(':8181/')) break
   }
   await page.waitForSelector('.mt-app', { timeout: 30000 })
-  await page.waitForNetworkIdle({ idleTime: 700, timeout: 15000 }).catch(() => {})
-  check(page.url().includes(':8086/mobile/trade'), '统一认证登录后回到移动端交易入口', page.url())
+  await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 700))
+  check(page.url().includes(':8181/'), '统一认证登录后回到独立移动端交易入口', page.url())
 
   await clickByText(page, '.mt-tabbar button', '市场')
   await page.waitForSelector('.mt-market-products .mt-product-card', { timeout: 20000 })
   await page.click('.mt-market-products .mt-product-card')
   await page.waitForSelector('.mt-detail-summary', { timeout: 20000 })
-  await page.waitForNetworkIdle({ idleTime: 700, timeout: 15000 }).catch(() => {})
+  await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 700))
   await sleep(400)
   await clickByText(page, '.mt-detail-actions button', '立即采购')
   await page.waitForSelector('.mt-form-page', { timeout: 20000 })
@@ -205,7 +214,7 @@ try {
   }, { title: marker })
   await page.screenshot({ path: path.join(OUT, 'mobile-trade-demand-create.png'), fullPage: true })
   await clickByText(page, '.mt-submit-button', '发布采购需求')
-  await page.waitForFunction(() => document.body.innerText.includes('智能撮合助手'), { timeout: 20000 })
+  await page.waitForFunction(() => document.body.innerText.includes('智能撮合助手'), undefined, { timeout: 20000 })
   await sleep(800)
   const demandCount = Number(sql(`
     SELECT COUNT(*) FROM agri_trade.agri_trade_demand
@@ -220,12 +229,12 @@ try {
   await page.screenshot({ path: path.join(OUT, 'mobile-trade-match.png'), fullPage: true })
 
   await clickByText(page, '.mt-tabbar button', '订单')
-  await page.waitForFunction(() => document.body.innerText.includes('我的订单'), { timeout: 20000 })
+  await page.waitForFunction(() => document.body.innerText.includes('我的订单'), undefined, { timeout: 20000 })
   check((await page.evaluate(() => document.body.innerText)).includes('我买到的'),
     '订单页支持买家与卖家视角切换')
 
   await clickByText(page, '.mt-tabbar button', '我的')
-  await page.waitForFunction(() => document.body.innerText.includes('当前经营主体'), { timeout: 20000 })
+  await page.waitForFunction(() => document.body.innerText.includes('当前经营主体'), undefined, { timeout: 20000 })
   const profileText = await page.evaluate(() => document.body.innerText)
   check(profileText.includes('资金与保证金') && profileText.includes('我的合同')
     && profileText.includes('物流跟踪'), '个人中心提供资金、合同和物流入口')
@@ -234,20 +243,20 @@ try {
   await page.screenshot({ path: path.join(OUT, 'mobile-trade-profile.png'), fullPage: true })
 
   await clickByText(page, '.mt-profile-menu button', '我的合同')
-  await page.waitForFunction(() => document.body.innerText.includes('我的合同'), { timeout: 20000 })
+  await page.waitForFunction(() => document.body.innerText.includes('我的合同'), undefined, { timeout: 20000 })
   check((await page.evaluate(() => document.body.innerText)).includes('查看采购与销售合同'),
     '移动端合同列表入口可正常打开')
   await page.click('.mt-topbar-sub button[aria-label="返回"]')
   await page.waitForSelector('.mt-profile-menu', { timeout: 10000 })
   await clickByText(page, '.mt-profile-menu button', '物流跟踪')
-  await page.waitForFunction(() => document.body.innerText.includes('查看承运商、当前位置和签收状态'), { timeout: 20000 })
+  await page.waitForFunction(() => document.body.innerText.includes('查看承运商、当前位置和签收状态'), undefined, { timeout: 20000 })
   check((await page.evaluate(() => document.body.innerText)).includes('物流跟踪'),
     '移动端物流跟踪入口可正常打开')
 
-  await page.setViewport({ width: 375, height: 812, deviceScaleFactor: 1 })
-  await page.goto(`${BASE}/`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.setViewportSize({ width: 375, height: 812, deviceScaleFactor: 1 })
+  await page.goto(`${BASE}/`, { waitUntil: 'networkidle', timeout: 60000 })
   await page.waitForSelector('.mt-app', { timeout: 30000 })
-  check(page.url().includes('/mobile/trade'), '移动设备访问交易端根地址自动进入移动端', page.url())
+  check(page.url().includes(':8181/'), '移动设备访问独立交易移动端根地址正常', page.url())
   check(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
     '375px 交易端根入口无横向溢出')
 

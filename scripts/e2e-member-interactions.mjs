@@ -1,13 +1,19 @@
 #!/usr/bin/env node
 /** 会员中心按钮、输入框、页签交互态颜色审计。 */
 import { createRequire } from 'node:module'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const require2 = createRequire(path.join(ROOT, 'agri-production/frontend/package.json'))
-const puppeteer = require2('puppeteer')
+const require2 = createRequire(path.join('C:/Users/71502/.workbuddy-ai/binaries/node/workspace', 'noop.js'))
+const { chromium } = require2('playwright-core')
+
+const BROWSER = [
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+].find((candidate) => existsSync(candidate))
 const BASE = 'http://localhost:8086'
 const failures = []
 const warnings = []
@@ -16,6 +22,7 @@ const check = (ok, label, extra = '') => {
   if (!ok) failures.push(label)
 }
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+let current = '登录阶段'
 const fill = async (page, selector, value) => page.evaluate(({ target, next }) => {
   const input = document.querySelector(target)
   if (!(input instanceof HTMLInputElement)) throw new Error(`未找到输入框 ${target}`)
@@ -32,8 +39,8 @@ const isBlue = (value) => {
 }
 
 const loginAndOpen = async (page, targetPath, username, password) => {
-  await page.goto(`${BASE}${targetPath}`, { waitUntil: 'networkidle2', timeout: 60000 })
-  await page.waitForFunction(() => window.location.port === '8090', { timeout: 20000 })
+  await page.goto(`${BASE}${targetPath}`, { waitUntil: 'networkidle', timeout: 60000 })
+  await page.waitForFunction(() => window.location.port === '8090', undefined, { timeout: 20000 })
   await page.waitForSelector('button[role="tab"]', { timeout: 20000 })
   await page.evaluate(() => {
     const tab = [...document.querySelectorAll('button[role="tab"]')]
@@ -54,20 +61,25 @@ const loginAndOpen = async (page, targetPath, username, password) => {
   await page.waitForSelector('.mc-shell', { timeout: 30000 })
 }
 
-const auditPage = async (page, role, tab, selector) => {
-  await page.goto(`${BASE}/member/${role}?tab=${tab}`, { waitUntil: 'networkidle2', timeout: 60000 })
-  await page.waitForSelector(selector, { timeout: 30000 })
-  await page.waitForNetworkIdle({ idleTime: 500, timeout: 10000 }).catch(() => {})
-
-  const buttons = await page.$$('.mc-body button:not([disabled])')
-  const visibleButtons = []
-  for (const button of buttons.slice(0, 16)) {
-    const visible = await button.evaluate((element) => {
-      const rect = element.getBoundingClientRect()
-      return rect.width > 0 && rect.height > 0
-    })
-    if (visible) visibleButtons.push(button)
+/** playwright 的 hover/focus 会做可见性检查，命中不可见元素要等满 30s 才抛错，所以先过滤。
+ *  必须用 isVisible()：矩形非空但 visibility:hidden 的节点照样能拿到宽高，却被 playwright 判为不可见。 */
+const visibleHandles = async (scope, selector, limit) => {
+  const handles = await scope.$$(selector)
+  const result = []
+  for (const handle of limit === undefined ? handles : handles.slice(0, limit)) {
+    if (await handle.isVisible()) result.push(handle)
   }
+  return { all: handles, visible: result }
+}
+
+const auditPage = async (page, role, tab, selector) => {
+  current = `${role}/${tab}`
+  await page.goto(`${BASE}/member/${role}?tab=${tab}`, { waitUntil: 'networkidle', timeout: 60000 })
+  await page.waitForSelector(selector, { timeout: 30000 })
+  await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 500))
+
+  const { visible: visibleButtons } = await visibleHandles(page, '.mc-body button:not([disabled])', 16)
   let buttonBlue = ''
   for (const button of visibleButtons.slice(0, 10)) {
     await button.hover()
@@ -88,14 +100,9 @@ const auditPage = async (page, role, tab, selector) => {
   }
   check(!buttonBlue, `${role}/${tab} 按钮悬浮态无默认蓝色`, buttonBlue)
 
-  const inputs = await page.$$('.mc-body input:not([disabled]), .mc-body textarea:not([disabled])')
+  const { all: inputs, visible: visibleInputs } = await visibleHandles(page, '.mc-body input:not([disabled]), .mc-body textarea:not([disabled])')
   let inputBlue = ''
-  for (const input of inputs.slice(0, 4)) {
-    const visible = await input.evaluate((element) => {
-      const rect = element.getBoundingClientRect()
-      return rect.width > 0 && rect.height > 0
-    })
-    if (!visible) continue
+  for (const input of visibleInputs.slice(0, 4)) {
     await input.focus()
     await sleep(40)
     const border = await input.evaluate((element) => getComputedStyle(element).borderColor)
@@ -106,9 +113,9 @@ const auditPage = async (page, role, tab, selector) => {
   }
   check(!inputBlue, `${role}/${tab} 输入框聚焦态无默认蓝色`, inputBlue)
 
-  const tabs = await page.$$('.mc-body .ant-tabs-tab')
+  const { all: tabs, visible: visibleTabs } = await visibleHandles(page, '.mc-body .ant-tabs-tab')
   let tabBlue = ''
-  for (const tabElement of tabs.slice(0, 4)) {
+  for (const tabElement of visibleTabs.slice(0, 4)) {
     await tabElement.hover()
     await sleep(40)
     const color = await tabElement.evaluate((element) => {
@@ -121,18 +128,18 @@ const auditPage = async (page, role, tab, selector) => {
     }
   }
   check(!tabBlue, `${role}/${tab} 页签悬浮态无默认蓝色`, tabBlue)
-  warnings.push(`${role}/${tab}: buttons=${visibleButtons.length}, inputs=${inputs.length}, tabs=${tabs.length}`)
+  warnings.push(`${role}/${tab}: buttons=${visibleButtons.length}, inputs=${visibleInputs.length}/${inputs.length}, tabs=${visibleTabs.length}/${tabs.length}`)
 }
 
-const browser = await puppeteer.launch({
-  executablePath: 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
-  headless: 'new',
+const browser = await chromium.launch({
+  headless: true,
+  executablePath: BROWSER,
   args: ['--no-sandbox'],
 })
 try {
-  const buyerContext = await browser.createBrowserContext()
+  const buyerContext = await browser.newContext()
   const buyer = await buyerContext.newPage()
-  await buyer.setViewport({ width: 1440, height: 1000 })
+  await buyer.setViewportSize({ width: 1440, height: 1000 })
   await loginAndOpen(buyer, '/member/buyer?tab=overview', '19900002005', 'Test12345')
   const buyerPages = [
     ['overview', '.buyer-overview'],
@@ -147,9 +154,9 @@ try {
   for (const [tab, selector] of buyerPages) await auditPage(buyer, 'buyer', tab, selector)
   await buyerContext.close()
 
-  const sellerContext = await browser.createBrowserContext()
+  const sellerContext = await browser.newContext()
   const seller = await sellerContext.newPage()
-  await seller.setViewport({ width: 1440, height: 1000 })
+  await seller.setViewportSize({ width: 1440, height: 1000 })
   await loginAndOpen(seller, '/member/seller?tab=overview', 'farmer', 'Admin@123')
   const sellerPages = [
     ['overview', '.seller-overview'],
@@ -168,17 +175,17 @@ try {
   ]
   for (const [tab, selector] of sellerPages) await auditPage(seller, 'seller', tab, selector)
 
-  await seller.goto(`${BASE}/member/seller?tab=trade`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await seller.goto(`${BASE}/member/seller?tab=trade`, { waitUntil: 'networkidle', timeout: 60000 })
   await seller.waitForSelector('.seller-switch-tabs', { timeout: 20000 })
   await seller.evaluate(() => {
     const button = [...document.querySelectorAll('.seller-switch-tabs button')]
       .find((item) => item.textContent?.includes('智能匹配'))
     button?.click()
   })
-  await seller.waitForFunction(() => document.body.innerText.includes('匹配结果'), { timeout: 15000 })
-  const antTabs = await seller.$$('.mc-body .ant-tabs-tab')
+  await seller.waitForFunction(() => document.body.innerText.includes('匹配结果'), undefined, { timeout: 15000 })
+  const { all: antTabs, visible: visibleAntTabs } = await visibleHandles(seller, '.mc-body .ant-tabs-tab')
   let antTabBlue = ''
-  for (const tabElement of antTabs) {
+  for (const tabElement of visibleAntTabs) {
     await tabElement.hover()
     await sleep(40)
     const color = await tabElement.evaluate((element) => {
@@ -191,9 +198,10 @@ try {
     }
   }
   check(!antTabBlue, '智能匹配页签悬浮态无默认蓝色', antTabBlue)
+  console.log(`智能匹配页签：可见 ${visibleAntTabs.length} / 共 ${antTabs.length}`)
   await sellerContext.close()
 } catch (error) {
-  check(false, '会员中心交互态审计未抛异常', String(error).slice(0, 320))
+  check(false, `会员中心交互态审计未抛异常（阶段：${current}）`, String(error).slice(0, 320))
 } finally {
   await browser.close()
 }

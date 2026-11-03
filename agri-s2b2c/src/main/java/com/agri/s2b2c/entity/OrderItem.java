@@ -19,9 +19,14 @@ public class OrderItem {
     private String name;
     private String spec;
     private BigDecimal price;
+    /** 下单时的供货价快照，用于供应商收入/对账，不受后续调价影响。 */
+    private BigDecimal supplyPrice;
     private Integer quantity;
     private BigDecimal totalAmount;
     private String image;
     private String traceCode;
+    /** 秒杀活动ID；取消订单时据此精确恢复秒杀库存与预算。 */
+    private Long flashSaleId;
+    private BigDecimal flashSubsidy;
     private LocalDateTime createTime;
 }

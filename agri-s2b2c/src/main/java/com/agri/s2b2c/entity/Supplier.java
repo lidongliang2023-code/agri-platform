@@ -14,6 +14,8 @@ import java.time.LocalDateTime;
 public class Supplier {
     @TableId(type = IdType.ASSIGN_ID)
     private Long id;
+    /** 平台账号 ID（统一登录后的归属） */
+    private Long userId;
     private String companyName;
     private String creditCode;
     private String industry;

@@ -101,17 +101,33 @@ export function deleteGradeRule(ruleId: string): Promise<boolean> {
 
 /** 检测单分页查询参数（对齐后端 page / size / keyword / status） */
 export interface InspectionPageParams {
-  /** 检测单号关键字 */
+  /** 检测单号 / 批次号 / 作物名 模糊匹配 */
   keyword?: string
   /** 状态过滤：PENDING / TESTING / DONE */
   status?: string
+  /** 结论过滤：PASS / FAIL / PENDING（PENDING = 还没出结论，库里 result 为空） */
+  result?: string
+  /** 检测类型：SELF / SEND / SAMPLING */
+  inspectionType?: string
+  /** 检测机构全名（下拉给的就是全名，服务端精确匹配） */
+  labName?: string
+  /** 抽样日期起（yyyy-MM-dd） */
+  startDate?: string
+  /** 抽样日期止（yyyy-MM-dd） */
+  endDate?: string
   /** 页码，从 1 开始 */
   pageNum?: number
   /** 每页条数 */
   pageSize?: number
 }
 
-/** 分页查询检测单（后端 GET /quality/inspections?page&size&keyword&status） */
+/**
+ * 分页查询检测单（后端 GET /quality/inspections）。
+ *
+ * <p>这些条件**全部在服务端生效**。以前页面只发 keyword，结果与机构是前端在拿回的那 200 条里
+ * 二次过滤、表格再本地翻页 —— 单数超过 200 后，"待检"筛出来是空的、机构下拉换了没反应，
+ * 看起来像数据不存在。</p>
+ */
 export function fetchInspectionPage(
   params: InspectionPageParams = {},
 ): Promise<PageResult<RawInspection>> {
@@ -120,6 +136,11 @@ export function fetchInspectionPage(
     size: params.pageSize ?? 10,
     keyword: params.keyword,
     status: params.status,
+    result: params.result,
+    inspectionType: params.inspectionType,
+    labName: params.labName,
+    startDate: params.startDate,
+    endDate: params.endDate,
   })
 }
 

@@ -1,570 +1,382 @@
 <template>
-  <div class="announcement">
-    <div class="page-header">
-      <div class="header-left">
-        <h1>公告管理</h1>
-        <p>管理系统公告和通知消息</p>
+  <div class="mds-page">
+    <PageHeader
+      title="公告管理"
+      subtitle="平台公告的起草、发布与下线；发布后的公告面向全平台展示。"
+      source="系统配置 · 公告"
+    >
+      <template #actions>
+        <button v-point="'POST /admin/masterdata/announcement'" class="mds-btn mds-btn--primary" @click="openCreate">+ 发布公告</button>
+        <button class="mds-btn" :disabled="loading" @click="load">刷新</button>
+      </template>
+    </PageHeader>
+
+    <NoticeBar tone="info" title="状态口径：">
+      草稿 → 发布（记录发布时间与发布人）→ 下线。已发布的公告仍可修改正文，但不会重置发布时间；到期时间留空表示长期有效。
+    </NoticeBar>
+
+    <div class="mds-card">
+      <div class="mds-filter">
+        <input v-model="keyword" class="mds-input" type="search" placeholder="标题 / 正文关键词" @keyup.enter="search" />
+        <select v-model="filterStatus" class="mds-select" @change="search">
+          <option value="">全部状态</option>
+          <option value="draft">草稿</option>
+          <option value="published">已发布</option>
+          <option value="offline">已下线</option>
+        </select>
+        <select v-model="filterType" class="mds-select" @change="search">
+          <option value="">全部类型</option>
+          <option value="info">通知公告</option>
+          <option value="warning">重要提醒</option>
+          <option value="maintenance">系统维护</option>
+          <option value="emergency">紧急通知</option>
+        </select>
+        <button class="mds-btn mds-btn--primary" @click="search">查询</button>
+        <button class="mds-btn" @click="reset">重置</button>
       </div>
-      <button class="add-btn" @click="showAddModal = true">+ 发布公告</button>
-    </div>
 
-    <div class="filter-bar">
-      <select v-model="filterStatus" class="filter-select">
-        <option value="all">全部状态</option>
-        <option value="draft">草稿</option>
-        <option value="published">已发布</option>
-        <option value="expired">已过期</option>
-      </select>
-      <input 
-        type="text" 
-        v-model="filterKeyword" 
-        placeholder="搜索公告标题..." 
-        class="filter-input"
-      />
-    </div>
-
-    <div class="announcement-list">
-      <div 
-        v-for="item in filteredAnnouncements" 
-        :key="item.id" 
-        class="announcement-card"
-        :class="item.status"
-      >
-        <div class="card-header">
-          <div class="header-left">
-            <span class="type-badge" :class="item.type">{{ getTypeLabel(item.type) }}</span>
-            <h3>{{ item.title }}</h3>
-          </div>
-          <span class="status-badge">{{ getStatusLabel(item.status) }}</span>
-        </div>
-        <div class="card-body">
-          <p>{{ item.content }}</p>
-        </div>
-        <div class="card-footer">
-          <div class="meta">
-            <span class="author">作者: {{ item.author }}</span>
-            <span class="time">{{ item.publishTime }}</span>
-            <span v-if="item.expireTime" class="expire">到期: {{ item.expireTime }}</span>
-          </div>
-          <div class="actions">
-            <button v-if="item.status === 'draft'" class="action-btn publish" @click="publishAnnouncement(item)">发布</button>
-            <button class="action-btn edit" @click="editAnnouncement(item)">编辑</button>
-            <button class="action-btn delete" @click="deleteAnnouncement(item)">删除</button>
-          </div>
-        </div>
+      <div class="mds-table-wrap">
+        <table class="mds-table announcement-table">
+          <thead>
+            <tr>
+              <th>标题</th>
+              <th>类型</th>
+              <th>状态</th>
+              <th>发布人</th>
+              <th>发布时间</th>
+              <th>到期时间</th>
+              <th class="mds-actions">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-if="loading">
+              <td colspan="7" class="mds-empty">正在加载公告…</td>
+            </tr>
+            <tr v-else-if="!rows.length">
+              <td colspan="7">
+                <EmptyState
+                  icon="📢"
+                  title="没有符合条件的公告"
+                  :description="rows.length === 0 ? '还没有发布过公告；点击右上角「发布公告」起草第一条。' : '调整筛选条件后重试。'"
+                />
+              </td>
+            </tr>
+            <tr v-for="row in rows" :key="row.id">
+              <td>
+                <div class="mds-name">{{ row.title }}</div>
+                <div class="mds-hint content-cell" :title="row.content">{{ row.content }}</div>
+              </td>
+              <td><StatusTag :text="typeText(row.type)" :tone="typeTone(row.type)" plain /></td>
+              <td><StatusTag :text="statusText(row.status)" :tone="statusTone(row.status)" /></td>
+              <td>{{ row.author || '—' }}</td>
+              <td class="mds-muted time-cell">{{ formatTime(row.publishTime) }}</td>
+              <td class="mds-muted time-cell">{{ row.expireTime ? formatTime(row.expireTime) : '长期' }}</td>
+              <td class="mds-actions">
+                <button v-point="'PUT /admin/masterdata/announcement/{id}'" class="mds-btn mds-btn--link" @click="openEdit(row)">编辑</button>
+                <button v-point="'PUT /admin/masterdata/announcement/{id}/publish'"
+                  v-if="row.status !== 'published'"
+                  class="mds-btn mds-btn--link"
+                  :disabled="busyId === row.id"
+                  @click="publish(row)"
+                >发布</button>
+                <button v-point="'PUT /admin/masterdata/announcement/{id}/offline'"
+                  v-else
+                  class="mds-btn mds-btn--link mds-danger"
+                  :disabled="busyId === row.id"
+                  @click="offline(row)"
+                >下线</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
+
+      <PagerBar :page="page" :page-size="pageSize" :total="total" @change="changePage" @update:page-size="changePageSize" />
     </div>
 
-    <div class="modal-overlay" v-if="showAddModal" @click="closeModal">
-      <div class="modal-content" @click.stop>
-        <div class="modal-header">
-          <h3>{{ isEdit ? '编辑公告' : '发布公告' }}</h3>
-          <button class="close-btn" @click="closeModal">×</button>
+    <div v-if="showModal" class="mds-mask" @click="closeModal">
+      <div class="mds-modal" @click.stop>
+        <div class="mds-card-head">
+          <h2 class="mds-card-title">{{ editingId ? '编辑公告' : '发布公告' }}</h2>
+          <button class="mds-btn mds-btn--link" @click="closeModal">关闭</button>
         </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label>公告标题 *</label>
-            <input type="text" v-model="form.title" class="form-input" placeholder="请输入公告标题" />
+        <div class="mds-card-body">
+          <div class="mds-form">
+            <label class="mds-field">
+              <span class="mds-field__label mds-required">标题</span>
+              <input v-model="form.title" class="mds-input" placeholder="如：系统维护通知" />
+            </label>
+            <label class="mds-field">
+              <span class="mds-field__label">类型</span>
+              <select v-model="form.type" class="mds-select">
+                <option value="info">通知公告</option>
+                <option value="warning">重要提醒</option>
+                <option value="maintenance">系统维护</option>
+                <option value="emergency">紧急通知</option>
+              </select>
+            </label>
+            <label class="mds-field">
+              <span class="mds-field__label">到期时间</span>
+              <input v-model="form.expireTime" class="mds-input" type="datetime-local" />
+            </label>
+            <label v-if="!editingId" class="mds-field">
+              <span class="mds-field__label">发布方式</span>
+              <select v-model="form.publishNow" class="mds-select">
+                <option :value="true">立即发布</option>
+                <option :value="false">先存草稿</option>
+              </select>
+            </label>
+            <label class="mds-field mds-field--full">
+              <span class="mds-field__label mds-required">正文</span>
+              <textarea v-model="form.content" class="mds-textarea" style="min-height: 140px" placeholder="公告正文，支持换行" />
+            </label>
           </div>
-          <div class="form-group">
-            <label>公告类型</label>
-            <select v-model="form.type" class="form-input">
-              <option value="info">通知公告</option>
-              <option value="warning">重要提醒</option>
-              <option value="maintenance">系统维护</option>
-              <option value="emergency">紧急通知</option>
-            </select>
+          <div class="mds-form-actions">
+            <button class="mds-btn" @click="closeModal">取消</button>
+            <button class="mds-btn mds-btn--primary" :disabled="saving" @click="submit">
+              {{ saving ? '提交中…' : editingId ? '保存修改' : form.publishNow ? '发布' : '存草稿' }}
+            </button>
           </div>
-          <div class="form-group">
-            <label>公告内容 *</label>
-            <textarea v-model="form.content" class="form-input" rows="6" placeholder="请输入公告内容"></textarea>
-          </div>
-          <div class="form-group">
-            <label>发布时间</label>
-            <input type="datetime-local" v-model="form.publishTime" class="form-input" />
-          </div>
-          <div class="form-group">
-            <label>过期时间</label>
-            <input type="datetime-local" v-model="form.expireTime" class="form-input" />
-          </div>
-          <div class="form-group">
-            <label>是否发布</label>
-            <div class="checkbox-option">
-              <input type="checkbox" v-model="form.published" id="published" />
-              <label for="published">立即发布</label>
-            </div>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-cancel" @click="closeModal">取消</button>
-          <button class="btn btn-primary" @click="saveAnnouncement">{{ isEdit ? '保存修改' : '发布公告' }}</button>
         </div>
       </div>
     </div>
   </div>
 </template>
 
-<script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+<script setup lang="ts">
+import { onMounted, reactive, ref } from 'vue'
+import { message } from 'ant-design-vue'
+import PageHeader from '@/components/ui/PageHeader.vue'
+import StatusTag from '@/components/ui/StatusTag.vue'
+import NoticeBar from '@/components/ui/NoticeBar.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
+import PagerBar from '@/components/ui/PagerBar.vue'
+import {
+  createAnnouncement,
+  getAnnouncementPage,
+  offlineAnnouncement,
+  publishAnnouncement,
+  updateAnnouncement,
+} from '@/utils/api'
 
-const showAddModal = ref(false)
-const isEdit = ref(false)
-const filterStatus = ref('all')
-const filterKeyword = ref('')
+interface AnnouncementRow {
+  id: string
+  title: string
+  type?: string
+  content: string
+  status: string
+  publishTime?: string
+  expireTime?: string | null
+  author?: string
+}
+
+const rows = ref<AnnouncementRow[]>([])
+const loading = ref(false)
+const saving = ref(false)
+const busyId = ref<string | null>(null)
+const page = ref(1)
+const pageSize = ref(20)
+const total = ref(0)
+const keyword = ref('')
+const filterStatus = ref('')
+const filterType = ref('')
+const showModal = ref(false)
+const editingId = ref<string | null>(null)
 
 const form = reactive({
-  id: null,
   title: '',
   type: 'info',
   content: '',
-  author: '管理员',
-  publishTime: '',
   expireTime: '',
-  published: false,
-  status: 'draft'
+  publishNow: true,
 })
 
-const announcements = ref([])
+const TYPE_TEXT: Record<string, string> = {
+  info: '通知公告',
+  warning: '重要提醒',
+  maintenance: '系统维护',
+  emergency: '紧急通知',
+}
+const TYPE_TONE: Record<string, 'info' | 'warning' | 'purple' | 'danger'> = {
+  info: 'info',
+  warning: 'warning',
+  maintenance: 'purple',
+  emergency: 'danger',
+}
+const STATUS_TEXT: Record<string, string> = { draft: '草稿', published: '已发布', offline: '已下线' }
+const STATUS_TONE: Record<string, 'gray' | 'success' | 'danger'> = {
+  draft: 'gray',
+  published: 'success',
+  offline: 'danger',
+}
+const typeText = (type?: string) => TYPE_TEXT[type ?? ''] ?? type ?? '—'
+const typeTone = (type?: string) => TYPE_TONE[type ?? ''] ?? 'info'
+const statusText = (status?: string) => STATUS_TEXT[status ?? ''] ?? status ?? '—'
+const statusTone = (status?: string) => STATUS_TONE[status ?? ''] ?? 'gray'
+const formatTime = (value?: string | null) => (value ? String(value).replace('T', ' ').slice(0, 16) : '—')
 
-const mockAnnouncements = [
-  { id: 1, title: '系统升级通知', type: 'maintenance', content: '系统将于2026年5月15日00:00-04:00进行升级维护，期间系统将暂停服务，请提前做好准备。', author: '管理员', publishTime: '2026-05-10 09:00:00', expireTime: '2026-05-16 00:00:00', status: 'published' },
-  { id: 2, title: '数据质量检测规则更新', type: 'info', content: '新增身份证号验证规则和邮箱格式验证规则，请相关人员注意查看。', author: '管理员', publishTime: '2026-05-09 14:30:00', expireTime: '', status: 'published' },
-  { id: 3, title: '主体注册流程优化', type: 'info', content: '主体注册流程已优化，新增邮箱验证环节，请主体管理员注意。', author: '管理员', publishTime: '2026-05-08 10:00:00', expireTime: '', status: 'published' },
-  { id: 4, title: '安全提醒', type: 'warning', content: '近期发现异常登录尝试，请各用户注意账号安全，及时修改密码。', author: '管理员', publishTime: '2026-05-07 16:00:00', expireTime: '', status: 'published' },
-  { id: 5, title: '新功能预告', type: 'info', content: '数据质量仪表盘功能即将上线，敬请期待。', author: '管理员', publishTime: '', expireTime: '', status: 'draft' }
-]
+async function load() {
+  loading.value = true
+  try {
+    const response = await getAnnouncementPage({
+      pageNum: page.value,
+      pageSize: pageSize.value,
+      status: filterStatus.value || undefined,
+      type: filterType.value || undefined,
+      keyword: keyword.value || undefined,
+    })
+    if (response.code !== 200) throw new Error(response.message || '加载公告失败')
+    rows.value = (response.data?.list ?? []) as AnnouncementRow[]
+    total.value = Number(response.data?.total ?? 0)
+  } catch (error) {
+    rows.value = []
+    total.value = 0
+    message.error(error instanceof Error ? error.message : '加载公告失败')
+  } finally {
+    loading.value = false
+  }
+}
 
-const filteredAnnouncements = computed(() => {
-  return announcements.value.filter(item => {
-    const matchStatus = filterStatus.value === 'all' || item.status === filterStatus.value
-    const matchKeyword = !filterKeyword.value || 
-      item.title.toLowerCase().includes(filterKeyword.value.toLowerCase()) ||
-      item.content.toLowerCase().includes(filterKeyword.value.toLowerCase())
-    return matchStatus && matchKeyword
+function search() {
+  page.value = 1
+  void load()
+}
+
+function reset() {
+  keyword.value = ''
+  filterStatus.value = ''
+  filterType.value = ''
+  search()
+}
+
+function changePage(next: number) {
+  page.value = next
+  void load()
+}
+
+function changePageSize(size: number) {
+  pageSize.value = size
+  page.value = 1
+  void load()
+}
+
+function openCreate() {
+  editingId.value = null
+  Object.assign(form, { title: '', type: 'info', content: '', expireTime: '', publishNow: true })
+  showModal.value = true
+}
+
+function openEdit(row: AnnouncementRow) {
+  editingId.value = row.id
+  Object.assign(form, {
+    title: row.title,
+    type: row.type ?? 'info',
+    content: row.content,
+    expireTime: row.expireTime ? String(row.expireTime).replace(' ', 'T').slice(0, 16) : '',
+    publishNow: row.status === 'published',
   })
-})
-
-const getTypeLabel = (type) => {
-  const labels = {
-    info: '通知',
-    warning: '提醒',
-    maintenance: '维护',
-    emergency: '紧急'
-  }
-  return labels[type] || type
+  showModal.value = true
 }
 
-const getStatusLabel = (status) => {
-  const labels = {
-    draft: '草稿',
-    published: '已发布',
-    expired: '已过期'
-  }
-  return labels[status] || status
+function closeModal() {
+  showModal.value = false
+  editingId.value = null
 }
 
-const loadData = () => {
-  announcements.value = mockAnnouncements
-}
-
-onMounted(() => {
-  loadData()
-})
-
-const closeModal = () => {
-  showAddModal.value = false
-  isEdit.value = false
-  Object.keys(form).forEach(key => {
-    form[key] = key === 'type' ? 'info' : key === 'author' ? '管理员' : key === 'published' ? false : key === 'status' ? 'draft' : ''
-  })
-}
-
-const editAnnouncement = (item) => {
-  isEdit.value = true
-  Object.assign(form, item)
-  form.published = item.status === 'published'
-  showAddModal.value = true
-}
-
-const publishAnnouncement = (item) => {
-  item.status = 'published'
-  item.publishTime = '刚刚'
-  alert(`公告 "${item.title}" 已发布`)
-}
-
-const deleteAnnouncement = (item) => {
-  if (confirm(`确定删除公告 "${item.title}" 吗？`)) {
-    const index = announcements.value.findIndex(a => a.id === item.id)
-    if (index !== -1) {
-      announcements.value.splice(index, 1)
-    }
-    alert('公告已删除')
-  }
-}
-
-const saveAnnouncement = () => {
-  if (!form.title || !form.content) {
-    alert('请填写必填字段')
+async function submit() {
+  if (!form.title.trim() || !form.content.trim()) {
+    message.warning('标题与正文为必填')
     return
   }
-
-  form.status = form.published ? 'published' : 'draft'
-  form.publishTime = form.published ? '刚刚' : form.publishTime
-
-  if (isEdit.value) {
-    const index = announcements.value.findIndex(a => a.id === form.id)
-    if (index !== -1) {
-      announcements.value[index] = { ...announcements.value[index], ...form }
-    }
-    alert('公告已更新')
-  } else {
-    announcements.value.push({
-      id: Date.now(),
-      ...form
-    })
-    alert('公告已保存')
+  saving.value = true
+  const payload = {
+    title: form.title.trim(),
+    type: form.type,
+    content: form.content,
+    expireTime: form.expireTime || null,
+    publishNow: editingId.value ? undefined : form.publishNow,
   }
-  closeModal()
+  try {
+    const response = editingId.value
+      ? await updateAnnouncement(editingId.value, payload)
+      : await createAnnouncement(payload)
+    if (response.code !== 200) throw new Error(response.message || '保存失败')
+    message.success(editingId.value ? '公告已更新' : form.publishNow ? '公告已发布' : '草稿已保存')
+    closeModal()
+    await load()
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '保存失败')
+  } finally {
+    saving.value = false
+  }
 }
+
+async function publish(row: AnnouncementRow) {
+  busyId.value = row.id
+  try {
+    const response = await publishAnnouncement(row.id)
+    if (response.code !== 200) throw new Error(response.message || '发布失败')
+    message.success('公告已发布')
+    await load()
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '发布失败')
+  } finally {
+    busyId.value = null
+  }
+}
+
+async function offline(row: AnnouncementRow) {
+  if (!window.confirm(`确认下线「${row.title}」？下线后全平台不再展示。`)) return
+  busyId.value = row.id
+  try {
+    const response = await offlineAnnouncement(row.id)
+    if (response.code !== 200) throw new Error(response.message || '下线失败')
+    message.success('公告已下线')
+    await load()
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '下线失败')
+  } finally {
+    busyId.value = null
+  }
+}
+
+onMounted(load)
 </script>
 
 <style scoped>
-.announcement {
-  padding: 20px;
+.announcement-table {
+  min-width: 1040px;
 }
 
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 24px;
-}
-
-.header-left h1 {
-  font-size: 24px;
-  font-weight: 600;
-  color: #2d3748;
-  margin: 0;
-}
-
-.header-left p {
-  font-size: 14px;
-  color: #a0aec0;
-  margin: 4px 0 0;
-}
-
-.add-btn {
-  padding: 10px 20px;
-  background: linear-gradient(135deg, #238636 0%, #2ea043 100%);
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.add-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(35, 134, 54, 0.3);
-}
-
-.filter-bar {
-  display: flex;
-  gap: 16px;
-  margin-bottom: 20px;
-}
-
-.filter-select {
-  padding: 8px 16px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 14px;
-  outline: none;
-  cursor: pointer;
-}
-
-.filter-input {
-  padding: 8px 16px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 14px;
-  outline: none;
-  flex: 1;
-  min-width: 200px;
-}
-
-.announcement-list {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.announcement-card {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+.content-cell {
+  max-width: 420px;
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.announcement-card.draft {
-  border-left: 4px solid #a0aec0;
+.time-cell {
+  white-space: nowrap;
 }
 
-.announcement-card.published {
-  border-left: 4px solid #238636;
-}
-
-.announcement-card.expired {
-  border-left: 4px solid #6b7280;
-  opacity: 0.7;
-}
-
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  padding: 16px;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.header-left {
-  flex: 1;
-}
-
-.header-left h3 {
-  font-size: 18px;
-  font-weight: 600;
-  color: #2d3748;
-  margin: 8px 0 0;
-}
-
-.type-badge {
-  padding: 4px 10px;
-  border-radius: 4px;
-  font-size: 12px;
-}
-
-.type-badge.info {
-  background: rgba(37, 99, 235, 0.1);
-  color: #2563eb;
-}
-
-.type-badge.warning {
-  background: rgba(210, 153, 34, 0.1);
-  color: #d29922;
-}
-
-.type-badge.maintenance {
-  background: rgba(147, 51, 234, 0.1);
-  color: #7c3aed;
-}
-
-.type-badge.emergency {
-  background: rgba(239, 68, 68, 0.1);
-  color: #dc2626;
-}
-
-.status-badge {
-  padding: 4px 10px;
-  border-radius: 4px;
-  font-size: 12px;
-  background: rgba(156, 163, 175, 0.1);
-  color: #6b7280;
-}
-
-.card-body {
-  padding: 16px;
-}
-
-.card-body p {
-  font-size: 14px;
-  color: #4a5568;
-  line-height: 1.6;
-  margin: 0;
-}
-
-.card-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 16px;
-  background: #f8fafc;
-}
-
-.meta {
-  display: flex;
-  gap: 16px;
-  font-size: 12px;
-  color: #718096;
-}
-
-.actions {
-  display: flex;
-  gap: 8px;
-}
-
-.action-btn {
-  font-size: 12px;
-  padding: 6px 12px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.action-btn.publish {
-  background: rgba(35, 134, 54, 0.1);
-  color: #238636;
-}
-
-.action-btn.edit {
-  background: rgba(37, 99, 235, 0.1);
-  color: #2563eb;
-}
-
-.action-btn.delete {
-  background: rgba(239, 68, 68, 0.1);
-  color: #dc2626;
-}
-
-.action-btn:hover {
-  opacity: 0.8;
-}
-
-.modal-overlay {
+.mds-mask {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  inset: 0;
+  z-index: 1000;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
-}
-
-.modal-content {
-  background: #fff;
-  border-radius: 12px;
-  width: 600px;
-  max-width: 90%;
-  max-height: 90vh;
-  overflow-y: auto;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.modal-header h3 {
-  font-size: 18px;
-  font-weight: 600;
-  color: #2d3748;
-  margin: 0;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 24px;
-  color: #a0aec0;
-  cursor: pointer;
-  padding: 0;
-  line-height: 1;
-}
-
-.close-btn:hover {
-  color: #2d3748;
-}
-
-.modal-body {
+  background: rgba(0, 0, 0, 0.45);
   padding: 20px;
 }
 
-.form-group {
-  margin-bottom: 16px;
-}
-
-.form-group label {
-  display: block;
-  font-size: 14px;
-  color: #4a5568;
-  margin-bottom: 6px;
-  font-weight: 500;
-}
-
-.form-input {
-  width: 100%;
-  padding: 10px 14px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 14px;
-  outline: none;
-  transition: border-color 0.2s;
-  box-sizing: border-box;
-}
-
-.form-input:focus {
-  border-color: #238636;
-}
-
-.checkbox-option {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.checkbox-option input {
-  width: 18px;
-  height: 18px;
-}
-
-.checkbox-option label {
-  margin: 0;
-  font-weight: 400;
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  padding: 20px;
-  border-top: 1px solid #f0f0f0;
-}
-
-.btn {
-  padding: 10px 20px;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  border: none;
-}
-
-.btn-cancel {
-  background: #f0f0f0;
-  color: #4a5568;
-}
-
-.btn-cancel:hover {
-  background: #e2e8f0;
-}
-
-.btn-primary {
-  background: linear-gradient(135deg, #238636 0%, #2ea043 100%);
-  color: #fff;
-}
-
-.btn-primary:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(35, 134, 54, 0.3);
+.mds-modal {
+  width: 760px;
+  max-width: 100%;
+  max-height: 88vh;
+  overflow: auto;
+  border-radius: var(--mds-radius);
+  background: var(--mds-card);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.22);
 }
 </style>

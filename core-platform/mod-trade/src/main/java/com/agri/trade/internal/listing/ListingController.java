@@ -1,5 +1,8 @@
 package com.agri.trade.internal.listing;
 
+import com.agri.core.infra.web.MarketContext;
+import com.agri.platform.api.facade.CapabilityCodes;
+import com.agri.platform.api.facade.CapabilityFacade;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.agri.shared.exception.BusinessException;
@@ -35,6 +38,8 @@ public class ListingController {
     private static final DateTimeFormatter NO_FORMAT = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
 
     private final ListingMapper listingMapper;
+    /** 业务能力门面：发布挂牌要求具备交易类业务身份 */
+    private final CapabilityFacade capabilityFacade;
 
     public record CreateListingRequest(@NotBlank String type, @NotNull Long merchantId, @NotNull Long productId,
                                        String productName, @NotNull BigDecimal quantity, @NotNull BigDecimal price) {
@@ -60,6 +65,12 @@ public class ListingController {
         if (!"SELL".equals(req.type()) && !"BUY".equals(req.type())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "type 必须为 SELL 或 BUY");
         }
+        // 身份审核通过 → 能力 → 放行；没通过的人在业务动作这一层被挡住。
+        // 这是"身份申请"第一次真正影响业务动作，而不只是改单据状态。
+        Long userId = MarketContext.currentUserId();
+        capabilityFacade.requireAny(userId,
+                "SELL".equals(req.type()) ? CapabilityCodes.TRADE_LISTING_SELL : CapabilityCodes.TRADE_LISTING_BUY,
+                "发布交易挂牌");
         ListingEntity listing = new ListingEntity();
         listing.setListingNo("LP" + NO_FORMAT.format(LocalDateTime.now())
                 + ThreadLocalRandom.current().nextInt(1000, 9999));

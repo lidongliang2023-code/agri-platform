@@ -99,15 +99,28 @@ public class BlockchainController {
 
     /* ==================== 写路径（模拟链） ==================== */
 
-    /** 提交存证（前端 submitChain，body {bizId, bizType, bizSummary}）。 */
+    /**
+     * 提交存证（前端 submitChain，body {@code {bizId, bizType, bizSummary}}）。
+     *
+     * <p>{@code bizType} 收**字符串业务类型**（HARVEST / QUALITY / TRACE / INPUT）。
+     * 这里以前把它解析成 {@code Integer} 再 {@code String.valueOf} 落库，于是
+     * {@code target_type} 里出现 {@code '2'} —— 不属于任何词表、对不到业务，
+     * 但存证列表照旧显示它，等于一条"谁也读不回来的已上链记录"。现在由服务层统一归一并拒绝。</p>
+     */
     @PostMapping("/records")
     public ApiResponse<ChainRecordContractVO> submit(@RequestBody Map<String, Object> body) {
         return ApiResponse.success(chainRecordService.submit(
-                str(body.get("bizId")), toInt(body.get("bizType")), str(body.get("bizSummary")),
+                str(body.get("bizId")), str(body.get("bizType")), str(body.get("bizSummary")),
                 TenantContextService.currentTenantId()));
     }
 
-    /** 按业务存证（前端 anchorRecord）。 */
+    /**
+     * 按业务存证（前端 anchorRecord）。
+     *
+     * <p>写之前服务层会按令牌主体在业务表里定位这条 {@code bizNo}/{@code traceCode}：
+     * 不存在、已删除、或属于别家经营主体，一律 404 拒绝 —— 存证是给真实业务动作发凭证，
+     * 能给自由填写的单号出"已上链"，这条凭证就没有任何意义。</p>
+     */
     @PostMapping("/anchor")
     public ApiResponse<ChainRecordContractVO> anchor(@RequestBody Map<String, Object> body) {
         return ApiResponse.success(chainRecordService.anchor(
@@ -142,18 +155,6 @@ public class BlockchainController {
         }
         String text = String.valueOf(value).trim();
         return text.isEmpty() ? null : text;
-    }
-
-    private static Integer toInt(Object value) {
-        String text = str(value);
-        if (text == null) {
-            return null;
-        }
-        try {
-            return Integer.valueOf(text);
-        } catch (NumberFormatException e) {
-            return null;
-        }
     }
 
     private static int firstNonNull(Integer... values) {

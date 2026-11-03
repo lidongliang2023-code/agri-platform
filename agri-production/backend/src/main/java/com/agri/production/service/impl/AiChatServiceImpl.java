@@ -20,6 +20,7 @@ import com.agri.production.mapper.AlertRecordMapper;
 import com.agri.production.mapper.GrowthRecordMapper;
 import com.agri.production.mapper.HarvestBatchMapper;
 import com.agri.production.mapper.IoTDeviceMapper;
+import com.agri.production.service.IotDeviceStatsService;
 import com.agri.production.mapper.InspectionMapper;
 import com.agri.production.mapper.PlotMapper;
 import com.agri.production.mapper.TaskMapper;
@@ -73,6 +74,7 @@ public class AiChatServiceImpl implements IAiChatService {
     private final TaskMapper taskMapper;
     private final AlertRecordMapper alertMapper;
     private final IoTDeviceMapper deviceMapper;
+    private final IotDeviceStatsService iotDeviceStats;
     private final GrowthRecordMapper growthMapper;
     private final InspectionMapper inspectionMapper;
     private final PlotMapper plotMapper;
@@ -81,7 +83,7 @@ public class AiChatServiceImpl implements IAiChatService {
                              AiMessageMapper messageMapper, HarvestBatchMapper harvestMapper,
                              TaskMapper taskMapper, AlertRecordMapper alertMapper, IoTDeviceMapper deviceMapper,
                              GrowthRecordMapper growthMapper, InspectionMapper inspectionMapper,
-                             PlotMapper plotMapper) {
+                             PlotMapper plotMapper, IotDeviceStatsService iotDeviceStats) {
         this.diagnosisMapper = diagnosisMapper;
         this.sessionMapper = sessionMapper;
         this.messageMapper = messageMapper;
@@ -89,6 +91,7 @@ public class AiChatServiceImpl implements IAiChatService {
         this.taskMapper = taskMapper;
         this.alertMapper = alertMapper;
         this.deviceMapper = deviceMapper;
+        this.iotDeviceStats = iotDeviceStats;
         this.growthMapper = growthMapper;
         this.inspectionMapper = inspectionMapper;
         this.plotMapper = plotMapper;
@@ -386,11 +389,13 @@ public class AiChatServiceImpl implements IAiChatService {
     }
 
     private Answer deviceAnswer(String tenantId) {
-        long total = deviceMapper.selectCount(new LambdaQueryWrapper<IoTDevice>().eq(IoTDevice::getTenantId, tenantId));
-        long online = deviceMapper.selectCount(new LambdaQueryWrapper<IoTDevice>()
-                .eq(IoTDevice::getTenantId, tenantId).in(IoTDevice::getStatus, DEVICE_ONLINE));
+        // 设备台账收敛到物联网系统后，AI 助手报的数必须和「设备列表」页一致，
+        // 否则用户会看到"助手说 13 台、列表有 29 台"这种互相对不上的答案
+        long[] stats = iotDeviceStats.totalAndOnline(tenantId, null);
+        long total = stats[0];
+        long online = stats[1];
         return new Answer("device", String.format("设备台账共 %d 台，其中在线 %d 台、离线 %d 台。",
-                total, online, total - online), List.of("iot-devices"));
+                total, online, Math.max(total - online, 0)), List.of("iot-devices"));
     }
 
     private Answer growthAnswer(String tenantId) {

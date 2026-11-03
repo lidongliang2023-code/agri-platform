@@ -1,13 +1,19 @@
 #!/usr/bin/env node
 /** 官网门户 · 物流服务页回归（2026-10-20）。 */
 import { createRequire } from 'node:module'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const require2 = createRequire(path.join(REPO_ROOT, 'agri-production/frontend/package.json'))
-const puppeteer = require2('puppeteer')
+const require2 = createRequire(path.join('C:/Users/71502/.workbuddy-ai/binaries/node/workspace', 'noop.js'))
+const { chromium } = require2('playwright-core')
+
+const BROWSER = [
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+].find((candidate) => existsSync(candidate))
 const BASE = 'http://localhost:8098/portal/'
 const HEADFUL = process.argv.includes('--headful')
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -18,13 +24,13 @@ const check = (ok, label, extra = '') => {
   if (!ok) failures.push(label)
 }
 
-const browser = await puppeteer.launch({ headless: HEADFUL ? false : 'new', args: ['--no-sandbox'] })
+const browser = await chromium.launch({ headless: !HEADFUL, executablePath: BROWSER, args: ['--no-sandbox'] })
 try {
-  const page = await browser.newPage()
+  const page = await (await browser.newContext({ viewport: { width: 1440, height: 1000 } })).newPage()
   const errors = []
   page.on('pageerror', (error) => errors.push(String(error)))
-  await page.setViewport({ width: 1440, height: 1000 })
-  await page.goto(`${BASE}#/logistics`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await page.goto(`${BASE}#/logistics`, { waitUntil: 'networkidle', timeout: 60000 })
   await page.waitForSelector('.logi-hero', { timeout: 20000 })
   await sleep(500)
 
@@ -32,9 +38,9 @@ try {
   check(text.includes('从田间到餐桌') && text.includes('全程温控可追溯'), '物流服务 Hero 已渲染')
   const logiHeroBackground = await page.$eval('.logi-hero', (element) => getComputedStyle(element).backgroundImage)
   const logiButtonColor = await page.$eval('.logi-btn-light', (element) => getComputedStyle(element).color)
-  const homePage = await browser.newPage()
-  await homePage.setViewport({ width: 1440, height: 1000 })
-  await homePage.goto(BASE, { waitUntil: 'networkidle2', timeout: 60000 })
+  const homePage = await (await browser.newContext({ viewport: { width: 1440, height: 1000 } })).newPage()
+  await homePage.setViewportSize({ width: 1440, height: 1000 })
+  await homePage.goto(BASE, { waitUntil: 'networkidle', timeout: 60000 })
   const portalHeroBackground = await homePage.$eval('.portal-hero', (element) => getComputedStyle(element).backgroundImage)
   const portalButtonColor = await homePage.$eval('.portal-btn-light', (element) => getComputedStyle(element).color)
   await homePage.close()
@@ -67,8 +73,8 @@ try {
 
   await page.screenshot({ path: path.join('C:/Users/71502/.codex/visualizations/2026/10/16/01a14244-ead8-7ab0-8c7c-df7abac44648', 'portal-logistics.png'), fullPage: true })
 
-  await page.setViewport({ width: 390, height: 844 })
-  await page.goto(`${BASE}#/logistics`, { waitUntil: 'networkidle2' })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto(`${BASE}#/logistics`, { waitUntil: 'networkidle' })
   await page.waitForSelector('.logi-hero', { timeout: 20000 })
   await sleep(500)
   await page.screenshot({ path: path.join('C:/Users/71502/.codex/visualizations/2026/10/16/01a14244-ead8-7ab0-8c7c-df7abac44648', 'portal-logistics-mobile.png'), fullPage: true })

@@ -97,17 +97,17 @@ onMounted(load)
 </script>
 
 <style scoped>
-.finance-kpi em { color: #60776a; font-size: 10px; font-style: normal; }
+.finance-kpi em { color: #60776a; font-size: var(--fin-fs-xs); font-style: normal; }
 .report-layout { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(270px, .7fr); gap: 14px; }
 .report-bars { display: grid; gap: 17px; padding: 19px; }
 .report-bars > div { display: grid; grid-template-columns: 75px minmax(0, 1fr) 100px; align-items: center; gap: 10px; }
-.report-bars span { color: #62786b; font-size: 9px; }
-.report-bars strong { color: #395443; font-size: 9px; text-align: right; }
+.report-bars span { color: #62786b; font-size: var(--fin-fs-xs); }
+.report-bars strong { color: #395443; font-size: var(--fin-fs-xs); text-align: right; }
 .report-track { overflow: hidden; height: 10px; border-radius: 99px; background: #e9f1ec; }
 .report-track b { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--fin-green-700), var(--fin-green-500, #159a5e)); }
 .report-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin: 0; background: #edf2ee; }
 .report-metrics > div { padding: 13px 15px; background: #fff; }
-.report-metrics dt { color: #87978e; font-size: 8px; }
+.report-metrics dt { color: #87978e; font-size: var(--fin-fs-xs); }
 .report-metrics dd { margin: 4px 0 0; color: #294f38; font-family: ui-monospace, Consolas, monospace; font-size: 13px; }
 @media (max-width: 820px) { .report-layout { grid-template-columns: 1fr; } }
 </style>

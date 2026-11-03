@@ -8,6 +8,7 @@ import com.agri.production.dto.InputUsageSaveDTO;
 import com.agri.production.entity.InputMaterial;
 import com.agri.production.entity.InputStockFlow;
 import com.agri.production.entity.InputUsageRecord;
+import com.agri.production.vo.InputStockFlowVO;
 import com.agri.production.service.IInputService;
 import com.agri.production.service.FarmIdResolver;
 import com.agri.production.service.TenantContextService;
@@ -160,6 +161,28 @@ public class InputController {
         }
         inputService.deleteFlow(owner, recordId, tenantId);
         return ApiResponse.success(true);
+    }
+
+    /**
+     * 跨投入品分页查询库存流水（服务端筛选 / 排序）。
+     *
+     * <p>字面量路径必须写在 {@code /{inputId}} 之前语义上更具体；Spring 会优先命中字面量，
+     * 因此 {@code /inputs/stock-flows} 不会被 {@code /{inputId}} 接走。</p>
+     */
+    @GetMapping("/stock-flows")
+    public ApiResponse<PageResult<InputStockFlowVO>> pageAllFlows(
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer pageNum,
+            @RequestParam(required = false) Integer size,
+            @RequestParam(required = false) Integer pageSize,
+            @RequestParam(required = false) Integer flowType,
+            @RequestParam(required = false) String batchNo,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate) {
+        int p = pageNum != null ? pageNum : (page != null ? page : 1);
+        int s = pageSize != null ? pageSize : (size != null ? size : 20);
+        return ApiResponse.success(inputService.pageAllFlows(p, s, flowType, batchNo, startDate, endDate,
+                TenantContextService.currentTenantId()));
     }
 
     /** 库存流水（某投入品）。 */

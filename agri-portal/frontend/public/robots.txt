@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+
+# 门户是单页应用（hash 路由，形如 /portal/#/info/news/1）。
+# 除入口 /portal/ 外没有独立可抓取的 URL，因此这里不提供 sitemap：
+# 把带 # 的地址写进 sitemap 只会被搜索引擎规范化掉，属于无效声明。
+#
+# 若要让资讯详情页被正常收录，需要改为 history 路由（/portal/info/news/1）
+# 并配合预渲染或 SSR —— 这是独立改造，尚未实施。

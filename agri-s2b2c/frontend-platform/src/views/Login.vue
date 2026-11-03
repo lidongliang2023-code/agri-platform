@@ -2,8 +2,9 @@
   <div class="login-page">
     <div class="login-container">
       <div class="logo">
-        <span class="logo-icon">🌾</span>
-        <h1>农联优选 - 平台运营管理</h1>
+        <span class="logo-icon">丰</span>
+        <h1>丰链云 · 平台运营工作台</h1>
+        <p class="login-subtitle">S2B2C 全域运营管理</p>
       </div>
       <el-form :model="form" :rules="rules" ref="formRef" class="login-form">
         <el-form-item prop="username">

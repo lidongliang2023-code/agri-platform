@@ -17,6 +17,16 @@ public class TenantDetailVO {
     private String tenantName;
     
     private String tenantType;
+
+    private String industry;
+
+    private String companySize;
+
+    private String businessType;
+
+    private String verifyStatus;
+
+    private String verifyRemark;
     
     private String contactName;
     
@@ -35,8 +45,36 @@ public class TenantDetailVO {
     private String creditCode;
     
     private String legalPerson;
+
+    private String licenseNo;
+
+    private String identityNoMasked;
+
+    private String validStart;
+
+    private String validEnd;
+
+    private String certificationNo;
+
+    private String verificationChannel;
+
+    private String legalPersonFaceStatus;
+
+    private String corporateBankName;
+
+    private String corporateBankAccount;
+
+    private String corporateTransferStatus;
+
+    private Boolean policeVerified;
+
+    private Boolean livenessVerified;
+
+    private String certificationStatus;
+
+    private String certificationReviewRemark;
     
-    private Long registeredCapital;
+    private String registeredCapital;
     
     private String businessScope;
     

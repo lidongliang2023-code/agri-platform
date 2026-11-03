@@ -1,13 +1,19 @@
 #!/usr/bin/env node
 /** 买家评价/资金与卖家经营页面重构回归。 */
 import { createRequire } from 'node:module'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const require2 = createRequire(path.join(ROOT, 'agri-production/frontend/package.json'))
-const puppeteer = require2('puppeteer')
+const require2 = createRequire(path.join('C:/Users/71502/.workbuddy-ai/binaries/node/workspace', 'noop.js'))
+const { chromium } = require2('playwright-core')
+
+const BROWSER = [
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+].find((candidate) => existsSync(candidate))
 const BASE = 'http://localhost:8086'
 const OUT = 'C:/Users/71502/.codex/visualizations/2026/10/16/01a14244-ead8-7ab0-8c7c-df7abac44648'
 const failures = []
@@ -25,8 +31,8 @@ const fill = async (page, selector, value) => page.evaluate(({ target, next }) =
 }, { target: selector, next: value })
 
 const loginAndOpen = async (page, targetPath, username, password) => {
-  await page.goto(`${BASE}${targetPath}`, { waitUntil: 'networkidle2', timeout: 60000 })
-  await page.waitForFunction(() => window.location.port === '8090', { timeout: 20000 })
+  await page.goto(`${BASE}${targetPath}`, { waitUntil: 'networkidle', timeout: 60000 })
+  await page.waitForFunction(() => window.location.port === '8090', undefined, { timeout: 20000 })
   await page.waitForSelector('button[role="tab"]', { timeout: 20000 })
   await page.evaluate(() => {
     const tab = [...document.querySelectorAll('button[role="tab"]')]
@@ -48,9 +54,10 @@ const loginAndOpen = async (page, targetPath, username, password) => {
 }
 
 const openMemberPage = async (page, role, tab, selector) => {
-  await page.goto(`${BASE}/member/${role}?tab=${tab}`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.goto(`${BASE}/member/${role}?tab=${tab}`, { waitUntil: 'networkidle', timeout: 60000 })
   await page.waitForSelector(selector, { timeout: 30000 })
-  await page.waitForNetworkIdle({ idleTime: 600, timeout: 12000 }).catch(() => {})
+  await page.waitForLoadState('networkidle', { timeout: 12000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 600))
   await sleep(300)
   return page.evaluate(() => document.body.innerText)
 }
@@ -58,17 +65,17 @@ const openMemberPage = async (page, role, tab, selector) => {
 const noOverflow = (page) => page.evaluate(() =>
   document.documentElement.scrollWidth <= window.innerWidth + 1)
 
-const browser = await puppeteer.launch({
-  executablePath: 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
-  headless: 'new',
+const browser = await chromium.launch({
+  headless: true,
+  executablePath: BROWSER,
   args: ['--no-sandbox'],
 })
 try {
-  const buyerContext = await browser.createBrowserContext()
+  const buyerContext = await browser.newContext()
   const buyer = await buyerContext.newPage()
   const buyerErrors = []
   buyer.on('pageerror', (error) => buyerErrors.push(String(error)))
-  await buyer.setViewport({ width: 1440, height: 1000 })
+  await buyer.setViewportSize({ width: 1440, height: 1000 })
   await loginAndOpen(buyer, '/member/buyer?tab=rate', '19900002005', 'Test12345')
 
   const buyerRate = await openMemberPage(buyer, 'buyer', 'rate', '.buyer-rating-workspace')
@@ -79,12 +86,12 @@ try {
   check((await buyer.$$eval('.buyer-review-card', (items) => items.length)) > 0,
     '采购评价以卡片展示真实评价')
   await buyer.screenshot({ path: path.join(OUT, 'buyer-rating-redesigned.png'), fullPage: true })
-  await buyer.setViewport({ width: 390, height: 844 })
-  await buyer.reload({ waitUntil: 'networkidle2', timeout: 60000 })
+  await buyer.setViewportSize({ width: 390, height: 844 })
+  await buyer.reload({ waitUntil: 'networkidle', timeout: 60000 })
   await buyer.waitForSelector('.buyer-rating-workspace', { timeout: 30000 })
   check(await noOverflow(buyer), '390px 买家采购评价页无横向溢出')
   await buyer.screenshot({ path: path.join(OUT, 'buyer-rating-mobile.png'), fullPage: true })
-  await buyer.setViewport({ width: 1440, height: 1000 })
+  await buyer.setViewportSize({ width: 1440, height: 1000 })
 
   const buyerFund = await openMemberPage(buyer, 'buyer', 'fund', '.buyer-fund-workspace')
   check(buyerFund.includes('资金与发票') && buyerFund.includes('发票申请与记录') && buyerFund.includes('保证金账户'),
@@ -92,8 +99,8 @@ try {
   check((await buyer.$$eval('.buyer-invoice-card', (items) => items.length)) > 0,
     '发票记录以统一业务卡片展示')
   await buyer.screenshot({ path: path.join(OUT, 'buyer-fund-redesigned.png'), fullPage: true })
-  await buyer.setViewport({ width: 390, height: 844 })
-  await buyer.reload({ waitUntil: 'networkidle2', timeout: 60000 })
+  await buyer.setViewportSize({ width: 390, height: 844 })
+  await buyer.reload({ waitUntil: 'networkidle', timeout: 60000 })
   await buyer.waitForSelector('.buyer-fund-workspace', { timeout: 30000 })
   const buyerFundNoOverflow = await noOverflow(buyer)
   if (!buyerFundNoOverflow) {
@@ -113,11 +120,11 @@ try {
   check(buyerErrors.length === 0, '买家评价与资金页面无未捕获脚本异常', buyerErrors.slice(0, 2).join(' | '))
   await buyerContext.close()
 
-  const sellerContext = await browser.createBrowserContext()
+  const sellerContext = await browser.newContext()
   const seller = await sellerContext.newPage()
   const sellerErrors = []
   seller.on('pageerror', (error) => sellerErrors.push(String(error)))
-  await seller.setViewport({ width: 1440, height: 1000 })
+  await seller.setViewportSize({ width: 1440, height: 1000 })
   await loginAndOpen(seller, '/member/seller?tab=overview', 'farmer', 'Admin@123')
 
   const sellerOverview = await openMemberPage(seller, 'seller', 'overview', '.seller-overview')
@@ -128,12 +135,12 @@ try {
   check((await seller.$$eval('.seller-lead-grid > div', (items) => items.length)) === 4,
     '卖家首页展示商品、询价、评分与客户线索')
   await seller.screenshot({ path: path.join(OUT, 'seller-overview-redesigned.png'), fullPage: true })
-  await seller.setViewport({ width: 390, height: 844 })
-  await seller.reload({ waitUntil: 'networkidle2', timeout: 60000 })
+  await seller.setViewportSize({ width: 390, height: 844 })
+  await seller.reload({ waitUntil: 'networkidle', timeout: 60000 })
   await seller.waitForSelector('.seller-overview', { timeout: 30000 })
   check(await noOverflow(seller), '390px 卖家首页概览无横向溢出')
   await seller.screenshot({ path: path.join(OUT, 'seller-overview-mobile.png'), fullPage: true })
-  await seller.setViewport({ width: 1440, height: 1000 })
+  await seller.setViewportSize({ width: 1440, height: 1000 })
 
   const sellerPublish = await openMemberPage(seller, 'seller', 'publish', '.seller-product-page')
   check(sellerPublish.includes('发布新商品') && sellerPublish.includes('基础信息') && sellerPublish.includes('商品图片'),
@@ -141,12 +148,12 @@ try {
   check((await seller.$$eval('.seller-product-main .mc-panel', (items) => items.length)) >= 5,
     '商品发布页使用统一会员中心面板')
   await seller.screenshot({ path: path.join(OUT, 'seller-product-publish-redesigned.png'), fullPage: true })
-  await seller.setViewport({ width: 390, height: 844 })
-  await seller.reload({ waitUntil: 'networkidle2', timeout: 60000 })
+  await seller.setViewportSize({ width: 390, height: 844 })
+  await seller.reload({ waitUntil: 'networkidle', timeout: 60000 })
   await seller.waitForSelector('.seller-product-page', { timeout: 30000 })
   check(await noOverflow(seller), '390px 卖家商品发布页无横向溢出')
   await seller.screenshot({ path: path.join(OUT, 'seller-product-publish-mobile.png'), fullPage: true })
-  await seller.setViewport({ width: 1440, height: 1000 })
+  await seller.setViewportSize({ width: 1440, height: 1000 })
 
   const sellerTrade = await openMemberPage(seller, 'seller', 'trade', '.seller-trade-workspace')
   check(sellerTrade.includes('报价与撮合') && sellerTrade.includes('报价管理') && sellerTrade.includes('智能匹配') && sellerTrade.includes('价格推荐'),
@@ -189,13 +196,13 @@ try {
   check((await seller.$$eval('.seller-customer-card', (items) => items.length)) > 0,
     '客户卡片来自真实销售订单聚合')
   await seller.screenshot({ path: path.join(OUT, 'seller-customer-redesigned.png'), fullPage: true })
-  await seller.setViewport({ width: 390, height: 844 })
-  await seller.reload({ waitUntil: 'networkidle2', timeout: 60000 })
+  await seller.setViewportSize({ width: 390, height: 844 })
+  await seller.reload({ waitUntil: 'networkidle', timeout: 60000 })
   await seller.waitForSelector('.seller-customer-workspace', { timeout: 30000 })
   check(await noOverflow(seller), '390px 卖家客户管理页无横向溢出')
   await seller.screenshot({ path: path.join(OUT, 'seller-customer-mobile.png'), fullPage: true })
 
-  await seller.setViewport({ width: 1440, height: 1000 })
+  await seller.setViewportSize({ width: 1440, height: 1000 })
   const sellerIot = await openMemberPage(seller, 'seller', 'iot', '.seller-iot-workspace')
   check(sellerIot.includes('生产接入') && sellerIot.includes('设备登记') && sellerIot.includes('进入生产管理工作台'),
     '生产接入页重构为流程与入口页面')

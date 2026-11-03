@@ -1,19 +1,64 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import { Icon } from './Icon'
-import { PortalLoginModal } from './PortalLoginModal'
-import type { PortalUser } from './PortalLoginModal'
 import { BrandMark } from './BrandMark'
-import { go, productionLogin, ssoRegister, tradeUrl } from '../utils'
+import {
+  completePlatformLogin,
+  governmentUrl,
+  go,
+  productionLogin,
+  redirectToPlatformLogin,
+  ssoRegister,
+  tradeUrl,
+} from '../utils'
 import { clearPlatformAccessToken } from '../utils/platformToken'
 
 const CHANNELS = ['粮油产业', '果蔬产业', '畜禽产业', '茶药产业', '饲料农资', '水产产业', '预制菜', '冷链物流']
+type PortalScope = 'full' | 'info' | 'service'
+const PORTAL_SCOPE = import.meta.env.VITE_PORTAL_SCOPE as PortalScope | undefined
+
+interface PortalUser {
+  id?: string
+  username?: string
+  nickname?: string
+  phone?: string
+  stage?: string
+  identity?: string
+  subjectName?: string
+  certificationStatus?: string
+}
+
+const NAV_ITEMS: Array<{ path: string; active: string; label: string; scopes: PortalScope[] }> = [
+  { path: '#/', active: '/', label: '首页', scopes: ['full', 'info', 'service'] },
+  { path: '#/chains', active: '/chains', label: '产业链', scopes: ['full', 'info'] },
+  { path: '#/info', active: '/info', label: '产业资讯', scopes: ['full', 'info', 'service'] },
+  { path: '#/hall', active: '/hall', label: '交易大厅', scopes: ['full'] },
+  // 这两个原本是"滚到首页对应区块"的锚点，有了独立的资讯频道后直接指到频道里，
+  // 避免用户点了还在首页原地打转。
+  { path: '#/info/market', active: '/info/market', label: '价格指数', scopes: ['full', 'info'] },
+  { path: '#/finance', active: '/finance', label: '供应链金融', scopes: ['full', 'service'] },
+  { path: '#/logistics', active: '/logistics', label: '物流服务', scopes: ['full', 'service'] },
+  { path: governmentUrl('/'), active: '', label: '政府监管', scopes: ['full'] },
+]
+
+const visibleNavItems = NAV_ITEMS.filter((item) =>
+  item.scopes.includes(PORTAL_SCOPE ?? 'full'))
 
 export function PortalLayout({ children, active = '/' }: { children: ReactNode; active?: string }): JSX.Element {
   const [keyword, setKeyword] = useState('')
   const [user, setUser] = useState<PortalUser | null>(null)
-  const [loginOpen, setLoginOpen] = useState(false)
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
+  // 窄屏（<=860px）下 .main-nav 与 .header-search 都是 display:none，
+  // 手机上原本没有任何导航入口，只能靠首页里的链接。这里补一个抽屉。
+  const [navOpen, setNavOpen] = useState(false)
+
+  // 抽屉打开时锁住背景滚动，否则手指一划页面跟着动，抽屉里的列表反而划不动。
+  useEffect(() => {
+    if (!navOpen) return undefined
+    const previous = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = previous }
+  }, [navOpen])
 
   async function sessionUser(): Promise<PortalUser | null> {
     try {
@@ -45,7 +90,9 @@ export function PortalLayout({ children, active = '/' }: { children: ReactNode; 
 
   useEffect(() => {
     let cancelled = false
-    void sessionUser()
+    void completePlatformLogin()
+      .catch(() => false)
+      .then(() => sessionUser())
       .then((nextUser) => {
         if (!cancelled && nextUser) setUser(nextUser)
       })
@@ -141,7 +188,11 @@ export function PortalLayout({ children, active = '/' }: { children: ReactNode; 
                 )}
               </span>
             ) : (
-              <button className="portal-login-trigger" type="button" onClick={() => setLoginOpen(true)}>
+              <button
+                className="portal-login-trigger"
+                type="button"
+                onClick={() => void redirectToPlatformLogin()}
+              >
                 <Icon name="user" size={12} />登录
               </button>
             )}
@@ -162,13 +213,10 @@ export function PortalLayout({ children, active = '/' }: { children: ReactNode; 
             <span>丰链云<small>FENGCHAIN · AGRI</small></span>
           </a>
           <nav className="main-nav">
-            <a href="#/" className={active === '/' ? 'active' : ''}>首页</a>
-            <a href="#/chains" className={active === '/chains' ? 'active' : ''}>产业链</a>
-            <a href="#/hall" className={active === '/hall' ? 'active' : ''}>交易大厅</a>
-            <a href="#/?scroll=price">价格指数</a>
-            <a href="#/?scroll=news">产业资讯</a>
-            <a href="#/finance" className={active === '/finance' ? 'active' : ''}>供应链金融</a>
-            <a href="#/logistics" className={active === '/logistics' ? 'active' : ''}>物流服务</a>
+            {visibleNavItems.map((item) => (
+              <a key={`${item.path}-${item.label}`} href={item.path}
+                className={item.active && active === item.active ? 'active' : ''}>{item.label}</a>
+            ))}
           </nav>
           <form className="header-search" onSubmit={search}>
             <input
@@ -179,8 +227,50 @@ export function PortalLayout({ children, active = '/' }: { children: ReactNode; 
             />
             <button type="submit">搜索</button>
           </form>
+          <button
+            type="button"
+            className="nav-toggle"
+            aria-label={navOpen ? '关闭导航菜单' : '打开导航菜单'}
+            aria-expanded={navOpen}
+            onClick={() => setNavOpen((open) => !open)}
+          >
+            <span /><span /><span />
+          </button>
         </div>
       </header>
+
+      {navOpen && (
+        <div className="portal-mobile-nav" role="dialog" aria-modal="true" aria-label="导航菜单">
+          <button type="button" className="portal-mobile-mask" aria-label="关闭菜单" onClick={() => setNavOpen(false)} />
+          <div className="portal-mobile-panel">
+            <div className="portal-mobile-head">
+              <b>导航</b>
+              <button type="button" onClick={() => setNavOpen(false)}>关闭</button>
+            </div>
+            <form className="portal-mobile-search" onSubmit={search}>
+              <input
+                value={keyword}
+                onChange={(event) => setKeyword(event.target.value)}
+                placeholder="搜索商品 / 供应商 / 需求"
+                aria-label="搜索商品、供应商或需求"
+              />
+              <button type="submit" onClick={() => setNavOpen(false)}>搜索</button>
+            </form>
+            <nav className="portal-mobile-links">
+              {visibleNavItems.map((item) => (
+                <a
+                  key={`m-${item.path}-${item.label}`}
+                  href={item.path}
+                  className={item.active && active === item.active ? 'active' : ''}
+                  onClick={() => setNavOpen(false)}
+                >
+                  {item.label}
+                </a>
+              ))}
+            </nav>
+          </div>
+        </div>
+      )}
 
       <div className="portal-channelbar">
         <div className="container">
@@ -209,6 +299,7 @@ export function PortalLayout({ children, active = '/' }: { children: ReactNode; 
               <a href="#/hall">交易大厅</a>
               <a href="#/logistics">物流服务</a>
               <a href="#/finance">供应链金融</a>
+              <a href={governmentUrl('/')}>政府监管</a>
               <a href={productionLogin()}>生产管理</a>
             </div>
             <div>
@@ -232,17 +323,6 @@ export function PortalLayout({ children, active = '/' }: { children: ReactNode; 
           </div>
         </div>
       </footer>
-      <PortalLoginModal
-        open={loginOpen}
-        onClose={() => setLoginOpen(false)}
-        onSuccess={(nextUser) => {
-          setUser(nextUser)
-          setLoginOpen(false)
-          void sessionUser().then((fresh) => {
-            if (fresh) setUser(fresh)
-          })
-        }}
-      />
     </div>
   )
 }

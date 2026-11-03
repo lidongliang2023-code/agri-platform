@@ -1,13 +1,19 @@
 #!/usr/bin/env node
 /** 全链路订单在买家端、卖家端的最终状态与按钮角色验收。 */
 import { createRequire } from 'node:module'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const require2 = createRequire(path.join(ROOT, 'agri-production/frontend/package.json'))
-const puppeteer = require2('puppeteer')
+const require2 = createRequire(path.join('C:/Users/71502/.workbuddy-ai/binaries/node/workspace', 'noop.js'))
+const { chromium } = require2('playwright-core')
+
+const BROWSER = [
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+].find((candidate) => existsSync(candidate))
 const TRADE = 'http://localhost:8086'
 const ORDER_ID = process.argv.find((item) => /^\d+$/.test(item)) ?? '7624'
 const OUT = 'C:/Users/71502/.codex/visualizations/2026/10/16/01a14244-ead8-7ab0-8c7c-df7abac44648'
@@ -27,8 +33,8 @@ const fill = async (page, selector, value) => page.evaluate(({ target, next }) =
 }, { target: selector, next: value })
 
 const loginAndOpen = async (page, centerPath, username, password) => {
-  await page.goto(`${TRADE}${centerPath}`, { waitUntil: 'networkidle2', timeout: 60000 })
-  await page.waitForFunction(() => window.location.port === '8090', { timeout: 20000 })
+  await page.goto(`${TRADE}${centerPath}`, { waitUntil: 'networkidle', timeout: 60000 })
+  await page.waitForFunction(() => window.location.port === '8090', undefined, { timeout: 20000 })
   await page.waitForSelector('button[role="tab"]', { timeout: 20000 })
   await page.evaluate(() => {
     const tab = [...document.querySelectorAll('button[role="tab"]')]
@@ -47,27 +53,28 @@ const loginAndOpen = async (page, centerPath, username, password) => {
     if (page.url().includes(':8086') && page.url().includes(centerPath)) break
   }
   await page.waitForSelector('.mc-shell', { timeout: 30000 })
-  await page.waitForNetworkIdle({ idleTime: 500, timeout: 12000 }).catch(() => {})
+  await page.waitForLoadState('networkidle', { timeout: 12000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 500))
 
-  await page.goto(`${TRADE}/order/detail/${ORDER_ID}`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.goto(`${TRADE}/order/detail/${ORDER_ID}`, { waitUntil: 'networkidle', timeout: 60000 })
   await page.waitForSelector('.order-detail-hero', { timeout: 30000 })
   await page.waitForFunction((id) => document.body.innerText.includes(`/order/detail/${id}`)
-    || document.body.innerText.includes('订单总额'), { timeout: 20000 }, ORDER_ID)
+    || document.body.innerText.includes('订单总额'), ORDER_ID, { timeout: 20000 })
   await sleep(500)
   return page.evaluate(() => document.body.innerText)
 }
 
-const browser = await puppeteer.launch({
-  executablePath: 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
-  headless: 'new',
+const browser = await chromium.launch({
+  headless: true,
+  executablePath: BROWSER,
   args: ['--no-sandbox'],
 })
 try {
-  const buyerContext = await browser.createBrowserContext()
+  const buyerContext = await browser.newContext()
   const buyer = await buyerContext.newPage()
   const buyerErrors = []
   buyer.on('pageerror', (error) => buyerErrors.push(String(error)))
-  await buyer.setViewport({ width: 1440, height: 1000 })
+  await buyer.setViewportSize({ width: 1440, height: 1000 })
   const buyerText = await loginAndOpen(buyer, '/member/buyer', '19900002005', 'Test12345')
   check(buyerText.includes('订单总额') && buyerText.includes('¥266'), '买家可打开全链路订单详情')
   check(buyerText.includes('已退款'), '买家端最终状态显示为已退款')
@@ -78,11 +85,11 @@ try {
   await buyer.screenshot({ path: path.join(OUT, 'order-lifecycle-buyer.png'), fullPage: true })
   await buyerContext.close()
 
-  const sellerContext = await browser.createBrowserContext()
+  const sellerContext = await browser.newContext()
   const seller = await sellerContext.newPage()
   const sellerErrors = []
   seller.on('pageerror', (error) => sellerErrors.push(String(error)))
-  await seller.setViewport({ width: 1440, height: 1000 })
+  await seller.setViewportSize({ width: 1440, height: 1000 })
   const sellerText = await loginAndOpen(seller, '/member/seller', 'farmer', 'Admin@123')
   check(sellerText.includes('订单总额') && sellerText.includes('¥266'), '卖家可打开全链路订单详情')
   check(sellerText.includes('已退款'), '卖家端最终状态显示为已退款')

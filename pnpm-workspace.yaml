@@ -10,6 +10,9 @@
 packages:
   - 'packages/*'
   - 'agri-production/frontend'
+  - 'agri-production/miniprogram'
+  # 交易撮合移动端：独立 uni-app 工程，可同时构建 H5、小程序和 APP。
+  - 'agri-trade/miniprogram'
   # 主数据管理平台前端（mdm）：完成网关接入后，本轮正式并入 workspace。
   # 这里用**显式路径**而不是 agri-*/web 通配：通配会把 agri-iot/web 这类他人在途、还没定稿的工程
   # 一并纳入，让 pnpm 接管它们的依赖树 —— 那不是本轮该做的决定。
@@ -24,10 +27,31 @@ packages:
   - 'agri-s2b2c/frontend-consumer'
   - 'agri-s2b2c/frontend-platform'
   - 'agri-s2b2c/frontend-supplier'
+  - 'agri-s2b2c/mobile'
+  - 'agri-s2b2c/mobile-supplier'
+  - 'agri-s2b2c/mobile-channel'
   # 统一认证中心登录页（sso 子域）：判据①「登录页部署于 sso 子域」的载体。
   - 'agri-sso/frontend'
   # 官网门户（首页 / 产业链 / 认证中心）：静态托管在网关 bucket，独立流水线。
   - 'agri-portal/frontend'
+  # 综合服务用户端（服务交易、农险、政策、培训、问诊与资源对接）。
+  - 'agri-service/frontend'
+  - 'agri-service/mobile'
+  - 'agri-service/ops'
+  # 信息资讯子系统（资讯、行情、供需撮合、AI 问答、培训知识、报告存证）。
+  # 与综合服务并列的独立子系统，不复用 agri-service 的包名与端口。
+  - 'agri-info/frontend'
+  - 'agri-info/ops'
+  # 信息资讯移动端（uni-app）：同一套源码构建 H5 / 微信小程序 / App。
+  - 'agri-info/mobile'
+  # 政府监管用户端、移动端（uni-app）和监管运营端。
+  - 'agri-government/frontend'
+  - 'agri-government/mobile'
+  - 'agri-government/ops'
+  - 'agri-iot/web'
+  - 'agri-iot/ops'
+  - 'agri-iot/miniprogram'
+  - 'agri-iot/shared-ui'
 # pnpm >=10 默认拦截依赖的构建脚本。esbuild 的 postinstall 负责把平台二进制就位，
 # 被拦掉时 pnpm install 会直接以 ERR_PNPM_IGNORED_BUILDS 失败（已实测），vite 少了它跑不起来。
 # 按「最小允许清单」只放 esbuild：以后新增依赖的构建脚本同样在此显式登记，而不是关掉整个机制。

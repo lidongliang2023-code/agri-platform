@@ -4,6 +4,7 @@ import com.agri.production.common.entity.PageResult;
 import com.agri.production.vo.EnvTrendVO;
 import com.agri.production.vo.EnvironmentDataVO;
 import com.agri.production.vo.IotReadingVO;
+import com.agri.production.vo.MonitorEnvVO;
 
 import java.util.List;
 
@@ -72,6 +73,24 @@ public interface ISensorPivotService {
      */
     List<IotReadingVO> series(String tenantId, String deviceId, String metric,
                               String startDate, String endDate);
+
+    /**
+     * 生产监控看板用的「环境实时概览」：窗口聚合 + 按小时曲线。
+     *
+     * <p>与 {@link #history} 的分工：{@code history} 是**按天**聚合给生长曲线用的；
+     * 看板要的是**按小时**的近 24 小时态势。两者读的是同一张长表、同一套指标别名，
+     * 所以都放在这个服务里，避免看板另写一套归一逻辑后与生长曲线对不上。</p>
+     *
+     * <p><b>窗口锚定规则</b>：窗口终点取"最新一次采样时间"而不是当前时间，
+     * 并把滞后小时数一起返回（详见 {@code MonitorEnvVO} 的类注释）。</p>
+     *
+     * @param tenantId 当前租户
+     * @param farmId   农场筛选，可为空（为空表示该租户全部农场）
+     * @param plotId   地块筛选，可为空
+     * @param hours    窗口长度（小时），&lt;=0 时按 24 处理，上限 7 天
+     * @return 环境概览；没有任何采样数据时返回 {@code MonitorEnvVO.empty(hours)}
+     */
+    MonitorEnvVO monitorEnv(String tenantId, Long farmId, String plotId, int hours);
 
     /**
      * 指标别名 → 规范 snake_case 码。

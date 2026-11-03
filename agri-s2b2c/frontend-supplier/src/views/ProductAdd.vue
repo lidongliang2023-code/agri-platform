@@ -69,6 +69,7 @@ import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { Plus } from '@element-plus/icons-vue'
 import { supplierApi } from '../api'
+import { currentSupplierId } from '../api/supplierSession'
 
 const router = useRouter()
 const formRef = ref(null)
@@ -90,7 +91,7 @@ const categories = ref([
 const imageList = ref([])
 
 const form = reactive({
-  supplierId: 1,
+  supplierId: null,
   name: '',
   sellingPoint: '',
   categoryId: null,

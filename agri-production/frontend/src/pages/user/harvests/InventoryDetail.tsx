@@ -18,8 +18,6 @@ import {
   Alert as AntAlert,
   Button,
   Card,
-  Col,
-  Descriptions,
   Empty,
   Form,
   Input,
@@ -27,11 +25,9 @@ import {
   Modal,
   Popconfirm,
   Progress,
-  Row,
   Select,
   Skeleton,
   Space,
-  Statistic,
   Table,
   Tag,
   Timeline,
@@ -47,6 +43,7 @@ import {
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import useFarmStore from '@/store/farm'
+import { DetailInfoGrid, DetailMetricGrid } from '@/components'
 import {
   outboundInventory,
   queryHarvests,
@@ -293,15 +290,10 @@ export default function InventoryDetail(): JSX.Element {
 
   return (
     <PageContainer
-      title={
-        <Space size={8}>
-          <Typography.Link onClick={() => navigate('/production/harvests/inventory')}>
-            <ArrowLeftOutlined /> 返回
-          </Typography.Link>
-          <span>{record.productName ?? '库存'} · 库存详情</span>
-        </Space>
-      }
+      title={`📦 ${record.productName ?? '库存'}`}
       subTitle={currentFarm?.farmName}
+      onBack={() => navigate('/production/harvests/inventory')}
+      backIcon={<ArrowLeftOutlined />}
       extra={[
         <Button
           key="out"
@@ -346,94 +338,119 @@ export default function InventoryDetail(): JSX.Element {
       ]}
     >
 
-      <Row gutter={16} style={{ marginBottom: 16 }}>
-        <Col span={6}>
-          <Card>
-            <Statistic
-              title="当前库存"
-              value={record.currentQty}
-              precision={2}
-              suffix={record.unit}
-              valueStyle={{ color: '#52c41a' }}
-            />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card>
-            <Statistic title="安全库存" value={record.safeQty ?? 0} suffix={record.unit} />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card>
-            <Statistic
-              title="可用库存"
-              value={Math.max(0, record.currentQty - (record.frozenQty ?? 0))}
-              precision={2}
-              suffix={record.unit}
-              valueStyle={{ color: '#1677ff' }}
-            />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card>
-            <Statistic title="累计损耗" value={record.lossQty ?? 0} suffix={record.unit} />
-          </Card>
-        </Col>
-      </Row>
+      <div style={{ marginBottom: 16 }}>
+        <DetailMetricGrid
+          items={[
+            {
+              key: 'current',
+              title: '当前库存',
+              value: record.currentQty,
+              precision: 2,
+              suffix: record.unit,
+              valueStyle: { color: '#52c41a' },
+            },
+            {
+              key: 'safe',
+              title: '安全库存',
+              value: record.safeQty ?? 0,
+              suffix: record.unit,
+            },
+            {
+              key: 'available',
+              title: '可用库存',
+              value: Math.max(0, record.currentQty - (record.frozenQty ?? 0)),
+              precision: 2,
+              suffix: record.unit,
+              valueStyle: { color: '#1677ff' },
+            },
+            {
+              key: 'loss',
+              title: '累计损耗',
+              value: record.lossQty ?? 0,
+              suffix: record.unit,
+            },
+          ]}
+        />
+      </div>
 
-      <Card title="📋 库存信息" style={{ marginBottom: 16 }}>
-        <Descriptions bordered column={3} size="middle">
-          <Descriptions.Item label="库存编号">{record.inventoryId}</Descriptions.Item>
-          <Descriptions.Item label="品名">
-            <Space size={4}>
-              <span>{record.productName ?? '-'}</span>
-              {record.grade ? (
-                <Tag color={GRADE_COLOR_MAP[record.grade] ?? 'default'}>
-                  {GRADE_LABEL_MAP[record.grade] ?? record.grade}
-                </Tag>
-              ) : null}
-            </Space>
-          </Descriptions.Item>
-          <Descriptions.Item label="仓库">{record.warehouseName}</Descriptions.Item>
-          <Descriptions.Item label="当前库存">
-            {record.currentQty.toLocaleString()} {record.unit}
-          </Descriptions.Item>
-          <Descriptions.Item label="安全库存">
-            {(record.safeQty ?? 0).toLocaleString()} {record.unit}
-          </Descriptions.Item>
-          <Descriptions.Item label="冻结数量">
-            {(record.frozenQty ?? 0).toLocaleString()} {record.unit}
-          </Descriptions.Item>
-          <Descriptions.Item label="批次号">{record.batchNo ?? '-'}</Descriptions.Item>
-          <Descriptions.Item label="入库日期">
-            {record.lastInAt ? dayjs(record.lastInAt).format('YYYY-MM-DD') : '-'}
-          </Descriptions.Item>
-          <Descriptions.Item label="最近出库">
-            {record.lastOutAt ? dayjs(record.lastOutAt).format('YYYY-MM-DD') : '-'}
-          </Descriptions.Item>
-          <Descriptions.Item label="保质期至">{record.expireDate ?? '-'}</Descriptions.Item>
-          <Descriptions.Item label="库位编号">{record.locationCode ?? '-'}</Descriptions.Item>
-          <Descriptions.Item label="关联采收">
-            {relatedHarvest ? (
-              <Typography.Link
-                onClick={() => navigate(`/production/harvests/${relatedHarvest.batchId}`)}
-              >
-                {relatedHarvest.batchNo}
-              </Typography.Link>
-            ) : (
-              record.relatedBatchNo ?? '-'
-            )}
-          </Descriptions.Item>
-          <Descriptions.Item label="状态">
-            <Space size={4}>
-              <Tag color={healthMeta.color}>● {healthMeta.label}</Tag>
-              {record.frozen ? <Tag color="volcano">已冻结</Tag> : null}
-            </Space>
-          </Descriptions.Item>
-          <Descriptions.Item label="备注" span={2}>
-            {record.remark ?? '-'}
-          </Descriptions.Item>
-        </Descriptions>
+      <Card
+        title="📋 基本信息"
+        style={{ marginBottom: 16 }}
+        extra={
+          <Space size={4} wrap>
+            <Tag color={healthMeta.color}>● {healthMeta.label}</Tag>
+            {record.frozen ? <Tag color="volcano">已冻结</Tag> : null}
+          </Space>
+        }
+      >
+        <DetailInfoGrid
+          columns={2}
+          items={[
+            { key: 'inventoryId', label: '库存编号', value: record.inventoryId },
+            {
+              key: 'product',
+              label: '品名',
+              value: (
+                <Space size={4}>
+                  <span>{record.productName ?? '-'}</span>
+                  {record.grade ? (
+                    <Tag color={GRADE_COLOR_MAP[record.grade] ?? 'default'}>
+                      {GRADE_LABEL_MAP[record.grade] ?? record.grade}
+                    </Tag>
+                  ) : null}
+                </Space>
+              ),
+            },
+            { key: 'warehouse', label: '仓库', value: record.warehouseName },
+            {
+              key: 'currentQty',
+              label: '当前库存',
+              value: `${record.currentQty.toLocaleString()} ${record.unit}`,
+            },
+            {
+              key: 'safeQty',
+              label: '安全库存',
+              value: `${(record.safeQty ?? 0).toLocaleString()} ${record.unit}`,
+            },
+            {
+              key: 'frozenQty',
+              label: '冻结数量',
+              value: `${(record.frozenQty ?? 0).toLocaleString()} ${record.unit}`,
+            },
+            { key: 'batchNo', label: '批次号', value: record.batchNo ?? '-' },
+            {
+              key: 'lastInAt',
+              label: '入库日期',
+              value: record.lastInAt ? dayjs(record.lastInAt).format('YYYY-MM-DD') : '-',
+            },
+            {
+              key: 'lastOutAt',
+              label: '最近出库',
+              value: record.lastOutAt ? dayjs(record.lastOutAt).format('YYYY-MM-DD') : '-',
+            },
+            { key: 'expireDate', label: '保质期至', value: record.expireDate ?? '-' },
+            { key: 'locationCode', label: '库位编号', value: record.locationCode ?? '-' },
+            {
+              key: 'relatedHarvest',
+              label: '关联采收',
+              value: relatedHarvest ? (
+                <Typography.Link
+                  onClick={() => navigate(`/production/harvests/${relatedHarvest.batchId}`)}
+                >
+                  {relatedHarvest.batchNo}
+                </Typography.Link>
+              ) : (
+                record.relatedBatchNo ?? '-'
+              ),
+            },
+            {
+              key: 'remark',
+              label: '备注',
+              fullWidth: true,
+              value: record.remark ?? '-',
+            },
+          ]}
+        />
 
         <Progress
           style={{ marginTop: 16, maxWidth: 520 }}
@@ -443,7 +460,7 @@ export default function InventoryDetail(): JSX.Element {
         />
       </Card>
 
-      <Card title="📋 出入库记录">
+      <Card title={`📋 出入库记录（${flows.length} 条）`}>
         {/*
           失败必须说出来，不能只留一张空表。
           教训：`queryInventoryFlows` 曾把路径写成 `/harvests/inventory/{batchId}/flows`，

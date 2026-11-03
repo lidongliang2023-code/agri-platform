@@ -1,14 +1,20 @@
 #!/usr/bin/env node
 /** 个人中心主体级团队与角色权限回归（2026-10-21）。 */
 import { createRequire } from 'node:module'
+import { existsSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const require2 = createRequire(path.join(REPO_ROOT, 'agri-production/frontend/package.json'))
-const puppeteer = require2('puppeteer')
+const require2 = createRequire(path.join('C:/Users/71502/.workbuddy-ai/binaries/node/workspace', 'noop.js'))
+const { chromium } = require2('playwright-core')
+
+const BROWSER = [
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+].find((candidate) => existsSync(candidate))
 const PORTAL = 'http://localhost:8098/portal/'
 const OUT = 'C:/Users/71502/.codex/visualizations/2026/10/16/01a14244-ead8-7ab0-8c7c-df7abac44648'
 const account = { phone: '19900002005', password: 'Test12345' }
@@ -55,13 +61,13 @@ const clickButton = async (page, label, selector = 'button') => {
 }
 
 let cleanup = null
-const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox'] })
+const browser = await chromium.launch({ headless: true, executablePath: BROWSER, args: ['--no-sandbox'] })
 try {
-  const page = await browser.newPage()
+  const page = await (await browser.newContext({ viewport: { width: 1440, height: 1000 } })).newPage()
   const errors = []
   page.on('pageerror', (error) => errors.push(String(error)))
-  await page.setViewport({ width: 1440, height: 1000 })
-  await page.goto(PORTAL, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await page.goto(PORTAL, { waitUntil: 'networkidle', timeout: 60000 })
 
   const login = await page.evaluate(async ({ phone, password }) => {
     const response = await fetch('/api/v1/sso/login-standalone', {
@@ -135,14 +141,16 @@ try {
   check(switched.code === 0, '切换到团队测试主体')
   cleanup = { userId: originalSummary.data.userId, merchantId: added.merchantId, originalActive }
 
-  await page.goto(`${PORTAL}#/account?tab=team`, { waitUntil: 'networkidle2', timeout: 60000 })
-  await page.reload({ waitUntil: 'networkidle2', timeout: 60000 })
+  await page.goto(`${PORTAL}#/account?tab=team`, { waitUntil: 'networkidle', timeout: 60000 })
+  await page.reload({ waitUntil: 'networkidle', timeout: 60000 })
   await page.waitForSelector('.account-team-panel', { timeout: 20000 })
   const teamText = await page.evaluate(() => document.body.innerText)
   check(teamText.includes(added.merchantName) && teamText.includes('团队与成员'),
     '个人中心团队页显示当前主体')
 
-  await clickButton(page, '邀请成员')
+  // 「邀请成员」在侧边栏 navModel 里也是一个条目（点了只是切回团队页），
+  // 不加作用域就会点到导航项，弹窗永远不出现。
+  await clickButton(page, '邀请成员', '.account-team-panel button')
   await page.waitForSelector('.account-team-modal', { timeout: 10000 })
   const inputs = await page.$$('.account-team-modal input')
   await inputs[0].click({ clickCount: 3 })
@@ -150,7 +158,7 @@ try {
   await inputs[1].type(memberPhone)
   await clickButton(page, '发送邀请', '.account-team-modal .account-form-actions button')
   await page.waitForFunction((name) => document.body.innerText.includes(name),
-    { timeout: 10000 }, memberName)
+    memberName, { timeout: 10000 })
   check((await page.evaluate(() => document.querySelector('.account-team-table')?.innerText || ''))
     .includes(memberName), '在当前主体下真实邀请成员并显示')
   await page.screenshot({ path: path.join(OUT, 'account-team-members.png'), fullPage: true })
@@ -197,14 +205,14 @@ try {
     === JSON.stringify([...(originalOwnerRole?.permissions ?? [])].sort()),
   '切回原主体后角色权限不受新主体配置影响')
 
-  await page.goto(`${PORTAL}#/account?tab=team`, { waitUntil: 'networkidle2', timeout: 60000 })
-  await page.reload({ waitUntil: 'networkidle2', timeout: 60000 })
+  await page.goto(`${PORTAL}#/account?tab=team`, { waitUntil: 'networkidle', timeout: 60000 })
+  await page.reload({ waitUntil: 'networkidle', timeout: 60000 })
   await page.waitForSelector('.account-team-panel', { timeout: 20000 })
   const restoredTeam = await page.evaluate(() => document.querySelector('.account-team-table')?.innerText || '')
   check(!restoredTeam.includes(memberName), '切回原主体后不显示新主体团队成员')
 
-  await page.goto(`${PORTAL}#/account?tab=roles`, { waitUntil: 'networkidle2', timeout: 60000 })
-  await page.reload({ waitUntil: 'networkidle2', timeout: 60000 })
+  await page.goto(`${PORTAL}#/account?tab=roles`, { waitUntil: 'networkidle', timeout: 60000 })
+  await page.reload({ waitUntil: 'networkidle', timeout: 60000 })
   await page.waitForSelector('.account-role-card', { timeout: 20000 })
   await page.screenshot({ path: path.join(OUT, 'account-team-roles.png'), fullPage: true })
   check(errors.length === 0, '个人中心团队与角色页面无脚本异常', errors.slice(0, 2).join(' | '))

@@ -124,6 +124,29 @@ CREATE TABLE IF NOT EXISTS `agri_trade_product` (
     INDEX `idx_create_time` (`create_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='交易商品表';
 
+CREATE TABLE IF NOT EXISTS `agri_trade_product_sku` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `product_id` BIGINT NOT NULL COMMENT '商品ID',
+    `sku_code` VARCHAR(64) NOT NULL COMMENT 'SKU编码',
+    `sku_name` VARCHAR(200) NOT NULL COMMENT 'SKU名称或销售规格',
+    `barcode` VARCHAR(100) NULL COMMENT 'SKU条码',
+    `unit` VARCHAR(20) NOT NULL COMMENT '计量单位',
+    `price` DECIMAL(18,4) NOT NULL COMMENT '销售单价',
+    `stock_quantity` DECIMAL(18,4) NOT NULL DEFAULT 0 COMMENT 'SKU库存',
+    `min_order_quantity` DECIMAL(18,4) NOT NULL DEFAULT 1 COMMENT 'SKU起订量',
+    `status` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '状态：1启用 0停用',
+    `sort_order` INT NOT NULL DEFAULT 0 COMMENT '显示顺序',
+    `del_flag` TINYINT(1) DEFAULT 0 COMMENT '删除标记',
+    `tenant_id` VARCHAR(64) NULL COMMENT '租户ID',
+    `create_by` VARCHAR(64) NULL COMMENT '创建人',
+    `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_by` VARCHAR(64) NULL COMMENT '更新人',
+    `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    INDEX `idx_product_sku_product_id` (`product_id`),
+    INDEX `idx_product_sku_code` (`sku_code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='商品SKU表';
+
 CREATE TABLE IF NOT EXISTS `agri_trade_demand` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     `demand_no` VARCHAR(64) NOT NULL COMMENT '需求编号',
@@ -1139,3 +1162,120 @@ CREATE TABLE IF NOT EXISTS `agri_trade_guarantee_log` (
     KEY `idx_guarantee_id` (`guarantee_id`),
     KEY `idx_action` (`action`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='保证金流水表';
+
+-- ===========================================================================
+-- 店铺关注与在线洽谈
+--
+-- 关注以平台用户为粒度；洽谈会话以「登录用户 + 供应商主体」唯一。
+-- 同一个用户在店铺与“客服”入口反复点击时复用同一会话，不重复建房间。
+-- 未读数分别记录在买卖双方，消息与最后摘要都真实落库。
+-- ===========================================================================
+CREATE TABLE IF NOT EXISTS `agri_trade_shop_follow` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `user_id` BIGINT NOT NULL COMMENT '平台用户ID',
+    `seller_id` BIGINT NOT NULL COMMENT '供应商经营主体ID',
+    `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '关注时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_follow_user_seller` (`user_id`, `seller_id`),
+    KEY `idx_follow_seller` (`seller_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='供应商店铺关注表';
+
+CREATE TABLE IF NOT EXISTS `agri_trade_product_favorite` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `user_id` BIGINT NOT NULL COMMENT '平台用户ID',
+    `product_id` BIGINT NOT NULL COMMENT '货源ID',
+    `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '收藏时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_favorite_user_product` (`user_id`, `product_id`),
+    KEY `idx_favorite_product` (`product_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='买家商品收藏表';
+
+CREATE TABLE IF NOT EXISTS `agri_trade_negotiation` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `conversation_no` VARCHAR(64) NOT NULL COMMENT '洽谈编号',
+    `buyer_user_id` BIGINT NOT NULL COMMENT '采购方平台用户ID',
+    `buyer_name` VARCHAR(128) NOT NULL COMMENT '采购方展示名称快照',
+    `seller_id` BIGINT NOT NULL COMMENT '供应商经营主体ID',
+    `seller_name` VARCHAR(128) NOT NULL COMMENT '供应商展示名称快照',
+    `product_id` BIGINT NULL COMMENT '本次洽谈关联商品',
+    `product_name` VARCHAR(255) NULL COMMENT '本次洽谈关联商品名称快照',
+    `last_message` VARCHAR(1000) NULL COMMENT '最后一条消息摘要',
+    `last_message_time` DATETIME NULL COMMENT '最后消息时间',
+    `buyer_unread` INT NOT NULL DEFAULT 0 COMMENT '采购方未读数',
+    `seller_unread` INT NOT NULL DEFAULT 0 COMMENT '供应商未读数',
+    `status` INT NOT NULL DEFAULT 1 COMMENT '1有效 0关闭',
+    `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_negotiation_buyer_seller` (`buyer_user_id`, `seller_id`),
+    UNIQUE KEY `uk_negotiation_no` (`conversation_no`),
+    KEY `idx_negotiation_seller` (`seller_id`),
+    KEY `idx_negotiation_last_time` (`last_message_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='供应商店铺在线洽谈会话';
+
+CREATE TABLE IF NOT EXISTS `agri_trade_negotiation_message` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `negotiation_id` BIGINT NOT NULL COMMENT '洽谈会话ID',
+    `sender_user_id` BIGINT NOT NULL COMMENT '发送人平台用户ID',
+    `sender_role` VARCHAR(16) NOT NULL COMMENT 'BUYER 采购方 / SELLER 供应商 / SYSTEM 系统',
+    `sender_name` VARCHAR(128) NOT NULL COMMENT '发送人展示名称快照',
+    `message_type` VARCHAR(20) NOT NULL DEFAULT 'TEXT' COMMENT 'TEXT / QUOTE / ORDER_REQUEST / SYSTEM',
+    `content` TEXT NOT NULL COMMENT '消息正文',
+    `attachment_url` VARCHAR(500) NULL COMMENT '附件地址（预留）',
+    `business_type` VARCHAR(20) NULL COMMENT '业务卡类型：ORDER_REQUEST',
+    `business_id` BIGINT NULL COMMENT '业务卡关联商品ID',
+    `business_title` VARCHAR(255) NULL COMMENT '业务卡标题',
+    `business_url` VARCHAR(500) NULL COMMENT '业务卡站内操作地址',
+    `business_quantity` DECIMAL(18,4) NULL COMMENT '业务卡采购数量',
+    `business_unit` VARCHAR(20) NULL COMMENT '业务卡数量单位',
+    `business_price` DECIMAL(18,4) NULL COMMENT '业务卡期望单价',
+    `read_flag` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '接收方是否已读',
+    `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '发送时间',
+    PRIMARY KEY (`id`),
+    KEY `idx_negotiation_message_room` (`negotiation_id`, `create_time`),
+    KEY `idx_negotiation_message_sender` (`sender_user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='在线洽谈消息';
+
+-- 兼容已存在的洽谈消息表：旧库没有结构化业务卡字段，启动时幂等补齐。
+SET @ddl := (SELECT IF(COUNT(*) = 0,
+  'ALTER TABLE `agri_trade_negotiation_message` ADD COLUMN `business_type` VARCHAR(20) NULL COMMENT ''业务卡类型：ORDER_REQUEST''',
+  'SELECT 1')
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'agri_trade_negotiation_message' AND COLUMN_NAME = 'business_type');
+PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @ddl := (SELECT IF(COUNT(*) = 0,
+  'ALTER TABLE `agri_trade_negotiation_message` ADD COLUMN `business_id` BIGINT NULL COMMENT ''业务卡关联商品ID''',
+  'SELECT 1')
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'agri_trade_negotiation_message' AND COLUMN_NAME = 'business_id');
+PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @ddl := (SELECT IF(COUNT(*) = 0,
+  'ALTER TABLE `agri_trade_negotiation_message` ADD COLUMN `business_title` VARCHAR(255) NULL COMMENT ''业务卡标题''',
+  'SELECT 1')
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'agri_trade_negotiation_message' AND COLUMN_NAME = 'business_title');
+PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @ddl := (SELECT IF(COUNT(*) = 0,
+  'ALTER TABLE `agri_trade_negotiation_message` ADD COLUMN `business_url` VARCHAR(500) NULL COMMENT ''业务卡站内操作地址''',
+  'SELECT 1')
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'agri_trade_negotiation_message' AND COLUMN_NAME = 'business_url');
+PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @ddl := (SELECT IF(COUNT(*) = 0,
+  'ALTER TABLE `agri_trade_negotiation_message` ADD COLUMN `business_quantity` DECIMAL(18,4) NULL COMMENT ''业务卡采购数量''',
+  'SELECT 1')
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'agri_trade_negotiation_message' AND COLUMN_NAME = 'business_quantity');
+PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @ddl := (SELECT IF(COUNT(*) = 0,
+  'ALTER TABLE `agri_trade_negotiation_message` ADD COLUMN `business_unit` VARCHAR(20) NULL COMMENT ''业务卡数量单位''',
+  'SELECT 1')
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'agri_trade_negotiation_message' AND COLUMN_NAME = 'business_unit');
+PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @ddl := (SELECT IF(COUNT(*) = 0,
+  'ALTER TABLE `agri_trade_negotiation_message` ADD COLUMN `business_price` DECIMAL(18,4) NULL COMMENT ''业务卡期望单价''',
+  'SELECT 1')
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'agri_trade_negotiation_message' AND COLUMN_NAME = 'business_price');
+PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;

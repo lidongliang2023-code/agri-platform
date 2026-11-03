@@ -122,9 +122,6 @@ public class Contract {
     @TableField("del_flag")
     private Integer delFlag;
 
-    @TableField("tenant_id")
-    private String tenantId;
-
     @TableField("create_by")
     private String createBy;
 

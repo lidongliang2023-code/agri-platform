@@ -2,11 +2,14 @@ package com.agri.admin.service;
 
 import com.agri.admin.dto.CodeRuleDTO;
 import com.agri.admin.dto.DataFormatDTO;
+import com.agri.admin.dto.MetadataDTO;
+import com.agri.admin.dto.StandardChangeDTO;
 import com.agri.admin.vo.CodeRuleVO;
 import com.agri.admin.vo.DataFormatVO;
 import com.agri.common.entity.PageResult;
 import com.agri.masterdata.dto.DictItemSaveDTO;
 import com.agri.masterdata.dto.DictSaveDTO;
+import com.agri.masterdata.entity.MetadataCatalog;
 import com.agri.masterdata.vo.DictVO;
 
 import java.util.List;
@@ -60,7 +63,19 @@ public interface IAdminDataStandardService {
 
     void createDataFormat(DataFormatDTO dto);
 
+    void updateDataFormat(Long id, DataFormatDTO dto);
+
+    void updateDataFormatStatus(Long id, String status);
+
     PageResult<DataFormatVO> getChangeApproveList(Integer pageNum, Integer pageSize, String status);
 
+    Long createStandardChange(StandardChangeDTO dto);
+
     void approveChange(Long id, String status, String remark);
+
+    List<MetadataCatalog> getMetadataList(String metadataType, String domain, String keyword);
+
+    Long createMetadata(MetadataDTO dto);
+
+    void updateMetadata(Long id, MetadataDTO dto);
 }

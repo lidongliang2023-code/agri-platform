@@ -105,7 +105,7 @@
 
 .mc-brand small {
   display: block;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
   color: rgba(255, 255, 255, 0.48);
   letter-spacing: 2.4px;
   font-weight: 500;
@@ -114,7 +114,7 @@
 
 .mc-side-group {
   padding: 14px 18px 6px;
-  font-size: 10.5px;
+  font-size: var(--agri-font-size-micro);
   letter-spacing: 1.4px;
   color: rgba(255, 255, 255, 0.35);
 }
@@ -196,7 +196,7 @@
   display: block;
   margin-top: 8px;
   text-align: center;
-  font-size: 10.5px;
+  font-size: var(--agri-font-size-micro);
   color: rgba(255, 255, 255, 0.32);
 }
 
@@ -385,7 +385,7 @@
 
 .mc-stat-d {
   margin-top: 7px;
-  font-size: 11.5px;
+  font-size: var(--agri-font-size-micro);
   color: var(--mc-ink-500);
 }
 
@@ -456,7 +456,7 @@
 }
 
 .mc-xs {
-  font-size: 11.5px;
+  font-size: var(--agri-font-size-micro);
   color: var(--mc-ink-500);
 }
 
@@ -469,7 +469,7 @@
 
 .mc-unit {
   color: var(--mc-ink-500);
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
   font-weight: 500;
   margin-left: 2px;
 }
@@ -512,7 +512,7 @@
   border-radius: 999px;
   background: var(--mc-green-100);
   color: var(--mc-green-700);
-  font-size: 11.5px;
+  font-size: var(--agri-font-size-micro);
   font-weight: 600;
   white-space: nowrap;
 }

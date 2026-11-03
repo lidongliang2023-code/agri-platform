@@ -65,6 +65,23 @@ public class SupplierServiceImpl extends ServiceImpl<SupplierMapper, Supplier> i
     }
 
     @Override
+    public boolean reapply(Supplier supplier) {
+        Supplier existing = supplier.getId() == null ? null : baseMapper.selectById(supplier.getId());
+        if (existing == null || !"REJECTED".equalsIgnoreCase(existing.getAuditStatus())) {
+            return false;
+        }
+        supplier.setUserId(existing.getUserId());
+        supplier.setAuditStatus("PENDING");
+        supplier.setStatus("ACTIVE");
+        supplier.setCreateTime(existing.getCreateTime());
+        supplier.setUpdateTime(LocalDateTime.now());
+        return baseMapper.update(supplier, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<Supplier>()
+                .eq(Supplier::getId, existing.getId())
+                .set(Supplier::getAuditOpinion, null)
+                .set(Supplier::getAuditTime, null)) > 0;
+    }
+
+    @Override
     public boolean updateAudit(Long id, String auditStatus, String auditOpinion) {
         Supplier supplier = baseMapper.selectById(id);
         if (supplier == null) return false;

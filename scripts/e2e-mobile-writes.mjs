@@ -26,8 +26,13 @@ import { fileURLToPath } from 'node:url'
 import { ensureMobileDevServer } from './lib/mobile-dev-server.mjs'
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const require2 = createRequire(path.join(REPO_ROOT, 'agri-production/frontend/package.json'))
-const puppeteer = require2('puppeteer')
+const require2 = createRequire(path.join('C:/Users/71502/.workbuddy-ai/binaries/node/workspace', 'noop.js'))
+const { chromium } = require2('playwright-core')
+
+const BROWSER = [
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+].find((candidate) => existsSync(candidate))
 
 const arg = (name, fallback) => {
   const hit = process.argv.slice(2).find((a) => a.startsWith(`--${name}=`))
@@ -154,9 +159,9 @@ try {
   process.exit(2)
 }
 
-const browser = await puppeteer.launch({ headless: HEADFUL ? false : 'new', args: ['--no-sandbox'] })
-const page = await browser.newPage()
-await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true, deviceScaleFactor: 2 })
+const browser = await chromium.launch({ headless: !HEADFUL, executablePath: BROWSER, args: ['--no-sandbox'] })
+const page = await (await browser.newContext({ viewport: { width: 1440, height: 1000 } })).newPage()
+await page.setViewportSize({ width: 390, height: 844, isMobile: true, hasTouch: true, deviceScaleFactor: 2 })
 const pageErrors = []
 const badResponses = []
 /** 页面发出的写请求（用来断言"该发的发了、不该发的没发"） */
@@ -186,7 +191,8 @@ const open = async (route, settleMs = 1500) => {
   if (samePath) {
     await page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 })
   }
-  await page.waitForNetworkIdle({ idleTime: 500, timeout: 15000 }).catch(() => {})
+  await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 500))
   await sleep(settleMs)
 }
 
@@ -383,7 +389,7 @@ const pickOption = async (fieldLabel, optionText) => {
 const clickButton = async (label) => {
   const ok = await page.evaluate((text) => {
     const norm = (s) => (s ?? '').replace(/\s+/g, '')
-    const el = [...document.querySelectorAll('#app .btn-primary, #app .btn-ghost, #app button')].find(
+    const el = [...document.querySelectorAll('#app .btn-primary, #app .btn-ghost, #app .primary-button, #app button')].find(
       (node) => norm(node.textContent) === norm(text),
     )
     if (!el) return false
@@ -430,7 +436,7 @@ const waitForButton = async (label, timeoutMs = 15000) => {
   while (Date.now() < deadline) {
     const exists = await page.evaluate((text) => {
       const norm = (s) => (s ?? '').replace(/\s+/g, '')
-      return [...document.querySelectorAll('#app .btn-primary, #app .btn-ghost, #app button')].some(
+      return [...document.querySelectorAll('#app .btn-primary, #app .btn-ghost, #app .primary-button, #app button')].some(
         (node) => norm(node.textContent) === norm(text),
       )
     }, label)
@@ -470,11 +476,18 @@ try {
   /* ==================== 0) 登录 ==================== */
 
   await open('pages/login/login', 800)
+  await page.evaluate(() => {
+    const tab = [...document.querySelectorAll('.auth-tabs uni-button')]
+      .find((item) => item.textContent?.includes('账号密码'))
+    tab?.click()
+  })
+  await sleep(200)
   await setUniInput(0, USER)
   await setUniInput(1, PASSWORD)
   await sleep(300)
   await clickButton('登录')
-  await page.waitForNetworkIdle({ idleTime: 800, timeout: 20000 }).catch(() => {})
+  await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 800))
   await sleep(1800)
   check((await page.evaluate(() => location.hash)).includes('workbench'), '登录后进入工作台')
 
@@ -510,7 +523,8 @@ try {
   await sleep(1200)
   const confirmed = await confirmModal()
   check(confirmed, '「有未校验项」时弹出确认框（不谎报通过，也不静默放行）')
-  await page.waitForNetworkIdle({ idleTime: 700, timeout: 20000 }).catch(() => {})
+  await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 700))
   await sleep(1200)
   const usageWrite = writes.slice(writesBefore).find((item) => item.includes('/inputs/usages'))
   check(Boolean(usageWrite), '页面发出 POST /inputs/usages', usageWrite ?? writes.slice(writesBefore).join(' | '))
@@ -612,7 +626,8 @@ try {
   const submitReady = await waitForButton('提交采收登记')
   check(submitReady, '休药期校验通过后出现「提交采收登记」按钮', (await bodyText()).slice(-80))
   await clickButton('提交采收登记')
-  await page.waitForNetworkIdle({ idleTime: 800, timeout: 20000 }).catch(() => {})
+  await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 800))
   await sleep(2000)
   const harvestWrite = writes.slice(beforeOk).find((item) => /POST .*\/harvests$/.test(item))
   check(Boolean(harvestWrite), '放行后发出 POST /harvests', harvestWrite ?? writes.slice(beforeOk).join(' | '))
@@ -653,7 +668,8 @@ try {
 
   const beforeTask = writes.length
   await clickButton('创建任务')
-  await page.waitForNetworkIdle({ idleTime: 800, timeout: 20000 }).catch(() => {})
+  await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 800))
   await sleep(2000)
   const taskWrite = writes.slice(beforeTask).find((item) => /POST .*\/tasks$/.test(item))
   check(Boolean(taskWrite), '页面发出 POST /tasks', taskWrite ?? writes.slice(beforeTask).join(' | '))
@@ -712,7 +728,8 @@ try {
   await fillField('作物品种', '中杂9号')
   const beforePlot = writes.length
   await clickButton('提交')
-  await page.waitForNetworkIdle({ idleTime: 800, timeout: 20000 }).catch(() => {})
+  await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 800))
   await sleep(2000)
   const plotWrite = writes.slice(beforePlot).find((item) => /POST .*\/plots$/.test(item))
   check(Boolean(plotWrite), '页面发出 POST /plots', plotWrite ?? writes.slice(beforePlot).join(' | '))

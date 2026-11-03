@@ -1,13 +1,19 @@
 #!/usr/bin/env node
 /** 买家/卖家资料与认证迁移到门户个人中心回归。 */
 import { createRequire } from 'node:module'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const require2 = createRequire(path.join(ROOT, 'agri-production/frontend/package.json'))
-const puppeteer = require2('puppeteer')
+const require2 = createRequire(path.join('C:/Users/71502/.workbuddy-ai/binaries/node/workspace', 'noop.js'))
+const { chromium } = require2('playwright-core')
+
+const BROWSER = [
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+].find((candidate) => existsSync(candidate))
 const BASE = 'http://localhost'
 const failures = []
 const check = (ok, label, extra = '') => {
@@ -55,38 +61,44 @@ const waitForPersonalCenter = async (page) => {
     await sleep(500)
     if (page.url().includes(':8098/portal/#/account')) break
   }
-  await page.waitForNetworkIdle({ idleTime: 700, timeout: 15000 }).catch(() => {})
+  await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 700))
   return page.url()
 }
 
-const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox'] })
+const browser = await chromium.launch({ headless: true, executablePath: BROWSER, args: ['--no-sandbox'] })
 try {
-  const context = await browser.createBrowserContext()
+  const context = await browser.newContext()
   const page = await context.newPage()
-  await page.setViewport({ width: 1440, height: 1000 })
+  await page.setViewportSize({ width: 1440, height: 1000 })
 
-  await page.goto(`${BASE}:8086/member/buyer?tab=profile`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.goto(`${BASE}:8086/member/buyer?tab=profile`, { waitUntil: 'networkidle', timeout: 60000 })
   await login(page)
   const buyerUrl = await waitForPersonalCenter(page)
-  check(buyerUrl.includes('#/account/business'), '买家旧企业资料页自动跳转个人中心', buyerUrl)
+  /**
+   * 旧的交易端「企业资料」页（`/member/buyer?tab=profile`）现在由个人中心的「我的组织」承接
+   * （`normalizeAccountTab` 把老 tab 归到 `#/account/org`），页面上是「我的经营主体」卡片 + 经营主体 ID，
+   * 不再有"主体资料与认证"这个页签名 —— 断言按落点的真实标题判，而不是按老名字判。
+   */
+  check(buyerUrl.includes('#/account/org'), '买家旧企业资料页自动跳转个人中心「我的组织」', buyerUrl)
   let text = await page.evaluate(() => document.body.innerText)
-  check(text.includes('主体资料与认证') && text.includes('经营主体 ID'),
-    '个人中心已承接企业资料与认证')
+  check(text.includes('我的经营主体') && text.includes('经营主体 ID'),
+    '个人中心已承接企业资料与认证', text.replace(/\s+/g, ' ').slice(0, 90))
   check(!text.includes('企业资料与认证'), '个人中心不再保留交易端旧页签名')
 
-  await page.goto(`${BASE}:8086/member/seller?tab=profile`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.goto(`${BASE}:8086/member/seller?tab=profile`, { waitUntil: 'networkidle', timeout: 60000 })
   const sellerUrl = await waitForPersonalCenter(page)
-  check(sellerUrl.includes('#/account/business'), '卖家旧店铺资料页自动跳转个人中心', sellerUrl)
+  check(sellerUrl.includes('#/account/org'), '卖家旧店铺资料页自动跳转个人中心「我的组织」', sellerUrl)
   text = await page.evaluate(() => document.body.innerText)
-  check(text.includes('主体资料与认证') && text.includes('认证'),
+  check(text.includes('我的经营主体') && text.includes('认证'),
     '个人中心已承接店铺主体资料与认证状态')
 
-  await page.goto(`${BASE}:8086/member/buyer`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.goto(`${BASE}:8086/member/buyer`, { waitUntil: 'networkidle', timeout: 60000 })
   text = await page.evaluate(() => document.body.innerText)
   check(!text.includes('企业资料与认证'), '买家中心菜单已移除企业资料与认证')
   check(text.includes('个人中心'), '买家中心保留个人中心快捷入口')
 
-  await page.goto(`${BASE}:8086/member/seller`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.goto(`${BASE}:8086/member/seller`, { waitUntil: 'networkidle', timeout: 60000 })
   text = await page.evaluate(() => document.body.innerText)
   check(!text.includes('店铺资料与认证'), '卖家中心菜单已移除店铺资料与认证')
   check(text.includes('个人中心'), '卖家中心保留个人中心快捷入口')

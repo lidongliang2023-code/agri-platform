@@ -51,5 +51,8 @@ public class OverdueRecord {
 
     private LocalDateTime updatedAt;
 
+    /** 关联第几期账单（定时扫描按期登记并累加逾期天数）。 */
+    private Integer period;
+
     private Integer delFlag;
 }

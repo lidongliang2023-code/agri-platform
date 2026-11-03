@@ -11,6 +11,7 @@ public class OrderItemVO {
     private String name;
     private String spec;
     private BigDecimal price;
+    private BigDecimal supplyPrice;
     private Integer quantity;
     private BigDecimal totalAmount;
     private String image;

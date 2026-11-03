@@ -1,13 +1,19 @@
 #!/usr/bin/env node
 /** 交易中心受保护页面直达统一认证登录回归。 */
 import { createRequire } from 'node:module'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const require2 = createRequire(path.join(ROOT, 'agri-production/frontend/package.json'))
-const puppeteer = require2('puppeteer')
+const require2 = createRequire(path.join('C:/Users/71502/.workbuddy-ai/binaries/node/workspace', 'noop.js'))
+const { chromium } = require2('playwright-core')
+
+const BROWSER = [
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+].find((candidate) => existsSync(candidate))
 const TRADE = 'http://localhost:8086'
 const failures = []
 const check = (ok, label, extra = '') => {
@@ -23,16 +29,16 @@ const fill = async (page, selector, value) => page.evaluate(({ target, next }) =
   input.dispatchEvent(new Event('input', { bubbles: true }))
 }, { target: selector, next: value })
 
-const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox'] })
+const browser = await chromium.launch({ headless: true, executablePath: BROWSER, args: ['--no-sandbox'] })
 try {
-  const page = await browser.newPage()
+  const page = await (await browser.newContext({ viewport: { width: 1440, height: 1000 } })).newPage()
   const errors = []
   page.on('pageerror', (error) => errors.push(String(error)))
   await page.goto(`${TRADE}/member/seller?tab=goods`, {
-    waitUntil: 'networkidle2',
+    waitUntil: 'networkidle',
     timeout: 60000,
   })
-  await page.waitForFunction(() => window.location.port === '8090', { timeout: 20000 })
+  await page.waitForFunction(() => window.location.port === '8090', undefined, { timeout: 20000 })
   check(page.url().includes(':8090/') && page.url().includes('/login'),
     '卖家中心未登录直达统一认证登录页', page.url())
   check(!page.url().includes(':8086/login'), '不经过交易中心本地登录页')
@@ -58,10 +64,10 @@ try {
     || page.url().includes(':8086/member/seller'),
   '统一认证成功后返回卖家中心原页面', page.url())
 
-  const isolated = await browser.createBrowserContext()
+  const isolated = await browser.newContext()
   const another = await isolated.newPage()
-  await another.goto(`${TRADE}/order/create`, { waitUntil: 'networkidle2', timeout: 60000 })
-  await another.waitForFunction(() => window.location.port === '8090', { timeout: 20000 })
+  await another.goto(`${TRADE}/order/create`, { waitUntil: 'networkidle', timeout: 60000 })
+  await another.waitForFunction(() => window.location.port === '8090', undefined, { timeout: 20000 })
   check(another.url().includes(':8090/') && another.url().includes('/login'),
     '其他交易中心受保护页面同样直达统一认证', another.url())
   await isolated.close()

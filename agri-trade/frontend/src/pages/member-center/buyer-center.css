@@ -36,7 +36,7 @@
 
 .buyer-overview-title small {
   color: var(--mc-green-700);
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
   font-weight: 800;
   letter-spacing: .1em;
 }
@@ -51,7 +51,7 @@
   margin: 5px 0 0;
   overflow: hidden;
   color: #7d9084;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -78,7 +78,7 @@
 
 .buyer-overview-figures span {
   color: #83948a;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .buyer-overview-figures strong {
@@ -155,7 +155,7 @@
 
 .buyer-task small {
   color: #6d8275;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .buyer-task strong {
@@ -168,20 +168,20 @@
 .buyer-task strong em {
   margin-left: 2px;
   color: #7d9184;
-  font-size: 8px;
+  font-size: var(--agri-font-size-micro);
   font-style: normal;
   font-weight: 400;
 }
 
 .buyer-task i {
   color: #95a39b;
-  font-size: 8px;
+  font-size: var(--agri-font-size-micro);
   font-style: normal;
 }
 
 .buyer-task > .anticon:last-child {
   color: #8ca096;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .buyer-overview-layout {
@@ -238,7 +238,7 @@
 
 .buyer-pipeline-stat small {
   color: #718579;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .buyer-pipeline-stat strong {
@@ -250,7 +250,7 @@
 
 .buyer-pipeline-stat em {
   color: #96a49c;
-  font-size: 8px;
+  font-size: var(--agri-font-size-micro);
   font-style: normal;
   white-space: nowrap;
 }
@@ -270,7 +270,7 @@
 
 .buyer-funds span {
   color: #82948a;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .buyer-funds strong {
@@ -287,7 +287,7 @@
   border-top: 1px solid #edf2ee;
   background: #f7fcf9;
   color: #789083;
-  font-size: 8.5px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .buyer-funds-foot .anticon {
@@ -339,17 +339,17 @@
 
 .buyer-quick-list strong {
   color: #3e5b48;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .buyer-quick-list small {
   color: #8a9b91;
-  font-size: 8.5px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .buyer-quick-list > button > .anticon {
   color: #93a39a;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .buyer-trust-card {
@@ -370,12 +370,12 @@
 
 .buyer-trust-card strong {
   color: #3a5b47;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .buyer-trust-card span {
   color: #82968a;
-  font-size: 8.5px;
+  font-size: var(--agri-font-size-micro);
   line-height: 1.55;
 }
 
@@ -416,7 +416,7 @@
 
 .buyer-workspace-hero small {
   color: var(--mc-green-700);
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
   font-weight: 800;
   letter-spacing: .1em;
 }
@@ -430,7 +430,7 @@
 .buyer-workspace-hero p {
   margin: 5px 0 0;
   color: #7d9084;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .buyer-workspace-stats {
@@ -457,7 +457,7 @@
 
 .buyer-workspace-stats span {
   color: #83948a;
-  font-size: 8.5px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .buyer-workspace-stats strong {
@@ -483,7 +483,7 @@
 
 .buyer-section-note {
   color: #899a90;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .buyer-review-pending-list {
@@ -522,13 +522,13 @@
 .buyer-review-pending small {
   color: #8b9c92;
   font-family: "Roboto Mono", ui-monospace, monospace;
-  font-size: 8px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .buyer-review-pending strong {
   overflow: hidden;
   color: #365440;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -536,7 +536,7 @@
 .buyer-review-pending p {
   margin: 0;
   color: #84968a;
-  font-size: 8.5px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .buyer-review-grid {
@@ -568,7 +568,7 @@
   border-radius: 9px;
   background: #e4f3ea;
   color: var(--mc-green-700);
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
   font-weight: 800;
 }
 
@@ -582,17 +582,17 @@
 
 .buyer-review-head strong {
   color: #3d5b48;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .buyer-review-head small {
   color: #8b9c92;
-  font-size: 8px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .buyer-review-head em {
   color: #f5a623;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
   font-style: normal;
   letter-spacing: 1px;
 }
@@ -601,7 +601,7 @@
   min-height: 40px;
   margin: 10px 0;
   color: #5f7567;
-  font-size: 9.5px;
+  font-size: var(--agri-font-size-micro);
   line-height: 1.7;
 }
 
@@ -616,7 +616,7 @@
   border-radius: 7px;
   background: #f0f7f3;
   color: #71897b;
-  font-size: 8.5px;
+  font-size: var(--agri-font-size-micro);
   line-height: 1.5;
 }
 
@@ -633,7 +633,7 @@
   align-items: flex-start;
   gap: 7px;
   color: #718579;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
   line-height: 1.65;
 }
 
@@ -660,13 +660,198 @@
 
 .buyer-workspace-trust strong {
   color: #3a5b47;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .buyer-workspace-trust span {
   color: #82968a;
-  font-size: 8.5px;
+  font-size: var(--agri-font-size-micro);
   line-height: 1.55;
+}
+
+.buyer-demand-workspace .buyer-demand-toolbar {
+  margin-bottom: 0;
+  padding: 11px 13px;
+  border: 1px solid #e1ebe5;
+  border-radius: 11px;
+  background: #fff;
+}
+
+.buyer-demand-toolbar .ant-input-affix-wrapper {
+  width: min(320px, 100%);
+  border-color: #d6e4db;
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.buyer-demand-toolbar .ant-input-affix-wrapper:focus-within,
+.buyer-demand-toolbar .ant-select-focused .ant-select-selector {
+  border-color: var(--mc-green-500) !important;
+  box-shadow: 0 0 0 3px rgba(21, 154, 94, .08) !important;
+}
+
+.buyer-demand-name {
+  display: block;
+  max-width: 240px;
+  overflow: hidden;
+  color: #294238;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.buyer-demand-row-actions {
+  display: flex;
+  gap: 10px;
+  white-space: nowrap;
+}
+
+.buyer-quote-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.mc-table tbody tr.buyer-inquiry-row {
+  cursor: pointer;
+  transition: background .16s ease, box-shadow .16s ease;
+}
+
+.mc-table tbody tr.buyer-inquiry-row:hover {
+  background: #f3fbf6;
+}
+
+.mc-table tbody tr.buyer-inquiry-row.selected {
+  background: #e6f7ee;
+  box-shadow: inset 3px 0 0 #159a5e;
+}
+
+.buyer-inquiry-row:focus-visible {
+  outline: 2px solid #159a5e;
+  outline-offset: -2px;
+}
+
+.buyer-following-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 13px;
+}
+
+.buyer-following-card {
+  overflow: hidden;
+  border: 1px solid #dce9e1;
+  border-radius: 13px;
+  background: #fff;
+  box-shadow: 0 10px 28px rgba(17, 68, 42, .045);
+}
+
+.buyer-following-head {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 15px;
+  background: linear-gradient(135deg, #f8fdfa, #eff9f3);
+}
+
+.buyer-following-head > span {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #12764a, #31a66e);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.buyer-following-head > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.buyer-following-head strong {
+  overflow: hidden;
+  color: #1d4933;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.buyer-following-head small {
+  color: #7b8d82;
+  font-size: var(--agri-font-size-micro);
+}
+
+.buyer-following-head em {
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #e1f5ea;
+  color: #0f6a43;
+  font-size: var(--agri-font-size-micro);
+  font-style: normal;
+  font-weight: 700;
+}
+
+.buyer-following-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 13px 15px;
+}
+
+.buyer-following-facts > div {
+  display: grid;
+  gap: 3px;
+  padding: 8px 9px;
+  border-radius: 8px;
+  background: #f7faf8;
+}
+
+.buyer-following-facts span {
+  color: #89988f;
+  font-size: var(--agri-font-size-micro);
+}
+
+.buyer-following-facts strong {
+  overflow: hidden;
+  color: #405a4b;
+  font-size: var(--agri-font-size-micro);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.buyer-following-facts strong small {
+  margin-left: 2px;
+  font-size: var(--agri-font-size-micro);
+  font-weight: 400;
+}
+
+.buyer-following-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 15px 15px;
+}
+
+.buyer-following-actions .mc-btn {
+  margin: 0;
+}
+
+.buyer-following-actions .mc-link {
+  margin-left: auto;
+}
+
+.buyer-following-actions .danger {
+  color: #c94949;
+}
+
+@media (max-width: 1050px) {
+  .buyer-following-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .buyer-finance-metrics {
@@ -690,7 +875,7 @@
 
 .buyer-finance-metrics span {
   color: #82948a;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .buyer-finance-metrics strong {
@@ -703,14 +888,14 @@
 .buyer-finance-metrics strong em {
   margin-left: 2px;
   color: #7c9084;
-  font-size: 8px;
+  font-size: var(--agri-font-size-micro);
   font-style: normal;
 }
 
 .buyer-finance-metrics small {
   margin-top: 3px;
   color: #93a299;
-  font-size: 8px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .buyer-invoice-list {
@@ -750,13 +935,13 @@
 .buyer-invoice-card time {
   color: #8b9c92;
   font-family: "Roboto Mono", ui-monospace, monospace;
-  font-size: 8px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .buyer-invoice-card strong {
   overflow: hidden;
   color: #3d5b48;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -764,7 +949,7 @@
 .buyer-invoice-card p {
   margin: 0;
   color: #87988e;
-  font-size: 8.5px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .buyer-invoice-card > div:nth-child(3) {
@@ -774,7 +959,7 @@
 .buyer-invoice-card > div:nth-child(3) span {
   display: block;
   color: #8a9b91;
-  font-size: 8px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .buyer-invoice-card > div:nth-child(3) strong {
@@ -809,7 +994,7 @@
 
 .buyer-finance-subhead span {
   color: #8a9a91;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .buyer-finance-subpage > div:last-child > div {
@@ -849,18 +1034,18 @@
 
 .buyer-finance-subpage .ant-card-head-title {
   color: #355441;
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .buyer-finance-subpage .ant-table {
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .buyer-finance-subpage .ant-table-thead > tr > th {
   padding: 8px 10px;
   background: #f4f8f5;
   color: #5f7567;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .buyer-finance-subpage .ant-table-tbody > tr > td {

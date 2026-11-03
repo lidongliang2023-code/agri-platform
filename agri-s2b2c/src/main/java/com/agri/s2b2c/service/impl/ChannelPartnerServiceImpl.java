@@ -3,12 +3,15 @@ package com.agri.s2b2c.service.impl;
 import com.agri.s2b2c.entity.ChannelPartner;
 import com.agri.s2b2c.entity.Commission;
 import com.agri.s2b2c.entity.Order;
+import com.agri.s2b2c.entity.ChannelProduct;
 import com.agri.s2b2c.entity.Product;
 import com.agri.s2b2c.mapper.ChannelPartnerMapper;
 import com.agri.s2b2c.mapper.CommissionMapper;
 import com.agri.s2b2c.mapper.OrderMapper;
+import com.agri.s2b2c.mapper.ChannelProductMapper;
 import com.agri.s2b2c.mapper.ProductMapper;
 import com.agri.s2b2c.service.ChannelPartnerService;
+import com.agri.s2b2c.service.DistributionRuleService;
 import com.agri.s2b2c.vo.ChannelPartnerVO;
 import com.agri.s2b2c.vo.CommissionVO;
 import com.agri.s2b2c.vo.ProductVO;
@@ -24,20 +27,28 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 public class ChannelPartnerServiceImpl extends ServiceImpl<ChannelPartnerMapper, ChannelPartner> implements ChannelPartnerService {
 
     private final ProductMapper productMapper;
+    private final ChannelProductMapper channelProductMapper;
     private final CommissionMapper commissionMapper;
     private final OrderMapper orderMapper;
     private final ObjectMapper objectMapper;
+    private final DistributionRuleService distributionRuleService;
 
-    public ChannelPartnerServiceImpl(ProductMapper productMapper, CommissionMapper commissionMapper, OrderMapper orderMapper, ObjectMapper objectMapper) {
+    public ChannelPartnerServiceImpl(ProductMapper productMapper, ChannelProductMapper channelProductMapper,
+                                     CommissionMapper commissionMapper, OrderMapper orderMapper, ObjectMapper objectMapper,
+                                     DistributionRuleService distributionRuleService) {
         this.productMapper = productMapper;
+        this.channelProductMapper = channelProductMapper;
         this.commissionMapper = commissionMapper;
         this.orderMapper = orderMapper;
         this.objectMapper = objectMapper;
+        this.distributionRuleService = distributionRuleService;
     }
 
     @Override
@@ -78,6 +89,24 @@ public class ChannelPartnerServiceImpl extends ServiceImpl<ChannelPartnerMapper,
     }
 
     @Override
+    public boolean reapply(ChannelPartner partner) {
+        ChannelPartner existing = partner.getId() == null ? null : baseMapper.selectById(partner.getId());
+        if (existing == null || !"REJECTED".equalsIgnoreCase(existing.getAuditStatus())) {
+            return false;
+        }
+        partner.setUserId(existing.getUserId());
+        partner.setAuditStatus("PENDING");
+        partner.setStatus("ACTIVE");
+        partner.setGrade(existing.getGrade() == null ? "LEVEL_1" : existing.getGrade());
+        partner.setCreateTime(existing.getCreateTime());
+        partner.setUpdateTime(LocalDateTime.now());
+        return baseMapper.update(partner, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<ChannelPartner>()
+                .eq(ChannelPartner::getId, existing.getId())
+                .set(ChannelPartner::getAuditOpinion, null)
+                .set(ChannelPartner::getAuditTime, null)) > 0;
+    }
+
+    @Override
     public boolean updateAudit(Long id, String auditStatus, String auditOpinion) {
         ChannelPartner partner = baseMapper.selectById(id);
         if (partner == null) return false;
@@ -100,24 +129,75 @@ public class ChannelPartnerServiceImpl extends ServiceImpl<ChannelPartnerMapper,
 
     @Override
     public IPage<ProductVO> getSelectedProducts(Long channelId, int page, int size) {
+        // 选品关系在 channel_product 里；商品仍归供应商，不再通过 product.channel_id 反查
+        List<ChannelProduct> relations = channelProductMapper.selectList(new LambdaQueryWrapper<ChannelProduct>()
+                .eq(ChannelProduct::getChannelId, channelId)
+                .eq(ChannelProduct::getStatus, "ACTIVE"));
+        List<Long> productIds = relations.stream().map(ChannelProduct::getProductId)
+                .filter(java.util.Objects::nonNull).distinct().toList();
+        Page<Product> pageQuery = new Page<>(page, size);
+        if (productIds.isEmpty()) {
+            return pageQuery.convert(this::convertProductToVO);
+        }
+        Map<Long, ChannelProduct> relationByProduct = relations.stream()
+                .collect(Collectors.toMap(ChannelProduct::getProductId, r -> r, (a, b) -> a));
         LambdaQueryWrapper<Product> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Product::getChannelId, channelId);
+        wrapper.in(Product::getId, productIds);
         wrapper.eq(Product::getStatus, "APPROVED");
         wrapper.orderByDesc(Product::getUpdateTime);
-
-        Page<Product> pageQuery = new Page<>(page, size);
-        IPage<Product> pageResult = productMapper.selectPage(pageQuery, wrapper);
-
-        return pageResult.convert(this::convertProductToVO);
+        return productMapper.selectPage(pageQuery, wrapper).convert(product -> {
+            ProductVO vo = convertProductToVO(product);
+            ChannelProduct relation = relationByProduct.get(product.getId());
+            if (vo != null && relation != null) {
+                vo.setRetailPrice(relation.getRetailPrice());
+                vo.setShelfStatus(relation.getShelfStatus() == null ? "ON" : relation.getShelfStatus());
+                vo.setEffectivePrice(relation.getRetailPrice() != null && relation.getRetailPrice().signum() > 0
+                        ? relation.getRetailPrice() : vo.getPrice());
+            }
+            return vo;
+        });
     }
 
     @Override
     public boolean selectProduct(Long channelId, Long productId) {
         Product product = productMapper.selectById(productId);
-        if (product == null) return false;
-        product.setChannelId(channelId);
-        product.setUpdateTime(LocalDateTime.now());
-        return productMapper.updateById(product) > 0;
+        if (product == null) {
+            throw new IllegalArgumentException("商品不存在");
+        }
+        if (!"APPROVED".equals(product.getStatus())) {
+            throw new IllegalArgumentException("商品未通过审核，不能选品上架");
+        }
+        distributionRuleService.assertAllowed(product, channelId);
+        // 只建立/恢复关系，绝不改写商品本身的归属（商品属于供应商，可被多个渠道同时选中）
+        ChannelProduct existing = channelProductMapper.selectOne(new LambdaQueryWrapper<ChannelProduct>()
+                .eq(ChannelProduct::getChannelId, channelId)
+                .eq(ChannelProduct::getProductId, productId)
+                .last("LIMIT 1"));
+        Integer maxChannels = product.getMaxChannels();
+        if (maxChannels != null && maxChannels > 0
+                && (existing == null || !"ACTIVE".equals(existing.getStatus()))) {
+            Long activeCount = channelProductMapper.selectCount(new LambdaQueryWrapper<ChannelProduct>()
+                    .eq(ChannelProduct::getProductId, productId)
+                    .eq(ChannelProduct::getStatus, "ACTIVE"));
+            if (activeCount != null && activeCount >= maxChannels) {
+                throw new IllegalArgumentException("该商品授权渠道已达上限（" + maxChannels + " 个）");
+            }
+        }
+        if (existing != null) {
+            if ("ACTIVE".equals(existing.getStatus())) {
+                return true;
+            }
+            existing.setStatus("ACTIVE");
+            existing.setPickedAt(LocalDateTime.now());
+            return channelProductMapper.updateById(existing) > 0;
+        }
+        ChannelProduct relation = new ChannelProduct();
+        relation.setChannelId(channelId);
+        relation.setProductId(productId);
+        relation.setSupplierId(product.getSupplierId());
+        relation.setStatus("ACTIVE");
+        relation.setPickedAt(LocalDateTime.now());
+        return channelProductMapper.insert(relation) > 0;
     }
 
     @Override

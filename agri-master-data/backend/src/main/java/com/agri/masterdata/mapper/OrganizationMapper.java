@@ -19,10 +19,15 @@ public interface OrganizationMapper extends BaseMapper<Organization> {
     List<Organization> selectOrgByTenantId(@Param("tenantId") String tenantId);
 
     List<OrganizationVO> selectAdminOrgList(@Param("offset") Integer offset, @Param("limit") Integer limit, 
-                                            @Param("orgName") String orgName, @Param("orgType") String orgType, 
-                                            @Param("tenantId") String tenantId);
+                                            @Param("keyword") String keyword, @Param("orgName") String orgName,
+                                            @Param("orgType") String orgType, @Param("tenantId") String tenantId,
+                                            @Param("status") Integer status);
 
-    long countAdminOrgList(@Param("orgName") String orgName, @Param("orgType") String orgType, @Param("tenantId") String tenantId);
+    long countAdminOrgList(@Param("keyword") String keyword, @Param("orgName") String orgName,
+                           @Param("orgType") String orgType, @Param("tenantId") String tenantId,
+                           @Param("status") Integer status);
+
+    OrganizationVO selectAdminOrgDetail(@Param("id") Long id);
 
     List<OrgAuditVO> selectOrgCertAuditList(@Param("offset") Integer offset, @Param("limit") Integer limit, @Param("authStatus") String authStatus);
 

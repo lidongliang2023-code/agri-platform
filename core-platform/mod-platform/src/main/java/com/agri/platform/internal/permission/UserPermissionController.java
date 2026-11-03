@@ -1,6 +1,7 @@
 package com.agri.platform.internal.permission;
 
 import com.agri.core.infra.web.MarketContext;
+import com.agri.platform.api.facade.CapabilityFacade;
 import com.agri.shared.exception.ErrorCode;
 import com.agri.shared.result.ApiResponse;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +33,8 @@ import java.util.Map;
 public class UserPermissionController {
 
     private final UserPermissionService userPermissionService;
+    /** 业务能力：合并进 permissions，供各子系统/前端按能力码准入（如 gov.oversight） */
+    private final CapabilityFacade capabilityFacade;
 
     /**
      * 当前用户在当前市场的角色与权限码。
@@ -54,7 +57,17 @@ public class UserPermissionController {
         view.put("userId", resolved.userId());
         view.put("marketId", resolved.marketId());
         view.put("roles", resolved.roles());
-        view.put("permissions", new ArrayList<>(resolved.permissions()));
+        // 业务能力与 RBAC 权限码一起下发：能力码带命名空间（gov.oversight / trade.wholesale），
+        // 不会和 role 权限码（gov:citizen）撞名；前端/子系统可以按任意一种准入。
+        java.util.List<String> capabilities = capabilityFacade.codesOf(userId);
+        java.util.List<String> permissions = new ArrayList<>(resolved.permissions());
+        for (String code : capabilities) {
+            if (!permissions.contains(code)) {
+                permissions.add(code);
+            }
+        }
+        view.put("permissions", permissions);
+        view.put("capabilities", capabilities);
         view.put("wildcard", resolved.permissions().contains(UserPermissionService.WILDCARD));
         view.put("operator", resolved.isOperator());
         return ApiResponse.ok(view);

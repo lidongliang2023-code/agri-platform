@@ -42,6 +42,39 @@ sa-token:
   token-style: uuid
   is-log: false
 
+services:
+  platform:
+    url: http://localhost:8093
+  # 仓单链路要读生产域的采收批次/库存/存证/IoT 读数。跨域取数走接口而不是直连库，
+  # 并且必须带调用方自己的令牌 —— 生产侧按令牌解析主体，换成服务账号等于让 A 的仓单看到 B 的数据。
+  production:
+    url: ${PRODUCTION_SERVICE_URL:http://localhost:8092}
+
+agri:
+  production-client:
+    connect-timeout-ms: ${AGRI_PRODUCTION_CONNECT_TIMEOUT_MS:3000}
+    read-timeout-ms: ${AGRI_PRODUCTION_READ_TIMEOUT_MS:15000}
+  fund:
+    # 资金机构可配置本金上限。已配置未回款本金会实时占用额度。
+    total-limit: ${AGRI_FUND_TOTAL_LIMIT:50000000}
+    minimum-investment: ${AGRI_FUND_MINIMUM_INVESTMENT:1000}
+  risk:
+    # 本地一体化部署使用同一 MySQL 实例中的业务库形成只读风控视图。
+    # 独立部署时可按实际库名覆盖。
+    trade-database: ${AGRI_RISK_TRADE_DATABASE:agri_trade}
+    iot-database: ${AGRI_RISK_IOT_DATABASE:agri_iot}
+    production-database: ${AGRI_RISK_PRODUCTION_DATABASE:agri_production}
+
+# 供应链金融后端没有独立认证层，所有 API 必须携带平台令牌。
+# 通用读写权限保证基础准入，控制器再按融资方、资金方和运营角色收紧。
+platform:
+  rbac:
+    operator-paths:
+      - /api/**
+    read-permission: finance:read
+    write-permission: finance:write
+    require-auth: true
+
 knife4j:
   enable: true
   openapi:

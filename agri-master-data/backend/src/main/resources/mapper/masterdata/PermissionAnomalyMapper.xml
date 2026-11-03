@@ -1,0 +1,222 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  权限巡检 SQL。
+
+  四条口径 = 页面上那张《检测规则口径》表，一条不多一条不少：
+    权限过大 / 互斥角色 / 过期权限 / 重复·幽灵。
+  每条查询都只读真实授权关系（user_role / role_menu / menu / role + 互斥对），
+  判定依据写进 detail（带具体数字与对象名），审计结论要能被复核。
+
+  为什么不看 status 列：三张授权表的 status 默认都是 0，而写入路径从来不填它
+  （RoleMapper.insertRoleMenu 只写 role_id/menu_id）。按 status 过滤等于把所有绑定都筛掉，
+  页面会显示"没有任何授权"—— 那是查询条件造出来的假象，不是数据。
+-->
+<mapper namespace="com.agri.masterdata.mapper.PermissionAnomalyMapper">
+
+    <!-- 权限过大：账号（含其全部角色、且只看未过期的绑定）可见菜单数达到阈值 -->
+    <select id="selectOverPrivilegedUsers" resultType="com.agri.admin.vo.AnomalyFinding">
+        SELECT 'USER' AS targetType,
+               CAST(u.id AS CHAR) AS targetId,
+               CONCAT(IFNULL(u.real_name, '-'), '（', u.username, '）') AS targetName,
+               u.tenant_id AS tenantId,
+               CONCAT('可见菜单 ', COUNT(DISTINCT rm.menu_id), ' 个，达到阈值 ', #{threshold},
+                      '；角色：', GROUP_CONCAT(DISTINCT r.role_name ORDER BY r.role_name SEPARATOR '、')) AS detail
+        FROM agri_md_user_role ur
+        JOIN agri_md_user u ON u.id = ur.user_id AND u.del_flag = 0
+        JOIN agri_md_role r ON r.id = ur.role_id AND r.del_flag = 0
+        JOIN agri_md_role_menu rm ON rm.role_id = ur.role_id AND rm.del_flag = 0
+             AND (rm.expire_time IS NULL OR rm.expire_time &gt; NOW())
+        JOIN agri_md_menu m ON m.id = rm.menu_id AND m.del_flag = 0
+        WHERE ur.del_flag = 0 AND (ur.expire_time IS NULL OR ur.expire_time &gt; NOW())
+        GROUP BY u.id, u.real_name, u.username, u.tenant_id
+        HAVING COUNT(DISTINCT rm.menu_id) &gt;= #{threshold}
+        ORDER BY COUNT(DISTINCT rm.menu_id) DESC
+    </select>
+
+    <!-- 互斥角色：同一账号同时持有互斥对里的两个角色（按账号聚合，一个账号一条结论） -->
+    <select id="selectMutexRoleHolders" resultType="com.agri.admin.vo.AnomalyFinding">
+        SELECT 'USER' AS targetType,
+               CAST(u.id AS CHAR) AS targetId,
+               CONCAT(IFNULL(u.real_name, '-'), '（', u.username, '）') AS targetName,
+               u.tenant_id AS tenantId,
+               CONCAT('同时持有互斥角色：',
+                      GROUP_CONCAT(CONCAT(ra.role_name, ' × ', rb.role_name, '（', mx.reason, '）')
+                                   SEPARATOR '；')) AS detail
+        FROM agri_md_role_mutex mx
+        JOIN agri_md_role ra ON ra.role_code = mx.role_code_a AND ra.del_flag = 0
+        JOIN agri_md_role rb ON rb.role_code = mx.role_code_b AND rb.del_flag = 0
+        JOIN agri_md_user_role ua ON ua.role_id = ra.id AND ua.del_flag = 0
+        JOIN agri_md_user_role ub ON ub.role_id = rb.id AND ub.user_id = ua.user_id AND ub.del_flag = 0
+        JOIN agri_md_user u ON u.id = ua.user_id AND u.del_flag = 0
+        WHERE mx.del_flag = 0 AND mx.enabled = 1
+        GROUP BY u.id, u.real_name, u.username, u.tenant_id
+    </select>
+
+    <!-- 过期权限：到期时间已过但绑定仍未撤销（角色↔菜单、人↔角色两处都查） -->
+    <select id="selectExpiredGrants" resultType="com.agri.admin.vo.AnomalyFinding">
+        SELECT 'ROLE_MENU' AS targetType,
+               CAST(rm.id AS CHAR) AS targetId,
+               CONCAT(IFNULL(r.role_name, '角色'), ' → ', IFNULL(m.menu_name, '菜单')) AS targetName,
+               rm.tenant_id AS tenantId,
+               CONCAT('授权已于 ', DATE_FORMAT(rm.expire_time, '%Y-%m-%d %H:%i'), ' 到期，绑定仍在') AS detail
+        FROM agri_md_role_menu rm
+        LEFT JOIN agri_md_role r ON r.id = rm.role_id
+        LEFT JOIN agri_md_menu m ON m.id = rm.menu_id
+        WHERE rm.del_flag = 0 AND rm.expire_time IS NOT NULL AND rm.expire_time &lt;= NOW()
+        UNION ALL
+        SELECT 'USER_ROLE',
+               CAST(ur.id AS CHAR),
+               CONCAT(IFNULL(u.username, '账号'), ' × ', IFNULL(r.role_name, '角色')),
+               ur.tenant_id,
+               CONCAT('授权已于 ', DATE_FORMAT(ur.expire_time, '%Y-%m-%d %H:%i'), ' 到期，绑定仍在')
+        FROM agri_md_user_role ur
+        LEFT JOIN agri_md_role r ON r.id = ur.role_id
+        LEFT JOIN agri_md_user u ON u.id = ur.user_id
+        WHERE ur.del_flag = 0 AND ur.expire_time IS NOT NULL AND ur.expire_time &lt;= NOW()
+        ORDER BY targetType, targetId
+    </select>
+
+    <!-- 重复绑定：同一 (角色, 菜单) 出现多条未删除记录 -->
+    <select id="selectDuplicateBindings" resultType="com.agri.admin.vo.AnomalyFinding">
+        SELECT 'ROLE_MENU_DUP' AS targetType,
+               CONCAT(rm.role_id, '-', rm.menu_id) AS targetId,
+               CONCAT(IFNULL(r.role_name, '角色'), ' → ', IFNULL(m.menu_name, '菜单')) AS targetName,
+               MAX(rm.tenant_id) AS tenantId,
+               CONCAT('同一绑定重复 ', COUNT(*), ' 条（记录 id：',
+                      GROUP_CONCAT(rm.id ORDER BY rm.id SEPARATOR ','), '）') AS detail
+        FROM agri_md_role_menu rm
+        LEFT JOIN agri_md_role r ON r.id = rm.role_id
+        LEFT JOIN agri_md_menu m ON m.id = rm.menu_id
+        WHERE rm.del_flag = 0
+        GROUP BY rm.role_id, rm.menu_id, r.role_name, m.menu_name
+        HAVING COUNT(*) &gt; 1
+    </select>
+
+    <!-- 幽灵绑定：绑定指向已删除或不存在的角色 / 菜单 / 账号 -->
+    <select id="selectOrphanBindings" resultType="com.agri.admin.vo.AnomalyFinding">
+        SELECT 'ROLE_MENU' AS targetType,
+               CAST(rm.id AS CHAR) AS targetId,
+               CONCAT('role_id=', rm.role_id, ' menu_id=', rm.menu_id) AS targetName,
+               rm.tenant_id AS tenantId,
+               CASE WHEN r.id IS NULL THEN '绑定的角色不存在'
+                    WHEN r.del_flag = 1 THEN '绑定的角色已删除'
+                    WHEN m.id IS NULL THEN '绑定的菜单不存在'
+                    ELSE '绑定的菜单已删除' END AS detail
+        FROM agri_md_role_menu rm
+        LEFT JOIN agri_md_role r ON r.id = rm.role_id
+        LEFT JOIN agri_md_menu m ON m.id = rm.menu_id
+        WHERE rm.del_flag = 0
+          AND (r.id IS NULL OR r.del_flag = 1 OR m.id IS NULL OR m.del_flag = 1)
+        UNION ALL
+        SELECT 'USER_ROLE',
+               CAST(ur.id AS CHAR),
+               CONCAT('user_id=', ur.user_id, ' role_id=', ur.role_id),
+               ur.tenant_id,
+               CASE WHEN r.id IS NULL THEN '绑定的角色不存在'
+                    WHEN r.del_flag = 1 THEN '绑定的角色已删除'
+                    WHEN u.id IS NULL THEN '绑定的账号不存在'
+                    ELSE '绑定的账号已删除' END
+        FROM agri_md_user_role ur
+        LEFT JOIN agri_md_role r ON r.id = ur.role_id
+        LEFT JOIN agri_md_user u ON u.id = ur.user_id
+        WHERE ur.del_flag = 0
+          AND (r.id IS NULL OR r.del_flag = 1 OR u.id IS NULL OR u.del_flag = 1)
+        ORDER BY targetType, targetId
+    </select>
+
+    <!-- 落一条发现：按 (规则, 对象类型, 对象) 去重；已存在则刷新 last_seen 并重新打开。
+         first_seen 只在插入时写，更新时不动 —— "第一次发现"这个事实不能被后来的扫描改掉。 -->
+    <insert id="upsertFinding">
+        INSERT INTO agri_md_permission_anomaly
+          (rule_code, anomaly_type, severity, target_type, target_id, target_name, tenant_id,
+           detail, status, first_seen, last_seen, del_flag)
+        VALUES (#{item.ruleCode}, #{item.anomalyType}, #{item.severity}, #{item.targetType},
+                #{item.targetId}, #{item.targetName}, #{item.tenantId}, #{item.detail},
+                'OPEN', #{item.firstSeen}, #{item.lastSeen}, 0)
+        ON DUPLICATE KEY UPDATE
+          anomaly_type = VALUES(anomaly_type),
+          severity = VALUES(severity),
+          target_name = VALUES(target_name),
+          tenant_id = VALUES(tenant_id),
+          detail = VALUES(detail),
+          status = 'OPEN',
+          resolved_time = NULL,
+          last_seen = VALUES(last_seen),
+          del_flag = 0
+    </insert>
+
+    <!-- 本轮没再复现的 OPEN 记录转 RESOLVED：修好授权后异常不会一直挂着。
+         做法是"先把全部 OPEN 置为已处置，再由本轮发现重新打开"，而不是比较 last_seen：
+         列只存到秒，两次扫描落在同一秒时时间比较会漏掉消解（实测过），
+         而这个做法与扫描间隔无关。 -->
+    <update id="resolveAllOpen">
+        UPDATE agri_md_permission_anomaly
+        SET status = 'RESOLVED', resolved_time = NOW()
+        WHERE del_flag = 0 AND status = 'OPEN'
+    </update>
+
+    <!-- 本次扫描新消解的条数（被重新打开的不算，它已经不是 RESOLVED） -->
+    <select id="countNewlyResolved" resultType="java.lang.Integer">
+        SELECT COUNT(*) FROM agri_md_permission_anomaly
+        WHERE del_flag = 0 AND status = 'RESOLVED' AND resolved_time &gt;= #{since}
+    </select>
+
+    <select id="selectByStatus" resultType="com.agri.masterdata.entity.PermissionAnomaly">
+        SELECT * FROM agri_md_permission_anomaly
+        WHERE del_flag = 0
+        <choose>
+            <when test="status != null and status != ''">AND status = #{status}</when>
+            <otherwise>AND status = 'OPEN'</otherwise>
+        </choose>
+        ORDER BY CASE severity WHEN 'HIGH' THEN 0 WHEN 'MEDIUM' THEN 1 ELSE 2 END, last_seen DESC, id DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="selectLastScanAt" resultType="java.time.LocalDateTime">
+        SELECT MAX(last_seen) FROM agri_md_permission_anomaly WHERE del_flag = 0
+    </select>
+
+    <!-- 按角色的真实聚合：人数来自 user_role，授权数来自 role_menu（都不是编的） -->
+    <select id="selectRoleDistribution" resultType="com.agri.admin.vo.PermissionStatisticsVO$RoleDistribution">
+        SELECT r.role_name AS roleName,
+               r.role_code AS roleCode,
+               (SELECT COUNT(*) FROM agri_md_user_role ur WHERE ur.role_id = r.id AND ur.del_flag = 0) AS userCount,
+               (SELECT COUNT(*) FROM agri_md_role_menu rm WHERE rm.role_id = r.id AND rm.del_flag = 0) AS permissionCount
+        FROM agri_md_role r
+        WHERE r.del_flag = 0
+        <if test="tenantId != null and tenantId != ''">
+            AND r.tenant_id = CONVERT(#{tenantId} USING utf8mb4) COLLATE utf8mb4_unicode_ci
+        </if>
+        ORDER BY userCount DESC, r.id ASC
+        LIMIT 20
+    </select>
+
+    <!-- 近 N 天趋势：三个数各自来自自己表的 create_time，没有按天快照也不编一条曲线。
+         permissionChanges 取的是权限族操作日志（module 含"权限"或"角色"），不是全部日志。 -->
+    <select id="selectTrends" resultType="com.agri.admin.vo.PermissionStatisticsVO$PermissionTrend">
+        SELECT DATE_FORMAT(x.day, '%Y-%m-%d') AS date,
+               SUM(x.role_creations) AS roleCreations,
+               SUM(x.permission_changes) AS permissionChanges,
+               SUM(x.role_assignments) AS roleAssignments
+        FROM (
+            SELECT create_time AS day, COUNT(*) AS role_creations, 0 AS permission_changes, 0 AS role_assignments
+            FROM agri_md_role
+            WHERE create_time IS NOT NULL AND create_time &gt;= DATE_SUB(CURDATE(), INTERVAL #{days} DAY)
+            GROUP BY create_time
+            UNION ALL
+            SELECT create_time, 0, COUNT(*), 0
+            FROM agri_md_operation_log
+            WHERE create_time IS NOT NULL AND create_time &gt;= DATE_SUB(CURDATE(), INTERVAL #{days} DAY)
+              AND (module LIKE '%权限%' OR module LIKE '%角色%')
+            GROUP BY create_time
+            UNION ALL
+            SELECT create_time, 0, 0, COUNT(*)
+            FROM agri_md_user_role
+            WHERE create_time IS NOT NULL AND create_time &gt;= DATE_SUB(CURDATE(), INTERVAL #{days} DAY)
+            GROUP BY create_time
+        ) x
+        GROUP BY DATE_FORMAT(x.day, '%Y-%m-%d')
+        ORDER BY date ASC
+    </select>
+</mapper>

@@ -1,13 +1,19 @@
 #!/usr/bin/env node
 /** 卖家信用评价列表、回复页与申诉页视觉回归。 */
 import { createRequire } from 'node:module'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const require2 = createRequire(path.join(ROOT, 'agri-production/frontend/package.json'))
-const puppeteer = require2('puppeteer')
+const require2 = createRequire(path.join('C:/Users/71502/.workbuddy-ai/binaries/node/workspace', 'noop.js'))
+const { chromium } = require2('playwright-core')
+
+const BROWSER = [
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+].find((candidate) => existsSync(candidate))
 const BASE = 'http://localhost:8086'
 const OUT = 'C:/Users/71502/.codex/visualizations/2026/10/16/01a14244-ead8-7ab0-8c7c-df7abac44648'
 const failures = []
@@ -24,18 +30,18 @@ const fill = async (page, selector, value) => page.evaluate(({ target, next }) =
   input.dispatchEvent(new Event('input', { bubbles: true }))
 }, { target: selector, next: value })
 
-const browser = await puppeteer.launch({
-  executablePath: 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
-  headless: 'new',
+const browser = await chromium.launch({
+  headless: true,
+  executablePath: BROWSER,
   args: ['--no-sandbox'],
 })
 try {
-  const page = await browser.newPage()
+  const page = await (await browser.newContext({ viewport: { width: 1440, height: 1000 } })).newPage()
   const errors = []
   page.on('pageerror', (error) => errors.push(String(error)))
-  await page.setViewport({ width: 1440, height: 1000 })
-  await page.goto(`${BASE}/member/seller?tab=rate`, { waitUntil: 'networkidle2', timeout: 60000 })
-  await page.waitForFunction(() => window.location.port === '8090', { timeout: 20000 })
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await page.goto(`${BASE}/member/seller?tab=rate`, { waitUntil: 'networkidle', timeout: 60000 })
+  await page.waitForFunction(() => window.location.port === '8090', undefined, { timeout: 20000 })
   await page.waitForSelector('button[role="tab"]', { timeout: 20000 })
   await page.evaluate(() => {
     const tab = [...document.querySelectorAll('button[role="tab"]')]
@@ -54,11 +60,25 @@ try {
     if (page.url().includes('/member/seller')) break
   }
   await page.waitForSelector('.credit-workbench', { timeout: 30000 })
-  await page.waitForNetworkIdle({ idleTime: 700, timeout: 15000 }).catch(() => {})
+  await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 700))
 
   const pageText = await page.evaluate(() => document.body.innerText)
-  check(pageText.includes('信用评价明细') && pageText.includes('回复评价') && pageText.includes('发起申诉'),
-    '信用评价列表使用统一工作区')
+  /**
+   * 「信用评价明细」这个标题从来不存在（这一页的工作区标题是「店铺评价与信用」，列表按卡片渲染），
+   * 断言改成看真实渲染产物：卡片条数 + 每条卡片上的可执行动作。
+   */
+  const cards = await page.$$eval('.credit-evaluation-card', (items) => items.map((card) => ({
+    text: (card.innerText ?? '').replace(/\s+/g, ' '),
+    actions: [...card.querySelectorAll('.credit-evaluation-actions button')].map((b) => b.textContent?.replace(/\s+/g, '').trim()),
+  })))
+  check(cards.length > 0 && pageText.includes('店铺评价与信用'), '信用评价列表使用统一工作区并按卡片展示',
+    `${cards.length} 张评价卡`)
+  /** 已经回复过 / 已在申诉中的卡片按口径不再给动作，所以不能要求"每张都有按钮"。 */
+  const withReply = cards.filter((card) => card.actions.includes('回复评价')).length
+  const withAppeal = cards.filter((card) => card.actions.includes('发起申诉')).length
+  check(withReply > 0 && withAppeal > 0, '评价卡按可执行动作给出回复与申诉入口',
+    `可回复 ${withReply} 张、可申诉 ${withAppeal} 张（共 ${cards.length} 张）`)
   check(!(await page.$('.ant-table')), '信用评价已移除默认 Ant Design 表格')
   check((await page.$$eval('.credit-evaluation-card', (items) => items.length)) > 0,
     '真实评价以业务卡片展示')
@@ -71,7 +91,7 @@ try {
     return true
   })
   check(openedReply, '未回复评价提供页面级回复入口')
-  await page.waitForFunction(() => document.body.innerText.includes('回复买家评价'), { timeout: 10000 })
+  await page.waitForFunction(() => document.body.innerText.includes('回复买家评价'), undefined, { timeout: 10000 })
   const replyText = await page.evaluate(() => document.body.innerText)
   check(replyText.includes('公开回复') && replyText.includes('回复说明') && replyText.includes('发布回复'),
     '回复页面使用独立表单与说明侧栏')
@@ -88,7 +108,7 @@ try {
     return true
   })
   check(openedAppeal, '被评价卖家提供页面级申诉入口')
-  await page.waitForFunction(() => document.body.innerText.includes('发起评价申诉'), { timeout: 10000 })
+  await page.waitForFunction(() => document.body.innerText.includes('发起评价申诉'), undefined, { timeout: 10000 })
   const appealText = await page.evaluate(() => document.body.innerText)
   check(appealText.includes('申诉信息') && appealText.includes('申诉须知') && appealText.includes('提交申诉'),
     '申诉页面使用独立表单与申诉须知')
@@ -97,8 +117,8 @@ try {
   await page.click('.credit-back')
   await page.waitForSelector('.credit-workbench', { timeout: 10000 })
 
-  await page.setViewport({ width: 390, height: 844 })
-  await page.reload({ waitUntil: 'networkidle2', timeout: 60000 })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.reload({ waitUntil: 'networkidle', timeout: 60000 })
   await page.waitForSelector('.credit-workbench', { timeout: 30000 })
   check(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
     '390px 信用评价页无横向溢出')

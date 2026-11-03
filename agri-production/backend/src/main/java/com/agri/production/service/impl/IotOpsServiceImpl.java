@@ -10,7 +10,9 @@ import com.agri.production.mapper.IoTDeviceMapper;
 import com.agri.production.mapper.IotBindingMapper;
 import com.agri.production.mapper.IotCommandMapper;
 import com.agri.production.mapper.IotMaintenanceMapper;
+import com.agri.production.integration.IotDeviceClient;
 import com.agri.production.service.IIotOpsService;
+import com.agri.production.service.TenantContextService;
 import com.agri.production.vo.IotBindingVO;
 import com.agri.production.vo.IotCommandVO;
 import com.agri.production.vo.IotDeviceVO;
@@ -18,14 +20,17 @@ import com.agri.production.vo.IotMaintenanceVO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
@@ -64,13 +69,18 @@ public class IotOpsServiceImpl implements IIotOpsService {
     private final IotCommandMapper commandMapper;
     private final IotMaintenanceMapper maintenanceMapper;
     private final IoTDeviceMapper deviceMapper;
+    private final IotDeviceClient iotDeviceClient;
+    private final JdbcTemplate jdbc;
 
     public IotOpsServiceImpl(IotBindingMapper bindingMapper, IotCommandMapper commandMapper,
-                             IotMaintenanceMapper maintenanceMapper, IoTDeviceMapper deviceMapper) {
+                             IotMaintenanceMapper maintenanceMapper, IoTDeviceMapper deviceMapper,
+                             IotDeviceClient iotDeviceClient, JdbcTemplate jdbc) {
         this.bindingMapper = bindingMapper;
         this.commandMapper = commandMapper;
         this.maintenanceMapper = maintenanceMapper;
         this.deviceMapper = deviceMapper;
+        this.iotDeviceClient = iotDeviceClient;
+        this.jdbc = jdbc;
     }
 
     /* ==================== 绑定 ==================== */
@@ -180,7 +190,102 @@ public class IotOpsServiceImpl implements IIotOpsService {
             bindingMapper.updateById(entity);
         }
         log.info("设备绑定{}：{}（{} → {}）", created ? "建立" : "更新", entity.getBindingId(), deviceId, targetId);
+        // 绑定到地块时把归属回写到物联网端，保证两边看到的设备归属是同一个
+        if ("PLOT".equals(bindType)) {
+            syncPlotToIot(device, targetId, payload.targetName());
+        }
         return IotBindingVO.of(entity);
+    }
+
+    /**
+     * 把「设备绑定到地块」的结果回写物联网端的 {@code iot_device.plot_id}。
+     *
+     * <p>绑定关系的权威仍在本地 {@code agri_prod_iot_binding}（它支持大棚、解绑历史、
+     * 采集频率，物联网端只有一个 plot_id 单列），但归属必须让物联网端也能看到 ——
+     * 否则物联网系统的设备详情里永远显示"未分配地块"。</p>
+     *
+     * <p>回写失败不阻断绑定：绑定本身已经落库，回写只是同步动作，
+     * 失败时留日志由后续重试或人工订正。</p>
+     */
+    private void syncPlotToIot(IoTDevice device, String bindTargetId, String targetName) {
+        if (device == null || device.getId() == null) {
+            return;
+        }
+        Long plotId = resolveLocalPlotId(bindTargetId, targetName);
+        if (plotId == null) {
+            log.warn("绑定对象 {} 无法换算成本地地块主键，跳过回写物联网端 plot_id", bindTargetId);
+            return;
+        }
+        Map<String, Object> body = new HashMap<>();
+        body.put("plotId", plotId);
+        try {
+            iotDeviceClient.updateDevice(TenantContextService.currentAuthorization(), device.getId(), body);
+            log.info("已回写物联网端 plot_id：设备 {} → 地块 {}", device.getId(), plotId);
+        } catch (RuntimeException e) {
+            log.warn("回写物联网端 plot_id 失败（设备 {}）：{}", device.getId(), e.getMessage());
+        }
+    }
+
+    /**
+     * 把绑定对象标识换算成本地地块主键。
+     *
+     * <p>页面新建绑定写的是本地数字 id，历史演示数据写的是平台标识（{@code DEMO-PLOT-001}），
+     * 而地块表的编码是 {@code DEMO-PLOTC-001}（多一个 C），两者对不上。
+     * 所以数字直接采用，平台标识只能退化成按地块名称反查。</p>
+     */
+    private Long resolveLocalPlotId(String bindTargetId, String targetName) {
+        String text = blankToNull(bindTargetId);
+        if (text == null) {
+            return null;
+        }
+        if (text.chars().allMatch(Character::isDigit)) {
+            try {
+                return Long.valueOf(text);
+            } catch (NumberFormatException ignored) {
+                // 超长数字，落到名称反查
+            }
+        }
+        String name = blankToNull(targetName);
+        if (name == null) {
+            return null;
+        }
+        try {
+            List<Long> ids = jdbc.queryForList(
+                    "SELECT id FROM agri_prod_plot_info WHERE deleted=0 AND plot_name=? LIMIT 1",
+                    Long.class, name);
+            return ids.isEmpty() ? null : ids.get(0);
+        } catch (RuntimeException e) {
+            log.warn("按名称反查地块失败（{}）：{}", name, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 解绑后，如果该设备已经没有其他生效中的地块绑定，就把物联网端的 {@code plot_id} 清空。
+     */
+    private void releasePlotIfLast(IotBinding binding) {
+        if (!"PLOT".equals(binding.getBindType())) {
+            return;
+        }
+        Long deviceId = longValue(binding.getDeviceId());
+        if (deviceId == null) {
+            return;
+        }
+        Long remaining = bindingMapper.selectCount(new LambdaQueryWrapper<IotBinding>()
+                .eq(IotBinding::getDeviceId, binding.getDeviceId())
+                .eq(IotBinding::getBindType, "PLOT")
+                .eq(IotBinding::getStatus, "BOUND"));
+        if (remaining != null && remaining > 0) {
+            return;
+        }
+        Map<String, Object> body = new HashMap<>();
+        body.put("plotId", null);
+        try {
+            iotDeviceClient.updateDevice(TenantContextService.currentAuthorization(), deviceId, body);
+            log.info("已解除物联网端 plot_id：设备 {}", deviceId);
+        } catch (RuntimeException e) {
+            log.warn("解除物联网端 plot_id 失败（设备 {}）：{}", deviceId, e.getMessage());
+        }
     }
 
     @Override
@@ -192,6 +297,7 @@ public class IotOpsServiceImpl implements IIotOpsService {
         entity.setUnboundAt(LocalDateTime.now());
         bindingMapper.updateById(entity);
         log.info("设备解绑：{}（{}）", entity.getBindingId(), entity.getDeviceId());
+        releasePlotIfLast(entity);
         return IotBindingVO.of(entity);
     }
 
@@ -348,6 +454,11 @@ public class IotOpsServiceImpl implements IIotOpsService {
         if (text == null) {
             return null;
         }
+        // 设备台账已收敛到物联网系统，优先按那边查；查不到再回退本地历史副本
+        IoTDevice fromIot = resolveFromIot(text);
+        if (fromIot != null) {
+            return fromIot;
+        }
         if (text.chars().allMatch(Character::isDigit)) {
             try {
                 IoTDevice device = deviceMapper.selectById(Long.valueOf(text));
@@ -360,6 +471,72 @@ public class IotOpsServiceImpl implements IIotOpsService {
                 .eq(IoTDevice::getTenantId, tenantId)
                 .and(w -> w.eq(IoTDevice::getDeviceCode, text).or().eq(IoTDevice::getPlatformDeviceId, text))
                 .last("LIMIT 1"));
+    }
+
+    /**
+     * 从物联网系统解析设备，构造一个<b>不落库的影子对象</b>供上层取 id/编码/名称/农场。
+     *
+     * <p>影子对象的 {@code tenantId} 故意留空：它不代表本地台账里的行，
+     * 后续若有人对它执行 {@code updateById}，条件命中的只会是同 id 的历史副本（已废弃），
+     * 不会污染真实数据。</p>
+     */
+    private IoTDevice resolveFromIot(String raw) {
+        String authorization = TenantContextService.currentAuthorization();
+        if (authorization == null || authorization.isBlank()) {
+            return null;
+        }
+        try {
+            Map<String, Object> row = null;
+            if (raw.chars().allMatch(Character::isDigit)) {
+                try {
+                    row = iotDeviceClient.getDevice(authorization, Long.parseLong(raw));
+                } catch (RuntimeException ignored) {
+                    // 数字 id 在物联网端不存在时继续按编码找
+                }
+            }
+            if (row == null) {
+                List<Map<String, Object>> list = iotDeviceClient.listDevices(
+                        authorization, Map.of("keyword", raw));
+                row = list.stream()
+                        .filter(item -> raw.equalsIgnoreCase(String.valueOf(item.get("deviceCode"))))
+                        .findFirst()
+                        .orElse(null);
+            }
+            if (row == null) {
+                return null;
+            }
+            IoTDevice shadow = new IoTDevice();
+            shadow.setId(longValue(row.get("id")));
+            shadow.setDeviceCode(str(row.get("deviceCode")));
+            shadow.setDeviceName(str(row.get("deviceName")));
+            shadow.setFarmId(longValue(row.get("farmId")));
+            return shadow;
+        } catch (RuntimeException e) {
+            log.warn("查询物联网设备失败，回退本地台账：{}", e.getMessage());
+            return null;
+        }
+    }
+
+    private static Long longValue(Object value) {
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        if (value == null) {
+            return null;
+        }
+        try {
+            return Long.parseLong(String.valueOf(value).trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private static String str(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String text = String.valueOf(value).trim();
+        return text.isEmpty() ? null : text;
     }
 
     private static int clampLimit(Integer limit) {

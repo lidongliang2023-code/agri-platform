@@ -52,6 +52,8 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             "/api/v1/sso/login-by-sms",
             "/api/v1/sso/login-standalone",
             "/api/v1/sso/login-standalone-by-sms",
+            // 二次验证第二步：同样发生在"建会话之前"，不放行会让 2FA 用户永远登不进来
+            "/api/v1/sso/login-standalone-mfa",
             "/api/v1/sso/register-by-sms",
             "/api/v1/sso/password-reset",
             // 分步注册：前三个发生在拿令牌之前；status 用 SSO HttpOnly 会话校验，
@@ -60,7 +62,12 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             "/api/v1/sso/onboarding/status",
             "/api/v1/sso/onboarding/subject",
             "/api/v1/sso/onboarding/certification",
+            "/api/v1/sso/onboarding/verification/**",
             "/api/v1/sso/account/**",
+            // 冻结申诉：账号被冻结后 status=0，登录直接被拒 —— 要求它带令牌
+            // 等于"被冻结的人永远没机会申诉"，所以必须放行。
+            // 只写申诉理由，不解封、不返回账号内容，实际处置仍由运营人工复核。
+            "/api/v1/sso/freeze-appeal",
             "/api/v1/public/logistics-inquiries",
             "/api/v1/public/news",
             // 公开行情（数据分级 L1）——卫星服务 satellite-quote-push 拉取数据源亦复用此口径
@@ -72,6 +79,14 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             // 内部事件入口：以 X-Internal-Token 校验（见 InternalEventIngressController）
             "/internal/**",
             "/error");
+
+    /**
+     * 这些端点既可由 SSO Cookie 调用，也可由移动端 Bearer 调用。
+     * 未携带令牌时仍按白名单放行（由控制器校验 SSO 会话）；携带令牌时先解析出 MarketContext。
+     */
+    private static final List<String> OPTIONAL_AUTH_WHITELIST = List.of(
+            "/api/v1/sso/onboarding/**",
+            "/api/v1/sso/account/**");
 
     private final JwtUtil jwtUtil;
     private final TokenRevocationService revocationService;
@@ -87,7 +102,13 @@ public class JwtAuthFilter extends OncePerRequestFilter {
      * 但那两类能改"别人有什么权限"、能建用户，属于授权本身的授权 —— 收在超管手里。</p>
      */
     private static final List<String> SUPER_ADMIN_ONLY = List.of(
-            "/api/v1/admin/roles/**", "/api/v1/admin/users/**");
+            "/api/v1/admin/roles/**", "/api/v1/admin/users/**",
+            // 身份申请审核：能改"别人有没有某个身份"，与改角色同级别，收在超管手里
+            "/api/v1/admin/identity-applications/**",
+            // 意见反馈：列表里带用户联系方式，回复会直接推给用户，同样不放给普通运营
+            "/api/v1/admin/feedback/**",
+            // 隐私与数据：注销/导出都动到"账号是否存在"，比普通运营权限高一级
+            "/api/v1/admin/privacy-requests/**");
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
@@ -99,7 +120,12 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
             return true;
         }
-        return WHITELIST.stream().anyMatch(p -> MATCHER.match(p, request.getRequestURI()));
+        String uri = request.getRequestURI();
+        boolean optionalAuth = OPTIONAL_AUTH_WHITELIST.stream().anyMatch(p -> MATCHER.match(p, uri));
+        if (optionalAuth && bearerToken(request) != null) {
+            return false;
+        }
+        return WHITELIST.stream().anyMatch(p -> MATCHER.match(p, uri));
     }
 
     @Override

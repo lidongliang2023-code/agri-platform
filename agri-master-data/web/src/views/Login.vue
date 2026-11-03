@@ -23,20 +23,13 @@
       </div>
 
       <div class="delegate">
-        <p class="delegate-title">使用平台账号登录</p>
+        <p class="delegate-title">统一认证登录</p>
         <p class="delegate-desc">
-          账号由平台统一认证中心管理，本系统不保存你的密码与登录凭证。
+          将前往统一认证中心完成账号验证，登录成功后自动返回主数据管理。
         </p>
-        <a-button
-          type="primary"
-          size="large"
-          block
-          :loading="redirecting"
-          class="login-btn"
-          @click="startLogin"
-        >
-          前往统一认证中心
-        </a-button>
+        <button type="button" class="login-btn" :disabled="redirecting" @click="startLogin(true)">
+          {{ redirecting ? '正在前往认证中心…' : '使用统一认证登录' }}
+        </button>
         <p v-if="error" class="delegate-error">{{ error }}</p>
       </div>
 
@@ -48,34 +41,55 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { useSessionStore } from '@/stores/session'
 import { redirectToSso } from '@/utils/sso'
 import BrandMark from '@/components/BrandMark.vue'
 
 const route = useRoute()
+const router = useRouter()
+const session = useSessionStore()
 const redirecting = ref(false)
 const error = ref('')
 
-/** 去认证中心。带回跳目标，登录后能回到用户原本想去的页面。 */
-async function startLogin(): Promise<void> {
+/**
+ * 跳转认证中心。
+ *
+ * @param manual 是否由用户点击触发。自动跳转（页面挂载时）带冷却，
+ *               避免"回调失败 → 回登录页 → 又自动跳"形成死循环。
+ */
+async function startLogin(manual = false): Promise<void> {
+  if (redirecting.value) {
+    return
+  }
   redirecting.value = true
   error.value = ''
   try {
     const target = typeof route.query.redirect === 'string' ? route.query.redirect : undefined
-    await redirectToSso(target)
+    const safeTarget = target?.startsWith('/') && !target.startsWith('//') ? target : '/dashboard'
+    await redirectToSso(cleanReturnTarget(safeTarget), { manual })
   } catch (cause) {
-    redirecting.value = false
     error.value = cause instanceof Error ? cause.message : '无法跳转到统一认证中心'
+  } finally {
+    redirecting.value = false
   }
 }
 
+function cleanReturnTarget(target: string): string {
+  return target
+    .replace(/([?&])logout=1(?=&|$)/, '$1')
+    .replace(/[?&]$/, '')
+}
+
 onMounted(() => {
-  // 带 ?local=1 时不自动跳转：那是从失败的回跳页回来的，自动跳会变成无限来回
-  if (route.query.local === '1') {
+  if (session.isLoggedIn) {
+    void router.replace('/dashboard')
     return
   }
-  void startLogin()
+  if (route.query.local !== '1') {
+    void startLogin(false)
+  }
 })
 </script>
 

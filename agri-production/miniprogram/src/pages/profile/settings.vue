@@ -33,7 +33,7 @@
     <view class="card">
       <view class="field" style="border-bottom: none">
         <text class="field-label">关于</text>
-        <text class="field-value muted">生产管理移动端 v1.0.0（小程序 / H5 双端）</text>
+        <text class="field-value muted">生产管理移动端 v1.0.0（H5 / 小程序 / APP）</text>
       </view>
     </view>
   </view>
@@ -46,11 +46,15 @@ import { TOKEN_KEY } from '@/utils/request'
 // 通知偏好存储键
 const PREF_KEY = 'agri_mobile_notify_prefs'
 
+const storedPrefs = uni.getStorageSync(PREF_KEY) as Partial<{
+  task: boolean
+  alert: boolean
+  message: boolean
+}> | null
 const prefs = ref<{ task: boolean; alert: boolean; message: boolean }>({
-  task: true,
-  alert: true,
-  message: true,
-  ...(uni.getStorageSync(PREF_KEY) || {}),
+  task: storedPrefs?.task ?? true,
+  alert: storedPrefs?.alert ?? true,
+  message: storedPrefs?.message ?? true,
 })
 
 function onToggle(key: 'task' | 'alert' | 'message', event: any): void {

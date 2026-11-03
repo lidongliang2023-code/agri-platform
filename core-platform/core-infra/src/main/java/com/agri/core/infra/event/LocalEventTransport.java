@@ -3,6 +3,7 @@ package com.agri.core.infra.event;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -13,6 +14,7 @@ import java.util.List;
  */
 @Slf4j
 @Component
+@Primary
 @RequiredArgsConstructor
 @ConditionalOnProperty(name = "agri.event.transport", havingValue = "local", matchIfMissing = true)
 public class LocalEventTransport implements EventTransport {

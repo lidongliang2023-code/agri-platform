@@ -9,25 +9,24 @@
  * - 「地块基本信息」：所属农场（带 `农场总面积: X亩 | 已用: Y亩 | 空闲: Z亩` 提示条）、
  *   地块名称、面积（亩，不能超过空闲面积）、土壤类型（radio）、灌溉方式（radio）、坡度（radio）
  * - 「地块位置」：地图选点区域 + `点击地图选点 | 搜索位置 | 输入经纬度` + 经度 / 纬度输入
- * - 「地块边界（可选）」：`📐 绘制多边形边界` + 当前面积提示
+ * - 「地块边界（可选）」：天地图绘制多边形边界 + 实时面积提示
  * - 底部按钮：`取消`、`保存`、`保存并添加作物`
  *
- * 实现说明（2026-10-17 修正）：
- * - **经度 / 纬度落真实列** `center_longitude` / `center_latitude`；多边形边界落 `boundary`（GeoJSON）。
- *   此前这里把它们打包成一个自造的 `geoBoundary` 键 —— 后端 PlotSaveDTO 并不接受，
- *   于是新增/编辑地块时填的位置**一直没落库**，编辑回填也永远是空（后端返回的是 `boundary`）。
- * - 坡度仍作为 GeoJSON 的扩展属性（`slope`）存在 `boundary` 里：库里没有坡度列，
- *   这样至少不会丢；将来补列时迁移这一处即可。
- * - 「种植类型」走真实列 `planting_type`（2026-10-19 补列）：此前表里没有该列，
- *   表单提交了也被丢弃、列表用默认值 1 把整片农场都说成「露天」；现在存量行保持 NULL（不猜）、
- *   新建/编辑由表单写入。
+ * 实现说明（2026-11-02 重构）：
+ * - 边界绘制从「文本框逐行输入经纬度」改为 **天地图地图绘制**：点击地图添加顶点、
+ *   点击顶点标记删除、支持撤销 / 清空，实时显示顶点数 / 面积（亩）/ 周长。
+ *   组件位于 `@agri/shared` 的 `TiandituBoundaryEditor`，与 `TiandituMap` 共用 SDK 加载器。
+ * - 边界仍是 GeoJSON 落 `boundary`（Polygon，首尾闭合，坡度作为 slope 扩展属性），
+ *   不做任何自定义字段；编辑态从 `boundary` 回填（此前误读 `geoBoundary`，导致编辑时边界总为空）。
+ * - 绘制出可用边界（≥3 顶点）且中心点为空时，自动用多边形质心补 `center_longitude` / `center_latitude`，
+ *   这样列表 / 详情的地图视图能直接按中心点定位并展示边界。
  * - 支持 `?plotId=` 编辑态与 `?farmId=` 预选农场
  */
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { PageContainer } from '@ant-design/pro-components'
-import { BorderOuterOutlined, EnvironmentOutlined, LeftOutlined } from '@ant-design/icons'
+import { LeftOutlined, EnvironmentOutlined } from '@ant-design/icons'
 import {
   Alert,
   Button,
@@ -36,7 +35,6 @@ import {
   Form,
   Input,
   InputNumber,
-  Modal,
   Radio,
   Row,
   Select,
@@ -47,8 +45,13 @@ import {
 } from 'antd'
 import { createPlot, getPlot, listPlots, updatePlot } from '@/api/plots'
 import { getFarmSummary, listAllFarms } from '@/api/farms'
-import { listCropOptions } from '@/api/crops'
-import { CROP_EMOJI_MAP } from '@/types'
+import {
+  TiandituBoundaryEditor,
+  computePolygonMetrics,
+  geocodeAddress,
+  parseBoundaryVertices,
+  polygonCentroid,
+} from '@agri/shared'
 
 /** 土壤类型选项（原型 P6） */
 const SOIL_TYPE_OPTIONS: string[] = ['壤土', '砂土', '黏土', '盐碱土']
@@ -85,7 +88,7 @@ interface PolygonGeometry {
   /** 几何类型 */
   type: 'Polygon'
   /** 外环坐标 */
-  coordinates: Coordinate[][]
+  coordinates: number[][]
   /** 坡度描述 */
   slope?: string
 }
@@ -109,27 +112,16 @@ interface PlotFormValues {
   plantingType: number
   /** 坡度 */
   slope: string
-  /**
-   * 当前作物：作物主数据主键（页面作物下拉的 value）。
-
-   *
-   * <p>作物是主数据（`/production/crops` 维护），地块这里选一个 —— 提交后落 `crop_id` +
-   * `current_crop`（名称，页面直接显示）。此前地块压根没有"当前作物"的录入入口，
-   * 库里的值只来自演示数据迁移。</p>
-   */
-  cropId?: string
   /** 经度 */
   longitude?: number
   /** 纬度 */
   latitude?: number
-  /** 多边形边界文本（每行 `经度,纬度`） */
-  polygonText?: string
 }
 
 /**
  * 安全解析 GeoJSON 字符串。
  *
- * @param raw 原始 geoBoundary 字符串
+ * @param raw 原始边界 GeoJSON 字符串（后端 `boundary`）
  * @returns 解析后的几何体，非法时返回 undefined
  */
 function parseBoundary(raw: string | undefined): BoundaryGeometry | undefined {
@@ -142,41 +134,26 @@ function parseBoundary(raw: string | undefined): BoundaryGeometry | undefined {
 }
 
 /**
- * 解析多边形文本为坐标数组。
+ * 构建 GeoJSON 边界字符串。
  *
- * @param text 每行形如 `116.5623,40.1234`
- * @returns 坐标数组
- */
-function parsePolygonText(text: string | undefined): Coordinate[] {
-  if (!text) return []
-  return text
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const [lng, lat] = line.split(/[,，\s]+/).map((item) => Number(item))
-      return [lng, lat] as Coordinate
-    })
-    .filter((point) => Number.isFinite(point[0]) && Number.isFinite(point[1]))
-}
-
-/**
- * 构建 geoBoundary 字符串。
+ * <p>多边形顶点由天地图绘制编辑器给出（不闭合），这里补上首尾闭合点。
+ * 只有顶点 ≥3 时才写多边形；1~2 个顶点的半成品在提交前就会被拦截，
+ * 不会降级成 Point（那会让人以为边界已保存）。</p>
  *
  * @param values 表单值
+ * @param points 边界顶点（`[经度, 纬度]`，不闭合）
  * @returns JSON 字符串；无任何位置信息时返回 undefined
  */
-function buildBoundary(values: PlotFormValues): string | undefined {
-  const points = parsePolygonText(values.polygonText)
+function buildBoundary(values: PlotFormValues, points: number[][]): string | undefined {
   if (points.length >= 3) {
     const geometry: PolygonGeometry = {
       type: 'Polygon',
-      coordinates: [[...points, points[0]]],
+      coordinates: [...points, points[0]],
       slope: values.slope,
     }
     return JSON.stringify(geometry)
   }
-  if (values.longitude !== undefined && values.latitude !== undefined) {
+  if (typeof values.longitude === 'number' && typeof values.latitude === 'number') {
     const geometry: PointGeometry = {
       type: 'Point',
       coordinates: [values.longitude, values.latitude],
@@ -201,9 +178,17 @@ export default function Create(): JSX.Element {
   const presetFarmId = searchParams.get('farmId')
 
   const [form] = Form.useForm<PlotFormValues>()
+  const watchedLongitude = Form.useWatch('longitude', form)
+  const watchedLatitude = Form.useWatch('latitude', form)
   const [farmId, setFarmId] = useState<string | undefined>(presetFarmId ?? undefined)
-  const [polygonOpen, setPolygonOpen] = useState<boolean>(false)
-  const [polygonText, setPolygonText] = useState<string>('')
+  /** 边界顶点（`[经度, 纬度]`，不闭合；由天地图绘制编辑器维护） */
+  const [boundaryPoints, setBoundaryPoints] = useState<number[][]>([])
+  /** 地址定位关键字（只用于地图定位，不写入地块档案） */
+  const [addressKeyword, setAddressKeyword] = useState('')
+  /** 地址定位请求中 */
+  const [locating, setLocating] = useState(false)
+  /** 地址定位信号：递增后让地图重新居中到定位点 */
+  const [locateSignal, setLocateSignal] = useState(0)
   const [saveAction, setSaveAction] = useState<'list' | 'crop'>('list')
 
   /** 农场下拉 */
@@ -219,12 +204,16 @@ export default function Create(): JSX.Element {
     queryFn: () => getPlot(editingPlotId as string),
   })
 
-  /** 板块加载后回填表单 */
+  /** 地块详情加载后回填表单（含边界顶点） */
   useEffect(() => {
     const plot = plotQuery.data
     if (!plot) return
-    const geometry = parseBoundary(plot.geoBoundary)
-    const points = geometry?.type === 'Polygon' ? geometry.coordinates[0] : undefined
+    // 后端真实列是 boundary；geoBoundary 是历史自造键，仅作为兜底读取
+    const rawBoundary = plot.boundary ?? plot.geoBoundary
+    const geometry = parseBoundary(rawBoundary)
+    const points = parseBoundaryVertices(rawBoundary)
+    const pointCoordinates = geometry?.type === 'Point' ? geometry.coordinates : undefined
+    const boundaryCenter = points.length >= 3 ? polygonCentroid(points) : null
     const next: PlotFormValues = {
       farmId: plot.farmId,
       plotName: plot.plotName,
@@ -234,20 +223,12 @@ export default function Create(): JSX.Element {
       // 存量行没有这一列（补列前建的），不猜；表单默认露天只在新建时生效
       plantingType: plot.plantingType ?? 1,
       slope: geometry?.slope ?? '平地',
-      // 作物下拉的 value 是主数据主键；历史行只有名字（crop_id 为空）时先留空
-      cropId: plot.cropId || undefined,
-      // 点型边界 → 用几何里的坐标；多边形/无边界 → 用后端真实的中心点列
-      longitude: geometry?.type === 'Point' ? geometry.coordinates[0] : plot.centerLongitude,
-      latitude: geometry?.type === 'Point' ? geometry.coordinates[1] : plot.centerLatitude,
-      polygonText: points
-        ? points
-            .slice(0, points.length - 1)
-            .map((point) => `${point[0]},${point[1]}`)
-            .join('\n')
-        : '',
+      // 点型边界 → 用几何里的坐标；否则用后端中心点列；都没有但有多边形时用质心
+      longitude: pointCoordinates?.[0] ?? plot.centerLongitude ?? boundaryCenter?.longitude,
+      latitude: pointCoordinates?.[1] ?? plot.centerLatitude ?? boundaryCenter?.latitude,
     }
     setFarmId(plot.farmId)
-    setPolygonText(next.polygonText ?? '')
+    setBoundaryPoints(points)
     form.setFieldsValue(next)
   }, [plotQuery.data, form])
 
@@ -258,25 +239,6 @@ export default function Create(): JSX.Element {
     queryFn: () => getFarmSummary(farmId as string),
     retry: false,
   })
-
-  /**
-   * 作物主数据下拉（「当前作物」）。
-
-   * <p>只给启用中的作物；拉不到就是空列表 —— 页面上会提示"没有可选作物"，
-   * 不塞假选项（与计划 / 负责人下拉同口径）。没有想要的作物去 `/production/crops` 新增。</p>
-   */
-  const cropQuery = useQuery({
-    queryKey: ['crop-options'],
-    queryFn: () => listCropOptions(),
-  })
-  const cropOptions = useMemo(
-    () =>
-      (cropQuery.data ?? []).map((item) => ({
-        value: item.cropId,
-        label: CROP_EMOJI_MAP[item.cropName] ? `${CROP_EMOJI_MAP[item.cropName]} ${item.cropName}` : item.cropName,
-      })),
-    [cropQuery.data],
-  )
 
   /** 农场下地块（计算已用面积） */
   const plotsQuery = useQuery({
@@ -306,16 +268,92 @@ export default function Create(): JSX.Element {
     return { totalArea, usedArea: Math.max(0, usedArea), free, editingArea }
   }, [farmQuery.data, summaryQuery.data, plotsQuery.data, farmId, editingPlotId])
 
+  /** 边界测量（顶点数 ≥3 时面积 / 周长才有意义） */
+  const boundaryMetrics = useMemo(
+    () => computePolygonMetrics(boundaryPoints),
+    [boundaryPoints],
+  )
+
+  /**
+   * 绘制出可用边界且中心点未填时，用多边形质心补中心点。
+   *
+   * <p>列表地图视图只按 `center_longitude` / `center_latitude` 定位，
+   * 没有中心点就算有边界也不显示；这里只在为空时补，不覆盖用户手填的坐标。</p>
+   */
+  useEffect(() => {
+    if (boundaryPoints.length < 3) return
+    const longitude = form.getFieldValue('longitude')
+    const latitude = form.getFieldValue('latitude')
+    if (typeof longitude === 'number' && typeof latitude === 'number') return
+    const centroid = polygonCentroid(boundaryPoints)
+    if (!centroid) return
+    form.setFieldsValue({
+      longitude: Number(centroid.longitude.toFixed(6)),
+      latitude: Number(centroid.latitude.toFixed(6)),
+    })
+  }, [boundaryPoints, form])
+
+  /** 边界编辑器初始定位：已选中心点优先，其次农场坐标 */
+  const boundaryFocusPoint = useMemo(() => {
+    if (typeof watchedLongitude === 'number' && typeof watchedLatitude === 'number') {
+      return { longitude: watchedLongitude, latitude: watchedLatitude }
+    }
+    const farm = (farmQuery.data ?? []).find((item) => item.farmId === farmId)
+    if (farm?.longitude !== undefined && farm?.latitude !== undefined) {
+      return { longitude: Number(farm.longitude), latitude: Number(farm.latitude) }
+    }
+    return null
+  }, [watchedLongitude, watchedLatitude, farmQuery.data, farmId])
+
+  /**
+   * 按地址定位地块位置。
+   *
+   * <p>地址只用于地图定位（天地图地理编码），不落库；定位成功后写回中心经纬度并让地图居中，
+   * 用户随后可直接在同一个地图上绘制边界。</p>
+   */
+  const handleLocateByAddress = async (): Promise<void> => {
+    const keyword = addressKeyword.trim()
+    if (!keyword) {
+      message.warning('请输入地块所在地址，例如「山东省烟台市栖霞市」')
+      return
+    }
+    setLocating(true)
+    try {
+      const result = await geocodeAddress(keyword)
+      form.setFieldsValue({
+        longitude: Number(result.longitude.toFixed(6)),
+        latitude: Number(result.latitude.toFixed(6)),
+      })
+      setLocateSignal((value) => value + 1)
+      message.success(
+        `已定位到：${result.matchedAddress ?? keyword}${
+          result.level ? `（${result.level}）` : ''
+        }`,
+      )
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '地址定位失败，请稍后重试')
+    } finally {
+      setLocating(false)
+    }
+  }
+
   /** 保存 mutation */
   const saveMutation = useMutation({
     mutationFn: async (params: {
       values: PlotFormValues
       action: 'list' | 'crop'
-      polygonText: string
+      points: number[][]
     }) => {
       // 字段映射约定（后端 PlotInfoEntity 无经度 / 纬度 / 坡度 / 边界等独立列）：
       // 位置按后端真实字段提交：中心点两列 + 边界一列（GeoJSON）。
       // 坡度没有独立列，作为 GeoJSON 的 slope 扩展属性随 boundary 一起存。
+      const center =
+        typeof params.values.longitude === 'number' && typeof params.values.latitude === 'number'
+          ? {
+              longitude: params.values.longitude,
+              latitude: params.values.latitude,
+            }
+          : polygonCentroid(params.points)
       const payload = {
         farmId: params.values.farmId,
         plotName: params.values.plotName,
@@ -323,11 +361,9 @@ export default function Create(): JSX.Element {
         soilType: params.values.soilType,
         irrigationType: params.values.irrigationType,
         plantingType: params.values.plantingType as 1 | 2 | 3 | 4,
-        // 当前作物走作物主数据（主键）；后端据此落 crop_id + current_crop（名称）
-        cropId: params.values.cropId,
-        boundary: buildBoundary({ ...params.values, polygonText: params.polygonText }),
-        centerLongitude: params.values.longitude,
-        centerLatitude: params.values.latitude,
+        boundary: buildBoundary(params.values, params.points),
+        centerLongitude: center ? Number(center.longitude.toFixed(6)) : undefined,
+        centerLatitude: center ? Number(center.latitude.toFixed(6)) : undefined,
         // 这里原先固定发 status: 1，但后端 PlotSaveDTO **根本没有这个字段**（新增的地块统一是
         // active/启用，状态变更是走 PATCH /plots/{id}/status）。留着它会让人以为"表单能设状态"，
         // 更糟的是若哪天后端收下这个字段，编辑一个已停用地块时会被这一行**静默重新启用**。
@@ -366,14 +402,16 @@ export default function Create(): JSX.Element {
 
   /** 提交 */
   const handleSubmit = (action: 'list' | 'crop'): void => {
+    // 1~2 个顶点构不成边界；直接拦下，避免把半成品静默丢掉或降级成中心点
+    if (boundaryPoints.length > 0 && boundaryPoints.length < 3) {
+      message.warning('地块边界至少需要 3 个顶点：请继续在地图上绘制，或清空边界后保存')
+      return
+    }
     setSaveAction(action)
     void form.validateFields().then((values) => {
-      saveMutation.mutate({ values, action, polygonText })
+      saveMutation.mutate({ values, action, points: boundaryPoints })
     })
   }
-
-  /** 多边形顶点数量 */
-  const polygonPoints = useMemo(() => parsePolygonText(polygonText), [polygonText])
 
   return (
     <PageContainer
@@ -495,21 +533,6 @@ export default function Create(): JSX.Element {
               />
             </Form.Item>
 
-            <Form.Item
-              name="cropId"
-              label="当前作物"
-              extra="取自作物主数据（由平台运营维护）；缺作物请联系平台运营添加（品种请在下方单独填）"
-            >
-              <Select
-                allowClear
-                showSearch
-                optionFilterProp="label"
-                placeholder={cropOptions.length > 0 ? '选择该地块当前种的作物（可不填）' : '作物主数据里还没有作物'}
-                options={cropOptions}
-                style={{ maxWidth: 360 }}
-              />
-            </Form.Item>
-
             <Form.Item name="soilType" label="土壤类型">
               <Radio.Group
                 options={SOIL_TYPE_OPTIONS.map((item) => ({ value: item, label: item }))}
@@ -535,114 +558,114 @@ export default function Create(): JSX.Element {
             </Form.Item>
           </Card>
 
-          <Card title="地块位置" style={{ marginBottom: 16 }}>
-            <div
-              style={{
-                height: 220,
-                marginBottom: 16,
-                borderRadius: 8,
-                border: '1px dashed #91caff',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                background:
-                  'repeating-linear-gradient(45deg, #f0f7ff, #f0f7ff 14px, #e6f4ff 14px, #e6f4ff 28px)',
-              }}
+          <Card title="📍 地块位置与边界（可选）">
+            <Space.Compact style={{ width: '100%', maxWidth: 720 }}>
+              <Input
+                allowClear
+                value={addressKeyword}
+                onChange={(event) => setAddressKeyword(event.target.value)}
+                onPressEnter={() => void handleLocateByAddress()}
+                placeholder="输入地块所在地址，如 山东省烟台市栖霞市 XX 镇 XX 村"
+                prefix={<EnvironmentOutlined />}
+                disabled={saveMutation.isPending}
+              />
+              <Button
+                type="primary"
+                loading={locating}
+                disabled={saveMutation.isPending}
+                onClick={() => void handleLocateByAddress()}
+              >
+                按地址定位
+              </Button>
+            </Space.Compact>
+            <Typography.Paragraph type="secondary" style={{ margin: '8px 0 12px' }}>
+              地址只用于地图定位，不写入地块档案；定位后在下方天地图上点击绘制边界，
+              不绘制边界时以定位点作为地块中心点。
+            </Typography.Paragraph>
+
+            <TiandituBoundaryEditor
+              value={boundaryPoints}
+              onChange={setBoundaryPoints}
+              height={420}
+              focusPoint={boundaryFocusPoint}
+              locateSignal={locateSignal}
+              disabled={saveMutation.isPending}
+            />
+
+            <Row
+              align="middle"
+              justify="space-between"
+              gutter={[12, 8]}
+              style={{ marginTop: 12 }}
             >
-              <Space direction="vertical" align="center">
-                <EnvironmentOutlined style={{ fontSize: 26, color: '#1677ff' }} />
-                <Typography.Text strong>🗺️ 高德地图选点区域</Typography.Text>
-                <Typography.Text type="secondary">
-                  地图控件接入后将支持直接点击选点
-                </Typography.Text>
-              </Space>
-            </div>
-            <Typography.Text type="secondary">点击地图选点 | 搜索位置 | 输入经纬度</Typography.Text>
+              <Col>
+                <Space size={8} wrap>
+                  <Tag
+                    color={
+                      boundaryPoints.length >= 3
+                        ? 'green'
+                        : boundaryPoints.length > 0
+                          ? 'orange'
+                          : 'default'
+                    }
+                  >
+                    {boundaryPoints.length >= 3
+                      ? '已绘制边界'
+                      : boundaryPoints.length > 0
+                        ? '绘制中（顶点不足）'
+                        : '未绘制边界'}
+                  </Tag>
+                  {boundaryPoints.length >= 3 && (
+                    <Typography.Text type="secondary">
+                      顶点 {boundaryPoints.length} 个 · 面积约{' '}
+                      {boundaryMetrics.areaMu.toFixed(2)} 亩
+                    </Typography.Text>
+                  )}
+                </Space>
+              </Col>
+              {boundaryPoints.length >= 3 && (
+                <Col>
+                  <Typography.Link
+                    onClick={() => {
+                      form.setFieldsValue({
+                        area: Number(boundaryMetrics.areaMu.toFixed(2)),
+                      })
+                      message.success('已按绘制边界填入面积，可继续手动调整')
+                    }}
+                  >
+                    使用绘制面积
+                  </Typography.Link>
+                </Col>
+              )}
+            </Row>
+            <Typography.Paragraph type="secondary" style={{ margin: '8px 0 0' }}>
+              在天地图上依次点击顶点绘制边界（至少 3 个），点击已有顶点标记可删除；
+              保存后边界按 GeoJSON 写入地块档案，并在列表 / 详情地图上展示。
+            </Typography.Paragraph>
+
             <Row gutter={24} style={{ marginTop: 12 }}>
               <Col xs={24} md={12}>
-                <Form.Item name="longitude" label="经度">
+                <Form.Item name="longitude" label="中心经度">
                   <InputNumber
                     precision={6}
                     style={{ width: '100%' }}
-                    placeholder="例如 116.5623"
+                    placeholder="地址定位后自动填充，也可手动输入"
                   />
                 </Form.Item>
               </Col>
               <Col xs={24} md={12}>
-                <Form.Item name="latitude" label="纬度">
+                <Form.Item name="latitude" label="中心纬度">
                   <InputNumber
                     precision={6}
                     style={{ width: '100%' }}
-                    placeholder="例如 40.1234"
+                    placeholder="地址定位后自动填充，也可手动输入"
                   />
                 </Form.Item>
               </Col>
             </Row>
           </Card>
-
-          <Card title="地块边界（可选）">
-            <Space direction="vertical" size={12} style={{ width: '100%' }}>
-              <Space size={8} wrap>
-                <Typography.Text>如需精确绘制地块边界，点击</Typography.Text>
-                <Button icon={<BorderOuterOutlined />} onClick={() => setPolygonOpen(true)}>
-                  📐 绘制多边形边界
-                </Button>
-              </Space>
-              <div
-                style={{
-                  minHeight: 120,
-                  borderRadius: 8,
-                  border: '1px dashed #d9d9d9',
-                  background: '#fafafa',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Space direction="vertical" align="center">
-                  <Typography.Text type="secondary">地块边界绘制区域</Typography.Text>
-                  <Tag color={polygonPoints.length >= 3 ? 'green' : 'default'}>
-                    当前面积: {polygonPoints.length >= 3 ? '已绘制边界' : '-（未绘制）'}
-                  </Tag>
-                  {polygonPoints.length >= 3 && (
-                    <Typography.Text type="secondary">
-                      顶点数：{polygonPoints.length}
-                    </Typography.Text>
-                  )}
-                </Space>
-              </div>
-            </Space>
-          </Card>
         </Form>
       )}
-
-      <Modal
-        title="绘制多边形边界"
-        open={polygonOpen}
-        okText="确定"
-        cancelText="取消"
-        onCancel={() => setPolygonOpen(false)}
-        onOk={() => {
-          if (polygonPoints.length >= 3) {
-            message.success(`已保存 ${polygonPoints.length} 个边界顶点`)
-          } else if (polygonPoints.length > 0) {
-            message.warning('至少需要 3 个顶点才能构成地块边界')
-          }
-          setPolygonOpen(false)
-        }}
-        width={560}
-      >
-        <Typography.Paragraph type="secondary">
-          每行输入一个顶点坐标，格式：<Typography.Text code>经度,纬度</Typography.Text>
-          ，至少 3 个顶点自动闭合为多边形。
-        </Typography.Paragraph>
-        <Input.TextArea
-          rows={8}
-          value={polygonText}
-          onChange={(event) => setPolygonText(event.target.value)}
-          placeholder={'116.5623,40.1234\n116.5721,40.1256\n116.5688,40.1189'}
-        />
-      </Modal>
     </PageContainer>
   )
 }

@@ -5,8 +5,7 @@
  * PRD 序号：PRD 6.1 #2
  *
  * 页面用途（PRD）：多维度数据展示、图表分析、GIS 地图。
- * 说明：原型 P19 中的地图区块为色块占位，本页沿用同一思路——
- * 「GIS 区域分布」使用区域卡片网格 + 利用率色条等效呈现，不引入额外地图依赖。
+ * 说明：地图区块统一接入天地图；地图下方保留区域卡片网格与利用率信息。
  */
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -47,6 +46,11 @@ import { listInputUsages } from '@/api/inputs'
 import { aggregateInputRanking, plotStatusMeta } from '@/utils/production-adapter'
 import type { RankItem } from '@/utils/production-adapter'
 import { MetricStatistic } from '@/components'
+import {
+  TiandituMap,
+  chinaRegionCenter,
+  type TiandituMapPoint,
+} from '@agri/shared'
 
 /** 趋势图周期 */
 type TrendPeriod = 'week' | 'month' | 'quarter'
@@ -203,6 +207,24 @@ export default function ProductionCockpit(): JSX.Element {
       : mapped
   }, [farms, plots, regionFilter])
 
+  const farmMapPoints = useMemo<TiandituMapPoint[]>(() => {
+    const result: TiandituMapPoint[] = []
+    regionCards.forEach((region) => {
+      const farm = farms.find((item) => String(item.farmId) === String(region.farmId))
+      const center = chinaRegionCenter(farm?.province || '')
+      if (!center) return
+      result.push({
+        id: region.farmId,
+        longitude: center.longitude,
+        latitude: center.latitude,
+        title: region.farmName,
+        meta: `${region.region} · ${region.areaTotal.toLocaleString('zh-CN')} 亩`,
+        tone: region.status === 1 ? (region.usageRate < 40 ? 'orange' : 'green') : 'gray',
+      })
+    })
+    return result
+  }, [regionCards, farms])
+
   /**
    * 构造环形饼图配置
    * @param title 标题
@@ -231,7 +253,7 @@ export default function ProductionCockpit(): JSX.Element {
           radius: ['38%', '62%'],
           center: ['50%', '54%'],
           avoidLabelOverlap: true,
-          label: { formatter: '{b}\n{d}%', fontSize: 11 },
+          label: { formatter: '{b}\n{d}%', fontSize: 12 },
           data,
         },
       ],
@@ -506,7 +528,7 @@ export default function ProductionCockpit(): JSX.Element {
             <GlobalOutlined style={{ color: '#1677ff' }} />
             <span>GIS 区域分布</span>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              原型中地图为色块占位，此处以区域卡片网格 + 利用率色条等效呈现
+              天地图农场分布 + 区域运营卡片
             </Typography.Text>
           </Space>
         }
@@ -526,8 +548,14 @@ export default function ProductionCockpit(): JSX.Element {
         ) : regionCards.length === 0 ? (
           <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无农场区域数据" />
         ) : (
-          <Row gutter={[16, 16]}>
-            {regionCards.map((region) => (
+          <Space direction="vertical" size={16} style={{ width: '100%' }}>
+            <TiandituMap
+              points={farmMapPoints}
+              height={420}
+              onPointClick={(point) => navigate(`/production/farms/${point.id}`)}
+            />
+            <Row gutter={[16, 16]}>
+              {regionCards.map((region) => (
               <Col key={region.farmId} xs={24} sm={12} xl={8}>
                 <Card
                   size="small"
@@ -574,8 +602,9 @@ export default function ProductionCockpit(): JSX.Element {
                   </Space>
                 </Card>
               </Col>
-            ))}
-          </Row>
+              ))}
+            </Row>
+          </Space>
         )}
       </Card>
     </Space>

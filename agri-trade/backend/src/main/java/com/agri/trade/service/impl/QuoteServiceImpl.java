@@ -403,24 +403,6 @@ public class QuoteServiceImpl extends ServiceImpl<QuoteMapper, Quote> implements
     }
 
     @Override
-    public List<Quote> getQuotesByBuyer(Long buyerId) {
-        LambdaQueryWrapper<Quote> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Quote::getBuyerId, buyerId);
-        wrapper.eq(Quote::getDelFlag, 0);
-        wrapper.orderByDesc(Quote::getCreateTime);
-        return baseMapper.selectList(wrapper);
-    }
-
-    @Override
-    public List<Quote> getQuotesBySeller(Long sellerId) {
-        LambdaQueryWrapper<Quote> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Quote::getSellerId, sellerId);
-        wrapper.eq(Quote::getDelFlag, 0);
-        wrapper.orderByDesc(Quote::getCreateTime);
-        return baseMapper.selectList(wrapper);
-    }
-
-    @Override
     public void acceptQuote(Long quoteId) {
         Quote quote = baseMapper.selectById(quoteId);
         if (quote != null) {

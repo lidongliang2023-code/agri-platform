@@ -33,7 +33,8 @@ import {
 } from 'antd'
 import { ArrowLeftOutlined } from '@ant-design/icons'
 import { fetchTaskRecords, getTask, reviewTask } from '@/api/tasks'
-import type { TaskRecord } from '@/types'
+import { fetchUsagesByTask } from '@/api/inputs'
+import type { InputUsageRecord, TaskRecord } from '@/types'
 import {
   ACCEPT_STATUS_META,
   TASK_PRIORITY_COLOR_MAP,
@@ -42,7 +43,7 @@ import {
   TASK_STATUS_LABEL_MAP,
   TASK_TYPE_LABEL_MAP,
 } from '@/types'
-import { isTaskExecuting, TASK_ACCEPT_PENDING } from '@/types/task'
+import { isTaskDone, TASK_ACCEPT_PENDING } from '@/types/task'
 
 /** 执行记录类型文本 */
 const RECORD_TYPE_TEXT: Record<number, string> = {
@@ -74,8 +75,13 @@ function parsePhotoList(record: TaskRecord): string[] {
     .filter(Boolean)
 }
 
-/** 解析关联投入品使用记录 ID */
-function parseUsageIds(raw?: string): string[] {
+/**
+ * 解析照片地址字段（JSON 数组字符串或逗号分隔）。
+ *
+ * @param raw 原始字段
+ * @returns 地址列表
+ */
+function parseUrlList(raw?: string): string[] {
   if (!raw) return []
   try {
     const parsed: unknown = JSON.parse(raw)
@@ -126,13 +132,24 @@ export default function TaskAcceptance(): JSX.Element {
     queryFn: () => fetchTaskRecords(taskId, 1, 50),
   })
 
+  /** 本任务关联的投入品使用记录（真实台账） */
+  const usagesQuery = useQuery({
+    queryKey: ['production-inputs', 'usages', 'task', taskId],
+    enabled: Boolean(taskId),
+    queryFn: () => fetchUsagesByTask(taskId),
+  })
+
   const task = taskQuery.data
   const records = recordQuery.data?.list ?? []
+  const usages = usagesQuery.data ?? []
 
-  /** 汇总照片墙 */
+  /** 汇总照片墙（记录照片 + 提交成果照片） */
   const allPhotos = useMemo(
-    () => records.flatMap((record: TaskRecord) => parsePhotoList(record)),
-    [records],
+    () => [
+      ...records.flatMap((record: TaskRecord) => parsePhotoList(record)),
+      ...parseUrlList(task?.resultPhotoUrls),
+    ],
+    [records, task],
   )
 
   /** 最近一次打卡坐标 */
@@ -141,9 +158,6 @@ export default function TaskAcceptance(): JSX.Element {
     [records],
   )
 
-  /** 关联投入品 */
-  const usageIds = useMemo(() => parseUsageIds(task?.relatedUsageIds), [task])
-
   /** 验收提交 */
   const reviewMutation = useMutation({
     mutationFn: (values: AcceptanceFormValues) =>
@@ -151,9 +165,11 @@ export default function TaskAcceptance(): JSX.Element {
     onSuccess: (_data, variables) => {
       message.success(variables.pass ? '验收通过，任务已归档' : '已驳回，任务退回执行')
       void queryClient.invalidateQueries({ queryKey: ['production-task', taskId] })
+      void queryClient.invalidateQueries({ queryKey: ['production-task-records', taskId] })
       void queryClient.invalidateQueries({ queryKey: ['production-tasks'] })
       navigate(`/production/tasks/${taskId}`)
     },
+    onError: (error: Error) => message.error(error.message || '验收提交失败'),
   })
 
   /** 任务信息描述项 */
@@ -260,8 +276,9 @@ export default function TaskAcceptance(): JSX.Element {
     )
   }
 
-  // 「已提交待验收」以 acceptStatus === 0 表达；执行态同时兼容 executing / doing。
-  const canReview = task.acceptStatus === TASK_ACCEPT_PENDING || isTaskExecuting(task.status)
+  // 只有「已提交成果 + 待验收」才能验收。执行中也显示验收按钮会让人绕过提交直接归档，
+  // 后端同样会拒绝（acceptTask 校验 status=completed && acceptStatus=0）。
+  const canReview = isTaskDone(task.status) && task.acceptStatus === TASK_ACCEPT_PENDING
 
   return (
     <PageContainer
@@ -278,6 +295,15 @@ export default function TaskAcceptance(): JSX.Element {
     >
       <Card title="📋 任务信息" style={{ marginBottom: 16 }}>
         <Descriptions bordered column={3} size="small" items={baseItems} />
+        {task.resultDesc && (
+          <Alert
+            style={{ marginTop: 12 }}
+            type="info"
+            showIcon
+            message="执行人提交的成果说明"
+            description={task.resultDesc}
+          />
+        )}
         {task.acceptStatus !== 0 && (
           <Alert
             style={{ marginTop: 12 }}
@@ -287,12 +313,16 @@ export default function TaskAcceptance(): JSX.Element {
             description={task.acceptRemark ?? '无验收意见'}
           />
         )}
-        {!canReview && (
+        {!canReview && task.acceptStatus !== 1 && (
           <Alert
             style={{ marginTop: 12 }}
             type="warning"
             showIcon
-            message={`任务当前状态为「${TASK_STATUS_LABEL_MAP[task.status] ?? task.status}」，执行人提交成果后可进行验收`}
+            message={
+              task.acceptStatus === 2
+                ? '任务已驳回，执行人重新开始执行并提交成果后可再次验收'
+                : `任务当前状态为「${TASK_STATUS_LABEL_MAP[task.status] ?? task.status}」，执行人提交成果后可进行验收`
+            }
           />
         )}
       </Card>
@@ -336,7 +366,7 @@ export default function TaskAcceptance(): JSX.Element {
                 />
               </Col>
               <Col span={8}>
-                <Statistic title="关联投入品" value={usageIds.length} suffix="项" />
+                <Statistic title="关联投入品" value={usages.length} suffix="项" />
               </Col>
             </Row>
             <Divider />
@@ -359,14 +389,18 @@ export default function TaskAcceptance(): JSX.Element {
             <Divider />
             <Typography.Text strong>投入品用量记录</Typography.Text>
             <div style={{ marginTop: 8 }}>
-              {usageIds.length === 0 ? (
+              {usages.length === 0 ? (
                 <Typography.Text type="secondary">本次任务未登记投入品</Typography.Text>
               ) : (
-                <Space size={[8, 8]} wrap>
-                  {usageIds.map((usageId) => (
-                    <Tag key={usageId} color="green">
-                      投入品记录 {usageId}
-                    </Tag>
+                <Space direction="vertical" size={6} style={{ width: '100%' }}>
+                  {usages.map((usage: InputUsageRecord) => (
+                    <Typography.Text key={usage.usageId}>
+                      <Tag color="green">{usage.inputName ?? '投入品'}</Tag>
+                      {usage.dosage === undefined || usage.dosage === null
+                        ? '用量未登记'
+                        : `${usage.dosage} ${usage.unit ?? ''}`}
+                      {usage.usedAt ? ` ｜ ${usage.usedAt}` : ''}
+                    </Typography.Text>
                   ))}
                 </Space>
               )}

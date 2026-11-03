@@ -7,6 +7,7 @@ import com.agri.production.common.exception.BusinessException;
 import com.agri.production.entity.CropInfo;
 import com.agri.production.entity.PlantingPlan;
 import com.agri.production.entity.Plot;
+import com.agri.production.entity.PlotCrop;
 import com.agri.production.common.entity.PageResult;
 import com.agri.production.common.util.BeanCopyUtils;
 import com.agri.production.mapper.CropInfoMapper;
@@ -33,10 +34,14 @@ public class PlotServiceImpl extends ServiceImpl<PlotMapper, Plot> implements IP
     private final CropInfoMapper cropMapper;
     /** 计划台账：地块的「在种 / 空闲」由它决定（地块表本身只有启用与否）。 */
     private final PlantingPlanMapper planMapper;
+    /** 种养品种台账：地块表单去掉「当前作物」后，这两列的真相在这一张表里。 */
+    private final PlotCropServiceImpl plotCropService;
 
-    public PlotServiceImpl(CropInfoMapper cropMapper, PlantingPlanMapper planMapper) {
+    public PlotServiceImpl(CropInfoMapper cropMapper, PlantingPlanMapper planMapper,
+                           PlotCropServiceImpl plotCropService) {
         this.cropMapper = cropMapper;
         this.planMapper = planMapper;
+        this.plotCropService = plotCropService;
     }
 
     @Override
@@ -46,7 +51,7 @@ public class PlotServiceImpl extends ServiceImpl<PlotMapper, Plot> implements IP
         plot.setTenantId(tenantId);
         plot.setPlotCode(generatePlotCode(tenantId));
         plot.setStatus("active");
-        resolveCrop(plot, dto, tenantId);
+        resolveCrop(plot, dto, tenantId, null, null);
         save(plot);
         return PlotVO.of(plot, plantingPlotIds(tenantId));
     }
@@ -58,8 +63,11 @@ public class PlotServiceImpl extends ServiceImpl<PlotMapper, Plot> implements IP
         if (plot == null || !tenantId.equals(plot.getTenantId())) {
             throw new BusinessException(404, "地块不存在：" + dto.getId());
         }
+        // BeanCopyUtils 是整表覆盖，省略的字段会变成 null，作物两列的旧值得先留住再判口径。
+        String previousCrop = plot.getCurrentCrop();
+        Long previousCropId = plot.getCropId();
         BeanCopyUtils.copy(dto, plot);
-        resolveCrop(plot, dto, tenantId);
+        resolveCrop(plot, dto, tenantId, previousCropId, previousCrop);
         updateById(plot);
         return PlotVO.of(plot, plantingPlotIds(tenantId));
     }
@@ -74,17 +82,20 @@ public class PlotServiceImpl extends ServiceImpl<PlotMapper, Plot> implements IP
 
      *
      * <p>下发的是主键（数字）或作物名都能认；认不出报 400 —— 既然作物已是主数据，
-     * 就不该再往地块上写一个主数据里没有的作物名。本次请求没下发作物则保持原值。</p>
+     * 就不该再往地块上写一个主数据里没有的作物名。</p>
+
+     *
+     * <p>没下发作物时的优先级：地块的种养品种台账（现在的录入入口）&gt; 地块原有的值。
+     * 早期只写地块、没有台账行的演示数据因此不会被一次无关编辑抹掉。</p>
      */
-    private void resolveCrop(Plot plot, PlotSaveDTO dto, String tenantId) {
+    private void resolveCrop(Plot plot, PlotSaveDTO dto, String tenantId,
+                             Long previousCropId, String previousCrop) {
         String rawId = dto.getCropId() == null ? null : dto.getCropId().trim();
         String rawName = dto.getCurrentCrop() == null ? null : dto.getCurrentCrop().trim();
         if ((rawId == null || rawId.isEmpty()) && (rawName == null || rawName.isEmpty())) {
-            // 没下发作物 = 这次就是"不要作物"。地块更新是**整表提交**语义（DTO 里省略的字段本来就会被
-            // BeanCopyUtils 清空），所以这里显式把两列一起清掉 —— 只清名字、留着 crop_id，
-            // 会留下"有 ID 没名字"的半截状态（实测踩到过）。
-            plot.setCropId(null);
-            plot.setCurrentCrop(null);
+            PlotCrop first = plotCropService.earliest(plot.getId(), tenantId);
+            plot.setCropId(first != null ? first.getCropId() : previousCropId);
+            plot.setCurrentCrop(first != null ? first.getCropName() : previousCrop);
             return;
         }
         Long pk = parseLong(rawId);

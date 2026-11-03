@@ -1,0 +1,72 @@
+{
+  "pages": [
+    { "path": "pages/news/index", "style": { "navigationStyle": "custom" } },
+    { "path": "pages/news/channel", "style": { "navigationBarTitleText": "资讯频道" } },
+    { "path": "pages/news/article", "style": { "navigationStyle": "custom" } },
+
+    { "path": "pages/market/index", "style": { "navigationStyle": "custom" } },
+    { "path": "pages/market/variety", "style": { "navigationStyle": "custom" } },
+    { "path": "pages/market/price-index", "style": { "navigationStyle": "custom" } },
+
+    { "path": "pages/alert/setup", "style": { "navigationBarTitleText": "价格预警" } },
+    { "path": "pages/alert/messages", "style": { "navigationBarTitleText": "预警消息" } },
+
+    { "path": "pages/ai/index", "style": { "navigationStyle": "custom" } },
+    { "path": "pages/ai/history", "style": { "navigationBarTitleText": "历史提问" } },
+
+    { "path": "pages/search/index", "style": { "navigationStyle": "custom" } },
+    { "path": "pages/message/index", "style": { "navigationBarTitleText": "消息通知" } },
+    { "path": "pages/favorite/index", "style": { "navigationBarTitleText": "我的收藏" } },
+    { "path": "pages/history/index", "style": { "navigationBarTitleText": "浏览历史" } },
+    { "path": "pages/subscription/index", "style": { "navigationBarTitleText": "我的订阅" } },
+
+    { "path": "pages/profile/index", "style": { "navigationStyle": "custom" } },
+    { "path": "pages/profile/edit", "style": { "navigationBarTitleText": "编辑资料" } },
+    { "path": "pages/settings/index", "style": { "navigationBarTitleText": "设置" } },
+    { "path": "pages/help/index", "style": { "navigationBarTitleText": "帮助与反馈" } },
+
+    { "path": "pages/course/index", "style": { "navigationStyle": "custom" } },
+    { "path": "pages/course/detail", "style": { "navigationStyle": "custom" } },
+    { "path": "pages/course/play", "style": { "navigationStyle": "custom" } },
+
+    { "path": "pages/sd/index", "style": { "navigationBarTitleText": "供需大厅" } },
+    { "path": "pages/sd/publish", "style": { "navigationBarTitleText": "发布信息" } },
+    { "path": "pages/sd/detail", "style": { "navigationStyle": "custom" } },
+    { "path": "pages/sd/match", "style": { "navigationBarTitleText": "智能匹配" } },
+    { "path": "pages/sd/chat", "style": { "navigationStyle": "custom" } },
+    { "path": "pages/sd/mine", "style": { "navigationBarTitleText": "我的发布" } },
+
+    { "path": "pages/report/detail", "style": { "navigationStyle": "custom" } },
+    { "path": "pages/report/mine", "style": { "navigationBarTitleText": "我的报告" } },
+
+    { "path": "pages/attest/index", "style": { "navigationBarTitleText": "存证记录" } },
+    { "path": "pages/attest/detail", "style": { "navigationBarTitleText": "存证详情" } },
+    { "path": "pages/attest/verify", "style": { "navigationBarTitleText": "内容验证" } },
+
+    { "path": "pages/expert/apply", "style": { "navigationBarTitleText": "专家认证申请" } },
+    { "path": "pages/expert/verify", "style": { "navigationBarTitleText": "专家认证查询" } },
+    { "path": "pages/expert/detail", "style": { "navigationStyle": "custom" } },
+    { "path": "pages/expert/cert", "style": { "navigationBarTitleText": "我的认证" } },
+
+    { "path": "pages/login/index", "style": { "navigationStyle": "custom" } }
+  ],
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "丰链云信息资讯",
+    "navigationBarBackgroundColor": "#ffffff",
+    "backgroundColor": "#f4f7f5",
+    "backgroundTextStyle": "dark"
+  },
+  "tabBar": {
+    "color": "#94a198",
+    "selectedColor": "#12764a",
+    "borderStyle": "white",
+    "backgroundColor": "#ffffff",
+    "list": [
+      { "pagePath": "pages/news/index", "text": "资讯" },
+      { "pagePath": "pages/market/index", "text": "行情" },
+      { "pagePath": "pages/ai/index", "text": "AI问答" },
+      { "pagePath": "pages/profile/index", "text": "我的" }
+    ]
+  }
+}

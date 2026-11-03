@@ -23,5 +23,10 @@ public class AfterSale {
     private String status;
     private String handleOpinion;
     private LocalDateTime handleTime;
+    /** 退货退款：买家回寄物流与商家收货时间。 */
+    private String returnCompany;
+    private String returnLogisticsNo;
+    private LocalDateTime returnShippedAt;
+    private LocalDateTime returnReceivedAt;
     private LocalDateTime createTime;
 }

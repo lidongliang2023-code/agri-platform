@@ -2,13 +2,19 @@
 /** 买家中心全链路页面验收：从询价报价受理到合同、售后、评价、开票及运营发票页。 */
 import { execFileSync } from 'node:child_process'
 import { createRequire } from 'node:module'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const require2 = createRequire(path.join(ROOT, 'agri-production/frontend/package.json'))
-const puppeteer = require2('puppeteer')
+const require2 = createRequire(path.join('C:/Users/71502/.workbuddy-ai/binaries/node/workspace', 'noop.js'))
+const { chromium } = require2('playwright-core')
+
+const BROWSER = [
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+].find((candidate) => existsSync(candidate))
 const TRADE = 'http://localhost:8086'
 const CORE = 'http://localhost:8093'
 const MAIN_ORDER_ID = Number(process.argv.find((item) => /^\d+$/.test(item)) ?? '7627')
@@ -62,8 +68,8 @@ const fill = async (page, selector, value) => page.evaluate(({ target, next }) =
 }, { target: selector, next: value })
 
 const loginAndOpen = async (page, targetPath, username, password) => {
-  await page.goto(`${TRADE}${targetPath}`, { waitUntil: 'networkidle2', timeout: 60000 })
-  await page.waitForFunction(() => window.location.port === '8090', { timeout: 20000 })
+  await page.goto(`${TRADE}${targetPath}`, { waitUntil: 'networkidle', timeout: 60000 })
+  await page.waitForFunction(() => window.location.port === '8090', undefined, { timeout: 20000 })
   await page.waitForSelector('button[role="tab"]', { timeout: 20000 })
   await page.evaluate(() => {
     const tab = [...document.querySelectorAll('button[role="tab"]')]
@@ -81,16 +87,18 @@ const loginAndOpen = async (page, targetPath, username, password) => {
     await sleep(400)
     if (page.url().includes(':8086') && !page.url().includes('/login')) break
   }
-  await page.waitForNetworkIdle({ idleTime: 700, timeout: 15000 }).catch(() => {})
+  await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 700))
 }
 
 const openBuyerTab = async (page, label) => {
   await page.goto(`${TRADE}/member/buyer?tab=${encodeURIComponent(label)}`, {
-    waitUntil: 'networkidle2',
+    waitUntil: 'networkidle',
     timeout: 60000,
   })
   await page.waitForSelector('.mc-shell', { timeout: 30000 })
-  await page.waitForNetworkIdle({ idleTime: 600, timeout: 12000 }).catch(() => {})
+  await page.waitForLoadState('networkidle', { timeout: 12000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 600))
   await sleep(400)
   return page.evaluate(() => document.body.innerText)
 }
@@ -167,21 +175,22 @@ const refundNo = scalar(`
   WHERE order_id = ${refundOrderId} AND del_flag = 0 ORDER BY id DESC LIMIT 1
 `)
 
-const browser = await puppeteer.launch({
-  executablePath: 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
-  headless: 'new',
+const browser = await chromium.launch({
+  headless: true,
+  executablePath: BROWSER,
   args: ['--no-sandbox'],
 })
 try {
-  const buyerContext = await browser.createBrowserContext()
+  const buyerContext = await browser.newContext()
   const buyer = await buyerContext.newPage()
   const errors = []
   buyer.on('pageerror', (error) => errors.push(String(error)))
-  await buyer.setViewport({ width: 1440, height: 1000 })
+  await buyer.setViewportSize({ width: 1440, height: 1000 })
   await loginAndOpen(buyer, '/member/buyer?tab=inquiry', '19900002005', 'Test12345')
 
   const inquiryText = await openBuyerTab(buyer, 'inquiry')
-  check(inquiryText.includes('发布采购需求') && inquiryText.includes('我的询价'), '买家中心询价页完整渲染')
+  check(inquiryText.includes('询价与报价') && inquiryText.includes('货源询价进展')
+    && inquiryText.includes('查看采购需求'), '买家中心询价页完整渲染')
   check(inquiryText.includes(pendingQuoteNo), '待受理供应商报价在页面可见', pendingQuoteNo)
   const clicked = await buyer.evaluate((quoteNo) => {
     const row = [...document.querySelectorAll('tr')].find((item) => item.textContent?.includes(quoteNo))
@@ -238,12 +247,12 @@ try {
   const offlineSignText = await buyer.evaluate(() => document.body.innerText)
   check(offlineSignText.includes('上传已签署合同扫描件'), '线下签署提供合同扫描件上传入口')
   await buyer.screenshot({ path: path.join(OUT, 'contract-sign-modes.png'), fullPage: true })
-  await buyer.setViewport({ width: 390, height: 844 })
+  await buyer.setViewportSize({ width: 390, height: 844 })
   const signMobileNoOverflow = await buyer.evaluate(() =>
     document.documentElement.scrollWidth <= window.innerWidth + 1)
   check(signMobileNoOverflow, '390px 合同签署页无横向溢出')
   await buyer.screenshot({ path: path.join(OUT, 'contract-sign-mobile.png'), fullPage: true })
-  await buyer.setViewport({ width: 1440, height: 1000 })
+  await buyer.setViewportSize({ width: 1440, height: 1000 })
   await buyer.click('.contract-back')
   await buyer.waitForSelector('.contract-detail-page', { timeout: 10000 })
   const detailText = await buyer.evaluate(() => document.body.innerText)
@@ -265,7 +274,8 @@ try {
       .find((item) => (item.textContent ?? '').replace(/\s/g, '') === '搜索')
     button?.click()
   })
-  await buyer.waitForNetworkIdle({ idleTime: 700, timeout: 15000 }).catch(() => {})
+  await buyer.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 700))
   const signedContractText = await buyer.evaluate(() => document.body.innerText)
   check(signedContractText.includes(mainContract[1] ?? '') && signedContractText.includes('已签署'),
     '合同管理可查询并显示已签署合同', mainContract[1] ?? '')
@@ -283,12 +293,12 @@ try {
   check(mainDetailText.includes('在线电子签章') && mainDetailText.includes('线下签署文件'),
     '已签署合同详情展示在线签章和线下签署证据')
   await buyer.screenshot({ path: path.join(OUT, 'contract-detail-redesigned.png'), fullPage: true })
-  await buyer.setViewport({ width: 390, height: 844 })
+  await buyer.setViewportSize({ width: 390, height: 844 })
   const detailMobileNoOverflow = await buyer.evaluate(() =>
     document.documentElement.scrollWidth <= window.innerWidth + 1)
   check(detailMobileNoOverflow, '390px 合同详情页无横向溢出')
   await buyer.screenshot({ path: path.join(OUT, 'contract-detail-mobile.png'), fullPage: true })
-  await buyer.setViewport({ width: 1440, height: 1000 })
+  await buyer.setViewportSize({ width: 1440, height: 1000 })
   await buyer.click('.contract-back')
   await buyer.waitForSelector('.contract-table', { timeout: 10000 })
 
@@ -308,11 +318,11 @@ try {
   await buyer.screenshot({ path: path.join(OUT, 'buyer-journey-fund.png'), fullPage: true })
   await buyerContext.close()
 
-  const sellerContext = await browser.createBrowserContext()
+  const sellerContext = await browser.newContext()
   const seller = await sellerContext.newPage()
   const sellerErrors = []
   seller.on('pageerror', (error) => sellerErrors.push(String(error)))
-  await seller.setViewport({ width: 1440, height: 1000 })
+  await seller.setViewportSize({ width: 1440, height: 1000 })
   await loginAndOpen(seller, '/member/seller?tab=contract', 'farmer', 'Admin@123')
   await seller.waitForSelector('.contract-page', { timeout: 30000 })
   const sellerContractText = await seller.evaluate(() => document.body.innerText)
@@ -330,7 +340,8 @@ try {
       .find((item) => (item.textContent ?? '').replace(/\s/g, '') === '搜索')
     button?.click()
   })
-  await seller.waitForNetworkIdle({ idleTime: 700, timeout: 15000 }).catch(() => {})
+  await seller.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 700))
   const sellerRowFound = await seller.evaluate((contractNo) =>
     document.body.innerText.includes(contractNo), mainContract[1] ?? '')
   check(sellerRowFound, '卖家中心可按合同编号查询合同', mainContract[1] ?? '')
@@ -351,20 +362,22 @@ try {
   check(sellerErrors.length === 0, '卖家合同页面无未捕获脚本异常', sellerErrors.slice(0, 2).join(' | '))
   await sellerContext.close()
 
-  const adminContext = await browser.createBrowserContext()
+  const adminContext = await browser.newContext()
   const admin = await adminContext.newPage()
   const adminErrors = []
   admin.on('pageerror', (error) => adminErrors.push(String(error)))
-  await admin.setViewport({ width: 1440, height: 1000 })
+  await admin.setViewportSize({ width: 1440, height: 1000 })
   await loginAndOpen(admin, '/admin/trade/invoice', 'admin', 'Admin@123')
   await admin.waitForSelector('.admin-shell', { timeout: 30000 })
-  await admin.waitForNetworkIdle({ idleTime: 700, timeout: 15000 }).catch(() => {})
+  await admin.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 700))
   // 默认是“待开票”，切到“已开票”验证最新发票。
   await admin.click('.ant-select-selector')
   await sleep(250)
   await admin.keyboard.press('ArrowDown')
   await admin.keyboard.press('Enter')
-  await admin.waitForNetworkIdle({ idleTime: 700, timeout: 15000 }).catch(() => {})
+  await admin.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 700))
   await sleep(500)
   const adminText = await admin.evaluate(() => document.body.innerText)
   check(adminText.includes('发票审核') && adminText.includes(mainInvoice[1] ?? ''),

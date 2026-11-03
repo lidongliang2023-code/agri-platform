@@ -5,14 +5,16 @@
  * PRD 序号：PRD 6.1 #27
  *
  * 还原要点（PRD 6.1 #27「阈值规则、通知对象、生效时段」）：
- * - 规则列表：规则名称、监测指标、阈值条件、持续时间、告警级别、适用范围、通知方式、生效时段、启用状态
+ * - 规则列表：规则名称、监测指标、阈值条件、持续时间、告警级别、适用范围、通知方式、启用状态
  * - 新增 / 编辑：阈值表达式用表单拼装（监测指标 + 比较符 + 阈值 + 持续时间）
- * - 通知对象：通知渠道（站内 / 短信 / 微信）多选 + 通知成员多选
- * - 生效时段：按天设置生效起止时间（TimePicker.RangePicker）
+ * - 通知方式：站内 / 短信 / 微信多选（后端 notifyChannels 字段，可落库）
  * - 启停：列表开关直接切换，失败时回落本地状态保证可交互
  *
- * 数据来源：`/alerts/rules`（列表 / 新增 / 编辑 / 删除 / 启停），
- * 地块与成员分别来自 `/plots`、`/members`；后端骨架无数据时回落示例规则。
+ * 后端当前没有“通知成员 / 生效时段”字段，页面上不再展示这两项，
+ * 避免收集了却存不进去；待后端补字段后再恢复。
+ *
+ * 数据来源：`/alerts/rules`（列表 / 新增 / 编辑 / 删除 / 启停），地块来自 `/plots`；
+ * 后端无数据（接口出错）时回落示例规则。
  */
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -34,14 +36,12 @@ import {
   Switch,
   Table,
   Tag,
-  TimePicker,
   Tooltip,
   Typography,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { DeleteOutlined, EditOutlined, PlusOutlined, SettingOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
-import type { Dayjs } from 'dayjs'
 import useFarmStore from '@/store/farm'
 import {
   createAlertRule,
@@ -50,7 +50,6 @@ import {
   updateAlertRule,
   updateAlertRuleStatus,
 } from '@/api/alerts'
-import { listMembers } from '@/api/members'
 import { listPlots } from '@/api/plots'
 import { alertLevelMeta } from '@/utils/production-adapter'
 import { toFiniteNumber } from '@/utils/metric-format'
@@ -59,7 +58,6 @@ import { MISSING_VALUE_TEXT } from '@/components/MetricStatistic'
 import type { AlertLevel, AlertRule } from '@/types'
 
 const { Text } = Typography
-const { RangePicker: TimeRangePicker } = TimePicker
 
 /** 监测指标字典（业务键 → 名称 / 单位 / 默认阈值） */
 const METRIC_OPTIONS: { value: string; label: string; unit: string; defaultThreshold: number }[] = [
@@ -140,6 +138,14 @@ const ALERT_LEVEL_FROM_BACKEND: Record<string, AlertLevel> = {
   normal: 2,
   important: 3,
   urgent: 4,
+}
+
+/** 页面级别数字 → 后端字符串枚举（与 {@link ALERT_LEVEL_FROM_BACKEND} 严格反向） */
+const ALERT_LEVEL_TO_BACKEND: Record<AlertLevel, string> = {
+  1: 'INFO',
+  2: 'WARN',
+  3: 'CRITICAL',
+  4: 'URGENT',
 }
 
 /** 级别无法识别时的兜底（不臆造严重程度，取最轻档并保留原值供提示） */
@@ -264,7 +270,22 @@ type RulePayload = Partial<Omit<AlertRule, 'notifyChannels'>> &
  * @returns api 层入参
  */
 function toApiPayload(payload: RulePayload): Partial<AlertRule> {
-  return payload as unknown as Partial<AlertRule>
+  // 页面视图字段与后端实体字段是两套命名：threshold → thresholdValue、
+  // duration → durationMin、数字级别 → INFO/WARN/CRITICAL/URGENT、
+  // scopeIds → plotId。此前直接 `as` 透传，后端只收到 ruleName，
+  // 指标 / 阈值 / 时长 / 级别全部落成 null（实测新建规则即如此）。
+  return {
+    ruleName: payload.ruleName,
+    metric: payload.metric,
+    operator: payload.operator,
+    thresholdValue: payload.threshold,
+    durationMin: payload.duration,
+    alertLevel: ALERT_LEVEL_TO_BACKEND[payload.alertLevel ?? 2],
+    plotId: payload.scope === 'plot' ? payload.scopeIds?.[0] : undefined,
+    notifyChannels: payload.notifyChannels,
+    enabledFlag: payload.status === 1 ? 1 : 0,
+    status: payload.status,
+  } as unknown as Partial<AlertRule>
 }
 
 /**
@@ -361,10 +382,6 @@ interface RuleFormValues {
   scopeIds?: string[]
   /** 通知渠道（取值见 NOTIFY_CHANNEL_OPTIONS，与后端中文档案名一致） */
   notifyChannels: string[]
-  /** 通知成员 */
-  notifyUserIds?: string[]
-  /** 生效时段 */
-  activeRange?: [Dayjs, Dayjs]
 }
 
 /** 示例规则模板 */
@@ -552,16 +569,15 @@ export default function AlertRules(): JSX.Element {
       }),
   })
 
-  /** 地块选项 */
+  /**
+   * 地块选项。
+   *
+   * <p>不传 farmId：地块列表接口并不按农场过滤，传了反而可能拿到空页；
+   * 规则选择“指定地块”时直接列出全部地块。</p>
+   */
   const plotQuery = useQuery({
-    queryKey: ['production-alert-rule-plots', farmId],
-    queryFn: () => listPlots({ pageNum: 1, pageSize: 100, farmId }),
-  })
-
-  /** 成员选项 */
-  const memberQuery = useQuery({
-    queryKey: ['production-alert-rule-members'],
-    queryFn: () => listMembers({ pageNum: 1, pageSize: 100 }),
+    queryKey: ['production-alert-rule-plots'],
+    queryFn: () => listPlots({ pageNum: 1, pageSize: 200 }),
   })
 
   // 后端直出 AlertRuleEntity，字段名与 types/alert.ts 的 AlertRule 并不一致
@@ -584,12 +600,6 @@ export default function AlertRules(): JSX.Element {
       label: `${item.plotName}（${item.area} 亩）`,
     }))
   }, [plotQuery.data])
-
-  const memberOptions: { value: string; label: string }[] = useMemo(() => {
-    const members = memberQuery.data?.list ?? []
-    // 无成员时同样就是空选项；原 FALLBACK_MEMBERS 兜底已移除（同属"会被提交的编造值"）。
-    return members.map((item) => ({ value: item.userId, label: item.realName }))
-  }, [memberQuery.data])
 
   /** 最终渲染数据 */
   const { rows, total } = useMemo<{ rows: RuleView[]; total: number }>(() => {
@@ -647,22 +657,18 @@ export default function AlertRules(): JSX.Element {
         scope: editing.scope,
         scopeIds: editing.scopeIds ?? [],
         notifyChannels: parseNotifyChannels(editing.notifyChannels),
-        notifyUserIds: editing.notifyUserIds ?? [],
-        activeRange: editing.activeStart
-          ? [dayjs(editing.activeStart, 'HH:mm'), dayjs(editing.activeEnd || '23:59', 'HH:mm')]
-          : undefined,
       })
       return
     }
     form.setFieldsValue({
       operator: 'gt',
       alertLevel: 3,
-      scope: 'plot',
+      // 默认整个农场：原来默认“指定地块”但不预选地块，新建规则会被必填校验卡住
+      scope: 'farm',
       notifyChannels: ['站内'],
       duration: 30,
       metric: 'airTemperature',
       threshold: 38,
-      activeRange: [dayjs('00:00', 'HH:mm'), dayjs('23:59', 'HH:mm')],
     })
   }
 
@@ -695,9 +701,6 @@ export default function AlertRules(): JSX.Element {
       scope: values.scope,
       scopeIds: values.scope === 'plot' ? (values.scopeIds ?? []) : [],
       notifyChannels: values.notifyChannels.join(','),
-      notifyUserIds: values.notifyUserIds ?? [],
-      activeStart: values.activeRange?.[0]?.format('HH:mm'),
-      activeEnd: values.activeRange?.[1]?.format('HH:mm'),
       status: editing?.status ?? 1,
     }
     setSubmitting(true)
@@ -878,7 +881,7 @@ export default function AlertRules(): JSX.Element {
       title: '通知方式',
       dataIndex: 'notifyChannels',
       width: 180,
-      render: (channels: RuleView['notifyChannels'], record) => {
+      render: (channels: RuleView['notifyChannels']) => {
         const list = parseNotifyChannels(channels)
         return (
           <Space size={4} wrap>
@@ -892,19 +895,9 @@ export default function AlertRules(): JSX.Element {
               // 后端给的就是中文档案名，原样展示；不做任何本地编码换算
               list.map((item) => <Tag key={item}>{item}</Tag>)
             )}
-            {(record.notifyUserIds ?? []).length > 0 && (
-              <Tag color="purple">{record.notifyUserIds?.length} 人</Tag>
-            )}
           </Space>
         )
       },
-    },
-    {
-      title: '生效时段',
-      key: 'activeRange',
-      width: 130,
-      render: (_value: unknown, record) =>
-        record.activeStart ? `${record.activeStart} ~ ${record.activeEnd ?? '23:59'}` : '全天',
     },
     {
       title: '状态',
@@ -1143,30 +1136,12 @@ export default function AlertRules(): JSX.Element {
             </Col>
           </Row>
 
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item
-                name="notifyChannels"
-                label="通知方式"
-                rules={[{ required: true, message: '请选择通知方式' }]}
-              >
-                <Select mode="multiple" options={NOTIFY_CHANNEL_OPTIONS} placeholder="请选择渠道" />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="notifyUserIds" label="通知对象">
-                <Select
-                  mode="multiple"
-                  options={memberOptions}
-                  placeholder="请选择通知成员"
-                  allowClear
-                />
-              </Form.Item>
-            </Col>
-          </Row>
-
-          <Form.Item name="activeRange" label="生效时段" tooltip="留空表示全天生效">
-            <TimeRangePicker format="HH:mm" style={{ width: '100%' }} placeholder={['开始', '结束']} />
+          <Form.Item
+            name="notifyChannels"
+            label="通知方式"
+            rules={[{ required: true, message: '请选择通知方式' }]}
+          >
+            <Select mode="multiple" options={NOTIFY_CHANNEL_OPTIONS} placeholder="请选择渠道" />
           </Form.Item>
         </Form>
       </Modal>

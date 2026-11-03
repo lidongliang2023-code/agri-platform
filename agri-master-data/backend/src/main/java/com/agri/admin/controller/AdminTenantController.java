@@ -84,8 +84,9 @@ public class AdminTenantController {
     public ApiResponse<PageResult<TenantQuotaOverviewVO>> getQuotaOverview(
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "10") Integer pageSize,
-            @RequestParam(required = false) String keyword) {
-        return ApiResponse.success(adminTenantService.getQuotaOverview(pageNum, pageSize, keyword));
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String tenantType) {
+        return ApiResponse.success(adminTenantService.getQuotaOverview(pageNum, pageSize, keyword, tenantType));
     }
 
     @Operation(summary = "调整租户配额")
@@ -106,6 +107,12 @@ public class AdminTenantController {
     @GetMapping("/package/list")
     public ApiResponse<List<TenantPackageVO>> getPackageList() {
         return ApiResponse.success(adminTenantService.getPackageList());
+    }
+
+    @Operation(summary = "获取服务套餐详情")
+    @GetMapping("/package/{id}")
+    public ApiResponse<TenantPackageVO> getPackageDetail(@PathVariable Long id) {
+        return ApiResponse.success(adminTenantService.getPackageDetail(id));
     }
 
     @Operation(summary = "创建租户套餐")

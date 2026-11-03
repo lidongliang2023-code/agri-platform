@@ -1,12 +1,16 @@
 package com.agri.production.service.impl;
 
+import com.agri.production.common.constant.PlanStatusDict;
 import com.agri.production.common.entity.PageResult;
 import com.agri.production.common.exception.BusinessException;
 import com.agri.production.entity.Approval;
 import com.agri.production.entity.ApprovalFlow;
+import com.agri.production.entity.PlantingPlan;
 import com.agri.production.mapper.ApprovalFlowMapper;
 import com.agri.production.mapper.ApprovalMapper;
+import com.agri.production.mapper.PlantingPlanMapper;
 import com.agri.production.service.IAdminApprovalService;
+import com.agri.production.service.IProductionNotificationService;
 import com.agri.production.vo.AdminApprovalFlowVO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -39,11 +43,17 @@ public class AdminApprovalServiceImpl implements IAdminApprovalService {
 
     private final ApprovalMapper approvalMapper;
     private final ApprovalFlowMapper approvalFlowMapper;
+    private final PlantingPlanMapper plantingPlanMapper;
+    private final IProductionNotificationService notificationService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public AdminApprovalServiceImpl(ApprovalMapper approvalMapper, ApprovalFlowMapper approvalFlowMapper) {
+    public AdminApprovalServiceImpl(ApprovalMapper approvalMapper, ApprovalFlowMapper approvalFlowMapper,
+                                    PlantingPlanMapper plantingPlanMapper,
+                                    IProductionNotificationService notificationService) {
         this.approvalMapper = approvalMapper;
         this.approvalFlowMapper = approvalFlowMapper;
+        this.plantingPlanMapper = plantingPlanMapper;
+        this.notificationService = notificationService;
     }
 
     @Override
@@ -87,6 +97,24 @@ public class AdminApprovalServiceImpl implements IAdminApprovalService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Approval approve(String approvalId, String remark) {
+        return decide(approvalId, remark, true);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Approval reject(String approvalId, String remark) {
+        if (remark == null || remark.isBlank()) {
+            throw new BusinessException(400, "驳回时必须填写审批意见");
+        }
+        return decide(approvalId, remark, false);
+    }
+
+    @Override
+    public Approval detail(String approvalId) {
+        return requireApproval(approvalId);
+    }
+
+    private Approval decide(String approvalId, String remark, boolean approved) {
         Approval approval = requireApproval(approvalId);
         if (STATUS_APPROVED.equalsIgnoreCase(approval.getStatus())) {
             throw new BusinessException(400, "该审批单已通过，无需重复审批：" + approvalId);
@@ -94,15 +122,45 @@ public class AdminApprovalServiceImpl implements IAdminApprovalService {
         if (STATUS_REJECTED.equalsIgnoreCase(approval.getStatus())) {
             throw new BusinessException(400, "该审批单已驳回，如需变更请重新提交：" + approvalId);
         }
-        approval.setStatus(STATUS_APPROVED);
+        approval.setStatus(approved ? STATUS_APPROVED : STATUS_REJECTED);
         approval.setApproveAt(LocalDateTime.now());
-        if (remark != null && !remark.isBlank()) {
-            approval.setApproveOpinion(remark.trim());
-        }
+        approval.setApproveOpinion(remark == null || remark.isBlank() ? null : remark.trim());
         approval.setUpdateTime(LocalDateTime.now());
         approvalMapper.updateById(approval);
-        log.info("审批通过：{} {}", approval.getApprovalCode(), approval.getTitle());
+        syncBusiness(approval, approved);
+        log.info("审批{}：{} {}", approved ? "通过" : "驳回", approval.getApprovalCode(), approval.getTitle());
         return approvalMapper.selectById(approval.getId());
+    }
+
+    /** 审批结果回写关联业务。当前生产域已接入 PLAN，其它类型保持审批单自身状态。 */
+    private void syncBusiness(Approval approval, boolean approved) {
+        if (!"PLAN".equalsIgnoreCase(approval.getBizType()) || approval.getBizId() == null) {
+            return;
+        }
+        Long planId;
+        try {
+            planId = Long.valueOf(approval.getBizId());
+        } catch (NumberFormatException e) {
+            log.warn("审批单 {} 关联的计划标识不是数字：{}", approval.getApprovalCode(), approval.getBizId());
+            return;
+        }
+        PlantingPlan plan = plantingPlanMapper.selectById(planId);
+        if (plan == null || !Integer.valueOf(0).equals(plan.getDeleted())) {
+            log.warn("审批单 {} 关联的种养计划不存在或已删除：{}", approval.getApprovalCode(), planId);
+            return;
+        }
+        plan.setPlanStatus(approved ? PlanStatusDict.ACTIVE : PlanStatusDict.DRAFT);
+        plan.setApprover(approval.getCurrentApproverId());
+        plan.setApprovalComment(approval.getApproveOpinion());
+        plan.setApprovalTime(java.sql.Timestamp.valueOf(approval.getApproveAt()));
+        plan.setUpdateTime(LocalDateTime.now());
+        plantingPlanMapper.updateById(plan);
+        notificationService.notify(plan.getTenantId(), String.valueOf(plan.getFarmId()),
+                String.valueOf(plan.getManagerId()), "APPROVAL",
+                approved ? "种养计划审批通过" : "种养计划审批驳回",
+                String.format("计划「%s」%s%s", plan.getPlanName(), approved ? "已通过审批并进入进行中。" : "被驳回，请修改后重新提交。",
+                        approval.getApproveOpinion() == null ? "" : "审批意见：" + approval.getApproveOpinion()),
+                String.valueOf(plan.getId()), "/production/plans/" + plan.getId());
     }
 
     @Override
@@ -179,6 +237,21 @@ public class AdminApprovalServiceImpl implements IAdminApprovalService {
         return AdminApprovalFlowVO.of(approvalFlowMapper.selectById(flow.getId()));
     }
 
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteFlow(String flowId) {
+        if (flowId == null || flowId.isBlank()) {
+            throw new BusinessException(400, "缺少 flowId");
+        }
+        ApprovalFlow flow = approvalFlowMapper.selectOne(new LambdaQueryWrapper<ApprovalFlow>()
+                .eq(ApprovalFlow::getFlowCode, flowId.trim()).last("LIMIT 1"));
+        if (flow == null) {
+            throw new BusinessException(404, "审批流程不存在：" + flowId);
+        }
+        approvalFlowMapper.deleteById(flow.getId());
+        log.info("删除审批流程：{}", flow.getFlowCode());
+    }
+
     private void applyFlowPayload(ApprovalFlow flow, Map<String, Object> payload) {
         if (payload == null) {
             return;
@@ -195,14 +268,35 @@ public class AdminApprovalServiceImpl implements IAdminApprovalService {
                 flow.setStatus(status == 0 ? 0 : 1);
             }
         }
-        if (payload.containsKey("nodes")) {
+        boolean hasNodes = payload.containsKey("nodes");
+        boolean hasRoutes = payload.containsKey("conditionRoutes");
+        boolean hasEscalations = payload.containsKey("escalations");
+        if (hasNodes || hasRoutes || hasEscalations) {
             try {
-                flow.setNodesJson(objectMapper.writeValueAsString(payload.get("nodes")));
+                List<Map<String, Object>> nodes = hasNodes ? listValue(payload.get("nodes")) : currentNodes(flow);
+                Map<String, Object> config = new LinkedHashMap<>();
+                config.put("nodes", nodes);
+                config.put("conditionRoutes", hasRoutes ? listValue(payload.get("conditionRoutes"))
+                        : AdminApprovalFlowVO.of(flow).getConditionRoutes());
+                config.put("escalations", hasEscalations ? listValue(payload.get("escalations"))
+                        : AdminApprovalFlowVO.of(flow).getEscalations());
+                flow.setNodesJson(objectMapper.writeValueAsString(config));
             } catch (Exception e) {
-                // 节点序列化不了属于入参问题，直接拒掉，别存一段坏 JSON 让页面以后打不开
-                throw new BusinessException(400, "流程节点格式不正确，无法保存");
+                throw new BusinessException(400, "流程配置格式不正确，无法保存");
             }
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> listValue(Object value) {
+        if (value instanceof List<?> list) {
+            return (List<Map<String, Object>>) list;
+        }
+        return List.of();
+    }
+
+    private List<Map<String, Object>> currentNodes(ApprovalFlow flow) {
+        return AdminApprovalFlowVO.of(flow).getNodes();
     }
 
     private Approval requireApproval(String approvalId) {

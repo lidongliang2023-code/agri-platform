@@ -39,6 +39,15 @@ export interface IotDevice {
   signal?: number
   /** 最近心跳时间 */
   lastHeartbeatAt?: string
+  /**
+   * 关联地块 ID（生产地块主键）。
+   *
+   * <p>设备台账收敛到物联网系统后由 `iot_device.plot_id` 提供，生产端「设备绑定到地块」
+   * 会回写这个字段。未绑定地块时为 null/undefined。</p>
+   */
+  plotId?: string
+  /** 通信协议（MQTT / LoRaWAN / Modbus / GB28181 …） */
+  protocol?: string
   /** 安装位置描述 */
   location?: string
   /** 经度 */

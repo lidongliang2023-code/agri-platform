@@ -13,6 +13,7 @@ public interface ChannelPartnerService extends IService<ChannelPartner> {
     ChannelPartnerVO getById(Long id);
     IPage<ChannelPartnerVO> pageList(int page, int size, String keyword, String auditStatus);
     boolean apply(ChannelPartner partner);
+    boolean reapply(ChannelPartner partner);
     boolean updateAudit(Long id, String auditStatus, String auditOpinion);
     boolean updateInfo(ChannelPartner partner);
     IPage<ProductVO> getSelectedProducts(Long channelId, int page, int size);

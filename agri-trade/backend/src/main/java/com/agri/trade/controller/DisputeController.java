@@ -65,7 +65,7 @@ public class DisputeController {
     }
 
     @PostMapping
-    public ApiResponse<Boolean> createDispute(@RequestBody Dispute dispute) {
+    public ApiResponse<Dispute> createDispute(@RequestBody Dispute dispute) {
         // 申请人必须是自己的主体：原先直接采信请求体里的 complainantId，
         // 等于谁都能以别人名义发起纠纷、把别人的订单拖进争议状态。
         PlatformIdentityService.MerchantSelection mine = identityService.selectMerchant(dispute.getComplainantId());
@@ -128,7 +128,7 @@ public class DisputeController {
             // 争议的进度有自己的 dispute_status 与 process_stage，不该覆盖订单状态。
             order.setDisputeId(dispute.getId());
             orderMapper.updateById(order);
-            return ApiResponse.success(true);
+            return ApiResponse.success(dispute);
         }
         return ApiResponse.error("创建失败");
     }

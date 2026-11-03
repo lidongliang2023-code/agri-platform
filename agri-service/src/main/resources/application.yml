@@ -1,0 +1,36 @@
+server:
+  port: 8094
+
+spring:
+  application:
+    name: agri-service
+  profiles:
+    # 生产与默认开发均使用 MySQL；无 MySQL 的 CI 可用 --spring.profiles.active=h2。
+    active: ${SPRING_PROFILES_ACTIVE:mysql}
+  jackson:
+    time-zone: GMT+8
+    date-format: yyyy-MM-dd HH:mm:ss
+    serialization:
+      write-dates-as-timestamps: false
+
+logging:
+  level:
+    com.agri.service: INFO
+
+# 服务商工作台的能力校验：调用核心平台内部接口（共享内部令牌）
+agri:
+  capability:
+    check-url: "${CORE_CAPABILITY_CHECK_URL:http://localhost:8093/api/v1/internal/capability-check}"
+    internal-token: "${AGRI_INTERNAL_TOKEN:agri-internal-dev}"
+
+services:
+  platform:
+    url: http://localhost:8093
+
+platform:
+  rbac:
+    operator-paths:
+      - /api/**
+    read-permission: service:read
+    write-permission: service:write
+    require-auth: true

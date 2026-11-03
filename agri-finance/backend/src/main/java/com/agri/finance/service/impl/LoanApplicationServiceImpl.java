@@ -51,19 +51,29 @@ public class LoanApplicationServiceImpl extends ServiceImpl<LoanApplicationMappe
     }
 
     @Override
-    public LoanApplication review(String id, String result, String opinion, BigDecimal amount, BigDecimal rate) {
+    public LoanApplication review(
+            String id,
+            String result,
+            String opinion,
+            BigDecimal amount,
+            BigDecimal rate,
+            String reviewerId,
+            String reviewerName) {
         LoanApplication application = getById(id);
-        if (application != null) {
-            application.setStatus(result);
-            application.setReviewOpinion(opinion);
-            application.setReviewTime(LocalDateTime.now());
-            if ("已通过".equals(result)) {
-                application.setActualAmount(amount != null ? amount : application.getSuggestedAmount());
-                application.setActualRate(rate != null ? rate : application.getSuggestedRate());
-            }
-            application.setUpdatedAt(LocalDateTime.now());
-            updateById(application);
+        if (application == null || !"待审批".equals(application.getStatus())) {
+            return null;
         }
+        application.setStatus(result);
+        application.setReviewOpinion(opinion);
+        application.setReviewerId(reviewerId);
+        application.setReviewerName(reviewerName);
+        application.setReviewTime(LocalDateTime.now());
+        if ("已通过".equals(result)) {
+            application.setActualAmount(amount != null ? amount : application.getSuggestedAmount());
+            application.setActualRate(rate != null ? rate : application.getSuggestedRate());
+        }
+        application.setUpdatedAt(LocalDateTime.now());
+        updateById(application);
         return application;
     }
 }

@@ -43,14 +43,14 @@ public class CompensationServiceImpl extends ServiceImpl<CompensationRecordMappe
         if (disputeId == null && orderId == null) {
             return null;
         }
+        Dispute dispute = disputeId == null ? null : disputeMapper.selectById(disputeId);
+        if (disputeId != null && dispute == null) {
+            return null;
+        }
         if (disputeId != null) {
             CompensationRecord exist = getByDispute(disputeId);
             if (exist != null) {
                 return exist;
-            }
-            Dispute dispute = disputeMapper.selectById(disputeId);
-            if (dispute == null) {
-                return null;
             }
             if (orderId == null) {
                 orderId = dispute.getOrderId();
@@ -59,13 +59,27 @@ public class CompensationServiceImpl extends ServiceImpl<CompensationRecordMappe
             if (applicantId == null) {
                 applicantId = dispute.getComplainantId();
             }
-            if (applicantName == null || applicantName.isEmpty()) {
-                applicantName = dispute.getComplainantName();
-            }
+        }
+        TradeOrder order = orderId == null ? null : orderMapper.selectById(orderId);
+        if (orderId != null && order == null) {
+            // 挂了一张不存在的订单：这笔钱事后对不上任何单据
+            return null;
+        }
+        // 申请人只认单据上的参与方（纠纷申请方、订单买方或卖方）。
+        // 原先请求体写谁就当谁 —— 赔付单上的申请人是可以凭空填的，
+        // 配上"收款方由订单推导"，就能造出一张"某家应得赔付"的单据。
+        if (applicantId != null && !isPartyOf(dispute, order, applicantId)) {
+            return null;
+        }
+        // 申请人名称一律由服务端按单据取，不采信调用方传来的字符串。
+        if (applicantId != null) {
+            applicantName = nameOfParty(order, applicantId,
+                    dispute != null && applicantId.equals(dispute.getComplainantId())
+                            ? dispute.getComplainantName() : null);
         }
 
         CompensationRecord compensation = new CompensationRecord();
-        compensation.setCompensationNo("CP" + System.currentTimeMillis());
+        compensation.setCompensationNo(nextCompensationNo());
         compensation.setOrderId(orderId);
         compensation.setDisputeId(disputeId);
         compensation.setCompensationType(compensationType);
@@ -77,25 +91,56 @@ public class CompensationServiceImpl extends ServiceImpl<CompensationRecordMappe
         compensation.setCreateTime(new Date());
         compensation.setUpdateTime(new Date());
 
-        if (orderId != null) {
-            TradeOrder order = orderMapper.selectById(orderId);
-            if (order != null) {
-                compensation.setOrderNo(order.getOrderNo());
-                // 收款方 = 受损方。纠纷里申请人是买方时赔给买方，是卖方时赔给卖方 ——
-                // 原先一律写订单买方，卖方申请成立的赔付会被打给买方。
-                Dispute dispute = disputeId == null ? null : disputeMapper.selectById(disputeId);
-                if (dispute != null && "seller".equals(dispute.getComplainantType())) {
-                    compensation.setRecipientId(order.getSellerId());
-                    compensation.setRecipientName(order.getSellerName());
-                } else {
-                    compensation.setRecipientId(order.getBuyerId());
-                    compensation.setRecipientName(order.getBuyerName());
-                }
+        if (order != null) {
+            compensation.setOrderNo(order.getOrderNo());
+            // 收款方 = 受损方。纠纷里申请人是买方时赔给买方，是卖方时赔给卖方 ——
+            // 原先一律写订单买方，卖方申请成立的赔付会被打给买方。
+            if (dispute != null && "seller".equals(dispute.getComplainantType())) {
+                compensation.setRecipientId(order.getSellerId());
+                compensation.setRecipientName(order.getSellerName());
+            } else {
+                compensation.setRecipientId(order.getBuyerId());
+                compensation.setRecipientName(order.getBuyerName());
             }
         }
 
         baseMapper.insert(compensation);
         return compensation;
+    }
+
+    /** 这个主体号是不是这场纠纷或这张订单的参与方。 */
+    private static boolean isPartyOf(Dispute dispute, TradeOrder order, Long applicantId) {
+        if (applicantId == null) {
+            return false;
+        }
+        if (dispute != null && applicantId.equals(dispute.getComplainantId())) {
+            return true;
+        }
+        return order != null && (applicantId.equals(order.getBuyerId()) || applicantId.equals(order.getSellerId()));
+    }
+
+    /** 按主体号回它在单据上的名字；单据上找不到就用纠纷里的那份。 */
+    private static String nameOfParty(TradeOrder order, Long applicantId, String fallback) {
+        if (order != null) {
+            if (applicantId.equals(order.getBuyerId())) {
+                return order.getBuyerName();
+            }
+            if (applicantId.equals(order.getSellerId())) {
+                return order.getSellerName();
+            }
+        }
+        return fallback;
+    }
+
+    /**
+     * 赔付单号：毫秒 + 6 位随机段。
+     *
+     * <p>{@code comp_no} 上有唯一索引，仲裁自动建单与运营手工建单落在同一毫秒时，
+     * 纯毫秒的编号会撞索引（一边报"建单失败"，另一边其实什么都没写）。</p>
+     */
+    private static String nextCompensationNo() {
+        return "CP" + System.currentTimeMillis()
+                + UUID.randomUUID().toString().substring(0, 6).toUpperCase();
     }
 
     @Override

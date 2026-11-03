@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /** 主数据运营端新增商品 → 交易库落库 → 官网详情展示（2026-10-21）。 */
 import { createRequire } from 'node:module'
+import { existsSync } from 'node:fs'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -8,8 +9,13 @@ import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const require2 = createRequire(path.join(REPO_ROOT, 'agri-production/frontend/package.json'))
-const puppeteer = require2('puppeteer')
+const require2 = createRequire(path.join('C:/Users/71502/.workbuddy-ai/binaries/node/workspace', 'noop.js'))
+const { chromium } = require2('playwright-core')
+
+const BROWSER = [
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+].find((candidate) => existsSync(candidate))
 const MDM = 'http://localhost:8080'
 const TRADE = 'http://localhost:8086'
 const OUT = 'C:/Users/71502/.codex/visualizations/2026/10/16/01a14244-ead8-7ab0-8c7c-df7abac44648'
@@ -52,7 +58,7 @@ const selectOption = async (page, label, preferred) => {
 }
 
 async function loginAndOpen(page) {
-  await page.goto(`${MDM}/product/list`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.goto(`${MDM}/product/list`, { waitUntil: 'networkidle', timeout: 60000 })
   for (let i = 0; i < 30; i++) {
     if (await page.$('.product-list')) return
     if (page.url().includes(':8090') || page.url().includes('/login')) break
@@ -76,7 +82,7 @@ async function loginAndOpen(page) {
     await sleep(600)
     if (page.url().includes('8080') && !page.url().includes('/login')) break
   }
-  await page.goto(`${MDM}/product/list`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.goto(`${MDM}/product/list`, { waitUntil: 'networkidle', timeout: 60000 })
   await page.waitForSelector('.product-list', { timeout: 30000 })
 }
 
@@ -88,12 +94,12 @@ const png = Buffer.from(
 )
 await writeFile(imageFile, png)
 
-const browser = await puppeteer.launch({ headless: HEADFUL ? false : 'new', args: ['--no-sandbox'] })
+const browser = await chromium.launch({ headless: !HEADFUL, executablePath: BROWSER, args: ['--no-sandbox'] })
 try {
-  const page = await browser.newPage()
+  const page = await (await browser.newContext({ viewport: { width: 1440, height: 1000 } })).newPage()
   const errors = []
   page.on('pageerror', (error) => errors.push(String(error)))
-  await page.setViewport({ width: 1440, height: 1000 })
+  await page.setViewportSize({ width: 1440, height: 1000 })
   await loginAndOpen(page)
 
   await page.click('.add-btn')
@@ -130,8 +136,8 @@ try {
   await setField(page, '商品描述', '联调新增商品：赣南脐橙，产地直供，支持冷链发货。')
 
   const fileInput = await page.$('.modal-content input[type="file"]')
-  await fileInput.uploadFile(imageFile)
-  await page.waitForFunction(() => document.querySelectorAll('.image-item').length === 1, { timeout: 20000 })
+  await fileInput.setInputFiles(imageFile)
+  await page.waitForFunction(() => document.querySelectorAll('.image-item').length === 1, undefined, { timeout: 20000 })
   check(true, '新增商品表单可上传图片并显示主图预览')
 
   const responsePromise = page.waitForResponse((response) =>
@@ -146,9 +152,9 @@ try {
   const created = body.data
   if (!created?.id) throw new Error(body.message || '商品创建失败')
 
-  await page.goto(`${MDM}/product/list`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.goto(`${MDM}/product/list`, { waitUntil: 'networkidle', timeout: 60000 })
   await page.waitForSelector('.product-list', { timeout: 20000 })
-  await page.waitForFunction((name) => document.body.innerText.includes(name), { timeout: 10000 }, productName)
+  await page.waitForFunction((name) => document.body.innerText.includes(name), productName, { timeout: 10000 })
   check(true, '新增商品后运营列表立即出现该商品')
 
   const detailResponse = await fetch(`${TRADE}/api/trade/public/products/${created.id}`)
@@ -187,11 +193,11 @@ try {
   check(listBody.code === 200 && listBody.data?.records?.some((item) => item.id === created.id),
     '新增商品已进入官网商品列表与产业链数据源')
 
-  const detailPage = await browser.newPage()
+  const detailPage = await (await browser.newContext({ viewport: { width: 1440, height: 1000 } })).newPage()
   const detailErrors = []
   detailPage.on('pageerror', (error) => detailErrors.push(String(error)))
-  await detailPage.setViewport({ width: 1440, height: 1000 })
-  await detailPage.goto(`${TRADE}/product/detail/${created.id}`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await detailPage.setViewportSize({ width: 1440, height: 1000 })
+  await detailPage.goto(`${TRADE}/product/detail/${created.id}`, { waitUntil: 'networkidle', timeout: 60000 })
   await detailPage.waitForSelector('.pd-hero', { timeout: 20000 })
   const detailText = await detailPage.evaluate(() => document.body.innerText)
   check(detailText.includes(productName) && detailText.includes('江西省 赣州市 信丰县')

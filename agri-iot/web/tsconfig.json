@@ -10,6 +10,7 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
+    "types": ["vite/client"],
     "jsx": "react-jsx",
     "strict": true,
     "noUnusedLocals": true,
@@ -17,7 +18,12 @@
     "noFallthroughCasesInSwitch": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      "@agri/shared": ["../../packages/agri-shared/src"],
+      "@agri/shared/*": ["../../packages/agri-shared/src/*"],
+      "react": ["node_modules/@types/react/index.d.ts"],
+      "react/jsx-runtime": ["node_modules/@types/react/jsx-runtime.d.ts"],
+      "axios": ["node_modules/axios"]
     }
   },
   "include": ["src"],

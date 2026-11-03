@@ -5,6 +5,7 @@ import com.agri.production.common.entity.PageResult;
 import com.agri.production.entity.Approval;
 import com.agri.production.service.IAdminApprovalService;
 import com.agri.production.vo.AdminApprovalFlowVO;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -54,11 +55,24 @@ public class AdminApprovalController {
                 keyword, status, approvalType));
     }
 
+    /** 审批详情。 */
+    @GetMapping("/{approvalId}")
+    public ApiResponse<Approval> detail(@PathVariable String approvalId) {
+        return ApiResponse.success(adminApprovalService.detail(approvalId));
+    }
+
     /** 审批通过（页面传 body {remark}）。 */
     @PatchMapping("/{approvalId}/approve")
     public ApiResponse<Approval> approve(@PathVariable String approvalId,
                                         @RequestBody(required = false) Map<String, Object> body) {
         return ApiResponse.success(adminApprovalService.approve(approvalId, remarkOf(body)));
+    }
+
+    /** 审批驳回（页面传 body {remark}）。 */
+    @PatchMapping("/{approvalId}/reject")
+    public ApiResponse<Approval> reject(@PathVariable String approvalId,
+                                        @RequestBody(required = false) Map<String, Object> body) {
+        return ApiResponse.success(adminApprovalService.reject(approvalId, remarkOf(body)));
     }
 
     /** 批量审批通过（页面传 body {approvalIds, remark}）。 */
@@ -109,6 +123,13 @@ public class AdminApprovalController {
     public ApiResponse<AdminApprovalFlowVO> updateFlow(@PathVariable String flowId,
                                                       @RequestBody(required = false) Map<String, Object> payload) {
         return ApiResponse.success(adminApprovalService.updateFlow(flowId, payload));
+    }
+
+    /** 删除流程配置。 */
+    @DeleteMapping("/config/{flowId}")
+    public ApiResponse<Void> deleteFlow(@PathVariable String flowId) {
+        adminApprovalService.deleteFlow(flowId);
+        return ApiResponse.success();
     }
 
     private static String remarkOf(Map<String, Object> body) {

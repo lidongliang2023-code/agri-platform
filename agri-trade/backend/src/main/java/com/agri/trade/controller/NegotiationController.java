@@ -61,20 +61,41 @@ public class NegotiationController {
         return ApiResponse.success(inquiry);
     }
 
+    /**
+     * 批量询价（对撮合结果一次发出多张询价单）。
+     *
+     * <p>采购方一律由服务端从令牌推导，并且只能对**自己发布的需求**发起 ——
+     * 原先这条直接采信请求体里的 buyerId：既能把询价挂到别人的需求上，
+     * 也让供应商那边看到"某家采购方在问"其实根本不是那家问的。
+     * 校验口径与 {@code POST /inquiry} 完全一致（同一条 createInquiry 链路）。</p>
+     */
     @PostMapping("/inquiry/batch")
     public ApiResponse<List<Inquiry>> batchCreateInquiries(@RequestBody Map<String, Object> params) {
-        Long demandId = ((Number) params.get("demandId")).longValue();
-        List<Number> productIds = (List<Number>) params.get("productIds");
-        Long buyerId = params.containsKey("buyerId") ? ((Number) params.get("buyerId")).longValue() : null;
-
-        List<Long> ids = productIds.stream().map(Number::longValue).toList();
-        List<Inquiry> inquiries = inquiryService.batchCreateInquiries(demandId, ids, buyerId);
-        return ApiResponse.success(inquiries);
-    }
-
-    @GetMapping("/inquiry/buyer/{buyerId}")
-    public ApiResponse<List<Inquiry>> getBuyerInquiries(@PathVariable Long buyerId) {
-        List<Inquiry> inquiries = inquiryService.getInquiriesByBuyer(buyerId);
+        Long demandId = asLong(params.get("demandId"));
+        Object rawProductIds = params.get("productIds");
+        if (demandId == null || !(rawProductIds instanceof List<?> rawList) || rawList.isEmpty()) {
+            return ApiResponse.error("请指定采购需求（demandId）和至少一个货源（productIds）");
+        }
+        List<Long> ids = new java.util.ArrayList<>();
+        for (Object item : rawList) {
+            Long productId = asLong(item);
+            if (productId == null) {
+                return ApiResponse.error("货源编号里有不是数字的值：" + item);
+            }
+            ids.add(productId);
+        }
+        PlatformIdentityService.MerchantScope scope = identityService.currentScope();
+        if (!scope.resolved()) {
+            return ApiResponse.error(scope.error());
+        }
+        if (ids.size() > 20) {
+            return ApiResponse.error("一次最多对 20 个货源发起询价");
+        }
+        List<Inquiry> inquiries = inquiryService.batchCreateInquiries(demandId, ids, scope.merchantIds());
+        if (inquiries.isEmpty()) {
+            return ApiResponse.error("没有发出询价：采购需求不存在或不是您的、对应货源已下架，"
+                    + "或这些货源您已经问过价了");
+        }
         return ApiResponse.success(inquiries);
     }
 
@@ -84,6 +105,13 @@ public class NegotiationController {
      * <p>注意路径要比 {@code /inquiry/{inquiryId}/quotes} 更具体，否则会被那条吃掉 ——
      * Spring 会按最具体的模板匹配，"{@code inquiry/mine}" 与 "{@code inquiry/{id}/quotes}"
      * 段数不同，不会冲突。</p>
+     *
+     * <p><b>这里以前有四条 "按 id 查别人单据" 的读接口</b>：
+     * {@code /inquiry/buyer/{buyerId}}、{@code /inquiry/seller/{sellerId}}、
+     * {@code /quote/buyer/{buyerId}}、{@code /quote/seller/{sellerId}}。
+     * 询价里带着采购方的收货地、目标价与量，报价里带着对方的单价 —— 都是正在谈的生意。
+     * 而 id 就是主体号，换个号就能看别家的谈判内容，且它们没有任何前端调用
+     * （页面用的都是下面这两个按令牌取数的 mine/received）。已下线。</p>
      */
     @GetMapping("/inquiry/mine")
     public ApiResponse<List<Inquiry>> myInquiries() {
@@ -102,12 +130,6 @@ public class NegotiationController {
             return ApiResponse.error(scope.error());
         }
         return ApiResponse.success(inquiryService.getReceivedInquiriesByScope(scope.merchantIds()));
-    }
-
-    @GetMapping("/inquiry/seller/{sellerId}")
-    public ApiResponse<List<Inquiry>> getSellerInquiries(@PathVariable Long sellerId) {
-        List<Inquiry> inquiries = inquiryService.getInquiriesBySeller(sellerId);
-        return ApiResponse.success(inquiries);
     }
 
     @GetMapping("/inquiry/{inquiryId}/quotes")
@@ -207,6 +229,16 @@ public class NegotiationController {
     @Operation(summary = "修改报价（仅限待审核、未生成订单的报价）")
     @PutMapping("/quote/{id}")
     public ApiResponse<Boolean> updateQuote(@PathVariable Long id, @RequestBody Map<String, Object> params) {
+        Quote current = quoteService.getById(id);
+        if (current == null) {
+            return ApiResponse.error("报价不存在");
+        }
+        // 改报价是报价方自己的动作。服务层只校验状态（待受理、未成单），不校验归属 ——
+        // 少这一步，任何登录用户换个 id 就能改别人报给采购方的单价与数量。
+        String denied = denyIfNotSeller(current);
+        if (denied != null) {
+            return ApiResponse.error(denied);
+        }
         Quote patch = new Quote();
         patch.setProductName(asString(params.get("productName")));
         patch.setUnitPrice(asDecimal(params.get("unitPrice")));
@@ -226,8 +258,33 @@ public class NegotiationController {
     @Operation(summary = "删除报价（软删；已生成订单的报价不允许删）")
     @DeleteMapping("/quote/{id}")
     public ApiResponse<Boolean> deleteQuote(@PathVariable Long id) {
+        Quote current = quoteService.getById(id);
+        if (current == null) {
+            return ApiResponse.error("报价不存在");
+        }
+        String denied = denyIfNotSeller(current);
+        if (denied != null) {
+            return ApiResponse.error(denied);
+        }
         boolean ok = quoteService.deleteQuote(id);
         return ok ? ApiResponse.success(true) : ApiResponse.error("报价不存在或已生成订单，无法删除");
+    }
+
+    /**
+     * 判权：修改/删除报价是**报价方（供货方）**的动作。
+     *
+     * @return 拒绝原因；允许时返回 null。不属于自己时按"报价不存在"回，
+     *         免得这个接口变成"用连号 id 探测别家报价"的工具。
+     */
+    private String denyIfNotSeller(Quote quote) {
+        PlatformIdentityService.MerchantScope scope = identityService.currentScope();
+        if (!scope.resolved()) {
+            return scope.error();
+        }
+        if (quote.getSellerId() != null && scope.merchantIds().contains(quote.getSellerId())) {
+            return null;
+        }
+        return "报价不存在";
     }
 
     private static Long asLong(Object value) {
@@ -304,12 +361,6 @@ public class NegotiationController {
         }
     }
 
-    @GetMapping("/quote/buyer/{buyerId}")
-    public ApiResponse<List<Quote>> getBuyerQuotes(@PathVariable Long buyerId) {
-        List<Quote> quotes = quoteService.getQuotesByBuyer(buyerId);
-        return ApiResponse.success(quotes);
-    }
-
     @Operation(summary = "报价分页列表")
     @GetMapping("/quote/page")
     public ApiResponse<IPage<Quote>> getQuotePage(
@@ -336,6 +387,17 @@ public class NegotiationController {
         if (quote == null) {
             return ApiResponse.error("报价不存在");
         }
+        // 报价里有对方单价、数量与收货地：光锁住分页列表、留着详情按 id 随便取等于没锁
+        // （报价 id 是连号的）。与受理/拒绝同一口径 —— 只有买卖双方能看。
+        PlatformIdentityService.MerchantScope scope = identityService.currentScope();
+        if (!scope.resolved()) {
+            return ApiResponse.error(scope.error());
+        }
+        boolean mine = (quote.getBuyerId() != null && scope.merchantIds().contains(quote.getBuyerId()))
+                || (quote.getSellerId() != null && scope.merchantIds().contains(quote.getSellerId()));
+        if (!mine) {
+            return ApiResponse.error("报价不存在");
+        }
         return ApiResponse.success(quote);
     }
 
@@ -358,12 +420,6 @@ public class NegotiationController {
             return ApiResponse.error("报价不存在或当前状态不允许生成订单（已拒绝的报价不能转订单）");
         }
         return ApiResponse.success(order);
-    }
-
-    @GetMapping("/quote/seller/{sellerId}")
-    public ApiResponse<List<Quote>> getSellerQuotes(@PathVariable Long sellerId) {
-        List<Quote> quotes = quoteService.getQuotesBySeller(sellerId);
-        return ApiResponse.success(quotes);
     }
 
     @PostMapping("/quote/{quoteId}/accept")
@@ -431,10 +487,10 @@ public class NegotiationController {
         return "只有采购方可以受理或拒绝这份报价";
     }
 
-    @PutMapping("/inquiry/{inquiryId}/status")
-    public ApiResponse<Boolean> updateInquiryStatus(@PathVariable Long inquiryId, @RequestBody Map<String, String> params) {
-        String status = params.get("status");
-        inquiryService.updateInquiryStatus(inquiryId, status);
-        return ApiResponse.success(true);
-    }
+    /**
+     * 这里以前挂着 {@code PUT /inquiry/{inquiryId}/status}：任何登录用户传任意字符串就能
+     * 改写别人询价单的状态（连状态词表都不校验），而询价状态本来是由事件推进的 ——
+     * 供应商报价→quoted、买家受理→converted。改状态没有对应的页面动作，接口也没有调用方，
+     * 已下线；服务层的 updateInquiryStatus 一并删除。
+     */
 }

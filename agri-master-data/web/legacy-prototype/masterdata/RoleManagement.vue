@@ -455,7 +455,7 @@ onMounted(() => {})
 .status-badge {
   padding: 4px 10px;
   border-radius: 12px;
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
   font-weight: 500;
 }
 
@@ -656,7 +656,7 @@ onMounted(() => {})
 }
 
 .perm-code {
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
   color: #a0aec0;
   font-family: monospace;
 }

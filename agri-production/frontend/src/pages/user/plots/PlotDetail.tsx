@@ -24,39 +24,81 @@
  *   2026-10-17 修正：此前前端自造的 `geoBoundary` 键后端不收，位置信息实际没落库。
  *   农场「海拔 / 简介 / 业务类型」序列化存放于 Farm.remark。后端补列后需同步迁移读写两侧。
  */
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { PageContainer } from '@ant-design/pro-components'
 import ReactECharts from 'echarts-for-react'
-import { EditOutlined, ExperimentOutlined, LeftOutlined, QrcodeOutlined } from '@ant-design/icons'
+import {
+  DeleteOutlined,
+  EditOutlined,
+  ExperimentOutlined,
+  LeftOutlined,
+  PlusOutlined,
+  QrcodeOutlined,
+} from '@ant-design/icons'
 import {
   Alert,
   Button,
   Card,
   Col,
-  Descriptions,
+  DatePicker,
   Divider,
   Empty,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Popconfirm,
+  Radio,
   Row,
+  Select,
   Skeleton,
   Space,
   Table,
+  Tabs,
   Tag,
-  Tooltip,
   Typography,
+  message,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
-import { getLatestSoil, getPlot } from '@/api/plots'
+import type { Dayjs } from 'dayjs'
+import { DetailInfoGrid } from '@/components'
+import {
+  createPlotCrop,
+  deletePlotCrop,
+  getLatestSoil,
+  getPlot,
+  listPlotCrops,
+  updatePlotCrop,
+  type PlotCropPayload,
+} from '@/api/plots'
 import { getFarm } from '@/api/farms'
+import { listCropOptions } from '@/api/crops'
+import { listHarvests } from '@/api/harvests'
 import { getEnvironmentHistory, listEnvironmentData, listGrowthRecordsByPlot } from '@/api/growth'
-import { getPlan } from '@/api/plans'
 import { listTasks } from '@/api/tasks'
 import { listInputUsages } from '@/api/inputs'
-import type { Task } from '@/types'
-// 地块状态已统一收敛到 @/types（原各页面各存一份）
-import { PLOT_STATUS_META } from '@/types'
+import type {
+  GrowthRecord,
+  HarvestBatch,
+  InputUsageRecord,
+  PlotCrop,
+  Task,
+} from '@/types'
+import {
+  TiandituMap,
+  parseBoundaryVertices,
+  polygonCentroid,
+  type TiandituMapPoint,
+} from '@agri/shared'
+// 地块状态与采收 / 投入品展示口径统一从 @/types 引入
+import {
+  BATCH_STATUS_META,
+  GRADE_LABEL_MAP,
+  PLOT_STATUS_META,
+} from '@/types'
 
 /** 地块状态元数据 */
 /**
@@ -82,6 +124,81 @@ const GROWTH_LEVEL_SCORE_MAP: Record<number, number> = {
   2: 65,
   3: 80,
   4: 92,
+}
+
+/** 长势评级文案 */
+const GROWTH_LEVEL_LABEL: Record<number, string> = {
+  1: '弱',
+  2: '偏弱',
+  3: '正常',
+  4: '旺盛',
+}
+
+/** 长势评级颜色 */
+const GROWTH_LEVEL_COLOR: Record<number, string> = {
+  1: 'red',
+  2: 'orange',
+  3: 'green',
+  4: 'lime',
+}
+
+/** 种植标准（「添加种养品种」弹窗：有机 / 绿色 / 普通） */
+const PLANTING_STANDARD_OPTIONS: Array<{
+  value: 'ORGANIC' | 'GREEN' | 'NORMAL'
+  label: string
+  icon: string
+  color: string
+}> = [
+  { value: 'ORGANIC', label: '有机', icon: '🌿', color: 'green' },
+  { value: 'GREEN', label: '绿色', icon: '🍃', color: 'cyan' },
+  { value: 'NORMAL', label: '普通', icon: '🌱', color: 'default' },
+]
+
+/** 种植标准元数据（未知 / 空值回落「未设置」） */
+function plantingStandardMeta(value?: string): { label: string; icon: string; color: string } {
+  return (
+    PLANTING_STANDARD_OPTIONS.find((option) => option.value === value) ?? {
+      label: '未设置',
+      icon: '🌱',
+      color: 'default',
+    }
+  )
+}
+
+/** 种植方式文案 */
+const PLANTING_METHOD_LABEL: Record<string, string> = {
+  TRANSPLANT: '移栽',
+  DIRECT: '直播',
+}
+
+/** 作业方式文案 */
+const OPERATION_METHOD_LABEL: Record<string, string> = {
+  MANUAL: '人工',
+  MECHANICAL: '机械',
+}
+
+/** 「添加种养品种」表单值（日期控件是 dayjs，提交时格式化为 YYYY-MM-DD） */
+interface CropFormValues {
+  /** 种类（作物主数据 ID） */
+  cropId: string
+  /** 品种 */
+  cropVariety?: string
+  /** 种植标准 */
+  plantingStandard: 'ORGANIC' | 'GREEN' | 'NORMAL'
+  /** 种植方式 */
+  plantingMethod: 'TRANSPLANT' | 'DIRECT'
+  /** 作业方式 */
+  operationMethod: 'MANUAL' | 'MECHANICAL'
+  /** 移栽时间 */
+  transplantDate: Dayjs
+  /** 预计采收时间 */
+  expectedHarvestDate?: Dayjs
+  /** 预计亩产（公斤/亩） */
+  expectedYieldPerMu?: number
+  /** 株数 */
+  plantCount?: number
+  /** 株间距（cm） */
+  plantSpacing?: number
 }
 
 /** 评分分级文案 */
@@ -126,7 +243,7 @@ function buildGaugeOption(score: number): Record<string, unknown> {
         axisLine: { lineStyle: { width: 12, color: [[1, '#f0f0f0']] } },
         axisTick: { show: false },
         splitLine: { length: 8, lineStyle: { width: 1, color: '#d9d9d9' } },
-        axisLabel: { distance: -18, color: '#8c8c8c', fontSize: 10 },
+        axisLabel: { distance: -18, color: '#8c8c8c', fontSize: 12 },
         pointer: { width: 4, itemStyle: { color: '#52c41a' } },
         detail: {
           valueAnimation: true,
@@ -194,6 +311,12 @@ function buildEnvTrendOption(
 export default function PlotDetail(): JSX.Element {
   const { plotId } = useParams<{ plotId: string }>()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
+
+  /** 种养品种弹窗：editingCrop 为空表示新增，有值表示编辑该条 */
+  const [cropModalOpen, setCropModalOpen] = useState(false)
+  const [editingCrop, setEditingCrop] = useState<PlotCrop | null>(null)
+  const [cropForm] = Form.useForm<CropFormValues>()
 
   /** 地块信息 */
   const plotQuery = useQuery({
@@ -209,14 +332,6 @@ export default function PlotDetail(): JSX.Element {
     queryKey: ['plot-farm', plot?.farmId],
     enabled: Boolean(plot?.farmId),
     queryFn: () => getFarm(plot?.farmId as string),
-    retry: false,
-  })
-
-  /** 当前种养计划 */
-  const planQuery = useQuery({
-    queryKey: ['plot-plan', plot?.currentPlanId],
-    enabled: Boolean(plot?.currentPlanId),
-    queryFn: () => getPlan(plot?.currentPlanId as string),
     retry: false,
   })
 
@@ -265,9 +380,34 @@ export default function PlotDetail(): JSX.Element {
   const taskQuery = useQuery({
     queryKey: ['plot-tasks', plotId],
     enabled: Boolean(plotId),
-    queryFn: () => listTasks({ plotId, pageNum: 1, pageSize: 5 }),
+    queryFn: () => listTasks({ plotId, pageNum: 1, pageSize: 100 }),
     retry: false,
   })
+
+  /** 采收记录 */
+  const harvestQuery = useQuery({
+    queryKey: ['plot-harvests', plotId],
+    enabled: Boolean(plotId),
+    queryFn: () => listHarvests({ plotId, pageNum: 1, pageSize: 100 }),
+    retry: false,
+  })
+
+  /** 作物主数据（种养品种维护） */
+  const cropOptionsQuery = useQuery({
+    queryKey: ['crop-options'],
+    queryFn: () => listCropOptions(),
+    staleTime: 60_000,
+  })
+
+  /** 地块已登记的种养品种（一个地块可多条） */
+  const plotCropsQuery = useQuery({
+    queryKey: ['plot-crops', plotId],
+    enabled: Boolean(plotId),
+    queryFn: () => listPlotCrops(plotId as string),
+    retry: false,
+  })
+
+  const plotCrops = useMemo(() => plotCropsQuery.data ?? [], [plotCropsQuery.data])
 
   /** 投入品使用记录 */
   const usageQuery = useQuery({
@@ -313,6 +453,45 @@ export default function PlotDetail(): JSX.Element {
   }, [growthQuery.data])
 
   /**
+   * 地图点位：中心点优先，缺失但有多边形边界时用边界质心定位。
+   *
+   * <p>400 米外没中心点的存量地块也能在详情里看到边界，而不是只剩一个空白占位。</p>
+   */
+  const plotMapPoint = useMemo<TiandituMapPoint | null>(() => {
+    if (!plot) return null
+    const rawBoundary = plot.boundary ?? plot.geoBoundary
+    const vertices = parseBoundaryVertices(rawBoundary)
+    const hasCenter =
+      plot.centerLongitude !== undefined &&
+      plot.centerLongitude !== null &&
+      plot.centerLatitude !== undefined &&
+      plot.centerLatitude !== null
+    const center = hasCenter
+      ? {
+          longitude: Number(plot.centerLongitude),
+          latitude: Number(plot.centerLatitude),
+        }
+      : vertices.length >= 3
+        ? polygonCentroid(vertices)
+        : null
+    if (!center) return null
+    return {
+      id: plot.plotId,
+      longitude: center.longitude,
+      latitude: center.latitude,
+      title: plot.plotName,
+      meta: `${Number(plot.area || 0).toLocaleString('zh-CN')}亩`,
+      boundary: rawBoundary ?? null,
+    }
+  }, [plot])
+
+  /** 是否已绘制多边形边界（用于详情地图下方的提示） */
+  const hasBoundary = useMemo(
+    () => parseBoundaryVertices(plot?.boundary ?? plot?.geoBoundary).length >= 3,
+    [plot],
+  )
+
+  /**
    * 长势评分：由真实 growthLevel 折算；无长势记录时为 null，页面显示「未接入」，
    * 不再回落到示例分 80（那个数字会被当成该地块的真实长势分）。
    */
@@ -325,13 +504,6 @@ export default function PlotDetail(): JSX.Element {
 
   /** 是否有真实长势数据 */
   const hasGrowthData = Boolean(latestGrowth)
-
-  /** 种植天数 */
-  const plantingDays = useMemo(() => {
-    const start = planQuery.data?.startDate ?? latestGrowth?.recordDate
-    if (!start) return undefined
-    return Math.max(0, dayjs().startOf('day').diff(dayjs(start).startOf('day'), 'day'))
-  }, [planQuery.data, latestGrowth])
 
   /** 环境 8 项指标（原型 P5） */
   const envMetrics = useMemo<EnvMetric[]>(() => {
@@ -391,29 +563,119 @@ export default function PlotDetail(): JSX.Element {
     }
   }, [trendQuery.data])
 
-  /** 投入品统计 */
-  const usageStats = useMemo(() => {
-    const rows = usageQuery.data?.list ?? []
-    const total = rows.length
-    const grouped: Record<string, { count: number; amount: number; unit: string }> = {}
-    rows.forEach((row) => {
-      const key = row.inputName ?? row.inputId ?? '其它'
-      if (!grouped[key]) grouped[key] = { count: 0, amount: 0, unit: row.unit ?? '' }
-      grouped[key].count += 1
-      grouped[key].amount += Number(row.quantity) || 0
-    })
-    return { total, grouped }
-  }, [usageQuery.data])
+  /** 作物下拉（种养品种维护） */
+  const cropOptions = useMemo(
+    () =>
+      (cropOptionsQuery.data ?? []).map((item) => ({
+        value: item.cropId,
+        label: item.cropName,
+      })),
+    [cropOptionsQuery.data],
+  )
 
-  /** 农事记录列定义（原型 P5 表头） */
+  /** 弹窗里已选的种类（品种输入框占位文案用） */
+  const selectedCropId = Form.useWatch('cropId', cropForm)
+  const selectedCropName = cropOptions.find((item) => item.value === selectedCropId)?.label
+
+  /** 关联记录（统一在详情页展示与维护） */
+  const tasks = taskQuery.data?.list ?? []
+  const harvests = harvestQuery.data?.list ?? []
+  const usages = usageQuery.data?.list ?? []
+  const growthRecords = useMemo(
+    () =>
+      [...(growthQuery.data ?? [])].sort((a, b) =>
+        (b.recordDate ?? '').localeCompare(a.recordDate ?? ''),
+      ),
+    [growthQuery.data],
+  )
+
+  /** 打开「添加种养品种」弹窗 */
+  const openAddCropModal = (): void => {
+    setEditingCrop(null)
+    cropForm.resetFields()
+    cropForm.setFieldsValue({
+      plantingStandard: 'NORMAL',
+      plantingMethod: 'TRANSPLANT',
+      operationMethod: 'MANUAL',
+    })
+    setCropModalOpen(true)
+  }
+
+  /** 打开「编辑种养品种」弹窗 */
+  const openEditCropModal = (record: PlotCrop): void => {
+    setEditingCrop(record)
+    cropForm.resetFields()
+    cropForm.setFieldsValue({
+      cropId:
+        record.cropId === undefined || record.cropId === null ? '' : String(record.cropId),
+      cropVariety: record.cropVariety,
+      plantingStandard: record.plantingStandard ?? 'NORMAL',
+      plantingMethod: record.plantingMethod ?? 'TRANSPLANT',
+      operationMethod: record.operationMethod ?? 'MANUAL',
+      transplantDate: record.transplantDate ? dayjs(record.transplantDate) : undefined,
+      expectedHarvestDate: record.expectedHarvestDate
+        ? dayjs(record.expectedHarvestDate)
+        : undefined,
+      expectedYieldPerMu: record.expectedYieldPerMu,
+      plantCount: record.plantCount,
+      plantSpacing: record.plantSpacing,
+    })
+    setCropModalOpen(true)
+  }
+
+  /** 新增 / 编辑种养品种 */
+  const saveCropMutation = useMutation({
+    mutationFn: async (values: CropFormValues) => {
+      if (!plotId) throw new Error('地块信息尚未加载，请稍后重试')
+      const payload: PlotCropPayload = {
+        cropId: values.cropId,
+        cropVariety: values.cropVariety?.trim() || undefined,
+        plantingStandard: values.plantingStandard,
+        plantingMethod: values.plantingMethod,
+        operationMethod: values.operationMethod,
+        transplantDate: values.transplantDate.format('YYYY-MM-DD'),
+        expectedHarvestDate: values.expectedHarvestDate?.format('YYYY-MM-DD'),
+        expectedYieldPerMu: values.expectedYieldPerMu,
+        plantCount: values.plantCount,
+        plantSpacing: values.plantSpacing,
+      }
+      return editingCrop
+        ? updatePlotCrop(plotId, editingCrop.cropRecordId, payload)
+        : createPlotCrop(plotId, payload)
+    },
+    onSuccess: () => {
+      message.success(editingCrop ? '种养品种已更新' : '种养品种已添加')
+      setCropModalOpen(false)
+      setEditingCrop(null)
+      void queryClient.invalidateQueries({ queryKey: ['plot-crops', plotId] })
+    },
+    onError: (error: Error) => message.error(error.message || '保存失败，请稍后重试'),
+  })
+
+  /** 删除种养品种 */
+  const deleteCropMutation = useMutation({
+    mutationFn: (record: PlotCrop) => deletePlotCrop(plotId as string, record.cropRecordId),
+    onSuccess: (_data, record) => {
+      message.success(`已删除种养品种：${record.cropName}`)
+      void queryClient.invalidateQueries({ queryKey: ['plot-crops', plotId] })
+    },
+    onError: (error: Error) => message.error(error.message || '删除失败，请稍后重试'),
+  })
+
+  /** 农事记录列定义 */
   const taskColumns: ColumnsType<Task> = [
     {
       title: '日期',
       dataIndex: 'planStartDate',
-      width: 90,
+      width: 96,
       render: (value: string) => (value ? dayjs(value).format('MM-DD') : '-'),
     },
-    { title: '类型', dataIndex: 'taskType', width: 110, render: (value: string) => value || '-' },
+    {
+      title: '类型',
+      dataIndex: 'taskType',
+      width: 100,
+      render: (value: string) => value || '-',
+    },
     {
       title: '详情',
       dataIndex: 'description',
@@ -421,36 +683,154 @@ export default function PlotDetail(): JSX.Element {
       render: (value: string, record) => value || record.taskName,
     },
     {
-      title: '操作人',
+      title: '执行人',
       dataIndex: 'assigneeName',
       width: 100,
-      render: (value: string) => value || <Typography.Text type="secondary">未派发</Typography.Text>,
+      render: (value: string) =>
+        value || <Typography.Text type="secondary">未派发</Typography.Text>,
     },
     {
       title: '状态',
       dataIndex: 'status',
-      width: 100,
+      width: 96,
       render: (_, record) => {
         const meta = TASK_STATUS_META[record.status] ?? { label: record.status, color: 'default' }
         return <Tag color={meta.color}>{meta.label}</Tag>
       },
     },
     {
-      // 本列挂在**农事任务**行上，而存证域（prod_blockchain_record）的业务类型只有
-      // TRACE / INSPECTION / HARVEST 三类，表内也没有任何 task 关联字段 ——
-      // 农事任务在存证域里**没有对应物**。
-      // 曾考虑「地块 → 批次 → HARVEST 存证」的间接路径，但那是地块级/批次级的结论，
-      // 摊到每一行农事任务上会把「这个批次有存证」渲染成「这条任务已上链」，属误导，故不采用。
-      // 因此这里既不能说「由区块链存证模块写入」（暗示有数据源、只是恰好为空），
-      // 也不能说「后端未提供字段」（暗示是接口没补齐）—— 准确说法是这类业务本就没有存证纪录。
-      title: (
-        <Tooltip title="农事任务无链上存证记录（存证域仅覆盖 TRACE/INSPECTION/HARVEST）">
-          上链 🔗
-        </Tooltip>
+      title: '操作',
+      key: 'action',
+      width: 80,
+      render: (_, record) => (
+        <Typography.Link onClick={() => navigate(`/production/tasks/${record.taskId}`)}>
+          查看
+        </Typography.Link>
       ),
-      key: 'onChain',
+    },
+  ]
+
+  /** 采收记录列定义 */
+  const harvestColumns: ColumnsType<HarvestBatch> = [
+    { title: '采收日期', dataIndex: 'harvestDate', width: 110 },
+    {
+      title: '数量',
+      key: 'quantity',
+      width: 120,
+      render: (_, record) =>
+        `${Number(record.quantity || 0).toLocaleString('zh-CN')} ${record.unit ?? ''}`,
+    },
+    {
+      title: '质量等级',
+      dataIndex: 'grade',
+      width: 96,
+      render: (value: string) => <Tag>{GRADE_LABEL_MAP[value] ?? value ?? '-'}</Tag>,
+    },
+    {
+      title: '状态',
+      dataIndex: 'status',
+      width: 96,
+      render: (value: HarvestBatch['status']) => {
+        const meta = BATCH_STATUS_META[value] ?? { label: value, color: 'default' }
+        return <Tag color={meta.color}>{meta.label}</Tag>
+      },
+    },
+    {
+      title: '操作',
+      key: 'action',
+      width: 80,
+      render: (_, record) => (
+        <Typography.Link onClick={() => navigate(`/production/harvests/${record.batchId}`)}>
+          查看
+        </Typography.Link>
+      ),
+    },
+  ]
+
+  /** 农资使用记录列定义 */
+  const usageColumns: ColumnsType<InputUsageRecord> = [
+    {
+      title: '使用日期',
+      dataIndex: 'usedAt',
       width: 110,
-      render: () => <Typography.Text type="secondary">未接入</Typography.Text>,
+      render: (value: string) => (value ? dayjs(value).format('YYYY-MM-DD') : '-'),
+    },
+    {
+      title: '投入品',
+      dataIndex: 'inputName',
+      ellipsis: true,
+      render: (value: string) => value || '-',
+    },
+    {
+      title: '用量',
+      key: 'dosage',
+      width: 120,
+      render: (_, record) => `${record.dosage ?? '-'} ${record.unit ?? ''}`,
+    },
+    {
+      title: '方式',
+      dataIndex: 'method',
+      width: 90,
+      render: (value: string) => value || '-',
+    },
+    {
+      title: '操作',
+      key: 'action',
+      width: 80,
+      render: (_, record) =>
+        record.inputId ? (
+          <Typography.Link onClick={() => navigate(`/production/inputs/${record.inputId}`)}>
+            查看
+          </Typography.Link>
+        ) : (
+          '-'
+        ),
+    },
+  ]
+
+  /** 种植模型（生长）记录列定义 */
+  const growthColumns: ColumnsType<GrowthRecord> = [
+    { title: '记录日期', dataIndex: 'recordDate', width: 110 },
+    { title: '生育期', dataIndex: 'growthStage', width: 110 },
+    {
+      title: '株高(cm)',
+      dataIndex: 'plantHeight',
+      width: 100,
+      render: (value: number | undefined) => value ?? '-',
+    },
+    {
+      title: '叶面积指数',
+      dataIndex: 'leafAreaIndex',
+      width: 110,
+      render: (value: number | undefined) => value ?? '-',
+    },
+    {
+      title: '长势',
+      dataIndex: 'growthLevel',
+      width: 90,
+      render: (value: number) => (
+        <Tag color={GROWTH_LEVEL_COLOR[value] ?? 'default'}>
+          {GROWTH_LEVEL_LABEL[value] ?? value}
+        </Tag>
+      ),
+    },
+    {
+      title: '记录人',
+      dataIndex: 'recorderName',
+      width: 100,
+      render: (value: string) => value || '-',
+    },
+    {
+      title: '操作',
+      key: 'action',
+      width: 80,
+      render: () => (
+        <Typography.Link
+          onClick={() => navigate(`/production/growth/records?plotId=${plotId}`)}
+        >
+          维护
+        </Typography.Link>
+      ),
     },
   ]
 
@@ -480,13 +860,6 @@ export default function PlotDetail(): JSX.Element {
   }
 
   const statusMeta = PLOT_STATUS_META[plot.status] ?? { label: '未知', color: 'default' }
-  const plan = planQuery.data
-  // 当前作物：计划里的作物优先（地块上种什么由计划决定），其次地块台账的 current_crop（主数据来的名称），
-  // 最后退回 cropVariety（历史行只有品种）
-  const cropName = plan?.cropName ?? plot.currentCrop ?? plot.cropVariety ?? '-'
-  const variety = plot.cropVariety ?? plan?.cropVariety ?? '-'
-  const stageText = latestGrowth?.growthStage
-  const usages = Object.entries(usageStats.grouped)
 
   return (
     <PageContainer
@@ -520,44 +893,208 @@ export default function PlotDetail(): JSX.Element {
       ]}
     >
       <Space direction="vertical" size={16} style={{ width: '100%' }}>
-        <Card title="📍 基本信息">
-          <Descriptions
-            bordered
-            column={{ xs: 1, sm: 2, md: 3 }}
-            size="small"
+        <Card
+          title="📋 基本信息"
+          extra={<Tag color={statusMeta.color}>{statusMeta.label}</Tag>}
+        >
+          <DetailInfoGrid
+            columns={2}
             items={[
-              { key: 'code', label: '地块编号', children: plot.plotCode || '-' },
+              { key: 'code', label: '地块编号', value: plot.plotCode || '-' },
               {
                 key: 'area',
                 label: '面积',
-                children: `${Number(plot.area || 0).toLocaleString('zh-CN')}亩`,
+                value: `${Number(plot.area || 0).toLocaleString('zh-CN')}亩`,
               },
               {
                 key: 'farm',
-                label: '所属',
-                children: plot.farmName ?? farmQuery.data?.farmName ?? '-',
+                label: '所属农场',
+                value: plot.farmName ?? farmQuery.data?.farmName ?? '-',
               },
-              { key: 'crop', label: '当前作物', children: cropName },
-              { key: 'variety', label: '品种', children: variety },
-              { key: 'plantDate', label: '种植日期', children: plan?.startDate ?? '-' },
-              {
-                key: 'stage',
-                label: '生长阶段',
-                children: (
-                  <Space size={4}>
-                    <Tag color={statusMeta.color}>{statusMeta.label}</Tag>
-                    {stageText && <Tag color="geekblue">{stageText}</Tag>}
-                    {plantingDays !== undefined && (
-                      <Typography.Text type="secondary">第 {plantingDays} 天</Typography.Text>
-                    )}
-                  </Space>
-                ),
-              },
-              { key: 'harvest', label: '预计采收', children: plan?.endDate ?? '-' },
-              { key: 'irrigation', label: '灌溉方式', children: plot.irrigationType || '-' },
-              { key: 'soil', label: '土壤类型', children: plot.soilType || '-' },
+              { key: 'irrigation', label: '灌溉方式', value: plot.irrigationType || '-' },
+              { key: 'soil', label: '土壤类型', value: plot.soilType || '-' },
             ]}
           />
+        </Card>
+
+        <Card
+          title={`🌱 种养品种（${plotCrops.length}）`}
+          extra={
+            <Typography.Link onClick={openAddCropModal}>
+              <PlusOutlined /> 添加种养品种
+            </Typography.Link>
+          }
+        >
+          {plotCrops.length === 0 ? (
+            <Space direction="vertical" size={12} style={{ width: '100%' }}>
+              {(plot.currentCrop || plot.cropVariety) && (
+                <Alert
+                  type="info"
+                  showIcon
+                  message={`该地块此前登记的单一种养品种：${plot.currentCrop ?? plot.cropVariety}${
+                    plot.cropVariety ? `（${plot.cropVariety}）` : ''
+                  }`}
+                  description="添加种养品种后，详情页按多品种台账展示与维护；地块原有的「当前作物」仍用于列表显示。"
+                />
+              )}
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description="尚未添加种养品种"
+              >
+                <Button type="primary" icon={<PlusOutlined />} onClick={openAddCropModal}>
+                  添加种养品种
+                </Button>
+              </Empty>
+            </Space>
+          ) : (
+            <Row gutter={[12, 12]}>
+              {plotCrops.map((record) => {
+                const standard = plantingStandardMeta(record.plantingStandard)
+                return (
+                  <Col key={record.cropRecordId} xs={24} sm={12} xl={8}>
+                    <Card
+                      size="small"
+                      style={{ height: '100%', borderColor: '#b7eb8f' }}
+                      title={
+                        <Space size={8} wrap>
+                          <Typography.Text strong style={{ fontSize: 16 }}>
+                            {standard.icon} {record.cropName}
+                          </Typography.Text>
+                          <Tag color={standard.color}>{standard.label}</Tag>
+                        </Space>
+                      }
+                      extra={
+                        <Space size={8}>
+                          <Typography.Link onClick={() => openEditCropModal(record)}>
+                            <EditOutlined /> 编辑
+                          </Typography.Link>
+                          <Popconfirm
+                            title="删除该种养品种？"
+                            description="删除后该品种明细不再展示，地块其他记录不受影响。"
+                            okText="删除"
+                            cancelText="取消"
+                            okButtonProps={{ danger: true }}
+                            onConfirm={() => deleteCropMutation.mutate(record)}
+                          >
+                            <Typography.Link type="danger">
+                              <DeleteOutlined /> 删除
+                            </Typography.Link>
+                          </Popconfirm>
+                        </Space>
+                      }
+                    >
+                      <DetailInfoGrid
+                        columns={2}
+                        items={[
+                          { key: 'variety', label: '品种', value: record.cropVariety || '-' },
+                          {
+                            key: 'method',
+                            label: '种植方式',
+                            value: PLANTING_METHOD_LABEL[record.plantingMethod ?? ''] ?? '-',
+                          },
+                          {
+                            key: 'operation',
+                            label: '作业方式',
+                            value: OPERATION_METHOD_LABEL[record.operationMethod ?? ''] ?? '-',
+                          },
+                          {
+                            key: 'transplant',
+                            label: '移栽时间',
+                            value: record.transplantDate || '-',
+                          },
+                          {
+                            key: 'harvest',
+                            label: '预计采收',
+                            value: record.expectedHarvestDate || '-',
+                          },
+                          {
+                            key: 'yield',
+                            label: '预计亩产',
+                            value:
+                              record.expectedYieldPerMu !== undefined
+                                ? `${record.expectedYieldPerMu} 公斤/亩`
+                                : '-',
+                          },
+                          {
+                            key: 'count',
+                            label: '株数',
+                            value:
+                              record.plantCount !== undefined ? `${record.plantCount} 株` : '-',
+                          },
+                          {
+                            key: 'spacing',
+                            label: '株间距',
+                            value:
+                              record.plantSpacing !== undefined
+                                ? `${record.plantSpacing} cm`
+                                : '-',
+                          },
+                        ]}
+                      />
+                    </Card>
+                  </Col>
+                )
+              })}
+              <Col xs={24} sm={12} xl={8}>
+                <Card
+                  size="small"
+                  hoverable
+                  style={{
+                    height: '100%',
+                    minHeight: 240,
+                    borderStyle: 'dashed',
+                    cursor: 'pointer',
+                  }}
+                  onClick={openAddCropModal}
+                >
+                  <div
+                    style={{
+                      height: '100%',
+                      minHeight: 190,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Space direction="vertical" align="center" size={8}>
+                      <PlusOutlined style={{ fontSize: 28, color: '#52c41a' }} />
+                      <Typography.Text type="secondary">添加种养品种</Typography.Text>
+                    </Space>
+                  </div>
+                </Card>
+              </Col>
+            </Row>
+          )}
+        </Card>
+
+        <Card
+          title="🗺️ 地块位置与边界"
+          extra={<Tag color="green">天地图</Tag>}
+        >
+          {plotMapPoint ? (
+            <Space direction="vertical" size={8} style={{ width: '100%' }}>
+              <TiandituMap
+                points={[plotMapPoint]}
+                height={360}
+                zoom={15}
+                showLegend={false}
+              />
+              {!hasBoundary && (
+                <Typography.Text type="secondary">
+                  该地块尚未绘制边界，可在编辑页用天地图绘制，保存后在此展示。
+                </Typography.Text>
+              )}
+            </Space>
+          ) : (
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description="该地块尚未维护中心点与边界"
+            >
+              <Button onClick={() => navigate(`/production/plots/create?plotId=${plotId}`)}>
+                去编辑
+              </Button>
+            </Empty>
+          )}
         </Card>
 
         <Card
@@ -671,11 +1208,18 @@ export default function PlotDetail(): JSX.Element {
         <Card
           title="📡 实时环境数据"
           extra={
-            <Typography.Link
-              onClick={() => navigate(`/production/growth/environment?plotId=${plotId}`)}
-            >
-              查看历史曲线→
-            </Typography.Link>
+            <Space size={12}>
+              <Typography.Link
+                onClick={() => navigate(`/production/iot/bindings?plotId=${plotId}`)}
+              >
+                绑定监测设备→
+              </Typography.Link>
+              <Typography.Link
+                onClick={() => navigate(`/production/growth/environment?plotId=${plotId}`)}
+              >
+                查看历史曲线→
+              </Typography.Link>
+            </Space>
           }
         >
           {!latestEnv && (
@@ -723,68 +1267,354 @@ export default function PlotDetail(): JSX.Element {
           )}
         </Card>
 
-        <Card
-          title="📋 最近农事记录 (5条)"
-          extra={
-            <Typography.Link onClick={() => navigate(`/production/tasks?plotId=${plotId}`)}>
-              查看全部→
-            </Typography.Link>
-          }
-        >
-          <Table<Task>
-            rowKey="taskId"
-            size="small"
-            dataSource={taskQuery.data?.list ?? []}
-            columns={taskColumns}
-            pagination={false}
-            locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无农事记录" /> }}
+        <Card title="📋 关联记录">
+          <Tabs
+            items={[
+              {
+                key: 'tasks',
+                label: `农事记录（${tasks.length}）`,
+                children: (
+                  <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                    <Row justify="space-between" align="middle" gutter={[12, 8]}>
+                      <Col>
+                        <Typography.Text type="secondary">
+                          关联该地块的农事任务，进入详情可编辑、验收或转派
+                        </Typography.Text>
+                      </Col>
+                      <Col>
+                        <Button
+                          size="small"
+                          type="primary"
+                          onClick={() =>
+                            navigate(
+                              `/production/tasks/create?plotId=${plotId}&farmId=${plot.farmId}`,
+                            )
+                          }
+                        >
+                          新增农事记录
+                        </Button>
+                      </Col>
+                    </Row>
+                    <Table<Task>
+                      rowKey="taskId"
+                      size="small"
+                      dataSource={tasks}
+                      columns={taskColumns}
+                      pagination={{ pageSize: 5, size: 'small', showSizeChanger: false }}
+                      scroll={{ x: 720 }}
+                      locale={{
+                        emptyText: (
+                          <Empty
+                            image={Empty.PRESENTED_IMAGE_SIMPLE}
+                            description="暂无农事记录"
+                          />
+                        ),
+                      }}
+                    />
+                  </Space>
+                ),
+              },
+              {
+                key: 'harvests',
+                label: `采收记录（${harvests.length}）`,
+                children: (
+                  <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                    <Row justify="space-between" align="middle" gutter={[12, 8]}>
+                      <Col>
+                        <Typography.Text type="secondary">
+                          该地块的采收批次，进入详情可确认入库
+                        </Typography.Text>
+                      </Col>
+                      <Col>
+                        <Button
+                          size="small"
+                          type="primary"
+                          onClick={() =>
+                            navigate(
+                              `/production/harvests/create?plotId=${plotId}&farmId=${plot.farmId}`,
+                            )
+                          }
+                        >
+                          新增采收记录
+                        </Button>
+                      </Col>
+                    </Row>
+                    <Table<HarvestBatch>
+                      rowKey="batchId"
+                      size="small"
+                      dataSource={harvests}
+                      columns={harvestColumns}
+                      pagination={{ pageSize: 5, size: 'small', showSizeChanger: false }}
+                      scroll={{ x: 620 }}
+                      locale={{
+                        emptyText: (
+                          <Empty
+                            image={Empty.PRESENTED_IMAGE_SIMPLE}
+                            description="暂无采收记录"
+                          />
+                        ),
+                      }}
+                    />
+                  </Space>
+                ),
+              },
+              {
+                key: 'usages',
+                label: `农资使用（${usages.length}）`,
+                children: (
+                  <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                    <Row justify="space-between" align="middle" gutter={[12, 8]}>
+                      <Col>
+                        <Typography.Text type="secondary">
+                          该地块的农资投入品使用记录，可进入投入品台账查看合规与存证
+                        </Typography.Text>
+                      </Col>
+                      <Col>
+                        <Button
+                          size="small"
+                          type="primary"
+                          onClick={() =>
+                            navigate(
+                              `/production/inputs?tab=ledger&plotId=${plotId}&create=1`,
+                            )
+                          }
+                        >
+                          新增农资使用
+                        </Button>
+                      </Col>
+                    </Row>
+                    <Table<InputUsageRecord>
+                      rowKey="usageId"
+                      size="small"
+                      dataSource={usages}
+                      columns={usageColumns}
+                      pagination={{ pageSize: 5, size: 'small', showSizeChanger: false }}
+                      scroll={{ x: 620 }}
+                      locale={{
+                        emptyText: (
+                          <Empty
+                            image={Empty.PRESENTED_IMAGE_SIMPLE}
+                            description="暂无农资使用记录"
+                          />
+                        ),
+                      }}
+                    />
+                  </Space>
+                ),
+              },
+              {
+                key: 'growth',
+                label: `种植模型（${growthRecords.length}）`,
+                children: (
+                  <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                    <Row justify="space-between" align="middle" gutter={[12, 8]}>
+                      <Col>
+                        <Typography.Text type="secondary">
+                          生育期、株高、叶面积与长势打卡记录，进入生长记录页可编辑
+                        </Typography.Text>
+                      </Col>
+                      <Col>
+                        <Button
+                          size="small"
+                          type="primary"
+                          onClick={() =>
+                            navigate(
+                              `/production/growth/records?plotId=${plotId}&create=1`,
+                            )
+                          }
+                        >
+                          新增模型记录
+                        </Button>
+                      </Col>
+                    </Row>
+                    <Table<GrowthRecord>
+                      rowKey="recordId"
+                      size="small"
+                      dataSource={growthRecords}
+                      columns={growthColumns}
+                      pagination={{ pageSize: 5, size: 'small', showSizeChanger: false }}
+                      scroll={{ x: 820 }}
+                      locale={{
+                        emptyText: (
+                          <Empty
+                            image={Empty.PRESENTED_IMAGE_SIMPLE}
+                            description="暂无种植模型记录"
+                          />
+                        ),
+                      }}
+                    />
+                  </Space>
+                ),
+              },
+            ]}
           />
         </Card>
-
-        <Card
-          title="💊 投入品使用统计"
-          extra={
-            /* 2026-10-16：原指向已删除的 /production/inputs/ledger，改指权威页「投入品台账」 */
-            <Typography.Link onClick={() => navigate('/production/inputs')}>
-              查看投入品台账→
-            </Typography.Link>
-          }
-        >
-          {usageStats.total === 0 ? (
-            <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description="本季暂无投入品使用记录"
-            />
-          ) : (
-            <Row gutter={[12, 12]}>
-              <Col xs={24} sm={8}>
-                <Card size="small">
-                  <Typography.Text type="secondary">本季累计记录</Typography.Text>
-                  <div>
-                    <Typography.Text strong style={{ fontSize: 22 }}>
-                      {usageStats.total}
-                    </Typography.Text>
-                    <Typography.Text type="secondary"> 笔</Typography.Text>
-                  </div>
-                </Card>
-              </Col>
-              {usages.slice(0, 5).map(([name, item]) => (
-                <Col key={name} xs={12} sm={8} md={4}>
-                  <Card size="small">
-                    <Typography.Text type="secondary" ellipsis>
-                      {name}
-                    </Typography.Text>
-                    <div>
-                      <Typography.Text strong>{item.amount.toLocaleString('zh-CN')}</Typography.Text>
-                      <Typography.Text type="secondary"> {item.unit}</Typography.Text>
-                    </div>
-                  </Card>
-                </Col>
-              ))}
-            </Row>
-          )}
-        </Card>
       </Space>
+
+      <Modal
+        title={editingCrop ? '🌱 编辑种养品种' : '🌱 添加种养品种'}
+        open={cropModalOpen}
+        okText="确定"
+        cancelText="取消"
+        width={640}
+        destroyOnHidden
+        forceRender
+        confirmLoading={saveCropMutation.isPending}
+        onCancel={() => {
+          setCropModalOpen(false)
+          setEditingCrop(null)
+        }}
+        onOk={() => {
+          void cropForm.validateFields().then((values) => saveCropMutation.mutate(values))
+        }}
+      >
+        <Form form={cropForm} layout="vertical" preserve={false}>
+          <Row gutter={12}>
+            <Col span={12}>
+              <Form.Item
+                name="cropId"
+                label="种类"
+                rules={[{ required: true, message: '请选择种类' }]}
+                extra="取自作物主数据；没有需要的作物请联系平台运营新增"
+              >
+                <Select
+                  showSearch
+                  optionFilterProp="label"
+                  options={cropOptions}
+                  placeholder="请选择种类"
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="cropVariety" label="品种">
+                <Input
+                  placeholder={
+                    selectedCropName ? `${selectedCropName}的哪个品种` : '该作物下的哪个品种'
+                  }
+                  maxLength={50}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Form.Item
+            name="plantingStandard"
+            label="种植标准"
+            rules={[{ required: true, message: '请选择种植标准' }]}
+          >
+            <Radio.Group style={{ width: '100%' }}>
+              <Row gutter={8}>
+                {PLANTING_STANDARD_OPTIONS.map((option) => (
+                  <Col span={8} key={option.value}>
+                    <Radio.Button
+                      value={option.value}
+                      style={{
+                        width: '100%',
+                        height: 64,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
+                      }}
+                    >
+                      <span style={{ fontSize: 18 }}>{option.icon}</span>
+                      {option.label}
+                    </Radio.Button>
+                  </Col>
+                ))}
+              </Row>
+            </Radio.Group>
+          </Form.Item>
+
+          <Row gutter={12}>
+            <Col span={12}>
+              <Form.Item
+                name="plantingMethod"
+                label="种植方式"
+                rules={[{ required: true, message: '请选择种植方式' }]}
+              >
+                <Radio.Group>
+                  <Radio value="TRANSPLANT">移栽</Radio>
+                  <Radio value="DIRECT">直播</Radio>
+                </Radio.Group>
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="operationMethod"
+                label="作业方式"
+                rules={[{ required: true, message: '请选择作业方式' }]}
+              >
+                <Radio.Group>
+                  <Radio value="MANUAL">人工</Radio>
+                  <Radio value="MECHANICAL">机械</Radio>
+                </Radio.Group>
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={12}>
+            <Col span={12}>
+              <Form.Item
+                name="transplantDate"
+                label="移栽时间"
+                rules={[{ required: true, message: '请选择移栽时间' }]}
+              >
+                <DatePicker
+                  style={{ width: '100%' }}
+                  format="YYYY-MM-DD"
+                  placeholder="请选择移栽时间"
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="expectedHarvestDate" label="预计采收时间">
+                <DatePicker
+                  style={{ width: '100%' }}
+                  format="YYYY-MM-DD"
+                  placeholder="请选择预计采收时间"
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={12}>
+            <Col span={8}>
+              <Form.Item name="expectedYieldPerMu" label="预计亩产">
+                <InputNumber
+                  style={{ width: '100%' }}
+                  min={0}
+                  precision={2}
+                  addonAfter="公斤/亩"
+                  placeholder="如 5000"
+                />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item name="plantCount" label="株数">
+                <InputNumber
+                  style={{ width: '100%' }}
+                  min={0}
+                  precision={0}
+                  addonAfter="株"
+                  placeholder="如 1200"
+                />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item name="plantSpacing" label="株间距">
+                <InputNumber
+                  style={{ width: '100%' }}
+                  min={0}
+                  precision={2}
+                  addonAfter="cm"
+                  placeholder="如 35"
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+        </Form>
+      </Modal>
     </PageContainer>
   )
 }

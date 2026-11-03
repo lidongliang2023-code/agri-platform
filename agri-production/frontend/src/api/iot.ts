@@ -39,6 +39,27 @@ export function getDevice(deviceId: string): Promise<IotDevice> {
   return http.get<IotDevice>(`${BASE}/devices/${deviceId}`)
 }
 
+/** 设备数量统计（总数 / 在线 / 离线 / 故障） */
+export interface DeviceStats {
+  total: number
+  online: number
+  offline: number
+  alert: number
+}
+
+/**
+ * 查询设备数量统计（GET /iot/device-stats）。
+ *
+ * <p>监控看板、管理端大盘这类"只要数字"的场景用它，而不是拉全量设备列表再取
+ * `length` —— 设备超过一页时后者会静默少算，且与物联网端的统计口径
+ * （`alert` 单独计数）对不上。</p>
+ *
+ * @param farmId 农场标识（数字 id / 农场编码 / 平台标识 DEMO-FARM-001），可空
+ */
+export function getDeviceStats(farmId?: string): Promise<DeviceStats> {
+  return http.get<DeviceStats>(`${BASE}/device-stats`, { farmId })
+}
+
 /** 新增设备 */
 export function createDevice(payload: DevicePayload): Promise<string> {
   return http.post<string>(`${BASE}/devices`, payload)

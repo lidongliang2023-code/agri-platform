@@ -3,14 +3,21 @@ package com.agri.production.service.impl;
 import com.agri.production.common.entity.PageResult;
 import com.agri.production.common.exception.BusinessException;
 import com.agri.production.dto.InspectionSaveDTO;
+import com.agri.production.entity.AlertRecord;
+import com.agri.production.entity.HarvestBatch;
 import com.agri.production.entity.Inspection;
+import com.agri.production.entity.Inventory;
 import com.agri.production.entity.Plot;
 import com.agri.production.entity.QualityGradeRule;
 import com.agri.production.entity.TestingLab;
+import com.agri.production.mapper.HarvestBatchMapper;
 import com.agri.production.mapper.InspectionMapper;
+import com.agri.production.mapper.InventoryMapper;
 import com.agri.production.mapper.PlotMapper;
 import com.agri.production.mapper.QualityGradeRuleMapper;
 import com.agri.production.mapper.TestingLabMapper;
+import com.agri.production.service.IAlertService;
+import com.agri.production.service.IProductionNotificationService;
 import com.agri.production.service.IQualityService;
 import com.agri.production.service.IDomainEventService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -52,15 +59,26 @@ public class QualityServiceImpl implements IQualityService {
     private final TestingLabMapper labMapper;
     private final QualityGradeRuleMapper gradeRuleMapper;
     private final PlotMapper plotMapper;
+    private final HarvestBatchMapper harvestBatchMapper;
+    private final InventoryMapper inventoryMapper;
+    private final IAlertService alertService;
+    private final IProductionNotificationService notificationService;
     private final IDomainEventService domainEventService;
 
     public QualityServiceImpl(InspectionMapper inspectionMapper, TestingLabMapper labMapper,
                              QualityGradeRuleMapper gradeRuleMapper, PlotMapper plotMapper,
+                             HarvestBatchMapper harvestBatchMapper, InventoryMapper inventoryMapper,
+                             IAlertService alertService,
+                             IProductionNotificationService notificationService,
                              IDomainEventService domainEventService) {
         this.inspectionMapper = inspectionMapper;
         this.labMapper = labMapper;
         this.gradeRuleMapper = gradeRuleMapper;
         this.plotMapper = plotMapper;
+        this.harvestBatchMapper = harvestBatchMapper;
+        this.inventoryMapper = inventoryMapper;
+        this.alertService = alertService;
+        this.notificationService = notificationService;
         this.domainEventService = domainEventService;
     }
 
@@ -68,7 +86,7 @@ public class QualityServiceImpl implements IQualityService {
 
     @Override
     public PageResult<Inspection> pageInspections(int pageNum, int pageSize, String keyword, String status, Long farmId,
-                                                 Long batchId, String inspectionType, String result,
+                                                 Long batchId, String inspectionType, String result, String labName,
                                                  String startDate, String endDate, String tenantId) {
         LambdaQueryWrapper<Inspection> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Inspection::getTenantId, tenantId);
@@ -91,7 +109,21 @@ public class QualityServiceImpl implements IQualityService {
             wrapper.eq(Inspection::getInspectionType, inspectionType.trim().toUpperCase());
         }
         if (result != null && !result.isBlank()) {
-            wrapper.eq(Inspection::getResult, result.trim().toUpperCase());
+            String value = result.trim().toUpperCase();
+            if ("PENDING".equals(value)) {
+                // 页面那一档"待检"**不是库里的结论取值**：还没出结论的行 result 是 NULL。
+                // 按等值筛 'PENDING' 会一条都命中不到 —— 看起来像"没有待检的单"，其实是筛错了。
+                wrapper.and(q -> q.isNull(Inspection::getResult)
+                        .or().eq(Inspection::getResult, "")
+                        .or().eq(Inspection::getResult, "PENDING"));
+            } else {
+                wrapper.eq(Inspection::getResult, value);
+            }
+        }
+        if (labName != null && !labName.isBlank()) {
+            // 机构的取值来自机构下拉（机构全名），精确匹配：模糊匹配会让总站与分中心互相混进来，
+            // 而页面没有第二层可筛，用户只会看到"筛了但没少"。
+            wrapper.eq(Inspection::getLabName, labName.trim());
         }
         LocalDateTime from = parseDateTimeOrNull(startDate, true);
         LocalDateTime to = parseDateTimeOrNull(endDate, false);
@@ -218,6 +250,7 @@ public class QualityServiceImpl implements IQualityService {
         }
         inspection.setUpdateTime(LocalDateTime.now());
         inspectionMapper.updateById(inspection);
+        syncHarvestBatch(inspection, normalized, tenantId);
         // 契约要求结论联动 prod.quality.test.passed / failed。按 2026-10-14 拍板的事件口径
         // （复用平台 core-infra 的 outbox 契约）**落库为 NEW**，投递由 relay 负责 ——
         // 现在没有 relay，状态就停在 NEW，不谎报"已发送"。
@@ -461,6 +494,73 @@ public class QualityServiceImpl implements IQualityService {
             throw new BusinessException(404, "分级规则不存在：" + ruleId);
         }
         return rule;
+    }
+
+    private void syncHarvestBatch(Inspection inspection, String result, String tenantId) {
+        if (inspection.getBatchId() == null) {
+            return;
+        }
+        HarvestBatch batch = harvestBatchMapper.selectById(inspection.getBatchId());
+        if (batch == null || !tenantId.equals(batch.getTenantId())) {
+            log.warn("质检单 {} 关联的采收批次不存在或租户不一致：{}", inspection.getInspectionNo(), inspection.getBatchId());
+            return;
+        }
+        batch.setInspectionId(inspection.getInspectionId());
+        batch.setInspectionNo(inspection.getInspectionNo());
+        if (RESULT_FAIL.equals(result)) {
+            batch.setStatus(4);
+            batch.setRemark(appendBatchRemark(batch.getRemark(), "质检不合格，批次已冻结：" + inspection.getInspectionNo()));
+        } else if (Integer.valueOf(4).equals(batch.getStatus())) {
+            batch.setStatus(1);
+            batch.setRemark(appendBatchRemark(batch.getRemark(), "质检合格，批次解除冻结：" + inspection.getInspectionNo()));
+        }
+        batch.setUpdateTime(LocalDateTime.now());
+        harvestBatchMapper.updateById(batch);
+        applyInventoryFreeze(batch.getBatchId(), tenantId, RESULT_FAIL.equals(result));
+
+        if (RESULT_FAIL.equals(result)) {
+            AlertRecord alert = new AlertRecord();
+            alert.setAlertCode("QUALITY" + inspection.getInspectionId());
+            alert.setAlertType("QUALITY");
+            alert.setLevel("error");
+            alert.setSourceType("quality");
+            alert.setSourceId(inspection.getInspectionId());
+            alert.setSourceName(inspection.getInspectionNo());
+            alert.setFarmId(inspection.getFarmId());
+            alert.setPlotId(inspection.getPlotId());
+            alert.setTitle("质量检测不合格：" + (inspection.getCropName() == null ? batch.getBatchNo() : inspection.getCropName()));
+            alert.setContent(String.format("批次 %s 的检测单 %s 结论为不合格，批次已冻结，请执行处置或召回。",
+                    batch.getBatchNo(), inspection.getInspectionNo()));
+            alert.setTenantId(tenantId);
+            alertService.triggerAlert(alert);
+            notificationService.notify(tenantId, inspection.getFarmId() == null ? null : String.valueOf(inspection.getFarmId()),
+                    inspection.getInspectorId() == null ? null : String.valueOf(inspection.getInspectorId()), "QUALITY",
+                    "质量检测不合格", alert.getContent(), String.valueOf(batch.getBatchId()),
+                    "/production/harvests/" + batch.getBatchId());
+        }
+    }
+
+    private void applyInventoryFreeze(Long batchId, String tenantId, boolean frozen) {
+        List<Inventory> inventories = inventoryMapper.selectList(new LambdaQueryWrapper<Inventory>()
+                .eq(Inventory::getTenantId, tenantId)
+                .eq(Inventory::getBatchId, batchId));
+        LocalDateTime now = LocalDateTime.now();
+        for (Inventory inventory : inventories) {
+            inventory.setFrozen(frozen ? 1 : 0);
+            inventory.setFrozenQty(frozen ? inventory.getCurrentQty() : java.math.BigDecimal.ZERO);
+            inventory.setUpdateTime(now);
+            inventoryMapper.updateById(inventory);
+        }
+    }
+
+    private static String appendBatchRemark(String current, String addition) {
+        if (current == null || current.isBlank()) {
+            return addition;
+        }
+        if (current.contains(addition)) {
+            return current;
+        }
+        return current + "；" + addition;
     }
 
     private static boolean isBlank(String value) {

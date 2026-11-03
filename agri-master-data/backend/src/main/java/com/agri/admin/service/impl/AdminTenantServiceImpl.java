@@ -2,6 +2,7 @@ package com.agri.admin.service.impl;
 
 import com.agri.admin.dto.TenantCreateDTO;
 import com.agri.admin.client.CoreTenantSubjectClient;
+import com.agri.admin.client.CoreUserAdminClient;
 import com.agri.admin.dto.TenantPackageDTO;
 import com.agri.admin.dto.TenantQuotaAdjustDTO;
 import com.agri.admin.service.IAdminTenantService;
@@ -17,6 +18,7 @@ import com.agri.masterdata.dto.TenantSaveDTO;
 import com.agri.masterdata.dto.TenantUpdateDTO;
 import com.agri.masterdata.entity.OperationLog;
 import com.agri.masterdata.entity.Organization;
+import com.agri.masterdata.entity.Product;
 import com.agri.masterdata.entity.Tenant;
 import com.agri.masterdata.entity.TenantPackage;
 import com.agri.masterdata.entity.TenantQuota;
@@ -24,6 +26,7 @@ import com.agri.masterdata.entity.User;
 import com.agri.masterdata.entity.UserAuthentication;
 import com.agri.masterdata.mapper.OperationLogMapper;
 import com.agri.masterdata.mapper.OrganizationMapper;
+import com.agri.masterdata.mapper.ProductMapper;
 import com.agri.masterdata.mapper.TenantMapper;
 import com.agri.masterdata.mapper.TenantPackageMapper;
 import com.agri.masterdata.mapper.TenantQuotaMapper;
@@ -65,11 +68,13 @@ public class AdminTenantServiceImpl implements IAdminTenantService {
     private final ITenantQuotaService tenantQuotaService;
     private final IUserService userService;
     private final CoreTenantSubjectClient coreTenantSubjectClient;
+    private final CoreUserAdminClient coreUserAdminClient;
     private final TenantMapper tenantMapper;
     private final TenantPackageMapper tenantPackageMapper;
     private final TenantQuotaMapper tenantQuotaMapper;
     private final UserMapper userMapper;
     private final OrganizationMapper organizationMapper;
+    private final ProductMapper productMapper;
     private final UserAuthenticationMapper userAuthenticationMapper;
     private final OperationLogMapper operationLogMapper;
 
@@ -107,10 +112,48 @@ public class AdminTenantServiceImpl implements IAdminTenantService {
         vo.setTenantCode(subject.tenantCode());
         vo.setTenantName(subject.tenantName());
         vo.setTenantType("personal".equalsIgnoreCase(subject.memberType()) ? "INDIVIDUAL" : "ENTERPRISE");
+        vo.setIndustry(subject.industry());
+        vo.setCompanySize(subject.companySize());
+        vo.setBusinessType(subject.businessType());
+        vo.setAddress(subject.address());
+        vo.setCreditCode(subject.creditCode());
+        vo.setVerifyStatus(subject.verifyStatus());
+        vo.setVerifyRemark(subject.verifyRemark());
         vo.setContactName(subject.contactName());
         vo.setPhone(subject.contactPhone());
         vo.setStatus(subject.status());
         vo.setCreateTime(subject.createdAt() != null ? subject.createdAt().toString() : null);
+        CoreTenantSubjectClient.CoreCertification certification = subject.certification();
+        if (certification != null) {
+            vo.setCreditCode(certification.creditCode() != null ? certification.creditCode() : subject.creditCode());
+            vo.setLegalPerson(certification.legalPerson());
+            vo.setLicenseNo(certification.licenseNo());
+            vo.setBusinessLicenseUrl(certification.businessLicenseUrl());
+            vo.setCertificationNo(certification.certNo());
+            vo.setVerificationChannel(certification.verificationChannel());
+            vo.setLegalPersonFaceStatus(certification.legalPersonFaceStatus());
+            vo.setCorporateBankName(certification.corporateBankName());
+            vo.setCorporateBankAccount(certification.corporateBankAccount());
+            vo.setCorporateTransferStatus(certification.corporateTransferStatus());
+            vo.setRegisteredCapital(certification.registeredCapital());
+            vo.setCertificationStatus(certification.status());
+            vo.setCertificationReviewRemark(certification.reviewRemark());
+        }
+        CoreTenantSubjectClient.CoreIdentity identity = subject.identity();
+        if (identity != null) {
+            vo.setIdentityNoMasked(identity.idNoMasked());
+            vo.setLegalPerson(identity.realName());
+            vo.setValidStart(identity.validStart());
+            vo.setValidEnd(identity.validEnd());
+            vo.setCertificationNo(identity.identityNo());
+            vo.setVerificationChannel(identity.verificationChannel());
+            vo.setPoliceVerified(identity.policeVerified());
+            vo.setLivenessVerified(identity.livenessVerified());
+            vo.setCertificationStatus(identity.status());
+            vo.setCertificationReviewRemark(identity.reviewRemark());
+            if (vo.getEmail() == null) vo.setEmail(identity.email());
+            if (vo.getAddress() == null) vo.setAddress(identity.address());
+        }
         vo.setQuotaInfo(getTenantQuota(id));
         vo.setUserOrgStats(getUserOrgStats(id));
         vo.setQualityScore(getQualityScore(id));
@@ -130,7 +173,9 @@ public class AdminTenantServiceImpl implements IAdminTenantService {
         String contactName = dto.getContactName() != null ? dto.getContactName() : dto.getContactPerson();
         CoreTenantSubjectClient.CoreApiResponse<CoreTenantSubjectClient.CoreTenantSubject> response =
                 coreTenantSubjectClient.update(id, new CoreTenantSubjectClient.TenantSubjectUpdate(
-                        dto.getTenantName(), null, null, contactName, dto.getContactPhone(), dto.getStatus()));
+                        dto.getTenantName(), dto.getIndustry(), dto.getCompanySize(),
+                        dto.getBusinessType(), dto.getAddress(), dto.getCreditCode(),
+                        contactName, dto.getContactPhone(), dto.getStatus()));
         requireSuccess(response.code(), response.message());
     }
 
@@ -153,13 +198,15 @@ public class AdminTenantServiceImpl implements IAdminTenantService {
         );
         
         TenantDetailVO.QuotaInfo info = new TenantDetailVO.QuotaInfo();
+        info.setUsedUsers(Math.toIntExact(countMembers(id)));
+        info.setUsedOrgs(Math.toIntExact(organizationMapper.selectCount(
+                new LambdaQueryWrapper<Organization>().eq(Organization::getTenantId, id.toString()))));
+        info.setUsedProducts(Math.toIntExact(productMapper.selectCount(
+                new LambdaQueryWrapper<Product>().eq(Product::getTenantId, id.toString()))));
         if (quota != null) {
             info.setUserLimit(quota.getUserLimit());
-            info.setUsedUsers(quota.getUsedUsers());
             info.setOrgLimit(quota.getOrgLimit());
-            info.setUsedOrgs(quota.getUsedOrgs());
             info.setProductLimit(quota.getProductLimit());
-            info.setUsedProducts(quota.getUsedProducts());
             info.setStorageLimit(quota.getStorageLimit());
             info.setUsedStorage(quota.getUsedStorage());
             info.setApiLimit(quota.getApiLimit());
@@ -171,52 +218,52 @@ public class AdminTenantServiceImpl implements IAdminTenantService {
     }
 
     @Override
-    public PageResult<TenantQuotaOverviewVO> getQuotaOverview(Integer pageNum, Integer pageSize, String keyword) {
-        // 先按条件分页查租户，再把这批租户的配额**一次性**捞回来合并。
-        // 不写成"每个租户查一次配额"：那是 N+1，一页 10 个租户就是 11 次数据库往返。
-        LambdaQueryWrapper<Tenant> tenantWrapper = new LambdaQueryWrapper<>();
-        if (keyword != null && !keyword.isEmpty()) {
-            tenantWrapper.and(w -> w.like(Tenant::getTenantName, keyword)
-                    .or().like(Tenant::getTenantCode, keyword));
-        }
-        tenantWrapper.orderByDesc(Tenant::getCreateTime);
-
-        IPage<Tenant> page = tenantMapper.selectPage(new Page<>(pageNum, pageSize), tenantWrapper);
-        List<Tenant> tenants = page.getRecords();
-
-        // agri_md_tenant_quota.tenant_id 存的是租户主键的字符串形式（与 getTenantQuota 同口径）
+    public PageResult<TenantQuotaOverviewVO> getQuotaOverview(Integer pageNum, Integer pageSize,
+                                                               String keyword, String tenantType) {
+        String memberType = "INDIVIDUAL".equalsIgnoreCase(tenantType)
+                || "PERSONAL".equalsIgnoreCase(tenantType) ? "personal"
+                : "ENTERPRISE".equalsIgnoreCase(tenantType) ? "enterprise" : null;
+        CoreTenantSubjectClient.CoreApiResponse<CoreTenantSubjectClient.CorePageResult<
+                CoreTenantSubjectClient.CoreTenantSubject>> response =
+                coreTenantSubjectClient.page(pageNum, pageSize, keyword, null, memberType);
+        requireSuccess(response.code(), response.message());
+        CoreTenantSubjectClient.CorePageResult<CoreTenantSubjectClient.CoreTenantSubject> data = response.data();
+        List<CoreTenantSubjectClient.CoreTenantSubject> subjects =
+                data == null || data.records() == null ? List.of() : data.records();
+        List<String> tenantIds = subjects.stream()
+                .map(item -> String.valueOf(item.tenantId())).toList();
         Map<String, TenantQuota> quotaMap = new HashMap<>();
-        if (!tenants.isEmpty()) {
-            List<String> tenantIds = new ArrayList<>();
-            for (Tenant tenant : tenants) {
-                if (tenant.getId() != null) {
-                    tenantIds.add(tenant.getId().toString());
-                }
-            }
-            if (!tenantIds.isEmpty()) {
-                for (TenantQuota quota : tenantQuotaMapper.selectList(
-                        new LambdaQueryWrapper<TenantQuota>().in(TenantQuota::getTenantId, tenantIds))) {
-                    quotaMap.put(quota.getTenantId(), quota);
-                }
+        if (!tenantIds.isEmpty()) {
+            for (TenantQuota quota : tenantQuotaMapper.selectList(
+                    new LambdaQueryWrapper<TenantQuota>().in(TenantQuota::getTenantId, tenantIds))) {
+                quotaMap.put(quota.getTenantId(), quota);
             }
         }
+
+        Map<Long, Long> memberCounts = countMembersBySubject();
+        Map<String, Long> orgCounts = countByTenant(organizationMapper.selectMaps(
+                new QueryWrapper<Organization>().select("tenant_id AS tid", "COUNT(*) AS cnt")
+                        .in("tenant_id", tenantIds).groupBy("tenant_id")), "tid");
+        Map<String, Long> productCounts = countByTenant(productMapper.selectMaps(
+                new QueryWrapper<Product>().select("tenant_id AS tid", "COUNT(*) AS cnt")
+                        .in("tenant_id", tenantIds).groupBy("tenant_id")), "tid");
 
         List<TenantQuotaOverviewVO> list = new ArrayList<>();
-        for (Tenant tenant : tenants) {
+        for (CoreTenantSubjectClient.CoreTenantSubject subject : subjects) {
             TenantQuotaOverviewVO vo = new TenantQuotaOverviewVO();
-            vo.setId(tenant.getId());
-            vo.setTenantCode(tenant.getTenantCode());
-            vo.setTenantName(tenant.getTenantName());
-            vo.setTenantType(tenant.getTenantType());
-
-            TenantQuota quota = tenant.getId() == null ? null : quotaMap.get(tenant.getId().toString());
+            vo.setId(subject.tenantId());
+            vo.setTenantCode(subject.tenantCode());
+            vo.setTenantName(subject.tenantName());
+            vo.setTenantType("personal".equalsIgnoreCase(subject.memberType()) ? "INDIVIDUAL" : "ENTERPRISE");
+            String tenantId = String.valueOf(subject.tenantId());
+            TenantQuota quota = quotaMap.get(tenantId);
             vo.setHasQuota(quota != null);
+            vo.setUserUsed(memberCounts.getOrDefault(subject.tenantId(), 0L).intValue());
+            vo.setOrgUsed(orgCounts.getOrDefault(tenantId, 0L).intValue());
+            vo.setProductUsed(productCounts.getOrDefault(tenantId, 0L).intValue());
             if (quota != null) {
-                vo.setUserUsed(quota.getUsedUsers());
                 vo.setUserLimit(quota.getUserLimit());
-                vo.setOrgUsed(quota.getUsedOrgs());
                 vo.setOrgLimit(quota.getOrgLimit());
-                vo.setProductUsed(quota.getUsedProducts());
                 vo.setProductLimit(quota.getProductLimit());
                 vo.setStorageUsed(quota.getUsedStorage());
                 vo.setStorageLimit(quota.getStorageLimit());
@@ -225,26 +272,44 @@ public class AdminTenantServiceImpl implements IAdminTenantService {
             }
             list.add(vo);
         }
-        return PageResult.success(list, page.getTotal(), pageNum, pageSize);
+        long total = data == null ? 0 : data.total();
+        return PageResult.success(list, total, pageNum, pageSize);
     }
 
     @Override
     public void adjustTenantQuota(Long id, TenantQuotaAdjustDTO dto) {
+        CoreTenantSubjectClient.CoreApiResponse<CoreTenantSubjectClient.CoreTenantSubject> subjectResponse =
+                coreTenantSubjectClient.detail(id);
+        requireSuccess(subjectResponse.code(), subjectResponse.message());
         TenantQuota quota = tenantQuotaMapper.selectOne(
             new LambdaQueryWrapper<TenantQuota>().eq(TenantQuota::getTenantId, id.toString())
         );
-        
         if (quota == null) {
-            throw new BusinessException("租户配额不存在");
+            quota = new TenantQuota();
+            quota.setTenantId(id.toString());
+            quota.setQuotaType("SUBJECT");
+            quota.setStatus(1);
+            quota.setUsedUsers(0);
+            quota.setUsedOrgs(0);
+            quota.setUsedProducts(0);
+            quota.setUsedStorage(0L);
+            quota.setUsedApi(0);
         }
-        
         if (dto.getUserLimit() != null) quota.setUserLimit(dto.getUserLimit());
         if (dto.getOrgLimit() != null) quota.setOrgLimit(dto.getOrgLimit());
         if (dto.getProductLimit() != null) quota.setProductLimit(dto.getProductLimit());
         if (dto.getStorageLimit() != null) quota.setStorageLimit(dto.getStorageLimit());
         if (dto.getApiLimit() != null) quota.setApiLimit(dto.getApiLimit());
-        
-        tenantQuotaMapper.updateById(quota);
+        quota.setUsedUsers(Math.toIntExact(countMembers(id)));
+        quota.setUsedOrgs(organizationMapper.selectCount(new LambdaQueryWrapper<Organization>()
+                .eq(Organization::getTenantId, id.toString())).intValue());
+        quota.setUsedProducts(productMapper.selectCount(new LambdaQueryWrapper<Product>()
+                .eq(Product::getTenantId, id.toString())).intValue());
+        if (quota.getId() == null) {
+            tenantQuotaMapper.insert(quota);
+        } else {
+            tenantQuotaMapper.updateById(quota);
+        }
     }
 
     @Override
@@ -275,11 +340,21 @@ public class AdminTenantServiceImpl implements IAdminTenantService {
     }
 
     @Override
+    public TenantPackageVO getPackageDetail(Long id) {
+        TenantPackage entity = tenantPackageMapper.selectById(id);
+        if (entity == null) {
+            throw new BusinessException("套餐不存在");
+        }
+        return toPackageVO(entity);
+    }
+
+    @Override
     @Transactional
     public void createPackage(TenantPackageDTO dto) {
         if (dto.getPackageCode() == null || dto.getPackageCode().isEmpty()) {
             throw new BusinessException("套餐编码不能为空");
         }
+        validatePackage(dto, true);
         Long exists = tenantPackageMapper.selectCount(
                 new LambdaQueryWrapper<TenantPackage>().eq(TenantPackage::getPackageCode, dto.getPackageCode()));
         if (exists != null && exists > 0) {
@@ -289,7 +364,7 @@ public class AdminTenantServiceImpl implements IAdminTenantService {
         entity.setPackageCode(dto.getPackageCode());
         entity.setDelFlag(0);
         applyPackageDto(entity, dto);
-        entity.setStatus(1);
+        entity.setStatus(dto.getStatus() == null ? 1 : dto.getStatus());
         tenantPackageMapper.insert(entity);
     }
 
@@ -300,6 +375,7 @@ public class AdminTenantServiceImpl implements IAdminTenantService {
         if (entity == null) {
             throw new BusinessException("套餐不存在");
         }
+        validatePackage(dto, false);
         // 只覆盖本次传了的字段：否则"改个价格"会把限额、说明一并清空
         applyPackageDto(entity, dto);
         tenantPackageMapper.updateById(entity);
@@ -362,6 +438,40 @@ public class AdminTenantServiceImpl implements IAdminTenantService {
             entity.setServiceLevel(dto.getServiceLevel());
             entity.setServiceLevelDesc(defaultServiceLevelDesc(dto.getServiceLevel()));
         }
+        if (dto.getStatus() != null) {
+            if (dto.getStatus() != 0 && dto.getStatus() != 1) {
+                throw new BusinessException("套餐状态只能是 0 或 1");
+            }
+            entity.setStatus(dto.getStatus());
+        }
+    }
+
+    private void validatePackage(TenantPackageDTO dto, boolean creating) {
+        if (dto == null) {
+            throw new BusinessException("套餐资料不能为空");
+        }
+        if (dto.getPackageName() == null || dto.getPackageName().isBlank()) {
+            throw new BusinessException("套餐名称不能为空");
+        }
+        if (creating && (dto.getPackageCode() == null
+                || !dto.getPackageCode().matches("[A-Za-z0-9_-]{2,64}"))) {
+            throw new BusinessException("套餐编码应为 2-64 位字母、数字、下划线或短横线");
+        }
+        if (dto.getPrice() == null || dto.getPrice() < 0) {
+            throw new BusinessException("套餐价格不能小于 0");
+        }
+        if (dto.getDuration() == null || dto.getDuration() <= 0) {
+            throw new BusinessException("套餐有效期必须大于 0 天");
+        }
+        if (negative(dto.getUserLimit()) || negative(dto.getOrgLimit())
+                || negative(dto.getProductLimit()) || negative(dto.getStorageLimit())
+                || negative(dto.getApiLimit())) {
+            throw new BusinessException("套餐限额不能小于 0");
+        }
+    }
+
+    private static boolean negative(Number value) {
+        return value != null && value.doubleValue() < 0;
     }
 
     private TenantPackageVO toPackageVO(TenantPackage entity) {
@@ -386,44 +496,44 @@ public class AdminTenantServiceImpl implements IAdminTenantService {
 
     @Override
     public TenantStatisticsVO getTenantStatistics(String tenantId, String timeRange) {
+        List<CoreTenantSubjectClient.CoreTenantSubject> subjects = loadSubjectsForStatistics();
         TenantStatisticsVO vo = new TenantStatisticsVO();
-        vo.setSummary(getTenantSummary());
-        vo.setTrends(getTenantTrends(timeRange));
-        vo.setRankings(getTenantRankings());
-        vo.setTenantTypes(countByName("tenant_type", "未填写"));
-        vo.setRegions(countByName("province", "未填写"));
+        vo.setSummary(buildTenantSummary(subjects));
+        vo.setTrends(buildTenantTrends(subjects, timeRange));
+        vo.setRankings(buildTenantRankings(subjects));
+        vo.setTenantTypes(buildTenantTypes(subjects));
+        vo.setVerificationStatuses(buildVerificationStatuses(subjects));
+        vo.setRegions(List.of());
         return vo;
     }
 
     @Override
     public TenantStatisticsVO.Summary getTenantSummary() {
+        return buildTenantSummary(loadSubjectsForStatistics());
+    }
+
+    private TenantStatisticsVO.Summary buildTenantSummary(
+            List<CoreTenantSubjectClient.CoreTenantSubject> subjects) {
         TenantStatisticsVO.Summary summary = new TenantStatisticsVO.Summary();
-        summary.setTotalTenants(tenantMapper.selectCount(new LambdaQueryWrapper<Tenant>()));
-        // 按类型统计必须忽略大小写：库里存的是 'ENTERPRISE' / 'INDIVIDUAL'（大写），
-        // 这里原先按小写 'enterprise' 比较 —— 赶上 MySQL 不区分大小写的排序规则能碰巧命中，
-        // 一旦库改成 _bin / _as_cs，就会恒返回 0：列表里明明有 7 家企业租户，
-        // 统计卡片上却是"企业租户 0 家"。用 UPPER() 把口径固定下来。
-        summary.setEnterpriseTenants(tenantMapper.selectCount(
-            new LambdaQueryWrapper<Tenant>().apply("UPPER(tenant_type) = {0}", "ENTERPRISE")
-        ));
-        summary.setIndividualTenants(tenantMapper.selectCount(
-            new LambdaQueryWrapper<Tenant>().apply("UPPER(tenant_type) = {0}", "INDIVIDUAL")
-        ));
-        summary.setActiveTenants(tenantMapper.selectCount(
-            new LambdaQueryWrapper<Tenant>().eq(Tenant::getStatus, StatusEnum.ENABLE.getCode())
-        ));
-        summary.setInactiveTenants(tenantMapper.selectCount(
-            new LambdaQueryWrapper<Tenant>().eq(Tenant::getStatus, StatusEnum.DISABLE.getCode())
-        ));
-        // 到期数现在有真实来源（agri_md_tenant.expire_time），不再是"没有来源所以留空"
-        summary.setExpiredTenants(tenantMapper.selectCount(
-            new LambdaQueryWrapper<Tenant>()
-                .isNotNull(Tenant::getExpireTime)
-                .lt(Tenant::getExpireTime, new Date())
-        ));
-        // 租户主数据质量得分仍然没有来源（没有"按租户汇总质量得分"的表），留空而不是写死 96.8
+        long total = subjects.size();
+        long enterprise = subjects.stream()
+                .filter(item -> "enterprise".equalsIgnoreCase(item.memberType())).count();
+        long active = subjects.stream().filter(item -> Integer.valueOf(1).equals(item.status())).count();
+        summary.setTotalTenants(total);
+        summary.setEnterpriseTenants(enterprise);
+        summary.setIndividualTenants(total - enterprise);
+        summary.setActiveTenants(active);
+        summary.setInactiveTenants(total - active);
+        summary.setExpiredTenants(null);
         summary.setAvgQualityScore(null);
-        summary.setTotalUsers(userMapper.selectCount(new LambdaQueryWrapper<User>()));
+        CoreUserAdminClient.CoreApiResponse<CoreUserAdminClient.CorePage<CoreUserAdminClient.CoreUser>> users =
+                coreUserAdminClient.pageUsers(1, 1, null);
+        if (users.code() != null && users.code() == 0 && users.data() != null) {
+            summary.setTotalUsers(users.data().total());
+        } else {
+            Map<Long, Long> memberCounts = countMembersBySubject();
+            summary.setTotalUsers(memberCounts.values().stream().mapToLong(Long::longValue).sum());
+        }
         return summary;
     }
 
@@ -473,15 +583,19 @@ public class AdminTenantServiceImpl implements IAdminTenantService {
         String code = tenant == null ? null : tenant.getTenantCode();
         String idText = String.valueOf(tenantId);
 
-        stats.setTotalUsers(userMapper.selectCount(tenantScoped(User::getTenantId, code, idText)));
-
-        LambdaQueryWrapper<UserAuthentication> approved = tenantScoped(UserAuthentication::getTenantId, code, idText);
-        approved.apply("UPPER(auth_status) = {0}", "APPROVED");
-        stats.setVerifiedUsers(userAuthenticationMapper.selectCount(approved));
-
-        LambdaQueryWrapper<UserAuthentication> pending = tenantScoped(UserAuthentication::getTenantId, code, idText);
-        pending.apply("UPPER(auth_status) = {0}", "PENDING");
-        stats.setPendingUsers(userAuthenticationMapper.selectCount(pending));
+        try {
+            CoreUserAdminClient.CoreApiResponse<CoreUserAdminClient.CorePage<
+                    CoreUserAdminClient.CoreMembership>> response =
+                    coreUserAdminClient.pageMembershipsByMerchant(1, 500, tenantId);
+            if (response.code() != null && response.code() == 0
+                    && response.data() != null && response.data().records() != null) {
+                stats.setTotalUsers(response.data().records().stream()
+                        .filter(item -> Integer.valueOf(1).equals(item.status()))
+                        .count());
+            }
+        } catch (RuntimeException ignored) {
+            // 核心平台暂时不可达时保留成员统计为空，不用本地旧表伪造人数。
+        }
 
         stats.setTotalOrgs(organizationMapper.selectCount(tenantScoped(Organization::getTenantId, code, idText)));
 
@@ -552,7 +666,8 @@ public class AdminTenantServiceImpl implements IAdminTenantService {
         return logs;
     }
 
-    private List<TenantStatisticsVO.TenantTrend> getTenantTrends(String timeRange) {
+    private List<TenantStatisticsVO.TenantTrend> buildTenantTrends(
+            List<CoreTenantSubjectClient.CoreTenantSubject> subjects, String timeRange) {
         int days = switch (timeRange == null ? "" : timeRange) {
             case "7d" -> 7;
             case "90d" -> 90;
@@ -563,17 +678,11 @@ public class AdminTenantServiceImpl implements IAdminTenantService {
         LocalDate today = LocalDate.now();
         LocalDate from = today.minusDays(days - 1L);
 
-        QueryWrapper<Tenant> wrapper = new QueryWrapper<>();
-        wrapper.select("DATE(create_time) AS d", "COUNT(*) AS cnt")
-            .ge("create_time", from.atStartOfDay())
-            .groupBy("DATE(create_time)");
         Map<String, Long> counts = new HashMap<>();
-        for (Map<String, Object> row : tenantMapper.selectMaps(wrapper)) {
-            Object day = row.get("d");
-            Object count = row.get("cnt");
-            if (day != null) {
-                counts.put(String.valueOf(day).substring(0, 10),
-                    count == null ? 0L : Long.valueOf(String.valueOf(count)));
+        for (CoreTenantSubjectClient.CoreTenantSubject subject : subjects) {
+            LocalDateTime createdAt = parsePlatformTime(subject.createdAt());
+            if (createdAt != null && !createdAt.toLocalDate().isBefore(from)) {
+                counts.merge(createdAt.toLocalDate().toString(), 1L, Long::sum);
             }
         }
 
@@ -618,34 +727,69 @@ public class AdminTenantServiceImpl implements IAdminTenantService {
      * <p>{@code qualityScore / dataUpdates} 保持 null：没有质量得分汇总表，
      * 也没有"数据变更次数"的统计表。要有真数字得先建这两样东西。</p>
      */
-    private List<TenantStatisticsVO.TenantRank> getTenantRankings() {
-        Map<String, Long> userCounts = groupedCount(userMapper.selectMaps(
-            new QueryWrapper<User>().select("tenant_id AS tid", "COUNT(*) AS cnt").groupBy("tenant_id")), "tid");
+    private List<TenantStatisticsVO.TenantRank> buildTenantRankings(
+            List<CoreTenantSubjectClient.CoreTenantSubject> subjects) {
+        Map<Long, Long> userCounts = countMembersBySubject();
         Map<String, Long> orgCounts = groupedCount(organizationMapper.selectMaps(
             new QueryWrapper<Organization>().select("tenant_id AS tid", "COUNT(*) AS cnt").groupBy("tenant_id")), "tid");
 
-        List<Tenant> tenants = tenantMapper.selectList(new LambdaQueryWrapper<Tenant>());
-        tenants.sort(Comparator.comparingLong(
-            (Tenant tenant) -> userCounts.getOrDefault(tenant.getTenantCode(), 0L)).reversed());
+        List<CoreTenantSubjectClient.CoreTenantSubject> sorted = subjects.stream()
+                .sorted(Comparator.comparingLong(
+                        (CoreTenantSubjectClient.CoreTenantSubject item) ->
+                                userCounts.getOrDefault(item.tenantId(), 0L)).reversed())
+                .toList();
 
         List<TenantStatisticsVO.TenantRank> rankings = new ArrayList<>();
-        for (Tenant tenant : tenants) {
+        for (CoreTenantSubjectClient.CoreTenantSubject subject : sorted) {
             if (rankings.size() >= 10) {
                 break;
             }
             TenantStatisticsVO.TenantRank rank = new TenantStatisticsVO.TenantRank();
             rank.setRank(rankings.size() + 1);
-            rank.setTenantId(tenant.getTenantCode());
-            rank.setTenantName(tenant.getTenantName());
-            rank.setTenantType(tenant.getTenantType());
-            rank.setUserCount(userCounts.getOrDefault(tenant.getTenantCode(), 0L));
-            rank.setOrgCount(orgCounts.getOrDefault(tenant.getTenantCode(), 0L));
+            rank.setTenantId(String.valueOf(subject.tenantId()));
+            rank.setTenantName(subject.tenantName());
+            rank.setTenantType("personal".equalsIgnoreCase(subject.memberType()) ? "INDIVIDUAL" : "ENTERPRISE");
+            rank.setUserCount(userCounts.getOrDefault(subject.tenantId(), 0L));
+            rank.setOrgCount(orgCounts.getOrDefault(String.valueOf(subject.tenantId()), 0L));
             rank.setQualityScore(null);
             rank.setDataUpdates(null);
-            rank.setStatus(StatusEnum.ENABLE.getCode().equals(tenant.getStatus()) ? "启用中" : "已停用");
+            rank.setStatus(Integer.valueOf(1).equals(subject.status()) ? "启用中" : "已停用");
             rankings.add(rank);
         }
         return rankings;
+    }
+
+    private List<TenantStatisticsVO.NameCount> buildTenantTypes(
+            List<CoreTenantSubjectClient.CoreTenantSubject> subjects) {
+        long enterprise = subjects.stream()
+                .filter(item -> "enterprise".equalsIgnoreCase(item.memberType())).count();
+        long personal = subjects.size() - enterprise;
+        List<TenantStatisticsVO.NameCount> result = new ArrayList<>();
+        if (enterprise > 0) result.add(new TenantStatisticsVO.NameCount("ENTERPRISE", enterprise));
+        if (personal > 0) result.add(new TenantStatisticsVO.NameCount("INDIVIDUAL", personal));
+        return result;
+    }
+
+    private List<TenantStatisticsVO.NameCount> buildVerificationStatuses(
+            List<CoreTenantSubjectClient.CoreTenantSubject> subjects) {
+        Map<String, Long> counts = new LinkedHashMap<>();
+        for (CoreTenantSubjectClient.CoreTenantSubject subject : subjects) {
+            String status = subject.verifyStatus();
+            if (status == null || status.isBlank()) status = "unverified";
+            counts.merge(status, 1L, Long::sum);
+        }
+        return counts.entrySet().stream()
+                .map(item -> new TenantStatisticsVO.NameCount(item.getKey(), item.getValue()))
+                .toList();
+    }
+
+    private List<CoreTenantSubjectClient.CoreTenantSubject> loadSubjectsForStatistics() {
+        CoreTenantSubjectClient.CoreApiResponse<CoreTenantSubjectClient.CorePageResult<
+                CoreTenantSubjectClient.CoreTenantSubject>> response =
+                coreTenantSubjectClient.page(1, 1000, null, null, null);
+        requireSuccess(response.code(), response.message());
+        return response.data() == null || response.data().records() == null
+                ? List.of() : response.data().records();
     }
 
     private TenantVO toTenantVO(CoreTenantSubjectClient.CoreTenantSubject subject) {
@@ -654,6 +798,17 @@ public class AdminTenantServiceImpl implements IAdminTenantService {
                 .tenantCode(subject.tenantCode())
                 .tenantName(subject.tenantName())
                 .tenantType("personal".equalsIgnoreCase(subject.memberType()) ? "INDIVIDUAL" : "ENTERPRISE")
+                .industry(subject.industry())
+                .companySize(subject.companySize())
+                .businessType(subject.businessType())
+                .address(subject.address())
+                .creditCode(subject.creditCode())
+                .legalPerson(subject.certification() != null
+                        ? subject.certification().legalPerson()
+                        : subject.identity() != null ? subject.identity().realName() : null)
+                .licenseNo(subject.certification() != null ? subject.certification().licenseNo() : null)
+                .idNoMasked(subject.identity() != null ? subject.identity().idNoMasked() : null)
+                .verifyStatus(subject.verifyStatus())
                 .contactPerson(subject.contactName())
                 .contactPhone(subject.contactPhone())
                 .status(subject.status())
@@ -689,5 +844,39 @@ public class AdminTenantServiceImpl implements IAdminTenantService {
             }
         }
         return result;
+    }
+
+    private Map<String, Long> countByTenant(List<Map<String, Object>> rows, String keyColumn) {
+        return groupedCount(rows, keyColumn);
+    }
+
+    private Map<Long, Long> countMembersBySubject() {
+        CoreUserAdminClient.CoreApiResponse<CoreUserAdminClient.CorePage<
+                CoreUserAdminClient.CoreMembership>> response =
+                coreUserAdminClient.pageMemberships(1, 1000);
+        requireSuccess(response.code(), response.message());
+        Map<Long, Long> result = new HashMap<>();
+        if (response.data() == null || response.data().records() == null) {
+            return result;
+        }
+        for (CoreUserAdminClient.CoreMembership item : response.data().records()) {
+            if (Integer.valueOf(1).equals(item.status())) {
+                result.merge(item.merchantId(), 1L, Long::sum);
+            }
+        }
+        return result;
+    }
+
+    private long countMembers(Long subjectId) {
+        CoreUserAdminClient.CoreApiResponse<CoreUserAdminClient.CorePage<
+                CoreUserAdminClient.CoreMembership>> response =
+                coreUserAdminClient.pageMembershipsByMerchant(1, 500, subjectId);
+        requireSuccess(response.code(), response.message());
+        if (response.data() == null || response.data().records() == null) {
+            return 0L;
+        }
+        return response.data().records().stream()
+                .filter(item -> Integer.valueOf(1).equals(item.status()))
+                .count();
     }
 }

@@ -38,7 +38,8 @@ public interface CoreTenantSubjectClient {
     CoreApiResponse<CoreTenantSubject> updateStatus(@PathVariable("tenantId") Long tenantId,
                                                     @RequestBody TenantStatusUpdate request);
 
-    record TenantSubjectUpdate(String tenantName, String industry, String businessType,
+    record TenantSubjectUpdate(String tenantName, String industry, String companySize, String businessType,
+                               String address, String creditCode,
                                String contactName, String contactPhone, Integer status) {
     }
 
@@ -51,12 +52,59 @@ public interface CoreTenantSubjectClient {
             String tenantName,
             String memberType,
             String industry,
+            String companySize,
             String businessType,
+            String address,
+            String creditCode,
             String contactName,
             String contactPhone,
             Integer status,
             String verifyStatus,
-            String createdAt) {
+            String verifyRemark,
+            String createdAt,
+            CoreCertification certification,
+            CoreIdentity identity) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record CoreCertification(
+            String certNo,
+            String companyName,
+            String creditCode,
+            String legalPerson,
+            String licenseNo,
+            String contactName,
+            String contactPhone,
+            String attachNote,
+            String businessLicenseUrl,
+            String legalPersonFaceStatus,
+            String corporateBankName,
+            String corporateBankAccount,
+            String corporateTransferStatus,
+            String registeredCapital,
+            String verificationChannel,
+            String status,
+            String submitTime,
+            String reviewRemark) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record CoreIdentity(
+            String identityNo,
+            String realName,
+            String idNoMasked,
+            String validStart,
+            String validEnd,
+            String contactPhone,
+            String address,
+            String email,
+            String businessType,
+            String verificationChannel,
+            Boolean policeVerified,
+            Boolean livenessVerified,
+            String status,
+            String submitTime,
+            String reviewRemark) {
     }
 
     record CorePageResult<T>(List<T> records, long total, long page, long size) {

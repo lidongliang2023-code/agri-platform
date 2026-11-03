@@ -38,7 +38,7 @@
 .seller-overview-title small,
 .seller-workspace-hero small {
   color: var(--mc-green-700);
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
   font-weight: 800;
   letter-spacing: .1em;
 }
@@ -55,7 +55,7 @@
   margin: 5px 0 0;
   overflow: hidden;
   color: #7d9084;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -80,7 +80,7 @@
 
 .seller-overview-figures span {
   color: #83948a;
-  font-size: 8.5px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .seller-overview-figures strong {
@@ -93,7 +93,7 @@
 .seller-overview-figures em {
   margin-left: 2px;
   color: #7c9084;
-  font-size: 8px;
+  font-size: var(--agri-font-size-micro);
   font-style: normal;
 }
 
@@ -154,7 +154,7 @@
 
 .seller-task small {
   color: #6d8275;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .seller-task strong {
@@ -167,20 +167,20 @@
 .seller-task strong em {
   margin-left: 2px;
   color: #7d9184;
-  font-size: 8px;
+  font-size: var(--agri-font-size-micro);
   font-style: normal;
   font-weight: 400;
 }
 
 .seller-task i {
   color: #95a39b;
-  font-size: 8px;
+  font-size: var(--agri-font-size-micro);
   font-style: normal;
 }
 
 .seller-task > .anticon:last-child {
   color: #8ca096;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .seller-overview-layout {
@@ -237,7 +237,7 @@
 
 .seller-lead-grid small {
   color: #718579;
-  font-size: 8.5px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .seller-lead-grid strong {
@@ -248,7 +248,7 @@
 
 .seller-lead-grid em {
   color: #95a39b;
-  font-size: 8px;
+  font-size: var(--agri-font-size-micro);
   font-style: normal;
 }
 
@@ -274,12 +274,12 @@
 .seller-rating-card span,
 .seller-rating-card small {
   color: #82948a;
-  font-size: 8.5px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .seller-rating-card em {
   color: #f5a623;
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
   font-style: normal;
   letter-spacing: 1px;
 }
@@ -302,13 +302,13 @@
 .seller-rating-lines span,
 .seller-fund-lines span {
   color: #83958a;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .seller-rating-lines strong,
 .seller-fund-lines strong {
   color: #3e5e49;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .seller-quick-list {
@@ -349,12 +349,12 @@
 
 .seller-quick-list strong {
   color: #405c49;
-  font-size: 9.5px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .seller-quick-list > button > .anticon {
   color: #95a39b;
-  font-size: 8px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .seller-workspace-hero {
@@ -401,7 +401,7 @@
 
 .seller-workspace-stats span {
   color: #83948a;
-  font-size: 8.5px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .seller-workspace-stats strong {
@@ -449,12 +449,12 @@
 
 .seller-switch-tabs strong {
   color: #3f5c49;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .seller-switch-tabs small {
   color: #8d9d93;
-  font-size: 8px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .seller-switch-tabs button.on {
@@ -515,14 +515,14 @@
 }
 
 .seller-embedded-workbench .ant-table {
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .seller-embedded-workbench .ant-table-thead > tr > th {
   padding: 9px 10px;
   background: #f4f8f5;
   color: #5f7567;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .seller-embedded-workbench .ant-table-tbody > tr > td {
@@ -604,12 +604,12 @@
 .seller-rating-score span,
 .seller-rating-score small {
   color: #83958a;
-  font-size: 8px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .seller-rating-score em {
   color: #f5a623;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
   font-style: normal;
   letter-spacing: 1px;
 }
@@ -635,7 +635,7 @@
 
 .seller-rating-metrics span {
   color: #82948a;
-  font-size: 8.5px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .seller-rating-metrics strong {
@@ -648,13 +648,13 @@
 .seller-rating-metrics em {
   margin-top: 2px;
   color: #93a299;
-  font-size: 8px;
+  font-size: var(--agri-font-size-micro);
   font-style: normal;
 }
 
 .seller-section-note {
   color: #899a90;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .seller-review-grid {
@@ -686,7 +686,7 @@
   border-radius: 9px;
   background: #e4f3ea;
   color: var(--mc-green-700);
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
   font-weight: 800;
 }
 
@@ -700,17 +700,17 @@
 
 .seller-review-head strong {
   color: #3d5b48;
-  font-size: 9.5px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .seller-review-head small {
   color: #8b9c92;
-  font-size: 7.5px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .seller-review-head em {
   color: #f5a623;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
   font-style: normal;
 }
 
@@ -718,7 +718,7 @@
   min-height: 38px;
   margin: 9px 0;
   color: #607668;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
   line-height: 1.7;
 }
 
@@ -727,7 +727,7 @@
   border-radius: 7px;
   background: #f0f7f3;
   color: #71897b;
-  font-size: 8.5px;
+  font-size: var(--agri-font-size-micro);
   line-height: 1.5;
 }
 
@@ -742,15 +742,31 @@
   border-radius: 999px;
   background: #edf4ef;
   color: #70867a;
-  font-size: 7.5px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .seller-credit-note {
-  padding: 13px 16px;
-  border-bottom: 1px solid #edf2ee;
-  color: #768b7e;
-  font-size: 9px;
+  margin: 14px 18px 0;
+  padding: 10px 12px;
+  border: 1px solid #e8f0eb;
+  border-radius: 9px;
+  background: #f8fbf9;
+  color: #708579;
+  font-size: var(--agri-font-size-micro);
   line-height: 1.65;
+}
+
+.seller-credit-panel .mc-panel-extra .mc-tag {
+  font-size: var(--agri-font-size-micro);
+}
+
+.seller-credit-panel .seller-embedded-workbench {
+  padding: 12px 18px 18px;
+}
+
+.seller-credit-panel .mc-pager {
+  padding-right: 0;
+  padding-left: 0;
 }
 
 .seller-finance-metrics {
@@ -774,7 +790,7 @@
 
 .seller-finance-metrics span {
   color: #82948a;
-  font-size: 8.5px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .seller-finance-metrics strong {
@@ -787,14 +803,14 @@
 .seller-finance-metrics strong em {
   margin-left: 2px;
   color: #7c9084;
-  font-size: 8px;
+  font-size: var(--agri-font-size-micro);
   font-style: normal;
 }
 
 .seller-finance-metrics small {
   margin-top: 2px;
   color: #93a299;
-  font-size: 8px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .seller-finance-history {
@@ -835,13 +851,13 @@
 }
 
 .seller-finance-support .ant-table {
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .seller-finance-support .ant-table-thead > tr > th {
   padding: 8px;
   background: #f4f8f5;
-  font-size: 8px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .seller-finance-support .ant-table-tbody > tr > td {
@@ -885,7 +901,7 @@
 
 .seller-customer-toolbar span {
   color: #8a9b91;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .seller-customer-grid {
@@ -935,13 +951,13 @@
 
 .seller-customer-head small {
   color: #8b9c92;
-  font-size: 8px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .seller-customer-head strong {
   overflow: hidden;
   color: #365440;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -962,7 +978,7 @@
 .seller-customer-figures span {
   display: block;
   color: #8a9b91;
-  font-size: 8px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .seller-customer-figures strong {
@@ -976,7 +992,7 @@
 .seller-customer-figures em {
   margin-left: 2px;
   color: #84968a;
-  font-size: 7px;
+  font-size: var(--agri-font-size-micro);
   font-style: normal;
 }
 
@@ -985,12 +1001,12 @@
   justify-content: space-between;
   margin-top: 11px;
   color: #8b9c92;
-  font-size: 8.5px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .seller-customer-foot strong {
   color: #607669;
-  font-size: 8.5px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .seller-iot-hero {
@@ -1012,7 +1028,7 @@
 
 .seller-iot-hero small {
   color: var(--mc-green-700);
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
   font-weight: 800;
   letter-spacing: .1em;
 }
@@ -1026,7 +1042,7 @@
 .seller-iot-hero p {
   margin: 5px 0 0;
   color: #7d9084;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .seller-iot-steps {
@@ -1047,7 +1063,7 @@
 .seller-iot-step > span {
   color: #1a8153;
   font-family: "DIN Alternate", ui-monospace, monospace;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
   font-weight: 800;
 }
 
@@ -1072,7 +1088,7 @@
 .seller-iot-step p {
   margin: 6px 0 0;
   color: #7b8f82;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
   line-height: 1.65;
 }
 
@@ -1094,7 +1110,7 @@
   gap: 7px;
   margin: 0;
   color: #6e8375;
-  font-size: 9.5px;
+  font-size: var(--agri-font-size-micro);
   line-height: 1.7;
 }
 
@@ -1126,7 +1142,7 @@
 
 .seller-iot-action span {
   color: #7f9386;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
   line-height: 1.6;
 }
 
@@ -1262,6 +1278,24 @@
   .seller-customer-toolbar {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .seller-credit-note {
+    margin: 12px 14px 0;
+    font-size: var(--agri-font-size-micro);
+  }
+
+  .seller-credit-panel .mc-panel-head {
+    align-items: flex-start;
+    padding: 12px 14px;
+  }
+
+  .seller-credit-panel .mc-panel-extra {
+    flex: 0 0 auto;
+  }
+
+  .seller-credit-panel .seller-embedded-workbench {
+    padding: 10px 14px 14px;
   }
 
   .seller-iot-hero > a {

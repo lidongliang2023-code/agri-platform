@@ -138,11 +138,13 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { DocumentChecked, Search } from '@element-plus/icons-vue'
 import FinanceStatus from '@/components/FinanceStatus.vue'
 import { financeApi, money, productName, shortDate } from '@/api/finance'
 
+const router = useRouter()
 const loading = ref(true)
 const confirmingId = ref('')
 const applications = ref([])
@@ -190,7 +192,7 @@ function compactMoney(value) {
 function statusHint(item) {
   if (item.status === '待审批') return '平台审批中'
   if (item.status === '已拒绝') return item.reviewOpinion || '审批未通过'
-  return '已生成借款'
+  return '待确认借款'
 }
 
 function showLoan(loan) {
@@ -198,18 +200,23 @@ function showLoan(loan) {
   detailOpen.value = true
 }
 
+/**
+ * 确认借款：生成待签合同，随后到「融资合同」页签署。
+ *
+ * <p>放款不在这里发生 —— 合同双方签齐后由后端自动生成借款与还款计划，
+ * 这样"钱已借出但合同没签"的状态就不存在了。</p>
+ */
 async function confirmLoan(application) {
   await ElMessageBox.confirm(
-    `确认按审批金额 ${money(application.actualAmount || application.suggestedAmount)} 发起借款？系统将生成借款记录和还款计划。`,
+    `确认按审批金额 ${money(application.actualAmount || application.suggestedAmount)} 借款？系统将生成借款合同，签署完成后由资金方放款。`,
     '确认借款',
-    { confirmButtonText: '确认借款', cancelButtonText: '取消', type: 'info' },
+    { confirmButtonText: '确认并生成合同', cancelButtonText: '取消', type: 'info' },
   )
   confirmingId.value = application.id
   try {
-    await financeApi.confirmLoan(application.id)
-    ElMessage.success('借款已确认，还款计划已生成')
-    await load()
-    activeTab.value = 'loan'
+    await financeApi.acceptLoan(application.id)
+    ElMessage.success('借款合同已生成，请前往签署')
+    router.push('/borrower/contracts')
   } catch (err) {
     ElMessage.error(err.message || '确认借款失败')
   } finally {
@@ -239,7 +246,7 @@ onMounted(load)
 <style scoped>
 .finance-kpi em {
   color: #61786a;
-  font-size: 10px;
+  font-size: var(--fin-fs-xs);
   font-style: normal;
 }
 
@@ -295,21 +302,21 @@ onMounted(load)
 
 .application-main strong {
   color: #344f3f;
-  font-size: 11px;
+  font-size: var(--fin-fs-xs);
 }
 
 .application-main p {
   margin: 3px 0;
   color: #8a9991;
   font-family: ui-monospace, Consolas, monospace;
-  font-size: 8px;
+  font-size: var(--fin-fs-xs);
 }
 
 .application-main > span {
   display: block;
   overflow: hidden;
   color: #71857a;
-  font-size: 8.5px;
+  font-size: var(--fin-fs-xs);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -326,7 +333,7 @@ onMounted(load)
 
 .application-amount span {
   color: #8a9990;
-  font-size: 7.5px;
+  font-size: var(--fin-fs-xs);
 }
 
 .application-amount strong {
@@ -339,7 +346,7 @@ onMounted(load)
 .application-amount small {
   margin-top: 2px;
   color: #95a098;
-  font-size: 7.5px;
+  font-size: var(--fin-fs-xs);
 }
 
 .application-action {
@@ -348,7 +355,7 @@ onMounted(load)
 
 .application-action > span {
   color: #7d8f83;
-  font-size: 8px;
+  font-size: var(--fin-fs-xs);
 }
 
 .loan-progress-cell {
@@ -364,7 +371,7 @@ onMounted(load)
 
 .loan-progress-cell small {
   color: #778a7e;
-  font-size: 8px;
+  font-size: var(--fin-fs-xs);
 }
 
 .loan-detail-dialog {
@@ -388,13 +395,13 @@ onMounted(load)
 
 .loan-detail-dialog span {
   color: #89978f;
-  font-size: 8px;
+  font-size: var(--fin-fs-xs);
 }
 
 .loan-detail-dialog strong {
   margin-top: 3px;
   color: #3c5746;
-  font-size: 10px;
+  font-size: var(--fin-fs-xs);
 }
 
 @media (max-width: 760px) {

@@ -34,7 +34,10 @@
           <span class="finance-avatar">{{ financeUser.name.slice(0, 1) }}</span>
           <div><strong>{{ financeUser.name }}</strong><small>认证融资主体</small></div>
         </div>
-        <a href="http://localhost:8098/portal/" title="返回官网门户">官网</a>
+        <div class="finance-account-actions">
+          <a href="http://localhost:8098/portal/" title="返回官网门户">官网</a>
+          <button type="button" @click="logout">退出</button>
+        </div>
       </div>
     </aside>
 
@@ -85,10 +88,12 @@ import {
   Wallet,
 } from '@element-plus/icons-vue'
 import { financeApi, financeUser } from '@/api/finance'
+import { logoutFinance } from '@/auth'
 
 const route = useRoute()
 const navOpen = ref(false)
 const unreadCount = ref(0)
+const logout = () => logoutFinance()
 
 const primaryNav = [
   { path: '/borrower/home', label: '融资工作台', icon: HomeFilled },

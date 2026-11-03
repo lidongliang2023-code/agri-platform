@@ -159,7 +159,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import FinanceStatus from '@/components/FinanceStatus.vue'
 import { financeApi, financeUser, money, productName, shortDate } from '@/api/finance'
-import { financeProducts } from '@/data/products'
+import { loadFinanceProducts } from '@/data/products'
 
 const router = useRouter()
 const loading = ref(true)
@@ -170,6 +170,7 @@ const applications = ref([])
 const plans = ref([])
 const pledges = ref([])
 const messages = ref([])
+const financeProducts = ref([])
 
 const activeLoans = computed(() => loans.value.filter((item) => item.status === '还款中'))
 const outstandingAmount = computed(() => activeLoans.value.reduce((total, item) => total + Number(item.remainingAmount || 0), 0))
@@ -183,13 +184,14 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    const [creditData, loanData, applicationData, planData, pledgeData, messageData] = await Promise.all([
+    const [creditData, loanData, applicationData, planData, pledgeData, messageData, productData] = await Promise.all([
       financeApi.credit(),
       financeApi.loans(),
       financeApi.applications(),
       financeApi.repaymentPlans(),
       financeApi.pledges(),
       financeApi.messages(),
+      loadFinanceProducts(),
     ])
     credit.value = creditData
     loans.value = loanData || []
@@ -197,6 +199,7 @@ async function load() {
     plans.value = planData || []
     pledges.value = pledgeData || []
     messages.value = messageData || []
+    financeProducts.value = productData || []
   } catch (err) {
     error.value = err.message || '融资工作台加载失败'
   } finally {
@@ -218,14 +221,14 @@ onMounted(load)
   border-radius: 10px;
   background: #fff2f0;
   color: #a8473f;
-  font-size: 10px;
+  font-size: var(--fin-fs-xs);
 }
 
 .finance-hero :deep(.el-button) {
   height: 36px;
   padding: 0 14px;
   border-radius: 9px;
-  font-size: 9.5px;
+  font-size: var(--fin-fs-xs);
 }
 
 .finance-hero :deep(.hero-primary) {
@@ -247,7 +250,7 @@ onMounted(load)
 
 .finance-kpi em {
   color: #61786a;
-  font-size: 10px;
+  font-size: var(--fin-fs-xs);
   font-style: normal;
 }
 
@@ -272,7 +275,7 @@ onMounted(load)
 
 .home-section-head span {
   color: #86968c;
-  font-size: 8.5px;
+  font-size: var(--fin-fs-xs);
 }
 
 .home-side-stack {
@@ -307,7 +310,7 @@ onMounted(load)
   height: 34px;
   place-items: center;
   border-radius: 9px;
-  font-size: 8px;
+  font-size: var(--fin-fs-xs);
   font-weight: 750;
 }
 
@@ -323,7 +326,7 @@ onMounted(load)
   display: block;
   overflow: hidden;
   color: #3a5545;
-  font-size: 9.5px;
+  font-size: var(--fin-fs-xs);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -332,14 +335,14 @@ onMounted(load)
   overflow: hidden;
   margin: 3px 0 0;
   color: #87968d;
-  font-size: 8px;
+  font-size: var(--fin-fs-xs);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .home-todo-list b {
   color: #9aa69f;
-  font-size: 10px;
+  font-size: var(--fin-fs-xs);
 }
 
 .home-credit-body {
@@ -359,7 +362,7 @@ onMounted(load)
 
 .home-credit-body span {
   color: #7c8e82;
-  font-size: 8.5px;
+  font-size: var(--fin-fs-xs);
 }
 
 .home-credit-body b {
@@ -374,7 +377,7 @@ onMounted(load)
   padding: 10px 13px;
   background: #f7fbf8;
   color: #71847a;
-  font-size: 8.5px;
+  font-size: var(--fin-fs-xs);
   line-height: 1.6;
 }
 </style>

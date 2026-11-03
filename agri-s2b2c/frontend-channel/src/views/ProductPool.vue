@@ -19,6 +19,12 @@
       </el-table-column>
       <el-table-column prop="sales" label="销量" />
       <el-table-column prop="stock" label="库存" />
+      <el-table-column label="限售区域" min-width="160">
+        <template #default="{ row }">
+          <span v-if="!row.regionNames?.length" class="muted">全国</span>
+          <span v-else>{{ row.regionNames.join('、') }}</span>
+        </template>
+      </el-table-column>
       <el-table-column label="操作">
         <template #default="{ row }">
           <el-button type="primary" size="small" @click="selectProduct(row.id)">选品上架</el-button>
@@ -38,6 +44,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { channelApi } from '../api'
+import { currentChannelId } from '../api/channelSession'
 
 const keyword = ref('')
 const categoryId = ref(null)
@@ -79,8 +86,13 @@ const handlePageChange = (currentPage) => {
 }
 
 const selectProduct = async (productId) => {
+  const channelId = await currentChannelId()
+  if (!channelId) {
+    alert('当前账号还没有渠道档案，请先提交渠道入驻申请')
+    return
+  }
   const res = await channelApi.selectProduct({
-    channelId: 1,
+    channelId,
     productId: productId
   })
   if (res.success) {
@@ -100,5 +112,10 @@ const selectProduct = async (productId) => {
   display: flex;
   gap: 15px;
   align-items: center;
+}
+
+.muted {
+  color: #84938a;
+  font-size: 12px;
 }
 </style>

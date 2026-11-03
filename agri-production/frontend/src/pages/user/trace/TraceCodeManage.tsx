@@ -8,7 +8,7 @@
  * 还原要点：
  * - 标题 🏷️ 溯源码管理 + `+ 生成溯源码` / `批量生成` / `刷新` 按钮
  * - 统计卡 4 项：溯源码总量 / 已激活 / 已扫码 / 待分配
- * - 筛选：全部状态（已生成 / 已激活 / 已扫码 / 已作废）+ 全部农场 + 搜索溯源码 + 查询 / 重置
+ * - 筛选：状态（已生成 / 已激活 / 已扫码 / 已作废 / 已过期）+ 全部农场 + 搜索溯源码 + 链上状态 + 有效期 + 生成日期 + 查询 / 重置
  * - 表格列：溯源码 | 关联产品 | 农场/地块 | 批次号 | 生成时间 | 状态 | 扫码次数 | 有效期 | 操作
  * - 行操作：全链路→（跳转 P24）/ 激活（prod.trace.activated）/ 模拟扫码 / 作废
  * - 勾选后支持批量激活、批量作废、导出 CSV
@@ -57,25 +57,66 @@ import {
 import { listHarvests } from '@/api/harvests'
 import type { HarvestBatch, RawTraceCode, TraceCodeStatus } from '@/types'
 
-/** 状态展示元数据（generated 灰 / activated 绿 / scanned 蓝 / expired 红） */
-const STATUS_META: Record<TraceCodeStatus, { label: string; color: string }> = {
+/**
+ * 状态展示元数据 —— 键是**后端原始状态**（generated / active / scanned / revoked / expired），一档一个说法。
+ *
+ * <p>旧版这张表挂在前端四档枚举上，把后端的 {@code revoked} 和 {@code expired} 都塞进 {@code 'expired'}
+ * 再统一显示"已作废"。2026-11-02 到期扫描上线后库里真的同时存在这两种码：
+ * 一个是到了有效期自动失效，一个是被人工作废，原因与处置都不同，列表不能说成同一句话。</p>
+ */
+const STATUS_META: Record<string, { label: string; color: string }> = {
   generated: { label: '已生成', color: 'default' },
-  activated: { label: '已激活', color: 'green' },
+  active: { label: '已激活', color: 'green' },
   scanned: { label: '已扫码', color: 'blue' },
-  expired: { label: '已作废', color: 'red' },
+  revoked: { label: '已作废', color: 'red' },
+  expired: { label: '已过期', color: 'volcano' },
+}
+
+/** 状态列与导出的文案：认识的值给中文档，词表外的取值原样显示，不冒充成已知状态 */
+function statusView(status?: string): { label: string; color: string } {
+  const key = (status ?? '').trim().toLowerCase()
+  return STATUS_META[key] ?? { label: status || '-', color: 'default' }
 }
 
 /** 状态下拉选项 */
+/**
+ * 状态筛选项。
+ *
+ * ⚠️ value 直接用**服务端词表**（generated/active/scanned/revoked/expired），不再自己编一套内部键。
+ * 旧版有一项是 `{ value: 'expired', label: '已作废' }` 再经 toServerStatus 映射成 revoked ——
+ * 内部键名与词表含义相反，2026-11-02 溯源码真的有了 expired 状态后，这一项就会变成歧义源
+ * （"已过期"和"已作废"抢同一个键）。翻译函数一并删掉，留着只会让人以为还需要翻译。
+ */
 const STATUS_OPTIONS: { value: string; label: string }[] = [
-  { value: 'all', label: '全部状态' },
   { value: 'generated', label: '已生成' },
-  { value: 'activated', label: '已激活' },
+  { value: 'active', label: '已激活' },
   { value: 'scanned', label: '已扫码' },
-  { value: 'expired', label: '已作废' },
+  { value: 'revoked', label: '已作废' },
+  { value: 'expired', label: '已过期' },
 ]
 
-/** 列表一次性拉取上限（后端未提供关键字检索，关键字过滤在前端完成） */
-const MAX_FETCH_SIZE = 500
+/** 链上状态筛选项（与列表「链上状态」列的三种显示一一对应） */
+const CHAIN_OPTIONS: { value: 'onChain' | 'unconfirmed' | 'none'; label: string }[] = [
+  { value: 'onChain', label: '已上链' },
+  { value: 'unconfirmed', label: '有存证但未成功' },
+  { value: 'none', label: '无存证记录' },
+]
+
+/** 有效期筛选项（unset = 没设有效期，这类码不参与到期扫描，不能算成已过期） */
+const EXPIRY_OPTIONS: { value: 'expired' | 'valid' | 'unset'; label: string }[] = [
+  { value: 'valid', label: '有效期内' },
+  { value: 'expired', label: '已过期' },
+  { value: 'unset', label: '未设置有效期' },
+]
+
+/**
+ * 导出相关：分页取全的页大小与单次上限。
+ *
+ * 上限不是性能考虑，是**诚实**考虑：不设上限就可能把几十万行拉进浏览器，
+ * 而设了上限就必须告诉用户"还有多少没导出去"（见 handleExport 的提示）。
+ */
+const EXPORT_PAGE_SIZE = 200
+const EXPORT_MAX_ROWS = 5000
 
 /** 生成弹窗表单值 */
 interface GenerateFormValues {
@@ -87,21 +128,27 @@ interface GenerateFormValues {
   expireDate?: Dayjs
 }
 
-/** 列表筛选条件 */
+/** 列表筛选条件（全部在服务端生效） */
 interface CodeFilters {
-  /** 状态 */
+  /** 状态（服务端词表原值） */
   status?: string
   /** 农场 ID */
   farmId?: string
   /** 关键字（溯源码 / 批次号 / 产品） */
   keyword?: string
+  /** 链上状态 */
+  chain?: 'onChain' | 'unconfirmed' | 'none'
+  /** 有效期 */
+  expiry?: 'expired' | 'valid' | 'unset'
+  /** 生成日期区间（服务端按 create_time 比，两端都含当天） */
+  dateRange?: [Dayjs, Dayjs]
 }
 
 /**
- * 归一化后端状态为前端状态枚举。
+ * 归一化后端状态，**只用于操作按钮的开关**（能不能激活/扫码/作废）。
  *
- * 后端 prod_trace_code 写入值为 generated / active / scanned / revoked，
- * 前端统一展示口径为 generated / activated / scanned / expired。
+ * <p>展示文案不走这里，走 {@link statusView}：这一档把 revoked 与 expired 合并成 'expired'，
+ * 用来判断"这条码已经终态、不用再给作废按钮"是对的；拿它当文案就会把两种失效说成一种。</p>
  *
  * @param status 后端状态字符串
  * @returns 前端状态枚举
@@ -118,27 +165,6 @@ function normalizeStatus(status?: string): TraceCodeStatus {
       return 'expired'
     default:
       return 'generated'
-  }
-}
-
-/**
- * 前端状态转换为后端查询值。
- *
- * @param status 前端状态
- * @returns 后端状态查询值，全部时返回 undefined
- */
-function toServerStatus(status?: string): string | undefined {
-  switch (status) {
-    case 'generated':
-      return 'generated'
-    case 'activated':
-      return 'active'
-    case 'scanned':
-      return 'scanned'
-    case 'expired':
-      return 'revoked'
-    default:
-      return undefined
   }
 }
 
@@ -174,20 +200,37 @@ export default function TraceCodeManage(): JSX.Element {
   const [filterForm] = Form.useForm<CodeFilters>()
 
   const [selectedKeys, setSelectedKeys] = useState<string[]>([])
+  const [exporting, setExporting] = useState<boolean>(false)
   const [genOpen, setGenOpen] = useState<boolean>(false)
   const [genMode, setGenMode] = useState<'single' | 'batch'>('single')
   const [genForm] = Form.useForm<GenerateFormValues>()
 
-  /** 列表数据源（按状态过滤，关键字在前端二次过滤） */
+  /**
+   * 列表：筛选与分页都在服务端。
+   *
+   * <p>两步修过的痕迹都在这段注释里，因为它们属于同一类问题：</p>
+   * <ul>
+   *   <li>2026-11-02 上午：只发 status，关键字与农场在拿回的那 500 条里本地过滤 ——
+   *       超过 500 条后，不在这一批里的码搜出来是空的，看起来像"这个码不存在"；</li>
+   *   <li>本轮：一次取 500 条再由表格本地翻页 —— 表格里"第 2 页"其实是这 500 条的第 11~20 行，
+   *       码数超过 500 的主体永远翻不到后面的数据。现在 {@code pageNum/pageSize} 直接进请求。</li>
+   * </ul>
+   */
+  /** 当前筛选条件对应的请求参数（列表与导出共用一份，避免两处各拼一遍走偏） */
+  const filterParams = (): Parameters<typeof fetchTraceCodePage>[0] => ({
+    status: filters.status,
+    keyword: filters.keyword?.trim() || undefined,
+    farmId: filters.farmId ? String(filters.farmId) : undefined,
+    chain: filters.chain,
+    expiry: filters.expiry,
+    from: filters.dateRange?.[0]?.format('YYYY-MM-DD'),
+    to: filters.dateRange?.[1]?.format('YYYY-MM-DD'),
+  })
+
   const listQuery = useQuery({
-    queryKey: ['trace-codes', farmId, filters.status],
+    queryKey: ['trace-codes', farmId, filters, pageNum, pageSize],
     enabled: Boolean(farmId),
-    queryFn: () =>
-      fetchTraceCodePage({
-        status: toServerStatus(filters.status),
-        pageNum: 1,
-        pageSize: MAX_FETCH_SIZE,
-      }),
+    queryFn: () => fetchTraceCodePage({ ...filterParams(), pageNum, pageSize }),
   })
 
   /** 统计卡：总量 */
@@ -241,17 +284,8 @@ export default function TraceCodeManage(): JSX.Element {
     [listQuery.data],
   )
 
-  /** 前端过滤后的列表 */
-  const filteredList = useMemo<RawTraceCode[]>(() => {
-    const keyword = (filters.keyword ?? '').trim().toLowerCase()
-    return (listQuery.data?.list ?? []).filter((item) => {
-      if (filters.farmId && item.farmId && item.farmId !== filters.farmId) return false
-      if (!keyword) return true
-      return [item.code, item.batchNo, item.productName, item.batchId]
-        .filter(Boolean)
-        .some((field) => String(field).toLowerCase().includes(keyword))
-    })
-  }, [listQuery.data, filters.keyword, filters.farmId])
+  /** 当前页数据（服务端已按筛选与分页取好，这里不再本地过滤或本地翻页） */
+  const pageRows = useMemo<RawTraceCode[]>(() => listQuery.data?.list ?? [], [listQuery.data])
 
   /** 统一失效刷新 */
   const invalidateAll = async (): Promise<void> => {
@@ -375,51 +409,80 @@ export default function TraceCodeManage(): JSX.Element {
     setSelectedKeys([])
   }
 
-  /** 导出当前筛选结果为 CSV */
-  const handleExport = (): void => {
-    if (filteredList.length === 0) {
-      message.warning('暂无可导出的数据')
-      return
-    }
-    const header = [
-      '溯源码',
-      '关联产品',
-      '农场',
-      '地块',
-      '批次号',
-      '生成时间',
-      '状态',
-      '扫码次数',
-      '最近扫码',
-      '有效期',
-    ]
-    const body = filteredList.map((item) =>
-      [
-        item.code,
-        item.productName ?? (item.batchId ? (item.batchNo ?? '-') : '待分配'),
-        item.farmName ?? currentFarm?.farmName ?? '-',
-        item.plotName ?? '-',
-        item.batchNo ?? item.batchId ?? '-',
-        toDateText(item.createdAt),
-        STATUS_META[normalizeStatus(item.status)].label,
-        item.scanCount ?? 0,
-        item.lastScanAt ?? '-',
-        item.expireDate ?? '-',
+  /**
+   * 导出当前筛选结果为 CSV。
+   *
+   * <p>分页搬到服务端后，列表里只有当前这一页；要是继续拿列表数据导出，
+   * "导出"就会悄悄变成"导出这一页"。所以这里按同样的筛选条件翻页取全，
+   * 到 {@code EXPORT_MAX_ROWS} 上限就停，并在提示里说清楚还剩多少条没导出去 ——
+   * 不假装导全了。</p>
+   */
+  const handleExport = async (): Promise<void> => {
+    setExporting(true)
+    try {
+      const first = await fetchTraceCodePage({ ...filterParams(), pageNum: 1, pageSize: EXPORT_PAGE_SIZE })
+      const total = first.total ?? 0
+      if (total === 0) {
+        message.warning('当前筛选条件下没有可导出的数据')
+        return
+      }
+      const rows = [...(first.list ?? [])]
+      const pages = Math.ceil(Math.min(total, EXPORT_MAX_ROWS) / EXPORT_PAGE_SIZE)
+      for (let next = 2; next <= pages; next += 1) {
+        const pageData = await fetchTraceCodePage({ ...filterParams(), pageNum: next, pageSize: EXPORT_PAGE_SIZE })
+        rows.push(...(pageData.list ?? []))
+      }
+      const truncated = total > rows.length
+      const header = [
+        '溯源码',
+        '关联产品',
+        '农场',
+        '地块',
+        '批次号',
+        '生成时间',
+        '状态',
+        '扫码次数',
+        '首次扫码',
+        '有效期',
+        '链上状态',
       ]
-        .map(escapeCsv)
-        .join(','),
-    )
-    const csv = `\uFEFF${[header.join(','), ...body].join('\n')}`
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `溯源码_${dayjs().format('YYYYMMDDHHmm')}.csv`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
-    message.success(`已导出 ${filteredList.length} 条溯源码`)
+      const body = rows.map((item) =>
+        [
+          item.code,
+          item.productName ?? (item.batchId ? (item.batchNo ?? '-') : '待分配'),
+          item.farmName ?? '-',
+          item.plotName ?? '-',
+          item.batchNo ?? item.batchId ?? '-',
+          toDateText(item.createdAt),
+          statusView(item.status).label,
+          item.scanCount ?? 0,
+          item.firstQueryTime ?? '尚未被扫码',
+          item.expireDate ?? '未设置有效期',
+          item.onChain === true ? '已上链' : item.attested === true ? '存证未成功' : '无存证记录',
+        ]
+          .map(escapeCsv)
+          .join(','),
+      )
+      const csv = `\uFEFF${[header.join(','), ...body].join('\n')}`
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `溯源码_${dayjs().format('YYYYMMDDHHmm')}.csv`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+      message.success(
+        truncated
+          ? `已导出 ${rows.length} 条；筛选共 ${total} 条，超过单次上限 ${EXPORT_MAX_ROWS} 条未导完，请缩小筛选范围`
+          : `已导出 ${rows.length} 条溯源码（当前筛选的全部结果）`,
+      )
+    } catch (error) {
+      message.error(`导出失败，未生成文件：${(error as Error)?.message ?? '未知错误'}`)
+    } finally {
+      setExporting(false)
+    }
   }
 
   /** 表格列定义 */
@@ -467,8 +530,40 @@ export default function TraceCodeManage(): JSX.Element {
       key: 'status',
       width: 100,
       render: (_, record) => {
-        const meta = STATUS_META[normalizeStatus(record.status)]
+        const meta = statusView(record.status)
         return <Tag color={meta.color}>{meta.label}</Tag>
+      },
+    },
+    {
+      /**
+       * 链上状态（后端按存证表判定，与全链路页、监管核验同一处规则）。
+       * 三态分开：已上链 / 存证未出块或失败 / 无存证记录 —— 最后一种不是"未接入"。
+       */
+      title: '链上状态',
+      key: 'chain',
+      width: 130,
+      render: (_, record) => {
+        if (record.onChain === true) {
+          return (
+            <Tooltip title={record.recordNo ? `存证 ${record.recordNo}（模拟链 SUCCESS）` : '模拟链 SUCCESS'}>
+              <Tag color="green">🔗 已上链</Tag>
+            </Tooltip>
+          )
+        }
+        if (record.attested === true) {
+          return (
+            <Tooltip title={`存证记录 ${record.recordNo ?? '—'} 状态 ${record.chainStatus ?? '未知'}，尚未出块`}>
+              <Tag color={record.chainStatus === 'FAILED' ? 'red' : 'orange'}>
+                {record.chainStatus === 'FAILED' ? '存证失败' : '存证未出块'}
+              </Tag>
+            </Tooltip>
+          )
+        }
+        return (
+          <Tooltip title="已查询存证表 agri_prod_chain_record，这条溯源码没有链上存证记录">
+            <Tag>无存证记录</Tag>
+          </Tooltip>
+        )
       },
     },
     {
@@ -476,7 +571,9 @@ export default function TraceCodeManage(): JSX.Element {
       dataIndex: 'scanCount',
       width: 110,
       render: (_, record) => (
-        <Tooltip title={record.lastScanAt ? `最近扫码：${record.lastScanAt}` : '暂无扫码记录'}>
+        // 后端只有**首次**扫码时间（first_query_time），没有"最近扫码"这一列；
+        // 旧代码读 record.lastScanAt（后端从来不给这个键），扫过 3 次的码也会显示"暂无扫码记录"。
+        <Tooltip title={record.firstQueryTime ? `首次扫码：${record.firstQueryTime}` : '尚未被扫码'}>
           <span>{record.scanCount ?? 0}</span>
         </Tooltip>
       ),
@@ -636,6 +733,15 @@ export default function TraceCodeManage(): JSX.Element {
           <Form.Item name="keyword" label="关键字">
             <Input allowClear placeholder="搜索溯源码 / 批次号 / 产品" style={{ width: 220 }} />
           </Form.Item>
+          <Form.Item name="chain" label="链上状态">
+            <Select allowClear placeholder="全部" options={CHAIN_OPTIONS} style={{ width: 170 }} />
+          </Form.Item>
+          <Form.Item name="expiry" label="有效期">
+            <Select allowClear placeholder="全部" options={EXPIRY_OPTIONS} style={{ width: 150 }} />
+          </Form.Item>
+          <Form.Item name="dateRange" label="生成日期">
+            <DatePicker.RangePicker placeholder={['生成起', '生成止']} style={{ width: 240 }} />
+          </Form.Item>
           <Form.Item>
             <Space>
               <Button type="primary" onClick={handleSearch}>
@@ -651,7 +757,7 @@ export default function TraceCodeManage(): JSX.Element {
         rowKey="code"
         size="small"
         columns={columns}
-        dataSource={filteredList}
+        dataSource={pageRows}
         loading={listQuery.isFetching}
         search={false}
         options={{
@@ -668,7 +774,8 @@ export default function TraceCodeManage(): JSX.Element {
         pagination={{
           current: pageNum,
           pageSize,
-          total: filteredList.length,
+          // 总数只认服务端给的；拿不到就显示 0，不拿"本页行数"冒充总数（旧写法是本地翻页时代的残留）
+          total: listQuery.data?.total ?? 0,
           showSizeChanger: true,
           showTotal: (total) => `共 ${total} 条`,
           onChange: (nextPage, nextSize) => {
@@ -695,7 +802,7 @@ export default function TraceCodeManage(): JSX.Element {
           >
             批量作废（{selectedKeys.length}）
           </Button>,
-          <Button key="export" icon={<ExportOutlined />} onClick={handleExport}>
+          <Button key="export" icon={<ExportOutlined />} loading={exporting} onClick={() => void handleExport()}>
             导出
           </Button>,
         ]}

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.agri.masterdata.mapper.ProductAttributeMapper">
+
+    <!--
+      2026-10-29 补齐：与 ProductCategoryMapper 同一类缺口 —— 方法有声明、没有 SQL。
+      属性模板页按品类查询走 selectByCategoryId，没有这段 XML 会直接 500。
+    -->
+
+    <select id="selectByCategoryId" resultType="com.agri.masterdata.entity.ProductAttribute">
+        SELECT * FROM agri_md_product_attribute
+        WHERE del_flag = 0
+          AND category_id = #{categoryId}
+        ORDER BY sort_order ASC, id ASC
+    </select>
+
+    <select id="selectByAttributeCode" resultType="com.agri.masterdata.entity.ProductAttribute">
+        SELECT * FROM agri_md_product_attribute
+        WHERE del_flag = 0
+          AND attribute_code = #{attributeCode}
+        ORDER BY id ASC
+    </select>
+
+    <select id="selectByCategoryIdAndCode" resultType="com.agri.masterdata.entity.ProductAttribute">
+        SELECT * FROM agri_md_product_attribute
+        WHERE del_flag = 0
+          AND category_id = #{categoryId}
+          AND attribute_code = #{attributeCode}
+        LIMIT 1
+    </select>
+
+</mapper>

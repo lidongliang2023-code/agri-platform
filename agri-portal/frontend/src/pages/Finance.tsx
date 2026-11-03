@@ -1,8 +1,10 @@
+import { useEffect, useState } from 'react'
 import { Icon } from '../components/Icon'
-import { ssoRegister, tradeUrl } from '../utils'
+import { financeUrl, ssoRegister } from '../utils'
 import './finance.css'
 
-const FUNDING_URL = tradeUrl('/member/seller?tab=fund')
+const FUNDING_URL = financeUrl('/borrower/home')
+const FUND_PROVIDER_URL = financeUrl('/fund/workbench')
 
 const HERO_STATS = [
   { icon: 'money', label: '累计放款', value: '¥ 86.4', unit: '亿', meta: '覆盖 3,820 家产业链企业' },
@@ -20,66 +22,53 @@ const STATS = [
 ]
 
 interface FinanceProduct {
+  key: string
   icon: string
   title: string
   desc: string
   tags: string[]
   rate: string
   tone: string
-  cooperation?: boolean
 }
 
-const PRODUCTS: FinanceProduct[] = [
-  {
-    icon: 'clipboard',
-    title: '订单融资',
-    desc: '卖家凭已成交的平台订单申请融资，资金方放款后，买家付款自动用于清偿。',
-    tags: ['额度 500 万', '期限 1-6 月', '最快 1 天'],
-    rate: '4.5',
-    tone: 'green',
-  },
-  {
-    icon: 'file',
-    title: '应收账款质押',
-    desc: '供应商将对核心企业的应收账款质押给资金方，核心企业确权后完成放款。',
-    tags: ['额度 2,000 万', '期限 1-12 月', '核心企业增信'],
-    rate: '5.2',
-    tone: 'tech',
-  },
-  {
-    icon: 'box',
-    title: '存货质押融资',
-    desc: '以监管仓中的农产品存货作为质押物，结合出入库与物联网数据动态估值。',
-    tags: ['额度 1,000 万', '期限 1-9 月', '物联网估值'],
-    rate: '5.8',
-    tone: 'emerald',
-  },
-  {
-    icon: 'cpu',
-    title: '农机 / 设备贷',
-    desc: '合作社与农户购买智能农机、水肥一体机、物联网设备可申请专项信贷。',
-    tags: ['额度 100 万', '期限 1-3 年', '政府贴息'],
-    rate: '3.8',
-    tone: 'sky',
-  },
-  {
-    icon: 'cart',
-    title: '农资采购贷',
-    desc: '种植户、合作社采购种子、化肥、农药时可申请分期融资，按季安排还款。',
-    tags: ['额度 50 万', '期限 3-12 月', '零首付'],
-    rate: '6.0',
-    tone: 'violet',
-  },
-  {
-    icon: 'users',
-    title: '核心企业赋能',
-    desc: '核心企业可为上下游提供确权、信用背书与反向保理，共同拓展产业链金融生态。',
-    tags: ['反向保理', '信用背书', '授信额度'],
-    rate: '',
-    tone: 'amber',
-    cooperation: true,
-  },
-]
+interface ConfiguredFinanceProduct {
+  id: string
+  productCode: string
+  productName: string
+  rate: number
+  termMin: number
+  termMax: number
+  amountMin: number
+  amountMax: number
+  pledgeRate?: number
+  status: string
+  description?: string
+}
+
+const PRODUCT_TONES = ['green', 'tech', 'emerald', 'sky', 'violet', 'amber']
+
+function compactAmount(value: number): string {
+  if (value >= 100000000) return `${(value / 100000000).toFixed(2)}亿`
+  if (value >= 10000) return `${(value / 10000).toFixed(value % 10000 === 0 ? 0 : 1)}万`
+  return Number(value || 0).toLocaleString('zh-CN')
+}
+
+function toFinanceProduct(product: ConfiguredFinanceProduct, index: number): FinanceProduct {
+  const pledgeRate = Number(product.pledgeRate || 0)
+  return {
+    key: product.productCode,
+    icon: ['clipboard', 'file', 'box', 'cpu', 'cart'][index % 5],
+    title: product.productName,
+    desc: product.description || '基于平台真实交易与经营数据提供的农业产业链融资产品。',
+    tags: [
+      `额度 ${compactAmount(product.amountMin)}-${compactAmount(product.amountMax)}元`,
+      `期限 ${product.termMin}-${product.termMax} 月`,
+      pledgeRate > 0 ? `质押率 ${pledgeRate}%` : '纯信用',
+    ],
+    rate: Number(product.rate || 0).toFixed(2),
+    tone: PRODUCT_TONES[index % PRODUCT_TONES.length],
+  }
+}
 
 const RISKS = [
   {
@@ -120,6 +109,43 @@ const scrollTo = (id: string): void => {
 }
 
 export function Finance(): JSX.Element {
+  const [products, setProducts] = useState<FinanceProduct[]>([])
+  const [productLoading, setProductLoading] = useState(true)
+  const [productError, setProductError] = useState('')
+  useEffect(() => {
+    let active = true
+    void fetch('/open/finance/products', { headers: { Accept: 'application/json' } })
+      .then(async (response) => {
+        const body = await response.json() as {
+          code?: number
+          message?: string
+          data?: ConfiguredFinanceProduct[]
+        }
+        if (!response.ok || body.code !== 200 || !Array.isArray(body.data)) {
+          throw new Error(body.message || '金融产品加载失败')
+        }
+        if (active) setProducts(body.data.map(toFinanceProduct))
+      })
+      .catch((error: unknown) => {
+        if (active) setProductError(error instanceof Error ? error.message : '金融产品加载失败')
+      })
+      .finally(() => {
+        if (active) setProductLoading(false)
+      })
+    return () => { active = false }
+  }, [])
+  const applyUrl = (productCode: string): string =>
+    financeUrl(`/borrower/loan-apply?product=${encodeURIComponent(productCode)}`)
+  /**
+   * 在架产品里的最低年化利率。
+   *
+   * <p>Hero 那句"年化利率低至 X%"原先写死 4.5%，而下面的产品卡早就改成读资金方配置了 ——
+   * 两边一旦不一致，页面顶部就在替资金方报一个没人承诺过的价。读不到产品就不说这句话。</p>
+   */
+  const minRate = products.length > 0
+    ? Math.min(...products.map((product) => Number(product.rate) || 0))
+    : null
+
   return (
     <>
       <section className="fin-hero">
@@ -133,15 +159,19 @@ export function Finance(): JSX.Element {
             </p>
             <div className="fin-hero-actions">
               <a className="btn btn-lg fin-btn-light" href={FUNDING_URL} target="_blank" rel="noreferrer">我要融资</a>
-              <button className="btn btn-lg fin-btn-ghost" type="button" onClick={() => scrollTo('fin-partner')}>我是资金方</button>
+              <a className="btn btn-lg fin-btn-ghost" href={FUND_PROVIDER_URL} target="_blank" rel="noreferrer">我是资金方</a>
               <button className="btn btn-lg fin-btn-line" type="button" onClick={() => scrollTo('fin-products')}>查看金融产品</button>
             </div>
             <div className="fin-hero-points">
-              <span><i><Icon name="check" size={12} /></i>审批最快 1 天</span>
-              <span><i><Icon name="check" size={12} /></i>年化利率低至 4.5%</span>
+              {minRate !== null && (
+                <span><i><Icon name="check" size={12} /></i>年化利率 {minRate.toFixed(2)}% 起（在架产品最低价）</span>
+              )}
               <span><i><Icon name="check" size={12} /></i>全程线上办理</span>
             </div>
-            <p className="fin-demo-line">页面额度、利率、时效与机构数据均为原型示例，最终以资金方审批为准。</p>
+            <p className="fin-demo-line">
+              产品名称、利率、额度与期限取自资金方端在架配置；放款时效、风控指标与机构名称仍为原型示例，
+              最终以资金方审批为准。
+            </p>
           </div>
 
           <div className="fin-hero-stats">
@@ -177,12 +207,12 @@ export function Finance(): JSX.Element {
         <div className="container">
           <div className="fin-section-head">
             <span className="tag tag-tech">产品矩阵</span>
-            <h2>五大专属金融产品 · 覆盖产业链全环节</h2>
-            <p>基于平台交易、物流、仓储与生产数据设计融资场景，额度与利率为原型示例。</p>
+            <h2>专属金融产品 · 覆盖产业链全环节</h2>
+            <p>产品名称、利率、额度和期限与资金方端产品配置实时同步。</p>
           </div>
           <div className="grid grid-3 fin-product-grid">
-            {PRODUCTS.map((product) => (
-              <article className="card card-hover fin-product" key={product.title}>
+            {products.map((product) => (
+              <article className="card card-hover fin-product" key={product.key}>
                 <div className="card-b">
                   <div className="fin-product-head">
                     <span className={`fin-icon tone-${product.tone}`}><Icon name={product.icon} size={22} /></span>
@@ -194,19 +224,22 @@ export function Finance(): JSX.Element {
                     {product.tags.map((tag) => <span className="chip" key={tag}>{tag}</span>)}
                   </div>
                   <div className="fin-product-foot">
-                    {product.rate
-                      ? <span className="fin-rate">年化 <b>{product.rate}%</b> 起</span>
-                      : <span className="fin-muted">成为核心企业，赋能上下游</span>}
-                    {product.cooperation
-                      ? <button className="btn btn-sm btn-outline" type="button" onClick={() => scrollTo('fin-partner')}>咨询合作</button>
-                      : <a className="btn btn-sm btn-primary" href={FUNDING_URL} target="_blank" rel="noreferrer">立即申请</a>}
+                    <span className="fin-rate">年化 <b>{product.rate}%</b> 起</span>
+                    <a className="btn btn-sm btn-primary" href={applyUrl(product.key)} target="_blank" rel="noreferrer">立即申请</a>
                   </div>
                 </div>
               </article>
             ))}
+            {productLoading && <div className="fin-product-state">正在读取资金方启用的融资产品…</div>}
+            {!productLoading && productError && (
+              <div className="fin-product-state error">产品加载失败：{productError}</div>
+            )}
+            {!productLoading && !productError && products.length === 0 && (
+              <div className="fin-product-state">资金方暂未启用融资产品。</div>
+            )}
           </div>
           <p className="fin-section-note">
-            当前门户未接入授信申请接口，“立即申请”将进入会员中心资金服务；请登录并完成实名认证后办理。
+            产品数据来自资金方端「产品配置」；点击立即申请将进入供应链金融融资端并在登录后恢复目标页面。
           </p>
         </div>
       </section>
@@ -251,9 +284,9 @@ export function Finance(): JSX.Element {
           <div className="card fin-partner-callout">
             <div>
               <b><Icon name="users" size={18} />资金方合作</b>
-              <p>当前门户尚未开放资金方线上入驻。机构可围绕订单融资、仓单质押与核心企业确权场景，与平台运营对接联合风控和数据服务方案。</p>
+              <p>认证资金机构可登录资金方工作台，配置融资资产、审批融资申请并查看投资与风控数据。</p>
             </div>
-            <button className="btn btn-outline" type="button" onClick={() => scrollTo('fin-products')}>返回金融产品</button>
+            <a className="btn btn-outline" href={FUND_PROVIDER_URL} target="_blank" rel="noreferrer">进入资金方端</a>
           </div>
         </div>
       </section>

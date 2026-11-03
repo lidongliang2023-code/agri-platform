@@ -13,8 +13,8 @@
  * - 步骤三：任务描述 + 信息确认，提交后跳转任务详情
  */
 import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { PageContainer, ProForm, ProFormDateTimePicker, ProFormRadio, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components'
 import { Button, Card, Descriptions, Space, Steps, Tag, Typography, message } from 'antd'
 import { ArrowLeftOutlined } from '@ant-design/icons'
@@ -23,8 +23,9 @@ import type { Dayjs } from 'dayjs'
 import useFarmStore from '@/store/farm'
 import { createTask, fetchTaskTemplatesPage } from '@/api/tasks'
 import { listMembers } from '@/api/members'
+import { listPlans, listPlanStages } from '@/api/plans'
 import { listPlots } from '@/api/plots'
-import type { Member, Plot, Task, TaskPriority, TaskTemplate } from '@/types'
+import type { Member, Plan, PlanStage, Plot, Task, TaskPriority, TaskTemplate } from '@/types'
 import { TASK_PRIORITY_LABEL_MAP, TASK_TYPE_LABEL_MAP, TASK_TYPE_OPTIONS } from '@/types'
 
 /** 新建任务表单值 */
@@ -37,6 +38,10 @@ interface TaskFormValues {
   priority?: TaskPriority
   /** 所属农场 */
   farmId?: string
+  /** 所属种养计划 */
+  planId?: string
+  /** 所属计划阶段 */
+  stageId?: string
   /** 执行地块 */
   plotId?: string
   /** 计划开始时间 */
@@ -75,8 +80,16 @@ const STEP_FIELDS: string[][] = [
  */
 export default function TaskCreate(): JSX.Element {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const currentFarm = useFarmStore((state) => state.currentFarm)
+  const [searchParams] = useSearchParams()
+  /** 从地块详情进入时预选执行地块 */
+  const presetPlotId = searchParams.get('plotId') ?? undefined
+  /** 从计划 / 阶段进入时预选关联计划与阶段 */
+  const presetPlanId = searchParams.get('planId') ?? undefined
+  const presetStageId = searchParams.get('stageId') ?? undefined
   const [currentStep, setCurrentStep] = useState<number>(0)
+  const [selectedPlanId, setSelectedPlanId] = useState<string | undefined>(presetPlanId)
   const [form] = ProForm.useForm<TaskFormValues>()
 
   const farmId = currentFarm?.farmId
@@ -86,6 +99,20 @@ export default function TaskCreate(): JSX.Element {
     queryKey: ['plot-options', farmId],
     enabled: Boolean(farmId),
     queryFn: () => listPlots({ farmId, pageNum: 1, pageSize: 100 }),
+  })
+
+  /** 种养计划下拉（任务必须能回挂到计划） */
+  const planQuery = useQuery({
+    queryKey: ['task-plan-options', farmId],
+    enabled: Boolean(farmId),
+    queryFn: () => listPlans({ farmId, pageNum: 1, pageSize: 100 }),
+  })
+
+  /** 计划阶段下拉（选择计划后才可加载） */
+  const stageQuery = useQuery({
+    queryKey: ['task-stage-options', selectedPlanId],
+    enabled: Boolean(selectedPlanId),
+    queryFn: () => (selectedPlanId ? listPlanStages(selectedPlanId) : Promise.resolve([] as PlanStage[])),
   })
 
   /** 执行人下拉（原型：张三 / 李四 / 王五） */
@@ -108,6 +135,24 @@ export default function TaskCreate(): JSX.Element {
         label: `${plot.plotName}${plot.cropVariety ? `(${plot.cropVariety})` : ''}`,
       })),
     [plotQuery.data],
+  )
+
+  const planOptions = useMemo(
+    () =>
+      (planQuery.data?.list ?? []).map((plan: Plan) => ({
+        value: plan.planId,
+        label: `${plan.planName}${plan.cropName ? `（${plan.cropName}）` : ''}`,
+      })),
+    [planQuery.data],
+  )
+
+  const stageOptions = useMemo(
+    () =>
+      (stageQuery.data ?? []).map((stage: PlanStage) => ({
+        value: stage.stageId,
+        label: stage.stageName,
+      })),
+    [stageQuery.data],
   )
 
   const memberOptions = useMemo(
@@ -136,11 +181,15 @@ export default function TaskCreate(): JSX.Element {
       const raw = result as unknown as Task | string | null
       const taskId = typeof raw === 'string' ? raw : raw?.taskId
       message.success('任务创建成功')
+      void queryClient.invalidateQueries({ queryKey: ['production-tasks'] })
       if (taskId) {
         navigate(`/production/tasks/${taskId}`)
         return
       }
       navigate('/production/tasks')
+    },
+    onError: (error: Error) => {
+      message.error(error.message || '任务创建失败')
     },
   })
 
@@ -171,15 +220,13 @@ export default function TaskCreate(): JSX.Element {
       taskType: values.taskType,
       priority: values.priority ?? 3,
       plotId: values.plotId,
+      planId: values.planId,
+      stageId: values.stageId,
       assigneeId: values.assigneeId,
       templateId: values.templateId,
       description: values.description,
       farmId: values.farmId,
-      status: 'pending',
-      // 计划起止发**完整时间**：控件是 datetime-local、确认页也按 `YYYY-MM-DD HH:mm` 回显，
-      // 而库里 plan_start_time / plan_end_time 是 DATETIME。此前这里 format('YYYY-MM-DD')
-      // 把用户选的时分**静默丢掉**（注释还写着"后端是 LocalDate"，其实不是）。
-      // 后端入参同时容忍纯日期写法，见 TaskServiceImpl.parseDateTime。
+      // status 由后端统一置为 pending，前端不再传（传了也会被忽略，容易让人误以为可指定初始状态）
       planStartDate: values.planStartDate ? dayjs(values.planStartDate).format('YYYY-MM-DD HH:mm:ss') : undefined,
       planEndDate: values.planEndDate ? dayjs(values.planEndDate).format('YYYY-MM-DD HH:mm:ss') : undefined,
     }
@@ -190,6 +237,8 @@ export default function TaskCreate(): JSX.Element {
   const renderConfirm = (): JSX.Element => {
     const values = form.getFieldsValue(true) as TaskFormValues
     const plotLabel = plotOptions.find((item) => item.value === values.plotId)?.label ?? '-'
+    const planLabel = planOptions.find((item) => item.value === values.planId)?.label ?? '不关联计划'
+    const stageLabel = stageOptions.find((item) => item.value === values.stageId)?.label ?? '不关联阶段'
     const memberLabel = memberOptions.find((item) => item.value === values.assigneeId)?.label ?? '-'
     const templateLabel =
       templateOptions.find((item) => item.value === values.templateId)?.label ?? '不关联模板'
@@ -205,6 +254,8 @@ export default function TaskCreate(): JSX.Element {
           {TASK_PRIORITY_LABEL_MAP[values.priority ?? 3] ?? '重要'}
         </Descriptions.Item>
         <Descriptions.Item label="执行地块">{plotLabel}</Descriptions.Item>
+        <Descriptions.Item label="关联计划">{planLabel}</Descriptions.Item>
+        <Descriptions.Item label="关联阶段">{stageLabel}</Descriptions.Item>
         <Descriptions.Item label="计划开始">
           {values.planStartDate ? dayjs(values.planStartDate).format('YYYY-MM-DD HH:mm') : '-'}
         </Descriptions.Item>
@@ -250,6 +301,9 @@ export default function TaskCreate(): JSX.Element {
           initialValues={{
             priority: 3,
             farmId,
+            plotId: presetPlotId,
+            planId: presetPlanId,
+            stageId: presetStageId,
             taskType: 'fertilizing',
           }}
         >
@@ -303,6 +357,37 @@ export default function TaskCreate(): JSX.Element {
                 placeholder="请选择执行地块"
                 options={plotOptions}
                 rules={[{ required: true, message: '请选择执行地块' }]}
+              />
+              <ProFormSelect
+                name="planId"
+                label="关联种养计划（可选）"
+                placeholder="选择后任务将计入计划进度"
+                options={planOptions}
+                fieldProps={{
+                  allowClear: true,
+                  showSearch: true,
+                  onChange: (value?: string) => {
+                    setSelectedPlanId(value)
+                    form.setFieldValue('stageId', undefined)
+                    // 计划自带地块时自动带出执行地块（用户仍可改选）
+                    if (value) {
+                      const plan = (planQuery.data?.list ?? []).find(
+                        (item: Plan) => item.planId === value,
+                      )
+                      if (plan?.plotId && !form.getFieldValue('plotId')) {
+                        form.setFieldValue('plotId', plan.plotId)
+                      }
+                    }
+                  },
+                }}
+              />
+              <ProFormSelect
+                name="stageId"
+                label="关联计划阶段（可选）"
+                placeholder="请先选择种养计划"
+                options={stageOptions}
+                disabled={!selectedPlanId}
+                fieldProps={{ allowClear: true }}
               />
           </div>
 

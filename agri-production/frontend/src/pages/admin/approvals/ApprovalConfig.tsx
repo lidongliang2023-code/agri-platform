@@ -45,7 +45,6 @@ import {
   listApprovalFlows,
   updateApprovalFlow,
 } from '@/api'
-import { DemoDataAlert } from '@/components'
 import { hasNonEmptyTextFields } from '@/utils/shape-guard'
 import type { ApprovalFlowConfig, ApprovalNodeConfig } from '@/types'
 
@@ -130,125 +129,6 @@ interface FlowRow extends Omit<ApprovalFlowConfig, 'approvalType'> {
   escalations: TimeoutEscalation[]
 }
 
-/** 演示流程配置数据 */
-const MOCK_FLOWS: FlowRow[] = [
-  {
-    flowId: 'FLOW-001',
-    flowName: '主体注册审核流程',
-    approvalType: 1,
-    status: 1,
-    updatedAt: '2025-07-10 10:12',
-    nodes: [
-      {
-        nodeId: 'N-1-1',
-        flowId: 'FLOW-001',
-        nodeOrder: 1,
-        nodeName: '资质初审',
-        approveRoleCode: 'PLATFORM_ADMIN',
-        approveMode: 1,
-        timeoutHours: 24,
-      },
-      {
-        nodeId: 'N-1-2',
-        flowId: 'FLOW-001',
-        nodeOrder: 2,
-        nodeName: '运营复核',
-        approveRoleCode: 'OPS_MANAGER',
-        approveMode: 1,
-        timeoutHours: 12,
-      },
-    ],
-    conditionRoutes: [
-      { field: 'amount', operator: 'gte', threshold: '100000', targetNodeOrder: 2 },
-      { field: 'approvalType', operator: 'eq', threshold: '3', targetNodeOrder: 2 },
-    ],
-    escalations: [{ timeoutHours: 24, escalateTo: 'OPS_MANAGER', notifyBySms: true }],
-  },
-  {
-    flowId: 'FLOW-002',
-    flowName: '配额调整审批流程',
-    approvalType: 2,
-    status: 1,
-    updatedAt: '2025-07-08 16:40',
-    nodes: [
-      {
-        nodeId: 'N-2-1',
-        flowId: 'FLOW-002',
-        nodeOrder: 1,
-        nodeName: '运营审核',
-        approveRoleCode: 'OPS_MANAGER',
-        approveMode: 1,
-        timeoutHours: 8,
-      },
-    ],
-    conditionRoutes: [
-      { field: 'quotaUsageRate', operator: 'gte', threshold: '90', targetNodeOrder: 1 },
-    ],
-    escalations: [{ timeoutHours: 8, escalateTo: 'PLATFORM_ADMIN', notifyBySms: false }],
-  },
-  {
-    flowId: 'FLOW-003',
-    flowName: '农场停用审批流程',
-    approvalType: 3,
-    status: 1,
-    updatedAt: '2025-06-28 09:25',
-    nodes: [
-      {
-        nodeId: 'N-3-1',
-        flowId: 'FLOW-003',
-        nodeOrder: 1,
-        nodeName: '业务验收',
-        approveRoleCode: 'AGRONOMIST',
-        approveMode: 2,
-        timeoutHours: 48,
-      },
-      {
-        nodeId: 'N-3-2',
-        flowId: 'FLOW-003',
-        nodeOrder: 2,
-        nodeName: '平台确认',
-        approveRoleCode: 'PLATFORM_ADMIN',
-        approveMode: 1,
-        timeoutHours: 24,
-      },
-    ],
-    conditionRoutes: [
-      { field: 'farmScale', operator: 'gte', threshold: '500', targetNodeOrder: 2 },
-    ],
-    escalations: [{ timeoutHours: 48, escalateTo: 'OPS_MANAGER', notifyBySms: true }],
-  },
-  {
-    flowId: 'FLOW-004',
-    flowName: '数据导出审批流程',
-    approvalType: 4,
-    status: 0,
-    updatedAt: '2025-06-15 14:02',
-    nodes: [
-      {
-        nodeId: 'N-4-1',
-        flowId: 'FLOW-004',
-        nodeOrder: 1,
-        nodeName: '数据安全审核',
-        approveRoleCode: 'DATA_SECURITY',
-        approveMode: 1,
-        timeoutHours: 12,
-      },
-    ],
-    conditionRoutes: [],
-    escalations: [{ timeoutHours: 12, escalateTo: 'PLATFORM_SUPERVISOR', notifyBySms: true }],
-  },
-]
-
-/** 本地演示数据源 */
-let mockFlowStore: FlowRow[] = [...MOCK_FLOWS]
-
-/** 示例数据覆盖范围（提示条文案） */
-const DEMO_SCOPE = '下方审批流程台账（流程名称 / 适用类型 / 节点数 / 条件路由 / 状态 / 更新时间）'
-
-/** 示例数据写操作提示 */
-const DEMO_WRITE_NOTE =
-  '新建 / 编辑 / 启用停用 / 删除流程等操作只会修改浏览器本地内存中的示例数据，未写入服务端，刷新页面后即失效。'
-
 /**
  * 创建空白节点
  * @param order 节点序号
@@ -278,63 +158,31 @@ export default function ApprovalConfig(): JSX.Element {
   const [drawerOpen, setDrawerOpen] = useState<boolean>(false)
   const [editingId, setEditingId] = useState<string | undefined>(undefined)
   const [activeTab, setActiveTab] = useState<string>('nodes')
-  /** 是否处于示例数据（演示）模式：由数据层返回的 demo 标志驱动 */
-  const [demoMode, setDemoMode] = useState<boolean>(false)
 
   const listQuery = useQuery({
     queryKey: ['admin-approval-flow-config'],
-    queryFn: async (): Promise<{ flows: FlowRow[]; demo: boolean }> => {
-      try {
-        const { list } = await listApprovalFlows({ pageNum: 1, pageSize: 100 })
-        if (Array.isArray(list)) {
-          // 形状校验（实测依据见 @/utils/shape-guard）：
-          // `GET /admin/approvals/config` 当前返回的是 `{ bizType, approveLevel }`
-          // 骨架（ApprovalService#config() 硬编码的 CERT / RECALL / QUOTA 三条），
-          // 既没有 flowId 也没有 flowName，更没有 nodes —— 是「审批类型级别」的
-          // 骨架，不是流程台账要的 ApprovalFlowConfig。
-          //
-          // 是否走真数据由「数据形状」决定，不是由「接口通不通」决定：
-          // 接口通了但只给骨架，仍然算没有真数据，保持 demo: true，
-          // 让 DemoDataAlert 横幅继续提示「非服务端真实数据」。
-          // 否则横幅消失、三条骨架被标成凭空的「主体注册」，比降级更骗人。
-          const realFlows = list.filter((item) =>
-            hasNonEmptyTextFields(item, ['flowId', 'flowName']),
-          )
-          if (realFlows.length > 0) {
-            return {
-              flows: realFlows.map<FlowRow>((item) => ({
-                ...item,
-                // 不认识的审批类型保持 undefined，由列渲染显示「未指定」，
-                // 绝不兜底成 1（那会把 CERT/RECALL/QUOTA 一律标成「主体注册」）
-                approvalType: item.approvalType as AdminApprovalType | undefined,
-                conditionRoutes: [],
-                escalations: [],
-              })),
-              demo: false,
-            }
-          }
-        }
-      } catch {
-        /* 后端不可用时降级为演示数据 */
-      }
-      return { flows: mockFlowStore, demo: true }
+    queryFn: async (): Promise<FlowRow[]> => {
+      const { list } = await listApprovalFlows({ pageNum: 1, pageSize: 100 })
+      return (Array.isArray(list) ? list : []).filter((item) =>
+        hasNonEmptyTextFields(item, ['flowId', 'flowName']),
+      ).map<FlowRow>((item) => ({
+        ...item,
+        approvalType: item.approvalType as AdminApprovalType | undefined,
+        conditionRoutes: (item.conditionRoutes ?? []) as ConditionRoute[],
+        escalations: (item.escalations ?? []) as TimeoutEscalation[],
+      }))
     },
+    retry: 1,
   })
 
   useEffect(() => {
-    if (listQuery.data) {
-      setFlows(listQuery.data.flows)
-      setDemoMode(listQuery.data.demo)
-    }
+    setFlows(listQuery.data ?? [])
   }, [listQuery.data])
 
   /** 保存流程配置 */
   const saveMutation = useMutation({
     mutationFn: async (values: FlowRow) => {
-      const payload: Partial<ApprovalFlowConfig> & {
-        conditionRoutes?: ConditionRoute[]
-        escalations?: TimeoutEscalation[]
-      } = {
+      const payload = {
         flowName: values.flowName,
         approvalType: values.approvalType,
         status: values.status,
@@ -346,71 +194,42 @@ export default function ApprovalConfig(): JSX.Element {
         conditionRoutes: values.conditionRoutes ?? [],
         escalations: values.escalations ?? [],
       }
-      try {
-        if (editingId) {
-          await updateApprovalFlow(editingId, payload)
-        } else {
-          await createApprovalFlow(payload)
-        }
-        message.success('流程配置已保存')
-      } catch {
-        message.warning('流程配置已保存（演示模式，仅本地更新，未写入服务端，刷新后失效）')
-      }
-      const nextId = editingId ?? `FLOW-${Date.now()}`
-      const nextRow: FlowRow = {
-        ...values,
-        flowId: nextId,
-        nodes: payload.nodes ?? [],
-        conditionRoutes: payload.conditionRoutes ?? [],
-        escalations: payload.escalations ?? [],
-        updatedAt: new Date().toISOString().slice(0, 16).replace('T', ' '),
-      }
-      mockFlowStore = editingId
-        ? mockFlowStore.map((item) => (item.flowId === editingId ? nextRow : item))
-        : [nextRow, ...mockFlowStore]
-      return nextRow
+      if (editingId) await updateApprovalFlow(editingId, payload)
+      else await createApprovalFlow(payload)
     },
     onSuccess: () => {
+      message.success('流程配置已保存')
       setDrawerOpen(false)
       void queryClient.invalidateQueries({ queryKey: ['admin-approval-flow-config'] })
     },
+    onError: (error: Error) => message.error(error.message || '流程配置保存失败'),
   })
 
   /** 切换流程启用状态 */
   const toggleMutation = useMutation({
     mutationFn: async (row: FlowRow) => {
       const nextStatus: 0 | 1 = row.status === 1 ? 0 : 1
-      try {
-        await updateApprovalFlow(row.flowId, { status: nextStatus })
-        message.success(nextStatus === 1 ? '流程已启用' : '流程已停用')
-      } catch {
-        message.warning(
-          `${nextStatus === 1 ? '流程已启用' : '流程已停用'}（演示模式，仅本地更新，未写入服务端）`,
-        )
-      }
-      mockFlowStore = mockFlowStore.map((item) =>
-        item.flowId === row.flowId ? { ...item, status: nextStatus } : item,
-      )
+      await updateApprovalFlow(row.flowId, { status: nextStatus })
       return nextStatus
     },
-    onSuccess: () =>
-      void queryClient.invalidateQueries({ queryKey: ['admin-approval-flow-config'] }),
+    onSuccess: (nextStatus) => {
+      message.success(nextStatus === 1 ? '流程已启用' : '流程已停用')
+      void queryClient.invalidateQueries({ queryKey: ['admin-approval-flow-config'] })
+    },
+    onError: (error: Error) => message.error(error.message || '流程状态更新失败'),
   })
 
   /** 删除流程 */
   const removeMutation = useMutation({
     mutationFn: async (row: FlowRow) => {
-      try {
-        await deleteApprovalFlow(row.flowId)
-        message.success('流程已删除')
-      } catch {
-        message.warning('流程已删除（演示模式，仅本地更新，未写入服务端，刷新后失效）')
-      }
-      mockFlowStore = mockFlowStore.filter((item) => item.flowId !== row.flowId)
+      await deleteApprovalFlow(row.flowId)
       return row.flowId
     },
-    onSuccess: () =>
-      void queryClient.invalidateQueries({ queryKey: ['admin-approval-flow-config'] }),
+    onSuccess: () => {
+      message.success('流程已删除')
+      void queryClient.invalidateQueries({ queryKey: ['admin-approval-flow-config'] })
+    },
+    onError: (error: Error) => message.error(error.message || '流程删除失败'),
   })
 
   /**
@@ -526,8 +345,6 @@ export default function ApprovalConfig(): JSX.Element {
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      {demoMode ? <DemoDataAlert scope={DEMO_SCOPE} writeNote={DEMO_WRITE_NOTE} /> : null}
-
       <Row gutter={16}>
         <Col span={24}>
           <Card styles={{ body: { padding: 12 } }}>

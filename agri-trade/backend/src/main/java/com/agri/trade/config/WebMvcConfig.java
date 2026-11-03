@@ -1,5 +1,6 @@
 package com.agri.trade.config;
 
+import com.agri.trade.common.capability.TradeCapabilityInterceptor;
 import com.agri.trade.common.security.AuthenticationInterceptor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
@@ -20,11 +21,14 @@ import java.nio.file.Paths;
 public class WebMvcConfig implements WebMvcConfigurer {
 
     private final AuthenticationInterceptor authenticationInterceptor;
+    private final TradeCapabilityInterceptor tradeCapabilityInterceptor;
     private final String uploadDir;
 
     public WebMvcConfig(AuthenticationInterceptor authenticationInterceptor,
+                        TradeCapabilityInterceptor tradeCapabilityInterceptor,
                         @Value("${agri.trade.upload-dir:uploads}") String uploadDir) {
         this.authenticationInterceptor = authenticationInterceptor;
+        this.tradeCapabilityInterceptor = tradeCapabilityInterceptor;
         this.uploadDir = uploadDir;
     }
 
@@ -44,6 +48,14 @@ public class WebMvcConfig implements WebMvcConfigurer {
                         "/uploads/trade/**",
                         // 官网门户公开只读接口：仅返回已发布商品的展示字段
                         "/api/trade/public/**"
+                );
+        // 能力校验只覆盖用户侧写接口：运营端 /api/trade/admin/**、公开只读、图片上传不参与
+        registry.addInterceptor(tradeCapabilityInterceptor)
+                .addPathPatterns("/api/trade/**")
+                .excludePathPatterns(
+                        "/api/trade/admin/**",
+                        "/api/trade/public/**",
+                        "/uploads/trade/**"
                 );
     }
 

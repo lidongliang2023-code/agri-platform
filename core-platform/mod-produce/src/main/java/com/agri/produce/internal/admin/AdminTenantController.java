@@ -75,7 +75,8 @@ public class AdminTenantController {
             @PathVariable Long id,
             @RequestBody TenantStatusRequest request) {
         return ApiResponse.ok(tenantSubjectService.update(id,
-                new TenantSubjectProvider.TenantSubjectUpdate(null, null, null, null, null, request.status())));
+                new TenantSubjectProvider.TenantSubjectUpdate(
+                        null, null, null, null, null, null, null, null, request.status())));
     }
 
     @DeleteMapping("/{id}")

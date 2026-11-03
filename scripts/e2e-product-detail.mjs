@@ -1,13 +1,19 @@
 #!/usr/bin/env node
 /** 交易商品详情页回归（2026-10-21）。 */
 import { createRequire } from 'node:module'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const require2 = createRequire(path.join(REPO_ROOT, 'agri-production/frontend/package.json'))
-const puppeteer = require2('puppeteer')
+const require2 = createRequire(path.join('C:/Users/71502/.workbuddy-ai/binaries/node/workspace', 'noop.js'))
+const { chromium } = require2('playwright-core')
+
+const BROWSER = [
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+].find((candidate) => existsSync(candidate))
 const BASE = process.argv.find((item) => item.startsWith('--base='))?.split('=').slice(1).join('=')
   ?? 'http://localhost:8086'
 const HEADFUL = process.argv.includes('--headful')
@@ -29,13 +35,13 @@ if (!product) {
   process.exit(1)
 }
 
-const browser = await puppeteer.launch({ headless: HEADFUL ? false : 'new', args: ['--no-sandbox'] })
+const browser = await chromium.launch({ headless: !HEADFUL, executablePath: BROWSER, args: ['--no-sandbox'] })
 try {
-  const page = await browser.newPage()
+  const page = await (await browser.newContext({ viewport: { width: 1440, height: 1000 } })).newPage()
   const errors = []
   page.on('pageerror', (error) => errors.push(String(error)))
-  await page.setViewport({ width: 1440, height: 1000 })
-  await page.goto(`${BASE}/product/detail/${product.id}`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await page.goto(`${BASE}/product/detail/${product.id}`, { waitUntil: 'networkidle', timeout: 60000 })
   await page.waitForSelector('.pd-hero', { timeout: 20000 })
   await sleep(400)
 
@@ -83,8 +89,8 @@ try {
 
   await page.screenshot({ path: path.join(OUT_DIR, 'trade-product-detail.png'), fullPage: true })
 
-  await page.setViewport({ width: 390, height: 844 })
-  await page.goto(`${BASE}/product/detail/${product.id}`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto(`${BASE}/product/detail/${product.id}`, { waitUntil: 'networkidle', timeout: 60000 })
   await page.waitForSelector('.pd-hero', { timeout: 20000 })
   await sleep(400)
   const noOverflow = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)
@@ -95,7 +101,7 @@ try {
     const button = [...document.querySelectorAll('.pd-actions button')].find((item) => item.textContent?.includes('立即下单'))
     button?.click()
   })
-  await page.waitForFunction(() => window.location.port === '8090', { timeout: 15000 })
+  await page.waitForFunction(() => window.location.port === '8090', undefined, { timeout: 15000 })
   check(page.url().includes(':8090/') && page.url().includes('/login')
     && !page.url().includes(':8086/login'),
   '未登录下单直接进入统一认证登录页', page.url())

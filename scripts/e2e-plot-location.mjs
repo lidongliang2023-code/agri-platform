@@ -18,8 +18,13 @@ import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const require2 = createRequire(path.join(REPO_ROOT, 'agri-production/frontend/package.json'))
-const puppeteer = require2('puppeteer')
+const require2 = createRequire(path.join('C:/Users/71502/.workbuddy-ai/binaries/node/workspace', 'noop.js'))
+const { chromium } = require2('playwright-core')
+
+const BROWSER = [
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+].find((candidate) => existsSync(candidate))
 
 const arg = (name, fallback) => {
   const hit = process.argv.slice(2).find((a) => a.startsWith(`--${name}=`))
@@ -65,9 +70,9 @@ const login = await (await fetch(`${BASE_URL}/api/v1/auth/login`, {
 check(login.code === 0, '登录')
 const token = login.data.accessToken
 
-const browser = await puppeteer.launch({ headless: HEADFUL ? false : 'new', args: ['--no-sandbox'] })
-const page = await browser.newPage()
-await page.setViewport({ width: 1600, height: 1000 })
+const browser = await chromium.launch({ headless: !HEADFUL, executablePath: BROWSER, args: ['--no-sandbox'] })
+const page = await (await browser.newContext({ viewport: { width: 1440, height: 1000 } })).newPage()
+await page.setViewportSize({ width: 1600, height: 1000 })
 /** 捕获页面发出的新建地块请求体（这是本脚本的核心证据） */
 let createBody = ''
 const badResponses = []
@@ -94,7 +99,7 @@ try {
       body: JSON.stringify(creds),
     })
   }, { username: USER, password: PASSWORD, marketId: 1 })
-  await page.evaluateOnNewDocument(() => {
+  await page.addInitScript(() => {
     try {
       localStorage.setItem('agri_user_info', JSON.stringify({ username: 'farmer', realName: '张农户' }))
       localStorage.setItem('agri_roles', JSON.stringify(['FARMER']))
@@ -109,7 +114,7 @@ try {
     }
   })
 
-  await page.goto(`${BASE_URL}/production/plots/create`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.goto(`${BASE_URL}/production/plots/create`, { waitUntil: 'networkidle', timeout: 60000 })
   await page.waitForSelector('#plotName', { timeout: 20000 })
   await sleep(800)
 
@@ -190,7 +195,8 @@ try {
     return true
   })
   check(clicked, '点了「保存」')
-  await page.waitForNetworkIdle({ idleTime: 800, timeout: 20000 }).catch(() => {})
+  await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 800))
   await sleep(2000)
 
   // ① 请求体：必须出现真实字段，且不再出现自造的 geoBoundary

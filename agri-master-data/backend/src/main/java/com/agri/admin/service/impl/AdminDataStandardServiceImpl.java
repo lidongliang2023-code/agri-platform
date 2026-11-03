@@ -2,6 +2,8 @@ package com.agri.admin.service.impl;
 
 import com.agri.admin.dto.CodeRuleDTO;
 import com.agri.admin.dto.DataFormatDTO;
+import com.agri.admin.dto.MetadataDTO;
+import com.agri.admin.dto.StandardChangeDTO;
 import com.agri.admin.service.IAdminDataStandardService;
 import com.agri.admin.vo.CodeRuleVO;
 import com.agri.admin.vo.DataFormatVO;
@@ -12,11 +14,19 @@ import com.agri.masterdata.dto.DictSaveDTO;
 import com.agri.masterdata.entity.Dict;
 import com.agri.masterdata.entity.DictItem;
 import com.agri.masterdata.entity.CodeRule;
+import com.agri.masterdata.entity.DataFormat;
+import com.agri.masterdata.entity.MetadataCatalog;
+import com.agri.masterdata.entity.StandardChange;
 import com.agri.masterdata.mapper.CodeRuleMapper;
+import com.agri.masterdata.mapper.DataFormatMapper;
 import com.agri.masterdata.mapper.DictItemMapper;
 import com.agri.masterdata.mapper.DictMapper;
+import com.agri.masterdata.mapper.MetadataCatalogMapper;
+import com.agri.masterdata.mapper.StandardChangeMapper;
 import com.agri.masterdata.vo.DictVO;
+import com.agri.common.security.SecurityUtils;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -25,6 +35,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.List;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
 @Service
@@ -35,6 +46,9 @@ public class AdminDataStandardServiceImpl implements IAdminDataStandardService {
     private final DictMapper dictMapper;
     private final DictItemMapper dictItemMapper;
     private final CodeRuleMapper codeRuleMapper;
+    private final DataFormatMapper dataFormatMapper;
+    private final StandardChangeMapper changeMapper;
+    private final MetadataCatalogMapper metadataMapper;
 
     @Override
     public PageResult<DictVO> getDictList(Integer pageNum, Integer pageSize, String dictName) {
@@ -60,7 +74,12 @@ public class AdminDataStandardServiceImpl implements IAdminDataStandardService {
         Dict dict = Dict.builder()
                 .dictCode(dto.getDictCode())
                 .dictName(dto.getDictName())
+                .dictType(dto.getDictType())
                 .description(dto.getDescription())
+                // 表的 status 默认值是 0（禁用）：不显式写 1 的话，页面上点「新增字典」
+                // 建出来的第一条就是"禁用"，看起来像新增失败
+                .status(dto.getStatus() == null ? 1 : dto.getStatus())
+                .delFlag(0)
                 .build();
         dictMapper.insert(dict);
         
@@ -84,8 +103,11 @@ public class AdminDataStandardServiceImpl implements IAdminDataStandardService {
         if (dict == null) {
             throw new BusinessException("字典不存在");
         }
-        dict.setDictName(dto.getDictName());
-        dict.setDescription(dto.getDescription());
+        if (dto.getDictName() != null) dict.setDictName(dto.getDictName());
+        if (dto.getDescription() != null) dict.setDescription(dto.getDescription());
+        if (dto.getDictType() != null) dict.setDictType(dto.getDictType());
+        // 原来不落 status：字典的启停按钮点了也不生效
+        if (dto.getStatus() != null) dict.setStatus(dto.getStatus());
         dictMapper.updateById(dict);
     }
 
@@ -268,6 +290,11 @@ public class AdminDataStandardServiceImpl implements IAdminDataStandardService {
         if (rule == null) {
             throw new BusinessException("编码规则不存在");
         }
+        // 手工录入规则没有前缀/序号，试算只会拼出一段无意义的字符；
+        // 明确拒绝，而不是让 String.format 在 seqLength=0 时抛 500。
+        if ("manual".equalsIgnoreCase(rule.getRuleType())) {
+            throw new BusinessException("手工录入规则不参与自动生成，无需试算");
+        }
         // 按规则真实拼一个样例，而不是返回写死的 TEST001 ——
         // "试算"的意义就在于把用户配的前缀/日期/序号长度拼出来给他看。
         StringBuilder code = new StringBuilder();
@@ -275,9 +302,14 @@ public class AdminDataStandardServiceImpl implements IAdminDataStandardService {
             code.append(rule.getPrefix());
         }
         if (rule.getDateFormat() != null && !rule.getDateFormat().isEmpty()) {
-            code.append(LocalDate.now().format(DateTimeFormatter.ofPattern(rule.getDateFormat())));
+            try {
+                code.append(LocalDate.now().format(DateTimeFormatter.ofPattern(rule.getDateFormat())));
+            } catch (IllegalArgumentException e) {
+                throw new BusinessException("日期格式非法：" + rule.getDateFormat());
+            }
         }
-        int seqLength = rule.getSeqLength() == null ? 4 : rule.getSeqLength();
+        // seqLength 可能是 0 或负数（历史数据里就有），%00d 会抛 IllegalFormatException
+        int seqLength = rule.getSeqLength() == null || rule.getSeqLength() <= 0 ? 4 : rule.getSeqLength();
         code.append(String.format("%0" + seqLength + "d", 1));
         if (rule.getSuffix() != null) {
             code.append(rule.getSuffix());
@@ -333,24 +365,219 @@ public class AdminDataStandardServiceImpl implements IAdminDataStandardService {
 
     @Override
     public List<DataFormatVO> getDataFormatList() {
-        return new ArrayList<>();
+        List<DataFormat> rows = dataFormatMapper.selectList(
+                new LambdaQueryWrapper<DataFormat>().orderByAsc(DataFormat::getFormatCode));
+        List<DataFormatVO> list = new ArrayList<>();
+        for (DataFormat row : rows) {
+            list.add(toFormatVO(row));
+        }
+        return list;
     }
 
     @Override
     @Transactional
     public void createDataFormat(DataFormatDTO dto) {
+        String code = trim(dto.getFormatCode());
+        if (code == null) {
+            throw new BusinessException("格式编码不能为空");
+        }
+        Long exists = dataFormatMapper.selectCount(new LambdaQueryWrapper<DataFormat>()
+                .eq(DataFormat::getFormatCode, code));
+        if (exists != null && exists > 0) {
+            throw new BusinessException("格式编码已存在：" + code);
+        }
+        DataFormat entity = new DataFormat();
+        entity.setFormatCode(code);
+        entity.setFormatName(trim(dto.getFormatName()));
+        entity.setDataType(dto.getDataType() == null ? "string" : dto.getDataType());
+        entity.setValidationRule(dto.getValidationRule());
+        entity.setMaxLength(dto.getMaxLength());
+        entity.setMinLength(dto.getMinLength());
+        entity.setDefaultValue(dto.getDefaultValue());
+        entity.setDescription(dto.getDescription());
+        // 新建先落草稿：发布是单独动作，避免"一建就对外生效"
+        entity.setStatus("DRAFT");
+        dataFormatMapper.insert(entity);
+    }
+
+    @Override
+    @Transactional
+    public void updateDataFormat(Long id, DataFormatDTO dto) {
+        DataFormat entity = requireFormat(id);
+        if (dto.getFormatName() != null) entity.setFormatName(trim(dto.getFormatName()));
+        if (dto.getDataType() != null) entity.setDataType(dto.getDataType());
+        if (dto.getValidationRule() != null) entity.setValidationRule(dto.getValidationRule());
+        if (dto.getMaxLength() != null) entity.setMaxLength(dto.getMaxLength());
+        if (dto.getMinLength() != null) entity.setMinLength(dto.getMinLength());
+        if (dto.getDefaultValue() != null) entity.setDefaultValue(dto.getDefaultValue());
+        if (dto.getDescription() != null) entity.setDescription(dto.getDescription());
+        dataFormatMapper.updateById(entity);
+    }
+
+    @Override
+    @Transactional
+    public void updateDataFormatStatus(Long id, String status) {
+        String normalized = status == null ? "" : status.trim().toUpperCase();
+        if (!List.of("DRAFT", "PUBLISHED", "DISABLED").contains(normalized)) {
+            throw new BusinessException("状态只能是 DRAFT / PUBLISHED / DISABLED");
+        }
+        DataFormat entity = requireFormat(id);
+        entity.setStatus(normalized);
+        dataFormatMapper.updateById(entity);
     }
 
     @Override
     public PageResult<DataFormatVO> getChangeApproveList(Integer pageNum, Integer pageSize, String status) {
-        int offset = (pageNum - 1) * pageSize;
+        LambdaQueryWrapper<StandardChange> wrapper = new LambdaQueryWrapper<StandardChange>()
+                .eq(status != null && !status.isBlank(), StandardChange::getStatus, status)
+                .orderByDesc(StandardChange::getApplyTime)
+                .orderByDesc(StandardChange::getId);
+        Page<StandardChange> page = changeMapper.selectPage(new Page<>(pageNum, pageSize), wrapper);
         List<DataFormatVO> list = new ArrayList<>();
-        long total = 0;
-        return PageResult.success(list, total, pageNum, pageSize);
+        for (StandardChange row : page.getRecords()) {
+            DataFormatVO vo = new DataFormatVO();
+            vo.setId(row.getId());
+            vo.setFormatName(row.getTargetName());
+            vo.setChangeType(row.getChangeType());
+            vo.setStatus(row.getStatus());
+            vo.setApplicant(row.getApplicant());
+            vo.setApplyTime(row.getApplyTime() == null ? null : row.getApplyTime().toString());
+            vo.setReviewTime(row.getReviewTime() == null ? null : row.getReviewTime().toString());
+            vo.setRemark(row.getReviewRemark());
+            vo.setDescription(row.getAfterValue());
+            list.add(vo);
+        }
+        return PageResult.success(list, page.getTotal(), pageNum, pageSize);
+    }
+
+    @Override
+    @Transactional
+    public Long createStandardChange(StandardChangeDTO dto) {
+        String targetType = trim(dto.getTargetType());
+        if (targetType == null || !List.of("format", "dict", "code_rule").contains(targetType)) {
+            throw new BusinessException("目标类型只能是 format / dict / code_rule");
+        }
+        String targetName = trim(dto.getTargetName());
+        if (targetName == null) {
+            throw new BusinessException("目标名称不能为空");
+        }
+        StandardChange entity = new StandardChange();
+        entity.setTargetType(targetType);
+        entity.setTargetId(trim(dto.getTargetId()));
+        entity.setTargetName(targetName);
+        entity.setChangeType(dto.getChangeType() == null ? "UPDATE" : dto.getChangeType().toUpperCase());
+        entity.setBeforeValue(dto.getBeforeValue());
+        entity.setAfterValue(dto.getAfterValue());
+        entity.setStatus("PENDING");
+        entity.setApplicant(SecurityUtils.getUsername());
+        entity.setApplyTime(LocalDateTime.now());
+        entity.setRemark(trim(dto.getRemark()));
+        changeMapper.insert(entity);
+        return entity.getId();
     }
 
     @Override
     @Transactional
     public void approveChange(Long id, String status, String remark) {
+        String normalized = status == null ? "" : status.trim().toUpperCase();
+        if (!List.of("APPROVED", "REJECTED").contains(normalized)) {
+            throw new BusinessException("审批状态只能是 APPROVED / REJECTED");
+        }
+        StandardChange entity = changeMapper.selectById(id);
+        if (entity == null) {
+            throw new BusinessException("变更申请不存在");
+        }
+        if (!"PENDING".equals(entity.getStatus())) {
+            throw new BusinessException("该申请已审批，无需重复操作");
+        }
+        entity.setStatus(normalized);
+        entity.setReviewer(SecurityUtils.getUsername());
+        entity.setReviewTime(LocalDateTime.now());
+        entity.setReviewRemark(remark);
+        changeMapper.updateById(entity);
+        // 明确不自动改写目标：审批只留痕，目标修改由申请人按审批意见再走一次编辑
+    }
+
+    @Override
+    public List<MetadataCatalog> getMetadataList(String metadataType, String domain, String keyword) {
+        return metadataMapper.selectList(new LambdaQueryWrapper<MetadataCatalog>()
+                .eq(metadataType != null && !metadataType.isBlank(), MetadataCatalog::getMetadataType, metadataType)
+                .eq(domain != null && !domain.isBlank(), MetadataCatalog::getDomainName, domain)
+                .and(keyword != null && !keyword.isBlank(), w -> w
+                        .like(MetadataCatalog::getName, keyword)
+                        .or().like(MetadataCatalog::getNameEn, keyword))
+                .orderByAsc(MetadataCatalog::getMetadataType)
+                .orderByAsc(MetadataCatalog::getId));
+    }
+
+    @Override
+    @Transactional
+    public Long createMetadata(MetadataDTO dto) {
+        String name = trim(dto.getName());
+        if (name == null) {
+            throw new BusinessException("中文名称不能为空");
+        }
+        String type = trim(dto.getMetadataType());
+        if (type == null || !List.of("BUSINESS", "TECHNICAL", "MANAGEMENT").contains(type)) {
+            throw new BusinessException("元数据类型只能是 BUSINESS / TECHNICAL / MANAGEMENT");
+        }
+        MetadataCatalog entity = new MetadataCatalog();
+        applyMetadata(entity, dto, type, name);
+        metadataMapper.insert(entity);
+        return entity.getId();
+    }
+
+    @Override
+    @Transactional
+    public void updateMetadata(Long id, MetadataDTO dto) {
+        MetadataCatalog entity = metadataMapper.selectById(id);
+        if (entity == null) {
+            throw new BusinessException("元数据不存在");
+        }
+        applyMetadata(entity, dto, trim(dto.getMetadataType()), trim(dto.getName()));
+        metadataMapper.updateById(entity);
+    }
+
+    private void applyMetadata(MetadataCatalog entity, MetadataDTO dto, String type, String name) {
+        if (type != null) entity.setMetadataType(type);
+        if (name != null) entity.setName(name);
+        if (dto.getNameEn() != null) entity.setNameEn(dto.getNameEn());
+        if (dto.getDomainName() != null) entity.setDomainName(dto.getDomainName());
+        if (dto.getDataType() != null) entity.setDataType(dto.getDataType());
+        if (dto.getRequired() != null) entity.setRequired(dto.getRequired());
+        if (dto.getSourceTable() != null) entity.setSourceTable(dto.getSourceTable());
+        if (dto.getVersion() != null) entity.setVersion(dto.getVersion());
+        if (dto.getDescription() != null) entity.setDescription(dto.getDescription());
+        entity.setStatus(dto.getStatus() == null ? (entity.getStatus() == null ? "PUBLISHED" : entity.getStatus())
+                : dto.getStatus().toUpperCase());
+    }
+
+    private DataFormat requireFormat(Long id) {
+        DataFormat entity = dataFormatMapper.selectById(id);
+        if (entity == null) {
+            throw new BusinessException("格式标准不存在");
+        }
+        return entity;
+    }
+
+    private DataFormatVO toFormatVO(DataFormat row) {
+        DataFormatVO vo = new DataFormatVO();
+        vo.setId(row.getId());
+        vo.setFormatCode(row.getFormatCode());
+        vo.setFormatName(row.getFormatName());
+        vo.setDataType(row.getDataType());
+        vo.setValidationRule(row.getValidationRule());
+        vo.setMaxLength(row.getMaxLength());
+        vo.setMinLength(row.getMinLength());
+        vo.setDefaultValue(row.getDefaultValue());
+        vo.setDescription(row.getDescription());
+        vo.setStatus(row.getStatus());
+        return vo;
+    }
+
+    private static String trim(String value) {
+        if (value == null) return null;
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }

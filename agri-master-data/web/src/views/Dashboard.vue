@@ -1,51 +1,43 @@
 <!--
-  运营总览。
+  运营大盘。
 
-  本页有一条硬规矩：**只显示查回来的数**。
-
-  改动前这里写死了四个 KPI（128 / 3,542 / 567 / 8,934）、七天的活跃度柱、四条待审核、
-  四条告警 —— 后端一失败就"回落到演示数据"，于是页面永远是满的，
-  看起来一切正常，但一个真数都没有。
-
-  现在：有数据就显示数据；没有数据来源的区块显示"未接入"并说明原因；
-  接口失败直接把失败原因显示出来。空态比假数据有用 —— 假数据会让人基于它做判断。
+  硬规矩：只显示查回来的数 —— 有数据就显示，没有数据来源的区块明确写「未接入」并说明原因，
+  接口失败直接显示失败原因。空态比假数据有用：假数据会让人基于它做决策。
 -->
 <template>
-  <div class="dashboard">
-    <div class="section-header">
-      <h1 class="section-title">运营总览</h1>
-      <p class="section-desc">数据概览与统计分析</p>
-    </div>
+  <div class="mds-page">
+    <PageHeader
+      title="运营大盘"
+      subtitle="平台主数据运营全景：主体、用户、组织与待办；数据全部来自主数据后端实时查询。"
+      source="主数据后端 · 实时"
+    >
+      <template #actions>
+        <button class="mds-btn" :disabled="loading" @click="loadData">刷新</button>
+        <button class="mds-btn mds-btn--primary" @click="router.push('/subject/audit')">主体生命周期</button>
+      </template>
+    </PageHeader>
 
-    <a-alert
-      v-if="loadError"
-      type="error"
-      show-icon
-      class="load-error"
-      :message="`总览数据加载失败：${loadError}`"
-      description="下面显示的都是空值，不是真实统计结果。请检查后端与登录态是否正常。"
-    />
+    <NoticeBar v-if="loadError" tone="danger" title="总览数据加载失败：">
+      {{ loadError }}。下方显示的都是空值，不是真实统计结果，请检查后端与登录态。
+    </NoticeBar>
 
-    <div class="stats-cards">
-      <div class="stat-card" v-for="stat in stats" :key="stat.label">
-        <div class="stat-icon">{{ stat.icon }}</div>
-        <div class="stat-content">
-          <div class="stat-value">{{ stat.value }}</div>
-          <div class="stat-label">{{ stat.label }}</div>
+    <StatGrid :items="stats" />
+
+    <div class="overview-grid">
+      <div class="mds-card">
+        <div class="mds-card-head">
+          <div>
+            <h2 class="mds-card-title">主体活跃度排行</h2>
+            <p class="mds-card-sub">按启用状态经营主体，展示各主体下的启用用户数</p>
+          </div>
+          <button class="mds-btn mds-btn--link" @click="router.push('/subject/list')">全部主体</button>
         </div>
-      </div>
-    </div>
-
-    <div class="main-content">
-      <div class="chart-section">
-        <div class="section-header small">
-          <h3>主体活跃度排行</h3>
-          <span class="section-note">按启用状态经营主体，展示各主体下的启用用户数</span>
+        <div v-if="!activities.length" class="mds-card-body">
+          <EmptyState title="暂无主体数据" description="主体主档由统一认证注册产生；没有数据时这里不会用示例填充。" />
         </div>
-        <div v-if="activities.length === 0" class="empty-state">暂无主体数据</div>
         <div v-else class="rank-list">
           <div v-for="item in activities" :key="item.tenantId" class="rank-item">
-            <span class="rank-no">{{ item.rank }}</span>
+            <span class="rank-no" :class="{ 'rank-no--top': Number(item.rank) <= 3 }">{{ item.rank }}</span>
             <span class="rank-name">{{ item.tenantName || '未命名主体' }}</span>
             <span class="rank-type">{{ item.tenantType || '—' }}</span>
             <span class="rank-value">{{ item.userCount ?? '—' }} 用户</span>
@@ -53,50 +45,78 @@
         </div>
       </div>
 
-      <div class="right-panel">
-        <div class="card">
-          <div class="card-header">
-            <h3>数据质量</h3>
-          </div>
-          <!-- 质量评分需要质量规则与检测结果，后端尚未接入，这里如实说明 -->
-          <div class="not-wired">
-            <p class="not-wired-title">未接入</p>
-            <p class="not-wired-desc">
-              质量评分与各域分布需要「质量规则 + 检测结果」作为数据来源，
-              主数据域目前还没有这两张表，因此不展示任何评分数字。
-            </p>
+      <div class="mds-card" style="margin-bottom: 0">
+        <div class="mds-card-head">
+          <div>
+            <h2 class="mds-card-title">待办事项</h2>
+            <p class="mds-card-sub">认证状态为 pending 的记录与未建模事项分开标注</p>
           </div>
         </div>
-
-        <div class="card">
-          <div class="card-header">
-            <h3>待审核事项</h3>
-          </div>
-          <div class="audit-list">
-            <div v-for="item in pendingAudits" :key="item.label" class="audit-item">
-              <span class="audit-icon">{{ item.icon }}</span>
-              <div class="audit-info">
-                <span class="audit-title">{{ item.label }}</span>
-                <span class="audit-time">{{ item.hint }}</span>
-              </div>
-              <span class="audit-count">{{ item.value === null ? '未接入' : item.value }}</span>
-            </div>
-          </div>
+        <div class="mds-card-body mds-card-body--flush">
+          <button
+            v-for="item in pendingAudits"
+            :key="item.label"
+            class="todo-item"
+            @click="item.to && router.push(item.to)"
+          >
+            <span class="todo-icon">{{ item.icon }}</span>
+            <span class="todo-info">
+              <span class="todo-title">{{ item.label }}</span>
+              <span class="todo-hint">{{ item.hint }}</span>
+            </span>
+            <span v-if="item.value === null" class="mds-tag mds-tag--plain">未接入</span>
+            <span v-else class="todo-count">{{ item.value }}</span>
+          </button>
         </div>
       </div>
     </div>
 
-    <div class="bottom-section">
-      <div class="card wide">
-        <div class="card-header">
-          <h3>系统告警</h3>
-          <span class="section-note">告警需要监控阈值规则作为来源</span>
+    <div class="mds-grid mds-grid--2">
+      <div class="mds-card" style="margin-bottom: 0">
+        <div class="mds-card-head">
+          <div>
+            <h2 class="mds-card-title">数据质量</h2>
+            <p class="mds-card-sub">来自质量统计接口的实时聚合</p>
+          </div>
+          <button class="mds-btn mds-btn--link" @click="router.push('/quality/dashboard')">质量稽核</button>
         </div>
-        <div v-if="alerts.length === 0" class="empty-state">
-          暂无告警数据（告警来源未接入，此处不再用示例告警填充）
+        <div class="mds-card-body">
+          <div v-if="!quality.loaded" class="mds-empty">正在加载质量统计…</div>
+          <template v-else>
+            <div class="quality-row">
+              <div><span>问题总数</span><strong>{{ quality.total }}</strong></div>
+              <div><span>待闭环</span><strong class="is-warn">{{ quality.open }}</strong></div>
+              <div><span>严重</span><strong class="is-danger">{{ quality.high }}</strong></div>
+              <div><span>解决率</span><strong class="is-ok">{{ quality.rate }}</strong></div>
+            </div>
+            <div v-if="quality.domains.length" class="domain-list">
+              <div v-for="item in quality.domains" :key="item.name" class="domain-row">
+                <span class="domain-name">{{ item.name }}</span>
+                <div class="mds-progress">
+                  <div class="mds-progress__bar" :style="{ width: item.percent + '%' }" />
+                </div>
+                <span class="domain-count">{{ item.count }}</span>
+              </div>
+            </div>
+            <p v-else class="mds-hint">暂无数据域分布（质量问题表为空）。</p>
+          </template>
         </div>
-        <div v-else class="alert-table">
-          <table>
+      </div>
+
+      <div class="mds-card" style="margin-bottom: 0">
+        <div class="mds-card-head">
+          <h2 class="mds-card-title">系统告警</h2>
+          <span class="mds-card-sub">告警需要监控阈值规则作为来源</span>
+        </div>
+        <div v-if="!alerts.length" class="mds-card-body">
+          <EmptyState
+            icon="🔔"
+            title="暂无告警数据"
+            description="告警来源尚未接入；这里不会用示例告警填充。"
+          />
+        </div>
+        <div v-else class="mds-table-wrap">
+          <table class="mds-table">
             <thead>
               <tr>
                 <th>级别</th>
@@ -108,11 +128,11 @@
             </thead>
             <tbody>
               <tr v-for="(alert, index) in alerts" :key="index">
-                <td><span class="alert-badge">{{ alert.level }}</span></td>
-                <td>{{ alert.title }}</td>
+                <td><StatusTag :text="alert.level || '提示'" :tone="alert.level === '紧急' ? 'danger' : 'warning'" /></td>
+                <td class="mds-name">{{ alert.title }}</td>
                 <td>{{ alert.content }}</td>
                 <td>{{ alert.tenantName || '—' }}</td>
-                <td>{{ alert.createTime || '—' }}</td>
+                <td class="mds-muted">{{ alert.createTime || '—' }}</td>
               </tr>
             </tbody>
           </table>
@@ -123,53 +143,74 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { getDashboard, getTenantActivity } from '../utils/api'
+import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import PageHeader from '@/components/ui/PageHeader.vue'
+import StatGrid from '@/components/ui/StatGrid.vue'
+import StatusTag from '@/components/ui/StatusTag.vue'
+import NoticeBar from '@/components/ui/NoticeBar.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
+import { getDashboard, getQualityStatistics, getTenantActivity } from '../utils/api'
 
+const router = useRouter()
 const metrics = ref(null)
 const audit = ref(null)
 const activities = ref([])
 const alerts = ref([])
 const loadError = ref('')
+const loading = ref(false)
+const quality = ref({ loaded: false, total: '—', open: '—', high: '—', rate: '—', domains: [] })
 
-/** 显示规则：null / undefined 一律显示为 "—"，不显示 0（0 是"查到了 0 条"，含义完全不同） */
+/** null / undefined 显示 "—"，不显示 0（0 是"查到了 0 条"，含义完全不同） */
 const show = (value) => (value === null || value === undefined ? '—' : value)
 
 const stats = computed(() => [
-  { label: '主体总数', value: show(metrics.value?.tenantCount), icon: '🏢' },
-  { label: '用户总数', value: show(metrics.value?.userCount), icon: '👥' },
-  { label: '组织总数', value: show(metrics.value?.orgCount), icon: '🏠' },
-  { label: '待认证用户', value: show(audit.value?.userCertCount), icon: '🪪' },
+  // 口径：主数据本地表（agri_md_tenant）的启用数，不是统一认证的主体主档总数。
+  // 两个数会不一样（本地表只收已同步过来的主体），标签必须写清，否则会以为是同一个数。
+  { label: '启用主体（本地表）', value: show(metrics.value?.tenantCount), hint: '统一认证主体主档见「入驻与生命周期」' },
+  { label: '用户总数', value: show(metrics.value?.userCount), hint: '平台统一账号' },
+  { label: '组织总数', value: show(metrics.value?.orgCount), hint: '主数据本地组织表启用数' },
+  {
+    label: '待认证用户',
+    value: show(audit.value?.userCertCount),
+    hint: '认证状态为 pending',
+    tone: Number(audit.value?.userCertCount ?? 0) > 0 ? 'warning' : undefined,
+  },
 ])
 
 const pendingAudits = computed(() => [
   {
     label: '用户认证审核',
     value: audit.value?.userCertCount ?? null,
-    hint: '认证状态为 pending 的用户',
+    hint: '认证状态为 pending 的用户 · 在用户中心办理',
     icon: '👤',
+    to: '/user/audit',
   },
   {
     label: '组织资质审核',
     value: audit.value?.orgCertCount ?? null,
     hint: '认证状态为 pending 的组织',
     icon: '🏠',
+    to: '/org/list',
   },
   {
     label: '标准变更审批',
     value: audit.value?.standardChangeCount ?? null,
     hint: '标准变更表尚未建立',
     icon: '📋',
+    to: '/datastandard/metadata',
   },
   {
     label: '质量问题工单',
     value: audit.value?.qualityIssueCount ?? null,
-    hint: '质量问题表尚未建立',
+    hint: '待处理 + 处理中的质量问题',
     icon: '⚠️',
+    to: '/quality/issue',
   },
 ])
 
 async function loadData() {
+  loading.value = true
   loadError.value = ''
   try {
     const dashboard = await getDashboard()
@@ -181,13 +222,48 @@ async function loadData() {
     audit.value = dashboard.data?.pendingAudit ?? null
     alerts.value = dashboard.data?.alerts ?? []
 
-    const activity = await getTenantActivity(10)
+    const [activity, qualityRes] = await Promise.all([
+      getTenantActivity(10),
+      getQualityStatistics().catch(() => null),
+    ])
     if (activity.code === 200) {
       activities.value = activity.data ?? []
     }
+    applyQuality(qualityRes)
   } catch (error) {
-    // 不再"回落到演示数据"：失败就说失败，否则页面满屏数字却全是假的
+    // 不"回落到演示数据"：失败就说失败，否则页面满屏数字却全是假的
     loadError.value = error instanceof Error ? error.message : '请求失败'
+  } finally {
+    loading.value = false
+  }
+}
+
+function applyQuality(response) {
+  if (!response || response.code !== 200 || !response.data) {
+    quality.value = { loaded: true, total: '—', open: '—', high: '—', rate: '—', domains: [] }
+    return
+  }
+  const data = response.data
+  const statusMap = {}
+  ;(data.statusStatistics ?? []).forEach((item) => {
+    statusMap[item.status] = Number(item.issueCount ?? 0)
+  })
+  const total = Number(data.totalIssues ?? 0)
+  const domains = (data.domainStatistics ?? [])
+    .map((item) => ({
+      name: item.domainName || item.domainCode || '未命名域',
+      count: Number(item.issueCount ?? 0),
+      percent: total > 0 ? Math.round((Number(item.issueCount ?? 0) / total) * 100) : 0,
+    }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5)
+  quality.value = {
+    loaded: true,
+    total,
+    open: (statusMap.pending ?? 0) + (statusMap.processing ?? 0),
+    high: Number(data.highSeverityCount ?? 0),
+    rate: data.resolutionRate == null ? '—' : `${data.resolutionRate}%`,
+    domains,
   }
 }
 
@@ -195,280 +271,198 @@ onMounted(loadData)
 </script>
 
 <style scoped>
-.dashboard {
-  padding: 20px;
-}
-
-.section-header {
-  margin-bottom: 24px;
-}
-
-.section-header.small {
-  margin-bottom: 16px;
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-}
-
-.section-title {
-  font-size: 24px;
-  font-weight: 600;
-  color: #2d3748;
-  margin: 0;
-}
-
-.section-desc {
-  font-size: 14px;
-  color: #a0aec0;
-  margin: 4px 0 0;
-}
-
-.section-note {
-  font-size: 12px;
-  color: #a0aec0;
-}
-
-.load-error {
-  margin-bottom: 20px;
-}
-
-.stats-cards {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-  margin-bottom: 24px;
-}
-
-.stat-card {
-  background: #fff;
-  border-radius: 12px;
-  padding: 20px;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-
-.stat-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, #238636 0%, #2ea043 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 24px;
-}
-
-.stat-content {
-  flex: 1;
-}
-
-.stat-value {
-  font-size: 24px;
-  font-weight: 600;
-  color: #2d3748;
-}
-
-.stat-label {
-  font-size: 13px;
-  color: #a0aec0;
-}
-
-.main-content {
+.overview-grid {
   display: grid;
   grid-template-columns: 2fr 1fr;
-  gap: 20px;
-  margin-bottom: 24px;
-}
-
-.chart-section {
-  background: #fff;
-  border-radius: 12px;
-  padding: 20px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  gap: 16px;
+  margin-bottom: 16px;
 }
 
 .rank-list {
-  display: flex;
-  flex-direction: column;
+  padding: 4px 0;
 }
 
 .rank-item {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 4px;
-  border-bottom: 1px solid #f0f0f0;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--mds-line-soft);
   font-size: 13px;
 }
 
 .rank-item:last-child {
-  border-bottom: none;
+  border-bottom: 0;
 }
 
 .rank-no {
   width: 24px;
   height: 24px;
-  border-radius: 50%;
-  background: rgba(35, 134, 54, 0.1);
-  color: #238636;
-  display: flex;
+  flex: none;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
+  border-radius: 50%;
+  background: var(--mds-gray-soft);
+  color: var(--mds-text-2);
+  font-family: var(--mds-mono);
   font-size: 12px;
+}
+
+.rank-no--top {
+  background: var(--mds-brand-soft);
+  color: var(--mds-brand-deep);
+  font-weight: 700;
 }
 
 .rank-name {
   flex: 1;
-  color: #2d3748;
-  font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
 }
 
 .rank-type {
-  color: #a0aec0;
+  flex: none;
+  color: var(--mds-text-3);
+  font-size: var(--agri-font-size-micro);
 }
 
 .rank-value {
-  color: #4a5568;
-  min-width: 72px;
+  flex: none;
+  width: 78px;
   text-align: right;
+  font-family: var(--mds-mono);
+  color: var(--mds-text-2);
 }
 
-.right-panel {
+.todo-item {
   display: flex;
-  flex-direction: column;
-  gap: 20px;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 18px;
+  border: 0;
+  border-bottom: 1px solid var(--mds-line-soft);
+  background: none;
+  text-align: left;
+  cursor: pointer;
 }
 
-.card {
-  background: #fff;
-  border-radius: 12px;
-  padding: 20px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+.todo-item:last-child {
+  border-bottom: 0;
 }
 
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  margin-bottom: 16px;
+.todo-item:hover {
+  background: #f7fbf9;
 }
 
-.card-header h3 {
-  font-size: 16px;
-  font-weight: 600;
-  color: #2d3748;
-  margin: 0;
-}
-
-.not-wired {
-  padding: 16px;
-  border: 1px dashed #d9d9d9;
-  border-radius: 8px;
-  background: #fafafa;
-}
-
-.not-wired-title {
-  margin: 0 0 6px;
-  font-size: 14px;
-  font-weight: 600;
-  color: #8c8c8c;
-}
-
-.not-wired-desc {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.7;
-  color: #8c8c8c;
-}
-
-.empty-state {
-  padding: 28px 16px;
+.todo-icon {
+  width: 26px;
   text-align: center;
-  font-size: 13px;
-  color: #a0aec0;
-  background: #fafafa;
-  border-radius: 8px;
 }
 
-.audit-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.audit-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px;
-  background: #f8fafc;
-  border-radius: 8px;
-}
-
-.audit-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  background: rgba(35, 134, 54, 0.1);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-}
-
-.audit-info {
+.todo-info {
   flex: 1;
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 
-.audit-title {
+.todo-title {
   font-size: 13px;
-  color: #2d3748;
-  font-weight: 500;
-}
-
-.audit-time {
-  font-size: 11px;
-  color: #a0aec0;
-}
-
-.audit-count {
-  font-size: 16px;
   font-weight: 600;
-  color: #238636;
 }
 
-.bottom-section {
+.todo-hint {
+  font-size: var(--agri-font-size-micro);
+  color: var(--mds-text-3);
+}
+
+.todo-count {
+  font-family: var(--mds-mono);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--mds-brand-deep);
+}
+
+.quality-row {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
 }
 
-.alert-table {
-  overflow-x: auto;
+.quality-row div {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #f8faf9;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.alert-table table {
-  width: 100%;
-  border-collapse: collapse;
+.quality-row span {
+  font-size: var(--agri-font-size-micro);
+  color: var(--mds-text-3);
 }
 
-.alert-table th,
-.alert-table td {
-  padding: 12px;
-  text-align: left;
-  border-bottom: 1px solid #f0f0f0;
-  font-size: 13px;
+.quality-row strong {
+  font-family: var(--mds-mono);
+  font-size: 18px;
 }
 
-.alert-badge {
-  font-size: 10px;
-  font-weight: 500;
-  padding: 4px 10px;
-  border-radius: 12px;
-  background: rgba(59, 130, 246, 0.1);
-  color: #3b82f6;
+.quality-row .is-warn {
+  color: var(--mds-warning);
+}
+
+.quality-row .is-danger {
+  color: var(--mds-danger);
+}
+
+.quality-row .is-ok {
+  color: var(--mds-success);
+}
+
+.domain-list {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.domain-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+}
+
+.domain-name {
+  width: 96px;
+  flex: none;
+  color: var(--mds-text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.domain-row .mds-progress {
+  flex: 1;
+}
+
+.domain-count {
+  width: 32px;
+  flex: none;
+  text-align: right;
+  font-family: var(--mds-mono);
+  color: var(--mds-text-2);
+}
+
+@media (max-width: 1100px) {
+  .overview-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 </style>

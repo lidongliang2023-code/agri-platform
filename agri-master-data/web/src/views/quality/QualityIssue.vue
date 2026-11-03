@@ -1,373 +1,363 @@
 <template>
-  <div class="quality-issue">
-    <div class="page-header">
-      <div class="header-left">
-        <h1>质量问题工单</h1>
-        <p>管理数据质量问题工单处理</p>
-      </div>
-      <button class="add-btn" @click="showAddModal = true">+ 新建工单</button>
-    </div>
+  <div class="mds-page">
+    <PageHeader
+      title="问题治理与合并"
+      subtitle="质量问题的登记、处置与关闭：状态口径 pending / processing / resolved / ignored，处置人由服务端记当前登录账号。"
+      source="数据治理 · 质量问题"
+    >
+      <template #actions>
+        <button v-point="'POST /admin/masterdata/quality/issues'" class="mds-btn mds-btn--primary" @click="openAddModal">+ 新建工单</button>
+        <button class="mds-btn" @click="router.push('/quality/dashboard')">质量稽核</button>
+      </template>
+    </PageHeader>
 
-    <div class="filter-bar">
-      <select v-model="filterStatus" class="filter-select">
-        <option value="all">全部状态</option>
-        <option value="pending">待处理</option>
-        <option value="processing">处理中</option>
-        <option value="resolved">已解决</option>
-        <option value="closed">已关闭</option>
-      </select>
-      <select v-model="filterSeverity" class="filter-select">
-        <option value="all">全部等级</option>
-        <option value="critical">严重</option>
-        <option value="high">高</option>
-        <option value="medium">中</option>
-        <option value="low">低</option>
-      </select>
-      <input 
-        type="text" 
-        v-model="filterKeyword" 
-        placeholder="搜索问题描述..." 
-        class="filter-input"
+    <StatGrid :items="statItems" />
+
+    <div class="mds-card">
+      <div class="mds-filter">
+        <input
+          v-model="filterKeyword"
+          class="mds-input"
+          type="search"
+          placeholder="当前页内搜索问题描述（后端暂无全文检索）"
+          @keyup.enter="search"
+        />
+        <select v-model="filterStatus" class="mds-select" @change="search">
+          <option value="all">全部状态</option>
+          <option value="pending">待处理</option>
+          <option value="processing">处理中</option>
+          <option value="resolved">已解决</option>
+          <option value="ignored">已忽略</option>
+        </select>
+        <select v-model="filterSeverity" class="mds-select" @change="search">
+          <option value="all">全部等级</option>
+          <option value="high">严重</option>
+          <option value="medium">中</option>
+          <option value="low">低</option>
+        </select>
+        <select v-model="filterDomain" class="mds-select" @change="search">
+          <option value="all">全部数据域</option>
+          <option value="user">用户主数据</option>
+          <option value="org">组织主数据</option>
+          <option value="product">商品主数据</option>
+          <option value="customer">客户主数据</option>
+          <option value="supplier">供应商主数据</option>
+        </select>
+        <button class="mds-btn mds-btn--primary" @click="search">查询</button>
+        <button class="mds-btn" @click="reset">重置</button>
+      </div>
+
+      <div class="mds-table-wrap">
+        <table class="mds-table issue-table">
+          <thead>
+            <tr>
+              <th>工单编号</th>
+              <th>问题描述</th>
+              <th>所属数据域</th>
+              <th>严重等级</th>
+              <th>状态</th>
+              <th>创建时间</th>
+              <th>处理人</th>
+              <th class="mds-actions">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-if="loading">
+              <td colspan="8" class="mds-empty">正在加载问题工单…</td>
+            </tr>
+            <tr v-else-if="!visibleIssues.length">
+              <td colspan="8">
+                <EmptyState
+                  title="暂无符合条件的问题工单"
+                  description="调整筛选条件后重试；也可以直接新建一条质量问题。"
+                />
+              </td>
+            </tr>
+            <tr v-for="issue in visibleIssues" :key="issue.id">
+              <td class="mds-mono">{{ issue.code }}</td>
+              <td class="description-cell" :title="issue.description">{{ issue.description }}</td>
+              <td>{{ issue.domain }}</td>
+              <td><StatusTag :text="severityText(issue.severity)" :tone="severityTone(issue.severity)" /></td>
+              <td><StatusTag :text="statusText(issue.status)" :tone="statusTone(issue.status)" /></td>
+              <td class="mds-muted">{{ issue.createTime }}</td>
+              <td>{{ issue.assignee || '—' }}</td>
+              <td class="mds-actions">
+                <button class="mds-btn mds-btn--link" @click="viewIssue(issue)">查看</button>
+                <button
+                  v-point="'PUT /admin/masterdata/quality/issues/{id}/handle'"
+                  class="mds-btn mds-btn--link"
+                  :disabled="busyId === issue.id || issue.status === 'resolved' || issue.status === 'ignored'"
+                  @click="processIssue(issue)"
+                >开始处理</button>
+                <button
+                  class="mds-btn mds-btn--link"
+                  :class="{ 'mds-danger': issue.status !== 'resolved' }"
+                  :disabled="busyId === issue.id || issue.status === 'resolved'"
+                  @click="closeIssue(issue)"
+                >关闭</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <PagerBar
+        :page="currentPage"
+        :page-size="pageSize"
+        :total="total"
+        @change="changePage"
+        @update:page-size="changePageSize"
       />
     </div>
 
-    <div class="stats-row">
-      <div class="stat-item critical">
-        <div class="stat-icon">🔴</div>
-        <div class="stat-info">
-          <div class="stat-value">{{ issueStats.critical }}</div>
-          <div class="stat-label">严重</div>
+    <!-- 新建工单 -->
+    <div v-if="showAddModal" class="mds-mask" @click="closeAddModal">
+      <div class="mds-modal" @click.stop>
+        <div class="mds-card-head">
+          <h2 class="mds-card-title">新建工单</h2>
+          <button class="mds-btn mds-btn--link" @click="closeAddModal">关闭</button>
         </div>
-      </div>
-      <div class="stat-item high">
-        <div class="stat-icon">🟠</div>
-        <div class="stat-info">
-          <div class="stat-value">{{ issueStats.high }}</div>
-          <div class="stat-label">高</div>
-        </div>
-      </div>
-      <div class="stat-item medium">
-        <div class="stat-icon">🟡</div>
-        <div class="stat-info">
-          <div class="stat-value">{{ issueStats.medium }}</div>
-          <div class="stat-label">中</div>
-        </div>
-      </div>
-      <div class="stat-item low">
-        <div class="stat-icon">🟢</div>
-        <div class="stat-info">
-          <div class="stat-value">{{ issueStats.low }}</div>
-          <div class="stat-label">低</div>
+        <div class="mds-card-body">
+          <div class="mds-form">
+            <label class="mds-field mds-field--full">
+              <span class="mds-field__label mds-required">问题描述</span>
+              <textarea v-model="form.description" class="mds-textarea" placeholder="描述问题现象、影响范围与复现条件" />
+            </label>
+            <label class="mds-field">
+              <span class="mds-field__label mds-required">所属数据域</span>
+              <select v-model="form.domain" class="mds-select">
+                <option value="user">用户主数据</option>
+                <option value="organization">组织主数据</option>
+                <option value="product">商品主数据</option>
+                <option value="customer">客户主数据</option>
+                <option value="supplier">供应商主数据</option>
+              </select>
+            </label>
+            <label class="mds-field">
+              <span class="mds-field__label mds-required">严重等级</span>
+              <select v-model="form.severity" class="mds-select">
+                <option value="high">严重</option>
+                <option value="medium">中</option>
+                <option value="low">低</option>
+              </select>
+            </label>
+          </div>
+          <p class="mds-hint" style="margin-top: 10px">
+            处理人由「谁点了处置」决定，服务端记当前登录账号，不在登记时填写；
+            问题描述登记后不可修改（改结论应重新登记一条）。
+          </p>
+          <div class="mds-form-actions">
+            <button class="mds-btn" @click="closeAddModal">取消</button>
+            <button class="mds-btn mds-btn--primary" :disabled="saving" @click="saveIssue">
+              {{ saving ? '提交中…' : '登记工单' }}
+            </button>
+          </div>
         </div>
       </div>
     </div>
 
-    <div class="issue-table">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>工单编号</th>
-            <th>问题描述</th>
-            <th>所属数据域</th>
-            <th>严重等级</th>
-            <th>状态</th>
-            <th>创建时间</th>
-            <th>处理人</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="issue in filteredIssues" :key="issue.id">
-            <td class="code">{{ issue.code }}</td>
-            <td class="description">{{ issue.description }}</td>
-            <td>{{ issue.domain }}</td>
-            <td>
-              <span class="severity-badge" :class="issue.severity">
-                {{ getSeverityText(issue.severity) }}
-              </span>
-            </td>
-            <td>
-              <span class="status-badge" :class="issue.status">
-                {{ getStatusText(issue.status) }}
-              </span>
-            </td>
-            <td>{{ issue.createTime }}</td>
-            <td>{{ issue.assignee || '-' }}</td>
-            <td class="action-cell">
-              <button class="action-btn view" @click="viewIssue(issue)">查看</button>
-              <button 
-                class="action-btn process" 
-                @click="processIssue(issue)"
-                :disabled="issue.status === 'resolved' || issue.status === 'closed'"
-              >处理</button>
-              <button class="action-btn close" @click="closeIssue(issue)">关闭</button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+    <!-- 工单详情 -->
+    <div v-if="showDetailModal" class="mds-mask" @click="closeDetailModal">
+      <section class="mds-modal mds-modal--wide" @click.stop>
+        <div class="mds-card-head">
+          <div>
+            <p class="mds-card-sub">工单详情 · {{ selectedIssue?.code }}</p>
+            <h2 class="mds-card-title">{{ selectedIssue?.description }}</h2>
+          </div>
+          <button class="mds-btn" @click="closeDetailModal">关闭</button>
+        </div>
+        <div class="mds-card-body" v-if="selectedIssue">
+          <div class="mds-kv-grid">
+            <div class="mds-kv"><span class="mds-kv__k">工单编号</span><span class="mds-kv__v mds-mono">{{ selectedIssue.code }}</span></div>
+            <div class="mds-kv"><span class="mds-kv__k">所属数据域</span><span class="mds-kv__v">{{ selectedIssue.domain }}</span></div>
+            <div class="mds-kv"><span class="mds-kv__k">严重等级</span><span class="mds-kv__v">{{ severityText(selectedIssue.severity) }}</span></div>
+            <div class="mds-kv"><span class="mds-kv__k">状态</span><span class="mds-kv__v">{{ statusText(selectedIssue.status) }}</span></div>
+            <div class="mds-kv"><span class="mds-kv__k">创建时间</span><span class="mds-kv__v">{{ selectedIssue.createTime }}</span></div>
+            <div class="mds-kv"><span class="mds-kv__k">处理人</span><span class="mds-kv__v">{{ selectedIssue.assignee || '未分配' }}</span></div>
+            <div class="mds-kv"><span class="mds-kv__k">处理进度</span><span class="mds-kv__v">{{ progressPercent(selectedIssue.status) }}%</span></div>
+            <div class="mds-kv" v-if="selectedIssue.resolveRemark">
+              <span class="mds-kv__k">处置结论</span><span class="mds-kv__v">{{ selectedIssue.resolveRemark }}</span>
+            </div>
+          </div>
 
-      <div class="pagination">
-        <button class="page-btn" :disabled="currentPage === 1" @click="prevPage">上一页</button>
-        <span class="page-info">第 {{ currentPage }} / {{ totalPages }} 页</span>
-        <button class="page-btn" :disabled="currentPage === totalPages" @click="nextPage">下一页</button>
-      </div>
-    </div>
-
-    <div class="modal-overlay" v-if="showAddModal" @click="closeAddModal">
-      <div class="modal-content" @click.stop>
-        <div class="modal-header">
-          <h3>{{ isEdit ? '编辑工单' : '新建工单' }}</h3>
-          <button class="close-btn" @click="closeAddModal">×</button>
-        </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label>问题描述 *</label>
-            <textarea v-model="form.description" class="form-input" placeholder="请输入问题描述" rows="4"></textarea>
-          </div>
-          <div class="form-group">
-            <label>所属数据域 *</label>
-            <select v-model="form.domain" class="form-input">
-              <option value="user">用户主数据</option>
-              <option value="organization">组织主数据</option>
-              <option value="product">商品主数据</option>
-              <option value="customer">客户主数据</option>
-              <option value="supplier">供应商主数据</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>严重等级 *</label>
-            <div class="severity-options">
-              <label 
-                v-for="s in severities" 
-                :key="s.value"
-                class="severity-option"
-                :class="{selected: form.severity === s.value}"
-              >
-                <input type="radio" :value="s.value" v-model="form.severity" />
-                <span class="severity-dot" :class="s.value"></span>
-                <span>{{ s.label }}</span>
-              </label>
-            </div>
-          </div>
-          <!--
-            原来这里有"关联规则"下拉与"处理人"输入，两处都去掉了 —— 不是懒得接，而是接上也是假的：
-            - 质量规则族（/quality/rules）后端还没做，下拉恒为空，留着的效果是"选项点不出来"；
-            - 登记接口不接收处理人：处理人由"谁点了处置"决定，服务端记当前登录用户。
-          -->
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-cancel" @click="closeAddModal">取消</button>
-          <button class="btn btn-primary" @click="saveIssue">{{ isEdit ? '保存修改' : '创建工单' }}</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="modal-overlay" v-if="showDetailModal" @click="closeDetailModal">
-      <div class="modal-content detail-modal" @click.stop>
-        <div class="modal-header">
-          <h3>工单详情</h3>
-          <button class="close-btn" @click="closeDetailModal">×</button>
-        </div>
-        <div class="modal-body" v-if="selectedIssue">
-          <div class="detail-section">
-            <div class="detail-row">
-              <span class="detail-label">工单编号</span>
-              <span class="detail-value code">{{ selectedIssue.code }}</span>
-            </div>
-            <div class="detail-row">
-              <span class="detail-label">问题描述</span>
-              <span class="detail-value">{{ selectedIssue.description }}</span>
-            </div>
-            <div class="detail-row">
-              <span class="detail-label">所属数据域</span>
-              <span class="detail-value">{{ selectedIssue.domain }}</span>
-            </div>
-            <div class="detail-row">
-              <span class="detail-label">严重等级</span>
-              <span class="severity-badge" :class="selectedIssue.severity">
-                {{ getSeverityText(selectedIssue.severity) }}
-              </span>
-            </div>
-            <div class="detail-row">
-              <span class="detail-label">状态</span>
-              <span class="status-badge" :class="selectedIssue.status">
-                {{ getStatusText(selectedIssue.status) }}
-              </span>
-            </div>
-            <div class="detail-row">
-              <span class="detail-label">创建时间</span>
-              <span class="detail-value">{{ selectedIssue.createTime }}</span>
-            </div>
-            <div class="detail-row">
-              <span class="detail-label">处理人</span>
-              <span class="detail-value">{{ selectedIssue.assignee || '-' }}</span>
-            </div>
-            <div class="detail-row">
-              <span class="detail-label">处理进度</span>
-              <div class="progress-bar">
-                <div 
-                  class="progress-fill" 
-                  :style="{width: getProgressPercent(selectedIssue.status) + '%'}"
-                ></div>
-              </div>
-            </div>
-          </div>
           <div class="detail-section">
             <h4>处理日志</h4>
-            <div class="log-list">
+            <div v-if="!selectedIssue.logs?.length" class="mds-empty">暂无处置记录</div>
+            <div v-else class="log-list">
               <div v-for="(log, index) in selectedIssue.logs" :key="index" class="log-item">
                 <span class="log-time">{{ log.time }}</span>
-                <span class="log-action">{{ log.action }}</span>
+                <span class="log-action">{{ log.action }}<em v-if="log.remark"> · {{ log.remark }}</em></span>
                 <span class="log-operator">{{ log.operator }}</span>
               </div>
             </div>
           </div>
         </div>
-        <div class="modal-footer">
-          <button class="btn btn-cancel" @click="closeDetailModal">关闭</button>
-          <button 
-            v-if="selectedIssue?.status !== 'resolved' && selectedIssue?.status !== 'closed'"
-            class="btn btn-primary" 
+        <div class="mds-form-actions" v-if="selectedIssue">
+          <button
+            v-if="!['resolved', 'ignored'].includes(selectedIssue.status)"
+            v-point="'PUT /admin/masterdata/quality/issues/{id}/handle'"
+            class="mds-btn mds-btn--primary"
             @click="processIssue(selectedIssue)"
           >开始处理</button>
         </div>
-      </div>
+      </section>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
-import { getQualityList, getQualityDetail, handleQualityIssue, createQualityIssue } from '../../utils/api'
+import { useRouter } from 'vue-router'
+import PageHeader from '@/components/ui/PageHeader.vue'
+import StatGrid from '@/components/ui/StatGrid.vue'
+import StatusTag from '@/components/ui/StatusTag.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
+import PagerBar from '@/components/ui/PagerBar.vue'
+import {
+  createQualityIssue,
+  getQualityDetail,
+  getQualityList,
+  getQualityStatistics,
+  handleQualityIssue,
+} from '../../utils/api'
 
+const router = useRouter()
+const issues = ref([])
+const loading = ref(false)
+const saving = ref(false)
+const busyId = ref(null)
 const showAddModal = ref(false)
 const showDetailModal = ref(false)
-const isEdit = ref(false)
 const filterStatus = ref('all')
 const filterSeverity = ref('all')
+const filterDomain = ref('all')
 const filterKeyword = ref('')
 const currentPage = ref(1)
-const totalPages = ref(1)
+const pageSize = ref(10)
+const total = ref(0)
+const selectedIssue = ref(null)
+const severityStats = ref({ high: 0, medium: 0, low: 0, open: 0 })
 
 const form = reactive({
-  id: null,
   description: '',
   domain: 'user',
   severity: 'medium',
-  // 处理人不在这里填：由"谁点了处置"决定，服务端记当前登录用户
-  assignee: ''
 })
 
-const selectedIssue = ref(null)
+const statItems = computed(() => [
+  { label: '严重', value: severityStats.value.high ?? 0, tone: 'danger' },
+  { label: '中等', value: severityStats.value.medium ?? 0, tone: 'warning' },
+  { label: '低', value: severityStats.value.low ?? 0, tone: 'success' },
+  { label: '待处理', value: severityStats.value.open ?? 0, hint: '待处理 + 处理中' },
+])
 
-const severities = [
-  // 与后端 severity 口径一致：high / medium / low（原来多一个 critical，筛它永远没结果）
-  { value: 'high', label: '严重' },
-  { value: 'medium', label: '中' },
-  { value: 'low', label: '低' }
-]
-
-const issues = ref([])
-// 原来这里是一份 6 条的写死工单数组：列表、处理、关闭、新增全部只改本地。
-// 现在数据来自 /admin/masterdata/quality/issues，处置走 /issues/{id}/handle。
-
-const filteredIssues = computed(() => {
-  return issues.value.filter(issue => {
-    const matchStatus = filterStatus.value === 'all' || issue.status === filterStatus.value
-    const matchSeverity = filterSeverity.value === 'all' || issue.severity === filterSeverity.value
-    const matchKeyword = !filterKeyword.value || issue.description.toLowerCase().includes(filterKeyword.value.toLowerCase())
-    return matchStatus && matchSeverity && matchKeyword
-  })
+/** 关键词只有「当前页内筛选」——后端 /issues 没有全文检索参数，不做假的全量搜索 */
+const visibleIssues = computed(() => {
+  const kw = filterKeyword.value.trim().toLowerCase()
+  if (!kw) return issues.value
+  return issues.value.filter((issue) => String(issue.description || '').toLowerCase().includes(kw))
 })
 
-const issueStats = computed(() => ({
-  critical: issues.value.filter(i => i.severity === 'critical').length,
-  high: issues.value.filter(i => i.severity === 'high').length,
-  medium: issues.value.filter(i => i.severity === 'medium').length,
-  low: issues.value.filter(i => i.severity === 'low').length
-}))
+const SEVERITY_TEXT = { high: '严重', medium: '中', low: '低' }
+const SEVERITY_TONE = { high: 'danger', medium: 'warning', low: 'success' }
+const STATUS_TEXT = { pending: '待处理', processing: '处理中', resolved: '已解决', closed: '已关闭', ignored: '已忽略' }
+const STATUS_TONE = { pending: 'warning', processing: 'info', resolved: 'success', closed: 'gray', ignored: 'gray' }
+const severityText = (value) => SEVERITY_TEXT[value] ?? value ?? '—'
+const severityTone = (value) => SEVERITY_TONE[value] ?? 'gray'
+const statusText = (value) => STATUS_TEXT[value] ?? value ?? '—'
+const statusTone = (value) => STATUS_TONE[value] ?? 'gray'
+const progressPercent = (status) => ({ pending: 0, processing: 50, resolved: 100, closed: 100, ignored: 100 }[status] ?? 0)
 
-const getSeverityText = (severity) => {
-  const texts = {
-    critical: '严重',
-    high: '高',
-    medium: '中',
-    low: '低'
-  }
-  return texts[severity] || severity
-}
-
-const getStatusText = (status) => {
-  const texts = {
-    pending: '待处理',
-    processing: '处理中',
-    resolved: '已解决',
-    closed: '已关闭',
-    ignored: '已忽略'
-  }
-  return texts[status] || status
-}
-
-const getProgressPercent = (status) => {
-  const percent = {
-    pending: 0,
-    processing: 50,
-    resolved: 100,
-    closed: 100
-  }
-  return percent[status] || 0
-}
-
-/** 接口行 → 页面行。接口字段是 issueCode / handler / domainName，页面用的是 code / assignee / domain。 */
+/** 接口行 → 页面行：接口字段是 issueCode / handler / domainName */
 const toRow = (row) => ({
   id: row.id,
   code: row.issueCode,
   description: row.description,
-  domain: row.domain || row.domainName || '—',
+  domain: row.domainName || row.domain || '—',
   domainCode: row.domainCode,
   severity: row.severity || 'medium',
   status: row.status || 'pending',
   createTime: row.createTime,
   assignee: row.handler,
-  logs: []
+  logs: [],
 })
 
 const loadData = async () => {
+  loading.value = true
   try {
     const response = await getQualityList({
       pageNum: currentPage.value,
-      pageSize: 10,
-      // 后端参数名是 severity
-      severity: filterSeverity.value === 'all' ? '' : filterSeverity.value,
-      status: filterStatus.value === 'all' ? '' : filterStatus.value
+      pageSize: pageSize.value,
+      severity: filterSeverity.value === 'all' ? undefined : filterSeverity.value,
+      status: filterStatus.value === 'all' ? undefined : filterStatus.value,
+      domain: filterDomain.value === 'all' ? undefined : filterDomain.value,
     })
-    if (response.code !== 200) {
-      message.error(response.message || '加载工单失败')
-      issues.value = []
-      totalPages.value = 1
-      return
-    }
-    // 不再回落到演示数据：失败就说失败
-    issues.value = (response.data.list ?? []).map(toRow)
-    totalPages.value = Math.max(1, Math.ceil((response.data.total ?? 0) / 10))
+    if (response.code !== 200) throw new Error(response.message || '加载工单失败')
+    issues.value = (response.data?.list ?? []).map(toRow)
+    total.value = Number(response.data?.total ?? 0)
   } catch (error) {
-    message.error(error instanceof Error ? error.message : '加载工单失败')
     issues.value = []
-    totalPages.value = 1
+    total.value = 0
+    message.error(error instanceof Error ? error.message : '加载工单失败')
+  } finally {
+    loading.value = false
   }
 }
 
-onMounted(() => {
-  loadData()
-})
+/** 统计卡用全量统计，不是当前页计数 —— 否则"严重 2"只是这 10 行里的 2 条 */
+const loadStats = async () => {
+  try {
+    const response = await getQualityStatistics()
+    if (response.code !== 200 || !response.data) return
+    const data = response.data
+    const statusMap = {}
+    ;(data.statusStatistics ?? []).forEach((item) => {
+      statusMap[item.status] = item.issueCount ?? 0
+    })
+    severityStats.value = {
+      high: data.highSeverityCount ?? 0,
+      medium: data.mediumSeverityCount ?? 0,
+      low: data.lowSeverityCount ?? 0,
+      open: (statusMap.pending ?? 0) + (statusMap.processing ?? 0),
+    }
+  } catch {
+    // 统计失败不影响列表
+  }
+}
+
+function search() {
+  currentPage.value = 1
+  void loadData()
+}
+
+function reset() {
+  filterStatus.value = 'all'
+  filterSeverity.value = 'all'
+  filterDomain.value = 'all'
+  filterKeyword.value = ''
+  search()
+}
+
+function changePage(next) {
+  currentPage.value = next
+  // 原来这里只改 currentPage、不发请求：翻页按钮点了没反应（谎报分页）
+  void loadData()
+}
+
+function changePageSize(size) {
+  pageSize.value = size
+  currentPage.value = 1
+  void loadData()
+}
+
+const openAddModal = () => {
+  Object.assign(form, { description: '', domain: 'user', severity: 'medium' })
+  showAddModal.value = true
+}
 
 const closeAddModal = () => {
   showAddModal.value = false
-  isEdit.value = false
-  Object.keys(form).forEach(key => {
-    form[key] = key === 'domain' ? 'user' : key === 'severity' ? 'medium' : ''
-  })
 }
 
 const closeDetailModal = () => {
@@ -378,16 +368,16 @@ const closeDetailModal = () => {
 const viewIssue = (issue) => {
   selectedIssue.value = { ...issue }
   showDetailModal.value = true
-  // 处置历史单独取：列表不返回它（一页 10 行各带一串历史会把列表响应撑大）
+  // 处置历史单独取：列表不返回它（一页 10 行各带一串历史会把响应撑大）
   void (async () => {
     try {
       const response = await getQualityDetail(issue.id)
-      if (response.code === 200 && selectedIssue.value && selectedIssue.value.id === issue.id) {
+      if (response.code === 200 && selectedIssue.value?.id === issue.id) {
         const histories = response.data?.handleHistories ?? []
         selectedIssue.value = {
           ...selectedIssue.value,
           resolveRemark: response.data?.resolveRemark,
-          logs: histories.map(h => ({ time: h.time, action: h.action, operator: h.operator, remark: h.remark }))
+          logs: histories.map((h) => ({ time: h.time, action: h.action, operator: h.operator, remark: h.remark })),
         }
       }
     } catch (error) {
@@ -397,39 +387,37 @@ const viewIssue = (issue) => {
 }
 
 const processIssue = async (issue) => {
-  if (issue.status === 'resolved' || issue.status === 'closed') return
+  if (['resolved', 'ignored'].includes(issue.status)) return
+  busyId.value = issue.id
   try {
     const response = await handleQualityIssue(issue.id, { status: 'processing', remark: '开始处理' })
-    if (response.code === 200) {
-      message.success(`工单「${issue.code}」已开始处理`)
-      await loadData()
-      if (showDetailModal.value) {
-        viewIssue({ ...issue, status: 'processing' })
-      }
-    } else {
-      message.error(response.message || '操作失败')
+    if (response.code !== 200) throw new Error(response.message || '操作失败')
+    message.success(`工单「${issue.code}」已开始处理`)
+    await Promise.all([loadData(), loadStats()])
+    if (showDetailModal.value && selectedIssue.value?.id === issue.id) {
+      viewIssue({ ...issue, status: 'processing' })
     }
   } catch (error) {
     message.error(error instanceof Error ? error.message : '操作失败')
+  } finally {
+    busyId.value = null
   }
 }
 
 const closeIssue = async (issue) => {
-  if (!confirm(`确定关闭工单 "${issue.code}" 吗？`)) {
-    return
-  }
+  if (!window.confirm(`确定关闭工单「${issue.code}」吗？关闭即标记为已解决。`)) return
+  busyId.value = issue.id
   try {
     // 关闭 = 标记为已解决（状态口径：pending / processing / resolved / ignored）
     const response = await handleQualityIssue(issue.id, { status: 'resolved', remark: '工单关闭' })
-    if (response.code === 200) {
-      message.success('工单已关闭')
-      await loadData()
-      closeDetailModal()
-    } else {
-      message.error(response.message || '操作失败')
-    }
+    if (response.code !== 200) throw new Error(response.message || '操作失败')
+    message.success('工单已关闭')
+    await Promise.all([loadData(), loadStats()])
+    closeDetailModal()
   } catch (error) {
     message.error(error instanceof Error ? error.message : '操作失败')
+  } finally {
+    busyId.value = null
   }
 }
 
@@ -439,579 +427,122 @@ const DOMAIN_LABELS = {
   organization: ['org', '组织主数据'],
   product: ['product', '商品主数据'],
   customer: ['customer', '客户主数据'],
-  supplier: ['supplier', '供应商主数据']
+  supplier: ['supplier', '供应商主数据'],
 }
 
 const saveIssue = async () => {
-  if (!form.description) {
+  if (!form.description.trim()) {
     message.warning('请填写问题描述')
     return
   }
-
-  if (isEdit.value) {
-    // 后端目前只支持"登记"与"处置"，不支持改问题描述 —— 改描述属于篡改检测结论，
-    // 真要改应该重新登记一条。这里如实说明，不假装保存成功。
-    message.warning('质量问题不支持修改描述，请关闭后重新登记')
-    return
-  }
-
+  saving.value = true
   const [domainCode, domainName] = DOMAIN_LABELS[form.domain] ?? ['user', '用户主数据']
   try {
     const response = await createQualityIssue({
-      description: form.description,
+      description: form.description.trim(),
       domainCode,
       domainName,
-      severity: form.severity
+      severity: form.severity,
     })
-    if (response.code === 200) {
-      message.success('工单已创建')
-      closeAddModal()
-      await loadData()
-    } else {
-      message.error(response.message || '创建失败')
-    }
+    if (response.code !== 200) throw new Error(response.message || '创建失败')
+    message.success('工单已登记')
+    closeAddModal()
+    currentPage.value = 1
+    await Promise.all([loadData(), loadStats()])
   } catch (error) {
     message.error(error instanceof Error ? error.message : '创建失败')
+  } finally {
+    saving.value = false
   }
 }
 
-const prevPage = () => {
-  if (currentPage.value > 1) {
-    currentPage.value--
-  }
-}
-
-const nextPage = () => {
-  if (currentPage.value < totalPages.value) {
-    currentPage.value++
-  }
-}
+onMounted(() => {
+  void loadData()
+  void loadStats()
+})
 </script>
 
 <style scoped>
-.quality-issue {
-  padding: 20px;
-}
-
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 24px;
-}
-
-.header-left h1 {
-  font-size: 24px;
-  font-weight: 600;
-  color: #2d3748;
-  margin: 0;
-}
-
-.header-left p {
-  font-size: 14px;
-  color: #a0aec0;
-  margin: 4px 0 0;
-}
-
-.add-btn {
-  padding: 10px 20px;
-  background: linear-gradient(135deg, #238636 0%, #2ea043 100%);
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.add-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(35, 134, 54, 0.3);
-}
-
-.filter-bar {
-  display: flex;
-  gap: 16px;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
-}
-
-.filter-select {
-  padding: 8px 16px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 14px;
-  outline: none;
-  cursor: pointer;
-}
-
-.filter-input {
-  padding: 8px 16px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 14px;
-  outline: none;
-  flex: 1;
-  min-width: 200px;
-}
-
-.stats-row {
-  display: flex;
-  gap: 20px;
-  margin-bottom: 20px;
-}
-
-.stat-item {
-  flex: 1;
-  background: #fff;
-  border-radius: 12px;
-  padding: 16px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-
-.stat-icon {
-  font-size: 24px;
-}
-
-.stat-info {
-  flex: 1;
-}
-
-.stat-value {
-  font-size: 24px;
-  font-weight: 700;
-  color: #2d3748;
-  margin: 0;
-}
-
-.stat-label {
-  font-size: 12px;
-  color: #718096;
-  margin: 2px 0 0;
-}
-
 .issue-table {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  overflow: hidden;
+  min-width: 1080px;
 }
 
-.data-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.data-table th,
-.data-table td {
-  padding: 14px 16px;
-  text-align: left;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.data-table th {
-  font-size: 13px;
-  font-weight: 600;
-  color: #4a5568;
-  background: #f8fafc;
-}
-
-.data-table td {
-  font-size: 13px;
-  color: #2d3748;
-}
-
-.code {
-  font-family: monospace;
-  color: #238636;
-  font-weight: 500;
-}
-
-.description {
-  max-width: 300px;
+.description-cell {
+  max-width: 320px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.severity-badge {
-  display: inline-block;
-  padding: 4px 12px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.severity-badge.critical {
-  background: rgba(239, 68, 68, 0.1);
-  color: #dc2626;
-}
-
-.severity-badge.high {
-  background: rgba(234, 88, 12, 0.1);
-  color: #ea580c;
-}
-
-.severity-badge.medium {
-  background: rgba(210, 153, 34, 0.1);
-  color: #d29922;
-}
-
-.severity-badge.low {
-  background: rgba(35, 134, 54, 0.1);
-  color: #238636;
-}
-
-.status-badge {
-  display: inline-block;
-  padding: 4px 12px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.status-badge.pending {
-  background: rgba(234, 88, 12, 0.1);
-  color: #ea580c;
-}
-
-.status-badge.processing {
-  background: rgba(37, 99, 235, 0.1);
-  color: #2563eb;
-}
-
-.status-badge.resolved {
-  background: rgba(35, 134, 54, 0.1);
-  color: #238636;
-}
-
-.status-badge.closed {
-  background: rgba(156, 163, 175, 0.1);
-  color: #6b7280;
-}
-
-.action-cell {
-  display: flex;
-  gap: 8px;
-}
-
-.action-btn {
-  font-size: 12px;
-  padding: 6px 12px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.action-btn.view {
-  background: rgba(37, 99, 235, 0.1);
-  color: #2563eb;
-}
-
-.action-btn.process {
-  background: rgba(210, 153, 34, 0.1);
-  color: #d29922;
-}
-
-.action-btn.process:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.action-btn.close {
-  background: rgba(239, 68, 68, 0.1);
-  color: #dc2626;
-}
-
-.action-btn:hover:not(:disabled) {
-  opacity: 0.8;
-}
-
-.pagination {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 16px;
-  padding: 20px;
-}
-
-.page-btn {
-  padding: 8px 16px;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  background: #fff;
-  font-size: 13px;
-  color: #4a5568;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.page-btn:hover:not(:disabled) {
-  background: #f8fafc;
-}
-
-.page-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.page-info {
-  font-size: 13px;
-  color: #a0aec0;
-}
-
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.modal-content {
-  background: #fff;
-  border-radius: 12px;
-  width: 600px;
-  max-width: 90%;
-  max-height: 90vh;
-  overflow-y: auto;
-}
-
-.modal-content.detail-modal {
-  width: 800px;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px;
-  border-bottom: 1px solid #f0f0f0;
-  position: sticky;
-  top: 0;
-  background: #fff;
-}
-
-.modal-header h3 {
-  font-size: 18px;
-  font-weight: 600;
-  color: #2d3748;
-  margin: 0;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 24px;
-  color: #a0aec0;
-  cursor: pointer;
-  padding: 0;
-  line-height: 1;
-}
-
-.close-btn:hover {
-  color: #2d3748;
-}
-
-.modal-body {
-  padding: 20px;
-}
-
-.form-group {
-  margin-bottom: 16px;
-}
-
-.form-group label {
-  display: block;
-  font-size: 14px;
-  color: #4a5568;
-  margin-bottom: 6px;
-  font-weight: 500;
-}
-
-.form-input {
-  width: 100%;
-  padding: 10px 14px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 14px;
-  outline: none;
-  transition: border-color 0.2s;
-  box-sizing: border-box;
-}
-
-.form-input:focus {
-  border-color: #238636;
-}
-
-.severity-options {
-  display: flex;
-  gap: 20px;
-}
-
-.severity-option {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  padding: 8px 12px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  transition: all 0.2s;
-}
-
-.severity-option.selected {
-  background: rgba(35, 134, 54, 0.1);
-  border-color: #238636;
-}
-
-.severity-dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-}
-
-.severity-dot.critical {
-  background: #dc2626;
-}
-
-.severity-dot.high {
-  background: #ea580c;
-}
-
-.severity-dot.medium {
-  background: #d29922;
-}
-
-.severity-dot.low {
-  background: #238636;
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  padding: 20px;
-  border-top: 1px solid #f0f0f0;
-}
-
-.btn {
-  padding: 10px 20px;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  border: none;
-}
-
-.btn-cancel {
-  background: #f0f0f0;
-  color: #4a5568;
-}
-
-.btn-cancel:hover {
-  background: #e2e8f0;
-}
-
-.btn-primary {
-  background: linear-gradient(135deg, #238636 0%, #2ea043 100%);
-  color: #fff;
-}
-
-.btn-primary:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(35, 134, 54, 0.3);
-}
-
 .detail-section {
-  margin-bottom: 24px;
+  margin-top: 16px;
 }
 
 .detail-section h4 {
-  font-size: 16px;
+  margin: 0 0 10px;
+  font-size: 13.5px;
   font-weight: 600;
-  color: #2d3748;
-  margin: 0 0 16px;
-}
-
-.detail-row {
-  display: flex;
-  padding: 12px 0;
-  border-bottom: 1px dashed #f0f0f0;
-}
-
-.detail-row:last-child {
-  border-bottom: none;
-}
-
-.detail-label {
-  width: 120px;
-  font-size: 13px;
-  color: #718096;
-  font-weight: 500;
-}
-
-.detail-value {
-  flex: 1;
-  font-size: 13px;
-  color: #2d3748;
-}
-
-.progress-bar {
-  flex: 1;
-  height: 10px;
-  background: #e2e8f0;
-  border-radius: 5px;
-  overflow: hidden;
-}
-
-.progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #238636, #2ea043);
-  border-radius: 5px;
-  transition: width 0.3s;
 }
 
 .log-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .log-item {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 10px 12px;
-  background: #f8fafc;
+  gap: 14px;
+  padding: 9px 12px;
   border-radius: 6px;
+  background: #f8faf9;
+  font-size: 12.5px;
 }
 
 .log-time {
-  font-size: 12px;
-  color: #718096;
-  width: 100px;
+  width: 140px;
+  flex: none;
+  color: var(--mds-text-3);
+  font-family: var(--mds-mono);
 }
 
 .log-action {
   flex: 1;
-  font-size: 13px;
-  color: #2d3748;
+}
+
+.log-action em {
+  color: var(--mds-text-3);
+  font-style: normal;
 }
 
 .log-operator {
-  font-size: 12px;
-  color: #238636;
+  flex: none;
+  color: var(--mds-brand-deep);
+}
+
+.mds-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+  padding: 20px;
+}
+
+.mds-modal {
+  width: 680px;
+  max-width: 100%;
+  max-height: 88vh;
+  overflow: auto;
+  border-radius: var(--mds-radius);
+  background: var(--mds-card);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.22);
+}
+
+.mds-modal--wide {
+  width: 820px;
 }
 </style>

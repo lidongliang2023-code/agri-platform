@@ -1,0 +1,141 @@
+.tianditu-boundary-editor {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid #dce7df;
+  border-radius: 10px;
+  background:
+    radial-gradient(circle at 20% 25%, rgba(78, 171, 121, 0.16), transparent 32%),
+    radial-gradient(circle at 78% 65%, rgba(65, 134, 181, 0.14), transparent 36%),
+    repeating-linear-gradient(
+      0deg,
+      rgba(29, 91, 59, 0.04) 0,
+      rgba(29, 91, 59, 0.04) 1px,
+      transparent 1px,
+      transparent 34px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      rgba(29, 91, 59, 0.04) 0,
+      rgba(29, 91, 59, 0.04) 1px,
+      transparent 1px,
+      transparent 34px
+    ),
+    #f1f6f2;
+}
+
+.tianditu-boundary-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  /* 天地图内部 pane 的 z-index 最高到 1000：这里建立独立层叠上下文，
+     否则工具条 / 提示 / 面积会被地图瓦片盖住（此前就踩过，DOM 里存在但看不见）。 */
+  z-index: 0;
+}
+
+.tianditu-boundary-state {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 6px;
+  padding: 28px;
+  background: rgba(246, 250, 247, 0.9);
+  color: #53665a;
+  text-align: center;
+  backdrop-filter: blur(2px);
+}
+
+.tianditu-boundary-state b {
+  color: #173f29;
+  font-size: 14px;
+}
+
+.tianditu-boundary-state span {
+  max-width: 460px;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.tianditu-boundary-toolbar,
+.tianditu-boundary-hint,
+.tianditu-boundary-metrics {
+  position: absolute;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 9px;
+  border: 1px solid rgba(205, 220, 210, 0.9);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.94);
+  color: #53665a;
+  font-size: 12px;
+  box-shadow: 0 4px 14px rgba(20, 64, 40, 0.1);
+}
+
+/* 天地图缩放控件默认在左上角，工具条放右上角避免遮挡 */
+.tianditu-boundary-toolbar {
+  top: 12px;
+  right: 12px;
+}
+
+.tianditu-boundary-count {
+  color: #173f29;
+  font-weight: 650;
+}
+
+.tianditu-boundary-toolbar button {
+  padding: 3px 8px;
+  border: 1px solid #cfe0d5;
+  border-radius: 5px;
+  background: #f6faf7;
+  color: #173f29;
+  font-size: 12px;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.tianditu-boundary-toolbar button:hover:not(:disabled) {
+  border-color: #9ccdaf;
+  background: #e6f4ec;
+}
+
+.tianditu-boundary-toolbar button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.tianditu-boundary-hint {
+  right: 12px;
+  bottom: 12px;
+  color: #0e5233;
+  font-weight: 650;
+}
+
+.tianditu-boundary-metrics {
+  left: 12px;
+  bottom: 12px;
+}
+
+@media (max-width: 640px) {
+  .tianditu-boundary-toolbar,
+  .tianditu-boundary-hint,
+  .tianditu-boundary-metrics {
+    font-size: var(--agri-font-size-micro);
+  }
+
+  .tianditu-boundary-hint {
+    right: 8px;
+    bottom: 8px;
+  }
+
+  .tianditu-boundary-metrics {
+    left: 8px;
+    bottom: 8px;
+  }
+}

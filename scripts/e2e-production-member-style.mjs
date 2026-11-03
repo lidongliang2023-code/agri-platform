@@ -1,13 +1,19 @@
 #!/usr/bin/env node
 /** 生产管理用户端 / 运营端视觉令牌回归：对齐买家中心（2026-10-20）。 */
 import { createRequire } from 'node:module'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const require2 = createRequire(path.join(REPO_ROOT, 'agri-production/frontend/package.json'))
-const puppeteer = require2('puppeteer')
+const require2 = createRequire(path.join('C:/Users/71502/.workbuddy-ai/binaries/node/workspace', 'noop.js'))
+const { chromium } = require2('playwright-core')
+
+const BROWSER = [
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+].find((candidate) => existsSync(candidate))
 const HEADFUL = process.argv.includes('--headful')
 const OUT = 'C:/Users/71502/.codex/visualizations/2026/10/16/01a14244-ead8-7ab0-8c7c-df7abac44648'
 
@@ -17,12 +23,12 @@ const check = (ok, label, extra = '') => {
   if (!ok) failures.push(label)
 }
 
-const browser = await puppeteer.launch({ headless: HEADFUL ? false : 'new', args: ['--no-sandbox'] })
+const browser = await chromium.launch({ headless: !HEADFUL, executablePath: BROWSER, args: ['--no-sandbox'] })
 
 async function openStyledPage(urlPath, role) {
-  const page = await browser.newPage()
-  await page.setViewport({ width: 1440, height: 1000 })
-  await page.evaluateOnNewDocument((roleCode) => {
+  const page = await (await browser.newContext({ viewport: { width: 1440, height: 1000 } })).newPage()
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await page.addInitScript((roleCode) => {
     const admin = roleCode === 'SUPER_ADMIN'
     localStorage.setItem('agri_user_info', JSON.stringify({
       userId: '1',
@@ -36,10 +42,10 @@ async function openStyledPage(urlPath, role) {
     localStorage.setItem('agri_market_id', '1')
     localStorage.setItem('agri_end', admin ? 'admin' : 'user')
   }, role)
-  await page.setRequestInterception(true)
-  page.on('request', (request) => {
+  await page.route('**/*', async (route) => {
+    const request = route.request()
     const url = new URL(request.url())
-    const json = (body) => request.respond({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+    const json = (body) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
     if (url.pathname === '/api/v1/auth/refresh') {
       return json({
         code: 0,
@@ -59,9 +65,9 @@ async function openStyledPage(urlPath, role) {
     if (url.pathname.startsWith('/api/')) {
       return json({ code: 0, message: 'ok', data: null })
     }
-    return request.continue()
+    return route.continue()
   })
-  await page.goto(`http://localhost${urlPath}`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.goto(`http://localhost${urlPath}`, { waitUntil: 'networkidle', timeout: 60000 })
   await page.waitForSelector('.agri-sider', { timeout: 20000 })
   await page.waitForSelector('.agri-header', { timeout: 20000 })
   return page

@@ -13,8 +13,8 @@
  * - 行操作：报告（→trace-reports）/ 结果录入（PASS、FAIL）/ 明细 / 删除
  * - 结论提交后端联动领域事件：PASS → prod.quality.test.passed，FAIL → prod.quality.test.failed
  */
-import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { PageContainer, ProTable } from '@ant-design/pro-components'
 import type { ProColumns } from '@ant-design/pro-components'
@@ -63,9 +63,6 @@ import type {
   RawInspection,
   TestingLab,
 } from '@/types'
-
-/** 列表一次性拉取上限（后端未提供结果 / 机构过滤，二者在前端二次过滤） */
-const MAX_FETCH_SIZE = 200
 
 /** 检测类型选项 */
 const INSPECT_TYPE_OPTIONS: { value: string; label: string }[] = [
@@ -130,13 +127,19 @@ interface ResultFormValues {
   reportUrl?: string
 }
 
-/** 列表筛选条件 */
+/**
+ * 列表筛选条件（全部在服务端生效）
+ *
+ * <p>注释里标的"（前端）"是旧口径的遗留：结果与机构以前在浏览器里筛那 200 条，
+ * 表格再本地翻页。200 条一填满，"待检"就筛不出东西、换机构毫无反应 —— 看着像数据没了。
+ * 现在三个条件都进请求。</p>
+ */
 interface InspectionFilters {
-  /** 检测单号关键字（服务端） */
+  /** 检测单号 / 批次号 / 作物名 关键字（服务端） */
   keyword?: string
-  /** 结果筛选（前端） */
+  /** 结果（服务端）：PASS / FAIL / PENDING；'all' 表示不筛这一项 */
   result?: string
-  /** 检测机构（前端） */
+  /** 检测机构全名（服务端精确匹配） */
   labName?: string
 }
 
@@ -162,8 +165,21 @@ export default function QualityInspection(): JSX.Element {
 
   const [pageNum, setPageNum] = useState<number>(1)
   const [pageSize, setPageSize] = useState<number>(10)
-  const [filters, setFilters] = useState<InspectionFilters>({})
+  /**
+   * 支持从存证列表带 `?keyword=<质检单号>` 跳进来（存证的 target_code 就是检测单号）。
+   * 没有这个入口时，从一条存证回不到它对应的那张检测单。
+   */
+  const [searchParams] = useSearchParams()
+  const initialKeyword = searchParams.get('keyword') ?? ''
+  const [filters, setFilters] = useState<InspectionFilters>(() =>
+    initialKeyword ? { keyword: initialKeyword } : {},
+  )
   const [filterForm] = Form.useForm<InspectionFilters>()
+  useEffect(() => {
+    if (initialKeyword) {
+      filterForm.setFieldsValue({ keyword: initialKeyword })
+    }
+  }, [initialKeyword, filterForm])
 
   const [createOpen, setCreateOpen] = useState<boolean>(false)
   const [createForm] = Form.useForm<InspectionFormValues>()
@@ -171,15 +187,22 @@ export default function QualityInspection(): JSX.Element {
   const [resultForm] = Form.useForm<ResultFormValues>()
   const [detailId, setDetailId] = useState<string>('')
 
-  /** 检测单列表 */
+  /**
+   * 检测单列表：筛选与分页都在服务端。
+   *
+   * <p>{@code 'all'} 是"全部结果"那个选项的值，**不能发给后端**——发过去就成了
+   * {@code result='all'} 的等值筛选，一条都不剩。这里就地折成"不筛这一项"。</p>
+   */
   const listQuery = useQuery({
-    queryKey: ['quality-inspections', filters.keyword],
+    queryKey: ['quality-inspections', farmId, filters, pageNum, pageSize],
     enabled: Boolean(farmId),
     queryFn: () =>
       fetchInspectionPage({
-        keyword: filters.keyword,
-        pageNum: 1,
-        pageSize: MAX_FETCH_SIZE,
+        keyword: filters.keyword?.trim() || undefined,
+        result: filters.result && filters.result !== 'all' ? filters.result : undefined,
+        labName: filters.labName?.trim() || undefined,
+        pageNum,
+        pageSize,
       }),
   })
 
@@ -274,23 +297,8 @@ export default function QualityInspection(): JSX.Element {
     [batchQuery.data],
   )
 
-  /** 前端过滤后的列表 */
-  const filteredList = useMemo<RawInspection[]>(() => {
-    const result = filters.result
-    const labName = (filters.labName ?? '').trim()
-    return (listQuery.data?.list ?? []).filter((item) => {
-      if (result && result !== 'all') {
-        const actual = item.result ?? (item.status === 'DONE' ? undefined : 'PENDING')
-        if (result === 'PENDING') {
-          if (item.result === 'PASS' || item.result === 'FAIL') return false
-        } else if (actual !== result) {
-          return false
-        }
-      }
-      if (labName && String(item.labName ?? '') !== labName) return false
-      return true
-    })
-  }, [listQuery.data, filters.result, filters.labName])
+  /** 当前页数据（服务端已按结果/机构/关键字筛好并切好页，这里不再本地二次过滤或本地翻页） */
+  const pageRows = useMemo<RawInspection[]>(() => listQuery.data?.list ?? [], [listQuery.data])
 
   /** 统一失效刷新 */
   const invalidateAll = async (): Promise<void> => {
@@ -631,7 +639,7 @@ export default function QualityInspection(): JSX.Element {
         rowKey="inspectionId"
         size="small"
         columns={columns}
-        dataSource={filteredList}
+        dataSource={pageRows}
         loading={listQuery.isFetching}
         search={false}
         options={{
@@ -644,7 +652,9 @@ export default function QualityInspection(): JSX.Element {
         pagination={{
           current: pageNum,
           pageSize,
-          total: filteredList.length,
+          // 总数只认服务端给的（以前是 filteredList.length —— 本地筛完的那一批的长度，
+          // 与"共 N 条"这句话的含义不一致，翻页器也就成了摆设）
+          total: listQuery.data?.total ?? 0,
           showSizeChanger: true,
           showTotal: (total) => `共 ${total} 条`,
           onChange: (nextPage, nextSize) => {

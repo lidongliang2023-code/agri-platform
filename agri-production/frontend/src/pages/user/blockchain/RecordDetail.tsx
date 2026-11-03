@@ -24,11 +24,11 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import { PageContainer } from '@ant-design/pro-components'
 import {
   Alert,
   Button,
   Card,
-  Descriptions,
   Result,
   Space,
   Spin,
@@ -37,7 +37,6 @@ import {
   message,
 } from 'antd'
 import {
-  ArrowLeftOutlined,
   CheckCircleFilled,
   CloseCircleFilled,
   CopyOutlined,
@@ -46,6 +45,7 @@ import {
   ReloadOutlined,
   SafetyCertificateOutlined,
 } from '@ant-design/icons'
+import { DetailInfoGrid } from '@/components'
 import { getCertRecord, verifyChain } from '@/api/blockchain'
 import type { BlockchainBizRecord } from '@/types'
 import { asApiRequestError, httpStatusOf, toNumber } from '@/utils/request'
@@ -320,91 +320,121 @@ export default function RecordDetail(): JSX.Element {
   const blockHeight = toNumber(record.blockHeight, 0)
 
   return (
-    <Space direction="vertical" size={16} style={{ width: '100%' }}>
+    <PageContainer
+      title={`🔗 存证详情 #${record.recordId}`}
+      onBack={() => navigate('/production/blockchain/records')}
+      backIcon={<LinkOutlined />}
+    >
+      <Space direction="vertical" size={16} style={{ width: '100%' }}>
       <Card
-        title={
-          <Space>
-            <Button
-              type="link"
-              icon={<ArrowLeftOutlined />}
-              style={{ paddingLeft: 0 }}
-              onClick={() => navigate('/production/blockchain/records')}
-            >
-              返回列表
-            </Button>
-            <span>存证详情 #{record.recordId}</span>
-          </Space>
+        title="📋 链上元数据"
+        extra={
+          record.status === 'SUCCESS' ? (
+            <Tag color="success" icon={<CheckCircleFilled />}>
+              ✅ 已上链
+            </Tag>
+          ) : record.status === 'PENDING' ? (
+            <Tag color="processing">⏳ 上链中</Tag>
+          ) : (
+            <Tag color="error" icon={<CloseCircleFilled />}>
+              ❌ 上链失败
+            </Tag>
+          )
         }
       >
-        <Descriptions bordered size="small" column={3} title={<Space><LinkOutlined />链上元数据</Space>}>
-          <Descriptions.Item label="存证记录号">
-            <Typography.Text style={MONO_STYLE} copyable={{ text: record.recordId, tooltips: ['复制编号', '已复制'] }}>
-              {record.recordId}
-            </Typography.Text>
-          </Descriptions.Item>
-          <Descriptions.Item label="业务类型">
-            <Tag color="geekblue">
-              {BIZ_TYPE_NAME[record.bizType ?? ''] ?? record.bizType ?? '-'}
-            </Tag>
-          </Descriptions.Item>
-          <Descriptions.Item label="业务单号">{record.bizNo ?? '-'}</Descriptions.Item>
-          <Descriptions.Item label="关联批次">{record.batchId ?? '-'}</Descriptions.Item>
-          <Descriptions.Item label="链类型 / 网络">
-            {record.chainType ?? '-'} / {record.chainNetwork ?? '-'}
-          </Descriptions.Item>
-          <Descriptions.Item label="存证状态">
-            {record.status === 'SUCCESS' ? (
-              <Tag color="success" icon={<CheckCircleFilled />}>
-                ✅ 已上链
-              </Tag>
-            ) : record.status === 'PENDING' ? (
-              <Tag color="processing">⏳ 上链中</Tag>
-            ) : (
-              <Tag color="error" icon={<CloseCircleFilled />}>
-                ❌ 上链失败
-              </Tag>
-            )}
-          </Descriptions.Item>
-        </Descriptions>
+        <DetailInfoGrid
+          columns={2}
+          items={[
+            {
+              key: 'recordId',
+              label: '存证记录号',
+              value: (
+                <Typography.Text
+                  style={MONO_STYLE}
+                  copyable={{ text: record.recordId, tooltips: ['复制编号', '已复制'] }}
+                >
+                  {record.recordId}
+                </Typography.Text>
+              ),
+            },
+            {
+              key: 'bizType',
+              label: '业务类型',
+              value: (
+                <Tag color="geekblue">
+                  {BIZ_TYPE_NAME[record.bizType ?? ''] ?? record.bizType ?? '-'}
+                </Tag>
+              ),
+            },
+            { key: 'bizNo', label: '业务单号', value: record.bizNo ?? '-' },
+            { key: 'batchId', label: '关联批次', value: record.batchId ?? '-' },
+            {
+              key: 'chain',
+              label: '链类型 / 网络',
+              value: `${record.chainType ?? '-'} / ${record.chainNetwork ?? '-'}`,
+            },
+            {
+              key: 'traceCode',
+              label: '关联溯源码',
+              value: record.traceCode ?? '-',
+            },
+          ]}
+        />
       </Card>
 
-      <Card title={<Space><LinkOutlined />链上信息</Space>}>
-        <Descriptions bordered size="small" column={1}>
-          <Descriptions.Item label="交易哈希">
-            {txHash ? (
-              <Space size={4}>
-                <Typography.Text style={MONO_STYLE}>{txHash}</Typography.Text>
-                <Button
-                  type="link"
-                  size="small"
-                  icon={<CopyOutlined />}
-                  onClick={() => void copyText(txHash)}
+      <Card title="🔗 链上信息">
+        <DetailInfoGrid
+          columns={1}
+          items={[
+            {
+              key: 'txHash',
+              label: '交易哈希',
+              value: txHash ? (
+                <Space size={4}>
+                  <Typography.Text style={MONO_STYLE}>{txHash}</Typography.Text>
+                  <Button
+                    type="link"
+                    size="small"
+                    icon={<CopyOutlined />}
+                    onClick={() => void copyText(txHash)}
+                  >
+                    复制
+                  </Button>
+                </Space>
+              ) : (
+                <Typography.Text type="secondary">
+                  —（该记录尚未上链，后端未回填哈希）
+                </Typography.Text>
+              ),
+            },
+            {
+              key: 'blockHeight',
+              label: '区块高度',
+              value: (
+                <span style={MONO_STYLE}>
+                  {record.blockHeight === null || record.blockHeight === undefined
+                    ? '—'
+                    : blockHeight.toLocaleString('en-US')}
+                </span>
+              ),
+            },
+            { key: 'anchorAt', label: '上链时间', value: record.anchorAt ?? '—' },
+            {
+              key: 'payloadHash',
+              label: '内容哈希（payloadHash）',
+              value: record.payloadHash ? (
+                <Typography.Text
+                  style={MONO_STYLE}
+                  copyable={{ text: record.payloadHash, tooltips: ['复制指纹', '已复制'] }}
                 >
-                  复制
-                </Button>
-              </Space>
-            ) : (
-              <Typography.Text type="secondary">—（该记录尚未上链，后端未回填哈希）</Typography.Text>
-            )}
-          </Descriptions.Item>
-          <Descriptions.Item label="区块高度">
-            <span style={MONO_STYLE}>
-              {record.blockHeight === null || record.blockHeight === undefined
-                ? '—'
-                : blockHeight.toLocaleString('en-US')}
-            </span>
-          </Descriptions.Item>
-          <Descriptions.Item label="上链时间">{record.anchorAt ?? '—'}</Descriptions.Item>
-          <Descriptions.Item label="内容哈希（payloadHash）">
-            {record.payloadHash ? (
-              <Typography.Text style={MONO_STYLE} copyable={{ text: record.payloadHash, tooltips: ['复制指纹', '已复制'] }}>
-                {record.payloadHash}
-              </Typography.Text>
-            ) : (
-              <Typography.Text type="secondary">—</Typography.Text>
-            )}
-          </Descriptions.Item>
-        </Descriptions>
+                  {record.payloadHash}
+                </Typography.Text>
+              ) : (
+                <Typography.Text type="secondary">—</Typography.Text>
+              ),
+            },
+          ]}
+        />
         <Alert
           style={{ marginTop: 12 }}
           type="info"
@@ -415,7 +445,7 @@ export default function RecordDetail(): JSX.Element {
       </Card>
 
       <Card
-        title="链上验真"
+        title="✅ 链上验真"
         extra={
           <Button
             type="primary"
@@ -487,24 +517,33 @@ export default function RecordDetail(): JSX.Element {
                   </Space>
                 }
               />
-              <Descriptions bordered size="small" column={2}>
-                <Descriptions.Item label="交易哈希">
-                  <span style={MONO_STYLE}>{outcome.txHash}</span>
-                </Descriptions.Item>
-                <Descriptions.Item label="后端返回值">
-                  <span style={MONO_STYLE}>{String(outcome.passed)}</span>
-                </Descriptions.Item>
-                <Descriptions.Item label="验真时间">{outcome.verifiedAt}</Descriptions.Item>
-                <Descriptions.Item label="数据来源">
-                  <span style={MONO_STYLE}>{VERIFY_ENDPOINT}</span>
-                </Descriptions.Item>
-              </Descriptions>
+              <DetailInfoGrid
+                columns={2}
+                items={[
+                  {
+                    key: 'txHash',
+                    label: '交易哈希',
+                    value: <span style={MONO_STYLE}>{outcome.txHash}</span>,
+                  },
+                  {
+                    key: 'passed',
+                    label: '后端返回值',
+                    value: <span style={MONO_STYLE}>{String(outcome.passed)}</span>,
+                  },
+                  { key: 'verifiedAt', label: '验真时间', value: outcome.verifiedAt },
+                  {
+                    key: 'source',
+                    label: '数据来源',
+                    value: <span style={MONO_STYLE}>{VERIFY_ENDPOINT}</span>,
+                  },
+                ]}
+              />
             </>
           )}
         </Space>
       </Card>
 
-      <Card title={<Space><LinkOutlined />关联存证链路</Space>}>
+      <Card title="🔗 关联存证链路">
         <Alert
           type="info"
           showIcon
@@ -544,6 +583,7 @@ export default function RecordDetail(): JSX.Element {
           )}
         </Space>
       </Card>
-    </Space>
+      </Space>
+    </PageContainer>
   )
 }

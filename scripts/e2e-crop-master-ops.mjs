@@ -20,13 +20,19 @@
  * 退出码：0 = 全部通过；1 = 有断言失败。
  */
 import { createRequire } from 'node:module'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const require2 = createRequire(path.join(REPO_ROOT, 'agri-production/frontend/package.json'))
-const puppeteer = require2('puppeteer')
+const require2 = createRequire(path.join('C:/Users/71502/.workbuddy-ai/binaries/node/workspace', 'noop.js'))
+const { chromium } = require2('playwright-core')
+
+const BROWSER = [
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+].find((candidate) => existsSync(candidate))
 
 const arg = (name, fallback) => {
   const hit = process.argv.slice(2).find((a) => a.startsWith(`--${name}=`))
@@ -81,9 +87,9 @@ const farmerOptions = await (await fetch(`${BASE_URL}/api/v1/production/crops/op
 check(farmerOptions.code === 0 && Array.isArray(farmerOptions.data),
   '农户令牌读作物下拉仍放行', `code=${farmerOptions.code} 项数=${farmerOptions.data?.length ?? 0}`)
 
-const browser = await puppeteer.launch({ headless: HEADFUL ? false : 'new', args: ['--no-sandbox'] })
-const page = await browser.newPage()
-await page.setViewport({ width: 1600, height: 1000 })
+const browser = await chromium.launch({ headless: !HEADFUL, executablePath: BROWSER, args: ['--no-sandbox'] })
+const page = await (await browser.newContext({ viewport: { width: 1440, height: 1000 } })).newPage()
+await page.setViewportSize({ width: 1600, height: 1000 })
 const badResponses = []
 let createCall = null
 page.on('response', async (res) => {
@@ -118,7 +124,7 @@ try {
       })
     } catch { /* 由后续页面表现反映 */ }
   }, { username: ADMIN, password: PASSWORD, marketId: 1 })
-  await page.evaluateOnNewDocument((state) => {
+  await page.addInitScript((state) => {
     try {
       localStorage.setItem('agri_user_info', JSON.stringify(state.userInfo))
       localStorage.setItem('agri_roles', JSON.stringify(state.roles ?? ['SUPER_ADMIN']))
@@ -129,8 +135,9 @@ try {
   }, { userInfo: adminLogin.data.user ?? {}, roles: adminLogin.data.user?.roles ?? ['SUPER_ADMIN'], farmId: FARM_ID })
 
   // 1) 运营端维护页
-  await page.goto(`${BASE_URL}/admin/production/crops`, { waitUntil: 'networkidle2', timeout: 60000 })
-  await page.waitForNetworkIdle({ idleTime: 600, timeout: 10000 }).catch(() => {})
+  await page.goto(`${BASE_URL}/admin/production/crops`, { waitUntil: 'networkidle', timeout: 60000 })
+  await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 600))
   const opsText = await page.evaluate(() => document.body.innerText)
   check(opsText.includes('作物'), '运营端「作物管理」页已渲染')
   check(opsText.includes('新增作物'), '运营端页面有「新增作物」按钮（可维护）')
@@ -145,7 +152,8 @@ try {
     const btn = document.querySelector('.ant-modal-footer .ant-btn-primary')
     btn?.click()
   })
-  await page.waitForNetworkIdle({ idleTime: 800, timeout: 15000 }).catch(() => {})
+  await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 800))
   await sleep(800)
   check(Boolean(createCall) && createCall.json?.code === 0, '运营端新增作物成功',
     `HTTP ${createCall?.status} code=${createCall?.json?.code} msg=${createCall?.json?.message ?? ''}`)
@@ -180,15 +188,17 @@ try {
   await sleep(400)
 
   // 3) 用户端不再有维护入口
-  await page.goto(`${BASE_URL}/production/crops`, { waitUntil: 'networkidle2', timeout: 60000 })
-  await page.waitForNetworkIdle({ idleTime: 600, timeout: 10000 }).catch(() => {})
+  await page.goto(`${BASE_URL}/production/crops`, { waitUntil: 'networkidle', timeout: 60000 })
+  await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 600))
   const userText = await page.evaluate(() => document.body.innerText)
   check(!userText.includes('新增作物'), '用户端 /production/crops 不再渲染维护页（入口已撤）',
     userText.replace(/\s+/g, ' ').slice(0, 80))
 
   // 2c) 任务模板库（2026-10-16 从用户端搬到运营端，与作物管理同属"基础数据"）
-  await page.goto(`${BASE_URL}/admin/production/tasks/templates`, { waitUntil: 'networkidle2', timeout: 60000 })
-  await page.waitForNetworkIdle({ idleTime: 800, timeout: 15000 }).catch(() => {})
+  await page.goto(`${BASE_URL}/admin/production/tasks/templates`, { waitUntil: 'networkidle', timeout: 60000 })
+  await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 800))
   const templateText = await page.evaluate(() => document.body.innerText)
   const templateCrumb = await page.evaluate(
     () => document.querySelector('.ant-breadcrumb')?.innerText?.replace(/\s+/g, ' ') ?? '',
@@ -198,8 +208,9 @@ try {
   check(templateCrumb.includes('基础数据'), '「任务模板库」面包屑归到「基础数据」', templateCrumb || '（未找到面包屑）')
 
   // 4) 用户端仍能从下拉读到作物（计划页的作物下拉）
-  await page.goto(`${BASE_URL}/production/plans`, { waitUntil: 'networkidle2', timeout: 60000 })
-  await page.waitForNetworkIdle({ idleTime: 600, timeout: 10000 }).catch(() => {})
+  await page.goto(`${BASE_URL}/production/plans`, { waitUntil: 'networkidle', timeout: 60000 })
+  await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 600))
   const plansText = await page.evaluate(() => document.body.innerText)
   check(plansText.includes('种养计划'), '用户端计划页仍可访问（作物下拉数据源不变）')
 

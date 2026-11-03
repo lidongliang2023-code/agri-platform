@@ -45,7 +45,7 @@ public class CertificationFileController {
             @RequestParam String kind,
             @RequestPart("file") MultipartFile file,
             HttpServletRequest request) throws IOException {
-        requireEnterpriseAccess(merchantId, request);
+        requireSubjectAccess(merchantId, kind, request);
         return ApiResponse.ok(fileService.store(merchantId, kind, file));
     }
 
@@ -54,7 +54,7 @@ public class CertificationFileController {
                                             @PathVariable String kind,
                                             @PathVariable String fileId,
                                             HttpServletRequest request) {
-        requireEnterpriseAccess(merchantId, request);
+        requireSubjectAccess(merchantId, kind, request);
         Resource resource = fileService.load(merchantId, kind, fileId);
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(fileService.mediaType(fileId)))
@@ -63,7 +63,14 @@ public class CertificationFileController {
                 .body(resource);
     }
 
-    private void requireEnterpriseAccess(Long merchantId, HttpServletRequest request) {
+    /**
+     * 上传 / 预览的统一门禁：先登录、再校验主体绑定。
+     *
+     * <p>企业认证材料（营业执照、法人证件、打款凭证）只允许企业主体；
+     * 资质证照影像件（kind=certificate）挂在主体下，个人主体也需要传，
+     * 因此只校验"是不是我的主体"，不额外要求企业类型。</p>
+     */
+    private void requireSubjectAccess(Long merchantId, String kind, HttpServletRequest request) {
         long[] session = sessionService.resolve(request);
         if (session == null) {
             throw new BusinessException(ErrorCode.UNAUTHORIZED, "请先登录后操作认证材料");
@@ -74,6 +81,11 @@ public class CertificationFileController {
                 .eq(UserMerchantEntity::getStatus, 1));
         if (bound == null || bound == 0) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "无权访问该主体的认证材料");
+        }
+        boolean certificate = MerchantCertificationFileService.CERTIFICATE.equalsIgnoreCase(
+                kind == null ? "" : kind.trim());
+        if (certificate) {
+            return;
         }
         MerchantEntity merchant = merchantMapper.selectById(merchantId);
         if (merchant == null || "personal".equalsIgnoreCase(merchant.getMemberType())) {

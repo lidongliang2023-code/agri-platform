@@ -21,6 +21,11 @@ export default defineConfig({
   server: {
     port: 5177,
     proxy: {
+      // 平台侧接口（SSO 换票 / 运营账号 / 用户中心）在 core-platform，先于 /api 匹配。
+      '/api/v1': {
+        target: 'http://localhost:8093',
+        changeOrigin: true,
+      },
       '/api/trade': {
         target: 'http://localhost:8089',
         changeOrigin: true,

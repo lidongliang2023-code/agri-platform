@@ -15,6 +15,8 @@ public class Cart {
     private Long consumerId;
     private Long shopId;
     private Long productId;
+    /** 渠道店铺加购时的渠道 ID；为空表示普通直购 */
+    private Long channelId;
     private Long skuId;
     private Integer quantity;
     private Boolean selected;

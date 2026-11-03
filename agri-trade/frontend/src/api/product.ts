@@ -22,6 +22,21 @@ export interface ProductImage {
   sortOrder: number
 }
 
+/** 商品可售 SKU；旧商品由后端自动补一个默认规格。 */
+export interface ProductSkuVO {
+  id?: number | null
+  productId?: number
+  skuCode: string
+  skuName: string
+  barcode?: string | null
+  unit: string
+  price: number
+  stockQuantity: number
+  minOrderQuantity: number
+  status: number
+  sortOrder?: number
+}
+
 export interface TradeProductVO {
   id: number
   productCode: string
@@ -42,6 +57,7 @@ export interface TradeProductVO {
   viewCount?: number
   inquiryCount?: number
   publishStatus: string
+  skus?: ProductSkuVO[]
   createTime: string
   updateTime: string
 }
@@ -80,6 +96,7 @@ export interface PublicProductDetail {
   favoriteCount: number | null
   inquiryCount: number | null
   salesVolume: number | null
+  skus: ProductSkuVO[]
   publishStatus: string
   createTime: string
 }

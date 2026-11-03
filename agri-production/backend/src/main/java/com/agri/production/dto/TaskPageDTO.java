@@ -7,6 +7,14 @@ public class TaskPageDTO {
 
     private String taskName;
 
+    /**
+     * 关键字（任务名称 / 任务编号模糊匹配）。
+     *
+     * <p>前端列表页的搜索框传的是 {@code keyword}，早先 DTO 只有 {@code taskName}，
+     * Spring 把未声明参数直接丢掉 —— 用户输入关键字点查询，返回的却是全量。</p>
+     */
+    private String keyword;
+
     private String taskType;
 
     /**
@@ -22,7 +30,19 @@ public class TaskPageDTO {
 
     private Long plotId;
 
+    private Long planId;
+
+    private Long stageId;
+
     private Long executorId;
+
+    /**
+     * 执行人筛选（前端列表页传的是成员业务标识 {@code MEMB...} 或数字主键）。
+     *
+     * <p>服务层按「纯数字当主键、否则查 member_id」归一成 {@link #executorId} 后再进 SQL ——
+     * 直接把它当 Long 绑定会在参数绑定阶段 400，和农场筛选同一类问题。</p>
+     */
+    private String assigneeId;
 
     private String status;
 

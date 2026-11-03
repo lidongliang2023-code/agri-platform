@@ -8,3 +8,9 @@
  */
 
 export * from './styles/theme'
+export * from './components/TiandituMap'
+export { default as TiandituMap } from './components/TiandituMap'
+export * from './components/TiandituBoundaryEditor'
+export { default as TiandituBoundaryEditor } from './components/TiandituBoundaryEditor'
+export * from './components/tianditu'
+export * from './components/chinaRegionCenters'

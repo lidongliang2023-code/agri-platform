@@ -238,9 +238,17 @@ export function executeTask(taskId: string): Promise<Task> {
   return http.post<Task>(`${BASE}/${taskId}/start`)
 }
 
-/** 提交任务成果（执行中 → 待验收） */
-export function submitTaskResult(taskId: string): Promise<Task> {
-  return http.post<Task>(`${BASE}/${taskId}/submit`)
+/**
+ * 提交任务成果（执行中 → 待验收）。
+ *
+ * @param taskId 任务 ID
+ * @param payload 可选：成果说明 / 成果照片（后端按查询参数接收，落库到任务与完成打卡）
+ */
+export function submitTaskResult(
+  taskId: string,
+  payload?: { resultDesc?: string; resultPhotoUrls?: string },
+): Promise<Task> {
+  return http.post<Task>(`${BASE}/${taskId}/submit`, undefined, { params: payload })
 }
 
 /**

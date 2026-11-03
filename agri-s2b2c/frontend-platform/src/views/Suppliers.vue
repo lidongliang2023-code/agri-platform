@@ -26,6 +26,7 @@
           <el-tag :type="getAuditType(row.auditStatus)">{{ getAuditText(row.auditStatus) }}</el-tag>
         </template>
       </el-table-column>
+      <el-table-column prop="auditOpinion" label="审核意见" min-width="160" />
       <el-table-column prop="createTime" label="申请时间" />
       <el-table-column label="操作">
         <template #default="{ row }">
@@ -55,7 +56,7 @@
       </el-form>
       <template #footer>
         <el-button @click="showAudit = false">取消</el-button>
-        <el-button type="primary" @click="confirmAudit">确认</el-button>
+        <el-button type="primary" :loading="saving" @click="confirmAudit">确认</el-button>
       </template>
     </el-dialog>
   </div>
@@ -64,6 +65,7 @@
 <script setup>
 import { ref, onMounted, reactive } from 'vue'
 import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import { platformApi } from '../api'
 
 const router = useRouter()
@@ -75,6 +77,7 @@ const size = ref(10)
 const total = ref(0)
 const showAudit = ref(false)
 const currentId = ref(null)
+const saving = ref(false)
 
 const auditForm = reactive({
   status: 'APPROVED',
@@ -121,19 +124,34 @@ const goDetail = (id) => {
 
 const audit = (id) => {
   currentId.value = id
+  auditForm.status = 'APPROVED'
+  auditForm.opinion = ''
   showAudit.value = true
 }
 
 const confirmAudit = async () => {
-  const res = await platformApi.auditSupplier({
-    id: currentId.value,
-    auditStatus: auditForm.status,
-    auditOpinion: auditForm.opinion
-  })
-  if (res.success) {
-    alert('审核成功')
+  if (auditForm.status === 'REJECTED' && !auditForm.opinion.trim()) {
+    ElMessage.warning('拒绝时请填写审核意见')
+    return
+  }
+  saving.value = true
+  try {
+    const res = await platformApi.auditSupplier({
+      id: currentId.value,
+      auditStatus: auditForm.status,
+      auditOpinion: auditForm.opinion
+    })
+    if (res?.success === false) {
+      ElMessage.error(res.message || '审核失败')
+      return
+    }
+    ElMessage.success('审核已提交')
     showAudit.value = false
-    loadSuppliers()
+    await loadSuppliers()
+  } catch (e) {
+    ElMessage.error(e?.message || '审核失败')
+  } finally {
+    saving.value = false
   }
 }
 </script>

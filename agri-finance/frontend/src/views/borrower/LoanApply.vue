@@ -35,7 +35,7 @@
           <div class="finance-form-grid three">
             <el-form-item label="融资期限" prop="applyTerm">
               <el-select v-model="form.applyTerm" style="width: 100%">
-                <el-option v-for="term in [3, 6, 9, 12, 18, 24, 36]" :key="term" :label="`${term} 个月`" :value="term" />
+                <el-option v-for="term in termOptions" :key="term" :label="`${term} 个月`" :value="term" />
               </el-select>
             </el-form-item>
             <el-form-item label="还款方式" prop="repaymentMethod">
@@ -146,21 +146,19 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { CircleCheck, UploadFilled } from '@element-plus/icons-vue'
 import { financeApi, money } from '@/api/finance'
-import { financeProducts, productByKey } from '@/data/products'
+import { loadFinanceProducts, productByKey } from '@/data/products'
 
 const route = useRoute()
 const router = useRouter()
 const formRef = ref()
 const credit = ref(null)
+const financeProducts = ref([])
 const submitting = ref(false)
 const uploading = ref(false)
 const evidenceUrl = ref('')
 const evidenceName = ref('')
-const quickAmounts = [50000, 100000, 200000, 300000, 500000]
-
-const initialProduct = productByKey(String(route.query.product || 'agri'))
 const form = reactive({
-  productType: initialProduct.key,
+  productType: '',
   applyAmount: '',
   applyTerm: 12,
   repaymentMethod: '等额本息',
@@ -170,6 +168,25 @@ const form = reactive({
   collateralInfo: '',
   contactName: '',
   contactPhone: '',
+})
+
+const selectedProduct = computed(() => productByKey(financeProducts.value, form.productType))
+const termOptions = computed(() => {
+  const product = selectedProduct.value
+  if (!product) return [3, 6, 9, 12, 18, 24, 36]
+  const candidates = new Set([3, 6, 9, 12, 18, 24, 36, product.termMin, product.termMax])
+  return Array.from(candidates)
+    .filter((term) => term >= product.termMin && term <= product.termMax)
+    .sort((a, b) => a - b)
+})
+const quickAmounts = computed(() => {
+  const product = selectedProduct.value
+  if (!product) return []
+  const minimum = Math.max(1, product.amountMin)
+  const maximum = product.amountMax
+  return [minimum, maximum * 0.25, maximum * 0.5, maximum * 0.75, maximum]
+    .map((value) => Math.round(value / 10000) * 10000)
+    .filter((value, index, values) => value >= minimum && value <= maximum && values.indexOf(value) === index)
 })
 
 const rules = {
@@ -206,7 +223,12 @@ const estimatedPayment = computed(() => {
 })
 
 watch(() => route.query.product, (value) => {
-  if (value) form.productType = productByKey(String(value)).key
+  if (value && productByKey(financeProducts.value, String(value))) form.productType = String(value)
+})
+
+watch(selectedProduct, (product) => {
+  if (!product) return
+  form.applyTerm = Math.min(product.termMax, Math.max(product.termMin, Number(form.applyTerm || product.termMin)))
 })
 
 async function uploadEvidence(file) {
@@ -226,7 +248,20 @@ async function uploadEvidence(file) {
 
 async function submit() {
   await formRef.value.validate()
-  const product = productByKey(form.productType)
+  const product = productByKey(financeProducts.value, form.productType)
+  if (!product) {
+    ElMessage.warning('所选融资产品已下架，请重新选择')
+    return
+  }
+  const amount = Number(form.applyAmount)
+  if (amount < product.amountMin || amount > product.amountMax) {
+    ElMessage.warning(`申请金额需在 ${money(product.amountMin)} - ${money(product.amountMax)} 之间`)
+    return
+  }
+  if (Number(form.applyTerm) < product.termMin || Number(form.applyTerm) > product.termMax) {
+    ElMessage.warning(`融资期限需在 ${product.termMin}-${product.termMax} 个月之间`)
+    return
+  }
   await ElMessageBox.confirm(
     `确认申请${product.name} ${money(Number(form.applyAmount))}，期限 ${form.applyTerm} 个月？`,
     '提交融资申请',
@@ -264,7 +299,21 @@ function reset() {
 
 onMounted(async () => {
   try {
-    credit.value = await financeApi.credit()
+    const [creditResult, productsResult] = await Promise.allSettled([
+      financeApi.credit(),
+      loadFinanceProducts(),
+    ])
+    credit.value = creditResult.status === 'fulfilled' ? creditResult.value : null
+    financeProducts.value = productsResult.status === 'fulfilled' ? productsResult.value : []
+    const requested = String(route.query.product || '')
+    const initial = productByKey(financeProducts.value, requested)
+    if (initial) {
+      form.productType = initial.key
+      form.applyTerm = initial.termMin
+    }
+    if (productsResult.status === 'rejected') {
+      ElMessage.error(productsResult.reason?.message || '融资产品加载失败')
+    }
   } catch {
     credit.value = null
   }
@@ -290,7 +339,7 @@ onMounted(async () => {
   height: 32px;
   align-items: center;
   color: #b45b12;
-  font-size: 11px;
+  font-size: var(--fin-fs-xs);
   font-weight: 650;
 }
 
@@ -304,7 +353,7 @@ onMounted(async () => {
 
 .apply-quick-amount > span {
   color: #87978d;
-  font-size: 8px;
+  font-size: var(--fin-fs-xs);
 }
 
 .apply-quick-amount button {
@@ -314,7 +363,7 @@ onMounted(async () => {
   background: #f7fbf8;
   color: #577061;
   cursor: pointer;
-  font-size: 8px;
+  font-size: var(--fin-fs-xs);
 }
 
 .apply-quick-amount button:hover {
@@ -345,7 +394,7 @@ onMounted(async () => {
 
 .apply-upload :deep(.el-upload__text) {
   color: #71857a;
-  font-size: 9px;
+  font-size: var(--fin-fs-xs);
 }
 
 .apply-submit-bar {
@@ -367,7 +416,7 @@ onMounted(async () => {
 
 .apply-submit-bar span {
   color: #89988f;
-  font-size: 8px;
+  font-size: var(--fin-fs-xs);
 }
 
 .apply-submit-bar strong {
@@ -379,7 +428,7 @@ onMounted(async () => {
 
 .apply-submit-bar small {
   color: #9ca7a0;
-  font-size: 7.5px;
+  font-size: var(--fin-fs-xs);
 }
 
 .apply-aside {
@@ -405,7 +454,7 @@ onMounted(async () => {
 
 .apply-credit-card span {
   color: rgba(255, 255, 255, .58);
-  font-size: 8px;
+  font-size: var(--fin-fs-xs);
 }
 
 .apply-credit-card strong {
@@ -417,7 +466,7 @@ onMounted(async () => {
 .apply-credit-card p {
   margin: 4px 0 12px;
   color: rgba(255, 255, 255, .57);
-  font-size: 8px;
+  font-size: var(--fin-fs-xs);
 }
 
 .apply-credit-card .finance-progress {
@@ -431,7 +480,7 @@ onMounted(async () => {
 .apply-credit-card small {
   margin-top: 7px;
   color: rgba(255, 255, 255, .48);
-  font-size: 7.5px;
+  font-size: var(--fin-fs-xs);
 }
 
 .apply-flow {
@@ -457,18 +506,18 @@ onMounted(async () => {
   background: #e9f6ee;
   color: var(--fin-green-700);
   font-family: ui-monospace, Consolas, monospace;
-  font-size: 8px;
+  font-size: var(--fin-fs-xs);
 }
 
 .apply-flow strong {
   color: #3e5848;
-  font-size: 9.5px;
+  font-size: var(--fin-fs-xs);
 }
 
 .apply-flow p {
   margin: 3px 0 0;
   color: #89978f;
-  font-size: 8px;
+  font-size: var(--fin-fs-xs);
   line-height: 1.55;
 }
 
@@ -490,7 +539,7 @@ onMounted(async () => {
 .apply-tip p {
   margin: 0;
   color: #6f8377;
-  font-size: 8.5px;
+  font-size: var(--fin-fs-xs);
   line-height: 1.65;
 }
 

@@ -1,199 +1,141 @@
 <template>
-  <div class="tenant-detail">
-    <div class="page-header">
-      <button class="back-btn" @click="goBack">
-        <span>←</span>
-        <span>返回</span>
-      </button>
-      <div class="header-left">
+  <div class="subject-detail">
+    <header class="page-header">
+      <button class="back-btn" @click="goBack">← 返回主体列表</button>
+      <div>
         <h1>主体详情</h1>
-        <p>查看主体详细信息</p>
+        <p>查看主体注册档案、认证信息、联系方式和主体资源使用情况。</p>
       </div>
+      <button v-if="tenantData" class="edit-btn" @click="editSubject">编辑资料</button>
+    </header>
 
-    </div>
+    <div v-if="loadError" class="state-card error">{{ loadError }}</div>
+    <div v-else-if="!tenantData" class="state-card">正在加载主体详情…</div>
 
-    <p v-if="loadError" class="load-error">{{ loadError }}</p>
-    <div class="detail-card" v-else-if="!tenantData">
-      <p class="section-empty">正在加载主体详情…</p>
-    </div>
-
-    <div v-else class="detail-card">
-      <div class="detail-section">
-        <h3 class="section-title">基本信息</h3>
-        <div class="info-grid">
-          <div class="info-item">
-            <span class="label">主体编码</span>
-            <span class="value">{{ tenantData.tenantCode }}</span>
-          </div>
-          <div class="info-item">
-            <span class="label">主体名称</span>
-            <span class="value">{{ tenantData.tenantName }}</span>
-          </div>
-          <div class="info-item">
-            <span class="label">主体类型</span>
-            <!-- 原先只认小写 'enterprise'，而库里存的是 'ENTERPRISE'，
-                 于是所有企业主体都被显示成"个人"；合作社/系统主体更是直接没有对应文案。 -->
-            <span class="value">{{ tenantTypeLabel(tenantData.tenantType) }}</span>
-          </div>
-          <div class="info-item">
-            <span class="label">联系人</span>
-            <span class="value">{{ tenantData.contactName }}</span>
-          </div>
-          <div class="info-item">
-            <span class="label">联系电话</span>
-            <span class="value">{{ tenantData.phone }}</span>
-          </div>
-          <div class="info-item">
-            <span class="label">邮箱</span>
-            <span class="value">{{ tenantData.email }}</span>
-          </div>
-          <div class="info-item">
-            <span class="label">地址</span>
-            <span class="value">{{ tenantData.address }}</span>
-          </div>
-          <div class="info-item">
-            <span class="label">状态</span>
-            <!-- 状态判断原先写反了：库口径是 1=启用 / 0=停用（StatusEnum），
-                 页面却按 0=正常 判断，于是每个启用中的主体都显示"禁用"。 -->
-            <span class="status-badge" :class="tenantData.status === 1 ? 'active' : 'inactive'">
-              {{ tenantData.status === 1 ? '启用中' : '已停用' }}
-            </span>
+    <template v-else>
+      <section class="identity-card">
+        <div class="identity-main">
+          <span class="identity-icon">{{ isPersonal ? '👤' : '🏢' }}</span>
+          <div>
+            <div class="identity-title">
+              <h2>{{ value(tenantData.tenantName) }}</h2>
+              <span class="type-badge" :class="isPersonal ? 'personal' : 'enterprise'">{{ subjectTypeText(tenantData.tenantType) }}</span>
+            </div>
+            <p>{{ tenantData.tenantCode }}</p>
           </div>
         </div>
+        <div class="identity-status">
+          <span class="status-badge" :class="verifyClass(tenantData.verifyStatus)">{{ verifyText(tenantData.verifyStatus) }}</span>
+          <span class="status-badge" :class="Number(tenantData.status) === 1 ? 'active' : 'inactive'">
+            {{ Number(tenantData.status) === 1 ? '启用' : '停用' }}
+          </span>
+        </div>
+      </section>
+
+      <div class="content-grid">
+        <section class="detail-card">
+          <div class="card-head"><h3>注册档案</h3><span>{{ isPersonal ? '个人主体' : '企业主体' }}</span></div>
+          <div class="info-grid">
+            <div><label>主体编码</label><strong>{{ value(tenantData.tenantCode) }}</strong></div>
+            <div><label>主体类型</label><strong>{{ subjectTypeText(tenantData.tenantType) }}</strong></div>
+            <div><label>{{ isPersonal ? '真实姓名' : '企业名称' }}</label><strong>{{ value(tenantData.tenantName) }}</strong></div>
+            <template v-if="isPersonal">
+              <div><label>身份证号码</label><strong>{{ value(tenantData.identityNoMasked) }}</strong></div>
+              <div><label>个人经营类型</label><strong>{{ value(tenantData.businessType) }}</strong></div>
+              <div><label>证件有效期</label><strong>{{ validity }}</strong></div>
+            </template>
+            <template v-else>
+              <div><label>统一社会信用代码</label><strong>{{ value(tenantData.creditCode) }}</strong></div>
+              <div><label>所属行业</label><strong>{{ value(tenantData.industry) }}</strong></div>
+              <div><label>企业规模</label><strong>{{ value(tenantData.companySize) }}</strong></div>
+              <div><label>法定代表人</label><strong>{{ value(tenantData.legalPerson) }}</strong></div>
+              <div><label>营业执照号</label><strong>{{ value(tenantData.licenseNo) }}</strong></div>
+              <div><label>注册资本</label><strong>{{ value(tenantData.registeredCapital) }}</strong></div>
+            </template>
+            <div class="wide-field"><label>注册地址</label><strong>{{ value(tenantData.address) }}</strong></div>
+            <div><label>创建时间</label><strong>{{ formatDate(tenantData.createTime) }}</strong></div>
+          </div>
+        </section>
+
+        <section class="detail-card">
+          <div class="card-head"><h3>联系信息</h3></div>
+          <div class="info-grid">
+            <div><label>联系人</label><strong>{{ value(tenantData.contactName) }}</strong></div>
+            <div><label>联系电话</label><strong>{{ value(tenantData.phone) }}</strong></div>
+            <div><label>联系邮箱</label><strong>{{ value(tenantData.email) }}</strong></div>
+            <div><label>主体状态</label><strong>{{ Number(tenantData.status) === 1 ? '启用' : '停用' }}</strong></div>
+          </div>
+        </section>
       </div>
 
-      <div class="detail-section">
-        <h3 class="section-title">配额信息</h3>
-        <div v-if="tenantData.quotaInfo" class="quota-grid">
-          <div class="quota-item">
-            <div class="quota-header">
-              <span>用户配额</span>
-              <span class="quota-value">{{ tenantData.quotaInfo.usedUsers }} / {{ tenantData.quotaInfo.userLimit }}</span>
-            </div>
-            <div class="quota-progress">
-              <div class="progress-fill" :style="{ width: quotaPercent(tenantData.quotaInfo.usedUsers, tenantData.quotaInfo.userLimit) + '%' }"></div>
-            </div>
-          </div>
-          <div class="quota-item">
-            <div class="quota-header">
-              <span>组织配额</span>
-              <span class="quota-value">{{ tenantData.quotaInfo.usedOrgs }} / {{ tenantData.quotaInfo.orgLimit }}</span>
-            </div>
-            <div class="quota-progress">
-              <div class="progress-fill" :style="{ width: quotaPercent(tenantData.quotaInfo.usedOrgs, tenantData.quotaInfo.orgLimit) + '%' }"></div>
-            </div>
-          </div>
-          <div class="quota-item">
-            <div class="quota-header">
-              <span>商品配额</span>
-              <span class="quota-value">{{ tenantData.quotaInfo.usedProducts }} / {{ tenantData.quotaInfo.productLimit }}</span>
-            </div>
-            <div class="quota-progress">
-              <div class="progress-fill" :style="{ width: quotaPercent(tenantData.quotaInfo.usedProducts, tenantData.quotaInfo.productLimit) + '%' }"></div>
-            </div>
+      <section class="detail-card">
+        <div class="card-head">
+          <h3>认证与核验信息</h3>
+          <span class="status-badge" :class="verifyClass(tenantData.verifyStatus)">{{ verifyText(tenantData.verifyStatus) }}</span>
+        </div>
+        <div v-if="hasCertification" class="info-grid">
+          <div><label>认证单号</label><strong>{{ value(tenantData.certificationNo) }}</strong></div>
+          <div><label>认证状态</label><strong>{{ verifyText(tenantData.certificationStatus || tenantData.verifyStatus) }}</strong></div>
+          <div><label>认证渠道</label><strong>{{ value(tenantData.verificationChannel) }}</strong></div>
+          <template v-if="isPersonal">
+            <div><label>公安二要素</label><strong>{{ yesNo(tenantData.policeVerified) }}</strong></div>
+            <div><label>活体核验</label><strong>{{ yesNo(tenantData.livenessVerified) }}</strong></div>
+          </template>
+          <template v-else>
+            <div><label>法人扫脸</label><strong>{{ faceStatusText(tenantData.legalPersonFaceStatus) }}</strong></div>
+            <div><label>对公账户户名</label><strong>{{ value(tenantData.corporateBankName) }}</strong></div>
+            <div><label>对公账户</label><strong>{{ value(tenantData.corporateBankAccount) }}</strong></div>
+            <div><label>对公打款</label><strong>{{ transferStatusText(tenantData.corporateTransferStatus) }}</strong></div>
+            <div><label>营业执照材料</label><strong>{{ tenantData.businessLicenseUrl ? '已上传' : '未上传' }}</strong></div>
+          </template>
+          <div v-if="tenantData.certificationReviewRemark" class="wide-field">
+            <label>审核意见</label><strong>{{ tenantData.certificationReviewRemark }}</strong>
           </div>
         </div>
+        <div v-else class="empty-certification">该主体尚未提交认证资料。</div>
+      </section>
+
+      <div class="content-grid">
+        <section class="detail-card">
+          <div class="card-head"><h3>成员与组织</h3></div>
+          <div class="stats-grid">
+            <div><span>成员总数</span><strong>{{ countText(tenantData.userOrgStats?.totalUsers) }}</strong></div>
+            <div><span>已实名成员</span><strong>{{ countText(tenantData.userOrgStats?.verifiedUsers) }}</strong></div>
+            <div><span>待认证成员</span><strong>{{ countText(tenantData.userOrgStats?.pendingUsers) }}</strong></div>
+            <div><span>组织数量</span><strong>{{ countText(tenantData.userOrgStats?.totalOrgs) }}</strong></div>
+          </div>
+        </section>
+
+        <section class="detail-card">
+          <div class="card-head"><h3>资源配额</h3><router-link to="/subject/quota">查看配额 →</router-link></div>
+          <div class="stats-grid">
+            <div><span>用户</span><strong>{{ quotaText(tenantData.quotaInfo?.usedUsers, tenantData.quotaInfo?.userLimit) }}</strong></div>
+            <div><span>组织</span><strong>{{ quotaText(tenantData.quotaInfo?.usedOrgs, tenantData.quotaInfo?.orgLimit) }}</strong></div>
+            <div><span>商品</span><strong>{{ quotaText(tenantData.quotaInfo?.usedProducts, tenantData.quotaInfo?.productLimit) }}</strong></div>
+            <div><span>API</span><strong>{{ quotaText(tenantData.quotaInfo?.usedApiToday, tenantData.quotaInfo?.apiLimit) }}</strong></div>
+          </div>
+        </section>
       </div>
 
-      <div class="detail-section">
-        <h3 class="section-title">质量评分</h3>
-        <div v-if="hasQualityScore" class="quality-score">
-          <div class="score-circle">
-            <span class="score-value">{{ scoreText(tenantData.qualityScore.overallScore) }}</span>
-            <span class="score-label">综合评分</span>
-          </div>
-          <div class="score-details">
-            <div class="score-item">
-              <span>用户主数据</span>
-              <span>{{ scoreText(tenantData.qualityScore.userMasterData) }}</span>
-            </div>
-            <div class="score-item">
-              <span>组织主数据</span>
-              <span>{{ scoreText(tenantData.qualityScore.orgMasterData) }}</span>
-            </div>
-            <div class="score-item">
-              <span>商品主数据</span>
-              <span>{{ scoreText(tenantData.qualityScore.productMasterData) }}</span>
-            </div>
-            <div class="score-item">
-              <span>权限主数据</span>
-              <span>{{ scoreText(tenantData.qualityScore.permissionMasterData) }}</span>
-            </div>
-          </div>
-        </div>
-        <!-- 没有数据来源时如实说明。原先这里显示的是后端写死的 99.2 / 99.5 / …，
-             换个主体点进来数字纹丝不动，却是页面上最显眼的一块。 -->
-        <p v-else class="section-empty">
-          未接入：没有"按主体汇总主数据质量得分"的数据。需要先有质量得分汇总表
-          （数据质量模块目前只有问题工单），并在每次检测后回写，才能给出真实评分。
-        </p>
-      </div>
-
-      <div class="detail-section">
-        <h3 class="section-title">用户与组织</h3>
-        <div class="info-grid">
-          <div class="info-item">
-            <span class="label">用户数</span>
-            <span class="value">{{ countText(tenantData.userOrgStats?.totalUsers) }}</span>
-          </div>
-          <div class="info-item">
-            <span class="label">已实名认证用户</span>
-            <span class="value">{{ countText(tenantData.userOrgStats?.verifiedUsers) }}</span>
-          </div>
-          <div class="info-item">
-            <span class="label">待认证用户</span>
-            <span class="value">{{ countText(tenantData.userOrgStats?.pendingUsers) }}</span>
-          </div>
-          <div class="info-item">
-            <span class="label">组织数</span>
-            <span class="value">{{ countText(tenantData.userOrgStats?.totalOrgs) }}</span>
-          </div>
-          <div class="info-item">
-            <span class="label">已认证组织</span>
-            <span class="value">{{ countText(tenantData.userOrgStats?.verifiedOrgs) }}</span>
-          </div>
-          <div class="info-item">
-            <span class="label">待审核组织</span>
-            <span class="value">{{ countText(tenantData.userOrgStats?.pendingOrgs) }}</span>
-          </div>
-        </div>
-        <p class="section-note">
-          用户与组织按主体编码统计；"已实名认证 / 待认证"取用户认证记录，"已认证 / 待审核"取组织认证状态。
-          0 表示该主体确实没有对应记录。
-        </p>
-      </div>
-
-      <div class="detail-section">
-        <h3 class="section-title">操作记录</h3>
-        <table v-if="tenantData.operationLogs && tenantData.operationLogs.length" class="op-table">
-          <thead>
-            <tr>
-              <th>时间</th>
-              <th>操作</th>
-              <th>操作人</th>
-              <th>说明</th>
-            </tr>
-          </thead>
+      <section class="detail-card">
+        <div class="card-head"><h3>操作记录</h3></div>
+        <table v-if="tenantData.operationLogs?.length" class="log-table">
+          <thead><tr><th>时间</th><th>操作</th><th>操作人</th><th>说明</th></tr></thead>
           <tbody>
             <tr v-for="(log, index) in tenantData.operationLogs" :key="index">
-              <td>{{ log.time }}</td>
-              <td>{{ log.operationType }}</td>
-              <td>{{ log.operator }}</td>
-              <td>{{ log.content }}</td>
+              <td>{{ value(log.time) }}</td><td>{{ value(log.operationType) }}</td>
+              <td>{{ value(log.operator) }}</td><td>{{ value(log.content) }}</td>
             </tr>
           </tbody>
         </table>
-        <p v-else class="section-empty">
-          这个主体还没有操作记录。留痕从运营端"操作日志"接入后开始产生：
-          对该主体的每一次写操作（改资料 / 停启用 / 调配额 / 换套餐）都会记在这里。
-        </p>
-      </div>
-    </div>
+        <p v-else class="empty-tip">暂无操作记录。</p>
+      </section>
+    </template>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getTenantDetail } from '../../utils/api'
 
@@ -201,315 +143,93 @@ const route = useRoute()
 const router = useRouter()
 const tenantData = ref(null)
 const loadError = ref('')
-
-const goBack = () => {
-  router.push('/tenant/list')
-}
-
-const loadDetail = async () => {
-  const id = route.params.id
-  try {
-    const response = await getTenantDetail(id)
-    if (response.code !== 200) {
-      throw new Error(response.message || '接口返回失败')
-    }
-    tenantData.value = response.data
-    loadError.value = ''
-  } catch (error) {
-    console.error('加载主体详情失败', error)
-    // 这里原先会退回一份 mockTenantData（"阳光农场 / 张三 / 13800138001"这些编好的值）。
-    // 接口一挂就显示一份看着很正常的假资料，比报错危险得多 —— 没人会去核对一个"能打开的页面"。
-    tenantData.value = null
-    loadError.value =
-      '加载主体详情失败：' + (error instanceof Error ? error.message : String(error))
-  }
-}
-
-/** 质量评分里任何一项为空都算"没有来源"，整块显示未接入说明而不是给 0 或 85 这种数字。 */
-const hasQualityScore = computed(() => {
-  const score = tenantData.value?.qualityScore
-  if (!score) {
-    return false
-  }
-  return [score.overallScore, score.userMasterData, score.orgMasterData,
-    score.productMasterData, score.permissionMasterData].some((item) => item !== null && item !== undefined)
+const isPersonal = computed(() => tenantData.value?.tenantType === 'INDIVIDUAL')
+const hasCertification = computed(() => Boolean(
+  tenantData.value?.certificationNo ||
+  tenantData.value?.verificationChannel ||
+  tenantData.value?.legalPersonFaceStatus ||
+  tenantData.value?.identityNoMasked,
+))
+const validity = computed(() => {
+  const start = tenantData.value?.validStart
+  const end = tenantData.value?.validEnd
+  return start || end ? `${value(start)} 至 ${value(end)}` : '—'
 })
 
-const scoreText = (value) => (value === null || value === undefined ? '—' : value)
-
-/** 计数显示：null / undefined → "—"（没有数据），其余按千分位显示。 */
-const countText = (value) =>
-  value === null || value === undefined ? '—' : Number(value).toLocaleString()
-
-const TENANT_TYPE_LABELS = {
-  ENTERPRISE: '企业主体',
-  INDIVIDUAL: '个人主体',
-  COOPERATIVE: '合作社',
-  SYSTEM: '系统主体'
-}
-
-const tenantTypeLabel = (type) =>
-  TENANT_TYPE_LABELS[String(type || '').toUpperCase()] || type || '—'
-
-/** 配额进度百分比。上限为 0 或缺失时返回 0，避免算出 NaN% / Infinity% 这种脏显示。 */
-const quotaPercent = (used, limit) => {
-  const total = Number(limit)
-  if (!total) {
-    return 0
+const loadDetail = async () => {
+  loadError.value = ''
+  try {
+    const response = await getTenantDetail(route.params.id)
+    if (response.code !== 200) throw new Error(response.message || '主体详情加载失败')
+    tenantData.value = response.data
+  } catch (error) {
+    tenantData.value = null
+    loadError.value = error instanceof Error ? error.message : '主体详情加载失败'
   }
-  return Math.min(100, Math.round(((Number(used) || 0) / total) * 100))
 }
+
+const goBack = () => router.push('/subject/list')
+const editSubject = () => router.push(`/subject/edit/${route.params.id}`)
+const value = (input) => input === null || input === undefined || input === '' ? '—' : input
+const countText = (input) => input === null || input === undefined ? '—' : Number(input).toLocaleString('zh-CN')
+const quotaText = (used, limit) => `${countText(used)} / ${countText(limit)}`
+const subjectTypeText = (type) => type === 'INDIVIDUAL' ? '个人主体' : '企业主体'
+const verifyText = (status) => ({ approved: '已认证', pending: '审核中', rejected: '已驳回', draft: '草稿', unverified: '未认证' }[status] || '未认证')
+const verifyClass = (status) => ({ approved: 'active', pending: 'pending', rejected: 'rejected', draft: 'inactive', unverified: 'inactive' }[status] || 'inactive')
+const yesNo = (input) => input === true ? '已通过' : input === false ? '未通过' : '—'
+const faceStatusText = (status) => ({ verified: '已通过', uploaded: '材料已上传', pending: '待核验', rejected: '未通过' }[status] || status || '—')
+const transferStatusText = (status) => ({ verified: '已验证', submitted: '已提交', pending: '待打款', rejected: '未通过' }[status] || status || '—')
+const formatDate = (input) => input ? String(input).replace('T', ' ').slice(0, 16) : '—'
 
 onMounted(loadDetail)
 </script>
 
 <style scoped>
-.tenant-detail {
-  padding: 20px;
-}
-
-.page-header {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  margin-bottom: 24px;
-}
-
-.back-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: none;
-  border: 1px solid #e2e8f0;
-  padding: 8px 16px;
-  border-radius: 6px;
-  font-size: 14px;
-  color: #4a5568;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.back-btn:hover {
-  background: #f8fafc;
-}
-
-.header-left h1 {
-  font-size: 24px;
-  font-weight: 600;
-  color: #2d3748;
-  margin: 0;
-}
-
-.header-left p {
-  font-size: 14px;
-  color: #a0aec0;
-  margin: 4px 0 0;
-}
-
-.detail-card {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  padding: 24px;
-}
-
-.detail-section {
-  margin-bottom: 30px;
-}
-
-.detail-section:last-child {
-  margin-bottom: 0;
-}
-
-.section-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: #2d3748;
-  margin: 0 0 20px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #e8e8e8;
-}
-
-.info-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 20px;
-}
-
-.info-item {
-  display: flex;
-  flex-direction: column;
-  padding: 16px;
-  background: #f8fafc;
-  border-radius: 8px;
-}
-
-.label {
-  font-size: 13px;
-  color: #a0aec0;
-  margin-bottom: 6px;
-}
-
-.value {
-  font-size: 14px;
-  color: #2d3748;
-  font-weight: 500;
-}
-
-.status-badge {
-  font-size: 11px;
-  font-weight: 500;
-  padding: 4px 12px;
-  border-radius: 12px;
-  display: inline-block;
-}
-
-.status-badge.active {
-  background: rgba(35, 134, 54, 0.1);
-  color: #238636;
-}
-
-.status-badge.inactive {
-  background: rgba(160, 174, 192, 0.1);
-  color: #a0aec0;
-}
-
-.quota-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 20px;
-}
-
-.quota-item {
-  padding: 20px;
-  background: #f8fafc;
-  border-radius: 12px;
-}
-
-.quota-header {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 12px;
-  font-size: 14px;
-}
-
-.quota-value {
-  font-weight: 600;
-  color: #238636;
-}
-
-.quota-progress {
-  height: 8px;
-  background: #e2e8f0;
-  border-radius: 4px;
-  overflow: hidden;
-}
-
-.progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #238636 0%, #2ea043 100%);
-  border-radius: 4px;
-  transition: width 0.3s ease;
-}
-
-.quality-score {
-  display: flex;
-  align-items: center;
-  gap: 60px;
-}
-
-.score-circle {
-  width: 150px;
-  height: 150px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #238636 0%, #2ea043 100%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-}
-
-.score-value {
-  font-size: 36px;
-  font-weight: 700;
-}
-
-.score-label {
-  font-size: 12px;
-  opacity: 0.9;
-}
-
-.score-details {
-  flex: 1;
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 15px;
-}
-
-.score-item {
-  display: flex;
-  justify-content: space-between;
-  padding: 12px 16px;
-  background: #f8fafc;
-  border-radius: 8px;
-  font-size: 14px;
-}
-
-.score-item span:first-child {
-  color: #a0aec0;
-}
-
-.score-item span:last-child {
-  font-weight: 500;
-  color: #2d3748;
-}
-
-/* 说明文字：解释哪一项没有数据来源、缺的是什么 */
-.section-note {
-  margin: 12px 0 0;
-  font-size: 12px;
-  line-height: 1.6;
-  color: #a0aec0;
-}
-
-.section-empty {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.7;
-  color: #a0aec0;
-}
-
-/* 加载失败横幅：比"显示一份假资料"诚实得多 */
-.load-error {
-  margin: 0 0 16px;
-  padding: 10px 14px;
-  border-radius: 8px;
-  background: rgba(218, 54, 51, 0.08);
-  color: #da3633;
-  font-size: 13px;
-}
-
-.op-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.op-table th,
-.op-table td {
-  padding: 10px 12px;
-  text-align: left;
-  font-size: 13px;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.op-table th {
-  color: #4a5568;
-  font-weight: 600;
-  background: #f8fafc;
-}
-
-.op-table td {
-  color: #2d3748;
-}
+.subject-detail { padding:20px; color:#1f2937; }
+.page-header { display:flex; align-items:center; gap:18px; margin-bottom:18px; }
+.page-header > div { flex:1; }
+.page-header h1 { margin:0 0 5px; font-size:24px; }
+.page-header p { margin:0; color:#6b7280; }
+.back-btn,.edit-btn { height:36px; padding:0 14px; border-radius:8px; cursor:pointer; }
+.back-btn { border:1px solid #d1d5db; background:#fff; color:#4b5563; }
+.edit-btn { border:0; background:#10b981; color:#fff; }
+.state-card,.identity-card,.detail-card { border-radius:11px; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+.state-card { padding:40px; text-align:center; color:#6b7280; }
+.state-card.error { color:#b91c1c; background:#fef2f2; }
+.identity-card { display:flex; justify-content:space-between; align-items:center; gap:18px; padding:20px; margin-bottom:14px; }
+.identity-main { display:flex; align-items:center; gap:14px; }
+.identity-icon { width:52px; height:52px; display:grid; place-items:center; border-radius:13px; background:#ecfdf5; font-size:26px; }
+.identity-title { display:flex; align-items:center; flex-wrap:wrap; gap:9px; }
+.identity-title h2 { margin:0; font-size:21px; }
+.identity-main p { margin:5px 0 0; color:#8b9a91; font-family:ui-monospace,Consolas,monospace; font-size:12px; }
+.identity-status { display:flex; gap:8px; }
+.type-badge,.status-badge { display:inline-block; padding:4px 9px; border-radius:999px; font-size:12px; }
+.type-badge.enterprise,.status-badge.active { background:#ecfdf5; color:#047857; }
+.type-badge.personal { background:#eff6ff; color:#1d4ed8; }
+.status-badge.pending { background:#fffbeb; color:#b45309; }
+.status-badge.rejected { background:#fef2f2; color:#b91c1c; }
+.status-badge.inactive { background:#f3f4f6; color:#6b7280; }
+.content-grid { display:grid; grid-template-columns:1.35fr .65fr; gap:14px; margin-bottom:14px; }
+.detail-card { padding:18px; margin-bottom:14px; }
+.content-grid .detail-card { margin-bottom:0; }
+.card-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:15px; }
+.card-head h3 { margin:0; font-size:16px; }
+.card-head span { color:#9ca3af; font-size:12px; }
+.card-head a { color:#047857; font-size:12px; text-decoration:none; }
+.info-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+.info-grid > div { padding:11px; border-radius:8px; background:#f8fafc; }
+.info-grid label { display:block; margin-bottom:5px; color:#9ca3af; font-size: var(--agri-font-size-micro); }
+.info-grid strong { color:#27352d; font-size:13px; word-break:break-all; }
+.wide-field { grid-column:span 2; }
+.stats-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:9px; }
+.stats-grid div { padding:12px; border-radius:8px; background:#f8fafc; }
+.stats-grid span,.stats-grid strong { display:block; }
+.stats-grid span { color:#94a3b8; font-size: var(--agri-font-size-micro); }
+.stats-grid strong { margin-top:5px; color:#1f3b2a; font-size:17px; }
+.log-table { width:100%; border-collapse:collapse; }
+.log-table th,.log-table td { padding:10px; border-bottom:1px solid #edf0f2; text-align:left; font-size:12.5px; }
+.log-table th { background:#f8fafc; color:#64748b; }
+.empty-tip,.empty-certification { margin:0; padding:22px; border-radius:8px; background:#f8fafc; text-align:center; color:#9ca3af; }
+@media(max-width:1000px){.content-grid{grid-template-columns:1fr}.info-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){.page-header{align-items:flex-start;flex-wrap:wrap}.identity-card{align-items:flex-start;flex-direction:column}.info-grid,.stats-grid{grid-template-columns:1fr}.wide-field{grid-column:auto}}
 </style>

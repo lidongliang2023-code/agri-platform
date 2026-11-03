@@ -3,7 +3,16 @@ package com.agri.production.service.impl;
 import com.agri.production.common.entity.PageResult;
 import com.agri.production.common.exception.BusinessException;
 import com.agri.production.entity.ChainRecord;
+import com.agri.production.entity.HarvestBatch;
+import com.agri.production.entity.Inspection;
+import com.agri.production.entity.InputUsageRecord;
+import com.agri.production.entity.TraceCode;
 import com.agri.production.mapper.ChainRecordMapper;
+import com.agri.production.mapper.HarvestBatchMapper;
+import com.agri.production.mapper.InspectionMapper;
+import com.agri.production.mapper.InputUsageRecordMapper;
+import com.agri.production.mapper.TraceCodeMapper;
+import com.agri.production.service.ChainEvidenceRule;
 import com.agri.production.service.IChainRecordService;
 import com.agri.production.vo.ChainRecordContractVO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -17,11 +26,30 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 
+/**
+ * 区块链存证（本部署为**模拟链**）。
+ *
+ * <p><b>业务类型词表只有这一处</b>（{@link #normalizeType}）：{@code HARVEST}（采收批次）、
+ * {@code QUALITY}（质检单，平台侧旧词表叫 {@code INSPECTION}，在这里归一）、
+ * {@code TRACE}（溯源码）、{@code INPUT}（投入品使用）。
+ * 历史上投入品页面按数字枚举传 {@code bizType=2}，控制器原样 {@code String.valueOf} 落库，
+ * 于是 {@code target_type} 里出现 {@code '2'} 这种值 —— 它不属于任何词表，
+ * 读侧按 HARVEST/QUALITY/TRACE/INPUT 对号时永远匹配不上，**那条存证等于没写过**，
+ * 而存证列表页又能把它当一条"已上链"记录显示出来。现在数字一律拒绝，并给了迁移脚本
+ * （{@code schema-patch-chain-type-normalize.sql}）把历史值归一。</p>
+ *
+ * <p><b>写之前先证明业务真的存在</b>（{@link #resolveTarget}）：按令牌主体在对应业务表里查这条记录，
+ * 查不到就 404。存证的意义是"这个业务动作发生过、内容没被改"，能给一个不存在（或别人家）的
+ * 单号出"已上链"，等于给假事实发凭证 —— 所以这里宁可拒绝。跨主体按"找不到"回，
+ * 不说"存在但不是你的"（那是一个免费的探测接口）。</p>
+ */
 @Service
 @Slf4j
 public class ChainRecordServiceImpl implements IChainRecordService {
@@ -32,10 +60,31 @@ public class ChainRecordServiceImpl implements IChainRecordService {
     private static final String CHAIN_TYPE_SIMULATED = "SIMULATED";
     private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
-    private final ChainRecordMapper chainRecordMapper;
+    /** 可存证、且本部署能校验业务键的类型。 */
+    private static final Set<String> ANCHORABLE_TYPES = Set.of("HARVEST", "QUALITY", "TRACE", "INPUT");
+    /** 前端旧表单里出现过、但本部署没有对应业务主数据的类型：明确拒绝，不接受自由填写的单号。 */
+    private static final Set<String> UNVERIFIABLE_TYPES = Set.of("FARMING", "CIRCULATION", "IOT", "OTHER");
+    private static final String TYPE_HINT = "HARVEST（采收批次）/ QUALITY（质检单，旧词表 INSPECTION 自动归一）/ "
+            + "TRACE（溯源码）/ INPUT（投入品使用）";
 
-    public ChainRecordServiceImpl(ChainRecordMapper chainRecordMapper) {
+    private final ChainRecordMapper chainRecordMapper;
+    private final HarvestBatchMapper batchMapper;
+    private final InspectionMapper inspectionMapper;
+    private final TraceCodeMapper traceCodeMapper;
+    private final InputUsageRecordMapper inputUsageMapper;
+
+    public ChainRecordServiceImpl(ChainRecordMapper chainRecordMapper, HarvestBatchMapper batchMapper,
+                                  InspectionMapper inspectionMapper, TraceCodeMapper traceCodeMapper,
+                                  InputUsageRecordMapper inputUsageMapper) {
         this.chainRecordMapper = chainRecordMapper;
+        this.batchMapper = batchMapper;
+        this.inspectionMapper = inspectionMapper;
+        this.traceCodeMapper = traceCodeMapper;
+        this.inputUsageMapper = inputUsageMapper;
+    }
+
+    /** 存证对象：归一后的类型 + 业务主键 + 业务编号（编号才是页面与链路对号用的键）。 */
+    private record AnchorTarget(String type, Long id, String code) {
     }
 
     @Override
@@ -47,7 +96,7 @@ public class ChainRecordServiceImpl implements IChainRecordService {
             w.eq(ChainRecord::getChainStatus, status.trim().toUpperCase());
         }
         if (bizType != null && !bizType.isBlank()) {
-            w.eq(ChainRecord::getTargetType, normalizeBizType(bizType));
+            w.eq(ChainRecord::getTargetType, normalizeType(bizType));
         }
         if (keyword != null && !keyword.isBlank()) {
             // 页面上那个「业务单号模糊匹配」输入框此前是**静默无效**的：接口根本没这个参数，
@@ -84,7 +133,7 @@ public class ChainRecordServiceImpl implements IChainRecordService {
         LambdaQueryWrapper<ChainRecord> w = new LambdaQueryWrapper<>();
         w.eq(ChainRecord::getTenantId, tenantId).eq(ChainRecord::getDelFlag, 0);
         if (bizType != null && !bizType.isBlank()) {
-            w.eq(ChainRecord::getTargetType, normalizeBizType(bizType));
+            w.eq(ChainRecord::getTargetType, normalizeType(bizType));
         }
         // bizId 在库里可能是 target_code（单号/码值）也可能是 target_id（数字主键），两边都认
         Long numeric = toLongOrNull(bizId);
@@ -102,16 +151,105 @@ public class ChainRecordServiceImpl implements IChainRecordService {
     }
 
     /**
-     * 业务类型词表归一。
+     * 业务类型词表归一（读写两侧唯一入口）。
      *
-     * <p>同一件事在两套词表里叫法不同：平台侧（前端 api 契约、core-platform）把质检叫
-     * {@code INSPECTION}，而本服务的存证表把质检记成 {@code QUALITY}（演示数据与写路径都是这个值）。
-     * 不归一的话，前端按 {@code INSPECTION} 查质检存证会得到一个**空数组** ——
-     * 不报错、不提示，看起来就是"这批货没有存证"。筛了不生效比报错更难发现，所以在这里映射。</p>
+     * <p>三件事集中在这里做：</p>
+     * <ol>
+     *   <li>{@code INSPECTION → QUALITY}：平台侧（前端 api 契约、core-platform）把质检叫
+     *       {@code INSPECTION}，而存证表记的是 {@code QUALITY}。不归一，前端按 INSPECTION 查
+     *       质检存证会得到一个**空数组** —— 不报错、不提示，看起来就是"这批货没有存证"；
+     *       筛了不生效比报错更难发现，所以映射只放这一处；</li>
+     *   <li>数字枚举直接拒绝 —— 它是 {@code target_type='2'} 这类脏值的来源：写进去以后
+     *       按业务类型对号永远匹配不上（那条存证等于没写过），可存证列表还会把它显示成一条"已上链"；</li>
+     *   <li>{@code FARMING / CIRCULATION / IOT / OTHER} 本部署没有可校验的业务主数据入口，
+     *       拒绝（否则等于允许对着一串自由填写的单号伪造链上凭证）。</li>
+     * </ol>
      */
-    private static String normalizeBizType(String bizType) {
-        String value = bizType.trim().toUpperCase();
-        return "INSPECTION".equals(value) ? "QUALITY" : value;
+    private static String normalizeType(String rawType) {
+        if (rawType == null || rawType.isBlank()) {
+            throw new BusinessException(400, "缺少业务类型 bizType，可用值：" + TYPE_HINT);
+        }
+        String value = rawType.trim().toUpperCase();
+        if ("INSPECTION".equals(value)) {
+            return "QUALITY";
+        }
+        if (value.chars().allMatch(Character::isDigit)) {
+            throw new BusinessException(400, "业务类型不再接受数字枚举（历史上 bizType=2 被原样写进 target_type，"
+                    + "那条存证从此对不到任何业务）。请改用字符串：" + TYPE_HINT);
+        }
+        if (UNVERIFIABLE_TYPES.contains(value)) {
+            throw new BusinessException(400, "业务类型 " + value + " 在本部署没有可校验的业务主数据，"
+                    + "不能出存证（避免给不存在的业务伪造链上凭证）。可用值：" + TYPE_HINT);
+        }
+        if (!ANCHORABLE_TYPES.contains(value)) {
+            throw new BusinessException(400, "不认识的业务类型 " + value + "。可用值：" + TYPE_HINT);
+        }
+        return value;
+    }
+
+    /**
+     * 按业务键定位要存证的业务，顺带完成归属校验。
+     *
+     * <p>数字键认主键、非数字键认单号（批次号/质检单号/溯源码都不是纯数字，不会撞）。
+     * 命中后返回的 {@code code} 是**规范业务编号**，落进 {@code target_code} ——
+     * 全链路节点与核验视图都按编号对号，写侧把主键当编号存就会对不上。</p>
+     *
+     * <p>查不到一律 404「找不到要存证的业务」，跨主体也走这一句：说"存在但不是你的"
+     * 就成了免费的探测接口。</p>
+     */
+    private AnchorTarget resolveTarget(String type, String rawKey, String tenantId) {
+        String key = rawKey == null ? "" : rawKey.trim();
+        if (key.isEmpty()) {
+            throw new BusinessException(400, "缺少业务键（批次号 / 质检单号 / 溯源码 / 使用记录 ID）");
+        }
+        Long numeric = toLongOrNull(key);
+        if ("HARVEST".equals(type)) {
+            HarvestBatch batch = batchMapper.selectOne(new LambdaQueryWrapper<HarvestBatch>()
+                    .eq(HarvestBatch::getTenantId, tenantId)
+                    .eq(numeric == null, HarvestBatch::getBatchNo, key)
+                    .eq(numeric != null, HarvestBatch::getBatchId, numeric)
+                    .last("LIMIT 1"));
+            if (batch == null) {
+                throw notFound(type, key);
+            }
+            return new AnchorTarget(type, batch.getBatchId(), batch.getBatchNo());
+        }
+        if ("QUALITY".equals(type)) {
+            Inspection inspection = inspectionMapper.selectOne(new LambdaQueryWrapper<Inspection>()
+                    .eq(Inspection::getTenantId, tenantId)
+                    .eq(numeric == null, Inspection::getInspectionNo, key)
+                    .eq(numeric != null, Inspection::getInspectionId, numeric)
+                    .last("LIMIT 1"));
+            if (inspection == null) {
+                throw notFound(type, key);
+            }
+            return new AnchorTarget(type, inspection.getInspectionId(), inspection.getInspectionNo());
+        }
+        if ("TRACE".equals(type)) {
+            TraceCode code = traceCodeMapper.selectOne(new LambdaQueryWrapper<TraceCode>()
+                    .eq(TraceCode::getTenantId, tenantId)
+                    .eq(TraceCode::getTraceCode, key)
+                    .last("LIMIT 1"));
+            if (code == null) {
+                throw notFound(type, key);
+            }
+            return new AnchorTarget(type, code.getId(), code.getTraceCode());
+        }
+        // INPUT：投入品使用记录只有数字主键，页面传的就是 usageId
+        InputUsageRecord usage = numeric == null ? null
+                : inputUsageMapper.selectOne(new LambdaQueryWrapper<InputUsageRecord>()
+                .eq(InputUsageRecord::getTenantId, tenantId)
+                .eq(InputUsageRecord::getUsageId, numeric)
+                .last("LIMIT 1"));
+        if (usage == null) {
+            throw notFound(type, key);
+        }
+        return new AnchorTarget(type, usage.getUsageId(), String.valueOf(usage.getUsageId()));
+    }
+
+    private static BusinessException notFound(String type, String key) {
+        return new BusinessException(404, "找不到要存证的业务：" + type + " " + key
+                + "（只能给本经营主体名下、确实存在且未删除的记录出存证）");
     }
 
     @Override
@@ -140,6 +278,37 @@ public class ChainRecordServiceImpl implements IChainRecordService {
         return result;
     }
 
+    @Override
+    public Map<String, ChainRecord> traceEvidence(Collection<String> codes, String tenantId) {
+        List<String> keys = codes == null ? List.of() : codes.stream()
+                .filter(code -> code != null && !code.isBlank())
+                .map(code -> code.trim().toUpperCase())
+                .distinct()
+                .toList();
+        if (keys.isEmpty()) {
+            return Map.of();
+        }
+        List<ChainRecord> records = chainRecordMapper.selectList(new LambdaQueryWrapper<ChainRecord>()
+                .eq(ChainRecord::getTenantId, tenantId)
+                .eq(ChainRecord::getDelFlag, 0)
+                .apply("UPPER(target_type) = 'TRACE'")
+                .in(ChainRecord::getTargetCode, keys)
+                .orderByAsc(ChainRecord::getId));
+        Map<String, List<ChainRecord>> grouped = new LinkedHashMap<>();
+        for (ChainRecord record : records) {
+            String key = record.getTargetCode() == null ? "" : record.getTargetCode().trim().toUpperCase();
+            grouped.computeIfAbsent(key, item -> new ArrayList<>()).add(record);
+        }
+        Map<String, ChainRecord> decided = new LinkedHashMap<>();
+        grouped.forEach((key, list) -> {
+            ChainRecord winner = ChainEvidenceRule.decide(list);
+            if (winner != null) {
+                decided.put(key, winner);
+            }
+        });
+        return decided;
+    }
+
     private static Long toLongOrNull(String value) {
         if (value == null || value.isBlank()) {
             return null;
@@ -155,14 +324,9 @@ public class ChainRecordServiceImpl implements IChainRecordService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public ChainRecordContractVO submit(String bizId, Integer bizType, String bizSummary, String tenantId) {
-        if (bizId == null || bizId.isBlank()) {
-            throw new BusinessException(400, "bizId 不能为空");
-        }
-        if (bizType == null) {
-            throw new BusinessException(400, "bizType 不能为空");
-        }
-        ChainRecord record = newRecord(tenantId, String.valueOf(bizType), bizId, bizSummary);
+    public ChainRecordContractVO submit(String bizId, String bizType, String bizSummary, String tenantId) {
+        AnchorTarget target = resolveTarget(normalizeType(bizType), bizId, tenantId);
+        ChainRecord record = newRecord(tenantId, target, bizSummary);
         simulateChain(record);
         insertWithUniqueRecordNo(record);
         return ChainRecordContractVO.of(record);
@@ -176,7 +340,8 @@ public class ChainRecordServiceImpl implements IChainRecordService {
         if (key == null || key.isBlank()) {
             throw new BusinessException(400, "traceCode 与 bizNo 至少给一个（存证要有业务键）");
         }
-        ChainRecord record = newRecord(tenantId, bizType, key, bizSummary);
+        AnchorTarget target = resolveTarget(normalizeType(bizType), key, tenantId);
+        ChainRecord record = newRecord(tenantId, target, bizSummary);
         if (payloadHash != null && !payloadHash.isBlank()) {
             record.setDataHash(payloadHash.trim());
         }
@@ -220,14 +385,20 @@ public class ChainRecordServiceImpl implements IChainRecordService {
         return hit != null && hit > 0;
     }
 
-    /** 组一条待上链的记录（统一入口，避免四条写路径各写一遍字段）。 */
-    private ChainRecord newRecord(String tenantId, String bizType, String bizKey, String bizSummary) {
+    /**
+     * 组一条待上链的记录（统一入口，避免四条写路径各写一遍字段）。
+     *
+     * <p>{@code target_type} 只可能是归一后的四个值之一；{@code target_id} 与 {@code target_code}
+     * 一起写 —— 全链路节点用主键对号、页面用编号对号，两条路都要能对上。</p>
+     */
+    private ChainRecord newRecord(String tenantId, AnchorTarget target, String bizSummary) {
         ChainRecord record = new ChainRecord();
         record.setTenantId(tenantId);
-        record.setTargetType(bizType == null || bizType.isBlank() ? "OTHER" : bizType.trim().toUpperCase());
-        record.setTargetCode(bizKey);
+        record.setTargetType(target.type());
+        record.setTargetId(target.id());
+        record.setTargetCode(target.code());
         record.setChainType(CHAIN_TYPE_SIMULATED);
-        record.setDataHash(sha256(record.getTargetType() + "|" + bizKey + "|" + (bizSummary == null ? "" : bizSummary)));
+        record.setDataHash(sha256(target.type() + "|" + target.code() + "|" + (bizSummary == null ? "" : bizSummary)));
         record.setChainStatus(STATUS_PENDING);
         record.setRetryCount(0);
         record.setDelFlag(0);

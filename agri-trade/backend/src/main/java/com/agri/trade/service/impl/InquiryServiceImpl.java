@@ -51,19 +51,29 @@ public class InquiryServiceImpl extends ServiceImpl<InquiryMapper, Inquiry> impl
                 || !buyerScopeMerchantIds.contains(demand.getBuyerId())) {
             return null;
         }
+        if (hasInquiry(demand.getId(), productId)) {
+            // 重复点"发起询价"不该堆出第二张一模一样的待报价单。
+            return null;
+        }
 
         return createInquiryFromDemand(demand, productId);
     }
 
-    @Override
-    public Inquiry createInquiryFromDemand(Demand demand, Long productId) {
+    /**
+     * 由已通过归属校验的采购需求生成询价单。
+     *
+     * <p>刻意**不放进接口**：这个方法没有归属校验（拿到 Demand 就发问），
+     * 暴露出去等于给后面的人留一条"绕过 createInquiry 那道闸门"的近路。
+     * 调用方必须先确认这张需求属于当前主体。</p>
+     */
+    private Inquiry createInquiryFromDemand(Demand demand, Long productId) {
         TradeProduct product = productMapper.selectById(productId);
         if (product == null) {
             return null;
         }
 
         Inquiry inquiry = new Inquiry();
-        inquiry.setInquiryNo("IN" + System.currentTimeMillis());
+        inquiry.setInquiryNo(nextInquiryNo());
         inquiry.setDemandId(demand.getId());
         inquiry.setDemandNo(demand.getDemandNo());
         inquiry.setProductId(product.getId());
@@ -103,14 +113,26 @@ public class InquiryServiceImpl extends ServiceImpl<InquiryMapper, Inquiry> impl
 
     @Override
     @Transactional
-    public List<Inquiry> batchCreateInquiries(Long demandId, List<Long> productIds, Long buyerId) {
+    public List<Inquiry> batchCreateInquiries(Long demandId, List<Long> productIds,
+                                              java.util.Collection<Long> buyerScopeMerchantIds) {
         Demand demand = demandMapper.selectById(demandId);
         if (demand == null) {
+            return new ArrayList<>();
+        }
+        // 与单条发起同一道闸门：询价单的采购方是从需求带过来的，
+        // 不校验需求归属，任何人都能对别人的需求批量发问（供应商看到的是那家在问）。
+        if (buyerScopeMerchantIds == null || demand.getBuyerId() == null
+                || !buyerScopeMerchantIds.contains(demand.getBuyerId())) {
             return new ArrayList<>();
         }
 
         List<Inquiry> inquiries = new ArrayList<>();
         for (Long productId : productIds) {
+            // 同一张需求对同一个货源只问一次：以前重复点"批量询价"会堆出好几条一模一样的
+            // 待报价单，供应商那边看到的是同一家问了三遍。
+            if (hasInquiry(demandId, productId)) {
+                continue;
+            }
             Inquiry inquiry = createInquiryFromDemand(demand, productId);
             if (inquiry != null) {
                 inquiries.add(inquiry);
@@ -119,13 +141,25 @@ public class InquiryServiceImpl extends ServiceImpl<InquiryMapper, Inquiry> impl
         return inquiries;
     }
 
-    @Override
-    public List<Inquiry> getInquiriesByBuyer(Long buyerId) {
-        LambdaQueryWrapper<Inquiry> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Inquiry::getBuyerId, buyerId);
-        wrapper.eq(Inquiry::getDelFlag, 0);
-        wrapper.orderByDesc(Inquiry::getCreateTime);
-        return baseMapper.selectList(wrapper);
+    /** 这张需求是否已经向该货源发过询价（未删除的）。 */
+    private boolean hasInquiry(Long demandId, Long productId) {
+        Long existing = baseMapper.selectCount(new LambdaQueryWrapper<Inquiry>()
+                .eq(Inquiry::getDemandId, demandId)
+                .eq(Inquiry::getProductId, productId)
+                .eq(Inquiry::getDelFlag, 0));
+        return existing != null && existing > 0;
+    }
+
+    /**
+     * 询价单号。
+     *
+     * <p>以前是 {@code "IN" + currentTimeMillis()}：批量发起时同毫秒会撞 {@code uk_inquiry_no}
+     * 唯一索引，第二条直接抛异常、整批回滚，页面上只剩一句"发起询价失败"。
+     * 后面补 6 位随机段，同毫秒也不同号。</p>
+     */
+    private static String nextInquiryNo() {
+        return "IN" + System.currentTimeMillis()
+                + java.util.UUID.randomUUID().toString().substring(0, 6).toUpperCase();
     }
 
     @Override
@@ -154,31 +188,12 @@ public class InquiryServiceImpl extends ServiceImpl<InquiryMapper, Inquiry> impl
     }
 
     @Override
-    public List<Inquiry> getInquiriesBySeller(Long sellerId) {
-        LambdaQueryWrapper<Inquiry> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Inquiry::getSellerId, sellerId);
-        wrapper.eq(Inquiry::getDelFlag, 0);
-        wrapper.orderByDesc(Inquiry::getCreateTime);
-        return baseMapper.selectList(wrapper);
-    }
-
-    @Override
     public List<Quote> getQuotesByInquiry(Long inquiryId) {
         LambdaQueryWrapper<Quote> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Quote::getInquiryId, inquiryId);
         wrapper.eq(Quote::getDelFlag, 0);
         wrapper.orderByDesc(Quote::getCreateTime);
         return quoteMapper.selectList(wrapper);
-    }
-
-    @Override
-    public void updateInquiryStatus(Long inquiryId, String status) {
-        Inquiry inquiry = baseMapper.selectById(inquiryId);
-        if (inquiry != null) {
-            inquiry.setInquiryStatus(status);
-            inquiry.setUpdateTime(new Date());
-            baseMapper.updateById(inquiry);
-        }
     }
 
     @Override

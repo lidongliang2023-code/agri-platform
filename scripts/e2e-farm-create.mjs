@@ -13,7 +13,7 @@
  * 往 localStorage 写 agri_token 既不生效、启动时还会被清掉 —— 表现为全程 401 并跳登录页。
  * 正确做法：先落到**同源静态文件**（/prod/manifest.json，落 /login 会被送去统一认证中心那个源），
  * 在页面上下文里发一次登录请求（credentials: include，凭据进 HttpOnly Cookie），
- * 再用 evaluateOnNewDocument 写入**非凭证的界面态**（agri_user_info / agri_roles /
+ * 再用 addInitScript 写入**非凭证的界面态**（agri_user_info / agri_roles /
  * agri_permissions / agri_market_id）—— 少写这几项，应用会认定"没登录过"而跳过续签。</p>
  *
  * <p><b>为什么必须驱动真实表单、不能在页面里裸 fetch</b>：访问令牌只存在于
@@ -26,13 +26,19 @@
  * 退出码：0 = 全链路通过；1 = 有断言失败。
  */
 import { createRequire } from 'node:module'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const require2 = createRequire(path.join(REPO_ROOT, 'agri-production/frontend/package.json'))
-const puppeteer = require2('puppeteer')
+const require2 = createRequire(path.join('C:/Users/71502/.workbuddy-ai/binaries/node/workspace', 'noop.js'))
+const { chromium } = require2('playwright-core')
+
+const BROWSER = [
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+].find((candidate) => existsSync(candidate))
 
 const arg = (name, fallback) => {
   const hit = process.argv.slice(2).find((a) => a.startsWith(`--${name}=`))
@@ -84,9 +90,9 @@ const login = await (await fetch(`${BASE_URL}/api/v1/auth/login`, {
 check(login.code === 0, `登录（${USER}）`, `code=${login.code}`)
 if (login.code !== 0) process.exit(1)
 
-const browser = await puppeteer.launch({ headless: HEADFUL ? false : 'new', args: ['--no-sandbox'] })
-const page = await browser.newPage()
-await page.setViewport({ width: 1600, height: 1000 })
+const browser = await chromium.launch({ headless: !HEADFUL, executablePath: BROWSER, args: ['--no-sandbox'] })
+const page = await (await browser.newContext({ viewport: { width: 1440, height: 1000 } })).newPage()
+await page.setViewportSize({ width: 1600, height: 1000 })
 const badResponses = []
 /** 页面自己发出的 POST /farms 的响应体（用来核对契约，而不是靠我们手写请求） */
 let createCall = null
@@ -117,7 +123,7 @@ await page.evaluate(async (creds) => {
 }, { username: USER, password: PASSWORD, marketId: 1 })
 
 // 界面态（非凭证）：不写这几项，应用会认为"没登录过"而跳过续签，页面全程 401
-await page.evaluateOnNewDocument((state) => {
+await page.addInitScript((state) => {
   try {
     localStorage.setItem('agri_user_info', JSON.stringify(state.userInfo))
     localStorage.setItem('agri_roles', JSON.stringify(state.roles ?? []))
@@ -127,14 +133,15 @@ await page.evaluateOnNewDocument((state) => {
 }, { userInfo: login.data.user ?? {}, roles: ['FARMER'], marketId: 1 })
 
 // 1) 列表页：确认登录态真的带上了（而不是"看起来在页面上、其实全程 401"）
-await page.goto(`${BASE_URL}/production/farms`, { waitUntil: 'networkidle2', timeout: 60000 })
-await page.waitForNetworkIdle({ idleTime: 600, timeout: 10000 }).catch(() => {})
+await page.goto(`${BASE_URL}/production/farms`, { waitUntil: 'networkidle', timeout: 60000 })
+await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
+await new Promise((resolve) => setTimeout(resolve, 600))
 const listText = await page.evaluate(() => document.body.innerText)
 check(listText.includes('农场'), '列表页已登录并渲染（含"农场"字样）')
 check(!listText.includes('加载失败'), '列表页没有出现"加载失败"')
 
 // 2) 打开「新增农场」页并填表（字段名就是页面自己的 name，不是后端 DTO 名）
-await page.goto(`${BASE_URL}/production/farms/create`, { waitUntil: 'networkidle2', timeout: 60000 })
+await page.goto(`${BASE_URL}/production/farms/create`, { waitUntil: 'networkidle', timeout: 60000 })
 await page.waitForSelector('#farmName', { timeout: 20000 })
 await page.click('#farmName')
 await page.type('#farmName', farmName, { delay: 10 })
@@ -170,7 +177,7 @@ await page.type('#managerPhone', managerPhone, { delay: 10 })
 // 3) 点「保存并查看详情」→ 成功后页面自己会 navigate 到 /production/farms/{id}
 await clickButtonByText('保存并查看详情')
 let navigated = true
-await page.waitForFunction(() => /^\/production\/farms\/\d+$/.test(location.pathname), { timeout: 30000 })
+await page.waitForFunction(() => /^\/production\/farms\/\d+$/.test(location.pathname), undefined, { timeout: 30000 })
   .catch(() => { navigated = false })
 if (!navigated) {
   const formErrors = await page.evaluate(() =>
@@ -190,7 +197,8 @@ if (createCall) {
 }
 
 // 4) 详情页：面积 / 负责人 / 联系电话必须回显（这三个字段曾被静默丢掉）
-await page.waitForNetworkIdle({ idleTime: 600, timeout: 10000 }).catch(() => {})
+await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
+await new Promise((resolve) => setTimeout(resolve, 600))
 const detailText = await page.evaluate(() => document.body.innerText)
 check(detailText.includes(farmName), '详情页显示农场名称', farmName)
 check(detailText.includes(areaTotal), '详情页显示面积（areaTotal）', areaTotal)
@@ -202,12 +210,14 @@ check(detailText.includes(regionPath[0]) && detailText.includes(regionPath[1]), 
 check(detailText.includes('有机认证'), '详情页显示勾选的资质（有机认证已落库）')
 
 // 5) 列表页用关键字搜到这条新农场（列表默认分页 9 条，不搜不保证在第一页）
-await page.goto(`${BASE_URL}/production/farms`, { waitUntil: 'networkidle2', timeout: 60000 })
-await page.waitForNetworkIdle({ idleTime: 600, timeout: 10000 }).catch(() => {})
+await page.goto(`${BASE_URL}/production/farms`, { waitUntil: 'networkidle', timeout: 60000 })
+await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
+await new Promise((resolve) => setTimeout(resolve, 600))
 await page.waitForSelector('input[placeholder="搜索农场名称/编号..."]', { timeout: 20000 })
 await page.type('input[placeholder="搜索农场名称/编号..."]', farmName, { delay: 10 })
 await clickButtonByText('搜索')
-await page.waitForNetworkIdle({ idleTime: 800, timeout: 15000 }).catch(() => {})
+await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
+await new Promise((resolve) => setTimeout(resolve, 800))
 const listAgain = await page.evaluate(() => document.body.innerText)
 check(listAgain.includes(farmName), '列表中能查到新建的农场', farmName)
 

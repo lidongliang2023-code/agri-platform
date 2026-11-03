@@ -41,6 +41,7 @@ import {
   listMonitorRealtimeAlerts,
   listMonitorTaskStatusStats,
 } from '@/api/admin/monitor'
+import { TiandituMap } from '@agri/shared'
 const { Text, Title } = Typography
 
 /* ==================== 页面内常量与后端字段适配 ==================== */
@@ -631,10 +632,12 @@ export default function MonitorCenter(): JSX.Element {
 
         <Col xs={24} lg={10}>
           <Card size="small" title="区域生产状态地图">
-            <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description="后端暂无「按区域的农场数 / 活跃度」聚合接口，无法绘制区域生产状态地图"
-            />
+            <Space direction="vertical" size={8} style={{ width: '100%' }}>
+              <TiandituMap points={[]} height={300} showLegend={false} />
+              <Text type="secondary">
+                天地图已接入；后端暂未提供区域农场数量与活跃度聚合数据，因此当前只展示底图。
+              </Text>
+            </Space>
           </Card>
         </Col>
       </Row>

@@ -1,0 +1,47 @@
+server:
+  port: 8095
+
+spring:
+  application:
+    name: agri-government
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:mysql}
+  jackson:
+    time-zone: GMT+8
+    date-format: yyyy-MM-dd HH:mm:ss
+    serialization:
+      write-dates-as-timestamps: false
+
+logging:
+  level:
+    com.agri.government: INFO
+
+services:
+  platform:
+    url: http://localhost:8093
+
+# 政府执法端写操作的能力校验：调用核心平台内部接口
+agri:
+  capability:
+    check-url: "${CORE_CAPABILITY_CHECK_URL:http://localhost:8093/api/v1/internal/capability-check}"
+    internal-token: "${AGRI_INTERNAL_TOKEN:agri-internal-dev}"
+  # 溯源核验的数据源：生产域（架构口径=跨域取数走接口，不开别人的库连接）。
+  # 生产域不可达时核验直接报 503，不会退回本域的 gov_trace_event 归档表。
+  production:
+    url: "${AGRI_PRODUCTION_URL:http://localhost:8092}"
+
+platform:
+  rbac:
+    operator-paths:
+      - /api/**
+    read-permission: gov:read
+    write-permission: gov:write
+    require-auth: true
+    # 公众查询与公示（免登录）：主体信用、溯源核验、抽检公示、红黑榜、双公示。
+    # 这些本来就是"给外面看"的数据，页面文案也写着免登录查询；以前挂在
+    # @OperatorOnly("gov:citizen") 的控制器下，结果政府人员账号（gov:inspector）
+    # 打开溯源核验反而 403 —— 监管端最该能核验的那类账号被挡在自己公示页外面。
+    # 放行的这五个接口只回公示字段（见 GovernmentRepository#publicCredit/trace/publicity），
+    # 溯源那条又是刻意脱过敏的最小核验视图。
+    public-paths:
+      - /api/v1/government/public/**

@@ -36,6 +36,12 @@ public interface IPlantingPlanService extends IService<PlantingPlan> {
 
     boolean submitPlan(Long id);
 
+    /** 用户端提交审批：校验归属与状态，生成运营端审批单。 */
+    PlantingPlan submitForApproval(Long id, String tenantId);
+
+    /** 运营端审批通过：校验归属并同步审批单。 */
+    PlantingPlan approveByAdmin(Long id, String tenantId, String approver, String comment);
+
     /* ==================== 前端契约方法 ==================== */
 
     /**

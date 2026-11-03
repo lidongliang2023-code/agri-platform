@@ -215,6 +215,11 @@ public class UserIdentityController {
         view.put("address", entity.getAddress());
         view.put("email", entity.getEmail());
         view.put("businessType", entity.getBusinessType());
+        view.put("policeVerified", Boolean.TRUE.equals(entity.getPoliceVerified()));
+        view.put("livenessVerified", Boolean.TRUE.equals(entity.getLivenessVerified()));
+        view.put("verificationChannel", entity.getVerificationChannel());
+        view.put("policeVerifiedAt", entity.getPoliceVerifiedAt());
+        view.put("livenessVerifiedAt", entity.getLivenessVerifiedAt());
         view.put("status", entity.getStatus());
         view.put("submitTime", entity.getSubmitTime());
         view.put("reviewerName", entity.getReviewerName());

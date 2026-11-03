@@ -66,6 +66,7 @@ public class QualityController {
             @RequestParam(required = false) String inspectResult,
             @RequestParam(required = false) String farmId,
             @RequestParam(required = false) String batchId,
+            @RequestParam(required = false) String labName,
             @RequestParam(required = false) String startDate,
             @RequestParam(required = false) String endDate) {
         String tenantId = TenantContextService.currentTenantId();
@@ -77,7 +78,7 @@ public class QualityController {
                 farmIdResolver.resolveFilter(farmId, tenantId), toLong(batchId),
                 inspectionType != null ? inspectionType : inspectType,
                 result != null ? result : inspectResult,
-                startDate, endDate, tenantId));
+                labName, startDate, endDate, tenantId));
     }
 
     /** 批次下的检测记录（溯源页按批次查）。 */

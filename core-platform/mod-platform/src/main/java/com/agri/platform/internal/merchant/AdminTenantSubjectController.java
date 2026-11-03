@@ -53,7 +53,8 @@ public class AdminTenantSubjectController {
             @RequestBody StatusRequest request) {
         return ApiResponse.ok(tenantSubjectProvider.update(
                 tenantId,
-                new TenantSubjectProvider.TenantSubjectUpdate(null, null, null, null, null, request.status())));
+                new TenantSubjectProvider.TenantSubjectUpdate(
+                        null, null, null, null, null, null, null, null, request.status())));
     }
 
     public record StatusRequest(Integer status) {

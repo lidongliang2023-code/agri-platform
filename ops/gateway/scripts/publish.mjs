@@ -38,16 +38,148 @@ const APPS = {
   prod: { frontendDir: path.join('agri-production', 'frontend'), title: '生产管理系统' },
   mdm: { frontendDir: path.join('agri-master-data', 'web'), title: '主数据管理平台' },
   trade: { frontendDir: path.join('agri-trade', 'frontend'), title: '交易撮合平台' },
-  finance: { frontendDir: path.join('agri-finance', 'frontend'), title: '供应链金融平台' },
+  'trade-mobile': {
+    frontendDir: path.join('agri-trade', 'miniprogram'),
+    title: '交易撮合独立移动端（H5 / 微信小程序 / App）',
+    accessUrl: 'http://localhost:8181/',
+    builder: 'uni-app',
+    distDir: path.join('dist', 'build', 'h5'),
+  },
+  'prod-mobile': {
+    frontendDir: path.join('agri-production', 'miniprogram'),
+    title: '生产管理移动端（H5 / 微信小程序 / App）',
+    accessUrl: 'http://localhost:8180/',
+    builder: 'uni-app',
+    distDir: path.join('dist', 'build', 'h5'),
+  },
+  finance: {
+    frontendDir: path.join('agri-finance', 'frontend'),
+    title: '供应链金融平台',
+    accessUrl: 'http://localhost:8081/finance/',
+  },
+  'iot-web': {
+    frontendDir: path.join('agri-iot', 'web'),
+    title: '物联网管理用户端',
+    accessUrl: 'http://localhost:8101/',
+  },
+  'iot-admin': {
+    frontendDir: path.join('agri-iot', 'ops'),
+    title: '物联网管理运营端',
+    accessUrl: 'http://localhost:8102/',
+  },
+  'iot-mobile': {
+    frontendDir: path.join('agri-iot', 'miniprogram'),
+    title: '物联网管理移动端',
+    accessUrl: 'http://localhost:8111/',
+    builder: 'uni-app',
+    distDir: path.join('dist', 'build', 'h5'),
+  },
   // S2B2C 一个子系统有四个端（渠道/消费者/平台运营/供应商），按端各出一份产物。
   // 生产环境它们同属 mall 子域（按路径区分端），本地为了能直接点开，各给一个端口。
-  'mall-consumer': { frontendDir: path.join('agri-s2b2c', 'frontend-consumer'), title: 'S2B2C 商城（消费者端）' },
-  'mall-supplier': { frontendDir: path.join('agri-s2b2c', 'frontend-supplier'), title: 'S2B2C 商城（供应商端）' },
-  'mall-channel': { frontendDir: path.join('agri-s2b2c', 'frontend-channel'), title: 'S2B2C 商城（渠道端）' },
+  'mall-consumer': {
+    frontendDir: path.join('agri-s2b2c', 'frontend-consumer'),
+    title: 'S2B2C 商城（消费者端）',
+    accessUrl: 'http://localhost:8082/',
+  },
+  'mall-supplier': {
+    frontendDir: path.join('agri-s2b2c', 'frontend-supplier'),
+    title: 'S2B2C 商城（供应商端）',
+    accessUrl: 'http://localhost:8084/',
+  },
+  'mall-channel': {
+    frontendDir: path.join('agri-s2b2c', 'frontend-channel'),
+    title: 'S2B2C 商城（渠道端）',
+    accessUrl: 'http://localhost:8085/',
+  },
+  's2b2c-platform': {
+    frontendDir: path.join('agri-s2b2c', 'frontend-platform'),
+    title: 'S2B2C 平台运营端',
+    accessUrl: 'http://localhost:8103/',
+  },
+  'mall-mobile': {
+    frontendDir: path.join('agri-s2b2c', 'mobile'),
+    title: 'S2B2C 消费者移动端',
+    accessUrl: 'http://localhost:8182/',
+    builder: 'uni-app',
+    distDir: path.join('dist', 'build', 'h5'),
+  },
+  'mall-supplier-mobile': {
+    frontendDir: path.join('agri-s2b2c', 'mobile-supplier'),
+    title: 'S2B2C 供应商移动端',
+    accessUrl: 'http://localhost:8183/',
+    builder: 'uni-app',
+    distDir: path.join('dist', 'build', 'h5'),
+  },
+  'mall-channel-mobile': {
+    frontendDir: path.join('agri-s2b2c', 'mobile-channel'),
+    title: 'S2B2C 渠道商移动端',
+    accessUrl: 'http://localhost:8184/',
+    builder: 'uni-app',
+    distDir: path.join('dist', 'build', 'h5'),
+  },
   sso: { frontendDir: path.join('agri-sso', 'frontend'), title: '统一认证中心登录页' },
+  // 用户中心运营端：与 SSO 登录页同属 agri-sso，但产物、端口、入口路径都独立。
+  'user-center-ops': {
+    frontendDir: path.join('agri-sso', 'ops'),
+    title: '用户中心运营端',
+    accessUrl: 'http://localhost:8115/user-center-ops/',
+  },
   portal: { frontendDir: path.join('agri-portal', 'frontend'), title: '农产云官网门户' },
-  // 注意：agri-s2b2c/frontend-platform 未登记 —— 它当前构建不过（既有源码缺陷，见 ops/workspace/README.md），
-  // 发布器对「未登记子系统」会直接拒绝，这里保持拒绝状态而不是登记一个发布不出来的应用。
+  // 信息资讯（agri-info）：独立子系统，用户端与运营端各一份产物，共用 info 后端。
+  // 与综合服务（service）并列，不复用 agri-service 的包名、端口与产物目录。
+  info: {
+    frontendDir: path.join('agri-info', 'frontend'),
+    title: '信息资讯用户端',
+    accessUrl: 'http://localhost:8104/info/',
+  },
+  'info-ops': {
+    frontendDir: path.join('agri-info', 'ops'),
+    title: '信息资讯运营端',
+    accessUrl: 'http://localhost:8113/info-ops/',
+  },
+  // 信息资讯移动端：同一套 uni-app 源码产出 H5 / 微信小程序 / App，
+  // 这里只发布 H5 产物；小程序与 App 由 CI 单独取 dist/build/mp-weixin、dist/build/app。
+  'info-mobile': {
+    frontendDir: path.join('agri-info', 'mobile'),
+    title: '信息资讯移动端',
+    accessUrl: 'http://localhost:8114/',
+    builder: 'uni-app',
+    distDir: path.join('dist', 'build', 'h5'),
+  },
+  service: {
+    frontendDir: path.join('agri-service', 'frontend'),
+    title: '综合服务门户',
+    accessUrl: 'http://localhost:8105/',
+  },
+  'service-mobile': {
+    frontendDir: path.join('agri-service', 'mobile'),
+    title: '综合服务移动端',
+    accessUrl: 'http://localhost:8106/',
+    builder: 'uni-app',
+    distDir: path.join('dist', 'build', 'h5'),
+  },
+  'service-ops': {
+    frontendDir: path.join('agri-service', 'ops'),
+    title: '综合服务运营端',
+    accessUrl: 'http://localhost:8107/',
+  },
+  gov: {
+    frontendDir: path.join('agri-government', 'frontend'),
+    title: '政府监管服务用户端',
+    accessUrl: 'http://localhost:8108/',
+  },
+  'gov-mobile': {
+    frontendDir: path.join('agri-government', 'mobile'),
+    title: '政府监管移动执法端',
+    accessUrl: 'http://localhost:8109/',
+    builder: 'uni-app',
+    distDir: path.join('dist', 'build', 'h5'),
+  },
+  'gov-ops': {
+    frontendDir: path.join('agri-government', 'ops'),
+    title: '政府监管运营端',
+    accessUrl: 'http://localhost:8110/',
+  },
 }
 
 const USAGE = `用法：
@@ -123,15 +255,27 @@ async function publishVersion(app, version, distDir, { force, repoint }) {
     if (existsSync(versionDir) && !force) {
       fail(`版本目录已存在：${versionDir}\n版本目录按约定不可变。换一个 --version，或在确认要覆盖时加 --force。`)
     }
-    // 关键校验：资源前缀必须与版本目录一致，否则就是"指针切过去了、资源却 404"的白屏发布
+    // 关键校验：资源前缀必须与版本目录一致，否则就是"指针切过去了、资源却 404"的白屏发布。
+    //
+    // 这里刻意**逐个比对前缀**而不是 `index.html.includes(expectedPrefix)`：
+    // Git Bash / MSYS2 会把以 `/` 开头的参数当成路径做转换，`--base=/prod/versions/x/`
+    // 会变成 `/Program Files/.../PortableGit/prod/versions/x/` —— 这个串**包含**
+    // `/prod/versions/x/` 这段子串，于是 includes 检查放行，页面整片白屏。
+    // 2026-10-28 实际踩过一次：产物发上去了，打开是空白页，控制台报
+    // "Expected a JavaScript-or-Wasm module script but the server responded with text/html"。
     const distIndex = await readFile(path.join(distDir, 'index.html'), 'utf8')
     const expectedPrefix = `/${app}/versions/${version}/`
-    if (!distIndex.includes(expectedPrefix)) {
+    const assetUrls = [...distIndex.matchAll(/(?:src|href)="([^"]+)"/g)]
+      .map((match) => match[1])
+      .filter((url) => url.startsWith('/') && !url.startsWith('//'))
+    const badUrls = assetUrls.filter((url) => !url.startsWith(expectedPrefix))
+    if (assetUrls.length === 0 || badUrls.length > 0) {
       fail(
         `产物里的资源前缀与版本目录不一致，发布后必然白屏。\n` +
-          `  期望包含：${expectedPrefix}\n` +
-          `  实际 index.html 片段：${(distIndex.match(/src="[^"]+"/) || ['(未找到 script src)'])[0]}\n` +
-          `  解法：用 --build 发布（脚本会带 --base=/${app}/versions/${version}/ 重新构建）。`,
+          `  期望每个资源都以：${expectedPrefix} 开头\n` +
+          `  不合格的资源：${badUrls.slice(0, 3).join(' | ') || '(未找到任何本地资源引用)'}\n` +
+          `  解法一：用 --build 发布（脚本会带 --base=/${app}/versions/${version}/ 重新构建）。\n` +
+          `  解法二：自己构建时在 Git Bash 下加 MSYS_NO_PATHCONV=1，否则 --base 里的 / 会被当成路径转换。`,
       )
     }
     await rm(versionDir, { recursive: true, force: true })
@@ -173,14 +317,16 @@ if (args.repoint) {
   const dir = await publishVersion(args.app, args.repoint, null, { force: false, repoint: true })
   console.log(`\n✓ 指针已切到 ${args.app}@${args.repoint}`)
   console.log(`  版本目录 ${dir}`)
-  console.log(`  访问     http://localhost/${args.app}/index.html\n`)
+  console.log(`  访问     ${appConfig.accessUrl ?? `http://localhost/${args.app}/index.html`}\n`)
   process.exit(0)
 }
 
 if (!args.version) fail('缺少 --version')
 if (args.build && args.dist) fail('--build 与 --dist 不能同时给：前者是现场构建，后者是直接发布现成产物')
 // 产物目录：默认取工程内 dist；CI 或"构建在别处、只在这里发布"时用 --dist 指定
-const distDir = args.dist ? path.resolve(args.dist) : path.join(frontendDir, 'dist')
+const distDir = args.dist
+  ? path.resolve(args.dist)
+  : path.join(frontendDir, appConfig.distDir ?? 'dist')
 
 /**
  * 找 npm 包里的可执行脚本，兼容两种 node_modules 布局。
@@ -213,6 +359,21 @@ function resolveBin(frontendDir, pkg, relBin) {
 if (args.build) {
   const base = `/${args.app}/versions/${args.version}/`
   console.log(`构建 ${appConfig.title}（base=${base}）…`)
+  if (appConfig.builder === 'uni-app') {
+    const vueTscBin = resolveBin(frontendDir, 'vue-tsc', path.join('bin', 'vue-tsc.js'))
+    if (vueTscBin) {
+      const typecheck = spawnSync(process.execPath, [vueTscBin, '--noEmit'], { cwd: frontendDir, stdio: 'inherit' })
+      if (typecheck.status !== 0) fail('uni-app 类型检查未通过，发布中止')
+    }
+    const uniBin = resolveBin(frontendDir, '@dcloudio/vite-plugin-uni', path.join('bin', 'uni.js'))
+    if (!uniBin) fail(`找不到 uni-app 构建器（${frontendDir}）`)
+    const build = spawnSync(
+      process.execPath,
+      [uniBin, 'build'],
+      { cwd: frontendDir, stdio: 'inherit', env: { ...process.env, UNI_H5_BASE: base } },
+    )
+    if (build.status !== 0) fail('uni-app H5 构建失败，发布中止')
+  } else {
   // 类型检查只在工程真的装了 TypeScript 时才跑：Vue 系的工程没有 TS，
   // 无条件调用会因找不到 tsc 而把发布直接中止（不是类型错误，却报成失败）。
   const tscBin = resolveBin(frontendDir, 'typescript', path.join('bin', 'tsc'))
@@ -227,9 +388,10 @@ if (args.build) {
   const vite = spawnSync(
     process.execPath,
     [viteBin, 'build', `--base=${base}`],
-    { cwd: frontendDir, stdio: 'inherit' },
+    { cwd: frontendDir, stdio: 'inherit', env: { ...process.env, ...(appConfig.buildEnv ?? {}) } },
   )
   if (vite.status !== 0) fail('构建失败，发布中止')
+  }
 }
 
 const versionDir = await publishVersion(args.app, args.version, distDir, {
@@ -239,5 +401,5 @@ const versionDir = await publishVersion(args.app, args.version, distDir, {
 console.log(`\n✓ 已发布 ${args.app}@${args.version}`)
 console.log(`  版本目录 ${versionDir}`)
 console.log(`  指针     ${path.join(BUCKET_DIR, args.app, 'index.html')}`)
-console.log(`  访问     http://localhost/${args.app}/index.html`)
+  console.log(`  访问     ${appConfig.accessUrl ?? `http://localhost/${args.app}/index.html`}`)
 console.log(`  回滚     node ops/gateway/scripts/publish.mjs --app ${args.app} --repoint <旧版本>\n`)

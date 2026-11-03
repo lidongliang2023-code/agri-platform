@@ -36,8 +36,9 @@ public class AdminProductController {
             @RequestParam(required = false) String productCode,
             @RequestParam(required = false) String categoryId,
             @RequestParam(required = false) String status,
+            @RequestParam(required = false) String auditStatus,
             @RequestParam(required = false) String tenantId) {
-        return ApiResponse.success(adminProductService.getProductList(pageNum, pageSize, productName, productCode, categoryId, status, tenantId));
+        return ApiResponse.success(adminProductService.getProductList(pageNum, pageSize, productName, productCode, categoryId, status, auditStatus, tenantId));
     }
 
     @Operation(summary = "获取商品详情")
@@ -71,6 +72,13 @@ public class AdminProductController {
     @PutMapping("/{id}/status")
     public ApiResponse<Void> updateProductStatus(@PathVariable Long id, @RequestParam String status) {
         adminProductService.updateProductStatus(id, status);
+        return ApiResponse.success();
+    }
+
+    @Operation(summary = "SPU 准入审核（只改 audit_status，不动上下架）")
+    @PutMapping("/{id}/audit")
+    public ApiResponse<Void> auditProduct(@PathVariable Long id, @RequestParam String auditStatus) {
+        adminProductService.auditProduct(id, auditStatus);
         return ApiResponse.success();
     }
 

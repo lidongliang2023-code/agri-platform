@@ -7,6 +7,10 @@
         FROM agri_md_supplier s
         LEFT JOIN agri_md_organization o ON s.org_id = o.id
         WHERE s.del_flag = 0
+        <!-- 同 selectCustomerList：tenantId 必须真正参与过滤，否则企业端能看到别家的供应商 -->
+        <if test="tenantId != null and tenantId != ''">
+            AND s.tenant_id = #{tenantId}
+        </if>
         ORDER BY s.create_time DESC
     </select>
 

@@ -2,7 +2,7 @@
 /**
  * 买家中心全链路回归（2026-10-22）：
  * 发布采购需求 → 撮合与询价 → 卖家报价 → 买家受理成单 → 双方签合同
- * → 支付/发货/收货 → 售后纠纷 → 评价 → 申请开票 → 运营开票。
+ * → 支付/发货/收货 → 售后纠纷 → 结算 → 评价 → 申请开票 → 运营开票。
  *
  * 另建一张短链路订单验证收货后退款及买家中心退款记录接口。
  * 默认保留测试单据，便于页面复核；所有 ID 会在结束时打印。
@@ -349,6 +349,14 @@ try {
     WHERE order_id = ${mainOrderId} AND del_flag = 0 ORDER BY id DESC LIMIT 1
   `))
   check(disputeId > 0, '售后工单真实落库', `disputeId=${disputeId}`)
+  const blockedSettlement = await request(
+    'POST',
+    `/api/trade/admin/settlement/${mainOrderId}/settle`,
+    adminToken,
+    {},
+  )
+  check(blockedSettlement.body.code !== 200,
+    '存在未结售后时禁止提前结算', blockedSettlement.body.message ?? '')
   expectOk(await request('POST', `/api/trade/dispute/${disputeId}/resolve`, buyerToken, {
     result: 'agreed',
     remark: '供应商补偿包装费用，双方和解',
@@ -359,6 +367,14 @@ try {
   `)[0] ?? []
   check(disputeState[0] === 'resolved' && disputeState[1] === 'resolved',
     '售后工单关闭并保留处理结果', disputeState.join('/'))
+  const settlement = expectOk(await request(
+    'POST',
+    `/api/trade/admin/settlement/${mainOrderId}/settle`,
+    adminToken,
+    {},
+  ), '售后关闭后由运营完成资金结算')
+  check(Number(settlement?.sellerReceivable) === 248.8,
+    '结算金额扣除平台服务费并真实落库', `¥${settlement?.sellerReceivable}`)
 
   console.log('\n== 采购评价 ==')
   expectOk(await request('POST', '/api/trade/evaluation', buyerToken, {

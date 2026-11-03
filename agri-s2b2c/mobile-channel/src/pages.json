@@ -1,0 +1,31 @@
+{
+  "pages": [
+    { "path": "pages/home/index", "style": { "navigationBarTitleText": "渠道商工作台", "enablePullDownRefresh": true } },
+    { "path": "pages/pool/index", "style": { "navigationBarTitleText": "选品中心", "enablePullDownRefresh": true } },
+    { "path": "pages/products/index", "style": { "navigationBarTitleText": "我的货架", "enablePullDownRefresh": true } },
+    { "path": "pages/orders/index", "style": { "navigationBarTitleText": "订单管理", "enablePullDownRefresh": true } },
+    { "path": "pages/commissions/index", "style": { "navigationBarTitleText": "佣金管理", "enablePullDownRefresh": true } },
+    { "path": "pages/growth/index", "style": { "navigationBarTitleText": "营销与售后" } },
+    { "path": "pages/profile/index", "style": { "navigationBarTitleText": "店铺信息" } },
+    { "path": "pages/login/index", "style": { "navigationStyle": "custom" } }
+  ],
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "丰链云渠道商",
+    "navigationBarBackgroundColor": "#ffffff",
+    "backgroundColor": "#f4f7f5",
+    "backgroundTextStyle": "dark"
+  },
+  "tabBar": {
+    "color": "#94a198",
+    "selectedColor": "#12764a",
+    "borderStyle": "white",
+    "backgroundColor": "#ffffff",
+    "list": [
+      { "pagePath": "pages/home/index", "text": "工作台" },
+      { "pagePath": "pages/pool/index", "text": "选品" },
+      { "pagePath": "pages/commissions/index", "text": "佣金" },
+      { "pagePath": "pages/profile/index", "text": "我的" }
+    ]
+  }
+}

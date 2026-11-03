@@ -17,12 +17,17 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        // 默认指向 core-platform 的默认端口 8099。
-        // 8080 在本机被一个无关的微服务注册中心长期占用（discoveryComposite），
-        // core-platform 无法抢占，因此默认端口已改为 8099，前端同步对齐。
-        // 需要临时指向别处时用环境变量覆盖：
-        //   VITE_PROXY_TARGET=http://localhost:8111 npm run dev
-        target: process.env.VITE_PROXY_TARGET ?? 'http://localhost:8099',
+        // 默认指向**网关**（nginx :80），而不是某个后端的直连端口。
+        //
+        // 原因：`/api/v1/production/**` 现在由网关**按路径段**分发 —— iot/plots/growth 等
+        // 走 agri-production，未切换的段回退到 core-platform。开发时如果直连某个后端，
+        // 就绕过了这张路由表，会出现"本地好好的、发布后页面 500"（2026-10-28 实测踩过：
+        // 服务在 8094 上跑得好好的，网关却把 /monitor/** 兜底给了 core-platform）。
+        // 走网关能让开发与生产的路由行为完全一致。
+        //
+        // 只想直连某个后端时用环境变量覆盖：
+        //   VITE_PROXY_TARGET=http://localhost:8092 npm run dev   # 只打 agri-production
+        target: process.env.VITE_PROXY_TARGET ?? 'http://localhost',
         changeOrigin: true,
       },
     },

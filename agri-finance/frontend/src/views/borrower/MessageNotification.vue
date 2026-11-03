@@ -140,9 +140,9 @@ onMounted(load)
 
 .message-summary > div:first-child { border-left: 0; }
 .message-summary span, .message-summary strong { display: block; }
-.message-summary span { color: #85958c; font-size: 8px; }
+.message-summary span { color: #85958c; font-size: var(--fin-fs-xs); }
 .message-summary strong { margin-top: 4px; color: #244e36; font-family: ui-monospace, Consolas, monospace; font-size: 18px; }
-.message-summary em { color: #697d70; font-size: 9px; font-style: normal; }
+.message-summary em { color: #697d70; font-size: var(--fin-fs-xs); font-style: normal; }
 
 .message-card { min-height: 260px; }
 .finance-tabs button i {
@@ -155,7 +155,7 @@ onMounted(load)
   border-radius: 99px;
   background: #e2a72f;
   color: #3d2900;
-  font-size: 7px;
+  font-size: var(--fin-fs-xs);
   font-style: normal;
 }
 
@@ -181,9 +181,9 @@ onMounted(load)
 .message-type-icon.red { background: #fdecea; color: #b44c44; }
 .message-main { min-width: 0; }
 .message-main > div { display: flex; align-items: center; gap: 8px; }
-.message-main strong { color: #344f3f; font-size: 10.5px; }
-.message-main p { margin: 4px 0; color: #71857a; font-size: 8.5px; line-height: 1.55; }
-.message-main > span { color: #929f97; font-size: 7.5px; }
+.message-main strong { color: #344f3f; font-size: var(--fin-fs-xs); }
+.message-main p { margin: 4px 0; color: #71857a; font-size: var(--fin-fs-xs); line-height: 1.55; }
+.message-main > span { color: #929f97; font-size: var(--fin-fs-xs); }
 .message-unread-dot { width: 7px; height: 7px; border-radius: 50%; background: #168052; box-shadow: 0 0 0 4px rgba(22, 128, 82, .08); }
 
 @media (max-width: 680px) {

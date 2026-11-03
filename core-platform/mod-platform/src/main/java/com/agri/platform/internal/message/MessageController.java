@@ -36,6 +36,20 @@ public class MessageController {
         return ApiResponse.ok(PageResult.of(result.getRecords(), result.getTotal(), page, size));
     }
 
+    /**
+     * 未读数。
+     *
+     * <p>单独给一个端点，是因为侧栏角标只需要一个数字 ——
+     * 让前端拉一页消息再自己数，既不准（只数得到当前页）也浪费。</p>
+     */
+    @GetMapping("/unread-count")
+    public ApiResponse<Long> unreadCount() {
+        Long count = messageMapper.selectCount(new LambdaQueryWrapper<MessageEntity>()
+                .eq(MessageEntity::getUserId, MarketContext.currentUserId())
+                .eq(MessageEntity::getReadFlag, 0));
+        return ApiResponse.ok(count == null ? 0L : count);
+    }
+
     @PostMapping("/{id}/read")
     public ApiResponse<Void> read(@PathVariable Long id) {
         MessageEntity message = messageMapper.selectById(id);

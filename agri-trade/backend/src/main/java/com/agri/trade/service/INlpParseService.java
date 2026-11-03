@@ -1,10 +1,6 @@
 package com.agri.trade.service;
 
-import com.agri.trade.entity.Demand;
-
 public interface INlpParseService {
-
-    Demand parseNaturalLanguage(String naturalText, Long userId);
 
     ParsedDemandResult parseAndExtract(String naturalText);
 

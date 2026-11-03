@@ -77,5 +77,5 @@ onMounted(load)
 </script>
 
 <style scoped>
-.finance-kpi em { color: #60776a; font-size: 10px; font-style: normal; }
+.finance-kpi em { color: #60776a; font-size: var(--fin-fs-xs); font-style: normal; }
 </style>

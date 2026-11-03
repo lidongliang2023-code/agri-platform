@@ -1,4 +1,5 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
+import { canAccessFinancePath, financeHomeForPermissions } from '../auth'
 
 const routes = [
   { path: '/', redirect: '/borrower/home' },
@@ -71,9 +72,11 @@ const routes = [
       { path: '', redirect: '/fund/workbench' },
       { path: 'workbench', component: () => import('../views/fund/Workbench.vue'), meta: { title: '资金工作台' } },
       { path: 'asset-market', component: () => import('../views/fund/AssetMarket.vue'), meta: { title: '资产市场' } },
+      { path: 'asset-market/:assetId', component: () => import('../views/fund/AssetDetail.vue'), meta: { title: '资产详情' } },
       { path: 'approval', component: () => import('../views/fund/ApprovalManagement.vue'), meta: { title: '审批管理' } },
       { path: 'my-investment', component: () => import('../views/fund/MyInvestment.vue'), meta: { title: '我的投资' } },
       { path: 'product-config', component: () => import('../views/fund/ProductConfig.vue'), meta: { title: '产品配置' } },
+      { path: 'risk-center', component: () => import('../views/fund/RiskCenter.vue'), meta: { title: '三角链风控中台' } },
       { path: 'risk-strategy', component: () => import('../views/fund/RiskStrategy.vue'), meta: { title: '风控策略' } },
       { path: 'report', component: () => import('../views/shared/OpsReport.vue'), meta: { title: '数据报表' } },
     ],
@@ -90,6 +93,8 @@ const routes = [
       { path: 'overdue', component: () => import('../views/admin/OverdueManagement.vue'), meta: { title: '逾期管理' } },
       { path: 'credit-management', component: () => import('../views/admin/CreditManagement.vue'), meta: { title: '信用查询' } },
       { path: 'pledge', component: () => import('../views/admin/PledgeManagement.vue'), meta: { title: '质押与仓单' } },
+      { path: 'pledge-goods', component: () => import('../views/admin/PledgeGoodsDictionary.vue'), meta: { title: '质押物目录' } },
+      { path: 'fund-provider', component: () => import('../views/admin/FundProviderManagement.vue'), meta: { title: '资金机构' } },
       { path: 'blacklist', component: () => import('../views/admin/BlacklistManagement.vue'), meta: { title: '黑名单管理' } },
       { path: 'risk', component: () => import('../views/fund/RiskStrategy.vue'), meta: { title: '风险规则' } },
       { path: 'report', component: () => import('../views/shared/OpsReport.vue'), meta: { title: '报表中心' } },
@@ -106,6 +111,12 @@ const routes = [
 const router = createRouter({
   history: createWebHashHistory(),
   routes
+})
+
+router.beforeEach((to) => {
+  if (canAccessFinancePath(to.path)) return true
+  const home = financeHomeForPermissions()
+  return home && home !== to.path ? home : false
 })
 
 export default router

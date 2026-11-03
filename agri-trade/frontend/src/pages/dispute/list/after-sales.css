@@ -59,7 +59,7 @@
 .after-overview-title small,
 .after-hero small {
   color: #188454;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
   font-weight: 800;
   letter-spacing: .1em;
 }
@@ -75,7 +75,7 @@
 .after-hero p {
   margin: 5px 0 0;
   color: #7d9084;
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .after-overview-actions {
@@ -106,7 +106,7 @@
 
 .after-overview-stats span {
   color: #82948a;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .after-overview-stats strong {
@@ -125,12 +125,12 @@
   border-radius: 9px;
   background: #fffbeb;
   color: #8a671a;
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .after-count {
   color: var(--mc-ink-500);
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .after-toolbar {
@@ -167,7 +167,7 @@
   justify-content: center;
   gap: 9px;
   color: var(--mc-ink-500);
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .after-table {
@@ -194,7 +194,7 @@
 
 .after-name-link span {
   color: #85968c;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .after-name-link:hover strong {
@@ -213,7 +213,7 @@
   max-width: 180px;
   overflow: hidden;
   color: #536b5c;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -225,7 +225,7 @@
   flex: 0 0 auto;
   place-items: center;
   border-radius: 6px;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
   font-weight: 800;
 }
 
@@ -249,13 +249,13 @@
 .after-claim-cell span {
   color: #d25b2d;
   font-family: "DIN Alternate", "Roboto Mono", ui-monospace, monospace;
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .after-claim-cell small {
   overflow: hidden;
   color: #8a9a90;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -264,7 +264,7 @@
   display: block;
   margin-top: 4px;
   color: #8a9b91;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .after-action {
@@ -335,20 +335,20 @@
 
 .after-party-grid span:not(.after-party-badge) {
   color: #8a9b90;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .after-party-grid strong {
   overflow: hidden;
   color: #365440;
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .after-party-grid small {
   color: #96a49c;
-  font-size: 8px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .after-case-grid {
@@ -369,13 +369,13 @@
 
 .after-case-grid span {
   color: #899a90;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .after-case-grid strong {
   margin-top: 4px;
   color: #3d5a48;
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .after-case-grid .after-amount {
@@ -393,7 +393,7 @@
 
 .after-description > span {
   color: #8a9b91;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .after-description > strong {
@@ -404,7 +404,7 @@
 .after-description > p {
   margin: 3px 0 0;
   color: #687e70;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
   line-height: 1.8;
 }
 
@@ -421,13 +421,13 @@
 
 .after-result-list span {
   color: #8b9c92;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .after-result-list p {
   margin: 4px 0 0;
   color: #4d6756;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
   line-height: 1.7;
 }
 
@@ -482,12 +482,12 @@
 
 .after-timeline strong {
   color: #496452;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .after-timeline small {
   color: #91a097;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .after-advice,
@@ -506,7 +506,7 @@
   gap: 7px;
   margin: 0;
   color: #718579;
-  font-size: 9.5px;
+  font-size: var(--agri-font-size-micro);
   line-height: 1.65;
 }
 
@@ -528,7 +528,7 @@
 
 .after-form .ant-form-item-label > label {
   color: #4a6554;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
   font-weight: 600;
 }
 
@@ -574,13 +574,13 @@
 
 .after-duration span {
   color: #536d5c;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .after-duration small {
   margin-top: 6px;
   color: #8a9b91;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
   line-height: 1.6;
 }
 
@@ -602,12 +602,12 @@
 
 .logistics-carrier-cell span {
   color: #3f5e4b;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .logistics-carrier-cell small {
   color: #8a9a91;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .logistics-receiver-cell {
@@ -619,13 +619,13 @@
 
 .logistics-receiver-cell strong {
   color: #486452;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .logistics-receiver-cell small {
   overflow: hidden;
   color: #8a9b91;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -634,7 +634,7 @@
   max-width: 180px;
   overflow: hidden;
   color: #63796b;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -667,13 +667,13 @@
 
 .logistics-route small {
   color: #8c9d92;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .logistics-route strong {
   overflow: hidden;
   color: #3c5a47;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -748,7 +748,7 @@
   border-radius: 50%;
   background: #fff;
   color: #9ba9a1;
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .logistics-trace-item.latest .logistics-trace-dot {
@@ -764,7 +764,7 @@
 
 .logistics-trace-item strong {
   color: #3b5846;
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .logistics-trace-item p {
@@ -773,12 +773,12 @@
   gap: 5px;
   margin: 5px 0 3px;
   color: #75897d;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .logistics-trace-item small {
   color: #95a39b;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 @media (max-width: 1100px) {

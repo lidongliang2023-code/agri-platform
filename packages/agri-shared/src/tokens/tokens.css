@@ -14,8 +14,15 @@
   --agri-content-bg: #f5f7fa;
   --agri-container-bg: #ffffff;
   --agri-radius: 6px;
+  /* 字号阶梯：micro 是可读下限，任何可见文字不得小于它 */
+  --agri-font-size-micro: 12px;
+  --agri-font-size-aux: 13px;
   --agri-font-size-base: 14px;
   --agri-font-size-card-header: 15px;
+  --agri-font-size-card-title: 16px;
+  --agri-font-size-section: 18px;
+  --agri-font-size-page: 22px;
+  --agri-font-size-display: 28px;
   --agri-sider-width: 220px;
   --agri-sider-collapsed-width: 72px;
   --agri-header-height: 56px;

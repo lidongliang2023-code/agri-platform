@@ -143,7 +143,7 @@ onMounted(load)
   border-radius: 10px;
   background: #fff2f0;
   color: #a8473f;
-  font-size: 10px;
+  font-size: var(--fin-fs-xs);
 }
 
 .credit-hero {
@@ -184,12 +184,12 @@ onMounted(load)
 
 .credit-score-ring span {
   color: rgba(255, 255, 255, .57);
-  font-size: 9px;
+  font-size: var(--fin-fs-xs);
 }
 
 .credit-hero-copy > small {
   color: #a9dfbe;
-  font-size: 8px;
+  font-size: var(--fin-fs-xs);
   font-weight: 800;
   letter-spacing: .1em;
 }
@@ -202,7 +202,7 @@ onMounted(load)
 .credit-hero-copy > p {
   margin: 0;
   color: rgba(255, 255, 255, .62);
-  font-size: 9px;
+  font-size: var(--fin-fs-xs);
 }
 
 .credit-hero-meta {
@@ -213,7 +213,7 @@ onMounted(load)
 
 .credit-hero-meta span {
   color: rgba(255, 255, 255, .56);
-  font-size: 8px;
+  font-size: var(--fin-fs-xs);
 }
 
 .credit-hero-meta b {
@@ -226,7 +226,7 @@ onMounted(load)
 
 .finance-kpi em {
   color: #60776a;
-  font-size: 10px;
+  font-size: var(--fin-fs-xs);
   font-style: normal;
 }
 
@@ -253,7 +253,7 @@ onMounted(load)
 
 .credit-dimensions span {
   color: #506a59;
-  font-size: 9px;
+  font-size: var(--fin-fs-xs);
   font-weight: 650;
 }
 
@@ -265,14 +265,14 @@ onMounted(load)
 
 .credit-dimensions b small {
   color: #97a49c;
-  font-size: 7px;
+  font-size: var(--fin-fs-xs);
   font-weight: 500;
 }
 
 .credit-dimensions p {
   margin: 6px 0 0;
   color: #89978f;
-  font-size: 7.5px;
+  font-size: var(--fin-fs-xs);
 }
 
 .credit-advice-body {
@@ -292,13 +292,13 @@ onMounted(load)
 .credit-advice-body b {
   color: var(--fin-green-700);
   font-family: ui-monospace, Consolas, monospace;
-  font-size: 8px;
+  font-size: var(--fin-fs-xs);
 }
 
 .credit-advice-body p {
   margin: 0;
   color: #74877b;
-  font-size: 8.5px;
+  font-size: var(--fin-fs-xs);
   line-height: 1.6;
 }
 
@@ -308,7 +308,7 @@ onMounted(load)
   border-radius: 9px;
   background: #eff9f3;
   color: #557260;
-  font-size: 8.5px;
+  font-size: var(--fin-fs-xs);
   line-height: 1.6;
 }
 
@@ -332,19 +332,19 @@ onMounted(load)
 
 .credit-file-grid span {
   color: #87988e;
-  font-size: 8px;
+  font-size: var(--fin-fs-xs);
 }
 
 .credit-file-grid strong {
   margin-top: 4px;
   color: #365442;
-  font-size: 11px;
+  font-size: var(--fin-fs-xs);
 }
 
 .credit-file-grid small {
   margin-top: 3px;
   color: #9ca7a0;
-  font-size: 7.5px;
+  font-size: var(--fin-fs-xs);
 }
 
 @media (max-width: 980px) {

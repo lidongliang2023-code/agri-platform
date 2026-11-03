@@ -10,12 +10,14 @@ import com.agri.production.common.util.BeanCopyUtils;
 import com.agri.production.vo.FarmVO;
 import com.agri.production.vo.TaskVO;
 import com.agri.production.vo.TraceCodeVO;
+import com.agri.production.service.TenantContextService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -35,6 +37,8 @@ public class ProductionAdminController {
     // agri_prod_quality_inspection 只有 3 列对得上，这个控制器的统计与列表一直是坏的
     private final com.agri.production.mapper.InspectionMapper inspectionMapper;
     private final com.agri.production.service.FarmIdResolver farmIdResolver;
+    private final com.agri.production.service.IotDeviceStatsService iotDeviceStats;
+    private final com.agri.production.integration.IotDeviceClient iotDeviceClient;
 
     public ProductionAdminController(
             com.agri.production.mapper.FarmMapper farmMapper,
@@ -45,7 +49,9 @@ public class ProductionAdminController {
             com.agri.production.mapper.AlertRecordMapper alertRecordMapper,
             com.agri.production.mapper.IoTDeviceMapper ioTDeviceMapper,
             com.agri.production.mapper.InspectionMapper inspectionMapper,
-            com.agri.production.service.FarmIdResolver farmIdResolver) {
+            com.agri.production.service.FarmIdResolver farmIdResolver,
+            com.agri.production.service.IotDeviceStatsService iotDeviceStats,
+            com.agri.production.integration.IotDeviceClient iotDeviceClient) {
         this.farmMapper = farmMapper;
         this.taskMapper = taskMapper;
         this.traceCodeMapper = traceCodeMapper;
@@ -55,6 +61,8 @@ public class ProductionAdminController {
         this.ioTDeviceMapper = ioTDeviceMapper;
         this.inspectionMapper = inspectionMapper;
         this.farmIdResolver = farmIdResolver;
+        this.iotDeviceStats = iotDeviceStats;
+        this.iotDeviceClient = iotDeviceClient;
     }
 
     @GetMapping("/dashboard")
@@ -117,10 +125,70 @@ public class ProductionAdminController {
      * 两个同路径处理器会直接让应用起不来，所以是**替换**而不是并存。
      */
 
+    /**
+     * 运营端设备列表。
+     *
+     * <p>数据源改成物联网系统的设备台账，但**出参形状不变**（仍是 {@code List<IoTDevice>}），
+     * 免得运营端页面跟着改。设备台账收敛后，生产端的 {@code agri_prod_iot_device}
+     * 已无写入入口，继续读它只会读到一份不再更新的历史快照。</p>
+     */
     @GetMapping("/devices")
-    public ApiResponse<List<IoTDevice>> getDeviceList() {
-        List<IoTDevice> devices = ioTDeviceMapper.selectList(null);
+    public ApiResponse<List<IoTDevice>> getDeviceList(
+            @RequestHeader(value = "Authorization", required = false) String authorization) {
+        List<Map<String, Object>> rows = iotDeviceClient.listDevices(authorization, Map.of());
+        List<IoTDevice> devices = new ArrayList<>();
+        for (Map<String, Object> row : rows) {
+            IoTDevice device = new IoTDevice();
+            device.setId(asLong(row.get("id")));
+            device.setDeviceCode(asText(row.get("deviceCode")));
+            device.setDeviceName(asText(row.get("deviceName")));
+            device.setDeviceType(asText(row.get("typeName")));
+            device.setFarmId(asLong(row.get("farmId")));
+            device.setStatus(asText(row.get("onlineStatus")));
+            device.setProtocol(asText(row.get("protocol")));
+            device.setFirmwareVersion(asText(row.get("firmwareVersion")));
+            device.setBatteryLevel(asInt(row.get("battery")));
+            device.setSignalStrength(asInt(row.get("rssi")));
+            device.setTenantId(TenantContextService.currentTenantId());
+            devices.add(device);
+        }
         return ApiResponse.success(devices);
+    }
+
+    private static Long asLong(Object value) {
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        if (value == null) {
+            return null;
+        }
+        try {
+            return Long.parseLong(String.valueOf(value).trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private static Integer asInt(Object value) {
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        if (value == null) {
+            return null;
+        }
+        try {
+            return Integer.parseInt(String.valueOf(value).trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private static String asText(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String text = String.valueOf(value).trim();
+        return text.isEmpty() ? null : text;
     }
 
     @GetMapping("/quality-inspections")
@@ -199,9 +267,9 @@ public class ProductionAdminController {
         
         result.put("traceCount", 2340);
         
-        LambdaQueryWrapper<IoTDevice> deviceWrapper = new LambdaQueryWrapper<>();
-        deviceWrapper.eq(IoTDevice::getDeleted, 0);
-        result.put("deviceCount", (int)(long)ioTDeviceMapper.selectCount(deviceWrapper));
+        // 设备口径统一到物联网系统的台账，避免大盘 13 台 / 设备列表 29 台
+        result.put("deviceCount", (int) iotDeviceStats.totalCount(
+                TenantContextService.currentTenantId(), null));
         
         return ApiResponse.success(result);
     }

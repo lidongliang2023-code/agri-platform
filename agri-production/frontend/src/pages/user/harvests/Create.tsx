@@ -12,7 +12,7 @@
  * - 底部：取消 / 保存并继续采收 / 保存（→harvest-detail）
  */
 import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { PageContainer } from '@ant-design/pro-components'
 import {
@@ -112,8 +112,11 @@ export default function Create(): JSX.Element {
   const farmOptions = useFarmStore((state) => state.farmOptions)
 
   const [form] = Form.useForm<HarvestFormValues>()
+  const [searchParams] = useSearchParams()
+  /** 从地块详情进入时预选地块 */
+  const presetPlotId = searchParams.get('plotId') ?? undefined
   const [farmId, setFarmId] = useState<string | undefined>(currentFarm?.farmId)
-  const [plotId, setPlotId] = useState<string | undefined>(undefined)
+  const [plotId, setPlotId] = useState<string | undefined>(presetPlotId)
   const [quantity, setQuantity] = useState<number>(0)
   const [unit, setUnit] = useState<string>('kg')
 
@@ -362,6 +365,7 @@ export default function Create(): JSX.Element {
         layout="vertical"
         initialValues={{
           farmId: currentFarm?.farmId,
+          plotId: presetPlotId,
           harvestDate: dayjs(),
           unit: 'kg',
           grade: 'A',

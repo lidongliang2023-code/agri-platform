@@ -1,7 +1,6 @@
 package com.agri.production.dto;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -19,14 +18,24 @@ public class TaskSaveDTO {
 
     private String taskTypeDetail;
 
-    @NotNull(message = "农场ID不能为空")
-    private Long farmId;
+    /**
+     * 所属农场（前端当前农场标识）。
+     *
+     * <p>类型是 String：页面/接口传的是 {@code DEMO-FARM-016}、农场编码或本地数字 id，
+     * 由服务层 {@code FarmIdResolver} 换算成本地农场主键。写成 Long 会在 JSON 反序列化阶段
+     * 直接 400「请求体格式错误」，页面根本建不出任务（2026-11-02 联调实测）。</p>
+     */
+    private String farmId;
 
     private String farmCode;
 
     private Long plotId;
 
     private String plotCode;
+
+    private Long planId;
+
+    private Long stageId;
 
     private String cropName;
 

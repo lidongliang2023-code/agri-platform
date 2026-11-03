@@ -1,5 +1,6 @@
 package com.agri.finance.controller;
 
+import com.agri.common.rbac.OperatorOnly;
 import com.agri.finance.entity.CreditReport;
 import com.agri.finance.service.impl.CreditReportServiceImpl;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,6 +23,7 @@ public class CreditReportController {
     }
 
     @PostMapping("/report/generate")
+    @OperatorOnly("finance:borrower")
     public Map<String, Object> generateReport(@RequestParam String userId) {
         CreditReport report = creditReportService.generateReport(userId);
         return Map.of("code", 200, "message", "success", "data", report);

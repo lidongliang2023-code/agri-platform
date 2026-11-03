@@ -44,6 +44,11 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import ReactECharts from 'echarts-for-react'
+import {
+  TiandituMap,
+  chinaRegionCenter,
+  type TiandituMapPoint,
+} from '@agri/shared'
 import type { EChartsOption } from 'echarts'
 import { approveApproval, listApprovals, rejectApproval } from '@/api/admin/approvals'
 import { closeAlert, listAdminAlerts } from '@/api/admin/alerts'
@@ -360,6 +365,23 @@ export default function OpsDashboard(): JSX.Element {
       })),
     [regionQuery.data],
   )
+
+  const regionMapPoints = useMemo<TiandituMapPoint[]>(() => {
+    const result: TiandituMapPoint[] = []
+    regionStats.forEach((item) => {
+      const center = chinaRegionCenter(item.region)
+      if (!center) return
+      result.push({
+        id: item.region,
+        longitude: center.longitude,
+        latitude: center.latitude,
+        title: item.region,
+        meta: `${item.farmCount} 个农场 · ${item.fieldArea.toLocaleString('zh-CN')} 亩`,
+        tone: item.activityLevel === 'high' ? 'green' : item.activityLevel === 'middle' ? 'orange' : 'red',
+      })
+    })
+    return result
+  }, [regionStats])
 
   /** 排行数据（后端 /rank 返回农场维度） */
   const rankItems = useMemo<Array<{ name: string; value: number; plotCount: number }>>(() => {
@@ -723,47 +745,54 @@ export default function OpsDashboard(): JSX.Element {
             ) : regionStats.length === 0 ? (
               emptyBlock('全国生产分布')
             ) : (
-              <Row gutter={12}>
-                <Col xs={24} md={12}>
-                  <ReactECharts option={regionChartOption} style={{ height: 300 }} notMerge />
-                </Col>
-                <Col xs={24} md={12}>
-                  <div style={{ maxHeight: 300, overflowY: 'auto', paddingRight: 4 }}>
-                    {regionStats.map((item) => (
-                      <Card
-                        key={item.region}
-                        size="small"
-                        style={{
-                          marginBottom: 8,
-                          borderLeft: `3px solid ${activityColorMap[item.activityLevel]}`,
-                        }}
-                        styles={{ body: { padding: 10 } }}
-                      >
-                        <Row justify="space-between" align="middle">
-                          <Col>
-                            <Text strong>{item.region}</Text>
-                            <div>
-                              <Text type="secondary" style={{ fontSize: 12 }}>
-                                农场 {item.farmCount} · 主体 {item.tenantCount}
+              <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                <TiandituMap
+                  points={regionMapPoints}
+                  height={360}
+                  onPointClick={(point) => message.info(`${point.title}：${point.meta || ''}`)}
+                />
+                <Row gutter={12}>
+                  <Col xs={24} md={12}>
+                    <ReactECharts option={regionChartOption} style={{ height: 300 }} notMerge />
+                  </Col>
+                  <Col xs={24} md={12}>
+                    <div style={{ maxHeight: 300, overflowY: 'auto', paddingRight: 4 }}>
+                      {regionStats.map((item) => (
+                        <Card
+                          key={item.region}
+                          size="small"
+                          style={{
+                            marginBottom: 8,
+                            borderLeft: `3px solid ${activityColorMap[item.activityLevel]}`,
+                          }}
+                          styles={{ body: { padding: 10 } }}
+                        >
+                          <Row justify="space-between" align="middle">
+                            <Col>
+                              <Text strong>{item.region}</Text>
+                              <div>
+                                <Text type="secondary" style={{ fontSize: 12 }}>
+                                  农场 {item.farmCount} · 主体 {item.tenantCount}
+                                </Text>
+                              </div>
+                            </Col>
+                            <Col style={{ textAlign: 'right' }}>
+                              <Text strong style={{ color: activityColorMap[item.activityLevel] }}>
+                                {(item.fieldArea / 10000).toFixed(1)}万亩
                               </Text>
-                            </div>
-                          </Col>
-                          <Col style={{ textAlign: 'right' }}>
-                            <Text strong style={{ color: activityColorMap[item.activityLevel] }}>
-                              {(item.fieldArea / 10000).toFixed(1)}万亩
-                            </Text>
-                            <div>
-                              <Text type="secondary" style={{ fontSize: 12 }}>
-                                {activityTextMap[item.activityLevel]}
-                              </Text>
-                            </div>
-                          </Col>
-                        </Row>
-                      </Card>
-                    ))}
-                  </div>
-                </Col>
-              </Row>
+                              <div>
+                                <Text type="secondary" style={{ fontSize: 12 }}>
+                                  {activityTextMap[item.activityLevel]}
+                                </Text>
+                              </div>
+                            </Col>
+                          </Row>
+                        </Card>
+                      ))}
+                    </div>
+                  </Col>
+                </Row>
+              </Space>
             )}
           </Card>
         </Col>

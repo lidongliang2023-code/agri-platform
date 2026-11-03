@@ -107,16 +107,19 @@ export async function getAdminRefundPage(params: Record<string, unknown>) {
 /**
  * 退款审核。
  *
- * <p>status='approved' 时后端会把订单置为 refunded、并把退款额累加进订单已退金额；
- * 驳回只改退款单状态，不动订单。</p>
+ * <p>status='approved' 时后端会把订单置为已退款、并把退款额累加进订单已退金额；
+ * 驳回只改退款单状态并必须填原因，同时把订单从"售后中"放回原状态。</p>
+ *
+ * <p><b>审核人不再是入参</b>：后端由访问令牌取当前操作人账号写库。
+ * 以前是这里拼 `getCurrentUser()?.nickname ?? '运营'` 传上去 ——
+ * 那种留痕谁都能填，退了钱却对不出是谁批的。</p>
  */
 export async function auditRefund(
   id: number | string,
   status: 'approved' | 'rejected',
-  reviewer: string,
   remark?: string
 ) {
-  const response = await axios.post(`/api/trade/order/refund/${id}/audit`, { status, reviewer, remark })
+  const response = await axios.post(`/api/trade/order/refund/${id}/audit`, { status, remark })
   return response.data
 }
 
@@ -140,14 +143,17 @@ export async function createCompensation(data: Record<string, unknown>) {
   return response.data
 }
 
-/** 赔付审核：reviewResult 取 approved / rejected，其余字段作为审核痕迹留库 */
+/**
+ * 赔付审核：reviewResult 取 approved / rejected，remark 作为审核备注留痕。
+ *
+ * <p>审核人与退款审核同一口径 —— 由后端从访问令牌取当前账号写库，前端不再自报。</p>
+ */
 export async function reviewCompensation(
   id: number | string,
   reviewResult: 'approved' | 'rejected',
-  reviewer: string,
   remark?: string
 ) {
-  const response = await axios.post(`/api/trade/compensation/${id}/review`, { reviewResult, reviewer, remark })
+  const response = await axios.post(`/api/trade/compensation/${id}/review`, { reviewResult, remark })
   return response.data
 }
 

@@ -12,6 +12,7 @@ import com.agri.production.mapper.InventoryMapper;
 import com.agri.production.mapper.PlotMapper;
 import com.agri.production.service.IHarvestInventoryService;
 import com.agri.production.service.IDomainEventService;
+import com.agri.production.service.ITraceLifecycleService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -45,15 +46,18 @@ public class HarvestInventoryServiceImpl implements IHarvestInventoryService {
     private final InventoryFlowMapper flowMapper;
     private final PlotMapper plotMapper;
     private final IDomainEventService domainEventService;
+    private final ITraceLifecycleService traceLifecycleService;
 
     public HarvestInventoryServiceImpl(HarvestBatchMapper batchMapper, InventoryMapper inventoryMapper,
                                       InventoryFlowMapper flowMapper, PlotMapper plotMapper,
-                                      IDomainEventService domainEventService) {
+                                      IDomainEventService domainEventService,
+                                      ITraceLifecycleService traceLifecycleService) {
         this.batchMapper = batchMapper;
         this.inventoryMapper = inventoryMapper;
         this.flowMapper = flowMapper;
         this.plotMapper = plotMapper;
         this.domainEventService = domainEventService;
+        this.traceLifecycleService = traceLifecycleService;
     }
 
     /* ==================== 采收批次 ==================== */
@@ -146,10 +150,10 @@ public class HarvestInventoryServiceImpl implements IHarvestInventoryService {
         if (body != null && body.get("warehouseName") != null) {
             batch.setWarehouseName(str(body.get("warehouseName")));
         }
-        String traceCode = body == null ? null : str(body.get("traceCode"));
-        if (traceCode == null) {
-            traceCode = batch.getTraceCode() != null ? batch.getTraceCode() : nextTraceCode(batch);
-        }
+        var existingCodes = traceLifecycleService.listByBatch(String.valueOf(batch.getBatchId()), tenantId);
+        String traceCode = existingCodes.isEmpty()
+                ? traceLifecycleService.generate(String.valueOf(batch.getBatchId()), null, tenantId)
+                : existingCodes.get(0).getCode();
         batch.setTraceCode(traceCode);
         batch.setTraceGenerated(1);
         batch.setUpdateTime(LocalDateTime.now());

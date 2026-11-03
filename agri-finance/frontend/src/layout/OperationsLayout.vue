@@ -28,8 +28,11 @@
           <span class="finance-avatar">{{ displayUser.name.slice(0, 1) }}</span>
           <div><strong>{{ displayUser.name }}</strong><small>{{ role === 'fund' ? '认证资金机构' : '平台运营账户' }}</small></div>
         </div>
-        <router-link v-if="role === 'fund'" to="/admin/workbench" class="ops-role-link">运营端</router-link>
-        <router-link v-else to="/fund/workbench" class="ops-role-link">资金方</router-link>
+        <div class="ops-account-actions">
+          <router-link v-if="role === 'fund' && hasFinancePermission('finance:admin')" to="/admin/workbench" class="ops-role-link">运营端</router-link>
+          <router-link v-else-if="role === 'admin' && hasFinancePermission('finance:fund')" to="/fund/workbench" class="ops-role-link">资金方</router-link>
+          <button type="button" class="ops-role-link" @click="logout">退出</button>
+        </div>
       </div>
     </aside>
 
@@ -71,16 +74,19 @@ import {
   Lock,
   Menu,
   Money,
+  OfficeBuilding,
   Setting,
   Tickets,
   TrendCharts,
   Warning,
 } from '@element-plus/icons-vue'
 import { fundProvider, operationsApi, operationUser } from '@/api/operations'
+import { hasFinancePermission, logoutFinance } from '@/auth'
 
 const route = useRoute()
 const navOpen = ref(false)
 const unreadCount = ref(0)
+const logout = () => logoutFinance()
 const role = computed(() => route.path.startsWith('/fund') ? 'fund' : 'admin')
 const homePath = computed(() => role.value === 'fund' ? '/fund/workbench' : '/admin/workbench')
 const displayUser = computed(() => role.value === 'fund' ? fundProvider : operationUser)
@@ -94,6 +100,7 @@ const navigation = computed(() => role.value === 'fund' ? {
   ],
   secondary: [
     { path: '/fund/product-config', label: '产品配置', icon: Box },
+    { path: '/fund/risk-center', label: '风控中台', icon: DataAnalysis },
     { path: '/fund/risk-strategy', label: '风控策略', icon: Lock },
     { path: '/fund/report', label: '数据报表', icon: TrendCharts },
   ],
@@ -106,6 +113,8 @@ const navigation = computed(() => role.value === 'fund' ? {
   ],
   secondary: [
     { path: '/admin/pledge', label: '质押与仓单', icon: Box },
+    { path: '/admin/pledge-goods', label: '质押物目录', icon: Tickets },
+    { path: '/admin/fund-provider', label: '资金机构', icon: OfficeBuilding },
     { path: '/admin/blacklist', label: '黑名单', icon: Lock },
     { path: '/admin/risk', label: '风险规则', icon: Setting },
     { path: '/admin/report', label: '报表中心', icon: Files },
@@ -135,8 +144,19 @@ watch(() => route.fullPath, () => {
   border: 1px solid rgba(255, 255, 255, .1);
   border-radius: 7px;
   color: rgba(255, 255, 255, .55);
-  font-size: 8px;
+  font-size: var(--fin-fs-xs);
   text-decoration: none;
+}
+
+.ops-account-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ops-account-actions button {
+  cursor: pointer;
+  font: inherit;
 }
 
 .ops-ai-badge {
@@ -144,7 +164,7 @@ watch(() => route.fullPath, () => {
   border-radius: 99px;
   background: #edf8f2;
   color: var(--fin-green-700);
-  font-size: 8px;
+  font-size: var(--fin-fs-xs);
   font-weight: 700;
 }
 

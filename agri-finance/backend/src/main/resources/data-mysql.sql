@@ -23,13 +23,36 @@ INSERT IGNORE INTO repayment_plan VALUES
 ('PLAN-005', 'LOAN-20260928', 'FL20260928001', 5, 25000.00, 946.67, 25946.67, DATE_ADD(CURRENT_TIMESTAMP, INTERVAL 119 DAY), NULL, '待还款', 0.00, 0.00, DATE_ADD(CURRENT_TIMESTAMP, INTERVAL -24 DAY), CURRENT_TIMESTAMP, 0),
 ('PLAN-006', 'LOAN-20260928', 'FL20260928001', 6, 25000.00, 828.33, 25828.33, DATE_ADD(CURRENT_TIMESTAMP, INTERVAL 149 DAY), NULL, '待还款', 0.00, 0.00, DATE_ADD(CURRENT_TIMESTAMP, INTERVAL -24 DAY), CURRENT_TIMESTAMP, 0);
 
-INSERT IGNORE INTO pledge VALUES
+-- 列名显式写出：pledge 会随版本追加列（receipt_id/application_id/loan_id），位置式插入在新列上线后必然报列数不匹配。
+INSERT IGNORE INTO pledge (
+    id, pledge_no, user_id, commodity_type, quality_standard, quantity, unit_price, total_value, pledge_rate,
+    loan_amount, status, warehouse_name, warehouse_address, pledge_date, release_date, created_at, updated_at, del_flag
+) VALUES
 ('PLEDGE-001', 'FP20261009001', '2001', '优质稻谷', '一级', 180.00, 2800.00, 504000.00, 70.00, 352800.00, '已生效', '丰链云临沂中心仓', '山东省临沂市兰山区农业物流园 6 号库', DATE_ADD(CURRENT_TIMESTAMP, INTERVAL -14 DAY), NULL, DATE_ADD(CURRENT_TIMESTAMP, INTERVAL -14 DAY), CURRENT_TIMESTAMP, 0),
 ('PLEDGE-002', 'FP20261021002', '2001', '冷链苹果', '一级', 80.00, 5200.00, 416000.00, 65.00, 270400.00, '待审核', '丰链云烟台冷链仓', '山东省烟台市福山区冷链物流园 B3', DATE_ADD(CURRENT_TIMESTAMP, INTERVAL -2 DAY), NULL, DATE_ADD(CURRENT_TIMESTAMP, INTERVAL -2 DAY), CURRENT_TIMESTAMP, 0);
 
-INSERT IGNORE INTO contract VALUES
-('CONTRACT-001', 'FC20260928001', 'LOAN-20260928', 'FL20260928001', '2001', '绿源农业合作社', '等额本息借款合同', 300000.00, 5.68, 12, '执行中', '已签署', '2026-09-28 10:20:00', '2026-09-28 09:45:00', '/uploads/finance/contracts/FC20260928001.pdf', DATE_ADD(CURRENT_TIMESTAMP, INTERVAL -24 DAY), DATE_ADD(CURRENT_TIMESTAMP, INTERVAL 11 MONTH), DATE_ADD(CURRENT_TIMESTAMP, INTERVAL -24 DAY), CURRENT_TIMESTAMP, 0),
-('CONTRACT-002', 'FC20261021002', 'LOAN-PENDING-02', NULL, '2001', '绿源农业合作社', '仓单质押借款合同', 270400.00, 5.92, 9, '待签署', '待签署', NULL, '2026-10-21 15:30:00', '/uploads/finance/contracts/FC20261021002.pdf', DATE_ADD(CURRENT_TIMESTAMP, INTERVAL -2 DAY), DATE_ADD(CURRENT_TIMESTAMP, INTERVAL 9 MONTH), DATE_ADD(CURRENT_TIMESTAMP, INTERVAL -2 DAY), CURRENT_TIMESTAMP, 0);
+-- 质押物字典：仓单的品种、折算率上限和最长期限都来自这里，字典为空等于开不了仓单。
+INSERT IGNORE INTO pledge_goods (
+    id, goods_code, goods_name, category, pledge_rate_max, price_source, quality_standard,
+    price_volatility_threshold, max_pledge_term, status, created_at, updated_at, del_flag
+) VALUES
+('GOODS-RICE', 'PG-RICE', '优质稻谷', '粮食类', 70.00, '国家粮食和物资储备局批发价', '一等', 8.00, 180, '启用', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0),
+('GOODS-WHEAT', 'PG-WHEAT', '优质小麦', '粮食类', 65.00, '国家粮食和物资储备局批发价', '二等', 8.00, 180, '启用', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0),
+('GOODS-CORN', 'PG-CORN', '玉米', '粮食类', 65.00, '大连玉米期货主力结算价', '二等', 10.00, 180, '启用', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0),
+('GOODS-TOMATO', 'PG-TOMATO', '番茄', '果蔬类', 55.00, '全国农产品批发市场均价', '一级', 20.00, 90, '启用', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0),
+('GOODS-CUCUMBER', 'PG-CUCUMBER', '黄瓜', '果蔬类', 50.00, '全国农产品批发市场均价', '一级', 25.00, 60, '启用', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0),
+('GOODS-APPLE', 'PG-APPLE', '冷链苹果', '果蔬类', 65.00, '烟台果品批发市场均价', '优等', 12.00, 120, '启用', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0),
+('GOODS-TEA', 'PG-TEA', '名优绿茶', '经济作物', 60.00, '中国茶叶流通协会价格指数', '特级', 15.00, 120, '启用', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0),
+('GOODS-PORK', 'PG-PORK', '冷冻猪肉', '肉蛋类', 60.00, '商务部猪肉批发价', 'GB 20799', 18.00, 90, '启用', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0),
+('GOODS-SHRIMP', 'PG-SHRIMP', '冷冻水产', '水产类', 50.00, '中国水产价格指数', '一级', 25.00, 60, '禁用', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0);
+
+INSERT IGNORE INTO contract (
+    id, contract_no, loan_id, loan_no, user_id, user_name, contract_type, amount, rate, term,
+    status, sign_status, borrower_sign_time, lender_sign_time, contract_url,
+    start_date, end_date, created_at, updated_at, del_flag, application_id
+) VALUES
+('CONTRACT-001', 'FC20260928001', 'LOAN-20260928', 'FL20260928001', '2001', '绿源农业合作社', '等额本息借款合同', 300000.00, 5.68, 12, '执行中', '已签署', '2026-09-28 10:20:00', '2026-09-28 09:45:00', '/uploads/finance/contracts/FC20260928001.pdf', DATE_ADD(CURRENT_TIMESTAMP, INTERVAL -24 DAY), DATE_ADD(CURRENT_TIMESTAMP, INTERVAL 11 MONTH), DATE_ADD(CURRENT_TIMESTAMP, INTERVAL -24 DAY), CURRENT_TIMESTAMP, 0, 'APP-20261001'),
+('CONTRACT-002', 'FC20261021002', 'LOAN-PENDING-02', NULL, '2001', '绿源农业合作社', '仓单质押借款合同', 270400.00, 5.92, 9, '待签署', '待签署', NULL, '2026-10-21 15:30:00', '/uploads/finance/contracts/FC20261021002.pdf', DATE_ADD(CURRENT_TIMESTAMP, INTERVAL -2 DAY), DATE_ADD(CURRENT_TIMESTAMP, INTERVAL 9 MONTH), DATE_ADD(CURRENT_TIMESTAMP, INTERVAL -2 DAY), CURRENT_TIMESTAMP, 0, NULL);
 
 INSERT IGNORE INTO message_notification VALUES
 ('MSG-001', 'FM20261023001', '2001', 'REPAYMENT', '还款提醒', '第2期还款计划将于下月到期，应还金额 26,301.67 元，请提前安排资金。', 'REPAYMENT_PLAN', 'PLAN-002', FALSE, 'HIGH', 'ACTIVE', DATE_ADD(CURRENT_TIMESTAMP, INTERVAL -3 HOUR), 0),
@@ -38,7 +61,13 @@ INSERT IGNORE INTO message_notification VALUES
 ('MSG-FUND-001', 'FM20261023011', 'PROVIDER-BANK-001', 'ASSET', '新增可投资产', '优质稻谷收购周转资产已发布，AI 推荐分 94.6。', 'ASSET', 'ASSET-001', FALSE, 'HIGH', 'ACTIVE', DATE_ADD(CURRENT_TIMESTAMP, INTERVAL -2 HOUR), 0),
 ('MSG-FUND-002', 'FM20261022012', 'PROVIDER-BANK-001', 'REPAYMENT', '投资收益回款', '夏季蔬菜订单融资资产本息已回款 207,600.00 元。', 'INVESTMENT', 'INVESTMENT-002', TRUE, 'MEDIUM', 'ACTIVE', DATE_ADD(CURRENT_TIMESTAMP, INTERVAL -1 DAY), 0);
 
-INSERT IGNORE INTO fund_provider VALUES
+-- 列名显式写出：fund_provider 会随版本追加列（merchant_id），位置式插入在新列上线后必然报列数不匹配。
+INSERT IGNORE INTO fund_provider (
+    id, provider_no, institution_type, institution_name, credit_code, registered_capital,
+    established_year, business_license, financial_license, operation_license,
+    contact_name, contact_phone, contact_email, status, review_status, review_opinion,
+    reviewer_id, review_time, created_at, updated_at, del_flag
+) VALUES
 ('PROVIDER-BANK-001', 'FPROV20260001', 'BANK', '丰链云合作银行', '91310000MA1K123456', 500000000.00, 2018, '/uploads/finance/provider/business-license.pdf', '/uploads/finance/provider/financial-license.pdf', '/uploads/finance/provider/operation-license.pdf', '陈资金', '13800138100', 'capital@fengchain.local', 'ACTIVE', '已通过', '机构资质与资金能力审核通过', 'admin', DATE_ADD(CURRENT_TIMESTAMP, INTERVAL -90 DAY), DATE_ADD(CURRENT_TIMESTAMP, INTERVAL -90 DAY), CURRENT_TIMESTAMP, 0);
 
 INSERT IGNORE INTO asset VALUES
@@ -51,7 +80,11 @@ INSERT IGNORE INTO investment VALUES
 ('INVESTMENT-001', 'FI20261010001', 'ASSET-001', '优质稻谷收购周转资产', 'PROVIDER-BANK-001', '丰链云合作银行', 120000.00, 4800.00, 6, 5.92, '投资中', DATE_ADD(CURRENT_TIMESTAMP, INTERVAL -13 DAY), DATE_ADD(CURRENT_TIMESTAMP, INTERVAL 5 MONTH), NULL, NULL, DATE_ADD(CURRENT_TIMESTAMP, INTERVAL -13 DAY), CURRENT_TIMESTAMP, 0),
 ('INVESTMENT-002', 'FI20260901002', 'ASSET-HISTORY-01', '夏季蔬菜订单融资资产', 'PROVIDER-BANK-001', '丰链云合作银行', 200000.00, 7600.00, 4, 5.78, '已完成', DATE_ADD(CURRENT_TIMESTAMP, INTERVAL -52 DAY), DATE_ADD(CURRENT_TIMESTAMP, INTERVAL -22 DAY), DATE_ADD(CURRENT_TIMESTAMP, INTERVAL -22 DAY), 207600.00, DATE_ADD(CURRENT_TIMESTAMP, INTERVAL -52 DAY), DATE_ADD(CURRENT_TIMESTAMP, INTERVAL -22 DAY), 0);
 
-INSERT IGNORE INTO overdue_record VALUES
+INSERT IGNORE INTO overdue_record (
+    id, overdue_no, loan_id, loan_no, user_id, user_name, product_type,
+    overdue_principal, overdue_interest, overdue_amount, overdue_days, overdue_stage,
+    collector_id, collector_name, status, overdue_reason, overdue_date, created_at, updated_at, del_flag
+) VALUES
 ('OVERDUE-001', 'FOD20261023001', 'LOAN-HISTORY-03', 'FL20260815003', '2008', '金穗种植家庭农场', 'agri', 68000.00, 3680.00, 71680.00, 7, '早期', 'collector-01', '王催收', '催收中', '销售回款延迟，已电话联系', DATE_ADD(CURRENT_TIMESTAMP, INTERVAL -7 DAY), DATE_ADD(CURRENT_TIMESTAMP, INTERVAL -7 DAY), CURRENT_TIMESTAMP, 0),
 ('OVERDUE-002', 'FOD20261023002', 'LOAN-HISTORY-04', 'FL20260701004', '2009', '青山蔬菜合作社', 'sales', 120000.00, 9200.00, 129200.00, 36, '中期', 'collector-02', '李资产', '协商还款', '核心采购方账期延长', DATE_ADD(CURRENT_TIMESTAMP, INTERVAL -36 DAY), DATE_ADD(CURRENT_TIMESTAMP, INTERVAL -36 DAY), CURRENT_TIMESTAMP, 0);
 

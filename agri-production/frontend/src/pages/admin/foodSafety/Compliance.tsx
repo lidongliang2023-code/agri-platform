@@ -971,7 +971,7 @@ function StandardCheckTab(): JSX.Element {
         },
         axisTick: { show: false },
         splitLine: { length: 10, lineStyle: { width: 1, color: '#bfbfbf' } },
-        axisLabel: { distance: 14, fontSize: 10 },
+        axisLabel: { distance: 14, fontSize: 12 },
         pointer: { width: 4, length: '60%' },
         detail: { valueAnimation: true, formatter: '{value}%', fontSize: 22, offsetCenter: [0, '68%'] },
         data: [{ value: summary.passRate, name: '通过率' }],

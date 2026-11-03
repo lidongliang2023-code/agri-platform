@@ -7,7 +7,7 @@
  *
  * ====================== 数据源实测结论（已连后端验证） ======================
  * 可用（真实数据）：
- * - GET /admin/trace/code-stats    {"generated":"0","active":"5","scanned":"0","revoked":"0"}
+ * - GET /admin/trace/code-stats    {"generated":"0","active":"5","scanned":"0","revoked":"0","expired":"0"}
  * - GET /admin/quality/overview    {"passCount":"3","failCount":"1","passRate":"75","labCount":"2","frozenBatch":"1"}
  * 不可用（后端无对应端点）：
  * - 溯源码生成趋势（无趋势端点）
@@ -47,10 +47,12 @@ const CODE_STATUS_LABEL: Record<string, string> = {
   active: '已激活',
   scanned: '已扫码',
   revoked: '已作废',
+  // 2026-11-02 溯源码有了到期扫描；这一档不加，过期码就会从"码段分布"和"溯源码总量"里凭空消失
+  expired: '已过期',
 }
 
 /** 码段展示顺序（与后端返回 key 一致） */
-const CODE_STATUS_ORDER: string[] = ['generated', 'active', 'scanned', 'revoked']
+const CODE_STATUS_ORDER: string[] = ['generated', 'active', 'scanned', 'revoked', 'expired']
 
 /** 未接入项说明（后端无对应端点，明确告诉用户不要当真数据看） */
 const NOT_INTEGRATED_ITEMS: Array<{ name: string; reason: string }> = [
@@ -106,12 +108,13 @@ export default function TraceOverview(): JSX.Element {
       active: toNumber(raw.active),
       scanned: toNumber(raw.scanned),
       revoked: toNumber(raw.revoked),
+      expired: toNumber(raw.expired),
     }
   }, [statsQuery.data])
 
   /** 码总量（各状态之和；后端未返回任何状态时为 undefined） */
   const totalCodeCount = useMemo(() => {
-    const parts = [codeStats.generated, codeStats.active, codeStats.scanned, codeStats.revoked]
+    const parts = [codeStats.generated, codeStats.active, codeStats.scanned, codeStats.revoked, codeStats.expired]
     if (parts.every((item) => item === undefined)) {
       return undefined
     }
@@ -136,6 +139,7 @@ export default function TraceOverview(): JSX.Element {
       ['已激活', codeStats.active === undefined ? '未接入' : String(codeStats.active)],
       ['已扫码', codeStats.scanned === undefined ? '未接入' : String(codeStats.scanned)],
       ['已作废', codeStats.revoked === undefined ? '未接入' : String(codeStats.revoked)],
+      ['已过期', codeStats.expired === undefined ? '未接入' : String(codeStats.expired)],
       [
         '检测合格率(%)',
         toNumber(qualityQuery.data?.passRate) === undefined

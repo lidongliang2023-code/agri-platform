@@ -9,14 +9,32 @@ import {
   currentFarm,
   currentUser,
   ensureLogin,
+  getOnboardingStatus,
   isLoggedIn,
   login,
+  loginBySms,
   logout,
+  registerAccount,
+  sendSmsCode,
   setCurrentFarm,
+  type MobileUser,
 } from './auth'
 import type { FarmBrief } from './auth'
 
-export { currentFarm, currentUser, ensureLogin, isLoggedIn, login, logout, setCurrentFarm }
+export {
+  currentFarm,
+  currentUser,
+  ensureLogin,
+  getOnboardingStatus,
+  isLoggedIn,
+  login,
+  loginBySms,
+  logout,
+  registerAccount,
+  sendSmsCode,
+  setCurrentFarm,
+}
+export type { MobileUser }
 
 /**
  * 当前账号可见的农场列表（归一化 farmId）。

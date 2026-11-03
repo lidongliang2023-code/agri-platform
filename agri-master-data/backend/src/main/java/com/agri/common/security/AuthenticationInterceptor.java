@@ -2,6 +2,7 @@ package com.agri.common.security;
 
 import com.agri.common.constant.ErrorCode;
 import com.agri.common.exception.BusinessException;
+import com.agri.masterdata.security.MerchantContextResolver;
 import com.agri.masterdata.security.PlatformTokenService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -29,10 +30,13 @@ public class AuthenticationInterceptor implements HandlerInterceptor {
 
     private final TokenService tokenService;
     private final PlatformTokenService platformTokenService;
+    private final MerchantContextResolver merchantContextResolver;
 
-    public AuthenticationInterceptor(TokenService tokenService, PlatformTokenService platformTokenService) {
+    public AuthenticationInterceptor(TokenService tokenService, PlatformTokenService platformTokenService,
+                                     MerchantContextResolver merchantContextResolver) {
         this.tokenService = tokenService;
         this.platformTokenService = platformTokenService;
+        this.merchantContextResolver = merchantContextResolver;
     }
 
     @Override
@@ -58,6 +62,13 @@ public class AuthenticationInterceptor implements HandlerInterceptor {
         if (loginUser == null) {
             log.debug("Invalid or expired token");
             throw new BusinessException(ErrorCode.USER_TOKEN_INVALID);
+        }
+
+        // 企业端主体上下文：带了 X-Agri-Merchant 才解析，并且必须回源 core-platform 校验归属。
+        // 运营端不带这个头，tenantId 保持 null，跨主体视图不受影响。
+        String merchantId = request.getHeader(MerchantContextResolver.MERCHANT_HEADER);
+        if (merchantId != null && !merchantId.isBlank()) {
+            loginUser.setTenantId(merchantContextResolver.resolve(merchantId, token));
         }
 
         LoginUserHolder.setLoginUser(loginUser);

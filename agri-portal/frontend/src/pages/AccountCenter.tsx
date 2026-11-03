@@ -1,6 +1,24 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Icon } from '../components/Icon'
+import { AccountOverview } from './account/AccountOverview'
+import { Authorizations } from './account/Authorizations'
+import { Certificates } from './account/Certificates'
+import { CrossModule } from './account/CrossModule'
+import { Feedback } from './account/Feedback'
+import { HelpCenter } from './account/HelpCenter'
+import { IdentityApply } from './account/IdentityApply'
+import { LoginDevices } from './account/LoginDevices'
+import { Messages } from './account/Messages'
+import { Mfa } from './account/Mfa'
+import { NotificationSettings } from './account/NotificationSettings'
+import { OperationLogs } from './account/OperationLogs'
+import { Orders } from './account/Orders'
+import { PersonalRealname } from './account/PersonalRealname'
+import { PrivacyData } from './account/PrivacyData'
+import { ThirdPartyBindings } from './account/ThirdPartyBindings'
+import { NAV_GROUPS, findNavItem, navProgress } from './account/navModel'
+import { childrenOf, displayCityName, loadRegionCatalog, type RegionCatalog } from '@/utils/addressRegion'
 import { RolesPermissions } from './account/RolesPermissions'
 import { TeamMembers } from './account/TeamMembers'
 import './account-center.css'
@@ -37,6 +55,16 @@ interface MerchantRow {
     businessLicenseUrl: string | null
     legalPersonIdFrontUrl: string | null
     legalPersonIdBackUrl: string | null
+    legalPersonFaceUrl: string | null
+    legalPersonFaceStatus: string | null
+    corporateBankName: string | null
+    corporateBankAccount: string | null
+    corporateTransferAmount: string | null
+    corporateTransferReference: string | null
+    corporateTransferProofUrl: string | null
+    corporateTransferStatus: string | null
+    registeredCapital: string | null
+    verificationChannel: string | null
     status: string
     submitTime: string
     reviewer: string | null
@@ -85,6 +113,13 @@ interface Summary {
     validEnd: string | null
     contactPhone: string | null
     address: string | null
+    businessType: string | null
+    email: string | null
+    policeVerified: boolean
+    livenessVerified: boolean
+    verificationChannel: string | null
+    policeVerifiedAt: string | null
+    livenessVerifiedAt: string | null
     status: string
     submitTime: string
     reviewRemark: string | null
@@ -107,22 +142,54 @@ interface BusinessResult {
   alreadyJoined: boolean
 }
 
-type Tab = 'profile' | 'security' | 'addresses' | 'business' | 'team' | 'roles'
+type Tab = 'overview' | 'messages' | 'devices' | 'bindings' | 'notification' | 'logs'
+  | 'certificates' | 'realname' | 'feedback' | 'privacy' | 'crossModule' | 'orders'
+  | 'help' | 'authorizations' | 'mfa' | 'profile' | 'security'
+  | 'addresses' | 'enterprise' | 'org'
+  | 'team' | 'roles'
 type SecurityPage = 'password' | 'phone'
 
+/**
+ * 视图元数据（标题/描述用）。
+ *
+ * <p>注意：**侧栏菜单不从这里生成** —— 侧栏按原型 IA 走 {@link NAV_GROUPS}
+ * （7 个分组 23 个条目，见 `pages/account/navModel.ts`）。这里只保留
+ * 内容区标题需要的文案，两者不是一回事。</p>
+ */
 const TABS: { key: Tab; label: string; icon: string; description: string }[] = [
+  { key: 'overview', label: '账号总览', icon: 'home', description: '账号、实名、身份、待办与安全状况一览' },
+  { key: 'messages', label: '消息中心', icon: 'bell', description: '站内通知：加入申请、审核结果等' },
+  { key: 'devices', label: '登录设备', icon: 'cpu', description: '查看并下线当前账号的登录会话' },
+  { key: 'bindings', label: '第三方绑定', icon: 'globe', description: '登记微信 / 支付宝 / 钉钉账号标识' },
+  { key: 'notification', label: '通知设置', icon: 'settings', description: '配置通知类型、免打扰时段与推送频率' },
+  { key: 'logs', label: '操作日志', icon: 'clipboard', description: '查看本人最近的操作记录' },
+  { key: 'certificates', label: '资质证照', icon: 'file', description: '维护主体资质证照与到期预警' },
+  { key: 'realname', label: '个人实名', icon: 'user', description: '身份证资料、人脸活体与公安二要素核验' },
+  { key: 'feedback', label: '意见反馈', icon: 'clipboard', description: '提交建议或问题，查看平台回复' },
+  { key: 'privacy', label: '隐私与数据', icon: 'file', description: '数据导出、账号注销申请与第三方授权撤回' },
+  { key: 'crossModule', label: '跨模块入口', icon: 'globe', description: '各子系统入口与前置条件一览' },
+  { key: 'orders', label: '订单聚合', icon: 'cart', description: '跨域订单统一视图（当前接入交易域）' },
+  { key: 'help', label: '帮助中心', icon: 'alert', description: '常见问题与可查阅的资料' },
+  { key: 'authorizations', label: '授权管理', icon: 'layers', description: '谁在代表我访问平台：渠道、会话、身份、主体' },
+  { key: 'mfa', label: '二次验证', icon: 'check', description: '用手机验证器作为密码之外的第二道验证' },
   { key: 'profile', label: '账号资料', icon: 'user', description: '维护昵称、邮箱与账号概况' },
   { key: 'security', label: '账号安全', icon: 'shield', description: '修改密码与绑定手机号' },
   { key: 'addresses', label: '地址管理', icon: 'location', description: '维护收货地址与默认地址' },
-  { key: 'business', label: '主体资料与认证', icon: 'factory', description: '创建、认证并切换经营主体' },
-  { key: 'team', label: '团队与成员', icon: 'users', description: '管理当前主体的团队成员' },
-  { key: 'roles', label: '角色与权限', icon: 'shield', description: '配置当前主体的角色与权限' },
+  { key: 'enterprise', label: '企业实名', icon: 'award', description: '主体认证状态、材料与提交审核' },
+  { key: 'org', label: '我的组织', icon: 'factory', description: '经营主体、主体切换与加入申请' },
+  { key: 'team', label: '成员管理', icon: 'users', description: '管理当前主体的团队成员' },
+  { key: 'roles', label: '我的角色与权限', icon: 'shield', description: '配置当前主体的角色与权限' },
 ]
 
-const ACCOUNT_TAB_KEYS: Tab[] = ['profile', 'security', 'addresses', 'business', 'team', 'roles']
+const ACCOUNT_TAB_KEYS: Tab[] = ['overview', 'messages', 'devices', 'bindings', 'notification', 'logs',
+  'certificates', 'realname', 'feedback', 'privacy', 'crossModule', 'orders', 'help',
+  'authorizations', 'mfa', 'profile', 'security', 'addresses', 'enterprise', 'org', 'team', 'roles']
 
 function normalizeAccountTab(value: string | null | undefined): Tab {
-  return ACCOUNT_TAB_KEYS.includes(value as Tab) ? value as Tab : 'profile'
+  // 旧的「身份与认证」页已拆成企业实名 + 我的组织，老链接回落到我的组织；
+  // 「身份申请」已并入我的组织，旧链接同样回落
+  if (value === 'business' || value === 'identityApply') return 'org'
+  return ACCOUNT_TAB_KEYS.includes(value as Tab) ? value as Tab : 'overview'
 }
 
 function normalizeSecurityPage(value: string | null | undefined): SecurityPage {
@@ -180,19 +247,26 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
   const [tab, setTab] = useState<Tab>(() => normalizeAccountTab(initialTab))
   const [profileEditing, setProfileEditing] = useState(initialProfileEdit)
   const [securityPage, setSecurityPage] = useState<SecurityPage>(initialSecurityPage)
-  const [securityMenuOpen, setSecurityMenuOpen] = useState(Boolean(initialTab?.startsWith('security')))
+  /**
+   * 当前点开的"待接入"菜单项。
+   * 侧栏共 23 个条目，后端只支持其中一部分；点未接入的项时用它切到说明面板，
+   * 而不是留在上一个 tab 让用户以为点错了。
+   */
+  const [pendingKey, setPendingKey] = useState<string | null>(null)
+  /**
+   * 安全子页（修改密码 / 变更手机号）的展开态。
+   * 侧栏改成原型 IA 后不再需要它控制展开，但 openTab/openSecurity 仍在用它复位，
+   * 所以保留 setter、丢掉未使用的读取值。
+   */
+  const [, setSecurityMenuOpen] = useState(Boolean(initialTab?.startsWith('security')))
   const [summary, setSummary] = useState<Summary | null>(null)
+  const [realnameFormSignal, setRealnameFormSignal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [profile, setProfile] = useState({ nickname: '', email: '' })
   const [passwords, setPasswords] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' })
   const [phoneForm, setPhoneForm] = useState({ phone: '', code: '' })
-  const [realNameOpen, setRealNameOpen] = useState(false)
-  const [realNameForm, setRealNameForm] = useState({
-    realName: '', idCard: '', contactPhone: '', address: '',
-    validStart: '', validEnd: '', businessType: '', email: '',
-  })
   const [codeLeft, setCodeLeft] = useState(0)
   const [addresses, setAddresses] = useState<AddressRow[]>([])
   const [addressEditing, setAddressEditing] = useState<string | null>(null)
@@ -207,13 +281,21 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
     companyName: '', creditCode: '', legalPerson: '', licenseNo: '',
     contactName: '', contactPhone: '', attachNote: '',
     businessLicenseUrl: '', legalPersonIdFrontUrl: '', legalPersonIdBackUrl: '',
+    legalPersonFaceUrl: '', corporateBankName: '', corporateBankAccount: '',
+    corporateTransferAmount: '', corporateTransferReference: '', corporateTransferProofUrl: '',
+    registeredCapital: '',
   })
   const [certificationUploading, setCertificationUploading] = useState<string | null>(null)
   const [createIdentity, setCreateIdentity] = useState<'enterprise' | 'personal'>('enterprise')
   const [createBusinessForm, setCreateBusinessForm] = useState({
     companyName: '', creditCode: '', industry: INDUSTRIES[0], companySize: COMPANY_SIZES[0],
-    realName: '', idCard: '', businessType: BUSINESS_TYPES[0], address: '', contactName: '',
+    realName: '', idCard: '', businessType: BUSINESS_TYPES[0], contactName: '',
   })
+  // 注册地址：省/市/区来自主数据行政区划，详细地址手工填；提交时拼成后端接收的一个 address 字符串
+  const [addressRegion, setAddressRegion] = useState({ province: '', city: '', district: '', detail: '' })
+  const [regionCatalog, setRegionCatalog] = useState<RegionCatalog | null>(null)
+  const [regionLoading, setRegionLoading] = useState(false)
+  const [regionError, setRegionError] = useState('')
   const [busy, setBusy] = useState(false)
   const [switchingMerchantId, setSwitchingMerchantId] = useState<string | null>(null)
 
@@ -231,14 +313,6 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
       setSummary(data)
       setProfile({ nickname: data.nickname ?? '', email: data.email ?? '' })
       setAddresses(data.addresses ?? [])
-      setRealNameForm((current) => ({
-        ...current,
-        realName: data.realName?.realName ?? current.realName,
-        contactPhone: data.realName?.contactPhone ?? data.phone ?? current.contactPhone,
-        address: data.realName?.address ?? current.address,
-        validStart: data.realName?.validStart ?? current.validStart,
-        validEnd: data.realName?.validEnd ?? current.validEnd,
-      }))
     } catch {
       setError('无法连接账号服务')
     } finally {
@@ -312,10 +386,6 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
     if (window.location.hash !== target) window.location.hash = target
   }
 
-  const toggleSecurityMenu = (): void => {
-    setSecurityMenuOpen((current) => !current)
-  }
-
   const openProfileEdit = (): void => {
     setTab('profile')
     setProfileEditing(true)
@@ -381,23 +451,6 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
       if (result.code !== 0) return setError(result.message ?? '手机号变更失败')
       setPhoneForm({ phone: '', code: '' })
       flash('手机号已变更')
-      await load()
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const submitRealName = async (event: FormEvent): Promise<void> => {
-    event.preventDefault()
-    setBusy(true)
-    try {
-      const result = await api('/api/v1/sso/account/real-name', {
-        method: 'POST',
-        body: JSON.stringify(realNameForm),
-      })
-      if (result.code !== 0) return setError(result.message ?? '实名认证提交失败')
-      setRealNameOpen(false)
-      flash('个人实名认证已提交审核')
       await load()
     } finally {
       setBusy(false)
@@ -483,12 +536,30 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
     await load()
   }
 
+  /** 行政区划只在需要时拉一次；失败可重试，不阻塞个人主体创建 */
+  const ensureRegionCatalog = async (): Promise<void> => {
+    if (regionCatalog || regionLoading) return
+    setRegionLoading(true)
+    setRegionError('')
+    try {
+      setRegionCatalog(await loadRegionCatalog())
+    } catch (e) {
+      setRegionError((e as Error).message || '行政区划加载失败')
+    } finally {
+      setRegionLoading(false)
+    }
+  }
+
   const openCreateBusiness = (identity: 'enterprise' | 'personal'): void => {
     setCreateIdentity(identity)
     setCreateBusinessForm((current) => ({
       ...current,
       contactName: current.contactName || summary?.nickname || '',
     }))
+    if (identity === 'enterprise') {
+      setAddressRegion({ province: '', city: '', district: '', detail: '' })
+      void ensureRegionCatalog()
+    }
     setCreateBusinessOpen(true)
   }
 
@@ -506,11 +577,17 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
       }
     }
     if (!createBusinessForm.contactName.trim()) return setError('请填写联系人姓名')
+    if (createIdentity === 'enterprise') {
+      if (!addressRegion.province) return setError('请选择注册地址所在省份')
+      if (!addressRegion.city) return setError('请选择注册地址所在城市')
+      if (districtOptions.length > 0 && !addressRegion.district) return setError('请选择注册地址所在区县')
+      if (!addressRegion.detail.trim()) return setError('请填写详细地址（街道、门牌号）')
+    }
     setBusy(true)
     try {
       const result = await api('/api/v1/sso/account/businesses', {
         method: 'POST',
-        body: JSON.stringify({ ...createBusinessForm, identity: createIdentity }),
+        body: JSON.stringify({ ...createBusinessForm, address: composedAddress || null, identity: createIdentity }),
       })
       if (result.code !== 0) return setError(result.message ?? '主体创建失败')
       setCreateBusinessOpen(false)
@@ -540,12 +617,13 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
 
   const startCertification = (merchant: MerchantRow): void => {
     if (merchant.memberType === 'personal') {
-      setRealNameOpen(true)
-      setTab('business')
-      window.setTimeout(() => window.scrollTo({ top: 260, behavior: 'smooth' }), 50)
+      // 个人主体的实名就是账号级个人实名：直接切到「个人实名」菜单并展开资料表单
+      setRealnameFormSignal((value) => value + 1)
+      setTab('realname')
       return
     }
     const cert = merchant.certification
+    setTab('enterprise')
     setCertificationTarget(merchant)
     setCertificationForm({
       companyName: cert?.companyName || merchant.merchantName || '',
@@ -558,6 +636,13 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
       businessLicenseUrl: cert?.businessLicenseUrl || '',
       legalPersonIdFrontUrl: cert?.legalPersonIdFrontUrl || '',
       legalPersonIdBackUrl: cert?.legalPersonIdBackUrl || '',
+      legalPersonFaceUrl: cert?.legalPersonFaceUrl || '',
+      corporateBankName: cert?.corporateBankName || '',
+      corporateBankAccount: '',
+      corporateTransferAmount: cert?.corporateTransferAmount || '',
+      corporateTransferReference: cert?.corporateTransferReference || '',
+      corporateTransferProofUrl: cert?.corporateTransferProofUrl || '',
+      registeredCapital: cert?.registeredCapital || '',
     })
   }
 
@@ -593,7 +678,10 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
         business_license: 'businessLicenseUrl',
         legal_person_id_front: 'legalPersonIdFrontUrl',
         legal_person_id_back: 'legalPersonIdBackUrl',
-      }[kind] as 'businessLicenseUrl' | 'legalPersonIdFrontUrl' | 'legalPersonIdBackUrl' | undefined
+        legal_person_face: 'legalPersonFaceUrl',
+        corporate_transfer_proof: 'corporateTransferProofUrl',
+      }[kind] as 'businessLicenseUrl' | 'legalPersonIdFrontUrl' | 'legalPersonIdBackUrl'
+        | 'legalPersonFaceUrl' | 'corporateTransferProofUrl' | undefined
       if (field) setCertificationForm((current) => ({ ...current, [field]: result.data!.url }))
     } catch {
       setError('图片上传失败，请检查网络后重试')
@@ -615,8 +703,18 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
       return setError('请填写正确的 11 位联系电话')
     }
     if (!certificationForm.businessLicenseUrl) return setError('请上传营业执照照片')
-    if (!certificationForm.legalPersonIdFrontUrl) return setError('请上传法人身份证人像面照片')
-    if (!certificationForm.legalPersonIdBackUrl) return setError('请上传法人身份证国徽面照片')
+    if (!certificationForm.legalPersonFaceUrl) return setError('请完成法定代表人扫脸采集')
+    if (!certificationForm.corporateBankName.trim()) return setError('请填写对公账户户名')
+    if (!/^\d{8,32}$/.test(certificationForm.corporateBankAccount.replace(/\s/g, ''))) {
+      return setError('请填写有效的对公账户账号')
+    }
+    if (!/^\d{1,3}(\.\d{1,2})?$/.test(certificationForm.corporateTransferAmount)) {
+      return setError('请填写正确的对公打款金额')
+    }
+    if (certificationForm.corporateTransferReference.trim().length < 6) {
+      return setError('请填写对公打款流水号')
+    }
+    if (!certificationForm.corporateTransferProofUrl) return setError('请上传对公打款凭证')
     setBusy(true)
     try {
       const result = await api(`/api/v1/sso/account/businesses/${certificationTarget.merchantId}/submit-certification`, {
@@ -667,17 +765,36 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
 
   const activeMerchant = summary.merchants.find((merchant) =>
     merchant.merchantId === summary.activeMerchantId) ?? null
+
+  /* ---------- 注册地址级联 ---------- */
+  const provinceOption = regionCatalog?.provinces.find((item) => item.code === addressRegion.province)
+  const cityOptions = childrenOf(regionCatalog?.cities ?? [], addressRegion.province)
+  const cityOption = cityOptions.find((item) => item.code === addressRegion.city)
+  const districtOptions = childrenOf(regionCatalog?.districts ?? [], addressRegion.city)
+  const districtOption = districtOptions.find((item) => item.code === addressRegion.district)
+  const composedAddress = [
+    provinceOption?.name ?? '',
+    displayCityName(cityOption, provinceOption),
+    districtOption?.name ?? '',
+    addressRegion.detail.trim(),
+  ].filter(Boolean).join(' ')
   const activeTabMeta = TABS.find((item) => item.key === tab) ?? TABS[0]
+  const navStats = navProgress()
+  const pendingItem = pendingKey ? findNavItem(pendingKey) : undefined
   const securityTitle = securityPage === 'password' ? '修改密码' : '变更手机号'
   const securityDescription = securityPage === 'password'
     ? '设置新的登录密码'
     : '通过短信验证更换绑定手机号'
-  const pageTitle = tab === 'profile' && profileEditing
-    ? '编辑账号资料'
-    : tab === 'security' ? securityTitle : activeTabMeta.label
-  const pageDescription = tab === 'profile' && profileEditing
-    ? '修改昵称与邮箱，登录账号和手机号请在账号安全中维护'
-    : tab === 'security' ? securityDescription : activeTabMeta.description
+  const pageTitle = pendingItem
+    ? pendingItem.label
+    : tab === 'profile' && profileEditing
+      ? '编辑账号资料'
+      : tab === 'security' ? securityTitle : activeTabMeta.label
+  const pageDescription = pendingItem
+    ? '该功能尚未接入后端，下面是具体缺口'
+    : tab === 'profile' && profileEditing
+      ? '修改昵称与邮箱，登录账号和手机号请在账号安全中维护'
+      : tab === 'security' ? securityDescription : activeTabMeta.description
 
   return (
     <section className="section account-page">
@@ -700,43 +817,68 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
       <div className="account-shell">
         <aside className="account-sidebar">
           <div className="account-sidebar-head">
-            <span>个人中心</span>
-            <strong>账号与主体管理</strong>
+            <span>用户中心</span>
+            <strong>账号 · 身份 · 认证 · 安全</strong>
           </div>
-          <nav className="account-menu" aria-label="个人中心菜单">
-            {TABS.map((item) => item.key === 'security' ? (
-              <div className="account-menu-group" key={item.key}>
-                <button
-                  type="button"
-                  className={`account-menu-top ${tab === 'security' ? 'on' : ''}`}
-                  aria-expanded={securityMenuOpen}
-                  onClick={toggleSecurityMenu}
-                >
-                  <span className="account-menu-icon"><Icon name={item.icon} size={16} /></span>
-                  <span>{item.label}</span>
-                  <i className={securityMenuOpen ? 'expanded' : ''}>›</i>
-                </button>
-                {securityMenuOpen && (
-                  <div className="account-submenu">
-                    <button type="button" className={tab === 'security' && securityPage === 'password' ? 'on' : ''} onClick={() => openSecurity('password')}>
-                      <span className="account-submenu-dot" />修改密码
+          {/*
+            侧栏按原型 IA 渲染（8 组 / 20 项），而不是按"代码里现有哪些 tab"。
+            每项带状态：
+              ready    → 点进去有真实功能
+              external → 跳认证中心或独立认证页
+              pending  → 点开说明"缺哪个接口"，不给空白页也不给假数据
+            进度条让"原型 20 项、已实现 7 项"这件事在界面上就看得见，不用翻文档。
+          */}
+          <div className="uc-nav-progress" title="原型条目已实现进度">
+            <div className="uc-nav-progress-bar">
+              <span style={{ width: `${Math.round(((navStats.ready + navStats.external) / navStats.total) * 100)}%` }} />
+            </div>
+            <small>
+              已实现 {navStats.ready + navStats.external} / {navStats.total} 项
+              {navStats.pending > 0 ? ` · 待接入 ${navStats.pending}` : ''}
+            </small>
+          </div>
+          <nav className="account-menu" aria-label="用户中心菜单">
+            {NAV_GROUPS.map((group) => (
+              <div className="uc-nav-group" key={group.key}>
+                <div className="uc-nav-group-title">
+                  <Icon name={group.icon} size={13} />
+                  <span>{group.label}</span>
+                </div>
+                {group.items.map((item) => {
+                  const isActive = item.status === 'ready' && item.view === tab && !pendingKey
+                  return (
+                    <button
+                      type="button"
+                      key={item.key}
+                      className={`account-menu-top uc-nav-item ${isActive ? 'on' : ''} ${item.status === 'pending' ? 'is-pending' : ''}`}
+                      onClick={() => {
+                        if (item.status === 'external' && item.href) {
+                          window.location.href = item.href
+                          return
+                        }
+                        if (item.status === 'pending') {
+                          setPendingKey(item.key)
+                          return
+                        }
+                        if (item.view) {
+                          setPendingKey(null)
+                          openTab(item.view)
+                        }
+                      }}
+                    >
+                      <span className="account-menu-icon"><Icon name={item.icon} size={16} /></span>
+                      <span>{item.label}</span>
+                      {item.status === 'pending' && <i className="uc-nav-tag">待接入</i>}
+                      {item.status === 'external' && <i className="uc-nav-tag ext">跳转</i>}
+                      {item.status === 'ready' && <i>›</i>}
                     </button>
-                    <button type="button" className={tab === 'security' && securityPage === 'phone' ? 'on' : ''} onClick={() => openSecurity('phone')}>
-                      <span className="account-submenu-dot" />变更手机号
-                    </button>
-                  </div>
-                )}
+                  )
+                })}
               </div>
-            ) : (
-              <button type="button" key={item.key} className={`account-menu-top ${tab === item.key ? 'on' : ''}`} onClick={() => openTab(item.key)}>
-                <span className="account-menu-icon"><Icon name={item.icon} size={16} /></span>
-                <span>{item.label}</span>
-                <i>›</i>
-              </button>
             ))}
           </nav>
           <div className="account-sidebar-subject">
-            <span>当前登录主体</span>
+            <span>当前登录身份</span>
             <strong>{activeMerchant?.merchantName || '暂未选择'}</strong>
             <small>{activeMerchant ? `${activeMerchant.memberType === 'personal' ? '个人主体' : '企业主体'} · ${activeMerchant.roleInMerchant}` : '请先创建经营主体'}</small>
           </div>
@@ -745,13 +887,99 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
         <main className="account-content">
           <div className="account-content-head">
             <div>
-              <span>个人中心 / {activeTabMeta.label}{profileEditing ? ' / 编辑' : tab === 'security' ? ` / ${securityTitle}` : ''}</span>
+              <span>
+                用户中心 / {pendingItem ? pendingItem.label : activeTabMeta.label}
+                {profileEditing ? ' / 编辑' : tab === 'security' && !pendingItem ? ` / ${securityTitle}` : ''}
+              </span>
               <h2>{pageTitle}</h2>
             </div>
             <p>{pageDescription}</p>
           </div>
           {notice && <div className="account-notice">{notice}</div>}
           {error && <div className="account-error">{error}</div>}
+
+      {pendingItem && (
+        <div className="card uc-pending">
+          <div className="uc-pending-head">
+            <span className="uc-pending-icon"><Icon name="alert" size={22} /></span>
+            <div>
+              <h3>{pendingItem.label} · 暂未接入</h3>
+              <p>原型规划了这个页面，但后端目前没有对应能力。这里如实说明缺口，不展示示例数据。</p>
+            </div>
+          </div>
+          <dl className="uc-kv">
+            <dt>缺失能力</dt>
+            <dd>{pendingItem.gap ?? '待补充说明'}</dd>
+          </dl>
+          <p className="uc-pending-foot">
+            补齐后端接口后，本页可直接接上，无需改导航结构。
+          </p>
+        </div>
+      )}
+
+      {!pendingItem && tab === 'overview' && (
+        <AccountOverview
+          summary={{
+            userId: summary.userId,
+            username: summary.username,
+            nickname: summary.nickname,
+            phone: summary.phone,
+            email: summary.email,
+            status: summary.status,
+            createdAt: summary.createdAt,
+            realName: summary.realName
+              ? {
+                  realName: summary.realName.realName,
+                  status: summary.realName.status,
+                  policeVerified: summary.realName.policeVerified,
+                  livenessVerified: summary.realName.livenessVerified,
+                  verificationChannel: summary.realName.verificationChannel,
+                }
+              : null,
+            activeMerchantId: summary.activeMerchantId,
+            merchants: summary.merchants.map((item) => ({
+              merchantId: item.merchantId,
+              merchantName: item.merchantName ?? '未命名主体',
+              memberType: item.memberType,
+              roleInMerchant: item.roleInMerchant,
+              verifyStatus: item.verifyStatus,
+            })),
+            reviewInbox: summary.reviewInbox.map((item) => ({ id: item.id })),
+            sentJoinRequests: summary.sentJoinRequests.map((item) => ({ id: item.id, status: item.status })),
+          }}
+          onNavigate={(view) => {
+            setPendingKey(null)
+            openTab(view)
+          }}
+        />
+      )}
+
+      {!pendingItem && tab === 'messages' && <Messages />}
+
+      {!pendingItem && tab === 'devices' && <LoginDevices />}
+
+      {!pendingItem && tab === 'bindings' && <ThirdPartyBindings />}
+
+      {!pendingItem && tab === 'notification' && <NotificationSettings />}
+
+      {!pendingItem && tab === 'logs' && <OperationLogs />}
+
+      {!pendingItem && tab === 'certificates' && <Certificates />}
+
+
+      {!pendingItem && tab === 'feedback' && <Feedback />}
+
+      {!pendingItem && tab === 'privacy' && <PrivacyData />}
+
+      {!pendingItem && tab === 'crossModule' && <CrossModule />}
+
+      {!pendingItem && tab === 'orders' && <Orders />}
+
+      {!pendingItem && tab === 'help' && <HelpCenter />}
+
+      {!pendingItem && tab === 'authorizations' && <Authorizations />}
+
+      {!pendingItem && tab === 'mfa' && <Mfa />}
 
       {tab === 'profile' && !profileEditing && (
         <div className="account-profile-overview">
@@ -927,42 +1155,253 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
         </div>
       )}
 
-      {tab === 'business' && (
+      {tab === 'realname' && (
+        <PersonalRealname record={summary.realName} onRefresh={load} openFormSignal={realnameFormSignal} />
+      )}
+
+      {tab === 'enterprise' && (
         <div className="account-business-layout">
-          <div className="card account-card">
-            <div className="account-card-head"><h2>实名认证</h2><span className={`account-status ${tone(summary.realName?.status)}`}>{statusText(summary.realName?.status)}</span></div>
-            {summary.realName ? (
-              <div className="account-info-list">
-                <div><span>姓名</span><strong>{summary.realName.realName}</strong></div>
-                <div><span>证件号码</span><strong>{summary.realName.idNoMasked}</strong></div>
-                <div><span>有效期</span><strong>{summary.realName.validStart || '—'} 至 {summary.realName.validEnd || '—'}</strong></div>
-                <div><span>联系电话</span><strong>{summary.realName.contactPhone || '—'}</strong></div>
-                {summary.realName.reviewRemark && <div><span>审核意见</span><strong>{summary.realName.reviewRemark}</strong></div>}
-              </div>
-            ) : <p className="muted">尚未提交个人实名认证。</p>}
-            {summary.realName?.status !== 'verified' && (
-              <button className="btn btn-primary" onClick={() => setRealNameOpen(!realNameOpen)}>
-                {summary.realName ? '重新提交实名认证' : '办理个人实名认证'}
-              </button>
-            )}
-            {realNameOpen && summary.realName?.status !== 'verified' && (
-              <form className="account-realname-form" onSubmit={(event) => void submitRealName(event)}>
-                <div className="account-form-grid">
-                  <label>真实姓名<input className="input" value={realNameForm.realName} onChange={(event) => setRealNameForm({ ...realNameForm, realName: event.target.value })} /></label>
-                  <label>身份证号<input className="input" value={realNameForm.idCard} onChange={(event) => setRealNameForm({ ...realNameForm, idCard: event.target.value.toUpperCase() })} /></label>
-                  <label>联系电话<input className="input" value={realNameForm.contactPhone} onChange={(event) => setRealNameForm({ ...realNameForm, contactPhone: event.target.value })} /></label>
-                  <label>经营类型<input className="input" value={realNameForm.businessType} placeholder="家庭农场 / 个体采购户等" onChange={(event) => setRealNameForm({ ...realNameForm, businessType: event.target.value })} /></label>
-                  <label>证件有效期起<input className="input" type="date" value={realNameForm.validStart} onChange={(event) => setRealNameForm({ ...realNameForm, validStart: event.target.value })} /></label>
-                  <label>证件有效期止<input className="input" type="date" value={realNameForm.validEnd} onChange={(event) => setRealNameForm({ ...realNameForm, validEnd: event.target.value })} /></label>
+          <div className="card account-card uc-verify-hero">
+            <div className="account-card-head">
+              <h2>企业实名认证</h2>
+              <span>{activeMerchant ? `当前主体：${activeMerchant.merchantName}` : '当前账号还没有经营主体'}</span>
+            </div>
+            {activeMerchant ? (
+              <>
+                <div className="uc-verify-status">
+                  <span className={`account-status ${tone(activeMerchant.verifyStatus)}`}>{statusText(activeMerchant.verifyStatus)}</span>
+                  <p>{activeMerchant.memberType === 'personal'
+                    ? '个人主体不需要企业认证：账号完成「个人实名」后即可作为个人主体的身份依据。'
+                    : activeMerchant.verifyStatus === 'approved'
+                      ? '企业实名已通过，当前主体可开展交易、签约与金融申请。'
+                      : activeMerchant.verifyStatus === 'pending'
+                        ? '认证资料已提交平台审核，审核期间不可重复提交。'
+                        : activeMerchant.verifyStatus === 'rejected'
+                          ? '上次认证被驳回，请按审核意见修改资料后重新提交。'
+                          : '尚未提交企业认证。补齐营业执照、法人与对公账户信息后提交审核。'}</p>
                 </div>
-                <label>常住地址<input className="input" value={realNameForm.address} onChange={(event) => setRealNameForm({ ...realNameForm, address: event.target.value })} /></label>
-                <label>联系邮箱<input className="input" type="email" value={realNameForm.email} onChange={(event) => setRealNameForm({ ...realNameForm, email: event.target.value })} /></label>
+                <div className="account-info-list">
+                  <div><span>主体名称</span><strong>{activeMerchant.merchantName}</strong></div>
+                  <div><span>主体类型</span><strong>{activeMerchant.memberType === 'personal' ? '个人主体' : '企业主体'}</strong></div>
+                  <div><span>主体编码</span><strong>{activeMerchant.merchantCode || '—'}</strong></div>
+                  <div><span>统一社会信用代码</span><strong>{activeMerchant.creditCodeMasked || '—'}</strong></div>
+                  <div><span>法定代表人 / 联系人</span><strong>{activeMerchant.certification?.legalPerson || activeMerchant.contactName || '—'}</strong></div>
+                  <div><span>审核意见</span><strong>{activeMerchant.verifyRemark || '—'}</strong></div>
+                </div>
+                {activeMerchant.certification ? (
+                  <div className="certification-track">
+                    <span>认证单号</span><b>{activeMerchant.certification.certNo}</b>
+                    <span>提交时间</span><b>{String(activeMerchant.certification.submitTime).replace('T', ' ').slice(0, 16)}</b>
+                    {activeMerchant.certification.reviewTime && (
+                      <><span>审核时间</span><b>{String(activeMerchant.certification.reviewTime).replace('T', ' ').slice(0, 16)}</b></>
+                    )}
+                  </div>
+                ) : (
+                  <p className="uc-muted">还没有认证单。提交认证后会生成认证单号，审核进度以此为准。</p>
+                )}
                 <div className="account-form-actions">
-                  <button className="btn btn-primary" disabled={busy}>{busy ? '提交中…' : '提交实名审核'}</button>
-                  <button type="button" className="btn btn-ghost" onClick={() => setRealNameOpen(false)}>取消</button>
+                  {activeMerchant.memberType === 'personal' ? (
+                    <button className="btn btn-outline" onClick={() => setTab('realname')}>去个人实名</button>
+                  ) : activeMerchant.verifyStatus === 'approved' ? (
+                    <button className="btn btn-ghost" onClick={() => setTab('certificates')}>查看主体资质证照</button>
+                  ) : activeMerchant.verifyStatus === 'pending' ? (
+                    <button className="btn btn-ghost" disabled>等待平台审核</button>
+                  ) : (
+                    <button className="btn btn-primary" disabled={busy} onClick={() => void startCertification(activeMerchant)}>
+                      {activeMerchant.verifyStatus === 'rejected' ? '重新提交认证' : '开始企业认证'}
+                    </button>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="account-business-empty">
+                <p>认证挂在经营主体上。先到「我的组织」创建或加入一个企业主体，再回到本页提交认证。</p>
+                <button className="btn btn-primary" onClick={() => setTab('org')}>去我的组织</button>
+              </div>
+            )}
+          </div>
+
+          <div className="card account-card">
+            <div className="account-card-head">
+              <h2>其他主体认证状态</h2>
+              <span>{summary.merchants.length} 个主体</span>
+            </div>
+            {summary.merchants.length === 0 ? (
+              <div className="empty">暂无经营主体</div>
+            ) : (
+              <div className="uc-verify-list">
+                {summary.merchants.map((merchant) => (
+                  <div className={`uc-verify-row ${merchant.merchantId === summary.activeMerchantId ? 'active' : ''}`} key={merchant.bindingId}>
+                    <div className="uc-verify-row-main">
+                      <strong>{merchant.merchantName}</strong>
+                      <span>{merchant.memberType === 'personal' ? '个人主体' : '企业主体'} · {merchant.roleInMerchant}
+                        {merchant.merchantId === summary.activeMerchantId ? ' · 当前主体' : ''}
+                      </span>
+                      {merchant.verifyRemark && <small>审核意见：{merchant.verifyRemark}</small>}
+                    </div>
+                    <div className="uc-verify-row-actions">
+                      <span className={`account-status ${tone(merchant.verifyStatus)}`}>{statusText(merchant.verifyStatus)}</span>
+                      {merchant.memberType === 'personal' ? (
+                        <button className="btn btn-ghost btn-sm" onClick={() => setTab('realname')}>去个人实名</button>
+                      ) : merchant.verifyStatus === 'approved' || merchant.verifyStatus === 'pending' ? (
+                        <button className="btn btn-ghost btn-sm" disabled>{merchant.verifyStatus === 'approved' ? '已认证' : '审核中'}</button>
+                      ) : (
+                        <button className="btn btn-primary btn-sm" disabled={busy} onClick={() => void startCertification(merchant)}>
+                          {merchant.verifyStatus === 'rejected' ? '重新认证' : '去认证'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="card account-card">
+            <div className="account-card-head"><h2>认证需要准备什么</h2><span>提交后 1-2 个工作日出结果</span></div>
+            <ol className="uc-verify-flow">
+              <li><b>营业执照</b><span>完整、清晰、在有效期内，四角无遮挡</span></li>
+              <li><b>法定代表人扫脸</b><span>由法定代表人本人完成活体采集</span></li>
+              <li><b>对公账户与打款凭证</b><span>户名须与企业名称一致，上传银行回单核对账户归属</span></li>
+              <li><b>平台审核</b><span>审核通过后企业实名生效，可开展交易、签约与金融申请</span></li>
+            </ol>
+            <p className="uc-field-hint">
+              认证信息仅用于身份核验与合规留痕；对公账号等敏感字段只保存掩码，前台与运营端都不展示明文。
+            </p>
+          </div>
+          {certificationTarget && (
+            <div className="account-modal-mask" onClick={() => setCertificationTarget(null)}>
+              <form className="account-modal" onClick={(event) => event.stopPropagation()}
+                onSubmit={(event) => void submitEnterpriseCertification(event)}>
+                <div className="account-card-head">
+                  <h2>企业主体认证</h2>
+                  <button type="button" className="account-modal-close" onClick={() => setCertificationTarget(null)}>×</button>
+                </div>
+                {certificationTarget.verifyStatus === 'rejected' && (
+                  <div className="account-error">上次认证被驳回，请根据审核意见修改后重新提交。</div>
+                )}
+                <div className="account-form-grid">
+                  <label>企业名称<span className="account-required">*</span><input className="input" value={certificationForm.companyName} onChange={(event) => setCertificationForm({ ...certificationForm, companyName: event.target.value })} /></label>
+                  <label>统一社会信用代码<span className="account-required">*</span><input className="input" maxLength={18} value={certificationForm.creditCode} onChange={(event) => setCertificationForm({ ...certificationForm, creditCode: event.target.value.replace(/\s/g, '').toUpperCase() })} /></label>
+                  <label>法定代表人<span className="account-required">*</span><input className="input" value={certificationForm.legalPerson} placeholder="请输入法定代表人或经营者姓名" onChange={(event) => setCertificationForm({ ...certificationForm, legalPerson: event.target.value })} /></label>
+                  <label>营业执照号<input className="input" value={certificationForm.licenseNo} placeholder="如与统一社会信用代码相同可留空" onChange={(event) => setCertificationForm({ ...certificationForm, licenseNo: event.target.value })} /></label>
+                  <label>注册资本<input className="input" value={certificationForm.registeredCapital} placeholder="如：5000 万元" onChange={(event) => setCertificationForm({ ...certificationForm, registeredCapital: event.target.value })} /></label>
+                  <label>联系人姓名<span className="account-required">*</span><input className="input" value={certificationForm.contactName} onChange={(event) => setCertificationForm({ ...certificationForm, contactName: event.target.value })} /></label>
+                  <label>联系电话<span className="account-required">*</span><input className="input" maxLength={11} value={certificationForm.contactPhone} onChange={(event) => setCertificationForm({ ...certificationForm, contactPhone: event.target.value.replace(/\D/g, '') })} /></label>
+                  <label>对公账户户名<span className="account-required">*</span><input className="input" value={certificationForm.corporateBankName} onChange={(event) => setCertificationForm({ ...certificationForm, corporateBankName: event.target.value })} /></label>
+                  <label>对公账户账号<span className="account-required">*</span><input className="input" value={certificationForm.corporateBankAccount} placeholder="仅保存账户掩码" onChange={(event) => setCertificationForm({ ...certificationForm, corporateBankAccount: event.target.value.replace(/[^\d\s]/g, '') })} /></label>
+                  <label>对公打款金额<span className="account-required">*</span><input className="input" value={certificationForm.corporateTransferAmount} placeholder="如：0.37" onChange={(event) => setCertificationForm({ ...certificationForm, corporateTransferAmount: event.target.value.replace(/[^\d.]/g, '') })} /></label>
+                  <label>对公打款流水号<span className="account-required">*</span><input className="input" value={certificationForm.corporateTransferReference} onChange={(event) => setCertificationForm({ ...certificationForm, corporateTransferReference: event.target.value })} /></label>
+                </div>
+                  <div className="certification-documents">
+                    {[
+                      {
+                        kind: 'business_license', title: '营业执照照片',
+                        hint: '请上传完整、清晰且在有效期内的营业执照',
+                        url: certificationForm.businessLicenseUrl,
+                        field: 'businessLicenseUrl' as const,
+                      },
+                      {
+                        kind: 'legal_person_face', title: '法定代表人扫脸',
+                        hint: '调用摄像头采集，用于法人实名核验',
+                        url: certificationForm.legalPersonFaceUrl,
+                        field: 'legalPersonFaceUrl' as const,
+                      },
+                      {
+                        kind: 'corporate_transfer_proof', title: '对公打款凭证',
+                        hint: '上传银行回单，平台财务复核账户归属',
+                        url: certificationForm.corporateTransferProofUrl,
+                        field: 'corporateTransferProofUrl' as const,
+                      },
+                    ].map((document) => (
+                      <div className="certification-document" key={document.kind}>
+                        <div className="certification-document-head">
+                          <strong>{document.title}<span className="account-required">*</span></strong>
+                          <small>{document.hint}</small>
+                        </div>
+                        {document.url ? (
+                          <div className="certification-document-preview">
+                            <img src={document.url} alt={document.title} />
+                            <div>
+                              <span>已上传</span>
+                              <label className="certification-replace">
+                                {certificationUploading === document.kind ? '上传中…' : '重新上传'}
+                                <input
+                                  type="file"
+                                  accept="image/jpeg,image/png,image/webp"
+                                  capture={document.kind === 'legal_person_face' ? 'user' : undefined}
+                                  disabled={busy || Boolean(certificationUploading)}
+                                  onChange={(event) => {
+                                    const file = event.target.files?.[0]
+                                    if (file) void uploadCertificationDocument(document.kind, file)
+                                    event.currentTarget.value = ''
+                                  }}
+                                />
+                              </label>
+                            </div>
+                          </div>
+                        ) : (
+                          <label className="certification-upload">
+                            <span>{certificationUploading === document.kind ? '正在上传…' : '选择图片'}</span>
+                            <small>JPG / PNG / WEBP，不超过 5MB</small>
+                            <input
+                              type="file"
+                              accept="image/jpeg,image/png,image/webp"
+                              capture={document.kind === 'legal_person_face' ? 'user' : undefined}
+                              disabled={busy || Boolean(certificationUploading)}
+                              onChange={(event) => {
+                                const file = event.target.files?.[0]
+                                if (file) void uploadCertificationDocument(document.kind, file)
+                                event.currentTarget.value = ''
+                              }}
+                            />
+                          </label>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <label>认证材料说明<textarea className="input account-textarea" value={certificationForm.attachNote} placeholder="可填写经营范围、资质说明及需平台核验的其他信息" onChange={(event) => setCertificationForm({ ...certificationForm, attachNote: event.target.value })} /></label>
+                <p className="muted">提交后进入平台审核；审核通过前不会改变主体已有业务权限。</p>
+                <div className="account-form-actions">
+                  <button className="btn btn-primary" disabled={busy || Boolean(certificationUploading)}>{busy ? '提交中…' : certificationUploading ? '图片上传中…' : '提交认证审核'}</button>
+                  <button type="button" className="btn btn-ghost" onClick={() => setCertificationTarget(null)}>取消</button>
                 </div>
               </form>
-            )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === 'org' && (
+        <div className="account-business-layout">
+          <div className="card account-card uc-org-hero">
+            <div className="uc-org-hero-main">
+              <span className="uc-org-hero-icon"><Icon name="factory" size={22} /></span>
+              <div>
+                <h2>{activeMerchant?.merchantName ?? '还没有经营主体'}</h2>
+                <p>{activeMerchant
+                  ? `${activeMerchant.memberType === 'personal' ? '个人主体' : '企业主体'} · 我的角色：${activeMerchant.roleInMerchant} · 主体编码 ${activeMerchant.merchantCode || '—'}`
+                  : '创建企业主体后可开展交易、签约与认证；也可以直接申请加入已有主体。'}</p>
+              </div>
+            </div>
+            <div className="uc-org-hero-actions">
+              <span className={`account-status ${tone(activeMerchant?.verifyStatus ?? null)}`}>{statusText(activeMerchant?.verifyStatus ?? null)}</span>
+              <button type="button" className="btn btn-outline btn-sm" onClick={() => setTab('enterprise')}>企业实名</button>
+              <button type="button" className="btn btn-outline btn-sm" onClick={() => setTab('team')}>成员管理</button>
+              <button type="button" className="btn btn-outline btn-sm" onClick={() => setTab('roles')}>角色权限</button>
+            </div>
+          </div>
+
+          <div className="card account-card uc-org-identity">
+            <div className="account-card-head">
+              <h2>业务身份</h2>
+              <span>一个账号可同时持有多个；审核通过后开通对应业务能力，但不改变主体权限</span>
+            </div>
+            <p className="uc-muted">
+              业务身份是你在平台上对外声明的业务角色（批发商 / 零售商 / 农户等），审核通过后自动开通对应业务能力（见下方「已开通能力」），
+              业务接口按能力放行；它不改变主体权限——你在主体内的角色与数据范围仍由下方主体列表与「成员管理」维护。
+            </p>
+            <IdentityApply />
           </div>
 
           <div className="card account-card">
@@ -1082,6 +1521,15 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
               </div>
             </div>
           )}
+          <div className="card account-card">
+            <div className="account-card-head"><h2>组织协作</h2></div>
+            <p className="uc-muted">成员、邀请与角色权限在「组织权限」分组里维护；本页只负责主体归属、切换和加入申请。</p>
+            <div className="account-form-actions">
+              <button className="btn btn-outline" onClick={() => setTab('team')}>成员管理</button>
+              <button className="btn btn-outline" onClick={() => setTab('roles')}>我的角色与权限</button>
+            </div>
+          </div>
+
           {createBusinessOpen && (
             <div className="account-modal-mask" onClick={() => setCreateBusinessOpen(false)}>
               <form className="account-modal" onClick={(event) => event.stopPropagation()} onSubmit={(event) => void createBusiness(event)}>
@@ -1096,7 +1544,36 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
                       <label>统一社会信用代码<span className="account-required">*</span><input className="input" value={createBusinessForm.creditCode} maxLength={18} placeholder="15-18 位字母数字" onChange={(event) => setCreateBusinessForm({ ...createBusinessForm, creditCode: event.target.value.replace(/\s/g, '').toUpperCase() })} /></label>
                       <label>所属行业<select className="select" value={createBusinessForm.industry} onChange={(event) => setCreateBusinessForm({ ...createBusinessForm, industry: event.target.value })}>{INDUSTRIES.map((item) => <option key={item}>{item}</option>)}</select></label>
                       <label>企业规模<select className="select" value={createBusinessForm.companySize} onChange={(event) => setCreateBusinessForm({ ...createBusinessForm, companySize: event.target.value })}>{COMPANY_SIZES.map((item) => <option key={item}>{item}</option>)}</select></label>
-                      <label>注册地址<input className="input" value={createBusinessForm.address} placeholder="省 / 市 / 区 / 详细地址" onChange={(event) => setCreateBusinessForm({ ...createBusinessForm, address: event.target.value })} /></label>
+                      <label className="uc-address-field">注册地址<span className="account-required">*</span>
+                        <div className="uc-address-grid">
+                          <select className="select" value={addressRegion.province} aria-label="省份"
+                            onChange={(event) => setAddressRegion({ province: event.target.value, city: '', district: '', detail: addressRegion.detail })}>
+                            <option value="">{regionLoading ? '加载中…' : '选择省份'}</option>
+                            {(regionCatalog?.provinces ?? []).map((item) => <option key={item.code} value={item.code}>{item.name}</option>)}
+                          </select>
+                          <select className="select" value={addressRegion.city} aria-label="城市" disabled={!addressRegion.province}
+                            onChange={(event) => setAddressRegion({ ...addressRegion, city: event.target.value, district: '' })}>
+                            <option value="">{addressRegion.province ? '选择城市' : '先选省份'}</option>
+                            {cityOptions.map((item) => <option key={item.code} value={item.code}>{displayCityName(item, provinceOption)}</option>)}
+                          </select>
+                          <select className="select" value={addressRegion.district} aria-label="区县" disabled={!addressRegion.city}
+                            onChange={(event) => setAddressRegion({ ...addressRegion, district: event.target.value })}>
+                            <option value="">{addressRegion.city ? (districtOptions.length ? '选择区县' : '该市暂无区县数据') : '先选城市'}</option>
+                            {districtOptions.map((item) => <option key={item.code} value={item.code}>{item.name}</option>)}
+                          </select>
+                        </div>
+                        <input className="input" value={addressRegion.detail} placeholder="详细地址：街道、门牌号（手工填写）"
+                          onChange={(event) => setAddressRegion({ ...addressRegion, detail: event.target.value })} />
+                        {regionError && (
+                          <small className="uc-field-error">{regionError}
+                            <button type="button" className="uc-inline-link" onClick={() => void ensureRegionCatalog()}>重试</button>
+                          </small>
+                        )}
+                        {composedAddress && <small className="uc-field-hint">将保存为：{composedAddress}</small>}
+                        {!regionLoading && !regionError && (regionCatalog?.provinces?.length ?? 0) === 0 && (
+                          <small className="uc-field-error">主数据里还没有行政区划数据，请联系运营在「系统配置 → 行政区划」维护。</small>
+                        )}
+                      </label>
                     </>
                   ) : (
                     <>
@@ -1111,99 +1588,6 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
                 <div className="account-form-actions">
                   <button className="btn btn-primary" disabled={busy}>{busy ? '创建中…' : '创建主体'}</button>
                   <button type="button" className="btn btn-ghost" onClick={() => setCreateBusinessOpen(false)}>取消</button>
-                </div>
-              </form>
-            </div>
-          )}
-          {certificationTarget && (
-            <div className="account-modal-mask" onClick={() => setCertificationTarget(null)}>
-              <form className="account-modal" onClick={(event) => event.stopPropagation()}
-                onSubmit={(event) => void submitEnterpriseCertification(event)}>
-                <div className="account-card-head">
-                  <h2>企业主体认证</h2>
-                  <button type="button" className="account-modal-close" onClick={() => setCertificationTarget(null)}>×</button>
-                </div>
-                {certificationTarget.verifyStatus === 'rejected' && (
-                  <div className="account-error">上次认证被驳回，请根据审核意见修改后重新提交。</div>
-                )}
-                <div className="account-form-grid">
-                  <label>企业名称<span className="account-required">*</span><input className="input" value={certificationForm.companyName} onChange={(event) => setCertificationForm({ ...certificationForm, companyName: event.target.value })} /></label>
-                  <label>统一社会信用代码<span className="account-required">*</span><input className="input" maxLength={18} value={certificationForm.creditCode} onChange={(event) => setCertificationForm({ ...certificationForm, creditCode: event.target.value.replace(/\s/g, '').toUpperCase() })} /></label>
-                  <label>法定代表人<span className="account-required">*</span><input className="input" value={certificationForm.legalPerson} placeholder="请输入法定代表人或经营者姓名" onChange={(event) => setCertificationForm({ ...certificationForm, legalPerson: event.target.value })} /></label>
-                  <label>营业执照号<input className="input" value={certificationForm.licenseNo} placeholder="如与统一社会信用代码相同可留空" onChange={(event) => setCertificationForm({ ...certificationForm, licenseNo: event.target.value })} /></label>
-                  <label>联系人姓名<span className="account-required">*</span><input className="input" value={certificationForm.contactName} onChange={(event) => setCertificationForm({ ...certificationForm, contactName: event.target.value })} /></label>
-                  <label>联系电话<span className="account-required">*</span><input className="input" maxLength={11} value={certificationForm.contactPhone} onChange={(event) => setCertificationForm({ ...certificationForm, contactPhone: event.target.value.replace(/\D/g, '') })} /></label>
-                </div>
-                  <div className="certification-documents">
-                    {[
-                      {
-                        kind: 'business_license', title: '营业执照照片',
-                        hint: '请上传完整、清晰且在有效期内的营业执照',
-                        url: certificationForm.businessLicenseUrl,
-                        field: 'businessLicenseUrl' as const,
-                      },
-                      {
-                        kind: 'legal_person_id_front', title: '法人身份证人像面',
-                        hint: '证件信息清晰可见，仅用于主体实名认证',
-                        url: certificationForm.legalPersonIdFrontUrl,
-                        field: 'legalPersonIdFrontUrl' as const,
-                      },
-                      {
-                        kind: 'legal_person_id_back', title: '法人身份证国徽面',
-                        hint: '请上传身份证背面，确保有效期限清晰',
-                        url: certificationForm.legalPersonIdBackUrl,
-                        field: 'legalPersonIdBackUrl' as const,
-                      },
-                    ].map((document) => (
-                      <div className="certification-document" key={document.kind}>
-                        <div className="certification-document-head">
-                          <strong>{document.title}<span className="account-required">*</span></strong>
-                          <small>{document.hint}</small>
-                        </div>
-                        {document.url ? (
-                          <div className="certification-document-preview">
-                            <img src={document.url} alt={document.title} />
-                            <div>
-                              <span>已上传</span>
-                              <label className="certification-replace">
-                                {certificationUploading === document.kind ? '上传中…' : '重新上传'}
-                                <input
-                                  type="file"
-                                  accept="image/jpeg,image/png,image/webp"
-                                  disabled={busy || Boolean(certificationUploading)}
-                                  onChange={(event) => {
-                                    const file = event.target.files?.[0]
-                                    if (file) void uploadCertificationDocument(document.kind, file)
-                                    event.currentTarget.value = ''
-                                  }}
-                                />
-                              </label>
-                            </div>
-                          </div>
-                        ) : (
-                          <label className="certification-upload">
-                            <span>{certificationUploading === document.kind ? '正在上传…' : '选择图片'}</span>
-                            <small>JPG / PNG / WEBP，不超过 5MB</small>
-                            <input
-                              type="file"
-                              accept="image/jpeg,image/png,image/webp"
-                              disabled={busy || Boolean(certificationUploading)}
-                              onChange={(event) => {
-                                const file = event.target.files?.[0]
-                                if (file) void uploadCertificationDocument(document.kind, file)
-                                event.currentTarget.value = ''
-                              }}
-                            />
-                          </label>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                  <label>认证材料说明<textarea className="input account-textarea" value={certificationForm.attachNote} placeholder="可填写经营范围、资质说明及需平台核验的其他信息" onChange={(event) => setCertificationForm({ ...certificationForm, attachNote: event.target.value })} /></label>
-                <p className="muted">提交后进入平台审核；审核通过前不会改变主体已有业务权限。</p>
-                <div className="account-form-actions">
-                  <button className="btn btn-primary" disabled={busy || Boolean(certificationUploading)}>{busy ? '提交中…' : certificationUploading ? '图片上传中…' : '提交认证审核'}</button>
-                  <button type="button" className="btn btn-ghost" onClick={() => setCertificationTarget(null)}>取消</button>
                 </div>
               </form>
             </div>

@@ -11,7 +11,7 @@
   同域是上一轮 HttpOnly 刷新令牌能在开发期零 CORS 配置直接生效的前提。
 - **版本目录 + 指针发布**：`bucket/{app}/versions/{version}/` 不可变，`bucket/{app}/index.html` 是指针；
   回滚是把指针切回去，秒级、不用重新构建。
-- **多子系统并存**：当前已在网关上挂 6 个子系统前端（React 与 Vue 两套栈各 3 个），彼此互不串台。
+- **多子系统并存**：当前已在网关上挂生产、交易、物联网、综合服务、政府监管等独立前端，彼此互不串台。
 
 ## 已接入子系统与本地端口
 
@@ -19,10 +19,21 @@
 | :-- | :-- | :-- | :-- | :-- |
 | 生产管理系统 | `prod.agri.local` | `:80` | React + TS + antd | core-platform（:8093，在跑） |
 | 主数据管理平台 | `mdm.agri.local` | `:8080` | React + TS + antd | :8083（未跑） |
-| 供应链金融 | `finance.agri.local` | `:8081` | Vue 3 + element-plus | :8087（未跑） |
-| S2B2C 商城（消费者端） | `mall.agri.local` / `mall-consumer.agri.local` | `:8082` | Vue 3 + vant | :8088（未跑） |
-| S2B2C 商城（供应商端） | `mall-supplier.agri.local` | `:8084` | Vue 3 + element-plus | :8088（未跑） |
-| S2B2C 商城（渠道端） | `mall-channel.agri.local` | `:8085` | Vue 3 + element-plus | :8088（未跑） |
+| 物联网管理（用户端） | `iot.agri.local` | `:8101` | React + TS + antd | :8091 |
+| 物联网管理（运营端） | `iot-admin.agri.local` | `:8102` | React + TS + antd | :8091 |
+| 物联网管理（移动端） | `iot-mobile.agri.local` | `:8111` | uni-app（H5 / 微信小程序 / App） | :8091 |
+| 综合服务（用户端） | `service.agri.local` | `:8105` | React + TS + antd | :8094 |
+| 综合服务（移动端） | `service-mobile.agri.local` | `:8106` | uni-app（H5 / 微信小程序 / App） | :8094 |
+| 综合服务（运营端） | `service-ops.agri.local` | `:8107` | React + TS + antd | :8094 |
+| 政府监管（用户端） | `gov.agri.local` | `:8108` | React + TS + antd | :8095 |
+| 政府监管（移动端） | `gov-mobile.agri.local` | `:8109` | uni-app（H5 / 微信小程序 / App） | :8095 |
+| 政府监管（运营端） | `gov-ops.agri.local` | `:8110` | React + TS + antd | :8095 |
+| 交易撮合移动端 | `trade-mobile.agri.local` | `:8181` | React + TS | :8089 |
+| 供应链金融 | `finance.agri.local` | `:8081` | Vue 3 + element-plus | :8087 |
+| S2B2C 商城（消费者端） | `mall.agri.local` / `mall-consumer.agri.local` | `:8082` | Vue 3 + vant | :8088 |
+| S2B2C 商城（供应商端） | `mall-supplier.agri.local` | `:8084` | Vue 3 + element-plus | :8088 |
+| S2B2C 商城（渠道端） | `mall-channel.agri.local` | `:8085` | Vue 3 + element-plus | :8088 |
+| S2B2C 商城（平台运营端） | `s2b2c-platform.agri.local` | `:8103` | Vue 3 + element-plus | :8088 |
 | 统一认证中心（登录页） | `sso.agri.local` | `:8090` | React + TS | core-platform（:8093，在跑） |
 
 后端未跑的子域，其 `/api` 会返回 **502** —— 这正是"请求被路由到了该子系统自己的上游"的证据

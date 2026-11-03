@@ -25,13 +25,19 @@
  * 退出码：0 = 全链路通过；1 = 有断言失败。
  */
 import { createRequire } from 'node:module'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const require2 = createRequire(path.join(REPO_ROOT, 'agri-production/frontend/package.json'))
-const puppeteer = require2('puppeteer')
+const require2 = createRequire(path.join('C:/Users/71502/.workbuddy-ai/binaries/node/workspace', 'noop.js'))
+const { chromium } = require2('playwright-core')
+
+const BROWSER = [
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+].find((candidate) => existsSync(candidate))
 
 const arg = (name, fallback) => {
   const hit = process.argv.slice(2).find((a) => a.startsWith(`--${name}=`))
@@ -64,9 +70,9 @@ const login = await (await fetch(`${BASE_URL}/api/v1/auth/login`, {
 check(login.code === 0, `登录（${USER}）`, `code=${login.code}`)
 if (login.code !== 0) process.exit(1)
 
-const browser = await puppeteer.launch({ headless: HEADFUL ? false : 'new', args: ['--no-sandbox'] })
-const page = await browser.newPage()
-await page.setViewport({ width: 1600, height: 1000 })
+const browser = await chromium.launch({ headless: !HEADFUL, executablePath: BROWSER, args: ['--no-sandbox'] })
+const page = await (await browser.newContext({ viewport: { width: 1440, height: 1000 } })).newPage()
+await page.setViewportSize({ width: 1600, height: 1000 })
 const badResponses = []
 let createCall = null
 page.on('response', async (res) => {
@@ -103,7 +109,10 @@ const waitForOptions = async (timeoutMs = 15000) => {
   }
 }
 const openSelect = async (selector) => {
-  await page.click(selector)
+  // antd Select 真正接住指针的是内层节点，puppeteer 不看遮挡所以点外层也行；
+  // playwright 会做命中判定并报 "intercepts pointer events"，所以点到内层并放弃命中检查。
+  const inner = await page.$(`${selector} .ant-select-selector`)
+  await (inner ?? await page.$(selector)).click({ force: true })
   return waitForOptions()
 }
 const pickSelectOption = async (text) =>
@@ -145,7 +154,7 @@ try {
       })
     } catch { /* 由后续页面表现反映 */ }
   }, { username: USER, password: PASSWORD, marketId: 1 })
-  await page.evaluateOnNewDocument((state) => {
+  await page.addInitScript((state) => {
     try {
       localStorage.setItem('agri_user_info', JSON.stringify(state.userInfo))
       localStorage.setItem('agri_roles', JSON.stringify(['FARMER']))
@@ -156,7 +165,7 @@ try {
   }, { userInfo: login.data.user ?? {}, farmId: FARM_ID })
 
   // 1) 新建任务页（三步向导）
-  await page.goto(`${BASE_URL}/production/tasks/create`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.goto(`${BASE_URL}/production/tasks/create`, { waitUntil: 'networkidle', timeout: 60000 })
   await page.waitForSelector('#taskName', { timeout: 20000 })
   await sleep(800)
   check(true, '「新建任务」页已打开')
@@ -208,7 +217,8 @@ try {
   })
   console.log('  控件快照：', JSON.stringify(domSnapshot))
   await clickButtonByText('提交')
-  await page.waitForNetworkIdle({ idleTime: 800, timeout: 15000 }).catch(() => {})
+  await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 800))
   await sleep(1000)
 
   check(Boolean(createCall), '页面发出了 POST /api/v1/production/tasks')
@@ -251,8 +261,9 @@ try {
       '列表接口按关键字能查到这条任务', `total=${pageResp.data?.total}`)
 
     // 4) 列表**页面**也要能看到它（接口能查到 ≠ 页面渲染得出来）
-    await page.goto(`${BASE_URL}/production/tasks`, { waitUntil: 'networkidle2', timeout: 60000 })
-    await page.waitForNetworkIdle({ idleTime: 800, timeout: 15000 }).catch(() => {})
+    await page.goto(`${BASE_URL}/production/tasks`, { waitUntil: 'networkidle', timeout: 60000 })
+    await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
+    await new Promise((resolve) => setTimeout(resolve, 800))
     const listText = await page.evaluate(() => document.body.innerText)
     check(listText.includes(taskName), '「农事任务」列表页能查到新建的任务', taskName)
   }

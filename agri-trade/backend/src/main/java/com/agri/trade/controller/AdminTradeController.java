@@ -218,8 +218,12 @@ public class AdminTradeController {
         Page<TradeProduct> page = new Page<>(pageNum, pageSize);
         LambdaQueryWrapper<TradeProduct> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(TradeProduct::getDelFlag, 0);
-        wrapper.eq(TradeProduct::getPublishStatus,
-                publishStatus == null || publishStatus.isEmpty() ? "pending" : publishStatus);
+        // publishStatus=all 时不加状态条件：信息资讯运营端的审核台要一次拿到
+        // 待审核/已通过/未通过/已下架四种状态做分组统计，否则得发四遍请求再合并。
+        if (!"all".equalsIgnoreCase(publishStatus)) {
+            wrapper.eq(TradeProduct::getPublishStatus,
+                    publishStatus == null || publishStatus.isEmpty() ? "pending" : publishStatus);
+        }
         if (keyword != null && !keyword.isEmpty()) {
             wrapper.and(w -> w.like(TradeProduct::getProductName, keyword)
                     .or().like(TradeProduct::getProductCode, keyword)
@@ -230,10 +234,14 @@ public class AdminTradeController {
     }
 
     /**
-     * 货源审核：通过 → published，驳回 → rejected。
+     * 货源审核：通过 → published，驳回 → rejected，下架 → offline。
      *
      * <p>审核痕迹（审核人/时间/意见）一并落库 —— 审核动作没有留痕，
      * 事后就无法回答"这条货源是谁放行的"。</p>
+     *
+     * <p>{@code action=offline} 是给已上架商品做违规下架用的：它和"驳回"在业务上不是一回事
+     * （驳回是没通过审核，下架是曾经通过、事后被撤下），所以状态要分开存，
+     * 不能像以前那样只能靠 approved=false 一律记成 rejected。</p>
      */
     @Operation(summary = "货源审核")
     @PostMapping("/product/{id}/audit")
@@ -242,9 +250,11 @@ public class AdminTradeController {
         if (product == null) {
             return ApiResponse.error("货源不存在");
         }
+        String action = String.valueOf(params.getOrDefault("action", "")).trim();
         String pass = String.valueOf(params.getOrDefault("approved", "false"));
         boolean approved = "true".equalsIgnoreCase(pass) || "1".equals(pass);
-        product.setPublishStatus(approved ? "published" : "rejected");
+        product.setPublishStatus("offline".equalsIgnoreCase(action) ? "offline"
+                : approved ? "published" : "rejected");
         product.setAuditor(SecurityUtils.getUsername());
         product.setAuditTime(new Date());
         product.setAuditRemark(params.get("auditRemark") == null ? null : params.get("auditRemark").toString());

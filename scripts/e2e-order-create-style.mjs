@@ -1,13 +1,19 @@
 #!/usr/bin/env node
 /** 商品详情“立即下单”页面的视觉一致性与响应式回归。 */
 import { createRequire } from 'node:module'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const require2 = createRequire(path.join(ROOT, 'agri-production/frontend/package.json'))
-const puppeteer = require2('puppeteer')
+const require2 = createRequire(path.join('C:/Users/71502/.workbuddy-ai/binaries/node/workspace', 'noop.js'))
+const { chromium } = require2('playwright-core')
+
+const BROWSER = [
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+].find((candidate) => existsSync(candidate))
 const BASE = 'http://localhost:8086'
 const OUT = 'C:/Users/71502/.codex/visualizations/2026/10/16/01a14244-ead8-7ab0-8c7c-df7abac44648'
 const failures = []
@@ -78,20 +84,20 @@ const selectFieldSnapshot = async (page, label) => page.evaluate((text) => {
   }
 }, label)
 
-const browser = await puppeteer.launch({
-  executablePath: 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
-  headless: 'new',
+const browser = await chromium.launch({
+  headless: true,
+  executablePath: BROWSER,
   args: ['--no-sandbox'],
 })
 try {
-  const page = await browser.newPage()
+  const page = await (await browser.newContext({ viewport: { width: 1440, height: 1000 } })).newPage()
   const errors = []
   let createdOrderUrl = ''
   page.on('pageerror', (error) => errors.push(String(error)))
-  await page.setViewport({ width: 1440, height: 1000 })
+  await page.setViewportSize({ width: 1440, height: 1000 })
 
   // 先记录商品详情页的核心视觉参数。
-  await page.goto(`${BASE}/product/detail/7011`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.goto(`${BASE}/product/detail/7011`, { waitUntil: 'networkidle', timeout: 60000 })
   await page.waitForSelector('.pd-hero', { timeout: 20000 })
   const detailStyle = await page.evaluate(() => {
     const header = getComputedStyle(document.querySelector('.site-header'))
@@ -108,10 +114,10 @@ try {
   })
 
   await page.goto(`${BASE}/order/create?productId=7011&quantity=2`, {
-    waitUntil: 'networkidle2',
+    waitUntil: 'networkidle',
     timeout: 60000,
   })
-  await page.waitForFunction(() => window.location.port === '8090', { timeout: 20000 })
+  await page.waitForFunction(() => window.location.port === '8090', undefined, { timeout: 20000 })
   await page.waitForSelector('button[role="tab"]', { timeout: 20000 })
   await page.evaluate(() => {
     const tab = [...document.querySelectorAll('button[role="tab"]')]
@@ -130,7 +136,8 @@ try {
     if (page.url().includes('/order/create')) break
   }
   await page.waitForSelector('.oc-layout', { timeout: 30000 })
-  await page.waitForNetworkIdle({ idleTime: 700, timeout: 15000 }).catch(() => {})
+  await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 700))
   await sleep(500)
 
   const orderText = await page.evaluate(() => document.body.innerText)
@@ -216,12 +223,12 @@ try {
   createdOrderUrl = page.url()
 
   await page.goto(`${BASE}/order/create?productId=7011&quantity=2`, {
-    waitUntil: 'networkidle2',
+    waitUntil: 'networkidle',
     timeout: 60000,
   })
   await page.waitForSelector('.oc-layout', { timeout: 30000 })
-  await page.setViewport({ width: 390, height: 844 })
-  await page.reload({ waitUntil: 'networkidle2', timeout: 60000 })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.reload({ waitUntil: 'networkidle', timeout: 60000 })
   await page.waitForSelector('.oc-layout', { timeout: 30000 })
   await sleep(400)
   const noOverflow = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)
@@ -242,22 +249,22 @@ try {
     '移动端订单预览回落为普通文档流')
   await page.screenshot({ path: path.join(OUT, 'order-create-styled-mobile.png'), fullPage: true })
 
-  await page.setViewport({ width: 1440, height: 1000 })
-  await page.goto(`${BASE}/member/buyer?tab=publish`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await page.goto(`${BASE}/member/buyer?tab=publish`, { waitUntil: 'networkidle', timeout: 60000 })
   await page.waitForSelector('.demand-create-page', { timeout: 30000 })
   const demandProvince = await selectFieldSnapshot(page, '收货省份')
   const demandCity = await selectFieldSnapshot(page, '收货城市')
   check(demandProvince?.isSelect && demandCity?.isSelect, '采购需求页省份、城市均使用下拉选择')
   check(demandCity?.disabled, '采购需求页未选省份时城市禁用')
 
-  await page.goto(`${BASE}/product/create`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.goto(`${BASE}/product/create`, { waitUntil: 'networkidle', timeout: 60000 })
   await page.waitForSelector('.product-create-page', { timeout: 30000 })
   const originProvince = await selectFieldSnapshot(page, '产地省份')
   const originCity = await selectFieldSnapshot(page, '产地城市')
   check(originProvince?.isSelect && originCity?.isSelect, '商品资料页产地省份、城市均使用下拉选择')
   check(originCity?.disabled, '商品资料页未选省份时城市禁用')
 
-  await page.goto(createdOrderUrl, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.goto(createdOrderUrl, { waitUntil: 'networkidle', timeout: 60000 })
   await page.waitForSelector('.ant-form', { timeout: 30000 })
   const confirmProvince = await selectFieldSnapshot(page, '收货省份')
   const confirmCity = await selectFieldSnapshot(page, '收货城市')

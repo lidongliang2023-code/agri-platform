@@ -8,6 +8,7 @@
  * 测试数据使用 ASCII 名称，结束后删除；不会改动真实申请。
  */
 import { createRequire } from 'node:module'
+import { existsSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -15,8 +16,13 @@ import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const require2 = createRequire(path.join(REPO_ROOT, 'agri-production/frontend/package.json'))
-const puppeteer = require2('puppeteer')
+const require2 = createRequire(path.join('C:/Users/71502/.workbuddy-ai/binaries/node/workspace', 'noop.js'))
+const { chromium } = require2('playwright-core')
+
+const BROWSER = [
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+].find((candidate) => existsSync(candidate))
 const MYSQL = 'C:\\Program Files\\MySQL\\MySQL Server 8.4\\bin\\mysql.exe'
 const MDM = 'http://localhost:8080'
 const HEADFUL = process.argv.includes('--headful')
@@ -124,7 +130,7 @@ const cleanup = () => {
 }
 
 async function loginAndOpen(page) {
-  await page.goto(`${MDM}/user/audit`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.goto(`${MDM}/user/audit`, { waitUntil: 'networkidle', timeout: 60000 })
   for (let i = 0; i < 30; i++) {
     await sleep(500)
     if (page.url().includes(':8090') || page.url().includes('/login')) break
@@ -145,21 +151,22 @@ async function loginAndOpen(page) {
       if (page.url().includes('8080') && !page.url().includes('/login')) break
     }
     if (!page.url().includes('/user/audit')) {
-      await page.goto(`${MDM}/user/audit`, { waitUntil: 'networkidle2' })
+      await page.goto(`${MDM}/user/audit`, { waitUntil: 'networkidle' })
     }
   }
   await page.waitForSelector('.user-audit', { timeout: 30000 })
-  await page.waitForNetworkIdle({ idleTime: 600, timeout: 15000 }).catch(() => {})
+  await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 600))
   await sleep(500)
 }
 
-const browser = await puppeteer.launch({ headless: HEADFUL ? false : 'new', args: ['--no-sandbox'] })
+const browser = await chromium.launch({ headless: !HEADFUL, executablePath: BROWSER, args: ['--no-sandbox'] })
 try {
   setup()
-  const page = await browser.newPage()
+  const page = await (await browser.newContext({ viewport: { width: 1440, height: 1000 } })).newPage()
   const errors = []
   page.on('pageerror', (error) => errors.push(String(error)))
-  await page.setViewport({ width: 1440, height: 1000 })
+  await page.setViewportSize({ width: 1440, height: 1000 })
   await loginAndOpen(page)
 
   const text = await page.evaluate(() => document.body.innerText)

@@ -1,0 +1,10 @@
+{
+  "name":"丰链云监管执法","appid":"__UNI__AGRI_GOVERNMENT","description":"政府监管移动执法端：H5、微信小程序与 App","versionName":"1.0.0","versionCode":"100","transformPx":false,"vueVersion":"3",
+  "networkTimeout":{"request":15000,"uploadFile":30000,"downloadFile":30000},
+  "h5":{"title":"丰链云 · 监管执法","router":{"mode":"hash","base":"./"},"optimization":{"treeShaking":{"enable":true}}},
+  "mp-weixin":{"appid":"","setting":{"urlCheck":false,"es6":true,"postcss":true,"minified":true},"usingComponents":true},
+  "app-plus":{"name":"丰链云监管执法","usingComponents":true,"nvueStyleCompiler":"uni-app","compilerVersion":3,
+    "distribute":{"android":{"permissions":["<uses-permission android:name=\"android.permission.INTERNET\" />","<uses-permission android:name=\"android.permission.ACCESS_NETWORK_STATE\" />","<uses-permission android:name=\"android.permission.CAMERA\" />","<uses-permission android:name=\"android.permission.ACCESS_FINE_LOCATION\" />","<uses-permission android:name=\"android.permission.READ_MEDIA_IMAGES\" />"]},"ios":{"privacyDescription":{"NSCameraUsageDescription":"用于执法现场拍照取证和扫码核验","NSPhotoLibraryUsageDescription":"用于选择现场执法证据图片","NSLocationWhenInUseUsageDescription":"用于记录执法任务现场位置"}},"sdkConfigs":{}},
+    "splashscreen":{"alwaysShowBeforeRender":true,"waiting":true,"autoclose":true,"delay":0}
+  }
+}

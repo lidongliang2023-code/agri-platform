@@ -34,6 +34,12 @@ public class UserIdentityEntity {
     private String address;
     private String email;
     private String businessType;
+    /** 公安二要素核验与活体检测完成情况。 */
+    private Boolean policeVerified;
+    private LocalDateTime policeVerifiedAt;
+    private Boolean livenessVerified;
+    private LocalDateTime livenessVerifiedAt;
+    private String verificationChannel;
     /** pending / verified / rejected */
     private String status;
     private LocalDateTime submitTime;

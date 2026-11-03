@@ -97,14 +97,19 @@ const BIZ_TYPE_NAME: Record<string, string> = {
   TRACE: '溯源记录',
 }
 
-/** 业务类型选项（手动上链表单） */
+/**
+ * 业务类型选项（手动上链表单）。
+ *
+ * 只列**服务端能校验业务键**的四类：采收批次 / 质检单 / 投入品使用 / 溯源码。
+ * 旧版还有 FARMING、CIRCULATION、IOT —— 这三类本部署没有可校验的业务主数据入口，
+ * 单号是自由填写的，出证等于给一个可能不存在（或属于别家主体）的键伪造"已上链"，
+ * 所以后端直接拒绝（ChainRecordServiceImpl#normalizeType），表单也不再提供这个选项。
+ */
 const BIZ_TYPE_OPTIONS = [
-  { value: 'FARMING', label: '生产记录' },
+  { value: 'HARVEST', label: '采收入库' },
   { value: 'QUALITY', label: '质量检测' },
   { value: 'INPUT', label: '投入品使用' },
-  { value: 'HARVEST', label: '采收入库' },
-  { value: 'CIRCULATION', label: '流通记录' },
-  { value: 'IOT', label: 'IoT数据' },
+  { value: 'TRACE', label: '溯源记录' },
 ]
 
 /** 类型分布取数上限：后端 records 是分页接口，这里一次性取一批做本地分组统计 */
@@ -617,9 +622,10 @@ export default function BlockchainOverview(): JSX.Element {
           <Form.Item
             name="bizNo"
             label="业务单号"
+            extra="服务端会按当前经营主体核对这条业务是否真实存在（批次号 / 质检单号 / 溯源码 / 投入品使用记录 ID），不存在或不属于本主体会被拒绝"
             rules={[{ required: true, message: '请输入业务单号' }]}
           >
-            <Input placeholder="如 INS20260515001 / BC20260515" />
+            <Input placeholder="如 H20260601 / QC-DEMO-003 / AG010101202606010001 / 102" />
           </Form.Item>
           <Form.Item name="bizSummary" label="数据摘要">
             <Input.TextArea rows={3} placeholder="如 番茄农残检测INS0531" />

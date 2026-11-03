@@ -39,14 +39,34 @@ interface CategoryRow {
  *
  * <p>三种入口：新建、编辑（?id=）、从商品详情带着货源来（?productId=）。</p>
  */
-export default function DemandCreate({ embedded = false }: { embedded?: boolean }) {
+export default function DemandCreate({
+  embedded = false,
+  returnPath,
+}: {
+  embedded?: boolean
+  returnPath?: string
+}) {
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const [form] = Form.useForm()
   const editingId = params.get('id')
   const productId = params.get('productId')
   const isEdit = Boolean(editingId)
-  const returnPath = embedded ? '/member/buyer?tab=inquiry' : '/demand'
+  // 从信息资讯「发布需求」跳过来时会带 returnUrl；它是绝对地址（独立域名），
+  // 不能用 react-router 的 navigate，否则会当成站内路径拼错。
+  // 顺序很关键：**URL 参数优先于 returnPath 属性** —— 买家中心内嵌本组件时固定传
+  // `returnPath="/member/buyer?tab=demand-list"`，若让属性优先，外部进来的 returnUrl 会被吞掉，
+  // 用户发布完就被困在交易端（这个坑是 e2e 测出来的，不是猜的）。
+  const destination = params.get('returnUrl') ?? returnPath ?? (embedded ? '/member/buyer?tab=demand-list' : '/demand')
+  const destinationExternal = /^https?:\/\//i.test(destination)
+  const leave = (): void => {
+    if (destinationExternal) window.location.assign(destination)
+    else navigate(destination)
+  }
+  const back = (): void => {
+    if (isEdit) navigate(`/demand/detail/${editingId}`)
+    else leave()
+  }
 
   const [categories, setCategories] = useState<CategoryRow[]>([])
   const [nlpText, setNlpText] = useState('')
@@ -182,7 +202,8 @@ export default function DemandCreate({ embedded = false }: { embedded?: boolean 
         : await createDemand(payload)
       if (res?.code === 200) {
         message.success(isEdit ? '需求已更新' : '需求已发布')
-        navigate(isEdit ? `/demand/detail/${editingId}` : returnPath)
+        if (isEdit) navigate(`/demand/detail/${editingId}`)
+        else leave()
       } else {
         message.error(res?.message ?? '保存失败')
       }
@@ -204,9 +225,9 @@ export default function DemandCreate({ embedded = false }: { embedded?: boolean 
           <h2>{isEdit ? '编辑采购需求' : '发布采购需求'}</h2>
           <p>填写采购品类、数量和交付要求，平台将辅助撮合供应商并接收正式报价。</p>
         </div>
-        <button type="button" className="mc-btn ghost" onClick={() =>
-          navigate(isEdit ? `/demand/detail/${editingId}` : returnPath)}>
-          <ArrowLeftOutlined /> {embedded ? '返回需求管理' : '返回'}
+        <button type="button" className="mc-btn ghost" onClick={back}>
+          <ArrowLeftOutlined />{' '}
+          {isEdit ? '返回' : destinationExternal ? '返回信息资讯' : embedded ? '返回需求管理' : '返回'}
         </button>
       </section>
 
@@ -386,7 +407,7 @@ export default function DemandCreate({ embedded = false }: { embedded?: boolean 
               <button type="submit" className="mc-btn" disabled={saving}>
                 <SendOutlined /> {saving ? '正在保存…' : isEdit ? '保存修改' : '发布采购需求'}
               </button>
-              <button type="button" className="mc-btn ghost" onClick={() => navigate('/demand')}>
+              <button type="button" className="mc-btn ghost" onClick={leave}>
                 取消
               </button>
               <span><SafetyCertificateOutlined /> 发布后可在“我的询价”跟踪报价与成单进度</span>

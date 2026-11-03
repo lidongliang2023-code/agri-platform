@@ -50,6 +50,24 @@ public class MerchantCertificationEntity extends BaseEntity {
     /** 法人身份证国徽面照片 */
     private String legalPersonIdBackUrl;
 
+    /** 注册资本（认证时快照） */
+    private String registeredCapital;
+
+    /** 法人扫脸材料与结果（开发环境为模拟通道，生产接合规活体服务） */
+    private String legalPersonFaceUrl;
+    private String legalPersonFaceStatus;
+    private LocalDateTime legalPersonFaceAt;
+
+    /** 对公账户与打款核验材料 */
+    private String corporateBankName;
+    private String corporateBankAccount;
+    private String corporateTransferAmount;
+    private String corporateTransferReference;
+    private String corporateTransferProofUrl;
+    private String corporateTransferStatus;
+    private LocalDateTime corporateTransferAt;
+    private String verificationChannel;
+
     /** pending 待审核 / approved 已通过 / rejected 已驳回 */
     private String certStatus;
 

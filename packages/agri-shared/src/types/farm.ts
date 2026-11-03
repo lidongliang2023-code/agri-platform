@@ -64,6 +64,10 @@ export interface Plot {
   farmId: string
   /** 所属农场名称（冗余） */
   farmName?: string
+  /** 农场编码（后端 farm_code） */
+  farmCode?: string
+  /** 地块形状（后端 shape） */
+  shape?: string
   /** 面积（亩） */
   area: number
   /**
@@ -76,8 +80,18 @@ export interface Plot {
   plantingType?: PlantingType
   /** 土壤类型 */
   soilType: string
+  /** 土壤 pH（后端 soil_ph，详情更新时必须回传，否则整表提交会清空） */
+  soilPh?: number
+  /** 土壤有机质（后端 soil_organic_matter，详情更新时必须回传） */
+  soilOrganicMatter?: number
   /** 灌溉方式 */
   irrigationType: string
+  /** 种植日期（后端 planting_date，详情更新时必须回传） */
+  plantingDate?: string
+  /** 预计采收日期（后端 expected_harvest_date，详情更新时必须回传） */
+  expectedHarvestDate?: string
+  /** 备注（后端 remark，详情更新时必须回传） */
+  remark?: string
   /** 当前作物 ID */
   cropId?: string
   /**
@@ -105,6 +119,55 @@ export interface Plot {
   createdAt: string
   /** 更新时间 */
   updatedAt: string
+}
+
+/** 种植标准：ORGANIC 有机 / GREEN 绿色 / NORMAL 普通 */
+export type PlantingStandard = 'ORGANIC' | 'GREEN' | 'NORMAL'
+
+/** 地块品种的种植方式：TRANSPLANT 移栽 / DIRECT 直播 */
+export type PlotPlantingMethod = 'TRANSPLANT' | 'DIRECT'
+
+/** 地块品种的作业方式：MANUAL 人工 / MECHANICAL 机械 */
+export type PlotOperationMethod = 'MANUAL' | 'MECHANICAL'
+
+/**
+ * 地块种养品种（一个地块可登记多个）。
+ *
+ * <p>与地块上的 `currentCrop / cropId / cropVariety` 是两层口径：地块字段是「当前作物」单值，
+ * 列表与计划用它显示；本台账负责详情页的多品种明细（种类、品种、种植标准、种植/作业方式、
+ * 移栽时间、预计采收、预计亩产、株数、株间距）。</p>
+ */
+export interface PlotCrop {
+  /** 品种记录 ID（页面 cropRecordId） */
+  cropRecordId: string
+  /** 所属地块 ID */
+  plotId: string
+  /** 作物主数据 ID（后端 Long，JSON 为数字） */
+  cropId?: number | string
+  /** 作物名称（种类） */
+  cropName: string
+  /** 品种 */
+  cropVariety?: string
+  /** 种植标准 */
+  plantingStandard?: PlantingStandard
+  /** 种植方式 */
+  plantingMethod?: PlotPlantingMethod
+  /** 作业方式 */
+  operationMethod?: PlotOperationMethod
+  /** 移栽时间 YYYY-MM-DD */
+  transplantDate?: string
+  /** 预计采收时间 YYYY-MM-DD */
+  expectedHarvestDate?: string
+  /** 预计亩产（公斤/亩） */
+  expectedYieldPerMu?: number
+  /** 株数 */
+  plantCount?: number
+  /** 株间距（cm） */
+  plantSpacing?: number
+  /** 创建时间 */
+  createdAt?: string
+  /** 更新时间 */
+  updatedAt?: string
 }
 
 /** 土壤检测档案 */

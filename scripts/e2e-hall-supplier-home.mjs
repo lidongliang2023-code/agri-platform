@@ -1,13 +1,19 @@
 #!/usr/bin/env node
 /** 交易大厅优质供应商推荐进入公开主页回归（2026-10-22）。 */
 import { createRequire } from 'node:module'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const require2 = createRequire(path.join(ROOT, 'agri-production/frontend/package.json'))
-const puppeteer = require2('puppeteer')
+const require2 = createRequire(path.join('C:/Users/71502/.workbuddy-ai/binaries/node/workspace', 'noop.js'))
+const { chromium } = require2('playwright-core')
+
+const BROWSER = [
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+].find((candidate) => existsSync(candidate))
 const OUT = 'C:/Users/71502/.codex/visualizations/2026/10/16/01a14244-ead8-7ab0-8c7c-df7abac44648'
 const failures = []
 const check = (ok, label, extra = '') => {
@@ -15,17 +21,17 @@ const check = (ok, label, extra = '') => {
   if (!ok) failures.push(label)
 }
 
-const browser = await puppeteer.launch({
-  executablePath: 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
-  headless: 'new',
+const browser = await chromium.launch({
+  headless: true,
+  executablePath: BROWSER,
   args: ['--no-sandbox'],
 })
 try {
-  const page = await browser.newPage()
+  const page = await (await browser.newContext({ viewport: { width: 1440, height: 1000 } })).newPage()
   const errors = []
   page.on('pageerror', (error) => errors.push(String(error)))
-  await page.setViewport({ width: 1440, height: 1000 })
-  await page.goto('http://localhost:8098/portal/#/hall', { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await page.goto('http://localhost:8098/portal/#/hall', { waitUntil: 'networkidle', timeout: 60000 })
   await page.waitForSelector('.portal-hall-embed iframe', { timeout: 20000 })
   let hallFrame = null
   for (let i = 0; i < 30; i += 1) {
@@ -45,10 +51,10 @@ try {
     '优质供应商推荐卡片包含供应商主页地址', suppliers.map((item) => item.href).join(','))
   const firstSupplier = suppliers[0]
   await hallFrame.click('.hall-supplier')
-  await page.waitForFunction(() => window.location.pathname.startsWith('/shop/'), { timeout: 20000 })
+  await page.waitForFunction(() => window.location.pathname.startsWith('/shop/'), undefined, { timeout: 20000 })
   await page.waitForSelector('.shop-hero', { timeout: 20000 })
   await page.waitForFunction((name) => document.body.innerText.includes(name),
-    { timeout: 15000 }, firstSupplier.name)
+    firstSupplier.name, { timeout: 15000 })
   const pageText = await page.evaluate(() => document.body.innerText)
   check(pageText.includes('在售货源') && !page.url().includes('/login'),
     '点击推荐卡片免登录进入供应商主页', page.url())
@@ -75,15 +81,15 @@ try {
 
   const firstProductUrl = productCards[0]
   if (firstProductUrl) {
-    await page.goto(`http://localhost:8086${firstProductUrl}`, { waitUntil: 'networkidle2', timeout: 60000 })
+    await page.goto(`http://localhost:8086${firstProductUrl}`, { waitUntil: 'networkidle', timeout: 60000 })
     await page.waitForSelector('.pd-hero', { timeout: 20000 })
     check(page.url().includes(firstProductUrl), '店铺商品卡片可进入对应商品详情', firstProductUrl)
-    await page.goBack({ waitUntil: 'networkidle2', timeout: 60000 })
+    await page.goBack({ waitUntil: 'networkidle', timeout: 60000 })
     await page.waitForSelector('.shop-product-grid', { timeout: 20000 })
   }
 
-  await page.setViewport({ width: 390, height: 844 })
-  await page.reload({ waitUntil: 'networkidle2', timeout: 60000 })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.reload({ waitUntil: 'networkidle', timeout: 60000 })
   await page.waitForSelector('.shop-hero', { timeout: 20000 })
   const noOverflow = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)
   check(noOverflow, '390px 移动端店铺页无横向溢出')

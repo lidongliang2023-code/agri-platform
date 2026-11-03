@@ -61,7 +61,7 @@ public class AdminSettlementController {
     public ApiResponse<Settlement> settle(@PathVariable Long orderId) {
         Settlement settlement = settlementService.settle(orderId, SecurityUtils.getUsername());
         if (settlement == null) {
-            return ApiResponse.error("该订单不能结算：需要「已确认收货 / 已完成」且已付款，且没有结算过");
+            return ApiResponse.error("该订单不能结算：需要「已确认收货 / 已完成」且已付款、没有未结售后，且没有结算过");
         }
         return ApiResponse.success(settlement);
     }

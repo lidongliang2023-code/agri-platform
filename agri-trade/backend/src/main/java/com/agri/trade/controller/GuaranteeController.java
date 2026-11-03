@@ -3,9 +3,7 @@ package com.agri.trade.controller;
 import com.agri.trade.common.entity.ApiResponse;
 import com.agri.trade.common.security.SecurityUtils;
 import com.agri.trade.entity.MerchantGuarantee;
-import com.agri.trade.entity.CompensationRecord;
 import com.agri.trade.mapper.MerchantGuaranteeMapper;
-import com.agri.trade.mapper.CompensationRecordMapper;
 import com.agri.trade.service.IGuaranteeService;
 import com.agri.trade.service.PlatformIdentityService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -25,7 +23,6 @@ import java.util.Map;
 public class GuaranteeController {
 
     private final MerchantGuaranteeMapper guaranteeMapper;
-    private final CompensationRecordMapper compensationMapper;
     private final IGuaranteeService guaranteeService;
     private final PlatformIdentityService identityService;
 
@@ -136,6 +133,9 @@ public class GuaranteeController {
         if (guarantee.getMerchantId() == null) {
             return ApiResponse.error("请选择保证金所属经营主体");
         }
+        if (guarantee.getMerchantName() == null || guarantee.getMerchantName().trim().isEmpty()) {
+            return ApiResponse.error("请填写保证金账户对应的经营主体名称");
+        }
         return guaranteeService.submitGuarantee(guarantee, SecurityUtils.getUsername())
                 ? ApiResponse.success(true) : ApiResponse.error("创建失败");
     }
@@ -161,49 +161,19 @@ public class GuaranteeController {
         return updated ? ApiResponse.success(true) : ApiResponse.error("审核失败");
     }
 
-    @GetMapping("/compensation/page")
-    @com.agri.common.rbac.OperatorOnly("trade:read")
-    public ApiResponse<IPage<CompensationRecord>> getCompensationPage(
-            @RequestParam(defaultValue = "1") Integer pageNum,
-            @RequestParam(defaultValue = "10") Integer pageSize) {
-        Page<CompensationRecord> page = new Page<>(pageNum, pageSize);
-        LambdaQueryWrapper<CompensationRecord> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(CompensationRecord::getDelFlag, 0);
-        wrapper.orderByDesc(CompensationRecord::getCreateTime);
-        return ApiResponse.success(compensationMapper.selectPage(page, wrapper));
-    }
-
-    @PostMapping("/compensation")
-    @com.agri.common.rbac.OperatorOnly
-    public ApiResponse<Boolean> createCompensation(@RequestBody CompensationRecord compensation) {
-        compensation.setCompensationNo("CP" + System.currentTimeMillis());
-        compensation.setDelFlag(0);
-        compensation.setCompensationStatus("pending");
-        compensation.setCreateTime(new Date());
-        compensation.setUpdateTime(new Date());
-        int result = compensationMapper.insert(compensation);
-        return result > 0 ? ApiResponse.success(true) : ApiResponse.error("创建失败");
-    }
-
-    @PostMapping("/compensation/{id}/audit")
-    @com.agri.common.rbac.OperatorOnly
-    public ApiResponse<Boolean> auditCompensation(@PathVariable Long id, @RequestBody java.util.Map<String, Object> params) {
-        CompensationRecord compensation = compensationMapper.selectById(id);
-        if (compensation == null) return ApiResponse.error("赔付记录不存在");
-
-        compensation.setCompensationStatus((String) params.get("status"));
-        compensation.setReviewer((String) params.get("reviewer"));
-        compensation.setReviewTime(new Date());
-        compensation.setReviewResult((String) params.get("result"));
-        compensation.setReviewRemark((String) params.get("remark"));
-        compensation.setUpdateTime(new Date());
-
-        int result = compensationMapper.updateById(compensation);
-        if (result > 0 && "approved".equals(params.get("status"))) {
-            compensation.setPayTime(new Date());
-            compensation.setTransactionId("TX" + System.currentTimeMillis());
-            compensationMapper.updateById(compensation);
-        }
-        return result > 0 ? ApiResponse.success(true) : ApiResponse.error("审核失败");
-    }
+    /**
+     * 赔付单（compensation）在这里以前有三条路由：整实体直插的新建、无词表校验的审核、
+     * 以及一张不带任何条件的时间倒序分页。它们绕开了 {@code ICompensationService} 的全部守卫 ——
+     *
+     * <ul>
+     *   <li>新建：申请人、收款方、金额、来源单据全都采信请求体，可以凭空造一张"某家应得 100 万"的
+     *       赔付单，也不要求挂在纠纷或订单上（事后查不到为什么赔）；</li>
+     *   <li>审核：状态由调用方写任意字符串，已打款的单还能再审一次把状态翻回 pending，
+     *       审核人姓名也来自请求体；核准分支里还顺手写了 payTime 与流水号（审批即打款）；</li>
+     *   <li>分页：与 {@code /api/trade/admin/compensation/page} 同一份数据、两个口径。</li>
+     * </ul>
+     *
+     * <p>三条都已下线（前端从未调用过）。赔付的唯一入口是
+     * {@code /api/trade/compensation}（建单/审核/打款，全部由服务层守卫）。</p>
+     */
 }

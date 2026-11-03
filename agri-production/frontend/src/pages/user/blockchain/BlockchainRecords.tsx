@@ -37,6 +37,7 @@ import {
   Select,
   Space,
   Tag,
+  Tooltip,
   Typography,
   message,
 } from 'antd'
@@ -62,6 +63,41 @@ const MONO_STYLE: React.CSSProperties = {
 }
 
 /**
+ * 存证记录 → 可跳转的业务页。
+ *
+ * 四类业务的定位键不一样，跳法也不一样（都是本系统里真实存在的路由）：
+ *   HARVEST → 采收详情（要主键，编号进不去）
+ *   QUALITY → 质量检测页，用单号预填筛选（该页支持服务端 keyword）
+ *   TRACE   → 全链路溯源页，用溯源码预填（该页读 ?code=）
+ *   INPUT   → 投入品使用台账，用使用记录 ID 预填
+ *
+ * 拿不到主键或编号时返回 null：页面显示纯文本并说明为什么点不动，
+ * 而不是给一个跳过去只会报"记录不存在"的死链。
+ */
+function chainBizTarget(record: BlockchainBizRecord): { path: string; label: string } | null {
+  const bizNo = String(record.bizNo ?? '').trim()
+  const targetId = String(record.targetId ?? '').trim()
+  switch (record.bizType) {
+    case 'HARVEST':
+      return targetId
+        ? { path: `/production/harvests/${encodeURIComponent(targetId)}`, label: '采收详情' }
+        : null
+    case 'QUALITY':
+      return bizNo ? { path: `/production/quality?keyword=${encodeURIComponent(bizNo)}`, label: '检测记录' } : null
+    case 'TRACE':
+      return bizNo
+        ? { path: `/production/trace/full-chain?code=${encodeURIComponent(bizNo)}`, label: '全链路溯源' }
+        : null
+    case 'INPUT':
+      return bizNo
+        ? { path: `/production/inputs?tab=ledger&usageId=${encodeURIComponent(bizNo)}`, label: '使用记录' }
+        : null
+    default:
+      return null
+  }
+}
+
+/**
  * 业务类型编码 → 名称。
  *
  * 取值来自存证表 `target_type`，实测（agri-production 直连，2026-10-15）是
@@ -84,6 +120,7 @@ const BIZ_TYPE_NAME: Record<string, string> = {
 const BIZ_TYPE_OPTIONS: { value: string; label: string }[] = [
   { value: 'HARVEST', label: '采收入库' },
   { value: 'QUALITY', label: '质量检测' },
+  { value: 'INPUT', label: '投入品使用' },
   { value: 'TRACE', label: '溯源记录' },
 ]
 
@@ -365,7 +402,34 @@ export default function BlockchainRecords(): JSX.Element {
         </Tag>
       ),
     },
-    { title: '业务单号', dataIndex: 'bizNo', width: 160, ellipsis: true },
+    {
+      title: '业务单号',
+      dataIndex: 'bizNo',
+      width: 200,
+      ellipsis: true,
+      // 每一行都要能点回它存证的那条业务：以前只能看到一串单号，
+      // 想核对内容得自己跑去对应页面按号搜 —— 存证列表因此只是"看"，不能"查"。
+      render: (_, record) => {
+        const target = chainBizTarget(record)
+        if (!target) {
+          return (
+            <Tooltip title={record.bizNo ? '这条存证缺少可跳转的业务主键，只能按编号自行查找' : '存证记录没有业务键'}>
+              <Typography.Text type="secondary">{record.bizNo ?? '-'}</Typography.Text>
+            </Tooltip>
+          )
+        }
+        return (
+          <Space size={4}>
+            <Typography.Link onClick={() => navigate(target.path)}>
+              {record.bizNo ?? target.label}
+            </Typography.Link>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              {target.label}
+            </Typography.Text>
+          </Space>
+        )
+      },
+    },
     // 「关联批次」「关联溯源码」两列**已删**：本服务的存证表没有单独存这两个键（只有 target_code
     // 一个业务键），两列于是恒为 "-"。恒空的列会让人以为"这两项数据没同步过来"，
     // 而事实是**不这么存**——业务键列已经把批次号/溯源码显示出来了。
@@ -570,7 +634,7 @@ export default function BlockchainRecords(): JSX.Element {
           type="info"
           showIcon
           message="筛选与字段口径说明"
-          description="后端 GET /blockchain/records 支持 status、bizType、keyword 三个筛选参数（2026-10-15 复核）：keyword 匹配业务键（target_code）与存证记录号（record_no）。业务类型取值是存证表的 target_type（HARVEST / QUALITY / TRACE）—— 平台侧旧词表叫 INSPECTION，服务端已归一成 QUALITY。按时间范围筛选后端仍不支持，故未提供。表格只展示后端真实返回的字段：确认数、上链方式、数字签名、链ID 后端均不返回，故不展示。"
+          description="后端 GET /blockchain/records 支持 status、bizType、keyword 三个筛选参数：keyword 匹配业务键（target_code）与存证记录号（record_no）。业务类型取值是存证表的 target_type（HARVEST / QUALITY / INPUT / TRACE）—— 平台侧旧词表叫 INSPECTION，服务端已归一成 QUALITY；数字枚举（历史 bizType=2）已下线，传进来会直接报错而不是静默回空列表。按时间范围筛选后端仍不支持，故未提供。表格只展示后端真实返回的字段：确认数、上链方式、数字签名、链ID 后端均不返回，故不展示。"
         />
 
         <ProTable<BlockchainBizRecord>

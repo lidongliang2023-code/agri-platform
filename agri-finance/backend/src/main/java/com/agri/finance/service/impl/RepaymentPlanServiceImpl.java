@@ -11,15 +11,15 @@ import java.time.LocalDateTime;
 @Service
 public class RepaymentPlanServiceImpl extends ServiceImpl<RepaymentPlanMapper, RepaymentPlan> {
 
-    public void generatePlans(String loanId, String loanNo, BigDecimal amount, BigDecimal rate, Integer term, String repaymentMethod) {
+    /** 生成还款计划，返回计划内利息合计（放款时写进 loan.interestAmount）。 */
+    public BigDecimal generatePlans(String loanId, String loanNo, BigDecimal amount, BigDecimal rate, Integer term, String repaymentMethod) {
         if ("等额本息".equals(repaymentMethod)) {
-            generateEqualInstallmentPlans(loanId, loanNo, amount, rate, term);
-        } else {
-            generateSinglePaymentPlan(loanId, loanNo, amount, rate, term);
+            return generateEqualInstallmentPlans(loanId, loanNo, amount, rate, term);
         }
+        return generateSinglePaymentPlan(loanId, loanNo, amount, rate, term);
     }
 
-    private void generateEqualInstallmentPlans(String loanId, String loanNo, BigDecimal amount, BigDecimal rate, Integer term) {
+    private BigDecimal generateEqualInstallmentPlans(String loanId, String loanNo, BigDecimal amount, BigDecimal rate, Integer term) {
         BigDecimal monthlyRate = rate.divide(new BigDecimal("100")).divide(new BigDecimal("12"), 10, BigDecimal.ROUND_HALF_UP);
         BigDecimal monthlyPayment = amount.multiply(monthlyRate).multiply(
             monthlyRate.add(BigDecimal.ONE).pow(term))
@@ -29,6 +29,7 @@ public class RepaymentPlanServiceImpl extends ServiceImpl<RepaymentPlanMapper, R
             );
 
         BigDecimal remainingPrincipal = amount;
+        BigDecimal plannedInterest = BigDecimal.ZERO;
         LocalDateTime dueDate = LocalDateTime.now().plusMonths(1);
 
         for (int i = 1; i <= term; i++) {
@@ -53,12 +54,14 @@ public class RepaymentPlanServiceImpl extends ServiceImpl<RepaymentPlanMapper, R
 
             save(plan);
 
+            plannedInterest = plannedInterest.add(interest);
             remainingPrincipal = remainingPrincipal.subtract(principal);
             dueDate = dueDate.plusMonths(1);
         }
+        return plannedInterest.setScale(2, BigDecimal.ROUND_HALF_UP);
     }
 
-    private void generateSinglePaymentPlan(String loanId, String loanNo, BigDecimal amount, BigDecimal rate, Integer term) {
+    private BigDecimal generateSinglePaymentPlan(String loanId, String loanNo, BigDecimal amount, BigDecimal rate, Integer term) {
         BigDecimal totalInterest = amount.multiply(rate).multiply(new BigDecimal(term)).divide(new BigDecimal("1200"), 2, BigDecimal.ROUND_HALF_UP);
 
         RepaymentPlan plan = new RepaymentPlan();
@@ -75,5 +78,6 @@ public class RepaymentPlanServiceImpl extends ServiceImpl<RepaymentPlanMapper, R
         plan.setDelFlag(0);
 
         save(plan);
+        return totalInterest;
     }
 }

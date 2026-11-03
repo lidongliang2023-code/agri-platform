@@ -1,82 +1,74 @@
 <template>
   <div class="dashboard">
+    <div class="page-head">
+      <div>
+        <h2>运营大盘</h2>
+        <p>口径为 S2B2C 闭环交易（渠道订单 + 直购订单，排除已取消）；商品与类目主数据由交易撮合/主数据主责。</p>
+      </div>
+      <el-radio-group v-model="days" @change="load">
+        <el-radio-button :value="7">近 7 天</el-radio-button>
+        <el-radio-button :value="30">近 30 天</el-radio-button>
+        <el-radio-button :value="90">近 90 天</el-radio-button>
+      </el-radio-group>
+    </div>
+
     <div class="stats-row">
-      <div class="stat-card">
-        <div class="stat-icon suppliers">🏭</div>
-        <div class="stat-info">
-          <p class="stat-value">{{ dashboard.supplierCount || 0 }}</p>
-          <p class="stat-label">供应商数量</p>
-        </div>
+      <div class="stat-card"><span>GMV</span><b>¥{{ money(kpi.gmv) }}</b><small>{{ data.days || days }} 天内非取消订单</small></div>
+      <div class="stat-card"><span>订单数</span><b>{{ kpi.orders || 0 }}</b><small>客单价 ¥{{ money(kpi.avgOrderAmount) }}</small></div>
+      <div class="stat-card"><span>成交渠道商</span><b>{{ kpi.activeChannels || 0 }}</b><small>已审核渠道 {{ kpi.channels || 0 }}</small></div>
+      <div class="stat-card"><span>在售商品</span><b>{{ kpi.products || 0 }}</b><small>供应商 {{ kpi.suppliers || 0 }}</small></div>
+      <div class="stat-card"><span>买家数</span><b>{{ kpi.consumers || 0 }}</b><small>区间内下单去重</small></div>
+      <div class="stat-card"><span>退款率</span><b>{{ Number(kpi.refundRate || 0).toFixed(2) }}%</b><small>已同意售后金额 / GMV</small></div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <div class="card-head"><h3>GMV / 订单趋势</h3><span class="muted">按日</span></div>
+        <div ref="trendChart" class="chart" />
       </div>
-      <div class="stat-card">
-        <div class="stat-icon channels">🤝</div>
-        <div class="stat-info">
-          <p class="stat-value">{{ dashboard.channelCount || 0 }}</p>
-          <p class="stat-label">渠道商数量</p>
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon products">🥬</div>
-        <div class="stat-info">
-          <p class="stat-value">{{ dashboard.productCount || 0 }}</p>
-          <p class="stat-label">商品数量</p>
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon orders">📦</div>
-        <div class="stat-info">
-          <p class="stat-value">{{ dashboard.orderCount || 0 }}</p>
-          <p class="stat-label">订单数量</p>
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon consumers">👥</div>
-        <div class="stat-info">
-          <p class="stat-value">{{ dashboard.consumerCount || 0 }}</p>
-          <p class="stat-label">消费者数量</p>
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon revenue">💰</div>
-        <div class="stat-info">
-          <p class="stat-value">{{ dashboard.totalAmount || 0 }}</p>
-          <p class="stat-label">交易总额(元)</p>
-        </div>
+      <div class="card">
+        <div class="card-head"><h3>渠道等级分布</h3><span class="muted">GMV 取当前区间</span></div>
+        <el-table :data="data.gradeDistribution || []" border size="small">
+          <el-table-column label="等级" width="110">
+            <template #default="{ row }">{{ gradeText(row.grade) }}</template>
+          </el-table-column>
+          <el-table-column prop="channels" label="渠道数" width="90" />
+          <el-table-column label="GMV" width="120">
+            <template #default="{ row }">¥{{ money(row.gmv) }}</template>
+          </el-table-column>
+        </el-table>
+        <el-empty v-if="!(data.gradeDistribution || []).length" description="暂无渠道数据" :image-size="60" />
       </div>
     </div>
-    <div class="charts-row">
-      <div class="chart-card">
-        <h3>交易趋势</h3>
-        <div ref="revenueChart" class="chart"></div>
+
+    <div class="grid">
+      <div class="card">
+        <div class="card-head"><h3>待办事项</h3></div>
+        <ul class="todo-list">
+          <li @click="$router.push('/channel-onboard')"><span>渠道商入驻审核</span><b>{{ todos.channelPending || 0 }}</b></li>
+          <li @click="$router.push('/products')"><span>商品上架审核</span><b>{{ todos.productPending || 0 }}</b></li>
+          <li @click="$router.push('/withdrawals')"><span>提现审批</span><b>{{ todos.withdrawalPending || 0 }}</b></li>
+          <li @click="$router.push('/after-sales')"><span>售后待处理</span><b>{{ todos.afterSalePending || 0 }}</b></li>
+        </ul>
       </div>
-      <div class="chart-card">
-        <h3>订单状态分布</h3>
-        <div ref="orderChart" class="chart"></div>
+      <div class="card">
+        <div class="card-head"><h3>热销商品 Top 5</h3><el-button link type="primary" @click="$router.push('/price-center')">价格与价盘</el-button></div>
+        <el-table :data="data.topProducts || []" border size="small">
+          <el-table-column prop="name" label="商品" min-width="180" />
+          <el-table-column prop="qty" label="销量" width="90" />
+          <el-table-column label="销售额" width="120">
+            <template #default="{ row }">¥{{ money(row.amount) }}</template>
+          </el-table-column>
+        </el-table>
+        <el-empty v-if="!(data.topProducts || []).length" description="区间内暂无成交" :image-size="60" />
       </div>
     </div>
-    <div class="audit-section">
-      <h3>待审核事项</h3>
-      <div class="audit-row">
-        <div class="audit-card" @click="goToAudit('suppliers')">
-          <div class="audit-icon">🏭</div>
-          <div class="audit-info">
-            <p class="audit-count">2</p>
-            <p class="audit-label">供应商待审核</p>
-          </div>
-        </div>
-        <div class="audit-card" @click="goToAudit('channel-partners')">
-          <div class="audit-icon">🤝</div>
-          <div class="audit-info">
-            <p class="audit-count">1</p>
-            <p class="audit-label">渠道商待审核</p>
-          </div>
-        </div>
-        <div class="audit-card" @click="goToAudit('products')">
-          <div class="audit-icon">🥬</div>
-          <div class="audit-info">
-            <p class="audit-count">5</p>
-            <p class="audit-label">商品待审核</p>
-          </div>
+
+    <div class="card">
+      <div class="card-head"><h3>订单状态分布</h3></div>
+      <div class="status-grid">
+        <div v-for="(count, key) in data.byStatus || {}" :key="key" class="status-item">
+          <span>{{ statusText(key) }}</span><b>{{ count }}</b>
         </div>
       </div>
     </div>
@@ -84,190 +76,89 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { ElMessage } from 'element-plus'
 import * as echarts from 'echarts'
 import { platformApi } from '../api'
 
-const router = useRouter()
-const dashboard = ref({})
-const revenueChart = ref(null)
-const orderChart = ref(null)
+const days = ref(7)
+const data = ref({})
+const trendChart = ref(null)
+let chart = null
 
-onMounted(() => {
-  loadData()
-})
+const kpi = computed(() => data.value.kpi || {})
+const todos = computed(() => data.value.todos || {})
 
-const loadData = async () => {
-  const res = await platformApi.getDashboard()
-  dashboard.value = res
-  initCharts()
-}
+onMounted(load)
+onUnmounted(() => chart?.dispose())
 
-const initCharts = () => {
-  if (revenueChart.value) {
-    const chart = echarts.init(revenueChart.value)
-    chart.setOption({
-      xAxis: { type: 'category', data: ['1月', '2月', '3月', '4月', '5月', '6月'] },
-      yAxis: { type: 'value' },
-      series: [{
-        data: [120000, 150000, 180000, 220000, 190000, 250000],
-        type: 'line',
-        smooth: true
-      }]
-    })
-  }
-  if (orderChart.value) {
-    const chart = echarts.init(orderChart.value)
-    chart.setOption({
-      series: [{
-        type: 'pie',
-        data: [
-          { value: 30, name: '待付款' },
-          { value: 20, name: '待发货' },
-          { value: 40, name: '已发货' },
-          { value: 10, name: '已完成' }
-        ]
-      }]
-    })
+async function load() {
+  try {
+    data.value = (await platformApi.getOverview(days.value)) || {}
+    await nextTick()
+    renderTrend()
+  } catch (e) {
+    ElMessage.error(e?.message || '运营大盘读取失败')
   }
 }
 
-const goToAudit = (path) => {
-  router.push(`/${path}`)
+function renderTrend() {
+  if (!trendChart.value) return
+  if (!chart) chart = echarts.init(trendChart.value)
+  const trend = data.value.trend || []
+  chart.setOption({
+    tooltip: { trigger: 'axis' },
+    legend: { data: ['GMV', '订单数'], top: 0, textStyle: { color: '#6b7c72', fontSize: 12 } },
+    grid: { left: 50, right: 40, top: 32, bottom: 30 },
+    xAxis: {
+      type: 'category',
+      data: trend.map((p) => p.date),
+      axisLabel: { color: '#6b7c72', interval: Math.max(0, Math.floor(trend.length / 8) - 1) },
+      axisLine: { lineStyle: { color: '#e3eae5' } },
+    },
+    yAxis: [
+      { type: 'value', axisLabel: { color: '#6b7c72' }, splitLine: { lineStyle: { color: '#eef3ef' } } },
+      { type: 'value', axisLabel: { color: '#6b7c72' }, splitLine: { show: false } },
+    ],
+    series: [
+      { name: 'GMV', type: 'line', smooth: true, symbol: 'none', data: trend.map((p) => Number(p.amount || 0)),
+        lineStyle: { color: '#12764a', width: 2 }, areaStyle: { color: 'rgba(18,118,74,0.12)' } },
+      { name: '订单数', type: 'bar', yAxisIndex: 1, data: trend.map((p) => Number(p.orders || 0)),
+        itemStyle: { color: 'rgba(23,108,147,0.35)', borderRadius: [3, 3, 0, 0] }, barMaxWidth: 14 },
+    ],
+  }, true)
 }
+
+const money = (value) => Number(value || 0).toFixed(2)
+const gradeText = (value) => ({ LEVEL_1: '铜牌', LEVEL_2: '银牌', LEVEL_3: '金牌' }[value] || value || '未定级')
+const statusText = (value) => ({
+  PENDING_PAY: '待付款', PENDING_SHIP: '待发货', SHIPPED: '已发货', PENDING_RECEIVE: '待收货',
+  COMPLETED: '已完成', CANCELLED: '已取消', REFUNDING: '退款中', REFUNDED: '已退款',
+}[value] || value)
 </script>
 
 <style scoped>
-.dashboard {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.stats-row {
-  display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 20px;
-}
-
-.stat-card {
-  display: flex;
-  align-items: center;
-  padding: 20px;
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-}
-
-.stat-icon {
-  width: 50px;
-  height: 50px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 24px;
-  border-radius: 12px;
-  margin-right: 15px;
-}
-
-.stat-icon.suppliers {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-}
-
-.stat-icon.channels {
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-}
-
-.stat-icon.products {
-  background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
-}
-
-.stat-icon.orders {
-  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-}
-
-.stat-icon.consumers {
-  background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
-}
-
-.stat-icon.revenue {
-  background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
-}
-
-.stat-value {
-  font-size: 24px;
-  font-weight: bold;
-  color: #333;
-}
-
-.stat-label {
-  font-size: 12px;
-  color: #999;
-}
-
-.charts-row {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 20px;
-}
-
-.chart-card {
-  background: #fff;
-  border-radius: 12px;
-  padding: 20px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-}
-
-.chart-card h3 {
-  font-size: 16px;
-  margin-bottom: 20px;
-}
-
-.chart {
-  height: 250px;
-}
-
-.audit-section {
-  background: #fff;
-  border-radius: 12px;
-  padding: 20px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-}
-
-.audit-section h3 {
-  font-size: 16px;
-  margin-bottom: 20px;
-}
-
-.audit-row {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 20px;
-}
-
-.audit-card {
-  display: flex;
-  align-items: center;
-  padding: 20px;
-  background: #f5f7fa;
-  border-radius: 12px;
-  cursor: pointer;
-}
-
-.audit-icon {
-  font-size: 32px;
-  margin-right: 15px;
-}
-
-.audit-count {
-  font-size: 24px;
-  font-weight: bold;
-  color: #333;
-}
-
-.audit-label {
-  font-size: 14px;
-  color: #666;
-}
+.dashboard { display: flex; flex-direction: column; gap: 16px; }
+.page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.page-head h2 { margin: 0 0 6px; font-size: 18px; }
+.page-head p { margin: 0; color: #6b7c72; font-size: 13px; line-height: 1.6; max-width: 760px; }
+.stats-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; }
+.stat-card { display: flex; flex-direction: column; gap: 6px; padding: 16px; border: 1px solid #e3eae5; border-radius: 12px; background: #fff; }
+.stat-card span { color: #84938a; font-size: 12px; }
+.stat-card b { color: #173e2a; font-size: 21px; }
+.stat-card small { color: #94a198; font-size: var(--agri-font-size-micro); }
+.grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 16px; }
+.card { padding: 16px 18px; border: 1px solid #e3eae5; border-radius: 12px; background: #fff; }
+.card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.card-head h3 { margin: 0; font-size: 15px; }
+.muted { color: #84938a; font-size: 12px; }
+.chart { height: 280px; }
+.todo-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.todo-list li { display: flex; justify-content: space-between; padding: 12px 14px; border-radius: 10px; background: #f6faf7; color: #52665a; font-size: 13px; cursor: pointer; }
+.todo-list li:hover { background: #eef7f1; }
+.todo-list b { color: #173e2a; font-size: 16px; }
+.status-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+.status-item { display: flex; justify-content: space-between; padding: 10px 12px; border-radius: 10px; background: #f6faf7; color: #52665a; font-size: 13px; }
+.status-item b { color: #173e2a; }
+@media (max-width: 1200px) { .stats-row { grid-template-columns: repeat(3, 1fr); } .grid { grid-template-columns: 1fr; } }
 </style>

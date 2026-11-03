@@ -13,8 +13,20 @@ export default defineConfig({
     }
   },
   server: {
-    port: 5175,
+    port: 5176,
     proxy: {
+      '/api/v1/sso': {
+        target: 'http://localhost:8093',
+        changeOrigin: true
+      },
+      '/api/v1/auth': {
+        target: 'http://localhost:8093',
+        changeOrigin: true
+      },
+      '/api/v1/platform': {
+        target: 'http://localhost:8093',
+        changeOrigin: true
+      },
       '/api': {
         target: 'http://localhost:8087',
         changeOrigin: true

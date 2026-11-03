@@ -172,7 +172,7 @@ const SIDE_EFFECT_SUFFIXES = ['/generate', '/accredit', '/reject']
  *    在根治之前，这里先按前缀豁免，并记下这条**豁免是有前提的**：如果哪天生产域真的要自带角色端点，
  *    必须先把它从本清单删掉，否则它的缺口会被静默放行。
  */
-const PLATFORM_OWNED_PATHS = ['/admin/tenants/', '/alerts/rules', '/settings/tenant', '/roles']
+const PLATFORM_OWNED_PATHS = ['/admin/tenants/', '/admin/subjects', '/alerts/rules', '/settings/tenant', '/roles']
 
 /**
  * 抓 api 层的 `http.get/post/...('<path>')`。

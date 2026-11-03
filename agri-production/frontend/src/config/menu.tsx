@@ -65,10 +65,10 @@ export const USER_MENU: MenuGroup[] = [
   },
   {
     key: 'farm',
-    label: '农场数字化管理',
+    label: '我的农场',
     icon: <HomeOutlined />,
     children: [
-      { key: '/production/farms', label: '农场列表' },
+      { key: '/production/farms', label: '农场管理' },
       { key: '/production/plots', label: '地块管理' },
     ],
   },
@@ -84,7 +84,7 @@ export const USER_MENU: MenuGroup[] = [
     label: '智能种养',
     icon: <CalendarOutlined />,
     children: [
-      { key: '/production/plans', label: '种养计划列表' },
+      { key: '/production/plans', label: '种养计划' },
       { key: '/production/plans/calendar', label: '农事日历' },
       // 2026-10-16：改名为「农事任务」；「创建任务」入口撤掉（新建走列表页的按钮，
       // 不占一级菜单的一个叶子 —— 与 /production/farms/create、/production/plots/create 同处理）。
@@ -95,23 +95,15 @@ export const USER_MENU: MenuGroup[] = [
   },
   {
     key: 'input',
-    label: '农资投入品管理',
+    label: '农资管理',
     icon: <ExperimentOutlined />,
     children: [
-      { key: '/production/inputs', label: '投入品台账' },
-      // 2026-10-16 只保留一个：「投入品台账」（/production/inputs，原型 P10）是模块主页面 ——
-      // "投入概况 + 合规汇总 + **投入品档案增删改查** + 使用台账 Tab"。
-      // 「投入品使用台账」（/production/inputs/ledger，原型 P22）同日先摘菜单、后**整页删除**：
-      // 它的 Tab1（使用台账）与主页面「使用台账」Tab 同列同义，Tab2（出入库流水）与
-      // 「出入库管理」（/production/inputs/stock）的流水 Tab 同列同义，唯一多出的是只读「上链」列，
-      // 而那列在保留页「使用记录」（/production/inputs/usages）里是带操作按钮的完整版。
-      // 农场详情（📦 投入品台账）、地块详情（查看投入品台账→）两处深链已改指主页面。
-      { key: '/production/inputs/stock', label: '出入库管理' },
-      // 2026-10-16 同一口径收口第三份：「使用记录」（/production/inputs/usages）也不再占菜单叶子 ——
-      // 它与「投入品台账」页的「使用台账」Tab 大面积重叠。
-      // ⚠️ 但它的**新建使用记录 / 合规校验 / 上链 / 删除**是独有的，所以不能只是摘菜单了事：
-      // 入口挂到了「投入品台账」页「使用台账」Tab 的右上角（「登记使用记录 →」），页面上仍可达；
-      // 监控页（/production/monitor）也另有入口。路由同样保留。
+      // 2026-11-02：投入品台账与出入库管理合并为「农资管理」单页。
+      // 页内两个 Tab：投入品档案（含原出入库的库存总览与作业）/ 使用台账（含出入库流水）；
+      // 旧「出入库管理」（/production/inputs/stock）回落到 /production/inputs。
+      { key: '/production/inputs', label: '农资台账' },
+      // 2026-11-02：原「使用记录」独立页也已并入本页「使用台账」Tab（新建 / 合规 / 上链 / 删除
+      // 都在 Tab 内完成），旧 /production/inputs/usages 自动跳到 ?tab=ledger。
     ],
   },
   {
@@ -124,6 +116,9 @@ export const USER_MENU: MenuGroup[] = [
       { key: '/production/growth/environment', label: '环境数据' },
       { key: '/production/alerts', label: '告警中心' },
       { key: '/production/alerts/rules', label: '告警规则配置' },
+      // 2026-11-02：原「生长监测与IoT」分组只有一个生产监控看板，与上面两个分组重复，
+      // 并入「生长监测预警」；看板本身读的就是生长 + 环境 + 设备 + 告警数据。
+      { key: '/production/monitor', label: '生产监控看板' },
     ],
   },
   {
@@ -134,12 +129,6 @@ export const USER_MENU: MenuGroup[] = [
       { key: '/production/iot', label: '设备列表' },
       { key: '/production/iot/bindings', label: '设备绑定管理' },
     ],
-  },
-  {
-    key: 'monitor',
-    label: '生长监测与IoT',
-    icon: <MonitorOutlined />,
-    children: [{ key: '/production/monitor', label: '生产监控看板' }],
   },
   {
     key: 'harvest',

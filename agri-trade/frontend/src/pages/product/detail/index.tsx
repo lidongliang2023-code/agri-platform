@@ -6,6 +6,8 @@ import {
   CheckCircleOutlined,
   EnvironmentOutlined,
   FileTextOutlined,
+  HeartFilled,
+  HeartOutlined,
   SafetyCertificateOutlined,
   SearchOutlined,
   ShopOutlined,
@@ -21,7 +23,13 @@ import {
 } from '@/api/product'
 import { isLoggedIn } from '@/utils/session'
 import { redirectToSso } from '@/utils/sso'
+import {
+  favoriteProduct,
+  getProductFavoriteState,
+  unfavoriteProduct,
+} from '@/api/shop-interaction'
 import { BrandMark } from '@/components/BrandMark'
+import { PortalNav } from '@/components/PortalNav'
 import '../../hall/hall.css'
 import './product-detail.css'
 
@@ -125,9 +133,12 @@ export default function ProductDetail(): JSX.Element {
   const [similar, setSimilar] = useState<SimilarProduct[]>([])
   const [activeImage, setActiveImage] = useState(0)
   const [quantity, setQuantity] = useState(1)
+  const [selectedSkuId, setSelectedSkuId] = useState<number | null>(null)
   const [tab, setTab] = useState<DetailTab>('intro')
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [favorited, setFavorited] = useState(false)
+  const [favoriteBusy, setFavoriteBusy] = useState(false)
 
   useEffect(() => {
     if (!id) return
@@ -143,7 +154,9 @@ export default function ProductDetail(): JSX.Element {
         const detail = productRes.data as PublicProductDetail
         setProduct(detail)
         setImages(imageRes?.code === 200 ? imageRes.data ?? [] : [])
-        setQuantity(Number(detail.minOrderQuantity ?? 1))
+        const defaultSku = (detail.skus ?? []).find((sku) => sku.status === 1) ?? detail.skus?.[0]
+        setSelectedSkuId(defaultSku?.id ?? null)
+        setQuantity(Number(defaultSku?.minOrderQuantity ?? detail.minOrderQuantity ?? 1))
       })
       .catch(() => message.error('加载商品详情失败，请确认交易服务已启动'))
       .finally(() => { if (!cancelled) setLoading(false) })
@@ -186,6 +199,20 @@ export default function ProductDetail(): JSX.Element {
     return () => { cancelled = true }
   }, [product])
 
+  useEffect(() => {
+    if (!id || !isLoggedIn()) {
+      setFavorited(false)
+      return
+    }
+    let cancelled = false
+    void getProductFavoriteState(id)
+      .then((result) => {
+        if (!cancelled && result.code === 200) setFavorited(Boolean(result.data?.favorited))
+      })
+      .catch(() => { /* 未登录或状态读取失败不阻断商品浏览 */ })
+    return () => { cancelled = true }
+  }, [id])
+
   const certifications = useMemo(
     () => parseCertifications(product?.certificationJson ?? null),
     [product?.certificationJson],
@@ -197,12 +224,21 @@ export default function ProductDetail(): JSX.Element {
   const originFull = product
     ? [origin, product.originAddress].filter(Boolean).join(' ')
     : ''
-  const minOrder = Number(product?.minOrderQuantity ?? 1)
-  const stock = Number(product?.stockQuantity ?? 0)
-  const price = product?.price ?? product?.priceMin ?? null
+  const skus = product?.skus ?? []
+  const selectedSku = skus.find((sku) => sku.id === selectedSkuId) ?? skus[0]
+  const currentUnit = selectedSku?.unit ?? product?.unit ?? ''
+  const minOrder = Number(selectedSku?.minOrderQuantity ?? product?.minOrderQuantity ?? 1)
+  const stock = Number(selectedSku?.stockQuantity ?? product?.stockQuantity ?? 0)
+  const price = selectedSku?.price ?? product?.price ?? product?.priceMin ?? null
   const quantityValid = quantity >= minOrder && (stock <= 0 || quantity <= stock)
   const estimate = price == null ? null : price * quantity
   const currentImage = images[activeImage]?.imageUrl
+
+  const selectSku = (skuId: number | null): void => {
+    const sku = skus.find((item) => item.id === skuId) ?? skus[0]
+    setSelectedSkuId(sku?.id ?? null)
+    setQuantity(Number(sku?.minOrderQuantity ?? product?.minOrderQuantity ?? 1))
+  }
 
   const submitSearch = (event: FormEvent): void => {
     event.preventDefault()
@@ -216,6 +252,32 @@ export default function ProductDetail(): JSX.Element {
       return
     }
     window.location.href = path
+  }
+
+  const toggleFavorite = async (): Promise<void> => {
+    if (!product) return
+    if (!isLoggedIn()) {
+      await redirectToSso(`${window.location.pathname}${window.location.search}`)
+      return
+    }
+    setFavoriteBusy(true)
+    try {
+      const result = favorited ? await unfavoriteProduct(product.id) : await favoriteProduct(product.id)
+      if (result.code !== 200) {
+        message.error(result.message || '商品收藏操作失败')
+        return
+      }
+      setFavorited(Boolean(result.data?.favorited))
+      setProduct((current) => current ? {
+        ...current,
+        favoriteCount: Math.max(0, Number(current.favoriteCount ?? 0) + (result.data.favorited ? 1 : -1)),
+      } : current)
+      message.success(result.data.favorited ? '商品已收藏' : '已取消收藏')
+    } catch {
+      message.error('商品收藏操作失败，请稍后重试')
+    } finally {
+      setFavoriteBusy(false)
+    }
   }
 
   if (loading) {
@@ -257,15 +319,7 @@ export default function ProductDetail(): JSX.Element {
             <span className="hall-logo"><BrandMark size={36} /></span>
             <span>丰链云<small>FENGCHAIN · AGRI</small></span>
           </a>
-          <nav className="main-nav">
-            <a href={PORTAL}>首页</a>
-            <a href={`${PORTAL}#/chains`}>产业链</a>
-            <a className="active" href="/hall">交易大厅</a>
-            <a href={`${PORTAL}#/?scroll=price`}>价格指数</a>
-            <a href={`${PORTAL}#/?scroll=news`}>产业资讯</a>
-            <a href="/member/seller?tab=fund">供应链金融</a>
-            <a href={`${PORTAL}#/logistics`}>物流服务</a>
-          </nav>
+          <PortalNav />
           <form className="header-search" onSubmit={submitSearch}>
             <input value={search} onChange={(event) => setSearch(event.target.value)}
               placeholder="搜索商品 / 供应商 / 需求" />
@@ -311,26 +365,50 @@ export default function ProductDetail(): JSX.Element {
               <span className="hall-tag tech">{product.publishStatus === 'published' ? '已发布' : product.publishStatus}</span>
             </div>
 
+            {skus.length > 0 && (
+              <div className="pd-sku-picker">
+                <div className="pd-sku-picker-label">
+                  <span>选择规格</span>
+                  <small>共 {skus.length} 个可售 SKU</small>
+                </div>
+                <div className="pd-sku-options">
+                  {skus.map((sku, index) => {
+                    const active = selectedSku === sku
+                    const unavailable = sku.status !== 1 || Number(sku.stockQuantity ?? 0) <= 0
+                    return (
+                      <button type="button" key={sku.id ?? `${sku.skuCode}-${index}`}
+                        className={`${active ? 'on' : ''}${unavailable ? ' disabled' : ''}`}
+                        disabled={unavailable} onClick={() => selectSku(sku.id ?? null)}
+                        title={unavailable ? '该规格已停用或库存不足' : `${sku.skuName} · ${money(sku.price)}/${sku.unit}`}>
+                        <strong>{sku.skuName}</strong>
+                        <span>{money(sku.price)} / {sku.unit}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
             <div className="pd-price-panel">
               <div className="pd-current-price">
                 <span>当前报价</span>
-                <strong>{money(price)}<small>{price == null ? '' : ` / ${product.unit}`}</small></strong>
-                <em>起订 {minOrder} {product.unit}</em>
+                <strong>{money(price)}<small>{price == null ? '' : ` / ${currentUnit}`}</small></strong>
+                <em>起订 {minOrder} {currentUnit}</em>
               </div>
               <div className="pd-reference-grid">
                 <div><span>参考最低价</span><strong>{money(product.priceMin)}</strong></div>
-                <div><span>当前报价</span><strong>{money(product.price)}</strong></div>
+                <div><span>当前报价</span><strong>{money(price)}</strong></div>
                 <div><span>参考最高价</span><strong>{money(product.priceMax)}</strong></div>
               </div>
               <p>价格与库存来自交易域实时商品记录；成交价以询价、报价或订单确认结果为准。</p>
             </div>
 
             <div className="pd-info-grid">
-              <InfoLine label="规格" value={valueOr(product.specSize || product.specLevel)} />
+              <InfoLine label="当前规格" value={valueOr(selectedSku?.skuName || product.specSize || product.specLevel)} />
               <InfoLine label="产地" value={valueOr(origin)} />
               <InfoLine label="品种" value={valueOr(product.variety)} />
               <InfoLine label="质量等级" value={valueOr(product.qualityLevel || product.specLevel)} />
-              <InfoLine label="库存" value={`${stock || '—'} ${product.unit}`} />
+              <InfoLine label="库存" value={`${stock || '—'} ${currentUnit}`} />
               <InfoLine label="采收批次" value={valueOr(product.harvestBatchNo)} />
             </div>
 
@@ -351,7 +429,7 @@ export default function ProductDetail(): JSX.Element {
                 <span>采购数量</span>
                 <InputNumber min={minOrder} max={stock > 0 ? stock : undefined} value={quantity}
                   onChange={(value) => setQuantity(Number(value ?? minOrder))} controls />
-                <em>{product.unit}</em>
+                <em>{currentUnit}</em>
               </div>
               <div className="pd-estimate">
                 <span>预计货款</span>
@@ -360,13 +438,18 @@ export default function ProductDetail(): JSX.Element {
             </div>
             <p className={`pd-quantity-hint${quantityValid ? '' : ' error'}`}>
               {quantityValid
-                ? `数量需满足起订量 ${minOrder} ${product.unit}${stock > 0 ? `，当前库存 ${stock} ${product.unit}` : ''}`
-                : `采购数量应在 ${minOrder} 至 ${stock || '库存上限'} ${product.unit} 之间`}
+                ? `数量需满足起订量 ${minOrder} ${currentUnit}${stock > 0 ? `，当前库存 ${stock} ${currentUnit}` : ''}`
+                : `采购数量应在 ${minOrder} 至 ${stock || '库存上限'} ${currentUnit} 之间`}
             </p>
 
             <div className="pd-actions">
+              <button type="button" className={`pd-ghost${favorited ? ' favorite' : ''}`}
+                disabled={favoriteBusy} onClick={() => void toggleFavorite()}>
+                {favorited ? <HeartFilled /> : <HeartOutlined />}
+                {favoriteBusy ? '处理中…' : favorited ? '已收藏' : '收藏商品'}
+              </button>
               <button type="button" className="pd-primary" disabled={!quantityValid}
-                onClick={() => goProtected(`/order/create?productId=${product.id}&quantity=${quantity}`)}>
+                onClick={() => goProtected(`/order/create?productId=${product.id}&quantity=${quantity}${selectedSku?.id ? `&skuId=${selectedSku.id}` : ''}`)}>
                 <ThunderboltOutlined />立即下单
               </button>
               <button type="button" className="pd-outline" disabled={!quantityValid}
@@ -430,7 +513,7 @@ export default function ProductDetail(): JSX.Element {
               <div className="pd-feature-grid">
                 <div><EnvironmentOutlined /><strong>产地信息</strong><span>{originFull || '待供应商补充'}</span></div>
                 <div><SafetyCertificateOutlined /><strong>质量资料</strong><span>{product.qualityLevel || (certifications.length ? certifications.join('、') : '以供应商上传资料为准')}</span></div>
-                <div><TruckOutlined /><strong>供应能力</strong><span>{stock > 0 ? `当前库存 ${stock} ${product.unit}` : '库存待确认'}</span></div>
+                <div><TruckOutlined /><strong>供应能力</strong><span>{stock > 0 ? `当前库存 ${stock} ${currentUnit}` : '库存待确认'}</span></div>
               </div>
               {(product.qualityReportUrl || product.videoUrl || certifications.length > 0) && (
                 <div className="pd-proof-row">
@@ -455,8 +538,9 @@ export default function ProductDetail(): JSX.Element {
                   <tr><th>品种</th><td>{valueOr(product.variety)}</td><th>规格</th><td>{valueOr(product.specSize)}</td></tr>
                   <tr><th>等级</th><td>{valueOr(product.specLevel)}</td><th>质量等级</th><td>{valueOr(product.qualityLevel)}</td></tr>
                   <tr><th>产地</th><td>{valueOr(originFull)}</td><th>发货批次</th><td>{valueOr(product.harvestBatchNo)}</td></tr>
-                  <tr><th>起订量</th><td>{minOrder} {product.unit}</td><th>库存</th><td>{stock || '—'} {product.unit}</td></tr>
+                  <tr><th>起订量</th><td>{minOrder} {currentUnit}</td><th>库存</th><td>{stock || '—'} {currentUnit}</td></tr>
                   <tr><th>报价类型</th><td>{product.priceType || '平台报价'}</td><th>发布时间</th><td>{dateText(product.createTime)}</td></tr>
+                  <tr><th>SKU数量</th><td>{skus.length || 1} 个</td><th>当前规格</th><td>{selectedSku?.skuName || '默认规格'}</td></tr>
                 </tbody>
               </table>
             </div>
@@ -468,7 +552,7 @@ export default function ProductDetail(): JSX.Element {
                 <span className="pd-supplier-avatar"><ShopOutlined /></span>
                 <div>
                   <h3>{product.sellerName || '平台供应商'}</h3>
-                  <p><EnvironmentOutlined /> {originFull || '所在地待补充'} · 当前商品共 {stock || '—'} {product.unit} 可供</p>
+                  <p><EnvironmentOutlined /> {originFull || '所在地待补充'} · 当前商品共 {stock || '—'} {currentUnit} 可供</p>
                 </div>
                 <button type="button" className="pd-outline" onClick={() => { window.location.href = `/shop/${product.sellerId}` }}>查看店铺</button>
               </div>

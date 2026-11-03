@@ -13,6 +13,14 @@ public class TenantUpdateDTO {
 
     private String tenantType;
 
+    private String industry;
+
+    private String companySize;
+
+    private String businessType;
+
+    private String creditCode;
+
     private String contactName;
 
     private String contactPerson;

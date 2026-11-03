@@ -1,647 +1,387 @@
 <template>
   <div class="role-list">
-    <div class="page-header">
-      <div class="header-left">
+    <header class="page-header">
+      <div>
         <h1>角色管理</h1>
-        <p>管理系统角色与权限</p>
+        <p>统一查看平台公共角色、经营主体角色及其数据范围和成员使用情况。</p>
       </div>
-      <button class="add-btn" @click="openCreateModal">
-        <span class="btn-icon">+</span>
-        <span>新增角色</span>
-      </button>
-    </div>
+      <div class="header-actions">
+        <span class="source-tag">权限监管视图</span>
+        <button class="add-btn" v-point="'POST /admin/masterdata/permission/role'" @click="openCreate">+ 新增角色</button>
+      </div>
+    </header>
 
-    <div class="search-bar">
-      <div class="search-group">
-        <input 
-          type="text" 
-          v-model="searchForm.keyword" 
-          placeholder="角色名称/编码..." 
-          class="search-input"
-        />
-        <button class="search-btn" @click="loadData">搜索</button>
+    <section class="governance-note">
+      <span class="note-icon">i</span>
+      <div>
+        <strong>职责边界</strong>
+        <p>主体内部角色的日常维护由主体负责人或管理员在个人中心完成。运营端负责平台公共角色、跨主体核查和应急修正；历史主体角色与系统内置角色只读。</p>
       </div>
-      <div class="filter-group">
-        <select v-model="searchForm.status" class="filter-select">
-          <option value="">全部状态</option>
-          <option value="1">启用</option>
-          <option value="0">禁用</option>
-        </select>
-      </div>
-    </div>
+    </section>
 
-    <div class="table-card">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>角色编码</th>
-            <th>角色名称</th>
-            <th>角色标识</th>
-            <th>角色类型</th>
-            <th>数据范围</th>
-            <th>状态</th>
-            <th>创建时间</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="role in tableData" :key="role.id">
-            <td>{{ role.roleCode }}</td>
-            <td>{{ role.roleName }}</td>
-            <td>{{ role.roleKey }}</td>
-            <td>
-              <span class="type-badge" :class="role.roleType">
-                {{ role.roleType === 'system' ? '系统角色' : '自定义' }}
-              </span>
-            </td>
-            <td>{{ getDataScopeLabel(role.dataScope) }}</td>
-            <td>
-              <span class="status-badge" :class="role.status === 1 ? 'active' : 'inactive'">
-                {{ role.status === 1 ? '启用' : '禁用' }}
-              </span>
-            </td>
-            <td>{{ formatDate(role.createTime) }}</td>
-            <td class="action-cell">
-              <button class="action-btn edit" @click="editRole(role)">编辑</button>
-              <button 
-                class="action-btn" 
-                :class="role.status === 1 ? 'disable' : 'enable'"
-                @click="toggleStatus(role)"
-                :disabled="role.roleType === 'system'"
-              >
-                {{ role.status === 1 ? '禁用' : '启用' }}
-              </button>
-              <button 
-                class="action-btn delete" 
-                @click="deleteRole(role.id)"
-                :disabled="role.roleType === 'system'"
-              >删除</button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+    <section class="filter-card">
+      <input
+        v-model.trim="searchForm.keyword"
+        class="search-input"
+        type="search"
+        placeholder="搜索角色名称、编码、标识或说明"
+        @keyup.enter="handleSearch"
+      />
+      <select v-model="searchForm.ownership" class="filter-select" @change="handleOwnershipChange">
+        <option value="">全部归属</option>
+        <option value="PLATFORM">平台公共角色</option>
+        <option value="SUBJECT">指定经营主体</option>
+      </select>
+      <select
+        v-if="searchForm.ownership === 'SUBJECT'"
+        v-model="searchForm.tenantId"
+        class="filter-select subject-select"
+        @change="handleSearch"
+      >
+        <option value="">全部经营主体</option>
+        <option v-for="subject in subjects" :key="subject.id" :value="String(subject.id)">
+          {{ subject.tenantName }}
+        </option>
+      </select>
+      <select v-model="searchForm.roleType" class="filter-select" @change="handleSearch">
+        <option value="">全部类型</option>
+        <option value="system">系统角色</option>
+        <option value="custom">自定义角色</option>
+      </select>
+      <select v-model="searchForm.status" class="filter-select" @change="handleSearch">
+        <option value="">全部状态</option>
+        <option value="1">启用</option>
+        <option value="0">停用</option>
+      </select>
+      <button class="search-btn" @click="handleSearch">查询</button>
+      <button class="reset-btn" @click="resetSearch">重置</button>
+    </section>
+
+    <section class="stats-grid">
+      <div class="stat-card">
+        <span>角色总数</span>
+        <strong>{{ summary.total }}</strong>
+      </div>
+      <div class="stat-card">
+        <span>启用角色</span>
+        <strong>{{ summary.active }}</strong>
+      </div>
+      <div class="stat-card">
+        <span>系统角色</span>
+        <strong>{{ summary.systemRoles }}</strong>
+      </div>
+      <div class="stat-card">
+        <span>自定义角色</span>
+        <strong>{{ summary.customRoles }}</strong>
+      </div>
+      <div class="stat-card">
+        <span>平台 / 主体角色</span>
+        <strong>{{ summary.platformRoles }} / {{ summary.subjectRoles }}</strong>
+      </div>
+      <div class="stat-card legacy-stat">
+        <span>历史只读角色</span>
+        <strong>{{ summary.legacyRoles }}</strong>
+      </div>
+    </section>
+
+    <section class="table-card">
+      <div class="card-toolbar">
+        <div>
+          <h2>角色档案</h2>
+          <span>共 {{ total }} 个角色 · 运营端应急维护与跨主体核查</span>
+        </div>
+        <span class="readonly-hint">系统角色不可修改</span>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>角色</th>
+              <th>归属</th>
+              <th>角色类型</th>
+              <th>数据范围</th>
+              <th>成员数</th>
+              <th>状态</th>
+              <th>更新时间</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-if="loading">
+              <td colspan="8" class="empty-cell">正在加载角色档案…</td>
+            </tr>
+            <tr v-else-if="roles.length === 0">
+              <td colspan="8" class="empty-cell">暂无符合条件的角色</td>
+            </tr>
+            <template v-else>
+            <tr v-for="role in roles" :key="role.id">
+              <td>
+                <button class="role-name" @click="viewDetail(role.id)">{{ role.roleName }}</button>
+                <div class="role-code">{{ role.roleCode }} · {{ role.roleKey || '未设置标识' }}</div>
+                <small v-if="role.description">{{ role.description }}</small>
+              </td>
+              <td>
+                <div>{{ role.tenantName || '平台公共' }}</div>
+                <span class="ownership-badge" :class="ownershipClass(role.ownershipType)">
+                  {{ role.ownershipLabel }}
+                </span>
+              </td>
+              <td>
+                <span class="type-badge" :class="role.roleType">
+                  {{ role.roleType === 'system' ? '系统角色' : '自定义角色' }}
+                </span>
+              </td>
+              <td>
+                <div>{{ role.dataScopeName || '未设置' }}</div>
+                <small>{{ role.dataScope || '—' }}</small>
+              </td>
+              <td>{{ role.userCount ?? 0 }}</td>
+              <td>
+                <span class="status-badge" :class="role.status === 1 ? 'active' : 'inactive'">
+                  {{ role.status === 1 ? '启用' : '停用' }}
+                </span>
+              </td>
+              <td>{{ formatDateTime(role.updateTime || role.createTime) }}</td>
+              <td class="action-cell">
+                <button class="action-btn view" @click="viewDetail(role.id)">查看</button>
+                <button
+                  v-point="'PUT /admin/masterdata/permission/role/{id}'"
+                  class="action-btn edit"
+                  :disabled="!role.editable"
+                  :title="role.isSystem ? '系统角色只读' : role.legacy ? '历史角色只读' : '编辑角色'"
+                  @click="editRole(role)"
+                >编辑</button>
+                <button
+                  v-point="'PUT /admin/masterdata/permission/role/{id}/status'"
+                  class="action-btn status"
+                  :disabled="!role.editable"
+                  @click="toggleStatus(role)"
+                >{{ role.status === 1 ? '停用' : '启用' }}</button>
+                <button class="action-btn delete" v-point="'DELETE /admin/masterdata/permission/role/{id}'" :disabled="!role.editable" @click="deleteRole(role)">删除</button>
+              </td>
+            </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
 
       <div class="pagination">
-        <button class="page-btn" :disabled="pageNum === 1" @click="handleCurrentChange(pageNum - 1)">上一页</button>
-        <span class="page-info">第 {{ pageNum }} / {{ totalPages }} 页</span>
-        <button class="page-btn" :disabled="pageNum === totalPages" @click="handleCurrentChange(pageNum + 1)">下一页</button>
+        <span>共 {{ total }} 个角色</span>
+        <button :disabled="pageNum === 1" @click="changePage(-1)">上一页</button>
+        <span>第 {{ pageNum }} / {{ totalPages }} 页</span>
+        <button :disabled="pageNum >= totalPages" @click="changePage(1)">下一页</button>
       </div>
-    </div>
-
-    <div class="modal-overlay" v-if="modalVisible" @click="closeModal">
-      <div class="modal-content" @click.stop>
-        <div class="modal-header">
-          <h3>{{ form.id ? '编辑角色' : '新增角色' }}</h3>
-          <button class="close-btn" @click="closeModal">×</button>
-        </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label>角色编码 *</label>
-            <input type="text" v-model="form.roleCode" placeholder="请输入角色编码" class="form-input" :disabled="form.id" />
-          </div>
-          <div class="form-group">
-            <label>角色名称 *</label>
-            <input type="text" v-model="form.roleName" placeholder="请输入角色名称" class="form-input" />
-          </div>
-          <div class="form-group">
-            <label>角色标识</label>
-            <input type="text" v-model="form.roleKey" placeholder="请输入角色标识" class="form-input" />
-          </div>
-          <div class="form-group">
-            <label>角色类型</label>
-            <select v-model="form.roleType" class="form-select">
-              <option value="system">系统角色</option>
-              <option value="custom">自定义</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>数据范围</label>
-            <select v-model="form.dataScope" class="form-select">
-              <option :value="1">全部数据</option>
-              <option :value="2">本部门数据</option>
-              <option :value="3">本人数据</option>
-              <option :value="4">自定义</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>状态</label>
-            <select v-model="form.status" class="form-select">
-              <option :value="1">启用</option>
-              <option :value="0">禁用</option>
-            </select>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-cancel" @click="closeModal">取消</button>
-          <button class="btn btn-primary" @click="saveRole">确认{{ form.id ? '修改' : '添加' }}</button>
-        </div>
-      </div>
-    </div>
+    </section>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { getRoleList, createRole, updateRole, deleteRole as apiDeleteRole } from '../../utils/api'
+import {
+  deleteRole as deleteRoleApi,
+  getRoleList,
+  getRoleSummary,
+  getTenantList,
+  updateRoleStatus,
+} from '../../utils/api'
 
-const tableData = ref([])
+const router = useRouter()
+const loading = ref(false)
+const roles = ref([])
+const subjects = ref([])
 const pageNum = ref(1)
-const pageSize = ref(10)
+const pageSize = 20
 const total = ref(0)
-const modalVisible = ref(false)
-
-const totalPages = computed(() => Math.ceil(total.value / pageSize.value))
-
+const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize)))
+const summary = reactive({
+  total: 0,
+  active: 0,
+  disabled: 0,
+  systemRoles: 0,
+  customRoles: 0,
+  platformRoles: 0,
+  subjectRoles: 0,
+  legacyRoles: 0,
+})
 const searchForm = reactive({
   keyword: '',
-  status: ''
+  ownership: '',
+  tenantId: '',
+  roleType: '',
+  status: '',
 })
 
-const form = reactive({
-  id: null,
-  roleCode: '',
-  roleName: '',
-  roleKey: '',
-  roleType: 'custom',
-  dataScope: 1,
-  status: 1
+const queryParams = () => ({
+  keyword: searchForm.keyword || undefined,
+  ownership: searchForm.ownership || undefined,
+  tenantId: searchForm.tenantId || undefined,
+  roleType: searchForm.roleType || undefined,
+  status: searchForm.status === '' ? undefined : Number(searchForm.status),
 })
 
-const getDataScopeLabel = (scope) => {
-  const labels = { 1: '全部数据', 2: '本部门数据', 3: '本人数据', 4: '自定义' }
-  return labels[scope] || scope
+const loadSubjects = async () => {
+  const response = await getTenantList({ pageNum: 1, pageSize: 500, tenantStatus: 'ACTIVE' })
+  if (response.code !== 200) throw new Error(response.message || '经营主体加载失败')
+  subjects.value = response.data?.list ?? []
 }
 
 const loadData = async () => {
+  loading.value = true
   try {
-    const response = await getRoleList({
-      pageNum: pageNum.value,
-      pageSize: pageSize.value,
-      keyword: searchForm.keyword,
-      status: searchForm.status
-    })
-    if (response.code === 200) {
-      tableData.value = response.data.list ?? []
-      total.value = response.data.total ?? 0
-    } else {
-      message.error(response.message || '加载数据失败')
-      tableData.value = []
-      total.value = 0
-    }
+    const [listResponse, summaryResponse] = await Promise.all([
+      getRoleList({ pageNum: pageNum.value, pageSize, ...queryParams() }),
+      getRoleSummary(queryParams()),
+    ])
+    if (listResponse.code !== 200) throw new Error(listResponse.message || '角色列表加载失败')
+    if (summaryResponse.code !== 200) throw new Error(summaryResponse.message || '角色统计加载失败')
+    roles.value = listResponse.data?.list ?? []
+    total.value = Number(listResponse.data?.total ?? 0)
+    Object.assign(summary, summaryResponse.data ?? {})
   } catch (error) {
-    message.error(error instanceof Error ? error.message : '加载数据失败')
-    tableData.value = []
+    roles.value = []
     total.value = 0
+    message.error(error instanceof Error ? error.message : '角色列表加载失败')
+  } finally {
+    loading.value = false
   }
 }
 
-const handleCurrentChange = (page) => {
-  if (page >= 1 && page <= totalPages.value) {
-    pageNum.value = page
-    loadData()
-  }
+const handleSearch = () => {
+  pageNum.value = 1
+  void loadData()
 }
 
-const openCreateModal = () => {
-  form.id = null
-  form.roleCode = ''
-  form.roleName = ''
-  form.roleKey = ''
-  form.roleType = 'custom'
-  form.dataScope = 1
-  form.status = 1
-  modalVisible.value = true
+const handleOwnershipChange = () => {
+  if (searchForm.ownership !== 'SUBJECT') searchForm.tenantId = ''
+  handleSearch()
 }
 
-const editRole = (row) => {
-  form.id = row.id
-  form.roleCode = row.roleCode
-  form.roleName = row.roleName
-  form.roleKey = row.roleKey
-  form.roleType = row.roleType
-  form.dataScope = row.dataScope
-  form.status = row.status
-  modalVisible.value = true
+const resetSearch = () => {
+  Object.assign(searchForm, { keyword: '', ownership: '', tenantId: '', roleType: '', status: '' })
+  handleSearch()
 }
 
-const closeModal = () => {
-  modalVisible.value = false
+const changePage = (delta) => {
+  const next = pageNum.value + delta
+  if (next < 1 || next > totalPages.value) return
+  pageNum.value = next
+  void loadData()
 }
 
-const saveRole = async () => {
-  if (!form.roleCode || !form.roleName) {
-    alert('请填写必填项')
-    return
-  }
-  
+const openCreate = () => {
+  router.push({
+    path: '/permission/role/new',
+    query: searchForm.tenantId ? { tenantId: searchForm.tenantId } : {},
+  })
+}
+const viewDetail = (id) => router.push(`/permission/role/${id}`)
+const editRole = (role) => {
+  if (!role.editable) return
+  router.push(`/permission/role/${role.id}/edit`)
+}
+
+const toggleStatus = async (role) => {
+  if (!role.editable) return
+  const next = role.status === 1 ? 0 : 1
+  if (!confirm(`确定要${next === 1 ? '启用' : '停用'}“${role.roleName}”吗？`)) return
   try {
-    let response
-    if (form.id) {
-      response = await updateRole(form.id, form)
-    } else {
-      response = await createRole(form)
-    }
-    
-    if (response.code === 200) {
-      alert(form.id ? '修改成功' : '创建成功')
-      closeModal()
-      loadData()
-    } else {
-      alert(response.message || '操作失败')
-    }
+    const response = await updateRoleStatus(role.id, next)
+    if (response.code !== 200) throw new Error(response.message || '状态更新失败')
+    message.success(next === 1 ? '角色已启用' : '角色已停用')
+    await loadData()
   } catch (error) {
-    alert('操作失败')
+    message.error(error instanceof Error ? error.message : '状态更新失败')
   }
 }
 
-const toggleStatus = async (row) => {
+const deleteRole = async (role) => {
+  if (!role.editable) return
+  if (!confirm(`确定删除“${role.roleName}”吗？角色编码将保留唯一性占用。`)) return
   try {
-    const response = await updateRole(row.id, { status: row.status === 1 ? 0 : 1 })
-    if (response.code === 200) {
-      alert(row.status === 1 ? '禁用成功' : '启用成功')
-      loadData()
-    } else {
-      alert(response.message || '操作失败')
-    }
+    const response = await deleteRoleApi(role.id)
+    if (response.code !== 200) throw new Error(response.message || '删除失败')
+    message.success('角色已删除')
+    await loadData()
   } catch (error) {
-    alert('操作失败')
+    message.error(error instanceof Error ? error.message : '删除失败')
   }
 }
 
-const deleteRole = async (id) => {
-  if (!confirm('确定要删除该角色吗？')) return
+const ownershipClass = (type) => String(type || '').toLowerCase()
+const formatDateTime = (value) => value ? String(value).replace('T', ' ').slice(0, 16) : '—'
+
+onMounted(async () => {
   try {
-    const response = await apiDeleteRole(id)
-    if (response.code === 200) {
-      alert('删除成功')
-      loadData()
-    } else {
-      alert(response.message || '删除失败')
-    }
+    await loadSubjects()
   } catch (error) {
-    alert('删除失败')
+    message.error(error instanceof Error ? error.message : '经营主体加载失败')
   }
-}
-
-const formatDate = (date) => {
-  if (!date) return ''
-  // 后端返回 ISO（如 2026-10-12T17:32:41），只按空格切分会把 T 一起显示出来
-  return String(date).replace('T', ' ').split(' ')[0]
-}
-
-onMounted(() => {
-  loadData()
+  await loadData()
 })
 </script>
 
 <style scoped>
-.role-list {
-  padding: 20px;
-}
-
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 24px;
-}
-
-.header-left h1 {
-  font-size: 24px;
-  font-weight: 600;
-  color: #2d3748;
-  margin: 0;
-}
-
-.header-left p {
-  font-size: 14px;
-  color: #a0aec0;
-  margin: 4px 0 0;
-}
-
-.add-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: linear-gradient(135deg, #238636 0%, #2ea043 100%);
-  color: #fff;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.add-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(35, 134, 54, 0.3);
-}
-
-.btn-icon {
-  font-size: 18px;
-}
-
-.search-bar {
-  display: flex;
-  gap: 16px;
-  margin-bottom: 20px;
-}
-
-.search-group {
-  display: flex;
-  flex: 1;
-}
-
-.search-input {
-  flex: 1;
-  padding: 10px 16px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px 0 0 8px;
-  font-size: 14px;
-  outline: none;
-}
-
-.search-input:focus {
-  border-color: #238636;
-}
-
-.search-btn {
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-left: none;
-  padding: 10px 24px;
-  border-radius: 0 8px 8px 0;
-  font-size: 14px;
-  color: #238636;
-  cursor: pointer;
-}
-
-.filter-group {
-  display: flex;
-  gap: 12px;
-}
-
-.filter-select {
-  padding: 10px 16px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 14px;
-  color: #4a5568;
-  background: #fff;
-  cursor: pointer;
-}
-
-.table-card {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  overflow: hidden;
-}
-
-.data-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.data-table th,
-.data-table td {
-  padding: 14px 16px;
-  text-align: left;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.data-table th {
-  font-size: 13px;
-  font-weight: 600;
-  color: #4a5568;
-  background: #f8fafc;
-}
-
-.data-table td {
-  font-size: 13px;
-  color: #2d3748;
-}
-
-.type-badge {
-  font-size: 11px;
-  font-weight: 500;
-  padding: 4px 12px;
-  border-radius: 12px;
-}
-
-.type-badge.system {
-  background: rgba(218, 54, 51, 0.1);
-  color: #da3633;
-}
-
-.type-badge.custom {
-  background: rgba(59, 130, 246, 0.1);
-  color: #3b82f6;
-}
-
-.status-badge {
-  font-size: 11px;
-  font-weight: 500;
-  padding: 4px 12px;
-  border-radius: 12px;
-}
-
-.status-badge.active {
-  background: rgba(35, 134, 54, 0.1);
-  color: #238636;
-}
-
-.status-badge.inactive {
-  background: rgba(160, 174, 192, 0.1);
-  color: #a0aec0;
-}
-
-.action-cell {
-  display: flex;
-  gap: 8px;
-}
-
-.action-btn {
-  font-size: 12px;
-  padding: 6px 12px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.action-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.action-btn.edit {
-  background: rgba(210, 153, 34, 0.1);
-  color: #d29922;
-}
-
-.action-btn.disable {
-  background: rgba(218, 54, 51, 0.1);
-  color: #da3633;
-}
-
-.action-btn.enable {
-  background: rgba(35, 134, 54, 0.1);
-  color: #238636;
-}
-
-.action-btn.delete {
-  background: rgba(218, 54, 51, 0.1);
-  color: #da3633;
-}
-
-.pagination {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 16px;
-  padding: 20px;
-}
-
-.page-btn {
-  padding: 8px 16px;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  background: #fff;
-  font-size: 13px;
-  color: #4a5568;
-  cursor: pointer;
-}
-
-.page-btn:hover:not(:disabled) {
-  background: #f8fafc;
-}
-
-.page-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.page-info {
-  font-size: 13px;
-  color: #a0aec0;
-}
-
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.modal-content {
-  background: #fff;
-  border-radius: 12px;
-  width: 500px;
-  max-width: 90%;
-  overflow: hidden;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.modal-header h3 {
-  font-size: 18px;
-  font-weight: 600;
-  color: #2d3748;
-  margin: 0;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 24px;
-  color: #a0aec0;
-  cursor: pointer;
-}
-
-.modal-body {
-  padding: 20px;
-}
-
-.form-group {
-  margin-bottom: 16px;
-}
-
-.form-group label {
-  display: block;
-  font-size: 14px;
-  color: #4a5568;
-  margin-bottom: 6px;
-  font-weight: 500;
-}
-
-.form-input {
-  width: 100%;
-  padding: 10px 14px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 14px;
-  outline: none;
-  box-sizing: border-box;
-}
-
-.form-input:focus {
-  border-color: #238636;
-}
-
-.form-input:disabled {
-  background: #f8fafc;
-  color: #a0aec0;
-}
-
-.form-select {
-  width: 100%;
-  padding: 10px 14px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 14px;
-  color: #4a5568;
-  background: #fff;
-  cursor: pointer;
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  padding: 20px;
-  border-top: 1px solid #f0f0f0;
-}
-
-.btn {
-  padding: 10px 20px;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  border: none;
-}
-
-.btn-cancel {
-  background: #f0f0f0;
-  color: #4a5568;
-}
-
-.btn-primary {
-  background: linear-gradient(135deg, #238636 0%, #2ea043 100%);
-  color: #fff;
-}
+.role-list { padding:20px; color:#1f2937; }
+.page-header { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; margin-bottom:14px; }
+.page-header h1 { margin:0 0 6px; font-size:24px; }
+.page-header p { margin:0; color:#6b7280; }
+.header-actions { display:flex; align-items:center; gap:10px; }
+.source-tag,.type-badge,.status-badge,.ownership-badge { display:inline-block; padding:4px 9px; border-radius:999px; font-size:12px; white-space:nowrap; }
+.source-tag { background:#ecfdf5; color:#047857; }
+.add-btn,.search-btn,.reset-btn { height:38px; padding:0 18px; border:0; border-radius:8px; cursor:pointer; }
+.add-btn,.search-btn { background:#10b981; color:#fff; }
+.reset-btn { background:#f3f4f6; color:#4b5563; }
+.governance-note { display:flex; gap:12px; padding:14px 16px; margin-bottom:14px; border:1px solid #d1fae5; border-radius:10px; background:#f0fdf4; }
+.note-icon { width:22px; height:22px; display:grid; place-items:center; flex:0 0 auto; border-radius:50%; background:#10b981; color:#fff; font-family:Georgia,serif; font-weight:700; }
+.governance-note strong { display:block; margin-bottom:3px; color:#065f46; font-size:13px; }
+.governance-note p { margin:0; color:#4b7c68; font-size:12.5px; line-height:1.65; }
+.filter-card { display:flex; flex-wrap:wrap; gap:10px; padding:16px; margin-bottom:14px; border-radius:10px; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+.search-input { min-width:300px; flex:1; height:38px; padding:0 12px; border:1px solid #d1d5db; border-radius:8px; }
+.filter-select { min-width:145px; height:38px; padding:0 10px; border:1px solid #d1d5db; border-radius:8px; background:#fff; }
+.subject-select { min-width:240px; }
+.search-input:focus,.filter-select:focus { outline:none; border-color:#10b981; box-shadow:0 0 0 3px rgba(16,185,129,.1); }
+.stats-grid { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:10px; margin-bottom:14px; }
+.stat-card { padding:14px 16px; border-radius:10px; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+.stat-card span,.stat-card strong { display:block; }
+.stat-card span { color:#94a3b8; font-size:12px; }
+.stat-card strong { margin-top:7px; color:#1f3b2a; font-size:21px; }
+.legacy-stat strong { color:#6b7280; }
+.table-card { overflow:hidden; border-radius:10px; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+.card-toolbar { display:flex; align-items:center; justify-content:space-between; gap:14px; padding:16px 18px; border-bottom:1px solid #edf0f2; }
+.card-toolbar h2 { margin:0 0 4px; font-size:16px; }
+.card-toolbar span { color:#94a3b8; font-size:12px; }
+.readonly-hint { padding:5px 10px; border-radius:999px; background:#f3f4f6; color:#6b7280 !important; }
+.table-wrap { overflow:auto; }
+.data-table { width:100%; min-width:1180px; border-collapse:collapse; }
+.data-table th,.data-table td { padding:12px 14px; border-bottom:1px solid #edf0f2; text-align:left; vertical-align:top; }
+.data-table th { background:#f8fafc; color:#64748b; font-size:12.5px; font-weight:600; white-space:nowrap; }
+.data-table td { color:#334155; font-size:12.5px; }
+.data-table td small { display:block; max-width:300px; margin-top:4px; color:#94a3b8; line-height:1.45; }
+.role-name { padding:0; border:0; background:none; color:#065f46; font-weight:600; text-align:left; cursor:pointer; }
+.role-name:hover { color:#10b981; }
+.role-code { margin-top:4px; color:#94a3b8; font-family:ui-monospace,Consolas,monospace; font-size: var(--agri-font-size-micro); }
+.ownership-badge { margin-top:5px; padding:3px 8px; font-size: var(--agri-font-size-micro); }
+.ownership-badge.platform { background:#eff6ff; color:#1d4ed8; }
+.ownership-badge.subject { background:#ecfdf5; color:#047857; }
+.ownership-badge.legacy { background:#f3f4f6; color:#6b7280; }
+.type-badge.system { background:#fff7ed; color:#c2410c; }
+.type-badge.custom { background:#f5f3ff; color:#6d28d9; }
+.status-badge.active { background:#ecfdf5; color:#047857; }
+.status-badge.inactive { background:#f3f4f6; color:#6b7280; }
+.empty-cell { padding:42px !important; text-align:center !important; color:#9ca3af !important; }
+.action-cell { min-width:205px; white-space:nowrap; }
+.action-btn { margin-right:5px; padding:5px 9px; border:0; border-radius:6px; cursor:pointer; }
+.action-btn:last-child { margin-right:0; }
+.action-btn.view { color:#0369a1; background:#e0f2fe; }
+.action-btn.edit { color:#047857; background:#ecfdf5; }
+.action-btn.status { color:#b45309; background:#fffbeb; }
+.action-btn.delete { color:#b91c1c; background:#fef2f2; }
+.action-btn:disabled { opacity:.4; cursor:not-allowed; }
+.pagination { display:flex; justify-content:flex-end; align-items:center; gap:10px; padding:16px; color:#6b7280; font-size:12.5px; }
+.pagination button { padding:6px 12px; border:1px solid #d1d5db; border-radius:6px; background:#fff; cursor:pointer; }
+.pagination button:disabled { opacity:.45; cursor:not-allowed; }
+@media(max-width:1200px){.stats-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:720px){.page-header{align-items:flex-start;flex-direction:column}.header-actions{width:100%;justify-content:space-between}.search-input{min-width:100%}.stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>

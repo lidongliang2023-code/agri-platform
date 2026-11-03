@@ -99,18 +99,18 @@ onMounted(load)
 </script>
 
 <style scoped>
-.finance-kpi em { color: #60776a; font-size: 10px; font-style: normal; }
+.finance-kpi em { color: #60776a; font-size: var(--fin-fs-xs); font-style: normal; }
 .overdue-subject { display: flex; align-items: center; gap: 8px; }
-.overdue-subject > span { display: grid; width: 31px; height: 31px; place-items: center; border-radius: 8px; background: #fcebea; color: #ad5148; font-size: 8px; font-weight: 700; }
+.overdue-subject > span { display: grid; width: 31px; height: 31px; place-items: center; border-radius: 8px; background: #fcebea; color: #ad5148; font-size: var(--fin-fs-xs); font-weight: 700; }
 .overdue-subject strong, .overdue-subject small { display: block; }
-.overdue-subject strong { color: #3f5949; font-size: 9.5px; }
-.overdue-subject small { margin-top: 2px; color: #8b9a92; font-family: ui-monospace, Consolas, monospace; font-size: 7px; }
-.overdue-stage { padding: 3px 7px; border-radius: 7px; background: #fff2e1; color: #a96812; font-size: 7.5px; font-weight: 700; }
+.overdue-subject strong { color: #3f5949; font-size: var(--fin-fs-xs); }
+.overdue-subject small { margin-top: 2px; color: #8b9a92; font-family: ui-monospace, Consolas, monospace; font-size: var(--fin-fs-xs); }
+.overdue-stage { padding: 3px 7px; border-radius: 7px; background: #fff2e1; color: #a96812; font-size: var(--fin-fs-xs); font-weight: 700; }
 .overdue-stage.中期,
 .overdue-stage.后期 { background: #fcebea; color: #b14d45; }
 .danger { color: #b34c44; }
 .assign-summary { display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: 9px; background: #f6faf7; }
-.assign-summary span { color: #415b4a; font-size: 10px; font-weight: 650; }
+.assign-summary span { color: #415b4a; font-size: var(--fin-fs-xs); font-weight: 650; }
 .assign-summary strong { margin-left: auto; color: #d0523f; font-size: 12px; }
-.assign-summary small { color: #89988f; font-size: 8px; }
+.assign-summary small { color: #89988f; font-size: var(--fin-fs-xs); }
 </style>

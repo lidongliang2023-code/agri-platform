@@ -17,7 +17,8 @@
  * 改成运行时判断：小程序/App 里没有 `window`（必须绝对地址，开发者工具要勾"不校验合法域名"），
  * H5 用同源地址（开发期由 vite proxy 反代到网关）。</p>
  */
-const BASE_URL = typeof window === 'undefined' ? 'http://localhost' : ''
+const configuredBase = String(import.meta.env.VITE_API_BASE || '').replace(/\/$/, '')
+export const BASE_URL = configuredBase || (typeof window === 'undefined' ? 'http://localhost' : '')
 
 /** 后端统一响应体 */
 export interface ApiResponse<T> {

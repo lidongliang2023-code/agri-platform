@@ -1,12 +1,9 @@
 package com.agri.trade.service.impl;
 
-import com.agri.trade.entity.Demand;
 import com.agri.trade.service.INlpParseService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.math.BigDecimal;
-import java.util.Date;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -20,45 +17,6 @@ public class NlpParseServiceImpl implements INlpParseService {
     private static final Pattern LOCATION_PATTERN = Pattern.compile("(北京|天津|河北|山西|内蒙古|辽宁|吉林|黑龙江|上海|江苏|浙江|安徽|福建|江西|山东|河南|湖北|湖南|广东|广西|海南|重庆|四川|贵州|云南|西藏|陕西|甘肃|青海|宁夏|新疆|香港|澳门|台湾|省|市|区|县|镇|村)");
     private static final Pattern TIME_PATTERN = Pattern.compile("(今天|明天|后天|本周|下周|本月|下月|今年|明年|\\d+天内|\\d+周内|\\d+月内|\\d+号|\\d+月\\d+日)");
     private static final Pattern QUALITY_PATTERN = Pattern.compile("(优质|一等|二等|三等|绿色|有机|无公害|新鲜|优良|精品|特级|一级|二级)");
-
-    @Override
-    public Demand parseNaturalLanguage(String naturalText, Long userId) {
-        INlpParseService.ParsedDemandResult result = parseAndExtract(naturalText);
-
-        Demand demand = new Demand();
-        demand.setDemandName(result.getProductName() != null ? result.getProductName() : "采购需求");
-        demand.setCategoryCode(getCategoryCode(result.getProductName()));
-        demand.setProductName(result.getProductName());
-        demand.setSpecDesc(result.getQuality() != null ? result.getQuality() : "");
-        demand.setQualityLevel(result.getQuality() != null ? result.getQuality() : "normal");
-        
-        if (result.getQuantity() != null) {
-            try {
-                demand.setDemandQuantity(new BigDecimal(result.getQuantity()));
-            } catch (Exception e) {
-                demand.setDemandQuantity(BigDecimal.ZERO);
-            }
-        }
-        demand.setUnit(result.getUnit() != null ? result.getUnit() : "公斤");
-        
-        if (result.getPrice() != null) {
-            try {
-                demand.setExpectedPrice(new BigDecimal(result.getPrice()));
-            } catch (Exception e) {
-                demand.setExpectedPrice(null);
-            }
-        }
-        
-        demand.setDeliveryLocation(result.getLocation());
-        demand.setAdditionalRequirements(result.getAdditionalRequirements());
-        demand.setDemandStatus("pending");
-        demand.setPublishTime(new Date());
-        demand.setCreateTime(new Date());
-        demand.setUpdateTime(new Date());
-        demand.setDelFlag(0);
-
-        return demand;
-    }
 
     @Override
     public INlpParseService.ParsedDemandResult parseAndExtract(String naturalText) {
@@ -141,20 +99,6 @@ public class NlpParseServiceImpl implements INlpParseService {
             return matcher.group(1);
         }
         return null;
-    }
-
-    private String getCategoryCode(String productName) {
-        if (productName == null) return "other";
-        if (productName.contains("玉米") || productName.contains("小麦") || productName.contains("水稻") || productName.contains("大豆")) {
-            return "grain";
-        } else if (productName.contains("蔬菜") || productName.contains("水果")) {
-            return "vegetable";
-        } else if (productName.contains("猪肉") || productName.contains("牛肉") || productName.contains("鸡蛋") || productName.contains("牛奶")) {
-            return "livestock";
-        } else if (productName.contains("化肥") || productName.contains("农药") || productName.contains("种子") || productName.contains("饲料")) {
-            return "agri_input";
-        }
-        return "other";
     }
 
     private String extractAdditionalRequirements(String text, ParsedDemandResult result) {

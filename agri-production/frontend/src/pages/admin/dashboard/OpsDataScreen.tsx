@@ -35,6 +35,7 @@ import {
   fetchOpsOverviewMetrics,
   fetchRankItems,
 } from '@/api/admin/dashboard'
+import { TiandituMap } from '@agri/shared'
 
 const { Text } = Typography
 
@@ -438,7 +439,10 @@ export default function OpsDataScreen(): JSX.Element {
             </span>
             <span style={{ fontSize: 12, color: SCREEN_THEME.accentOrange }}>未接入</span>
           </div>
-          <PanelEmpty text="后端未提供 /admin/dashboard/region-distribution 端点，暂无区域分布数据" />
+          <TiandituMap points={[]} height={190} showLegend={false} compact />
+          <div style={{ marginTop: 6, color: SCREEN_THEME.subText, fontSize: 12 }}>
+            天地图底图已接入；后端暂无区域分布数据，暂不绘制区域点位。
+          </div>
         </div>
 
         {/* 实时滚动指标：后端暂无 /admin/dashboard/realtime 端点 */}

@@ -5,6 +5,7 @@ import com.agri.production.dto.InputInfoSaveDTO;
 import com.agri.production.dto.InputUsageSaveDTO;
 import com.agri.production.entity.InputMaterial;
 import com.agri.production.entity.InputStockFlow;
+import com.agri.production.vo.InputStockFlowVO;
 import com.agri.production.entity.InputUsageRecord;
 
 import java.math.BigDecimal;
@@ -39,6 +40,22 @@ public interface IInputService {
     /* ---------- 库存流水 ---------- */
 
     PageResult<InputStockFlow> pageFlows(Long inputId, int pageNum, int pageSize, Integer flowType, String tenantId);
+
+    /**
+     * 跨投入品分页查询库存流水（服务端筛选 / 排序，支持数据持续增长）。
+     *
+     * @param pageNum 页码
+     * @param pageSize 每页条数
+     * @param flowType 流水类型（可空）
+     * @param batchNo 批次号模糊（可空）
+     * @param startDate 开始日期 yyyy-MM-dd（可空）
+     * @param endDate 结束日期 yyyy-MM-dd（可空）
+     * @param tenantId 当前租户
+     * @returns 流水分页（含投入品名称 / 单位）
+     */
+    PageResult<InputStockFlowVO> pageAllFlows(int pageNum, int pageSize, Integer flowType,
+                                              String batchNo, String startDate, String endDate,
+                                              String tenantId);
 
     InputStockFlow createFlow(Long inputId, InputStockFlow flow, String tenantId);
 

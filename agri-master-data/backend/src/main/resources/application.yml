@@ -21,7 +21,8 @@ spring:
       # 替换成 U+FFFD（不可逆的数据损坏）。这个坑不报错、只在界面上表现为乱码，最难查。
       encoding: UTF-8
       schema-locations: classpath:schema.sql
-      data-locations: classpath:data.sql
+      # 逗号分隔会按顺序执行；权限点目录、全国行政区划各自成文件，避免 data.sql 越堆越大。
+      data-locations: classpath:data.sql,classpath:data-menu-catalog.sql,classpath:data-address-region.sql
   redis:
     host: localhost
     port: 6379

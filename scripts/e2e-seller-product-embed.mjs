@@ -1,13 +1,19 @@
 #!/usr/bin/env node
-/** 卖家中心“发布新商品”独立菜单回归（2026-10-22）。 */
+/** 卖家中心从商品管理进入发布商品回归（2026-10-24）。 */
 import { createRequire } from 'node:module'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const require2 = createRequire(path.join(ROOT, 'agri-production/frontend/package.json'))
-const puppeteer = require2('puppeteer')
+const require2 = createRequire(path.join('C:/Users/71502/.workbuddy-ai/binaries/node/workspace', 'noop.js'))
+const { chromium } = require2('playwright-core')
+
+const BROWSER = [
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+].find((candidate) => existsSync(candidate))
 const TRADE = 'http://localhost:8086'
 const OUT = 'C:/Users/71502/.codex/visualizations/2026/10/16/01a14244-ead8-7ab0-8c7c-df7abac44648'
 const failures = []
@@ -24,18 +30,18 @@ const fill = async (page, selector, value) => page.evaluate(({ target, next }) =
   input.dispatchEvent(new Event('input', { bubbles: true }))
 }, { target: selector, next: value })
 
-const browser = await puppeteer.launch({
-  executablePath: 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
-  headless: 'new',
+const browser = await chromium.launch({
+  headless: true,
+  executablePath: BROWSER,
   args: ['--no-sandbox'],
 })
 try {
-  const page = await browser.newPage()
+  const page = await (await browser.newContext({ viewport: { width: 1440, height: 1000 } })).newPage()
   const errors = []
   page.on('pageerror', (error) => errors.push(String(error)))
-  await page.setViewport({ width: 1440, height: 1000 })
-  await page.goto(`${TRADE}/member/seller?tab=publish`, { waitUntil: 'networkidle2', timeout: 60000 })
-  await page.waitForFunction(() => window.location.port === '8090', { timeout: 20000 })
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await page.goto(`${TRADE}/member/seller?tab=goods`, { waitUntil: 'networkidle', timeout: 60000 })
+  await page.waitForFunction(() => window.location.port === '8090', undefined, { timeout: 20000 })
   await page.waitForSelector('button[role="tab"]', { timeout: 20000 })
   await page.evaluate(() => {
     const tab = [...document.querySelectorAll('button[role="tab"]')]
@@ -54,23 +60,33 @@ try {
     if (page.url().includes(':8086/member/seller')) break
   }
   await page.waitForSelector('.mc-shell', { timeout: 30000 })
-  await page.waitForSelector('.product-create-page.is-embedded', { timeout: 20000 })
-  check(page.url().includes('tab=publish'), '卖家中心独立菜单地址进入发布新商品')
-
   const menu = await page.$$eval('.mc-side-nav button', (items) =>
     items.map((item) => ({ text: item.textContent?.trim(), active: item.classList.contains('on') })))
-  check(menu.some((item) => item.text === '发布新商品' && item.active),
-    '卖家中心包含并选中发布新商品菜单')
+  const menuTexts = menu.map((item) => item.text)
+  check(!menuTexts.includes('发布新商品') && !menuTexts.includes('供应发布'),
+    '卖家中心侧栏不再显示发布新商品和供应发布菜单')
+  check(menuTexts.indexOf('商品管理') >= 0
+    && menuTexts.indexOf('商品管理') < menuTexts.indexOf('报价与撮合')
+    && menuTexts.indexOf('报价与撮合') < menuTexts.indexOf('销售订单'),
+  '商品管理、报价与撮合均排在销售订单之前')
+  await page.evaluate(() => {
+    const button = [...document.querySelectorAll('button')]
+      .find((item) => (item.textContent ?? '').trim() === '上架新商品')
+    button?.click()
+  })
+  await page.waitForFunction(() => new URLSearchParams(location.search).get('tab') === 'publish')
+  await page.waitForSelector('.product-create-page.is-embedded', { timeout: 20000 })
+  check(page.url().includes('tab=publish'), '商品管理页按钮进入发布新商品')
   const text = await page.evaluate(() => document.body.innerText)
   check(text.includes('发布新商品') && text.includes('基础信息')
-    && text.includes('价格与库存') && text.includes('商品图片'),
+    && text.includes('价格与SKU库存') && text.includes('添加 SKU') && text.includes('商品图片'),
   '独立菜单内加载完整商品发布功能')
   check((await page.$$eval('.product-create-page input', (items) => items.length)) > 5,
     '商品发布表单字段完整渲染')
   await page.screenshot({ path: path.join(OUT, 'seller-publish-product.png'), fullPage: true })
 
   await page.goto(`${TRADE}/product/create?sellerId=2112531950528262146`, {
-    waitUntil: 'networkidle2',
+    waitUntil: 'networkidle',
     timeout: 60000,
   })
   await page.waitForFunction(() => window.location.pathname === '/member/seller'
@@ -79,7 +95,7 @@ try {
     '旧发布商品地址兼容跳转并保留卖家主体')
 
   await page.goto(`${TRADE}/product/edit/7011?sellerId=2112531950528262146`, {
-    waitUntil: 'networkidle2',
+    waitUntil: 'networkidle',
     timeout: 60000,
   })
   await page.waitForFunction(() => window.location.pathname === '/member/seller'

@@ -2,6 +2,8 @@ package com.agri.admin.controller;
 
 import com.agri.admin.dto.CodeRuleDTO;
 import com.agri.admin.dto.DataFormatDTO;
+import com.agri.admin.dto.MetadataDTO;
+import com.agri.admin.dto.StandardChangeDTO;
 import com.agri.admin.service.IAdminDataStandardService;
 import com.agri.admin.vo.CodeRuleVO;
 import com.agri.admin.vo.DataFormatVO;
@@ -9,6 +11,7 @@ import com.agri.common.entity.ApiResponse;
 import com.agri.common.entity.PageResult;
 import com.agri.masterdata.dto.DictItemSaveDTO;
 import com.agri.masterdata.dto.DictSaveDTO;
+import com.agri.masterdata.entity.MetadataCatalog;
 import com.agri.masterdata.vo.DictVO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -122,7 +125,9 @@ public class AdminDataStandardController {
     @Operation(summary = "测试编码规则")
     @PostMapping("/code-rule/{id}/test")
     public ApiResponse<String> testCodeRule(@PathVariable Long id) {
-        return ApiResponse.success(adminDataStandardService.testCodeRule(id));
+        // 必须用 (message, data) 重载：ApiResponse.success(String) 会把样例当成 message，
+        // 响应体变成 {code:200, message:"ORG000001", data:null}，前端读 data 只能读到 null。
+        return ApiResponse.success("试算成功", adminDataStandardService.testCodeRule(id));
     }
 
     @Operation(summary = "获取数据格式标准列表")
@@ -138,6 +143,26 @@ public class AdminDataStandardController {
         return ApiResponse.success();
     }
 
+    @Operation(summary = "修改数据格式标准")
+    @PutMapping("/format/{id}")
+    public ApiResponse<Void> updateDataFormat(@PathVariable Long id, @RequestBody DataFormatDTO dto) {
+        adminDataStandardService.updateDataFormat(id, dto);
+        return ApiResponse.success();
+    }
+
+    @Operation(summary = "发布 / 停用 / 退回草稿")
+    @PutMapping("/format/{id}/status")
+    public ApiResponse<Void> updateDataFormatStatus(@PathVariable Long id, @RequestParam String status) {
+        adminDataStandardService.updateDataFormatStatus(id, status);
+        return ApiResponse.success();
+    }
+
+    @Operation(summary = "提交标准变更申请")
+    @PostMapping("/change-approve")
+    public ApiResponse<Long> createStandardChange(@RequestBody StandardChangeDTO dto) {
+        return ApiResponse.success(adminDataStandardService.createStandardChange(dto));
+    }
+
     @Operation(summary = "获取数据变更审批列表")
     @GetMapping("/change-approve")
     public ApiResponse<PageResult<DataFormatVO>> getChangeApproveList(
@@ -151,6 +176,28 @@ public class AdminDataStandardController {
     @PutMapping("/change-approve/{id}")
     public ApiResponse<Void> approveChange(@PathVariable Long id, @RequestParam String status, @RequestParam(required = false) String remark) {
         adminDataStandardService.approveChange(id, status, remark);
+        return ApiResponse.success();
+    }
+
+    @Operation(summary = "元数据目录列表")
+    @GetMapping("/metadata")
+    public ApiResponse<List<MetadataCatalog>> getMetadataList(
+            @RequestParam(required = false) String metadataType,
+            @RequestParam(required = false) String domain,
+            @RequestParam(required = false) String keyword) {
+        return ApiResponse.success(adminDataStandardService.getMetadataList(metadataType, domain, keyword));
+    }
+
+    @Operation(summary = "新增元数据")
+    @PostMapping("/metadata")
+    public ApiResponse<Long> createMetadata(@RequestBody MetadataDTO dto) {
+        return ApiResponse.success(adminDataStandardService.createMetadata(dto));
+    }
+
+    @Operation(summary = "修改元数据")
+    @PutMapping("/metadata/{id}")
+    public ApiResponse<Void> updateMetadata(@PathVariable Long id, @RequestBody MetadataDTO dto) {
+        adminDataStandardService.updateMetadata(id, dto);
         return ApiResponse.success();
     }
 }

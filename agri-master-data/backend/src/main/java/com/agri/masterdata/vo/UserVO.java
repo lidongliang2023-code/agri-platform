@@ -1,6 +1,8 @@
 package com.agri.masterdata.vo;
 
 import com.agri.masterdata.entity.User;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -16,6 +18,7 @@ import java.util.List;
 @AllArgsConstructor
 public class UserVO {
 
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long id;
 
     private String userCode;
@@ -85,6 +88,26 @@ public class UserVO {
     private LocalDateTime updateTime;
 
     private String remark;
+
+    /** 统一用户当前绑定的经营主体（来自 platform_user_merchant）。 */
+    private List<Membership> memberships;
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class Membership {
+        @JsonSerialize(using = ToStringSerializer.class)
+        private Long bindingId;
+
+        @JsonSerialize(using = ToStringSerializer.class)
+        private Long subjectId;
+        private String subjectName;
+        private String memberType;
+        private String roleInMerchant;
+        private String verifyStatus;
+        private Integer status;
+    }
 
     public static UserVO fromEntity(User user) {
         if (user == null) {

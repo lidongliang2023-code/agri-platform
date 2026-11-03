@@ -12,23 +12,25 @@
  * - 每个节点展示：时间、操作人、记录详情、存证状态
  * - 支持按批次号 / 溯源码查询（/trace/full-chain/{batchId}/nodes）
  *
- * 【数据源实测 2026-10-10 修订】上一版把存证状态降级成「未接入」是**错的**，已纠正。
+ * 【存证口径 2026-11-01 再次修订】
  *
- * 事实澄清：上链状态根本不由 growth / inputs/usages / inspections / full-chain / harvests
- * 这五个列表端点提供（它们确实没有 onChain 字段，但这不构成「能力不存在」），
- * 而是由**独立的存证域** `GET /api/v1/production/blockchain/by-biz` 提供。
- * 该端点已连服实测：表 prod_blockchain_record 有真数据，端点能查到带 txHash / blockHeight
- * 的记录，且能区分 SUCCESS / PENDING / 无记录三态。
+ * 存证表只有一张：{@code agri_prod_chain_record}。它有两个读入口，别误当成两套数据：
+ *   · {@code GET /blockchain/by-biz} —— 按业务键单查（本页给采收 / 质检节点用）；
+ *   · {@code GET /trace/full-chain/{batchId}/nodes} —— 后端聚合链路时**已把每个节点的
+ *     attested / onChain / chainStatus / txHash / blockNumber / failedReason 一并给出**，
+ *     本页的溯源码节点直接用这份（它是"这个码自己的"存证，而不是查询框里那一个码的）。
  *
- * 因此本页改为**查存证域取真值**，按节点类型分别关联：
- *   TRACE      → bizNo = 溯源码（activeCode）
- *   INSPECTION → bizNo = 质检单号（inspectionNo）
- *   HARVEST    → bizNo = 批次号（batchNo，⚠️ 不是 batchId，见 api/blockchain.ts 注释）
- * 种植 / 投入品 / 入库 / 流通四类节点在存证域内没有对应业务类型（只有 TRACE/INSPECTION/
- * HARVEST），因此它们的真实结论是「无存证记录」，不是「未接入」。
+ * 后端在 2026-11-01 之前给的是代理判断：采收节点 onChain = "批次有没有码"、其余节点一律 false、
+ * txHash 全空 —— 于是同一批次在属主页与监管核验页能得出两个结论，现在两边共用一处判定。
  *
- * ⚠️ 「未接入」这个措辞已从本页删除：它把一个有数据、能查到的能力说成没接入，
- * 是与「把 undefined 渲染成待上链」方向相反、性质相同的假陈述。
+ * 三态 / 四态口径（**不是**「未接入」，那措辞已废弃）：
+ *   已上链 = 存证 SUCCESS；待上链 = 已提交未出块（PENDING）；存证失败 = FAILED（带原因）；
+ *   无存证记录 = 查过存证表、该业务没有记录。
+ * 存证表覆盖四类业务：HARVEST（批次号）/ QUALITY（质检单号）/ TRACE（溯源码）/ INPUT（使用记录 ID）。
+ * 种植、入库、出库没有存证环节，它们的真实结论是「无存证记录」（不是"能力未接入"）。
+ *
+ * ⚠️ 本部署是**模拟链**（chainType=SIMULATED、交易哈希带 SIMU 前缀）：这里的"已上链"只表示
+ *    存证表里有一条 SUCCESS 记录，不是公链完整性校验，页面必须点明。
  */
 import { useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -74,6 +76,7 @@ import type {
   InputUsage,
   InventoryFlow,
   RawInspection,
+  TraceFullChainNode,
 } from '@/types'
 
 /** 全链路环节 */
@@ -120,16 +123,22 @@ interface ChainNode {
   /** 记录详情 */
   detail?: string
   /**
-   * 是否已上链（由存证域 `GET /blockchain/by-biz` 的真实查询结果推导，不是本地估算）。
-   * - true  = 存证记录 status === SUCCESS（已出块，带 txHash / blockHeight）
-   * - false = 存证记录 status === PENDING（已提交未出块，txHash 为 null）
-   * - null  = **查过存证域、没有该业务单号的存证记录**（区别于「未接入」：能力是通的，只是没记录）
+   * 是否已上链（按存证表 `agri_prod_chain_record` 的真实记录推导，不是本地估算）。
+   * - true  = 存证记录 chainStatus === SUCCESS（已出块，带 txHash / blockNumber）
+   * - false = 有记录但没出块：PENDING 待上链，或 FAILED 已失败（看 chainStatus / failReason）
+   * - null  = **查过存证表、没有该业务单号的存证记录**（区别于「未接入」：能力是通的，只是没记录）
    */
   onChain: boolean | null
-  /** 上链交易哈希（SUCCESS 记录才有值，PENDING 为 null） */
+  /** 存证状态原值：PENDING / SUCCESS / FAILED（null 时没有） */
+  chainStatus?: string
+  /** 上链交易哈希（SUCCESS 记录才有值，PENDING / FAILED 为 null） */
   txHash?: string
   /** 区块高度（SUCCESS 记录才有值；后端序列化为字符串，展示前已 String() 归一） */
   blockHeight?: string
+  /** 上链失败原因（FAILED 才有） */
+  failReason?: string
+  /** 链类型：本部署为 SIMULATED（模拟链），出参带了就透出来 */
+  chainType?: string
 }
 
 /**
@@ -139,7 +148,14 @@ interface ChainNode {
  * 而不是「系统没接这个能力」。两者对运营的动作指引完全相反。
  */
 const NO_ANCHOR_TIP =
-  '已查询存证域（/blockchain/by-biz），该业务单号没有链上存证记录。存证域仅覆盖 TRACE / INSPECTION / HARVEST 三类业务'
+  '已查询存证表（agri_prod_chain_record），该业务单号没有链上存证记录。存证表覆盖 HARVEST / QUALITY(INSPECTION) / TRACE / INPUT 四类业务；种植、入库、出库没有存证环节'
+
+/** FAILED 与其他未出块状态的措辞不同：失败是有原因的，不能都写成「待上链」 */
+function chainLabel(item: Pick<ChainNode, 'onChain' | 'chainStatus'>): string {
+  if (item.onChain === null) return '无存证记录'
+  if (item.onChain === true) return '已上链'
+  return item.chainStatus === 'FAILED' ? '存证失败' : '待上链'
+}
 
 /** 检测类型展示文案 */
 const INSPECT_TYPE_TEXT: Record<string, string> = {
@@ -168,15 +184,18 @@ function escapeCsv(value: unknown): string {
 }
 
 /**
- * 由存证域记录推导节点的上链三态。
+ * 由存证记录（/blockchain/by-biz 的形状）推导节点的上链状态。
  *
- * @param record 存证记录；undefined 表示「查过存证域但没有该单号的记录」
- * @returns onChain（true 已上链 / false 待上链 / null 无存证记录）+ 链上明细
+ * @param record 存证记录；undefined 表示「查过存证表但没有该单号的记录」
+ * @returns onChain（true 已上链 / false 有记录但未出块 / null 无存证记录）+ 链上明细
  */
 function resolveAnchor(record: BlockchainBizRecord | undefined): {
   onChain: boolean | null
+  chainStatus?: string
   txHash?: string
   blockHeight?: string
+  failReason?: string
+  chainType?: string
 } {
   if (!record) {
     return { onChain: null }
@@ -184,9 +203,31 @@ function resolveAnchor(record: BlockchainBizRecord | undefined): {
   const txHash = record.txHash ?? undefined
   return {
     onChain: record.status === 'SUCCESS',
+    chainStatus: record.status ?? undefined,
     txHash,
     // 后端把 blockHeight 序列化成字符串（"12884201"），统一转字符串避免类型泄漏
     blockHeight: record.blockHeight == null ? undefined : String(record.blockHeight),
+    failReason: record.failReason ?? undefined,
+    chainType: record.chainType ?? undefined,
+  }
+}
+
+/**
+ * 后端 /trace/full-chain/{batchId}/nodes 的节点自 2026-11-01 起已带链上凭证
+ * （与监管核验视图同一处判定），这里只做形状转换，**不再由前端二次关联存证域** ——
+ * 同一个事实在两处判定，就会出现"属主页说已上链、核验页说没上链"。
+ */
+function nodeAnchor(node: TraceFullChainNode): ReturnType<typeof resolveAnchor> {
+  if (node.attested !== true) {
+    return { onChain: null }
+  }
+  return {
+    onChain: node.onChain === true,
+    chainStatus: node.chainStatus ?? undefined,
+    txHash: node.txHash ?? undefined,
+    blockHeight: node.blockNumber == null ? undefined : String(node.blockNumber),
+    failReason: node.failedReason ?? undefined,
+    chainType: node.chainType ?? undefined,
   }
 }
 
@@ -279,14 +320,6 @@ export default function FullChainTrace(): JSX.Element {
    */
   const harvestBatchNo = batchQuery.data?.batchNo ?? ''
 
-  /** 存证域：TRACE 类存证（bizNo = 溯源码） */
-  const traceAnchorQuery = useQuery({
-    queryKey: ['blockchain-by-biz', 'TRACE', activeCode],
-    enabled: Boolean(activeCode),
-    retry: false,
-    queryFn: () => listBlockchainByBiz({ bizType: 'TRACE', bizNo: activeCode }),
-  })
-
   /** 存证域：HARVEST 类存证（bizNo = 批次号） */
   const harvestAnchorQuery = useQuery({
     queryKey: ['blockchain-by-biz', 'HARVEST', harvestBatchNo],
@@ -325,11 +358,10 @@ export default function FullChainTrace(): JSX.Element {
         }
       })
     }
-    collect(traceAnchorQuery.data)
     collect(harvestAnchorQuery.data)
     inspectionAnchorQueries.forEach((query) => collect(query.data))
     return map
-  }, [traceAnchorQuery.data, harvestAnchorQuery.data, inspectionAnchorQueries])
+  }, [harvestAnchorQuery.data, inspectionAnchorQueries])
 
   /** 与地块匹配的生长记录（后端未支持 plotId 过滤，前端二次过滤） */
   const growthRecords = useMemo<GrowthRecord[]>(() => {
@@ -375,7 +407,7 @@ export default function FullChainTrace(): JSX.Element {
         detail: [firstGrowth.growthStage, firstGrowth.pestInfo, firstGrowth.remark]
           .filter(Boolean)
           .join(' · '),
-        // 存证域只有 TRACE / INSPECTION / HARVEST 三类，种植记录无对应业务类型 → 无存证记录
+        // 种植记录在存证表里没有对应业务类型 → 无存证记录
         onChain: null,
       })
     }
@@ -390,7 +422,7 @@ export default function FullChainTrace(): JSX.Element {
         timeText: formatTime(usage.usedAt),
         operator: usage.operatorName ?? usage.operatorId,
         detail: `${usage.quantity ?? 0}${usage.unit ?? ''} · ${usage.usageMethod ?? '常规施用'}`,
-        // 存证域无 INPUT 业务类型 → 无存证记录
+        // 投入品使用有存证业务类型（INPUT，业务键=使用记录 ID）；没记录就是"无存证记录"
         onChain: null,
       })
     })
@@ -480,20 +512,21 @@ export default function FullChainTrace(): JSX.Element {
       })
     }
 
-    // 溯源码节点（后端全链路接口返回）
-    ;(nodesQuery.data ?? []).forEach((node, index) => {
-      nodes.push({
-        key: `trace-${node.refId ?? index}`,
-        stage: 'trace',
-        title: `${node.nodeName ?? '溯源码'} - ${node.refNo ?? '—'}`,
-        time: node.occurredAt,
-        timeText: formatTime(node.occurredAt),
-        operator: node.operatorName,
-        detail: node.description ?? `节点类型 ${node.nodeType}`,
-        // TRACE 类存证，bizNo = 溯源码
-        ...resolveAnchor(anchorMap.get(activeCode)),
+    // 溯源码节点（后端全链路接口返回，链上凭证由后端按存证表判定，前端不再二次关联）
+    ;(nodesQuery.data ?? [])
+      .filter((node) => node.nodeType === 'trace')
+      .forEach((node, index) => {
+        nodes.push({
+          key: `trace-${node.refId ?? index}`,
+          stage: 'trace',
+          title: `${node.nodeName ?? '溯源码'} - ${node.refNo ?? '—'}`,
+          time: node.occurredAt,
+          timeText: formatTime(node.occurredAt),
+          operator: node.operatorName,
+          detail: node.description ?? `节点类型 ${node.nodeType}`,
+          ...nodeAnchor(node),
+        })
       })
-    })
 
     // 有时间的按时间升序，待操作节点保持在末尾
     return nodes.sort((a, b) => {
@@ -515,22 +548,23 @@ export default function FullChainTrace(): JSX.Element {
   ])
 
   /**
-   * 存证统计（全部来自存证域真实查询结果，不做本地估算）。
+   * 存证统计（全部来自存证表真实记录：节点自带的链上凭证 + by-biz 查询，不做本地估算）。
    *
-   * `onChain` 在这里是**真实条数**，0 就是 0 —— 与旧版不同，旧版的 null 表示「后端没这个字段」，
-   * 现在字段有了、查询也做了，所以 0 是一个合法且真实的结论，不需要再降级成「—」。
+   * `onChain` 是**真实条数**，0 就是 0 —— 0 是一个合法且真实的结论，不需要降级成「—」。
+   * `failed` 单独数出来：FAILED 与 PENDING 都是"没出块"，但一个是等出块、一个是要人工重试，
+   * 混在一个数字里就等于把失败说没了。
    */
   const chainStats = useMemo(() => {
     const total = chainNodes.length
     const anchored = chainNodes.filter((item) => item.onChain !== null).length
     const onChain = chainNodes.filter((item) => item.onChain === true).length
-    const pending = chainNodes.filter((item) => item.onChain === false).length
-    return { total, anchored, onChain, pending }
+    const failed = chainNodes.filter((item) => item.onChain === false && item.chainStatus === 'FAILED').length
+    const pending = chainNodes.filter((item) => item.onChain === false && item.chainStatus !== 'FAILED').length
+    return { total, anchored, onChain, pending, failed }
   }, [chainNodes])
 
   /** 存证查询是否仍在进行（进行中不渲染结论，避免把「还没查到」显示成「无记录」） */
   const anchorLoading =
-    traceAnchorQuery.isFetching ||
     harvestAnchorQuery.isFetching ||
     inspectionAnchorQueries.some((query) => query.isFetching)
 
@@ -566,7 +600,7 @@ export default function FullChainTrace(): JSX.Element {
       message.warning('暂无可导出的链路记录')
       return
     }
-    const header = ['环节', '节点', '时间', '操作人', '记录详情', '存证状态']
+    const header = ['环节', '节点', '时间', '操作人', '记录详情', '存证状态', '交易哈希', '失败原因']
     const body = chainNodes.map((item) =>
       [
         STAGE_META[item.stage].title,
@@ -574,7 +608,9 @@ export default function FullChainTrace(): JSX.Element {
         item.timeText,
         item.operator ?? '—',
         item.detail ?? '—',
-        item.onChain === null ? '无存证记录' : item.onChain ? '已上链' : '待上链',
+        chainLabel(item),
+        item.txHash ?? '',
+        item.failReason ?? '',
       ]
         .map(escapeCsv)
         .join(','),
@@ -633,42 +669,55 @@ export default function FullChainTrace(): JSX.Element {
           banner
           type="info"
           showIcon
-          message="存证状态口径说明：上链状态取自存证域 /blockchain/by-biz，按「溯源码(TRACE) / 质检单号(INSPECTION) / 批次号(HARVEST)」关联真实存证记录。已上链=存证 SUCCESS、待上链=存证 PENDING、无存证记录=查过存证域但无匹配记录。种植 / 投入品 / 入库 / 流通四类业务不在存证域覆盖范围内，显示为无存证记录"
+          message="存证状态口径说明：上链状态取自存证表 agri_prod_chain_record，按「批次号(HARVEST) / 质检单号(QUALITY) / 溯源码(TRACE) / 使用记录 ID(INPUT)」关联；本部署为模拟链（chainType=SIMULATED），已上链只代表存证表里有一条 SUCCESS 记录，不是公链完整性校验。已上链=SUCCESS、待上链=PENDING、存证失败=FAILED（带原因）、无存证记录=查过但没有匹配记录。种植 / 入库 / 出库没有存证环节，显示为无存证记录"
         />
         <Row gutter={16}>
-          <Col span={8}>
+          <Col span={6}>
             <Card>
               <Statistic title="全链路节点" value={chainStats.total} suffix="条" />
             </Card>
           </Col>
-          <Col span={8}>
+          <Col span={6}>
             <Card>
               <MetricStatistic
                 title="已上链"
                 value={chainStats.anchored === 0 ? null : chainStats.onChain}
                 suffix="条"
-                missingTip="本批次下没有任何节点命中存证域记录（存证域仅覆盖 TRACE / INSPECTION / HARVEST 三类业务），因此无法统计已上链条数"
+                missingTip="本批次下没有任何节点命中存证记录（存证表覆盖 HARVEST / QUALITY / TRACE / INPUT 四类业务），因此无法统计已上链条数"
               />
             </Card>
           </Col>
-          <Col span={8}>
+          <Col span={6}>
+            <Card>
+              <Statistic
+                title="未出块 / 失败"
+                value={`${chainStats.pending} / ${chainStats.failed}`}
+                valueStyle={{ color: chainStats.failed > 0 ? '#ff4d4f' : '#fa8c16' }}
+              />
+            </Card>
+          </Col>
+          <Col span={6}>
             <Card>
               <Statistic
                 title="验证状态"
                 value={
                   chainStats.anchored === 0
                     ? '无存证记录'
-                    : chainStats.onChain === chainStats.anchored
-                      ? '通过'
-                      : `部分上链 ${chainStats.onChain}/${chainStats.anchored}`
+                    : chainStats.failed > 0
+                      ? `存证失败 ${chainStats.failed} 条`
+                      : chainStats.onChain === chainStats.anchored
+                        ? '通过'
+                        : `部分上链 ${chainStats.onChain}/${chainStats.anchored}`
                 }
                 valueStyle={{
                   color:
                     chainStats.anchored === 0
                       ? '#bfbfbf'
-                      : chainStats.onChain === chainStats.anchored
-                        ? '#52c41a'
-                        : '#fa8c16',
+                      : chainStats.failed > 0
+                        ? '#ff4d4f'
+                        : chainStats.onChain === chainStats.anchored
+                          ? '#52c41a'
+                          : '#fa8c16',
                 }}
               />
             </Card>
@@ -697,7 +746,13 @@ export default function FullChainTrace(): JSX.Element {
                           <Tag color="default">无存证记录</Tag>
                         </Tooltip>
                       ) : item.onChain ? (
-                        <Tag color="green">🔗 已上链</Tag>
+                        <Tooltip title={item.chainType === 'SIMULATED' ? '模拟链存证（本部署不连真链）' : undefined}>
+                          <Tag color="green">🔗 已上链</Tag>
+                        </Tooltip>
+                      ) : item.chainStatus === 'FAILED' ? (
+                        <Tooltip title={item.failReason || '存证记录状态 FAILED，未给出原因'}>
+                          <Tag color="red">⚠ 存证失败</Tag>
+                        </Tooltip>
                       ) : (
                         <Tag>⏳ 待上链</Tag>
                       )}
@@ -708,6 +763,9 @@ export default function FullChainTrace(): JSX.Element {
                         {item.detail ? ` · ${item.detail}` : ''}
                         {item.txHash ? ` · 交易哈希 ${item.txHash}` : ''}
                         {item.blockHeight ? ` · 区块高度 ${item.blockHeight}` : ''}
+                        {item.chainStatus === 'FAILED' && !item.txHash
+                          ? ` · ${item.failReason || '存证失败，未生成交易哈希'}`
+                          : ''}
                       </Typography.Text>
                     </div>
                   </div>

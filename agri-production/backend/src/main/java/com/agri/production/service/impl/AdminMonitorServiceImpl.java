@@ -11,6 +11,9 @@ import com.agri.production.mapper.AlertRecordMapper;
 import com.agri.production.mapper.AlertRuleMapper;
 import com.agri.production.mapper.FarmMapper;
 import com.agri.production.mapper.IoTDeviceMapper;
+import com.agri.production.service.TenantContextService;
+import com.agri.production.integration.IotDeviceClient;
+import com.agri.production.service.IotDeviceStatsService;
 import com.agri.production.mapper.PlotMapper;
 import com.agri.production.mapper.TaskMapper;
 import com.agri.production.service.IAdminMonitorService;
@@ -45,6 +48,8 @@ public class AdminMonitorServiceImpl implements IAdminMonitorService {
             java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private final IoTDeviceMapper iotDeviceMapper;
+    private final IotDeviceStatsService iotDeviceStats;
+    private final IotDeviceClient iotDeviceClient;
     private final AlertRecordMapper alertRecordMapper;
     private final AlertRuleMapper alertRuleMapper;
     private final TaskMapper taskMapper;
@@ -52,12 +57,16 @@ public class AdminMonitorServiceImpl implements IAdminMonitorService {
     private final PlotMapper plotMapper;
 
     public AdminMonitorServiceImpl(IoTDeviceMapper iotDeviceMapper,
+                                   IotDeviceStatsService iotDeviceStats,
+                                   IotDeviceClient iotDeviceClient,
                                    AlertRecordMapper alertRecordMapper,
                                    AlertRuleMapper alertRuleMapper,
                                    TaskMapper taskMapper,
                                    FarmMapper farmMapper,
                                    PlotMapper plotMapper) {
         this.iotDeviceMapper = iotDeviceMapper;
+        this.iotDeviceStats = iotDeviceStats;
+        this.iotDeviceClient = iotDeviceClient;
         this.alertRecordMapper = alertRecordMapper;
         this.alertRuleMapper = alertRuleMapper;
         this.taskMapper = taskMapper;
@@ -82,29 +91,65 @@ public class AdminMonitorServiceImpl implements IAdminMonitorService {
         return result;
     }
 
+    /**
+     * 设备计数（口径统一到物联网系统的设备台账）。
+     *
+     * <p>原先直接 count 生产端的 {@code agri_prod_iot_device} —— 那张表在台账收敛后
+     * 已经不再更新，监控大盘会永远停在 13 台，而设备列表页显示 29 台。</p>
+     */
     private long countDevices(boolean onlineOnly) {
-        LambdaQueryWrapper<IoTDevice> w = new LambdaQueryWrapper<IoTDevice>().eq(IoTDevice::getIsEnabled, 1);
-        if (onlineOnly) {
-            w.eq(IoTDevice::getStatus, DEVICE_ONLINE);
-        }
-        Long hits = iotDeviceMapper.selectCount(w);
-        return hits == null ? 0L : hits;
+        String tenantId = TenantContextService.currentTenantId();
+        return onlineOnly
+                ? iotDeviceStats.onlineCount(tenantId, null)
+                : iotDeviceStats.totalCount(tenantId, null);
     }
 
+    /**
+     * 监控用的设备列表。
+     *
+     * <p>直接读物联网系统的设备台账：这样监控里的设备与「设备列表」页是同一批，
+     * 不会再出现"监控里 13 台、列表里 29 台"。</p>
+     */
     @Override
     public List<AdminMonitorDeviceVO> devices(boolean onlineOnly) {
-        LambdaQueryWrapper<IoTDevice> w = new LambdaQueryWrapper<IoTDevice>().eq(IoTDevice::getIsEnabled, 1);
+        String authorization = TenantContextService.currentAuthorization();
+        Map<String, Object> query = new java.util.LinkedHashMap<>();
         if (onlineOnly) {
-            w.eq(IoTDevice::getStatus, DEVICE_ONLINE);
+            query.put("status", DEVICE_ONLINE);
         }
-        w.orderByDesc(IoTDevice::getLastOnlineTime).orderByAsc(IoTDevice::getId);
-        List<IoTDevice> devices = iotDeviceMapper.selectList(w);
-        Map<Long, String> farmNames = farmNames(devices.stream().map(IoTDevice::getFarmId).toList());
+        List<Map<String, Object>> raw = iotDeviceClient.listDevices(authorization, query);
+        if (raw.isEmpty()) {
+            return List.of();
+        }
+        List<Long> farmIds = raw.stream()
+                .map(item -> longOrNull(item.get("farmId")))
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+        Map<Long, String> farmNames = farmNames(farmIds);
         List<AdminMonitorDeviceVO> rows = new ArrayList<>();
-        for (IoTDevice device : devices) {
-            rows.add(AdminMonitorDeviceVO.of(device, farmNames.get(device.getFarmId())));
+        for (Map<String, Object> item : raw) {
+            rows.add(AdminMonitorDeviceVO.ofIot(item, farmNames.get(longOrNull(item.get("farmId")))));
         }
+        // 故障/离线排前面，与物联网端设备列表的排序口径保持一致
+        rows.sort(java.util.Comparator
+                .comparingInt((AdminMonitorDeviceVO vo) -> vo.getOnlineStatus() == null ? 2 : vo.getOnlineStatus())
+                .thenComparing(vo -> vo.getDeviceId() == null ? "" : vo.getDeviceId()));
         return rows;
+    }
+
+    private static Long longOrNull(Object value) {
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        if (value == null) {
+            return null;
+        }
+        try {
+            return Long.parseLong(String.valueOf(value).trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     /** 一次把用到的农场名查出来，避免逐行查库 */

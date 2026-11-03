@@ -18,6 +18,7 @@ import {
   CheckCircleOutlined,
   DeleteOutlined,
   InfoCircleOutlined,
+  MinusCircleOutlined,
   PictureOutlined,
   PlusOutlined,
   ShopOutlined,
@@ -45,6 +46,27 @@ interface CategoryRow {
   level?: number
 }
 
+interface SkuFormValue {
+  id?: number | null
+  skuCode?: string
+  skuName?: string
+  barcode?: string | null
+  unit?: string
+  price?: number
+  stockQuantity?: number
+  minOrderQuantity?: number
+  status?: number
+}
+
+const emptySku = (): SkuFormValue => ({
+  skuCode: '',
+  skuName: '',
+  barcode: '',
+  unit: 'kg',
+  minOrderQuantity: 1,
+  status: 1,
+})
+
 /**
  * 卖家商品新增/编辑。
  *
@@ -64,7 +86,15 @@ export default function ProductCreate({ embedded = false }: { embedded?: boolean
   const [uploading, setUploading] = useState(false)
   const isEdit = Boolean(id)
   const requestedSellerId = params.get('sellerId') || undefined
-  const returnPath = '/member/seller?tab=goods'
+  // 从信息资讯「发布供应」跳过来时会带 returnUrl：发布完成或取消后回到原页面。
+  // 两个子系统是独立域名，用 navigate 处理不了绝对地址，必须区分开。
+  const returnPath = params.get('returnUrl') || '/member/seller?tab=goods'
+  const returnExternal = /^https?:\/\//i.test(returnPath)
+  const returnLabel = returnExternal ? '返回信息资讯' : embedded ? '返回商品管理' : '返回卖家中心'
+  const leave = (): void => {
+    if (returnExternal) window.location.assign(returnPath)
+    else navigate(returnPath)
+  }
 
   useEffect(() => {
     getCategoryList()
@@ -76,7 +106,13 @@ export default function ProductCreate({ embedded = false }: { embedded?: boolean
 
   useEffect(() => {
     if (!id) {
-      form.setFieldsValue({ status: 1, priceType: 'fixed', unit: 'kg', minOrderQuantity: 1 })
+      form.setFieldsValue({
+        status: 1,
+        priceType: 'fixed',
+        unit: 'kg',
+        minOrderQuantity: 1,
+        skus: [emptySku()],
+      })
       return
     }
     let cancelled = false
@@ -90,8 +126,21 @@ export default function ProductCreate({ embedded = false }: { embedded?: boolean
         }
         const item = body.data
         setImages(item.images ?? [])
+        const skus = item.skus?.length
+          ? item.skus
+          : [{
+            skuCode: `${item.productCode || 'DEFAULT'}-DEFAULT`,
+            skuName: item.specSize || item.specLevel || item.qualityLevel || '默认规格',
+            barcode: item.barcode,
+            unit: item.unit,
+            price: item.price ?? item.priceMin ?? undefined,
+            stockQuantity: item.stockQuantity ?? 0,
+            minOrderQuantity: item.minOrderQuantity ?? 1,
+            status: 1,
+          }]
         form.setFieldsValue({
           ...item,
+          skus,
           certificationsText: (item.certifications ?? []).join(','),
         })
       })
@@ -127,9 +176,26 @@ export default function ProductCreate({ embedded = false }: { embedded?: boolean
       message.warning('请至少上传一张商品图片')
       return
     }
+    const skus = Array.isArray(values.skus) ? values.skus as SkuFormValue[] : []
+    const sellableSkus = skus.filter((item) => item.status !== 0)
+    if (skus.length === 0 || sellableSkus.length === 0) {
+      message.warning('请至少维护一个启用SKU')
+      return
+    }
+    const prices = sellableSkus.map((item) => Number(item.price)).filter((value) => value > 0)
+    const stocks = sellableSkus.map((item) => Number(item.stockQuantity ?? 0))
+    const minOrders = sellableSkus.map((item) => Number(item.minOrderQuantity ?? 1))
+    const primarySku = sellableSkus[0]
     const category = categories.find((item) => Number(item.id) === Number(values.categoryId))
     const payload = {
       ...values,
+      skus,
+      price: Math.min(...prices),
+      priceMin: Math.min(...prices),
+      priceMax: Math.max(...prices),
+      stockQuantity: stocks.reduce((total, value) => total + value, 0),
+      unit: primarySku.unit,
+      minOrderQuantity: Math.min(...minOrders),
       sellerId: requestedSellerId,
       categoryName: category?.categoryName,
       certifications: String(values.certificationsText ?? '')
@@ -148,7 +214,7 @@ export default function ProductCreate({ embedded = false }: { embedded?: boolean
         return
       }
       message.success(isEdit ? '商品已更新，内容与主数据管理同步' : '商品已提交，主数据端可立即查看')
-      navigate(returnPath, { replace: true })
+      leave()
     } catch (error) {
       message.error(error instanceof Error ? error.message : '保存商品失败')
     } finally {
@@ -165,8 +231,8 @@ export default function ProductCreate({ embedded = false }: { embedded?: boolean
       <section className="seller-product-hero">
         <span className="seller-product-hero-icon"><ShopOutlined /></span>
         <div><small>{isEdit ? 'EDIT PRODUCT' : 'PUBLISH PRODUCT'}</small><h2>{isEdit ? '编辑商品' : '发布新商品'}</h2><p>维护完整商品资料、价格库存与产地信息，审核后同步至官网和交易大厅。</p></div>
-        <button type="button" className="mc-btn ghost" onClick={() => navigate(returnPath)}>
-          <ArrowLeftOutlined /> {embedded ? '返回商品管理' : '返回卖家中心'}
+        <button type="button" className="mc-btn ghost" onClick={leave}>
+          <ArrowLeftOutlined /> {returnLabel}
         </button>
       </section>
 
@@ -218,17 +284,89 @@ export default function ProductCreate({ embedded = false }: { embedded?: boolean
               </div>
             </Panel>
 
-            <Panel title="价格与库存" extra={<span className="seller-product-note">平台按此价格展示</span>}>
-              <div className="seller-product-section">
-                <Row gutter={[16, 0]}>
-                  <Col xs={12} md={12} lg={6}><Form.Item name="price" label="销售单价" rules={[{ required: true, message: '请填写销售单价' }]}><InputNumber min={0.01} precision={2} style={{ width: '100%' }} /></Form.Item></Col>
-                  <Col xs={12} md={12} lg={6}><Form.Item name="priceMin" label="参考最低价"><InputNumber min={0} precision={2} style={{ width: '100%' }} /></Form.Item></Col>
-                  <Col xs={12} md={12} lg={6}><Form.Item name="priceMax" label="参考最高价"><InputNumber min={0} precision={2} style={{ width: '100%' }} /></Form.Item></Col>
-                  <Col xs={12} md={12} lg={6}><Form.Item name="priceType" label="价格类型"><Select options={[{ value: 'fixed', label: '固定价' }, { value: 'negotiable', label: '可议价' }]} /></Form.Item></Col>
-                  <Col xs={12} md={12} lg={8}><Form.Item name="stockQuantity" label="库存数量" rules={[{ required: true, message: '请填写库存' }]}><InputNumber min={0} precision={3} style={{ width: '100%' }} /></Form.Item></Col>
-                  <Col xs={12} md={12} lg={8}><Form.Item name="unit" label="计量单位" rules={[{ required: true, message: '请填写单位' }]}><Input placeholder="箱 / kg / 吨" /></Form.Item></Col>
-                  <Col xs={12} md={12} lg={8}><Form.Item name="minOrderQuantity" label="起订量" rules={[{ required: true, message: '请填写起订量' }]}><InputNumber min={0.001} precision={3} style={{ width: '100%' }} /></Form.Item></Col>
-                </Row>
+            <Panel title="价格与SKU库存" extra={<span className="seller-product-note">每个规格独立计价与库存</span>}>
+              <div className="seller-product-section seller-sku-section">
+                <Form.List name="skus" rules={[{
+                  validator: async (_, value) => {
+                    if (!Array.isArray(value) || value.length === 0) {
+                      throw new Error('请至少维护一个SKU')
+                    }
+                  },
+                }]}>
+                  {(fields, { add, remove }, { errors }) => (
+                    <>
+                      <div className="seller-sku-list-head">
+                        <div>
+                          <strong>可售规格</strong>
+                          <span>同一商品可配置多个包装、等级或重量规格，采购方下单时选择具体 SKU。</span>
+                        </div>
+                        <span className="mc-tag ghost">{fields.length} 个 SKU</span>
+                      </div>
+                      {fields.map((field, index) => (
+                        <div className="seller-sku-card" key={field.key}>
+                          <div className="seller-sku-card-head">
+                            <div><span>SKU {String(index + 1).padStart(2, '0')}</span><strong>{form.getFieldValue(['skus', field.name, 'skuName']) || '待填写规格'}</strong></div>
+                            <button type="button" className="seller-sku-remove" disabled={fields.length <= 1}
+                              onClick={() => remove(field.name)}>
+                              <MinusCircleOutlined /> 删除
+                            </button>
+                          </div>
+                          <Row gutter={[14, 0]}>
+                            <Col xs={24} md={12} lg={8}>
+                              <Form.Item {...field} name={[field.name, 'skuName']} label="SKU名称 / 销售规格"
+                                rules={[{ required: true, whitespace: true, message: '请填写SKU规格' }]}>
+                                <Input placeholder="如：5kg/箱 · 一级果" maxLength={200} />
+                              </Form.Item>
+                            </Col>
+                            <Col xs={24} md={12} lg={8}>
+                              <Form.Item {...field} name={[field.name, 'skuCode']} label="SKU编码">
+                                <Input placeholder="留空自动生成" maxLength={64} />
+                              </Form.Item>
+                            </Col>
+                            <Col xs={24} md={12} lg={8}>
+                              <Form.Item {...field} name={[field.name, 'barcode']} label="SKU条码">
+                                <Input placeholder="可选" maxLength={100} />
+                              </Form.Item>
+                            </Col>
+                            <Col xs={12} md={8} lg={5}>
+                              <Form.Item {...field} name={[field.name, 'price']} label="销售单价（元）"
+                                rules={[{ required: true, message: '请填写单价' }]}>
+                                <InputNumber min={0.01} precision={2} style={{ width: '100%' }} />
+                              </Form.Item>
+                            </Col>
+                            <Col xs={12} md={8} lg={5}>
+                              <Form.Item {...field} name={[field.name, 'stockQuantity']} label="库存数量"
+                                rules={[{ required: true, message: '请填写库存' }]}>
+                                <InputNumber min={0} precision={3} style={{ width: '100%' }} />
+                              </Form.Item>
+                            </Col>
+                            <Col xs={12} md={8} lg={4}>
+                              <Form.Item {...field} name={[field.name, 'unit']} label="单位"
+                                rules={[{ required: true, whitespace: true, message: '请填写单位' }]}>
+                                <Input placeholder="箱 / kg" maxLength={20} />
+                              </Form.Item>
+                            </Col>
+                            <Col xs={12} md={12} lg={5}>
+                              <Form.Item {...field} name={[field.name, 'minOrderQuantity']} label="起订量"
+                                rules={[{ required: true, message: '请填写起订量' }]}>
+                                <InputNumber min={0.001} precision={3} style={{ width: '100%' }} />
+                              </Form.Item>
+                            </Col>
+                            <Col xs={24} md={12} lg={5}>
+                              <Form.Item {...field} name={[field.name, 'status']} label="SKU状态">
+                                <Select options={[{ value: 1, label: '启用' }, { value: 0, label: '停用' }]} />
+                              </Form.Item>
+                            </Col>
+                          </Row>
+                        </div>
+                      ))}
+                      <button type="button" className="seller-sku-add" onClick={() => add(emptySku())}>
+                        <PlusOutlined /> 添加 SKU
+                      </button>
+                      <Form.ErrorList errors={errors} />
+                    </>
+                  )}
+                </Form.List>
               </div>
             </Panel>
 
@@ -283,7 +421,7 @@ export default function ProductCreate({ embedded = false }: { embedded?: boolean
               <button type="submit" className="mc-btn" disabled={submitting || uploading}>
                 <PlusOutlined /> {submitting ? '正在保存…' : isEdit ? '保存商品' : '提交上架'}
               </button>
-              <button type="button" className="mc-btn ghost" onClick={() => navigate(returnPath)}>取消</button>
+              <button type="button" className="mc-btn ghost" onClick={leave}>取消</button>
             </div>
           </aside>
         </div>

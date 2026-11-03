@@ -4,6 +4,14 @@
  * 所属模块：IoT设备管理
  * 原型来源：用户端原型 P21 iot
  *
+ * 数据边界（2026-10-28 收敛）：
+ * - 设备本体（编码/名称/类型/协议/在线状态/所属地块）的唯一来源是物联网系统
+ *   `agri-iot` 的 `iot_device`，本页通过 `GET /iot/devices` 读取，**只读**。
+ *   设备的新增 / 编辑 / 删除一律在物联网系统完成，本页不再提供这些入口 ——
+ *   否则生产端和物联网端各写一份，两边看到的永远不是同一批设备。
+ * - 生产端只保留「绑定关系」（设备 ↔ 地块/大棚/农场 + 采集指标 + 采集频率），
+ *   入口是本页右上角的「绑定设备」，绑定到地块时会回写物联网端的 plot_id。
+ *
  * 还原要点：
  * - 标题「📡 IoT设备管理」+ `+ 绑定设备`、`批量操作 ▾` 按钮
  * - 状态卡 4 项：在线 / 离线 / 故障 / 总计
@@ -13,7 +21,7 @@
  */
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Alert,
   Button,
@@ -22,7 +30,6 @@ import {
   Dropdown,
   Empty,
   Input,
-  Popconfirm,
   Row,
   Select,
   Space,
@@ -35,7 +42,6 @@ import {
 import type { ColumnsType } from 'antd/es/table'
 import {
   ApiOutlined,
-  DeleteOutlined,
   DownloadOutlined,
   PlusOutlined,
   ReloadOutlined,
@@ -44,7 +50,6 @@ import {
 import dayjs from 'dayjs'
 import useFarmStore from '@/store/farm'
 import {
-  deleteDevice,
   deviceTypeLabel,
   heartbeatDevice,
   listBoundDevices,
@@ -135,7 +140,8 @@ function exportCsv(rows: IotDevice[]): void {
 /**
  * IoT 设备列表页面
  *
- * 业务职责：维护设备台账、监控在线状态，支持筛选、批量操作与下钻到设备详情。
+ * 业务职责：只读展示物联网系统的设备台账与在线状态，支持筛选、批量心跳/导出与下钻到设备详情。
+ * 设备本体的增删改不在这里（已收归物联网系统）。
  *
  * @returns 页面内容
  */
@@ -250,22 +256,6 @@ export default function DeviceList(): JSX.Element {
     }
   }
 
-  /** 批量删除 */
-  const deleteMutation = useMutation({
-    mutationFn: async (ids: string[]) => {
-      await Promise.all(ids.map((id) => deleteDevice(id)))
-      return ids.length
-    },
-    onSuccess: (count: number) => {
-      message.success(`已删除 ${count} 台设备`)
-      setSelectedIds([])
-      void queryClient.invalidateQueries({ queryKey: ['iot-devices'] })
-    },
-    onError: (error: Error) => {
-      message.error(error.message || '批量删除失败，请稍后重试')
-    },
-  })
-
   /** 表格列定义 */
   const columns: ColumnsType<IotDevice> = [
     { title: '设备名称', dataIndex: 'deviceName', key: 'deviceName', render: (value?: string) => value || '-' },
@@ -312,7 +302,7 @@ export default function DeviceList(): JSX.Element {
         return (
           <Space size={4}>
             <Button type="link" size="small" onClick={() => navigate(`/production/iot/${row.deviceId}`)}>
-              配置
+              详情
             </Button>
             {status === 1 ? (
               <Button
@@ -341,7 +331,7 @@ export default function DeviceList(): JSX.Element {
 
   return (
     <div style={{ padding: 24 }}>
-      <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
+      <Row justify="space-between" align="middle" style={{ marginBottom: 8 }}>
         <Typography.Title level={4} style={{ margin: 0 }}>
           📡 IoT设备管理
         </Typography.Title>
@@ -382,26 +372,10 @@ export default function DeviceList(): JSX.Element {
         </Space>
       </Row>
 
-      {selectedIds.length > 0 && (
-        <Alert
-          type="info"
-          showIcon
-          style={{ marginBottom: 16 }}
-          message={`已选择 ${selectedIds.length} 台设备`}
-          action={
-            <Popconfirm
-              title={`确认删除选中的 ${selectedIds.length} 台设备？`}
-              okText="删除"
-              cancelText="取消"
-              onConfirm={() => deleteMutation.mutate(selectedIds)}
-            >
-              <Button size="small" danger icon={<DeleteOutlined />}>
-                批量删除
-              </Button>
-            </Popconfirm>
-          }
-        />
-      )}
+      <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
+        设备台账由物联网系统统一维护（新增 / 编辑 / 删除在物联网端完成），本页只读；
+        生产端在这里为设备配置「绑定关系」（地块 / 大棚 / 农场 + 采集指标 + 采集频率）。
+      </Typography.Text>
 
       <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
         <Col xs={12} lg={6}>
@@ -488,7 +462,7 @@ export default function DeviceList(): JSX.Element {
           loading={devicesQuery.isLoading}
           dataSource={filteredDevices}
           columns={columns}
-          locale={{ emptyText: <Empty description="暂无设备，点击「绑定设备」添加" /> }}
+          locale={{ emptyText: <Empty description="暂无设备。设备台账在物联网系统中注册，注册后这里即可看到并可绑定" /> }}
           rowSelection={{
             selectedRowKeys: selectedIds,
             onChange: (keys) => setSelectedIds(keys as string[]),

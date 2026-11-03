@@ -650,13 +650,13 @@ onMounted(() => {})
   background: rgba(139, 92, 246, 0.1);
   color: #8b5cf6;
   border-radius: 12px;
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .status-badge {
   padding: 4px 10px;
   border-radius: 12px;
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
   font-weight: 500;
 }
 
@@ -780,7 +780,7 @@ onMounted(() => {})
 .audit-status {
   padding: 4px 12px;
   border-radius: 12px;
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
   font-weight: 500;
 }
 
@@ -1034,7 +1034,7 @@ onMounted(() => {})
 }
 
 .expand-icon {
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
   color: #a0aec0;
   width: 16px;
 }

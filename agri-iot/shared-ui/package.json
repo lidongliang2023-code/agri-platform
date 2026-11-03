@@ -1,0 +1,13 @@
+{
+  "name": "@agri/iot-shared-ui",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "axios": "^1.6.5",
+    "react": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.48"
+  }
+}

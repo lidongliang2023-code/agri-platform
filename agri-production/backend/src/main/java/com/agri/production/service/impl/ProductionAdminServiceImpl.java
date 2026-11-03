@@ -7,6 +7,8 @@ import com.agri.production.entity.Task;
 import com.agri.production.mapper.AlertRecordMapper;
 import com.agri.production.mapper.FarmMapper;
 import com.agri.production.mapper.IoTDeviceMapper;
+import com.agri.production.service.IotDeviceStatsService;
+import com.agri.production.service.TenantContextService;
 import com.agri.production.mapper.TaskMapper;
 import com.agri.production.service.IProductionAdminService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -23,13 +25,16 @@ public class ProductionAdminServiceImpl implements IProductionAdminService {
     private final TaskMapper taskMapper;
     private final AlertRecordMapper alertRecordMapper;
     private final IoTDeviceMapper ioTDeviceMapper;
+    private final IotDeviceStatsService iotDeviceStats;
 
     public ProductionAdminServiceImpl(FarmMapper farmMapper, TaskMapper taskMapper,
-                                      AlertRecordMapper alertRecordMapper, IoTDeviceMapper ioTDeviceMapper) {
+                                      AlertRecordMapper alertRecordMapper, IoTDeviceMapper ioTDeviceMapper,
+                                      IotDeviceStatsService iotDeviceStats) {
         this.farmMapper = farmMapper;
         this.taskMapper = taskMapper;
         this.alertRecordMapper = alertRecordMapper;
         this.ioTDeviceMapper = ioTDeviceMapper;
+        this.iotDeviceStats = iotDeviceStats;
     }
 
     @Override
@@ -131,22 +136,20 @@ public class ProductionAdminServiceImpl implements IProductionAdminService {
         return result;
     }
 
+    /**
+     * 设备统计（口径统一到物联网系统的设备台账）。
+     *
+     * <p>运营端大盘如果继续 count 生产端那张历史副本，会永远停在 13 台，
+     * 与设备列表页的 29 台对不上。</p>
+     */
     @Override
     public Map<String, Object> getDeviceStatistics() {
         Map<String, Object> result = new HashMap<>();
-        
-        LambdaQueryWrapper<IoTDevice> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(IoTDevice::getDeleted, 0);
-        
-        List<IoTDevice> devices = ioTDeviceMapper.selectList(wrapper);
-        
-        long onlineCount = devices.stream().filter(d -> "online".equals(d.getStatus())).count();
-        long offlineCount = devices.stream().filter(d -> "offline".equals(d.getStatus())).count();
-        
-        result.put("total", devices.size());
-        result.put("online", onlineCount);
-        result.put("offline", offlineCount);
-        
+        String tenantId = TenantContextService.currentTenantId();
+        Map<String, Object> counts = iotDeviceStats.counts(tenantId, null);
+        result.put("total", counts.get("total"));
+        result.put("online", counts.get("online"));
+        result.put("offline", counts.get("offline"));
         return result;
     }
 
@@ -188,8 +191,6 @@ public class ProductionAdminServiceImpl implements IProductionAdminService {
     }
 
     private int getDeviceCount() {
-        LambdaQueryWrapper<IoTDevice> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(IoTDevice::getDeleted, 0);
-        return (int) (long) ioTDeviceMapper.selectCount(wrapper);
+        return (int) iotDeviceStats.totalCount(TenantContextService.currentTenantId(), null);
     }
 }

@@ -289,12 +289,21 @@ export default function InventoryCreate(): JSX.Element {
 
           <Row gutter={16}>
             <Col span={12}>
-              <Form.Item name="relatedBatchId" label="关联采收记录">
+              {/*
+                「关联采收记录」实际是必填：库存行必须挂在某个采收批次上
+                （agri_prod_inventory.batch_id NOT NULL，后端也会回「请选择关联批次」）。
+                之前这里没写 rules、placeholder 还写着「可选」，用户填完其它项点保存
+                才会被后端挡回来 —— 一次没必要的往返。改成前端就拦住。
+              */}
+              <Form.Item
+                name="relatedBatchId"
+                label="关联采收记录"
+                rules={[{ required: true, message: '请选择关联采收记录' }]}
+              >
                 <Select
-                  allowClear
                   showSearch
                   optionFilterProp="label"
-                  placeholder="请选择（可选）"
+                  placeholder="请选择采收批次"
                   options={harvestOptions}
                   onChange={handleHarvestChange}
                   loading={harvestQuery.isFetching}

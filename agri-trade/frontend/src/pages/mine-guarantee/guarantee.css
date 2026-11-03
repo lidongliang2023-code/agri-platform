@@ -31,7 +31,7 @@
 .guarantee-overview-copy span,
 .guarantee-overview-actions > span {
   color: #899a90;
-  font-size: 9.5px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .guarantee-overview-actions > span {
@@ -67,7 +67,7 @@
 .guarantee-metrics span,
 .guarantee-log-summary span {
   color: #82948a;
-  font-size: 8.5px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .guarantee-metrics strong,
@@ -81,7 +81,7 @@
 .guarantee-metrics small {
   margin-top: 2px;
   color: #95a39b;
-  font-size: 7.5px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .guarantee-loading {
@@ -91,7 +91,7 @@
   justify-content: center;
   gap: 8px;
   color: #7c8f83;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .guarantee-account-list {
@@ -170,7 +170,7 @@
 .guarantee-account-head small {
   color: #8b9c92;
   font-family: "Roboto Mono", ui-monospace, monospace;
-  font-size: 8px;
+  font-size: var(--agri-font-size-micro);
   letter-spacing: -.01em;
 }
 
@@ -185,7 +185,7 @@
 .guarantee-account-head p {
   margin: 0;
   color: #84968a;
-  font-size: 8.5px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .guarantee-account-balances {
@@ -207,7 +207,7 @@
 
 .guarantee-account-balances span {
   color: #8b9c92;
-  font-size: 7.5px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .guarantee-account-balances strong {
@@ -222,7 +222,7 @@
   gap: 12px;
   padding: 10px 13px;
   color: #87998e;
-  font-size: 8px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .guarantee-account-meta span {
@@ -290,12 +290,12 @@
 
 .guarantee-note strong {
   color: #3c5b47;
-  font-size: 9.5px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .guarantee-note span {
   color: #81958a;
-  font-size: 8px;
+  font-size: var(--agri-font-size-micro);
   line-height: 1.55;
 }
 
@@ -310,7 +310,7 @@
   background: #fff;
   color: #456652;
   font: inherit;
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
   cursor: pointer;
 }
 
@@ -339,7 +339,7 @@
 
 .guarantee-action-hero small {
   color: #188454;
-  font-size: 8px;
+  font-size: var(--agri-font-size-micro);
   font-weight: 800;
   letter-spacing: .1em;
 }
@@ -353,7 +353,7 @@
 .guarantee-action-hero p {
   margin: 4px 0 0;
   color: #7d9084;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .guarantee-action-layout {
@@ -387,13 +387,13 @@
 
 .guarantee-account-strip span {
   color: #8a9b91;
-  font-size: 8px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .guarantee-account-strip strong {
   margin-top: 3px;
   color: #3b5a46;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .guarantee-quick-amounts {
@@ -407,7 +407,7 @@
 .guarantee-quick-amounts > span {
   margin-right: 2px;
   color: #82948a;
-  font-size: 8.5px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .guarantee-quick-amounts button {
@@ -417,7 +417,7 @@
   background: #f8fcf9;
   color: #486b56;
   font: inherit;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
   cursor: pointer;
   transition: border-color .16s ease, background .16s ease, color .16s ease;
 }
@@ -451,7 +451,7 @@
 
 .guarantee-replenish-preview span {
   color: #83958a;
-  font-size: 8px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .guarantee-replenish-preview strong {
@@ -466,13 +466,13 @@
   padding: 9px 12px;
   background: #fbfdfc;
   color: #7e9185;
-  font-size: 8px;
+  font-size: var(--agri-font-size-micro);
   line-height: 1.55;
 }
 
 .guarantee-form .ant-form-item-label > label {
   color: #4a6554;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
   font-weight: 600;
 }
 
@@ -509,7 +509,7 @@
   align-items: flex-start;
   gap: 6px;
   color: #74887b;
-  font-size: 8.5px;
+  font-size: var(--agri-font-size-micro);
   line-height: 1.65;
 }
 
@@ -563,7 +563,7 @@
 
 .guarantee-log strong {
   color: #3b5946;
-  font-size: 9.5px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .guarantee-log-action {
@@ -573,19 +573,19 @@
   border-radius: 999px;
   background: #edf7f1;
   color: #537463;
-  font-size: 7.5px;
+  font-size: var(--agri-font-size-micro);
   font-weight: 700;
 }
 
 .guarantee-log p {
   margin: 0;
   color: #758a7d;
-  font-size: 8.5px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .guarantee-log small {
   color: #8c9d92;
-  font-size: 7.5px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .guarantee-log-amount {
@@ -595,7 +595,7 @@
 .guarantee-log-amount strong {
   display: block;
   font-family: "DIN Alternate", ui-monospace, monospace;
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .guarantee-log-amount strong.increase {
@@ -608,7 +608,7 @@
 
 .guarantee-log-amount span {
   color: #8b9c92;
-  font-size: 7.5px;
+  font-size: var(--agri-font-size-micro);
 }
 
 @media (max-width: 900px) {

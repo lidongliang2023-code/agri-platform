@@ -209,20 +209,20 @@ onMounted(load)
   display: block;
   margin-bottom: 6px;
   color: #3f5b49;
-  font-size: 11px;
+  font-size: var(--fin-fs-xs);
   font-weight: 700;
 }
 
 .repayment-main strong {
   color: #415d4c;
   font-family: ui-monospace, Consolas, monospace;
-  font-size: 9px;
+  font-size: var(--fin-fs-xs);
 }
 
 .repayment-main > p {
   margin: 4px 0 8px;
   color: #8a9991;
-  font-size: 8px;
+  font-size: var(--fin-fs-xs);
 }
 
 .repayment-breakdown {
@@ -232,7 +232,7 @@ onMounted(load)
 
 .repayment-breakdown span {
   color: #7c8e82;
-  font-size: 8px;
+  font-size: var(--fin-fs-xs);
 }
 
 .repayment-breakdown b {
@@ -251,7 +251,7 @@ onMounted(load)
 
 .repayment-total > span {
   color: #8a9990;
-  font-size: 7.5px;
+  font-size: var(--fin-fs-xs);
 }
 
 .repayment-total > strong {
@@ -263,7 +263,7 @@ onMounted(load)
 
 .repayment-total > small {
   color: #95a098;
-  font-size: 8px;
+  font-size: var(--fin-fs-xs);
 }
 
 .repay-aside {
@@ -288,7 +288,7 @@ onMounted(load)
 
 .repay-summary > small {
   color: #a8dfbd;
-  font-size: 7px;
+  font-size: var(--fin-fs-xs);
   font-weight: 800;
   letter-spacing: .1em;
 }
@@ -296,7 +296,7 @@ onMounted(load)
 .repay-summary > span {
   margin-top: 13px;
   color: rgba(255, 255, 255, .57);
-  font-size: 8px;
+  font-size: var(--fin-fs-xs);
 }
 
 .repay-summary > strong {
@@ -328,12 +328,12 @@ onMounted(load)
 
 .repay-summary p span {
   color: rgba(255, 255, 255, .48);
-  font-size: 7px;
+  font-size: var(--fin-fs-xs);
 }
 
 .repay-summary p b {
   margin-top: 2px;
-  font-size: 9px;
+  font-size: var(--fin-fs-xs);
 }
 
 .repay-method {
@@ -353,12 +353,12 @@ onMounted(load)
 .repay-method b {
   color: var(--fin-green-700);
   font-family: ui-monospace, Consolas, monospace;
-  font-size: 8px;
+  font-size: var(--fin-fs-xs);
 }
 
 .repay-method span {
   color: #71857a;
-  font-size: 8.5px;
+  font-size: var(--fin-fs-xs);
   line-height: 1.6;
 }
 

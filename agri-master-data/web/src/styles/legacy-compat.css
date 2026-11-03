@@ -1,0 +1,100 @@
+/**
+ * 历史页面的外壳兼容层。
+ *
+ * 30 多个历史页面各自写了一份 scoped CSS（.page-header / .table-card / .data-table …），
+ * 颜色与圆角各用一套（#238636 / #10b981 / #047857 混用），与新页面的 mds-* 设计体系不一致。
+ *
+ * 这里只统一「外壳」——页面标题、卡片容器、筛选栏、表头、主按钮、分页按钮的
+ * 颜色 / 圆角 / 阴影 / 字号，**不改布局、不改状态标签配色、不改任何交互**：
+ * 布局与语义色一旦被全局覆盖，很容易把某个页面的特殊排版压坏，而这类回归没人会逐页复核。
+ *
+ * 等对应页面迁到 mds-* 组件后，删除这里的规则即可（按类名可精确回退）。
+ */
+.content-wrapper .page-header h1,
+.content-wrapper .header-left h1 {
+  font-size: 22px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.2px;
+  color: var(--mds-text) !important;
+}
+
+.content-wrapper .page-header p {
+  font-size: 13px !important;
+  line-height: 1.7;
+  color: var(--mds-text-2) !important;
+}
+
+.content-wrapper .table-card,
+.content-wrapper .card {
+  border: 1px solid var(--mds-line) !important;
+  border-radius: var(--mds-radius) !important;
+  box-shadow: var(--mds-shadow) !important;
+  background: var(--mds-card) !important;
+}
+
+.content-wrapper .search-bar,
+.content-wrapper .filter-bar {
+  border: 1px solid var(--mds-line) !important;
+  border-radius: var(--mds-radius) !important;
+  box-shadow: var(--mds-shadow) !important;
+  background: #fcfcfd !important;
+}
+
+.content-wrapper .search-input,
+.content-wrapper .filter-select,
+.content-wrapper .form-input,
+.content-wrapper .form-select {
+  border-color: #d7dbe0 !important;
+  border-radius: 6px !important;
+}
+
+.content-wrapper .search-input:focus,
+.content-wrapper .filter-select:focus,
+.content-wrapper .form-input:focus,
+.content-wrapper .form-select:focus {
+  border-color: var(--mds-brand) !important;
+  box-shadow: 0 0 0 3px rgba(19, 160, 90, 0.12) !important;
+}
+
+.content-wrapper .search-btn,
+.content-wrapper .add-btn,
+.content-wrapper .btn-primary {
+  background: var(--mds-brand) !important;
+  border-color: var(--mds-brand) !important;
+  color: #fff !important;
+  border-radius: 6px !important;
+}
+
+.content-wrapper .search-btn:hover:not(:disabled),
+.content-wrapper .add-btn:hover:not(:disabled),
+.content-wrapper .btn-primary:hover:not(:disabled) {
+  background: var(--mds-brand-deep) !important;
+  border-color: var(--mds-brand-deep) !important;
+}
+
+.content-wrapper .reset-btn {
+  border-radius: 6px !important;
+}
+
+.content-wrapper .data-table th {
+  background: #fafbfc !important;
+  color: #4e5969 !important;
+  font-weight: 600 !important;
+}
+
+.content-wrapper .data-table td {
+  border-bottom-color: var(--mds-line-soft) !important;
+}
+
+.content-wrapper .data-table tbody tr:hover {
+  background: #f7fbf9 !important;
+}
+
+.content-wrapper .page-btn {
+  border-radius: 6px !important;
+}
+
+.content-wrapper .page-btn:hover:not(:disabled) {
+  border-color: var(--mds-brand) !important;
+  color: var(--mds-brand-deep) !important;
+}

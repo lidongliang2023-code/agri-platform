@@ -1,8 +1,10 @@
 package com.agri.production.service;
 
 import com.agri.production.common.entity.PageResult;
+import com.agri.production.entity.ChainRecord;
 import com.agri.production.vo.ChainRecordContractVO;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
@@ -34,6 +36,19 @@ public interface IChainRecordService {
     /** 概览：总数 / 本月 / 最新区块高度 / 成功率 / 近七日趋势。 */
     Map<String, Object> overview(String tenantId);
 
+    /**
+     * 按溯源码**批量**取链上结论记录（列表页用，一次查询，不做 N+1）。
+     *
+     * <p>返回的键是存证表里的 {@code target_code}（大写），值是 {@link ChainEvidenceRule#decide}
+     * 选出来的那条记录 —— 调用方只负责展示，不再各自判"算不算已上链"。
+     * 没有存证记录的码不出现在结果里（缺键即"无存证记录"，与空对象区分开）。</p>
+     *
+     * <p>为什么需要这条：属主列表与运营端列表此前都拿溯源码表的
+     * {@code blockchain_tx_hash} 死列判 {@code onChain}，而那个列从来没人写过 ——
+     * 于是有真实 SUCCESS 存证的码在列表上也被显示成未上链。</p>
+     */
+    Map<String, ChainRecord> traceEvidence(Collection<String> codes, String tenantId);
+
     /* ---------- 写路径（**模拟链**）----------
      *
      * 口径（2026-10-15）：本部署不连真链，这四条按**模拟链**实现，并且
@@ -41,8 +56,14 @@ public interface IChainRecordService {
      * 不做成看起来像真上链 —— 页面/调用方一眼能看出这些存证是模拟产生的。
      */
 
-    /** 提交存证（前端 submitChain，body {bizId, bizType, bizSummary}）。 */
-    ChainRecordContractVO submit(String bizId, Integer bizType, String bizSummary, String tenantId);
+    /**
+     * 提交存证（前端 submitChain，body {@code {bizId, bizType, bizSummary}}）。
+     *
+     * <p>{@code bizType} 是**字符串业务类型**（HARVEST / QUALITY(INSPECTION) / TRACE / INPUT）。
+     * 以前这里是 {@code Integer}，页面传 2 就被原样写成 {@code target_type='2'} ——
+     * 那条存证从此对不到任何业务，却仍显示在存证列表里冒充"已上链"。数字枚举已下线。</p>
+     */
+    ChainRecordContractVO submit(String bizId, String bizType, String bizSummary, String tenantId);
 
     /** 按业务存证（前端 anchorRecord，body {bizType, bizNo, traceCode, bizSummary, payloadHash}）。 */
     ChainRecordContractVO anchor(String bizType, String bizNo, String traceCode, String bizSummary,

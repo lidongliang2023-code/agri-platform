@@ -160,10 +160,20 @@ export default function Detail(): JSX.Element {
       label: '扫码次数',
       value: traceCode?.scanCount === undefined ? '未接入' : String(traceCode.scanCount),
     },
-    { key: 'activatedAt', label: '激活时间', value: traceCode?.activatedAt ?? '未激活 / 未接入' },
-    { key: 'activatedBy', label: '激活操作人', value: traceCode?.activatedBy ?? '未接入' },
-    { key: 'lastScanAt', label: '最近扫码时间', value: traceCode?.lastScanAt ?? '未接入' },
-    { key: 'expireDate', label: '有效期至', value: traceCode?.expireDate ?? '未接入' },
+    { key: 'activatedAt', label: '激活时间', value: traceCode?.activateTime ?? '未激活' },
+    /** 表里没有"激活操作人"这一列，后端恒为 null —— 这句"未接入"是事实，不是偷懒 */
+    { key: 'activatedBy', label: '激活操作人', value: traceCode?.activatedBy ?? '未接入（表无该列）' },
+    /**
+     * 后端只有**首次**扫码时间，没有"最近扫码时间"。
+     * 旧版读的是 `lastScanAt`（运营端 VO 没这个字段），所以这一行永远是"未接入"；
+     * 现在按真实字段 labelled 成首次扫码，缺值就说没扫过。
+     */
+    { key: 'firstScanAt', label: '首次扫码时间', value: traceCode?.firstQueryTime ?? '尚未被扫码' },
+    {
+      key: 'expireDate',
+      label: '有效期至',
+      value: traceCode?.expireDate ?? '未设置有效期（不参与到期扫描）',
+    },
     {
       key: 'batchArchive',
       label: '批次档案',

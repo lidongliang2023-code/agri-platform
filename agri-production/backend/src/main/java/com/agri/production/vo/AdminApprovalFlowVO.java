@@ -28,6 +28,10 @@ public class AdminApprovalFlowVO {
     private List<Map<String, Object>> nodes;
     /** nodes 解析不出来时，原始 JSON 放这里（正常时为空） */
     private String nodesRaw;
+    /** 条件路由（存于 nodes_json 的扩展对象中） */
+    private List<Map<String, Object>> conditionRoutes;
+    /** 超时升级规则（存于 nodes_json 的扩展对象中） */
+    private List<Map<String, Object>> escalations;
     private Integer status;
     private String updatedAt;
     private String createdAt;
@@ -44,17 +48,37 @@ public class AdminApprovalFlowVO {
         vo.updatedAt = entity.getUpdateTime() == null ? null : DATE_TIME.format(entity.getUpdateTime());
         vo.createdAt = entity.getCreateTime() == null ? null : DATE_TIME.format(entity.getCreateTime());
         String json = entity.getNodesJson();
+        vo.conditionRoutes = List.of();
+        vo.escalations = List.of();
         if (json == null || json.isBlank()) {
             vo.nodes = List.of();
         } else {
             try {
-                vo.nodes = MAPPER.readValue(json, new TypeReference<List<Map<String, Object>>>() {
-                });
+                var root = MAPPER.readTree(json);
+                if (root.isArray()) {
+                    vo.nodes = MAPPER.convertValue(root, new TypeReference<List<Map<String, Object>>>() {
+                    });
+                } else if (root.isObject()) {
+                    vo.nodes = readList(root.get("nodes"));
+                    vo.conditionRoutes = readList(root.get("conditionRoutes"));
+                    vo.escalations = readList(root.get("escalations"));
+                } else {
+                    vo.nodes = List.of();
+                    vo.nodesRaw = json;
+                }
             } catch (Exception e) {
                 vo.nodes = List.of();
                 vo.nodesRaw = json;
             }
         }
         return vo;
+    }
+
+    private static List<Map<String, Object>> readList(com.fasterxml.jackson.databind.JsonNode node) {
+        if (node == null || !node.isArray()) {
+            return List.of();
+        }
+        return MAPPER.convertValue(node, new TypeReference<List<Map<String, Object>>>() {
+        });
     }
 }

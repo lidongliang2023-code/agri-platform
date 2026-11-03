@@ -19,11 +19,29 @@ public class WarehouseReceipt {
 
     private String pledgeId;
 
+    /** 仓单归属的融资主体（商户ID），由令牌解析，不接受请求参数。 */
+    private String userId;
+
+    private String batchId;
+
+    private String batchNo;
+
+    /** 质押物字典编码，决定折算率上限与最长期限。 */
+    private String goodsCode;
+
+    private String farmId;
+
+    private String plotId;
+
+    private String traceCode;
+
     private String commodityType;
 
     private String qualityStandard;
 
     private BigDecimal quantity;
+
+    private String unit;
 
     private BigDecimal unitPrice;
 

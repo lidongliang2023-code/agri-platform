@@ -107,6 +107,36 @@ public class PlotSoilServiceImpl {
         return entity.getSoilId();
     }
 
+    /**
+     * 删除检测档案（逻辑删除）。
+     *
+     * <p>页面「删除」按钮一直存在，但后端此前没有这条端点 —— 请求被兜底处理器当成成功返回，
+     * 记录却还在列表里。删除按业务编号 {@code soilId} 定位；纯数字时兼容按主键删。</p>
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void delete(String tenantId, String rawPlotId, String recordId) {
+        Long plotId = plotIdResolver.require(rawPlotId, tenantId);
+        String key = recordId == null ? null : recordId.trim();
+        if (key == null || key.isEmpty()) {
+            throw new BusinessException(400, "缺少土壤档案编号");
+        }
+        SoilRecord row = soilMapper.selectOne(baseWrapper(tenantId, plotId)
+                .eq(SoilRecord::getSoilId, key).last("LIMIT 1"));
+        if (row == null && key.chars().allMatch(Character::isDigit)) {
+            try {
+                row = soilMapper.selectOne(baseWrapper(tenantId, plotId)
+                        .eq(SoilRecord::getId, Long.valueOf(key)).last("LIMIT 1"));
+            } catch (NumberFormatException ignored) {
+                // 超长数字：按编号找不到就按不存在处理
+            }
+        }
+        if (row == null) {
+            throw new BusinessException(404, "土壤检测记录不存在：" + key);
+        }
+        soilMapper.deleteById(row.getId());
+        log.info("土壤档案删除：{}（地块 {}）", key, plotId);
+    }
+
     private LambdaQueryWrapper<SoilRecord> baseWrapper(String tenantId, Long plotId) {
         if (tenantId == null || tenantId.isBlank()) {
             throw new BusinessException(500, "租户上下文为空，无法查询土壤档案");

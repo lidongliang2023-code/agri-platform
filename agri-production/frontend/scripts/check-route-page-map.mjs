@@ -46,7 +46,15 @@ const imported = [...routesSrc.matchAll(/import\('@\/pages\/([^']+)'\)/g)].map((
  * 挪文件需要同步改 import 路径，冲突风险大于整洁收益。
  * 本清单为逐项精确匹配（不做目录/前缀通配），因此对其它真正的孤儿页面不产生遮蔽。
  */
-const NON_PAGE_FILES = new Set(['admin/farms/RectifyDispatchModal.tsx'])
+const NON_PAGE_FILES = new Set([
+  'admin/farms/RectifyDispatchModal.tsx',
+  // 2026-11-02：出入库管理并入「农资管理」页，InputStock 变为该页的 Tab 面板组件，
+  // 不再单独登记路由（旧 /production/inputs/stock 走重定向）。
+  'user/inputs/InputStock.tsx',
+  // 2026-11-02：使用记录页并入「农资管理」页的「使用台账」Tab，
+  // InputUsages 变为该页的 Tab 面板组件（旧 /production/inputs/usages 走重定向）。
+  'user/inputs/InputUsages.tsx',
+])
 
 /**
  * 判断某个文件是否命中非页面白名单

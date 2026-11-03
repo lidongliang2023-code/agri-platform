@@ -85,4 +85,10 @@ public class Approval {
     @TableLogic
     @TableField("deleted")
     private Integer deleted;
+
+    /** 页面兼容字段：审批编号与业务审批单号同值。 */
+    @JsonProperty("approvalNo")
+    public String getApprovalNo() {
+        return approvalCode;
+    }
 }

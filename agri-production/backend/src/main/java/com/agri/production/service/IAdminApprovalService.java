@@ -25,8 +25,14 @@ public interface IAdminApprovalService {
     /** 审批历史（已通过 / 已驳回）。 */
     PageResult<Approval> pageHistory(int pageNum, int pageSize, String keyword);
 
-    /** 审批通过：status → APPROVED，落审批意见与审批时间。 */
+    /** 审批通过：status → APPROVED，落审批意见与审批时间，并回写关联业务。 */
     Approval approve(String approvalId, String remark);
+
+    /** 审批驳回：status → REJECTED，落审批意见与审批时间，并回写关联业务。 */
+    Approval reject(String approvalId, String remark);
+
+    /** 审批详情。 */
+    Approval detail(String approvalId);
 
     /** 批量审批通过。 */
     Map<String, Object> batchApprove(List<String> approvalIds, String remark);
@@ -39,4 +45,7 @@ public interface IAdminApprovalService {
 
     /** 更新流程配置（只改传了的字段）。 */
     AdminApprovalFlowVO updateFlow(String flowId, Map<String, Object> payload);
+
+    /** 删除流程配置（逻辑删除）。 */
+    void deleteFlow(String flowId);
 }

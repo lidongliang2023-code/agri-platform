@@ -1,13 +1,19 @@
 #!/usr/bin/env node
 /** 卖家报价工作区、询价报价页和独立报价编辑页回归。 */
 import { createRequire } from 'node:module'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const require2 = createRequire(path.join(ROOT, 'agri-production/frontend/package.json'))
-const puppeteer = require2('puppeteer')
+const require2 = createRequire(path.join('C:/Users/71502/.workbuddy-ai/binaries/node/workspace', 'noop.js'))
+const { chromium } = require2('playwright-core')
+
+const BROWSER = [
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+].find((candidate) => existsSync(candidate))
 const BASE = 'http://localhost:8086'
 const OUT = 'C:/Users/71502/.codex/visualizations/2026/10/16/01a14244-ead8-7ab0-8c7c-df7abac44648'
 const failures = []
@@ -24,18 +30,18 @@ const fill = async (page, selector, value) => page.evaluate(({ target, next }) =
   input.dispatchEvent(new Event('input', { bubbles: true }))
 }, { target: selector, next: value })
 
-const browser = await puppeteer.launch({
-  executablePath: 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
-  headless: 'new',
+const browser = await chromium.launch({
+  headless: true,
+  executablePath: BROWSER,
   args: ['--no-sandbox'],
 })
 try {
-  const page = await browser.newPage()
+  const page = await (await browser.newContext({ viewport: { width: 1440, height: 1000 } })).newPage()
   const errors = []
   page.on('pageerror', (error) => errors.push(String(error)))
-  await page.setViewport({ width: 1440, height: 1000 })
-  await page.goto(`${BASE}/member/seller?tab=trade`, { waitUntil: 'networkidle2', timeout: 60000 })
-  await page.waitForFunction(() => window.location.port === '8090', { timeout: 20000 })
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await page.goto(`${BASE}/member/seller?tab=trade`, { waitUntil: 'networkidle', timeout: 60000 })
+  await page.waitForFunction(() => window.location.port === '8090', undefined, { timeout: 20000 })
   await page.waitForSelector('button[role="tab"]', { timeout: 20000 })
   await page.evaluate(() => {
     const tab = [...document.querySelectorAll('button[role="tab"]')]
@@ -54,7 +60,8 @@ try {
     if (page.url().includes('/member/seller')) break
   }
   await page.waitForSelector('.quote-workbench', { timeout: 30000 })
-  await page.waitForNetworkIdle({ idleTime: 700, timeout: 15000 }).catch(() => {})
+  await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 700))
 
   const listText = await page.evaluate(() => document.body.innerText)
   check(listText.includes('收到的询价') && listText.includes('报价管理') && listText.includes('新增报价'),
@@ -94,7 +101,7 @@ try {
     return true
   })
   check(openedInquiryQuote, '收到询价提供页面级报价入口')
-  await page.waitForFunction(() => document.body.innerText.includes('询价报价'), { timeout: 10000 })
+  await page.waitForFunction(() => document.body.innerText.includes('询价报价'), undefined, { timeout: 10000 })
   const inquiryQuoteText = await page.evaluate(() => document.body.innerText)
   check(inquiryQuoteText.includes('报价信息') && inquiryQuoteText.includes('报价提示') && inquiryQuoteText.includes('提交正式报价'),
     '询价报价使用独立页面、表单和提示侧栏')
@@ -123,7 +130,8 @@ try {
     setter.call(input, 'Q20261013301')
     input.dispatchEvent(new Event('input', { bubbles: true }))
   })
-  await page.waitForNetworkIdle({ idleTime: 700, timeout: 15000 }).catch(() => {})
+  await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 700))
   const pendingQuoteVisible = await page.evaluate(() => document.body.innerText.includes('Q20261013301'))
   check(pendingQuoteVisible, '报价列表支持按编号查询', 'Q20261013301')
   const openedEdit = await page.evaluate(() => {
@@ -134,7 +142,7 @@ try {
     return true
   })
   check(openedEdit, '待受理报价提供页面级编辑入口')
-  await page.waitForFunction(() => document.body.innerText.includes('编辑报价'), { timeout: 10000 })
+  await page.waitForFunction(() => document.body.innerText.includes('编辑报价'), undefined, { timeout: 10000 })
   check((await page.evaluate(() => document.body.innerText)).includes('保存报价'),
     '编辑报价页面完整回显并保留保存操作')
   await page.screenshot({ path: path.join(OUT, 'seller-quote-edit-page.png'), fullPage: true })
@@ -164,8 +172,8 @@ try {
   })
   await page.waitForSelector('.quote-workbench', { timeout: 10000 })
 
-  await page.setViewport({ width: 390, height: 844 })
-  await page.reload({ waitUntil: 'networkidle2', timeout: 60000 })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.reload({ waitUntil: 'networkidle', timeout: 60000 })
   await page.waitForSelector('.quote-workbench', { timeout: 30000 })
   check(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
     '390px 报价管理工作区无横向溢出')

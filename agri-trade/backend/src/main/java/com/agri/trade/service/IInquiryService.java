@@ -23,11 +23,18 @@ public interface IInquiryService extends IService<Inquiry> {
      */
     Inquiry createInquiry(Long demandId, Long productId, java.util.Collection<Long> buyerScopeMerchantIds);
 
-    Inquiry createInquiryFromDemand(Demand demand, Long productId);
-
-    List<Inquiry> batchCreateInquiries(Long demandId, List<Long> productIds, Long buyerId);
-
-    List<Inquiry> getInquiriesByBuyer(Long buyerId);
+    /**
+     * 对一张采购需求的多个货源批量发起询价。
+     *
+     * <p>与 {@link #createInquiry} 同一口径：采购方取自**需求本身**，而这张需求必须先属于
+     * 调用方绑定的经营主体。第三个参数以前是单个 buyerId，且从未被使用 ——
+     * 也就是说任何人都能对别人的需求批量发问。</p>
+     *
+     * @param buyerScopeMerchantIds 调用方绑定的经营主体列表
+     * @return 实际发出的询价单；需求不属于调用方时为空列表
+     */
+    List<Inquiry> batchCreateInquiries(Long demandId, List<Long> productIds,
+                                       java.util.Collection<Long> buyerScopeMerchantIds);
 
     /**
      * 我发起的询价（按绑定的经营主体过滤）。
@@ -46,11 +53,7 @@ public interface IInquiryService extends IService<Inquiry> {
      */
     List<Inquiry> getReceivedInquiriesByScope(java.util.Collection<Long> merchantIds);
 
-    List<Inquiry> getInquiriesBySeller(Long sellerId);
-
     List<Quote> getQuotesByInquiry(Long inquiryId);
-
-    void updateInquiryStatus(Long inquiryId, String status);
 
     void convertToOrder(Long inquiryId, Long quoteId);
 }

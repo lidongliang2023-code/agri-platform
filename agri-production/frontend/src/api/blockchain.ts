@@ -3,7 +3,7 @@
  */
 import { http } from '@/utils/request'
 import type { PageQuery, PageResult } from '@/types'
-import type { BlockchainBizRecord, BlockchainRecord } from '@/types'
+import type { BlockchainBizRecord } from '@/types'
 
 const BASE = '/blockchain'
 
@@ -27,18 +27,32 @@ export interface BlockchainOverviewStat {
   failed: number | string
 }
 
-/** 上链记录查询参数 */
+/**
+ * 上链记录查询参数。
+ *
+ * ⚠️ `bizType` / `status` 都是**字符串**：业务类型词表只有
+ * `HARVEST / QUALITY(旧词表 INSPECTION) / TRACE / INPUT` 四个（服务端 `ChainRecordServiceImpl#normalizeType`
+ * 是唯一归一处）。历史上这里传的是数字枚举（`2`=投入品使用），服务端原样写进 `target_type`，
+ * 于是出现对不到任何业务、却仍显示成"已上链"的存证记录 —— 数字枚举已下线，服务端会直接拒绝。
+ */
 export interface ChainRecordListParams extends PageQuery {
-  bizType?: number
-  status?: number
+  bizType?: string
+  status?: string
   txHash?: string
 }
 
-/** 分页查询上链记录 */
+/**
+ * 分页查询上链记录（后端返回 `ChainRecordContractVO`，即字符串词表那一套形状）。
+ *
+ * ⚠️ 这里以前标注的是 `BlockchainRecord`（bizType/status 都是 1..5 的数字枚举）——
+ * 那是 V1 平台的旧形状，本服务根本不返回它。**类型写错不会报错，只会让下一个照类型写代码的人踩空**：
+ * 投入品页面就是照着 `bizType: 2` 这个类型传参，后端把 2 原样写进 target_type，
+ * 于是那条存证从此对不到任何业务（2026-11-02 收口，见后端 ChainRecordServiceImpl 类注释）。
+ */
 export function listChainRecords(
   params: ChainRecordListParams,
-): Promise<PageResult<BlockchainRecord>> {
-  return http.get<PageResult<BlockchainRecord>>(
+): Promise<PageResult<BlockchainBizRecord>> {
+  return http.get<PageResult<BlockchainBizRecord>>(
     `${BASE}/records`,
     params,
   )
@@ -61,20 +75,26 @@ export function listChainRecords(
  * @param recordId 存证记录 ID
  * @returns 存证记录
  */
-export function getChainRecord(recordId: string): Promise<BlockchainRecord> {
-  return http.get<BlockchainRecord>(`${BASE}/${recordId}`)
+export function getChainRecord(recordId: string): Promise<BlockchainBizRecord> {
+  return http.get<BlockchainBizRecord>(`${BASE}/${recordId}`)
 }
 
-/** 提交上链 */
+/**
+ * 提交上链（POST /blockchain/records）。
+ *
+ * <p>`bizType` 用字符串业务类型，`bizId` 是业务键（批次号 / 质检单号 / 溯源码 / 使用记录 ID）。
+ * 服务端会先按当前经营主体在业务表里定位这条记录，**查不到就 404 拒绝** ——
+ * 存证是给真实业务动作发凭证，不接受自由填写的单号。</p>
+ */
 export function submitChain(
-  payload: { bizId: string; bizType: number; bizSummary?: string },
-): Promise<BlockchainRecord> {
-  return http.post<BlockchainRecord>(`${BASE}/records`, payload)
+  payload: { bizId: string; bizType: string; bizSummary?: string },
+): Promise<BlockchainBizRecord> {
+  return http.post<BlockchainBizRecord>(`${BASE}/records`, payload)
 }
 
 /** 重试上链 */
-export function retryChain(recordId: string): Promise<BlockchainRecord> {
-  return http.patch<BlockchainRecord>(`${BASE}/records/${recordId}/retry`)
+export function retryChain(recordId: string): Promise<BlockchainBizRecord> {
+  return http.patch<BlockchainBizRecord>(`${BASE}/records/${recordId}/retry`)
 }
 
 /** 链上数据验真 */
@@ -177,13 +197,15 @@ export interface BlockchainByBizParams {
   /**
    * 业务类型。
    *
-   * 服务端存的是**存证表的 target_type**：TRACE（溯源码）/ QUALITY（质检）/ HARVEST（采收批次）。
+   * 服务端存的是**存证表的 target_type**：HARVEST（采收批次）/ QUALITY（质检）/
+   * TRACE（溯源码）/ INPUT（投入品使用）。
    * 这里给 `INSPECTION` 是**旧词表**（平台侧 core-platform 与历史页面的叫法），
    * 服务端已做归一：`INSPECTION` → `QUALITY`。两边叫法不一致时**不要**靠"反正查不到就算了"，
-   * 归一集中放在后端一处（ChainRecordServiceImpl#normalizeBizType）。
+   * 归一集中放在后端一处（ChainRecordServiceImpl#normalizeType）。
+   * ⚠️ 数字枚举（如历史的 `2`=投入品使用）已下线：服务端直接报错，不再静默回空列表。
    */
-  bizType: 'TRACE' | 'INSPECTION' | 'HARVEST'
-  /** 业务键：库里的 target_code（批次号 / 质检单号 / 溯源码），服务端同时接受 bizId 这个旧名字 */
+  bizType: 'TRACE' | 'INSPECTION' | 'QUALITY' | 'HARVEST' | 'INPUT'
+  /** 业务键：库里的 target_code（批次号 / 质检单号 / 溯源码 / 使用记录 ID），服务端同时接受 bizId 这个旧名字 */
   bizNo: string
 }
 

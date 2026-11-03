@@ -1,6 +1,8 @@
 package com.agri.masterdata.vo;
 
 import com.agri.masterdata.entity.Role;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -15,6 +17,7 @@ import java.util.List;
 @AllArgsConstructor
 public class RoleVO {
 
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long id;
 
     private String roleCode;
@@ -51,7 +54,29 @@ public class RoleVO {
 
     private List<Long> menuIds;
 
+    private Boolean isSystem;
+
+    private String ownershipType;
+
+    private String ownershipLabel;
+
     private String tenantId;
+
+    private String tenantName;
+
+    private String tenantType;
+
+    private Boolean subjectLinked;
+
+    private Boolean legacy;
+
+    private Boolean editable;
+
+    private Long userCount;
+
+    private Long menuCount;
+
+    private Long permissionCount;
 
     private String createBy;
 
@@ -74,10 +99,28 @@ public class RoleVO {
                 .roleKey(role.getRoleKey())
                 .roleType(role.getRoleType())
                 .description(role.getDescription())
+                .roleSort(role.getSortOrder())
+                .dataScope(role.getDataScope())
+                .dataScopeName(dataScopeName(role.getDataScope()))
                 .status(role.getStatus())
+                .isSystem(Integer.valueOf(1).equals(role.getIsSystem()))
                 .tenantId(role.getTenantId())
                 .createBy(role.getCreateBy())
                 .createTime(role.getCreateTime())
+                .updateBy(role.getUpdateBy())
+                .updateTime(role.getUpdateTime())
+                .remark(role.getRemark())
                 .build();
+    }
+
+    public static String dataScopeName(String dataScope) {
+        return switch (dataScope == null ? "" : dataScope) {
+            case "ALL" -> "全部数据";
+            case "TENANT" -> "主体全部数据";
+            case "ORG" -> "本组织数据";
+            case "DEPT" -> "本部门数据";
+            case "OWNER" -> "本人数据";
+            default -> "未设置";
+        };
     }
 }

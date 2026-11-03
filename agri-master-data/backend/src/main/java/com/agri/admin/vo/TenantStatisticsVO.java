@@ -19,6 +19,9 @@ public class TenantStatisticsVO {
     /** 地域分布（按 agri_md_tenant.province 统计）。 */
     private List<NameCount> regions;
 
+    /** 主体认证状态分布（来自统一经营主体的 verify_status）。 */
+    private List<NameCount> verificationStatuses;
+
     /** 通用"名称 + 数量"对，供分布类图表使用。 */
     @Data
     public static class NameCount {

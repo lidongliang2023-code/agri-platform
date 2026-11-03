@@ -1,192 +1,220 @@
 <template>
-  <div class="dict-list">
-    <div class="page-header">
-      <div class="header-left">
-        <h1>数据字典</h1>
-        <p>管理系统数据字典及字典项</p>
-      </div>
-      <button class="add-btn" @click="openCreateModal">
-        <span class="btn-icon">+</span>
-        <span>新增字典</span>
-      </button>
-    </div>
+  <div class="mds-page">
+    <PageHeader
+      title="数据字典"
+      subtitle="平台级标准枚举（共享）与租户扩展枚举（隔离），支撑各业务模块的字段取值规范。"
+      source="数据标准 · 字典"
+    >
+      <template #actions>
+        <button v-point="'POST /admin/masterdata/standard/dict'" class="mds-btn mds-btn--primary" @click="openCreateModal">+ 新增字典</button>
+        <button class="mds-btn" :disabled="loading" @click="loadData">刷新</button>
+      </template>
+    </PageHeader>
 
-    <div class="search-bar">
-      <div class="search-group">
-        <input 
-          type="text" 
-          v-model="searchForm.keyword" 
-          placeholder="字典名称/编码..." 
-          class="search-input"
+    <NoticeBar tone="info" title="维护口径：">
+      字典项的值（itemValue）一旦被业务引用，只允许停用、不建议物理删除；改值会使历史数据对不上。
+    </NoticeBar>
+
+    <div class="mds-card">
+      <div class="mds-filter">
+        <input
+          v-model="searchForm.keyword"
+          class="mds-input"
+          type="search"
+          placeholder="字典名称 / 编码"
+          @keyup.enter="search"
         />
-        <button class="search-btn" @click="loadData">搜索</button>
-      </div>
-      <div class="filter-group">
-        <select v-model="searchForm.status" class="filter-select">
+        <select v-model="searchForm.status" class="mds-select" @change="search">
           <option value="">全部状态</option>
           <option value="1">启用</option>
           <option value="0">禁用</option>
         </select>
+        <button class="mds-btn mds-btn--primary" @click="search">查询</button>
+        <button class="mds-btn" @click="reset">重置</button>
+      </div>
+
+      <div class="mds-table-wrap">
+        <table class="mds-table">
+          <thead>
+            <tr>
+              <th>字典编码</th>
+              <th>字典名称</th>
+              <th>字典类型</th>
+              <th>描述</th>
+              <th>状态</th>
+              <th>创建时间</th>
+              <th class="mds-actions">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-if="loading">
+              <td colspan="7" class="mds-empty">正在加载字典…</td>
+            </tr>
+            <tr v-else-if="!tableData.length">
+              <td colspan="7">
+                <EmptyState title="暂无符合条件的字典" description="调整关键字或状态筛选；也可以直接新增字典。" />
+              </td>
+            </tr>
+            <tr v-for="dict in tableData" :key="dict.id">
+              <td class="mds-mono">{{ dict.dictCode || '—' }}</td>
+              <td class="mds-name">{{ dict.dictName || '—' }}</td>
+              <td>{{ dict.dictType || '—' }}</td>
+              <td class="desc-cell">{{ dict.description || '—' }}</td>
+              <td>
+                <StatusTag
+                  :text="Number(dict.status) === 1 ? '启用' : '禁用'"
+                  :tone="Number(dict.status) === 1 ? 'success' : 'gray'"
+                />
+              </td>
+              <td class="mds-muted">{{ formatDate(dict.createTime) }}</td>
+              <td class="mds-actions">
+                <button class="mds-btn mds-btn--link" @click="viewItems(dict)">字典项</button>
+                <button v-point="'PUT /admin/masterdata/standard/dict/{id}'" class="mds-btn mds-btn--link" @click="editDict(dict)">编辑</button>
+                <button v-point="'DELETE /admin/masterdata/standard/dict/{id}'" class="mds-btn mds-btn--link mds-danger" @click="deleteDict(dict.id)">删除</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <PagerBar
+        :page="pageNum"
+        :page-size="pageSize"
+        :total="total"
+        @change="handleCurrentChange"
+        @update:page-size="changePageSize"
+      />
+    </div>
+
+    <!-- 新增 / 编辑字典 -->
+    <div v-if="modalVisible" class="mds-mask" @click="closeModal">
+      <div class="mds-modal" @click.stop>
+        <div class="mds-card-head">
+          <h2 class="mds-card-title">{{ form.id ? '编辑字典' : '新增字典' }}</h2>
+          <button class="mds-btn mds-btn--link" @click="closeModal">关闭</button>
+        </div>
+        <div class="mds-card-body">
+          <div class="mds-form">
+            <label class="mds-field">
+              <span class="mds-field__label mds-required">字典编码</span>
+              <input v-model="form.dictCode" class="mds-input" :disabled="Boolean(form.id)" placeholder="如 user_identity_type" />
+            </label>
+            <label class="mds-field">
+              <span class="mds-field__label mds-required">字典名称</span>
+              <input v-model="form.dictName" class="mds-input" placeholder="如 用户身份类型" />
+            </label>
+            <label class="mds-field">
+              <span class="mds-field__label">字典类型</span>
+              <input v-model="form.dictType" class="mds-input" placeholder="如 platform / tenant" />
+            </label>
+            <label class="mds-field">
+              <span class="mds-field__label">状态</span>
+              <select v-model.number="form.status" class="mds-select">
+                <option :value="1">启用</option>
+                <option :value="0">禁用</option>
+              </select>
+            </label>
+            <label class="mds-field mds-field--full">
+              <span class="mds-field__label">描述</span>
+              <textarea v-model="form.description" class="mds-textarea" placeholder="字典用途、维护要求" />
+            </label>
+          </div>
+          <div class="mds-form-actions">
+            <button class="mds-btn" @click="closeModal">取消</button>
+            <button class="mds-btn mds-btn--primary" :disabled="saving" @click="saveDict">
+              {{ saving ? '保存中…' : form.id ? '保存修改' : '确认新增' }}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 
-    <div class="table-card">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>字典编码</th>
-            <th>字典名称</th>
-            <th>字典类型</th>
-            <th>描述</th>
-            <th>状态</th>
-            <th>创建时间</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="dict in tableData" :key="dict.id">
-            <td>{{ dict.dictCode }}</td>
-            <td>{{ dict.dictName }}</td>
-            <td>{{ dict.dictType }}</td>
-            <td class="desc-cell">{{ dict.description }}</td>
-            <td>
-              <span class="status-badge" :class="dict.status === 1 ? 'active' : 'inactive'">
-                {{ dict.status === 1 ? '启用' : '禁用' }}
-              </span>
-            </td>
-            <td>{{ formatDate(dict.createTime) }}</td>
-            <td class="action-cell">
-              <button class="action-btn view" @click="viewItems(dict)">查看项</button>
-              <button class="action-btn edit" @click="editDict(dict)">编辑</button>
-              <button 
-                class="action-btn delete" 
-                @click="deleteDict(dict.id)"
-              >删除</button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-
-      <div class="pagination">
-        <button class="page-btn" :disabled="pageNum === 1" @click="handleCurrentChange(pageNum - 1)">上一页</button>
-        <span class="page-info">第 {{ pageNum }} / {{ totalPages }} 页</span>
-        <button class="page-btn" :disabled="pageNum === totalPages" @click="handleCurrentChange(pageNum + 1)">下一页</button>
-      </div>
-    </div>
-
-    <div class="modal-overlay" v-if="modalVisible" @click="closeModal">
-      <div class="modal-content" @click.stop>
-        <div class="modal-header">
-          <h3>{{ form.id ? '编辑字典' : '新增字典' }}</h3>
-          <button class="close-btn" @click="closeModal">×</button>
-        </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label>字典编码 *</label>
-            <input type="text" v-model="form.dictCode" placeholder="请输入字典编码" class="form-input" :disabled="form.id" />
+    <!-- 字典项管理 -->
+    <div v-if="itemsModalVisible" class="mds-mask" @click="closeItemsModal">
+      <div class="mds-modal mds-modal--wide" @click.stop>
+        <div class="mds-card-head">
+          <div>
+            <h2 class="mds-card-title">{{ currentDictName }} · 字典项</h2>
+            <p class="mds-card-sub">值（code）用于存储，标签用于展示</p>
           </div>
-          <div class="form-group">
-            <label>字典名称 *</label>
-            <input type="text" v-model="form.dictName" placeholder="请输入字典名称" class="form-input" />
-          </div>
-          <div class="form-group">
-            <label>字典类型</label>
-            <input type="text" v-model="form.dictType" placeholder="请输入字典类型" class="form-input" />
-          </div>
-          <div class="form-group">
-            <label>描述</label>
-            <textarea v-model="form.description" placeholder="请输入描述" class="form-textarea"></textarea>
-          </div>
-          <div class="form-group">
-            <label>状态</label>
-            <select v-model="form.status" class="form-select">
-              <option :value="1">启用</option>
-              <option :value="0">禁用</option>
-            </select>
+          <div class="mds-head-actions">
+            <button v-point="'POST /admin/masterdata/standard/dict/{id}/item'" class="mds-btn mds-btn--primary mds-btn--sm" @click="openItemCreateModal">+ 添加字典项</button>
+            <button class="mds-btn" @click="closeItemsModal">关闭</button>
           </div>
         </div>
-        <div class="modal-footer">
-          <button class="btn btn-cancel" @click="closeModal">取消</button>
-          <button class="btn btn-primary" @click="saveDict">确认{{ form.id ? '修改' : '添加' }}</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="modal-overlay" v-if="itemsModalVisible" @click="closeItemsModal">
-      <div class="modal-content items-modal" @click.stop>
-        <div class="modal-header">
-          <h3>{{ currentDictName }} - 字典项管理</h3>
-          <button class="close-btn" @click="closeItemsModal">×</button>
-        </div>
-        <div class="modal-body">
-          <div class="items-header">
-            <span class="items-title">字典项列表</span>
-            <button class="btn btn-primary btn-sm" @click="openItemCreateModal">+ 添加字典项</button>
-          </div>
-          <table class="data-table items-table">
+        <div class="mds-table-wrap">
+          <table class="mds-table">
             <thead>
               <tr>
                 <th>值</th>
                 <th>标签</th>
-                <th>排序</th>
+                <th class="mds-num">排序</th>
                 <th>状态</th>
-                <th>操作</th>
+                <th class="mds-actions">操作</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="item in dictItems" :key="item.id">
-                <td>{{ item.itemValue }}</td>
-<td>{{ item.itemName }}</td>
-<td>{{ item.itemSort }}</td>
-                <td>
-                  <span class="status-badge" :class="item.status === 1 ? 'active' : 'inactive'">
-                    {{ item.status === 1 ? '启用' : '禁用' }}
-                  </span>
+              <tr v-if="!dictItems.length">
+                <td colspan="5">
+                  <EmptyState title="该字典还没有字典项" description="点击右上角「添加字典项」开始维护。" />
                 </td>
-                <td class="action-cell">
-                  <button class="action-btn edit" @click="editDictItem(item)">编辑</button>
-                  <button class="action-btn delete" @click="deleteDictItem(item.id)">删除</button>
+              </tr>
+              <tr v-for="item in dictItems" :key="item.id">
+                <td class="mds-mono">{{ item.itemValue }}</td>
+                <td>{{ item.itemName }}</td>
+                <td class="mds-num">{{ item.itemSort }}</td>
+                <td>
+                  <StatusTag
+                    :text="Number(item.status) === 1 ? '启用' : '禁用'"
+                    :tone="Number(item.status) === 1 ? 'success' : 'gray'"
+                  />
+                </td>
+                <td class="mds-actions">
+                  <button v-point="'PUT /admin/masterdata/standard/dict/item/{itemId}'" class="mds-btn mds-btn--link" @click="editDictItem(item)">编辑</button>
+                  <button v-point="'DELETE /admin/masterdata/standard/dict/item/{itemId}'" class="mds-btn mds-btn--link mds-danger" @click="deleteDictItem(item.id)">删除</button>
                 </td>
               </tr>
             </tbody>
           </table>
         </div>
-        <div class="modal-footer">
-          <button class="btn btn-cancel" @click="closeItemsModal">关闭</button>
-        </div>
       </div>
     </div>
 
-    <div class="modal-overlay" v-if="itemModalVisible" @click="closeItemModal">
-      <div class="modal-content" @click.stop>
-        <div class="modal-header">
-          <h3>{{ itemForm.id ? '编辑字典项' : '新增字典项' }}</h3>
-          <button class="close-btn" @click="closeItemModal">×</button>
+    <!-- 新增 / 编辑字典项 -->
+    <div v-if="itemModalVisible" class="mds-mask" @click="closeItemModal">
+      <div class="mds-modal mds-modal--sm" @click.stop>
+        <div class="mds-card-head">
+          <h2 class="mds-card-title">{{ itemForm.id ? '编辑字典项' : '新增字典项' }}</h2>
+          <button class="mds-btn mds-btn--link" @click="closeItemModal">关闭</button>
         </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label>值 *</label>
-            <input type="text" v-model="itemForm.itemValue" placeholder="请输入值" class="form-input" />
+        <div class="mds-card-body">
+          <div class="mds-form">
+            <label class="mds-field">
+              <span class="mds-field__label mds-required">值（code）</span>
+              <input v-model="itemForm.itemValue" class="mds-input" placeholder="如 L4" />
+            </label>
+            <label class="mds-field">
+              <span class="mds-field__label mds-required">标签</span>
+              <input v-model="itemForm.itemLabel" class="mds-input" placeholder="如 企业任职用户" />
+            </label>
+            <label class="mds-field">
+              <span class="mds-field__label">排序</span>
+              <input v-model.number="itemForm.sortOrder" class="mds-input" type="number" min="0" />
+            </label>
+            <label class="mds-field">
+              <span class="mds-field__label">状态</span>
+              <select v-model.number="itemForm.status" class="mds-select">
+                <option :value="1">启用</option>
+                <option :value="0">禁用</option>
+              </select>
+            </label>
           </div>
-          <div class="form-group">
-            <label>标签 *</label>
-            <input type="text" v-model="itemForm.itemLabel" placeholder="请输入标签" class="form-input" />
+          <div class="mds-form-actions">
+            <button class="mds-btn" @click="closeItemModal">取消</button>
+            <button class="mds-btn mds-btn--primary" :disabled="saving" @click="saveDictItem">
+              {{ saving ? '保存中…' : itemForm.id ? '保存修改' : '确认新增' }}
+            </button>
           </div>
-          <div class="form-group">
-            <label>排序</label>
-            <input type="number" v-model="itemForm.sortOrder" placeholder="请输入排序号" class="form-input" />
-          </div>
-          <div class="form-group">
-            <label>状态</label>
-            <select v-model="itemForm.status" class="form-select">
-              <option :value="1">启用</option>
-              <option :value="0">禁用</option>
-            </select>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-cancel" @click="closeItemModal">取消</button>
-          <button class="btn btn-primary" @click="saveDictItem">确认{{ itemForm.id ? '修改' : '添加' }}</button>
         </div>
       </div>
     </div>
@@ -194,14 +222,30 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
-import { getDictList, getDictDetail, createDict, updateDict, deleteDict as apiDeleteDict, createDictItem, updateDictItem, deleteDictItem as apiDeleteDictItem } from '../../utils/api'
+import PageHeader from '@/components/ui/PageHeader.vue'
+import StatusTag from '@/components/ui/StatusTag.vue'
+import NoticeBar from '@/components/ui/NoticeBar.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
+import PagerBar from '@/components/ui/PagerBar.vue'
+import {
+  createDict,
+  createDictItem,
+  deleteDict as apiDeleteDict,
+  deleteDictItem as apiDeleteDictItem,
+  getDictDetail,
+  getDictList,
+  updateDict,
+  updateDictItem,
+} from '../../utils/api'
 
 const tableData = ref([])
 const pageNum = ref(1)
-const pageSize = ref(10)
+const pageSize = ref(20)
 const total = ref(0)
+const loading = ref(false)
+const saving = ref(false)
 const modalVisible = ref(false)
 const itemsModalVisible = ref(false)
 const itemModalVisible = ref(false)
@@ -209,12 +253,7 @@ const currentDictName = ref('')
 const currentDictId = ref(null)
 const dictItems = ref([])
 
-const totalPages = computed(() => Math.ceil(total.value / pageSize.value))
-
-const searchForm = reactive({
-  keyword: '',
-  status: ''
-})
+const searchForm = reactive({ keyword: '', status: '' })
 
 const form = reactive({
   id: null,
@@ -222,7 +261,7 @@ const form = reactive({
   dictName: '',
   dictType: '',
   description: '',
-  status: 1
+  status: 1,
 })
 
 const itemForm = reactive({
@@ -230,56 +269,65 @@ const itemForm = reactive({
   itemValue: '',
   itemLabel: '',
   sortOrder: 1,
-  status: 1
+  status: 1,
 })
 
 const loadData = async () => {
+  loading.value = true
   try {
     const response = await getDictList({
       pageNum: pageNum.value,
       pageSize: pageSize.value,
-      keyword: searchForm.keyword,
-      status: searchForm.status
+      keyword: searchForm.keyword || undefined,
+      status: searchForm.status || undefined,
     })
-    if (response.code === 200) {
-      tableData.value = response.data.list ?? []
-      total.value = response.data.total ?? 0
-    } else {
-      message.error(response.message || '加载数据失败')
-      tableData.value = []
-      total.value = 0
-    }
+    if (response.code !== 200) throw new Error(response.message || '加载数据失败')
+    tableData.value = response.data?.list ?? []
+    total.value = Number(response.data?.total ?? 0)
   } catch (error) {
-    message.error(error instanceof Error ? error.message : '加载数据失败')
     tableData.value = []
     total.value = 0
+    message.error(error instanceof Error ? error.message : '加载数据失败')
+  } finally {
+    loading.value = false
   }
 }
 
-const handleCurrentChange = (page) => {
-  if (page >= 1 && page <= totalPages.value) {
-    pageNum.value = page
-    loadData()
-  }
+function search() {
+  pageNum.value = 1
+  void loadData()
+}
+
+function reset() {
+  Object.assign(searchForm, { keyword: '', status: '' })
+  search()
+}
+
+function handleCurrentChange(next) {
+  pageNum.value = next
+  void loadData()
+}
+
+function changePageSize(size) {
+  pageSize.value = size
+  pageNum.value = 1
+  void loadData()
 }
 
 const openCreateModal = () => {
-  form.id = null
-  form.dictCode = ''
-  form.dictName = ''
-  form.dictType = ''
-  form.description = ''
-  form.status = 1
+  Object.assign(form, { id: null, dictCode: '', dictName: '', dictType: '', description: '', status: 1 })
   modalVisible.value = true
 }
 
 const editDict = (row) => {
-  form.id = row.id
-  form.dictCode = row.dictCode
-  form.dictName = row.dictName
-  form.dictType = row.dictType
-  form.description = row.description
-  form.status = row.status
+  Object.assign(form, {
+    id: row.id,
+    dictCode: row.dictCode ?? '',
+    dictName: row.dictName ?? '',
+    dictType: row.dictType ?? '',
+    description: row.description ?? '',
+    status: Number(row.status ?? 1),
+  })
   modalVisible.value = true
 }
 
@@ -288,66 +336,50 @@ const closeModal = () => {
 }
 
 const saveDict = async () => {
-  if (!form.dictCode || !form.dictName) {
-    alert('请填写必填项')
+  if (!form.dictCode.trim() || !form.dictName.trim()) {
+    message.warning('字典编码与名称为必填')
     return
   }
-  
+  saving.value = true
   try {
-    let response
-    if (form.id) {
-      response = await updateDict(form.id, form)
-    } else {
-      response = await createDict(form)
-    }
-    
-    if (response.code === 200) {
-      alert(form.id ? '修改成功' : '创建成功')
-      closeModal()
-      loadData()
-    } else {
-      alert(response.message || '操作失败')
-    }
+    const payload = { ...form }
+    const response = form.id ? await updateDict(form.id, payload) : await createDict(payload)
+    if (response.code !== 200) throw new Error(response.message || '操作失败')
+    message.success(form.id ? '字典已更新' : '字典已创建')
+    closeModal()
+    await loadData()
   } catch (error) {
-    alert('操作失败')
+    message.error(error instanceof Error ? error.message : '操作失败')
+  } finally {
+    saving.value = false
   }
 }
 
 const deleteDict = async (id) => {
-  if (!confirm('确定要删除该字典吗？')) return
+  if (!window.confirm('确定删除该字典？字典项会一并不可见，历史引用不会自动清理。')) return
   try {
     const response = await apiDeleteDict(id)
-    if (response.code === 200) {
-      alert('删除成功')
-      loadData()
-    } else {
-      alert(response.message || '删除失败')
-    }
+    if (response.code !== 200) throw new Error(response.message || '删除失败')
+    message.success('字典已删除')
+    await loadData()
   } catch (error) {
-    alert('删除失败')
+    message.error(error instanceof Error ? error.message : '删除失败')
   }
 }
 
-const viewItems = (row) => {
-  // 原来这里写死了"是/否"两条：点任何字典都看到同一份假内容。
-  // 现在按字典 id 查真实字典项。
-  void (async () => {
-    currentDictName.value = row.dictName
-    currentDictId.value = row.id
-    try {
-      const response = await getDictDetail(row.id)
-      if (response.code === 200) {
-        dictItems.value = response.data?.items ?? []
-      } else {
-        message.error(response.message || '加载字典项失败')
-        dictItems.value = []
-      }
-    } catch (error) {
-      message.error(error instanceof Error ? error.message : '加载字典项失败')
-      dictItems.value = []
-    }
-    itemsModalVisible.value = true
-  })()
+/** 打开字典项：按字典 id 查真实条目（旧实现曾写死"是/否"两条假数据）。 */
+const viewItems = async (row) => {
+  currentDictName.value = row.dictName
+  currentDictId.value = row.id
+  try {
+    const response = await getDictDetail(row.id)
+    if (response.code !== 200) throw new Error(response.message || '加载字典项失败')
+    dictItems.value = response.data?.items ?? []
+  } catch (error) {
+    dictItems.value = []
+    message.error(error instanceof Error ? error.message : '加载字典项失败')
+  }
+  itemsModalVisible.value = true
 }
 
 const closeItemsModal = () => {
@@ -355,21 +387,19 @@ const closeItemsModal = () => {
 }
 
 const openItemCreateModal = () => {
-  itemForm.id = null
-  itemForm.itemValue = ''
-  itemForm.itemLabel = ''
-  itemForm.sortOrder = 1
-  itemForm.status = 1
+  Object.assign(itemForm, { id: null, itemValue: '', itemLabel: '', sortOrder: 1, status: 1 })
   itemModalVisible.value = true
 }
 
 const editDictItem = (row) => {
-  itemForm.id = row.id
-  itemForm.itemValue = row.itemValue
-  // 接口字段是 itemName / itemSort
-  itemForm.itemLabel = row.itemName
-  itemForm.sortOrder = row.itemSort
-  itemForm.status = row.status
+  Object.assign(itemForm, {
+    id: row.id,
+    itemValue: row.itemValue ?? '',
+    // 接口字段是 itemName / itemSort
+    itemLabel: row.itemName ?? '',
+    sortOrder: Number(row.itemSort ?? 1),
+    status: Number(row.status ?? 1),
+  })
   itemModalVisible.value = true
 }
 
@@ -378,455 +408,84 @@ const closeItemModal = () => {
 }
 
 const saveDictItem = async () => {
-  if (!itemForm.itemValue || !itemForm.itemLabel) {
-    message.warning('请填写必填项')
+  if (!itemForm.itemValue.trim() || !itemForm.itemLabel.trim()) {
+    message.warning('值与标签为必填')
     return
   }
-
+  saving.value = true
   const payload = {
     itemName: itemForm.itemLabel,
     itemValue: itemForm.itemValue,
     itemSort: Number(itemForm.sortOrder) || 1,
-    status: itemForm.status
+    status: itemForm.status,
   }
-
   try {
-    // 原来只改本地数组：弹窗里"添加/修改成功"，关掉再打开（甚至刷新）就回到原样
+    // 写接口 + 回读：原来只改本地数组，关掉弹窗就回到原样
     const response = itemForm.id
       ? await updateDictItem(itemForm.id, payload)
       : await createDictItem(currentDictId.value, payload)
-    if (response.code === 200) {
-      message.success(itemForm.id ? '修改成功' : '添加成功')
-      closeItemModal()
-      viewItems({ id: currentDictId.value, dictName: currentDictName.value })
-    } else {
-      message.error(response.message || '操作失败')
-    }
+    if (response.code !== 200) throw new Error(response.message || '操作失败')
+    message.success(itemForm.id ? '字典项已更新' : '字典项已添加')
+    closeItemModal()
+    await viewItems({ id: currentDictId.value, dictName: currentDictName.value })
   } catch (error) {
     message.error(error instanceof Error ? error.message : '操作失败')
+  } finally {
+    saving.value = false
   }
 }
 
 const deleteDictItem = async (id) => {
-  if (!confirm('确定要删除该字典项吗？')) return
+  if (!window.confirm('确定删除该字典项？已引用该值的业务数据会失去对应标签。')) return
   try {
     const response = await apiDeleteDictItem(id)
-    if (response.code === 200) {
-      message.success('删除成功')
-      viewItems({ id: currentDictId.value, dictName: currentDictName.value })
-    } else {
-      message.error(response.message || '删除失败')
-    }
+    if (response.code !== 200) throw new Error(response.message || '删除失败')
+    message.success('字典项已删除')
+    await viewItems({ id: currentDictId.value, dictName: currentDictName.value })
   } catch (error) {
     message.error(error instanceof Error ? error.message : '删除失败')
   }
 }
 
-const formatDate = (date) => {
-  if (!date) return ''
-  // 后端返回 ISO（如 2026-10-12T17:32:41），只按空格切分会把 T 一起显示出来
-  return String(date).replace('T', ' ').split(' ')[0]
-}
+const formatDate = (date) => (date ? String(date).replace('T', ' ').split(' ')[0] : '—')
 
-onMounted(() => {
-  loadData()
-})
+onMounted(loadData)
 </script>
 
 <style scoped>
-.dict-list {
-  padding: 20px;
-}
-
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 24px;
-}
-
-.header-left h1 {
-  font-size: 24px;
-  font-weight: 600;
-  color: #2d3748;
-  margin: 0;
-}
-
-.header-left p {
-  font-size: 14px;
-  color: #a0aec0;
-  margin: 4px 0 0;
-}
-
-.add-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: linear-gradient(135deg, #238636 0%, #2ea043 100%);
-  color: #fff;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.add-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(35, 134, 54, 0.3);
-}
-
-.btn-icon {
-  font-size: 18px;
-}
-
-.search-bar {
-  display: flex;
-  gap: 16px;
-  margin-bottom: 20px;
-}
-
-.search-group {
-  display: flex;
-  flex: 1;
-}
-
-.search-input {
-  flex: 1;
-  padding: 10px 16px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px 0 0 8px;
-  font-size: 14px;
-  outline: none;
-  transition: border-color 0.2s;
-}
-
-.search-input:focus {
-  border-color: #238636;
-}
-
-.search-btn {
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-left: none;
-  padding: 10px 24px;
-  border-radius: 0 8px 8px 0;
-  font-size: 14px;
-  color: #238636;
-  cursor: pointer;
-}
-
-.search-btn:hover {
-  background: rgba(35, 134, 54, 0.1);
-}
-
-.filter-group {
-  display: flex;
-  gap: 12px;
-}
-
-.filter-select {
-  padding: 10px 16px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 14px;
-  color: #4a5568;
-  background: #fff;
-  cursor: pointer;
-}
-
-.table-card {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  overflow: hidden;
-}
-
-.data-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.data-table th,
-.data-table td {
-  padding: 14px 16px;
-  text-align: left;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.data-table th {
-  font-size: 13px;
-  font-weight: 600;
-  color: #4a5568;
-  background: #f8fafc;
-}
-
-.data-table td {
-  font-size: 13px;
-  color: #2d3748;
-}
-
 .desc-cell {
-  max-width: 200px;
+  max-width: 260px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.status-badge {
-  font-size: 11px;
-  font-weight: 500;
-  padding: 4px 12px;
-  border-radius: 12px;
-}
-
-.status-badge.active {
-  background: rgba(35, 134, 54, 0.1);
-  color: #238636;
-}
-
-.status-badge.inactive {
-  background: rgba(160, 174, 192, 0.1);
-  color: #a0aec0;
-}
-
-.action-cell {
-  display: flex;
-  gap: 8px;
-}
-
-.action-btn {
-  font-size: 12px;
-  padding: 6px 12px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.action-btn.view {
-  background: rgba(59, 130, 246, 0.1);
-  color: #3b82f6;
-}
-
-.action-btn.edit {
-  background: rgba(210, 153, 34, 0.1);
-  color: #d29922;
-}
-
-.action-btn.delete {
-  background: rgba(218, 54, 51, 0.1);
-  color: #da3633;
-}
-
-.action-btn:hover {
-  opacity: 0.8;
-}
-
-.pagination {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 16px;
-  padding: 20px;
-}
-
-.page-btn {
-  padding: 8px 16px;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  background: #fff;
-  font-size: 13px;
-  color: #4a5568;
-  cursor: pointer;
-}
-
-.page-btn:hover:not(:disabled) {
-  background: #f8fafc;
-}
-
-.page-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.page-info {
-  font-size: 13px;
-  color: #a0aec0;
-}
-
-.modal-overlay {
+.mds-mask {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  inset: 0;
+  z-index: 1000;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
-}
-
-.modal-content {
-  background: #fff;
-  border-radius: 12px;
-  width: 500px;
-  max-width: 90%;
-  overflow: hidden;
-}
-
-.items-modal {
-  width: 700px;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.modal-header h3 {
-  font-size: 18px;
-  font-weight: 600;
-  color: #2d3748;
-  margin: 0;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 24px;
-  color: #a0aec0;
-  cursor: pointer;
-}
-
-.close-btn:hover {
-  color: #2d3748;
-}
-
-.modal-body {
+  background: rgba(0, 0, 0, 0.45);
   padding: 20px;
 }
 
-.items-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
+.mds-modal {
+  width: 680px;
+  max-width: 100%;
+  max-height: 88vh;
+  overflow: auto;
+  border-radius: var(--mds-radius);
+  background: var(--mds-card);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.22);
 }
 
-.items-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #2d3748;
+.mds-modal--wide {
+  width: 860px;
 }
 
-.btn {
-  padding: 10px 20px;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  border: none;
-  transition: all 0.2s;
-}
-
-.btn-sm {
-  padding: 6px 12px;
-  font-size: 12px;
-}
-
-.btn-cancel {
-  background: #f0f0f0;
-  color: #4a5568;
-}
-
-.btn-cancel:hover {
-  background: #e2e8f0;
-}
-
-.btn-primary {
-  background: linear-gradient(135deg, #238636 0%, #2ea043 100%);
-  color: #fff;
-}
-
-.btn-primary:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(35, 134, 54, 0.3);
-}
-
-.form-group {
-  margin-bottom: 16px;
-}
-
-.form-group label {
-  display: block;
-  font-size: 14px;
-  color: #4a5568;
-  margin-bottom: 6px;
-  font-weight: 500;
-}
-
-.form-input {
-  width: 100%;
-  padding: 10px 14px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 14px;
-  outline: none;
-  box-sizing: border-box;
-}
-
-.form-input:focus {
-  border-color: #238636;
-}
-
-.form-input:disabled {
-  background: #f8fafc;
-  color: #a0aec0;
-}
-
-.form-textarea {
-  width: 100%;
-  padding: 10px 14px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 14px;
-  outline: none;
-  box-sizing: border-box;
-  min-height: 80px;
-}
-
-.form-select {
-  width: 100%;
-  padding: 10px 14px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 14px;
-  color: #4a5568;
-  background: #fff;
-  cursor: pointer;
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  padding: 20px;
-  border-top: 1px solid #f0f0f0;
-}
-
-.items-table {
-  font-size: 13px;
-}
-
-.items-table th,
-.items-table td {
-  padding: 10px 12px;
+.mds-modal--sm {
+  width: 520px;
 }
 </style>

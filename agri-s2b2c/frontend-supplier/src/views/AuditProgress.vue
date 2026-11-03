@@ -1,88 +1,116 @@
 <template>
   <div class="audit-progress-page">
     <div class="progress-card">
-      <h2>审核进度</h2>
-      <el-timeline>
-        <el-timeline-item
-          v-for="(item, index) in steps"
-          :key="index"
-          :icon="item.icon"
-          :type="item.type"
-          :color="item.color"
-        >
-          <div class="step-content">
-            <h3>{{ item.title }}</h3>
-            <p>{{ item.desc }}</p>
-            <span v-if="item.time" class="step-time">{{ item.time }}</span>
-          </div>
-        </el-timeline-item>
-      </el-timeline>
-      <div class="audit-opinion" v-if="auditStatus === 'REJECTED' && auditOpinion">
-        <h3>审核意见</h3>
-        <p>{{ auditOpinion }}</p>
-        <el-button type="primary" @click="reapply">重新申请</el-button>
+      <div class="head">
+        <div>
+          <h2>入驻审核进度</h2>
+          <p>平台审核通过后，还需完成批发商业务身份认证，供货能力才会开通。</p>
+        </div>
+        <el-tag :type="statusType">{{ statusText }}</el-tag>
       </div>
+
+      <el-empty v-if="auditStatus === 'NONE'" description="尚未提交入驻申请">
+        <el-button type="primary" @click="router.push('/apply')">去提交申请</el-button>
+      </el-empty>
+
+      <template v-else>
+        <el-steps :active="activeStep" finish-status="success" simple class="steps">
+          <el-step title="提交申请" />
+          <el-step title="平台审核" />
+          <el-step title="业务身份与供货能力" />
+          <el-step title="入驻完成" />
+        </el-steps>
+
+        <dl class="info">
+          <dt>企业名称</dt><dd>{{ detail.companyName || profile.companyName || '—' }}</dd>
+          <dt>店铺名称</dt><dd>{{ detail.shopName || profile.shopName || '—' }}</dd>
+          <dt>申请时间</dt><dd>{{ profile.createTime || detail.createTime || '—' }}</dd>
+          <dt>审核时间</dt><dd>{{ profile.auditTime || detail.auditTime || '—' }}</dd>
+          <dt>供货能力</dt>
+          <dd>
+            <el-tag :type="profile.capabilityGranted ? 'success' : 'warning'">
+              {{ profile.capabilityGranted ? '已开通' : '未开通' }}
+            </el-tag>
+            <span v-if="!profile.capabilityGranted" class="reason">{{ profile.capabilityReason }}</span>
+          </dd>
+        </dl>
+
+        <div v-if="auditStatus === 'REJECTED'" class="audit-opinion">
+          <h3>审核意见</h3>
+          <p>{{ detail.auditOpinion || profile.auditOpinion || '请根据平台意见调整后重新申请。' }}</p>
+          <el-button type="primary" @click="reapply">重新申请</el-button>
+        </div>
+
+        <div v-if="auditStatus === 'APPROVED' && !profile.capabilityGranted" class="capability-guide">
+          <b>还需要完成业务身份认证</b>
+          <p>{{ profile.capabilityReason || '请先在用户中心完成批发商业务身份认证，通过后即可上架商品。' }}</p>
+          <el-button type="primary" size="small" @click="openIdentityCenter">前往用户中心完成认证</el-button>
+        </div>
+
+        <div class="actions">
+          <el-button :loading="loading" @click="loadAuditInfo">刷新审核状态</el-button>
+          <el-button v-if="auditStatus === 'APPROVED' && profile.capabilityGranted"
+                     type="primary" @click="router.push('/')">进入供应商工作台</el-button>
+        </div>
+      </template>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import { supplierApi } from '../api'
 
 const router = useRouter()
+const loading = ref(false)
+const profile = ref({})
+const detail = ref({})
+const auditStatus = ref('NONE')
 
-const auditStatus = ref('PENDING')
-const auditOpinion = ref('')
-const auditTime = ref('')
-
-const steps = ref([])
-
-const initSteps = () => {
-  const baseSteps = [
-    { title: '提交申请', desc: '供应商提交入驻申请', icon: 'Document', type: 'success', color: '#67c23a', time: '2025-01-15 10:30' },
-    { title: '资质审核', desc: '平台审核供应商资质信息', icon: 'User', type: '', color: '', time: '' },
-    { title: '产品审核', desc: '审核商品信息及图片', icon: 'Goods', type: '', color: '', time: '' },
-    { title: '审核通过', desc: '入驻成功，可正常经营', icon: 'CircleCheck', type: '', color: '', time: '' }
-  ]
-
-  if (auditStatus.value === 'APPROVED') {
-    baseSteps[1].type = 'success'
-    baseSteps[1].color = '#67c23a'
-    baseSteps[1].time = '2025-01-15 14:00'
-    baseSteps[2].type = 'success'
-    baseSteps[2].color = '#67c23a'
-    baseSteps[2].time = '2025-01-15 16:00'
-    baseSteps[3].type = 'success'
-    baseSteps[3].color = '#67c23a'
-    baseSteps[3].time = '2025-01-15 16:30'
-  } else if (auditStatus.value === 'PENDING') {
-    baseSteps[1].type = 'primary'
-    baseSteps[1].color = '#409eff'
-  } else if (auditStatus.value === 'REJECTED') {
-    baseSteps[1].type = 'danger'
-    baseSteps[1].color = '#f56c6c'
-    baseSteps[1].time = '2025-01-15 14:00'
-  }
-
-  steps.value = baseSteps
-}
-
-onMounted(() => {
-  loadAuditInfo()
+const statusText = computed(() => ({
+  NONE: '未申请', PENDING: '审核中', APPROVED: '已通过', REJECTED: '已拒绝',
+}[auditStatus.value] || auditStatus.value))
+const statusType = computed(() => ({
+  NONE: 'info', PENDING: 'warning', APPROVED: 'success', REJECTED: 'danger',
+}[auditStatus.value] || 'info'))
+const activeStep = computed(() => {
+  if (auditStatus.value === 'APPROVED' && profile.value.capabilityGranted) return 4
+  if (auditStatus.value === 'APPROVED') return 2
+  if (auditStatus.value === 'PENDING' || auditStatus.value === 'REJECTED') return 1
+  return 0
 })
 
-const loadAuditInfo = async () => {
-  const res = await supplierApi.getDetail(1)
-  auditStatus.value = res.auditStatus
-  auditOpinion.value = res.auditOpinion
-  auditTime.value = res.auditTime
-  initSteps()
+onMounted(loadAuditInfo)
+
+async function loadAuditInfo() {
+  loading.value = true
+  try {
+    const data = (await supplierApi.getProfile()) || {}
+    profile.value = data
+    if (!data.applied) {
+      auditStatus.value = 'NONE'
+      detail.value = {}
+      return
+    }
+    detail.value = await supplierApi.getDetail(data.id)
+    auditStatus.value = detail.value?.auditStatus || data.auditStatus || 'PENDING'
+  } catch (e) {
+    ElMessage.error(e?.message || '审核进度读取失败')
+  } finally {
+    loading.value = false
+  }
 }
 
-const reapply = () => {
-  router.push('/apply')
+const reapply = () => router.push('/apply')
+
+function openIdentityCenter() {
+  const local = ['localhost', '127.0.0.1'].includes(window.location.hostname)
+  const base = local
+    ? `${window.location.protocol}//${window.location.hostname}:8098/portal/index.html`
+    : `${window.location.origin}/portal/index.html`
+  window.open(`${base}#/account/org`, '_blank', 'noopener')
 }
 </script>
 
@@ -93,51 +121,96 @@ const reapply = () => {
 }
 
 .progress-card {
-  width: 600px;
-  background: #fff;
+  width: 760px;
+  max-width: 100%;
+  padding: 24px;
+  border: 1px solid #e3eae5;
   border-radius: 12px;
-  padding: 30px;
+  background: #fff;
 }
 
-.progress-card h2 {
-  text-align: center;
-  margin-bottom: 30px;
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
 }
 
-.step-content {
-  margin-left: 15px;
+.head h2 {
+  margin: 0 0 6px;
+  font-size: 18px;
 }
 
-.step-content h3 {
-  font-size: 16px;
-  margin-bottom: 5px;
-}
-
-.step-content p {
-  font-size: 14px;
-  color: #999;
-}
-
-.step-time {
+.head p {
+  margin: 0;
+  color: #84938a;
   font-size: 12px;
-  color: #999;
+  line-height: 1.6;
+}
+
+.steps {
+  margin-bottom: 18px;
+}
+
+.info {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 10px 14px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.info dt {
+  color: #84938a;
+}
+
+.info dd {
+  margin: 0;
+  color: #173e2a;
+}
+
+.reason {
+  margin-left: 8px;
+  color: #a46408;
+  font-size: 12px;
+}
+
+.audit-opinion,
+.capability-guide {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: 13px;
 }
 
 .audit-opinion {
-  margin-top: 30px;
-  padding: 20px;
-  background: #fef0f0;
-  border-radius: 8px;
+  border: 1px solid #f0c7c7;
+  background: #fff5f5;
+  color: #7d2e2e;
 }
 
-.audit-opinion h3 {
-  font-size: 16px;
-  color: #f56c6c;
-  margin-bottom: 10px;
+.capability-guide {
+  border: 1px solid #f2d8a8;
+  background: #fff9ec;
+  color: #7c5a12;
 }
 
-.audit-opinion p {
-  font-size: 14px;
-  color: #666;
+.audit-opinion h3,
+.capability-guide b {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+
+.audit-opinion p,
+.capability-guide p {
+  margin: 0 0 8px;
+  line-height: 1.7;
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 18px;
 }
 </style>

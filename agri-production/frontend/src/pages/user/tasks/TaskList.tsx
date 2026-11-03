@@ -40,23 +40,30 @@ import {
   CheckCircleOutlined,
   DeleteOutlined,
   ExportOutlined,
+  PlayCircleOutlined,
   PlusOutlined,
   UserSwitchOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import useFarmStore from '@/store/farm'
-import { deleteTask, dispatchTask, fetchTaskPage } from '@/api/tasks'
+import {
+  deleteTask,
+  dispatchTask,
+  executeTask,
+  fetchTaskPage,
+  submitTaskResult,
+} from '@/api/tasks'
 import { listMembers } from '@/api/members'
 import { listPlots } from '@/api/plots'
-import type { Member, Plot, Task, TaskStatus } from '@/types'
+import type { Member, Plot, Task } from '@/types'
 import {
   isTaskDone,
   isTaskExecuting,
   isTaskOverdue,
   OVERDUE_DERIVED_NOTICE,
   TASK_ACCEPT_PENDING,
-  TASK_STATUS_DOING,
-  TASK_STATUS_DONE,
+  TASK_STATUS_COMPLETED,
+  TASK_STATUS_EXECUTING,
 } from '@/types/task'
 import {
   ACCEPT_STATUS_META,
@@ -121,19 +128,56 @@ interface BoardColumn {
   title: string
   /** 列头颜色 */
   color: string
-  /** 归属于该列的任务状态 */
-  statuses: TaskStatus[]
+  /** 判定该任务属于本列（一条任务只会落进一列，避免同一卡片重复出现） */
+  match: (task: Task) => boolean
 }
 
-/** 看板列配置：标准值与迁移前别名归入同一列，避免同一业务状态重复展示 */
+/**
+ * 看板列配置。
+ *
+ * 「待验收」与「已完成」都来自 status=completed，靠 acceptStatus 拆开：
+ * - completed + acceptStatus=0 → 待验收
+ * - completed + acceptStatus=1 → 已完成
+ * 同一个任务不会同时出现在两列，也不会因为两个状态词（doing/done）重复展示。
+ */
 const BOARD_COLUMNS: BoardColumn[] = [
-  { key: 'pending', title: '待执行', color: '#1677ff', statuses: ['pending', 'assigned'] },
-  { key: 'doing', title: '执行中', color: '#fa8c16', statuses: ['executing', 'doing'] },
-  { key: 'done', title: '已完成', color: '#52c41a', statuses: ['completed', 'done'] },
-  { key: 'suspended', title: '已暂停', color: '#d4b106', statuses: ['suspended'] },
-  { key: 'cancelled', title: '已取消', color: '#8c8c8c', statuses: ['cancelled'] },
-  { key: 'expired', title: '已过期', color: '#fa541c', statuses: ['expired'] },
-  { key: 'rejected', title: '已驳回', color: '#ff4d4f', statuses: ['rejected'] },
+  {
+    key: 'pending',
+    title: '待执行',
+    color: '#1677ff',
+    match: (task) => task.status === 'pending' || task.status === 'assigned',
+  },
+  {
+    key: 'doing',
+    title: '执行中',
+    color: '#fa8c16',
+    match: (task) => isTaskExecuting(task.status),
+  },
+  {
+    key: 'acceptPending',
+    title: '待验收',
+    color: '#d4b106',
+    match: (task) => isTaskDone(task.status) && task.acceptStatus === TASK_ACCEPT_PENDING,
+  },
+  {
+    key: 'done',
+    title: '已完成',
+    color: '#52c41a',
+    match: (task) => isTaskDone(task.status) && task.acceptStatus !== TASK_ACCEPT_PENDING,
+  },
+  {
+    key: 'rejected',
+    title: '已驳回',
+    color: '#ff4d4f',
+    match: (task) => task.status === 'rejected',
+  },
+  {
+    key: 'closed',
+    title: '已暂停 / 取消 / 过期',
+    color: '#8c8c8c',
+    match: (task) =>
+      task.status === 'suspended' || task.status === 'cancelled' || task.status === 'expired',
+  },
 ]
 
 /**
@@ -179,9 +223,10 @@ function matchTab(task: Task, tab: TabKey): boolean {
  * 待执行（pending + assigned）与已逾期为复合条件，交由前端过滤，故不传 status。
  */
 function toServerStatus(tab: TabKey): string | undefined {
-  // 迁移窗口内后端仍按旧词检索，故下压 doing / done；数据切换验证完成后改为标准值（需单独提单）。
-  if (tab === 'doing') return TASK_STATUS_DOING
-  if (tab === 'done') return TASK_STATUS_DONE
+  // 后端服务层写入的是 executing / completed（并在查询时兼容旧词 doing / done），
+  // 查询下压必须用新词；此前传 doing/done 会把执行中 / 已完成列表筛成 0 条。
+  if (tab === 'doing') return TASK_STATUS_EXECUTING
+  if (tab === 'done') return TASK_STATUS_COMPLETED
   if (tab === 'rejected') return 'rejected'
   // pending（两值合并）、overdue（派生）、acceptPending（另一维度）都不行，
   // 统一返回 undefined，由 {@link CLIENT_ONLY_TABS} 标记改用本地筛选。
@@ -221,8 +266,7 @@ export default function TaskList(): JSX.Element {
   const boardQuery = useQuery({
     queryKey: ['production-tasks', 'board', farmId, filters],
     enabled: Boolean(farmId),
-    queryFn: () =>
-      fetchTaskPage({ farmId, ...filters, status: undefined, pageNum: 1, pageSize: 200 }),
+    queryFn: () => fetchTaskPage({ farmId, ...filters, pageNum: 1, pageSize: 200 }),
   })
 
   /** 当前 Tab 能否下压到后端 status 参数；不能的走本地筛选（见 CLIENT_ONLY_TABS） */
@@ -233,7 +277,13 @@ export default function TaskList(): JSX.Element {
     queryKey: ['production-tasks', 'table', farmId, filters, tab, pageNum, pageSize],
     enabled: Boolean(farmId) && view === 'table' && !clientOnlyTab,
     queryFn: () =>
-      fetchTaskPage({ farmId, ...filters, status: toServerStatus(tab), pageNum, pageSize }),
+      fetchTaskPage({
+        farmId,
+        ...filters,
+        status: toServerStatus(tab) ?? filters.status,
+        pageNum,
+        pageSize,
+      }),
   })
 
   /** 地块下拉（按当前农场） */
@@ -336,6 +386,27 @@ export default function TaskList(): JSX.Element {
       setAssigneeId(undefined)
       void invalidateTasks()
     },
+    onError: (error: Error) => message.error(error.message || '派发失败'),
+  })
+
+  /** 列表内快捷开始执行 */
+  const startMutation = useMutation({
+    mutationFn: (taskId: string) => executeTask(taskId),
+    onSuccess: () => {
+      message.success('任务已开始执行')
+      void invalidateTasks()
+    },
+    onError: (error: Error) => message.error(error.message || '开始执行失败'),
+  })
+
+  /** 列表内快捷提交成果（执行中 → 待验收） */
+  const submitMutation = useMutation({
+    mutationFn: (taskId: string) => submitTaskResult(taskId),
+    onSuccess: () => {
+      message.success('成果已提交，等待验收')
+      void invalidateTasks()
+    },
+    onError: (error: Error) => message.error(error.message || '提交成果失败'),
   })
 
   /** 删除任务 */
@@ -345,6 +416,7 @@ export default function TaskList(): JSX.Element {
       message.success('任务已删除')
       void invalidateTasks()
     },
+    onError: (error: Error) => message.error(error.message || '删除失败'),
   })
 
   /** 打开派发弹窗 */
@@ -425,6 +497,16 @@ export default function TaskList(): JSX.Element {
     message.success(`已导出 ${rows.length} 条任务`)
   }
 
+  /** 任务可执行的动作（按状态 + 验收维度判定，避免对已完成任务还显示「开始执行」） */
+  const canStart = (task: Task): boolean =>
+    task.status === 'pending' || task.status === 'assigned' || task.status === 'rejected'
+  const canAssign = (task: Task): boolean =>
+    task.status === 'pending' || task.status === 'assigned' || task.status === 'rejected'
+  const canSubmit = (task: Task): boolean => isTaskExecuting(task.status)
+  const canAccept = (task: Task): boolean =>
+    isTaskDone(task.status) && task.acceptStatus === TASK_ACCEPT_PENDING
+  const canDelete = (task: Task): boolean => !isTaskExecuting(task.status)
+
   /** 列表视图列定义 */
   const columns: ProColumns<Task>[] = [
     { title: '任务编号', dataIndex: 'taskNo', width: 140 },
@@ -495,35 +577,74 @@ export default function TaskList(): JSX.Element {
     {
       title: '操作',
       key: 'option',
-      width: 220,
+      width: 280,
       valueType: 'option',
-      render: (_, record) => [
-        <Typography.Link
-          key="detail"
-          onClick={() => navigate(`/production/tasks/${record.taskId}`)}
-        >
-          详情
-        </Typography.Link>,
-        <Typography.Link key="assign" onClick={() => openAssign(record)}>
-          派发
-        </Typography.Link>,
-        <Typography.Link
-          key="accept"
-          onClick={() => navigate(`/production/tasks/${record.taskId}/acceptance`)}
-        >
-          验收
-        </Typography.Link>,
-        <Popconfirm
-          key="delete"
-          title="确认删除该任务？"
-          description="删除后不可恢复，请谨慎操作。"
-          okText="确认删除"
-          cancelText="取消"
-          onConfirm={() => deleteMutation.mutate(record.taskId)}
-        >
-          <Typography.Link type="danger">删除</Typography.Link>
-        </Popconfirm>,
-      ],
+      render: (_, record) => {
+        const actions: JSX.Element[] = [
+          <Typography.Link
+            key="detail"
+            onClick={() => navigate(`/production/tasks/${record.taskId}`)}
+          >
+            详情
+          </Typography.Link>,
+        ]
+        if (canStart(record)) {
+          actions.push(
+            <Typography.Link
+              key="start"
+              onClick={() => startMutation.mutate(record.taskId)}
+            >
+              开始
+            </Typography.Link>,
+          )
+        }
+        if (canAssign(record)) {
+          actions.push(
+            <Typography.Link key="assign" onClick={() => openAssign(record)}>
+              派发
+            </Typography.Link>,
+          )
+        }
+        if (canSubmit(record)) {
+          actions.push(
+            <Popconfirm
+              key="submit"
+              title="确认提交任务成果？"
+              description="提交后任务进入待验收，验收通过前不能再次修改。"
+              okText="提交"
+              cancelText="取消"
+              onConfirm={() => submitMutation.mutate(record.taskId)}
+            >
+              <Typography.Link>提交成果</Typography.Link>
+            </Popconfirm>,
+          )
+        }
+        if (canAccept(record)) {
+          actions.push(
+            <Typography.Link
+              key="accept"
+              onClick={() => navigate(`/production/tasks/${record.taskId}/acceptance`)}
+            >
+              验收
+            </Typography.Link>,
+          )
+        }
+        if (canDelete(record)) {
+          actions.push(
+            <Popconfirm
+              key="delete"
+              title="确认删除该任务？"
+              description="删除后不可恢复，请谨慎操作。"
+              okText="确认删除"
+              cancelText="取消"
+              onConfirm={() => deleteMutation.mutate(record.taskId)}
+            >
+              <Typography.Link type="danger">删除</Typography.Link>
+            </Popconfirm>,
+          )
+        }
+        return actions
+      },
     },
   ]
 
@@ -561,24 +682,43 @@ export default function TaskList(): JSX.Element {
           {task.rejectCount > 0 && <Tag color="volcano">驳回 {task.rejectCount} 次</Tag>}
         </Space>
         <Space size={8} wrap onClick={(event) => event.stopPropagation()}>
-          <Typography.Link onClick={() => openAssign(task)}>
-            <UserSwitchOutlined /> 派发
+          <Typography.Link onClick={() => navigate(`/production/tasks/${task.taskId}`)}>
+            详情
           </Typography.Link>
-          <Typography.Link
-            onClick={() => navigate(`/production/tasks/${task.taskId}/acceptance`)}
-          >
-            <CheckCircleOutlined /> 验收
-          </Typography.Link>
-          <Popconfirm
-            title="确认删除该任务？"
-            okText="确认删除"
-            cancelText="取消"
-            onConfirm={() => deleteMutation.mutate(task.taskId)}
-          >
-            <Typography.Link type="danger">
-              <DeleteOutlined /> 删除
+          {canStart(task) && (
+            <Typography.Link onClick={() => startMutation.mutate(task.taskId)}>
+              <PlayCircleOutlined /> 开始
             </Typography.Link>
-          </Popconfirm>
+          )}
+          {canAssign(task) && (
+            <Typography.Link onClick={() => openAssign(task)}>
+              <UserSwitchOutlined /> 派发
+            </Typography.Link>
+          )}
+          {canSubmit(task) && (
+            <Typography.Link onClick={() => submitMutation.mutate(task.taskId)}>
+              提交成果
+            </Typography.Link>
+          )}
+          {canAccept(task) && (
+            <Typography.Link
+              onClick={() => navigate(`/production/tasks/${task.taskId}/acceptance`)}
+            >
+              <CheckCircleOutlined /> 验收
+            </Typography.Link>
+          )}
+          {canDelete(task) && (
+            <Popconfirm
+              title="确认删除该任务？"
+              okText="确认删除"
+              cancelText="取消"
+              onConfirm={() => deleteMutation.mutate(task.taskId)}
+            >
+              <Typography.Link type="danger">
+                <DeleteOutlined /> 删除
+              </Typography.Link>
+            </Popconfirm>
+          )}
         </Space>
       </Space>
     </Card>
@@ -588,7 +728,7 @@ export default function TaskList(): JSX.Element {
   const renderBoard = (): JSX.Element => (
     <Row gutter={12} wrap={false} style={{ overflowX: 'auto', paddingBottom: 8 }}>
       {BOARD_COLUMNS.map((column) => {
-        const items = filteredTasks.filter((task) => column.statuses.includes(task.status))
+        const items = filteredTasks.filter((task) => column.match(task))
         return (
           <Col key={column.key} flex="1 1 20%" style={{ minWidth: 240 }}>
             <Card
@@ -625,6 +765,8 @@ export default function TaskList(): JSX.Element {
       dataSource={tableRows}
       loading={tableLoading}
       search={false}
+      // 列宽合计约 1400，窄屏时在卡片内横向滚动
+      scroll={{ x: 1420 }}
       options={{ reload: () => void invalidateTasks(), density: true, setting: true }}
       pagination={{
         current: pageNum,
@@ -636,16 +778,6 @@ export default function TaskList(): JSX.Element {
           setPageSize(nextSize)
         },
       }}
-      toolBarRender={() => [
-        <Button
-          key="create"
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => navigate('/production/tasks/create')}
-        >
-          新建任务
-        </Button>,
-      ]}
     />
   )
 
@@ -789,12 +921,12 @@ export default function TaskList(): JSX.Element {
         {/* 逾期是本地推导值，不是后端状态——不标注会让用户以为是后端判定的 */}
         <Typography.Paragraph type="secondary" style={{ fontSize: 12, margin: '8px 0 0' }}>
           {OVERDUE_DERIVED_NOTICE}。「待验收」Tab 走
-          <Typography.Text code>status=done &amp;&amp; acceptStatus=0</Typography.Text>
-          —— 它是<strong>验收状态</strong>维度，与「任务状态」status 是两个维度（后端 status 只有
-          pending/assigned/doing/done/rejected，<strong>没有</strong> submitted）；
+          <Typography.Text code>status=completed &amp;&amp; acceptStatus=0</Typography.Text>
+          —— 它是<strong>验收状态</strong>维度，与「任务状态」status 是两个维度（后端 status 为
+          pending/assigned/executing/completed/rejected 等，<strong>没有</strong> submitted）；
           它是「已完成」的<strong>子集</strong>（已提交但还没验收），两者不互斥，
-          与「已逾期」和其他 Tab 的关系同理。看板按 status 分列，故不单设「待验收」列，
-          以免同一条任务在两个列里重复出现。
+          与「已逾期」和其他 Tab 的关系同理。看板已把 completed 按验收状态拆成「待验收 / 已完成」两列，
+          同一条任务只会出现在一列。
         </Typography.Paragraph>
         {!farmId ? (
           <Empty description="请先在顶部切换农场" />

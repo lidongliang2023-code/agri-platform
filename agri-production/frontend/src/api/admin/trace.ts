@@ -193,12 +193,50 @@ export interface AdminInspectionRow {
   createdAt?: string
 }
 
+/**
+ * 全链条回溯里的溯源码档案（后端 `AdminTraceCodeVO` 的真实字段名）。
+ *
+ * ⚠️ 这里以前直接标成用户端的 `RawTraceCode`：那个类型带 `activatedAt / lastScanAt`，
+ * 而运营端 VO 给的是 `activateTime / firstQueryTime`。名字对不上但 TS 不报错
+ * （RawTraceCode 是 Partial 拼的），于是详情页那两行**永远显示"未接入"**。
+ * 字段名跟着后端写，页面才不会读一个不存在的键。
+ */
+export interface AdminTraceCodeProfile {
+  /** 溯源码 */
+  code?: string
+  id?: string | number
+  /** generated / activated / scanned / active / expired / revoked */
+  status?: string
+  batchId?: string
+  batchNo?: string
+  /** 扫码次数 */
+  scanCount?: number
+  productName?: string
+  cropName?: string
+  grade?: string
+  farmName?: string
+  plotName?: string
+  harvestDate?: string
+  /** 有效期至（后端列 expiry_date；为空 = 未设置有效期） */
+  expireDate?: string | null
+  /** 激活时间 */
+  activateTime?: string | null
+  /** 首次扫码时间（后端只有首次，没有"最近扫码"） */
+  firstQueryTime?: string | null
+  onChain?: boolean
+  txHash?: string | null
+  /** 表里没有这一列，后端恒为 null */
+  activatedBy?: string | null
+  createdAt?: string
+  updatedAt?: string
+}
+
 /** 全链条回溯快照（/admin/trace/chain） */
 export interface AdminTraceChain {
   /** 是否命中溯源码 */
   found: boolean
   /** 溯源码档案 */
-  traceCode?: RawTraceCode
+  traceCode?: AdminTraceCodeProfile
   /** 关联批次档案 */
   batch?: AdminTraceChainBatch
   /** 批次关联检测记录 */
@@ -374,9 +412,27 @@ export async function fetchAdminTraceCodeStats(): Promise<Record<string, number>
 }
 
 /** 运营端溯源码分页查询参数 */
+/**
+ * 运营端溯源码分页参数。
+ *
+ * ⚠️ 全部在服务端生效。以前页面把 code/batchNo/dateRange 发给后端再本地筛当前页
+ * （后端只认 status），所以搜一个不在本页的码会筛出空列表，而分页总数还是没筛的数。
+ */
 export interface AdminTraceCodePageParams {
-  /** 状态过滤 generated / active / scanned / revoked */
+  /** 状态过滤 generated / active / scanned / revoked / expired */
   status?: string
+  /** 关键字：模糊匹配溯源码 / 批次号 / 产品名 */
+  keyword?: string
+  /** 农场主键 */
+  farmId?: string
+  /** 链上状态：onChain / unconfirmed / none */
+  chain?: 'onChain' | 'unconfirmed' | 'none'
+  /** 有效期：expired / valid / unset */
+  expiry?: 'expired' | 'valid' | 'unset'
+  /** 生成日期起（yyyy-MM-dd） */
+  from?: string
+  /** 生成日期止（yyyy-MM-dd） */
+  to?: string
   /** 页码，从 1 开始 */
   pageNum?: number
   /** 每页条数 */
@@ -391,6 +447,12 @@ export function fetchAdminTraceCodes(
     page: params.pageNum ?? 1,
     size: params.pageSize ?? 10,
     status: params.status,
+    keyword: params.keyword,
+    farmId: params.farmId,
+    chain: params.chain,
+    expiry: params.expiry,
+    from: params.from,
+    to: params.to,
   })
 }
 

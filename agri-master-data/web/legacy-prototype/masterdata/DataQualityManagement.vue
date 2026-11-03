@@ -887,13 +887,13 @@ onMounted(() => {})
   background: rgba(59, 130, 246, 0.1);
   color: #3b82f6;
   border-radius: 12px;
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .severity-badge {
   padding: 4px 10px;
   border-radius: 12px;
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
   font-weight: 500;
 }
 
@@ -920,7 +920,7 @@ onMounted(() => {})
 .status-badge {
   padding: 4px 10px;
   border-radius: 12px;
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
   font-weight: 500;
 }
 
@@ -1055,7 +1055,7 @@ onMounted(() => {})
 .rule-type {
   padding: 4px 10px;
   border-radius: 12px;
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .rule-type.completeness {

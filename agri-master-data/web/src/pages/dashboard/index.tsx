@@ -209,7 +209,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 500,
   },
   auditTime: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#6b7280',
   },
   auditAction: {

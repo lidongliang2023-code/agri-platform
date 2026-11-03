@@ -39,6 +39,9 @@ public class ProductVO {
 
     private Integer status;
 
+    /** SPU 准入审核状态：PENDING / APPROVED / REJECTED（agri_md_product.audit_status）。 */
+    private String auditStatus;
+
     private String tenantId;
 
     private String createBy;
@@ -62,9 +65,24 @@ public class ProductVO {
                 .specJson(product.getSpecJson())
                 .price(product.getPrice())
                 .imageUrls(product.getImageUrls())
+                // status 在实体里是 String、库里是 INT：非数字值解析失败时给 null，
+                // 不能让它把整个详情接口打成 500（一次脏数据毁掉整页）
+                .status(parseIntOrNull(product.getStatus()))
+                .auditStatus(product.getAuditStatus())
                 .tenantId(product.getTenantId())
                 .createBy(product.getCreateBy())
                 .createTime(product.getCreateTime())
                 .build();
+    }
+
+    private static Integer parseIntOrNull(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return Integer.valueOf(value.trim());
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
     }
 }

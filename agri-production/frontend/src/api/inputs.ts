@@ -149,6 +149,10 @@ export interface InputStockFlow {
   warehouseId?: string
   /** 流水类型：1入库 2领用 3退回 4盘盈 5盘亏 6报损 */
   flowType?: number
+  /** 投入品名称（全量流水分页接口返回，免前端再按投入品拼一次） */
+  inputName?: string
+  /** 投入品计量单位 */
+  inputUnit?: string
   /** 数量（入库为正、领用为负） */
   qty?: number
   /** 批次号 */
@@ -214,6 +218,25 @@ export function pageStockFlows(
   return http.get<PageResult<InputStockFlow>>(`${BASE}/${inputId}/stock-flows`, params)
 }
 
+/** 跨投入品库存流水查询参数（服务端筛选 / 排序，避免前端按投入品逐项拉取） */
+export interface AllStockFlowParams extends PageQuery {
+  /** 流水类型：1入库 2领用 3退回 4盘盈 5盘亏 6报损 */
+  flowType?: number
+  /** 批次号（模糊） */
+  batchNo?: string
+  /** 开始日期 yyyy-MM-dd */
+  startDate?: string
+  /** 结束日期 yyyy-MM-dd */
+  endDate?: string
+}
+
+/** 跨投入品分页查询库存流水（GET /inputs/stock-flows，含投入品名称） */
+export function pageAllStockFlows(
+  params: AllStockFlowParams,
+): Promise<PageResult<InputStockFlow>> {
+  return http.get<PageResult<InputStockFlow>>(`${BASE}/stock-flows`, params)
+}
+
 /** 新增库存流水（退回 / 盘盈 / 盘亏 / 报损等非标准作业） */
 export function createStockFlow(
   inputId: string,
@@ -229,7 +252,7 @@ export function removeStockFlow(inputId: string, flowId: string): Promise<void> 
 
 /** 分页查询投入品使用记录 */
 export function pageUsages(
-  params: PageQuery & { status?: number },
+  params: PageQuery & { status?: number; inputId?: string; plotId?: string },
 ): Promise<PageResult<InputUsageRecord>> {
   return http.get<PageResult<InputUsageRecord>>(`${BASE}/usages`, params)
 }

@@ -75,7 +75,10 @@ public class AuthService {
             throw new BusinessException(ErrorCode.USER_OR_PASSWORD_ERROR);
         }
         if (user.getStatus() == null || user.getStatus() != 1) {
-            throw new BusinessException(ErrorCode.USER_DISABLED);
+            // 默认文案是"用户已被禁用"，用户看到它只会来问客服"为什么禁用、怎么恢复"。
+            // 这里明确给出下一步动作：登录页有「账号被冻结？提交申诉」入口。
+            throw new BusinessException(ErrorCode.USER_DISABLED.getCode(),
+                    "账号已被停用或冻结，如认为有误，请在登录页点击「账号被冻结？提交申诉」申请复核");
         }
         Long marketId = request.marketId() == null ? 1L : request.marketId();
         return new AuthenticatedUser(user.getId(), marketId);

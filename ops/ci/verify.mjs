@@ -23,6 +23,10 @@
  *       有 `dist/build/mp-weixin` 产物时再核对一遍产物页面。不需要网络与数据库。</li>
  *   <li><b>mobile-e2e</b>：移动端真浏览器端到端（读链路 + 写链路两个脚本）。**默认跳过**，
  *       加 `--mobile-e2e` 打开 —— 它需要生产栈与 H5 dev server 在跑，CI 里没有这些。</li>
+ *   <li><b>scripts</b>：<code>scripts/</code> 下 e2e 与点检脚本<b>自身</b>能不能跑 —— 语法能解析、
+ *       不再用已经消失的 puppeteer、用 chromium 驱动时给了本机浏览器路径。
+ *       加这一组是因为 puppeteer 被移出依赖后，45 个脚本一跑就 MODULE_NOT_FOUND，
+ *       而门禁毫无察觉：脚本从没真正执行，历史"全绿"记录是假的。</li>
  * </ul>
  *
  * <p><b>CI 的已知边界</b>：`agri-master-data/`、`agri-finance/`、`agri-s2b2c/` 这些目录目前
@@ -57,7 +61,7 @@ for (let i = 2; i < process.argv.length; i += 1) {
   else if (token === '--help' || token === '-h') {
     console.log(
       '用法：node ops/ci/verify.mjs [--build] [--mobile-e2e] ' +
-        '[--only workspace,shared,gateway,bucket,apps,mobile,mobile-e2e,schema] [--skip shared]',
+        '[--only workspace,shared,gateway,bucket,apps,mobile,mobile-e2e,schema,scripts] [--skip shared]',
     )
     process.exit(0)
   } else {
@@ -251,6 +255,11 @@ async function checkApps() {
     .map((line) => /^\s*-\s*'?([^'\s][^']*)'?\s*$/.exec(line))
     .filter(Boolean)
     .map((m) => m[1])
+  // 独立移动端与物联网前端使用自己的 npm 依赖树，不进入 pnpm workspace，
+  // 但仍必须参与构建门禁。
+  for (const extra of ['agri-trade/mobile', 'agri-iot/web', 'agri-iot/admin']) {
+    if (!entries.includes(extra)) entries.push(extra)
+  }
   for (const entry of entries) {
     if (entry.includes('*')) continue
     const dir = path.join(REPO_ROOT, entry)
@@ -312,6 +321,109 @@ function checkSchema() {
     // 脚本自己会把表名列名打出来，这里整段带上，别让人再去手敲一遍
     record('schema', '列与实体一致性', 'fail', output.split(/\r?\n/).filter((l) => l.includes('✗')).join(' | ').slice(0, 400))
   }
+}
+
+/**
+ * ---------- scripts：e2e/点检脚本自身的可用性 ----------
+ *
+ * <p>加这一组的直接原因：仓库里的 puppeteer 早已不在（依赖被清掉），而 `scripts/` 下 45 个脚本
+ * 还在 `require2('puppeteer')`。它们不是"跑不过"，是**一跑就 MODULE_NOT_FOUND**——
+ * 也就是说这些脚本这些年的"全绿"记录根本没真正执行过，而门禁对此毫无察觉。
+ * 静态一条检查就能拦住这类腐化，成本几乎为零。</p>
+ *
+ * <p>三条规则：语法能解析；不得再用 puppeteer 专有 API；用 chromium 驱动必须给 executablePath
+ * （playwright-core 不自带浏览器，漏了就是在 CI 里"看起来配置好了"而本机根本起不来）。</p>
+ */
+/**
+ * playwright 的 `waitForFunction(pageFunction, arg, options)` 与 puppeteer 的
+ * `waitForFunction(pageFunction, options, ...args)` **参数位序不同**。
+ * 位置放错不会报错：函数会拿到那个 options 对象，于是断言永远为假、白等 30 秒，
+ * 看起来像"页面没渲染"，实际是脚本签名写错 —— 迁移时很容易整批踩到，故进门禁。
+ *
+ * @param {string} source 脚本源码
+ * @returns {string[]} 命中的问题描述（第二个参数是 options 字面量且还存在第三个实参的调用）
+ */
+function misorderedWaitForFunction(source) {
+  const hits = []
+  const needle = '.waitForFunction('
+  let from = 0
+  for (let guard = 0; guard < 200; guard++) {
+    const at = source.indexOf(needle, from)
+    if (at < 0) break
+    from = at + needle.length
+    const open = at + needle.length - 1
+    let depth = 0
+    let quote = null
+    const args = []
+    let current = ''
+    for (let i = open; i < source.length; i++) {
+      const ch = source[i]
+      if (quote) {
+        current += ch
+        if (ch === '\\') { current += source[++i] ?? ''; continue }
+        if (ch === quote) quote = null
+        continue
+      }
+      if (ch === "'" || ch === '"' || ch === '`') { quote = ch; current += ch; continue }
+      if (ch === '(' || ch === '[' || ch === '{') { depth++; if (depth === 1 && ch === '(') { current = ''; continue } }
+      if (ch === ')' || ch === ']' || ch === '}') { depth--; if (depth === 0) { args.push(current); break } }
+      if (ch === ',' && depth === 1) { args.push(current); current = ''; continue }
+      if (depth > 0) current += ch
+    }
+    // 尾随逗号会多切出一个空参，不算第三实参
+    while (args.length > 0 && args[args.length - 1].trim() === '') args.pop()
+    if (args.length >= 3 && /^\s*\{ *(timeout|polling)/.test(args[1])) {
+      const line = source.slice(0, at).split(/\r?\n/).length
+      hits.push(`第 ${line} 行 waitForFunction 参数位序错（playwright 是 (fn, arg, options)）`)
+    }
+  }
+  return hits
+}
+
+async function checkE2eHarness() {
+  const dir = path.join(REPO_ROOT, 'scripts')
+  const files = (await readdir(dir)).filter((name) => name.endsWith('.mjs')).sort()
+  const banned = [
+    [/require2\('puppeteer'\)|from 'puppeteer(-core)?'/, '仍依赖 puppeteer（仓库已无该包，跑即 MODULE_NOT_FOUND）'],
+    [/setRequestInterception/, 'puppeteer 专有：请求拦截要用 page.route'],
+    [/evaluateOnNewDocument/, 'puppeteer 专有：要用 addInitScript'],
+    [/createBrowserContext/, 'puppeteer 专有：要用 browser.newContext'],
+    [/\.setViewport\(/, 'puppeteer 专有：要用 setViewportSize 或 newContext 的 viewport'],
+    [/'networkidle2'/, 'puppeteer 专有等待档位：要用 networkidle'],
+    [/waitForNetworkIdle/, 'playwright 无 waitForNetworkIdle：要用 waitForLoadState'],
+    [/\.uploadFile\(/, 'puppeteer 专有：文件上传要用 setInputFiles'],
+    [/page\w*\.cookies\(\)/, 'puppeteer 专有：要经 page.context().cookies()'],
+  ]
+  const broken = []
+  let browserScripts = 0
+  let missingPath = 0
+  for (const name of files) {
+    const file = path.join(dir, name)
+    const source = await readFile(file, 'utf8')
+    const syntax = run(process.execPath, ['--check', file])
+    if (syntax.status !== 0) {
+      broken.push(`${name} 语法不通过：${firstMeaningfulError(`${syntax.stdout ?? ''}${syntax.stderr ?? ''}`)}`)
+      continue
+    }
+    for (const [pattern, why] of banned) {
+      const line = source.split(/\r?\n/).find((text, index) => pattern.test(text) && !/^\s*(\/\/|\*|\/\*)/.test(text))
+      if (line) broken.push(`${name}：${why}`)
+    }
+    for (const hit of misorderedWaitForFunction(source)) broken.push(`${name}：${hit}`)
+    if (/chromium\.launch\(/.test(source)) {
+      browserScripts += 1
+      if (!/executablePath/.test(source)) {
+        broken.push(`${name}：chromium.launch 没有 executablePath（playwright-core 不带浏览器）`)
+        missingPath += 1
+      }
+    }
+  }
+  if (broken.length > 0) {
+    record('scripts', 'e2e 脚本可执行性', 'fail', broken.slice(0, 6).join(' | ').slice(0, 900))
+    return
+  }
+  record('scripts', 'e2e 脚本可执行性', 'pass',
+    `${files.length} 个脚本语法通过、无 puppeteer 残留；${browserScripts} 个浏览器脚本都给了本机浏览器路径`)
 }
 
 /** ---------- mobile：移动端工程（uni-app，小程序/H5 同源）静态一致性 ---------- */
@@ -579,6 +691,7 @@ if (enabled('mobile-e2e')) {
   else record('mobile-e2e', '移动端端到端（真浏览器）', 'skip', '加 --mobile-e2e 打开（需要生产栈与 H5 dev server 在跑）')
 }
 if (enabled('schema')) checkSchema()
+if (enabled('scripts')) await checkE2eHarness()
 if (args.build && enabled('apps')) await checkApps()
 
 const icons = { pass: '✓', fail: '✗', skip: '·', warn: '⚠' }

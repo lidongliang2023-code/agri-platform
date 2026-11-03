@@ -9,6 +9,7 @@ import {
 import { isLoggedIn } from '@/utils/session'
 import { redirectToSso } from '@/utils/sso'
 import { BrandMark } from '@/components/BrandMark'
+import { PortalNav } from '@/components/PortalNav'
 import {
   HALL_PROVINCES,
   HALL_TAXONOMY,
@@ -269,15 +270,7 @@ export default function TradeHall(): JSX.Element {
             <span className="hall-logo"><BrandMark size={36} /></span>
             <span>丰链云<small>FENGCHAIN · AGRI</small></span>
           </a>
-          <nav className="main-nav">
-            <a href={PORTAL}>首页</a>
-            <a href={`${PORTAL}#/chains`}>产业链</a>
-            <a className="active" href="/hall">交易大厅</a>
-            <a href={`${PORTAL}#/?scroll=price`}>价格指数</a>
-            <a href={`${PORTAL}#/?scroll=news`}>产业资讯</a>
-            <a href="/member/seller?tab=fund">供应链金融</a>
-            <a href={`${PORTAL}#/logistics`}>物流服务</a>
-          </nav>
+          <PortalNav />
           <form className="header-search" onSubmit={submitSearch}>
             <input value={searchInput} onChange={(event) => setSearchInput(event.target.value)}
               placeholder="搜索商品 / 供应商 / 需求" />

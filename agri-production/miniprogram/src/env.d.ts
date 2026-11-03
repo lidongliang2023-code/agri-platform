@@ -16,3 +16,13 @@ declare module '*.vue' {
 
 /** uni-app 注入的全局对象（`uni.request` / `uni.getStorageSync` 等） */
 declare const uni: any
+
+interface ImportMetaEnv {
+  readonly VITE_API_BASE?: string
+  readonly VITE_TIANDITU_TOKEN?: string
+  readonly VITE_PRODUCTION_MOBILE_H5_URL?: string
+}
+
+interface ImportMeta {
+  readonly env: ImportMetaEnv
+}

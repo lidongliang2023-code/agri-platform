@@ -1,6 +1,8 @@
 package com.agri.masterdata.vo;
 
 import com.agri.masterdata.entity.Organization;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -15,11 +17,15 @@ import java.util.List;
 @AllArgsConstructor
 public class OrganizationVO {
 
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long id;
 
     private String orgName;
 
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long parentId;
+
+    private String parentName;
 
     private String ancestors;
 
@@ -28,6 +34,8 @@ public class OrganizationVO {
     private String orgType;
 
     private String orgTypeName;
+
+    private String orgPath;
 
     /**
      * 法人代表。
@@ -44,6 +52,14 @@ public class OrganizationVO {
 
     private String contactPhone;
 
+    private String contactMobile;
+
+    private String province;
+
+    private String city;
+
+    private String district;
+
     private String address;
 
     private Integer status;
@@ -54,9 +70,27 @@ public class OrganizationVO {
 
     private String tenantId;
 
+    /** 统一经营主体名称；历史 T 开头数据从兼容表回填。 */
+    private String tenantName;
+
+    /** 是否已关联可用的统一经营主体。 */
+    private Boolean subjectLinked;
+
+    /** 是否为未迁移的历史组织数据，只允许查看。 */
+    private Boolean legacy;
+
+    /** 当前是否允许在运营端应急维护。 */
+    private Boolean editable;
+
+    private Integer childCount;
+
     private String createBy;
 
     private LocalDateTime createTime;
+
+    private String updateBy;
+
+    private LocalDateTime updateTime;
 
     private String remark;
 
@@ -71,16 +105,23 @@ public class OrganizationVO {
                 .ancestors(org.getAncestors())
                 .orgCode(org.getOrgCode())
                 .orgType(org.getOrgType())
+                .orgPath(org.getOrgPath())
                 .legalPerson(org.getLegalPerson())
                 .orgLevel(org.getOrgLevel())
                 .contactPerson(org.getContactPerson())
                 .contactPhone(org.getContactPhone())
+                .contactMobile(org.getContactMobile())
+                .province(org.getProvince())
+                .city(org.getCity())
+                .district(org.getDistrict())
                 .address(org.getAddress())
                 .status(org.getStatus())
                 .authStatus(org.getAuthStatus())
                 .tenantId(org.getTenantId())
                 .createBy(org.getCreateBy())
                 .createTime(org.getCreateTime())
+                .updateBy(org.getUpdateBy())
+                .updateTime(org.getUpdateTime())
                 .build();
     }
 }

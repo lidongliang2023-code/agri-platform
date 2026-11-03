@@ -16,8 +16,9 @@ import {
   UserOutlined,
 } from '@ant-design/icons'
 import { createOrderFromProduct } from '@/api/order'
-import { getProductList } from '@/api/product'
+import { getProductList, getPublicProductById, type PublicProductDetail } from '@/api/product'
 import { BrandMark } from '@/components/BrandMark'
+import { PortalNav } from '@/components/PortalNav'
 import ProvinceCityFields from '@/components/ProvinceCityFields'
 import { redirectToSso } from '@/utils/sso'
 import '../../hall/hall.css'
@@ -55,15 +56,24 @@ export default function OrderCreate(): JSX.Element {
   const [params] = useSearchParams()
   const [form] = Form.useForm()
   const [products, setProducts] = useState<ProductOption[]>([])
+  const [productDetail, setProductDetail] = useState<PublicProductDetail | null>(null)
   const [loadingProducts, setLoadingProducts] = useState(true)
+  const [loadingSkus, setLoadingSkus] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [search, setSearch] = useState('')
 
   const productId = Form.useWatch('productId', form)
+  const skuId = Form.useWatch('skuId', form)
   const quantity = Number(Form.useWatch('quantity', form) ?? 0)
   const freightAmount = Number(Form.useWatch('freightAmount', form) ?? 0)
   const selectedProduct = products.find((item) => item.id === Number(productId))
-  const unitPrice = Number(selectedProduct?.price ?? selectedProduct?.priceMin ?? 0)
+  const skus = (productDetail?.skus ?? []).filter((item) => item.status === 1)
+  const selectableSkus = skus.filter((item) => item.id != null)
+  const selectedSku = skus.find((item) => item.id === Number(skuId)) ?? skus[0]
+  const currentUnit = selectedSku?.unit ?? selectedProduct?.unit ?? '单位'
+  const minOrderQuantity = Number(selectedSku?.minOrderQuantity ?? selectedProduct?.minOrderQuantity ?? 0.001)
+  const availableStock = Number(selectedSku?.stockQuantity ?? selectedProduct?.stockQuantity ?? 0)
+  const unitPrice = Number(selectedSku?.price ?? selectedProduct?.price ?? selectedProduct?.priceMin ?? 0)
   const goodsAmount = unitPrice * quantity
   const totalAmount = goodsAmount + freightAmount
 
@@ -86,6 +96,42 @@ export default function OrderCreate(): JSX.Element {
       quantity: Number.isFinite(quantityParam) && quantityParam > 0 ? quantityParam : undefined,
     })
   }, [params, form])
+
+  useEffect(() => {
+    if (!productId) {
+      setProductDetail(null)
+      return
+    }
+    let cancelled = false
+    setLoadingSkus(true)
+    getPublicProductById(Number(productId))
+      .then((body: { code?: number; data?: PublicProductDetail; message?: string }) => {
+        if (cancelled) return
+        if (body?.code !== 200 || !body.data) {
+          setProductDetail(null)
+          message.error(body?.message ?? '读取商品规格失败')
+          return
+        }
+        setProductDetail(body.data)
+        const enabled = (body.data.skus ?? []).filter((item) => item.status === 1)
+        const requested = Number(params.get('skuId'))
+        const nextSku = enabled.find((item) => item.id === requested) ?? enabled[0]
+        form.setFieldsValue({
+          skuId: nextSku?.id ?? undefined,
+          quantity: Number(nextSku?.minOrderQuantity ?? body.data.minOrderQuantity ?? 1),
+        })
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setProductDetail(null)
+          message.error('读取商品规格失败')
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingSkus(false)
+      })
+    return () => { cancelled = true }
+  }, [productId, form, params])
 
   const onFinish = async (values: Record<string, unknown>) => {
     setSubmitting(true)
@@ -134,15 +180,7 @@ export default function OrderCreate(): JSX.Element {
             <span className="hall-logo"><BrandMark size={36} /></span>
             <span>丰链云<small>FENGCHAIN · AGRI</small></span>
           </a>
-          <nav className="main-nav">
-            <a href={PORTAL}>首页</a>
-            <a href={`${PORTAL}#/chains`}>产业链</a>
-            <a className="active" href="/hall">交易大厅</a>
-            <a href={`${PORTAL}#/?scroll=price`}>价格指数</a>
-            <a href={`${PORTAL}#/?scroll=news`}>产业资讯</a>
-            <a href="/member/seller?tab=fund">供应链金融</a>
-            <a href={`${PORTAL}#/logistics`}>物流服务</a>
-          </nav>
+          <PortalNav />
           <form className="header-search" onSubmit={submitSearch}>
             <input value={search} onChange={(event) => setSearch(event.target.value)}
               placeholder="搜索商品 / 供应商 / 需求" />
@@ -203,7 +241,7 @@ export default function OrderCreate(): JSX.Element {
                   <div><strong>采购商品</strong><small>确认货源、数量和运费</small></div>
                 </div>
                 <Row gutter={[18, 0]}>
-                  <Col xs={24} lg={12}>
+                  <Col xs={24} md={12} lg={selectableSkus.length > 0 ? 8 : 12}>
                     <Form.Item label="选择货源" name="productId" rules={[{ required: true, message: '请选择货源' }]}>
                       <Select
                         showSearch
@@ -214,13 +252,33 @@ export default function OrderCreate(): JSX.Element {
                           value: item.id,
                           label: `${item.productName}（${item.sellerName}）${money(item.price ?? item.priceMin)}/${item.unit}`,
                         }))}
+                        onChange={() => form.setFieldsValue({ skuId: undefined, quantity: undefined })}
                       />
                     </Form.Item>
                   </Col>
+                  {selectableSkus.length > 0 && (
+                    <Col xs={24} md={12} lg={8}>
+                      <Form.Item label="商品规格" name="skuId"
+                        rules={selectableSkus.length > 1 ? [{ required: true, message: '请选择商品规格' }] : []}>
+                        <Select
+                          loading={loadingSkus}
+                          placeholder="请选择 SKU"
+                          options={selectableSkus.map((sku) => ({
+                            value: sku.id,
+                            label: `${sku.skuName} · ${money(sku.price)}/${sku.unit} · 库存 ${sku.stockQuantity}${sku.unit}`,
+                          }))}
+                          onChange={(value) => {
+                            const sku = skus.find((item) => item.id === value)
+                            form.setFieldsValue({ quantity: Number(sku?.minOrderQuantity ?? 1) })
+                          }}
+                        />
+                      </Form.Item>
+                    </Col>
+                  )}
                   <Col xs={12} lg={6}>
-                    <Form.Item label={`采购数量（${selectedProduct?.unit ?? '单位'}）`} name="quantity"
+                    <Form.Item label={`采购数量（${currentUnit}）`} name="quantity"
                       rules={[{ required: true, message: '请填写数量' }]}>
-                      <InputNumber min={selectedProduct?.minOrderQuantity ?? 0.001} style={{ width: '100%' }} />
+                      <InputNumber min={minOrderQuantity} max={availableStock > 0 ? availableStock : undefined} style={{ width: '100%' }} />
                     </Form.Item>
                   </Col>
                   <Col xs={12} lg={6}>
@@ -293,11 +351,12 @@ export default function OrderCreate(): JSX.Element {
                     <span>{selectedProduct.categoryName || selectedProduct.variety || '平台在售商品'}</span>
                     <strong>{selectedProduct.productName}</strong>
                     <small><ShopOutlined /> {selectedProduct.sellerName}</small>
+                    {selectedSku && <small>规格：{selectedSku.skuName} · 库存 {selectedSku.stockQuantity} {selectedSku.unit}</small>}
                   </div>
                 </div>
                 <div className="oc-summary-lines">
-                  <div><span>商品单价</span><strong>{money(unitPrice)} / {selectedProduct.unit}</strong></div>
-                  <div><span>采购数量</span><strong>{quantity || 0} {selectedProduct.unit}</strong></div>
+                  <div><span>商品单价</span><strong>{money(unitPrice)} / {currentUnit}</strong></div>
+                  <div><span>采购数量</span><strong>{quantity || 0} {currentUnit}</strong></div>
                   <div><span>商品金额</span><strong>{money(goodsAmount)}</strong></div>
                   <div><span>运费</span><strong>{money(freightAmount)}</strong></div>
                 </div>

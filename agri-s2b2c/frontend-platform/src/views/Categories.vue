@@ -1,7 +1,13 @@
 <template>
   <div class="categories-page">
-    <el-button type="primary" @click="showAddDialog = true">添加分类</el-button>
-    <el-table :data="categories" border style="margin-top: 20px">
+    <div class="page-head">
+      <div>
+        <h2>类目与溯源模板</h2>
+        <p>类目树主数据归主数据管理；本页维护分销展示类目。溯源模板需生产管理提供批次字段定义，当前未接入，不做占位假数据。</p>
+      </div>
+      <el-button type="primary" @click="showAddDialog = true">添加分类</el-button>
+    </div>
+    <el-table :data="categories" border>
       <el-table-column prop="id" label="ID" />
       <el-table-column prop="name" label="名称" />
       <el-table-column prop="icon" label="图标" />
@@ -110,4 +116,7 @@ const deleteCategory = async (id) => {
   border-radius: 12px;
   padding: 20px;
 }
+.page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+.page-head h2 { margin: 0 0 6px; font-size: 18px; }
+.page-head p { margin: 0; color: #6b7c72; font-size: 13px; line-height: 1.6; max-width: 760px; }
 </style>

@@ -44,10 +44,6 @@ public interface IQuoteService extends IService<Quote> {
      */
     boolean deleteQuote(Long id);
 
-    List<Quote> getQuotesByBuyer(Long buyerId);
-
-    List<Quote> getQuotesBySeller(Long sellerId);
-
     void acceptQuote(Long quoteId);
 
     void rejectQuote(Long quoteId, String reason);

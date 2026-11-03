@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -143,28 +144,26 @@ public class PlantingPlanController {
     }
 
     /**
-     * 提交计划审批：编制中 → 待审批。
+     * 提交计划审批：编制中 → 待审批，并生成运营端审批单。
      *
-     * <p>入参走查询串而不是请求体：无体的写操作如果声明成 {@code @RequestBody} 必填，
-     * 一调就是"Content-Type ... is not supported"的 500（农事任务页踩过同样的坑）。</p>
+     * <p>同时接受 POST 与 PATCH：{@code api/plans.ts} 历史上用 PATCH，页面主链路用 POST。
+     * 只留一种会让另一种直接 405。</p>
      */
-    @PostMapping("/{id}/submit")
+    @RequestMapping(value = "/{id}/submit", method = {RequestMethod.POST, RequestMethod.PATCH})
     public ApiResponse<PlantingPlanVO> submit(@PathVariable Long id) {
         String tenantId = TenantContextService.currentTenantId();
-        plantingPlanService.submitPlan(id);
-        return ApiResponse.success(plantingPlanService.detail(id, tenantId));
+        PlantingPlan plan = plantingPlanService.submitForApproval(id, tenantId);
+        return ApiResponse.success(PlantingPlanVO.of(plan));
     }
 
-    /** 审批计划（通过 → 进行中）。 */
+    /** 审批计划（通过 → 进行中），同步待审批单。 */
     @PostMapping("/{id}/approve")
     public ApiResponse<PlantingPlanVO> approve(@PathVariable Long id,
                                               @RequestParam(required = false) String approver,
                                               @RequestParam(required = false) String comment) {
         String tenantId = TenantContextService.currentTenantId();
-        if (!plantingPlanService.approvePlan(id, approver, comment)) {
-            throw new com.agri.production.common.exception.BusinessException(404, "种养计划不存在：" + id);
-        }
-        return ApiResponse.success(plantingPlanService.detail(id, tenantId));
+        return ApiResponse.success(PlantingPlanVO.of(
+                plantingPlanService.approveByAdmin(id, tenantId, approver, comment)));
     }
 
     /* ==================== 生育期阶段 ==================== */

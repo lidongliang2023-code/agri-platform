@@ -3,6 +3,7 @@ package com.agri.production.controller;
 import com.agri.production.common.entity.ApiResponse;
 import com.agri.production.common.entity.PageResult;
 import com.agri.production.service.ITraceLifecycleService;
+import com.agri.production.service.TraceCodeFilter;
 import com.agri.production.service.TenantContextService;
 import com.agri.production.vo.TraceCodeContractVO;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -42,17 +43,30 @@ public class TraceController {
         this.traceService = traceService;
     }
 
-    /** 分页查询溯源码（前端 fetchTraceCodePage，入参 page/size/status）。 */
+    /**
+     * 分页查询溯源码（前端 fetchTraceCodePage，入参 page/size/status）。
+     *
+     * <p>除 status 外还收 {@code keyword / farmId / chain / expiry / from / to}，
+     * 全部在服务端生效（见 {@code TraceCodeFilter}）。非法取值返回 400 并列出可选项 ——
+     * 静默忽略等于让用户以为筛过了。</p>
+     */
     @GetMapping("/codes")
     public ApiResponse<PageResult<TraceCodeContractVO>> page(
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer pageNum,
             @RequestParam(required = false) Integer size,
             @RequestParam(required = false) Integer pageSize,
-            @RequestParam(required = false) String status) {
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String farmId,
+            @RequestParam(required = false) String chain,
+            @RequestParam(required = false) String expiry,
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to) {
         return ApiResponse.success(traceService.page(
                 firstNonNull(pageNum, page, 1), firstNonNull(pageSize, size, 10),
-                status, TenantContextService.currentTenantId()));
+                TraceCodeFilter.of(status, keyword, farmId, chain, expiry, from, to),
+                TenantContextService.currentTenantId()));
     }
 
     /** 为批次生成溯源码（前端 generateTraceCode，入参在查询串里）。 */
@@ -76,6 +90,17 @@ public class TraceController {
     public ApiResponse<Integer> batchExpire(@RequestBody Map<String, Object> body) {
         return ApiResponse.success(traceService.batchUpdateStatus(codes(body), "expired",
                 TenantContextService.currentTenantId()));
+    }
+
+    /**
+     * 到期扫描（手动触发，仅本主体）：把过了"有效期至"的码置为 expired，返回条数。
+     *
+     * <p>定时任务（{@code TraceCodeExpiryJob}，扫全部主体）走的是同一个服务方法；
+     * 这条入口存在的意义是"结果可被立刻确认"，而不是让人等下一个整点。</p>
+     */
+    @PatchMapping("/codes/expire-overdue")
+    public ApiResponse<Integer> expireOverdue() {
+        return ApiResponse.success(traceService.expireOverdue(TenantContextService.currentTenantId()));
     }
 
     /** 单码详情（前端 fetchTraceCodeDetail 走 /trace/{code}；另有调用方走 /trace/codes/{code}）。 */
@@ -114,6 +139,9 @@ public class TraceController {
      *
      * <p>派生聚合：采收批次 + 该批次质检 + 该批次库存流水 + 该地块投入品使用 + 该批次溯源码。
      * 哪个域没数据就没有那一段，不补空节点。</p>
+     *
+     * <p>节点上的链上凭证（{@code onChain/txHash/chainStatus/recordNo/...}）按存证表真实记录判定，
+     * 与 {@code /public/verify} 同一口径 —— 属主页和核验页对同一批次只能有一个结论。</p>
      */
     @GetMapping("/full-chain/{batchId}/nodes")
     public ApiResponse<List<Map<String, Object>>> fullChainNodes(@PathVariable String batchId) {
@@ -124,6 +152,20 @@ public class TraceController {
     @GetMapping("/full-chain/trace/{code}")
     public ApiResponse<List<Map<String, Object>>> fullChainByCode(@PathVariable String code) {
         return ApiResponse.success(traceService.fullChainByCode(code, TenantContextService.currentTenantId()));
+    }
+
+    /**
+     * 溯源核验（跨主体，公众与监管免登录可用）：{@code GET /api/v1/production/trace/public/verify/{code}}。
+     *
+     * <p>这条刻意**不按调用方主体过滤**，也不要求令牌：溯源码的意义就是"任何人拿到都能验"，
+     * 监管端的公众查询页与移动端扫码都没有生产主体的身份。作为交换，出参只给核验要用的字段
+     * （产品/批次/生产主体名/码状态/节点时间线/链上凭证），节点是否"已上链"按
+     * {@code agri_prod_chain_record} 的真实记录判定，与属主侧 {@code /full-chain/**}
+     * 共用同一处判定（有多少条、几条 SUCCESS、几条没成功，都照实说）。</p>
+     */
+    @GetMapping("/public/verify/{code}")
+    public ApiResponse<Map<String, Object>> publicVerify(@PathVariable String code) {
+        return ApiResponse.success(traceService.publicVerification(code));
     }
 
     /** 按批次生成（前端 generateTraceCodeByBatch）。 */

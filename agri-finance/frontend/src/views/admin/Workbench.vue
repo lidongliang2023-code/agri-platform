@@ -126,47 +126,47 @@ onMounted(load)
 
 <style scoped>
 .ops-hero { display: flex; min-height: 180px; align-items: center; justify-content: space-between; gap: 24px; padding: 24px 28px; border-radius: 18px; background: radial-gradient(circle at 88% 9%, rgba(131, 228, 170, .18), transparent 13rem), linear-gradient(135deg, #083c27, #0f7048); color: #fff; }
-.ops-hero > div:first-child > span { color: #a9dfbe; font-size: 8px; letter-spacing: .12em; font-weight: 800; }
+.ops-hero > div:first-child > span { color: #a9dfbe; font-size: var(--fin-fs-xs); letter-spacing: .12em; font-weight: 800; }
 .ops-hero h1 { margin: 9px 0 5px; font-size: 26px; }
-.ops-hero p { margin: 0; color: rgba(255, 255, 255, .6); font-size: 9px; }
+.ops-hero p { margin: 0; color: rgba(255, 255, 255, .6); font-size: var(--fin-fs-xs); }
 .ops-hero > div:first-child > div { display: flex; align-items: baseline; gap: 5px; margin-top: 18px; }
 .ops-hero b { font-family: ui-monospace, Consolas, monospace; font-size: 22px; }
-.ops-hero > div:first-child span { color: rgba(255, 255, 255, .55); font-size: 8px; }
+.ops-hero > div:first-child span { color: rgba(255, 255, 255, .55); font-size: var(--fin-fs-xs); }
 .ops-hero i { width: 1px; height: 15px; margin: 0 10px; background: rgba(255, 255, 255, .18); }
 .ops-hero-risk { display: flex; width: 150px; height: 150px; align-items: center; justify-content: center; flex-direction: column; margin-right: 20px; border: 1px solid rgba(255, 255, 255, .16); border-radius: 50%; background: rgba(255, 255, 255, .07); box-shadow: 0 0 0 13px rgba(255, 255, 255, .035); }
-.ops-hero-risk span { color: rgba(255, 255, 255, .55); font-size: 8px; }
+.ops-hero-risk span { color: rgba(255, 255, 255, .55); font-size: var(--fin-fs-xs); }
 .ops-hero-risk strong { margin-top: 4px; font-family: ui-monospace, Consolas, monospace; font-size: 35px; }
-.ops-hero-risk small { margin-top: -3px; color: rgba(255, 255, 255, .44); font-size: 8px; }
-.ops-hero-risk em { margin-top: 6px; color: #bcefd0; font-size: 8px; font-style: normal; }
-.finance-kpi em { color: #60776a; font-size: 10px; font-style: normal; }
+.ops-hero-risk small { margin-top: -3px; color: rgba(255, 255, 255, .44); font-size: var(--fin-fs-xs); }
+.ops-hero-risk em { margin-top: 6px; color: #bcefd0; font-size: var(--fin-fs-xs); font-style: normal; }
+.finance-kpi em { color: #60776a; font-size: var(--fin-fs-xs); font-style: normal; }
 .ops-dashboard-layout { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(280px, .65fr); align-items: start; gap: 14px; }
 .ops-subject { display: flex; align-items: center; gap: 8px; }
-.ops-subject > span { display: grid; width: 31px; height: 31px; place-items: center; border-radius: 8px; background: #e8f5ee; color: var(--fin-green-700); font-size: 8px; font-weight: 700; }
+.ops-subject > span { display: grid; width: 31px; height: 31px; place-items: center; border-radius: 8px; background: #e8f5ee; color: var(--fin-green-700); font-size: var(--fin-fs-xs); font-weight: 700; }
 .ops-subject strong, .ops-subject small { display: block; }
-.ops-subject strong { color: #3a5544; font-size: 9.5px; }
-.ops-subject small { margin-top: 2px; color: #8b9a92; font-family: ui-monospace, Consolas, monospace; font-size: 7px; }
+.ops-subject strong { color: #3a5544; font-size: var(--fin-fs-xs); }
+.ops-subject small { margin-top: 2px; color: #8b9a92; font-family: ui-monospace, Consolas, monospace; font-size: var(--fin-fs-xs); }
 .ops-side { display: grid; gap: 14px; }
 .ops-alert-list { display: grid; }
 .ops-alert-list button { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 11px 13px; border: 0; border-top: 1px solid #edf2ee; background: #fff; text-align: left; cursor: pointer; }
 .ops-alert-list button:first-child { border-top: 0; }
-.ops-alert-level { padding: 3px 7px; border-radius: 7px; background: #fff1e1; color: #a76712; font-size: 7px; font-weight: 700; }
+.ops-alert-level { padding: 3px 7px; border-radius: 7px; background: #fff1e1; color: #a76712; font-size: var(--fin-fs-xs); font-weight: 700; }
 .ops-alert-list button > div { min-width: 0; }
 .ops-alert-list strong, .ops-alert-list p { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ops-alert-list strong { color: #425b4b; font-size: 8.5px; }
-.ops-alert-list p { margin: 3px 0 0; color: #8b9a92; font-size: 7.5px; }
+.ops-alert-list strong { color: #425b4b; font-size: var(--fin-fs-xs); }
+.ops-alert-list p { margin: 3px 0 0; color: #8b9a92; font-size: var(--fin-fs-xs); }
 .ops-alert-list svg { width: 14px; color: #c58b2e; }
-.ops-empty { padding: 18px; color: #8c9a92; font-size: 8px; text-align: center; }
+.ops-empty { padding: 18px; color: #8c9a92; font-size: var(--fin-fs-xs); text-align: center; }
 .ops-rule-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: #edf2ee; }
 .ops-rule-summary > div { padding: 11px 13px; background: #fff; }
 .ops-rule-summary span, .ops-rule-summary strong { display: block; }
-.ops-rule-summary span { color: #8a9990; font-size: 8px; }
+.ops-rule-summary span { color: #8a9990; font-size: var(--fin-fs-xs); }
 .ops-rule-summary strong { margin-top: 3px; color: #2f5c41; font-family: ui-monospace, Consolas, monospace; font-size: 14px; }
 .ops-monitor-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; padding: 14px; }
 .ops-monitor-grid > div { padding: 13px; border: 1px solid #e3ebe6; border-radius: 11px; }
 .ops-monitor-grid span, .ops-monitor-grid strong, .ops-monitor-grid small { display: block; }
-.ops-monitor-grid span { color: #87988e; font-size: 8px; }
+.ops-monitor-grid span { color: #87988e; font-size: var(--fin-fs-xs); }
 .ops-monitor-grid strong { margin-top: 3px; color: #294f38; font-size: 14px; }
-.ops-monitor-grid small { margin-top: 5px; color: #89988f; font-size: 7.5px; }
+.ops-monitor-grid small { margin-top: 5px; color: #89988f; font-size: var(--fin-fs-xs); }
 .finance-progress.amber > span { background: #d79b39; }
 .finance-progress.red > span { background: #bf5b4f; }
 @media (max-width: 900px) { .ops-dashboard-layout { grid-template-columns: 1fr; } .ops-side { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

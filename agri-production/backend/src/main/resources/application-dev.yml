@@ -16,12 +16,6 @@ spring:
       encoding: UTF-8
       schema-locations: classpath:schema-mysql.sql
 
-services:
-  iot:
-    url: localhost:8083
-  masterdata:
-    url: localhost:8084
-
 mybatis-plus:
   mapper-locations: classpath:mapper/**/*.xml
   type-aliases-package: com.agri.production.entity

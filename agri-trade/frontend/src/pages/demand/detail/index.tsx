@@ -14,6 +14,7 @@ import {
   ThunderboltOutlined,
 } from '@ant-design/icons'
 import { BrandMark } from '@/components/BrandMark'
+import { getMyMerchants } from '@/api/identity'
 import { deleteDemand, getDemandById, getDemandMatches, matchDemand } from '@/api/demand'
 import {
   createInquiry,
@@ -22,6 +23,7 @@ import {
   type InquiryVO,
 } from '@/api/inquiry'
 import { acceptQuote, convertQuoteToOrder, type QuoteVO } from '@/api/quote'
+import { ShopChat } from '../../shop/detail/ShopChat'
 import { EmptyState, Panel, money, shortDate } from '../../member-center/shared'
 import './demand-detail.css'
 
@@ -101,6 +103,14 @@ export default function DemandDetail(): JSX.Element {
   const [matching, setMatching] = useState(false)
   const [inquiryBusy, setInquiryBusy] = useState<number | null>(null)
   const [quoteBusy, setQuoteBusy] = useState<number | null>(null)
+  // 这张需求是不是"我名下主体"发的：改内容、下架、触发撮合都是主人的动作。
+  // 后端会拒（denyUnlessOwner），但把按钮留着点一下才报错，等于给访客设陷阱。
+  const [myMerchantIds, setMyMerchantIds] = useState<string[]>([])
+  const [chatTarget, setChatTarget] = useState<{
+    sellerId: string
+    sellerName: string
+    productId: number | null
+  } | null>(null)
 
   const loadMatches = useCallback(() => {
     if (!id) return
@@ -145,6 +155,16 @@ export default function DemandDetail(): JSX.Element {
     void loadInquiries()
     return () => { cancelled = true }
   }, [id, loadMatches, loadInquiries])
+
+  useEffect(() => {
+    getMyMerchants()
+      .then((response) => {
+        setMyMerchantIds((response.data ?? []).map((item) => String(item.merchantId)))
+      })
+      .catch(() => setMyMerchantIds([]))
+  }, [])
+
+  const isOwner = Boolean(demand && myMerchantIds.includes(String(demand.buyerId)))
 
   const handleMatch = async (): Promise<void> => {
     if (!id) return
@@ -207,7 +227,7 @@ export default function DemandDetail(): JSX.Element {
     const response = await deleteDemand(Number(id))
     if (response?.code === 200) {
       message.success('采购需求已下架')
-      navigate('/member/buyer?tab=inquiry')
+      navigate('/member/buyer?tab=demand-list')
     } else {
       message.error(response?.message ?? '下架失败')
     }
@@ -224,8 +244,8 @@ export default function DemandDetail(): JSX.Element {
     return (
       <div className="demand-detail-page demand-detail-center">
         <Empty description="没有找到这条采购需求" />
-        <button type="button" className="mc-btn" onClick={() => navigate('/member/buyer?tab=inquiry')}>
-          返回我的询价
+        <button type="button" className="mc-btn" onClick={() => navigate('/member/buyer?tab=demand-list')}>
+          返回采购需求
         </button>
       </div>
     )
@@ -240,10 +260,10 @@ export default function DemandDetail(): JSX.Element {
         </a>
         <nav>
           <a href="/member/buyer">买家中心</a><span>/</span>
-          <a href="/member/buyer?tab=inquiry">我的询价</a><span>/</span>
+          <a href="/member/buyer?tab=demand-list">采购需求</a><span>/</span>
           <strong>需求详情</strong>
         </nav>
-        <a className="demand-detail-back" href="/member/buyer?tab=inquiry"><ArrowLeftOutlined /> 返回我的询价</a>
+        <a className="demand-detail-back" href="/member/buyer?tab=demand-list"><ArrowLeftOutlined /> 返回采购需求</a>
       </header>
 
       <main className="demand-detail-main">
@@ -256,16 +276,22 @@ export default function DemandDetail(): JSX.Element {
           </div>
           <span className={`mc-tag ${demandMeta.tone}`}>{demandMeta.text}</span>
           <div className="demand-detail-actions">
-            <button type="button" className="mc-btn" disabled={matching} onClick={() => void handleMatch()}>
-              <ThunderboltOutlined /> {matching ? '撮合中…' : '触发智能撮合'}
-            </button>
-            <button type="button" className="mc-btn ghost"
-              onClick={() => navigate(`/member/buyer?tab=publish&id=${demand.id}`)}>
-              编辑需求
-            </button>
-            <button type="button" className="mc-btn ghost demand-detail-danger" onClick={() => void handleDelete()}>
-              下架需求
-            </button>
+            {isOwner ? (
+              <>
+                <button type="button" className="mc-btn" disabled={matching} onClick={() => void handleMatch()}>
+                  <ThunderboltOutlined /> {matching ? '撮合中…' : '触发智能撮合'}
+                </button>
+                <button type="button" className="mc-btn ghost"
+                  onClick={() => navigate(`/member/buyer?tab=publish&id=${demand.id}`)}>
+                  编辑需求
+                </button>
+                <button type="button" className="mc-btn ghost demand-detail-danger" onClick={() => void handleDelete()}>
+                  下架需求
+                </button>
+              </>
+            ) : (
+              <span className="demand-detail-muted">这条需求由别家经营主体发布，可查看撮合与报价，不能改</span>
+            )}
           </div>
         </section>
 
@@ -350,14 +376,24 @@ export default function DemandDetail(): JSX.Element {
                                   <div><span>数量</span><strong>{quote.quantity} {quote.unit}</strong></div>
                                   <div><span>含运费总价</span><strong className="demand-detail-price">{money(Number(quote.totalAmount ?? 0) + Number(quote.freightAmount ?? 0))}</strong></div>
                                   <span className={`mc-tag ${quoteMeta.tone}`}>{quoteMeta.text}</span>
-                                  {quote.quoteStatus === 'pending' ? (
-                                    <button type="button" className="mc-btn" disabled={quoteBusy === quote.id}
-                                      onClick={() => void handleAcceptQuote(quote)}>
-                                      {quoteBusy === quote.id ? '处理中…' : '接受报价并成单'}
+                                  <div className="demand-quote-actions">
+                                    <button type="button" className="mc-btn ghost"
+                                      onClick={() => setChatTarget({
+                                        sellerId: String(quote.sellerId),
+                                        sellerName: quote.sellerName || '供应商',
+                                        productId: quote.productId ?? null,
+                                      })}>
+                                      进入洽谈
                                     </button>
-                                  ) : quote.orderId ? (
-                                    <a className="mc-link" href={`/order/detail/${quote.orderId}`}>查看订单</a>
-                                  ) : <span />}
+                                    {quote.quoteStatus === 'pending' ? (
+                                      <button type="button" className="mc-btn" disabled={quoteBusy === quote.id}
+                                        onClick={() => void handleAcceptQuote(quote)}>
+                                        {quoteBusy === quote.id ? '处理中…' : '接受报价并成单'}
+                                      </button>
+                                    ) : quote.orderId ? (
+                                      <a className="mc-link" href={`/order/detail/${quote.orderId}`}>查看订单</a>
+                                    ) : null}
+                                  </div>
                                 </div>
                               )
                             })}
@@ -399,6 +435,13 @@ export default function DemandDetail(): JSX.Element {
           </aside>
         </div>
       </main>
+      <ShopChat
+        open={Boolean(chatTarget)}
+        sellerId={chatTarget?.sellerId ?? ''}
+        sellerName={chatTarget?.sellerName ?? ''}
+        productId={chatTarget?.productId}
+        onClose={() => setChatTarget(null)}
+      />
     </div>
   )
 }

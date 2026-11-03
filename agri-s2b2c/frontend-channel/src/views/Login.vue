@@ -2,8 +2,9 @@
   <div class="login-page">
     <div class="login-container">
       <div class="logo">
-        <span class="logo-icon">🌾</span>
-        <h1>农联优选 - 渠道商管理</h1>
+        <span class="logo-icon">丰</span>
+        <h1>丰链云 · 渠道商工作台</h1>
+        <p class="login-subtitle">渠道增长与分润管理</p>
       </div>
       <el-form :model="form" :rules="rules" ref="formRef" class="login-form">
         <el-form-item prop="phone">
@@ -56,7 +57,7 @@ const goApply = () => {
 <style scoped>
 .login-page {
   min-height: 100vh;
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  background: radial-gradient(circle at 80% 10%, rgba(104,222,150,.28), transparent 35%), linear-gradient(135deg, #073821, #12764a);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -95,7 +96,7 @@ const goApply = () => {
 }
 
 .links span {
-  color: #f5576c;
+  color: #12764a;
   cursor: pointer;
 }
 </style>

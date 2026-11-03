@@ -3,20 +3,22 @@ server:
   # 8085 也是网关的虚拟主机端口，同样不能用；IoT 让到 8091（本机空闲，网关尚未登记它的 upstream）。
   port: 8091
 
+# 物联网写接口的能力校验：调用核心平台内部接口（共享内部令牌）
+agri:
+  capability:
+    check-url: "${CORE_CAPABILITY_CHECK_URL:http://localhost:8093/api/v1/internal/capability-check}"
+    internal-token: "${AGRI_INTERNAL_TOKEN:agri-internal-dev}"
+
 spring:
   application:
     name: agri-iot
   profiles:
-    active: dev
-  datasource:
-    url: jdbc:h2:mem:agri-iot;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
-    username: sa
-    password:
-    driver-class-name: org.h2.Driver
-  h2:
-    console:
-      enabled: true
-      path: /h2-console
+    active: ${SPRING_PROFILES_ACTIVE:mysql}
+  jackson:
+    time-zone: GMT+8
+    date-format: yyyy-MM-dd HH:mm:ss
+    serialization:
+      write-dates-as-timestamps: false
   data:
     redis:
       host: localhost
@@ -33,7 +35,9 @@ mybatis-plus:
 
 services:
   masterdata:
-    url: http://localhost:8081
+    url: http://localhost:8083
+  production:
+    url: http://localhost:8092
   # 平台认证中心：RBAC 权限解析走它的 /api/v1/platform/permissions/mine
   platform:
     url: http://localhost:8093
@@ -52,6 +56,8 @@ platform:
   rbac:
     operator-paths:
       - /api/iot/**
+      - /api/v1/iot/app/**
+      - /api/v1/iot/ops/**
     read-permission: iot:read
     write-permission: iot:write
     require-auth: true

@@ -72,12 +72,15 @@
         <if test="status != null and status != ''">
             AND p.status = #{status}
         </if>
+        <if test="auditStatus != null and auditStatus != ''">
+            AND p.audit_status = #{auditStatus}
+        </if>
     </sql>
 
     <select id="selectAdminProductList" resultType="com.agri.masterdata.vo.ProductVO">
         SELECT p.id, p.product_code, p.product_name, p.category_id, p.brand, p.unit,
-               p.origin, p.spec_json, p.price, p.image_urls, p.status, p.tenant_id,
-               p.create_by, p.create_time, p.remark,
+               p.origin, p.spec_json, p.price, p.image_urls, p.status, p.audit_status AS auditStatus,
+               p.tenant_id, p.create_by, p.create_time, p.remark,
                c.category_name AS categoryName
         FROM agri_md_product p
         LEFT JOIN agri_md_product_category c ON c.id = p.category_id

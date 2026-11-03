@@ -23,12 +23,42 @@ public class CustomerServiceImpl implements ICustomerService {
     @Override
     public List<CustomerVO> list() {
         String tenantId = SecurityUtils.getTenantId();
+        // 企业端接口必须带主体上下文：没有就拒绝，绝不退化成"返回所有主体的数据"
+        if (tenantId == null || tenantId.isBlank()) {
+            throw new com.agri.common.exception.BusinessException(
+                    com.agri.common.constant.ErrorCode.PERMISSION_FORBIDDEN,
+                    "缺少经营主体上下文：请在请求头携带 X-Agri-Merchant");
+        }
         return customerMapper.selectCustomerList(tenantId);
     }
 
+    /**
+     * 客户详情。
+     *
+     * <p><b>必须校验归属</b>：原来这里直接 {@code selectCustomerById(id)} 返回，
+     * 换个 id 就能读到别家主体的客户（实测：主体 2001 的账号读到了 T1001 的客户）。
+     * 列表接口做了过滤、详情接口没做，是这类越权最常见的形态 —— 页面点不进去，
+     * 但直接请求接口可以。</p>
+     *
+     * <p>归属不符时统一说"不存在或不属于当前主体"，不用两种措辞，
+     * 避免被用来探测别家客户是否存在。</p>
+     */
     @Override
     public CustomerVO getById(Long id) {
-        return customerMapper.selectCustomerById(id);
+        String tenantId = SecurityUtils.getTenantId();
+        if (tenantId == null || tenantId.isBlank()) {
+            throw new com.agri.common.exception.BusinessException(
+                    com.agri.common.constant.ErrorCode.PERMISSION_FORBIDDEN,
+                    "缺少经营主体上下文：请在请求头携带 X-Agri-Merchant");
+        }
+        CustomerVO customer = customerMapper.selectCustomerById(id);
+        if (customer == null || customer.getTenantId() == null
+                || !tenantId.equals(customer.getTenantId())) {
+            throw new com.agri.common.exception.BusinessException(
+                    com.agri.common.constant.ErrorCode.PERMISSION_FORBIDDEN,
+                    "客户不存在或不属于当前主体");
+        }
+        return customer;
     }
 
     @Override

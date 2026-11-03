@@ -5,6 +5,10 @@
       "style": { "navigationBarTitleText": "登录" }
     },
     {
+      "path": "pages/register/register",
+      "style": { "navigationBarTitleText": "注册与认证" }
+    },
+    {
       "path": "pages/workbench/workbench",
       "style": { "navigationBarTitleText": "工作台" }
     },
@@ -35,6 +39,10 @@
     {
       "path": "pages/plots/map",
       "style": { "navigationBarTitleText": "地块地图" }
+    },
+    {
+      "path": "pages/plots/map-embed",
+      "style": { "navigationBarTitleText": "天地图 · 地块分布" }
     },
     {
       "path": "pages/plots/create",

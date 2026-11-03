@@ -50,6 +50,10 @@ platform:
 services:
   platform:
     url: http://localhost:8093
+  iot:
+    url: "${IOT_SERVICE_URL:http://localhost:8091}"
+  masterdata:
+    url: "${MASTERDATA_SERVICE_URL:http://localhost:8083}"
 
 # 领域事件投递（outbox 中继）—— 契约与平台 core-infra 的 outbox 一致：
 # NEW →（投递成功）SENT；失败指数退避重试，次数用尽转 DEAD（可用运营端 /admin/events 重放）。
@@ -62,6 +66,10 @@ services:
 #
 # 关闭态写法：transport: none（此时中继一行都不投，状态也不动）。
 agri:
+  # 生产写接口的能力校验：调用核心平台内部接口（共享内部令牌）
+  capability:
+    check-url: "${CORE_CAPABILITY_CHECK_URL:http://localhost:8093/api/v1/internal/capability-check}"
+    internal-token: "${AGRI_INTERNAL_TOKEN:agri-internal-dev}"
   event:
     transport: http
     outbox:

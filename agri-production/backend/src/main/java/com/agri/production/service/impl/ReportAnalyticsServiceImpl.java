@@ -13,6 +13,7 @@ import com.agri.production.mapper.AlertRecordMapper;
 import com.agri.production.mapper.FarmMapper;
 import com.agri.production.mapper.HarvestBatchMapper;
 import com.agri.production.mapper.IoTDeviceMapper;
+import com.agri.production.service.IotDeviceStatsService;
 import com.agri.production.mapper.InspectionMapper;
 import com.agri.production.mapper.InputUsageRecordMapper;
 import com.agri.production.mapper.PlantingPlanMapper;
@@ -100,10 +101,12 @@ public class ReportAnalyticsServiceImpl implements IReportAnalyticsService {
     private final PlantingPlanMapper planMapper;
     private final ProductionReportMapper reportMapper;
     private final ReportSubscriptionMapper subscriptionMapper;
+    private final IotDeviceStatsService iotDeviceStats;
 
     public ReportAnalyticsServiceImpl(HarvestBatchMapper harvestBatchMapper, TaskMapper taskMapper,
                                       InspectionMapper inspectionMapper, InputUsageRecordMapper inputUsageMapper,
                                       AlertRecordMapper alertMapper, IoTDeviceMapper deviceMapper,
+                                      IotDeviceStatsService iotDeviceStats,
                                       TraceCodeMapper traceCodeMapper, PlotMapper plotMapper, FarmMapper farmMapper,
                                       PlantingPlanMapper planMapper, ProductionReportMapper reportMapper,
                                       ReportSubscriptionMapper subscriptionMapper) {
@@ -113,6 +116,7 @@ public class ReportAnalyticsServiceImpl implements IReportAnalyticsService {
         this.inputUsageMapper = inputUsageMapper;
         this.alertMapper = alertMapper;
         this.deviceMapper = deviceMapper;
+        this.iotDeviceStats = iotDeviceStats;
         this.traceCodeMapper = traceCodeMapper;
         this.plotMapper = plotMapper;
         this.farmMapper = farmMapper;
@@ -715,15 +719,14 @@ public class ReportAnalyticsServiceImpl implements IReportAnalyticsService {
         return alertMapper.selectCount(w);
     }
 
+    /**
+     * 在线设备数（口径统一到物联网系统的设备台账）。
+     *
+     * <p>报表里的"在线设备"如果还数生产端那张不再更新的历史副本，
+     * 就会出现「报表写 8 台在线、设备列表写 24 台在线」的矛盾。</p>
+     */
     private long onlineDeviceCount(String tenantId, Long farmId) {
-        LambdaQueryWrapper<com.agri.production.entity.IoTDevice> w =
-                new LambdaQueryWrapper<com.agri.production.entity.IoTDevice>()
-                        .eq(com.agri.production.entity.IoTDevice::getTenantId, tenantId)
-                        .in(com.agri.production.entity.IoTDevice::getStatus, DEVICE_ONLINE);
-        if (farmId != null) {
-            w.eq(com.agri.production.entity.IoTDevice::getFarmId, farmId);
-        }
-        return deviceMapper.selectCount(w);
+        return iotDeviceStats.onlineCount(tenantId, farmId);
     }
 
     private long traceCodeCount(String tenantId, Long farmId) {

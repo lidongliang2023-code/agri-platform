@@ -17,7 +17,6 @@ import {
   Button,
   Card,
   Col,
-  Descriptions,
   Empty,
   List,
   Popconfirm,
@@ -26,19 +25,17 @@ import {
   Row,
   Skeleton,
   Space,
-  Statistic,
   Steps,
   Table,
   Tag,
   Timeline,
-  Tooltip,
   Typography,
 } from 'antd'
 import {
-  ArrowLeftOutlined,
   CalendarOutlined,
   DeleteOutlined,
   EditOutlined,
+  LeftOutlined,
   PlayCircleOutlined,
   PlusOutlined,
   ReloadOutlined,
@@ -46,12 +43,14 @@ import {
 } from '@ant-design/icons'
 import {
   ModalForm,
+  PageContainer,
   ProFormDatePicker,
   ProFormDigit,
   ProFormSelect,
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components'
+import { DetailInfoGrid, DetailMetricGrid } from '@/components'
 import {
   createPlanStage,
   fetchPlanDetail,
@@ -344,152 +343,173 @@ export default function PlanDetail(): JSX.Element {
 
   if (planQuery.isLoading) {
     return (
-      <Card>
-        <Skeleton active paragraph={{ rows: 8 }} />
-      </Card>
+      <PageContainer title="📋 种养计划详情">
+        <Card>
+          <Skeleton active paragraph={{ rows: 8 }} />
+        </Card>
+      </PageContainer>
     )
   }
 
   if (planQuery.isError || !plan) {
     return (
-      <Card>
-        <Result
-          status="404"
-          title="未找到该种养计划"
-          subTitle="计划可能已被删除，或当前账号无访问权限。"
-          extra={
-            <Button type="primary" onClick={() => navigate('/production/plans')}>
-              返回计划列表
-            </Button>
-          }
-        />
-      </Card>
+      <PageContainer title="📋 种养计划详情">
+        <Card>
+          <Result
+            status="404"
+            title="未找到该种养计划"
+            subTitle="计划可能已被删除，或当前账号无访问权限。"
+            extra={
+              <Button type="primary" onClick={() => navigate('/production/plans')}>
+                返回种养计划
+              </Button>
+            }
+          />
+        </Card>
+      </PageContainer>
     )
   }
 
   const statusMeta = planStatusMeta(plan.status)
 
   return (
-    <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      <Card
-        title={
-          <Space wrap>
-            <CalendarOutlined style={{ color: '#13a05a' }} />
-            <span>{plan.planName}</span>
-            <Tag color={statusMeta.color}>{statusMeta.label}</Tag>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              编号：{plan.planNo}
-            </Typography.Text>
-          </Space>
-        }
-        extra={
-          <Space>
-            <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/production/plans')}>
-              返回列表
+    <PageContainer
+      title={
+        <Space wrap>
+          <span>📋 {plan.planName}</span>
+          <Tag color={statusMeta.color}>{statusMeta.label}</Tag>
+        </Space>
+      }
+      subTitle={plan.planNo}
+      onBack={() => navigate('/production/plans')}
+      backIcon={<LeftOutlined />}
+      extra={
+        <Space>
+          <Button icon={<ReloadOutlined />} onClick={() => void refreshAll()}>
+            刷新
+          </Button>
+          {plan.status === 1 && (
+            <Button
+              type="primary"
+              icon={<PlayCircleOutlined />}
+              loading={startMutation.isPending}
+              onClick={() => startMutation.mutate()}
+            >
+              启动计划
             </Button>
-            <Button icon={<ReloadOutlined />} onClick={() => void refreshAll()}>
-              刷新
+          )}
+          {plan.status === 2 && (
+            <Button
+              danger
+              icon={<StopOutlined />}
+              loading={terminateMutation.isPending}
+              onClick={() => terminateMutation.mutate()}
+            >
+              终止计划
             </Button>
-            {plan.status === 1 ? (
-              <Button
-                type="primary"
-                icon={<PlayCircleOutlined />}
-                loading={startMutation.isPending}
-                onClick={() => startMutation.mutate()}
-              >
-                启动计划
-              </Button>
-            ) : null}
-            {plan.status === 2 ? (
-              <Button
-                danger
-                icon={<StopOutlined />}
-                loading={terminateMutation.isPending}
-                onClick={() => terminateMutation.mutate()}
-              >
-                终止计划
-              </Button>
-            ) : null}
-          </Space>
-        }
-      >
-        <Row gutter={16}>
-          <Col xs={12} md={8}>
-            <Statistic title="时间进度" value={progress} suffix="%" valueStyle={{ color: '#13a05a' }} />
-          </Col>
-          <Col xs={12} md={8}>
-            <Statistic
-              title="阶段完成"
-              value={stageStats.done}
-              suffix={`/ ${stages.length}`}
-            />
-          </Col>
-          <Col xs={12} md={8}>
-            <Tooltip
-              title={
+          )}
+        </Space>
+      }
+    >
+      <Space direction="vertical" size={16} style={{ width: '100%' }}>
+        <DetailMetricGrid
+          items={[
+            {
+              key: 'progress',
+              title: '时间进度',
+              value: progress,
+              suffix: '%',
+              valueStyle: { color: '#13a05a' },
+            },
+            {
+              key: 'stages',
+              title: '阶段完成',
+              value: stageStats.done,
+              suffix: `/ ${stages.length}`,
+            },
+            {
+              key: 'delay',
+              title: '延误天数（PLAN-05）',
+              value: stageStats.delayDays,
+              suffix: '天',
+              tooltip:
                 stageStats.delayDays > 0 && stageStats.delayedStageName
                   ? `最大延误来自未完成阶段「${stageStats.delayedStageName}」`
-                  : '全部阶段均在计划结束日期前'
-              }
-            >
-              <Statistic
-                title="延误天数（PLAN-05）"
-                value={stageStats.delayDays}
-                suffix="天"
-                valueStyle={{
-                  color: stageStats.delayDays > 0 ? '#cf1322' : '#52c41a',
-                }}
-              />
-            </Tooltip>
-          </Col>
-          <Col xs={12} md={8}>
-            <Statistic title="任务完成率" value={taskStats.rate} suffix="%" valueStyle={{ color: '#1677ff' }} />
-          </Col>
-          <Col xs={12} md={8}>
-            <Statistic
-              title="预计产量"
-              value={plan.expectedYield}
-              suffix="kg"
-              formatter={(value) => formatNumber(Number(value))}
-            />
-          </Col>
-        </Row>
-      </Card>
+                  : '全部阶段均在计划结束日期前',
+              valueStyle: {
+                color: stageStats.delayDays > 0 ? '#cf1322' : '#52c41a',
+              },
+            },
+            {
+              key: 'taskRate',
+              title: '任务完成率',
+              value: taskStats.rate,
+              suffix: '%',
+              valueStyle: { color: '#1677ff' },
+            },
+            {
+              key: 'yield',
+              title: '预计产量',
+              value: Number.isFinite(Number(plan.expectedYield))
+                ? Number(plan.expectedYield)
+                : null,
+              suffix: 'kg',
+              missingTip: '该计划未填写预计产量，显示为「—」',
+            },
+          ]}
+        />
 
       <Row gutter={[16, 16]}>
         <Col xs={24} lg={14}>
-          <Card title="基本信息">
-            <Descriptions bordered column={2} size="small">
-              <Descriptions.Item label="计划编号">{plan.planNo}</Descriptions.Item>
-              <Descriptions.Item label="计划名称">{plan.planName}</Descriptions.Item>
-              <Descriptions.Item label="所属农场">{plan.farmName || '-'}</Descriptions.Item>
-              <Descriptions.Item label="关联地块">{plan.plotName || plan.plotId || '-'}</Descriptions.Item>
-              <Descriptions.Item label="作物">{plan.cropName || '-'}</Descriptions.Item>
-              <Descriptions.Item label="品种">{plan.cropVariety || '-'}</Descriptions.Item>
-              <Descriptions.Item label="计划周期">
-                {plan.startDate ? `${plan.startDate} ~ ${plan.endDate}` : '-'}
-              </Descriptions.Item>
-              <Descriptions.Item label="计划状态">
-                <Tag color={statusMeta.color}>{statusMeta.label}</Tag>
-              </Descriptions.Item>
-              <Descriptions.Item label="负责人">{plan.managerName || plan.managerId || '-'}</Descriptions.Item>
-              <Descriptions.Item label="预计产量">
-                {formatNumber(plan.expectedYield)} kg
-              </Descriptions.Item>
-              <Descriptions.Item label="计划面积">
-                {/* 面积保留最多 2 位小数：用 formatNumber（固定 0 位）会把 88.5 显示成 89 */}
-                {plan.planArea > 0 ? `${formatAreaNumber(plan.planArea)} 亩` : '-'}
-              </Descriptions.Item>
-              <Descriptions.Item label="更新时间">{plan.updatedAt || '-'}</Descriptions.Item>
-              <Descriptions.Item label="备注" span={2}>
-                {plan.remark || '-'}
-              </Descriptions.Item>
-            </Descriptions>
+          <Card title="📋 基本信息">
+            <DetailInfoGrid
+              columns={2}
+              items={[
+                { key: 'planNo', label: '计划编号', value: plan.planNo },
+                { key: 'planName', label: '计划名称', value: plan.planName },
+                { key: 'farm', label: '所属农场', value: plan.farmName || '-' },
+                {
+                  key: 'plot',
+                  label: '关联地块',
+                  value: plan.plotName || plan.plotId || '-',
+                },
+                { key: 'crop', label: '作物', value: plan.cropName || '-' },
+                { key: 'variety', label: '品种', value: plan.cropVariety || '-' },
+                {
+                  key: 'period',
+                  label: '计划周期',
+                  value: plan.startDate ? `${plan.startDate} ~ ${plan.endDate}` : '-',
+                },
+                {
+                  key: 'manager',
+                  label: '负责人',
+                  value: plan.managerName || plan.managerId || '-',
+                },
+                {
+                  key: 'yield',
+                  label: '预计产量',
+                  value: `${formatNumber(plan.expectedYield)} kg`,
+                },
+                {
+                  key: 'area',
+                  label: '计划面积',
+                  // 面积保留最多 2 位小数：formatNumber 是固定 0 位，88.5 会显示成 89
+                  value: plan.planArea > 0 ? `${formatAreaNumber(plan.planArea)} 亩` : '-',
+                },
+                { key: 'updatedAt', label: '更新时间', value: plan.updatedAt || '-' },
+                {
+                  key: 'remark',
+                  label: '备注',
+                  fullWidth: true,
+                  value: plan.remark || '-',
+                },
+              ]}
+            />
           </Card>
         </Col>
 
         <Col xs={24} lg={10}>
-          <Card title="进度追踪">
+          <Card title="📊 进度追踪">
             <Space direction="vertical" size={16} style={{ width: '100%' }}>
               <div>
                 <Space style={{ width: '100%', justifyContent: 'space-between' }}>
@@ -538,7 +558,7 @@ export default function PlanDetail(): JSX.Element {
       <Row gutter={[16, 16]}>
         <Col xs={24} lg={12}>
           <Card
-            title="生育期安排"
+            title="🌱 生育期安排"
             extra={
               <Space>
                 <Button
@@ -601,8 +621,7 @@ export default function PlanDetail(): JSX.Element {
 
         <Col xs={24} lg={12}>
           <Card
-            title="阶段清单"
-            extra={<Typography.Text type="secondary">共 {stages.length} 个阶段</Typography.Text>}
+            title={`📝 阶段清单（${stages.length} 个）`}
           >
             {stages.length === 0 ? (
               <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无阶段数据" />
@@ -664,7 +683,11 @@ export default function PlanDetail(): JSX.Element {
       </Row>
 
       <Card
-        title="关联农事任务"
+        title={
+          tasksQuery.isLoading
+            ? '✅ 关联农事任务'
+            : `✅ 关联农事任务（${tasks.length} 条）`
+        }
         extra={
           <Button type="link" onClick={() => navigate('/production/tasks')}>
             前往任务列表 →
@@ -785,6 +808,7 @@ export default function PlanDetail(): JSX.Element {
           fieldProps={{ rows: 3, maxLength: 500 }}
         />
       </ModalForm>
-    </Space>
+      </Space>
+    </PageContainer>
   )
 }

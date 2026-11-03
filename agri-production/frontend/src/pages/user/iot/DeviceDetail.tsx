@@ -19,17 +19,16 @@
 import { useMemo, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { PageContainer } from '@ant-design/pro-components'
 import {
   Alert,
   Button,
   Card,
   Col,
   DatePicker,
-  Descriptions,
   Empty,
   Form,
   Input,
-  InputNumber,
   Modal,
   Row,
   Select,
@@ -45,11 +44,11 @@ import {
 } from 'antd'
 import {
   ArrowLeftOutlined,
-  EditOutlined,
   ReloadOutlined,
   SendOutlined,
   ToolOutlined,
 } from '@ant-design/icons'
+import { DetailInfoGrid } from '@/components'
 import ReactECharts from 'echarts-for-react'
 import type { EChartsOption } from 'echarts'
 import type { Dayjs } from 'dayjs'
@@ -69,7 +68,6 @@ import {
   onlineStatusMeta,
   sendCommand,
   unwrapList,
-  updateDevice,
 } from '@/api/iot'
 import { listPlots } from '@/api/plots'
 import type { IotCommand, IotDevice, IotMaintainType, IotMaintenance, Plot } from '@/types'
@@ -117,24 +115,6 @@ interface MaintenanceFormValues {
   result: string
 }
 
-/** 设备编辑表单值 */
-interface DeviceFormValues {
-  /** 设备名称 */
-  deviceName: string
-  /** 型号 */
-  model?: string
-  /** 厂商 */
-  manufacturer?: string
-  /** 固件版本 */
-  firmwareVersion?: string
-  /** 安装位置 */
-  location?: string
-  /** 经度 */
-  longitude?: number
-  /** 纬度 */
-  latitude?: number
-}
-
 /**
  * 读取设备在线状态（兼容实体字段 onlineFlag）。
  *
@@ -179,12 +159,9 @@ export default function DeviceDetail(): JSX.Element {
   const [commandOpen, setCommandOpen] = useState<boolean>(false)
   /** 维修登记弹窗 */
   const [maintainOpen, setMaintainOpen] = useState<boolean>(false)
-  /** 设备编辑弹窗 */
-  const [editOpen, setEditOpen] = useState<boolean>(false)
 
   const [commandForm] = Form.useForm<CommandFormValues>()
   const [maintainForm] = Form.useForm<MaintenanceFormValues>()
-  const [deviceForm] = Form.useForm<DeviceFormValues>()
 
   /** 设备详情 */
   const deviceQuery = useQuery({
@@ -313,19 +290,6 @@ export default function DeviceDetail(): JSX.Element {
     [seriesQuery.data],
   )
 
-  /** 更新设备档案 */
-  const updateMutation = useMutation({
-    mutationFn: (values: DeviceFormValues) => updateDevice(deviceId, values),
-    onSuccess: () => {
-      message.success('设备信息已更新')
-      setEditOpen(false)
-      void queryClient.invalidateQueries({ queryKey: ['iot-device', deviceId] })
-    },
-    onError: (error: Error) => {
-      message.error(error.message || '设备信息更新失败')
-    },
-  })
-
   /**
    * 下发控制指令（POST /iot/devices/{deviceId}/commands）。
    *
@@ -381,17 +345,17 @@ export default function DeviceDetail(): JSX.Element {
 
   if (deviceQuery.isLoading) {
     return (
-      <div style={{ padding: 24 }}>
+      <PageContainer title="📡 设备详情">
         <Card>
           <Skeleton active paragraph={{ rows: 8 }} />
         </Card>
-      </div>
+      </PageContainer>
     )
   }
 
   if (deviceQuery.isError || !device) {
     return (
-      <div style={{ padding: 24 }}>
+      <PageContainer title="📡 设备详情">
         <Alert
           type="error"
           showIcon
@@ -403,7 +367,7 @@ export default function DeviceDetail(): JSX.Element {
             </Button>
           }
         />
-      </div>
+      </PageContainer>
     )
   }
 
@@ -411,17 +375,17 @@ export default function DeviceDetail(): JSX.Element {
   const latest = latestQuery.data ?? null
 
   return (
-    <div style={{ padding: 24 }}>
-      <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
-        <Space size={12}>
-          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/production/iot')}>
-            返回
-          </Button>
-          <Typography.Title level={4} style={{ margin: 0 }}>
-            {device.deviceName || device.deviceCode || '设备详情'}
-          </Typography.Title>
+    <PageContainer
+      title={
+        <Space wrap>
+          <span>📡 {device.deviceName || device.deviceCode || '设备详情'}</span>
           <Tag color={statusMeta.color}>{statusMeta.label}</Tag>
         </Space>
+      }
+      subTitle={device.deviceCode}
+      onBack={() => navigate('/production/iot')}
+      backIcon={<ArrowLeftOutlined />}
+      extra={
         <Space>
           <Button
             icon={<ReloadOutlined />}
@@ -433,29 +397,12 @@ export default function DeviceDetail(): JSX.Element {
           >
             刷新
           </Button>
-          <Button
-            icon={<EditOutlined />}
-            onClick={() => {
-              deviceForm.setFieldsValue({
-                deviceName: device.deviceName,
-                model: device.model,
-                manufacturer: device.manufacturer,
-                firmwareVersion: device.firmwareVersion,
-                location: device.location,
-                longitude: device.longitude,
-                latitude: device.latitude,
-              })
-              setEditOpen(true)
-            }}
-          >
-            编辑
-          </Button>
           <Button type="primary" icon={<SendOutlined />} onClick={() => setCommandOpen(true)}>
             下发指令
           </Button>
         </Space>
-      </Row>
-
+      }
+    >
       {statusOf(device) !== 1 && (
         <Alert
           type="warning"
@@ -465,38 +412,72 @@ export default function DeviceDetail(): JSX.Element {
         />
       )}
 
-      <Card title="设备信息" style={{ marginBottom: 16 }}>
-        <Descriptions bordered size="small" column={{ xs: 1, sm: 2, lg: 3 }}>
-          <Descriptions.Item label="设备编码">{device.deviceCode || '-'}</Descriptions.Item>
-          <Descriptions.Item label="设备名称">{device.deviceName || '-'}</Descriptions.Item>
-          <Descriptions.Item label="设备ID">{device.deviceId}</Descriptions.Item>
-          <Descriptions.Item label="型号">{device.model || '-'}</Descriptions.Item>
-          <Descriptions.Item label="厂商">{device.manufacturer || '-'}</Descriptions.Item>
-          <Descriptions.Item label="固件版本">{device.firmwareVersion || '-'}</Descriptions.Item>
-          <Descriptions.Item label="所属农场">{device.farmName || device.farmId || '-'}</Descriptions.Item>
-          <Descriptions.Item label="关联地块">{boundPlotName ?? '未绑定'}</Descriptions.Item>
-          <Descriptions.Item label="安装位置">{device.location || '-'}</Descriptions.Item>
-          <Descriptions.Item label="经纬度">
-            {typeof device.longitude === 'number' && typeof device.latitude === 'number'
-              ? `${device.longitude}, ${device.latitude}`
-              : '-'}
-          </Descriptions.Item>
-          <Descriptions.Item label="电量">
-            {typeof device.battery === 'number' ? `${device.battery}%` : '-'}
-          </Descriptions.Item>
-          <Descriptions.Item label="信号强度">
-            {typeof device.signal === 'number' ? `${device.signal} dBm` : '-'}
-          </Descriptions.Item>
-          <Descriptions.Item label="最近心跳">
-            {device.lastHeartbeatAt ? dayjs(device.lastHeartbeatAt).format('YYYY-MM-DD HH:mm:ss') : '-'}
-          </Descriptions.Item>
-          <Descriptions.Item label="创建时间">
-            {device.createdAt ? dayjs(device.createdAt).format('YYYY-MM-DD HH:mm:ss') : '-'}
-          </Descriptions.Item>
-          <Descriptions.Item label="更新时间">
-            {device.updatedAt ? dayjs(device.updatedAt).format('YYYY-MM-DD HH:mm:ss') : '-'}
-          </Descriptions.Item>
-        </Descriptions>
+      <Card
+        title="📋 基本信息"
+        extra={
+          <Typography.Text type="secondary">
+            设备档案由物联网系统统一维护，本页只读
+          </Typography.Text>
+        }
+        style={{ marginBottom: 16 }}
+      >
+        <DetailInfoGrid
+          columns={2}
+          items={[
+            { key: 'deviceCode', label: '设备编码', value: device.deviceCode || '-' },
+            { key: 'deviceName', label: '设备名称', value: device.deviceName || '-' },
+            { key: 'deviceId', label: '设备ID', value: device.deviceId },
+            { key: 'model', label: '型号', value: device.model || '-' },
+            { key: 'manufacturer', label: '厂商', value: device.manufacturer || '-' },
+            { key: 'firmware', label: '固件版本', value: device.firmwareVersion || '-' },
+            {
+              key: 'farm',
+              label: '所属农场',
+              value: device.farmName || device.farmId || '-',
+            },
+            { key: 'plot', label: '关联地块', value: boundPlotName ?? '未绑定' },
+            { key: 'location', label: '安装位置', value: device.location || '-' },
+            {
+              key: 'lnglat',
+              label: '经纬度',
+              value:
+                typeof device.longitude === 'number' && typeof device.latitude === 'number'
+                  ? `${device.longitude}, ${device.latitude}`
+                  : '-',
+            },
+            {
+              key: 'battery',
+              label: '电量',
+              value: typeof device.battery === 'number' ? `${device.battery}%` : '-',
+            },
+            {
+              key: 'signal',
+              label: '信号强度',
+              value: typeof device.signal === 'number' ? `${device.signal} dBm` : '-',
+            },
+            {
+              key: 'heartbeat',
+              label: '最近心跳',
+              value: device.lastHeartbeatAt
+                ? dayjs(device.lastHeartbeatAt).format('YYYY-MM-DD HH:mm:ss')
+                : '-',
+            },
+            {
+              key: 'createdAt',
+              label: '创建时间',
+              value: device.createdAt
+                ? dayjs(device.createdAt).format('YYYY-MM-DD HH:mm:ss')
+                : '-',
+            },
+            {
+              key: 'updatedAt',
+              label: '更新时间',
+              value: device.updatedAt
+                ? dayjs(device.updatedAt).format('YYYY-MM-DD HH:mm:ss')
+                : '-',
+            },
+          ]}
+        />
       </Card>
 
       <Card>
@@ -793,47 +774,6 @@ export default function DeviceDetail(): JSX.Element {
           </Form.Item>
         </Form>
       </Modal>
-
-      <Modal
-        title="编辑设备信息"
-        open={editOpen}
-        onCancel={() => setEditOpen(false)}
-        onOk={() => deviceForm.submit()}
-        confirmLoading={updateMutation.isPending}
-        okText="保存"
-        cancelText="取消"
-        destroyOnClose
-      >
-        <Form<DeviceFormValues> form={deviceForm} layout="vertical" onFinish={(values) => updateMutation.mutate(values)} preserve={false}>
-          <Form.Item name="deviceName" label="设备名称" rules={[{ required: true, message: '请填写设备名称' }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item name="model" label="设备型号">
-            <Input />
-          </Form.Item>
-          <Form.Item name="manufacturer" label="厂商">
-            <Input />
-          </Form.Item>
-          <Form.Item name="firmwareVersion" label="固件版本">
-            <Input />
-          </Form.Item>
-          <Form.Item name="location" label="安装位置">
-            <Input />
-          </Form.Item>
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item name="longitude" label="经度">
-                <InputNumber precision={6} style={{ width: '100%' }} />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="latitude" label="纬度">
-                <InputNumber precision={6} style={{ width: '100%' }} />
-              </Form.Item>
-            </Col>
-          </Row>
-        </Form>
-      </Modal>
-    </div>
+    </PageContainer>
   )
 }

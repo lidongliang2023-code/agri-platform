@@ -2,6 +2,7 @@ package com.agri.production.service.impl;
 
 import com.agri.production.common.entity.PageResult;
 import com.agri.production.common.exception.BusinessException;
+import com.agri.production.entity.ChainRecord;
 import com.agri.production.entity.Farm;
 import com.agri.production.entity.HarvestBatch;
 import com.agri.production.entity.Inspection;
@@ -13,6 +14,8 @@ import com.agri.production.mapper.InspectionMapper;
 import com.agri.production.mapper.TestingLabMapper;
 import com.agri.production.mapper.TraceCodeMapper;
 import com.agri.production.service.IAdminTraceService;
+import com.agri.production.service.IChainRecordService;
+import com.agri.production.service.TraceCodeFilter;
 import com.agri.production.vo.AdminTraceCodeVO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -35,44 +38,66 @@ public class AdminTraceServiceImpl implements IAdminTraceService {
 
     /** 批次已冻结（agri_prod_harvest_batch.status 值域：1 在库 2 部分出库 3 清空 4 冻结 5 归档） */
     private static final int BATCH_STATUS_FROZEN = 4;
-    /** 码段统计的四个口径 —— 前端就按这四个键取值，键名不能改 */
-    private static final List<String> CODE_STATUSES = List.of("generated", "active", "scanned", "revoked");
+    /**
+     * 码段统计的口径 —— 前端就按这几个键取值，键名不能改。
+     *
+     * <p>{@code expired} 是 2026-11-02 补上的：溯源码有了到期扫描之后，
+     * 只统计四个状态会让过期码**从统计卡里凭空消失**（总数对不上，但没有任何地方说"少了"）。</p>
+     */
+    private static final List<String> CODE_STATUSES = List.of("generated", "active", "scanned", "revoked", "expired");
 
     private final TraceCodeMapper traceCodeMapper;
     private final HarvestBatchMapper harvestBatchMapper;
     private final InspectionMapper inspectionMapper;
     private final TestingLabMapper testingLabMapper;
     private final FarmMapper farmMapper;
+    private final IChainRecordService chainRecordService;
 
     public AdminTraceServiceImpl(TraceCodeMapper traceCodeMapper,
                                  HarvestBatchMapper harvestBatchMapper,
                                  InspectionMapper inspectionMapper,
                                  TestingLabMapper testingLabMapper,
-                                 FarmMapper farmMapper) {
+                                 FarmMapper farmMapper,
+                                 IChainRecordService chainRecordService) {
         this.traceCodeMapper = traceCodeMapper;
         this.harvestBatchMapper = harvestBatchMapper;
         this.inspectionMapper = inspectionMapper;
         this.testingLabMapper = testingLabMapper;
         this.farmMapper = farmMapper;
+        this.chainRecordService = chainRecordService;
+    }
+
+    /**
+     * 给运营端行贴链上凭证。
+     *
+     * <p>运营端列表跨主体，所以按行的 tenantId 分组、每组一次 IN 查询
+     * （既不做 N+1，也不会拿 A 主体的存证去回答 B 主体的码）。</p>
+     */
+    private void applyEvidence(List<AdminTraceCodeVO> rows, List<TraceCode> entities) {
+        Map<String, List<AdminTraceCodeVO>> byTenant = new LinkedHashMap<>();
+        for (int i = 0; i < rows.size(); i++) {
+            String tenant = entities.get(i).getTenantId() == null ? "" : entities.get(i).getTenantId();
+            byTenant.computeIfAbsent(tenant, key -> new ArrayList<>()).add(rows.get(i));
+        }
+        byTenant.forEach((tenant, group) -> {
+            List<String> codes = group.stream().map(AdminTraceCodeVO::getCode)
+                    .filter(java.util.Objects::nonNull).toList();
+            Map<String, ChainRecord> evidence = chainRecordService.traceEvidence(codes, tenant);
+            group.forEach(row -> row.applyEvidence(row.getCode() == null ? null
+                    : evidence.get(row.getCode().trim().toUpperCase())));
+        });
     }
 
     @Override
-    public PageResult<AdminTraceCodeVO> pageCodes(int pageNum, int pageSize, String status) {
+    public PageResult<AdminTraceCodeVO> pageCodes(int pageNum, int pageSize, TraceCodeFilter filter) {
         int p = pageNum > 0 ? pageNum : 1;
         int s = pageSize > 0 ? pageSize : 10;
         LambdaQueryWrapper<TraceCode> w = new LambdaQueryWrapper<>();
-        if (status != null && !status.isBlank()) {
-            String normalized = AdminTraceCodeVO.normalizeStatus(status);
-            // 库里的历史值可能是 inactive，而归一后它等于 generated —— 只按字面等值筛会漏掉这些行
-            if ("generated".equals(normalized)) {
-                w.in(TraceCode::getStatus, "generated", "inactive");
-            } else {
-                w.eq(TraceCode::getStatus, normalized);
-            }
-        }
+        filter.apply(w);
         w.orderByDesc(TraceCode::getCreateTime).orderByDesc(TraceCode::getId);
         Page<TraceCode> result = traceCodeMapper.selectPage(new Page<>(p, s), w);
         List<AdminTraceCodeVO> rows = result.getRecords().stream().map(AdminTraceCodeVO::of).toList();
+        applyEvidence(rows, result.getRecords());
         return PageResult.of(rows, result.getTotal(), p, s);
     }
 
@@ -108,7 +133,9 @@ public class AdminTraceServiceImpl implements IAdminTraceService {
         }
         TraceCode traceCode = codes.get(0);
         result.put("found", true);
-        result.put("traceCode", AdminTraceCodeVO.of(traceCode));
+        AdminTraceCodeVO profile = AdminTraceCodeVO.of(traceCode);
+        applyEvidence(List.of(profile), List.of(traceCode));
+        result.put("traceCode", profile);
 
         // 批次关联以 **batch_no** 为准：溯源码表的 harvest_id 指向旧表的数字主键，
         // 与采收批次的 id 不是一套（core-platform 那边踩过同样的坑，注释里写着"按 id 命中 0 条"）

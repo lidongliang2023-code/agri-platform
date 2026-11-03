@@ -1,13 +1,19 @@
 #!/usr/bin/env node
 /** 主数据管理 · 商品与分类迁移回归（2026-10-20）。 */
 import { createRequire } from 'node:module'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const require2 = createRequire(path.join(REPO_ROOT, 'agri-production/frontend/package.json'))
-const puppeteer = require2('puppeteer')
+const require2 = createRequire(path.join('C:/Users/71502/.workbuddy-ai/binaries/node/workspace', 'noop.js'))
+const { chromium } = require2('playwright-core')
+
+const BROWSER = [
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+].find((candidate) => existsSync(candidate))
 const MDM = 'http://localhost:8080'
 const HEADFUL = process.argv.includes('--headful')
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -28,7 +34,7 @@ const fill = async (page, selector, value) => {
 }
 
 async function loginAndOpen(page, targetPath) {
-  await page.goto(`${MDM}${targetPath}`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.goto(`${MDM}${targetPath}`, { waitUntil: 'networkidle', timeout: 60000 })
   for (let i = 0; i < 30; i++) {
     await sleep(500)
     if (page.url().includes(':8090') || page.url().includes('/login')) break
@@ -48,19 +54,20 @@ async function loginAndOpen(page, targetPath) {
     if (page.url().includes('8080') && !page.url().includes('/login')) break
   }
   if (!page.url().includes(targetPath)) {
-    await page.goto(`${MDM}${targetPath}`, { waitUntil: 'networkidle2' })
+    await page.goto(`${MDM}${targetPath}`, { waitUntil: 'networkidle' })
   }
   await page.waitForSelector('.catalog-page', { timeout: 30000 })
-  await page.waitForNetworkIdle({ idleTime: 600, timeout: 15000 }).catch(() => {})
+  await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 600))
   await sleep(500)
 }
 
-const browser = await puppeteer.launch({ headless: HEADFUL ? false : 'new', args: ['--no-sandbox'] })
+const browser = await chromium.launch({ headless: !HEADFUL, executablePath: BROWSER, args: ['--no-sandbox'] })
 try {
-  const page = await browser.newPage()
+  const page = await (await browser.newContext({ viewport: { width: 1440, height: 1000 } })).newPage()
   const errors = []
   page.on('pageerror', (error) => errors.push(String(error)))
-  await page.setViewport({ width: 1440, height: 1000 })
+  await page.setViewportSize({ width: 1440, height: 1000 })
   await loginAndOpen(page, '/product/catalog')
 
   const text = await page.evaluate(() => document.body.innerText)

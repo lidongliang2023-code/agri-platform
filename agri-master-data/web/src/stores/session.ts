@@ -24,6 +24,7 @@ export interface SessionUser {
 }
 
 const USER_KEY = 'agri_mdm_user'
+const FORCE_LOGOUT_KEY = 'agri_mdm_force_logout'
 
 /** 历史遗留的凭证键：**只用于清理**，不再写入。改代码不会擦掉老浏览器里已落盘的凭证。 */
 const LEGACY_CREDENTIAL_KEYS = ['token', 'user', 'userType']
@@ -80,6 +81,7 @@ export const useSessionStore = defineStore('session', () => {
       roles: result.user?.roles ?? [],
     }
     user.value = nextUser
+    sessionStorage.removeItem(FORCE_LOGOUT_KEY)
     try {
       localStorage.setItem(USER_KEY, JSON.stringify(nextUser))
     } catch {
@@ -100,10 +102,32 @@ export const useSessionStore = defineStore('session', () => {
     }
   }
 
+  /**
+   * 用户主动退出时设置。
+   *
+   * <p>即便登出接口短暂失败，也不能让尚存的 HttpOnly Cookie 在整页跳转后把用户静默登回来。
+   * 该标记会在下一次成功登录时由 apply() 清除。</p>
+   */
+  function markForcedLogout(): void {
+    try {
+      sessionStorage.setItem(FORCE_LOGOUT_KEY, '1')
+    } catch {
+      // 会话存储不可用时仍有服务端 Cookie 清理和 SSO 登出兜底
+    }
+  }
+
+  function isForcedLogout(): boolean {
+    try {
+      return sessionStorage.getItem(FORCE_LOGOUT_KEY) === '1'
+    } catch {
+      return false
+    }
+  }
+
   /** 启动续签：拿 Cookie 换回访问令牌。无论成败都必须置 ready。 */
   async function bootstrap(): Promise<void> {
     purgeLegacyCredentialKeys()
-    if (accessToken.value === null) {
+    if (!isForcedLogout() && accessToken.value === null) {
       const result = await refreshAccessToken()
       if (result) {
         apply(result)
@@ -112,5 +136,15 @@ export const useSessionStore = defineStore('session', () => {
     ready.value = true
   }
 
-  return { accessToken, expireAt, user, ready, isLoggedIn, apply, clear, bootstrap }
+  return {
+    accessToken,
+    expireAt,
+    user,
+    ready,
+    isLoggedIn,
+    apply,
+    clear,
+    markForcedLogout,
+    bootstrap,
+  }
 })

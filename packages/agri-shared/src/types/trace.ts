@@ -23,12 +23,19 @@ export interface TraceCode {
   farmId?: string
   /** 状态：generated/activated/scanned/expired */
   status: TraceCodeStatus
-  /** 激活时间 */
-  activatedAt?: string
+  /**
+   * 激活时间。
+   *
+   * ⚠️ 字段名跟后端 `TraceCodeContractVO` 一致（`activateTime`）。
+   * 以前这里声明的是 `activatedAt / lastScanAt`，后端从来不给这两个键，
+   * 于是页面的"最近扫码"tooltip 永远走"暂无扫码记录"分支、导出那一列永远是 "-" ——
+   * 明明扫过 3 次也照说没扫过。后端只有**首次**扫码时间，没有"最近扫码"，所以名字照实改。
+   */
+  activateTime?: string
   /** 扫码次数 */
   scanCount: number
-  /** 最近扫码时间 */
-  lastScanAt?: string
+  /** 首次扫码时间（后端没有"最近扫码时间"这一列） */
+  firstQueryTime?: string
   /** 失效日期 */
   expireDate?: string
   /** 码类型：1 批次码 2 单品码 */
@@ -65,12 +72,31 @@ export interface TraceNode {
   description?: string
   /** 关联单据 ID */
   refId?: string
+  /** 关联单据编号（溯源码 / 批次号 / 质检单号），存证记录按它对号 */
+  refNo?: string
   /** 现场照片地址列表 */
   photoUrls?: string[]
-  /** 上链交易哈希 */
+  /**
+   * 有没有命中存证记录（{@code agri_prod_chain_record}）。
+   * false = 存证域里没有这条业务的记录；true 时看 {@code chainStatus}。
+   */
+  attested?: boolean
+  /** 上链交易哈希（只有 chainStatus=SUCCESS 的记录才有） */
   txHash?: string
-  /** 是否已上链 */
+  /** 是否已上链（= 存证记录状态 SUCCESS；PENDING/FAILED 一律 false） */
   onChain: boolean
+  /** 存证状态：PENDING / SUCCESS / FAILED */
+  chainStatus?: string
+  /** 链类型：本部署固定 SIMULATED（模拟链，不是真链完整性校验） */
+  chainType?: string
+  /** 人读存证编号 */
+  recordNo?: string
+  /** 区块高度 */
+  blockNumber?: number
+  /** 出块时间 */
+  chainTime?: string
+  /** 上链失败原因（FAILED 才有） */
+  failedReason?: string
 }
 
 /** 扫码记录 */
@@ -117,10 +143,19 @@ export interface RawTraceCode extends Omit<Partial<TraceCode>, 'status' | 'id'> 
   plotName?: string
   /** 质量等级（冗余） */
   grade?: string
-  /** 是否已上链 */
+  /**
+   * 有没有链上存证记录（后端按 agri_prod_chain_record 判定）。
+   * false = 查过存证表、这条码没有记录；不是"能力未接入"。
+   */
+  attested?: boolean | null
+  /** 是否已上链（= 存证记录里有 SUCCESS；PENDING/FAILED 都是 false） */
   onChain?: boolean
-  /** 上链交易哈希 */
+  /** 存证状态原值：PENDING / SUCCESS / FAILED */
+  chainStatus?: string | null
+  /** 上链交易哈希（SUCCESS 才有） */
   txHash?: string
+  /** 人读存证编号 */
+  recordNo?: string | null
 }
 
 /** 全链路溯源节点（后端 /trace/full-chain/{batchId}/nodes 返回 Map 结构） */
@@ -139,12 +174,34 @@ export interface TraceFullChainNode {
   stage?: TraceStage
   /** 操作人姓名（前端增强字段） */
   operatorName?: string
-  /** 环节描述（前端增强字段） */
+  /** 环节描述 */
   description?: string
-  /** 是否已上链（前端增强字段） */
+  /**
+   * 链上凭证（2026-11-01 起由后端按 {@code agri_prod_chain_record} 真实记录给出，
+   * 不再是前端自己关联存证域推的）。口径：
+   * · {@code attested=false} → 存证域里**没有**这条业务的记录（投入品/入库/出库就是这一类）；
+   * · {@code attested=true, onChain=false} → 有记录但没出块，{@code chainStatus} 是 PENDING 或 FAILED，
+   *   FAILED 时 {@code failedReason} 给原因；
+   * · {@code onChain=true} → 记录状态 SUCCESS，{@code txHash} 与 {@code blockNumber} 有值。
+   * 本部署是模拟链（{@code chainType=SIMULATED}、哈希带 SIMU 前缀），展示时要点明。
+   */
+  attested?: boolean
+  /** 是否已上链（= 存证记录状态 SUCCESS） */
   onChain?: boolean
-  /** 上链交易哈希（前端增强字段） */
+  /** 上链交易哈希（SUCCESS 才有） */
   txHash?: string
+  /** 存证状态：PENDING / SUCCESS / FAILED */
+  chainStatus?: string
+  /** 链类型：本部署固定为 SIMULATED */
+  chainType?: string
+  /** 人读存证编号（CHAIN-YYYYMMDD-XXXX） */
+  recordNo?: string
+  /** 区块高度 */
+  blockNumber?: number
+  /** 出块时间（yyyy-MM-dd HH:mm） */
+  chainTime?: string
+  /** 上链失败原因（FAILED 才有） */
+  failedReason?: string
 }
 
 /** 溯源报告（原型 P26 四章结构，面向消费者 / 监管的正式报告） */

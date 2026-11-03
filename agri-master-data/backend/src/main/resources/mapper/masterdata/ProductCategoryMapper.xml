@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.agri.masterdata.mapper.ProductCategoryMapper">
+
+    <!--
+      2026-10-29 补齐：接口里声明了这 4 个方法，但仓库里没有对应 SQL，
+      调用直接抛 BindingException（Invalid bound statement）→ 品类树与属性模板页 500。
+      这里按物理表补上实现，条件与 del_flag 口径和其它业务 Mapper 保持一致。
+    -->
+
+    <select id="selectAll" resultType="com.agri.masterdata.entity.ProductCategory">
+        SELECT * FROM agri_md_product_category
+        WHERE del_flag = 0
+        ORDER BY order_num ASC, id ASC
+    </select>
+
+    <select id="selectTree" resultType="com.agri.masterdata.entity.ProductCategory">
+        SELECT * FROM agri_md_product_category
+        WHERE del_flag = 0
+          AND parent_id = #{parentId}
+        ORDER BY order_num ASC, id ASC
+    </select>
+
+    <select id="selectChildren" resultType="com.agri.masterdata.entity.ProductCategory">
+        SELECT * FROM agri_md_product_category
+        WHERE del_flag = 0
+          AND parent_id = #{parentId}
+        ORDER BY order_num ASC, id ASC
+    </select>
+
+    <select id="countChildren" resultType="int">
+        SELECT COUNT(*) FROM agri_md_product_category
+        WHERE del_flag = 0
+          AND parent_id = #{parentId}
+    </select>
+
+</mapper>

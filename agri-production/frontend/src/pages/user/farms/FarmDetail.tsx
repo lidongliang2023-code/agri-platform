@@ -6,7 +6,7 @@
  * 原型来源：用户端原型 P2 farm-detail
  *
  * 还原要点（对照原型 P2）：
- * - 头部 `< 返回农场列表` ｜ 农场名 ｜ `✏️ 编辑`、`📊 数据分析`
+ * - 头部 `< 返回农场管理` ｜ 农场名 ｜ `✏️ 编辑`、`📊 数据分析`
  * - 「📍 基本信息」：农场编号 / 状态 / 类型 / 地址 / 面积 / 海拔 / 负责人 / 联系电话 / 创建时间 / 资质
  * - 4 个指标卡：在田面积、本月产量、本月投入、预计收入
  * - 「🗺️ 地块分布」：地块缩略卡（作物 emoji / 状态 / 面积）+ `查看全部地块→`
@@ -26,7 +26,6 @@ import {
   ArrowDownOutlined,
   ArrowUpOutlined,
   EditOutlined,
-  InfoCircleOutlined,
   LeftOutlined,
   LineChartOutlined,
 } from '@ant-design/icons'
@@ -35,7 +34,6 @@ import {
   Button,
   Card,
   Col,
-  Descriptions,
   Empty,
   Form,
   Input,
@@ -45,13 +43,11 @@ import {
   Select,
   Skeleton,
   Space,
-  Statistic,
   Tag,
-  Tooltip,
   Typography,
   message,
 } from 'antd'
-import { MetricStatistic } from '@/components'
+import { DetailInfoGrid, DetailMetricGrid } from '@/components'
 import { getFarm, getFarmSummary, listFarmCerts, updateFarm } from '@/api/farms'
 import { listPlots } from '@/api/plots'
 import { listHarvests } from '@/api/harvests'
@@ -287,7 +283,11 @@ export default function FarmDetail(): JSX.Element {
 
   /** 农场地块列表 */
   const farmPlots = useMemo<Plot[]>(
-    () => (plotsQuery.data?.list ?? []).filter((plot) => plot.farmId === farmId),
+    () =>
+      (plotsQuery.data?.list ?? []).filter(
+        // 路由参数是字符串、实体主键是数字，严格相等会让列表永远为空
+        (plot) => String(plot.farmId) === String(farmId),
+      ),
     [plotsQuery.data, farmId],
   )
 
@@ -301,7 +301,9 @@ export default function FarmDetail(): JSX.Element {
     const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1)
     const lastMonth = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`
     const batches = (harvestQuery.data.list ?? []).filter(
-      (batch) => batch.farmId === farmId || farmPlots.some((plot) => plot.plotId === batch.plotId),
+      (batch) =>
+        String(batch.farmId) === String(farmId) ||
+        farmPlots.some((plot) => String(plot.plotId) === String(batch.plotId)),
     )
     const sumOf = (month: string): number =>
       batches
@@ -315,9 +317,9 @@ export default function FarmDetail(): JSX.Element {
   /** 本月投入笔数；接口不可用时为 null，显示「—」而非 0 笔 */
   const usageCount: number | null = useMemo(() => {
     if (usageQuery.isError || !usageQuery.data) return null
-    const plotIds = farmPlots.map((plot) => plot.plotId)
+    const plotIds = new Set(farmPlots.map((plot) => String(plot.plotId)))
     return (usageQuery.data.list ?? []).filter(
-      (usage) => usage.plotId && plotIds.includes(usage.plotId),
+      (usage) => usage.plotId && plotIds.has(String(usage.plotId)),
     ).length
   }, [usageQuery.data, usageQuery.isError, farmPlots])
 
@@ -396,7 +398,7 @@ export default function FarmDetail(): JSX.Element {
             <Space direction="vertical">
               <Typography.Text type="danger">农场数据加载失败，请稍后重试</Typography.Text>
               <Button onClick={() => void farmQuery.refetch()}>重新加载</Button>
-              <Button onClick={() => navigate('/production/farms')}>返回农场列表</Button>
+              <Button onClick={() => navigate('/production/farms')}>返回农场管理</Button>
             </Space>
           }
         />
@@ -411,45 +413,47 @@ export default function FarmDetail(): JSX.Element {
     const altitude = parseRemarkField(farm.remark, '海拔') ?? '暂未录入'
     const certs = certQuery.data?.list ?? []
     const visiblePlots = plotsExpanded ? farmPlots : farmPlots.slice(0, 5)
+    // 详细地址本身已带省市区时不再重复拼接（演示数据里两者都完整，直接拼会重复一遍）
+    const regionText = `${farm.province ?? ''}${farm.city ?? ''}${farm.district ?? ''}`
+    const addressText = farm.address
+      ? farm.province && farm.address.startsWith(farm.province)
+        ? farm.address
+        : `${regionText}${farm.address}`
+      : regionText || '-'
 
     return (
       <Space direction="vertical" size={16} style={{ width: '100%' }}>
-        <Card title="📍 基本信息">
-          <Descriptions
-            bordered
-            column={{ xs: 1, sm: 2, md: 3 }}
-            size="small"
+        <Card
+          title="📋 基本信息"
+          extra={
+            farm.status === 1 ? <Tag color="green">运营中</Tag> : <Tag>已停用</Tag>
+          }
+        >
+          <DetailInfoGrid
+            columns={2}
             items={[
-              { key: 'code', label: '农场编号', children: farm.farmCode || '-' },
-              {
-                key: 'status',
-                label: '状态',
-                children:
-                  farm.status === 1 ? <Tag color="green">运营中</Tag> : <Tag>已停用</Tag>,
-              },
-              { key: 'type', label: '类型', children: <Tag>{typeLabel}</Tag> },
+              { key: 'code', label: '农场编号', value: farm.farmCode || '-' },
+              { key: 'type', label: '类型', value: typeLabel },
               {
                 key: 'address',
                 label: '地址',
-                children:
-                  `${farm.province ?? ''}${farm.city ?? ''}${farm.district ?? ''}${
-                    farm.address ?? ''
-                  }` || '-',
+                fullWidth: true,
+                value: addressText,
               },
               {
                 key: 'area',
                 label: '面积',
-                children: `${Number(farm.areaTotal || 0).toLocaleString('zh-CN')}亩`,
+                value: `${Number(farm.areaTotal || 0).toLocaleString('zh-CN')}亩`,
               },
-              { key: 'altitude', label: '海拔', children: altitude },
-              { key: 'manager', label: '负责人', children: farm.managerName || '-' },
-              { key: 'phone', label: '联系电话', children: farm.managerPhone || '-' },
-              { key: 'createdAt', label: '创建时间', children: farm.createdAt || '-' },
+              { key: 'altitude', label: '海拔', value: altitude },
+              { key: 'manager', label: '负责人', value: farm.managerName || '-' },
+              { key: 'phone', label: '联系电话', value: farm.managerPhone || '-' },
+              { key: 'createdAt', label: '创建时间', value: farm.createdAt || '-' },
               {
                 key: 'certs',
                 label: '资质',
-                span: 3,
-                children:
+                fullWidth: true,
+                value:
                   certs.length === 0 ? (
                     <Typography.Text type="secondary">暂无资质记录</Typography.Text>
                   ) : (
@@ -467,61 +471,60 @@ export default function FarmDetail(): JSX.Element {
           />
         </Card>
 
-        <Row gutter={16}>
-          <Col xs={24} sm={12} xl={6}>
-            <Card>
-              <MetricStatistic title="在田面积" value={summary.plotAreaTotal} suffix="亩" />
-              <Typography.Text type="secondary">
-                利用率{' '}
-                {summary.usageRate === null ? (
-                  <Tooltip title="后端 /farms/{farmId}/summary 未提供在田面积 / 总面积，显示为「—」">
-                    <Typography.Text type="secondary" style={{ cursor: 'help' }}>
-                      —
-                      <InfoCircleOutlined style={{ fontSize: 11, color: '#faad14', marginLeft: 2 }} />
-                    </Typography.Text>
-                  </Tooltip>
-                ) : (
-                  `${summary.usageRate}%`
-                )}
-                （总面积 {summary.areaTotal === null ? '—' : summary.areaTotal.toLocaleString('zh-CN')}亩）
-              </Typography.Text>
-            </Card>
-          </Col>
-          <Col xs={24} sm={12} xl={6}>
-            <Card>
-              <MetricStatistic
-                title="本月产量"
-                value={harvestStats.current}
-                precision={2}
-                suffix="吨"
-                missingTip="采收批次接口未返回数据，显示为「—」，不按 0 吨处理"
-              />
-              <Space size={6}>
-                {renderTrend(harvestStats.trend)}
-                <Typography.Text type="secondary">较上月</Typography.Text>
-              </Space>
-            </Card>
-          </Col>
-          <Col xs={24} sm={12} xl={6}>
-            <Card>
-              <MetricStatistic
-                title="本月投入"
-                value={usageCount}
-                suffix="笔"
-                missingTip="投入品使用记录接口未返回数据，显示为「—」，不按 0 笔处理"
-              />
-              <Typography.Text type="secondary">投入品使用记录（金额待接入）</Typography.Text>
-            </Card>
-          </Col>
-          <Col xs={24} sm={12} xl={6}>
-            <Card>
-              <Tooltip title="收入测算依赖交易模块成交价，接入后自动填充">
-                <Statistic title="预计收入" value="—" />
-                <Typography.Text type="secondary">待交易数据接入</Typography.Text>
-              </Tooltip>
-            </Card>
-          </Col>
-        </Row>
+        <DetailMetricGrid
+          items={[
+            {
+              key: 'plantedArea',
+              title: '在田面积',
+              value: summary.plotAreaTotal,
+              suffix: '亩',
+              missingTip: '后端 /farms/{farmId}/summary 未提供在田面积，显示为「—」',
+              extra: (
+                <Typography.Text type="secondary">
+                  利用率 {summary.usageRate === null ? '—' : `${summary.usageRate}%`}
+                  （总面积{' '}
+                  {summary.areaTotal === null
+                    ? '—'
+                    : `${summary.areaTotal.toLocaleString('zh-CN')}亩`}
+                  ）
+                </Typography.Text>
+              ),
+            },
+            {
+              key: 'harvest',
+              title: '本月产量',
+              value: harvestStats.current,
+              precision: 2,
+              suffix: '吨',
+              missingTip: '采收批次接口未返回数据，显示为「—」，不按 0 吨处理',
+              extra: (
+                <Space size={6}>
+                  {renderTrend(harvestStats.trend)}
+                  <Typography.Text type="secondary">较上月</Typography.Text>
+                </Space>
+              ),
+            },
+            {
+              key: 'usage',
+              title: '本月投入',
+              value: usageCount,
+              suffix: '笔',
+              missingTip: '投入品使用记录接口未返回数据，显示为「—」，不按 0 笔处理',
+              extra: (
+                <Typography.Text type="secondary">
+                  投入品使用记录（金额待接入）
+                </Typography.Text>
+              ),
+            },
+            {
+              key: 'revenue',
+              title: '预计收入',
+              value: null,
+              missingTip: '收入测算依赖交易模块成交价，接入后自动填充',
+              extra: <Typography.Text type="secondary">待交易数据接入</Typography.Text>,
+            },
+          ]}
+        />
 
         <Card
           title={`🗺️ 地块分布 (${summary.plotCount === null ? farmPlots.length : summary.plotCount}个地块)`}

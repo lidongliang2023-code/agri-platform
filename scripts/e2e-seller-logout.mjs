@@ -1,13 +1,19 @@
 #!/usr/bin/env node
 /** 卖家中心退出登录 → 官网门户首页（2026-10-21）。 */
 import { createRequire } from 'node:module'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const require2 = createRequire(path.join(REPO_ROOT, 'agri-production/frontend/package.json'))
-const puppeteer = require2('puppeteer')
+const require2 = createRequire(path.join('C:/Users/71502/.workbuddy-ai/binaries/node/workspace', 'noop.js'))
+const { chromium } = require2('playwright-core')
+
+const BROWSER = [
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+].find((candidate) => existsSync(candidate))
 const HEADFUL = process.argv.includes('--headful')
 const OUT = 'C:/Users/71502/.codex/visualizations/2026/10/16/01a14244-ead8-7ab0-8c7c-df7abac44648'
 
@@ -17,13 +23,13 @@ const check = (ok, label, extra = '') => {
   if (!ok) failures.push(label)
 }
 
-const browser = await puppeteer.launch({ headless: HEADFUL ? false : 'new', args: ['--no-sandbox'] })
+const browser = await chromium.launch({ headless: !HEADFUL, executablePath: BROWSER, args: ['--no-sandbox'] })
 try {
-  const page = await browser.newPage()
+  const page = await (await browser.newContext({ viewport: { width: 1440, height: 1000 } })).newPage()
   const errors = []
   page.on('pageerror', (error) => errors.push(String(error)))
-  await page.setViewport({ width: 1440, height: 1000 })
-  await page.goto('http://localhost:8098/portal/', { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await page.goto('http://localhost:8098/portal/', { waitUntil: 'networkidle', timeout: 60000 })
   const login = await page.evaluate(async () => {
     const response = await fetch('/api/v1/sso/login-standalone', {
       method: 'POST',
@@ -41,7 +47,7 @@ try {
   check(login.code === 0 && login.data?.stage === 'done', '卖家账号登录成功')
 
   await page.goto('http://localhost:8086/member/seller?tab=goods', {
-    waitUntil: 'networkidle2',
+    waitUntil: 'networkidle',
     timeout: 60000,
   })
   await page.waitForSelector('.mc-logout', { timeout: 30000 })
@@ -52,7 +58,7 @@ try {
     return location.origin === 'http://localhost:8098'
       && location.pathname.startsWith('/portal/')
   }, { timeout: 30000 })
-  await page.waitForFunction(() => document.body.innerText.includes('从田间到餐桌'), { timeout: 20000 })
+  await page.waitForFunction(() => document.body.innerText.includes('从田间到餐桌'), undefined, { timeout: 20000 })
   const finalUrl = page.url()
   const text = await page.evaluate(() => document.body.innerText)
   check(finalUrl.startsWith('http://localhost:8098/portal/'), '退出后落到官网门户首页', finalUrl)

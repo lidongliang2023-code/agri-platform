@@ -2,17 +2,22 @@ package com.agri.production.service.impl;
 
 import com.agri.production.common.entity.PageResult;
 import com.agri.production.common.exception.BusinessException;
+import com.agri.production.entity.ChainRecord;
 import com.agri.production.entity.HarvestBatch;
 import com.agri.production.entity.Inspection;
 import com.agri.production.entity.InputUsageRecord;
 import com.agri.production.entity.InventoryFlow;
 import com.agri.production.entity.TraceCode;
+import com.agri.production.mapper.ChainRecordMapper;
 import com.agri.production.mapper.HarvestBatchMapper;
 import com.agri.production.mapper.InspectionMapper;
 import com.agri.production.mapper.InputUsageRecordMapper;
 import com.agri.production.mapper.InventoryFlowMapper;
 import com.agri.production.mapper.TraceCodeMapper;
+import com.agri.production.service.ChainEvidenceRule;
+import com.agri.production.service.IChainRecordService;
 import com.agri.production.service.ITraceLifecycleService;
+import com.agri.production.service.TraceCodeFilter;
 import com.agri.production.service.IDomainEventService;
 import com.agri.production.vo.TraceCodeContractVO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -49,27 +54,31 @@ public class TraceLifecycleServiceImpl implements ITraceLifecycleService {
     private final InspectionMapper inspectionMapper;
     private final InventoryFlowMapper inventoryFlowMapper;
     private final InputUsageRecordMapper inputUsageMapper;
+    private final ChainRecordMapper chainRecordMapper;
+    private final IChainRecordService chainRecordService;
     private final IDomainEventService domainEventService;
 
     public TraceLifecycleServiceImpl(TraceCodeMapper traceCodeMapper, HarvestBatchMapper batchMapper,
                                     InspectionMapper inspectionMapper, InventoryFlowMapper inventoryFlowMapper,
                                     InputUsageRecordMapper inputUsageMapper,
+                                    ChainRecordMapper chainRecordMapper,
+                                    IChainRecordService chainRecordService,
                                     IDomainEventService domainEventService) {
         this.traceCodeMapper = traceCodeMapper;
         this.batchMapper = batchMapper;
         this.inspectionMapper = inspectionMapper;
         this.inventoryFlowMapper = inventoryFlowMapper;
         this.inputUsageMapper = inputUsageMapper;
+        this.chainRecordMapper = chainRecordMapper;
+        this.chainRecordService = chainRecordService;
         this.domainEventService = domainEventService;
     }
 
     @Override
-    public PageResult<TraceCodeContractVO> page(int pageNum, int pageSize, String status, String tenantId) {
+    public PageResult<TraceCodeContractVO> page(int pageNum, int pageSize, TraceCodeFilter filter, String tenantId) {
         LambdaQueryWrapper<TraceCode> w = new LambdaQueryWrapper<>();
         w.eq(TraceCode::getTenantId, tenantId);
-        if (status != null && !status.isBlank()) {
-            w.eq(TraceCode::getStatus, status.trim().toLowerCase());
-        }
+        filter.apply(w);
         w.orderByDesc(TraceCode::getId);
         int p = pageNum > 0 ? pageNum : 1;
         int s = pageSize > 0 ? pageSize : 10;
@@ -78,12 +87,34 @@ public class TraceLifecycleServiceImpl implements ITraceLifecycleService {
         for (TraceCode c : r.getRecords()) {
             list.add(TraceCodeContractVO.of(c));
         }
+        applyEvidence(list, tenantId);
         return PageResult.of(list, r.getTotal(), p, s);
+    }
+
+    /**
+     * 给一批出参贴链上凭证（整页一次 IN 查询，不做 N+1）。
+     *
+     * <p>这一步是本轮的核心修正：列表的 {@code onChain} 以前读溯源码表那个从来没人写的
+     * {@code blockchain_tx_hash}，于是有真实 SUCCESS 存证的码也被显示成"未上链"。
+     * 现在与全链路节点、公开核验共用 {@link ChainEvidenceRule}。</p>
+     */
+    private void applyEvidence(List<TraceCodeContractVO> rows, String tenantId) {
+        if (rows.isEmpty()) {
+            return;
+        }
+        List<String> codes = rows.stream().map(TraceCodeContractVO::getCode).filter(java.util.Objects::nonNull).toList();
+        Map<String, ChainRecord> evidence = chainRecordService.traceEvidence(codes, tenantId);
+        for (TraceCodeContractVO row : rows) {
+            row.applyEvidence(row.getCode() == null ? null
+                    : evidence.get(row.getCode().trim().toUpperCase()));
+        }
     }
 
     @Override
     public TraceCodeContractVO detail(String code, String tenantId) {
-        return TraceCodeContractVO.of(getOwned(code, tenantId));
+        TraceCodeContractVO vo = TraceCodeContractVO.of(getOwned(code, tenantId));
+        applyEvidence(List.of(vo), tenantId);
+        return vo;
     }
 
     @Override
@@ -92,6 +123,7 @@ public class TraceLifecycleServiceImpl implements ITraceLifecycleService {
         if (batchId == null || batchId.isBlank()) {
             throw new BusinessException(400, "缺少 batchId");
         }
+        LocalDate expiry = parseExpireDate(expireDate);
         Long batch = toLong(batchId);
         HarvestBatch b = batch == null ? null : batchMapper.selectById(batch);
         if (b == null || !tenantId.equals(b.getTenantId())) {
@@ -112,6 +144,8 @@ public class TraceLifecycleServiceImpl implements ITraceLifecycleService {
         code.setCropName(b.getCropName());
         code.setQualityGrade(b.getGrade());
         code.setHarvestDate(b.getHarvestDate());
+        // 入参一直有、列也一直有，只是此前没人写：留空就是"未设置有效期"，不拿采收日+1年编一个
+        code.setExpiryDate(expiry);
         code.setStatus("generated");
         code.setQueryCount(0);
         code.setCreateTime(LocalDateTime.now());
@@ -121,6 +155,18 @@ public class TraceLifecycleServiceImpl implements ITraceLifecycleService {
         // 契约注释说这里要发 prod.trace.generated / activated 事件：本服务没有事件总线，
         // 因此没有伪造（与批次、质检两处一并记在缺口里）。
         return code.getTraceCode();
+    }
+
+    /** 到期日入参：只认 {@code yyyy-MM-dd}；不填就是"未设置有效期"（不参与到期扫描）。 */
+    private static LocalDate parseExpireDate(String expireDate) {
+        if (expireDate == null || expireDate.isBlank()) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(expireDate.trim());
+        } catch (java.time.format.DateTimeParseException e) {
+            throw new BusinessException(400, "有效期格式不对，要用 yyyy-MM-dd（收到：" + expireDate.trim() + "）");
+        }
     }
 
     @Override
@@ -198,6 +244,41 @@ public class TraceLifecycleServiceImpl implements ITraceLifecycleService {
         return affected;
     }
 
+    /**
+     * 到期扫描：把过了"有效期至"且还没走完生命周期的码置为 {@code expired}。
+     *
+     * <p>为什么需要它：生成接口一直收 {@code expireDate}，但既没落库也没有扫描，
+     * 于是"有效期"只是页面上一个填了也没用的输入框。现在两件事都补上了。</p>
+     *
+     * <p>口径：只处理 {@code expiry_date < 今天} 且状态仍是 {@code generated/active/scanned}
+     * （含存量写法 {@code inactive}）的码；已作废（revoked）与已过期的不动，
+     * 没设有效期的码**不参与**（不拿采收日或创建日编一个到期日出来）。
+     * 由定时任务（全部主体）与页面手动触发（仅本主体）共用。</p>
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int expireOverdue(String tenantId) {
+        LocalDate today = LocalDate.now();
+        LambdaQueryWrapper<TraceCode> w = new LambdaQueryWrapper<TraceCode>()
+                .isNotNull(TraceCode::getExpiryDate)
+                .lt(TraceCode::getExpiryDate, today)
+                .in(TraceCode::getStatus, List.of("generated", "active", "scanned", "inactive"));
+        if (tenantId != null && !tenantId.isBlank()) {
+            w.eq(TraceCode::getTenantId, tenantId);
+        }
+        List<TraceCode> overdue = traceCodeMapper.selectList(w);
+        for (TraceCode item : overdue) {
+            item.setStatus("expired");
+            item.setUpdateTime(LocalDateTime.now());
+            traceCodeMapper.updateById(item);
+        }
+        if (!overdue.isEmpty()) {
+            log.info("溯源码到期扫描：{} 条置为 expired（截止 {}，主体 {}）",
+                    overdue.size(), today, tenantId == null || tenantId.isBlank() ? "全部" : tenantId);
+        }
+        return overdue.size();
+    }
+
     @Override
     public List<TraceCodeContractVO> listByBatch(String batchId, String tenantId) {
         if (batchId == null || batchId.isBlank()) {
@@ -216,6 +297,7 @@ public class TraceLifecycleServiceImpl implements ITraceLifecycleService {
         for (TraceCode c : traceCodeMapper.selectList(w)) {
             list.add(TraceCodeContractVO.of(c));
         }
+        applyEvidence(list, tenantId);
         return list;
     }
 
@@ -239,7 +321,7 @@ public class TraceLifecycleServiceImpl implements ITraceLifecycleService {
                 batch.getQuantity() == null ? "—" : batch.getQuantity().stripTrailingZeros().toPlainString(),
                 batch.getUnit() == null ? "" : batch.getUnit(),
                 batch.getGrade() == null ? "—" : batch.getGrade()));
-        harvest.put("onChain", batch.getTraceCode() != null);
+        // 链上凭证不在这里逐节点猜：全部节点建完后统一交给 attachChainEvidence 按存证表判定
         nodes.add(harvest);
 
         // 2) 质检（按批次号或批次 id 关联；契约的检测单挂的是批次）
@@ -259,7 +341,6 @@ public class TraceLifecycleServiceImpl implements ITraceLifecycleService {
                     ins.getInspectionType() == null ? "检测" : ins.getInspectionType(),
                     ins.getResult() == null ? "—" : ins.getResult(),
                     ins.getStatus() == null ? "—" : ins.getStatus()));
-            node.put("onChain", Boolean.FALSE);
             nodes.add(node);
         }
 
@@ -280,7 +361,6 @@ public class TraceLifecycleServiceImpl implements ITraceLifecycleService {
                     flow.getQuantity() == null ? "—" : flow.getQuantity().stripTrailingZeros().toPlainString(),
                     flow.getUnit() == null ? "" : flow.getUnit(),
                     flow.getRemark() == null ? "" : "（" + flow.getRemark() + "）"));
-            node.put("onChain", Boolean.FALSE);
             nodes.add(node);
         }
 
@@ -302,12 +382,11 @@ public class TraceLifecycleServiceImpl implements ITraceLifecycleService {
                         usage.getDosage() == null ? "—" : usage.getDosage().stripTrailingZeros().toPlainString(),
                         usage.getUnit() == null ? "" : usage.getUnit(),
                         usage.getMethod() == null ? "—" : usage.getMethod()));
-                node.put("onChain", Boolean.FALSE);
                 nodes.add(node);
             }
         }
 
-        // 5) 溯源码（该批次的码；有交易哈希才算已上链）
+        // 5) 溯源码（该批次的码；有没有上链看存证表，不看 blockchain_tx_hash 那个没人写的列）
         for (TraceCode code : traceCodeMapper.selectList(new LambdaQueryWrapper<TraceCode>()
                 .eq(TraceCode::getTenantId, tenantId)
                 .and(q -> q.eq(TraceCode::getHarvestId, batch.getBatchId())
@@ -322,11 +401,10 @@ public class TraceLifecycleServiceImpl implements ITraceLifecycleService {
             node.put("operatorName", null);
             node.put("description", "溯源码状态 " + normalize(code.getStatus())
                     + "，查询 " + (code.getQueryCount() == null ? 0 : code.getQueryCount()) + " 次");
-            node.put("txHash", code.getBlockchainTxHash());
-            node.put("onChain", code.getBlockchainTxHash() != null && !code.getBlockchainTxHash().isBlank());
             nodes.add(node);
         }
 
+        attachChainEvidence(tenantId, nodes);
         nodes.sort(Comparator.comparing(n -> String.valueOf(n.get("occurredAt") == null ? "" : n.get("occurredAt"))));
         return nodes;
     }
@@ -352,12 +430,281 @@ public class TraceLifecycleServiceImpl implements ITraceLifecycleService {
             shaped.put("operatorName", node.get("operatorName"));
             shaped.put("description", node.get("description"));
             shaped.put("refId", node.get("refId"));
-            shaped.put("txHash", node.get("txHash"));
+            shaped.put("refNo", node.get("refNo"));
+            shaped.put("attested", node.get("attested"));
             shaped.put("onChain", node.get("onChain"));
+            shaped.put("chainStatus", node.get("chainStatus"));
+            shaped.put("chainType", node.get("chainType"));
+            shaped.put("recordNo", node.get("recordNo"));
+            shaped.put("txHash", node.get("txHash"));
+            shaped.put("blockNumber", node.get("blockNumber"));
+            shaped.put("chainTime", node.get("chainTime"));
+            shaped.put("failedReason", node.get("failedReason"));
             nodes.add(shaped);
             index += 1;
         }
         return nodes;
+    }
+
+    /**
+     * 溯源核验视图（**跨主体**，供监管公众查询与移动端扫码使用）。
+     *
+     * <p><b>为什么允许跨主体</b>：溯源码存在的全部意义就是"任何人拿到这串码都能验真伪"。
+     * 属主侧的 {@code /codes/{code}}、{@code /full-chain/**} 一律按令牌主体过滤，
+     * 那是"我管理我的码"；核验是另一个语义 —— 监管与消费者手上只有码，没有生产主体的令牌。
+     * 所以这条只回核验要用的字段（产品、批次、生产主体名、码状态、节点时间线与链上凭证），
+     * 不回内部主键以外的经营数据。</p>
+     *
+     * <p><b>链上口径与属主视图完全同源</b>：节点的是否上链一律由
+     * {@link #attachChainEvidence} 按 {@code agri_prod_chain_record} 的真实存证记录判定 ——
+     * 有记录且 {@code chain_status=SUCCESS} 才算已上链，PENDING/FAILED 要如实说出来（含失败原因），
+     * 没有记录就是"未存证"。属主侧 {@code /full-chain/**} 走的是同一个方法，
+     * 两边不会出现"同一批次两个结论"。</p>
+     *
+     * <p>软删的码不参与核验：实体继承了 {@code BaseEntity} 的 {@code @TableLogic deleted}，
+     * MyBatis-Plus 已给所有查询自动补 {@code deleted = 0}（2026-11-01 实测：属主列表与单码详情
+     * 都取不到已删码），这里不再重复写条件，只保留"取不到就报不存在或已作废"的语义。</p>
+     */
+    @Override
+    public Map<String, Object> publicVerification(String code) {
+        if (code == null || code.isBlank()) {
+            throw new BusinessException(400, "缺少溯源码");
+        }
+        String key = code.trim();
+        TraceCode entity = traceCodeMapper.selectOne(new LambdaQueryWrapper<TraceCode>()
+                .eq(TraceCode::getTraceCode, key)
+                .last("LIMIT 1"));
+        if (entity == null) {
+            throw new BusinessException(404, "溯源码不存在或已作废：" + key);
+        }
+
+        String batchKey = entity.getBatchNumber() != null ? entity.getBatchNumber()
+                : (entity.getHarvestId() == null ? null : String.valueOf(entity.getHarvestId()));
+        List<Map<String, Object>> rawNodes = batchKey == null
+                ? new ArrayList<>() : fullChainNodes(batchKey, entity.getTenantId());
+
+        List<Map<String, Object>> nodes = new ArrayList<>();
+        int index = 1;
+        for (Map<String, Object> node : rawNodes) {
+            Map<String, Object> view = new LinkedHashMap<>();
+            view.put("seq", index);
+            view.put("stage", node.get("stage"));
+            view.put("stageName", node.get("nodeName"));
+            view.put("title", nodeTitle(node));
+            view.put("detail", node.get("description"));
+            view.put("occurredAt", node.get("occurredAt"));
+            view.put("operatorName", node.get("operatorName"));
+            view.put("attested", node.get("attested"));
+            view.put("onChain", node.get("onChain"));
+            view.put("chainStatus", node.get("chainStatus"));
+            view.put("chainType", node.get("chainType"));
+            view.put("recordNo", node.get("recordNo"));
+            view.put("txHash", node.get("txHash"));
+            view.put("blockNumber", node.get("blockNumber"));
+            view.put("chainTime", node.get("chainTime"));
+            view.put("failedReason", node.get("failedReason"));
+            nodes.add(view);
+            index += 1;
+        }
+
+        ChainRecord self = codeAttestation(entity, key);
+        long attestedCount = nodes.stream().filter(item -> Boolean.TRUE.equals(item.get("attested"))).count();
+        long onChainCount = nodes.stream().filter(item -> Boolean.TRUE.equals(item.get("onChain"))).count();
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("traceCode", entity.getTraceCode());
+        result.put("productName", entity.getProductName());
+        result.put("cropName", entity.getCropName());
+        result.put("qualityGrade", entity.getQualityGrade());
+        result.put("batchNo", entity.getBatchNumber());
+        result.put("harvestDate", entity.getHarvestDate() == null ? null : entity.getHarvestDate().toString());
+        result.put("farmName", entity.getFarmName());
+        result.put("plotCode", entity.getPlotCode());
+        result.put("tenantId", entity.getTenantId());
+        result.put("status", entity.getStatus());
+        // 到期判定不能只看 status：扫描是每小时跑一次，两次之间过了有效期的码
+        // 状态还是 active —— 这时对公众说"可核验"就是假陈述，所以按日期再判一次。
+        boolean expiredByDate = entity.getExpiryDate() != null
+                && entity.getExpiryDate().isBefore(LocalDate.now());
+        result.put("expiryDate", entity.getExpiryDate());
+        result.put("expired", expiredByDate || "expired".equalsIgnoreCase(nullSafe(entity.getStatus())));
+        result.put("verifiable", "active".equalsIgnoreCase(nullSafe(entity.getStatus())) && !expiredByDate);
+        result.put("activatedAt", entity.getActivateTime() == null ? null
+                : entity.getActivateTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")));
+        result.put("queryCount", entity.getQueryCount());
+        result.put("codeTxHash", entity.getBlockchainTxHash());
+        result.put("codeBlockHeight", entity.getBlockchainBlockHeight());
+        result.put("selfAttestation", self == null ? null : Map.of(
+                "recordNo", nullSafe(self.getRecordNo()),
+                "chainStatus", nullSafe(self.getChainStatus()),
+                "txHash", nullSafe(self.getTxHash()),
+                "blockNumber", self.getBlockNumber() == null ? 0L : self.getBlockNumber()));
+        result.put("nodes", nodes);
+        result.put("nodeCount", nodes.size());
+        result.put("attestedCount", attestedCount);
+        result.put("onChainCount", onChainCount);
+        result.put("chainConclusion", (expiredByDate
+                ? "该溯源码有效期 " + entity.getExpiryDate() + " 已过，不再作为核验依据；" : "")
+                + (nodes.isEmpty()
+                ? "该码没有关联批次，取不到链路节点，无法核验"
+                : onChainCount + "/" + nodes.size() + " 个节点已完成链上存证（状态 SUCCESS）"
+                        + (attestedCount > onChainCount
+                        ? "，另有 " + (attestedCount - onChainCount) + " 个节点存证未成功，请谨慎采信" : "")
+                        + (attestedCount == 0 ? "，当前没有任何链上存证" : "")));
+        return result;
+    }
+
+    /**
+     * 给每个节点贴链上凭证（属主视图与核验视图唯一的一处判定）。
+     *
+     * <p>为什么要抽成一步：这三行曾经写成 {@code harvest.onChain = batch.traceCode != null}、
+     * 其余节点一律 {@code false}、{@code txHash} 干脆没人填 —— 于是同一个批次，属主页说"采收已上链"
+     * （其实是因为它挂了个码），核验页说"1/8 节点已上链、另 1 个存证未成功"，
+     * 两个结论都自称来自系统，差在一句代理判断上。现在两个视图读同一份 {@code agri_prod_chain_record}。</p>
+     *
+     * <p>取数只按"可能有存证的节点"（采收/质检/溯源码）的业务键与主键收窄，
+     * 投入品、出入库这类存证域没覆盖的业务不参与查询 —— 它们的真实结论是"没有存证记录"，
+     * 而不是"查了但没命中"，所以 attested 一律 false，不硬凑。</p>
+     */
+    private void attachChainEvidence(String tenantId, List<Map<String, Object>> nodes) {
+        List<String> targetCodes = new ArrayList<>();
+        List<Long> targetIds = new ArrayList<>();
+        for (Map<String, Object> node : nodes) {
+            if (chainTargetType(node) == null) {
+                continue;
+            }
+            String refNo = nullSafe(node.get("refNo"));
+            if (!refNo.isEmpty() && !targetCodes.contains(refNo)) {
+                targetCodes.add(refNo);
+            }
+            Long refId = asLong(node.get("refId"));
+            if (refId != null && !targetIds.contains(refId)) {
+                targetIds.add(refId);
+            }
+        }
+        List<ChainRecord> records = new ArrayList<>();
+        if (!targetCodes.isEmpty() || !targetIds.isEmpty()) {
+            LambdaQueryWrapper<ChainRecord> wrapper = new LambdaQueryWrapper<ChainRecord>()
+                    .eq(ChainRecord::getTenantId, tenantId)
+                    .eq(ChainRecord::getDelFlag, 0);
+            if (!targetCodes.isEmpty() && !targetIds.isEmpty()) {
+                wrapper.and(q -> q.in(ChainRecord::getTargetCode, targetCodes)
+                        .or().in(ChainRecord::getTargetId, targetIds));
+            } else if (!targetCodes.isEmpty()) {
+                wrapper.in(ChainRecord::getTargetCode, targetCodes);
+            } else {
+                wrapper.in(ChainRecord::getTargetId, targetIds);
+            }
+            wrapper.orderByAsc(ChainRecord::getId);
+            records = chainRecordMapper.selectList(wrapper);
+        }
+        for (Map<String, Object> node : nodes) {
+            ChainRecord record = matchRecord(node, records);
+            node.put("attested", record != null);
+            node.put("onChain", record != null && "SUCCESS".equalsIgnoreCase(nullSafe(record.getChainStatus())));
+            node.put("chainStatus", record == null ? null : record.getChainStatus());
+            node.put("chainType", record == null ? null : record.getChainType());
+            node.put("recordNo", record == null ? null : record.getRecordNo());
+            node.put("txHash", record == null ? null : record.getTxHash());
+            node.put("blockNumber", record == null ? null : record.getBlockNumber());
+            node.put("chainTime", record == null ? null : formatChainTime(record.getChainTime()));
+            node.put("failedReason", record == null ? null : record.getFailedReason());
+        }
+    }
+
+    /**
+     * 这个码自身的存证（TRACE 类，按码值命中；码没关联批次时也能取到）。
+     *
+     * <p>选择规则与列表、节点视图完全一致（{@link ChainEvidenceRule#decide}）——
+     * 以前这里"取最早一条"，于是同一个码先 FAILED 后重提成功时，核验视图会拿着历史的 FAILED
+     * 说事，而列表说已上链。两处各自都有依据，正是最难查的那种分叉。</p>
+     */
+    private ChainRecord codeAttestation(TraceCode entity, String code) {
+        List<ChainRecord> hits = chainRecordMapper.selectList(new LambdaQueryWrapper<ChainRecord>()
+                .eq(ChainRecord::getTenantId, entity.getTenantId())
+                .eq(ChainRecord::getDelFlag, 0)
+                .apply("UPPER(target_type) = 'TRACE'")
+                .eq(ChainRecord::getTargetCode, code)
+                .orderByAsc(ChainRecord::getId));
+        return ChainEvidenceRule.decide(hits);
+    }
+
+    /**
+     * 节点 ↔ 存证记录匹配。
+     *
+     * <p>业务类型对齐表里的 {@code target_type}：采收→HARVEST、质检→QUALITY、溯源码→TRACE、
+     * 投入品→INPUT；入库/出库没有存证环节，就是没上链，不硬凑。
+     * 先按业务编号（target_code）对，再按主键（target_id）对 —— 与记录写入口径一致。</p>
+     */
+    /**
+     * 节点 ↔ 存证记录匹配。
+     *
+     * <p>命中多条时（同一业务键反复提交存证）交给 {@link ChainEvidenceRule#decide} 选一条，
+     * 与属主列表、运营端列表用的是<b>同一个规则</b> —— 否则"FAILED 后又提交成功"这种码，
+     * 列表说已上链、链路说没上链，两边各自都有依据。</p>
+     */
+    private static ChainRecord matchRecord(Map<String, Object> node, List<ChainRecord> records) {
+        String type = chainTargetType(node);
+        if (type == null) {
+            return null;
+        }
+        String refNo = nullSafe(node.get("refNo"));
+        Long refId = asLong(node.get("refId"));
+        List<ChainRecord> hits = records.stream()
+                .filter(item -> type.equalsIgnoreCase(nullSafe(item.getTargetType())))
+                .filter(item -> (!refNo.isEmpty() && refNo.equalsIgnoreCase(nullSafe(item.getTargetCode())))
+                        || (refId != null && refId.equals(item.getTargetId())))
+                .toList();
+        return ChainEvidenceRule.decide(hits);
+    }
+
+    /**
+     * 节点对应的存证业务类型；返回 {@code null} 表示存证表不覆盖这类业务。
+     *
+     * <p>词表与 {@code ChainRecordServiceImpl#normalizeType} 一致：采收→{@code HARVEST}、
+     * 质检→{@code QUALITY}（前端旧词表叫 INSPECTION）、溯源码→{@code TRACE}、
+     * 投入品使用→{@code INPUT}。入库/出库/种植在本部署没有存证环节，就是没上链，不硬凑。</p>
+     *
+     * <p>{@code INPUT} 是 2026-11-02 补上的：投入品页面一直在按数字 {@code bizType=2} 提交存证，
+     * 落库成 {@code target_type='2'}，对号时对不到，于是这些节点被显示成"无存证记录"——
+     * 明明存过证。数字词表下线、历史值迁移后，这里才第一次能把它认出来。</p>
+     */
+    private static String chainTargetType(Map<String, Object> node) {
+        return switch (nullSafe(node.get("nodeType"))) {
+            case "harvest" -> "HARVEST";
+            case "inspect" -> "QUALITY";
+            case "trace" -> "TRACE";
+            case "input" -> "INPUT";
+            default -> null;
+        };
+    }
+
+    /** 上链时间统一成页面在用的 {@code yyyy-MM-dd HH:mm}（核验视图与属主视图同一个形状）。 */
+    private static String formatChainTime(java.util.Date value) {
+        return value == null ? null
+                : new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm").format(value);
+    }
+
+    /** 节点标题：阶段名 + 业务编号，页面上"采收 H20260601"这种可读形式。 */
+    private static String nodeTitle(Map<String, Object> node) {
+        String refNo = nullSafe(node.get("refNo"));
+        String name = nullSafe(node.get("nodeName"));
+        return refNo.isEmpty() ? name : name + " " + refNo;
+    }
+
+    private static String nullSafe(Object value) {
+        return value == null ? "" : String.valueOf(value);
+    }
+
+    private static Long asLong(Object value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return Long.valueOf(String.valueOf(value).trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     /** 取并校验批次（按 id 或按批次号都能定位，页面两边都在用）。 */

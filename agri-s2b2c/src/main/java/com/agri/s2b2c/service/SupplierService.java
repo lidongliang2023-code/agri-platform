@@ -10,6 +10,7 @@ public interface SupplierService extends IService<Supplier> {
     SupplierVO getById(Long id);
     IPage<SupplierVO> pageList(int page, int size, String keyword, String auditStatus);
     boolean apply(Supplier supplier);
+    boolean reapply(Supplier supplier);
     boolean updateAudit(Long id, String auditStatus, String auditOpinion);
     boolean updateInfo(Supplier supplier);
     IPage<ProductVO> getProducts(Long supplierId, int page, int size, String status);

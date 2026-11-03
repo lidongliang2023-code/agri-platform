@@ -5,8 +5,11 @@ import { Empty, Input, Select, Spin } from 'antd'
 import {
   ArrowRightOutlined,
   CheckCircleOutlined,
+  CustomerServiceOutlined,
   EnvironmentOutlined,
   FileTextOutlined,
+  HeartFilled,
+  HeartOutlined,
   SafetyCertificateOutlined,
   SearchOutlined,
   ShopOutlined,
@@ -15,7 +18,11 @@ import {
   UserOutlined,
 } from '@ant-design/icons'
 import { BrandMark } from '@/components/BrandMark'
+import { PortalNav } from '@/components/PortalNav'
+import { followSeller, getFollowState, unfollowSeller } from '@/api/shop-interaction'
+import { getAccessToken } from '@/utils/session'
 import { redirectToSso } from '@/utils/sso'
+import { ShopChat } from './ShopChat'
 import '../../hall/hall.css'
 import '../../product/detail/product-detail.css'
 import './shop-detail.css'
@@ -71,6 +78,11 @@ export default function ShopDetail(): JSX.Element {
   const [category, setCategory] = useState('')
   const [sort, setSort] = useState('newest')
   const [search, setSearch] = useState('')
+  const [followed, setFollowed] = useState(false)
+  const [followers, setFollowers] = useState(0)
+  const [followBusy, setFollowBusy] = useState(false)
+  const [chatOpen, setChatOpen] = useState(false)
+  const [interactionNotice, setInteractionNotice] = useState('')
 
   useEffect(() => {
     if (!sellerId) return
@@ -94,6 +106,32 @@ export default function ShopDetail(): JSX.Element {
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [sellerId])
+
+  useEffect(() => {
+    if (!sellerId || !getAccessToken()) {
+      setFollowed(false)
+      setFollowers(0)
+      return
+    }
+    let cancelled = false
+    void getFollowState(sellerId)
+      .then((result) => {
+        if (cancelled || result.code !== 200) return
+        setFollowed(Boolean(result.data?.followed))
+        setFollowers(Number(result.data?.followers ?? 0))
+      })
+      .catch(() => { /* 公开店铺页不因未登录打断浏览 */ })
+    return () => { cancelled = true }
+  }, [sellerId])
+
+  useEffect(() => {
+    if (!seller || !getAccessToken()) return
+    const url = new URL(window.location.href)
+    if (url.searchParams.get('chat') !== '1') return
+    setChatOpen(true)
+    url.searchParams.delete('chat')
+    window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`)
+  }, [seller])
 
   const sellerName = seller?.sellerName ?? rows[0]?.sellerName ?? '供应商主页'
   const location = seller ? [seller.province, seller.city].filter(Boolean).join(' ') : ''
@@ -123,6 +161,40 @@ export default function ShopDetail(): JSX.Element {
     window.location.href = `${PORTAL}#/chains${value ? `?q=${encodeURIComponent(value)}` : ''}`
   }
 
+  const toggleFollow = async (): Promise<void> => {
+    if (!getAccessToken()) {
+      await redirectToSso(`${window.location.pathname}${window.location.search}`)
+      return
+    }
+    setFollowBusy(true)
+    setInteractionNotice('')
+    try {
+      const result = followed ? await unfollowSeller(sellerId) : await followSeller(sellerId)
+      if (result.code !== 200 || !result.data) {
+        setInteractionNotice(result.message || '关注操作失败')
+        return
+      }
+      setFollowed(result.data.followed)
+      setFollowers(result.data.followers)
+      setInteractionNotice(result.data.followed ? '已关注该供应商' : '已取消关注')
+    } catch {
+      setInteractionNotice('关注操作失败，请稍后重试')
+    } finally {
+      setFollowBusy(false)
+    }
+  }
+
+  const openCustomerService = async (): Promise<void> => {
+    if (!getAccessToken()) {
+      const target = new URL(window.location.href)
+      target.searchParams.set('chat', '1')
+      await redirectToSso(`${target.pathname}${target.search}`)
+      return
+    }
+    setInteractionNotice('')
+    setChatOpen(true)
+  }
+
   return (
     <div className="hall-root shop-page">
       <div className="topbar">
@@ -147,15 +219,7 @@ export default function ShopDetail(): JSX.Element {
             <span className="hall-logo"><BrandMark size={36} /></span>
             <span>丰链云<small>FENGCHAIN · AGRI</small></span>
           </a>
-          <nav className="main-nav">
-            <a href={PORTAL}>首页</a>
-            <a href={`${PORTAL}#/chains`}>产业链</a>
-            <a className="active" href="/hall">交易大厅</a>
-            <a href={`${PORTAL}#/?scroll=price`}>价格指数</a>
-            <a href={`${PORTAL}#/?scroll=news`}>产业资讯</a>
-            <a href="/member/seller?tab=fund">供应链金融</a>
-            <a href={`${PORTAL}#/logistics`}>物流服务</a>
-          </nav>
+          <PortalNav />
           <form className="header-search" onSubmit={submitSearch}>
             <input value={search} onChange={(event) => setSearch(event.target.value)}
               placeholder="搜索商品 / 供应商 / 需求" />
@@ -188,9 +252,22 @@ export default function ShopDetail(): JSX.Element {
                 <span>平台撮合</span>
               </div>
             </div>
-            <a className="shop-hero-action" href="#products">
-              浏览全部货源 <ArrowRightOutlined />
-            </a>
+            <div className="shop-hero-actions">
+              <button type="button" className={`shop-follow-action ${followed ? 'followed' : ''}`}
+                disabled={followBusy} onClick={() => void toggleFollow()}>
+                {followed ? <HeartFilled /> : <HeartOutlined />}
+                {followBusy ? '处理中…' : followed
+                  ? `已关注 ${followers}`
+                  : followers > 0 ? `关注 ${followers}` : '关注'}
+              </button>
+              <button type="button" className="shop-service-action"
+                onClick={() => void openCustomerService()}>
+                <CustomerServiceOutlined />客服
+              </button>
+              <a className="shop-hero-action" href="#products">
+                浏览全部货源 <ArrowRightOutlined />
+              </a>
+            </div>
           </div>
 
           <div className="shop-metrics">
@@ -200,6 +277,8 @@ export default function ShopDetail(): JSX.Element {
             <div><span>起批价格</span><strong>{minPrice == null ? '询价' : money(minPrice)}</strong></div>
           </div>
         </section>
+
+        {interactionNotice && <div className="shop-interaction-notice">{interactionNotice}</div>}
 
         {error && (
           <div className="shop-alert">
@@ -323,6 +402,8 @@ export default function ShopDetail(): JSX.Element {
           <span>店铺信息与货源均来自交易域公开数据。</span>
         </div>
       </footer>
+      <ShopChat open={chatOpen} sellerId={sellerId} sellerName={sellerName}
+        onClose={() => setChatOpen(false)} />
     </div>
   )
 }

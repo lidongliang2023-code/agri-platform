@@ -133,7 +133,7 @@ export function MetricNumber({
       <Tooltip title={missingTip}>
         <Typography.Text type="secondary" style={{ cursor: 'help', ...style }}>
           {MISSING_VALUE_TEXT}
-          <InfoCircleOutlined style={{ fontSize: 11, color: '#faad14', marginLeft: 2 }} />
+          <InfoCircleOutlined style={{ fontSize: 12, color: '#faad14', marginLeft: 2 }} />
         </Typography.Text>
       </Tooltip>
     )
@@ -190,7 +190,7 @@ export function MetricText({
       <Tooltip title={missingTip}>
         <Typography.Text type="secondary" style={{ cursor: 'help' }}>
           {MISSING_VALUE_TEXT}
-          <InfoCircleOutlined style={{ fontSize: 11, color: '#faad14', marginLeft: 2 }} />
+          <InfoCircleOutlined style={{ fontSize: 12, color: '#faad14', marginLeft: 2 }} />
         </Typography.Text>
       </Tooltip>
     )

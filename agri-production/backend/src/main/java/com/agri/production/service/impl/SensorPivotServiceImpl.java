@@ -12,14 +12,17 @@ import com.agri.production.service.ISensorPivotService;
 import com.agri.production.vo.EnvTrendVO;
 import com.agri.production.vo.EnvironmentDataVO;
 import com.agri.production.vo.IotReadingVO;
+import com.agri.production.vo.MonitorEnvVO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
@@ -79,6 +82,8 @@ public class SensorPivotServiceImpl implements ISensorPivotService {
     private static final Map<String, String> ALIAS = buildAliases();
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     private static final DateTimeFormatter DATETIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    /** 看板曲线的按小时标签 */
+    private static final DateTimeFormatter HOUR = DateTimeFormatter.ofPattern("MM-dd HH:00");
 
     /** 透视时从长表读取的行数上限：演示/单地块规模下够用，避免无界查询把内存打满。 */
     private static final int PIVOT_SOURCE_LIMIT = 5000;
@@ -337,6 +342,117 @@ public class SensorPivotServiceImpl implements ISensorPivotService {
         return vo;
     }
 
+    /* ============================ 看板环境概览 ============================ */
+
+    @Override
+    public MonitorEnvVO monitorEnv(String tenantId, Long farmId, String plotId, int hours) {
+        int windowHours = hours <= 0 ? 24 : Math.min(hours, 24 * 7);
+        Filter probe = new Filter(tenantId, farmId, plotId, null, null, null, null, null);
+        if (probe.unresolvable()) {
+            return MonitorEnvVO.empty(windowHours);
+        }
+        // 窗口锚定在"最新一次采样"，而不是"当前时间"——否则设备离线时会返回空集，
+        // 页面只能显示空白，看不出是"没数据"还是"数据太旧"
+        LocalDateTime latest = latestSampleTime(probe);
+        if (latest == null) {
+            return MonitorEnvVO.empty(windowHours);
+        }
+        LocalDateTime from = latest.minusHours(windowHours);
+        List<SensorData> rows = query(
+                new Filter(tenantId, farmId, plotId, null, null, null, from, latest), null);
+
+        MonitorEnvVO vo = new MonitorEnvVO();
+        vo.setWindowHours(windowHours);
+        vo.setWindowFrom(DATETIME.format(from));
+        vo.setWindowTo(DATETIME.format(latest));
+        vo.setSampleCount(rows.size());
+        vo.setStaleHours(Math.max(0L, Duration.between(latest, LocalDateTime.now()).toHours()));
+
+        Map<String, double[]> sums = new LinkedHashMap<>();
+        Map<LocalDateTime, Map<String, double[]>> hourly = new TreeMap<>();
+        Set<Long> plotIds = new LinkedHashSet<>();
+        double rainfallTotal = 0;
+        boolean hasRainfall = false;
+
+        for (SensorData row : rows) {
+            if (row.getDataTime() == null) {
+                continue;
+            }
+            if (row.getPlotId() != null) {
+                plotIds.add(row.getPlotId());
+            }
+            String canonical = canonicalMetric(row.getSensorType());
+            if (canonical == null || row.getValue() == null) {
+                continue;
+            }
+            double value = row.getValue().doubleValue();
+            if (RAINFALL.equals(canonical)) {
+                // 降雨是"累计量"，聚合口径是求和而不是平均
+                rainfallTotal += value;
+                hasRainfall = true;
+            }
+            accumulate(sums, canonical, value);
+            accumulate(hourly.computeIfAbsent(
+                    row.getDataTime().truncatedTo(ChronoUnit.HOURS), key -> new LinkedHashMap<>()),
+                    canonical, value);
+        }
+
+        vo.setPlotCount(plotIds.size());
+        // 只放"有数据"的指标：缺的键前端按无数据渲染，而不是显示一个 0
+        sums.forEach((metric, acc) -> {
+            if (!RAINFALL.equals(metric) && acc[1] > 0) {
+                vo.getSummary().put(metric, round(acc[0] / acc[1]));
+            }
+        });
+        vo.setRainfallTotal(hasRainfall ? round(rainfallTotal) : null);
+
+        List<MonitorEnvVO.Point> points = new ArrayList<>(hourly.size());
+        hourly.forEach((hour, metrics) -> {
+            MonitorEnvVO.Point point = new MonitorEnvVO.Point();
+            point.setTime(hour.format(HOUR));
+            point.setAirTemperature(avgOf(metrics, AIR_TEMPERATURE));
+            point.setAirHumidity(avgOf(metrics, AIR_HUMIDITY));
+            point.setSoilTemperature(avgOf(metrics, SOIL_TEMPERATURE));
+            point.setSoilMoisture(avgOf(metrics, SOIL_MOISTURE));
+            point.setIlluminance(avgOf(metrics, ILLUMINANCE));
+            point.setCo2(avgOf(metrics, CO2));
+            points.add(point);
+        });
+        vo.setSeries(points);
+        return vo;
+    }
+
+    /** 取筛选范围内最新一次采样时刻；没有数据返回 null。 */
+    private LocalDateTime latestSampleTime(Filter filter) {
+        LambdaQueryWrapper<SensorData> w = new LambdaQueryWrapper<SensorData>()
+                .select(SensorData::getDataTime)
+                .eq(SensorData::getTenantId, filter.tenantId)
+                .eq(filter.farmKey != null, SensorData::getFarmId, filter.farmKey)
+                .eq(filter.plotKey != null, SensorData::getPlotId, filter.plotKey)
+                .eq(filter.deviceKey != null, SensorData::getDeviceId, filter.deviceKey)
+                .isNotNull(SensorData::getDataTime)
+                .orderByDesc(SensorData::getDataTime)
+                .last("LIMIT 1");
+        List<SensorData> rows = sensorDataMapper.selectList(w);
+        return rows.isEmpty() ? null : rows.get(0).getDataTime();
+    }
+
+    /** 累加器：{@code [0]=求和, [1]=计数} */
+    private static void accumulate(Map<String, double[]> target, String metric, double value) {
+        double[] acc = target.computeIfAbsent(metric, key -> new double[]{0, 0});
+        acc[0] += value;
+        acc[1] += 1;
+    }
+
+    /** 取某指标的小时均值；该小时没有该指标返回 null（曲线断开，不补 0）。 */
+    private static Double avgOf(Map<String, double[]> metrics, String metric) {
+        double[] acc = metrics.get(metric);
+        if (acc == null || acc[1] <= 0) {
+            return null;
+        }
+        return round(acc[0] / acc[1]);
+    }
+
     /* ============================== 透视主体 ============================== */
 
     /**
@@ -417,15 +533,28 @@ public class SensorPivotServiceImpl implements ISensorPivotService {
     /* ============================== 查询与解析 ============================== */
 
     private List<SensorData> query(Filter filter, Set<String> rawMetricNames) {
-        LocalDateTime from = filter.from == null ? null : filter.from.atStartOfDay();
-        // 结束日期按"含当天"处理，取下一天零点做开区间上界
-        LocalDateTime to = filter.to == null ? null : filter.to.plusDays(1).atStartOfDay();
+        LocalDateTime from;
+        LocalDateTime to;
+        boolean closeUpper;
+        if (filter.fromTime != null || filter.toTime != null) {
+            // 精确时间窗：上下界都是闭区间（窗口终点就是最新采样时刻，必须包含）
+            from = filter.fromTime;
+            to = filter.toTime;
+            closeUpper = true;
+        } else {
+            from = filter.from == null ? null : filter.from.atStartOfDay();
+            // 结束日期按"含当天"处理，取下一天零点做开区间上界
+            to = filter.to == null ? null : filter.to.plusDays(1).atStartOfDay();
+            closeUpper = false;
+        }
         LambdaQueryWrapper<SensorData> w = new LambdaQueryWrapper<SensorData>()
                 .eq(SensorData::getTenantId, filter.tenantId)
+                .eq(filter.farmKey != null, SensorData::getFarmId, filter.farmKey)
                 .eq(filter.plotKey != null, SensorData::getPlotId, filter.plotKey)
                 .eq(filter.deviceKey != null, SensorData::getDeviceId, filter.deviceKey)
                 .ge(from != null, SensorData::getDataTime, from)
-                .lt(to != null, SensorData::getDataTime, to)
+                .le(closeUpper && to != null, SensorData::getDataTime, to)
+                .lt(!closeUpper && to != null, SensorData::getDataTime, to)
                 .orderByAsc(SensorData::getDataTime)
                 .last("LIMIT " + PIVOT_SOURCE_LIMIT);
         if (rawMetricNames != null && !rawMetricNames.isEmpty()) {
@@ -502,19 +631,32 @@ public class SensorPivotServiceImpl implements ISensorPivotService {
      */
     private final class Filter {
         private final String tenantId;
+        private final Long farmKey;
         private final Long plotKey;
         private final Long deviceKey;
         private final LocalDate from;
         private final LocalDate to;
+        /** 精确时间窗（看板按小时聚合用）；非空时优先于 {@link #from}/{@link #to} */
+        private final LocalDateTime fromTime;
+        private final LocalDateTime toTime;
         private final String unresolvedFilter;
 
         private Filter(String tenantId, String plotId, String deviceId, LocalDate from, LocalDate to) {
+            this(tenantId, null, plotId, deviceId, from, to, null, null);
+        }
+
+        private Filter(String tenantId, Long farmId, String plotId, String deviceId,
+                       LocalDate from, LocalDate to,
+                       LocalDateTime fromTime, LocalDateTime toTime) {
             if (tenantId == null || tenantId.isBlank()) {
                 throw new BusinessException(500, "租户上下文为空，无法查询环境数据");
             }
             this.tenantId = tenantId;
+            this.farmKey = farmId == null || farmId <= 0 ? null : farmId;
             this.from = from;
             this.to = to;
+            this.fromTime = fromTime;
+            this.toTime = toTime;
             Resolution plot = resolvePlot(plotId);
             Resolution device = resolveDevice(deviceId);
             this.plotKey = plot.key;

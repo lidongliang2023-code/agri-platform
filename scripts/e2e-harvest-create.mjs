@@ -16,7 +16,7 @@
  * 于是"采收人选了、库里是 NULL"。已改为提交 `Member.id`（数字主键）。</p>
  *
  * <p>登录态给法同 {@code scripts/e2e-plan-create.mjs}：落同源静态文件 → 页面上下文
- * POST /auth/login 种下 HttpOnly Cookie → evaluateOnNewDocument 写非凭证界面态（含
+ * POST /auth/login 种下 HttpOnly Cookie → addInitScript 写非凭证界面态（含
  * `agri_current_farm`，本页查询以当前农场为作用域）。</p>
  *
  * <p>脚本自带清理：跑完 `DELETE /harvests/{id}`（软删），并复核查询侧不再出现该批次。</p>
@@ -33,8 +33,13 @@ import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const require2 = createRequire(path.join(REPO_ROOT, 'agri-production/frontend/package.json'))
-const puppeteer = require2('puppeteer')
+const require2 = createRequire(path.join('C:/Users/71502/.workbuddy-ai/binaries/node/workspace', 'noop.js'))
+const { chromium } = require2('playwright-core')
+
+const BROWSER = [
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+].find((candidate) => existsSync(candidate))
 
 const arg = (name, fallback) => {
   const hit = process.argv.slice(2).find((a) => a.startsWith(`--${name}=`))
@@ -130,9 +135,9 @@ const baselineTotal = before.json.data?.total ?? 0
 
 /* ==================== 2) 真浏览器走一遍新建 ==================== */
 
-const browser = await puppeteer.launch({ headless: HEADFUL ? false : 'new', args: ['--no-sandbox'] })
-const page = await browser.newPage()
-await page.setViewport({ width: 1600, height: 1000 })
+const browser = await chromium.launch({ headless: !HEADFUL, executablePath: BROWSER, args: ['--no-sandbox'] })
+const page = await (await browser.newContext({ viewport: { width: 1440, height: 1000 } })).newPage()
+await page.setViewportSize({ width: 1600, height: 1000 })
 const badResponses = []
 /** 页面自己发出的 POST /harvests 的响应体（用来核对契约） */
 let createCall = null
@@ -246,7 +251,7 @@ try {
       })
     } catch { /* 由后续页面表现反映 */ }
   }, { username: USER, password: PASSWORD, marketId: 1 })
-  await page.evaluateOnNewDocument((state) => {
+  await page.addInitScript((state) => {
     try {
       localStorage.setItem('agri_user_info', JSON.stringify(state.userInfo))
       localStorage.setItem('agri_roles', JSON.stringify(state.roles ?? []))
@@ -257,8 +262,9 @@ try {
   }, { userInfo: login.data.user ?? {}, roles: ['FARMER'], marketId: 1, farm: FARM })
 
   // 2a) 地块采收记录页：查询侧先渲染出来
-  await page.goto(`${BASE_URL}/production/harvests/plan`, { waitUntil: 'networkidle2', timeout: 60000 })
-  await page.waitForNetworkIdle({ idleTime: 600, timeout: 10000 }).catch(() => {})
+  await page.goto(`${BASE_URL}/production/harvests/plan`, { waitUntil: 'networkidle', timeout: 60000 })
+  await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 600))
   const planText = await page.evaluate(() => document.body.innerText)
   check(planText.includes('地块采收记录'), '「地块采收记录」页已登录并渲染')
   const rowsBefore = await readRows()
@@ -296,7 +302,8 @@ try {
 
   // 2f) 提交
   await clickButtonByText('保存')
-  await page.waitForNetworkIdle({ idleTime: 800, timeout: 20000 }).catch(() => {})
+  await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 800))
   await sleep(1500)
   check(Boolean(createCall), '页面发出了 POST /api/v1/production/harvests')
   check(createCall?.status === 200 && createCall?.json?.code === 0,
@@ -335,8 +342,9 @@ try {
     `inbound=${hitRow?.inboundStatus} status=${hitRow?.status}`)
 
   // 再让真页面刷新一次：列表里要出现这条
-  await page.goto(`${BASE_URL}/production/harvests/plan`, { waitUntil: 'networkidle2', timeout: 60000 })
-  await page.waitForNetworkIdle({ idleTime: 800, timeout: 15000 }).catch(() => {})
+  await page.goto(`${BASE_URL}/production/harvests/plan`, { waitUntil: 'networkidle', timeout: 60000 })
+  await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 800))
   const rowsAfter = await readRows()
   check(rowsAfter.text.includes(marker) || rowsAfter.text.includes(hitRow?.batchNo),
     '页面上能看到这条新记录（按备注标记或批次编号命中）',

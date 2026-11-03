@@ -42,6 +42,12 @@ public class Task extends BaseEntity {
     @TableField("plot_code")
     private String plotCode;
 
+    @TableField("plan_id")
+    private Long planId;
+
+    @TableField("stage_id")
+    private Long stageId;
+
     @TableField("crop_name")
     private String cropName;
 

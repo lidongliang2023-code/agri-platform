@@ -33,19 +33,69 @@ public interface TenantSubjectProvider {
             String tenantName,
             String memberType,
             String industry,
+            String companySize,
             String businessType,
+            String address,
+            String creditCode,
             String contactName,
             String contactPhone,
             Integer status,
             String verifyStatus,
-            LocalDateTime createdAt) {
+            String verifyRemark,
+            LocalDateTime createdAt,
+            CertificationInfo certification,
+            IdentityInfo identity) {
+    }
+
+    /** 企业认证资料快照。附件地址只用于运营查看，不包含证件明文。 */
+    record CertificationInfo(
+            String certNo,
+            String companyName,
+            String creditCode,
+            String legalPerson,
+            String licenseNo,
+            String contactName,
+            String contactPhone,
+            String attachNote,
+            String businessLicenseUrl,
+            String legalPersonFaceStatus,
+            String corporateBankName,
+            String corporateBankAccount,
+            String corporateTransferStatus,
+            String registeredCapital,
+            String verificationChannel,
+            String status,
+            LocalDateTime submitTime,
+            String reviewRemark) {
+    }
+
+    /** 个人实名资料。身份证号仅保留服务端生成的掩码。 */
+    record IdentityInfo(
+            String identityNo,
+            String realName,
+            String idNoMasked,
+            String validStart,
+            String validEnd,
+            String contactPhone,
+            String address,
+            String email,
+            String businessType,
+            String verificationChannel,
+            Boolean policeVerified,
+            Boolean livenessVerified,
+            String status,
+            LocalDateTime submitTime,
+            String reviewRemark) {
     }
 
     /** 运营端可修改字段；主体类型与编码来自注册，不允许在此改写。 */
     record TenantSubjectUpdate(
             String tenantName,
             String industry,
+            String companySize,
             String businessType,
+            String address,
+            String creditCode,
             String contactName,
             String contactPhone,
             Integer status) {

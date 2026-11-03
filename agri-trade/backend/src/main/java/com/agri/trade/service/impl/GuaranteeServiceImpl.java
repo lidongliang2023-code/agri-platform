@@ -1,9 +1,7 @@
 package com.agri.trade.service.impl;
 
 import com.agri.trade.entity.MerchantGuarantee;
-import com.agri.trade.entity.CompensationRecord;
 import com.agri.trade.mapper.MerchantGuaranteeMapper;
-import com.agri.trade.mapper.CompensationRecordMapper;
 import com.agri.trade.mapper.GuaranteeLogMapper;
 import com.agri.trade.entity.GuaranteeLog;
 import com.agri.trade.service.IGuaranteeService;
@@ -21,34 +19,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class GuaranteeServiceImpl extends ServiceImpl<MerchantGuaranteeMapper, MerchantGuarantee> implements IGuaranteeService {
 
-    private final CompensationRecordMapper compensationRecordMapper;
     private final GuaranteeLogMapper guaranteeLogMapper;
-
-    @Override
-    @Transactional
-    public MerchantGuarantee createGuarantee(Long merchantId, String merchantName, BigDecimal amount) {
-        MerchantGuarantee guarantee = new MerchantGuarantee();
-        guarantee.setGuaranteeNo("GT" + System.currentTimeMillis());
-        guarantee.setMerchantId(merchantId);
-        guarantee.setMerchantName(merchantName);
-        guarantee.setGuaranteeType("cash");
-        guarantee.setTotalAmount(amount);
-        guarantee.setAvailableAmount(amount);
-        guarantee.setFrozenAmount(BigDecimal.ZERO);
-        guarantee.setUsedAmount(BigDecimal.ZERO);
-        guarantee.setGuaranteeStatus("active");
-        guarantee.setApplyTime(new Date());
-        guarantee.setVerifyTime(new Date());
-        guarantee.setExpireTime(new Date(System.currentTimeMillis() + 365 * 24 * 60 * 60 * 1000L));
-        guarantee.setDelFlag(0);
-        guarantee.setCreateTime(new Date());
-        guarantee.setUpdateTime(new Date());
-
-        baseMapper.insert(guarantee);
-        writeLog(guarantee, "create", amount, BigDecimal.ZERO, amount,
-                BigDecimal.ZERO, BigDecimal.ZERO, "system", "保证金账户开立");
-        return guarantee;
-    }
 
     @Override
     @Transactional
@@ -81,12 +52,6 @@ public class GuaranteeServiceImpl extends ServiceImpl<MerchantGuaranteeMapper, M
 
     @Override
     @Transactional
-    public boolean freezeGuarantee(Long guaranteeId, BigDecimal amount) {
-        return freezeGuarantee(guaranteeId, amount, null, null);
-    }
-
-    @Override
-    @Transactional
     public boolean freezeGuarantee(Long guaranteeId, BigDecimal amount, String operator, String reason) {
         MerchantGuarantee guarantee = baseMapper.selectById(guaranteeId);
         if (guarantee == null || amount == null || amount.signum() <= 0) {
@@ -114,12 +79,6 @@ public class GuaranteeServiceImpl extends ServiceImpl<MerchantGuaranteeMapper, M
 
     @Override
     @Transactional
-    public boolean unfreezeGuarantee(Long guaranteeId, BigDecimal amount) {
-        return unfreezeGuarantee(guaranteeId, amount, null, null);
-    }
-
-    @Override
-    @Transactional
     public boolean unfreezeGuarantee(Long guaranteeId, BigDecimal amount, String operator, String reason) {
         MerchantGuarantee guarantee = baseMapper.selectById(guaranteeId);
         if (guarantee == null || amount == null || amount.signum() <= 0) {
@@ -143,39 +102,6 @@ public class GuaranteeServiceImpl extends ServiceImpl<MerchantGuaranteeMapper, M
         writeLog(guarantee, "unfreeze", amount, availableBefore, guarantee.getAvailableAmount(),
                 frozenBefore, guarantee.getFrozenAmount(), operator, reason);
         return true;
-    }
-
-    @Override
-    @Transactional
-    public boolean deductGuarantee(Long guaranteeId, BigDecimal amount) {
-        MerchantGuarantee guarantee = baseMapper.selectById(guaranteeId);
-        if (guarantee == null || amount == null || amount.signum() <= 0) {
-            return false;
-        }
-        if (!"active".equals(guarantee.getGuaranteeStatus())
-                || (guarantee.getExpireTime() != null && guarantee.getExpireTime().before(new Date()))) {
-            return false;
-        }
-
-        if (guarantee.getAvailableAmount().compareTo(amount) < 0) {
-            return false;
-        }
-
-        BigDecimal availableBefore = guarantee.getAvailableAmount();
-        BigDecimal frozenBefore = guarantee.getFrozenAmount();
-        guarantee.setAvailableAmount(availableBefore.subtract(amount));
-        guarantee.setUsedAmount(guarantee.getUsedAmount().add(amount));
-        guarantee.setUpdateTime(new Date());
-        baseMapper.updateById(guarantee);
-        writeLog(guarantee, "deduct", amount, availableBefore, guarantee.getAvailableAmount(),
-                frozenBefore, guarantee.getFrozenAmount(), "system", "保证金扣划");
-        return true;
-    }
-
-    @Override
-    @Transactional
-    public boolean replenishGuarantee(Long guaranteeId, BigDecimal amount) {
-        return replenishGuarantee(guaranteeId, amount, null, null);
     }
 
     @Override
@@ -254,27 +180,6 @@ public class GuaranteeServiceImpl extends ServiceImpl<MerchantGuaranteeMapper, M
         wrapper.eq(MerchantGuarantee::getDelFlag, 0);
         wrapper.orderByDesc(MerchantGuarantee::getCreateTime);
         return baseMapper.selectList(wrapper);
-    }
-
-    @Override
-    @Transactional
-    public boolean transferToCompensation(Long guaranteeId, Long disputeId, BigDecimal amount) {
-        if (!freezeGuarantee(guaranteeId, amount)) {
-            return false;
-        }
-
-        CompensationRecord compensation = new CompensationRecord();
-        compensation.setCompensationNo("CP" + System.currentTimeMillis());
-        compensation.setDisputeId(disputeId);
-        compensation.setCompensationType("guarantee");
-        compensation.setCompensationAmount(amount);
-        compensation.setCompensationStatus("pending");
-        compensation.setDelFlag(0);
-        compensation.setCreateTime(new Date());
-        compensation.setUpdateTime(new Date());
-
-        compensationRecordMapper.insert(compensation);
-        return true;
     }
 
     @Override

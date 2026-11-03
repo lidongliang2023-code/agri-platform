@@ -19,6 +19,8 @@
         <module>agri-production/backend</module>
         <module>agri-iot/backend</module>
         <module>agri-service</module>
+        <module>agri-info</module>
+        <module>agri-government</module>
         <module>agri-admin</module>
         <module>agri-ai</module>
         <module>agri-data-platform</module>

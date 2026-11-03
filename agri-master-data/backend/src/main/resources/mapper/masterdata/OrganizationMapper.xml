@@ -14,59 +14,78 @@
         o.id, o.org_code, o.org_name, o.org_type, o.parent_id, o.ancestors, o.org_level,
         o.org_path, o.legal_person, o.contact_person, o.contact_phone, o.contact_mobile,
         o.province, o.city, o.district, o.address, o.business_license, o.tax_no,
-        o.org_status, o.auth_status, o.status, o.tenant_id, o.create_by, o.create_time, o.remark
+        o.org_status, o.auth_status, o.status, o.tenant_id, o.create_by, o.create_time,
+        o.update_by, o.update_time, o.remark,
+        p.org_name AS parent_name,
+        (SELECT COUNT(*) FROM agri_md_organization c
+          WHERE c.del_flag = 0 AND c.parent_id = o.id) AS child_count,
+        (SELECT t.tenant_name FROM agri_md_tenant t
+          WHERE CAST(t.id AS CHAR) COLLATE utf8mb4_unicode_ci = o.tenant_id LIMIT 1) AS tenant_name
     </sql>
 
     <select id="selectOrgTree" resultType="com.agri.masterdata.vo.OrganizationVO">
         SELECT <include refid="orgColumns"/>
         FROM agri_md_organization o
+        LEFT JOIN agri_md_organization p ON p.id = o.parent_id AND p.del_flag = 0
         WHERE o.del_flag = 0
         <if test="tenantId != null and tenantId != ''">
-            AND o.tenant_id = #{tenantId}
+            AND o.tenant_id = CONVERT(#{tenantId} USING utf8mb4) COLLATE utf8mb4_unicode_ci
         </if>
-        ORDER BY o.org_level ASC, o.id ASC
+        ORDER BY o.org_level ASC, o.org_path ASC, o.id ASC
     </select>
 
     <select id="selectOrgChildren" resultType="com.agri.masterdata.vo.OrganizationVO">
         SELECT <include refid="orgColumns"/>
         FROM agri_md_organization o
+        LEFT JOIN agri_md_organization p ON p.id = o.parent_id AND p.del_flag = 0
         WHERE o.del_flag = 0 AND o.parent_id = #{parentId}
         <if test="tenantId != null and tenantId != ''">
-            AND o.tenant_id = #{tenantId}
+            AND o.tenant_id = CONVERT(#{tenantId} USING utf8mb4) COLLATE utf8mb4_unicode_ci
         </if>
-        ORDER BY o.id ASC
+        ORDER BY o.org_name ASC, o.id ASC
     </select>
 
     <select id="selectOrgByTenantId" resultType="com.agri.masterdata.entity.Organization">
         SELECT * FROM agri_md_organization
         WHERE del_flag = 0
         <if test="tenantId != null and tenantId != ''">
-            AND tenant_id = #{tenantId}
+            AND tenant_id = CONVERT(#{tenantId} USING utf8mb4) COLLATE utf8mb4_unicode_ci
         </if>
-        ORDER BY org_level ASC, id ASC
+        ORDER BY org_level ASC, org_path ASC, id ASC
     </select>
 
     <!-- 运营端组织列表：分页 + 多条件，列表与总数共用同一 where。 -->
     <sql id="adminOrgWhere">
         o.del_flag = 0
         <if test="tenantId != null and tenantId != ''">
-            AND o.tenant_id = #{tenantId}
+            AND o.tenant_id = CONVERT(#{tenantId} USING utf8mb4) COLLATE utf8mb4_unicode_ci
         </if>
         <if test="orgName != null and orgName != ''">
             AND o.org_name LIKE CONCAT('%', #{orgName}, '%')
         </if>
+        <if test="keyword != null and keyword != ''">
+            AND (
+                o.org_name LIKE CONCAT('%', #{keyword}, '%')
+                OR o.org_code LIKE CONCAT('%', #{keyword}, '%')
+                OR o.contact_person LIKE CONCAT('%', #{keyword}, '%')
+            )
+        </if>
         <if test="orgType != null and orgType != ''">
             AND o.org_type = #{orgType}
+        </if>
+        <if test="status != null">
+            AND o.status = #{status}
         </if>
     </sql>
 
     <select id="selectAdminOrgList" resultType="com.agri.masterdata.vo.OrganizationVO">
         SELECT <include refid="orgColumns"/>
         FROM agri_md_organization o
+        LEFT JOIN agri_md_organization p ON p.id = o.parent_id AND p.del_flag = 0
         <where>
             <include refid="adminOrgWhere"/>
         </where>
-        ORDER BY o.create_time DESC
+        ORDER BY o.create_time DESC, o.id DESC
         LIMIT #{offset}, #{limit}
     </select>
 
@@ -76,6 +95,13 @@
         <where>
             <include refid="adminOrgWhere"/>
         </where>
+    </select>
+
+    <select id="selectAdminOrgDetail" resultType="com.agri.masterdata.vo.OrganizationVO">
+        SELECT <include refid="orgColumns"/>
+        FROM agri_md_organization o
+        LEFT JOIN agri_md_organization p ON p.id = o.parent_id AND p.del_flag = 0
+        WHERE o.del_flag = 0 AND o.id = #{id}
     </select>
 
     <!-- 运营端组织认证审核列表（/admin/masterdata/org/cert-audit）。
@@ -95,7 +121,7 @@
                o.business_license, o.auth_status, o.create_time, o.tenant_id,
                t.tenant_name AS tenantName
         FROM agri_md_organization o
-        LEFT JOIN agri_md_tenant t ON t.id = o.tenant_id
+        LEFT JOIN agri_md_tenant t ON CAST(t.id AS CHAR) COLLATE utf8mb4_unicode_ci = o.tenant_id
         <where>
             <include refid="orgAuditWhere"/>
         </where>

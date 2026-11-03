@@ -26,6 +26,10 @@ import java.util.List;
 @RequiredArgsConstructor
 public class LogisticsController {
 
+    /** 物流状态词表（与物流页的进度条、分组同一口径）。 */
+    private static final List<String> LOGISTICS_STATUSES =
+            List.of("pending", "picked", "in_transit", "delivering", "delivered");
+
     private final LogisticsMapper logisticsMapper;
     private final LogisticsTraceMapper traceMapper;
     private final CarrierMapper carrierMapper;
@@ -166,6 +170,12 @@ public class LogisticsController {
         }
 
         String status = (String) params.get("status");
+        // 状态词表：物流页的进度条与"运输中/已签收"的分组只认这五个值。
+        // 原先传什么落什么，库里出现过 shipped / transit / DONE 这类值，
+        // 那些单子在前端既不进"运输中"也不进"已签收"，看起来像凭空消失。
+        if (!LOGISTICS_STATUSES.contains(status)) {
+            return ApiResponse.error("物流状态只能是 pending / picked / in_transit / delivering / delivered 之一");
+        }
         // 轨迹是"状态流转"的记录。编辑物流单时页面会把当前状态一并回传，
         // 原先这里无条件写轨迹 —— 用户只是改个承运商/运费，轨迹里也会多出一条
         // 一模一样的"运输中"，看轨迹分不清是真的动了货还是被人点了一下保存。
@@ -175,13 +185,11 @@ public class LogisticsController {
 
         // 时间戳各自归位：原先 in_transit 会把 delivery_time（送达时间）写掉 ——
         // 货还在路上，"已送达时间"就已经有了，之后谁也分不清到底送到了没有。
-        // 取值按本控制器 getStatusDescription 里的词表：pending / picked / in_transit /
-        // delivering / delivered（delivered 即已签收）。
         if ("picked".equals(status)) {
             logistics.setPickupTime(new Date());
         } else if ("in_transit".equals(status) || "delivering".equals(status)) {
             // 运输中/派送中：只更新位置，不写任何"到达/签收"时间
-        } else if ("delivered".equals(status) || "signed".equals(status)) {
+        } else if ("delivered".equals(status)) {
             logistics.setDeliveryTime(new Date());
             logistics.setActualArrivalTime(new Date());
             logistics.setSignTime(new Date());

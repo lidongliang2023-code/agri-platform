@@ -43,7 +43,9 @@ function resolve(viewKey: string): () => Promise<unknown> {
 
 interface RouteSpec {
   path: string
-  view: string
+  /** 有 redirect 时不需要视图（旧地址重定向） */
+  view?: string
+  redirect?: string
 }
 
 /**
@@ -53,32 +55,62 @@ interface RouteSpec {
 const ADMIN_ROUTES: RouteSpec[] = [
   { path: '/dashboard', view: 'Dashboard' },
   { path: '/masterdata/center', view: 'masterdata/MasterDataCenter' },
+  { path: '/masterdata/boundary', view: 'masterdata/ModuleBoundary' },
 
   { path: '/subject/list', view: 'tenant/TenantList' },
+  { path: '/subject/audit', view: 'subject/TenantAudit' },
+  { path: '/subject/create', view: 'subject/TenantCreate' },
   { path: '/subject/quota', view: 'tenant/TenantQuota' },
+  { path: '/subject/quota/:id', view: 'tenant/TenantQuotaDetail' },
+  { path: '/subject/quota/:id/edit', view: 'tenant/TenantQuotaEdit' },
   { path: '/subject/package', view: 'tenant/TenantPackage' },
+  { path: '/subject/package/new', view: 'tenant/TenantPackageEdit' },
+  { path: '/subject/package/:id', view: 'tenant/TenantPackageDetail' },
+  { path: '/subject/package/:id/edit', view: 'tenant/TenantPackageEdit' },
   { path: '/subject/statistics', view: 'tenant/TenantStatistics' },
   { path: '/subject/detail/:id', view: 'tenant/TenantDetail' },
+  { path: '/subject/edit/:id', view: 'tenant/TenantEdit' },
 
   // 兼容历史书签；新菜单统一使用 /subject/*。
   { path: '/tenant/list', view: 'tenant/TenantList' },
   { path: '/tenant/quota', view: 'tenant/TenantQuota' },
+  { path: '/tenant/quota/:id', view: 'tenant/TenantQuotaDetail' },
+  { path: '/tenant/quota/:id/edit', view: 'tenant/TenantQuotaEdit' },
   { path: '/tenant/package', view: 'tenant/TenantPackage' },
+  { path: '/tenant/package/new', view: 'tenant/TenantPackageEdit' },
+  { path: '/tenant/package/:id', view: 'tenant/TenantPackageDetail' },
+  { path: '/tenant/package/:id/edit', view: 'tenant/TenantPackageEdit' },
   { path: '/tenant/statistics', view: 'tenant/TenantStatistics' },
   { path: '/tenant/detail/:id', view: 'tenant/TenantDetail' },
+  { path: '/tenant/edit/:id', view: 'tenant/TenantEdit' },
+
+  { path: '/uc/overview', view: 'uc/UcOverview' },
+  { path: '/uc/identity', view: 'uc/UcIdentityList' },
+  { path: '/uc/certification', view: 'uc/UcCertificationAudit' },
+  { path: '/uc/identity-audit', view: 'uc/UcIdentityAudit' },
+  { path: '/uc/feedback', view: 'uc/UcFeedback' },
+  { path: '/uc/privacy', view: 'uc/UcPrivacy' },
 
   { path: '/user/list', view: 'user/UserList' },
   { path: '/user/audit', view: 'user/UserAudit' },
   { path: '/user/detail/:id', view: 'user/UserDetail' },
 
   { path: '/org/list', view: 'org/OrgList' },
+  { path: '/org/new', view: 'org/OrgEdit' },
+  { path: '/org/edit/:id', view: 'org/OrgEdit' },
   { path: '/org/detail/:id', view: 'org/OrgDetail' },
 
   { path: '/permission/role', view: 'permission/RoleList' },
+  { path: '/permission/role/new', view: 'permission/RoleEdit' },
+  { path: '/permission/role/:id/edit', view: 'permission/RoleEdit' },
+  { path: '/permission/role/:id', view: 'permission/RoleDetail' },
+  { path: '/permission/matrix', view: 'permission/RoleMatrix' },
+  { path: '/permission/anomaly', view: 'permission/PermissionAnomaly' },
   { path: '/permission/log', view: 'permission/PermissionLog' },
 
   { path: '/datastandard/dict', view: 'datastandard/DictList' },
   { path: '/datastandard/code-rule', view: 'datastandard/CodeRuleList' },
+  { path: '/datastandard/metadata', view: 'datastandard/DataMetadata' },
 
   { path: '/quality/dashboard', view: 'quality/QualityDashboard' },
   { path: '/quality/list', view: 'quality/QualityList' },
@@ -89,10 +121,14 @@ const ADMIN_ROUTES: RouteSpec[] = [
   { path: '/distribution/list', view: 'distribution/DistributionList' },
   { path: '/product/list', view: 'product/ProductList' },
   { path: '/product/catalog', view: 'product/CatalogList' },
+  { path: '/product/template', view: 'product/ProductTemplate' },
+  { path: '/product/spu-audit', view: 'product/SpuAudit' },
   { path: '/customer/list', view: 'customer/CustomerList' },
+  { path: '/customer/blacklist', view: 'customer/Blacklist' },
   { path: '/supplier/list', view: 'customer/SupplierList' },
 
   { path: '/system/params', view: 'system/SystemParams' },
+  { path: '/system/ops-accounts', view: 'system/OpsAccounts' },
   { path: '/system/template', view: 'system/NotificationTemplate' },
   { path: '/system/announcement', view: 'system/Announcement' },
   { path: '/system/region', view: 'system/RegionList' },
@@ -106,17 +142,42 @@ const ADMIN_ROUTES: RouteSpec[] = [
  * 两套菜单分属不同布局、不同登录入口，路由层面按完整路径区分。</p>
  */
 const USER_ROUTES: RouteSpec[] = [
-  { path: '/user/home', view: 'userportal/UserHome' },
-  { path: '/user/data', view: 'userportal/UserDataQuery' },
-  { path: '/user/report', view: 'userportal/UserReport' },
-  { path: '/user/help', view: 'userportal/UserHelp' },
+  { path: '/user/workbench', view: 'userportal/Workbench' },
+
+  // 组织与成员 / 业务档案 / 租户与审计：按原型的 IA 保留入口，页面明确标注待接入的能力
+  { path: '/user/org-tree', view: 'userportal/UserOrgs' },
+  { path: '/user/dept', view: 'userportal/UserDept' },
+  { path: '/user/members', view: 'userportal/UserMembers' },
+  { path: '/user/invite', view: 'userportal/UserInvite' },
+  { path: '/user/roles', view: 'userportal/UserRoles' },
+  { path: '/user/categories', view: 'userportal/UserCategories' },
+  { path: '/user/products', view: 'userportal/UserProducts' },
+  { path: '/user/attr-templates', view: 'userportal/UserAttrTemplates' },
+  { path: '/user/customers', view: 'userportal/UserCustomers' },
+  { path: '/user/suppliers', view: 'userportal/UserSuppliers' },
+  { path: '/user/partner-graph', view: 'userportal/UserPartnerGraph' },
+  { path: '/user/tenant', view: 'userportal/UserTenant' },
+  { path: '/user/operation-log', view: 'userportal/UserOperationLog' },
+
+  // 关联系统：真实接口（我的主体 / 实名 / 资质 / 消息）
+  { path: '/user/identity', view: 'userportal/MeIdentity' },
+  { path: '/user/realname', view: 'userportal/MeRealname' },
+  { path: '/user/qualification', view: 'userportal/MeQualification' },
+  { path: '/user/messages', view: 'userportal/MeMessages' },
+  { path: '/user/boundary', view: 'userportal/MeBoundary' },
+
+  // 旧静态页已下线：保留旧地址做重定向，避免书签 404
+  { path: '/user/home', redirect: '/user/workbench' },
+  { path: '/user/data', redirect: '/user/products' },
+  { path: '/user/report', redirect: '/user/tenant' },
+  { path: '/user/help', redirect: '/user/boundary' },
   { path: '/user/profile', view: 'userportal/UserProfile' },
-  { path: '/user/settings', view: 'userportal/UserSettings' },
+  { path: '/user/settings', redirect: '/user/profile' },
 ]
 
 const consumed = new Set<string>([
-  ...ADMIN_ROUTES.map((route) => route.view),
-  ...USER_ROUTES.map((route) => route.view),
+  ...(ADMIN_ROUTES.map((route) => route.view).filter(Boolean) as string[]),
+  ...(USER_ROUTES.map((route) => route.view).filter(Boolean) as string[]),
   'Login',
   'SsoCallback',
   'userportal/UserLogin',
@@ -157,7 +218,7 @@ const adminChildren: RouteRecordRaw[] = [
       ({
         path: route.path,
         name: route.path,
-        component: resolve(route.view),
+        component: resolve(route.view as string),
       }) as RouteRecordRaw,
   ),
 ]
@@ -175,13 +236,14 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/user',
     component: UserLayout,
-    children: USER_ROUTES.map(
-      (route) =>
-        ({
-          path: route.path,
-          name: route.path,
-          component: resolve(route.view),
-        }) as RouteRecordRaw,
+    children: USER_ROUTES.map((route) =>
+      route.redirect
+        ? ({ path: route.path, name: route.path, redirect: route.redirect } as RouteRecordRaw)
+        : ({
+            path: route.path,
+            name: route.path,
+            component: resolve(route.view as string),
+          } as RouteRecordRaw),
     ),
   },
   {

@@ -13,13 +13,17 @@
  * 用法：node scripts/e2e-portal.mjs [--base=http://localhost:8098] [--headful]
  */
 import { createRequire } from 'node:module'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
-import { fileURLToPath } from 'node:url'
 
-const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const require2 = createRequire(path.join(REPO_ROOT, 'agri-production/frontend/package.json'))
-const puppeteer = require2('puppeteer')
+const require2 = createRequire(path.join('C:/Users/71502/.workbuddy-ai/binaries/node/workspace', 'noop.js'))
+const { chromium } = require2('playwright-core')
+
+const BROWSER = [
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+].find((candidate) => existsSync(candidate))
 
 const arg = (name, fallback) => {
   const hit = process.argv.slice(2).find((a) => a.startsWith(`--${name}=`))
@@ -67,15 +71,15 @@ const testId = () => {
   return base + codes[sum % 11]
 }
 
-const browser = await puppeteer.launch({ headless: HEADFUL ? false : 'new', args: ['--no-sandbox'] })
+const browser = await chromium.launch({ headless: !HEADFUL, executablePath: BROWSER, args: ['--no-sandbox'] })
 try {
-  const page = await browser.newPage()
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } })
+  const page = await context.newPage()
   const pageErrors = []
   page.on('pageerror', (error) => pageErrors.push(String(error)))
-  await page.setViewport({ width: 1440, height: 1000 })
 
   // ---------- 首页 ----------
-  await page.goto(`${BASE}/portal/`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.goto(`${BASE}/portal/`, { waitUntil: 'networkidle', timeout: 60000 })
   await sleep(500)
   const homeText = await page.evaluate(() => document.body.innerText)
   check(homeText.includes('从田间到餐桌') && homeText.includes('产业链频道') && homeText.includes('价格指数')
@@ -99,32 +103,44 @@ try {
   const liveProducts = liveAll?.code === 200 && Array.isArray(liveAll.data) ? liveAll.data : []
   const fruitCount = liveProducts.filter((item) =>
     ['大白菜', '蔬菜', '苹果', '柑橘', '水果'].some((key) => (item.categoryName ?? '').includes(key))).length
-  const quoteApi = await page.evaluate(async () => {
+  const marketApi = await page.evaluate(async () => {
     try {
-      return await (await fetch('/api/v1/quotes?size=20')).json()
+      return await (await fetch('/api/v1/info/public/markets')).json()
     } catch {
       return null
     }
   })
-  const quoteRecords = quoteApi?.code === 0 ? quoteApi.data?.records ?? [] : []
+  const quoteRecords = Array.isArray(marketApi?.data?.quotes) ? marketApi.data.quotes : []
   check(hasLive ? homeText.includes('实时在售') : homeText.includes('暂无在售'),
     hasLive ? '交易域有数据时首页展示「实时在售」' : '交易域无数据时首页展示无在售空态')
   check(quoteRecords.length > 0
-    ? homeText.includes('平台行情') && homeText.includes(quoteRecords[0].productName)
+    ? homeText.includes('平台行情') && homeText.includes(quoteRecords[0].name)
     : homeText.includes('暂无行情'),
-  quoteRecords.length > 0 ? '首页价格指数展示后台真实行情' : '行情为空时首页不展示模拟价格')
-  const newsApi = await page.evaluate(async () => {
+  quoteRecords.length > 0 ? '首页价格指数展示资讯域真实行情' : '行情为空时首页不展示模拟价格')
+  const channelApi = await page.evaluate(async () => {
     try {
-      return await (await fetch('/api/v1/public/news?size=6')).json()
+      return await (await fetch('/api/v1/info/public/channels')).json()
     } catch {
       return null
     }
   })
-  check(newsApi?.code === 0, '产业资讯使用公开只读后端接口')
-  check(homeText.includes('平台公告'), '平台公告区块已渲染并读取后端数据')
-  if (Number(newsApi?.data?.total ?? 0) === 0) {
-    check(homeText.includes('暂无平台公告'), '无已发布资讯时公告展示空态而非模拟内容')
-  }
+  const channelList = Array.isArray(channelApi?.data) ? channelApi.data : []
+  check(channelApi?.code === 200 && channelList.length > 0, '产业资讯 tab 来自资讯域公开栏目接口',
+    `共 ${channelList.length} 个栏目`)
+  const announcementApi = await page.evaluate(async () => {
+    try {
+      return await (await fetch('/api/master-data/public/announcements?limit=5')).json()
+    } catch {
+      return null
+    }
+  })
+  const announcementList = Array.isArray(announcementApi?.data) ? announcementApi.data : []
+  check(announcementApi?.code === 200, '平台公告来自主数据公开只读接口')
+  check(announcementList.length === 0
+    ? homeText.includes('运营端暂无已发布的平台公告')
+    : homeText.includes(announcementList[0].title),
+  announcementList.length === 0 ? '无已发布公告时公告块如实展示空态' : '公告块渲染最新一条已发布公告')
+  check(!homeText.replace(/\s+/g, '').includes('1268亿'), '首页大盘不再使用写死的成交金额')
   if (hasLive) {
     check(homeText.includes(liveApi.data[0].productName), '首页展示交易域真实已发布商品', liveApi.data[0].productName)
   }
@@ -132,27 +148,40 @@ try {
     .find((el) => (el.textContent ?? '').includes('登录'))?.textContent?.trim())
   const registerHref = await page.evaluate(() => [...document.querySelectorAll('.portal-top-actions a')]
     .find((el) => (el.textContent ?? '').includes('免费注册'))?.getAttribute('href'))
-  check(loginButton?.includes('登录'), '首页登录入口可在门户内打开登录弹窗', loginButton ?? '')
+  check(loginButton?.includes('登录'), '未登录时首页显示登录入口', loginButton ?? '')
   await clickText(page, '登录')
-  const loginDialogVisible = await page.evaluate(() => Boolean(document.querySelector('.portal-login-card')))
-  check(loginDialogVisible, '门户登录弹窗已渲染')
-  await page.click('.portal-login-close')
+  await page.waitForFunction(() => location.href.includes('client_id=portal'), undefined, { timeout: 10000 })
+    .catch(() => {})
+  const ssoUrl = page.url()
+  check(ssoUrl.startsWith('http://localhost:8090/') && ssoUrl.includes('client_id=portal')
+    && ssoUrl.includes('code_challenge=') && ssoUrl.includes('code_challenge_method=S256')
+    && ssoUrl.includes('state=') && decodeURIComponent(ssoUrl).includes('redirect_uri=http://localhost:8098/portal/'),
+  '登录入口进入统一认证并带上 PKCE 参数（未登录时 /authorize 会先落到认证中心的登录页）', ssoUrl)
+  await page.goto(`${BASE}/portal/index.html`, { waitUntil: 'networkidle', timeout: 60000 })
+  await sleep(400)
   check(registerHref?.includes(':8090/register'), '首页注册入口指向统一认证中心注册页', registerHref ?? '')
 
   // ---------- 搜索 ----------
   await fill(page, '.header-search input', '大闸蟹')
   await page.click('.header-search button')
-  await page.waitForFunction(() => location.hash.includes('/chains?q='), { timeout: 10000 })
+  await page.waitForFunction(() => location.hash.includes('/chains?q='), undefined, { timeout: 10000 })
   await sleep(400)
   check((await counts(page)) === 1, '站内搜索「大闸蟹」过滤出 1 个货源')
   const searchText = await page.evaluate(() => document.body.innerText)
   check(searchText.includes('阳澄湖大闸蟹'), '搜索结果包含交易域真实大闸蟹货源')
 
   // ---------- 筛选 + 排序 ----------
-  await page.goto(`${BASE}/portal/#/chains`, { waitUntil: 'networkidle2' })
+  await page.goto(`${BASE}/portal/#/chains`, { waitUntil: 'networkidle' })
   await sleep(300)
   await clickText(page, '果蔬产业', '.portal-filter-row .chip')
-  check((await counts(page)) === fruitCount, `一级产业「果蔬产业」过滤出 ${fruitCount} 个真实货源`)
+  const headCount = await page.evaluate(() => Number(
+    (/共\s*(\d+)\s*个货源/.exec(document.querySelector('.portal-list-head')?.innerText ?? '')?.[1] ?? '-1')))
+  const shownCards = await counts(page)
+  check(headCount === fruitCount, `一级产业「果蔬产业」声明的货源数与接口一致`, `页面=${headCount} 接口=${fruitCount}`)
+  check(shownCards === Math.min(8, fruitCount),
+    '列表首屏按分页容量渲染，多出的靠分页器而不是静默截断', `卡片=${shownCards} 匹配=${headCount}`)
+  check(fruitCount <= 8 || await page.evaluate(() => Boolean(document.querySelector('.pager'))),
+    '结果超过一页时分页器出现', `匹配=${fruitCount}`)
   await clickText(page, '苹果', '.portal-filter-row .chip')
   check((await counts(page)) === 1, '二级品类「苹果」过滤出 1 个真实货源')
   await clickText(page, '陕西', '.portal-province-chips .chip')
@@ -160,15 +189,23 @@ try {
   const chainText = await page.evaluate(() => document.body.innerText)
   check(chainText.includes('洛川红富士苹果') && chainText.includes('产地：陕西'), '筛选后面包屑与真实结果一致', chainText.replace(/\s+/g, ' ').slice(0, 70))
 
-  await page.goto(`${BASE}/portal/#/chains`, { waitUntil: 'networkidle2' })
+  await page.goto(`${BASE}/portal/#/chains`, { waitUntil: 'networkidle' })
   await sleep(300)
   await clickText(page, '清空筛选')
   await clickText(page, '价格从低到高', '.portal-list-head .chip')
+  const cheapest = [...liveProducts].filter((item) => item.price != null)
+    .sort((a, b) => a.price - b.price)[0]?.productName ?? ''
   const firstProduct = await page.evaluate(() => document.querySelector('.portal-product-grid .card .strong')?.textContent?.trim())
-  check(firstProduct === '有机大白菜 5kg/件', '价格从低到高排序首项为 18.8 元/件的有机大白菜', firstProduct ?? '')
+  check(cheapest !== '' && firstProduct === cheapest, '价格从低到高首项即接口里最便宜的货源',
+    `页面=${firstProduct} 期望=${cheapest}`)
+  const priceColumn = await page.evaluate(() => [...document.querySelectorAll('.portal-product-grid .card')]
+    .map((card) => Number((/¥\s*([\d.]+)/.exec(card.innerText)?.[1] ?? 'NaN')))
+    .filter((value) => !Number.isNaN(value)))
+  check(priceColumn.length > 1 && priceColumn.every((value, index) => index === 0 || value >= priceColumn[index - 1]),
+    '价格升序在整页上单调不减', priceColumn.join(' ≤ '))
 
   // ---------- 认证中心 FAQ ----------
-  await page.goto(`${BASE}/portal/#/certify`, { waitUntil: 'networkidle2' })
+  await page.goto(`${BASE}/portal/#/certify`, { waitUntil: 'networkidle' })
   await sleep(300)
   const faqBefore = await page.evaluate(() => document.querySelectorAll('.portal-faq-item.open').length)
   await page.evaluate(() => {
@@ -181,7 +218,7 @@ try {
   check(faqBefore === 1 && faqAfter.includes('1-3 个工作日'), '认证 FAQ 可展开并显示审核时效')
 
   // ---------- 企业认证资料登记 ----------
-  await page.goto(`${BASE}/portal/#/certify/enterprise`, { waitUntil: 'networkidle2' })
+  await page.goto(`${BASE}/portal/#/certify/enterprise`, { waitUntil: 'networkidle' })
   await sleep(300)
   await clickText(page, '下一步')
   const entError = await page.evaluate(() => document.querySelector('.portal-form-error')?.textContent ?? '')
@@ -202,7 +239,7 @@ try {
     '企业认证：未登录时不写本地草稿，提示先登录', entErrorText.slice(0, 40))
 
   // ---------- 个人实名资料登记 ----------
-  await page.goto(`${BASE}/portal/#/certify/personal`, { waitUntil: 'networkidle2' })
+  await page.goto(`${BASE}/portal/#/certify/personal`, { waitUntil: 'networkidle' })
   await sleep(300)
   await fill(page, 'input[placeholder="与身份证一致"]', '联调实名用户')
   await fill(page, 'input[placeholder="18 位身份证号"]', '110105199001010011')

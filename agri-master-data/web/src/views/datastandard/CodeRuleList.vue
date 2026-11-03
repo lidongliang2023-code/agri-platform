@@ -1,134 +1,175 @@
 <template>
-  <div class="code-rule-list">
-    <div class="page-header">
-      <div class="header-left">
-        <h1>编码规则管理</h1>
-        <p>管理编码规则配置</p>
-      </div>
-      <button class="add-btn" @click="openCreateModal">
-        <span class="btn-icon">+</span>
-        <span>新增规则</span>
-      </button>
-    </div>
+  <div class="mds-page">
+    <PageHeader
+      title="编码规则管理"
+      subtitle="全平台主数据编码的统一规则：前缀 + 日期段 + 流水号（+ 后缀）；续号与冲突由后端生成。"
+      source="数据标准 · 编码"
+    >
+      <template #actions>
+        <button v-point="'POST /admin/masterdata/standard/code-rule'" class="mds-btn mds-btn--primary" @click="openCreateModal">+ 新增规则</button>
+        <button class="mds-btn" :disabled="loading" @click="loadData">刷新</button>
+      </template>
+    </PageHeader>
 
-    <div class="search-bar">
-      <div class="search-group">
-        <input 
-          type="text" 
-          v-model="searchForm.keyword" 
-          placeholder="搜索规则名称/编码..." 
-          class="search-input"
+    <NoticeBar tone="info" title="试算说明：">
+      「试算」按规则真实拼接一个样例（前缀 + 日期 + 序号），不是查已有编码；序号从这里看不出并发占用情况。
+    </NoticeBar>
+
+    <div class="mds-card">
+      <div class="mds-filter">
+        <input
+          v-model="searchForm.keyword"
+          class="mds-input"
+          type="search"
+          placeholder="规则名称 / 编码"
+          @keyup.enter="search"
         />
-        <button class="search-btn" @click="loadData">搜索</button>
-      </div>
-      <div class="filter-group">
-        <select v-model="searchForm.status" class="filter-select">
+        <select v-model="searchForm.status" class="mds-select" @change="search">
           <option value="">全部状态</option>
-          <option :value="1">启用</option>
-          <option :value="0">禁用</option>
+          <option value="1">启用</option>
+          <option value="0">禁用</option>
         </select>
+        <button class="mds-btn mds-btn--primary" @click="search">查询</button>
+        <button class="mds-btn" @click="reset">重置</button>
+      </div>
+
+      <div class="mds-table-wrap">
+        <table class="mds-table">
+          <thead>
+            <tr>
+              <th>规则编码</th>
+              <th>规则名称</th>
+              <th>编码格式</th>
+              <th>规则类型</th>
+              <th>前缀</th>
+              <th class="mds-num">序号长度</th>
+              <th>状态</th>
+              <th>创建时间</th>
+              <th class="mds-actions">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-if="loading">
+              <td colspan="9" class="mds-empty">正在加载编码规则…</td>
+            </tr>
+            <tr v-else-if="!tableData.length">
+              <td colspan="9">
+                <EmptyState title="暂无编码规则" description="新增规则后，用户 / 组织 / 商品等编码才会按统一规则生成。" />
+              </td>
+            </tr>
+            <tr v-for="rule in tableData" :key="rule.id">
+              <td class="mds-mono">{{ rule.ruleCode || '—' }}</td>
+              <td class="mds-name">{{ rule.ruleName || '—' }}</td>
+              <td class="mds-mono">{{ rule.rulePattern || '—' }}</td>
+              <td>
+                <StatusTag
+                  :text="rule.ruleType === 'auto' ? '自动生成' : '手动输入'"
+                  :tone="rule.ruleType === 'auto' ? 'success' : 'info'"
+                  plain
+                />
+              </td>
+              <td class="mds-mono">{{ rule.prefix || '—' }}</td>
+              <td class="mds-num">{{ rule.seqLength ?? '—' }}</td>
+              <td>
+                <StatusTag
+                  :text="Number(rule.status) === 1 ? '启用' : '禁用'"
+                  :tone="Number(rule.status) === 1 ? 'success' : 'gray'"
+                />
+              </td>
+              <td class="mds-muted">{{ formatDate(rule.createTime) }}</td>
+              <td class="mds-actions">
+                <button v-point="'POST /admin/masterdata/standard/code-rule/{id}/test'"
+                  class="mds-btn mds-btn--link"
+                  :disabled="busyId === rule.id || rule.ruleType === 'manual'"
+                  :title="rule.ruleType === 'manual' ? '手工录入规则不参与自动生成' : '按规则试算一个样例'"
+                  @click="tryRule(rule)"
+                >试算</button>
+                <button v-point="'PUT /admin/masterdata/standard/code-rule/{id}'" class="mds-btn mds-btn--link" @click="editRule(rule)">编辑</button>
+                <button v-point="'PUT /admin/masterdata/standard/code-rule/{id}'"
+                  class="mds-btn mds-btn--link"
+                  :class="{ 'mds-danger': Number(rule.status) === 1 }"
+                  :disabled="busyId === rule.id"
+                  @click="toggleStatus(rule)"
+                >
+                  {{ Number(rule.status) === 1 ? '禁用' : '启用' }}
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <PagerBar
+        :page="pageNum"
+        :page-size="pageSize"
+        :total="total"
+        @change="handleCurrentChange"
+        @update:page-size="changePageSize"
+      />
+    </div>
+
+    <div v-if="sample" class="mds-card">
+      <div class="mds-card-head">
+        <div>
+          <h2 class="mds-card-title">试算结果 · {{ sample.ruleName }}</h2>
+          <p class="mds-card-sub">按当前规则拼接的样例编码（序号固定取 1）</p>
+        </div>
+        <button class="mds-btn" @click="sample = null">收起</button>
+      </div>
+      <div class="mds-card-body">
+        <div class="sample-code">{{ sample.code }}</div>
       </div>
     </div>
 
-    <div class="table-card">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>规则编码</th>
-            <th>规则名称</th>
-            <th>编码格式</th>
-            <th>规则类型</th>
-            <th>前缀</th>
-            <th>序号长度</th>
-            <th>状态</th>
-            <th>创建时间</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="rule in tableData" :key="rule.id">
-            <td>{{ rule.ruleCode }}</td>
-            <td>{{ rule.ruleName }}</td>
-            <td>{{ rule.rulePattern }}</td>
-            <td>
-              <span class="type-badge" :class="rule.ruleType">
-                {{ rule.ruleType === 'auto' ? '自动生成' : '手动输入' }}
-              </span>
-            </td>
-            <td>{{ rule.prefix || '-' }}</td>
-            <td>{{ rule.seqLength }}</td>
-            <td>
-              <span class="status-badge" :class="rule.status === 1 ? 'active' : 'inactive'">
-                {{ rule.status === 1 ? '启用' : '禁用' }}
-              </span>
-            </td>
-            <td>{{ formatDate(rule.createTime) }}</td>
-            <td class="action-cell">
-              <button class="action-btn edit" @click="editRule(rule)">编辑</button>
-              <button 
-                class="action-btn"
-                :class="rule.status === 1 ? 'disable' : 'enable'"
-                @click="toggleStatus(rule)"
-              >
-                {{ rule.status === 1 ? '禁用' : '启用' }}
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-
-      <div class="pagination">
-        <button class="page-btn" :disabled="pageNum === 1" @click="handleCurrentChange(pageNum - 1)">上一页</button>
-        <span class="page-info">第 {{ pageNum }} / {{ totalPages }} 页</span>
-        <button class="page-btn" :disabled="pageNum === totalPages" @click="handleCurrentChange(pageNum + 1)">下一页</button>
-      </div>
-    </div>
-
-    <div class="modal-overlay" v-if="modalVisible" @click="modalVisible = false">
-      <div class="modal-content" @click.stop>
-        <div class="modal-header">
-          <h3>{{ form.id ? '编辑规则' : '新增规则' }}</h3>
-          <button class="close-btn" @click="modalVisible = false">×</button>
+    <div v-if="modalVisible" class="mds-mask" @click="closeModal">
+      <div class="mds-modal" @click.stop>
+        <div class="mds-card-head">
+          <h2 class="mds-card-title">{{ form.id ? '编辑规则' : '新增规则' }}</h2>
+          <button class="mds-btn mds-btn--link" @click="closeModal">关闭</button>
         </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label>规则编码 *</label>
-            <input type="text" v-model="form.ruleCode" placeholder="请输入规则编码" class="form-input" :disabled="form.id" />
+        <div class="mds-card-body">
+          <div class="mds-form">
+            <label class="mds-field">
+              <span class="mds-field__label mds-required">规则编码</span>
+              <input v-model="form.ruleCode" class="mds-input" :disabled="Boolean(form.id)" placeholder="如 CUSTOMER_CODE" />
+            </label>
+            <label class="mds-field">
+              <span class="mds-field__label mds-required">规则名称</span>
+              <input v-model="form.ruleName" class="mds-input" placeholder="如 客户编码规则" />
+            </label>
+            <label class="mds-field">
+              <span class="mds-field__label">规则类型</span>
+              <select v-model="form.ruleType" class="mds-select">
+                <option value="auto">自动生成</option>
+                <option value="manual">手动输入</option>
+              </select>
+            </label>
+            <label class="mds-field">
+              <span class="mds-field__label">前缀</span>
+              <input v-model="form.prefix" class="mds-input" placeholder="如 CUS" />
+            </label>
+            <label class="mds-field">
+              <span class="mds-field__label">序号长度</span>
+              <input v-model.number="form.seqLength" class="mds-input" type="number" min="1" max="12" />
+            </label>
+            <label class="mds-field">
+              <span class="mds-field__label">编码格式示例</span>
+              <input v-model="form.rulePattern" class="mds-input" placeholder="如 CUS+yyyyMMdd+5位" />
+            </label>
+            <label class="mds-field">
+              <span class="mds-field__label">状态</span>
+              <select v-model.number="form.status" class="mds-select">
+                <option :value="1">启用</option>
+                <option :value="0">禁用</option>
+              </select>
+            </label>
           </div>
-          <div class="form-group">
-            <label>规则名称 *</label>
-            <input type="text" v-model="form.ruleName" placeholder="请输入规则名称" class="form-input" />
+          <div class="mds-form-actions">
+            <button class="mds-btn" @click="closeModal">取消</button>
+            <button class="mds-btn mds-btn--primary" :disabled="saving" @click="saveRule">
+              {{ saving ? '保存中…' : form.id ? '保存修改' : '确认新增' }}
+            </button>
           </div>
-          <div class="form-group">
-            <label>规则类型</label>
-            <select v-model="form.ruleType" class="form-select">
-              <option value="auto">自动生成</option>
-              <option value="manual">手动输入</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>前缀</label>
-            <input type="text" v-model="form.prefix" placeholder="请输入前缀" class="form-input" />
-          </div>
-          <div class="form-group">
-            <label>序号长度</label>
-            <input type="number" v-model="form.seqLength" placeholder="请输入序号长度" class="form-input" />
-          </div>
-          <div class="form-group">
-            <label>编码格式示例</label>
-            <input type="text" v-model="form.rulePattern" placeholder="请输入编码格式示例" class="form-input" />
-          </div>
-          <div class="form-group">
-            <label>状态</label>
-            <select v-model="form.status" class="form-select">
-              <option :value="1">启用</option>
-              <option :value="0">禁用</option>
-            </select>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-cancel" @click="modalVisible = false">取消</button>
-          <button class="btn btn-primary" @click="saveRule">确认{{ form.id ? '修改' : '添加' }}</button>
         </div>
       </div>
     </div>
@@ -136,21 +177,31 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
-import { getCodeRuleList, createCodeRule, updateCodeRule } from '../../utils/api'
+import PageHeader from '@/components/ui/PageHeader.vue'
+import StatusTag from '@/components/ui/StatusTag.vue'
+import NoticeBar from '@/components/ui/NoticeBar.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
+import PagerBar from '@/components/ui/PagerBar.vue'
+import {
+  createCodeRule,
+  getCodeRuleList,
+  testCodeRule,
+  updateCodeRule,
+} from '../../utils/api'
 
 const tableData = ref([])
 const pageNum = ref(1)
-const pageSize = ref(10)
+const pageSize = ref(20)
 const total = ref(0)
-const totalPages = ref(1)
 const modalVisible = ref(false)
+const loading = ref(false)
+const saving = ref(false)
+const busyId = ref(null)
+const sample = ref(null)
 
-const searchForm = reactive({
-  keyword: '',
-  status: ''
-})
+const searchForm = reactive({ keyword: '', status: '' })
 
 const form = reactive({
   id: null,
@@ -160,489 +211,168 @@ const form = reactive({
   prefix: '',
   seqLength: 6,
   rulePattern: '',
-  status: 1
+  status: 1,
 })
 
 const loadData = async () => {
+  loading.value = true
   try {
     const response = await getCodeRuleList({
       pageNum: pageNum.value,
       pageSize: pageSize.value,
-      keyword: searchForm.keyword,
-      status: searchForm.status
+      keyword: searchForm.keyword || undefined,
+      status: searchForm.status || undefined,
     })
-    if (response.code === 200) {
-      tableData.value = response.data.list ?? []
-      total.value = response.data.total ?? 0
-      totalPages.value = Math.ceil(total.value / pageSize.value)
-    } else {
-      message.error(response.message || '加载数据失败')
-      tableData.value = []
-      total.value = 0
-      totalPages.value = 0
-    }
+    if (response.code !== 200) throw new Error(response.message || '加载数据失败')
+    tableData.value = response.data?.list ?? []
+    total.value = Number(response.data?.total ?? 0)
   } catch (error) {
-    message.error(error instanceof Error ? error.message : '加载数据失败')
     tableData.value = []
     total.value = 0
-    totalPages.value = 0
+    message.error(error instanceof Error ? error.message : '加载数据失败')
+  } finally {
+    loading.value = false
   }
 }
 
-const handleSizeChange = (size) => {
-  pageSize.value = size
-  loadData()
+function search() {
+  pageNum.value = 1
+  void loadData()
 }
 
-const handleCurrentChange = (page) => {
-  pageNum.value = page
-  loadData()
+function reset() {
+  Object.assign(searchForm, { keyword: '', status: '' })
+  search()
+}
+
+function handleCurrentChange(next) {
+  pageNum.value = next
+  void loadData()
+}
+
+function changePageSize(size) {
+  pageSize.value = size
+  pageNum.value = 1
+  void loadData()
 }
 
 const openCreateModal = () => {
-  form.id = null
-  form.ruleCode = ''
-  form.ruleName = ''
-  form.ruleType = 'auto'
-  form.prefix = ''
-  form.seqLength = 6
-  form.rulePattern = ''
-  form.status = 1
+  Object.assign(form, {
+    id: null,
+    ruleCode: '',
+    ruleName: '',
+    ruleType: 'auto',
+    prefix: '',
+    seqLength: 6,
+    rulePattern: '',
+    status: 1,
+  })
   modalVisible.value = true
 }
 
 const editRule = (row) => {
-  form.id = row.id
-  form.ruleCode = row.ruleCode
-  form.ruleName = row.ruleName
-  form.ruleType = row.ruleType
-  form.prefix = row.prefix
-  form.seqLength = row.seqLength
-  form.rulePattern = row.rulePattern
-  form.status = row.status
+  Object.assign(form, {
+    id: row.id,
+    ruleCode: row.ruleCode ?? '',
+    ruleName: row.ruleName ?? '',
+    ruleType: row.ruleType ?? 'auto',
+    prefix: row.prefix ?? '',
+    seqLength: Number(row.seqLength ?? 6),
+    rulePattern: row.rulePattern ?? '',
+    status: Number(row.status ?? 1),
+  })
   modalVisible.value = true
 }
 
+const closeModal = () => {
+  modalVisible.value = false
+}
+
 const saveRule = async () => {
-  if (!form.ruleCode || !form.ruleName) {
-    message.warning('请填写必填项')
+  if (!form.ruleCode.trim() || !form.ruleName.trim()) {
+    message.warning('规则编码与名称为必填')
     return
   }
-  
+  saving.value = true
   try {
-    let response
-    if (form.id) {
-      response = await updateCodeRule(form.id, form)
-    } else {
-      response = await createCodeRule(form)
-    }
-    
-    if (response.code === 200) {
-      message.success(form.id ? '修改成功' : '创建成功')
-      modalVisible.value = false
-      loadData()
-    } else {
-      message.error(response.message || '操作失败')
-    }
+    const payload = { ...form }
+    const response = form.id ? await updateCodeRule(form.id, payload) : await createCodeRule(payload)
+    if (response.code !== 200) throw new Error(response.message || '操作失败')
+    message.success(form.id ? '规则已更新' : '规则已创建')
+    closeModal()
+    await loadData()
   } catch (error) {
-    message.error('操作失败')
+    message.error(error instanceof Error ? error.message : '操作失败')
+  } finally {
+    saving.value = false
   }
 }
 
 const toggleStatus = async (row) => {
+  const enabling = Number(row.status) !== 1
+  if (!enabling && !window.confirm(`确认禁用「${row.ruleName}」？禁用后新编码将无法按此规则生成。`)) return
+  busyId.value = row.id
   try {
-    const response = await updateCodeRule(row.id, { status: row.status === 1 ? 0 : 1 })
-    if (response.code === 200) {
-      message.success(row.status === 1 ? '禁用成功' : '启用成功')
-      loadData()
-    } else {
-      message.error(response.message || '操作失败')
-    }
+    const response = await updateCodeRule(row.id, { status: enabling ? 1 : 0 })
+    if (response.code !== 200) throw new Error(response.message || '操作失败')
+    message.success(enabling ? '规则已启用' : '规则已禁用')
+    await loadData()
   } catch (error) {
-    message.error('操作失败')
+    message.error(error instanceof Error ? error.message : '操作失败')
+  } finally {
+    busyId.value = null
   }
 }
 
-/** 只取日期部分。后端返回 ISO（2026-10-12T17:32:41），只按空格切分会把 T 一起显示出来。 */
-const formatDate = (value) => {
-  if (!value) return ''
-  return String(value).replace('T', ' ').split(' ')[0]
+const tryRule = async (row) => {
+  busyId.value = row.id
+  try {
+    const response = await testCodeRule(row.id)
+    if (response.code !== 200) throw new Error(response.message || '试算失败')
+    sample.value = { ruleName: row.ruleName, code: String(response.data ?? '') }
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '试算失败')
+  } finally {
+    busyId.value = null
+  }
 }
 
-onMounted(() => {
-  loadData()
-})
+const formatDate = (value) => (value ? String(value).replace('T', ' ').split(' ')[0] : '—')
+
+onMounted(loadData)
 </script>
 
 <style scoped>
-.code-rule-list {
-  padding: 20px;
-}
-
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 24px;
-}
-
-.header-left h1 {
-  font-size: 24px;
-  font-weight: 600;
-  color: #2d3748;
-  margin: 0;
-}
-
-.header-left p {
-  font-size: 14px;
-  color: #a0aec0;
-  margin: 4px 0 0;
-}
-
-.add-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: linear-gradient(135deg, #238636 0%, #2ea043 100%);
-  color: #fff;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.add-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(35, 134, 54, 0.3);
-}
-
-.btn-icon {
-  font-size: 18px;
-}
-
-.search-bar {
-  display: flex;
-  gap: 16px;
-  margin-bottom: 20px;
-}
-
-.search-group {
-  display: flex;
-  flex: 1;
-}
-
-.search-input {
-  flex: 1;
-  padding: 10px 16px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px 0 0 8px;
-  font-size: 14px;
-  outline: none;
-  transition: border-color 0.2s;
-}
-
-.search-input:focus {
-  border-color: #238636;
-}
-
-.search-btn {
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-left: none;
-  padding: 10px 24px;
-  border-radius: 0 8px 8px 0;
-  font-size: 14px;
-  color: #238636;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.search-btn:hover {
-  background: rgba(35, 134, 54, 0.1);
-}
-
-.filter-group {
-  display: flex;
-  align-items: center;
-}
-
-.filter-select {
-  padding: 10px 16px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 14px;
-  color: #4a5568;
-  background: #fff;
-  cursor: pointer;
-  outline: none;
-}
-
-.table-card {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  overflow: hidden;
-}
-
-.data-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.data-table th,
-.data-table td {
+.sample-code {
   padding: 14px 16px;
-  text-align: left;
-  border-bottom: 1px solid #f0f0f0;
+  border-radius: 8px;
+  background: var(--mds-brand-soft);
+  color: var(--mds-brand-deep);
+  font-family: var(--mds-mono);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  word-break: break-all;
 }
 
-.data-table th {
-  font-size: 13px;
-  font-weight: 600;
-  color: #4a5568;
-  background: #f8fafc;
-}
-
-.data-table td {
-  font-size: 13px;
-  color: #2d3748;
-}
-
-.type-badge {
-  font-size: 11px;
-  font-weight: 500;
-  padding: 4px 12px;
-  border-radius: 12px;
-}
-
-.type-badge.auto {
-  background: rgba(35, 134, 54, 0.1);
-  color: #238636;
-}
-
-.type-badge.manual {
-  background: rgba(59, 130, 246, 0.1);
-  color: #3b82f6;
-}
-
-.status-badge {
-  font-size: 11px;
-  font-weight: 500;
-  padding: 4px 12px;
-  border-radius: 12px;
-}
-
-.status-badge.active {
-  background: rgba(35, 134, 54, 0.1);
-  color: #238636;
-}
-
-.status-badge.inactive {
-  background: rgba(160, 174, 192, 0.1);
-  color: #a0aec0;
-}
-
-.action-cell {
-  display: flex;
-  gap: 8px;
-}
-
-.action-btn {
-  font-size: 12px;
-  padding: 6px 12px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.action-btn.edit {
-  background: rgba(210, 153, 34, 0.1);
-  color: #d29922;
-}
-
-.action-btn.disable {
-  background: rgba(218, 54, 51, 0.1);
-  color: #da3633;
-}
-
-.action-btn.enable {
-  background: rgba(35, 134, 54, 0.1);
-  color: #238636;
-}
-
-.action-btn:hover {
-  opacity: 0.8;
-}
-
-.pagination {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 16px;
-  padding: 20px;
-}
-
-.page-btn {
-  padding: 8px 16px;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  background: #fff;
-  font-size: 13px;
-  color: #4a5568;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.page-btn:hover:not(:disabled) {
-  background: #f8fafc;
-}
-
-.page-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.page-info {
-  font-size: 13px;
-  color: #a0aec0;
-}
-
-.modal-overlay {
+.mds-mask {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  inset: 0;
+  z-index: 1000;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
-}
-
-.modal-content {
-  background: #fff;
-  border-radius: 12px;
-  width: 600px;
-  max-width: 90%;
-  overflow: hidden;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.modal-header h3 {
-  font-size: 18px;
-  font-weight: 600;
-  color: #2d3748;
-  margin: 0;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 24px;
-  color: #a0aec0;
-  cursor: pointer;
-  padding: 0;
-  line-height: 1;
-}
-
-.close-btn:hover {
-  color: #2d3748;
-}
-
-.modal-body {
+  background: rgba(0, 0, 0, 0.45);
   padding: 20px;
 }
 
-.form-group {
-  margin-bottom: 16px;
-}
-
-.form-group label {
-  display: block;
-  font-size: 14px;
-  color: #4a5568;
-  margin-bottom: 6px;
-  font-weight: 500;
-}
-
-.form-input {
-  width: 100%;
-  padding: 10px 14px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 14px;
-  outline: none;
-  transition: border-color 0.2s;
-  box-sizing: border-box;
-}
-
-.form-input:focus {
-  border-color: #238636;
-}
-
-.form-input:disabled {
-  background: #f8fafc;
-  color: #a0aec0;
-}
-
-.form-select {
-  width: 100%;
-  padding: 10px 14px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 14px;
-  color: #4a5568;
-  background: #fff;
-  cursor: pointer;
-  outline: none;
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  padding: 20px;
-  border-top: 1px solid #f0f0f0;
-}
-
-.btn {
-  padding: 10px 20px;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  border: none;
-}
-
-.btn-cancel {
-  background: #f0f0f0;
-  color: #4a5568;
-}
-
-.btn-cancel:hover {
-  background: #e2e8f0;
-}
-
-.btn-primary {
-  background: linear-gradient(135deg, #238636 0%, #2ea043 100%);
-  color: #fff;
-}
-
-.btn-primary:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(35, 134, 54, 0.3);
+.mds-modal {
+  width: 640px;
+  max-width: 100%;
+  max-height: 88vh;
+  overflow: auto;
+  border-radius: var(--mds-radius);
+  background: var(--mds-card);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.22);
 }
 </style>

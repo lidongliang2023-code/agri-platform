@@ -51,6 +51,60 @@ public class AdminMonitorDeviceVO {
     /** 最近一次重启指令下发时间（本部署只记录指令，不真重启设备） */
     private String rebootRequestedAt;
 
+    /**
+     * 从物联网系统（{@code /api/v1/iot/app/devices}）的设备对象转换。
+     *
+     * <p>设备台账收敛到物联网系统后，运营端监控必须读那边，否则监控里的设备集合
+     * 和「设备列表」页看到的不是同一批。类型/状态的口径转换与 {@link IotDeviceVO}
+     * 共用同一套方法 —— 两个页面各写一份映射，迟早会漂。</p>
+     */
+    public static AdminMonitorDeviceVO ofIot(java.util.Map<String, Object> row, String farmName) {
+        if (row == null) {
+            return null;
+        }
+        AdminMonitorDeviceVO vo = new AdminMonitorDeviceVO();
+        vo.deviceId = str(row.get("id"));
+        vo.deviceCode = str(row.get("deviceCode"));
+        vo.deviceName = str(row.get("deviceName"));
+        vo.deviceTypeText = str(row.get("typeName"));
+        vo.deviceType = IotDeviceVO.deviceTypeCode(vo.deviceTypeText);
+        vo.firmwareVersion = str(row.get("firmwareVersion"));
+        vo.farmId = str(row.get("farmId"));
+        vo.farmName = farmName;
+        vo.status = str(row.get("onlineStatus"));
+        vo.onlineStatus = IotDeviceVO.onlineStatusCode(vo.status);
+        vo.battery = intOrNull(row.get("battery"));
+        vo.signal = intOrNull(row.get("rssi"));
+        // 物联网端的 lastReport 本身就是"30秒前"这类可读文案
+        vo.lastHeartbeatAt = str(row.get("lastReport"));
+        vo.protocol = str(row.get("protocol"));
+        // 物联网端没有"是否启用"这一列：能出现在台账里的设备就是启用的
+        vo.isEnabled = 1;
+        return vo;
+    }
+
+    private static String str(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String text = String.valueOf(value).trim();
+        return text.isEmpty() ? null : text;
+    }
+
+    private static Integer intOrNull(Object value) {
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        if (value == null) {
+            return null;
+        }
+        try {
+            return Integer.parseInt(String.valueOf(value).trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
     public static AdminMonitorDeviceVO of(IoTDevice entity, String farmName) {
         if (entity == null) {
             return null;

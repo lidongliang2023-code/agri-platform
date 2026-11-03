@@ -62,6 +62,10 @@ jwt:
 # 只有同键同密钥，SSO 签发的令牌在本模块才验得过签。上面那个 `jwt.secret` 是交易模块自己的
 # 私有密钥（历史遗留，当前没有代码在用它签发/校验），与平台令牌是两套东西，不要混用。
 agri:
+  # 交易写接口的能力校验：调用核心平台内部接口（共享内部令牌）
+  capability:
+    check-url: "${CORE_CAPABILITY_CHECK_URL:http://localhost:8093/api/v1/internal/capability-check}"
+    internal-token: "${AGRI_INTERNAL_TOKEN:agri-internal-dev}"
   jwt:
     secret: ${AGRI_JWT_SECRET:agri-dev-secret-key-change-me-32bytes!}
     issuer: agri-core-platform

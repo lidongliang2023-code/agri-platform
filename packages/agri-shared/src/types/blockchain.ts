@@ -1,40 +1,15 @@
 /**
- * 区块链上链记录实体类型
+ * 区块链上链记录类型
+ *
+ * ⚠️ 这里原来有一套 V1 的数字词表类型（`ChainBizType = 1|2|3|4|5`、`ChainStatus = 1|2|3|4`
+ * 与 `BlockchainRecord`），**已删除**。理由不是"用不到"，而是它是**错的**：
+ * agri-production 的存证接口返回的是字符串词表（bizType=HARVEST/QUALITY/TRACE/INPUT，
+ * status=PENDING/SUCCESS/FAILED），而这套类型声明的是数字。页面照着它写代码，
+ * 于是投入品页把 `bizType: 2` 原样提交，后端 String.valueOf 落库成 `target_type='2'` ——
+ * 那条存证从此对不到任何业务，却仍在存证列表里显示成一条"已上链"；
+ * 同一页比较 `status === 3` 也永远不成立，有真实存证的记录反被显示成"未上链"。
+ * 现在统一用 `BlockchainBizRecord`（与后端 ChainRecordContractVO 一致）。
  */
-
-/** 上链业务类型：1 种植记录 2 投入品使用 3 农事任务 4 采收 5 检测报告 */
-export type ChainBizType = 1 | 2 | 3 | 4 | 5
-
-/** 上链状态：1 待上链 2 上链中 3 已上链 4 上链失败 */
-export type ChainStatus = 1 | 2 | 3 | 4
-
-/** 区块链上链记录 */
-export interface BlockchainRecord {
-  /** 记录 ID */
-  recordId: string
-  /** 业务 ID */
-  bizId: string
-  /** 业务类型：1 种植记录 2 投入品使用 3 农事任务 4 采收 5 检测报告 */
-  bizType: ChainBizType
-  /** 业务摘要 */
-  bizSummary?: string
-  /** 数据指纹（哈希） */
-  dataHash: string
-  /** 交易哈希 */
-  txHash?: string
-  /** 区块高度 */
-  blockHeight?: number
-  /** 链上时间戳 */
-  chainTimestamp?: string
-  /** 上链状态：1 待上链 2 上链中 3 已上链 4 上链失败 */
-  status: ChainStatus
-  /** 失败原因 */
-  failReason?: string
-  /** 提交时间 */
-  submittedAt: string
-  /** 上链完成时间 */
-  chainedAt?: string
-}
 
 /* ============================================================================
  * 以下为「区块链存证（P27 ~ P30）」页面填充时追加的类型，纯新增，不改动既有定义。
@@ -111,10 +86,26 @@ export interface BlockchainCertRecord {
 export interface BlockchainBizRecord {
   /** 存证记录 ID */
   recordId: string
-  /** 业务类型：TRACE / INSPECTION / HARVEST */
+  /** 人读存证编号（CHAIN-YYYYMMDD-XXXX） */
+  recordNo?: string | null
+  /** 业务类型：HARVEST / QUALITY / TRACE / INPUT（后端 target_type 原样透出） */
   bizType?: string
-  /** 关联业务单号（TRACE=溯源码、INSPECTION=质检单号、HARVEST=批次号 batch_no） */
-  bizNo?: string
+  /**
+   * 业务键。⚠️ 后端 `ChainRecordContractVO` 在迁移窗口内**同时**给 `bizId` 与 `bizNo`（值相同），
+   * 所以两个都声明；退出条件是页面统一到 `bizNo` 后删掉 `bizId`（见该 VO 的类注释）。
+   */
+  bizId?: string | null
+  /** 关联业务单号（TRACE=溯源码、QUALITY=质检单号、HARVEST=批次号 batch_no、INPUT=使用记录 ID） */
+  bizNo?: string | null
+  /** 业务摘要 */
+  bizSummary?: string | null
+  /**
+   * 业务主键（存证表 target_id）。
+   *
+   * 2026-11-02 起写侧命中业务时回填，存证列表靠它跳回业务详情页。
+   * 历史种子数据可能为空 —— 为空时页面只能显示编号，不给死链。
+   */
+  targetId?: string | number | null
   /** 关联批次 ID */
   batchId?: string
   /** 关联溯源码 */
@@ -127,12 +118,22 @@ export interface BlockchainBizRecord {
   txHash?: string | null
   /** 区块高度（运行时为字符串）；PENDING 记录为 null */
   blockHeight?: string | number | null
+  /** 存证内容哈希（后端两个名字都给，dataHash 是实体列名，payloadHash 是页面在用的那个） */
+  dataHash?: string | null
   /** 存证内容哈希 */
   payloadHash?: string | null
+  /** 重试次数 */
+  retryCount?: number | null
+  /** 上链时间；PENDING 记录为 null（chainedAt 是实体列名，anchorAt 是页面在用的名字） */
+  chainedAt?: string | null
   /** 上链时间；PENDING 记录为 null */
   anchorAt?: string | null
   /** 存证状态：PENDING / SUCCESS / FAILED */
   status?: string | null
+  /** 上链失败原因（FAILED 才有；后端列 failed_reason） */
+  failReason?: string | null
+  /** 提交时间（= 记录创建时间，后端两个名字都给） */
+  submittedAt?: string | null
   /** 记录创建时间（ProduceBaseEntity 审计字段，后端真实返回；未上链时用它兜底排序） */
   createdAt?: string | null
   /** 记录更新时间（ProduceBaseEntity 审计字段，后端真实返回） */

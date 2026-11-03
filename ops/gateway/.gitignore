@@ -3,3 +3,7 @@ bucket/
 logs/
 temp/
 *.pid
+
+# 培训课程视频（信息资讯模块）。几百 MB 的 mp4 不进版本库，
+# 由运营端上传接口或运维脚本投放到此目录；目录结构 = vod/{course-{id}}/{lesson}.mp4
+vod/

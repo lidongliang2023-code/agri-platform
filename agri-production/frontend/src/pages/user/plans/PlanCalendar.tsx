@@ -213,7 +213,7 @@ export default function PlanCalendar(): JSX.Element {
               <Badge status={entryStatus(entry)} />
               <span
                 style={{
-                  fontSize: 11,
+                  fontSize: 12,
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
@@ -225,7 +225,7 @@ export default function PlanCalendar(): JSX.Element {
             </div>
           ))}
           {bucket.entries.length > 3 ? (
-            <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
               +{bucket.entries.length - 3} 项
             </Typography.Text>
           ) : null}
@@ -238,7 +238,7 @@ export default function PlanCalendar(): JSX.Element {
                 )
                 .join('\n')}
             >
-              <Tag color="error" style={{ fontSize: 10, lineHeight: '16px', marginInlineEnd: 0 }}>
+              <Tag color="error" style={{ fontSize: 12, lineHeight: '16px', marginInlineEnd: 0 }}>
                 <WarningOutlined /> 冲突×{bucket.conflicts.length}
               </Tag>
             </Tooltip>
@@ -299,7 +299,7 @@ export default function PlanCalendar(): JSX.Element {
             >
               刷新
             </Button>
-            <Button onClick={() => navigate('/production/plans')}>返回计划列表</Button>
+            <Button onClick={() => navigate('/production/plans')}>返回种养计划</Button>
           </Space>
         }
       >

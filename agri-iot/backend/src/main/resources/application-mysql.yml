@@ -1,0 +1,21 @@
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: ${AGRI_IOT_DB_URL:jdbc:mysql://localhost:3306/agri_iot?createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowMultiQueries=true&useSSL=false&allowPublicKeyRetrieval=true}
+    username: ${AGRI_IOT_DB_USERNAME:root}
+    password: ${AGRI_IOT_DB_PASSWORD:root}
+    hikari:
+      maximum-pool-size: 12
+      minimum-idle: 2
+      connection-timeout: 5000
+      initialization-fail-timeout: 1
+  sql:
+    init:
+      mode: always
+      encoding: UTF-8
+      schema-locations: classpath:schema-iot-app.sql,classpath:schema-iot-mysql.sql
+      data-locations: classpath:data-iot-app.sql
+
+logging:
+  level:
+    com.agri.iot: INFO

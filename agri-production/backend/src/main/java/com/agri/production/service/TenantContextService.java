@@ -213,6 +213,25 @@ public class TenantContextService {
         return null;
     }
 
+    /**
+     * 当前请求的 {@code Authorization} 头（原样，含 {@code Bearer } 前缀）。
+     *
+     * <p>设备台账收敛到物联网系统后，本服务多处需要以「调用方自己的身份」去查物联网端 ——
+     * 物联网端靠这个令牌判权、并据此反查所属租户的农场范围，换成服务账号会把隔离抹平。
+     * 从请求上下文取而不是逐层加参数，是为了不改动 {@code resolveDevice} 那条调用链上
+     * 已有的 7 个方法签名。</p>
+     *
+     * @return 授权头；不在 HTTP 请求线程（定时任务等）时返回 null
+     */
+    public static String currentAuthorization() {
+        TenantContextService service = instance;
+        if (service == null) {
+            return null;
+        }
+        HttpServletRequest request = service.currentRequest();
+        return request == null ? null : request.getHeader(AUTHORIZATION);
+    }
+
     private HttpServletRequest currentRequest() {
         ServletRequestAttributes attributes =
                 (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();

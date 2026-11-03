@@ -103,7 +103,7 @@
 
 .oc-stepper small {
   color: #93a29a;
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .oc-stepper .on span {
@@ -319,7 +319,7 @@
   border-radius: 999px;
   background: #e2f4e9;
   color: #12764a;
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
   font-style: normal;
 }
 
@@ -361,7 +361,7 @@
 
 .oc-product span {
   color: #6e8879;
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .oc-product strong {
@@ -374,7 +374,7 @@
 
 .oc-product small {
   color: #8a9a91;
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .oc-summary-lines {
@@ -419,7 +419,7 @@
 
 .oc-total small {
   color: #8b9b92;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .oc-summary-trust {
@@ -445,7 +445,7 @@
   margin: 0 !important;
   padding: 0 20px 18px;
   color: #96a49c !important;
-  font-size: 11px !important;
+  font-size: var(--agri-font-size-micro) !important;
   line-height: 1.7;
 }
 

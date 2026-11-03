@@ -2,13 +2,19 @@
 /** 卖家保证金账户开立、审核、补缴、流水和权限闭环回归。 */
 import { execFileSync } from 'node:child_process'
 import { createRequire } from 'node:module'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const require2 = createRequire(path.join(ROOT, 'agri-production/frontend/package.json'))
-const puppeteer = require2('puppeteer')
+const require2 = createRequire(path.join('C:/Users/71502/.workbuddy-ai/binaries/node/workspace', 'noop.js'))
+const { chromium } = require2('playwright-core')
+
+const BROWSER = [
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+].find((candidate) => existsSync(candidate))
 const BASE = 'http://localhost:8086'
 const CORE = 'http://localhost:8093'
 const OUT = 'C:/Users/71502/.codex/visualizations/2026/10/16/01a14244-ead8-7ab0-8c7c-df7abac44648'
@@ -158,18 +164,18 @@ try {
   })
   check(forbidden.body.code !== 200, '其他经营主体不能为卖家保证金账户补缴', forbidden.body.message ?? '')
 
-  const browser = await puppeteer.launch({
-    executablePath: 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
-    headless: 'new',
-    args: ['--no-sandbox'],
-  })
+  const browser = await chromium.launch({
+  headless: true,
+  executablePath: BROWSER,
+  args: ['--no-sandbox'],
+})
   try {
-    const page = await browser.newPage()
+    const page = await (await browser.newContext({ viewport: { width: 1440, height: 1000 } })).newPage()
     const errors = []
     page.on('pageerror', (error) => errors.push(String(error)))
-    await page.setViewport({ width: 1440, height: 1000 })
-    await page.goto(`${BASE}/member/seller?tab=fund`, { waitUntil: 'networkidle2', timeout: 60000 })
-    await page.waitForFunction(() => window.location.port === '8090', { timeout: 20000 })
+    await page.setViewportSize({ width: 1440, height: 1000 })
+    await page.goto(`${BASE}/member/seller?tab=fund`, { waitUntil: 'networkidle', timeout: 60000 })
+    await page.waitForFunction(() => window.location.port === '8090', undefined, { timeout: 20000 })
     await page.waitForSelector('button[role="tab"]', { timeout: 20000 })
     await page.evaluate(() => {
       const tab = [...document.querySelectorAll('button[role="tab"]')]
@@ -188,7 +194,8 @@ try {
       if (page.url().includes('/member/seller')) break
     }
     await page.waitForSelector('.guarantee-workbench', { timeout: 30000 })
-    await page.waitForNetworkIdle({ idleTime: 700, timeout: 15000 }).catch(() => {})
+    await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
+    await new Promise((resolve) => setTimeout(resolve, 700))
     const listText = await page.evaluate(() => document.body.innerText)
     check(listText.includes('保证金账户') && listText.includes(guaranteeNo)
       && listText.includes('补缴保证金') && listText.includes('查看流水'),
@@ -268,8 +275,9 @@ try {
       return true
     }, guaranteeNo)
     check(openedLogs, '保证金账户提供页面级流水入口')
-    await page.waitForFunction(() => document.body.innerText.includes('资金流水'), { timeout: 10000 })
-    await page.waitForNetworkIdle({ idleTime: 500, timeout: 10000 }).catch(() => {})
+    await page.waitForFunction(() => document.body.innerText.includes('资金流水'), undefined, { timeout: 10000 })
+    await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
+    await new Promise((resolve) => setTimeout(resolve, 500))
     const openedLogText = await page.evaluate(() => document.body.innerText)
     check(openedLogText.includes('账户开立') && openedLogText.includes('账户审核'),
       '流水页展示账户开立与审核记录')
@@ -279,7 +287,7 @@ try {
         .find((item) => item.textContent?.includes('补缴'))
       button?.click()
     })
-    await page.waitForFunction(() => document.body.innerText.includes('GUARANTEE REPLENISHMENT'), { timeout: 10000 })
+    await page.waitForFunction(() => document.body.innerText.includes('GUARANTEE REPLENISHMENT'), undefined, { timeout: 10000 })
     const actionColumns = await page.$eval(
       '.guarantee-action-layout',
       (node) => getComputedStyle(node).gridTemplateColumns.split(' ').length,
@@ -319,8 +327,8 @@ try {
 
     await page.click('.guarantee-back')
     await page.waitForSelector('.guarantee-workbench', { timeout: 10000 })
-    await page.setViewport({ width: 390, height: 844 })
-    await page.reload({ waitUntil: 'networkidle2', timeout: 60000 })
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.reload({ waitUntil: 'networkidle', timeout: 60000 })
     await page.waitForSelector('.guarantee-workbench', { timeout: 30000 })
     check(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
       '390px 保证金账户页无横向溢出')

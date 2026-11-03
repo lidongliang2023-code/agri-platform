@@ -1,13 +1,19 @@
 #!/usr/bin/env node
 /** 丰链云跨子系统品牌一致性回归。 */
 import { createRequire } from 'node:module'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const require2 = createRequire(path.join(ROOT, 'agri-production/frontend/package.json'))
-const puppeteer = require2('puppeteer')
+const require2 = createRequire(path.join('C:/Users/71502/.workbuddy-ai/binaries/node/workspace', 'noop.js'))
+const { chromium } = require2('playwright-core')
+
+const BROWSER = [
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+].find((candidate) => existsSync(candidate))
 
 const BASE = 'http://localhost'
 const failures = []
@@ -24,19 +30,19 @@ const fill = async (page, selector, value) => page.evaluate(({ sel, val }) => {
   input.dispatchEvent(new Event('input', { bubbles: true }))
 }, { sel: selector, val: value })
 
-const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox'] })
+const browser = await chromium.launch({ headless: true, executablePath: BROWSER, args: ['--no-sandbox'] })
 try {
-  const context = await browser.createBrowserContext()
+  const context = await browser.newContext()
   const page = await context.newPage()
-  await page.setViewport({ width: 1440, height: 1000 })
+  await page.setViewportSize({ width: 1440, height: 1000 })
 
-  await page.goto(`${BASE}:8098/portal/#/`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.goto(`${BASE}:8098/portal/#/`, { waitUntil: 'networkidle', timeout: 60000 })
   let text = await page.evaluate(() => document.body.innerText)
   check(text.includes('丰链云') && !text.includes('农产云'), '官网门户已使用丰链云品牌名')
   check(await page.$$eval('svg[aria-label="丰链云"]', (nodes) => nodes.length > 0),
     '官网门户已显示丰链云图形标识')
 
-  await page.goto(`${BASE}:8090/login`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.goto(`${BASE}:8090/login`, { waitUntil: 'networkidle', timeout: 60000 })
   text = await page.evaluate(() => document.body.innerText)
   check(text.includes('丰链云') && !text.includes('农产云'), '统一认证中心已使用丰链云品牌名')
   check(await page.$$eval('svg[aria-label="丰链云"]', (nodes) => nodes.length > 0),
@@ -59,19 +65,19 @@ try {
     if (!page.url().includes(':8090/')) break
   }
 
-  await page.goto(`${BASE}/admin/production/dashboard/screen`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.goto(`${BASE}/admin/production/dashboard/screen`, { waitUntil: 'networkidle', timeout: 60000 })
   text = await page.evaluate(() => document.body.innerText)
   check(text.includes('丰链云') && !text.includes('农产云'), '生产管理运营端已使用丰链云品牌名')
   check(await page.$$eval('svg[aria-label="丰链云"]', (nodes) => nodes.length > 0),
     '生产管理运营端已显示丰链云图形标识')
 
-  await page.goto(`${BASE}:8080/subject/list`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.goto(`${BASE}:8080/subject/list`, { waitUntil: 'networkidle', timeout: 60000 })
   text = await page.evaluate(() => document.body.innerText)
   check(text.includes('丰链云') && !text.includes('农产云'), '主数据管理端已使用丰链云品牌名')
   check(await page.$$eval('svg[aria-label="丰链云"]', (nodes) => nodes.length > 0),
     '主数据管理端已显示丰链云图形标识')
 
-  await page.goto(`${BASE}:8086/member/seller`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.goto(`${BASE}:8086/member/seller`, { waitUntil: 'networkidle', timeout: 60000 })
   text = await page.evaluate(() => document.body.innerText)
   check(text.includes('丰链云') && !text.includes('农产云'), '卖家中心已使用丰链云品牌名')
   check(await page.$$eval('svg[aria-label="丰链云"]', (nodes) => nodes.length > 0),

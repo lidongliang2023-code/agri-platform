@@ -22,13 +22,19 @@
  * 退出码：0 = 全部通过；1 = 有断言失败。
  */
 import { createRequire } from 'node:module'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const require2 = createRequire(path.join(REPO_ROOT, 'agri-production/frontend/package.json'))
-const puppeteer = require2('puppeteer')
+const require2 = createRequire(path.join('C:/Users/71502/.workbuddy-ai/binaries/node/workspace', 'noop.js'))
+const { chromium } = require2('playwright-core')
+
+const BROWSER = [
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+].find((candidate) => existsSync(candidate))
 
 const arg = (name, fallback) => {
   const hit = process.argv.slice(2).find((a) => a.startsWith(`--${name}=`))
@@ -71,9 +77,9 @@ const isLoginPage = (url) =>
  * @param base 站点前缀（用户端 / 运营端都在同一站）
  */
 const logoutFlow = async (username, startPath) => {
-  const browser = await puppeteer.launch({ headless: HEADFUL ? false : 'new', args: ['--no-sandbox'] })
-  const page = await browser.newPage()
-  await page.setViewport({ width: 1600, height: 1000 })
+  const browser = await chromium.launch({ headless: !HEADFUL, executablePath: BROWSER, args: ['--no-sandbox'] })
+  const page = await (await browser.newContext({ viewport: { width: 1440, height: 1000 } })).newPage()
+  await page.setViewportSize({ width: 1600, height: 1000 })
   const login = await loginAs(username)
   await page.goto(`${BASE_URL}/prod/manifest.json`, { waitUntil: 'domcontentloaded', timeout: 20000 })
   await page.evaluate(async (creds) => {
@@ -84,7 +90,7 @@ const logoutFlow = async (username, startPath) => {
       })
     } catch { /* 由后续页面表现反映 */ }
   }, { username, password: PASSWORD, marketId: 1 })
-  await page.evaluateOnNewDocument((state) => {
+  await page.addInitScript((state) => {
     try {
       localStorage.setItem('agri_user_info', JSON.stringify(state.userInfo))
       localStorage.setItem('agri_roles', JSON.stringify(state.roles))
@@ -94,7 +100,7 @@ const logoutFlow = async (username, startPath) => {
     } catch { /* localStorage 不可用则忽略 */ }
   }, { userInfo: login.data?.user ?? {}, roles: login.data?.user?.roles ?? [], farmId: FARM_ID })
 
-  await page.goto(`${BASE_URL}${startPath}`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.goto(`${BASE_URL}${startPath}`, { waitUntil: 'networkidle', timeout: 60000 })
   await sleep(800)
   // 打开右上角用户菜单 → 点「退出登录」
   await page.evaluate(() => {
@@ -139,11 +145,11 @@ try {
     '运营端退出登录后停在登录页（不是业务页）', adminUrl)
 
   console.log('—— 场景 3：无会话直接打开业务页 ——')
-  const browser = await puppeteer.launch({ headless: HEADFUL ? false : 'new', args: ['--no-sandbox'] })
-  const page = await browser.newPage()
-  await page.setViewport({ width: 1600, height: 1000 })
+  const browser = await chromium.launch({ headless: !HEADFUL, executablePath: BROWSER, args: ['--no-sandbox'] })
+  const page = await (await browser.newContext({ viewport: { width: 1440, height: 1000 } })).newPage()
+  await page.setViewportSize({ width: 1600, height: 1000 })
   const seen = []
-  await page.goto(`${BASE_URL}/production/farms`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.goto(`${BASE_URL}/production/farms`, { waitUntil: 'networkidle', timeout: 60000 })
   seen.push(page.url())
   for (let i = 0; i < 12; i++) {
     await sleep(700)
@@ -155,8 +161,8 @@ try {
     '无令牌打开用户端业务页 → 落到登录页', noTokenUrl)
 
   const adminSeen = []
-  const page2 = await browser.newPage()
-  await page2.goto(`${BASE_URL}/admin/production/crops`, { waitUntil: 'networkidle2', timeout: 60000 })
+  const page2 = await (await browser.newContext({ viewport: { width: 1440, height: 1000 } })).newPage()
+  await page2.goto(`${BASE_URL}/admin/production/crops`, { waitUntil: 'networkidle', timeout: 60000 })
   adminSeen.push(page2.url())
   for (let i = 0; i < 12; i++) {
     await sleep(700)

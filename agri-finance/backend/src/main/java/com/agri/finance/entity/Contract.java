@@ -17,6 +17,9 @@ public class Contract {
 
     private String contractNo;
 
+    /** 关联的融资申请：放款闸门要按申请核对合同签署状态。 */
+    private String applicationId;
+
     private String loanId;
 
     private String loanNo;

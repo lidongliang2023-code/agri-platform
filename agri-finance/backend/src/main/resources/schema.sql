@@ -24,6 +24,25 @@ CREATE TABLE IF NOT EXISTS credit_score (
     del_flag INT DEFAULT 0
 );
 
+CREATE TABLE IF NOT EXISTS credit_report (
+    id VARCHAR(64) PRIMARY KEY,
+    report_no VARCHAR(64) NOT NULL,
+    user_id VARCHAR(64) NOT NULL,
+    user_name VARCHAR(128),
+    composite_score INT,
+    credit_level VARCHAR(16),
+    suggested_amount DECIMAL(18, 2),
+    reference_rate DECIMAL(8, 2),
+    data_sources VARCHAR(500),
+    dimension_scores VARCHAR(1000),
+    risk_alerts VARCHAR(1000),
+    improvement_suggestions VARCHAR(1000),
+    evaluation_time TIMESTAMP,
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP,
+    del_flag INT DEFAULT 0
+);
+
 CREATE TABLE IF NOT EXISTS loan_application (
     id VARCHAR(64) PRIMARY KEY,
     application_no VARCHAR(64) NOT NULL,
@@ -57,6 +76,20 @@ CREATE TABLE IF NOT EXISTS loan_application (
     created_at TIMESTAMP,
     updated_at TIMESTAMP,
     del_flag INT DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS finance_approval_record (
+    id VARCHAR(64) PRIMARY KEY,
+    application_id VARCHAR(64) NOT NULL,
+    provider_id VARCHAR(64) NOT NULL,
+    provider_name VARCHAR(128),
+    decision VARCHAR(32) NOT NULL,
+    approved_amount DECIMAL(18, 2),
+    approved_rate DECIMAL(8, 2),
+    opinion VARCHAR(1000),
+    reviewer_id VARCHAR(64),
+    reviewer_name VARCHAR(128),
+    created_at TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS loan (
@@ -112,8 +145,75 @@ CREATE TABLE IF NOT EXISTS pledge (
     status VARCHAR(32) NOT NULL,
     warehouse_name VARCHAR(128),
     warehouse_address VARCHAR(255),
+    receipt_id VARCHAR(64),
+    application_id VARCHAR(64),
+    loan_id VARCHAR(64),
     pledge_date TIMESTAMP,
     release_date TIMESTAMP,
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP,
+    del_flag INT DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS warehouse_receipt (
+    id VARCHAR(64) PRIMARY KEY,
+    receipt_no VARCHAR(64) NOT NULL,
+    pledge_id VARCHAR(64),
+    user_id VARCHAR(64),
+    batch_id VARCHAR(64),
+    batch_no VARCHAR(64),
+    goods_code VARCHAR(64),
+    farm_id VARCHAR(64),
+    plot_id VARCHAR(64),
+    trace_code VARCHAR(64),
+    commodity_type VARCHAR(128),
+    quality_standard VARCHAR(128),
+    quantity DECIMAL(18, 3),
+    unit VARCHAR(32),
+    unit_price DECIMAL(18, 2),
+    total_value DECIMAL(18, 2),
+    status VARCHAR(32),
+    warehouse_code VARCHAR(64),
+    warehouse_name VARCHAR(128),
+    location VARCHAR(255),
+    blockchain_hash VARCHAR(191),
+    issue_date TIMESTAMP,
+    expire_date TIMESTAMP,
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP,
+    del_flag INT DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS pledge_goods (
+    id VARCHAR(64) PRIMARY KEY,
+    goods_code VARCHAR(64) NOT NULL,
+    goods_name VARCHAR(128) NOT NULL,
+    category VARCHAR(64),
+    pledge_rate_max DECIMAL(8, 2),
+    price_source VARCHAR(128),
+    quality_standard VARCHAR(128),
+    price_volatility_threshold DECIMAL(8, 2),
+    max_pledge_term INT,
+    status VARCHAR(32),
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP,
+    del_flag INT DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS pledge_monitor (
+    id VARCHAR(64) PRIMARY KEY,
+    receipt_id VARCHAR(64),
+    receipt_no VARCHAR(64),
+    realtime_weight DECIMAL(18, 3),
+    temperature DECIMAL(8, 2),
+    humidity DECIMAL(8, 2),
+    gas_concentration DECIMAL(12, 3),
+    device_status VARCHAR(32),
+    device_code VARCHAR(64),
+    device_note VARCHAR(255),
+    alert_level VARCHAR(32),
+    alert_content VARCHAR(1000),
+    monitor_time TIMESTAMP,
     created_at TIMESTAMP,
     updated_at TIMESTAMP,
     del_flag INT DEFAULT 0
@@ -139,7 +239,8 @@ CREATE TABLE IF NOT EXISTS contract (
     end_date TIMESTAMP,
     created_at TIMESTAMP,
     updated_at TIMESTAMP,
-    del_flag INT DEFAULT 0
+    del_flag INT DEFAULT 0,
+    application_id VARCHAR(64)
 );
 
 CREATE TABLE IF NOT EXISTS message_notification (
@@ -179,7 +280,8 @@ CREATE TABLE IF NOT EXISTS fund_provider (
     review_time TIMESTAMP,
     created_at TIMESTAMP,
     updated_at TIMESTAMP,
-    del_flag INT DEFAULT 0
+    del_flag INT DEFAULT 0,
+    merchant_id VARCHAR(64)
 );
 
 CREATE TABLE IF NOT EXISTS asset (
@@ -250,7 +352,8 @@ CREATE TABLE IF NOT EXISTS overdue_record (
     overdue_date TIMESTAMP,
     created_at TIMESTAMP,
     updated_at TIMESTAMP,
-    del_flag INT DEFAULT 0
+    del_flag INT DEFAULT 0,
+    period INT
 );
 
 CREATE TABLE IF NOT EXISTS risk_control_rule (
@@ -302,3 +405,29 @@ CREATE TABLE IF NOT EXISTS finance_product_config (
     updated_at TIMESTAMP,
     del_flag INT DEFAULT 0
 );
+
+CREATE TABLE IF NOT EXISTS risk_assessment_snapshot (
+    id VARCHAR(64) PRIMARY KEY,
+    assessment_no VARCHAR(64) NOT NULL,
+    subject_id VARCHAR(64) NOT NULL,
+    subject_name VARCHAR(128),
+    transaction_score INT,
+    logistics_score INT,
+    warehouse_score INT,
+    production_score INT,
+    composite_score INT,
+    risk_level VARCHAR(32),
+    decision_text VARCHAR(128),
+    data_completeness DECIMAL(8, 2),
+    cross_validation_status VARCHAR(32),
+    findings_json TEXT,
+    metrics_json TEXT,
+    evaluated_by VARCHAR(64),
+    evaluated_at TIMESTAMP,
+    created_at TIMESTAMP,
+    del_flag INT DEFAULT 0
+);
+
+-- 说明：本文件同时给 H2（集成测试）与 MySQL（新库）建表，只写通用 DDL。
+-- 存量库的补列（merchant_id / application_id / period）在 schema-mysql.sql，
+-- MySQL 的 information_schema + PREPARE 写法 H2 不支持，混在这里会让测试库直接起不来。

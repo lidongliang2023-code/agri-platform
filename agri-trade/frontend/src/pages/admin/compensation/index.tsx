@@ -3,7 +3,6 @@ import { Alert, Button, Card, Col, Form, Input, InputNumber, Modal, Popconfirm, 
 import { PlusOutlined, ReloadOutlined } from '@ant-design/icons'
 import { createCompensation, executeCompensation, getAdminCompensationPage, getAdminDisputePage, reviewCompensation } from '@/api/admin'
 import { getOrderList } from '@/api/order'
-import { getCurrentUser } from '@/utils/session'
 
 interface CompensationRow {
   id: number
@@ -137,8 +136,8 @@ export default function AdminCompensation() {
   }, [load])
 
   const review = async (row: CompensationRow, approved: boolean, remark?: string) => {
-    const reviewer = getCurrentUser()?.nickname ?? getCurrentUser()?.username ?? '运营'
-    const res = await reviewCompensation(row.id, approved ? 'approved' : 'rejected', reviewer, remark)
+    // 审核人由后端从访问令牌取（原先这里拼当前昵称、取不到就写"运营"再传上去）。
+    const res = await reviewCompensation(row.id, approved ? 'approved' : 'rejected', remark)
     if (res?.code === 200) {
       message.success(approved ? '已核准，待打款' : '已驳回')
       setCurrent(null)

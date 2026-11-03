@@ -42,6 +42,11 @@ public class OperatorGuardInterceptor implements HandlerInterceptor {
         if (!(handler instanceof HandlerMethod handlerMethod)) {
             return true;
         }
+        // 公开路径（官网门户的只读接口）直接放行：门户是"开放浏览、无需登录"的场景，
+        // 在这里拦成 401 会让整个资讯门户打不开。放行的接口必须自己做好脱敏。
+        if (isPublicPath(request.getRequestURI())) {
+            return true;
+        }
         String required = requiredPermission(request, handlerMethod);
         if (required == null) {
             return true;
@@ -66,6 +71,16 @@ public class OperatorGuardInterceptor implements HandlerInterceptor {
         }
         log.warn("运营权限不足被拒：uri={} required={} granted={}", request.getRequestURI(), required, permissions);
         return reject(response, "你的账号没有该操作的权限（需要 " + required + "），请联系平台运营开通");
+    }
+
+    /** 是否命中公开路径白名单。 */
+    private boolean isPublicPath(String uri) {
+        for (String pattern : properties.getPublicPaths()) {
+            if (pattern != null && !pattern.isBlank() && MATCHER.match(pattern, uri)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** 这个请求需要哪个权限码；普通业务接口返回 null。 */

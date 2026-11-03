@@ -60,7 +60,8 @@ public class SmsAuthService {
     private static final String CODE_KEY = "agri:sms:code:";
     private static final String ATTEMPT_KEY = "agri:sms:attempt:";
     private static final String COOLDOWN_KEY = "agri:sms:cooldown:";
-    private static final Duration CODE_TTL = Duration.ofMinutes(5);
+    /** 验证码有效期兜底值；实际以 platform_uc_system_config 的 captcha.sms.ttl 为准 */
+    private static final Duration CODE_TTL_FALLBACK = Duration.ofMinutes(5);
     private static final Duration COOLDOWN = Duration.ofSeconds(60);
     private static final int MAX_ATTEMPTS = 5;
 
@@ -73,6 +74,8 @@ public class SmsAuthService {
     private final MerchantCertificationMapper certificationMapper;
     private final ActiveMerchantService activeMerchantService;
     private final UserIdentityMapper userIdentityMapper;
+    /** 账号侧策略（注册开关 / 密码复杂度 / 验证码时长 / 默认身份） */
+    private final com.agri.platform.internal.uc.AccountPolicyService policy;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
     /** 短信通道模式：none（默认，未配置服务商）/ dev（验证码写日志，仅联调用） */
@@ -83,6 +86,7 @@ public class SmsAuthService {
                           MerchantCertificationMapper certificationMapper,
                           ActiveMerchantService activeMerchantService,
                           UserIdentityMapper userIdentityMapper,
+                          com.agri.platform.internal.uc.AccountPolicyService policy,
                           @Value("${agri.auth.sms.mode:none}") String mode) {
         this.redis = redis;
         this.userMapper = userMapper;
@@ -93,6 +97,7 @@ public class SmsAuthService {
         this.certificationMapper = certificationMapper;
         this.activeMerchantService = activeMerchantService;
         this.userIdentityMapper = userIdentityMapper;
+        this.policy = policy;
         this.mode = mode == null ? "none" : mode.trim().toLowerCase();
         if ("dev".equals(this.mode)) {
             log.warn("短信通道运行在 [dev] 模式：验证码只写日志，不会真正发送短信。生产环境请把 "
@@ -124,11 +129,13 @@ public class SmsAuthService {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "验证码已发送，请 60 秒后再试");
         }
         String code = String.format("%06d", ThreadLocalRandom.current().nextInt(1_000_000));
-        redis.opsForValue().set(CODE_KEY + scene + ":" + normalized, code, CODE_TTL);
+        Duration ttl = codeTtl();
+        redis.opsForValue().set(CODE_KEY + scene + ":" + normalized, code, ttl);
         redis.delete(ATTEMPT_KEY + scene + ":" + normalized);
         redis.opsForValue().set(COOLDOWN_KEY + normalized, "1", COOLDOWN);
         // 只进日志：不回响应体、不落库明文
-        log.warn("[DEV 短信通道] {} 的验证码（场景 {}）＝ {}（5 分钟内有效）", mask(normalized), scene, code);
+        log.warn("[DEV 短信通道] {} 的验证码（场景 {}）＝ {}（{} 秒内有效）",
+                mask(normalized), scene, code, ttl.toSeconds());
     }
 
     /**
@@ -197,10 +204,7 @@ public class SmsAuthService {
      */
     @Transactional(rollbackFor = Exception.class)
     public Long resetPassword(String phone, String code, String newPassword) {
-        if (newPassword == null || newPassword.length() < 8 || newPassword.length() > 20
-                || !newPassword.matches(".*[A-Za-z].*") || !newPassword.matches(".*\\d.*")) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "密码应为 8-20 位，且同时包含字母和数字");
-        }
+        policy.validatePassword(newPassword, normalizePhone(phone));
         verify(phone, "reset_password", code);
         UserEntity user = requireUserByPhone(phone);
         user.setPassword(passwordEncoder.encode(newPassword));
@@ -271,7 +275,36 @@ public class SmsAuthService {
             Long merchantId,
             String subjectName,
             String certificationStatus,
-            String certificationNo) {
+            String certificationNo,
+            VerificationProgress verification) {
+    }
+
+    /**
+     * 认证开通进度。个人通道为公安二要素 + 活体；企业通道为执照、法人扫脸与对公打款。
+     * 文件地址均为受控地址，前端只用于预览和确认材料是否已上传。
+     */
+    public record VerificationProgress(
+            String channel,
+            Boolean policeVerified,
+            Boolean livenessVerified,
+            String businessLicenseUrl,
+            String legalPersonFaceUrl,
+            String legalPersonFaceStatus,
+            String corporateBankName,
+            String corporateBankAccount,
+            String corporateTransferAmount,
+            String corporateTransferReference,
+            String corporateTransferProofUrl,
+            String corporateTransferStatus,
+            String registeredCapital,
+            String idNoMasked,
+            String creditCode,
+            String legalPerson) {
+
+        public static VerificationProgress empty() {
+            return new VerificationProgress("", false, false, null, null, null,
+                    null, null, null, null, null, null, null, null, null, null);
+        }
     }
 
     /**
@@ -286,10 +319,8 @@ public class SmsAuthService {
         if (exists != null) {
             throw new BusinessException(ErrorCode.CONFLICT, "该手机号已注册，请直接登录");
         }
-        if (password == null || password.length() < 8 || password.length() > 20
-                || !password.matches(".*[A-Za-z].*") || !password.matches(".*\\d.*")) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "密码应为 8-20 位，且同时包含字母和数字");
-        }
+        // 复杂度与弱口令都由运营端的「参数配置」决定，不再写死在这里
+        policy.validatePassword(password, normalized);
         LocalDateTime now = LocalDateTime.now();
         UserEntity user = new UserEntity();
         user.setUsername(normalized);
@@ -301,19 +332,43 @@ public class SmsAuthService {
         user.setUpdatedAt(now);
         userMapper.insert(user);
 
-        RoleEntity farmer = roleMapper.selectOne(new LambdaQueryWrapper<RoleEntity>()
-                .eq(RoleEntity::getCode, "FARMER"));
-        if (farmer == null) {
-            log.warn("平台没有 FARMER 角色，注册用户 {} 未授任何角色", user.getId());
-        } else {
-            UserRoleEntity binding = new UserRoleEntity();
-            binding.setUserId(user.getId());
-            binding.setRoleId(farmer.getId());
-            binding.setMarketId(market);
-            userRoleMapper.insert(binding);
-        }
+        grantDefaultRole(user, market);
         log.info("账号注册成功：user={} phone={}（等待创建主体）", user.getId(), mask(normalized));
         return user;
+    }
+
+    /** 验证码有效期：跟随运营端配置，读不到就用 5 分钟兜底。 */
+    private Duration codeTtl() {
+        try {
+            return Duration.ofSeconds(policy.smsCodeTtlSeconds());
+        } catch (RuntimeException e) {
+            return CODE_TTL_FALLBACK;
+        }
+    }
+
+    /**
+     * 按运营端「新用户默认身份」授予角色。
+     *
+     * <p>配置为 NONE 时不授任何角色 —— 用户能登录但进不了业务域，需要走身份申请。
+     * 这是产品口径，不是 bug；配置页的选项写得很清楚。</p>
+     */
+    private void grantDefaultRole(UserEntity user, Long market) {
+        String code = policy.defaultRole();
+        if (code == null || code.isBlank() || "NONE".equalsIgnoreCase(code)) {
+            log.info("新用户 {} 未授默认身份（register.default.role=NONE），需自行申请身份", user.getId());
+            return;
+        }
+        RoleEntity role = roleMapper.selectOne(new LambdaQueryWrapper<RoleEntity>()
+                .eq(RoleEntity::getCode, code));
+        if (role == null) {
+            log.warn("平台没有 {} 角色，注册用户 {} 未授任何角色", code, user.getId());
+            return;
+        }
+        UserRoleEntity binding = new UserRoleEntity();
+        binding.setUserId(user.getId());
+        binding.setRoleId(role.getId());
+        binding.setMarketId(market);
+        userRoleMapper.insert(binding);
     }
 
     /** 查询当前账号的开通阶段，供登录后自动分流与注册页恢复步骤。 */
@@ -326,7 +381,7 @@ public class SmsAuthService {
         Long merchantId = activeMerchantService.resolve(userId, market);
         if (merchantId == null) {
             return new OnboardingStatus("subject", user.getPhone(), user.getNickname(), null,
-                    null, null, null, null);
+                    null, null, null, null, VerificationProgress.empty());
         }
         MerchantEntity merchant = merchantMapper.selectById(merchantId);
         String identity = merchant == null ? null : merchant.getMemberType();
@@ -334,7 +389,7 @@ public class SmsAuthService {
         if (merchant == null || identity == null || identity.isBlank()) {
             return new OnboardingStatus("done", user.getPhone(), user.getNickname(), identity,
                     merchantId, merchant == null ? null : merchant.getName(),
-                    merchant == null ? null : merchant.getVerifyStatus(), null);
+                    merchant == null ? null : merchant.getVerifyStatus(), null, VerificationProgress.empty());
         }
         if ("enterprise".equalsIgnoreCase(identity)) {
             MerchantCertificationEntity cert = latestCertification(merchantId);
@@ -342,7 +397,8 @@ public class SmsAuthService {
             String stage = certStatus == null || "draft".equals(certStatus) || "rejected".equals(certStatus)
                     ? "certification" : "pending".equals(certStatus) ? "pending" : "done";
             return new OnboardingStatus(stage, user.getPhone(), user.getNickname(), identity,
-                    merchantId, merchant.getName(), certStatus, cert == null ? null : cert.getCertNo());
+                    merchantId, merchant.getName(), certStatus, cert == null ? null : cert.getCertNo(),
+                    verificationProgress(null, cert));
         }
         UserIdentityEntity identityRecord = latestIdentity(userId);
         String identityStatus = identityRecord == null ? null : identityRecord.getStatus();
@@ -350,7 +406,38 @@ public class SmsAuthService {
                 ? "certification" : "pending".equals(identityStatus) ? "pending" : "done";
         return new OnboardingStatus(stage, user.getPhone(), user.getNickname(), identity,
                 merchantId, merchant == null ? null : merchant.getName(), identityStatus,
-                identityRecord == null ? null : identityRecord.getIdentityNo());
+                identityRecord == null ? null : identityRecord.getIdentityNo(),
+                verificationProgress(identityRecord, null));
+    }
+
+    private VerificationProgress verificationProgress(UserIdentityEntity identity,
+                                                      MerchantCertificationEntity certification) {
+        if (identity != null) {
+            return new VerificationProgress("公安二要素 + 活体",
+                    Boolean.TRUE.equals(identity.getPoliceVerified()),
+                    Boolean.TRUE.equals(identity.getLivenessVerified()),
+                    null, null, null, null, null, null, null, null, null, null,
+                    identity.getIdNoMasked(), null, identity.getRealName());
+        }
+        if (certification != null) {
+            return new VerificationProgress(
+                    certification.getVerificationChannel(),
+                    false, false,
+                    certification.getBusinessLicenseUrl(),
+                    certification.getLegalPersonFaceUrl(),
+                    certification.getLegalPersonFaceStatus(),
+                    certification.getCorporateBankName(),
+                    certification.getCorporateBankAccount(),
+                    certification.getCorporateTransferAmount(),
+                    certification.getCorporateTransferReference(),
+                    certification.getCorporateTransferProofUrl(),
+                    certification.getCorporateTransferStatus(),
+                    certification.getRegisteredCapital(),
+                    null,
+                    certification.getCreditCode(),
+                    certification.getLegalPerson());
+        }
+        return VerificationProgress.empty();
     }
 
     /**
@@ -557,7 +644,24 @@ public class SmsAuthService {
             if ("approved".equals(cert.getCertStatus())) {
                 return onboardingStatus(userId, market);
             }
+            if ("pending".equals(cert.getCertStatus())) {
+                return onboardingStatus(userId, market);
+            }
             if ("draft".equals(cert.getCertStatus()) || "rejected".equals(cert.getCertStatus())) {
+                requireText(cert.getBusinessLicenseUrl(), "请先上传营业执照照片");
+                requireText(cert.getLegalPersonFaceUrl(), "请先完成法定代表人扫脸");
+                if (!"verified".equals(cert.getLegalPersonFaceStatus())) {
+                    throw new BusinessException(ErrorCode.BAD_REQUEST, "法定代表人扫脸尚未通过");
+                }
+                requireText(cert.getCorporateBankName(), "请填写对公账户户名");
+                requireText(cert.getCorporateBankAccount(), "请填写对公账户账号");
+                requireText(cert.getCorporateTransferAmount(), "请填写对公打款金额");
+                requireText(cert.getCorporateTransferReference(), "请填写对公打款流水号");
+                requireText(cert.getCorporateTransferProofUrl(), "请上传对公打款凭证");
+                if (!"submitted".equals(cert.getCorporateTransferStatus())
+                        && !"verified".equals(cert.getCorporateTransferStatus())) {
+                    throw new BusinessException(ErrorCode.BAD_REQUEST, "对公打款凭证尚未提交");
+                }
                 cert.setCertStatus("pending");
                 cert.setSubmitTime(now);
                 cert.setReviewer(null);
@@ -573,7 +677,16 @@ public class SmsAuthService {
             if ("verified".equals(identity.getStatus())) {
                 return onboardingStatus(userId, market);
             }
+            if ("pending".equals(identity.getStatus())) {
+                return onboardingStatus(userId, market);
+            }
             if ("draft".equals(identity.getStatus()) || "rejected".equals(identity.getStatus())) {
+                if (!Boolean.TRUE.equals(identity.getPoliceVerified())) {
+                    throw new BusinessException(ErrorCode.BAD_REQUEST, "请先完成公安二要素核验");
+                }
+                if (!Boolean.TRUE.equals(identity.getLivenessVerified())) {
+                    throw new BusinessException(ErrorCode.BAD_REQUEST, "请先完成人脸活体检测");
+                }
                 identity.setStatus("pending");
                 identity.setSubmitTime(now);
                 identity.setUpdatedAt(now);
@@ -588,6 +701,12 @@ public class SmsAuthService {
         merchant.setVerifyRemark(null);
         merchantMapper.updateById(merchant);
         return onboardingStatus(userId, market);
+    }
+
+    private static void requireText(String value, String message) {
+        if (value == null || value.isBlank()) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, message);
+        }
     }
 
     private List<Long> myMerchantIds(Long userId, Long marketId) {
@@ -661,10 +780,7 @@ public class SmsAuthService {
 
         String rawPassword = profile.password();
         if (rawPassword != null && !rawPassword.isBlank()) {
-            if (rawPassword.length() < 8 || rawPassword.length() > 20
-                    || !rawPassword.matches(".*[A-Za-z].*") || !rawPassword.matches(".*\\d.*")) {
-                throw new BusinessException(ErrorCode.BAD_REQUEST, "密码应为 8-20 位，且同时包含字母和数字");
-            }
+            policy.validatePassword(rawPassword, normalized);
         }
 
         LocalDateTime now = LocalDateTime.now();
@@ -682,17 +798,7 @@ public class SmsAuthService {
         user.setUpdatedAt(now);
         userMapper.insert(user);
 
-        RoleEntity farmer = roleMapper.selectOne(new LambdaQueryWrapper<RoleEntity>()
-                .eq(RoleEntity::getCode, "FARMER"));
-        if (farmer == null) {
-            log.warn("平台没有 FARMER 角色，注册用户 {} 未授任何角色", user.getId());
-        } else {
-            UserRoleEntity binding = new UserRoleEntity();
-            binding.setUserId(user.getId());
-            binding.setRoleId(farmer.getId());
-            binding.setMarketId(market);
-            userRoleMapper.insert(binding);
-        }
+        grantDefaultRole(user, market);
 
         MerchantEntity merchant = new MerchantEntity();
         merchant.setMarketId(market);
@@ -710,7 +816,7 @@ public class SmsAuthService {
         merchant.setContactName(contactName == null ? displayName : contactName);
         merchant.setContactPhone(normalized);
         merchant.setStatus(1);
-        merchant.setVerifyStatus("enterprise".equals(identity) ? "pending" : "unverified");
+        merchant.setVerifyStatus("unverified");
         merchantMapper.insert(merchant);
 
         UserMerchantEntity membership = new UserMerchantEntity();
@@ -735,7 +841,7 @@ public class SmsAuthService {
             certification.setContactName(contactName == null ? displayName : contactName);
             certification.setContactPhone(normalized);
             certification.setAttachNote("统一认证中心自注册提交；所属行业、企业规模与注册地址已登记在经营主体档案。");
-            certification.setCertStatus("pending");
+            certification.setCertStatus("draft");
             certification.setSubmitTime(now);
             certificationMapper.insert(certification);
         } else {
@@ -750,7 +856,7 @@ public class SmsAuthService {
             realNameRecord.setIdNoMasked(IdNumberUtil.mask(idNo));
             realNameRecord.setIdNoHash(IdNumberUtil.hash(idNo, salt));
             realNameRecord.setIdNoSalt(salt);
-            realNameRecord.setStatus("pending");
+            realNameRecord.setStatus("draft");
             realNameRecord.setSubmitTime(now);
             realNameRecord.setCreatedAt(now);
             realNameRecord.setUpdatedAt(now);

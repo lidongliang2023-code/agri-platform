@@ -19,5 +19,8 @@ public class Commission {
     private BigDecimal rate;
     private String status;
     private LocalDateTime settleTime;
+    /** 结算批次号（批量结算时写入） */
+    private String settleBatchNo;
+    private String remark;
     private LocalDateTime createTime;
 }

@@ -1,0 +1,35 @@
+{
+  "name": "丰链云供应商",
+  "appid": "__UNI__AGRI_S2B2C_SUPPLIER_MOBILE",
+  "description": "S2B2C 供应商移动工作台，支持 H5、微信小程序与 App",
+  "versionName": "1.0.0",
+  "versionCode": "100",
+  "transformPx": false,
+  "vueVersion": "3",
+  "h5": {
+    "title": "丰链云 · 供应商移动工作台",
+    "router": { "mode": "hash", "base": "./" }
+  },
+  "mp-weixin": {
+    "appid": "",
+    "setting": { "urlCheck": false },
+    "usingComponents": true
+  },
+  "app-plus": {
+    "name": "丰链云供应商",
+    "usingComponents": true,
+    "nvueStyleCompiler": "uni-app",
+    "compilerVersion": 3,
+    "distribute": {
+      "android": {
+        "permissions": [
+          "<uses-permission android:name=\"android.permission.INTERNET\" />",
+          "<uses-permission android:name=\"android.permission.ACCESS_NETWORK_STATE\" />",
+          "<uses-permission android:name=\"android.permission.CAMERA\" />"
+        ]
+      },
+      "ios": {},
+      "sdkConfigs": {}
+    }
+  }
+}

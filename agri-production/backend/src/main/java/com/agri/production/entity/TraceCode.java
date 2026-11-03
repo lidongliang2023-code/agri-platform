@@ -58,6 +58,16 @@ public class TraceCode extends BaseEntity {
     @TableField("harvest_date")
     private java.time.LocalDate harvestDate;
 
+    /**
+     * 有效期至（V1 遗留列 {@code expiry_date}，此前没有任何代码读写它）。
+     *
+     * <p>2026-11-02 接通：生成接口一直收 {@code expireDate} 入参却直接丢弃，
+     * 页面「有效期至」列因此常年是 "-"——那不是"没有这个能力"，是参数被吞了。
+     * 到期扫描（{@code TraceCodeExpiryJob} → {@code TraceLifecycleServiceImpl#expireOverdue}）按这一列把未作废的码置为 {@code expired}。</p>
+     */
+    @TableField("expiry_date")
+    private java.time.LocalDate expiryDate;
+
     @TableField("status")
     private String status;
 

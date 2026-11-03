@@ -49,6 +49,7 @@ import {
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
+import { DetailInfoGrid, DetailMetricGrid } from '@/components'
 import {
   createSoilTest,
   deleteSoilTest,
@@ -56,6 +57,7 @@ import {
   listSoilRecords,
 } from '@/api/plots'
 import type { SoilCreatePayload } from '@/api/plots'
+import { getFarm } from '@/api/farms'
 import type { SoilTestRecord } from '@/types'
 
 /**
@@ -389,6 +391,14 @@ export default function PlotSoilRecords(): JSX.Element {
     queryFn: () => getPlot(plotId as string),
   })
 
+  /** 所属农场名称（地块详情不返回农场名，单独取一次用于信息块展示） */
+  const farmQuery = useQuery({
+    queryKey: ['farm-detail', plotQuery.data?.farmId],
+    enabled: Boolean(plotQuery.data?.farmId),
+    queryFn: () => getFarm(String(plotQuery.data?.farmId)),
+    retry: false,
+  })
+
   /** 土壤检测记录（分页，走 api 层 listSoilRecords → GET /plots/{plotId}/soil） */
   const soilQuery = useQuery({
     queryKey: ['plot-soil-records', plotId],
@@ -402,12 +412,14 @@ export default function PlotSoilRecords(): JSX.Element {
     mutationFn: (values: SoilFormValues) => {
       const payload: SoilCreatePayload = {
         plotId,
-        sampleDate: values.date.format('YYYY-MM-DD'),
+        // 后端按 testDate / totalNitrogen / availablePhosphorus / availablePotassium 读取请求体，
+        // 用实体列名（sampleDate / nitrogen / ...）会报「testDate 为必填」或静默丢字段
+        testDate: values.date.format('YYYY-MM-DD'),
         ph: values.ph,
         organicMatter: values.organicMatter,
-        nitrogen: values.nitrogen,
-        phosphorus: values.phosphorus,
-        potassium: values.potassium,
+        totalNitrogen: values.nitrogen,
+        availablePhosphorus: values.phosphorus,
+        availablePotassium: values.potassium,
         moisture: values.moisture,
         tester: values.tester,
         remark: values.remark,
@@ -543,51 +555,74 @@ export default function PlotSoilRecords(): JSX.Element {
       ]}
     >
       <Space direction="vertical" size={16} style={{ width: '100%' }}>
-        <Row gutter={[12, 12]}>
-          <Col xs={12} md={6}>
-            <Card>
-              <Typography.Text type="secondary">检测次数</Typography.Text>
-              <div>
-                <Typography.Text strong style={{ fontSize: 22 }}>
-                  {rows.length}
-                </Typography.Text>
-                <Typography.Text type="secondary"> 次</Typography.Text>
-              </div>
-            </Card>
-          </Col>
-          <Col xs={12} md={6}>
-            <Card>
-              <Typography.Text type="secondary">最新 pH</Typography.Text>
-              <div>
-                <Typography.Text strong style={{ fontSize: 22 }}>
-                  {latest ? (pickNumber(latest, 'ph', 'ph') ?? '-') : '-'}
-                </Typography.Text>
-              </div>
-            </Card>
-          </Col>
-          <Col xs={12} md={6}>
-            <Card>
-              <Typography.Text type="secondary">有机质(g/kg)</Typography.Text>
-              <div>
-                <Typography.Text strong style={{ fontSize: 22 }}>
-                  {latest ? (pickNumber(latest, 'organicMatter', 'organicMatter') ?? '-') : '-'}
-                </Typography.Text>
-              </div>
-            </Card>
-          </Col>
-          <Col xs={12} md={6}>
-            <Card>
-              <Typography.Text type="secondary">最近检测日期</Typography.Text>
-              <div>
-                <Typography.Text strong style={{ fontSize: 22 }}>
-                  {latest ? (pickDate(latest) ?? '-') : '-'}
-                </Typography.Text>
-              </div>
-            </Card>
-          </Col>
-        </Row>
+        {plotQuery.data && (
+          <Card title="📋 地块信息">
+            <DetailInfoGrid
+              columns={2}
+              items={[
+                { key: 'code', label: '地块编号', value: plotQuery.data.plotCode || '-' },
+                {
+                  key: 'farm',
+                  label: '所属农场',
+                  value: plotQuery.data.farmName ?? farmQuery.data?.farmName ?? '-',
+                },
+                {
+                  key: 'area',
+                  label: '面积',
+                  value: `${Number(plotQuery.data.area || 0).toLocaleString('zh-CN')}亩`,
+                },
+                {
+                  key: 'crop',
+                  label: '当前作物',
+                  value: plotQuery.data.currentCrop || plotQuery.data.cropVariety || '-',
+                },
+                { key: 'soil', label: '土壤类型', value: plotQuery.data.soilType || '-' },
+                {
+                  key: 'irrigation',
+                  label: '灌溉方式',
+                  value: plotQuery.data.irrigationType || '-',
+                },
+              ]}
+            />
+          </Card>
+        )}
 
-        <Card title="📋 检测记录">
+        <DetailMetricGrid
+          items={[
+            {
+              key: 'count',
+              title: '检测次数',
+              value: rows.length,
+              suffix: '次',
+            },
+            {
+              key: 'ph',
+              title: '最新 pH',
+              value: latest ? (pickNumber(latest, 'ph', 'ph') ?? null) : null,
+              precision: 2,
+              missingTip: '暂无检测记录，无 pH 数据',
+            },
+            {
+              key: 'organicMatter',
+              title: '有机质(g/kg)',
+              value: latest ? (pickNumber(latest, 'organicMatter', 'organicMatter') ?? null) : null,
+              precision: 1,
+              missingTip: '暂无检测记录，无有机质数据',
+            },
+            {
+              key: 'latestDate',
+              title: '最近检测日期',
+              value: latest ? (pickDate(latest) ?? null) : null,
+              missingTip: '暂无检测记录',
+            },
+          ]}
+        />
+
+        <Card
+          title={
+            soilQuery.isLoading ? '📋 检测记录' : `📋 检测记录（${rows.length} 条）`
+          }
+        >
           {soilQuery.isLoading ? (
             <Card loading />
           ) : rows.length === 0 ? (
@@ -672,7 +707,13 @@ export default function PlotSoilRecords(): JSX.Element {
         destroyOnClose
         width={640}
       >
-        <Form form={createForm} layout="vertical" style={{ marginTop: 16 }}>
+        <Form
+          form={createForm}
+          layout="vertical"
+          style={{ marginTop: 16 }}
+          // 检测日期默认今天：不默认的话用户很容易直接点保存，被必填校验挡回
+          initialValues={{ date: dayjs() }}
+        >
           <Form.Item
             name="date"
             label="检测日期"

@@ -55,6 +55,34 @@ public class MessageNotificationServiceImpl extends ServiceImpl<MessageNotificat
         return message;
     }
 
+    /**
+     * 业务动作完成后给某个主体发一条站内消息。
+     *
+     * <p>状态机推进了却不通知，用户只能靠刷新页面猜 —— 签署、放款、还款、逾期
+     * 都从这里出，消息与业务写在同一个事务里。</p>
+     */
+    public MessageNotification notify(String userId, String type, String title, String content,
+                                      String bizType, String bizId, String priority) {
+        if (userId == null || userId.isBlank()) {
+            return null;
+        }
+        MessageNotification message = new MessageNotification();
+        message.setUserId(userId);
+        message.setMessageType(type);
+        message.setTitle(title);
+        message.setContent(content);
+        message.setRelatedBizType(bizType);
+        message.setRelatedBizId(bizId);
+        message.setPriority(priority);
+        message.setStatus("ACTIVE");
+        return createMessage(message);
+    }
+
+    public MessageNotification notifyBorrower(String userId, String type, String title, String content,
+                                              String bizType, String bizId) {
+        return notify(userId, type, title, content, bizType, bizId, "HIGH");
+    }
+
     public void deleteMessage(String messageId) {
         MessageNotification message = getById(messageId);
         if (message != null) {

@@ -18,7 +18,10 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
-      "@agri/shared/*": ["../../packages/agri-shared/src/*"]
+      "@agri/shared": ["../../packages/agri-shared/src"],
+      "@agri/shared/*": ["../../packages/agri-shared/src/*"],
+      "react": ["node_modules/@types/react/index.d.ts"],
+      "react/jsx-runtime": ["node_modules/@types/react/jsx-runtime.d.ts"]
     }
   },
   "include": ["src"],

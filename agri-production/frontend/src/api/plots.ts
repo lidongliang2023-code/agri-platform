@@ -3,7 +3,14 @@
  */
 import { http } from '@/utils/request'
 import type { PageQuery, PageResult } from '@/types'
-import type { Plot, SoilTestRecord } from '@/types'
+import type {
+  PlantingStandard,
+  Plot,
+  PlotCrop,
+  PlotOperationMethod,
+  PlotPlantingMethod,
+  SoilTestRecord,
+} from '@/types'
 
 const BASE = '/plots'
 
@@ -77,6 +84,63 @@ export function deletePlot(plotId: string): Promise<void> {
 }
 
 /* ============================================================================
+ * 地块种养品种台账（一个地块可登记多个品种）
+ *
+ *   GET    /{plotId}/crops                    → List<PlotCrop>
+ *   POST   /{plotId}/crops                    → 新增后的完整记录
+ *   PUT    /{plotId}/crops/{cropRecordId}     → 更新后的完整记录
+ *   DELETE /{plotId}/crops/{cropRecordId}     → Void
+ * ========================================================================== */
+
+/** 种养品种新增 / 编辑请求体（字段对齐「添加种养品种」弹窗） */
+export interface PlotCropPayload {
+  /** 种类：作物主数据 ID */
+  cropId: string
+  /** 品种 */
+  cropVariety?: string
+  /** 种植标准：ORGANIC 有机 / GREEN 绿色 / NORMAL 普通 */
+  plantingStandard: PlantingStandard
+  /** 种植方式：TRANSPLANT 移栽 / DIRECT 直播 */
+  plantingMethod: PlotPlantingMethod
+  /** 作业方式：MANUAL 人工 / MECHANICAL 机械 */
+  operationMethod: PlotOperationMethod
+  /** 移栽时间 YYYY-MM-DD */
+  transplantDate: string
+  /** 预计采收时间 YYYY-MM-DD */
+  expectedHarvestDate?: string
+  /** 预计亩产（公斤/亩） */
+  expectedYieldPerMu?: number
+  /** 株数 */
+  plantCount?: number
+  /** 株间距（cm） */
+  plantSpacing?: number
+}
+
+/** 查询地块下的全部种养品种（裸数组） */
+export function listPlotCrops(plotId: string): Promise<PlotCrop[]> {
+  return http.get<PlotCrop[]>(`${BASE}/${plotId}/crops`)
+}
+
+/** 新增种养品种 */
+export function createPlotCrop(plotId: string, payload: PlotCropPayload): Promise<PlotCrop> {
+  return http.post<PlotCrop>(`${BASE}/${plotId}/crops`, payload)
+}
+
+/** 编辑种养品种 */
+export function updatePlotCrop(
+  plotId: string,
+  cropRecordId: string,
+  payload: PlotCropPayload,
+): Promise<PlotCrop> {
+  return http.put<PlotCrop>(`${BASE}/${plotId}/crops/${cropRecordId}`, payload)
+}
+
+/** 删除种养品种 */
+export function deletePlotCrop(plotId: string, cropRecordId: string): Promise<void> {
+  return http.delete<void>(`${BASE}/${plotId}/crops/${cropRecordId}`)
+}
+
+/* ============================================================================
  * 土壤检测档案
  *
  * 后端 `PlotController` 的真实契约（以 Controller 源码为准，不要凭前端习惯猜）：
@@ -99,32 +163,30 @@ export function deletePlot(plotId: string): Promise<void> {
 /**
  * 土壤检测新增 / 编辑请求体。
  *
- * ⚠️ 字段命名**对齐后端 `PlotSoilEntity`**（sampleDate / nitrogen / phosphorus /
- * potassium / tester / salinity …），**不是** `SoilTestRecord` 的命名
- * （testDate / totalNitrogen / availablePhosphorus / availablePotassium / testOrg）。
- * 后端 `@RequestBody` 只认这一套命名，用错会静默丢字段。
+ * ⚠️ 字段名以后端 `PlotSoilServiceImpl.create` **实际读取的页面契约名**为准：
+ * `testDate / totalNitrogen / availablePhosphorus / availablePotassium / moisture / tester`。
+ * 后端实体列虽然叫 `sample_date / nitrogen / phosphorus / potassium`，但请求体**不认列名** ——
+ * 发 `sampleDate` 会报「testDate 为必填（yyyy-MM-dd）」，发 `nitrogen` 等会被静默丢掉。
  */
 export interface SoilCreatePayload {
   /** 土壤记录 ID（更新时可传，新增由服务端生成） */
   soilId?: string
   /** 地块 ID */
   plotId?: string
-  /** 采样日期 */
-  sampleDate?: string
+  /** 检测日期 YYYY-MM-DD（后端按 testDate 读取，必填） */
+  testDate: string
   /** pH 值 */
   ph?: number
   /** 有机质 g/kg */
   organicMatter?: number
-  /** 碱解氮 mg/kg */
-  nitrogen?: number
-  /** 有效磷 mg/kg */
-  phosphorus?: number
-  /** 速效钾 mg/kg */
-  potassium?: number
+  /** 全氮 g/kg（后端按 totalNitrogen 读取） */
+  totalNitrogen?: number
+  /** 有效磷 mg/kg（后端按 availablePhosphorus 读取） */
+  availablePhosphorus?: number
+  /** 速效钾 mg/kg（后端按 availablePotassium 读取） */
+  availablePotassium?: number
   /** 含水率 % */
   moisture?: number
-  /** 含盐量 g/kg */
-  salinity?: number
   /** 检测人 */
   tester?: string
   /** 备注 */

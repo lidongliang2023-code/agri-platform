@@ -1,5 +1,5 @@
 /**
- * 页面名称：种养计划列表
+ * 页面名称：种养计划
  * 路由路径：/production/plans
  * 所属模块：智能种养
  * PRD 序号：PRD 6.1 #11（对应 PRD 8.2 智能种养计划）
@@ -27,8 +27,8 @@ import {
   CopyOutlined,
   DeleteOutlined,
   EditOutlined,
-  PlayCircleOutlined,
   PlusOutlined,
+  SendOutlined,
   StopOutlined,
 } from '@ant-design/icons'
 import useFarmStore from '@/store/farm'
@@ -39,7 +39,7 @@ import {
   fetchMembers,
   fetchPlans,
   removePlan,
-  startPlan,
+  submitPlanApproval,
   terminatePlan,
   updatePlanInfo,
 } from '@/api/production-view'
@@ -82,7 +82,7 @@ interface PlanFormValue {
 }
 
 /**
- * 种养计划列表
+ * 种养计划
  * @returns 页面内容
  */
 export default function PlanList(): JSX.Element {
@@ -307,13 +307,13 @@ export default function PlanList(): JSX.Element {
     onError: (error: Error) => message.error(error.message || '更新失败'),
   })
 
-  const startMutation = useMutation({
-    mutationFn: (planId: string) => startPlan(planId),
+  const submitApprovalMutation = useMutation({
+    mutationFn: (planId: string) => submitPlanApproval(planId),
     onSuccess: () => {
-      message.success('计划已启动')
+      message.success('计划已提交审批，等待运营处理')
       void reload()
     },
-    onError: (error: Error) => message.error(error.message || '启动失败'),
+    onError: (error: Error) => message.error(error.message || '提交审批失败'),
   })
 
   const terminateMutation = useMutation({
@@ -508,13 +508,13 @@ export default function PlanList(): JSX.Element {
             </Popconfirm>
           ) : entity.status === 1 ? (
             <Popconfirm
-              key="start"
-              title="启动计划"
-              description={`确认启动「${entity.planName}」？`}
-              onConfirm={() => startMutation.mutate(entity.planId)}
+              key="submit-approval"
+              title="提交审批"
+              description={`确认提交「${entity.planName}」给平台运营审批？`}
+              onConfirm={() => submitApprovalMutation.mutate(entity.planId)}
             >
-              <Button type="link" size="small" icon={<PlayCircleOutlined />}>
-                启动
+              <Button type="link" size="small" icon={<SendOutlined />}>
+                提交审批
               </Button>
             </Popconfirm>
           ) : null,
@@ -532,7 +532,7 @@ export default function PlanList(): JSX.Element {
         ],
       },
     ],
-    [navigate, removeMutation, startMutation, statusEnum, terminateMutation],
+    [navigate, removeMutation, statusEnum, submitApprovalMutation, terminateMutation],
   )
 
   return (
@@ -543,7 +543,7 @@ export default function PlanList(): JSX.Element {
         headerTitle={
           <Space>
             <CalendarOutlined style={{ color: '#13a05a' }} />
-            <span>种养计划列表</span>
+            <span>种养计划</span>
           </Space>
         }
         columns={columns}
@@ -586,7 +586,7 @@ export default function PlanList(): JSX.Element {
             })
             return { data: result.list, success: true, total: result.total }
           } catch (error) {
-            message.error((error as Error).message || '计划列表加载失败')
+            message.error((error as Error).message || '种养计划加载失败')
             return { data: [], success: true, total: 0 }
           }
         }}

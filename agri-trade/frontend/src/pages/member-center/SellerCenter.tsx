@@ -36,6 +36,7 @@ import MyGuarantee from '@/pages/mine-guarantee'
 import PriceList from '@/pages/price/list'
 import QuoteList from '@/pages/quote/list'
 import ProductCreate from '@/pages/product/create'
+import { ShopChat } from '@/pages/shop/detail/ShopChat'
 import { MemberCenterShell, type MemberNavItem } from './MemberCenterShell'
 import './seller-center.css'
 import {
@@ -57,11 +58,10 @@ import {
 
 const NAV: MemberNavItem[] = [
   { key: 'overview', label: '首页概览', icon: <HomeOutlined /> },
-  { key: 'publish', label: '发布新商品', icon: <AppstoreAddOutlined /> },
-  { key: 'sales', label: '销售订单', icon: <ShopOutlined /> },
   { key: 'goods', label: '商品管理', icon: <AppstoreOutlined /> },
-  { key: 'supply', label: '供应发布', icon: <AppstoreAddOutlined /> },
   { key: 'trade', label: '报价与撮合', icon: <StarOutlined /> },
+  { key: 'chat', label: '洽谈消息', icon: <CustomerServiceOutlined /> },
+  { key: 'sales', label: '销售订单', icon: <ShopOutlined /> },
   { key: 'ship', label: '发货与物流', icon: <TruckOutlined /> },
   { key: 'after', label: '售后处理', icon: <AlertOutlined /> },
   { key: 'rate', label: '店铺评价与信用', icon: <StarOutlined /> },
@@ -382,7 +382,7 @@ export default function SellerCenter(): JSX.Element {
         ) : (
           <div className="mc-table-wrap">
             <table className="mc-table">
-              <thead><tr><th>图片</th><th>商品</th><th>品类</th><th>规格</th><th>单价</th><th>库存</th><th>发布状态</th><th>启停</th><th>操作</th></tr></thead>
+              <thead><tr><th>图片</th><th>商品</th><th>品类</th><th>SKU / 规格</th><th>价格</th><th>库存</th><th>发布状态</th><th>启停</th><th>操作</th></tr></thead>
               <tbody>
                 {filteredProducts.map((item) => (
                   <tr key={item.id}>
@@ -393,21 +393,23 @@ export default function SellerCenter(): JSX.Element {
                     </td>
                     <td><strong>{item.productName}</strong><div className="mc-toolbar-muted">{item.productCode}</div></td>
                     <td>{item.categoryName ?? '—'}</td>
-                    <td>{item.specSize ?? item.specLevel ?? '—'}</td>
-                    <td className="mc-price">{money(item.price)}<span className="mc-unit">/{item.unit}</span></td>
+                    <td>
+                      <span className="mc-tag ghost">{item.skus?.length ?? 0} 个 SKU</span>
+                      <div className="mc-toolbar-muted">
+                        {(item.skus ?? []).slice(0, 2).map((sku) => sku.skuName).join(' / ') || item.specSize || item.specLevel || '默认规格'}
+                      </div>
+                    </td>
+                    <td className="mc-price">{skuPriceText(item)}<span className="mc-unit">/{item.unit}</span></td>
                     <td className="mc-mono">{item.stockQuantity ?? '—'} {item.unit}</td>
                     <td><span className={`mc-tag ${item.publishStatus === 'published' ? 'green' : item.publishStatus === 'pending' ? 'amber' : 'ghost'}`}>{publishText(item.publishStatus)}</span></td>
                     <td><span className={`mc-tag ${item.status === 1 ? 'green' : 'ghost'}`}>{item.status === 1 ? '启用' : '停用'}</span></td>
                     <td>
                       <div className="mc-actions">
                         {item.publishStatus === 'published' && <a className="mc-link" href={`/product/detail/${item.id}`}>官网详情</a>}
-                        <button type="button" className="mc-link" onClick={() => {
-                          const next = new URLSearchParams(params)
-                          next.set('tab', 'publish')
-                          next.set('id', String(item.id))
-                          if (sellerId) next.set('sellerId', sellerId)
-                          setParams(next, { replace: true })
-                        }}>编辑</button>
+                        <a className="mc-link"
+                          href={`/product/edit/${item.id}${sellerId ? `?sellerId=${encodeURIComponent(sellerId)}` : ''}`}>
+                          编辑
+                        </a>
                         <button type="button" className="mc-link" onClick={() => void toggleProductStatus(item.id, item.status)}>
                           {item.status === 1 ? '下架' : '上架'}
                         </button>
@@ -537,7 +539,7 @@ export default function SellerCenter(): JSX.Element {
           </div>
         )}
       </Panel>
-      <Panel title="评价管理与申诉" extra={<span className="mc-tag amber">信用分接口待接入</span>}>
+      <Panel className="seller-credit-panel" title="评价管理与申诉" extra={<span className="mc-tag amber">信用分接口待接入</span>}>
         <div className="seller-credit-note">
           当前交易域只提供真实评价均分，没有独立信用分字段；不展示虚构的信用分或等级。
         </div>
@@ -710,6 +712,19 @@ export default function SellerCenter(): JSX.Element {
     : active === 'goods' ? renderGoods()
       : active === 'supply' ? renderSupply()
         : active === 'trade' ? renderTrade()
+          : active === 'chat' ? (
+            <div className="mc-embedded seller-negotiation-inbox">
+              <ShopChat
+                open
+                embedded
+                inbox
+                inboxRole="seller"
+                sellerId={sellerId ?? ''}
+                sellerName={sellerMerchant?.merchantName ?? ''}
+                onClose={() => setActive('overview')}
+              />
+            </div>
+          )
           : active === 'ship' ? renderShip()
             : active === 'after' ? renderAfter()
               : active === 'rate' ? renderRate()
@@ -720,7 +735,8 @@ export default function SellerCenter(): JSX.Element {
                         : renderOverview()
 
   return (
-    <MemberCenterShell role="seller" active={active} navItems={NAV}
+    <MemberCenterShell role="seller"
+      active={active === 'publish' || active === 'supply' ? 'goods' : active} navItems={NAV}
       merchantName={sellerMerchant?.merchantName ?? ''} onNavigate={setActive}>
       {base.loading && <div className="mc-loading">正在加载会员数据…</div>}
       {base.error && <div className="mc-alert"><AlertOutlined />{base.error}</div>}
@@ -766,6 +782,19 @@ function renderSellerOrders(
 function publishText(status: string | undefined): string {
   const map: Record<string, string> = { published: '在售', pending: '待审核', soldout: '已售罄', offline: '已下架', rejected: '已驳回' }
   return status ? map[status] ?? status : '—'
+}
+
+function skuPriceText(product: {
+  price: number | null
+  skus?: Array<{ price: number; status: number }>
+}): string {
+  const prices = (product.skus ?? [])
+    .filter((item) => item.status === 1 && Number(item.price) > 0)
+    .map((item) => Number(item.price))
+  if (prices.length === 0) return money(product.price)
+  const min = Math.min(...prices)
+  const max = Math.max(...prices)
+  return min === max ? money(min) : `${money(min)} 起`
 }
 
 function avgMetric(rows: { ratingQuality: number; ratingService: number; ratingDelivery: number }[], key: 'ratingQuality' | 'ratingService' | 'ratingDelivery'): string {

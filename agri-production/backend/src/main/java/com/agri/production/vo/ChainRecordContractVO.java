@@ -46,6 +46,14 @@ public class ChainRecordContractVO {
     private String bizId;
     private String bizNo;
     private String bizType;
+    /**
+     * 业务主键（表列 {@code target_id}）。
+     *
+     * <p>2026-11-02 补上：存证列表要能点回业务详情页，而详情页要的是主键
+     * （批次 id、检测单 id、投入品 id），业务编号跳不过去。写侧已经保证命中时回填这一列，
+     * 只有历史种子数据可能为空 —— 为空时页面显示纯文本并说明原因，不做死链。</p>
+     */
+    private Long targetId;
     private String bizSummary;
     /** 业务键的哈希。同样两个名字（payloadHash 是页面在用的一侧） */
     private String dataHash;
@@ -80,6 +88,7 @@ public class ChainRecordContractVO {
         vo.bizId = bizKey;
         vo.bizNo = bizKey;
         vo.bizType = entity.getTargetType();
+        vo.targetId = entity.getTargetId();
         vo.bizSummary = entity.getTargetType() == null ? null
                 : entity.getTargetType() + " " + (entity.getTargetCode() == null ? "" : entity.getTargetCode());
         vo.dataHash = entity.getDataHash();

@@ -53,6 +53,17 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..
 /** 前端根目录 */
 const FRONTEND_ROOT = path.join(REPO_ROOT, 'agri-production', 'frontend')
 
+/** playwright-core 的现成安装位置（Qoder 工作区），本机没有时可回落到前端目录自装 */
+const WORKSPACE_DRIVER_DIR = 'C:/Users/71502/.workbuddy-ai/binaries/node/workspace'
+
+/** playwright-core 不带浏览器，只能用本机 Chrome/Edge */
+const BROWSER_CANDIDATES = [
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+  'C:/Program Files/Microsoft/Edge/Application/msedge.exe',
+]
+
 /** 路由注册表（唯一路由配置源） */
 const ROUTES_FILE = path.join(FRONTEND_ROOT, 'src', 'router', 'routes.tsx')
 
@@ -349,41 +360,51 @@ async function login() {
 /* ============================ 巡检执行 ============================ */
 
 /**
- * 载入 puppeteer。
+ * 载入浏览器驱动（playwright-core）。
  *
- * puppeteer 用 `npm i puppeteer --no-save` 装在**前端目录**的 node_modules 里，
- * 而本脚本位于仓库 `scripts/` 下，Node 的默认解析路径找不到它，
- * 因此这里显式回落到 `agri-production/frontend/node_modules/puppeteer`。
+ * playwright-core **不自带浏览器**，所以还要给一个可执行的 Chrome/Edge 路径
+ * （puppeteer 时代是装包时顺手下载 Chromium，不需要这一步）。
  *
- * @returns {Promise<object>} puppeteer 模块
- * @throws {Error} 驱动缺失时抛出带安装指引的错误
+ * 驱动解析顺序：Qoder 工作区已装的 playwright-core → 本脚本可解析到的 playwright/playwright-core
+ * → 各前端目录（`npm i playwright-core --no-save` 就地装）。
+ *
+ * @returns {Promise<{chromium: object, executablePath: string}>}
+ * @throws {Error} 驱动或浏览器缺失时抛出带安装指引的错误
  */
-async function loadPuppeteer() {
-  // 用 createRequire 从前端目录解析，可解析到包入口的真实文件路径（ESM 不能直接 import 目录）
-  const frontendRequire = createRequire(path.join(FRONTEND_ROOT, 'package.json'))
-  const candidates = []
-  for (const spec of ['puppeteer', 'puppeteer-core']) {
-    for (const base of [import.meta.url, path.join(FRONTEND_ROOT, 'package.json')]) {
+async function loadDriver() {
+  const bases = [
+    path.join(WORKSPACE_DRIVER_DIR, 'noop.js'),
+    import.meta.url,
+    path.join(FRONTEND_ROOT, 'package.json'),
+  ]
+  for (const spec of ['playwright-core', 'playwright']) {
+    for (const base of bases) {
+      let resolved = null
       try {
-        candidates.push(createRequire(base).resolve(spec))
+        resolved = createRequire(base).resolve(spec)
       } catch {
-        /* 该解析基点下不可达，尝试下一个 */
+        continue
+      }
+      try {
+        const mod = await import(pathToFileURL(resolved).href)
+        const chromium = (mod.default ?? mod).chromium
+        if (chromium) {
+          const executablePath = process.env.AGRI_BROWSER_PATH
+            ?? BROWSER_CANDIDATES.find((candidate) => fs.existsSync(candidate))
+          if (!executablePath) {
+            throw new Error('未找到 Chrome/Edge 可执行文件；设 AGRI_BROWSER_PATH 指向浏览器')
+          }
+          return { chromium, executablePath }
+        }
+      } catch (err) {
+        console.warn(`[patrol] 驱动候选 ${resolved} 载入失败：${err && err.message ? err.message : String(err)}`)
       }
     }
   }
-  for (const resolved of candidates) {
-    try {
-      const mod = await import(pathToFileURL(resolved).href)
-      return mod.default ?? mod
-    } catch (err) {
-      console.warn(`[patrol] 驱动候选 ${resolved} 载入失败：${err && err.message ? err.message : err}`)
-    }
-  }
-  void frontendRequire
   throw new Error(
     '未找到浏览器驱动。请在前端目录执行（务必 --no-save，不要污染 package.json）：\n' +
-      '  cd agri-production/frontend && npm i puppeteer --no-save\n' +
-      '若默认源失败：npm i puppeteer --no-save --registry=https://registry.npmmirror.com'
+      '  cd agri-production/frontend && npm i playwright-core --no-save\n' +
+      '若默认源失败：npm i playwright-core --no-save --registry=https://registry.npmmirror.com'
   )
 }
 
@@ -467,8 +488,7 @@ async function patrolOne(ctx, route, deep) {
     note: '',
   }
 
-  const page = await browser.newPage()
-  await page.setViewport({ width: 1440, height: 900 })
+  const page = await (await browser.newContext({ viewport: { width: 1440, height: 900 } })).newPage()
 
   /** @type {string[]} 收集到的 console error 文本 */
   const consoleErrors = []
@@ -559,14 +579,14 @@ async function patrolOne(ctx, route, deep) {
   //
   // 这几项按 src/store/auth.ts 的设计本来就**不是凭证**（令牌始终只在内存 + HttpOnly Cookie），
   // 写它们不绕过任何安全机制，只是把"这个浏览器上次登录过"这一事实告诉应用。
-  // 界面态用 evaluateOnNewDocument 写：它在**应用脚本之前**执行，不参与导航竞态。
+  // 界面态用 addInitScript 写：它在**应用脚本之前**执行，不参与导航竞态。
   //
   // 为什么不能用 page.evaluate 写（上一版就是这么写的，实测失败）：`/login` 这个路由会立刻
   // 把整页送去统一认证中心，evaluate 与那次导航抢同一个执行上下文 —— 写入被丢掉。
   // 现场回读的证据：目标页最终停在 /login、正文是「统一认证中心 …」，而
   // localStorage 的 agri_user_info 长度为 0（我的写入没落盘）。
   if (token && ctx.userInfo) {
-    await page.evaluateOnNewDocument(
+    await page.addInitScript(
       (state) => {
         try {
           localStorage.setItem('agri_user_info', JSON.stringify(state.userInfo))
@@ -583,7 +603,7 @@ async function patrolOne(ctx, route, deep) {
   const target = `${BASE_URL}${route.fullPath}`
   try {
     const resp = await page.goto(target, {
-      waitUntil: 'networkidle2',
+      waitUntil: 'networkidle',
       timeout: PAGE_TIMEOUT,
     })
     record.httpStatus = resp ? resp.status() : null
@@ -591,7 +611,7 @@ async function patrolOne(ctx, route, deep) {
     record.note = `goto 失败：${err && err.message ? err.message : String(err)}`
   }
   // 网络空闲后再给 React 一帧时间完成懒加载组件的渲染
-  await page.waitForNetworkIdle({ idleTime: 600, timeout: 10000 }).catch(() => {})
+  await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
   await new Promise((r) => setTimeout(r, 800))
 
   try {
@@ -717,14 +737,15 @@ async function main() {
     }
   }
 
-  const puppeteer = await loadPuppeteer()
-  const browser = await puppeteer.launch({
+  const { chromium, executablePath } = await loadDriver()
+  const browser = await chromium.launch({
     headless: true,
+    executablePath,
     args: ['--no-sandbox', '--disable-dev-shm-usage', '--no-proxy-server'],
   })
 
   // 驱动自检：确认浏览器真的能启动
-  const probe = await browser.newPage()
+  const probe = await (await browser.newContext()).newPage()
   await probe.goto('about:blank')
   await probe.close()
   console.log('[patrol] 浏览器自检通过（about:blank）')

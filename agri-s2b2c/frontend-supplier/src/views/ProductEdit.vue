@@ -58,6 +58,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { supplierApi } from '../api'
+import { currentSupplierId } from '../api/supplierSession'
 
 const router = useRouter()
 const route = useRoute()
@@ -78,7 +79,7 @@ const categories = ref([
 
 const form = reactive({
   id: null,
-  supplierId: 1,
+  supplierId: null,
   name: '',
   sellingPoint: '',
   categoryId: null,

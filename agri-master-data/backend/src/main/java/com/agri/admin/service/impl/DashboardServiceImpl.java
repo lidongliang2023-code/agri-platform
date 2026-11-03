@@ -10,6 +10,7 @@ import com.agri.masterdata.entity.Tenant;
 import com.agri.masterdata.entity.User;
 import com.agri.masterdata.entity.UserAuthentication;
 import com.agri.masterdata.mapper.OrganizationMapper;
+import com.agri.masterdata.mapper.QualityIssueMapper;
 import com.agri.masterdata.mapper.TenantMapper;
 import com.agri.masterdata.mapper.UserAuthenticationMapper;
 import com.agri.masterdata.mapper.UserMapper;
@@ -50,6 +51,7 @@ public class DashboardServiceImpl implements IDashboardService {
     private final UserMapper userMapper;
     private final OrganizationMapper organizationMapper;
     private final UserAuthenticationMapper userAuthenticationMapper;
+    private final QualityIssueMapper qualityIssueMapper;
 
     /** 认证审核中状态值（与 UserAuthentication.authStatus 口径一致） */
     private static final String AUDIT_PENDING = "pending";
@@ -129,9 +131,12 @@ public class DashboardServiceImpl implements IDashboardService {
                 new LambdaQueryWrapper<Organization>()
                         .eq(Organization::getAuthStatus, AUDIT_PENDING)
         ));
-        // 标准变更申请与质量问题都还没有对应的表，留空而不是写死 3 / 8。
+        // 标准变更申请没有对应的表，留空而不是写死数字；
+        // 质量问题表已存在：待处理 + 处理中 才是真正的「待办」。
         audit.setStandardChangeCount(null);
-        audit.setQualityIssueCount(null);
+        audit.setQualityIssueCount(qualityIssueMapper.selectCount(
+                new LambdaQueryWrapper<com.agri.masterdata.entity.QualityIssue>()
+                        .in(com.agri.masterdata.entity.QualityIssue::getStatus, "pending", "processing")));
         return audit;
     }
 

@@ -6,5 +6,13 @@ import java.math.BigDecimal;
 
 public interface ILoanApplicationService extends IService<LoanApplication> {
     LoanApplication apply(LoanApplication application);
-    LoanApplication review(String id, String result, String opinion, BigDecimal amount, BigDecimal rate);
+    LoanApplication review(
+            String id,
+            String result,
+            String opinion,
+            BigDecimal amount,
+            BigDecimal rate,
+            String reviewerId,
+            String reviewerName
+    );
 }

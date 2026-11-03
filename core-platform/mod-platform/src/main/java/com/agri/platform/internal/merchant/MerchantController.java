@@ -58,6 +58,21 @@ public class MerchantController {
         return ApiResponse.ok(PageResult.of(result.getRecords(), result.getTotal(), page, size));
     }
 
+    /**
+     * 按 ID 取单个客商（运营端与子系统反查主体名称用）。
+     *
+     * <p>子系统只需要"这个主体号是谁"，却要为此拉整页客商列表再自己筛 ——
+     * 客商量级上来后既慢又不可靠，所以补这个最小详情端点。</p>
+     */
+    @GetMapping("/{id}")
+    public ApiResponse<MerchantEntity> detail(@PathVariable Long id) {
+        MerchantEntity merchant = merchantMapper.selectById(id);
+        if (merchant == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "经营主体不存在：" + id);
+        }
+        return ApiResponse.ok(merchant);
+    }
+
     @PostMapping
     public ApiResponse<Long> create(@Valid @RequestBody MerchantUpsertRequest req) {
         MerchantEntity merchant = new MerchantEntity();

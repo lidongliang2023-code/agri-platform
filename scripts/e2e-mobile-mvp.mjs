@@ -14,7 +14,7 @@
  *       [--password=Admin@123] [--shot=<截图输出目录>] [--headful]
  * 退出码：0 = 全绿；1 = 有断言失败。
  */
-import { mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import process from 'node:process'
@@ -22,8 +22,13 @@ import { fileURLToPath } from 'node:url'
 import { ensureMobileDevServer } from './lib/mobile-dev-server.mjs'
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const require2 = createRequire(path.join(REPO_ROOT, 'agri-production/frontend/package.json'))
-const puppeteer = require2('puppeteer')
+const require2 = createRequire(path.join('C:/Users/71502/.workbuddy-ai/binaries/node/workspace', 'noop.js'))
+const { chromium } = require2('playwright-core')
+
+const BROWSER = [
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+].find((candidate) => existsSync(candidate))
 
 const arg = (name, fallback) => {
   const hit = process.argv.slice(2).find((a) => a.startsWith(`--${name}=`))
@@ -61,9 +66,9 @@ if (!(await ensureMobileDevServer({ root: path.join(REPO_ROOT, 'agri-production/
   process.exit(2)
 }
 
-const browser = await puppeteer.launch({ headless: HEADFUL ? false : 'new', args: ['--no-sandbox'] })
-const page = await browser.newPage()
-await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true, deviceScaleFactor: 2 })
+const browser = await chromium.launch({ headless: !HEADFUL, executablePath: BROWSER, args: ['--no-sandbox'] })
+const page = await (await browser.newContext({ viewport: { width: 1440, height: 1000 } })).newPage()
+await page.setViewportSize({ width: 390, height: 844, isMobile: true, hasTouch: true, deviceScaleFactor: 2 })
 page.on('console', (msg) => {
   if (msg.type() === 'error') consoleErrors.push(msg.text().slice(0, 160))
 })
@@ -121,7 +126,8 @@ const currentHash = () => page.evaluate(() => location.hash)
  */
 const open = async (route, settleMs = 1200) => {
   await page.goto(`${BASE_URL}/#/${route}`, { waitUntil: 'domcontentloaded', timeout: 60000 })
-  await page.waitForNetworkIdle({ idleTime: 500, timeout: 15000 }).catch(() => {})
+  await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 500))
   await sleep(settleMs)
 }
 
@@ -161,11 +167,19 @@ try {
 
   await open('pages/login/login')
   const loginText = await pageText()
-  check(loginText.includes('农业生产管理'), '登录页渲染', loginText.replace(/\s+/g, ' ').slice(0, 40))
+  check(loginText.includes('丰链云') && loginText.includes('手机验证码')
+    && loginText.includes('账号密码') && loginText.includes('其他登录方式'),
+  '登录页渲染验证码/密码与第三方入口', loginText.replace(/\s+/g, ' ').slice(0, 48))
   await shot('01-login')
+  await page.evaluate(() => {
+    const tab = [...document.querySelectorAll('.auth-tabs uni-button')]
+      .find((item) => item.textContent?.includes('账号密码'))
+    tab?.click()
+  })
+  await sleep(200)
 
   const inputs = await page.$$('#app input')
-  check(inputs.length >= 2, '登录表单有账号/密码/市场三个输入框', `找到 ${inputs.length} 个`)
+  check(inputs.length >= 2, '账号密码表单包含账号与密码输入框', `找到 ${inputs.length} 个`)
   await setUniInput(0, USER)
   await setUniInput(1, PASSWORD)
   await sleep(300)
@@ -173,11 +187,12 @@ try {
   // ⚠️ 不能用"文本等于登录"去找元素：H5 端导航栏标题也叫「登录」，会点到标题上（实测踩过，
   // 表现是"点了没反应、也没有请求发出"）。这里按按钮类名点，并校验它确实是登录按钮。
   const loginButtonText = await page.evaluate(
-    () => document.querySelector('#app .btn-primary')?.textContent ?? '',
+    () => document.querySelector('#app .primary-button')?.textContent ?? '',
   )
   check(loginButtonText.replace(/\s+/g, '') === '登录', '找到登录按钮', loginButtonText.trim())
-  await page.click('#app .btn-primary')
-  await page.waitForNetworkIdle({ idleTime: 800, timeout: 20000 }).catch(() => {})
+  await page.click('#app .primary-button')
+  await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 800))
   await sleep(2000)
 
   const token = await page.evaluate(() => window.localStorage.getItem('agri_token'))
@@ -291,7 +306,8 @@ try {
     return true
   })
   check(pickedInput, '合规校验页列出了可选的投入品')
-  await page.waitForNetworkIdle({ idleTime: 600, timeout: 15000 }).catch(() => {})
+  await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 600))
   await sleep(1500)
   const checkedText = await pageText()
   check(checkedText.includes('整体结论') && checkedText.includes('未校验'),

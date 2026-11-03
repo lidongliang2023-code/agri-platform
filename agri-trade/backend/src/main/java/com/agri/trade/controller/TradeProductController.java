@@ -192,16 +192,12 @@ public class TradeProductController {
         return "只能操作自己发布的货源";
     }
 
-    @PostMapping("/{id}/audit")
-    public ApiResponse<Boolean> auditProduct(@PathVariable Long id, @RequestBody java.util.Map<String, String> params) {
-        TradeProduct product = productMapper.selectById(id);
-        if (product == null) return ApiResponse.error("商品不存在");
-        product.setPublishStatus(params.get("status"));
-        product.setAuditRemark(params.get("remark"));
-        product.setAuditTime(new Date());
-        product.setAuditor(params.get("auditor"));
-        product.setUpdateTime(new Date());
-        int result = productMapper.updateById(product);
-        return result > 0 ? ApiResponse.success(true) : ApiResponse.error("审核失败");
-    }
+    /**
+     * 这里以前挂着 {@code POST /api/trade/product/{id}/audit}（货源审核）：
+     * 它不校验调用者是不是运营（只被能力拦截器当作"评审动作"直接放行），
+     * 状态取请求体任意字符串，审核人也是请求体自报的 —— 也就是任何登录用户
+     * 都能把自己或别人的货源改成 published，并在审核痕迹里填任何名字。
+     * 运营端用的是同一条链路上有判权的那条：{@code /api/trade/admin/product/{id}/audit}
+     * （审核人取令牌、状态由 approved/action 推导）。这条已下线，前端从未调用过。
+     */
 }

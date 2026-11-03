@@ -1,5 +1,6 @@
 package com.agri.finance.controller;
 
+import com.agri.common.rbac.OperatorOnly;
 import com.agri.finance.entity.PledgeMonitor;
 import com.agri.finance.service.impl.PledgeMonitorServiceImpl;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -10,6 +11,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/pledge-monitor")
+@OperatorOnly("finance:admin")
 public class PledgeMonitorController {
 
     @Autowired

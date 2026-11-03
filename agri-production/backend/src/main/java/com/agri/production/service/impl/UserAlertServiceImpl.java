@@ -4,8 +4,11 @@ import com.agri.production.common.constant.AlertDict;
 import com.agri.production.common.entity.PageResult;
 import com.agri.production.common.exception.BusinessException;
 import com.agri.production.entity.AlertRecord;
+import com.agri.production.entity.AlertRule;
 import com.agri.production.mapper.AlertRecordMapper;
+import com.agri.production.mapper.AlertRuleMapper;
 import com.agri.production.service.FarmIdResolver;
+import com.agri.production.service.IProductionNotificationService;
 import com.agri.production.service.IUserAlertService;
 import com.agri.production.vo.UserAlertVO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -36,10 +39,16 @@ public class UserAlertServiceImpl implements IUserAlertService {
 
     private final AlertRecordMapper alertMapper;
     private final FarmIdResolver farmIdResolver;
+    private final AlertRuleMapper alertRuleMapper;
+    private final IProductionNotificationService notificationService;
 
-    public UserAlertServiceImpl(AlertRecordMapper alertMapper, FarmIdResolver farmIdResolver) {
+    public UserAlertServiceImpl(AlertRecordMapper alertMapper, FarmIdResolver farmIdResolver,
+                                AlertRuleMapper alertRuleMapper,
+                                IProductionNotificationService notificationService) {
         this.alertMapper = alertMapper;
         this.farmIdResolver = farmIdResolver;
+        this.alertRuleMapper = alertRuleMapper;
+        this.notificationService = notificationService;
     }
 
     @Override
@@ -106,6 +115,7 @@ public class UserAlertServiceImpl implements IUserAlertService {
         }
         alert.setUpdateTime(LocalDateTime.now());
         alertMapper.updateById(alert);
+        notifyHandled(tenantId, alert, AlertDict.statusTextOf(status));
         log.info("告警处置：{} → {}（{}）", alert.getAlertCode(), alert.getStatus(), handleRemark);
         return UserAlertVO.of(alertMapper.selectById(alert.getId()));
     }
@@ -138,6 +148,7 @@ public class UserAlertServiceImpl implements IUserAlertService {
             alert.setHandleTime(now);
             alert.setUpdateTime(now);
             alertMapper.updateById(alert);
+            notifyHandled(tenantId, alert, AlertDict.statusTextOf(AlertDict.STATUS_IGNORED));
             updated++;
         }
         log.info("告警批量忽略：{} 条（请求 {} 条）", updated, codes.size());
@@ -145,6 +156,21 @@ public class UserAlertServiceImpl implements IUserAlertService {
     }
 
     /* ==================== 内部工具 ==================== */
+
+    private void notifyHandled(String tenantId, AlertRecord alert, String statusText) {
+        String receiver = null;
+        if (alert.getRuleCode() != null) {
+            AlertRule rule = alertRuleMapper.selectOne(new LambdaQueryWrapper<AlertRule>()
+                    .eq(AlertRule::getTenantId, tenantId)
+                    .eq(AlertRule::getRuleCode, alert.getRuleCode())
+                    .last("LIMIT 1"));
+            receiver = rule == null ? null : rule.getNotifyUsers();
+        }
+        notificationService.notify(tenantId, alert.getFarmId() == null ? null : String.valueOf(alert.getFarmId()),
+                receiver, "ALERT", "告警已处置",
+                String.format("告警「%s」状态已更新为%s。", alert.getTitle(), statusText),
+                alert.getAlertCode(), "/production/alerts");
+    }
 
     private LambdaQueryWrapper<AlertRecord> baseWrapper(String tenantId) {
         if (tenantId == null || tenantId.isBlank()) {

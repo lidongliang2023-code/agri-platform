@@ -496,7 +496,7 @@ export default function AnalyticsOverview(): JSX.Element {
                         <Text type="secondary" style={{ fontSize: 12 }}>
                           未接入
                           <InfoCircleOutlined
-                            style={{ fontSize: 11, color: '#faad14', marginLeft: 2 }}
+                            style={{ fontSize: 12, color: '#faad14', marginLeft: 2 }}
                           />
                         </Text>
                       </div>
@@ -523,7 +523,7 @@ export default function AnalyticsOverview(): JSX.Element {
                         <Text type="secondary" style={{ fontSize: 12 }}>
                           未接入
                           <InfoCircleOutlined
-                            style={{ fontSize: 11, color: '#faad14', marginLeft: 2 }}
+                            style={{ fontSize: 12, color: '#faad14', marginLeft: 2 }}
                           />
                         </Text>
                       </div>

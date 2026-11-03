@@ -26,6 +26,24 @@ public class TenantVO {
 
     private String tenantType;
 
+    private String industry;
+
+    private String companySize;
+
+    private String businessType;
+
+    private String address;
+
+    private String creditCode;
+
+    private String legalPerson;
+
+    private String licenseNo;
+
+    private String idNoMasked;
+
+    private String verifyStatus;
+
     private String contactPerson;
 
     private String contactPhone;

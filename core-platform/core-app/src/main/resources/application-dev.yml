@@ -5,6 +5,9 @@ agri:
   auth:
     sms:
       mode: dev
+    identity:
+      # 本地仅用于联调公安二要素、活体和法人扫脸流程；生产必须接合规服务商。
+      verification-mode: dev
   sso:
     # 本地开发口径的 SSO 客户端注册表（生产用 application-prod.yml 或环境变量覆盖）。
     #
@@ -34,14 +37,120 @@ agri:
         - http://mdm.agri.local/
       finance:
         - http://localhost:8081/
+        - http://127.0.0.1:8081/
+        - http://localhost:5176/
+        - http://127.0.0.1:5176/
         - http://finance.agri.local/
       trade:
         - http://localhost:8086/
+        - http://127.0.0.1:8086/
         - http://localhost:3002/
+        - http://127.0.0.1:3002/
         - http://trade.agri.local/
+      trade-mobile:
+        - http://localhost:8181/
+        - http://127.0.0.1:8181/
+        - http://192.168.0.106:8181/
+        - http://trade-mobile.agri.local/
       portal:
         - http://localhost:8098/portal/
         - http://127.0.0.1:8098/portal/
+      iot:
+        - http://localhost:8101/
+        - http://127.0.0.1:8101/
+        - http://iot.agri.local/
+      iot-admin:
+        - http://localhost:8102/
+        - http://127.0.0.1:8102/
+        - http://iot-admin.agri.local/
+      service:
+        - http://localhost:8105/
+        - http://127.0.0.1:8105/
+        - http://localhost:8106/
+        - http://127.0.0.1:8106/
+        - http://localhost:5194/
+        - http://127.0.0.1:5194/
+        - http://localhost:5195/
+        - http://127.0.0.1:5195/
+        - http://service.agri.local/
+        - http://service-mobile.agri.local/
+      service-ops:
+        - http://localhost:8107/
+        - http://127.0.0.1:8107/
+        - http://localhost:5196/
+        - http://127.0.0.1:5196/
+        - http://service-ops.agri.local/
+      gov:
+        - http://localhost:8108/
+        - http://127.0.0.1:8108/
+        - http://localhost:8109/
+        - http://127.0.0.1:8109/
+        - http://localhost:5181/
+        - http://127.0.0.1:5181/
+        - http://localhost:5182/
+        - http://127.0.0.1:5182/
+        - http://gov.agri.local/
+        - http://gov-mobile.agri.local/
+      gov-ops:
+        - http://localhost:8110/
+        - http://127.0.0.1:8110/
+        - http://localhost:5183/
+        - http://127.0.0.1:5183/
+        - http://gov-ops.agri.local/
+      mall-consumer:
+        - http://localhost:8082/
+        - http://127.0.0.1:8082/
+        - http://localhost:8182/
+        - http://127.0.0.1:8182/
+        - http://localhost:3000/
+        - http://mall-consumer.agri.local/
+      mall-supplier:
+        - http://localhost:8084/
+        - http://127.0.0.1:8084/
+        - http://localhost:8183/
+        - http://127.0.0.1:8183/
+        - http://localhost:3001/
+        - http://mall-supplier.agri.local/
+      mall-channel:
+        - http://localhost:8085/
+        - http://127.0.0.1:8085/
+        - http://localhost:8184/
+        - http://127.0.0.1:8184/
+        - http://localhost:3002/
+        - http://mall-channel.agri.local/
+      s2b2c-platform:
+        - http://localhost:8103/
+        - http://127.0.0.1:8103/
+        - http://localhost:3003/
+        - http://s2b2c-platform.agri.local/
+      # 信息资讯（agri-info）：用户端与运营端是两个独立产物，各自登记一个 client_id。
+      # 用户端跑在网关 :8104 的 /info/ 下（dev 直连 :5197），运营端在 :8113 的 /info-ops/ 下（dev 直连 :5198）。
+      # 注意 redirect_uri 用的是 origin + /sso/callback（不含 base 路径），所以这里登记的是站点根，
+      # 与 service / service-ops 的口径一致。
+      info:
+        - http://localhost:8104/
+        - http://127.0.0.1:8104/
+        - http://localhost:5197/
+        - http://127.0.0.1:5197/
+        # 移动端 H5 产物（:8114 网关 / :5199 dev），沿用 info client。
+        - http://localhost:8114/
+        - http://127.0.0.1:8114/
+        - http://localhost:5199/
+        - http://127.0.0.1:5199/
+        - http://info.agri.local/
+      info-ops:
+        - http://localhost:8113/
+        - http://127.0.0.1:8113/
+        - http://localhost:5198/
+        - http://127.0.0.1:5198/
+        - http://info-ops.agri.local/
+      # 用户中心运营端（agri-sso/ops）：网关 :8115，dev :5200。
+      user-center-ops:
+        - http://localhost:8115/
+        - http://127.0.0.1:8115/
+        - http://localhost:5200/
+        - http://127.0.0.1:5200/
+        - http://user-center-ops.agri.local/
 
 logging:
   level:

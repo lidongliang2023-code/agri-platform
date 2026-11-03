@@ -1,469 +1,180 @@
 <template>
-  <div class="user-profile">
-    <div class="page-header">
-      <h1>个人中心</h1>
-      <p>管理您的个人信息</p>
-    </div>
+  <div class="mds-page">
+    <PageHeader
+      title="资料与安全"
+      subtitle="当前统一账号的基础资料、实名状态与安全项；账号级设置由用户中心统一维护。"
+      source="只读 · 用户中心主责"
+    >
+      <template #actions>
+        <button class="mds-btn" @click="openUserCenter">前往用户中心 · 资料与安全</button>
+        <button class="mds-btn" :disabled="loading" @click="load">刷新</button>
+      </template>
+    </PageHeader>
 
-    <div class="profile-content">
-      <div class="profile-card">
-        <div class="profile-header">
-          <div class="avatar">
-            <span class="avatar-icon">👤</span>
-          </div>
-          <div class="user-info">
-            <h2>{{ userProfile.nickname }}</h2>
-            <p class="user-email">{{ userProfile.email }}</p>
-            <p class="user-role">{{ userProfile.role }}</p>
-          </div>
-          <button class="edit-btn" @click="editProfile">编辑资料</button>
+    <NoticeBar tone="info" title="只读视图：">
+      昵称、手机号、密码与二次验证都在用户中心修改；本页展示的是这些设置在企业端的使用结果（如实名是否生效）。
+    </NoticeBar>
+
+    <div class="mds-grid mds-grid--2">
+      <div class="mds-card" style="margin-bottom: 0">
+        <div class="mds-card-head">
+          <h2 class="mds-card-title">账号资料</h2>
         </div>
-
-        <div class="profile-stats">
-          <div class="stat-item">
-            <span class="stat-value">{{ profileStats.queries }}</span>
-            <span class="stat-label">查询次数</span>
+        <div class="mds-card-body">
+          <div class="profile-head">
+            <span class="avatar">{{ initial }}</span>
+            <div>
+              <strong>{{ userInfo.nickname || userInfo.username || '未命名账号' }}</strong>
+              <small>{{ userInfo.username || '—' }} · {{ userInfo.roles?.join(' / ') || '未分配角色' }}</small>
+            </div>
           </div>
-          <div class="stat-item">
-            <span class="stat-value">{{ profileStats.exports }}</span>
-            <span class="stat-label">导出次数</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-value">{{ profileStats.reports }}</span>
-            <span class="stat-label">生成报表</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-value">{{ profileStats.days }}</span>
-            <span class="stat-label">使用天数</span>
+          <div class="mds-kv-grid" style="grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 14px">
+            <div class="mds-kv"><span class="mds-kv__k">登录账号</span><span class="mds-kv__v mds-mono">{{ userInfo.username || '—' }}</span></div>
+            <div class="mds-kv"><span class="mds-kv__k">昵称</span><span class="mds-kv__v">{{ userInfo.nickname || '—' }}</span></div>
+            <div class="mds-kv" style="grid-column: 1 / -1">
+              <span class="mds-kv__k">平台角色</span>
+              <span class="mds-kv__v">
+                <StatusTag v-for="role in userInfo.roles || []" :key="role" :text="role" tone="gray" plain />
+                <span v-if="!userInfo.roles?.length" class="mds-muted">未分配</span>
+              </span>
+            </div>
           </div>
         </div>
       </div>
 
-      <div class="info-section">
-        <div class="section-card">
-          <h3>基本信息</h3>
-          <div class="info-grid">
-            <div class="info-item">
-              <span class="info-label">用户名</span>
-              <span class="info-value">{{ userProfile.username }}</span>
-            </div>
-            <div class="info-item">
-              <span class="info-label">昵称</span>
-              <span class="info-value">{{ userProfile.nickname }}</span>
-            </div>
-            <div class="info-item">
-              <span class="info-label">邮箱</span>
-              <span class="info-value">{{ userProfile.email }}</span>
-            </div>
-            <div class="info-item">
-              <span class="info-label">手机号</span>
-              <span class="info-value">{{ userProfile.phone }}</span>
-            </div>
-            <div class="info-item">
-              <span class="info-label">所属组织</span>
-              <span class="info-value">{{ userProfile.organization }}</span>
-            </div>
-            <div class="info-item">
-              <span class="info-label">角色</span>
-              <span class="info-value">{{ userProfile.role }}</span>
-            </div>
-            <div class="info-item">
-              <span class="info-label">创建时间</span>
-              <span class="info-value">{{ userProfile.createTime }}</span>
-            </div>
-            <div class="info-item">
-              <span class="info-label">最后登录</span>
-              <span class="info-value">{{ userProfile.lastLogin }}</span>
-            </div>
+      <div class="mds-card" style="margin-bottom: 0">
+        <div class="mds-card-head">
+          <div>
+            <h2 class="mds-card-title">实名与安全</h2>
+            <p class="mds-card-sub">实名状态来自个人实名记录，其余安全项需到用户中心查看</p>
           </div>
         </div>
-
-        <div class="section-card">
-          <h3>最近活动</h3>
-          <div class="activity-list">
-            <div v-for="activity in recentActivities" :key="activity.id" class="activity-item">
-              <span class="activity-icon">{{ activity.icon }}</span>
-              <div class="activity-content">
-                <span class="activity-title">{{ activity.title }}</span>
-                <span class="activity-time">{{ activity.time }}</span>
-              </div>
-            </div>
+        <div class="mds-card-body mds-card-body--flush">
+          <div class="sec-row">
+            <span class="sec-label">个人实名</span>
+            <StatusTag :text="realnameText" :tone="realnameTone" />
           </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="modal-overlay" v-if="modalVisible" @click="modalVisible = false">
-      <div class="modal-content" @click.stop>
-        <div class="modal-header">
-          <h3>编辑个人资料</h3>
-          <button class="close-btn" @click="modalVisible = false">×</button>
-        </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label>昵称</label>
-            <input type="text" v-model="editForm.nickname" class="form-input" />
+          <div class="sec-row">
+            <span class="sec-label">证件号</span>
+            <span class="sec-value mds-mono">{{ identity?.idNoMasked || '—' }}</span>
           </div>
-          <div class="form-group">
-            <label>邮箱</label>
-            <input type="email" v-model="editForm.email" class="form-input" />
+          <div class="sec-row">
+            <span class="sec-label">公安核验</span>
+            <span class="sec-value">{{ identity?.policeVerified ? '已核对' : '未核对' }}</span>
           </div>
-          <div class="form-group">
-            <label>手机号</label>
-            <input type="tel" v-model="editForm.phone" class="form-input" />
+          <div class="sec-row">
+            <span class="sec-label">登录密码</span>
+            <span class="sec-value mds-muted">在用户中心修改</span>
           </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-cancel" @click="modalVisible = false">取消</button>
-          <button class="btn btn-primary" @click="saveProfile">保存</button>
+          <div class="sec-row">
+            <span class="sec-label">二次验证（2FA）</span>
+            <span class="sec-value mds-muted">平台暂无自助接口</span>
+          </div>
+          <div class="sec-row">
+            <span class="sec-label">登录设备</span>
+            <span class="sec-value mds-muted">在用户中心的会话管理查看</span>
+          </div>
         </div>
       </div>
     </div>
   </div>
 </template>
 
-<script setup>
-import { ref, reactive, onMounted } from 'vue'
+<script setup lang="ts">
+import { computed, onMounted, ref } from 'vue'
+import PageHeader from '@/components/ui/PageHeader.vue'
+import NoticeBar from '@/components/ui/NoticeBar.vue'
+import StatusTag from '@/components/ui/StatusTag.vue'
+import { useSessionStore } from '@/stores/session'
+import { getMyRealName, type MyIdentity } from '@/utils/me'
 
-const modalVisible = ref(false)
+const session = useSessionStore()
+const loading = ref(false)
+const identity = ref<MyIdentity | null>(null)
 
-const userProfile = ref({
-  username: 'zhangsan',
-  nickname: '张三',
-  email: 'zhangsan@example.com',
-  phone: '13800138001',
-  organization: '研发部',
-  role: '普通用户',
-  createTime: '2026-01-15 10:30:00',
-  lastLogin: '2026-05-09 09:15:00'
+const userInfo = computed(() => session.user ?? { username: '', nickname: '', roles: [] })
+const initial = computed(() => (userInfo.value.nickname || userInfo.value.username || '用').slice(0, 1))
+
+const realnameText = computed(() => {
+  const status = identity.value?.status
+  if (status === 'verified' || status === 'approved') return '已实名'
+  if (status === 'pending') return '审核中'
+  if (status === 'rejected') return '已驳回'
+  return '未实名'
+})
+const realnameTone = computed(() => {
+  const status = identity.value?.status
+  if (status === 'verified' || status === 'approved') return 'success'
+  if (status === 'pending') return 'warning'
+  if (status === 'rejected') return 'danger'
+  return 'gray'
 })
 
-const profileStats = ref({
-  queries: 2847,
-  exports: 328,
-  reports: 156,
-  days: 114
-})
-
-const recentActivities = ref([
-  { id: 1, icon: '🔍', title: '查询用户数据', time: '10分钟前' },
-  { id: 2, icon: '📊', title: '生成数据质量报告', time: '30分钟前' },
-  { id: 3, icon: '📥', title: '导出商品数据', time: '1小时前' },
-  { id: 4, icon: '🔍', title: '查询组织架构', time: '2小时前' },
-  { id: 5, icon: '📊', title: '查看使用统计报表', time: '3小时前' }
-])
-
-const editForm = reactive({
-  nickname: '',
-  email: '',
-  phone: ''
-})
-
-const editProfile = () => {
-  editForm.nickname = userProfile.value.nickname
-  editForm.email = userProfile.value.email
-  editForm.phone = userProfile.value.phone
-  modalVisible.value = true
+function openUserCenter() {
+  window.open(`${window.location.protocol}//${window.location.hostname}:8115/user-center-ops/`, '_blank', 'noopener')
 }
 
-const saveProfile = () => {
-  userProfile.value.nickname = editForm.nickname
-  userProfile.value.email = editForm.email
-  userProfile.value.phone = editForm.phone
-  modalVisible.value = false
-  alert('个人资料已更新')
+async function load() {
+  loading.value = true
+  try {
+    const response = await getMyRealName().catch(() => null)
+    identity.value = (response?.data ?? null) as MyIdentity | null
+  } finally {
+    loading.value = false
+  }
 }
 
-onMounted(() => {})
+onMounted(load)
 </script>
 
 <style scoped>
-.user-profile {
-  max-width: 1000px;
-  margin: 0 auto;
-}
-
-.page-header {
-  margin-bottom: 24px;
-}
-
-.page-header h1 {
-  font-size: 24px;
-  font-weight: 600;
-  color: #2d3748;
-  margin: 0;
-}
-
-.page-header p {
-  font-size: 14px;
-  color: #a0aec0;
-  margin: 4px 0 0;
-}
-
-.profile-content {
-  display: grid;
-  grid-template-columns: 320px 1fr;
-  gap: 24px;
-}
-
-.profile-card {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-  overflow: hidden;
-}
-
-.profile-header {
-  padding: 24px;
-  background: linear-gradient(135deg, #238636 0%, #2ea043 100%);
-  color: #fff;
-  text-align: center;
+.profile-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .avatar {
-  width: 80px;
-  height: 80px;
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0 auto 16px;
-}
-
-.avatar-icon {
-  font-size: 40px;
-}
-
-.user-info h2 {
-  font-size: 20px;
-  font-weight: 600;
-  margin: 0 0 8px;
-}
-
-.user-email {
-  font-size: 14px;
-  opacity: 0.9;
-  margin: 0 0 4px;
-}
-
-.user-role {
-  font-size: 13px;
-  opacity: 0.8;
-  margin: 0 0 16px;
-}
-
-.edit-btn {
-  padding: 8px 20px;
-  background: rgba(255, 255, 255, 0.2);
+  background: linear-gradient(135deg, #159a5e, #0ea5e9);
   color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 20px;
-  font-size: 13px;
-  cursor: pointer;
+  font-size: 17px;
+  font-weight: 700;
 }
 
-.profile-stats {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  padding: 20px;
-}
-
-.stat-item {
-  text-align: center;
-  padding: 12px;
-}
-
-.stat-value {
+.profile-head strong {
   display: block;
-  font-size: 24px;
-  font-weight: 600;
-  color: #2d3748;
-  margin-bottom: 4px;
+  font-size: 15px;
 }
 
-.stat-label {
+.profile-head small {
+  color: var(--mds-text-3);
   font-size: 12px;
-  color: #a0aec0;
 }
 
-.info-section {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.section-card {
-  background: #fff;
-  border-radius: 12px;
-  padding: 24px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-}
-
-.section-card h3 {
-  font-size: 16px;
-  font-weight: 600;
-  color: #2d3748;
-  margin: 0 0 20px;
-}
-
-.info-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 16px;
-}
-
-.info-item {
-  display: flex;
-  flex-direction: column;
-  padding: 12px;
-  background: #f8fafc;
-  border-radius: 8px;
-}
-
-.info-label {
-  font-size: 12px;
-  color: #a0aec0;
-  margin-bottom: 4px;
-}
-
-.info-value {
-  font-size: 14px;
-  color: #2d3748;
-  font-weight: 500;
-}
-
-.activity-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.activity-item {
+.sec-row {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px;
-  background: #f8fafc;
-  border-radius: 8px;
-}
-
-.activity-icon {
-  font-size: 18px;
-}
-
-.activity-content {
-  flex: 1;
-}
-
-.activity-title {
-  display: block;
-  font-size: 14px;
-  color: #2d3748;
-  margin-bottom: 2px;
-}
-
-.activity-time {
-  font-size: 12px;
-  color: #a0aec0;
-}
-
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.modal-content {
-  background: #fff;
-  border-radius: 12px;
-  width: 450px;
-  overflow: hidden;
-}
-
-.modal-header {
-  display: flex;
   justify-content: space-between;
-  align-items: center;
-  padding: 20px;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.modal-header h3 {
-  font-size: 18px;
-  font-weight: 600;
-  color: #2d3748;
-  margin: 0;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 24px;
-  color: #a0aec0;
-  cursor: pointer;
-}
-
-.modal-body {
-  padding: 20px;
-}
-
-.form-group {
-  margin-bottom: 16px;
-}
-
-.form-group label {
-  display: block;
-  font-size: 13px;
-  color: #4a5568;
-  margin-bottom: 6px;
-}
-
-.form-input {
-  width: 100%;
-  padding: 10px 14px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 14px;
-  outline: none;
-  box-sizing: border-box;
-}
-
-.form-input:focus {
-  border-color: #238636;
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
   gap: 12px;
-  padding: 20px;
-  border-top: 1px solid #f0f0f0;
+  padding: 11px 18px;
+  border-bottom: 1px solid var(--mds-line-soft);
+  font-size: 13px;
 }
 
-.btn {
-  padding: 10px 20px;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  border: none;
+.sec-row:last-child {
+  border-bottom: 0;
 }
 
-.btn-cancel {
-  background: #f0f0f0;
-  color: #4a5568;
+.sec-label {
+  color: var(--mds-text-2);
 }
 
-.btn-primary {
-  background: #238636;
-  color: #fff;
+.sec-value {
+  text-align: right;
 }
 </style>

@@ -18,7 +18,14 @@ import java.util.Map;
 public interface IAdminTraceService {
 
     /** 溯源码分页（status 为空 = 全部）。 */
-    PageResult<AdminTraceCodeVO> pageCodes(int pageNum, int pageSize, String status);
+    /**
+     * 溯源码分页（运营端）。
+     *
+     * <p>筛选一律在服务端生效（{@link TraceCodeFilter}）。此前关键字、批次号、生成日期是前端在
+     * 已取回的那 10 行里过滤的，代码注释写着"后端 /codes 仅支持 status 过滤" ——
+     * 于是搜一个不在本页的码会筛出空列表，而分页总数还是没筛的数。</p>
+     */
+    PageResult<AdminTraceCodeVO> pageCodes(int pageNum, int pageSize, TraceCodeFilter filter);
 
     /** 码段统计：按 generated / active / scanned / revoked 四个状态计数。 */
     Map<String, Object> codeStats();

@@ -1,11 +1,18 @@
 package com.agri.production.service.impl;
 
+import com.agri.production.entity.AlertRecord;
+import com.agri.production.entity.AlertRule;
 import com.agri.production.entity.IoTDevice;
 import com.agri.production.entity.SensorData;
 import com.agri.production.common.entity.PageResult;
+import com.agri.production.mapper.AlertRuleMapper;
 import com.agri.production.mapper.IoTDeviceMapper;
 import com.agri.production.mapper.SensorDataMapper;
+import com.agri.production.service.IAlertService;
 import com.agri.production.service.IIoTService;
+import com.agri.production.service.IProductionNotificationService;
+import com.agri.production.service.TenantContextService;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import org.springframework.stereotype.Service;
@@ -21,10 +28,18 @@ public class IoTServiceImpl implements IIoTService {
 
     private final IoTDeviceMapper ioTDeviceMapper;
     private final SensorDataMapper sensorDataMapper;
+    private final AlertRuleMapper alertRuleMapper;
+    private final IAlertService alertService;
+    private final IProductionNotificationService notificationService;
 
-    public IoTServiceImpl(IoTDeviceMapper ioTDeviceMapper, SensorDataMapper sensorDataMapper) {
+    public IoTServiceImpl(IoTDeviceMapper ioTDeviceMapper, SensorDataMapper sensorDataMapper,
+                          AlertRuleMapper alertRuleMapper, IAlertService alertService,
+                          IProductionNotificationService notificationService) {
         this.ioTDeviceMapper = ioTDeviceMapper;
         this.sensorDataMapper = sensorDataMapper;
+        this.alertRuleMapper = alertRuleMapper;
+        this.alertService = alertService;
+        this.notificationService = notificationService;
     }
 
     @Override
@@ -87,7 +102,73 @@ public class IoTServiceImpl implements IIoTService {
     @Transactional
     public void saveSensorData(SensorData data) {
         data.setDataTime(LocalDateTime.now());
+        if (data.getTenantId() == null || data.getTenantId().isBlank()) {
+            data.setTenantId(TenantContextService.currentTenantId());
+        }
         sensorDataMapper.insert(data);
+        evaluateSensorRules(data);
+    }
+
+    /** 按已配置阈值的环境规则生成告警；没有阈值或没有命中时不编造告警。 */
+    private void evaluateSensorRules(SensorData data) {
+        if (data.getValue() == null || data.getSensorType() == null || data.getTenantId() == null) {
+            return;
+        }
+        List<AlertRule> rules = alertRuleMapper.selectList(new LambdaQueryWrapper<AlertRule>()
+                .eq(AlertRule::getTenantId, data.getTenantId())
+                .eq(AlertRule::getIsEnabled, 1)
+                .and(q -> q.eq(AlertRule::getAlertType, data.getSensorType())
+                        .or().eq(AlertRule::getSourceType, "SENSOR")));
+        IoTDevice device = data.getDeviceId() == null ? null : ioTDeviceMapper.selectById(data.getDeviceId());
+        for (AlertRule rule : rules) {
+            if (!matchesSensorType(rule, data.getSensorType())) {
+                continue;
+            }
+            boolean below = rule.getThresholdMin() != null && data.getValue().compareTo(rule.getThresholdMin()) < 0;
+            boolean above = rule.getThresholdMax() != null && data.getValue().compareTo(rule.getThresholdMax()) > 0;
+            if (!below && !above) {
+                continue;
+            }
+            AlertRecord alert = new AlertRecord();
+            alert.setRuleId(rule.getId());
+            alert.setRuleCode(rule.getRuleCode());
+            alert.setAlertType(rule.getAlertType());
+            alert.setLevel(rule.getLevel());
+            alert.setSourceType("sensor");
+            alert.setSourceId(data.getDeviceId());
+            alert.setSourceName(data.getDeviceCode());
+            alert.setFarmId(device == null ? data.getFarmId() : device.getFarmId());
+            alert.setPlotId(device == null ? data.getPlotId() : device.getPlotId());
+            alert.setTitle(rule.getRuleName());
+            alert.setContent(String.format("设备 %s 的 %s 实测 %s%s，越过阈值 %s。",
+                    data.getDeviceCode() == null ? "未知设备" : data.getDeviceCode(),
+                    data.getSensorName() == null ? data.getSensorType() : data.getSensorName(),
+                    data.getValue().stripTrailingZeros().toPlainString(),
+                    data.getUnit() == null ? "" : data.getUnit(),
+                    below ? "下限 " + rule.getThresholdMin().stripTrailingZeros().toPlainString()
+                            : "上限 " + rule.getThresholdMax().stripTrailingZeros().toPlainString()));
+            alert.setValue(data.getValue());
+            alert.setThresholdMin(rule.getThresholdMin());
+            alert.setThresholdMax(rule.getThresholdMax());
+            alert.setUnit(data.getUnit());
+            alert.setTenantId(data.getTenantId());
+            AlertRecord saved = alertService.triggerAlert(alert);
+            notificationService.notify(data.getTenantId(),
+                    saved.getFarmId() == null ? null : String.valueOf(saved.getFarmId()),
+                    rule.getNotifyUsers(), "ALERT", saved.getTitle(), saved.getContent(),
+                    saved.getAlertCode(), "/production/alerts");
+        }
+    }
+
+    private static boolean matchesSensorType(AlertRule rule, String sensorType) {
+        if (rule.getAlertType() != null && rule.getAlertType().equalsIgnoreCase(sensorType)) {
+            return true;
+        }
+        String type = sensorType.toLowerCase();
+        String name = rule.getRuleName() == null ? "" : rule.getRuleName().toLowerCase();
+        return ("soil_moisture".equals(type) && (name.contains("土壤湿度") || name.contains("湿度")))
+                || ("temperature".equals(type) && (name.contains("温度") || name.contains("temperature")))
+                || ("humidity".equals(type) && (name.contains("湿度") || name.contains("humidity")));
     }
 
     @Override

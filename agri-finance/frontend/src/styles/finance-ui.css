@@ -22,10 +22,30 @@
   --el-color-primary-dark-2: #0e5233;
   --el-border-radius-base: 10px;
   --el-font-size-base: 14px;
+
+  /**
+   * 金融模块字号规范（三端共用：borrower 融资方 / fund 资金方 / admin 运营端）。
+   *
+   * <p>定这条下限的理由：这一份样式原先有 433 处写在 6–11.5px（其中 8px 就占了 116 处），
+   * 表头、金额、状态标签在 1080p 上基本要凑近屏幕才读得清。浏览器不会小于 12px 才叫"小字"，
+   * 12px 是可读底线，所以任何字号不得再往这下面走。</p>
+   *
+   * <p>层级靠粗细与颜色拉开，不靠把字压到 8px：徽标/轴标签/表格元信息一律 xs，
+   * 次要说明 sm，正文与表单 base（与 --el-font-size-base 同值），卡片标题 md，
+   * 分组标题 lg，页面标题 xl，主数字 xxl。</p>
+   */
+  --fin-fs-xs: 12px;
+  --fin-fs-sm: 13px;
+  --fin-fs-base: 14px;
+  --fin-fs-md: 16px;
+  --fin-fs-lg: 18px;
+  --fin-fs-xl: 22px;
+  --fin-fs-xxl: 28px;
 }
 
 body {
   background: var(--fin-bg);
+  font-size: var(--fin-fs-base);
 }
 
 .finance-shell {
@@ -89,7 +109,7 @@ body {
 
 .finance-brand small {
   color: rgba(255, 255, 255, .42);
-  font-size: 7px;
+  font-size: var(--fin-fs-xs);
   letter-spacing: .16em;
 }
 
@@ -115,7 +135,7 @@ body {
 .finance-role small {
   margin-top: 2px;
   color: rgba(255, 255, 255, .43);
-  font-size: 8px;
+  font-size: var(--fin-fs-xs);
 }
 
 .finance-nav {
@@ -128,7 +148,7 @@ body {
 .finance-nav-title {
   padding: 14px 11px 6px;
   color: rgba(255, 255, 255, .35);
-  font-size: 9px;
+  font-size: var(--fin-fs-xs);
   font-weight: 700;
   letter-spacing: .14em;
 }
@@ -175,7 +195,7 @@ body {
   border-radius: 99px;
   background: #f1b74b;
   color: #493100;
-  font-size: 8px;
+  font-size: var(--fin-fs-xs);
   font-style: normal;
   font-weight: 800;
 }
@@ -223,12 +243,12 @@ body {
 
 .finance-sidebar-foot strong {
   color: rgba(255, 255, 255, .82);
-  font-size: 9.5px;
+  font-size: var(--fin-fs-xs);
 }
 
 .finance-sidebar-foot small {
   color: rgba(255, 255, 255, .35);
-  font-size: 7.5px;
+  font-size: var(--fin-fs-xs);
 }
 
 .finance-sidebar-foot > a {
@@ -237,7 +257,25 @@ body {
   border: 1px solid rgba(255, 255, 255, .1);
   border-radius: 7px;
   color: rgba(255, 255, 255, .55);
-  font-size: 8px;
+  font-size: var(--fin-fs-xs);
+  text-decoration: none;
+}
+
+.finance-account-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 4px;
+}
+
+.finance-account-actions button,
+.finance-account-actions a {
+  padding: 5px 7px;
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 7px;
+  background: transparent;
+  color: rgba(255, 255, 255, .55);
+  cursor: pointer;
+  font-size: var(--fin-fs-xs);
   text-decoration: none;
 }
 
@@ -274,7 +312,7 @@ body {
 
 .finance-topbar-left small {
   color: #8a9a90;
-  font-size: 8px;
+  font-size: var(--fin-fs-xs);
 }
 
 .finance-topbar-left strong {
@@ -333,7 +371,7 @@ body {
   border-radius: 99px;
   background: #e6a72e;
   color: #3d2900;
-  font-size: 7px;
+  font-size: var(--fin-fs-xs);
   font-style: normal;
   font-weight: 800;
 }
@@ -358,7 +396,7 @@ body {
   border-radius: 10px;
   background: #e6f5ec;
   color: var(--fin-green-800);
-  font-size: 11px;
+  font-size: var(--fin-fs-xs);
   font-weight: 800;
 }
 
@@ -369,12 +407,12 @@ body {
 
 .finance-topbar-user strong {
   color: #314e3d;
-  font-size: 10px;
+  font-size: var(--fin-fs-xs);
 }
 
 .finance-topbar-user small {
   color: #8d9b93;
-  font-size: 7.5px;
+  font-size: var(--fin-fs-xs);
 }
 
 .finance-content {
@@ -399,7 +437,7 @@ body {
 .finance-page-heading small {
   display: block;
   color: var(--fin-green-700);
-  font-size: 8px;
+  font-size: var(--fin-fs-xs);
   font-weight: 800;
   letter-spacing: .13em;
 }
@@ -414,7 +452,7 @@ body {
 .finance-page-heading p {
   margin: 0;
   color: #7c8e82;
-  font-size: 10px;
+  font-size: var(--fin-fs-xs);
 }
 
 .finance-page-heading-actions {
@@ -449,7 +487,7 @@ body {
 .finance-card-head small,
 .finance-muted {
   color: #8a9a90;
-  font-size: 9px;
+  font-size: var(--fin-fs-xs);
 }
 
 .finance-card-body {
@@ -492,7 +530,7 @@ body {
 
 .finance-kpi > span {
   color: #7d8f83;
-  font-size: 9px;
+  font-size: var(--fin-fs-xs);
 }
 
 .finance-kpi > strong {
@@ -505,7 +543,7 @@ body {
 .finance-kpi > small {
   margin-top: 2px;
   color: #93a097;
-  font-size: 8px;
+  font-size: var(--fin-fs-xs);
 }
 
 .finance-hero {
@@ -546,7 +584,7 @@ body {
   border-radius: 99px;
   background: rgba(255, 255, 255, .08);
   color: #d8f5e4;
-  font-size: 8px;
+  font-size: var(--fin-fs-xs);
   font-weight: 700;
 }
 
@@ -560,7 +598,7 @@ body {
   max-width: 530px;
   margin: 0;
   color: rgba(255, 255, 255, .68);
-  font-size: 10px;
+  font-size: var(--fin-fs-xs);
   line-height: 1.7;
 }
 
@@ -604,7 +642,7 @@ body {
 
 .finance-credit-disc small {
   color: rgba(255, 255, 255, .55);
-  font-size: 8px;
+  font-size: var(--fin-fs-xs);
 }
 
 .finance-product-grid {
@@ -650,7 +688,7 @@ body {
 .finance-product-card > small {
   position: relative;
   color: var(--fin-green-700);
-  font-size: 7px;
+  font-size: var(--fin-fs-xs);
   font-weight: 800;
   letter-spacing: .11em;
 }
@@ -666,7 +704,7 @@ body {
   min-height: 45px;
   margin: 0 0 12px;
   color: #7c8d82;
-  font-size: 9px;
+  font-size: var(--fin-fs-xs);
   line-height: 1.65;
 }
 
@@ -681,7 +719,7 @@ body {
   border-radius: 6px;
   background: #f2f8f4;
   color: #5d7867;
-  font-size: 8px;
+  font-size: var(--fin-fs-xs);
 }
 
 .finance-product-foot {
@@ -700,12 +738,12 @@ body {
 
 .finance-product-rate small {
   color: #95a098;
-  font-size: 7px;
+  font-size: var(--fin-fs-xs);
 }
 
 .finance-product-foot > span {
   color: var(--fin-green-700);
-  font-size: 8px;
+  font-size: var(--fin-fs-xs);
   font-weight: 700;
 }
 
@@ -742,7 +780,7 @@ body {
   background: transparent;
   color: #74867a;
   cursor: pointer;
-  font-size: 9px;
+  font-size: var(--fin-fs-xs);
 }
 
 .finance-tabs button.on {
@@ -785,7 +823,7 @@ body {
   max-width: 290px;
   margin: 5px 0 0;
   color: #8d9b93;
-  font-size: 9px;
+  font-size: var(--fin-fs-xs);
   line-height: 1.65;
 }
 
@@ -795,7 +833,7 @@ body {
   gap: 4px;
   padding: 3px 8px;
   border-radius: 99px;
-  font-size: 8px;
+  font-size: var(--fin-fs-xs);
   font-weight: 700;
   white-space: nowrap;
 }
@@ -819,7 +857,7 @@ body {
   border-radius: 9px;
   background: var(--fin-green-700);
   color: #fff;
-  font-size: 10px;
+  font-size: var(--fin-fs-xs);
   font-weight: 650;
 }
 
@@ -834,7 +872,7 @@ body {
   border-radius: 9px;
   background: #fff;
   color: var(--fin-green-800);
-  font-size: 10px;
+  font-size: var(--fin-fs-xs);
 }
 
 .finance-ghost-button.el-button:hover {
@@ -846,7 +884,7 @@ body {
 .finance-link-button.el-button {
   padding: 0;
   color: var(--fin-green-700);
-  font-size: 9px;
+  font-size: var(--fin-fs-xs);
 }
 
 .finance-form-card {
@@ -872,7 +910,7 @@ body {
 
 .finance-form-card .el-form-item__label {
   color: #536a5d;
-  font-size: 10px;
+  font-size: var(--fin-fs-xs);
   font-weight: 600;
 }
 
@@ -915,7 +953,7 @@ body {
   align-items: center;
   gap: 8px;
   color: #8a9991;
-  font-size: 9px;
+  font-size: var(--fin-fs-xs);
 }
 
 .finance-step:not(:last-child)::after {
@@ -937,7 +975,7 @@ body {
   background: #eef3f0;
   color: #77887d;
   font-family: ui-monospace, Consolas, monospace;
-  font-size: 8px;
+  font-size: var(--fin-fs-xs);
   font-weight: 800;
 }
 
@@ -969,12 +1007,12 @@ body {
   --el-table-header-bg-color: #f5f9f6;
   --el-table-row-hover-bg-color: #f8fbf9;
   color: #42594b;
-  font-size: 10px;
+  font-size: var(--fin-fs-xs);
 }
 
 .el-table th.el-table__cell {
   color: #6d7f74;
-  font-size: 9px;
+  font-size: var(--fin-fs-xs);
   font-weight: 650;
 }
 

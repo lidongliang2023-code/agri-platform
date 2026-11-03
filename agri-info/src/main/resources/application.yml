@@ -1,0 +1,60 @@
+server:
+  port: 8096
+
+spring:
+  application:
+    name: agri-info
+  profiles:
+    # 默认走 MySQL（库 agri_info）；无 MySQL 的 CI / 演示环境用 --spring.profiles.active=h2。
+    active: ${SPRING_PROFILES_ACTIVE:mysql}
+  jackson:
+    time-zone: GMT+8
+    date-format: yyyy-MM-dd HH:mm:ss
+    serialization:
+      write-dates-as-timestamps: false
+  # 课程视频上传：Spring 默认只放行 1MB/10MB，几百 MB 的 mp4 会在进 Controller 之前就被拒，
+  # 报的是 "Maximum upload size exceeded"，很容易误判成前端上传失败。
+  servlet:
+    multipart:
+      max-file-size: 2048MB
+      max-request-size: 2048MB
+      file-size-threshold: 2MB
+
+logging:
+  level:
+    com.agri.info: INFO
+
+# 统一认证中心（core-platform）地址，仅用于日志与排障定位，鉴权走平台令牌解析。
+services:
+  platform:
+    url: http://localhost:8093
+
+platform:
+  rbac:
+    operator-paths:
+      - /api/**
+    read-permission: info:read
+    write-permission: info:write
+    require-auth: true
+    # 官网门户是开放浏览、无需登录的场景，这条前缀下的只读接口直接放行。
+    # 只放行 InfoPublicController（已做脱敏），不要把业务接口整段挂进来。
+    public-paths:
+      - /api/v1/info/public/**
+
+# 培训课程视频（VOD）
+# secret 必须与网关 ops/gateway/conf/conf.d/41-info-service.conf 里 secure_link_md5 的密钥一致；
+# storage-dir 必须与 nginx 的 `location /vod/ { root .; }` 指向同一物理目录。
+# 两处任一不一致，现象都是「上传成功但视频打不开」，且不会报配置错误。
+agri:
+  info:
+    vod:
+      secret: ${AGRI_VOD_SECRET:agri-vod-dev-secret}
+      public-path: /vod/
+      ticket-ttl-seconds: 300
+      storage-dir: ${AGRI_VOD_DIR:../ops/gateway/vod}
+      max-file-size-mb: 2048
+    # 交易撮合服务：供需大厅的供应/需求/撮合全部复用它的能力，本模块不再自建一套。
+    trade:
+      base-url: ${AGRI_TRADE_URL:http://localhost:8089/api/trade}
+      connect-timeout-ms: 3000
+      read-timeout-ms: 15000

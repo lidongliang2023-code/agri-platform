@@ -7,6 +7,7 @@ import com.agri.trade.entity.TradeProduct;
 import com.agri.trade.mapper.OrderItemMapper;
 import com.agri.trade.mapper.TradeOrderMapper;
 import com.agri.trade.mapper.TradeProductMapper;
+import com.agri.trade.service.PlatformSummaryService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import io.swagger.v3.oas.annotations.Operation;
@@ -16,15 +17,11 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * 用户端首页看板。
@@ -34,8 +31,9 @@ import java.util.Set;
  * 以及"山东寿光番茄 / 北京XX商贸"这类编出来的成交记录），页面照着一渲染，
  * 看起来一切正常、实际全是假的。</p>
  *
- * <p>现在每一项都有可核对的真实定义（下面每个字段的注释就是口径），
- * 且**只返回平台级聚合**：首页是公开门面，不按人过滤也不泄露具体买卖方名称。</p>
+ * <p>现在每一项都有可核对的真实定义，且<b>只返回平台级聚合</b>：首页是公开门面，不按人过滤也不泄露具体买卖方名称。
+ * 四个大盘指标的口径在 {@link PlatformSummaryService} 一处实现，官网门户的公开大盘读的是同一份，
+ * 不再各算各的。</p>
  */
 @Tag(name = "用户端 - 首页看板")
 @RestController
@@ -48,45 +46,16 @@ public class HomeController {
     private final TradeOrderMapper orderMapper;
     private final TradeProductMapper productMapper;
     private final OrderItemMapper orderItemMapper;
+    private final PlatformSummaryService platformSummaryService;
 
     @Operation(summary = "首页看板汇总")
     @GetMapping("/summary")
     public ApiResponse<Map<String, Object>> summary() {
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("stat", buildStat());
+        result.put("stat", platformSummaryService.platformStat());
         result.put("categoryQuotes", categoryQuotes());
         result.put("recentDeals", recentDeals());
         return ApiResponse.success(result);
-    }
-
-    /** 四个卡片：口径写在字段名里，前端标签要与之一致，不许再把"元"当"亿"显示。 */
-    private Map<String, Object> buildStat() {
-        List<TradeOrder> orders = orderMapper.selectList(new LambdaQueryWrapper<TradeOrder>()
-                .eq(TradeOrder::getDelFlag, 0)
-                // 已取消的订单不计入交易额与成交笔数
-                .ne(TradeOrder::getOrderStatus, "cancelled"));
-
-        BigDecimal amount = BigDecimal.ZERO;
-        Set<Long> participants = new HashSet<>();
-        for (TradeOrder order : orders) {
-            amount = amount.add(order.getTotalAmount() == null ? BigDecimal.ZERO : order.getTotalAmount());
-            if (order.getBuyerId() != null) {
-                participants.add(order.getBuyerId());
-            }
-            if (order.getSellerId() != null) {
-                participants.add(order.getSellerId());
-            }
-        }
-
-        Map<String, Object> stat = new LinkedHashMap<>();
-        stat.put("tradeAmount", amount);                       // 累计交易额（元）
-        stat.put("dealCount", orders.size());                  // 累计成交笔数（笔）
-        stat.put("participantCount", participants.size());      // 参与交易的买卖方数（家/人）
-        stat.put("publishedProductCount", productMapper.selectCount(
-                new LambdaQueryWrapper<TradeProduct>()
-                        .eq(TradeProduct::getDelFlag, 0)
-                        .eq(TradeProduct::getPublishStatus, "published"))); // 在架货源数（个）
-        return stat;
     }
 
     /**

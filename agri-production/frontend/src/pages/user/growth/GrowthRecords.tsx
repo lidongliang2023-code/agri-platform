@@ -10,7 +10,8 @@
  * - 长势对比：同一地块选择两条不同时期记录，照片并排对比 + 指标差值表
  * - 照片录入：后端 photos 为字符串字段，表单用「每行一个地址」的文本域录入
  */
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Alert,
@@ -131,11 +132,14 @@ export default function GrowthRecords(): JSX.Element {
 
   /** 视图模式 */
   const [view, setView] = useState<ViewMode>('table')
+  /** 从地块详情进入时按地块过滤，并可自动打开新增弹窗 */
+  const [searchParams] = useSearchParams()
+  const presetPlotId = searchParams.get('plotId') ?? undefined
   /** 分页 */
   const [pageNum, setPageNum] = useState<number>(1)
   const [pageSize, setPageSize] = useState<number>(10)
   /** 筛选条件 */
-  const [plotFilter, setPlotFilter] = useState<string | undefined>(undefined)
+  const [plotFilter, setPlotFilter] = useState<string | undefined>(presetPlotId)
   const [stageFilter, setStageFilter] = useState<string | undefined>(undefined)
   const [dateRange, setDateRange] = useState<[Dayjs, Dayjs] | null>(null)
   /** 新增 / 编辑弹窗 */
@@ -279,12 +283,26 @@ export default function GrowthRecords(): JSX.Element {
   const openCreate = (): void => {
     setEditing(null)
     form.setFieldsValue({
+      plotId: plotFilter,
       recordDate: dayjs(),
       growthLevel: 3,
       growthStage: '苗期',
     } as RecordFormValues)
     setModalOpen(true)
   }
+
+  /** 从地块详情带 `?plotId=&create=1` 进入时，直接打开新增弹窗并预选地块 */
+  useEffect(() => {
+    if (!presetPlotId || searchParams.get('create') !== '1') return
+    setEditing(null)
+    form.setFieldsValue({
+      plotId: presetPlotId,
+      recordDate: dayjs(),
+      growthLevel: 3,
+      growthStage: '苗期',
+    } as RecordFormValues)
+    setModalOpen(true)
+  }, [presetPlotId, searchParams, form])
 
   /** 打开编辑弹窗 */
   const openEdit = (record: GrowthRecord): void => {

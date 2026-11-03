@@ -1,0 +1,104 @@
+:root {
+  --van-primary-color: #12764a;
+  --van-success-color: #159a5e;
+  --van-danger-color: #c94b4b;
+  --van-warning-color: #d88718;
+  --van-text-color: #0b1a12;
+  --van-text-color-2: #6b7c72;
+  --van-background: #f4f7f5;
+  --van-background-2: #ffffff;
+  --van-border-color: #e3eae5;
+  --van-active-color: #f1fbf5;
+  --van-button-primary-background: #12764a;
+  --van-button-primary-border-color: #12764a;
+  --van-button-danger-background: #12764a;
+  --van-button-danger-border-color: #12764a;
+  --van-tabbar-item-active-color: #12764a;
+  --van-search-content-background: #fff;
+}
+
+body {
+  background: #f4f7f5 !important;
+  color: #0b1a12 !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif !important;
+}
+
+.van-search { padding: 14px 18px !important; background: transparent !important; }
+.van-search__content { border: 1px solid #e3eae5; border-radius: 10px !important; background: #fff !important; box-shadow: none; }
+.van-search__content--round { border-radius: 10px !important; }
+.van-tabbar { border-top: 1px solid #e3eae5 !important; box-shadow: 0 -8px 24px rgba(17,62,41,.05) !important; }
+.van-button { border-radius: 8px !important; font-weight: 600; }
+.van-nav-bar { border-bottom: 1px solid #e3eae5; background: #fff; }
+.van-nav-bar__title { color: #0b1a12; font-weight: 700; }
+.van-divider { border-color: #e3eae5 !important; }
+.van-empty__description { color: #7a8b81 !important; }
+.product-img { background: #eef7f1; }
+
+html body .cart-page,
+html body .orders-page,
+html body .category-page,
+html body .my-page,
+html body .search-page,
+html body .order-detail-page,
+html body .order-confirm-page,
+html body .addresses-page {
+  background: #f4f7f5;
+}
+
+html body .cart-item,
+html body .order-card,
+html body .address-card,
+html body .products-card,
+html body .coupon-card,
+html body .remark-card,
+html body .price-card,
+html body .product-info,
+html body .product-detail {
+  border-color: #e3eae5 !important;
+  border-radius: 12px !important;
+  background: #fff !important;
+  box-shadow: none !important;
+}
+
+html body .product-name,
+html body .user-name,
+html body .section-title,
+html body .product-detail h3 {
+  color: #0b1a12 !important;
+}
+
+html body .product-spec,
+html body .selling-point,
+html body .product-desc,
+html body .label,
+html body .stat-label,
+html body .user-phone {
+  color: #6b7c72 !important;
+}
+
+html body .price,
+html body .total-price,
+html body .spec-price {
+  color: #d45b32 !important;
+}
+
+html body .bottom-bar {
+  border-top: 1px solid #e3eae5 !important;
+  background: rgba(255,255,255,.97) !important;
+  box-shadow: 0 -8px 24px rgba(17,62,41,.06) !important;
+}
+
+@media (min-width: 721px) {
+  html body .bottom-bar {
+    right: auto !important;
+    bottom: 0 !important;
+    left: 50% !important;
+    width: min(100%, 1180px) !important;
+    transform: translateX(-50%);
+  }
+}
+
+html body .van-button--danger {
+  background: linear-gradient(135deg,#159a5e,#12764a) !important;
+  border-color: #12764a !important;
+}

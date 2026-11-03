@@ -1,760 +1,457 @@
 <template>
-  <div class="quality-list">
-    <div class="page-header">
-      <div class="header-left">
-        <h1>数据质量监控</h1>
-        <p>监控数据质量问题</p>
-      </div>
-    </div>
+  <div class="mds-page">
+    <PageHeader
+      title="质量监控"
+      subtitle="数据质量问题的实时清单：按严重级别与状态筛选，查看详情并登记处置结果。"
+      source="数据治理 · 质量问题"
+    >
+      <template #actions>
+        <button class="mds-btn" :disabled="loading" @click="reloadAll">刷新</button>
+        <button class="mds-btn mds-btn--primary" @click="router.push('/quality/issue')">问题工单</button>
+      </template>
+    </PageHeader>
 
-    <div class="stats-row">
-      <div class="stat-item">
-        <!-- 原来这里是 `|| 125` 这类写死兜底：统计没取到就显示 125 / 45 / 12 / 85%，
-             看起来像有数据、其实一条不是真的。现在取不到就显示 "—"。 -->
-        <span class="stat-num">{{ stats.totalIssues ?? '—' }}</span>
-        <span class="stat-text">问题总数</span>
-      </div>
-      <div class="stat-item warning">
-        <span class="stat-num">{{ stats.mediumSeverityCount ?? '—' }}</span>
-        <span class="stat-text">警告问题</span>
-      </div>
-      <div class="stat-item danger">
-        <span class="stat-num">{{ stats.highSeverityCount ?? '—' }}</span>
-        <span class="stat-text">严重问题</span>
-      </div>
-      <div class="stat-item success">
-        <span class="stat-num">{{ stats.resolutionRate == null ? '—' : stats.resolutionRate + '%' }}</span>
-        <span class="stat-text">解决率</span>
-      </div>
-    </div>
+    <StatGrid :items="statItems" />
 
-    <div class="search-bar">
-      <div class="search-group">
-        <input 
-          type="text" 
-          v-model="searchForm.keyword" 
-          placeholder="搜索问题描述/关联数据..." 
-          class="search-input"
+    <div class="mds-card">
+      <div class="mds-filter">
+        <input
+          v-model="keyword"
+          class="mds-input"
+          type="search"
+          placeholder="当前页内搜索问题描述（后端无全文检索）"
+          @keyup.enter="() => {}"
         />
-        <button class="search-btn" @click="loadData">搜索</button>
-      </div>
-      <div class="filter-group">
-        <select v-model="searchForm.level" class="filter-select">
+        <select v-model="severity" class="mds-select" @change="search">
           <option value="">全部级别</option>
-          <!-- 取值与后端 severity 一致：high / medium / low -->
           <option value="high">严重</option>
           <option value="medium">警告</option>
           <option value="low">提示</option>
         </select>
-      </div>
-      <div class="filter-group">
-        <select v-model="searchForm.status" class="filter-select">
+        <select v-model="status" class="mds-select" @change="search">
           <option value="">全部状态</option>
           <option value="pending">待处理</option>
           <option value="processing">处理中</option>
           <option value="resolved">已解决</option>
+          <option value="ignored">已忽略</option>
         </select>
+        <span class="mds-hint">共 {{ total }} 条</span>
       </div>
+
+      <div class="mds-table-wrap">
+        <table class="mds-table monitor-table">
+          <thead>
+            <tr>
+              <th>问题编码</th>
+              <th>级别</th>
+              <th>问题类型</th>
+              <th>问题描述</th>
+              <th>关联数据</th>
+              <th>检测时间</th>
+              <th>状态</th>
+              <th>处理人</th>
+              <th class="mds-actions">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-if="loading">
+              <td colspan="9" class="mds-empty">正在加载质量问题…</td>
+            </tr>
+            <tr v-else-if="!visibleRows.length">
+              <td colspan="9">
+                <EmptyState
+                  :title="rows.length ? '当前页没有匹配的问题' : '暂无质量问题'"
+                  :description="rows.length ? '关键词只过滤当前页；清空后翻页查看其他页。' : '检测任务产出问题后，这里会出现记录。'"
+                />
+              </td>
+            </tr>
+            <tr v-for="row in visibleRows" :key="row.id">
+              <td class="mds-mono">{{ row.issueCode }}</td>
+              <td><StatusTag :text="severityText(row.severity)" :tone="severityTone(row.severity)" /></td>
+              <td>{{ row.issueType || '—' }}</td>
+              <td class="desc-cell" :title="row.description">{{ row.description || '—' }}</td>
+              <td class="mds-muted">{{ row.affectedData || '—' }}</td>
+              <td class="mds-muted time-cell">{{ formatTime(row.createTime) }}</td>
+              <td><StatusTag :text="statusText(row.status)" :tone="statusTone(row.status)" /></td>
+              <td>{{ row.handler || '—' }}</td>
+              <td class="mds-actions">
+                <button class="mds-btn mds-btn--link" @click="openDetail(row)">详情</button>
+                <button
+                  class="mds-btn mds-btn--link"
+                  :disabled="busyId === row.id || row.status === 'resolved' || row.status === 'ignored'"
+                  @click="openHandle(row)"
+                >处理</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <PagerBar
+        :page="pageNum"
+        :page-size="pageSize"
+        :total="total"
+        @change="changePage"
+        @update:page-size="changePageSize"
+      />
     </div>
 
-    <div class="table-card">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>问题编码</th>
-            <th>问题级别</th>
-            <th>问题类型</th>
-            <th>问题描述</th>
-            <th>关联数据</th>
-            <th>检测时间</th>
-            <th>处理状态</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="issue in tableData" :key="issue.id">
-            <td>{{ issue.issueCode }}</td>
-            <td>
-              <!-- 接口字段是 severity（high/medium/low），页面原来读 issueLevel，
-                   两者名字不同 → 这一列会恒为空、徽标也永远没有配色 -->
-              <span class="level-badge" :class="issue.severity">
-                {{ getLevelLabel(issue.severity) }}
-              </span>
-            </td>
-            <td>{{ issue.issueType }}</td>
-            <td>{{ issue.description }}</td>
-            <td>{{ issue.affectedData }}</td>
-            <td>{{ formatDate(issue.createTime) }}</td>
-            <td>
-              <span class="status-badge" :class="issue.status">
-                {{ getStatusLabel(issue.status) }}
-              </span>
-            </td>
-            <td class="action-cell">
-              <button class="action-btn view" @click="viewDetail(issue)">详情</button>
-              <button 
-                v-if="issue.status !== 'resolved'"
-                class="action-btn handle"
-                @click="handleIssue(issue)"
-              >处理</button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+    <!-- 详情 -->
+    <div v-if="detail" class="mds-mask" @click="detail = null">
+      <section class="mds-modal mds-modal--wide" @click.stop>
+        <div class="mds-card-head">
+          <div>
+            <p class="mds-card-sub">问题详情 · {{ detail.issueCode }}</p>
+            <h2 class="mds-card-title">{{ detail.description }}</h2>
+          </div>
+          <button class="mds-btn" @click="detail = null">关闭</button>
+        </div>
+        <div class="mds-card-body">
+          <div class="mds-kv-grid" style="grid-template-columns: repeat(2, minmax(0, 1fr))">
+            <div class="mds-kv"><span class="mds-kv__k">级别</span><span class="mds-kv__v">{{ severityText(detail.severity) }}</span></div>
+            <div class="mds-kv"><span class="mds-kv__k">问题类型</span><span class="mds-kv__v">{{ detail.issueType || '—' }}</span></div>
+            <div class="mds-kv"><span class="mds-kv__k">数据域</span><span class="mds-kv__v">{{ detail.domainName || detail.domain || '—' }}</span></div>
+            <div class="mds-kv"><span class="mds-kv__k">关联数据</span><span class="mds-kv__v mds-mono">{{ detail.affectedData || '—' }}</span></div>
+            <div class="mds-kv"><span class="mds-kv__k">状态</span><span class="mds-kv__v">{{ statusText(detail.status) }}</span></div>
+            <div class="mds-kv"><span class="mds-kv__k">处理人</span><span class="mds-kv__v">{{ detail.handler || '未分配' }}</span></div>
+            <div class="mds-kv"><span class="mds-kv__k">检测时间</span><span class="mds-kv__v">{{ formatTime(detail.createTime) }}</span></div>
+            <div class="mds-kv"><span class="mds-kv__k">最后更新</span><span class="mds-kv__v">{{ formatTime(detail.lastUpdateTime) }}</span></div>
+            <div class="mds-kv"><span class="mds-kv__k">所属主体</span><span class="mds-kv__v mds-mono">{{ detail.tenantName || detail.tenantId || '平台' }}</span></div>
+          </div>
 
-      <div class="pagination">
-        <button class="page-btn" :disabled="pageNum === 1" @click="handleCurrentChange(pageNum - 1)">上一页</button>
-        <span class="page-info">第 {{ pageNum }} / {{ totalPages }} 页</span>
-        <button class="page-btn" :disabled="pageNum === totalPages" @click="handleCurrentChange(pageNum + 1)">下一页</button>
-      </div>
+          <div class="history">
+            <h4>处置历史</h4>
+            <div v-if="!history.length" class="mds-empty">暂无处置记录</div>
+            <div v-else class="history-list">
+              <div v-for="(item, index) in history" :key="index" class="history-row">
+                <span class="mds-mono">{{ formatTime(item.time) }}</span>
+                <span>{{ item.action }}<em v-if="item.remark"> · {{ item.remark }}</em></span>
+                <span class="mds-muted">{{ item.operator }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="mds-form-actions" v-if="detail.status !== 'resolved' && detail.status !== 'ignored'">
+          <button v-point="'PUT /admin/masterdata/quality/issues/{id}/handle'" class="mds-btn mds-btn--primary" @click="openHandle(detail)">处理</button>
+        </div>
+      </section>
     </div>
 
-    <div class="modal-overlay" v-if="detailVisible" @click="detailVisible = false">
-      <div class="modal-content detail-modal" @click.stop>
-        <div class="modal-header">
-          <h3>问题详情</h3>
-          <button class="close-btn" @click="detailVisible = false">×</button>
+    <!-- 处置 -->
+    <div v-if="handleTarget" class="mds-mask" @click="closeHandle">
+      <div class="mds-modal" @click.stop>
+        <div class="mds-card-head">
+          <div>
+            <h2 class="mds-card-title">处理问题 · {{ handleTarget.issueCode }}</h2>
+            <p class="mds-card-sub">{{ handleTarget.description }}</p>
+          </div>
+          <button class="mds-btn mds-btn--link" @click="closeHandle">关闭</button>
         </div>
-        <div class="modal-body" v-if="detailData">
-          <div class="detail-row">
-            <span class="detail-label">问题编码</span>
-            <span class="detail-value">{{ detailData.issueCode }}</span>
+        <div class="mds-card-body">
+          <div class="mds-form">
+            <label class="mds-field">
+              <span class="mds-field__label mds-required">处理结果</span>
+              <select v-model="handleForm.result" class="mds-select">
+                <option value="">请选择处理结果</option>
+                <option value="fixed">已修复</option>
+                <option value="ignored">无需处理</option>
+                <option value="pending">待确认</option>
+              </select>
+            </label>
+            <label class="mds-field mds-field--full">
+              <span class="mds-field__label">处理备注</span>
+              <textarea v-model="handleForm.remark" class="mds-textarea" placeholder="说明修复方式或无需处理的原因" />
+            </label>
           </div>
-          <div class="detail-row">
-            <span class="detail-label">问题级别</span>
-            <span class="level-badge" :class="detailData.issueLevel">
-              {{ getLevelLabel(detailData.issueLevel) }}
-            </span>
+          <div class="mds-form-actions">
+            <button class="mds-btn" @click="closeHandle">取消</button>
+            <button class="mds-btn mds-btn--primary" :disabled="saving" @click="submitHandle">
+              {{ saving ? '提交中…' : '确认处理' }}
+            </button>
           </div>
-          <div class="detail-row">
-            <span class="detail-label">问题类型</span>
-            <span class="detail-value">{{ detailData.issueType }}</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">问题描述</span>
-            <span class="detail-value">{{ detailData.issueDesc }}</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">关联数据</span>
-            <span class="detail-value">{{ detailData.relatedData }}</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">检测时间</span>
-            <span class="detail-value">{{ detailData.detectTime }}</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">处理状态</span>
-            <span class="status-badge" :class="detailData.status">
-              {{ getStatusLabel(detailData.status) }}
-            </span>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-cancel" @click="detailVisible = false">关闭</button>
-          <button 
-            v-if="detailData && detailData.status !== 'resolved'" 
-            class="btn btn-primary" 
-            @click="handleIssue(detailData)"
-          >处理</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="modal-overlay" v-if="handleModalVisible" @click="handleModalVisible = false">
-      <div class="modal-content" @click.stop>
-        <div class="modal-header">
-          <h3>处理问题</h3>
-          <button class="close-btn" @click="handleModalVisible = false">×</button>
-        </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label>处理结果</label>
-            <!-- 字段名对齐后端：处置接口的参数是 status（必填）+ remark。
-                 原来的 handleResult/handleNote 会被后端判成"缺少必需的请求参数 status"。 -->
-            <select v-model="handleForm.status" class="form-select">
-              <option value="">请选择处理结果</option>
-              <option value="fixed">已修复</option>
-              <option value="ignored">无需处理</option>
-              <option value="pending">待确认</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>处理备注</label>
-            <textarea v-model="handleForm.remark" rows="3" class="form-textarea" placeholder="请输入处理备注"></textarea>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-cancel" @click="handleModalVisible = false">取消</button>
-          <button class="btn btn-primary" @click="confirmHandle">确定处理</button>
         </div>
       </div>
     </div>
   </div>
 </template>
 
-<script setup>
-import { ref, reactive, onMounted } from 'vue'
+<script setup lang="ts">
+import { computed, onMounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
-import { getQualityList, getQualityStatistics, handleQualityIssue } from '../../utils/api'
+import { useRouter } from 'vue-router'
+import PageHeader from '@/components/ui/PageHeader.vue'
+import StatGrid from '@/components/ui/StatGrid.vue'
+import StatusTag from '@/components/ui/StatusTag.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
+import PagerBar from '@/components/ui/PagerBar.vue'
+import { getQualityDetail, getQualityList, getQualityStatistics, handleQualityIssue } from '../../utils/api'
 
-const tableData = ref([])
+interface IssueRow {
+  id: number
+  issueCode?: string
+  issueType?: string
+  severity?: string
+  domain?: string
+  domainName?: string
+  description?: string
+  affectedData?: string
+  status?: string
+  createTime?: string
+  lastUpdateTime?: string
+  handler?: string
+  tenantId?: string
+  tenantName?: string
+}
+
+const router = useRouter()
+const rows = ref<IssueRow[]>([])
+const loading = ref(false)
+const saving = ref(false)
+const busyId = ref<number | null>(null)
 const pageNum = ref(1)
-const pageSize = ref(10)
+const pageSize = ref(20)
 const total = ref(0)
-const totalPages = ref(1)
-const detailVisible = ref(false)
-const handleModalVisible = ref(false)
-const detailData = ref(null)
-const stats = ref({})
+const severity = ref('')
+const status = ref('')
+const keyword = ref('')
+const stats = ref<Record<string, number | null>>({})
+const detail = ref<IssueRow | null>(null)
+const history = ref<Array<{ time?: string; action?: string; operator?: string; remark?: string }>>([])
+const handleTarget = ref<IssueRow | null>(null)
+const handleForm = reactive({ result: '', remark: '' })
 
-const searchForm = reactive({
-  keyword: '',
-  level: '',
-  status: ''
+/** 关键词只过滤当前页：后端 /quality/issues 没有全文检索参数，不做假的全量搜索 */
+const visibleRows = computed(() => {
+  const kw = keyword.value.trim().toLowerCase()
+  if (!kw) return rows.value
+  return rows.value.filter((row) =>
+    [row.description, row.issueCode, row.affectedData].some((field) =>
+      String(field ?? '').toLowerCase().includes(kw),
+    ),
+  )
 })
 
-const handleForm = reactive({
-    status: '',
-    remark: ''
-})
+const statItems = computed(() => [
+  { label: '问题总数', value: stats.value.totalIssues ?? '—' },
+  { label: '警告问题', value: stats.value.mediumSeverityCount ?? '—', tone: 'warning' },
+  {
+    label: '严重问题',
+    value: stats.value.highSeverityCount ?? '—',
+    tone: Number(stats.value.highSeverityCount ?? 0) > 0 ? 'danger' : undefined,
+  },
+  {
+    label: '解决率',
+    value: stats.value.resolutionRate == null ? '—' : `${stats.value.resolutionRate}%`,
+    tone: 'success',
+  },
+])
 
-const getLevelLabel = (level) => {
-  // 与后端统一后的严重程度口径：high / medium / low
-  const labels = { high: '严重', medium: '警告', low: '提示' }
-  return labels[level] || level
+const SEVERITY_TEXT: Record<string, string> = { high: '严重', medium: '警告', low: '提示' }
+const SEVERITY_TONE: Record<string, 'danger' | 'warning' | 'success' | 'gray'> = {
+  high: 'danger',
+  medium: 'warning',
+  low: 'success',
 }
-
-const getStatusLabel = (status) => {
-  const labels = { pending: '待处理', processing: '处理中', resolved: '已解决', ignored: '已忽略' }
-  return labels[status] || status
+const STATUS_TEXT: Record<string, string> = {
+  pending: '待处理',
+  processing: '处理中',
+  resolved: '已解决',
+  ignored: '已忽略',
 }
-
-const loadData = async () => {
-  try {
-    const response = await getQualityList({
-      pageNum: pageNum.value,
-      pageSize: pageSize.value,
-      keyword: searchForm.keyword,
-      // 后端参数名是 severity；页面上的下拉仍叫"级别"
-      severity: searchForm.level,
-      status: searchForm.status
-    })
-    if (response.code === 200) {
-      tableData.value = response.data.list ?? []
-      total.value = response.data.total ?? 0
-      totalPages.value = Math.ceil(total.value / pageSize.value)
-    } else {
-      message.error(response.message || '加载数据失败')
-      tableData.value = []
-      total.value = 0
-      totalPages.value = 0
-    }
-  } catch (error) {
-    message.error(error instanceof Error ? error.message : '加载数据失败')
-    tableData.value = []
-    total.value = 0
-    totalPages.value = 0
-  }
+const STATUS_TONE: Record<string, 'warning' | 'info' | 'success' | 'gray'> = {
+  pending: 'warning',
+  processing: 'info',
+  resolved: 'success',
+  ignored: 'gray',
 }
+const severityText = (value?: string) => SEVERITY_TEXT[value ?? ''] ?? value ?? '—'
+const severityTone = (value?: string) => SEVERITY_TONE[value ?? ''] ?? 'gray'
+const statusText = (value?: string) => STATUS_TEXT[value ?? ''] ?? value ?? '—'
+const statusTone = (value?: string) => STATUS_TONE[value ?? ''] ?? 'gray'
+const formatTime = (value?: string) => (value ? String(value).replace('T', ' ').slice(0, 19) : '—')
 
-/** 顶部四个统计取全局口径（不是拿当前页现算，否则翻页就变数） */
-const loadStats = async () => {
+async function loadStats() {
   try {
     const response = await getQualityStatistics()
-    if (response.code === 200 && response.data) {
-      stats.value = response.data
-    } else {
-      stats.value = {}
-    }
-  } catch (error) {
-    console.error('质量统计加载失败:', error)
+    stats.value = response.code === 200 && response.data ? (response.data as Record<string, number | null>) : {}
+  } catch {
     stats.value = {}
   }
 }
 
-const handleSizeChange = (size) => {
+async function loadData() {
+  loading.value = true
+  try {
+    const response = await getQualityList({
+      pageNum: pageNum.value,
+      pageSize: pageSize.value,
+      severity: severity.value || undefined,
+      status: status.value || undefined,
+    })
+    if (response.code !== 200) throw new Error(response.message || '加载质量问题失败')
+    rows.value = (response.data?.list ?? []) as IssueRow[]
+    total.value = Number(response.data?.total ?? 0)
+  } catch (error) {
+    rows.value = []
+    total.value = 0
+    message.error(error instanceof Error ? error.message : '加载质量问题失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+function reloadAll() {
+  void loadData()
+  void loadStats()
+}
+
+function search() {
+  pageNum.value = 1
+  void loadData()
+}
+
+function changePage(next: number) {
+  pageNum.value = next
+  void loadData()
+}
+
+function changePageSize(size: number) {
   pageSize.value = size
-  loadData()
+  pageNum.value = 1
+  void loadData()
 }
 
-const handleCurrentChange = (page) => {
-  pageNum.value = page
-  loadData()
+async function openDetail(row: IssueRow) {
+  detail.value = row
+  history.value = []
+  try {
+    const response = await getQualityDetail(row.id)
+    if (response.code === 200 && detail.value?.id === row.id) {
+      const data = response.data as {
+        handleHistories?: Array<{ time?: string; action?: string; operator?: string; remark?: string }>
+      }
+      history.value = data?.handleHistories ?? []
+    }
+  } catch {
+    history.value = []
+  }
 }
 
-const viewDetail = (row) => {
-  detailData.value = row
-  detailVisible.value = true
-}
-
-const handleIssue = (row) => {
-  detailData.value = row
-  handleForm.status = ''
+function openHandle(row: IssueRow) {
+  handleTarget.value = row
+  handleForm.result = ''
   handleForm.remark = ''
-  handleModalVisible.value = true
 }
 
-const confirmHandle = async () => {
-  if (!handleForm.status) {
+function closeHandle() {
+  handleTarget.value = null
+}
+
+async function submitHandle() {
+  if (!handleForm.result) {
     message.warning('请选择处理结果')
     return
   }
-
-  /**
-   * 弹窗里的"处理结果"取值（fixed / ignored / pending）是页面自己的叫法，
-   * 后端的状态口径是 resolved / ignored / processing。
-   * 直接把 fixed 当 status 提交，库里会存进一个谁都不认的状态字（实测就是这样），
-   * 列表里显示成 "fixed"。这里做一次显式翻译。
-   */
-  const HANDLE_RESULT_TO_STATUS = { fixed: 'resolved', ignored: 'ignored', pending: 'processing' }
-
+  // 弹窗里的结果值（fixed/ignored/pending）是页面叫法，后端状态口径是 resolved/ignored/processing
+  const RESULT_TO_STATUS: Record<string, string> = {
+    fixed: 'resolved',
+    ignored: 'ignored',
+    pending: 'processing',
+  }
+  const target = handleTarget.value
+  if (!target) return
+  saving.value = true
+  busyId.value = target.id
   try {
-    const response = await handleQualityIssue(detailData.value.id, {
-      status: HANDLE_RESULT_TO_STATUS[handleForm.status] ?? handleForm.status,
-      remark: handleForm.remark
+    const response = await handleQualityIssue(target.id, {
+      status: RESULT_TO_STATUS[handleForm.result] ?? handleForm.result,
+      remark: handleForm.remark,
     })
-    if (response.code === 200) {
-      message.success('处理成功')
-      handleModalVisible.value = false
-      detailVisible.value = false
-      // 处置会改变"已解决/解决率"，所以统计也要跟着刷
-      loadStats()
-      loadData()
-    } else {
-      message.error(response.message || '操作失败')
-    }
+    if (response.code !== 200) throw new Error(response.message || '操作失败')
+    message.success('处理成功')
+    closeHandle()
+    detail.value = null
+    await Promise.all([loadData(), loadStats()])
   } catch (error) {
-    message.error('操作失败')
+    message.error(error instanceof Error ? error.message : '操作失败')
+  } finally {
+    saving.value = false
+    busyId.value = null
   }
 }
 
-const formatDate = (date) => {
-  if (!date) return ''
-  // 后端返回 ISO（如 2026-10-12T17:32:41），只按空格切分会把 T 一起显示出来
-  return String(date).replace('T', ' ').split(' ')[0]
-}
-
-onMounted(() => {
-  loadStats()
-  loadData()
-})
+onMounted(reloadAll)
 </script>
 
 <style scoped>
-.quality-list {
-  padding: 20px;
+.monitor-table {
+  min-width: 1120px;
 }
 
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 24px;
+.time-cell {
+  white-space: nowrap;
 }
 
-.header-left h1 {
-  font-size: 24px;
+.desc-cell {
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history {
+  margin-top: 16px;
+}
+
+.history h4 {
+  margin: 0 0 10px;
+  font-size: 13.5px;
   font-weight: 600;
-  color: #2d3748;
-  margin: 0;
 }
 
-.header-left p {
-  font-size: 14px;
-  color: #a0aec0;
-  margin: 4px 0 0;
-}
-
-.stats-row {
-  display: flex;
-  gap: 20px;
-  margin-bottom: 20px;
-}
-
-.stat-item {
-  flex: 1;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 12px;
-  padding: 20px;
+.history-list {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  color: #fff;
-}
-
-.stat-item.warning {
-  background: linear-gradient(135deg, #faad14 0%, #ffc53d 100%);
-}
-
-.stat-item.danger {
-  background: linear-gradient(135deg, #f5222d 0%, #ff4d4f 100%);
-}
-
-.stat-item.success {
-  background: linear-gradient(135deg, #52c41a 0%, #73d13d 100%);
-}
-
-.stat-num {
-  font-size: 28px;
-  font-weight: 700;
-}
-
-.stat-text {
-  font-size: 14px;
-  opacity: 0.9;
-  margin-top: 4px;
-}
-
-.search-bar {
-  display: flex;
-  gap: 16px;
-  margin-bottom: 20px;
-}
-
-.search-group {
-  display: flex;
-  flex: 1;
-}
-
-.search-input {
-  flex: 1;
-  padding: 10px 16px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px 0 0 8px;
-  font-size: 14px;
-  outline: none;
-  transition: border-color 0.2s;
-}
-
-.search-input:focus {
-  border-color: #238636;
-}
-
-.search-btn {
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-left: none;
-  padding: 10px 24px;
-  border-radius: 0 8px 8px 0;
-  font-size: 14px;
-  color: #238636;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.search-btn:hover {
-  background: rgba(35, 134, 54, 0.1);
-}
-
-.filter-group {
-  display: flex;
-  align-items: center;
-}
-
-.filter-select {
-  padding: 10px 16px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 14px;
-  color: #4a5568;
-  background: #fff;
-  cursor: pointer;
-  outline: none;
-}
-
-.table-card {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  overflow: hidden;
-}
-
-.data-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.data-table th,
-.data-table td {
-  padding: 14px 16px;
-  text-align: left;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.data-table th {
-  font-size: 13px;
-  font-weight: 600;
-  color: #4a5568;
-  background: #f8fafc;
-}
-
-.data-table td {
-  font-size: 13px;
-  color: #2d3748;
-}
-
-.level-badge {
-  font-size: 11px;
-  font-weight: 500;
-  padding: 4px 12px;
-  border-radius: 12px;
-}
-
-.level-badge.critical,
-.level-badge.high {
-  background: rgba(218, 54, 51, 0.1);
-  color: #da3633;
-}
-
-.level-badge.warning,
-.level-badge.medium {
-  background: rgba(210, 153, 34, 0.1);
-  color: #d29922;
-}
-
-.level-badge.info,
-.level-badge.low {
-  background: rgba(59, 130, 246, 0.1);
-  color: #3b82f6;
-}
-
-.status-badge {
-  font-size: 11px;
-  font-weight: 500;
-  padding: 4px 12px;
-  border-radius: 12px;
-}
-
-.status-badge.pending {
-  background: rgba(218, 54, 51, 0.1);
-  color: #da3633;
-}
-
-.status-badge.processing {
-  background: rgba(210, 153, 34, 0.1);
-  color: #d29922;
-}
-
-.status-badge.resolved {
-  background: rgba(35, 134, 54, 0.1);
-  color: #238636;
-}
-
-.action-cell {
-  display: flex;
   gap: 8px;
 }
 
-.action-btn {
-  font-size: 12px;
-  padding: 6px 12px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.action-btn.view {
-  background: rgba(59, 130, 246, 0.1);
-  color: #3b82f6;
-}
-
-.action-btn.handle {
-  background: rgba(35, 134, 54, 0.1);
-  color: #238636;
-}
-
-.action-btn:hover {
-  opacity: 0.8;
-}
-
-.pagination {
+.history-row {
   display: flex;
-  justify-content: center;
   align-items: center;
-  gap: 16px;
-  padding: 20px;
-}
-
-.page-btn {
-  padding: 8px 16px;
-  border: 1px solid #e2e8f0;
+  gap: 14px;
+  padding: 9px 12px;
   border-radius: 6px;
-  background: #fff;
-  font-size: 13px;
-  color: #4a5568;
-  cursor: pointer;
-  transition: all 0.2s;
+  background: #f8faf9;
+  font-size: 12.5px;
 }
 
-.page-btn:hover:not(:disabled) {
-  background: #f8fafc;
+.history-row em {
+  color: var(--mds-text-3);
+  font-style: normal;
 }
 
-.page-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.page-info {
-  font-size: 13px;
-  color: #a0aec0;
-}
-
-.modal-overlay {
+.mds-mask {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  inset: 0;
+  z-index: 1000;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
-}
-
-.modal-content {
-  background: #fff;
-  border-radius: 12px;
-  width: 500px;
-  max-width: 90%;
-  overflow: hidden;
-}
-
-.detail-modal {
-  width: 600px;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.modal-header h3 {
-  font-size: 18px;
-  font-weight: 600;
-  color: #2d3748;
-  margin: 0;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 24px;
-  color: #a0aec0;
-  cursor: pointer;
-  padding: 0;
-  line-height: 1;
-}
-
-.close-btn:hover {
-  color: #2d3748;
-}
-
-.modal-body {
+  background: rgba(0, 0, 0, 0.45);
   padding: 20px;
 }
 
-.form-group {
-  margin-bottom: 16px;
+.mds-modal {
+  width: 680px;
+  max-width: 100%;
+  max-height: 88vh;
+  overflow: auto;
+  border-radius: var(--mds-radius);
+  background: var(--mds-card);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.22);
 }
 
-.form-group label {
-  display: block;
-  font-size: 14px;
-  color: #4a5568;
-  margin-bottom: 6px;
-  font-weight: 500;
-}
-
-.form-select {
-  width: 100%;
-  padding: 10px 14px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 14px;
-  color: #4a5568;
-  background: #fff;
-  cursor: pointer;
-  outline: none;
-}
-
-.form-textarea {
-  width: 100%;
-  padding: 10px 14px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 14px;
-  outline: none;
-  transition: border-color 0.2s;
-  box-sizing: border-box;
-  resize: vertical;
-}
-
-.form-textarea:focus {
-  border-color: #238636;
-}
-
-.detail-row {
-  display: flex;
-  justify-content: space-between;
-  padding: 12px 0;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.detail-row:last-child {
-  border-bottom: none;
-}
-
-.detail-label {
-  font-size: 13px;
-  color: #a0aec0;
-}
-
-.detail-value {
-  font-size: 13px;
-  color: #2d3748;
-  font-weight: 500;
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  padding: 20px;
-  border-top: 1px solid #f0f0f0;
-}
-
-.btn {
-  padding: 10px 20px;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  border: none;
-}
-
-.btn-cancel {
-  background: #f0f0f0;
-  color: #4a5568;
-}
-
-.btn-cancel:hover {
-  background: #e2e8f0;
-}
-
-.btn-primary {
-  background: linear-gradient(135deg, #238636 0%, #2ea043 100%);
-  color: #fff;
-}
-
-.btn-primary:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(35, 134, 54, 0.3);
+.mds-modal--wide {
+  width: 820px;
 }
 </style>

@@ -13,6 +13,7 @@ import com.agri.production.mapper.InputStockFlowMapper;
 import com.agri.production.mapper.InputUsageRecordMapper;
 import com.agri.production.mapper.PlotMapper;
 import com.agri.production.service.IInputService;
+import com.agri.production.vo.InputStockFlowVO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -242,6 +243,46 @@ public class InputServiceImpl implements IInputService {
     }
 
     @Override
+    public PageResult<InputStockFlowVO> pageAllFlows(int pageNum, int pageSize, Integer flowType,
+                                                    String batchNo, String startDate, String endDate,
+                                                    String tenantId) {
+        LambdaQueryWrapper<InputStockFlow> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(InputStockFlow::getTenantId, tenantId);
+        if (flowType != null) {
+            wrapper.eq(InputStockFlow::getFlowType, flowType);
+        }
+        String batch = trimToNull(batchNo);
+        if (batch != null) {
+            wrapper.like(InputStockFlow::getBatchNo, batch);
+        }
+        LocalDate start = parseDate(startDate);
+        LocalDate end = parseDate(endDate);
+        if (start != null) {
+            wrapper.ge(InputStockFlow::getCreateTime, start.atStartOfDay());
+        }
+        if (end != null) {
+            wrapper.le(InputStockFlow::getCreateTime, end.atTime(java.time.LocalTime.MAX));
+        }
+        wrapper.orderByDesc(InputStockFlow::getCreateTime).orderByDesc(InputStockFlow::getFlowId);
+        int safePage = pageNum > 0 ? pageNum : 1;
+        int safeSize = pageSize > 0 ? pageSize : 20;
+        IPage<InputStockFlow> result = flowMapper.selectPage(new Page<>(safePage, safeSize), wrapper);
+        List<Long> inputIds = result.getRecords().stream()
+                .map(InputStockFlow::getInputId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+        Map<Long, InputMaterial> materials = inputIds.isEmpty()
+                ? Map.of()
+                : inputMapper.selectBatchIds(inputIds).stream()
+                        .collect(Collectors.toMap(InputMaterial::getInputId, item -> item));
+        List<InputStockFlowVO> rows = result.getRecords().stream()
+                .map(flow -> InputStockFlowVO.of(flow, materials.get(flow.getInputId())))
+                .toList();
+        return PageResult.of(rows, result.getTotal(), safePage, safeSize);
+    }
+
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public InputStockFlow createFlow(Long inputId, InputStockFlow flow, String tenantId) {
         InputMaterial material = getOwned(inputId, tenantId);
@@ -309,7 +350,19 @@ public class InputServiceImpl implements IInputService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public InputMaterial consume(Long inputId, BigDecimal qty, Long relatedTaskId, Long operatorId, String tenantId) {
+    public InputMaterial consume(Long inputId, BigDecimal qty, Long relatedTaskId, Long operatorId,
+                                  String tenantId) {
+        return consumeInternal(inputId, qty, relatedTaskId, operatorId, tenantId, null);
+    }
+
+    /**
+     * 领用：写领用流水 + 扣库存。
+     *
+     * @param remark 流水备注；使用登记触发时写入 {@code 使用登记 #usageId}，
+     *               供修改 / 删除使用记录时按编号找回对应的领用流水
+     */
+    private InputMaterial consumeInternal(Long inputId, BigDecimal qty, Long relatedTaskId, Long operatorId,
+                                          String tenantId, String remark) {
         InputMaterial material = getOwned(inputId, tenantId);
         BigDecimal amount = requirePositive(qty);
         InputStockFlow flow = new InputStockFlow();
@@ -318,6 +371,7 @@ public class InputServiceImpl implements IInputService {
         flow.setRelatedTaskId(relatedTaskId);
         flow.setOperatorId(operatorId);
         flow.setTenantId(tenantId);
+        flow.setRemark(trimToNull(remark));
         flow.setCreateTime(LocalDateTime.now());
         flow.setUpdateTime(LocalDateTime.now());
         flow.setDeleted(0);
@@ -325,6 +379,51 @@ public class InputServiceImpl implements IInputService {
         flowMapper.insert(flow);
         applyStock(material, amount.negate());
         return detail(inputId, tenantId);
+    }
+
+    /** 使用登记产生的领用流水备注（带 usageId，便于一对一追溯）。 */
+    private static String usageConsumeRemark(Long usageId) {
+        return usageId == null ? null : "使用登记 #" + usageId + " 自动领用";
+    }
+
+    /**
+     * 该使用记录是否有可追溯的领用流水。
+     *
+     * <p>历史 / 演示数据里存在「有使用记录、没有领用流水」或「有流水但未带编号」的情况：
+     * 这类记录不能直接回补库存（会把从未扣过的量加回去），也不能直接删除。</p>
+     */
+    private boolean hasUsageConsumeFlow(Long usageId) {
+        if (usageId == null) {
+            return false;
+        }
+        return flowMapper.selectCount(new LambdaQueryWrapper<InputStockFlow>()
+                .eq(InputStockFlow::getFlowType, 2)
+                .like(InputStockFlow::getRemark, "使用登记 #" + usageId + " ")) > 0;
+    }
+
+    /** 使用记录修改或删除时，把此前扣掉的量以「退回」流水放回库存。 */
+    private void returnStock(Long inputId, BigDecimal qty, Long relatedTaskId, Long operatorId,
+                             String tenantId, String reason) {
+        InputMaterial material = getOwned(inputId, tenantId);
+        BigDecimal amount = requirePositive(qty);
+        InputStockFlow flow = new InputStockFlow();
+        flow.setFlowType(3);
+        flow.setQty(amount);
+        flow.setRelatedTaskId(relatedTaskId);
+        flow.setOperatorId(operatorId);
+        flow.setTenantId(tenantId);
+        // 原实现收了 reason 却没用：退回流水没有备注，事后分不清是系统回退还是人工退回
+        flow.setRemark(trimToNull(reason));
+        flow.setCreateTime(LocalDateTime.now());
+        flow.setUpdateTime(LocalDateTime.now());
+        flow.setDeleted(0);
+        flow.setInputId(inputId);
+        flowMapper.insert(flow);
+        applyStock(material, amount);
+    }
+
+    private static boolean isPositive(BigDecimal value) {
+        return value != null && value.compareTo(BigDecimal.ZERO) > 0;
     }
 
     /* ==================== 使用记录 ==================== */
@@ -385,6 +484,11 @@ public class InputServiceImpl implements IInputService {
         record.setUpdateTime(LocalDateTime.now());
         record.setDeleted(0);
         usageMapper.insert(record);
+        if (Integer.valueOf(1).equals(record.getStatus()) && record.getInputId() != null) {
+            // 流水备注带 usageId：后续修改 / 删除这条使用记录时能按编号找回并回补库存
+            consumeInternal(record.getInputId(), record.getDosage(), record.getTaskId(),
+                    record.getOperatorId(), tenantId, usageConsumeRemark(record.getUsageId()));
+        }
         return record;
     }
 
@@ -395,9 +499,36 @@ public class InputServiceImpl implements IInputService {
         if (record == null || !tenantId.equals(record.getTenantId())) {
             throw new BusinessException(404, "使用记录不存在：" + usageId);
         }
+        Long oldInputId = record.getInputId();
+        BigDecimal oldDosage = record.getDosage();
+        Integer oldStatus = record.getStatus();
         applyUsage(record, dto);
         record.setUpdateTime(LocalDateTime.now());
         usageMapper.updateById(record);
+        boolean hadConsumed = Integer.valueOf(1).equals(oldStatus) && oldInputId != null && isPositive(oldDosage);
+        boolean shouldConsume = Integer.valueOf(1).equals(record.getStatus()) && record.getInputId() != null
+                && isPositive(record.getDosage());
+        // 只有「投入品 / 用量 / 状态」变化才动库存；只改地块、任务、备注等不应产生一对出入库流水
+        boolean stockChanged = hadConsumed != shouldConsume
+                || (hadConsumed && shouldConsume
+                    && (!java.util.Objects.equals(oldInputId, record.getInputId())
+                        || oldDosage.compareTo(record.getDosage()) != 0
+                        || !java.util.Objects.equals(oldStatus, record.getStatus())));
+        if (!stockChanged) {
+            return record;
+        }
+        if (hadConsumed && !hasUsageConsumeFlow(usageId)) {
+            throw new BusinessException(400,
+                    "该使用记录没有可追溯的领用流水（历史数据），不能直接修改用量或状态；请删除后重新登记");
+        }
+        if (hadConsumed) {
+            returnStock(oldInputId, oldDosage, record.getTaskId(), record.getOperatorId(), tenantId,
+                    "使用记录变更回退 #" + usageId);
+        }
+        if (shouldConsume) {
+            consumeInternal(record.getInputId(), record.getDosage(), record.getTaskId(), record.getOperatorId(),
+                    tenantId, usageConsumeRemark(usageId));
+        }
         return record;
     }
 
@@ -407,6 +538,15 @@ public class InputServiceImpl implements IInputService {
         InputUsageRecord record = usageMapper.selectById(usageId);
         if (record == null || !tenantId.equals(record.getTenantId())) {
             throw new BusinessException(404, "使用记录不存在：" + usageId);
+        }
+        if (Integer.valueOf(1).equals(record.getStatus()) && record.getInputId() != null && isPositive(record.getDosage())) {
+            // 只有确实扣过库存（有带 usageId 的领用流水）才回补，避免把从未扣过的历史记录加回去
+            if (!hasUsageConsumeFlow(usageId)) {
+                throw new BusinessException(400,
+                        "该使用记录没有可追溯的领用流水（历史数据），不能直接删除；请先完成库存校准");
+            }
+            returnStock(record.getInputId(), record.getDosage(), record.getTaskId(), record.getOperatorId(), tenantId,
+                    "使用记录删除回退 #" + usageId);
         }
         usageMapper.deleteById(usageId);
     }
@@ -521,6 +661,23 @@ public class InputServiceImpl implements IInputService {
             InputMaterial material = inputMapper.selectById(record.getInputId());
             if (material != null && record.getTenantId().equals(material.getTenantId())) {
                 record.setInputName(material.getInputName());
+                if (record.getUnit() == null) {
+                    record.setUnit(material.getUnit());
+                }
+                if (record.getSafetyIntervalDays() == null) {
+                    record.setSafetyIntervalDays(material.getSafetyInterval());
+                }
+            }
+        }
+        // 反向补全：页面只选名称时也要拿到投入品主键，否则库存流水无法关联并扣库。
+        if (record.getInputId() == null && record.getInputName() != null) {
+            InputMaterial material = inputMapper.selectOne(new LambdaQueryWrapper<InputMaterial>()
+                    .eq(InputMaterial::getTenantId, record.getTenantId())
+                    .eq(InputMaterial::getInputName, record.getInputName())
+                    .orderByAsc(InputMaterial::getInputId)
+                    .last("LIMIT 1"));
+            if (material != null) {
+                record.setInputId(material.getInputId());
                 if (record.getUnit() == null) {
                     record.setUnit(material.getUnit());
                 }

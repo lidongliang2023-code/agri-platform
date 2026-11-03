@@ -4,17 +4,20 @@ import com.agri.production.common.constant.PlanStatusDict;
 import com.agri.production.common.entity.PageResult;
 import com.agri.production.common.exception.BusinessException;
 import com.agri.production.dto.PlantingPlanSaveDTO;
+import com.agri.production.entity.Approval;
 import com.agri.production.entity.Farm;
 import com.agri.production.entity.PlantingPlan;
 import com.agri.production.entity.Plot;
 import com.agri.production.entity.TeamMember;
 import com.agri.production.entity.CropInfo;
+import com.agri.production.mapper.ApprovalMapper;
 import com.agri.production.mapper.FarmMapper;
 import com.agri.production.mapper.PlantingPlanMapper;
 import com.agri.production.mapper.PlotMapper;
 import com.agri.production.mapper.TeamMemberMapper;
 import com.agri.production.mapper.CropInfoMapper;
 import com.agri.production.service.IPlantingPlanService;
+import com.agri.production.service.IProductionNotificationService;
 import com.agri.production.vo.PlantingPlanVO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -57,13 +60,19 @@ public class PlantingPlanServiceImpl extends ServiceImpl<PlantingPlanMapper, Pla
     private final TeamMemberMapper memberMapper;
     /** 作物主数据：把作物落到 crop_id（主键）+ crop_name（名称）。 */
     private final CropInfoMapper cropMapper;
+    /** 运营审批单：计划提交时生成、计划直接审批时同步。 */
+    private final ApprovalMapper approvalMapper;
+    private final IProductionNotificationService notificationService;
 
     public PlantingPlanServiceImpl(PlotMapper plotMapper, FarmMapper farmMapper, TeamMemberMapper memberMapper,
-                                   CropInfoMapper cropMapper) {
+                                   CropInfoMapper cropMapper, ApprovalMapper approvalMapper,
+                                   IProductionNotificationService notificationService) {
         this.plotMapper = plotMapper;
         this.farmMapper = farmMapper;
         this.memberMapper = memberMapper;
         this.cropMapper = cropMapper;
+        this.approvalMapper = approvalMapper;
+        this.notificationService = notificationService;
     }
 
     @Override
@@ -130,15 +139,10 @@ public class PlantingPlanServiceImpl extends ServiceImpl<PlantingPlanMapper, Pla
         if (plan == null || Integer.valueOf(1).equals(plan.getDeleted())) {
             return false;
         }
-        plan.setPlanStatus(PlanStatusDict.ACTIVE);
-        plan.setApprover(approver);
-        plan.setApprovalComment(comment);
-        plan.setApprovalTime(new Date());
-        plan.setUpdateTime(LocalDateTime.now());
+        applyApprovalDecision(plan, true, approver, comment);
         return this.updateById(plan);
     }
 
-    /** 提交审批 → 待审批（原先写的 "submitted" 同样不在词表里）。 */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean submitPlan(Long id) {
@@ -149,6 +153,89 @@ public class PlantingPlanServiceImpl extends ServiceImpl<PlantingPlanMapper, Pla
         plan.setPlanStatus(PlanStatusDict.PENDING);
         plan.setUpdateTime(LocalDateTime.now());
         return this.updateById(plan);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public PlantingPlan submitForApproval(Long id, String tenantId) {
+        PlantingPlan plan = getOwned(id, tenantId);
+        Integer code = PlanStatusDict.toCode(plan.getPlanStatus());
+        if (code == 2 || code == 3) {
+            throw new BusinessException(400, "计划已经处于「进行中」或「已完结」，无需重复提交审批");
+        }
+        if (code == 5) {
+            Approval existing = findPendingPlanApproval(plan.getId());
+            if (existing != null) {
+                return plan;
+            }
+        }
+        plan.setPlanStatus(PlanStatusDict.PENDING);
+        plan.setApprover(null);
+        plan.setApprovalComment(null);
+        plan.setApprovalTime(null);
+        plan.setUpdateTime(LocalDateTime.now());
+        this.updateById(plan);
+        createPlanApproval(plan);
+        return plan;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public PlantingPlan approveByAdmin(Long id, String tenantId, String approver, String comment) {
+        PlantingPlan plan = getOwned(id, tenantId);
+        applyApprovalDecision(plan, true, approver, comment);
+        this.updateById(plan);
+        Approval approval = findPendingPlanApproval(plan.getId());
+        if (approval != null) {
+            approval.setStatus("APPROVED");
+            approval.setCurrentApproverId(approver);
+            approval.setApproveOpinion(comment);
+            approval.setApproveAt(LocalDateTime.now());
+            approval.setUpdateTime(LocalDateTime.now());
+            approvalMapper.updateById(approval);
+        }
+        return plan;
+    }
+
+    private void applyApprovalDecision(PlantingPlan plan, boolean approved, String approver, String comment) {
+        plan.setPlanStatus(approved ? PlanStatusDict.ACTIVE : PlanStatusDict.DRAFT);
+        plan.setApprover(approver);
+        plan.setApprovalComment(comment);
+        plan.setApprovalTime(new Date());
+        plan.setUpdateTime(LocalDateTime.now());
+    }
+
+    private void createPlanApproval(PlantingPlan plan) {
+        Approval approval = new Approval();
+        approval.setApprovalCode("PLAN" + plan.getId() + "T" + System.currentTimeMillis());
+        approval.setBizType("PLAN");
+        approval.setBizId(String.valueOf(plan.getId()));
+        approval.setTitle("种养计划审批：" + plan.getPlanName());
+        approval.setApplicantId(plan.getManagerId() == null ? null : String.valueOf(plan.getManagerId()));
+        approval.setApplicantName(plan.getManagerName());
+        approval.setApproveLevel(1);
+        approval.setCurrentApproverId("PLATFORM_OPERATOR");
+        approval.setSubmitAt(LocalDateTime.now());
+        approval.setStatus("PENDING");
+        approval.setTenantId(plan.getTenantId());
+        approval.setCreateTime(LocalDateTime.now());
+        approval.setUpdateTime(LocalDateTime.now());
+        approval.setDeleted(0);
+        approvalMapper.insert(approval);
+        notificationService.notify(plan.getTenantId(), String.valueOf(plan.getFarmId()),
+                plan.getManagerId() == null ? null : String.valueOf(plan.getManagerId()), "APPROVAL",
+                "种养计划已提交审批",
+                String.format("计划「%s」已提交，等待平台运营审批。", plan.getPlanName()),
+                String.valueOf(plan.getId()), "/production/plans/" + plan.getId());
+    }
+
+    private Approval findPendingPlanApproval(Long planId) {
+        return approvalMapper.selectOne(new LambdaQueryWrapper<Approval>()
+                .eq(Approval::getBizType, "PLAN")
+                .eq(Approval::getBizId, String.valueOf(planId))
+                .eq(Approval::getStatus, "PENDING")
+                .orderByDesc(Approval::getId)
+                .last("LIMIT 1"));
     }
 
     /* ==================== 前端契约方法 ==================== */

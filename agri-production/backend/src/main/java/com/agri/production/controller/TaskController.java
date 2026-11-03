@@ -8,7 +8,16 @@ import com.agri.production.service.ITaskService;
 import com.agri.production.service.FarmIdResolver;
 import com.agri.production.vo.TaskVO;
 import jakarta.validation.Valid;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 import java.util.Map;
@@ -37,8 +46,15 @@ public class TaskController {
         return ApiResponse.success(vo.getId() == null ? null : String.valueOf(vo.getId()));
     }
 
+    /**
+     * 更新任务。
+     *
+     * <p>这里**不能**加 {@code @Valid}：详情页的编辑弹窗只改名称 / 类型 / 优先级 / 执行人 /
+     * 计划时间 / 描述，是部分更新；按创建 DTO 的必填校验会把「农场ID不能为空」直接抛给用户，
+     * 编辑永远保存不了。服务层按"只覆盖传了的字段"合并。</p>
+     */
     @PutMapping("/{id}")
-    public ApiResponse<TaskVO> update(@PathVariable Long id, @Valid @RequestBody TaskSaveDTO dto) {
+    public ApiResponse<TaskVO> update(@PathVariable Long id, @RequestBody TaskSaveDTO dto) {
         dto.setId(id);
         String tenantId = TenantContextService.currentTenantId();
         TaskVO vo = taskService.update(dto, tenantId);
@@ -77,7 +93,7 @@ public class TaskController {
         return ApiResponse.success(result);
     }
 
-    @PostMapping("/{id}/start")
+    @RequestMapping(value = "/{id}/start", method = {RequestMethod.POST, RequestMethod.PATCH})
     public ApiResponse<TaskVO> startTask(@PathVariable Long id) {
         String tenantId = TenantContextService.currentTenantId();
         TaskVO vo = taskService.startTask(id, tenantId);
@@ -90,9 +106,9 @@ public class TaskController {
      * <p>前端是 {@code POST /tasks/{id}/assign?assigneeId=xxx}（参数在查询串里，
      * 见 api/tasks.ts 的 dispatchTask）—— 后端此前没有这个接口。</p>
      */
-    @PostMapping("/{id}/assign")
+    @RequestMapping(value = "/{id}/assign", method = {RequestMethod.POST, RequestMethod.PATCH})
     public ApiResponse<TaskVO> assignTask(@PathVariable Long id,
-                                          @RequestParam Long assigneeId,
+                                          @RequestParam String assigneeId,
                                           @RequestParam(required = false) String assigneeName) {
         String tenantId = TenantContextService.currentTenantId();
         return ApiResponse.success(taskService.assignTask(id, assigneeId, assigneeName, tenantId));
@@ -105,7 +121,7 @@ public class TaskController {
      * 后端此前叫 {@code /complete} 且要求 body 必填，前端一调就是 400/404。
      * 保留 /complete 作为别名（同一实现），避免如果还有别处在用旧路径。</p>
      */
-    @PostMapping({"/{id}/submit", "/{id}/complete"})
+    @RequestMapping(value = {"/{id}/submit", "/{id}/complete"}, method = {RequestMethod.POST, RequestMethod.PATCH})
     public ApiResponse<TaskVO> submitTask(@PathVariable Long id,
                                           @RequestParam(required = false) String resultDesc,
                                           @RequestParam(required = false) String resultPhotoUrls) {

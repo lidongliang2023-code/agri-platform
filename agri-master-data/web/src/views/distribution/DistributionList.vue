@@ -71,7 +71,7 @@
             <td>{{ formatDate(task.startTime) }}</td>
             <td class="action-cell">
               <button class="action-btn view" @click="viewDetail(task)">详情</button>
-              <button 
+              <button v-point="'POST /admin/masterdata/distribution/tasks/{id}/retry'" 
                 v-if="task.status === 'failed'"
                 class="action-btn retry"
                 @click="retryTask(task.id)"
@@ -390,7 +390,7 @@ onMounted(() => {
 }
 
 .type-badge {
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
   font-weight: 500;
   padding: 4px 12px;
   border-radius: 12px;
@@ -407,7 +407,7 @@ onMounted(() => {
 }
 
 .status-badge {
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
   font-weight: 500;
   padding: 4px 12px;
   border-radius: 12px;

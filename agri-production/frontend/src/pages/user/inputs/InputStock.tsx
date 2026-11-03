@@ -1,20 +1,20 @@
 /**
- * 页面名称：出入库管理
- * 路由路径：/production/inputs/stock
- * 所属模块：农资投入品管理
+ * 页面名称：出入库管理（已拆入「农资管理」页的投入品档案 / 使用台账两个 Tab）
+ * 路由路径：无独立路由（旧 /production/inputs/stock 回落到 /production/inputs）
+ * 所属模块：农资管理
  * PRD 序号：PRD 6.1 #21「出入库管理」（原型未覆盖，按 PRD 7.2 闭环与 11.2.4 表结构实现）
  *
  * 实现要点：
- * - 四类作业：入库（flow_type 1）/ 领用（2）/ 退回（3）/ 盘点（4 盘盈 · 5 盘亏 · 6 报损）
- * - 入库与领用走后端 /stock-in、/consume，流水与库存原子联动
+ * - 作业入口：入库（flow_type 1）/ 使用登记（走使用台账，生成 2 领用流水）/ 退回（3）/ 盘点（4 盘盈 · 5 盘亏 · 6 报损）
+ * - 入库走后端 /stock-in；领用由「登记使用记录」统一触发 /consume，流水与库存原子联动
  * - 退回 / 盘点走 /stock-flows 写流水，并同步校正投入品库存
- * - 库存总览：按剩余量升序，低库存置顶，含预警阈值与库存状态
- * - 流水查询：按流水类型 / 批次号 / 日期区间筛选，支持导出
+ * - 库存总览（part=overview）：按剩余量升序，低库存置顶，含预警阈值与库存状态，挂在投入品档案 Tab
+ * - 流水查询（part=flows）：按流水类型 / 批次号 / 日期区间筛选，支持导出，挂在使用台账 Tab 底部
  */
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { PageContainer, ProTable } from '@ant-design/pro-components'
+import { ProTable } from '@ant-design/pro-components'
 import type { ProColumns } from '@ant-design/pro-components'
 import {
   Alert,
@@ -36,21 +36,25 @@ import {
   Typography,
   message,
 } from 'antd'
-import { DownloadOutlined, InboxOutlined, ReconciliationOutlined } from '@ant-design/icons'
+import {
+  DownloadOutlined,
+  FormOutlined,
+  InboxOutlined,
+  ReconciliationOutlined,
+  RollbackOutlined,
+} from '@ant-design/icons'
 import dayjs from 'dayjs'
 import type { Dayjs } from 'dayjs'
 import useFarmStore from '@/store/farm'
 import { listMembers } from '@/api/members'
 import { fetchTaskPage } from '@/api/tasks'
 import {
-  consume,
   createStockFlow,
   fetchInputStockOverview,
   fetchInputWarning,
+  pageAllStockFlows,
   pageInputs,
-  pageStockFlows,
   stockIn,
-  updateInputInfo,
 } from '@/api/inputs'
 import type { InputInfo, InputStockFlow } from '@/api/inputs'
 import type { Member, Task } from '@/types'
@@ -67,8 +71,13 @@ import {
 } from './shared'
 import type { StockState } from './shared'
 
-/** 作业弹窗类型 */
-type ActionKey = 'in' | 'consume' | 'return' | 'check' | null
+/**
+ * 作业弹窗类型。
+ *
+ * <p><b>领用不在这里</b>：领用必须走「使用台账 → 登记使用记录」，
+ * 由后端在同一次事务里写使用记录 + 领用流水 + 扣库存，保证台账与库存对得上。</p>
+ */
+type ActionKey = 'in' | 'return' | 'check' | null
 
 /** 流水筛选条件 */
 interface FlowFilters {
@@ -86,15 +95,6 @@ interface StockInForm {
   qty?: number
   batchNo?: string
   expireDate?: Dayjs
-  operatorId?: string
-  remark?: string
-}
-
-/** 领用表单值 */
-interface ConsumeForm {
-  inputId?: string
-  qty?: number
-  relatedTaskId?: string
   operatorId?: string
   remark?: string
 }
@@ -124,14 +124,41 @@ function dateKey(value?: string): string {
   return (value ?? '').slice(0, 10)
 }
 
+/** 面板分区：库存总览并入「投入品档案」Tab，出入库流水并入「使用台账」Tab */
+export type InputStockPart = 'overview' | 'flows'
+
+/** 从合并台账中的单行操作打开库存作业弹窗。 */
+export interface StockActionShortcut {
+  /** 每次点击递增，允许连续打开同一个作业 */
+  requestId: number
+  /** 作业类型 */
+  action: Exclude<ActionKey, null>
+  /** 预选投入品 */
+  inputId: string
+}
+
+interface InputStockProps {
+  /** 渲染哪一块：overview = 库存总览与四类作业；flows = 出入库流水 */
+  part?: InputStockPart
+  /** 是否渲染内置库存列表；合并到投入品档案主表时关闭，避免重复列表 */
+  showTable?: boolean
+  /** 外部主表触发的单行库存作业 */
+  shortcut?: StockActionShortcut
+}
+
 /**
- * 出入库管理页
+ * 出入库面板（拆分后分别并入「投入品档案」「使用台账」两个 Tab）
  *
  * 业务职责：投入品入库 / 领用 / 退回 / 盘点四类作业，库存总览与流水查询。
  *
- * @returns 页面内容
+ * @param props 分区选择
+ * @returns 面板内容（页头由外层「农资管理」页统一提供）
  */
-export default function InputStock(): JSX.Element {
+export default function InputStock({
+  part = 'overview',
+  showTable = true,
+  shortcut,
+}: InputStockProps): JSX.Element {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const currentFarm = useFarmStore((state) => state.currentFarm)
@@ -144,11 +171,23 @@ export default function InputStock(): JSX.Element {
   const [filterForm] = Form.useForm<FlowFilters>()
 
   const [inForm] = Form.useForm<StockInForm>()
-  const [consumeForm] = Form.useForm<ConsumeForm>()
   const [returnForm] = Form.useForm<ReturnForm>()
   const [checkForm] = Form.useForm<CheckForm>()
   const [checkInputId, setCheckInputId] = useState<string | undefined>(undefined)
   const [checkActual, setCheckActual] = useState<number | undefined>(undefined)
+
+  useEffect(() => {
+    if (!shortcut) return
+    setAction(shortcut.action)
+    if (shortcut.action === 'in') inForm.setFieldValue('inputId', shortcut.inputId)
+    if (shortcut.action === 'return') returnForm.setFieldValue('inputId', shortcut.inputId)
+    if (shortcut.action === 'check') {
+      setCheckInputId(shortcut.inputId)
+      setCheckActual(undefined)
+      checkForm.setFieldValue('inputId', shortcut.inputId)
+      checkForm.setFieldValue('actualQty', undefined)
+    }
+  }, [shortcut, inForm, returnForm, checkForm])
 
   /** 投入品档案 */
   const inputsQuery = useQuery({
@@ -168,17 +207,36 @@ export default function InputStock(): JSX.Element {
     queryFn: () => fetchInputWarning(),
   })
 
-  /** 出入库流水（按投入品逐项拉取后合并） */
+  /**
+   * 跨投入品流水（服务端筛选 / 分页）。
+   *
+   * <p>原实现按投入品逐项拉流水再合并，最多只覆盖 50 个投入品 × 每个 100 条 ——
+   * 数据一多就会截断。改为单个分页接口后，新增流水会真实追加到列表，不受前端上限影响。</p>
+   */
   const flowsQuery = useQuery({
-    queryKey: ['production-inputs', 'all-stock-flows'],
-    queryFn: async () => {
-      const inputs = await pageInputs({ pageNum: 1, pageSize: 100 })
-      const targets = inputs.list.slice(0, 50)
-      const lists = await Promise.all(
-        targets.map((input) => pageStockFlows(input.inputId, { pageNum: 1, pageSize: 100 })),
-      )
-      return lists.flatMap((page) => page.list ?? [])
-    },
+    queryKey: ['production-inputs', 'stock-flows', pageNum, pageSize, filters],
+    enabled: part === 'flows',
+    queryFn: () =>
+      pageAllStockFlows({
+        pageNum,
+        pageSize,
+        flowType: filters.flowType,
+        batchNo: filters.batchNo,
+        startDate: filters.dateRange?.[0]?.format('YYYY-MM-DD'),
+        endDate: filters.dateRange?.[1]?.format('YYYY-MM-DD'),
+      }),
+  })
+
+  /** 本月流水笔数（只取 total，不拉整页数据） */
+  const monthFlowQuery = useQuery({
+    queryKey: ['production-inputs', 'stock-flows-month'],
+    queryFn: () =>
+      pageAllStockFlows({
+        pageNum: 1,
+        pageSize: 1,
+        startDate: dayjs().startOf('month').format('YYYY-MM-DD'),
+        endDate: dayjs().format('YYYY-MM-DD'),
+      }),
   })
 
   /** 成员下拉 */
@@ -188,7 +246,7 @@ export default function InputStock(): JSX.Element {
     queryFn: () => listMembers({ farmId, pageNum: 1, pageSize: 200 }),
   })
 
-  /** 农事任务下拉（领用必填关联任务） */
+  /** 农事任务下拉（退回时可关联任务） */
   const tasksQuery = useQuery({
     queryKey: ['task-options', farmId],
     enabled: Boolean(farmId),
@@ -250,23 +308,12 @@ export default function InputStock(): JSX.Element {
     },
   })
 
-  /** 领用作业 */
-  const consumeMutation = useMutation({
-    mutationFn: (values: ConsumeForm) =>
-      consume(String(values.inputId), {
-        qty: values.qty ?? 0,
-        relatedTaskId: values.relatedTaskId,
-        operatorId: values.operatorId,
-      }),
-    onSuccess: () => {
-      message.success('领用成功，库存已扣减')
-      setAction(null)
-      consumeForm.resetFields()
-      void invalidateAll()
-    },
-  })
-
-  /** 退回作业：写流水 + 回补库存 */
+  /**
+   * 退回作业：写退回流水。
+   *
+   * <p>库存由后端 `createFlow` 在同一次事务里回补（流水 = 库存的唯一改动入口），
+   * 前端不再额外调 `updateInputInfo` —— 两处都改会把库存重复加一遍。</p>
+   */
   const returnMutation = useMutation({
     mutationFn: async (values: ReturnForm) => {
       const inputId = String(values.inputId)
@@ -281,24 +328,29 @@ export default function InputStock(): JSX.Element {
         relatedTaskId: values.relatedTaskId,
         remark: values.remark,
       })
-      const current = inputMap.get(inputId)?.stockQty ?? 0
-      await updateInputInfo(inputId, { stockQty: Number((current + qty).toFixed(3)) })
     },
     onSuccess: () => {
-      message.success('退回成功，库存已回补')
+      message.success('退回成功，已写入退回流水并回补库存')
       setAction(null)
       returnForm.resetFields()
       void invalidateAll()
     },
   })
 
-  /** 盘点作业：按差异生成盘盈 / 盘亏 / 报损流水并校正库存 */
+  /**
+   * 盘点作业：按差异生成盘盈 / 盘亏 / 报损流水，库存由后端随流水校正。
+   *
+   * <p>差异为 0 时不再发「数量 0」的流水（后端会拒绝），直接提示库存一致。</p>
+   */
   const checkMutation = useMutation({
-    mutationFn: async (values: CheckForm) => {
+    mutationFn: async (values: CheckForm): Promise<boolean> => {
       const inputId = String(values.inputId)
       const systemQty = inputMap.get(inputId)?.stockQty ?? 0
       const actualQty = values.actualQty ?? 0
       const diff = Number((actualQty - systemQty).toFixed(3))
+      if (Math.abs(diff) < 0.0001) {
+        return false
+      }
       const flowType = values.flowType ?? (diff > 0 ? 4 : 5)
       await createStockFlow(inputId, {
         inputId,
@@ -307,10 +359,10 @@ export default function InputStock(): JSX.Element {
         operatorId: values.operatorId,
         remark: values.remark ?? `库存盘点：系统 ${systemQty} → 实盘 ${actualQty}`,
       })
-      await updateInputInfo(inputId, { stockQty: actualQty })
+      return true
     },
-    onSuccess: () => {
-      message.success('盘点完成，库存已校正')
+    onSuccess: (changed) => {
+      message.success(changed ? '盘点完成，已写入盘点流水并校正库存' : '库存一致，无需调整')
       setAction(null)
       checkForm.resetFields()
       setCheckInputId(undefined)
@@ -349,46 +401,22 @@ export default function InputStock(): JSX.Element {
     return counts
   }, [allStockRows])
 
-  /** 临期批次（30 天内到期） */
+  /** 临期投入品（30 天内到期，按最近批次效期统计） */
   const expiringCount = useMemo(() => {
     const limit = dayjs().add(30, 'day').format('YYYY-MM-DD')
-    return (flowsQuery.data ?? []).filter((flow) => {
-      if (!flow.expireDate) return false
-      const key = dateKey(flow.expireDate)
-      return key >= dayjs().format('YYYY-MM-DD') && key <= limit
+    const today = dayjs().format('YYYY-MM-DD')
+    return allStockRows.filter((item) => {
+      if (!item.nearestExpireDate) return false
+      const key = dateKey(item.nearestExpireDate)
+      return key >= today && key <= limit
     }).length
-  }, [flowsQuery.data])
+  }, [allStockRows])
 
-  /** 本月流水笔数 */
-  const monthFlowCount = useMemo(() => {
-    const start = dayjs().startOf('month').format('YYYY-MM-DD')
-    return (flowsQuery.data ?? []).filter((flow) => dateKey(flow.createdAt) >= start).length
-  }, [flowsQuery.data])
+  /** 本月流水笔数（服务端 total，不受分页影响） */
+  const monthFlowCount = monthFlowQuery.data?.total ?? 0
 
-  /** 流水行（含投入品名称） */
-  const flowRows = useMemo<(InputStockFlow & { inputLabel: string })[]>(() => {
-    const start = filters.dateRange?.[0]?.format('YYYY-MM-DD')
-    const end = filters.dateRange?.[1]?.format('YYYY-MM-DD')
-    const batchNo = (filters.batchNo ?? '').trim()
-    return (flowsQuery.data ?? [])
-      .filter((flow) => {
-        if (filters.flowType && flow.flowType !== filters.flowType) return false
-        if (start && dateKey(flow.createdAt) < start) return false
-        if (end && dateKey(flow.createdAt) > end) return false
-        if (batchNo && !(flow.batchNo ?? '').includes(batchNo)) return false
-        return true
-      })
-      .map((flow) => ({
-        ...flow,
-        inputLabel: (flow.inputId ? inputMap.get(flow.inputId)?.inputName : undefined) ?? flow.inputId ?? '-',
-      }))
-      .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')))
-  }, [flowsQuery.data, inputMap, filters])
-
-  const pagedFlows = useMemo(
-    () => flowRows.slice((pageNum - 1) * pageSize, pageNum * pageSize),
-    [flowRows, pageNum, pageSize],
-  )
+  /** 当前页流水（服务端已筛选 / 排序） */
+  const flowRows = useMemo(() => flowsQuery.data?.list ?? [], [flowsQuery.data])
 
   /** 库存总览列 */
   const stockColumns: ProColumns<InputInfo>[] = [
@@ -453,13 +481,10 @@ export default function InputStock(): JSX.Element {
           入库
         </Typography.Link>,
         <Typography.Link
-          key="consume"
-          onClick={() => {
-            setAction('consume')
-            consumeForm.setFieldsValue({ inputId: record.inputId })
-          }}
+          key="usage"
+          onClick={() => navigate('/production/inputs?tab=ledger&create=1')}
         >
-          领用
+          使用登记
         </Typography.Link>,
         <Typography.Link
           key="detail"
@@ -472,7 +497,7 @@ export default function InputStock(): JSX.Element {
   ]
 
   /** 流水列 */
-  const flowColumns: ProColumns<InputStockFlow & { inputLabel: string }>[] = [
+  const flowColumns: ProColumns<InputStockFlow>[] = [
     {
       title: '时间',
       key: 'createdAt',
@@ -481,11 +506,14 @@ export default function InputStock(): JSX.Element {
     },
     {
       title: '投入品',
-      key: 'inputLabel',
+      key: 'inputName',
       width: 160,
       render: (_, record) => (
         <Typography.Link onClick={() => navigate(`/production/inputs/${record.inputId ?? ''}`)}>
-          {record.inputLabel}
+          {record.inputName ??
+            (record.inputId ? inputMap.get(record.inputId)?.inputName : undefined) ??
+            record.inputId ??
+            '-'}
         </Typography.Link>
       ),
     },
@@ -547,27 +575,43 @@ export default function InputStock(): JSX.Element {
     setFilters({})
   }
 
-  /** 导出流水 */
-  const handleExport = (): void => {
-    if (flowRows.length === 0) {
-      message.warning('暂无可导出的数据')
-      return
+  /** 导出流水（按当前筛选条件重新拉全量，避免只导出当前页） */
+  const handleExport = async (): Promise<void> => {
+    try {
+      const result = await pageAllStockFlows({
+        pageNum: 1,
+        pageSize: 2000,
+        flowType: filters.flowType,
+        batchNo: filters.batchNo,
+        startDate: filters.dateRange?.[0]?.format('YYYY-MM-DD'),
+        endDate: filters.dateRange?.[1]?.format('YYYY-MM-DD'),
+      })
+      const rows = result.list ?? []
+      if (rows.length === 0) {
+        message.warning('暂无可导出的数据')
+        return
+      }
+      downloadCsv(
+        '投入品出入库流水',
+        ['时间', '投入品', '流水类型', '数量', '批次号', '有效期至', '操作人', '关联任务', '备注'],
+        rows.map((row) => [
+          fmtDate(row.createdAt, 'YYYY-MM-DD HH:mm'),
+          row.inputName ??
+            (row.inputId ? inputMap.get(row.inputId)?.inputName : undefined) ??
+            row.inputId ??
+            '',
+          flowTypeMeta(row.flowType).label,
+          fmtNumber(row.qty),
+          row.batchNo ?? '',
+          fmtDate(row.expireDate),
+          row.operatorId ?? '',
+          row.relatedTaskId ?? '',
+          row.remark ?? '',
+        ]),
+      )
+    } catch (error) {
+      message.error((error as Error).message || '导出失败，请稍后重试')
     }
-    downloadCsv(
-      '投入品出入库流水',
-      ['时间', '投入品', '流水类型', '数量', '批次号', '有效期至', '操作人', '关联任务', '备注'],
-      flowRows.map((row) => [
-        fmtDate(row.createdAt, 'YYYY-MM-DD HH:mm'),
-        row.inputLabel,
-        flowTypeMeta(row.flowType).label,
-        fmtNumber(row.qty),
-        row.batchNo ?? '',
-        fmtDate(row.expireDate),
-        row.operatorId ?? '',
-        row.relatedTaskId ?? '',
-        row.remark ?? '',
-      ]),
-    )
   }
 
   /** 盘点差异与推荐类型 */
@@ -577,167 +621,192 @@ export default function InputStock(): JSX.Element {
     return Number(((checkActual ?? systemQty) - systemQty).toFixed(3))
   }, [checkInputId, checkActual, inputMap])
 
-  const loading = inputsQuery.isFetching || stockQuery.isFetching || flowsQuery.isFetching
-  const isError = inputsQuery.isError || stockQuery.isError || flowsQuery.isError
+  const loading =
+    part === 'flows'
+      ? flowsQuery.isFetching
+      : inputsQuery.isFetching || stockQuery.isFetching
+  const isError =
+    part === 'flows' ? flowsQuery.isError : inputsQuery.isError || stockQuery.isError
   const warningCount = (warningQuery.data ?? []).length
 
-  return (
-    <PageContainer
-      title="📦 投入品出入库管理"
-      subTitle={currentFarm ? currentFarm.farmName : undefined}
-      extra={[
-        <Button
-          key="in"
-          type="primary"
-          icon={<InboxOutlined />}
-          onClick={() => setAction('in')}
-        >
-          入库
-        </Button>,
-        <Button key="consume" onClick={() => setAction('consume')}>
-          领用
-        </Button>,
-        <Button key="return" onClick={() => setAction('return')}>
-          退回
-        </Button>,
-        <Button
-          key="check"
-          icon={<ReconciliationOutlined />}
-          onClick={() => setAction('check')}
-        >
-          盘点
-        </Button>,
-      ]}
-    >
-      <Row gutter={16} style={{ marginBottom: 16 }}>
-        <Col span={6}>
-          <Card>
-            <Statistic title="在库投入品" value={allStockRows.length} suffix="种" />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card>
-            <Statistic
-              title="低库存预警"
-              value={warningCount}
-              suffix="种"
-              valueStyle={{ color: warningCount > 0 ? '#cf1322' : undefined }}
-            />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card>
-            <Statistic
-              title="30 天内到期批次"
-              value={expiringCount}
-              suffix="个"
-              valueStyle={{ color: expiringCount > 0 ? '#fa8c16' : undefined }}
-            />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card>
-            <Statistic title="本月流水" value={monthFlowCount} suffix="笔" />
-          </Card>
-        </Col>
-      </Row>
+  /**
+   * 作业入口。
+   *
+   * <p>领用不在这里单独做一遍：统一跳「使用台账 → 登记使用记录」，
+   * 由后端一次事务完成「使用记录 + 领用流水 + 扣库存」，避免两套入口各扣一次。</p>
+   */
+  const actionButtons = (
+    <Space wrap>
+      <Button type="primary" icon={<InboxOutlined />} onClick={() => setAction('in')}>
+        入库
+      </Button>
+      <Button
+        icon={<FormOutlined />}
+        onClick={() => navigate('/production/inputs?tab=ledger&create=1')}
+      >
+        使用登记
+      </Button>
+      <Button icon={<RollbackOutlined />} onClick={() => setAction('return')}>
+        退回
+      </Button>
+      <Button icon={<ReconciliationOutlined />} onClick={() => setAction('check')}>
+        盘点
+      </Button>
+    </Space>
+  )
 
-      {warningCount > 0 && (
-        <Alert
-          style={{ marginBottom: 16 }}
-          type="warning"
-          showIcon
-          message={`⚠️ 库存预警：${warningCount} 种投入品库存已低于预警阈值，请及时补货（R-INPUT-05）`}
-        />
+  return (
+    <>
+      {part === 'overview' && (
+        <>
+          <div style={{ marginBottom: 16 }}>{actionButtons}</div>
+          <Alert
+            style={{ marginBottom: 16 }}
+            type="info"
+            showIcon
+            message="领用 / 使用统一在「使用台账 → 登记使用记录」办理：保存后同一次事务写入使用记录、领用流水并扣减库存。"
+          />
+          <Row gutter={16} style={{ marginBottom: 16 }}>
+            <Col span={6}>
+              <Card>
+                <Statistic title="在库投入品" value={allStockRows.length} suffix="种" />
+              </Card>
+            </Col>
+            <Col span={6}>
+              <Card>
+                <Statistic
+                  title="低库存预警"
+                  value={warningCount}
+                  suffix="种"
+                  valueStyle={{ color: warningCount > 0 ? '#cf1322' : undefined }}
+                />
+              </Card>
+            </Col>
+            <Col span={6}>
+              <Card>
+                <Statistic
+                  title="30 天内到期投入品"
+                  value={expiringCount}
+                  suffix="个"
+                  valueStyle={{ color: expiringCount > 0 ? '#fa8c16' : undefined }}
+                />
+              </Card>
+            </Col>
+            <Col span={6}>
+              <Card>
+                <Statistic title="本月流水" value={monthFlowCount} suffix="笔" />
+              </Card>
+            </Col>
+          </Row>
+
+          {warningCount > 0 && (
+            <Alert
+              style={{ marginBottom: 16 }}
+              type="warning"
+              showIcon
+              message={`⚠️ 库存预警：${warningCount} 种投入品库存已低于预警阈值，请及时补货（R-INPUT-05）`}
+            />
+          )}
+
+          {showTable && (
+            <Card
+              title="🏪 库存总览（低库存优先）"
+              style={{ marginBottom: 16 }}
+              extra={
+                <Segmented
+                  value={stockState}
+                  onChange={(value) => setStockState(value as StockState | 'all')}
+                  options={STOCK_STATE_OPTIONS.map((option) => ({
+                    value: option.value,
+                    label: `${option.label}(${stockStateCounts[option.value]})`,
+                  }))}
+                />
+              }
+            >
+              <ProTable<InputInfo>
+                rowKey="inputId"
+                columns={stockColumns}
+                dataSource={stockRows}
+                loading={loading}
+                search={false}
+                // 列宽合计约 920，窄屏时在卡片内横向滚动
+                scroll={{ x: 940 }}
+                options={{ reload: () => void invalidateAll(), density: true, setting: true }}
+                pagination={{ pageSize: 10, showTotal: (total) => `共 ${total} 种` }}
+              />
+            </Card>
+          )}
+        </>
       )}
 
-      <Card
-        title="🏪 库存总览（低库存优先）"
-        style={{ marginBottom: 16 }}
-        extra={
-          <Segmented
-            value={stockState}
-            onChange={(value) => setStockState(value as StockState | 'all')}
-            options={STOCK_STATE_OPTIONS.map((option) => ({
-              value: option.value,
-              label: `${option.label}(${stockStateCounts[option.value]})`,
-            }))}
-          />
-        }
-      >
-        <ProTable<InputInfo>
-          rowKey="inputId"
-          columns={stockColumns}
-          dataSource={stockRows}
-          loading={loading}
-          search={false}
-          options={{ reload: () => void invalidateAll(), density: true, setting: true }}
-          pagination={{ pageSize: 10, showTotal: (total) => `共 ${total} 种` }}
-        />
-      </Card>
-
-      <Card title="📋 出入库流水">
-        <Form form={filterForm} layout="inline" style={{ rowGap: 12, marginBottom: 12 }}>
-          <Form.Item name="flowType" label="流水类型">
-            <Select
-              allowClear
-              placeholder="全部流水类型"
-              options={FLOW_TYPE_OPTIONS}
-              style={{ width: 120 }}
-            />
-          </Form.Item>
-          <Form.Item name="batchNo" label="批次号">
-            <Input allowClear placeholder="请输入批次号" style={{ width: 160 }} />
-          </Form.Item>
-          <Form.Item name="dateRange" label="日期区间">
-            <DatePicker.RangePicker allowClear placeholder={['开始日期', '结束日期']} />
-          </Form.Item>
-          <Form.Item>
-            <Space>
-              <Button type="primary" onClick={handleSearch}>
-                查询
-              </Button>
-              <Button onClick={handleReset}>重置</Button>
-              <Button icon={<DownloadOutlined />} onClick={handleExport}>
-                导出
-              </Button>
-            </Space>
-          </Form.Item>
-        </Form>
-        {isError ? (
-          <Empty
-            description={
-              <Space direction="vertical">
-                <Typography.Text type="danger">出入库数据加载失败，请稍后重试</Typography.Text>
-                <Button onClick={() => void invalidateAll()}>重新加载</Button>
+      {part === 'flows' && (
+        <Card title="📋 出入库流水">
+          <Form form={filterForm} layout="inline" style={{ rowGap: 12, marginBottom: 12 }}>
+            <Form.Item name="flowType" label="流水类型">
+              <Select
+                allowClear
+                placeholder="全部流水类型"
+                options={FLOW_TYPE_OPTIONS}
+                style={{ width: 120 }}
+              />
+            </Form.Item>
+            <Form.Item name="batchNo" label="批次号">
+              <Input allowClear placeholder="请输入批次号" style={{ width: 160 }} />
+            </Form.Item>
+            <Form.Item name="dateRange" label="日期区间">
+              <DatePicker.RangePicker allowClear placeholder={['开始日期', '结束日期']} />
+            </Form.Item>
+            <Form.Item>
+              <Space>
+                <Button type="primary" onClick={handleSearch}>
+                  查询
+                </Button>
+                <Button onClick={handleReset}>重置</Button>
+                <Button icon={<DownloadOutlined />} onClick={() => void handleExport()}>
+                  导出
+                </Button>
               </Space>
-            }
-          />
-        ) : (
-          <ProTable<InputStockFlow & { inputLabel: string }>
-            rowKey="flowId"
-            columns={flowColumns}
-            dataSource={pagedFlows}
-            loading={loading}
-            search={false}
-            options={{ reload: () => void invalidateAll(), density: true, setting: true }}
-            pagination={{
-              current: pageNum,
-              pageSize,
-              total: flowRows.length,
-              showSizeChanger: true,
-              showTotal: (total) => `共 ${total} 条`,
-              onChange: (nextPage, nextSize) => {
-                setPageNum(nextPage)
-                setPageSize(nextSize)
-              },
-            }}
-          />
-        )}
-      </Card>
+            </Form.Item>
+          </Form>
+          {isError ? (
+            <Empty
+              description={
+                <Space direction="vertical">
+                  <Typography.Text type="danger">出入库数据加载失败，请稍后重试</Typography.Text>
+                  <Button onClick={() => void invalidateAll()}>重新加载</Button>
+                </Space>
+              }
+            />
+          ) : (
+            <ProTable<InputStockFlow>
+              rowKey="flowId"
+              columns={flowColumns}
+              dataSource={flowRows}
+              loading={loading}
+              search={false}
+              // 固定列宽合计约 1070，备注列需要额外空间，窄屏时表格内部横向滚动
+              scroll={{ x: 1200 }}
+              options={{ reload: () => void invalidateAll(), density: true, setting: true }}
+              pagination={{
+                current: pageNum,
+                pageSize,
+                total: flowsQuery.data?.total ?? 0,
+                showSizeChanger: true,
+                showTotal: (total) => `共 ${total} 条`,
+                onChange: (nextPage, nextSize) => {
+                  setPageNum(nextPage)
+                  setPageSize(nextSize)
+                },
+              }}
+            />
+          )}
+        </Card>
+      )}
 
-      {/* 入库 */}
-      <Modal
+      {part === 'overview' && (
+        <>
+          {/* 入库 */}
+          <Modal
         title="投入品入库"
         open={action === 'in'}
         okText="确认入库"
@@ -781,47 +850,7 @@ export default function InputStock(): JSX.Element {
         </Form>
       </Modal>
 
-      {/* 领用 */}
-      <Modal
-        title="投入品领用"
-        open={action === 'consume'}
-        okText="确认领用"
-        cancelText="取消"
-        confirmLoading={consumeMutation.isPending}
-        onOk={() => {
-          void consumeForm.validateFields().then((values) => {
-            consumeMutation.mutate(values)
-          })
-        }}
-        onCancel={() => setAction(null)}
-        destroyOnClose
-      >
-        <Form form={consumeForm} layout="vertical" style={{ marginTop: 16 }}>
-          <Form.Item
-            label="投入品"
-            name="inputId"
-            rules={[{ required: true, message: '请选择投入品' }]}
-          >
-            <Select showSearch optionFilterProp="label" options={inputOptions} placeholder="请选择投入品" />
-          </Form.Item>
-          <Form.Item label="领用数量" name="qty" rules={[{ required: true, message: '请输入领用数量' }]}>
-            <InputNumber min={0} precision={3} style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item
-            label="关联农事任务"
-            name="relatedTaskId"
-            rules={[{ required: true, message: '领用必填关联任务（PRD 11.2.4）' }]}
-          >
-            <Select showSearch optionFilterProp="label" options={taskOptions} placeholder="请选择关联任务" />
-          </Form.Item>
-          <Form.Item label="操作人" name="operatorId">
-            <Select showSearch optionFilterProp="label" options={memberOptions} placeholder="请选择操作人" />
-          </Form.Item>
-          <Form.Item label="备注" name="remark">
-            <Input placeholder="如 1号田番茄追肥" />
-          </Form.Item>
-        </Form>
-      </Modal>
+
 
       {/* 退回 */}
       <Modal
@@ -964,6 +993,8 @@ export default function InputStock(): JSX.Element {
           </Form.Item>
         </Form>
       </Modal>
-    </PageContainer>
+        </>
+      )}
+    </>
   )
 }

@@ -3,12 +3,15 @@ package com.agri.trade.controller;
 import com.agri.trade.common.entity.ApiResponse;
 import com.agri.trade.entity.Demand;
 import com.agri.trade.entity.ProductImage;
+import com.agri.trade.entity.ProductSku;
 import com.agri.trade.entity.TradeProductCategory;
 import com.agri.trade.entity.TradeProduct;
 import com.agri.trade.mapper.DemandMapper;
 import com.agri.trade.mapper.ProductImageMapper;
+import com.agri.trade.mapper.ProductSkuMapper;
 import com.agri.trade.mapper.TradeProductCategoryMapper;
 import com.agri.trade.mapper.TradeProductMapper;
+import com.agri.trade.service.PlatformSummaryService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -42,6 +46,8 @@ public class PortalPublicController {
     private final TradeProductCategoryMapper categoryMapper;
     private final DemandMapper demandMapper;
     private final ProductImageMapper productImageMapper;
+    private final ProductSkuMapper productSkuMapper;
+    private final PlatformSummaryService platformSummaryService;
 
     /** 门户展示用的已发布商品（按发布时间倒序）。 */
     @GetMapping("/products")
@@ -232,6 +238,18 @@ public class PortalPublicController {
                 .collect(Collectors.toList()));
     }
 
+    /**
+     * 门户首页公开大盘：只给平台级聚合，不含订单号、买卖方身份与逐笔金额。
+     *
+     * <p>门户首页原先把「1268 亿成交 / 42 万笔 / 186 万上架商品 / 38 万注册用户」写成前端常量，
+     * 运营下架商品、作废订单，首页数字纹丝不动。这里把 {@link PlatformSummaryService} 的同一份
+     * 口径开放给匿名访客，与登录用户端首页读的是同一个算法。</p>
+     */
+    @GetMapping("/summary")
+    public ApiResponse<Map<String, Object>> summary() {
+        return ApiResponse.success(platformSummaryService.platformStat());
+    }
+
     private static PortalProductView toView(TradeProduct product) {
         String origin = String.join("", nullToEmpty(product.getOriginProvince()),
                 nullToEmpty(product.getOriginCity()), nullToEmpty(product.getOriginDistrict()));
@@ -239,7 +257,7 @@ public class PortalPublicController {
         return new PortalProductView(
                 product.getId(),
                 product.getProductName(),
-                product.getSellerId(),
+                product.getSellerId() == null ? null : String.valueOf(product.getSellerId()),
                 product.getSellerName(),
                 product.getCategoryName(),
                 product.getVariety(),
@@ -256,7 +274,26 @@ public class PortalPublicController {
                 product.getCategoryId());
     }
 
-    private static PortalProductDetailView toDetailView(TradeProduct product) {
+    private PortalProductDetailView toDetailView(TradeProduct product) {
+        List<ProductSku> skuRows = productSkuMapper.selectList(new LambdaQueryWrapper<ProductSku>()
+                        .eq(ProductSku::getProductId, product.getId())
+                        .eq(ProductSku::getDelFlag, 0)
+                        .orderByAsc(ProductSku::getSortOrder)
+                        .orderByAsc(ProductSku::getId));
+        List<PublicProductSkuView> skus = skuRows
+                .stream()
+                .filter(item -> Integer.valueOf(1).equals(item.getStatus()))
+                .map(item -> new PublicProductSkuView(item.getId(), item.getSkuCode(), item.getSkuName(),
+                        item.getBarcode(), item.getUnit(), item.getPrice(), item.getStockQuantity(),
+                        item.getMinOrderQuantity(), item.getStatus(), item.getSortOrder()))
+                .collect(Collectors.toList());
+        if (skuRows.isEmpty()) {
+            skus = List.of(new PublicProductSkuView(null,
+                    product.getProductCode() == null ? "DEFAULT" : product.getProductCode() + "-DEFAULT",
+                    firstNonBlank(product.getSpecSize(), product.getSpecLevel(), product.getQualityLevel(), "默认规格"),
+                    product.getRemark(), product.getUnit(), product.getPrice(), product.getStockQuantity(),
+                    product.getMinOrderQuantity(), 1, 1));
+        }
         return new PortalProductDetailView(
                 product.getId(),
                 product.getProductCode(),
@@ -281,6 +318,7 @@ public class PortalPublicController {
                 product.getPriceMax(),
                 product.getPriceType(),
                 product.getMinOrderQuantity(),
+                skus,
                 product.getHarvestBatchNo(),
                 product.getCertificationJson(),
                 product.getQualityReportUrl(),
@@ -311,7 +349,12 @@ public class PortalPublicController {
     public record PortalProductView(
             Long id,
             String productName,
-            Long sellerId,
+            /**
+             * 经营主体号是雪花 ID（19 位），按数字下发会被浏览器 {@code JSON.parse} 直接吃掉精度：
+             * {@code ...146} 变成 {@code ...100}，大厅里的「供应商主页」链接就指到了不存在的店铺。
+             * 所以这里必须以字符串下发（同 {@link PublicSellerView}）。
+             */
+            String sellerId,
             String sellerName,
             String categoryName,
             String variety,
@@ -362,6 +405,7 @@ public class PortalPublicController {
             BigDecimal priceMax,
             String priceType,
             BigDecimal minOrderQuantity,
+            List<PublicProductSkuView> skus,
             String harvestBatchNo,
             String certificationJson,
             String qualityReportUrl,
@@ -373,6 +417,19 @@ public class PortalPublicController {
             Integer salesVolume,
             String publishStatus,
             java.util.Date createTime) {
+    }
+
+    public record PublicProductSkuView(
+            Long id,
+            String skuCode,
+            String skuName,
+            String barcode,
+            String unit,
+            BigDecimal price,
+            BigDecimal stockQuantity,
+            BigDecimal minOrderQuantity,
+            Integer status,
+            Integer sortOrder) {
     }
 
     public record PublicProductImageView(Long id, String imageUrl, String imageType, Integer sortOrder) {

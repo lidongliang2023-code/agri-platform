@@ -1,11 +1,14 @@
 package com.agri.s2b2c.service.impl;
 
 import com.agri.s2b2c.entity.Cart;
+import com.agri.s2b2c.entity.ChannelProduct;
 import com.agri.s2b2c.entity.Consumer;
 import com.agri.s2b2c.entity.Product;
 import com.agri.s2b2c.mapper.CartMapper;
+import com.agri.s2b2c.mapper.ChannelProductMapper;
 import com.agri.s2b2c.mapper.ConsumerMapper;
 import com.agri.s2b2c.mapper.ProductMapper;
+import com.agri.s2b2c.service.ActivityPriceService;
 import com.agri.s2b2c.service.ConsumerService;
 import com.agri.s2b2c.vo.CartVO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -22,13 +25,19 @@ import java.util.List;
 public class ConsumerServiceImpl extends ServiceImpl<ConsumerMapper, Consumer> implements ConsumerService {
 
     private final CartMapper cartMapper;
+    private final ChannelProductMapper channelProductMapper;
     private final ProductMapper productMapper;
     private final ObjectMapper objectMapper;
+    private final ActivityPriceService activityPriceService;
 
-    public ConsumerServiceImpl(CartMapper cartMapper, ProductMapper productMapper, ObjectMapper objectMapper) {
+    public ConsumerServiceImpl(CartMapper cartMapper, ChannelProductMapper channelProductMapper,
+                               ProductMapper productMapper, ObjectMapper objectMapper,
+                               ActivityPriceService activityPriceService) {
         this.cartMapper = cartMapper;
+        this.channelProductMapper = channelProductMapper;
         this.productMapper = productMapper;
         this.objectMapper = objectMapper;
+        this.activityPriceService = activityPriceService;
     }
 
     @Override
@@ -72,12 +81,35 @@ public class ConsumerServiceImpl extends ServiceImpl<ConsumerMapper, Consumer> i
 
     @Override
     public boolean addCart(Long consumerId, Long productId, Integer quantity) {
+        return addCart(consumerId, productId, quantity, null);
+    }
+
+    @Override
+    public boolean addCart(Long consumerId, Long productId, Integer quantity, Long channelId) {
         Product product = productMapper.selectById(productId);
         if (product == null) return false;
+        if (channelId != null) {
+            // 渠道店铺加购：商品必须在该渠道的选品清单里，且货架未下架
+            ChannelProduct relation = channelProductMapper.selectOne(new LambdaQueryWrapper<ChannelProduct>()
+                    .eq(ChannelProduct::getChannelId, channelId)
+                    .eq(ChannelProduct::getProductId, productId)
+                    .last("LIMIT 1"));
+            if (relation == null || !"ACTIVE".equals(relation.getStatus())) {
+                throw new IllegalArgumentException("该渠道未上架此商品，不能从渠道店铺加购");
+            }
+            if ("OFF".equalsIgnoreCase(relation.getShelfStatus())) {
+                throw new IllegalArgumentException("该商品已在渠道店铺下架");
+            }
+        }
 
         LambdaQueryWrapper<Cart> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Cart::getConsumerId, consumerId);
         wrapper.eq(Cart::getProductId, productId);
+        if (channelId == null) {
+            wrapper.isNull(Cart::getChannelId);
+        } else {
+            wrapper.eq(Cart::getChannelId, channelId);
+        }
         Cart existing = cartMapper.selectOne(wrapper);
 
         if (existing != null) {
@@ -88,7 +120,9 @@ public class ConsumerServiceImpl extends ServiceImpl<ConsumerMapper, Consumer> i
 
         Cart cart = new Cart();
         cart.setConsumerId(consumerId);
+        cart.setShopId(product.getSupplierId());
         cart.setProductId(productId);
+        cart.setChannelId(channelId);
         cart.setQuantity(quantity);
         cart.setSelected(true);
         cart.setCreateTime(LocalDateTime.now());
@@ -98,9 +132,19 @@ public class ConsumerServiceImpl extends ServiceImpl<ConsumerMapper, Consumer> i
 
     @Override
     public boolean updateCart(Long id, Integer quantity) {
+        return updateCart(id, quantity, null);
+    }
+
+    @Override
+    public boolean updateCart(Long id, Integer quantity, Boolean selected) {
         Cart cart = cartMapper.selectById(id);
         if (cart == null) return false;
-        cart.setQuantity(quantity);
+        if (quantity != null) {
+            cart.setQuantity(quantity);
+        }
+        if (selected != null) {
+            cart.setSelected(selected);
+        }
         cart.setUpdateTime(LocalDateTime.now());
         return cartMapper.updateById(cart) > 0;
     }
@@ -125,6 +169,14 @@ public class ConsumerServiceImpl extends ServiceImpl<ConsumerMapper, Consumer> i
         if (product != null) {
             vo.setName(product.getName());
             vo.setPrice(product.getPrice());
+            vo.setOriginalPrice(product.getPrice());
+            // 秒杀进行中：购物车小计按活动价，页面会打「秒杀价」标；下单时后端按同一规则重算
+            ActivityPriceService.Flash flash = activityPriceService.activeFlash(product.getId());
+            if (flash != null) {
+                vo.setActivityPrice(flash.price());
+                vo.setActivityType("FLASH");
+                vo.setActivityEndTime(flash.endTime());
+            }
             vo.setStock(product.getStock());
             vo.setSpec(product.getSpec());
             try {

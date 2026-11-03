@@ -52,6 +52,8 @@ public class CustomerSupplierRelation {
     @TableField("status")
     private String status;
 
+    private String tenantId;
+
     @TableField("create_time")
     private LocalDateTime createTime;
 }

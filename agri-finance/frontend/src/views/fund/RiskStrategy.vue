@@ -103,20 +103,20 @@ onMounted(load)
 </script>
 
 <style scoped>
-.finance-kpi em { color: #60776a; font-size: 10px; font-style: normal; }
+.finance-kpi em { color: #60776a; font-size: var(--fin-fs-xs); font-style: normal; }
 .risk-layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; align-items: start; gap: 14px; }
 .rule-name { display: flex; align-items: center; gap: 9px; }
-.rule-name > span { display: grid; width: 32px; height: 32px; place-items: center; border-radius: 9px; background: #e8f5ee; color: var(--fin-green-700); font-size: 9px; font-weight: 700; }
+.rule-name > span { display: grid; width: 32px; height: 32px; place-items: center; border-radius: 9px; background: #e8f5ee; color: var(--fin-green-700); font-size: var(--fin-fs-xs); font-weight: 700; }
 .rule-name strong, .rule-name small { display: block; }
-.rule-name strong { color: #395443; font-size: 10px; }
-.rule-name small { margin-top: 2px; color: #8b9a92; font-family: ui-monospace, Consolas, monospace; font-size: 7px; }
-.rule-status { display: inline-flex; padding: 3px 8px; border-radius: 99px; font-size: 8px; font-weight: 700; }
+.rule-name strong { color: #395443; font-size: var(--fin-fs-xs); }
+.rule-name small { margin-top: 2px; color: #8b9a92; font-family: ui-monospace, Consolas, monospace; font-size: var(--fin-fs-xs); }
+.rule-status { display: inline-flex; padding: 3px 8px; border-radius: 99px; font-size: var(--fin-fs-xs); font-weight: 700; }
 .rule-status.on { background: #e7f6ed; color: #18774d; }
 .rule-status.off { background: #eef2ef; color: #75827a; }
 .risk-strategy-guide { display: grid; padding: 14px 15px; }
 .risk-strategy-guide > div { padding: 10px 0; border-top: 1px solid #edf2ee; }
 .risk-strategy-guide > div:first-child { border-top: 0; }
-.risk-strategy-guide b { color: #376149; font-size: 9px; }
-.risk-strategy-guide p { margin: 3px 0 0; color: #75887c; font-size: 8.5px; line-height: 1.6; }
+.risk-strategy-guide b { color: #376149; font-size: var(--fin-fs-xs); }
+.risk-strategy-guide p { margin: 3px 0 0; color: #75887c; font-size: var(--fin-fs-xs); line-height: 1.6; }
 @media (max-width: 900px) { .risk-layout { grid-template-columns: 1fr; } }
 </style>

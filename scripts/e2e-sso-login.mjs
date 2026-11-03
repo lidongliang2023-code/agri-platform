@@ -21,14 +21,20 @@
  * 退出码：0 = 全部通过；1 = 有断言失败。
  */
 import { createRequire } from 'node:module'
+import { existsSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const require2 = createRequire(path.join(REPO_ROOT, 'agri-production/frontend/package.json'))
-const puppeteer = require2('puppeteer')
+const require2 = createRequire(path.join('C:/Users/71502/.workbuddy-ai/binaries/node/workspace', 'noop.js'))
+const { chromium } = require2('playwright-core')
+
+const BROWSER = [
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+].find((candidate) => existsSync(candidate))
 
 const arg = (name, fallback) => {
   const hit = process.argv.slice(2).find((a) => a.startsWith(`--${name}=`))
@@ -50,7 +56,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 /** 打开登录入口并等认证中心登录页出现 */
 const openSsoLoginPage = async (page) => {
-  await page.goto(`${BASE_URL}/production/login`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.goto(`${BASE_URL}/production/login`, { waitUntil: 'networkidle', timeout: 60000 })
   for (let i = 0; i < 20; i++) {
     await sleep(600)
     if (page.url().includes(':8090/')) break
@@ -65,7 +71,8 @@ const waitLanded = async (page) => {
     landed = page.url()
     if (landed.startsWith(BASE_URL) && !landed.includes('/login')) break
   }
-  await page.waitForNetworkIdle({ idleTime: 800, timeout: 15000 }).catch(() => {})
+  await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 800))
   return landed
 }
 /** 切 Tab（antd 之外的手写 Tab，用 role=tab 定位） */
@@ -88,13 +95,13 @@ const fill = async (page, selector, value) => {
   }, { sel: selector, val: value })
 }
 
-const browser = await puppeteer.launch({ headless: HEADFUL ? false : 'new', args: ['--no-sandbox'] })
+const browser = await chromium.launch({ headless: !HEADFUL, executablePath: BROWSER, args: ['--no-sandbox'] })
 
 try {
   // ---------- 场景 A：登录页形态 + 微信依赖说明 + 验证码登录 ----------
-  const ctxA = await browser.createBrowserContext()
+  const ctxA = await browser.newContext()
   const pageA = await ctxA.newPage()
-  await pageA.setViewport({ width: 1440, height: 900 })
+  await pageA.setViewportSize({ width: 1440, height: 900 })
   /** 登录接口的响应体：失败时唯一能看清原因的地方 */
   let smsLoginCall = null
   pageA.on('response', async (res) => {
@@ -160,16 +167,16 @@ try {
   }
   check(smsLanded.startsWith(BASE_URL) && !smsLanded.includes('login') && !smsLanded.includes(':8090'),
     '验证码登录后回跳到子系统业务页（SSO 链路打通）', smsLanded)
-  const ssoCookie = (await pageA.cookies()).find((cookie) => cookie.name === 'agri_sso_session')
+  const ssoCookie = (await pageA.context().cookies()).find((cookie) => cookie.name === 'agri_sso_session')
   check(Boolean(ssoCookie) && ssoCookie.expires > Date.now() / 1000 + 6 * 24 * 3600,
     '「7 天内自动登录」真实生效（SSO 会话 Cookie 有效期 ≥ 6 天）',
     ssoCookie ? `expires=${new Date(ssoCookie.expires * 1000).toISOString()}` : '未拿到会话 Cookie')
   await ctxA.close()
 
   // ---------- 场景 B：账号 + 密码登录（独立上下文，避免 SSO 会话串味）----------
-  const ctxB = await browser.createBrowserContext()
+  const ctxB = await browser.newContext()
   const pageB = await ctxB.newPage()
-  await pageB.setViewport({ width: 1440, height: 900 })
+  await pageB.setViewportSize({ width: 1440, height: 900 })
   await openSsoLoginPage(pageB)
   await clickTab(pageB, '账号 + 密码')
   await fill(pageB, 'input[autocomplete="username"]', PHONE)
@@ -192,9 +199,9 @@ try {
   // 并且注册后能从子系统入口免登进入。
   const registerPhone = `139${String(Date.now()).slice(-8)}`
   const registerPassword = 'Agri2026test'
-  const ctxC = await browser.createBrowserContext()
+  const ctxC = await browser.newContext()
   const pageC = await ctxC.newPage()
-  await pageC.setViewport({ width: 1440, height: 1000 })
+  await pageC.setViewportSize({ width: 1440, height: 1000 })
   let standaloneRegisterBody = null
   let standaloneCertificationBody = null
   pageC.on('response', async (res) => {
@@ -209,7 +216,7 @@ try {
       } catch { /* ignore */ }
     }
   })
-  await pageC.goto(`${BASE_URL}:8090/register`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await pageC.goto(`${BASE_URL}:8090/register`, { waitUntil: 'networkidle', timeout: 60000 })
   await pageC.waitForSelector('input[placeholder="8-20 位字母+数字"]', { timeout: 15000 })
   const standaloneText = await pageC.evaluate(() => document.body.innerText)
   const registerDisabled = await pageC.evaluate(() => {
@@ -278,9 +285,9 @@ try {
   await ctxC.close()
 
   // ---------- 场景 D：新会话用独立注册的账号 + 密码登录 ----------
-  const ctxD = await browser.createBrowserContext()
+  const ctxD = await browser.newContext()
   const pageD = await ctxD.newPage()
-  await pageD.setViewport({ width: 1440, height: 1000 })
+  await pageD.setViewportSize({ width: 1440, height: 1000 })
   await openSsoLoginPage(pageD)
   await clickTab(pageD, '账号 + 密码')
   // 场景 C 注册的是个人会员；登录身份要与注册身份一致（服务端会校验 member_type）

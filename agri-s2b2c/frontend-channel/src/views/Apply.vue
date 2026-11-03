@@ -38,6 +38,9 @@
       <el-form-item label="店铺名称" prop="shopName">
         <el-input v-model="form.shopName" />
       </el-form-item>
+      <el-form-item label="供应商邀请码" prop="inviteCode">
+        <el-input v-model="form.inviteCode" placeholder="选填；填写后供应商可看到招募关系" />
+      </el-form-item>
       <el-form-item label="店铺描述" prop="shopDesc">
         <el-input v-model="form.shopDesc" type="textarea" :rows="3" />
       </el-form-item>
@@ -52,6 +55,7 @@
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { channelApi } from '../api'
+import { resetChannelSession } from '../api/channelSession'
 
 const router = useRouter()
 const formRef = ref(null)
@@ -68,7 +72,8 @@ const form = reactive({
   contactPhone: '',
   referrerId: null,
   shopName: '',
-  shopDesc: ''
+  shopDesc: '',
+  inviteCode: ''
 })
 
 const rules = {
@@ -81,8 +86,9 @@ const submitForm = async () => {
   formRef.value.validate(async (valid) => {
     if (valid) {
       const res = await channelApi.apply(form)
+      alert(res.message)
       if (res.success) {
-        alert(res.message)
+        resetChannelSession()
         router.push('/')
       }
     }

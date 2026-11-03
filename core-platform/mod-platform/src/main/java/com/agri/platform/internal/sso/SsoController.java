@@ -1,6 +1,7 @@
 package com.agri.platform.internal.sso;
 
 import com.agri.core.infra.security.RefreshCookieSupport;
+import com.agri.platform.internal.account.MfaService;
 import com.agri.platform.internal.auth.AuthService;
 import com.agri.platform.internal.auth.dto.AuthOutcome;
 import com.agri.platform.internal.auth.dto.LoginRequest;
@@ -33,6 +34,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import com.agri.platform.internal.account.UserOperationLogService;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.net.URI;
@@ -56,6 +58,8 @@ public class SsoController {
 
     private final AuthService authService;
     private final SsoSessionService sessionService;
+    /** 用户操作日志：登录也要留痕，否则「操作日志」页里永远看不到登录记录 */
+    private final UserOperationLogService operationLog;
     private final AuthorizationCodeService codeService;
     private final SsoProperties properties;
     private final RefreshCookieSupport cookieSupport;
@@ -63,6 +67,9 @@ public class SsoController {
     private final SmsAuthService smsAuthService;
     private final MerchantMapper merchantMapper;
     private final UserMerchantMapper userMerchantMapper;
+    private final MfaService mfaService;
+    /** 账号侧策略：注册开关 / 注册方式（运营端可改） */
+    private final com.agri.platform.internal.uc.AccountPolicyService accountPolicy;
 
     /** 授权端点：有登录态则发码回跳，无则转登录页 */
     @GetMapping("/authorize")
@@ -162,9 +169,49 @@ public class SsoController {
                 request.marketId(), request.phone()));
         LoginVO login = outcome.body();
         Long marketId = request.marketId() == null ? 1L : request.marketId();
+        // 二次验证：密码对了还不够。这里**先不建会话**，只签发一个 5 分钟的一次性挑战，
+        // 校验通过后才真正登录 —— 否则"拦在登录上"就成了一句空话。
+        if (mfaService.isActive(login.user().id())) {
+            String challenge = mfaService.issueChallenge(login.user().id());
+            operationLog.record(login.user().id(), "login_mfa_challenge", "登录待二次验证",
+                    login.user().username(), null);
+            return ApiResponse.ok(new StandaloneLoginResult(null, null, null, null, 0L,
+                    true, challenge));
+        }
         sessionService.create(login.user().id(), marketId, !Boolean.FALSE.equals(request.remember()), response);
         cookieSupport.write(response, outcome.refreshToken());
+        operationLog.record(login.user().id(), "login", "登录账号",
+                login.user().username(), "通过统一认证中心登录");
         return ApiResponse.ok(standaloneResult(login, marketId));
+    }
+
+    /**
+     * 登录第二步：提交二次验证码。
+     *
+     * <p>用一次性 challenge 换 userId，**不接受前端自报用户 id** —— 否则改个 id 就能绕过密码。
+     * challenge 校验后立即从 Redis 删除，失败也只能重新走一次密码登录（防暴力试码）。</p>
+     */
+    @PostMapping("/login-standalone-mfa")
+    public ApiResponse<StandaloneLoginResult> loginStandaloneMfa(
+            @RequestBody StandaloneMfaLoginRequest request, HttpServletResponse response) {
+        Long userId = mfaService.consumeChallenge(request.challengeToken());
+        if (userId == null) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED, "登录已超时，请重新输入账号密码");
+        }
+        if (!mfaService.verifyCode(userId, request.code(), true)) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED, "验证码不正确，请重新登录后再试");
+        }
+        Long marketId = request.marketId() == null ? 1L : request.marketId();
+        AuthOutcome outcome = authService.issueTokens(userId, marketId);
+        sessionService.create(userId, marketId, !Boolean.FALSE.equals(request.remember()), response);
+        cookieSupport.write(response, outcome.refreshToken());
+        operationLog.record(userId, "login", "登录账号", null, "二次验证通过");
+        return ApiResponse.ok(standaloneResult(outcome.body(), marketId));
+    }
+
+    /** 登录第二步入参：challengeToken 由第一步返回 */
+    public record StandaloneMfaLoginRequest(String challengeToken, String code, Long marketId,
+                                            Boolean remember) {
     }
 
     /** 独立认证中心的手机验证码登录。 */
@@ -174,6 +221,14 @@ public class SsoController {
         smsAuthService.verify(request.phone(), "login", request.code());
         UserEntity user = smsAuthService.requireUserByPhone(request.phone());
         Long marketId = request.marketId() == null ? 1L : request.marketId();
+        // 短信登录同样要过二次验证：手机号只是"持有证明"，不能替代验证器
+        if (mfaService.isActive(user.getId())) {
+            String challenge = mfaService.issueChallenge(user.getId());
+            operationLog.record(user.getId(), "login_mfa_challenge", "登录待二次验证",
+                    user.getUsername(), "短信登录");
+            return ApiResponse.ok(new StandaloneLoginResult(null, null, null, null, 0L,
+                    true, challenge));
+        }
         AuthOutcome outcome = authService.issueTokens(user.getId(), marketId);
         sessionService.create(user.getId(), marketId, !Boolean.FALSE.equals(request.remember()), response);
         cookieSupport.write(response, outcome.refreshToken());
@@ -192,7 +247,8 @@ public class SsoController {
                     || role.equals("MARKET_OPS") || role.endsWith("ADMIN") || role.endsWith("OPS"));
             redirect = ops ? "/admin/production/dashboard" : "/production/dashboard";
         }
-        return new StandaloneLoginResult(stage, redirect, login.user());
+        return new StandaloneLoginResult(stage, redirect, login.user(), login.accessToken(),
+                login.expiresIn(), false, null);
     }
 
     /**
@@ -213,6 +269,8 @@ public class SsoController {
         if (hasContext) {
             assertClient(clientId, redirectUri);
         }
+        // 先校验注册策略：平台暂停注册时，不该先消耗掉用户的验证码
+        accountPolicy.assertRegistrationAllowed("phone");
         smsAuthService.verify(request.phone(), "register", request.code());
         Long marketId = request.marketId() == null ? 1L : request.marketId();
         UserEntity user = smsAuthService.registerByPhone(request.phone(),
@@ -237,6 +295,7 @@ public class SsoController {
         if (request == null || request.phone() == null || request.code() == null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "手机号与验证码不能为空");
         }
+        accountPolicy.assertRegistrationAllowed("phone");
         smsAuthService.verify(request.phone(), "register", request.code());
         Long marketId = request.marketId() == null ? 1L : request.marketId();
         UserEntity user = smsAuthService.registerAccountByPhone(request.phone(), request.password(),
@@ -298,7 +357,15 @@ public class SsoController {
     public record StandaloneSmsLoginRequest(String phone, String code, Long marketId, Boolean remember) {
     }
 
-    public record StandaloneLoginResult(String stage, String redirect, UserVO user) {
+    /**
+     * 独立登录结果。
+     *
+     * <p>{@code mfaRequired=true} 时其余字段为空，调用方必须走第二步提交验证码，
+     * 用 {@code challengeToken} 换真正的登录态。</p>
+     */
+    public record StandaloneLoginResult(String stage, String redirect, UserVO user,
+                                        String accessToken, long expiresIn,
+                                        Boolean mfaRequired, String challengeToken) {
     }
 
     public record CertificationContext(String clientId, String redirectUri, String state,

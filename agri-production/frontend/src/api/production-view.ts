@@ -760,10 +760,10 @@ export async function fetchPlanTasks(planId: string, limit = 50): Promise<Task[]
   try {
     const raw = await http.get<unknown>(
       '/tasks',
-      buildPageParams(1, 100, { keyword: '' }),
+      buildPageParams(1, Math.min(limit, 100), { keyword: '', planId }),
       { silent: true },
     )
-    const page = normalizePageResult<unknown>(raw, 1, 100)
+    const page = normalizePageResult<unknown>(raw, 1, Math.min(limit, 100))
     return page.list.map(normalizeTask).filter((task) => task.planId === planId).slice(0, limit)
   } catch {
     return []
@@ -943,6 +943,15 @@ export async function startPlan(planId: string): Promise<void> {
  */
 export async function terminatePlan(planId: string): Promise<void> {
   await http.post<unknown>(`/plans/${planId}/terminate`)
+}
+
+/**
+ * 提交种养计划审批（→ 5 待审批，并生成运营端审批单）。
+ * @param planId 计划 ID
+ * @returns 最新计划
+ */
+export async function submitPlanApproval(planId: string): Promise<Plan> {
+  return http.post<Plan>(`/plans/${planId}/submit`)
 }
 
 /** 农事日历条目视图模型 */

@@ -1,174 +1,168 @@
 <template>
-  <div class="quality-task">
-    <div class="page-header">
-      <div class="header-left">
-        <h1>质量检测任务</h1>
-        <p>管理质量检测任务调度与执行</p>
-      </div>
-      <button class="add-btn" @click="showAddModal = true">+ 新建任务</button>
-    </div>
+  <div class="mds-page">
+    <PageHeader
+      title="检测任务"
+      subtitle="质量检测任务的调度与执行记录。规则引擎尚未实现：这里的「执行」只登记一次巡检，不做真实规则计算。"
+      source="数据治理 · 检测任务"
+    >
+      <template #actions>
+        <button v-point="'POST /admin/masterdata/quality/tasks'" class="mds-btn mds-btn--primary" @click="openCreate">+ 新建任务</button>
+        <button class="mds-btn" :disabled="loading" @click="loadData">刷新</button>
+      </template>
+    </PageHeader>
 
-    <div class="filter-bar">
-      <select v-model="filterStatus" class="filter-select">
-        <option value="all">全部状态</option>
-        <option value="scheduled">待执行</option>
-        <option value="running">执行中</option>
-        <option value="completed">已完成</option>
-        <option value="failed">失败</option>
-      </select>
-      <input 
-        type="text" 
-        v-model="filterKeyword" 
-        placeholder="搜索任务名称..." 
-        class="filter-input"
-      />
-    </div>
+    <StatGrid :items="statItems" />
 
-    <div class="stats-row">
-      <div class="stat-item">
-        <div class="stat-value">{{ taskStats.total }}</div>
-        <div class="stat-label">总任务数</div>
+    <div class="mds-card">
+      <div class="mds-filter">
+        <input v-model="filterKeyword" class="mds-input" type="search" placeholder="搜索任务名称" />
+        <select v-model="filterStatus" class="mds-select">
+          <option value="all">全部状态</option>
+          <option value="scheduled">待执行</option>
+          <option value="running">执行中</option>
+          <option value="completed">已完成</option>
+          <option value="failed">失败</option>
+          <option value="paused">已暂停</option>
+        </select>
+        <span class="mds-hint">共 {{ filteredTasks.length }} / {{ tasks.length }} 条 · 任务列表一次加载，不走分页</span>
       </div>
-      <div class="stat-item running">
-        <div class="stat-value">{{ taskStats.running }}</div>
-        <div class="stat-label">执行中</div>
-      </div>
-      <div class="stat-item completed">
-        <div class="stat-value">{{ taskStats.completed }}</div>
-        <div class="stat-label">已完成</div>
-      </div>
-      <div class="stat-item failed">
-        <div class="stat-value">{{ taskStats.failed }}</div>
-        <div class="stat-label">失败</div>
-      </div>
-    </div>
 
-    <div class="task-table">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>任务名称</th>
-            <th>检测规则</th>
-            <th>执行类型</th>
-            <th>下次执行时间</th>
-            <th>状态</th>
-            <th>最近执行</th>
-            <th>成功率</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="task in filteredTasks" :key="task.id">
-            <td>
-              <div class="task-name">
-                <span class="task-icon">{{ getTaskIcon(task.type) }}</span>
-                <span>{{ task.name }}</span>
-              </div>
-            </td>
-            <td>{{ task.ruleNames.join(', ') }}</td>
-            <td>
-              <span class="type-badge" :class="task.type">
-                {{ task.type === 'manual' ? '手动' : task.type === 'scheduled' ? '定时' : '实时' }}
-              </span>
-            </td>
-            <td>{{ task.nextRunTime || '-' }}</td>
-            <td>
-              <span class="status-badge" :class="task.status">
-                {{ getStatusText(task.status) }}
-              </span>
-            </td>
-            <td>{{ task.lastRunTime || '-' }}</td>
-            <td>
-              <div class="success-rate">
-                <div class="rate-bar">
-                  <div 
-                    class="rate-fill" 
-                    :style="{width: (task.successRate ?? 0) + '%'}"
-                    :class="getRateClass(task.successRate)"
-                  ></div>
+      <div class="mds-table-wrap">
+        <table class="mds-table task-table">
+          <thead>
+            <tr>
+              <th>任务名称</th>
+              <th>检测规则</th>
+              <th>执行类型</th>
+              <th>下次执行</th>
+              <th>状态</th>
+              <th>最近执行</th>
+              <th>成功率</th>
+              <th class="mds-actions">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-if="loading">
+              <td colspan="8" class="mds-empty">正在加载检测任务…</td>
+            </tr>
+            <tr v-else-if="!filteredTasks.length">
+              <td colspan="8">
+                <EmptyState
+                  :title="tasks.length ? '没有符合条件的任务' : '还没有检测任务'"
+                  :description="tasks.length ? '调整状态或关键字筛选。' : '新建任务并关联至少一条质量规则。'"
+                />
+              </td>
+            </tr>
+            <tr v-for="task in filteredTasks" :key="task.id">
+              <td>
+                <div class="task-name">
+                  <span>{{ taskIcon(task.type) }}</span>
+                  <span class="mds-name">{{ task.name }}</span>
                 </div>
-                <!-- 成功率为空表示"没有执行引擎、不编数字"，显示 — 而不是 0% -->
-                <span>{{ task.successRate == null ? '—' : task.successRate + '%' }}</span>
-              </div>
-            </td>
-            <td class="action-cell">
-              <button 
-                class="action-btn run" 
-                @click="runTask(task)"
-                :disabled="task.status === 'running'"
-              >执行</button>
-              <button class="action-btn edit" @click="editTask(task)">编辑</button>
-              <button class="action-btn delete" @click="deleteTask(task)">删除</button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-
-      <div class="pagination">
-        <button class="page-btn" :disabled="currentPage === 1" @click="prevPage">上一页</button>
-        <span class="page-info">第 {{ currentPage }} / {{ totalPages }} 页</span>
-        <button class="page-btn" :disabled="currentPage === totalPages" @click="nextPage">下一页</button>
+                <div class="mds-hint mds-mono">{{ task.code }}</div>
+              </td>
+              <td>
+                <template v-if="task.ruleNames?.length">
+                  <StatusTag v-for="name in task.ruleNames" :key="name" :text="name" tone="gray" plain />
+                </template>
+                <span v-else class="mds-muted">未关联规则</span>
+              </td>
+              <td><StatusTag :text="typeText(task.type)" :tone="typeTone(task.type)" plain /></td>
+              <td class="mds-muted">{{ task.nextRunTime || '—' }}</td>
+              <td><StatusTag :text="statusText(task.status)" :tone="statusTone(task.status)" /></td>
+              <td class="mds-muted">{{ task.lastRunTime || '—' }}</td>
+              <td>
+                <div class="rate">
+                  <div class="rate-bar">
+                    <div
+                      class="rate-fill"
+                      :class="rateClass(task.successRate)"
+                      :style="{ width: (task.successRate ?? 0) + '%' }"
+                    />
+                  </div>
+                  <span>{{ task.successRate == null ? '—' : task.successRate + '%' }}</span>
+                </div>
+              </td>
+              <td class="mds-actions">
+                <button v-point="'POST /admin/masterdata/quality/tasks/{id}/run'"
+                  class="mds-btn mds-btn--link"
+                  :disabled="busyId === task.id || task.status === 'running'"
+                  @click="runTask(task)"
+                >执行</button>
+                <button v-point="'PUT /admin/masterdata/quality/tasks/{id}'" class="mds-btn mds-btn--link" @click="editTask(task)">编辑</button>
+                <button v-point="'DELETE /admin/masterdata/quality/tasks/{id}'" class="mds-btn mds-btn--link mds-danger" :disabled="busyId === task.id" @click="deleteTask(task)">
+                  删除
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
 
-    <div class="modal-overlay" v-if="showAddModal" @click="closeAddModal">
-      <div class="modal-content" @click.stop>
-        <div class="modal-header">
-          <h3>{{ isEdit ? '编辑任务' : '新建任务' }}</h3>
-          <button class="close-btn" @click="closeAddModal">×</button>
+    <div v-if="showAddModal" class="mds-mask" @click="closeAddModal">
+      <div class="mds-modal" @click.stop>
+        <div class="mds-card-head">
+          <h2 class="mds-card-title">{{ isEdit ? '编辑任务' : '新建任务' }}</h2>
+          <button class="mds-btn mds-btn--link" @click="closeAddModal">关闭</button>
         </div>
-        <div class="modal-body">
-          <!-- 任务编码是后端的唯一标识，原表单没有这一项，不补上就没法新建任务 -->
-          <div class="form-group">
-            <label>任务编码 *</label>
-            <input type="text" v-model="form.code" class="form-input" placeholder="如 TASK-USER-DAILY" :disabled="isEdit" />
-          </div>
-          <div class="form-group">
-            <label>任务名称 *</label>
-            <input type="text" v-model="form.name" class="form-input" placeholder="请输入任务名称" />
-          </div>
-          <div class="form-group">
-            <label>执行类型 *</label>
-            <select v-model="form.type" class="form-input" @change="onTypeChange">
-              <option value="manual">手动执行</option>
-              <option value="scheduled">定时执行</option>
-              <option value="realtime">实时检测</option>
-            </select>
-          </div>
-          <div class="form-group" v-if="form.type === 'scheduled'">
-            <label>执行周期 *</label>
-            <select v-model="form.cronExpression" class="form-input">
-              <option value="0 0 2 * * ?">每天凌晨2点</option>
-              <option value="0 0 2 * * MON">每周一凌晨2点</option>
-              <option value="0 0 2 1 * ?">每月1日凌晨2点</option>
-              <option value="0 */30 * * * ?">每30分钟</option>
-              <option value="0 0 * * * ?">每小时</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>关联规则 *</label>
-            <div class="rule-select">
-              <div 
-                v-for="rule in availableRules" 
-                :key="rule.id"
-                class="rule-checkbox"
-                :class="{selected: form.ruleIds.includes(rule.id)}"
-                @click="toggleRule(rule.id)"
-              >
-                <input type="checkbox" :checked="form.ruleIds.includes(rule.id)" />
-                <span>{{ rule.name }}</span>
+        <div class="mds-card-body">
+          <div class="mds-form">
+            <label class="mds-field">
+              <span class="mds-field__label mds-required">任务编码</span>
+              <input v-model="form.code" class="mds-input" :disabled="isEdit" placeholder="如 TASK-USER-DAILY" />
+            </label>
+            <label class="mds-field">
+              <span class="mds-field__label mds-required">任务名称</span>
+              <input v-model="form.name" class="mds-input" placeholder="如 用户主数据每日巡检" />
+            </label>
+            <label class="mds-field">
+              <span class="mds-field__label mds-required">执行类型</span>
+              <select v-model="form.type" class="mds-select" @change="onTypeChange">
+                <option value="manual">手动执行</option>
+                <option value="scheduled">定时执行</option>
+                <option value="realtime">实时检测</option>
+              </select>
+            </label>
+            <label v-if="form.type === 'scheduled'" class="mds-field">
+              <span class="mds-field__label mds-required">执行周期</span>
+              <select v-model="form.cronExpression" class="mds-select">
+                <option value="0 0 2 * * ?">每天凌晨 2 点</option>
+                <option value="0 0 2 * * MON">每周一凌晨 2 点</option>
+                <option value="0 0 2 1 * ?">每月 1 日凌晨 2 点</option>
+                <option value="0 */30 * * * ?">每 30 分钟</option>
+                <option value="0 0 * * * ?">每小时</option>
+              </select>
+            </label>
+            <label class="mds-field">
+              <span class="mds-field__label">启用</span>
+              <select v-model="form.enabled" class="mds-select">
+                <option :value="true">启用</option>
+                <option :value="false">暂停</option>
+              </select>
+            </label>
+            <div class="mds-field mds-field--full">
+              <span class="mds-field__label mds-required">关联规则（可多选）</span>
+              <div v-if="!availableRules.length" class="mds-hint">还没有可用规则，请先到「质量规则」新建。</div>
+              <div v-else class="rule-picker">
+                <label
+                  v-for="rule in availableRules"
+                  :key="rule.id"
+                  class="rule-option"
+                  :class="{ 'is-selected': form.ruleIds.includes(rule.id) }"
+                >
+                  <input type="checkbox" :checked="form.ruleIds.includes(rule.id)" @change="toggleRule(rule.id)" />
+                  <span>{{ rule.name }}</span>
+                </label>
               </div>
             </div>
           </div>
-          <div class="form-group">
-            <label>
-              <input type="checkbox" v-model="form.enabled" /> 启用任务
-            </label>
+          <div class="mds-form-actions">
+            <button class="mds-btn" @click="closeAddModal">取消</button>
+            <button class="mds-btn mds-btn--primary" :disabled="saving" @click="saveTask">
+              {{ saving ? '保存中…' : isEdit ? '保存修改' : '创建任务' }}
+            </button>
           </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-cancel" @click="closeAddModal">取消</button>
-          <button class="btn btn-primary" @click="saveTask">{{ isEdit ? '保存修改' : '创建任务' }}</button>
         </div>
       </div>
     </div>
@@ -176,19 +170,30 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
+import PageHeader from '@/components/ui/PageHeader.vue'
+import StatGrid from '@/components/ui/StatGrid.vue'
+import StatusTag from '@/components/ui/StatusTag.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
 import {
-  getQualityTaskList, createQualityTask, updateQualityTask,
-  deleteQualityTask, runQualityTask, getQualityRuleList
+  createQualityTask,
+  deleteQualityTask,
+  getQualityRuleList,
+  getQualityTaskList,
+  runQualityTask,
+  updateQualityTask,
 } from '../../utils/api'
 
 const showAddModal = ref(false)
 const isEdit = ref(false)
 const filterStatus = ref('all')
 const filterKeyword = ref('')
-const currentPage = ref(1)
-const totalPages = ref(1)
+const tasks = ref([])
+const availableRules = ref([])
+const loading = ref(false)
+const saving = ref(false)
+const busyId = ref(null)
 
 const form = reactive({
   id: null,
@@ -197,52 +202,54 @@ const form = reactive({
   type: 'manual',
   cronExpression: '0 0 2 * * ?',
   ruleIds: [],
-  enabled: true
+  enabled: true,
 })
 
-const tasks = ref([])
-const availableRules = ref([])
-// 原来这里是一份 6 条的写死任务数组与 8 条写死规则下拉：增删改、触发执行全在内存里。
-// 现在数据来自 /admin/masterdata/quality/tasks，规则下拉来自 /quality/rules。
-
-const filteredTasks = computed(() => {
-  return tasks.value.filter(task => {
+const filteredTasks = computed(() =>
+  tasks.value.filter((task) => {
     const matchStatus = filterStatus.value === 'all' || task.status === filterStatus.value
-    const matchKeyword = !filterKeyword.value || task.name.toLowerCase().includes(filterKeyword.value.toLowerCase())
+    const matchKeyword =
+      !filterKeyword.value || String(task.name || '').toLowerCase().includes(filterKeyword.value.toLowerCase())
     return matchStatus && matchKeyword
-  })
+  }),
+)
+
+const statItems = computed(() => {
+  const list = tasks.value
+  return [
+    { label: '总任务数', value: list.length },
+    { label: '执行中', value: list.filter((task) => task.status === 'running').length, tone: 'brand' },
+    { label: '已完成', value: list.filter((task) => task.status === 'completed').length },
+    {
+      label: '失败',
+      value: list.filter((task) => task.status === 'failed').length,
+      tone: list.some((task) => task.status === 'failed') ? 'danger' : undefined,
+    },
+  ]
 })
 
-const taskStats = computed(() => ({
-  total: tasks.value.length,
-  running: tasks.value.filter(t => t.status === 'running').length,
-  completed: tasks.value.filter(t => t.status === 'completed').length,
-  failed: tasks.value.filter(t => t.status === 'failed').length
-}))
-
-const getTaskIcon = (type) => {
-  const icons = {
-    manual: '▶️',
-    scheduled: '⏰',
-    realtime: '⚡'
-  }
-  return icons[type] || '📋'
+const TYPE_META = {
+  manual: { icon: '▶️', text: '手动', tone: 'gray' },
+  scheduled: { icon: '⏰', text: '定时', tone: 'warning' },
+  realtime: { icon: '⚡', text: '实时', tone: 'success' },
 }
+const taskIcon = (type) => TYPE_META[type]?.icon ?? '📋'
+const typeText = (type) => TYPE_META[type]?.text ?? type ?? '—'
+const typeTone = (type) => TYPE_META[type]?.tone ?? 'gray'
 
-const getStatusText = (status) => {
-  const texts = {
-    scheduled: '待执行',
-    running: '执行中',
-    completed: '已完成',
-    failed: '失败',
-    paused: '已暂停'
-  }
-  return texts[status] || status
+const STATUS_TEXT = {
+  scheduled: '待执行',
+  running: '执行中',
+  completed: '已完成',
+  failed: '失败',
+  paused: '已暂停',
 }
+const STATUS_TONE = { scheduled: 'info', running: 'brand', completed: 'success', failed: 'danger', paused: 'gray' }
+const statusText = (status) => STATUS_TEXT[status] ?? status ?? '—'
+const statusTone = (status) => STATUS_TONE[status] ?? 'gray'
 
-const getRateClass = (rate) => {
-  // 成功率为 null 时不套用任何配色：原来 null >= 95 为 false，会一路落到 poor 的红色 ——
-  // 把"暂无数据"画成了"差"。
+/** 成功率为 null 时不套配色：原来 null 落到 poor 的红色，把「暂无数据」画成了「差」 */
+const rateClass = (rate) => {
   if (rate == null) return ''
   if (rate >= 95) return 'excellent'
   if (rate >= 90) return 'good'
@@ -252,17 +259,12 @@ const getRateClass = (rate) => {
 
 const toggleRule = (ruleId) => {
   const index = form.ruleIds.indexOf(ruleId)
-  if (index === -1) {
-    form.ruleIds.push(ruleId)
-  } else {
-    form.ruleIds.splice(index, 1)
-  }
+  if (index === -1) form.ruleIds.push(ruleId)
+  else form.ruleIds.splice(index, 1)
 }
 
 const onTypeChange = () => {
-  if (form.type === 'scheduled') {
-    form.cronExpression = '0 0 2 * * ?'
-  }
+  if (form.type === 'scheduled') form.cronExpression = '0 0 2 * * ?'
 }
 
 /** 接口行 → 页面行（接口字段是 taskName / taskType / runCount / lastFailCount） */
@@ -279,42 +281,42 @@ const toRow = (row) => ({
   successRate: row.successRate,
   runCount: row.runCount ?? 0,
   lastFailCount: row.lastFailCount,
-  cronExpression: row.cronExpression
+  cronExpression: row.cronExpression,
 })
 
 const loadData = async () => {
+  loading.value = true
   try {
-    const [taskRes, ruleRes] = await Promise.all([
-      getQualityTaskList(),
-      getQualityRuleList()
-    ])
-    if (taskRes.code !== 200) {
-      message.error(taskRes.message || '加载检测任务失败')
-      tasks.value = []
-      return
-    }
-    // 不再回落到演示数据：失败就说失败
+    const [taskRes, ruleRes] = await Promise.all([getQualityTaskList(), getQualityRuleList()])
+    if (taskRes.code !== 200) throw new Error(taskRes.message || '加载检测任务失败')
     tasks.value = (taskRes.data ?? []).map(toRow)
-    totalPages.value = Math.max(1, Math.ceil(tasks.value.length / 10))
     if (ruleRes.code === 200) {
-      availableRules.value = (ruleRes.data ?? []).map(r => ({ id: r.id, name: r.ruleName }))
+      availableRules.value = (ruleRes.data ?? []).map((rule) => ({ id: rule.id, name: rule.ruleName }))
     }
   } catch (error) {
-    message.error(error instanceof Error ? error.message : '加载检测任务失败')
     tasks.value = []
+    message.error(error instanceof Error ? error.message : '加载检测任务失败')
+  } finally {
+    loading.value = false
   }
 }
 
-onMounted(() => {
-  loadData()
-})
-
-const closeAddModal = () => {
-  showAddModal.value = false
-  isEdit.value = false
-  Object.keys(form).forEach(key => {
-    form[key] = key === 'type' ? 'manual' : key === 'cronExpression' ? '0 0 2 * * ?' : key === 'ruleIds' ? [] : key === 'enabled' ? true : ''
+const resetForm = () => {
+  Object.assign(form, {
+    id: null,
+    code: '',
+    name: '',
+    type: 'manual',
+    cronExpression: '0 0 2 * * ?',
+    ruleIds: [],
+    enabled: true,
   })
+}
+
+const openCreate = () => {
+  resetForm()
+  isEdit.value = false
+  showAddModal.value = true
 }
 
 const editTask = (task) => {
@@ -326,537 +328,175 @@ const editTask = (task) => {
     type: task.type,
     cronExpression: task.cronExpression || '0 0 2 * * ?',
     ruleIds: [...task.ruleIds],
-    enabled: task.status !== 'paused'
+    enabled: task.status !== 'paused',
   })
   showAddModal.value = true
 }
 
+const closeAddModal = () => {
+  showAddModal.value = false
+  isEdit.value = false
+}
+
 const deleteTask = async (task) => {
-  if (!confirm(`确定删除任务 "${task.name}" 吗？`)) {
-    return
-  }
+  if (!window.confirm(`确定删除任务「${task.name}」吗？`)) return
+  busyId.value = task.id
   try {
     const response = await deleteQualityTask(task.id)
-    if (response.code === 200) {
-      message.success('任务已删除')
-      loadData()
-    } else {
-      message.error(response.message || '删除失败')
-    }
+    if (response.code !== 200) throw new Error(response.message || '删除失败')
+    message.success('任务已删除')
+    await loadData()
   } catch (error) {
     message.error(error instanceof Error ? error.message : '删除失败')
+  } finally {
+    busyId.value = null
   }
 }
 
 const runTask = async (task) => {
+  busyId.value = task.id
   try {
     const response = await runQualityTask(task.id)
-    if (response.code === 200) {
-      // 如实说明这一步做了什么：只记录了一次巡检，检测引擎尚未实现
-      message.success(`已记录一次巡检（关联 ${response.data?.lastSuccessCount ?? 0} 条规则；检测引擎尚未实现，非真实规则计算）`)
-      loadData()
-    } else {
-      message.error(response.message || '触发失败')
-    }
+    if (response.code !== 200) throw new Error(response.message || '触发失败')
+    // 如实说明这一步做了什么：只记录了一次巡检，检测引擎尚未实现
+    message.success(
+      `已记录一次巡检（关联 ${response.data?.lastSuccessCount ?? 0} 条规则；检测引擎尚未实现，非真实规则计算）`,
+    )
+    await loadData()
   } catch (error) {
     message.error(error instanceof Error ? error.message : '触发失败')
+  } finally {
+    busyId.value = null
   }
 }
 
 const saveTask = async () => {
-  if (!form.code) {
+  if (!form.code.trim()) {
     message.warning('请填写任务编码')
     return
   }
-  if (!form.name || form.ruleIds.length === 0) {
+  if (!form.name.trim() || form.ruleIds.length === 0) {
     message.warning('请填写任务名称并选择至少一个检测规则')
     return
   }
-
+  saving.value = true
   const payload = {
-    taskCode: form.code,
-    taskName: form.name,
+    taskCode: form.code.trim(),
+    taskName: form.name.trim(),
     taskType: form.type,
     cronExpression: form.type === 'scheduled' ? form.cronExpression : null,
     status: form.enabled ? 'scheduled' : 'paused',
-    ruleIds: form.ruleIds
+    ruleIds: form.ruleIds,
   }
-
   try {
     const response = isEdit.value
       ? await updateQualityTask(form.id, payload)
       : await createQualityTask(payload)
-    if (response.code === 200) {
-      message.success(isEdit.value ? '任务已更新' : '任务已创建')
-      closeAddModal()
-      loadData()
-    } else {
-      message.error(response.message || '保存失败')
-    }
+    if (response.code !== 200) throw new Error(response.message || '保存失败')
+    message.success(isEdit.value ? '任务已更新' : '任务已创建')
+    closeAddModal()
+    await loadData()
   } catch (error) {
     message.error(error instanceof Error ? error.message : '保存失败')
+  } finally {
+    saving.value = false
   }
 }
 
-const prevPage = () => {
-  if (currentPage.value > 1) {
-    currentPage.value--
-  }
-}
-
-const nextPage = () => {
-  if (currentPage.value < totalPages.value) {
-    currentPage.value++
-  }
-}
+onMounted(loadData)
 </script>
 
 <style scoped>
-.quality-task {
-  padding: 20px;
-}
-
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 24px;
-}
-
-.header-left h1 {
-  font-size: 24px;
-  font-weight: 600;
-  color: #2d3748;
-  margin: 0;
-}
-
-.header-left p {
-  font-size: 14px;
-  color: #a0aec0;
-  margin: 4px 0 0;
-}
-
-.add-btn {
-  padding: 10px 20px;
-  background: linear-gradient(135deg, #238636 0%, #2ea043 100%);
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.add-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(35, 134, 54, 0.3);
-}
-
-.filter-bar {
-  display: flex;
-  gap: 16px;
-  margin-bottom: 20px;
-}
-
-.filter-select {
-  padding: 8px 16px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 14px;
-  outline: none;
-  cursor: pointer;
-}
-
-.filter-input {
-  padding: 8px 16px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 14px;
-  outline: none;
-  flex: 1;
-  min-width: 200px;
-}
-
-.stats-row {
-  display: flex;
-  gap: 20px;
-  margin-bottom: 20px;
-}
-
-.stat-item {
-  flex: 1;
-  background: #fff;
-  border-radius: 12px;
-  padding: 20px;
-  text-align: center;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-
-.stat-item.running .stat-value {
-  color: #238636;
-}
-
-.stat-item.completed .stat-value {
-  color: #2563eb;
-}
-
-.stat-item.failed .stat-value {
-  color: #dc2626;
-}
-
-.stat-value {
-  font-size: 28px;
-  font-weight: 700;
-  color: #2d3748;
-  margin: 0;
-}
-
-.stat-label {
-  font-size: 13px;
-  color: #718096;
-  margin: 4px 0 0;
-}
-
 .task-table {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  overflow: hidden;
-}
-
-.data-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.data-table th,
-.data-table td {
-  padding: 14px 16px;
-  text-align: left;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.data-table th {
-  font-size: 13px;
-  font-weight: 600;
-  color: #4a5568;
-  background: #f8fafc;
-}
-
-.data-table td {
-  font-size: 13px;
-  color: #2d3748;
+  min-width: 1080px;
 }
 
 .task-name {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
-.task-icon {
-  font-size: 16px;
-}
-
-.type-badge {
-  display: inline-block;
-  padding: 4px 12px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.type-badge.manual {
-  background: rgba(156, 163, 175, 0.1);
-  color: #6b7280;
-}
-
-.type-badge.scheduled {
-  background: rgba(210, 153, 34, 0.1);
-  color: #d29922;
-}
-
-.type-badge.realtime {
-  background: rgba(35, 134, 54, 0.1);
-  color: #238636;
-}
-
-.status-badge {
-  display: inline-block;
-  padding: 4px 12px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.status-badge.scheduled {
-  background: rgba(37, 99, 235, 0.1);
-  color: #2563eb;
-}
-
-.status-badge.running {
-  background: rgba(35, 134, 54, 0.1);
-  color: #238636;
-}
-
-.status-badge.completed {
-  background: rgba(156, 163, 175, 0.1);
-  color: #6b7280;
-}
-
-.status-badge.failed {
-  background: rgba(239, 68, 68, 0.1);
-  color: #dc2626;
-}
-
-.success-rate {
+.rate {
   display: flex;
   align-items: center;
   gap: 8px;
+  font-size: 12.5px;
+  color: var(--mds-text-2);
 }
 
 .rate-bar {
   width: 60px;
   height: 6px;
-  background: #e2e8f0;
   border-radius: 3px;
+  background: var(--mds-line-soft);
   overflow: hidden;
 }
 
 .rate-fill {
   height: 100%;
   border-radius: 3px;
+  background: var(--mds-line);
 }
 
 .rate-fill.excellent {
-  background: #238636;
+  background: var(--mds-brand);
 }
 
 .rate-fill.good {
-  background: #2ea043;
+  background: #5bb98a;
 }
 
 .rate-fill.normal {
-  background: #d29922;
+  background: var(--mds-warning);
 }
 
 .rate-fill.poor {
-  background: #dc2626;
+  background: var(--mds-danger);
 }
 
-.action-cell {
-  display: flex;
-  gap: 8px;
-}
-
-.action-btn {
-  font-size: 12px;
-  padding: 6px 12px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.action-btn.run {
-  background: rgba(35, 134, 54, 0.1);
-  color: #238636;
-}
-
-.action-btn.run:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.action-btn.edit {
-  background: rgba(37, 99, 235, 0.1);
-  color: #2563eb;
-}
-
-.action-btn.delete {
-  background: rgba(239, 68, 68, 0.1);
-  color: #dc2626;
-}
-
-.action-btn:hover:not(:disabled) {
-  opacity: 0.8;
-}
-
-.pagination {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 16px;
-  padding: 20px;
-}
-
-.page-btn {
-  padding: 8px 16px;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  background: #fff;
-  font-size: 13px;
-  color: #4a5568;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.page-btn:hover:not(:disabled) {
-  background: #f8fafc;
-}
-
-.page-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.page-info {
-  font-size: 13px;
-  color: #a0aec0;
-}
-
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.modal-content {
-  background: #fff;
-  border-radius: 12px;
-  width: 600px;
-  max-width: 90%;
-  max-height: 90vh;
-  overflow-y: auto;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px;
-  border-bottom: 1px solid #f0f0f0;
-  position: sticky;
-  top: 0;
-  background: #fff;
-}
-
-.modal-header h3 {
-  font-size: 18px;
-  font-weight: 600;
-  color: #2d3748;
-  margin: 0;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 24px;
-  color: #a0aec0;
-  cursor: pointer;
-  padding: 0;
-  line-height: 1;
-}
-
-.close-btn:hover {
-  color: #2d3748;
-}
-
-.modal-body {
-  padding: 20px;
-}
-
-.form-group {
-  margin-bottom: 16px;
-}
-
-.form-group label {
-  display: block;
-  font-size: 14px;
-  color: #4a5568;
-  margin-bottom: 6px;
-  font-weight: 500;
-}
-
-.form-input {
-  width: 100%;
-  padding: 10px 14px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 14px;
-  outline: none;
-  transition: border-color 0.2s;
-  box-sizing: border-box;
-}
-
-.form-input:focus {
-  border-color: #238636;
-}
-
-.rule-select {
+.rule-picker {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
+  margin-top: 4px;
 }
 
-.rule-checkbox {
-  display: flex;
+.rule-option {
+  display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 12px;
-  border: 1px solid #e2e8f0;
+  padding: 6px 10px;
+  border: 1px solid #d7dbe0;
   border-radius: 6px;
+  font-size: 12.5px;
   cursor: pointer;
-  transition: all 0.2s;
 }
 
-.rule-checkbox.selected {
-  background: rgba(35, 134, 54, 0.1);
-  border-color: #238636;
+.rule-option.is-selected {
+  border-color: var(--mds-brand);
+  background: var(--mds-brand-soft);
+  color: var(--mds-brand-deep);
 }
 
-.modal-footer {
+.mds-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
   display: flex;
-  justify-content: flex-end;
-  gap: 12px;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
   padding: 20px;
-  border-top: 1px solid #f0f0f0;
 }
 
-.btn {
-  padding: 10px 20px;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  border: none;
-}
-
-.btn-cancel {
-  background: #f0f0f0;
-  color: #4a5568;
-}
-
-.btn-cancel:hover {
-  background: #e2e8f0;
-}
-
-.btn-primary {
-  background: linear-gradient(135deg, #238636 0%, #2ea043 100%);
-  color: #fff;
-}
-
-.btn-primary:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(35, 134, 54, 0.3);
+.mds-modal {
+  width: 720px;
+  max-width: 100%;
+  max-height: 88vh;
+  overflow: auto;
+  border-radius: var(--mds-radius);
+  background: var(--mds-card);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.22);
 }
 </style>

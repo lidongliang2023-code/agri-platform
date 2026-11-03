@@ -50,9 +50,16 @@ export function submitPlan(planId: string): Promise<boolean> {
   return http.patch<boolean>(`${BASE}/${planId}/submit`)
 }
 
-/** 查询计划阶段列表 */
+/**
+ * 查询计划阶段列表。
+ *
+ * <p>必须走 `/plans/{id}/stages/list`：不带 `/list` 的那条是**分页接口**，
+ * 返回 `{ records, total, page, size }` 对象。此前这里按数组声明、页面直接 `.map()`，
+ * 选择种养计划后阶段查询一返回就抛 `(intermediate value).map is not a function`，
+ * 新建任务页整页报错（2026-11-02 实测）。</p>
+ */
 export function listPlanStages(planId: string): Promise<PlanStage[]> {
-  return http.get<PlanStage[]>(`${BASE}/${planId}/stages`)
+  return http.get<PlanStage[]>(`${BASE}/${planId}/stages/list`)
 }
 
 /** 查询农事日历（按时间区间聚合阶段） */

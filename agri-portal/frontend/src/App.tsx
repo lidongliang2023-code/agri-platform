@@ -9,6 +9,12 @@ import { Finance } from './pages/Finance'
 import { Hall } from './pages/Hall'
 import { Logistics } from './pages/Logistics'
 import { AccountCenter } from './pages/AccountCenter'
+import { InfoHome } from './pages/info/InfoHome'
+import { InfoNewsDetail } from './pages/info/InfoNews'
+import { InfoMarket } from './pages/info/InfoMarket'
+import { InfoSupplyDemand } from './pages/info/InfoSupplyDemand'
+import { InfoService, type InfoTab } from './pages/info/InfoService'
+import { InfoSearch } from './pages/info/InfoSearch'
 import { useHashRoute } from './utils'
 
 function NotFound(): JSX.Element {
@@ -57,6 +63,39 @@ export default function App(): JSX.Element {
       ? route.path.slice('/account/'.length)
       : route.query.get('tab')
     page = <AccountCenter initialTab={tab} />
+  } else if (route.path === '/info') {
+    page = <InfoHome />
+    active = '/info'
+  } else if (route.path === '/info/news') {
+    // 列表已并入资讯首页；旧地址直接回首页，避免收藏的链接失效
+    page = <InfoHome />
+    active = '/info'
+  } else if (route.path.startsWith('/info/news/')) {
+    page = <InfoNewsDetail id={Number(route.path.split('/')[3])} />
+    active = '/info'
+  } else if (route.path === '/info/market') {
+    page = <InfoMarket />
+    active = '/info/market'
+  } else if (route.path.startsWith('/info/market/')) {
+    page = <InfoMarket id={Number(route.path.split('/')[3])} />
+    active = '/info/market'
+  } else if (route.path === '/info/supply-demand') {
+    page = <InfoSupplyDemand />
+    active = '/info'
+  } else if (route.path.startsWith('/info/supply-demand/')) {
+    page = (
+      <InfoSupplyDemand
+        id={Number(route.path.split('/')[3])}
+        type={route.query.get('type') ?? 'supply'}
+      />
+    )
+    active = '/info'
+  } else if (['/info/training', '/info/experts', '/info/reports', '/info/knowledge'].includes(route.path)) {
+    page = <InfoService tab={route.path.slice('/info/'.length) as InfoTab} />
+    active = '/info'
+  } else if (route.path === '/info/search') {
+    page = <InfoSearch keyword={route.query.get('keyword') ?? ''} />
+    active = '/info'
   } else {
     page = <NotFound />
   }

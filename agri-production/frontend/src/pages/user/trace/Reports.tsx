@@ -172,7 +172,7 @@ function buildReportHtml(report: GeneratedReport): string {
   ])
   push('四、区块链存证', [
     ['全链路存证记录', formatCount(report.chainTotal, '条')],
-    ['已上链记录', report.chainOnChain === undefined ? '未接入（后端未提供上链状态字段）' : `${report.chainOnChain} 条`],
+    ['已上链记录', report.chainOnChain === undefined ? '未取到全链路节点' : `${report.chainOnChain} 条`],
     ['验证状态', report.verifyPassed === undefined ? '未接入' : report.verifyPassed ? '通过' : '待上链'],
   ])
   const unavailableHtml =
@@ -322,8 +322,12 @@ export default function Reports(): JSX.Element {
         inspectGrade: batch.grade,
         // 全链路节点数（后端返回才有值）
         chainTotal: nodes ? nodes.length : undefined,
-        // 上链状态：后端返回体中不存在 onChain 字段，一律按「未接入」呈现
-        chainOnChain: undefined,
+        /**
+         * 已上链节点数：直接数后端节点上的 onChain（存证表判定，见 ChainEvidenceRule）。
+         * 旧版这里写死 undefined，理由是"后端返回体中不存在 onChain 字段"——
+         * 那个结论在 2026-11-01 之后已经不成立，继续留着就是把已有的能力报成没接入。
+         */
+        chainOnChain: nodes ? nodes.filter((node) => node.onChain === true).length : undefined,
         verifyPassed: undefined,
         generatedAt: now,
         unavailable,
@@ -710,7 +714,7 @@ export default function Reports(): JSX.Element {
                 {formatCount(preview.chainTotal, '条')}
               </Descriptions.Item>
               <Descriptions.Item label="已上链记录">
-                {preview.chainOnChain === undefined ? '未接入（后端未提供上链状态字段）' : `${preview.chainOnChain} 条`}
+                {preview.chainOnChain === undefined ? '未取到全链路节点' : `${preview.chainOnChain} 条`}
               </Descriptions.Item>
               <Descriptions.Item label="验证状态" span={2}>
                 {preview.verifyPassed === undefined ? (

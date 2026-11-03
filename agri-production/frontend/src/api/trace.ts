@@ -78,16 +78,35 @@ export function traceByCode(code: string): Promise<TraceNode[]> {
  * -------------------------------------------------------------------------- */
 
 /** 溯源码分页查询参数（对齐后端 page / size / status） */
+/**
+ * 溯源码分页查询参数。
+ *
+ * ⚠️ 这些条件全部在**服务端**生效。以前只有 status 是服务端的，关键字与农场是前端在
+ * 已取回的那 500 条里过滤 —— 超过 500 条后搜不到的码会被显示成"不存在"，
+ * 而农场条件比的是出参里当时根本没有的 farmId，从来没生效过。
+ */
 export interface TraceCodePageParams {
-  /** 状态过滤：generated / active / scanned / revoked */
+  /** 状态过滤：generated / active / scanned / revoked / expired */
   status?: string
+  /** 关键字：模糊匹配溯源码 / 批次号 / 产品名 */
+  keyword?: string
+  /** 农场主键 */
+  farmId?: string
+  /** 链上状态：onChain（已上链）/ unconfirmed（有存证未出块）/ none（无存证记录） */
+  chain?: 'onChain' | 'unconfirmed' | 'none'
+  /** 有效期：expired / valid / unset */
+  expiry?: 'expired' | 'valid' | 'unset'
+  /** 生成日期起（yyyy-MM-dd） */
+  from?: string
+  /** 生成日期止（yyyy-MM-dd） */
+  to?: string
   /** 页码，从 1 开始 */
   pageNum?: number
   /** 每页条数 */
   pageSize?: number
 }
 
-/** 分页查询溯源码（后端 GET /trace/codes?page&size&status） */
+/** 分页查询溯源码（后端 GET /trace/codes） */
 export function fetchTraceCodePage(
   params: TraceCodePageParams = {},
 ): Promise<PageResult<RawTraceCode>> {
@@ -95,6 +114,12 @@ export function fetchTraceCodePage(
     page: params.pageNum ?? 1,
     size: params.pageSize ?? 10,
     status: params.status,
+    keyword: params.keyword,
+    farmId: params.farmId,
+    chain: params.chain,
+    expiry: params.expiry,
+    from: params.from,
+    to: params.to,
   })
 }
 
@@ -125,7 +150,13 @@ export function generateTraceCodeByBatch(batchId: string | number): Promise<stri
   return http.post<string>(`${BASE}/batches/${batchId}/generate`)
 }
 
-/** 激活溯源码（后端 POST /trace/activate，触发 prod.trace.activated 事件） */
+/**
+ * 激活溯源码（后端 POST /trace/activate，会按口径写一条 prod.trace.activated 事件到 outbox）。
+ *
+ * ⚠️ {@code activatedBy} 只是入参透传：**表里没有这一列**，后端记日志但不落库，
+ * 所以调用方不要传一个写死的名字冒充"操作人留痕"（运营端此前就传 '运营管理员'）。
+ * 真要留痕，得先给表加列并让后端写它。
+ */
 export function activateTraceCode(code: string, activatedBy?: string): Promise<RawTraceCode> {
   return http.post<RawTraceCode>(`${BASE}/activate`, undefined, {
     params: { code, activatedBy },

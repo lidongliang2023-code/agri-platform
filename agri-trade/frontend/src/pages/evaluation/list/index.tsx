@@ -214,37 +214,38 @@ export default function EvaluationList(): JSX.Element {
 
   return (
     <div className="credit-workbench">
-      <div className="credit-list-head">
-        <div><strong>信用评价明细</strong><span>查看买家评价，进行公开回复或对异常评价发起申诉</span></div>
-        <span className="mc-tag ghost">共 {total} 条</span>
-      </div>
       <div className="credit-toolbar">
-        <Input
-          prefix={<SearchOutlined />}
-          allowClear
-          placeholder="输入评价编号"
-          value={draft.evaluationNo}
-          onChange={(event) => setDraft((previous) => ({
+        <div className="credit-toolbar-fields">
+          <Input
+            prefix={<SearchOutlined />}
+            allowClear
+            placeholder="输入评价编号"
+            value={draft.evaluationNo}
+            onChange={(event) => setDraft((previous) => ({
+              ...previous,
+              evaluationNo: event.target.value || undefined,
+            }))}
+          />
+          <Select
+            allowClear
+            placeholder="综合评分"
+            value={draft.ratingOverall}
+            onChange={(value) => setDraft((previous) => ({ ...previous, ratingOverall: value }))}
+            options={[5, 4, 3, 2, 1].map((value) => ({ value, label: `${value} 星` }))}
+          />
+        </div>
+        <div className="credit-toolbar-actions">
+          <span className="credit-count">共 {total} 条</span>
+          <button type="button" className="mc-btn" onClick={() => setQuery((previous) => ({
             ...previous,
-            evaluationNo: event.target.value || undefined,
-          }))}
-        />
-        <Select
-          allowClear
-          placeholder="综合评分"
-          value={draft.ratingOverall}
-          onChange={(value) => setDraft((previous) => ({ ...previous, ratingOverall: value }))}
-          options={[5, 4, 3, 2, 1].map((value) => ({ value, label: `${value} 星` }))}
-        />
-        <button type="button" className="mc-btn" onClick={() => setQuery((previous) => ({
-          ...previous,
-          pageNum: 1,
-          ...draft,
-        }))}>搜索</button>
-        <button type="button" className="mc-btn ghost" onClick={() => {
-          setDraft({})
-          setQuery({ pageNum: 1, pageSize: 10 })
-        }}>重置</button>
+            pageNum: 1,
+            ...draft,
+          }))}>搜索</button>
+          <button type="button" className="mc-btn ghost" onClick={() => {
+            setDraft({})
+            setQuery({ pageNum: 1, pageSize: 10 })
+          }}>重置</button>
+        </div>
       </div>
 
       {isLoading ? (

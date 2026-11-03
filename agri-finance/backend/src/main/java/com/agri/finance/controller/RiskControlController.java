@@ -1,8 +1,9 @@
 package com.agri.finance.controller;
 
+import com.agri.common.rbac.OperatorOnly;
 import com.agri.finance.entity.RiskControlRule;
+import com.agri.finance.service.RiskCenterService;
 import com.agri.finance.service.impl.RiskControlRuleServiceImpl;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -10,10 +11,35 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/risk-control")
+@OperatorOnly("finance:fund")
 public class RiskControlController {
 
-    @Autowired
-    private RiskControlRuleServiceImpl riskControlRuleService;
+    private final RiskControlRuleServiceImpl riskControlRuleService;
+    private final RiskCenterService riskCenterService;
+
+    public RiskControlController(
+            RiskControlRuleServiceImpl riskControlRuleService,
+            RiskCenterService riskCenterService) {
+        this.riskControlRuleService = riskControlRuleService;
+        this.riskCenterService = riskCenterService;
+    }
+
+    @GetMapping("/center")
+    public Map<String, Object> center(@RequestParam(defaultValue = "2001") String subjectId) {
+        return Map.of("code", 200, "message", "success", "data", riskCenterService.center(subjectId));
+    }
+
+    @PostMapping("/center/assess/{subjectId}")
+    public Map<String, Object> assess(@PathVariable String subjectId) {
+        return Map.of("code", 200, "message", "风险快照已生成",
+                "data", riskCenterService.assess(subjectId, "finance-fund"));
+    }
+
+    @GetMapping("/center/snapshots")
+    public Map<String, Object> snapshots(@RequestParam(defaultValue = "") String subjectId) {
+        return Map.of("code", 200, "message", "success",
+                "data", riskCenterService.snapshots(subjectId));
+    }
 
     @PostMapping("/rule")
     public Map<String, Object> createRule(@RequestBody RiskControlRule rule) {

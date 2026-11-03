@@ -12,7 +12,7 @@
  */
 import { lazy } from 'react'
 import type { RouteObject } from 'react-router-dom'
-import { Navigate } from 'react-router-dom'
+import { Navigate, useLocation } from 'react-router-dom'
 
 /** 路由元信息 */
 export interface RouteMeta {
@@ -57,12 +57,10 @@ const TaskCreate = lazy(() => import('@/pages/user/tasks/TaskCreate'))
 // 由平台运营维护、主体使用 —— 用户端只在新建任务的模板下拉里用。
 const TaskTemplates = lazy(() => import('@/pages/admin/production/tasks/TaskTemplates'))
 const TaskAcceptance = lazy(() => import('@/pages/user/tasks/TaskAcceptance'))
-// 农资投入品管理
+// 农资管理
 const InputList = lazy(() => import('@/pages/user/inputs/InputList'))
 const InputCreate = lazy(() => import('@/pages/user/inputs/Create'))
 const InputDetail = lazy(() => import('@/pages/user/inputs/InputDetail'))
-const InputStock = lazy(() => import('@/pages/user/inputs/InputStock'))
-const InputUsages = lazy(() => import('@/pages/user/inputs/InputUsages'))
 // 生长监测预警
 const GrowthOverview = lazy(() => import('@/pages/user/growth/GrowthOverview'))
 const GrowthRecords = lazy(() => import('@/pages/user/growth/GrowthRecords'))
@@ -156,9 +154,23 @@ const AdminQualityReport = lazy(() => import('@/pages/admin/reports/AdminQuality
 /**
  * 用户端路由（父级 /production）。
  *
- * 页面条数由下方 USER_PAGE_COUNT 派生；另有 2 条重定向不是页面：
- * 1 条索引重定向（无 path，{@link isPageRoute} 天然排除）+ 1 条旧链接回落（`inputs/ledger`，带 path 会计入条数）。
+ * 页面条数由下方 USER_PAGE_COUNT 派生；另有 4 条重定向不是页面：
+ * 1 条索引重定向（无 path，{@link isPageRoute} 天然排除）+ 3 条旧链接回落
+ * （`inputs/ledger`、`inputs/stock`、`inputs/usages`，带 path 会计入条数）。
  */
+/**
+ * 旧「使用记录」独立页 → 农资管理页的使用台账 Tab。
+ *
+ * <p>保留 plotId / usageId / create 等查询参数：地块详情、存证列表、
+ * 监控看板的深链仍然能直接落到对应筛选或打开登记弹窗。</p>
+ */
+function LegacyUsageRedirect() {
+  const location = useLocation()
+  const params = new URLSearchParams(location.search)
+  params.set('tab', 'ledger')
+  return <Navigate to={`/production/inputs?${params.toString()}`} replace />
+}
+
 export const USER_ROUTES: AppRoute[] = [
   {
     index: true,
@@ -187,7 +199,7 @@ export const USER_ROUTES: AppRoute[] = [
   {
     path: 'farms',
     element: <FarmList />,
-    meta: { name: '农场列表', path: '/production/farms', module: '农场数字化管理', prd: 'PRD 6.1 #4' },
+    meta: { name: '农场管理', path: '/production/farms', module: '农场数字化管理', prd: 'PRD 6.1 #4' },
   },
   {
     path: 'farms/create',
@@ -248,7 +260,7 @@ export const USER_ROUTES: AppRoute[] = [
     path: 'plans',
     element: <PlanList />,
     meta: {
-      name: '种养计划列表',
+      name: '种养计划',
       path: '/production/plans',
       module: '智能种养计划',
       prd: 'PRD 6.1 #11',
@@ -313,9 +325,9 @@ export const USER_ROUTES: AppRoute[] = [
     path: 'inputs',
     element: <InputList />,
     meta: {
-      name: '投入品台账',
+      name: '农资管理',
       path: '/production/inputs',
-      module: '农资投入品管理',
+      module: '农资管理',
       prd: 'PRD 6.1 #19',
     },
   },
@@ -325,7 +337,7 @@ export const USER_ROUTES: AppRoute[] = [
     meta: {
       name: '新建投入品',
       path: '/production/inputs/create',
-      module: '农资投入品管理',
+      module: '农资管理',
       prd: '原型补充',
     },
   },
@@ -336,29 +348,31 @@ export const USER_ROUTES: AppRoute[] = [
     path: 'inputs/ledger',
     element: <Navigate to="/production/inputs" replace />,
     meta: {
-      name: '投入品台账（旧链接回落）',
+      name: '农资管理（旧链接回落）',
       path: '/production/inputs/ledger',
-      module: '农资投入品管理',
+      module: '农资管理',
       prd: '原型补充',
     },
   },
   {
+    // 2026-11-02：出入库管理已拆入「农资管理」页的两个 Tab（库存总览 → 投入品档案、
+    // 出入库流水 → 使用台账），旧深链/书签回落到农资管理页。
     path: 'inputs/stock',
-    element: <InputStock />,
+    element: <Navigate to="/production/inputs" replace />,
     meta: {
-      name: '出入库管理',
+      name: '出入库管理（旧链接回落）',
       path: '/production/inputs/stock',
-      module: '农资投入品管理',
+      module: '农资管理',
       prd: 'PRD 6.1 #21',
     },
   },
   {
     path: 'inputs/usages',
-    element: <InputUsages />,
+    element: <LegacyUsageRedirect />,
     meta: {
-      name: '使用记录',
+      name: '使用台账（旧链接回落）',
       path: '/production/inputs/usages',
-      module: '农资投入品管理',
+      module: '农资管理',
       prd: 'PRD 6.1 #22',
     },
   },
@@ -368,7 +382,7 @@ export const USER_ROUTES: AppRoute[] = [
     meta: {
       name: '投入品详情',
       path: '/production/inputs/:inputId',
-      module: '农资投入品管理',
+      module: '农资管理',
       prd: 'PRD 6.1 #20',
     },
   },
@@ -448,7 +462,7 @@ export const USER_ROUTES: AppRoute[] = [
     meta: {
       name: '生产监控看板',
       path: '/production/monitor',
-      module: '生长监测与IoT',
+      module: '生长监测预警',
       prd: '原型补充',
     },
   },

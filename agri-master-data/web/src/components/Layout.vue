@@ -1,270 +1,323 @@
 <template>
-  <div class="layout-container">
+  <div class="layout-container" :class="{ 'is-collapsed': collapsed }">
     <aside class="sidebar">
       <div class="logo-section">
-        <BrandMark :size="42" />
+        <BrandMark :size="36" />
         <div class="logo-text">
           <h1>丰链云</h1>
           <p>主数据管理</p>
         </div>
       </div>
+
       <nav class="nav-menu">
-        <ul>
-          <li v-for="item in menuItems" :key="item.path" :class="{ active: isCurrentPath(item), expanded: expandedMenu === item.path }">
-            <a 
-              :href="item.path" 
-              @click.prevent="handleMenuClick(item)"
-              class="menu-link"
-            >
-              <span class="nav-icon"><MenuIcon :name="item.icon" /></span>
-              <span class="nav-label">{{ item.label }}</span>
-              <span v-if="item.children" class="expand-icon" :class="{ expanded: expandedMenu === item.path }">▶</span>
-            </a>
-            <ul v-if="item.children && expandedMenu === item.path" class="sub-menu">
-              <li v-for="child in item.children" :key="child.path" :class="{ active: currentPath === child.path }">
-                <a :href="child.path" @click.prevent="handleNavClick(child.path)">
-                  {{ child.label }}
-                </a>
-              </li>
-            </ul>
-          </li>
-        </ul>
+        <div v-for="group in menuGroups" :key="group.key" class="nav-group">
+          <button
+            type="button"
+            class="group-head"
+            :class="{ 'is-open': isGroupOpen(group) }"
+            :aria-expanded="isGroupOpen(group)"
+            @click="toggleGroup(group)"
+          >
+            <span class="group-icon"><MenuIcon :name="group.icon" /></span>
+            <span class="group-label">{{ group.label }}</span>
+            <span class="group-arrow">▶</span>
+          </button>
+          <ul v-show="isGroupOpen(group)" class="sub-menu">
+            <li v-for="item in group.items" :key="item.path" :class="{ active: isActive(item.path) }">
+              <router-link :to="item.path" :title="item.label">
+                {{ item.label }}
+                <span v-if="item.readonly" class="readonly-mark">只读</span>
+              </router-link>
+            </li>
+          </ul>
+        </div>
       </nav>
-      <div class="sidebar-foot">平台运营 · 主数据管理</div>
+
+      <div class="sidebar-foot">主数据运营端 · V1.0</div>
     </aside>
+
     <main class="main-content">
       <header class="top-header">
         <div class="header-left">
+          <button type="button" class="collapse-btn" :title="collapsed ? '展开菜单' : '收起菜单'" @click="toggleCollapse">
+            ☰
+          </button>
           <div class="breadcrumb">
-            <span>主数据管理</span><b>/</b><strong>{{ currentLocation }}</strong>
+            <span>{{ currentGroupLabel }}</span><b>/</b><strong>{{ currentPageLabel }}</strong>
           </div>
         </div>
         <div class="header-right">
+          <form class="global-search" @submit.prevent="submitSearch">
+            <input
+              v-model="searchKeyword"
+              type="search"
+              placeholder="搜索主体 / 组织 / 用户"
+              aria-label="全局搜索"
+            />
+          </form>
           <div class="role-switch">
             <span class="on">运营中心</span>
-            <a :href="userEntry">用户端</a>
+            <a :href="userEntry">会员中心</a>
           </div>
-          <button class="notification-btn">🔔</button>
+          <button
+            type="button"
+            class="icon-btn"
+            title="消息中心由用户中心统一承载，点击前往用户中心运营端"
+            @click="openUserCenter"
+          >🔔</button>
           <div class="user-info">
-            <div class="user-avatar">{{ (userInfo.nickname || userInfo.username || '管').slice(0, 1) }}</div>
+            <div class="user-avatar">{{ userInitial }}</div>
             <div class="user-detail">
               <span class="user-name">{{ userInfo.nickname || userInfo.username || '管理员' }}</span>
-              <!-- 原来这里写死 admin@masterdata.com：一个真实的界面上不该出现编造的邮箱 -->
-              <span class="user-email">{{ userInfo.roles?.length ? userInfo.roles.join(' / ') : '未分配角色' }}</span>
+              <span class="user-roles">{{ userInfo.roles?.length ? userInfo.roles.join(' / ') : '未分配角色' }}</span>
             </div>
           </div>
+          <button class="logout-btn" :disabled="loggingOut" @click="handleLogout">
+            {{ loggingOut ? '退出中…' : '退出登录' }}
+          </button>
         </div>
       </header>
       <div class="content-wrapper">
+        <PointHiddenNotice />
         <router-view />
       </div>
     </main>
   </div>
 </template>
 
-<script setup>
-import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+<script setup lang="ts">
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useSessionStore } from '@/stores/session'
-import { ssoLogoutUrl } from '@/utils/sso'
+import { revokePlatformSession, ssoLogoutUrl } from '@/utils/sso'
 import BrandMark from '@/components/BrandMark.vue'
 import MenuIcon from '@/components/MenuIcon.vue'
+import PointHiddenNotice from '@/components/ui/PointHiddenNotice.vue'
 
-const router = useRouter()
+interface MenuItem {
+  path: string
+  label: string
+  readonly?: boolean
+}
+
+interface MenuGroup {
+  key: string
+  label: string
+  icon: string
+  items: MenuItem[]
+}
+
 /**
- * 登录态取唯一来源（Pinia）。
+ * 导航分组与《主数据管理模块_运营端原型 v1》一一对应（9 组）。
  *
- * 这里原来直接读 localStorage 里的 `user` / `token`，等于在 store 之外另开一份状态：
- * 两份状态必然分叉，而且 localStorage 里的凭证本来就不该存在（V2.0 第 4.3 节）。
+ * 与原型的唯一差异：原型把「租户详情」也放进菜单，但详情页离开主体 ID 无法独立渲染，
+ * 因此不进菜单（从列表点进去），菜单只保留可独立到达的页面。
  */
-const session = useSessionStore()
-
-/** 当前用户展示信息（内存态优先，回退到持久化的非凭证资料） */
-const userInfo = computed(() => session.user ?? { username: '', nickname: '', roles: [] })
-const currentPath = ref('/dashboard')
-const expandedMenu = ref(null)
-/** 用户端入口（买家中心）；运营端与用户端共用平台 SSO。 */
-const userEntry = `${window.location.protocol}//${window.location.hostname}:8086/member/buyer`
-
-const menuItems = [
-  { path: '/dashboard', label: '运营总览', icon: 'dashboard' },
-  { path: '/masterdata/center', label: '主数据运营', icon: 'masterdata' },
+const menuGroups: MenuGroup[] = [
   {
-    path: '/subject',
-    label: '主体管理',
+    key: 'overview',
+    label: '运营总览',
+    icon: 'dashboard',
+    items: [
+      { path: '/dashboard', label: '运营大盘' },
+      { path: '/masterdata/center', label: '主数据总览' },
+    ],
+  },
+  {
+    key: 'tenant',
+    label: '租户与配额',
     icon: 'subject',
-    children: [
-      { path: '/subject/list', label: '企业与个人主体' },
-      { path: '/subject/quota', label: '主体资源配额' },
-      { path: '/subject/package', label: '服务套餐' },
-      { path: '/subject/statistics', label: '主体数据统计' }
-    ]
+    items: [
+      { path: '/subject/list', label: '租户列表' },
+      { path: '/subject/audit', label: '入驻与生命周期' },
+      { path: '/subject/create', label: '开通配置' },
+      { path: '/subject/quota', label: '配额与超限' },
+      { path: '/subject/package', label: '套餐模板' },
+      { path: '/subject/statistics', label: '主体数据统计' },
+    ],
   },
   {
-    path: '/user', 
-    label: '用户管理', 
-    icon: 'user',
-    children: [
-      { path: '/user/list', label: '用户列表' },
-      { path: '/user/audit', label: '认证审核' }
-    ]
-  },
-  { 
-    path: '/org', 
-    label: '组织管理', 
+    key: 'org',
+    label: '组织与权限',
     icon: 'org',
-    children: [
-      { path: '/org/list', label: '组织列表' }
-    ]
+    items: [
+      { path: '/org/list', label: '全平台组织' },
+      { path: '/permission/role', label: '角色与权限点' },
+      { path: '/permission/matrix', label: '角色权限矩阵' },
+      { path: '/permission/anomaly', label: '异常权限检测' },
+    ],
   },
-  { 
-    path: '/permission', 
-    label: '权限审计', 
-    icon: 'permission',
-    children: [
-      { path: '/permission/role', label: '角色管理' },
-      { path: '/permission/log', label: '操作日志' }
-    ]
-  },
-  { 
-    path: '/datastandard', 
-    label: '数据标准', 
-    icon: 'standard',
-    children: [
-      { path: '/datastandard/dict', label: '数据字典' },
-      { path: '/datastandard/code-rule', label: '编码规则' }
-    ]
-  },
-  { 
-    path: '/quality', 
-    label: '数据质量', 
-    icon: 'quality',
-    children: [
-      { path: '/quality/dashboard', label: '质量仪表盘' },
-      { path: '/quality/list', label: '质量监控' },
-      { path: '/quality/rule', label: '规则配置' },
-      { path: '/quality/task', label: '检测任务' },
-      { path: '/quality/issue', label: '问题工单' }
-    ]
-  },
-  { 
-    path: '/distribution', 
-    label: '数据分发', 
-    icon: 'distribution',
-    children: [
-      { path: '/distribution/list', label: '分发监控' }
-    ]
-  },
-  { 
-    path: '/product', 
-    label: '商品管理', 
+  {
+    key: 'product',
+    label: '商品主数据',
     icon: 'product',
-    children: [
-      { path: '/product/list', label: '商品列表' },
-      { path: '/product/catalog', label: '商品与分类' }
-    ]
+    items: [
+      { path: '/product/catalog', label: '品类标准与单位' },
+      { path: '/product/template', label: '属性模板与 SKU' },
+      { path: '/product/spu-audit', label: '商品审核' },
+      { path: '/product/list', label: '官网上架商品' },
+    ],
   },
-  { 
-    path: '/customer', 
-    label: '客户供应商', 
+  {
+    key: 'partner',
+    label: '客商主数据',
     icon: 'customer',
-    children: [
-      { path: '/customer/list', label: '客户列表' },
-      { path: '/supplier/list', label: '供应商列表' }
-    ]
+    items: [
+      { path: '/customer/list', label: '客户主数据' },
+      { path: '/supplier/list', label: '供应商主数据' },
+      { path: '/customer/blacklist', label: '黑名单管理' },
+    ],
   },
-  
-  { 
-    path: '/system', 
-    label: '系统配置', 
+  {
+    key: 'standard',
+    label: '数据标准',
+    icon: 'standard',
+    items: [
+      { path: '/datastandard/code-rule', label: '编码规则管理' },
+      { path: '/datastandard/dict', label: '数据字典' },
+      { path: '/datastandard/metadata', label: '标准与元数据' },
+    ],
+  },
+  {
+    key: 'governance',
+    label: '数据治理',
+    icon: 'quality',
+    items: [
+      { path: '/quality/dashboard', label: '质量稽核' },
+      { path: '/quality/list', label: '质量监控' },
+      { path: '/quality/issue', label: '问题治理与合并' },
+      { path: '/quality/rule', label: '质量规则' },
+      { path: '/quality/task', label: '检测任务' },
+      { path: '/distribution/list', label: '血缘与分发' },
+    ],
+  },
+  {
+    key: 'system',
+    label: '系统与审计',
     icon: 'system',
-    children: [
+    items: [
+      { path: '/permission/log', label: '操作审计' },
+      { path: '/system/ops-accounts', label: '运营账号与角色' },
       { path: '/system/params', label: '参数配置' },
       { path: '/system/template', label: '通知模板' },
       { path: '/system/announcement', label: '公告管理' },
-      { path: '/system/region', label: '行政区划' }
-    ]
-  }
+      { path: '/system/region', label: '行政区划' },
+    ],
+  },
+  {
+    key: 'related',
+    label: '关联系统（只读）',
+    icon: 'user',
+    items: [
+      { path: '/user/list', label: '全平台用户', readonly: true },
+      { path: '/user/audit', label: '实名认证审核', readonly: true },
+      { path: '/uc/overview', label: '用户中心总览', readonly: true },
+      { path: '/uc/identity', label: '身份管理', readonly: true },
+      { path: '/uc/identity-audit', label: '身份申请审核', readonly: true },
+      { path: '/uc/certification', label: '资质审核', readonly: true },
+      { path: '/uc/feedback', label: '意见反馈处理', readonly: true },
+      { path: '/uc/privacy', label: '隐私与数据申请', readonly: true },
+      { path: '/masterdata/boundary', label: '模块边界与协同' },
+    ],
+  },
 ]
 
-const currentLocation = computed(() => {
-  const pathNames = {
-    '/dashboard': '运营总览',
-    '/masterdata/center': '主数据运营',
-    '/subject/list': '企业与个人主体',
-    '/subject/quota': '主体资源配额',
-    '/subject/package': '服务套餐',
-    '/subject/statistics': '主体数据统计',
-    '/user/list': '用户管理',
-    '/user/audit': '认证审核',
-    '/org/list': '组织管理',
-    '/permission/role': '角色管理',
-    '/permission/log': '操作日志',
-    '/datastandard/dict': '数据字典',
-    '/datastandard/code-rule': '编码规则',
-    '/quality/dashboard': '质量仪表盘',
-    '/quality/list': '质量监控',
-    '/quality/rule': '规则配置',
-    '/quality/task': '检测任务',
-    '/quality/issue': '问题工单',
-    '/distribution/list': '分发监控',
-    '/product/list': '商品列表',
-    '/product/catalog': '商品与分类',
-    '/customer/list': '客户管理',
-    '/supplier/list': '供应商管理',
-    '/system/params': '参数配置',
-    '/system/template': '通知模板',
-    '/system/announcement': '公告管理',
-    '/system/region': '行政区划'
-  }
-  return pathNames[currentPath.value] || '首页'
-})
+const router = useRouter()
+const route = useRoute()
+const session = useSessionStore()
 
-const isCurrentPath = (item) => {
-  if (currentPath.value === item.path) return true
-  if (item.children) {
-    return item.children.some(child => currentPath.value === child.path)
-  }
+const userInfo = computed(() => session.user ?? { username: '', nickname: '', roles: [] })
+const userInitial = computed(() => (userInfo.value.nickname || userInfo.value.username || '管').slice(0, 1))
+const userEntry = `${window.location.protocol}//${window.location.hostname}:8086/member/buyer`
+const userCenterOps = `${window.location.protocol}//${window.location.hostname}:8115/user-center-ops/`
+
+const COLLAPSE_KEY = 'mds.sidebar.collapsed'
+const collapsed = ref(localStorage.getItem(COLLAPSE_KEY) === '1')
+const loggingOut = ref(false)
+const searchKeyword = ref('')
+const expandedKeys = ref<string[]>([])
+
+/** 默认展开当前页所在分组；首次进入展开「运营总览」。 */
+function defaultExpanded(): string[] {
+  const hits = menuGroups.filter((group) => group.items.some((item) => isActive(item.path))).map((group) => group.key)
+  return hits.length ? hits : ['overview']
+}
+
+function isActive(path: string): boolean {
+  const current = route.path
+  if (current === path) return true
+  // 详情/编辑页归属到列表菜单，例如 /subject/detail/9 → /subject/list
+  if (path === '/subject/list' && /^\/subject\/(detail|edit)\//.test(current)) return true
+  if (path === '/permission/role' && /^\/permission\/role\//.test(current)) return true
+  if (path === '/org/list' && /^\/org\//.test(current)) return true
+  if (path === '/user/list' && /^\/user\/detail\//.test(current)) return true
+  if (path === '/datastandard/dict' && /^\/datastandard\/dict\//.test(current)) return true
   return false
 }
 
-const handleMenuClick = (item) => {
-  if (item.children) {
-    if (expandedMenu.value === item.path) {
-      expandedMenu.value = null
-    } else {
-      expandedMenu.value = item.path
-    }
-  }
-  if (!item.children) {
-    currentPath.value = item.path
-    router.push(item.path)
-  }
+function isGroupOpen(group: MenuGroup): boolean {
+  return expandedKeys.value.includes(group.key)
 }
 
-const handleNavClick = (path) => {
-  currentPath.value = path
-  router.push(path)
+function toggleGroup(group: MenuGroup) {
+  if (collapsed.value) {
+    collapsed.value = false
+    localStorage.setItem(COLLAPSE_KEY, '0')
+  }
+  expandedKeys.value = isGroupOpen(group)
+    ? expandedKeys.value.filter((key) => key !== group.key)
+    : [...expandedKeys.value, group.key]
 }
 
-const handleLogout = () => {
+function toggleCollapse() {
+  collapsed.value = !collapsed.value
+  localStorage.setItem(COLLAPSE_KEY, collapsed.value ? '1' : '0')
+}
+
+const currentGroup = computed(() => menuGroups.find((group) => group.items.some((item) => isActive(item.path))))
+const currentGroupLabel = computed(() => currentGroup.value?.label ?? '主数据管理')
+const currentPageLabel = computed(() => {
+  const item = currentGroup.value?.items.find((entry) => isActive(entry.path))
+  if (item) return item.label
+  return detailTitles[route.path] ?? '页面'
+})
+
+const detailTitles: Record<string, string> = {
+  '/subject/create': '开通配置',
+  '/subject/edit/:id': '编辑主体',
+  '/system/ops-accounts': '运营账号与角色',
+}
+
+function submitSearch() {
+  const keyword = searchKeyword.value.trim()
+  router.push({ path: '/subject/list', query: keyword ? { keyword } : {} })
+}
+
+function openUserCenter() {
+  window.open(userCenterOps, '_blank', 'noopener')
+}
+
+async function handleLogout() {
+  if (loggingOut.value) return
+  loggingOut.value = true
+  session.markForcedLogout()
+  await revokePlatformSession()
   session.clear()
-  // 必须由浏览器**整页导航**到认证中心的登出端点：SSO 会话 Cookie 只存在于那个域上，
-  // 子系统发起的跨域 XHR 带不上它 —— 只清本地会出现"点了登出、刷新又登回来"。
-  window.location.href = ssoLogoutUrl()
+  window.location.assign(ssoLogoutUrl())
 }
+
+watch(
+  () => route.path,
+  () => {
+    const key = currentGroup.value?.key
+    if (key && !expandedKeys.value.includes(key)) {
+      expandedKeys.value = [...expandedKeys.value, key]
+    }
+  },
+)
 
 onMounted(() => {
-  currentPath.value = router.currentRoute.value.path
-  const currentMenu = menuItems.find(item => {
-    if (item.children) {
-      return item.children.some(child => currentPath.value === child.path)
-    }
-    return false
-  })
-  if (currentMenu) {
-    expandedMenu.value = currentMenu.path
-  }
+  expandedKeys.value = defaultExpanded()
 })
 </script>
 
@@ -272,12 +325,12 @@ onMounted(() => {
 .layout-container {
   display: flex;
   min-height: 100vh;
-  background: #f4f7f5;
+  background: var(--mds-bg, #f5f7fa);
 }
 
 .sidebar {
   width: 224px;
-  background: linear-gradient(180deg, #06281a, #05301f);
+  background: #062b1c;
   color: #fff;
   position: fixed;
   left: 0;
@@ -286,145 +339,170 @@ onMounted(() => {
   z-index: 100;
   display: flex;
   flex-direction: column;
+  transition: width 0.22s ease;
   overflow: hidden;
 }
 
+.is-collapsed .sidebar {
+  width: 64px;
+}
+
 .logo-section {
-  padding: 18px;
-  background: transparent;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  flex: none;
   display: flex;
   align-items: center;
   gap: 10px;
-  flex: none;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .logo-text h1 {
   margin: 0;
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 800;
   letter-spacing: 0.3px;
+  white-space: nowrap;
 }
 
 .logo-text p {
   margin: 2px 0 0;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
   opacity: 0.55;
   letter-spacing: 2.4px;
+  white-space: nowrap;
 }
 
 .nav-menu {
   flex: 1;
-  padding: 10px 0;
+  padding: 8px 8px 12px;
   overflow-y: auto;
   overflow-x: hidden;
 }
 
-.nav-menu ul {
-  list-style: none;
-  padding: 0;
-  margin: 0;
+.nav-menu::-webkit-scrollbar {
+  width: 6px;
 }
 
-.nav-menu > ul > li {
-  margin: 2px 10px;
-  border-radius: 8px;
+.nav-menu::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 3px;
 }
 
-.nav-menu > ul > li > a {
+.nav-group + .nav-group {
+  margin-top: 2px;
+}
+
+.group-head {
   display: flex;
   align-items: center;
-  padding: 9px 12px;
-  color: rgba(255, 255, 255, 0.76);
-  text-decoration: none;
-  transition: all 0.2s;
-  font-size: 13.5px;
+  gap: 9px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
 }
 
-.nav-menu > ul > li:hover > a {
+.group-head:hover {
   background: rgba(255, 255, 255, 0.08);
   color: #fff;
 }
 
-.nav-menu > ul > li.active > a {
-  background: linear-gradient(135deg, #12764a, #159a5e);
-  color: #fff;
-  box-shadow: 0 8px 22px rgba(21, 154, 94, 0.28);
-}
-
-.nav-icon {
-  width: 18px;
-  height: 18px;
-  margin-right: 10px;
+.group-icon {
   display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: rgba(255, 255, 255, 0.68);
-  transition: color 0.2s ease;
+  color: rgba(255, 255, 255, 0.55);
 }
 
-.nav-menu > ul > li:hover > a .nav-icon {
-  color: rgba(255, 255, 255, 0.92);
+.group-head:hover .group-icon,
+.group-head.is-open .group-icon {
+  color: #7fe0ae;
 }
 
-.nav-menu > ul > li.active > a .nav-icon {
-  color: #fff;
+.group-label {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.menu-icon-svg {
-  display: block;
-  flex: none;
-}
-
-.expand-icon {
-  margin-left: auto;
-  font-size: 10px;
-  color: rgba(255, 255, 255, 0.4);
+.group-arrow {
+  font-size: var(--agri-font-size-micro);
+  color: rgba(255, 255, 255, 0.35);
   transition: transform 0.2s;
 }
 
-.expand-icon.expanded {
+.group-head.is-open .group-arrow {
   transform: rotate(90deg);
 }
 
 .sub-menu {
-  background: rgba(0, 0, 0, 0.16);
-  margin: 4px 8px;
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.sub-menu li {
-  padding: 2px 0;
+  list-style: none;
+  margin: 2px 0 6px;
+  padding: 0;
 }
 
 .sub-menu li a {
-  display: block;
-  padding: 8px 14px 8px 42px;
-  color: rgba(255, 255, 255, 0.65);
-  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px 8px 35px;
+  border-left: 3px solid transparent;
+  color: rgba(255, 255, 255, 0.62);
   font-size: 12.5px;
-  transition: all 0.2s;
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.sub-menu li:hover a {
-  background: rgba(255, 255, 255, 0.08);
+.sub-menu li a:hover {
+  background: rgba(19, 160, 90, 0.16);
   color: #fff;
 }
 
 .sub-menu li.active a {
-  color: #6fd6a2;
-  background: rgba(21, 154, 94, 0.16);
+  border-left-color: #7fe0ae;
+  background: rgba(19, 160, 90, 0.24);
+  color: #fff;
   font-weight: 600;
+}
+
+.readonly-mark {
+  flex: none;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.6);
+  font-size: var(--agri-font-size-micro);
+  line-height: 15px;
 }
 
 .sidebar-foot {
   flex: none;
-  padding: 14px 16px;
+  padding: 12px 10px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.35);
-  font-size: 10.5px;
+  color: rgba(255, 255, 255, 0.32);
+  font-size: var(--agri-font-size-micro);
   text-align: center;
+  white-space: nowrap;
+}
+
+.is-collapsed .logo-text,
+.is-collapsed .group-label,
+.is-collapsed .group-arrow,
+.is-collapsed .sub-menu,
+.is-collapsed .sidebar-foot {
+  display: none;
+}
+
+.is-collapsed .group-head {
+  justify-content: center;
+  padding: 10px 0;
 }
 
 .main-content {
@@ -433,15 +511,21 @@ onMounted(() => {
   margin-left: 224px;
   display: flex;
   flex-direction: column;
+  transition: margin-left 0.22s ease;
+}
+
+.is-collapsed .main-content {
+  margin-left: 64px;
 }
 
 .top-header {
-  background: #fff;
-  padding: 0 24px;
   height: 60px;
+  padding: 0 22px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 16px;
+  background: #fff;
   border-bottom: 1px solid #e3eae5;
   position: sticky;
   top: 0;
@@ -449,15 +533,39 @@ onMounted(() => {
 }
 
 .header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
   flex: 1;
+}
+
+.collapse-btn {
+  width: 32px;
+  height: 32px;
+  border: 1px solid #e3eae5;
+  border-radius: 7px;
+  background: #fff;
+  color: #4b5563;
+  cursor: pointer;
+  flex: none;
+}
+
+.collapse-btn:hover {
+  border-color: #13a05a;
+  color: #0f7a45;
 }
 
 .breadcrumb {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
   color: #6b7c72;
   font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .breadcrumb b {
@@ -467,18 +575,36 @@ onMounted(() => {
 
 .breadcrumb strong {
   color: #0b1a12;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .header-right {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  flex: none;
+}
+
+.global-search input {
+  width: 188px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid #e3eae5;
+  border-radius: 7px;
+  background: #f7faf8;
+  font-size: 12.5px;
+  outline: none;
+}
+
+.global-search input:focus {
+  border-color: #13a05a;
+  background: #fff;
 }
 
 .role-switch {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
   padding: 3px;
   border: 1px solid #e3eae5;
   border-radius: 999px;
@@ -487,17 +613,13 @@ onMounted(() => {
 
 .role-switch span,
 .role-switch a {
-  padding: 4px 12px;
+  padding: 3px 11px;
   border-radius: 999px;
   color: #6b7c72;
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
   text-decoration: none;
   white-space: nowrap;
-}
-
-.role-switch a:hover {
-  color: #0e5233;
 }
 
 .role-switch .on {
@@ -505,30 +627,24 @@ onMounted(() => {
   color: #fff;
 }
 
-.notification-btn {
-  background: #f4f7f5;
-  border: none;
-  font-size: 16px;
-  cursor: pointer;
-  padding: 6px 8px;
+.icon-btn {
+  width: 32px;
+  height: 32px;
+  border: 0;
   border-radius: 8px;
+  background: #f4f7f5;
+  font-size: 15px;
+  cursor: pointer;
 }
 
-.notification-btn:hover {
+.icon-btn:hover {
   background: #e4f6ec;
 }
 
 .user-info {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 4px 8px;
-  border-radius: 8px;
-  cursor: pointer;
-}
-
-.user-info:hover {
-  background: #f4f7f5;
+  gap: 8px;
 }
 
 .user-avatar {
@@ -547,142 +663,92 @@ onMounted(() => {
 .user-detail {
   display: flex;
   flex-direction: column;
+  line-height: 1.25;
 }
 
 .user-name {
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 600;
   color: #33453b;
 }
 
-.user-email {
-  font-size: 10.5px;
+.user-roles {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--agri-font-size-micro);
   color: #93a29a;
+}
+
+.logout-btn {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 7px;
+  background: #fff;
+  color: #4b5563;
+  font-size: 12.5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.logout-btn:hover:not(:disabled) {
+  border-color: #10b981;
+  color: #047857;
+  background: #ecfdf5;
+}
+
+.logout-btn:disabled {
+  opacity: 0.55;
+  cursor: wait;
 }
 
 .content-wrapper {
   flex: 1;
-  padding: 20px 24px 34px;
-  background: #f4f7f5;
+  padding: 18px 22px 34px;
+  background: var(--mds-bg, #f5f7fa);
 }
 
-/* 页面公共控件向会员中心的绿色系收口 */
-.content-wrapper .add-btn,
-.content-wrapper .btn-primary {
-  background: linear-gradient(135deg, #12764a, #159a5e) !important;
-}
-
-.content-wrapper .search-btn {
-  color: #12764a;
-}
-
-.content-wrapper .status-badge.active,
-.content-wrapper .type-badge.enterprise {
-  background: rgba(18, 118, 74, 0.1);
-  color: #12764a;
-}
-
-.content-wrapper .table-card {
-  border: 1px solid #e3eae5;
-  box-shadow: none;
-}
-
-.content-wrapper .header-left h1 {
-  color: #0b1a12;
-}
-
-@media (max-width: 900px) {
-  .layout-container {
-    display: block;
-  }
-
+@media (max-width: 1024px) {
   .sidebar {
-    position: relative;
-    width: 100%;
-    bottom: auto;
+    width: 64px;
   }
 
-  .main-content {
-    margin-left: 0;
-  }
-
-  .nav-menu {
-    max-height: 320px;
-  }
-
+  .logo-text,
+  .group-label,
+  .group-arrow,
+  .sub-menu,
   .sidebar-foot {
     display: none;
   }
 
-  .top-header {
-    padding: 0 14px;
+  .group-head {
+    justify-content: center;
+    padding: 10px 0;
   }
 
-  .content-wrapper {
-    padding: 14px;
+  .main-content {
+    margin-left: 64px;
   }
 
-  .user-email {
+  .global-search {
     display: none;
   }
 }
 
-@media (max-width: 700px) {
+@media (max-width: 760px) {
+  .content-wrapper {
+    padding: 14px;
+  }
+
   .top-header {
-    height: auto;
-    min-height: 60px;
-    flex-wrap: wrap;
-    gap: 8px;
-    padding: 10px 12px;
+    padding: 0 12px;
   }
 
-  .header-left {
-    flex: 1 1 100%;
-  }
-
-  .breadcrumb {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .header-right {
-    width: 100%;
-    justify-content: flex-end;
-  }
-
+  .user-detail,
   .role-switch {
-    margin-right: auto;
+    display: none;
   }
-}
-
-.nav-menu::-webkit-scrollbar {
-  width: 6px;
-}
-
-.nav-menu::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.nav-menu::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 3px;
-}
-
-.nav-menu::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
-}
-
-.nav-menu::-moz-scrollbar {
-  width: 6px;
-}
-
-.nav-menu::-moz-scrollbar-track {
-  background: transparent;
-}
-
-.nav-menu::-moz-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 3px;
 }
 </style>

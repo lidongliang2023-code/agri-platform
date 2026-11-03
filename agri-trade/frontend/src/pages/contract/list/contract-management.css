@@ -38,7 +38,7 @@
 
 .contract-overview-title > div > span {
   color: #158255;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
   font-weight: 800;
   letter-spacing: .12em;
 }
@@ -72,7 +72,7 @@
 .contract-overview-stats span {
   display: block;
   color: #82958a;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .contract-overview-stats strong {
@@ -163,7 +163,7 @@
 
 .contract-name-link span {
   color: #82948a;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .contract-name-link:hover strong {
@@ -187,7 +187,7 @@
   max-width: 150px;
   overflow: hidden;
   color: #455f50;
-  font-size: 11.5px;
+  font-size: var(--agri-font-size-micro);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -198,7 +198,7 @@
 
 .contract-progress div > span:first-child {
   color: #84968b;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .contract-party-mark {
@@ -208,7 +208,7 @@
   flex: 0 0 auto;
   place-items: center;
   border-radius: 7px;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
   font-weight: 800;
 }
 
@@ -287,7 +287,7 @@
 .contract-detail-title > span,
 .contract-sign-heading > div:nth-child(2) > span {
   color: #198456;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
   font-weight: 700;
   letter-spacing: .04em;
 }
@@ -306,7 +306,7 @@
 .contract-sign-heading p {
   margin: 5px 0 0;
   color: #7e9185;
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .contract-detail-hero-actions {
@@ -357,7 +357,7 @@
 
 .contract-party-card > div span {
   color: #87988e;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .contract-party-card > div strong {
@@ -370,7 +370,7 @@
 
 .contract-party-card > div small {
   color: #9aa79f;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .contract-party-link {
@@ -383,7 +383,7 @@
 }
 
 .contract-party-link small {
-  font-size: 8px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .contract-terms-grid {
@@ -404,7 +404,7 @@
 
 .contract-terms-grid span {
   color: #84958b;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .contract-terms-grid strong {
@@ -452,19 +452,19 @@
 
 .contract-signature-head strong {
   color: #2a4a38;
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .contract-signature-head span {
   color: #86988d;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .contract-signature-card > small {
   display: block;
   margin-top: 12px;
   color: #91a097;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .contract-evidence {
@@ -498,20 +498,20 @@
 
 .contract-evidence strong {
   color: #316048;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .contract-evidence small {
   overflow: hidden;
   color: #7e9386;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .contract-evidence a {
   color: #0d6f46;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
   font-weight: 700;
 }
 
@@ -519,7 +519,7 @@
   display: block;
   margin-top: 12px;
   color: #97a49c;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .contract-content {
@@ -582,12 +582,12 @@
 
 .contract-timeline strong {
   color: #4c6657;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .contract-timeline small {
   color: #91a097;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .contract-hash-list {
@@ -604,20 +604,20 @@
 
 .contract-hash-list span {
   color: #899a90;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .contract-hash-list code {
   overflow-wrap: anywhere;
   color: #446353;
   font-family: "Roboto Mono", ui-monospace, monospace;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
   line-height: 1.5;
 }
 
 .contract-hash-list strong {
   color: var(--mc-green-700);
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .contract-sign-layout {
@@ -687,13 +687,13 @@
 
 .contract-method-card small {
   color: #85978c;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
   line-height: 1.55;
 }
 
 .contract-sign-form-panel .ant-form-item-label > label {
   color: #496453;
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
   font-weight: 600;
 }
 
@@ -740,12 +740,12 @@
 
 .contract-upload-zone strong {
   color: #385441;
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .contract-upload-zone small {
   color: #8c9d92;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .contract-upload-preview {
@@ -769,14 +769,14 @@
 .contract-upload-preview strong {
   overflow: hidden;
   color: #466452;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .contract-upload-preview a {
   color: var(--mc-green-700);
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .contract-sign-actions {
@@ -801,7 +801,7 @@
 .contract-summary-contract > span {
   color: #87988e;
   font-family: "Roboto Mono", ui-monospace, monospace;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .contract-summary-contract > strong {
@@ -829,7 +829,7 @@
   align-items: center;
   gap: 7px;
   color: #809287;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .contract-summary-parties strong {
@@ -837,7 +837,7 @@
   max-width: 150px;
   overflow: hidden;
   color: #466351;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -854,7 +854,7 @@
   gap: 7px;
   margin: 0;
   color: #71867a;
-  font-size: 9.5px;
+  font-size: var(--agri-font-size-micro);
   line-height: 1.65;
 }
 

@@ -44,6 +44,14 @@ public class TaskVO {
 
     private String plotName;
 
+    private Long planId;
+
+    private Long stageId;
+
+    private String planName;
+
+    private String stageName;
+
     private String cropName;
 
     @JsonProperty("description")

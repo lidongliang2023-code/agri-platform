@@ -124,6 +124,12 @@ export interface Task {
   taskNo: string
   /** 所属计划 ID */
   planId?: string
+  /** 所属计划名称（冗余） */
+  planName?: string
+  /** 所属计划阶段 ID */
+  stageId?: string
+  /** 所属计划阶段名称（冗余） */
+  stageName?: string
   /** 所属地块 ID */
   plotId?: string
   /** 所属地块名称（冗余） */
@@ -156,6 +162,10 @@ export interface Task {
   priority: TaskPriority
   /** 关联任务模板 ID */
   templateId?: string
+  /** 提交的成果说明（后端 result_desc） */
+  resultDesc?: string
+  /** 提交的成果照片（后端 result_photo_urls，JSON 数组字符串） */
+  resultPhotoUrls?: string
   /** 关联投入品使用记录 ID（后端为 JSON 数组字符串） */
   relatedUsageIds?: string
   /** 所属农场 ID（创建表单入参，后端按地块归属农场） */

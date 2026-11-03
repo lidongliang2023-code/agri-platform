@@ -39,6 +39,35 @@ CREATE TABLE IF NOT EXISTS `agri_md_user` (
   UNIQUE KEY `uk_email` (`email`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户表';
 
+-- 成员任职档案：真实账号（统一认证 platform_user）在本主体内担任什么职务。
+--
+-- 为什么不直接给 agri_md_user 加 platform_user_id / dept_id / position_id：
+--   1. agri_md_user.password 是 NOT NULL —— 为一个 SSO 账号建本地档案就得填个假密码，
+--      这是把"认证凭证"和"员工档案"混在一起，方向就错了；
+--   2. agri_md_user.username 是**全局唯一**，而同一账号可以在多个主体任职；
+--   3. agri_md_user 里已有 5 条种子数据（seed_2001_*），加列会让它们看起来像真员工。
+-- 所以单独建表：**只存账号 ID 与组织位置，账号信息仍以用户中心为权威源**（不冗余用户名/手机号，
+-- 避免账号改名后这里过期）。展示时以用户中心成员列表为主表、本表为右表连接，
+-- 孤儿记录（platform_user_id 不在成员列表里）自然不显示。
+CREATE TABLE IF NOT EXISTS `agri_md_member_profile` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `tenant_id` VARCHAR(64) NOT NULL COMMENT '所属经营主体',
+  `platform_user_id` BIGINT NOT NULL COMMENT '统一认证账号ID（platform_user.id）',
+  -- 下面三个位置字段统一用 VARCHAR 存"实体主键的字符串形式"。
+  -- 原因：三张表的主键类型各不相同 —— organization.id 是雪花 Long、department.id 是自增 BIGINT、
+  -- position.position_id 是雪花 VARCHAR。前端一律以字符串传（雪花超出 JS 安全整数范围，
+  -- 传数字会被静默截断），存字符串就不用来回转换，也不会出现"部门能存、岗位存不进去"。
+  `org_id` VARCHAR(64) NULL COMMENT '所属组织（agri_md_organization.id）',
+  `dept_id` VARCHAR(64) NULL COMMENT '所属部门（agri_md_department.id，自增主键）',
+  `position_id` VARCHAR(64) NULL COMMENT '岗位（agri_md_position.position_id，雪花业务主键）',
+  `job_status` VARCHAR(32) DEFAULT 'active' COMMENT '在职状态：active / left',
+  `create_time` DATETIME COMMENT '创建时间',
+  `update_time` DATETIME COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_tenant_platform_user` (`tenant_id`, `platform_user_id`),
+  KEY `idx_tenant` (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='成员任职档案（账号在主体内的组织位置）';
+
 CREATE TABLE IF NOT EXISTS `agri_md_tenant` (
   `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
   `tenant_code` VARCHAR(64) NOT NULL UNIQUE COMMENT '租户编码',
@@ -131,6 +160,8 @@ CREATE TABLE IF NOT EXISTS `agri_md_user_role` (
   `tenant_id` VARCHAR(64) COMMENT '租户ID',
   `create_time` DATETIME COMMENT '创建时间',
   `create_by` VARCHAR(64) COMMENT '创建人',
+  -- 「过期权限」这条巡检口径的数据源（2026-11-02）：NULL = 永久，不拿 create_time+90 天编一个到期日
+  `expire_time` DATETIME NULL COMMENT '授权到期时间；NULL=永久',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_user_role` (`user_id`, `role_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户角色关联表';
@@ -169,17 +200,23 @@ CREATE TABLE IF NOT EXISTS `agri_md_role_menu` (
   `tenant_id` VARCHAR(64) COMMENT '租户ID',
   `create_time` DATETIME COMMENT '创建时间',
   `create_by` VARCHAR(64) COMMENT '创建人',
+  -- 与 agri_md_user_role 同一口径：页面级授权也要能到期，否则「过期权限」这条规则只能查角色绑定一半
+  `expire_time` DATETIME NULL COMMENT '授权到期时间；NULL=永久',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_role_menu` (`role_id`, `menu_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='角色菜单关联表';
 
 CREATE TABLE IF NOT EXISTS `agri_md_permission` (
   `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-  `perm_code` VARCHAR(64) NOT NULL UNIQUE COMMENT '权限编码',
+  -- 191 而不是 64：perm_code 存的是 "METHOD /路径模板"，长度由端点决定不由人控制。
+  -- 原来 64，超宽时同步在事务里报 Data too long → **整批权限点一个都建不出来**（2026-11-02 实测）。
+  -- utf8mb4 下 191*4 < 3072，唯一索引仍可用。已部署库由 db/20261102-permission-points.sql 放宽。
+  `perm_code` VARCHAR(191) NOT NULL COMMENT '权限点编码：METHOD + 端点路径模板',
   `perm_name` VARCHAR(128) NOT NULL COMMENT '权限名称',
   `perm_type` VARCHAR(32) COMMENT '权限类型',
   `api_path` VARCHAR(512) COMMENT 'API路径',
   `http_method` VARCHAR(16) COMMENT 'HTTP方法',
+  `module` VARCHAR(64) NULL COMMENT '所属功能模块（同步自控制器 @Tag 名称）',
   `status` INT DEFAULT 0 COMMENT '状态',
   `del_flag` INT DEFAULT 0 COMMENT '删除标志',
   `tenant_id` VARCHAR(64) COMMENT '租户ID',
@@ -200,7 +237,8 @@ CREATE TABLE IF NOT EXISTS `agri_md_permission` (
   `sort_order` INT NULL COMMENT '实体字段对齐补齐（2026-10-12）',
   `remark` VARCHAR(500) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_perm_code` (`perm_code`)
+  UNIQUE KEY `uk_perm_code` (`perm_code`),
+  KEY `idx_md_perm_module` (`module`, `del_flag`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='权限表';
 
 CREATE TABLE IF NOT EXISTS `agri_md_role_permission` (
@@ -214,7 +252,9 @@ CREATE TABLE IF NOT EXISTS `agri_md_role_permission` (
   `create_by` VARCHAR(64) COMMENT '创建人',
   `permission_id` VARCHAR(255) NULL COMMENT '实体字段对齐补齐（2026-10-12）',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_role_perm` (`role_id`, `perm_id`)
+  UNIQUE KEY `uk_role_perm` (`role_id`, `perm_id`),
+  -- 收紧判定每次写请求都要问"这个点有没有任何角色持有"，按 perm_id 反查必须有索引
+  KEY `idx_md_rp_perm` (`perm_id`, `del_flag`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='角色权限关联表';
 
 CREATE TABLE IF NOT EXISTS `agri_md_organization` (
@@ -1052,3 +1092,212 @@ CREATE TABLE IF NOT EXISTS `agri_md_operation_log` (
   KEY `idx_operation_log_time` (`create_time`),
   KEY `idx_operation_log_module` (`module`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='操作日志表';
+
+-- ------------------------------------------------ 黑名单（平台级联合惩戒）
+-- 2026-10-30：此前运营端「黑名单管理」是缺口页（无表无接口）。
+-- 口径：平台级，tenant_id 记录发起方（运营端写入为 0）；status=active 表示惩戒生效。
+CREATE TABLE IF NOT EXISTS `agri_md_blacklist` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `target_type` VARCHAR(32) NOT NULL COMMENT '对象类型：user / customer / supplier',
+  `target_id` VARCHAR(64) COMMENT '对象ID（可为空：仅登记名称时）',
+  `target_name` VARCHAR(255) NOT NULL COMMENT '对象名称',
+  `reason` VARCHAR(64) NOT NULL COMMENT '拉黑原因编码/简述',
+  `evidence` VARCHAR(500) COMMENT '证据/依据摘要',
+  `start_time` DATETIME COMMENT '生效时间',
+  `expire_time` DATETIME NULL COMMENT '到期时间（空=永久）',
+  `status` VARCHAR(16) DEFAULT 'active' COMMENT '状态：active 生效 / released 已解除',
+  `release_reason` VARCHAR(500) COMMENT '解除原因',
+  `release_time` DATETIME COMMENT '解除时间',
+  `tenant_id` VARCHAR(64) COMMENT '发起方租户ID（运营端为 0）',
+  `remark` VARCHAR(500) COMMENT '备注',
+  `create_by` VARCHAR(64) COMMENT '创建人',
+  `create_time` DATETIME COMMENT '创建时间',
+  `update_by` VARCHAR(64) COMMENT '更新人',
+  `update_time` DATETIME COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_blacklist_target` (`target_type`, `target_id`),
+  KEY `idx_blacklist_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='黑名单表';
+
+-- ------------------------------------------------ 平台公告
+-- 2026-10-30：此前「公告管理」用的是 5 条写死示例，刷新即复原。
+-- 口径：平台公告，tenant_id 为 0；status: draft / published / offline / expired。
+CREATE TABLE IF NOT EXISTS `agri_md_announcement` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `title` VARCHAR(200) NOT NULL COMMENT '公告标题',
+  `type` VARCHAR(32) DEFAULT 'info' COMMENT '类型：info / warning / maintenance / emergency',
+  `content` TEXT NOT NULL COMMENT '公告内容',
+  `status` VARCHAR(16) DEFAULT 'draft' COMMENT '状态：draft / published / offline',
+  `publish_time` DATETIME NULL COMMENT '发布时间（空=未发布）',
+  `expire_time` DATETIME NULL COMMENT '到期时间（空=长期）',
+  `author` VARCHAR(64) COMMENT '发布人',
+  `tenant_id` VARCHAR(64) COMMENT '租户ID（平台公告为 0）',
+  `remark` VARCHAR(500) COMMENT '备注',
+  `create_by` VARCHAR(64) COMMENT '创建人',
+  `create_time` DATETIME COMMENT '创建时间',
+  `update_by` VARCHAR(64) COMMENT '更新人',
+  `update_time` DATETIME COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_announcement_status` (`status`),
+  KEY `idx_announcement_publish` (`publish_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='平台公告表';
+
+-- ------------------------------------------------ 格式标准（字段级）
+-- 2026-10-30：此前 /standard/format 系列是空实现（恒返回空列表，也没有表）。
+CREATE TABLE IF NOT EXISTS `agri_md_data_format` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `format_code` VARCHAR(64) NOT NULL COMMENT '格式编码（唯一）',
+  `format_name` VARCHAR(128) NOT NULL COMMENT '格式名称',
+  `data_type` VARCHAR(32) DEFAULT 'string' COMMENT '数据类型：string/number/date/boolean/enum',
+  `validation_rule` VARCHAR(500) COMMENT '校验规则（正则或表达式）',
+  `max_length` INT NULL COMMENT '最大长度',
+  `min_length` INT NULL COMMENT '最小长度',
+  `default_value` VARCHAR(255) COMMENT '默认值',
+  `description` VARCHAR(500) COMMENT '说明',
+  `status` VARCHAR(16) DEFAULT 'DRAFT' COMMENT '状态：DRAFT/PUBLISHED/DISABLED',
+  `tenant_id` VARCHAR(64) COMMENT '租户ID（平台标准为 0）',
+  `create_by` VARCHAR(64) COMMENT '创建人',
+  `create_time` DATETIME COMMENT '创建时间',
+  `update_by` VARCHAR(64) COMMENT '更新人',
+  `update_time` DATETIME COMMENT '更新时间',
+  `remark` VARCHAR(500) COMMENT '备注',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_format_code` (`format_code`),
+  KEY `idx_format_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='字段格式标准表';
+
+-- ------------------------------------------------ 标准变更申请
+-- 审批只记录决策与意见，不自动改写目标（避免"点一下通过，标准偷偷变了"）。
+CREATE TABLE IF NOT EXISTS `agri_md_standard_change` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `target_type` VARCHAR(32) NOT NULL COMMENT '目标类型：format / dict / code_rule',
+  `target_id` VARCHAR(64) COMMENT '目标ID',
+  `target_name` VARCHAR(200) NOT NULL COMMENT '目标名称',
+  `change_type` VARCHAR(32) DEFAULT 'UPDATE' COMMENT '变更类型：CREATE/UPDATE/DISABLE',
+  `before_value` TEXT COMMENT '变更前',
+  `after_value` TEXT COMMENT '变更后',
+  `status` VARCHAR(16) DEFAULT 'PENDING' COMMENT '状态：PENDING/APPROVED/REJECTED',
+  `applicant` VARCHAR(64) COMMENT '申请人',
+  `apply_time` DATETIME COMMENT '申请时间',
+  `reviewer` VARCHAR(64) COMMENT '审批人',
+  `review_time` DATETIME COMMENT '审批时间',
+  `review_remark` VARCHAR(500) COMMENT '审批意见',
+  `tenant_id` VARCHAR(64) COMMENT '租户ID（平台为 0）',
+  `create_by` VARCHAR(64) COMMENT '创建人',
+  `create_time` DATETIME COMMENT '创建时间',
+  `update_by` VARCHAR(64) COMMENT '更新人',
+  `update_time` DATETIME COMMENT '更新时间',
+  `remark` VARCHAR(500) COMMENT '备注',
+  PRIMARY KEY (`id`),
+  KEY `idx_change_status` (`status`),
+  KEY `idx_change_target` (`target_type`, `target_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='数据标准变更申请表';
+
+-- ------------------------------------------------ 元数据目录
+CREATE TABLE IF NOT EXISTS `agri_md_metadata` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `metadata_type` VARCHAR(32) NOT NULL COMMENT '类型：BUSINESS/TECHNICAL/MANAGEMENT',
+  `name` VARCHAR(128) NOT NULL COMMENT '中文名称',
+  `name_en` VARCHAR(128) COMMENT '英文标识',
+  `domain_name` VARCHAR(64) COMMENT '主题域',
+  `data_type` VARCHAR(64) COMMENT '数据类型 / 长度',
+  `required` VARCHAR(16) COMMENT '是否必填：是/条件必填/系统生成',
+  `source_table` VARCHAR(128) COMMENT '来源表 / 接口',
+  `version` VARCHAR(32) COMMENT '版本',
+  `description` VARCHAR(500) COMMENT '说明',
+  `status` VARCHAR(16) DEFAULT 'PUBLISHED' COMMENT '状态：DRAFT/PUBLISHED/DISABLED',
+  `tenant_id` VARCHAR(64) COMMENT '租户ID（平台为 0）',
+  `create_by` VARCHAR(64) COMMENT '创建人',
+  `create_time` DATETIME COMMENT '创建时间',
+  `update_by` VARCHAR(64) COMMENT '更新人',
+  `update_time` DATETIME COMMENT '更新时间',
+  `remark` VARCHAR(500) COMMENT '备注',
+  PRIMARY KEY (`id`),
+  KEY `idx_metadata_type` (`metadata_type`),
+  KEY `idx_metadata_domain` (`domain_name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='元数据目录表';
+
+-- ===========================================================================
+-- 权限巡检与授权申请（2026-11-02）
+--
+-- 这四张表原先只存在于 db/20261102-permission-anomaly.sql / db/20261102-permission-request.sql，
+-- 而本文件才是每次启动都会执行的建表来源（`spring.sql.init.schema-locations: classpath:schema.sql`）。
+-- 少一张，新库上就是"接口 200 但表不存在"——本轮之前正是这个状态。
+-- 规则与互斥对的**种子数据**仍只在 db/ 脚本里（那是配置数据，不该由建表文件造）。
+-- 已部署库不受影响：全部 IF NOT EXISTS。
+-- ===========================================================================
+
+CREATE TABLE IF NOT EXISTS `agri_md_permission_rule` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `rule_code` VARCHAR(64) NOT NULL COMMENT '规则编码（扫描结果按它归因）',
+  `rule_name` VARCHAR(64) NOT NULL COMMENT '规则名（页面展示）',
+  `anomaly_type` VARCHAR(32) NOT NULL COMMENT 'OVER_PRIVILEGE / MUTEX_ROLE / EXPIRED_GRANT / BINDING_INTEGRITY',
+  `severity` VARCHAR(16) NOT NULL COMMENT 'danger / warning',
+  `metric` VARCHAR(32) NOT NULL COMMENT '判定口径，一处实现对应一个取值',
+  `threshold` INT NULL COMMENT '阈值；不适用的规则为 NULL（不编一个数冒充可配置）',
+  `enabled` INT NOT NULL DEFAULT 1 COMMENT '1=生效',
+  `remark` VARCHAR(255) NULL COMMENT '这条规则到底在查什么（页面 tooltip 读它）',
+  `del_flag` INT NOT NULL DEFAULT 0,
+  `tenant_id` VARCHAR(32) NULL COMMENT 'NULL=平台级规则（对所有主体生效）',
+  `create_time` DATETIME NULL,
+  `update_time` DATETIME NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_md_perm_rule` (`rule_code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='权限巡检规则';
+
+CREATE TABLE IF NOT EXISTS `agri_md_role_mutex` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `role_code_a` VARCHAR(64) NOT NULL,
+  `role_code_b` VARCHAR(64) NOT NULL,
+  `reason` VARCHAR(255) NOT NULL COMMENT '为什么互斥（异常描述里会带上，审计要能看懂）',
+  `enabled` INT NOT NULL DEFAULT 1,
+  `del_flag` INT NOT NULL DEFAULT 0,
+  `create_time` DATETIME NULL,
+  `update_time` DATETIME NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_md_role_mutex` (`role_code_a`, `role_code_b`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='角色互斥对（职责分离）';
+
+CREATE TABLE IF NOT EXISTS `agri_md_permission_anomaly` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `rule_code` VARCHAR(64) NOT NULL,
+  `anomaly_type` VARCHAR(32) NOT NULL,
+  `severity` VARCHAR(16) NOT NULL,
+  `target_type` VARCHAR(32) NOT NULL COMMENT 'USER / ROLE / ROLE_MENU / USER_ROLE',
+  `target_id` VARCHAR(64) NOT NULL COMMENT '雪花主键按字符串存，避免前端精度丢失',
+  `target_name` VARCHAR(128) NULL,
+  `tenant_id` VARCHAR(32) NULL,
+  `detail` VARCHAR(512) NULL COMMENT '判定依据：数字与对象名，不写"可能存在风险"这种空话',
+  `status` VARCHAR(16) NOT NULL DEFAULT 'OPEN' COMMENT 'OPEN / RESOLVED',
+  `first_seen` DATETIME NOT NULL,
+  `last_seen` DATETIME NOT NULL,
+  `resolved_time` DATETIME NULL,
+  `del_flag` INT NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_md_anomaly_target` (`rule_code`, `target_type`, `target_id`),
+  KEY `idx_md_anomaly_status` (`status`, `last_seen`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='权限巡检结果';
+
+-- 故意**不加唯一键**：全局逻辑删除只置 del_flag=1、行仍占着唯一键，
+-- 加了唯一键「驳回后重新申请」必然 Duplicate entry（这个坑在 uk_role_perm 上踩过）。
+-- 判重在服务层：同一申请人对同一个点只允许一条 PENDING。
+CREATE TABLE IF NOT EXISTS `agri_md_permission_request` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `applicant` VARCHAR(64) NOT NULL COMMENT '申请人：平台账号用户名（与权限点桥接同一口径）',
+  `applicant_name` VARCHAR(128) NULL COMMENT '申请人姓名/昵称，仅展示用',
+  `perm_code` VARCHAR(191) NOT NULL COMMENT '申请的权限点编码（agri_md_permission.perm_code）',
+  `perm_name` VARCHAR(128) NULL COMMENT '提交时的名称快照：点可能后续下线，快照保证申请单仍可读',
+  `page_path` VARCHAR(160) NULL COMMENT '从哪个页面提的（路由），处理人能对上具体按钮',
+  `reason` VARCHAR(500) NULL COMMENT '申请理由；留空就是留空，不补一个"默认理由"冒充内容',
+  `status` VARCHAR(16) NOT NULL DEFAULT 'PENDING' COMMENT 'PENDING / APPROVED / REJECTED',
+  `handler` VARCHAR(64) NULL COMMENT '处理人：取自令牌的平台账号，不写死"admin"',
+  `handle_remark` VARCHAR(500) NULL COMMENT '处理说明（驳回原因 / 授权给了哪个角色）',
+  `handle_time` DATETIME NULL COMMENT 'NULL = 还没处理',
+  `del_flag` INT NOT NULL DEFAULT 0,
+  `tenant_id` VARCHAR(64) NULL COMMENT '申请时所处经营主体；平台运营账号为 NULL',
+  `create_time` DATETIME NULL,
+  `update_time` DATETIME NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_md_req_status` (`status`, `del_flag`),
+  KEY `idx_md_req_applicant` (`applicant`, `perm_code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='权限点授权申请';

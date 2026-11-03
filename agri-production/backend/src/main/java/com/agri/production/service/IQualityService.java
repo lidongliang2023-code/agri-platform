@@ -19,8 +19,16 @@ public interface IQualityService {
 
     /* ---------- 检测单 ---------- */
 
+    /**
+     * 检测单分页。筛选与分页**全部在服务端**生效（页面以前取 200 条再本地筛、本地翻页）。
+     *
+     * @param result 结论：{@code PASS} / {@code FAIL} / {@code PENDING}。
+     *               {@code PENDING} 不是库里的取值，而是"还没出结论"——未出结论的行
+     *               {@code result} 为 NULL，按等值筛一条都命中不到（见实现里的解释）。
+     * @param labName 检测机构名称（页面那个下拉给的是机构全名，精确匹配）
+     */
     PageResult<Inspection> pageInspections(int pageNum, int pageSize, String keyword, String status, Long farmId,
-                                           Long batchId, String inspectionType, String result,
+                                           Long batchId, String inspectionType, String result, String labName,
                                            String startDate, String endDate, String tenantId);
 
     Inspection detail(Long inspectionId, String tenantId);

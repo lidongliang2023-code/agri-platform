@@ -1,0 +1,426 @@
+{
+  "schemaVersion": 2,
+  "updatedAt": "2026-10-26",
+  "modules": [
+    {
+      "id": "platform",
+      "name": "平台基础",
+      "deploymentUnits": [
+        {
+          "id": "portal",
+          "kind": "frontend",
+          "port": 8098,
+          "url": "http://localhost:8098/portal/",
+          "publishApp": "portal",
+          "source": "agri-portal/frontend"
+        },
+        {
+          "id": "sso",
+          "kind": "frontend",
+          "port": 8090,
+          "url": "http://localhost:8090/login",
+          "publishApp": "sso",
+          "source": "agri-sso/frontend"
+        },
+        {
+          "id": "core-api",
+          "kind": "backend",
+          "port": 8093,
+          "url": "http://localhost:8093",
+          "source": "core-platform/core-app"
+        }
+      ]
+    },
+    {
+      "id": "master-data",
+      "name": "主数据管理",
+      "deploymentUnits": [
+        {
+          "id": "mdm-web",
+          "kind": "frontend",
+          "port": 8080,
+          "url": "http://localhost:8080/",
+          "publishApp": "mdm",
+          "source": "agri-master-data/web"
+        },
+        {
+          "id": "mdm-api",
+          "kind": "backend",
+          "port": 8083,
+          "url": "http://localhost:8083/api/masterdata",
+          "source": "agri-master-data/backend"
+        }
+      ]
+    },
+    {
+      "id": "production",
+      "name": "生产管理",
+      "deploymentUnits": [
+        {
+          "id": "production-pc",
+          "kind": "frontend",
+          "port": 80,
+          "url": "http://localhost/production/login",
+          "publishApp": "prod",
+          "source": "agri-production/frontend"
+        },
+        {
+          "id": "production-ops",
+          "kind": "operator-frontend",
+          "port": 8190,
+          "url": "http://localhost:8190/",
+          "publishApp": "prod",
+          "source": "agri-production/frontend"
+        },
+        {
+          "id": "production-mobile",
+          "kind": "mobile-frontend",
+          "port": 8180,
+          "url": "http://localhost:8180/",
+          "publishApp": "prod-mobile",
+          "source": "agri-production/miniprogram",
+          "targets": [
+            "h5",
+            "mp-weixin",
+            "app"
+          ]
+        },
+        {
+          "id": "production-api",
+          "kind": "backend",
+          "port": 8092,
+          "url": "http://localhost:8092/api/v1/production",
+          "source": "agri-production/backend"
+        }
+      ]
+    },
+    {
+      "id": "trade",
+      "name": "交易撮合",
+      "deploymentUnits": [
+        {
+          "id": "trade-web",
+          "kind": "frontend",
+          "port": 8086,
+          "url": "http://localhost:8086/",
+          "publishApp": "trade",
+          "source": "agri-trade/frontend"
+        },
+        {
+          "id": "trade-mobile",
+          "kind": "mobile-frontend",
+          "port": 8181,
+          "url": "http://localhost:8181/",
+          "publishApp": "trade-mobile",
+          "source": "agri-trade/miniprogram",
+          "targets": [
+            "h5",
+            "mp-weixin",
+            "app"
+          ]
+        },
+        {
+          "id": "trade-api",
+          "kind": "backend",
+          "port": 8089,
+          "url": "http://localhost:8089/api/trade",
+          "source": "agri-trade/backend"
+        }
+      ]
+    },
+    {
+      "id": "iot",
+      "name": "物联网管理",
+      "deploymentUnits": [
+        {
+          "id": "iot-web",
+          "kind": "frontend",
+          "port": 8101,
+          "url": "http://localhost:8101/",
+          "publishApp": "iot-web",
+          "source": "agri-iot/web"
+        },
+        {
+          "id": "iot-ops",
+          "kind": "operator-frontend",
+          "port": 8102,
+          "url": "http://localhost:8102/",
+          "publishApp": "iot-admin",
+          "source": "agri-iot/ops"
+        },
+        {
+          "id": "iot-mobile",
+          "kind": "mobile-frontend",
+          "port": 8111,
+          "url": "http://localhost:8111/",
+          "publishApp": "iot-mobile",
+          "source": "agri-iot/miniprogram",
+          "targets": [
+            "h5",
+            "mp-weixin",
+            "app"
+          ]
+        },
+        {
+          "id": "iot-api",
+          "kind": "backend",
+          "port": 8091,
+          "url": "http://localhost:8091/api/v1/iot",
+          "source": "agri-iot/backend"
+        }
+      ]
+    },
+    {
+      "id": "s2b2c",
+      "name": "S2B2C",
+      "deploymentUnits": [
+        {
+          "id": "s2b2c-consumer",
+          "kind": "frontend",
+          "port": 8082,
+          "url": "http://localhost:8082/",
+          "publishApp": "mall-consumer",
+          "source": "agri-s2b2c/frontend-consumer"
+        },
+        {
+          "id": "s2b2c-supplier",
+          "kind": "frontend",
+          "port": 8084,
+          "url": "http://localhost:8084/",
+          "publishApp": "mall-supplier",
+          "source": "agri-s2b2c/frontend-supplier"
+        },
+        {
+          "id": "s2b2c-channel",
+          "kind": "frontend",
+          "port": 8085,
+          "url": "http://localhost:8085/",
+          "publishApp": "mall-channel",
+          "source": "agri-s2b2c/frontend-channel"
+        },
+        {
+          "id": "s2b2c-platform",
+          "kind": "operator-frontend",
+          "port": 8103,
+          "url": "http://localhost:8103/",
+          "publishApp": "s2b2c-platform",
+          "source": "agri-s2b2c/frontend-platform"
+        },
+        {
+          "id": "s2b2c-consumer-mobile",
+          "kind": "mobile-frontend",
+          "port": 8182,
+          "url": "http://localhost:8182/",
+          "publishApp": "mall-mobile",
+          "source": "agri-s2b2c/mobile",
+          "targets": [
+            "h5",
+            "mp-weixin",
+            "app"
+          ]
+        },
+        {
+          "id": "s2b2c-supplier-mobile",
+          "kind": "mobile-frontend",
+          "port": 8183,
+          "url": "http://localhost:8183/",
+          "publishApp": "mall-supplier-mobile",
+          "source": "agri-s2b2c/mobile-supplier",
+          "targets": [
+            "h5",
+            "mp-weixin",
+            "app"
+          ]
+        },
+        {
+          "id": "s2b2c-channel-mobile",
+          "kind": "mobile-frontend",
+          "port": 8184,
+          "url": "http://localhost:8184/",
+          "publishApp": "mall-channel-mobile",
+          "source": "agri-s2b2c/mobile-channel",
+          "targets": [
+            "h5",
+            "mp-weixin",
+            "app"
+          ]
+        },
+        {
+          "id": "s2b2c-api",
+          "kind": "backend",
+          "port": 8088,
+          "url": "http://localhost:8088/api",
+          "source": "agri-s2b2c"
+        }
+      ]
+    },
+    {
+      "id": "finance",
+      "name": "供应链金融",
+      "deploymentUnits": [
+        {
+          "id": "finance-web",
+          "kind": "frontend",
+          "port": 8081,
+          "url": "http://localhost:8081/finance/",
+          "publishApp": "finance",
+          "source": "agri-finance/frontend"
+        },
+        {
+          "id": "finance-api",
+          "kind": "backend",
+          "port": 8087,
+          "url": "http://localhost:8087/api",
+          "source": "agri-finance/backend"
+        }
+      ]
+    },
+    {
+      "id": "information",
+      "name": "信息资讯",
+      "deploymentUnits": [
+        {
+          "id": "info-web",
+          "kind": "frontend",
+          "port": 8104,
+          "url": "http://localhost:8104/info/",
+          "publishApp": "info",
+          "source": "agri-info/frontend"
+        },
+        {
+          "id": "info-ops",
+          "kind": "operator-frontend",
+          "port": 8113,
+          "url": "http://localhost:8113/info-ops/",
+          "publishApp": "info-ops",
+          "source": "agri-info/ops"
+        },
+        {
+          "id": "info-mobile",
+          "kind": "mobile-frontend",
+          "port": 8114,
+          "url": "http://localhost:8114/",
+          "publishApp": "info-mobile",
+          "source": "agri-info/mobile",
+          "targets": [
+            "h5",
+            "mp-weixin",
+            "app"
+          ]
+        },
+        {
+          "id": "info-api",
+          "kind": "backend",
+          "port": 8096,
+          "url": "http://localhost:8096/api/v1/info",
+          "source": "agri-info"
+        }
+      ]
+    },
+    {
+      "id": "service",
+      "name": "综合服务",
+      "deploymentUnits": [
+        {
+          "id": "service-web",
+          "kind": "frontend",
+          "port": 8105,
+          "url": "http://localhost:8105/service/",
+          "publishApp": "service",
+          "source": "agri-service/frontend"
+        },
+        {
+          "id": "service-mobile",
+          "kind": "mobile-frontend",
+          "port": 8106,
+          "url": "http://localhost:8106/",
+          "publishApp": "service-mobile",
+          "source": "agri-service/mobile",
+          "targets": [
+            "h5",
+            "mp-weixin",
+            "app"
+          ]
+        },
+        {
+          "id": "service-ops",
+          "kind": "operator-frontend",
+          "port": 8107,
+          "url": "http://localhost:8107/service-ops/",
+          "publishApp": "service-ops",
+          "source": "agri-service/ops"
+        },
+        {
+          "id": "service-api",
+          "kind": "backend",
+          "port": 8094,
+          "url": "http://localhost:8094/api/v1/service",
+          "source": "agri-service"
+        }
+      ]
+    },
+    {
+      "id": "government",
+      "name": "政府监管",
+      "deploymentUnits": [
+        {
+          "id": "government-web",
+          "kind": "frontend",
+          "port": 8108,
+          "url": "http://localhost:8108/gov/",
+          "publishApp": "gov",
+          "source": "agri-government/frontend"
+        },
+        {
+          "id": "government-mobile",
+          "kind": "mobile-frontend",
+          "port": 8109,
+          "url": "http://localhost:8109/",
+          "publishApp": "gov-mobile",
+          "source": "agri-government/mobile",
+          "targets": [
+            "h5",
+            "mp-weixin",
+            "app"
+          ]
+        },
+        {
+          "id": "government-ops",
+          "kind": "operator-frontend",
+          "port": 8110,
+          "url": "http://localhost:8110/gov-ops/",
+          "publishApp": "gov-ops",
+          "source": "agri-government/ops"
+        },
+        {
+          "id": "government-api",
+          "kind": "backend",
+          "port": 8095,
+          "url": "http://localhost:8095/api/v1/government",
+          "source": "agri-government"
+        },
+        {
+          "id": "government-exchange",
+          "kind": "backend",
+          "port": 8112,
+          "url": "http://localhost:8112",
+          "source": "core-platform/satellite-gov-exchange"
+        }
+      ]
+    },
+    {
+      "id": "user-center",
+      "name": "用户中心",
+      "deploymentUnits": [
+        {
+          "id": "user-center-ops",
+          "kind": "operator-frontend",
+          "port": 8115,
+          "url": "http://localhost:8115/user-center-ops/",
+          "publishApp": "user-center-ops",
+          "source": "agri-sso/ops"
+        }
+      ]
+    }
+  ]
+}

@@ -1,13 +1,19 @@
 #!/usr/bin/env node
 /** 卖家中心商品与主数据商品同源、范围隔离回归（2026-10-21）。 */
 import { createRequire } from 'node:module'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const require2 = createRequire(path.join(REPO_ROOT, 'agri-production/frontend/package.json'))
-const puppeteer = require2('puppeteer')
+const require2 = createRequire(path.join('C:/Users/71502/.workbuddy-ai/binaries/node/workspace', 'noop.js'))
+const { chromium } = require2('playwright-core')
+
+const BROWSER = [
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+].find((candidate) => existsSync(candidate))
 const TRADE = 'http://localhost:8086'
 const PORTAL = 'http://localhost:8098/portal/'
 const CORE = 'http://localhost:8093'
@@ -38,10 +44,10 @@ const loginAdmin = async () => {
   return body.data.accessToken
 }
 
-const browser = await puppeteer.launch({ headless: HEADFUL ? false : 'new', args: ['--no-sandbox'] })
+const browser = await chromium.launch({ headless: !HEADFUL, executablePath: BROWSER, args: ['--no-sandbox'] })
 let token = ''
 try {
-  const page = await browser.newPage()
+  const page = await (await browser.newContext({ viewport: { width: 1440, height: 1000 } })).newPage()
   const errors = []
   let authorization = ''
   page.on('pageerror', (error) => errors.push(String(error)))
@@ -49,8 +55,8 @@ try {
     const value = request.headers().authorization
     if (typeof value === 'string' && value.startsWith('Bearer ')) authorization = value
   })
-  await page.setViewport({ width: 1440, height: 1000 })
-  await page.goto(PORTAL, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await page.goto(PORTAL, { waitUntil: 'networkidle', timeout: 60000 })
   const login = await page.evaluate(async () => {
     const response = await fetch('/api/v1/sso/login-standalone', {
       method: 'POST',
@@ -67,7 +73,7 @@ try {
   })
   check(login.code === 0 && login.data?.stage === 'done', '真实企业卖家账号登录成功', login.data?.stage ?? login.message)
 
-  await page.goto(`${TRADE}/member/seller?tab=goods`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.goto(`${TRADE}/member/seller?tab=goods`, { waitUntil: 'networkidle', timeout: 60000 })
   await page.waitForSelector('.mc-shell', { timeout: 30000 })
   for (let i = 0; i < 30 && !authorization; i += 1) await sleep(200)
   token = authorization.replace(/^Bearer\s+/i, '')
@@ -187,8 +193,8 @@ try {
   check(allBody.code === 200 && (allBody.data?.records ?? []).some((item) => item.id === 7011),
     '主数据全量列表仍能看到其他卖家的商品')
 
-  await page.reload({ waitUntil: 'networkidle2' })
-  await page.waitForFunction((name) => document.body.innerText.includes(name), { timeout: 20000 }, productName)
+  await page.reload({ waitUntil: 'networkidle' })
+  await page.waitForFunction((name) => document.body.innerText.includes(name), productName, { timeout: 20000 })
   check(true, '卖家中心页面显示当前卖家的新增商品')
   await page.screenshot({ path: path.join(OUT, 'seller-product-center.png'), fullPage: true })
 
@@ -198,7 +204,7 @@ try {
       ?.getAttribute('href'), created.id)
   check(Boolean(editHref), '卖家中心提供与主数据同字段的编辑入口', editHref ?? '')
   if (editHref) {
-    await page.goto(`${TRADE}${editHref}`, { waitUntil: 'networkidle2', timeout: 60000 })
+    await page.goto(`${TRADE}${editHref}`, { waitUntil: 'networkidle', timeout: 60000 })
     await page.waitForSelector('.ant-form', { timeout: 20000 })
     const editText = await page.evaluate(() => document.body.innerText)
     check(['商品名称', '商品分类', '产地省份', '销售单价', '库存数量', '起订量', '认证信息', '商品图片']

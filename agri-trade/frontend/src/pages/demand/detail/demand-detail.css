@@ -65,7 +65,7 @@
 .demand-detail-brand small {
   margin-top: 4px;
   color: #84958b;
-  font-size: 7px;
+  font-size: var(--agri-font-size-micro);
   font-weight: 500;
   letter-spacing: 1.7px;
 }
@@ -75,7 +75,7 @@
   align-items: center;
   gap: 7px;
   color: #8a9a91;
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .demand-detail-topbar nav a {
@@ -92,7 +92,7 @@
   gap: 5px;
   margin-left: auto;
   color: #3e6650;
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .demand-detail-main {
@@ -133,7 +133,7 @@
 
 .demand-detail-hero small {
   color: #188454;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
   font-weight: 700;
   letter-spacing: .06em;
 }
@@ -150,7 +150,7 @@
 .demand-detail-hero p {
   margin: 5px 0 0;
   color: #7f9186;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .demand-detail-actions {
@@ -182,7 +182,7 @@
 
 .demand-detail-muted {
   color: #8b9c91;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .demand-detail-facts {
@@ -205,12 +205,12 @@
 .demand-detail-facts span,
 .demand-detail-requirement span {
   color: #899a90;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .demand-detail-facts strong {
   color: #3a5845;
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .demand-detail-price {
@@ -236,7 +236,7 @@
   gap: 5px;
   margin: 0;
   color: #607669;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
   line-height: 1.7;
 }
 
@@ -275,7 +275,7 @@
 }
 
 .demand-match-score small {
-  font-size: 8px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .demand-match-card > div {
@@ -284,21 +284,21 @@
 
 .demand-match-card > div > strong {
   color: #355541;
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .demand-match-card > div > p {
   overflow: hidden;
   margin: 4px 0 2px;
   color: #758a7d;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .demand-match-card > div > small {
   color: #91a097;
-  font-size: 8px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .demand-inquiry {
@@ -338,28 +338,28 @@
 .demand-inquiry-head small {
   color: #90a096;
   font-family: "Roboto Mono", ui-monospace, monospace;
-  font-size: 8px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .demand-inquiry-head strong {
   color: #365440;
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .demand-inquiry-head div > span {
   color: #84968a;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .demand-inquiry-count {
   color: #6e8477;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .demand-no-quote {
   padding: 20px;
   color: #8d9d93;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
   text-align: center;
 }
 
@@ -385,12 +385,27 @@
 .demand-quote small,
 .demand-quote span {
   color: #8a9b91;
-  font-size: 8px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .demand-quote strong {
   color: #456250;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
+}
+
+.demand-quote-actions {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.demand-quote-actions .mc-btn {
+  min-height: 28px;
+  padding: 4px 9px;
+  font-size: var(--agri-font-size-micro);
+  white-space: nowrap;
 }
 
 .demand-summary {
@@ -407,12 +422,12 @@
 
 .demand-summary span {
   color: #899a90;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .demand-summary strong {
   color: #496653;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
   text-align: right;
 }
 
@@ -450,7 +465,7 @@
   border-radius: 50%;
   background: #fff;
   color: #9caaa1;
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .demand-progress > div.on > span {
@@ -467,12 +482,12 @@
 
 .demand-progress strong {
   color: #4a6553;
-  font-size: 9.5px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .demand-progress small {
   color: #8e9e94;
-  font-size: 8.5px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .demand-tips {
@@ -487,7 +502,7 @@
   gap: 6px;
   margin: 0;
   color: #74887b;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
   line-height: 1.65;
 }
 
@@ -555,7 +570,12 @@
 
   .demand-quote > span,
   .demand-quote > a,
-  .demand-quote > button {
+  .demand-quote > button,
+  .demand-quote-actions {
     grid-column: 1 / -1;
+  }
+
+  .demand-quote-actions {
+    justify-content: flex-start;
   }
 }

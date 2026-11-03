@@ -390,17 +390,17 @@ onMounted(async () => {
 .data-table th,.data-table td { padding:13px 14px; border-bottom:1px solid #eef2f5; text-align:left; font-size:13px; }
 .data-table th { color:#526173; background:#f8fafc; font-weight:650; }
 .product-thumb { width:58px; height:58px; border-radius:8px; object-fit:cover; background:#f1f5f3; }
-.product-thumb.placeholder { display:grid; place-items:center; color:#9aa7b3; font-size:11px; }
-.cell-sub { margin-top:4px; color:#8a96a3; font-size:11px; }
+.product-thumb.placeholder { display:grid; place-items:center; color:#9aa7b3; font-size: var(--agri-font-size-micro); }
+.cell-sub { margin-top:4px; color:#8a96a3; font-size: var(--agri-font-size-micro); }
 .price-cell { color:#d33e43; font-weight:700; }
-.price-cell span { margin-left:3px; color:#8a96a3; font-size:10px; font-weight:400; }
-.type-badge,.status-badge { display:inline-block; padding:4px 9px; border-radius:999px; font-size:11px; }
+.price-cell span { margin-left:3px; color:#8a96a3; font-size: var(--agri-font-size-micro); font-weight:400; }
+.type-badge,.status-badge { display:inline-block; padding:4px 9px; border-radius:999px; font-size: var(--agri-font-size-micro); }
 .type-badge { color:#238636; background:#eaf7ee; }
 .status-badge.active { color:#238636; background:#eaf7ee; }
 .status-badge.inactive { color:#7a8691; background:#f1f4f6; }
 .status-badge.pending { color:#b7791f; background:#fff8e7; }
 .action-cell { display:flex; gap:6px; white-space:nowrap; }
-.action-btn { border:none; border-radius:5px; padding:6px 9px; font-size:11px; cursor:pointer; }
+.action-btn { border:none; border-radius:5px; padding:6px 9px; font-size: var(--agri-font-size-micro); cursor:pointer; }
 .action-btn.view { color:#2878c7; background:#eef6ff; }
 .action-btn.edit { color:#b7791f; background:#fff8e7; }
 .action-btn.disable { color:#c53030; background:#fff0f0; }
@@ -413,7 +413,7 @@ onMounted(async () => {
 .modal-content { width:min(1040px,96vw); max-height:92vh; display:flex; flex-direction:column; overflow:hidden; border-radius:14px; background:#fff; box-shadow:0 24px 70px rgba(0,0,0,.2); }
 .modal-header { display:flex; align-items:flex-start; justify-content:space-between; padding:18px 22px; border-bottom:1px solid #edf1ef; }
 .modal-header h3 { margin:0; color:#203128; font-size:19px; }
-.modal-header p { margin:5px 0 0; color:#8a96a3; font-size:11.5px; }
+.modal-header p { margin:5px 0 0; color:#8a96a3; font-size: var(--agri-font-size-micro); }
 .close-btn { border:none; color:#8a96a3; background:transparent; font-size:25px; cursor:pointer; }
 .modal-body { padding:20px 22px; overflow-y:auto; }
 .form-section { margin-bottom:22px; padding-bottom:18px; border-bottom:1px dashed #e5ece8; }
@@ -428,14 +428,14 @@ onMounted(async () => {
 .form-input,.form-select { width:100%; padding:9px 11px; color:#33453b; outline:none; font:inherit; font-size:12.5px; }
 textarea.form-input { resize:vertical; line-height:1.7; }
 .upload-box { display:flex; align-items:center; gap:12px; padding:13px; border:1px dashed #b9d8c8; border-radius:9px; background:#f6fbf8; }
-.upload-box span { color:#8a96a3; font-size:11px; }
+.upload-box span { color:#8a96a3; font-size: var(--agri-font-size-micro); }
 .upload-btn { padding:8px 14px; border:1px solid #238636; border-radius:7px; color:#238636; background:#fff; cursor:pointer; }
 .image-grid { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:10px; margin-top:12px; }
 .image-item { position:relative; overflow:hidden; border:1px solid #e2e8f0; border-radius:9px; background:#f8fafc; }
 .image-item.main { border:2px solid #238636; }
 .image-item img { width:100%; height:100px; object-fit:cover; display:block; }
-.image-item span { display:block; padding:5px 7px; color:#526173; font-size:10px; }
-.image-item button { position:absolute; top:5px; right:5px; border:none; border-radius:5px; padding:3px 6px; color:#fff; background:rgba(0,0,0,.55); font-size:10px; cursor:pointer; }
+.image-item span { display:block; padding:5px 7px; color:#526173; font-size: var(--agri-font-size-micro); }
+.image-item button { position:absolute; top:5px; right:5px; border:none; border-radius:5px; padding:3px 6px; color:#fff; background:rgba(0,0,0,.55); font-size: var(--agri-font-size-micro); cursor:pointer; }
 .modal-footer { display:flex; justify-content:flex-end; gap:10px; padding:14px 22px; border-top:1px solid #edf1ef; background:#fbfdfc; }
 .btn { padding:9px 17px; border:none; border-radius:7px; cursor:pointer; font-size:13px; }
 .btn-cancel { color:#526173; background:#edf1ef; }

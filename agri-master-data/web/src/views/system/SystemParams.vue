@@ -1,119 +1,131 @@
 <template>
-  <div class="system-params">
-    <div class="page-header">
-      <div class="header-left">
-        <h1>系统参数配置</h1>
-        <p>管理系统运行参数和配置项</p>
+  <div class="mds-page">
+    <PageHeader
+      title="参数配置"
+      subtitle="平台运行参数与配置项：编码、分组、类型与值；停用的参数不会被执行侧读取。"
+      source="系统配置 · 参数"
+    >
+      <template #actions>
+        <button v-point="'POST /admin/masterdata/config'" class="mds-btn mds-btn--primary" @click="openCreate">+ 新增参数</button>
+        <button class="mds-btn" :disabled="loading" @click="loadData">刷新</button>
+      </template>
+    </PageHeader>
+
+    <div class="mds-card">
+      <div class="mds-filter">
+        <input v-model="filterKeyword" class="mds-input" type="search" placeholder="搜索参数编码 / 名称" />
+        <select v-model="filterGroup" class="mds-select">
+          <option value="all">全部分组</option>
+          <option v-for="group in paramGroups" :key="group" :value="group">{{ group }}</option>
+        </select>
+        <span class="mds-hint">共 {{ filteredParams.length }} / {{ params.length }} 条</span>
       </div>
-      <button class="add-btn" @click="showAddModal = true">+ 新增参数</button>
+
+      <div class="mds-table-wrap">
+        <table class="mds-table param-table">
+          <thead>
+            <tr>
+              <th>参数编码</th>
+              <th>参数名称</th>
+              <th>分组</th>
+              <th>参数值</th>
+              <th>类型</th>
+              <th>状态</th>
+              <th>描述</th>
+              <th class="mds-actions">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-if="loading">
+              <td colspan="8" class="mds-empty">正在加载系统配置…</td>
+            </tr>
+            <tr v-else-if="!filteredParams.length">
+              <td colspan="8">
+                <EmptyState
+                  :title="params.length ? '没有符合条件的参数' : '还没有系统参数'"
+                  :description="params.length ? '调整分组或关键字筛选。' : '新增参数后，执行侧才能读取到配置。'"
+                />
+              </td>
+            </tr>
+            <tr v-for="param in filteredParams" :key="param.id">
+              <td class="mds-mono">{{ param.code }}</td>
+              <td class="mds-name">{{ param.name }}</td>
+              <td><StatusTag v-if="param.group" :text="param.group" tone="info" plain /><span v-else class="mds-muted">—</span></td>
+              <td class="value-cell" :title="param.value">{{ param.value }}</td>
+              <td><StatusTag :text="typeText(param.type)" tone="purple" plain /></td>
+              <td>
+                <StatusTag
+                  :text="param.enabled ? '启用' : '禁用'"
+                  :tone="param.enabled ? 'success' : 'gray'"
+                />
+              </td>
+              <td class="desc-cell" :title="param.description">{{ param.description || '—' }}</td>
+              <td class="mds-actions">
+                <button v-point="'PUT /admin/masterdata/config/{id}'" class="mds-btn mds-btn--link" @click="editParam(param)">编辑</button>
+                <button class="mds-btn mds-btn--link" :disabled="busyId === param.id" @click="toggleParam(param)">
+                  {{ param.enabled ? '禁用' : '启用' }}
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
 
-    <div class="filter-bar">
-      <select v-model="filterGroup" class="filter-select">
-        <option value="all">全部分组</option>
-        <option v-for="group in paramGroups" :key="group" :value="group">{{ group }}</option>
-      </select>
-      <input 
-        type="text" 
-        v-model="filterKeyword" 
-        placeholder="搜索参数名称..." 
-        class="filter-input"
-      />
-    </div>
-
-    <div class="params-table">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>参数编码</th>
-            <th>参数名称</th>
-            <th>参数分组</th>
-            <th>参数值</th>
-            <th>数据类型</th>
-            <th>是否启用</th>
-            <th>描述</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="param in filteredParams" :key="param.id">
-            <td class="code">{{ param.code }}</td>
-            <td>{{ param.name }}</td>
-            <td>
-              <span class="group-badge">{{ param.group }}</span>
-            </td>
-            <td class="value-cell">{{ param.value }}</td>
-            <td>
-              <span class="type-badge">{{ getTypeText(param.type) }}</span>
-            </td>
-            <td>
-              <span class="status-badge" :class="param.enabled ? 'enabled' : 'disabled'">
-                {{ param.enabled ? '启用' : '禁用' }}
-              </span>
-            </td>
-            <td class="desc-cell">{{ param.description }}</td>
-            <td class="action-cell">
-              <button class="action-btn edit" @click="editParam(param)">编辑</button>
-              <button 
-                class="action-btn toggle" 
-                @click="toggleParam(param)"
-              >{{ param.enabled ? '禁用' : '启用' }}</button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <div class="modal-overlay" v-if="showAddModal" @click="closeModal">
-      <div class="modal-content" @click.stop>
-        <div class="modal-header">
-          <h3>{{ isEdit ? '编辑参数' : '新增参数' }}</h3>
-          <button class="close-btn" @click="closeModal">×</button>
+    <div v-if="showAddModal" class="mds-mask" @click="closeModal">
+      <div class="mds-modal" @click.stop>
+        <div class="mds-card-head">
+          <h2 class="mds-card-title">{{ isEdit ? '编辑参数' : '新增参数' }}</h2>
+          <button class="mds-btn mds-btn--link" @click="closeModal">关闭</button>
         </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label>参数编码 *</label>
-            <input type="text" v-model="form.code" class="form-input" placeholder="请输入参数编码" :disabled="isEdit" />
+        <div class="mds-card-body">
+          <div class="mds-form">
+            <label class="mds-field">
+              <span class="mds-field__label mds-required">参数编码</span>
+              <input v-model="form.code" class="mds-input" :disabled="isEdit" placeholder="如 quality.rule.enabled" />
+            </label>
+            <label class="mds-field">
+              <span class="mds-field__label mds-required">参数名称</span>
+              <input v-model="form.name" class="mds-input" placeholder="如 质量规则开关" />
+            </label>
+            <label class="mds-field">
+              <span class="mds-field__label">参数分组</span>
+              <select v-model="form.group" class="mds-select">
+                <option value="">未分组</option>
+                <option v-for="group in paramGroups" :key="group" :value="group">{{ group }}</option>
+              </select>
+            </label>
+            <label class="mds-field">
+              <span class="mds-field__label mds-required">数据类型</span>
+              <select v-model="form.type" class="mds-select">
+                <option value="string">字符串</option>
+                <option value="number">数字</option>
+                <option value="boolean">布尔值</option>
+                <option value="json">JSON</option>
+              </select>
+            </label>
+            <label class="mds-field mds-field--full">
+              <span class="mds-field__label mds-required">参数值</span>
+              <textarea v-model="form.value" class="mds-textarea" :placeholder="form.type === 'json' ? '{&quot;key&quot;: &quot;value&quot;}' : '参数值'" />
+            </label>
+            <label class="mds-field">
+              <span class="mds-field__label">是否启用</span>
+              <select v-model="form.enabled" class="mds-select">
+                <option :value="true">启用</option>
+                <option :value="false">禁用</option>
+              </select>
+            </label>
+            <label class="mds-field mds-field--full">
+              <span class="mds-field__label">描述</span>
+              <textarea v-model="form.description" class="mds-textarea" placeholder="这个参数影响什么、改动要注意什么" />
+            </label>
           </div>
-          <div class="form-group">
-            <label>参数名称 *</label>
-            <input type="text" v-model="form.name" class="form-input" placeholder="请输入参数名称" />
+          <div class="mds-form-actions">
+            <button class="mds-btn" @click="closeModal">取消</button>
+            <button class="mds-btn mds-btn--primary" :disabled="saving" @click="saveParam">
+              {{ saving ? '保存中…' : isEdit ? '保存修改' : '新增参数' }}
+            </button>
           </div>
-          <div class="form-group">
-            <label>参数分组</label>
-            <select v-model="form.group" class="form-input">
-              <option value="">请选择分组</option>
-              <option v-for="group in paramGroups" :key="group" :value="group">{{ group }}</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>数据类型 *</label>
-            <select v-model="form.type" class="form-input">
-              <option value="string">字符串</option>
-              <option value="number">数字</option>
-              <option value="boolean">布尔值</option>
-              <option value="json">JSON</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>参数值 *</label>
-            <textarea v-model="form.value" class="form-input" :rows="form.type === 'json' ? 4 : 2" placeholder="请输入参数值"></textarea>
-          </div>
-          <div class="form-group">
-            <label>是否启用</label>
-            <div class="checkbox-option">
-              <input type="checkbox" v-model="form.enabled" id="enabled" />
-              <label for="enabled">启用</label>
-            </div>
-          </div>
-          <div class="form-group">
-            <label>描述</label>
-            <textarea v-model="form.description" class="form-input" rows="3" placeholder="请输入参数描述"></textarea>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-cancel" @click="closeModal">取消</button>
-          <button class="btn btn-primary" @click="saveParam">{{ isEdit ? '保存修改' : '新增参数' }}</button>
         </div>
       </div>
     </div>
@@ -121,14 +133,21 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
-import { getSystemConfigList, createSystemConfig, updateSystemConfig } from '../../utils/api'
+import PageHeader from '@/components/ui/PageHeader.vue'
+import StatusTag from '@/components/ui/StatusTag.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
+import { createSystemConfig, getSystemConfigList, updateSystemConfig } from '../../utils/api'
 
 const showAddModal = ref(false)
 const isEdit = ref(false)
 const filterGroup = ref('all')
 const filterKeyword = ref('')
+const params = ref([])
+const loading = ref(false)
+const saving = ref(false)
+const busyId = ref(null)
 
 const form = reactive({
   id: null,
@@ -138,44 +157,34 @@ const form = reactive({
   type: 'string',
   value: '',
   enabled: true,
-  description: ''
+  description: '',
 })
 
-const params = ref([])
-
-/**
- * 分组列表**从数据里推导**，不再写死。
- *
- * 写死的问题是：后端新增了一个分组（比如"数据安全"），筛选下拉里不会出现它，
- * 那一组参数就永远筛不出来 —— 而界面上完全看不出缺了什么。
- */
+/** 分组从数据里推导：写死的下拉永远漏掉后端新增的分组 */
 const paramGroups = computed(() => {
   const groups = new Set()
-  params.value.forEach(p => { if (p.group) groups.add(p.group) })
+  params.value.forEach((param) => {
+    if (param.group) groups.add(param.group)
+  })
   return Array.from(groups)
 })
 
-const filteredParams = computed(() => {
-  return params.value.filter(param => {
+const filteredParams = computed(() =>
+  params.value.filter((param) => {
     const matchGroup = filterGroup.value === 'all' || param.group === filterGroup.value
-    const matchKeyword = !filterKeyword.value || 
-      (param.code ?? '').toLowerCase().includes(filterKeyword.value.toLowerCase()) ||
-      (param.name ?? '').toLowerCase().includes(filterKeyword.value.toLowerCase())
+    const kw = filterKeyword.value.trim().toLowerCase()
+    const matchKeyword =
+      !kw ||
+      String(param.code ?? '').toLowerCase().includes(kw) ||
+      String(param.name ?? '').toLowerCase().includes(kw)
     return matchGroup && matchKeyword
-  })
-})
+  }),
+)
 
-const getTypeText = (type) => {
-  const texts = {
-    string: '字符串',
-    number: '数字',
-    boolean: '布尔',
-    json: 'JSON'
-  }
-  return texts[type] || type
-}
+const TYPE_TEXT = { string: '字符串', number: '数字', boolean: '布尔', json: 'JSON' }
+const typeText = (type) => TYPE_TEXT[type] ?? type ?? '—'
 
-/** 接口字段 → 页面字段。两边命名不同（configKey/configName/… vs code/name/…），映射只在这一处做。 */
+/** 接口字段 → 页面字段（configKey/configName/… vs code/name/…），映射只在这一处做 */
 const toRow = (row) => ({
   id: row.id,
   code: row.configKey,
@@ -183,409 +192,130 @@ const toRow = (row) => ({
   group: row.groupName,
   type: row.configType || 'string',
   value: row.configValue,
-  // 接口给的是 StatusEnum 口径的数字（1 启用 / 0 禁用），页面用布尔开关
   enabled: Number(row.status) === 1,
-  description: row.description
+  description: row.description,
 })
 
 const loadData = async () => {
+  loading.value = true
   try {
     const response = await getSystemConfigList()
-    if (response.code !== 200) {
-      message.error(response.message || '加载系统配置失败')
-      params.value = []
-      return
-    }
-    // 不再回落到演示数据：失败就说失败
+    if (response.code !== 200) throw new Error(response.message || '加载系统配置失败')
     params.value = (response.data ?? []).map(toRow)
   } catch (error) {
-    message.error(error instanceof Error ? error.message : '加载系统配置失败')
     params.value = []
+    message.error(error instanceof Error ? error.message : '加载系统配置失败')
+  } finally {
+    loading.value = false
   }
 }
 
-onMounted(() => {
-  loadData()
-})
-
-const closeModal = () => {
-  showAddModal.value = false
+const openCreate = () => {
+  Object.assign(form, { id: null, code: '', name: '', group: '', type: 'string', value: '', enabled: true, description: '' })
   isEdit.value = false
-  Object.keys(form).forEach(key => {
-    form[key] = key === 'type' ? 'string' : key === 'enabled' ? true : ''
-  })
+  showAddModal.value = true
 }
 
 const editParam = (param) => {
   isEdit.value = true
-  Object.assign(form, param)
+  Object.assign(form, {
+    id: param.id,
+    code: param.code ?? '',
+    name: param.name ?? '',
+    group: param.group ?? '',
+    type: param.type ?? 'string',
+    value: param.value ?? '',
+    enabled: Boolean(param.enabled),
+    description: param.description ?? '',
+  })
   showAddModal.value = true
+}
+
+const closeModal = () => {
+  showAddModal.value = false
+  isEdit.value = false
 }
 
 const toggleParam = async (param) => {
   const nextStatus = param.enabled ? 0 : 1
+  busyId.value = param.id
   try {
-    // 只提交 status：接口侧是"只覆盖本次传了的字段"，不会被清空其它列
+    // 只提交 status：接口侧「只覆盖本次传了的字段」，不会被清空其它列
     const response = await updateSystemConfig(param.id, { status: nextStatus })
-    if (response.code === 200) {
-      message.success(`参数「${param.name}」已${nextStatus === 1 ? '启用' : '禁用'}`)
-      loadData()
-    } else {
-      message.error(response.message || '操作失败')
-    }
+    if (response.code !== 200) throw new Error(response.message || '操作失败')
+    message.success(`参数「${param.name}」已${nextStatus === 1 ? '启用' : '禁用'}`)
+    await loadData()
   } catch (error) {
     message.error(error instanceof Error ? error.message : '操作失败')
+  } finally {
+    busyId.value = null
   }
 }
 
 const saveParam = async () => {
-  if (!form.code || !form.name || !form.value) {
-    message.warning('请填写必填字段')
+  if (!form.code.trim() || !form.name.trim() || !String(form.value).trim()) {
+    message.warning('参数编码、名称与参数值为必填')
     return
   }
-
+  saving.value = true
   const payload = {
-    configKey: form.code,
-    configName: form.name,
+    configKey: form.code.trim(),
+    configName: form.name.trim(),
     groupName: form.group,
     configType: form.type,
     configValue: form.value,
     description: form.description,
-    status: form.enabled ? 1 : 0
+    status: form.enabled ? 1 : 0,
   }
-
   try {
     const response = isEdit.value
       ? await updateSystemConfig(form.id, payload)
       : await createSystemConfig(payload)
-    if (response.code === 200) {
-      message.success(isEdit.value ? '参数已更新' : '参数已新增')
-      closeModal()
-      loadData()
-    } else {
-      message.error(response.message || '保存失败')
-    }
+    if (response.code !== 200) throw new Error(response.message || '保存失败')
+    message.success(isEdit.value ? '参数已更新' : '参数已新增')
+    closeModal()
+    await loadData()
   } catch (error) {
     message.error(error instanceof Error ? error.message : '保存失败')
+  } finally {
+    saving.value = false
   }
 }
+
+onMounted(loadData)
 </script>
 
 <style scoped>
-.system-params {
-  padding: 20px;
+.param-table {
+  min-width: 1080px;
 }
 
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 24px;
-}
-
-.header-left h1 {
-  font-size: 24px;
-  font-weight: 600;
-  color: #2d3748;
-  margin: 0;
-}
-
-.header-left p {
-  font-size: 14px;
-  color: #a0aec0;
-  margin: 4px 0 0;
-}
-
-.add-btn {
-  padding: 10px 20px;
-  background: linear-gradient(135deg, #238636 0%, #2ea043 100%);
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.add-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(35, 134, 54, 0.3);
-}
-
-.filter-bar {
-  display: flex;
-  gap: 16px;
-  margin-bottom: 20px;
-}
-
-.filter-select {
-  padding: 8px 16px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 14px;
-  outline: none;
-  cursor: pointer;
-}
-
-.filter-input {
-  padding: 8px 16px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 14px;
-  outline: none;
-  flex: 1;
-  min-width: 200px;
-}
-
-.params-table {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  overflow: hidden;
-}
-
-.data-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.data-table th,
-.data-table td {
-  padding: 12px 16px;
-  text-align: left;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.data-table th {
-  font-size: 13px;
-  font-weight: 600;
-  color: #4a5568;
-  background: #f8fafc;
-}
-
-.data-table td {
-  font-size: 13px;
-  color: #2d3748;
-}
-
-.code {
-  font-family: monospace;
-  color: #238636;
-  font-weight: 500;
-}
-
-.value-cell {
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
+.value-cell,
 .desc-cell {
-  max-width: 200px;
+  max-width: 220px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.group-badge {
-  padding: 4px 10px;
-  background: rgba(37, 99, 235, 0.1);
-  color: #2563eb;
-  border-radius: 4px;
-  font-size: 12px;
-}
-
-.type-badge {
-  padding: 4px 10px;
-  background: rgba(147, 51, 234, 0.1);
-  color: #7c3aed;
-  border-radius: 4px;
-  font-size: 12px;
-}
-
-.status-badge {
-  padding: 4px 10px;
-  border-radius: 4px;
-  font-size: 12px;
-}
-
-.status-badge.enabled {
-  background: rgba(35, 134, 54, 0.1);
-  color: #238636;
-}
-
-.status-badge.disabled {
-  background: rgba(156, 163, 175, 0.1);
-  color: #6b7280;
-}
-
-.action-cell {
-  display: flex;
-  gap: 8px;
-}
-
-.action-btn {
-  font-size: 12px;
-  padding: 6px 12px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.action-btn.edit {
-  background: rgba(37, 99, 235, 0.1);
-  color: #2563eb;
-}
-
-.action-btn.toggle {
-  background: rgba(210, 153, 34, 0.1);
-  color: #d29922;
-}
-
-.action-btn:hover {
-  opacity: 0.8;
-}
-
-.modal-overlay {
+.mds-mask {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  inset: 0;
+  z-index: 1000;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
-}
-
-.modal-content {
-  background: #fff;
-  border-radius: 12px;
-  width: 600px;
-  max-width: 90%;
-  max-height: 90vh;
-  overflow-y: auto;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.modal-header h3 {
-  font-size: 18px;
-  font-weight: 600;
-  color: #2d3748;
-  margin: 0;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 24px;
-  color: #a0aec0;
-  cursor: pointer;
-  padding: 0;
-  line-height: 1;
-}
-
-.close-btn:hover {
-  color: #2d3748;
-}
-
-.modal-body {
+  background: rgba(0, 0, 0, 0.45);
   padding: 20px;
 }
 
-.form-group {
-  margin-bottom: 16px;
-}
-
-.form-group label {
-  display: block;
-  font-size: 14px;
-  color: #4a5568;
-  margin-bottom: 6px;
-  font-weight: 500;
-}
-
-.form-input {
-  width: 100%;
-  padding: 10px 14px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 14px;
-  outline: none;
-  transition: border-color 0.2s;
-  box-sizing: border-box;
-}
-
-.form-input:focus {
-  border-color: #238636;
-}
-
-.form-input:disabled {
-  background: #f8fafc;
-  color: #a0aec0;
-}
-
-.checkbox-option {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.checkbox-option input {
-  width: 18px;
-  height: 18px;
-}
-
-.checkbox-option label {
-  margin: 0;
-  font-weight: 400;
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  padding: 20px;
-  border-top: 1px solid #f0f0f0;
-}
-
-.btn {
-  padding: 10px 20px;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  border: none;
-}
-
-.btn-cancel {
-  background: #f0f0f0;
-  color: #4a5568;
-}
-
-.btn-cancel:hover {
-  background: #e2e8f0;
-}
-
-.btn-primary {
-  background: linear-gradient(135deg, #238636 0%, #2ea043 100%);
-  color: #fff;
-}
-
-.btn-primary:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(35, 134, 54, 0.3);
+.mds-modal {
+  width: 680px;
+  max-width: 100%;
+  max-height: 88vh;
+  overflow: auto;
+  border-radius: var(--mds-radius);
+  background: var(--mds-card);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.22);
 }
 </style>

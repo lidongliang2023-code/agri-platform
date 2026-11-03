@@ -91,6 +91,8 @@ const sql = (statement) => {
     `-p${MYSQL_PASSWORD}`,
     '-N',
     '-B',
+    '-D',
+    'agri_trade',
     '-e',
     statement,
   ], {
@@ -109,6 +111,7 @@ const cleanup = (orderId) => {
     JOIN agri_trade.agri_trade_logistics l ON l.id = t.logistics_id
     WHERE l.order_id = ${orderId};
     DELETE FROM agri_trade.agri_trade_refund WHERE order_id = ${orderId};
+    DELETE FROM agri_trade.agri_trade_contract WHERE order_id = ${orderId};
     DELETE FROM agri_trade.agri_trade_payment WHERE order_id = ${orderId};
     DELETE FROM agri_trade.agri_trade_logistics WHERE order_id = ${orderId};
     DELETE FROM agri_trade.agri_trade_order_item WHERE order_id = ${orderId};
@@ -177,6 +180,8 @@ try {
     `¥${created.body.data?.totalAmount} expected=¥${expectedTotal}`)
   check(scalar(`SELECT COUNT(*) FROM agri_trade.agri_trade_order_item WHERE order_id = ${orderId}`) === '1',
     '订单明细已真实落库')
+  check(scalar(`SELECT COUNT(*) FROM agri_trade.agri_trade_contract WHERE order_id = ${orderId} AND del_flag = 0`) === '1',
+    '商品直接下单后自动生成待签合同')
   if (!orderId) throw new Error('订单未创建成功，后续链路无法执行')
 
   console.log('\n== 支付 ==')

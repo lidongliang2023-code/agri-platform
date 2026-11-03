@@ -36,13 +36,16 @@ public interface IAdminTenantService {
      * 而配额管理页要的是"所有租户各占一行"。前端若靠逐个租户去调单条接口，
      * 10 个租户就是 11 次请求，且没有总数、没法分页。</p>
      */
-    PageResult<TenantQuotaOverviewVO> getQuotaOverview(Integer pageNum, Integer pageSize, String keyword);
+    PageResult<TenantQuotaOverviewVO> getQuotaOverview(Integer pageNum, Integer pageSize,
+                                                        String keyword, String tenantType);
 
     void adjustTenantQuota(Long id, TenantQuotaAdjustDTO dto);
 
     void setAlertThreshold(Long id, Integer threshold);
 
     List<TenantPackageVO> getPackageList();
+
+    TenantPackageVO getPackageDetail(Long id);
 
     void createPackage(TenantPackageDTO dto);
 

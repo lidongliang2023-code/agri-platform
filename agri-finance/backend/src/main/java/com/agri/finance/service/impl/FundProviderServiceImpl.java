@@ -63,4 +63,22 @@ public class FundProviderServiceImpl extends ServiceImpl<FundProviderMapper, Fun
              .eq(FundProvider::getDelFlag, 0);
         return list(query);
     }
+
+    /** 运营端台账：全部在册机构（不按准入状态过滤 —— 待审核的也要看得见才能审）。 */
+    public List<FundProvider> listActive(String keyword) {
+        LambdaQueryWrapper<FundProvider> query = new LambdaQueryWrapper<>();
+        query.eq(FundProvider::getDelFlag, 0);
+        if (keyword != null && !keyword.isBlank()) {
+            String value = keyword.trim();
+            query.and(w -> w.like(FundProvider::getInstitutionName, value)
+                    .or().like(FundProvider::getProviderNo, value)
+                    .or().like(FundProvider::getCreditCode, value));
+        }
+        query.orderByAsc(FundProvider::getProviderNo);
+        return list(query);
+    }
+
+    public boolean lockForInvestment(String providerId) {
+        return baseMapper.lockProvider(providerId) != null;
+    }
 }

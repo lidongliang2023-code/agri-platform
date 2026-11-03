@@ -1,666 +1,244 @@
 <template>
-  <div class="user-list">
-    <div class="page-header">
-      <div class="header-left">
-        <h1>用户管理</h1>
-        <p>管理系统用户信息</p>
-      </div>
-      <button class="add-btn" @click="openCreateModal">
-        <span class="btn-icon">+</span>
-        <span>新增用户</span>
-      </button>
-    </div>
+  <div class="mds-page">
+    <PageHeader
+      title="全平台用户"
+      subtitle="统一认证账号、经营主体成员关系与认证状态；账号启停与实名审核由用户中心运营端办理。"
+      source="只读 · 统一认证用户主档"
+    >
+      <template #actions>
+        <button class="mds-btn" @click="openUserCenter">前往用户中心 · 用户管理</button>
+        <button class="mds-btn" :disabled="loading" @click="load">刷新</button>
+      </template>
+    </PageHeader>
 
-    <div class="search-bar">
-      <div class="search-group">
-        <input 
-          type="text" 
-          v-model="searchForm.keyword" 
-          placeholder="用户名/姓名/手机号..." 
-          class="search-input"
+    <NoticeBar tone="info" title="只读视图：">
+      本页的「停用 / 启用」已移除 —— 账号状态改由用户中心运营端统一处置，避免同一账号在两处被改成不同状态。
+    </NoticeBar>
+
+    <StatGrid :items="statItems" />
+
+    <div class="mds-card">
+      <div class="mds-filter">
+        <input
+          v-model="filters.keyword"
+          class="mds-input"
+          type="search"
+          placeholder="搜索账号、昵称、手机号、邮箱或主体名称"
+          @keyup.enter="search"
         />
-        <button class="search-btn" @click="loadData">搜索</button>
-      </div>
-      <div class="filter-group">
-        <select v-model="searchForm.status" class="filter-select">
-          <option value="">全部状态</option>
-          <option value="active">正常</option>
-          <option value="inactive">禁用</option>
+        <select v-model="filters.userType" class="mds-select" @change="search">
+          <option value="">全部主体类型</option>
+          <option value="enterprise">企业主体成员</option>
+          <option value="personal">个人主体成员</option>
         </select>
-        <select v-model="searchForm.realNameStatus" class="filter-select">
-          <option value="">实名状态</option>
-          <option value="verified">已认证</option>
-          <option value="unverified">未认证</option>
+        <select v-model="filters.verifyStatus" class="mds-select" @change="search">
+          <option value="">全部认证状态</option>
+          <option value="approved">已认证</option>
           <option value="pending">审核中</option>
+          <option value="rejected">已驳回</option>
+          <option value="unverified">未认证</option>
         </select>
+        <select v-model="filters.status" class="mds-select" @change="search">
+          <option value="">全部账号状态</option>
+          <option value="active">正常</option>
+          <option value="inactive">已停用</option>
+        </select>
+        <button class="mds-btn mds-btn--primary" @click="search">查询</button>
+        <button class="mds-btn" @click="reset">重置</button>
       </div>
-    </div>
 
-    <div class="table-card">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>用户编码</th>
-            <th>用户名</th>
-            <th>真实姓名</th>
-            <th>手机号</th>
-            <th>用户类型</th>
-            <th>实名状态</th>
-            <th>状态</th>
-            <th>创建时间</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="user in tableData" :key="user.id">
-            <td>{{ user.userCode }}</td>
-            <td>{{ user.username }}</td>
-            <td>{{ user.realName }}</td>
-            <td>{{ user.phone }}</td>
-            <td>
-              <span class="type-badge" :class="user.userType">
-                {{ user.userType === 'enterprise' ? '企业用户' : '个人用户' }}
-              </span>
-            </td>
-            <td>
-              <span class="status-badge" :class="user.realNameStatus">
-                {{ getStatusLabel(user.realNameStatus) }}
-              </span>
-            </td>
-            <td>
-              <span class="status-badge" :class="user.userStatus">
-                {{ user.userStatus === 'active' ? '正常' : '禁用' }}
-              </span>
-            </td>
-            <td>{{ formatDate(user.createTime) }}</td>
-            <td class="action-cell">
-              <button class="action-btn view" @click="viewDetail(user.id)">详情</button>
-              <button class="action-btn edit" @click="editUser(user)">编辑</button>
-              <button 
-                class="action-btn" 
-                :class="user.userStatus === 'active' ? 'disable' : 'enable'"
-                @click="toggleStatus(user)"
-              >
-                {{ user.userStatus === 'active' ? '禁用' : '启用' }}
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-
-      <div class="pagination">
-        <button class="page-btn" :disabled="pageNum === 1" @click="handleCurrentChange(pageNum - 1)">上一页</button>
-        <span class="page-info">第 {{ pageNum }} / {{ totalPages }} 页</span>
-        <button class="page-btn" :disabled="pageNum === totalPages" @click="handleCurrentChange(pageNum + 1)">下一页</button>
+      <div class="mds-table-wrap">
+        <table class="mds-table user-table">
+          <thead>
+            <tr>
+              <th>统一账号</th>
+              <th>联系方式</th>
+              <th>绑定主体</th>
+              <th>主体内角色</th>
+              <th>认证状态</th>
+              <th>账号状态</th>
+              <th>创建时间</th>
+              <th class="mds-actions">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-if="loading">
+              <td colspan="8" class="mds-empty">正在加载统一用户…</td>
+            </tr>
+            <tr v-else-if="!rows.length">
+              <td colspan="8">
+                <EmptyState title="暂无符合条件的统一用户" description="调整关键字或筛选条件后重试。" />
+              </td>
+            </tr>
+            <tr v-for="user in rows" :key="user.id">
+              <td>
+                <div class="user-account">
+                  <span class="avatar">{{ (user.nickName || user.username || '用').slice(0, 1) }}</span>
+                  <div>
+                    <strong>{{ user.username }}</strong>
+                    <small class="mds-hint">{{ user.nickName || '未设置昵称' }}</small>
+                  </div>
+                </div>
+              </td>
+              <td>
+                <div>{{ user.phone || '—' }}</div>
+                <small class="mds-hint">{{ user.email || '未填写邮箱' }}</small>
+              </td>
+              <td>
+                <template v-if="user.memberships?.length">
+                  <StatusTag
+                    v-for="member in user.memberships"
+                    :key="member.bindingId"
+                    :text="member.subjectName || member.subjectId"
+                    :tone="member.memberType === 'personal' ? 'info' : 'brand'"
+                    plain
+                  />
+                </template>
+                <span v-else class="mds-muted">未绑定主体</span>
+              </td>
+              <td>{{ roleText(user.roleNames) }}</td>
+              <td><StatusTag :text="verifyText(user.realNameStatus)" :tone="verifyTone(user.realNameStatus)" /></td>
+              <td>
+                <StatusTag
+                  :text="isActive(user) ? '正常' : '已停用'"
+                  :tone="isActive(user) ? 'success' : 'gray'"
+                />
+              </td>
+              <td class="mds-muted">{{ formatDate(user.createTime) }}</td>
+              <td class="mds-actions">
+                <button class="mds-btn mds-btn--link" @click="viewDetail(user.id)">查看详情</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
-    </div>
 
-    <div class="modal-overlay" v-if="modalVisible" @click="closeModal">
-      <div class="modal-content" @click.stop>
-        <div class="modal-header">
-          <h3>{{ form.id ? '编辑用户' : '新增用户' }}</h3>
-          <button class="close-btn" @click="closeModal">×</button>
-        </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label>用户名 *</label>
-            <input type="text" v-model="form.username" placeholder="请输入用户名" class="form-input" />
-          </div>
-          <div class="form-group">
-            <label>真实姓名 *</label>
-            <input type="text" v-model="form.realName" placeholder="请输入真实姓名" class="form-input" />
-          </div>
-          <div class="form-group">
-            <label>手机号</label>
-            <input type="text" v-model="form.phone" placeholder="请输入手机号" class="form-input" />
-          </div>
-          <div class="form-group">
-            <label>邮箱</label>
-            <input type="text" v-model="form.email" placeholder="请输入邮箱" class="form-input" />
-          </div>
-          <div class="form-group">
-            <label>用户类型</label>
-            <select v-model="form.userType" class="form-select">
-              <option value="enterprise">企业用户</option>
-              <option value="individual">个人用户</option>
-            </select>
-          </div>
-          <div class="form-group" v-if="!form.id">
-            <label>密码 *</label>
-            <input type="password" v-model="form.password" placeholder="请输入密码" class="form-input" />
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-cancel" @click="closeModal">取消</button>
-          <button class="btn btn-primary" @click="saveUser">确认{{ form.id ? '修改' : '添加' }}</button>
-        </div>
-      </div>
+      <PagerBar
+        :page="pageNum"
+        :page-size="PAGE_SIZE"
+        :total="total"
+        :page-size-options="[20]"
+        @change="changePage"
+      />
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { getUserList, createUser, updateUser, changeStatus } from '../../utils/api'
+import PageHeader from '@/components/ui/PageHeader.vue'
+import StatGrid from '@/components/ui/StatGrid.vue'
+import StatusTag from '@/components/ui/StatusTag.vue'
+import NoticeBar from '@/components/ui/NoticeBar.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
+import PagerBar from '@/components/ui/PagerBar.vue'
+import { getUserList } from '../../utils/api'
 
-const tableData = ref([])
+const PAGE_SIZE = 20
+const router = useRouter()
+const rows = ref([])
+const loading = ref(false)
 const pageNum = ref(1)
-const pageSize = ref(10)
 const total = ref(0)
-const modalVisible = ref(false)
+const filters = reactive({ keyword: '', userType: '', verifyStatus: '', status: '' })
+const totalPages = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)))
+const activeCount = computed(() => rows.value.filter(isActive).length)
+const boundCount = computed(() => rows.value.filter((user) => user.memberships?.length).length)
+const pendingCount = computed(() => rows.value.filter((user) => user.realNameStatus === 'pending').length)
+const isActive = (user) => Number(user?.status) === 1
 
-const totalPages = computed(() => Math.ceil(total.value / pageSize.value))
+/** 后三张卡是「当前页」口径：接口没有按状态聚合的字段，这里如实标注 */
+const statItems = computed(() => [
+  { label: '用户总数', value: total.value, hint: '统一认证账号' },
+  { label: '当前页正常', value: activeCount.value, hint: '账号状态启用' },
+  { label: '当前页已绑定', value: boundCount.value, hint: '至少加入一个经营主体' },
+  {
+    label: '当前页待认证',
+    value: pendingCount.value,
+    hint: '主体认证审核中',
+    tone: pendingCount.value ? 'warning' : undefined,
+  },
+])
 
-const searchForm = reactive({
-  keyword: '',
-  status: '',
-  realNameStatus: ''
-})
-
-const form = reactive({
-  id: null,
-  username: '',
-  realName: '',
-  phone: '',
-  email: '',
-  userType: 'individual',
-  password: ''
-})
-
-const getStatusLabel = (status) => {
-  const labels = { verified: '已认证', unverified: '未认证', pending: '审核中' }
-  return labels[status] || status
-}
-
-const loadData = async () => {
+const load = async () => {
+  loading.value = true
   try {
     const response = await getUserList({
       pageNum: pageNum.value,
-      pageSize: pageSize.value,
-      keyword: searchForm.keyword,
-      userStatus: searchForm.status,
-      realNameStatus: searchForm.realNameStatus
+      pageSize: PAGE_SIZE,
+      username: filters.keyword || undefined,
+      userType: filters.userType || undefined,
+      realNameStatus: filters.verifyStatus || undefined,
+      userStatus: filters.status || undefined,
     })
-    if (response.code === 200) {
-      tableData.value = response.data.list ?? []
-      total.value = response.data.total ?? 0
-    } else {
-      message.error(response.message || '加载数据失败')
-      tableData.value = []
-      total.value = 0
-    }
+    if (response.code !== 200) throw new Error(response.message || '统一用户加载失败')
+    rows.value = response.data?.list ?? []
+    total.value = Number(response.data?.total ?? 0)
   } catch (error) {
-    message.error(error instanceof Error ? error.message : '加载数据失败')
-    tableData.value = []
+    rows.value = []
     total.value = 0
+    message.error(error instanceof Error ? error.message : '统一用户加载失败')
+  } finally {
+    loading.value = false
   }
 }
 
-const handleCurrentChange = (page) => {
-  if (page >= 1 && page <= totalPages.value) {
-    pageNum.value = page
-    loadData()
-  }
+const search = () => {
+  pageNum.value = 1
+  void load()
+}
+const reset = () => {
+  Object.assign(filters, { keyword: '', userType: '', verifyStatus: '', status: '' })
+  search()
+}
+const changePage = (page) => {
+  if (page < 1 || page > totalPages.value) return
+  pageNum.value = page
+  void load()
+}
+const viewDetail = (id) => router.push(`/user/detail/${id}`)
+
+const VERIFY_TEXT = { approved: '已认证', pending: '审核中', rejected: '已驳回', unverified: '未认证' }
+const VERIFY_TONE = { approved: 'success', pending: 'warning', rejected: 'danger', unverified: 'gray' }
+const verifyText = (status) => VERIFY_TEXT[status] ?? '未认证'
+const verifyTone = (status) => VERIFY_TONE[status] ?? 'gray'
+const roleText = (roles) => {
+  if (!roles?.length) return '—'
+  const labels = { owner: '负责人', buyer: '采购', seller: '销售', finance: '财务' }
+  return [...new Set(roles)].map((role) => labels[role] || role).join('、')
+}
+const formatDate = (value) => (value ? String(value).replace('T', ' ').slice(0, 16) : '—')
+
+function openUserCenter() {
+  window.open(`${window.location.protocol}//${window.location.hostname}:8115/user-center-ops/`, '_blank', 'noopener')
 }
 
-const openCreateModal = () => {
-  form.id = null
-  form.username = ''
-  form.realName = ''
-  form.phone = ''
-  form.email = ''
-  form.userType = 'individual'
-  form.password = ''
-  modalVisible.value = true
-}
-
-const editUser = (row) => {
-  form.id = row.id
-  form.username = row.username
-  form.realName = row.realName
-  form.phone = row.phone
-  form.email = row.email
-  form.userType = row.userType
-  modalVisible.value = true
-}
-
-const closeModal = () => {
-  modalVisible.value = false
-}
-
-const saveUser = async () => {
-  if (!form.username || !form.realName) {
-    alert('请填写必填项')
-    return
-  }
-  
-  if (!form.id && !form.password) {
-    alert('请设置密码')
-    return
-  }
-  
-  try {
-    let response
-    if (form.id) {
-      response = await updateUser(form.id, {
-        realName: form.realName,
-        phone: form.phone,
-        email: form.email,
-        userType: form.userType
-      })
-    } else {
-      response = await createUser({
-        username: form.username,
-        password: form.password,
-        realName: form.realName,
-        phone: form.phone,
-        email: form.email,
-        userType: form.userType
-      })
-    }
-    
-    if (response.code === 200) {
-      alert(form.id ? '修改成功' : '创建成功')
-      closeModal()
-      loadData()
-    } else {
-      alert(response.message || '操作失败')
-    }
-  } catch (error) {
-    alert('操作失败')
-  }
-}
-
-const toggleStatus = async (row) => {
-  try {
-    const response = await changeStatus(row.id, row.userStatus === 'active' ? 0 : 1)
-    if (response.code === 200) {
-      alert(row.userStatus === 'active' ? '禁用成功' : '启用成功')
-      loadData()
-    } else {
-      alert(response.message || '操作失败')
-    }
-  } catch (error) {
-    alert('操作失败')
-  }
-}
-
-const viewDetail = (id) => {
-  alert(`查看用户详情: ${id}`)
-}
-
-const formatDate = (date) => {
-  if (!date) return ''
-  // 后端返回 ISO（如 2026-10-12T17:32:41），只按空格切分会把 T 一起显示出来
-  return String(date).replace('T', ' ').split(' ')[0]
-}
-
-onMounted(() => {
-  loadData()
-})
+onMounted(load)
 </script>
 
 <style scoped>
-.user-list {
-  padding: 20px;
+.user-table {
+  min-width: 1120px;
 }
 
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 24px;
-}
-
-.header-left h1 {
-  font-size: 24px;
-  font-weight: 600;
-  color: #2d3748;
-  margin: 0;
-}
-
-.header-left p {
-  font-size: 14px;
-  color: #a0aec0;
-  margin: 4px 0 0;
-}
-
-.add-btn {
+.user-account {
   display: flex;
   align-items: center;
-  gap: 8px;
-  background: linear-gradient(135deg, #238636 0%, #2ea043 100%);
+  gap: 10px;
+}
+
+.avatar {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #13a05a, #0ea5e9);
   color: #fff;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.add-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(35, 134, 54, 0.3);
-}
-
-.btn-icon {
-  font-size: 18px;
-}
-
-.search-bar {
-  display: flex;
-  gap: 16px;
-  margin-bottom: 20px;
-}
-
-.search-group {
-  display: flex;
-  flex: 1;
-}
-
-.search-input {
-  flex: 1;
-  padding: 10px 16px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px 0 0 8px;
-  font-size: 14px;
-  outline: none;
-  transition: border-color 0.2s;
-}
-
-.search-input:focus {
-  border-color: #238636;
-}
-
-.search-btn {
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-left: none;
-  padding: 10px 24px;
-  border-radius: 0 8px 8px 0;
-  font-size: 14px;
-  color: #238636;
-  cursor: pointer;
-}
-
-.search-btn:hover {
-  background: rgba(35, 134, 54, 0.1);
-}
-
-.filter-group {
-  display: flex;
-  gap: 12px;
-}
-
-.filter-select {
-  padding: 10px 16px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 14px;
-  color: #4a5568;
-  background: #fff;
-  cursor: pointer;
-  outline: none;
-}
-
-.table-card {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  overflow: hidden;
-}
-
-.data-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.data-table th,
-.data-table td {
-  padding: 14px 16px;
-  text-align: left;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.data-table th {
-  font-size: 13px;
-  font-weight: 600;
-  color: #4a5568;
-  background: #f8fafc;
-}
-
-.data-table td {
-  font-size: 13px;
-  color: #2d3748;
-}
-
-.type-badge {
-  font-size: 11px;
-  font-weight: 500;
-  padding: 4px 12px;
-  border-radius: 12px;
-}
-
-.type-badge.enterprise {
-  background: rgba(59, 130, 246, 0.1);
-  color: #3b82f6;
-}
-
-.type-badge.individual {
-  background: rgba(35, 134, 54, 0.1);
-  color: #238636;
-}
-
-.status-badge {
-  font-size: 11px;
-  font-weight: 500;
-  padding: 4px 12px;
-  border-radius: 12px;
-}
-
-.status-badge.active {
-  background: rgba(35, 134, 54, 0.1);
-  color: #238636;
-}
-
-.status-badge.inactive {
-  background: rgba(160, 174, 192, 0.1);
-  color: #a0aec0;
-}
-
-.status-badge.verified {
-  background: rgba(35, 134, 54, 0.1);
-  color: #238636;
-}
-
-.status-badge.unverified {
-  background: rgba(210, 153, 34, 0.1);
-  color: #d29922;
-}
-
-.status-badge.pending {
-  background: rgba(59, 130, 246, 0.1);
-  color: #3b82f6;
-}
-
-.action-cell {
-  display: flex;
-  gap: 8px;
-}
-
-.action-btn {
   font-size: 12px;
-  padding: 6px 12px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.action-btn.view {
-  background: rgba(59, 130, 246, 0.1);
-  color: #3b82f6;
-}
-
-.action-btn.edit {
-  background: rgba(210, 153, 34, 0.1);
-  color: #d29922;
-}
-
-.action-btn.disable {
-  background: rgba(218, 54, 51, 0.1);
-  color: #da3633;
-}
-
-.action-btn.enable {
-  background: rgba(35, 134, 54, 0.1);
-  color: #238636;
-}
-
-.pagination {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 16px;
-  padding: 20px;
-}
-
-.page-btn {
-  padding: 8px 16px;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  background: #fff;
-  font-size: 13px;
-  color: #4a5568;
-  cursor: pointer;
-}
-
-.page-btn:hover:not(:disabled) {
-  background: #f8fafc;
-}
-
-.page-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.page-info {
-  font-size: 13px;
-  color: #a0aec0;
-}
-
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.modal-content {
-  background: #fff;
-  border-radius: 12px;
-  width: 500px;
-  max-width: 90%;
-  overflow: hidden;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.modal-header h3 {
-  font-size: 18px;
-  font-weight: 600;
-  color: #2d3748;
-  margin: 0;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 24px;
-  color: #a0aec0;
-  cursor: pointer;
-}
-
-.modal-body {
-  padding: 20px;
-}
-
-.form-group {
-  margin-bottom: 16px;
-}
-
-.form-group label {
-  display: block;
-  font-size: 14px;
-  color: #4a5568;
-  margin-bottom: 6px;
-  font-weight: 500;
-}
-
-.form-input {
-  width: 100%;
-  padding: 10px 14px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 14px;
-  outline: none;
-  box-sizing: border-box;
-}
-
-.form-input:focus {
-  border-color: #238636;
-}
-
-.form-select {
-  width: 100%;
-  padding: 10px 14px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 14px;
-  color: #4a5568;
-  background: #fff;
-  cursor: pointer;
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  padding: 20px;
-  border-top: 1px solid #f0f0f0;
-}
-
-.btn {
-  padding: 10px 20px;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  border: none;
-}
-
-.btn-cancel {
-  background: #f0f0f0;
-  color: #4a5568;
-}
-
-.btn-primary {
-  background: linear-gradient(135deg, #238636 0%, #2ea043 100%);
-  color: #fff;
+  font-weight: 700;
 }
 </style>

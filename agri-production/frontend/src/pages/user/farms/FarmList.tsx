@@ -12,7 +12,7 @@
  * - **卡片视图**：每张卡含 🌾 农场名、状态标签、★默认标签、
  *   📍 地区 | 类型 | 面积 | 在田面积、地块数 | 本月任务 | 告警，
  *   底部操作 `查看详情`、`生产监控→`，右上角 `更多 ▾` 下拉
- * - 额外提供「卡片 / 列表」视图切换、设为默认农场、启停、删除、CSV 导入
+ * - 额外提供「卡片 / 列表」视图切换、设为默认农场、启停、删除、CSV 模板下载与批量导入
  *
  * 数据口径说明：
  * - 农场主数据来自 GET /farms；地块数 / 在田面积来自 GET /farms/{farmId}/summary
@@ -27,11 +27,14 @@ import type { MenuProps } from 'antd'
 import {
   AppstoreOutlined,
   DownOutlined,
+  DownloadOutlined,
   ImportOutlined,
+  InboxOutlined,
   PlusOutlined,
   UnorderedListOutlined,
 } from '@ant-design/icons'
 import {
+  Alert,
   Button,
   Card,
   Col,
@@ -54,8 +57,15 @@ import {
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { deleteFarm, getFarmSummary, listFarms, updateFarmStatus, createFarm } from '@/api/farms'
+import type { FarmPayload } from '@/api/farms'
 import { listAlerts } from '@/api/alerts'
 import { listTasks } from '@/api/tasks'
+import {
+  FARM_TYPE_BUSINESS_OPTIONS,
+  downloadFarmImportTemplate,
+  parseFarmImportFile,
+  type FarmImportRow,
+} from '@/utils/farm-import'
 import useFarmStore from '@/store/farm'
 import type { Farm } from '@/types'
 
@@ -94,16 +104,6 @@ const FARM_TYPE_FALLBACK_MAP: Record<number, string> = {
   2: '养殖类',
   3: '综合种养',
 }
-
-/** 农场业务类型选项（原型 P1 / P3 口径） */
-const FARM_TYPE_BUSINESS_OPTIONS: string[] = [
-  '蔬菜种植',
-  '水稻种植',
-  '果树种植',
-  '综合养殖',
-  '畜牧养殖',
-  '水产养殖',
-]
 
 /**
  * 从 remark 中解析自定义键值。
@@ -160,7 +160,7 @@ function formatArea(value: number | undefined): string {
  * 农场列表页
  *
  * 业务职责：以卡片 / 列表双视图展示主体下全部农场，支持检索筛选、
- * 切换当前农场、启停、删除与 CSV 批量导入。
+ * 切换当前农场、启停、删除，以及「下载模板 → 编辑 → 上传 CSV」的批量导入。
  *
  * @returns 页面内容
  */
@@ -175,6 +175,14 @@ export default function FarmList(): JSX.Element {
   const [pageSize, setPageSize] = useState<number>(9)
   const [filters, setFilters] = useState<FilterValues>({})
   const [filterForm] = Form.useForm<FilterValues>()
+  /** 导入弹窗开关 */
+  const [importOpen, setImportOpen] = useState<boolean>(false)
+  /** 解析后的导入行（含逐行校验结果） */
+  const [importRows, setImportRows] = useState<FarmImportRow[]>([])
+  /** 已选择的文件名 */
+  const [importFileName, setImportFileName] = useState<string>('')
+  /** 文件级错误（表头缺失 / 无法解析） */
+  const [importError, setImportError] = useState<string>('')
 
   /** 农场分页数据（关键字 / 状态由服务端过滤） */
   const listQuery = useQuery({
@@ -275,31 +283,67 @@ export default function FarmList(): JSX.Element {
     },
   })
 
-  /** CSV 批量导入 */
+  /**
+   * 批量导入（逐行提交）。
+   *
+   * <p>只提交逐行校验通过的数据；失败行跳过并在结果里列出原因，
+   * 不因单行失败回滚已成功的农场（与原有导入行为一致）。</p>
+   */
   const importMutation = useMutation({
-    mutationFn: async (rows: Record<string, string>[]) => {
+    mutationFn: async (rows: FarmImportRow[]) => {
+      const targets = rows.filter((row) => row.payload !== undefined)
       const results = await Promise.allSettled(
-        rows.map((row) =>
-          createFarm({
-            farmName: row['农场名称'],
-            province: row['省份'],
-            city: row['城市'],
-            district: row['区县'],
-            address: row['详细地址'],
-            areaTotal: Number(row['面积']) || 0,
-            managerName: row['负责人'],
-            managerPhone: row['联系电话'],
-            status: 1,
-            remark: row['产业类型'] ? `产业类型:${row['产业类型']}` : undefined,
-          }),
-        ),
+        targets.map((row) => createFarm(row.payload as FarmPayload)),
       )
-      const success = results.filter((item) => item.status === 'fulfilled').length
-      return { success, failed: results.length - success }
+      const failures = results
+        .map((result, index) => ({ result, row: targets[index] }))
+        .filter((item) => item.result.status === 'rejected')
+        .map((item) => ({
+          rowNumber: item.row.rowNumber,
+          farmName: item.row.values.farmName,
+          reason:
+            item.result.status === 'rejected' && item.result.reason instanceof Error
+              ? item.result.reason.message
+              : '导入失败',
+        }))
+      return {
+        success: results.length - failures.length,
+        failed: failures.length,
+        failures,
+      }
     },
     onSuccess: (result) => {
-      message.success(`导入完成：成功 ${result.success} 条，失败 ${result.failed} 条`)
+      setImportOpen(false)
       void invalidateFarms()
+      if (result.failed === 0) {
+        message.success(`导入完成：成功导入 ${result.success} 个农场`)
+        return
+      }
+      message.warning(`导入完成：成功 ${result.success} 条，失败 ${result.failed} 条`)
+      Modal.warning({
+        title: '部分农场导入失败',
+        width: 560,
+        content: (
+          <Space direction="vertical" size={4} style={{ width: '100%' }}>
+            {result.failures.slice(0, 10).map((failure) => (
+              <Typography.Text
+                key={`${failure.rowNumber}-${failure.farmName}`}
+                type="danger"
+              >
+                第 {failure.rowNumber} 行「{failure.farmName || '未命名'}」：{failure.reason}
+              </Typography.Text>
+            ))}
+            {result.failures.length > 10 && (
+              <Typography.Text type="secondary">
+                仅显示前 10 条失败记录，请修正文件后重新导入。
+              </Typography.Text>
+            )}
+          </Space>
+        ),
+      })
+    },
+    onError: (error: Error) => {
+      message.error(error.message || '导入失败，请稍后重试')
     },
   })
 
@@ -405,36 +449,101 @@ export default function FarmList(): JSX.Element {
     setPageNum(1)
   }
 
-  /** CSV 文件导入解析 */
-  const handleImportFile = (file: File): void => {
-    const reader = new FileReader()
-    reader.onload = () => {
-      const lines = String(reader.result ?? '')
-        .split(/\r?\n/)
-        .filter((line) => line.trim().length > 0)
-      if (lines.length < 2) {
-        message.warning('文件内容为空，请检查 CSV 模板')
-        return
-      }
-      const headers = lines[0].split(',').map((item) => item.trim())
-      const rows = lines.slice(1).map((line) => {
-        const cells = line.split(',').map((item) => item.trim())
-        const row: Record<string, string> = {}
-        headers.forEach((header, index) => {
-          row[header] = cells[index] ?? ''
-        })
-        return row
-      })
-      const validRows = rows.filter((row) => Boolean(row['农场名称']))
-      if (validRows.length === 0) {
-        message.warning('未解析到有效数据，请检查「农场名称」列')
-        return
-      }
-      importMutation.mutate(validRows)
-    }
-    reader.onerror = () => message.error('文件读取失败，请重试')
-    reader.readAsText(file, 'UTF-8')
+  /** 打开导入弹窗并重置上一次的选择 */
+  const openImportModal = (): void => {
+    setImportRows([])
+    setImportFileName('')
+    setImportError('')
+    setImportOpen(true)
   }
+
+  /**
+   * 读取用户选择的 CSV 文件并逐行校验。
+   *
+   * <p>选中文件后不立即提交，先在弹窗里展示解析与校验结果，
+   * 用户确认后再导入，避免选错文件直接落库。</p>
+   *
+   * @param file 用户选择的文件
+   */
+  const handleImportFile = async (file: File): Promise<void> => {
+    setImportFileName(file.name)
+    setImportError('')
+    setImportRows([])
+    try {
+      const result = await parseFarmImportFile(file)
+      if (result.headerErrors.length > 0) {
+        setImportError(result.headerErrors.join('；'))
+      }
+      setImportRows(result.rows)
+      if (result.rows.length === 0 && result.headerErrors.length === 0) {
+        setImportError('文件中没有可解析的数据行，请按模板填写后再导入')
+      }
+    } catch (error) {
+      setImportError(
+        error instanceof Error ? error.message : '文件解析失败，请确认文件为 CSV 格式',
+      )
+    }
+  }
+
+  /** 当前文件中逐行校验通过、可提交的行 */
+  const importableRows = useMemo<FarmImportRow[]>(
+    () => importRows.filter((row) => row.errors.length === 0 && row.payload !== undefined),
+    [importRows],
+  )
+
+  /** 导入预览列定义 */
+  const importPreviewColumns: ColumnsType<FarmImportRow> = [
+    {
+      title: '行号',
+      dataIndex: 'rowNumber',
+      width: 66,
+    },
+    {
+      title: '农场名称',
+      key: 'farmName',
+      width: 160,
+      ellipsis: true,
+      render: (_, row) => row.values.farmName || '-',
+    },
+    {
+      title: '类型',
+      key: 'farmType',
+      width: 100,
+      render: (_, row) => row.values.farmTypeLabel || '-',
+    },
+    {
+      title: '地区',
+      key: 'region',
+      width: 180,
+      ellipsis: true,
+      render: (_, row) =>
+        `${row.values.province}${row.values.city}${row.values.district}` || '-',
+    },
+    {
+      title: '面积(亩)',
+      key: 'area',
+      width: 90,
+      render: (_, row) => row.values.area || '-',
+    },
+    {
+      title: '负责人',
+      key: 'manager',
+      width: 140,
+      ellipsis: true,
+      render: (_, row) =>
+        [row.values.managerName, row.values.managerPhone].filter(Boolean).join(' / ') || '-',
+    },
+    {
+      title: '校验结果',
+      key: 'validation',
+      render: (_, row) =>
+        row.errors.length === 0 ? (
+          <Tag color="green">可导入</Tag>
+        ) : (
+          <Typography.Text type="danger">{row.errors.join('；')}</Typography.Text>
+        ),
+    },
+  ]
 
   /** 列表视图列定义 */
   const columns: ColumnsType<Farm> = [
@@ -666,17 +775,16 @@ export default function FarmList(): JSX.Element {
             { label: '列表视图', value: 'table', icon: <UnorderedListOutlined /> },
           ]}
         />,
-        <Upload
-          key="import"
-          accept=".csv,.txt"
-          showUploadList={false}
-          beforeUpload={(file) => {
-            handleImportFile(file as File)
-            return false
-          }}
+        <Button
+          key="template"
+          icon={<DownloadOutlined />}
+          onClick={downloadFarmImportTemplate}
         >
-          <Button icon={<ImportOutlined />}>📥 导入</Button>
-        </Upload>,
+          下载模板
+        </Button>,
+        <Button key="import" icon={<ImportOutlined />} onClick={openImportModal}>
+          📥 导入
+        </Button>,
         <Button
           key="create"
           type="primary"
@@ -768,6 +876,107 @@ export default function FarmList(): JSX.Element {
           </div>
         )}
       </Card>
+
+      <Modal
+        title="导入农场"
+        open={importOpen}
+        width={880}
+        maskClosable={!importMutation.isPending}
+        onCancel={() => {
+          if (!importMutation.isPending) setImportOpen(false)
+        }}
+        footer={[
+          <Button
+            key="cancel"
+            disabled={importMutation.isPending}
+            onClick={() => setImportOpen(false)}
+          >
+            取消
+          </Button>,
+          <Button
+            key="template"
+            icon={<DownloadOutlined />}
+            disabled={importMutation.isPending}
+            onClick={downloadFarmImportTemplate}
+          >
+            下载导入模板
+          </Button>,
+          <Button
+            key="submit"
+            type="primary"
+            loading={importMutation.isPending}
+            disabled={importableRows.length === 0}
+            onClick={() => importMutation.mutate(importableRows)}
+          >
+            开始导入{importableRows.length > 0 ? `（${importableRows.length} 条）` : ''}
+          </Button>,
+        ]}
+      >
+        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+          <Alert
+            type="info"
+            showIcon
+            message="按模板填写后上传 CSV 文件"
+            description={
+              <Space direction="vertical" size={2}>
+                <span>1. 点击「下载导入模板」，用 Excel 打开并填写农场数据。</span>
+                <span>
+                  2. 必填列：农场名称、农场类型、省份、城市、区县、详细地址、面积、负责人、联系电话；
+                  农场类型需为模板中的六种业务类型之一。
+                </span>
+                <span>3. 保存为 CSV 后，在下方选择该文件；校验不通过的行会标红并在导入时跳过。</span>
+              </Space>
+            }
+          />
+
+          <Upload.Dragger
+            accept=".csv,.txt"
+            maxCount={1}
+            showUploadList={false}
+            disabled={importMutation.isPending}
+            beforeUpload={(file) => {
+              void handleImportFile(file as File)
+              return false
+            }}
+          >
+            <p className="ant-upload-drag-icon">
+              <InboxOutlined />
+            </p>
+            <p className="ant-upload-text">点击或拖拽 CSV 文件到此处</p>
+            <p className="ant-upload-hint">
+              支持 UTF-8 / GBK 编码；Excel 编辑后请另存为 CSV（逗号分隔）
+            </p>
+          </Upload.Dragger>
+
+          {importFileName && (
+            <Typography.Text type="secondary">已选择文件：{importFileName}</Typography.Text>
+          )}
+
+          {importError && <Alert type="error" showIcon message={importError} />}
+
+          {importRows.length > 0 && (
+            <Space direction="vertical" size={8} style={{ width: '100%' }}>
+              <Alert
+                type={importableRows.length === importRows.length ? 'success' : 'warning'}
+                showIcon
+                message={`已解析 ${importRows.length} 行，可导入 ${importableRows.length} 行${
+                  importRows.length - importableRows.length > 0
+                    ? `，${importRows.length - importableRows.length} 行需修正（导入时跳过）`
+                    : ''
+                }`}
+              />
+              <Table<FarmImportRow>
+                rowKey={(row) => String(row.rowNumber)}
+                size="small"
+                columns={importPreviewColumns}
+                dataSource={importRows}
+                pagination={false}
+                scroll={{ y: 280 }}
+              />
+            </Space>
+          )}
+        </Space>
+      </Modal>
     </PageContainer>
   )
 }

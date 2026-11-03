@@ -922,31 +922,6 @@ export function fmtDate(value?: string | null, pattern = 'YYYY-MM-DD'): string {
   return date.isValid() ? date.format(pattern) : String(value)
 }
 
-/**
- * 确定性伪哈希：用于本地生成存证摘要占位（后端链上接口接入后由真实 txHash 覆盖）。
- *
- * @param seed 种子串
- * @param length 十六进制长度，默认 40
- * @returns 0x 前缀哈希串
- */
-export function pseudoHash(seed: string, length = 40): string {
-  let h1 = 0x811c9dc5
-  let h2 = 0x01000193
-  const source = `agri-chain::${seed}`
-  for (let i = 0; i < source.length; i += 1) {
-    const code = source.charCodeAt(i)
-    h1 = Math.imul(h1 ^ code, 16777619) >>> 0
-    h2 = (Math.imul(h2 + code, 48271) + i) >>> 0
-  }
-  let out = ''
-  while (out.length < length) {
-    out += (h1 >>> 0).toString(16).padStart(8, '0') + (h2 >>> 0).toString(16).padStart(8, '0')
-    h1 = Math.imul(h1 ^ h2, 16777619) >>> 0
-    h2 = (h2 + 0x9e3779b9) >>> 0
-  }
-  return `0x${out.slice(0, length)}`
-}
-
 /** CSV 单元格转义：包裹双引号并转义内部双引号 */
 export function escapeCsv(value: unknown): string {
   return `"${String(value ?? '').replace(/"/g, '""')}"`

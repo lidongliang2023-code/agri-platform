@@ -2,6 +2,8 @@ package com.agri.trade.service;
 
 import com.agri.trade.entity.Settlement;
 import com.agri.trade.entity.TradeOrder;
+import com.agri.trade.entity.Dispute;
+import com.agri.trade.mapper.DisputeMapper;
 import com.agri.trade.mapper.SettlementMapper;
 import com.agri.trade.mapper.TradeOrderMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -52,6 +54,7 @@ public class SettlementService {
 
     private final SettlementMapper settlementMapper;
     private final TradeOrderMapper orderMapper;
+    private final DisputeMapper disputeMapper;
     private final TradeConfigService configService;
 
     /** 配置文件里的默认费率；运营在「系统配置」里改过就以库里的为准。 */
@@ -112,6 +115,7 @@ public class SettlementService {
             pendingWrapper.notIn(TradeOrder::getId, settledOrderIds);
         }
         List<TradeOrder> pendingOrders = orderMapper.selectList(pendingWrapper);
+        pendingOrders = pendingOrders.stream().filter(order -> !hasOpenDispute(order.getId())).toList();
 
         BigDecimal pendingAmount = BigDecimal.ZERO;
         BigDecimal pendingFee = BigDecimal.ZERO;
@@ -173,6 +177,9 @@ public class SettlementService {
         if (!"paid".equals(order.getPaymentStatus())) {
             return null;
         }
+        if (hasOpenDispute(orderId)) {
+            return null;
+        }
 
         BigDecimal total = nullToZero(order.getTotalAmount());
         BigDecimal fee = platformFee(order);
@@ -217,6 +224,14 @@ public class SettlementService {
                         .select(Settlement::getOrderId))
                 .stream().map(Settlement::getOrderId).filter(java.util.Objects::nonNull)
                 .collect(Collectors.toSet());
+    }
+
+    private boolean hasOpenDispute(Long orderId) {
+        Long count = disputeMapper.selectCount(new LambdaQueryWrapper<Dispute>()
+                .eq(Dispute::getOrderId, orderId)
+                .in(Dispute::getDisputeStatus, List.of("pending", "processing"))
+                .eq(Dispute::getDelFlag, 0));
+        return count != null && count > 0;
     }
 
     private BigDecimal platformFee(TradeOrder order) {

@@ -4,10 +4,19 @@
       地图标记取自地块台账的边界/中心经纬度；未标注的地块不落点。「导航到这里」需在真机上调起系统地图。
     </view>
 
-    <!-- 小程序端用原生 map 组件；H5 无地图 Key 时退回列表（不假装有地图） -->
-    <!-- #ifdef MP-WEIXIN -->
+    <!-- H5 使用天地图 Web SDK；小程序与 App 使用平台原生地图组件。 -->
+    <!-- #ifdef H5 -->
+    <TiandituH5Map
+      v-if="tdtPoints.length > 0"
+      :points="tdtPoints"
+      height="560rpx"
+      @select="selectPlot"
+    />
+    <!-- #endif -->
+    <!-- #ifndef H5 -->
+    <web-view v-if="tiandituEmbedUrl" :src="tiandituEmbedUrl" />
     <map
-      v-if="markers.length > 0"
+      v-else-if="markers.length > 0"
       class="map-box"
       :latitude="center.latitude"
       :longitude="center.longitude"
@@ -15,10 +24,6 @@
       @markertap="onMarkerTap"
     />
     <!-- #endif -->
-    <!-- #ifdef H5 -->
-    <view class="notice">当前 H5 预览未配置地图 Key，以下以列表呈现地块经纬度。</view>
-    <!-- #endif -->
-
     <view v-if="located.length === 0" class="empty">该农场地块都没有经纬度标注</view>
     <view v-for="plot in located" :key="plot.plotId" class="card">
       <view class="row">
@@ -39,6 +44,7 @@ import { onShow } from '@dcloudio/uni-app'
 import { listPlots } from '@/api/production'
 import { currentFarm, ensureLogin } from '@/utils/auth-helper'
 import { fmtNumber } from '@/utils/format'
+import TiandituH5Map from '@/components/TiandituH5Map.vue'
 
 /** 带经纬度的地块（boundary GeoJSON 或中心点任一可用即算） */
 const located = ref<any[]>([])
@@ -80,9 +86,28 @@ const markers = computed(() =>
   })),
 )
 
+const tdtPoints = computed(() =>
+  located.value.map((plot) => ({
+    id: String(plot.plotId),
+    longitude: Number(plot.longitude),
+    latitude: Number(plot.latitude),
+    title: String(plot.plotName || '地块'),
+  })),
+)
+
+const tiandituEmbedUrl = computed(() => {
+  const base = String(import.meta.env.VITE_PRODUCTION_MOBILE_H5_URL || '').replace(/\/+$/, '')
+  if (!base || !tdtPoints.value.length) return ''
+  return `${base}/#/pages/plots/map-embed?points=${encodeURIComponent(JSON.stringify(tdtPoints.value))}`
+})
+
 function onMarkerTap(event: any): void {
   const plot = located.value[event.detail.markerId]
   if (plot) goDetail(plot.plotId)
+}
+
+function selectPlot(id: string): void {
+  goDetail(id)
 }
 
 function goDetail(plotId: string): void {

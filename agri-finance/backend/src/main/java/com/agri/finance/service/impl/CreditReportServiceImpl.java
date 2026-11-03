@@ -25,7 +25,8 @@ public class CreditReportServiceImpl extends ServiceImpl<CreditReportMapper, Cre
              .eq(CreditReport::getDelFlag, 0)
              .orderByDesc(CreditReport::getCreatedAt)
              .last("LIMIT 1");
-        return getOne(query);
+        CreditReport report = getOne(query);
+        return report == null ? generateReport(userId) : report;
     }
 
     public CreditReport generateReport(String userId) {
@@ -34,7 +35,7 @@ public class CreditReportServiceImpl extends ServiceImpl<CreditReportMapper, Cre
         CreditReport report = new CreditReport();
         report.setReportNo("CR" + System.currentTimeMillis());
         report.setUserId(userId);
-        report.setUserName("用户" + userId.substring(0, 8));
+        report.setUserName("用户" + userId.substring(0, Math.min(8, userId.length())));
         report.setCompositeScore(score.getCompositeScore());
         report.setCreditLevel(score.getCreditLevel());
         report.setSuggestedAmount(score.getAvailableAmount());

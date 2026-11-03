@@ -331,7 +331,7 @@ export default function GrowthOverview(): JSX.Element {
             <Tooltip title="该地块暂无生长记录，后端未返回长势评级，不臆造评分">
               <Tag color="default">
                 —
-                <InfoCircleOutlined style={{ fontSize: 11, color: '#faad14', marginLeft: 2 }} />
+                <InfoCircleOutlined style={{ fontSize: 12, color: '#faad14', marginLeft: 2 }} />
               </Tag>
             </Tooltip>
           ) : (
@@ -350,7 +350,7 @@ export default function GrowthOverview(): JSX.Element {
               <Tooltip title="该地块暂无生长记录，未做过病虫害诊断，结论未知">
                 <Tag color="default">
                   未诊断
-                  <InfoCircleOutlined style={{ fontSize: 11, color: '#faad14', marginLeft: 2 }} />
+                  <InfoCircleOutlined style={{ fontSize: 12, color: '#faad14', marginLeft: 2 }} />
                 </Tag>
               </Tooltip>
             )
@@ -402,7 +402,7 @@ export default function GrowthOverview(): JSX.Element {
     return (
       <Space direction="vertical" size={2} style={{ width: '100%' }}>
         {dayRecords.slice(0, 2).map((record) => (
-          <Tag key={record.recordId} color="green" style={{ fontSize: 11, margin: 0 }}>
+          <Tag key={record.recordId} color="green" style={{ fontSize: 12, margin: 0 }}>
             {record.plotName ?? record.plotId} {record.growthStage}
           </Tag>
         ))}
@@ -426,7 +426,7 @@ export default function GrowthOverview(): JSX.Element {
         <Tooltip title="该地块暂无生长记录，未做过病虫害诊断，结论未知">
           <Tag color="default">
             未诊断
-            <InfoCircleOutlined style={{ fontSize: 11, color: '#faad14', marginLeft: 2 }} />
+            <InfoCircleOutlined style={{ fontSize: 12, color: '#faad14', marginLeft: 2 }} />
           </Tag>
         </Tooltip>
       ) : (
@@ -438,7 +438,7 @@ export default function GrowthOverview(): JSX.Element {
         <Tooltip title="该地块暂无生长记录，后端未返回长势评级，不臆造评分">
           <Typography.Text strong style={{ color: '#bfbfbf', cursor: 'help' }}>
             —
-            <InfoCircleOutlined style={{ fontSize: 11, color: '#faad14', marginLeft: 2 }} />
+            <InfoCircleOutlined style={{ fontSize: 12, color: '#faad14', marginLeft: 2 }} />
           </Typography.Text>
         </Tooltip>
       ) : (

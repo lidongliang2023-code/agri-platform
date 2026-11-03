@@ -1,0 +1,47 @@
+.detail-info-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--detail-info-columns, 2), minmax(0, 1fr));
+  gap: 22px 48px;
+}
+
+/* 参照详情页参考样式：标签在上、值在下，不做边框 / 底色卡片 */
+.detail-info-item {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.detail-info-label {
+  color: #8a978f;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.detail-info-value {
+  margin-top: 5px;
+  color: #0b1a12;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+.detail-info-item-full {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 900px) {
+  .detail-info-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px 24px;
+  }
+}
+
+@media (max-width: 640px) {
+  .detail-info-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+}

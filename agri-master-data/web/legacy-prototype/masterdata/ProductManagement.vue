@@ -567,7 +567,7 @@ onMounted(() => {})
 }
 
 .product-category {
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
   padding: 4px 10px;
   background: rgba(59, 130, 246, 0.1);
   color: #3b82f6;
@@ -575,7 +575,7 @@ onMounted(() => {})
 }
 
 .product-status {
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
   padding: 4px 10px;
   border-radius: 12px;
   font-weight: 500;

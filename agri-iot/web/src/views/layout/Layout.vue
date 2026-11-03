@@ -388,7 +388,7 @@ const showSettings = () => {
 .link-badge {
   background: var(--danger-color);
   color: white;
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
   padding: 2px 6px;
   border-radius: 8px;
   min-width: 18px;
@@ -490,7 +490,7 @@ const showSettings = () => {
   right: 4px;
   background: var(--danger-color);
   color: white;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
   padding: 1px 4px;
   border-radius: 8px;
   min-width: 14px;
@@ -530,7 +530,7 @@ const showSettings = () => {
 }
 
 .user-arrow {
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
   color: var(--text-muted);
 }
 

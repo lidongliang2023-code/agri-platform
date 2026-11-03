@@ -1,7 +1,7 @@
 /**
  * 页面名称：投入品详情
  * 路由路径：/production/inputs/:inputId
- * 所属模块：农资投入品管理
+ * 所属模块：农资管理
  * 原型来源：用户端原型 P12 input-detail — 投入品详情
  *
  * 还原要点：
@@ -22,7 +22,6 @@ import {
   Button,
   Card,
   Col,
-  Descriptions,
   Empty,
   Modal,
   Progress,
@@ -42,34 +41,38 @@ import {
   LinkOutlined,
   SafetyCertificateOutlined,
 } from '@ant-design/icons'
-import dayjs from 'dayjs'
 import { listPlots } from '@/api/plots'
 import { getInputInfo, pageStockFlows, pageUsages } from '@/api/inputs'
 import type { InputStockFlow } from '@/api/inputs'
 import { listChainRecords, submitChain } from '@/api/blockchain'
-import type { BlockchainRecord, InputUsageRecord } from '@/types'
+import type { BlockchainBizRecord, InputUsageRecord } from '@/types'
 import useFarmStore from '@/store/farm'
+import { DetailInfoGrid } from '@/components'
 import {
   categoryMeta,
   checkCompliance,
   fmtDate,
   fmtNumber,
   flowTypeMeta,
-  pseudoHash,
   summarizeCompliance,
 } from './shared'
 import type { ComplianceItem } from './shared'
 
 /** 上链状态：1 待上链 2 上链中 3 已上链 4 上链失败 */
-type ChainState = 'none' | 'pending' | 'chaining' | 'chained' | 'failed'
+/** 存证状态（按后端返回的字符串状态推导；'pending' 那一档已删除 —— 后端没有"上链中"这个中间态） */
+type ChainState = 'none' | 'chaining' | 'chained' | 'failed'
 
-/** 存证状态展示元数据 */
+/**
+ * 存证状态展示元数据。
+ *
+ * `none` 的措辞是「无存证记录」而不是「待上链」：前者是"查过了，这条业务没存证"，
+ * 后者暗示"马上就上链了"，两者对运营的动作指引完全不同。
+ */
 const CHAIN_STATE_META: Record<ChainState, { label: string; color: string; tagColor: string }> = {
-  none: { label: '待上链', color: '#8c8c8c', tagColor: 'default' },
-  pending: { label: '待上链', color: '#8c8c8c', tagColor: 'default' },
-  chaining: { label: '⏳ 上链中', color: '#1677ff', tagColor: 'blue' },
-  chained: { label: '✅ 已上链', color: '#52c41a', tagColor: 'green' },
-  failed: { label: '❌ 上链失败', color: '#ff4d4f', tagColor: 'red' },
+  none: { label: '无存证记录', color: '#8c8c8c', tagColor: 'default' },
+  chaining: { label: '⏳ 已提交待出块', color: '#1677ff', tagColor: 'blue' },
+  chained: { label: '✅ 已上链（模拟链）', color: '#52c41a', tagColor: 'green' },
+  failed: { label: '❌ 存证失败', color: '#ff4d4f', tagColor: 'red' },
 }
 
 /** 校验项图标：通过 / 预警 / 违规 */
@@ -109,10 +112,18 @@ export default function InputDetail(): JSX.Element {
     queryFn: () => getInputInfo(inputId),
   })
 
-  /** 使用记录（全量拉取后按投入品过滤） */
+  /**
+   * 使用记录（按投入品服务端过滤）。
+   *
+   * ⚠️ 旧版是"全量拉 500 条再本地 `usage.inputId === inputId` 过滤"：路由参数是**字符串**、
+   * 后端返回的 inputId 是**数字**，严格相等永远 false，于是这个页面的「使用记录 / 累计用量 /
+   * 合规校验 / 区块链存证」四块**常年显示空值**，接口 200、控制台无报错。
+   * 后端 `/inputs/usages` 一直支持 inputId 过滤，改为服务端过滤（顺带不再拉全量）。
+   */
   const usagesQuery = useQuery({
-    queryKey: ['production-inputs', 'usages'],
-    queryFn: () => pageUsages({ pageNum: 1, pageSize: 500 }),
+    queryKey: ['production-inputs', 'usages', inputId],
+    enabled: Boolean(inputId),
+    queryFn: () => pageUsages({ inputId, pageNum: 1, pageSize: 200 }),
   })
 
   /** 出入库流水 */
@@ -122,10 +133,10 @@ export default function InputDetail(): JSX.Element {
     queryFn: () => pageStockFlows(inputId, { pageNum: 1, pageSize: 200 }),
   })
 
-  /** 链上存证记录（bizType 2 = 投入品使用） */
+  /** 链上存证记录（业务类型 INPUT = 投入品使用；历史上是数字 2，服务端已下线该写法） */
   const chainQuery = useQuery({
     queryKey: ['blockchain', 'records', 'input-usage'],
-    queryFn: () => listChainRecords({ bizType: 2, pageNum: 1, pageSize: 200 }),
+    queryFn: () => listChainRecords({ bizType: 'INPUT', pageNum: 1, pageSize: 200 }),
   })
 
   /** 地块名称映射 */
@@ -135,13 +146,27 @@ export default function InputDetail(): JSX.Element {
     queryFn: () => listPlots({ farmId, pageNum: 1, pageSize: 200 }),
   })
 
-  /** 上链提交 */
+  /**
+   * 上链提交。
+   *
+   * 成功话术按**服务端返回的真实状态**说：本部署是模拟链，写一条就是 SUCCESS 并带回交易哈希，
+   * 所以不能再写"等待链上确认"（那是把已完成的动作说成未完成）。
+   * 失败必须显式报错：服务端会核对这条使用记录是否真的属于当前经营主体，
+   * 静默失败会让人以为"点了没反应"，其实是被拒了。
+   */
   const chainMutation = useMutation({
     mutationFn: (bizId: string) =>
-      submitChain({ bizId, bizType: 2, bizSummary: '投入品使用记录存证' }),
-    onSuccess: () => {
-      message.success('已提交上链，等待链上确认')
+      submitChain({ bizId, bizType: 'INPUT', bizSummary: '投入品使用记录存证' }),
+    onSuccess: (record) => {
+      message.success(
+        record?.status === 'SUCCESS'
+          ? `已存证（模拟链 SUCCESS${record.txHash ? `，交易哈希 ${record.txHash}` : ''}）`
+          : `已提交存证，当前状态 ${record?.status ?? '未知'}`,
+      )
       void queryClient.invalidateQueries({ queryKey: ['blockchain'] })
+    },
+    onError: (err: Error) => {
+      message.error(`存证失败，未写入任何记录：${err.message}`)
     },
   })
 
@@ -149,10 +174,13 @@ export default function InputDetail(): JSX.Element {
   const inputName = item?.inputName ?? ''
 
   /** 该投入品的使用记录，按时间倒序 */
-  const usages = useMemo<InputUsageRecord[]>(() => {
-    const list = (usagesQuery.data?.list ?? []).filter((usage) => usage.inputId === inputId)
-    return [...list].sort((a, b) => String(b.usedAt ?? '').localeCompare(String(a.usedAt ?? '')))
-  }, [usagesQuery.data, inputId])
+  const usages = useMemo<InputUsageRecord[]>(
+    () =>
+      [...(usagesQuery.data?.list ?? [])].sort((a, b) =>
+        String(b.usedAt ?? '').localeCompare(String(a.usedAt ?? '')),
+      ),
+    [usagesQuery.data],
+  )
 
   /** 出入库流水，按时间倒序 */
   const flows = useMemo<InputStockFlow[]>(() => {
@@ -191,32 +219,40 @@ export default function InputDetail(): JSX.Element {
 
   const complianceLevel = summarizeCompliance(complianceItems)
 
-  /** 当前记录的链上存证 */
-  const chainRecord = useMemo<BlockchainRecord | undefined>(
+  /**
+   * 当前记录的链上存证（按业务键对号：存证的 target_code 就是使用记录 ID 的字符串形式）。
+   *
+   * ⚠️ 旧版写的是 `record.bizId === latestUsage.usageId` —— 后端把业务键序列化成**字符串**，
+   * 而 usageId 是 number，这个严格相等永远为 false，于是页面**一直显示"待上链"**，
+   * 哪怕存证表里真有这条记录。接口 200、不报错、结论是假的，属于最难被发现的一类。
+   */
+  const chainRecord = useMemo<BlockchainBizRecord | undefined>(
     () =>
       (chainQuery.data?.list ?? []).find(
-        (record) => latestUsage && record.bizId === latestUsage.usageId,
+        (record) =>
+          latestUsage && String(record.bizNo ?? record.bizId ?? '') === String(latestUsage.usageId),
       ),
     [chainQuery.data, latestUsage],
   )
 
-  /** 上链状态 */
+  /**
+   * 存证状态：按后端返回的**字符串状态**判（PENDING / SUCCESS / FAILED）。
+   * 旧版比较的是 1/2/3/4 这套数字，本服务从不返回数字状态，所以分支永远走不到。
+   */
   const chainState: ChainState = !latestUsage
     ? 'none'
-    : chainRecord?.status === 3
+    : chainRecord?.status === 'SUCCESS'
       ? 'chained'
-      : chainRecord?.status === 2
+      : chainRecord?.status === 'PENDING'
         ? 'chaining'
-        : chainRecord?.status === 4
+        : chainRecord?.status === 'FAILED'
           ? 'failed'
-          : 'pending'
+          : 'none'
 
-  /** 存证编号 / 交易哈希 / 上链时间 */
-  const certNo = latestUsage
-    ? `CERT-${dayjs(latestUsage.usedAt ?? dayjs()).format('YYYYMMDDHHmmss')}`
-    : '-'
-  const txHash = chainRecord?.txHash ?? (latestUsage ? pseudoHash(latestUsage.usageId) : '-')
-  const chainedAt = chainRecord?.chainedAt ?? chainRecord?.submittedAt ?? '-'
+  /** 存证编号 / 交易哈希 / 上链时间：只从真实存证记录取，没有记录就说没有，不本地编造 */
+  const certNo = chainRecord?.recordNo ?? '—（尚无存证记录）'
+  const txHash = chainRecord?.txHash ?? '未生成交易哈希'
+  const chainedAt = chainRecord?.anchorAt ?? chainRecord?.chainedAt ?? chainRecord?.createdAt ?? ''
 
   /** 库存水位百分比（以预警阈值的 3 倍为满刻度） */
   const stockPercent = useMemo(() => {
@@ -326,44 +362,54 @@ export default function InputDetail(): JSX.Element {
     { title: '备注', key: 'remark', render: (_, record) => record.remark ?? '-' },
   ]
 
-  /** 存证验真结论（5 项，原型 P29 / P30） */
+  /**
+   * 存证核对项（只列**本部署真能核对**的事实）。
+   *
+   * 旧版这五张卡写的是"ECDSA 签名验证通过""链上哈希 = 链下计算哈希""原始数据完整性校验通过"
+   * "时间戳可信" —— 后端从来没有这些校验：存证表是本地库，`/blockchain/verify` 只回答
+   * "本库有没有一条同键的 SUCCESS 记录"，而且本部署是**模拟链**（chainType=SIMULATED）。
+   * 把这些写成"校验通过"是在替安全能力编事实，用户会据此认为数据经过链上验证。
+   * 现在每条只说自己依据哪个字段、结论是什么，做不到的直接写"本部署不做该核验"。
+   */
   const verifyChecks = useMemo(
     () => [
       {
-        key: 'hash',
-        label: '数据哈希一致性',
+        key: 'record',
+        label: '有无存证记录',
         passed: Boolean(chainRecord),
         detail: chainRecord
-          ? '链上哈希 = 链下计算哈希'
-          : '该记录尚未上链，无法比对链上哈希',
+          ? `存证编号 ${chainRecord.recordNo ?? '—'}，业务键 ${chainRecord.bizNo ?? chainRecord.bizId ?? '—'}`
+          : '存证表（agri_prod_chain_record）里没有这条使用记录的存证',
       },
       {
-        key: 'signature',
-        label: '数字签名有效性',
-        passed: Boolean(chainRecord && chainRecord.status === 3),
-        detail: chainRecord ? 'ECDSA 签名验证通过' : '待上链后自动校签',
+        key: 'status',
+        label: '存证状态',
+        passed: chainRecord?.status === 'SUCCESS',
+        detail: chainRecord
+          ? `${chainRecord.status ?? '未知'}${chainRecord.failReason ? `（原因：${chainRecord.failReason}）` : ''}`
+          : '无记录，无状态',
       },
       {
-        key: 'confirm',
-        label: '区块确认数达标',
-        passed: Boolean(chainRecord && chainRecord.status === 3),
-        detail: chainRecord?.blockHeight
-          ? `区块高度 ${chainRecord.blockHeight}`
-          : '尚未出块，无确认数',
+        key: 'anchor',
+        label: '是否已出块',
+        passed: Boolean(chainRecord?.txHash),
+        detail: chainRecord?.txHash
+          ? `交易哈希 ${chainRecord.txHash}，区块高度 ${chainRecord.blockHeight ?? '—'}`
+          : '尚未出块，没有交易哈希与区块高度',
       },
       {
-        key: 'timestamp',
-        label: '时间戳可信',
-        passed: Boolean(chainRecord?.chainTimestamp),
-        detail: chainRecord?.chainTimestamp
-          ? `链上时间 ${fmtDate(chainRecord.chainTimestamp, 'YYYY-MM-DD HH:mm:ss')}`
-          : '无链上时间戳',
+        key: 'payload',
+        label: '内容指纹是否留档',
+        passed: Boolean(chainRecord?.payloadHash ?? chainRecord?.dataHash),
+        detail: chainRecord
+          ? '存证记录里存了 data_hash（内容指纹）。注意：本部署不连真链，**没有做"链上=链下"比对**'
+          : '无存证记录，也就没有可比对的内容指纹',
       },
       {
-        key: 'integrity',
-        label: '数据未被篡改',
-        passed: Boolean(chainRecord && chainRecord.status === 3),
-        detail: chainRecord ? '原始数据完整性校验通过' : '待上链后校验',
+        key: 'chainType',
+        label: '链类型',
+        passed: false,
+        detail: '本部署为 SIMULATED（模拟链）：签名校验、区块确认数、公链完整性校验都不存在',
       },
     ],
     [chainRecord],
@@ -402,17 +448,10 @@ export default function InputDetail(): JSX.Element {
 
   return (
     <PageContainer
-      title={
-        <Space size={8}>
-          <Typography.Link onClick={() => navigate('/production/inputs')}>
-            <ArrowLeftOutlined /> 返回
-          </Typography.Link>
-          <span>
-            {inputName || '投入品'} · 投入品详情
-          </span>
-        </Space>
-      }
+      title={`📦 ${inputName || '投入品'}`}
       subTitle={item ? `编号 ${item.inputCode ?? item.inputId}` : undefined}
+      onBack={() => navigate('/production/inputs')}
+      backIcon={<ArrowLeftOutlined />}
       loading={detailQuery.isLoading}
       extra={[
         <Button
@@ -420,40 +459,39 @@ export default function InputDetail(): JSX.Element {
           icon={<LinkOutlined />}
           onClick={() => navigate('/production/trace/full-chain')}
         >
-          🔗 查看溯源链路
-        </Button>,
-        <Button key="edit" onClick={() => navigate('/production/inputs')}>
-          返回台账
+          查看溯源链路
         </Button>,
       ]}
     >
       <Row gutter={16}>
         <Col span={16}>
-          <Card title="📋 基本信息" style={{ marginBottom: 16 }}>
-            <Descriptions
-              bordered
-              column={2}
-              size="small"
+          <Card
+            title="📋 基本信息"
+            style={{ marginBottom: 16 }}
+            extra={item?.status === 1 ? <Tag color="green">启用</Tag> : <Tag>停用</Tag>}
+          >
+            <DetailInfoGrid
+              columns={2}
               items={[
-                { key: 'code', label: '投入品编号', children: item?.inputCode ?? item?.inputId ?? '-' },
-                { key: 'name', label: '投入品名称', children: item?.inputName ?? '-' },
+                {
+                  key: 'code',
+                  label: '投入品编号',
+                  value: item?.inputCode ?? item?.inputId ?? '-',
+                },
+                { key: 'name', label: '投入品名称', value: item?.inputName ?? '-' },
                 {
                   key: 'type',
                   label: '投入品类型',
-                  children: (
-                    <Tag color={categoryMeta(item?.inputType).color}>
-                      {categoryMeta(item?.inputType).label}
-                    </Tag>
-                  ),
+                  value: categoryMeta(item?.inputType).label,
                 },
-                { key: 'regNo', label: '登记证号', children: item?.registrationNo ?? '-' },
-                { key: 'manufacturer', label: '生产厂家', children: item?.manufacturer ?? '-' },
-                { key: 'spec', label: '规格', children: item?.spec ?? '-' },
-                { key: 'unit', label: '计量单位', children: item?.unit ?? '-' },
+                { key: 'regNo', label: '登记证号', value: item?.registrationNo ?? '-' },
+                { key: 'manufacturer', label: '生产厂家', value: item?.manufacturer ?? '-' },
+                { key: 'spec', label: '规格', value: item?.spec ?? '-' },
+                { key: 'unit', label: '计量单位', value: item?.unit ?? '-' },
                 {
                   key: 'safety',
                   label: '安全间隔期',
-                  children:
+                  value:
                     item?.safetyInterval === undefined || item?.safetyInterval === null
                       ? '-'
                       : `${item.safetyInterval} 天`,
@@ -461,34 +499,32 @@ export default function InputDetail(): JSX.Element {
                 {
                   key: 'stock',
                   label: '当前库存',
-                  children: `${fmtNumber(item?.stockQty)} ${item?.unit ?? ''}`,
+                  value: `${fmtNumber(item?.stockQty)} ${item?.unit ?? ''}`,
                 },
                 {
                   key: 'warn',
                   label: '库存预警阈值',
-                  children:
+                  value:
                     item?.warnQty === undefined || item?.warnQty === null
                       ? '-'
                       : `${fmtNumber(item.warnQty)} ${item?.unit ?? ''}`,
                 },
                 {
-                  key: 'status',
-                  label: '状态',
-                  children:
-                    item?.status === 1 ? (
-                      <Tag color="green">启用</Tag>
-                    ) : (
-                      <Tag color="default">停用</Tag>
-                    ),
+                  key: 'createdAt',
+                  label: '创建时间',
+                  value: fmtDate(item?.createdAt, 'YYYY-MM-DD HH:mm'),
                 },
-                { key: 'createdAt', label: '创建时间', children: fmtDate(item?.createdAt, 'YYYY-MM-DD HH:mm') },
-                { key: 'updatedAt', label: '更新时间', children: fmtDate(item?.updatedAt, 'YYYY-MM-DD HH:mm') },
+                {
+                  key: 'updatedAt',
+                  label: '更新时间',
+                  value: fmtDate(item?.updatedAt, 'YYYY-MM-DD HH:mm'),
+                },
               ]}
             />
           </Card>
 
           <Card
-            title="✅ 合规校验结果"
+            title={`✅ 合规校验结果（${complianceItems.length} 项）`}
             style={{ marginBottom: 16 }}
             extra={
               <Tag
@@ -557,6 +593,8 @@ export default function InputDetail(): JSX.Element {
                       dataSource={usages}
                       loading={usagesQuery.isFetching}
                       search={false}
+                      // 列宽合计约 890，窄屏时表格内部横向滚动
+                      scroll={{ x: 900 }}
                       options={false}
                       pagination={{ pageSize: 10, showTotal: (total) => `共 ${total} 条` }}
                     />
@@ -572,6 +610,8 @@ export default function InputDetail(): JSX.Element {
                       dataSource={flows}
                       loading={flowsQuery.isFetching}
                       search={false}
+                      // 固定列宽合计约 970，备注列需额外空间，窄屏时表格内部横向滚动
+                      scroll={{ x: 1120 }}
                       options={false}
                       pagination={{ pageSize: 10, showTotal: (total) => `共 ${total} 条` }}
                     />
@@ -603,25 +643,23 @@ export default function InputDetail(): JSX.Element {
                 message={`库存已达预警阈值 ${fmtNumber(item?.warnQty)} ${item?.unit ?? ''}，请及时补货`}
               />
             )}
-            <Descriptions
-              column={1}
-              size="small"
-              style={{ marginTop: 12 }}
+            <DetailInfoGrid
+              columns={1}
               items={[
                 {
                   key: 'batch',
                   label: '最近批次',
-                  children: flows.find((flow) => flow.batchNo)?.batchNo ?? '-',
+                  value: flows.find((flow) => flow.batchNo)?.batchNo ?? '-',
                 },
                 {
                   key: 'expire',
                   label: '有效期至',
-                  children: fmtDate(flows.find((flow) => flow.expireDate)?.expireDate),
+                  value: fmtDate(flows.find((flow) => flow.expireDate)?.expireDate),
                 },
                 {
                   key: 'latest',
                   label: '最近使用',
-                  children: latestUsage
+                  value: latestUsage
                     ? `${fmtDate(latestUsage.usedAt)} · ${fmtNumber(latestUsage.dosage)} ${
                         latestUsage.unit ?? ''
                       }`
@@ -630,7 +668,7 @@ export default function InputDetail(): JSX.Element {
                 {
                   key: 'cumulative',
                   label: '累计用量',
-                  children: `${fmtNumber(cumulativeDosage)} ${latestUsage?.unit ?? ''}`,
+                  value: `${fmtNumber(cumulativeDosage)} ${latestUsage?.unit ?? ''}`,
                 },
               ]}
             />
@@ -644,27 +682,38 @@ export default function InputDetail(): JSX.Element {
               </Tag>
             }
           >
-            <Descriptions
-              column={1}
-              size="small"
+            <DetailInfoGrid
+              columns={1}
               items={[
-                { key: 'certNo', label: '存证编号', children: certNo },
+                { key: 'certNo', label: '存证编号', value: certNo },
                 {
                   key: 'txHash',
                   label: '交易哈希',
-                  children: (
+                  value: chainRecord?.txHash ? (
                     <Typography.Text copyable style={{ fontSize: 12, wordBreak: 'break-all' }}>
-                      {txHash}
+                      {chainRecord.txHash}
                     </Typography.Text>
+                  ) : (
+                    <Typography.Text type="secondary">{txHash}</Typography.Text>
                   ),
                 },
-                { key: 'chainAt', label: '上链时间', children: fmtDate(chainedAt, 'YYYY-MM-DD HH:mm:ss') },
+                {
+                  key: 'chainAt',
+                  label: '上链时间',
+                  value: chainedAt
+                    ? fmtDate(chainedAt, 'YYYY-MM-DD HH:mm:ss')
+                    : '未出块（无存证记录或存证仍待上链）',
+                },
                 {
                   key: 'blockHeight',
                   label: '区块高度',
-                  children: chainRecord?.blockHeight ?? '-',
+                  value: chainRecord?.blockHeight ?? '未出块',
                 },
-                { key: 'bizId', label: '关联业务单号', children: latestUsage?.usageId ?? '-' },
+                {
+                  key: 'bizId',
+                  label: '关联业务单号',
+                  value: latestUsage?.usageId ?? '-',
+                },
               ]}
             />
             <Space style={{ marginTop: 12 }}>

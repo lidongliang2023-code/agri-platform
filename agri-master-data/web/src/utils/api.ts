@@ -189,6 +189,8 @@ export const adjustTenantQuota = (id: number | string, data: unknown) =>
 export const setTenantQuotaAlertThreshold = (id: number | string, threshold: number) =>
   put(`${BASE}/subject/${id}/quota/alert-threshold`, null, { threshold })
 export const getTenantPackageList = () => get(`${BASE}/subject/package/list`)
+export const getTenantPackageDetail = (id: number | string) =>
+  get(`${BASE}/subject/package/${id}`)
 export const createTenantPackage = (data: unknown) => post(`${BASE}/subject/package`, data)
 export const updateTenantPackage = (id: number | string, data: unknown) =>
   put(`${BASE}/subject/package/${id}`, data)
@@ -223,6 +225,8 @@ export const getOrgTree = (tenantId?: string) => get(`${BASE}/org/tree`, { tenan
 export const getOrgDetail = (id: number | string) => get(`${BASE}/org/detail/${id}`)
 export const createOrg = (data: unknown) => post(`${BASE}/org`, data)
 export const updateOrg = (id: number | string, data: unknown) => put(`${BASE}/org/${id}`, data)
+export const updateOrgStatus = (id: number | string, status: number | string) =>
+  put(`${BASE}/org/${id}/status`, null, { status })
 export const deleteOrg = (id: number | string) => del(`${BASE}/org/${id}`)
 export const getOrgAuditList = (params?: QueryParams) => get(`${BASE}/org/cert-audit`, params)
 export const reviewOrgCert = (id: number | string, authStatus: string, auditNote?: string) =>
@@ -231,10 +235,16 @@ export const reviewOrgCert = (id: number | string, authStatus: string, auditNote
 /* ---------------------------------- 权限审计 ---------------------------------- */
 
 export const getRoleList = (params?: QueryParams) => get(`${BASE}/permission/role/list`, params)
+export const getRoleSummary = (params?: QueryParams) => get(`${BASE}/permission/role/summary`, params)
 export const getRoleDetail = (id: number | string) => get(`${BASE}/permission/role/${id}`)
 export const createRole = (data: unknown) => post(`${BASE}/permission/role`, data)
 export const updateRole = (id: number | string, data: unknown) =>
   put(`${BASE}/permission/role/${id}`, data)
+export const updateRoleStatus = (id: number | string, status: number | string) =>
+  put(`${BASE}/permission/role/${id}/status`, null, { status })
+/** 覆盖式保存角色的权限点绑定：传"保存后的全部 id"，返回实际生效条数 */
+export const assignRoleMenus = (id: number | string, menuIds: Array<number | string>) =>
+  put<number>(`${BASE}/permission/role/${id}/menus`, menuIds)
 export const deleteRole = (id: number | string) => del(`${BASE}/permission/role/${id}`)
 export const getPermissionStatistics = (params?: QueryParams) =>
   get(`${BASE}/permission/statistics`, params)
@@ -243,9 +253,37 @@ export const getPermissionChangeLogs = (params?: QueryParams) =>
   get(`${BASE}/permission/change-log`, params)
 export const getPermissionAnomaly = (params?: QueryParams) =>
   get(`${BASE}/permission/anomaly`, params)
+/** 立刻扫描一次（页面「重新检测」；与每日定时任务共用后端同一处实现） */
+export const scanPermissionAnomaly = () => post(`${BASE}/permission/anomaly/scan`)
+/** 巡检规则与阈值（页面的「判定口径」按它渲染） */
+export const getPermissionRules = () => get(`${BASE}/permission/rules`)
+/* ---------- 权限点（按钮级 / API 级，2026-11-02） ---------- */
+/** 权限点目录：由后端真实端点映射同步，只含写方法 */
+export const getPermissionPoints = (params?: QueryParams) => get(`${BASE}/permission/points`, params)
+/** 立刻同步端点目录（幂等；代码里已消失的端点会被置为下线） */
+export const syncPermissionPoints = () => post(`${BASE}/permission/points/sync`)
+/** 某角色已持有的权限点 id（一律字符串，18 位主键不能过 Number） */
+export const getRolePoints = (id: number | string) => get<string[]>(`${BASE}/permission/role/${id}/points`)
+/** 覆盖式保存某角色的权限点授权：勾上即收紧 */
+export const assignRolePoints = (id: number | string, permIds: Array<number | string>) =>
+  put<number>(`${BASE}/permission/role/${id}/points`, permIds)
+/** 当前调用者的权限点视图（超管标志 + 本地账号 + 已持有编码） */
+export const getMyPermissionPoints = () => get(`${BASE}/permission/mine`)
+/** 授权申请列表；status 不传即不按状态筛（矩阵页默认选「待处理」，兜底口径在前端一处） */
+export const getPermissionRequests = (params?: QueryParams) => get(`${BASE}/permission/requests`, params)
+/** 处理一条授权申请：同意即把该点真的授给申请人所在的角色 */
+export const handlePermissionRequest = (id: number | string, approve: boolean, remark?: string) =>
+  put<{ status?: string; granted?: number; message?: string }>(
+    `${BASE}/permission/requests/${id}/handle`,
+    { approve, remark },
+  )
 /** 操作日志（对应页面 /permission/log） */
 export const getOperationLogs = (params?: QueryParams) =>
   get(`${BASE}/permission/operation-log`, params)
+export const getOperationLogSummary = (params?: QueryParams) =>
+  get(`${BASE}/permission/operation-log/summary`, params)
+export const getOperationLogModules = () =>
+  get<string[]>(`${BASE}/permission/operation-log/modules`)
 
 /* ---------------------------------- 数据标准 ---------------------------------- */
 
@@ -273,6 +311,15 @@ export const testCodeRule = (id: number | string, data?: unknown) =>
 
 export const getDataFormatList = (params?: QueryParams) => get(`${BASE}/standard/format/list`, params)
 export const createDataFormat = (data: unknown) => post(`${BASE}/standard/format`, data)
+export const updateDataFormat = (id: number | string, data: unknown) =>
+  put(`${BASE}/standard/format/${id}`, data)
+export const updateDataFormatStatus = (id: number | string, status: string) =>
+  put(`${BASE}/standard/format/${id}/status`, null, { status })
+export const createStandardChange = (data: unknown) => post(`${BASE}/standard/change-approve`, data)
+export const getMetadataList = (params?: QueryParams) => get(`${BASE}/standard/metadata`, params)
+export const createMetadata = (data: unknown) => post(`${BASE}/standard/metadata`, data)
+export const updateMetadata = (id: number | string, data: unknown) =>
+  put(`${BASE}/standard/metadata/${id}`, data)
 export const getChangeApproveList = (params?: QueryParams) =>
   get(`${BASE}/standard/change-approve`, params)
 export const approveStandardChange = (id: number | string, status: string, remark?: string) =>
@@ -345,6 +392,9 @@ export const updateProduct = (id: number | string, data: unknown) =>
 export const deleteProduct = (id: number | string) => del(`${BASE}/product/${id}`)
 export const updateProductStatus = (id: number | string, status: string) =>
   put(`${BASE}/product/${id}/status`, null, { status })
+/** SPU 准入审核：只改 audit_status（PENDING / APPROVED / REJECTED），不动上下架。 */
+export const auditProduct = (id: number | string, auditStatus: string) =>
+  put(`${BASE}/product/${id}/audit`, null, { auditStatus })
 export const getProductStatistics = (params?: QueryParams) =>
   get(`${BASE}/product/statistics`, params)
 
@@ -395,6 +445,67 @@ export const createSupplier = (data: unknown) => post(`${BASE}/customer/supplier
 export const updateSupplier = (id: number | string, data: unknown) =>
   put(`${BASE}/customer/supplier/${id}`, data)
 export const deleteSupplier = (id: number | string) => del(`${BASE}/customer/supplier/${id}`)
+
+/* ---------------------------- 商品品类 / 属性模板 ---------------------------- */
+
+/** 品类树（主数据业务接口族，非 /admin 前缀）。 */
+export const getProductCategoryTree = (params?: QueryParams) =>
+  get('/api/master-data/products/categories/tree', params)
+
+/** 属性模板列表；传 categoryId 时只取该品类下的属性。 */
+export const getProductAttributeList = (params?: QueryParams) =>
+  get('/api/product/attribute', params)
+export const createProductAttribute = (data: unknown) => post('/api/product/attribute', data)
+export const updateProductAttribute = (id: number | string, data: unknown) =>
+  put(`/api/product/attribute/${id}`, data)
+export const deleteProductAttribute = (id: number | string) =>
+  del(`/api/product/attribute/${id}`)
+
+/* --------------------------- 平台运营账号（core-platform） --------------------------- */
+
+/**
+ * 运营账号列表（带角色码/实名状态）。
+ *
+ * <p>账号主档在 core-platform，不在主数据库；本模块只做只读查看与角色目录，
+ * 账号与角色的绑定、冻结、重置密码统一在用户中心运营端办理。</p>
+ */
+export const getPlatformOpsUsers = (params?: QueryParams) =>
+  get('/api/v1/admin/uc/users', params)
+export const getPlatformRoles = () => get('/api/v1/admin/roles')
+
+/* ------------------------- 消息模板（core-platform 用户中心） ------------------------- */
+
+export const getMessageTemplates = (params?: QueryParams) =>
+  get('/api/v1/admin/uc/message-templates', params)
+export const createMessageTemplate = (data: unknown) =>
+  post('/api/v1/admin/uc/message-templates', data)
+export const updateMessageTemplate = (id: number | string, data: unknown) =>
+  put(`/api/v1/admin/uc/message-templates/${id}`, data)
+
+/** 权限点目录（菜单树，权限点即菜单节点上的 perms）。 */
+export const getMenuTree = () => get('/api/system/menu/tree')
+
+/* ------------------------------- 行政区划（地址域） ------------------------------- */
+
+export const getRegionTree = (params?: QueryParams) =>
+  get('/api/master-data/address/regions/tree', params)
+export const createRegion = (data: unknown) => post('/api/master-data/address/regions', data)
+export const updateRegion = (regionId: string, data: unknown) =>
+  put(`/api/master-data/address/regions/${regionId}`, data)
+
+/* ------------------------------- 黑名单 / 公告（运营端） ------------------------------- */
+
+export const getBlacklistPage = (params?: QueryParams) => get(`${BASE}/blacklist`, params)
+export const createBlacklist = (data: unknown) => post(`${BASE}/blacklist`, data)
+export const releaseBlacklist = (id: number | string, reason?: string) =>
+  put(`${BASE}/blacklist/${id}/release`, null, { reason })
+
+export const getAnnouncementPage = (params?: QueryParams) => get(`${BASE}/announcement`, params)
+export const createAnnouncement = (data: unknown) => post(`${BASE}/announcement`, data)
+export const updateAnnouncement = (id: number | string, data: unknown) =>
+  put(`${BASE}/announcement/${id}`, data)
+export const publishAnnouncement = (id: number | string) => put(`${BASE}/announcement/${id}/publish`)
+export const offlineAnnouncement = (id: number | string) => put(`${BASE}/announcement/${id}/offline`)
 
 /* ---------------------------------- 系统配置 ---------------------------------- */
 

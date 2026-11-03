@@ -1,14 +1,20 @@
 #!/usr/bin/env node
-/** 买家中心“发布采购需求”独立菜单回归（2026-10-22）。 */
+/** 买家中心从采购需求列表进入发布页回归（2026-10-24）。 */
 import { createRequire } from 'node:module'
+import { existsSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const require2 = createRequire(path.join(ROOT, 'agri-production/frontend/package.json'))
-const puppeteer = require2('puppeteer')
+const require2 = createRequire(path.join('C:/Users/71502/.workbuddy-ai/binaries/node/workspace', 'noop.js'))
+const { chromium } = require2('playwright-core')
+
+const BROWSER = [
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+].find((candidate) => existsSync(candidate))
 const TRADE = 'http://localhost:8086'
 const OUT = 'C:/Users/71502/.codex/visualizations/2026/10/16/01a14244-ead8-7ab0-8c7c-df7abac44648'
 const demandName = `买家中心采购需求联调${Date.now().toString().slice(-6)}`
@@ -28,18 +34,18 @@ const fill = async (page, selector, value) => page.evaluate(({ target, next }) =
 }, { target: selector, next: value })
 
 let createdId = null
-const browser = await puppeteer.launch({
-  executablePath: 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
-  headless: 'new',
+const browser = await chromium.launch({
+  headless: true,
+  executablePath: BROWSER,
   args: ['--no-sandbox'],
 })
 try {
-  const page = await browser.newPage()
+  const page = await (await browser.newContext({ viewport: { width: 1440, height: 1000 } })).newPage()
   const errors = []
   page.on('pageerror', (error) => errors.push(String(error)))
-  await page.setViewport({ width: 1440, height: 1000 })
-  await page.goto(`${TRADE}/member/buyer?tab=publish`, { waitUntil: 'networkidle2', timeout: 60000 })
-  await page.waitForFunction(() => window.location.port === '8090', { timeout: 20000 })
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await page.goto(`${TRADE}/member/buyer?tab=demand-list`, { waitUntil: 'networkidle', timeout: 60000 })
+  await page.waitForFunction(() => window.location.port === '8090', undefined, { timeout: 20000 })
   await page.waitForSelector('button[role="tab"]', { timeout: 20000 })
   await page.evaluate(() => {
     const tab = [...document.querySelectorAll('button[role="tab"]')]
@@ -58,20 +64,24 @@ try {
     if (page.url().includes(':8086/member/buyer')) break
   }
   await page.waitForSelector('.mc-shell', { timeout: 30000 })
-  await page.waitForSelector('.demand-create-page.is-embedded', { timeout: 20000 })
-  check(page.url().includes('tab=publish'), '买家中心独立菜单地址进入发布采购需求')
-
   const menu = await page.$$eval('.mc-side-nav button', (items) =>
-    items.map((item) => ({ text: item.textContent?.trim(), active: item.classList.contains('on') })))
-  check(menu.some((item) => item.text === '发布采购需求' && item.active),
-    '买家中心包含并选中发布采购需求菜单')
+    items.map((item) => item.textContent?.trim()))
+  check(!menu.includes('发布采购需求'), '买家中心侧栏不再显示发布采购需求菜单')
+  await page.evaluate(() => {
+    const button = [...document.querySelectorAll('button')]
+      .find((item) => (item.textContent ?? '').trim() === '发布采购需求')
+    button?.click()
+  })
+  await page.waitForFunction(() => new URLSearchParams(location.search).get('tab') === 'publish')
+  await page.waitForSelector('.demand-create-page.is-embedded', { timeout: 20000 })
+  check(page.url().includes('tab=publish'), '采购需求列表按钮进入发布采购需求')
   const formText = await page.evaluate(() => document.body.innerText)
   check(formText.includes('发布采购需求') && formText.includes('智能解析并预填'),
     '独立菜单内加载完整发布需求功能')
   await page.screenshot({ path: path.join(OUT, 'buyer-publish-demand.png'), fullPage: true })
 
   await page.goto(`${TRADE}/demand/create?productId=7011&quantity=10`, {
-    waitUntil: 'networkidle2',
+    waitUntil: 'networkidle',
     timeout: 60000,
   })
   await page.waitForFunction(() => window.location.pathname === '/member/buyer'
@@ -119,7 +129,16 @@ try {
       qualityRequirement: '联调质量要求',
     }),
   }).then((response) => response.json())
-  check(created.code === 200 && created.data === true, '通过买家中心发布链路真实创建采购需求')
+  /**
+   * POST /api/trade/demand 的回参是新建出来的需求本体（`ApiResponse<Demand>`），不是布尔。
+   * 断言按真实契约读 id 与名称，再拿它去列表接口回查 —— 只判 `data === true` 会永远红，
+   * 而且掩盖了"到底建成什么样"这一层证据。
+   */
+  check(created.code === 200 && /^\d+$/.test(String(created.data?.id ?? ''))
+    && created.data?.demandName === demandName,
+  '通过买家中心发布链路真实创建采购需求',
+    `code=${created.code} id=${created.data?.id ?? '-'} demandNo=${created.data?.demandNo ?? '-'}`)
+  if (created.data?.id) createdId = String(created.data.id)
 
   const pageResult = await fetch(
     `http://localhost:8086/api/trade/demand/page?pageNum=1&pageSize=20&keyword=${encodeURIComponent(demandName)}`,
@@ -129,13 +148,13 @@ try {
   createdId = demand?.id ?? null
   check(pageResult.code === 200 && Boolean(demand), '新建采购需求可从真实接口查询')
 
-  await page.goto(`${TRADE}/member/buyer?tab=inquiry`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.goto(`${TRADE}/member/buyer?tab=demand-list`, { waitUntil: 'networkidle', timeout: 60000 })
   await page.waitForSelector('.mc-shell', { timeout: 20000 })
-  await page.reload({ waitUntil: 'networkidle2', timeout: 60000 })
+  await page.reload({ waitUntil: 'networkidle', timeout: 60000 })
   await page.waitForSelector('.mc-table', { timeout: 20000 })
   const demandTableText = await page.evaluate(() =>
     [...document.querySelectorAll('.mc-table')].map((table) => table.innerText).join('\n'))
-  check(demandTableText.includes(demandName), '采购需求进入买家中心需求管理列表',
+  check(demandTableText.includes(demandName), '采购需求进入买家中心采购需求列表',
     demandTableText.replace(/\s+/g, ' ').slice(0, 240))
   check(errors.length === 0, '发布采购需求页面无未捕获脚本异常', errors.slice(0, 2).join(' | '))
 } catch (error) {

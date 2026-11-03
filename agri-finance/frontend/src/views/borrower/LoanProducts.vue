@@ -53,6 +53,10 @@
         </dl>
         <el-button class="finance-action-button" @click="apply(product)">申请此产品</el-button>
       </article>
+      <div v-if="!loading && !financeProducts.length" class="finance-card product-catalog-empty">
+        <strong>暂无可申请融资产品</strong>
+        <p>资金方尚未启用产品，请稍后刷新或联系平台运营。</p>
+      </div>
     </div>
 
     <section class="finance-card">
@@ -72,16 +76,26 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import { financeApi, money } from '@/api/finance'
-import { financeProducts } from '@/data/products'
+import { loadFinanceProducts } from '@/data/products'
 
 const router = useRouter()
 const credit = ref(null)
+const financeProducts = ref([])
 const loading = ref(true)
 
 onMounted(async () => {
   try {
-    credit.value = await financeApi.credit()
+    const [creditResult, productsResult] = await Promise.allSettled([
+      financeApi.credit(),
+      loadFinanceProducts(),
+    ])
+    credit.value = creditResult.status === 'fulfilled' ? creditResult.value : null
+    financeProducts.value = productsResult.status === 'fulfilled' ? productsResult.value : []
+    if (productsResult.status === 'rejected') {
+      ElMessage.error(productsResult.reason?.message || '融资产品加载失败')
+    }
   } finally {
     loading.value = false
   }
@@ -114,7 +128,7 @@ function apply(product) {
 
 .product-credit-banner > div:first-child > span {
   color: rgba(255, 255, 255, .62);
-  font-size: 9px;
+  font-size: var(--fin-fs-xs);
 }
 
 .product-credit-banner strong {
@@ -126,7 +140,7 @@ function apply(product) {
 .product-credit-banner p {
   margin: 4px 0 0;
   color: rgba(255, 255, 255, .55);
-  font-size: 8.5px;
+  font-size: var(--fin-fs-xs);
 }
 
 .product-credit-steps {
@@ -139,7 +153,7 @@ function apply(product) {
   align-items: center;
   gap: 6px;
   color: rgba(255, 255, 255, .7);
-  font-size: 8.5px;
+  font-size: var(--fin-fs-xs);
   white-space: nowrap;
 }
 
@@ -153,7 +167,7 @@ function apply(product) {
   background: rgba(255, 255, 255, .08);
   color: #d9f5e4;
   font-family: ui-monospace, Consolas, monospace;
-  font-size: 7px;
+  font-size: var(--fin-fs-xs);
 }
 
 .product-credit-steps i {
@@ -167,6 +181,23 @@ function apply(product) {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 11px;
+}
+
+.product-catalog-empty {
+  grid-column: 1 / -1;
+  padding: 28px;
+  text-align: center;
+}
+
+.product-catalog-empty strong {
+  color: #315342;
+  font-size: 12px;
+}
+
+.product-catalog-empty p {
+  margin: 6px 0 0;
+  color: #84958b;
+  font-size: var(--fin-fs-xs);
 }
 
 .product-catalog-card {
@@ -198,7 +229,7 @@ function apply(product) {
   background: #e9f7ef;
   color: #12764a;
   font-family: ui-monospace, Consolas, monospace;
-  font-size: 8px;
+  font-size: var(--fin-fs-xs);
   font-weight: 800;
 }
 
@@ -209,7 +240,7 @@ function apply(product) {
 
 .product-catalog-head small {
   color: #93a098;
-  font-size: 6.5px;
+  font-size: var(--fin-fs-xs);
   font-weight: 700;
   letter-spacing: .08em;
 }
@@ -224,7 +255,7 @@ function apply(product) {
   min-height: 52px;
   margin: 0;
   color: #7d8e83;
-  font-size: 9px;
+  font-size: var(--fin-fs-xs);
   line-height: 1.65;
 }
 
@@ -240,7 +271,7 @@ function apply(product) {
   border-radius: 6px;
   background: #f3f8f5;
   color: #5e7967;
-  font-size: 8px;
+  font-size: var(--fin-fs-xs);
 }
 
 .product-catalog-card dl {
@@ -257,13 +288,13 @@ function apply(product) {
 
 .product-catalog-card dt {
   color: #8a9990;
-  font-size: 8px;
+  font-size: var(--fin-fs-xs);
 }
 
 .product-catalog-card dd {
   margin: 0;
   color: #425c4c;
-  font-size: 9px;
+  font-size: var(--fin-fs-xs);
   font-weight: 650;
 }
 
@@ -293,12 +324,12 @@ function apply(product) {
 .product-notices b {
   color: #1e7e51;
   font-family: ui-monospace, Consolas, monospace;
-  font-size: 9px;
+  font-size: var(--fin-fs-xs);
 }
 
 .product-notices span {
   color: #71857a;
-  font-size: 9px;
+  font-size: var(--fin-fs-xs);
   line-height: 1.6;
 }
 

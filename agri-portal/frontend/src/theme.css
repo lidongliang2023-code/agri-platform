@@ -139,7 +139,7 @@ table { border-collapse: collapse; width: 100%; }
   box-shadow: none; overflow: hidden;
 }
 .brand .logo svg { width: 36px; height: 36px; }
-.brand small { display: block; font-size: 10px; font-weight: 500; color: var(--ink-500); letter-spacing: 3px; }
+.brand small { display: block; font-size: var(--agri-font-size-micro); font-weight: 500; color: var(--ink-500); letter-spacing: 3px; }
 
 .main-nav { display: flex; align-items: center; gap: 4px; flex: 1; }
 .main-nav a { padding: 8px 14px; border-radius: var(--r-sm); color: var(--ink-700); font-weight: 500; transition: .18s; }
@@ -253,7 +253,7 @@ table { border-collapse: collapse; width: 100%; }
 .app-side .brand { color: #fff; padding: 20px; border-bottom: 1px solid rgba(255,255,255,.1); }
 .app-side .brand small { color: rgba(255,255,255,.5); }
 .side-nav { padding: 12px; overflow-y: auto; flex: 1; }
-.side-nav .group { font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: rgba(255,255,255,.35); padding: 14px 12px 6px; }
+.side-nav .group { font-size: var(--agri-font-size-micro); letter-spacing: 1px; text-transform: uppercase; color: rgba(255,255,255,.35); padding: 14px 12px 6px; }
 .side-nav a { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--r-sm); color: rgba(255,255,255,.78); font-size: 14px; transition: .16s; }
 .side-nav a svg { width: 17px; height: 17px; opacity: .8; }
 .side-nav a:hover { background: rgba(255,255,255,.08); color: #fff; }
@@ -340,7 +340,7 @@ table { border-collapse: collapse; width: 100%; }
 .gauge svg { transform: rotate(-90deg); }
 .gauge .lbl { position: absolute; text-align: center; }
 .gauge .lbl .n { font-family: var(--mono); font-size: 24px; font-weight: 800; color: #EAFFF5; }
-.gauge .lbl .t { font-size: 11px; color: rgba(220,239,228,.5); }
+.gauge .lbl .t { font-size: var(--agri-font-size-micro); color: rgba(220,239,228,.5); }
 .dot-pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--green-400); box-shadow: 0 0 0 0 rgba(47,184,119,.7); animation: pulse 1.8s infinite; }
 @keyframes pulse { 70% { box-shadow: 0 0 0 9px rgba(47,184,119,0); } 100% { box-shadow: 0 0 0 0 rgba(47,184,119,0); } }
 
@@ -359,7 +359,7 @@ table { border-collapse: collapse; width: 100%; }
 .m-search { background: rgba(255,255,255,.92); border-radius: var(--r-pill); display: flex; align-items: center; gap: 8px; padding: 8px 14px; font-size: 13px; color: var(--ink-400); }
 .m-scroll { flex: 1; overflow-y: auto; }
 .m-bottom { height: 58px; background: #fff; border-top: 1px solid var(--line); display: flex; }
-.m-bottom a { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font-size: 10.5px; color: var(--ink-400); }
+.m-bottom a { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font-size: var(--agri-font-size-micro); color: var(--ink-400); }
 .m-bottom a.on { color: var(--green-600); font-weight: 700; }
 .m-bottom a svg { width: 20px; height: 20px; }
 .m-cap { text-align: center; font-weight: 700; color: var(--ink-700); margin-top: 12px; font-size: 13px; }
@@ -416,10 +416,10 @@ table { border-collapse: collapse; width: 100%; }
 .engine a.mod { display: block; transition: .18s; }
 .engine a.mod:hover { border-color: var(--green-400); box-shadow: var(--shadow-sm); transform: translateX(2px); }
 .engine .mod .n { font-weight: 700; font-size: 13.5px; }
-.engine .mod .d { font-size: 11.5px; color: var(--ink-500); margin-top: 3px; }
+.engine .mod .d { font-size: var(--agri-font-size-micro); color: var(--ink-500); margin-top: 3px; }
 .mod-chip { background: #fff; border: 1px solid var(--line); border-radius: var(--r-sm); padding: 14px 12px; text-align: center; font-weight: 700; font-size: 13.5px; transition: .18s; }
 .mod-chip:hover { border-color: var(--green-400); box-shadow: var(--shadow-sm); transform: translateY(-2px); }
-.mod-chip small { display: block; font-weight: 500; color: var(--ink-500); font-size: 11px; margin-top: 4px; }
+.mod-chip small { display: block; font-weight: 500; color: var(--ink-500); font-size: var(--agri-font-size-micro); margin-top: 4px; }
 .data-foundation { background: #fff; border: 1px dashed var(--green-300); border-radius: var(--r-md); padding: 14px; margin-top: 0; }
 .data-foundation .layer-label { margin-bottom: 10px; }
 .df-cards { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
@@ -446,3 +446,21 @@ table { border-collapse: collapse; width: 100%; }
 .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
 .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
 .grid-5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; }
+
+/* ============================================================================
+ * 字号阶梯（与 packages/agri-shared/src/tokens/tokens.css 同值同名）
+ *
+ * 本应用不依赖 @agri/shared，所以在这里镜像一份令牌；改值时两边一起改。
+ * --agri-font-size-micro 是可读下限：可见文字不得小于 12px，
+ * 层级靠字重与颜色拉开，不靠把字压小。
+ * ========================================================================== */
+:root {
+  --agri-font-size-micro: 12px;
+  --agri-font-size-aux: 13px;
+  --agri-font-size-base: 14px;
+  --agri-font-size-card-header: 15px;
+  --agri-font-size-card-title: 16px;
+  --agri-font-size-section: 18px;
+  --agri-font-size-page: 22px;
+  --agri-font-size-display: 28px;
+}

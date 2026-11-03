@@ -55,10 +55,22 @@ export const BORDER = {
   radius: 6,
 } as const
 
-/** 字号 */
+/**
+ * 字号
+ *
+ * <p>`sizeMicro` 是**可读下限**：各子系统原先合计有 798 处写在 6–11.5px
+ * （交易端 410、门户 225、主数据 100…），1080p 上表头与金额要凑近屏幕才读得清。
+ * 层级靠字重与颜色拉开，不靠把字压到 12px 以下。</p>
+ */
 export const FONT = {
+  sizeMicro: 12,
+  sizeAux: 13,
   sizeBase: 14,
   sizeCardHeader: 15,
+  sizeCardTitle: 16,
+  sizeSection: 18,
+  sizePage: 22,
+  sizeDisplay: 28,
 } as const
 
 /**
@@ -76,8 +88,14 @@ export const CSS_VARIABLES: Record<string, string> = {
   '--agri-content-bg': SURFACE.contentBg,
   '--agri-container-bg': SURFACE.containerBg,
   '--agri-radius': `${BORDER.radius}px`,
+  '--agri-font-size-micro': `${FONT.sizeMicro}px`,
+  '--agri-font-size-aux': `${FONT.sizeAux}px`,
   '--agri-font-size-base': `${FONT.sizeBase}px`,
   '--agri-font-size-card-header': `${FONT.sizeCardHeader}px`,
+  '--agri-font-size-card-title': `${FONT.sizeCardTitle}px`,
+  '--agri-font-size-section': `${FONT.sizeSection}px`,
+  '--agri-font-size-page': `${FONT.sizePage}px`,
+  '--agri-font-size-display': `${FONT.sizeDisplay}px`,
   '--agri-sider-width': `${LAYOUT_SIZE.siderWidth}px`,
   '--agri-sider-collapsed-width': `${LAYOUT_SIZE.siderCollapsedWidth}px`,
   '--agri-header-height': `${LAYOUT_SIZE.headerHeight}px`,

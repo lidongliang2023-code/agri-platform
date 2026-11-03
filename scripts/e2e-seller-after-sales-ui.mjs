@@ -2,13 +2,19 @@
 /** 卖家中心售后纠纷与物流管理页面回归。 */
 import { execFileSync } from 'node:child_process'
 import { createRequire } from 'node:module'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const require2 = createRequire(path.join(ROOT, 'agri-production/frontend/package.json'))
-const puppeteer = require2('puppeteer')
+const require2 = createRequire(path.join('C:/Users/71502/.workbuddy-ai/binaries/node/workspace', 'noop.js'))
+const { chromium } = require2('playwright-core')
+
+const BROWSER = [
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+].find((candidate) => existsSync(candidate))
 const BASE = 'http://localhost:8086'
 const CORE = 'http://localhost:8093'
 const OUT = 'C:/Users/71502/.codex/visualizations/2026/10/16/01a14244-ead8-7ab0-8c7c-df7abac44648'
@@ -68,18 +74,18 @@ const disputeNo = created?.code === 200
   : ''
 check(Boolean(disputeNo), '准备一张真实待处理售后工单', disputeNo || created?.message || '')
 
-const browser = await puppeteer.launch({
-  executablePath: 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
-  headless: 'new',
+const browser = await chromium.launch({
+  headless: true,
+  executablePath: BROWSER,
   args: ['--no-sandbox'],
 })
 try {
-  const page = await browser.newPage()
+  const page = await (await browser.newContext({ viewport: { width: 1440, height: 1000 } })).newPage()
   const errors = []
   page.on('pageerror', (error) => errors.push(String(error)))
-  await page.setViewport({ width: 1440, height: 1000 })
-  await page.goto(`${BASE}/member/seller?tab=after`, { waitUntil: 'networkidle2', timeout: 60000 })
-  await page.waitForFunction(() => window.location.port === '8090', { timeout: 20000 })
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await page.goto(`${BASE}/member/seller?tab=after`, { waitUntil: 'networkidle', timeout: 60000 })
+  await page.waitForFunction(() => window.location.port === '8090', undefined, { timeout: 20000 })
   await page.waitForSelector('button[role="tab"]', { timeout: 20000 })
   await page.evaluate(() => {
     const tab = [...document.querySelectorAll('button[role="tab"]')]
@@ -98,7 +104,8 @@ try {
     if (page.url().includes('/member/seller')) break
   }
   await page.waitForSelector('.after-workbench', { timeout: 30000 })
-  await page.waitForNetworkIdle({ idleTime: 700, timeout: 15000 }).catch(() => {})
+  await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 700))
 
   const afterText = await page.evaluate(() => document.body.innerText)
   check(afterText.includes('纠纷管理') && afterText.includes('售后工单') && afterText.includes('本页待处理'),
@@ -112,7 +119,7 @@ try {
       .find((item) => (item.textContent ?? '').includes('发起售后'))
     button?.click()
   })
-  await page.waitForFunction(() => document.body.innerText.includes('发起售后纠纷'), { timeout: 10000 })
+  await page.waitForFunction(() => document.body.innerText.includes('发起售后纠纷'), undefined, { timeout: 10000 })
   const createText = await page.evaluate(() => document.body.innerText)
   check(createText.includes('工单信息') && createText.includes('发起条件'), '发起售后使用独立页面和引导侧栏')
   await page.click('.after-back')
@@ -127,7 +134,7 @@ try {
     return true
   }, disputeNo)
   check(openedDetail, '待处理纠纷可进入独立详情页')
-  await page.waitForFunction(() => document.body.innerText.includes('售后诉求'), { timeout: 10000 })
+  await page.waitForFunction(() => document.body.innerText.includes('售后诉求'), undefined, { timeout: 10000 })
   const detailText = await page.evaluate(() => document.body.innerText)
   check(detailText.includes('争议双方') && detailText.includes('处理记录') && detailText.includes('处理进度'),
     '纠纷详情展示双方、诉求、处理记录和进度')
@@ -138,7 +145,7 @@ try {
       .find((item) => item.textContent?.includes('处理工单'))
     button?.click()
   })
-  await page.waitForFunction(() => document.body.innerText.includes('处理售后工单'), { timeout: 10000 })
+  await page.waitForFunction(() => document.body.innerText.includes('处理售后工单'), undefined, { timeout: 10000 })
   const processText = await page.evaluate(() => document.body.innerText)
   check(processText.includes('双方处理结果') && processText.includes('确认了结'),
     '处理纠纷使用独立页面')
@@ -155,9 +162,10 @@ try {
   const resolvedText = await page.evaluate(() => document.body.innerText)
   check(resolvedText.includes('已解决'), '纠纷处理结果正确回写详情页')
 
-  await page.goto(`${BASE}/member/seller?tab=ship`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.goto(`${BASE}/member/seller?tab=ship`, { waitUntil: 'networkidle', timeout: 60000 })
   await page.waitForSelector('.logistics-workbench', { timeout: 30000 })
-  await page.waitForNetworkIdle({ idleTime: 700, timeout: 15000 }).catch(() => {})
+  await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 700))
   const logisticsText = await page.evaluate(() => document.body.innerText)
   check(logisticsText.includes('待发货订单') && logisticsText.includes('物流管理') && logisticsText.includes('本页运输中'),
     '卖家发货页统一展示待发货订单和物流工作区')
@@ -175,7 +183,7 @@ try {
     return true
   })
   check(openedLogistics, '物流列表可进入独立详情页')
-  await page.waitForFunction(() => document.body.innerText.includes('运输路线'), { timeout: 10000 })
+  await page.waitForFunction(() => document.body.innerText.includes('运输路线'), undefined, { timeout: 10000 })
   const logisticsDetailText = await page.evaluate(() => document.body.innerText)
   check(logisticsDetailText.includes('物流信息') && logisticsDetailText.includes('履约进度') && logisticsDetailText.includes('快捷操作'),
     '物流详情展示路线、物流信息、履约进度和操作')
@@ -186,31 +194,31 @@ try {
       .find((item) => item.textContent?.includes('查看轨迹'))
     button?.click()
   })
-  await page.waitForFunction(() => document.body.innerText.includes('运输节点'), { timeout: 10000 })
+  await page.waitForFunction(() => document.body.innerText.includes('运输节点'), undefined, { timeout: 10000 })
   const traceText = await page.evaluate(() => document.body.innerText)
   check(traceText.includes('物流轨迹') && (traceText.includes('已签收') || traceText.includes('已揽收') || traceText.includes('运输中')),
     '物流轨迹使用独立时间线页面')
   await page.screenshot({ path: path.join(OUT, 'seller-logistics-trace.png'), fullPage: true })
   await page.click('.after-back')
-  await page.waitForFunction(() => document.body.innerText.includes('运输路线'), { timeout: 10000 })
+  await page.waitForFunction(() => document.body.innerText.includes('运输路线'), undefined, { timeout: 10000 })
 
   await page.evaluate(() => {
     const button = [...document.querySelectorAll('.logistics-hero-actions button')]
       .find((item) => item.textContent?.includes('编辑'))
     button?.click()
   })
-  await page.waitForFunction(() => document.body.innerText.includes('编辑物流信息'), { timeout: 10000 })
+  await page.waitForFunction(() => document.body.innerText.includes('编辑物流信息'), undefined, { timeout: 10000 })
   const editText = await page.evaluate(() => document.body.innerText)
   check(editText.includes('物流与收发货信息') && editText.includes('保存物流信息'),
     '物流编辑使用独立页面并保留完整字段')
   await page.screenshot({ path: path.join(OUT, 'seller-logistics-edit.png'), fullPage: true })
   await page.click('.after-back')
-  await page.waitForFunction(() => document.body.innerText.includes('运输路线'), { timeout: 10000 })
+  await page.waitForFunction(() => document.body.innerText.includes('运输路线'), undefined, { timeout: 10000 })
   await page.click('.after-back')
   await page.waitForSelector('.logistics-workbench', { timeout: 10000 })
 
-  await page.setViewport({ width: 390, height: 844 })
-  await page.reload({ waitUntil: 'networkidle2', timeout: 60000 })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.reload({ waitUntil: 'networkidle', timeout: 60000 })
   await page.waitForSelector('.logistics-workbench', { timeout: 30000 })
   const noOverflow = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)
   check(noOverflow, '390px 卖家物流页无横向溢出')

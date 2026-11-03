@@ -20,6 +20,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   PageContainer,
   ModalForm,
+  ProFormDateTimePicker,
   ProFormDigit,
   ProFormRadio,
   ProFormSelect,
@@ -31,7 +32,6 @@ import {
   Button,
   Card,
   Col,
-  Descriptions,
   Divider,
   Empty,
   Image,
@@ -62,20 +62,24 @@ import {
   submitTaskResult,
   updateTask,
 } from '@/api/tasks'
+import { fetchUsagesByTask } from '@/api/inputs'
 import { getPlot } from '@/api/plots'
 import { listMembers } from '@/api/members'
-import type { Member, Task, TaskRecord } from '@/types'
+import type { InputUsageRecord, Member, Task, TaskRecord } from '@/types'
 import {
   ACCEPT_STATUS_META,
   TASK_ACCEPT_PENDING,
-  TASK_PRIORITY_COLOR_MAP,
   TASK_PRIORITY_LABEL_MAP,
+  TASK_PRIORITY_OPTIONS,
   TASK_RECORD_TYPE_OPTIONS,
   TASK_STATUS_COLOR_MAP,
   TASK_STATUS_LABEL_MAP,
   TASK_TYPE_LABEL_MAP,
+  TASK_TYPE_OPTIONS,
 } from '@/types'
 import { isTaskDone, isTaskExecuting } from '@/types/task'
+import { DetailInfoGrid } from '@/components'
+import type { DetailInfoItem } from '@/components'
 
 /** 执行记录类型文本 */
 const RECORD_TYPE_TEXT: Record<number, string> = {
@@ -107,21 +111,6 @@ function parsePhotoList(record: TaskRecord): string[] {
     .filter(Boolean)
 }
 
-/** 解析关联投入品使用记录 ID */
-function parseUsageIds(raw?: string): string[] {
-  if (!raw) return []
-  try {
-    const parsed: unknown = JSON.parse(raw)
-    if (Array.isArray(parsed)) return parsed.map((item) => String(item))
-  } catch {
-    // 非 JSON 时按逗号分隔处理
-  }
-  return raw
-    .split(',')
-    .map((item) => item.trim())
-    .filter(Boolean)
-}
-
 /** 打卡表单值 */
 interface CheckInFormValues {
   /** 记录类型 */
@@ -146,6 +135,34 @@ interface ReviewFormValues {
   remark?: string
 }
 
+/** 提交成果表单值 */
+interface SubmitFormValues {
+  /** 成果说明 */
+  resultDesc?: string
+  /** 成果照片地址 */
+  resultPhotoUrls?: string[]
+}
+
+/**
+ * 解析照片地址字段（JSON 数组字符串或逗号分隔）。
+ *
+ * @param raw 原始字段
+ * @returns 地址列表
+ */
+function parseUrlList(raw?: string): string[] {
+  if (!raw) return []
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    if (Array.isArray(parsed)) return parsed.map((item) => String(item))
+  } catch {
+    // 非 JSON 时按逗号分隔处理
+  }
+  return raw
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
 /**
  * 任务详情页
  *
@@ -161,6 +178,7 @@ export default function TaskDetail(): JSX.Element {
   const [assignOpen, setAssignOpen] = useState<boolean>(false)
   const [checkInOpen, setCheckInOpen] = useState<boolean>(false)
   const [editOpen, setEditOpen] = useState<boolean>(false)
+  const [submitOpen, setSubmitOpen] = useState<boolean>(false)
   const [reviewOpen, setReviewOpen] = useState<boolean>(false)
   const [reviewPass, setReviewPass] = useState<boolean>(true)
 
@@ -172,12 +190,27 @@ export default function TaskDetail(): JSX.Element {
   })
 
   const task = taskQuery.data
+  /** 可开始执行 / 可编辑 / 可转派：待处理、已派发、验收驳回后 */
+  const canStartTask = Boolean(task && ['pending', 'assigned', 'rejected'].includes(task.status))
+  /** 可提交成果：执行中 */
+  const canSubmitTask = Boolean(task && isTaskExecuting(task.status))
+  /** 可验收：已提交成果（completed/done）且验收状态为待验收 */
+  const canAcceptTask = Boolean(
+    task && isTaskDone(task.status) && task.acceptStatus === TASK_ACCEPT_PENDING,
+  )
 
   /** 执行记录 */
   const recordQuery = useQuery({
     queryKey: ['production-task-records', taskId],
     enabled: Boolean(taskId),
     queryFn: () => fetchTaskRecords(taskId, 1, 50),
+  })
+
+  /** 本任务关联的投入品使用记录（真实台账，不再依赖不存在的 relatedUsageIds 字段） */
+  const usagesQuery = useQuery({
+    queryKey: ['production-inputs', 'usages', 'task', taskId],
+    enabled: Boolean(taskId),
+    queryFn: () => fetchUsagesByTask(taskId),
   })
 
   /** 关联地块 */
@@ -206,6 +239,9 @@ export default function TaskDetail(): JSX.Element {
   const refreshTask = (): Promise<void> =>
     queryClient.invalidateQueries({ queryKey: ['production-task', taskId] })
       .then(() => queryClient.invalidateQueries({ queryKey: ['production-task-records', taskId] }))
+      .then(() =>
+        queryClient.invalidateQueries({ queryKey: ['production-inputs', 'usages', 'task', taskId] }),
+      )
       .then(() => queryClient.invalidateQueries({ queryKey: ['production-tasks'] }))
       .then(() => undefined)
 
@@ -216,15 +252,25 @@ export default function TaskDetail(): JSX.Element {
       message.success('任务已开始执行')
       void refreshTask()
     },
+    onError: (error: Error) => message.error(error.message || '开始执行失败'),
   })
 
   /** 提交成果 */
   const submitMutation = useMutation({
-    mutationFn: () => submitTaskResult(taskId),
+    mutationFn: (values: SubmitFormValues) =>
+      submitTaskResult(taskId, {
+        resultDesc: values.resultDesc,
+        resultPhotoUrls:
+          values.resultPhotoUrls && values.resultPhotoUrls.length > 0
+            ? JSON.stringify(values.resultPhotoUrls)
+            : undefined,
+      }),
     onSuccess: () => {
       message.success('成果已提交，等待验收')
+      setSubmitOpen(false)
       void refreshTask()
     },
+    onError: (error: Error) => message.error(error.message || '提交成果失败'),
   })
 
   /** 验收（通过 / 驳回） */
@@ -235,6 +281,7 @@ export default function TaskDetail(): JSX.Element {
       setReviewOpen(false)
       void refreshTask()
     },
+    onError: (error: Error) => message.error(error.message || '验收提交失败'),
   })
 
   /** 转派 */
@@ -245,6 +292,7 @@ export default function TaskDetail(): JSX.Element {
       setAssignOpen(false)
       void refreshTask()
     },
+    onError: (error: Error) => message.error(error.message || '转派失败'),
   })
 
   /** 编辑任务 */
@@ -255,6 +303,7 @@ export default function TaskDetail(): JSX.Element {
       setEditOpen(false)
       void refreshTask()
     },
+    onError: (error: Error) => message.error(error.message || '任务更新失败'),
   })
 
   /** 删除任务 */
@@ -265,6 +314,7 @@ export default function TaskDetail(): JSX.Element {
       void queryClient.invalidateQueries({ queryKey: ['production-tasks'] })
       navigate('/production/tasks')
     },
+    onError: (error: Error) => message.error(error.message || '删除失败'),
   })
 
   /** 新增执行记录（打卡） */
@@ -285,61 +335,47 @@ export default function TaskDetail(): JSX.Element {
       setCheckInOpen(false)
       void refreshTask()
     },
+    onError: (error: Error) => message.error(error.message || '执行记录上报失败'),
   })
 
   /** 任务信息描述项 */
-  const baseItems = useMemo(() => {
+  const baseItems = useMemo<DetailInfoItem[]>(() => {
     if (!task) return []
     return [
-      { key: 'taskNo', label: '任务编号', children: task.taskNo ?? '-' },
-      {
-        key: 'status',
-        label: '状态',
-        children: (
-          <Tag color={TASK_STATUS_COLOR_MAP[task.status] ?? 'default'}>
-            {TASK_STATUS_LABEL_MAP[task.status] ?? task.status}
-          </Tag>
-        ),
-      },
+      { key: 'taskNo', label: '任务编号', value: task.taskNo ?? '-' },
       {
         key: 'priority',
         label: '优先级',
-        children: (
-          <Tag color={TASK_PRIORITY_COLOR_MAP[task.priority] ?? 'default'}>
-            {TASK_PRIORITY_LABEL_MAP[task.priority] ?? '普通'}
-          </Tag>
-        ),
+        value: TASK_PRIORITY_LABEL_MAP[task.priority] ?? '普通',
       },
       {
         key: 'taskType',
         label: '任务类型',
-        children: <Tag color="geekblue">{TASK_TYPE_LABEL_MAP[task.taskType] ?? task.taskType}</Tag>,
+        value: TASK_TYPE_LABEL_MAP[task.taskType] ?? task.taskType,
       },
-      { key: 'farm', label: '所属农场', children: task.farmName ?? '-' },
+      { key: 'farm', label: '所属农场', value: task.farmName ?? '-' },
       {
         key: 'plot',
         label: '地块',
-        children: task.plotName ?? task.plotId ?? '-',
+        value: task.plotName ?? task.plotId ?? '-',
       },
-      { key: 'assignee', label: '执行人', children: task.assigneeName ?? '未派发' },
-      { key: 'assigner', label: '派发人', children: task.assignerName ?? '-' },
+      { key: 'assignee', label: '执行人', value: task.assigneeName ?? '未派发' },
+      { key: 'assigner', label: '派发人', value: task.assignerName ?? '-' },
       {
         key: 'plan',
         label: '计划时间',
-        span: 2,
-        children: `${task.planStartDate ?? '-'} ~ ${task.planEndDate ?? '-'}`,
+        value: `${task.planStartDate ?? '-'} ~ ${task.planEndDate ?? '-'}`,
       },
       {
         key: 'actual',
         label: '实际执行',
-        span: 2,
-        children: `${task.actualStartDate ?? '-'} ~ ${task.actualEndDate ?? task.completedAt ?? '-'}`,
+        value: `${task.actualStartDate ?? '-'} ~ ${task.actualEndDate ?? task.completedAt ?? '-'}`,
       },
       {
         key: 'accept',
         label: '验收状态',
-        children: (
-          <Space>
+        value: (
+          <Space size={4} wrap>
             <Tag color={ACCEPT_STATUS_META[task.acceptStatus]?.color ?? 'gold'}>
               {ACCEPT_STATUS_META[task.acceptStatus]?.label ?? '待验收'}
             </Tag>
@@ -347,12 +383,12 @@ export default function TaskDetail(): JSX.Element {
           </Space>
         ),
       },
-      { key: 'rejectCount', label: '驳回次数', children: `${task.rejectCount ?? 0} 次` },
+      { key: 'rejectCount', label: '驳回次数', value: `${task.rejectCount ?? 0} 次` },
       {
         key: 'description',
         label: '任务描述',
-        span: 3,
-        children: task.description ?? '暂无描述',
+        fullWidth: true,
+        value: task.description ?? '暂无描述',
       },
     ]
   }, [task])
@@ -366,7 +402,9 @@ export default function TaskDetail(): JSX.Element {
         color: 'gray',
         children: (
           <div>
-            <Typography.Text strong>{task.createdAt}</Typography.Text>
+            <Typography.Text strong>
+              {dayjs(task.createdAt).format('YYYY-MM-DD HH:mm')}
+            </Typography.Text>
             <div>
               <Typography.Text>任务已创建，待执行</Typography.Text>
             </div>
@@ -418,8 +456,11 @@ export default function TaskDetail(): JSX.Element {
     return items
   }, [recordQuery.data, task])
 
-  /** 关联投入品 */
-  const usageIds = useMemo(() => parseUsageIds(task?.relatedUsageIds), [task])
+  /** 关联投入品使用记录 */
+  const usages = usagesQuery.data ?? []
+
+  /** 提交成果照片 */
+  const resultPhotos = useMemo(() => parseUrlList(task?.resultPhotoUrls), [task])
 
   if (taskQuery.isLoading) {
     return (
@@ -450,38 +491,35 @@ export default function TaskDetail(): JSX.Element {
 
   return (
     <PageContainer
-      title={`任务详情：${task.taskName}`}
+      title={`📋 ${task.taskName}`}
+      subTitle={task.taskNo}
+      onBack={() => navigate('/production/tasks')}
+      backIcon={<ArrowLeftOutlined />}
       extra={[
-        <Button
-          key="back"
-          icon={<ArrowLeftOutlined />}
-          onClick={() => navigate('/production/tasks')}
-        >
-          返回
-        </Button>,
-        <Button
-          key="start"
-          type="primary"
-          icon={<PlayCircleOutlined />}
-          disabled={isTaskExecuting(task.status) || isTaskDone(task.status)}
-          loading={startMutation.isPending}
-          onClick={() => startMutation.mutate()}
-        >
-          开始执行
-        </Button>,
-        <Button key="edit" onClick={() => setEditOpen(true)}>
+        <Tag key="status" color={TASK_STATUS_COLOR_MAP[task.status] ?? 'default'}>
+          {TASK_STATUS_LABEL_MAP[task.status] ?? task.status}
+        </Tag>,
+        <Button key="edit" disabled={!canStartTask} onClick={() => setEditOpen(true)}>
           编辑
         </Button>,
-        <Button key="assign" onClick={() => setAssignOpen(true)}>
+        <Button key="assign" disabled={!canStartTask} onClick={() => setAssignOpen(true)}>
           转派
         </Button>,
       ]}
     >
-      <Card title="📋 任务信息" style={{ marginBottom: 16 }}>
-        <Descriptions bordered column={3} size="small" items={baseItems} />
+      <Card
+        title="📋 基本信息"
+        style={{ marginBottom: 16 }}
+        extra={
+          <Tag color={TASK_STATUS_COLOR_MAP[task.status] ?? 'default'}>
+            {TASK_STATUS_LABEL_MAP[task.status] ?? task.status}
+          </Tag>
+        }
+      >
+        <DetailInfoGrid columns={2} items={baseItems} />
         {task.acceptStatus === 2 && task.acceptRemark && (
           <Alert
-            style={{ marginTop: 12 }}
+            style={{ marginTop: 16 }}
             type="error"
             showIcon
             message="验收驳回意见"
@@ -490,10 +528,33 @@ export default function TaskDetail(): JSX.Element {
         )}
       </Card>
 
+      {(task.resultDesc || resultPhotos.length > 0) && (
+        <Card title="📤 提交成果" style={{ marginBottom: 16 }}>
+          <Typography.Paragraph style={{ marginBottom: resultPhotos.length > 0 ? 12 : 0 }}>
+            {task.resultDesc || '未填写成果说明'}
+          </Typography.Paragraph>
+          {resultPhotos.length > 0 && (
+            <Image.PreviewGroup>
+              <Space size={[8, 8]} wrap>
+                {resultPhotos.map((url) => (
+                  <Image
+                    key={url}
+                    src={url}
+                    width={96}
+                    height={96}
+                    style={{ objectFit: 'cover', borderRadius: 4 }}
+                  />
+                ))}
+              </Space>
+            </Image.PreviewGroup>
+          )}
+        </Card>
+      )}
+
       <Row gutter={16}>
         <Col xs={24} lg={14}>
           <Card
-            title="📋 执行记录"
+            title={`📋 执行记录（${timelineItems.length} 条）`}
             extra={
               <Button type="link" onClick={() => setCheckInOpen(true)}>
                 + 添加执行记录
@@ -518,23 +579,24 @@ export default function TaskDetail(): JSX.Element {
         <Col xs={24} lg={10}>
           <Card title="🌾 关联地块" style={{ marginBottom: 16 }}>
             {plotQuery.data ? (
-              <Descriptions column={1} size="small">
-                <Descriptions.Item label="地块名称">
-                  {plotQuery.data.plotName}
-                </Descriptions.Item>
-                <Descriptions.Item label="地块编码">
-                  {plotQuery.data.plotCode}
-                </Descriptions.Item>
-                <Descriptions.Item label="面积（亩）">
-                  {plotQuery.data.area}
-                </Descriptions.Item>
-                <Descriptions.Item label="当前作物">
-                  {plotQuery.data.cropVariety ?? '-'}
-                </Descriptions.Item>
-                <Descriptions.Item label="灌溉方式">
-                  {plotQuery.data.irrigationType ?? '-'}
-                </Descriptions.Item>
-              </Descriptions>
+              <DetailInfoGrid
+                columns={1}
+                items={[
+                  { key: 'plotName', label: '地块名称', value: plotQuery.data.plotName },
+                  { key: 'plotCode', label: '地块编码', value: plotQuery.data.plotCode },
+                  { key: 'area', label: '面积（亩）', value: plotQuery.data.area },
+                  {
+                    key: 'crop',
+                    label: '当前作物',
+                    value: plotQuery.data.cropVariety ?? '-',
+                  },
+                  {
+                    key: 'irrigation',
+                    label: '灌溉方式',
+                    value: plotQuery.data.irrigationType ?? '-',
+                  },
+                ]}
+              />
             ) : (
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
@@ -543,18 +605,42 @@ export default function TaskDetail(): JSX.Element {
             )}
           </Card>
 
-          <Card title="💊 关联投入品">
-            {usageIds.length === 0 ? (
+          <Card
+            title={`💊 关联投入品（${usages.length} 条）`}
+            loading={usagesQuery.isFetching}
+          >
+            {usages.length === 0 ? (
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
                 description={<Typography.Text type="secondary">暂无关联投入品记录</Typography.Text>}
               />
             ) : (
-              <Space size={[8, 8]} wrap>
-                {usageIds.map((usageId) => (
-                  <Tag key={usageId} color="green">
-                    投入品记录 {usageId}
-                  </Tag>
+              <Space direction="vertical" size={8} style={{ width: '100%' }}>
+                {usages.map((usage: InputUsageRecord) => (
+                  <Card key={usage.usageId} size="small" bodyStyle={{ padding: 10 }}>
+                    <Space direction="vertical" size={2} style={{ width: '100%' }}>
+                      <Space size={8} wrap>
+                        <Typography.Link
+                          onClick={() =>
+                            navigate(
+                              `/production/inputs?tab=ledger&usageId=${encodeURIComponent(usage.usageId)}`,
+                            )
+                          }
+                        >
+                          {usage.inputName ?? '投入品使用记录'}
+                        </Typography.Link>
+                        <Tag color="green">
+                          {usage.dosage === undefined || usage.dosage === null
+                            ? '用量未登记'
+                            : `${usage.dosage} ${usage.unit ?? ''}`}
+                        </Tag>
+                      </Space>
+                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                        {usage.usedAt ? dayjs(usage.usedAt).format('YYYY-MM-DD HH:mm') : '-'}
+                        {usage.plotId ? ` ｜ 地块 ${usage.plotId}` : ''}
+                      </Typography.Text>
+                    </Space>
+                  </Card>
                 ))}
               </Space>
             )}
@@ -569,26 +655,25 @@ export default function TaskDetail(): JSX.Element {
           <Button
             type="primary"
             icon={<PlayCircleOutlined />}
-            disabled={isTaskExecuting(task.status) || isTaskDone(task.status)}
+            disabled={!canStartTask}
             loading={startMutation.isPending}
             onClick={() => startMutation.mutate()}
           >
             开始执行
           </Button>
-          <Button
-            disabled={!isTaskExecuting(task.status)}
-            loading={submitMutation.isPending}
-            onClick={() => submitMutation.mutate()}
-          >
+          <Button disabled={!canSubmitTask} onClick={() => setSubmitOpen(true)}>
             提交成果
           </Button>
-          <Button onClick={() => navigate(`/production/tasks/${taskId}/acceptance`)}>
-            前往验收
-          </Button>
+          {canAcceptTask && (
+            <Button onClick={() => navigate(`/production/tasks/${taskId}/acceptance`)}>
+              前往验收
+            </Button>
+          )}
           <Button
             type="primary"
             icon={<CheckCircleOutlined />}
-            disabled={task.acceptStatus !== TASK_ACCEPT_PENDING}
+            disabled={!canAcceptTask}
+            loading={reviewMutation.isPending}
             onClick={() => {
               setReviewPass(true)
               setReviewOpen(true)
@@ -599,7 +684,7 @@ export default function TaskDetail(): JSX.Element {
           <Button
             danger
             icon={<CloseCircleOutlined />}
-            disabled={task.acceptStatus !== TASK_ACCEPT_PENDING}
+            disabled={!canAcceptTask}
             onClick={() => {
               setReviewPass(false)
               setReviewOpen(true)
@@ -607,8 +692,6 @@ export default function TaskDetail(): JSX.Element {
           >
             驳回
           </Button>
-          <Button onClick={() => setAssignOpen(true)}>转派</Button>
-          <Button onClick={() => setEditOpen(true)}>编辑</Button>
           <Popconfirm
             title="确认删除该任务？"
             description="删除后不可恢复，请谨慎操作。"
@@ -616,11 +699,20 @@ export default function TaskDetail(): JSX.Element {
             cancelText="取消"
             onConfirm={() => deleteMutation.mutate()}
           >
-            <Button danger loading={deleteMutation.isPending}>
+            <Button
+              danger
+              disabled={isTaskExecuting(task.status)}
+              loading={deleteMutation.isPending}
+            >
               删除
             </Button>
           </Popconfirm>
         </Space>
+        {isTaskExecuting(task.status) && (
+          <Typography.Text type="secondary" style={{ display: 'block', marginTop: 8 }}>
+            执行中的任务不能删除；提交成果并通过验收后自动归档。
+          </Typography.Text>
+        )}
       </Card>
 
       {/* 转派弹窗 */}
@@ -680,6 +772,32 @@ export default function TaskDetail(): JSX.Element {
         <ProFormTextArea name="abnormalDesc" label="异常说明" placeholder="选填" />
       </ModalForm>
 
+      {/* 提交成果弹窗 */}
+      <ModalForm<SubmitFormValues>
+        title="提交任务成果"
+        open={submitOpen}
+        onOpenChange={setSubmitOpen}
+        width={520}
+        modalProps={{ destroyOnClose: true }}
+        onFinish={async (values) => {
+          submitMutation.mutate(values)
+          return true
+        }}
+      >
+        <ProFormTextArea
+          name="resultDesc"
+          label="成果说明"
+          placeholder="填写作业完成情况、用量与异常说明"
+          fieldProps={{ rows: 4, maxLength: 500, showCount: true }}
+        />
+        <ProFormSelect
+          name="resultPhotoUrls"
+          label="成果照片地址"
+          mode="tags"
+          placeholder="输入图片地址后回车，可添加多张"
+        />
+      </ModalForm>
+
       {/* 编辑任务弹窗 */}
       <ModalForm<Partial<Task>>
         title="编辑任务"
@@ -692,12 +810,27 @@ export default function TaskDetail(): JSX.Element {
           taskType: task.taskType,
           priority: task.priority ?? 3,
           assigneeId: task.assigneeId,
-          planStartDate: task.planStartDate,
-          planEndDate: task.planEndDate,
+          planStartDate: task.planStartDate ? dayjs(task.planStartDate) : undefined,
+          planEndDate: task.planEndDate ? dayjs(task.planEndDate) : undefined,
           description: task.description,
         }}
         onFinish={async (values) => {
-          updateMutation.mutate(values)
+          // 日期控件给的是 Dayjs，接口要的是 yyyy-MM-dd HH:mm:ss；直接传对象会变成 [object Object]
+          const start = values.planStartDate ? dayjs(values.planStartDate) : undefined
+          const end = values.planEndDate ? dayjs(values.planEndDate) : undefined
+          if (start && end && end.isBefore(start)) {
+            message.warning('计划结束时间不能早于开始时间')
+            return false
+          }
+          updateMutation.mutate({
+            taskName: values.taskName,
+            taskType: values.taskType,
+            priority: values.priority,
+            assigneeId: values.assigneeId,
+            planStartDate: start ? start.format('YYYY-MM-DD HH:mm:ss') : undefined,
+            planEndDate: end ? end.format('YYYY-MM-DD HH:mm:ss') : undefined,
+            description: values.description,
+          })
           return true
         }}
       >
@@ -706,10 +839,32 @@ export default function TaskDetail(): JSX.Element {
           label="任务名称"
           rules={[{ required: true, message: '请输入任务名称' }]}
         />
+        <ProFormSelect
+          name="taskType"
+          label="任务类型"
+          options={TASK_TYPE_OPTIONS}
+          rules={[{ required: true, message: '请选择任务类型' }]}
+        />
+        <ProFormSelect
+          name="priority"
+          label="优先级"
+          options={TASK_PRIORITY_OPTIONS}
+          rules={[{ required: true, message: '请选择优先级' }]}
+        />
         <ProFormSelect name="assigneeId" label="执行人" options={memberOptions} />
-        <ProFormText name="planStartDate" label="计划开始（YYYY-MM-DD）" />
-        <ProFormText name="planEndDate" label="计划结束（YYYY-MM-DD）" />
-        <ProFormTextArea name="description" label="任务描述" />
+        <ProFormDateTimePicker
+          name="planStartDate"
+          label="计划开始"
+          rules={[{ required: true, message: '请选择计划开始时间' }]}
+          fieldProps={{ style: { width: '100%' }, showTime: { format: 'HH:mm' } }}
+        />
+        <ProFormDateTimePicker
+          name="planEndDate"
+          label="计划结束"
+          rules={[{ required: true, message: '请选择计划结束时间' }]}
+          fieldProps={{ style: { width: '100%' }, showTime: { format: 'HH:mm' } }}
+        />
+        <ProFormTextArea name="description" label="任务描述" fieldProps={{ rows: 3 }} />
       </ModalForm>
 
       {/* 验收弹窗 */}

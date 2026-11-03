@@ -12,6 +12,8 @@ public class CommissionVO {
     private BigDecimal amount;
     private BigDecimal rate;
     private String status;
+    private String settleBatchNo;
+    private String remark;
     private LocalDateTime settleTime;
     private LocalDateTime createTime;
 }

@@ -1,872 +1,621 @@
 <template>
-  <div class="org-list">
-    <div class="page-header">
-      <div class="header-left">
-        <h1>组织管理</h1>
-        <p>管理组织信息与配置</p>
+  <div class="mds-page">
+    <PageHeader
+      title="全平台组织"
+      subtitle="组织属于经营主体内部数据：日常由主体负责人维护，运营端保留跨主体核查、异常处置与应急修正。"
+      source="运营监管视图"
+    >
+      <template #actions>
+        <button v-point="'POST /admin/masterdata/org'" class="mds-btn" :disabled="!activeSubject" @click="openCreate">+ 新增组织</button>
+        <button class="mds-btn" :disabled="loading" @click="refresh">刷新</button>
+      </template>
+    </PageHeader>
+
+    <NoticeBar tone="info" title="权限边界：">
+      组织属于经营主体内部数据，日常维护由主体负责人或主体管理员完成。运营端的变更会纳入操作审计；
+      历史组织（未关联统一主体）只读。
+    </NoticeBar>
+
+    <div class="mds-card">
+      <div class="mds-card-body subject-bar">
+        <div class="subject-copy">
+          <span class="subject-label">当前主体</span>
+          <strong>{{ activeSubject?.tenantName || '全部经营主体' }}</strong>
+          <small v-if="activeSubject">
+            {{ subjectTypeText(activeSubject.tenantType) }} · {{ activeSubject.tenantCode || '未生成编码' }}
+          </small>
+          <small v-else>跨主体监管视图包含尚未迁移的历史组织数据</small>
+        </div>
+        <select v-model="searchForm.tenantId" class="mds-select" style="min-width: 320px" @change="handleSubjectChange">
+          <option value="">全部经营主体（含历史）</option>
+          <option v-for="subject in subjectOptions" :key="subject.id" :value="String(subject.id)">
+            {{ subject.tenantName }}（{{ subjectTypeText(subject.tenantType) }}）
+          </option>
+        </select>
       </div>
-      <button class="add-btn" @click="openCreateModal">
-        <span class="btn-icon">+</span>
-        <span>新增组织</span>
-      </button>
     </div>
 
-    <div class="search-bar">
-      <div class="search-group">
-        <input 
-          type="text" 
-          v-model="searchForm.keyword" 
-          placeholder="组织名称/编码..." 
-          class="search-input"
+    <StatGrid :items="statItems" />
+
+    <div class="mds-card">
+      <div class="mds-filter">
+        <input
+          v-model.trim="searchForm.keyword"
+          class="mds-input"
+          type="search"
+          placeholder="搜索组织名称、编码或负责人"
+          @keyup.enter="handleSearch"
         />
-        <button class="search-btn" @click="loadData">搜索</button>
-      </div>
-      <div class="filter-group">
-        <select v-model="searchForm.orgType" class="filter-select">
-          <option value="">全部类型</option>
-          <option value="enterprise">企业</option>
-          <option value="cooperative">合作社</option>
-          <option value="farmer">农户</option>
+        <select v-model="searchForm.orgType" class="mds-select">
+          <option value="">全部组织类型</option>
+          <option value="ENTERPRISE">企业组织</option>
+          <option value="COOPERATIVE">合作社</option>
+          <option value="FARM">农场/基地</option>
+          <option value="DEPARTMENT">部门</option>
+          <option value="TEAM">团队</option>
+          <option value="PRODUCTION_UNIT">生产单位</option>
         </select>
-        <select v-model="searchForm.authStatus" class="filter-select">
-          <option value="">认证状态</option>
-          <option value="verified">已认证</option>
-          <option value="unverified">未认证</option>
-          <option value="pending">审核中</option>
+        <select v-model="searchForm.status" class="mds-select">
+          <option value="">全部状态</option>
+          <option value="1">启用</option>
+          <option value="0">停用</option>
         </select>
+        <button class="mds-btn mds-btn--primary" @click="handleSearch">查询</button>
+        <button class="mds-btn" @click="resetSearch">重置</button>
       </div>
-    </div>
 
-    <!--
-      组织架构树。
-
-      这段是从未接线的 masterdata/OrganizationManagement 页合并过来的 ——
-      那一页唯一比本页多的能力就是"按层级看组织"，而它的数据是本地假数组。
-      搬过来后改成读 GET /org/tree（真数据），并把原来写死的三层嵌套
-      换成"按 parentId 建树 + 拍平渲染"，层数不再受限于三层。
-    -->
-    <div class="tree-panel">
-      <div class="panel-header">
-        <h3>组织架构树</h3>
-        <span class="panel-hint" v-if="selectedOrg">
-          已选中：{{ selectedOrg.orgName }}
-          <button class="link-btn" @click="clearSelected">清除</button>
-        </span>
-      </div>
-      <div v-if="treeError" class="tree-empty">{{ treeError }}</div>
-      <div v-else-if="treeNodes.length === 0" class="tree-empty">暂无组织数据</div>
-      <ul v-else class="tree-list">
-        <li
-          v-for="node in treeNodes"
-          :key="node.id"
-          class="tree-row"
-          :class="{ active: selectedOrg && selectedOrg.id === node.id }"
-          :style="{ paddingLeft: node.depth * 18 + 8 + 'px' }"
-          @click="selectNode(node)"
-        >
-          <span
-            class="node-toggle"
-            @click.stop="toggleNode(node)"
-          >{{ node.hasChildren ? (expandedIds.includes(node.id) ? '▼' : '▶') : '·' }}</span>
-          <span class="node-name">{{ node.orgName }}</span>
-          <span class="node-type">{{ getOrgTypeLabel(node.orgType) }}</span>
-          <span class="node-auth">{{ getStatusLabel(node.authStatus) }}</span>
-        </li>
-      </ul>
-    </div>
-
-    <div class="selected-strip" v-if="selectedOrg">
-      <span>编码：{{ selectedOrg.orgCode || '—' }}</span>
-      <span>类型：{{ getOrgTypeLabel(selectedOrg.orgType) }}</span>
-      <span>法人：{{ selectedOrg.legalPerson || '—' }}</span>
-      <span>联系人：{{ selectedOrg.contactPerson || '—' }}</span>
-      <span>电话：{{ selectedOrg.contactPhone || '—' }}</span>
-      <span>认证：{{ getStatusLabel(selectedOrg.authStatus) }}</span>
-      <span>层级：{{ selectedOrg.orgLevel ?? '—' }}</span>
-    </div>
-
-    <div class="table-card">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>组织编码</th>
-            <th>组织名称</th>
-            <th>组织类型</th>
-            <th>法人</th>
-            <th>联系人</th>
-            <th>联系电话</th>
-            <th>认证状态</th>
-            <th>创建时间</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="org in tableData" :key="org.id">
-            <td>{{ org.orgCode }}</td>
-            <td>{{ org.orgName }}</td>
-            <td>
-              <span class="type-badge" :class="org.orgType">
-                {{ getOrgTypeLabel(org.orgType) }}
-              </span>
-            </td>
-            <td>{{ org.legalPerson }}</td>
-            <td>{{ org.contactPerson }}</td>
-            <td>{{ org.contactPhone }}</td>
-            <td>
-              <span class="status-badge" :class="org.authStatus">
-                {{ getStatusLabel(org.authStatus) }}
-              </span>
-            </td>
-            <td>{{ formatDate(org.createTime) }}</td>
-            <td class="action-cell">
-              <button class="action-btn view" @click="viewDetail(org.id)">详情</button>
-              <button class="action-btn edit" @click="editOrg(org)">编辑</button>
-              <button 
-                class="action-btn delete" 
-                @click="deleteOrgById(org.id)"
-                v-if="org.authStatus === 'unverified'"
-              >删除</button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-
-      <div class="pagination">
-        <button class="page-btn" :disabled="pageNum === 1" @click="handleCurrentChange(pageNum - 1)">上一页</button>
-        <span class="page-info">第 {{ pageNum }} / {{ totalPages }} 页</span>
-        <button class="page-btn" :disabled="pageNum === totalPages" @click="handleCurrentChange(pageNum + 1)">下一页</button>
-      </div>
-    </div>
-
-    <div class="modal-overlay" v-if="modalVisible" @click="closeModal">
-      <div class="modal-content" @click.stop>
-        <div class="modal-header">
-          <h3>{{ form.id ? '编辑组织' : '新增组织' }}</h3>
-          <button class="close-btn" @click="closeModal">×</button>
+      <div class="mds-card-head">
+        <div>
+          <h2 class="mds-card-title">组织档案</h2>
+          <p class="mds-card-sub">{{ listSummary }}</p>
         </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label>组织名称 *</label>
-            <input type="text" v-model="form.orgName" placeholder="请输入组织名称" class="form-input" />
-          </div>
-          <div class="form-group">
-            <label>组织类型</label>
-            <select v-model="form.orgType" class="form-select">
-              <option value="enterprise">企业</option>
-              <option value="cooperative">合作社</option>
-              <option value="farmer">农户</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>法人 *</label>
-            <input type="text" v-model="form.legalPerson" placeholder="请输入法人姓名" class="form-input" />
-          </div>
-          <div class="form-group">
-            <label>联系人</label>
-            <input type="text" v-model="form.contactPerson" placeholder="请输入联系人" class="form-input" />
-          </div>
-          <div class="form-group">
-            <label>联系电话</label>
-            <input type="text" v-model="form.contactPhone" placeholder="请输入联系电话" class="form-input" />
-          </div>
-          <div class="form-group">
-            <label>地址</label>
-            <textarea v-model="form.address" placeholder="请输入地址" class="form-textarea"></textarea>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-cancel" @click="closeModal">取消</button>
-          <button class="btn btn-primary" @click="saveOrg">确认{{ form.id ? '修改' : '添加' }}</button>
+        <div class="view-switch" role="group" aria-label="展示方式">
+          <button :class="{ active: viewMode === 'table' }" @click="viewMode = 'table'">列表</button>
+          <button :class="{ active: viewMode === 'tree' }" @click="viewMode = 'tree'">层级</button>
         </div>
       </div>
+
+      <div v-if="viewMode === 'table'" class="mds-table-wrap">
+        <table class="mds-table org-table">
+          <thead>
+            <tr>
+              <th>组织</th>
+              <th>所属主体</th>
+              <th>上级 / 层级</th>
+              <th>组织类型</th>
+              <th>负责人</th>
+              <th>状态</th>
+              <th>更新时间</th>
+              <th class="mds-actions">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-if="loading">
+              <td colspan="8" class="mds-empty">正在加载组织档案…</td>
+            </tr>
+            <tr v-else-if="tableData.length === 0">
+              <td colspan="8">
+                <EmptyState
+                  :title="activeSubject ? '当前主体下暂无符合条件的组织' : '暂无符合条件的组织'"
+                  description="调整关键字或筛选条件后重试；历史组织需先关联统一主体才能维护。"
+                />
+              </td>
+            </tr>
+            <tr v-for="org in tableData" v-else :key="org.id">
+              <td>
+                <button class="link-name" @click="viewDetail(org.id)">{{ org.orgName }}</button>
+                <div class="mds-mono mds-muted">{{ org.orgCode }}</div>
+              </td>
+              <td>
+                <div>{{ org.tenantName || '未匹配主体' }}</div>
+                <StatusTag v-if="org.legacy" text="历史只读" tone="gray" plain />
+                <StatusTag v-else text="统一主体" tone="brand" plain />
+              </td>
+              <td>
+                <div>{{ org.parentName || '一级组织' }}</div>
+                <small class="mds-hint">第 {{ org.orgLevel || 1 }} 级</small>
+              </td>
+              <td><StatusTag :text="orgTypeText(org)" :tone="typeTone(org.orgType)" plain /></td>
+              <td>
+                <div>{{ org.contactPerson || '—' }}</div>
+                <small class="mds-hint">{{ org.contactPhone || '—' }}</small>
+              </td>
+              <td>
+                <StatusTag
+                  :text="Number(org.status) === 1 ? '启用' : '停用'"
+                  :tone="Number(org.status) === 1 ? 'success' : 'gray'"
+                />
+              </td>
+              <td class="mds-muted">{{ formatDateTime(org.updateTime || org.createTime) }}</td>
+              <td class="mds-actions">
+                <button class="mds-btn mds-btn--link" @click="viewDetail(org.id)">查看</button>
+                <button v-point="'PUT /admin/masterdata/org/{id}'"
+                  class="mds-btn mds-btn--link"
+                  :disabled="org.legacy"
+                  :title="org.legacy ? '历史组织未关联统一主体，只允许查看' : '编辑组织'"
+                  @click="editOrg(org)"
+                >编辑</button>
+                <button v-point="'PUT /admin/masterdata/org/{id}/status'" class="mds-btn mds-btn--link" :disabled="org.legacy" @click="toggleOrgStatus(org)">
+                  {{ Number(org.status) === 1 ? '停用' : '启用' }}
+                </button>
+                <button v-point="'DELETE /admin/masterdata/org/{id}'" class="mds-btn mds-btn--link mds-danger" :disabled="org.legacy" @click="deleteOrgById(org)">
+                  删除
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div v-else class="tree-view">
+        <div v-if="treeError" class="mds-empty">{{ treeError }}</div>
+        <div v-else-if="flatTree.length === 0">
+          <EmptyState title="暂无符合条件的分层组织" description="切换主体或调整筛选条件后再看层级视图。" />
+        </div>
+        <template v-else>
+          <div
+            v-for="node in flatTree"
+            :key="node.id"
+            class="tree-row"
+            :style="{ paddingLeft: `${12 + node.depth * 24}px` }"
+          >
+            <button class="tree-toggle" :disabled="!node.hasChildren" @click="toggleNode(node.id)">
+              {{ node.hasChildren ? (expandedIds.includes(String(node.id)) ? '−' : '+') : '·' }}
+            </button>
+            <div class="tree-main">
+              <button class="link-name" @click="viewDetail(node.id)">{{ node.orgName }}</button>
+              <span class="mds-mono mds-muted">{{ node.orgCode }}</span>
+              <StatusTag :text="orgTypeText(node)" :tone="typeTone(node.orgType)" plain />
+              <StatusTag v-if="node.legacy" text="历史只读" tone="gray" plain />
+            </div>
+            <div class="tree-meta">{{ node.parentName || '一级组织' }} · 第 {{ node.orgLevel || 1 }} 级</div>
+            <div class="tree-person">{{ node.contactPerson || '未设置负责人' }}</div>
+            <StatusTag
+              :text="Number(node.status) === 1 ? '启用' : '停用'"
+              :tone="Number(node.status) === 1 ? 'success' : 'gray'"
+            />
+            <div class="tree-actions">
+              <button class="mds-btn mds-btn--link" @click="viewDetail(node.id)">查看</button>
+              <button v-point="'PUT /admin/masterdata/org/{id}'" class="mds-btn mds-btn--link" :disabled="node.legacy" @click="editOrg(node)">编辑</button>
+            </div>
+          </div>
+        </template>
+      </div>
+
+      <PagerBar
+        v-if="viewMode === 'table'"
+        :page="pageNum"
+        :page-size="pageSize"
+        :total="total"
+        @change="goPage"
+      />
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { getOrgList, getOrgTree, createOrg, updateOrg, deleteOrg } from '../../utils/api'
+import PageHeader from '@/components/ui/PageHeader.vue'
+import StatGrid from '@/components/ui/StatGrid.vue'
+import StatusTag from '@/components/ui/StatusTag.vue'
+import NoticeBar from '@/components/ui/NoticeBar.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
+import PagerBar from '@/components/ui/PagerBar.vue'
+import {
+  deleteOrg,
+  getOrgList,
+  getOrgTree,
+  getTenantList,
+  updateOrgStatus,
+} from '../../utils/api'
 
+const route = useRoute()
+const router = useRouter()
+const subjectOptions = ref([])
 const tableData = ref([])
+const treeRoots = ref([])
+const treeError = ref('')
+const expandedIds = ref([])
+const loading = ref(false)
+const viewMode = ref('table')
 const pageNum = ref(1)
-const pageSize = ref(10)
+const pageSize = ref(20)
 const total = ref(0)
-const modalVisible = ref(false)
-
-const totalPages = computed(() => Math.ceil(total.value / pageSize.value))
 
 const searchForm = reactive({
+  tenantId: '',
   keyword: '',
   orgType: '',
-  authStatus: ''
+  status: '',
 })
 
-const form = reactive({
-  id: null,
-  orgName: '',
-  orgType: 'enterprise',
-  legalPerson: '',
-  contactPerson: '',
-  contactPhone: '',
-  address: ''
-})
+const activeSubject = computed(() =>
+  subjectOptions.value.find((subject) => String(subject.id) === String(searchForm.tenantId)),
+)
+const listSummary = computed(
+  () => `${activeSubject.value?.tenantName || '全部经营主体'} · 运营端应急维护与跨主体核查`,
+)
 
-const getOrgTypeLabel = (type) => {
-  // 大小写不敏感，并覆盖后端实际在用的取值：
-  // 库里存的是 ENTERPRISE / COOPERATIVE / FARM / DEPARTMENT，
-  // 而原映射表只认小写的 enterprise/cooperative/farmer，
-  // 于是每一行都把原始编码直接显示出来（表里显示 "FARM" 而不是"农场"）。
-  const labels = {
-    enterprise: '企业',
-    cooperative: '合作社',
-    farmer: '农户',
-    farm: '农场',
-    department: '部门',
-    government: '政府机构',
-    other: '其他'
-  }
-  if (!type) return '—'
-  return labels[String(type).toLowerCase()] || type
+const subjectTypeText = (type) => (type === 'INDIVIDUAL' || type === 'personal' ? '个人主体' : '企业主体')
+// 取值以库里实际 org_type 为准（ENTERPRISE / COOPERATIVE / FARM / DEPARTMENT / TEAM / PRODUCTION_UNIT）
+const ORG_TYPE_TEXT = {
+  ENTERPRISE: '企业组织',
+  COOPERATIVE: '合作社',
+  FARM: '农场/基地',
+  DEPARTMENT: '部门',
+  TEAM: '团队',
+  PRODUCTION_UNIT: '生产单位',
 }
+const orgTypeText = (org) => org.orgTypeName || ORG_TYPE_TEXT[org.orgType] || org.orgType || '未分类'
+const TYPE_TONE = {
+  ENTERPRISE: 'info',
+  COOPERATIVE: 'cyan',
+  FARM: 'brand',
+  DEPARTMENT: 'info',
+  TEAM: 'purple',
+  PRODUCTION_UNIT: 'warning',
+}
+const typeTone = (type) => TYPE_TONE[type] ?? 'gray'
+const formatDateTime = (value) => (value ? String(value).replace('T', ' ').slice(0, 16) : '—')
 
-const getStatusLabel = (status) => {
-  const labels = { verified: '已认证', unverified: '未认证', pending: '审核中' }
-  return labels[status] || status
+const loadSubjects = async () => {
+  const response = await getTenantList({ pageNum: 1, pageSize: 200, tenantStatus: 'ACTIVE' })
+  if (response.code !== 200) throw new Error(response.message || '经营主体加载失败')
+  subjectOptions.value = response.data?.list ?? []
 }
 
 const loadData = async () => {
+  loading.value = true
   try {
     const response = await getOrgList({
       pageNum: pageNum.value,
       pageSize: pageSize.value,
-      orgName: searchForm.keyword,
-      orgType: searchForm.orgType
+      keyword: searchForm.keyword || undefined,
+      orgType: searchForm.orgType || undefined,
+      tenantId: searchForm.tenantId || undefined,
+      status: searchForm.status === '' ? undefined : Number(searchForm.status),
     })
-    if (response.code === 200) {
-      tableData.value = response.data.list ?? []
-      total.value = response.data.total ?? 0
-    } else {
-      message.error(response.message || '加载数据失败')
-      tableData.value = []
-      total.value = 0
-    }
+    if (response.code !== 200) throw new Error(response.message || '组织列表加载失败')
+    tableData.value = response.data?.list ?? []
+    total.value = Number(response.data?.total ?? 0)
   } catch (error) {
-    message.error(error instanceof Error ? error.message : '加载数据失败')
     tableData.value = []
     total.value = 0
+    message.error(error instanceof Error ? error.message : '组织列表加载失败')
+  } finally {
+    loading.value = false
   }
 }
 
-/* ---------------------------- 组织架构树（真数据） ---------------------------- */
+const loadTree = async () => {
+  treeError.value = ''
+  try {
+    const response = await getOrgTree(searchForm.tenantId || undefined)
+    if (response.code !== 200) throw new Error(response.message || '组织层级加载失败')
+    treeRoots.value = response.data ?? []
+    const ids = []
+    const collect = (nodes) =>
+      nodes.forEach((node) => {
+        if (node.children?.length) ids.push(String(node.id))
+        collect(node.children ?? [])
+      })
+    collect(treeRoots.value)
+    expandedIds.value = ids
+  } catch (error) {
+    treeRoots.value = []
+    treeError.value = error instanceof Error ? error.message : '组织层级加载失败'
+  }
+}
 
-/** 树的全量数据（拍平后的可见节点） */
-const treeNodes = ref([])
-const treeError = ref('')
-const expandedIds = ref([])
-const selectedOrg = ref(null)
-/** 原始树数据（未经展开过滤），供 toggleNode 重新计算 */
-let treeSource = []
+const matches = (org) => {
+  const keyword = searchForm.keyword.toLowerCase()
+  const keywordMatched =
+    !keyword ||
+    [org.orgName, org.orgCode, org.contactPerson].some((value) =>
+      String(value || '').toLowerCase().includes(keyword),
+    )
+  const typeMatched = !searchForm.orgType || org.orgType === searchForm.orgType
+  const statusMatched = searchForm.status === '' || Number(org.status) === Number(searchForm.status)
+  return keywordMatched && typeMatched && statusMatched
+}
 
-/** 把树按"当前展开了哪些节点"拍平成带 depth 的列表，模板只需一层 v-for */
-function flatten(nodes, depth = 0, out = []) {
+const filterTree = (nodes) =>
+  nodes.flatMap((node) => {
+    const children = filterTree(node.children ?? [])
+    if (!matches(node) && children.length === 0) return []
+    return [{ ...node, children }]
+  })
+
+const filteredTree = computed(() => filterTree(treeRoots.value))
+
+const flatten = (nodes, depth = 0, out = []) => {
   nodes.forEach((node) => {
-    out.push({ ...node, depth, hasChildren: node.children.length > 0 })
-    if (node.children.length > 0 && expandedIds.value.includes(node.id)) {
+    out.push({ ...node, depth, hasChildren: Boolean(node.children?.length) })
+    if (node.children?.length && expandedIds.value.includes(String(node.id))) {
       flatten(node.children, depth + 1, out)
     }
   })
   return out
 }
 
-function refreshTreeNodes() {
-  treeNodes.value = flatten(treeSource)
-}
+const flatTree = computed(() => flatten(filteredTree.value))
 
-const loadTree = async () => {
-  treeError.value = ''
-  try {
-    const response = await getOrgTree()
-    if (response.code !== 200) {
-      treeError.value = response.message || '组织架构树加载失败'
-      treeSource = []
-      treeNodes.value = []
-      return
-    }
-    // 接口 /org/tree 返回的本来就是**嵌套树**（每个节点自带 children），
-    // 不需要在前端按 parentId 重新拼一次 —— 那样反而会把 children 覆盖掉。
-    treeSource = response.data ?? []
-    // 默认展开根节点，否则进来只看到几个根、像"没有下级"
-    expandedIds.value = treeSource.map((node) => node.id)
-    refreshTreeNodes()
-  } catch (error) {
-    treeError.value = error instanceof Error ? error.message : '组织架构树加载失败'
-    treeSource = []
-    treeNodes.value = []
+const treeStats = computed(() => {
+  const all = []
+  const collect = (nodes) =>
+    nodes.forEach((node) => {
+      all.push(node)
+      collect(node.children ?? [])
+    })
+  collect(filteredTree.value)
+  return {
+    total: all.length,
+    departments: all.filter((org) => org.orgType === 'DEPARTMENT').length,
+    teams: all.filter((org) => org.orgType === 'TEAM').length,
+    production: all.filter((org) => org.orgType === 'PRODUCTION_UNIT' || org.orgType === 'FARM').length,
+    legacy: all.filter((org) => org.legacy).length,
   }
+})
+
+const statItems = computed(() => {
+  const current = treeStats.value
+  // 表格视图用的是分页总数；层级视图统计的是当前树，两种口径分别标注，避免把 20 当全部
+  return [
+    { label: '组织总数', value: viewMode.value === 'table' ? total.value : current.total, hint: viewMode.value === 'table' ? '符合筛选条件的分页总数' : '当前层级树节点数' },
+    { label: '部门', value: current.departments, hint: '层级树口径' },
+    { label: '团队', value: current.teams, hint: '层级树口径' },
+    { label: '生产单位 / 基地', value: current.production, hint: '层级树口径' },
+    { label: '历史只读数据', value: current.legacy, hint: '未关联统一主体', tone: current.legacy ? 'warning' : undefined },
+  ]
+})
+
+const refresh = async () => {
+  pageNum.value = 1
+  await Promise.all([loadData(), loadTree()])
 }
 
-const toggleNode = (node) => {
-  if (!node.hasChildren) return
-  expandedIds.value = expandedIds.value.includes(node.id)
-    ? expandedIds.value.filter((id) => id !== node.id)
-    : [...expandedIds.value, node.id]
-  refreshTreeNodes()
+const handleSearch = () => refresh()
+
+const handleSubjectChange = async () => {
+  await refresh()
+  const query = { ...route.query }
+  if (searchForm.tenantId) query.tenantId = searchForm.tenantId
+  else delete query.tenantId
+  await router.replace({ path: '/org/list', query })
 }
 
-const selectNode = (node) => {
-  selectedOrg.value = node
+const resetSearch = () => {
+  searchForm.keyword = ''
+  searchForm.orgType = ''
+  searchForm.status = ''
+  refresh()
 }
 
-const clearSelected = () => {
-  selectedOrg.value = null
+function goPage(next) {
+  pageNum.value = next
+  void loadData()
 }
 
-const handleCurrentChange = (page) => {
-  if (page >= 1 && page <= totalPages.value) {
-    pageNum.value = page
-    loadData()
-  }
+const toggleNode = (id) => {
+  const key = String(id)
+  expandedIds.value = expandedIds.value.includes(key)
+    ? expandedIds.value.filter((item) => item !== key)
+    : [...expandedIds.value, key]
 }
 
-const openCreateModal = () => {
-  form.id = null
-  form.orgName = ''
-  form.orgType = 'enterprise'
-  form.legalPerson = ''
-  form.contactPerson = ''
-  form.contactPhone = ''
-  form.address = ''
-  modalVisible.value = true
-}
-
-const editOrg = (row) => {
-  form.id = row.id
-  form.orgName = row.orgName
-  form.orgType = row.orgType
-  form.legalPerson = row.legalPerson
-  form.contactPerson = row.contactPerson
-  form.contactPhone = row.contactPhone
-  form.address = row.address
-  modalVisible.value = true
-}
-
-const closeModal = () => {
-  modalVisible.value = false
-}
-
-const saveOrg = async () => {
-  if (!form.orgName || !form.legalPerson) {
-    alert('请填写必填项')
+const openCreate = () => {
+  if (!activeSubject.value) {
+    message.warning('请先选择一个经营主体，再新增其内部组织')
     return
   }
-  
+  router.push({ path: '/org/new', query: { tenantId: searchForm.tenantId } })
+}
+
+const editOrg = (org) => {
+  if (org.legacy) {
+    message.warning('历史组织未关联统一经营主体，只允许查看')
+    return
+  }
+  router.push(`/org/edit/${org.id}`)
+}
+
+const viewDetail = (id) => router.push(`/org/detail/${id}`)
+
+const toggleOrgStatus = async (org) => {
+  if (org.legacy) return
+  const next = Number(org.status) === 1 ? 0 : 1
+  if (!window.confirm(`确定要${next === 1 ? '启用' : '停用'}“${org.orgName}”吗？`)) return
   try {
-    let response
-    if (form.id) {
-      response = await updateOrg(form.id, form)
-    } else {
-      response = await createOrg(form)
-    }
-    
-    if (response.code === 200) {
-      alert(form.id ? '修改成功' : '创建成功')
-      closeModal()
-      loadData()
-    } else {
-      alert(response.message || '操作失败')
-    }
+    const response = await updateOrgStatus(org.id, next)
+    if (response.code !== 200) throw new Error(response.message || '状态更新失败')
+    message.success(next === 1 ? '组织已启用' : '组织已停用')
+    await Promise.all([loadData(), loadTree()])
   } catch (error) {
-    alert('操作失败')
+    message.error(error instanceof Error ? error.message : '状态更新失败')
   }
 }
 
-const viewDetail = (id) => {
-  alert(`查看组织详情: ${id}`)
-}
-
-const deleteOrgById = async (id) => {
-  if (!confirm('确定要删除该组织吗？')) return
+const deleteOrgById = async (org) => {
+  if (org.legacy) return
+  if (Number(org.childCount) > 0) {
+    message.warning('该组织下仍有子组织，请先调整或删除子组织')
+    return
+  }
+  if (!window.confirm(`确定删除“${org.orgName}”吗？删除后由运营端保留操作审计。`)) return
   try {
-    const response = await deleteOrg(id)
-    if (response.code === 200) {
-      alert('删除成功')
-      loadData()
-    } else {
-      alert(response.message || '删除失败')
-    }
+    const response = await deleteOrg(org.id)
+    if (response.code !== 200) throw new Error(response.message || '删除失败')
+    message.success('组织已删除')
+    await refresh()
   } catch (error) {
-    alert('删除失败')
+    message.error(error instanceof Error ? error.message : '删除失败')
   }
 }
 
-const formatDate = (date) => {
-  if (!date) return ''
-  // 后端返回 ISO（如 2026-10-12T17:32:41），只按空格切分会把 T 一起显示出来
-  return String(date).replace('T', ' ').split(' ')[0]
-}
-
-onMounted(() => {
-  loadTree()
-  loadData()
+onMounted(async () => {
+  try {
+    await loadSubjects()
+    const requestedTenant = String(route.query.tenantId || '')
+    const validRequested = subjectOptions.value.some((subject) => String(subject.id) === requestedTenant)
+    // 默认看「全部经营主体」：默认落在第一个主体上时，随机挑到一个小主体就会是一张空表，
+    // 看起来像"组织数据丢了"。要看单个主体再从下拉里选。
+    searchForm.tenantId = validRequested ? requestedTenant : ''
+    await Promise.all([loadData(), loadTree()])
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '页面初始化失败')
+  }
 })
 </script>
 
 <style scoped>
-.org-list {
-  padding: 20px;
-}
-
-.page-header {
+.subject-bar {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 24px;
+  gap: 18px;
+  flex-wrap: wrap;
 }
 
-.header-left h1 {
-  font-size: 24px;
-  font-weight: 600;
-  color: #2d3748;
-  margin: 0;
-}
-
-.header-left p {
-  font-size: 14px;
-  color: #a0aec0;
-  margin: 4px 0 0;
-}
-
-.add-btn {
+.subject-copy {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  background: linear-gradient(135deg, #238636 0%, #2ea043 100%);
-  color: #fff;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
-.add-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(35, 134, 54, 0.3);
-}
-
-.btn-icon {
-  font-size: 18px;
-}
-
-.search-bar {
-  display: flex;
-  gap: 16px;
-  margin-bottom: 20px;
-}
-
-.search-group {
-  display: flex;
-  flex: 1;
-}
-
-.search-input {
-  flex: 1;
-  padding: 10px 16px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px 0 0 8px;
-  font-size: 14px;
-  outline: none;
-}
-
-.search-input:focus {
-  border-color: #238636;
-}
-
-.search-btn {
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-left: none;
-  padding: 10px 24px;
-  border-radius: 0 8px 8px 0;
-  font-size: 14px;
-  color: #238636;
-  cursor: pointer;
-}
-
-.filter-group {
-  display: flex;
-  gap: 12px;
-}
-
-.filter-select {
-  padding: 10px 16px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 14px;
-  color: #4a5568;
-  background: #fff;
-  cursor: pointer;
-}
-
-.table-card {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  overflow: hidden;
-}
-
-.data-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.data-table th,
-.data-table td {
-  padding: 14px 16px;
-  text-align: left;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.data-table th {
-  font-size: 13px;
-  font-weight: 600;
-  color: #4a5568;
-  background: #f8fafc;
-}
-
-.data-table td {
-  font-size: 13px;
-  color: #2d3748;
-}
-
-.type-badge {
-  font-size: 11px;
-  font-weight: 500;
-  padding: 4px 12px;
-  border-radius: 12px;
-}
-
-.type-badge.enterprise {
-  background: rgba(59, 130, 246, 0.1);
-  color: #3b82f6;
-}
-
-.type-badge.cooperative {
-  background: rgba(35, 134, 54, 0.1);
-  color: #238636;
-}
-
-.type-badge.farmer {
-  background: rgba(210, 153, 34, 0.1);
-  color: #d29922;
-}
-
-.status-badge {
-  font-size: 11px;
-  font-weight: 500;
-  padding: 4px 12px;
-  border-radius: 12px;
-}
-
-.status-badge.verified {
-  background: rgba(35, 134, 54, 0.1);
-  color: #238636;
-}
-
-.status-badge.unverified {
-  background: rgba(210, 153, 34, 0.1);
-  color: #d29922;
-}
-
-.status-badge.pending {
-  background: rgba(59, 130, 246, 0.1);
-  color: #3b82f6;
-}
-
-.action-cell {
-  display: flex;
-  gap: 8px;
-}
-
-.action-btn {
+.subject-label {
   font-size: 12px;
-  padding: 6px 12px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
+  color: var(--mds-text-3);
 }
 
-.action-btn.view {
-  background: rgba(59, 130, 246, 0.1);
-  color: #3b82f6;
+.subject-copy strong {
+  font-size: 17px;
 }
 
-.action-btn.edit {
-  background: rgba(210, 153, 34, 0.1);
-  color: #d29922;
+.subject-copy small {
+  width: 100%;
+  color: var(--mds-text-3);
+  font-size: 12px;
 }
 
-.action-btn.delete {
-  background: rgba(218, 54, 51, 0.1);
-  color: #da3633;
-}
-
-.pagination {
+.view-switch {
   display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 16px;
-  padding: 20px;
+  padding: 3px;
+  border-radius: 8px;
+  background: var(--mds-gray-soft);
 }
 
-.page-btn {
-  padding: 8px 16px;
-  border: 1px solid #e2e8f0;
+.view-switch button {
+  padding: 5px 14px;
+  border: 0;
   border-radius: 6px;
-  background: #fff;
-  font-size: 13px;
-  color: #4a5568;
+  background: transparent;
+  color: var(--mds-text-2);
+  font-size: 12.5px;
   cursor: pointer;
 }
 
-.page-btn:hover:not(:disabled) {
-  background: #f8fafc;
-}
-
-.page-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.page-info {
-  font-size: 13px;
-  color: #a0aec0;
-}
-
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.modal-content {
+.view-switch button.active {
   background: #fff;
-  border-radius: 12px;
-  width: 500px;
-  max-width: 90%;
-  overflow: hidden;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.modal-header h3 {
-  font-size: 18px;
-  font-weight: 600;
-  color: #2d3748;
-  margin: 0;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 24px;
-  color: #a0aec0;
-  cursor: pointer;
-}
-
-.modal-body {
-  padding: 20px;
-}
-
-.form-group {
-  margin-bottom: 16px;
-}
-
-.form-group label {
-  display: block;
-  font-size: 14px;
-  color: #4a5568;
-  margin-bottom: 6px;
-  font-weight: 500;
-}
-
-.form-input {
-  width: 100%;
-  padding: 10px 14px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 14px;
-  outline: none;
-  box-sizing: border-box;
-}
-
-.form-input:focus {
-  border-color: #238636;
-}
-
-.form-textarea {
-  width: 100%;
-  padding: 10px 14px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 14px;
-  outline: none;
-  box-sizing: border-box;
-  min-height: 80px;
-}
-
-.form-select {
-  width: 100%;
-  padding: 10px 14px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 14px;
-  color: #4a5568;
-  background: #fff;
-  cursor: pointer;
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  padding: 20px;
-  border-top: 1px solid #f0f0f0;
-}
-
-.btn {
-  padding: 10px 20px;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  border: none;
-}
-
-.btn-cancel {
-  background: #f0f0f0;
-  color: #4a5568;
-}
-
-.btn-primary {
-  background: linear-gradient(135deg, #238636 0%, #2ea043 100%);
-  color: #fff;
-}
-
-/* ---------------------------- 组织架构树 ---------------------------- */
-
-.tree-panel {
-  background: #fff;
-  border-radius: 12px;
+  color: var(--mds-brand-deep);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  padding: 16px 20px;
-  margin-bottom: 16px;
-}
-
-.panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-
-.panel-header h3 {
-  margin: 0;
-  font-size: 15px;
   font-weight: 600;
-  color: #2d3748;
 }
 
-.panel-hint {
-  font-size: 12px;
-  color: #718096;
+.org-table {
+  min-width: 1160px;
 }
 
-.link-btn {
-  border: none;
-  background: none;
-  color: #238636;
-  font-size: 12px;
-  cursor: pointer;
-  padding: 0 4px;
-}
-
-.tree-list {
-  list-style: none;
-  margin: 0;
+.link-name {
+  max-width: 260px;
   padding: 0;
-  max-height: 260px;
-  overflow-y: auto;
+  border: 0;
+  background: none;
+  color: var(--mds-brand-deep);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.link-name:hover {
+  text-decoration: underline;
+}
+
+.tree-view {
+  min-height: 220px;
+  padding: 8px 0;
 }
 
 .tree-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 24px minmax(320px, 1.2fr) minmax(180px, 0.7fr) minmax(130px, 0.45fr) auto auto;
   align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
-  border-radius: 6px;
-  font-size: 13px;
-  color: #2d3748;
+  gap: 10px;
+  min-height: 48px;
+  padding-right: 16px;
+  border-bottom: 1px solid var(--mds-line-soft);
+  font-size: 12.5px;
+}
+
+.tree-toggle {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid #d7dbe0;
+  border-radius: 5px;
+  background: #fff;
+  color: var(--mds-text-2);
   cursor: pointer;
 }
 
-.tree-row:hover {
-  background: #f5f7fa;
+.tree-toggle:disabled {
+  border-color: transparent;
+  cursor: default;
 }
 
-.tree-row.active {
-  background: rgba(35, 134, 54, 0.1);
-  color: #238636;
-}
-
-.node-toggle {
-  width: 12px;
-  font-size: 10px;
-  color: #a0aec0;
-}
-
-.node-name {
-  flex: 1;
-}
-
-.node-type,
-.node-auth {
-  font-size: 12px;
-  color: #a0aec0;
-}
-
-.tree-empty {
-  padding: 20px;
-  text-align: center;
-  font-size: 13px;
-  color: #a0aec0;
-}
-
-.selected-strip {
+.tree-main {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
-  gap: 16px;
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  padding: 12px 20px;
-  margin-bottom: 16px;
-  font-size: 13px;
-  color: #4a5568;
+  gap: 8px;
+}
+
+.tree-meta,
+.tree-person {
+  color: var(--mds-text-2);
+}
+
+.tree-actions {
+  white-space: nowrap;
+}
+
+@media (max-width: 1050px) {
+  .tree-row {
+    grid-template-columns: 24px minmax(280px, 1fr) auto auto;
+  }
+
+  .tree-meta,
+  .tree-person {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .subject-bar {
+    align-items: flex-start;
+  }
+
+  .tree-row {
+    grid-template-columns: 24px 1fr auto;
+  }
+
+  .tree-actions,
+  .tree-row > .mds-tag {
+    display: none;
+  }
 }
 </style>

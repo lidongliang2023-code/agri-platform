@@ -29,6 +29,42 @@
       "style": {
         "navigationBarTitleText": "地块管理"
       }
+    },
+    {
+      "path": "pages/scene/index",
+      "style": {
+        "navigationBarTitleText": "场景控制"
+      }
+    },
+    {
+      "path": "pages/scene/edit",
+      "style": {
+        "navigationBarTitleText": "新建与编辑场景"
+      }
+    },
+    {
+      "path": "pages/automation/index",
+      "style": {
+        "navigationBarTitleText": "自动化规则"
+      }
+    },
+    {
+      "path": "pages/automation/edit",
+      "style": {
+        "navigationBarTitleText": "新建与编辑自动化规则"
+      }
+    },
+    {
+      "path": "pages/messages/index",
+      "style": {
+        "navigationBarTitleText": "消息通知"
+      }
+    },
+    {
+      "path": "pages/login/index",
+      "style": {
+        "navigationStyle": "custom"
+      }
     }
   ],
   "globalStyle": {
@@ -44,30 +80,10 @@
     "borderStyle": "black",
     "backgroundColor": "#ffffff",
     "list": [
-      {
-        "pagePath": "pages/index/index",
-        "text": "首页",
-        "iconPath": "static/home.png",
-        "selectedIconPath": "static/home-active.png"
-      },
-      {
-        "pagePath": "pages/device/list",
-        "text": "设备",
-        "iconPath": "static/device.png",
-        "selectedIconPath": "static/device-active.png"
-      },
-      {
-        "pagePath": "pages/alert/list",
-        "text": "告警",
-        "iconPath": "static/alert.png",
-        "selectedIconPath": "static/alert-active.png"
-      },
-      {
-        "pagePath": "pages/plot/list",
-        "text": "地块",
-        "iconPath": "static/plot.png",
-        "selectedIconPath": "static/plot-active.png"
-      }
+      { "pagePath": "pages/index/index", "text": "首页" },
+      { "pagePath": "pages/device/list", "text": "设备" },
+      { "pagePath": "pages/alert/list", "text": "告警" },
+      { "pagePath": "pages/plot/list", "text": "地块" }
     ]
   }
 }

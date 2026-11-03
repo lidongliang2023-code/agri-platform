@@ -10,7 +10,6 @@ import DemandDetail from '@/pages/demand/detail'
 import BuyerCenter from '@/pages/member-center/BuyerCenter'
 import SellerCenter from '@/pages/member-center/SellerCenter'
 import TradeHall from '@/pages/hall'
-import MobileTrade from '@/pages/mobile-trade'
 import SsoCallback from '@/pages/sso/callback'
 import AdminLayout from '@/pages/admin/layout'
 import AdminDashboard from '@/pages/admin/dashboard'
@@ -32,6 +31,11 @@ import AdminCarrier from '@/pages/admin/carrier'
 import ExternalRedirect from '@/pages/admin/external-redirect'
 import { isLoggedIn } from '@/utils/session'
 import { redirectToSso, SSO_CALLBACK_PATH } from '@/utils/sso'
+
+const TRADE_MOBILE_ORIGIN = (import.meta.env.VITE_TRADE_MOBILE_ORIGIN as string | undefined)
+  || (['localhost', '127.0.0.1'].includes(window.location.hostname)
+    ? `${window.location.protocol}//${window.location.hostname}:8181/`
+    : 'https://trade-mobile.agri-platform.com/')
 
 function LoginRedirect({ returnTo }: { returnTo: string }): JSX.Element {
   const started = useRef(false)
@@ -77,9 +81,17 @@ function ProductPublishRedirect(): JSX.Element {
   return <Navigate to={`/member/seller?${query.toString()}`} replace />
 }
 
+/** 旧交易端移动路由统一转到独立部署的交易移动端。 */
+function MobileTradeRedirect(): JSX.Element {
+  useEffect(() => {
+    window.location.replace(TRADE_MOBILE_ORIGIN)
+  }, [])
+  return <div style={{ padding: 40, color: '#6b7c72' }}>正在打开交易移动端…</div>
+}
+
 function RootEntry(): JSX.Element {
   const mobile = window.matchMedia('(max-width: 768px)').matches
-  return <Navigate to={mobile ? '/mobile/trade' : '/member/buyer'} replace />
+  return mobile ? <MobileTradeRedirect /> : <Navigate to="/member/buyer" replace />
 }
 
 function AppRouter() {
@@ -121,9 +133,9 @@ function AppRouter() {
       </Route>
       {/* 交易端只剩买家中心 / 卖家中心；没有全局后台菜单与首页 */}
       <Route path="/hall" element={<TradeHall />} />
-      <Route path="/mobile/trade" element={<MobileTrade />} />
-      <Route path="/mobile" element={<Navigate to="/mobile/trade" replace />} />
-      <Route path="/m" element={<Navigate to="/mobile/trade" replace />} />
+      <Route path="/mobile/trade" element={<MobileTradeRedirect />} />
+      <Route path="/mobile" element={<MobileTradeRedirect />} />
+      <Route path="/m" element={<MobileTradeRedirect />} />
       <Route path="/member/buyer" element={<PrivateRoute><BuyerCenter /></PrivateRoute>} />
       <Route path="/member/seller" element={<PrivateRoute><SellerCenter /></PrivateRoute>} />
 
@@ -142,7 +154,7 @@ function AppRouter() {
       {/* 旧入口只保留重定向，不再渲染旧菜单页 */}
       <Route path="/order" element={<Navigate to="/member/buyer?tab=purchase" replace />} />
       <Route path="/product" element={<Navigate to="/member/seller?tab=goods" replace />} />
-      <Route path="/demand" element={<Navigate to="/member/buyer?tab=inquiry" replace />} />
+      <Route path="/demand" element={<Navigate to="/member/buyer?tab=demand-list" replace />} />
       <Route path="/quote" element={<Navigate to="/member/seller?tab=trade" replace />} />
       <Route path="/match" element={<Navigate to="/member/seller?tab=trade" replace />} />
       <Route path="/price" element={<Navigate to="/member/seller?tab=trade" replace />} />

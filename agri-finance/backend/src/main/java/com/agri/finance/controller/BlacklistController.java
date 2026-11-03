@@ -1,6 +1,8 @@
 package com.agri.finance.controller;
 
+import com.agri.common.rbac.OperatorOnly;
 import com.agri.finance.entity.Blacklist;
+import com.agri.finance.service.FinanceIdentityService;
 import com.agri.finance.service.impl.BlacklistServiceImpl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import org.springframework.web.bind.annotation.*;
@@ -9,12 +11,16 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/blacklist")
+@OperatorOnly("finance:admin")
 public class BlacklistController {
 
     private final BlacklistServiceImpl blacklistService;
+    private final FinanceIdentityService identityService;
 
-    public BlacklistController(BlacklistServiceImpl blacklistService) {
+    public BlacklistController(BlacklistServiceImpl blacklistService,
+                               FinanceIdentityService identityService) {
         this.blacklistService = blacklistService;
+        this.identityService = identityService;
     }
 
     @PostMapping("/add")
@@ -43,17 +49,16 @@ public class BlacklistController {
     @PostMapping("/approve")
     public Map<String, Object> approveBlacklist(@RequestBody Map<String, String> request) {
         String id = request.get("id");
-        String reviewerId = request.get("reviewerId");
-        String reviewerName = request.get("reviewerName");
-        Blacklist item = blacklistService.approveBlacklist(id, reviewerId, reviewerName);
-        return Map.of("code", 200, "message", "success", "data", item);
+        Blacklist item = blacklistService.approveBlacklist(id,
+                identityService.currentOperatorId(), identityService.currentOperatorName());
+        return Map.of("code", 200, "message", "复核完成", "data", item);
     }
 
     @PostMapping("/remove")
     public Map<String, Object> removeFromBlacklist(@RequestBody Map<String, String> request) {
         String id = request.get("id");
         Blacklist item = blacklistService.removeFromBlacklist(id);
-        return Map.of("code", 200, "message", "success", "data", item);
+        return Map.of("code", 200, "message", "已解除", "data", item);
     }
 
     @PostMapping("/check")

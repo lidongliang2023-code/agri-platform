@@ -23,3 +23,21 @@ body {
 #root {
   min-height: 100vh;
 }
+
+/* ============================================================================
+ * 字号阶梯（与 packages/agri-shared/src/tokens/tokens.css 同值同名）
+ *
+ * 本应用不依赖 @agri/shared，所以在这里镜像一份令牌；改值时两边一起改。
+ * --agri-font-size-micro 是可读下限：可见文字不得小于 12px，
+ * 层级靠字重与颜色拉开，不靠把字压小。
+ * ========================================================================== */
+:root {
+  --agri-font-size-micro: 12px;
+  --agri-font-size-aux: 13px;
+  --agri-font-size-base: 14px;
+  --agri-font-size-card-header: 15px;
+  --agri-font-size-card-title: 16px;
+  --agri-font-size-section: 18px;
+  --agri-font-size-page: 22px;
+  --agri-font-size-display: 28px;
+}

@@ -6,7 +6,55 @@
 
 .quote-section-note {
   color: #899a90;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
+}
+
+.quote-received-tools {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.quote-view-toggle {
+  display: inline-flex;
+  padding: 3px;
+  border: 1px solid #d7e5dc;
+  border-radius: 8px;
+  background: #f5f9f6;
+}
+
+.quote-view-toggle button {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  gap: 4px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #6f8276;
+  font: inherit;
+  font-size: var(--agri-font-size-micro);
+  cursor: pointer;
+}
+
+.quote-view-toggle button.on {
+  background: #12764a;
+  color: #fff;
+  box-shadow: 0 3px 9px rgba(18, 118, 74, .16);
+}
+
+.quote-received-table {
+  padding: 0 14px 12px;
+}
+
+.quote-received-product {
+  display: block;
+  max-width: 230px;
+  overflow: hidden;
+  color: #365440;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .quote-inquiry-grid {
@@ -52,13 +100,13 @@
 .quote-inquiry-head small {
   color: #8b9c92;
   font-family: "Roboto Mono", ui-monospace, monospace;
-  font-size: 7.5px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .quote-inquiry-head strong {
   overflow: hidden;
   color: #365440;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -66,7 +114,7 @@
 .quote-inquiry-head p {
   margin: 0;
   color: #84968a;
-  font-size: 8px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .quote-inquiry-data {
@@ -88,13 +136,13 @@
 
 .quote-inquiry-data span {
   color: #8a9b91;
-  font-size: 7.5px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .quote-inquiry-data strong {
   margin-top: 2px;
   color: #486452;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .quote-inquiry-foot {
@@ -107,7 +155,7 @@
 
 .quote-inquiry-foot > span {
   color: #8b9c92;
-  font-size: 8px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .quote-toolbar {
@@ -146,7 +194,7 @@
 
 .quote-list-summary span {
   color: #74897c;
-  font-size: 8.5px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .quote-loading {
@@ -156,7 +204,7 @@
   justify-content: center;
   gap: 9px;
   color: #7c8f83;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .quote-card-list {
@@ -196,7 +244,7 @@
 .quote-card-title strong {
   overflow: hidden;
   color: #33533f;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -205,14 +253,14 @@
   display: block;
   margin-top: 3px;
   color: #8b9c92;
-  font-size: 8px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .quote-card-main p {
   overflow: hidden;
   margin: 5px 0 0;
   color: #7c9084;
-  font-size: 8.5px;
+  font-size: var(--agri-font-size-micro);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -233,14 +281,14 @@
 .quote-card-numbers span,
 .quote-card-validity span {
   color: #899a90;
-  font-size: 7.5px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .quote-card-numbers strong,
 .quote-card-validity strong {
   margin-top: 2px;
   color: #456250;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .quote-card-numbers .quote-price {
@@ -280,7 +328,7 @@
   background: #fff;
   color: #456652;
   font: inherit;
-  font-size: 11px;
+  font-size: var(--agri-font-size-micro);
   cursor: pointer;
 }
 
@@ -321,7 +369,7 @@
 
 .quote-action-hero small {
   color: #188454;
-  font-size: 8px;
+  font-size: var(--agri-font-size-micro);
   font-weight: 800;
   letter-spacing: .1em;
 }
@@ -335,7 +383,7 @@
 .quote-action-hero p {
   margin: 4px 0 0;
   color: #7d9084;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .quote-action-layout {
@@ -374,13 +422,13 @@
 
 .quote-inquiry-brief span {
   color: #8a9b91;
-  font-size: 8px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .quote-inquiry-brief strong {
   margin-top: 3px;
   color: #3f5d49;
-  font-size: 9.5px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .quote-form-grid {
@@ -391,7 +439,7 @@
 
 .quote-form .ant-form-item-label > label {
   color: #4a6554;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
   font-weight: 600;
 }
 
@@ -437,7 +485,7 @@
   align-items: flex-start;
   gap: 7px;
   color: #718579;
-  font-size: 9px;
+  font-size: var(--agri-font-size-micro);
   line-height: 1.65;
 }
 
@@ -464,12 +512,12 @@
 
 .quote-aside-tip strong {
   color: #3a5b47;
-  font-size: 10px;
+  font-size: var(--agri-font-size-micro);
 }
 
 .quote-aside-tip span {
   color: #82968a;
-  font-size: 8.5px;
+  font-size: var(--agri-font-size-micro);
   line-height: 1.55;
 }
 
@@ -508,6 +556,12 @@
 }
 
 @media (max-width: 680px) {
+  .quote-received-tools {
+    align-items: flex-end;
+    flex-direction: column;
+    gap: 6px;
+  }
+
   .quote-toolbar {
     grid-template-columns: 1fr 1fr;
   }

@@ -14,6 +14,13 @@
  * - 编辑已有绑定走 `bindDevice`（后端「同设备+类型+对象重复绑定」= upsert 语义），
  *   保证采集指标 / 采集频率能被真实保存，而不是只改状态
  * - 传感器映射（通道 → 监测指标）前端按设备维度持久化，并把映射出的指标回写绑定关系的 metrics
+ *
+ * 数据边界（2026-10-28 收敛）：
+ * - 设备下拉来自物联网系统的设备台账（`GET /iot/devices` → agri-iot 的 `iot_device`），
+ *   生产端不再有第二份设备表，所以这里选到的设备与物联网端看到的是同一批。
+ * - 绑定关系本身留在生产端（`agri_prod_iot_binding`）：它比物联网端多出「大棚/农场」
+ *   两类对象、解绑历史和采集频率。绑定到「地块」时会把结果回写物联网端的 `plot_id`，
+ *   保证物联网端设备详情里的地块归属同步可见。
  */
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'

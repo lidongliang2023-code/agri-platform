@@ -1,0 +1,32 @@
+.detail-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+}
+
+.detail-metric-card {
+  height: 100%;
+  padding: 16px 18px;
+  border: 1px solid #e3eae5;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(11, 26, 18, 0.03);
+}
+
+.detail-metric-extra {
+  margin-top: 8px;
+  color: #6b7c72;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+@media (max-width: 640px) {
+  .detail-metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .detail-metric-card {
+    padding: 12px 14px;
+  }
+}

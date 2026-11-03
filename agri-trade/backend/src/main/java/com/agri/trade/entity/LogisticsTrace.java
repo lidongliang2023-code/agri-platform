@@ -67,9 +67,6 @@ public class LogisticsTrace {
     @TableField("del_flag")
     private Integer delFlag;
 
-    @TableField("tenant_id")
-    private String tenantId;
-
     @TableField("create_time")
     private Date createTime;
 }

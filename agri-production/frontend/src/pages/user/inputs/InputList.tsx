@@ -1,19 +1,19 @@
 /**
- * 页面名称：投入品列表（台账）
- * 路由路径：/production/inputs
- * 所属模块：农资投入品管理
- * 原型来源：用户端原型 P10 inputs — 投入品列表（台账）
+ * 页面名称：农资管理（投入品档案 / 使用台账）
+ * 路由路径：/production/inputs（旧 /production/inputs/usages 跳 ?tab=ledger；旧 /production/inputs/stock 回落到本页）
+ * 所属模块：农资管理
+ * 原型来源：用户端原型 P10 inputs — 投入品列表（台账），并合并原出入库管理页、使用记录页
  *
  * 还原要点：
- * - 标题「💊 投入品台账」+ 扫码录入 / 手动添加 / 导入 / 导出 按钮
+ * - 标题「🌾 农资管理」+ 扫码录入 / 手动添加 / 导入 / 导出 按钮（仅投入品档案 Tab 展示）
  * - 筛选器：统计周期（本月 / 本季度 / 本年）、全部类型、全部地块、全部合规
  * - 「📊 投入概况」4 项：肥料 / 农药 / 种苗 / 其他 的用量与次数
  * - 合规汇总：合规状态 / 拦截次数 / 预警次数 / 休药期地块数
- * - Tab 1 投入品档案：分类检索 + 准入校验标识 + 库存预警，支持增删改查
- * - Tab 2 使用台账：日期 | 投入品 | 类型 | 地块 | 用量 | 合规 | 操作（溯源 → 详情）
+ * - Tab 1 投入品档案：查询条件 + 投入概况 + 合规汇总 + 库存总览（原出入库管理）+ 投入品档案表
+ * - Tab 2 使用台账：使用记录 + 合规/上链 + 出入库流水（原出入库管理）
  */
 import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { PageContainer, ProTable } from '@ant-design/pro-components'
 import type { ProColumns } from '@ant-design/pro-components'
@@ -67,16 +67,32 @@ import {
   checkCompliance,
   categoryMeta,
   downloadCsv,
-  fmtDate,
   fmtNumber,
   resolveRange,
   resolveStockState,
   summarizeCompliance,
 } from './shared'
 import type { ComplianceItem, ComplianceLevel, StockState } from './shared'
+import InputStock from './InputStock'
+import type { StockActionShortcut } from './InputStock'
+import InputUsages from './InputUsages'
 
-/** 主 Tab：投入品档案 / 使用台账 */
+/** 主 Tab：投入品档案 / 使用台账（原「出入库管理」已拆入这两个 Tab） */
 type MainTab = 'archive' | 'ledger'
+
+/**
+ * 归一化 `?tab=` 参数。
+ *
+ * <p>旧的「使用记录」页（`/production/inputs/usages`）映射到 ledger；
+ * 旧的「出入库管理」页（`/production/inputs/stock`）已拆入两个 Tab，统一回落到
+ * 投入品档案（库存总览所在位置）。</p>
+ *
+ * @param value 查询参数原始值
+ * @returns 合法 Tab 值，缺省为投入品档案
+ */
+function normalizeTab(value: string | null): MainTab {
+  return value === 'ledger' ? 'ledger' : 'archive'
+}
 
 /** 列表筛选条件 */
 interface FilterState {
@@ -157,7 +173,10 @@ export default function InputList(): JSX.Element {
   const currentFarm = useFarmStore((state) => state.currentFarm)
   const farmId = currentFarm?.farmId
 
-  const [tab, setTab] = useState<MainTab>('archive')
+  const [searchParams, setSearchParams] = useSearchParams()
+  // Tab 直接由 URL 派生：深链 ?tab=ledger（原「使用记录」页）/ ?tab=stock（原「出入库管理」页）
+  // 与页内跳转（如出入库 Tab 的「使用登记」）都能即时落位
+  const tab = normalizeTab(searchParams.get('tab'))
   const [pageNum, setPageNum] = useState<number>(1)
   const [pageSize, setPageSize] = useState<number>(20)
   const [filters, setFilters] = useState<FilterState>({ range: 'month' })
@@ -169,6 +188,7 @@ export default function InputList(): JSX.Element {
   const [scanCode, setScanCode] = useState<string>('')
   const [importOpen, setImportOpen] = useState<boolean>(false)
   const [importing, setImporting] = useState<boolean>(false)
+  const [stockShortcut, setStockShortcut] = useState<StockActionShortcut>()
 
   /** 投入品档案（一次性取全量，前端完成分类 / 合规 / 库存预警过滤与分页） */
   const inputsQuery = useQuery({
@@ -339,39 +359,47 @@ export default function InputList(): JSX.Element {
     return { blocked, warning, withdrawalPlots: withdrawalPlots.size, total: ledgerRows.length }
   }, [ledgerRows])
 
-  /** 档案过滤结果 */
+  /** 档案过滤结果（合并库存总览后仍按低库存优先） */
   const filteredInputs = useMemo<InputInfo[]>(() => {
     const keyword = (filters.keyword ?? '').trim()
-    return allInputs.filter((item) => {
-      if (keyword) {
-        const haystack = `${item.inputName ?? ''}${item.registrationNo ?? ''}${
-          item.manufacturer ?? ''
-        }`
-        if (!haystack.includes(keyword)) return false
-      }
-      if (filters.category && (item.inputType ?? 'OTHER') !== filters.category) return false
-      if (filters.compliance) {
-        if (checkAdmission(item.inputName, item.inputType).level !== filters.compliance) {
-          return false
+    const stateOrder: Record<StockState, number> = {
+      shortage: 0,
+      expiring: 1,
+      warning: 2,
+      normal: 3,
+    }
+    return allInputs
+      .filter((item) => {
+        if (keyword) {
+          const haystack = `${item.inputName ?? ''}${item.registrationNo ?? ''}${
+            item.manufacturer ?? ''
+          }`
+          if (!haystack.includes(keyword)) return false
         }
-      }
-      if (filters.stockState && filters.stockState !== 'all') {
-        if (stockStateOf(item) !== filters.stockState) return false
-      }
-      return true
-    })
+        if (filters.category && (item.inputType ?? 'OTHER') !== filters.category) return false
+        if (filters.compliance) {
+          if (checkAdmission(item.inputName, item.inputType).level !== filters.compliance) {
+            return false
+          }
+        }
+        if (filters.stockState && filters.stockState !== 'all') {
+          if (stockStateOf(item) !== filters.stockState) return false
+        }
+        return true
+      })
+      .sort((left, right) => {
+        const byState = stateOrder[stockStateOf(left)] - stateOrder[stockStateOf(right)]
+        if (byState !== 0) return byState
+        return String(left.nearestExpireDate ?? '9999-12-31').localeCompare(
+          String(right.nearestExpireDate ?? '9999-12-31'),
+        )
+      })
   }, [allInputs, filters])
 
   /** 当前页档案数据 */
   const pagedInputs = useMemo<InputInfo[]>(
     () => filteredInputs.slice((pageNum - 1) * pageSize, pageNum * pageSize),
     [filteredInputs, pageNum, pageSize],
-  )
-
-  /** 当前页台账数据 */
-  const pagedLedger = useMemo<LedgerRow[]>(
-    () => ledgerRows.slice((pageNum - 1) * pageSize, pageNum * pageSize),
-    [ledgerRows, pageNum, pageSize],
   )
 
   /** 查询 */
@@ -386,6 +414,22 @@ export default function InputList(): JSX.Element {
     filterForm.resetFields()
     setPageNum(1)
     setFilters({ range: 'month' })
+  }
+
+  /**
+   * 切换主 Tab（只改 URL，Tab 由 `?tab=` 派生）。
+   *
+   * <p>`create` / `usageId` 是一次性深链参数，切换 Tab 时一并清掉，避免下次进入
+   * 使用台账时又弹出登记窗或残留筛选。</p>
+   */
+  const switchTab = (next: MainTab): void => {
+    setPageNum(1)
+    const params = new URLSearchParams(searchParams)
+    params.delete('create')
+    params.delete('usageId')
+    if (next === 'archive') params.delete('tab')
+    else params.set('tab', next)
+    setSearchParams(params, { replace: true })
   }
 
   /** 打开编辑弹窗 */
@@ -513,58 +557,37 @@ export default function InputList(): JSX.Element {
     )
   }
 
-  /** 导出当前视图数据 */
+  /** 导出投入品档案（使用台账 / 出入库 Tab 各自有导出按钮） */
   const handleExport = (): void => {
-    if (tab === 'archive') {
-      if (filteredInputs.length === 0) {
-        message.warning('暂无可导出的数据')
-        return
-      }
-      downloadCsv(
-        '投入品档案',
-        [
-          '投入品名称',
-          '投入品类型',
-          '登记证号',
-          '生产厂家',
-          '规格',
-          '库存',
-          '单位',
-          '安全间隔期(天)',
-          '准入校验',
-          '状态',
-        ],
-        filteredInputs.map((item) => [
-          item.inputName ?? '',
-          categoryMeta(item.inputType).label,
-          item.registrationNo ?? '',
-          item.manufacturer ?? '',
-          item.spec ?? '',
-          fmtNumber(item.stockQty),
-          item.unit ?? '',
-          item.safetyInterval ?? '',
-          checkAdmission(item.inputName, item.inputType).label,
-          item.status === 1 ? '启用' : '停用',
-        ]),
-      )
-      return
-    }
-    if (ledgerRows.length === 0) {
+    if (filteredInputs.length === 0) {
       message.warning('暂无可导出的数据')
       return
     }
     downloadCsv(
-      '投入品使用台账',
-      ['日期', '投入品', '投入品类型', '地块', '用量', '单位', '操作人', '合规结论'],
-      ledgerRows.map((row) => [
-        fmtDate(row.usage.usedAt),
-        row.usage.inputName ?? row.input?.inputName ?? '-',
-        categoryMeta(row.input?.inputType).label,
-        row.plotName,
-        fmtNumber(row.usage.dosage),
-        row.usage.unit ?? '',
-        row.usage.operatorId ?? '',
-        row.items.map((item) => `${item.label}:${item.result}`).join('；'),
+      '投入品档案',
+      [
+        '投入品名称',
+        '投入品类型',
+        '登记证号',
+        '生产厂家',
+        '规格',
+        '库存',
+        '单位',
+        '安全间隔期(天)',
+        '准入校验',
+        '状态',
+      ],
+      filteredInputs.map((item) => [
+        item.inputName ?? '',
+        categoryMeta(item.inputType).label,
+        item.registrationNo ?? '',
+        item.manufacturer ?? '',
+        item.spec ?? '',
+        fmtNumber(item.stockQty),
+        item.unit ?? '',
+        item.safetyInterval ?? '',
+        checkAdmission(item.inputName, item.inputType).label,
+        item.status === 1 ? '启用' : '停用',
       ]),
     )
   }
@@ -616,7 +639,7 @@ export default function InputList(): JSX.Element {
     {
       title: '库存',
       dataIndex: 'stockQty',
-      width: 150,
+      width: 170,
       render: (_, record) => {
         const state = stockStateOf(record)
         const meta = STOCK_STATE_META[state]
@@ -635,6 +658,21 @@ export default function InputList(): JSX.Element {
           </Space>
         )
       },
+    },
+    {
+      title: '预警阈值',
+      dataIndex: 'warnQty',
+      width: 120,
+      render: (_, record) =>
+        record.warnQty === undefined || record.warnQty === null
+          ? '-'
+          : `${fmtNumber(record.warnQty)} ${record.unit ?? ''}`,
+    },
+    {
+      title: '最近批次效期',
+      dataIndex: 'nearestExpireDate',
+      width: 130,
+      render: (_, record) => record.nearestExpireDate?.slice(0, 10) ?? '-',
     },
     {
       title: '安全间隔期',
@@ -671,9 +709,27 @@ export default function InputList(): JSX.Element {
     {
       title: '操作',
       key: 'option',
-      width: 210,
+      width: 300,
       valueType: 'option',
       render: (_, record) => [
+        <Typography.Link
+          key="stock-in"
+          onClick={() =>
+            setStockShortcut((previous) => ({
+              requestId: (previous?.requestId ?? 0) + 1,
+              action: 'in',
+              inputId: record.inputId,
+            }))
+          }
+        >
+          入库
+        </Typography.Link>,
+        <Typography.Link
+          key="usage"
+          onClick={() => navigate('/production/inputs?tab=ledger&create=1')}
+        >
+          使用登记
+        </Typography.Link>,
         <Typography.Link
           key="detail"
           onClick={() => navigate(`/production/inputs/${record.inputId}`)}
@@ -682,9 +738,6 @@ export default function InputList(): JSX.Element {
         </Typography.Link>,
         <Typography.Link key="edit" onClick={() => openEdit(record)}>
           编辑
-        </Typography.Link>,
-        <Typography.Link key="stock" onClick={() => navigate('/production/inputs/stock')}>
-          出入库
         </Typography.Link>,
         <Popconfirm
           key="delete"
@@ -700,79 +753,6 @@ export default function InputList(): JSX.Element {
     },
   ]
 
-  /** 台账列定义（原型 P10 表格列） */
-  const ledgerColumns: ProColumns<LedgerRow>[] = [
-    {
-      title: '日期',
-      key: 'usedAt',
-      width: 120,
-      render: (_, record) => fmtDate(record.usage.usedAt),
-    },
-    {
-      title: '投入品',
-      key: 'inputName',
-      width: 150,
-      render: (_, record) => (
-        <Typography.Link onClick={() => navigate(`/production/inputs/${record.usage.inputId ?? ''}`)}>
-          {record.usage.inputName ?? record.input?.inputName ?? '-'}
-        </Typography.Link>
-      ),
-    },
-    {
-      title: '投入品类型',
-      key: 'category',
-      width: 110,
-      render: (_, record) => {
-        const meta = categoryMeta(record.input?.inputType)
-        return <Tag color={meta.color}>{meta.label}</Tag>
-      },
-    },
-    { title: '地块', key: 'plotName', width: 120, render: (_, record) => record.plotName },
-    {
-      title: '用量',
-      key: 'dosage',
-      width: 120,
-      render: (_, record) => `${fmtNumber(record.usage.dosage)} ${record.usage.unit ?? ''}`,
-    },
-    {
-      title: '操作人',
-      key: 'operatorId',
-      width: 110,
-      render: (_, record) => record.usage.operatorId ?? '-',
-    },
-    {
-      title: '合规',
-      key: 'compliance',
-      width: 120,
-      render: (_, record) => {
-        const meta = {
-          pass: { icon: '✅', color: 'green', label: '通过' },
-          warning: { icon: '⚠️', color: 'orange', label: '预警' },
-          blocked: { icon: '❌', color: 'red', label: '拦截' },
-        }[record.level]
-        return (
-          <Tag color={meta.color}>
-            {meta.icon} {meta.label}
-          </Tag>
-        )
-      },
-    },
-    {
-      title: '操作',
-      key: 'option',
-      width: 110,
-      valueType: 'option',
-      render: (_, record) => [
-        <Typography.Link
-          key="trace"
-          onClick={() => navigate(`/production/inputs/${record.usage.inputId ?? ''}`)}
-        >
-          溯源 →
-        </Typography.Link>,
-      ],
-    },
-  ]
-
   const loading = inputsQuery.isFetching || usagesQuery.isFetching
   const isError = inputsQuery.isError || usagesQuery.isError
   const rangeLabel =
@@ -780,206 +760,209 @@ export default function InputList(): JSX.Element {
 
   return (
     <PageContainer
-      title="💊 投入品台账"
+      title="🌾 农资管理"
       subTitle={currentFarm ? currentFarm.farmName : undefined}
-      extra={[
-        <Button key="scan" icon={<ScanOutlined />} onClick={() => setScanOpen(true)}>
-          📷 扫码录入
-        </Button>,
-        <Button
-          key="create"
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => navigate('/production/inputs/create')}
-        >
-          + 手动添加
-        </Button>,
-        <Button key="import" icon={<ImportOutlined />} onClick={() => setImportOpen(true)}>
-          导入
-        </Button>,
-        <Button key="export" icon={<DownloadOutlined />} onClick={handleExport}>
-          导出
-        </Button>,
-      ]}
+      // 页头操作按钮只在「投入品档案」Tab 展示；使用台账与流水各自带作业按钮
+      extra={
+        tab !== 'archive'
+          ? undefined
+          : [
+              <Button key="scan" icon={<ScanOutlined />} onClick={() => setScanOpen(true)}>
+                扫码录入
+              </Button>,
+              <Button
+                key="create"
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={() => navigate('/production/inputs/create')}
+              >
+                手动添加
+              </Button>,
+              <Button key="import" icon={<ImportOutlined />} onClick={() => setImportOpen(true)}>
+                导入
+              </Button>,
+              <Button key="export" icon={<DownloadOutlined />} onClick={handleExport}>
+                导出
+              </Button>,
+            ]
+      }
     >
-      <Card style={{ marginBottom: 16 }}>
-        <Form form={filterForm} layout="inline" style={{ rowGap: 12 }}>
-          <Form.Item name="range" label="统计周期">
-            <Select
-              placeholder="请选择周期"
-              options={RANGE_OPTIONS}
-              style={{ width: 120 }}
-              defaultValue="month"
-            />
-          </Form.Item>
-          <Form.Item name="category" label="投入品类型">
-            <Select
-              allowClear
-              placeholder="全部投入品类型"
-              options={INPUT_CATEGORY_OPTIONS}
-              style={{ width: 120 }}
-            />
-          </Form.Item>
-          <Form.Item name="plotId" label="地块">
-            <Select
-              allowClear
-              showSearch
-              optionFilterProp="label"
-              placeholder="全部地块"
-              options={plotOptions}
-              style={{ width: 140 }}
-            />
-          </Form.Item>
-          <Form.Item name="compliance" label="合规">
-            <Select
-              allowClear
-              placeholder="全部合规"
-              style={{ width: 120 }}
-              options={[
-                { value: 'pass', label: '✅ 通过' },
-                { value: 'warning', label: '⚠️ 预警' },
-                { value: 'blocked', label: '❌ 拦截' },
-              ]}
-            />
-          </Form.Item>
-          <Form.Item name="keyword" label="关键字">
-            <Input allowClear placeholder="投入品名称 / 登记证号" style={{ width: 180 }} />
-          </Form.Item>
-          <Form.Item label="库存状态">
-            <Segmented
-              size="small"
-              value={filters.stockState ?? 'all'}
-              onChange={(value) => {
-                const next = value as StockState | 'all'
-                filterForm.setFieldValue('stockState', next)
-                setFilters((prev) => ({ ...prev, stockState: next }))
-              }}
-              options={STOCK_STATE_OPTIONS}
-            />
-          </Form.Item>
-          <Form.Item>
-            <Space>
-              <Button type="primary" onClick={handleSearch}>
-                查询
-              </Button>
-              <Button onClick={handleReset}>重置</Button>
-            </Space>
-          </Form.Item>
-        </Form>
-      </Card>
-
-      <Card title={`📊 投入概况（${rangeLabel}）`} style={{ marginBottom: 16 }} loading={loading}>
-        <Row gutter={16}>
-          {overview.map((item) => (
-            <Col key={item.value} span={6}>
-              <Statistic
-                title={`${item.label}（${item.count} 次）`}
-                value={item.qty}
-                precision={2}
-                suffix={item.unit || '-'}
-              />
-            </Col>
-          ))}
-        </Row>
-      </Card>
-
-      <Alert
-        style={{ marginBottom: 16 }}
-        type={complianceSummary.blocked > 0 ? 'error' : 'success'}
-        showIcon
-        message={
-          <Space size={16} wrap>
-            <span>
-              合规状态：
-              {complianceSummary.blocked > 0 ? (
-                <Tag color="red">❌ 存在拦截</Tag>
-              ) : (
-                <Tag color="green">✅ 全部通过</Tag>
-              )}
-            </span>
-            <span>拦截：{complianceSummary.blocked} 次</span>
-            <span>预警：{complianceSummary.warning} 次</span>
-            <span>休药期地块：{complianceSummary.withdrawalPlots} 个</span>
-            <Typography.Text type="secondary">
-              统计口径 {rangeStart} ~ {rangeEnd}，共 {complianceSummary.total} 条使用记录
-            </Typography.Text>
-          </Space>
-        }
-      />
-
       <Card>
         <Tabs
           activeKey={tab}
-          onChange={(key) => {
-            setTab(key as MainTab)
-            setPageNum(1)
-          }}
-          // 「登记使用记录」入口（2026-10-16 菜单收口配套）：
-          // 「使用记录」(/production/inputs/usages) 的菜单叶子已撤销（它与本页「使用台账」Tab 重叠），
-          // 但**新建使用记录 / 合规校验 / 上链 / 删除**是那一页独有的能力 —— 收口不能顺手砍功能，
-          // 所以把入口挂到最相关的这个 Tab 右上角，页面上仍然可达（不再单独占菜单位）。
-          tabBarExtraContent={
-            <Button type="link" onClick={() => navigate('/production/inputs/usages')}>
-              登记使用记录 →
-            </Button>
-          }
+          onChange={(key) => switchTab(key as MainTab)}
           items={[
-            { key: 'archive', label: `投入品档案(${filteredInputs.length})` },
-            { key: 'ledger', label: `使用台账(${ledgerRows.length})` },
+            {
+              key: 'archive',
+              label: `投入品档案(${filteredInputs.length})`,
+              children: (
+                <>
+                  <Card style={{ marginBottom: 16 }}>
+                    <Form form={filterForm} layout="inline" style={{ rowGap: 12 }}>
+                      <Form.Item name="range" label="统计周期">
+                        <Select
+                          placeholder="请选择周期"
+                          options={RANGE_OPTIONS}
+                          style={{ width: 120 }}
+                          defaultValue="month"
+                        />
+                      </Form.Item>
+                      <Form.Item name="category" label="投入品类型">
+                        <Select
+                          allowClear
+                          placeholder="全部投入品类型"
+                          options={INPUT_CATEGORY_OPTIONS}
+                          style={{ width: 120 }}
+                        />
+                      </Form.Item>
+                      <Form.Item name="plotId" label="地块">
+                        <Select
+                          allowClear
+                          showSearch
+                          optionFilterProp="label"
+                          placeholder="全部地块"
+                          options={plotOptions}
+                          style={{ width: 140 }}
+                        />
+                      </Form.Item>
+                      <Form.Item name="compliance" label="合规">
+                        <Select
+                          allowClear
+                          placeholder="全部合规"
+                          style={{ width: 120 }}
+                          options={[
+                            { value: 'pass', label: '✅ 通过' },
+                            { value: 'warning', label: '⚠️ 预警' },
+                            { value: 'blocked', label: '❌ 拦截' },
+                          ]}
+                        />
+                      </Form.Item>
+                      <Form.Item name="keyword" label="关键字">
+                        <Input allowClear placeholder="投入品名称 / 登记证号" style={{ width: 180 }} />
+                      </Form.Item>
+                      <Form.Item label="库存状态">
+                        <Segmented
+                          size="small"
+                          value={filters.stockState ?? 'all'}
+                          onChange={(value) => {
+                            const next = value as StockState | 'all'
+                            filterForm.setFieldValue('stockState', next)
+                            setFilters((prev) => ({ ...prev, stockState: next }))
+                          }}
+                          options={STOCK_STATE_OPTIONS}
+                        />
+                      </Form.Item>
+                      <Form.Item>
+                        <Space>
+                          <Button type="primary" onClick={handleSearch}>
+                            查询
+                          </Button>
+                          <Button onClick={handleReset}>重置</Button>
+                        </Space>
+                      </Form.Item>
+                    </Form>
+                  </Card>
+
+                  <Card
+                    title={`📊 投入概况（${rangeLabel}）`}
+                    style={{ marginBottom: 16 }}
+                    loading={loading}
+                  >
+                    <Row gutter={16}>
+                      {overview.map((item) => (
+                        <Col key={item.value} span={6}>
+                          <Statistic
+                            title={`${item.label}（${item.count} 次）`}
+                            value={item.qty}
+                            precision={2}
+                            suffix={item.unit || '-'}
+                          />
+                        </Col>
+                      ))}
+                    </Row>
+                  </Card>
+
+                  <Alert
+                    style={{ marginBottom: 16 }}
+                    type={complianceSummary.blocked > 0 ? 'error' : 'success'}
+                    showIcon
+                    message={
+                      <Space size={16} wrap>
+                        <span>
+                          合规状态：
+                          {complianceSummary.blocked > 0 ? (
+                            <Tag color="red">❌ 存在拦截</Tag>
+                          ) : (
+                            <Tag color="green">✅ 全部通过</Tag>
+                          )}
+                        </span>
+                        <span>拦截：{complianceSummary.blocked} 次</span>
+                        <span>预警：{complianceSummary.warning} 次</span>
+                        <span>休药期地块：{complianceSummary.withdrawalPlots} 个</span>
+                        <Typography.Text type="secondary">
+                          统计口径 {rangeStart} ~ {rangeEnd}，共 {complianceSummary.total} 条使用记录
+                        </Typography.Text>
+                      </Space>
+                    }
+                  />
+
+                  {/* 库存统计与作业保留；库存列表已并入下方唯一主表 */}
+                  <InputStock part="overview" showTable={false} shortcut={stockShortcut} />
+
+                  {isError ? (
+                    <Empty
+                      description={
+                        <Space direction="vertical">
+                          <Typography.Text type="danger">投入品数据加载失败，请稍后重试</Typography.Text>
+                          <Button onClick={() => void invalidateAll()}>重新加载</Button>
+                        </Space>
+                      }
+                    />
+                  ) : (
+                    <Card
+                      title="🏪 库存总览 · 投入品档案（低库存优先）"
+                      extra={
+                        <Typography.Text type="secondary">
+                          共 {filteredInputs.length} 种
+                        </Typography.Text>
+                      }
+                    >
+                      <ProTable<InputInfo>
+                        rowKey="inputId"
+                        columns={archiveColumns}
+                        dataSource={pagedInputs}
+                        loading={loading}
+                        search={false}
+                        rowSelection={{}}
+                        // 库存、效期和作业并入同一张表，窄屏只在这一张表内横向滚动
+                        scroll={{ x: 1750 }}
+                        options={{ reload: () => void invalidateAll(), density: true, setting: true }}
+                        pagination={{
+                          current: pageNum,
+                          pageSize,
+                          total: filteredInputs.length,
+                          showSizeChanger: true,
+                          showTotal: (total) => `共 ${total} 条`,
+                          onChange: (nextPage, nextSize) => {
+                            setPageNum(nextPage)
+                            setPageSize(nextSize)
+                          },
+                        }}
+                      />
+                    </Card>
+                  )}
+                </>
+              ),
+            },
+            {
+              key: 'ledger',
+              label: '使用台账',
+              children: (
+                <InputUsages />
+              ),
+            },
           ]}
         />
-        {isError ? (
-          <Empty
-            description={
-              <Space direction="vertical">
-                <Typography.Text type="danger">投入品数据加载失败，请稍后重试</Typography.Text>
-                <Button onClick={() => void invalidateAll()}>重新加载</Button>
-              </Space>
-            }
-          />
-        ) : tab === 'archive' ? (
-          <ProTable<InputInfo>
-            rowKey="inputId"
-            columns={archiveColumns}
-            dataSource={pagedInputs}
-            loading={loading}
-            search={false}
-            rowSelection={{}}
-            options={{ reload: () => void invalidateAll(), density: true, setting: true }}
-            pagination={{
-              current: pageNum,
-              pageSize,
-              total: filteredInputs.length,
-              showSizeChanger: true,
-              showTotal: (total) => `共 ${total} 条`,
-              onChange: (nextPage, nextSize) => {
-                setPageNum(nextPage)
-                setPageSize(nextSize)
-              },
-            }}
-          />
-        ) : (
-          <ProTable<LedgerRow>
-            rowKey={(record) => record.usage.usageId}
-            columns={ledgerColumns}
-            dataSource={pagedLedger}
-            loading={loading}
-            search={false}
-            rowSelection={{}}
-            options={{ reload: () => void invalidateAll(), density: true, setting: true }}
-            pagination={{
-              current: pageNum,
-              pageSize,
-              total: ledgerRows.length,
-              showSizeChanger: true,
-              showTotal: (total) => `共 ${total} 条`,
-              onChange: (nextPage, nextSize) => {
-                setPageNum(nextPage)
-                setPageSize(nextSize)
-              },
-            }}
-          />
-        )}
       </Card>
 
       <Modal

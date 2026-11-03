@@ -1,212 +1,338 @@
 <template>
-  <div class="category-page">
-    <van-search v-model="keyword" placeholder="搜索农产品" @search="handleSearch" />
-    <div class="category-content">
-      <div class="left-menu">
-        <div 
-          class="menu-item" 
-          :class="{ active: activeCategory === cat.id }"
-          v-for="cat in leftCategories" 
-          :key="cat.id"
-          @click="selectCategory(cat.id)"
-        >
-          {{ cat.name }}
-        </div>
-      </div>
-      <div class="right-content">
-        <div class="sub-category" v-if="subCategories.length > 0">
-          <div 
-            class="sub-item" 
-            v-for="sub in subCategories" 
-            :key="sub.id"
-            @click="selectSubCategory(sub.id)"
-          >
-            <span>{{ sub.name }}</span>
-          </div>
-        </div>
-        <div class="product-grid">
-          <div class="product-card" v-for="product in products" :key="product.id" @click="goDetail(product.id)">
-            <img :src="getFirstImage(product.images)" class="product-img" />
-            <h4 class="product-name">{{ product.name }}</h4>
-            <p class="price">¥{{ product.price }}</p>
-          </div>
-        </div>
-        <van-empty v-if="products.length === 0" description="暂无商品" />
+  <div class="m-container" v-loading="loading">
+    <!-- 顶部：搜索 + 全部商品入口 -->
+    <div class="m-page-hd lead">
+      <h1>商品分类</h1>
+      <span class="sub">共 {{ firstLevel.length }} 个一级分类 · {{ subCount }} 个二级分类</span>
+      <div class="hd-actions">
+        <el-input
+          v-model="keyword"
+          class="hd-search"
+          placeholder="搜索商品，如「有机大米」"
+          clearable
+          @keyup.enter="goSearch"
+        />
+        <button type="button" class="m-btn" @click="goSearch">搜索</button>
+        <button type="button" class="m-btn primary" @click="router.push('/products')">全部商品</button>
       </div>
     </div>
+
+    <div v-if="firstLevel.length" class="cat-layout">
+      <!-- 一级分类竖列 -->
+      <aside class="m-card cat-rail">
+        <button
+          v-for="cat in firstLevel"
+          :key="cat.id"
+          type="button"
+          class="rail-item"
+          :class="{ on: String(cat.id) === String(activeId) }"
+          @click="selectCategory(cat.id)"
+        >
+          <span class="ico">{{ cat.icon || '🌿' }}</span>
+          <span class="name">{{ cat.name }}</span>
+          <span class="cnt muted small">{{ (cat.children || []).length }}</span>
+        </button>
+      </aside>
+
+      <section class="cat-main m-stack">
+        <!-- 二级分类 -->
+        <div class="m-card">
+          <div class="m-card-hd">
+            <h3>{{ activeCat?.name || '分类' }}</h3>
+            <span class="muted small">{{ subCategories.length }} 个二级分类</span>
+            <div class="hd-actions">
+              <button type="button" class="m-btn sm ghost" @click="goList(activeId)">
+                查看该分类全部商品 ›
+              </button>
+            </div>
+          </div>
+
+          <div class="m-card-pad">
+            <div v-if="subCategories.length" class="m-grid m-grid-4">
+              <button
+                v-for="sub in subCategories"
+                :key="sub.id"
+                type="button"
+                class="sub-item"
+                @click="goList(sub.id)"
+              >
+                <span class="sub-ico">{{ sub.icon || '🌿' }}</span>
+                <b>{{ sub.name }}</b>
+                <small>{{ sub.children?.length ? `${sub.children.length} 个子类` : '产地直供' }}</small>
+              </button>
+            </div>
+            <EmptyBlock
+              v-else
+              icon="🗂️"
+              title="该分类暂无二级分类"
+              desc="二级分类由平台运营端在分类管理中维护。未配置子类时该分类下仍可能有商品，可直接查看该分类商品。"
+            >
+              <template #actions>
+                <button type="button" class="m-btn ghost" @click="goList(activeId)">查看该分类商品</button>
+              </template>
+            </EmptyBlock>
+          </div>
+        </div>
+
+        <!-- 当前分类热销 -->
+        <div>
+          <SectionHead
+            title="本类热销"
+            :desc="activeCat ? `按累计销量展示「${activeCat.name}」下的在架商品` : '按累计销量展示在架商品'"
+            more-text="更多 ›"
+            @more="goList(activeId)"
+          />
+          <div v-if="hotProducts.length" class="m-grid m-grid-4">
+            <ProductCard
+              v-for="p in hotProducts"
+              :key="p.id"
+              :product="p"
+              :favorited="favorites.has(p.id)"
+              @favorite="favorites.toggle(p.id)"
+              @add="addToCart(p)"
+            />
+          </div>
+          <EmptyBlock
+            v-else-if="!hotLoading"
+            icon="🌾"
+            title="该分类暂无在架商品"
+            desc="商品由供应商在供应商端上架、经平台审核通过后才会出现在这里，审核前不展示。"
+          >
+            <template #actions>
+              <button type="button" class="m-btn ghost" @click="router.push('/products')">看看全部商品</button>
+            </template>
+          </EmptyBlock>
+        </div>
+      </section>
+    </div>
+
+    <EmptyBlock
+      v-else-if="!loading"
+      icon="🗂️"
+      title="暂无分类数据"
+      desc="分类树由平台运营端维护。当前接口没有返回任何分类，因此无法按分类浏览，可先进入全部商品列表。"
+    >
+      <template #actions>
+        <button type="button" class="m-btn primary" @click="router.push('/products')">查看全部商品</button>
+      </template>
+    </EmptyBlock>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import { consumerApi } from '../api'
+import { useUserStore } from '../stores/user'
+import { useFavorites } from '../composables/useFavorites'
+import SectionHead from '../components/SectionHead.vue'
+import ProductCard from '../components/ProductCard.vue'
+import EmptyBlock from '../components/EmptyBlock.vue'
 
 const router = useRouter()
-const route = useRoute()
+const userStore = useUserStore()
+const favorites = useFavorites()
+
+const loading = ref(false)
+const hotLoading = ref(false)
 const keyword = ref('')
-const activeCategory = ref(1)
-const selectedSubCategory = ref(null)
-const products = ref([])
+const activeId = ref(null)
+const hotProducts = ref([])
 
-const leftCategories = ref([
-  { id: 1, name: '粮油调味' },
-  { id: 2, name: '新鲜果蔬' },
-  { id: 3, name: '肉禽蛋奶' },
-  { id: 4, name: '茶叶茶饮' },
-  { id: 5, name: '滋补养生' },
-  { id: 6, name: '地方特产' }
-])
+const firstLevel = computed(() => userStore.categories || [])
+const activeCat = computed(
+  () => firstLevel.value.find((cat) => String(cat.id) === String(activeId.value)) || null,
+)
+const subCategories = computed(() => activeCat.value?.children || [])
+const subCount = computed(() =>
+  firstLevel.value.reduce((sum, cat) => sum + (cat.children?.length || 0), 0),
+)
 
-const subCategoryMap = {
-  1: [{ id: 7, name: '大米' }, { id: 8, name: '面粉' }, { id: 9, name: '食用油' }, { id: 10, name: '调味品' }],
-  2: [{ id: 11, name: '时令蔬菜' }, { id: 12, name: '新鲜水果' }, { id: 13, name: '有机蔬菜' }],
-  3: [{ id: 14, name: '猪肉' }, { id: 15, name: '牛羊肉' }, { id: 16, name: '鲜蛋' }],
-  4: [{ id: 17, name: '绿茶' }, { id: 18, name: '红茶' }, { id: 19, name: '普洱茶' }],
-  5: [],
-  6: []
-}
-
-const subCategories = ref(subCategoryMap[1] || [])
-
-onMounted(() => {
-  if (route.query.id) {
-    activeCategory.value = parseInt(route.query.id)
+async function load() {
+  loading.value = true
+  try {
+    // 分类树统一走 store 缓存，避免各页面各拉一份
+    const tree = await userStore.loadCategories(true)
+    if (!activeId.value && tree?.length) activeId.value = tree[0].id
+    await favorites.load()
+  } catch (err) {
+    ElMessage.error(err.friendlyMessage || '分类加载失败')
+  } finally {
+    loading.value = false
   }
-  loadProducts()
-})
-
-watch(activeCategory, () => {
-  selectedSubCategory.value = null
-  subCategories.value = subCategoryMap[activeCategory.value] || []
-  loadProducts()
-})
-
-watch(selectedSubCategory, () => {
-  loadProducts()
-})
-
-const selectCategory = (id) => {
-  activeCategory.value = id
+  if (activeId.value) await loadHot()
 }
 
-const selectSubCategory = (id) => {
-  selectedSubCategory.value = selectedSubCategory.value === id ? null : id
-}
-
-const loadProducts = async () => {
-  const params = { page: 1, size: 20, categoryId: selectedSubCategory.value || activeCategory.value }
-  const res = await consumerApi.getProducts(params)
-  products.value = res.records || []
-}
-
-const getFirstImage = (images) => {
-  if (images && Array.isArray(images) && images.length > 0) {
-    return images[0]
+async function loadHot() {
+  hotLoading.value = true
+  try {
+    const page = await consumerApi.getProducts({ categoryId: activeId.value, page: 1, size: 8 })
+    hotProducts.value = (page?.records || []).slice(0, 4)
+  } catch (err) {
+    hotProducts.value = []
+    ElMessage.error(err.friendlyMessage || '热销商品加载失败')
+  } finally {
+    hotLoading.value = false
   }
-  return 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=agricultural%20product%20placeholder&image_size=square'
 }
 
-const goDetail = (id) => {
-  router.push(`/product/${id}`)
+function selectCategory(id) {
+  if (String(id) === String(activeId.value)) return
+  activeId.value = id
+  loadHot()
 }
 
-const handleSearch = () => {
-  router.push(`/search?keyword=${keyword.value}`)
+function goList(categoryId) {
+  router.push({ path: '/products', query: categoryId ? { categoryId } : {} })
 }
+
+function goSearch() {
+  const q = keyword.value.trim()
+  if (!q) {
+    ElMessage.warning('请输入要搜索的商品关键词')
+    return
+  }
+  router.push({ path: '/search', query: { q } })
+}
+
+async function addToCart(product) {
+  if (!userStore.consumerId) {
+    ElMessage.warning('请先完成登录')
+    return
+  }
+  try {
+    const res = await consumerApi.addCart({
+      consumerId: userStore.consumerId,
+      productId: product.id,
+      quantity: 1,
+    })
+    if (res?.success === false) {
+      ElMessage.warning(res.message || '加入购物车失败')
+      return
+    }
+    await userStore.refreshCart()
+    ElMessage.success('已加入购物车')
+  } catch (err) {
+    ElMessage.error(err.friendlyMessage || '加入购物车失败')
+  }
+}
+
+onMounted(load)
 </script>
 
 <style scoped>
-.category-page {
-  height: calc(100vh - 50px);
-  display: flex;
-  flex-direction: column;
+.m-container {
+  width: min(1280px, calc(100% - 48px));
+  margin: 0 auto;
 }
 
-.category-content {
-  flex: 1;
-  display: flex;
+.lead {
+  margin-top: 18px;
+}
+
+.hd-search {
+  width: 240px;
+}
+
+.cat-layout {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.cat-rail {
+  display: grid;
   overflow: hidden;
+  padding: 6px 0;
 }
 
-.left-menu {
-  width: 80px;
-  background: #f5f5f5;
-  overflow-y: auto;
-}
-
-.menu-item {
-  padding: 15px 10px;
-  text-align: center;
-  font-size: 13px;
-  color: #666;
-  border-left: 3px solid transparent;
-}
-
-.menu-item.active {
-  background: #fff;
-  color: #667eea;
-  border-left-color: #667eea;
-  font-weight: bold;
-}
-
-.right-content {
-  flex: 1;
-  background: #fff;
-  overflow-y: auto;
-  padding: 10px;
-}
-
-.sub-category {
+.rail-item {
   display: flex;
-  flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
-  margin-bottom: 15px;
+  width: 100%;
+  height: 46px;
+  padding: 0 14px;
+  border: 0;
+  border-left: 3px solid transparent;
+  background: #fff;
+  color: #33453b;
+  font-size: 13.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rail-item:hover {
+  background: #f8fbf9;
+  color: #12764a;
+}
+
+.rail-item.on {
+  border-left-color: #12764a;
+  background: #f1fbf5;
+  color: #12764a;
+  font-weight: 700;
+}
+
+.rail-item .ico {
+  font-size: 15px;
+}
+
+.rail-item .name {
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.rail-item .cnt {
+  font-variant-numeric: tabular-nums;
 }
 
 .sub-item {
-  padding: 5px 12px;
-  background: #f5f5f5;
-  border-radius: 15px;
-  font-size: 12px;
-}
-
-.sub-item.active {
-  background: #667eea;
-  color: #fff;
-}
-
-.product-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
-}
-
-.product-card {
+  justify-items: center;
+  gap: 4px;
+  padding: 16px 10px;
+  border: 1px solid #e3eae5;
+  border-radius: 10px;
   background: #fff;
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+  cursor: pointer;
+  transition: border-color .15s, transform .15s, background .15s;
 }
 
-.product-img {
-  width: 100%;
-  height: 120px;
-  object-fit: cover;
+.sub-item:hover {
+  transform: translateY(-2px);
+  border-color: #bfe0cd;
+  background: #fbfdfc;
 }
 
-.product-name {
+.sub-item .sub-ico {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: #f1fbf5;
+  font-size: 19px;
+}
+
+.sub-item b {
   font-size: 13px;
-  padding: 8px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-weight: 600;
 }
 
-.price {
-  font-size: 16px;
-  font-weight: bold;
-  color: #f44336;
-  padding: 0 8px 8px;
+.sub-item small {
+  color: #93a29a;
+  font-size: var(--agri-font-size-micro);
+}
+
+@media (max-width: 1080px) {
+  .cat-layout { grid-template-columns: minmax(0, 1fr); }
+  .cat-rail { grid-auto-flow: column; overflow-x: auto; padding: 0; }
+  .rail-item { width: auto; border-left: 0; border-bottom: 3px solid transparent; }
+  .rail-item.on { border-bottom-color: #12764a; }
 }
 </style>

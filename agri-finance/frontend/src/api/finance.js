@@ -1,20 +1,9 @@
 import axios from 'axios'
+import { configuredProductName } from '../data/products'
+import { loadFinanceSubject } from './subject'
 
-const USER_KEY = 'agri_finance_user_id'
-const NAME_KEY = 'agri_finance_user_name'
-
-export const financeUser = {
-  id: localStorage.getItem(USER_KEY) || '2001',
-  name: localStorage.getItem(NAME_KEY) || '绿源农业合作社',
-}
-
-export function setFinanceUser(user) {
-  if (!user?.id) return
-  financeUser.id = String(user.id)
-  financeUser.name = user.name || financeUser.name
-  localStorage.setItem(USER_KEY, financeUser.id)
-  localStorage.setItem(NAME_KEY, financeUser.name)
-}
+// 融资主体身份来自后端按令牌解析的身份卡，不再在前端写死主体号
+export { financeUser } from './subject'
 
 async function request(promise) {
   const response = await promise
@@ -25,40 +14,50 @@ async function request(promise) {
   return body.data
 }
 
+async function borrower(promiseFactory) {
+  await loadFinanceSubject()
+  return request(promiseFactory())
+}
+
 export const financeApi = {
-  credit: () => request(axios.get('/api/v1/credit/score', { params: { userId: financeUser.id } })),
-  applications: () => request(axios.get('/api/v1/loan/applications', {
-    params: { userId: financeUser.id },
-  })),
-  apply: (payload) => request(axios.post('/api/v1/loan/apply', {
-    ...payload,
-    userId: financeUser.id,
-    userName: financeUser.name,
-  })),
+  credit: () => borrower(() => axios.get('/api/v1/credit/score')),
+  applications: () => borrower(() => axios.get('/api/v1/loan/applications')),
+  apply: (payload) => borrower(() => axios.post('/api/v1/loan/apply', payload)),
   uploadEvidence: (file) => {
     const data = new FormData()
     data.append('file', file)
     return request(axios.post('/api/v1/loan/evidence', data))
   },
-  loans: () => request(axios.get('/api/v1/loan/list', { params: { userId: financeUser.id } })),
+  loans: () => borrower(() => axios.get('/api/v1/loan/list')),
   loan: (id) => request(axios.get(`/api/v1/loan/${id}`)),
-  confirmLoan: (applicationId) => request(axios.post('/api/v1/loan/create', { applicationId })),
-  repaymentPlans: (loanId = '') => request(axios.get('/api/v1/repayment/plans', {
+  /** 确认借款：生成待签合同（放款要等双方签署）。 */
+  acceptLoan: (applicationId) => request(axios.post(`/api/v1/loan/${applicationId}/accept`)),
+  repaymentPlans: (loanId = '') => borrower(() => axios.get('/api/v1/repayment/plans', {
     params: loanId ? { loanId } : {},
   })),
   payRepayment: (planId) => request(axios.post('/api/v1/repayment/pay', { planId })),
-  pledges: () => request(axios.get('/api/v1/pledge/list', { params: { userId: financeUser.id } })),
-  createPledge: (payload) => request(axios.post('/api/v1/pledge/create', {
-    ...payload,
-    userId: financeUser.id,
+  pledges: () => borrower(() => axios.get('/api/v1/pledge/list')),
+  /** 质押必须挂在自己的仓单上；仓单来自生产域已入库批次，不是手填的品名数量。 */
+  createPledge: (payload) => borrower(() => axios.post('/api/v1/pledge/create', payload)),
+  receiptBatches: () => borrower(() => axios.get('/api/v1/warehouse-receipt/batches')),
+  batchPreview: (batchId) => borrower(() => axios.get('/api/v1/warehouse-receipt/batch-preview', {
+    params: { batchId },
   })),
-  contracts: () => request(axios.get('/api/v1/contract/list', { params: { userId: financeUser.id } })),
-  signContract: (id) => request(axios.post('/api/v1/contract/sign', { id, signType: 'borrower' })),
-  messages: () => request(axios.get('/api/v1/message/list', { params: { userId: financeUser.id } })),
+  createReceipt: (payload) => borrower(() => axios.post('/api/v1/warehouse-receipt/create', payload)),
+  receipts: (status = '') => borrower(() => axios.get('/api/v1/warehouse-receipt/list', {
+    params: status ? { status } : {},
+  })),
+  receiptDetail: (id) => request(axios.get(`/api/v1/warehouse-receipt/${id}`)),
+  refreshReceiptMonitor: (id) => request(axios.post(`/api/v1/warehouse-receipt/${id}/monitor/refresh`)),
+  /** 质押物字典：折算率上限与最长期限决定开单和质押能填多少。 */
+  pledgeGoodsOptions: () => request(axios.get('/api/v1/pledge-goods/enabled')),
+  contracts: () => borrower(() => axios.get('/api/v1/contract/list')),
+  /** 只签融资方这一半边，资金方那半边由后端按资金方身份落签。 */
+  signContract: (id) => request(axios.post('/api/v1/contract/sign', { id })),
+  messages: () => borrower(() => axios.get('/api/v1/message/list')),
   markMessageRead: (id) => request(axios.post(`/api/v1/message/read/${id}`)),
-  markAllMessagesRead: () => request(axios.post('/api/v1/message/read-all', null, {
-    params: { userId: financeUser.id },
-  })),
+  markAllMessagesRead: () => request(axios.post('/api/v1/message/read-all')),
+  evaluateCredit: () => request(axios.post('/api/v1/credit/evaluate')),
 }
 
 export function money(value, empty = '¥0.00') {
@@ -80,6 +79,13 @@ export function shortDate(value) {
   return value ? String(value).replace('T', ' ').slice(0, 16) : '—'
 }
 
+/** 数量口径：库存与仓单都带小数（1250.000 kg 要显示成 1250），末尾无意义的 0 去掉。 */
+export function num(value) {
+  if (value == null || value === '') return '—'
+  const amount = Number(value)
+  return Number.isFinite(amount) ? String(Number(amount.toFixed(3))) : String(value)
+}
+
 export const PRODUCT_NAMES = {
   agri: '农资贷',
   purchase: '收购贷',
@@ -93,5 +99,5 @@ export const PRODUCT_NAMES = {
 }
 
 export function productName(value) {
-  return PRODUCT_NAMES[value] || value || '综合融资'
+  return configuredProductName(value) || PRODUCT_NAMES[value] || value || '综合融资'
 }

@@ -23,6 +23,9 @@ public class FundProvider {
 
     private String creditCode;
 
+    /** 绑定的平台经营主体号：资金方登录身份由此反查机构，不接受前端自报机构号。 */
+    private String merchantId;
+
     private BigDecimal registeredCapital;
 
     private Integer establishedYear;

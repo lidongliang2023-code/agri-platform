@@ -38,6 +38,18 @@ function resolveSsoOrigin(): string {
 const VERIFIER_KEY = 'agri_mdm_code_verifier'
 const STATE_KEY = 'agri_mdm_state'
 const RETURN_KEY = 'agri_mdm_return'
+/**
+ * 上一次"自动跳认证中心"的时间戳。
+ *
+ * <p>用途是**防无限打转**：如果换票没成功（state 不匹配、Cookie 被禁、回调页被别处
+ * 打断等），用户会回到登录页，而登录页挂载后又自动跳认证中心 —— 就形成
+ * 「认证中心 ↔ 回调页」的死循环，用户只看到页面在闪，没有任何提示。</p>
+ *
+ * <p>所以自动跳转加冷却：冷却期内再次自动跳直接报错，把控制权交回用户（页面上有
+ * 手动按钮）。手动点击不受冷却限制。</p>
+ */
+const NAV_AT_KEY = 'agri_mdm_sso_nav_at'
+const NAV_COOLDOWN_MS = 8000
 
 /** base64url（PKCE 要求 URL 安全且无填充） */
 function base64Url(bytes: Uint8Array): string {
@@ -64,7 +76,25 @@ async function codeChallengeOf(verifier: string): Promise<string> {
  * <p>verifier 与 state 放 sessionStorage：它们是本次跳转的**短期状态**，不是凭证，
  * 也不该跨标签页长期留存（放 localStorage 反而会让它们一直躺在磁盘上）。</p>
  */
-export async function redirectToSso(returnTo?: string): Promise<void> {
+export async function redirectToSso(returnTo?: string, options?: { manual?: boolean }): Promise<void> {
+  const now = Date.now()
+  let lastNavAt = 0
+  try {
+    lastNavAt = Number(sessionStorage.getItem(NAV_AT_KEY) ?? 0)
+  } catch {
+    // 会话存储不可用时不做冷却判断，交给后续流程兜底
+  }
+  if (!options?.manual && lastNavAt > 0 && now - lastNavAt < NAV_COOLDOWN_MS) {
+    throw new Error(
+      '刚完成一次认证跳转但仍未登录，可能是浏览器禁用了 Cookie 或登录态未能建立。请点上方按钮重试。',
+    )
+  }
+  try {
+    sessionStorage.setItem(NAV_AT_KEY, String(now))
+  } catch {
+    // 同上
+  }
+
   const verifier = randomBase64Url()
   const state = randomBase64Url(16)
   sessionStorage.setItem(VERIFIER_KEY, verifier)
@@ -131,6 +161,8 @@ export async function exchangeCode(code: string, state: string | null): Promise<
   }
   sessionStorage.removeItem(VERIFIER_KEY)
   sessionStorage.removeItem(STATE_KEY)
+  // 换票成功说明这一轮认证闭环了，清掉冷却标记，避免影响下一次正常登录
+  sessionStorage.removeItem(NAV_AT_KEY)
   return body.data as SsoLoginResult
 }
 
@@ -155,6 +187,25 @@ export async function refreshAccessToken(): Promise<SsoLoginResult | null> {
   } catch {
     // 没有可用的刷新令牌（或后端不可达）：当作"未登录"处理，不抛给调用方
     return null
+  }
+}
+
+/**
+ * 吊销本域的刷新令牌并清除 HttpOnly Cookie。
+ *
+ * <p>SSO 全局会话位于认证中心域，本函数清不到；反过来，只跳认证中心登出也清不掉
+ * 主数据域上的刷新 Cookie。因此完整退出必须两件事都做。</p>
+ */
+export async function revokePlatformSession(): Promise<boolean> {
+  try {
+    const response = await axios.post('/api/v1/auth/logout', {}, {
+      timeout: 10000,
+      withCredentials: true,
+    })
+    return response.data?.code === 0
+  } catch {
+    // 网络异常时仍继续清理本地态和 SSO 会话；强制退出标记会阻止本域 Cookie 自动续签。
+    return false
   }
 }
 

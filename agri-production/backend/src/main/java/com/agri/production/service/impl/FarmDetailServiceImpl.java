@@ -14,6 +14,7 @@ import com.agri.production.mapper.FarmCertMapper;
 import com.agri.production.mapper.FarmMapper;
 import com.agri.production.mapper.HarvestBatchMapper;
 import com.agri.production.mapper.IoTDeviceMapper;
+import com.agri.production.service.IotDeviceStatsService;
 import com.agri.production.mapper.PlotMapper;
 import com.agri.production.mapper.TaskMapper;
 import com.agri.production.common.constant.AlertDict;
@@ -55,10 +56,12 @@ public class FarmDetailServiceImpl {
     private final HarvestBatchMapper harvestMapper;
     private final AlertRecordMapper alertMapper;
     private final IoTDeviceMapper deviceMapper;
+    private final IotDeviceStatsService iotDeviceStats;
 
     public FarmDetailServiceImpl(FarmCertMapper certMapper, FarmMapper farmMapper, PlotMapper plotMapper,
                                  TaskMapper taskMapper, HarvestBatchMapper harvestMapper,
-                                 AlertRecordMapper alertMapper, IoTDeviceMapper deviceMapper) {
+                                 AlertRecordMapper alertMapper, IoTDeviceMapper deviceMapper,
+                                 IotDeviceStatsService iotDeviceStats) {
         this.certMapper = certMapper;
         this.farmMapper = farmMapper;
         this.plotMapper = plotMapper;
@@ -66,6 +69,7 @@ public class FarmDetailServiceImpl {
         this.harvestMapper = harvestMapper;
         this.alertMapper = alertMapper;
         this.deviceMapper = deviceMapper;
+        this.iotDeviceStats = iotDeviceStats;
     }
 
     /** 证照分页（keyword 匹配名称/编号，status 过滤）。 */
@@ -149,8 +153,8 @@ public class FarmDetailServiceImpl {
         result.put("alertPending", alertMapper.selectCount(new LambdaQueryWrapper<AlertRecord>()
                 .eq(AlertRecord::getTenantId, tenantId).eq(AlertRecord::getFarmId, farmId)
                 .in(AlertRecord::getStatus, AlertDict.statusValuesOf(AlertDict.STATUS_PENDING))));
-        result.put("deviceCount", deviceMapper.selectCount(new LambdaQueryWrapper<IoTDevice>()
-                .eq(IoTDevice::getTenantId, tenantId).eq(IoTDevice::getFarmId, farmId)));
+        // 设备台账已收敛到物联网系统，这里走统一统计（物联网端不可达时才回落本地历史副本）
+        result.put("deviceCount", iotDeviceStats.totalCount(tenantId, farmId));
         result.put("certCount", certMapper.selectCount(new LambdaQueryWrapper<FarmCert>()
                 .eq(FarmCert::getTenantId, tenantId).eq(FarmCert::getFarmId, farmId)));
         return result;

@@ -23,6 +23,12 @@ public class SupplierServiceImpl implements ISupplierService {
     @Override
     public List<SupplierVO> list() {
         String tenantId = SecurityUtils.getTenantId();
+        // 同客户列表：企业端必须带主体上下文
+        if (tenantId == null || tenantId.isBlank()) {
+            throw new com.agri.common.exception.BusinessException(
+                    com.agri.common.constant.ErrorCode.PERMISSION_FORBIDDEN,
+                    "缺少经营主体上下文：请在请求头携带 X-Agri-Merchant");
+        }
         return supplierMapper.selectSupplierList(tenantId);
     }
 

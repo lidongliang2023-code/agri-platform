@@ -52,6 +52,7 @@ import { deletePlot, listPlots, updatePlotStatus } from '@/api/plots'
 import { listAllFarms } from '@/api/farms'
 import { listGrowthRecords } from '@/api/growth'
 import type { Plot } from '@/types'
+import { TiandituMap, type TiandituMapPoint } from '@agri/shared'
 // 地块状态与作物 emoji 已统一收敛到 @/types（原各页面各存一份）
 import { CROP_EMOJI_MAP, PLOT_STATUS_META } from '@/types'
 
@@ -97,15 +98,6 @@ interface PlotFilters {
   status?: number
   /** 关键字 */
   keyword?: string
-}
-
-/** 地图视图色块配色（按状态） */
-const MAP_COLOR_MAP: Record<number, string> = {
-  0: '#d9d9d9',
-  1: '#91caff',
-  2: '#95de64',
-  3: '#ffd591',
-  4: '#ffe58f',
 }
 
 /**
@@ -429,47 +421,51 @@ export default function PlotList(): JSX.Element {
     },
   ]
 
-  /** 渲染地图视图（占位示意图） */
-  const renderMap = (): JSX.Element => (
-    <div
-      style={{
-        position: 'relative',
-        minHeight: 420,
-        borderRadius: 8,
-        border: '1px dashed #91caff',
-        background:
-          'repeating-linear-gradient(45deg, #f0f7ff, #f0f7ff 12px, #e6f4ff 12px, #e6f4ff 24px)',
-        padding: 16,
-      }}
-    >
-      <Space direction="vertical" style={{ width: '100%' }}>
-        <Typography.Text type="secondary">
-          🗺️ 地块分布示意（接入高德 / 天地图后将展示真实地块边界）
-        </Typography.Text>
-        <Row gutter={[12, 12]}>
-          {pagePlots.map((plot) => (
-            <Col key={plot.plotId} xs={12} sm={8} md={6} lg={4}>
-              <Card
-                size="small"
-                hoverable
-                onClick={() => navigate(`/production/plots/${plot.plotId}`)}
-                style={{ background: MAP_COLOR_MAP[plot.status] ?? '#f5f5f5' }}
-              >
-                <Typography.Text strong ellipsis>
-                  {plot.plotName}
-                </Typography.Text>
-                <div>
-                  <Typography.Text type="secondary">
-                    {Number(plot.area || 0).toLocaleString('zh-CN')}亩
-                  </Typography.Text>
-                </div>
-              </Card>
-            </Col>
-          ))}
-        </Row>
-      </Space>
-    </div>
-  )
+  /** 渲染地图视图：统一使用天地图，中心点与 GeoJSON 边界均来自地块台账 */
+  const renderMap = (): JSX.Element => {
+    const mapPoints: TiandituMapPoint[] = filteredPlots
+      .filter(
+        (plot) =>
+          typeof plot.centerLongitude === 'number' &&
+          Number.isFinite(plot.centerLongitude) &&
+          typeof plot.centerLatitude === 'number' &&
+          Number.isFinite(plot.centerLatitude),
+      )
+      .map((plot) => ({
+        id: plot.plotId,
+        longitude: Number(plot.centerLongitude),
+        latitude: Number(plot.centerLatitude),
+        title: plot.plotName,
+        meta: `${cropLabelOf(plot) || '未种植'} · ${Number(plot.area || 0).toLocaleString('zh-CN')}亩`,
+        tone: plot.status === 2 ? 'green' : plot.status === 0 ? 'gray' : 'orange',
+        boundary: plot.boundary,
+      }))
+    return (
+      <Card
+        size="small"
+        title="生产地块分布"
+        extra={
+          <Space>
+            <Tag color="green">天地图</Tag>
+            <Typography.Text type="secondary">
+              {mapPoints.length}/{filteredPlots.length} 个地块有坐标
+            </Typography.Text>
+          </Space>
+        }
+      >
+        <TiandituMap
+          points={mapPoints}
+          height={560}
+          onPointClick={(point) => navigate(`/production/plots/${point.id}`)}
+        />
+        {mapPoints.length === 0 && (
+          <Typography.Text type="secondary">
+            当前筛选地块尚未维护中心经纬度，可在地块编辑页通过天地图选点后保存。
+          </Typography.Text>
+        )}
+      </Card>
+    )
+  }
 
   /** 渲染看板（卡片）视图 */
   const renderBoard = (): JSX.Element => (

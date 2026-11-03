@@ -3,6 +3,7 @@ package com.agri.production.controller.admin;
 import com.agri.production.common.entity.ApiResponse;
 import com.agri.production.common.entity.PageResult;
 import com.agri.production.service.IAdminTraceService;
+import com.agri.production.service.TraceCodeFilter;
 import com.agri.production.vo.AdminTraceCodeVO;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -35,25 +36,69 @@ public class AdminTraceController {
         this.adminTraceService = adminTraceService;
     }
 
-    /** 溯源码分页（core-platform 有一个同口径的 {@code GET /admin/trace}，这里保留以免口径分叉）。 */
+    /**
+     * 溯源码分页（core-platform 有一个同口径的 {@code GET /admin/trace}，这里保留以免口径分叉）。
+     *
+     * <p>筛选参数与 {@code /codes} 同一套，全部在服务端生效。</p>
+     */
     @GetMapping
     public ApiResponse<PageResult<AdminTraceCodeVO>> page(
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size,
-            @RequestParam(required = false) String status) {
-        return ApiResponse.success(adminTraceService.pageCodes(page, size, status));
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String code,
+            @RequestParam(required = false) String batchNo,
+            @RequestParam(required = false) String farmId,
+            @RequestParam(required = false) String chain,
+            @RequestParam(required = false) String expiry,
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to) {
+        return ApiResponse.success(adminTraceService.pageCodes(page, size,
+                buildFilter(status, keyword, code, batchNo, farmId, chain, expiry, from, to)));
     }
 
-    /** 溯源码分页（页面 {@code AdminTraceCodeManage} 走这条）。 */
+    /**
+     * 溯源码分页（页面 {@code AdminTraceCodeManage} 走这条）。
+     *
+     * <p>{@code keyword} 与 {@code code}/{@code batchNo} 都收：页面表单里是分开的两个框，
+     * 而旧调用方传的是 keyword —— 两个名字都映射到同一组模糊匹配列，不玩"参数名不对就静默不筛"。</p>
+     */
     @GetMapping("/codes")
     public ApiResponse<PageResult<AdminTraceCodeVO>> codes(
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer pageNum,
             @RequestParam(required = false) Integer size,
             @RequestParam(required = false) Integer pageSize,
-            @RequestParam(required = false) String status) {
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String code,
+            @RequestParam(required = false) String batchNo,
+            @RequestParam(required = false) String farmId,
+            @RequestParam(required = false) String chain,
+            @RequestParam(required = false) String expiry,
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to) {
         return ApiResponse.success(adminTraceService.pageCodes(
-                firstNonNull(pageNum, page, 1), firstNonNull(pageSize, size, 10), status));
+                firstNonNull(pageNum, page, 1), firstNonNull(pageSize, size, 10),
+                buildFilter(status, keyword, code, batchNo, farmId, chain, expiry, from, to)));
+    }
+
+    /** 把查询串拼成筛选条件；{@code code}/{@code batchNo} 任一有值就并进关键字。 */
+    private static TraceCodeFilter buildFilter(String status, String keyword, String code, String batchNo,
+                                               String farmId, String chain, String expiry,
+                                               String from, String to) {
+        String text = firstNonBlank(keyword, code, batchNo);
+        return TraceCodeFilter.of(status, text, farmId, chain, expiry, from, to);
+    }
+
+    private static String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
     }
 
     /** 码段统计（页面 {@code TraceOverview} 走这条）。 */

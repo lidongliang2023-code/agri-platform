@@ -43,6 +43,11 @@ import {
 } from '@/api/admin/farms'
 import type { FarmComplianceProfile } from '@/api/admin/farms'
 import {
+  TiandituMap,
+  chinaRegionCenter,
+  type TiandituMapPoint,
+} from '@agri/shared'
+import {
   RISK_BAND_META,
   buildRiskInfo,
   exportCsv,
@@ -96,9 +101,9 @@ interface MapFilters {
  *
  * ⚠️ GIS 实现说明（技术选型原因）：
  * 1. 后端 `GET /admin/farms/map` 当前只返回「省 + 市 + 区 + 面积」，不含经纬度，无法做真实打点；
- * 2. 项目未内置中国行政 GeoJSON，且按约定不引入高德 / 百度等外部地图依赖；
- * 3. 原型 P5 中的地图本体亦为占位色块，真实交互是「区域筛选 + 统计条 + 图层切换」。
- * 因此采用等价替代方案：**区域聚合网格 + ECharts 热力图**
+ * 2. 项目统一使用天地图 Web API，不接入高德 / 百度；
+ * 3. 后端暂无农场精确经纬度时，按省级行政区代表点聚合展示，不伪造农场位置。
+ * 地图下方保留**区域聚合网格 + ECharts 热力图**
  * - 「热力图」图层：X 轴区域、Y 轴风险等级，色块深浅表示农场密度；
  * - 「聚合」图层：区域卡片网格，底色深浅表示农场密度，左边框颜色表示主导风险等级；
  * 两者与原型 P5 的交互口径完全一致。
@@ -288,6 +293,39 @@ export default function FarmGisMap(): JSX.Element {
       }))
       .sort((a, b) => b.farmCount - a.farmCount)
   }, [filteredPoints, applied.province])
+
+  /** 天地图区域点位：优先展示省级农场密度，不使用虚构农场坐标。 */
+  const mapPoints = useMemo<TiandituMapPoint[]>(() => {
+    const byProvince = new Map<string, {
+      count: number
+      area: number
+      high: number
+      medium: number
+    }>()
+    filteredPoints.forEach((item) => {
+      const province = item.province || '未知省份'
+      const current = byProvince.get(province) ?? { count: 0, area: 0, high: 0, medium: 0 }
+      current.count += 1
+      current.area += item.areaTotal
+      if (item.riskLevel === 'high') current.high += 1
+      if (item.riskLevel === 'medium') current.medium += 1
+      byProvince.set(province, current)
+    })
+    const result: TiandituMapPoint[] = []
+    byProvince.forEach((summary, province) => {
+      const center = chinaRegionCenter(province)
+      if (!center) return
+      result.push({
+        id: province,
+        longitude: center.longitude,
+        latitude: center.latitude,
+        title: province,
+        meta: `${summary.count} 个农场 · ${summary.area.toLocaleString('zh-CN')} 亩`,
+        tone: summary.high > 0 ? 'red' : summary.medium > 0 ? 'orange' : 'green',
+      })
+    })
+    return result
+  }, [filteredPoints])
 
   /** 最大密度，用于颜色深浅插值 */
   const maxFarmCount: number = useMemo<number>(
@@ -674,13 +712,18 @@ export default function FarmGisMap(): JSX.Element {
               />
             )}
 
-            <Alert
-              style={{ marginBottom: 8 }}
-              type="warning"
-              showIcon
-              message="GIS 说明：本项目不引入外部地图依赖，后端暂未返回经纬度，项目也未内置中国 GeoJSON"
-              description="此处以「区域聚合网格 + ECharts 热力图（色块深浅 = 农场密度）」等价替代原型中的占位地图，交互口径与原型 P5 保持一致。"
-            />
+            <div style={{ marginBottom: 12 }}>
+              <TiandituMap
+                points={mapPoints}
+                height={480}
+                onPointClick={(point) => {
+                  setSelectedRegions([String(point.id)])
+                }}
+              />
+              <Typography.Text type="secondary" style={{ display: 'block', marginTop: 6 }}>
+                天地图点位按省级行政区汇总；农场有精确经纬度时可直接扩展为农场级点位。
+              </Typography.Text>
+            </div>
 
             {/* 图层一：热力图 */}
             {layer === 'heatmap' &&

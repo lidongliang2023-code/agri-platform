@@ -1,0 +1,26 @@
+{
+  "pages":[
+    {"path":"pages/workbench/index","style":{"navigationStyle":"custom"}},
+    {"path":"pages/tasks/index","style":{"navigationBarTitleText":"执法任务"}},
+    {"path":"pages/tasks/detail","style":{"navigationBarTitleText":"任务详情"}},
+    {"path":"pages/tasks/checklist","style":{"navigationBarTitleText":"现场检查表"}},
+    {"path":"pages/scan/index","style":{"navigationStyle":"custom"}},
+    {"path":"pages/cases/index","style":{"navigationBarTitleText":"案件办理"}},
+    {"path":"pages/cases/create","style":{"navigationBarTitleText":"立案登记"}},
+    {"path":"pages/evidence/index","style":{"navigationBarTitleText":"拍照取证"}},
+    {"path":"pages/messages/index","style":{"navigationBarTitleText":"消息通知"}},
+    {"path":"pages/profile/index","style":{"navigationStyle":"custom"}},
+    {"path":"pages/login/index","style":{"navigationStyle":"custom"}}
+  ],
+  "globalStyle":{"navigationBarTextStyle":"black","navigationBarTitleText":"丰链云监管执法","navigationBarBackgroundColor":"#ffffff","backgroundColor":"#f4f7f5","backgroundTextStyle":"dark"},
+  "tabBar":{
+    "color":"#94a198","selectedColor":"#12764a","borderStyle":"white","backgroundColor":"#ffffff",
+    "list":[
+      {"pagePath":"pages/workbench/index","text":"工作台"},
+      {"pagePath":"pages/tasks/index","text":"任务"},
+      {"pagePath":"pages/scan/index","text":"扫码"},
+      {"pagePath":"pages/cases/index","text":"案件"},
+      {"pagePath":"pages/profile/index","text":"我的"}
+    ]
+  }
+}

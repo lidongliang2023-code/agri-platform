@@ -5,6 +5,7 @@ import com.agri.production.common.entity.PageResult;
 import com.agri.production.service.TenantContextService;
 import com.agri.production.service.impl.PlotSoilServiceImpl;
 import com.agri.production.vo.SoilTestRecordVO;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -63,6 +64,13 @@ public class PlotSoilController {
     public ApiResponse<String> create(@PathVariable String plotId,
                                      @RequestBody(required = false) Map<String, Object> body) {
         return ApiResponse.success(soilService.create(TenantContextService.currentTenantId(), plotId, body));
+    }
+
+    /** 删除土壤检测档案（按业务编号 soilId；逻辑删除）。 */
+    @DeleteMapping("/soil/{recordId}")
+    public ApiResponse<Void> delete(@PathVariable String plotId, @PathVariable String recordId) {
+        soilService.delete(TenantContextService.currentTenantId(), plotId, recordId);
+        return ApiResponse.success();
     }
 
     private static int firstNonNull(Integer... values) {
