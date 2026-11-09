@@ -660,7 +660,7 @@ public class OrderController {
     }
 
     @PostMapping("/refund/{id}/audit")
-    @com.agri.common.rbac.OperatorOnly
+    @com.agri.common.rbac.OperatorOnly("trade:ops")
     @Transactional(rollbackFor = Exception.class)
     public ApiResponse<Boolean> auditRefund(@PathVariable Long id, @RequestBody java.util.Map<String, String> params) {
         RefundRecord refund = refundMapper.selectById(id);
