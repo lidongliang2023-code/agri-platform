@@ -79,3 +79,34 @@ agri-trade/backend/uploads/
 core-platform/uploads/
 core-platform/core-app/uploads/
 agri-service/backend/uploads/
+
+# Generated review artifacts and local test outputs
+outputs/
+**/outputs/
+.screenshots/
+**/.screenshots/
+__tmpout/
+**/__tmpout/
+*.report
+*.out
+*.trace
+
+# Archives and generated bundles
+*.zip
+*.rar
+*.7z
+*.tar
+*.tar.gz
+*.tgz
+
+# Local debug and crash files
+debug.log
+*.dmp
+hs_err_pid*.log
+
+# Local TLS/private key material
+ops/gateway/conf/firmware-tls/*.key
+ops/gateway/conf/firmware-tls/*.pem
+*.p12
+*.pfx
+*.jks
