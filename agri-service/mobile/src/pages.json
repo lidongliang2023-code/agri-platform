@@ -23,6 +23,7 @@
     "backgroundTextStyle": "dark"
   },
   "tabBar": {
+    "fontSize": "12px",
     "color": "#94a198",
     "selectedColor": "#12764a",
     "borderStyle": "white",

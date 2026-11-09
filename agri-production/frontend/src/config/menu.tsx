@@ -1,8 +1,8 @@
 /**
  * 侧边栏菜单配置
  *
- * 用户端按 PRD 一级模块分组，并补充原型独有的「生长监测与IoT」分组；
- * （2026-10-16 调整：原「智能种养计划」与「农事任务管理」合并为一级菜单「智能种养」——
+ * 用户端按生产业务流程组织两级分类；
+ * （2026-10-16 调整：原「农事生产」与「农事任务管理」合并为一级菜单「农事生产」——
  *   两者是同一条业务链，详见该分组上的注释。分组数不再等于 PRD 模块数。）
  *
  * 运营端按 PRD 一级模块 + 原型补充的「食品安全」「AI与知识中心」两个分组组织。
@@ -13,21 +13,19 @@
  */
 import {
   AlertOutlined,
-  ApiOutlined,
   AuditOutlined,
   BarChartOutlined,
-  BlockOutlined,
   CalendarOutlined,
   DashboardOutlined,
   DatabaseOutlined,
   ExperimentOutlined,
   HomeOutlined,
   InboxOutlined,
-  LineChartOutlined,
   MonitorOutlined,
   RobotOutlined,
   SafetyCertificateOutlined,
-  SafetyOutlined,
+  SwapOutlined,
+  SettingOutlined,
 } from '@ant-design/icons'
 import type { ReactNode } from 'react'
 
@@ -51,21 +49,20 @@ export interface MenuGroup {
   children: MenuLeaf[]
 }
 
-/** 用户端菜单（PRD 十二个一级模块 + 原型补充的「生长监测与IoT」分组） */
+/** 用户端采用两级导航，按工作入口、生产作业、履约和分析配置组织；详情及新建由业务页进入。 */
 export const USER_MENU: MenuGroup[] = [
   {
     key: 'dashboard',
-    label: '首页看板',
+    label: '工作台',
     icon: <DashboardOutlined />,
     children: [
       { key: '/production/dashboard', label: '生产数据看板' },
-      { key: '/production/dashboard/production', label: '生产驾驶舱' },
       { key: '/production/messages', label: '消息中心' },
     ],
   },
   {
     key: 'farm',
-    label: '我的农场',
+    label: '农场与地块',
     icon: <HomeOutlined />,
     children: [
       { key: '/production/farms', label: '农场管理' },
@@ -73,24 +70,13 @@ export const USER_MENU: MenuGroup[] = [
     ],
   },
   {
-    // 2026-10-16 合并：原「智能种养计划」+「农事任务管理」两个一级菜单。
-    // 两者本来就是一条链上的东西 —— 计划定阶段 → 阶段生成任务 → 任务回填计划进度，
-    // 页面之间互相跳（计划详情里就是任务列表、农事日历里"任务"与"计划阶段"并列展示）。
-    // 拆成两个一级菜单只会让"计划 ↔ 任务"的来回切换要跨菜单找。
-    //
-    // 叶子路径与数量都没变（5 条），所以 USER_MENU_LEAF_COUNT 与菜单↔路由校验不受影响；
-    // 面包屑读的是 group.label（buildBreadcrumb），这两组页面下一律显示「智能种养」。
     key: 'smart-farming',
-    label: '智能种养',
+    label: '农事生产',
     icon: <CalendarOutlined />,
     children: [
-      { key: '/production/plans', label: '种养计划' },
-      { key: '/production/plans/calendar', label: '农事日历' },
-      // 2026-10-16：改名为「农事任务」；「创建任务」入口撤掉（新建走列表页的按钮，
-      // 不占一级菜单的一个叶子 —— 与 /production/farms/create、/production/plots/create 同处理）。
+      { key: '/production/plans', label: '农事计划' },
       { key: '/production/tasks', label: '农事任务' },
-      // 「任务模板库」同日搬到运营端（模板是标准作业配置，由平台运营维护、主体使用），
-      // 见 ADMIN_MENU 的「基础数据」分组。
+      { key: '/production/plans/calendar', label: '农事日历' },
     ],
   },
   {
@@ -98,44 +84,29 @@ export const USER_MENU: MenuGroup[] = [
     label: '农资管理',
     icon: <ExperimentOutlined />,
     children: [
-      // 2026-11-02：投入品台账与出入库管理合并为「农资管理」单页。
-      // 页内两个 Tab：投入品档案（含原出入库的库存总览与作业）/ 使用台账（含出入库流水）；
-      // 旧「出入库管理」（/production/inputs/stock）回落到 /production/inputs。
       { key: '/production/inputs', label: '农资台账' },
-      // 2026-11-02：原「使用记录」独立页也已并入本页「使用台账」Tab（新建 / 合规 / 上链 / 删除
-      // 都在 Tab 内完成），旧 /production/inputs/usages 自动跳到 ?tab=ledger。
     ],
   },
   {
     key: 'growth',
-    label: '生长监测预警',
-    icon: <LineChartOutlined />,
+    label: '监测与设备',
+    icon: <MonitorOutlined />,
     children: [
+      { key: '/production/monitor', label: '生产监控看板' },
       { key: '/production/growth', label: '生长监测总览' },
       { key: '/production/growth/records', label: '生长记录' },
       { key: '/production/growth/environment', label: '环境数据' },
-      { key: '/production/alerts', label: '告警中心' },
+      { key: '/production/alerts', label: '告警处置与复盘' },
       { key: '/production/alerts/rules', label: '告警规则配置' },
-      // 2026-11-02：原「生长监测与IoT」分组只有一个生产监控看板，与上面两个分组重复，
-      // 并入「生长监测预警」；看板本身读的就是生长 + 环境 + 设备 + 告警数据。
-      { key: '/production/monitor', label: '生产监控看板' },
-    ],
-  },
-  {
-    key: 'iot',
-    label: 'IoT设备管理',
-    icon: <ApiOutlined />,
-    children: [
       { key: '/production/iot', label: '设备列表' },
       { key: '/production/iot/bindings', label: '设备绑定管理' },
     ],
   },
   {
     key: 'harvest',
-    label: '采收库存管理',
+    label: '采收与库存',
     icon: <InboxOutlined />,
     children: [
-      { key: '/production/harvests/plan', label: '地块采收记录' },
       { key: '/production/harvests', label: '采收记录' },
       { key: '/production/harvests/inventory', label: '库存管理' },
     ],
@@ -145,40 +116,41 @@ export const USER_MENU: MenuGroup[] = [
     label: '质量检测与溯源',
     icon: <SafetyCertificateOutlined />,
     children: [
-      { key: '/production/quality', label: '质量检测管理' },
-      { key: '/production/quality/grading', label: '质量分级管理' },
-      { key: '/production/trace', label: '溯源码管理' },
-      { key: '/production/trace/full-chain', label: '生产全链路溯源' },
-      { key: '/production/trace/reports', label: '溯源报告' },
+      { key: '/production/quality', label: '质量检测与批次等级' },
+      { key: '/production/process', label: '加工记录' },
+      { key: '/production/trace', label: '单品溯源码管理' },
+      { key: '/production/trace/full-chain', label: '生产溯源与报告' },
+      { key: '/production/blockchain', label: '存证中心' },
     ],
   },
   {
-    key: 'blockchain',
-    label: '区块链增强',
-    icon: <BlockOutlined />,
+    key: 'p2t',
+    label: '产销对接',
+    icon: <SwapOutlined />,
     children: [
-      { key: '/production/blockchain', label: '区块链概览' },
-      { key: '/production/blockchain/records', label: '上链记录' },
-      { key: '/production/blockchain/verify', label: '存证验证' },
-    ],
-  },
-  {
-    key: 'ai',
-    label: '智能决策中心',
-    icon: <RobotOutlined />,
-    children: [
-      { key: '/production/ai/pest-detection', label: '病虫害识别' },
-      { key: '/production/ai/assistant', label: 'AI问答助手' },
-      { key: '/production/ai/yield-forecast', label: '产量预测' },
+      { key: '/production/p2t', label: '产销工作台' },
+      { key: '/production/p2t/offers', label: '供给管理' },
+      { key: '/production/p2t/subscriptions', label: '认购台账' },
+      { key: '/production/p2t/diffs', label: '差异协同' },
+      { key: '/production/p2t/trace', label: '供给与履约追踪' },
+      { key: '/production/p2t/demand', label: '需求分析' },
     ],
   },
   {
     key: 'analytics',
-    label: '报表与设置',
+    label: '分析与决策',
     icon: <BarChartOutlined />,
     children: [
       { key: '/production/analytics', label: '数据分析总览' },
       { key: '/production/analytics/reports', label: '生产报表' },
+      { key: '/production/ai/assistant', label: '农事智能助手' },
+    ],
+  },
+  {
+    key: 'settings',
+    label: '系统设置',
+    icon: <SettingOutlined />,
+    children: [
       { key: '/production/settings', label: '系统设置' },
     ],
   },
@@ -235,26 +207,17 @@ export const ADMIN_MENU: MenuGroup[] = [
   },
   {
     key: 'trace',
-    label: '质量追溯管理',
+    label: '质量安全与溯源',
     icon: <SafetyCertificateOutlined />,
     children: [
-      { key: '/admin/production/trace', label: '溯源管理总览' },
-      { key: '/admin/production/trace/codes', label: '溯源码管理' },
+      { key: '/admin/production/trace', label: '质量安全总览' },
+      { key: '/admin/production/trace/codes', label: '单品溯源码管理' },
       { key: '/admin/production/quality/labs', label: '检测机构管理' },
       { key: '/admin/production/quality/recalls', label: '不合格品处置' },
       { key: '/admin/production/quality/inspections', label: '检测报告管理' },
-    ],
-  },
-  {
-    key: 'food-safety',
-    label: '食品安全',
-    icon: <SafetyOutlined />,
-    children: [
-      { key: '/admin/production/food-safety', label: '食品安全监控中心' },
-      { key: '/admin/production/food-safety/circulation', label: '流通异常检测' },
-      { key: '/admin/production/food-safety/compliance', label: '合规校验管理' },
-      { key: '/admin/production/food-safety/trust-label', label: '可信农产品管理' },
-      { key: '/admin/production/food-safety/cold-chain', label: '冷链资源撮合' },
+      { key: '/admin/production/food-safety/circulation', label: '流通异常台账' },
+      { key: '/admin/production/food-safety/compliance', label: '合规核验台账' },
+      { key: '/admin/production/food-safety/trust-label', label: '产品认证台账' },
     ],
   },
   {
@@ -268,6 +231,8 @@ export const ADMIN_MENU: MenuGroup[] = [
     ],
   },
   {
+    // 产销对接不在运营端：意向发布与认领归经营主体自己（见用户端「产销对接」组），
+    // 平台侧只保留下面的审批、差异兜底等治理动作。
     key: 'approval',
     label: '审批管理',
     icon: <AuditOutlined />,
@@ -282,9 +247,8 @@ export const ADMIN_MENU: MenuGroup[] = [
     label: '异常告警处理',
     icon: <AlertOutlined />,
     children: [
-      { key: '/admin/production/alerts', label: '告警中心' },
+      { key: '/admin/production/alerts', label: '告警处置与复盘' },
       { key: '/admin/production/alerts/emergency', label: '应急预案' },
-      { key: '/admin/production/alerts/review', label: '灾害事件复盘' },
     ],
   },
   {
@@ -292,9 +256,7 @@ export const ADMIN_MENU: MenuGroup[] = [
     label: '统计报表',
     icon: <BarChartOutlined />,
     children: [
-      { key: '/admin/production/reports', label: '报表中心' },
-      { key: '/admin/production/reports/production', label: '生产报表' },
-      { key: '/admin/production/reports/quality', label: '质量报表' },
+      { key: '/admin/production/reports', label: '生产与质量报表' },
     ],
   },
 ]

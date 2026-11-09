@@ -351,12 +351,12 @@ const phoneMasked = computed(() => {
 
 .unit-label {
   color: #718277;
-  font-size: 23rpx;
+  font-size: 24rpx;
 }
 
 .link {
   color: #12764a;
-  font-size: 21rpx;
+  font-size: 24rpx;
 }
 
 .picker {

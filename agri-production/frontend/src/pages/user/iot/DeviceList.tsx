@@ -1,3 +1,4 @@
+import Table from '@/components/BusinessRecordList'
 /**
  * 页面名称：设备列表（IoT设备管理）
  * 路由路径：/production/iot
@@ -34,7 +35,6 @@ import {
   Select,
   Space,
   Statistic,
-  Table,
   Tag,
   Typography,
   message,
@@ -331,8 +331,8 @@ export default function DeviceList(): JSX.Element {
 
   return (
     <div style={{ padding: 24 }}>
-      <Row justify="space-between" align="middle" style={{ marginBottom: 8 }}>
-        <Typography.Title level={4} style={{ margin: 0 }}>
+      <Row className="production-custom-page-header production-page-header-row" justify="space-between" align="middle" style={{ marginBottom: 8 }}>
+        <Typography.Title className="production-page-heading" level={4} style={{ margin: 0 }}>
           📡 IoT设备管理
         </Typography.Title>
         <Space>
@@ -372,10 +372,7 @@ export default function DeviceList(): JSX.Element {
         </Space>
       </Row>
 
-      <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
-        设备台账由物联网系统统一维护（新增 / 编辑 / 删除在物联网端完成），本页只读；
-        生产端在这里为设备配置「绑定关系」（地块 / 大棚 / 农场 + 采集指标 + 采集频率）。
-      </Typography.Text>
+
 
       <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
         <Col xs={12} lg={6}>

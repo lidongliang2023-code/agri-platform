@@ -1,3 +1,21 @@
+export interface FirmwarePackage {
+  id: number
+  firmwareName: string
+  versionName: string
+  firmwareType: 'gateway' | 'sensor' | 'controller'
+  targetModel: string
+  packageUrl: string
+  fileSizeBytes: number
+  status: 'draft' | 'stable' | 'deprecated'
+  sha256Text: string
+  releaseNotes?: string
+  changelogText?: string
+  publishedAt?: string
+  deprecatedAt?: string
+  createdAt: string
+}
+
+import type { CommandReceipt } from '../../shared-ui/CommandReceipts'
 import axios from 'axios'
 import { attachUnifiedAuth } from '../../shared-ui/sso'
 export interface Tenant{id:number;tenantName:string;tenantCode:string;planName:string;deviceLimit:number;deviceCount:number;region:string;status:string;expireDate:string}
@@ -8,7 +26,7 @@ export interface Product{id:number;productName:string;productKey:string;category
 export interface Protocol{id:number;protocolName:string;protocolType:string;endpoint:string;port:string;status:string;connections:number}
 export interface AccessAudit{id:number;deviceCode:string;deviceName:string;tenantName:string;requestType:string;status:string;submittedAt:string;auditor?:string;note?:string}
 export interface AlertRule{id:number;source?:'platform'|'tenant';ruleName:string;deviceType?:string|null;metricKey:string;metricName:string;operator:string;threshold:number;durationSeconds:number;level:string;enabled:boolean;remark?:string|null;createdBy?:string|null;updatedAt?:string|null;overridden?:boolean;overriddenByRuleName?:string|null;tenantId?:string;tenantName?:string|null}
-export interface OtaTask{id:number;taskNo:string;tenantName?:string|null;firmwareVersion:string;targetCount:number;successCount:number;failedCount:number;targetScope:string;status:string;executeWindow:string;createdAt:string}
+export interface OtaTask{id:number;firmwareId:number;taskNo:string;tenantName?:string|null;firmwareVersion:string;targetCount:number;successCount:number;failedCount:number;targetScope:string;status:string;executeWindow:string;createdAt:string}
 export interface WorkOrder{id:number;orderNo:string;source:string;tenantName?:string|null;deviceName:string;type:string;priority:string;status:string;technician:string;description?:string|null;createdAt:string}
 export interface OpsOverview{metrics:{tenants:number;devices:number;online:number;offline:number;openAlerts:number;gateways:number;todayControls:number;throughput:number;pendingAccess:number;dataPoints:number};tenants:Tenant[];devices:Device[];alerts:Alert[];gateways:Gateway[];onlineTrend:number[];typeDistribution:Array<{name:string;value:number}>}
 interface Envelope<T>{code:number;message:string;data:T}
@@ -16,6 +34,17 @@ const client=axios.create({baseURL:'/api/v1/iot/ops',timeout:15000})
 attachUnifiedAuth(client,'iot-admin')
 async function req<T>(call:Promise<{data:Envelope<T>}>):Promise<T>{try{const r=await call;if(![0,200].includes(r.data.code))throw new Error(r.data.message);return r.data.data}catch(e){if(axios.isAxiosError(e)){const m=(e.response?.data as {message?:string}|undefined)?.message;throw new Error(m||'物联网运营服务不可用')}throw e}}
 export const opsApi={
+  uploadFirmwarePackage:(file:File,expectedSha256?:string)=>{const data=new FormData();data.append('file',file);if(expectedSha256)data.append('expectedSha256',expectedSha256);return req<{packageUrl:string;sha256Text:string;fileSizeBytes:number;originalName:string}>(client.post('/firmware/packages/upload',data,{timeout:300000}))},
+  listFirmwarePackages:(params?:{type?:string;model?:string;status?:string})=>req<FirmwarePackage[]>(client.get('/firmware/packages',{params})),
+  getFirmwarePackage:(id:number)=>req<FirmwarePackage>(client.get(`/firmware/packages/${id}`)),
+  registerFirmwarePackage:(payload:Record<string,unknown>)=>req<{id:number;message:string}>(client.post('/firmware/packages',payload)),
+  publishFirmwarePackage:(id:number)=>req<{id:number}>(client.post(`/firmware/packages/${id}/publish`)),
+  deprecateFirmwarePackage:(id:number,reason:string)=>req<{id:number}>(client.post(`/firmware/packages/${id}/deprecate`,{reason})),
+
+  otaReceipts:(id:number,page:number)=>req<CommandReceipt[]>(client.get(`/gateways/${id}/ota`,{params:{page,size:20}})),
+  gatewayCommandReceipts:(id:number,page:number)=>req<CommandReceipt[]>(client.get(`/gateways/${id}/commands`,{params:{page,size:20}})),
+  commandReceipts:(id:number,page:number)=>req<CommandReceipt[]>(client.get(`/devices/${id}/commands`,{params:{page,size:20}})),
+  handleWorkOrder:(id:number,status:string,note:string)=>req<WorkOrder>(client.post(`/work-orders/${id}/handle`,{status,note})),
   overview:()=>req<OpsOverview>(client.get('/overview')),
   tenants:()=>req<Tenant[]>(client.get('/tenants')),
   updateQuota:(id:number,deviceLimit:number)=>req<Tenant>(client.post(`/tenants/${id}/quota`,{deviceLimit})),
@@ -23,7 +52,7 @@ export const opsApi={
   gateways:()=>req<Gateway[]>(client.get('/gateways')),
   restartGateway:(id:number)=>req<Record<string,unknown>>(client.post(`/gateways/${id}/restart`,{})),
   alerts:()=>req<Alert[]>(client.get('/alerts')),
-  handleAlert:(id:number,note:string)=>req<Alert>(client.post(`/alerts/${id}/handle`,{status:'resolved',note})),
+  handleAlert:(id:number,note:string,status:string)=>req<Alert>(client.post(`/alerts/${id}/handle`,{status,note})),
   products:()=>req<Product[]>(client.get('/products')),
   protocols:()=>req<Protocol[]>(client.get('/protocols')),
   accessAudits:()=>req<AccessAudit[]>(client.get('/access-audits')),
@@ -32,7 +61,7 @@ export const opsApi={
   tenantAlertRules:()=>req<AlertRule[]>(client.get('/alert-rules/tenant')),
   reviewAccess:(id:number,status:string,note:string)=>req<AccessAudit>(client.post(`/access-audits/${id}/review`,{status,note})),
   ota:()=>req<OtaTask[]>(client.get('/ota')),
-  executeOta:(id:number)=>req<OtaTask>(client.post(`/ota/${id}/execute`,{})),
+  executeOta:(id:number,gatewayIds:number[],firmwareUrl:string)=>req<OtaTask>(client.post(`/ota/${id}/execute`,{gatewayIds,firmwareUrl})),
   workOrders:()=>req<WorkOrder[]>(client.get('/work-orders')),
   logs:()=>req<Array<{id:number;operator:string;action:string;target:string;detail:string;ip?:string|null;createdAt:string}>>(client.get('/logs')),
   reports:()=>req<{summary:{tenants:number;devices:number;online:number;alerts:number;openAlerts:number;workOrders:number;openWorkOrders:number;controls:number;dataPoints:number};tenantRank:Tenant[];protocols:Protocol[];gateways:Gateway[];alerts:Alert[]}>(client.get('/reports')),

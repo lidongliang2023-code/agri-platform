@@ -58,3 +58,22 @@ agri:
       base-url: ${AGRI_TRADE_URL:http://localhost:8089/api/trade}
       connect-timeout-ms: 3000
       read-timeout-ms: 15000
+
+# Unified probes: dependency failures affect readiness, not liveness.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      show-components: never
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: '*'
+          exclude: livenessState

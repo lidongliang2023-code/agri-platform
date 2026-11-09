@@ -15,7 +15,7 @@
     <div class="stats-row">
       <div class="stat-card"><span>GMV</span><b>¥{{ money(kpi.gmv) }}</b><small>{{ data.days || days }} 天内非取消订单</small></div>
       <div class="stat-card"><span>订单数</span><b>{{ kpi.orders || 0 }}</b><small>客单价 ¥{{ money(kpi.avgOrderAmount) }}</small></div>
-      <div class="stat-card"><span>成交渠道商</span><b>{{ kpi.activeChannels || 0 }}</b><small>已审核渠道 {{ kpi.channels || 0 }}</small></div>
+      <div class="stat-card"><span>成交商家</span><b>{{ kpi.activeChannels || 0 }}</b><small>已审核渠道 {{ kpi.channels || 0 }}</small></div>
       <div class="stat-card"><span>在售商品</span><b>{{ kpi.products || 0 }}</b><small>供应商 {{ kpi.suppliers || 0 }}</small></div>
       <div class="stat-card"><span>买家数</span><b>{{ kpi.consumers || 0 }}</b><small>区间内下单去重</small></div>
       <div class="stat-card"><span>退款率</span><b>{{ Number(kpi.refundRate || 0).toFixed(2) }}%</b><small>已同意售后金额 / GMV</small></div>
@@ -45,7 +45,7 @@
       <div class="card">
         <div class="card-head"><h3>待办事项</h3></div>
         <ul class="todo-list">
-          <li @click="$router.push('/channel-onboard')"><span>渠道商入驻审核</span><b>{{ todos.channelPending || 0 }}</b></li>
+          <li @click="$router.push('/channel-onboard')"><span>商家入驻审核</span><b>{{ todos.channelPending || 0 }}</b></li>
           <li @click="$router.push('/products')"><span>商品上架审核</span><b>{{ todos.productPending || 0 }}</b></li>
           <li @click="$router.push('/withdrawals')"><span>提现审批</span><b>{{ todos.withdrawalPending || 0 }}</b></li>
           <li @click="$router.push('/after-sales')"><span>售后待处理</span><b>{{ todos.afterSalePending || 0 }}</b></li>

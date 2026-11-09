@@ -1,17 +1,4 @@
-/**
- * 运营端 - 统计报表 API
- *
- * ⚠️ 契约诚实口径（对照后端源码核验，2026-10）：
- * 后端唯一的报表控制器是
- * `core-platform/mod-produce/.../internal/admin/AdminReportController.java`，
- * 基址 `/api/v1/production/admin/reports`，返回实体只有
- * `ReportTaskEntity`（同目录 ReportTaskEntity.java），字段为：
- *   reportId / reportType / reportName / farmId / bizDateFrom / bizDateTo /
- *   generatorId / fileUrl / generatedAt / status
- * **没有任何「报表内容统计」端点**：产量、面积、完成率、合格率、在线率等
- * 均不在后端数据契约内。本文件因此不再声明 `period` / `tenantId` / `fileSize`
- * 等后端不消费、不返回的字段。
- */
+/** 运营端统计报表：生产服务任务台账、真实 CSV 快照生成与下载。 */
 import { http, toPageResult } from '@/utils/request'
 import type { PageQuery, PageResult } from '@/types'
 
@@ -114,11 +101,10 @@ export interface AdminReportPage extends PageResult<ReportTask> {
 /**
  * 分页查询报表中心列表。
  *
- * 后端 `AdminReportController#page` 只接受 `page / size / keyword / status` 四个入参，
- * 因此这里不再声明后端不消费的 `reportType` / `period` / `tenantId`。
+ * 后端先按名称、状态、类型、农场及统计期间交集筛选，再分页。
  */
 export async function listAdminReports(
-  params: PageQuery & { keyword?: string; status?: string },
+  params: PageQuery & { keyword?: string; status?: string; reportType?: string; farmId?: string; startDate?: string; endDate?: string },
 ): Promise<AdminReportPage> {
   const empty: AdminReportPage = {
     pageNum: params.pageNum ?? 1,
@@ -194,20 +180,7 @@ export async function listQualityReports(params: PageQuery): Promise<PageResult<
   return toPageResult<ReportTask>(raw, params)
 }
 
-/**
- * 新建报表任务（真实写端点 `POST /admin/reports`）。
- *
- * 后端 `AdminReportController#create` 接收 `ReportTaskEntity` 并返回报表编号字符串；
- * `ReportTaskService#create` 在未传 reportId 时自动生成 `RPT` 前缀主键，
- * marketId / tenantId 由 MyMetaObjectHandler 自动填充。
- *
- * ⚠️ 这里**不**顺势调用 `POST /{reportId}/generate`：该端点的服务端实现
- * （ReportTaskService#generate）只是把状态改成 DONE、回填一个 `/report/{id}.xlsx`
- * 字符串，**并不产出任何真实报表文件**，调用它等于向用户谎称「已生成」。
- *
- * @param payload 任务字段（reportId 留空时由服务端生成）
- * @returns 服务端返回的报表编号
- */
+/** 登记任务；文件生成由独立操作触发。 */
 export function createReportTask(payload: Partial<ReportTask>): Promise<string> {
   return http.post<string>(BASE, payload)
 }
@@ -215,4 +188,31 @@ export function createReportTask(payload: Partial<ReportTask>): Promise<string> 
 /** 删除报表 */
 export function deleteAdminReport(reportId: string): Promise<void> {
   return http.delete<void>(`${BASE}/${reportId}`)
+}
+
+/** 生成并保存真实 CSV 快照。 */
+export function generateAdminReportFile(code: string): Promise<ReportTask> {
+  return http.post<ReportTask>(`${BASE}/${encodeURIComponent(code)}/generate`)
+}
+
+/** 使用当前登录身份下载快照。 */
+export async function downloadAdminReportFile(code: string, fileName?: string): Promise<void> {
+  const blob = await http.get<Blob>(`${BASE}/${encodeURIComponent(code)}/file`, undefined, { responseType: 'blob' })
+  if (blob.type.includes('json')) {
+    const error = JSON.parse(await blob.text()) as { message?: string }
+    throw new Error(error.message || '报表下载失败')
+  }
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = (fileName || `${code}.csv`).replace(/[\\/:*?"<>|]/g, '_')
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+/** 按业务编号回读实际保存的任务。 */
+export function getAdminReportTask(code: string): Promise<ReportTask> {
+ return http.get<ReportTask>(`${BASE}/detail/${encodeURIComponent(code)}`)
 }

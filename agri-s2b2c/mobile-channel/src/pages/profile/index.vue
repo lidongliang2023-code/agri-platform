@@ -1,6 +1,6 @@
 <template>
   <view class="page profile-page">
-    <view class="shop-hero"><view class="shop-mark">渠</view><view class="shop-copy"><text class="shop-name">{{ channel?.shopName || '渠道商店铺' }}</text><text class="shop-company">{{ channel?.companyName || '丰链云渠道合作伙伴' }}</text><text class="shop-account">{{ maskedPhone }}</text></view><text class="tag tag-green">{{ channel?.grade || '渠道商' }}</text></view>
+    <view class="shop-hero"><view class="shop-mark">渠</view><view class="shop-copy"><text class="shop-name">{{ channel?.shopName || '商家店铺' }}</text><text class="shop-company">{{ channel?.companyName || '丰链云渠道合作伙伴' }}</text><text class="shop-account">{{ maskedPhone }}</text></view><text class="tag tag-green">{{ channel?.grade || '商家' }}</text></view>
     <view class="card menu-card">
       <view class="compact-row" @tap="goCommissions"><view class="compact-icon">佣</view><view class="compact-copy"><text>佣金管理</text><small class="small-copy">查看分润与结算进度</small></view><text class="arrow">›</text></view>
       <view class="compact-row" @tap="goOrders"><view class="compact-icon">单</view><view class="compact-copy"><text>订单管理</text><small class="small-copy">查看渠道成交订单</small></view><text class="arrow">›</text></view>
@@ -17,7 +17,7 @@
       <view class="form-item"><text class="form-label">详细地址</text><textarea v-model="form.address" class="textarea" /></view>
       <button class="btn btn-primary btn-block" :loading="saving" @tap="save">保存店铺资料</button>
     </view>
-    <view class="platform-card"><text>当前运行端</text><b>{{ platformLabel }}</b><small class="small-copy">同一套渠道商业务支持小程序、Android / iOS App 和 H5。</small></view>
+    <view class="platform-card"><text>当前运行端</text><b>{{ platformLabel }}</b><small class="small-copy">同一套商家业务支持小程序、Android / iOS App 和 H5。</small></view>
     <button class="logout" @tap="logout">退出登录</button>
   </view>
 </template>
@@ -95,7 +95,7 @@ function goGrowth() { uni.navigateTo({ url: '/pages/growth/index' }) }
 function logout() {
   uni.showModal({
     title: '退出登录',
-    content: '确定退出渠道商移动工作台吗？',
+    content: '确定退出商家移动工作台吗？',
     async success(result) {
       if (!result.confirm) return
       await logoutUnifiedAccount()
@@ -107,5 +107,5 @@ function logout() {
 </script>
 
 <style scoped lang="scss">
-.profile-page{padding-bottom:36rpx}.shop-hero{display:flex;align-items:center;gap:16rpx;margin:18rpx 22rpx 0;padding:26rpx;border-radius:24rpx;background:radial-gradient(circle at 88% 0,rgba(110,231,162,.18),transparent 42%),linear-gradient(135deg,#073821,#12764a);color:#fff}.shop-mark{display:grid;width:74rpx;height:74rpx;flex:0 0 74rpx;place-items:center;border:1rpx solid rgba(255,255,255,.24);border-radius:20rpx;background:rgba(255,255,255,.1);color:#c9f2d7;font-size:30rpx;font-weight:800}.shop-copy{min-width:0;flex:1}.shop-name,.shop-company,.shop-account{display:block}.shop-name{font-size:27rpx;font-weight:800}.shop-company{margin-top:5rpx;color:rgba(255,255,255,.64);font-size:18rpx}.shop-account{margin-top:5rpx;color:rgba(255,255,255,.42);font-size:16rpx}.menu-card{padding-top:8rpx;padding-bottom:8rpx}.arrow{color:#a1ada6;font-size:36rpx}.form-card{margin-top:0}.platform-card{margin:0 22rpx;padding:22rpx;border:1rpx solid #dcebe2;border-radius:20rpx;background:#f5fbf7}.platform-card text,.platform-card b,.platform-card .small-copy{display:block}.platform-card text{color:#718277;font-size:17rpx}.platform-card b{margin-top:4rpx;color:#0e5233;font-size:24rpx}.platform-card .small-copy{margin-top:7rpx;color:#718277;font-size:17rpx;line-height:1.55}.logout{height:74rpx;margin:20rpx 22rpx 0;border:1rpx solid #efcccc;border-radius:16rpx;background:#fff;color:#c54b4b;font-size:22rpx;line-height:72rpx}
+.profile-page{padding-bottom:36rpx}.shop-hero{display:flex;align-items:center;gap:16rpx;margin:18rpx 22rpx 0;padding:26rpx;border-radius:24rpx;background:radial-gradient(circle at 88% 0,rgba(110,231,162,.18),transparent 42%),linear-gradient(135deg,#073821,#12764a);color:#fff}.shop-mark{display:grid;width:74rpx;height:74rpx;flex:0 0 74rpx;place-items:center;border:1rpx solid rgba(255,255,255,.24);border-radius:20rpx;background:rgba(255,255,255,.1);color:#c9f2d7;font-size:30rpx;font-weight:800}.shop-copy{min-width:0;flex:1}.shop-name,.shop-company,.shop-account{display:block}.shop-name{font-size:27rpx;font-weight:800}.shop-company{margin-top:5rpx;color:rgba(255,255,255,.64);font-size:24rpx}.shop-account{margin-top:5rpx;color:rgba(255,255,255,.42);font-size:24rpx}.menu-card{padding-top:8rpx;padding-bottom:8rpx}.arrow{color:#a1ada6;font-size:36rpx}.form-card{margin-top:0}.platform-card{margin:0 22rpx;padding:22rpx;border:1rpx solid #dcebe2;border-radius:20rpx;background:#f5fbf7}.platform-card text,.platform-card b,.platform-card .small-copy{display:block}.platform-card text{color:#718277;font-size:24rpx}.platform-card b{margin-top:4rpx;color:#0e5233;font-size:24rpx}.platform-card .small-copy{margin-top:7rpx;color:#718277;font-size:24rpx;line-height:1.55}.logout{height:74rpx;margin:20rpx 22rpx 0;border:1rpx solid #efcccc;border-radius:16rpx;background:#fff;color:#c54b4b;font-size:24rpx;line-height:72rpx}
 </style>

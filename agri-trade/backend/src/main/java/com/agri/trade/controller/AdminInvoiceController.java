@@ -55,7 +55,7 @@ public class AdminInvoiceController {
                                        @RequestBody Map<String, String> params) {
         Invoice invoice = invoiceMapper.selectById(id);
         if (invoice == null || Integer.valueOf(1).equals(invoice.getDelFlag())) {
-            return ApiResponse.error("发票申请不存在");
+            return ApiResponse.error(404, "发票申请不存在");
         }
         if (!"pending".equals(invoice.getInvoiceStatus())) {
             return ApiResponse.error("该发票申请已经处理过，不能重复审核");

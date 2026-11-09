@@ -22,6 +22,7 @@ export type OpsPageKey =
   | 'privacy-request'
   | 'feedback-manage'
   | 'stats'
+  | 'health-monitor'
   | 'config'
   | 'audit-log'
 
@@ -219,6 +220,8 @@ export interface OrgDetailData {
 export interface IdentityApplication {
   id: number | string
   userId: number | string
+  /** 申请人账号昵称（列表接口补的字段，详情可能为空） */
+  applicantName?: string | null
   identityType: string
   merchantId: number | string | null
   subjectName: string | null
@@ -233,7 +236,10 @@ export interface IdentityApplication {
   reviewerName: string | null
   reviewTime: string | null
   reviewRemark: string | null
-  createdAt: string | null
+  /** 管理端列表接口返回的提交时间 */
+  applyTime?: string | null
+  /** 组织详情里直接透传实体时返回的创建时间 */
+  createdAt?: string | null
 }
 
 export interface CertificationRecord {
@@ -286,8 +292,15 @@ export interface RoleRecord {
   id: number | string
   code: string
   name: string
+  /** 角色说明 */
+  description?: string | null
+  /** enabled / disabled */
+  status?: string | null
   permissions: string
+  /** 绑定该角色的用户数（列表接口回填） */
+  memberCount?: number | null
   createdAt: string | null
+  updatedAt?: string | null
 }
 
 export interface RolePermissionData {

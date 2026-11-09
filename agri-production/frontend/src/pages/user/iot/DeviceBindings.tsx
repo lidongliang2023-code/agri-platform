@@ -514,8 +514,8 @@ export default function DeviceBindings(): JSX.Element {
 
   return (
     <div style={{ padding: 24 }}>
-      <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
-        <Typography.Title level={4} style={{ margin: 0 }}>
+      <Row className="production-custom-page-header production-page-header-row" justify="space-between" align="middle" style={{ marginBottom: 16 }}>
+        <Typography.Title className="production-page-heading" level={4} style={{ margin: 0 }}>
           🔗 设备绑定管理
         </Typography.Title>
         <Space>
@@ -681,9 +681,7 @@ export default function DeviceBindings(): JSX.Element {
         destroyOnClose
       >
         <Space direction="vertical" style={{ width: '100%' }} size={12}>
-          <Typography.Text type="secondary">
-            配置设备各采集通道与监测指标的映射关系（含单位与倍率），保存后自动回写到绑定关系的采集指标。
-          </Typography.Text>
+
           <Table<SensorChannel>
             size="small"
             rowKey="key"

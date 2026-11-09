@@ -29,8 +29,11 @@ import java.util.Locale;
 @RequiredArgsConstructor
 public class RolePermissionService {
 
-    /** {@code platform_role.permissions} 列宽（VARCHAR(1000)），超出即明确失败而非静默截断 */
-    private static final int MAX_STORAGE_LENGTH = 1000;
+    /**
+     * {@code platform_role.permissions} 已放宽为 TEXT（V57），保留一个远高于矩阵规模的上限，
+     * 只用于挡住异常超大 payload，而不是让正常的全量勾选失败。
+     */
+    private static final int MAX_STORAGE_LENGTH = 60000;
 
     private final RoleMapper roleMapper;
 

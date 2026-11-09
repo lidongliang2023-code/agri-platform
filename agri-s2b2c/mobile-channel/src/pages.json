@@ -1,6 +1,6 @@
 {
   "pages": [
-    { "path": "pages/home/index", "style": { "navigationBarTitleText": "渠道商工作台", "enablePullDownRefresh": true } },
+    { "path": "pages/home/index", "style": { "navigationBarTitleText": "商家工作台", "enablePullDownRefresh": true } },
     { "path": "pages/pool/index", "style": { "navigationBarTitleText": "选品中心", "enablePullDownRefresh": true } },
     { "path": "pages/products/index", "style": { "navigationBarTitleText": "我的货架", "enablePullDownRefresh": true } },
     { "path": "pages/orders/index", "style": { "navigationBarTitleText": "订单管理", "enablePullDownRefresh": true } },
@@ -11,12 +11,13 @@
   ],
   "globalStyle": {
     "navigationBarTextStyle": "black",
-    "navigationBarTitleText": "丰链云渠道商",
+    "navigationBarTitleText": "丰链云商家",
     "navigationBarBackgroundColor": "#ffffff",
     "backgroundColor": "#f4f7f5",
     "backgroundTextStyle": "dark"
   },
   "tabBar": {
+    "fontSize": "12px",
     "color": "#94a198",
     "selectedColor": "#12764a",
     "borderStyle": "white",

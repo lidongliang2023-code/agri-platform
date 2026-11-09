@@ -266,7 +266,7 @@ function openVariety(id: number) {
 
 .city-caret {
   color: rgba(255, 255, 255, 0.6);
-  font-size: 20rpx;
+  font-size: 24rpx;
 }
 
 .bell {
@@ -292,7 +292,7 @@ function openVariety(id: number) {
   border: 3rpx solid #0d4e32;
   border-radius: 16rpx;
   background: #e44949;
-  font-size: 16rpx;
+  font-size: 24rpx;
   line-height: 27rpx;
   text-align: center;
 }
@@ -306,7 +306,7 @@ function openVariety(id: number) {
 
 .greeting .small {
   color: rgba(255, 255, 255, 0.55);
-  font-size: 22rpx;
+  font-size: 24rpx;
 }
 
 .greeting .title {
@@ -361,12 +361,12 @@ function openVariety(id: number) {
   padding: 2rpx 10rpx;
   border-radius: 8rpx;
   background: rgba(255, 255, 255, 0.16);
-  font-size: 18rpx;
+  font-size: 24rpx;
 }
 
 .ticker-line {
   color: rgba(255, 255, 255, 0.78);
-  font-size: 20rpx;
+  font-size: 24rpx;
 }
 
 .page-body {
@@ -395,7 +395,7 @@ function openVariety(id: number) {
   align-items: center;
   flex-direction: column;
   gap: 9rpx;
-  font-size: 21rpx;
+  font-size: 24rpx;
 }
 
 .quick-icon {
@@ -472,7 +472,7 @@ function openVariety(id: number) {
   right: 10rpx;
   bottom: 8rpx;
   color: #0e5233;
-  font-size: 20rpx;
+  font-size: 24rpx;
 }
 
 .feed-ai {
@@ -483,7 +483,7 @@ function openVariety(id: number) {
   border-radius: 6rpx;
   background: #765097;
   color: #ffffff;
-  font-size: 16rpx;
+  font-size: 24rpx;
 }
 
 .feed-body {
@@ -497,7 +497,7 @@ function openVariety(id: number) {
 .feed-summary {
   overflow: hidden;
   color: #718277;
-  font-size: 21rpx;
+  font-size: 24rpx;
   line-height: 1.5;
   text-overflow: ellipsis;
   display: -webkit-box;
@@ -515,7 +515,7 @@ function openVariety(id: number) {
 .feed-end {
   padding: 20rpx 0 24rpx;
   color: #b3c0b7;
-  font-size: 20rpx;
+  font-size: 24rpx;
   text-align: center;
 }
 

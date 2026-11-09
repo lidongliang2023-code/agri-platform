@@ -1,6 +1,6 @@
 # S2B2C 模块
 
-包含消费者商城、供应商端、小 B 渠道商端和平台运营端，默认使用独立 MySQL 数据库
+包含消费者商城、商家端和平台运营端（含整合收敛的供货工作台业务），默认使用独立 MySQL 数据库
 `agri_s2b2c`。
 
 ## 访问地址
@@ -8,12 +8,12 @@
 | 端 | 正式地址 | 开发地址 |
 | --- | --- | --- |
 | 消费者端 | http://127.0.0.1:8082/ | http://127.0.0.1:3000/ |
-| 供应商端 | http://127.0.0.1:8084/ | http://127.0.0.1:3001/ |
-| 渠道商端 | http://127.0.0.1:8085/ | http://127.0.0.1:3002/ |
+| 供应商端（已合并至平台运营端供货工作台） | http://127.0.0.1:8103/supply | - |
+| 商家端 | http://127.0.0.1:8085/ | http://127.0.0.1:3002/ |
 | 平台运营端 | http://127.0.0.1:8103/ | http://127.0.0.1:3003/ |
 | 消费者移动端（H5） | http://127.0.0.1:8182/ | http://127.0.0.1:5197/ |
-| 供应商移动端（H5） | http://127.0.0.1:8183/ | http://127.0.0.1:5198/ |
-| 渠道商移动端（H5） | http://127.0.0.1:8184/ | http://127.0.0.1:5199/ |
+| 供应商移动端（H5）（已停用并收敛至平台端） | - | - |
+| 商家移动端（H5） | http://127.0.0.1:8184/ | http://127.0.0.1:5199/ |
 | 后端 | http://127.0.0.1:8088 | - |
 
 ## 数据库
@@ -26,19 +26,19 @@
 
 ## 统一账号与权限
 
-S2B2C 不再维护独立登录账号。消费者端、供应商端、渠道商端、平台运营端及三个移动端
+S2B2C 不再维护独立登录账号。消费者端、供应商端、商家端、平台运营端及三个移动端
 均使用丰链云统一用户名和密码，并由平台 RBAC 判定角色权限。
 
 | 端 | SSO client_id | 必要权限 |
 | --- | --- | --- |
 | PC / H5 消费者端 | `mall-consumer` | `s2b2c:consumer` |
-| PC / H5 供应商端 | `mall-supplier` | `s2b2c:supplier` |
-| PC / H5 渠道商端 | `mall-channel` | `s2b2c:channel` |
+| 平台运营端供货工作台（原供应商业务） | `s2b2c-platform` | `s2b2c:admin` / 平台供货角色 |
+| PC / H5 商家端 | `mall-channel` | `s2b2c:channel` |
 | 平台运营端 | `s2b2c-platform` | `s2b2c:admin` |
 
 通用权限为 `s2b2c:read`、`s2b2c:write`；供应商履约使用 `s2b2c:fulfillment`。
 `FARMER` 角色默认开通消费者权限，`MARKET_OPS` 默认开通平台运营权限。
-供应商和渠道商账号由平台运营分配 `S2B2C_SUPPLIER` / `S2B2C_CHANNEL` 角色。
+供应商和商家账号由平台运营分配 `S2B2C_SUPPLIER` / `S2B2C_CHANNEL` 角色。
 
 PC 端使用 OAuth2 授权码 + PKCE；H5、微信小程序和 App 使用统一账号密码登录后，
 再调用平台权限接口校验角色权限。`agri-s2b2c` 后端所有 `/api/**` 请求均要求平台
@@ -54,8 +54,8 @@ java -jar target/agri-s2b2c-1.0.0.jar --spring.profiles.active=h2
 
 - 消费者：商品、购物车、下单、支付、收货、地址、领券、秒杀、拼团、溯源和售后。
 - 供应商：入驻、商品创建与编辑、订单查看、审核进度。
-- 渠道商：平台选品、货架商品、订单、佣金、营销素材和售后协同。
-- 运营端：供应商/渠道商/商品审核、类目、订单发货、售后审核、佣金结算和增长看板。
+- 商家：平台选品、货架商品、订单、佣金、营销素材和售后协同。
+- 运营端：供应商/商家/商品审核、类目、订单发货、售后审核、佣金结算和增长看板。
 
 ## 资金口径与身份收口（2026-11-02）
 
@@ -101,6 +101,125 @@ java -jar target/agri-s2b2c-1.0.0.jar --spring.profiles.active=h2
 （截图 `outputs/s2b2c-money-guard-20261102/`）。造出的订单/佣金/批次/提现/售后/券记录/收货地址
 跑完全部删除，商品库存与销量、优惠券 `remain_count` 按本次件数还原。
 
+## 一物一码溯源闭环（2026-11-03 收口）
+
+**链路只有一份，在农业生产域。** 商城不再自己拼一段"溯源介绍"：
+`ProductionTraceQueryService` 是唯一聚合处（按商品 / 按溯源码 / 按批次三个入口，出参同一形状），
+渲染也只有一处 `TraceTimeline.vue`（PC 商品详情、PC 溯源查询页、移动端扫码页共用）。
+两处各写一遍是本项目反复出现的病：同一个数据三个页面三个说法。
+
+**三种结果必须是三句话**，压成"空列表"就等于把系统故障说成"这货没来历"：
+
+| 出参 | 页面说什么 | 反例（改之前） |
+| :-- | :-- | :-- |
+| `bound=false` | 该商品尚未绑定生产批次（供应商去商品编辑页绑） | 全都显示"暂无溯源记录" |
+| `bound=true, matched=false` | 绑定的批次在生产管理模块查不到（批次删了或编号填错） | 同上 |
+| 生产域不可达（HTTP 503） | 溯源链路暂时连不上生产管理模块，这不是"没有溯源记录" | 同上 |
+| 命中 | 种植/投入/质检/采收/入库/加工逐节点 + 链上结论 | —— |
+
+### 扫码的人不该先注册
+
+- 后端：`PublicTraceController` 挂在 `/api/public/trace/**`，`WebConfig` 把这一族从登录拦截里排除
+  （只回链路节点、码状态、链上结论，不回价格库存客户数据）。
+- 前端 PC：`frontend-consumer/src/config/public-paths.js` 登记 `['/trace']`，
+  `bootstrapUnifiedSso` 在公开路径上**没有会话也照常挂载**（返回 `{ anonymous: true }`），
+  且公开路径上的 401 **不再跳登录** —— 溯源页顺带拉一次商品下拉必然 401，
+  跟着跳就等于扫码第一步是"请先登录"。
+- 前端移动端：同一条判据落在 `mobile-unified-auth.handleUnauthorized(publicPages)` +
+  `api.ts` 的 `PUBLIC_PAGES=['pages/services/index']`；未登录不再请求 `/consumer/marketing`
+  私域接口（请求必 401，页面会把"没登录"弹成"登录已失效"），
+  优惠活动页签改说"统一账号登录后显示"。
+- 深链：`?code=AG…` 直接自动查询（PC `Trace.vue` 与移动端 `onLoad` 都认 `code`），
+  停在「扫码溯源」页签，不再要求人手输一遍。
+
+实测（无 cookie 的真实浏览器）：`http://localhost:8082/trace?code=AG010101202606010001` 直接出 11 个节点、
+加工两道工序与「2/11 已上链」结论；`http://localhost:8182/#/pages/services/index?code=…` 同样直接渲染。
+
+### 商品绑哪个生产批次，只有供应商本人能说了算
+
+`s2b2c_product.prod_batch_no` 是新列：`src/main/resources/schema.sql` 里既有建表定义，
+也带一条只在缺列时才执行的 `ALTER TABLE`（存量演示库不用手工补列）。绑与解的口径：
+
+- 候选来自生产域且按**调用方令牌**取（`GET /api/supplier/production-batches`），
+  所以选出来的必然是自己主体登记过的采收批次；
+- 写入前 `requireOwnBatch()` 再核一次（`POST/PUT` 直接构造请求体塞别人的批次号 → 400，
+  错误里说清"不在你所属经营主体名下"）；
+- 清空即解绑，落库是 **NULL**：这一列的更新策略是 `FieldStrategy.IGNORED`（否则 `updateById`
+  的 NOT_NULL 会跳过 null，"解绑"永远写不进去），代价是空串也会原样落库，
+  所以 `ProductServiceImpl.normalizeBatchBinding()` 把空白统一压成 NULL ——
+  库里"未绑定"只留一个写法，同一列既 NULL 又 `''` 的话，以后每个统计都得写两种条件。
+
+### 商品编辑页曾经读错对象（本轮真发现的缺陷）
+
+`ProductEdit.vue` 原来调 `GET /api/supplier/detail/{id}` —— 那是**供应商档案**详情，
+按商品 id 传进去拿到的是"id 恰好等于这个数的供应商"，于是表单除了名字全是空，
+而保存是整表提交：没显示出来的列（含 `prod_batch_no`）被写成默认值。
+现在：
+
+- 新增 `GET /api/supplier/product/{id}`，返回**实体全字段**（`ProductVO` 是列表页投影，
+  缺 `categoryId/costPrice/stockWarning/detail/prodBatchNo`，用它回读就一定会漏列）；
+  不是本主体的商品一律 **404**（不确认它存在）；
+- 档案读不到就在页面顶部说明原因并**禁用「保存修改」**：读不全就不许写回；
+- `watch(() => route.params.id)` 重新读档案：同一路由换参数不会重新挂载组件，
+  否则表单带着上一条商品的（或读失败后的空）状态继续显示。
+
+回归见 `scripts/check-supplier-batch-bind-ui.mjs`（20 项：读对档案 → 下拉里的批次确是生产域登记过的 →
+链路预览 → 保存落库 → 重进仍显示 → 别人的商品读不到且按钮禁用 → 换 id 仍重读 → 解绑落 NULL → 还原开场值）。
+
+### 深链到生产端的地址只有一个写法
+
+生产端是 `createBrowserRouter`（history 模式），网关把 `/prod/` 当静态产物目录、业务路由在**根路径**上。
+所以 `…/prod/#/production/...` 与 `…/prod/production/...` 都会落进生产端的 404 页；
+正确形态是 `http://<host>/production/trace/full-chain?code=…`。拼装收在
+`frontend-consumer/src/config/cross-module.js` 的 `productionChainUrl()` 一处。
+
+顺带修掉生产端一个会吃掉深链的坑：`SsoHandoff` 跳统一认证时没带 `returnTo`，
+未登录用户从商城点「在生产管理模块看全链路」→ 登录成功后落在**看板页**，那支码的链路根本打不开
+（`agri-production/frontend/src/pages/sso/SsoHandoff.tsx`，改为把 `RequireAuth` 记下的原地址
+存进 sessionStorage，回跳后仍打开原地址）。
+
+端到端：`scripts/e2e-traceability-loop.mjs` **47 项全绿**，覆盖
+"绑定 → 消费者读到真节点 → 按码与按商品同源 → 解绑再绑仍同源 → 加工工序在生产端登记并立刻进链 →
+删除后链路同步少掉 → PC/移动端匿名渲染 → 深链落到生产端同一批次"，
+以及四条负分支（绑别人的批次被拒、查无此码 404、未绑定 `bound=false`、越权读档案 404）。
+供应商端真机点检 `scripts/check-supplier-batch-bind-ui.mjs` **20 项全绿**。
+
+### 溯源点检的夹具账号（2026-11-03 补，红的是夹具不是产品）
+
+`GET /api/supplier/production-batches` 只回**当前令牌主体名下**的采收批次（跨主体不可见是设计），
+而演示账号 `supplier1` 的主体在 2026-11-03 14:08 被改绑到「五常大米专营有限公司」——名下 0 个批次，
+下拉合法为空，两条溯源脚本从第一步就断。有批次的主体 2001（绿源农业合作社）名下的 `farmer/admin`
+又没有 `s2b2c:supplier` 权限，且 `/api/supplier/**` 整族（含 `/apply`）被这个权限码拦着——
+所以**没有"未入驻先申请"的口子**，这是口径而不是 bug。
+
+于是新增幂等夹具脚本 `scripts/provision-supplier-with-batches.mjs`，四步全走产品自己的端点：
+
+1. `POST /api/v1/admin/users` 建账号 `lvyuanshop`（角色 `S2B2C_SUPPLIER`）；
+2. `POST /api/v1/admin/user-merchants` 绑到主体 `2001`（雪花号按字符串传，`Number()` 会丢精度）；
+3. 身份申请 + 运营端审核通过 → `s2b2c.supplier` 能力成立（判定只认 `mall_supplier` 身份，见 `CapabilityFacadeImpl.isMallSupplier`）；
+4. 账号自己 `POST /api/supplier/apply` → 平台 `PUT /api/platform/supplier/audit` 通过 → 有 `s2b2c_supplier` 行，能建商品。
+
+两条脚本都改成 `E2E_SUPPLIER_USER`（默认 `lvyuanshop`）取夹具，比对基准也从"全库批次"收紧成
+"**该账号主体名下**的批次"；点检里没有现成商品时**自建用例商品并物理删除**，不再改演示商品 1 的档案。
+另一条同类坑：`/api/v1/production/process/{id}` 的删除是逻辑删除（`deleted=1`），
+链路视图看不到了但行还在表里，所以脚本收尾按本轮工序号物理删并回库核对 `COUNT=0`。
+浏览器侧还有一条：core-platform 的 `/authorize` 现在只认 `agri_sso_session_<clientId>`，
+点检取会话要 `POST /api/v1/sso/login` 带 `clientId`（`login-standalone` 只写全局 Cookie，注入后会一路弹回登录页）。
+
+### 本轮没有覆盖的分支（别当成已支持）
+
+- **匿名只能看到链路，看不到商品本身**：`/api/consumer/**` 整族仍要求登录，
+  所以扫码的人知道"这批西红柿哪来的"，却不知道"这盒卖多少钱、还有没有货"。
+  要把商品浏览也放开，得单独开一组公开只读端点（价格库存属于经营数据，不能顺手放进 `/api/public`）。
+- 公开核验端点**没有**限流与防码值枚举（`PublicTraceController` 顶部注释同样写了这条边界），上线前要在网关侧补。
+- `ProductAdd.vue`（发布新商品）还没有批次选择器：新建的商品要**再进编辑页**绑定；
+  后端 `POST /api/supplier/product/create` 已接受 `prodBatchNo` 并做同样的归属校验，只是页面没给入口。
+- 商家端与运营端看不到"这个商品绑了哪个批次"：`ProductVO`（列表投影）没有这一列，
+  只有供应商编辑页按实体全字段读得到。真要在货架上标"可溯源"，得先把列加进出参再谈展示。
+- 移动端公开页的判定是**按页面路由**（`pages/services/index`）而不是按页签：
+  未登录进这一页仍看得到"优惠活动/售后服务"两个页签的壳，只是内容改成"登录后显示"；
+  点领取/提交会照旧送去登录页。
+
 ## 发布
 
 ```powershell
@@ -135,13 +254,13 @@ pnpm build:app
 认证与权限接口通过 `VITE_S2B2C_AUTH_BASE` 指向统一认证所在域名。示例见各移动端
 目录的 `.env.example`。
 
-供应商、渠道商的移动工程分别位于 `mobile-supplier/` 和 `mobile-channel/`，
+供应商、商家的移动工程分别位于 `mobile-supplier/` 和 `mobile-channel/`，
 三者使用相同的 uni-app 工具链，但登录态、菜单和业务接口按角色隔离。
 
 ## 消费者端（PC 商城，frontend-consumer）
 
 `frontend-consumer/` 是按《S2B2C模块_消费者端PC原型_v1》重做的 PC 商城，与供应商端、
-渠道商端、平台运营端共用 `frontend-shared/styles/s2b2c-admin.css` 的 `--s2-*` 品牌令牌
+商家端、平台运营端共用 `frontend-shared/styles/s2b2c-admin.css` 的 `--s2-*` 品牌令牌
 （绿 #12764a、价格 #d45b32、底 #f4f7f5），技术栈为 Vue 3 + Element Plus + Vite。
 
 页面（36 个路由）按域划分：

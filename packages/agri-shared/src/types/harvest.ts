@@ -31,6 +31,10 @@ export type InventoryHealthStatus = 'normal' | 'warning' | 'shortage' | 'expirin
 
 /** 采收批次 */
 export interface HarvestBatch {
+  /** 同主体未删除供给关联数（详情返回，含关闭/驳回单据）。 */
+  linkedOfferCount?: number
+  /** 服务端派生的直接修改/删除限制原因。 */
+  mutationBlockedReason?: string
   /** 批次 ID */
   batchId: string
   /** 批次号 */

@@ -26,8 +26,8 @@ public class NoticeController {
         this.channelIdentityService = channelIdentityService;
     }
 
-    @GetMapping("/api/supplier/notices")
-    @OperatorOnly("s2b2c:supplier")
+    @GetMapping("/api/platform/supply/notices")
+    @OperatorOnly("s2b2c:platform")
     public ResponseEntity<Map<String, Object>> supplierNotices(@RequestParam(defaultValue = "false") boolean unreadOnly,
                                                                @RequestParam(defaultValue = "1") int page,
                                                                @RequestParam(defaultValue = "10") int size) {
@@ -35,37 +35,37 @@ public class NoticeController {
         return ResponseEntity.ok(noticeService.list("SUPPLIER", supplier.getId(), unreadOnly, page, size));
     }
 
-    @GetMapping("/api/supplier/notices/unread-count")
-    @OperatorOnly("s2b2c:supplier")
+    @GetMapping("/api/platform/supply/notices/unread-count")
+    @OperatorOnly("s2b2c:platform")
     public ResponseEntity<Map<String, Object>> supplierUnread() {
         Supplier supplier = supplierIdentityService.requireCurrent();
         return ResponseEntity.ok(Map.of("unread", noticeService.unreadCount("SUPPLIER", supplier.getId())));
     }
 
-    @PutMapping("/api/supplier/notices/{id}/read")
-    @OperatorOnly("s2b2c:supplier")
+    @PutMapping("/api/platform/supply/notices/{id}/read")
+    @OperatorOnly("s2b2c:platform")
     public ResponseEntity<Map<String, Object>> supplierRead(@PathVariable Long id) {
         Supplier supplier = supplierIdentityService.requireCurrent();
         return ResponseEntity.ok(Map.of("success", noticeService.markRead("SUPPLIER", supplier.getId(), id)));
     }
 
-    @PutMapping("/api/supplier/notices/read-all")
-    @OperatorOnly("s2b2c:supplier")
+    @PutMapping("/api/platform/supply/notices/read-all")
+    @OperatorOnly("s2b2c:platform")
     public ResponseEntity<Map<String, Object>> supplierReadAll() {
         Supplier supplier = supplierIdentityService.requireCurrent();
         return ResponseEntity.ok(Map.of("success", true,
                 "updated", noticeService.markAllRead("SUPPLIER", supplier.getId())));
     }
 
-    @GetMapping("/api/supplier/notice-preferences")
-    @OperatorOnly("s2b2c:supplier")
+    @GetMapping("/api/platform/supply/notice-preferences")
+    @OperatorOnly("s2b2c:platform")
     public ResponseEntity<?> supplierPreferences() {
         Supplier supplier = supplierIdentityService.requireCurrent();
         return ResponseEntity.ok(noticeService.preferences("SUPPLIER", supplier.getId()));
     }
 
-    @PutMapping("/api/supplier/notice-preferences")
-    @OperatorOnly("s2b2c:supplier")
+    @PutMapping("/api/platform/supply/notice-preferences")
+    @OperatorOnly("s2b2c:platform")
     public ResponseEntity<Map<String, Object>> supplierUpdatePreference(@RequestBody Map<String, Object> body) {
         Supplier supplier = supplierIdentityService.requireCurrent();
         boolean ok = noticeService.updatePreference("SUPPLIER", supplier.getId(),

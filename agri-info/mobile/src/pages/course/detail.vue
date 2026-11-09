@@ -292,7 +292,7 @@ const totalLabel = computed(() => {
   border-radius: 14rpx;
   background: #eef7f1;
   color: #12764a;
-  font-size: 22rpx;
+  font-size: 24rpx;
   font-weight: 600;
 }
 </style>

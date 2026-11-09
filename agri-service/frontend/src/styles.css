@@ -115,17 +115,11 @@ p {
 }
 
 .app-brand-mark {
-  display: grid;
+  display: block;
   width: 34px;
   height: 34px;
   flex: 0 0 34px;
-  place-items: center;
-  border: 1px solid rgba(255, 255, 255, .2);
   border-radius: 10px;
-  background: linear-gradient(135deg, #20a866, #117248);
-  box-shadow: 0 8px 22px rgba(10, 87, 51, .38);
-  font-size: 17px;
-  font-weight: 800;
 }
 
 .app-brand-copy {

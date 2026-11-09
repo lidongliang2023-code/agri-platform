@@ -1,3 +1,6 @@
+import ProTable from '@/components/ProductionTable'
+import Card from '@/components/SectionCard'
+import './inputs.css'
 /**
  * 页面名称：出入库管理（已拆入「农资管理」页的投入品档案 / 使用台账两个 Tab）
  * 路由路径：无独立路由（旧 /production/inputs/stock 回落到 /production/inputs）
@@ -14,12 +17,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ProTable } from '@ant-design/pro-components'
+
 import type { ProColumns } from '@ant-design/pro-components'
 import {
   Alert,
   Button,
-  Card,
   Col,
   DatePicker,
   Empty,
@@ -467,6 +469,7 @@ export default function InputStock({
     },
     {
       title: '操作',
+      fixed: 'right',
       key: 'option',
       width: 160,
       valueType: 'option',
@@ -660,19 +663,14 @@ export default function InputStock({
       {part === 'overview' && (
         <>
           <div style={{ marginBottom: 16 }}>{actionButtons}</div>
-          <Alert
-            style={{ marginBottom: 16 }}
-            type="info"
-            showIcon
-            message="领用 / 使用统一在「使用台账 → 登记使用记录」办理：保存后同一次事务写入使用记录、领用流水并扣减库存。"
-          />
-          <Row gutter={16} style={{ marginBottom: 16 }}>
-            <Col span={6}>
+
+          <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+            <Col xs={12} lg={6}>
               <Card>
                 <Statistic title="在库投入品" value={allStockRows.length} suffix="种" />
               </Card>
             </Col>
-            <Col span={6}>
+            <Col xs={12} lg={6}>
               <Card>
                 <Statistic
                   title="低库存预警"
@@ -682,7 +680,7 @@ export default function InputStock({
                 />
               </Card>
             </Col>
-            <Col span={6}>
+            <Col xs={12} lg={6}>
               <Card>
                 <Statistic
                   title="30 天内到期投入品"
@@ -692,7 +690,7 @@ export default function InputStock({
                 />
               </Card>
             </Col>
-            <Col span={6}>
+            <Col xs={12} lg={6}>
               <Card>
                 <Statistic title="本月流水" value={monthFlowCount} suffix="笔" />
               </Card>
@@ -724,6 +722,8 @@ export default function InputStock({
               }
             >
               <ProTable<InputInfo>
+            cardProps={false}
+            className="input-record-table"
                 rowKey="inputId"
                 columns={stockColumns}
                 dataSource={stockRows}
@@ -779,6 +779,8 @@ export default function InputStock({
             />
           ) : (
             <ProTable<InputStockFlow>
+            cardProps={false}
+            className="input-record-table"
               rowKey="flowId"
               columns={flowColumns}
               dataSource={flowRows}

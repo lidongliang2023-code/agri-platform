@@ -81,14 +81,14 @@ function toDemand() { uni.switchTab({ url: '/pages/demands/index' }) }
 .hero { padding: 0 28rpx 42rpx; border-radius: 0 0 38rpx 38rpx; background: radial-gradient(circle at 88% 8%, rgba(83,213,138,.28), transparent 430rpx), linear-gradient(145deg,#073821,#0d5d3b); color: #fff; }
 .hero-top { display: flex; align-items: center; justify-content: space-between; height: 70rpx; }
 .brand { font-size: 31rpx; font-weight: 750; }
-.online { color: #9ce8ba; font-size: 18rpx; }
-.welcome { display: block; margin-top: 22rpx; color: rgba(255,255,255,.55); font-size: 21rpx; }
+.online { color: #9ce8ba; font-size: 24rpx; }
+.welcome { display: block; margin-top: 22rpx; color: rgba(255,255,255,.55); font-size: 24rpx; }
 .hero-title { display: block; margin-top: 6rpx; font-size: 44rpx; font-weight: 760; }
-.hero-desc { display: block; margin-top: 8rpx; color: rgba(255,255,255,.6); font-size: 21rpx; }
+.hero-desc { display: block; margin-top: 8rpx; color: rgba(255,255,255,.6); font-size: 24rpx; }
 .metrics { display: grid; grid-template-columns: repeat(3,1fr); margin-top: 28rpx; padding: 20rpx; border: 1rpx solid rgba(255,255,255,.12); border-radius: 20rpx; background: rgba(1,28,15,.18); }
 .metrics view { display: flex; align-items: center; flex-direction: column; gap: 4rpx; }
 .metrics b { font-family: monospace; font-size: 34rpx; }
-.metrics text { color: rgba(255,255,255,.5); font-size: 18rpx; }
+.metrics text { color: rgba(255,255,255,.5); font-size: 24rpx; }
 .pad { margin-top: -26rpx; padding: 0 24rpx 30rpx; position: relative; }
 .product,.demand { padding: 17rpx 0; border-top: 1rpx solid #edf2ee; }
 .product:first-of-type,.demand:first-of-type { border-top: 0; }
@@ -96,11 +96,11 @@ function toDemand() { uni.switchTab({ url: '/pages/demands/index' }) }
 .product-icon { display: grid; width: 70rpx; height: 70rpx; flex: 0 0 70rpx; place-items: center; border-radius: 18rpx; background: #e5f5eb; color: #0e5233; font-size: 27rpx; font-weight: 750; }
 .product-copy { min-width: 0; flex: 1; }
 .product-name,.product-copy text { display: block; }
-.product-name { margin-bottom: 5rpx; font-size: 23rpx; font-weight: 650; }
+.product-name { margin-bottom: 5rpx; font-size: 24rpx; font-weight: 650; }
 .product-price { text-align: right; }
 .product-price text { display: block; }
 .between { display: flex; align-items: center; justify-content: space-between; gap: 12rpx; }
-.demand-name { font-size: 23rpx; font-weight: 650; }
+.demand-name { font-size: 24rpx; font-weight: 650; }
 .demand .muted { display: block; margin-top: 6rpx; }
-.demand-foot { margin-top: 10rpx; font-size: 20rpx; }
+.demand-foot { margin-top: 10rpx; font-size: 24rpx; }
 </style>

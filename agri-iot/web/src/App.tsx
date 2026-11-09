@@ -1,3 +1,4 @@
+import CommandReceipts from '../../shared-ui/CommandReceipts'
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
@@ -92,7 +93,7 @@ const PAGES: Page[] = [
   "messages",
 ];
 const TITLES: Record<Page, string> = {
-  dashboard: "物联网工作台",
+  dashboard: "监测工作台",
   monitor: "实时监测大屏",
   devices: "设备管理",
   gateways: "边缘网关",
@@ -110,8 +111,7 @@ const MENU: Array<{
   {
     group: "运营监控",
     items: [
-      { page: "dashboard", label: "物联网工作台", icon: <DashboardOutlined /> },
-      { page: "monitor", label: "实时监测大屏", icon: <ThunderboltOutlined /> },
+      { page: "dashboard", label: "监测工作台", icon: <DashboardOutlined /> },
     ],
   },
   {
@@ -619,7 +619,7 @@ function Devices() {
     [deviceTypes, setDeviceTypes] = useState<IotDeviceType[]>([]),
     [plots, setPlots] = useState<IotPlot[]>([]),
     [farms, setFarms] = useState<IotProductionFarm[]>([]),
-    [keyword, setKeyword] = useState(""),
+    [keyword, setKeyword] = useState(new URLSearchParams(location.search).get("keyword") || ""),
     [status, setStatus] = useState("all"),
     [group, setGroup] = useState<number | undefined>(),
     [plotFilter, setPlotFilter] = useState<number | undefined>(initialPlotId),
@@ -683,8 +683,8 @@ function Devices() {
     if (!detail) return;
     try {
       const result = await iotApi.control(detail.id, action);
-      // 平台没有到真机的回执链路，提示要说清"指令已下发"而不是"设备已执行"
-      message.success(String(result.message ?? "控制指令已下发"));
+      // 申请与设备执行结果分别展示，以设备回执为准
+      message.success(String(result.message ?? "控制申请已登记"));
       open(detail.id);
     } catch (e) {
       message.error(e instanceof Error ? e.message : "控制失败");
@@ -1026,20 +1026,8 @@ function Devices() {
               </div>
             )}
             <div className="device-history">
-              <b>控制记录</b>
-              {detail.controls?.length ? (
-                detail.controls.map((c) => (
-                  <div key={c.id}>
-                    <span>{c.action}</span>
-                    <small>
-                      {c.operator} · {c.createdAt}
-                    </small>
-                    <em>{c.result}</em>
-                  </div>
-                ))
-              ) : (
-                <p className="device-history-empty">暂无控制记录</p>
-              )}
+              <b>设备指令与回执</b>
+              <CommandReceipts key={detail.id} deviceId={detail.id} load={iotApi.commandReceipts} />
             </div>
           </div>
         )}
@@ -1258,6 +1246,7 @@ function typeIcon(name: string) {
 }
 
 function Gateways() {
+  const [receiptGateway,setReceiptGateway]=useState<IotGateway | null>(null);
   const { message, modal } = AntApp.useApp();
   const [items, setItems] = useState<IotGateway[]>([]),
     [farms, setFarms] = useState<IotProductionFarm[]>([]),
@@ -1360,12 +1349,12 @@ function Gateways() {
   const restart = (gateway: IotGateway) => {
     modal.confirm({
       title: "重启边缘网关",
-      content: `确认重启「${gateway.gatewayName}」？重启期间边缘规则可能短暂中断。`,
+      content: `登记「${gateway.gatewayName}」重启申请？当前未接入下发通道，不会执行设备重启。`,
       okText: "确认重启",
       onOk: async () => {
         try {
           await iotApi.restartGateway(gateway.id);
-          message.success("网关重启指令已完成，状态已写回");
+          message.info("重启申请已登记，请查看回执；未确认网关执行");
           await load();
           if (detail?.id === gateway.id) await openDetail(gateway.id);
         } catch (error) {
@@ -1396,6 +1385,7 @@ function Gateways() {
   };
   return (
     <div className="iot-page">
+      <Modal title="网关重启与OTA升级回执" open={!!receiptGateway} footer={null} width={1200} onCancel={()=>setReceiptGateway(null)}>{receiptGateway&&<><h3>重启回执</h3><CommandReceipts key={'restart'+receiptGateway.id} deviceId={receiptGateway.id} load={iotApi.gatewayCommandReceipts}/><h3>OTA升级回执（动作列为目标版本）</h3><CommandReceipts key={'ota'+receiptGateway.id} deviceId={receiptGateway.id} load={iotApi.otaReceipts}/></>}</Modal>
       <PageTitle
         title="边缘网关"
         desc="生产农场网关接入、状态监控、设备挂载与远程运维。"
@@ -1533,6 +1523,7 @@ function Gateways() {
               <div>
                 <Button size="small" onClick={() => void openDetail(g.id)}>详情</Button>
                 <Button size="small" type="text" icon={<EditOutlined />} onClick={() => openEdit(g)} />
+              <Button size="small" onClick={()=>setReceiptGateway(g)}>重启/升级回执</Button>
                 <Button size="small" type="text" icon={<ReloadOutlined />} onClick={() => restart(g)} />
                 <Button size="small" type="text" danger icon={<DeleteOutlined />} onClick={() => remove(g)} />
               </div>
@@ -2450,7 +2441,7 @@ function Alerts() {
   const [items, setItems] = useState<IotAlert[]>([]),
     [tab, setTab] = useState<"alerts" | "rules">("alerts"),
     [target, setTarget] = useState<IotAlert | null>(null),
-    [note, setNote] = useState("已通知运维并完成现场核查");
+    [note, setNote] = useState("");
   const load = () =>
     void iotApi
       .alerts()
@@ -2460,9 +2451,9 @@ function Alerts() {
   const handle = async () => {
     if (!target) return;
     try {
-      await iotApi.handleAlert(target.id, note);
+      await iotApi.handleAlert(target.id, note, target.status === "pending" ? "handling" : "resolved");
       setTarget(null);
-      message.success("告警已处置");
+      message.success("处置状态已保存并回读");
       load();
     } catch (e) {
       message.error(e instanceof Error ? e.message : "处置失败");
@@ -2538,10 +2529,10 @@ function Alerts() {
                       size="small"
                       onClick={() => {
                         setTarget(a);
-                        setNote("已通知运维并完成现场核查");
+                        setNote("");
                       }}
                     >
-                      立即处置
+                      {a.status === "pending" ? "受理告警" : "登记处理结果"}
                     </Button>
                     <Button
                       size="small"
@@ -3389,9 +3380,11 @@ function Messages() {
       .catch((e: Error) => message.error(e.message));
   useEffect(load, []);
   const readAll = async () => {
-    await iotApi.readAll();
-    setItems(items.map((i) => ({ ...i, read: true })));
-    message.success("已全部标为已读");
+    try {
+      await iotApi.readAll();
+      load();
+      message.success("已全部标为已读");
+    } catch (e) { message.error(e instanceof Error ? e.message : "已读保存失败"); }
   };
   return (
     <div className="iot-page">
@@ -3407,9 +3400,7 @@ function Messages() {
             key={i.id}
             className={i.read ? "read" : ""}
             onClick={() =>
-              setItems(
-                items.map((x) => (x.id === i.id ? { ...x, read: true } : x)),
-              )
+              void iotApi.readMessage(i.id).then(() => load()).catch((e: Error) => message.error(e.message))
             }
           >
             <span>
@@ -3436,10 +3427,20 @@ function Messages() {
   );
 }
 
+function MonitoringWorkspace({initial}: {initial: "dashboard" | "monitor"}) {
+  const [view,setView] = useState(initial);
+  useEffect(() => setView(initial),[initial]);
+  return <div><div style={{padding:"16px 24px 0"}}><div style={{display:"flex",gap:8}}>
+    <Button type={view === "dashboard" ? "primary" : "default"} onClick={()=>setView("dashboard")}>生产物联概况</Button>
+    <Button type={view === "monitor" ? "primary" : "default"} onClick={()=>setView("monitor")}>实时遥测监测</Button>
+  </div></div>{view === "monitor" ? <Monitor /> : <Dashboard />}</div>;
+}
+
 function AppContent({ page }: { page: Page }) {
   switch (page) {
     case "monitor":
-      return <Monitor />;
+    case "dashboard":
+      return <MonitoringWorkspace initial={page === "monitor" ? "monitor" : "dashboard"} />;
     case "devices":
       return <Devices />;
     case "gateways":
@@ -3505,11 +3506,11 @@ function IotShell() {
               className="iot-brand"
               onClick={() => navigate("/dashboard")}
             >
-              <span>丰</span>
+              <img className="iot-brand-logo" src={`${import.meta.env.BASE_URL}fengchain.svg`} alt="丰链云" />
               {!collapsed && (
                 <div>
                   <b>丰链云</b>
-                  <small>物联网管理系统</small>
+                  <small>FENGCHAIN · AGRI</small>
                 </div>
               )}
             </button>
@@ -3535,8 +3536,8 @@ function IotShell() {
             <div className="iot-side-foot">
               {!collapsed && (
                 <div>
-                  <b>设备接入正常</b>
-                  <small>今日数据 45,860 点</small>
+                  <b>设备与生产地块共用归属</b>
+                  <small>状态以服务端心跳与遥测为准</small>
                 </div>
               )}
               <button type="button" onClick={() => setCollapsed(!collapsed)}>
@@ -3561,11 +3562,12 @@ function IotShell() {
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
-                  navigate("/devices");
+                  const keyword = String(new FormData(e.currentTarget).get("keyword") || "").trim();
+                  navigate(`/devices?keyword=${encodeURIComponent(keyword)}`);
                 }}
               >
                 <SearchOutlined />
-                <input placeholder="搜索设备 / 网关 / 告警" />
+                <input name="keyword" placeholder="搜索设备名称或编号" />
               </form>
               <div className="iot-header-right">
                 <span>{clock.date}</span>

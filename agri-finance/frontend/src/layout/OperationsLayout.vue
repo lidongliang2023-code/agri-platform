@@ -2,8 +2,8 @@
   <div class="finance-shell ops-shell" :class="{ 'nav-open': navOpen }">
     <aside class="finance-sidebar">
       <router-link :to="homePath" class="finance-brand" @click="navOpen = false">
-        <span class="finance-brand-mark">丰</span>
-        <span><strong>丰链云</strong><small>FENGCHAIN · FINANCE</small></span>
+        <img class="finance-brand-mark" :src="brandLogoSrc" alt="丰链云" />
+        <span><strong>丰链云</strong><small>FENGCHAIN · AGRI</small></span>
       </router-link>
 
       <div class="finance-role">
@@ -61,6 +61,7 @@
 </template>
 
 <script setup>
+const brandLogoSrc = `${import.meta.env.BASE_URL}fengchain.svg`
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import {

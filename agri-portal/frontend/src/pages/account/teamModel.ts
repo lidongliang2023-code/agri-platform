@@ -46,7 +46,7 @@ export interface PermissionGroup {
 
 export const PERMISSION_GROUPS: PermissionGroup[] = [
   {
-    domain: 'produce', name: '生产管理', actions: ['view', 'create', 'update', 'delete', 'export'],
+    domain: 'produce', name: '生产管理', actions: ['view', 'create', 'update', 'delete', 'export', 'approve'],
     resources: [
       { code: 'dashboard', name: '生产看板' }, { code: 'farm', name: '农场档案' },
       { code: 'plot', name: '地块档案' }, { code: 'member', name: '团队与成员' },
@@ -81,7 +81,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
 
 export const ACTION_LABELS: Record<string, string> = {
   view: '查看', create: '新增', update: '编辑', delete: '删除',
-  export: '导出', run: '调用', verify: '验真', submit: '提交',
+  export: '导出', approve: '审批', run: '调用', verify: '验真', submit: '提交',
 }
 
 export const ALL_PERMISSION_CODES = PERMISSION_GROUPS.flatMap((group) =>
@@ -98,7 +98,7 @@ export const ROLE_TEMPLATES: Record<string, string[]> = {
   FARM_MANAGER: [
     'produce.dashboard.view', 'produce.farm.view', 'produce.farm.update',
     'produce.plot.view', 'produce.plot.update', 'produce.plan.view',
-    'produce.plan.create', 'produce.task.view', 'produce.task.create',
+    'produce.plan.create', 'produce.plan.approve', 'produce.task.view', 'produce.task.create',
     'produce.input.view', 'produce.harvest.view', 'produce.alert.view',
   ],
   AGRONOMIST: [

@@ -2,16 +2,16 @@
   <view class="page home-page">
     <view class="hero">
       <text class="hero-kicker">CHANNEL WORKBENCH</text>
-      <text class="hero-title">{{ channel?.shopName || '渠道商工作台' }}</text>
+      <text class="hero-title">{{ channel?.shopName || '商家工作台' }}</text>
       <text class="hero-desc">{{ channel?.companyName || '渠道增长与产地好物分销' }}</text>
       <view class="hero-status"><text class="online-dot" /><text>分润链路正常</text><text class="hero-platform">{{ platformLabel }}</text></view>
     </view>
 
     <view class="metric-grid">
       <view class="metric-card"><view class="metric-icon">佣</view><text class="metric-value">{{ money(totalCommission) }}</text><text class="metric-label">累计佣金</text></view>
-      <view class="metric-card"><view class="metric-icon">单</view><text class="metric-value">{{ dashboard.orderCount || orders.length }}</text><text class="metric-label">本月订单</text></view>
-      <view class="metric-card"><view class="metric-icon">品</view><text class="metric-value">{{ dashboard.productCount || channelProducts.length }}</text><text class="metric-label">上架商品</text></view>
-      <view class="metric-card pending"><view class="metric-icon">待</view><text class="metric-value">{{ money(pendingCommission) }}</text><text class="metric-label">待结算佣金</text></view>
+      <view class="metric-card"><view class="metric-icon">单</view><text class="metric-value">{{ dashboard.todayOrders ?? 0 }}</text><text class="metric-label">今日有效订单</text></view>
+      <view class="metric-card"><view class="metric-icon">品</view><text class="metric-value">{{ productTotal }}</text><text class="metric-label">货架商品</text></view>
+      <view class="metric-card pending"><view class="metric-icon">待</view><text class="metric-value">{{ money(pendingCommission) }}</text><text class="metric-label">近20笔待结算佣金</text></view>
     </view>
 
     <view class="section-head"><view><text class="kicker">QUICK ACTION</text><text class="title">渠道经营</text></view></view>
@@ -37,15 +37,14 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { onPullDownRefresh, onShow } from '@dcloudio/uni-app'
-import { channelApi, type ChannelPartner, type Commission, type Dashboard, type Order, type Product } from '../../api'
+import { channelApi, type ChannelPartner, type Commission, type Dashboard } from '../../api'
 import { channelSession, requireChannelLogin } from '../../session'
 import { money, statusMeta, toast } from '../../utils'
 
 const channel = ref<ChannelPartner | null>(null)
 const dashboard = ref<Dashboard>({})
-const orders = ref<Order[]>([])
 const commissions = ref<Commission[]>([])
-const channelProducts = ref<Product[]>([])
+const productTotal = ref(0)
 const totalCommission = ref(0)
 const pendingCommission = computed(() => commissions.value.filter((item) => item.status === 'PENDING').reduce((sum, item) => sum + Number(item.amount), 0))
 const platformLabel = computed(() => {
@@ -58,22 +57,20 @@ onPullDownRefresh(load)
 
 async function load() {
   if (!requireChannelLogin()) return
-  const channelId = channelSession.account?.id || 1
+  const channelId = channelSession.account!.id
   try {
-    const [detail, dashboardData, orderData, commissionData, totalData, productData] = await Promise.all([
+    const [detail, dashboardData, commissionData, totalData, productData] = await Promise.all([
       channelApi.getChannel(channelId),
       channelApi.getDashboard(),
-      channelApi.getOrders({ page: 1, size: 20 }),
       channelApi.getCommissions({ channelId, page: 1, size: 20 }),
       channelApi.getTotalCommission(channelId),
       channelApi.getProducts({ channelId, page: 1, size: 30 }),
     ])
     channel.value = detail
     dashboard.value = dashboardData
-    orders.value = orderData.records || []
     commissions.value = commissionData.records || []
     totalCommission.value = Number(totalData.total || 0)
-    channelProducts.value = productData.records || []
+    productTotal.value = Number(productData.total ?? 0)
   } catch (error) {
     toast((error as Error).message)
   } finally {
@@ -90,16 +87,16 @@ function goCommissions() { uni.switchTab({ url: '/pages/commissions/index' }) }
 
 <style scoped lang="scss">
 .hero { margin: 18rpx 22rpx 0; }
-.hero-status { display: flex; align-items: center; gap: 8rpx; margin-top: 22rpx; color: rgba(255,255,255,.72); font-size: 18rpx; }
+.hero-status { display: flex; align-items: center; gap: 8rpx; margin-top: 22rpx; color: rgba(255,255,255,.72); font-size: 24rpx; }
 .online-dot { width: 12rpx; height: 12rpx; border-radius: 50%; background: #6ee7a2; box-shadow: 0 0 0 6rpx rgba(110,231,162,.12); }
 .hero-platform { margin-left: auto; padding: 5rpx 12rpx; border: 1rpx solid rgba(255,255,255,.16); border-radius: 999rpx; }
 .metric-card.pending .metric-icon { background: #fff3dd; color: #a96a08; }
 .quick-grid { display: flex; flex-wrap: wrap; gap: 12rpx; padding: 0 22rpx; }
 .quick-card { width: calc((100% - 12rpx) / 2); padding: 20rpx; border: 1rpx solid #e3eae5; border-radius: 20rpx; background: #fff; }
-.quick-icon { display: grid; width: 46rpx; height: 46rpx; place-items: center; border-radius: 13rpx; background: #eaf7ef; color: #12764a; font-size: 19rpx; font-weight: 800; }
-.quick-card text,.quick-card .small-copy{display:block}.quick-card text{margin-top:12rpx;color:#0b1a12;font-size:22rpx;font-weight:700}.quick-card .small-copy{margin-top:4rpx;color:#93a29a;font-size:17rpx}
+.quick-icon { display: grid; width: 46rpx; height: 46rpx; place-items: center; border-radius: 13rpx; background: #eaf7ef; color: #12764a; font-size: 24rpx; font-weight: 800; }
+.quick-card text,.quick-card .small-copy{display:block}.quick-card text{margin-top:12rpx;color:#0b1a12;font-size:24rpx;font-weight:700}.quick-card .small-copy{margin-top:4rpx;color:#93a29a;font-size:24rpx}
 .commission-row{display:flex;align-items:center;gap:13rpx;padding:15rpx 0;border-top:1rpx solid #edf2ee}.commission-row:first-child{border-top:0}
-.commission-icon{display:grid;width:50rpx;height:50rpx;flex:0 0 50rpx;place-items:center;border-radius:14rpx;background:#eaf7ef;color:#12764a;font-size:18rpx;font-weight:800}
-.commission-copy{min-width:0;flex:1}.commission-copy text,.commission-copy .small-copy{display:block}.commission-copy text{color:#0b1a12;font-size:20rpx;font-weight:650}.commission-copy .small-copy{margin-top:4rpx;color:#93a29a;font-size:16rpx}
-.commission-right{display:flex;align-items:flex-end;flex-direction:column;gap:6rpx}.commission-right b{color:#d45b32;font-size:22rpx}.empty-mini{padding:42rpx 0;color:#94a198;text-align:center;font-size:20rpx}
+.commission-icon{display:grid;width:50rpx;height:50rpx;flex:0 0 50rpx;place-items:center;border-radius:14rpx;background:#eaf7ef;color:#12764a;font-size:24rpx;font-weight:800}
+.commission-copy{min-width:0;flex:1}.commission-copy text,.commission-copy .small-copy{display:block}.commission-copy text{color:#0b1a12;font-size:24rpx;font-weight:650}.commission-copy .small-copy{margin-top:4rpx;color:#93a29a;font-size:24rpx}
+.commission-right{display:flex;align-items:flex-end;flex-direction:column;gap:6rpx}.commission-right b{color:#d45b32;font-size:24rpx}.empty-mini{padding:42rpx 0;color:#94a198;text-align:center;font-size:24rpx}
 </style>

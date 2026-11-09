@@ -31,15 +31,13 @@ import java.util.concurrent.ThreadLocalRandom;
  * · 本钩子对**所有** controller 生效（含运营端），不挑路径。</p>
  *
  * <p>代价与边界：① 日志写入失败只打 WARN、不影响业务响应（审计不能成为业务故障源）；
- * ② operator 是占位说明——本服务拿不到平台用户档案；③ 只记"谁调了哪个写接口"，不解析请求体（不落业务数据，避免把敏感字段抄进日志）。</p>
+ * ② operator 为平台认证身份快照，资料不可用时保留可信用户 ID；③ 只记"谁调了哪个写接口"，不解析请求体（不落业务数据，避免把敏感字段抄进日志）。</p>
  */
 @Slf4j
 @RestControllerAdvice
 public class OperateLogAdvice implements ResponseBodyAdvice<Object> {
 
     private static final List<String> WRITE_METHODS = List.of("POST", "PUT", "PATCH", "DELETE");
-    /** 记录操作人的占位说明：宁可写清"拿不到"，也不拿 userId 冒充姓名。 */
-    private static final String OPERATOR_UNKNOWN = "未持有用户档案（本服务仅解析到经营主体）";
 
     private final OperateLogMapper logMapper;
     private final HttpServletRequest request;
@@ -89,7 +87,7 @@ public class OperateLogAdvice implements ResponseBodyAdvice<Object> {
         entity.setTarget(method + " " + path);
         entity.setBusinessCode(code);
         entity.setResult(code != null && code == 0 ? 1 : 0);
-        entity.setOperator(OPERATOR_UNKNOWN);
+        entity.setOperator("身份未解析（未获取可信用户身份）");
         entity.setIpAddress(clientIp());
         entity.setOperateAt(LocalDateTime.now());
         if (code != null && code != 0 && body instanceof ApiResponse<?> apiResponse) {
@@ -98,6 +96,7 @@ public class OperateLogAdvice implements ResponseBodyAdvice<Object> {
         }
         try {
             entity.setTenantId(TenantContextService.currentTenantId());
+            entity.setOperator(TenantContextService.currentOperator());
         } catch (Exception e) {
             // 未登录/平台不可达时租户解析会抛错：日志照样要能落库（审计对象正是这类请求），租户记为 UNKNOWN
             entity.setTenantId("UNKNOWN");

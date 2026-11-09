@@ -20,7 +20,7 @@ public class PriceController {
     public ApiResponse<IPriceService.PriceRecommendation> getRecommendation(@PathVariable Long productId) {
         IPriceService.PriceRecommendation recommendation = priceService.getPriceRecommendation(productId);
         if (recommendation == null) {
-            return ApiResponse.error("商品不存在");
+            return ApiResponse.error(404, "商品不存在");
         }
         return ApiResponse.success(recommendation);
     }
@@ -29,7 +29,7 @@ public class PriceController {
     public ApiResponse<IPriceService.PriceRecommendation> getCategoryRecommendation(@PathVariable String categoryCode) {
         IPriceService.PriceRecommendation recommendation = priceService.getPriceRecommendationByCategory(categoryCode);
         if (recommendation == null) {
-            return ApiResponse.error("分类不存在");
+            return ApiResponse.error(404, "分类不存在");
         }
         return ApiResponse.success(recommendation);
     }

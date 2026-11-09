@@ -109,8 +109,8 @@ public class OnboardingVerificationController {
         if (cert == null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "企业认证草稿不存在，请返回主体步骤重新保存");
         }
-        if ("pending".equals(cert.getCertStatus()) || "approved".equals(cert.getCertStatus())) {
-            throw new BusinessException(ErrorCode.CONFLICT, "企业认证已提交或已通过，不能重复修改");
+        if (!"draft".equals(cert.getCertStatus())) {
+            throw new BusinessException(ErrorCode.CONFLICT, "仅可修改新草稿，请先返回主体步骤保存补正资料");
         }
         if (body == null || isBlank(body.legalPerson())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "请填写法定代表人姓名");
@@ -180,7 +180,7 @@ public class OnboardingVerificationController {
         if (merchantId == null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "请先创建经营主体");
         }
-        MerchantEntity merchant = merchantMapper.selectById(merchantId);
+        MerchantEntity merchant = merchantMapper.lockById(merchantId);
         if (merchant == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND, "经营主体不存在");
         }
@@ -196,7 +196,7 @@ public class OnboardingVerificationController {
         if (identity == null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "实名资料不存在，请返回主体步骤重新保存");
         }
-        if ("pending".equals(identity.getStatus()) || "verified".equals(identity.getStatus())) {
+        if (!"draft".equals(identity.getStatus())) {
             throw new BusinessException(ErrorCode.CONFLICT, "实名认证已提交或已通过，不能重复修改");
         }
         return identity;
@@ -206,14 +206,14 @@ public class OnboardingVerificationController {
         return identityMapper.selectOne(new LambdaQueryWrapper<UserIdentityEntity>()
                 .eq(UserIdentityEntity::getUserId, userId)
                 .orderByDesc(UserIdentityEntity::getId)
-                .last("LIMIT 1"));
+                .last("LIMIT 1 FOR UPDATE"));
     }
 
     private MerchantCertificationEntity latestCertification(Long merchantId) {
         return certificationMapper.selectOne(new LambdaQueryWrapper<MerchantCertificationEntity>()
                 .eq(MerchantCertificationEntity::getMerchantId, merchantId)
                 .orderByDesc(MerchantCertificationEntity::getId)
-                .last("LIMIT 1"));
+                .last("LIMIT 1 FOR UPDATE"));
     }
 
     private static String maskBankAccount(String value) {

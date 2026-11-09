@@ -23,8 +23,8 @@ import java.util.Set;
  * <p>生产后端是独立部署的服务，判定口径仍归核心平台：把入站令牌原样带给
  * `/api/v1/internal/capability-check`，由平台按 {@code production.manage}（已加入经营主体）判定。</p>
  *
- * <p>只拦写方法；运营端 {@code /api/v1/production/admin/**} 与小程序 {@code /api/v1/production/mobile/**}
- * 各自有独立鉴权链路，不在这里改变行为。</p>
+ * <p>PC、H5、小程序与移动专用路径统一拦截写方法；仅运营端
+ * {@code /api/v1/production/admin/**} 保留独立鉴权链路。</p>
  */
 @Component
 public class ProductionApiCapabilityInterceptor implements HandlerInterceptor {
@@ -52,6 +52,15 @@ public class ProductionApiCapabilityInterceptor implements HandlerInterceptor {
         if (authorization == null || !authorization.startsWith("Bearer ")) {
             return reject(response, HttpServletResponse.SC_UNAUTHORIZED, 401, "请先登录后再维护生产数据");
         }
+        // 与控制器共享同一次请求解析的主体，禁止权限与数据使用不同主体。
+        Long merchantId;
+        try {
+            merchantId = Long.valueOf(com.agri.production.service.TenantContextService.currentTenantId());
+        } catch (com.agri.production.common.exception.BusinessException e) {
+            throw e;
+        } catch (NumberFormatException e) {
+            return reject(response, 403, 403, "当前经营主体无效，请重新选择主体");
+        }
         JsonNode data;
         try {
             HttpRequest checkRequest = HttpRequest.newBuilder(URI.create(checkUrl))
@@ -59,7 +68,8 @@ public class ProductionApiCapabilityInterceptor implements HandlerInterceptor {
                     .header("Content-Type", "application/json")
                     .header("Authorization", authorization)
                     .header("X-Internal-Token", internalToken)
-                    .POST(HttpRequest.BodyPublishers.ofString("{\"code\":\"production.manage\"}"))
+                    .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(
+                            java.util.Map.of("code", "production.manage", "merchantId", merchantId))))
                     .build();
             HttpResponse<String> checkResponse = httpClient.send(checkRequest, HttpResponse.BodyHandlers.ofString());
             if (checkResponse.statusCode() != 200) {
@@ -88,7 +98,7 @@ public class ProductionApiCapabilityInterceptor implements HandlerInterceptor {
         response.setStatus(status);
         response.setContentType("application/json");
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
-        response.getWriter().write("{\"code\":" + code + ",\"message\":\"" + message + "\",\"data\":null}");
+        response.getWriter().write(objectMapper.writeValueAsString(java.util.Map.of("code", code, "message", message)));
         return false;
     }
 }

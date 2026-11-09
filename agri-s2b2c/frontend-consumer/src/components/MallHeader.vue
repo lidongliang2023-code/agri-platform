@@ -2,9 +2,9 @@
   <header class="m-topbar">
     <div class="m-container m-top-inner">
       <button type="button" class="m-logo" @click="go('/')">
-        <span class="lg">🌾</span>
+        <img class="lg" :src="brandLogoSrc" alt="丰链云" />
         <span class="txt">
-          农联优选
+          丰链云
           <small>产地直供 · 全程溯源</small>
         </span>
       </button>
@@ -72,6 +72,7 @@
 </template>
 
 <script setup>
+const brandLogoSrc = `${import.meta.env.BASE_URL}fengchain.svg`
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
@@ -145,13 +146,10 @@ function onCategory(categoryId) {
 }
 
 .m-logo .lg {
-  display: grid;
-  place-items: center;
+  display: block;
   width: 40px;
   height: 40px;
   border-radius: 11px;
-  background: linear-gradient(135deg, #12764a, #4fb07f);
-  font-size: 21px;
   box-shadow: 0 6px 14px rgba(18, 118, 74, .22);
 }
 

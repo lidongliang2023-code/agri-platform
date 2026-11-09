@@ -97,7 +97,7 @@ function clear() {
 
 .clear {
   color: #c54b4b;
-  font-size: 22rpx;
+  font-size: 24rpx;
 }
 
 .group {
@@ -108,7 +108,7 @@ function clear() {
   display: block;
   margin: 14rpx 2rpx 10rpx;
   color: #718277;
-  font-size: 22rpx;
+  font-size: 24rpx;
   font-weight: 650;
 }
 </style>

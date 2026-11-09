@@ -16,6 +16,8 @@ import java.util.Map;
 public class IotOpsRepository {
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
     private final JdbcTemplate jdbc;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.agri.iot.service.GatewayCommandService gatewayCommands;
     private final IotIdentityService identity;
 
     public IotOpsRepository(JdbcTemplate jdbc, IotIdentityService identity) {
@@ -157,12 +159,8 @@ public class IotOpsRepository {
      * 现在只留一条"指令已下发"的留痕（带真实时间），状态仍由网关心跳决定。</p>
      */
     public Map<String, Object> restartGateway(long id) {
-        if (jdbc.queryForObject("SELECT COUNT(*) FROM iot_gateway WHERE id=?", Integer.class, id) == 0) {
-            throw BusinessException.notFound("边缘网关不存在：" + id);
-        }
-        jdbc.update("UPDATE iot_gateway SET last_online=? WHERE id=?", nowLabel() + "（重启指令已下发）", id);
-        addLog("远程重启网关", "GW-" + id, "重启指令已下发，等待网关心跳回传");
-        return Map.of("id", id, "result", "queued", "message", "网关重启指令已下发，状态以上线心跳为准");
+        if(jdbc.queryForList("SELECT id FROM iot_gateway WHERE id=?",id).isEmpty())throw BusinessException.notFound("网关不存在");
+        return gatewayCommands.register(id,"GW-"+id,"重启网关",identity.requireOperatorName());
     }
 
     public List<Map<String, Object>> alerts() {
@@ -177,19 +175,10 @@ public class IotOpsRepository {
                 "handleNote", rs.getString("handle_note"), "createdAt", rs.getString("created_at")));
     }
 
+    @org.springframework.transaction.annotation.Transactional
     public Map<String, Object> handleAlert(long id, Map<String, Object> body) {
-        String status = text(body, "status", "resolved");
-        if (!List.of("pending", "handling", "resolved").contains(status)) {
-            throw new IllegalArgumentException("告警状态只能是待处理、处理中或已恢复");
-        }
-        if (jdbc.queryForObject("SELECT COUNT(*) FROM iot_alert WHERE id=?", Integer.class, id) == 0) {
-            throw BusinessException.notFound("告警不存在：" + id);
-        }
-        String operator = identity.requireOperatorName();
-        jdbc.update("""
-                UPDATE iot_alert SET status=?,handled_by=?,handle_note=?,handled_at=? WHERE id=?
-                """, status, operator, required(body, "note", "请填写处置说明"), nowLabel(), id);
-        addLog("告警运营处置", "ALERT-" + id, status + " · " + text(body, "note", ""));
+        IotAppRepository.transitionAlert(jdbc, id, body, identity.requireOperatorName());
+        addLog("告警运营处置", "ALERT-" + id, String.valueOf(body.get("note")));
         return alerts().stream().filter(a -> longValue(a.get("id")) == id).findFirst()
                 .orElseThrow(() -> BusinessException.notFound("告警不存在：" + id));
     }
@@ -253,33 +242,10 @@ public class IotOpsRepository {
                 """, (rs, rowNum) -> map(
                 "id", rs.getLong("id"), "taskNo", rs.getString("task_no"),
                 "tenantName", rs.getString("tenant_name"),
-                "firmwareVersion", rs.getString("firmware_version"), "targetCount", rs.getInt("target_count"),
+                "firmwareId", rs.getLong("firmware_id"), "firmwareVersion", rs.getString("firmware_version"), "targetCount", rs.getInt("target_count"),
                 "successCount", rs.getInt("success_count"), "failedCount", rs.getInt("failed_count"),
                 "targetScope", rs.getString("target_scope"), "status", rs.getString("status"),
                 "executeWindow", rs.getString("execute_window"), "createdAt", rs.getString("created_at")));
-    }
-
-    /**
-     * 执行 OTA 任务。
-     *
-     * <p>平台没有到网关/设备的固件下发与回执链路，以前点一次就把状态写成 running 并记
-     * "已进入执行队列"，运营看到的"执行中"其实是点击动作本身造出来的。
-     * 现在不改状态：留一条排期留痕，返回里明确说明要等设备上线回执后才回写进度。</p>
-     */
-    public Map<String, Object> executeOta(long id) {
-        Map<String, Object> task = otaTasks().stream()
-                .filter(o -> longValue(o.get("id")) == id)
-                .findFirst()
-                .orElseThrow(() -> BusinessException.notFound("升级任务不存在：" + id));
-        if ("completed".equals(task.get("status"))) {
-            throw new IllegalArgumentException("该任务已完成，无需重复执行");
-        }
-        addLog("排期OTA任务", String.valueOf(task.get("taskNo")),
-                "执行窗口 " + task.get("executeWindow") + "，等待网关拉取固件后回写进度");
-        Map<String, Object> result = new LinkedHashMap<>(task);
-        result.put("message", "任务已排入执行窗口 " + task.get("executeWindow")
-                + "；升级进度需网关回执后回写，当前不改标记为执行中");
-        return result;
     }
 
     public List<Map<String, Object>> workOrders() {
@@ -293,6 +259,29 @@ public class IotOpsRepository {
                 "priority", rs.getString("priority"), "status", rs.getString("status"),
                 "technician", rs.getString("technician"), "description", rs.getString("description"),
                 "createdAt", rs.getString("created_at")));
+    }
+
+    @org.springframework.transaction.annotation.Transactional
+    public Map<String, Object> handleWorkOrder(long id, Map<String, Object> body) {
+        List<Map<String, Object>> rows = jdbc.queryForList("SELECT status,description FROM iot_work_order WHERE id=? FOR UPDATE", id);
+        if (rows.isEmpty()) throw BusinessException.notFound("工单不存在");
+        String current = String.valueOf(rows.get(0).get("status"));
+        String next = text(body, "status", "");
+        if (!("pending".equals(current) && "processing".equals(next))
+                && !("processing".equals(current) && "completed".equals(next))) {
+            throw new IllegalArgumentException("仅支持待受理→处理中→已完成，请刷新状态");
+        }
+        String note = required(body, "note", "请填写实际处理结果");
+        if (note.length() < 4 || note.length() > 200) throw new IllegalArgumentException("处理说明须为4至200字");
+        String operator = identity.requireOperatorName();
+        String old = rows.get(0).get("description") == null ? "" : String.valueOf(rows.get(0).get("description"));
+        String history = old + "\n[" + nowLabel() + " · " + operator + " · " + next + "] " + note;
+        if (history.length() > 500) throw new IllegalArgumentException("历史超过500字容量，禁止截断，请精简本次说明");
+        int changed = jdbc.update("UPDATE iot_work_order SET status=?,technician=?,description=?,completed_at=? WHERE id=? AND status=?",
+                next, operator, history, "completed".equals(next) ? nowLabel() : null, id, current);
+        if (changed != 1) throw new IllegalArgumentException("工单状态已变化，请刷新");
+        addLog("运维工单处置", "WO-" + id, next + " · " + note);
+        return workOrders().stream().filter(row -> longValue(row.get("id")) == id).findFirst().orElseThrow();
     }
 
     public List<Map<String, Object>> logs() {

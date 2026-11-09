@@ -19,8 +19,8 @@ import java.util.Map;
 
 /** 供应商分销商招募：邀请码与招募关系。 */
 @RestController
-@RequestMapping("/api/supplier")
-@OperatorOnly("s2b2c:supplier")
+@RequestMapping("/api/platform/supply")
+@OperatorOnly("s2b2c:platform")
 public class SupplierRecruitController {
 
     private static final String ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";

@@ -55,6 +55,11 @@ public class AdminAlertController {
                 firstNonNull(pageNum, page, 1), firstNonNull(pageSize, size, 10), status, alertLevel));
     }
 
+    @GetMapping("/{alertId}")
+    public ApiResponse<AdminAlertReviewVO> detail(@PathVariable Long alertId) {
+        return ApiResponse.success(adminAlertService.getAlert(alertId));
+    }
+
     /** 关闭告警（告警中心 / 运营看板 / 监控中心三处都在调）。 */
     @PatchMapping("/{alertId}/close")
     public ApiResponse<Map<String, Object>> close(@PathVariable Long alertId,

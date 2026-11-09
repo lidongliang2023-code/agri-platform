@@ -66,31 +66,46 @@ public class UserPermissionService {
     /**
      * 解析某个用户在某市场下的角色与权限码。
      *
-     * @param marketId 为空时不按市场过滤（取该用户全部市场的角色）
+     * @param marketId 仅保留历史响应兼容，不再作为单平台权限边界
      */
     public Resolved resolve(Long userId, Long marketId) {
-        List<UserRoleEntity> bindings;
-        if (userId == null) {
-            bindings = List.of();
-        } else {
-            LambdaQueryWrapper<UserRoleEntity> wrapper = new LambdaQueryWrapper<UserRoleEntity>()
-                    .eq(UserRoleEntity::getUserId, userId);
-            if (marketId != null) {
-                wrapper.eq(UserRoleEntity::getMarketId, marketId);
-            }
-            bindings = userRoleMapper.selectList(wrapper);
-        }
+        return resolveDomains(userId, marketId, false);
+    }
 
+    private Resolved resolveDomains(Long userId, Long marketId, boolean platformOnly) {
+        List<UserRoleEntity> bindings = userId == null ? List.of() : userRoleMapper.selectList(
+                new LambdaQueryWrapper<UserRoleEntity>().eq(UserRoleEntity::getUserId, userId));
         List<String> roles = new ArrayList<>();
         Set<String> permissions = new LinkedHashSet<>();
         if (!bindings.isEmpty()) {
-            List<Long> roleIds = bindings.stream().map(UserRoleEntity::getRoleId).toList();
-            for (RoleEntity role : roleMapper.selectBatchIds(roleIds)) {
+            for (RoleEntity role : roleMapper.selectBatchIds(bindings.stream()
+                    .map(UserRoleEntity::getRoleId).distinct().toList())) {
+                if (!"enabled".equalsIgnoreCase(role.getStatus())) continue;
+                String scope = role.getScopeType();
+                boolean platform = "PLATFORM".equals(scope);
+                boolean business = "BUSINESS".equals(scope);
+                boolean regulatory = "REGULATORY".equals(scope);
+                boolean subject = "SUBJECT".equals(scope);
+                if (platformOnly && !platform) continue;
+                if (!platform && !business && !regulatory && !subject) continue;
                 roles.add(role.getCode());
-                permissions.addAll(parsePermissions(role));
+                for (String code : parsePermissions(role)) {
+                    if (platform
+                            || (regulatory && code.startsWith("gov:") && !code.equals("gov:*"))
+                            || (subject && !code.equals("*") && !code.startsWith("uc:")
+                                && !code.startsWith("platform:") && !code.endsWith(":admin") && !code.equals("gov:*"))
+                            || (business && !code.equals("*") && !code.startsWith("uc:")
+                                && !code.startsWith("platform:") && !code.startsWith("production:")
+                                && !code.startsWith("gov:"))) permissions.add(code);
+                }
             }
         }
         return new Resolved(userId, marketId, roles, permissions);
+    }
+
+    /** 平台运营不继承任何市场角色。 */
+    public Resolved resolvePlatform(Long userId) {
+        return resolveDomains(userId, null, true);
     }
 
     /**

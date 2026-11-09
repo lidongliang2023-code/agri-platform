@@ -1,3 +1,5 @@
+import Card from '@/components/SectionCard'
+import './inputs.css'
 /**
  * 页面名称：新建投入品
  * 路由路径：/production/inputs/create
@@ -16,7 +18,7 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { PageContainer, ProCard } from '@ant-design/pro-components'
+import PageContainer from '@/components/ProductionPageContainer'
 import {
   Alert,
   Button,
@@ -292,6 +294,7 @@ export default function Create(): JSX.Element {
 
   return (
     <PageContainer
+      className="inputs-page"
       title={
         <Space size={8}>
           <Typography.Link onClick={() => navigate('/production/inputs')}>
@@ -329,11 +332,11 @@ export default function Create(): JSX.Element {
           usedAt: dayjs(),
         }}
       >
-        <Row gutter={16}>
-          <Col span={16}>
-            <ProCard title="☐ 投入品信息" headerBordered style={{ marginBottom: 16 }}>
-              <Row gutter={16}>
-                <Col span={12}>
+        <Row gutter={[16, 16]}>
+          <Col xs={24} xl={16}>
+            <Card title="☐ 投入品信息" style={{ marginBottom: 16 }}>
+              <Row gutter={[16, 16]}>
+                <Col xs={24} md={12}>
                   <Form.Item
                     label="投入品名称"
                     name="inputName"
@@ -342,7 +345,7 @@ export default function Create(): JSX.Element {
                     <Input placeholder="请输入或扫码自动填充" />
                   </Form.Item>
                 </Col>
-                <Col span={12}>
+                <Col xs={24} md={12}>
                   <Form.Item
                     label="投入品类型"
                     name="inputType"
@@ -351,12 +354,12 @@ export default function Create(): JSX.Element {
                     <Select options={INPUT_CATEGORY_OPTIONS} placeholder="请选择类型" />
                   </Form.Item>
                 </Col>
-                <Col span={12}>
+                <Col xs={24} md={12}>
                   <Form.Item label="投入品条码" name="inputCode">
                     <Input placeholder="扫码或手动输入" />
                   </Form.Item>
                 </Col>
-                <Col span={12}>
+                <Col xs={24} md={12}>
                   <Form.Item
                     label="登记证号"
                     name="registrationNo"
@@ -376,7 +379,7 @@ export default function Create(): JSX.Element {
                     <Input placeholder="如 PD20180001 或 农肥(2018)准字1234号" />
                   </Form.Item>
                 </Col>
-                <Col span={12}>
+                <Col xs={24} md={12}>
                   <Form.Item
                     label="生产厂家"
                     name="manufacturer"
@@ -385,12 +388,12 @@ export default function Create(): JSX.Element {
                     <Input placeholder="请输入生产厂家" />
                   </Form.Item>
                 </Col>
-                <Col span={12}>
+                <Col xs={24} md={12}>
                   <Form.Item label="规格" name="spec">
                     <Input placeholder="如 50kg/袋、200mL/瓶（可含有效成分）" />
                   </Form.Item>
                 </Col>
-                <Col span={12}>
+                <Col xs={24} md={12}>
                   <Form.Item
                     label="计量单位"
                     name="unit"
@@ -399,7 +402,7 @@ export default function Create(): JSX.Element {
                     <Select options={STOCK_UNIT_OPTIONS} placeholder="请选择单位" />
                   </Form.Item>
                 </Col>
-                <Col span={12}>
+                <Col xs={24} md={12}>
                   <Form.Item
                     label="安全间隔期（天）"
                     name="safetyInterval"
@@ -420,11 +423,11 @@ export default function Create(): JSX.Element {
                   </Form.Item>
                 </Col>
               </Row>
-            </ProCard>
+            </Card>
 
-            <ProCard title="☐ 库存与初始入库批次" headerBordered style={{ marginBottom: 16 }}>
-              <Row gutter={16}>
-                <Col span={8}>
+            <Card title="☐ 库存与初始入库批次" style={{ marginBottom: 16 }}>
+              <Row gutter={[16, 16]}>
+                <Col xs={24} md={8}>
                   <Form.Item
                     label="初始库存"
                     name="stockQty"
@@ -433,7 +436,7 @@ export default function Create(): JSX.Element {
                     <InputNumber min={0} precision={2} style={{ width: '100%' }} />
                   </Form.Item>
                 </Col>
-                <Col span={8}>
+                <Col xs={24} md={8}>
                   <Form.Item
                     label="库存预警阈值"
                     name="warnQty"
@@ -442,7 +445,7 @@ export default function Create(): JSX.Element {
                     <InputNumber min={0} precision={2} style={{ width: '100%' }} />
                   </Form.Item>
                 </Col>
-                <Col span={8}>
+                <Col xs={24} md={8}>
                   <Form.Item label="状态" name="status">
                     <Select
                       options={[
@@ -452,7 +455,7 @@ export default function Create(): JSX.Element {
                     />
                   </Form.Item>
                 </Col>
-                <Col span={12}>
+                <Col xs={24} md={12}>
                   <Form.Item
                     label="批次号"
                     name="batchNo"
@@ -461,7 +464,7 @@ export default function Create(): JSX.Element {
                     <Input placeholder="如 BN20260501" />
                   </Form.Item>
                 </Col>
-                <Col span={12}>
+                <Col xs={24} md={12}>
                   <Form.Item
                     label="有效期至"
                     name="expireDate"
@@ -471,11 +474,11 @@ export default function Create(): JSX.Element {
                   </Form.Item>
                 </Col>
               </Row>
-            </ProCard>
+            </Card>
 
-            <ProCard
+            <Card
               title="☐ 本次使用登记（可选）"
-              headerBordered
+
               extra={
                 <Space>
                   <Typography.Text type="secondary">登记</Typography.Text>
@@ -485,8 +488,8 @@ export default function Create(): JSX.Element {
                 </Space>
               }
             >
-              <Row gutter={16}>
-                <Col span={12}>
+              <Row gutter={[16, 16]}>
+                <Col xs={24} md={12}>
                   <Form.Item label="使用地块" name="plotId">
                     <Select
                       allowClear
@@ -498,7 +501,7 @@ export default function Create(): JSX.Element {
                     />
                   </Form.Item>
                 </Col>
-                <Col span={12}>
+                <Col xs={24} md={12}>
                   <Form.Item label="关联农事任务" name="taskId">
                     <Select
                       allowClear
@@ -510,7 +513,7 @@ export default function Create(): JSX.Element {
                     />
                   </Form.Item>
                 </Col>
-                <Col span={6}>
+                <Col xs={12} lg={6}>
                   <Form.Item label="用量" name="dosage">
                     <InputNumber
                       min={0}
@@ -521,12 +524,12 @@ export default function Create(): JSX.Element {
                     />
                   </Form.Item>
                 </Col>
-                <Col span={6}>
+                <Col xs={12} lg={6}>
                   <Form.Item label="单位" name="dosageUnit">
                     <Select options={DOSAGE_UNIT_OPTIONS} disabled={!withUsage} />
                   </Form.Item>
                 </Col>
-                <Col span={6}>
+                <Col xs={12} lg={6}>
                   <Form.Item label="施用方式" name="method">
                     <Select
                       allowClear
@@ -536,7 +539,7 @@ export default function Create(): JSX.Element {
                     />
                   </Form.Item>
                 </Col>
-                <Col span={6}>
+                <Col xs={12} lg={6}>
                   <Form.Item label="操作人" name="operatorId">
                     <Select
                       allowClear
@@ -548,13 +551,13 @@ export default function Create(): JSX.Element {
                     />
                   </Form.Item>
                 </Col>
-                <Col span={12}>
+                <Col xs={24} md={12}>
                   <Form.Item label="使用日期" name="usedAt">
                     <DatePicker showTime style={{ width: '100%' }} disabled={!withUsage} />
                   </Form.Item>
                 </Col>
               </Row>
-            </ProCard>
+            </Card>
 
             <Space style={{ marginTop: 16 }}>
               <Button onClick={handleReset}>取消</Button>
@@ -569,8 +572,8 @@ export default function Create(): JSX.Element {
             </Space>
           </Col>
 
-          <Col span={8}>
-            <ProCard title="✅ 合规校验" headerBordered style={{ marginBottom: 16 }}>
+          <Col xs={24} md={8}>
+            <Card title="✅ 合规校验" style={{ marginBottom: 16 }}>
               <Space direction="vertical" size={12} style={{ width: '100%' }}>
                 <Alert
                   type={
@@ -638,9 +641,9 @@ export default function Create(): JSX.Element {
                   初始库存：{stockQty ?? 0}；初始库存大于 0 时将同步生成一条入库流水。
                 </Typography.Text>
               </Space>
-            </ProCard>
+            </Card>
 
-            <ProCard title="ℹ️ 填写说明" headerBordered>
+            <Card title="ℹ️ 填写说明">
               <Space direction="vertical" size={8}>
                 <Typography.Text type="secondary">
                   · 登记证号须与实物包装一致，系统按农药 PD/LS、肥料「农肥」、种子「农种经许」、
@@ -656,7 +659,7 @@ export default function Create(): JSX.Element {
                   · 勾选「本次使用登记」可在建档同时生成一条使用记录，并关联地块与农事任务。
                 </Typography.Text>
               </Space>
-            </ProCard>
+            </Card>
           </Col>
         </Row>
       </Form>

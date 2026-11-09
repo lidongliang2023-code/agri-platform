@@ -17,18 +17,22 @@ import {
   bootstrapUnifiedSso,
   showUnifiedAuthFailure,
 } from '../../frontend-shared/unified-auth'
+import { PUBLIC_PATHS } from './config/public-paths'
 
 bootstrapUnifiedSso({
   clientId: 'mall-consumer',
   permission: 's2b2c:consumer',
   landingPath: '/',
+  publicPaths: PUBLIC_PATHS,
 })
-  .then((login) => {
-    if (!login) return
+  .then((session) => {
+    // 只有"正在跳登录"（null）不挂载；匿名访客（{ anonymous: true }）照常挂载，
+    // 否则扫码进来的第一步就是"先注册"，溯源码等于白印。
+    if (!session) return
     const app = createApp(App)
     app.use(createPinia())
     app.use(router)
     app.use(ElementPlus, { locale: zhCn })
     app.mount('#app')
   })
-  .catch(showUnifiedAuthFailure)
+  .catch((error) => showUnifiedAuthFailure(error, 'mall-consumer'))

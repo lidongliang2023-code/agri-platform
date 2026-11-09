@@ -1,5 +1,6 @@
 package com.agri.s2b2c.service;
 
+
 import com.agri.s2b2c.entity.Order;
 import com.agri.s2b2c.mapper.OrderMapper;
 import com.baomidou.mybatisplus.core.toolkit.IdWorker;
@@ -24,8 +25,17 @@ public class OrderShipmentService {
     private final JdbcTemplate jdbc;
     private final OrderMapper orderMapper;
     private final NoticeService noticeService;
+    private final OrderTraceService orderTraceService;
 
-    public OrderShipmentService(JdbcTemplate jdbc, OrderMapper orderMapper, NoticeService noticeService) {
+    private void applyShipped(Order order, String no, String company) {
+        orderTraceService.requireShippable(order.getId());
+        order.setStatus("SHIPPED");
+        order.setLogisticsNo(no);
+        order.setLogisticsCompany(company == null || company.isBlank() ? "云仓/直发" : company.trim());
+    }
+
+    public OrderShipmentService(JdbcTemplate jdbc, OrderMapper orderMapper, NoticeService noticeService, OrderTraceService orderTraceService) {
+        this.orderTraceService = orderTraceService;
         this.jdbc = jdbc;
         this.orderMapper = orderMapper;
         this.noticeService = noticeService;
@@ -60,9 +70,7 @@ public class OrderShipmentService {
         order.setShipConfirmStatus(orderConfirmStatus);
         order.setShipProposedBy(actorType);
         if (!counterpartExists) {
-            order.setStatus("SHIPPED");
-            order.setLogisticsNo(no);
-            order.setLogisticsCompany(company == null || company.isBlank() ? "云仓/直发" : company.trim());
+            applyShipped(order, no, company);
         }
         order.setUpdateTime(LocalDateTime.now());
         orderMapper.updateById(order);
@@ -96,9 +104,7 @@ public class OrderShipmentService {
         jdbc.update("UPDATE s2b2c_order_shipment SET status = 'CONFIRMED', confirmed_by_type = ?, "
                         + "confirmed_by_id = ?, confirmed_at = NOW(), update_time = NOW() WHERE id = ?",
                 actorType, actorId, pending.get("id"));
-        order.setStatus("SHIPPED");
-        order.setLogisticsNo(String.valueOf(pending.get("logistics_no")));
-        order.setLogisticsCompany(String.valueOf(pending.get("logistics_company")));
+        applyShipped(order, String.valueOf(pending.get("logistics_no")), String.valueOf(pending.get("logistics_company")));
         order.setShipConfirmStatus("CONFIRMED");
         order.setUpdateTime(LocalDateTime.now());
         orderMapper.updateById(order);

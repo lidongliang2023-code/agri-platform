@@ -24,11 +24,21 @@ import com.agri.masterdata.mapper.MemberProfileMapper;
 import com.agri.masterdata.mapper.OperationLogMapper;
 import com.agri.masterdata.mapper.OrganizationMapper;
 import com.agri.masterdata.mapper.PositionMapper;
+import com.agri.masterdata.mapper.PermissionMapper;
+import com.agri.masterdata.mapper.PermissionRequestMapper;
 import com.agri.masterdata.mapper.ProductCategoryMapper;
 import com.agri.masterdata.mapper.ProductMapper;
 import com.agri.masterdata.mapper.RoleMapper;
+import com.agri.masterdata.mapper.RolePermissionMapper;
 import com.agri.masterdata.mapper.SupplierMapper;
 import com.agri.masterdata.mapper.UserMapper;
+import com.agri.masterdata.mapper.UserRoleMapper;
+import com.agri.masterdata.entity.Permission;
+import com.agri.masterdata.entity.PermissionRequest;
+import com.agri.masterdata.entity.RolePermission;
+import com.agri.masterdata.entity.UserRole;
+import com.agri.masterdata.service.IPermissionService;
+import com.agri.masterdata.vo.PermissionVO;
 import com.agri.masterdata.vo.ProductVO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -45,10 +55,15 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 import java.time.LocalDateTime;
 
 /**
@@ -80,6 +95,11 @@ public class UserWorkspaceController {
     private final AnnouncementService announcementService;
     private final SupplierMapper supplierMapper;
     private final MemberProfileMapper memberProfileMapper;
+    private final UserRoleMapper userRoleMapper;
+    private final RolePermissionMapper rolePermissionMapper;
+    private final PermissionMapper permissionMapper;
+    private final PermissionRequestMapper permissionRequestMapper;
+    private final IPermissionService permissionService;
     /** 仅用于生成业务编码时取已有最大序号（需要 LIKE 前缀匹配，用 Mapper 写起来更绕） */
     private final JdbcTemplate jdbcTemplate;
 
@@ -237,6 +257,7 @@ public class UserWorkspaceController {
         String tenantId = requireTenant();
         List<Role> rows = roleMapper.selectList(new LambdaQueryWrapper<Role>()
                 .and(w -> w.isNull(Role::getTenantId).or().eq(Role::getTenantId, "").or().eq(Role::getTenantId, tenantId))
+                .and(w -> w.isNull(Role::getDelFlag).or().eq(Role::getDelFlag, 0))
                 .orderByAsc(Role::getRoleLevel));
         List<Map<String, Object>> list = new ArrayList<>();
         for (Role role : rows) {
@@ -793,6 +814,202 @@ public class UserWorkspaceController {
         return ApiResponse.success();
     }
 
+    /* ==================== 组织级角色：成员与权限（租户管理员在本主体内维护） ==================== */
+
+    /**
+     * 删除本主体自定义角色。
+     *
+     * <p>系统内置角色、别家角色一律拒绝；角色下仍有成员时明确阻断 ——
+     * 直接删会留下指向不存在角色的 {@code agri_md_user_role} 脏关联。</p>
+     *
+     * <p>必须用 {@code deleteById}：全局配置了 {@code logic-delete-field: delFlag}，
+     * 该字段由 MyBatis-Plus 接管，{@code setDelFlag(1) + updateById} 会被跳过 ——
+     * 接口返回 200 而记录仍在（静默失败）。</p>
+     */
+    @DeleteMapping("/roles/{id}")
+    public ApiResponse<Void> deleteRole(@PathVariable Long id) {
+        String tenantId = requireTenant();
+        Role role = requireOwnedRole(id, tenantId);
+        if (role.getIsSystem() != null && role.getIsSystem() == 1) {
+            throw new BusinessException(ErrorCode.PERMISSION_FORBIDDEN, "系统内置角色不允许删除");
+        }
+        Long members = userRoleMapper.selectCount(new LambdaQueryWrapper<UserRole>()
+                .eq(UserRole::getRoleId, id));
+        if (members != null && members > 0) {
+            throw new BusinessException(ErrorCode.PARAM_VALIDATE_ERROR,
+                    "角色下仍有 " + members + " 名成员，请先移出成员再删除");
+        }
+        roleMapper.deleteById(id);
+        rolePermissionMapper.delete(new LambdaQueryWrapper<RolePermission>()
+                .eq(RolePermission::getRoleId, id));
+        return ApiResponse.success();
+    }
+
+    /** 角色成员（只返回仍属于当前主体的账号，跨租户的一律不展示）。 */
+    @GetMapping("/roles/{id}/members")
+    public ApiResponse<List<Map<String, Object>>> roleMembers(@PathVariable Long id) {
+        String tenantId = requireTenant();
+        requireOwnedRole(id, tenantId);
+        List<UserRole> links = userRoleMapper.selectList(new LambdaQueryWrapper<UserRole>()
+                .eq(UserRole::getRoleId, id));
+        if (links.isEmpty()) {
+            return ApiResponse.success(Collections.emptyList());
+        }
+        List<Long> userIds = links.stream().map(UserRole::getUserId)
+                .filter(Objects::nonNull).distinct().collect(Collectors.toList());
+        if (userIds.isEmpty()) {
+            return ApiResponse.success(Collections.emptyList());
+        }
+        List<User> users = userMapper.selectList(new LambdaQueryWrapper<User>()
+                .in(User::getId, userIds)
+                .eq(User::getTenantId, tenantId)
+                .and(w -> w.isNull(User::getDelFlag).or().eq(User::getDelFlag, 0)));
+        List<Map<String, Object>> list = new ArrayList<>();
+        for (User user : users) {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("userId", String.valueOf(user.getId()));
+            item.put("username", user.getUsername());
+            item.put("realName", user.getRealName());
+            item.put("phone", user.getPhone());
+            item.put("userStatus", user.getUserStatus());
+            list.add(item);
+        }
+        return ApiResponse.success(list);
+    }
+
+    /**
+     * 把本主体账号加入角色。
+     *
+     * <p>成员必须是当前主体的账号：传别家的 userId 直接 403，而不是静默跳过 ——
+     * 静默跳过会让调用方以为加成功了。</p>
+     */
+    @PostMapping("/roles/{id}/members")
+    public ApiResponse<Void> addRoleMembers(@PathVariable Long id, @RequestBody RoleMemberRequest body) {
+        String tenantId = requireTenant();
+        Role role = requireOwnedRole(id, tenantId);
+        if (role.getIsSystem() != null && role.getIsSystem() == 1) {
+            throw new BusinessException(ErrorCode.PERMISSION_FORBIDDEN, "系统内置角色的成员由平台维护");
+        }
+        List<Long> userIds = body == null || body.userIds() == null ? Collections.emptyList()
+                : body.userIds().stream().filter(Objects::nonNull).distinct().collect(Collectors.toList());
+        if (userIds.isEmpty()) {
+            throw new BusinessException(ErrorCode.PARAM_VALIDATE_ERROR, "请选择要加入角色的成员");
+        }
+        List<User> users = userMapper.selectList(new LambdaQueryWrapper<User>()
+                .in(User::getId, userIds)
+                .eq(User::getTenantId, tenantId)
+                .and(w -> w.isNull(User::getDelFlag).or().eq(User::getDelFlag, 0)));
+        if (users.size() != userIds.size()) {
+            throw new BusinessException(ErrorCode.PERMISSION_FORBIDDEN,
+                    "有 " + (userIds.size() - users.size()) + " 个账号不属于当前主体，不能加入本主体角色");
+        }
+        Set<Long> exists = userRoleMapper.selectList(new LambdaQueryWrapper<UserRole>()
+                        .eq(UserRole::getRoleId, id))
+                .stream().map(UserRole::getUserId).filter(Objects::nonNull).collect(Collectors.toSet());
+        for (Long userId : userIds) {
+            if (exists.contains(userId)) {
+                continue;
+            }
+            UserRole link = new UserRole();
+            link.setUserId(userId);
+            link.setRoleId(id);
+            link.setTenantId(tenantId);
+            userRoleMapper.insert(link);
+        }
+        return ApiResponse.success();
+    }
+
+    /** 把成员移出角色（只允许动本主体角色）。 */
+    @DeleteMapping("/roles/{id}/members/{userId}")
+    public ApiResponse<Void> removeRoleMember(@PathVariable Long id, @PathVariable Long userId) {
+        String tenantId = requireTenant();
+        requireOwnedRole(id, tenantId);
+        userRoleMapper.delete(new LambdaQueryWrapper<UserRole>()
+                .eq(UserRole::getRoleId, id)
+                .eq(UserRole::getUserId, userId));
+        return ApiResponse.success();
+    }
+
+    /**
+     * 本主体「可授予」的权限点。
+     *
+     * <p>口径：平台共享角色（tenant 为空）已持有的点 ∪ 本主体现有角色已持有的点 ∪
+     * 运营端已批准给本主体的授权申请点。三者都是"平台已经放到这个主体里"的权限，
+     * 租户管理员只能在集合内分配，<b>不能借此自行扩权</b>。</p>
+     */
+    @GetMapping("/roles/grantable-permissions")
+    public ApiResponse<List<PermissionVO>> grantablePermissions() {
+        String tenantId = requireTenant();
+        Set<Long> allowed = grantablePermIds(tenantId);
+        if (allowed.isEmpty()) {
+            return ApiResponse.success(Collections.emptyList());
+        }
+        List<PermissionVO> points = permissionService.listPoints(null, null);
+        List<PermissionVO> list = points.stream()
+                .filter(point -> point.getId() != null && allowed.contains(Long.valueOf(point.getId())))
+                .collect(Collectors.toList());
+        return ApiResponse.success(list);
+    }
+
+    /** 角色已持有的权限点 ID（与 grantable-permissions 同口径）。 */
+    @GetMapping("/roles/{id}/permissions")
+    public ApiResponse<List<String>> rolePermissions(@PathVariable Long id) {
+        String tenantId = requireTenant();
+        requireOwnedRole(id, tenantId);
+        return ApiResponse.success(permissionService.pointIdsOfRole(id));
+    }
+
+    /**
+     * 覆盖写入角色权限点。
+     *
+     * <p>越权尝试必须显式失败：请求里只要有一个点不在「可授予集合」内，整单 403 并列出编码，
+     * 不做"能写的写、不能写的悄悄丢掉"。</p>
+     */
+    @PutMapping("/roles/{id}/permissions")
+    public ApiResponse<Void> assignRolePermissions(@PathVariable Long id,
+                                                   @RequestBody RolePermRequest body) {
+        String tenantId = requireTenant();
+        Role role = requireOwnedRole(id, tenantId);
+        if (role.getIsSystem() != null && role.getIsSystem() == 1) {
+            throw new BusinessException(ErrorCode.PERMISSION_FORBIDDEN, "系统内置角色的权限由平台维护");
+        }
+        List<String> permIds = body == null || body.permIds() == null ? Collections.emptyList()
+                : body.permIds().stream().filter(Objects::nonNull).map(String::trim)
+                .filter(item -> !item.isEmpty()).distinct().collect(Collectors.toList());
+        List<Long> parsed = new ArrayList<>();
+        for (String permId : permIds) {
+            try {
+                parsed.add(Long.valueOf(permId));
+            } catch (NumberFormatException ex) {
+                throw new BusinessException(ErrorCode.PARAM_VALIDATE_ERROR, "权限点参数不合法：" + permId);
+            }
+        }
+        Set<Long> allowed = grantablePermIds(tenantId);
+        List<Permission> requested = parsed.isEmpty() ? Collections.emptyList()
+                : permissionMapper.selectList(new LambdaQueryWrapper<Permission>().in(Permission::getId, parsed));
+        if (requested.size() != parsed.size()) {
+            throw new BusinessException(ErrorCode.PARAM_VALIDATE_ERROR,
+                    "有 " + (parsed.size() - requested.size()) + " 个权限点不在目录里，请先同步端点目录");
+        }
+        List<String> denied = requested.stream()
+                .filter(point -> !allowed.contains(point.getId()))
+                .map(Permission::getPermCode).collect(Collectors.toList());
+        if (!denied.isEmpty()) {
+            throw new BusinessException(ErrorCode.PERMISSION_FORBIDDEN,
+                    "以下权限点未被平台授予当前主体，不能分配给本主体角色：" + String.join("、", denied));
+        }
+        permissionService.assignRolePoints(id, permIds, SecurityUtils.getUsername());
+        return ApiResponse.success();
+    }
+
+    /** 企业端角色成员入参 */
+    public record RoleMemberRequest(List<Long> userIds) {
+    }
+
+    /** 企业端角色权限点入参 */
+    public record RolePermRequest(List<String> permIds) {
+    }
+
     /** 组织入参 */
     public record OrgSaveRequest(String orgName, String orgType, String parentId,
                                  String contactPerson, String contactPhone,
@@ -1116,6 +1333,76 @@ public class UserWorkspaceController {
         if (value == null) return null;
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    /**
+     * 角色必须是当前主体自己的、未删除的角色；平台共享角色（tenant 为空）也不允许在这里改。
+     *
+     * <p>这是组织级角色的租户边界：所有成员/权限写操作都先过这一关，
+     * 换个 roleId 就只能撞 403，而不是按 id 直改别家的角色。</p>
+     */
+    private Role requireOwnedRole(Long roleId, String tenantId) {
+        Role role = roleId == null ? null : roleMapper.selectById(roleId);
+        boolean deleted = role != null && role.getDelFlag() != null && role.getDelFlag() == 1;
+        if (role == null || deleted || role.getTenantId() == null || !tenantId.equals(role.getTenantId())) {
+            throw new BusinessException(ErrorCode.PERMISSION_FORBIDDEN, "角色不存在或不属于当前主体");
+        }
+        return role;
+    }
+
+    /**
+     * 当前主体可授予的权限点集合。
+     *
+     * <p>平台共享角色（{@code tenant_id} 为空）已持有的点、本主体现有角色已持有的点、
+     * 运营端已批准给本主体的授权申请点，三者并集。租户管理员只能在这个集合内做分配，
+     * 集合之外的点一律 403 —— 前端隐藏按钮不算数，越权必须由服务端拒绝。</p>
+     */
+    private Set<Long> grantablePermIds(String tenantId) {
+        Set<Long> ids = new HashSet<>();
+        List<Role> shared = roleMapper.selectList(new LambdaQueryWrapper<Role>()
+                .and(w -> w.isNull(Role::getTenantId).or().eq(Role::getTenantId, ""))
+                .and(w -> w.isNull(Role::getDelFlag).or().eq(Role::getDelFlag, 0)));
+        List<Role> own = roleMapper.selectList(new LambdaQueryWrapper<Role>()
+                .eq(Role::getTenantId, tenantId)
+                .and(w -> w.isNull(Role::getDelFlag).or().eq(Role::getDelFlag, 0)));
+        List<Long> roleIds = new ArrayList<>();
+        shared.forEach(role -> {
+            if (role.getId() != null) {
+                roleIds.add(role.getId());
+            }
+        });
+        own.forEach(role -> {
+            if (role.getId() != null) {
+                roleIds.add(role.getId());
+            }
+        });
+        if (!roleIds.isEmpty()) {
+            rolePermissionMapper.selectList(new LambdaQueryWrapper<RolePermission>()
+                            .in(RolePermission::getRoleId, roleIds)
+                            .and(w -> w.isNull(RolePermission::getDelFlag).or().eq(RolePermission::getDelFlag, 0)))
+                    .forEach(grant -> {
+                        if (grant.getPermId() != null) {
+                            ids.add(grant.getPermId());
+                        }
+                    });
+        }
+        List<PermissionRequest> approved = permissionRequestMapper.selectList(new LambdaQueryWrapper<PermissionRequest>()
+                .eq(PermissionRequest::getTenantId, tenantId)
+                .eq(PermissionRequest::getStatus, PermissionRequest.APPROVED)
+                .and(w -> w.isNull(PermissionRequest::getDelFlag).or().eq(PermissionRequest::getDelFlag, 0)));
+        List<String> codes = approved.stream().map(PermissionRequest::getPermCode)
+                .filter(Objects::nonNull).distinct().collect(Collectors.toList());
+        if (!codes.isEmpty()) {
+            permissionMapper.selectList(new LambdaQueryWrapper<Permission>()
+                            .in(Permission::getPermCode, codes)
+                            .and(w -> w.isNull(Permission::getDelFlag).or().eq(Permission::getDelFlag, 0)))
+                    .forEach(point -> {
+                        if (point.getId() != null) {
+                            ids.add(point.getId());
+                        }
+                    });
+        }
+        return ids;
     }
 
     private String requireTenant() {

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { BrandMark } from './BrandMark'
+import { Icon } from './Icon'
+import { PasswordInput } from './PasswordInput'
 import { AlipayIcon, GovernmentServiceIcon, WechatIcon } from './ThirdPartyIcons'
 
 /**
@@ -48,6 +50,10 @@ interface SsoBody {
     nickname?: string
     identity?: string
     subjectName?: string
+    certificationStatus?: string
+    reviewRemark?: string
+    reviewTime?: string
+    subject?: { creditCode?: string; contactName?: string; contactPhone?: string; address?: string; industry?: string; companySize?: string; businessType?: string }
     status?: string
     merchantId?: number | string
     /** 二次验证：true 时其余字段为空，必须走第二步提交验证码 */
@@ -72,6 +78,15 @@ interface SsoBody {
       legalPerson?: string
     }
   }
+}
+
+function validCreditCode(raw: string): boolean {
+  const code = raw.trim().toUpperCase()
+  const chars = '0123456789ABCDEFGHJKLMNPQRTUWXY'
+  const weights = [1,3,9,27,19,26,16,17,20,29,25,13,8,24,10,30,28]
+  if (code.length !== 18 || [...code].some(c => !chars.includes(c))) return false
+  const sum = weights.reduce((total, weight, index) => total + chars.indexOf(code[index]) * weight, 0)
+  return chars[(31 - sum % 31) % 31] === code[17]
 }
 
 const INDUSTRIES = ['粮油产业', '果蔬产业', '畜禽产业', '茶药产业', '饲料农资', '水产产业', '流通贸易', '加工制造', '其他']
@@ -143,48 +158,6 @@ function writeResetCooldown(phone: string, seconds: number): void {
 /** 手机号脱敏：138****8000（找回密码全程只展示脱敏号，避免肩窥带走完整号码） */
 function maskPhone(value: string): string {
   return /^\d{11}$/.test(value) ? `${value.slice(0, 3)}****${value.slice(7)}` : value
-}
-
-function Icon({ name, size = 16 }: { name: string; size?: number }): JSX.Element {
-  const common = {
-    width: size,
-    height: size,
-    viewBox: '0 0 24 24',
-    fill: 'none',
-    stroke: 'currentColor',
-    strokeWidth: 1.8,
-    strokeLinecap: 'round' as const,
-    strokeLinejoin: 'round' as const,
-    'aria-hidden': true,
-  }
-  switch (name) {
-    case 'back':
-      return <svg {...common}><path d="m15 18-6-6 6-6" /><path d="M9 12h11" /></svg>
-    case 'seed':
-      return <svg {...common}><path d="M12 21c0-6 3-9 8-9 0 6-3 9-8 9Z" /><path d="M12 21c0-6-3-9-8-9 0 6 3 9 8 9Z" /><path d="M12 21v-8" /></svg>
-    case 'shield':
-      return <svg {...common}><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3Z" /><path d="m9 12 2 2 4-4" /></svg>
-    case 'zap':
-      return <svg {...common}><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z" /></svg>
-    case 'money':
-      return <svg {...common}><circle cx="12" cy="12" r="8" /><path d="M9 9h6M9 15h6M12 7v10" /></svg>
-    case 'cart':
-      return <svg {...common}><circle cx="9" cy="20" r="1.4" /><circle cx="18" cy="20" r="1.4" /><path d="M3 4h2l2.2 10.2A2 2 0 0 0 9.2 16H18l2-8H6" /></svg>
-    case 'box':
-      return <svg {...common}><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Z" /><path d="M4 7.5 12 12l8-4.5M12 12v9" /></svg>
-    case 'factory':
-      return <svg {...common}><path d="M3 21V10l5 3V10l5 3V7l8 5v9H3Z" /><path d="M7 17h2M12 17h2M17 17h2" /></svg>
-    case 'user':
-      return <svg {...common}><circle cx="12" cy="8" r="3.5" /><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6" /></svg>
-    case 'check':
-      return <svg {...common}><path d="m5 12 5 5 9-10" /></svg>
-    case 'eye':
-      return <svg {...common}><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" /><circle cx="12" cy="12" r="2.8" /></svg>
-    case 'eye-off':
-      return <svg {...common}><path d="m3 3 18 18" /><path d="M10.6 6.2A11 11 0 0 1 12 6c6 0 9.5 6 9.5 6a16 16 0 0 1-2.1 2.8M6.2 6.5C3.8 8.2 2.5 12 2.5 12s3.5 6 9.5 6c1.3 0 2.5-.3 3.6-.7" /><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" /></svg>
-    default:
-      return <svg {...common}><circle cx="12" cy="12" r="8" /></svg>
-  }
 }
 
 function LoginAside(): JSX.Element {
@@ -307,7 +280,6 @@ export default function App(): JSX.Element {
   const [smsCode, setSmsCode] = useState('')
   const [account, setAccount] = useState('')
   const [password, setPassword] = useState('')
-  const [showLoginPassword, setShowLoginPassword] = useState(false)
   const [remember, setRemember] = useState(true)
   const [forgotOpen, setForgotOpen] = useState(initialQuery.get('mode') === 'forgot')
   // 冻结申诉：账号被冻结时登不进来，所以这个表单不需要密码，只凭手机号 + 理由
@@ -326,8 +298,6 @@ export default function App(): JSX.Element {
   const [resetStep, setResetStep] = useState<1 | 2 | 3>(1)
   // 验证码发给的是哪个号：手机号改过之后必须重新获取，不能拿旧码往下走
   const [resetSentPhone, setResetSentPhone] = useState('')
-  const [showResetPassword, setShowResetPassword] = useState(false)
-  const [showResetConfirm, setShowResetConfirm] = useState(false)
 
   const [reg, setReg] = useState<RegisterForm>({
     identity: new URLSearchParams(window.location.search).get('identity') === 'personal'
@@ -366,6 +336,9 @@ export default function App(): JSX.Element {
   const [success, setSuccess] = useState<{ redirect: string | null; identity: Identity; hasIdCard: boolean } | null>(null)
   const [accountCreated, setAccountCreated] = useState(false)
   const [onboardingStage, setOnboardingStage] = useState('')
+  const [certificationStatus, setCertificationStatus] = useState('')
+  const [reviewRemark, setReviewRemark] = useState('')
+  const [reviewTime, setReviewTime] = useState('')
   const [onboardingMerchantId, setOnboardingMerchantId] = useState<string | null>(null)
   const [identityIdMasked, setIdentityIdMasked] = useState('')
   const [verificationUploading, setVerificationUploading] = useState('')
@@ -392,6 +365,9 @@ export default function App(): JSX.Element {
   const applyOnboardingData = (data: NonNullable<SsoBody['data']>): void => {
     const stage = data.stage ?? ''
     setOnboardingStage(stage)
+    setCertificationStatus(data.certificationStatus ?? '')
+    setReviewRemark(data.reviewRemark ?? '')
+    setReviewTime(data.reviewTime ?? '')
     setOnboardingMerchantId(data.merchantId == null ? null : String(data.merchantId))
     setAccountCreated(true)
     const evidence = data.verification
@@ -420,12 +396,17 @@ export default function App(): JSX.Element {
       ...previous,
       phone: data.phone ?? previous.phone,
       nickname: data.nickname ?? previous.nickname,
-      identity: data.identity === 'personal' ? 'personal' : previous.identity,
+      identity: data.identity === 'personal' ? 'personal' : data.identity === 'enterprise' ? 'enterprise' : previous.identity,
       companyName: data.identity === 'enterprise' ? (data.subjectName ?? previous.companyName) : previous.companyName,
       realName: data.identity === 'personal' ? (data.subjectName ?? previous.realName) : previous.realName,
-      creditCode: data.identity === 'enterprise' ? (evidence?.creditCode ?? previous.creditCode) : previous.creditCode,
+      creditCode: data.identity === 'enterprise' ? (data.subject?.creditCode ?? evidence?.creditCode ?? '') : previous.creditCode,
       legalPerson: data.identity === 'enterprise' ? (evidence?.legalPerson ?? previous.legalPerson) : previous.legalPerson,
-      contactName: previous.contactName || data.subjectName || '',
+      contactName: data.subject?.contactName ?? '',
+      contactPhone: data.subject?.contactPhone ?? '',
+      address: data.subject?.address ?? '',
+      industry: data.subject?.industry ?? '',
+      companySize: data.subject?.companySize ?? '',
+      businessType: data.subject?.businessType ?? '',
     }))
   }
 
@@ -560,8 +541,12 @@ export default function App(): JSX.Element {
         setError('请填写企业名称')
         return false
       }
-      if (!/^[0-9A-Za-z]{15,18}$/.test(reg.creditCode.trim())) {
-        setError('请填写 15-18 位统一社会信用代码')
+      if (!validCreditCode(reg.creditCode)) {
+        setError('请填写18位有效统一社会信用代码，并核对校验位')
+        return false
+      }
+      if (!reg.address.trim() || !reg.industry || !reg.companySize) {
+        setError('请补齐营业执照完整住所、行业和企业规模')
         return false
       }
       if (!reg.legalPerson.trim()) {
@@ -732,8 +717,6 @@ export default function App(): JSX.Element {
         confirm: '',
       }))
       setResetSentPhone('')
-      setShowResetPassword(false)
-      setShowResetConfirm(false)
     } catch {
       setError('无法联系认证服务，请确认后端已启动')
     } finally {
@@ -842,6 +825,10 @@ export default function App(): JSX.Element {
       setError('认证中心未返回回跳地址，请联系平台运营')
       return
     }
+    if (contextMissing && redirect === "/user-center-ops/") {
+      window.location.href = `${window.location.protocol}//${window.location.hostname}:8115/`
+      return
+    }
     // 独立登录返回的是站内路径（/production/... 或 /admin/...），
     // 必须切到平台根域，不能留在 :8090 的认证中心 origin 下。
     window.location.href = contextMissing && redirect.startsWith('/')
@@ -935,7 +922,7 @@ export default function App(): JSX.Element {
         body: JSON.stringify({
           identity: reg.identity,
           companyName: reg.companyName.trim(),
-          creditCode: reg.creditCode.trim(),
+          creditCode: reg.creditCode.trim().toUpperCase(),
           industry: reg.identity === 'enterprise' ? reg.industry : '',
           companySize: reg.identity === 'enterprise' ? reg.companySize : '',
           address: reg.identity === 'enterprise' ? reg.address.trim() : '',
@@ -1267,36 +1254,27 @@ export default function App(): JSX.Element {
           </div>
           <label className="auth-field">
             新密码<span className="req">*</span>
-            <div className="password-row">
-              <input className="auth-input" type={showResetPassword ? 'text' : 'password'}
-                value={resetForm.password} maxLength={20} autoComplete="new-password" autoFocus
-                placeholder="8-20 位，同时包含字母和数字"
-                onChange={(event) => { setResetForm({ ...resetForm, password: event.target.value }); setError('') }} />
-              <button type="button" className="password-toggle"
-                aria-label={showResetPassword ? '隐藏新密码' : '显示新密码'}
-                title={showResetPassword ? '隐藏新密码' : '显示新密码'}
-                aria-pressed={showResetPassword}
-                onClick={() => setShowResetPassword((visible) => !visible)}>
-                <Icon name={showResetPassword ? 'eye-off' : 'eye'} size={19} />
-              </button>
-            </div>
+            <PasswordInput
+              label="新密码"
+              value={resetForm.password}
+              maxLength={20}
+              autoComplete="new-password"
+              autoFocus
+              placeholder="8-20 位，同时包含字母和数字"
+              onChange={(value) => { setResetForm({ ...resetForm, password: value }); setError('') }}
+            />
             <span className={`pwd-meter ${resetStrength}`} aria-hidden="true"><i /><i /><i /></span>
           </label>
           <label className="auth-field">
             确认新密码<span className="req">*</span>
-            <div className="password-row">
-              <input className="auth-input" type={showResetConfirm ? 'text' : 'password'}
-                value={resetForm.confirm} maxLength={20} autoComplete="new-password"
-                placeholder="请再次输入新密码"
-                onChange={(event) => { setResetForm({ ...resetForm, confirm: event.target.value }); setError('') }} />
-              <button type="button" className="password-toggle"
-                aria-label={showResetConfirm ? '隐藏确认密码' : '显示确认密码'}
-                title={showResetConfirm ? '隐藏确认密码' : '显示确认密码'}
-                aria-pressed={showResetConfirm}
-                onClick={() => setShowResetConfirm((visible) => !visible)}>
-                <Icon name={showResetConfirm ? 'eye-off' : 'eye'} size={19} />
-              </button>
-            </div>
+            <PasswordInput
+              label="确认密码"
+              value={resetForm.confirm}
+              maxLength={20}
+              autoComplete="new-password"
+              placeholder="请再次输入新密码"
+              onChange={(value) => { setResetForm({ ...resetForm, confirm: value }); setError('') }}
+            />
           </label>
           <ul className="pwd-rules" aria-label="密码规则">
             <li className={resetRules.length ? 'ok' : ''}>8-20 位</li>
@@ -1390,27 +1368,14 @@ export default function App(): JSX.Element {
             </label>
             <div className="auth-field">
               <label htmlFor="login-password">密码</label>
-              <div className="password-row">
-                <input
-                  id="login-password"
-                  className="auth-input"
-                  type={showLoginPassword ? 'text' : 'password'}
-                  value={password}
-                  autoComplete="current-password"
-                  placeholder="请输入登录密码"
-                  onChange={(event) => { setPassword(event.target.value); setError('') }}
-                />
-                <button
-                  type="button"
-                  className="password-toggle"
-                  aria-label={showLoginPassword ? '隐藏密码' : '显示密码'}
-                  title={showLoginPassword ? '隐藏密码' : '显示密码'}
-                  aria-pressed={showLoginPassword}
-                  onClick={() => setShowLoginPassword((visible) => !visible)}
-                >
-                  <Icon name={showLoginPassword ? 'eye-off' : 'eye'} size={19} />
-                </button>
-              </div>
+              <PasswordInput
+                id="login-password"
+                label="密码"
+                value={password}
+                autoComplete="current-password"
+                placeholder="请输入登录密码"
+                onChange={(value) => { setPassword(value); setError('') }}
+              />
             </div>
           </>
         )}
@@ -1553,16 +1518,26 @@ export default function App(): JSX.Element {
             <div className="form-grid">
               <label className="auth-field">
                 设置密码<span className="req">*</span>
-                <input className="auth-input" type="password" value={reg.password} maxLength={20}
-                  autoComplete="new-password" placeholder="8-20 位字母+数字"
-                  onChange={(event) => patchReg({ password: event.target.value })} />
+                <PasswordInput
+                  label="密码"
+                  value={reg.password}
+                  maxLength={20}
+                  autoComplete="new-password"
+                  placeholder="8-20 位字母+数字"
+                  onChange={(value) => patchReg({ password: value })}
+                />
                 <span className={`pwd-meter ${strength}`}><i /><i /><i /></span>
               </label>
               <label className="auth-field">
                 确认密码<span className="req">*</span>
-                <input className="auth-input" type="password" value={reg.confirm} maxLength={20}
-                  autoComplete="new-password" placeholder="再次输入密码"
-                  onChange={(event) => patchReg({ confirm: event.target.value })} />
+                <PasswordInput
+                  label="确认密码"
+                  value={reg.confirm}
+                  maxLength={20}
+                  autoComplete="new-password"
+                  placeholder="再次输入密码"
+                  onChange={(value) => patchReg({ confirm: value })}
+                />
               </label>
             </div>
 
@@ -1710,11 +1685,14 @@ export default function App(): JSX.Element {
                 <span className={`verification-status ${onboardingStage}`}>
                   {onboardingStage === 'done' ? '✓ 已认证'
                     : onboardingStage === 'pending' ? '审核中'
-                      : onboardingStage === 'rejected' ? '需重新认证' : '待认证'}
+                      : certificationStatus === 'rejected' ? '需补正认证' : '待认证'}
                 </span>
               </div>
 
-              <div className="verification-timeline">
+              {reviewRemark && <div className="auth-notice" role="status"><strong>审核意见：</strong>{reviewRemark}{reviewTime && <small> · {reviewTime.replace('T', ' ')}</small>}
+                {certificationStatus === 'rejected' && <button type="button" className="btn-ghost" onClick={() => goToStep(2)}>返回主体资料补正</button>}
+              </div>}
+              {onboardingStage !== 'done' && <div className="verification-timeline">
                 {(reg.identity === 'enterprise'
                   ? [
                       ['信息填写', Boolean(onboardingMerchantId)],
@@ -1734,7 +1712,7 @@ export default function App(): JSX.Element {
                         <small>{label}</small>
                       </div>
                     ))}
-              </div>
+              </div>}
 
               <div className="verification-facts">
                 {reg.identity === 'enterprise' ? (
@@ -1744,7 +1722,7 @@ export default function App(): JSX.Element {
                     <div><span>法定代表人</span><b>{reg.legalPerson || '—'}</b></div>
                     <div><span>注册资本</span><b>{enterpriseVerification.registeredCapital || '—'}</b></div>
                     <div><span>认证方式</span><b>法人扫脸 + 对公打款</b></div>
-                    <div><span>核验状态</span><b>{enterpriseVerification.legalPersonFaceStatus === 'verified' ? '法人扫脸已通过' : '待法人扫脸'}</b></div>
+                    <div><span>核验状态</span><b>{onboardingStage === 'done' ? '主体认证已通过（核验明细请查看主体档案）' : enterpriseVerification.legalPersonFaceStatus === 'verified' ? '法人扫脸已通过' : '待法人扫脸'}</b></div>
                   </>
                 ) : (
                   <>
@@ -1929,6 +1907,7 @@ export default function App(): JSX.Element {
       <div className="auth-foot">
         已有账号？
         <button type="button" onClick={() => switchView('/login')}>直接登录 →</button>
+        <button type="button" onClick={() => { window.location.href = `${window.location.protocol}//${window.location.hostname}:8115/` }}>平台运营端 →</button>
       </div>
     </>
   )

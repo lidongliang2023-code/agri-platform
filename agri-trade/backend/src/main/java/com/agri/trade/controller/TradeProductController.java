@@ -118,7 +118,7 @@ public class TradeProductController {
     @GetMapping("/{id}")
     public ApiResponse<TradeProduct> getProductById(@PathVariable Long id) {
         TradeProduct product = productMapper.selectById(id);
-        if (product == null) return ApiResponse.error("商品不存在");
+        if (product == null) return ApiResponse.error(404, "商品不存在");
         return ApiResponse.success(product);
     }
 
@@ -151,7 +151,7 @@ public class TradeProductController {
     @PutMapping("/{id}")
     public ApiResponse<Boolean> updateProduct(@PathVariable Long id, @RequestBody TradeProduct product) {
         TradeProduct exist = productMapper.selectById(id);
-        if (exist == null) return ApiResponse.error("商品不存在");
+        if (exist == null) return ApiResponse.error(404, "商品不存在");
         String denied = denyIfNotOwner(exist);
         if (denied != null) return ApiResponse.error(denied);
         product.setId(id);
@@ -165,7 +165,7 @@ public class TradeProductController {
     @DeleteMapping("/{id}")
     public ApiResponse<Boolean> deleteProduct(@PathVariable Long id) {
         TradeProduct product = productMapper.selectById(id);
-        if (product == null) return ApiResponse.error("商品不存在");
+        if (product == null) return ApiResponse.error(404, "商品不存在");
         String denied = denyIfNotOwner(product);
         if (denied != null) return ApiResponse.error(denied);
         // 同上：必须用 deleteById，否则接口成功而记录还在。

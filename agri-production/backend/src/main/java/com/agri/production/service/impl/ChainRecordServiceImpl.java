@@ -6,11 +6,13 @@ import com.agri.production.entity.ChainRecord;
 import com.agri.production.entity.HarvestBatch;
 import com.agri.production.entity.Inspection;
 import com.agri.production.entity.InputUsageRecord;
+import com.agri.production.entity.ProcessRecord;
 import com.agri.production.entity.TraceCode;
 import com.agri.production.mapper.ChainRecordMapper;
 import com.agri.production.mapper.HarvestBatchMapper;
 import com.agri.production.mapper.InspectionMapper;
 import com.agri.production.mapper.InputUsageRecordMapper;
+import com.agri.production.mapper.ProcessRecordMapper;
 import com.agri.production.mapper.TraceCodeMapper;
 import com.agri.production.service.ChainEvidenceRule;
 import com.agri.production.service.IChainRecordService;
@@ -38,7 +40,8 @@ import java.util.concurrent.ThreadLocalRandom;
  *
  * <p><b>业务类型词表只有这一处</b>（{@link #normalizeType}）：{@code HARVEST}（采收批次）、
  * {@code QUALITY}（质检单，平台侧旧词表叫 {@code INSPECTION}，在这里归一）、
- * {@code TRACE}（溯源码）、{@code INPUT}（投入品使用）。
+ * {@code TRACE}（溯源码）、{@code INPUT}（投入品使用）、{@code PROCESS}（加工记录，2026-11-03 随
+ * 「种植-采收-加工」链路补上）。
  * 历史上投入品页面按数字枚举传 {@code bizType=2}，控制器原样 {@code String.valueOf} 落库，
  * 于是 {@code target_type} 里出现 {@code '2'} 这种值 —— 它不属于任何词表，
  * 读侧按 HARVEST/QUALITY/TRACE/INPUT 对号时永远匹配不上，**那条存证等于没写过**，
@@ -61,26 +64,28 @@ public class ChainRecordServiceImpl implements IChainRecordService {
     private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
     /** 可存证、且本部署能校验业务键的类型。 */
-    private static final Set<String> ANCHORABLE_TYPES = Set.of("HARVEST", "QUALITY", "TRACE", "INPUT");
+    private static final Set<String> ANCHORABLE_TYPES = Set.of("HARVEST", "QUALITY", "TRACE", "INPUT", "PROCESS");
     /** 前端旧表单里出现过、但本部署没有对应业务主数据的类型：明确拒绝，不接受自由填写的单号。 */
     private static final Set<String> UNVERIFIABLE_TYPES = Set.of("FARMING", "CIRCULATION", "IOT", "OTHER");
     private static final String TYPE_HINT = "HARVEST（采收批次）/ QUALITY（质检单，旧词表 INSPECTION 自动归一）/ "
-            + "TRACE（溯源码）/ INPUT（投入品使用）";
+            + "TRACE（溯源码）/ INPUT（投入品使用）/ PROCESS（加工记录）";
 
     private final ChainRecordMapper chainRecordMapper;
     private final HarvestBatchMapper batchMapper;
     private final InspectionMapper inspectionMapper;
     private final TraceCodeMapper traceCodeMapper;
     private final InputUsageRecordMapper inputUsageMapper;
+    private final ProcessRecordMapper processMapper;
 
     public ChainRecordServiceImpl(ChainRecordMapper chainRecordMapper, HarvestBatchMapper batchMapper,
                                   InspectionMapper inspectionMapper, TraceCodeMapper traceCodeMapper,
-                                  InputUsageRecordMapper inputUsageMapper) {
+                                  InputUsageRecordMapper inputUsageMapper, ProcessRecordMapper processMapper) {
         this.chainRecordMapper = chainRecordMapper;
         this.batchMapper = batchMapper;
         this.inspectionMapper = inspectionMapper;
         this.traceCodeMapper = traceCodeMapper;
         this.inputUsageMapper = inputUsageMapper;
+        this.processMapper = processMapper;
     }
 
     /** 存证对象：归一后的类型 + 业务主键 + 业务编号（编号才是页面与链路对号用的键）。 */
@@ -234,6 +239,17 @@ public class ChainRecordServiceImpl implements IChainRecordService {
                 throw notFound(type, key);
             }
             return new AnchorTarget(type, code.getId(), code.getTraceCode());
+        }
+        if ("PROCESS".equals(type)) {
+            ProcessRecord record = processMapper.selectOne(new LambdaQueryWrapper<ProcessRecord>()
+                    .eq(ProcessRecord::getTenantId, tenantId)
+                    .eq(numeric == null, ProcessRecord::getProcessCode, key)
+                    .eq(numeric != null, ProcessRecord::getId, numeric)
+                    .last("LIMIT 1"));
+            if (record == null) {
+                throw notFound(type, key);
+            }
+            return new AnchorTarget(type, record.getId(), record.getProcessCode());
         }
         // INPUT：投入品使用记录只有数字主键，页面传的就是 usageId
         InputUsageRecord usage = numeric == null ? null

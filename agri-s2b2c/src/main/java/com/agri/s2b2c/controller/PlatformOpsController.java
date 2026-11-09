@@ -384,7 +384,7 @@ public class PlatformOpsController {
         return ResponseEntity.ok(result);
     }
 
-    /** 渠道商经营绩效列表：按渠道聚合订单、复购、售后与在售商品。 */
+    /** 商家经营绩效列表：按渠道聚合订单、复购、售后与在售商品。 */
     @GetMapping("/channel-performance")
     public ResponseEntity<Map<String, Object>> channelPerformance(@RequestParam(required = false) String keyword,
                                                                   @RequestParam(required = false) String grade,
@@ -461,7 +461,7 @@ public class PlatformOpsController {
         return ResponseEntity.ok(result);
     }
 
-    /** 渠道商经营绩效详情：近 30 天走势、热销商品、最近订单、佣金与提现概况。 */
+    /** 商家经营绩效详情：近 30 天走势、热销商品、最近订单、佣金与提现概况。 */
     @GetMapping("/channel/{id}/performance")
     public ResponseEntity<Map<String, Object>> channelPerformanceDetail(@PathVariable Long id) {
         Map<String, Object> channel = null;
@@ -473,7 +473,7 @@ public class PlatformOpsController {
             channel = row;
         }
         if (channel == null) {
-            return ResponseEntity.status(404).body(Map.of("message", "渠道商不存在"));
+            return ResponseEntity.status(404).body(Map.of("message", "商家不存在"));
         }
         LocalDateTime start30 = LocalDate.now().minusDays(29).atStartOfDay();
         Map<String, Object> metric = aggregateChannelMetrics(start30).getOrDefault(id, new HashMap<>());

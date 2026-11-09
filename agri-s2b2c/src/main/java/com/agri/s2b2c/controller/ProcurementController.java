@@ -182,7 +182,7 @@ public class ProcurementController {
         return ResponseEntity.ok(Map.of("success", true, "message", "批次状态已更新为 " + next));
     }
 
-    /* ---------------- 渠道商端 ---------------- */
+    /* ---------------- 商家端 ---------------- */
 
     @GetMapping("/api/channel/group-purchases")
     @OperatorOnly("s2b2c:channel")

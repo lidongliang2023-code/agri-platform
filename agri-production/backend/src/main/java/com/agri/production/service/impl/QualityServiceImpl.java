@@ -55,6 +55,7 @@ public class QualityServiceImpl implements IQualityService {
 
     private static final DateTimeFormatter CODE_DAY = DateTimeFormatter.ofPattern("yyyyMMdd");
 
+    private final com.agri.production.mapper.FarmMapper farmMapper;
     private final InspectionMapper inspectionMapper;
     private final TestingLabMapper labMapper;
     private final QualityGradeRuleMapper gradeRuleMapper;
@@ -65,12 +66,13 @@ public class QualityServiceImpl implements IQualityService {
     private final IProductionNotificationService notificationService;
     private final IDomainEventService domainEventService;
 
-    public QualityServiceImpl(InspectionMapper inspectionMapper, TestingLabMapper labMapper,
+    public QualityServiceImpl(com.agri.production.mapper.FarmMapper farmMapper, InspectionMapper inspectionMapper, TestingLabMapper labMapper,
                              QualityGradeRuleMapper gradeRuleMapper, PlotMapper plotMapper,
                              HarvestBatchMapper harvestBatchMapper, InventoryMapper inventoryMapper,
                              IAlertService alertService,
                              IProductionNotificationService notificationService,
                              IDomainEventService domainEventService) {
+        this.farmMapper = farmMapper;
         this.inspectionMapper = inspectionMapper;
         this.labMapper = labMapper;
         this.gradeRuleMapper = gradeRuleMapper;
@@ -175,34 +177,49 @@ public class QualityServiceImpl implements IQualityService {
         if (inspection.getSampleAt() == null) {
             inspection.setSampleAt(LocalDateTime.now());
         }
+        validateSource(inspection, tenantId);
         alignResultAndStatus(inspection);
         inspection.setCreateTime(LocalDateTime.now());
         inspection.setUpdateTime(LocalDateTime.now());
         inspection.setDeleted(0);
         inspectionMapper.insert(inspection);
+        if (inspection.getResult() != null) applyResultEffects(inspection, inspection.getResult(), tenantId);
         return inspection;
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Inspection update(Long inspectionId, InspectionSaveDTO dto, String tenantId) {
-        Inspection inspection = getOwned(inspectionId, tenantId);
+        Inspection inspection = getOwnedForUpdate(inspectionId, tenantId);
         if (dto == null) {
             throw new BusinessException(400, "检测单内容不能为空");
+        }
+        Long originalBatch = inspection.getBatchId();
+        String originalResult = inspection.getResult();
+        if (originalResult != null && dto.getResult() != null && normalizeResult(dto.getResult()) == null) {
+            throw new BusinessException(400, "已出具的检测结论不能清空");
         }
         // 就地改已加载的实体：页面编辑只下发一部分字段，
         // new 一个空实体再 updateById 会把没下发的列清成 null
         applyDto(inspection, dto);
+        if (originalResult != null && !java.util.Objects.equals(originalBatch, inspection.getBatchId())) {
+            throw new BusinessException(400, "已出具结论的检测单不能更换批次，请登记新的检测单");
+        }
+        validateSource(inspection, tenantId);
         alignResultAndStatus(inspection);
         inspection.setUpdateTime(LocalDateTime.now());
         inspectionMapper.updateById(inspection);
+        if (inspection.getResult() != null && !java.util.Objects.equals(originalResult, inspection.getResult())) {
+            applyResultEffects(inspection, inspection.getResult(), tenantId);
+        }
         return inspection;
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void delete(Long inspectionId, String tenantId) {
-        getOwned(inspectionId, tenantId);
+        Inspection inspection = getOwnedForUpdate(inspectionId, tenantId);
+        if (inspection.getResult() != null) throw new BusinessException(400, "已出具结论的检测单须保留，不能直接删除");
         inspectionMapper.deleteById(inspectionId);
     }
 
@@ -235,11 +252,14 @@ public class QualityServiceImpl implements IQualityService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Inspection submitResult(Long inspectionId, String result, String reportUrl, String tenantId) {
-        Inspection inspection = getOwned(inspectionId, tenantId);
+        Inspection inspection = getOwnedForUpdate(inspectionId, tenantId);
+        validateSource(inspection, tenantId);
         String normalized = normalizeResult(result);
         if (normalized == null) {
             throw new BusinessException(400, "结论只能是 PASS 或 FAIL（收到：" + result + "）");
         }
+        if (normalized.equals(inspection.getResult()) && STATUS_DONE.equals(inspection.getStatus())
+                && (isBlank(reportUrl) || reportUrl.trim().equals(inspection.getReportUrl()))) return inspection;
         if (STATUS_PENDING.equals(inspection.getStatus())) {
             log.info("检测单 {} 从 PENDING 直接出结论 {}", inspectionId, normalized);
         }
@@ -250,6 +270,11 @@ public class QualityServiceImpl implements IQualityService {
         }
         inspection.setUpdateTime(LocalDateTime.now());
         inspectionMapper.updateById(inspection);
+        applyResultEffects(inspection, normalized, tenantId);
+        return inspection;
+    }
+
+    private void applyResultEffects(Inspection inspection, String normalized, String tenantId) {
         syncHarvestBatch(inspection, normalized, tenantId);
         // 契约要求结论联动 prod.quality.test.passed / failed。按 2026-10-14 拍板的事件口径
         // （复用平台 core-infra 的 outbox 契约）**落库为 NEW**，投递由 relay 负责 ——
@@ -264,7 +289,6 @@ public class QualityServiceImpl implements IQualityService {
                 RESULT_FAIL.equals(normalized) ? inspection.getRemark() : null,
                 LocalDateTime.now().toString(),
                 tenantId);
-        return inspection;
     }
 
     @Override
@@ -471,6 +495,12 @@ public class QualityServiceImpl implements IQualityService {
 
     /* ==================== 内部工具 ==================== */
 
+    private Inspection getOwnedForUpdate(Long id, String tenantId) {
+        Inspection inspection = inspectionMapper.selectOwnedForUpdate(id, tenantId);
+        if (inspection == null) throw new BusinessException(404, "检测单不存在：" + id);
+        return inspection;
+    }
+
     private Inspection getOwned(Long inspectionId, String tenantId) {
         Inspection inspection = inspectionMapper.selectById(inspectionId);
         if (inspection == null || !tenantId.equals(inspection.getTenantId())) {
@@ -567,6 +597,32 @@ public class QualityServiceImpl implements IQualityService {
         return value == null || value.trim().isEmpty();
     }
 
+    private void validateSource(Inspection inspection, String tenantId) {
+        if (inspection.getBatchId() != null) {
+            HarvestBatch batch = harvestBatchMapper.selectById(inspection.getBatchId());
+            if (batch == null || !tenantId.equals(batch.getTenantId())) throw new BusinessException(404, "当前主体下采收批次不存在");
+            if (inspection.getPlotId() != null && !java.util.Objects.equals(inspection.getPlotId(), batch.getPlotId())) throw new BusinessException(400, "检测地块与采收批次不一致");
+            if (inspection.getFarmId() != null && !java.util.Objects.equals(inspection.getFarmId(), batch.getFarmId())) throw new BusinessException(400, "检测农场与采收批次不一致");
+            inspection.setBatchNo(batch.getBatchNo());
+            inspection.setPlotId(batch.getPlotId());
+            inspection.setFarmId(batch.getFarmId());
+            inspection.setCropId(batch.getCropId());
+            inspection.setCropName(batch.getCropName());
+        }
+        if (inspection.getPlotId() != null) {
+            Plot plot = plotMapper.selectById(inspection.getPlotId());
+            if (plot == null || !tenantId.equals(plot.getTenantId())) throw new BusinessException(404, "当前主体下地块不存在");
+            if (inspection.getFarmId() != null && !java.util.Objects.equals(inspection.getFarmId(), plot.getFarmId())) throw new BusinessException(400, "检测农场与地块不一致");
+            inspection.setFarmId(plot.getFarmId());
+        }
+        if (inspection.getFarmId() != null) {
+            com.agri.production.entity.Farm farm = farmMapper.selectById(inspection.getFarmId());
+            if (farm == null || !tenantId.equals(farm.getTenantId())) throw new BusinessException(404, "当前主体下农场不存在");
+        }
+        if (inspection.getLabId() != null) inspection.setLabName(getOwnedLab(inspection.getLabId(), tenantId).getLabName());
+        if (inspection.getSampleQty() != null && inspection.getSampleQty().signum() <= 0) throw new BusinessException(400, "抽样数量必须大于0");
+    }
+
     private void applyDto(Inspection inspection, InspectionSaveDTO dto) {
         if (dto.getInspectionNo() != null && !dto.getInspectionNo().isBlank()) {
             inspection.setInspectionNo(dto.getInspectionNo().trim());
@@ -602,7 +658,9 @@ public class QualityServiceImpl implements IQualityService {
             inspection.setSampleAt(parseDateTime(dto.getSampleAt()));
         }
         if (dto.getResult() != null) {
-            inspection.setResult(normalizeResult(dto.getResult()));
+            String result = normalizeResult(dto.getResult());
+            if (!isBlank(dto.getResult()) && result == null) throw new BusinessException(400, "结论只能是 PASS 或 FAIL");
+            inspection.setResult(result);
         }
         if (dto.getReportUrl() != null) {
             inspection.setReportUrl(trimToNull(dto.getReportUrl()));
@@ -646,7 +704,8 @@ public class QualityServiceImpl implements IQualityService {
      */
     private void alignResultAndStatus(Inspection inspection) {
         boolean hasResult = RESULT_PASS.equals(inspection.getResult()) || RESULT_FAIL.equals(inspection.getResult());
-        if (hasResult && STATUS_PENDING.equals(inspection.getStatus())) {
+        if (!hasResult && STATUS_DONE.equals(inspection.getStatus())) throw new BusinessException(400, "未录入结论不能标记为已完成");
+        if (hasResult) {
             inspection.setStatus(STATUS_DONE);
         }
     }
@@ -737,7 +796,7 @@ public class QualityServiceImpl implements IQualityService {
         try {
             return Long.valueOf(text);
         } catch (NumberFormatException e) {
-            return null;
+            throw new BusinessException(400, "关联编号格式不正确：" + text);
         }
     }
 

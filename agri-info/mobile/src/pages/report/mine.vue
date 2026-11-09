@@ -142,7 +142,7 @@ function download(item: Report) {
 
 .sub-link {
   color: #12764a;
-  font-size: 22rpx;
+  font-size: 24rpx;
 }
 
 .chips {
@@ -203,6 +203,6 @@ function download(item: Report) {
 
 .act {
   color: #12764a;
-  font-size: 21rpx;
+  font-size: 24rpx;
 }
 </style>

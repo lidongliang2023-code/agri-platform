@@ -17,14 +17,14 @@ public class WebConfig implements WebMvcConfigurer {
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(productionApiCapabilityInterceptor)
                 .addPathPatterns("/api/v1/production/**")
-                .excludePathPatterns("/api/v1/production/admin/**", "/api/v1/production/mobile/**");
+                .excludePathPatterns("/api/v1/production/admin/**");
     }
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/api/**")
                 .allowedOrigins("*")
-                .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
                 .maxAge(3600);
     }

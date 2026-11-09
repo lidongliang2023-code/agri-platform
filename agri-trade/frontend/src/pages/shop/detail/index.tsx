@@ -158,7 +158,7 @@ export default function ShopDetail(): JSX.Element {
   const submitSearch = (event: FormEvent): void => {
     event.preventDefault()
     const value = search.trim()
-    window.location.href = `${PORTAL}#/chains${value ? `?q=${encodeURIComponent(value)}` : ''}`
+    window.location.href = `${PORTAL}#/hall${value ? `?q=${encodeURIComponent(value)}` : ''}`
   }
 
   const toggleFollow = async (): Promise<void> => {

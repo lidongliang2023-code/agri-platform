@@ -1,8 +1,9 @@
+import ProTable from '@/components/ProductionTable'
 /**
- * 页面名称：种养计划
+ * 页面名称：农事计划
  * 路由路径：/production/plans
- * 所属模块：智能种养
- * PRD 序号：PRD 6.1 #11（对应 PRD 8.2 智能种养计划）
+ * 所属模块：农事生产
+ * PRD 序号：PRD 6.1 #11（对应 PRD 8.2 农事生产）
  *
  * 页面用途（PRD）：计划列表、状态跟踪、地块关联。
  * 表格使用 ProTable；支持按计划名称 / 状态 / 作物检索，
@@ -11,19 +12,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { App as AntdApp, Button, Popconfirm, Progress, Space, Tag, Typography } from 'antd'
-import {
-  ModalForm,
-  ProFormDatePicker,
-  ProFormDigit,
-  ProFormSelect,
-  ProFormText,
-  ProFormTextArea,
-  ProTable,
-} from '@ant-design/pro-components'
+import { ModalForm, ProFormDatePicker, ProFormDigit, ProFormSelect, ProFormText, ProFormTextArea, } from '@ant-design/pro-components'
+import PageContainer from '@/components/ProductionPageContainer'
 import type { ActionType, ProColumns } from '@ant-design/pro-components'
+import type { TableProps } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   CalendarOutlined,
+  CheckCircleOutlined,
   CopyOutlined,
   DeleteOutlined,
   EditOutlined,
@@ -31,12 +27,16 @@ import {
   SendOutlined,
   StopOutlined,
 } from '@ant-design/icons'
+import './plans.css'
+import useAuthStore from '@/store/auth'
 import useFarmStore from '@/store/farm'
 import { listPlots } from '@/api/plots'
 import { listCropOptions } from '@/api/crops'
 import {
+  approvePlan,
   createPlanInfo,
   fetchMembers,
+  fetchPlanApprovalPermission,
   fetchPlans,
   removePlan,
   submitPlanApproval,
@@ -82,7 +82,7 @@ interface PlanFormValue {
 }
 
 /**
- * 种养计划
+ * 农事计划
  * @returns 页面内容
  */
 export default function PlanList(): JSX.Element {
@@ -91,7 +91,17 @@ export default function PlanList(): JSX.Element {
   const queryClient = useQueryClient()
   const currentFarm = useFarmStore((state) => state.currentFarm)
   const farmId = currentFarm?.farmId
+  const currentUser = useAuthStore((state) => state.userInfo)
+
+  /** 当前用户是否有农事计划审批权限（主体经营者或有审批权限的团队角色） */
+  const approvalPermissionQuery = useQuery({
+    queryKey: ['plan-approval-permission'],
+    queryFn: fetchPlanApprovalPermission,
+    staleTime: 60_000,
+  })
+  const canApprovePlan = approvalPermissionQuery.data === true
   const actionRef = useRef<ActionType>(null)
+  const [tableSize, setTableSize] = useState<TableProps<Plan>['size']>('small')
   const [createOpen, setCreateOpen] = useState<boolean>(false)
   const [editing, setEditing] = useState<Plan | null>(null)
   const [duplicating, setDuplicating] = useState<Plan | null>(null)
@@ -277,7 +287,7 @@ export default function PlanList(): JSX.Element {
         status: payload.status ?? 1,
       }),
     onSuccess: () => {
-      message.success('种养计划已创建')
+      message.success('农事计划已创建')
       setCreateOpen(false)
       setDuplicating(null)
       void reload()
@@ -300,7 +310,7 @@ export default function PlanList(): JSX.Element {
         status: payload.value.status,
       }),
     onSuccess: () => {
-      message.success('种养计划已更新')
+      message.success('农事计划已更新')
       setEditing(null)
       void reload()
     },
@@ -310,10 +320,20 @@ export default function PlanList(): JSX.Element {
   const submitApprovalMutation = useMutation({
     mutationFn: (planId: string) => submitPlanApproval(planId),
     onSuccess: () => {
-      message.success('计划已提交审批，等待运营处理')
+      message.success('计划已提交审批，等待本主体审批')
       void reload()
     },
     onError: (error: Error) => message.error(error.message || '提交审批失败'),
+  })
+
+  const approveMutation = useMutation({
+    mutationFn: (plan: Plan) =>
+      approvePlan(plan.planId, currentUser?.realName || currentUser?.username || '本主体审批人', '审批通过'),
+    onSuccess: () => {
+      message.success('计划审批已通过，已进入进行中')
+      void reload()
+    },
+    onError: (error: Error) => message.error(error.message || '审批失败'),
   })
 
   const terminateMutation = useMutation({
@@ -510,13 +530,30 @@ export default function PlanList(): JSX.Element {
             <Popconfirm
               key="submit-approval"
               title="提交审批"
-              description={`确认提交「${entity.planName}」给平台运营审批？`}
+              description={`确认提交「${entity.planName}」给本主体审批人审批？`}
               onConfirm={() => submitApprovalMutation.mutate(entity.planId)}
             >
               <Button type="link" size="small" icon={<SendOutlined />}>
                 提交审批
               </Button>
             </Popconfirm>
+          ) : entity.status === 5 ? (
+            canApprovePlan ? (
+              <Popconfirm
+                key="approve-plan"
+                title="审批通过"
+                description={`确认审批通过「${entity.planName}」？通过后计划将进入进行中。`}
+                onConfirm={() => approveMutation.mutate(entity)}
+              >
+                <Button type="link" size="small" icon={<CheckCircleOutlined />}>
+                  审批通过
+                </Button>
+              </Popconfirm>
+            ) : (
+              <Typography.Text key="approve-waiting" type="secondary" style={{ fontSize: 12 }}>
+                待审批
+              </Typography.Text>
+            )
           ) : null,
           <Popconfirm
             key="remove"
@@ -532,18 +569,19 @@ export default function PlanList(): JSX.Element {
         ],
       },
     ],
-    [navigate, removeMutation, statusEnum, submitApprovalMutation, terminateMutation],
+    [approveMutation, canApprovePlan, navigate, removeMutation, statusEnum, submitApprovalMutation, terminateMutation],
   )
 
   return (
-    <>
+    <PageContainer className="production-plans-page" title="📋 农事计划" subTitle={currentFarm?.farmName}>
+
       <ProTable<Plan>
         actionRef={actionRef}
         rowKey="planId"
         headerTitle={
           <Space>
             <CalendarOutlined style={{ color: '#13a05a' }} />
-            <span>种养计划</span>
+            <span>农事计划</span>
           </Space>
         }
         columns={columns}
@@ -565,7 +603,7 @@ export default function PlanList(): JSX.Element {
               setCreateOpen(true)
             }}
           >
-            新增种养计划
+            新增农事计划
           </Button>,
         ]}
         request={async (params) => {
@@ -586,13 +624,15 @@ export default function PlanList(): JSX.Element {
             })
             return { data: result.list, success: true, total: result.total }
           } catch (error) {
-            message.error((error as Error).message || '种养计划加载失败')
-            return { data: [], success: true, total: 0 }
+            message.error((error as Error).message || '农事计划加载失败')
+            return { data: [], success: false, total: 0 }
           }
         }}
-        pagination={{ pageSize: 10, showSizeChanger: true }}
+        pagination={{ defaultPageSize: 10, showSizeChanger: true, showTotal: (total) => `共 ${total} 条计划` }}
         dateFormatter="string"
-        scroll={{ x: 1400 }}
+        scroll={{ x: 'max-content' }}
+        size={tableSize}
+        onSizeChange={setTableSize}
       />
 
       <ModalForm<PlanFormValue>
@@ -600,11 +640,15 @@ export default function PlanList(): JSX.Element {
         title={
           <Space>
             <PlusOutlined style={{ color: '#13a05a' }} />
-            <span>{duplicating ? '复用历史计划' : '新增种养计划'}</span>
+            <span>{duplicating ? '复用历史计划' : '新增农事计划'}</span>
           </Space>
         }
         open={createOpen}
-        width={560}
+        width={800}
+        grid
+        colProps={{ xs: 24, md: 12 }}
+        rowProps={{ gutter: 20 }}
+        className="production-plan-form"
         modalProps={{ destroyOnHidden: true, confirmLoading: createMutation.isPending }}
         initialValues={createInitialValues}
         onOpenChange={(visible) => {
@@ -681,7 +725,7 @@ export default function PlanList(): JSX.Element {
           request={loadMemberOptions}
         />
         <ProFormSelect name="status" label="计划状态" options={PLAN_STATUS_OPTIONS} initialValue={1} />
-        <ProFormTextArea name="remark" label="备注" placeholder="补充说明，200 字以内" />
+        <ProFormTextArea colProps={{ span: 24 }} name="remark" label="备注" placeholder="补充说明，200 字以内" />
       </ModalForm>
 
       <ModalForm<PlanFormValue>
@@ -689,11 +733,15 @@ export default function PlanList(): JSX.Element {
         title={
           <Space>
             <EditOutlined style={{ color: '#13a05a' }} />
-            <span>编辑种养计划</span>
+            <span>编辑农事计划</span>
           </Space>
         }
         open={editing !== null}
-        width={560}
+        width={800}
+        grid
+        colProps={{ xs: 24, md: 12 }}
+        rowProps={{ gutter: 20 }}
+        className="production-plan-form"
         initialValues={
           editing
             ? {
@@ -764,6 +812,6 @@ export default function PlanList(): JSX.Element {
         />
         <ProFormSelect name="status" label="计划状态" options={PLAN_STATUS_OPTIONS} />
       </ModalForm>
-    </>
+    </PageContainer>
   )
 }

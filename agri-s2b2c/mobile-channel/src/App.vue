@@ -2,7 +2,7 @@
 import { onLaunch } from '@dcloudio/uni-app'
 
 onLaunch(() => {
-  // 渠道商移动工作台：H5、微信小程序、App 共用业务页面。
+  // 商家移动工作台：H5、微信小程序、App 共用业务页面。
 })
 </script>
 

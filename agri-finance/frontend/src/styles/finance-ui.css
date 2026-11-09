@@ -82,18 +82,11 @@ body {
 }
 
 .finance-brand-mark {
-  display: grid;
+  display: block;
   width: 37px;
   height: 37px;
   flex: 0 0 auto;
-  place-items: center;
-  border: 1px solid rgba(255, 255, 255, .12);
   border-radius: 12px;
-  background: rgba(255, 255, 255, .08);
-  color: #dff8e8;
-  font-family: "STKaiti", "KaiTi", serif;
-  font-size: 21px;
-  font-weight: 800;
 }
 
 .finance-brand > span:last-child {

@@ -426,3 +426,14 @@ function escapeCsvCell(cell: string): string {
   if (/[",\r\n]/.test(cell)) return `"${cell.replace(/"/g, '""')}"`
   return cell
 }
+
+/** 统一导入组件使用相同的农场字段校验与转换。 */
+export function prepareFarmImportRecord(raw: Record<string, string>): { payload?: FarmPayload; errors: string[] } {
+  const values = emptyValues()
+  for (const [header, value] of Object.entries(raw)) {
+    const key = HEADER_ALIASES[normalizeHeader(header)]
+    if (key) values[key] = value
+  }
+  const errors = validateRow(values)
+  return { errors, payload: errors.length ? undefined : toPayload(values) }
+}

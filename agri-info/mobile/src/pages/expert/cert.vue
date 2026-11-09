@@ -255,7 +255,7 @@ function downloadCert() {
 
 .cert-sub {
   color: rgba(255, 255, 255, 0.72);
-  font-size: 21rpx;
+  font-size: 24rpx;
 }
 
 .cert-fields {
@@ -275,12 +275,12 @@ function downloadCert() {
 
 .cert-label {
   color: rgba(255, 255, 255, 0.6);
-  font-size: 21rpx;
+  font-size: 24rpx;
 }
 
 .cert-value {
   font-family: "DIN Alternate", monospace;
-  font-size: 22rpx;
+  font-size: 24rpx;
 }
 
 .step {

@@ -82,7 +82,7 @@ public class AdminCarrierController {
     public ApiResponse<Boolean> changeStatus(@PathVariable Long id, @RequestBody Map<String, Integer> params) {
         Carrier carrier = carrierMapper.selectById(id);
         if (carrier == null || (carrier.getDelFlag() != null && carrier.getDelFlag() == 1)) {
-            return ApiResponse.error("承运商不存在");
+            return ApiResponse.error(404, "承运商不存在");
         }
         Integer status = params.get("status");
         if (status == null || (status != 0 && status != 1)) {

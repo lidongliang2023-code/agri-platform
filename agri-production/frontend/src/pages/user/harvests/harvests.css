@@ -1,0 +1,22 @@
+.harvest-business-page .ant-form-vertical .ant-form-item-label > label {
+  color: #426451;
+  font-weight: 500;
+}
+.harvest-business-page .ant-form-vertical .ant-form-item {
+  margin-bottom: 20px;
+}
+.harvest-business-page .production-section-card + .production-section-card {
+  margin-top: 16px;
+}
+.harvest-business-page .ant-form-inline {
+  gap: 12px 0;
+}
+@media (max-width: 767px) {
+  .harvest-business-page .ant-form-inline .ant-form-item {
+    margin-inline-end: 0;
+    width: 100%;
+  }
+  .harvest-business-page .ant-form-inline .ant-form-item-control {
+    min-width: 0;
+  }
+}

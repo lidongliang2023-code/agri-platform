@@ -242,7 +242,7 @@ async function submitOrder() {
 
 .address-person > text:nth-child(2) {
   color: #718277;
-  font-size: 21rpx;
+  font-size: 24rpx;
   font-weight: 400;
 }
 
@@ -254,7 +254,7 @@ async function submitOrder() {
 .address-detail {
   margin-top: 8rpx;
   color: #718277;
-  font-size: 20rpx;
+  font-size: 24rpx;
   line-height: 1.5;
 }
 
@@ -317,7 +317,7 @@ async function submitOrder() {
 .item-spec {
   margin-top: 7rpx;
   color: #84938a;
-  font-size: 19rpx;
+  font-size: 24rpx;
 }
 
 .item-bottom {
@@ -333,7 +333,7 @@ async function submitOrder() {
 
 .quantity {
   color: #718277;
-  font-size: 20rpx;
+  font-size: 24rpx;
 }
 
 .empty-mini {
@@ -352,7 +352,7 @@ async function submitOrder() {
   display: flex;
   justify-content: space-between;
   color: #52665a;
-  font-size: 22rpx;
+  font-size: 24rpx;
 }
 
 .fee-row.total {
@@ -379,7 +379,7 @@ async function submitOrder() {
 
 .coupon-title {
   color: #52665a;
-  font-size: 22rpx;
+  font-size: 24rpx;
 }
 
 .coupon-chips {
@@ -394,7 +394,7 @@ async function submitOrder() {
   border-radius: 999rpx;
   background: #f7fbf8;
   color: #52665a;
-  font-size: 20rpx;
+  font-size: 24rpx;
 }
 
 .coupon-chip.active {
@@ -435,7 +435,7 @@ async function submitOrder() {
   border-radius: 12rpx;
   background: #e1f3e8;
   color: #12764a;
-  font-size: 20rpx;
+  font-size: 24rpx;
   font-weight: 800;
 }
 
@@ -446,13 +446,13 @@ async function submitOrder() {
 
 .security-note b {
   color: #0e5233;
-  font-size: 21rpx;
+  font-size: 24rpx;
 }
 
 .security-note text {
   margin-top: 4rpx;
   color: #84938a;
-  font-size: 17rpx;
+  font-size: 24rpx;
 }
 
 .submit-bar {
@@ -464,7 +464,7 @@ async function submitOrder() {
   align-items: baseline;
   gap: 8rpx;
   color: #718277;
-  font-size: 20rpx;
+  font-size: 24rpx;
 }
 
 .submit-total .price {

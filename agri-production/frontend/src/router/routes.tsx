@@ -45,7 +45,7 @@ const PlotList = lazy(() => import('@/pages/user/plots/PlotList'))
 const PlotDetail = lazy(() => import('@/pages/user/plots/PlotDetail'))
 const PlotCreate = lazy(() => import('@/pages/user/plots/Create'))
 const PlotSoilRecords = lazy(() => import('@/pages/user/plots/PlotSoilRecords'))
-// 智能种养计划
+// 农事生产
 const PlanList = lazy(() => import('@/pages/user/plans/PlanList'))
 const PlanDetail = lazy(() => import('@/pages/user/plans/PlanDetail'))
 const PlanCalendar = lazy(() => import('@/pages/user/plans/PlanCalendar'))
@@ -86,6 +86,7 @@ const QualityInspection = lazy(() => import('@/pages/user/quality/QualityInspect
 const QualityGrading = lazy(() => import('@/pages/user/quality/QualityGrading'))
 const TraceCodeManage = lazy(() => import('@/pages/user/trace/TraceCodeManage'))
 const FullChainTrace = lazy(() => import('@/pages/user/trace/FullChainTrace'))
+const ProcessRecordManage = lazy(() => import('@/pages/user/trace/ProcessRecordManage'))
 const TraceReports = lazy(() => import('@/pages/user/trace/Reports'))
 // 区块链增强
 const BlockchainOverview = lazy(() => import('@/pages/user/blockchain/BlockchainOverview'))
@@ -132,7 +133,6 @@ const FoodSafetyIndex = lazy(() => import('@/pages/admin/foodSafety/Index'))
 const FoodSafetyCirculation = lazy(() => import('@/pages/admin/foodSafety/Circulation'))
 const FoodSafetyCompliance = lazy(() => import('@/pages/admin/foodSafety/Compliance'))
 const FoodSafetyTrustLabel = lazy(() => import('@/pages/admin/foodSafety/TrustLabel'))
-const FoodSafetyColdChain = lazy(() => import('@/pages/admin/foodSafety/ColdChain'))
 // AI中心
 const AiModels = lazy(() => import('@/pages/admin/ai/Models'))
 // 审批管理
@@ -150,6 +150,16 @@ const KnowledgeBase = lazy(() => import('@/pages/admin/knowledge/KnowledgeBase')
 const ReportCenter = lazy(() => import('@/pages/admin/reports/ReportCenter'))
 const AdminProductionReport = lazy(() => import('@/pages/admin/reports/AdminProductionReport'))
 const AdminQualityReport = lazy(() => import('@/pages/admin/reports/AdminQualityReport'))
+// 产销对接（生产侧）：可供事实 + 认购回写，价格/商品/订单归交易端
+const P2tOverviewPage = lazy(() => import('@/pages/user/p2t/Overview'))
+const P2tVarietyMapPage = lazy(() => import('@/pages/user/p2t/VarietyMap'))
+const P2tBatchesPage = lazy(() => import('@/pages/user/p2t/Batches'))
+const P2tOffersPage = lazy(() => import('@/pages/user/p2t/Offers'))
+const P2tSubscriptionsPage = lazy(() => import('@/pages/user/p2t/Subscriptions'))
+const P2tDemandPage = lazy(() => import('@/pages/user/p2t/Demand'))
+const P2tDiffsPage = lazy(() => import('@/pages/user/p2t/Diffs'))
+const P2tTracePage = lazy(() => import('@/pages/user/p2t/Trace'))
+const P2tBoundaryPage = lazy(() => import('@/pages/user/p2t/Boundary'))
 
 /**
  * 用户端路由（父级 /production）。
@@ -179,27 +189,21 @@ export const USER_ROUTES: AppRoute[] = [
   {
     path: 'dashboard',
     element: <DashboardHome />,
-    meta: { name: '生产数据看板', path: '/production/dashboard', module: '首页看板', prd: 'PRD 6.1 #1' },
+    meta: { name: '生产数据看板', path: '/production/dashboard', module: '工作台', prd: 'PRD 6.1 #1' },
   },
   {
     path: 'dashboard/production',
     element: <ProductionCockpit />,
-    meta: {
-      name: '生产驾驶舱',
-      path: '/production/dashboard/production',
-      module: '首页看板',
-      prd: 'PRD 6.1 #2',
-    },
   },
   {
     path: 'messages',
     element: <MessageCenter />,
-    meta: { name: '消息中心', path: '/production/messages', module: '首页看板', prd: 'PRD 6.1 #3' },
+    meta: { name: '消息中心', path: '/production/messages', module: '工作台', prd: 'PRD 6.1 #3' },
   },
   {
     path: 'farms',
     element: <FarmList />,
-    meta: { name: '农场管理', path: '/production/farms', module: '农场数字化管理', prd: 'PRD 6.1 #4' },
+    meta: { name: '农场管理', path: '/production/farms', module: '农场与地块', prd: 'PRD 6.1 #4' },
   },
   {
     path: 'farms/create',
@@ -207,7 +211,7 @@ export const USER_ROUTES: AppRoute[] = [
     meta: {
       name: '新增农场',
       path: '/production/farms/create',
-      module: '农场数字化管理',
+      module: '农场与地块',
       prd: '原型补充',
     },
   },
@@ -217,14 +221,14 @@ export const USER_ROUTES: AppRoute[] = [
     meta: {
       name: '农场详情',
       path: '/production/farms/:farmId',
-      module: '农场数字化管理',
+      module: '农场与地块',
       prd: 'PRD 6.1 #5',
     },
   },
   {
     path: 'plots',
     element: <PlotList />,
-    meta: { name: '地块列表', path: '/production/plots', module: '农场数字化管理', prd: 'PRD 6.1 #6' },
+    meta: { name: '地块列表', path: '/production/plots', module: '农场与地块', prd: 'PRD 6.1 #6' },
   },
   {
     path: 'plots/create',
@@ -232,7 +236,7 @@ export const USER_ROUTES: AppRoute[] = [
     meta: {
       name: '新增地块',
       path: '/production/plots/create',
-      module: '农场数字化管理',
+      module: '农场与地块',
       prd: '原型补充',
     },
   },
@@ -242,7 +246,7 @@ export const USER_ROUTES: AppRoute[] = [
     meta: {
       name: '地块详情',
       path: '/production/plots/:plotId',
-      module: '农场数字化管理',
+      module: '农场与地块',
       prd: 'PRD 6.1 #7',
     },
   },
@@ -252,7 +256,7 @@ export const USER_ROUTES: AppRoute[] = [
     meta: {
       name: '土壤检测档案',
       path: '/production/plots/:plotId/soil',
-      module: '农场数字化管理',
+      module: '农场与地块',
       prd: 'PRD 6.1 #8',
     },
   },
@@ -260,9 +264,9 @@ export const USER_ROUTES: AppRoute[] = [
     path: 'plans',
     element: <PlanList />,
     meta: {
-      name: '种养计划',
+      name: '农事计划',
       path: '/production/plans',
-      module: '智能种养计划',
+      module: '农事生产',
       prd: 'PRD 6.1 #11',
     },
   },
@@ -272,7 +276,7 @@ export const USER_ROUTES: AppRoute[] = [
     meta: {
       name: '农事日历',
       path: '/production/plans/calendar',
-      module: '智能种养计划',
+      module: '农事生产',
       prd: 'PRD 6.1 #13',
     },
   },
@@ -280,9 +284,9 @@ export const USER_ROUTES: AppRoute[] = [
     path: 'plans/:planId',
     element: <PlanDetail />,
     meta: {
-      name: '种养计划详情',
+      name: '农事计划详情',
       path: '/production/plans/:planId',
-      module: '智能种养计划',
+      module: '农事生产',
       prd: 'PRD 6.1 #12',
     },
   },
@@ -392,7 +396,7 @@ export const USER_ROUTES: AppRoute[] = [
     meta: {
       name: '生长监测总览',
       path: '/production/growth',
-      module: '生长监测预警',
+      module: '监测与设备',
       prd: 'PRD 6.1 #23',
     },
   },
@@ -402,7 +406,7 @@ export const USER_ROUTES: AppRoute[] = [
     meta: {
       name: '生长记录',
       path: '/production/growth/records',
-      module: '生长监测预警',
+      module: '监测与设备',
       prd: 'PRD 6.1 #24',
     },
   },
@@ -412,14 +416,14 @@ export const USER_ROUTES: AppRoute[] = [
     meta: {
       name: '环境数据',
       path: '/production/growth/environment',
-      module: '生长监测预警',
+      module: '监测与设备',
       prd: 'PRD 6.1 #25',
     },
   },
   {
     path: 'alerts',
     element: <AlertCenter />,
-    meta: { name: '告警中心', path: '/production/alerts', module: '生长监测预警', prd: 'PRD 6.1 #26' },
+    meta: { name: '告警中心', path: '/production/alerts', module: '监测与设备', prd: 'PRD 6.1 #26' },
   },
   {
     path: 'alerts/rules',
@@ -427,14 +431,14 @@ export const USER_ROUTES: AppRoute[] = [
     meta: {
       name: '告警规则配置',
       path: '/production/alerts/rules',
-      module: '生长监测预警',
+      module: '监测与设备',
       prd: 'PRD 6.1 #27',
     },
   },
   {
     path: 'iot',
     element: <DeviceList />,
-    meta: { name: '设备列表', path: '/production/iot', module: 'IoT设备管理', prd: 'PRD 6.1 #28' },
+    meta: { name: '设备列表', path: '/production/iot', module: '监测与设备', prd: 'PRD 6.1 #28' },
   },
   {
     path: 'iot/bindings',
@@ -442,7 +446,7 @@ export const USER_ROUTES: AppRoute[] = [
     meta: {
       name: '设备绑定管理',
       path: '/production/iot/bindings',
-      module: 'IoT设备管理',
+      module: '监测与设备',
       prd: 'PRD 6.1 #30',
     },
   },
@@ -452,7 +456,7 @@ export const USER_ROUTES: AppRoute[] = [
     meta: {
       name: '设备详情',
       path: '/production/iot/:deviceId',
-      module: 'IoT设备管理',
+      module: '监测与设备',
       prd: 'PRD 6.1 #29',
     },
   },
@@ -462,7 +466,7 @@ export const USER_ROUTES: AppRoute[] = [
     meta: {
       name: '生产监控看板',
       path: '/production/monitor',
-      module: '生长监测预警',
+      module: '监测与设备',
       prd: '原型补充',
     },
   },
@@ -470,11 +474,10 @@ export const USER_ROUTES: AppRoute[] = [
     path: 'harvests/plan',
     element: <HarvestPlan />,
     meta: {
-      // 后端 /harvests/plan 的语义是「按地块聚合采收记录」，不是采收计划，
-      // 名称按真实语义对齐（采收计划功能后端尚未实现）。
-      name: '地块采收记录',
+      // 旧地址保留兼容，页面已合并到采收记录。
+      name: '采收记录',
       path: '/production/harvests/plan',
-      module: '采收库存管理',
+      module: '采收与库存',
       prd: 'PRD 6.1 #31',
     },
   },
@@ -484,7 +487,7 @@ export const USER_ROUTES: AppRoute[] = [
     meta: {
       name: '采收记录',
       path: '/production/harvests',
-      module: '采收库存管理',
+      module: '采收与库存',
       prd: 'PRD 6.1 #32',
     },
   },
@@ -494,7 +497,7 @@ export const USER_ROUTES: AppRoute[] = [
     meta: {
       name: '新建采收',
       path: '/production/harvests/create',
-      module: '采收库存管理',
+      module: '采收与库存',
       prd: '原型补充',
     },
   },
@@ -504,7 +507,7 @@ export const USER_ROUTES: AppRoute[] = [
     meta: {
       name: '库存管理',
       path: '/production/harvests/inventory',
-      module: '采收库存管理',
+      module: '采收与库存',
       prd: 'PRD 6.1 #33',
     },
   },
@@ -514,7 +517,7 @@ export const USER_ROUTES: AppRoute[] = [
     meta: {
       name: '新增库存',
       path: '/production/harvests/inventory/create',
-      module: '采收库存管理',
+      module: '采收与库存',
       prd: '原型补充',
     },
   },
@@ -524,7 +527,7 @@ export const USER_ROUTES: AppRoute[] = [
     meta: {
       name: '库存详情',
       path: '/production/harvests/inventory/:inventoryId',
-      module: '采收库存管理',
+      module: '采收与库存',
       prd: '原型补充',
     },
   },
@@ -534,7 +537,7 @@ export const USER_ROUTES: AppRoute[] = [
     meta: {
       name: '采收详情',
       path: '/production/harvests/:harvestId',
-      module: '采收库存管理',
+      module: '采收与库存',
       prd: '原型补充',
     },
   },
@@ -579,6 +582,16 @@ export const USER_ROUTES: AppRoute[] = [
     },
   },
   {
+    path: 'process',
+    element: <ProcessRecordManage />,
+    meta: {
+      name: '加工记录',
+      path: '/production/process',
+      module: '质量检测与溯源',
+      prd: 'PRD 6.1 #37（加工环节）',
+    },
+  },
+  {
     path: 'trace/reports',
     element: <TraceReports />,
     meta: {
@@ -594,7 +607,7 @@ export const USER_ROUTES: AppRoute[] = [
     meta: {
       name: '区块链概览',
       path: '/production/blockchain',
-      module: '区块链增强',
+      module: '质量检测与溯源',
       prd: 'PRD 6.1 #38',
     },
   },
@@ -604,7 +617,7 @@ export const USER_ROUTES: AppRoute[] = [
     meta: {
       name: '上链记录',
       path: '/production/blockchain/records',
-      module: '区块链增强',
+      module: '质量检测与溯源',
       prd: 'PRD 6.1 #39',
     },
   },
@@ -614,7 +627,7 @@ export const USER_ROUTES: AppRoute[] = [
     meta: {
       name: '存证详情',
       path: '/production/blockchain/records/:recordId',
-      module: '区块链增强',
+      module: '质量检测与溯源',
       prd: '原型补充',
     },
   },
@@ -624,7 +637,7 @@ export const USER_ROUTES: AppRoute[] = [
     meta: {
       name: '存证验证',
       path: '/production/blockchain/verify',
-      module: '区块链增强',
+      module: '质量检测与溯源',
       prd: '原型补充',
     },
   },
@@ -634,7 +647,7 @@ export const USER_ROUTES: AppRoute[] = [
     meta: {
       name: '病虫害识别',
       path: '/production/ai/pest-detection',
-      module: '智能决策中心',
+      module: '分析与决策',
       prd: 'PRD 6.1 #40',
     },
   },
@@ -644,7 +657,7 @@ export const USER_ROUTES: AppRoute[] = [
     meta: {
       name: 'AI问答助手',
       path: '/production/ai/assistant',
-      module: '智能决策中心',
+      module: '分析与决策',
       prd: 'PRD 6.1 #41',
     },
   },
@@ -654,7 +667,7 @@ export const USER_ROUTES: AppRoute[] = [
     meta: {
       name: '产量预测',
       path: '/production/ai/yield-forecast',
-      module: '智能决策中心',
+      module: '分析与决策',
       prd: 'PRD 6.1 #42',
     },
   },
@@ -664,7 +677,7 @@ export const USER_ROUTES: AppRoute[] = [
     meta: {
       name: '数据分析总览',
       path: '/production/analytics',
-      module: '报表与设置',
+      module: '分析与决策',
       prd: 'PRD 6.1 #43',
     },
   },
@@ -674,14 +687,105 @@ export const USER_ROUTES: AppRoute[] = [
     meta: {
       name: '生产报表',
       path: '/production/analytics/reports',
-      module: '报表与设置',
+      module: '分析与决策',
       prd: 'PRD 6.1 #44',
     },
   },
   {
     path: 'settings',
     element: <SystemSettings />,
-    meta: { name: '系统设置', path: '/production/settings', module: '报表与设置', prd: 'PRD 6.1 #45' },
+    meta: { name: '系统设置', path: '/production/settings', module: '系统设置', prd: 'PRD 6.1 #45' },
+  },
+  /* ==================== 产销对接（由经营主体在本端发起） ==================== */
+  {
+    path: 'p2t',
+    element: <P2tOverviewPage />,
+    meta: {
+      name: '产销对接总览',
+      path: '/production/p2t',
+      module: '产销对接',
+      prd: '产销对接原型 v1',
+    },
+  },
+  {
+    path: 'p2t/variety',
+    element: <P2tVarietyMapPage />,
+    meta: {
+      name: '品种对接表',
+      path: '/production/p2t/variety',
+      module: '产销对接',
+      prd: '产销对接原型 v1',
+    },
+  },
+  {
+    path: 'p2t/batches',
+    element: <P2tBatchesPage />,
+    meta: {
+      name: '采收批次与可售量',
+      path: '/production/p2t/batches',
+      module: '产销对接',
+      prd: '产销对接原型 v1',
+    },
+  },
+  {
+    path: 'p2t/offers',
+    element: <P2tOffersPage />,
+    meta: {
+      name: '供给意向发布',
+      path: '/production/p2t/offers',
+      module: '产销对接',
+      prd: '产销对接原型 v1',
+    },
+  },
+  {
+    path: 'p2t/subscriptions',
+    element: <P2tSubscriptionsPage />,
+    meta: {
+      name: '认购台账',
+      path: '/production/p2t/subscriptions',
+      module: '产销对接',
+      prd: '产销对接原型 v1',
+    },
+  },
+  {
+    path: 'p2t/demand',
+    element: <P2tDemandPage />,
+    meta: {
+      name: '需求反哺与排产建议',
+      path: '/production/p2t/demand',
+      module: '产销对接',
+      prd: '产销对接原型 v1',
+    },
+  },
+  {
+    path: 'p2t/diffs',
+    element: <P2tDiffsPage />,
+    meta: {
+      name: '差异与异常处置',
+      path: '/production/p2t/diffs',
+      module: '产销对接',
+      prd: '产销对接原型 v1',
+    },
+  },
+  {
+    path: 'p2t/trace',
+    element: <P2tTracePage />,
+    meta: {
+      name: '全链路追踪（生产侧）',
+      path: '/production/p2t/trace',
+      module: '产销对接',
+      prd: '产销对接原型 v1',
+    },
+  },
+  {
+    path: 'p2t/boundary',
+    element: <P2tBoundaryPage />,
+    meta: {
+      name: '边界与归位说明',
+      path: '/production/p2t/boundary',
+      module: '产销对接',
+      prd: '产销对接原型 v1',
+    },
   },
 ]
 
@@ -876,9 +980,9 @@ export const ADMIN_ROUTES: AppRoute[] = [
     path: 'trace',
     element: <TraceOverview />,
     meta: {
-      name: '溯源管理总览',
+      name: '质量安全总览',
       path: '/admin/production/trace',
-      module: '质量追溯管理',
+      module: '质量安全与溯源',
       prd: 'PRD 6.2 #16',
     },
   },
@@ -888,7 +992,7 @@ export const ADMIN_ROUTES: AppRoute[] = [
     meta: {
       name: '溯源码管理',
       path: '/admin/production/trace/codes',
-      module: '质量追溯管理',
+      module: '质量安全与溯源',
       prd: 'PRD 6.2 #17',
     },
   },
@@ -898,7 +1002,7 @@ export const ADMIN_ROUTES: AppRoute[] = [
     meta: {
       name: '溯源链路详情',
       path: '/admin/production/trace/:code',
-      module: '质量追溯管理',
+      module: '质量安全与溯源',
       prd: '原型补充',
     },
   },
@@ -908,7 +1012,7 @@ export const ADMIN_ROUTES: AppRoute[] = [
     meta: {
       name: '检测机构管理',
       path: '/admin/production/quality/labs',
-      module: '质量追溯管理',
+      module: '质量安全与溯源',
       prd: 'PRD 6.2 #18',
     },
   },
@@ -918,7 +1022,7 @@ export const ADMIN_ROUTES: AppRoute[] = [
     meta: {
       name: '不合格品处置',
       path: '/admin/production/quality/recalls',
-      module: '质量追溯管理',
+      module: '质量安全与溯源',
       prd: 'PRD 6.2 #19',
     },
   },
@@ -928,7 +1032,7 @@ export const ADMIN_ROUTES: AppRoute[] = [
     meta: {
       name: '检测报告管理',
       path: '/admin/production/quality/inspections',
-      module: '质量追溯管理',
+      module: '质量安全与溯源',
       prd: '原型补充',
     },
   },
@@ -938,7 +1042,7 @@ export const ADMIN_ROUTES: AppRoute[] = [
     meta: {
       name: '食品安全监控中心',
       path: '/admin/production/food-safety',
-      module: '食品安全',
+      module: '质量安全与溯源',
       prd: '原型补充',
     },
   },
@@ -948,7 +1052,7 @@ export const ADMIN_ROUTES: AppRoute[] = [
     meta: {
       name: '流通异常检测',
       path: '/admin/production/food-safety/circulation',
-      module: '食品安全',
+      module: '质量安全与溯源',
       prd: '原型补充',
     },
   },
@@ -958,7 +1062,7 @@ export const ADMIN_ROUTES: AppRoute[] = [
     meta: {
       name: '合规校验管理',
       path: '/admin/production/food-safety/compliance',
-      module: '食品安全',
+      module: '质量安全与溯源',
       prd: '原型补充',
     },
   },
@@ -968,17 +1072,17 @@ export const ADMIN_ROUTES: AppRoute[] = [
     meta: {
       name: '可信农产品管理',
       path: '/admin/production/food-safety/trust-label',
-      module: '食品安全',
+      module: '质量安全与溯源',
       prd: '原型补充',
     },
   },
   {
     path: 'food-safety/cold-chain',
-    element: <FoodSafetyColdChain />,
+    element: <div style={{padding: 24}}>冷链资源撮合属于交易履约域，已从生产监管菜单移除。请通过交易端物流业务处理；此入口不再创建撮合单。</div>,
     meta: {
       name: '冷链资源撮合',
       path: '/admin/production/food-safety/cold-chain',
-      module: '食品安全',
+      module: '质量安全与溯源',
       prd: '原型补充',
     },
   },
@@ -1102,6 +1206,7 @@ export const ADMIN_ROUTES: AppRoute[] = [
       prd: 'PRD 6.2 #30',
     },
   },
+
 ]
 
 /* ==================== 页面条数（全部从路由表派生，禁止写死） ==================== */

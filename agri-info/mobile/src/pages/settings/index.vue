@@ -114,7 +114,7 @@ function logout() {
 .group-label {
   margin: 14rpx 2rpx 10rpx;
   color: #718277;
-  font-size: 22rpx;
+  font-size: 24rpx;
   font-weight: 650;
 }
 
@@ -143,7 +143,7 @@ function logout() {
 
 .row-value {
   color: #94a198;
-  font-size: 22rpx;
+  font-size: 24rpx;
 }
 
 .foot {

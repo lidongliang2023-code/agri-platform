@@ -46,7 +46,7 @@ import {
 import type { ColumnsType } from 'antd/es/table'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
-import { fetchAdminTraceChain, recallAdminTraceBatch } from '@/api/admin/trace'
+import { fetchAdminTraceChain, recallQualityBatch } from '@/api/admin/trace'
 import { revokeTraceCode } from '@/api/trace'
 
 const { Text, Title } = Typography
@@ -118,17 +118,14 @@ export default function Detail(): JSX.Element {
    * 后端侧的 NOT_FOUND 已另开工单，改完这里应当改成按 code 分支。
    */
   const recallMutation = useMutation({
-    mutationFn: (batchId: string) => recallAdminTraceBatch(batchId),
-    onSuccess: (count) => {
-      const invalidated = Number.isFinite(Number(count)) ? Number(count) : 0
-      if (invalidated > 0) {
-        message.success(`召回已执行，作废溯源码 ${invalidated} 张并冻结批次`)
-      } else {
-        message.warning(
-          '召回未生效：服务端作废了 0 张溯源码。该批次可能不存在，也可能该批次名下没有溯源码——未确认批次已冻结，请核对批次 ID',
-        )
-      }
-      void queryClient.invalidateQueries({ queryKey: ['admin', 'trace', 'chain', code] })
+    mutationFn: async (batchId: string) => {
+      const result = await recallQualityBatch(batchId)
+      if (Number(result.status) !== 4) throw new Error('批次冻结状态未确认')
+      return result
+    },
+    onSuccess: () => {
+      message.success('批次冻结已回读确认，同主体库存冻结与溯源码作废已执行')
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'trace'] })
     },
     onError: () => {
       message.warning('召回接口未返回成功，请确认批次 ID 是否有效')

@@ -94,7 +94,7 @@ onLoad((options) => {
 })
 
 onShareAppMessage(() => ({
-  title: product.value?.name || '丰链云优选产地好货',
+  title: product.value?.name || '丰链云产地好货',
   path: `/pages/product/detail?id=${product.value?.id || 1}`,
 }))
 
@@ -152,7 +152,7 @@ function openTrace() {
 .loading {
   padding: 120rpx 0;
   color: #84938a;
-  font-size: 23rpx;
+  font-size: 24rpx;
   text-align: center;
 }
 
@@ -192,7 +192,7 @@ function openTrace() {
   bottom: 20rpx;
   z-index: 2;
   color: rgba(18, 118, 74, 0.25);
-  font-size: 17rpx;
+  font-size: 24rpx;
   font-weight: 700;
   letter-spacing: 3rpx;
 }
@@ -209,7 +209,7 @@ function openTrace() {
 
 .eyebrow {
   color: #12764a;
-  font-size: 17rpx;
+  font-size: 24rpx;
   font-weight: 700;
   letter-spacing: 2rpx;
 }
@@ -227,7 +227,7 @@ function openTrace() {
   display: block;
   margin-top: 12rpx;
   color: #6b7c72;
-  font-size: 23rpx;
+  font-size: 24rpx;
   line-height: 1.65;
 }
 
@@ -244,14 +244,14 @@ function openTrace() {
 
 .original {
   color: #a1ada6;
-  font-size: 22rpx;
+  font-size: 24rpx;
   text-decoration: line-through;
 }
 
 .sales {
   margin-left: auto;
   color: #93a29a;
-  font-size: 19rpx;
+  font-size: 24rpx;
 }
 
 .cert-row {
@@ -287,13 +287,13 @@ function openTrace() {
 
 .assurance-row b {
   color: #0e5233;
-  font-size: 20rpx;
+  font-size: 24rpx;
 }
 
 .assurance-row text {
   margin-top: 5rpx;
   color: #8a9990;
-  font-size: 16rpx;
+  font-size: 24rpx;
 }
 
 .spec-card {
@@ -321,12 +321,12 @@ function openTrace() {
 
 .spec-item text {
   color: #718277;
-  font-size: 20rpx;
+  font-size: 24rpx;
 }
 
 .spec-item b {
   color: #33453b;
-  font-size: 20rpx;
+  font-size: 24rpx;
   font-weight: 600;
 }
 
@@ -368,7 +368,7 @@ function openTrace() {
 
 .trace-kicker {
   color: #9fe7b8;
-  font-size: 16rpx;
+  font-size: 24rpx;
   font-weight: 700;
   letter-spacing: 2rpx;
 }
@@ -382,7 +382,7 @@ function openTrace() {
 .trace-desc {
   margin-top: 6rpx;
   color: rgba(255, 255, 255, 0.64);
-  font-size: 18rpx;
+  font-size: 24rpx;
 }
 
 .trace-arrow {
@@ -410,7 +410,7 @@ function openTrace() {
 .quantity-stock {
   margin-top: 6rpx;
   color: #93a29a;
-  font-size: 18rpx;
+  font-size: 24rpx;
 }
 
 .stepper {
@@ -458,7 +458,7 @@ function openTrace() {
   flex-direction: column;
   gap: 4rpx;
   color: #6b7c72;
-  font-size: 17rpx;
+  font-size: 24rpx;
 }
 
 .cart-icon {
@@ -469,7 +469,7 @@ function openTrace() {
   border-radius: 12rpx;
   background: #eaf7ef;
   color: #12764a;
-  font-size: 19rpx;
+  font-size: 24rpx;
   font-weight: 700;
 }
 
@@ -477,6 +477,6 @@ function openTrace() {
   flex: 1;
   height: 80rpx;
   padding: 0 10rpx;
-  font-size: 23rpx;
+  font-size: 24rpx;
 }
 </style>

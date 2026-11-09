@@ -1,3 +1,6 @@
+import ProTable from '@/components/ProductionTable'
+import Card from '@/components/SectionCard'
+import './inputs.css'
 /**
  * 页面名称：投入品详情
  * 路由路径：/production/inputs/:inputId
@@ -15,14 +18,15 @@
 import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { PageContainer, ProTable } from '@ant-design/pro-components'
+
+import PageContainer from '@/components/ProductionPageContainer'
 import type { ProColumns } from '@ant-design/pro-components'
 import {
   Alert,
   Button,
-  Card,
   Col,
   Empty,
+  List,
   Modal,
   Progress,
   Row,
@@ -80,13 +84,6 @@ const LEVEL_ICON: Record<string, JSX.Element> = {
   pass: <CheckCircleOutlined style={{ color: '#52c41a', fontSize: 20 }} />,
   warning: <ExclamationCircleOutlined style={{ color: '#fa8c16', fontSize: 20 }} />,
   blocked: <CloseCircleOutlined style={{ color: '#ff4d4f', fontSize: 20 }} />,
-}
-
-/** 校验项卡片背景色 */
-const LEVEL_BG: Record<string, string> = {
-  pass: '#f6ffed',
-  warning: '#fff7e6',
-  blocked: '#fff1f0',
 }
 
 /**
@@ -417,7 +414,7 @@ export default function InputDetail(): JSX.Element {
 
   if (!inputId) {
     return (
-      <PageContainer title="投入品详情">
+      <PageContainer className="inputs-page" title="投入品详情">
         <Empty description="缺少投入品 ID" />
       </PageContainer>
     )
@@ -425,7 +422,7 @@ export default function InputDetail(): JSX.Element {
 
   if (detailQuery.isError) {
     return (
-      <PageContainer title="投入品详情">
+      <PageContainer className="inputs-page" title="投入品详情">
         <Empty
           description={
             <Space direction="vertical">
@@ -448,6 +445,7 @@ export default function InputDetail(): JSX.Element {
 
   return (
     <PageContainer
+      className="inputs-page"
       title={`📦 ${inputName || '投入品'}`}
       subTitle={item ? `编号 ${item.inputCode ?? item.inputId}` : undefined}
       onBack={() => navigate('/production/inputs')}
@@ -463,8 +461,8 @@ export default function InputDetail(): JSX.Element {
         </Button>,
       ]}
     >
-      <Row gutter={16}>
-        <Col span={16}>
+      <Row gutter={[16, 16]}>
+        <Col xs={24} xl={16}>
           <Card
             title="📋 基本信息"
             style={{ marginBottom: 16 }}
@@ -545,39 +543,20 @@ export default function InputDetail(): JSX.Element {
               </Tag>
             }
           >
-            <Row gutter={[12, 12]}>
-              {complianceItems.map((check) => (
-                <Col key={check.key} span={12}>
-                  <Card
-                    size="small"
-                    style={{ background: LEVEL_BG[check.level], borderColor: check.color }}
-                  >
-                    <Space align="start" size={10}>
-                      {LEVEL_ICON[check.level]}
-                      <Space direction="vertical" size={2}>
-                        <Space size={6}>
-                          <Typography.Text strong>{check.label}</Typography.Text>
-                          <Tag
-                            color={
-                              check.level === 'pass'
-                                ? 'green'
-                                : check.level === 'warning'
-                                  ? 'orange'
-                                  : 'red'
-                            }
-                          >
-                            {check.result}
-                          </Tag>
-                        </Space>
-                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                          {check.detail}
-                        </Typography.Text>
-                      </Space>
-                    </Space>
-                  </Card>
-                </Col>
-              ))}
-            </Row>
+            <List
+              className="input-check-list"
+              dataSource={complianceItems}
+              rowKey="key"
+              renderItem={(check) => (
+                <List.Item extra={<Tag color={check.level === 'pass' ? 'green' : check.level === 'warning' ? 'orange' : 'red'}>{check.result}</Tag>}>
+                  <List.Item.Meta
+                    avatar={LEVEL_ICON[check.level]}
+                    title={check.label}
+                    description={check.detail}
+                  />
+                </List.Item>
+              )}
+            />
           </Card>
 
           <Card>
@@ -588,6 +567,8 @@ export default function InputDetail(): JSX.Element {
                   label: `使用记录(${usages.length})`,
                   children: (
                     <ProTable<InputUsageRecord>
+            cardProps={false}
+            className="input-record-table"
                       rowKey="usageId"
                       columns={usageColumns}
                       dataSource={usages}
@@ -605,6 +586,8 @@ export default function InputDetail(): JSX.Element {
                   label: `出入库流水(${flows.length})`,
                   children: (
                     <ProTable<InputStockFlow>
+            cardProps={false}
+            className="input-record-table"
                       rowKey="flowId"
                       columns={flowColumns}
                       dataSource={flows}
@@ -622,7 +605,7 @@ export default function InputDetail(): JSX.Element {
           </Card>
         </Col>
 
-        <Col span={8}>
+        <Col xs={24} md={8}>
           <Card title="📦 库存与流向" style={{ marginBottom: 16 }}>
             <Statistic
               title="当前库存"
@@ -773,23 +756,20 @@ export default function InputDetail(): JSX.Element {
                 : '未查询到链上记录，无法完成哈希比对与签名验证'
             }
           />
-          {verifyChecks.map((check) => (
-            <Card key={check.key} size="small">
-              <Space align="start">
-                {check.passed ? (
-                  <CheckCircleOutlined style={{ color: '#52c41a' }} />
-                ) : (
-                  <ExclamationCircleOutlined style={{ color: '#fa8c16' }} />
-                )}
-                <Space direction="vertical" size={0}>
-                  <Typography.Text strong>{check.label}</Typography.Text>
-                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                    {check.detail}
-                  </Typography.Text>
-                </Space>
-              </Space>
-            </Card>
-          ))}
+          <List
+            className="input-check-list"
+            dataSource={verifyChecks}
+            rowKey="key"
+            renderItem={(check) => (
+              <List.Item>
+                <List.Item.Meta
+                  avatar={check.passed ? <CheckCircleOutlined style={{ color: '#52c41a' }} /> : <ExclamationCircleOutlined style={{ color: '#fa8c16' }} />}
+                  title={check.label}
+                  description={check.detail}
+                />
+              </List.Item>
+            )}
+          />
         </Space>
       </Modal>
     </PageContainer>

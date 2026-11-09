@@ -1,5 +1,5 @@
 /**
- * 页面名称：食品安全监控中心
+ * 页面名称：食品安全事件台账
  * 路由路径：/admin/production/food-safety
  * 所属模块：食品安全
  * 原型 pageId：food-safety（PRD 外，原型补充页面 P15）
@@ -102,7 +102,7 @@ const HEATMAP_COLUMNS: string[] = ['一组', '二组', '三组', '四组']
 const HEATMAP_ROWS: string[] = ['第一排', '第二排', '第三排', '第四排']
 
 /**
- * 食品安全监控中心
+ * 食品安全事件台账
  *
  * 业务职责：汇总平台食品安全态势，包括食品安全综合指数、检测合格率、告警数量与
  * 合规校验通过率，通过农场风险热力图定位高风险主体，并对食品安全事件告警进行处置。
@@ -110,7 +110,7 @@ const HEATMAP_ROWS: string[] = ['第一排', '第二排', '第三排', '第四�
  *
  * @returns 页面内容
  */
-export default function Index(): JSX.Element {
+function Index(): JSX.Element {
   const navigate = useNavigate()
   const { message } = App.useApp()
   const queryClient = useQueryClient()
@@ -316,7 +316,7 @@ export default function Index(): JSX.Element {
           />
           <Space align="center" size={8}>
             <Title level={4} style={{ margin: 0 }}>
-              食品安全监控中心
+              食品安全事件台账
             </Title>
             <Tag icon={<SyncOutlined spin />} color="success">
               实时监控中
@@ -585,7 +585,7 @@ export default function Index(): JSX.Element {
       <Modal
         open={activeAlert !== null}
         title="处置食品安全告警"
-        okText="提交处置"
+        okText="登记处理进展"
         cancelText="取消"
         confirmLoading={handleMutation.isPending}
         onCancel={() => setActiveAlert(null)}
@@ -632,3 +632,5 @@ export default function Index(): JSX.Element {
     </div>
   )
 }
+
+export default function SafetyEvidencePage() { return <><div role="note" style={{padding: 16, background: "#fffbe6", marginBottom: 16}}>此处仅登记处理进展，不自动执行下架、销毁、物流或退款，也不作为整改结案凭据。批次冻结与码作废请进入不合格品处置。</div><Index /></> }

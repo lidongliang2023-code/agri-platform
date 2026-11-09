@@ -18,8 +18,8 @@
         <div class="tip">
           <b>渠道专柜</b>
           <span>
-            这里展示的是渠道商从平台选品清单中选中的商品，价格与库存由平台统一管控；
-            渠道商不持有库存，下单后仍由产地供应商直发。
+            这里展示的是商家从平台选品清单中选中的商品，价格与库存由平台统一管控；
+            商家不持有库存，下单后仍由产地供应商直发。
           </span>
         </div>
       </section>
@@ -42,7 +42,7 @@
         v-else
         icon="🏪"
         title="该渠道还没有在售商品"
-        desc="渠道商从平台选品清单中选中并处于生效状态后，商品才会出现在这里。"
+        desc="商家从平台选品清单中选中并处于生效状态后，商品才会出现在这里。"
       >
         <template #actions>
           <button type="button" class="m-btn primary" @click="$router.push('/products')">去平台商城逛逛</button>
@@ -86,7 +86,7 @@ const gradeText = computed(() => {
   return grade ? `渠道等级 ${grade}` : '平台认证渠道'
 })
 
-/** 渠道接口只返回必要字段，补成 ProductCard 需要的形状（不补佣金率——那是渠道商自己的数据，不该给消费者看）。 */
+/** 渠道接口只返回必要字段，补成 ProductCard 需要的形状（不补佣金率——那是商家自己的数据，不该给消费者看）。 */
 function toProduct(item) {
   return {
     id: item.id,

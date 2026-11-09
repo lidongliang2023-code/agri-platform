@@ -179,7 +179,7 @@ function openPolicy(id: number) {
 
 .read-all {
   color: #12764a;
-  font-size: 22rpx;
+  font-size: 24rpx;
 }
 
 .group-card {
@@ -226,7 +226,7 @@ function openPolicy(id: number) {
 .group-desc {
   overflow: hidden;
   color: #718277;
-  font-size: 21rpx;
+  font-size: 24rpx;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -238,7 +238,7 @@ function openPolicy(id: number) {
   border-radius: 17rpx;
   background: #e44949;
   color: #ffffff;
-  font-size: 18rpx;
+  font-size: 24rpx;
   line-height: 34rpx;
   text-align: center;
 }

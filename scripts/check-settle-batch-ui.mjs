@@ -1,5 +1,5 @@
 /**
- * 佣金结算批次点检：运营端发起批次结算（空范围）+ 渠道端批次区渲染。
+ * 佣金结算批次点检：运营端发起批次结算（空范围）+ 商家端批次区渲染。
  * 用法：node scripts/check-settle-batch-ui.mjs
  */
 import { existsSync, mkdirSync } from 'node:fs'
@@ -76,8 +76,8 @@ try {
   await page.locator('.el-menu-item', { hasText: '佣金管理' }).click()
   await page.waitForTimeout(1200)
   text = (await page.evaluate(() => document.body.innerText)).replace(/\s+/g, ' ')
-  check(!page.url().includes('/login') && !text.includes('404 Not Found'), '渠道端免登录直进（SSO 会话有效）', page.url())
-  check(text.includes('结算批次'), '渠道端展示「结算批次」区', '')
+  check(!page.url().includes('/login') && !text.includes('404 Not Found'), '商家端免登录直进（SSO 会话有效）', page.url())
+  check(text.includes('结算批次'), '商家端展示「结算批次」区', '')
   await page.screenshot({ path: path.join(OUT, 'channel-settlements.png'), fullPage: false })
 
   check(pageErrors.length === 0, '页面无运行时异常', pageErrors.slice(0, 2).join(' | '))

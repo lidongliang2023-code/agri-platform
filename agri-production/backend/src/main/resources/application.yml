@@ -65,6 +65,11 @@ services:
 #    消费端就位后：改 transport/关闭态都不需要，重放即可（POST /api/v1/production/admin/events/{id}/replay）。
 #
 # 关闭态写法：transport: none（此时中继一行都不投，状态也不动）。
+# 产销对接：交易撮合后端调用生产端「平台级通道」的服务密钥（两边必须一致）。
+# 未配置时通道关闭（生产端平台级接口一律 403），用户侧接口不受影响。
+p2t:
+  trade-channel-token: "${P2T_TRADE_CHANNEL_TOKEN:agri-p2t-channel-2026}"
+
 agri:
   # 生产写接口的能力校验：调用核心平台内部接口（共享内部令牌）
   capability:
@@ -80,3 +85,22 @@ agri:
     http:
       targets: http://localhost:8093
       internal-token: ${AGRI_INTERNAL_TOKEN:dev-internal-token}
+
+# Unified probes: dependency failures affect readiness, not liveness.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      show-components: never
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: '*'
+          exclude: livenessState

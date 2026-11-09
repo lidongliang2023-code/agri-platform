@@ -24,6 +24,11 @@ import java.util.Map;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiResponse<Void>> firmwareTooLarge(org.springframework.web.multipart.MaxUploadSizeExceededException e) {
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(ApiResponse.fail(413,"固件文件超过上传上限，请使用不超过256MB的文件"));
+    }
+
 
     private static final Logger logger = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
@@ -81,6 +86,24 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(ex.getStatusCode()).body(
                 ApiResponse.fail(ex.getStatusCode().value(),
                         ex.getReason() == null ? "请求处理失败，请稍后重试" : ex.getReason()));
+    }
+
+    @ExceptionHandler(org.springframework.web.HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleUnsupportedMediaType(org.springframework.web.HttpMediaTypeNotSupportedException ex) {
+        return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
+                .body(ApiResponse.fail(415, "请求格式不支持；文件上传请使用 multipart/form-data，并通过 file 字段选择文件"));
+    }
+
+    @ExceptionHandler(org.springframework.web.multipart.support.MissingServletRequestPartException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMissingUploadPart(org.springframework.web.multipart.support.MissingServletRequestPartException ex) {
+        return ResponseEntity.badRequest()
+                .body(ApiResponse.fail(400, "缺少上传文件字段，请通过 file 字段选择文件后重试"));
+    }
+
+    @ExceptionHandler(org.springframework.web.multipart.MultipartException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMalformedUpload(org.springframework.web.multipart.MultipartException ex) {
+        return ResponseEntity.badRequest()
+                .body(ApiResponse.fail(400, "上传内容格式不正确或不完整，请重新选择文件后上传"));
     }
 
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)

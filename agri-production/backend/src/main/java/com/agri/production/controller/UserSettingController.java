@@ -25,10 +25,7 @@ import java.util.Map;
  * 而 {@code request.ts} 的归一化只在 {@code data.records} 是数组时才转成分页结构 ——
  * 返 {@code {records,total}} 会让页面拿到一个对象、表格直接空掉。</p>
  *
- * <p>不实现 {@code GET/PUT /settings/tenant} 与 {@code GET /settings/logs}：
- * 前者的租户档案属平台域主数据（网关已把这一族整条交回平台侧），后者本部署没有操作日志表、
- * 页面已按「未接入」显式提示。刻意不写 {@code @GetMapping("/{id}")} ——
- * 那种吃任意段的映射会把 {@code /by-key} 之类字面量路径一并吞掉（这项目里栽过）。</p>
+ * <p>主体档案由平台权威绑定只读映射；操作日志由独立控制器承接。</p>
  */
 @RestController
 @RequestMapping("/api/v1/production/settings")
@@ -38,6 +35,12 @@ public class UserSettingController {
 
     public UserSettingController(IUserSettingService settingService) {
         this.settingService = settingService;
+    }
+
+    /** 当前经营主体的权威资料，只读，不与配置主键路由混用。 */
+    @GetMapping("/tenant")
+    public ApiResponse<Map<String, Object>> tenant() {
+        return ApiResponse.success(TenantContextService.currentTenantProfile());
     }
 
     /** 配置项列表（裸数组，字段名按页面 SettingItem）。 */

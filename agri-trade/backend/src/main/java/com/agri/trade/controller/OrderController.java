@@ -20,7 +20,9 @@ import com.agri.trade.mapper.LogisticsMapper;
 import com.agri.trade.mapper.LogisticsTraceMapper;
 import com.agri.trade.service.PlatformIdentityService;
 import com.agri.trade.service.IContractService;
+import com.agri.trade.service.P2tTradeService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.RequiredArgsConstructor;
@@ -48,6 +50,7 @@ public class OrderController {
     private final ProductSkuMapper productSkuMapper;
     private final PlatformIdentityService identityService;
     private final IContractService contractService;
+    private final P2tTradeService p2tTradeService;
 
     /** 能发起退款的订单状态：钱已经在平台手里。待付款、已取消、已退款都没得退。 */
     private static final List<String> REFUNDABLE_ORDER_STATUS =
@@ -74,7 +77,7 @@ public class OrderController {
         }
         TradeProduct product = productMapper.selectById(productId);
         if (product == null) {
-            return ApiResponse.error("货源不存在");
+            return ApiResponse.error(404, "货源不存在");
         }
         // 未上架的货源不能下单：草稿/待审核的货源只有卖家自己能看，不该能被买
         if (!"published".equals(product.getPublishStatus())) {
@@ -94,7 +97,7 @@ public class OrderController {
         ProductSku sku = null;
         if (skuId != null) {
             sku = skus.stream().filter(item -> skuId.equals(item.getId())).findFirst().orElse(null);
-            if (sku == null) return ApiResponse.error("所选商品规格不存在或已停用");
+            if (sku == null) return ApiResponse.error(404, "所选商品规格不存在或已停用");
         } else if (skus.size() == 1) {
             sku = skus.get(0);
         } else if (skus.size() > 1) {
@@ -127,6 +130,28 @@ public class OrderController {
             return ApiResponse.error(mine.error());
         }
 
+        // 原子扣减库存防超卖（乐观锁校验并扣减）
+        if (sku != null) {
+            int deductedSku = productSkuMapper.update(null, new LambdaUpdateWrapper<ProductSku>()
+                    .eq(ProductSku::getId, sku.getId())
+                    .ge(ProductSku::getStockQuantity, quantity)
+                    .setSql("stock_quantity = stock_quantity - " + quantity));
+            if (deductedSku <= 0) {
+                return ApiResponse.error("规格库存不足，下单失败");
+            }
+            productMapper.update(null, new LambdaUpdateWrapper<TradeProduct>()
+                    .eq(TradeProduct::getId, product.getId())
+                    .setSql("stock_quantity = GREATEST(stock_quantity - " + quantity + ", 0)"));
+        } else {
+            int deductedProduct = productMapper.update(null, new LambdaUpdateWrapper<TradeProduct>()
+                    .eq(TradeProduct::getId, product.getId())
+                    .ge(TradeProduct::getStockQuantity, quantity)
+                    .setSql("stock_quantity = stock_quantity - " + quantity));
+            if (deductedProduct <= 0) {
+                return ApiResponse.error("商品库存不足，下单失败");
+            }
+        }
+
         Date now = new Date();
         TradeOrder order = new TradeOrder();
         order.setOrderNo("SO" + System.currentTimeMillis());
@@ -152,6 +177,9 @@ public class OrderController {
         order.setDeliveryContact(str(params.get("deliveryContact")));
         order.setDeliveryPhone(str(params.get("deliveryPhone")));
         order.setSource("product");
+        // 生产直供订单：带上来源供给单号，支付成功后按这张单回写认购量
+        order.setSourceOfferNo(product.getSourceOfferNo());
+        order.setP2tWritebackStatus(product.getSourceOfferNo() == null ? null : "PENDING");
         order.setDelFlag(0);
         order.setCreateTime(now);
         order.setUpdateTime(now);
@@ -229,7 +257,7 @@ public class OrderController {
     @GetMapping("/{id}")
     public ApiResponse<TradeOrder> getOrderById(@PathVariable Long id) {
         TradeOrder order = orderMapper.selectById(id);
-        if (order == null) return ApiResponse.error("订单不存在");
+        if (order == null) return ApiResponse.error(404, "订单不存在");
         String denied = denyIfNotParticipant(order);
         if (denied != null) return ApiResponse.error(denied);
         return ApiResponse.success(order);
@@ -239,7 +267,7 @@ public class OrderController {
     public ApiResponse<List<OrderItem>> getOrderItems(@PathVariable Long id) {
         // 明细同样要判权：光锁住详情、留着明细等于没锁（订单 id 是连号的，猜一个就能看别人的货）。
         TradeOrder order = orderMapper.selectById(id);
-        if (order == null) return ApiResponse.error("订单不存在");
+        if (order == null) return ApiResponse.error(404, "订单不存在");
         String denied = denyIfNotParticipant(order);
         if (denied != null) return ApiResponse.error(denied);
         LambdaQueryWrapper<OrderItem> wrapper = new LambdaQueryWrapper<>();
@@ -303,7 +331,7 @@ public class OrderController {
     @PutMapping("/{id}")
     public ApiResponse<Boolean> updateOrder(@PathVariable Long id, @RequestBody TradeOrder order) {
         TradeOrder existing = orderMapper.selectById(id);
-        if (existing == null) return ApiResponse.error("订单不存在");
+        if (existing == null) return ApiResponse.error(404, "订单不存在");
         String denied = denyIfNotParticipant(existing);
         if (denied != null) return ApiResponse.error(denied);
         // 页面只能补收货信息与备注，不能通过“编辑订单”改金额、参与方或状态。
@@ -324,7 +352,7 @@ public class OrderController {
     @PostMapping("/{id}/status")
     public ApiResponse<Boolean> updateOrderStatus(@PathVariable Long id, @RequestBody java.util.Map<String, String> params) {
         TradeOrder order = orderMapper.selectById(id);
-        if (order == null) return ApiResponse.error("订单不存在");
+        if (order == null) return ApiResponse.error(404, "订单不存在");
         String denied = denyIfNotParticipant(order);
         if (denied != null) return ApiResponse.error(denied);
         
@@ -343,14 +371,43 @@ public class OrderController {
         order.setOrderStatus("cancelled");
         order.setUpdateTime(new Date());
         int result = orderMapper.updateById(order);
+        if (result > 0) {
+            revertOrderStock(order);
+        }
         return result > 0 ? ApiResponse.success(true) : ApiResponse.error("取消失败");
+    }
+
+    private void revertOrderStock(TradeOrder order) {
+        if (order == null || !"product".equals(order.getSource())) return;
+        List<OrderItem> items = itemMapper.selectList(new LambdaQueryWrapper<OrderItem>()
+                .eq(OrderItem::getOrderId, order.getId())
+                .eq(OrderItem::getDelFlag, 0));
+        for (OrderItem item : items) {
+            if (item.getProductId() != null && item.getQuantity() != null && item.getQuantity().signum() > 0) {
+                if (item.getSpecLevel() != null && !item.getSpecLevel().isEmpty()) {
+                    ProductSku sku = productSkuMapper.selectOne(new LambdaQueryWrapper<ProductSku>()
+                            .eq(ProductSku::getProductId, item.getProductId())
+                            .eq(ProductSku::getSkuName, item.getSpecLevel())
+                            .eq(ProductSku::getDelFlag, 0)
+                            .last("LIMIT 1"));
+                    if (sku != null) {
+                        productSkuMapper.update(null, new LambdaUpdateWrapper<ProductSku>()
+                                .eq(ProductSku::getId, sku.getId())
+                                .setSql("stock_quantity = stock_quantity + " + item.getQuantity()));
+                    }
+                }
+                productMapper.update(null, new LambdaUpdateWrapper<TradeProduct>()
+                        .eq(TradeProduct::getId, item.getProductId())
+                        .setSql("stock_quantity = stock_quantity + " + item.getQuantity()));
+            }
+        }
     }
 
     @PostMapping("/{id}/pay")
     @Transactional(rollbackFor = Exception.class)
     public ApiResponse<Boolean> payOrder(@PathVariable Long id, @RequestBody java.util.Map<String, Object> params) {
         TradeOrder order = orderMapper.selectById(id);
-        if (order == null) return ApiResponse.error("订单不存在");
+        if (order == null) return ApiResponse.error(404, "订单不存在");
         PlatformIdentityService.MerchantScope scope = identityService.currentScope();
         if (!scope.resolved()) return ApiResponse.error(scope.error());
         if (!scope.hasBinding() || !scope.merchantIds().contains(order.getBuyerId())) {
@@ -395,6 +452,13 @@ public class OrderController {
             order.setPaymentMethod(paymentMethod);
             order.setUpdateTime(new Date());
             orderMapper.updateById(order);
+            // 支付成功 → 回写生产端认购量。回写失败不影响支付结果，由重试队列补偿。
+            try {
+                p2tTradeService.writebackOrder(order);
+            } catch (Exception e) {
+                org.slf4j.LoggerFactory.getLogger(OrderController.class)
+                        .warn("产销回写异常（订单仍支付成功）：{} {}", order.getOrderNo(), e.getMessage());
+            }
             return ApiResponse.success(true);
         }
         return ApiResponse.error("支付失败");
@@ -406,7 +470,7 @@ public class OrderController {
     public ApiResponse<Logistics> shipOrder(@PathVariable Long id,
                                             @RequestBody(required = false) Map<String, Object> params) {
         TradeOrder order = orderMapper.selectById(id);
-        if (order == null) return ApiResponse.error("订单不存在");
+        if (order == null) return ApiResponse.error(404, "订单不存在");
         PlatformIdentityService.MerchantScope scope = identityService.currentScope();
         if (!scope.resolved()) return ApiResponse.error(scope.error());
         if (!scope.hasBinding() || !scope.merchantIds().contains(order.getSellerId())) {
@@ -474,7 +538,7 @@ public class OrderController {
     public ApiResponse<Boolean> confirmReceipt(@PathVariable Long id,
                                                @RequestBody(required = false) Map<String, Object> params) {
         TradeOrder order = orderMapper.selectById(id);
-        if (order == null) return ApiResponse.error("订单不存在");
+        if (order == null) return ApiResponse.error(404, "订单不存在");
         PlatformIdentityService.MerchantScope scope = identityService.currentScope();
         if (!scope.resolved()) return ApiResponse.error(scope.error());
         if (!scope.hasBinding() || !scope.merchantIds().contains(order.getBuyerId())) {
@@ -510,7 +574,7 @@ public class OrderController {
     @PostMapping("/{id}/refund")
     public ApiResponse<Boolean> applyRefund(@PathVariable Long id, @RequestBody java.util.Map<String, Object> params) {
         TradeOrder order = orderMapper.selectById(id);
-        if (order == null) return ApiResponse.error("订单不存在");
+        if (order == null) return ApiResponse.error(404, "订单不存在");
         String denied = denyIfNotParticipant(order);
         if (denied != null) return ApiResponse.error(denied);
 
@@ -600,7 +664,7 @@ public class OrderController {
     @Transactional(rollbackFor = Exception.class)
     public ApiResponse<Boolean> auditRefund(@PathVariable Long id, @RequestBody java.util.Map<String, String> params) {
         RefundRecord refund = refundMapper.selectById(id);
-        if (refund == null) return ApiResponse.error("退款记录不存在");
+        if (refund == null) return ApiResponse.error(404, "退款记录不存在");
 
         String status = params.get("status");
         if (!"approved".equals(status) && !"rejected".equals(status)) {
@@ -645,6 +709,9 @@ public class OrderController {
                 order.setOrderStatus("refunded");
                 order.setUpdateTime(new Date());
                 orderMapper.updateById(order);
+
+                // 退货退款或整单退款审核通过，回补对应货源的库存
+                revertOrderStock(order);
                 PaymentRecord payment = refund.getPaymentId() == null
                         ? paymentMapper.selectOne(new LambdaQueryWrapper<PaymentRecord>()
                                 .eq(PaymentRecord::getOrderId, order.getId())

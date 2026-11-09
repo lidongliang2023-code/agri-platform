@@ -2,7 +2,7 @@
   <view class="page profile-page">
     <view class="status-bar" :style="{ height: `${statusBarHeight}px` }" />
     <view class="profile-nav">
-      <view class="brand"><view class="brand-mark">丰</view><text>丰链云 · 农联优选</text></view>
+      <view class="brand"><image class="brand-mark" src="/static/fengchain.svg" mode="aspectFill" /><text>丰链云</text></view>
       <text class="platform">{{ platformName }}</text>
     </view>
 
@@ -10,7 +10,7 @@
       <view class="user-avatar">{{ userInitial }}</view>
       <view class="user-copy">
         <template v-if="session.user">
-          <text class="user-name">{{ session.user.nickname || '农联优选会员' }}</text>
+          <text class="user-name">{{ session.user.nickname || '丰链云会员' }}</text>
           <text class="user-phone">{{ maskedPhone }}</text>
           <view class="member-row">
             <text class="member-level">{{ session.user.memberLevel || '普通会员' }}</text>
@@ -69,7 +69,7 @@
     </view>
 
     <button v-if="session.user" class="logout-button" @tap="logout">退出登录</button>
-    <text class="version">丰链云优选 v1.0.0</text>
+    <text class="version">丰链云 v1.0.0</text>
   </view>
 </template>
 
@@ -171,7 +171,7 @@ function logout() {
   border: 1rpx solid #dce7df;
   border-radius: 999rpx;
   color: #718277;
-  font-size: 17rpx;
+  font-size: 24rpx;
 }
 
 .user-card {
@@ -220,7 +220,7 @@ function logout() {
 .user-phone {
   margin-top: 7rpx;
   color: rgba(255, 255, 255, 0.66);
-  font-size: 20rpx;
+  font-size: 24rpx;
 }
 
 .member-row {
@@ -235,12 +235,12 @@ function logout() {
   border-radius: 999rpx;
   background: rgba(159, 231, 184, 0.16);
   color: #c9f2d7;
-  font-size: 17rpx;
+  font-size: 24rpx;
 }
 
 .member-code {
   color: rgba(255, 255, 255, 0.42);
-  font-size: 16rpx;
+  font-size: 24rpx;
   letter-spacing: 1rpx;
 }
 
@@ -251,7 +251,7 @@ function logout() {
   border-radius: 14rpx;
   background: #fff;
   color: #0e5233;
-  font-size: 21rpx;
+  font-size: 24rpx;
   font-weight: 700;
   line-height: 62rpx;
 }
@@ -289,7 +289,7 @@ function logout() {
 .stats-row text {
   margin-top: 6rpx;
   color: #84938a;
-  font-size: 18rpx;
+  font-size: 24rpx;
 }
 
 .section-label {
@@ -303,7 +303,7 @@ function logout() {
 
 .section-label text {
   color: #12764a;
-  font-size: 16rpx;
+  font-size: 24rpx;
   font-weight: 700;
   letter-spacing: 2rpx;
 }
@@ -344,7 +344,7 @@ function logout() {
   border-radius: 15rpx;
   background: #eaf7ef;
   color: #12764a;
-  font-size: 21rpx;
+  font-size: 24rpx;
   font-weight: 800;
 }
 
@@ -367,7 +367,7 @@ function logout() {
 .menu-copy small {
   margin-top: 5rpx;
   color: #93a29a;
-  font-size: 18rpx;
+  font-size: 24rpx;
 }
 
 .menu-arrow {
@@ -397,7 +397,7 @@ function logout() {
 .platform-desc {
   margin-top: 8rpx;
   color: #718277;
-  font-size: 19rpx;
+  font-size: 24rpx;
   line-height: 1.55;
 }
 
@@ -414,7 +414,7 @@ function logout() {
   border-radius: 18rpx;
   background: #fff;
   color: #c54b4b;
-  font-size: 23rpx;
+  font-size: 24rpx;
   line-height: 74rpx;
 }
 
@@ -422,7 +422,7 @@ function logout() {
   display: block;
   margin: 28rpx 0 10rpx;
   color: #a4aea8;
-  font-size: 17rpx;
+  font-size: 24rpx;
   text-align: center;
 }
 </style>

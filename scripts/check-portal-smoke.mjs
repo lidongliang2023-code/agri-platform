@@ -37,8 +37,8 @@ const check = (ok, label, extra = '') => {
 /** 每条路由：必须出现的关键文案。 */
 const ROUTES = [
   { hash: '#/', expect: ['从田间到餐桌', '平台公告'], label: '首页' },
-  { hash: '#/chains', expect: ['产业链频道', '在售商品'], label: '产业链' },
   { hash: '#/hall', expect: ['交易大厅'], label: '交易大厅' },
+  { hash: '#/chains', expect: ['交易大厅'], label: '产业链旧链接跳转交易大厅' },
   { hash: '#/finance', expect: ['供应链金融'], label: '金融服务' },
   { hash: '#/logistics', expect: ['物流', '服务'], label: '物流服务' },
   { hash: '#/certify', expect: ['认证', '所需材料'], label: '认证说明' },

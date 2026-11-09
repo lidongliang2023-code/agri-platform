@@ -377,7 +377,7 @@ function goBack() {
 .match-reason {
   display: block;
   color: #53665a;
-  font-size: 23rpx;
+  font-size: 24rpx;
   line-height: 1.68;
 }
 
@@ -427,6 +427,6 @@ function goBack() {
   border-radius: 8rpx;
   background: #f3eaf9;
   color: #6b418d;
-  font-size: 19rpx;
+  font-size: 24rpx;
 }
 </style>

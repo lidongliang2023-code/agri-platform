@@ -2,7 +2,7 @@
  * 生产主链路端到端联调（用户端 + 运营端 + 数据库落库）
  *
  * 链路：
- *   地块 → 种养计划 → 提交审批 → 运营审批通过 → 计划进入进行中
+ *   地块 → 种养计划 → 提交审批 → 主体内部审批通过 → 计划进入进行中
  *   → 计划阶段 → 农事任务（开始/提交/验收）→ 阶段完成
  *   → 投入品入库 → 使用记录自动扣库并写流水
  *   → 采收批次 → 溯源码 → 入库库存与流水
@@ -13,6 +13,9 @@
  */
 import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
+
+const originalFetch = globalThis.fetch
+globalThis.fetch = (url, options = {}) => originalFetch(url, { ...options, signal: options.signal ?? AbortSignal.timeout(20000) })
 
 const CORE = 'http://localhost:8093'
 const GW = 'http://localhost'
@@ -107,9 +110,11 @@ check(Boolean(adminToken) && Boolean(farmerToken) && Boolean(luochuanToken),
   '取得运营端、用户端与另一主体的令牌')
 
 try {
-  const farms = await api(farmerToken, 'GET', '/farms?page=1&size=1')
-  const farmId = farms?.records?.[0]?.id
-  check(Boolean(farmId), '读取当前租户农场', `farm=${farmId}`)
+  // 任务必须派发给本农场的在岗成员才能开始执行，所以先找在岗成员，再用他所在的农场做整条链路
+  const allMembers = await api(farmerToken, 'GET', '/members?page=1&size=100')
+  const activeMember = (allMembers?.records ?? allMembers?.list ?? []).find((row) => Number(row.status) === 1 && row.farmId)
+  const farmId = activeMember ? Number(activeMember.farmId) : undefined
+  check(Boolean(farmId), '读取有在岗成员的当前主体农场', `farm=${farmId} member=${activeMember?.memberId ?? ''}`)
 
   const plot = await api(farmerToken, 'POST', '/plots', {
     plotName: `联调地块-${suffix}`, farmId, area: 12.5, soilType: '壤土', status: 1,
@@ -139,19 +144,14 @@ try {
   const pendingPlan = await api(farmerToken, 'GET', `/plans/${ids.plan}`)
   check(pendingPlan?.status === 5, '用户端提交计划后进入待审批', `status=${pendingPlan?.status}`)
 
-  const approvals = await api(adminToken, 'GET', `/admin/approvals?page=1&size=50&status=1&approvalType=PLAN`)
-  const approval = (approvals?.records ?? approvals?.list ?? []).find((row) => String(row.bizId) === ids.plan)
-  ids.approval = String(approval?.approvalId ?? '')
-  check(Boolean(ids.approval), '运营端审批台账出现计划审批单', `approval=${ids.approval}`)
-
-  await api(adminToken, 'PATCH', `/admin/approvals/${ids.approval}/approve`, { remark: `联调通过-${suffix}` })
+  await api(farmerToken, 'POST', `/plans/${ids.plan}/approve`, { comment: `联调主体内审批-${suffix}` })
   const approvedPlan = await api(farmerToken, 'GET', `/plans/${ids.plan}`)
-  const approvalAfter = sql(`SELECT CONCAT(status,'|',IFNULL(approve_opinion,'')) FROM agri_production.agri_prod_approval WHERE approval_code = '${ids.approval}'`)
-  check(approvedPlan?.status === 2 && approvalAfter.startsWith('APPROVED|'),
-    '运营审批通过后计划进入进行中且审批意见落库', `plan=${approvedPlan?.status} approval=${approvalAfter}`)
+  const approvalAfter = sql(`SELECT plan_status FROM agri_production.agri_prod_planting_plan WHERE id = '${ids.plan}'`)
+  check(approvedPlan?.status === 2 && approvalAfter === 'active',
+    '主体内部审批通过后计划进入进行中且状态落库', `plan=${approvedPlan?.status} db=${approvalAfter}`)
 
   const members = await api(farmerToken, 'GET', `/members?page=1&size=10&farmId=${farmId}`)
-  const member = (members?.records ?? members?.list ?? []).find((row) => row.status === 1) ?? members?.records?.[0]
+  const member = (members?.records ?? members?.list ?? []).find((row) => Number(row.status) === 1) ?? activeMember
   ids.task = String(await api(farmerToken, 'POST', '/tasks', {
     taskName: `联调农事任务-${suffix}`, taskType: 'fertilizing', priority: 3,
     farmId, plotId: ids.plot, planId: ids.plan, stageId: ids.stage,
@@ -199,6 +199,15 @@ try {
   const traceRows = sql(`SELECT COUNT(*) FROM agri_production.agri_prod_trace_code WHERE harvest_id = '${ids.batch}' AND deleted = 0`)
   check(Boolean(generated?.traceCode) && traceRows === '1' && Number(generated?.traceGenerated) === 1,
     '采收批次生成溯源码并写入溯源码台账', `code=${generated?.traceCode} rows=${traceRows}`)
+
+  // 先验证正常生成码可以扫码；后续质检不合格会冻结批次，冻结后扫码应被拒绝。
+  const scannedCode = generated.traceCode
+  await api(farmerToken, 'POST', `/trace/scan?code=${scannedCode}`)
+  const scannedProfile = await api(farmerToken, 'GET', `/trace/codes/${scannedCode}`)
+  check(Boolean(scannedProfile?.firstQueryTime) && scannedProfile?.queryCount === 1
+    && Boolean(scannedProfile?.plotName),
+    '扫码后回显首次扫码时间与地块编号（firstQueryTime/plotName 真的有值）',
+    `first=${scannedProfile?.firstQueryTime ?? ''} plot=${scannedProfile?.plotName ?? ''}`)
 
   await api(farmerToken, 'POST', '/harvests/inventory/in', {
     batchId: ids.batch, warehouseName: '联调主仓', quantity: 100, operatorName: '联调操作员',
@@ -546,15 +555,6 @@ try {
   check((pageSizeChanged?.records ?? []).length === 5 && pageSizeChanged?.total === 12,
     '改每页条数由服务端返回对应条数（不是本地切同一批数据）',
     `rows=${(pageSizeChanged?.records ?? []).length}`)
-
-  // 首次扫码时间与地块：这两个键以前页面读的是后端根本不返回的名字，永远显示"暂无/-"
-  const scannedCode = page1Codes[0]
-  await api(farmerToken, 'POST', `/trace/scan?code=${scannedCode}`)
-  const scannedProfile = await api(farmerToken, 'GET', `/trace/codes/${scannedCode}`)
-  check(Boolean(scannedProfile?.firstQueryTime) && scannedProfile?.queryCount === 1
-    && Boolean(scannedProfile?.plotName),
-    '扫码后回显首次扫码时间与地块编号（firstQueryTime/plotName 真的有值）',
-    `first=${scannedProfile?.firstQueryTime ?? ''} plot=${scannedProfile?.plotName ?? ''}`)
 
   // 人为作废与到期失效是两件事：库里 revoked / expired 两个取值要各自筛得出来，页面才谈得上两种文案。
   // 这里另起一条没有到期日的码来作废 —— 别拿 pastCode 那批，它们的组合会把两个维度搅在一起看不清。

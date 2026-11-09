@@ -68,6 +68,7 @@ public class SsoController {
     private final MerchantMapper merchantMapper;
     private final UserMerchantMapper userMerchantMapper;
     private final MfaService mfaService;
+    private final com.agri.platform.internal.permission.UserPermissionService userPermissionService;
     /** 账号侧策略：注册开关 / 注册方式（运营端可改） */
     private final com.agri.platform.internal.uc.AccountPolicyService accountPolicy;
 
@@ -80,7 +81,7 @@ public class SsoController {
                                           @RequestParam(value = "code_challenge_method", required = false) String codeChallengeMethod,
                                           HttpServletRequest request) {
         assertClient(clientId, redirectUri);
-        long[] session = sessionService.resolve(request);
+        long[] session = sessionService.resolve(request, clientId);
         if (session == null) {
             // 未登录：原始 query 原样带走，避免"这里拼一遍、登录页再拼一遍"两处不一致
             String query = request.getQueryString();
@@ -99,9 +100,11 @@ public class SsoController {
                 authService.authenticate(new LoginRequest(request.username(), request.password(), request.marketId(),
                         request.phone()));
         assertIdentity(user.userId(), request.identity());
-        sessionService.create(user.userId(), user.marketId(), Boolean.TRUE.equals(request.remember()), response);
+        sessionService.createForClient(user.userId(), user.marketId(), Boolean.TRUE.equals(request.remember()),
+                request.clientId(), response);
         SmsAuthService.OnboardingStatus onboarding = smsAuthService.onboardingStatus(user.userId(), user.marketId());
-        if (!"done".equals(onboarding.stage())) {
+        if (!canEnterUserCenterOperations(user.userId(), user.marketId(), request.clientId())
+                && !"done".equals(onboarding.stage())) {
             return ApiResponse.ok(new SsoLoginResult(null, onboarding.stage()));
         }
         String code = codeService.issue(user.userId(), user.marketId(), request.clientId(), request.redirectUri(),
@@ -110,14 +113,18 @@ public class SsoController {
     }
 
     /**
-     * 发送手机验证码（登录 / 注册共用）。
-
+     * 发送手机验证码（登录 / 注册 / 找回密码）。
      *
      * <p>短信通道未配置真实服务商时（{@code agri.auth.sms.mode=none}）**直接拒绝**并说明原因；
      * dev 模式下验证码只写**后端日志**，不回响应体 —— 页面流程与生产一致，不会把验证码漏给前端。</p>
+     *
+     * <p>这是公开端点，因此只允许 {@code login / register / reset_password} 三个场景。
+     * 换绑手机（change_phone）不在这里发：未登录就能对任意号码发码，等于谁都能替别人
+     * 触发短信并把对方刚要用的码顶掉，改走 {@code POST /api/v1/sso/account/phone/code}。</p>
      */
     @PostMapping("/sms/code")
     public ApiResponse<SmsCodeSentResult> sendSmsCode(@Valid @RequestBody SmsCodeRequest request) {
+        SmsAuthService.assertPublicScene(request.scene());
         smsAuthService.send(request.phone(), request.scene());
         return ApiResponse.ok(new SmsCodeSentResult(true, smsAuthService.devMode(),
                 smsAuthService.devMode() ? "开发模式：验证码已写入后端日志（不回传、不入库明文）"
@@ -238,6 +245,10 @@ public class SsoController {
     private StandaloneLoginResult standaloneResult(LoginVO login, Long marketId) {
         SmsAuthService.OnboardingStatus onboarding = smsAuthService.onboardingStatus(login.user().id(), marketId);
         String stage = onboarding.stage();
+        if (userPermissionService.resolvePlatform(login.user().id()).has("uc:admin")) {
+            return new StandaloneLoginResult("done", "/user-center-ops/", login.user(),
+                    login.accessToken(), login.expiresIn(), false, null);
+        }
         String redirect;
         if (!"done".equals(stage)) {
             redirect = "/register?step=" + ("subject".equals(stage) ? 2 : 3);
@@ -322,12 +333,15 @@ public class SsoController {
     /** 分步注册第 3 步：激活 draft 认证为 pending，并可选签发回跳授权码。 */
     @PostMapping("/onboarding/certification")
     public ApiResponse<ActivateCertificationResult> activateCertification(
-            @RequestBody(required = false) CertificationContext request, HttpServletRequest httpRequest) {
+            @RequestBody(required = false) CertificationContext request, HttpServletRequest httpRequest,
+            HttpServletResponse response) {
         long[] session = requireSession(httpRequest);
         SmsAuthService.OnboardingStatus status = smsAuthService.activateCertification(session[0], session[1]);
         String redirect = null;
         if (request != null && trimToNull(request.clientId()) != null && trimToNull(request.redirectUri()) != null) {
             assertClient(request.clientId(), request.redirectUri());
+            // 分步注册只建了全局会话；这里补写子系统专属会话，注册完成后回跳即可直接进入
+            sessionService.createForClient(session[0], session[1], true, request.clientId(), response);
             String code = codeService.issue(session[0], session[1], request.clientId(), request.redirectUri(),
                     request.codeChallenge(), request.codeChallengeMethod());
             redirect = callback(request.redirectUri(), code, request.state());
@@ -379,13 +393,29 @@ public class SsoController {
     private SsoLoginResult signIn(Long userId, Long marketId, String clientId, String redirectUri, String state,
                                   String codeChallenge, String codeChallengeMethod, boolean remember,
                                   HttpServletResponse response) {
-        sessionService.create(userId, marketId, remember, response);
+        if (clientId == null || clientId.isBlank()) {
+            sessionService.create(userId, marketId, remember, response);
+        } else {
+            sessionService.createForClient(userId, marketId, remember, clientId, response);
+        }
         SmsAuthService.OnboardingStatus onboarding = smsAuthService.onboardingStatus(userId, marketId);
-        if (!"done".equals(onboarding.stage())) {
+        if (!canEnterUserCenterOperations(userId, marketId, clientId)
+                && !"done".equals(onboarding.stage())) {
             return new SsoLoginResult(null, onboarding.stage());
         }
         String code = codeService.issue(userId, marketId, clientId, redirectUri, codeChallenge, codeChallengeMethod);
         return new SsoLoginResult(callback(redirectUri, code, state));
+    }
+
+    /** 运营履职不依赖经营主体认证；权限仍按当前市场实时解析。 */
+    private boolean canEnterUserCenterOperations(Long userId, Long marketId, String clientId) {
+        if ("user-center-ops".equals(clientId) || "portal".equals(clientId)) {
+            return userPermissionService.resolvePlatform(userId).has("uc:admin");
+        }
+        if ("gov-ops".equals(clientId)) {
+            return userPermissionService.resolve(userId, marketId).has("gov:admin");
+        }
+        return false;
     }
 
     /** 换票端点：code + PKCE → 平台令牌（访问令牌在响应体，刷新令牌进 HttpOnly Cookie） */
@@ -398,6 +428,8 @@ public class SsoController {
         codeService.verifyPkce(code, request.codeVerifier());
         AuthOutcome outcome = authService.issueTokens(code.userId(), code.marketId());
         cookieSupport.write(response, outcome.refreshToken());
+        // 子系统专属刷新令牌：避免 A 子系统刷新时拿到 B 子系统账号的令牌
+        cookieSupport.writeForClient(response, outcome.refreshToken(), code.clientId());
         return ApiResponse.ok(outcome.body());
     }
 
@@ -424,7 +456,8 @@ public class SsoController {
         if (allowed == null || allowed.isEmpty()) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "未注册的 client_id：" + clientId);
         }
-        sessionService.destroy(request, response);
+        sessionService.destroy(request, response, clientId);
+        cookieSupport.clearForClient(response, clientId);
         // 回到该客户端注册在案的第一个来源（取自配置白名单，不是请求参数 —— 避免开放重定向）
         return redirect(allowed.get(0) + "?logout=1");
     }

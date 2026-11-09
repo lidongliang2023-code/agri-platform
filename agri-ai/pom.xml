@@ -13,7 +13,7 @@
     <artifactId>agri-ai</artifactId>
     <packaging>jar</packaging>
     <name>agri-ai</name>
-    <description>AI能力中台模块</description>
+    <description>现代农业产业互联网平台 AI中台子系统</description>
 
     <properties>
         <maven.compiler.source>17</maven.compiler.source>
@@ -22,6 +22,10 @@
     </properties>
 
     <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
         <dependency>
             <groupId>com.agri</groupId>
             <artifactId>agri-common</artifactId>
@@ -33,10 +37,25 @@
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
 
+        <!-- 平台统一单点登录与RBAC鉴权组件 (Sa-Token) -->
+        <dependency>
+            <groupId>cn.dev33</groupId>
+            <artifactId>sa-token-spring-boot3-starter</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
             <optional>true</optional>
         </dependency>
     </dependencies>
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <executions><execution><goals><goal>repackage</goal></goals></execution></executions>
+            </plugin>
+        </plugins>
+    </build>
 </project>

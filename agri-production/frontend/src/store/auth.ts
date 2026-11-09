@@ -78,6 +78,20 @@ export interface LoginPayload {
   marketId?: number | null
 }
 
+/**
+ * 是否正在执行「显式退出登录」的整页 SSO 登出跳转。
+ *
+ * <p>显式退出会先清空登录态再跳转 SSO；如果路由守卫此时照常导航到登录页，
+ * 登录页的 SSO 闸门会在 SSO 会话尚未销毁时再次发起授权，形成中间页闪现。
+ * 置位后守卫改为等待跳转，不再插入登录页。</p>
+ */
+let redirectingToSsoLogout = false
+
+/** 路由守卫用于判断当前是否处于退出登录跳转中 */
+export function isRedirectingToSsoLogout(): boolean {
+  return redirectingToSsoLogout
+}
+
 /** 登出选项 */
 export interface LogoutOptions {
   /**
@@ -175,6 +189,7 @@ const useAuthStore = create<AuthState>((set, get) => ({
     roles,
     marketId,
   }) => {
+    redirectingToSsoLogout = false
     // 用户资料 / 权限 / 角色 / 市场是界面态，可持久化；令牌一律不落盘
     localStorage.setItem('agri_user_info', JSON.stringify(userInfo))
     localStorage.setItem('agri_permissions', JSON.stringify(permissions))
@@ -203,6 +218,10 @@ const useAuthStore = create<AuthState>((set, get) => ({
   setAuthReady: (ready: boolean) => set({ authReady: ready }),
 
   logout: (options?: LogoutOptions) => {
+    if (options?.sso !== false) {
+      // 显式退出：从这一刻起由 SSO 登出整页跳转接管，守卫不要再插中间登录页
+      redirectingToSsoLogout = true
+    }
     localStorage.removeItem(ROLES_KEY)
     localStorage.removeItem(MARKET_ID_KEY)
     localStorage.removeItem('agri_user_info')

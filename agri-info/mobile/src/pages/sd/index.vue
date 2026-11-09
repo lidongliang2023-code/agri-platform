@@ -226,7 +226,7 @@ function badgeTone(badge: string) {
   height: 100%;
   flex: 1;
   color: #0b1a12;
-  font-size: 23rpx;
+  font-size: 24rpx;
 }
 
 .ph {
@@ -237,7 +237,7 @@ function badgeTone(badge: string) {
   padding: 10rpx 16rpx;
   border: 1rpx solid rgba(255, 255, 255, 0.2);
   border-radius: 14rpx;
-  font-size: 21rpx;
+  font-size: 24rpx;
 }
 
 .stat-grid {
@@ -305,7 +305,7 @@ function badgeTone(badge: string) {
   border-radius: 8rpx;
   background: #f3eaf9;
   color: #6b418d;
-  font-size: 19rpx;
+  font-size: 24rpx;
   font-weight: 650;
 }
 
@@ -313,7 +313,7 @@ function badgeTone(badge: string) {
   display: block;
   margin-top: 10rpx;
   color: #718277;
-  font-size: 21rpx;
+  font-size: 24rpx;
   line-height: 1.55;
 }
 
@@ -357,7 +357,7 @@ function badgeTone(badge: string) {
 
 .link {
   color: #12764a;
-  font-size: 21rpx;
+  font-size: 24rpx;
   font-weight: 600;
 }
 

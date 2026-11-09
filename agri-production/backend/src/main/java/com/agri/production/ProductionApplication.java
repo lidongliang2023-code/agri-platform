@@ -6,7 +6,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cloud.openfeign.EnableFeignClients;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
-@SpringBootApplication
+@SpringBootApplication(scanBasePackages = {"com.agri.production", "com.agri.common.ai"})
 @MapperScan("com.agri.production.mapper")
 @EnableFeignClients
 // 领域事件中继（DomainEventRelay）用 @Scheduled 轮询 outbox，没有这个注解调度器不启动 ——

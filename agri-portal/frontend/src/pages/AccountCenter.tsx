@@ -268,6 +268,8 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
   const [passwords, setPasswords] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' })
   const [phoneForm, setPhoneForm] = useState({ phone: '', code: '' })
   const [codeLeft, setCodeLeft] = useState(0)
+  /** 已经发过码的号码：只有它和当前输入的号码一致时才允许提交，避免"填了码但那条码根本没发给这个号" */
+  const [codeSentFor, setCodeSentFor] = useState('')
   const [addresses, setAddresses] = useState<AddressRow[]>([])
   const [addressEditing, setAddressEditing] = useState<string | null>(null)
   const [addressForm, setAddressForm] = useState({ ...emptyAddress })
@@ -429,28 +431,44 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
     }
   }
 
+  /** 换绑手机的三条门槛：合法号、不等于当前号、验证码位数够。页面与后端同一口径，谁先说都不算骗人。 */
+  const phoneValid = /^1[3-9]\d{9}$/.test(phoneForm.phone)
+  const phoneSameAsCurrent = Boolean(summary?.phone) && phoneForm.phone === summary?.phone
+  const phoneCodeReady = codeSentFor === phoneForm.phone && /^\d{6}$/.test(phoneForm.code)
+
   const sendPhoneCode = async (): Promise<void> => {
-    if (!/^1[3-9]\d{9}$/.test(phoneForm.phone)) return setError('请输入正确的手机号')
-    const result = await api<{ hint?: string }>('/api/v1/sso/sms/code', {
+    setError('')
+    if (!phoneValid) return setError('请输入正确的 11 位手机号')
+    if (phoneSameAsCurrent) return setError('新手机号与当前绑定的手机号相同，无需变更')
+    const result = await api<{ hint?: string; devMode?: boolean }>('/api/v1/sso/account/phone/code', {
       method: 'POST',
-      body: JSON.stringify({ phone: phoneForm.phone, scene: 'change_phone' }),
+      body: JSON.stringify({ phone: phoneForm.phone }),
     })
     if (result.code !== 0) return setError(result.message ?? '验证码发送失败')
+    setCodeSentFor(phoneForm.phone)
     setCodeLeft(60)
     flash(result.data?.hint ?? '验证码已发送')
   }
 
   const changePhone = async (event: FormEvent): Promise<void> => {
     event.preventDefault()
+    if (!phoneValid) return setError('请输入正确的 11 位手机号')
+    if (!phoneCodeReady) return setError(codeSentFor !== phoneForm.phone
+      ? '请先给这个号码获取验证码（换过号码要重新获取）'
+      : '验证码是 6 位数字')
     setBusy(true)
     try {
-      const result = await api('/api/v1/sso/account/phone', {
+      const result = await api<{ loginNameChanged?: boolean }>('/api/v1/sso/account/phone', {
         method: 'POST',
         body: JSON.stringify(phoneForm),
       })
       if (result.code !== 0) return setError(result.message ?? '手机号变更失败')
       setPhoneForm({ phone: '', code: '' })
-      flash('手机号已变更')
+      setCodeSentFor('')
+      // 登录名可能就是旧手机号：换号后登录名一起变，不写清楚用户会拿旧号登录不上还以为账号丢了
+      flash(result.data?.loginNameChanged
+        ? '手机号已变更，登录名同步改为新手机号'
+        : '手机号已变更')
       await load()
     } finally {
       setBusy(false)
@@ -784,7 +802,7 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
   const securityTitle = securityPage === 'password' ? '修改密码' : '变更手机号'
   const securityDescription = securityPage === 'password'
     ? '设置新的登录密码'
-    : '通过短信验证更换绑定手机号'
+    : '先验证新号码收得到短信，再换绑（登录名是手机号时会同步变更）'
   const pageTitle = pendingItem
     ? pendingItem.label
     : tab === 'profile' && profileEditing
@@ -1095,18 +1113,37 @@ export function AccountCenter({ initialTab }: { initialTab?: string | null }): J
       )}
 
       {tab === 'security' && securityPage === 'phone' && (
-        <form className="card account-card account-security-page" onSubmit={(event) => void changePhone(event)}>
-            <div className="account-card-head"><h2>变更手机号</h2><span>当前：{summary.phone || '未绑定'}</span></div>
-            <label>新手机号<input className="input" value={phoneForm.phone} maxLength={11} onChange={(event) => setPhoneForm({ ...phoneForm, phone: event.target.value.replace(/\D/g, '') })} /></label>
+        <form className="card account-card account-security-page account-phone-form" onSubmit={(event) => void changePhone(event)}>
+            <div className="account-card-head">
+              <h2>变更手机号</h2>
+              <span>当前绑定：{summary?.phone || '未绑定'}</span>
+            </div>
+            <label>新手机号<input className="input" value={phoneForm.phone} maxLength={11}
+              placeholder="11 位大陆手机号"
+              onChange={(event) => setPhoneForm({ ...phoneForm, phone: event.target.value.replace(/\D/g, '') })} /></label>
+            {phoneSameAsCurrent && <p className="account-field-warning">这个号码就是当前绑定的号码，换绑请填新号码。</p>}
             <label>短信验证码
               <div className="account-code-row">
-                <input className="input" value={phoneForm.code} maxLength={6} onChange={(event) => setPhoneForm({ ...phoneForm, code: event.target.value.replace(/\D/g, '') })} />
-                <button type="button" className="btn btn-outline" disabled={codeLeft > 0} onClick={() => void sendPhoneCode()}>
+                <input className="input" value={phoneForm.code} maxLength={6} placeholder="6 位数字"
+                  onChange={(event) => setPhoneForm({ ...phoneForm, code: event.target.value.replace(/\D/g, '') })} />
+                <button type="button" className="btn btn-outline"
+                  disabled={busy || codeLeft > 0 || !phoneValid || phoneSameAsCurrent}
+                  onClick={() => void sendPhoneCode()}>
                   {codeLeft > 0 ? `${codeLeft}s` : '获取验证码'}
                 </button>
               </div>
             </label>
-            <button className="btn btn-primary" disabled={busy}>{busy ? '提交中…' : '确认变更'}</button>
+            <p className="account-field-hint">
+              {codeSentFor && codeSentFor !== phoneForm.phone
+                ? '验证码是上一条号码的：换了号码要重新获取。'
+                : '验证码 5 分钟内有效、只用一次；同一号码 60 秒内不重发，当日有发送上限（由运营端参数配置决定）。'}
+            </p>
+            {summary?.username === summary?.phone && (
+              <p className="account-field-warning">
+                这个账号的登录名就是当前手机号，换绑后<b>登录名会一起变成新号码</b>，以后请用新号码登录。
+              </p>
+            )}
+            <button className="btn btn-primary" disabled={busy || !phoneCodeReady}>{busy ? '提交中…' : '确认变更'}</button>
         </form>
       )}
 

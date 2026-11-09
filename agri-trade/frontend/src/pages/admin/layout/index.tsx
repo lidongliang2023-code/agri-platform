@@ -29,7 +29,13 @@ const MENU_LABELS: Record<string, string> = {
   '/admin/trade/report': '报表',
   '/admin/trade/guarantee': '保证金管理',
   '/admin/trade/contract-template': '合同模板',
-  '/admin/trade/carrier': '承运商管理'
+  '/admin/trade/carrier': '承运商管理',
+  '/admin/trade/p2t/orders': '撮合订单与回写',
+  '/admin/trade/p2t/recon': '产销对账',
+  '/admin/trade/p2t/rules': '对接规则配置',
+  '/admin/trade/p2t/diffs': '差异与异常处置',
+  '/admin/trade/p2t/trace': '全链路追踪',
+  '/admin/trade/p2t/boundary': '边界与归位说明'
 }
 
 const adminTheme = {
@@ -120,7 +126,7 @@ export default function AdminLayout() {
       <Sider width={224} className="admin-side">
         <div className="admin-brand">
           <span className="admin-brand-logo"><BrandMark size={34} /></span>
-          <span className="admin-brand-text">丰链云<small>OPS CENTER</small></span>
+          <span className="admin-brand-text">丰链云<small>FENGCHAIN · AGRI</small></span>
         </div>
         <div className="admin-side-title">平台运营中心</div>
         <Menu
@@ -149,6 +155,22 @@ export default function AdminLayout() {
               ],
             },
             { key: '/admin/trade/order', icon: <FileSearchOutlined />, label: '订单监管' },
+            {
+              // 产销对接：平台只看回写、对账、差异与规则。
+              // 「供给池审核」与「建品上架」已下线——那两步是对接双方的事，
+              // 由供应商主体在卖家中心（/member/seller?tab=p2t）自己承接。
+              key: 'p2t',
+              icon: <SwapOutlined />,
+              label: '产销对接',
+              children: [
+                { key: '/admin/trade/p2t/orders', icon: <FileTextOutlined />, label: '撮合订单与回写' },
+                { key: '/admin/trade/p2t/recon', icon: <AccountBookOutlined />, label: '产销对账' },
+                { key: '/admin/trade/p2t/rules', icon: <SettingOutlined />, label: '对接规则配置' },
+                { key: '/admin/trade/p2t/diffs', icon: <AlertOutlined />, label: '差异与异常处置' },
+                { key: '/admin/trade/p2t/trace', icon: <FileSearchOutlined />, label: '全链路追踪' },
+                { key: '/admin/trade/p2t/boundary', icon: <SafetyOutlined />, label: '边界与归位说明' },
+              ],
+            },
             { key: '/admin/trade/settlement', icon: <AccountBookOutlined />, label: '结算与分账' },
             { key: 'external-catalog', icon: <AppstoreAddOutlined />, label: '商品与分类（主数据）' },
             { key: '/admin/trade/dispute', icon: <TeamOutlined />, label: '纠纷仲裁' },

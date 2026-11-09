@@ -39,7 +39,7 @@ async function load() {
 <style scoped lang="scss">
 .section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20rpx; }
 .title { font-size: 34rpx; font-weight: 760; }
-.order-no { font-family: monospace; font-size: 21rpx; font-weight: 650; }
+.order-no { font-family: monospace; font-size: 24rpx; font-weight: 650; }
 .order-name { display: block; margin-top: 14rpx; font-size: 26rpx; font-weight: 700; }
 .order-card > .muted { display: block; margin-top: 6rpx; }
 .foot { margin-top: 16rpx; padding-top: 14rpx; border-top: 1rpx solid #edf2ee; }

@@ -1,0 +1,68 @@
+.production-page-container .ant-page-header {
+  padding: 16px 24px;
+  background: transparent;
+}
+.production-page-container .ant-page-header-heading {
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.production-page-container .ant-page-header-heading-left {
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.production-page-container .ant-page-header-heading-title,
+.production-custom-page-header .production-page-heading {
+  margin: 0;
+  font-size: 22px !important;
+  line-height: 32px;
+  font-weight: 600;
+  color: #173e2c;
+}
+.production-page-container .ant-page-header-heading-sub-title {
+  margin-inline-start: 0;
+  font-size: 14px;
+  color: #6b8074;
+}
+.production-page-container .ant-page-header-heading-extra {
+  margin-inline-start: auto;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.production-custom-page-header.ant-card {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.production-custom-page-header.ant-card > .ant-card-body {
+  padding: 0 0 8px;
+}
+.production-custom-page-header .ant-space {
+  flex-wrap: wrap;
+}
+.production-custom-page-header .anticon {
+  font-size: 20px;
+  color: #23744c;
+}
+.production-custom-page-header .ant-btn .anticon {
+  font-size: 14px;
+  color: inherit;
+}
+.production-page-header-row {
+  gap: 12px;
+  margin-bottom: 16px;
+}
+@media (max-width: 767px) {
+  .production-page-container .ant-page-header { padding: 12px 16px; }
+  .production-page-container .ant-page-header-heading-extra {
+    width: 100%;
+    margin: 0;
+    justify-content: flex-end;
+  }
+  .production-custom-page-header .production-page-heading,
+  .production-page-container .ant-page-header-heading-title { font-size: 20px !important; }
+}

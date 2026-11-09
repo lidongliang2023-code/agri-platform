@@ -58,7 +58,7 @@ public class DisputeController {
     @GetMapping("/{id}")
     public ApiResponse<Dispute> getDisputeById(@PathVariable Long id) {
         Dispute dispute = disputeMapper.selectById(id);
-        if (dispute == null) return ApiResponse.error("纠纷不存在");
+        if (dispute == null) return ApiResponse.error(404, "纠纷不存在");
         String denied = denyIfNotParticipant(dispute);
         if (denied != null) return ApiResponse.error(denied);
         return ApiResponse.success(dispute);
@@ -77,7 +77,7 @@ public class DisputeController {
         }
         TradeOrder order = orderMapper.selectById(dispute.getOrderId());
         if (order == null) {
-            return ApiResponse.error("订单不存在");
+            return ApiResponse.error(404, "订单不存在");
         }
         Long me = mine.merchantId();
         // 只能对"自己参与的订单"发起纠纷。原先不校验订单归属 —— 任何人都能
@@ -137,7 +137,7 @@ public class DisputeController {
     @com.agri.common.rbac.OperatorOnly
     public ApiResponse<Boolean> mediationDispute(@PathVariable Long id, @RequestBody java.util.Map<String, String> params) {
         Dispute dispute = disputeMapper.selectById(id);
-        if (dispute == null) return ApiResponse.error("纠纷不存在");
+        if (dispute == null) return ApiResponse.error(404, "纠纷不存在");
 
         dispute.setProcessStage("mediation");
         dispute.setMediator(params.get("mediator"));
@@ -165,7 +165,7 @@ public class DisputeController {
     @com.agri.common.rbac.OperatorOnly
     public ApiResponse<Boolean> arbitrationDispute(@PathVariable Long id, @RequestBody java.util.Map<String, Object> params) {
         Dispute dispute = disputeMapper.selectById(id);
-        if (dispute == null) return ApiResponse.error("纠纷不存在");
+        if (dispute == null) return ApiResponse.error(404, "纠纷不存在");
 
         String arbitrationResult = (String) params.get("result");
         dispute.setProcessStage("arbitration");
@@ -233,7 +233,7 @@ public class DisputeController {
     @PostMapping("/{id}/resolve")
     public ApiResponse<Boolean> resolveDispute(@PathVariable Long id, @RequestBody java.util.Map<String, String> params) {
         Dispute dispute = disputeMapper.selectById(id);
-        if (dispute == null) return ApiResponse.error("纠纷不存在");
+        if (dispute == null) return ApiResponse.error(404, "纠纷不存在");
         String denied = denyIfNotParticipant(dispute);
         if (denied != null) return ApiResponse.error(denied);
         if ("resolved".equals(dispute.getDisputeStatus()) || "closed".equals(dispute.getDisputeStatus())) {

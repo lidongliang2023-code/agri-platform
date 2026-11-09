@@ -88,7 +88,7 @@ public class TraceController {
     /** 批量作废（前端 expireTraceCodes，PATCH + body {codes}）。 */
     @PatchMapping("/codes/expire")
     public ApiResponse<Integer> batchExpire(@RequestBody Map<String, Object> body) {
-        return ApiResponse.success(traceService.batchUpdateStatus(codes(body), "expired",
+        return ApiResponse.success(traceService.batchUpdateStatus(codes(body), "revoked",
                 TenantContextService.currentTenantId()));
     }
 
@@ -166,6 +166,18 @@ public class TraceController {
     @GetMapping("/public/verify/{code}")
     public ApiResponse<Map<String, Object>> publicVerify(@PathVariable String code) {
         return ApiResponse.success(traceService.publicVerification(code));
+    }
+
+    /**
+     * 批次级公开核验：{@code GET /api/v1/production/trace/public/batch/{batchNo}}。
+     *
+     * <p>给商城商品详情用 —— 商品绑定的是采收批次，消费者还没扫码时手上只有批次号。
+     * 与上一个端点同一套免登录语义（不解析租户）、同一份节点与链上口径，
+     * 另外返回本批次的溯源码清单。</p>
+     */
+    @GetMapping("/public/batch/{batchNo}")
+    public ApiResponse<Map<String, Object>> publicBatch(@PathVariable String batchNo) {
+        return ApiResponse.success(traceService.publicBatchVerification(batchNo));
     }
 
     /** 按批次生成（前端 generateTraceCodeByBatch）。 */

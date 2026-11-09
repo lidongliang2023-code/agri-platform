@@ -78,6 +78,9 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             "/actuator/**",
             // 内部事件入口：以 X-Internal-Token 校验（见 InternalEventIngressController）
             "/internal/**",
+            // 供应商入驻开通：由 S2B2C 审核通过后调用，申请人令牌不在调用链上，
+            // 准入改由控制器内的 X-Internal-Token 校验（见 SupplierOnboardingInternalController）
+            "/api/v1/internal/supplier-onboarding/**",
             "/error");
 
     /**
@@ -161,16 +164,16 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             // 而不是令牌里的角色摘要：架构文档 V2.0 5.5「细权限以后端实时鉴权为准」。
             // 权限数据本身出问题时抛 BusinessException，由下面的 catch 原样返回 403 原因。
             if (request.getRequestURI().startsWith(ADMIN_PATH_PREFIX)) {
-                UserPermissionService.Resolved resolved = userPermissionService.resolve(userId, currentMarket);
+                UserPermissionService.Resolved resolved = userPermissionService.resolvePlatform(userId);
                 boolean superAdminOnly = SUPER_ADMIN_ONLY.stream()
                         .anyMatch(p -> MATCHER.match(p, request.getRequestURI()));
                 boolean allowed = superAdminOnly
                         ? resolved.has(UserPermissionService.WILDCARD)
-                        : resolved.isOperator();
+                        : resolved.has("uc:admin");
                 if (!allowed) {
                     forbidden(response, superAdminOnly
                             ? "该接口只有平台超级管理员可以调用"
-                            : "无权访问平台运营端接口：需要运营角色（SUPER_ADMIN 或 MARKET_OPS）");
+                            : "无权访问平台运营端接口：需要平台域运营授权");
                     return;
                 }
             }

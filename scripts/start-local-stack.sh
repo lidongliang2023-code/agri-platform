@@ -90,14 +90,14 @@ else
 fi
 
 # ---------- 3. nginx 网关 ----------
-echo "[3/4] nginx 网关（ops/gateway，28 个端口）"
 GATEWAY_PORTS="80 8080 8081 8082 8084 8085 8086 8090 8098 8101 8102 8103 8104 8105 8106 8107 8108 8109 8110 8111 8113 8114 8115 8180 8181 8182 8183 8184 8190"
+echo "[3/4] nginx 网关（ops/gateway，$(echo $GATEWAY_PORTS | wc -w) 个端口）"
 nginx_pid=$(netstat -ano 2>/dev/null | awk '$2 ~ /:8090$/ && /LISTENING/ {print $NF; exit}')
 missing_ports=""
 for p in $GATEWAY_PORTS; do port_listen "$p" || missing_ports="$missing_ports $p"; done
 
 if [ -n "$nginx_pid" ] && [ -z "$missing_ports" ]; then
-  ok "已在运行，且 28 个端口全在听"
+  ok "已在运行，且 $(echo $GATEWAY_PORTS | wc -w) 个端口全在听"
 elif [ "$MODE" = "--status" ]; then
   bad "nginx 未运行或配置落后；缺端口:$missing_ports"
 elif [ -n "$nginx_pid" ]; then
@@ -106,7 +106,7 @@ elif [ -n "$nginx_pid" ]; then
   sleep 3
   still=""
   for p in $GATEWAY_PORTS; do port_listen "$p" || still="$still $p"; done
-  if [ -z "$still" ]; then ok "已重载，28 个端口齐全"; else bad "仍缺端口:$still（看 $NGINX_PREFIX/logs/error.log）"; fi
+  if [ -z "$still" ]; then ok "已重载，$(echo $GATEWAY_PORTS | wc -w) 个端口齐全"; else bad "仍缺端口:$still（看 $NGINX_PREFIX/logs/error.log）"; fi
 else
   warn "未运行，正在启动…"
   "$NGINX_BIN" -p "$NGINX_PREFIX" -c conf/nginx.conf >/dev/null 2>&1
@@ -146,7 +146,8 @@ start_backend() {
 echo "[4/4] 后端服务（10 个）"
 # 核心平台必须显式传库口令：yml 默认 root123，本机是 root
 start_backend "core-platform"   "core-platform"            "core-app/target/core-app-1.0.0.jar"              8093 "/api/v1/sso/account/modules"          "" "MYSQL_PASSWORD=root"
-start_backend "agri-master-data" "agri-master-data/backend" "target/agri-master-data-1.0.0.jar"              8083 "/"                                     "" ""
+# 主数据后端 yml 里写的是历史库口令（Agri@2024），本机 MySQL 实际是 root；不带覆盖会启动即挂（Access denied）
+start_backend "agri-master-data" "agri-master-data/backend" "target/agri-master-data-1.0.0.jar"              8083 "/"                                     "--spring.datasource.password=root" ""
 start_backend "agri-finance"    "agri-finance/backend"     "target/agri-finance-1.0.0-SNAPSHOT.jar"         8087 "/"                                     "" ""
 start_backend "agri-s2b2c"      "agri-s2b2c"               "target/agri-s2b2c-1.0.0.jar"                    8088 "/api/consumer/products"                "" ""
 start_backend "agri-trade"      "agri-trade/backend"       "target/agri-trade-1.0.0-SNAPSHOT.jar"           8089 "/api/trade/public/categories"          "" ""

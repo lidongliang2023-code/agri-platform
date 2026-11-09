@@ -45,7 +45,7 @@ async function readAll() {
 .message.read { opacity: .62; }
 .message-icon { display: flex; width: 68rpx; height: 68rpx; flex: 0 0 68rpx; align-items: center; justify-content: center; border-radius: 17rpx; background: #e5f5eb; font-size: 29rpx; }
 .message > view { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 4rpx; }
-.message-title { font-size: 23rpx; font-weight: 650; }
+.message-title { font-size: 24rpx; font-weight: 650; }
 .unread-dot { width: 12rpx; height: 12rpx; border-radius: 50%; background: #df4c4c; }
 .chev { color: #94a198; font-size: 36rpx; }
 </style>

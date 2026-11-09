@@ -19,12 +19,45 @@ import java.util.Map;
 @RequestMapping("/api/v1/iot/ops")
 @OperatorOnly("iot:admin")
 public class IotOpsController {
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.agri.iot.integration.ProductionFarmClient otaFarms;
+    public record OtaStart(List<Long> gatewayIds,String firmwareUrl) {}
     private final IotOpsRepository repository;
     private final IotAlertRuleRepository ruleRepository;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.agri.iot.service.FirmwarePackageService firmwarePackageService;
 
     public IotOpsController(IotOpsRepository repository, IotAlertRuleRepository ruleRepository) {
         this.repository = repository;
         this.ruleRepository = ruleRepository;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.agri.iot.service.DeviceCommandService commandService;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.agri.iot.integration.IotIdentityService commandIdentity;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.agri.iot.service.OtaCommandService otaCommands;
+    @GetMapping("/gateways/{id}/ota")
+    public ApiResponse<List<Map<String,Object>>> otaHistory(@PathVariable long id,@RequestParam(defaultValue="1") int page,@RequestParam(defaultValue="20") int size){
+        commandIdentity.requireOperatorName();
+        return ApiResponse.success(otaCommands.history(id,page,size));
+    }
+    @GetMapping("/devices/{id}/commands")
+    public ApiResponse<List<Map<String,Object>>> commandHistory(@PathVariable long id,
+            @RequestParam(defaultValue="1") int page,@RequestParam(defaultValue="20") int size) {
+        commandIdentity.requireOperatorName();
+        return ApiResponse.success(commandService.history(id,page,size));
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.agri.iot.service.GatewayCommandService gatewayCommands;
+    @GetMapping("/gateways/{id}/commands")
+    public ApiResponse<List<Map<String,Object>>> gatewayHistory(@PathVariable long id,
+            @RequestParam(defaultValue="1") int page,@RequestParam(defaultValue="20") int size) {
+
+        commandIdentity.requireOperatorName();
+        return ApiResponse.success(gatewayCommands.history(id,page,size));
     }
 
     @GetMapping("/overview")
@@ -104,12 +137,13 @@ public class IotOpsController {
 
     @GetMapping("/ota")
     public ApiResponse<List<Map<String, Object>>> otaTasks() {
+        otaCommands.refreshTasks();
         return ApiResponse.success(repository.otaTasks());
     }
 
     @PostMapping("/ota/{id}/execute")
-    public ApiResponse<Map<String, Object>> executeOta(@PathVariable long id) {
-        return ApiResponse.success("OTA任务已排入执行窗口", repository.executeOta(id));
+    public ApiResponse<Map<String, Object>> executeOta(@PathVariable long id,@RequestBody OtaStart body) {
+        return ApiResponse.success(otaCommands.start(id,body.gatewayIds(),body.firmwareUrl(),commandIdentity.requireOperatorName(),otaFarms.listCurrentTenantFarms()));
     }
 
     @GetMapping("/work-orders")
@@ -117,9 +151,56 @@ public class IotOpsController {
         return ApiResponse.success(repository.workOrders());
     }
 
+    @PostMapping("/work-orders/{id}/handle")
+    public ApiResponse<Map<String, Object>> handleWorkOrder(@PathVariable long id, @RequestBody Map<String, Object> body) {
+        return ApiResponse.success(repository.handleWorkOrder(id, body));
+    }
+
     @GetMapping("/logs")
     public ApiResponse<List<Map<String, Object>>> logs() { return ApiResponse.success(repository.logs()); }
 
     @GetMapping("/reports")
     public ApiResponse<Map<String, Object>> reports() { return ApiResponse.success(repository.reports()); }
+
+    // ====== 固件包管理接口 ======
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.agri.iot.service.FirmwareStorageService firmwareStorage;
+
+    @PostMapping(value="/firmware/packages/upload",consumes="multipart/form-data")
+    public ApiResponse<Map<String,Object>> uploadFirmware(
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file,
+            @RequestParam(required=false) String expectedSha256) {
+        commandIdentity.requireOperatorName();
+        return ApiResponse.success(firmwareStorage.upload(file,expectedSha256));
+    }
+
+    @GetMapping("/firmware/packages")
+    public ApiResponse<List<Map<String, Object>>> listFirmwarePackages(
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) String model,
+            @RequestParam(required = false) String status) {
+        return ApiResponse.success(firmwarePackageService.list(type, model, status));
+    }
+
+    @GetMapping("/firmware/packages/{id}")
+    public ApiResponse<Map<String, Object>> getFirmwarePackage(@PathVariable long id) {
+        return ApiResponse.success(firmwarePackageService.get(id));
+    }
+
+    @PostMapping("/firmware/packages")
+    public ApiResponse<Map<String, Object>> registerFirmwarePackage(@RequestBody Map<String, Object> payload) {
+        return ApiResponse.success(firmwarePackageService.register(payload));
+    }
+
+    @PostMapping("/firmware/packages/{id}/publish")
+    public ApiResponse<Map<String, Object>> publishFirmwarePackage(@PathVariable long id) {
+        return ApiResponse.success(firmwarePackageService.publish(id));
+    }
+
+    @PostMapping("/firmware/packages/{id}/deprecate")
+    public ApiResponse<Map<String, Object>> deprecateFirmwarePackage(@PathVariable long id, @RequestBody(required = false) Map<String, Object> body) {
+        String reason = body != null ? java.util.Objects.toString(body.get("reason"), "") : "";
+        return ApiResponse.success(firmwarePackageService.deprecate(id, reason));
+    }
+
 }

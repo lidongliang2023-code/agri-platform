@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Button, Descriptions, Input, Select, Table } from 'antd'
+import { Button, Descriptions, Empty, Input, Select, Table, Tag } from 'antd'
 import { useApp } from '../app-context'
 import { ucApi } from '../api'
 import {
@@ -9,6 +9,7 @@ import {
   SectionHeading,
   StatusTag,
   formatTime,
+  identityTypeText,
 } from '../components/ui'
 import type { OrgDetailData, OrgRecord } from '../types'
 
@@ -19,19 +20,21 @@ export function OrgListPage(): JSX.Element {
   const [rows, setRows] = useState<OrgRecord[]>([])
   const [total, setTotal] = useState(0)
   const [pageNum, setPageNum] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
   const [keyword, setKeyword] = useState('')
   const [draft, setDraft] = useState('')
   const [type, setType] = useState('')
   const [verifyStatus, setVerifyStatus] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [refresh, setRefresh] = useState(0)
 
   useEffect(() => {
     setLoading(true)
     setError('')
     ucApi.orgs({
       pageNum,
-      pageSize: 20,
+      pageSize,
       keyword: keyword || undefined,
       type: type || undefined,
       verifyStatus: verifyStatus || undefined,
@@ -42,20 +45,48 @@ export function OrgListPage(): JSX.Element {
       })
       .catch((reason: Error) => setError(reason.message))
       .finally(() => setLoading(false))
-  }, [pageNum, keyword, type, verifyStatus])
+  }, [pageNum, pageSize, keyword, type, verifyStatus, refresh])
 
   const certified = rows.filter((row) => row.verifyStatus === 'approved').length
+  const pending = rows.filter((row) => row.verifyStatus === 'pending').length
+  const filtered = Boolean(keyword || type || verifyStatus)
+
+  const resetFilters = (): void => {
+    setDraft('')
+    setKeyword('')
+    setType('')
+    setVerifyStatus('')
+    setPageNum(1)
+  }
 
   return (
     <div className="page-stack">
       <PageTitle
         eyebrow="组织管理"
         title="组织列表"
-        description={`平台组织 ${total} 家 · 当前页已认证 ${certified} 家 · 组织与账号是多对多关系`}
+        description={`平台组织 ${total} 家 · 组织与账号是多对多关系，认证状态决定能否参与业务`}
       />
 
-      <section className="surface-card">
-        <div className="chip-row" style={{ marginBottom: 14 }}>
+      <div className="grid-3">
+        <div className="stat-tile">
+          <span className="stat-label">组织总数</span>
+          <b className="stat-value">{total}<small>家</small></b>
+          <span className="stat-note">当前筛选条件下的全部组织</span>
+        </div>
+        <div className="stat-tile">
+          <span className="stat-label">当前页已认证</span>
+          <b className="stat-value">{certified}<small>家</small></b>
+          <span className="stat-note">认证通过，可参与业务</span>
+        </div>
+        <div className="stat-tile">
+          <span className="stat-label">当前页待认证</span>
+          <b className="stat-value">{pending}<small>家</small></b>
+          <span className="stat-note">等待资质审核</span>
+        </div>
+      </div>
+
+      <section className="surface-card list-card">
+        <div className="list-toolbar">
           <Input
             value={draft}
             placeholder="搜组织名称 / 编码 / 信用代码"
@@ -84,16 +115,28 @@ export function OrgListPage(): JSX.Element {
             ]}
             onChange={(value) => { setVerifyStatus(value); setPageNum(1) }}
           />
+          {filtered && <Button type="link" onClick={resetFilters}>清空筛选</Button>}
         </div>
 
-        {error && <ErrorBlock message={error} />}
+        {error && <ErrorBlock message={error} onRetry={() => setRefresh((value) => value + 1)} />}
         {!error && (
           <Table
+            className="agri-list-table"
             rowKey="id"
             size="middle"
             loading={loading}
             dataSource={rows}
             scroll={{ x: 1180 }}
+            locale={{
+              emptyText: (
+                <Empty
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  description={filtered ? '没有符合条件的组织' : '暂无组织数据'}
+                >
+                  {filtered && <Button onClick={resetFilters}>清空筛选</Button>}
+                </Empty>
+              ),
+            }}
             columns={[
               {
                 title: '组织',
@@ -153,10 +196,18 @@ export function OrgListPage(): JSX.Element {
             ]}
             pagination={{
               current: pageNum,
-              pageSize: 20,
+              pageSize,
               total,
+              showSizeChanger: true,
+              pageSizeOptions: ['10', '20', '50', '100'],
               showTotal: (count) => `共 ${count} 家组织`,
-              onChange: (next) => setPageNum(next),
+              onChange: (next, nextSize) => {
+                setPageNum(next)
+                if (nextSize && nextSize !== pageSize) {
+                  setPageSize(nextSize)
+                  setPageNum(1)
+                }
+              },
             }}
           />
         )}
@@ -329,7 +380,14 @@ export function OrgDetailPage({ id }: { id: string }): JSX.Element {
             pagination={false}
             dataSource={applications}
             columns={[
-              { title: '申请身份', dataIndex: 'identityType', width: 130 },
+              {
+                title: '申请身份',
+                dataIndex: 'identityType',
+                width: 130,
+                render: (value: string) => (
+                  <Tag className="soft-tag">{identityTypeText(value)}</Tag>
+                ),
+              },
               { title: '主体名称', dataIndex: 'subjectName', render: (value: string) => value || '—' },
               {
                 title: '状态',
@@ -337,7 +395,12 @@ export function OrgDetailPage({ id }: { id: string }): JSX.Element {
                 width: 110,
                 render: (value: string) => <StatusTag status={value} />,
               },
-              { title: '提交时间', dataIndex: 'createdAt', width: 150, render: (value: string) => formatTime(value) },
+              {
+                title: '提交时间',
+                dataIndex: 'applyTime',
+                width: 150,
+                render: (value: string, row) => formatTime(value ?? row.createdAt),
+              },
             ]}
           />
         </section>

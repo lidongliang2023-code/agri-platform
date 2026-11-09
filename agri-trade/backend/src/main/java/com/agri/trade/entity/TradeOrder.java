@@ -37,6 +37,20 @@ public class TradeOrder {
     @TableField("buyer_type")
     private String buyerType;
 
+    /** 产销对接：来源供给单号（为空表示普通交易订单） */
+    @TableField("source_offer_no")
+    private String sourceOfferNo;
+
+    /** 产销对接：认购回写状态 SUCCESS / FAILED / RETRYING */
+    @TableField("p2t_writeback_status")
+    private String p2tWritebackStatus;
+
+    @TableField("p2t_writeback_message")
+    private String p2tWritebackMessage;
+
+    @TableField("p2t_writeback_time")
+    private Date p2tWritebackTime;
+
     @TableField("buyer_province")
     private String buyerProvince;
 

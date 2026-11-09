@@ -2,7 +2,7 @@
   <div class="channels-page">
     <div class="page-head">
       <div>
-        <h2>渠道商列表与分层</h2>
+        <h2>商家列表与分层</h2>
         <p>按渠道聚合近 30 天经营表现；复购率、售后率为渠道内真实订单口径，健康度仅作运营标记（非平台评分）。</p>
       </div>
       <el-button @click="$router.push('/channel-onboard')">入驻审核</el-button>
@@ -76,7 +76,7 @@
         </template>
       </el-table-column>
     </el-table>
-    <el-empty v-if="!rows.length" description="当前筛选条件下没有渠道商" />
+    <el-empty v-if="!rows.length" description="当前筛选条件下没有商家" />
     <el-pagination
       v-model:current-page="page"
       :page-size="size"

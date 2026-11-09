@@ -24,11 +24,24 @@
           <view class="item-copy">
             <text class="item-name">{{ item.name }}</text>
             <text class="item-spec">{{ item.spec }}</text>
+            <text class="item-spec">下单来源批次：{{ item.prodBatchNo || '历史来源未记录' }}</text>
+            <button class="btn" :aria-label="`查看订单溯源：${item.name}`" @tap="showTrace(item.id)">查看订单溯源</button>
             <view class="item-bottom"><text class="price">{{ money(item.price) }}</text><text>× {{ item.quantity }}</text></view>
           </view>
         </view>
       </view>
 
+      <view v-if="traceOpened" class="card info-card">
+        <text class="card-title">订单来源与单品流转</text>
+        <text v-if="traceLoading">正在加载溯源记录…</text>
+        <text v-if="traceError" class="trace-error">{{ traceError }}</text>
+        <template v-if="traceData">
+          <text class="item-spec">{{ traceData.reason || `下单批次：${traceData.batchNo || '未记录'}` }}</text>
+          <text v-if="!traceData.units?.length" class="item-spec">尚未记录实际出货单品码，不代表该订单已完成单品溯源。</text>
+          <view v-for="unit in traceData.units || []" :key="unit.traceCode" class="trace-row"><text>单品码：{{ unit.traceCode }}</text><text>批次：{{ unit.batchNo }}</text></view>
+          <view v-for="(node, index) in traceData.nodes || []" :key="index" class="trace-row"><text>{{ node.title || node.stageName }}</text><text>{{ node.detail }}</text><text class="item-spec">{{ node.occurredAt || '未记录时间' }}</text></view>
+        </template>
+      </view>
       <view class="card info-card">
         <info-row label="订单编号" :value="order.orderNo" />
         <info-row label="创建时间" :value="order.createTime?.replace('T', ' ')" />
@@ -57,7 +70,7 @@
 <script setup lang="ts">
 import { defineComponent, h, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { mallApi, type Address, type Order } from '../../api'
+import { mallApi, type Address, type Order, type TraceView } from '../../api'
 import { money, statusMeta, toast } from '../../utils'
 
 const InfoRow = defineComponent({
@@ -72,6 +85,19 @@ const InfoRow = defineComponent({
 
 const order = ref<Order | null>(null)
 const loading = ref(true)
+const traceOpened = ref(false)
+const traceLoading = ref(false)
+const traceError = ref('')
+const traceData = ref<TraceView | null>(null)
+let traceRequest = 0
+async function showTrace(itemId: string | number) {
+  if (!order.value) return
+  const requestId = ++traceRequest
+  traceOpened.value = true; traceLoading.value = true; traceError.value = ''; traceData.value = null
+  try { const result = await mallApi.getOrderTrace(order.value.id, itemId); if (requestId === traceRequest) traceData.value = result }
+  catch (e) { if (requestId === traceRequest) traceError.value = (e as Error).message || '溯源查询失败' }
+  finally { if (requestId === traceRequest) traceLoading.value = false }
+}
 
 onLoad((options) => load(String(options?.id || '')))
 
@@ -110,6 +136,9 @@ async function receive() {
 </script>
 
 <style scoped lang="scss">
+.trace-row { display: flex; flex-direction: column; gap: 10rpx; padding: 22rpx 0; border-bottom: 1px solid #e7eee9; }
+.trace-error { display: block; color: #b42318; padding: 18rpx 0; }
+
 .detail-page {
   padding-bottom: calc(40rpx + env(safe-area-inset-bottom));
 }
@@ -138,7 +167,7 @@ async function receive() {
 
 .status-kicker {
   color: #9fe7b8;
-  font-size: 16rpx;
+  font-size: 24rpx;
   font-weight: 700;
   letter-spacing: 2rpx;
 }
@@ -152,7 +181,7 @@ async function receive() {
 .status-desc {
   margin-top: 9rpx;
   color: rgba(255, 255, 255, 0.62);
-  font-size: 20rpx;
+  font-size: 24rpx;
 }
 
 .address-card {
@@ -170,7 +199,7 @@ async function receive() {
   border-radius: 14rpx;
   background: #eaf7ef;
   color: #12764a;
-  font-size: 21rpx;
+  font-size: 24rpx;
   font-weight: 800;
 }
 
@@ -188,7 +217,7 @@ async function receive() {
 .address-detail {
   margin-top: 8rpx;
   color: #718277;
-  font-size: 20rpx;
+  font-size: 24rpx;
   line-height: 1.55;
 }
 
@@ -232,14 +261,14 @@ async function receive() {
 }
 
 .item-name {
-  font-size: 23rpx;
+  font-size: 24rpx;
   font-weight: 700;
 }
 
 .item-spec {
   margin-top: 6rpx;
   color: #84938a;
-  font-size: 18rpx;
+  font-size: 24rpx;
 }
 
 .item-bottom {
@@ -267,13 +296,13 @@ async function receive() {
 
 .info-label {
   color: #718277;
-  font-size: 21rpx;
+  font-size: 24rpx;
 }
 
 .info-value {
   max-width: 72%;
   color: #33453b;
-  font-size: 21rpx;
+  font-size: 24rpx;
   text-align: right;
 }
 
@@ -282,7 +311,7 @@ async function receive() {
   justify-content: space-between;
   padding: 12rpx 0;
   color: #52665a;
-  font-size: 21rpx;
+  font-size: 24rpx;
 }
 
 .amount-card view.total {

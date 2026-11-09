@@ -31,15 +31,21 @@ public class ExperienceController {
     private final ConsumerIdentityService consumerIdentityService;
     private final ChannelIdentityService channelIdentityService;
     private final SupplierIdentityService supplierIdentityService;
+    private final com.agri.s2b2c.service.ProductionTraceQueryService traceQueryService;
     private final JdbcTemplate jdbc;
+    private final com.agri.s2b2c.service.OrderTraceService orderTraceService;
 
     public ExperienceController(JdbcTemplate jdbc, CommissionSettlementService commissionSettlementService,
                                 AfterSaleRefundService afterSaleRefundService,
                                 AfterSaleNoticeService afterSaleNoticeService,
                                 ConsumerIdentityService consumerIdentityService,
                                 ChannelIdentityService channelIdentityService,
-                                SupplierIdentityService supplierIdentityService) {
+                                SupplierIdentityService supplierIdentityService,
+                                com.agri.s2b2c.service.ProductionTraceQueryService traceQueryService,
+                                com.agri.s2b2c.service.OrderTraceService orderTraceService) {
+        this.orderTraceService = orderTraceService;
         this.jdbc = jdbc;
+        this.traceQueryService = traceQueryService;
         this.commissionSettlementService = commissionSettlementService;
         this.afterSaleRefundService = afterSaleRefundService;
         this.afterSaleNoticeService = afterSaleNoticeService;
@@ -151,16 +157,16 @@ public class ExperienceController {
 
     @GetMapping("/api/consumer/trace/{productId}")
     @OperatorOnly("s2b2c:consumer")
-    public ResponseEntity<List<Map<String, Object>>> trace(@PathVariable Long productId) {
-        return ResponseEntity.ok(jdbc.query("""
-                SELECT id,batch_code AS batchCode,origin,planting_date AS plantingDate,harvest_date AS harvestDate,
-                       processing_info AS processingInfo,quality_report AS qualityReport,storage_info AS storageInfo
-                FROM s2b2c_traceability WHERE product_id=? ORDER BY harvest_date DESC
-                """, (rs, rowNum) -> row(
-                "id", rs.getLong("id"), "batchCode", rs.getString("batchCode"), "origin", rs.getString("origin"),
-                "plantingDate", rs.getString("plantingDate"), "harvestDate", rs.getString("harvestDate"),
-                "processingInfo", rs.getString("processingInfo"), "qualityReport", rs.getString("qualityReport"),
-                "storageInfo", rs.getString("storageInfo")), productId));
+    public ResponseEntity<?> trace(@PathVariable Long productId) {
+        // 改读生产域：原先这里查 s2b2c_traceability，而那张表全仓没有写入方、只有建库脚本灌的两行演示数据，
+        // 于是"详情页有溯源内容"和"内容是生产域登记的"是两件事。绑定批次后链路只从生产域实查。
+        // 生产域不可达时抛 ProductionTraceUnavailableException → 503，不能压成空列表（那等于说"这货没来历"）。
+        try {
+            return ResponseEntity.ok(traceQueryService.productTrace(productId));
+        } catch (com.agri.s2b2c.integration.ProductionTraceUnavailableException e) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body(Map.of("success", false, "unavailable", true, "message", e.getMessage()));
+        }
     }
 
     @GetMapping("/api/consumer/after-sales")
@@ -345,6 +351,7 @@ public class ExperienceController {
      * 现在先按令牌解析供应商档案并核对归属；平台运营（没有供应商档案）仍可代发，
      * 这是两类调用者的真实区别，不是给绕过留口子。</p>
      */
+    @Transactional(rollbackFor = Exception.class)
     @PutMapping("/api/platform/order/ship")
     @OperatorOnly("s2b2c:fulfillment")
     public ResponseEntity<Map<String, Object>> shipOrder(@RequestParam Long id,
@@ -367,6 +374,8 @@ public class ExperienceController {
             return ResponseEntity.badRequest().body(Map.of("success", false,
                     "message", OrderStatus.rejectReason(status, OrderStatus.SHIPPED)));
         }
+        if (logisticsNo == null || logisticsNo.isBlank()) return ResponseEntity.badRequest().body(Map.of("success", false, "message", "请填写物流单号"));
+        orderTraceService.requireShippable(id);
         int updated = jdbc.update("""
                 UPDATE s2b2c_order SET status='SHIPPED',logistics_no=?,logistics_company=?,update_time=?
                 WHERE id=? AND status='PENDING_SHIP'

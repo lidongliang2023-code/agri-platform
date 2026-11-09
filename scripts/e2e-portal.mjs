@@ -4,8 +4,8 @@
  *
  * 覆盖：
  *   1. 首页各区块与示例数据标注；
- *   2. 站内搜索 → 产业链页关键词过滤；
- *   3. 一级/二级/产地筛选与价格排序；
+ *   2. 站内搜索 → 交易大厅（产业链频道已并入）关键词过滤；
+ *   3. 交易大厅一级/二级/产地筛选与价格排序；
  *   4. 认证中心 FAQ；
  *   5. 企业认证资料登记：必填校验 → 分步填写 → 未登录提交拦截；
  *   6. 个人实名：身份证校验位 → 分步填写 → 未登录提交拦截。
@@ -60,7 +60,7 @@ const clickText = async (page, text, scope = 'button') => {
   await sleep(250)
 }
 
-const counts = async (page) => page.evaluate(() => document.querySelectorAll('.portal-product-grid .card').length)
+const HALL_FRAME = 'iframe[title="丰链云交易大厅"]'
 
 /** 生成校验位正确的 18 位测试身份证号（不对应真实人员）。 */
 const testId = () => {
@@ -93,16 +93,6 @@ try {
     }
   })
   const hasLive = liveApi?.code === 200 && Array.isArray(liveApi.data) && liveApi.data.length > 0
-  const liveAll = await page.evaluate(async () => {
-    try {
-      return await (await fetch('/api/trade/public/products?limit=24')).json()
-    } catch {
-      return null
-    }
-  })
-  const liveProducts = liveAll?.code === 200 && Array.isArray(liveAll.data) ? liveAll.data : []
-  const fruitCount = liveProducts.filter((item) =>
-    ['大白菜', '蔬菜', '苹果', '柑橘', '水果'].some((key) => (item.categoryName ?? '').includes(key))).length
   const marketApi = await page.evaluate(async () => {
     try {
       return await (await fetch('/api/v1/info/public/markets')).json()
@@ -164,42 +154,47 @@ try {
   // ---------- 搜索 ----------
   await fill(page, '.header-search input', '大闸蟹')
   await page.click('.header-search button')
-  await page.waitForFunction(() => location.hash.includes('/chains?q='), undefined, { timeout: 10000 })
-  await sleep(400)
-  check((await counts(page)) === 1, '站内搜索「大闸蟹」过滤出 1 个货源')
-  const searchText = await page.evaluate(() => document.body.innerText)
+  await page.waitForFunction(() => location.hash.includes('/hall?q='), undefined, { timeout: 10000 })
+  const hallFrame = page.frameLocator(HALL_FRAME)
+  await hallFrame.locator('.hall-product').first().waitFor({ state: 'visible', timeout: 20000 })
+  await sleep(300)
+  check((await hallFrame.locator('.hall-product').count()) === 1, '站内搜索「大闸蟹」在交易大厅过滤出 1 个货源')
+  const searchText = await hallFrame.locator('body').innerText()
   check(searchText.includes('阳澄湖大闸蟹'), '搜索结果包含交易域真实大闸蟹货源')
 
   // ---------- 筛选 + 排序 ----------
-  await page.goto(`${BASE}/portal/#/chains`, { waitUntil: 'networkidle' })
-  await sleep(300)
-  await clickText(page, '果蔬产业', '.portal-filter-row .chip')
-  const headCount = await page.evaluate(() => Number(
-    (/共\s*(\d+)\s*个货源/.exec(document.querySelector('.portal-list-head')?.innerText ?? '')?.[1] ?? '-1')))
-  const shownCards = await counts(page)
-  check(headCount === fruitCount, `一级产业「果蔬产业」声明的货源数与接口一致`, `页面=${headCount} 接口=${fruitCount}`)
-  check(shownCards === Math.min(8, fruitCount),
-    '列表首屏按分页容量渲染，多出的靠分页器而不是静默截断', `卡片=${shownCards} 匹配=${headCount}`)
-  check(fruitCount <= 8 || await page.evaluate(() => Boolean(document.querySelector('.pager'))),
-    '结果超过一页时分页器出现', `匹配=${fruitCount}`)
-  await clickText(page, '苹果', '.portal-filter-row .chip')
-  check((await counts(page)) === 1, '二级品类「苹果」过滤出 1 个真实货源')
-  await clickText(page, '陕西', '.portal-province-chips .chip')
-  check((await counts(page)) === 1, '产地「陕西」过滤出 1 个货源')
-  const chainText = await page.evaluate(() => document.body.innerText)
-  check(chainText.includes('洛川红富士苹果') && chainText.includes('产地：陕西'), '筛选后面包屑与真实结果一致', chainText.replace(/\s+/g, ' ').slice(0, 70))
+  await page.goto(`${BASE}/portal/#/hall`, { waitUntil: 'networkidle' })
+  await hallFrame.locator('.hall-product').first().waitFor({ state: 'visible', timeout: 20000 })
+  await hallFrame.locator('.hall-chips button').filter({ hasText: '果蔬产业' }).first().click()
+  await sleep(600)
+  const hallTrail = await hallFrame.locator('.hall-trail').innerText()
+  const hallTotal = Number(/匹配\s*(\d+)\s*个货源/.exec(hallTrail)?.[1] ?? '-1')
+  const shownCards = await hallFrame.locator('.hall-product').count()
+  check(hallTotal >= 0 && shownCards === Math.min(9, hallTotal),
+    '一级产业「果蔬产业」声明的货源数与列表一致', `卡片=${shownCards} 总数=${hallTotal}`)
+  check(hallTotal <= 9 || (await hallFrame.locator('.hall-pager').count()) > 0,
+    '结果超过一页时分页器出现', `总数=${hallTotal}`)
+  await hallFrame.locator('.hall-chips button').filter({ hasText: '苹果' }).first().click()
+  await sleep(600)
+  const appleTrail = await hallFrame.locator('.hall-trail').innerText()
+  check(appleTrail.includes('苹果') && (await hallFrame.locator('.hall-product').count()) > 0,
+    '二级品类「苹果」筛选出真实货源')
+  await hallFrame.locator('.hall-province-group button').filter({ hasText: '陕西' }).first().click()
+  await sleep(600)
+  const provinceTrail = await hallFrame.locator('.hall-trail').innerText()
+  const provinceText = await hallFrame.locator('.hall-list').innerText()
+  check(provinceTrail.includes('产地：陕西') && provinceText.includes('陕西'),
+    '产地「陕西」筛选后列表展示陕西货源')
 
-  await page.goto(`${BASE}/portal/#/chains`, { waitUntil: 'networkidle' })
-  await sleep(300)
-  await clickText(page, '清空筛选')
-  await clickText(page, '价格从低到高', '.portal-list-head .chip')
-  const cheapest = [...liveProducts].filter((item) => item.price != null)
-    .sort((a, b) => a.price - b.price)[0]?.productName ?? ''
-  const firstProduct = await page.evaluate(() => document.querySelector('.portal-product-grid .card .strong')?.textContent?.trim())
-  check(cheapest !== '' && firstProduct === cheapest, '价格从低到高首项即接口里最便宜的货源',
-    `页面=${firstProduct} 期望=${cheapest}`)
-  const priceColumn = await page.evaluate(() => [...document.querySelectorAll('.portal-product-grid .card')]
-    .map((card) => Number((/¥\s*([\d.]+)/.exec(card.innerText)?.[1] ?? 'NaN')))
+  await page.goto(`${BASE}/portal/#/hall`, { waitUntil: 'networkidle' })
+  await hallFrame.locator('.hall-product').first().waitFor({ state: 'visible', timeout: 20000 })
+  // 地址栏 hash 未变时 iframe 不会重载，上一轮的产业/产地筛选仍在 iframe 内生效，先清空
+  await hallFrame.locator('.hall-reset').first().click()
+  await sleep(600)
+  await hallFrame.locator('.hall-toolbar .hall-chips button').filter({ hasText: '价格从低到高' }).first().click()
+  await sleep(600)
+  const priceColumn = await hallFrame.locator('.hall-price').evaluateAll((nodes) => nodes
+    .map((node) => Number((/¥\s*([\d,.]+)/.exec(node.textContent ?? '')?.[1] ?? 'NaN').replace(/,/g, '')))
     .filter((value) => !Number.isNaN(value)))
   check(priceColumn.length > 1 && priceColumn.every((value, index) => index === 0 || value >= priceColumn[index - 1]),
     '价格升序在整页上单调不减', priceColumn.join(' ≤ '))

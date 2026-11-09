@@ -28,3 +28,11 @@
   --agri-header-height: 56px;
   --agri-content-padding: 16px;
 }
+
+/**
+ * `<small>` 走的是浏览器默认的 0.833em，不是某个声明值 ——
+ * 所以"把所有 font-size 都提到 12px"这一条治不到它：父级只要 ≤14px，它就又掉回 12px 以下。
+ * 真机证据：info-ops 行情页表格里 4 个「元/公斤」渲染成 11.6667px（父级 14px × 0.833）。
+ * 这里给它同一个下限：父级大时仍按比例缩放，父级小时顶到 micro，不会更小。
+ */
+small { font-size: max(var(--agri-font-size-micro), 0.833em); }

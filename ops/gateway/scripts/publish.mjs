@@ -81,14 +81,9 @@ const APPS = {
     title: 'S2B2C 商城（消费者端）',
     accessUrl: 'http://localhost:8082/',
   },
-  'mall-supplier': {
-    frontendDir: path.join('agri-s2b2c', 'frontend-supplier'),
-    title: 'S2B2C 商城（供应商端）',
-    accessUrl: 'http://localhost:8084/',
-  },
   'mall-channel': {
     frontendDir: path.join('agri-s2b2c', 'frontend-channel'),
-    title: 'S2B2C 商城（渠道端）',
+    title: 'S2B2C 商城（商家端）',
     accessUrl: 'http://localhost:8085/',
   },
   's2b2c-platform': {
@@ -100,13 +95,6 @@ const APPS = {
     frontendDir: path.join('agri-s2b2c', 'mobile'),
     title: 'S2B2C 消费者移动端',
     accessUrl: 'http://localhost:8182/',
-    builder: 'uni-app',
-    distDir: path.join('dist', 'build', 'h5'),
-  },
-  'mall-supplier-mobile': {
-    frontendDir: path.join('agri-s2b2c', 'mobile-supplier'),
-    title: 'S2B2C 供应商移动端',
-    accessUrl: 'http://localhost:8183/',
     builder: 'uni-app',
     distDir: path.join('dist', 'build', 'h5'),
   },

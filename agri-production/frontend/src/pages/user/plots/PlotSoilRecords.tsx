@@ -1,3 +1,5 @@
+import BusinessRecordList from '@/components/BusinessRecordList'
+import Card from '@/components/SectionCard'
 /**
  * 页面名称：土壤检测档案
  * 路由路径：/production/plots/:plotId/soil
@@ -19,19 +21,12 @@
 import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { PageContainer } from '@ant-design/pro-components'
+import PageContainer from '@/components/ProductionPageContainer'
 import ReactECharts from 'echarts-for-react'
+import { CheckCircleOutlined, InfoCircleOutlined, LeftOutlined, PlusOutlined, WarningOutlined } from '@ant-design/icons'
 import {
-  CheckCircleOutlined,
-  ExperimentOutlined,
-  InfoCircleOutlined,
-  LeftOutlined,
-  PlusOutlined,
-  WarningOutlined,
-} from '@ant-design/icons'
-import {
+  Alert,
   Button,
-  Card,
   Col,
   DatePicker,
   Empty,
@@ -42,7 +37,6 @@ import {
   Popconfirm,
   Row,
   Space,
-  Table,
   Tag,
   Typography,
   message,
@@ -625,6 +619,8 @@ export default function PlotSoilRecords(): JSX.Element {
         >
           {soilQuery.isLoading ? (
             <Card loading />
+          ) : soilQuery.isError ? (
+            <Alert type="error" showIcon message="土壤检测记录加载失败" action={<Button onClick={() => void soilQuery.refetch()}>重新加载</Button>} />
           ) : rows.length === 0 ? (
             <Empty
               description={
@@ -639,8 +635,8 @@ export default function PlotSoilRecords(): JSX.Element {
               }
             />
           ) : (
-            <Table<SoilRow>
-              rowKey={(record) => pickId(record) || pickDate(record) || Math.random().toString()}
+            <BusinessRecordList<SoilRow>
+              rowKey={(record, index) => pickId(record) || `${pickDate(record) ?? 'soil'}-${index}`}
               columns={columns}
               dataSource={rows}
               pagination={{ pageSize: 10, showSizeChanger: true }}
@@ -771,9 +767,7 @@ export default function PlotSoilRecords(): JSX.Element {
       {!plotId && (
         <Empty description={<Typography.Text type="danger">缺少地块参数</Typography.Text>} />
       )}
-      <Typography.Paragraph type="secondary" style={{ marginTop: 12 }}>
-        <ExperimentOutlined /> 提示：建议每季至少检测 1 次，连续记录可显著提升肥力趋势预测准确度。
-      </Typography.Paragraph>
+
     </PageContainer>
   )
 }

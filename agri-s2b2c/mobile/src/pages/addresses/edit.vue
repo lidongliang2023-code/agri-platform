@@ -140,14 +140,14 @@ function onDefaultChange(event: any) {
 
 .default-row text {
   color: #0b1a12;
-  font-size: 23rpx;
+  font-size: 24rpx;
   font-weight: 650;
 }
 
 .default-row small {
   margin-top: 5rpx;
   color: #93a29a;
-  font-size: 18rpx;
+  font-size: 24rpx;
 }
 
 .save-bar {

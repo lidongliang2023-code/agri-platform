@@ -29,7 +29,8 @@
             {{ received.includes(coupon.id) ? '已领取' : '领取' }}
           </button>
         </view>
-        <view v-if="!(marketing.coupons || []).length" class="empty-mini">暂无可领取优惠券</view>
+        <view v-if="!session.user" class="empty-mini">统一账号登录后显示可领的优惠券、秒杀与拼团；扫码溯源不需要登录。</view>
+        <view v-else-if="!(marketing.coupons || []).length" class="empty-mini">暂无可领取优惠券</view>
       </view>
 
       <view class="section">
@@ -59,29 +60,52 @@
       </view>
 
       <view class="section">
-        <view class="section-head"><view><text class="kicker">PRODUCT TRACE</text><text class="title">查询溯源档案</text></view></view>
+        <view class="section-head"><view><text class="kicker">TRACEABILITY</text><text class="title">查询溯源链路</text></view></view>
         <view class="trace-search">
-          <input v-model="productId" class="trace-input" type="number" placeholder="输入商品编号，例如 1" />
+          <input v-model="traceQuery" class="trace-input" placeholder="溯源码（AG…）或商品编号" />
           <button class="btn btn-sm btn-ghost" @tap="scanCode">扫码</button>
           <button class="btn btn-sm btn-primary" :loading="traceLoading" @tap="queryTrace">查询</button>
         </view>
+        <text class="trace-tip">链路内容来自生产管理模块（种植 / 采收 / 加工 / 质检 / 仓储），商城只读展示。</text>
       </view>
 
-      <view v-for="record in traceRecords" :key="record.id" class="section trace-record">
+      <view v-if="trace.unavailable" class="empty">
+        <view class="empty-icon">!</view>
+        <text>溯源链路暂时连不上生产管理模块</text>
+        <text class="empty-sub">{{ trace.message || '请稍后重试，这不是「该商品没有溯源记录」' }}</text>
+      </view>
+      <view v-else-if="!trace.matched" class="empty">
+        <view class="empty-icon">溯</view>
+        <text>{{ trace.bound ? '绑定的批次在生产管理模块查不到' : '该商品尚未绑定生产批次' }}</text>
+        <text class="empty-sub">{{ trace.reason || '供应商在商品编辑页绑定采收批次后即可展示，商城不代填批次内容。' }}</text>
+      </view>
+
+      <view v-else class="section trace-record">
         <view class="trace-batch">
           <view class="trace-mark">溯</view>
-          <view><text class="batch-code">{{ record.batchCode }}</text><small>{{ record.origin }}</small></view>
+          <view>
+            <text class="batch-code">{{ trace.batchNo }}</text>
+            <small>{{ trace.productName || trace.cropName }} · {{ trace.origin || trace.farmName || '产地未填' }}</small>
+          </view>
         </view>
         <view class="timeline">
-          <view class="timeline-item"><text class="timeline-dot">1</text><view><b>种植</b><small>{{ record.plantingDate }}</small></view></view>
-          <view class="timeline-item"><text class="timeline-dot">2</text><view><b>采收</b><small>{{ record.harvestDate }}</small></view></view>
-          <view class="timeline-item"><text class="timeline-dot">3</text><view><b>加工质检</b><small>{{ record.processingInfo }} · {{ record.qualityReport }}</small></view></view>
-          <view class="timeline-item"><text class="timeline-dot">4</text><view><b>仓储物流</b><small>{{ record.storageInfo }}</small></view></view>
+          <view v-for="n in trace.nodes" :key="n.seq" class="timeline-item">
+            <text class="timeline-dot">{{ n.seq }}</text>
+            <view>
+              <b>{{ n.stageName }}<text v-if="n.onChain" class="chain-tag">已上链</text></b>
+              <small>{{ n.occurredAt ? String(n.occurredAt).replace('T', ' ').slice(0, 16) : '时间未记录' }} · {{ n.detail }}</small>
+            </view>
+          </view>
         </view>
-      </view>
-      <view v-if="traceQueried && !traceRecords.length" class="empty">
-        <view class="empty-icon">溯</view>
-        <text>没有找到该商品的溯源记录</text>
+        <text class="trace-conclusion">{{ trace.conclusion }}</text>
+        <view v-if="trace.sourceBasis === 'UNIT_CODE'" class="trace-circulation">
+          <text class="circulation-title">单品履约与流通记录</text>
+          <text v-if="!trace.circulationRecorded" class="circulation-empty">已核验生产事实；暂无商城零售流转绑定记录。</text>
+          <view v-for="(c, i) in trace.circulation || []" :key="i" class="circulation-item">
+            <text>状态：{{ c.orderStatus }} · 承运：{{ c.logisticsCompany || '直发' }}</text>
+            <small>绑定履约时间：{{ c.boundAt ? String(c.boundAt).replace('T', ' ').slice(0, 16) : '未记录' }}</small>
+          </view>
+        </view>
       </view>
     </template>
 
@@ -119,7 +143,7 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { mallApi, type AfterSale, type MarketingData, type TraceRecord } from '../../api'
+import { mallApi, type AfterSale, type MarketingData, type TraceView } from '../../api'
 import { session } from '../../session'
 import { money, statusMeta, toast } from '../../utils'
 
@@ -127,8 +151,8 @@ const tabs = ['优惠活动', '扫码溯源', '售后服务']
 const activeTab = ref(0)
 const marketing = ref<MarketingData>({ coupons: [], flashSales: [], groupBuys: [] })
 const received = ref<Array<string | number>>([])
-const productId = ref('1')
-const traceRecords = ref<TraceRecord[]>([])
+const traceQuery = ref('')
+const trace = ref<TraceView>({ bound: false, matched: false, nodes: [] })
 const traceQueried = ref(false)
 const traceLoading = ref(false)
 const afterSales = ref<AfterSale[]>([])
@@ -136,22 +160,41 @@ const submitting = ref(false)
 const afterForm = reactive({ orderId: '', amount: '', reason: '' })
 
 onLoad((options) => {
-  if (options?.productId) productId.value = String(options.productId)
+  /*
+   * 包装上印的码扫出来就是一个带 code 的链接：落到这一页就要直接停在「扫码溯源」并把链路查出来。
+   * 以前只认 productId，扫码的人进来停在「优惠活动」页签，还得自己切页签、再手输那串码 ——
+   * 而优惠活动那一屏是要登录的，于是扫码第一步变成"请先登录"。
+   */
+  if (options?.code) {
+    activeTab.value = 1
+    traceQuery.value = String(options.code)
+    queryTrace()
+    return
+  }
+  // 商品详情的「全链路溯源」入口带的是 productId，直接填进查询框并按商品号查一次
+  if (options?.productId) {
+    activeTab.value = 1
+    traceQuery.value = String(options.productId)
+    queryTrace()
+  }
 })
 
 onMounted(load)
 
 async function load() {
+  if (!session.user) {
+    // 优惠活动/售后都是按登录消费者取数的私域接口，未登录就别请求：
+    // 请求必 401，页面会把"还没登录"弹成"登录已失效"，而扫码的人本来也不需要这两块。
+    return
+  }
   try {
     marketing.value = await mallApi.getMarketing()
-    if (session.user) {
-      const [coupons, records] = await Promise.all([
-        mallApi.getCoupons(session.user.id),
-        mallApi.getAfterSales(session.user.id),
-      ])
-      received.value = coupons.map((item) => item.couponId)
-      afterSales.value = records || []
-    }
+    const [coupons, records] = await Promise.all([
+      mallApi.getCoupons(session.user.id),
+      mallApi.getAfterSales(session.user.id),
+    ])
+    received.value = coupons.map((item) => item.couponId)
+    afterSales.value = records || []
   } catch (error) {
     toast((error as Error).message)
   }
@@ -173,14 +216,28 @@ async function receiveCoupon(id: number) {
 }
 
 async function queryTrace() {
-  if (!productId.value) return toast('请输入商品编号')
+  const value = traceQuery.value.trim()
+  if (!value) return toast('请输入溯源码或商品编号')
   traceLoading.value = true
   traceQueried.value = true
   try {
-    traceRecords.value = (await mallApi.getTrace(Number(productId.value))) || []
+    // 纯数字当商品号，其余按溯源码：真实码是 AG… 形式，只取数字段必然查不到
+    trace.value = /^\d+$/.test(value)
+      ? await mallApi.getTrace(value)
+      : await mallApi.getTraceByCode(value)
   } catch (error) {
-    traceRecords.value = []
-    toast((error as Error).message)
+    const failure = error as Error & { status?: number; body?: Record<string, unknown> }
+    const body = failure.body
+    trace.value = {
+      bound: body?.bound === true,
+      matched: false,
+      nodes: [],
+      unavailable: failure.status === 503 || body?.unavailable === true,
+      message: failure.message,
+      reason: typeof body?.message === 'string' ? body.message : '',
+    }
+    // 404（查无此码）与 503（链路不可达）都有专门的界面文案，不再叠一层 toast
+    if (failure.status !== 404 && failure.status !== 503) toast(failure.message)
   } finally {
     traceLoading.value = false
   }
@@ -189,16 +246,14 @@ async function queryTrace() {
 function scanCode() {
   uni.scanCode({
     success(result) {
-      const match = result.result.match(/\d+/)
-      if (match) {
-        productId.value = match[0]
-        queryTrace()
-      } else {
-        toast('未识别到商品编号')
-      }
+      // 直接用扫到的原始串：溯源码是 AG + 数字，抠出数字段再按商品号查必然错
+      const raw = String(result.result ?? '').trim()
+      if (!raw) return toast('扫码结果为空')
+      traceQuery.value = raw
+      queryTrace()
     },
     fail() {
-      toast('扫码未完成，可手动输入商品编号')
+      toast('扫码未完成，可手动输入溯源码')
     },
   })
 }
@@ -231,6 +286,11 @@ async function submitAfterSale() {
 </script>
 
 <style scoped lang="scss">
+.trace-circulation { margin-top: 24rpx; padding-top: 20rpx; border-top: 1rpx dashed #cfe0d5; }
+.circulation-title { display: block; font-size: 26rpx; font-weight: 700; color: #16462e; margin-bottom: 8rpx; }
+.circulation-empty { display: block; font-size: 22rpx; color: #789082; }
+.circulation-item { padding: 8rpx 0; font-size: 23rpx; color: #2d5540; display: flex; flex-direction: column; }
+
 .services-page {
   padding-bottom: 34rpx;
 }
@@ -246,7 +306,7 @@ async function submitAfterSale() {
   flex: 1;
   padding: 10rpx 0;
   color: #718277;
-  font-size: 22rpx;
+  font-size: 24rpx;
   text-align: center;
 }
 
@@ -284,7 +344,7 @@ async function submitAfterSale() {
 
 .hero-kicker {
   color: #9fe7b8;
-  font-size: 16rpx;
+  font-size: 24rpx;
   font-weight: 700;
   letter-spacing: 2rpx;
 }
@@ -298,7 +358,7 @@ async function submitAfterSale() {
 .hero-desc {
   margin-top: 9rpx;
   color: rgba(255, 255, 255, 0.62);
-  font-size: 20rpx;
+  font-size: 24rpx;
 }
 
 .trace-hero {
@@ -335,7 +395,7 @@ async function submitAfterSale() {
 
 .kicker {
   color: #12764a;
-  font-size: 15rpx;
+  font-size: 24rpx;
   font-weight: 700;
   letter-spacing: 2rpx;
 }
@@ -349,7 +409,7 @@ async function submitAfterSale() {
 
 .sub {
   color: #93a29a;
-  font-size: 17rpx;
+  font-size: 24rpx;
 }
 
 .coupon-card {
@@ -385,7 +445,7 @@ async function submitAfterSale() {
 
 .coupon-value small {
   margin-top: 5rpx;
-  font-size: 15rpx;
+  font-size: 24rpx;
 }
 
 .coupon-copy {
@@ -401,20 +461,20 @@ async function submitAfterSale() {
 
 .coupon-copy text {
   color: #0b1a12;
-  font-size: 23rpx;
+  font-size: 24rpx;
   font-weight: 650;
 }
 
 .coupon-copy small {
   margin-top: 6rpx;
   color: #84938a;
-  font-size: 17rpx;
+  font-size: 24rpx;
 }
 
 .coupon-copy em {
   margin-top: 4rpx;
   color: #c46616;
-  font-size: 16rpx;
+  font-size: 24rpx;
   font-style: normal;
 }
 
@@ -455,7 +515,7 @@ async function submitAfterSale() {
 .deal-icon.group {
   background: #eaf7ef;
   color: #12764a;
-  font-size: 20rpx;
+  font-size: 24rpx;
   font-weight: 800;
 }
 
@@ -471,14 +531,14 @@ async function submitAfterSale() {
 
 .deal-copy text {
   color: #0b1a12;
-  font-size: 22rpx;
+  font-size: 24rpx;
   font-weight: 650;
 }
 
 .deal-copy small {
   margin-top: 6rpx;
   color: #84938a;
-  font-size: 17rpx;
+  font-size: 24rpx;
 }
 
 .deal-price {
@@ -498,14 +558,14 @@ async function submitAfterSale() {
 .deal-price small {
   margin-top: 4rpx;
   color: #a1ada6;
-  font-size: 16rpx;
+  font-size: 24rpx;
   text-decoration: line-through;
 }
 
 .empty-mini {
   padding: 55rpx 0;
   color: #94a198;
-  font-size: 21rpx;
+  font-size: 24rpx;
   text-align: center;
 }
 
@@ -522,7 +582,43 @@ async function submitAfterSale() {
   padding: 0 18rpx;
   border: 1rpx solid #dfe8e2;
   border-radius: 14rpx;
-  font-size: 22rpx;
+  font-size: 24rpx;
+}
+
+/* 说明性文字同样守 24rpx（=12px）可读下限，不靠压字号做层级 */
+.trace-tip,
+.trace-conclusion {
+  display: block;
+  margin-top: 12rpx;
+  color: #718277;
+  font-size: 24rpx;
+  line-height: 1.6;
+}
+
+.trace-conclusion {
+  margin: 16rpx 0 0;
+  padding: 14rpx 16rpx;
+  border-radius: 12rpx;
+  background: #f2fbf5;
+  color: #0e5233;
+}
+
+.empty-sub {
+  display: block;
+  margin-top: 8rpx;
+  color: #94a198;
+  font-size: 24rpx;
+  line-height: 1.6;
+}
+
+.chain-tag {
+  display: inline-block;
+  margin-left: 10rpx;
+  padding: 2rpx 10rpx;
+  border-radius: 8rpx;
+  background: #e5f5eb;
+  color: #0e5233;
+  font-size: 24rpx;
 }
 
 .trace-record {
@@ -545,7 +641,7 @@ async function submitAfterSale() {
   border-radius: 15rpx;
   background: #eaf7ef;
   color: #12764a;
-  font-size: 22rpx;
+  font-size: 24rpx;
   font-weight: 800;
 }
 
@@ -556,14 +652,14 @@ async function submitAfterSale() {
 
 .batch-code {
   color: #0b1a12;
-  font-size: 23rpx;
+  font-size: 24rpx;
   font-weight: 700;
 }
 
 .trace-batch small {
   margin-top: 4rpx;
   color: #84938a;
-  font-size: 17rpx;
+  font-size: 24rpx;
 }
 
 .timeline {
@@ -586,7 +682,7 @@ async function submitAfterSale() {
   border-radius: 50%;
   background: #e5f5eb;
   color: #12764a;
-  font-size: 15rpx;
+  font-size: 24rpx;
   font-weight: 700;
 }
 
@@ -597,13 +693,13 @@ async function submitAfterSale() {
 
 .timeline-item b {
   color: #33453b;
-  font-size: 21rpx;
+  font-size: 24rpx;
 }
 
 .timeline-item small {
   margin-top: 5rpx;
   color: #84938a;
-  font-size: 17rpx;
+  font-size: 24rpx;
   line-height: 1.5;
 }
 
@@ -630,21 +726,21 @@ async function submitAfterSale() {
 
 .after-head > view text {
   color: #0b1a12;
-  font-size: 22rpx;
+  font-size: 24rpx;
   font-weight: 700;
 }
 
 .after-head > view small {
   margin-top: 5rpx;
   color: #93a29a;
-  font-size: 17rpx;
+  font-size: 24rpx;
 }
 
 .after-reason {
   display: block;
   margin-top: 10rpx;
   color: #52665a;
-  font-size: 19rpx;
+  font-size: 24rpx;
 }
 
 .after-foot {
@@ -653,11 +749,11 @@ async function submitAfterSale() {
 
 .after-foot small {
   color: #93a29a;
-  font-size: 16rpx;
+  font-size: 24rpx;
 }
 
 .after-foot b {
   color: #d45b32;
-  font-size: 23rpx;
+  font-size: 24rpx;
 }
 </style>

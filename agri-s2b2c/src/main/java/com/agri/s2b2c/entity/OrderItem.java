@@ -25,6 +25,8 @@ public class OrderItem {
     private BigDecimal totalAmount;
     private String image;
     private String traceCode;
+    /** 下单来源批次快照，不能替代实际出货单品绑定。 */
+    private String prodBatchNo;
     /** 秒杀活动ID；取消订单时据此精确恢复秒杀库存与预算。 */
     private Long flashSaleId;
     private BigDecimal flashSubsidy;

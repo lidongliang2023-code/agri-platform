@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import {
   SearchOutlined,
@@ -68,6 +68,27 @@ const PORTAL = `${window.location.protocol}//${window.location.hostname}:8098/po
 const SSO_REGISTER = `${window.location.protocol}//${window.location.hostname}:8090/register`
 const PAGE_SIZE = 9
 const EMBEDDED = new URLSearchParams(window.location.search).get('embed') === '1'
+const PORTAL_HERO = EMBEDDED && new URLSearchParams(window.location.search).get('portalHero') === '1'
+
+// 门户「交易大厅」把产业链筛选参数透传到 iframe（原「产业链」页已并入交易大厅），
+// 这里只接受字典内合法的取值，避免旧链接或手工拼参数把页面筛成空列表。
+const HALL_QUERY = new URLSearchParams(window.location.search)
+const queryValue = (name: string): string => (HALL_QUERY.get(name) ?? '').trim()
+const QUERY_L1 = queryValue('l1')
+const INITIAL_L1 = Object.prototype.hasOwnProperty.call(HALL_TAXONOMY, QUERY_L1) ? QUERY_L1 : ''
+const QUERY_L2 = queryValue('l2')
+const INITIAL_L2 = INITIAL_L1 && Object.prototype.hasOwnProperty.call(HALL_TAXONOMY[INITIAL_L1] ?? {}, QUERY_L2)
+  ? QUERY_L2 : ''
+const QUERY_L3 = queryValue('l3')
+const INITIAL_L3 = INITIAL_L2 && (HALL_TAXONOMY[INITIAL_L1]?.[INITIAL_L2] ?? []).includes(QUERY_L3)
+  ? QUERY_L3 : ''
+const QUERY_PROVINCE = queryValue('province') || queryValue('loc')
+const INITIAL_PROVINCE = HALL_PROVINCES.some((item) => item.name === QUERY_PROVINCE) ? QUERY_PROVINCE : ''
+const INITIAL_KEYWORD = queryValue('keyword') || queryValue('q')
+const INITIAL_TAB: 'supply' | 'purchase' = queryValue('tab') === 'purchase' ? 'purchase' : 'supply'
+
+/** 产地筛选默认只露常用户省份，其余收进「更多产地」浮层 —— 33 个省份平铺会把筛选区撑到 400px 以上。 */
+const TOP_PROVINCES = ['山东', '河南', '河北', '江苏', '安徽', '湖北', '湖南', '四川', '云南', '广西', '广东', '陕西']
 
 const money = (value: number | null | undefined): string =>
   value == null ? '询价' : `¥${Number(value).toLocaleString('zh-CN', { maximumFractionDigits: 2 })}`
@@ -75,28 +96,48 @@ const money = (value: number | null | undefined): string =>
 const shortDate = (value: string): string => value?.slice(0, 10) ?? '—'
 
 export default function TradeHall(): JSX.Element {
-  const [tab, setTab] = useState<'supply' | 'purchase'>('supply')
+  const [tab, setTab] = useState<'supply' | 'purchase'>(INITIAL_TAB)
   const [products, setProducts] = useState<HallProduct[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [keyword, setKeyword] = useState('')
-  const [searchInput, setSearchInput] = useState('')
-  const [l1, setL1] = useState('')
-  const [l2, setL2] = useState('')
-  const [l3, setL3] = useState('')
-  const [province, setProvince] = useState('')
+  const [keyword, setKeyword] = useState(INITIAL_KEYWORD)
+  const [searchInput, setSearchInput] = useState(INITIAL_KEYWORD)
+  const [l1, setL1] = useState(INITIAL_L1)
+  const [l2, setL2] = useState(INITIAL_L2)
+  const [l3, setL3] = useState(INITIAL_L3)
+  const [province, setProvince] = useState(INITIAL_PROVINCE)
   const [sort, setSort] = useState('default')
   const [demands, setDemands] = useState<PublicDemand[]>([])
   const [recommendations, setRecommendations] = useState<HallProduct[]>([])
   const [demandLoading, setDemandLoading] = useState(false)
+  const [provinceOpen, setProvinceOpen] = useState(false)
+  const provinceRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     if (!EMBEDDED) {
       window.location.replace(`${PORTAL}#/hall`)
     }
   }, [])
+
+  useEffect(() => {
+    if (!provinceOpen) return undefined
+    const onPointerDown = (event: MouseEvent): void => {
+      if (provinceRef.current && !provinceRef.current.contains(event.target as Node)) {
+        setProvinceOpen(false)
+      }
+    }
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') setProvinceOpen(false)
+    }
+    document.addEventListener('mousedown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [provinceOpen])
 
   useEffect(() => {
     if (!EMBEDDED) return undefined
@@ -116,6 +157,11 @@ export default function TradeHall(): JSX.Element {
         '*',
       )
     }
+    const onParentReady = (event: MessageEvent): void => {
+      if (event.source !== window.parent || event.origin !== new URL(PORTAL).origin) return
+      if (event.data?.type === 'agri-hall-ready') reportHeight()
+    }
+    window.addEventListener('message', onParentReady)
     reportHeight()
     const observer = new ResizeObserver(reportHeight)
     observer.observe(document.body)
@@ -123,6 +169,7 @@ export default function TradeHall(): JSX.Element {
     return () => {
       observer.disconnect()
       window.removeEventListener('resize', reportHeight)
+      window.removeEventListener('message', onParentReady)
     }
   }, [])
 
@@ -248,9 +295,25 @@ export default function TradeHall(): JSX.Element {
   }
 
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  const hasFilter = Boolean(l1 || l2 || l3 || province || keyword)
+  // 常用户省份优先；若当前选中的在外省列表里，也把它提到前面，避免"选中了却看不见"
+  const topProvinceOptions = useMemo(() => {
+    const names = TOP_PROVINCES.filter((name) => HALL_PROVINCES.some((item) => item.name === name))
+    if (province && !names.includes(province)) names.unshift(province)
+    return names
+  }, [province])
+  const activeFilters = useMemo(() => {
+    const list: Array<{ key: string; label: string; clear: () => void }> = []
+    if (l1) list.push({ key: 'l1', label: l1, clear: () => { setL1(''); setL2(''); setL3(''); setPage(1) } })
+    if (l2) list.push({ key: 'l2', label: l2, clear: () => { setL2(''); setL3(''); setPage(1) } })
+    if (l3) list.push({ key: 'l3', label: l3, clear: () => { setL3(''); setPage(1) } })
+    if (province) list.push({ key: 'province', label: `产地 ${province}`, clear: () => { setProvince(''); setPage(1) } })
+    if (keyword) list.push({ key: 'keyword', label: `“${keyword}”`, clear: () => { setKeyword(''); setSearchInput(''); setPage(1) } })
+    return list
+  }, [l1, l2, l3, province, keyword])
 
   return (
-    <div className={EMBEDDED ? 'hall-root hall-embed' : 'hall-root'}>
+    <div className={EMBEDDED ? `hall-root hall-embed${PORTAL_HERO ? ' hall-portal-shell' : ''}` : 'hall-root'}>
       <div className="topbar" style={EMBEDDED ? { display: 'none' } : undefined}>
         <div className="hall-container">
           <span>您好，欢迎来到丰链云交易大厅！智能大宗交易 · 平台撮合 · 支持在线议价</span>
@@ -280,17 +343,21 @@ export default function TradeHall(): JSX.Element {
       </header>
 
       <main className="hall-container hall-main">
-        <div className="hall-crumb"><a href={PORTAL}>首页</a><span>/</span><strong>交易大厅</strong></div>
-        <div className="hall-title-row">
-          <div>
+        {/* 嵌入门户时页头已有导航与面包屑，这里不再重复一遍 */}
+        {!EMBEDDED && <div className="hall-crumb"><a href={PORTAL}>首页</a><span>/</span><strong>交易大厅</strong></div>}
+        {/* 页头与「价格指数」的 section-head 同一口径：17px 标题 + 小字说明 + 右侧计数 */}
+        {EMBEDDED ? (
+          <section className="hall-portal-hero">
             <h1>交易大厅</h1>
-            <p>智能大宗交易 · 平台撮合 · 支持在线议价</p>
+            <p>汇聚农业产业链优质货源与采购需求，支持在线议价与平台撮合，让产销对接更高效。</p>
+            <div className="hall-portal-hero-meta"><span>{total} 个在售商品</span><span>产业链选品 · 产地直连 · 在线议价</span></div>
+          </section>
+        ) : (
+          <div className="hall-title-row">
+            <h2>交易大厅 <small>智能大宗交易 · 平台撮合 · 支持在线议价</small></h2>
+            <span className="hall-title-count">{total} 个在售商品</span>
           </div>
-          <div className="hall-title-tags">
-            <span className="hall-tag tech">平台质检</span>
-            <span className="hall-tag">资金担保</span>
-          </div>
-        </div>
+        )}
 
         <div className="hall-tabs">
           <button type="button" className={tab === 'supply' ? 'on' : ''} onClick={() => setTab('supply')}>供应大厅</button>
@@ -300,82 +367,103 @@ export default function TradeHall(): JSX.Element {
         {tab === 'supply' ? (
           <>
             <div className="hall-supply">
-              <aside className="hall-filter-card">
-                <div className="hall-card-head">
-                  <h3><ShopOutlined />筛选条件</h3>
-                  <div className="hall-filter-actions">
-                    <span className="hall-tag tech">支持三级分类</span>
-                    <button type="button" className="hall-reset" onClick={resetFilters}>清空筛选</button>
+              <section className="hall-filter-card">
+                <div className="hall-filter-head">
+                  <span className="hall-filter-title"><ShopOutlined />筛选</span>
+                  <div className="hall-filter-head-right">
+                    <span className="hall-filter-count">匹配 <b>{total}</b> 个货源</span>
+                    {hasFilter && (
+                      <button type="button" className="hall-filter-clear" onClick={resetFilters}>清空</button>
+                    )}
                   </div>
                 </div>
-                <div className="hall-filter-body">
-                  <div className="hall-trail">
-                    <button type="button" onClick={resetFilters}>全部产业链</button>
-                    {l1 && <><span>/</span><strong>{l1}</strong></>}
-                    {l2 && <><span>/</span><strong>{l2}</strong></>}
-                    {l3 && <><span>/</span><strong>{l3}</strong></>}
-                    {province && <><span>·</span><strong>产地：{province}</strong></>}
-                    <span>·</span><span>匹配 <b>{total}</b> 个货源</span>
+
+                <div className="hall-filter-line">
+                  <span className="hall-filter-label">产业链</span>
+                  <div className="hall-chip-scroll">
+                    <button type="button" className={l1 === '' ? 'on' : ''} onClick={() => { setL1(''); setL2(''); setL3(''); setPage(1) }}>全部</button>
+                    {level1.map((item) => (
+                      <button type="button" key={item} className={l1 === item ? 'on' : ''}
+                        onClick={() => { setL1(item); setL2(''); setL3(''); setPage(1) }}>{item}</button>
+                    ))}
                   </div>
-                  <div className="hall-filter-row">
-                    <span className="hall-filter-label">一级产业</span>
-                    <div className="hall-chips">
-                      <button type="button" className={l1 === '' ? 'on' : ''} onClick={() => { setL1(''); setL2(''); setL3(''); setPage(1) }}>全部产业</button>
-                      {level1.map((item) => (
-                        <button type="button" key={item} className={l1 === item ? 'on' : ''}
-                          onClick={() => { setL1(item); setL2(''); setL3(''); setPage(1) }}>{item}</button>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="hall-filter-row">
-                    <span className="hall-filter-label">二级品类</span>
-                    <div className="hall-chips">
-                      {!level2.length && <span className="hall-hint">请选择一级产业</span>}
+                </div>
+
+                {l1 && (
+                  <div className="hall-filter-line">
+                    <span className="hall-filter-label">品类</span>
+                    <div className="hall-chip-scroll">
                       {level2.map((item) => (
                         <button type="button" key={item} className={l2 === item ? 'on' : ''}
                           onClick={() => { setL2(item); setL3(''); setPage(1) }}>{item}</button>
                       ))}
                     </div>
                   </div>
-                  <div className="hall-filter-row">
-                    <span className="hall-filter-label">三级品种</span>
-                    <div className="hall-chips">
-                      {!level3.length && <span className="hall-hint">请选择二级品类</span>}
+                )}
+
+                {l2 && level3.length > 0 && (
+                  <div className="hall-filter-line">
+                    <span className="hall-filter-label">品种</span>
+                    <div className="hall-chip-scroll">
                       {level3.map((item) => (
                         <button type="button" key={item} className={l3 === item ? 'on' : ''}
                           onClick={() => { setL3(item); setPage(1) }}>{item}</button>
                       ))}
                     </div>
                   </div>
-                  <div className="hall-filter-row">
-                    <span className="hall-filter-label">产地</span>
-                    <div className="hall-province-groups">
-                      <div className="hall-chips">
-                        <button type="button" className={province === '' ? 'on' : ''} onClick={() => { setProvince(''); setPage(1) }}>全部省份</button>
-                      </div>
+                )}
+
+                <div className="hall-filter-line hall-filter-province" ref={provinceRef}>
+                  <span className="hall-filter-label">产地</span>
+                  <div className="hall-chip-scroll">
+                    <button type="button" className={province === '' ? 'on' : ''}
+                      onClick={() => { setProvince(''); setPage(1) }}>全部</button>
+                    {topProvinceOptions.map((name) => (
+                      <button type="button" key={name} className={province === name ? 'on' : ''}
+                        onClick={() => { setProvince(name); setPage(1); setProvinceOpen(false) }}>{name}</button>
+                    ))}
+                  </div>
+                  <button type="button" className={provinceOpen ? 'hall-more open' : 'hall-more'}
+                    aria-expanded={provinceOpen} onClick={() => setProvinceOpen((open) => !open)}>
+                    更多产地<span aria-hidden>{provinceOpen ? '▴' : '▾'}</span>
+                  </button>
+                  {provinceOpen && (
+                    <div className="hall-province-pop" role="dialog" aria-label="更多产地">
                       {PROVINCE_GROUPS.map((group) => {
                         const items = HALL_PROVINCES.filter((item) => item.group === group)
                         if (!items.length) return null
                         return (
-                          <div className="hall-province-group" key={group}>
+                          <div className="hall-province-pop-group" key={group}>
                             <span>{group}</span>
-                            <div className="hall-chips">
+                            <div className="hall-province-pop-chips">
                               {items.map((item) => (
                                 <button type="button" key={item.name} className={province === item.name ? 'on' : ''}
-                                  onClick={() => { setProvince(item.name); setPage(1) }}>{item.name}</button>
+                                  onClick={() => { setProvince(item.name); setPage(1); setProvinceOpen(false) }}>{item.name}</button>
                               ))}
                             </div>
                           </div>
                         )
                       })}
                     </div>
-                  </div>
+                  )}
                 </div>
-              </aside>
+
+                {hasFilter && (
+                  <div className="hall-active-row">
+                    <span className="hall-active-label">已选</span>
+                    {activeFilters.map((filter) => (
+                      <button type="button" key={filter.key} className="hall-active-chip" onClick={filter.clear}>
+                        {filter.label}<i aria-hidden>×</i>
+                      </button>
+                    ))}
+                    <button type="button" className="hall-active-reset" onClick={resetFilters}>清空全部</button>
+                  </div>
+                )}
+              </section>
 
               <section className="hall-list">
                 <div className="hall-toolbar">
-                  <span>共 <b>{total}</b> 个在售商品{total > 0 ? `（第 ${page} / ${pages} 页）` : ''}</span>
+                  <span>{pages > 1 ? <>第 <b>{page}</b> / {pages} 页</> : <>共 <b>{total}</b> 个在售商品</>}</span>
                   <div className="hall-chips">
                     {[
                       { key: 'default', label: '综合' },

@@ -148,7 +148,7 @@ function goShopping() {
   border-radius: 999rpx;
   background: #fff;
   color: #4b5d53;
-  font-size: 21rpx;
+  font-size: 24rpx;
   line-height: 58rpx;
 }
 
@@ -192,7 +192,7 @@ function goShopping() {
 
 .order-kicker {
   color: #12764a;
-  font-size: 15rpx;
+  font-size: 24rpx;
   font-weight: 700;
   letter-spacing: 2rpx;
 }
@@ -200,7 +200,7 @@ function goShopping() {
 .order-no {
   margin-top: 4rpx;
   color: #0b1a12;
-  font-size: 22rpx;
+  font-size: 24rpx;
   font-weight: 700;
 }
 
@@ -245,14 +245,14 @@ function goShopping() {
 
 .item-name {
   color: #0b1a12;
-  font-size: 23rpx;
+  font-size: 24rpx;
   font-weight: 650;
 }
 
 .item-spec {
   margin-top: 6rpx;
   color: #84938a;
-  font-size: 18rpx;
+  font-size: 24rpx;
 }
 
 .item-bottom {
@@ -260,7 +260,7 @@ function goShopping() {
   justify-content: space-between;
   margin-top: auto;
   color: #52665a;
-  font-size: 19rpx;
+  font-size: 24rpx;
 }
 
 .order-foot {
@@ -271,12 +271,12 @@ function goShopping() {
 
 .order-time {
   color: #93a29a;
-  font-size: 17rpx;
+  font-size: 24rpx;
 }
 
 .order-total {
   color: #52665a;
-  font-size: 20rpx;
+  font-size: 24rpx;
 }
 
 .order-total .price {

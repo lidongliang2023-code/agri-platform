@@ -1,3 +1,5 @@
+import Table from '@/components/BusinessRecordList'
+import PageContainer from '@/components/ProductionPageContainer'
 /**
  * 页面名称：区块链存证总览
  * 路由路径：/production/blockchain
@@ -34,8 +36,6 @@ import {
   Select,
   Space,
   Statistic,
-  Switch,
-  Table,
   Tag,
   Typography,
   message,
@@ -47,7 +47,6 @@ import {
   CloudUploadOutlined,
   LinkOutlined,
   ReloadOutlined,
-  SettingOutlined,
 } from '@ant-design/icons'
 import ReactECharts from 'echarts-for-react'
 import type { EChartsOption } from 'echarts'
@@ -60,26 +59,6 @@ import {
 import type { BlockchainBizRecord } from '@/types'
 import { asApiRequestError, httpStatusOf, toNumber } from '@/utils/request'
 import useFarmStore from '@/store/farm'
-
-/** 存证设置本地缓存键 */
-const SETTINGS_KEY = 'agri_bc_settings'
-
-/** 存证设置项结构 */
-interface ChainSettings {
-  /** 是否开启自动上链 */
-  autoAnchor: boolean
-  /** 安全确认阈值 */
-  confirmThreshold: number
-  /** 批量上链时间 */
-  batchTime: string
-}
-
-/** 默认存证设置 */
-const DEFAULT_SETTINGS: ChainSettings = {
-  autoAnchor: true,
-  confirmThreshold: 6,
-  batchTime: '03:30',
-}
 
 /**
  * 业务类型编码 → 名称（取值是存证表 target_type，实测 TRACE / QUALITY / HARVEST）。
@@ -102,7 +81,7 @@ const BIZ_TYPE_NAME: Record<string, string> = {
  *
  * 只列**服务端能校验业务键**的四类：采收批次 / 质检单 / 投入品使用 / 溯源码。
  * 旧版还有 FARMING、CIRCULATION、IOT —— 这三类本部署没有可校验的业务主数据入口，
- * 单号是自由填写的，出证等于给一个可能不存在（或属于别家主体）的键伪造"已上链"，
+ * 单号是自由填写的，出证等于给一个可能不存在（或属于别家主体）的键伪造"已存证（模拟）"，
  * 所以后端直接拒绝（ChainRecordServiceImpl#normalizeType），表单也不再提供这个选项。
  */
 const BIZ_TYPE_OPTIONS = [
@@ -114,20 +93,6 @@ const BIZ_TYPE_OPTIONS = [
 
 /** 类型分布取数上限：后端 records 是分页接口，这里一次性取一批做本地分组统计 */
 const STAT_SCAN_SIZE = 500
-
-/**
- * 读取本地存证设置
- * @returns 存证设置
- */
-function readSettings(): ChainSettings {
-  try {
-    const raw = localStorage.getItem(SETTINGS_KEY)
-    if (!raw) return DEFAULT_SETTINGS
-    return { ...DEFAULT_SETTINGS, ...(JSON.parse(raw) as Partial<ChainSettings>) }
-  } catch {
-    return DEFAULT_SETTINGS
-  }
-}
 
 /**
  * 把查询失败原因转成明示文案：区分「后端业务拒绝」「HTTP 非 200」「后端不可达」，
@@ -164,7 +129,7 @@ interface RecentRow {
 /**
  * 区块链存证总览（原型 P27）
  *
- * 业务职责：展示后端真实提供的存证总量 / 上链成功 / 上链失败三项指标，
+ * 业务职责：展示后端真实提供的存证总量 / 存证成功 / 上链失败三项指标，
  * 用真实存证记录统计类型分布与最近存证，并对后端未提供的能力做明示说明。
  *
  * @returns 页面内容
@@ -175,14 +140,11 @@ export default function BlockchainOverview(): JSX.Element {
   const farmId = useFarmStore((state) => state.currentFarm?.farmId)
 
   const [anchorOpen, setAnchorOpen] = useState<boolean>(false)
-  const [settingsOpen, setSettingsOpen] = useState<boolean>(false)
-  const [settings, setSettings] = useState<ChainSettings>(() => readSettings())
   const [anchorForm] = Form.useForm<{
     bizType: string
     bizNo: string
     bizSummary?: string
   }>()
-  const [settingsForm] = Form.useForm<ChainSettings>()
 
   /** 总览统计：后端真实形状 {total, success, failed}（值可能是字符串） */
   const overviewQuery = useQuery({
@@ -242,7 +204,7 @@ export default function BlockchainOverview(): JSX.Element {
     mutationFn: (payload: { bizType: string; bizNo: string; bizSummary?: string }) =>
       anchorRecord(payload),
     onSuccess: () => {
-      message.success('已提交上链，链上确认后将更新存证状态')
+      message.success('已提交存证，请在存证记录核对处理状态；当前未接入真实区块链')
       setAnchorOpen(false)
       anchorForm.resetFields()
       void queryClient.invalidateQueries({ queryKey: ['blockchain-overview'] })
@@ -289,7 +251,7 @@ export default function BlockchainOverview(): JSX.Element {
       render: (status: string) =>
         status === 'SUCCESS' ? (
           <Tag color="success" icon={<CheckCircleFilled />}>
-            已上链
+            已存证（模拟）
           </Tag>
         ) : status === 'PENDING' ? (
           <Tag color="processing" icon={<ClockCircleOutlined />}>
@@ -301,31 +263,14 @@ export default function BlockchainOverview(): JSX.Element {
     },
   ]
 
-  /** 打开存证设置弹窗 */
-  const openSettings = (): void => {
-    settingsForm.setFieldsValue(settings)
-    setSettingsOpen(true)
-  }
-
-  /** 保存存证设置（本地持久化） */
-  const submitSettings = (): void => {
-    const values = settingsForm.getFieldsValue() as ChainSettings
-    const next: ChainSettings = {
-      autoAnchor: values.autoAnchor !== false,
-      confirmThreshold: Number(values.confirmThreshold) || DEFAULT_SETTINGS.confirmThreshold,
-      batchTime: values.batchTime || DEFAULT_SETTINGS.batchTime,
-    }
-    setSettings(next)
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(next))
-    message.success('存证设置已保存')
-    setSettingsOpen(false)
-  }
-
   const overviewError = overviewQuery.isError
   const recordsError = recordsQuery.isError
 
   return (
+    <PageContainer title="🔗 区块链存证总览">
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
+      <Alert type="warning" showIcon message="当前使用模拟存证，未接入真实区块链"
+        description="本地存证与核验只用于核对库内记录，不能证明第三方链上真实性，也不代替质量检测结论。自动上链及定时批量上链尚未提供。" />
       {overviewError && (
         <Alert
           type="error"
@@ -398,9 +343,6 @@ export default function BlockchainOverview(): JSX.Element {
             >
               手动上链
             </Button>
-            <Button icon={<SettingOutlined />} onClick={openSettings}>
-              存证设置
-            </Button>
           </Space>
         }
       >
@@ -418,7 +360,7 @@ export default function BlockchainOverview(): JSX.Element {
           <Col xs={24} sm={12} lg={6}>
             <Card size="small">
               <Statistic
-                title="上链成功"
+                title="存证成功"
                 value={overviewError ? '—' : success}
                 suffix="条"
                 valueStyle={{ color: '#13a05a' }}
@@ -449,12 +391,7 @@ export default function BlockchainOverview(): JSX.Element {
             </Card>
           </Col>
         </Row>
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          数据来源：GET /api/v1/production/blockchain/overview。「存证总数 / 上链成功 /
-          上链失败」是后端直接返回的字段（后端返回的是字符串，展示前已转数字）；
-          「未成功（含上链中）」是<strong>推导值</strong> = total − success − failed，
-          <strong>不是后端字段</strong>。环比增幅、验证通过率等指标后端未提供，故不展示。
-        </Typography.Text>
+
       </Card>
 
       <Row gutter={[16, 16]}>
@@ -493,23 +430,7 @@ export default function BlockchainOverview(): JSX.Element {
             </Typography.Text>
           </Card>
         </Col>
-        <Col xs={24} lg={10}>
-          <Card
-            title={
-              <Space>
-                <LinkOutlined />
-                <span>链上健康度</span>
-              </Space>
-            }
-          >
-            <Alert
-              type="info"
-              showIcon
-              message="后端暂未提供链上健康度指标"
-              description="联盟链运行状态、当前区块高度、最近出块时间、共识节点数、链上确认率、链ID、数据完整性校验 —— 后端 GET /blockchain/overview 均不返回这些字段，本页不填充任何占位数值。"
-            />
-          </Card>
-        </Col>
+        
       </Row>
 
       <Row gutter={[16, 16]}>
@@ -540,31 +461,7 @@ export default function BlockchainOverview(): JSX.Element {
             />
           </Card>
         </Col>
-        <Col xs={24} lg={10}>
-          <Card
-            title={
-              <Space>
-                <ClockCircleOutlined />
-                <span>待上链队列</span>
-              </Space>
-            }
-            extra={
-              <Button
-                size="small"
-                onClick={() => navigate('/production/blockchain/records?status=PENDING')}
-              >
-                查看上链中的记录
-              </Button>
-            }
-          >
-            <Alert
-              type="info"
-              showIcon
-              message="后端暂未提供待上链队列与批量上链能力"
-              description="后端没有「待上链队列」查询端点，也没有批量上链 / 重试上链端点（POST /blockchain/anchor 只能单条新建存证）。本页不再提供「立即上链」按钮 —— 旧实现点一次只新建一条 BATCH 存证，却提示「N 条待上链数据已上链」，属于写操作假成功。请到存证记录列表按状态筛选后逐条处理。"
-            />
-          </Card>
-        </Col>
+        
       </Row>
 
       <Card title="存证验证工具">
@@ -587,11 +484,6 @@ export default function BlockchainOverview(): JSX.Element {
             >
               存证记录列表
             </Button>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              安全确认阈值设置：≥ {settings.confirmThreshold} 个区块
-              {settings.autoAnchor ? '（自动上链已开启）' : '（自动上链已关闭）'}
-              （该阈值为本地设置项，后端验真不使用它）
-            </Typography.Text>
           </Space>
         </Space>
       </Card>
@@ -633,31 +525,8 @@ export default function BlockchainOverview(): JSX.Element {
         </Form>
       </Modal>
 
-      <Modal
-        title="存证设置"
-        open={settingsOpen}
-        onCancel={() => setSettingsOpen(false)}
-        onOk={submitSettings}
-        okText="保存"
-        cancelText="取消"
-        destroyOnClose
-      >
-        <Form form={settingsForm} layout="vertical" initialValues={settings} preserve={false}>
-          <Form.Item name="autoAnchor" label="自动上链" valuePropName="checked">
-            <Switch checkedChildren="开启" unCheckedChildren="关闭" />
-          </Form.Item>
-          <Form.Item
-            name="confirmThreshold"
-            label="安全确认阈值（区块确认数）"
-            rules={[{ required: true, message: '请输入安全确认阈值' }]}
-          >
-            <Input type="number" min={1} max={100} placeholder="6" />
-          </Form.Item>
-          <Form.Item name="batchTime" label="定时批量上链时间">
-            <Input placeholder="03:30" />
-          </Form.Item>
-        </Form>
-      </Modal>
+
     </Space>
+    </PageContainer>
   )
 }

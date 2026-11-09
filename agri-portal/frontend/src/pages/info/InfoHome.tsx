@@ -1,3 +1,4 @@
+import { PortalPageHero } from '../../components/PortalPageHero'
 import { useEffect, useState } from 'react'
 import {
   dayLabel,
@@ -105,14 +106,8 @@ export function InfoHome(): JSX.Element {
   }
 
   return (
-    <div className="info-page">
-      <section className="info-hero">
-        <h1>读懂行情，种好每一亩</h1>
-        <p>
-          汇聚核心农产品品种的产地与批发市场价格、行业资讯、供需信息、农技知识与认证专家，
-          开放浏览、无需登录 —— 让产地与市场之间的信息差归零。
-        </p>
-
+    <div className="info-page portal-channel-page">
+      <PortalPageHero badge="产业资讯 · 行情与知识服务" title="读懂行情，种好每一亩" description="汇聚农产品产地与批发市场价格、行业资讯、供需信息、农技知识与认证专家，让产地与市场高效连接。">
         <div className="info-hero-metrics">
           <div className="info-hero-metric">
             <b>{stats.monitoredQuotes ?? '—'}</b>
@@ -154,7 +149,7 @@ export function InfoHome(): JSX.Element {
             </button>
           ))}
         </div>
-      </section>
+      </PortalPageHero>
 
       {loading && <div className="info-loading">正在加载资讯…</div>}
 

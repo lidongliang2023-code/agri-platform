@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS gov_subject (
     contact_phone VARCHAR(40),
     address VARCHAR(300),
     region VARCHAR(100),
+    region_code VARCHAR(12),
     industry VARCHAR(80),
     scale_text VARCHAR(80),
     credit_score INT DEFAULT 90,
@@ -251,6 +252,7 @@ CREATE TABLE IF NOT EXISTS gov_complaint (
     reporter_phone VARCHAR(40),
     anonymous BOOLEAN DEFAULT FALSE,
     target_name VARCHAR(200),
+    region_code VARCHAR(12),
     status VARCHAR(30) DEFAULT 'accepted',
     priority VARCHAR(20) DEFAULT 'normal',
     assigned_org VARCHAR(120),
@@ -351,8 +353,43 @@ CREATE TABLE IF NOT EXISTS gov_op_log (
     role_name VARCHAR(80),
     action_name VARCHAR(120),
     target_name VARCHAR(200),
+    region_code VARCHAR(12),
     subject_id BIGINT,
     detail VARCHAR(1200),
     ip_address VARCHAR(60),
     created_at VARCHAR(40)
+);
+
+-- 监管范围配置登记：不自动授予人员权限，不替代业务接口的数据过滤。
+CREATE TABLE IF NOT EXISTS gov_scope_config (
+    id VARCHAR(36) PRIMARY KEY,
+    organization_code VARCHAR(64) NOT NULL UNIQUE,
+    organization_name VARCHAR(160) NOT NULL,
+    status VARCHAR(20) NOT NULL,
+    regions_json MEDIUMTEXT NOT NULL,
+    note VARCHAR(1000),
+    version BIGINT NOT NULL,
+    updated_at VARCHAR(40) NOT NULL
+);
+CREATE TABLE IF NOT EXISTS gov_scope_config_audit (
+    id VARCHAR(36) PRIMARY KEY,
+    scope_id VARCHAR(36) NOT NULL,
+    version BIGINT NOT NULL,
+    operator_name VARCHAR(160) NOT NULL,
+    before_json MEDIUMTEXT,
+    snapshot_json MEDIUMTEXT NOT NULL,
+    created_at VARCHAR(40) NOT NULL,
+    UNIQUE(scope_id,version)
+);
+
+-- 监管人员授权与不可覆盖的版本审计
+CREATE TABLE IF NOT EXISTS gov_personnel_grant (
+ id VARCHAR(36) PRIMARY KEY, personnel_id BIGINT NOT NULL, scope_id VARCHAR(36) NOT NULL,
+ version BIGINT NOT NULL, snapshot_json MEDIUMTEXT NOT NULL, updated_at VARCHAR(40) NOT NULL,
+ UNIQUE(personnel_id,scope_id)
+);
+CREATE TABLE IF NOT EXISTS gov_personnel_grant_audit (
+ id VARCHAR(36) PRIMARY KEY, grant_id VARCHAR(36) NOT NULL, version BIGINT NOT NULL,
+ operator_name VARCHAR(160) NOT NULL, before_json MEDIUMTEXT, snapshot_json MEDIUMTEXT NOT NULL,
+ created_at VARCHAR(40) NOT NULL, UNIQUE(grant_id,version)
 );

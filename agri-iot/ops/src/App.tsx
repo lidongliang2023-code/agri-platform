@@ -1,3 +1,4 @@
+import CommandReceipts from '../../shared-ui/CommandReceipts'
 import { useEffect, useState, type ReactNode } from "react";
 import {
   AlertOutlined,
@@ -27,6 +28,7 @@ import {
   InputNumber,
   Modal,
   Progress,
+  Select,
   Table,
   Tag,
 } from "antd";
@@ -45,6 +47,7 @@ import {
   type Protocol,
   type Tenant,
   type WorkOrder,
+  type FirmwarePackage,
 } from "./api";
 import { downloadCsv, stampFilename } from "../../shared-ui/exportCsv";
 import { useClock } from "../../shared-ui/clock";
@@ -56,6 +59,7 @@ import UnifiedSsoGate, {
 type Page =
   | "dashboard"
   | "tenants"
+  | "firmwares"
   | "devices"
   | "gateways"
   | "alerts"
@@ -69,6 +73,7 @@ type Page =
 const PAGES: Page[] = [
   "dashboard",
   "tenants",
+  "firmwares",
   "devices",
   "gateways",
   "alerts",
@@ -83,6 +88,7 @@ const PAGES: Page[] = [
 const TITLES: Record<Page, string> = {
   dashboard: "运营概览大屏",
   tenants: "租户与配额",
+  firmwares: "固件包管理",
   devices: "平台设备监控",
   gateways: "网关运维",
   alerts: "告警运营中心",
@@ -120,6 +126,7 @@ const MENU: Array<{
       { page: "alerts", label: "告警运营中心", icon: <AlertOutlined /> },
       { page: "rules", label: "阈值规则治理", icon: <SlidersOutlined /> },
       { page: "workorders", label: "运维工单", icon: <ToolOutlined /> },
+      { page: "firmwares", label: "固件包管理", icon: <DatabaseOutlined /> },
       { page: "ota", label: "OTA 升级运营", icon: <ReloadOutlined /> },
     ],
   },
@@ -446,6 +453,7 @@ function Devices() {
   const [items, setItems] = useState<Device[]>([]),
     [status, setStatus] = useState("all"),
     [keyword, setKeyword] = useState("");
+  const [commandDevice,setCommandDevice]=useState<Device|null>(null);
   const load = () =>
     void opsApi
       .devices({ keyword, status: status === "all" ? undefined : status })
@@ -484,9 +492,11 @@ function Devices() {
     { title: "电量", dataIndex: "battery", render: (v) => `${v}%` },
     { title: "最近上报", dataIndex: "lastReport" },
     { title: "固件", dataIndex: "firmwareVersion" },
+    { title: "操作", key:"commands",fixed:"right",width:120,render:(_,r)=><Button onClick={()=>setCommandDevice(r)}>指令回执</Button> },
   ];
   return (
     <div className="o-page">
+      <Modal title="设备指令与回执" open={!!commandDevice} footer={null} width={1200} onCancel={()=>setCommandDevice(null)}>{commandDevice&&<CommandReceipts key={commandDevice.id} deviceId={commandDevice.id} load={opsApi.commandReceipts}/>}</Modal>
       <Title
         title="平台设备监控"
         desc="全平台设备在线状态、关键指标、租户归属与固件版本。"
@@ -528,7 +538,8 @@ function Devices() {
 }
 
 function Gateways() {
-  const { message } = AntApp.useApp();
+  const [receiptGateway,setReceiptGateway]=useState<Gateway | null>(null);
+  const { message, modal } = AntApp.useApp();
   const [items, setItems] = useState<Gateway[]>([]);
   const load = () =>
     void opsApi
@@ -539,7 +550,7 @@ function Gateways() {
   const restart = async (id: number) => {
     try {
       await opsApi.restartGateway(id);
-      message.success("远程重启指令已下发");
+      message.info("重启申请已登记，请查看回执；未确认网关执行");
       load();
     } catch (e) {
       message.error(e instanceof Error ? e.message : "操作失败");
@@ -547,6 +558,7 @@ function Gateways() {
   };
   return (
     <div className="o-page">
+      <Modal title="网关重启与OTA升级回执" open={!!receiptGateway} footer={null} width={1200} onCancel={()=>setReceiptGateway(null)}>{receiptGateway&&<><h3>重启回执</h3><CommandReceipts key={'restart'+receiptGateway.id} deviceId={receiptGateway.id} load={opsApi.gatewayCommandReceipts}/><h3>OTA升级回执（动作列为目标版本）</h3><CommandReceipts key={'ota'+receiptGateway.id} deviceId={receiptGateway.id} load={opsApi.otaReceipts}/></>}</Modal>
       <Title
         title="网关运维"
         desc="网关在线率、挂载设备、资源占用与远程维护。"
@@ -586,7 +598,8 @@ function Gateways() {
             />
             <footer>
               <span>{g.model}</span>
-              <Button size="small" onClick={() => void restart(g.id)}>
+              <Button size="small" onClick={()=>setReceiptGateway(g)}>重启/升级回执</Button>
+              <Button size="small" onClick={() => modal.confirm({title:"申请重启网关",content:"重启可能中断挂载设备通信。申请不代表执行成功，请按指令回执核验。",onOk:()=>restart(g.id)})}>
                 远程重启
               </Button>
             </footer>
@@ -616,7 +629,7 @@ function Alerts() {
       return;
     }
     try {
-      await opsApi.handleAlert(target.id, note.trim());
+      await opsApi.handleAlert(target.id, note.trim(), target.status === "pending" ? "handling" : "resolved");
       setTarget(null);
       setNote("");
       message.success("告警已处置");
@@ -629,7 +642,7 @@ function Alerts() {
     <div className="o-page">
       <Title
         title="告警运营中心"
-        desc="全平台告警分派、响应时限、误报标记与运维闭环。"
+        desc="全平台设备告警统一台账；待处理→处理中→已处理，双端共用处置记录。"
       />
       <div className="o-alert-grid">
         {items.map((a) => (
@@ -661,9 +674,9 @@ function Alerts() {
                 <Button
                   size="small"
                   type="primary"
-                  onClick={() => setTarget(a)}
+                  onClick={() => { setTarget(a); setNote(""); }}
                 >
-                  立即处置
+                  登记处置
                 </Button>
               )}
             </footer>
@@ -990,23 +1003,289 @@ function Access() {
   );
 }
 
+
+function Firmwares() {
+  const { message } = AntApp.useApp();
+  const [items, setItems] = useState<FirmwarePackage[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [type, setType] = useState<string>('');
+  const [status, setStatus] = useState<string>('');
+  const [model, setModel] = useState<string>('');
+  const [modalOpen, setModalOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [uploading,setUploading]=useState(false);
+  const [uploaded,setUploaded]=useState(false);
+  const [expectedHash,setExpectedHash]=useState('');
+  const uploadFile=async(file:File)=>{
+    if(file.size===0 || file.size>268435456){message.error('请选择大于0且不超过256MB的固件文件');return}
+    setUploading(true);
+    try{const result=await opsApi.uploadFirmwarePackage(file,expectedHash.trim());form.setFieldsValue(result);setUploaded(true);message.success('上传完成，服务端已计算并核验SHA-256及大小')}
+    catch(e){message.error(e instanceof Error?e.message:'上传失败')}
+    finally{setUploading(false)}
+  };
+  const [form] = Form.useForm();
+
+  const load = () => {
+    setLoading(true);
+    opsApi
+      .listFirmwarePackages({
+        type: type || undefined,
+        status: status || undefined,
+        model: model.trim() || undefined,
+      })
+      .then(setItems)
+      .catch((e: Error) => message.error(e.message))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(load, [type, status, model]);
+
+  const handleRegister = async () => {
+    try {
+      const values = await form.validateFields();
+      setSaving(true);
+      const result=await opsApi.registerFirmwarePackage(values);
+      const saved=await opsApi.getFirmwarePackage(result.id);
+      if(saved.versionName!==values.versionName.trim()||saved.packageUrl!==values.packageUrl.trim()||saved.sha256Text!==values.sha256Text.trim().toLowerCase())throw new Error('服务端保存回读不一致，请刷新核对，勿重复登记');
+      message.success('固件草稿包登记成功');
+      setModalOpen(false);
+      form.resetFields();
+      load();
+    } catch (e) {
+      if (e instanceof Error) message.error(e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handlePublish = async (id: number) => {
+    try {
+      await opsApi.publishFirmwarePackage(id);
+      if((await opsApi.getFirmwarePackage(id)).status!=='stable')throw new Error('发布状态回读未确认');
+      message.success('固件包已发布为稳定版');
+      load();
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : '发布失败');
+    }
+  };
+
+  const [deprecating,setDeprecating]=useState<number|null>(null);
+  const [reason,setReason]=useState('');
+  const handleDeprecate = async (id: number) => {
+    try {
+      await opsApi.deprecateFirmwarePackage(id, reason);
+      if((await opsApi.getFirmwarePackage(id)).status!=='deprecated')throw new Error('废弃状态回读未确认');
+      setDeprecating(null);setReason('');
+      message.success('固件包已废弃');
+      load();
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : '操作失败');
+    }
+  };
+
+  const columns: ColumnsType<FirmwarePackage> = [
+    { title: 'ID', dataIndex: 'id', width: 70 },
+    {
+      title: '固件名称与版本',
+      key: 'name',
+      render: (_, r) => (
+        <div>
+          <b>{r.firmwareName}</b>
+          <div style={{ fontSize: 12, color: '#666' }}>
+            {r.versionName} · {r.firmwareType} · 型号: {r.targetModel}
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: '包大小',
+      dataIndex: 'fileSizeBytes',
+      width: 110,
+      render: (v) => (v ? `${(v / 1024 / 1024).toFixed(2)} MB` : '-'),
+    },
+    {
+      title: 'SHA-256 完整摘要',
+      dataIndex: 'sha256Text',
+      width: 220,
+      render: (v) => <span style={{ fontFamily: 'monospace', fontSize: 11 }}>{v}</span>,
+    },
+    {
+      title: '状态',
+      dataIndex: 'status',
+      width: 100,
+      render: (s) => (
+        <Tag color={s === 'stable' ? 'success' : s === 'draft' ? 'warning' : 'default'}>
+          {s === 'stable' ? '已发布稳定版' : s === 'draft' ? '草稿' : '已废弃'}
+        </Tag>
+      ),
+    },
+    {
+      title: '更新说明',
+      dataIndex: 'releaseNotes',
+      ellipsis: true,
+    },
+    {
+      title: '登记时间',
+      dataIndex: 'createdAt',
+      width: 160,
+    },
+    {
+      title: '操作',
+      key: 'action',
+      width: 160,
+      fixed: 'right',
+      render: (_, r) => (
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Button size="small" onClick={()=>Modal.info({title:'固件包详情',width:700,content:<div style={{wordBreak:'break-all'}}><p>{r.firmwareName} · {r.versionName}</p><p>适用型号：{r.targetModel}</p><p>包地址：{r.packageUrl||'历史未登记'}</p><p>SHA-256：{r.sha256Text}</p><p>发布：{r.publishedAt||'—'}；废弃：{r.deprecatedAt||'—'}</p><p>发布说明：{r.releaseNotes||'—'}</p><p>变更说明：{r.changelogText||'—'}</p></div>})}>详情</Button>
+          {r.status === 'draft' && (
+            <Button size="small" type="primary" onClick={() => Modal.confirm({title:'发布稳定版后包资料不可更改',content:'请确认已核验固件来源、型号和摘要。托管文件将重新核验摘要与大小；外部地址仅校验登记资料。均不代替真机兼容验收。',onOk:()=>handlePublish(r.id)})}>
+              发布稳定版
+            </Button>
+          )}
+          {r.status === 'stable' && (
+            <Button size="small" danger onClick={() => {setReason('');setDeprecating(r.id)}}>
+              下线废弃
+            </Button>
+          )}
+        </div>
+      ),
+    },
+  ];
+
+  return (
+    <div className="o-page">
+      <Title
+        title="固件包版本台账"
+        desc="设备与边缘网关的固件包、适用型号、完整SHA-256防篡改摘要及发布状态。"
+      />
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+        <div style={{ display: 'flex', gap: 12 }}>
+          <Select
+            placeholder="固件类型"
+            style={{ width: 130 }}
+            allowClear
+            value={type || undefined}
+            onChange={(v) => setType(v || '')}
+            options={[
+              { value: 'gateway', label: '边缘网关' },
+              { value: 'sensor', label: '传感器' },
+              { value: 'controller', label: '控制器' },
+            ]}
+          />
+          <Select
+            placeholder="状态"
+            style={{ width: 130 }}
+            allowClear
+            value={status || undefined}
+            onChange={(v) => setStatus(v || '')}
+            options={[
+              { value: 'draft', label: '草稿' },
+              { value: 'stable', label: '已发布稳定版' },
+              { value: 'deprecated', label: '已废弃' },
+            ]}
+          />
+          <Input
+            placeholder="适用型号搜索"
+            style={{ width: 160 }}
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
+          />
+          <Button icon={<ReloadOutlined />} onClick={load}>刷新</Button>
+        </div>
+        <Button type="primary" onClick={() => {setUploaded(false);setExpectedHash('');form.resetFields();setModalOpen(true)}}>登记新固件包</Button>
+      </div>
+
+      <Table
+        rowKey="id"
+        columns={columns}
+        dataSource={items}
+        loading={loading}
+        scroll={{x:1300}}
+        pagination={{ defaultPageSize: 10,showSizeChanger:true }}
+      />
+
+      <Modal title="废弃固件包" open={deprecating!==null} onCancel={()=>setDeprecating(null)} onOk={()=>{if(deprecating!==null)return handleDeprecate(deprecating)}} okButtonProps={{disabled:reason.trim().length<4}}>
+        <Input.TextArea value={reason} maxLength={300} onChange={e=>setReason(e.target.value)} placeholder="填写实际下线原因，至少4个字"/>
+      </Modal>
+      <Modal
+        title="登记新固件包"
+        open={modalOpen}
+        confirmLoading={saving || uploading}
+        onCancel={() => { if (!saving && !uploading) setModalOpen(false); }}
+        onOk={()=>{if(!uploading)return handleRegister()}}
+        okButtonProps={{disabled:uploading}}
+        okText="保存草稿包"
+      >
+        <Form form={form} layout="vertical" initialValues={{ firmwareType: 'gateway', targetModel: 'ALL' }}>
+          <Form.Item name="firmwareName" label="固件包名称" rules={[{ required: true, message: '请输入固件包名称' }]}>
+            <Input placeholder="如：EdgeGateway 稳定升级包" />
+          </Form.Item>
+          <Form.Item name="versionName" label="版本号（规范语义版本）" rules={[{ required: true, message: '请输入符合语义规则的版本号，如 v1.2.0' }]}>
+            <Input placeholder="v1.2.0" />
+          </Form.Item>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <Form.Item name="firmwareType" label="类型" style={{ flex: 1 }} rules={[{ required: true }]}>
+              <Select options={[{ value: 'gateway', label: '边缘网关' }, { value: 'sensor', label: '传感器' }, { value: 'controller', label: '控制器' }]} />
+            </Form.Item>
+            <Form.Item name="targetModel" label="适用型号" style={{ flex: 1 }} rules={[{ required: true }]}>
+              <Input placeholder="ALL 或 GW-PRO-2026" />
+            </Form.Item>
+          </div>
+          <div style={{marginBottom:16}}>
+            <p>上传固件文件后由服务端计算摘要与大小；不解压、不执行。仅支持bin/img/zip/fw/hex/tar/gz，最大256MB。上传校验不代替厂家签名和型号兼容认证。</p>
+            <Input value={expectedHash} disabled={uploading || uploaded} maxLength={64} onChange={e=>setExpectedHash(e.target.value)} placeholder="可选：厂家提供的预期SHA-256，填写后必须匹配"/>
+            <input type="file" accept=".bin,.img,.zip,.fw,.hex,.tar,.gz" disabled={uploading || saving} onChange={e=>{const file=e.target.files?.[0];if(file)void uploadFile(file);e.target.value=''}}/>
+            {uploading?<p>正在上传并校验，请勿关闭…</p>:null}
+            {uploaded?<p>已按实际文件核验；地址、摘要、大小已锁定。重新上传可替换，外部地址请重新打开登记窗口。</p>:<p>也可登记外部HTTPS地址，但本服务未核验其实际文件。</p>}
+          </div>
+          <Form.Item name="packageUrl" label="HTTPS 固件包下载链接" rules={[{ required: true, message: '请输入无鉴权片段的HTTPS固件地址' }]}>
+            <Input disabled={uploaded || uploading} placeholder="已部署的 HTTPS 固件文件地址" />
+          </Form.Item>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <Form.Item name="fileSizeBytes" label="包大小（字节）" style={{ flex: 1 }} rules={[{ required: true, message: '请输入文件大小' }]}>
+              <InputNumber disabled={uploaded || uploading} style={{ width: '100%' }} min={1} max={2147483648} placeholder="如 15728640" />
+            </Form.Item>
+          </div>
+          <Form.Item name="sha256Text" label="64位 SHA-256 防篡改摘要" rules={[{ required: true, message: '请输入64位HEX摘要' }]}>
+            <Input disabled={uploaded || uploading} placeholder="完整的64位sha256十六进制字符串" />
+          </Form.Item>
+          <Form.Item name="releaseNotes" label="发布说明">
+            <Input.TextArea rows={2} placeholder="固件版本核心特性或更新概要" />
+          </Form.Item>
+          <Form.Item name="changelogText" label="Changelog 详细变更">
+            <Input.TextArea rows={2} placeholder="修复问题清单及硬件兼容清单" />
+          </Form.Item>
+        </Form>
+      </Modal>
+    </div>
+  );
+}
+
 function Ota() {
   const { message } = AntApp.useApp();
   const [items, setItems] = useState<OtaTask[]>([]);
+  const [target,setTarget]=useState<OtaTask|null>(null);
+  const [gateways,setGateways]=useState<Gateway[]>([]);
+  const [ids,setIds]=useState<number[]>([]);
+  const [url,setUrl]=useState('');
+  const [firmware,setFirmware]=useState<FirmwarePackage|null>(null);
+  const [saving,setSaving]=useState(false);
   const load = () =>
     void opsApi
       .ota()
       .then(setItems)
       .catch((e: Error) => message.error(e.message));
-  useEffect(load, []);
+  useEffect(()=>{load();const timer=setInterval(load,10000);return()=>clearInterval(timer)}, []);
   const execute = async (id: number) => {
+    if(saving)return;setSaving(true);
     try {
-      await opsApi.executeOta(id);
-      message.success("OTA 任务已排入执行窗口，进度待网关回执后回写");
+      await opsApi.executeOta(id,ids,url);
+      setTarget(null);
+      message.success("升级申请已保存，等待网关领取与真实执行回执");
       load();
     } catch (e) {
       message.error(e instanceof Error ? e.message : "执行失败");
-    }
+    } finally {setSaving(false)}
   };
   return (
     <div className="o-page">
@@ -1014,6 +1293,12 @@ function Ota() {
         title="OTA 升级运营"
         desc="固件版本、灰度范围、执行窗口与升级结果。"
       />
+      <Modal title="确认OTA目标与固件" open={!!target} confirmLoading={saving} onCancel={()=>{if(!saving)setTarget(null)}} onOk={()=>{if(target)void execute(target.id)}} okButtonProps={{disabled:!ids.length||!url.trim()}}>
+        <p>仅选择与任务主体一致的网关；固件必须为稳定版且具有完整SHA-256。执行窗口仅作参考，本次确认后即可领取，有效期30分钟。接入端须验证固件签名、型号兼容及摘要，按指令编号幂等执行。</p>
+        <Select mode="multiple" style={{width:'100%'}} placeholder="选择目标网关" value={ids} onChange={setIds} options={gateways.map(g=>({value:g.id,label:`${g.gatewayName} · ${g.id}`}))}/>
+        <p style={{wordBreak:'break-all'}}>固件：{firmware?.firmwareName} · {firmware?.versionName}<br/>型号：{firmware?.targetModel}<br/>SHA-256：{firmware?.sha256Text}<br/>下载地址：{url || '尚未读取到完整固件包资料，禁止启动'}</p>
+      </Modal>
+      <p>成功数仅来自版本及摘要一致的网关回执；超时为结果未知。逐网关明细请在网关运维的回执入口查询。</p>
       <div className="o-ota-list">
         {items.map((t) => (
           <section className="o-card" key={t.id}>
@@ -1032,7 +1317,7 @@ function Ota() {
               <span>创建 {t.createdAt}</span>
             </div>
             <Progress
-              percent={Math.round((t.successCount / t.targetCount) * 100)}
+              percent={t.targetCount?Math.round((t.successCount / t.targetCount) * 100):0}
               strokeColor="#159a5e"
             />
             <footer>
@@ -1043,7 +1328,7 @@ function Ota() {
                 <Button
                   size="small"
                   type="primary"
-                  onClick={() => void execute(t.id)}
+                  onClick={() => {setTarget(t);setIds([]);setUrl('');setFirmware(null);setGateways([]);void Promise.all([opsApi.gateways(),opsApi.getFirmwarePackage(t.firmwareId)]).then(([gs,fw])=>{if(fw.status!=='stable'||!fw.packageUrl||!fw.fileSizeBytes)throw new Error('该任务关联固件缺少完整包资料或未发布');setFirmware(fw);setUrl(fw.packageUrl);setGateways(gs.filter(g=>fw.firmwareType==='gateway'&&(fw.targetModel==='ALL'||fw.targetModel===g.model)))}).catch((e:Error)=>message.error(e.message))}}
                 >
                   开始升级
                 </Button>
@@ -1058,6 +1343,9 @@ function Ota() {
 
 function WorkOrders() {
   const { message } = AntApp.useApp();
+  const [target,setTarget] = useState<WorkOrder | null>(null);
+  const [note,setNote] = useState("");
+  const [saving,setSaving] = useState(false);
   const [items, setItems] = useState<WorkOrder[]>([]);
   useEffect(() => {
     void opsApi
@@ -1067,7 +1355,7 @@ function WorkOrders() {
   }, [message]);
   return (
     <div className="o-page">
-      <Title title="运维工单" desc="故障工单、预防性维保、派单与 SLA 跟踪。" />
+      <Title title="运维工单" desc="用户报修与运营处理共用台账：待受理→处理中→已完成，保留实际处理结果。" />
       <section className="o-card o-table">
         <Table
           rowKey="id"
@@ -1100,9 +1388,21 @@ function WorkOrders() {
               render: (v) => <Status value={v} />,
             },
             { title: "创建", dataIndex: "createdAt" },
+            { title: "操作", key: "action", fixed: "right", width: 140, render: (_, row) =>
+              <Button disabled={!["pending", "processing"].includes(row.status)} onClick={() => {setTarget(row);setNote("");}}>
+                {row.status === "pending" ? "受理工单" : "登记完成"}</Button> },
           ]}
         />
       </section>
+      <Modal title={target?.status === "pending" ? "受理运维工单" : "登记实际维修完成结果"} open={Boolean(target)} confirmLoading={saving}
+        onCancel={() => {if(!saving)setTarget(null);}} onOk={async () => {
+          if(!target)return;
+          if(note.trim().length<4){message.error("请填写不少于4字的实际说明");return;}
+          setSaving(true);
+          try {await opsApi.handleWorkOrder(target.id,target.status==="pending"?"processing":"completed",note.trim());
+            const rows=await opsApi.workOrders();setItems(rows);setTarget(null);message.success("工单状态已保存并回读");
+          }catch(e){message.error(e instanceof Error?e.message:"保存失败");}finally{setSaving(false);}
+        }}><Input.TextArea rows={4} maxLength={200} showCount value={note} onChange={e=>setNote(e.target.value)} placeholder="实际处理进展或完成结果；不会自动改变设备心跳" /></Modal>
     </div>
   );
 }
@@ -1268,6 +1568,8 @@ function Content({ page }: { page: Page }) {
   switch (page) {
     case "tenants":
       return <Tenants />;
+    case "firmwares":
+      return <Firmwares />;
     case "devices":
       return <Devices />;
     case "gateways":
@@ -1334,11 +1636,11 @@ function OpsShell() {
           className="o-brand"
           onClick={() => go("dashboard")}
         >
-          <span>丰</span>
+          <img className="o-brand-logo" src={`${import.meta.env.BASE_URL}fengchain.svg`} alt="丰链云" />
           {!collapsed && (
             <div>
               <b>丰链云</b>
-              <small>物联网运营平台</small>
+              <small>FENGCHAIN · AGRI</small>
             </div>
           )}
         </button>

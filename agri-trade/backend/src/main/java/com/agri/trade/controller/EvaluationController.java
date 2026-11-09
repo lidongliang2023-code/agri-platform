@@ -65,7 +65,7 @@ public class EvaluationController {
     @GetMapping("/{id}")
     public ApiResponse<Evaluation> getEvaluationById(@PathVariable Long id) {
         Evaluation evaluation = evaluationMapper.selectById(id);
-        if (evaluation == null) return ApiResponse.error("评价不存在");
+        if (evaluation == null) return ApiResponse.error(404, "评价不存在");
         return ApiResponse.success(evaluation);
     }
 
@@ -82,7 +82,7 @@ public class EvaluationController {
         }
         TradeOrder order = orderMapper.selectById(evaluation.getOrderId());
         if (order == null) {
-            return ApiResponse.error("订单不存在");
+            return ApiResponse.error(404, "订单不存在");
         }
         PlatformIdentityService.MerchantScope scope = identityService.currentScope();
         if (!scope.resolved()) {
@@ -134,7 +134,7 @@ public class EvaluationController {
     @PutMapping("/{id}/reply")
     public ApiResponse<Boolean> replyEvaluation(@PathVariable Long id, @RequestBody java.util.Map<String, String> params) {
         Evaluation evaluation = evaluationMapper.selectById(id);
-        if (evaluation == null) return ApiResponse.error("评价不存在");
+        if (evaluation == null) return ApiResponse.error(404, "评价不存在");
 
         // 回复是**被评价方的官方回应**：只有被评价的那家主体能回，
         // 否则任何人都能替商家"回"一句（那句话在页面上是挂着商家名的）。
@@ -181,7 +181,7 @@ public class EvaluationController {
                                                  @RequestBody Map<String, Object> params) {
         Evaluation evaluation = evaluationMapper.selectById(id);
         if (evaluation == null) {
-            return ApiResponse.error("评价不存在");
+            return ApiResponse.error(404, "评价不存在");
         }
         // 申诉人 = 这条评价的被评价方。这里不能用"让调用方挑一个主体"那套：
         // 申诉人是由**单据本身**决定的（只有一个正确答案），而用户可能绑定多家主体，

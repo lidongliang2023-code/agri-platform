@@ -58,12 +58,12 @@ function publish() {
 .page-top > view { display: flex; flex-direction: column; gap: 5rpx; }
 .page-title { font-size: 38rpx; font-weight: 750; }
 .tabs { white-space: nowrap; }
-.tabs button { display: inline-flex; padding: 12rpx 22rpx; margin: 8rpx 10rpx 18rpx 0; border-radius: 28rpx; background: #e9f0ec; color: #718277; font-size: 21rpx; }
+.tabs button { display: inline-flex; padding: 12rpx 22rpx; margin: 8rpx 10rpx 18rpx 0; border-radius: 28rpx; background: #e9f0ec; color: #718277; font-size: 24rpx; }
 .tabs button.on { background: #12764a; color: #fff; }
 .order-list { display: flex; flex-direction: column; gap: 16rpx; }
 .order-card { display: flex; flex-direction: column; gap: 9rpx; padding: 24rpx; border: 1rpx solid #e1e9e3; border-radius: 22rpx; background: #fff; }
 .order-title { margin-top: 5rpx; font-size: 28rpx; font-weight: 650; }
-.order-meta { display: flex; flex-direction: column; gap: 4rpx; color: #94a198; font-size: 20rpx; }
+.order-meta { display: flex; flex-direction: column; gap: 4rpx; color: #94a198; font-size: 24rpx; }
 .order-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 4rpx; padding-top: 16rpx; border-top: 1rpx solid #edf2ee; }
-.link { color: #12764a; font-size: 21rpx; font-weight: 600; }
+.link { color: #12764a; font-size: 24rpx; font-weight: 600; }
 </style>

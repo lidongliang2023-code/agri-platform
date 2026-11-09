@@ -174,17 +174,17 @@ async function submitInsure() {
 .policy-head > view { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 3rpx; }
 .policy-head .strong { overflow: hidden; font-size: 24rpx; text-overflow: ellipsis; white-space: nowrap; }
 .figures { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8rpx; margin: 16rpx 0; padding: 14rpx; border-radius: 12rpx; background: #f4f8f5; }
-.figures view { display: flex; flex-direction: column; gap: 4rpx; font-size: 21rpx; }
+.figures view { display: flex; flex-direction: column; gap: 4rpx; font-size: 24rpx; }
 .product-scroll { white-space: nowrap; }
 .product-card { display: inline-flex; width: 330rpx; flex-direction: column; gap: 7rpx; margin-right: 14rpx; padding: 20rpx; border: 1rpx solid #e1e9e3; border-radius: 18rpx; background: #fff; vertical-align: top; white-space: normal; }
 .product-icon { font-size: 38rpx; }
-.product-premium { color: #0e5233; font-size: 22rpx; }
+.product-premium { color: #0e5233; font-size: 24rpx; }
 .product-card .muted { min-height: 84rpx; }
 .claim { display: flex; flex-direction: column; gap: 6rpx; margin-bottom: 14rpx; padding: 18rpx; border: 1rpx solid #f1dfc1; border-radius: 15rpx; background: #fffdf8; }
 .overlay { position: fixed; inset: 0; z-index: 20; display: flex; align-items: flex-end; background: rgba(5,25,15,.45); }
 .sheet { width: 100%; padding: 28rpx 28rpx calc(28rpx + env(safe-area-inset-bottom)); border-radius: 30rpx 30rpx 0 0; background: #fff; }
 .sheet-head, .between { margin-bottom: 20rpx; }
 .sheet-close { color: #718277; font-size: 44rpx; }
-.quote { display: flex; flex-direction: column; gap: 6rpx; margin: 16rpx 0; padding: 18rpx; border-radius: 14rpx; background: #f2f7f3; font-size: 21rpx; color: #4c5a51; }
+.quote { display: flex; flex-direction: column; gap: 6rpx; margin: 16rpx 0; padding: 18rpx; border-radius: 14rpx; background: #f2f7f3; font-size: 24rpx; color: #4c5a51; }
 .quote-total { font-size: 25rpx; font-weight: 650; color: #0e5233; }
 </style>

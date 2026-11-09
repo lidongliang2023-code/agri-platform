@@ -273,7 +273,7 @@ export function ConfigPage(): JSX.Element {
                   {row.label ?? row.configKey}
                   <Tag
                     className={`soft-tag tone-${ENFORCED_KEYS.has(row.configKey) ? 'green' : 'default'}`}
-                    style={{ marginLeft: 6, fontSize: 11 }}
+                    style={{ marginLeft: 6, fontSize: 'var(--o-fs-micro)' }}
                   >
                     {ENFORCED_KEYS.has(row.configKey) ? '已生效' : '仅记录'}
                   </Tag>

@@ -19,10 +19,12 @@ import {
   SendOutlined,
   ShopOutlined,
   StarOutlined,
+  SwapOutlined,
   TeamOutlined,
   TruckOutlined,
   WalletOutlined,
 } from '@ant-design/icons'
+import SellerP2tPanel from './SellerP2tPanel'
 import { shipOrder as shipOrderRequest } from '@/api/order'
 import { updateSellerProductStatus } from '@/api/product'
 import { getMySettlement, type SellerSettlementView } from '@/api/settlement'
@@ -59,6 +61,7 @@ import {
 const NAV: MemberNavItem[] = [
   { key: 'overview', label: '首页概览', icon: <HomeOutlined /> },
   { key: 'goods', label: '商品管理', icon: <AppstoreOutlined /> },
+  { key: 'p2t', label: '产销对接（承接）', icon: <SwapOutlined /> },
   { key: 'trade', label: '报价与撮合', icon: <StarOutlined /> },
   { key: 'chat', label: '洽谈消息', icon: <CustomerServiceOutlined /> },
   { key: 'sales', label: '销售订单', icon: <ShopOutlined /> },
@@ -732,7 +735,10 @@ export default function SellerCenter(): JSX.Element {
                   : active === 'fund' ? renderFund()
                     : active === 'customer' ? renderCustomer()
                       : active === 'iot' ? renderIot()
-                        : renderOverview()
+                        : active === 'p2t' ? (
+                          <SellerP2tPanel merchants={base.merchants} preferredMerchantId={sellerId} />
+                        )
+                          : renderOverview()
 
   return (
     <MemberCenterShell role="seller"

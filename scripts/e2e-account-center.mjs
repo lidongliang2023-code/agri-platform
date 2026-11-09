@@ -36,6 +36,16 @@ const redisCode = (phone) => execFileSync(
   { encoding: 'utf8' },
 ).trim()
 
+/** 直接跑一条 redis-cli（--raw 保证不带类型前缀）。 */
+const redisRun = (...args) => execFileSync('C:\\Redis\\redis-cli.exe', ['--raw', ...args],
+  { encoding: 'utf8' }).replace(/\r/g, '').trim()
+/** 本轮碰过的号码都登记在这里，收尾（含异常路径）统一清掉验证码/计数/冷却键。 */
+const smsPhonesTouched = []
+const sweepSmsKeys = (phone) => {
+  if (!phone) return
+  redisRun('KEYS', `agri:sms:*${phone}*`).split('\n').filter(Boolean).forEach((key) => redisRun('DEL', key))
+}
+
 const MYSQL_BIN = 'C:\\Program Files\\MySQL\\MySQL Server 8.4\\bin\\mysql.exe'
 /**
  * mysql CLI 不带 --default-character-set=utf8mb4 时，中文按控制台代码页（GBK）吐出来，
@@ -271,6 +281,13 @@ try {
     && original.data?.merchants?.filter((item) => item.merchantId === initialActiveMerchantId).length === 1,
   '登录会话只解析出一个当前主体', initialActiveMerchantId ?? '')
 
+  /**
+   * 取一个平台访问令牌给后面的"主体范围"用例用。
+   *
+   * <p>先按真实前端的方式在浏览器里 refresh；refresh 目前被"按子系统隔离刷新令牌"这条
+   * 在改的口径挡住（见下面的 console 说明），所以拿不到时退回脚本侧登录 ——
+   * 两条路都要打印是哪条通的，不能悄悄换一条就当作前端没问题。</p>
+   */
   const refreshedSession = await page.evaluate(async () => {
     const response = await fetch('/api/v1/auth/refresh', {
       method: 'POST',
@@ -280,8 +297,21 @@ try {
     })
     return await response.json()
   })
-  const accessToken = refreshedSession.data?.accessToken
-  check(refreshedSession.code === 0 && Boolean(accessToken), '可获取平台访问令牌用于主体范围验证')
+  let accessToken = refreshedSession.data?.accessToken
+  let tokenSource = '浏览器 /api/v1/auth/refresh'
+  if (!accessToken) {
+    console.log(`· 浏览器内 refresh 未拿到令牌（code=${refreshedSession.code} ${refreshedSession.message}）：`
+      + 'core-platform 正在把刷新令牌按子系统分开，而 /sso/login-standalone 只写全局 agri_refresh_token，'
+      + '浏览器请求带 Referer/Origin → 服务端按 portal 这个 client 找 agri_refresh_token_portal 找不到。'
+      + '本轮改用脚本侧登录取令牌，这条产品缺口单独上报。')
+    const nodeLogin = await (await fetch(`${GATEWAY}/api/v1/auth/login`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: account.phone, password: account.password, marketId: 1 }),
+    })).json()
+    accessToken = nodeLogin?.data?.accessToken
+    tokenSource = '脚本侧 /api/v1/auth/login'
+  }
+  check(Boolean(accessToken), '可获取平台访问令牌用于主体范围验证', `来源：${tokenSource}`)
 
   const testNickname = `账号中心测试${Date.now().toString().slice(-6)}`
   const profileSave = await request('/api/v1/sso/account/profile', {
@@ -357,32 +387,193 @@ try {
   check(loginRestored.code === 0 && loginRestored.data?.stage === 'done',
     '密码修改与恢复链路真实可用（原哈希已还原）', `恢复后登录 code=${loginRestored.code}`)
 
-  const newPhone = `199${String(Date.now()).slice(-8)}`
-  let sms = await request('/api/v1/sso/sms/code', {
-    method: 'POST',
-    body: JSON.stringify({ phone: newPhone, scene: 'change_phone' }),
+  /* ─────────── 绑定手机号：一条正链路 + 六条负分支（2026-11-03 重构） ───────────
+   *
+   * 旧版只有"发码 → 改 → 改回来"三步，且发码走的是**公开**端点 `/api/v1/sso/sms/code`。
+   * 那意味着任何人未登录都能对任意手机号发换绑码（骚扰 + 把对方刚收到的码顶掉），
+   * 而且"号码已被占用""号码没变"这类冲突要等用户填完 6 位码才被拒 —— 白烧一条码还要干等 60 秒。
+   * 现在换绑发码收在 `POST /api/v1/sso/account/phone/code`（要会话、先判冲突），
+   * 真落库仍在 `/phone` 且**占用判定放在验码之后**（发码与提交之间号可能被别人抢走）。
+   */
+  const codeKey = (phone) => `agri:sms:code:change_phone:${phone}`
+  const attemptKey = (phone) => `agri:sms:attempt:change_phone:${phone}`
+  const cooldownKey = (phone) => `agri:sms:cooldown:${phone}`
+  const sendPhoneCode = (phone) => {
+    smsPhonesTouched.push(phone)
+    return request('/api/v1/sso/account/phone/code', { method: 'POST', body: JSON.stringify({ phone }) })
+  }
+  const submitPhone = (phone, code) => request('/api/v1/sso/account/phone', {
+    method: 'POST', body: JSON.stringify({ phone, code }),
   })
-  let code = redisCode(newPhone)
-  const phoneChange = await request('/api/v1/sso/account/phone', {
-    method: 'POST',
-    body: JSON.stringify({ phone: newPhone, code }),
-  })
-  let afterPhone = await request('/api/v1/sso/account/summary')
-  check(sms.code === 0 && phoneChange.code === 0 && afterPhone.data?.phone === newPhone,
-    '短信验证后手机号变更真实落库', newPhone)
+  /** 永远不等于真码的错码（避免 1/1000000 概率撞对） */
+  const otherCode = (real, offset = 1) => String((Number(real) + offset) % 1_000_000).padStart(6, '0')
 
-  sms = await request('/api/v1/sso/sms/code', {
-    method: 'POST',
-    body: JSON.stringify({ phone: account.phone, scene: 'change_phone' }),
+  const newPhone = `199${String(Date.now()).slice(-8)}`
+  const voidPhone = `198${String(Date.now()).slice(-8)}`
+  const dailyPhone = `197${String(Date.now()).slice(-8)}`
+  const takenPhone = sql(`SELECT phone FROM agri_core.platform_user
+    WHERE deleted = 0 AND phone REGEXP '^1[3-9][0-9]{9}$' AND phone <> '${account.phone}' ORDER BY id LIMIT 1`)
+  // 上一轮如果中途中断，冷却/计数键会留在这里，把这一轮的第一次发码判成"60 秒内不重发"（假红）。
+  ;[newPhone, voidPhone, dailyPhone, account.phone, takenPhone].filter(Boolean).forEach(sweepSmsKeys)
+
+  const publicSend = await request('/api/v1/sso/sms/code', {
+    method: 'POST', body: JSON.stringify({ phone: newPhone, scene: 'change_phone' }),
   })
-  code = redisCode(account.phone)
-  const phoneRestore = await request('/api/v1/sso/account/phone', {
-    method: 'POST',
-    body: JSON.stringify({ phone: account.phone, code }),
-  })
-  afterPhone = await request('/api/v1/sso/account/summary')
-  check(sms.code === 0 && phoneRestore.code === 0 && afterPhone.data?.phone === account.phone,
-    '手机号测试后恢复登录账号')
+  check(publicSend.code !== 0 && /账号中心/.test(String(publicSend.message ?? '')),
+    '负分支：公开端点拒绝换绑场景的发码', String(publicSend.message ?? '').slice(0, 46))
+
+  const anonSend = await (await fetch(`${GATEWAY}/api/v1/sso/account/phone/code`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ phone: newPhone }),
+  })).json()
+  check(anonSend.code !== 0 && /登录/.test(String(anonSend.message ?? '')),
+    '负分支：没有会话就发不出换绑验证码', `code=${anonSend.code} ${String(anonSend.message ?? '').slice(0, 26)}`)
+
+  const sameSend = await sendPhoneCode(account.phone)
+  check(sameSend.code !== 0 && /相同/.test(String(sameSend.message ?? ''))
+    && redisRun('EXISTS', codeKey(account.phone)) === '0',
+  '负分支：新号与当前绑定号相同时直接拒，且不产生验证码', String(sameSend.message ?? '').slice(0, 40))
+
+  if (/^1[3-9]\d{9}$/.test(String(takenPhone))) {
+    const takenSend = await sendPhoneCode(takenPhone)
+    check(takenSend.code !== 0 && /已绑定其他账号/.test(String(takenSend.message ?? '')),
+      '负分支：号码已被别的账号占用时不发码', `${takenPhone}｜${String(takenSend.message ?? '').slice(0, 30)}`)
+  } else {
+    check(false, '负分支：号码已被别的账号占用时不发码', `演示库里找不到可借用的他人号码（takenPhone=${takenPhone}）`)
+  }
+
+  const firstSend = await sendPhoneCode(newPhone)
+  check(firstSend.code === 0 && firstSend.data?.sent === true,
+    '换绑发码走账号中心（登录态）成功', `devMode=${firstSend.data?.devMode} hint=${String(firstSend.data?.hint ?? '').slice(0, 26)}`)
+  const phoneCode = redisCode(newPhone)
+  check(/^\d{6}$/.test(String(phoneCode)) && !JSON.stringify(firstSend).includes(phoneCode),
+    '验证码只进 Redis/日志，响应体里没有明文码', `Redis=${phoneCode}`)
+  const resend = await sendPhoneCode(newPhone)
+  check(resend.code !== 0 && /60 秒/.test(String(resend.message ?? '')),
+    '负分支：60 秒内不重发', String(resend.message ?? '').slice(0, 30))
+
+  const wrongTry = await submitPhone(newPhone, otherCode(phoneCode))
+  check(wrongTry.code !== 0 && /还可试 4 次/.test(String(wrongTry.message ?? '')),
+    '负分支：错码只计一次错误，好码仍然可用', String(wrongTry.message ?? '').slice(0, 30))
+  const bound = await submitPhone(newPhone, phoneCode)
+  check(bound.code === 0 && bound.data?.loginNameChanged === true,
+    '正分支：换绑成功并回报"登录名同步变更"（该账号登录名就是手机号）', JSON.stringify(bound.data ?? {}).slice(0, 60))
+  const afterBound = await request('/api/v1/sso/account/summary')
+  check(afterBound.data?.phone === newPhone && afterBound.data?.username === newPhone,
+    '换绑后手机号与登录名都真的落到库里', `phone=${afterBound.data?.phone} username=${afterBound.data?.username}`)
+
+  const voidSend = await sendPhoneCode(voidPhone)
+  const voidCode = redisCode(voidPhone)
+  let voidLast = ''
+  for (let i = 0; i < 5; i += 1) {
+    const tried = await submitPhone(voidPhone, otherCode(voidCode, i + 1))
+    voidLast = String(tried.message ?? '')
+  }
+  check(voidSend.code === 0 && /错满 5 次/.test(voidLast),
+    '负分支：连续错满 5 次本条立即作废（不再是错第 6 次才作废）', voidLast.slice(0, 44))
+  const voidReuse = await submitPhone(voidPhone, voidCode)
+  check(voidReuse.code !== 0 && /过期或未发送/.test(String(voidReuse.message ?? ''))
+    && redisRun('EXISTS', codeKey(voidPhone)) === '0' && redisRun('EXISTS', attemptKey(voidPhone)) === '0',
+  '作废后连正确码也不再接受，Redis 里这条码与计数都已清掉', String(voidReuse.message ?? '').slice(0, 30))
+
+  /* ── 真机：换绑手机页面（禁用语义 + 同号提醒 + 成功后写清登录名变了） ── */
+  await openAccountView('security/phone')
+  const phoneInputs = page.locator('.account-phone-form input')
+  const sendButton = page.locator('.account-phone-form .account-code-row button')
+  const submitButton = page.locator('.account-phone-form button.btn-primary')
+  check(await sendButton.isDisabled(), '刚进页面时「获取验证码」不可点（还没填号码）')
+  await phoneInputs.first().fill(newPhone)
+  await sleep(400)
+  const sameNumberWarn = await page.evaluate(() => document.querySelector('.account-phone-form .account-field-warning')?.innerText.replace(/\s+/g, ' ') ?? '')
+  check(await sendButton.isDisabled() && sameNumberWarn.includes('就是当前绑定的号码'),
+    '填成当前绑定的号码时页面当场提醒，按钮仍不可点', sameNumberWarn.slice(0, 40))
+  await phoneInputs.first().fill(account.phone)
+  await sleep(400)
+  check(!(await sendButton.isDisabled()), '换成新号码后「获取验证码」解禁')
+  check(await submitButton.isDisabled(), '没填验证码时「确认变更」不可点（不会把空码送去后端）')
+  await sendButton.click()
+  const uiWaitCode = await (async () => {
+    for (let i = 0; i < 40; i += 1) {
+      const value = redisCode(account.phone)
+      if (/^\d{6}$/.test(String(value))) return value
+      await sleep(250)
+    }
+    return ''
+  })()
+  check(Boolean(uiWaitCode), '页面上点「获取验证码」真的走通了发码链路', `Redis=${uiWaitCode}`)
+  const uiNotice = await page.evaluate(() => document.querySelector('.account-notice')?.innerText.replace(/\s+/g, ' ') ?? '')
+  check(uiNotice.includes('验证码已'), '发码结果用真实提示告知（含开发通道说明）', uiNotice.slice(0, 40))
+  await phoneInputs.nth(1).fill(otherCode(uiWaitCode))
+  await sleep(300)
+  check(await submitButton.isEnabled(), '填了 6 位码后「确认变更」解禁（不管码对不对，对错由服务端判）')
+  await phoneInputs.nth(1).fill(uiWaitCode)
+  await sleep(200)
+  await submitButton.click()
+  /*
+   * 提示要在点的当下就抓：flash 几秒后自动消失，而下面轮询库要跑好几轮 SQL ——
+   * 先轮库再读文案，读到的是"提示已经没了"的页面（上一轮这条就是这么假红的）。
+   */
+  const submitNotice = await (async () => {
+    for (let i = 0; i < 40; i += 1) {
+      const text = await page.evaluate(() => document.querySelector('.account-notice')?.innerText.replace(/\s+/g, ' ') ?? '')
+      if (text.includes('已变更')) return text
+      await sleep(150)
+    }
+    return ''
+  })()
+  const restoredPhone = await (async () => {
+    for (let i = 0; i < 40; i += 1) {
+      const row = sql(`SELECT CONCAT(phone,'|',username) FROM agri_core.platform_user WHERE id=${platformUserId}`)
+      if (row === `${account.phone}|${account.phone}`) return row
+      await sleep(250)
+    }
+    return sql(`SELECT CONCAT(phone,'|',username) FROM agri_core.platform_user WHERE id=${platformUserId}`)
+  })()
+  check(submitNotice.includes('登录名同步'), '换绑成功的提示写清"登录名同步改为新手机号"', submitNotice.slice(0, 44))
+  check(restoredPhone === `${account.phone}|${account.phone}`,
+    '页面换绑回原号码：手机号与登录名一起回到开场值', restoredPhone)
+
+  /* ── 日发上限：运营端参数配置此前"能改没人执行"，现在真被读到 ── */
+  const limitBefore = sql(`SELECT config_value FROM agri_core.platform_uc_system_config WHERE config_key='captcha.sms.daily.limit'`)
+  const adminLogin = await (await fetch(`${GATEWAY}/api/v1/auth/login`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: 'admin', password: 'Admin@123' }),
+  })).json()
+  const adminToken = adminLogin?.data?.accessToken ?? ''
+  const setLimit = async (value) => (await fetch(`${GATEWAY}/api/v1/admin/uc/configs`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify([{ key: 'captcha.sms.daily.limit', value }]),
+  })).json()
+  const lowered = await setLimit('2')
+  check(lowered.code === 0, '运营端把当日发码上限临时改成 2（保存即失效缓存）', JSON.stringify(lowered.data ?? {}).slice(0, 50))
+  const limitTries = []
+  for (let i = 0; i < 3; i += 1) {
+    redisRun('DEL', cooldownKey(dailyPhone))   // 冷却是另一层：清掉它才能专测"当日条数"这条上限
+    limitTries.push(await sendPhoneCode(dailyPhone))
+  }
+  check(limitTries[0].code === 0 && limitTries[1].code === 0, '上限之内照常发码', `前两次 code=${limitTries.map((r) => r.code).join('/')}`)
+  check(limitTries[2].code !== 0 && /今日/.test(String(limitTries[2].message ?? '')),
+    '负分支：超过当日发码上限被拒', String(limitTries[2].message ?? '').slice(0, 46))
+  const limitRestored = await setLimit(limitBefore)
+  check(limitRestored.code === 0
+    && sql(`SELECT config_value FROM agri_core.platform_uc_system_config WHERE config_key='captcha.sms.daily.limit'`) === limitBefore,
+  '发码上限已还原', `开场值 ${limitBefore} → 现值 ${sql(`SELECT config_value FROM agri_core.platform_uc_system_config WHERE config_key='captcha.sms.daily.limit'`)}`)
+
+  /*
+   * 注意别把这句写成以 `[` 开头：上一条语句以 `)` 结束，ASI 不会补分号，
+   * 会被解析成 `check(...)[数组].forEach(...)` —— 报出来就是一个看不出所以然的
+   * "Cannot read properties of undefined"（本轮真踩了一次，栈只指到这一行）。
+   */
+  const phonesToSweep = [newPhone, voidPhone, dailyPhone, account.phone]
+  phonesToSweep.forEach(sweepSmsKeys)
+  /*
+   * 判据只针对**本轮用过的号码**：Redis 里可能同时有别的脚本/别的轮次留下的换绑键，
+   * 断言"全局没有 change_phone 键"会把别人的残留算成我的错（上一轮就是这么红的）。
+   */
+  const smsKeysLeft = redisRun('KEYS', 'agri:sms:*').split('\n').filter(Boolean)
+    .filter((key) => phonesToSweep.some((phone) => key.includes(phone)))
+  check(smsKeysLeft.length === 0, '清理：本轮号码的验证码/计数/冷却键都已从 Redis 清掉', `残留 ${smsKeysLeft.length} 个：${smsKeysLeft.slice(0, 2).join(' ')}`)
 
   const addressCreate = await request('/api/v1/sso/account/addresses', {
     method: 'POST',
@@ -885,9 +1076,16 @@ try {
 
   console.log('\n个人中心地址：http://localhost:8098/portal/#/account')
 } catch (error) {
-  check(false, '个人中心回归未抛异常', String(error).slice(0, 260))
+  /** 崩溃必须带栈：只写 message 的话，"哪一行炸了"要靠猜（本轮排查就在这上面绕了一圈）。 */
+  fs.writeFileSync(path.join(REPO_ROOT, 'outputs', 'account-center-crash.txt'),
+    `${error}\n${error?.stack ?? '(无栈)'}\n`, 'utf8')
+  const at = [...String(error?.stack ?? '').matchAll(/e2e-account-center\.mjs:(\d+):(\d+)/g)]
+    .map((match) => `L${match[1]}:${match[2]}`).slice(0, 3).join(' ')
+  check(false, '个人中心回归未抛异常', `${String(error).slice(0, 150)}${at ? `　栈：${at}（完整栈见 outputs/account-center-crash.txt）` : ''}`)
 } finally {
   /* ---------------- 收尾：本轮造的东西一律清零（断言红不红都要清） ---------------- */
+  // 验证码键有 TTL（日限键到当天午夜），但"本轮碰过的号码"不该留到明天再自然消失
+  smsPhonesTouched.filter(Boolean).forEach(sweepSmsKeys)
   const merchantIds = [addedMerchant?.merchantId, addedEnterprise?.merchantId]
     .filter((id) => /^\d+$/.test(String(id ?? '')))
   if (merchantIds.length) {

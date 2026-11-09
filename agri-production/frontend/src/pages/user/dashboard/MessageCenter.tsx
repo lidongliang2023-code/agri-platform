@@ -1,3 +1,4 @@
+import PageContainer from '@/components/ProductionPageContainer'
 /**
  * 页面名称：消息中心
  * 路由路径：/production/messages
@@ -219,14 +220,8 @@ export default function MessageCenter(): JSX.Element {
   }
 
   return (
+    <PageContainer title={<Space><BellOutlined />消息中心<Badge count={unreadTotal} /></Space>}>
     <Card
-      title={
-        <Space>
-          <BellOutlined style={{ color: '#13a05a' }} />
-          <span>消息中心</span>
-          <Badge count={unreadTotal} />
-        </Space>
-      }
       extra={
         <Space>
           <Input.Search
@@ -370,5 +365,6 @@ export default function MessageCenter(): JSX.Element {
         </Col>
       </Row>
     </Card>
+    </PageContainer>
   )
 }

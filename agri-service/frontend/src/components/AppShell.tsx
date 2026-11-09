@@ -125,11 +125,11 @@ export function AppShell({ children }: { children: ReactNode }): JSX.Element {
     <div className={`app-shell${collapsed ? ' sidebar-collapsed' : ''}`}>
       <aside className={`app-sidebar${mobileOpen ? ' mobile-open' : ''}`}>
         <button className="app-brand" type="button" onClick={() => go('home')}>
-          <span className="app-brand-mark">丰</span>
+          <img className="app-brand-mark" src={`${import.meta.env.BASE_URL}fengchain.svg`} alt="丰链云" />
           {!collapsed && (
             <span className="app-brand-copy">
               <b>丰链云</b>
-              <small>综合服务 · SERVICE</small>
+              <small>FENGCHAIN · AGRI</small>
             </span>
           )}
         </button>

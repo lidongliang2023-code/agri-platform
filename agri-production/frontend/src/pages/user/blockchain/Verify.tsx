@@ -1,3 +1,4 @@
+import PageContainer from '@/components/ProductionPageContainer'
 /**
  * 页面名称：存证验证
  * 路由路径：/production/blockchain/verify
@@ -341,8 +342,9 @@ export default function Verify(): JSX.Element {
     VERIFY_TYPE_OPTIONS.find((item) => item.value === verifyType)?.placeholder ?? ''
 
   return (
+    <PageContainer title="🔍 存证验真">
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      <Card title="🔍 存证验真">
+      <Card>
         <Space direction="vertical" size={16} style={{ width: '100%' }}>
           <Space direction="vertical" size={8} style={{ width: '100%' }}>
             <Typography.Text strong>验真方式</Typography.Text>
@@ -523,5 +525,6 @@ export default function Verify(): JSX.Element {
         </Card>
       )}
     </Space>
+    </PageContainer>
   )
 }

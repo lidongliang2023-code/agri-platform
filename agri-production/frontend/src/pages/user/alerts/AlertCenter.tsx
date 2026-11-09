@@ -1,3 +1,4 @@
+import Table from '@/components/BusinessRecordList'
 /**
  * 页面名称：告警中心
  * 路由路径：/production/alerts
@@ -9,16 +10,17 @@
  * - 顶部指标卡：未处理 / 处理中 / 已处理 / 已忽略 与各级别分布
  * - 筛选：告警级别（紧急 / 严重 / 一般 / 提示）、处理状态、告警场景（来源）、触发时间、关键字
  * - 列表：告警编号、标题、级别 Tag、场景、触发值、地块、触发时间、状态、处理人
- * - 处理闭环：确认受理（1→2）→ 提交处理（2→3，填处理措施与结果）→ 关闭告警（3→4）
+ * - 处理闭环：确认受理（1→2）→ 提交处理（2→3，填处理措施与结果），已处理即归档；忽略为独立终态
  * - 支持单条忽略与批量忽略
  *
- * 数据来源：`/alerts` + `/alerts/stats`；后端骨架阶段无数据时回落示例数据，
- * 交互（筛选 / 分页 / 处理流转）在回落态下同样完整可用。
+ * 数据来源：`/alerts` + `/alerts/stats`；仅使用服务端真实记录，失败时提示重试。
  */
-import { useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   App as AntdApp,
+  Alert as Feedback,
   Button,
   Card,
   Col,
@@ -36,7 +38,6 @@ import {
   Spin,
   Statistic,
   Steps,
-  Table,
   Tag,
   Tooltip,
   Typography,
@@ -45,23 +46,19 @@ import type { ColumnsType } from 'antd/es/table'
 import {
   BellOutlined,
   CheckCircleOutlined,
-  CloseCircleOutlined,
   ReloadOutlined,
   ToolOutlined,
 } from '@ant-design/icons'
-import dayjs from 'dayjs'
 import type { Dayjs } from 'dayjs'
 import useFarmStore from '@/store/farm'
-import { getAlertStats, handleAlert, ignoreAlerts, listAlerts } from '@/api/alerts'
+import { getAlert, getAlertStats, handleAlert, ignoreAlerts, listAlerts } from '@/api/alerts'
 import { alertLevelMeta, alertStatusMeta, formatNumber } from '@/utils/production-adapter'
 import { errorMessageOf } from '@/utils/request'
-import type { Alert, AlertLevel, AlertSource, AlertStatus } from '@/types'
+import type { Alert, AlertStatus } from '@/types'
 
 const { RangePicker } = DatePicker
 const { Text, Paragraph } = Typography
 
-/** 示例数据基准时间（与原型示例口径一致） */
-const DEMO_BASE: Dayjs = dayjs('2026-06-03 10:30:00')
 
 /** 告警来源（对应领域事件中的 scene）文案 */
 const ALERT_SOURCE_LABEL: Record<number, string> = {
@@ -94,122 +91,8 @@ const ALERT_STATUS_OPTIONS: { value: number; label: string }[] = [
   { value: 1, label: '未处理' },
   { value: 2, label: '处理中' },
   { value: 3, label: '已处理' },
-  { value: 4, label: '已关闭 / 已忽略' },
+  { value: 4, label: '已忽略' },
 ]
-
-/** 示例告警模板（标题 / 内容 / 来源 / 级别 / 触发值） */
-const DEMO_TEMPLATES: {
-  title: string
-  content: string
-  source: AlertSource
-  level: AlertLevel
-  value: string
-}[] = [
-  {
-    title: '棚内湿度持续偏高',
-    content: '3号棚空气湿度连续 60 分钟高于 85%，晚疫病发生风险上升，建议立即通风降湿。',
-    source: 1,
-    level: 3,
-    value: '湿度 88.5%',
-  },
-  {
-    title: '土壤墒情低于阈值',
-    content: '1号田 20cm 土层土壤含水量低于 35% 已持续 30 分钟，建议启动滴灌补水。',
-    source: 1,
-    level: 2,
-    value: '含水量 31.2%',
-  },
-  {
-    title: '气象站数据中断',
-    content: '2号田气象站连续 4 小时未上报数据，设备疑似离线，请检查供电与网络。',
-    source: 2,
-    level: 4,
-    value: '离线 240 分钟',
-  },
-  {
-    title: '番茄晚疫病疑似发生',
-    content: 'AI 识别 1号田番茄叶片出现水渍状斑点，置信度 92%，建议 24 小时内完成防治。',
-    source: 3,
-    level: 4,
-    value: '置信度 92%',
-  },
-  {
-    title: '灌溉任务超时未完成',
-    content: '计划 06-03 08:00 执行的灌溉任务已超时 2 小时，执行人未打卡，请跟进。',
-    source: 4,
-    level: 2,
-    value: '超时 120 分钟',
-  },
-  {
-    title: '投入品库存不足',
-    content: '代森锰锌可湿性粉剂剩余库存低于安全库存 10kg，请及时补货以免影响防治作业。',
-    source: 5,
-    level: 1,
-    value: '剩余 6.5kg',
-  },
-  {
-    title: '棚内温度异常升高',
-    content: '4号棚空气温度连续 20 分钟高于 38℃，存在高温热害风险，建议遮阳降温。',
-    source: 1,
-    level: 3,
-    value: '温度 38.6℃',
-  },
-  {
-    title: '土壤 pH 值偏低',
-    content: '果园北区土壤 pH 检测值 5.2，低于作物适宜区间，建议施用石灰改良。',
-    source: 1,
-    level: 1,
-    value: 'pH 5.2',
-  },
-]
-
-/** 示例地块名称 */
-const DEMO_PLOTS: string[] = ['1号田', '2号田', '3号棚', '4号棚', '水稻A区', '果园北区']
-
-/** 示例处理人 */
-const DEMO_HANDLERS: string[] = ['张三', '李四', '王五', '赵六']
-
-/**
- * 生成示例告警数据
- *
- * @param count 生成条数
- * @returns 告警列表
- */
-function buildDemoAlerts(count = 34): Alert[] {
-  return Array.from({ length: count }, (_unused, index) => {
-    const tpl = DEMO_TEMPLATES[index % DEMO_TEMPLATES.length]
-    const round = Math.floor(index / DEMO_TEMPLATES.length)
-    const status = ((index % 5) + round) % 4 === 0 ? 1 : (((index + round) % 4) + 1)
-    const triggeredAt = DEMO_BASE.subtract(index * 37 + round * 11, 'minute')
-    const resolved = status === 3 || status === 4
-    return {
-      alertId: `DEMO-ALT-${String(index + 1).padStart(4, '0')}`,
-      alertNo: `ALT20260603${String(index + 1).padStart(4, '0')}`,
-      alertTitle: `${tpl.title}${round > 0 ? `（第${round + 1}次）` : ''}`,
-      alertContent: tpl.content,
-      alertLevel: tpl.level,
-      alertSource: tpl.source,
-      plotName: DEMO_PLOTS[index % DEMO_PLOTS.length],
-      plotId: `DEMO-PLOT-${(index % DEMO_PLOTS.length) + 1}`,
-      triggerValue: tpl.value,
-      status: status as AlertStatus,
-      handlerName: resolved ? DEMO_HANDLERS[index % DEMO_HANDLERS.length] : undefined,
-      handleRemark:
-        status === 3
-          ? '已完成处置：按预案执行并复核现场数据，指标恢复正常区间。'
-          : status === 4
-            ? '经复核为误报，关闭告警。'
-            : undefined,
-      triggeredAt: triggeredAt.format('YYYY-MM-DD HH:mm:ss'),
-      handledAt: resolved
-        ? triggeredAt.add(35, 'minute').format('YYYY-MM-DD HH:mm:ss')
-        : undefined,
-    }
-  })
-}
-
-/** 示例告警数据集（模块级常量，保证翻页与筛选稳定） */
-const DEMO_ALERTS: Alert[] = buildDemoAlerts()
 
 /** 列表筛选条件 */
 interface AlertFilters {
@@ -244,11 +127,6 @@ interface HandleFormValues {
  * @returns Tag 元信息
  */
 function resolveStatus(alert: Alert): { label: string; color: string } {
-  if (alert.status === 4) {
-    return alert.handleRemark
-      ? { label: '已关闭', color: 'default' }
-      : { label: '已忽略', color: 'default' }
-  }
   return alertStatusMeta(alert.status)
 }
 
@@ -277,10 +155,15 @@ export default function AlertCenter(): JSX.Element {
   const [handleForm] = Form.useForm<HandleFormValues>()
 
   /** 详情弹窗 */
-  const [detailTarget, setDetailTarget] = useState<Alert | null>(null)
-
-  /** 本地处置补丁：回落态下保证闭环交互真实生效 */
-  const [patches, setPatches] = useState<Record<string, Partial<Alert>>>({})
+  const [searchParams] = useSearchParams()
+  const [detailId, setDetailId] = useState<string | null>(null)
+  useEffect(() => { setDetailId(searchParams.get('alertId')) }, [searchParams])
+  useEffect(() => { setSelectedKeys([]); setHandleOpen(false) }, [farmId])
+  const detailQuery = useQuery({
+    queryKey: ['production-alert-detail', farmId, detailId],
+    queryFn: () => getAlert(detailId!), enabled: Boolean(detailId), staleTime: 0,
+  })
+  const detailTarget = detailQuery.isError ? null : detailQuery.data ?? null
 
   /** 告警列表 */
   const listQuery = useQuery({
@@ -305,104 +188,17 @@ export default function AlertCenter(): JSX.Element {
     queryFn: () => getAlertStats(farmId),
   })
 
-  const remoteRows: Alert[] = listQuery.data?.list ?? []
-  // 只在**接口出错**时回落示例数据。
-  // 原先还包含 `remoteRows.length === 0`：那会让「接口成功、但本农场确实没有告警」也显示示例数据 ——
-  // 用户会把编造的告警当成自己的真实告警。空态就是空态，空 ≠ 假。
-  const usingFallback: boolean = !listQuery.isLoading && listQuery.isError
-
-  /**
-   * 应用本地处置补丁
-   * @param alert 告警记录
-   * @returns 合并后的告警记录
-   */
-  const applyPatch = (alert: Alert): Alert =>
-    patches[alert.alertId] ? { ...alert, ...patches[alert.alertId] } : alert
-
-  /** 最终渲染数据：接口优先，回落态本地筛选 + 分页 */
-  const { rows, total, levelCounts } = useMemo<{
-    rows: Alert[]
-    total: number
-    levelCounts: Record<number, number>
-  }>(() => {
-    const counts: Record<number, number> = {}
-    if (!usingFallback) {
-      const merged = remoteRows.map(applyPatch)
-      merged.forEach((item) => {
-        counts[item.alertLevel] = (counts[item.alertLevel] ?? 0) + 1
-      })
-      return { rows: merged, total: listQuery.data?.total ?? 0, levelCounts: counts }
-    }
-    const keyword = filters.keyword?.trim().toLowerCase() ?? ''
-    const filtered = DEMO_ALERTS.map(applyPatch).filter((item) => {
-      if (filters.level && item.alertLevel !== filters.level) return false
-      if (filters.status && item.status !== filters.status) return false
-      if (filters.source && item.alertSource !== filters.source) return false
-      if (filters.range?.[0] && filters.range?.[1]) {
-        const day = (item.triggeredAt ?? '').slice(0, 10)
-        if (day < filters.range[0].format('YYYY-MM-DD')) return false
-        if (day > filters.range[1].format('YYYY-MM-DD')) return false
-      }
-      if (keyword) {
-        const haystack = `${item.alertNo} ${item.alertTitle} ${item.alertContent} ${
-          item.plotName ?? ''
-        }`.toLowerCase()
-        if (!haystack.includes(keyword)) return false
-      }
-      return true
-    })
-    filtered.forEach((item) => {
-      counts[item.alertLevel] = (counts[item.alertLevel] ?? 0) + 1
-    })
-    const start = (pageNum - 1) * pageSize
-    return {
-      rows: filtered.slice(start, start + pageSize),
-      total: filtered.length,
-      levelCounts: counts,
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [usingFallback, remoteRows, listQuery.data?.total, filters, pageNum, pageSize, patches])
-
-  /** 统计卡数值：接口统计优先，回落态按示例数据实时统计 */
-  const statCards = useMemo<{ key: string; title: string; value: number; color: string }[]>(() => {
-    if (!usingFallback) {
-      const stats = statsQuery.data
-      return [
-        { key: 'unhandled', title: '未处理', value: stats?.unhandled ?? 0, color: '#ff4d4f' },
-        { key: 'handling', title: '处理中', value: stats?.handling ?? 0, color: '#fa8c16' },
-        { key: 'resolved', title: '已处理', value: stats?.resolved ?? 0, color: '#52c41a' },
-        { key: 'ignored', title: '已忽略', value: stats?.ignored ?? 0, color: '#8c8c8c' },
-      ]
-    }
-    const all = DEMO_ALERTS.map(applyPatch)
-    return [
-      {
-        key: 'unhandled',
-        title: '未处理',
-        value: all.filter((item) => item.status === 1).length,
-        color: '#ff4d4f',
-      },
-      {
-        key: 'handling',
-        title: '处理中',
-        value: all.filter((item) => item.status === 2).length,
-        color: '#fa8c16',
-      },
-      {
-        key: 'resolved',
-        title: '已处理',
-        value: all.filter((item) => item.status === 3).length,
-        color: '#52c41a',
-      },
-      {
-        key: 'ignored',
-        title: '已关闭 / 已忽略',
-        value: all.filter((item) => item.status === 4).length,
-        color: '#8c8c8c',
-      },
-    ]
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [usingFallback, statsQuery.data, patches])
+  const rows = listQuery.isError ? [] : listQuery.data?.list ?? []
+  const total = listQuery.isError ? 0 : listQuery.data?.total ?? 0
+  const levelCounts = Object.fromEntries((statsQuery.data?.levelCounts ?? []).map(x => [x.level, x.count]))
+  const stats = statsQuery.data
+  const statCards = [
+    { key: 'unhandled', title: '未处理', value: stats?.unhandled, color: '#ff4d4f' },
+    { key: 'handling', title: '处理中', value: stats?.handling, color: '#fa8c16' },
+    { key: 'resolved', title: '已处理归档', value: stats?.resolved, color: '#52c41a' },
+    { key: 'ignored', title: '已忽略', value: stats?.ignored, color: '#8c8c8c' },
+  ]
+  const applyPatch = (alert: Alert): Alert => alert
 
   /**
    * 执行处置动作
@@ -425,14 +221,7 @@ export default function AlertCenter(): JSX.Element {
     alert: Alert,
     nextStatus: AlertStatus,
     remark: string,
-    handlerName: string,
   ): Promise<{ remoteOk: boolean; reason: string }> {
-    const patch: Partial<Alert> = {
-      status: nextStatus,
-      handleRemark: remark,
-      handlerName,
-      handledAt: dayjs().format('YYYY-MM-DD HH:mm:ss'),
-    }
     let remoteOk = false
     let reason = ''
     try {
@@ -447,7 +236,6 @@ export default function AlertCenter(): JSX.Element {
     } catch (error) {
       reason = errorMessageOf(error)
     }
-    setPatches((prev) => ({ ...prev, [alert.alertId]: { ...prev[alert.alertId], ...patch } }))
     return { remoteOk, reason }
   }
 
@@ -471,15 +259,14 @@ export default function AlertCenter(): JSX.Element {
       handleTarget,
       2,
       values.handleMeasure || '已确认受理，待现场处置。',
-      values.handlerName || '当前用户',
     )
     setHandleSubmitting(false)
     if (remoteOk) {
       message.success('告警已确认受理，进入处理中')
     } else {
-      message.warning(`受理未同步到服务端（${reason}），仅本页本地生效，刷新后会还原`)
+      message.warning(`受理未同步到服务端（${reason}），未改变告警状态，请重试`)
     }
-    setHandleOpen(false)
+    if (remoteOk) setHandleOpen(false)
   }
 
   /** 提交处理：2 → 3 */
@@ -498,35 +285,14 @@ export default function AlertCenter(): JSX.Element {
       handleTarget,
       3,
       remark,
-      values.handlerName || '当前用户',
     )
     setHandleSubmitting(false)
     if (remoteOk) {
       message.success('处理结果已提交，告警标记为已处理')
     } else {
-      message.warning(`处理未同步到服务端（${reason}），仅本页本地生效，刷新后会还原`)
+      message.warning(`处理未同步到服务端（${reason}），未改变告警状态，请重试`)
     }
-    setHandleOpen(false)
-  }
-
-  /** 关闭告警：3 → 4 */
-  const handleClose = async (): Promise<void> => {
-    if (!handleTarget) return
-    const values = handleForm.getFieldsValue()
-    setHandleSubmitting(true)
-    const { remoteOk, reason } = await doHandle(
-      handleTarget,
-      4,
-      values.handleResult || '处置完毕，复核通过后关闭告警。',
-      values.handlerName || handleTarget.handlerName || '当前用户',
-    )
-    setHandleSubmitting(false)
-    if (remoteOk) {
-      message.success('告警已关闭')
-    } else {
-      message.warning(`关闭未同步到服务端（${reason}），仅本页本地生效，刷新后会还原`)
-    }
-    setHandleOpen(false)
+    if (remoteOk) setHandleOpen(false)
   }
 
   /**
@@ -538,37 +304,22 @@ export default function AlertCenter(): JSX.Element {
    */
   const ignoreMutation = useMutation({
     mutationFn: async (ids: string[]) => {
-      let remoteOk = false
-      let reason = ''
-      try {
-        remoteOk = await ignoreAlerts(ids)
-        if (!remoteOk) {
-          reason = '服务端未更新任何记录（所选告警可能不存在或已被他人处置）'
-        }
-      } catch (error) {
-        reason = errorMessageOf(error)
-      }
-      const now = dayjs().format('YYYY-MM-DD HH:mm:ss')
-      setPatches((prev) => {
-        const next = { ...prev }
-        ids.forEach((id) => {
-          next[id] = { ...next[id], status: 4, handleRemark: '', handledAt: now }
-        })
-        return next
-      })
-      return { remoteOk, reason, count: ids.length }
+      if (!await ignoreAlerts(ids)) throw new Error('服务端未更新记录，请刷新后重试')
+      return ids.length
     },
-    onSuccess: ({ remoteOk, reason, count }) => {
-      if (remoteOk) {
-        message.success(`已忽略所选 ${count} 条告警`)
-        void queryClient.invalidateQueries({ queryKey: ['production-alerts'] })
-        void queryClient.invalidateQueries({ queryKey: ['production-alerts-stats'] })
-      } else {
-        message.warning(`忽略未同步到服务端（${reason}），仅本页本地生效，刷新后会还原`)
-      }
+    onSuccess: (count) => {
+      message.success(`已忽略 ${count} 条告警`)
       setSelectedKeys([])
+      void queryClient.invalidateQueries({ queryKey: ['production-alerts'] })
+      void queryClient.invalidateQueries({ queryKey: ['production-alerts-stats'] })
+      void queryClient.invalidateQueries({ queryKey: ['production-alert-detail'] })
     },
+    onError: (error) => message.error(errorMessageOf(error)),
   })
+  const openFreshHandle = async (alert: Alert): Promise<void> => {
+    try { openHandle(await getAlert(alert.alertId)) }
+    catch (error) { message.error(errorMessageOf(error)) }
+  }
 
   /** 触发搜索 */
   const handleSearch = (): void => {
@@ -670,19 +421,15 @@ export default function AlertCenter(): JSX.Element {
       fixed: 'right',
       render: (_value: unknown, record) => (
         <Space size={4}>
-          <Button type="link" size="small" onClick={() => setDetailTarget(record)}>
+          <Button type="link" size="small" onClick={() => setDetailId(record.alertId)}>
             详情
           </Button>
           {record.status !== 3 && record.status !== 4 && (
-            <Button type="link" size="small" onClick={() => openHandle(record)}>
+            <Button type="link" size="small" onClick={() => void openFreshHandle(record)}>
               处理
             </Button>
           )}
-          {record.status === 3 && (
-            <Button type="link" size="small" onClick={() => openHandle(record)}>
-              关闭
-            </Button>
-          )}
+
         </Space>
       ),
     },
@@ -695,12 +442,12 @@ export default function AlertCenter(): JSX.Element {
   return (
     <div style={{ padding: 24 }}>
       <Space direction="vertical" size={16} style={{ width: '100%' }}>
-        <Card>
+        <Card className="production-custom-page-header">
           <Row align="middle" gutter={16}>
             <Col flex="auto">
               <Space size={8}>
                 <BellOutlined style={{ fontSize: 20, color: '#fa8c16' }} />
-                <span style={{ fontSize: 18, fontWeight: 600 }}>告警中心</span>
+                <span className="production-page-heading">告警中心</span>
                 <Text type="secondary">
                   事件 prod.alert.triggered · 场景 / 级别 / 内容由规则引擎与 IoT 监听触发
                 </Text>
@@ -731,13 +478,14 @@ export default function AlertCenter(): JSX.Element {
           </Row>
         </Card>
 
+        {statsQuery.isError && <Feedback type="error" showIcon message="告警统计加载失败" action={<Button onClick={() => void statsQuery.refetch()}>重试</Button>} />}
         <Row gutter={16}>
           {statCards.map((card) => (
             <Col span={6} key={card.key}>
               <Card>
                 <Statistic
                   title={card.title}
-                  value={card.value}
+                  value={statsQuery.isError ? '—' : card.value ?? '—'}
                   suffix="条"
                   valueStyle={{ color: card.color }}
                 />
@@ -804,9 +552,9 @@ export default function AlertCenter(): JSX.Element {
             <Button onClick={handleReset}>重置</Button>
           </Space>
 
-          {usingFallback && (
+          {listQuery.isError && (
             <Empty
-              description="接口请求失败，当前展示示例数据（筛选 / 分页 / 处置闭环均可用）；接口恢复后自动切回真实数据。"
+              description="告警加载失败，未展示任何示例数据。请点击刷新重试。"
               style={{ margin: '12px 0' }}
             />
           )}
@@ -820,6 +568,7 @@ export default function AlertCenter(): JSX.Element {
               rowSelection={{
                 selectedRowKeys: selectedKeys,
                 onChange: (keys) => setSelectedKeys(keys as string[]),
+                getCheckboxProps: (record) => ({ disabled: record.status !== 1 }),
               }}
               pagination={{
                 current: pageNum,
@@ -866,15 +615,7 @@ export default function AlertCenter(): JSX.Element {
           >
             提交处理
           </Button>,
-          <Button
-            key="close"
-            icon={<CloseCircleOutlined />}
-            disabled={currentTarget?.status !== 3}
-            loading={handleSubmitting}
-            onClick={() => void handleClose()}
-          >
-            关闭告警
-          </Button>,
+
         ]}
       >
         {currentTarget && (
@@ -882,7 +623,7 @@ export default function AlertCenter(): JSX.Element {
             <Steps
               size="small"
               current={currentStep}
-              items={[{ title: '确认受理' }, { title: '处理处置' }, { title: '关闭归档' }]}
+              items={[{ title: '确认受理' }, { title: '处理处置' }, { title: '已处理归档' }]}
             />
             <Descriptions column={2} size="small" bordered>
               <Descriptions.Item label="告警标题" span={2}>
@@ -937,15 +678,17 @@ export default function AlertCenter(): JSX.Element {
       {/* 详情弹窗 */}
       <Modal
         title="告警详情"
-        open={Boolean(detailTarget)}
-        onCancel={() => setDetailTarget(null)}
+        open={Boolean(detailId)}
+        onCancel={() => setDetailId(null)}
         footer={[
-          <Button key="close" type="primary" onClick={() => setDetailTarget(null)}>
+          <Button key="close" type="primary" onClick={() => setDetailId(null)}>
             关闭
           </Button>,
         ]}
         width={680}
       >
+        {detailQuery.isLoading && <Spin />}
+        {detailQuery.isError && <Feedback type="error" message="详情加载失败" action={<Button onClick={() => void detailQuery.refetch()}>重试</Button>} />}
         {detailTarget && (
           <Descriptions column={2} size="small" bordered>
             <Descriptions.Item label="告警编号">{detailTarget.alertNo}</Descriptions.Item>

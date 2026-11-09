@@ -156,28 +156,28 @@ function toProvider(id: number) {
 .home-nav { display: flex; align-items: center; justify-content: space-between; height: 70rpx; }
 .home-title { font-size: 31rpx; font-weight: 700; }
 .bell { position: relative; display: flex; width: 68rpx; height: 68rpx; align-items: center; justify-content: center; border: 1rpx solid rgba(255,255,255,.14); border-radius: 20rpx; background: rgba(255,255,255,.08); }
-.bell text { position: absolute; top: -4rpx; right: -2rpx; min-width: 30rpx; height: 30rpx; border: 3rpx solid #0d4e32; border-radius: 16rpx; background: #e44949; font-size: 16rpx; line-height: 27rpx; text-align: center; }
+.bell text { position: absolute; top: -4rpx; right: -2rpx; min-width: 30rpx; height: 30rpx; border: 3rpx solid #0d4e32; border-radius: 16rpx; background: #e44949; font-size: 24rpx; line-height: 27rpx; text-align: center; }
 .home-greeting { display: flex; flex-direction: column; gap: 7rpx; margin-top: 24rpx; }
-.home-greeting .small { color: rgba(255,255,255,.55); font-size: 22rpx; }
+.home-greeting .small { color: rgba(255,255,255,.55); font-size: 24rpx; }
 .home-greeting .title { font-size: 43rpx; font-weight: 750; }
 .search-box { display: flex; height: 82rpx; align-items: center; gap: 12rpx; margin-top: 24rpx; padding: 0 22rpx; border-radius: 20rpx; background: rgba(255,255,255,.95); color: #94a198; }
 .search-box input { flex: 1; color: #0b1a12; font-size: 24rpx; }
 .weather { display: flex; align-items: center; gap: 18rpx; margin-top: 20rpx; padding: 18rpx; border: 1rpx solid rgba(255,255,255,.1); border-radius: 18rpx; background: rgba(1,28,15,.17); }
 .weather .temp { color: #8be1af; font-family: monospace; font-size: 45rpx; }
 .weather view { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 4rpx; }
-.weather-title { font-size: 22rpx; }
-.weather-sub { overflow: hidden; color: rgba(255,255,255,.45); font-size: 18rpx; text-overflow: ellipsis; white-space: nowrap; }
+.weather-title { font-size: 24rpx; }
+.weather-sub { overflow: hidden; color: rgba(255,255,255,.45); font-size: 24rpx; text-overflow: ellipsis; white-space: nowrap; }
 .page-body { padding: 20rpx 24rpx 30rpx; }
 .ai-entry { display: flex; align-items: center; gap: 16rpx; margin-top: -54rpx; padding: 20rpx; border: 1rpx solid #e2d4ec; border-radius: 22rpx; background: linear-gradient(135deg, #fbf8fd, #f1e9f7); box-shadow: 0 12rpx 30rpx rgba(63,34,82,.08); }
 .arrow { color: #a395ab; font-size: 34rpx; }
 .quick-card { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24rpx 4rpx; padding: 28rpx 12rpx; }
-.quick-item { display: flex; align-items: center; flex-direction: column; gap: 9rpx; font-size: 21rpx; }
+.quick-item { display: flex; align-items: center; flex-direction: column; gap: 9rpx; font-size: 24rpx; }
 .quick-icon { display: flex; width: 82rpx; height: 82rpx; align-items: center; justify-content: center; border-radius: 23rpx; background: #e5f5eb; font-size: 38rpx; }
 .todo { display: flex; align-items: center; gap: 16rpx; padding: 17rpx; border-radius: 18rpx; background: #f2fbf5; }
 .todo-icon { display: flex; width: 66rpx; height: 66rpx; flex: 0 0 66rpx; align-items: center; justify-content: center; border-radius: 17rpx; background: #e5f5eb; font-size: 29rpx; }
 .todo-copy { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 4rpx; }
 .todo-copy .progress { margin-top: 5rpx; }
-.todo-percent { color: #0e5233; font-family: monospace; font-size: 22rpx; }
+.todo-percent { color: #0e5233; font-family: monospace; font-size: 24rpx; }
 .section-head { display: flex; align-items: center; justify-content: space-between; margin: 26rpx 2rpx 14rpx; }
 .section-title { font-size: 30rpx; font-weight: 700; }
 .policy-scroll, .provider-scroll { width: 100%; white-space: nowrap; }
@@ -186,12 +186,12 @@ function toProvider(id: number) {
 .policy-banner.tone-2 { background: linear-gradient(135deg, #78509a, #543174); }
 .policy-banner .tiny { color: rgba(255,255,255,.55); }
 .policy-title { min-height: 62rpx; font-size: 26rpx; font-weight: 650; line-height: 1.4; }
-.policy-amount { color: #d2f2df; font-size: 20rpx; }
+.policy-amount { color: #d2f2df; font-size: 24rpx; }
 .near-card { display: inline-flex; width: 340rpx; box-sizing: border-box; flex-direction: column; gap: 7rpx; margin-right: 16rpx; padding: 20rpx; border: 1rpx solid #e1e9e3; border-radius: 20rpx; background: #fff; white-space: normal; }
 .near-icon { display: flex; width: 70rpx; height: 70rpx; align-items: center; justify-content: center; border-radius: 18rpx; background: #e5f5eb; font-size: 34rpx; }
 .near-name { font-size: 24rpx; font-weight: 650; }
 .gold { color: #d88b1f; }
 .near-tags { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .near-price { color: #0e5233; font-size: 28rpx; font-weight: 700; }
-.near-price text { color: #94a198; font-size: 18rpx; font-weight: 400; }
+.near-price text { color: #94a198; font-size: 24rpx; font-weight: 400; }
 </style>

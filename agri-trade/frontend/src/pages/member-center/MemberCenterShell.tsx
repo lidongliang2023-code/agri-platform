@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { ConfigProvider } from 'antd'
 import { BellOutlined, LogoutOutlined, ShopOutlined, SwapOutlined } from '@ant-design/icons'
 import { clearSession } from '@/utils/session'
@@ -89,14 +89,14 @@ export function MemberCenterShell({ role, active, navItems, merchantName, onNavi
       <div className="mc-main">
         <header className="mc-top">
           <div className="mc-crumb">
-            <a href={role === 'buyer' ? '/member/buyer' : '/member/seller'}>{ROLE_TEXT[role]}</a>
+            <Link to={role === 'buyer' ? '/member/buyer' : '/member/seller'}>{ROLE_TEXT[role]}</Link>
             <span>/</span>
             <strong>{activeLabel}</strong>
           </div>
           <div className="mc-top-right">
             <div className="mc-role-switch">
-              <a className={role === 'buyer' ? 'on' : ''} href="/member/buyer">买家中心</a>
-              <a className={role === 'seller' ? 'on' : ''} href="/member/seller">卖家中心</a>
+              <Link className={role === 'buyer' ? 'on' : ''} to="/member/buyer">买家中心</Link>
+              <Link className={role === 'seller' ? 'on' : ''} to="/member/seller">卖家中心</Link>
             </div>
             <span className="mc-avatar">{avatar}</span>
             <span className="mc-merchant-name">{merchantName || '尚未绑定经营主体'}</span>

@@ -291,6 +291,11 @@ CREATE TABLE IF NOT EXISTS s2b2c_product (
     delivery_time VARCHAR(50),
     certifications VARCHAR(500),
     traceability_info TEXT,
+    -- 绑定的生产域采收批次号（agri_production.agri_prod_harvest_batch.batch_no）。
+    -- 这是"一物一码可溯源"的连接点：详情页那条链路不是商城自己写的，而是按这个批次去生产域实查回来的
+    -- （种植/采收/加工/质检/仓储 + 链上存证）。为空就是没绑，页面据此说"尚未绑定生产批次"，
+    -- 不再拿本地种子批次冒充。
+    prod_batch_no VARCHAR(64) NULL COMMENT '绑定的生产域采收批次号（空=未绑定，溯源链路不可展示）',
     status VARCHAR(20) DEFAULT 'PENDING',
     audit_time TIMESTAMP,
     audit_opinion VARCHAR(1000),
@@ -311,6 +316,17 @@ CREATE TABLE IF NOT EXISTS s2b2c_product_sku (
     status VARCHAR(20) DEFAULT 'ACTIVE',
     create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- 存量库补列：CREATE TABLE IF NOT EXISTS 对已存在的表不生效，老库必须靠这条幂等 ALTER 才拿得到新列。
+-- （漏掉这一步的后果是"接口 200、SQL 报 Unknown column"，本项目已为此踩过一次。）
+SET @ddl := (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE s2b2c_product ADD COLUMN prod_batch_no VARCHAR(64) NULL COMMENT ''绑定的生产域采收批次号''',
+    'SELECT 1')
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 's2b2c_product' AND COLUMN_NAME = 'prod_batch_no'
+);
+PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 CREATE TABLE IF NOT EXISTS s2b2c_shop (
     id BIGINT PRIMARY KEY,
@@ -729,7 +745,7 @@ INSERT IGNORE INTO s2b2c_traceability
 (2,4,'YUNNAN-GRAPE-2026-01','云南宾川葡萄基地','2026-03-10','2026-10-18','采后预冷、分级装箱','糖度与农残检测合格','冷链运输 2-8℃');
 
 -- ── 消费者域：收藏 / 足迹 / 评价 / 签到 / 积分流水 ──────────────────────
--- 说明：这几张是消费者端独有的关系表，供应商端、渠道商端、运营端不读取，故不改动既有表结构。
+-- 说明：这几张是消费者端独有的关系表，供应商端、商家端、运营端不读取，故不改动既有表结构。
 
 CREATE TABLE IF NOT EXISTS s2b2c_favorite (
     id BIGINT PRIMARY KEY,
@@ -1208,3 +1224,22 @@ SET @ddl := (
   WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 's2b2c_product' AND COLUMN_NAME = 'max_retail_price'
 );
 PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- 订单来源批次快照：不根据当前商品回填历史订单。
+SET @ddl := (
+ SELECT IF(COUNT(*) = 0,
+ 'ALTER TABLE s2b2c_order_item ADD COLUMN prod_batch_no VARCHAR(100) NULL COMMENT ''下单来源批次快照''',
+ 'SELECT 1') FROM information_schema.COLUMNS
+ WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 's2b2c_order_item' AND COLUMN_NAME = 'prod_batch_no'
+);
+PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- 每个销售单位一码，唯一约束防止一码分配给多个订单；不存生产事实副本。
+CREATE TABLE IF NOT EXISTS s2b2c_order_trace_unit (
+ trace_code VARCHAR(100) NOT NULL PRIMARY KEY,
+ order_id BIGINT NOT NULL,
+ order_item_id BIGINT NOT NULL,
+ batch_no VARCHAR(100) NOT NULL,
+ create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+ KEY idx_trace_order(order_id, order_item_id)
+);

@@ -139,7 +139,7 @@ function toSearch() {
 
 .search-ph {
   color: #b3c0b7;
-  font-size: 23rpx;
+  font-size: 24rpx;
 }
 
 .type-chips {
@@ -158,7 +158,7 @@ function toSearch() {
 .foot {
   padding: 24rpx 0 8rpx;
   color: #b3c0b7;
-  font-size: 20rpx;
+  font-size: 24rpx;
   text-align: center;
 }
 </style>

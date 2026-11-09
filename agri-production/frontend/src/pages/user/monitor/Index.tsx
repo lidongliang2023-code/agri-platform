@@ -349,10 +349,10 @@ export default function MonitorIndex(): JSX.Element {
 
   return (
     <div style={{ padding: 24 }}>
-      <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
+      <Row className="production-custom-page-header production-page-header-row" justify="space-between" align="middle" style={{ marginBottom: 16 }}>
         <Space size={12}>
           <DashboardOutlined style={{ fontSize: 22 }} />
-          <Typography.Title level={4} style={{ margin: 0 }}>
+          <Typography.Title className="production-page-heading" level={4} style={{ margin: 0 }}>
             生产监控看板
           </Typography.Title>
           <Select

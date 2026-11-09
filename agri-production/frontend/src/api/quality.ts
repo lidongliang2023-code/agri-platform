@@ -101,6 +101,10 @@ export function deleteGradeRule(ruleId: string): Promise<boolean> {
 
 /** 检测单分页查询参数（对齐后端 page / size / keyword / status） */
 export interface InspectionPageParams {
+  /** 当前农场，服务端校验所属经营主体。 */
+  farmId?: string
+  /** 严格限定当前批次，供正式等级复核选择依据使用。 */
+  batchId?: string
   /** 检测单号 / 批次号 / 作物名 模糊匹配 */
   keyword?: string
   /** 状态过滤：PENDING / TESTING / DONE */
@@ -135,6 +139,8 @@ export function fetchInspectionPage(
     page: params.pageNum ?? 1,
     size: params.pageSize ?? 10,
     keyword: params.keyword,
+    farmId: params.farmId,
+    batchId: params.batchId,
     status: params.status,
     result: params.result,
     inspectionType: params.inspectionType,
@@ -231,3 +237,14 @@ export async function fetchGradingStats(): Promise<Record<string, number>> {
   })
   return result
 }
+
+/** 正式等级复核凭据，ID按字符串传输以兼容Long。 */
+export interface GradeReview {
+ id: string; reviewNo: string; ticketId: string; ticketNo: string; offerNo: string; orderNo: string;
+ batchId: string; originalGrade: string; reviewedGrade: string; inspectionId: string; inspectionNo?: string;
+ reason: string; applicantId: string; reviewerId?: string; reviewRemark?: string;
+ status: string; createTime: string; reviewedAt?: string; consumedAt?: string;
+}
+export const pageGradeReviews = (params: {pageNum: number; pageSize: number; ticketId?: string}) => http.get<PageResult<GradeReview>>(`${BASE}/grade-reviews`, params)
+export const applyGradeReview = (body: {ticketId: string; inspectionId: string; reviewedGrade: string; reason: string}) => http.post<GradeReview>(`${BASE}/grade-reviews`, body)
+export const decideGradeReview = (id: string, body: {approved: boolean; remark: string}) => http.post<GradeReview>(`${BASE}/grade-reviews/${id}/decision`, body)

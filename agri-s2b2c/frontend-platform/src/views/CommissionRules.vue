@@ -92,7 +92,7 @@
           <el-button type="primary" :loading="settling" @click="settle">批量结算待结算佣金</el-button>
         </div>
       </div>
-      <p class="settle-hint">每次结算会生成批次号，佣金行会记录批次；渠道端可在「佣金管理」看到自己相关的批次。</p>
+      <p class="settle-hint">每次结算会生成批次号，佣金行会记录批次；商家端可在「佣金管理」看到自己相关的批次。</p>
       <el-table :data="settlements" border size="small">
         <el-table-column prop="batchNo" label="批次号" width="200" />
         <el-table-column label="渠道" width="120">

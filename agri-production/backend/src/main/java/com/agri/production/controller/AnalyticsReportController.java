@@ -31,7 +31,7 @@ import java.util.Map;
 /**
  * 用户端：数据分析与报表（{@code /api/v1/production/analytics}）。
  *
- * <p>页面用到的路径：看板（/dashboard）、维度分析（/dimension）、指标趋势（/trend）、
+ * <p>页面用到的路径：报表概览（/report-overview）、维度分析（/dimension）、指标趋势（/trend）、
  * 报表列表与生成（/reports）、导出（/reports/{id}/export）、下载（/reports/{id}/file）、
  * 订阅（/reports/subscribe、/reports/subscriptions）。</p>
  *
@@ -56,7 +56,7 @@ public class AnalyticsReportController {
     /* ==================== 看板 / 维度 / 趋势 ==================== */
 
     /** 看板指标（扁平 Map，键与前端 buildOverview 的候选键一致）。 */
-    @GetMapping("/dashboard")
+    @GetMapping("/report-overview")
     public ApiResponse<Map<String, Object>> dashboard(
             @RequestParam(required = false) String farmId,
             @RequestParam(required = false) String startDate,
@@ -115,7 +115,7 @@ public class AnalyticsReportController {
                 farmIdResolver.resolveFilter(str(payload.get("farmId")), tenantId),
                 intOrNull(payload.get("reportType"), "报表类型"),
                 str(payload.get("period")),
-                str(payload.get("generatedBy"))));
+                TenantContextService.currentUserId()));
     }
 
     /** 删除报表（页面以返回值是否为 true 判定"确实删掉了"）。 */

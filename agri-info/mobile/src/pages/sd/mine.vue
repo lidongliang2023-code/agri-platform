@@ -243,7 +243,7 @@ function statusLabel(value: string) {
 
 .act {
   color: #12764a;
-  font-size: 21rpx;
+  font-size: 24rpx;
   font-weight: 600;
 }
 

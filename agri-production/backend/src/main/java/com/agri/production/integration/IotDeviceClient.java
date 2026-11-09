@@ -127,6 +127,9 @@ public class IotDeviceClient {
         } catch (RestClientResponseException e) {
             // 把物联网端的 4xx 转成业务异常，页面才能看到"设备不存在/无权限"这类真实原因，
             // 而不是统一变成一个 500。
+            if (e.getStatusCode().value() == 404) {
+                throw new com.agri.production.common.exception.BusinessException(404, "设备不存在");
+            }
             String message = e.getResponseBodyAsString(StandardCharsets.UTF_8);
             throw new IllegalArgumentException("物联网服务返回 " + e.getStatusCode().value()
                     + "：" + (message == null || message.isBlank() ? e.getStatusText() : message));

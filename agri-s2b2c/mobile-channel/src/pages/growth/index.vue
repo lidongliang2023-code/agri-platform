@@ -31,7 +31,7 @@ import { channelSession, requireChannelLogin } from '../../session'
 import { money, statusMeta, toast } from '../../utils'
 
 const growth = ref<Partial<GrowthData>>({})
-const shareText = ref('农联优选产地直发，五常大米当季限量秒杀，邻里拼团更优惠，点击进入我的小店查看。')
+const shareText = ref('丰链云产地直发，五常大米当季限量秒杀，邻里拼团更优惠，点击进入我的小店查看。')
 const pendingAfterSales = computed(() => (growth.value.afterSales || []).filter((item) => item.status === 'PENDING').length)
 
 onShow(load)
@@ -54,5 +54,5 @@ function copyShare() {
 </script>
 
 <style scoped lang="scss">
-.growth-page{padding-bottom:28rpx}.activity-row{display:flex;align-items:center;gap:13rpx;padding:14rpx 0;border-top:1rpx solid #edf2ee}.activity-row:first-child{border-top:0}.activity-icon{display:grid;width:50rpx;height:50rpx;flex:0 0 50rpx;place-items:center;border-radius:14rpx;background:#eaf7ef;color:#12764a;font-size:17rpx;font-weight:800}.activity-copy{min-width:0;flex:1}.activity-copy text,.activity-copy .small-copy{display:block}.activity-copy text{color:#0b1a12;font-size:20rpx;font-weight:650}.activity-copy .small-copy{margin-top:5rpx;color:#93a29a;font-size:16rpx}.share-box{margin-top:14rpx;padding-top:14rpx;border-top:1rpx solid #edf2ee}.copy-button{margin:10rpx 0 0 auto}.after-row{display:flex;align-items:center;gap:10rpx;padding:15rpx 0;border-top:1rpx solid #edf2ee}.after-row:first-child{border-top:0}.after-row>view{min-width:0;flex:1}.after-row>view text,.after-row>view .small-copy{display:block}.after-row>view text{color:#0b1a12;font-size:20rpx;font-weight:650}.after-row>view .small-copy{margin-top:5rpx;color:#84938a;font-size:16rpx}.after-row>b{color:#d45b32;font-size:21rpx}.empty-mini{padding:44rpx 0;color:#94a198;text-align:center;font-size:20rpx}
+.growth-page{padding-bottom:28rpx}.activity-row{display:flex;align-items:center;gap:13rpx;padding:14rpx 0;border-top:1rpx solid #edf2ee}.activity-row:first-child{border-top:0}.activity-icon{display:grid;width:50rpx;height:50rpx;flex:0 0 50rpx;place-items:center;border-radius:14rpx;background:#eaf7ef;color:#12764a;font-size:24rpx;font-weight:800}.activity-copy{min-width:0;flex:1}.activity-copy text,.activity-copy .small-copy{display:block}.activity-copy text{color:#0b1a12;font-size:24rpx;font-weight:650}.activity-copy .small-copy{margin-top:5rpx;color:#93a29a;font-size:24rpx}.share-box{margin-top:14rpx;padding-top:14rpx;border-top:1rpx solid #edf2ee}.copy-button{margin:10rpx 0 0 auto}.after-row{display:flex;align-items:center;gap:10rpx;padding:15rpx 0;border-top:1rpx solid #edf2ee}.after-row:first-child{border-top:0}.after-row>view{min-width:0;flex:1}.after-row>view text,.after-row>view .small-copy{display:block}.after-row>view text{color:#0b1a12;font-size:24rpx;font-weight:650}.after-row>view .small-copy{margin-top:5rpx;color:#84938a;font-size:24rpx}.after-row>b{color:#d45b32;font-size:24rpx}.empty-mini{padding:44rpx 0;color:#94a198;text-align:center;font-size:24rpx}
 </style>

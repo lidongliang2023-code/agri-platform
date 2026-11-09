@@ -33,6 +33,13 @@ import java.util.Map;
 @RequestMapping("/api/v1/production/members")
 public class UserMemberController {
 
+    private static void requireSubjectOwner() {
+        if (!"owner".equalsIgnoreCase(TenantContextService.currentMerchantRole())) {
+            throw new com.agri.production.common.exception.BusinessException(403,
+                    "仅当前经营主体所有者可管理成员及角色权限");
+        }
+    }
+
     private final IUserMemberService memberService;
     private final ProductionRoleService roleService;
 
@@ -59,6 +66,7 @@ public class UserMemberController {
     /** 邀请/新增成员（返回新成员编号）。 */
     @PostMapping
     public ApiResponse<String> create(@RequestBody(required = false) Map<String, Object> body) {
+        requireSubjectOwner();
         return ApiResponse.success(memberService.create(
                 TenantContextService.currentTenantId(), payloadOf(body)));
     }
@@ -67,6 +75,7 @@ public class UserMemberController {
     @PutMapping("/{memberId}")
     public ApiResponse<UserMemberVO> update(@PathVariable String memberId,
                                            @RequestBody(required = false) Map<String, Object> body) {
+        requireSubjectOwner();
         return ApiResponse.success(memberService.update(
                 TenantContextService.currentTenantId(), memberId, payloadOf(body)));
     }
@@ -74,6 +83,7 @@ public class UserMemberController {
     /** 移除成员（逻辑删除）。 */
     @DeleteMapping("/{memberId}")
     public ApiResponse<Void> delete(@PathVariable String memberId) {
+        requireSubjectOwner();
         memberService.delete(TenantContextService.currentTenantId(), memberId);
         return ApiResponse.success();
     }
@@ -100,6 +110,7 @@ public class UserMemberController {
     @PutMapping("/roles/{roleId}/permissions")
     public ApiResponse<ProductionRoleService.RoleView> saveRolePermissions(
             @PathVariable String roleId, @RequestBody(required = false) Map<String, Object> body) {
+        requireSubjectOwner();
         List<String> permissions = stringList(body == null ? null : body.get("permissions"));
         String dataScope = body == null || body.get("dataScope") == null
                 ? null : String.valueOf(body.get("dataScope"));

@@ -288,7 +288,7 @@ function goBack() {
 
 .clear {
   color: #b3c0b7;
-  font-size: 22rpx;
+  font-size: 24rpx;
 }
 
 .submit {
@@ -325,7 +325,7 @@ function goBack() {
   border-radius: 30rpx;
   background: #ffffff;
   color: #53665a;
-  font-size: 22rpx;
+  font-size: 24rpx;
 }
 
 .hot-list {
@@ -352,7 +352,7 @@ function goBack() {
   border-radius: 8rpx;
   background: #feebeb;
   color: #c54b4b;
-  font-size: 18rpx;
+  font-size: 24rpx;
 }
 
 .hot-tag.new {
@@ -377,7 +377,7 @@ function goBack() {
   display: block;
   margin-bottom: 6rpx;
   color: #0e5233;
-  font-size: 22rpx;
+  font-size: 24rpx;
   font-weight: 700;
 }
 
@@ -415,11 +415,11 @@ function goBack() {
   flex: 1;
   flex-direction: column;
   gap: 4rpx;
-  font-size: 23rpx;
+  font-size: 24rpx;
 }
 
 .ai-copy text:last-child {
   color: #6b418d;
-  font-size: 21rpx;
+  font-size: 24rpx;
 }
 </style>

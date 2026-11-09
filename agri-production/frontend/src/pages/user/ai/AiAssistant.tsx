@@ -1,3 +1,4 @@
+import PageContainer from '@/components/ProductionPageContainer'
 /**
  * 页面名称：AI农艺师对话
  * 路由路径：/production/ai/assistant
@@ -304,6 +305,11 @@ function resolveTaskSuggestion(content: string): TaskSuggestion | null {
  * @returns 页面内容
  */
 export default function AiAssistant(): JSX.Element {
+  const subject = useAuthStore(state => state.userInfo?.tenantId)
+  return <AssistantContent key={String(subject ?? '')} />
+}
+
+function AssistantContent(): JSX.Element {
   const navigate = useNavigate()
   const { message } = AntdApp.useApp()
   const queryClient = useQueryClient()
@@ -341,13 +347,13 @@ export default function AiAssistant(): JSX.Element {
 
   /** 远程会话列表 */
   const sessionsQuery = useQuery({
-    queryKey: ['ai-chat-sessions', farmId],
+    queryKey: ['ai-chat-sessions', userInfo?.tenantId, farmId],
     queryFn: () => listChatSessions(),
   })
 
   /** 远程消息列表 */
   const messagesQuery = useQuery({
-    queryKey: ['ai-chat-messages', activeSessionId],
+    queryKey: ['ai-chat-messages', userInfo?.tenantId, activeSessionId],
     enabled: Boolean(activeSessionId),
     queryFn: () => listChatMessages(activeSessionId),
   })
@@ -623,6 +629,7 @@ export default function AiAssistant(): JSX.Element {
   const sessionsEmpty: boolean = !sessionsQuery.isLoading && sessions.length === 0
 
   return (
+    <PageContainer title="农事智能助手">
     <div style={{ padding: 24 }}>
       <Space direction="vertical" size={12} style={{ width: '100%' }}>
         {sessionsQuery.isError && (
@@ -641,21 +648,7 @@ export default function AiAssistant(): JSX.Element {
             description="服务端未返回任何问答会话。点击左上角「＋」新建一个会话后再开始提问；页面不会展示示例会话，以免被误认为真实历史对话。"
           />
         )}
-        {/*
-          键名/语义不匹配提示：后端 GET /ai/assistant/sessions 实际返回的是
-          **AI 诊断记录摘要**（sessionId / plotId / diagnosisType / resultLabel / confidence / diagnosedAt），
-          不是问答会话实体——没有 title / lastMessage / createdAt。
-          列表能渲染出行，但标题实为诊断结果、消息区为空，属于「接口通了但语义不符」，
-          必须显式告知，否则用户会以为是真实的历史对话。
-        */}
-        {!sessionsQuery.isError && sessions.length > 0 && (
-          <Alert
-            type="warning"
-            showIcon
-            message="会话列表来自服务端 AI 诊断记录摘要，不是问答会话"
-            description="后端该端点当前返回的是 prod_ai_diagnosis 诊断记录（无 title / lastMessage / createdAt 字段），因此标题显示为诊断结果或记录 ID、消息区为空。后端补齐问答会话实体后此提示可移除。"
-          />
-        )}
+        <Alert type="info" showIcon message="规则式农事咨询" description="回答基于本系统已有生产记录和固定规则，不做图像识别或产量预测，也不代替农技人员的现场判断。" />
       </Space>
       <Card
         styles={{ body: { padding: 0, height: 'calc(100vh - 216px)' } }}
@@ -688,7 +681,7 @@ export default function AiAssistant(): JSX.Element {
                   icon={<PlusOutlined />}
                   loading={createMutation.isPending}
                   onClick={() => createMutation.mutate()}
-                />
+                >新建会话</Button>
               </Tooltip>
             </div>
             <div style={{ flex: 1, overflowY: 'auto' }}>
@@ -971,5 +964,6 @@ export default function AiAssistant(): JSX.Element {
         />
       </Modal>
     </div>
+    </PageContainer>
   )
 }

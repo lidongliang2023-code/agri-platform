@@ -24,4 +24,4 @@ bootstrapUnifiedSso({
     app.use(ElementPlus)
     app.mount('#app')
   })
-  .catch(showUnifiedAuthFailure)
+  .catch((error) => showUnifiedAuthFailure(error, 's2b2c-platform'))

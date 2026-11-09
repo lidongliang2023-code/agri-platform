@@ -174,7 +174,7 @@ function feedback() {
   border-radius: 14rpx;
   background: #f6faf7;
   color: #53665a;
-  font-size: 23rpx;
+  font-size: 24rpx;
   line-height: 1.72;
 }
 

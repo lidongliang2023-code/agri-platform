@@ -25,8 +25,14 @@ import java.util.stream.Collectors;
  * <p>能力来源有两条，都必须是**服务端真实数据**：</p>
  * <ul>
  *   <li>业务身份：已审核通过的 {@code platform_identity_application}（批发商/零售商/…）</li>
- *   <li>主体数据：已加入经营主体 → {@code production.manage}；经营主体认证通过 → {@code finance.apply}</li>
+ *   <li>主体数据：已加入经营主体 **且已开通农户 / 合作社管理员身份** → {@code production.manage}；
+ *       已加入经营主体 **且已开通商城供应商身份** → {@code s2b2c.supplier}；
+ *       经营主体认证通过 → {@code finance.apply}</li>
  * </ul>
+ *
+ * <p><b>生产管理不再"加入主体即开通"</b>：新建主体但未申请任何身份时不应默认可写生产数据，
+ * 否则等于绕过了业务身份的审核口径。生产管理只认农户与合作社管理员身份 ——
+ * 批发商、零售商、商城供应商都不再附带生产写权限。</p>
  *
  * <p>只读、无缓存：身份与认证状态随时会变，缓存失效策略的成本高于一次索引查询。</p>
  */
@@ -45,7 +51,9 @@ public class CapabilityFacadeImpl implements CapabilityFacade {
         }
         Set<String> codes = new LinkedHashSet<>(identityCodes(userId));
         List<Long> merchantIds = merchantIdsOf(userId);
-        if (!merchantIds.isEmpty()) {
+        // 生产管理不再"加入主体即开通"：必须是主体成员 + 已开通农户/合作社管理员身份，
+        // 否则新建主体但未申请任何身份的账号会默认拥有生产写权限。
+        if (merchantIds.stream().anyMatch(id -> hasProductionCertification(id) && hasProductionIdentity(userId, List.of(id)))) {
             codes.add(CapabilityCodes.PRODUCTION_MANAGE);
         }
         if (hasApprovedCertification(merchantIds)) {
@@ -80,8 +88,19 @@ public class CapabilityFacadeImpl implements CapabilityFacade {
             if (merchantId != null && !merchantIds.contains(merchantId)) {
                 return new Decision(false, "你不是该主体的成员，不能维护它的生产数据");
             }
-            boolean granted = merchantId != null ? merchantIds.contains(merchantId) : !merchantIds.isEmpty();
-            return new Decision(granted, granted ? null : "需要先加入经营主体（生产数据按主体归属）");
+            if (merchantIds.isEmpty()) {
+                return new Decision(false, "需要先加入经营主体（生产数据按主体归属）");
+            }
+            if (merchantId == null && merchantIds.size() != 1) {
+                return new Decision(false, "请选择当前经营主体后再维护生产数据");
+            }
+            Long subjectId = merchantId == null ? merchantIds.get(0) : merchantId;
+            if (!hasProductionCertification(subjectId)) {
+                return new Decision(false, "当前经营主体认证尚未通过，请在认证中心查看审核进度或补正材料；认证通过后才能新增、修改生产数据");
+            }
+            boolean granted = hasProductionIdentity(userId, List.of(subjectId));
+            return new Decision(granted, granted ? null
+                    : "需要在当前经营主体下开通「农户」或「合作社管理员」业务身份并通过审核；其他主体的身份不能通用");
         }
         if (CapabilityCodes.FINANCE_APPLY.equals(capabilityCode)) {
             if (merchantId != null && !merchantIds.contains(merchantId)) {
@@ -102,8 +121,9 @@ public class CapabilityFacadeImpl implements CapabilityFacade {
             if (merchantIds.isEmpty()) {
                 return new Decision(false, "需要先加入经营主体");
             }
-            return new Decision(isMallSupplier(userId, merchantIds), isMallSupplier(userId, merchantIds)
-                    ? null : "需要已开通交易类业务身份（批发商 / 零售商 / 农户 / 合作社管理员）");
+            boolean granted = isMallSupplier(userId, merchantId == null ? merchantIds : List.of(merchantId));
+            return new Decision(granted, granted
+                    ? null : "需要已开通「商城供应商」业务身份，审核通过后自动生效");
         }
         return new Decision(false, "该能力暂不支持校验");
     }
@@ -137,14 +157,18 @@ public class CapabilityFacadeImpl implements CapabilityFacade {
 
     // ==================== 内部查询 ====================
 
-    /** 商城供应商 = 有主体 + 有交易类业务身份 */
+    /** 商城供应商 = 有主体 + 已开通「商城供应商」身份 */
     private boolean isMallSupplier(Long userId, List<Long> merchantIds) {
         if (merchantIds == null || merchantIds.isEmpty()) {
             return false;
         }
-        Set<String> types = identityTypes(userId);
-        return types.contains("wholesaler") || types.contains("retailer")
-                || types.contains("farmer") || types.contains("coop_admin");
+        return identityTypes(userId, merchantIds).contains("mall_supplier");
+    }
+
+    /** 生产管理只认农户 / 合作社管理员：仅"加入主体"或持有其它身份都不构成开通依据。 */
+    private boolean hasProductionIdentity(Long userId, List<Long> merchantIds) {
+        Set<String> types = identityTypes(userId, merchantIds);
+        return types.contains("farmer") || types.contains("coop_admin");
     }
 
     private List<String> identityCodes(Long userId) {
@@ -160,7 +184,21 @@ public class CapabilityFacadeImpl implements CapabilityFacade {
         return identityApplicationMapper.selectList(new LambdaQueryWrapper<IdentityApplicationEntity>()
                         .eq(IdentityApplicationEntity::getUserId, userId)
                         .eq(IdentityApplicationEntity::getStatus, "approved"))
+                .stream().map(IdentityApplicationEntity::getIdentityType)
+                .filter(Objects::nonNull).collect(Collectors.toSet());
+    }
+
+    /** 身份只能作用于其申请主体；未关联主体的历史申请不授予经营权限。 */
+    private Set<String> identityTypes(Long userId, List<Long> merchantIds) {
+        if (merchantIds == null || merchantIds.isEmpty()) return Set.of();
+        return identityApplicationMapper.selectList(new LambdaQueryWrapper<IdentityApplicationEntity>()
+                        .eq(IdentityApplicationEntity::getUserId, userId)
+                        .eq(IdentityApplicationEntity::getStatus, "approved")
+                        .in(IdentityApplicationEntity::getMerchantId, merchantIds))
                 .stream()
+                .filter(row -> Objects.equals(row.getUserId(), userId)
+                        && "approved".equals(row.getStatus()) && row.getMerchantId() != null
+                        && merchantIds.contains(row.getMerchantId()))
                 .map(IdentityApplicationEntity::getIdentityType)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
@@ -175,6 +213,17 @@ public class CapabilityFacadeImpl implements CapabilityFacade {
                 .filter(Objects::nonNull)
                 .distinct()
                 .toList();
+    }
+
+    /** 仅最新申请明确通过才可生产写入，历史通过记录不覆盖待审或补正状态。 */
+    private boolean hasProductionCertification(Long merchantId) {
+        List<MerchantCertificationEntity> rows = certificationMapper.selectList(
+                new LambdaQueryWrapper<MerchantCertificationEntity>()
+                        .eq(MerchantCertificationEntity::getMerchantId, merchantId)
+                        .orderByDesc(MerchantCertificationEntity::getId).last("LIMIT 1"));
+        return rows != null && !rows.isEmpty()
+                && Objects.equals(merchantId, rows.get(0).getMerchantId())
+                && "approved".equals(rows.get(0).getCertStatus());
     }
 
     private boolean hasApprovedCertification(List<Long> merchantIds) {

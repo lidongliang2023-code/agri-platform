@@ -27,7 +27,7 @@ const arg = (name, fallback) => {
 const TRADE_URL = arg('trade', 'http://localhost:8086').replace(/\/$/, '')
 const CORE_URL = arg('core', 'http://localhost:8093').replace(/\/$/, '')
 const PRODUCT_ID = Number(arg('product', '7001'))
-const QUANTITY = Number(arg('quantity', '2'))
+const QUANTITY = Number(arg('quantity', '50'))
 const FREIGHT_AMOUNT = Number(arg('freight', '10'))
 const BUYER = { username: arg('buyer', '19900002005'), password: arg('buyer-password', 'Test12345') }
 const SELLER = { username: arg('seller', 'farmer'), password: arg('seller-password', 'Admin@123') }
@@ -183,6 +183,25 @@ try {
   check(scalar(`SELECT COUNT(*) FROM agri_trade.agri_trade_contract WHERE order_id = ${orderId} AND del_flag = 0`) === '1',
     '商品直接下单后自动生成待签合同')
   if (!orderId) throw new Error('订单未创建成功，后续链路无法执行')
+
+  const stockAfterOrder = Number(scalar(`
+    SELECT stock_quantity FROM agri_trade.agri_trade_product WHERE id = ${PRODUCT_ID}
+  `))
+  check(stockAfterOrder === initialStock - QUANTITY,
+    '下单后商品库存已精确扣减', `前=${initialStock} 扣=${QUANTITY} 现=${stockAfterOrder}`)
+
+  const oversellAttempt = await call('POST', '/api/trade/order/from-product', buyerToken, {
+    productId: PRODUCT_ID,
+    quantity: stockAfterOrder + 100,
+    freightAmount: FREIGHT_AMOUNT,
+    deliveryProvince: '北京市',
+    deliveryCity: '北京市',
+    deliveryDistrict: '丰台区',
+    deliveryAddress: '超卖测试地址',
+    deliveryContact: '超卖测试收货人',
+    deliveryPhone: '13900000000',
+  })
+  check(oversellAttempt.body.code !== 200, '超过库存数量下单被拦截防超卖', oversellAttempt.body.message ?? '')
 
   console.log('\n== 支付 ==')
   const sellerPay = await call('POST', `/api/trade/order/${orderId}/pay`, sellerToken, { paymentMethod: 'transfer' })
@@ -342,6 +361,12 @@ try {
   check(scalar(`
     SELECT COUNT(*) FROM agri_trade.agri_trade_order WHERE id = ${orderId} AND del_flag = 0
   `) === '1', '退款完成后订单仍可追溯，未被物理误删')
+
+  const stockAfterRefund = Number(scalar(`
+    SELECT stock_quantity FROM agri_trade.agri_trade_product WHERE id = ${PRODUCT_ID}
+  `))
+  check(stockAfterRefund === initialStock,
+    '退款完成后商品库存已精确回补', `退前=${stockAfterOrder} 补=${QUANTITY} 现=${stockAfterRefund}`)
 
   const orderPage = await call('GET', `/api/trade/order/${orderId}`, buyerToken)
   check(orderPage.body.code === 200

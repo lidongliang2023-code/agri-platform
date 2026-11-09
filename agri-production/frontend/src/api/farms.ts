@@ -126,3 +126,32 @@ export function deleteFarmCert(farmId: string, certId: string): Promise<void> {
 export function verifyFarmCert(farmId: string, certId: string): Promise<FarmCert> {
   return http.post<FarmCert>(`${BASE}/${farmId}/certs/${certId}/verify`)
 }
+
+/** 主体受控证照存储，文件本体不进入生产服务。 */
+export async function uploadFarmCertificate(file: File, subject: string): Promise<string> {
+  const { default: axios } = await import('axios')
+  const { default: auth } = await import('@/store/auth')
+  const form = new FormData()
+  form.append('file', file)
+  const response = await axios.post(`/api/v1/sso/account/businesses/${encodeURIComponent(subject)}/certification-files?kind=certificate`, form, {
+    withCredentials: true, timeout: 60000,
+    headers: auth.getState().token ? { Authorization: `Bearer ${auth.getState().token}` } : {},
+  })
+  if (response.data?.code !== 0 || !response.data?.data?.url) throw new Error(response.data?.message || '证书上传失败')
+  return response.data.data.url
+}
+
+export async function previewFarmCertificate(url: string): Promise<void> {
+  if (!/^\/api\/v1\/sso\/account\/businesses\/[1-9]\d*\/certification-files\/certificate\/[a-f0-9]{32}\.(jpg|png|webp)$/.test(url)) {
+    throw new Error('历史附件地址不可预览，请重新上传证书')
+  }
+  const { default: axios } = await import('axios')
+  const { default: auth } = await import('@/store/auth')
+  const response = await axios.get(url, { responseType: 'blob', withCredentials: true, timeout: 30000,
+    headers: auth.getState().token ? { Authorization: `Bearer ${auth.getState().token}` } : {}, })
+  if (!/^image\/(jpeg|png|webp)$/.test(response.data.type)) throw new Error('附件返回内容异常，请重新登录后重试')
+  const objectUrl = URL.createObjectURL(response.data)
+  const link = document.createElement('a')
+  link.href = objectUrl; link.target = '_blank'; link.rel = 'noopener'; link.click()
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 60000)
+}

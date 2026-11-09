@@ -50,6 +50,7 @@ public class MerchantCertificationController {
     // ------------------------------ 主体侧 ------------------------------
 
     /** 提交认证申请。 */
+    @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
     @PostMapping("/api/v1/platform/merchant-certifications")
     public ApiResponse<MerchantCertificationEntity> submit(@RequestBody SubmitRequest request) {
         Long userId = MarketContext.currentUserId();
@@ -61,9 +62,16 @@ public class MerchantCertificationController {
         }
         // 能替哪个主体提交，由服务端按绑定关系判定
         Long merchantId = resolveMyMerchant(request.getMerchantId(), userId);
-        MerchantEntity merchant = merchantMapper.selectById(merchantId);
+        MerchantEntity merchant = merchantMapper.lockById(merchantId);
         if (merchant == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND, "经营主体不存在");
+        }
+        String submittedCompanyName = request.getCompanyName().trim();
+        request.setCreditCode(CreditCodeValidator.validate(request.getCreditCode()));
+        if (!java.util.Objects.equals(trim(merchant.getName()), submittedCompanyName)
+                || !java.util.Objects.equals(trim(merchant.getCreditCode()), trim(request.getCreditCode()))) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "认证企业名称和信用代码必须与当前经营主体一致：" + merchant.getName());
         }
         // 已经认证通过的，不再接受重复提交：现在没有"认证有效期"这层模型，
         // 允许重交只会把一家已验证的主体打回待审核 —— 等于自己把自己的认证撤销了。
@@ -72,24 +80,30 @@ public class MerchantCertificationController {
             throw new BusinessException(ErrorCode.CONFLICT, "该主体已通过认证，如需变更信息请联系运营");
         }
         // 一次只能有一条待审核：否则运营端面对同一家主体的多份材料，不知道该审哪一份
-        Long pending = certificationMapper.selectCount(new LambdaQueryWrapper<MerchantCertificationEntity>()
+        List<MerchantCertificationEntity> pending = certificationMapper.selectList(new LambdaQueryWrapper<MerchantCertificationEntity>()
                 .eq(MerchantCertificationEntity::getMerchantId, merchantId)
-                .eq(MerchantCertificationEntity::getCertStatus, "pending"));
-        if (pending != null && pending > 0) {
+                .eq(MerchantCertificationEntity::getCertStatus, "pending").last("FOR UPDATE"));
+        if (!pending.isEmpty()) {
             throw new BusinessException(ErrorCode.CONFLICT, "该主体已有一份待审核的认证申请，请等待审核结果");
         }
 
+        requireProfile(merchant);
         LocalDateTime now = LocalDateTime.now();
         MerchantCertificationEntity entity = new MerchantCertificationEntity();
+        entity.snapshot(merchant);
+        MerchantCertificationEntity previous = certificationMapper.selectOne(new LambdaQueryWrapper<MerchantCertificationEntity>()
+                .eq(MerchantCertificationEntity::getMerchantId, merchantId)
+                .orderByDesc(MerchantCertificationEntity::getId).last("LIMIT 1 FOR UPDATE"));
+        entity.setPreviousCertificationId(previous == null ? null : previous.getId());
         entity.setMerchantId(merchantId);
         entity.setMerchantName(merchant.getName());
         entity.setCertNo("CT" + System.currentTimeMillis());
-        entity.setCompanyName(request.getCompanyName().trim());
+        entity.setCompanyName(submittedCompanyName);
         entity.setCreditCode(request.getCreditCode().trim());
         entity.setLegalPerson(trim(request.getLegalPerson()));
         entity.setLicenseNo(trim(request.getLicenseNo()));
-        entity.setContactName(trim(request.getContactName()));
-        entity.setContactPhone(trim(request.getContactPhone()));
+        entity.setContactName(merchant.getContactName());
+        entity.setContactPhone(merchant.getContactPhone());
         entity.setAttachNote(trim(request.getAttachNote()));
         entity.setBusinessLicenseUrl(certificationFileService.requireOwnedUrl(merchantId,
                 MerchantCertificationFileService.BUSINESS_LICENSE, request.getBusinessLicenseUrl()));
@@ -153,12 +167,17 @@ public class MerchantCertificationController {
     }
 
     /** 审核认证申请。 */
+    @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
     @PostMapping("/api/v1/admin/merchant-certifications/{id}/audit")
     public ApiResponse<Void> audit(@PathVariable Long id, @RequestBody AuditRequest request) {
-        MerchantCertificationEntity entity = certificationMapper.selectById(id);
+        MerchantCertificationEntity entity = certificationMapper.selectOne(new LambdaQueryWrapper<MerchantCertificationEntity>()
+                .eq(MerchantCertificationEntity::getId, id).last("FOR UPDATE"));
         if (entity == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND, "认证申请不存在");
         }
+        MerchantEntity lockedMerchant = merchantMapper.lockById(entity.getMerchantId());
+        entity = certificationMapper.selectOne(new LambdaQueryWrapper<MerchantCertificationEntity>()
+                .eq(MerchantCertificationEntity::getId, id).last("FOR UPDATE"));
         if (!"pending".equals(entity.getCertStatus())) {
             throw new BusinessException(ErrorCode.CONFLICT, "该申请已经审核过了");
         }
@@ -171,6 +190,22 @@ public class MerchantCertificationController {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "驳回必须填写审核意见");
         }
 
+        MerchantEntity merchant = lockedMerchant;
+        if (merchant == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "关联经营主体不存在");
+        }
+        if ("approved".equals(status)
+                && (!java.util.Objects.equals(trim(merchant.getName()), trim(entity.getCompanyName()))
+                || !java.util.Objects.equals(trim(merchant.getCreditCode()), trim(entity.getCreditCode())))) {
+            throw new BusinessException(ErrorCode.CONFLICT, "申请名称或信用代码与当前主体不一致，请驳回后重新提交");
+        }
+        MerchantCertificationEntity latest = certificationMapper.selectOne(
+                new LambdaQueryWrapper<MerchantCertificationEntity>()
+                        .eq(MerchantCertificationEntity::getMerchantId, entity.getMerchantId())
+                        .orderByDesc(MerchantCertificationEntity::getId).last("LIMIT 1 FOR UPDATE"));
+        if (latest == null || !java.util.Objects.equals(latest.getId(), entity.getId())) {
+            throw new BusinessException(ErrorCode.CONFLICT, "只能审核该主体的最新认证申请");
+        }
         MarketContext.Session session = MarketContext.get();
         String reviewer = session == null ? null : session.getUsername();
         LocalDateTime now = LocalDateTime.now();
@@ -180,7 +215,6 @@ public class MerchantCertificationController {
         entity.setReviewRemark(trim(request.getRemark()));
         certificationMapper.updateById(entity);
 
-        MerchantEntity merchant = merchantMapper.selectById(entity.getMerchantId());
         if (merchant != null) {
             merchant.setVerifyStatus(status);
             merchant.setVerifyRemark(trim(request.getRemark()));
@@ -227,6 +261,17 @@ public class MerchantCertificationController {
             return mine.get(0);
         }
         throw new BusinessException(ErrorCode.BAD_REQUEST, "你的账号绑定了多家经营主体，请指定 merchantId");
+    }
+
+    public static void requireProfile(MerchantEntity merchant) {
+        CreditCodeValidator.validate(merchant.getCreditCode());
+        if (isBlank(merchant.getContactName()) || isBlank(merchant.getAddress())
+                || isBlank(merchant.getIndustry()) || isBlank(merchant.getCompanySize())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "请先补齐主体联系人、完整注册地址、行业和企业规模");
+        }
+        if (merchant.getContactPhone() == null || !merchant.getContactPhone().matches("^1[3-9]\\d{9}$")) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "请先补齐有效的主体联系电话");
+        }
     }
 
     private static boolean isBlank(String value) {

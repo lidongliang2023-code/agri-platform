@@ -39,6 +39,9 @@ public class Inspection {
     @TableId(value = "id", type = IdType.AUTO)
     private Long inspectionId;
 
+    public Long getId() { return this.inspectionId; }
+    public void setId(Long id) { this.inspectionId = id; }
+
     @TableField("inspection_no")
     private String inspectionNo;
 

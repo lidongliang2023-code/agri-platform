@@ -29,7 +29,8 @@
 3. **行情**：读 `agri_core.svc_quote`，库里只剩建库种子那 1 条（红富士苹果 6.48）。
 4. **死链**：每条资讯无论指向哪篇文章，链接都统一是 `#/certify`（认证说明页）。
 5. `src/data/portal.ts` 里的 `PRODUCTS / NEWS / ANNOUNCEMENTS / PRICE_COMMODITIES` 演示列表已删除，
-   只保留产业链与省份字典、认证文案。留着它们就会有人继续当成"数据源"接回去。
+   只保留认证文案。留着它们就会有人继续当成"数据源"接回去。
+   产业链分类与省份字典已随「产业链」页并入交易大厅，统一由交易端 `pages/hall/taxonomy.ts` 维护。
 
 ## 供应链金融页的利率与时效（2026-11-03）
 
@@ -43,6 +44,28 @@
 - 回归：`scripts/e2e-portal-finance.mjs` 的期望值逐条取自 `/open/finance/products`（卡数、名称、利率、链接），
   不再钉死产品名与利率。
 
+## 账号中心 · 绑定手机号（2026-11-03 重构）
+
+页面：`#/account/security/phone`（`src/pages/AccountCenter.tsx` 的 `.account-phone-form`）。两步走，
+**没证明新号码收得到短信就不改库**：
+
+| 步骤 | 端点 | 拒绝条件（都是服务端判的，页面只是提前拦住） |
+|---|---|---|
+| 发码 | `POST /api/v1/sso/account/phone/code`（要 SSO 会话） | 号码非法；与当前绑定号码相同；已被别的账号绑定；60 秒内重发；当日条数超 `captcha.sms.daily.limit` |
+| 提交 | `POST /api/v1/sso/account/phone` | 6 位码缺失/过期/错满 5 次作废；验码通过后再查一次占用（发码与提交之间可能被别人抢走） |
+
+三条设计口径：
+
+- **换绑的发码不在公开端点**：`POST /api/v1/sso/sms/code` 只接受 `login / register / reset_password`，
+  传 `change_phone` 会被拒（未登录就能对任意号码发码 = 谁都能替别人触发短信、把对方刚收到的码顶掉）。
+- **冲突判定放在发码时**：让页面填完 6 位码才被拒，等于白烧一条验证码还要干等 60 秒冷却。
+  代价是登录用户能探到"某号码已注册"，所以真正生效的占用判定仍在提交时**验码之后**再查一遍。
+- **登录名可能跟着手机号走**：手机号兼作登录名（`username`）的账号换绑后，`username` 一起变成新号码。
+  接口回 `loginNameChanged`，页面把这句话写进提示 —— 否则用户会拿旧号登录失败、以为账号丢了。
+
+页面状态不是装饰：号码非法/与当前相同/倒计时未结束时「获取验证码」不可点，没填码时「确认变更」不可点，
+错误与"开发通道验证码见后端日志"都用页面自己的提示条说清（不静默、不弹通用"操作失败"）。
+
 ## 故障口径
 
 任一块数据读不到时：大盘显示 `—` 并在下方给"交易服务暂时读不到（原因）"，其余区块显示同样的说明条。
@@ -54,6 +77,20 @@
   草稿不可见/发布可见/下线不可见、503 故障分支、零残留。
 - `node scripts/e2e-portal.mjs`：门户整站回归（首页/搜索/筛选/认证表单）。已迁到 `playwright-core`。
 - `node scripts/check-portal-smoke.mjs`：11 条一级路由逐个进入，断言无 JS 异常、无 5xx、关键区块在位。
+- `node scripts/e2e-account-center.mjs`：**91 条通过 / 2 条失败**（2026-11-03）。失败的两条是"切主体后生产数据落位"
+  与"新成员写在切换后主体的租户号下"，改动前的基线（`git show HEAD:` 跑同一脚本）同样红 —— 归 #151/#152 红项队列，
+  不是本轮引入。本轮覆盖：换绑手机 18 条（4 条负分支 + 页面禁用态 + 落库与还原 + Redis 键清理）、
+  资料/密码/地址/主体切换/成员与证照链路。
+
+### 本轮查出但没修的产品缺口
+
+`POST /api/v1/auth/refresh` **在浏览器里必然失败**：刷新已按子系统分令牌
+（`AuthController#clientIdOf` 用 `Referer/Origin` 推断 client → 要 `agri_refresh_token_<clientId>`），
+而 `/api/v1/sso/login-standalone` 只写全局 `agri_refresh_token` → 门户（client `portal`）拿到 5003
+「刷新凭证无效或已过期」，访问令牌 2 小时后过期就只能重新登录。同一套 cookie 在脚本里（不带 Origin/Referer）是通的，
+所以这条只有真浏览器会撞。修法属于"刷新令牌按子系统分开"那笔在途改造（要么独立登录也写 client 令牌，
+要么全局会话换票时允许回退全局刷新令牌），本轮没有替它改，脚本改成"refresh 拿不到就退回脚本侧登录取令牌"
+并把两条路径都打出来 —— 没有把这条断言改松。
 
 浏览器点检依赖 `C:/Users/71502/.workbuddy-ai/binaries/node/workspace` 里的 `playwright-core` + 本机 Chrome/Edge；
 仓库内不再有 `puppeteer`，仍写 `require2('puppeteer')` 的脚本会直接 `MODULE_NOT_FOUND`。

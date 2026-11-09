@@ -79,6 +79,9 @@ const post = <T>(url: string, data?: unknown): Promise<T> =>
 const put = <T>(url: string, data?: unknown): Promise<T> =>
   request<T>(client.put(url, data))
 
+const del = <T>(url: string): Promise<T> =>
+  request<T>(client.delete(url))
+
 function normalizeDashboard(data: DashboardData): DashboardData {
   return {
     ...data,
@@ -173,8 +176,13 @@ export const ucApi = {
   orgDetail: (id: string) => get<OrgDetailData>(`/api/v1/admin/uc/orgs/${id}`),
 
   /* ---------- 认证审核（复用既有 admin 接口） ---------- */
-  identityApplications: (params: { pageNum?: number; pageSize?: number; status?: string }) =>
-    get<PageResult<IdentityApplication>>('/api/v1/admin/identity-applications', params).then(normalizePage),
+  identityApplications: (params: {
+    pageNum?: number
+    pageSize?: number
+    status?: string
+    identityType?: string
+    keyword?: string
+  }) => get<PageResult<IdentityApplication>>('/api/v1/admin/identity-applications', params).then(normalizePage),
 
   reviewIdentityApplication: (id: string, approved: boolean, remark: string) =>
     post<void>(`/api/v1/admin/identity-applications/${id}/review`, { approved, remark }),
@@ -197,6 +205,14 @@ export const ucApi = {
 
   /* ---------- 角色权限（复用既有 admin 接口） ---------- */
   roles: () => get<RoleRecord[]>('/api/v1/admin/roles'),
+
+  createRole: (body: { code: string; name: string; description?: string }) =>
+    post<RoleRecord>('/api/v1/admin/roles', body),
+
+  updateRole: (code: string, body: { name?: string; description?: string; status?: string }) =>
+    put<RoleRecord>(`/api/v1/admin/roles/${code}`, body),
+
+  deleteRole: (code: string) => del<void>(`/api/v1/admin/roles/${code}`),
 
   rolePermissions: (code: string) =>
     get<string[]>(`/api/v1/admin/roles/${code}/permissions`),
@@ -302,3 +318,5 @@ export const ucApi = {
     actionPrefix?: string
   }) => get<PageResult<AuditLog>>('/api/v1/admin/uc/audit-logs', params).then(normalizePage),
 }
+
+export const healthMonitor = () => request<import('./pages/HealthMonitorPage').HealthSnapshot>(client.get('/api/v1/admin/uc/health-monitor'))

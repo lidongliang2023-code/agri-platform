@@ -4,25 +4,24 @@ import com.agri.production.common.entity.ApiResponse;
 import com.agri.production.common.entity.PageResult;
 import com.agri.production.entity.ReportTask;
 import com.agri.production.service.IAdminReportService;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 
 /**
  * 运营端：统计报表（{@code /api/v1/production/admin/reports}）。
- *
- * <p>按页面契约 {@code api/admin/reports.ts} 实现页面真的会调的五条：
- * 台账分页 / 新建 / 生产（GOV）报表 / 质量（QUALITY）报表 / 报表中心统计。</p>
- *
- * <p><b>{@code /stat} 在平台侧是被吞掉的</b>：core 的 AdminReportController 没有这个端点，
- * 请求会被 {@code @GetMapping("/{id}")} 接走当作"报表编号=stat"去查，必然 404 ——
- * 页面对此写了明确的降级提示。这里实现它，页面那三张卡片才有真数。</p>
  */
 @RestController
 @RequestMapping("/api/v1/production/admin/reports")
@@ -42,15 +41,42 @@ public class AdminReportController {
             @RequestParam(required = false) Integer size,
             @RequestParam(required = false) Integer pageSize,
             @RequestParam(required = false) String keyword,
-            @RequestParam(required = false) String status) {
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String reportType,
+            @RequestParam(required = false) Long farmId,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate) {
         return ApiResponse.success(adminReportService.pageReports(
-                firstNonNull(pageNum, page, 1), firstNonNull(pageSize, size, 10), keyword, status));
+                firstNonNull(pageNum, page, 1), firstNonNull(pageSize, size, 10),
+                keyword, status, reportType, farmId, startDate, endDate));
+    }
+
+    @GetMapping("/detail/{code}")
+    public ApiResponse<ReportTask> detail(@PathVariable String code) {
+        return ApiResponse.success(adminReportService.getReport(code));
     }
 
     /** 新建报表任务（返回报表编号）。 */
     @PostMapping
     public ApiResponse<String> create(@RequestBody(required = false) Map<String, Object> payload) {
         return ApiResponse.success(adminReportService.createReport(payload));
+    }
+
+    /** 按任务生成真实报表快照文件（落盘并回填下载地址）。 */
+    @PostMapping("/{code}/generate")
+    public ApiResponse<ReportTask> generate(@PathVariable String code) {
+        return ApiResponse.success(adminReportService.generateReportFile(code));
+    }
+
+    /** 下载报表快照文件。 */
+    @GetMapping("/{code}/file")
+    public ResponseEntity<byte[]> download(@PathVariable String code) {
+        IAdminReportService.ReportFile file = adminReportService.downloadReportFile(code);
+        String encoded = URLEncoder.encode(file.fileName(), StandardCharsets.UTF_8).replace("+", "%20");
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + encoded)
+                .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
+                .body(file.content());
     }
 
     /** 生产（监管）报表：类型 GOV。 */

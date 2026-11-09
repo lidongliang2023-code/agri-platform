@@ -26,9 +26,7 @@ packages:
   - 'agri-s2b2c/frontend-channel'
   - 'agri-s2b2c/frontend-consumer'
   - 'agri-s2b2c/frontend-platform'
-  - 'agri-s2b2c/frontend-supplier'
   - 'agri-s2b2c/mobile'
-  - 'agri-s2b2c/mobile-supplier'
   - 'agri-s2b2c/mobile-channel'
   # 统一认证中心登录页（sso 子域）：判据①「登录页部署于 sso 子域」的载体。
   - 'agri-sso/frontend'

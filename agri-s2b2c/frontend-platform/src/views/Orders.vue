@@ -30,7 +30,7 @@
       <el-table-column prop="consumerId" label="消费者ID" />
       <el-table-column prop="shopId" label="店铺ID" />
       <el-table-column prop="supplierId" label="供应商ID" />
-      <el-table-column prop="channelId" label="渠道商ID" />
+      <el-table-column prop="channelId" label="商家ID" />
       <el-table-column prop="totalAmount" label="订单金额" />
       <el-table-column prop="payAmount" label="实付金额" />
       <el-table-column prop="status" label="状态">

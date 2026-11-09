@@ -6,21 +6,14 @@
       source="角色 / 菜单 · 主数据后端"
     >
       <template #actions>
-        <button
-          class="mds-btn"
-          :class="{ 'mds-btn--primary': editing }"
-          :disabled="loading || !matrixRows.length"
-          @click="toggleEditing"
-        >
-          {{ editing ? '退出编辑' : '编辑授权' }}
-        </button>
+        <span class="mds-hint">组织级角色由企业端租户管理员维护，本页只读</span>
         <button class="mds-btn" :disabled="loading" @click="load">重新计算</button>
       </template>
     </PageHeader>
 
-    <NoticeBar v-if="editing" tone="warning" title="编辑授权中：">
-      点击单元格即切换该角色对这条权限点的授权，立即写入后端（覆盖式保存），页面按回读结果更新。
-      系统内置角色与历史主体角色只读，单元格不可点。
+    <NoticeBar tone="info" title="归属说明：">
+      组织级角色数据归属本主体（agri_md_role），成员分配与权限授予由各主体企业端「角色与权限」页的租户管理员维护。
+      运营端不再提供组织级角色的增删改入口；本页只做全景对照与授权申请审批。
     </NoticeBar>
 
     <StatGrid :items="stats" />
@@ -560,11 +553,6 @@ async function syncCatalog() {
   } finally {
     syncing.value = false
   }
-}
-
-function toggleEditing() {
-  editing.value = !editing.value
-  if (!editing.value) savingKey.value = ''
 }
 
 /**

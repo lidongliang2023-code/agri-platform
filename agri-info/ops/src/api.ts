@@ -1,6 +1,8 @@
 import axios from 'axios'
 import { attachUnifiedAuth } from './sso'
 import type {
+  CollectionAlert,
+  CollectionAlertPolicy,
   AiAdmin,
   AttestationsAdmin,
   AuditLog,
@@ -77,7 +79,16 @@ export const opsApi = {
 
   quotes: () => request<QuotesAdmin>(client.get('/quotes')),
   saveQuote: (body: Record<string, unknown>) => request<{ message: string }>(client.post('/quotes', body)),
-  runTask: (id: number) => request<{ message: string }>(client.post(`/collect-tasks/${id}/run`)),
+  runTask: (id: number) => request<{ message: string; status: string }>(client.post(`/collect-tasks/${id}/run`, {}, { timeout: 180000 })),
+  collectionSchedule: (id: number) => request<{ enabled: boolean; cron: string; maxRetries: number; retrySeconds: number; nextRunAt?: string; lastResult?: string }>(client.get(`/collect-tasks/${id}/schedule`)),
+  saveCollectionSchedule: (id: number, body: Record<string, unknown>) => request<{ message: string }>(client.post(`/collect-tasks/${id}/schedule`, body)),
+  collectionConfig: (id: number) => request<Record<string, unknown>>(client.get(`/collect-tasks/${id}/config`)),
+  saveCollectionConfig: (id: number, body: Record<string, unknown>) => request<{ message: string }>(client.post(`/collect-tasks/${id}/config`, body)),
+  collectionRuns: (id: number) => request<Array<{ id: number; startedAt: string; status: string; totalRows: number; acceptedRows: number; duplicateRows: number; rejectedRows: number; detail: string }>>(client.get(`/collect-tasks/${id}/runs`)),
+  collectionAlerts: (status: string, taskId?: number) => request<{ items: CollectionAlert[]; freshness: import('./types').CollectionFreshness[]; total: number; activeCount: number; pendingCount: number }>(client.get('/collection-alerts', { params: { status, taskId } })),
+  collectionAlertPolicy: (id: number) => request<CollectionAlertPolicy>(client.get(`/collect-tasks/${id}/alert-policy`)),
+  saveCollectionAlertPolicy: (id: number, body: CollectionAlertPolicy) => request<{ message: string }>(client.post(`/collect-tasks/${id}/alert-policy`, body)),
+  acknowledgeCollectionAlert: (id: number, note: string) => request<{ message: string }>(client.post(`/collection-alerts/${id}/acknowledge`, { note })),
   quality: () => request<QuotesAdmin['quality']>(client.get('/quality')),
   saveAlertRule: (body: Record<string, unknown>) => request<{ message: string }>(client.post('/alert-rules', body)),
   forecastConfig: () => request<Record<string, unknown>>(client.get('/forecast-config')),
@@ -158,4 +169,8 @@ export const opsApi = {
       }),
     )
   },
+}
+
+export function cloudFactoryRequest<T>(path: string, body?: unknown, method = 'POST'): Promise<T> {
+  return request<T>(body === undefined ? client.get(path) : client.request({ url: path, method, data: body }))
 }

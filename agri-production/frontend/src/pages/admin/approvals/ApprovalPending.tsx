@@ -55,7 +55,7 @@ interface ApprovalRow extends Omit<Approval, 'approvalType'> {
 
 /** 审批类型文案 */
 const BIZ_TYPE_MAP: Record<string, string> = {
-  PLAN: '种养计划',
+  PLAN: '农事计划',
   CERT: '认证申请',
   QUOTA: '配额调整',
   RECALL: '召回申请',
@@ -257,7 +257,7 @@ export default function ApprovalPending(): JSX.Element {
 
       <Row gutter={16}>
         <Col span={4}><Card><Statistic title="待审批总数" value={stats.total} valueStyle={{ color: '#1677ff' }} /></Card></Col>
-        <Col span={5}><Card><Statistic title="种养计划" value={stats.plan} /></Card></Col>
+        <Col span={5}><Card><Statistic title="农事计划" value={stats.plan} /></Card></Col>
         <Col span={5}><Card><Statistic title="认证申请" value={stats.cert} /></Card></Col>
         <Col span={5}><Card><Statistic title="配额调整" value={stats.quota} /></Card></Col>
         <Col span={5}><Card><Statistic title="召回申请" value={stats.recall} /></Card></Col>
@@ -285,7 +285,7 @@ export default function ApprovalPending(): JSX.Element {
               placeholder="全部"
               style={{ width: 150 }}
               options={[
-                { value: 'PLAN', label: '种养计划' },
+                { value: 'PLAN', label: '农事计划' },
                 { value: 'CERT', label: '认证申请' },
                 { value: 'QUOTA', label: '配额调整' },
                 { value: 'RECALL', label: '召回申请' },

@@ -42,7 +42,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 渠道商经营台：订单详情与履约、售后、客户、经营分析、对账单。
+ * 商家经营台：订单详情与履约、售后、客户、经营分析、对账单。
  *
  * <p>所有查询都以当前渠道档案为边界，跨渠道数据一律 403；商品主数据、区域分润、
  * 溯源与账号实名仍归各自模块，本控制器只做引用与经营结果汇总。</p>
@@ -121,7 +121,7 @@ public class ChannelOpsController {
      * 渠道改价 / 上下架：只改分销层（channel_product），不改商品主数据。
      *
      * <p>retailPrice 为空串表示恢复按商品价；不传表示不改。售价上限按商品价 5 倍兜底，
-     * 避免误输入；标题、图片与卖点归交易撮合，渠道端不提供修改。</p>
+     * 避免误输入；标题、图片与卖点归交易撮合，商家端不提供修改。</p>
      */
     @PutMapping("/product/{productId}/listing")
     public ResponseEntity<Map<String, Object>> updateListing(@PathVariable Long productId,

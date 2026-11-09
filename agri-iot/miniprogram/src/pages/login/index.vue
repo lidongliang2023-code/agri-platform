@@ -2,8 +2,8 @@
   <view class="login-page">
     <view class="status-bar" :style="{ height: `${statusBarHeight}px` }" />
     <view class="login-content">
-      <view class="brand-mark">丰</view>
-      <text class="login-title">丰链云 · 物联网管理</text>
+      <image class="brand-mark" src="/static/fengchain.svg" mode="aspectFill" />
+      <text class="login-title">丰链云</text>
       <text class="login-subtitle">统一账号登录 · 与平台其他系统共用身份</text>
 
       <view class="login-card">
@@ -97,7 +97,7 @@ async function submit() {
 .login-subtitle {
   margin-top: 9rpx;
   color: rgba(255, 255, 255, .58);
-  font-size: 20rpx;
+  font-size: 24rpx;
 }
 
 .login-card {
@@ -118,7 +118,7 @@ async function submit() {
 }
 
 .form-title { font-size: 31rpx; font-weight: 800; }
-.form-tip { margin-top: 7rpx; color: #84938a; font-size: 18rpx; line-height: 1.5; }
+.form-tip { margin-top: 7rpx; color: #84938a; font-size: 24rpx; line-height: 1.5; }
 
 .input-box {
   display: flex;
@@ -135,7 +135,7 @@ async function submit() {
   width: 72rpx;
   border-right: 1rpx solid #e3eae5;
   color: #52665a;
-  font-size: 21rpx;
+  font-size: 24rpx;
   text-align: center;
 }
 
@@ -152,7 +152,7 @@ async function submit() {
   line-height: 84rpx;
 }
 
-.permission-tip { margin-top: 16rpx; color: #93a29a; font-size: 17rpx; text-align: center; }
+.permission-tip { margin-top: 16rpx; color: #93a29a; font-size: 24rpx; text-align: center; }
 
 .trust-row {
   display: flex;
@@ -163,6 +163,6 @@ async function submit() {
 .trust-row view { flex: 1; text-align: center; }
 .trust-row b,
 .trust-row text { display: block; }
-.trust-row b { color: rgba(255, 255, 255, .82); font-size: 19rpx; }
-.trust-row text { margin-top: 5rpx; color: rgba(255, 255, 255, .42); font-size: 16rpx; }
+.trust-row b { color: rgba(255, 255, 255, .82); font-size: 24rpx; }
+.trust-row text { margin-top: 5rpx; color: rgba(255, 255, 255, .42); font-size: 24rpx; }
 </style>

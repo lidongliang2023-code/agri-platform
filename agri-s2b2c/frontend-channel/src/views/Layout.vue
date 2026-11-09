@@ -3,8 +3,8 @@
     <div v-if="mobileOpen" class="sidebar-overlay" @click="mobileOpen = false" />
     <aside class="sidebar" :class="{ 'is-open': mobileOpen }">
       <div class="brand">
-        <span class="brand-mark">丰</span>
-        <span class="brand-copy"><b>丰链云</b><small>渠道商工作台</small></span>
+        <img class="brand-mark" :src="brandLogoSrc" alt="丰链云" />
+        <span class="brand-copy"><b>丰链云</b><small>FENGCHAIN · AGRI</small></span>
       </div>
       <div class="workspace-badge"><i /> 渠道增长与分润</div>
       <el-menu :default-active="activeMenu" router class="sidebar-menu" :default-openeds="openedGroups" @select="mobileOpen = false">
@@ -80,7 +80,7 @@
         </el-menu-item>
       </el-menu>
       <div class="sidebar-footer">
-        <div class="sidebar-role"><span>当前角色</span><b>渠道商</b></div>
+        <div class="sidebar-role"><span>当前角色</span><b>商家</b></div>
         <div class="logout-btn">
           <el-button link @click="logout"><el-icon><SwitchButton /></el-icon> 退出登录</el-button>
         </div>
@@ -114,7 +114,7 @@
           <el-dropdown>
             <span class="user-info">
               <span class="user-avatar">{{ userInitial }}</span>
-              <span class="user-label"><small>统一账号 · 渠道商</small><b>{{ userDisplayName }}</b></span>
+              <span class="user-label"><small>统一账号 · 商家</small><b>{{ userDisplayName }}</b></span>
               <el-icon><ArrowDown /></el-icon>
             </span>
             <template #dropdown>
@@ -143,6 +143,7 @@
 </template>
 
 <script setup>
+const brandLogoSrc = `${import.meta.env.BASE_URL}fengchain.svg`
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
@@ -165,7 +166,7 @@ const channelApproved = computed(() => profile.value?.applied === true
 const canApply = computed(() => profile.value?.applied !== true
   || String(profile.value?.auditStatus || '').toUpperCase() === 'REJECTED')
 const onboardingTitle = computed(() => {
-  if (!profile.value?.applied) return '当前账号还没有渠道商档案'
+  if (!profile.value?.applied) return '当前账号还没有商家档案'
   if (String(profile.value?.auditStatus || '').toUpperCase() === 'REJECTED') return '渠道入驻申请未通过'
   return '渠道入驻申请审核中'
 })
@@ -216,7 +217,7 @@ const pageTitle = computed(() => {
   if (route.path.startsWith('/orders/')) return '订单详情'
   if (route.path.startsWith('/customers/')) return '客户画像'
   if (route.path.startsWith('/gap/')) return '能力未接入'
-  return titles[route.path] || '渠道商工作台'
+  return titles[route.path] || '商家工作台'
 })
 
 async function loadUnread() {

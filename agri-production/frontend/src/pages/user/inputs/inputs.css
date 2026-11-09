@@ -1,0 +1,26 @@
+.inputs-page .production-section-card { margin-bottom: 16px; }
+.inputs-page .input-tabs-card > .ant-card-body { padding: 20px; }
+.inputs-page .ant-tabs-nav { margin-bottom: 20px; }
+.inputs-page .ant-form-inline { gap: 12px 0; }
+.inputs-page .ant-form-inline .ant-form-item { margin-bottom: 0; }
+.inputs-page .ant-statistic-title { color: #63796b; font-size: 13px; }
+.inputs-page .ant-statistic-content { color: #203e30; font-size: 26px; font-weight: 600; }
+.inputs-page .ant-statistic-content-suffix { font-size: 14px; font-weight: 400; }
+.inputs-page .input-record-table .ant-table-thead > tr > th { background: #f3f8f4; color: #365443; }
+.inputs-page .input-record-table .ant-pro-table-list-toolbar-container { padding-top: 0; }
+.inputs-page .input-record-table .ant-table-container { border: 1px solid #edf2ee; border-radius: 10px; overflow: hidden; }
+.inputs-page .input-record-section > .ant-card-head { display: none; }
+.inputs-page .input-record-table .ant-table-pagination { margin-bottom: 0; }
+.input-check-list .ant-list-item { padding: 14px 0; gap: 12px; }
+.input-check-list .ant-list-item-meta-title { color: #203e30; }
+.input-check-list .ant-list-item-meta-description { color: #63796b; }
+.input-check-list .ant-list-item-meta-avatar { margin-inline-end: 12px; }
+.inputs-page .ant-form-vertical .ant-form-item-label > label { color: #53675b; }
+@media (max-width: 767px) {
+ .inputs-page .input-tabs-card > .ant-card-body { padding: 14px; }
+ .inputs-page .ant-form-inline .ant-form-item { width: 100%; }
+ .inputs-page .ant-form-inline .ant-form-item-control { min-width: 0; }
+ .inputs-page .ant-form-inline .ant-select, .inputs-page .ant-form-inline .ant-input-affix-wrapper, .inputs-page .ant-form-inline .ant-picker { width: 100% !important; }
+ .inputs-page .ant-segmented { max-width: 100%; overflow-x: auto; }
+ .input-check-list .ant-list-item { align-items: flex-start; }
+}

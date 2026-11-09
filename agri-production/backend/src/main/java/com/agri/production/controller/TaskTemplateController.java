@@ -1,11 +1,13 @@
 package com.agri.production.controller;
 
+import com.agri.common.rbac.OperatorOnly;
 import com.agri.production.common.entity.ApiResponse;
 import com.agri.production.common.exception.BusinessException;
 import com.agri.production.entity.TaskTemplate;
 import com.agri.production.service.ITaskTemplateService;
 import com.agri.production.service.TenantContextService;
 import com.agri.production.vo.TaskTemplateVO;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.RequiredArgsConstructor;
@@ -20,12 +22,7 @@ import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
- * 任务模板库。
- *
- * <p>路径按**前端契约**定（前端 {@code api/tasks.ts} 用 {@code BASE=/tasks} 拼
- * {@code /api/v1/production/tasks/templates...}），原先这里挂在
- * {@code /api/production/template} 上 —— 少一层 {@code /v1}、又是另一段前缀，
- * 前端一调就是 404。全前端搜过，没有任何地方用旧路径，所以直接改，不并存两套。</p>
+ * 任务模板库（基础数据，运营维护，多主体使用）。
  */
 @RestController
 @RequestMapping("/api/v1/production/tasks/templates")
@@ -34,7 +31,6 @@ public class TaskTemplateController {
 
     private final ITaskTemplateService taskTemplateService;
 
-    /** 出参统一走 TaskTemplateVO（字段名对齐前端契约，见该类的说明）。 */
     private IPage<TaskTemplateVO> toVoPage(IPage<TaskTemplate> page) {
         IPage<TaskTemplateVO> voPage = new Page<>(page.getCurrent(), page.getSize(), page.getTotal());
         voPage.setRecords(page.getRecords().stream().map(TaskTemplateVO::of).toList());
@@ -53,9 +49,6 @@ public class TaskTemplateController {
             @RequestParam(required = false) String templateType,
             @RequestParam(required = false) String cropCategory,
             @RequestParam(required = false) String taskType,
-            // 前端分页入参用的是 page/size（见 api/tasks.ts 的 fetchTaskTemplatesPage），
-            // 后端原先只认 pageNum/pageSize —— 参数名对不上会被 Spring 静默忽略，
-            // 表现是"翻页没反应、永远第一页"。两个名字都收。
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size,
             @RequestParam(required = false) String keyword,
@@ -64,11 +57,43 @@ public class TaskTemplateController {
         int pageSize2 = size != null ? size : pageSize;
         Page<TaskTemplate> page2 = new Page<>(current, pageSize2);
         String nameFilter = (templateName != null && !templateName.isEmpty()) ? templateName : keyword;
-        IPage<TaskTemplate> result = taskTemplateService.queryPage(page2, nameFilter, templateType, cropCategory, taskType);
+
+        String currentTenant = TenantContextService.currentTenantId();
+        LambdaQueryWrapper<TaskTemplate> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(TaskTemplate::getDelFlag, 0);
+
+        // 租户隔离与平台共享：系统模板(isSystem=1)或同租户历史模板可见
+        if (currentTenant != null && !currentTenant.isBlank()) {
+            wrapper.and(q -> q.eq(TaskTemplate::getIsSystem, 1)
+                    .or().eq(TaskTemplate::getTenantId, currentTenant)
+                    .or().eq(TaskTemplate::getTenantId, "PLATFORM"));
+        }
+
+        if (nameFilter != null && !nameFilter.isEmpty()) {
+            wrapper.and(q -> q.like(TaskTemplate::getTemplateName, nameFilter)
+                    .or().like(TaskTemplate::getTemplateCode, nameFilter));
+        }
+        if (templateType != null && !templateType.isEmpty()) {
+            wrapper.eq(TaskTemplate::getTemplateType, templateType);
+        }
+        if (cropCategory != null && !cropCategory.isEmpty()) {
+            wrapper.eq(TaskTemplate::getCropCategory, cropCategory);
+        }
+        if (taskType != null && !taskType.isEmpty()) {
+            wrapper.eq(TaskTemplate::getTaskType, taskType);
+        }
+        if (status != null) {
+            String dbStatus = status == 1 ? "active" : "inactive";
+            wrapper.eq(TaskTemplate::getStatus, dbStatus);
+        }
+
+        wrapper.orderByDesc(TaskTemplate::getSortOrder)
+               .orderByDesc(TaskTemplate::getCreateTime);
+
+        IPage<TaskTemplate> result = taskTemplateService.page(page2, wrapper);
         return ApiResponse.success(toVoPage(result));
     }
 
-    /** 分页（前端契约路径：GET /api/v1/production/tasks/templates） */
     @GetMapping
     public ApiResponse<IPage<TaskTemplateVO>> page(
             @RequestParam(defaultValue = "1") Integer pageNum,
@@ -85,83 +110,130 @@ public class TaskTemplateController {
                 page, size, keyword, status);
     }
 
-    /** 按作物取模板（前端 TaskCreate 的模板选择用：GET /templates/by-crop?cropId=） */
     @GetMapping("/by-crop")
     public ApiResponse<List<TaskTemplateVO>> getByCrop(@RequestParam(required = false) String cropId,
                                                        @RequestParam(required = false) String cropName) {
-        List<TaskTemplate> templates = taskTemplateService.getTemplatesByCrop(
-                cropName != null && !cropName.isEmpty() ? cropName : cropId);
-        return ApiResponse.success(toVoList(templates));
+        String filter = cropName != null && !cropName.isEmpty() ? cropName : cropId;
+        String currentTenant = TenantContextService.currentTenantId();
+        LambdaQueryWrapper<TaskTemplate> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(TaskTemplate::getDelFlag, 0)
+               .eq(TaskTemplate::getStatus, "active");
+        if (currentTenant != null && !currentTenant.isBlank()) {
+            wrapper.and(q -> q.eq(TaskTemplate::getIsSystem, 1)
+                    .or().eq(TaskTemplate::getTenantId, currentTenant)
+                    .or().eq(TaskTemplate::getTenantId, "PLATFORM"));
+        }
+        if (filter != null && !filter.isEmpty()) {
+            wrapper.and(q -> q.eq(TaskTemplate::getCropCategory, filter)
+                    .or().eq(TaskTemplate::getCropName, filter));
+        }
+        wrapper.orderByDesc(TaskTemplate::getSortOrder).orderByDesc(TaskTemplate::getCreateTime);
+        return ApiResponse.success(toVoList(taskTemplateService.list(wrapper)));
     }
 
-    /*
-     * 说明：上面新增的两个端点是为了对上前端契约；既有的 /page /list /system /{id}
-     * 以及 POST/PUT/DELETE/{id}/status/{id}/use 全部保留（同名前缀变化后一起生效）。
-     * status 参数暂时只接不筛 —— 表里 status 是 'active' 这类字符串，等页面确实要用
-     * 再按词表实现，避免现在编一套过滤口径出来。
-     */
-    
     @GetMapping("/list")
-    public ApiResponse<List<TaskTemplate>> getList(
+    public ApiResponse<List<TaskTemplateVO>> getList(
             @RequestParam(required = false) String templateType,
             @RequestParam(required = false) String cropCategory,
             @RequestParam(required = false) String taskType) {
-        List<TaskTemplate> templates;
-        if (templateType != null && !templateType.isEmpty()) {
-            templates = taskTemplateService.getTemplatesByType(templateType);
-        } else if (cropCategory != null && !cropCategory.isEmpty()) {
-            templates = taskTemplateService.getTemplatesByCrop(cropCategory);
-        } else if (taskType != null && !taskType.isEmpty()) {
-            templates = taskTemplateService.getTemplatesByTaskType(taskType);
-        } else {
-            templates = taskTemplateService.list();
+        String currentTenant = TenantContextService.currentTenantId();
+        LambdaQueryWrapper<TaskTemplate> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(TaskTemplate::getDelFlag, 0)
+               .eq(TaskTemplate::getStatus, "active");
+        if (currentTenant != null && !currentTenant.isBlank()) {
+            wrapper.and(q -> q.eq(TaskTemplate::getIsSystem, 1)
+                    .or().eq(TaskTemplate::getTenantId, currentTenant)
+                    .or().eq(TaskTemplate::getTenantId, "PLATFORM"));
         }
-        return ApiResponse.success(templates);
+        if (templateType != null && !templateType.isEmpty()) {
+            wrapper.eq(TaskTemplate::getTemplateType, templateType);
+        }
+        if (cropCategory != null && !cropCategory.isEmpty()) {
+            wrapper.eq(TaskTemplate::getCropCategory, cropCategory);
+        }
+        if (taskType != null && !taskType.isEmpty()) {
+            wrapper.eq(TaskTemplate::getTaskType, taskType);
+        }
+        wrapper.orderByDesc(TaskTemplate::getSortOrder).orderByDesc(TaskTemplate::getCreateTime);
+        return ApiResponse.success(toVoList(taskTemplateService.list(wrapper)));
     }
 
     @GetMapping("/system")
-    public ApiResponse<List<TaskTemplate>> getSystemTemplates() {
-        List<TaskTemplate> templates = taskTemplateService.getSystemTemplates();
-        return ApiResponse.success(templates);
+    public ApiResponse<List<TaskTemplateVO>> getSystemTemplates() {
+        return ApiResponse.success(toVoList(taskTemplateService.getSystemTemplates()));
     }
 
     @GetMapping("/{id}")
-    public ApiResponse<TaskTemplate> getById(@PathVariable Long id) {
+    public ApiResponse<TaskTemplateVO> getById(@PathVariable Long id) {
         TaskTemplate template = taskTemplateService.getById(id);
-        if (template == null) {
-            // 业务上的"找不到"要返 4xx：原先走 ApiResponse.error(...) → 业务码 500，
-            // 前端显示的是"系统异常"，日志里也是一条与真实故障混淆的 ERROR
+        if (template == null || template.getDelFlag() == 1) {
             throw new BusinessException(404, "任务模板不存在：" + id);
         }
-        return ApiResponse.success(template);
+        return ApiResponse.success(TaskTemplateVO.of(template));
     }
 
-    /**
-     * 新增任务模板。
-     *
-     * <p>原先这里有三处会直接打成 500：① 不校验名称；② 不生成 {@code templateCode}，
-     * 而表上那一列是 NOT NULL 无默认值（实测 "Field 'template_code' doesn't have a default value"）；
-     * ③ 不写 tenantId（同样是 NOT NULL）。空请求体一提交就是"系统异常"。</p>
-     *
-     * <p>返回值按契约给**新模板 ID**（前端 {@code createTaskTemplate} 声明的是 {@code Promise<string>}），
-     * 原先返回的是 {@code true}，页面拿到的"ID"是个布尔值。</p>
-     */
+    @OperatorOnly
     @PostMapping
-    public ApiResponse<String> create(@RequestBody TaskTemplate template) {
-        String tenantId = TenantContextService.currentTenantId();
-        if (template == null || template.getTemplateName() == null || template.getTemplateName().isBlank()) {
+    public ApiResponse<String> create(@RequestBody Map<String, Object> payload) {
+        if (payload == null || payload.get("templateName") == null || String.valueOf(payload.get("templateName")).isBlank()) {
             throw new BusinessException(400, "模板名称不能为空");
         }
+        String tenantId = TenantContextService.currentTenantId();
+        TaskTemplate template = new TaskTemplate();
         template.setDelFlag(0);
-        template.setTenantId(tenantId);
-        template.setTemplateName(template.getTemplateName().trim());
-        if (template.getTemplateCode() == null || template.getTemplateCode().isBlank()) {
-            template.setTemplateCode(nextTemplateCode(tenantId));
+        template.setTenantId(tenantId != null && !tenantId.isBlank() ? tenantId : "PLATFORM");
+        template.setTemplateName(String.valueOf(payload.get("templateName")).trim());
+
+        String templateCode = payload.get("templateCode") != null ? String.valueOf(payload.get("templateCode")).trim() : "";
+        template.setTemplateCode(!templateCode.isEmpty() ? templateCode : nextTemplateCode(template.getTenantId()));
+
+        if (payload.get("templateType") != null) template.setTemplateType(String.valueOf(payload.get("templateType")));
+        if (payload.get("cropCategory") != null) template.setCropCategory(String.valueOf(payload.get("cropCategory")));
+        if (payload.get("cropName") != null) template.setCropName(String.valueOf(payload.get("cropName")));
+        if (payload.get("taskType") != null) template.setTaskType(String.valueOf(payload.get("taskType")));
+        if (payload.get("growthStage") != null) template.setGrowthStage(String.valueOf(payload.get("growthStage")));
+        if (payload.get("description") != null) template.setDescription(String.valueOf(payload.get("description")));
+        
+        // 兼容 workContent / content / templateContent
+        Object contentObj = payload.get("templateContent");
+        if (contentObj == null) contentObj = payload.get("workContent");
+        if (contentObj == null) contentObj = payload.get("content");
+        if (contentObj != null) template.setTemplateContent(String.valueOf(contentObj));
+
+        // 兼容 standardHours / workHours / recommendedDurationHours
+        Object hoursObj = payload.get("recommendedDurationHours");
+        if (hoursObj == null) hoursObj = payload.get("standardHours");
+        if (hoursObj == null) hoursObj = payload.get("workHours");
+        if (hoursObj != null && !String.valueOf(hoursObj).isBlank()) {
+            try {
+                template.setRecommendedDurationHours((int) Math.round(Double.parseDouble(String.valueOf(hoursObj))));
+            } catch (Exception ignored) {}
         }
+
+        // 投入品兼容
+        Object inputsObj = payload.get("inputItems");
+        if (inputsObj == null) inputsObj = payload.get("inputIds");
+        if (inputsObj == null) inputsObj = payload.get("requiredInputs");
+        if (inputsObj instanceof List<?> list) {
+            template.setRequiredInputs(String.join(",", list.stream().map(String::valueOf).toList()));
+        } else if (inputsObj != null) {
+            template.setRequiredInputs(String.valueOf(inputsObj));
+        }
+
+        Object statusObj = payload.get("status");
+        if (statusObj != null) {
+            template.setStatus("1".equals(String.valueOf(statusObj)) || "active".equalsIgnoreCase(String.valueOf(statusObj)) ? "active" : "inactive");
+        } else {
+            template.setStatus("active");
+        }
+
+        template.setIsSystem(1); // 运营维护的基础数据标记为系统标准模板
+        template.setUseCount(0);
+        template.setSortOrder(payload.get("sortOrder") != null ? Integer.parseInt(String.valueOf(payload.get("sortOrder"))) : 0);
+        template.setRemark(payload.get("remark") != null ? String.valueOf(payload.get("remark")) : null);
         template.setCreateTime(new Date());
         template.setUpdateTime(new Date());
-        template.setStatus("active");
-        template.setIsSystem(0);
+
         try {
             taskTemplateService.save(template);
         } catch (DuplicateKeyException e) {
@@ -170,75 +242,85 @@ public class TaskTemplateController {
         return ApiResponse.success(String.valueOf(template.getId()));
     }
 
-    /**
-     * 更新任务模板。
-     *
-     * <p>原先是 {@code template.setId(id); updateById(template)} —— 请求体里没下发的列会被**清成 null**
-     * （页面编辑只改其中几项，一提交就把其它字段抹掉）。这里改成在已加载的实体上就地改。</p>
-     */
+    @OperatorOnly
     @PutMapping("/{id}")
-    public ApiResponse<TaskTemplate> update(@PathVariable Long id, @RequestBody TaskTemplate template) {
+    public ApiResponse<TaskTemplateVO> update(@PathVariable Long id, @RequestBody Map<String, Object> payload) {
         TaskTemplate existing = taskTemplateService.getById(id);
-        if (existing == null) {
+        if (existing == null || existing.getDelFlag() == 1) {
             throw new BusinessException(404, "任务模板不存在：" + id);
         }
-        if (template == null) {
-            throw new BusinessException(400, "模板内容不能为空");
+        if (payload == null || payload.isEmpty()) {
+            throw new BusinessException(400, "更新内容不能为空");
         }
-        if (template.getTemplateName() != null && !template.getTemplateName().isBlank()) {
-            existing.setTemplateName(template.getTemplateName().trim());
+
+        if (payload.containsKey("templateName") && payload.get("templateName") != null) {
+            String name = String.valueOf(payload.get("templateName")).trim();
+            if (name.isEmpty()) throw new BusinessException(400, "模板名称不能为空");
+            existing.setTemplateName(name);
         }
-        if (template.getTemplateCode() != null && !template.getTemplateCode().isBlank()) {
-            existing.setTemplateCode(template.getTemplateCode().trim());
+        if (payload.containsKey("templateCode") && payload.get("templateCode") != null) {
+            existing.setTemplateCode(String.valueOf(payload.get("templateCode")).trim());
         }
-        if (template.getTemplateType() != null) {
-            existing.setTemplateType(template.getTemplateType());
+        if (payload.containsKey("templateType")) existing.setTemplateType(payload.get("templateType") != null ? String.valueOf(payload.get("templateType")) : null);
+        if (payload.containsKey("cropCategory")) existing.setCropCategory(payload.get("cropCategory") != null ? String.valueOf(payload.get("cropCategory")) : null);
+        if (payload.containsKey("cropName")) existing.setCropName(payload.get("cropName") != null ? String.valueOf(payload.get("cropName")) : null);
+        if (payload.containsKey("taskType")) existing.setTaskType(payload.get("taskType") != null ? String.valueOf(payload.get("taskType")) : null);
+        if (payload.containsKey("growthStage")) existing.setGrowthStage(payload.get("growthStage") != null ? String.valueOf(payload.get("growthStage")) : null);
+        if (payload.containsKey("description")) existing.setDescription(payload.get("description") != null ? String.valueOf(payload.get("description")) : null);
+
+        if (payload.containsKey("templateContent") || payload.containsKey("workContent") || payload.containsKey("content")) {
+            Object contentObj = payload.get("templateContent");
+            if (contentObj == null) contentObj = payload.get("workContent");
+            if (contentObj == null) contentObj = payload.get("content");
+            existing.setTemplateContent(contentObj != null ? String.valueOf(contentObj) : null);
         }
-        if (template.getCropCategory() != null) {
-            existing.setCropCategory(template.getCropCategory());
+
+        if (payload.containsKey("recommendedDurationHours") || payload.containsKey("standardHours") || payload.containsKey("workHours")) {
+            Object hoursObj = payload.get("recommendedDurationHours");
+            if (hoursObj == null) hoursObj = payload.get("standardHours");
+            if (hoursObj == null) hoursObj = payload.get("workHours");
+            if (hoursObj != null && !String.valueOf(hoursObj).isBlank()) {
+                existing.setRecommendedDurationHours((int) Math.round(Double.parseDouble(String.valueOf(hoursObj))));
+            } else {
+                existing.setRecommendedDurationHours(null);
+            }
         }
-        if (template.getCropName() != null) {
-            existing.setCropName(template.getCropName());
+
+        if (payload.containsKey("inputItems") || payload.containsKey("inputIds") || payload.containsKey("requiredInputs")) {
+            Object inputsObj = payload.get("inputItems");
+            if (inputsObj == null) inputsObj = payload.get("inputIds");
+            if (inputsObj == null) inputsObj = payload.get("requiredInputs");
+            if (inputsObj instanceof List<?> list) {
+                existing.setRequiredInputs(String.join(",", list.stream().map(String::valueOf).toList()));
+            } else if (inputsObj != null) {
+                existing.setRequiredInputs(String.valueOf(inputsObj));
+            } else {
+                existing.setRequiredInputs(null);
+            }
         }
-        if (template.getTaskType() != null) {
-            existing.setTaskType(template.getTaskType());
+
+        if (payload.containsKey("status")) {
+            Object statusObj = payload.get("status");
+            existing.setStatus("1".equals(String.valueOf(statusObj)) || "active".equalsIgnoreCase(String.valueOf(statusObj)) ? "active" : "inactive");
         }
-        if (template.getGrowthStage() != null) {
-            existing.setGrowthStage(template.getGrowthStage());
+
+        if (payload.containsKey("sortOrder") && payload.get("sortOrder") != null) {
+            existing.setSortOrder(Integer.parseInt(String.valueOf(payload.get("sortOrder"))));
         }
-        if (template.getDescription() != null) {
-            existing.setDescription(template.getDescription());
+        if (payload.containsKey("remark")) {
+            existing.setRemark(payload.get("remark") != null ? String.valueOf(payload.get("remark")) : null);
         }
-        if (template.getTemplateContent() != null) {
-            existing.setTemplateContent(template.getTemplateContent());
-        }
-        if (template.getRecommendedDurationHours() != null) {
-            existing.setRecommendedDurationHours(template.getRecommendedDurationHours());
-        }
-        if (template.getRequiredInputs() != null) {
-            existing.setRequiredInputs(template.getRequiredInputs());
-        }
-        if (template.getOptionalInputs() != null) {
-            existing.setOptionalInputs(template.getOptionalInputs());
-        }
-        if (template.getSortOrder() != null) {
-            existing.setSortOrder(template.getSortOrder());
-        }
-        if (template.getStatus() != null && !template.getStatus().isBlank()) {
-            existing.setStatus(template.getStatus());
-        }
-        if (template.getRemark() != null) {
-            existing.setRemark(template.getRemark());
-        }
+
         existing.setUpdateTime(new Date());
         taskTemplateService.updateById(existing);
-        return ApiResponse.success(existing);
+        return ApiResponse.success(TaskTemplateVO.of(existing));
     }
 
+    @OperatorOnly
     @DeleteMapping("/{id}")
     public ApiResponse<Boolean> delete(@PathVariable Long id) {
         TaskTemplate template = taskTemplateService.getById(id);
-        if (template == null) {
+        if (template == null || template.getDelFlag() == 1) {
             throw new BusinessException(404, "任务模板不存在：" + id);
         }
         template.setDelFlag(1);
@@ -247,13 +329,15 @@ public class TaskTemplateController {
         return ApiResponse.success(true);
     }
 
+    @OperatorOnly
     @PostMapping("/{id}/status")
-    public ApiResponse<Boolean> updateStatus(@PathVariable Long id, @RequestBody Map<String, String> params) {
-        String status = params.get("status");
-        if (status == null || status.isBlank()) {
+    public ApiResponse<Boolean> updateStatus(@PathVariable Long id, @RequestBody Map<String, Object> params) {
+        Object statusObj = params != null ? params.get("status") : null;
+        if (statusObj == null || String.valueOf(statusObj).isBlank()) {
             throw new BusinessException(400, "status 不能为空");
         }
-        boolean success = taskTemplateService.updateTemplateStatus(id, status);
+        String statusStr = "1".equals(String.valueOf(statusObj)) || "active".equalsIgnoreCase(String.valueOf(statusObj)) ? "active" : "inactive";
+        boolean success = taskTemplateService.updateTemplateStatus(id, statusStr);
         if (success) {
             return ApiResponse.success(true);
         }
@@ -266,13 +350,11 @@ public class TaskTemplateController {
         return ApiResponse.success(true);
     }
 
-    /** 生成同租户内唯一的模板编码：TPL-yyyyMMdd-4 位随机。 */
     private String nextTemplateCode(String tenantId) {
         String day = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
         for (int i = 0; i < 8; i++) {
             String code = "TPL-" + day + "-" + String.format("%04d", ThreadLocalRandom.current().nextInt(10000));
-            Long used = taskTemplateService.lambdaQuery().eq(TaskTemplate::getTenantId, tenantId)
-                    .eq(TaskTemplate::getTemplateCode, code).count();
+            Long used = taskTemplateService.lambdaQuery().eq(TaskTemplate::getTemplateCode, code).count();
             if (used == null || used == 0) {
                 return code;
             }

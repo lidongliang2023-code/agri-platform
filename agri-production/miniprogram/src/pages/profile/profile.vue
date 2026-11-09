@@ -1,6 +1,17 @@
 <template>
   <view class="page">
     <view class="card">
+      <view class="card-title"><text>当前经营主体与生产准入</text></view>
+      <view v-if="scopeError" class="error-box">{{ scopeError }}</view>
+      <view v-for="item in subjects" :key="item.merchantId" class="field" @click="selectSubject(item)">
+        <text class="field-label">{{ item.merchantName || item.merchantId }}</text>
+        <text class="field-value link">{{ selectedSubject === String(item.merchantId) ? '✓ 当前主体' : '切换' }}</text>
+      </view>
+      <view class="muted">{{ admissionText }}</view>
+      <view class="muted" style="margin-top: 12rpx">生产写入需本主体成员关系有效、企业认证通过，并具备本主体已批准的农户或合作社管理员身份。</view>
+      <text class="link" @click="refreshScope">刷新准入状态</text>
+    </view>
+    <view class="card">
       <view class="row">
         <view>
           <text class="strong" style="font-size: 34rpx">{{ user.realName || '未登录' }}</text>
@@ -70,6 +81,46 @@ import {
 } from '@/utils/auth-helper'
 import type { FarmBrief } from '@/utils/auth'
 
+import { SUBJECT_KEY, subjectSummary, productionAdmission, activateProductionSubject } from '@/utils/request'
+import type { ProductionSubject } from '@/utils/request'
+const subjects = ref<ProductionSubject[]>([])
+const selectedSubject = ref('')
+const admissionText = ref('正在读取生产准入状态')
+const scopeError = ref('')
+const switching = ref(false)
+async function refreshScope(): Promise<void> {
+  scopeError.value = ''
+  admissionText.value = '正在读取生产准入状态'
+  try {
+    const summary = await subjectSummary()
+    subjects.value = summary.merchants || []
+    const active = summary.activeMerchantId ? String(summary.activeMerchantId) : ''
+    if (String(uni.getStorageSync(SUBJECT_KEY) || '') !== active) {
+      uni.removeStorageSync('agri_current_farm')
+      farm.value = null
+      farms.value = []
+    }
+    selectedSubject.value = active
+    if (active) uni.setStorageSync(SUBJECT_KEY, active)
+    else uni.removeStorageSync(SUBJECT_KEY)
+    const result = await productionAdmission(active)
+    admissionText.value = result.granted ? '已具备当前主体的生产写入准入条件' : result.reason || '当前主体暂不具备生产写入权限'
+  } catch (e: any) {
+    admissionText.value = '暂无法确认准入，生产写入不会放行'
+    scopeError.value = e.message || '读取主体失败'
+  }
+}
+async function selectSubject(item: ProductionSubject): Promise<void> {
+  if (switching.value || selectedSubject.value === String(item.merchantId)) return
+  switching.value = true
+  try {
+    await activateProductionSubject(String(item.merchantId))
+    farms.value = []
+    farm.value = null
+    await load()
+  } catch (e: any) { scopeError.value = e.message || '切换主体失败' }
+  finally { switching.value = false }
+}
 const user = ref(currentUser())
 const farms = ref<FarmBrief[]>([])
 const farm = ref(currentFarm())
@@ -91,6 +142,7 @@ const isCurrent = (item: FarmBrief): boolean =>
 
 async function load(): Promise<void> {
   user.value = currentUser()
+  await refreshScope()
   farm.value = currentFarm()
   try {
     farms.value = await listFarms()

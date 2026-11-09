@@ -43,14 +43,14 @@ function publish() {
 <style scoped lang="scss">
 .section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20rpx; }
 .kicker,.title { display: block; }
-.kicker { color: #12764a; font-size: 17rpx; font-weight: 750; letter-spacing: .1em; }
+.kicker { color: #12764a; font-size: 24rpx; font-weight: 750; letter-spacing: .1em; }
 .title { margin-top: 4rpx; font-size: 34rpx; font-weight: 760; }
-.btn-sm { min-height: 60rpx; padding: 0 18rpx; font-size: 21rpx; }
+.btn-sm { min-height: 60rpx; padding: 0 18rpx; font-size: 24rpx; }
 .demand-name { font-size: 26rpx; font-weight: 700; }
 .demand-card > .muted { display: block; margin-top: 8rpx; }
 .info { display: grid; grid-template-columns: repeat(2,1fr); gap: 12rpx; margin-top: 16rpx; padding: 16rpx; border-radius: 14rpx; background: #f4faf6; }
 .info view { display: flex; flex-direction: column; gap: 4rpx; }
-.info text { color: #718277; font-size: 18rpx; }
-.info b { font-size: 22rpx; }
+.info text { color: #718277; font-size: 24rpx; }
+.info b { font-size: 24rpx; }
 .foot { margin-top: 15rpx; }
 </style>

@@ -55,7 +55,8 @@ public class UserPermissionController {
 
         Map<String, Object> view = new LinkedHashMap<>();
         view.put("userId", resolved.userId());
-        view.put("marketId", resolved.marketId());
+        view.put("marketId", resolved.marketId()); // 旧客户端兼容
+        view.put("marketSelectionRequired", false);
         view.put("roles", resolved.roles());
         // 业务能力与 RBAC 权限码一起下发：能力码带命名空间（gov.oversight / trade.wholesale），
         // 不会和 role 权限码（gov:citizen）撞名；前端/子系统可以按任意一种准入。
@@ -70,6 +71,8 @@ public class UserPermissionController {
         view.put("capabilities", capabilities);
         view.put("wildcard", resolved.permissions().contains(UserPermissionService.WILDCARD));
         view.put("operator", resolved.isOperator());
+        view.put("platformOperator", userPermissionService.resolvePlatform(userId).has("uc:admin"));
+        view.put("authorizationScope", "SINGLE_PLATFORM");
         return ApiResponse.ok(view);
     }
 }

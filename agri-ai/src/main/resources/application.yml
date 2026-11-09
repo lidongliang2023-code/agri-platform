@@ -1,11 +1,22 @@
 server:
-  port: 8085
+  port: ${SERVER_PORT:8201}
 
 spring:
   application:
     name: agri-ai
   profiles:
     active: dev
+
+# 产业互联网平台统一登录 (Sa-Token 配置)
+sa-token:
+  token-name: agri-token
+  timeout: 2592000
+  active-timeout: -1
+  is-concurrent: true
+  is-share: true
+  token-style: uuid
+  is-read-body: false
+  is-log: false
 
 ai:
   tongyi:
@@ -18,4 +29,23 @@ ai:
 
 logging:
   level:
-    com.agri.ai: DEBUG
+    com.agri.ai: INFO
+
+# Unified probes: dependency failures affect readiness, not liveness.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      show-components: never
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: '*'
+          exclude: livenessState

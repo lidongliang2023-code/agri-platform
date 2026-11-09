@@ -74,7 +74,9 @@ const capabilities = await readJson(await fetch(`${CORE}/api/v1/sso/account/capa
 const caps = capabilities?.data?.capabilities ?? []
 const productionCap = caps.find((item) => item.code === 'production.manage')
 const financeCap = caps.find((item) => item.code === 'finance.apply')
-check(productionCap?.granted === true, 'admin 具备 production.manage（已加入经营主体）', `granted=${productionCap?.granted}`)
+check(productionCap?.granted === false,
+  'admin 仅绑定主体、未开通业务身份时 production.manage 不应默认具备',
+  `granted=${productionCap?.granted} reason=${productionCap?.reason}`)
 check(financeCap?.granted === false, 'admin 不具备 finance.apply（主体认证未通过）', `granted=${financeCap?.granted} reason=${financeCap?.reason}`)
 const consumerCap = caps.find((item) => item.code === 's2b2c.consumer')
 const supplierCap = caps.find((item) => item.code === 's2b2c.supplier')
@@ -91,8 +93,9 @@ const internal = async (body, headers = {}) => {
   return { status: response.status, body: await readJson(response) }
 }
 const okProduction = await internal({ code: 'production.manage' }, { 'X-Internal-Token': INTERNAL_TOKEN })
-check(okProduction.body?.code === 0 && okProduction.body?.data?.granted === true,
-  '内部接口：production.manage 判定为具备', `granted=${okProduction.body?.data?.granted}`)
+check(okProduction.body?.code === 0 && okProduction.body?.data?.granted === false,
+  '内部接口：production.manage 在无业务身份时判定为不具备',
+  `granted=${okProduction.body?.data?.granted} reason=${okProduction.body?.data?.reason}`)
 const okFinance = await internal({ code: 'finance.apply' }, { 'X-Internal-Token': INTERNAL_TOKEN })
 check(okFinance.body?.code === 0 && okFinance.body?.data?.granted === false,
   '内部接口：finance.apply 判定为不具备', `reason=${okFinance.body?.data?.reason}`)
@@ -111,8 +114,19 @@ const farmWrite = async (headers) => {
 const anonymousFarm = await farmWrite({})
 check(anonymousFarm.status === 401, '生产写接口：无令牌 401', `status=${anonymousFarm.status}`)
 const allowedFarm = await farmWrite({ Authorization: `Bearer ${token}` })
-check(allowedFarm.status !== 401 && allowedFarm.status !== 403,
-  '生产写接口：具备能力后放行（返回业务结果）', `status=${allowedFarm.status}`)
+check(allowedFarm.status === 403,
+  '生产写接口：仅绑定主体、无业务身份时 403 拦截', `status=${allowedFarm.status}`)
+
+// 已开通交易类业务身份（farmer 有 wholesaler）的账号应当放行：证明不是"所有账号都被拦"
+const farmerLogin = await (await fetch(`${CORE}/api/v1/auth/login`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ username: 'farmer', password: 'Admin@123', marketId: 1 }),
+})).json()
+const farmerToken = farmerLogin?.data?.accessToken ?? ''
+const farmerFarm = await farmWrite({ Authorization: `Bearer ${farmerToken}` })
+check(farmerFarm.status !== 401 && farmerFarm.status !== 403,
+  '生产写接口：已开通业务身份（farmer）放行', `status=${farmerFarm.status}`)
   // 真实用户走网关（:80 → agri-production），确认拦截器在真实链路上生效
   const gatewayFarm = await (await fetch('http://localhost/api/v1/production/farms/__e2e_none__', {
     method: 'DELETE',
@@ -147,7 +161,7 @@ check(String(infoPublish?.message ?? '').includes('业务身份'),
 
 /* ---------- 4.6) 物联网写接口 ---------- */
 const iotWrite = async (headers) => {
-  const response = await fetch(`${IOT}/api/iot/device`, {
+  const response = await fetch(`${IOT}/api/v1/iot/app/devices`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...headers },
     body: '{}',

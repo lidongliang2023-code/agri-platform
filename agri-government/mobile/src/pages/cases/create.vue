@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AuthorizationNotice from '../../components/AuthorizationNotice.vue'
 import { reactive,ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { api } from '../../api'
@@ -34,7 +35,7 @@ async function submit(){
   }catch(e){uni.showToast({title:e instanceof Error?e.message:'立案失败',icon:'none'})}finally{submitting.value=false}
 }
 </script>
-<template><view class="page pad"><view class="card"><view class="card-head"><text class="card-title">立案登记</text><text class="tag orange">一般程序</text></view>
+<template><view class="page pad"><AuthorizationNotice duty="case" context="cases"/><view class="card"><view class="card-head"><text class="card-title">立案登记</text><text class="tag orange">一般程序</text></view>
   <view class="form-item"><text class="form-label">监管主体统一社会信用代码</text><view class="lookup"><input class="input" v-model="codeRef" placeholder="扫码或输入信用代码"/><button class="btn btn-sm" :loading="looking" @click="lookup">核验</button></view></view>
   <view class="subject-line"><text class="form-label">立案主体</text><text class="strong">{{ form.subjectName || '尚未核验' }}</text><text class="tag" :class="resolved?'green':'red'">{{ resolved?'档案已匹配':'未核验' }}</text></view>
   <view class="form-item"><text class="form-label">案件类型</text><input class="input" v-model="form.caseType"/></view>
@@ -42,4 +43,4 @@ async function submit(){
   <view class="form-item"><text class="form-label">法律依据</text><input class="input" v-model="form.legalBasis" placeholder="如《农产品质量安全法》第七十一条"/></view>
   <view class="notice">承办人默认记为当前执法人员（{{ form.taskId?`关联任务 #${form.taskId}`:'由任务详情进入可关联任务' }}）；立案后进入调查取证、裁量、处罚告知与结案归档流程。</view>
   <button class="btn btn-primary btn-block" :loading="submitting" @click="submit">提交立案登记</button></view></view></template>
-<style lang="scss" scoped>.lookup{display:flex;gap:10rpx;margin-top:8rpx}.lookup .input{flex:1}.subject-line{display:flex;align-items:center;gap:12rpx;margin-bottom:18rpx;padding:16rpx;border-radius:14rpx;background:#f2fbf5}.subject-line .form-label{color:#53665a;font-size:20rpx}.subject-line .strong{flex:1;font-size:22rpx}.notice{margin-bottom:18rpx;padding:14rpx;border-radius:12rpx;background:#fff3dd;color:#9b6b0d;font-size:19rpx;line-height:1.6}</style>
+<style lang="scss" scoped>.lookup{display:flex;gap:10rpx;margin-top:8rpx}.lookup .input{flex:1}.subject-line{display:flex;align-items:center;gap:12rpx;margin-bottom:18rpx;padding:16rpx;border-radius:14rpx;background:#f2fbf5}.subject-line .form-label{color:#53665a;font-size:24rpx}.subject-line .strong{flex:1;font-size:24rpx}.notice{margin-bottom:18rpx;padding:14rpx;border-radius:12rpx;background:#fff3dd;color:#9b6b0d;font-size:24rpx;line-height:1.6}</style>

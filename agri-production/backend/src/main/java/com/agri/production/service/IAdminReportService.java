@@ -14,11 +14,25 @@ import java.util.Map;
  */
 public interface IAdminReportService {
 
+    record ReportFile(String fileName, byte[] content) {}
+
     /** 报表台账分页（keyword 匹配报表名/编号，status 可筛）。 */
     PageResult<ReportTask> pageReports(int pageNum, int pageSize, String keyword, String status);
 
+    /** 报表台账多维筛选分页（支持类型、农场、统计日期范围）。 */
+    PageResult<ReportTask> pageReports(int pageNum, int pageSize, String keyword, String status,
+                                     String reportType, Long farmId, String startDate, String endDate);
+
     /** 新建报表任务，返回报表编号。 */
     String createReport(Map<String, Object> payload);
+
+    ReportTask getReport(String reportCode);
+
+    /** 按任务生成真实快照文件，更新状态为 DONE / FAILED。 */
+    ReportTask generateReportFile(String reportCode);
+
+    /** 下载报表快照文件（需运营权限）。 */
+    ReportFile downloadReportFile(String reportCode);
 
     /** 按类型列出（GOV / QUALITY）。 */
     List<ReportTask> listByType(String reportType);

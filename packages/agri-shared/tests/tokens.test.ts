@@ -46,6 +46,19 @@ describe('设计令牌：CSS 变量投影与 TS 定义逐项一致', () => {
     expect(globalLess).toContain('tokens/tokens.css')
     expect(declaredVariables(globalLess)).toEqual({})
   })
+
+  /**
+   * 可读下限要能被机器守住，否则下一次有人写 font-size: 11px 没人拦得住。
+   *
+   * micro=12px 是「可见文字不得小于 12px」这条口径的唯一落点；
+   * 那条 small 规则看着多余（没人给 <small> 写过字号），但浏览器默认的 0.833em
+   * 会让父级只要 ≤14px 就重新掉到 12px 以下 —— info-ops 行情页实测过 11.6667px。
+   */
+  it('字号下限：micro 是 12px，且给 <small> 的默认缩放也兜住同一下限', () => {
+    expect(FONT.sizeMicro).toBe(12)
+    expect(declared['--agri-font-size-micro']).toBe('12px')
+    expect(tokensCss).toMatch(/small\s*\{\s*font-size:\s*max\(var\(--agri-font-size-micro\),\s*0\.833em\)/)
+  })
 })
 
 describe('antd 主题由令牌派生', () => {

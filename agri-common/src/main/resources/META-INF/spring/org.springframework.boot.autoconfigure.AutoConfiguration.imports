@@ -1,1 +1,2 @@
 com.agri.common.rbac.RbacAutoConfiguration
+com.agri.common.ai.AgriAiAutoConfiguration

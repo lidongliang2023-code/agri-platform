@@ -2246,3 +2246,57 @@ WHERE p.deleted = 0
   AND p.current_crop IS NOT NULL
   AND TRIM(p.current_crop) <> ''
   AND NOT EXISTS (SELECT 1 FROM agri_prod_plot_crop pc WHERE pc.plot_id = p.id);
+
+-- ---------------------------------------------------------------------------
+-- 加工记录（2026-11-03 新增）：让「种植 → 采收 → 加工」这条链路第一次有了加工环节的真实载体。
+--
+-- 为什么建在生产域而不是商城侧：溯源码与采收批次都归生产域，"一物一码可溯源"要能被任何人核验，
+-- 加工环节如果只写在商城的商品详情里，就变成"卖家自己说"，核验端拿不到、链上存证也挂不上。
+--
+-- 没有给 process_code 建唯一键：本表继承全局逻辑删除（deleted），唯一键 × 软删 = 取消后再登记
+-- 同一个单号必撞 Duplicate entry（主数据权限点那轮已踩过，见关系表物理删的处置）。判重放服务层。
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS agri_prod_process_record (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    process_code VARCHAR(64) NOT NULL COMMENT '加工单号（PR+日期+4 位随机，服务层保证租户内唯一）',
+    batch_id BIGINT NOT NULL COMMENT '采收批次主键（agri_prod_harvest_batch.id）',
+    batch_no VARCHAR(64) COMMENT '采收批次号（冗余，链路节点与存证对号用）',
+    process_type VARCHAR(32) NOT NULL COMMENT '加工类型：PRECOOL 预冷 / SORTING 分选清洗 / GRADING 分级 / DRYING 烘干 / PACKAGING 分装 / CUTING 净切',
+    process_name VARCHAR(128) COMMENT '工序名称（展示用，如 采后预冷与分级装箱）',
+    location VARCHAR(191) COMMENT '加工场地/车间',
+    operator_name VARCHAR(64) COMMENT '操作人/负责人',
+    started_at DATETIME COMMENT '开始时间',
+    finished_at DATETIME COMMENT '结束时间',
+    input_quantity DECIMAL(18,4) COMMENT '投入量',
+    input_unit VARCHAR(32) COMMENT '投入单位',
+    output_quantity DECIMAL(18,4) COMMENT '产出量',
+    output_unit VARCHAR(32) COMMENT '产出单位',
+    process_params VARCHAR(500) COMMENT '工艺参数（温度/时长/配比等，纯文本照实记）',
+    photos VARCHAR(1000) COMMENT '现场凭证图片（JSON 数组字符串；没有就是没拍）',
+    status VARCHAR(20) NOT NULL DEFAULT 'DONE' COMMENT 'DOING 进行中 / DONE 已完成 / CANCELED 已取消',
+    remark TEXT,
+    farm_id BIGINT COMMENT '所属农场（冗余，取自批次）',
+    tenant_id VARCHAR(191) NOT NULL COMMENT '经营主体号',
+    create_by TEXT,
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    update_by TEXT,
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    deleted BIGINT DEFAULT 0,
+    INDEX `idx_process_batch_id` (batch_id),
+    INDEX `idx_process_tenant_id` (tenant_id),
+    INDEX `idx_process_code` (process_code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 演示种子：给已有的示范批次 H20260601（西红柿，租户 2001）补两道真实存在的工序，
+-- 让"种植-采收-加工"在生产溯源页上首屏就能看全。词表与校验都走同一套服务，不是页面假数据。
+INSERT IGNORE INTO agri_prod_process_record
+    (id, process_code, batch_id, batch_no, process_type, process_name, location, operator_name,
+     started_at, finished_at, input_quantity, input_unit, output_quantity, output_unit,
+     process_params, status, farm_id, tenant_id, remark)
+VALUES
+    (1, 'PR202606010001', 1, 'H20260601', 'PRECOOL', '采后预冷', 'A区预冷库', '张工',
+     '2026-06-01 16:00:00', '2026-06-01 19:30:00', 1250.0000, 'kg', 1242.0000, 'kg',
+     '冷风预冷至果心 8℃，历时 3.5 小时', 'DONE', 1, '2001', '预冷损耗 8kg，为田间热散去'),
+    (2, 'PR202606010002', 1, 'H20260601', 'GRADING', '分级与分装', 'A区分装车间', '张工',
+     '2026-06-02 08:00:00', '2026-06-02 12:00:00', 1242.0000, 'kg', 1180.0000, 'kg',
+     '按单果重 150g/200g 两档分选，特级装 5kg 纸箱', 'DONE', 1, '2001', '不合格果 62kg 转加工原料');

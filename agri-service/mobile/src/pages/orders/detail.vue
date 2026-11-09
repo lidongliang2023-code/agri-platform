@@ -105,16 +105,16 @@ function contactProvider() {
 .provider-line > view:nth-child(2) { display: flex; flex: 1; flex-direction: column; gap: 4rpx; }
 .info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 22rpx; padding-top: 22rpx; }
 .info-grid view { display: flex; flex-direction: column; gap: 5rpx; }
-.info-grid text:last-child { color: #34473b; font-size: 21rpx; }
+.info-grid text:last-child { color: #34473b; font-size: 24rpx; }
 .price { color: #0e5233 !important; font-weight: 700; }
 .timeline { display: flex; flex-direction: column; }
 .timeline > view { display: flex; gap: 15rpx; padding-bottom: 24rpx; }
-.timeline .dot { display: flex; width: 34rpx; height: 34rpx; flex: 0 0 34rpx; align-items: center; justify-content: center; border: 1rpx solid #dfe8e2; border-radius: 50%; color: #94a198; font-size: 18rpx; }
+.timeline .dot { display: flex; width: 34rpx; height: 34rpx; flex: 0 0 34rpx; align-items: center; justify-content: center; border: 1rpx solid #dfe8e2; border-radius: 50%; color: #94a198; font-size: 24rpx; }
 .timeline .done .dot { border-color: #159a5e; background: #159a5e; color: #fff; }
 .timeline > view > view:last-child { display: flex; flex-direction: column; gap: 4rpx; }
 .quality { margin-bottom: 20rpx; padding: 24rpx; border-radius: 22rpx; background: linear-gradient(135deg, #082d1c, #0d5638); color: rgba(255,255,255,.55); }
 .quality .score { color: #8fe2b2; font-family: monospace; font-size: 42rpx; font-weight: 700; }
-.quality .score text { font-size: 18rpx; }
+.quality .score text { font-size: 24rpx; }
 .review-card { display: flex; flex-direction: column; gap: 16rpx; }
 .stars { display: flex; gap: 10rpx; color: #d5ddd7; font-size: 44rpx; }
 .stars text.on { color: #e09a2c; }

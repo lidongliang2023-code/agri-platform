@@ -235,7 +235,7 @@ function switchAddType(type: '品种' | '频道') {
 
 .head-sub {
   color: rgba(255, 255, 255, 0.6);
-  font-size: 21rpx;
+  font-size: 24rpx;
 }
 
 .sub-row {

@@ -55,6 +55,13 @@ public class GlobalExceptionHandler {
         return new ApiResponse<>(ErrorCode.BAD_REQUEST.getCode(), "单张图片不能超过 5MB", null, traceId());
     }
 
+    @ExceptionHandler({org.springframework.web.servlet.resource.NoResourceFoundException.class,
+            org.springframework.web.servlet.NoHandlerFoundException.class})
+    public org.springframework.http.ResponseEntity<java.util.Map<String, Object>> healthRouteNotFound(Exception exception) {
+        return org.springframework.http.ResponseEntity.status(404)
+                .body(java.util.Map.of("code", 404, "message", "请求地址不存在"));
+    }
+
     @ExceptionHandler(Exception.class)
     public ApiResponse<Void> handleUnknown(Exception e) {
         log.error("[{}] 系统异常", traceId(), e);

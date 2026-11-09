@@ -1,5 +1,6 @@
 package com.agri.production.service.impl;
 
+import com.agri.production.common.exception.FarmNotFoundException;
 import com.agri.production.dto.FarmPageDTO;
 import com.agri.production.dto.FarmSaveDTO;
 import com.agri.production.entity.Farm;
@@ -38,7 +39,7 @@ public class FarmServiceImpl extends ServiceImpl<FarmMapper, Farm> implements IF
         normalizePageAliases(dto);
         Farm farm = getById(dto.getId());
         if (farm == null || !tenantId.equals(farm.getTenantId())) {
-            throw new RuntimeException("农场不存在");
+            throw new FarmNotFoundException();
         }
         BeanCopyUtils.copy(dto, farm);
         updateById(farm);
@@ -69,7 +70,7 @@ public class FarmServiceImpl extends ServiceImpl<FarmMapper, Farm> implements IF
     public void delete(Long id, String tenantId) {
         Farm farm = getById(id);
         if (farm == null || !tenantId.equals(farm.getTenantId())) {
-            throw new RuntimeException("农场不存在");
+            throw new FarmNotFoundException();
         }
         removeById(id);
     }
@@ -78,7 +79,7 @@ public class FarmServiceImpl extends ServiceImpl<FarmMapper, Farm> implements IF
     public FarmVO getById(Long id, String tenantId) {
         Farm farm = getById(id);
         if (farm == null || !tenantId.equals(farm.getTenantId())) {
-            throw new RuntimeException("农场不存在");
+            throw new FarmNotFoundException();
         }
         return FarmVO.of(farm);
     }
@@ -95,7 +96,7 @@ public class FarmServiceImpl extends ServiceImpl<FarmMapper, Farm> implements IF
     public FarmVO getByCode(String farmCode, String tenantId) {
         Farm farm = baseMapper.selectByCode(farmCode, tenantId);
         if (farm == null) {
-            throw new RuntimeException("农场不存在");
+            throw new FarmNotFoundException();
         }
         return FarmVO.of(farm);
     }

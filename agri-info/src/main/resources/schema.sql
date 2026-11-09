@@ -426,3 +426,142 @@ CREATE TABLE IF NOT EXISTS info_audit_log (
     ip_address VARCHAR(60),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+
+-- 授权行情采集：配置与密钥分离，原始时点观测用于幂等及日线归档。
+CREATE TABLE IF NOT EXISTS info_collect_config (
+    task_id BIGINT PRIMARY KEY,
+    endpoint VARCHAR(1500) NOT NULL,
+    rows_path VARCHAR(200) NOT NULL DEFAULT '',
+    field_map VARCHAR(4000) NOT NULL DEFAULT '{}',
+    token_env VARCHAR(120) NOT NULL DEFAULT '',
+    enabled BOOLEAN DEFAULT FALSE
+);
+CREATE TABLE IF NOT EXISTS info_collect_run (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    task_id BIGINT NOT NULL,
+    started_at VARCHAR(40) NOT NULL,
+    finished_at VARCHAR(40),
+    status VARCHAR(20) NOT NULL,
+    total_rows INT DEFAULT 0,
+    accepted_rows INT DEFAULT 0,
+    duplicate_rows INT DEFAULT 0,
+    rejected_rows INT DEFAULT 0,
+    detail VARCHAR(2000)
+);
+CREATE TABLE IF NOT EXISTS info_collect_observation (
+    observation_key VARCHAR(100) PRIMARY KEY,
+    task_id BIGINT NOT NULL,
+    run_id BIGINT NOT NULL,
+    quote_code VARCHAR(40) NOT NULL,
+    observed_at VARCHAR(40) NOT NULL,
+    price DECIMAL(10,2) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_collect_quote_time (quote_code, observed_at)
+);
+
+
+-- 自动采集调度独立持久化，现有任务默认不启用。
+CREATE TABLE IF NOT EXISTS info_collect_schedule (
+    task_id BIGINT PRIMARY KEY,
+    enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    cron_expression VARCHAR(120) NOT NULL,
+    max_retries INT NOT NULL DEFAULT 2,
+    retry_seconds INT NOT NULL DEFAULT 60,
+    next_run_at VARCHAR(40),
+    retry_count INT NOT NULL DEFAULT 0,
+    last_result VARCHAR(2000),
+    lease_token VARCHAR(40),
+    lease_until VARCHAR(40),
+    INDEX idx_collect_schedule_due (enabled, next_run_at)
+);
+
+-- 运营采集故障告警，与用户价格波动预警隔离。NULL 活动位允许保留多次恢复历史。
+CREATE TABLE IF NOT EXISTS info_collect_alert_policy (
+    task_id BIGINT PRIMARY KEY,
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    failure_threshold INT NOT NULL DEFAULT 1,
+    reject_percent INT NOT NULL DEFAULT 20,
+    stale_minutes INT NOT NULL DEFAULT 180,
+    last_run_id BIGINT NOT NULL DEFAULT 0,
+    failure_streak INT NOT NULL DEFAULT 0,
+    monitor_from VARCHAR(40) NOT NULL
+);
+CREATE TABLE IF NOT EXISTS info_collect_alert (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    task_id BIGINT NOT NULL,
+    alert_type VARCHAR(30) NOT NULL,
+    severity VARCHAR(20) NOT NULL,
+    status VARCHAR(30) NOT NULL,
+    active_slot INT,
+    hit_count INT NOT NULL DEFAULT 1,
+    first_at VARCHAR(40) NOT NULL,
+    last_at VARCHAR(40) NOT NULL,
+    recovered_at VARCHAR(40),
+    detail VARCHAR(2000),
+    ack_by VARCHAR(120),
+    ack_note VARCHAR(500),
+    ack_at VARCHAR(40),
+    recovery_note VARCHAR(500),
+    UNIQUE KEY uk_collect_alert_active (task_id,alert_type,active_slot),
+    INDEX idx_collect_alert_status (active_slot,last_at)
+);
+
+-- 独立时效规则表兼容已有数据库，无需改写已存在告警规则表。
+CREATE TABLE IF NOT EXISTS info_collect_freshness_policy (
+    task_id BIGINT PRIMARY KEY,
+    enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    max_age_minutes INT NOT NULL DEFAULT 1440,
+    expired_percent INT NOT NULL DEFAULT 20,
+    monitor_from VARCHAR(40) NOT NULL
+);
+
+
+-- VR 云工厂：仅管理公开展示资料和远程验厂服务，不复制生产/设备领域台账。
+CREATE TABLE IF NOT EXISTS info_cloud_factory (
+ id BIGINT AUTO_INCREMENT PRIMARY KEY,
+ name VARCHAR(120) NOT NULL, enterprise VARCHAR(120) NOT NULL,
+ region VARCHAR(120) NOT NULL, category VARCHAR(60) NOT NULL,
+ description VARCHAR(2000) NOT NULL, base_ref VARCHAR(100) DEFAULT '',
+ product_keyword VARCHAR(80) DEFAULT '', trace_code VARCHAR(100) DEFAULT '',
+ status VARCHAR(20) NOT NULL DEFAULT 'draft', updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS info_cloud_factory_media (
+ id BIGINT AUTO_INCREMENT PRIMARY KEY, factory_id BIGINT NOT NULL,
+ title VARCHAR(120) NOT NULL, kind VARCHAR(20) NOT NULL, url VARCHAR(1500) NOT NULL,
+ captured_at VARCHAR(40) NOT NULL, description VARCHAR(300) DEFAULT '', sort_no INT DEFAULT 0,
+ FOREIGN KEY(factory_id) REFERENCES info_cloud_factory(id)
+);
+CREATE TABLE IF NOT EXISTS info_cloud_factory_visit (
+ id BIGINT AUTO_INCREMENT PRIMARY KEY, factory_id BIGINT NOT NULL,
+ owner_id VARCHAR(100) NOT NULL, contact VARCHAR(60) NOT NULL, phone VARCHAR(30) NOT NULL,
+ purpose VARCHAR(600) NOT NULL, requested_at VARCHAR(40) NOT NULL,
+ status VARCHAR(20) NOT NULL DEFAULT 'pending', note VARCHAR(1000) DEFAULT '',
+ updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+ FOREIGN KEY(factory_id) REFERENCES info_cloud_factory(id)
+);
+
+-- 预约维度的验厂报告；用户仅能读取本人已发布版本。
+CREATE TABLE IF NOT EXISTS info_cloud_factory_report (
+ visit_id BIGINT PRIMARY KEY,
+ payload TEXT NOT NULL,
+ status VARCHAR(20) NOT NULL DEFAULT 'draft',
+ revision INT NOT NULL DEFAULT 1,
+ author VARCHAR(100) NOT NULL,
+ reviewer VARCHAR(100) DEFAULT '',
+ review_note VARCHAR(1000) DEFAULT '',
+ published_at VARCHAR(40),
+ FOREIGN KEY(visit_id) REFERENCES info_cloud_factory_visit(id)
+);
+
+-- 绿色服务独立台账；业务证据仅引用各领域原始记录，不复制生产/物流台账。
+CREATE TABLE IF NOT EXISTS info_green_record (
+ id BIGINT AUTO_INCREMENT PRIMARY KEY,
+ kind VARCHAR(30) NOT NULL,
+ owner_id VARCHAR(120) NOT NULL,
+ status VARCHAR(30) NOT NULL DEFAULT 'draft',
+ revision INT NOT NULL DEFAULT 1,
+ payload LONGTEXT NOT NULL,
+ created_at VARCHAR(40) DEFAULT '',
+ updated_at VARCHAR(40) DEFAULT ''
+);

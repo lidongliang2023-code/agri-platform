@@ -84,6 +84,7 @@ public class UserMemberServiceImpl implements IUserMemberService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public String create(String tenantId, MemberPayload payload) {
+        com.agri.production.service.TenantContextService.requireSubjectOwner();
         if (payload == null) {
             throw new BusinessException(400, "请求体不能为空");
         }
@@ -118,6 +119,7 @@ public class UserMemberServiceImpl implements IUserMemberService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public UserMemberVO update(String tenantId, String memberId, MemberPayload payload) {
+        com.agri.production.service.TenantContextService.requireSubjectOwner();
         if (payload == null) {
             throw new BusinessException(400, "请求体不能为空");
         }
@@ -156,6 +158,7 @@ public class UserMemberServiceImpl implements IUserMemberService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void delete(String tenantId, String memberId) {
+        com.agri.production.service.TenantContextService.requireSubjectOwner();
         TeamMember member = requireMember(tenantId, memberId);
         memberMapper.deleteById(member.getId());
         log.info("团队成员移除：{}", member.getMemberId());

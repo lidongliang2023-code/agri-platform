@@ -49,6 +49,13 @@ public class InternalCapabilityController {
             return ApiResponse.ok(result);
         }
         String code = body == null ? null : body.code();
+        if ("production.manage".equals(code)
+                && (body.merchantId() == null || body.merchantId() <= 0)) {
+            result.put("granted", false);
+            result.put("reason", "请先选择本次业务所属的经营主体");
+            result.put("code", code);
+            return ApiResponse.ok(result);
+        }
         CapabilityFacade.Decision decision = capabilityFacade.check(userId, code, body == null ? null : body.merchantId());
         result.put("granted", decision.granted());
         result.put("reason", decision.reason());

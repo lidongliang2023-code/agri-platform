@@ -1,3 +1,6 @@
+import ProTable from '@/components/ProductionTable'
+import Card from '@/components/SectionCard'
+import './inputs.css'
 /**
  * 页面名称：农资管理（投入品档案 / 使用台账）
  * 路由路径：/production/inputs（旧 /production/inputs/usages 跳 ?tab=ledger；旧 /production/inputs/stock 回落到本页）
@@ -15,12 +18,12 @@
 import { useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { PageContainer, ProTable } from '@ant-design/pro-components'
+
+import PageContainer from '@/components/ProductionPageContainer'
 import type { ProColumns } from '@ant-design/pro-components'
 import {
   Alert,
   Button,
-  Card,
   Col,
   Empty,
   Form,
@@ -708,6 +711,7 @@ export default function InputList(): JSX.Element {
     },
     {
       title: '操作',
+      fixed: 'right',
       key: 'option',
       width: 300,
       valueType: 'option',
@@ -760,7 +764,8 @@ export default function InputList(): JSX.Element {
 
   return (
     <PageContainer
-      title="🌾 农资管理"
+      className="inputs-page"
+      title="农资台账"
       subTitle={currentFarm ? currentFarm.farmName : undefined}
       // 页头操作按钮只在「投入品档案」Tab 展示；使用台账与流水各自带作业按钮
       extra={
@@ -787,7 +792,7 @@ export default function InputList(): JSX.Element {
             ]
       }
     >
-      <Card>
+      <Card className="input-tabs-card">
         <Tabs
           activeKey={tab}
           onChange={(key) => switchTab(key as MainTab)}
@@ -868,9 +873,9 @@ export default function InputList(): JSX.Element {
                     style={{ marginBottom: 16 }}
                     loading={loading}
                   >
-                    <Row gutter={16}>
+                    <Row gutter={[16, 16]}>
                       {overview.map((item) => (
-                        <Col key={item.value} span={6}>
+                        <Col key={item.value} xs={12} lg={6}>
                           <Statistic
                             title={`${item.label}（${item.count} 次）`}
                             value={item.qty}
@@ -920,7 +925,8 @@ export default function InputList(): JSX.Element {
                     />
                   ) : (
                     <Card
-                      title="🏪 库存总览 · 投入品档案（低库存优先）"
+                      className="input-record-section"
+                      title="投入品档案"
                       extra={
                         <Typography.Text type="secondary">
                           共 {filteredInputs.length} 种
@@ -928,11 +934,14 @@ export default function InputList(): JSX.Element {
                       }
                     >
                       <ProTable<InputInfo>
+            cardProps={false}
+            className="input-record-table"
                         rowKey="inputId"
                         columns={archiveColumns}
                         dataSource={pagedInputs}
                         loading={loading}
                         search={false}
+                        headerTitle="投入品档案"
                         rowSelection={{}}
                         // 库存、效期和作业并入同一张表，窄屏只在这一张表内横向滚动
                         scroll={{ x: 1750 }}

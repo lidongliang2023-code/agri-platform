@@ -1,3 +1,8 @@
+import PlotImportModal from './PlotImportModal'
+import BusinessRecordList from '@/components/BusinessRecordList'
+import BusinessCards from '@/components/BusinessCards'
+import DetailMetricGrid from '@/components/DetailMetricGrid'
+import Card from '@/components/SectionCard'
 /**
  * 页面名称：地块列表
  * 路由路径：/production/plots
@@ -12,45 +17,40 @@
  * - 统计条：`共 N 个地块 | 在田 X | 休耕 Y`
  * - 表格列：复选框 | 地块编号 | 地块名 | 农场 | 面积 | 作物 | 生长阶段 | 状态 | 操作
  *
- * 数据说明：后端地块列表接口仅支持 keyword / status 过滤，不支持农场与作物过滤，
- * 因此本页一次性取全量（≤500 条）后在客户端完成四维筛选与分页，保证统计口径准确。
+ * 数据说明：逐页加载当前主体全部地块和生长记录，完整加载后统一筛选、统计与展示。
  */
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { PageContainer } from '@ant-design/pro-components'
+import PageContainer from '@/components/ProductionPageContainer'
 import {
   AppstoreOutlined,
-  DeleteOutlined,
   ImportOutlined,
   PlusOutlined,
   TableOutlined,
   EnvironmentOutlined,
 } from '@ant-design/icons'
 import {
+  Alert,
   Button,
-  Card,
-  Col,
   Empty,
   Form,
   Input,
   Modal,
   Pagination,
   Popconfirm,
-  Row,
   Segmented,
   Select,
   Space,
-  Table,
   Tag,
   Typography,
-  Upload,
   message,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { deletePlot, listPlots, updatePlotStatus } from '@/api/plots'
 import { listAllFarms } from '@/api/farms'
 import { listGrowthRecords } from '@/api/growth'
+import { loadCompletePages } from '@/utils/load-complete-pages'
 import type { Plot } from '@/types'
 import { TiandituMap, type TiandituMapPoint } from '@agri/shared'
 // 地块状态与作物 emoji 已统一收敛到 @/types（原各页面各存一份）
@@ -60,14 +60,6 @@ import { CROP_EMOJI_MAP, PLOT_STATUS_META } from '@/types'
 type ViewMode = 'table' | 'map' | 'board'
 
 /** 地块状态元数据 */
-/** 种植类型元数据 */
-const PLANTING_TYPE_META: Record<number, { label: string; color: string }> = {
-  1: { label: '露天', color: 'green' },
-  2: { label: '大棚', color: 'cyan' },
-  3: { label: '水田', color: 'blue' },
-  4: { label: '山地', color: 'geekblue' },
-}
-
 /** 原型 P4 生长阶段取值 */
 const DEFAULT_STAGE_OPTIONS: string[] = ['苗期', '开花期', '结果期', '采收期']
 
@@ -112,6 +104,7 @@ export default function PlotList(): JSX.Element {
   const [searchParams] = useSearchParams()
   const queryClient = useQueryClient()
 
+  const [importOpen, setImportOpen] = useState(false)
   const [view, setView] = useState<ViewMode>('table')
   const [pageNum, setPageNum] = useState<number>(1)
   const [pageSize, setPageSize] = useState<number>(10)
@@ -121,10 +114,11 @@ export default function PlotList(): JSX.Element {
   })
   const [filterForm] = Form.useForm<PlotFilters>()
 
-  /** 地块全量数据（≤500 条，客户端筛选） */
+  /** 完整加载地块：不得用单页结果冒充主体全量。 */
   const plotsQuery = useQuery({
     queryKey: ['plots-all'],
-    queryFn: () => listPlots({ pageNum: 1, pageSize: 500 }),
+    queryFn: () => loadCompletePages(listPlots, (plot) => plot.plotId),
+    retry: false,
   })
 
   /** 农场下拉 */
@@ -136,9 +130,11 @@ export default function PlotList(): JSX.Element {
   /** 生长记录：构建 地块 → 最新生育期映射 */
   const growthQuery = useQuery({
     queryKey: ['growth-stage-options'],
-    queryFn: () => listGrowthRecords({ pageNum: 1, pageSize: 200 }),
+    queryFn: () => loadCompletePages(listGrowthRecords, (record) => record.recordId),
     retry: false,
   })
+
+  const complete = plotsQuery.isSuccess && growthQuery.isSuccess && !plotsQuery.isFetching && !growthQuery.isFetching
 
   /** 刷新地块数据 */
   const invalidatePlots = (): Promise<void> =>
@@ -174,9 +170,12 @@ export default function PlotList(): JSX.Element {
   const batchDeleteMutation = useMutation({
     mutationFn: (plotIds: string[]) =>
       Promise.allSettled(plotIds.map((plotId) => deletePlot(plotId))),
-    onSuccess: () => {
-      message.success('批量删除完成')
-      setSelectedRowKeys([])
+    onSuccess: (results, plotIds) => {
+      const failed = results.flatMap((result, index) => result.status === 'rejected' ? [plotIds[index]] : [])
+      const succeeded = results.length - failed.length
+      if (failed.length) message.warning(`已删除 ${succeeded} 个地块，${failed.length} 个删除失败，请核对后重试`)
+      else message.success(`已删除 ${succeeded} 个地块`)
+      setSelectedRowKeys(failed)
       void invalidatePlots()
     },
   })
@@ -254,15 +253,22 @@ export default function PlotList(): JSX.Element {
     return {
       total: list.length,
       planting: list.filter((plot) => plot.status === 2 || plot.status === 3).length,
-      fallow: list.filter((plot) => plot.status === 4).length,
+      idle: list.filter((plot) => plot.status === 1).length,
       area: list.reduce((sum, plot) => sum + (Number(plot.area) || 0), 0),
     }
   }, [filteredPlots])
 
+  const currentPage = Math.min(pageNum, Math.max(1, Math.ceil(filteredPlots.length / pageSize)))
+  useEffect(() => {
+    setPageNum(currentPage)
+    const visibleIds = new Set(filteredPlots.map((plot) => plot.plotId))
+    setSelectedRowKeys((keys) => keys.filter((key) => visibleIds.has(key)))
+  }, [currentPage, filteredPlots])
+
   /** 当前页数据 */
   const pagePlots = useMemo<Plot[]>(
-    () => filteredPlots.slice((pageNum - 1) * pageSize, pageNum * pageSize),
-    [filteredPlots, pageNum, pageSize],
+    () => filteredPlots.slice((currentPage - 1) * pageSize, currentPage * pageSize),
+    [filteredPlots, currentPage, pageSize],
   )
 
   /** 查询 */
@@ -294,34 +300,13 @@ export default function PlotList(): JSX.Element {
     })
   }
 
-  /** CSV 导入（演示：解析后提示，实际写入需后端批量接口） */
-  const handleImport = (file: File): void => {
-    const reader = new FileReader()
-    reader.onload = () => {
-      const lines = String(reader.result ?? '')
-        .split(/\r?\n/)
-        .filter((line) => line.trim().length > 0)
-      if (lines.length < 2) {
-        message.warning('文件内容为空，请检查 CSV 模板')
-        return
-      }
-      const headers = lines[0].split(',').map((item) => item.trim())
-      if (!headers.includes('地块名称')) {
-        message.warning('缺少「地块名称」列，请下载模板后重新填写')
-        return
-      }
-      message.info(`已解析 ${lines.length - 1} 条地块记录，请等待后端批量导入接口开放`)
-    }
-    reader.onerror = () => message.error('文件读取失败，请重试')
-    reader.readAsText(file, 'UTF-8')
-  }
-
   /** 列表视图列定义（原型 P4） */
   const columns: ColumnsType<Plot> = [
-    { title: '地块编号', dataIndex: 'plotCode', width: 140, render: (value) => value || '-' },
+    { title: '地块编号', dataIndex: 'plotCode', width: 140, fixed: 'left', render: (value) => value || '-' },
     {
       title: '地块名',
       dataIndex: 'plotName',
+      width: 180,
       ellipsis: true,
       render: (value: string, record) => (
         <Typography.Link onClick={() => navigate(`/production/plots/${record.plotId}`)}>
@@ -381,7 +366,7 @@ export default function PlotList(): JSX.Element {
     {
       title: '操作',
       key: 'option',
-      width: 160,
+      width: 300,
       fixed: 'right',
       render: (_, record) => (
         <Space size={8}>
@@ -467,87 +452,23 @@ export default function PlotList(): JSX.Element {
     )
   }
 
-  /** 渲染看板（卡片）视图 */
+  /** 与列表共用字段和操作，避免两种视图能力不一致。 */
   const renderBoard = (): JSX.Element => (
-    <Row gutter={[12, 12]}>
-      {pagePlots.map((plot) => {
-        const statusMeta = PLOT_STATUS_META[plot.status] ?? { label: '未知', color: 'default' }
-        // 种植类型：plot 表没有 planting_type 列（后端从不返回），没值就显示「—」，
-        // 不再用默认值 1 把每块地都说成「露天」
-        const plantingMeta = (plot.plantingType ? PLANTING_TYPE_META[plot.plantingType] : undefined) ?? {
-          label: '—',
-          color: 'default',
-        }
-        return (
-          <Col key={plot.plotId} xs={24} sm={12} md={8} xl={6}>
-            <Card
-              hoverable
-              onClick={() => navigate(`/production/plots/${plot.plotId}`)}
-              title={
-                <Space size={4}>
-                  {/* 与列表「作物」列同一口径：currentCrop 优先，历史行退回 cropVariety */}
-                  <span>{CROP_EMOJI_MAP[cropLabelOf(plot)] ?? '🌱'}</span>
-                  <Typography.Text ellipsis style={{ maxWidth: 120 }}>
-                    {plot.plotName}
-                  </Typography.Text>
-                </Space>
-              }
-              extra={<Tag color={statusMeta.color}>{statusMeta.label}</Tag>}
-              actions={[
-                <Typography.Link
-                  key="soil"
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    navigate(`/production/plots/${plot.plotId}/soil`)
-                  }}
-                >
-                  土壤档案
-                </Typography.Link>,
-                <Popconfirm
-                  key="delete"
-                  title="确认删除该地块？"
-                  okText="确认删除"
-                  cancelText="取消"
-                  onConfirm={() => deleteMutation.mutate(plot.plotId)}
-                >
-                  <Typography.Link type="danger" onClick={(event) => event.stopPropagation()}>
-                    <DeleteOutlined /> 删除
-                  </Typography.Link>
-                </Popconfirm>,
-              ]}
-            >
-              <Space direction="vertical" size={4} style={{ width: '100%' }}>
-                <Typography.Text type="secondary">{plot.plotCode || '无编号'}</Typography.Text>
-                <Typography.Text>
-                  {Number(plot.area || 0).toLocaleString('zh-CN')}亩 | {plot.soilType || '未检测'} |{' '}
-                  {plot.irrigationType || '未配置'}
-                </Typography.Text>
-                <Space size={4} wrap>
-                  <Tag color={plantingMeta.color}>{plantingMeta.label}</Tag>
-                  {plotStageMap[plot.plotId] && (
-                    <Tag color="geekblue">{plotStageMap[plot.plotId]}</Tag>
-                  )}
-                </Space>
-              </Space>
-            </Card>
-          </Col>
-        )
-      })}
-    </Row>
+    <BusinessCards<Plot> rowKey="plotId" dataSource={pagePlots} columns={columns} pagination={false} />
   )
 
   /** 渲染内容区 */
   const renderContent = (): JSX.Element => {
-    if (plotsQuery.isLoading) {
+    if (plotsQuery.isLoading || growthQuery.isLoading || plotsQuery.isFetching || growthQuery.isFetching) {
       return <Card loading />
     }
-    if (plotsQuery.isError) {
+    if (plotsQuery.isError || growthQuery.isError) {
       return (
         <Empty
           description={
             <Space direction="vertical">
-              <Typography.Text type="danger">地块数据加载失败，请稍后重试</Typography.Text>
-              <Button onClick={() => void plotsQuery.refetch()}>重新加载</Button>
+              <Typography.Text type="danger">全量数据加载失败，筛选与统计暂不可用：{(plotsQuery.error ?? growthQuery.error)?.message ?? '请重试'}</Typography.Text>
+              <Button onClick={() => { void plotsQuery.refetch(); void growthQuery.refetch() }}>重新加载</Button>
             </Space>
           }
         />
@@ -570,7 +491,8 @@ export default function PlotList(): JSX.Element {
     if (view === 'map') return renderMap()
     if (view === 'board') return renderBoard()
     return (
-      <Table<Plot>
+      <BusinessRecordList<Plot>
+        onReload={() => Promise.all([plotsQuery.refetch(), growthQuery.refetch(), farmQuery.refetch()])}
         rowKey="plotId"
         dataSource={pagePlots}
         columns={columns}
@@ -579,15 +501,15 @@ export default function PlotList(): JSX.Element {
           selectedRowKeys,
           onChange: (keys) => setSelectedRowKeys(keys as string[]),
         }}
-        scroll={{ x: 1100 }}
+        scroll={{ x: 1400 }}
       />
     )
   }
 
   return (
     <PageContainer
-      title="🗺️ 地块管理"
-      subTitle={`共 ${stats.total} 个地块 | 在田 ${stats.planting} | 休耕 ${stats.fallow} | 合计 ${stats.area}亩`}
+      title="地块管理"
+      subTitle="管理地块档案、空间边界与生产关联记录"
       extra={[
         <Segmented
           key="view"
@@ -596,21 +518,12 @@ export default function PlotList(): JSX.Element {
           options={[
             { label: '列表', value: 'table', icon: <TableOutlined /> },
             { label: '地图', value: 'map', icon: <EnvironmentOutlined /> },
-            { label: '看板', value: 'board', icon: <AppstoreOutlined /> },
+            { label: '卡片', value: 'board', icon: <AppstoreOutlined /> },
           ]}
         />,
-        <Upload
-          key="import"
-          accept=".csv,.txt"
-          showUploadList={false}
-          beforeUpload={(file) => {
-            handleImport(file as File)
-            return false
-          }}
-        >
-          <Button icon={<ImportOutlined />}>📥 批量导入</Button>
-        </Upload>,
-        <Button key="batch" danger disabled={selectedRowKeys.length === 0} onClick={confirmBatchDelete}>
+        <Button key="import" icon={<ImportOutlined />} disabled={!farmQuery.isSuccess || !farmQuery.data?.length}
+          onClick={() => setImportOpen(true)}>导入地块</Button>,
+        <Button key="batch" danger disabled={!complete || selectedRowKeys.length === 0} onClick={confirmBatchDelete}>
           批量删除（{selectedRowKeys.length}）
         </Button>,
         <Button
@@ -623,7 +536,15 @@ export default function PlotList(): JSX.Element {
         </Button>,
       ]}
     >
-      <Card style={{ marginBottom: 16 }}>
+      <DetailMetricGrid items={[
+        { key: 'total', title: '筛选地块', value: complete ? stats.total : null, suffix: '个' },
+        { key: 'planting', title: '筛选在田', value: complete ? stats.planting : null, suffix: '个' },
+        { key: 'idle', title: '筛选空闲', value: complete ? stats.idle : null, suffix: '个' },
+        { key: 'area', title: '筛选面积', value: complete ? stats.area : null, suffix: '亩', precision: 2 },
+      ]} />
+
+      {(plotsQuery.isError || growthQuery.isError) && <Alert type="error" showIcon message="全量数据未加载完成，暂不显示统计" style={{ marginBottom: 16 }} />}
+      <Card title="筛选地块" style={{ marginBottom: 16 }}>
         <Form form={filterForm} layout="inline" initialValues={{ farmId: filters.farmId }} style={{ rowGap: 12 }}>
           <Form.Item name="farmId" label="农场">
             <Select
@@ -681,12 +602,12 @@ export default function PlotList(): JSX.Element {
         </Form>
       </Card>
 
-      <Card>
+      <Card title="地块档案">
         {renderContent()}
-        {view !== 'map' && filteredPlots.length > 0 && (
+        {complete && view !== 'map' && filteredPlots.length > 0 && (
           <div style={{ marginTop: 16, textAlign: 'right' }}>
             <Pagination
-              current={pageNum}
+              current={currentPage}
               pageSize={pageSize}
               total={filteredPlots.length}
               showSizeChanger
@@ -699,6 +620,8 @@ export default function PlotList(): JSX.Element {
           </div>
         )}
       </Card>
+      {importOpen && <PlotImportModal farms={farmQuery.data ?? []} initialFarmId={filters.farmId}
+        onClose={() => setImportOpen(false)} onComplete={() => queryClient.invalidateQueries({ queryKey: ['plots-all'] })} />}
     </PageContainer>
   )
 }

@@ -7,7 +7,7 @@
   "transformPx": false,
   "vueVersion": "3",
   "h5": {
-    "title": "丰链云 · 农联优选",
+    "title": "丰链云",
     "router": {
       "mode": "hash",
       "base": "./"

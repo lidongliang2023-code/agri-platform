@@ -1,348 +1,350 @@
 ﻿<#
 .SYNOPSIS
-    本地一键启动交易、门户与生产管理依赖的整套运行环境（依赖 + 后端 + 网关）。
-
+    启动本机依赖、15 个后端与网关；重复运行只补启动缺失实例。
 .DESCRIPTION
-    本机这套东西**没有**做成 Windows 服务（除 Redis 有服务注册但常起不来），
-    重开机后要按依赖顺序手动拉起。这个脚本把顺序与那些坑固定下来，可重复执行：
-    已经在跑的组件直接跳过，只补没起来的。
-
-    顺序（依赖在前）：
-      MySQL(3306) → Redis(6379) → core-platform(8093) → agri-trade(8089) → agri-finance(8087)
-      → agri-masterdata(8083) → agri-production(8092) → agri-iot(8091) → agri-s2b2c(8088)
-      → agri-service(8094) → agri-info(8096) → agri-government(8095) → satellite-gov-exchange(8112)
-      → nginx(80/8080/8081/8082/8083/8084/8085/8086/8090/8098/8101/8102/8103/8104/8105/8106/8107/8108/8109/8110/8111/8113/8114/8180/8181/8182/8183/8184/8190)
-
-    踩过的坑（脚本里都处理了）：
-      1. MySQL 不是服务，要用 my.ini 启动；`--defaults-file` 的路径带空格，
-         **必须用引号包住整段**，否则 mysqld 会把路径截断在空格处、报
-         "Failed to open required defaults file"。
-      2. Redis 的服务用当前会话起不动（Cannot open 'Redis' service），
-         改为直接跑 `C:\Redis\redis-server.exe` 带配置文件。
-      3. core-platform 的库口令默认是 `root123`（application.yml 的 `${MYSQL_PASSWORD:root123}`），
-         而本机 MySQL 的 root 口令是 `root` —— 必须带 `MYSQL_PASSWORD=root` 启动，
-         否则启动即失败：`Access denied for user 'root'@'localhost'`。
-      4. nginx 的 prefix **必须用 ASCII 路径**（仓库路径含中文与括号，nginx 解析不了），
-         所以走 `C:\Users\<你>\agri-gw` 这个 junction。且 nginx 在前台会占住终端，
-         要用 Start-Process 脱离式启动。
-
+    不构建、不停止现有进程。健康检查失败返回退出码 1，成功返回 0。
+    日志持久保存在 ops/local/logs；密码优先使用 MYSQL_PASSWORD 环境变量。
 .EXAMPLE
-    powershell -NoProfile -ExecutionPolicy Bypass -File .\ops\local\start-production-stack.ps1
+    .\ops\local\start-production-stack.ps1
+.EXAMPLE
+    .\ops\local\start-production-stack.ps1 -CheckOnly
+.EXAMPLE
+    .\ops\local\start-production-stack.ps1 -Services agri-ai,satellite-iot -SkipGateway
 #>
-
+[CmdletBinding()]
 param(
-    [string]$RepoRoot = (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)),
-    [string]$MysqlRootPassword = 'root',
-    [string]$GatewayPrefix = "$env:USERPROFILE\agri-gw"
+    [string]$RepoRoot = '',
+    [string]$MysqlRootPassword = $(if ($env:MYSQL_PASSWORD) { $env:MYSQL_PASSWORD } else { 'root' }),
+    [string]$GatewayPrefix = "$env:USERPROFILE\agri-gw",
+    [string[]]$Services = @(),
+    [switch]$CheckOnly,
+    [switch]$SkipGateway,
+    [ValidateRange(5,300)][int]$TimeoutSec = 90,
+    [string]$LogDirectory = '',
+    # 仅清理巡检汇总日志；0 表示永久保留。
+    [ValidateRange(0,36500)][int]$LogRetentionDays = 30
 )
-
 $ErrorActionPreference = 'Stop'
-$mysqlBin = 'C:\Program Files\MySQL\MySQL Server 8.4\bin'
-$mysqlIni = 'C:\ProgramData\MySQL\MySQL Server 8.4\my.ini'
-$redisExe = 'C:\Redis\redis-server.exe'
-$redisConf = 'C:\Redis\redis.windows.conf'
-$nginxExe = 'C:\nginx\nginx.exe'
-
-function Test-Port([int]$Port) {
-    # 不依赖 NetTCPIP 模块：部分受限 PowerShell/Windows 环境里
-    # Get-NetTCPConnection 会被策略禁用，导致"端口明明在监听却反复启动第二份进程"。
-    $client = New-Object System.Net.Sockets.TcpClient
+if (!$RepoRoot) {
+    if ($PSScriptRoot) { $RepoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot) }
+    elseif (Test-Path 'ops/local/start-production-stack.ps1') { $RepoRoot = (Get-Location).Path }
+    else { throw '请用 -RepoRoot 指定项目根目录' }
+}
+$RepoRoot = (Resolve-Path $RepoRoot).Path
+if (!$LogDirectory) { $LogDirectory = Join-Path $RepoRoot 'ops/local/logs' }
+# 仅记录检查输出，不记录启动命令、环境变量或数据库密码。
+New-Item -ItemType Directory -Path $LogDirectory -Force | Out-Null
+$runStarted = Get-Date
+$runMode = if ($CheckOnly) { 'health-check' } else { 'startup-check' }
+$runLog = Join-Path $LogDirectory ("{0}-{1}-{2}.log" -f $runMode,$runStarted.ToString('yyyyMMdd-HHmmss-fff'),([Guid]::NewGuid().ToString('N').Substring(0,8)))
+$runLog = [IO.Path]::GetFullPath($runLog)
+$logEncoding = New-Object System.Text.UTF8Encoding($true)
+[IO.File]::WriteAllText($runLog,"巡检开始：$($runStarted.ToString('yyyy-MM-dd HH:mm:ss'))`r`n模式：$runMode`r`n",$logEncoding)
+function Write-CheckMessage {
+    param([string]$Message = '', [ConsoleColor]$ForegroundColor = [ConsoleColor]::Gray)
+    Write-Host $Message -ForegroundColor $ForegroundColor
+    [IO.File]::AppendAllText($runLog,$Message + [Environment]::NewLine,$logEncoding)
+}
+Write-CheckMessage "本次检查日志：$runLog"
+function Remove-ExpiredCheckLogs {
+    param([string]$Directory, [int]$RetentionDays, [string]$CurrentLog)
+    if ($RetentionDays -eq 0) {
+        Write-CheckMessage '日志保留策略：永久保留，自动清理已关闭。'
+        return
+    }
+    $cutoff = (Get-Date).AddDays(-$RetentionDays)
+    Write-CheckMessage "日志保留策略：保留 $RetentionDays 天，仅清理巡检汇总日志（按最后修改时间）。"
+    $removed = 0
+    $warnings = 0
     try {
-        $async = $client.BeginConnect('127.0.0.1', $Port, $null, $null)
-        return $async.AsyncWaitHandle.WaitOne(350) -and $client.Connected
-    } catch {
-        return $false
-    } finally {
-        $client.Dispose()
-    }
-}
-
-function Wait-Port([int]$Port, [int]$TimeoutSec, [string]$What) {
-    for ($i = 0; $i -lt $TimeoutSec; $i++) {
-        if (Test-Port $Port) { Write-Host "  ✓ $What 已就绪（:$Port）"; return $true }
-        Start-Sleep -Seconds 1
-    }
-    Write-Warning "  ✗ $What 在 $TimeoutSec 秒内没有监听 :$Port，请看日志"
-    return $false
-}
-
-Write-Host '== 1/14 MySQL（:3306）=='
-if (Test-Port 3306) {
-    Write-Host '  · 已在运行，跳过'
-} else {
-    Start-Process -FilePath "$mysqlBin\mysqld.exe" `
-        -ArgumentList "--defaults-file=`"$mysqlIni`"" `
-        -WindowStyle Hidden `
-        -RedirectStandardOutput "$env:TEMP\agri-mysqld.out.log" `
-        -RedirectStandardError "$env:TEMP\agri-mysqld.err.log"
-    [void](Wait-Port 3306 30 'MySQL')
-}
-
-Write-Host '== 2/14 Redis（:6379）=='
-if (Test-Port 6379) {
-    Write-Host '  · 已在运行，跳过'
-} else {
-    Start-Process -FilePath $redisExe -ArgumentList $redisConf -WindowStyle Hidden
-    [void](Wait-Port 6379 15 'Redis')
-}
-
-Write-Host '== 3/14 core-platform（:8093，认证与平台域）=='
-if (Test-Port 8093) {
-    Write-Host '  · 已在运行，跳过'
-} else {
-    # 口令必须是本机 MySQL 的真实口令：core-app 的默认值是 root123，本机是 root
-    $env:MYSQL_PASSWORD = $MysqlRootPassword
-    $env:AGRI_CERTIFICATION_UPLOAD_DIR = Join-Path $RepoRoot 'core-platform\uploads\platform\certification'
-    $coreApp = Join-Path $RepoRoot 'core-platform\core-app\target'
-    Start-Process -FilePath 'java' -ArgumentList @('-jar', 'core-app-1.0.0.jar', '--server.port=8093') `
-        -WorkingDirectory $coreApp -WindowStyle Hidden `
-        -RedirectStandardOutput "$env:TEMP\agri-core-8093.out.log" `
-        -RedirectStandardError "$env:TEMP\agri-core-8093.err.log"
-    [void](Wait-Port 8093 90 'core-platform')
-}
-
-Write-Host '== 4/14 agri-trade（:8089，交易、商品详情与大厅）=='
-if (Test-Port 8089) {
-    Write-Host '  · 已在运行，跳过'
-} else {
-    $tradeApp = Join-Path $RepoRoot 'agri-trade\backend\target\agri-trade-1.0.0-SNAPSHOT.jar'
-    if (-not (Test-Path $tradeApp)) {
-        throw "交易后端 JAR 不存在：$tradeApp（先执行 Maven package）"
-    }
-    $tradeDir = Split-Path -Parent $tradeApp
-    $env:MYSQL_USERNAME = 'root'
-    $env:MYSQL_PASSWORD = $MysqlRootPassword
-    $env:AGRI_TRADE_UPLOAD_DIR = Join-Path $RepoRoot 'agri-trade\backend\uploads'
-    Start-Process -FilePath 'java' `
-        -ArgumentList @('-jar', $tradeApp, '--server.port=8089') `
-        -WorkingDirectory $tradeDir -WindowStyle Hidden `
-        -RedirectStandardOutput "$env:TEMP\agri-trade-8089.out.log" `
-        -RedirectStandardError "$env:TEMP\agri-trade-8089.err.log"
-    [void](Wait-Port 8089 90 'agri-trade')
-}
-
-Write-Host '== 5/14 agri-finance（:8087，供应链金融后端）=='
-if (Test-Port 8087) {
-    Write-Host '  · 已在运行，跳过'
-} else {
-    $financeApp = Join-Path $RepoRoot 'agri-finance\backend\target\agri-finance-1.0.0-SNAPSHOT.jar'
-    if (-not (Test-Path $financeApp)) {
-        throw "供应链金融后端 JAR 不存在：$financeApp（先执行 Maven package）"
-    }
-    $financeDir = Join-Path $RepoRoot 'agri-finance\backend'
-    $financeEnvironment = @{
-        'SPRING_PROFILES_ACTIVE' = $env:SPRING_PROFILES_ACTIVE
-        'MYSQL_HOST' = $env:MYSQL_HOST
-        'MYSQL_PORT' = $env:MYSQL_PORT
-        'MYSQL_DATABASE' = $env:MYSQL_DATABASE
-        'MYSQL_USERNAME' = $env:MYSQL_USERNAME
-        'MYSQL_PASSWORD' = $env:MYSQL_PASSWORD
-    }
-    try {
-        $env:SPRING_PROFILES_ACTIVE = 'mysql'
-        $env:MYSQL_HOST = 'localhost'
-        $env:MYSQL_PORT = '3306'
-        $env:MYSQL_DATABASE = 'agri_finance'
-        $env:MYSQL_USERNAME = 'root'
-        $env:MYSQL_PASSWORD = $MysqlRootPassword
-        Start-Process -FilePath 'java' `
-            -ArgumentList @('-jar', 'target\agri-finance-1.0.0-SNAPSHOT.jar', '--server.port=8087') `
-            -WorkingDirectory $financeDir -WindowStyle Hidden `
-            -RedirectStandardOutput "$env:TEMP\agri-finance-8087.out.log" `
-            -RedirectStandardError "$env:TEMP\agri-finance-8087.err.log"
-    } finally {
-        foreach ($name in $financeEnvironment.Keys) {
-            if ($null -eq $financeEnvironment[$name]) {
-                Remove-Item "Env:$name" -ErrorAction SilentlyContinue
-            } else {
-                Set-Item "Env:$name" $financeEnvironment[$name]
+        $candidates = @(Get-ChildItem -LiteralPath $Directory -File -ErrorAction Stop | Where-Object {
+            $_.Name -cmatch '^(health-check|startup-check)-[0-9]{8}-[0-9]{6}-[0-9]{3}-[0-9a-f]{8}\.log$' -and
+            $_.FullName -ne $CurrentLog -and $_.LastWriteTime -lt $cutoff -and
+            !($_.Attributes -band [IO.FileAttributes]::ReparsePoint)
+        })
+        foreach ($file in $candidates) {
+            try {
+                Remove-Item -LiteralPath $file.FullName -ErrorAction Stop
+                $removed++
+                Write-CheckMessage "[日志清理] 已删除过期巡检日志：$($file.Name)"
+            } catch {
+                $warnings++
+                Write-CheckMessage "[日志清理警告] 无法删除 $($file.Name)，已保留，不影响巡检。" -ForegroundColor Yellow
             }
         }
+    } catch {
+        $warnings++
+        Write-CheckMessage '[日志清理警告] 无法读取日志目录，本次跳过清理。' -ForegroundColor Yellow
     }
-    [void](Wait-Port 8087 90 'agri-finance')
+    Write-CheckMessage "日志清理汇总：删除 $removed 个，警告 $warnings 项；服务运行日志不参与清理。"
 }
-
-Write-Host '== 6/14 agri-masterdata（:8083，主数据管理运营后端）=='
-if (Test-Port 8083) {
-    Write-Host '  · 已在运行，跳过'
-} else {
-    $mdmApp = Join-Path $RepoRoot 'agri-master-data\backend\target\agri-master-data-1.0.0.jar'
-    if (-not (Test-Path $mdmApp)) {
-        throw "主数据后端 JAR 不存在：$mdmApp（先执行 Maven package）"
+$runCompleted = $false
+$results = New-Object 'System.Collections.Generic.List[object]'
+function Record($Name,$State,$Detail) {
+    $results.Add([pscustomobject]@{Service=$Name;State=$State;Detail=$Detail})
+    Write-CheckMessage "[$State] $Name : $Detail"
+}
+function Test-Port([int]$Port) {
+    $c = New-Object Net.Sockets.TcpClient
+    try { $a=$c.BeginConnect('127.0.0.1',$Port,$null,$null); return ($a.AsyncWaitHandle.WaitOne(350) -and $c.Connected) }
+    catch { return $false } finally { $c.Dispose() }
+}
+Add-Type -AssemblyName System.Net.Http
+function Get-LocalResponse([string]$Url, [int]$Seconds = 3) {
+    $handler = New-Object System.Net.Http.HttpClientHandler
+    $handler.UseProxy = $false
+    $client = New-Object System.Net.Http.HttpClient($handler)
+    $client.Timeout = [TimeSpan]::FromSeconds($Seconds)
+    try {
+        $response = $client.GetAsync($Url).GetAwaiter().GetResult()
+        try { return [pscustomobject]@{ StatusCode=[int]$response.StatusCode; Content=$response.Content.ReadAsStringAsync().GetAwaiter().GetResult() } }
+        finally { $response.Dispose() }
+    } finally { $client.Dispose() }
+}
+function Explain-Probe([int]$StatusCode,[string]$Content,[string]$Path) {
+    switch ($StatusCode) {
+        404 { return "$Path HTTP 404：探针不存在；核对端口、Actuator 依赖及运行包版本，部署新版后再检查。" }
+        401 { return "$Path HTTP 401：健康端点被登录校验拦截；检查安全配置，仅开放必要健康端点，不要放开业务接口。" }
+        403 { return "$Path HTTP 403：健康端点被权限校验拦截；检查安全规则与网关路由。" }
+        503 { return "$Path HTTP 503：应用或依赖未就绪；查看对应服务日志，重点检查数据库、Redis 连接和启动异常。" }
     }
-    $mdmDir = Split-Path -Parent $mdmApp
-    $env:SPRING_DATASOURCE_USERNAME = 'root'
-    $env:SPRING_DATASOURCE_PASSWORD = $MysqlRootPassword
-    Start-Process -FilePath 'java' `
-        -ArgumentList @('-jar', $mdmApp, '--server.port=8083') `
-        -WorkingDirectory $mdmDir -WindowStyle Hidden `
-        -RedirectStandardOutput "$env:TEMP\agri-masterdata-8083.out.log" `
-        -RedirectStandardError "$env:TEMP\agri-masterdata-8083.err.log"
-    [void](Wait-Port 8083 90 'agri-masterdata')
-}
-
-Write-Host '== 7/14 agri-production（:8092，生产管理模块后端）=='
-if (Test-Port 8092) {
-    Write-Host '  · 已在运行，跳过'
-} else {
-    $prodBackend = Join-Path $RepoRoot 'agri-production\backend'
-    Start-Process -FilePath 'java' `
-        -ArgumentList @(
-            '-jar',
-            'target\agri-production-1.0.0-SNAPSHOT.jar',
-            '--server.port=8092',
-            '--spring.profiles.active=dev'
-        ) `
-        -WorkingDirectory $prodBackend -WindowStyle Hidden `
-        -RedirectStandardOutput "$env:TEMP\agri-production-8092.out.log" `
-        -RedirectStandardError "$env:TEMP\agri-production-8092.err.log"
-    [void](Wait-Port 8092 90 'agri-production')
-}
-
-Write-Host '== 8/14 agri-iot（:8091，物联网管理后端）=='
-if (Test-Port 8091) {
-    Write-Host '  · 已在运行，跳过'
-} else {
-    $iotApp = Join-Path $RepoRoot 'agri-iot\backend\target\agri-iot-platform-1.0.0.jar'
-    if (-not (Test-Path $iotApp)) {
-        throw "物联网后端 JAR 不存在：$iotApp（先执行 Maven package）"
+    if ($StatusCode -ge 500) { return "$Path HTTP $StatusCode：服务内部异常；检查异常日志、健康组件及异常处理器。" }
+    if ($StatusCode -ne 200) { return "$Path HTTP $StatusCode：非预期响应；检查服务端口、重定向和路由。" }
+    try { $health=$Content | ConvertFrom-Json -ErrorAction Stop } catch { return "$Path HTTP 200 但非健康 JSON；可能访问了前端或错误服务，请核对端口。" }
+    if ($health.status -ne 'UP') {
+        $status=[string]$health.status
+        if (!$status) { $status='缺少 status' }
+        return "$Path 状态 $status：检查服务依赖及启动日志；端口可连接不代表业务就绪。"
     }
-    Start-Process -FilePath 'java' `
-        -ArgumentList @('-jar', $iotApp, '--server.port=8091') `
-        -WorkingDirectory (Split-Path -Parent $iotApp) -WindowStyle Hidden `
-        -RedirectStandardOutput "$env:TEMP\agri-iot-8091.out.log" `
-        -RedirectStandardError "$env:TEMP\agri-iot-8091.err.log"
-    [void](Wait-Port 8091 60 'agri-iot')
+    return ''
 }
-
-Write-Host '== 9/14 agri-s2b2c（:8088，S2B2C 后端）=='
-if (Test-Port 8088) {
-    Write-Host '  · 已在运行，跳过'
-} else {
-    $s2b2cJar = Join-Path $RepoRoot 'agri-s2b2c\target\agri-s2b2c-1.0.0.jar'
-    if (-not (Test-Path $s2b2cJar)) {
-        throw "S2B2C 后端 JAR 不存在：$s2b2cJar（先执行该模块 Maven package）"
+function Probe([int]$Port) {
+    $issues=@()
+    foreach ($path in @('/actuator/health','/actuator/health/liveness','/actuator/health/readiness')) {
+        try {
+            $r=Get-LocalResponse "http://127.0.0.1:$Port$path" 3
+            $issue=Explain-Probe $r.StatusCode $r.Content $path
+            if ($issue) { $issues+=$issue }
+        } catch {
+            $exception=$_.Exception.GetBaseException()
+            if ($exception -is [System.OperationCanceledException] -or $exception.Message -match 'timeout|timed out|超时|取消') {
+                $issues+="$path 请求超时（3 秒）：检查 CPU、内存、线程阻塞及依赖连接超时。"
+            } else { $issues+="$path 连接或请求失败：检查监听端口、进程退出和服务日志。" }
+        }
     }
-    Start-Process -FilePath 'java' `
-        -ArgumentList @('-jar', $s2b2cJar, '--server.port=8088') `
-        -WorkingDirectory (Split-Path -Parent $s2b2cJar) -WindowStyle Hidden `
-        -RedirectStandardOutput "$env:TEMP\agri-s2b2c-8088.out.log" `
-        -RedirectStandardError "$env:TEMP\agri-s2b2c-8088.err.log"
-    [void](Wait-Port 8088 60 'agri-s2b2c')
+    return ($issues -join '； ')
 }
-
-Write-Host '== 10/14 agri-service（:8094，综合服务后端）=='
-if (Test-Port 8094) {
-    Write-Host '  · 已在运行，跳过'
-} else {
-    $serviceJar = Join-Path $RepoRoot 'agri-service\target\agri-service-1.0.0.jar'
-    if (-not (Test-Path $serviceJar)) {
-        throw "综合服务后端 JAR 不存在：$serviceJar（先执行 agri-service Maven package）"
+function Show-FailureHints {
+    foreach ($result in @($results | Where-Object State -eq 'FAIL')) {
+        Write-CheckMessage "`n[故障定位] $($result.Service)" -ForegroundColor Yellow
+        Write-CheckMessage $result.Detail
+        $entry=$catalog | Where-Object { $_[0] -eq $result.Service } | Select-Object -First 1
+        $port=0
+        if ($entry) { $port=[int]$entry[1] }
+        elseif ($result.Service -eq 'MySQL') { $port=3306 }
+        elseif ($result.Service -eq 'Redis') { $port=6379 }
+        if ($port) {
+            try {
+                $listeners=@(Get-NetTCPConnection -State Listen -LocalPort $port -ErrorAction SilentlyContinue)
+                if (!$listeners.Count) { Write-CheckMessage "端口 $port 未监听：服务未启动或已退出；检查运行包及启动错误日志，再使用启动入口补启动。" }
+                foreach ($owner in @($listeners.OwningProcess | Sort-Object -Unique)) {
+                    $process=Get-Process -Id $owner -ErrorAction SilentlyContinue
+                    Write-CheckMessage "监听端口 $port，PID=$owner，进程=$($process.ProcessName)。如与预期服务不符，请先核实占用者，不要直接结束进程。"
+                }
+            } catch { Write-CheckMessage '暂未读取到监听进程信息，可结合服务日志定位。' }
+        }
+        if ($entry) {
+            $jarPath=Join-Path $RepoRoot $entry[2]
+            if (!(Test-Path $jarPath -PathType Leaf)) { Write-CheckMessage "运行包缺失：$jarPath；请构建对应模块。" }
+        }
+        if ($result.Service -eq 'MySQL') { Write-CheckMessage '检查 MySQL Windows 服务、数据目录及错误日志；端口检查不验证数据库账号密码。' }
+        if ($result.Service -eq 'Redis') { Write-CheckMessage '检查 Redis 配置、监听端口与启动日志；端口检查不验证缓存读写。' }
+        if ($result.Service -eq 'nginx') { Write-CheckMessage '检查 nginx 配置、入口端口及网关 error.log；HTTP 502/504 通常还需检查对应上游服务。' }
+        $logs=@(Get-ChildItem -LiteralPath $LogDirectory -Filter "$($result.Service)-*.log" -File -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 2)
+        if ($logs.Count) { foreach ($log in $logs) { Write-CheckMessage "最近日志：$($log.FullName)" } }
+        else { Write-CheckMessage '未找到本脚本生成的持久日志；若由其他方式启动，请查看该启动方式的输出日志。' }
     }
-    Start-Process -FilePath 'java' `
-        -ArgumentList @('-jar', $serviceJar, '--server.port=8094') `
-        -WorkingDirectory (Split-Path -Parent $serviceJar) -WindowStyle Hidden `
-        -RedirectStandardOutput "$env:TEMP\agri-service-8094.out.log" `
-        -RedirectStandardError "$env:TEMP\agri-service-8094.err.log"
-    [void](Wait-Port 8094 60 'agri-service')
 }
-
-Write-Host '== 11/14 agri-info（:8096，信息资讯后端）=='
-if (Test-Port 8096) {
-    Write-Host '  · 已在运行，跳过'
-} else {
-    # 信息资讯是独立子系统（库 agri_info），与综合服务并列，不共用 :8094。
-    $infoJar = Join-Path $RepoRoot 'agri-info\target\agri-info-1.0.0.jar'
-    if (-not (Test-Path $infoJar)) {
-        throw "信息资讯后端 JAR 不存在：$infoJar（先执行 agri-info Maven package）"
+function Launch($Exe,$Arguments,$WorkingDir,$Name,$Environment) {
+    New-Item -ItemType Directory -Path $LogDirectory -Force | Out-Null
+    $stamp=Get-Date -Format 'yyyyMMdd-HHmmss-fff'
+    $saved=@{}
+    try {
+        foreach ($key in $Environment.Keys) {
+            $saved[$key]=[Environment]::GetEnvironmentVariable($key,'Process')
+            [Environment]::SetEnvironmentVariable($key,$Environment[$key],'Process')
+        }
+        return Start-Process -FilePath $Exe -ArgumentList $Arguments -WorkingDirectory $WorkingDir -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $LogDirectory "$Name-$stamp.out.log") -RedirectStandardError (Join-Path $LogDirectory "$Name-$stamp.err.log")
+    } finally {
+        foreach ($key in $saved.Keys) { [Environment]::SetEnvironmentVariable($key,$saved[$key],'Process') }
     }
-    Start-Process -FilePath 'java' `
-        -ArgumentList @('-jar', $infoJar, '--server.port=8096') `
-        -WorkingDirectory (Split-Path -Parent $infoJar) -WindowStyle Hidden `
-        -RedirectStandardOutput "$env:TEMP\agri-info-8096.out.log" `
-        -RedirectStandardError "$env:TEMP\agri-info-8096.err.log"
-    [void](Wait-Port 8096 60 'agri-info')
 }
-
-Write-Host '== 12/14 agri-government（:8095，政府监管后端）=='
-if (Test-Port 8095) {
-    Write-Host '  · 已在运行，跳过'
-} else {
-    $governmentJar = Join-Path $RepoRoot 'agri-government\target\agri-government-1.0.0.jar'
-    if (-not (Test-Path $governmentJar)) {
-        throw "政府监管后端 JAR 不存在：$governmentJar（先执行 agri-government Maven package）"
+function Dependency($Name,$Port,$Exe,$Arguments,$WorkingDir) {
+    if (Test-Port $Port) { Record $Name 'OK' "端口 $Port 已监听"; return $true }
+    if ($CheckOnly) { Record $Name 'FAIL' '未运行'; return $false }
+    try {
+        $proc=Launch $Exe $Arguments $WorkingDir $Name @{}
+        $deadline=(Get-Date).AddSeconds(30)
+        do {
+            if (Test-Port $Port) { Record $Name 'OK' '已启动'; return $true }
+            if ($proc.HasExited) { throw "进程退出，退出码 $($proc.ExitCode)" }
+            Start-Sleep -Milliseconds 500
+        } while ((Get-Date) -lt $deadline)
+        throw '等待端口超时'
+    } catch { Record $Name 'FAIL' $_.Exception.Message; return $false }
+}
+# 清单与统一监控的固定端口一致；显式 profile 避免落到内存数据库。
+$catalog=@(
+    @('core-platform',8093,'core-platform/core-app/target/core-app-1.0.0.jar',''),
+    @('agri-trade',8089,'agri-trade/backend/target/agri-trade-1.0.0-SNAPSHOT.jar','mysql'),
+    @('agri-finance',8087,'agri-finance/backend/target/agri-finance-1.0.0-SNAPSHOT.jar','mysql'),
+    @('agri-masterdata',8083,'agri-master-data/backend/target/agri-master-data-1.0.0.jar','mysql'),
+    @('agri-production',8092,'agri-production/backend/target/agri-production-1.0.0-SNAPSHOT.jar','dev'),
+    @('agri-iot',8091,'agri-iot/backend/target/agri-iot-platform-1.0.0.jar','mysql'),
+    @('agri-s2b2c',8088,'agri-s2b2c/target/agri-s2b2c-1.0.0.jar','mysql'),
+    @('agri-service',8094,'agri-service/target/agri-service-1.0.0.jar','mysql'),
+    @('agri-info',8096,'agri-info/target/agri-info-1.0.0.jar','mysql'),
+    @('agri-government',8095,'agri-government/target/agri-government-1.0.0.jar','mysql'),
+    @('satellite-gov-exchange',8112,'core-platform/satellite-gov-exchange/target/satellite-gov-exchange-1.0.0.jar',''),
+    @('agri-ai',8201,'agri-ai/target/agri-ai-1.0.0.jar','dev'),
+    @('satellite-iot',8202,'core-platform/satellite-iot/target/satellite-iot-1.0.0.jar',''),
+    @('satellite-ai-gateway',8203,'core-platform/satellite-ai-gateway/target/satellite-ai-gateway-1.0.0.jar',''),
+    @('satellite-quote-push',8204,'core-platform/satellite-quote-push/target/satellite-quote-push-1.0.0.jar','')
+)
+foreach ($requested in $Services) { if ($requested -notin @($catalog | ForEach-Object { $_[0] })) { throw "未知服务：$requested" } }
+# 防止同时双击脚本导致同一服务启动两份。
+$mutex=New-Object Threading.Mutex($false,'Local\AgriPlatformStackStartup')
+$locked=$false
+try {
+    try { $locked=$mutex.WaitOne(0) } catch [Threading.AbandonedMutexException] { $locked=$true }
+    if (!$locked) { throw '另一个启动脚本正在执行，请等待其结束。' }
+    Remove-ExpiredCheckLogs -Directory $LogDirectory -RetentionDays $LogRetentionDays -CurrentLog $runLog
+    $db=Dependency 'MySQL' 3306 'C:\Program Files\MySQL\MySQL Server 8.4\bin\mysqld.exe' '--defaults-file="C:\ProgramData\MySQL\MySQL Server 8.4\my.ini"' $RepoRoot
+    $cache=Dependency 'Redis' 6379 'C:\Redis\redis-server.exe' '"C:\Redis\redis.windows.conf"' 'C:\Redis'
+    foreach ($s in $catalog) {
+        $name,$port,$relative,$profile=$s
+        # 部分启动仍先确保认证核心可用。
+        if ($Services.Count -and $name -ne 'core-platform' -and $name -notin $Services) { continue }
+        $jar=Join-Path $RepoRoot $relative
+        $existing=Test-Port $port
+        if ($existing) {
+            $errorText=Probe $port
+            if ($errorText) { Record $name 'FAIL' "端口已占用，不重复启动；$errorText" }
+            else { Record $name 'OK' '已运行，三个探针均 UP' }
+            continue
+        }
+        if ($CheckOnly) { Record $name 'FAIL' '未运行'; continue }
+        if (!$db -or !$cache) { Record $name 'FAIL' '依赖未就绪，跳过启动'; continue }
+        if (!(Test-Path $jar -PathType Leaf)) { Record $name 'FAIL' '运行包不存在，请先构建'; continue }
+        try {
+            $environment=@{
+                MYSQL_USERNAME='root'; MYSQL_PASSWORD=$MysqlRootPassword
+                SPRING_DATASOURCE_USERNAME='root'; SPRING_DATASOURCE_PASSWORD=$MysqlRootPassword
+                MYSQL_HOST='localhost'; MYSQL_PORT='3306'; MYSQL_DATABASE=$null; MYSQL_URL=$null
+                SPRING_PROFILES_ACTIVE=$null; SPRING_DATASOURCE_URL=$null
+                CORE_BASE_URL='http://localhost:8093'
+            }
+            if ($name -eq 'agri-finance') { $environment.MYSQL_DATABASE='agri_finance' }
+            if ($name -eq 'core-platform') { $environment.AGRI_CERTIFICATION_UPLOAD_DIR=Join-Path $RepoRoot 'core-platform/uploads/platform/certification' }
+            if ($name -eq 'agri-trade') { $environment.AGRI_TRADE_UPLOAD_DIR=Join-Path $RepoRoot 'agri-trade/backend/uploads' }
+            if ($name -eq 'agri-iot') {
+                $environment.IOT_FIRMWARE_STORAGE_DIR=Join-Path $RepoRoot 'agri-iot/backend/data/firmware'
+                $environment.IOT_FIRMWARE_PUBLIC_BASE_URL=$(if ($env:IOT_FIRMWARE_PUBLIC_BASE_URL) { $env:IOT_FIRMWARE_PUBLIC_BASE_URL } else { 'https://localhost:8443/api/v1/iot/gateway-channel/firmware' })
+            }
+            if ($name -eq 'satellite-gov-exchange') { $environment.GOV_EXPORT_DIR=Join-Path $RepoRoot 'core-platform/satellite-gov-exchange/gov-outbox' }
+            $arguments=@('-jar',('"'+$jar+'"'),"--server.port=$port")
+            if ($port -ge 8201) { $arguments=@('-Xms64m','-Xmx256m')+$arguments }
+            if ($profile) { $arguments+="--spring.profiles.active=$profile" }
+            if ($name -eq 'agri-production') { $arguments+="--spring.datasource.password=$MysqlRootPassword" }
+            if ($name -eq 'core-platform') {
+                $uri=([Uri](Join-Path $RepoRoot 'core-platform/core-app/src/main/resources/application.yml')).AbsoluteUri
+                $arguments+='"--spring.config.additional-location='+$uri+'"'
+            }
+            $work=Split-Path $jar -Parent
+            if ($name -in @('agri-production','agri-finance')) { $work=Split-Path $work -Parent }
+            $proc=Launch 'java' $arguments $work $name $environment
+            $deadline=(Get-Date).AddSeconds($TimeoutSec)
+            $errorText='尚未监听'
+            do {
+                if ($proc.HasExited) { throw "进程提前退出（$($proc.ExitCode)），请查看持久日志" }
+                if (Test-Port $port) { $errorText=Probe $port; if (!$errorText) { break } }
+                Start-Sleep -Milliseconds 700
+            } while ((Get-Date) -lt $deadline)
+            if ($errorText) { throw "启动未就绪：$errorText" }
+            Record $name 'OK' "已启动 PID=$($proc.Id)，三个探针均 UP"
+        } catch { Record $name 'FAIL' $_.Exception.Message }
     }
-    Start-Process -FilePath 'java' `
-        -ArgumentList @('-jar', $governmentJar, '--server.port=8095') `
-        -WorkingDirectory (Split-Path -Parent $governmentJar) -WindowStyle Hidden `
-        -RedirectStandardOutput "$env:TEMP\agri-government-8095.out.log" `
-        -RedirectStandardError "$env:TEMP\agri-government-8095.err.log"
-    [void](Wait-Port 8095 60 'agri-government')
-}
-
-Write-Host '== 13/14 satellite-gov-exchange（:8112，政府监管交换前置）=='
-if (Test-Port 8112) {
-    Write-Host '  · 已在运行，跳过'
-} else {
-    $govJar = Join-Path $RepoRoot 'core-platform\satellite-gov-exchange\target\satellite-gov-exchange-1.0.0.jar'
-    if (-not (Test-Path $govJar)) {
-        throw "政务交换 JAR 不存在：$govJar（先执行 satellite-gov-exchange Maven package）"
+    if (!$SkipGateway) {
+        try {
+            $nginx='C:\nginx\nginx.exe'
+            if (!$CheckOnly) {
+                if (!(Test-Path $GatewayPrefix)) { throw '网关目录不存在' }
+                $chk = Start-Process $nginx -ArgumentList @('-p', $GatewayPrefix, '-c', 'conf/nginx.conf', '-t') -NoNewWindow -Wait -PassThru
+                if ($chk.ExitCode -ne 0) { throw '网关配置检查失败' }
+            }
+            if (!(Test-Port 80) -and !$CheckOnly) {
+                $null=Launch $nginx @('-p',('"'+$GatewayPrefix+'"'),'-c','conf/nginx.conf') $GatewayPrefix 'nginx' @{}
+                $deadline=(Get-Date).AddSeconds(15)
+                while (!(Test-Port 80) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }
+            }
+            foreach ($port in @(80,8090,8098,8110,8115)) {
+                $r=Get-LocalResponse "http://127.0.0.1:$port/" 5
+                if ($r.StatusCode -ne 200) { throw "网关入口 $port HTTP $($r.StatusCode)：检查网关路由、静态资源和上游服务" }
+            }
+            Record 'nginx' 'OK' '五个主要入口 HTTP 检查通过'
+        } catch { Record 'nginx' 'FAIL' $_.Exception.Message }
     }
-    $env:MYSQL_USERNAME = 'root'
-    $env:MYSQL_PASSWORD = $MysqlRootPassword
-    $env:GOV_EXPORT_DIR = Join-Path $RepoRoot 'core-platform\satellite-gov-exchange\gov-outbox'
-    Start-Process -FilePath 'java' `
-        -ArgumentList @('-jar', $govJar, '--server.port=8112') `
-        -WorkingDirectory (Split-Path -Parent $govJar) -WindowStyle Hidden `
-        -RedirectStandardOutput "$env:TEMP\agri-gov-8112.out.log" `
-        -RedirectStandardError "$env:TEMP\agri-gov-8112.err.log"
-    [void](Wait-Port 8112 60 'satellite-gov-exchange')
+    Write-CheckMessage "`n运行检查汇总："
+    Write-CheckMessage ($results | Format-Table -AutoSize -Wrap | Out-String -Width 200)
+    $failed=@($results | Where-Object State -eq 'FAIL').Count
+    $runCompleted = $true
+    if ($failed) { Show-FailureHints; Write-CheckMessage "$failed 项未就绪，请按汇总处理；未停止任何现有进程。"; exit 1 }
+    Write-CheckMessage '所选组件全部就绪。现有服务没有重启；外部 MQTT / AI 开关沿用原配置。'
+Write-CheckMessage '  官网门户        http://localhost:8098/portal/'
+Write-CheckMessage '  交易大厅        http://localhost:8098/portal/#/hall'
+Write-CheckMessage '  商品详情        http://localhost:8086/product/detail/7005'
+Write-CheckMessage '  买家中心        http://localhost:8086/member/buyer'
+Write-CheckMessage '  卖家中心        http://localhost:8086/member/seller'
+Write-CheckMessage '  供应链金融      http://localhost:8081/finance/index.html'
+Write-CheckMessage '  物联网用户端    http://localhost:8101/'
+Write-CheckMessage '  物联网运营端    http://localhost:8102/'
+Write-CheckMessage '  物联网移动端    http://localhost:8111/'
+Write-CheckMessage '  S2B2C 消费者端  http://localhost:8082/'
+Write-CheckMessage '  S2B2C 移动端    http://localhost:8182/'
+Write-CheckMessage '  S2B2C 供应商移动端 http://localhost:8183/'
+Write-CheckMessage '  S2B2C 渠道商移动端 http://localhost:8184/'
+Write-CheckMessage '  S2B2C 供应商端  http://localhost:8084/'
+Write-CheckMessage '  S2B2C 商家端    http://localhost:8085/'
+Write-CheckMessage '  S2B2C 运营端    http://localhost:8103/'
+Write-CheckMessage '  信息资讯        http://localhost:8104/'
+Write-CheckMessage '  信息资讯运营端  http://localhost:8113/info-ops/'
+Write-CheckMessage '  信息资讯移动端  http://localhost:8114/'
+Write-CheckMessage '  综合服务用户端  http://localhost:8105/'
+Write-CheckMessage '  综合服务移动端  http://localhost:8106/'
+Write-CheckMessage '  综合服务运营端  http://localhost:8107/'
+Write-CheckMessage '  政府监管用户端  http://localhost:8108/'
+Write-CheckMessage '  政府监管移动端  http://localhost:8109/'
+Write-CheckMessage '  政府监管运营端  http://localhost:8110/'
+Write-CheckMessage '  统一认证        http://localhost:8090/login'
+Write-CheckMessage '  主数据运营端    http://localhost:8080/user/list'
+Write-CheckMessage '  生产管理移动端  http://localhost:8180/'
+Write-CheckMessage '  交易撮合移动端  http://localhost:8181/'
+Write-CheckMessage '  运营端（平台）  http://localhost:8190/    → 登录后 http://localhost:8190/admin/login'
+Write-CheckMessage '  后端直连（调试）http://localhost:8092/api/v1/production'
+    Write-CheckMessage '  用户中心运营端  http://localhost:8115/user-center-ops/'
+    exit 0
+} catch {
+    Write-CheckMessage ("[执行异常] " + $_.Exception.Message) -ForegroundColor Red
+    exit 1
+} finally {
+    $failedCount = @($results | Where-Object State -eq 'FAIL').Count
+    $okCount = @($results | Where-Object State -eq 'OK').Count
+    $finalState = if (!$runCompleted) { '异常中止，退出码 1' } elseif ($failedCount) { '存在未就绪项，退出码 1' } else { '全部通过，退出码 0' }
+    Write-CheckMessage "最终结果：$finalState；通过 $okCount 项，失败 $failedCount 项。"
+    Write-CheckMessage ("结束时间：{0}；耗时 {1:N1} 秒" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'),((Get-Date)-$runStarted).TotalSeconds)
+    Write-CheckMessage "日志已保存：$runLog"
+    if ($locked) { $mutex.ReleaseMutex() }
+    $mutex.Dispose()
 }
 
-Write-Host '== 14/14 统一网关 nginx（:80 / :8080 / :8081 / :8082 / :8084 / :8085 / :8086 / :8090 / :8098 / :8101 / :8102 / :8103 / :8104 / :8105 / :8106 / :8107 / :8108 / :8109 / :8110 / :8111 / :8113 / :8114 / :8180 / :8181 / :8182 / :8183 / :8184 / :8190）=='
-if (Test-Port 80) {
-    Write-Host '  · 已在运行，跳过'
-} else {
-    if (-not (Test-Path $GatewayPrefix)) {
-        throw "网关 prefix 不存在：$GatewayPrefix（仓库路径含中文，nginx 需要 ASCII junction，见脚本注释）"
-    }
-    & $nginxExe -p $GatewayPrefix -c conf/nginx.conf -t | Out-Null
-    # nginx 在 Windows 上是控制台程序：不脱离会占住当前终端
-    Start-Process -FilePath $nginxExe -ArgumentList @('-p', $GatewayPrefix, '-c', 'conf/nginx.conf') -WindowStyle Hidden
-    [void](Wait-Port 80 15 'nginx')
-}
 
-Write-Host ''
-Write-Host '启动完成，访问地址：'
-Write-Host '  官网门户        http://localhost:8098/portal/'
-Write-Host '  交易大厅        http://localhost:8098/portal/#/hall'
-Write-Host '  商品详情        http://localhost:8086/product/detail/7005'
-Write-Host '  买家中心        http://localhost:8086/member/buyer'
-Write-Host '  卖家中心        http://localhost:8086/member/seller'
-Write-Host '  供应链金融      http://localhost:8081/finance/index.html'
-Write-Host '  物联网用户端    http://localhost:8101/'
-Write-Host '  物联网运营端    http://localhost:8102/'
-Write-Host '  物联网移动端    http://localhost:8111/'
-Write-Host '  S2B2C 消费者端  http://localhost:8082/'
-Write-Host '  S2B2C 移动端    http://localhost:8182/'
-Write-Host '  S2B2C 供应商移动端 http://localhost:8183/'
-Write-Host '  S2B2C 渠道商移动端 http://localhost:8184/'
-Write-Host '  S2B2C 供应商端  http://localhost:8084/'
-Write-Host '  S2B2C 渠道端    http://localhost:8085/'
-Write-Host '  S2B2C 运营端    http://localhost:8103/'
-Write-Host '  信息资讯        http://localhost:8104/'
-Write-Host '  信息资讯运营端  http://localhost:8113/info-ops/'
-Write-Host '  信息资讯移动端  http://localhost:8114/'
-Write-Host '  综合服务用户端  http://localhost:8105/'
-Write-Host '  综合服务移动端  http://localhost:8106/'
-Write-Host '  综合服务运营端  http://localhost:8107/'
-Write-Host '  政府监管用户端  http://localhost:8108/'
-Write-Host '  政府监管移动端  http://localhost:8109/'
-Write-Host '  政府监管运营端  http://localhost:8110/'
-Write-Host '  统一认证        http://localhost:8090/login'
-Write-Host '  主数据运营端    http://localhost:8080/user/list'
-Write-Host '  生产管理移动端  http://localhost:8180/'
-Write-Host '  交易撮合移动端  http://localhost:8181/'
-Write-Host '  运营端（平台）  http://localhost:8190/    → 登录后 http://localhost:8190/admin/login'
-Write-Host '  后端直连（调试）http://localhost:8092/api/v1/production'
-Write-Host '  账号：farmer / Admin@123（用户端）、admin / Admin@123（运营端）'

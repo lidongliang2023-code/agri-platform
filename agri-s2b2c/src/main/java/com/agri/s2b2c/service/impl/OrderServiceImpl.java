@@ -307,6 +307,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                 item.setSpec(product.getSpec());
                 item.setPrice(line.unitPrice());
                 item.setSupplyPrice(product.getPrice());
+                item.setProdBatchNo(product.getProdBatchNo());
                 item.setQuantity(quantity);
                 item.setTotalAmount(line.amount());
                 item.setImage(firstImage(product.getImages()));

@@ -34,3 +34,22 @@ platform:
     read-permission: service:read
     write-permission: service:write
     require-auth: true
+
+# Unified probes: dependency failures affect readiness, not liveness.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      show-components: never
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: '*'
+          exclude: livenessState

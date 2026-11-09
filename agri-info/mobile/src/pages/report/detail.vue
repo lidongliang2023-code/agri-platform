@@ -226,7 +226,7 @@ function openReport(reportId: number) {
 
 .head-sub {
   color: #718277;
-  font-size: 22rpx;
+  font-size: 24rpx;
 }
 
 .head-meta {
@@ -261,7 +261,7 @@ function openReport(reportId: number) {
   width: 34rpx;
   color: #94a198;
   font-family: "DIN Alternate", monospace;
-  font-size: 21rpx;
+  font-size: 24rpx;
   text-align: center;
 }
 
@@ -273,7 +273,7 @@ function openReport(reportId: number) {
 
 .summary {
   color: #53665a;
-  font-size: 23rpx;
+  font-size: 24rpx;
   line-height: 1.8;
 }
 

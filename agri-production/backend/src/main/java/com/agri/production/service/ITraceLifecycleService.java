@@ -84,4 +84,13 @@ public interface ITraceLifecycleService {
      * </ul>
      */
     Map<String, Object> publicVerification(String code);
+
+    /**
+     * 批次级公开核验视图（{@code GET /trace/public/batch/{batchNo}}）：同样**跨主体、免登录**。
+     *
+     * <p>存在的理由：商城商品详情只知道自己绑定的**采收批次**，不知道消费者手上具体是哪一支码。
+     * 与 {@link #publicVerification} 共用同一份节点拼装与链上判定，差别只有主键（批次号 vs 码），
+     * 另附本批次的码清单（一物一码要能看到"这批有哪些码、各自什么状态"）。</p>
+     */
+    Map<String, Object> publicBatchVerification(String batchNo);
 }

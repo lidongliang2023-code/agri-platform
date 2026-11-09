@@ -22,7 +22,7 @@
       <el-empty v-if="!(data.afterSales || []).length" description="暂无售后" />
     </section>
     <section class="card"><header><h2>佣金结算</h2><span>渠道分润统一结算</span><el-button type="primary" size="small" @click="settle">结算待处理佣金</el-button></header>
-      <el-table :data="data.commissions || []" size="small"><el-table-column prop="orderId" label="订单"/><el-table-column prop="channelId" label="渠道商"/><el-table-column prop="rate" label="比例"/><el-table-column label="佣金"><template #default="{row}">{{ money(row.amount) }}</template></el-table-column><el-table-column prop="status" label="状态"/></el-table>
+      <el-table :data="data.commissions || []" size="small"><el-table-column prop="orderId" label="订单"/><el-table-column prop="channelId" label="商家"/><el-table-column prop="rate" label="比例"/><el-table-column label="佣金"><template #default="{row}">{{ money(row.amount) }}</template></el-table-column><el-table-column prop="status" label="状态"/></el-table>
     </section>
   </section>
 </template>
@@ -39,7 +39,7 @@ async function load() { data.value = await platformApi.getGrowth() }
 async function review(item, status) { await platformApi.reviewAfterSale(item.id, status, status === 'APPROVED' ? '平台审核通过' : '材料不足，已驳回'); ElMessage.success('售后审核已更新'); load() }
 async function ship(order) {
   const { value } = await ElMessageBox.prompt('请输入物流单号', `订单 ${order.orderNo} 发货`, { confirmButtonText: '确认发货' })
-  await platformApi.shipOrder(order.id, value, '农联优选物流')
+  await platformApi.shipOrder(order.id, value, '丰链云物流')
   ElMessage.success('订单已发货')
   load()
 }

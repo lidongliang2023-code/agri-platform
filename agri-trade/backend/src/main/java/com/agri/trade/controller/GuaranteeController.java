@@ -76,7 +76,7 @@ public class GuaranteeController {
         }
         MerchantGuarantee guarantee = guaranteeMapper.selectById(id);
         if (guarantee == null) {
-            return ApiResponse.error("保证金账户不存在");
+            return ApiResponse.error(404, "保证金账户不存在");
         }
         if (guarantee.getMerchantId() == null || !scope.merchantIds().contains(guarantee.getMerchantId())) {
             return ApiResponse.error("只能给自己的保证金账户补缴");
@@ -120,7 +120,7 @@ public class GuaranteeController {
     @com.agri.common.rbac.OperatorOnly("trade:read")
     public ApiResponse<MerchantGuarantee> getGuaranteeById(@PathVariable Long id) {
         MerchantGuarantee guarantee = guaranteeMapper.selectById(id);
-        if (guarantee == null) return ApiResponse.error("保证金记录不存在");
+        if (guarantee == null) return ApiResponse.error(404, "保证金记录不存在");
         return ApiResponse.success(guarantee);
     }
 
@@ -145,7 +145,7 @@ public class GuaranteeController {
     public ApiResponse<Boolean> verifyGuarantee(@PathVariable Long id,
                                                 @RequestBody java.util.Map<String, String> params) {
         MerchantGuarantee guarantee = guaranteeMapper.selectById(id);
-        if (guarantee == null) return ApiResponse.error("保证金记录不存在");
+        if (guarantee == null) return ApiResponse.error(404, "保证金记录不存在");
         if (!"pending".equals(guarantee.getGuaranteeStatus())) {
             return ApiResponse.error("该账户已经审核过了");
         }

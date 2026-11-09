@@ -25,6 +25,8 @@ import java.util.Map;
 public class IotAppRepository {
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
     private final JdbcTemplate jdbc;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.agri.iot.service.GatewayCommandService gatewayCommands;
     private final ProductionPlotClient productionPlots;
     private final ProductionFarmClient productionFarms;
     private final IotIdentityService identity;
@@ -635,19 +637,8 @@ public class IotAppRepository {
             throw new IllegalArgumentException("该设备不支持远程控制");
         }
         String action = required(body, "action", "请选择控制动作");
-        jdbc.update("""
-                INSERT INTO iot_control_log
-                (device_id,device_name,action_name,operator_name,result_text,created_at)
-                VALUES (?,?,?,?,?,?)
-                """, id, device.get("deviceName"), action, operator,
-                "指令已下发到边缘网关，等待设备回执", nowLabel());
-        return map(
-                "deviceId", id,
-                "deviceName", device.get("deviceName"),
-                "action", action,
-                "operator", operator,
-                "result", "queued",
-                "message", "控制指令已下发到边缘网关，设备回执需在真机接入后回传");
+        return new com.agri.iot.service.DeviceCommandService(jdbc).register(id,
+                String.valueOf(device.get("deviceName")), action, operator);
     }
 
     public List<Map<String, Object>> plots() {
@@ -819,22 +810,11 @@ public class IotAppRepository {
         return Map.of("id", id, "gatewayCode", gateway.get("gatewayCode"));
     }
 
-    /**
-     * 重启边缘网关。
-     *
-     * <p>原先这里直接把 {@code online_status} 改成 online、CPU/内存清 0，
-     * 等于平台替网关"宣布自己重启成功了"。没有心跳回传链路就不能改状态，
-     * 这里只记一条下发留痕，状态由网关上线时自己更新。</p>
-     */
+    /** 登记网关重启指令，执行结果以接入端回执为准，不改变心跳。 */
     @Transactional
     public Map<String, Object> restartGateway(long id) {
-        Map<String, Object> gateway = gateway(id);
-        jdbc.update("UPDATE iot_gateway SET last_online=? WHERE id=?",
-                nowLabel() + "（重启指令已下发）", id);
-        addLog("重启边缘网关", String.valueOf(gateway.get("gatewayCode")), "重启指令已下发，等待网关心跳回传");
-        Map<String, Object> result = new LinkedHashMap<>(gateway(id));
-        result.put("message", "重启指令已下发，网关状态以上线心跳为准");
-        return result;
+        Map<String,Object> gateway = gateway(id);
+        return gatewayCommands.register(id,"GW-"+id,"重启网关",identity.requireOperatorName());
     }
 
     /**
@@ -860,19 +840,34 @@ public class IotAppRepository {
      * 处置人还从请求体里取（前端写谁就是谁）。现在先按租户校验归属，
      * 处置人取令牌账号，状态只接受三种流转值。</p>
      */
+    @Transactional
     public Map<String, Object> handleAlert(long id, Map<String, Object> body) {
         identity.requireTenantRow("iot_alert", id, "告警");
-        String status = text(body, "status", "resolved");
-        if (!List.of("pending", "handling", "resolved").contains(status)) {
-            throw new IllegalArgumentException("告警状态只能是待处理、处理中或已恢复");
-        }
-        String note = required(body, "note", "请填写处置说明");
-        String operator = identity.requireOperatorName();
-        jdbc.update("""
-                UPDATE iot_alert SET status=?,handled_by=?,handle_note=?,handled_at=? WHERE id=?
-                """, status, operator, note, nowLabel(), id);
-        addLog("处置告警", "IOT-ALERT-" + id, status + " · " + note);
+        transitionAlert(jdbc, id, body, identity.requireOperatorName());
+        addLog("处置告警", "IOT-ALERT-" + id, String.valueOf(body.get("note")));
         return queryOne("SELECT * FROM iot_alert WHERE id=?", alertMapper(), id);
+    }
+
+    /** 双端共用状态与审计规则；条件更新防止并发请求覆盖历史。 */
+    static void transitionAlert(JdbcTemplate jdbc, long id, Map<String, Object> body, String operator) {
+        List<Map<String, Object>> rows = jdbc.queryForList(
+                "SELECT status,handle_note FROM iot_alert WHERE id=? FOR UPDATE", id);
+        if (rows.isEmpty()) throw new IllegalArgumentException("告警不存在");
+        String current = String.valueOf(rows.get(0).get("status"));
+        String next = body.get("status") == null ? "resolved" : String.valueOf(body.get("status"));
+        if (!("pending".equals(current) && "handling".equals(next))
+                && !("handling".equals(current) && "resolved".equals(next))) {
+            throw new IllegalArgumentException("状态已变化或不允许跳转；请按待处理→处理中→已处理顺序操作并刷新");
+        }
+        String note = body.get("note") == null ? "" : String.valueOf(body.get("note")).trim();
+        if (note.length() < 4 || note.length() > 200) throw new IllegalArgumentException("请填写4至200字的实际处置说明");
+        String old = rows.get(0).get("handle_note") == null ? "" : String.valueOf(rows.get(0).get("handle_note"));
+        String history = old + (old.isBlank() ? "" : "\n") + "[" + LocalDateTime.now()
+                + " · " + operator + " · " + next + "] " + note;
+        if (history.length() > 800) throw new IllegalArgumentException("处置历史超过800字容量，禁止覆盖或截断原凭据");
+        int changed = jdbc.update("UPDATE iot_alert SET status=?,handled_by=?,handle_note=?,handled_at=? WHERE id=? AND status=?",
+                next, operator, history, LocalDateTime.now().format(TIME), id, current);
+        if (changed != 1) throw new IllegalArgumentException("告警状态已被其他操作更新，请刷新");
     }
 
     /**
@@ -1241,6 +1236,13 @@ public class IotAppRepository {
     public List<Map<String, Object>> messages() {
         return jdbc.query("SELECT * FROM iot_message WHERE tenant_id=? ORDER BY id DESC",
                 messageMapper(), scopeTenantId());
+    }
+
+    @Transactional
+    public Map<String, Object> readMessage(long id) {
+        identity.requireTenantRow("iot_message", id, "消息");
+        jdbc.update("UPDATE iot_message SET is_read=TRUE WHERE id=? AND tenant_id=?", id, identity.currentTenantId());
+        return queryOne("SELECT * FROM iot_message WHERE id=? AND tenant_id=?", messageMapper(), id, identity.currentTenantId());
     }
 
     public Map<String, Object> readAllMessages() {

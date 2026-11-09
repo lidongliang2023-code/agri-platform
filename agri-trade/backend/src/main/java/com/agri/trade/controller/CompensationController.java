@@ -147,7 +147,7 @@ public class CompensationController {
 
         CompensationRecord compensation = compensationService.reviewCompensation(compensationId, reviewResult, reviewer, remark);
         if (compensation == null) {
-            return ApiResponse.error("审核失败：赔付单不存在，或已经不是待审核状态（一张单只审一次）");
+            return ApiResponse.error(404, "审核失败：赔付单不存在，或已经不是待审核状态（一张单只审一次）");
         }
         return ApiResponse.success(compensation);
     }
@@ -157,7 +157,7 @@ public class CompensationController {
     public ApiResponse<Boolean> executeCompensation(@PathVariable Long compensationId) {
         boolean result = compensationService.executeCompensation(compensationId);
         return result ? ApiResponse.success(true)
-                : ApiResponse.error("打款失败：赔付单不存在，或尚未核准（只有「已核准待打款」的单可以打款）");
+                : ApiResponse.error(404, "打款失败：赔付单不存在，或尚未核准（只有「已核准待打款」的单可以打款）");
     }
 
     /** 数字字段容错取值：请求体里的 id 可能是数字，也可能是字符串（前端 Long 转字符串）。 */

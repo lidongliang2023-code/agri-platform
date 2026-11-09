@@ -13,11 +13,34 @@ function app(port, path = '/') {
 
 export const crossModule = {
   masterData: app(8080, '/'), // 主数据管理：货源主数据、品类标准
-  production: app(80, '/prod/'), // 生产管理：种植批次与全链路溯源
+  production: app(80, '/'), // 生产管理：种植批次与全链路溯源
   trade: app(8086, '/'), // 交易撮合：大宗供需撮合
   supplier: app(8084, '/'), // S2B2C 供应商端（供货方）
-  channel: app(8085, '/'), // S2B2C 渠道商端（小 B 分销）
+  channel: app(8085, '/'), // S2B2C 商家端（小 B 分销）
   platform: app(8103, '/'), // S2B2C 平台运营端
+}
+
+/**
+ * 生产端「全链路溯源」深链（消费者点开后看到同一批次在生产侧的原始登记）。
+ *
+ * 地址口径只认这一处，因为生产端是 createBrowserRouter（history 模式）：
+ * - 网关把 /prod/ 当成静态产物目录（bucket/prod/index.html），业务路由在**根路径**上，
+ *   所以写成 `…/prod/production/…` 会命中不到路由、`…/prod/#/…` 更是直接把 # 之后的部分当 hash 丢掉；
+ * - 实测 `http://localhost/production/trace/full-chain?code=…` 才是渲染出链路的那一个。
+ *
+ * 参数名以生产端页面实际读取的为准：它读 `?code=` 与 `?batchId=`（FullChainTrace.tsx 的
+ * useSearchParams），批次号也能当 batchId 传——后端 requireBatch 两个都认。
+ *
+ * @param {{ code?: string, batchId?: string }} params 有码优先带码（消费者手上就是这支码）
+ * @returns {string} 可直接放在 <a href> 里的绝对地址
+ */
+export function productionChainUrl({ code = '', batchId = '' } = {}) {
+  const params = new URLSearchParams()
+  if (code) params.set('code', String(code))
+  else if (batchId) params.set('batchId', String(batchId))
+  const query = params.toString()
+  const base = crossModule.production.endsWith('/') ? crossModule.production : `${crossModule.production}/`
+  return `${base}production/trace/full-chain${query ? `?${query}` : ''}`
 }
 
 /** 模块边界页用的能力归属清单（与后端 /api/consumer 的职责边界一一对应）。 */

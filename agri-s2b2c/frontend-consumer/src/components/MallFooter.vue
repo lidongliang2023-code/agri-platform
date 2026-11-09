@@ -4,8 +4,8 @@
       <div class="m-footer-main">
         <div>
           <div class="ft-brand">
-            <span class="lg">🌾</span>
-            <span class="txt">农联优选</span>
+            <img class="lg" :src="brandLogoSrc" alt="丰链云" />
+            <span class="txt">丰链云</span>
           </div>
           <p class="brand-desc">
             农业产业互联网平台 S2B2C 消费者端。基地直供、一物一码、全程可溯源；下单后由产地供应商直发，
@@ -46,14 +46,16 @@
         </div>
       </div>
       <div class="m-footer-bar">
-        <span>© 2026 农联优选 · 农业产业互联网平台</span>
+        <span>© 2026 丰链云 · 农业产业互联网平台</span>
         <span>消费者端 v1.0 · 数据来源：S2B2C 消费者域接口</span>
       </div>
     </div>
   </footer>
 </template>
 
-<script setup></script>
+<script setup>
+const brandLogoSrc = `${import.meta.env.BASE_URL}fengchain.svg`
+</script>
 
 <style scoped>
 .ft-brand {
@@ -66,13 +68,10 @@
 }
 
 .ft-brand .lg {
-  display: grid;
-  place-items: center;
+  display: block;
   width: 34px;
   height: 34px;
   border-radius: 10px;
-  background: linear-gradient(135deg, #12764a, #4fb07f);
-  font-size: 17px;
 }
 
 .ft-badges {

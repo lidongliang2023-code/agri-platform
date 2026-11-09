@@ -70,7 +70,7 @@ public class PortalPublicController {
         TradeProduct product = productMapper.selectById(id);
         if (product == null || Integer.valueOf(1).equals(product.getDelFlag())
                 || !"published".equals(product.getPublishStatus())) {
-            return ApiResponse.error("商品不存在或已下架");
+            return ApiResponse.error(404, "商品不存在或已下架");
         }
         return ApiResponse.success(toDetailView(product));
     }
@@ -81,7 +81,7 @@ public class PortalPublicController {
         TradeProduct product = productMapper.selectById(id);
         if (product == null || Integer.valueOf(1).equals(product.getDelFlag())
                 || !"published".equals(product.getPublishStatus())) {
-            return ApiResponse.error("商品不存在或已下架");
+            return ApiResponse.error(404, "商品不存在或已下架");
         }
         List<PublicProductImageView> images = productImageMapper.selectList(
                         new LambdaQueryWrapper<ProductImage>()
@@ -194,7 +194,7 @@ public class PortalPublicController {
                 .orderByDesc(TradeProduct::getCreateTime)
                 .last("LIMIT 100"));
         if (products.isEmpty()) {
-            return ApiResponse.error("供应商不存在或暂无在售货源");
+            return ApiResponse.error(404, "供应商不存在或暂无在售货源");
         }
         TradeProduct first = products.get(0);
         List<PortalProductView> views = products.stream()

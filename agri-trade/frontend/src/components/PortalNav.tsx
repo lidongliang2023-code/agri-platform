@@ -16,7 +16,6 @@ const GOVERNMENT = `${window.location.protocol}//${window.location.hostname}:810
 
 const NAV_ITEMS: Array<{ label: string; href: string; key?: string }> = [
   { label: '首页', href: PORTAL },
-  { label: '产业链', href: `${PORTAL}#/chains` },
   { label: '产业资讯', href: `${PORTAL}#/info` },
   { label: '交易大厅', href: '/hall', key: 'hall' },
   { label: '价格指数', href: `${PORTAL}#/info/market` },

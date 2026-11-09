@@ -1,0 +1,13 @@
+.production-plans-page .ant-pro-table-list-toolbar-title { color: #244b38; font-weight: 600; }
+.production-plans-page .ant-pro-table-search,
+.production-plans-page .ant-pro-table-list-toolbar-container,
+.production-plans-page .ant-pro-table .ant-card { border-radius: 12px; }
+.production-plans-page .ant-table-thead > tr > th { background: #f2f8f4; color: #385746; }
+.production-plans-page .ant-table-wrapper { border-radius: 12px; }
+.production-plans-page .ant-statistic { padding: 14px 16px; border: 1px solid #e6eee8; border-radius: 12px; background: #f5faf7; }
+.production-plan-form .ant-form-item-label > label { color: #53675b; }
+.production-plan-form .ant-modal-body { max-height: 72vh; overflow-y: auto; }
+@media (max-width: 640px) {
+  .production-plans-page .ant-pro-table-list-toolbar-container { flex-wrap: wrap; gap: 12px; }
+  .production-plans-page .ant-statistic { padding: 10px; }
+}

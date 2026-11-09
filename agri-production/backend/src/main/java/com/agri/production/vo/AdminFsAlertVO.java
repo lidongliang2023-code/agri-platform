@@ -29,6 +29,7 @@ public class AdminFsAlertVO {
     /** 待处理 / 处理中 / 已处理 */
     private String status;
     /** 处置措施（已处理时才有） */
+    private Long handleBy;
     private String measure;
     private String handleRemark;
     private String handleTime;
@@ -45,6 +46,7 @@ public class AdminFsAlertVO {
         vo.time = entity.getHappenTime() == null ? null : DATE_TIME.format(entity.getHappenTime());
         vo.level = entity.getLevel();
         vo.status = entity.getStatus();
+        vo.handleBy = entity.getHandleBy();
         vo.measure = entity.getMeasure();
         vo.handleRemark = entity.getHandleRemark();
         vo.handleTime = entity.getHandleTime() == null ? null : DATE_TIME.format(entity.getHandleTime());

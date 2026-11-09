@@ -1,7 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
 const routes = [
-  { path: '/login', redirect: '/' },
   {
     path: '/',
     component: () => import('../views/Layout.vue'),
@@ -37,7 +36,9 @@ const routes = [
       { path: 'apply', name: 'Apply', component: () => import('../views/Apply.vue') },
       { path: 'gap/:key', name: 'Gap', component: () => import('../views/Gap.vue') },
     ]
-  }
+  },
+  // 未匹配路径（含已下线的 /login）统一回首页，避免白屏
+  { path: '/:pathMatch(.*)*', redirect: '/' }
 ]
 
 const router = createRouter({

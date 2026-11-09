@@ -47,6 +47,16 @@ function granted(permissions, required) {
   return permissions.includes(`${prefix}:*`)
 }
 
+/**
+ * 是否落在"允许匿名访问"的路径上。
+ *
+ * 只比前缀且要求边界（/trace 命中 /trace 与 /trace/x，不命中 /tracer），
+ * 因为这一判断决定"要不要把访客送去登录"，判宽了等于全站免登录。
+ */
+export function isPublicPath(pathname, publicPaths = []) {
+  return publicPaths.some((p) => pathname === p || pathname.startsWith(`${p}/`))
+}
+
 function setSession(data, permissions) {
   sessionStorage.setItem(TOKEN_KEY, data.accessToken)
   localStorage.setItem(USER_KEY, JSON.stringify(data.user))
@@ -141,10 +151,10 @@ async function loadPermissions(token) {
   if (!response.ok) throw new Error('无法读取平台权限，请稍后重试')
   const body = await response.json()
   if (body.code !== 0) throw new Error(body.message || '无法读取平台权限')
-  return body.data?.permissions || []
+  return (body.data || {}).permissions || []
 }
 
-export async function bootstrapUnifiedSso({ clientId, permission, landingPath = '/' }) {
+export async function bootstrapUnifiedSso({ clientId, permission, landingPath = '/', publicPaths = [] }) {
   const callback = window.location.pathname.replace(/\/+$/, '') === CALLBACK_PATH
   let login = null
   if (callback) {
@@ -176,22 +186,50 @@ export async function bootstrapUnifiedSso({ clientId, permission, landingPath = 
   login = await refreshSession()
 
   if (!login) {
+    /*
+     * 公开路径（消费者端只有 /trace）在此直接匿名挂载，不回跳登录。
+     *
+     * 溯源码的唯一意义是"拿到这串码的人都能验"。原先整个应用挂在 SSO 之后：
+     * 消费者扫包装上的码 → 浏览器先跳统一认证中心 → 页面根本没挂载，
+     * 后端那个免登录的 /api/public/trace/** 就成了没人能走到的死路。
+     * 返回值刻意用对象而不是 null：null 表示"正在跳登录，别挂载"，
+     * { anonymous: true } 表示"没有会话但要挂载"，调用方据此分流。
+     */
+    if (isPublicPath(window.location.pathname, publicPaths)) return { anonymous: true }
     const returnTo = window.location.pathname === '/login' ? landingPath : window.location.pathname + window.location.search
     await redirectToUnifiedLogin(clientId, returnTo)
     return null
   }
 
-  const permissions = await loadPermissions(login.accessToken)
-  if (!granted(permissions, permission)) {
-    const error = new Error(`当前统一账号没有 ${permission} 权限，请联系平台运营开通 S2B2C 角色权限。`)
-    error.permissionDenied = true
-    throw error
+  let permissions
+  let gateFailure = null
+  try {
+    permissions = await loadPermissions(login.accessToken)
+    // 准入判定只认权限码：后端 SupplierController 就是 @OperatorOnly("s2b2c:supplier")，
+    // 运营账号（MARKET_OPS）没有这个码时进得来也调不动接口，与其放进来看到一堆 403，
+    // 不如在这里明确告知需要开通。
+    if (!granted(permissions, permission)) {
+      gateFailure = new Error(`当前统一账号没有 ${permission} 权限，请联系平台运营开通 S2B2C 角色权限。`)
+      gateFailure.permissionDenied = true
+    }
+  } catch (error) {
+    gateFailure = error
+  }
+  if (gateFailure) {
+    /*
+     * 带着刷新令牌访问公开路径时也放行渲染：读权限失败，或这个账号本来就没有
+     * 商城消费者权限（例如监管账号顺手点开一支码），都不该被挡在核验页外面 ——
+     * 链路内容来自免登录的 /api/public/trace/**，不依赖商城身份。
+     * 此时按空权限挂载：会话仍是有效的（头部显示已登录），只是不复用商城能力。
+     */
+    if (!isPublicPath(window.location.pathname, publicPaths)) throw gateFailure
+    permissions = []
   }
   setSession(login, permissions)
   return login
 }
 
-export function attachUnifiedAuth(instance, clientId) {
+export function attachUnifiedAuth(instance, clientId, publicPaths = []) {
   instance.interceptors.request.use((config) => {
     const token = getUnifiedToken()
     if (token) config.headers.Authorization = `Bearer ${token}`
@@ -200,7 +238,9 @@ export function attachUnifiedAuth(instance, clientId) {
   instance.interceptors.response.use(
     (response) => response,
     async (error) => {
-      if (error.response?.status === 401) {
+      if (error.response?.status === 401 && !isPublicPath(window.location.pathname, publicPaths)) {
+        // 公开路径上这个跳转尤其致命：溯源页顺带拉一次商品下拉就会 401，
+        // 于是"扫码即验"的人被整页送去登录，链路一次都看不到。
         clearSession()
         await redirectToUnifiedLogin(clientId, window.location.pathname + window.location.search)
       }
@@ -209,9 +249,19 @@ export function attachUnifiedAuth(instance, clientId) {
   )
 }
 
-export async function logoutUnified(clientId) {
+export function logoutUnified(clientId) {
+  /*
+   * 登出请求**不等返回**就整页跳转。
+   *
+   * 原来写的是 `await fetch(...)` 再 assign：只要这个请求慢一点、被网关卡住或响应始终
+   * 不落地，await 就永远挂着，按钮表现成"点了没反应"（2026-11-03 在 8084 供应商端实测到
+   * 这一现象：请求已发出，但两种存储都没清、URL 也没变）。
+   * 清本地会话与跳转不依赖这个请求的成败，所以立即执行；请求用 keepalive 让它在页面
+   * 卸载后仍能发完。真正销毁 SSO 全局会话的是下一跳认证中心的 /logout 端点，
+   * 它同时会清掉该 client 的刷新 Cookie。
+   */
   try {
-    await fetch('/api/v1/auth/logout', { method: 'POST', credentials: 'include' })
+    void fetch('/api/v1/auth/logout', { method: 'POST', credentials: 'include', keepalive: true })
   } catch {
     // 本地会话无论服务端是否可达都必须清理。
   }
@@ -219,7 +269,14 @@ export async function logoutUnified(clientId) {
   window.location.assign(`${ssoOrigin()}/logout?client_id=${encodeURIComponent(clientId)}`)
 }
 
-export function showUnifiedAuthFailure(error) {
+/**
+ * 统一登录 / 权限失败页。
+ *
+ * 「重新登录」不能再 `location.reload()`：SSO 全局会话仍然有效，刷新只会用同一个账号
+ * 重新走一遍权限判定，页面看起来就是"点了没反应"。正确动作是先登出 SSO
+ * （清理本地会话 + 跳认证中心登出端点），回到登录页换账号登录。
+ */
+export function showUnifiedAuthFailure(error, clientId) {
   const message = error instanceof Error ? error.message : '统一认证失败'
   document.getElementById('app').innerHTML = `
     <main class="s2b2c-unified-error">
@@ -227,7 +284,10 @@ export function showUnifiedAuthFailure(error) {
         <div class="s2b2c-unified-mark">丰</div>
         <h1>${error?.permissionDenied ? '暂无 S2B2C 访问权限' : '统一登录未完成'}</h1>
         <p>${message.replace(/[<>&"']/g, (char) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' })[char])}</p>
-        <button type="button" onclick="location.reload()">重新登录</button>
+        <button type="button" class="s2b2c-unified-relogin">重新登录</button>
       </section>
     </main>`
+  document.querySelector('.s2b2c-unified-relogin')?.addEventListener('click', () => {
+    void logoutUnified(clientId)
+  })
 }

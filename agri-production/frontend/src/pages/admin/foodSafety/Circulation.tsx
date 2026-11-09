@@ -89,7 +89,7 @@ const ACTION_OPTIONS: string[] = ['通知责任方核查', '召回问题批次',
  *
  * @returns 页面内容
  */
-export default function Circulation(): JSX.Element {
+function Circulation(): JSX.Element {
   const { message } = App.useApp()
   const queryClient = useQueryClient()
 
@@ -117,7 +117,7 @@ export default function Circulation(): JSX.Element {
     retry: false,
   })
 
-  /** 处理流通异常（只有 result.ok 才提示成功并关闭弹窗） */
+  /** 登记流通异常处理进展（只有 result.ok 才提示成功并关闭弹窗） */
   const handleMutation = useMutation({
     mutationFn: (payload: { id: string; action: string; remark: string }) =>
       handleCirculation(payload.id, { action: payload.action, remark: payload.remark }),
@@ -390,8 +390,8 @@ export default function Circulation(): JSX.Element {
       {/* 处置弹窗 */}
       <Modal
         open={activeRecord !== null}
-        title="处理流通异常"
-        okText="提交处置"
+        title="登记流通异常处理进展"
+        okText="登记处理进展"
         cancelText="取消"
         confirmLoading={handleMutation.isPending}
         onCancel={() => setActiveRecord(null)}
@@ -430,3 +430,5 @@ export default function Circulation(): JSX.Element {
     </div>
   )
 }
+
+export default function SafetyEvidencePage() { return <><div role="note" style={{padding: 16, background: "#fffbe6", marginBottom: 16}}>此处仅登记处理进展，不自动执行下架、销毁、物流或退款，也不作为整改结案凭据。批次冻结与码作废请进入不合格品处置。</div><Circulation /></> }

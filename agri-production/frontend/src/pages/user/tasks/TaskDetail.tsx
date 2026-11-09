@@ -1,7 +1,7 @@
 /**
  * 页面名称：任务详情
  * 路由路径：/production/tasks/:taskId
- * 所属模块：智能种养
+ * 所属模块：农事生产
  * PRD 序号：PRD 6.1 #15
  * 原型来源：用户端原型 P9 task-detail
  *
@@ -17,20 +17,11 @@ import { useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  PageContainer,
-  ModalForm,
-  ProFormDateTimePicker,
-  ProFormDigit,
-  ProFormRadio,
-  ProFormSelect,
-  ProFormText,
-  ProFormTextArea,
-} from '@ant-design/pro-components'
-import {
+import { ModalForm, ProFormDateTimePicker, ProFormDigit, ProFormRadio, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components'
+import PageContainer from '@/components/ProductionPageContainer'
+import { Pagination,
   Alert,
   Button,
-  Card,
   Col,
   Divider,
   Empty,
@@ -50,6 +41,7 @@ import {
   CloseCircleOutlined,
   PlayCircleOutlined,
 } from '@ant-design/icons'
+import Card from '@/components/SectionCard'
 import dayjs from 'dayjs'
 import {
   createTaskRecord,
@@ -189,6 +181,7 @@ export default function TaskDetail(): JSX.Element {
     queryFn: () => getTask(taskId),
   })
 
+  const [recordPage, setRecordPage] = useState(1)
   const task = taskQuery.data
   /** 可开始执行 / 可编辑 / 可转派：待处理、已派发、验收驳回后 */
   const canStartTask = Boolean(task && ['pending', 'assigned', 'rejected'].includes(task.status))
@@ -201,9 +194,9 @@ export default function TaskDetail(): JSX.Element {
 
   /** 执行记录 */
   const recordQuery = useQuery({
-    queryKey: ['production-task-records', taskId],
+    queryKey: ['production-task-records', taskId, recordPage],
     enabled: Boolean(taskId),
-    queryFn: () => fetchTaskRecords(taskId, 1, 50),
+    queryFn: () => fetchTaskRecords(taskId, recordPage, 50),
   })
 
   /** 本任务关联的投入品使用记录（真实台账，不再依赖不存在的 relatedUsageIds 字段） */
@@ -528,8 +521,11 @@ export default function TaskDetail(): JSX.Element {
         )}
       </Card>
 
+        {(recordQuery.isError || usagesQuery.isError) && <Alert type="error" showIcon message="执行记录或投入品加载失败，不能据此认定没有记录" action={<Button onClick={() => { void recordQuery.refetch(); void usagesQuery.refetch() }}>重试</Button>} />}
+      {plotQuery.isError && <Alert type="error" message="关联地块加载失败" action={<Button onClick={() => void plotQuery.refetch()}>重试</Button>} />}
+      <Pagination current={recordPage} pageSize={50} total={recordQuery.data?.total ?? 0} onChange={setRecordPage} showSizeChanger={false} style={{ marginBottom: 16 }} />
       {(task.resultDesc || resultPhotos.length > 0) && (
-        <Card title="📤 提交成果" style={{ marginBottom: 16 }}>
+      <Card title="📤 提交成果" style={{ marginBottom: 16 }}>
           <Typography.Paragraph style={{ marginBottom: resultPhotos.length > 0 ? 12 : 0 }}>
             {task.resultDesc || '未填写成果说明'}
           </Typography.Paragraph>
@@ -723,8 +719,7 @@ export default function TaskDetail(): JSX.Element {
         width={480}
         modalProps={{ destroyOnClose: true }}
         onFinish={async (values) => {
-          dispatchMutation.mutate(values.assigneeId)
-          return true
+          try { await dispatchMutation.mutateAsync(values.assigneeId); return true } catch { return false }
         }}
       >
         <ProFormSelect
@@ -745,8 +740,7 @@ export default function TaskDetail(): JSX.Element {
         modalProps={{ destroyOnClose: true }}
         initialValues={{ executeType: 2 }}
         onFinish={async (values) => {
-          checkInMutation.mutate(values)
-          return true
+          try { await checkInMutation.mutateAsync(values); return true } catch { return false }
         }}
       >
         <ProFormRadio.Group
@@ -780,8 +774,7 @@ export default function TaskDetail(): JSX.Element {
         width={520}
         modalProps={{ destroyOnClose: true }}
         onFinish={async (values) => {
-          submitMutation.mutate(values)
-          return true
+          try { await submitMutation.mutateAsync(values); return true } catch { return false }
         }}
       >
         <ProFormTextArea
@@ -822,7 +815,7 @@ export default function TaskDetail(): JSX.Element {
             message.warning('计划结束时间不能早于开始时间')
             return false
           }
-          updateMutation.mutate({
+          try { await updateMutation.mutateAsync({
             taskName: values.taskName,
             taskType: values.taskType,
             priority: values.priority,
@@ -830,8 +823,7 @@ export default function TaskDetail(): JSX.Element {
             planStartDate: start ? start.format('YYYY-MM-DD HH:mm:ss') : undefined,
             planEndDate: end ? end.format('YYYY-MM-DD HH:mm:ss') : undefined,
             description: values.description,
-          })
-          return true
+          }); return true } catch { return false }
         }}
       >
         <ProFormText
@@ -880,8 +872,7 @@ export default function TaskDetail(): JSX.Element {
             message.warning('驳回时必须填写原因')
             return false
           }
-          reviewMutation.mutate(values)
-          return true
+          try { await reviewMutation.mutateAsync(values); return true } catch { return false }
         }}
       >
         <ProFormRadio.Group

@@ -15,16 +15,9 @@ import UserLogin from '@/pages/user/UserLogin'
 import SsoCallback from '@/pages/sso/SsoCallback'
 import SsoHandoff from '@/pages/sso/SsoHandoff'
 import { ADMIN_ROUTES, USER_ROUTES } from './routes'
-import useAuthStore from '@/store/auth'
+import useAuthStore, { isRedirectingToSsoLogout } from '@/store/auth'
 import { ADMIN_LOGIN_PATH, USER_LOGIN_PATH, resolveHomePath } from '@/api/auth'
-
-/** 上次使用的端（用户端 / 运营端）。SSO 登出写死回跳 `/?logout=1`、不带端信息，只能记在本地。 */
-const END_KEY = 'agri_end'
-
-/** 按端取登录页 */
-function loginPathForEnd(end: string | null): string {
-  return end === 'admin' ? ADMIN_LOGIN_PATH : USER_LOGIN_PATH
-}
+import { SSO_CLIENT_ID, redirectToSso } from '@/api/sso'
 
 /**
  * 受保护路由守卫（2026-10-16 加）。
@@ -46,13 +39,6 @@ function RequireAuth({ end, children }: { end: 'user' | 'admin'; children: React
   const authReady = useAuthStore((state) => state.authReady)
   const location = useLocation()
 
-  // 记住"这台浏览器上次在用哪个端"，供退出登录（SSO 回跳 /?logout=1）落回同一端的登录页
-  useEffect(() => {
-    try {
-      localStorage.setItem(END_KEY, end)
-    } catch { /* 隐私模式下 localStorage 不可用，忽略 */ }
-  }, [end])
-
   if (!authReady) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
@@ -61,6 +47,15 @@ function RequireAuth({ end, children }: { end: 'user' | 'admin'; children: React
     )
   }
   if (!token) {
+    // 显式退出登录已清空令牌，但整页 SSO 登出跳转尚未完成：停在这里等待，
+    // 不能先导航到登录页 —— 否则登录页的 SSO 闸门会把用户再次送回授权端点。
+    if (isRedirectingToSsoLogout()) {
+      return (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+          <Spin size="large" />
+        </div>
+      )
+    }
     return (
       <Navigate
         to={end === 'admin' ? ADMIN_LOGIN_PATH : USER_LOGIN_PATH}
@@ -77,17 +72,27 @@ function RequireAuth({ end, children }: { end: 'user' | 'admin'; children: React
 
  *
  * <p>`?logout=1` 是**统一认证中心登出后的固定回跳**（它忽略 `redirect_uri`，写死 `${origin}/?logout=1`）。
- * 改前这里一律送去 `/production/dashboard` —— 那是业务页，刚登出的人会被守卫/401 再弹一次，
- * 实测最终停在**运营端**登录页（用户端也这样）。现在识别这个信号，直接落回**本端**登录页。</p>
+ * 此时 SSO 会话已销毁，直接去统一认证登录页；不要再经 `/production/login` 中转 ——
+ * 本地登录页的 SSO 闸门会再发起一次授权跳转，用户会看到多余的中间页。</p>
  */
 function RootEntry(): JSX.Element {
   const [searchParams] = useSearchParams()
-  if (searchParams.get('logout') === '1') {
-    let end: string | null = null
-    try {
-      end = localStorage.getItem(END_KEY)
-    } catch { /* 隐私模式忽略 */ }
-    return <Navigate to={loginPathForEnd(end)} replace />
+  const isLogout = searchParams.get('logout') === '1'
+
+  useEffect(() => {
+    if (!isLogout) return
+    void redirectToSso(SSO_CLIENT_ID).catch(() => {
+      // 极少数无法生成 PKCE 的环境：退回本地登录页
+      window.location.replace(USER_LOGIN_PATH)
+    })
+  }, [isLogout])
+
+  if (isLogout) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+        <Spin size="large" />
+      </div>
+    )
   }
   return <Navigate to="/production/dashboard" replace />
 }

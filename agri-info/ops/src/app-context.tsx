@@ -22,6 +22,8 @@ export function useApp(): AppContextValue {
 }
 
 const PAGE_KEYS: OpsPageKey[] = [
+  'green-supply',
+  'cloud-factories',
   'dashboard',
   'contents',
   'channels',

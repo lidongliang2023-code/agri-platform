@@ -1,3 +1,7 @@
+import '@/pages/user/quality/quality-trace.css'
+import Card from '@/components/SectionCard'
+import DetailInfoGrid from '@/components/DetailInfoGrid'
+import ProTable from '@/components/ProductionTable'
 /**
  * 页面名称：溯源报告
  * 路由路径：/production/trace/reports
@@ -32,13 +36,13 @@
 import { useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { PageContainer, ProTable } from '@ant-design/pro-components'
+
+import PageContainer from '@/components/ProductionPageContainer'
 import type { ProColumns } from '@ant-design/pro-components'
 import {
   Alert,
   AutoComplete,
   Button,
-  Descriptions,
   Drawer,
   Empty,
   Form,
@@ -58,7 +62,8 @@ import {
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import useFarmStore from '@/store/farm'
-import { fetchFullChainNodes } from '@/api/trace'
+import { fetchFullChainNodes, fetchTraceCodeDetail } from '@/api/trace'
+import { loadCompletePages } from '@/utils/load-complete-pages'
 import { listInspectionsByBatch } from '@/api/quality'
 import { getHarvest, listHarvests } from '@/api/harvests'
 import { listGrowthRecords } from '@/api/growth'
@@ -245,6 +250,10 @@ export default function Reports(): JSX.Element {
       const unavailable: string[] = []
       /** 批次档案：取不到直接判定生成失败 */
       const batch = await getHarvest(batchId)
+      if (code) {
+        const trace = await fetchTraceCodeDetail(code)
+        if (String(trace.batchId) !== String(batch.batchId)) throw new Error('溯源码不属于所选采收批次')
+      }
       const plotId = String(batch.plotId ?? '')
 
       if (!plotId) {
@@ -261,13 +270,13 @@ export default function Reports(): JSX.Element {
           return null
         }),
         plotId
-          ? listGrowthRecords({ plotId, pageNum: 1, pageSize: 100 }).catch(() => {
+          ? loadCompletePages(params => listGrowthRecords({ ...params, plotId }), row => String(row.recordId)).catch(() => {
               unavailable.push('生长监测记录')
               return null
             })
           : Promise.resolve(null),
         plotId
-          ? listInputUsages({ plotId, pageNum: 1, pageSize: 100 }).catch(() => {
+          ? loadCompletePages(params => listInputUsages({ ...params, plotId }), row => String(row.usageId)).catch(() => {
               unavailable.push('投入品使用记录')
               return null
             })
@@ -283,7 +292,7 @@ export default function Reports(): JSX.Element {
       const sortedGrowth = [...plotGrowth].sort((a, b) =>
         String(a.recordDate).localeCompare(String(b.recordDate)),
       )
-      const inspection = (inspections ?? [])[0] as RawInspection | undefined
+      const inspection = (inspections ?? []).find(item => String(item.inspectionId) === String(batch.inspectionId) && String(item.batchId) === String(batch.batchId)) as RawInspection | undefined
 
       const now = dayjs().format('YYYY-MM-DD HH:mm:ss')
       return {
@@ -295,9 +304,9 @@ export default function Reports(): JSX.Element {
         productName: batch.cropName ?? batch.cropId,
         variety: batch.cropVariety,
         grade: batch.grade,
-        farmName: currentFarm?.farmName,
+        farmName: batch.farmName,
         plotName: batch.plotName ?? batch.plotId,
-        region: currentFarm?.farmName,
+        region: undefined,
         harvestDate: batch.harvestDate,
         plantDate: sortedGrowth[0]?.recordDate,
         // 灌溉方式 / 土壤类型：后端无对应字段，保持缺失 → 渲染为「未接入」
@@ -313,7 +322,7 @@ export default function Reports(): JSX.Element {
         labName: inspection?.labName,
         inspectResult:
           inspection === undefined
-            ? undefined
+            ? '批次未关联有效检测单'
             : inspection.result === 'PASS'
               ? '合格'
               : inspection.result === 'FAIL'
@@ -342,8 +351,8 @@ export default function Reports(): JSX.Element {
           : `报告 ${report.reportNo} 已生成（实时聚合，未保存到服务端）`,
       )
     },
-    onError: () => {
-      message.error('生成报告失败：未能读取该批次档案，请确认批次是否存在')
+    onError: (error: Error) => {
+      message.error(error.message || '生成报告失败')
     },
   })
 
@@ -419,6 +428,7 @@ export default function Reports(): JSX.Element {
     },
     {
       title: '操作',
+      fixed: 'right',
       key: 'option',
       width: 240,
       valueType: 'option',
@@ -453,7 +463,7 @@ export default function Reports(): JSX.Element {
   ]
 
   return (
-    <PageContainer
+    <PageContainer className="quality-trace-page"
       title={
         <Space>
           <Button
@@ -554,7 +564,7 @@ export default function Reports(): JSX.Element {
         ]}
       />
 
-      <Modal
+      <Modal className="quality-trace-dialog"
         title="生成溯源报告"
         open={genOpen}
         okText="生成报告"
@@ -596,7 +606,7 @@ export default function Reports(): JSX.Element {
         </Form>
       </Modal>
 
-      <Drawer
+      <Drawer rootClassName="quality-trace-dialog"
         title={preview ? `📑 产品溯源报告 · ${preview.reportNo}` : '报告预览'}
         width={900}
         open={Boolean(preview)}
@@ -628,111 +638,54 @@ export default function Reports(): JSX.Element {
               }
             />
 
-            <Descriptions title="📑 产品溯源报告" column={2} bordered size="small">
-              <Descriptions.Item label="溯源码">
-                {preview.code || <Typography.Text type="secondary">未填写</Typography.Text>}
-              </Descriptions.Item>
-              <Descriptions.Item label="生成时间">{preview.generatedAt}</Descriptions.Item>
-            </Descriptions>
+            <Card title="产品溯源报告" style={{ marginTop: 16 }}><DetailInfoGrid columns={2} items={[
+{ label: '溯源码', value: <>{preview.code || <Typography.Text type="secondary">未填写</Typography.Text>}</> },
+{ label: '生成时间', value: <>{preview.generatedAt}</> }
+]} /></Card>
 
-            <Descriptions
-              title="一、产品基本信息"
-              column={2}
-              bordered
-              size="small"
-              style={{ marginTop: 16 }}
-            >
-              <Descriptions.Item label="产品名称">{preview.productName ?? '-'}</Descriptions.Item>
-              <Descriptions.Item label="品种">{preview.variety ?? '-'}</Descriptions.Item>
-              <Descriptions.Item label="质量等级">
-                {preview.grade ? <Tag color="blue">{preview.grade}</Tag> : '-'}
-              </Descriptions.Item>
-              <Descriptions.Item label="产地">
-                {[preview.region, preview.farmName, preview.plotName].filter(Boolean).join(' · ') ||
-                  '-'}
-              </Descriptions.Item>
-              <Descriptions.Item label="批次号">
-                {preview.batchNo ?? preview.batchId ?? '-'}
-              </Descriptions.Item>
-              <Descriptions.Item label="采收日期">
-                {formatDate(preview.harvestDate)}
-              </Descriptions.Item>
-            </Descriptions>
+            <Card title="一、产品基本信息" style={{ marginTop: 16 }}><DetailInfoGrid columns={2} items={[
+{ label: '产品名称', value: <>{preview.productName ?? '-'}</> },
+{ label: '品种', value: <>{preview.variety ?? '-'}</> },
+{ label: '质量等级', value: <>{preview.grade ? <Tag color="blue">{preview.grade}</Tag> : '-'}</> },
+{ label: '产地', value: <>{[preview.region, preview.farmName, preview.plotName].filter(Boolean).join(' · ') ||
+                  '-'}</> },
+{ label: '批次号', value: <>{preview.batchNo ?? preview.batchId ?? '-'}</> },
+{ label: '采收日期', value: <>{formatDate(preview.harvestDate)}</> }
+]} /></Card>
 
-            <Descriptions
-              title="二、生产过程记录"
-              column={2}
-              bordered
-              size="small"
-              style={{ marginTop: 16 }}
-            >
-              <Descriptions.Item label="种植日期">
-                {formatDate(preview.plantDate)}
-              </Descriptions.Item>
-              <Descriptions.Item label="灌溉方式">{preview.irrigation ?? '未接入'}</Descriptions.Item>
-              <Descriptions.Item label="土壤类型">{preview.soilType ?? '未接入'}</Descriptions.Item>
-              <Descriptions.Item label="投入品使用记录">
-                {formatCount(preview.fertilizeCount, '条')}
-              </Descriptions.Item>
-              <Descriptions.Item label="病虫害防治记录">
-                {formatCount(preview.protectCount, '次')}
-              </Descriptions.Item>
-              <Descriptions.Item label="投入品合规结论">
-                {preview.inputCompliant === undefined
+            <Card title="二、生产过程记录" style={{ marginTop: 16 }}><DetailInfoGrid columns={2} items={[
+{ label: '种植日期', value: <>{formatDate(preview.plantDate)}</> },
+{ label: '灌溉方式', value: <>{preview.irrigation ?? '未接入'}</> },
+{ label: '土壤类型', value: <>{preview.soilType ?? '未接入'}</> },
+{ label: '投入品使用记录', value: <>{formatCount(preview.fertilizeCount, '条')}</> },
+{ label: '病虫害防治记录', value: <>{formatCount(preview.protectCount, '次')}</> },
+{ label: '投入品合规结论', value: <>{preview.inputCompliant === undefined
                   ? '未接入（后端未提供合规校验结果）'
                   : preview.inputCompliant
                     ? '✅ 全部投入品合规'
-                    : '⚠️ 存在待核查投入品'}
-              </Descriptions.Item>
-            </Descriptions>
+                    : '⚠️ 存在待核查投入品'}</> }
+]} /></Card>
 
-            <Descriptions
-              title="三、质量检测"
-              column={2}
-              bordered
-              size="small"
-              style={{ marginTop: 16 }}
-            >
-              <Descriptions.Item label="检测编号">{preview.inspectionNo ?? '-'}</Descriptions.Item>
-              <Descriptions.Item label="检测机构">{preview.labName ?? '-'}</Descriptions.Item>
-              <Descriptions.Item label="检测结论" span={2}>
-                {preview.inspectResult ?? '-'}
-              </Descriptions.Item>
-              <Descriptions.Item label="质量等级（采收初评）">
-                {preview.inspectGrade ? <Tag color="green">{preview.inspectGrade}</Tag> : '-'}
-              </Descriptions.Item>
-            </Descriptions>
+            <Card title="三、质量检测" style={{ marginTop: 16 }}><DetailInfoGrid columns={2} items={[
+{ label: '检测编号', value: <>{preview.inspectionNo ?? '-'}</> },
+{ label: '检测机构', value: <>{preview.labName ?? '-'}</> },
+{ label: '检测结论', value: <>{preview.inspectResult ?? '-'}</>, fullWidth: true },
+{ label: '质量等级（采收初评）', value: <>{preview.inspectGrade ? <Tag color="green">{preview.inspectGrade}</Tag> : '-'}</> }
+]} /></Card>
 
-            <Descriptions
-              title="四、区块链存证"
-              column={2}
-              bordered
-              size="small"
-              style={{ marginTop: 16 }}
-            >
-              <Descriptions.Item label="全链路存证记录">
-                {formatCount(preview.chainTotal, '条')}
-              </Descriptions.Item>
-              <Descriptions.Item label="已上链记录">
-                {preview.chainOnChain === undefined ? '未取到全链路节点' : `${preview.chainOnChain} 条`}
-              </Descriptions.Item>
-              <Descriptions.Item label="验证状态" span={2}>
-                {preview.verifyPassed === undefined ? (
+            <Card title="四、区块链存证" style={{ marginTop: 16 }}><DetailInfoGrid columns={2} items={[
+{ label: '全链路存证记录', value: <>{formatCount(preview.chainTotal, '条')}</> },
+{ label: '已上链记录', value: <>{preview.chainOnChain === undefined ? '未取到全链路节点' : `${preview.chainOnChain} 条`}</> },
+{ label: '验证状态', value: <>{preview.verifyPassed === undefined ? (
                   <Typography.Text type="secondary">未接入</Typography.Text>
                 ) : preview.verifyPassed ? (
                   '✅ 通过'
                 ) : (
                   '⏳ 待上链'
-                )}
-              </Descriptions.Item>
-            </Descriptions>
+                )}</>, fullWidth: true }
+]} /></Card>
 
-            <Typography.Paragraph type="secondary" style={{ marginTop: 16, fontSize: 12 }}>
-              数据口径：产品名称 / 等级 / 采收日期取自 GET /harvests/{'{id}'}；种植日期取自生长记录最早一条；
-              投入品使用记录取自 GET /inputs/usages（按地块过滤）；检测结论取自 GET /quality/inspections/by-batch；
-              全链路记录数取自 GET /trace/full-chain/{'{batchId}'}/nodes。
-              灌溉方式、土壤类型、病虫害防治、投入品合规、上链状态后端均未返回，按「未接入」呈现。
-            </Typography.Paragraph>
+
           </div>
         )}
       </Drawer>

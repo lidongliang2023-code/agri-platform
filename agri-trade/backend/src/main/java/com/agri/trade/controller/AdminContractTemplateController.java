@@ -74,7 +74,7 @@ public class AdminContractTemplateController {
     public ApiResponse<Boolean> update(@PathVariable Long id, @RequestBody ContractTemplate template) {
         ContractTemplate exist = templateMapper.selectById(id);
         if (exist == null || (exist.getDelFlag() != null && exist.getDelFlag() == 1)) {
-            return ApiResponse.error("模板不存在");
+            return ApiResponse.error(404, "模板不存在");
         }
         template.setId(id);
         template.setTemplateCode(null);
@@ -90,7 +90,7 @@ public class AdminContractTemplateController {
     public ApiResponse<Boolean> delete(@PathVariable Long id) {
         ContractTemplate exist = templateMapper.selectById(id);
         if (exist == null) {
-            return ApiResponse.error("模板不存在");
+            return ApiResponse.error(404, "模板不存在");
         }
         int result = templateMapper.deleteById(id);
         return result > 0 ? ApiResponse.success(true) : ApiResponse.error("删除失败");

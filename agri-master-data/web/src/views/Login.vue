@@ -16,8 +16,8 @@
         <div class="logo-section">
           <BrandMark :size="44" />
           <div class="logo-text">
-            <h2>丰链云 · 主数据管理</h2>
-            <p>FENGCHAIN MASTER DATA</p>
+            <h2>丰链云</h2>
+            <p>FENGCHAIN · AGRI</p>
           </div>
         </div>
       </div>

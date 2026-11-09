@@ -41,6 +41,8 @@ public interface IHarvestInventoryService {
     /** 批次库存在流水（前端库存详情读它）。 */
     PageResult<InventoryFlow> pageBatchFlows(Long batchId, int pageNum, int pageSize, String tenantId);
 
+    PageResult<InventoryFlow> pageBatchFlows(Long batchId, int pageNum, int pageSize, String tenantId, Long inventoryId, Integer flowType, String direction, String startDate, String endDate, String operatorName, String keyword);
+
     /** 按地块聚合已发生的采收记录（前端"地块采收记录"页；数据源是采收记录表）。 */
     PageResult<Map<String, Object>> pagePlotHarvestRecords(Long plotId, int pageNum, int pageSize, String tenantId);
 
@@ -62,17 +64,17 @@ public interface IHarvestInventoryService {
 
     /** 出库（HARV-06）：扣减 + flowType=2 流水，库存不足直接拒绝。 */
     InventoryFlow stockOut(Long batchId, java.math.BigDecimal qty, String relatedOrderNo,
-                           String operatorName, String tenantId);
+                           String operatorName, Long inventoryId, String tenantId);
 
     /** 冻结：冻结量 = 当前量，批次状态置 4（冻结）。 */
-    HarvestBatch freeze(Long batchId, String tenantId);
+    HarvestBatch freeze(Long batchId, Long inventoryId, boolean frozen, String tenantId);
 
     /** 损耗登记（HARV-09）：扣减 + flowType=4 流水，同时累计 lossQty/lossReason。 */
     boolean registerLoss(Long batchId, Map<String, Object> body, String tenantId);
 
-    /** 调拨：源仓扣减、目标仓累加，写一条 flowType=3 流水。 */
+    /** 调拨：源仓扣减、目标仓累加，写出仓与入仓两条 flowType=3 流水。 */
     boolean transfer(Long batchId, Map<String, Object> body, String tenantId);
 
-    /** 某批次的库存记录（多仓时取第一条，用于出库/冻结/损耗的定位）。 */
+    /** 某批次的全部分仓库存记录。 */
     List<Inventory> inventoryByBatch(Long batchId, String tenantId);
 }

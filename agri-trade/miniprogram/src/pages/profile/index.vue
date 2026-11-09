@@ -49,13 +49,13 @@ function logout() {
 .page-title { align-self: stretch; margin-bottom: 20rpx; font-size: 31rpx; font-weight: 700; }
 .avatar { display: grid; width: 120rpx; height: 120rpx; place-items: center; border: 6rpx solid rgba(255,255,255,.16); border-radius: 50%; background: linear-gradient(135deg,#26a96a,#12764a); font-size: 42rpx; font-weight: 750; }
 .name { margin-top: 14rpx; font-size: 34rpx; font-weight: 700; }
-.account { margin-top: 6rpx; color: rgba(255,255,255,.55); font-size: 20rpx; }
-.verified { margin-top: 12rpx; padding: 6rpx 14rpx; border-radius: 18rpx; background: rgba(255,255,255,.1); color: #a9e7c1; font-size: 18rpx; }
+.account { margin-top: 6rpx; color: rgba(255,255,255,.55); font-size: 24rpx; }
+.verified { margin-top: 12rpx; padding: 6rpx 14rpx; border-radius: 18rpx; background: rgba(255,255,255,.1); color: #a9e7c1; font-size: 24rpx; }
 .pad { margin-top: -20rpx; position: relative; padding: 0 24rpx; }
 .menu { margin-bottom: 16rpx; overflow: hidden; border: 1rpx solid #e1e9e3; border-radius: 21rpx; background: #fff; }
 .menu view { display: flex; min-height: 90rpx; align-items: center; gap: 14rpx; padding: 12rpx 20rpx; border-bottom: 1rpx solid #edf2ee; }
 .menu view:last-child { border-bottom: 0; }
-.icon { display: grid; width: 52rpx; height: 52rpx; place-items: center; border-radius: 14rpx; background: #edf8f2; color: #12764a; font-size: 19rpx; font-weight: 750; }
-.menu b { flex: 1; font-size: 23rpx; }
+.icon { display: grid; width: 52rpx; height: 52rpx; place-items: center; border-radius: 14rpx; background: #edf8f2; color: #12764a; font-size: 24rpx; font-weight: 750; }
+.menu b { flex: 1; font-size: 24rpx; }
 .menu view > text:last-child { color: #94a198; font-size: 30rpx; }
 </style>

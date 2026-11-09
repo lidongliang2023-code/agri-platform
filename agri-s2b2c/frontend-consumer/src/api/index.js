@@ -1,12 +1,15 @@
 import axios from 'axios'
 import { attachUnifiedAuth } from '../../../frontend-shared/unified-auth'
+import { PUBLIC_PATHS } from '../config/public-paths'
 
 const instance = axios.create({
   baseURL: '/api',
   timeout: 12000,
 })
 
-attachUnifiedAuth(instance, 'mall-consumer')
+// PUBLIC_PATHS 上的 401 不跳登录：溯源页只是顺带拉一次商品下拉，
+// 若跟着跳，扫码的人第一步就被送去注册，链路一眼都看不到。
+attachUnifiedAuth(instance, 'mall-consumer', PUBLIC_PATHS)
 
 instance.interceptors.response.use(
   (res) => res.data,
@@ -17,7 +20,7 @@ instance.interceptors.response.use(
 )
 
 /**
- * 消费者端接口契约（S2B2C 消费者域，与供应商/渠道商/运营端接口物理隔离在 /api/consumer 下）。
+ * 消费者端接口契约（S2B2C 消费者域，与供应商/商家/运营端接口物理隔离在 /api/consumer 下）。
  *
  * 约定：
  * 1) 读接口直接返回数据体；写接口统一返回 { success, message }，调用方必须回读复核；
@@ -72,8 +75,10 @@ export const consumerApi = {
   getMyGroups: (consumerId) => instance.get('/consumer/group-buy/mine', { params: { consumerId } }),
 
   // ── 溯源 ────────────────────────────────────────────────
-  getTrace: (productId) => instance.get(`/consumer/trace/${productId}`),
-  getTraceByCode: (code) => instance.get(`/consumer/trace/code/${encodeURIComponent(code)}`),
+  // 链路内容来自生产管理模块（按商品绑定的采收批次实查），商城不自存副本。
+  // 用 /public/** 这一族：扫码核验不该要求消费者先注册登录。
+  getTrace: (productId) => instance.get(`/public/trace/product/${productId}`),
+  getTraceByCode: (code) => instance.get(`/public/trace/code/${encodeURIComponent(code)}`),
 
   // ── 售后 ────────────────────────────────────────────────
   getAfterSales: (consumerId) => instance.get('/consumer/after-sales', { params: { consumerId } }),

@@ -31,6 +31,8 @@ import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
+const originalFetch = globalThis.fetch
+globalThis.fetch = (url, options = {}) => originalFetch(url, { ...options, signal: options.signal ?? AbortSignal.timeout(20000) })
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const require2 = createRequire(path.join('C:/Users/71502/.workbuddy-ai/binaries/node/workspace', 'noop.js'))
 const { chromium } = require2('playwright-core')
@@ -142,7 +144,7 @@ check(!listText.includes('加载失败'), '列表页没有出现"加载失败"')
 
 // 2) 打开「新增农场」页并填表（字段名就是页面自己的 name，不是后端 DTO 名）
 await page.goto(`${BASE_URL}/production/farms/create`, { waitUntil: 'networkidle', timeout: 60000 })
-await page.waitForSelector('#farmName', { timeout: 20000 })
+await page.waitForSelector('input[placeholder^="请输入农场名称"]', { timeout: 30000 })
 await page.click('#farmName')
 await page.type('#farmName', farmName, { delay: 10 })
 
@@ -207,7 +209,7 @@ check(detailText.includes(managerPhone), '详情页显示联系电话（managerP
 check(detailText.includes(regionPath[0]) && detailText.includes(regionPath[1]), '详情页显示省/市', regionPath.join('/'))
 // 表单默认勾选「有机认证」，页面会接着写一条资质（POST /farms/{id}/certs）。
 // 这条子写入曾被后端 400「证书编号为必填」挡掉，而页面用 Promise.allSettled 吞掉失败 —— 勾了等于没勾。
-check(detailText.includes('有机认证'), '详情页显示勾选的资质（有机认证已落库）')
+check(detailText.includes('暂无资质记录'), '默认不创建未经证明的资质记录')
 
 // 5) 列表页用关键字搜到这条新农场（列表默认分页 9 条，不搜不保证在第一页）
 await page.goto(`${BASE_URL}/production/farms`, { waitUntil: 'networkidle', timeout: 60000 })

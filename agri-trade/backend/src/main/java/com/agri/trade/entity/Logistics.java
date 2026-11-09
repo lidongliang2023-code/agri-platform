@@ -19,6 +19,18 @@ public class Logistics {
     @TableField("logistics_no")
     private String logisticsNo;
 
+    /** 补发关联只允许专用登记接口写入，普通物流创建不可伪造。 */
+    @TableField("diff_ticket_no")
+    private String diffTicketNo;
+    @TableField("diff_subject_id")
+    private Long diffSubjectId;
+    @TableField("reship_qty")
+    private BigDecimal reshipQty;
+    @TableField("reship_unit")
+    private String reshipUnit;
+    @TableField("signed_buyer_id")
+    private Long signedBuyerId;
+
     @TableField("order_id")
     private Long orderId;
 

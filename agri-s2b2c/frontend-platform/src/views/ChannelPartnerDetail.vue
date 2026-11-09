@@ -2,7 +2,7 @@
   <div class="partner-detail-page" v-loading="loading">
     <div class="page-head">
       <div>
-        <h2>渠道商详情</h2>
+        <h2>商家详情</h2>
         <p v-if="channel">{{ channel.shopName || channel.companyName }} · {{ channel.id }} · 入驻 {{ channel.createTime }}</p>
       </div>
       <div class="head-actions">

@@ -2,12 +2,14 @@ package com.agri.production.controller;
 
 import com.agri.production.common.entity.ApiResponse;
 import com.agri.production.common.entity.PageResult;
+import com.agri.production.common.exception.BusinessException;
 import com.agri.production.dto.PlantingPlanSaveDTO;
 import com.agri.production.entity.PlanStage;
 import com.agri.production.entity.PlantingPlan;
 import com.agri.production.service.IPlanStageService;
 import com.agri.production.service.IPlantingPlanService;
 import com.agri.production.service.FarmIdResolver;
+import com.agri.production.service.ProductionRoleService;
 import com.agri.production.service.TenantContextService;
 import com.agri.production.vo.PlantingPlanVO;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -45,13 +47,16 @@ public class PlantingPlanController {
     private final IPlantingPlanService plantingPlanService;
     private final IPlanStageService planStageService;
     private final FarmIdResolver farmIdResolver;
+    private final ProductionRoleService productionRoleService;
 
     public PlantingPlanController(IPlantingPlanService plantingPlanService,
                                   IPlanStageService planStageService,
-                                  FarmIdResolver farmIdResolver) {
+                                  FarmIdResolver farmIdResolver,
+                                  ProductionRoleService productionRoleService) {
         this.plantingPlanService = plantingPlanService;
         this.planStageService = planStageService;
         this.farmIdResolver = farmIdResolver;
+        this.productionRoleService = productionRoleService;
     }
 
     /** 分页查询计划列表。 */
@@ -156,14 +161,28 @@ public class PlantingPlanController {
         return ApiResponse.success(PlantingPlanVO.of(plan));
     }
 
-    /** 审批计划（通过 → 进行中），同步待审批单。 */
+    /**
+     * 用户端审批计划（通过 → 进行中）。
+     *
+     * <p>不再要求运营端审批；但调用方必须具备种养计划审批权限
+     * （主体经营者，或团队角色配置了 {@code produce.plan.approve}）。</p>
+     */
     @PostMapping("/{id}/approve")
     public ApiResponse<PlantingPlanVO> approve(@PathVariable Long id,
                                               @RequestParam(required = false) String approver,
                                               @RequestParam(required = false) String comment) {
         String tenantId = TenantContextService.currentTenantId();
+        if (!productionRoleService.canApprovePlan(tenantId)) {
+            throw new BusinessException(403, "当前账号没有种养计划审批权限");
+        }
         return ApiResponse.success(PlantingPlanVO.of(
-                plantingPlanService.approveByAdmin(id, tenantId, approver, comment)));
+                plantingPlanService.approveByUser(id, tenantId, approver, comment)));
+    }
+
+    /** 当前调用方是否有种养计划审批权限（前端据此展示审批入口）。 */
+    @GetMapping("/approval-permission")
+    public ApiResponse<Boolean> approvalPermission() {
+        return ApiResponse.success(productionRoleService.canApprovePlan(TenantContextService.currentTenantId()));
     }
 
     /* ==================== 生育期阶段 ==================== */

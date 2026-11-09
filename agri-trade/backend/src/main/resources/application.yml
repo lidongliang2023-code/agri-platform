@@ -104,9 +104,13 @@ services:
     # 拿它当主数据接口地址只会把 Feign 调用打到网关的静态站点上。
     url: http://localhost:8083
   production:
-    # 生产管理域后端跑在 8082（见 agri-production/backend/src/main/resources/application.yml）。
-    # 原先写 8083 —— 那是主数据域后端的端口，等于把两个域的服务地址都指错了。
-    url: http://localhost:8082
+    # 生产管理域后端实际跑在 8092（agri-production 的 server.port=8082 只是它自己的配置，
+    # 本地网关把 8082 留给了前端虚拟主机）。Feign 必须直连后端端口，不能填网关前端端口。
+    url: http://localhost:8092
+
+# 产销对接：调用生产端「平台级通道」的服务密钥（与 agri-production 配置一致）
+p2t:
+  trade-channel-token: "${P2T_TRADE_CHANNEL_TOKEN:agri-p2t-channel-2026}"
 
 # 运营端准入（平台 RBAC，V2.0 第 5.5 节）—— 由 agri-common 里的
 # OperatorGuardInterceptor 自动装配后生效，这里只声明"本服务的运营接口在哪、要什么权限码"：
@@ -125,3 +129,22 @@ platform:
     # 仍然显式打开：一旦哪天那个拦截器被摘掉或改了白名单，运营接口不会跟着变敞开 ——
     # 纵深防御，代价是"多一次前置校验"。
     require-auth: true
+
+# Unified probes: dependency failures affect readiness, not liveness.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      show-components: never
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: '*'
+          exclude: livenessState

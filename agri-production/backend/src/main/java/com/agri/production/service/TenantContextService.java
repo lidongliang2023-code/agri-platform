@@ -39,6 +39,8 @@ import java.util.Map;
 public class TenantContextService {
 
     private static final String REQUEST_ATTR = TenantContextService.class.getName() + ".tenant";
+    private static final String USER_ATTR = TenantContextService.class.getName() + ".user";
+    private static final String MERCHANT_ROLE_ATTR = TenantContextService.class.getName() + ".merchant-role";
     private static final String AUTHORIZATION = "Authorization";
     /** 绑定了多家主体时，用它显式指定本次操作以哪家身份进行。 */
     private static final String MERCHANT_HEADER = "X-Merchant-Id";
@@ -68,6 +70,10 @@ public class TenantContextService {
 
     public TenantContextService(@Value("${services.platform.url:}") String platformUrl) {
         this.platformUrl = platformUrl;
+        org.springframework.http.client.SimpleClientHttpRequestFactory factory = new org.springframework.http.client.SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(3000);
+        factory.setReadTimeout(5000);
+        restTemplate.setRequestFactory(factory);
         instance = this;
         log.info("租户上下文已装配：tenant = 调用方绑定的经营主体（平台地址 {}）",
                 platformUrl == null || platformUrl.isBlank() ? "未配置" : platformUrl);
@@ -129,7 +135,107 @@ public class TenantContextService {
 
         String tenantId = pickTenant(bindings, request);
         request.setAttribute(REQUEST_ATTR, tenantId);
+        rememberBinding(bindings, tenantId, request);
         return tenantId;
+    }
+
+    /**
+     * 记录当前所选主体对应的平台用户与主体内角色（owner / member 等）。
+     * 后续权限判断（如种养计划审批）用它区分"主体经营者"和普通成员。
+     */
+    private void rememberBinding(List<Map<String, Object>> bindings, String tenantId, HttpServletRequest request) {
+        for (Map<String, Object> binding : bindings) {
+            Object merchantId = binding.get("merchantId");
+            if (merchantId == null || !tenantId.equals(String.valueOf(merchantId))) {
+                continue;
+            }
+            request.setAttribute(REQUEST_ATTR + ".binding", new java.util.LinkedHashMap<>(binding));
+            Object userId = binding.get("userId");
+            if (userId != null) {
+                request.setAttribute(USER_ATTR, String.valueOf(userId));
+            }
+            Object role = binding.get("roleInMerchant");
+            if (role != null) {
+                request.setAttribute(MERCHANT_ROLE_ATTR, String.valueOf(role));
+            }
+            return;
+        }
+    }
+
+    /** 当前调用方在所选主体中的平台用户 ID（无绑定时为 null）。 */
+    public static String currentUserId() {
+        if (instance == null) {
+            return null;
+        }
+        HttpServletRequest request = instance.currentRequest();
+        if (request == null) {
+            return null;
+        }
+        instance.resolve();
+        Object value = request.getAttribute(USER_ATTR);
+        return value == null ? null : String.valueOf(value);
+    }
+
+    /** 仅映射调用者已绑定的当前主体权威字段，不维护生产侧主体副本。 */
+    public static Map<String, Object> currentTenantProfile() {
+        String tenant = currentTenantId();
+        Object value = instance.currentRequest().getAttribute(REQUEST_ATTR + ".binding");
+        if (!(value instanceof Map<?, ?> binding))
+            throw new BusinessException(503, "当前主体档案暂不可读取");
+        Map<String, Object> profile = new java.util.LinkedHashMap<>();
+        profile.put("tenantCode", tenant);
+        profile.put("tenantName", binding.get("merchantName"));
+        profile.put("creditCode", binding.get("creditCode"));
+        return profile;
+    }
+
+    /** 操作时身份快照，来源为平台认证接口，不能使用客户端自报姓名。 */
+    public static String currentOperator() {
+        String id = currentUserId();
+        if (id == null || id.isBlank()) return "身份未解析（未获取可信用户身份）";
+        String fallback = "用户 ID：" + id;
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.set(HttpHeaders.AUTHORIZATION, currentAuthorization());
+            ResponseEntity<Map> response = instance.restTemplate.exchange(
+                    instance.platformUrl + "/api/v1/auth/me", HttpMethod.GET,
+                    new HttpEntity<>(headers), Map.class);
+            Map body = response.getBody();
+            if (body == null || !(body.get("data") instanceof Map user)
+                    || !id.equals(String.valueOf(user.get("id")))) return fallback;
+            String account = cleanIdentity(user.get("username"));
+            String name = cleanIdentity(user.get("nickname"));
+            return (name.isBlank() ? "" : name + " · ")
+                    + (account.isBlank() ? "" : account + " · ") + fallback;
+        } catch (RuntimeException e) {
+            log.warn("操作人档案读取失败，保留可信用户 ID");
+            return fallback;
+        }
+    }
+
+    private static String cleanIdentity(Object value) {
+        if (value == null) return "";
+        String text = String.valueOf(value).replaceAll("[\\p{Cntrl}]", " ").trim();
+        return text.substring(0, Math.min(24, text.length()));
+    }
+
+    /** 当前调用方在所选主体中的角色，如 owner / member。 */
+    public static void requireSubjectOwner() {
+        if (!"owner".equalsIgnoreCase(currentMerchantRole()))
+            throw new BusinessException(403, "仅当前经营主体所有者可管理成员及角色权限");
+    }
+
+    public static String currentMerchantRole() {
+        if (instance == null) {
+            return null;
+        }
+        HttpServletRequest request = instance.currentRequest();
+        if (request == null) {
+            return null;
+        }
+        instance.resolve();
+        Object value = request.getAttribute(MERCHANT_ROLE_ATTR);
+        return value == null ? null : String.valueOf(value);
     }
 
     /**
@@ -146,7 +252,8 @@ public class TenantContextService {
      */
     private List<Map<String, Object>> fetchBindings(String token) {
         CachedBindings cached = bindingsCache.get(token);
-        if (cached != null && cached.fresh()) {
+        if (cached != null && cached.fresh()
+                && (currentRequest() == null || currentRequest().getHeader("X-Merchant-Id") == null)) {
             return cached.bindings();
         }
         RuntimeException last = null;
@@ -186,9 +293,6 @@ public class TenantContextService {
         if (ids.isEmpty()) {
             throw new BusinessException(403, "当前账号绑定的经营主体数据异常（缺少 merchantId），请联系平台运营核查");
         }
-        if (ids.size() == 1) {
-            return ids.get(0);
-        }
         String requested = request.getHeader(MERCHANT_HEADER);
         if (requested != null && !requested.isBlank()) {
             if (!ids.contains(requested.trim())) {
@@ -196,6 +300,7 @@ public class TenantContextService {
             }
             return requested.trim();
         }
+        if (ids.size() == 1) return ids.get(0);
         throw new BusinessException(400,
                 "当前账号绑定了多家经营主体，请在请求头 " + MERCHANT_HEADER + " 指定本次操作的主体：" + ids);
     }

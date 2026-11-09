@@ -12,6 +12,7 @@ import com.agri.s2b2c.service.OrderAutoCompleteService;
 import com.agri.s2b2c.service.OrderTimeoutService;
 import com.agri.s2b2c.service.SupplierStatementService;
 import com.agri.s2b2c.service.SupplierRecruitService;
+import com.agri.s2b2c.service.SupplierOnboardingGrantService;
 import com.agri.s2b2c.vo.CategoryVO;
 import com.agri.s2b2c.vo.ProductVO;
 import com.agri.s2b2c.vo.SupplierVO;
@@ -51,6 +52,7 @@ public class PlatformController {
     private final OrderTimeoutService orderTimeoutService;
     private final OrderAutoCompleteService orderAutoCompleteService;
     private final SupplierStatementService supplierStatementService;
+    private final SupplierOnboardingGrantService onboardingGrantService;
 
     public PlatformController(SupplierMapper supplierMapper, ChannelPartnerMapper channelPartnerMapper,
                               ProductMapper productMapper, OrderMapper orderMapper,
@@ -62,7 +64,8 @@ public class PlatformController {
                               SupplierRecruitService recruitService, ChannelGradeService channelGradeService,
                               OrderTimeoutService orderTimeoutService,
                               OrderAutoCompleteService orderAutoCompleteService,
-                              SupplierStatementService supplierStatementService) {
+                              SupplierStatementService supplierStatementService,
+                              SupplierOnboardingGrantService onboardingGrantService) {
         this.supplierMapper = supplierMapper;
         this.channelPartnerMapper = channelPartnerMapper;
         this.productMapper = productMapper;
@@ -79,6 +82,7 @@ public class PlatformController {
         this.orderTimeoutService = orderTimeoutService;
         this.orderAutoCompleteService = orderAutoCompleteService;
         this.supplierStatementService = supplierStatementService;
+        this.onboardingGrantService = onboardingGrantService;
     }
 
     @GetMapping("/dashboard")
@@ -143,15 +147,39 @@ public class PlatformController {
             @RequestParam(required = false) String auditOpinion) {
         Map<String, Object> result = new HashMap<>();
         Supplier supplier = supplierMapper.selectById(id);
-        if (supplier != null) {
-            supplier.setAuditStatus(auditStatus);
-            supplier.setAuditOpinion(auditOpinion);
-            supplier.setAuditTime(LocalDateTime.now());
-            supplier.setUpdateTime(LocalDateTime.now());
-            int count = supplierMapper.updateById(supplier);
-            result.put("success", count > 0);
-        } else {
+        if (supplier == null) {
             result.put("success", false);
+            result.put("message", "供应商不存在");
+            return ResponseEntity.ok(result);
+        }
+        String status = auditStatus == null ? "" : auditStatus.trim().toUpperCase();
+        if (!"APPROVED".equals(status) && !"REJECTED".equals(status)) {
+            result.put("success", false);
+            result.put("message", "审核结果只能是 APPROVED 或 REJECTED");
+            return ResponseEntity.ok(result);
+        }
+        if ("APPROVED".equals(status)) {
+            // 平台审核通过即开通业务身份与供货能力：不再让申请人自己去用户中心重复认证。
+            // 开通失败则审核不通过（避免出现"显示已通过、工作台却进不去"的半开通状态）。
+            try {
+                Map<String, Object> grant = onboardingGrantService.grant(supplier);
+                result.put("merchantId", grant.get("merchantId"));
+                result.put("identityType", grant.get("identityType"));
+                result.put("capabilityGranted", grant.get("capabilityGranted"));
+            } catch (IllegalStateException e) {
+                result.put("success", false);
+                result.put("message", e.getMessage());
+                return ResponseEntity.ok(result);
+            }
+        }
+        supplier.setAuditStatus(status);
+        supplier.setAuditOpinion(auditOpinion);
+        supplier.setAuditTime(LocalDateTime.now());
+        supplier.setUpdateTime(LocalDateTime.now());
+        int count = supplierMapper.updateById(supplier);
+        result.put("success", count > 0);
+        if (count > 0 && "REJECTED".equals(status)) {
+            result.put("message", "已驳回，供应商可修改后重新申请");
         }
         return ResponseEntity.ok(result);
     }

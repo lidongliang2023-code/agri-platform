@@ -93,6 +93,7 @@ const MENU: MenuGroup[] = [
   {
     title: '系统设置',
     items: [
+      { key: 'health-monitor', label: '统一健康监控', icon: <DashboardOutlined /> },
       { key: 'config', label: '参数配置', icon: <SettingOutlined /> },
       { key: 'audit-log', label: '操作审计', icon: <AuditOutlined /> },
     ],
@@ -101,6 +102,7 @@ const MENU: MenuGroup[] = [
 
 const TITLES: Record<OpsPageKey, string> = {
   dashboard: '用户中心总览',
+  'health-monitor': '统一健康监控',
   'user-list': '用户列表',
   'user-detail': '用户详情',
   'user-identity': '身份管理',
@@ -161,11 +163,11 @@ export function AppShell({ children }: { children: ReactNode }): JSX.Element {
     <div className={`app-shell${collapsed ? ' sidebar-collapsed' : ''}`}>
       <aside className={`app-sidebar${mobileOpen ? ' mobile-open' : ''}`}>
         <button className="app-brand" type="button" onClick={() => navigate('dashboard')}>
-          <span className="app-brand-mark">户</span>
+          <img className="app-brand-mark" src={`${import.meta.env.BASE_URL}fengchain.svg`} alt="丰链云" />
           {!collapsed && (
             <span className="app-brand-copy">
               <b>丰链云</b>
-              <small>用户中心 · 运营端</small>
+              <small>FENGCHAIN · AGRI</small>
             </span>
           )}
         </button>

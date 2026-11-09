@@ -4,10 +4,13 @@ import com.agri.common.exception.BusinessException;
 import com.agri.common.result.ApiResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -18,11 +21,6 @@ public class ServiceExceptionHandler {
 
     /**
      * 业务异常按 code 落到对应的 HTTP 状态。
-     *
-     * <p>原先所有非 {@code IllegalArgumentException} 的异常都会掉进下面的兜底分支，
-     * 变成 HTTP 500 + "服务暂时不可用，请稍后重试"：身份没绑定（本该 403 并说明该找谁）、
-     * 单据不归属当前主体（本该 403）、状态机冲突（本该 409）全都糊成一句"服务不可用"，
-     * 页面只能重试，用户永远不知道自己缺哪一步。</p>
      */
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiResponse<Void>> handleBusiness(BusinessException exception) {
@@ -53,6 +51,20 @@ public class ServiceExceptionHandler {
                 .map(error -> error.getDefaultMessage() == null ? "表单校验失败" : error.getDefaultMessage())
                 .orElse("表单校验失败");
         return ApiResponse.fail(message);
+    }
+
+    @ExceptionHandler({MethodArgumentTypeMismatchException.class, MissingServletRequestParameterException.class, HttpMessageNotReadableException.class})
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiResponse<Void> handleBadRequest(Exception exception) {
+        LOG.warn("综合服务请求参数异常：{}", exception.getMessage());
+        return ApiResponse.fail(400, "请求参数格式不正确，请检查后重试");
+    }
+
+    @ExceptionHandler({org.springframework.web.servlet.resource.NoResourceFoundException.class,
+            org.springframework.web.servlet.NoHandlerFoundException.class})
+    public org.springframework.http.ResponseEntity<java.util.Map<String, Object>> healthRouteNotFound(Exception exception) {
+        return org.springframework.http.ResponseEntity.status(404)
+                .body(java.util.Map.of("code", 404, "message", "请求地址不存在"));
     }
 
     @ExceptionHandler(Exception.class)

@@ -163,8 +163,8 @@ async function submit() {
 .summary { display: flex; align-items: center; gap: 16rpx; margin-bottom: 20rpx; padding: 22rpx; border-radius: 22rpx; background: #edf8f2; }
 .summary-icon { display: flex; width: 82rpx; height: 82rpx; align-items: center; justify-content: center; border-radius: 20rpx; background: #12764a; font-size: 40rpx; }
 .summary > view:last-child { display: flex; flex-direction: column; gap: 5rpx; }
-.notice { margin-bottom: 20rpx; padding: 16rpx; border-radius: 13rpx; background: #fff3dd; color: #8f661b; font-size: 20rpx; line-height: 1.6; }
+.notice { margin-bottom: 20rpx; padding: 16rpx; border-radius: 13rpx; background: #fff3dd; color: #8f661b; font-size: 24rpx; line-height: 1.6; }
 .picker { min-height: 68rpx; padding: 18rpx 20rpx; border: 1rpx solid #dfe7e1; border-radius: 14rpx; background: #fbfdfb; font-size: 24rpx; color: #1f2a23; }
-.quote { display: flex; flex-direction: column; gap: 6rpx; margin: 16rpx 0; padding: 18rpx; border-radius: 14rpx; background: #f2f7f3; font-size: 21rpx; color: #4c5a51; }
+.quote { display: flex; flex-direction: column; gap: 6rpx; margin: 16rpx 0; padding: 18rpx; border-radius: 14rpx; background: #f2f7f3; font-size: 24rpx; color: #4c5a51; }
 .quote-total { font-size: 25rpx; font-weight: 650; color: #0e5233; }
 </style>

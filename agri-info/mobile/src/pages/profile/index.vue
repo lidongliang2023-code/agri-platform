@@ -215,12 +215,12 @@ function toSearch() {
   padding: 2rpx 10rpx;
   border-radius: 8rpx;
   background: rgba(255, 255, 255, 0.18);
-  font-size: 18rpx;
+  font-size: 24rpx;
 }
 
 .hero-sub {
   color: rgba(255, 255, 255, 0.6);
-  font-size: 21rpx;
+  font-size: 24rpx;
 }
 
 .cat-row {
@@ -234,14 +234,14 @@ function toSearch() {
   border-radius: 8rpx;
   background: rgba(255, 255, 255, 0.12);
   color: rgba(255, 255, 255, 0.82);
-  font-size: 19rpx;
+  font-size: 24rpx;
 }
 
 .settings {
   padding: 8rpx 14rpx;
   border: 1rpx solid rgba(255, 255, 255, 0.18);
   border-radius: 14rpx;
-  font-size: 20rpx;
+  font-size: 24rpx;
 }
 
 .hero-stats {
@@ -284,7 +284,7 @@ function toSearch() {
 
 .search-ph {
   color: #b3c0b7;
-  font-size: 23rpx;
+  font-size: 24rpx;
 }
 
 .menu-card {
@@ -331,7 +331,7 @@ function toSearch() {
 .menu-desc {
   overflow: hidden;
   color: #94a198;
-  font-size: 20rpx;
+  font-size: 24rpx;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -343,7 +343,7 @@ function toSearch() {
   border-radius: 16rpx;
   background: #eef7f2;
   color: #0e5233;
-  font-size: 19rpx;
+  font-size: 24rpx;
   line-height: 32rpx;
   text-align: center;
 }

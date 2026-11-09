@@ -14,8 +14,8 @@ export interface Complaint { id:number;complaintNo:string;type:string;title:stri
 export interface Sampling { id:number;samplingNo:string;productName:string;subjectName:string;region:string;sampleDate:string;testItems:string;result:string;disposition:string }
 export interface DataShare { id:number;resourceName:string;owner:string;receiver:string;shareType:string;sensitiveLevel:string;status:string;recordCount:number;updatedAt:string }
 export interface Overview {
-  metrics:{subjects:number;pendingWarnings:number;openCases:number;pendingTasks:number;samplingPassRate:number;aiAssistCount:number;tradeAmount:number}
-  trend:Array<{date:string;subjects:number;warnings:number;inspections:number;samplingRate:number;cases:number;tradeAmount:number}>
+  metrics:{subjects:number;pendingWarnings:number;openCases:number;pendingTasks:number;samplingPassRate:number;aiAssistCount:number;tradeAmount:number|null}
+  trend:Array<{date:string;subjects:number;warnings:number;inspections:number;samplingRate:number;cases:number;tradeAmount:number|null}>
   todos:Array<{route:string;title:string;count:number;description:string}>
   warnings:Warning[];aiBrief:string[]
 }
@@ -26,7 +26,19 @@ async function req<T>(call:Promise<{data:Envelope<T>}>):Promise<T>{
   try{const r=await call;if(![0,200].includes(r.data.code))throw new Error(r.data.message);return r.data.data}
   catch(e){if(axios.isAxiosError(e)){const m=(e.response?.data as {message?:string}|undefined)?.message;throw new Error(m||'政府监管服务不可用')}throw e}
 }
+export interface RegulatoryScope {id?:string;organizationCode:string;organizationName:string;status:'enabled'|'disabled';regions:Array<{code:string;name:string;includeChildren:boolean;duties:string[]}>;note:string;version?:number;updatedAt?:string}
+export interface PersonnelGrant {id?:string;personnelId:string;scopeId:string;status:string;regions:RegulatoryScope['regions'];validFrom:string;validUntil:string;basis:string;version?:number}
+export interface RegulatoryPerson {id:string;name:string;organization:string;platformUserId:string;status:string}
 export const opsApi={
+  regionRegistry:(kind:string)=>req<Array<{id:number;name:string;regionCode:string|null}>>(client.get(`/ops/region-registry/${kind}`)),
+  saveRegion:(kind:string,id:number,body:Record<string,string>)=>req(client.put(`/ops/region-registry/${kind}/${id}`,body)),
+
+  personnel:()=>req<RegulatoryPerson[]>(client.get('/ops/personnel-grants/people')),
+  grants:()=>req<PersonnelGrant[]>(client.get('/ops/personnel-grants')),
+  saveGrant:(body:PersonnelGrant)=>req<PersonnelGrant>(body.id?client.put(`/ops/personnel-grants/${body.id}`,body):client.post('/ops/personnel-grants',body)),
+  grantHistory:(id:string)=>req<Array<{version:number;operator_name:string;created_at:string;snapshot_json:string;before_json:string}>>(client.get(`/ops/personnel-grants/${id}/history`)),
+  scopes:()=>req<RegulatoryScope[]>(client.get('/ops/scopes')),
+  saveScope:(body:RegulatoryScope,id?:string)=>req<RegulatoryScope>(id?client.put(`/ops/scopes/${id}`,body):client.post('/ops/scopes',body)),
   overview:()=>req<Overview>(client.get('/ops/overview')),
   subjects:(keyword?:string,riskLevel?:string)=>req<Subject[]>(client.get('/ops/subjects',{params:{keyword,riskLevel}})),
   warnings:(status?:string)=>req<Warning[]>(client.get('/ops/warnings',{params:{status}})),

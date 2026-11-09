@@ -120,7 +120,7 @@ defineExpose({ loadAddresses })
 
 .head-kicker {
   color: #12764a;
-  font-size: 16rpx;
+  font-size: 24rpx;
   font-weight: 700;
   letter-spacing: 2rpx;
 }
@@ -134,7 +134,7 @@ defineExpose({ loadAddresses })
 
 .head-count {
   color: #93a29a;
-  font-size: 19rpx;
+  font-size: 24rpx;
 }
 
 .address-list {
@@ -171,14 +171,14 @@ defineExpose({ loadAddresses })
 
 .address-phone {
   color: #718277;
-  font-size: 20rpx;
+  font-size: 24rpx;
 }
 
 .address-detail {
   display: block;
   margin-top: 12rpx;
   color: #52665a;
-  font-size: 21rpx;
+  font-size: 24rpx;
   line-height: 1.55;
 }
 
@@ -187,7 +187,7 @@ defineExpose({ loadAddresses })
   flex-direction: column;
   gap: 12rpx;
   color: #12764a;
-  font-size: 20rpx;
+  font-size: 24rpx;
 }
 
 .address-actions .delete {

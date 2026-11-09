@@ -61,7 +61,7 @@ function inquire() {
 .price-row { margin-top: 20rpx; }
 .price-row .price { color: #9ce8ba; font-size: 38rpx; }
 .price-row .tiny { color: rgba(255,255,255,.5); }
-.row { display: flex; justify-content: space-between; padding: 16rpx 0; border-bottom: 1rpx solid #edf2ee; font-size: 22rpx; }
+.row { display: flex; justify-content: space-between; padding: 16rpx 0; border-bottom: 1rpx solid #edf2ee; font-size: 24rpx; }
 .row:last-child { border-bottom: 0; }
 .row text { color: #718277; }
 .description { display: block; margin-top: 14rpx; line-height: 1.75; }

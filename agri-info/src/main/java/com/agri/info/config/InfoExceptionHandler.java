@@ -43,6 +43,18 @@ public class InfoExceptionHandler {
         return ApiResponse.fail("参数 " + exception.getName() + " 格式不正确");
     }
 
+    @ExceptionHandler({org.springframework.web.servlet.resource.NoResourceFoundException.class,
+            org.springframework.web.servlet.NoHandlerFoundException.class})
+    public org.springframework.http.ResponseEntity<java.util.Map<String, Object>> healthRouteNotFound(Exception exception) {
+        return org.springframework.http.ResponseEntity.status(404)
+                .body(java.util.Map.of("code", 404, "message", "请求地址不存在"));
+    }
+
+    @ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
+    public org.springframework.http.ResponseEntity<ApiResponse<Void>> handleStatus(org.springframework.web.server.ResponseStatusException exception) {
+        return org.springframework.http.ResponseEntity.status(exception.getStatusCode()).body(ApiResponse.fail(exception.getReason()));
+    }
+
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public ApiResponse<Void> handleUnexpected(Exception exception) {

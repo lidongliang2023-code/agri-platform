@@ -307,7 +307,7 @@ function goBack() {
   width: 54rpx;
   height: 54rpx;
   flex: 0 0 54rpx;
-  font-size: 22rpx;
+  font-size: 24rpx;
 }
 
 .meta-copy {

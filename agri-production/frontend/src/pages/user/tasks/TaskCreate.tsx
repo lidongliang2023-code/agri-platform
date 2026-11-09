@@ -1,7 +1,7 @@
 /**
  * 页面名称：创建任务（分步表单）
  * 路由路径：/production/tasks/create
- * 所属模块：智能种养
+ * 所属模块：农事生产
  * PRD 序号：PRD 6.1 #16
  * 原型来源：用户端原型 P8 task-create（三步向导）
  *
@@ -15,9 +15,12 @@
 import { useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { PageContainer, ProForm, ProFormDateTimePicker, ProFormRadio, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components'
-import { Button, Card, Descriptions, Space, Steps, Tag, Typography, message } from 'antd'
+import { ProForm, ProFormDateTimePicker, ProFormRadio, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components'
+import PageContainer from '@/components/ProductionPageContainer'
+import { Button, Space, Steps, Tag, message } from 'antd'
 import { ArrowLeftOutlined } from '@ant-design/icons'
+import Card from '@/components/SectionCard'
+import DetailInfoGrid from '@/components/DetailInfoGrid'
 import dayjs from 'dayjs'
 import type { Dayjs } from 'dayjs'
 import useFarmStore from '@/store/farm'
@@ -38,7 +41,7 @@ interface TaskFormValues {
   priority?: TaskPriority
   /** 所属农场 */
   farmId?: string
-  /** 所属种养计划 */
+  /** 所属农事计划 */
   planId?: string
   /** 所属计划阶段 */
   stageId?: string
@@ -101,7 +104,7 @@ export default function TaskCreate(): JSX.Element {
     queryFn: () => listPlots({ farmId, pageNum: 1, pageSize: 100 }),
   })
 
-  /** 种养计划下拉（任务必须能回挂到计划） */
+  /** 农事计划下拉（任务必须能回挂到计划） */
   const planQuery = useQuery({
     queryKey: ['task-plan-options', farmId],
     enabled: Boolean(farmId),
@@ -243,28 +246,20 @@ export default function TaskCreate(): JSX.Element {
     const templateLabel =
       templateOptions.find((item) => item.value === values.templateId)?.label ?? '不关联模板'
     return (
-      <Descriptions bordered column={2} size="small">
-        <Descriptions.Item label="任务名称">{values.taskName ?? '-'}</Descriptions.Item>
-        <Descriptions.Item label="任务类型">
-          <Tag color="geekblue">
+      <DetailInfoGrid columns={2} items={[
+        { label: "任务名称", value: (<>{values.taskName ?? '-'}</>) },
+        { label: "任务类型", value: (<><Tag color="geekblue">
             {TASK_TYPE_LABEL_MAP[values.taskType ?? ''] ?? values.taskType ?? '-'}
-          </Tag>
-        </Descriptions.Item>
-        <Descriptions.Item label="优先级">
-          {TASK_PRIORITY_LABEL_MAP[values.priority ?? 3] ?? '重要'}
-        </Descriptions.Item>
-        <Descriptions.Item label="执行地块">{plotLabel}</Descriptions.Item>
-        <Descriptions.Item label="关联计划">{planLabel}</Descriptions.Item>
-        <Descriptions.Item label="关联阶段">{stageLabel}</Descriptions.Item>
-        <Descriptions.Item label="计划开始">
-          {values.planStartDate ? dayjs(values.planStartDate).format('YYYY-MM-DD HH:mm') : '-'}
-        </Descriptions.Item>
-        <Descriptions.Item label="计划结束">
-          {values.planEndDate ? dayjs(values.planEndDate).format('YYYY-MM-DD HH:mm') : '-'}
-        </Descriptions.Item>
-        <Descriptions.Item label="执行人">{memberLabel}</Descriptions.Item>
-        <Descriptions.Item label="关联模板">{templateLabel}</Descriptions.Item>
-      </Descriptions>
+          </Tag></>) },
+        { label: "优先级", value: (<>{TASK_PRIORITY_LABEL_MAP[values.priority ?? 3] ?? '重要'}</>) },
+        { label: "执行地块", value: (<>{plotLabel}</>) },
+        { label: "关联计划", value: (<>{planLabel}</>) },
+        { label: "关联阶段", value: (<>{stageLabel}</>) },
+        { label: "计划开始", value: (<>{values.planStartDate ? dayjs(values.planStartDate).format('YYYY-MM-DD HH:mm') : '-'}</>) },
+        { label: "计划结束", value: (<>{values.planEndDate ? dayjs(values.planEndDate).format('YYYY-MM-DD HH:mm') : '-'}</>) },
+        { label: "执行人", value: (<>{memberLabel}</>) },
+        { label: "关联模板", value: (<>{templateLabel}</>) },
+      ]} />
     )
   }
 
@@ -360,7 +355,7 @@ export default function TaskCreate(): JSX.Element {
               />
               <ProFormSelect
                 name="planId"
-                label="关联种养计划（可选）"
+                label="关联农事计划（可选）"
                 placeholder="选择后任务将计入计划进度"
                 options={planOptions}
                 fieldProps={{
@@ -384,7 +379,7 @@ export default function TaskCreate(): JSX.Element {
               <ProFormSelect
                 name="stageId"
                 label="关联计划阶段（可选）"
-                placeholder="请先选择种养计划"
+                placeholder="请先选择农事计划"
                 options={stageOptions}
                 disabled={!selectedPlanId}
                 fieldProps={{ allowClear: true }}
@@ -452,8 +447,9 @@ export default function TaskCreate(): JSX.Element {
                 placeholder="请描述作业要求、用量标准与注意事项"
                 fieldProps={{ rows: 4, maxLength: 500, showCount: true }}
               />
-              <Typography.Title level={5}>信息确认</Typography.Title>
-              {renderConfirm()}
+              <Card title="信息确认" style={{ marginTop: 24 }}>
+                {renderConfirm()}
+              </Card>
           </div>
         </ProForm>
 

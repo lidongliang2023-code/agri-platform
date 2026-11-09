@@ -29,6 +29,12 @@ import AdminGuarantee from '@/pages/admin/guarantee'
 import AdminContractTemplate from '@/pages/admin/contract-template'
 import AdminCarrier from '@/pages/admin/carrier'
 import ExternalRedirect from '@/pages/admin/external-redirect'
+import P2tOrders from '@/pages/admin/p2t/Orders'
+import P2tRecon from '@/pages/admin/p2t/Recon'
+import P2tRules from '@/pages/admin/p2t/Rules'
+import P2tDiffs from '@/pages/admin/p2t/Diffs'
+import P2tTrace from '@/pages/admin/p2t/Trace'
+import P2tBoundary from '@/pages/admin/p2t/Boundary'
 import { isLoggedIn } from '@/utils/session'
 import { redirectToSso, SSO_CALLBACK_PATH } from '@/utils/sso'
 
@@ -130,6 +136,14 @@ function AppRouter() {
         <Route path="contract-template" element={<AdminContractTemplate />} />
         <Route path="carrier" element={<AdminCarrier />} />
         <Route path="identity" element={<ExternalRedirect path="/user/audit" />} />
+        {/* 产销对接（交易侧）只留平台治理：回写重试 / 对账 / 规则 / 差异 / 追踪。
+            审核与建品已迁到卖家中心（/member/seller?tab=p2t），由供应商主体自己承接。 */}
+        <Route path="p2t/orders" element={<P2tOrders />} />
+        <Route path="p2t/recon" element={<P2tRecon />} />
+        <Route path="p2t/rules" element={<P2tRules />} />
+        <Route path="p2t/diffs" element={<P2tDiffs />} />
+        <Route path="p2t/trace" element={<P2tTrace />} />
+        <Route path="p2t/boundary" element={<P2tBoundary />} />
       </Route>
       {/* 交易端只剩买家中心 / 卖家中心；没有全局后台菜单与首页 */}
       <Route path="/hall" element={<TradeHall />} />

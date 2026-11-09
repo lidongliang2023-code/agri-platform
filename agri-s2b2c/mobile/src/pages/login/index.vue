@@ -8,8 +8,8 @@
     </view>
 
     <view class="login-content">
-      <view class="brand-mark">丰</view>
-      <text class="login-title">丰链云 · 农联优选</text>
+      <image class="brand-mark" src="/static/fengchain.svg" mode="aspectFill" />
+      <text class="login-title">丰链云</text>
       <text class="login-subtitle">产地好货，从田间直达餐桌</text>
 
       <view class="login-card">
@@ -42,7 +42,8 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { leaveLoginPage, saveSession } from '../../session'
+import { clearSession, leaveLoginPage, saveSession } from '../../session'
+import { mallApi } from '../../api'
 import { toast } from '../../utils'
 import { loginWithUnifiedAccount } from '../../../../frontend-shared/mobile-unified-auth'
 
@@ -61,21 +62,18 @@ async function submit() {
   if (!password.value) return toast('请输入统一账号密码')
   submitting.value = true
   try {
-    const result = await loginWithUnifiedAccount(
+    await loginWithUnifiedAccount(
       username.value.trim(),
       password.value,
       's2b2c:consumer',
     )
-    saveSession({
-      id: 1,
-      nickname: result.user.nickname || result.user.username,
-      phone: result.user.username,
-      points: 0,
-      totalConsume: 0,
-    })
+    const profile = await mallApi.getProfile()
+    if (!profile?.id) throw new Error('未能获取当前消费者档案，请重新登录')
+    saveSession(profile)
     toast('登录成功', 'success')
     setTimeout(() => leaveLoginPage(redirect.value), 300)
   } catch (error) {
+    clearSession()
     toast((error as Error).message)
   } finally {
     submitting.value = false
@@ -154,7 +152,7 @@ function goBack() {
 .login-subtitle {
   margin-top: 9rpx;
   color: rgba(255, 255, 255, 0.58);
-  font-size: 20rpx;
+  font-size: 24rpx;
 }
 
 .login-card {
@@ -181,7 +179,7 @@ function goBack() {
 .form-desc {
   margin-top: 7rpx;
   color: #84938a;
-  font-size: 18rpx;
+  font-size: 24rpx;
 }
 
 .phone-field {
@@ -198,7 +196,7 @@ function goBack() {
   padding: 0 20rpx;
   border-right: 1rpx solid #e3eae5;
   color: #52665a;
-  font-size: 23rpx;
+  font-size: 24rpx;
 }
 
 .phone-field input {
@@ -225,7 +223,7 @@ function goBack() {
   gap: 9rpx;
   margin-top: 20rpx;
   color: #84938a;
-  font-size: 17rpx;
+  font-size: 24rpx;
   line-height: 1.5;
 }
 
@@ -239,7 +237,7 @@ function goBack() {
   border: 1rpx solid #cbd7cf;
   border-radius: 7rpx;
   color: #fff;
-  font-size: 17rpx;
+  font-size: 24rpx;
 }
 
 .agreement-check.checked {
@@ -265,12 +263,12 @@ function goBack() {
 
 .trust-row b {
   color: rgba(255, 255, 255, 0.82);
-  font-size: 19rpx;
+  font-size: 24rpx;
 }
 
 .trust-row text {
   margin-top: 5rpx;
   color: rgba(255, 255, 255, 0.42);
-  font-size: 16rpx;
+  font-size: 24rpx;
 }
 </style>

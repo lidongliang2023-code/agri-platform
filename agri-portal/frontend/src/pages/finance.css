@@ -2,7 +2,7 @@
   position: relative;
   overflow: hidden;
   color: #fff;
-  background: linear-gradient(135deg, #0a2e2b 0%, #0e5233 50%, #0c7ba8 100%);
+  background: var(--portal-hero-background);
 }
 
 .fin-hero::before {

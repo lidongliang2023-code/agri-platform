@@ -318,7 +318,7 @@ function goBack() {
   border: 1rpx solid #dce7df;
   border-radius: 14rpx;
   color: #0e5233;
-  font-size: 21rpx;
+  font-size: 24rpx;
 }
 
 .price-block {

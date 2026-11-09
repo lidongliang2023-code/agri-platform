@@ -1,3 +1,5 @@
+import { GreenSupplyOpsPage } from './pages/GreenSupplyOpsPage'
+import { CloudFactoriesPage } from './pages/CloudFactoriesPage'
 import { useEffect, useMemo, useState } from 'react'
 import { App as AntApp, ConfigProvider } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
@@ -21,6 +23,8 @@ import './styles.css'
 
 function resolvePage(route: RouteState): JSX.Element {
   switch (route.page) {
+    case 'green-supply': return <GreenSupplyOpsPage />
+    case 'cloud-factories': return <CloudFactoriesPage />
     case 'contents': return <ContentsPage />
     case 'channels': return <ChannelsPage />
     case 'courses': return <CoursesPage />

@@ -1,0 +1,44 @@
+.production-section-card.ant-card {
+  min-width: 0;
+  border: 1px solid #e3eae5;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(11, 26, 18, .03);
+}
+.production-section-card > .ant-card-head {
+  min-height: 56px;
+  padding: 0 20px;
+  border-bottom: 1px solid #edf2ee;
+}
+.production-section-card > .ant-card-head .ant-card-head-title {
+  color: #203e30;
+  font-size: 16px;
+  font-weight: 600;
+  white-space: normal;
+}
+.production-section-card > .ant-card-body { padding: 20px; }
+.production-section-card > .ant-card-actions {
+  border-top: 1px solid #edf2ee;
+  border-radius: 0 0 12px 12px;
+  background: #f8fbf9;
+}
+.production-section-card .ant-form-item-label > label { color: #53675b; }
+.farm-record-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 350px), 1fr)); gap: 16px; }
+.farm-record-grid > .production-section-card { height: 100%; }
+@media (max-width: 640px) {
+  .production-section-card > .ant-card-head { padding: 0 14px; }
+  .production-section-card > .ant-card-body { padding: 14px; }
+  .production-section-card .ant-form-inline { display: flex; flex-direction: column; }
+  .production-section-card .ant-form-inline .ant-form-item { margin-inline-end: 0; }
+}
+
+/* 分区标题与记录列表工具栏共享一行，工具栏不再占用内容区高度。 */
+.production-section-heading-tools { display: flex; align-items: center; justify-content: flex-end; gap: 16px; }
+.production-section-toolbar-host:empty { display: none; }
+.production-section-toolbar-host .ant-pro-table-list-toolbar-container { padding: 0; gap: 8px; flex-wrap: nowrap; }
+.production-section-toolbar-host .ant-pro-table-list-toolbar-left:empty { display: none; }
+.production-section-toolbar-host .ant-pro-table-list-toolbar-right { margin-inline-start: auto; }
+.production-section-card > .ant-card-head .ant-card-head-title { min-width: 0; }
+@media (max-width: 767px) {
+  .production-section-heading-tools { gap: 8px; flex-wrap: wrap; }
+}

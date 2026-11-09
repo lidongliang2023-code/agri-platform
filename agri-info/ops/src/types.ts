@@ -1,4 +1,6 @@
 export type OpsPageKey =
+  | 'green-supply'
+  | 'cloud-factories'
   | 'dashboard'
   | 'contents'
   | 'channels'
@@ -154,6 +156,10 @@ export interface QuoteSource {
 }
 
 export interface CollectTask {
+  scheduleEnabled?: boolean
+  nextRunAt?: string
+  retryCount?: number
+  scheduleResult?: string
   id: number
   name: string
   sourceName: string
@@ -485,4 +491,46 @@ export interface RecommendItem {
   channel: string | null
   coverIcon: string | null
   publishedAt: string | null
+}
+
+export interface CollectionFreshness {
+  taskId: number
+  taskName: string
+  sourceName: string
+  state: 'paused' | 'no_samples' | 'expired' | 'healthy'
+  total: number
+  expired: number
+  expiredPercent: number | null
+  oldestObservedAt: string | null
+  latestObservedAt: string | null
+  maxAgeMinutes: number
+  thresholdPercent: number
+  checkedAt: string
+}
+export interface CollectionAlertPolicy {
+  freshnessEnabled: boolean
+  maxAgeMinutes: number
+  expiredPercent: number
+  enabled: boolean
+  failureThreshold: number
+  rejectPercent: number
+  staleMinutes: number
+}
+export interface CollectionAlert {
+  id: number
+  taskId: number
+  taskName: string
+  sourceName: string
+  alertType: string
+  severity: string
+  status: string
+  hitCount: number
+  firstAt: string
+  lastAt: string
+  recoveredAt?: string
+  detail: string
+  ackBy?: string
+  ackNote?: string
+  ackAt?: string
+  recoveryNote?: string
 }

@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import { Icon } from './Icon'
 import { BrandMark } from './BrandMark'
 import {
   completePlatformLogin,
-  governmentUrl,
+  
   go,
   productionLogin,
   redirectToPlatformLogin,
@@ -30,15 +30,15 @@ interface PortalUser {
 
 const NAV_ITEMS: Array<{ path: string; active: string; label: string; scopes: PortalScope[] }> = [
   { path: '#/', active: '/', label: '首页', scopes: ['full', 'info', 'service'] },
-  { path: '#/chains', active: '/chains', label: '产业链', scopes: ['full', 'info'] },
   { path: '#/info', active: '/info', label: '产业资讯', scopes: ['full', 'info', 'service'] },
   { path: '#/hall', active: '/hall', label: '交易大厅', scopes: ['full'] },
   // 这两个原本是"滚到首页对应区块"的锚点，有了独立的资讯频道后直接指到频道里，
   // 避免用户点了还在首页原地打转。
+  { path: '#/cloud-factory', active: '/cloud-factory', label: 'VR 云工厂', scopes: ['full', 'service'] },
   { path: '#/info/market', active: '/info/market', label: '价格指数', scopes: ['full', 'info'] },
   { path: '#/finance', active: '/finance', label: '供应链金融', scopes: ['full', 'service'] },
   { path: '#/logistics', active: '/logistics', label: '物流服务', scopes: ['full', 'service'] },
-  { path: governmentUrl('/'), active: '', label: '政府监管', scopes: ['full'] },
+  { path: '#/government', active: '/government', label: '政府监管', scopes: ['full'] },
 ]
 
 const visibleNavItems = NAV_ITEMS.filter((item) =>
@@ -48,16 +48,82 @@ export function PortalLayout({ children, active = '/' }: { children: ReactNode; 
   const [keyword, setKeyword] = useState('')
   const [user, setUser] = useState<PortalUser | null>(null)
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
-  // 窄屏（<=860px）下 .main-nav 与 .header-search 都是 display:none，
-  // 手机上原本没有任何导航入口，只能靠首页里的链接。这里补一个抽屉。
+  // 横滑导航之外保留手机抽屉，便于集中浏览所有入口。
   const [navOpen, setNavOpen] = useState(false)
+  const navRef = useRef<HTMLElement>(null)
+  const [navEdges, setNavEdges] = useState({ left: false, right: false })
+
+  useEffect(() => {
+    const nav = navRef.current
+    if (!nav) return
+    const update = (): void => setNavEdges({
+      left: nav.scrollLeft > 2,
+      right: nav.scrollWidth - nav.clientWidth - nav.scrollLeft > 2,
+    })
+    const wheel = (event: WheelEvent): void => {
+      if (event.ctrlKey || Math.abs(event.deltaX) > Math.abs(event.deltaY) || !event.deltaY) return
+      const delta = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? nav.clientWidth : 1)
+      const next = Math.max(0, Math.min(nav.scrollWidth - nav.clientWidth, nav.scrollLeft + delta))
+      if (next === nav.scrollLeft) return
+      event.preventDefault()
+      nav.scrollLeft = next
+    }
+    const observer = new ResizeObserver(update)
+    observer.observe(nav)
+    Array.from(nav.children).forEach(child => observer.observe(child))
+    nav.addEventListener('scroll', update, { passive: true })
+    nav.addEventListener('wheel', wheel, { passive: false })
+    update()
+    return () => {
+      observer.disconnect()
+      nav.removeEventListener('scroll', update)
+      nav.removeEventListener('wheel', wheel)
+    }
+  }, [])
+
+  useEffect(() => {
+    const nav = navRef.current
+    const selected = nav?.querySelector<HTMLElement>('[aria-current="page"]')
+    if (!nav || !selected) return
+    const left = selected.offsetLeft - nav.offsetLeft
+    if (left < nav.scrollLeft) nav.scrollLeft = left
+    else if (left + selected.offsetWidth > nav.scrollLeft + nav.clientWidth) {
+      nav.scrollLeft = left + selected.offsetWidth - nav.clientWidth
+    }
+  }, [active])
+
+  function scrollNav(direction: number): void {
+    const nav = navRef.current
+    nav?.scrollBy({ left: direction * Math.max(160, nav.clientWidth * .7), behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
+  }
+
 
   // 抽屉打开时锁住背景滚动，否则手指一划页面跟着动，抽屉里的列表反而划不动。
   useEffect(() => {
     if (!navOpen) return undefined
     const previous = document.body.style.overflow
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const panel = document.querySelector<HTMLElement>('.portal-mobile-panel')
+    const focusable = (): HTMLElement[] => Array.from(panel?.querySelectorAll<HTMLElement>('a[href],button:not(:disabled),input:not(:disabled)') ?? [])
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') { event.preventDefault(); setNavOpen(false) }
+      if (event.key !== 'Tab') return
+      const items = focusable(), first = items[0], last = items[items.length - 1]
+      if (!first || !last) return
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus() }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
+    }
+    const onResize = (): void => { if (window.innerWidth > 860) setNavOpen(false) }
     document.body.style.overflow = 'hidden'
-    return () => { document.body.style.overflow = previous }
+    focusable()[0]?.focus()
+    document.addEventListener('keydown', onKeyDown)
+    window.addEventListener('resize', onResize)
+    return () => {
+      document.body.style.overflow = previous
+      document.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('resize', onResize)
+      previousFocus?.focus({ preventScroll: true })
+    }
   }, [navOpen])
 
   async function sessionUser(): Promise<PortalUser | null> {
@@ -121,7 +187,7 @@ export function PortalLayout({ children, active = '/' }: { children: ReactNode; 
   const search = (event: FormEvent): void => {
     event.preventDefault()
     const value = keyword.trim()
-    go(value ? `/chains?q=${encodeURIComponent(value)}` : '/chains')
+    go(value ? `/hall?q=${encodeURIComponent(value)}` : '/hall')
   }
 
   return (
@@ -132,8 +198,6 @@ export function PortalLayout({ children, active = '/' }: { children: ReactNode; 
           <span className="portal-top-actions">
             <a href={tradeUrl('/member/buyer')} target="_blank" rel="noreferrer">我是买家</a><span className="sep">·</span>
             <a href={tradeUrl('/member/seller')} target="_blank" rel="noreferrer">我是卖家</a><span className="sep">·</span>
-            <a href={tradeUrl('/member/buyer')} target="_blank" rel="noreferrer">会员中心</a><span className="sep">·</span>
-            {user && <><a href="#/account">个人中心</a><span className="sep">·</span></>}
             {user ? (
               <span className="portal-logged-user">
                 <span className="portal-user-avatar">{(user.nickname || user.username || user.phone || '用').slice(0, 1)}</span>
@@ -212,12 +276,21 @@ export function PortalLayout({ children, active = '/' }: { children: ReactNode; 
             <span className="logo"><BrandMark size={36} /></span>
             <span>丰链云<small>FENGCHAIN · AGRI</small></span>
           </a>
-          <nav className="main-nav">
-            {visibleNavItems.map((item) => (
-              <a key={`${item.path}-${item.label}`} href={item.path}
-                className={item.active && active === item.active ? 'active' : ''}>{item.label}</a>
-            ))}
-          </nav>
+          <div className="portal-nav-shell">
+            <button type="button" className="portal-nav-arrow" aria-label="向左滚动顶部菜单" aria-controls="portal-main-navigation" disabled={!navEdges.left} onClick={() => scrollNav(-1)}>‹</button>
+            <nav id="portal-main-navigation" className="main-nav" aria-label="官网主导航" ref={navRef}
+              onKeyDown={event => {
+                if (event.altKey || event.ctrlKey || event.metaKey) return
+                if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); scrollNav(event.key === 'ArrowLeft' ? -1 : 1) }
+              }}>
+              {visibleNavItems.map((item) => (
+                <a key={`${item.path}-${item.label}`} href={item.path}
+                  aria-current={active === item.active ? 'page' : undefined}
+                  className={active === item.active ? 'active' : ''}>{item.label}</a>
+              ))}
+            </nav>
+            <button type="button" className="portal-nav-arrow" aria-label="向右滚动顶部菜单" aria-controls="portal-main-navigation" disabled={!navEdges.right} onClick={() => scrollNav(1)}>›</button>
+          </div>
           <form className="header-search" onSubmit={search}>
             <input
               value={keyword}
@@ -232,6 +305,7 @@ export function PortalLayout({ children, active = '/' }: { children: ReactNode; 
             className="nav-toggle"
             aria-label={navOpen ? '关闭导航菜单' : '打开导航菜单'}
             aria-expanded={navOpen}
+            aria-controls="portal-mobile-navigation"
             onClick={() => setNavOpen((open) => !open)}
           >
             <span /><span /><span />
@@ -240,7 +314,7 @@ export function PortalLayout({ children, active = '/' }: { children: ReactNode; 
       </header>
 
       {navOpen && (
-        <div className="portal-mobile-nav" role="dialog" aria-modal="true" aria-label="导航菜单">
+        <div id="portal-mobile-navigation" className="portal-mobile-nav" role="dialog" aria-modal="true" aria-label="导航菜单">
           <button type="button" className="portal-mobile-mask" aria-label="关闭菜单" onClick={() => setNavOpen(false)} />
           <div className="portal-mobile-panel">
             <div className="portal-mobile-head">
@@ -274,9 +348,9 @@ export function PortalLayout({ children, active = '/' }: { children: ReactNode; 
 
       <div className="portal-channelbar">
         <div className="container">
-          <a className="tag portal-all-channel" href="#/chains"><Icon name="layers" size={14} />全部频道</a>
+          <a className="tag portal-all-channel" href="#/hall"><Icon name="layers" size={14} />全部频道</a>
           {CHANNELS.map((channel) => (
-            <a className="chip" key={channel} href={`#/chains?l1=${encodeURIComponent(channel)}`}>{channel}</a>
+            <a className="chip" key={channel} href={`#/hall?l1=${encodeURIComponent(channel)}`}>{channel}</a>
           ))}
         </div>
       </div>
@@ -295,11 +369,10 @@ export function PortalLayout({ children, active = '/' }: { children: ReactNode; 
             <div>
               <h4>关于平台</h4>
               <a href="#/certify">认证中心</a>
-              <a href="#/chains">产业链频道</a>
               <a href="#/hall">交易大厅</a>
               <a href="#/logistics">物流服务</a>
               <a href="#/finance">供应链金融</a>
-              <a href={governmentUrl('/')}>政府监管</a>
+              <a href="#/government">政府监管</a>
               <a href={productionLogin()}>生产管理</a>
             </div>
             <div>

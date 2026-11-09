@@ -1,3 +1,5 @@
+import ProTable from '@/components/ProductionTable'
+import PageContainer from '@/components/ProductionPageContainer'
 /**
  * 页面名称：存证记录
  * 路由路径：/production/blockchain/records
@@ -24,7 +26,7 @@
 import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ProTable } from '@ant-design/pro-components'
+
 import type { ProColumns } from '@ant-design/pro-components'
 import {
   Alert,
@@ -537,8 +539,8 @@ export default function BlockchainRecords(): JSX.Element {
   ]
 
   return (
+    <PageContainer title="📋 存证记录">
     <Card
-      title="📋 存证记录"
       extra={
         <Space>
           <Button
@@ -630,12 +632,7 @@ export default function BlockchainRecords(): JSX.Element {
           </Col>
         </Row>
 
-        <Alert
-          type="info"
-          showIcon
-          message="筛选与字段口径说明"
-          description="后端 GET /blockchain/records 支持 status、bizType、keyword 三个筛选参数：keyword 匹配业务键（target_code）与存证记录号（record_no）。业务类型取值是存证表的 target_type（HARVEST / QUALITY / INPUT / TRACE）—— 平台侧旧词表叫 INSPECTION，服务端已归一成 QUALITY；数字枚举（历史 bizType=2）已下线，传进来会直接报错而不是静默回空列表。按时间范围筛选后端仍不支持，故未提供。表格只展示后端真实返回的字段：确认数、上链方式、数字签名、链ID 后端均不返回，故不展示。"
-        />
+
 
         <ProTable<BlockchainBizRecord>
           rowKey="recordId"
@@ -705,5 +702,6 @@ export default function BlockchainRecords(): JSX.Element {
         </Space>
       </Modal>
     </Card>
+    </PageContainer>
   )
 }

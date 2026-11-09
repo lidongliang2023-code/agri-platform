@@ -59,7 +59,7 @@ const router = createRouter({
 })
 
 router.afterEach((to) => {
-  document.title = `${to.meta?.title || '商城'} · 农联优选`
+  document.title = `${to.meta?.title || '商城'} · 丰链云`
 })
 
 export default router

@@ -88,6 +88,14 @@ public class TradeProduct {
     @TableField("harvest_batch_no")
     private String harvestBatchNo;
 
+    /** 产销对接：来源供给单号（生产端签发） */
+    @TableField("source_offer_no")
+    private String sourceOfferNo;
+
+    /** 产销对接：来源供给量（只读，建品时的上限依据） */
+    @TableField("source_offer_qty")
+    private BigDecimal sourceOfferQty;
+
     @TableField("certification_json")
     private String certificationJson;
 

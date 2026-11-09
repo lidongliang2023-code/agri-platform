@@ -1,526 +1,320 @@
-/**
- * 页面名称：报表中心
- * 路由路径：/admin/production/reports
- * 所属模块：统计报表
- * PRD 序号：PRD 6.2 #28
- * 原型页码：P26 reports
- *
- * 交互说明（对照原型 P26）：
- * - 筛选：报表类型（生产报表 / 质量报表 / 设备报表 / 告警报表）+ 时间范围；
- * - 6 张报表卡片：图标 + 名称 / 最新时间·更新频率 / 覆盖范围 / 操作（查看、下载）；
- *   「生产日报」跳转 /admin/production/reports/production，「质量检测报告」跳转 .../quality；
- * - 收藏管理：星标收藏持久化到 localStorage，支持「仅看收藏」过滤；
- * - 下载通过前端 Blob 生成报表摘要文件，无需后端介入即可闭环。
- *
- * 明示（与 AI 模型管理同一套口径，避免"看起来像真的"）：
- * - ① 顶部常驻 Alert：示例数据 + 收藏仅在本机生效 + 下载为前端生成摘要文件；
- * - ② 收藏与下载的成功提示均带限定语「仅保存到本机 / 未同步服务端」「前端即时生成的摘要文件」；
- * - ③ 服务端报表列表中不存在的卡片统一带「示例」Tag，可一眼区分真实报表与示例数据。
- */
-import { useEffect, useMemo, useState } from 'react'
-import dayjs from 'dayjs'
+import { useState } from 'react'
+import { Alert, App, Button, Card, Collapse, DatePicker, Form, Input, Modal, Popconfirm, Select, Space, Tag, Typography } from 'antd'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  Alert,
-  App,
-  Button,
-  Card,
-  Col,
-  DatePicker,
-  Empty,
-  Form,
-  Input,
-  Row,
-  Select,
-  Space,
-  Statistic,
-  Switch,
-  Tag,
-  Tooltip,
-  Typography,
-} from 'antd'
-import {
-  BarChartOutlined,
-  DownloadOutlined,
-  EyeOutlined,
-  ReloadOutlined,
-  StarFilled,
-  StarOutlined,
-} from '@ant-design/icons'
-import { useNavigate } from 'react-router-dom'
-import type { CSSProperties } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { getReportCenterStat, listAdminReports } from '@/api'
-import type { AdminReportPage } from '@/api'
+  createReportTask,
+  downloadAdminReportFile,
+  generateAdminReportFile,
+  getAdminReportTask,
+  listAdminReports,
+  type ReportTask,
+} from '@/api/admin/reports'
+import ProductionTable from '@/components/ProductionTable'
+import { PlusOutlined, SearchOutlined, UndoOutlined } from '@ant-design/icons'
+import dayjs, { type Dayjs } from 'dayjs'
+import { supervisionFarms } from '@/api/admin/farm-supervision'
+import type { Farm } from '@/types'
 
-/** 报表大类：production 生产报表 / quality 质量报表 / device 设备报表 / alert 告警报表 */
-type ReportGroup = 'production' | 'quality' | 'device' | 'alert'
+const STATUS: Record<string, string> = { PENDING: '待生成', RUNNING: '生成中', DONE: '已生成', FAILED: '失败' }
 
-/** 报表卡片模型 */
-interface ReportCard {
-  /** 报表 ID */
-  reportId: string
-  /** 报表名称 */
-  name: string
-  /** 所属大类 */
-  group: ReportGroup
-  /** 图标 */
-  icon: string
-  /** 最新时间描述 */
-  latest: string
-  /** 更新频率 */
-  frequency: string
-  /** 覆盖范围描述 */
-  coverage: string
-  /** 跳转路由（可选） */
-  route?: string
-}
-
-/** 原型 P26 的 6 张报表卡片 */
-const REPORT_CARDS: ReportCard[] = [
-  {
-    reportId: 'RPT-PROD-DAY',
-    name: '生产日报',
-    group: 'production',
-    icon: '📊',
-    latest: '2025-07-14',
-    frequency: '每日更新',
-    coverage: '任务完成率、产量、种植面积',
-    route: '/admin/production/reports/production',
-  },
-  {
-    reportId: 'RPT-PROD-WEEK',
-    name: '生产周报',
-    group: 'production',
-    icon: '📊',
-    latest: '2025-07-07 ~ 07-13',
-    frequency: '每周更新',
-    coverage: '周度汇总、趋势对比',
-    route: '/admin/production/reports/production',
-  },
-  {
-    reportId: 'RPT-PROD-MONTH',
-    name: '生产月报',
-    group: 'production',
-    icon: '📊',
-    latest: '2025-06',
-    frequency: '每月更新',
-    coverage: '月度总结、同比环比',
-    route: '/admin/production/reports/production',
-  },
-  {
-    reportId: 'RPT-QUALITY',
-    name: '质量检测报告',
-    group: 'quality',
-    icon: '🛡️',
-    latest: '2025-07-14',
-    frequency: '按批次',
-    coverage: '检测合格率、异常分布',
-    route: '/admin/production/reports/quality',
-  },
-  {
-    reportId: 'RPT-DEVICE',
-    name: '设备运维报表',
-    group: 'device',
-    icon: '📡',
-    latest: '2025-07-14',
-    frequency: '每日更新',
-    coverage: '在线率、故障率、维护记录',
-  },
-  {
-    reportId: 'RPT-ALERT',
-    name: '告警分析报表',
-    group: 'alert',
-    icon: '⚠️',
-    latest: '2025-07-14',
-    frequency: '每日更新',
-    coverage: '告警统计、处理时效、根因分析',
-  },
-]
-
-/** 收藏缓存 key */
-const FAVORITE_KEY = 'agri:admin:reports:favorites'
-
-/** 统计接口不可用时统计卡显示的占位符（不是 0，0 会被读成「本月生成 0 份」） */
-const UNAVAILABLE_TEXT = '—'
-
-/** 占位符样式：弱化，避免与真实数字混淆 */
-const UNAVAILABLE_VALUE_STYLE: CSSProperties = { color: '#bfbfbf', fontSize: 24 }
-
-/**
- * 读取本地收藏
- * @returns 已收藏报表 ID 列表
- */
-function readFavorites(): string[] {
-  try {
-    const raw = window.localStorage.getItem(FAVORITE_KEY)
-    if (!raw) {
-      return []
-    }
-    const parsed: unknown = JSON.parse(raw)
-    return Array.isArray(parsed) ? (parsed as string[]) : []
-  } catch {
-    return []
-  }
-}
-
-/** 查询条件 */
-interface FilterState {
-  group?: ReportGroup
-  keyword?: string
-  range?: [string, string]
-}
-
-/**
- * 报表中心页面
- * @returns 页面内容
- */
-export default function ReportCenter(): JSX.Element {
+export default function ReportCenter() {
   const { message } = App.useApp()
-  const navigate = useNavigate()
-  const queryClient = useQueryClient()
-  const [form] = Form.useForm<FilterState>()
-  const [filters, setFilters] = useState<FilterState>({})
-  const [favorites, setFavorites] = useState<string[]>(readFavorites())
-  const [onlyFavorite, setOnlyFavorite] = useState<boolean>(false)
-  const [serverTotal, setServerTotal] = useState<number | undefined>(undefined)
-
-  /**
-   * 报表中心统计。
-   *
-   * ⚠️ 不再在 catch 里返回 `{ totalCount: 6, monthCount: 128, downloadCount: 862, failedCount: 2 }`
-   * 这类编造数字：后端 `GET /admin/reports/stat` 实际不存在（会被 `@GetMapping("/{id}")`
-   * 吞掉后抛 NOT_FOUND），编造数字会让「接口挂了」显示成「本月生成 128 份」。
-   * 现在由 api 层返回 `unavailableReason`，本页按失败态渲染。
-   */
-  const statQuery = useQuery({
-    queryKey: ['admin-report-center-stat'],
-    queryFn: () => getReportCenterStat(),
-  })
-
-  /** 统计接口不可用原因（非空即本次没拿到任何真实统计） */
-  const statUnavailableReason: string | undefined = statQuery.data?.unavailableReason
-
-  /** 服务端报表任务列表；失败时同样带 unavailableReason，不做「空列表」冒充 */
-  const listQuery = useQuery({
-    queryKey: ['admin-report-center-list'],
-    queryFn: async (): Promise<AdminReportPage> => {
-      const page = await listAdminReports({ pageNum: 1, pageSize: 100 })
-      setServerTotal(page.unavailableReason ? undefined : page.total)
-      return page
-    },
-  })
-
-  /** 报表任务列表接口不可用原因 */
-  const listUnavailableReason: string | undefined = listQuery.data?.unavailableReason
-
-  useEffect(() => {
-    window.localStorage.setItem(FAVORITE_KEY, JSON.stringify(favorites))
-  }, [favorites])
-
-  /** 切换收藏（仅写入本机 localStorage，不调用服务端） */
-  const toggleFavorite = (reportId: string): void => {
-    const willFavorite = !favorites.includes(reportId)
-    setFavorites((prev) =>
-      prev.includes(reportId) ? prev.filter((id) => id !== reportId) : [...prev, reportId],
-    )
-    const target = REPORT_CARDS.find((card) => card.reportId === reportId)
-    message.success(
-      willFavorite
-        ? `已收藏「${target?.name ?? reportId}」（仅保存到本机，未同步服务端）`
-        : `已取消收藏「${target?.name ?? reportId}」（仅在本机生效，未同步服务端）`,
-    )
+  const client = useQueryClient()
+  const [page, setPage] = useState(1)
+  const [size, setSize] = useState(20)
+  const [keyword, setKeyword] = useState('')
+  const [status, setStatus] = useState<string>()
+  const [reportType, setReportType] = useState<string>()
+  const [farmId, setFarmId] = useState<string>()
+  const [range, setRange] = useState<[Dayjs, Dayjs] | null>(null)
+  const [searchText, setSearchText] = useState('')
+  const [draftStatus, setDraftStatus] = useState<string>()
+  const [draftType, setDraftType] = useState<string>()
+  const [draftFarm, setDraftFarm] = useState<string>()
+  const [draftRange, setDraftRange] = useState<[Dayjs, Dayjs] | null>(null)
+  const applyFilters = () => {
+    setKeyword(searchText.trim())
+    setStatus(draftStatus)
+    setReportType(draftType)
+    setFarmId(draftFarm)
+    setRange(draftRange)
+    setPage(1)
   }
-
-  /** 是否为本机示例卡片（服务端报表列表中不存在） */
-  const isDemoCard = (card: ReportCard): boolean =>
-    !listQuery.data?.list?.some((item) => item.reportId === card.reportId)
-
-  /** 当前展示的报表卡片 */
-  const displayCards = useMemo(
-    () =>
-      REPORT_CARDS.filter((card) => {
-        if (filters.group && card.group !== filters.group) {
-          return false
-        }
-        if (filters.keyword && !card.name.includes(filters.keyword)) {
-          return false
-        }
-        if (onlyFavorite && !favorites.includes(card.reportId)) {
-          return false
-        }
-        return true
-      }),
-    [filters, onlyFavorite, favorites],
-  )
-
-  /**
-   * 查看报表：配置了路由的跳转对应页面，其余提示暂未开放
-   * @param card 目标报表卡片
-   */
-  const handleView = (card: ReportCard): void => {
-    if (card.route) {
-      navigate(card.route)
-      return
+  const resetFilters = () => {
+    setSearchText(''); setKeyword('')
+    setDraftStatus(undefined); setStatus(undefined)
+    setDraftType(undefined); setReportType(undefined)
+    setDraftFarm(undefined); setFarmId(undefined)
+    setDraftRange(null); setRange(null); setPage(1)
+  }
+  const filterCount = [keyword, status, reportType, farmId, range].filter(Boolean).length
+  const farms = useQuery({queryKey: ['report-farm-options'], queryFn: async () => {
+    const result: Farm[] = []
+    for (let pageNum = 1; ; pageNum++) {
+      const data = await supervisionFarms({pageNum, pageSize: 100})
+      if (!Array.isArray(data.list)) throw new Error('农场列表结构异常')
+      result.push(...data.list)
+      if (result.length >= data.total) return result
+      if (!data.list.length) throw new Error('农场列表不完整，请重试')
     }
-    message.info(`「${card.name}」详情页正在建设中，可通过下载获取最新报表`)
+  }, retry: false})
+  const farmOptions = farms.data?.map(f => ({value: String(f.farmId), label: `${f.farmName}（${f.farmId}）`})) ?? []
+  const farmLabel = (id?: string) => id == null ? '全平台' : farmOptions.find(f => f.value === String(id))?.label ?? `农场 ID：${id}`
+  const datePresets = [
+    {label:'本月', value:[dayjs().startOf('month'), dayjs()] as [Dayjs,Dayjs]},
+    {label:'近30天', value:[dayjs().subtract(29,'day'), dayjs()] as [Dayjs,Dayjs]},
+    {label:'本年', value:[dayjs().startOf('year'), dayjs()] as [Dayjs,Dayjs]},
+  ]
+  const [open, setOpen] = useState(false)
+  const [actionCode, setActionCode] = useState<string | null>(null)
+  const [form] = Form.useForm<{ reportName: string; reportType: string; farmId?: string; range: [Dayjs, Dayjs] }>()
+
+  const query = useQuery({
+    queryKey: ['admin-report-tasks', page, size, keyword, status, reportType, farmId, range?.[0]?.format('YYYY-MM-DD'), range?.[1]?.format('YYYY-MM-DD')],
+    queryFn: () => listAdminReports({ pageNum: page, pageSize: size, keyword, status, reportType, farmId, startDate: range?.[0]?.format('YYYY-MM-DD'), endDate: range?.[1]?.format('YYYY-MM-DD') }),
+    retry: false,
+  })
+
+  const save = useMutation({
+    mutationFn: async () => {
+      const v = await form.validateFields()
+      const code = await createReportTask({
+        reportName: v.reportName.trim(),
+        reportType: v.reportType,
+        farmId: v.farmId,
+        bizDateFrom: v.range[0].format('YYYY-MM-DD'),
+        bizDateTo: v.range[1].format('YYYY-MM-DD'),
+      })
+      const check = await getAdminReportTask(code)
+      if (
+        check.reportId !== code ||
+        check.reportType !== v.reportType ||
+        String(check.farmId ?? '') !== String(v.farmId ?? '') ||
+        check.reportName !== v.reportName.trim() ||
+        check.bizDateFrom !== v.range[0].format('YYYY-MM-DD') ||
+        check.bizDateTo !== v.range[1].format('YYYY-MM-DD')
+      ) {
+        throw new Error('任务已提交，但回读未确认，请刷新核对，勿重复提交')
+      }
+      return code
+    },
+    onSuccess: () => {
+      message.success('报表任务已登记并回读确认')
+      setOpen(false)
+      form.resetFields()
+      void client.invalidateQueries({ queryKey: ['admin-report-tasks'] })
+    },
+    onError: (e: Error) => message.error(e.message),
+  })
+
+  const handleGenerate = async (code: string) => {
+    setActionCode(code)
+    try {
+      const res = await generateAdminReportFile(code)
+      if (res.status === 'DONE') {
+        message.success('报表快照已生成')
+      } else {
+        message.warning(`报表生成状态为：${STATUS[res.status ?? ''] ?? res.status ?? '未知'}`)
+      }
+      void client.invalidateQueries({ queryKey: ['admin-report-tasks'] })
+    } catch (e) {
+      message.error((e as Error)?.message ?? '触发生成失败')
+    } finally {
+      setActionCode(null)
+    }
   }
 
-  /**
-   * 下载报表摘要（前端 Blob 方式，保证无后端依赖时也可闭环）
-   * @param card 目标报表卡片
-   */
-  const handleDownload = (card: ReportCard): void => {
-    const content = [
-      `报表名称：${card.name}`,
-      `报表编号：${card.reportId}`,
-      `最新时间：${card.latest}`,
-      `更新频率：${card.frequency}`,
-      `覆盖范围：${card.coverage}`,
-      `导出时间：${dayjs().format('YYYY-MM-DD HH:mm:ss')}`,
-      '',
-      '说明：本文件由平台报表中心自动导出，用于运营侧的离线查阅。',
-    ].join('\n')
-    const blob = new Blob([`\uFEFF${content}`], { type: 'text/plain;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `${card.name}_${dayjs().format('YYYYMMDD')}.txt`
-    link.click()
-    URL.revokeObjectURL(url)
-    message.success(`「${card.name}」已下载（前端即时生成的摘要文件，非服务端原始报表）`)
+  const handleDownload = async (row: ReportTask) => {
+    setActionCode(row.reportId)
+    try {
+      await downloadAdminReportFile(row.reportId, `${row.reportName || row.reportId}.csv`)
+      message.success('报表下载已开始')
+    } catch (e) {
+      message.error((e as Error)?.message ?? '下载失败')
+    } finally {
+      setActionCode(null)
+    }
   }
-
-  /**
-   * 渲染一张统计卡。
-   *
-   * 统计接口不可用时统一显示「—」：接口失败 ≠ 有 128 份本月报表，
-   * 用示例数字顶上会让用户把「接口挂了」读成「业务量很大」。
-   *
-   * @param title 卡片标题
-   * @param value 真实统计值（仅在接口可用时使用）
-   * @param suffix 单位（仅在接口可用时显示）
-   * @param valueStyle 数值样式（仅在接口可用时应用）
-   * @returns 统计卡所在的栅格列
-   */
-  const renderStatCard = (
-    title: string,
-    value: number,
-    suffix: string,
-    valueStyle?: CSSProperties,
-  ): JSX.Element => (
-    <Col span={6}>
-      <Card>
-        <Statistic
-          title={title}
-          value={statUnavailableReason ? UNAVAILABLE_TEXT : value}
-          suffix={statUnavailableReason ? undefined : suffix}
-          valueStyle={statUnavailableReason ? UNAVAILABLE_VALUE_STYLE : valueStyle}
-          loading={!statUnavailableReason && statQuery.isPending}
-        />
-      </Card>
-    </Col>
-  )
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
+      <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+        <Typography.Title level={4} style={{ margin: 0 }}>
+          生产与质量报表
+        </Typography.Title>
+        <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
+          登记报表任务
+        </Button>
+      </Space>
+
       <Alert
-        type="warning"
+        type="info"
         showIcon
-        message="报表目录含本机示例数据；收藏状态仅保存在本机浏览器，未同步至服务端"
-        description={
-          <span>
-            服务端报表接口未返回数据时，本页展示原型 P26 的示例报表目录与示例统计，带{' '}
-            <Typography.Text code>示例</Typography.Text> 标签的卡片即本机示例数据（非服务端真实报表）；
-            星标收藏写入浏览器本地存储（localStorage），<Typography.Text strong>只对当前浏览器生效</Typography.Text>
-            ，其他账号 / 设备不可见，也不会同步到服务端；卡片「下载」得到的是
-            <Typography.Text strong>前端即时生成的摘要文件</Typography.Text>，不是服务端生成的 PDF / Excel 原件。
-          </span>
-        }
+        message="统一管理生产与质量报表任务及快照"
+        description="支持即时登记并触发生成真实 CSV 报表快照。快照基于生产、质量及告警事实生成并落盘，未生成前不可下载，无业务记录时如实显示为零；已生成快照保持不变。"
       />
-      {statUnavailableReason ? (
-        <Alert
-          banner
-          showIcon
-          type="warning"
-          message="报表中心统计未接入：后端尚未提供 /admin/reports/stat，四张统计卡显示「—」，不使用示例数字占位"
-          description={
-            <span>
-              原因：{statUnavailableReason}。为避免把编造数字误当成真实统计，此处
-              <strong>不会</strong>用示例值填充；接口上线后本提示自动消失，卡片即恢复真实数字。
-            </span>
-          }
-        />
-      ) : null}
 
-      {listUnavailableReason ? (
-        <Alert
-          banner
-          showIcon
-          type="warning"
-          message="服务端报表任务列表不可用，下方卡片一律按示例数据处理"
-          description={
-            <span>
-              原因：{listUnavailableReason}。此时所有卡片都会带{' '}
-              <Typography.Text code>示例</Typography.Text> 标签，
-              <strong>不代表服务端已存在这些报表</strong>。
-            </span>
-          }
-        />
-      ) : null}
-
-      <Row gutter={16}>
-        {renderStatCard('报表总数', serverTotal ?? statQuery.data?.totalCount ?? 0, '类')}
-        {renderStatCard('本月生成', statQuery.data?.monthCount ?? 0, '份')}
-        {renderStatCard('下载次数', statQuery.data?.downloadCount ?? 0, '次')}
-        {renderStatCard(
-          '生成失败',
-          statQuery.data?.failedCount ?? 0,
-          '份',
-          (statQuery.data?.failedCount ?? 0) > 0 ? { color: '#cf1322' } : undefined,
-        )}
-      </Row>
-
-      <Card>
-        <Form<FilterState>
-          form={form}
-          layout="inline"
-          style={{ rowGap: 12 }}
-          onFinish={(values) => {
-            const range = values.range as unknown as [dayjs.Dayjs, dayjs.Dayjs] | undefined
-            setFilters({
-              ...values,
-              range: range ? [range[0].format('YYYY-MM-DD'), range[1].format('YYYY-MM-DD')] : undefined,
-            })
-          }}
-        >
-          <Form.Item name="keyword" label="快速查询">
-            <Input allowClear placeholder="输入报表名称" style={{ width: 180 }} />
+      <Card size="small">
+        <Form layout="inline" onFinish={applyFilters} style={{ rowGap: 12 }}>
+          <Form.Item label="名称 / 编号">
+            <Input placeholder="搜索报表名称或编号" allowClear value={searchText} onChange={e => setSearchText(e.target.value)} style={{ width: 230 }} />
           </Form.Item>
-          <Form.Item name="group" label="报表类型">
-            <Select
-              allowClear
-              placeholder="全部"
-              style={{ width: 160 }}
-              options={[
-                { value: 'production', label: '生产报表' },
-                { value: 'quality', label: '质量报表' },
-                { value: 'device', label: '设备报表' },
-                { value: 'alert', label: '告警报表' },
-              ]}
-            />
+          <Form.Item label="状态">
+            <Select allowClear value={draftStatus} placeholder="全部状态" style={{ width: 140 }} options={Object.entries(STATUS).map(([value, label]) => ({ value, label }))} onChange={setDraftStatus} />
           </Form.Item>
-          <Form.Item name="range" label="时间范围">
-            <DatePicker.RangePicker />
+          <Form.Item label="类型">
+            <Select allowClear value={draftType} placeholder="全部类型" style={{ width: 150 }} options={[{value:'GOV',label:'生产监管'},{value:'QUALITY',label:'质量'},{value:'BIZ',label:'生产经营'}]} onChange={setDraftType} />
+          </Form.Item>
+          <Form.Item label="农场">
+            <Select allowClear showSearch optionFilterProp="label" value={draftFarm} placeholder="全部农场范围" loading={farms.isFetching} style={{width:260}} options={farmOptions} onChange={setDraftFarm} />
+          </Form.Item>
+          <Form.Item label="统计期间">
+            <DatePicker.RangePicker value={draftRange} presets={datePresets} placeholder={['开始日期','结束日期']} onChange={v=>setDraftRange(v?.[0] && v?.[1] ? [v[0],v[1]] : null)} />
           </Form.Item>
           <Form.Item>
             <Space>
-              <Button type="primary" htmlType="submit">
-                查询
-              </Button>
-              <Button
-                onClick={() => {
-                  form.resetFields()
-                  setFilters({})
-                }}
-              >
-                重置
-              </Button>
-              <Button
-                icon={<ReloadOutlined />}
-                onClick={() => {
-                  void queryClient.invalidateQueries({ queryKey: ['admin-report-center-stat'] })
-                  void queryClient.invalidateQueries({ queryKey: ['admin-report-center-list'] })
-                }}
-              >
-                刷新
-              </Button>
-              <Tooltip title="收藏状态仅保存在当前浏览器本地（localStorage），不会同步到服务端，换设备 / 清理浏览器数据后失效">
-                <Space size={4}>
-                  <Switch
-                    checked={onlyFavorite}
-                    onChange={(checked) => setOnlyFavorite(checked)}
-                    checkedChildren="收藏"
-                    unCheckedChildren="全部"
-                  />
-                  <Typography.Text type="secondary">仅看收藏（{favorites.length}）</Typography.Text>
-                </Space>
-              </Tooltip>
+              <Button type="primary" htmlType="submit" icon={<SearchOutlined />} loading={query.isFetching}>查询</Button>
+              <Button icon={<UndoOutlined />} onClick={resetFilters}>重置</Button>
             </Space>
           </Form.Item>
         </Form>
+        <Typography.Paragraph type="secondary" style={{margin:'12px 0 0'}}>日期匹配与所选期间有交集的报表；调整条件后点击查询，列表筛选不改变已生成快照。</Typography.Paragraph>
       </Card>
 
-      {displayCards.length === 0 ? (
-        <Card>
-          <Empty description="没有符合条件的报表" />
-        </Card>
-      ) : (
-        <Row gutter={[16, 16]}>
-          {displayCards.map((card) => (
-            <Col span={8} key={card.reportId}>
-              <Card
-                styles={{ body: { padding: 16 } }}
-                title={
-                  <Space>
-                    <span style={{ fontSize: 18 }}>{card.icon}</span>
-                    <span>{card.name}</span>
-                    <Tag color={card.group === 'quality' ? 'blue' : card.group === 'production' ? 'green' : 'orange'}>
-                      {card.group === 'production'
-                        ? '生产'
-                        : card.group === 'quality'
-                          ? '质量'
-                          : card.group === 'device'
-                            ? '设备'
-                            : '告警'}
-                    </Tag>
-                    {isDemoCard(card) ? <Tag color="purple">示例</Tag> : null}
-                  </Space>
-                }
-                extra={
-                  <Button
-                    type="text"
-                    icon={
-                      favorites.includes(card.reportId) ? (
-                        <StarFilled style={{ color: '#faad14' }} />
-                      ) : (
-                        <StarOutlined />
-                      )
-                    }
-                    onClick={() => toggleFavorite(card.reportId)}
-                    aria-label="收藏"
-                  />
-                }
-                actions={[
-                  <Button key="view" type="link" icon={<EyeOutlined />} onClick={() => handleView(card)}>
-                    查看
-                  </Button>,
-                  <Button
-                    key="download"
-                    type="link"
-                    icon={<DownloadOutlined />}
-                    onClick={() => handleDownload(card)}
+      {farms.isError && <Alert type="error" message="农场选项读取失败" action={<Button onClick={()=>void farms.refetch()}>重试</Button>} />}
+      <Collapse size="small" items={[{key:'metrics',label:'指标口径与快照说明',children:<Typography.Paragraph style={{margin:0}}>任务按计划开始日，采收按采收日，检测按采样日，告警按创建日统计；地块与面积为生成时点在册值。任务验收完成率=验收通过任务/期间任务；检测合格率仅以已完成且结论明确的检测为分母；告警处置完成率以明确已处理或关闭为完成。无分母显示—，合计按数量加权。经营报表不含未接入的交易金额。</Typography.Paragraph>}]} />
+      {query.data?.unavailableReason || query.isError ? (
+        <Alert
+          type="error"
+          showIcon
+          message={query.data?.unavailableReason || '报表读取失败'}
+          action={<Button onClick={() => void query.refetch()}>重试</Button>}
+        />
+      ) : null}
+
+      <ProductionTable<ReportTask>
+        headerTitle={<Space wrap><span>报表任务</span><Tag>{query.isSuccess && !query.data?.unavailableReason ? `共 ${query.data?.total ?? 0} 份` : '数量待确认'}</Tag>{filterCount > 0 && <Tag color="blue">已应用 {filterCount} 项筛选</Tag>}</Space>}
+        search={false}
+        columnWidthStorageKey="admin-report-list"
+        columnsState={{ persistenceKey: 'production-admin-report-columns-v1', persistenceType: 'localStorage' }}
+        options={{ reload: () => { void query.refetch() }, density: true, setting: true, fullScreen: true }}
+        locale={{ emptyText: filterCount ? '没有匹配的报表，请调整筛选条件或重置' : '暂无报表任务，点击右上方登记报表任务' }}
+        rowKey="reportId"
+        loading={query.isFetching}
+        dataSource={query.data?.list ?? []}
+        scroll={{ x: 1350 }}
+        pagination={{
+          current: page,
+          pageSize: size,
+          total: query.data?.total ?? 0,
+          showSizeChanger: true,
+          showTotal: total => `共 ${total} 份`,
+          onChange: (p, s) => {
+            setPage(s === size ? p : 1)
+            setSize(s)
+          },
+        }}
+        columns={[
+          { title: '报表编号', dataIndex: 'reportId', width: 230 },
+          { title: '名称', dataIndex: 'reportName', width: 200 },
+          {
+            title: '类型',
+            dataIndex: 'reportType',
+            width: 110,
+            render: (v) => ({ GOV: '生产监管', BIZ: '经营', QUALITY: '质量' }[v as string] ?? v),
+          },
+          {
+            title: '统计期间',
+            key: 'period',
+            width: 220,
+            render: (_, r) => `${r.bizDateFrom ?? '—'} 至 ${r.bizDateTo ?? '—'}`,
+          },
+          { title: '农场范围', key: 'farm', width: 220, render: (_, row) => farmLabel(row.farmId) },
+          { title: '创建人 ID', dataIndex: 'generatorId', width: 150 },
+          {
+            title: '状态',
+            dataIndex: 'status',
+            width: 100,
+            render: (v) => (
+              <Tag color={v === 'DONE' ? 'green' : v === 'FAILED' ? 'red' : 'default'}>
+                {STATUS[v as string] ?? v ?? '—'}
+              </Tag>
+            ),
+          },
+          {
+            title: '生成时间',
+            dataIndex: 'generatedAt',
+            width: 180,
+            render: (v) => v || '—',
+          },
+          {
+            title: '操作',
+            key: 'actions',
+            hideInSetting: true,
+            width: 180,
+            fixed: 'right',
+            render: (_, row) => {
+              const busy = actionCode === row.reportId
+              const isDone = row.status === 'DONE'
+              return (
+                <Space size={8}>
+                  {!isDone && <Popconfirm
+                    title="确认生成当前统计期间的报表快照？"
+                    onConfirm={() => void handleGenerate(row.reportId)}
+                    okText="确定"
+                    cancelText="取消"
                   >
-                    下载
-                  </Button>,
-                ]}
-              >
-                <Space direction="vertical" size={4} style={{ width: '100%' }}>
-                  <Typography.Text type="secondary">
-                    最新 {card.latest} · {card.frequency}
-                  </Typography.Text>
-                  <Typography.Text type="secondary">覆盖 {card.coverage}</Typography.Text>
-                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                    <BarChartOutlined /> 编号 {card.reportId}
-                    {listQuery.data?.list?.some((item) => item.reportId === card.reportId)
-                      ? ' · 平台已生成'
-                      : ''}
-                  </Typography.Text>
+                    <Button type="link" size="small" loading={busy} disabled={actionCode !== null}>
+                      {row.status === 'FAILED' ? '重试生成' : '生成快照'}
+                    </Button>
+                  </Popconfirm>}
+                  {isDone ? (
+                    <Button type="link" size="small" loading={busy} onClick={() => void handleDownload(row)}>
+                      下载
+                    </Button>
+                  ) : (
+                    <Button type="link" size="small" disabled>
+                      待生成
+                    </Button>
+                  )}
                 </Space>
-              </Card>
-            </Col>
-          ))}
-        </Row>
-      )}
+              )
+            },
+          },
+        ]}
+      />
+
+      <Modal
+        title="登记报表任务"
+        open={open}
+        confirmLoading={save.isPending}
+        onCancel={() => {
+          if (!save.isPending) setOpen(false)
+        }}
+        onOk={() => save.mutate()}
+        destroyOnClose
+      >
+        <Form form={form} layout="vertical" initialValues={{reportType:'GOV'}}>
+          <Form.Item name="reportName" label="报表名称" rules={[{ required: true, whitespace: true }]}>
+            <Input maxLength={100} />
+          </Form.Item>
+          <Form.Item name="reportType" label="类型" rules={[{ required: true }]}>
+            <Select
+              options={[
+                { value: 'GOV', label: '生产监管' },
+                { value: 'QUALITY', label: '质量' },
+                { value: 'BIZ', label: '经营' },
+              ]}
+            />
+          </Form.Item>
+          <Form.Item name="farmId" label="农场范围" extra="不选时统计全平台农场；所选范围将固化到任务与快照。">
+            <Select allowClear showSearch optionFilterProp="label" loading={farms.isFetching} options={farmOptions} placeholder="全平台" />
+          </Form.Item>
+          <Form.Item name="range" label="统计期间" rules={[{ required: true }]}>
+            <DatePicker.RangePicker presets={datePresets} />
+          </Form.Item>
+        </Form>
+      </Modal>
     </Space>
   )
 }

@@ -158,19 +158,19 @@ async function progress(order: Order) {
 .workbench-head > view { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 4rpx; }
 .workbench-head .tiny { color: #8ad8aa; }
 .head-title { font-size: 29rpx; font-weight: 700; }
-.head-sub { color: rgba(255,255,255,.47); font-size: 18rpx; }
-.state { align-self: flex-start; padding: 6rpx 14rpx; border-radius: 999rpx; font-size: 18rpx; }
+.head-sub { color: rgba(255,255,255,.47); font-size: 24rpx; }
+.state { align-self: flex-start; padding: 6rpx 14rpx; border-radius: 999rpx; font-size: 24rpx; }
 .state.ok { background: rgba(83,213,138,.22); color: #a8ecc4; }
 .state.warn { background: rgba(255,195,86,.22); color: #ffdf9f; }
 .stat-row { display: flex; gap: 14rpx; margin-bottom: 20rpx; }
 .stat { flex: 1; padding: 18rpx; border: 1rpx solid #e1eae4; border-radius: 16rpx; background: #fff; display: flex; flex-direction: column; gap: 6rpx; }
-.stat text { color: #7b8a80; font-size: 18rpx; }
+.stat text { color: #7b8a80; font-size: 24rpx; }
 .stat b { font-size: 30rpx; color: #0e5233; }
 .grab-card { margin-bottom: 14rpx; padding: 18rpx; border: 1rpx solid #e1eae4; border-radius: 16rpx; }
 .grab-card > text { display: block; margin-top: 6rpx; }
 .grab-title { font-size: 24rpx; font-weight: 650; }
 .grab-foot { margin-top: 14rpx; gap: 12rpx; }
-.price { color: #0e5233; font-size: 19rpx; max-width: 420rpx; }
+.price { color: #0e5233; font-size: 24rpx; max-width: 420rpx; }
 .work-order { margin-bottom: 14rpx; padding: 16rpx; border: 1rpx solid #e1e9e3; border-radius: 16rpx; }
 .work-order > text { display: block; margin: 7rpx 0; }
 .work-order .btn { margin-top: 14rpx; }

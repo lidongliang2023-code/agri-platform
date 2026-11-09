@@ -1,7 +1,7 @@
 /**
  * 页面名称：任务验收
  * 路由路径：/production/tasks/:taskId/acceptance
- * 所属模块：智能种养
+ * 所属模块：农事生产
  * PRD 序号：PRD 6.1 #18（TASK-06 任务验收）
  *
  * 原型无此页，按 PRD 设计：
@@ -9,16 +9,17 @@
  * - 验收结论：通过 / 驳回；驳回必须填写原因（后端累加 rejectCount）
  * - 已验收任务展示历史结论，并支持重新验收
  */
+import Card from '@/components/SectionCard'
+import DetailInfoGrid from '@/components/DetailInfoGrid'
 import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { PageContainer, ProForm, ProFormRadio, ProFormTextArea } from '@ant-design/pro-components'
-import {
+import { ProForm, ProFormRadio, ProFormTextArea } from '@ant-design/pro-components'
+import PageContainer from '@/components/ProductionPageContainer'
+import { Pagination,
   Alert,
   Button,
-  Card,
   Col,
-  Descriptions,
   Divider,
   Empty,
   Image,
@@ -126,10 +127,11 @@ export default function TaskAcceptance(): JSX.Element {
   })
 
   /** 执行记录 */
+  const [recordPage, setRecordPage] = useState(1)
   const recordQuery = useQuery({
-    queryKey: ['production-task-records', taskId],
+    queryKey: ['production-task-records', taskId, recordPage],
     enabled: Boolean(taskId),
-    queryFn: () => fetchTaskRecords(taskId, 1, 50),
+    queryFn: () => fetchTaskRecords(taskId, recordPage, 50),
   })
 
   /** 本任务关联的投入品使用记录（真实台账） */
@@ -293,8 +295,10 @@ export default function TaskAcceptance(): JSX.Element {
         </Button>,
       ]}
     >
+      {(recordQuery.isError || usagesQuery.isError) && <Alert type="error" showIcon message="执行记录或投入品加载失败，不能据此认定没有记录" action={<Button onClick={() => { void recordQuery.refetch(); void usagesQuery.refetch() }}>重试</Button>} />}
+      <Pagination current={recordPage} pageSize={50} total={recordQuery.data?.total ?? 0} onChange={setRecordPage} showSizeChanger={false} style={{ marginBottom: 16 }} />
       <Card title="📋 任务信息" style={{ marginBottom: 16 }}>
-        <Descriptions bordered column={3} size="small" items={baseItems} />
+        <DetailInfoGrid columns={3} items={baseItems.map((i) => ({ key: i.key, label: i.label, value: i.children }))} />
         {task.resultDesc && (
           <Alert
             style={{ marginTop: 12 }}
@@ -370,22 +374,14 @@ export default function TaskAcceptance(): JSX.Element {
               </Col>
             </Row>
             <Divider />
-            <Descriptions column={2} size="small">
-              <Descriptions.Item label="最近打卡时间">
-                {latestRecord?.executeTime ?? '-'}
-              </Descriptions.Item>
-              <Descriptions.Item label="打卡坐标">
-                {latestRecord?.gpsLat && latestRecord?.gpsLng
+            <DetailInfoGrid columns={2} items={[
+              { label: "最近打卡时间", value: (<>{latestRecord?.executeTime ?? '-'}</>) },
+              { label: "打卡坐标", value: (<>{latestRecord?.gpsLat && latestRecord?.gpsLng
                   ? `${latestRecord.gpsLat}, ${latestRecord.gpsLng}`
-                  : '-'}
-              </Descriptions.Item>
-              <Descriptions.Item label="是否离线补传">
-                {latestRecord?.offlineFlag === 1 ? <Tag color="orange">是</Tag> : '否'}
-              </Descriptions.Item>
-              <Descriptions.Item label="异常说明">
-                {latestRecord?.abnormalDesc ?? '无'}
-              </Descriptions.Item>
-            </Descriptions>
+                  : '-'}</>) },
+              { label: "是否离线补传", value: (<>{latestRecord?.offlineFlag === 1 ? <Tag color="orange">是</Tag> : '否'}</>) },
+              { label: "异常说明", value: (<>{latestRecord?.abnormalDesc ?? '无'}</>) },
+            ]} />
             <Divider />
             <Typography.Text strong>投入品用量记录</Typography.Text>
             <div style={{ marginTop: 8 }}>
@@ -441,8 +437,7 @@ export default function TaskAcceptance(): JSX.Element {
               message.warning('驳回时必须填写驳回原因')
               return false
             }
-            reviewMutation.mutate(values)
-            return true
+            try { await reviewMutation.mutateAsync(values); return true } catch { return false }
           }}
         >
           <ProFormRadio.Group

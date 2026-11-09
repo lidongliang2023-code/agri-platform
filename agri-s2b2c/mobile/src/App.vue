@@ -62,12 +62,12 @@ button::after {
 
 .muted {
   color: #718277;
-  font-size: 22rpx;
+  font-size: 24rpx;
 }
 
 .tiny {
   color: #94a198;
-  font-size: 20rpx;
+  font-size: 24rpx;
 }
 
 .strong {
@@ -102,7 +102,7 @@ button::after {
 
 .card-sub {
   color: #94a198;
-  font-size: 20rpx;
+  font-size: 24rpx;
 }
 
 .btn {
@@ -143,7 +143,7 @@ button::after {
   min-height: 56rpx;
   padding: 0 18rpx;
   border-radius: 12rpx;
-  font-size: 22rpx;
+  font-size: 24rpx;
 }
 
 .btn-block {
@@ -160,7 +160,7 @@ button::after {
   align-items: center;
   padding: 4rpx 12rpx;
   border-radius: 999rpx;
-  font-size: 20rpx;
+  font-size: 24rpx;
   line-height: 1.5;
 }
 
@@ -227,7 +227,7 @@ button::after {
 .field-label {
   width: 160rpx;
   color: #718277;
-  font-size: 23rpx;
+  font-size: 24rpx;
 }
 
 .field input,
@@ -245,7 +245,7 @@ button::after {
   display: block;
   margin-bottom: 9rpx;
   color: #52665a;
-  font-size: 23rpx;
+  font-size: 24rpx;
   font-weight: 600;
 }
 
@@ -311,7 +311,7 @@ button::after {
 .custom-nav .right {
   min-width: 88rpx;
   color: #12764a;
-  font-size: 22rpx;
+  font-size: 24rpx;
   text-align: right;
 }
 

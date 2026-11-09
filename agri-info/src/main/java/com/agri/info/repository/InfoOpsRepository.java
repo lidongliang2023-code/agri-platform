@@ -72,8 +72,8 @@ public class InfoOpsRepository extends InfoRepository {
         quoteQuality.put("sourceCount", number("SELECT COUNT(*) FROM info_quote_source"));
         quoteQuality.put("sourceNormal", number("SELECT COUNT(*) FROM info_quote_source WHERE status='normal'"));
         quoteQuality.put("points", number("SELECT COALESCE(SUM(point_count),0) FROM info_quote_source"));
-        quoteQuality.put("availableRate", new BigDecimal("99.62"));
-        quoteQuality.put("blockedRows", 186);
+        quoteQuality.put("availableRate", quality().get("availableRate"));
+        quoteQuality.put("blockedRows", quality().get("blockedRows"));
         quoteQuality.put("accuracy", jdbc.query("""
                 SELECT q.category, f.mape FROM info_forecast f JOIN info_quote q ON q.id=f.quote_id
                 WHERE f.horizon='7d' GROUP BY q.category, f.mape
@@ -328,11 +328,20 @@ public class InfoOpsRepository extends InfoRepository {
             item.put("name", rs.getString("name"));
             item.put("sourceName", rs.getString("source_name"));
             item.put("cron", rs.getString("cron_text"));
+            var schedules = jdbc.queryForList("SELECT enabled,next_run_at,retry_count,last_result FROM info_collect_schedule WHERE task_id=?",rs.getLong("id"));
+            if (!schedules.isEmpty()) {
+                var schedule=schedules.get(0);
+                item.put("scheduleEnabled",schedule.get("enabled"));
+                item.put("nextRunAt",schedule.get("next_run_at"));
+                item.put("retryCount",schedule.get("retry_count"));
+                item.put("scheduleResult",schedule.get("last_result"));
+            }
             item.put("lastRun", rs.getString("last_run"));
             item.put("lastRows", rs.getInt("last_rows"));
             item.put("durationMs", rs.getInt("duration_ms"));
-            item.put("status", rs.getString("status"));
-            item.put("remark", rs.getString("remark"));
+            boolean configured = Boolean.TRUE.equals(jdbc.queryForObject("SELECT COUNT(*) > 0 FROM info_collect_config WHERE task_id=? AND enabled=TRUE", Boolean.class, rs.getLong("id")));
+            item.put("status", configured ? rs.getString("status") : "pending_config");
+            item.put("remark", configured ? rs.getString("remark") : "待接入授权行情接口，尚未进行真实采集");
             return item;
         }));
         result.put("indices", jdbc.query("SELECT * FROM info_price_index ORDER BY id", indexMapper()));
@@ -373,36 +382,20 @@ public class InfoOpsRepository extends InfoRepository {
         return Map.of("message", "品种已纳入监测", "quotes", quotesAdmin().get("quotes"));
     }
 
-    public Map<String, Object> runTask(long id, String operator) {
-        List<Map<String, Object>> rows = jdbc.query(
-                "SELECT * FROM info_collect_task WHERE id=?", (rs, rowNum) -> {
-                    Map<String, Object> item = new LinkedHashMap<>();
-                    item.put("id", rs.getLong("id"));
-                    item.put("name", rs.getString("name"));
-                    return item;
-                }, id);
-        if (rows.isEmpty()) {
-            throw new IllegalArgumentException("采集任务不存在");
-        }
-        jdbc.update("""
-                UPDATE info_collect_task SET last_run=?, status='success', remark=? WHERE id=?
-                """, nowLabel(), "手动触发成功（运营端）", id);
-        log(operator, "手动执行采集任务", String.valueOf(rows.get(0).get("name")), "运营端手动触发");
-        return Map.of("message", "任务已触发，结果将在 1 分钟内回写", "tasks", quotesAdmin().get("tasks"));
-    }
-
     public Map<String, Object> quality() {
+        long accepted = number("SELECT COALESCE(SUM(accepted_rows),0) FROM info_collect_run");
+        long duplicate = number("SELECT COALESCE(SUM(duplicate_rows),0) FROM info_collect_run");
+        long rejected = number("SELECT COALESCE(SUM(rejected_rows),0) FROM info_collect_run");
+        long total = accepted + duplicate + rejected;
         Map<String, Object> quality = new LinkedHashMap<>();
-        quality.put("availableRate", new BigDecimal("99.62"));
-        quality.put("blockedRows", 186);
-        quality.put("duplicateRows", 42);
-        quality.put("missingRows", 17);
+        quality.put("availableRate", total == 0 ? BigDecimal.ZERO : BigDecimal.valueOf((accepted + duplicate) * 100.0 / total).setScale(2, RoundingMode.HALF_UP));
+        quality.put("blockedRows", rejected);
+        quality.put("duplicateRows", duplicate);
+        quality.put("missingRows", 0);
         quality.put("rules", List.of(
-                Map.of("name", "价格偏离中位数 ±30%", "level", "拦截", "hit", 96),
-                Map.of("name", "同一品种同市场重复报价", "level", "去重", "hit", 42),
-                Map.of("name", "单位与规格缺失", "level", "补全", "hit", 17),
-                Map.of("name", "采集时间戳超前", "level", "拦截", "hit", 6),
-                Map.of("name", "产地信息员连续 3 日未报", "level", "告警", "hit", 3)));
+                Map.of("name", "真实接口有效观测", "level", "入库", "hit", accepted),
+                Map.of("name", "同一报价同一时点重复", "level", "去重", "hit", duplicate),
+                Map.of("name", "必填缺失、无效价格、未来时间或时点价格冲突", "level", "拒收", "hit", rejected)));
         return quality;
     }
 

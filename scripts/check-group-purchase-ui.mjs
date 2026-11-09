@@ -138,7 +138,7 @@ try {
     await page.goto(`${CHANNEL}/purchase`, { waitUntil: 'networkidle', timeout: 60000 })
     await page.waitForTimeout(1000)
     text = (await page.evaluate(() => document.body.innerText)).replace(/\s+/g, ' ')
-    check(text.includes('集采采购补货') && text.includes(batchTitle), '渠道端展示可报名批次')
+    check(text.includes('集采采购补货') && text.includes(batchTitle), '商家端展示可报名批次')
     await page.locator('tr', { hasText: batchTitle }).first().locator('button', { hasText: '报名' }).click()
     await page.waitForSelector('.el-dialog .el-form-item input', { timeout: 10000 })
     const qtyInput = page.locator('.el-dialog .el-form-item', { hasText: '报名数量' }).locator('input').first()
@@ -148,7 +148,7 @@ try {
     const commitment = sql(`SELECT CONCAT(quantity,'|',amount,'|',status) FROM agri_s2b2c.s2b2c_group_purchase_order WHERE batch_id='${batchId}' AND channel_id='${channelId}'`)
     check(commitment === '8|80.00|RESERVED', '渠道报名落库', commitment)
     text = (await page.evaluate(() => document.body.innerText)).replace(/\s+/g, ' ')
-    check(text.includes('8 件') && text.includes('已报名'), '渠道端展示我的报名')
+    check(text.includes('8 件') && text.includes('已报名'), '商家端展示我的报名')
     await page.screenshot({ path: path.join(OUT, '02-channel-joined.png'), fullPage: false })
 
     await page.goto(`${PLATFORM}/group-purchases`, { waitUntil: 'networkidle', timeout: 60000 })
@@ -177,7 +177,7 @@ try {
     await page.goto(`${CHANNEL}/purchase`, { waitUntil: 'networkidle', timeout: 60000 })
     await page.waitForTimeout(900)
     text = (await page.evaluate(() => document.body.innerText)).replace(/\s+/g, ' ')
-    check(!text.includes(batchTitle) || text.includes('已确认'), '渠道端批次关闭后展示确认状态')
+    check(!text.includes(batchTitle) || text.includes('已确认'), '商家端批次关闭后展示确认状态')
     const historyStatus = sql(`SELECT status FROM agri_s2b2c.s2b2c_group_purchase_order WHERE batch_id='${batchId}'`)
     check(historyStatus === 'CONFIRMED', '渠道我的集采记录为已确认', historyStatus)
 

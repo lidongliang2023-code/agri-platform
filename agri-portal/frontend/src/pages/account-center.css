@@ -95,6 +95,9 @@
 .account-code-row { display:flex; gap:8px; }
 .account-code-row .input { flex:1; min-width:0; }
 .account-code-row button { flex:none; margin:0; }
+/* 表单下面的说明与提醒：字号跟 --agri-font-size-micro（不低于 12px），不靠压小字来"少占地方" */
+.account-field-hint { margin:2px 0 12px; color:#6b7c72; font-size: var(--agri-font-size-micro); line-height:1.6; }
+.account-field-warning { margin:2px 0 12px; padding:9px 11px; border:1px solid #ffd4d4; border-radius:10px; background:#fff7f7; color:#a13a3a; font-size: var(--agri-font-size-micro); line-height:1.6; }
 .account-address-card { padding:20px; }
 .account-address-list { display:grid; gap:10px; }
 .account-address { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:14px; border:1px solid #e3eae5; border-radius:10px; }

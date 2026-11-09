@@ -1,3 +1,4 @@
+import type { CommandReceipt } from '../../../shared-ui/CommandReceipts'
 import axios from 'axios'
 import { attachUnifiedAuth } from '../../../shared-ui/sso'
 
@@ -48,6 +49,9 @@ async function req<T>(call:Promise<{data:Envelope<T>}>):Promise<T>{
   catch(e){if(axios.isAxiosError(e)){const m=(e.response?.data as {message?:string}|undefined)?.message;throw new Error(m||'物联网服务暂时不可用')}throw e}
 }
 export const iotApi={
+  otaReceipts:(id:number,page:number)=>req<CommandReceipt[]>(client.get(`/gateways/${id}/ota`,{params:{page,size:20}})),
+  gatewayCommandReceipts:(id:number,page:number)=>req<CommandReceipt[]>(client.get(`/gateways/${id}/commands`,{params:{page,size:20}})),
+  commandReceipts:(id:number,page:number)=>req<CommandReceipt[]>(client.get(`/devices/${id}/commands`,{params:{page,size:20}})),
   overview:()=>req<IotOverview>(client.get('/overview')),
   devices:(params?:{keyword?:string;status?:string;groupId?:number;plotId?:number})=>req<IotDevice[]>(client.get('/devices',{params})),
   device:(id:number)=>req<IotDevice>(client.get(`/devices/${id}`)),
@@ -64,7 +68,7 @@ export const iotApi={
   deleteGateway:(id:number)=>req<Record<string,unknown>>(client.delete(`/gateways/${id}`)),
   restartGateway:(id:number)=>req<IotGateway>(client.post(`/gateways/${id}/restart`,{})),
   alerts:(status?:string)=>req<IotAlert[]>(client.get('/alerts',{params:{status}})),
-  handleAlert:(id:number,note:string)=>req<IotAlert>(client.post(`/alerts/${id}/handle`,{status:'resolved',note})),
+  handleAlert:(id:number,note:string,status:string)=>req<IotAlert>(client.post(`/alerts/${id}/handle`,{status,note})),
   /** 阈值规则是平台预置的，用户端只读；主体自己的阈值走下面的 custom 系列。 */
   alertRules:()=>req<AlertRule[]>(client.get('/alert-rules')),
   alertRuleView:()=>req<AlertRuleView>(client.get('/alert-rules/view')),
@@ -92,6 +96,7 @@ export const iotApi={
   firmware:()=>req<Array<{id:number;productName:string;version:string;fileSize:string;sha256:string;status:string;releaseAt:string}>>(client.get('/firmware')),
   ota:()=>req<Array<{id:number;taskNo:string;firmwareVersion:string;targetCount:number;successCount:number;failedCount:number;targetScope:string;status:string;executeWindow:string;createdAt:string}>>(client.get('/ota')),
   messages:()=>req<Array<{id:number;type:string;title:string;content:string;read:boolean;createdAt:string}>>(client.get('/messages')),
+  readMessage: (id: number) => req<Record<string, unknown>>(client.post(`/messages/${id}/read`, {})),
   readAll:()=>req(client.post('/messages/read-all',{})),
 }
 

@@ -81,10 +81,10 @@ function publish() {
 .search { display: flex; height: 76rpx; flex: 1; align-items: center; gap: 10rpx; padding: 0 20rpx; border: 1rpx solid #e1e9e3; border-radius: 16rpx; background: #fff; color: #94a198; }
 .search input { min-width: 0; flex: 1; font-size: 24rpx; }
 .chips { margin-top: 16rpx; white-space: nowrap; }
-.chip { display: inline-flex; padding: 10rpx 20rpx; margin-right: 10rpx; border: 1rpx solid #e1e9e3; border-radius: 28rpx; background: #fff; color: #718277; font-size: 21rpx; }
+.chip { display: inline-flex; padding: 10rpx 20rpx; margin-right: 10rpx; border: 1rpx solid #e1e9e3; border-radius: 28rpx; background: #fff; color: #718277; font-size: 24rpx; }
 .chip.on { border-color: #12764a; background: #12764a; color: #fff; }
 .sort-tabs { display: flex; margin: 16rpx 0; padding: 6rpx; border-radius: 15rpx; background: #e9f0ec; }
-.sort-tabs button { flex: 1; padding: 10rpx 0; border-radius: 11rpx; color: #718277; font-size: 20rpx; }
+.sort-tabs button { flex: 1; padding: 10rpx 0; border-radius: 11rpx; color: #718277; font-size: 24rpx; }
 .sort-tabs button.on { background: #fff; color: #0e5233; box-shadow: 0 4rpx 12rpx rgba(20,58,38,.08); font-weight: 650; }
 .provider-list { display: flex; flex-direction: column; gap: 16rpx; }
 .provider-card { display: flex; align-items: center; gap: 16rpx; padding: 22rpx; border: 1rpx solid #e1e9e3; border-radius: 22rpx; background: #fff; }
@@ -92,9 +92,9 @@ function publish() {
 .provider-copy { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 5rpx; }
 .name-line { display: flex; align-items: center; gap: 8rpx; }
 .provider-name { overflow: hidden; font-size: 25rpx; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
-.provider-meta { color: #d88b1f; font-size: 19rpx; }
-.provider-tags { overflow: hidden; color: #94a198; font-size: 19rpx; text-overflow: ellipsis; white-space: nowrap; }
+.provider-meta { color: #d88b1f; font-size: 24rpx; }
+.provider-tags { overflow: hidden; color: #94a198; font-size: 24rpx; text-overflow: ellipsis; white-space: nowrap; }
 .price { display: flex; flex: 0 0 auto; flex-direction: column; align-items: flex-end; color: #0e5233; font-size: 28rpx; font-weight: 700; }
-.price text { color: #94a198; font-size: 17rpx; font-weight: 400; }
-.publish-float { position: fixed; right: 24rpx; bottom: calc(130rpx + env(safe-area-inset-bottom)); z-index: 8; height: 72rpx; min-height: 72rpx; border-radius: 40rpx; font-size: 22rpx; }
+.price text { color: #94a198; font-size: 24rpx; font-weight: 400; }
+.publish-float { position: fixed; right: 24rpx; bottom: calc(130rpx + env(safe-area-inset-bottom)); z-index: 8; height: 72rpx; min-height: 72rpx; border-radius: 40rpx; font-size: 24rpx; }
 </style>

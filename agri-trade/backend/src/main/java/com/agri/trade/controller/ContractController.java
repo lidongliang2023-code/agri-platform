@@ -104,7 +104,7 @@ public class ContractController {
     @GetMapping("/{id}")
     public ApiResponse<Contract> getContractById(@PathVariable Long id) {
         Contract contract = contractMapper.selectById(id);
-        if (contract == null) return ApiResponse.error("合同不存在");
+        if (contract == null) return ApiResponse.error(404, "合同不存在");
         String denied = denyIfNotParty(contract);
         if (denied != null) return ApiResponse.error(denied);
         return ApiResponse.success(contract);
@@ -131,7 +131,7 @@ public class ContractController {
     public ApiResponse<Boolean> signContract(@PathVariable Long id,
                                              @RequestBody(required = false) java.util.Map<String, String> params) {
         Contract contract = contractMapper.selectById(id);
-        if (contract == null) return ApiResponse.error("合同不存在");
+        if (contract == null) return ApiResponse.error(404, "合同不存在");
 
         // 签署方由服务端判定，**不采信请求体里的 signatoryType** ——
         // 原先签名侧完全由调用方声明，等于任何人（包括与合同无关的第三方）都能
@@ -221,7 +221,7 @@ public class ContractController {
                                                     @RequestParam String signMode,
                                                     @RequestPart("file") MultipartFile file) throws IOException {
         Contract contract = contractMapper.selectById(id);
-        if (contract == null) return ApiResponse.error("合同不存在");
+        if (contract == null) return ApiResponse.error(404, "合同不存在");
         String denied = denyIfNotParty(contract);
         if (denied != null) return ApiResponse.error(denied);
         if ("cancelled".equals(contract.getContractStatus())) {
@@ -267,7 +267,7 @@ public class ContractController {
     @PostMapping("/{id}/archive")
     public ApiResponse<Boolean> archiveContract(@PathVariable Long id) {
         Contract contract = contractMapper.selectById(id);
-        if (contract == null) return ApiResponse.error("合同不存在");
+        if (contract == null) return ApiResponse.error(404, "合同不存在");
         PlatformIdentityService.MerchantScope scope = identityService.currentScope();
         if (!scope.resolved()) {
             return ApiResponse.error(scope.error());

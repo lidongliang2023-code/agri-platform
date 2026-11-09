@@ -1,3 +1,4 @@
+import Table from '@/components/BusinessRecordList'
 /**
  * 页面名称：环境数据
  * 路由路径：/production/growth/environment
@@ -25,7 +26,6 @@ import {
   Skeleton,
   Space,
   Statistic,
-  Table,
   Tag,
   Typography,
   message,
@@ -306,8 +306,8 @@ export default function EnvironmentData(): JSX.Element {
 
   return (
     <div style={{ padding: 24 }}>
-      <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
-        <Typography.Title level={4} style={{ margin: 0 }}>
+      <Row className="production-custom-page-header production-page-header-row" justify="space-between" align="middle" style={{ marginBottom: 16 }}>
+        <Typography.Title className="production-page-heading" level={4} style={{ margin: 0 }}>
           🌡️ 环境数据
         </Typography.Title>
         <Space>

@@ -189,7 +189,7 @@ function toPreference() {
   padding: 6rpx 14rpx;
   border: 1rpx solid rgba(255, 255, 255, 0.18);
   border-radius: 12rpx;
-  font-size: 19rpx;
+  font-size: 24rpx;
 }
 
 .reason-row {
@@ -200,7 +200,7 @@ function toPreference() {
 
 .filter {
   color: #94a198;
-  font-size: 21rpx;
+  font-size: 24rpx;
 }
 
 .filter.active {
@@ -227,7 +227,7 @@ function toPreference() {
   border-radius: 8rpx;
   background: #f3eaf9;
   color: #6b418d;
-  font-size: 19rpx;
+  font-size: 24rpx;
   font-weight: 650;
 }
 
@@ -235,7 +235,7 @@ function toPreference() {
   display: block;
   margin-top: 10rpx;
   color: #718277;
-  font-size: 21rpx;
+  font-size: 24rpx;
   line-height: 1.6;
 }
 

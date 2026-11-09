@@ -39,7 +39,7 @@ import {
   WarningOutlined,
 } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { closeAlert, listAdminAlerts } from '@/api'
+import { closeAlert, listAdminAlerts, getAdminAlert } from '@/api'
 import type { Alert, AlertStatus, PageResult } from '@/types'
 
 /** 运营端告警级别：1 提示 2 一般 3 重要 4 紧急（与后端 AlertDict 的 INFO/WARN/CRITICAL/URGENT 对齐） */
@@ -156,6 +156,8 @@ export default function AdminAlertCenter(): JSX.Element {
   const queryClient = useQueryClient()
   const [form] = Form.useForm<FilterState>()
   const [handleForm] = Form.useForm<{ measure: string; remark: string }>()
+  const [pageNum, setPageNum] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
   const [filters, setFilters] = useState<FilterState>({})
   const [rows, setRows] = useState<AlertRow[]>([])
   /** 后端返回的告警总数（分页 total），未加载时为 null，卡片展示「—」 */
@@ -165,13 +167,13 @@ export default function AdminAlertCenter(): JSX.Element {
   const [modalState, setModalState] = useState<AlertModalState>({ open: false, ids: [] })
 
   const listQuery = useQuery({
-    queryKey: ['admin-alerts-center', filters],
+    queryKey: ['admin-alerts-center', filters, pageNum, pageSize],
     queryFn: async (): Promise<{ rows: AlertRow[]; total: number }> => {
       // 只取后端真实数据：返回空就是空，报错交给 TanStack Query 标记 isError，
       // 页面据实展示空态 / 错误提示，不再有任何本地演示数据兜底
       const page: PageResult<Alert> = await listAdminAlerts({
-        pageNum: 1,
-        pageSize: 200,
+        pageNum,
+        pageSize,
         alertLevel: filters.alertLevel,
         status: filters.status,
       })
@@ -192,6 +194,7 @@ export default function AdminAlertCenter(): JSX.Element {
 
   useEffect(() => {
     if (listQuery.data) {
+      setDetailRow(prev => prev ? listQuery.data.rows.find(row => row.alertId === prev.alertId) : undefined)
       setRows(listQuery.data.rows)
       setTotal(listQuery.data.total)
       setSelectedKeys([])
@@ -211,11 +214,11 @@ export default function AdminAlertCenter(): JSX.Element {
       now.getDate(),
     ).padStart(2, '0')}`
     return {
-      critical: rows.filter((row) => row.alertLevel === 4 && row.status !== 3).length,
-      major: rows.filter((row) => row.alertLevel === 3 && row.status !== 3).length,
-      minor: rows.filter((row) => row.alertLevel === 2 && row.status !== 3).length,
+      critical: rows.filter((row) => row.alertLevel === 4 && (row.status !== 3 && row.status !== 4)).length,
+      major: rows.filter((row) => row.alertLevel === 3 && (row.status !== 3 && row.status !== 4)).length,
+      minor: rows.filter((row) => row.alertLevel === 2 && (row.status !== 3 && row.status !== 4)).length,
       handledToday: rows.filter(
-        (row) => row.status === 3 && (row.handledAt ?? '').slice(0, 10) === today,
+        (row) => (row.status === 3 || row.status === 4) && (row.handledAt ?? '').slice(0, 10) === today,
       ).length,
       total,
     }
@@ -229,8 +232,11 @@ export default function AdminAlertCenter(): JSX.Element {
    */
   const submitHandle = async (ids: string[], measure: string, remark: string): Promise<void> => {
     const measureLabel = MEASURE_OPTIONS.find((item) => item.value === measure)?.label ?? measure
-    await Promise.all(ids.map((id) => closeAlert(id, `${measureLabel}：${remark}`)))
-    message.success('告警已处置')
+    const results = await Promise.allSettled(ids.map((id) => closeAlert(id, `${measureLabel}：${remark}`)))
+    await queryClient.invalidateQueries({ queryKey: ['admin-alerts-center'] })
+    const failed = results.filter(r => r.status === 'rejected').length
+    if (failed) throw new Error(`已保存 ${results.length-failed} 条，失败 ${failed} 条；列表已刷新，请核对后重试`)
+    message.success('处置进展已保存并刷新；待处理进入处理中，处理中进入已处理')
     setSelectedKeys([])
     // 以服务端数据为准重新拉取，不在本地伪造「已处置」状态
     void queryClient.invalidateQueries({ queryKey: ['admin-alerts-center'] })
@@ -249,6 +255,15 @@ export default function AdminAlertCenter(): JSX.Element {
    * 打开告警处理弹窗
    * @param row 目标告警，为空表示批量处理
    */
+  const openDetail = async (row: AlertRow): Promise<void> => {
+    try {
+      const latest = await getAdminAlert(row.alertId)
+      setDetailRow({ ...row, ...latest })
+    } catch (error) {
+      message.error(`告警详情读取失败：${(error as Error).message}`)
+    }
+  }
+
   const openHandleModal = (row?: AlertRow): void => {
     handleForm.resetFields()
     setModalState({ open: true, current: row, ids: row ? [row.alertId] : selectedKeys })
@@ -351,11 +366,12 @@ export default function AdminAlertCenter(): JSX.Element {
       </Row>
 
       <Card>
-        <Form<FilterState>
+        <AntAlert type="info" showIcon message="与用户端共用告警台账：未处理 → 处理中 → 已处理；已处理记录只读复盘。分级数量为当前页，告警总数为服务端筛选总数。" />
+      <Form<FilterState>
           form={form}
           layout="inline"
           style={{ rowGap: 12, marginBottom: 16 }}
-          onFinish={(values) => setFilters(values)}
+          onFinish={(values) => { setFilters(values); setPageNum(1) }}
         >
           <Form.Item name="alertLevel" label="告警级别">
             <Select
@@ -389,7 +405,7 @@ export default function AdminAlertCenter(): JSX.Element {
               <Button
                 onClick={() => {
                   form.resetFields()
-                  setFilters({})
+                  setFilters({}); setPageNum(1)
                 }}
               >
                 重置
@@ -436,7 +452,7 @@ export default function AdminAlertCenter(): JSX.Element {
           <List
             dataSource={rows}
             rowKey="alertId"
-            pagination={{ pageSize: 6, showSizeChanger: true, showTotal: (total) => `共 ${total} 条` }}
+            pagination={{ current: pageNum, pageSize, total: total ?? 0, showSizeChanger: true, onChange: (p, size) => { setPageNum(p); setPageSize(size) }, showTotal: (n) => `共 ${n} 条` }}
             renderItem={(row) => (
               <List.Item
                 style={{
@@ -445,19 +461,19 @@ export default function AdminAlertCenter(): JSX.Element {
                   padding: 12,
                   marginBottom: 8,
                   background:
-                    row.status === 3 ? '#fafafa' : row.alertLevel === 4 ? '#fff7f7' : '#ffffff',
+                    (row.status === 3 || row.status === 4) ? '#fafafa' : row.alertLevel === 4 ? '#fff7f7' : '#ffffff',
                 }}
                 actions={[
                   <Button
                     key="handle"
                     type="primary"
                     size="small"
-                    disabled={row.status === 3}
+                    disabled={(row.status === 3 || row.status === 4)}
                     onClick={() => openHandleModal(row)}
                   >
                     介入
                   </Button>,
-                  <Button key="detail" size="small" onClick={() => setDetailRow(row)}>
+                  <Button key="detail" size="small" onClick={() => void openDetail(row)}>
                     详情
                   </Button>,
                 ]}
@@ -465,7 +481,7 @@ export default function AdminAlertCenter(): JSX.Element {
                 <List.Item.Meta
                   avatar={
                     <Checkbox
-                      disabled={row.status === 3}
+                      disabled={(row.status === 3 || row.status === 4)}
                       checked={selectedKeys.includes(row.alertId)}
                       onChange={(event) => {
                         if (event.target.checked) {
@@ -572,7 +588,7 @@ export default function AdminAlertCenter(): JSX.Element {
         open={Boolean(detailRow)}
         onClose={() => setDetailRow(undefined)}
         extra={
-          detailRow && detailRow.status !== 3 ? (
+          detailRow && (detailRow.status !== 3 && detailRow.status !== 4) ? (
             <Button type="primary" onClick={() => {
               const target = detailRow
               setDetailRow(undefined)

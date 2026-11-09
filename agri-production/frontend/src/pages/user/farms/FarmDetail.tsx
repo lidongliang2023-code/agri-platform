@@ -1,3 +1,7 @@
+import FarmRectificationPanel from '@/components/FarmRectificationPanel'
+import { previewFarmCertificate } from '@/api/farms'
+import Card from '@/components/SectionCard'
+import useFarmStore from '@/store/farm'
 /**
  * 页面名称：农场详情
  * 路由路径：/production/farms/:farmId
@@ -20,8 +24,8 @@
  */
 import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { PageContainer } from '@ant-design/pro-components'
+import { useQuery } from '@tanstack/react-query'
+import PageContainer from '@/components/ProductionPageContainer'
 import {
   ArrowDownOutlined,
   ArrowUpOutlined,
@@ -32,15 +36,9 @@ import {
 import {
   Alert,
   Button,
-  Card,
   Col,
   Empty,
-  Form,
-  Input,
-  InputNumber,
-  Modal,
   Row,
-  Select,
   Skeleton,
   Space,
   Tag,
@@ -48,7 +46,7 @@ import {
   message,
 } from 'antd'
 import { DetailInfoGrid, DetailMetricGrid } from '@/components'
-import { getFarm, getFarmSummary, listFarmCerts, updateFarm } from '@/api/farms'
+import { getFarm, getFarmSummary, listFarmCerts } from '@/api/farms'
 import { listPlots } from '@/api/plots'
 import { listHarvests } from '@/api/harvests'
 import { listInputUsages } from '@/api/inputs'
@@ -64,25 +62,6 @@ const FARM_TYPE_FALLBACK_MAP: Record<number, string> = {
 }
 
 /** 农场业务类型选项（原型 P3 口径） */
-const FARM_TYPE_BUSINESS_OPTIONS: string[] = [
-  '蔬菜种植',
-  '水稻种植',
-  '果树种植',
-  '综合养殖',
-  '畜牧养殖',
-  '水产养殖',
-]
-
-/** 业务类型 → 后端 farmType */
-const BUSINESS_TYPE_VALUE_MAP: Record<string, number> = {
-  蔬菜种植: 1,
-  水稻种植: 1,
-  果树种植: 1,
-  综合养殖: 3,
-  畜牧养殖: 2,
-  水产养殖: 2,
-}
-
 /** 快捷入口配置（原型 P2 四个入口） */
 interface QuickEntry {
   /** 唯一键 */
@@ -94,7 +73,7 @@ interface QuickEntry {
 }
 
 const QUICK_ENTRIES: QuickEntry[] = [
-  { key: 'plan', label: '🌱 新建种养计划', path: '/production/plans?create=1' },
+  { key: 'plan', label: '🌱 新建农事计划', path: '/production/plans?create=1' },
   { key: 'tasks', label: '📋 农事任务', path: '/production/tasks' },
   { key: 'monitor', label: '📡 生产监控→', path: '/production/monitor' },
   // 2026-10-16：原指向 /production/inputs/ledger（投入品使用台账，与「投入品台账」页重复），
@@ -110,7 +89,7 @@ const FARM_SCOPED_ENTRY_KEYS: string[] = ['plan', 'monitor']
 /**
  * 拼接快捷入口目标地址，按需带上 `farmId` 上下文。
  *
- * 种养计划入口使用 `/production/plans?create=1`（PlanList 识别该参数自动弹出新增表单），
+ * 农事计划入口使用 `/production/plans?create=1`（PlanList 识别该参数自动弹出新增表单），
  * 不存在 `/production/plans/create` 路由，勿改回后者以免被 `plans/:planId` 兜底吞掉。
  *
  * @param entry 快捷入口配置
@@ -124,23 +103,6 @@ function resolveEntryPath(entry: QuickEntry, farmId: string | undefined): string
 }
 
 /** 编辑表单值 */
-interface EditFormValues {
-  /** 农场名称 */
-  farmName: string
-  /** 业务类型标签 */
-  typeLabel: string
-  /** 总面积（亩） */
-  areaTotal: number
-  /** 负责人 */
-  managerName: string
-  /** 联系电话 */
-  managerPhone: string
-  /** 详细地址 */
-  address: string
-  /** 海拔（米，持久化于 remark） */
-  altitude?: number
-}
-
 /**
  * 从 remark 解析自定义键值。
  *
@@ -165,24 +127,6 @@ function parseRemarkField(remark: string | undefined, key: string): string | und
  * @param entries 待写入键值对
  * @returns 合并后的备注
  */
-function mergeRemark(remark: string | undefined, entries: Record<string, string>): string {
-  const keys = Object.keys(entries)
-  const kept: string[] = []
-  ;(remark ?? '')
-    .split(/[；;]/)
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .forEach((item) => {
-      const key = item.split(/[:：]/)[0]?.trim()
-      if (!key || keys.includes(key)) return
-      kept.push(item)
-    })
-  Object.entries(entries).forEach(([key, value]) => {
-    if (value) kept.push(`${key}:${value}`)
-  })
-  return kept.join('；')
-}
-
 /**
  * 计算环比百分比。
  *
@@ -206,11 +150,9 @@ function calcTrend(current: number, previous: number): number | undefined {
 export default function FarmDetail(): JSX.Element {
   const { farmId } = useParams<{ farmId: string }>()
   const navigate = useNavigate()
-  const queryClient = useQueryClient()
+  const setCurrentFarm = useFarmStore((state) => state.setCurrentFarm)
 
-  const [editOpen, setEditOpen] = useState<boolean>(false)
   const [plotsExpanded, setPlotsExpanded] = useState<boolean>(false)
-  const [editForm] = Form.useForm<EditFormValues>()
 
   /** 农场基本信息 */
   const farmQuery = useQuery({
@@ -256,29 +198,6 @@ export default function FarmDetail(): JSX.Element {
     enabled: Boolean(farmId),
     queryFn: () => listInputUsages({ pageNum: 1, pageSize: 200 }),
     retry: false,
-  })
-
-  /** 保存编辑 */
-  const updateMutation = useMutation({
-    mutationFn: (values: EditFormValues) =>
-      updateFarm(farmId as string, {
-        farmName: values.farmName,
-        areaTotal: Number(values.areaTotal),
-        managerName: values.managerName,
-        managerPhone: values.managerPhone,
-        address: values.address,
-        farmType: (BUSINESS_TYPE_VALUE_MAP[values.typeLabel] ?? 1) as 1 | 2 | 3,
-        remark: mergeRemark(farmQuery.data?.remark, {
-          海拔: values.altitude ? `${values.altitude}m` : '',
-          产业类型: values.typeLabel ?? '',
-        }),
-      }),
-    onSuccess: () => {
-      message.success('农场信息已更新')
-      setEditOpen(false)
-      void queryClient.invalidateQueries({ queryKey: ['farm-detail', farmId] })
-      void queryClient.invalidateQueries({ queryKey: ['farms'] })
-    },
   })
 
   /** 农场地块列表 */
@@ -353,24 +272,10 @@ export default function FarmDetail(): JSX.Element {
     return { plotCount: pick('plotCount'), plotAreaTotal, areaTotal, usageRate }
   }, [summaryQuery.data, summaryQuery.isError, farmQuery.data])
 
-  /** 打开编辑弹窗并回填 */
+  /** 编辑与新增使用同一个表单页 */
   const openEdit = (): void => {
-    const farm = farmQuery.data
-    if (!farm) return
-    const altitudeText = parseRemarkField(farm.remark, '海拔') ?? ''
-    editForm.setFieldsValue({
-      farmName: farm.farmName,
-      typeLabel:
-        parseRemarkField(farm.remark, '产业类型') ??
-        FARM_TYPE_FALLBACK_MAP[farm.farmType] ??
-        '蔬菜种植',
-      areaTotal: Number(farm.areaTotal) || 0,
-      managerName: farm.managerName,
-      managerPhone: farm.managerPhone,
-      address: farm.address,
-      altitude: Number(altitudeText.replace('m', '')) || undefined,
-    })
-    setEditOpen(true)
+    if (!farmQuery.data) return
+    navigate(`/production/farms/create?farmId=${farmId}`)
   }
 
   /** 渲染同比箭头（增长绿↑ / 下降红↓） */
@@ -458,10 +363,12 @@ export default function FarmDetail(): JSX.Element {
                     <Typography.Text type="secondary">暂无资质记录</Typography.Text>
                   ) : (
                     <Space size={8} wrap>
+                      <Button type="link" onClick={() => navigate(`/production/farms/create?farmId=${farmId}`)}>管理证书</Button>
                       {certs.map((cert) => (
                         <Tag key={cert.certId ?? cert.certName} color="blue">
                           {cert.certName}
                           {cert.expireDate ? `(${cert.expireDate} 到期)` : ''}
+                          {cert.attachUrl && <Button type="link" size="small" onClick={() => void previewFarmCertificate(cert.attachUrl!).catch(error => message.error(error.message))}>预览附件</Button>}
                         </Tag>
                       ))}
                     </Space>
@@ -600,7 +507,12 @@ export default function FarmDetail(): JSX.Element {
                 <Button
                   block
                   size="large"
-                  onClick={() => navigate(resolveEntryPath(entry, farmId))}
+                  onClick={() => {
+                    if (farmQuery.data && farmId) {
+                      setCurrentFarm({ farmId: String(farmId), farmCode: farmQuery.data.farmCode ?? '', farmName: farmQuery.data.farmName })
+                    }
+                    navigate(resolveEntryPath(entry, farmId))
+                  }}
                 >
                   {entry.label}
                 </Button>
@@ -633,75 +545,8 @@ export default function FarmDetail(): JSX.Element {
     >
       {!farmId && <Alert type="warning" showIcon message="缺少农场 ID，请返回列表重新进入" />}
       {renderBody()}
+      {farmId && farmQuery.data && <Card title="监管检查与整改" style={{ marginTop: 16 }}><FarmRectificationPanel farmId={farmId} user /></Card>}
 
-      <Modal
-        title="编辑农场资料"
-        open={editOpen}
-        okText="保存"
-        cancelText="取消"
-        confirmLoading={updateMutation.isPending}
-        onCancel={() => setEditOpen(false)}
-        onOk={() => {
-          void editForm.validateFields().then((values) => updateMutation.mutate(values))
-        }}
-        destroyOnClose
-      >
-        <Form form={editForm} layout="vertical" style={{ marginTop: 16 }}>
-          <Form.Item
-            name="farmName"
-            label="农场名称"
-            rules={[
-              { required: true, message: '请输入农场名称' },
-              { min: 2, max: 50, message: '农场名称需为 2-50 个字符' },
-            ]}
-          >
-            <Input placeholder="请输入农场名称" />
-          </Form.Item>
-          <Form.Item
-            name="typeLabel"
-            label="农场类型"
-            rules={[{ required: true, message: '请选择农场类型' }]}
-          >
-            <Select
-              options={FARM_TYPE_BUSINESS_OPTIONS.map((item) => ({ value: item, label: item }))}
-            />
-          </Form.Item>
-          <Form.Item
-            name="areaTotal"
-            label="面积（亩）"
-            rules={[{ required: true, message: '请输入农场面积' }]}
-          >
-            <InputNumber min={0} precision={2} style={{ width: '100%' }} placeholder="请输入面积" />
-          </Form.Item>
-          <Form.Item name="altitude" label="海拔（米）">
-            <InputNumber min={0} max={9000} style={{ width: '100%' }} placeholder="选填" />
-          </Form.Item>
-          <Form.Item
-            name="managerName"
-            label="负责人"
-            rules={[{ required: true, message: '请输入负责人姓名' }]}
-          >
-            <Input placeholder="请输入负责人姓名" />
-          </Form.Item>
-          <Form.Item
-            name="managerPhone"
-            label="联系电话"
-            rules={[
-              { required: true, message: '请输入联系电话' },
-              { pattern: /^1[3-9]\d{9}$/, message: '请输入正确的 11 位手机号' },
-            ]}
-          >
-            <Input placeholder="请输入手机号" />
-          </Form.Item>
-          <Form.Item
-            name="address"
-            label="详细地址"
-            rules={[{ required: true, message: '请输入详细地址' }]}
-          >
-            <Input placeholder="请输入详细地址" />
-          </Form.Item>
-        </Form>
-      </Modal>
     </PageContainer>
   )
 }

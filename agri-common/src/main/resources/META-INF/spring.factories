@@ -1,0 +1,3 @@
+org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
+  com.agri.common.ai.AgriAiAutoConfiguration,\
+  com.agri.common.rbac.RbacAutoConfiguration

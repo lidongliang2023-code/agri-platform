@@ -1,11 +1,5 @@
 import request from '@/utils/request'
 
-export const authAPI = {
-  login: (data: { username: string; password: string }) =>
-    request.post('/auth/login', data),
-  getUserInfo: () => request.get('/auth/user/info'),
-}
-
 export const deviceAPI = {
   list: (params: any) => request.get('/iot/device', { params }),
   get: (id: number) => request.get(`/iot/device/${id}`),

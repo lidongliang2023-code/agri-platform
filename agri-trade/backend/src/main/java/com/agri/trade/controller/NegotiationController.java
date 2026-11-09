@@ -56,7 +56,7 @@ public class NegotiationController {
 
         Inquiry inquiry = inquiryService.createInquiry(demandId, productId, scope.merchantIds());
         if (inquiry == null) {
-            return ApiResponse.error("发起询价失败：采购需求或货源不存在，或这张需求不是你的（只能对自己的采购需求询价）");
+            return ApiResponse.error(404, "发起询价失败：采购需求或货源不存在，或这张需求不是你的（只能对自己的采购需求询价）");
         }
         return ApiResponse.success(inquiry);
     }
@@ -136,7 +136,7 @@ public class NegotiationController {
     public ApiResponse<List<Quote>> getInquiryQuotes(@PathVariable Long inquiryId) {
         Inquiry inquiry = inquiryService.getById(inquiryId);
         if (inquiry == null) {
-            return ApiResponse.error("询价单不存在");
+            return ApiResponse.error(404, "询价单不存在");
         }
         PlatformIdentityService.MerchantScope scope = identityService.currentScope();
         if (!scope.resolved()) {
@@ -181,7 +181,7 @@ public class NegotiationController {
         }
         com.agri.trade.entity.Inquiry inquiry = inquiryService.getById(inquiryId);
         if (inquiry == null) {
-            return ApiResponse.error("询价单不存在");
+            return ApiResponse.error(404, "询价单不存在");
         }
         if (inquiry.getSellerId() == null || !scope.merchantIds().contains(inquiry.getSellerId())) {
             return ApiResponse.error("只有被询价的供应商可以报价");
@@ -231,7 +231,7 @@ public class NegotiationController {
     public ApiResponse<Boolean> updateQuote(@PathVariable Long id, @RequestBody Map<String, Object> params) {
         Quote current = quoteService.getById(id);
         if (current == null) {
-            return ApiResponse.error("报价不存在");
+            return ApiResponse.error(404, "报价不存在");
         }
         // 改报价是报价方自己的动作。服务层只校验状态（待受理、未成单），不校验归属 ——
         // 少这一步，任何登录用户换个 id 就能改别人报给采购方的单价与数量。
@@ -252,7 +252,7 @@ public class NegotiationController {
         boolean ok = quoteService.updateQuoteFromForm(id, patch, asInt(params.get("validDays")));
         return ok
                 ? ApiResponse.success(true)
-                : ApiResponse.error("报价不存在、已被删除，或已受理/已生成订单（这三种情况都不允许修改）");
+                : ApiResponse.error(404, "报价不存在、已被删除，或已受理/已生成订单（这三种情况都不允许修改）");
     }
 
     @Operation(summary = "删除报价（软删；已生成订单的报价不允许删）")
@@ -260,14 +260,14 @@ public class NegotiationController {
     public ApiResponse<Boolean> deleteQuote(@PathVariable Long id) {
         Quote current = quoteService.getById(id);
         if (current == null) {
-            return ApiResponse.error("报价不存在");
+            return ApiResponse.error(404, "报价不存在");
         }
         String denied = denyIfNotSeller(current);
         if (denied != null) {
             return ApiResponse.error(denied);
         }
         boolean ok = quoteService.deleteQuote(id);
-        return ok ? ApiResponse.success(true) : ApiResponse.error("报价不存在或已生成订单，无法删除");
+        return ok ? ApiResponse.success(true) : ApiResponse.error(404, "报价不存在或已生成订单，无法删除");
     }
 
     /**
@@ -385,7 +385,7 @@ public class NegotiationController {
     public ApiResponse<Quote> getQuoteById(@PathVariable Long id) {
         Quote quote = quoteService.getById(id);
         if (quote == null) {
-            return ApiResponse.error("报价不存在");
+            return ApiResponse.error(404, "报价不存在");
         }
         // 报价里有对方单价、数量与收货地：光锁住分页列表、留着详情按 id 随便取等于没锁
         // （报价 id 是连号的）。与受理/拒绝同一口径 —— 只有买卖双方能看。
@@ -396,7 +396,7 @@ public class NegotiationController {
         boolean mine = (quote.getBuyerId() != null && scope.merchantIds().contains(quote.getBuyerId()))
                 || (quote.getSellerId() != null && scope.merchantIds().contains(quote.getSellerId()));
         if (!mine) {
-            return ApiResponse.error("报价不存在");
+            return ApiResponse.error(404, "报价不存在");
         }
         return ApiResponse.success(quote);
     }
@@ -406,7 +406,7 @@ public class NegotiationController {
     public ApiResponse<TradeOrder> convertQuoteToOrder(@PathVariable Long quoteId) {
         Quote quote = quoteService.getById(quoteId);
         if (quote == null) {
-            return ApiResponse.error("报价不存在");
+            return ApiResponse.error(404, "报价不存在");
         }
         // 与"受理"同一口径：生成订单是采购方的动作，否则等于替别人下单。
         String denied = denyIfNotBuyer(quote);
@@ -417,7 +417,7 @@ public class NegotiationController {
         if (order == null) {
             // 两种 null：报价不存在，或状态不允许（已拒绝的报价不能转订单）。
             // 提示要覆盖两种，否则用户会去怀疑"报价怎么没了"。
-            return ApiResponse.error("报价不存在或当前状态不允许生成订单（已拒绝的报价不能转订单）");
+            return ApiResponse.error(404, "报价不存在或当前状态不允许生成订单（已拒绝的报价不能转订单）");
         }
         return ApiResponse.success(order);
     }
@@ -426,7 +426,7 @@ public class NegotiationController {
     public ApiResponse<Boolean> acceptQuote(@PathVariable Long quoteId) {
         Quote quote = quoteService.getById(quoteId);
         if (quote == null) {
-            return ApiResponse.error("报价不存在");
+            return ApiResponse.error(404, "报价不存在");
         }
         String denied = denyIfNotBuyer(quote);
         if (denied != null) {
@@ -451,7 +451,7 @@ public class NegotiationController {
     public ApiResponse<Boolean> rejectQuote(@PathVariable Long quoteId, @RequestBody Map<String, String> params) {
         Quote quote = quoteService.getById(quoteId);
         if (quote == null) {
-            return ApiResponse.error("报价不存在");
+            return ApiResponse.error(404, "报价不存在");
         }
         String denied = denyIfNotBuyer(quote);
         if (denied != null) {

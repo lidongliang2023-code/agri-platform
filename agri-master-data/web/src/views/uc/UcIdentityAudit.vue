@@ -112,15 +112,28 @@ function openUserCenter(): void {
 /** core-platform 成功码是 0；同时兼容 200 */
 const isOk = (res: any): boolean => res?.code === 0 || res?.code === 200
 
+/**
+ * 身份码 → 中文名。
+ *
+ * <p>同一张申请单表里用户端写入小写业务码，历史种子/联调脚本写入大写枚举，
+ * 因此按大写归一后查表，避免「申请身份」列直接露出 PURCHASER / COOP_ADMIN
+ * 这类原始枚举；空值统一显示「—」。</p>
+ */
 const IDENTITY_LABEL: Record<string, string> = {
-  wholesaler: '批发商',
-  retailer: '零售商',
-  farmer: '农户',
-  coop_admin: '合作社管理员',
-  service_provider: '服务商',
-  government: '政府人员',
+  PURCHASER: '收购商',
+  WHOLESALER: '批发商',
+  RETAILER: '零售商',
+  FARMER: '农户',
+  COOP_ADMIN: '合作社管理员',
+  MALL_SUPPLIER: '商城供应商',
+  SERVICE_PROVIDER: '服务商',
+  GOVERNMENT: '政府人员',
 }
-const identityLabel = (code: string): string => IDENTITY_LABEL[code] ?? code
+const identityLabel = (code: string): string => {
+  const key = String(code ?? '').trim().toUpperCase()
+  if (!key) return '—'
+  return IDENTITY_LABEL[key] ?? String(code)
+}
 
 const STATUS_TEXT: Record<string, string> = {
   pending: '待审核',

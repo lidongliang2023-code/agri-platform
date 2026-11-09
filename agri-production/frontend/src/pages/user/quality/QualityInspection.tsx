@@ -1,3 +1,8 @@
+import '@/pages/user/quality/quality-trace.css'
+import BusinessRecordList from '@/components/BusinessRecordList'
+import DetailInfoGrid from '@/components/DetailInfoGrid'
+import Card from '@/components/SectionCard'
+import ProTable from '@/components/ProductionTable'
 /**
  * 页面名称：质量检测管理
  * 路由路径：/production/quality
@@ -7,7 +12,7 @@
  *
  * 还原要点：
  * - 标题 🔬 质量检测记录 + `+ 录入检测报告` 按钮
- * - 统计：合格 / 不合格 / 待检（数据源 GET /quality/grading）
+ * - 统计：合格 / 不合格 / 待检 / 检测中（当前农场服务端分页总数）
  * - 筛选：全部结果（合格 / 不合格 / 待检）+ 全部机构 + 搜索检测编号
  * - 表格列：检测编号 | 产品名称 | 批次号 | 检测项目 | 检测机构 | 检测日期 | 结果 | 上链 | 操作
  * - 行操作：报告（→trace-reports）/ 结果录入（PASS、FAIL）/ 明细 / 删除
@@ -16,15 +21,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
-import { PageContainer, ProTable } from '@ant-design/pro-components'
+
+import PageContainer from '@/components/ProductionPageContainer'
 import type { ProColumns } from '@ant-design/pro-components'
 import {
+  Alert,
   AutoComplete,
   Button,
-  Card,
   Col,
   DatePicker,
-  Descriptions,
   Drawer,
   Form,
   Input,
@@ -35,7 +40,6 @@ import {
   Select,
   Space,
   Statistic,
-  Table,
   Tag,
   Tooltip,
   Typography,
@@ -47,7 +51,6 @@ import dayjs from 'dayjs'
 import useFarmStore from '@/store/farm'
 import {
   deleteInspection,
-  fetchGradingStats,
   fetchInspectionItems,
   fetchInspectionPage,
   fetchLabPage,
@@ -198,6 +201,7 @@ export default function QualityInspection(): JSX.Element {
     enabled: Boolean(farmId),
     queryFn: () =>
       fetchInspectionPage({
+        farmId,
         keyword: filters.keyword?.trim() || undefined,
         result: filters.result && filters.result !== 'all' ? filters.result : undefined,
         labName: filters.labName?.trim() || undefined,
@@ -206,19 +210,29 @@ export default function QualityInspection(): JSX.Element {
       }),
   })
 
-  /** 检测单总量 */
-  const totalQuery = useQuery({
-    queryKey: ['quality-inspections-total'],
-    enabled: Boolean(farmId),
-    queryFn: () => fetchInspectionPage({ pageNum: 1, pageSize: 1 }),
+  /** 当前农场全量检测状态统计，不受下方列表筛选影响。 */
+  const inspectionStats = useQueries({
+    queries: [
+      { label: '合格', status: 'DONE', result: 'PASS', color: '#52c41a' },
+      { label: '不合格', status: 'DONE', result: 'FAIL', color: '#ff4d4f' },
+      { label: '待检', status: 'PENDING', result: undefined, color: undefined },
+      { label: '检测中', status: 'TESTING', result: undefined, color: undefined },
+    ].map((item) => ({
+      queryKey: ['quality-inspections-stats', farmId, item.status, item.result],
+      enabled: Boolean(farmId),
+      queryFn: () => fetchInspectionPage({ farmId, status: item.status, result: item.result, pageNum: 1, pageSize: 1 }),
+      select: (page: Awaited<ReturnType<typeof fetchInspectionPage>>) => ({ ...item, count: page.total }),
+    })),
   })
 
-  /** 分级统计（PASS / FAIL） */
-  const statsQuery = useQuery({
-    queryKey: ['quality-grading-stats'],
-    enabled: Boolean(farmId),
-    queryFn: () => fetchGradingStats(),
-  })
+  useEffect(() => {
+    setPageNum(1)
+    setDetailId('')
+    setCreateOpen(false)
+    setResultTarget(null)
+    createForm.resetFields()
+    resultForm.resetFields()
+  }, [farmId, createForm, resultForm])
 
   /** 检测机构下拉 */
   const labQuery = useQuery({
@@ -302,9 +316,9 @@ export default function QualityInspection(): JSX.Element {
 
   /** 统一失效刷新 */
   const invalidateAll = async (): Promise<void> => {
+    await Promise.all(['harvests', 'harvest-batch-options', 'inventories', 'inventory', 'trace-codes'].map(key => queryClient.invalidateQueries({ queryKey: [key] })))
     await queryClient.invalidateQueries({ queryKey: ['quality-inspections'] })
-    await queryClient.invalidateQueries({ queryKey: ['quality-inspections-total'] })
-    await queryClient.invalidateQueries({ queryKey: ['quality-grading-stats'] })
+    await queryClient.invalidateQueries({ queryKey: ['quality-inspections-stats'] })
   }
 
   /** 送检登记 */
@@ -316,8 +330,8 @@ export default function QualityInspection(): JSX.Element {
       createForm.resetFields()
       void invalidateAll()
     },
-    onError: () => {
-      message.error('登记失败，请检查检测单号是否重复')
+    onError: (error: Error) => {
+      message.error(error.message || '登记失败')
     },
   })
 
@@ -328,8 +342,8 @@ export default function QualityInspection(): JSX.Element {
     onSuccess: (_data, variables) => {
       message.success(
         variables.result === 'PASS'
-          ? '已登记合格结论，并发布 prod.quality.test.passed'
-          : '已登记不合格结论，并发布 prod.quality.test.failed',
+          ? '合格结论已保存'
+          : '不合格结论已保存，关联批次及库存已冻结',
       )
       setResultTarget(null)
       resultForm.resetFields()
@@ -446,6 +460,8 @@ export default function QualityInspection(): JSX.Element {
       key: 'result',
       width: 130,
       render: (_, record) => {
+        if (record.status === 'TESTING') return <Tag color="processing">检测中</Tag>
+        if (record.status === 'PENDING') return <Tag>待检</Tag>
         if (record.result === 'PASS') return <Tag color="green">✅ 合格</Tag>
         if (record.result === 'FAIL') return <Tag color="red">❌ 不合格</Tag>
         return <Tag>⏳ 待检</Tag>
@@ -489,6 +505,7 @@ export default function QualityInspection(): JSX.Element {
     },
     {
       title: '操作',
+      fixed: 'right',
       key: 'option',
       width: 260,
       valueType: 'option',
@@ -546,16 +563,8 @@ export default function QualityInspection(): JSX.Element {
     ]
   }, [detailQuery.data])
 
-  /** 待检数量 */
-  const pendingCount = Math.max(
-    (totalQuery.data?.total ?? 0) -
-      Number(statsQuery.data?.PASS ?? 0) -
-      Number(statsQuery.data?.FAIL ?? 0),
-    0,
-  )
-
   return (
-    <PageContainer
+    <PageContainer className="quality-trace-page"
       title="🔬 质量检测记录"
       subTitle={currentFarm ? currentFarm.farmName : undefined}
       extra={[
@@ -573,32 +582,16 @@ export default function QualityInspection(): JSX.Element {
         </Button>,
       ]}
     >
-      <Row gutter={16} style={{ marginBottom: 16 }}>
-        <Col span={8}>
-          <Card loading={statsQuery.isFetching}>
-            <Statistic
-              title="合格"
-              value={Number(statsQuery.data?.PASS ?? 0)}
-              suffix="单"
-              valueStyle={{ color: '#52c41a' }}
-            />
-          </Card>
-        </Col>
-        <Col span={8}>
-          <Card loading={statsQuery.isFetching}>
-            <Statistic
-              title="不合格"
-              value={Number(statsQuery.data?.FAIL ?? 0)}
-              suffix="单"
-              valueStyle={{ color: '#ff4d4f' }}
-            />
-          </Card>
-        </Col>
-        <Col span={8}>
-          <Card loading={totalQuery.isFetching || statsQuery.isFetching}>
-            <Statistic title="待检" value={pendingCount} suffix="单" />
-          </Card>
-        </Col>
+      <Typography.Paragraph type="secondary">统计范围：当前农场全部检测单；合格、不合格仅统计已完成检测，待检与检测中分别按实际状态统计，不受下方列表筛选影响。</Typography.Paragraph>
+      {inspectionStats.some((query) => query.isError) && <Alert type="error" showIcon message="检测统计读取失败，未取得的数量显示为 —" action={<Button onClick={() => void invalidateAll()}>重试</Button>} style={{ marginBottom: 16 }} />}
+      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+        {inspectionStats.map((query, index) => (
+          <Col xs={12} lg={6} key={index}>
+            <Card loading={query.isFetching}>
+              <Statistic title={['合格', '不合格', '待检', '检测中'][index]} value={query.isError || !query.data ? '—' : query.data.count} suffix="单" valueStyle={{ color: query.data?.color }} />
+            </Card>
+          </Col>
+        ))}
       </Row>
 
       <Card style={{ marginBottom: 16 }}>
@@ -669,7 +662,7 @@ export default function QualityInspection(): JSX.Element {
         ]}
       />
 
-      <Modal
+      <Modal className="quality-trace-dialog"
         title="录入检测报告"
         open={createOpen}
         okText="确认登记"
@@ -770,7 +763,7 @@ export default function QualityInspection(): JSX.Element {
         </Form>
       </Modal>
 
-      <Modal
+      <Modal className="quality-trace-dialog"
         title={`结果录入：${resultTarget?.inspectionNo ?? resultTarget?.inspectionId ?? ''}`}
         open={Boolean(resultTarget)}
         okText="确认提交"
@@ -807,7 +800,7 @@ export default function QualityInspection(): JSX.Element {
         </Form>
       </Modal>
 
-      <Drawer
+      <Drawer rootClassName="quality-trace-dialog"
         title="检测项明细"
         width={720}
         open={Boolean(detailId)}
@@ -817,32 +810,22 @@ export default function QualityInspection(): JSX.Element {
           <Typography.Text type="danger">明细加载失败，请稍后重试</Typography.Text>
         ) : (
           <Space direction="vertical" size={16} style={{ width: '100%' }}>
-            <Descriptions column={2} bordered size="small">
-              <Descriptions.Item label="检测编号">
-                {detailQuery.data?.inspectionNo ?? detailId}
-              </Descriptions.Item>
-              <Descriptions.Item label="检测类型">
-                {INSPECT_TYPE_TEXT[String(detailQuery.data?.inspectionType)] ??
+            <DetailInfoGrid columns={2} items={[
+{ label: '检测编号', value: <>{detailQuery.data?.inspectionNo ?? detailId}</> },
+{ label: '检测类型', value: <>{INSPECT_TYPE_TEXT[String(detailQuery.data?.inspectionType)] ??
                   detailQuery.data?.inspectionType ??
-                  '—'}
-              </Descriptions.Item>
-              <Descriptions.Item label="检测项目">
-                {detailQuery.data?.item ?? '—'}
-              </Descriptions.Item>
-              <Descriptions.Item label="检测结论">
-                {detailQuery.data?.result === 'PASS' ? (
+                  '—'}</> },
+{ label: '检测项目', value: <>{detailQuery.data?.item ?? '—'}</> },
+{ label: '检测结论', value: <>{detailQuery.data?.result === 'PASS' ? (
                   <Tag color="green">合格</Tag>
                 ) : detailQuery.data?.result === 'FAIL' ? (
                   <Tag color="red">不合格</Tag>
                 ) : (
                   <Tag>待检</Tag>
-                )}
-              </Descriptions.Item>
-              <Descriptions.Item label="检测单状态" span={2}>
-                {detailQuery.data?.status ?? '—'}
-              </Descriptions.Item>
-            </Descriptions>
-            <Table<InspectionItem>
+                )}</> },
+{ label: '检测单状态', value: <>{detailQuery.data?.status ?? '—'}</>, fullWidth: true }
+]} />
+            <BusinessRecordList<InspectionItem>
               rowKey="itemId"
               size="small"
               loading={detailQuery.isFetching}

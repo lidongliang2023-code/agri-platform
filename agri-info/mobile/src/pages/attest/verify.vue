@@ -184,14 +184,14 @@ function useHistory(item: VerifyItem) {
   display: block;
   margin-top: 8rpx;
   color: #53665a;
-  font-size: 22rpx;
+  font-size: 24rpx;
   line-height: 1.65;
 }
 
 .hash {
   max-width: 64%;
   font-family: "SFMono-Regular", Consolas, monospace;
-  font-size: 18rpx;
+  font-size: 24rpx;
   word-break: break-all;
 }
 

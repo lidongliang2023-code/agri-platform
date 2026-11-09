@@ -1,6 +1,8 @@
 .portal-hall-embed {
+  position: relative;
   width: 100%;
   background: #f4f7f5;
+  min-height: 900px;
 }
 
 .portal-hall-embed iframe {
@@ -9,4 +11,129 @@
   min-height: 900px;
   border: 0;
   background: #f4f7f5;
+  transition: opacity 0.2s ease-in-out;
+}
+
+.portal-hall-embed iframe.is-loading {
+  opacity: 1;
+}
+
+.portal-hall-embed iframe.is-ready {
+  opacity: 1;
+}
+
+.portal-hall-skeleton {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 32px 24px;
+  background: #f4f7f5;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.portal-hall-skeleton .skeleton-bar {
+  height: 48px;
+  max-width: 600px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, #e3ece6 25%, #edf3ef 50%, #e3ece6 75%);
+  background-size: 200% 100%;
+  animation: portal-skeleton-pulse 1.4s ease-in-out infinite;
+  margin-bottom: 24px;
+}
+
+.portal-hall-skeleton .skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 20px;
+  max-width: 1280px;
+}
+
+.portal-hall-skeleton .skeleton-card {
+  height: 220px;
+  border-radius: 12px;
+  background: linear-gradient(90deg, #e3ece6 25%, #edf3ef 50%, #e3ece6 75%);
+  background-size: 200% 100%;
+  animation: portal-skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+.portal-hall-skeleton .skeleton-hint {
+  margin-top: 18px;
+  color: #557263;
+  font-size: 14px;
+}
+
+@keyframes portal-skeleton-pulse {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.portal-hall-fallback {
+  max-width: 640px;
+  margin: 60px auto;
+  padding: 36px 32px;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 4px 16px rgba(12, 73, 46, 0.08);
+  text-align: center;
+}
+
+.portal-hall-fallback .fallback-title {
+  color: #123826;
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+
+.portal-hall-fallback .fallback-desc {
+  color: #5a7366;
+  font-size: 14px;
+  line-height: 1.6;
+  margin-bottom: 24px;
+}
+
+.portal-hall-fallback .fallback-actions {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.portal-hall-fallback .fallback-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  padding: 0 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.portal-hall-fallback .fallback-btn-primary {
+  background: #117348;
+  color: #ffffff;
+}
+
+.portal-hall-fallback .fallback-btn-primary:hover {
+  background: #0e5c3a;
+}
+
+.portal-hall-fallback .fallback-btn-subtle {
+  background: #f0f5f2;
+  border-color: #d1dfd6;
+  color: #194d34;
+}
+
+.portal-hall-fallback .fallback-btn-subtle:hover {
+  background: #e4eee7;
 }

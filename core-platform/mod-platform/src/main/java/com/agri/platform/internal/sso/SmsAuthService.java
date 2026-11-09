@@ -27,6 +27,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -60,10 +61,24 @@ public class SmsAuthService {
     private static final String CODE_KEY = "agri:sms:code:";
     private static final String ATTEMPT_KEY = "agri:sms:attempt:";
     private static final String COOLDOWN_KEY = "agri:sms:cooldown:";
+    /**
+     * 日发上限计数：{@code agri:sms:daily:<场景>:<手机号>:<yyyyMMdd>}。
+     * 运营端早就有 {@code captcha.sms.daily.limit} 这条配置（出厂值 10），但服务里从没读过 ——
+     * "配置页能改、改了没东西执行"比没配置更糟，所以这里把它真正接上。
+     */
+    private static final String DAILY_KEY = "agri:sms:daily:";
     /** 验证码有效期兜底值；实际以 platform_uc_system_config 的 captcha.sms.ttl 为准 */
     private static final Duration CODE_TTL_FALLBACK = Duration.ofMinutes(5);
     private static final Duration COOLDOWN = Duration.ofSeconds(60);
     private static final int MAX_ATTEMPTS = 5;
+    /**
+     * 允许在**公开**端点（未登录）发码的场景。
+     *
+     * <p>换绑手机（change_phone）不在其中：它是登录态内的账号变更，
+     * 走 {@code /api/v1/sso/account/phone/code}。留在公开端点上等于任何人都能
+     * 对任意手机号发码（骚扰 + 把别人刚要用的码占掉），而公开发码又无法核对是谁发起的。</p>
+     */
+    private static final List<String> PUBLIC_SCENES = List.of("login", "register", "reset_password");
 
     private final StringRedisTemplate redis;
     private final UserMapper userMapper;
@@ -128,8 +143,9 @@ public class SmsAuthService {
         if (Boolean.TRUE.equals(redis.hasKey(COOLDOWN_KEY + normalized))) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "验证码已发送，请 60 秒后再试");
         }
-        String code = String.format("%06d", ThreadLocalRandom.current().nextInt(1_000_000));
         Duration ttl = codeTtl();
+        assertDailyLimit(normalized, scene);
+        String code = String.format("%06d", ThreadLocalRandom.current().nextInt(1_000_000));
         redis.opsForValue().set(CODE_KEY + scene + ":" + normalized, code, ttl);
         redis.delete(ATTEMPT_KEY + scene + ":" + normalized);
         redis.opsForValue().set(COOLDOWN_KEY + normalized, "1", COOLDOWN);
@@ -139,8 +155,14 @@ public class SmsAuthService {
     }
 
     /**
-     * 校验验证码：成功即作废；错误累计到上限整体作废。
-
+     * 校验验证码。
+     *
+     * <p>口径写死在这里，避免"最多 5 次"被实现成第 6 次才作废：</p>
+     * <ul>
+     *   <li>先比码：码对了一定算通过，不会因为"前面错过几次"就拒绝正确输入；</li>
+     *   <li>只有错的那次才计入次数，错满 {@value #MAX_ATTEMPTS} 次本条立即作废（要重新获取）；</li>
+     *   <li>验过即删（一次性，防重放），并解除重发冷却。</li>
+     * </ul>
      *
      * @param phone 手机号
      * @param scene 场景（与发送时一致）
@@ -157,20 +179,30 @@ public class SmsAuthService {
         if (expected == null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "验证码已过期或未发送，请重新获取");
         }
-        Long attempts = redis.opsForValue().increment(ATTEMPT_KEY + scene + ":" + normalized);
-        if (attempts != null && attempts > MAX_ATTEMPTS) {
+        if (expected.equals(code.trim())) {
             redis.delete(key);
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "验证码错误次数过多，请重新获取");
+            redis.delete(ATTEMPT_KEY + scene + ":" + normalized);
+            // 验证成功后解除重发冷却：此时号码已证明可接收，留着冷却只会让
+            // "刚登录完、马上换账号再登"的人面对一条已失效的验证码干等 60 秒。
+            redis.delete(COOLDOWN_KEY + normalized);
+            return;
         }
-        if (!expected.equals(code.trim())) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "验证码不正确");
+        String attemptKey = ATTEMPT_KEY + scene + ":" + normalized;
+        Long incremented = redis.opsForValue().increment(attemptKey);
+        // 计数键必须自己带过期：否则码早就作废了，"已错 3 次"这个状态会一直挂在 Redis 里，
+        // 下次同号同场景重发时又叠上去，用户会遇到"我刚发的码一填就错"这种解释不了的提示。
+        long wrong = incremented == null ? MAX_ATTEMPTS : incremented;
+        if (wrong == 1L) {
+            redis.expire(attemptKey, codeTtl());
         }
-        // 一次性：验过即删，防重放
-        redis.delete(key);
-        redis.delete(ATTEMPT_KEY + scene + ":" + normalized);
-        // 验证成功后解除重发冷却：此时号码已证明可接收，留着冷却只会让
-        // "刚登录完、马上换账号再登"的人面对一条已失效的验证码干等 60 秒。
-        redis.delete(COOLDOWN_KEY + normalized);
+        if (wrong >= MAX_ATTEMPTS) {
+            redis.delete(key);
+            redis.delete(attemptKey);
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "验证码已连续错满 " + MAX_ATTEMPTS + " 次，本条已作废，请重新获取");
+        }
+        throw new BusinessException(ErrorCode.BAD_REQUEST,
+                "验证码不正确（还可试 " + (MAX_ATTEMPTS - wrong) + " 次）");
     }
 
     /**
@@ -276,7 +308,25 @@ public class SmsAuthService {
             String subjectName,
             String certificationStatus,
             String certificationNo,
-            VerificationProgress verification) {
+            VerificationProgress verification,
+            SubjectDetails subject,
+            String reviewRemark,
+            LocalDateTime reviewTime) {
+        public OnboardingStatus(String stage, String phone, String nickname, String identity,
+                Long merchantId, String subjectName, String certificationStatus, String certificationNo,
+                VerificationProgress verification) {
+            this(stage, phone, nickname, identity, merchantId, subjectName, certificationStatus,
+                    certificationNo, verification, null, null, null);
+        }
+    }
+
+    public record SubjectDetails(String creditCode, String contactName, String contactPhone,
+            String address, String industry, String companySize, String businessType) {
+        static SubjectDetails of(MerchantEntity m) {
+            return new SubjectDetails(m.getCreditCode(), m.getContactName(), m.getContactPhone(),
+                    m.getAddress(), m.getIndustry(), m.getCompanySize(), m.getBusinessType());
+        }
+
     }
 
     /**
@@ -347,6 +397,54 @@ public class SmsAuthService {
     }
 
     /**
+     * 同一手机号、同一场景的当日发送上限（运营端 {@code captcha.sms.daily.limit}）。
+     *
+     * <p>先计数再判上限：被拒的那一次也占用额度。反骚扰宁可偏严一点——
+     * 一个脚本反复试同一批号码时，"这次没发出去所以不算"正是它想要的口径。</p>
+     */
+    private void assertDailyLimit(String phone, String scene) {
+        int limit;
+        try {
+            limit = policy.smsDailyLimit();
+        } catch (RuntimeException e) {
+            return;   // 配置读不到时不拦正常业务，只失去这层保护
+        }
+        String key = DAILY_KEY + scene + ":" + phone + ":" + LocalDate.now();
+        Long used = redis.opsForValue().increment(key);
+        if (used == null) {
+            return;
+        }
+        if (used == 1L) {
+            redis.expire(key, Duration.between(LocalDateTime.now(), LocalDate.now().plusDays(1).atStartOfDay()));
+        }
+        if (used > limit) {
+            throw new BusinessException(ErrorCode.BIZ_ERROR,
+                    "该手机号今日验证码已发送 " + limit + " 条，请明天再试；如需立即处理请联系平台运营");
+        }
+    }
+
+    /** 场景词表（所有入口共用，包括公开端点）。 */
+    private static void assertScene(String scene) {
+        if (!"login".equals(scene) && !"register".equals(scene) && !"change_phone".equals(scene)
+                && !"reset_password".equals(scene)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "场景只能是 login、register、change_phone 或 reset_password");
+        }
+    }
+
+    /**
+     * 公开端点的场景白名单：未登录只允许发登录 / 注册 / 找回密码的码。
+     * 换绑手机是账号变更，必须由账号中心在登录态里发起，否则任何人都能替别人发码。
+     */
+    public static void assertPublicScene(String scene) {
+        assertScene(scene);
+        if (!PUBLIC_SCENES.contains(scene)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "场景 " + scene + " 需要在账号中心登录后发起，不能从公开端点发送验证码");
+        }
+    }
+
+    /**
      * 按运营端「新用户默认身份」授予角色。
      *
      * <p>配置为 NONE 时不授任何角色 —— 用户能登录但进不了业务域，需要走身份申请。
@@ -385,29 +483,39 @@ public class SmsAuthService {
         }
         MerchantEntity merchant = merchantMapper.selectById(merchantId);
         String identity = merchant == null ? null : merchant.getMemberType();
-        // 历史账号的主体没有 member_type：不能因为新流程上线就把老账号拦在开通向导里。
+        // 缺少主体类型不能推断认证通过，需补齐主体资料。
         if (merchant == null || identity == null || identity.isBlank()) {
-            return new OnboardingStatus("done", user.getPhone(), user.getNickname(), identity,
+            return new OnboardingStatus("subject", user.getPhone(), user.getNickname(), identity,
                     merchantId, merchant == null ? null : merchant.getName(),
                     merchant == null ? null : merchant.getVerifyStatus(), null, VerificationProgress.empty());
         }
         if ("enterprise".equalsIgnoreCase(identity)) {
             MerchantCertificationEntity cert = latestCertification(merchantId);
+            if (cert != null && (!java.util.Objects.equals(trimToNull(merchant.getName()), trimToNull(cert.getCompanyName()))
+                    || !java.util.Objects.equals(trimToNull(merchant.getCreditCode()), trimToNull(cert.getCreditCode())))) {
+                return new OnboardingStatus("subject", user.getPhone(), user.getNickname(), identity,
+                        merchantId, merchant.getName(), "rejected", cert.getCertNo(), VerificationProgress.empty(),
+                        SubjectDetails.of(merchant), cert.getReviewRemark(), cert.getReviewTime());
+            }
             String certStatus = cert == null ? null : cert.getCertStatus();
-            String stage = certStatus == null || "draft".equals(certStatus) || "rejected".equals(certStatus)
-                    ? "certification" : "pending".equals(certStatus) ? "pending" : "done";
+            String stage = "approved".equals(certStatus) ? "done"
+                    : "pending".equals(certStatus) ? "pending" : "certification";
             return new OnboardingStatus(stage, user.getPhone(), user.getNickname(), identity,
                     merchantId, merchant.getName(), certStatus, cert == null ? null : cert.getCertNo(),
-                    verificationProgress(null, cert));
+                    verificationProgress(null, cert), SubjectDetails.of(merchant),
+                    cert == null ? null : cert.getReviewRemark(),
+                    cert == null ? null : cert.getReviewTime());
         }
         UserIdentityEntity identityRecord = latestIdentity(userId);
         String identityStatus = identityRecord == null ? null : identityRecord.getStatus();
-        String stage = identityStatus == null || "draft".equals(identityStatus) || "rejected".equals(identityStatus)
-                ? "certification" : "pending".equals(identityStatus) ? "pending" : "done";
+        String stage = "approved".equals(identityStatus) ? "done"
+                : "pending".equals(identityStatus) ? "pending" : "certification";
         return new OnboardingStatus(stage, user.getPhone(), user.getNickname(), identity,
                 merchantId, merchant == null ? null : merchant.getName(), identityStatus,
                 identityRecord == null ? null : identityRecord.getIdentityNo(),
-                verificationProgress(identityRecord, null));
+                verificationProgress(identityRecord, null), SubjectDetails.of(merchant),
+                identityRecord == null ? null : identityRecord.getReviewRemark(),
+                identityRecord == null ? null : identityRecord.getReviewTime());
     }
 
     private VerificationProgress verificationProgress(UserIdentityEntity identity,
@@ -483,9 +591,7 @@ public class SmsAuthService {
             if (companyName == null) {
                 throw new BusinessException(ErrorCode.BAD_REQUEST, "企业名称不能为空");
             }
-            if (creditCode == null || !creditCode.matches("[0-9A-Za-z]{15,18}")) {
-                throw new BusinessException(ErrorCode.BAD_REQUEST, "统一社会信用代码应为 15-18 位字母数字");
-            }
+            creditCode = com.agri.platform.internal.merchant.CreditCodeValidator.validate(creditCode);
         } else {
             if (realName == null) {
                 throw new BusinessException(ErrorCode.BAD_REQUEST, "真实姓名不能为空");
@@ -496,7 +602,7 @@ public class SmsAuthService {
         }
 
         Long merchantId = forceNewMerchant
-                ? null : myMerchantIds(userId, market).stream().findFirst().orElse(null);
+                ? null : activeMerchantService.resolve(userId, market);
         MerchantEntity merchant;
         LocalDateTime now = LocalDateTime.now();
         if (merchantId == null) {
@@ -530,13 +636,21 @@ public class SmsAuthService {
             membership.setUpdatedAt(now);
             userMerchantMapper.insert(membership);
         } else {
-            merchant = merchantMapper.selectById(merchantId);
+            merchant = merchantMapper.lockById(merchantId);
             if (merchant == null) {
                 throw new BusinessException(ErrorCode.NOT_FOUND, "经营主体不存在");
             }
             if (merchant.getMemberType() != null && !merchant.getMemberType().isBlank()
                     && !identity.equalsIgnoreCase(merchant.getMemberType())) {
                 throw new BusinessException(ErrorCode.CONFLICT, "主体类型创建后不可更改");
+            }
+            MerchantCertificationEntity existingCert = latestCertificationForUpdate(merchant.getId());
+            boolean locked = "approved".equals(merchant.getVerifyStatus())
+                    || "pending".equals(merchant.getVerifyStatus())
+                    || (existingCert != null && ("pending".equals(existingCert.getCertStatus())
+                    || "approved".equals(existingCert.getCertStatus())));
+            if (locked) {
+                throw new BusinessException(ErrorCode.CONFLICT, "主体正在审核或已认证，不能修改认证资料；请等待退回补正或走主体变更流程");
             }
             merchant.setName("enterprise".equals(identity) ? companyName : realName);
             merchant.setMemberType(identity);
@@ -558,10 +672,12 @@ public class SmsAuthService {
             if (sameCredit != null && sameCredit > 0) {
                 throw new BusinessException(ErrorCode.CONFLICT, "该统一社会信用代码已登记");
             }
-            MerchantCertificationEntity cert = latestCertification(merchant.getId());
+            MerchantCertificationEntity cert = latestCertificationForUpdate(merchant.getId());
             if (cert == null || "draft".equals(cert.getCertStatus()) || "rejected".equals(cert.getCertStatus())) {
                 if (cert == null || "rejected".equals(cert.getCertStatus())) {
+                    Long previousId = cert == null ? null : cert.getId();
                     cert = new MerchantCertificationEntity();
+                    cert.setPreviousCertificationId(previousId);
                     cert.setMerchantId(merchant.getId());
                     cert.setMerchantName(merchant.getName());
                     cert.setCertNo("CT" + System.currentTimeMillis()
@@ -570,6 +686,8 @@ public class SmsAuthService {
                     // 表字段 NOT NULL；draft 不属于审核队列，提交时间会在激活时覆盖。
                     cert.setSubmitTime(now);
                 }
+                cert.snapshot(merchant);
+                cert.setMerchantName(merchant.getName());
                 cert.setCompanyName(companyName);
                 cert.setCreditCode(creditCode);
                 cert.setContactName(merchant.getContactName());
@@ -631,13 +749,13 @@ public class SmsAuthService {
         if (merchantId == null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "请先完成主体创建");
         }
-        MerchantEntity merchant = merchantMapper.selectById(merchantId);
+        MerchantEntity merchant = merchantMapper.lockById(merchantId);
         if (merchant == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND, "经营主体不存在");
         }
         LocalDateTime now = LocalDateTime.now();
         if ("enterprise".equalsIgnoreCase(merchant.getMemberType())) {
-            MerchantCertificationEntity cert = latestCertification(merchantId);
+            MerchantCertificationEntity cert = latestCertificationForUpdate(merchantId);
             if (cert == null) {
                 throw new BusinessException(ErrorCode.BAD_REQUEST, "认证资料不存在，请返回主体步骤重新填写");
             }
@@ -647,7 +765,25 @@ public class SmsAuthService {
             if ("pending".equals(cert.getCertStatus())) {
                 return onboardingStatus(userId, market);
             }
-            if ("draft".equals(cert.getCertStatus()) || "rejected".equals(cert.getCertStatus())) {
+            if (!"draft".equals(cert.getCertStatus())) {
+                throw new BusinessException(ErrorCode.CONFLICT, "请返回主体资料步骤保存补正草稿，原驳回申请不可再次提交");
+            }
+            if ("draft".equals(cert.getCertStatus())) {
+                com.agri.platform.internal.merchant.CreditCodeValidator.validate(cert.getCreditCode());
+                if (!java.util.Objects.equals(merchant.getName(), cert.getCompanyName())
+                        || !java.util.Objects.equals(merchant.getCreditCode(), cert.getCreditCode())) {
+                    throw new BusinessException(ErrorCode.CONFLICT, "主体资料已变化，请返回主体步骤重新保存");
+                }
+                requireText(merchant.getContactName(), "请填写联系人姓名");
+                if (merchant.getContactPhone() == null || !merchant.getContactPhone().matches("^1[3-9]\\d{9}$")) {
+                    throw new BusinessException(ErrorCode.BAD_REQUEST, "请填写有效的联系电话");
+                }
+                requireText(merchant.getAddress(), "请按营业执照补齐完整注册地址");
+                requireText(merchant.getIndustry(), "请选择行业");
+                requireText(merchant.getCompanySize(), "请选择企业规模");
+                cert.snapshot(merchant);
+                cert.setContactName(merchant.getContactName());
+                cert.setContactPhone(merchant.getContactPhone());
                 requireText(cert.getBusinessLicenseUrl(), "请先上传营业执照照片");
                 requireText(cert.getLegalPersonFaceUrl(), "请先完成法定代表人扫脸");
                 if (!"verified".equals(cert.getLegalPersonFaceStatus())) {
@@ -680,7 +816,10 @@ public class SmsAuthService {
             if ("pending".equals(identity.getStatus())) {
                 return onboardingStatus(userId, market);
             }
-            if ("draft".equals(identity.getStatus()) || "rejected".equals(identity.getStatus())) {
+            if (!"draft".equals(identity.getStatus())) {
+                throw new BusinessException(ErrorCode.CONFLICT, "请返回主体资料步骤保存新的补正草稿");
+            }
+            if ("draft".equals(identity.getStatus())) {
                 if (!Boolean.TRUE.equals(identity.getPoliceVerified())) {
                     throw new BusinessException(ErrorCode.BAD_REQUEST, "请先完成公安二要素核验");
                 }
@@ -722,6 +861,12 @@ public class SmsAuthService {
                 .toList();
     }
 
+    private MerchantCertificationEntity latestCertificationForUpdate(Long merchantId) {
+        return certificationMapper.selectOne(new LambdaQueryWrapper<MerchantCertificationEntity>()
+                .eq(MerchantCertificationEntity::getMerchantId, merchantId)
+                .orderByDesc(MerchantCertificationEntity::getId).last("LIMIT 1 FOR UPDATE"));
+    }
+
     private MerchantCertificationEntity latestCertification(Long merchantId) {
         return certificationMapper.selectOne(new LambdaQueryWrapper<MerchantCertificationEntity>()
                 .eq(MerchantCertificationEntity::getMerchantId, merchantId)
@@ -760,9 +905,7 @@ public class SmsAuthService {
             if (companyName == null) {
                 throw new BusinessException(ErrorCode.BAD_REQUEST, "企业名称不能为空");
             }
-            if (creditCode == null || !creditCode.matches("[0-9A-Za-z]{15,18}")) {
-                throw new BusinessException(ErrorCode.BAD_REQUEST, "统一社会信用代码应为 15-18 位字母数字");
-            }
+            creditCode = com.agri.platform.internal.merchant.CreditCodeValidator.validate(creditCode);
             Long sameCredit = merchantMapper.selectCount(new LambdaQueryWrapper<MerchantEntity>()
                     .eq(MerchantEntity::getCreditCode, creditCode));
             if (sameCredit != null && sameCredit > 0) {
@@ -873,14 +1016,6 @@ public class SmsAuthService {
             return null;
         }
         return value.trim();
-    }
-
-    private static void assertScene(String scene) {
-        if (!"login".equals(scene) && !"register".equals(scene) && !"change_phone".equals(scene)
-                && !"reset_password".equals(scene)) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST,
-                    "场景只能是 login、register、change_phone 或 reset_password");
-        }
     }
 
     private static String normalizePhone(String phone) {

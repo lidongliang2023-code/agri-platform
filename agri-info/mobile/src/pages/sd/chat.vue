@@ -221,7 +221,7 @@ function openDetail() {
   border-radius: 18rpx;
   background: #e5f5eb;
   color: #0e5233;
-  font-size: 22rpx;
+  font-size: 24rpx;
   font-weight: 700;
 }
 
@@ -259,7 +259,7 @@ function openDetail() {
 
 .time {
   color: #b3c0b7;
-  font-size: 18rpx;
+  font-size: 24rpx;
 }
 
 .ai-tip {
@@ -275,13 +275,13 @@ function openDetail() {
 
 .ai-tag {
   color: #6b418d;
-  font-size: 20rpx;
+  font-size: 24rpx;
   font-weight: 700;
 }
 
 .ai-text {
   color: #53665a;
-  font-size: 22rpx;
+  font-size: 24rpx;
   line-height: 1.66;
 }
 
@@ -302,7 +302,7 @@ function openDetail() {
   border: 1rpx dashed #cfe0d6;
   border-radius: 14rpx;
   color: #53665a;
-  font-size: 20rpx;
+  font-size: 24rpx;
 }
 
 .input-bar {

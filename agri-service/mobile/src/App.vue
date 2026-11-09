@@ -64,12 +64,12 @@ button::after {
 
 .muted {
   color: #718277;
-  font-size: 22rpx;
+  font-size: 24rpx;
 }
 
 .tiny {
   color: #94a198;
-  font-size: 20rpx;
+  font-size: 24rpx;
 }
 
 .strong {
@@ -100,7 +100,7 @@ button::after {
 
 .card-sub {
   color: #94a198;
-  font-size: 20rpx;
+  font-size: 24rpx;
 }
 
 .btn {
@@ -141,7 +141,7 @@ button::after {
   min-height: 58rpx;
   padding: 0 20rpx;
   border-radius: 12rpx;
-  font-size: 22rpx;
+  font-size: 24rpx;
 }
 
 .btn-block {
@@ -153,7 +153,7 @@ button::after {
   align-items: center;
   padding: 4rpx 12rpx;
   border-radius: 8rpx;
-  font-size: 20rpx;
+  font-size: 24rpx;
   line-height: 1.5;
 }
 
@@ -230,7 +230,7 @@ button::after {
   display: block;
   margin-bottom: 9rpx;
   color: #53665a;
-  font-size: 23rpx;
+  font-size: 24rpx;
   font-weight: 600;
 }
 
@@ -293,7 +293,7 @@ button::after {
 .hero-desc {
   margin-top: 10rpx;
   color: rgba(255, 255, 255, 0.62);
-  font-size: 22rpx;
+  font-size: 24rpx;
   line-height: 1.65;
 }
 
@@ -330,7 +330,7 @@ button::after {
 
 .ai-copy text:first-child {
   color: #6b418d;
-  font-size: 20rpx;
+  font-size: 24rpx;
   font-weight: 700;
 }
 
@@ -341,7 +341,7 @@ button::after {
 
 .ai-copy text:last-child {
   color: #718277;
-  font-size: 21rpx;
+  font-size: 24rpx;
 }
 
 .custom-nav {
@@ -368,7 +368,7 @@ button::after {
 .custom-nav .right {
   min-width: 96rpx;
   color: #12764a;
-  font-size: 23rpx;
+  font-size: 24rpx;
   text-align: right;
 }
 

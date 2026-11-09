@@ -1,7 +1,7 @@
 /**
  * 用户中心 · 身份申请
  *
- * <p>数据来自 `GET /api/v1/sso/account/identity-applications`：接口返回**全部 6 类身份**
+ * <p>数据来自 `GET /api/v1/sso/account/identity-applications`：接口返回**全部 7 类身份**
  * 及其当前状态（available / pending / approved / rejected / cancelled），
  * 页面据此渲染"去申请 / 审核中 / 已开通 / 已驳回"。</p>
  *
@@ -39,6 +39,23 @@ interface ApiBody<T> {
   data?: T
 }
 
+/** 当前登录主体（身份申请的主体名称/信用代码以它为准） */
+interface MerchantInfo {
+  merchantId: string | number
+  merchantName: string
+  creditCode?: string
+}
+
+/** 账号概览里与主体相关的部分（Cookie 会话即可读取，无需额外令牌） */
+interface AccountSummaryLite {
+  activeMerchantId?: string | null
+  merchants?: Array<{
+    merchantId: string
+    merchantName: string | null
+    creditCode: string | null
+  }>
+}
+
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     credentials: 'include',
@@ -67,6 +84,7 @@ const IDENTITY_ICON: Record<string, string> = {
   retailer: 'box',
   farmer: 'seed',
   coop_admin: 'users',
+  mall_supplier: 'box',
   service_provider: 'tool',
   government: 'shield',
 }
@@ -108,17 +126,30 @@ export function IdentityApply(): JSX.Element {
   const [form, setForm] = useState<ApplyForm | null>(null)
   const [saving, setSaving] = useState(false)
   const [capabilities, setCapabilities] = useState<CapabilityRow[]>([])
+  const [merchant, setMerchant] = useState<MerchantInfo | null>(null)
 
   const load = useCallback(async (): Promise<void> => {
     setLoading(true)
     setError('')
     try {
-      const [data, capabilityData] = await Promise.all([
+      const [data, capabilityData, summary] = await Promise.all([
         api<{ identities?: IdentityRow[] }>('/api/v1/sso/account/identity-applications'),
         api<{ capabilities?: CapabilityRow[] }>('/api/v1/sso/account/capabilities'),
+        api<AccountSummaryLite>('/api/v1/sso/account/summary'),
       ])
       setRows(data?.identities ?? [])
       setCapabilities(capabilityData?.capabilities ?? [])
+      const merchantRows = summary?.merchants ?? []
+      const active = merchantRows.find(
+        (item) => summary?.activeMerchantId && String(item.merchantId) === String(summary.activeMerchantId),
+      ) ?? merchantRows[0]
+      setMerchant(active
+        ? {
+            merchantId: active.merchantId,
+            merchantName: active.merchantName ?? '',
+            creditCode: active.creditCode ?? '',
+          }
+        : null)
     } catch (e) {
       setError((e as Error).message || '身份申请加载失败')
     } finally {
@@ -131,14 +162,24 @@ export function IdentityApply(): JSX.Element {
   }, [load])
 
   const openApply = (row: IdentityRow): void => {
-    setForm({ ...EMPTY_FORM, identityType: row.code })
+    setForm({
+      ...EMPTY_FORM,
+      identityType: row.code,
+      // 主体名称与信用代码默认带出当前登录主体，且不可修改（服务端同样强制覆盖）
+      subjectName: merchant?.merchantName ?? '',
+      creditCode: merchant?.creditCode ?? '',
+    })
     setNotice('')
   }
 
   const submit = async (): Promise<void> => {
     if (!form) return
+    if (!merchant) {
+      setError('当前账号还没有绑定经营主体，请先在「经营主体」页创建或加入主体')
+      return
+    }
     if (!form.subjectName.trim()) {
-      setError('请填写主体名称')
+      setError('当前经营主体缺少名称，请先在经营主体页面补全')
       return
     }
     setSaving(true)
@@ -210,6 +251,12 @@ export function IdentityApply(): JSX.Element {
         </div>
       )}
 
+      {!loading && !merchant && (
+        <div className="account-notice">
+          当前账号还没有绑定经营主体，申请业务身份前请先在「账户中心 → 经营主体」创建或加入主体。
+        </div>
+      )}
+
       {notice && <div className="account-notice">{notice}</div>}
       {error && <div className="account-error">{error}</div>}
       {loading && <div className="card empty">正在加载身份…</div>}
@@ -263,20 +310,14 @@ export function IdentityApply(): JSX.Element {
             <h3>申请身份：{rows.find((row) => row.code === form.identityType)?.label ?? form.identityType}</h3>
             <label>
               主体名称 <span className="uc-id-req">*</span>
-              <input
-                value={form.subjectName}
-                placeholder="如 金乡县金穗大蒜专业合作社"
-                onChange={(event) => setForm({ ...form, subjectName: event.target.value })}
-              />
+              <input value={form.subjectName} readOnly placeholder="当前登录主体" />
+              <small className="uc-muted">来自当前登录主体，不可修改</small>
             </label>
             <div className="uc-id-row">
               <label>
                 统一社会信用代码
-                <input
-                  value={form.creditCode}
-                  placeholder="选填"
-                  onChange={(event) => setForm({ ...form, creditCode: event.target.value })}
-                />
+                <input value={form.creditCode} readOnly placeholder="当前主体未填写信用代码" />
+                <small className="uc-muted">来自当前登录主体，不可修改</small>
               </label>
               <label>
                 经营场所

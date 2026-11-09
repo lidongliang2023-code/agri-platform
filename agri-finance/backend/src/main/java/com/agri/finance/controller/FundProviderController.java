@@ -189,6 +189,9 @@ public class FundProviderController {
     @GetMapping("/{id}")
     public Map<String, Object> getProviderDetail(@PathVariable String id) {
         FundProvider provider = fundProviderService.getById(id);
+        if (provider == null || Integer.valueOf(1).equals(provider.getDelFlag())) {
+            return Map.of("code", 404, "message", "资金机构不存在", "data", "");
+        }
         return Map.of("code", 200, "message", "success", "data", provider);
     }
 }

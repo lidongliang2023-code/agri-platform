@@ -62,7 +62,7 @@ public class DemandController {
     @GetMapping("/{id}")
     public ApiResponse<Demand> getDemandById(@PathVariable Long id) {
         Demand demand = demandMapper.selectById(id);
-        if (demand == null) return ApiResponse.error("需求不存在");
+        if (demand == null) return ApiResponse.error(404, "需求不存在");
         return ApiResponse.success(demand);
     }
 
@@ -118,7 +118,7 @@ public class DemandController {
     public ApiResponse<Boolean> updateDemand(@PathVariable Long id, @RequestBody Demand demand) {
         Demand existing = demandMapper.selectById(id);
         if (existing == null) {
-            return ApiResponse.error("需求不存在");
+            return ApiResponse.error(404, "需求不存在");
         }
         // 原先这条是 demand.setId(id) + updateById(整个请求体)：任何登录用户换个 id 就能把
         // 别家采购需求改成自己的（连 buyerId 都能重写），或者顺手改单号、改状态、置 delFlag。
@@ -174,7 +174,7 @@ public class DemandController {
     public ApiResponse<Boolean> deleteDemand(@PathVariable Long id) {
         Demand demand = demandMapper.selectById(id);
         if (demand == null) {
-            return ApiResponse.error("需求不存在");
+            return ApiResponse.error(404, "需求不存在");
         }
         String denied = denyUnlessOwner(demand);
         if (denied != null) {
@@ -194,7 +194,7 @@ public class DemandController {
             @PathVariable Long id,
             @RequestParam(defaultValue = "5") Integer limit) {
         Demand demand = demandMapper.selectById(id);
-        if (demand == null) return ApiResponse.error("需求不存在");
+        if (demand == null) return ApiResponse.error(404, "需求不存在");
         // 触发撮合会往这张需求上写匹配记录（并给对方货源计一次响应），是主人的动作。
         String denied = denyUnlessOwner(demand);
         if (denied != null) return ApiResponse.error(denied);

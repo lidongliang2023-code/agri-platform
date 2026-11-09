@@ -30,6 +30,7 @@ public class UserIdentityServiceImpl implements IUserIdentityService {
             "collector", "收购商",
             "wholesaler", "批发商",
             "retailer", "零售商",
+            "mall_supplier", "商城供应商",
             "service_provider", "服务商",
             "government", "政府用户",
             "enterprise", "企业用户",

@@ -199,7 +199,7 @@ function openProduct(id: number) {
 
 .cart-kicker {
   color: #12764a;
-  font-size: 17rpx;
+  font-size: 24rpx;
   font-weight: 700;
   letter-spacing: 2rpx;
 }
@@ -213,7 +213,7 @@ function openProduct(id: number) {
 
 .cart-count {
   color: #93a29a;
-  font-size: 20rpx;
+  font-size: 24rpx;
 }
 
 .cart-list {
@@ -241,7 +241,7 @@ function openProduct(id: number) {
   border: 1rpx solid #cdd8d1;
   border-radius: 50%;
   color: #fff;
-  font-size: 21rpx;
+  font-size: 24rpx;
 }
 
 .check.checked {
@@ -294,7 +294,7 @@ function openProduct(id: number) {
 .item-spec {
   margin-top: 7rpx;
   color: #84938a;
-  font-size: 19rpx;
+  font-size: 24rpx;
 }
 
 .item-bottom {
@@ -333,7 +333,7 @@ function openProduct(id: number) {
 
 .stepper-value {
   min-width: 52rpx;
-  font-size: 21rpx;
+  font-size: 24rpx;
 }
 
 .delete {
@@ -364,7 +364,7 @@ function openProduct(id: number) {
   align-items: center;
   gap: 9rpx;
   color: #52665a;
-  font-size: 22rpx;
+  font-size: 24rpx;
 }
 
 .total-copy {
@@ -373,7 +373,7 @@ function openProduct(id: number) {
   align-items: flex-end;
   flex-direction: column;
   color: #718277;
-  font-size: 18rpx;
+  font-size: 24rpx;
 }
 
 .total-price {
@@ -386,7 +386,7 @@ function openProduct(id: number) {
 .checkout {
   width: 220rpx;
   height: 78rpx;
-  font-size: 23rpx;
+  font-size: 24rpx;
 }
 
 .checkout[disabled] {

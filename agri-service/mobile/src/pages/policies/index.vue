@@ -81,7 +81,7 @@ async function submit() {
 .policy-row { display: flex; align-items: center; gap: 14rpx; padding: 18rpx 0; border-bottom: 1rpx solid #edf2ee; }
 .policy-row:last-child { border-bottom: 0; }
 .score { display: flex; width: 76rpx; height: 76rpx; flex: 0 0 76rpx; align-items: center; justify-content: center; flex-direction: column; border-radius: 50%; background: #f2fbf5; color: #0e5233; font-family: monospace; font-size: 25rpx; font-weight: 700; }
-.score text { font-family: sans-serif; font-size: 14rpx; font-weight: 400; }
+.score text { font-family: sans-serif; font-size: 24rpx; font-weight: 400; }
 .policy-copy { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 5rpx; }
 .policy-title { font-size: 24rpx; font-weight: 650; }
 .chev { color: #94a198; font-size: 38rpx; }
@@ -91,6 +91,6 @@ async function submit() {
 .sheet { width: 100%; padding: 28rpx 28rpx calc(28rpx + env(safe-area-inset-bottom)); border-radius: 30rpx 30rpx 0 0; background: #fff; }
 .sheet-close { color: #718277; font-size: 44rpx; }
 .materials { display: flex; gap: 8rpx; flex-wrap: wrap; margin-bottom: 20rpx; padding: 16rpx; border-radius: 13rpx; background: #f2fbf5; }
-.materials text { color: #0e5233; font-size: 20rpx; }
-.readonly { min-height: 68rpx; padding: 18rpx 20rpx; border: 1rpx solid #e6ede8; border-radius: 14rpx; background: #f6f9f7; color: #55655b; font-size: 23rpx; }
+.materials text { color: #0e5233; font-size: 24rpx; }
+.readonly { min-height: 68rpx; padding: 18rpx 20rpx; border: 1rpx solid #e6ede8; border-radius: 14rpx; background: #f6f9f7; color: #55655b; font-size: 24rpx; }
 </style>

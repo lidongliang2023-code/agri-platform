@@ -1,11 +1,27 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
 const routes = [
-  { path: '/login', redirect: '/' },
   { 
     path: '/', 
     component: () => import('../views/Layout.vue'),
     children: [
+      { path: 'supply', component: () => import('../views/SupplyWorkspace.vue'), children: [
+          { path: '', redirect: '/supply/products' },
+          { path: 'todo', component: () => import('../supply/views/Todo.vue') },
+          { path: 'supply-pool', component: () => import('../supply/views/SupplyPool.vue') },
+          { path: 'listing-config', component: () => import('../supply/views/ListingConfig.vue') },
+          { path: 'distributors', component: () => import('../supply/views/Distributors.vue') },
+          { path: 'distributor-detail/:id', component: () => import('../supply/views/DistributorDetail.vue') },
+          { path: 'recruit', component: () => import('../supply/views/Recruit.vue') },
+          { path: 'revenue', component: () => import('../supply/views/Revenue.vue') },
+          { path: 'analytics', component: () => import('../supply/views/Analytics.vue') },
+          { path: 'notice-settings', component: () => import('../supply/views/NoticeSettings.vue') },
+          { path: 'products', component: () => import('../supply/views/Products.vue') },
+          { path: 'product-add', component: () => import('../supply/views/ProductAdd.vue') },
+          { path: 'product-edit/:id', component: () => import('../supply/views/ProductEdit.vue') },
+          { path: 'orders', component: () => import('../supply/views/Orders.vue') },
+          { path: 'order-detail/:id', component: () => import('../supply/views/OrderDetail.vue') }
+      ] },
       { path: '', name: 'Dashboard', component: () => import('../views/Dashboard.vue') },
       { path: 'suppliers', name: 'Suppliers', component: () => import('../views/Suppliers.vue') },
       { path: 'supplier-detail/:id', name: 'SupplierDetail', component: () => import('../views/SupplierDetail.vue') },
@@ -40,7 +56,9 @@ const routes = [
       { path: 'withdrawals', name: 'Withdrawals', component: () => import('../views/Withdrawals.vue') },
       { path: 'categories', name: 'Categories', component: () => import('../views/Categories.vue') }
     ]
-  }
+  },
+  // 未匹配路径（含已下线的 /login）统一回首页，避免白屏
+  { path: '/:pathMatch(.*)*', redirect: '/' }
 ]
 
 const router = createRouter({

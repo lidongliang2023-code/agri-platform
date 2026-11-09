@@ -10,6 +10,11 @@ export interface LogisticsQuery {
 }
 
 export interface LogisticsVO {
+  diffTicketNo?: string
+  reshipQty?: number
+  reshipUnit?: string
+  signedBuyerId?: number
+
   id: number
   logisticsNo: string
   orderId: number
@@ -107,5 +112,10 @@ export interface CarrierVO {
 
 export async function getCarriers() {
   const response = await axios.get('/api/trade/logistics/carrier/list')
+  return response.data
+}
+
+export async function createReship(id: number, ticketNo: string) {
+  const response = await axios.post(`/api/trade/logistics/${id}/reship`, { ticketNo })
   return response.data
 }

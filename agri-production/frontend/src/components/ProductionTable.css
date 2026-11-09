@@ -1,0 +1,46 @@
+.production-record-table .ant-pro-table-list-toolbar-container {
+  align-items: center;
+  gap: 12px;
+  padding-block: 12px;
+}
+.production-record-table .ant-pro-table-list-toolbar-right {
+  margin-inline-start: auto;
+  flex-shrink: 0;
+}
+.production-record-table .ant-pro-table-list-toolbar-left { min-width: 0; }
+@media (max-width: 767px) {
+  .production-record-table .ant-pro-table-list-toolbar-container { flex-wrap: wrap; }
+}
+
+.production-record-table .ant-table-thead > tr > th {
+  position: relative;
+}
+.production-record-table .production-column-resize-handle {
+  position: absolute;
+  z-index: 5;
+  top: 0;
+  right: -5px;
+  bottom: 0;
+  width: 10px;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+}
+.production-record-table .production-column-resize-handle::after {
+  content: '';
+  position: absolute;
+  top: 20%;
+  bottom: 20%;
+  left: 4px;
+  width: 2px;
+  border-radius: 2px;
+  background: #cbdcd1;
+}
+.production-record-table .production-column-resize-handle:hover::after,
+.production-record-table .production-column-resize-handle:focus-visible::after {
+  background: #23744c;
+}
+.production-record-table .production-column-resize-handle:focus-visible {
+  outline: 2px solid #23744c;
+  outline-offset: -2px;
+}

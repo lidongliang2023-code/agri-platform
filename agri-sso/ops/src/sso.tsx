@@ -30,6 +30,7 @@ interface SsoState {
 
 interface PermissionResult {
   code: number
+  message?: string
   data?: { permissions?: string[] }
 }
 
@@ -130,9 +131,10 @@ async function exchangeCode(clientId: string, code: string, state: string | null
   return response.data.data as LoginResult
 }
 
-async function restoreSession(): Promise<LoginResult | null> {
+async function restoreSession(clientId: string): Promise<LoginResult | null> {
   try {
     const response = await axios.post('/api/v1/auth/refresh', {}, {
+      headers: { 'X-Sso-Client': clientId },
       timeout: 20000,
       withCredentials: true,
     })
@@ -146,16 +148,24 @@ async function restoreSession(): Promise<LoginResult | null> {
 }
 
 async function loadPermissions(): Promise<string[]> {
-  if (!accessToken) return []
-  try {
-    const response = await axios.get<PermissionResult>('/api/v1/platform/permissions/mine', {
-      headers: { Authorization: `Bearer ${accessToken}` },
-      timeout: 15000,
-    })
-    return response.data?.data?.permissions ?? []
-  } catch {
-    return []
+  if (!accessToken) throw new Error('登录会话已失效，请重新登录')
+  const response = await axios.get<PermissionResult>('/api/v1/platform/permissions/mine', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    timeout: 15000,
+  }).catch((cause: unknown) => {
+    if (axios.isAxiosError(cause)) {
+      throw new Error(cause.response?.data?.message || `权限服务读取失败${cause.response ? `（HTTP ${cause.response.status}）` : '，请检查服务连接'}`)
+    }
+    throw cause
+  })
+  if (response.data?.code !== 0) {
+    throw new Error(response.data?.message || '权限服务返回异常，请重试')
   }
+  const permissions = response.data.data?.permissions
+  if (!Array.isArray(permissions) || !permissions.every((value) => typeof value === 'string')) {
+    throw new Error('权限服务返回格式异常，请联系平台管理员')
+  }
+  return permissions
 }
 
 export function attachUnifiedAuth(client: AxiosInstance, clientId: string) {
@@ -170,6 +180,12 @@ export function attachUnifiedAuth(client: AxiosInstance, clientId: string) {
         clearSession()
         await redirectToSso(clientId, routeTarget())
       }
+      // 403 必须把后端的真实原因带到页面上：默认的
+      // "Request failed with status code 403" 看不出是缺权限还是角色受限。
+      if (error.response?.status === 403) {
+        const body = error.response.data as { message?: string } | undefined
+        error.message = body?.message || '当前账号无权执行该操作'
+      }
       return Promise.reject(error)
     },
   )
@@ -177,7 +193,7 @@ export function attachUnifiedAuth(client: AxiosInstance, clientId: string) {
 
 export async function logoutUnified(clientId: string) {
   try {
-    await axios.post('/api/v1/auth/logout', {}, { timeout: 10000, withCredentials: true })
+    await axios.post('/api/v1/auth/logout', {}, { headers: { 'X-Sso-Client': clientId }, timeout: 10000, withCredentials: true })
   } catch {
     // 本地会话必须清理，即使服务端登出接口暂时不可达。
   }
@@ -213,6 +229,7 @@ export default function UnifiedSsoGate({
   const [checking, setChecking] = useState(true)
   const [error, setError] = useState('')
   const [denied, setDenied] = useState(false)
+  const [deniedAccount, setDeniedAccount] = useState('')
   const retry = () => {
     setChecking(true)
     setError('')
@@ -234,7 +251,7 @@ export default function UnifiedSsoGate({
           sessionStorage.removeItem(RETURN_KEY)
           window.history.replaceState({}, '', returnTo || landingPath)
         } else {
-          login = await restoreSession()
+          login = await restoreSession(clientId)
         }
         if (!login) {
           await redirectToSso(clientId, routeTarget())
@@ -244,6 +261,7 @@ export default function UnifiedSsoGate({
         const allowed = requiredPermissions.every((permission) => granted(permissions, permission))
         if (cancelled) return
         if (!allowed) {
+          setDeniedAccount(login.user.username)
           setDenied(true)
           clearSession()
           return
@@ -260,7 +278,7 @@ export default function UnifiedSsoGate({
   }, [clientId, landingPath, requiredPermissions])
 
   if (error) return <Failure title="统一登录未完成" message={error} onRetry={retry} />
-  if (denied) return <Failure title="暂无用户中心运营权限" message="当前统一账号没有用户中心运营端角色权限（uc:admin），请联系平台管理员开通。" onRetry={retry} />
+  if (denied) return <Failure title="暂无用户中心运营权限" message={`当前账号「${deniedAccount}」没有平台用户中心运营权限（uc:admin）。请使用有权限的运营账号登录。`} onRetry={retry} />
   if (checking || !session) return <Failure title="正在连接统一认证中心" message="正在核验统一账号与用户中心运营权限，请稍候…" />
   return <SessionContext.Provider value={session}>{children}</SessionContext.Provider>
 }

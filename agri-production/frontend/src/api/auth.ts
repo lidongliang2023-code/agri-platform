@@ -328,12 +328,24 @@ export function installAuthRefreshInterceptor(): void {
  * 服务端刷新令牌并清除 HttpOnly Cookie，不必逐个调用点去补网络请求。
  */
 registerServerLogout((options) => {
-  void (async () => {
-    // 先吊销平台令牌（刷新令牌 + 访问令牌黑名单），再决定是否去 SSO 域销毁全局会话。
-    // 顺序不能反：整页导航会中断当前文档的请求，跳走之后就没机会再发了。
-    await logout()
-    if (options?.sso !== false) {
-      window.location.href = ssoLogoutUrl(SSO_CLIENT_ID)
-    }
-  })()
+  if (options?.sso === false) {
+    void logout()
+    return
+  }
+  // 显式退出登录：立即整页跳转 SSO 登出，不再先 await 平台登出接口。
+  // 原实现等待接口返回期间，路由守卫已把用户送到 /production/login；该页的 SsoHandoff
+  // 看到 SSO 全局会话仍然有效，会再次发起授权跳转，表现为“要点两次退出”才能离开。
+  // 这里用 keepalive 把平台登出塞进浏览器卸载流程，然后立刻离开当前文档。
+  try {
+    void fetch(`${AUTH_BASE}/logout`, {
+      method: 'POST',
+      credentials: 'include',
+      keepalive: true,
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    })
+  } catch {
+    // 平台令牌吊销失败不阻塞 SSO 登出；SSO 会话销毁后仍会回到登录页
+  }
+  window.location.href = ssoLogoutUrl(SSO_CLIENT_ID)
 })

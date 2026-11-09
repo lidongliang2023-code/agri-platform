@@ -11,7 +11,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  * 复用核心基础设施（事件总线/统一响应），数据表前缀 iot_，独立数据库 agri_iot。
  */
 @EnableScheduling
-@MapperScan("com.agri.core.infra")
+@MapperScan(basePackages = "com.agri.core.infra", annotationClass = org.apache.ibatis.annotations.Mapper.class)
 @ComponentScan(basePackages = {"com.agri.satellite.iot", "com.agri.core.infra"})
 @SpringBootApplication
 public class IotAccessApplication {

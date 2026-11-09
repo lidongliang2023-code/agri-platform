@@ -231,7 +231,7 @@ const activePoints = computed(() =>
 
 .head-label {
   color: rgba(255, 255, 255, 0.6);
-  font-size: 22rpx;
+  font-size: 24rpx;
 }
 
 .head-value {

@@ -41,6 +41,13 @@ public class GovernmentExceptionHandler {
         return ResponseEntity.status(status).body(ApiResponse.fail(exception.getCode(), exception.getMessage()));
     }
 
+    @ExceptionHandler({org.springframework.web.servlet.resource.NoResourceFoundException.class,
+            org.springframework.web.servlet.NoHandlerFoundException.class})
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ApiResponse<Void> notFound(Exception exception) {
+        return ApiResponse.fail(404, "请求地址不存在");
+    }
+
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public ApiResponse<Void> unexpected(Exception exception) {

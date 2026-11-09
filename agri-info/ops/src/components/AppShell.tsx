@@ -31,6 +31,8 @@ const MENU: MenuGroup[] = [
   {
     title: '内容运营',
     items: [
+      { key: 'green-supply', label: '绿色供应链', icon: <ClusterOutlined /> },
+      { key: 'cloud-factories', label: 'VR 云工厂', icon: <VideoCameraOutlined /> },
       { key: 'contents', label: '内容审核', icon: <FileTextOutlined /> },
       { key: 'courses', label: '培训课程', icon: <VideoCameraOutlined /> },
       { key: 'channels', label: '栏目与作者', icon: <ClusterOutlined /> },
@@ -67,6 +69,8 @@ const MENU: MenuGroup[] = [
 ]
 
 const TITLES: Record<OpsPageKey, string> = {
+  'green-supply': '绿色供应链',
+  'cloud-factories': 'VR 云工厂',
   dashboard: '运营大盘',
   contents: '内容审核',
   courses: '培训课程',
@@ -115,11 +119,11 @@ export function AppShell({ children }: { children: ReactNode }): JSX.Element {
     <div className={`app-shell${collapsed ? ' sidebar-collapsed' : ''}`}>
       <aside className={`app-sidebar${mobileOpen ? ' mobile-open' : ''}`}>
         <button className="app-brand" type="button" onClick={() => navigate('dashboard')}>
-          <span className="app-brand-mark">运</span>
+          <img className="app-brand-mark" src={`${import.meta.env.BASE_URL}fengchain.svg`} alt="丰链云" />
           {!collapsed && (
             <span className="app-brand-copy">
               <b>丰链云</b>
-              <small>信息资讯 · 运营端</small>
+              <small>FENGCHAIN · AGRI</small>
             </span>
           )}
         </button>

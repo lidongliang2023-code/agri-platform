@@ -15,6 +15,7 @@ import java.util.Map;
  * （本服务不实现，网关的 404 回退会兜住）；这里只实现前端页面真的在调、而两边都没有实现的那几条。</p>
  */
 public interface IAdminAlertService {
+    AdminAlertReviewVO getAlert(Long id);
 
     /**
      * 告警列表分页（运营端「告警中心」页面走这条）。

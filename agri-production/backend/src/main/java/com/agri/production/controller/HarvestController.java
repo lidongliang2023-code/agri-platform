@@ -127,10 +127,17 @@ public class HarvestController {
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer pageNum,
             @RequestParam(required = false) Integer size,
-            @RequestParam(required = false) Integer pageSize) {
+            @RequestParam(required = false) Integer pageSize,
+            @RequestParam(required = false) Long inventoryId,
+            @RequestParam(required = false) Integer flowType,
+            @RequestParam(required = false) String direction,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate,
+            @RequestParam(required = false) String operatorName,
+            @RequestParam(required = false) String keyword) {
         return ApiResponse.success(service.pageBatchFlows(batchId,
                 firstNonNull(pageNum, page, 1), firstNonNull(pageSize, size, 50),
-                TenantContextService.currentTenantId()));
+                TenantContextService.currentTenantId(), inventoryId, flowType, direction, startDate, endDate, operatorName, keyword));
     }
 
     /* ==================== 成品库存 ==================== */
@@ -175,15 +182,18 @@ public class HarvestController {
     public ApiResponse<InventoryFlow> stockOut(@PathVariable Long batchId,
                                               @RequestParam BigDecimal qty,
                                               @RequestParam(required = false) String relatedOrderNo,
-                                              @RequestParam(required = false) String operatorName) {
-        return ApiResponse.success(service.stockOut(batchId, qty, relatedOrderNo, operatorName,
+                                              @RequestParam(required = false) String operatorName,
+                                              @RequestParam(required = false) Long inventoryId) {
+        return ApiResponse.success(service.stockOut(batchId, qty, relatedOrderNo, operatorName, inventoryId,
                 TenantContextService.currentTenantId()));
     }
 
     /** 冻结库存（返回冻结后的批次，前端按批次判断成功）。 */
     @PostMapping("/inventory/{batchId}/freeze")
-    public ApiResponse<HarvestBatch> freeze(@PathVariable Long batchId) {
-        return ApiResponse.success(service.freeze(batchId, TenantContextService.currentTenantId()));
+    public ApiResponse<HarvestBatch> freeze(@PathVariable Long batchId,
+                                            @RequestParam(required = false) Long inventoryId,
+                                            @RequestParam(defaultValue = "true") boolean frozen) {
+        return ApiResponse.success(service.freeze(batchId, inventoryId, frozen, TenantContextService.currentTenantId()));
     }
 
     /** 损耗登记（HARV-09）。 */

@@ -1,3 +1,5 @@
+import { Tabs } from 'antd'
+import SafetyOverview from '../foodSafety/Index'
 /**
  * 页面名称：溯源总览
  * 路由路径：/admin/production/trace
@@ -85,7 +87,7 @@ function toNumber(value: string | number | undefined): number | undefined {
  *
  * @returns 页面内容
  */
-export default function TraceOverview(): JSX.Element {
+function TraceOverview(): JSX.Element {
   /** 码段统计 */
   const statsQuery = useQuery({
     queryKey: ['admin', 'trace', 'code-stats'],
@@ -344,4 +346,8 @@ export default function TraceOverview(): JSX.Element {
       </Card>
     </Space>
   )
+}
+
+export default function QualitySafetyOverview() {
+ return <Tabs destroyOnHidden items={[{key: "quality", label: "质量与溯源", children: <TraceOverview />}, {key: "safety", label: "安全事件台账", children: <SafetyOverview />}]} />
 }

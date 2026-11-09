@@ -1,3 +1,4 @@
+import Table from '@/components/BusinessRecordList'
 /**
  * 页面名称：生长记录
  * 路由路径：/production/growth/records
@@ -31,7 +32,6 @@ import {
   Segmented,
   Select,
   Space,
-  Table,
   Tag,
   Typography,
   message,
@@ -436,8 +436,8 @@ export default function GrowthRecords(): JSX.Element {
 
   return (
     <div style={{ padding: 24 }}>
-      <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
-        <Typography.Title level={4} style={{ margin: 0 }}>
+      <Row className="production-custom-page-header production-page-header-row" justify="space-between" align="middle" style={{ marginBottom: 16 }}>
+        <Typography.Title className="production-page-heading" level={4} style={{ margin: 0 }}>
           🌱 生长记录
         </Typography.Title>
         <Space>

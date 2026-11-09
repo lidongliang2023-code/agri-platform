@@ -230,11 +230,8 @@ export interface TenantProfileResult {
 /**
  * 查询主体信息。
  *
- * ⚠️ 实测（core-app :8098）：后端**没有** `GET /settings/tenant` 这个端点，该路径会被
- * `SettingController#detail` 的 `@GetMapping("/{id}")` 吞掉，返回
- * `code=404 资源不存在`（与请求 `/settings/zzz-not-exist` 完全一致，可据此判定是
- * 端点缺失而非"该主体没档案"）。因此本函数**不再静默回落到 null**，而是把不可用原因
- * 一并返回，交由页面做醒目降级提示。
+ * 生产服务只读映射统一平台当前已绑定主体的名称及信用代码。
+ * 查询失败时显式提示，不使用农场资料或示例档案替代。
  *
  * @returns 查询结果，含可能的不可用原因
  */
@@ -333,9 +330,8 @@ export async function listOperationLogs(
       silent: true,
     })
     if (res && Array.isArray(res.list)) {
-      return res.list.length > 0
-        ? { ...res }
-        : { ...res, unavailableReason: '后端 /settings/logs 已请求成功，但未返回任何日志记录' }
+      // 合法空页表示没有匹配记录，不能据此认定审计接口未接入。
+      return { ...res }
     }
     return {
       ...empty,

@@ -1,0 +1,20 @@
+.quality-trace-page .ant-form-item-label > label,
+.quality-trace-dialog .ant-form-item-label > label { color: #506b5b; font-weight: 500; }
+.quality-trace-page .ant-form-inline { gap: 8px 0; }
+.quality-trace-page .ant-statistic-title { color: #6b8074; }
+.quality-trace-page .ant-statistic-content { font-weight: 600; }
+.quality-trace-dialog .ant-form-vertical .ant-form-item { margin-bottom: 20px; }
+.quality-trace-dialog .production-section-card + .production-section-card { margin-top: 16px; }
+@media (max-width: 767px) {
+  .quality-trace-page .ant-row > .ant-col { max-width: 100%; }
+  .quality-trace-page .ant-form-inline .ant-form-item { margin-inline-end: 0; }
+  .quality-trace-page .ant-form-inline .ant-form-item-control-input-content > .ant-select,
+  .quality-trace-page .ant-form-inline .ant-form-item-control-input-content > .ant-input-affix-wrapper { max-width: 100%; }
+  .quality-trace-dialog .ant-drawer-content-wrapper { max-width: 100vw; }
+}
+
+.quality-trace-page .trace-domain-note { margin: 16px 0; }
+.quality-trace-page .trace-query-row .ant-input { width: 300px; max-width: 100%; }
+.quality-trace-page .trace-event-row { padding: 0 0 16px; border-bottom: 1px solid #e7eee9; }
+.quality-trace-page .trace-event-row p { margin: 10px 0; color: #506b5b; line-height: 1.8; }
+@media (max-width: 767px) { .quality-trace-page .trace-query-row .ant-input { width: 100%; } }

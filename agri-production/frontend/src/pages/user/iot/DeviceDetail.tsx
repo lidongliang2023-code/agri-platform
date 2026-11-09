@@ -1,3 +1,4 @@
+import Table from '@/components/BusinessRecordList'
 /**
  * 页面名称：设备详情
  * 路由路径：/production/iot/:deviceId
@@ -19,7 +20,7 @@
 import { useMemo, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { PageContainer } from '@ant-design/pro-components'
+import PageContainer from '@/components/ProductionPageContainer'
 import {
   Alert,
   Button,
@@ -35,7 +36,6 @@ import {
   Skeleton,
   Space,
   Statistic,
-  Table,
   Tabs,
   Tag,
   Timeline,
@@ -608,9 +608,7 @@ export default function DeviceDetail(): JSX.Element {
                     >
                       刷新
                     </Button>
-                    <Typography.Text type="secondary">
-                      指令状态由服务端按设备在线状态（10 分钟心跳窗口）落库，非前端计算
-                    </Typography.Text>
+
                   </Space>
                   <Table<IotCommand>
                     size="small"

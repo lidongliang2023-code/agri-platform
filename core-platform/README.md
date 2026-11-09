@@ -100,6 +100,7 @@ IoT 端到端演示：登录核心 → `POST :8081/api/v1/ingest {"deviceNo":"WS
 | 域 | 端点 |
 |---|---|
 | 认证 | POST /api/v1/auth/login · /refresh · /logout · GET /me |
+| 账号中心（SSO 会话） | GET /api/v1/sso/account/summary · PUT /profile · **POST /phone/code → POST /phone**（换绑手机：发码要会话、验码才落库） · POST /api/v1/sso/sms/code（只接 login/register/reset_password） |
 | 平台域 | /api/v1/markets · /api/v1/products · /api/v1/admin/products|users|merchants|roles · /api/v1/messages |
 | 交易域 | /api/v1/trade/listings · /api/v1/trade/orders（create/pay/settle/cancel） |
 | 生产域 | /api/v1/produce/plots|devices|batches（harvest、trace-code）|quality-reports|alerts |

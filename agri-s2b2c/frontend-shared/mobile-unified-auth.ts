@@ -106,7 +106,22 @@ export async function logoutUnifiedAccount() {
   clearUnifiedAccount()
 }
 
-export function handleUnauthorized() {
+/**
+ * 401 的统一处理：清本地身份，并（除非正停在允许匿名访问的页面上）送回登录页。
+ *
+ * <p>`publicPages` 的判据与 PC 端一致：**这一页要展示的东西全部来自免登录端点**才算公开页。
+ * 消费者扫包装上的溯源码落到的就是这一页，若跟着跳转，扫码第一步变成"请先登录"，
+ * 而后端 /api/public/trace/** 本来就是公开的——链路明明查得到，却没人能看到。</p>
+ */
+export function handleUnauthorized(publicPages: string[] = []) {
   clearUnifiedAccount()
+  if (publicPages.length && isPublicPage(publicPages)) return
   uni.reLaunch({ url: '/pages/login/index' })
+}
+
+/** uni-app 的页面栈顶就是当前页；路由名不带前导斜杠（pages/services/index）。 */
+function isPublicPage(publicPages: string[]): boolean {
+  const pages = typeof getCurrentPages === 'function' ? getCurrentPages() : []
+  const route = String((pages[pages.length - 1] as { route?: string } | undefined)?.route ?? '')
+  return publicPages.some((p) => route === p.replace(/^\/+/, '') || route.startsWith(`${p.replace(/^\/+/, '')}/`))
 }

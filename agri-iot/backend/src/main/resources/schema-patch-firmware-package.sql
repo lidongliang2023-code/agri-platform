@@ -1,0 +1,24 @@
+-- 固件包字段升级；仅DDL，不回填或伪造历史包资料。
+SET @db := DATABASE();
+SET @s := IF((SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=@db AND TABLE_NAME='iot_firmware' AND COLUMN_NAME='firmware_type')=0, 'ALTER TABLE iot_firmware ADD COLUMN firmware_type VARCHAR(40) DEFAULT ''gateway''', 'DO 0');
+PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
+SET @s := IF((SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=@db AND TABLE_NAME='iot_firmware' AND COLUMN_NAME='target_model')=0, 'ALTER TABLE iot_firmware ADD COLUMN target_model VARCHAR(80) DEFAULT ''ALL''', 'DO 0');
+PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
+SET @s := IF((SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=@db AND TABLE_NAME='iot_firmware' AND COLUMN_NAME='package_url')=0, 'ALTER TABLE iot_firmware ADD COLUMN package_url VARCHAR(1000) NULL', 'DO 0');
+PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
+SET @s := IF((SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=@db AND TABLE_NAME='iot_firmware' AND COLUMN_NAME='file_size_bytes')=0, 'ALTER TABLE iot_firmware ADD COLUMN file_size_bytes BIGINT DEFAULT 0', 'DO 0');
+PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
+SET @s := IF((SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=@db AND TABLE_NAME='iot_firmware' AND COLUMN_NAME='published_at')=0, 'ALTER TABLE iot_firmware ADD COLUMN published_at VARCHAR(40) NULL', 'DO 0');
+PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
+SET @s := IF((SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=@db AND TABLE_NAME='iot_firmware' AND COLUMN_NAME='deprecated_at')=0, 'ALTER TABLE iot_firmware ADD COLUMN deprecated_at VARCHAR(40) NULL', 'DO 0');
+PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
+SET @s := IF((SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=@db AND TABLE_NAME='iot_firmware' AND COLUMN_NAME='release_notes')=0, 'ALTER TABLE iot_firmware ADD COLUMN release_notes VARCHAR(500) NULL', 'DO 0');
+PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
+SET @s := IF((SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=@db AND TABLE_NAME='iot_firmware' AND COLUMN_NAME='changelog_text')=0, 'ALTER TABLE iot_firmware ADD COLUMN changelog_text VARCHAR(1000) NULL', 'DO 0');
+PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
+SET @s := IF((SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=@db AND TABLE_NAME='iot_firmware' AND COLUMN_NAME='created_at')=0, 'ALTER TABLE iot_firmware ADD COLUMN created_at VARCHAR(40) NULL', 'DO 0');
+PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
+SET @s := IF((SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=@db AND TABLE_NAME='iot_firmware' AND COLUMN_NAME='deprecate_reason')=0, 'ALTER TABLE iot_firmware ADD COLUMN deprecate_reason VARCHAR(300) NULL', 'DO 0');
+PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
+SET @s := IF((SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=@db AND TABLE_NAME='iot_firmware' AND INDEX_NAME='uk_firmware_version')=0, 'CREATE UNIQUE INDEX uk_firmware_version ON iot_firmware(firmware_type,target_model,version_name)', 'DO 0');
+PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;

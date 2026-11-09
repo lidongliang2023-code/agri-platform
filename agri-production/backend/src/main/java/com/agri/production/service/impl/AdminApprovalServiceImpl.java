@@ -62,6 +62,8 @@ public class AdminApprovalServiceImpl implements IAdminApprovalService {
         int p = pageNum > 0 ? pageNum : 1;
         int s = pageSize > 0 ? pageSize : 10;
         LambdaQueryWrapper<Approval> w = new LambdaQueryWrapper<>();
+        // 种养计划改由用户端有审批权限的成员审批，运营端不再展示/处理 PLAN 审批单
+        w.ne(Approval::getBizType, "PLAN");
         if (keyword != null && !keyword.isBlank()) {
             String kw = keyword.trim();
             w.and(q -> q.like(Approval::getTitle, kw).or().like(Approval::getApprovalCode, kw)
@@ -83,6 +85,7 @@ public class AdminApprovalServiceImpl implements IAdminApprovalService {
         int p = pageNum > 0 ? pageNum : 1;
         int s = pageSize > 0 ? pageSize : 10;
         LambdaQueryWrapper<Approval> w = new LambdaQueryWrapper<Approval>()
+                .ne(Approval::getBizType, "PLAN")
                 .in(Approval::getStatus, List.of(STATUS_APPROVED, "approved", STATUS_REJECTED, "rejected"));
         if (keyword != null && !keyword.isBlank()) {
             String kw = keyword.trim();

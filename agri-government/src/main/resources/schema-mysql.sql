@@ -180,3 +180,13 @@ UPDATE gov_user SET certificate_no = CASE name
 
 -- 执法人员 ↔ 平台账号、监管主体 ↔ 平台经营主体这两条绑定关系不在这里写死：
 -- 由 scripts/provision-gov-access.mjs 走监管运营端接口建立（幂等，可反复执行，也会纠正上一轮的错绑）。
+
+SET @scope_ddl = (SELECT IF(COUNT(*)=0, 'ALTER TABLE gov_subject ADD COLUMN region_code VARCHAR(12) NULL', 'SELECT 1') FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='gov_subject' AND column_name='region_code');
+PREPARE scope_stmt FROM @scope_ddl;
+EXECUTE scope_stmt;
+DEALLOCATE PREPARE scope_stmt;
+
+SET @scope_ddl = (SELECT IF(COUNT(*)=0, 'ALTER TABLE gov_complaint ADD COLUMN region_code VARCHAR(12) NULL', 'SELECT 1') FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='gov_complaint' AND column_name='region_code');
+PREPARE scope_stmt FROM @scope_ddl;
+EXECUTE scope_stmt;
+DEALLOCATE PREPARE scope_stmt;

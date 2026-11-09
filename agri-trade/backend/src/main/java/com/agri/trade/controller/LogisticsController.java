@@ -35,6 +35,7 @@ public class LogisticsController {
     private final CarrierMapper carrierMapper;
     private final TradeOrderMapper orderMapper;
     private final PlatformIdentityService identityService;
+    private final com.agri.trade.service.ProductionDiffClient productionDiffClient;
 
     @GetMapping("/carrier/page")
     public ApiResponse<IPage<Carrier>> getCarrierPage(
@@ -98,13 +99,13 @@ public class LogisticsController {
     @DeleteMapping("/{id}")
     public ApiResponse<Boolean> deleteLogistics(@PathVariable Long id) {
         Logistics logistics = logisticsMapper.selectById(id);
-        if (logistics == null) return ApiResponse.error("物流订单不存在");
+        if (logistics == null) return ApiResponse.error(404, "物流订单不存在");
         // 原先这里连判权都没有：任何登录用户能删掉别人订单下的物流单。
         String denied = denyIfNotOrderParty(logistics);
         if (denied != null) {
             return ApiResponse.error(denied);
         }
-        if ("delivered".equals(logistics.getLogisticsStatus())) {
+        if (logistics.getDiffTicketNo() != null || "delivered".equals(logistics.getLogisticsStatus())) {
             return ApiResponse.error("已签收的物流单不能删除");
         }
         // 与其它模块同样的坑：全局逻辑删除字段不会被 updateById 写进 SET，必须用 deleteById
@@ -115,7 +116,7 @@ public class LogisticsController {
     @GetMapping("/{id}")
     public ApiResponse<Logistics> getLogisticsById(@PathVariable Long id) {
         Logistics logistics = logisticsMapper.selectById(id);
-        if (logistics == null) return ApiResponse.error("物流订单不存在");
+        if (logistics == null) return ApiResponse.error(404, "物流订单不存在");
         String denied = denyIfNotOrderParty(logistics);
         if (denied != null) {
             return ApiResponse.error(denied);
@@ -126,7 +127,7 @@ public class LogisticsController {
     @GetMapping("/{id}/traces")
     public ApiResponse<List<LogisticsTrace>> getLogisticsTraces(@PathVariable Long id) {
         Logistics logistics = logisticsMapper.selectById(id);
-        if (logistics == null) return ApiResponse.error("物流订单不存在");
+        if (logistics == null) return ApiResponse.error(404, "物流订单不存在");
         String denied = denyIfNotOrderParty(logistics);
         if (denied != null) {
             return ApiResponse.error(denied);
@@ -140,6 +141,11 @@ public class LogisticsController {
 
     @PostMapping
     public ApiResponse<Boolean> createLogistics(@RequestBody Logistics logistics) {
+        if (logistics.getDiffTicketNo() != null || logistics.getDiffSubjectId() != null || logistics.getReshipQty() != null
+                || logistics.getReshipUnit() != null || logistics.getSignedBuyerId() != null)
+            return ApiResponse.error("补发必须通过原物流单的补发登记入口创建");
+        logistics.setId(null); logistics.setSignTime(null); logistics.setSignReceiver(null);
+        logistics.setDeliveryTime(null); logistics.setActualArrivalTime(null);
         // 只能给自己参与的订单开物流单（否则任何用户都能往别人的订单上挂一张物流单）
         if (logistics.getOrderId() == null) {
             return ApiResponse.error("必须指定关联订单");
@@ -160,15 +166,72 @@ public class LogisticsController {
         return result > 0 ? ApiResponse.success(true) : ApiResponse.error("创建失败");
     }
 
+    /** 一工单一张足额补发物流；唯一约束负责并发防重，历史删除也不释放凭据。 */
+    @PostMapping("/{id}/reship")
+    @org.springframework.transaction.annotation.Transactional
+    public ApiResponse<Logistics> createReship(@PathVariable Long id, @RequestBody java.util.Map<String, String> params) {
+        Logistics original = logisticsMapper.selectById(id);
+        if (original == null || !Integer.valueOf(0).equals(original.getDelFlag()) || original.getDiffTicketNo() != null)
+            return ApiResponse.error("请选择原订单的有效普通物流单");
+        TradeOrder order = orderMapper.selectById(original.getOrderId());
+        var scope = identityService.currentScope();
+        if (!scope.resolved() || order == null || !Integer.valueOf(0).equals(order.getDelFlag())
+                || !scope.merchantIds().contains(order.getSellerId())) return ApiResponse.error(403, "仅原订单卖方可登记补发");
+        String ticketNo = params.get("ticketNo");
+        if (ticketNo == null || !ticketNo.matches("[A-Za-z0-9_-]{1,64}")) return ApiResponse.error(400, "请填写有效工单号");
+        com.fasterxml.jackson.databind.JsonNode requirement;
+        try { requirement = productionDiffClient.requirement(ticketNo, order.getSellerId()); }
+        catch (Exception e) { return ApiResponse.error(503, "生产工单核验失败或服务不可用，未创建补发物流"); }
+        if (!order.getOrderNo().equals(requirement.path("orderNo").asText())
+                || order.getSourceOfferNo() == null || !order.getSourceOfferNo().equals(requirement.path("offerNo").asText())
+                || !ticketNo.equals(requirement.path("ticketNo").asText())
+                || !requirement.path("quantity").isNumber() || requirement.path("quantity").decimalValue().signum() <= 0
+                || requirement.path("unit").asText().isBlank()) return ApiResponse.error(400, "工单与原供给、订单或补发数量不一致");
+        if (logisticsMapper.selectCount(new LambdaQueryWrapper<Logistics>()
+                .eq(Logistics::getDiffTicketNo, ticketNo).eq(Logistics::getDiffSubjectId, order.getSellerId())) > 0)
+            return ApiResponse.error(409, "该工单已有补发物流，请继续维护原补发单");
+        Logistics row = new Logistics();
+        row.setLogisticsNo("RS" + java.util.UUID.randomUUID().toString().replace("-", ""));
+        row.setOrderId(order.getId()); row.setOrderNo(order.getOrderNo());
+        row.setDiffTicketNo(ticketNo); row.setDiffSubjectId(order.getSellerId());
+        row.setReshipQty(requirement.path("quantity").decimalValue()); row.setReshipUnit(requirement.path("unit").asText());
+        row.setCarrierId(original.getCarrierId()); row.setCarrierName(original.getCarrierName()); row.setCarrierNo(original.getCarrierNo());
+        row.setSenderAddress(original.getSenderAddress()); row.setSenderContact(original.getSenderContact()); row.setSenderPhone(original.getSenderPhone());
+        row.setReceiverAddress(original.getReceiverAddress()); row.setReceiverContact(original.getReceiverContact()); row.setReceiverPhone(original.getReceiverPhone());
+        row.setSenderProvince(original.getSenderProvince()); row.setSenderCity(original.getSenderCity()); row.setSenderDistrict(original.getSenderDistrict());
+        row.setReceiverProvince(original.getReceiverProvince()); row.setReceiverCity(original.getReceiverCity()); row.setReceiverDistrict(original.getReceiverDistrict());
+        row.setGoodsName(original.getGoodsName()); row.setLogisticsType(original.getLogisticsType()); row.setTempRequire(original.getTempRequire());
+        row.setLogisticsStatus("pending"); row.setDelFlag(0); row.setCreateTime(new Date()); row.setUpdateTime(new Date());
+        logisticsMapper.insert(row); addTrace(row.getId(), "pending", null);
+        return ApiResponse.success(row);
+    }
+
     @PostMapping("/{id}/status")
+    @org.springframework.transaction.annotation.Transactional
     public ApiResponse<Boolean> updateLogisticsStatus(@PathVariable Long id, @RequestBody java.util.Map<String, Object> params) {
         Logistics logistics = logisticsMapper.selectById(id);
-        if (logistics == null) return ApiResponse.error("物流订单不存在");
+        if (logistics == null) return ApiResponse.error(404, "物流订单不存在");
         String denied = denyIfNotOrderParty(logistics);
         if (denied != null) {
             return ApiResponse.error(denied);
         }
 
+        if (logistics.getDiffTicketNo() != null) {
+            logistics = logisticsMapper.selectOne(new LambdaQueryWrapper<Logistics>().eq(Logistics::getId, id).last("FOR UPDATE"));
+            if (logistics == null || !Integer.valueOf(0).equals(logistics.getDelFlag())) return ApiResponse.error(404, "补发物流不存在");
+            if ("delivered".equals(logistics.getLogisticsStatus())) return ApiResponse.error("已签收补发凭据不可修改");
+            TradeOrder order = orderMapper.selectById(logistics.getOrderId());
+            var scope = identityService.currentScope();
+            if ("delivered".equals(params.get("status"))) {
+                if (!scope.merchantIds().contains(order.getBuyerId())) return ApiResponse.error(403, "补发须由订单买方确认签收");
+                String receiver = (String) params.get("signReceiver");
+                if (receiver == null || receiver.isBlank() || receiver.length() > 64) return ApiResponse.error("请填写签收人");
+                logistics.setSignedBuyerId(order.getBuyerId());
+            } else if (!scope.merchantIds().contains(order.getSellerId())) return ApiResponse.error(403, "补发运输进度由卖方维护");
+            String next = (String) params.get("status");
+            if (LOGISTICS_STATUSES.indexOf(next) < LOGISTICS_STATUSES.indexOf(logistics.getLogisticsStatus()))
+                return ApiResponse.error("补发物流状态不可回退");
+        }
         String status = (String) params.get("status");
         // 状态词表：物流页的进度条与"运输中/已签收"的分组只认这五个值。
         // 原先传什么落什么，库里出现过 shipped / transit / DONE 这类值，
@@ -219,21 +282,29 @@ public class LogisticsController {
      * 否则任何登录用户都能改别人的承运商与收货信息。</p>
      */
     @PutMapping("/{id}")
+    @org.springframework.transaction.annotation.Transactional
     public ApiResponse<Boolean> updateLogistics(@PathVariable Long id, @RequestBody Logistics patch) {
         Logistics logistics = logisticsMapper.selectById(id);
         if (logistics == null) {
-            return ApiResponse.error("物流订单不存在");
+            return ApiResponse.error(404, "物流订单不存在");
         }
         String denied = denyIfNotOrderParty(logistics);
         if (denied != null) {
             return ApiResponse.error(denied);
+        }
+        if (logistics.getDiffTicketNo() != null) {
+            logistics = logisticsMapper.selectOne(new LambdaQueryWrapper<Logistics>().eq(Logistics::getId, id).last("FOR UPDATE"));
+            if (logistics == null || "delivered".equals(logistics.getLogisticsStatus())) return ApiResponse.error("已签收补发凭据不可修改");
+            TradeOrder order = orderMapper.selectById(logistics.getOrderId());
+            if (order == null || !identityService.currentScope().merchantIds().contains(order.getSellerId()))
+                return ApiResponse.error(403, "仅卖方可维护补发运输信息");
         }
         // 只允许改"安排运输"相关字段；状态走 /{id}/status（那会写轨迹），
         // 单号、订单号这些标识字段不允许改。
         if (patch.getCarrierId() != null) {
             Carrier carrier = carrierMapper.selectById(patch.getCarrierId());
             if (carrier == null) {
-                return ApiResponse.error("承运商不存在");
+                return ApiResponse.error(404, "承运商不存在");
             }
             logistics.setCarrierId(carrier.getId());
             // 承运商名以主数据为准，不采信请求体（否则会出现"改了个不存在的名字"）

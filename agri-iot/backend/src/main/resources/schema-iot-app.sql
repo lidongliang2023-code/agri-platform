@@ -219,6 +219,12 @@ CREATE TABLE IF NOT EXISTS iot_rule_config (
 );
 
 CREATE TABLE IF NOT EXISTS iot_control_log (
+    command_no VARCHAR(40) UNIQUE,
+    command_status VARCHAR(20),
+    dispatch_token VARCHAR(64),
+    expires_at VARCHAR(40),
+    sent_at VARCHAR(40),
+    receipt_at VARCHAR(40),
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     device_id BIGINT,
     device_name VARCHAR(160),
@@ -250,7 +256,18 @@ CREATE TABLE IF NOT EXISTS iot_firmware (
     file_size VARCHAR(40),
     sha256_text VARCHAR(100),
     status VARCHAR(30) DEFAULT 'stable',
-    release_at VARCHAR(40)
+    release_at VARCHAR(40),
+    firmware_type VARCHAR(40) DEFAULT 'gateway',
+    target_model VARCHAR(80) DEFAULT 'ALL',
+    package_url VARCHAR(1000) NULL,
+    file_size_bytes BIGINT DEFAULT 0,
+    published_at VARCHAR(40) NULL,
+    deprecated_at VARCHAR(40) NULL,
+    release_notes VARCHAR(500) NULL,
+    changelog_text VARCHAR(1000) NULL,
+    created_at VARCHAR(40) NULL,
+    deprecate_reason VARCHAR(300) NULL,
+    UNIQUE KEY uk_firmware_version (firmware_type,target_model,version_name)
 );
 
 CREATE TABLE IF NOT EXISTS iot_ota_task (
@@ -320,4 +337,35 @@ CREATE TABLE IF NOT EXISTS iot_ops_log (
     target_name VARCHAR(200),
     detail_text VARCHAR(1000),
     created_at VARCHAR(40)
+);
+
+CREATE TABLE IF NOT EXISTS iot_gateway_command (
+ id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ gateway_id BIGINT NOT NULL,
+ gateway_name VARCHAR(160),
+ action_name VARCHAR(120) NOT NULL,
+ operator_name VARCHAR(300) NOT NULL,
+ result_text VARCHAR(300),
+ created_at VARCHAR(40) NOT NULL,
+ command_no VARCHAR(40) NOT NULL,
+ command_status VARCHAR(20) NOT NULL,
+ dispatch_token VARCHAR(64),
+ expires_at VARCHAR(40) NOT NULL,
+ sent_at VARCHAR(40),
+ receipt_at VARCHAR(40),
+ UNIQUE KEY uk_gateway_command_no (command_no),
+ KEY idx_gateway_command_status (gateway_id,command_status)
+);
+
+CREATE TABLE IF NOT EXISTS iot_ota_receipt (
+ id BIGINT AUTO_INCREMENT PRIMARY KEY,
+ task_id BIGINT NOT NULL, gateway_id BIGINT NOT NULL,
+ command_no VARCHAR(40) NOT NULL UNIQUE,
+ command_status VARCHAR(20) NOT NULL,
+ firmware_version VARCHAR(40) NOT NULL, firmware_url VARCHAR(1000) NOT NULL,
+ sha256_text VARCHAR(64) NOT NULL, dispatch_token VARCHAR(64),
+ progress INT NOT NULL DEFAULT 0, installed_version VARCHAR(40),
+ result_text VARCHAR(300), operator_name VARCHAR(160),
+ created_at VARCHAR(40), expires_at VARCHAR(40), sent_at VARCHAR(40), receipt_at VARCHAR(40),
+ UNIQUE KEY uk_ota_task_gateway(task_id,gateway_id)
 );

@@ -54,7 +54,7 @@ page {
 }
 
 .tag {
-  font-size: 22rpx;
+  font-size: 24rpx;
   padding: 2rpx 12rpx;
   border-radius: 8rpx;
   border: 1rpx solid currentColor;

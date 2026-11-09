@@ -100,6 +100,6 @@ function remove(item: Scene) {
 .scene-icon { font-size: 34rpx; }
 .scene .muted { min-height: 64rpx; line-height: 1.55; }
 .scene-actions { display: flex; gap: 6rpx; margin-top: 7rpx; }
-.scene-actions .btn { flex: 1; padding: 0 8rpx; font-size: 18rpx; }
-@media (max-width: 520px) { .scene-list { grid-template-columns: 1fr; } .head-actions .btn { font-size: 18rpx; } }
+.scene-actions .btn { flex: 1; padding: 0 8rpx; font-size: 24rpx; }
+@media (max-width: 520px) { .scene-list { grid-template-columns: 1fr; } .head-actions .btn { font-size: 24rpx; } }
 </style>

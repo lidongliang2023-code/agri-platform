@@ -3,6 +3,7 @@ package com.agri.government.repository;
 import com.agri.common.exception.BusinessException;
 import com.agri.government.integration.ProductionTraceClient;
 import com.agri.government.security.GovernmentIdentityService;
+import com.agri.government.security.GovernmentDataScope;
 import com.agri.government.service.GovernmentAuditService;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -46,27 +47,30 @@ public class GovernmentOpsRepository {
     private static final AtomicLong SERIAL = new AtomicLong();
 
     private final JdbcTemplate jdbc;
+    private final GovernmentDataScope scope;
     private final GovernmentIdentityService identity;
     private final GovernmentAuditService audit;
     private final ProductionTraceClient traceSource;
 
     public GovernmentOpsRepository(JdbcTemplate jdbc, GovernmentIdentityService identity,
-                                   GovernmentAuditService audit, ProductionTraceClient traceSource) {
+                                   GovernmentAuditService audit, ProductionTraceClient traceSource, GovernmentDataScope scope) {
+        this.scope = scope;
         this.jdbc = jdbc;
         this.identity = identity;
         this.audit = audit;
         this.traceSource = traceSource;
     }
 
-    public Map<String, Object> overview() {
+    public Map<String, Object> overview() { return scope.statistics(this::scopedOverview); }
+    private Map<String, Object> scopedOverview() {
         Map<String, Object> metrics = new LinkedHashMap<>();
         metrics.put("subjects", number("SELECT COUNT(*) FROM gov_subject"));
         metrics.put("pendingWarnings", number("SELECT COUNT(*) FROM gov_warning WHERE status<>'closed'"));
         metrics.put("openCases", number("SELECT COUNT(*) FROM gov_case WHERE status<>'closed'"));
         metrics.put("pendingTasks", number("SELECT COUNT(*) FROM gov_task WHERE status<>'completed'"));
-        Long samplingTotal = jdbc.queryForObject("SELECT COUNT(*) FROM gov_sampling", Long.class);
-        Long samplingPassed = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM gov_sampling WHERE result_text='合格'", Long.class);
+        Long samplingTotal = jdbc.queryForObject(scope.sql("SELECT COUNT(*) FROM gov_sampling"), Long.class);
+        Long samplingPassed = jdbc.queryForObject(scope.sql(
+                "SELECT COUNT(*) FROM gov_sampling WHERE result_text='合格'"), Long.class);
         metrics.put("samplingPassRate", samplingTotal == null || samplingTotal == 0 ? BigDecimal.ZERO
                 : BigDecimal.valueOf(samplingPassed == null ? 0 : samplingPassed)
                 .multiply(BigDecimal.valueOf(100))
@@ -75,11 +79,11 @@ public class GovernmentOpsRepository {
         long aiAssist = number("SELECT COUNT(*) FROM gov_warning WHERE ai_confidence IS NOT NULL")
                 + number("SELECT COUNT(*) FROM gov_self_check");
         metrics.put("aiAssistCount", aiAssist);
-        metrics.put("tradeAmount", jdbc.queryForObject(
-                "SELECT trade_amount FROM gov_daily_metric ORDER BY metric_date DESC LIMIT 1", BigDecimal.class));
+        metrics.put("tradeAmount", null);
+        metrics.put("scopeNotice", "仅统计有效授权辖区；全域交易额和历史趋势未按辖区采集，暂不展示");
         return Map.of(
                 "metrics", metrics,
-                "trend", jdbc.query("SELECT * FROM gov_daily_metric ORDER BY metric_date", dailyMapper()),
+                "trend", jdbc.query(scope.sql("SELECT * FROM gov_daily_metric ORDER BY metric_date"), dailyMapper()),
                 "todos", List.of(
                         todo("warnings", "预警处置", number("SELECT COUNT(*) FROM gov_warning WHERE status='pending'"), "红警与跨部门核查"),
                         todo("tasks", "执法任务", number("SELECT COUNT(*) FROM gov_task WHERE status='pending'"), "今日到期任务"),
@@ -122,8 +126,8 @@ public class GovernmentOpsRepository {
     private long overdueRectifications() {
         long total = 0;
         String today = DATE.format(LocalDateTime.now());
-        for (Object deadline : jdbc.queryForList(
-                "SELECT deadline FROM gov_rectification WHERE status<>'closed' AND deadline IS NOT NULL",
+        for (Object deadline : jdbc.queryForList(scope.sql(
+                "SELECT deadline FROM gov_rectification WHERE status<>'closed' AND deadline IS NOT NULL"),
                 String.class)) {
             if (deadline != null && String.valueOf(deadline).compareTo(today) < 0) {
                 total++;
@@ -146,7 +150,7 @@ public class GovernmentOpsRepository {
             args.add(riskLevel);
         }
         sql.append(" ORDER BY credit_score ASC, updated_at DESC");
-        return jdbc.query(sql.toString(), subjectMapper(), args.toArray());
+        return jdbc.query(scope.sql(sql.toString()), subjectMapper(), args.toArray());
     }
 
     /**
@@ -170,8 +174,8 @@ public class GovernmentOpsRepository {
         } catch (NumberFormatException e) {
             throw BusinessException.validationError("经营主体号必须是数字，收到：" + merchantIdValue);
         }
-        for (Map<String, Object> occupied : jdbc.queryForList(
-                "SELECT subject_name FROM gov_subject WHERE merchant_id=? AND id<>?", merchantId, subjectId)) {
+        for (Map<String, Object> occupied : jdbc.queryForList(scope.sql(
+                "SELECT subject_name FROM gov_subject WHERE merchant_id=? AND id<>?"), merchantId, subjectId)) {
             throw BusinessException.forbidden("经营主体 " + merchantId + " 已绑定监管档案《"
                     + occupied.get("subject_name") + "》，请先解除后再绑定");
         }
@@ -187,9 +191,9 @@ public class GovernmentOpsRepository {
 
     public List<Map<String, Object>> warnings(String status) {
         if (status == null || status.isBlank() || "all".equals(status)) {
-            return jdbc.query("SELECT * FROM gov_warning ORDER BY status='closed', id", warningMapper());
+            return jdbc.query(scope.sql("SELECT * FROM gov_warning ORDER BY status='closed', id"), warningMapper());
         }
-        return jdbc.query("SELECT * FROM gov_warning WHERE status=? ORDER BY id", warningMapper(), status);
+        return jdbc.query(scope.sql("SELECT * FROM gov_warning WHERE status=? ORDER BY id"), warningMapper(), status);
     }
 
     /**
@@ -199,6 +203,7 @@ public class GovernmentOpsRepository {
      * 可能根本不存在的人，移动端也就永远显示那份任务。</p>
      */
     public Map<String, Object> handleWarning(long id, Map<String, Object> body) {
+        scope.requireRecord("gov_warning", id, "inspection");
         String status = text(body, "status", "processing");
         String note = required(body, "note", "请填写处置意见");
         Map<String, Object> warning = queryOne("SELECT * FROM gov_warning WHERE id=?", warningMapper(), id);
@@ -206,6 +211,7 @@ public class GovernmentOpsRepository {
             throw BusinessException.validationError("请指定承办执法人员（assigneeId）——预警不会自动落在某个固定的人身上");
         }
         Long assigneeId = resolveAssignee(body.get("assigneeId"), null);
+        scope.requirePersonSubject(assigneeId, longValue(warning.get("subjectId")), "inspection");
         String assigneeName = assigneeId == null ? requireOperatorName() : inspectorName(assigneeId);
         int updated = jdbc.update("UPDATE gov_warning SET status=?,assigned_to=?,assignee_id=?,handle_note=? WHERE id=?",
                 status, assigneeName, assigneeId, note, id);
@@ -227,9 +233,9 @@ public class GovernmentOpsRepository {
 
     public List<Map<String, Object>> tasks(String status) {
         if (status == null || status.isBlank() || "all".equals(status)) {
-            return jdbc.query("SELECT * FROM gov_task ORDER BY status='completed', created_at DESC", taskMapper());
+            return jdbc.query(scope.sql("SELECT * FROM gov_task ORDER BY status='completed', created_at DESC"), taskMapper());
         }
-        return jdbc.query("SELECT * FROM gov_task WHERE status=? ORDER BY created_at DESC", taskMapper(), status);
+        return jdbc.query(scope.sql("SELECT * FROM gov_task WHERE status=? ORDER BY created_at DESC"), taskMapper(), status);
     }
 
     /**
@@ -237,9 +243,11 @@ public class GovernmentOpsRepository {
      * 检查项按 {@code gov_check_item} 模板展开成逐项记录（详情页读这些行，不再返回写死的 8 条）。
      */
     public Map<String, Object> createTask(Map<String, Object> body) {
+        scope.requireSubject(longValue(body.get("subjectId")), "inspection");
         String taskNo = "RW" + nowCompact();
         Map<String, Object> subject = requireSubject(longValue(body.get("subjectId"), 0L));
         Long assigneeId = resolveAssignee(body.get("assigneeId"), null);
+        scope.requirePersonSubject(assigneeId, longValue(subject.get("id")), "inspection");
         String assigneeName = inspectorName(assigneeId);
         List<Map<String, Object>> items = activeCheckItems();
         if (items.isEmpty()) {
@@ -283,11 +291,12 @@ public class GovernmentOpsRepository {
     }
 
     public List<Map<String, Object>> cases() {
-        return jdbc.query("SELECT * FROM gov_case ORDER BY status='closed', filed_at DESC", caseMapper());
+        return jdbc.query(scope.sql("SELECT * FROM gov_case ORDER BY status='closed', filed_at DESC"), caseMapper());
     }
 
     /** 案件阶段推进：办案人取当前登录执法人员；结案时通知主体（这是主体的权利义务变化，不能只留在运营侧）。 */
     public Map<String, Object> advanceCase(long id, Map<String, Object> body) {
+        scope.requireRecord("gov_case", id, "case");
         Map<String, Object> current = queryOne("SELECT * FROM gov_case WHERE id=?", caseMapper(), id);
         String status = text(body, "status", "investigating");
         int progress = switch (status) {
@@ -303,6 +312,7 @@ public class GovernmentOpsRepository {
             throw new BusinessException(409, "案件已办结，不能再推进阶段");
         }
         Long handlerId = resolveAssignee(body.get("handlerId"), longValue(current.get("handlerId")));
+        scope.requirePersonSubject(handlerId, longValue(current.get("subjectId")), "case");
         int updated = jdbc.update("UPDATE gov_case SET status=?,stage_progress=?,handler=?,handler_id=?,"
                 + "penalty_amount=?,closed_at=CASE WHEN ?='closed' THEN ? ELSE closed_at END WHERE id=?",
                 status, progress, inspectorName(handlerId), handlerId,
@@ -333,10 +343,10 @@ public class GovernmentOpsRepository {
     /** 整改台账（运营端复核队列）：默认待复核的排在前面。 */
     public List<Map<String, Object>> rectifications(String status) {
         if (status == null || status.isBlank() || "all".equals(status)) {
-            return jdbc.query("SELECT * FROM gov_rectification ORDER BY status='closed', deadline",
+            return jdbc.query(scope.sql("SELECT * FROM gov_rectification ORDER BY status='closed', deadline"),
                     rectificationMapper());
         }
-        return jdbc.query("SELECT * FROM gov_rectification WHERE status=? ORDER BY deadline",
+        return jdbc.query(scope.sql("SELECT * FROM gov_rectification WHERE status=? ORDER BY deadline"),
                 rectificationMapper(), status);
     }
 
@@ -345,6 +355,7 @@ public class GovernmentOpsRepository {
      * 主体的待办也不会消失（原来运营端根本没有这个动作）。
      */
     public Map<String, Object> reviewRectification(long id, Map<String, Object> body) {
+        scope.requireRecord("gov_rectification", id, "inspection");
         Map<String, Object> row = queryOne("SELECT * FROM gov_rectification WHERE id=?", rectificationMapper(), id);
         String status = text(body, "status", "closed");
         if (!List.of("closed", "pending").contains(status)) {
@@ -368,14 +379,15 @@ public class GovernmentOpsRepository {
     }
 
     public List<Map<String, Object>> repairs() {
-        return jdbc.query("""
+        return jdbc.query(scope.sql("""
                 SELECT r.*, s.subject_name FROM gov_credit_repair r
                 LEFT JOIN gov_subject s ON s.id = r.subject_id
                 ORDER BY r.status='approved', r.submitted_at DESC
-                """, repairMapper());
+                """), repairMapper());
     }
 
     public Map<String, Object> reviewRepair(long id, Map<String, Object> body) {
+        scope.requireRecord("gov_credit_repair", id, "credit");
         Map<String, Object> repair = repairRow(id);
         String status = text(body, "status", "approved");
         if (!List.of("reviewing", "approved", "rejected").contains(status)) {
@@ -410,11 +422,12 @@ public class GovernmentOpsRepository {
     }
 
     public List<Map<String, Object>> subsidies() {
-        return jdbc.query("SELECT * FROM gov_subsidy ORDER BY status IN ('paid','rejected'), submitted_at DESC",
+        return jdbc.query(scope.sql("SELECT * FROM gov_subsidy ORDER BY status IN ('paid','rejected'), submitted_at DESC"),
                 subsidyMapper());
     }
 
     public Map<String, Object> reviewSubsidy(long id, Map<String, Object> body) {
+        scope.requireRecord("gov_subsidy", id, "subsidy");
         Map<String, Object> subsidy = queryOne("SELECT * FROM gov_subsidy WHERE id=?", subsidyMapper(), id);
         String status = text(body, "status", "county_review");
         int progress = switch (status) {
@@ -442,10 +455,11 @@ public class GovernmentOpsRepository {
     }
 
     public List<Map<String, Object>> complaints() {
-        return jdbc.query("SELECT * FROM gov_complaint ORDER BY status='resolved', created_at DESC", complaintMapper());
+        return jdbc.query(scope.sql("SELECT * FROM gov_complaint ORDER BY status='resolved', created_at DESC"), complaintMapper());
     }
 
     public Map<String, Object> handleComplaint(long id, Map<String, Object> body) {
+        scope.requireRecord("gov_complaint", id, "complaint");
         Map<String, Object> complaint = queryOne("SELECT * FROM gov_complaint WHERE id=?", complaintMapper(), id);
         String status = text(body, "status", "resolved");
         String note = required(body, "note", "请填写处理结论");
@@ -455,7 +469,7 @@ public class GovernmentOpsRepository {
                 String.valueOf(complaint.get("complaintNo")), note, null);
         // 被举报主体若已在档案里登记，处理结论要通知到它，否则主体永远不知道自己被举报且已结案
         String target = String.valueOf(complaint.get("targetName"));
-        List<Long> matched = jdbc.queryForList("SELECT id FROM gov_subject WHERE subject_name=?", Long.class, target);
+        List<Long> matched = jdbc.queryForList(scope.sql("SELECT id FROM gov_subject WHERE subject_name=?"), Long.class, target);
         for (Long subjectId : matched) {
             audit.notifySubject(subjectId, "complaint",
                     "resolved".equals(status) ? "针对本主体的举报已办结" : "针对本主体的举报处理中",
@@ -466,10 +480,11 @@ public class GovernmentOpsRepository {
     }
 
     public List<Map<String, Object>> samplings() {
-        return jdbc.query("SELECT * FROM gov_sampling ORDER BY sample_date DESC", samplingMapper());
+        return jdbc.query(scope.sql("SELECT * FROM gov_sampling ORDER BY sample_date DESC"), samplingMapper());
     }
 
     public Map<String, Object> createSampling(Map<String, Object> body) {
+        scope.requireSubject(longValue(body.get("subjectId")), "sampling");
         String samplingNo = "CY" + nowCompact();
         Map<String, Object> subject = requireSubject(longValue(body.get("subjectId"), 0L));
         jdbc.update("""
@@ -490,10 +505,11 @@ public class GovernmentOpsRepository {
     }
 
     public List<Map<String, Object>> dataShares() {
-        return jdbc.query("SELECT * FROM gov_data_share ORDER BY id", dataShareMapper());
+        return jdbc.query(scope.sql("SELECT * FROM gov_data_share ORDER BY id"), dataShareMapper());
     }
 
     public Map<String, Object> reviewDataShare(long id, Map<String, Object> body) {
+        if (id >= 0) throw BusinessException.forbidden("共享资源尚未登记辖区，暂不允许审核");
         Map<String, Object> share = queryOne("SELECT * FROM gov_data_share WHERE id=?", dataShareMapper(), id);
         String status = text(body, "status", "approved");
         jdbc.update("UPDATE gov_data_share SET status=?,updated_at=? WHERE id=?",
@@ -525,8 +541,8 @@ public class GovernmentOpsRepository {
         } catch (NumberFormatException e) {
             throw BusinessException.validationError("平台用户号必须是数字，收到：" + platformUserIdValue);
         }
-        for (Map<String, Object> occupied : jdbc.queryForList(
-                "SELECT name FROM gov_user WHERE platform_user_id=? AND id<>?", platformUserId, userId)) {
+        for (Map<String, Object> occupied : jdbc.queryForList(scope.sql(
+                "SELECT name FROM gov_user WHERE platform_user_id=? AND id<>?"), platformUserId, userId)) {
             throw BusinessException.forbidden("平台用户 " + platformUserId + " 已绑定执法人员档案《"
                     + occupied.get("name") + "》，请先解除");
         }
@@ -539,7 +555,7 @@ public class GovernmentOpsRepository {
 
     /** 执法人员档案：带上是否已绑定平台账号，运营一眼能看出谁登不进移动执法端。 */
     public List<Map<String, Object>> users() {
-        return jdbc.query("SELECT * FROM gov_user ORDER BY id", (rs, rowNum) -> map(
+        return jdbc.query(scope.sql("SELECT * FROM gov_user ORDER BY id"), (rs, rowNum) -> map(
                 "id", rs.getLong("id"), "name", rs.getString("name"), "role", rs.getString("role_name"),
                 "organization", rs.getString("organization"), "grid", rs.getString("grid_name"),
                 "certificateNo", rs.getString("certificate_no"),
@@ -549,15 +565,16 @@ public class GovernmentOpsRepository {
     }
 
     public List<Map<String, Object>> logs() {
-        return jdbc.query("SELECT * FROM gov_op_log ORDER BY id DESC LIMIT 200", logMapper());
+        return jdbc.query(scope.sql("SELECT * FROM gov_op_log ORDER BY id DESC LIMIT 200"), logMapper());
     }
 
-    public Map<String, Object> statistics() {
+    public Map<String, Object> statistics() { return scope.statistics(this::scopedStatistics); }
+    private Map<String, Object> scopedStatistics() {
         return Map.of(
-                "trend", jdbc.query("SELECT * FROM gov_daily_metric ORDER BY metric_date", dailyMapper()),
-                "warningTypes", jdbc.query("""
+                "trend", jdbc.query(scope.sql("SELECT * FROM gov_daily_metric ORDER BY metric_date"), dailyMapper()),
+                "warningTypes", jdbc.query(scope.sql("""
                         SELECT warning_type name, COUNT(*) value FROM gov_warning GROUP BY warning_type ORDER BY value DESC
-                        """, (rs, rowNum) -> map("name", rs.getString("name"), "value", rs.getLong("value"))),
+                        """), (rs, rowNum) -> map("name", rs.getString("name"), "value", rs.getLong("value"))),
                 "samplings", samplings(),
                 "cases", cases(),
                 "subjects", subjects(null, null)
@@ -577,11 +594,11 @@ public class GovernmentOpsRepository {
                 "SELECT COUNT(*) FROM gov_warning WHERE assignee_id=? AND status<>'closed'", inspectorId));
         stats.put("openCases", number(
                 "SELECT COUNT(*) FROM gov_case WHERE handler_id=? AND status<>'closed'", inspectorId));
-        List<Map<String, Object>> tasks = jdbc.query(
-                "SELECT * FROM gov_task WHERE assignee_id=? ORDER BY status='completed', created_at DESC",
+        List<Map<String, Object>> tasks = jdbc.query(scope.sql(
+                "SELECT * FROM gov_task WHERE assignee_id=? ORDER BY status='completed', created_at DESC"),
                 taskMapper(), inspectorId);
-        List<Map<String, Object>> warnings = jdbc.query(
-                "SELECT * FROM gov_warning WHERE assignee_id=? OR assignee_id IS NULL ORDER BY status='closed', id",
+        List<Map<String, Object>> warnings = jdbc.query(scope.sql(
+                "SELECT * FROM gov_warning WHERE assignee_id=? OR assignee_id IS NULL ORDER BY status='closed', id"),
                 warningMapper(), inspectorId);
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("inspector", Map.of(
@@ -595,8 +612,8 @@ public class GovernmentOpsRepository {
         result.put("stats", stats);
         result.put("tasks", tasks);
         result.put("warnings", warnings);
-        result.put("recentCases", jdbc.query(
-                "SELECT * FROM gov_case WHERE handler_id=? ORDER BY status='closed', filed_at DESC LIMIT 4",
+        result.put("recentCases", jdbc.query(scope.sql(
+                "SELECT * FROM gov_case WHERE handler_id=? ORDER BY status='closed', filed_at DESC LIMIT 4"),
                 caseMapper(), inspectorId));
         // 原来的"离线取证 3 条"是常量；现在按取证记录里确实落库的条数给
         result.put("offlineRecords", number(
@@ -606,29 +623,29 @@ public class GovernmentOpsRepository {
     }
 
     public List<Map<String, Object>> mobileTasks() {
-        return jdbc.query("SELECT * FROM gov_task WHERE assignee_id=? ORDER BY status='completed', created_at DESC",
+        return jdbc.query(scope.sql("SELECT * FROM gov_task WHERE assignee_id=? ORDER BY status='completed', created_at DESC"),
                 taskMapper(), requireInspectorId());
     }
 
     /** 任务详情：检查项读 {@code gov_task_check}（没有就按清单模板即时展开），不再返回代码里写死的 8 条。 */
     public Map<String, Object> mobileTask(long id) {
         Map<String, Object> task = requireAssignableTask(id);
-        List<Map<String, Object>> checks = jdbc.query("""
+        List<Map<String, Object>> checks = jdbc.query(scope.sql("""
                 SELECT c.*, i.sort_order FROM gov_task_check c
                 LEFT JOIN gov_check_item i ON i.id = c.item_id
                 WHERE c.task_id=? ORDER BY COALESCE(i.sort_order, 99), c.id
-                """, taskCheckMapper(), id);
+                """), taskCheckMapper(), id);
         if (checks.isEmpty()) {
             for (Map<String, Object> item : activeCheckItems()) {
                 jdbc.update("INSERT INTO gov_task_check (task_id,item_id,item_name,note,done) VALUES (?,?,?, ?,FALSE)",
                         id, item.get("id"), item.get("itemName"), item.get("note"));
             }
             jdbc.update("UPDATE gov_task SET checklist_total=? WHERE id=?", activeCheckItems().size(), id);
-            checks = jdbc.query("""
+            checks = jdbc.query(scope.sql("""
                     SELECT c.*, i.sort_order FROM gov_task_check c
                     LEFT JOIN gov_check_item i ON i.id = c.item_id
                     WHERE c.task_id=? ORDER BY COALESCE(i.sort_order, 99), c.id
-                    """, taskCheckMapper(), id);
+                    """), taskCheckMapper(), id);
         }
         task.put("checklist", checks);
         task.put("subject", queryOne("SELECT * FROM gov_subject WHERE id=?", subjectMapper(),
@@ -694,8 +711,8 @@ public class GovernmentOpsRepository {
         }
         requireInspectorId();
         String like = "%" + code.trim().toLowerCase(Locale.ROOT) + "%";
-        List<Map<String, Object>> subjects = jdbc.query(
-                "SELECT * FROM gov_subject WHERE LOWER(credit_code)=LOWER(?) OR credit_code LIKE ? LIMIT 3",
+        List<Map<String, Object>> subjects = jdbc.query(scope.sql(
+                "SELECT * FROM gov_subject WHERE LOWER(credit_code)=LOWER(?) OR credit_code LIKE ? LIMIT 3"),
                 subjectMapper(), code.trim(), like);
         if (!subjects.isEmpty()) {
             return Map.of("type", "subject", "verified", true, "subject", subjects.get(0));
@@ -711,6 +728,7 @@ public class GovernmentOpsRepository {
             }
             throw e;
         }
+        if (verification != null) throw BusinessException.forbidden("跨域溯源尚未建立可核实的辖区映射，请使用公众溯源入口；执法核验暂不返回跨域明细");
         boolean effective = Boolean.TRUE.equals(verification.raw().get("verifiable"));
         boolean allOnChain = verification.nodeCount() > 0 && verification.onChainCount() == verification.nodeCount();
         Map<String, Object> result = new LinkedHashMap<>(verification.raw());
@@ -732,14 +750,22 @@ public class GovernmentOpsRepository {
     }
 
     public List<Map<String, Object>> mobileCases() {
-        return jdbc.query("SELECT * FROM gov_case WHERE handler_id=? ORDER BY status='closed', filed_at DESC",
+        return jdbc.query(scope.sql("SELECT * FROM gov_case WHERE handler_id=? ORDER BY status='closed', filed_at DESC"),
                 caseMapper(), requireInspectorId());
     }
 
     public Map<String, Object> createCase(Map<String, Object> body) {
+        scope.requireSubject(longValue(body.get("subjectId")), "case");
         String caseNo = "AJ" + nowCompact();
         Map<String, Object> subject = requireSubject(longValue(body.get("subjectId"), 0L));
-        Long handlerId = resolveAssignee(body.get("handlerId"), null);
+        Long handlerId = requireInspectorId();
+        Long requestedHandler = longValue(body.get("handlerId"), handlerId);
+        if (!handlerId.equals(requestedHandler)) throw BusinessException.forbidden("现场立案不能指定其他承办人");
+        Long linkedTask = longValue(body.get("taskId"), null);
+        if (linkedTask == null) throw BusinessException.forbidden("现场立案须关联本人承办任务");
+        Long taskSubject = ownedSubject("gov_task", "assignee_id", linkedTask, handlerId);
+        if (!taskSubject.equals(longValue(subject.get("id"))))
+            throw BusinessException.forbidden("案件主体与承办任务不一致");
         jdbc.update("""
                 INSERT INTO gov_case (case_no,task_id,subject_id,subject_name,case_type,summary,legal_basis,
                 status,stage_progress,penalty_amount,handler,handler_id,filed_at)
@@ -760,6 +786,16 @@ public class GovernmentOpsRepository {
      * 现场取证：证据真的落库（编号、SHA-256 摘要、承办人、任务/案件归属），
      * 原来只往操作日志写一句话然后回一个由字符串 hashCode 生成的"证据哈希"。
      */
+    private Long ownedSubject(String table, String ownerColumn, Long id, Long inspector) {
+        scope.requireRecord(table, id, "gov_case".equals(table) ? "case" : "inspection");
+        // 表名和列名仅由本类固定常量传入。
+        List<Long> subjects = jdbc.queryForList(scope.sql("SELECT subject_id FROM " + table
+                + " WHERE id=? AND " + ownerColumn + "=?"), Long.class, id, inspector);
+        if (subjects.size() != 1 || subjects.get(0) == null)
+            throw BusinessException.forbidden("关联记录不存在或不属于当前承办人");
+        return subjects.get(0);
+    }
+
     public Map<String, Object> addEvidence(Map<String, Object> body) {
         Long inspectorId = requireInspectorId();
         String evidenceNo = "ZJ" + nowCompact();
@@ -771,11 +807,14 @@ public class GovernmentOpsRepository {
         }
         Long caseId = longValue(body.get("caseId"), null);
         Long subjectId = null;
-        if (taskId != null) {
-            subjectId = jdbc.queryForObject("SELECT subject_id FROM gov_task WHERE id=?", Long.class, taskId);
-        } else if (caseId != null) {
-            subjectId = jdbc.queryForObject("SELECT subject_id FROM gov_case WHERE id=?", Long.class, caseId);
+        if (taskId != null) subjectId = ownedSubject("gov_task", "assignee_id", taskId, inspectorId);
+        if (caseId != null) {
+            Long caseSubject = ownedSubject("gov_case", "handler_id", caseId, inspectorId);
+            if (subjectId != null && !subjectId.equals(caseSubject))
+                throw BusinessException.forbidden("证据关联的任务与案件主体不一致");
+            subjectId = caseSubject;
         }
+        if (subjectId == null) throw BusinessException.forbidden("证据须关联本人承办的任务或案件");
         String capturedAt = TIME.format(LocalDateTime.now());
         String hash = sha256(evidenceNo + "|" + description + "|" + capturedAt + "|" + inspectorId);
         boolean uploaded = Boolean.TRUE.equals(body.get("uploaded"));
@@ -793,24 +832,24 @@ public class GovernmentOpsRepository {
 
     /** 取证记录列表（移动端的"证据"页），按当前执法人员过滤。 */
     public List<Map<String, Object>> myEvidence() {
-        return jdbc.query("SELECT * FROM gov_evidence WHERE captured_by_id=? ORDER BY id DESC LIMIT 50",
+        return jdbc.query(scope.sql("SELECT * FROM gov_evidence WHERE captured_by_id=? ORDER BY id DESC LIMIT 50"),
                 evidenceMapper(), requireInspectorId());
     }
 
     /** 收件箱（移动端）：只取发给当前执法人员的消息。 */
     public List<Map<String, Object>> inspectorMessages() {
-        return jdbc.query("SELECT * FROM gov_message WHERE assignee_id=? ORDER BY id DESC",
+        return jdbc.query(scope.sql("SELECT * FROM gov_message WHERE assignee_id=? AND ((biz_type='TASK' AND biz_no IN (SELECT task_no FROM gov_task)) OR (biz_type='WARNING' AND biz_no IN (SELECT warning_no FROM gov_warning)) OR (biz_type='CASE' AND biz_no IN (SELECT case_no FROM gov_case))) ORDER BY id DESC"),
                 messageMapper(), requireInspectorId());
     }
 
     public Map<String, Object> readInspectorMessages() {
-        int count = jdbc.update("UPDATE gov_message SET is_read=TRUE WHERE assignee_id=? AND is_read=FALSE",
+        int count = jdbc.update(scope.sql("UPDATE gov_message SET is_read=TRUE WHERE assignee_id=? AND ((biz_type='TASK' AND biz_no IN (SELECT task_no FROM gov_task)) OR (biz_type='WARNING' AND biz_no IN (SELECT warning_no FROM gov_warning)) OR (biz_type='CASE' AND biz_no IN (SELECT case_no FROM gov_case))) AND is_read=FALSE"),
                 requireInspectorId());
         return Map.of("updated", count);
     }
 
     public List<Map<String, Object>> checkItems() {
-        return jdbc.query("SELECT * FROM gov_check_item ORDER BY sort_order, id", checkItemMapper());
+        return jdbc.query(scope.sql("SELECT * FROM gov_check_item ORDER BY sort_order, id"), checkItemMapper());
     }
 
     public Map<String, Object> saveCheckItem(Map<String, Object> body, Long id) {
@@ -818,8 +857,8 @@ public class GovernmentOpsRepository {
         String note = text(body, "note", "");
         if (id == null) {
             jdbc.update("INSERT INTO gov_check_item (item_name,note,sort_order,status) VALUES (?,?,?, 'active')",
-                    name, note, jdbc.queryForObject(
-                            "SELECT COALESCE(MAX(sort_order),0)+1 FROM gov_check_item", Integer.class));
+                    name, note, jdbc.queryForObject(scope.sql(
+                            "SELECT COALESCE(MAX(sort_order),0)+1 FROM gov_check_item"), Integer.class));
             audit.log(requireOperatorName(), currentUserId(), identity.operatorRole(), "执法事项清单启停",
                     name, "新增检查项", null);
             return queryOne("SELECT * FROM gov_check_item WHERE item_name=? ORDER BY id DESC LIMIT 1",
@@ -873,7 +912,7 @@ public class GovernmentOpsRepository {
         if (inspectorId == null) {
             return requireOperatorName();
         }
-        List<String> names = jdbc.queryForList("SELECT name FROM gov_user WHERE id=?", String.class, inspectorId);
+        List<String> names = jdbc.queryForList(scope.sql("SELECT name FROM gov_user WHERE id=?"), String.class, inspectorId);
         if (names.isEmpty()) {
             throw BusinessException.notFound("执法人员档案不存在：" + inspectorId);
         }
@@ -887,8 +926,8 @@ public class GovernmentOpsRepository {
     private Long resolveAssignee(Object requested, Object existing) {
         Long explicit = longValue(requested, null);
         if (explicit != null) {
-            List<Map<String, Object>> rows = jdbc.queryForList(
-                    "SELECT id, status FROM gov_user WHERE id=?", explicit);
+            List<Map<String, Object>> rows = jdbc.queryForList(scope.sql(
+                    "SELECT id, status FROM gov_user WHERE id=?"), explicit);
             if (rows.isEmpty()) {
                 throw BusinessException.notFound("执法人员档案不存在：" + explicit);
             }
@@ -912,6 +951,7 @@ public class GovernmentOpsRepository {
     }
 
     private Map<String, Object> requireAssignableTask(long id) {
+        scope.requireRecord("gov_task", id, "inspection");
         Map<String, Object> task = queryOne("SELECT * FROM gov_task WHERE id=?", taskMapper(), id);
         if (identity.isInspector()) {
             long inspectorId = requireInspectorId();
@@ -926,7 +966,7 @@ public class GovernmentOpsRepository {
     }
 
     private Map<String, Object> requireSubject(long subjectId) {
-        List<Map<String, Object>> rows = jdbc.queryForList("SELECT * FROM gov_subject WHERE id=?", subjectId);
+        List<Map<String, Object>> rows = jdbc.queryForList(scope.sql("SELECT * FROM gov_subject WHERE id=?"), subjectId);
         if (rows.isEmpty()) {
             throw BusinessException.notFound("监管主体档案不存在（subjectId=" + subjectId + "），请从主体台账里选择");
         }
@@ -934,7 +974,7 @@ public class GovernmentOpsRepository {
     }
 
     private List<Map<String, Object>> activeCheckItems() {
-        return jdbc.query("SELECT * FROM gov_check_item WHERE status='active' ORDER BY sort_order, id",
+        return jdbc.query(scope.sql("SELECT * FROM gov_check_item WHERE status='active' ORDER BY sort_order, id"),
                 checkItemMapper());
     }
 
@@ -953,7 +993,7 @@ public class GovernmentOpsRepository {
     }
 
     private Long taskIdOf(String taskNo) {
-        List<Long> ids = jdbc.queryForList("SELECT id FROM gov_task WHERE task_no=?", Long.class, taskNo);
+        List<Long> ids = jdbc.queryForList(scope.sql("SELECT id FROM gov_task WHERE task_no=?"), Long.class, taskNo);
         return ids.isEmpty() ? null : ids.get(0);
     }
 
@@ -1138,13 +1178,13 @@ public class GovernmentOpsRepository {
     }
 
     private <T> T queryOne(String sql, RowMapper<T> mapper, Object... args) {
-        List<T> rows = jdbc.query(sql, mapper, args);
+        List<T> rows = jdbc.query(scope.sql(sql), mapper, args);
         if (rows.isEmpty()) throw BusinessException.notFound("数据不存在");
         return rows.get(0);
     }
 
     private long number(String sql, Object... args) {
-        Number value = jdbc.queryForObject(sql, Number.class, args);
+        Number value = jdbc.queryForObject(scope.sql(sql), Number.class, args);
         return value == null ? 0 : value.longValue();
     }
 

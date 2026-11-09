@@ -24,10 +24,23 @@ import java.util.stream.Collectors;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(FarmNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ApiResponse<Void> handleFarmNotFoundException(FarmNotFoundException e) {
+        return ApiResponse.fail(e.getCode(), e.getMessage());
+    }
+
     @ExceptionHandler(BusinessException.class)
     public ApiResponse<Void> handleBusinessException(BusinessException e) {
         log.error("业务异常: {}", e.getMessage());
         return ApiResponse.fail(e.getCode(), e.getMessage());
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiResponse<Void> handleIllegalArgumentException(IllegalArgumentException e) {
+        log.warn("非法参数异常: {}", e.getMessage());
+        return ApiResponse.fail(400, e.getMessage());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

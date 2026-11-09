@@ -3,8 +3,8 @@
     <div v-if="mobileOpen" class="sidebar-overlay" @click="mobileOpen = false" />
     <aside class="sidebar" :class="{ 'is-open': mobileOpen }">
       <div class="brand">
-        <span class="brand-mark">丰</span>
-        <span class="brand-copy"><b>丰链云</b><small>平台运营工作台</small></span>
+        <img class="brand-mark" :src="brandLogoSrc" alt="丰链云" />
+        <span class="brand-copy"><b>丰链云</b><small>FENGCHAIN · AGRI</small></span>
       </div>
       <div class="workspace-badge"><i /> 全域交易运营中</div>
       <el-menu :default-active="activeMenu" router unique-opened class="sidebar-menu" :default-openeds="openedGroups" @select="mobileOpen = false">
@@ -18,20 +18,34 @@
           <el-menu-item index="/reports">数据报表</el-menu-item>
         </el-sub-menu>
 
+        <el-sub-menu index="supply">
+          <template #title><el-icon><Goods /></el-icon><span>平台供货运营</span></template>
+          <el-menu-item index="/supply/products">货源商品维护</el-menu-item>
+          <el-menu-item index="/supply/supply-pool">可投放货源</el-menu-item>
+          <el-menu-item index="/supply/listing-config">投放与授权规则</el-menu-item>
+          <el-menu-item index="/supply/distributors">渠道授权网络</el-menu-item>
+          <el-menu-item index="/supply/recruit">渠道招募</el-menu-item>
+          <el-menu-item index="/supply/orders">供货履约</el-menu-item>
+          <el-menu-item index="/supply/todo">供货待办</el-menu-item>
+          <el-menu-item index="/supply/revenue">供货收入与对账</el-menu-item>
+          <el-menu-item index="/supply/analytics">货源动销分析</el-menu-item>
+          <el-menu-item index="/supply/notice-settings">供货消息设置</el-menu-item>
+        </el-sub-menu>
+
         <el-sub-menu index="goods">
           <template #title><el-icon><Goods /></el-icon><span>商品与供应链</span></template>
           <el-menu-item index="/product-pool">总部选品池</el-menu-item>
           <el-menu-item index="/products">商品审核</el-menu-item>
           <el-menu-item index="/categories">类目与溯源模板</el-menu-item>
-          <el-menu-item index="/suppliers">供应商管理</el-menu-item>
+          <el-menu-item index="/suppliers">货源档案管理</el-menu-item>
           <el-menu-item index="/inventory">库存与云仓</el-menu-item>
           <el-menu-item index="/group-purchases">集采管理</el-menu-item>
         </el-sub-menu>
 
         <el-sub-menu index="channel">
-          <template #title><el-icon><UserFilled /></el-icon><span>小 B 渠道商</span></template>
+          <template #title><el-icon><UserFilled /></el-icon><span>小 B 商家</span></template>
           <el-menu-item index="/channel-onboard">入驻审核</el-menu-item>
-          <el-menu-item index="/channel-partners">渠道商列表</el-menu-item>
+          <el-menu-item index="/channel-partners">商家列表</el-menu-item>
         </el-sub-menu>
 
         <el-sub-menu index="trade">
@@ -56,7 +70,7 @@
           <el-menu-item index="/settlement">分润结算</el-menu-item>
           <el-menu-item index="/withdrawals">提现审批</el-menu-item>
           <el-menu-item index="/commission-report">佣金明细报表</el-menu-item>
-          <el-menu-item index="/supplier-statements">供应商对账单</el-menu-item>
+          <el-menu-item index="/supplier-statements">供货对账单</el-menu-item>
         </el-sub-menu>
 
         <el-sub-menu index="risk">
@@ -115,6 +129,7 @@
 </template>
 
 <script setup>
+const brandLogoSrc = `${import.meta.env.BASE_URL}fengchain.svg`
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import {
@@ -136,8 +151,8 @@ const userInitial = computed(() => userDisplayName.value.slice(0, 1) || '运')
 const pageTitle = computed(() => {
   const titles = {
     '/': '运营大盘',
-    '/suppliers': '供应商管理',
-    '/channel-partners': '渠道商列表',
+    '/suppliers': '货源档案管理',
+    '/channel-partners': '商家列表',
     '/channel-onboard': '入驻审核',
     '/products': '商品审核',
     '/product-pool': '总部选品池',
@@ -155,7 +170,7 @@ const pageTitle = computed(() => {
     '/settlement': '分润结算',
     '/withdrawals': '提现审批',
     '/commission-report': '佣金明细报表',
-    '/supplier-statements': '供应商对账单',
+    '/supplier-statements': '供货对账单',
     '/reports': '数据报表中心',
     '/group-purchases': '集采管理',
     '/risk-rules': '风控规则',
@@ -164,8 +179,9 @@ const pageTitle = computed(() => {
     '/boundary': '模块边界与协同说明',
     '/growth': '增长与风控',
   }
-  if (route.name === 'SupplierDetail') return '供应商详情'
-  if (route.name === 'ChannelPartnerDetail') return '渠道商详情'
+  if (route.path.startsWith('/supply')) return '平台供货运营'
+  if (route.name === 'SupplierDetail') return '货源档案详情'
+  if (route.name === 'ChannelPartnerDetail') return '商家详情'
   if (route.name === 'ProductDetail') return '商品详情'
   if (route.path.startsWith('/gap/')) return '能力未接入'
   return titles[route.path] || '平台运营工作台'

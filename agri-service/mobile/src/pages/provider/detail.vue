@@ -85,21 +85,21 @@ function explainContact() {
 .detail-hero { display: flex; align-items: flex-start; gap: 20rpx; margin-bottom: 20rpx; padding: 28rpx; border: 1rpx solid #d8e8de; border-radius: 26rpx; background: linear-gradient(140deg, #fff, #edf8f2); }
 .provider-big-icon { display: flex; width: 112rpx; height: 112rpx; flex: 0 0 112rpx; align-items: center; justify-content: center; border-radius: 27rpx; background: linear-gradient(135deg, #12764a, #159a5e); color: #fff; font-size: 56rpx; }
 .detail-hero > view:last-child { display: flex; min-width: 0; flex-direction: column; gap: 7rpx; }
-.verified { color: #12764a; font-size: 20rpx; }
+.verified { color: #12764a; font-size: 24rpx; }
 .provider-title { font-size: 35rpx; font-weight: 750; }
-.rating { color: #d88b1f; font-size: 21rpx; }
+.rating { color: #d88b1f; font-size: 24rpx; }
 .service-item { display: flex; align-items: center; gap: 14rpx; padding: 20rpx 0; border-bottom: 1rpx solid #edf2ee; }
 .service-item:last-child { border-bottom: 0; }
 .item-copy { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 4rpx; }
 .item-copy .strong { font-size: 25rpx; }
 .item-copy .muted { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .item-price { color: #0e5233; font-size: 28rpx; font-weight: 700; }
-.item-price text { color: #94a198; font-size: 17rpx; font-weight: 400; }
+.item-price text { color: #94a198; font-size: 24rpx; font-weight: 400; }
 .trust-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12rpx; }
-.trust-grid text { padding: 14rpx; border-radius: 12rpx; background: #f2fbf5; color: #0e5233; font-size: 19rpx; }
+.trust-grid text { padding: 14rpx; border-radius: 12rpx; background: #f2fbf5; color: #0e5233; font-size: 24rpx; }
 .review { display: flex; flex-direction: column; gap: 5rpx; padding: 18rpx 0; border-bottom: 1rpx solid #edf2ee; }
 .gold { color: #d88b1f; }
 .bottom-actions { position: fixed; right: 0; bottom: 0; left: 0; z-index: 10; display: grid; grid-template-columns: 180rpx 1fr; gap: 14rpx; padding: 18rpx 24rpx calc(18rpx + env(safe-area-inset-bottom)); border-top: 1rpx solid #e1e9e3; background: rgba(255,255,255,.97); }
-.contact-tip { margin: 20rpx 0 40rpx; color: #7b8a80; font-size: 20rpx; text-align: center; }
+.contact-tip { margin: 20rpx 0 40rpx; color: #7b8a80; font-size: 24rpx; text-align: center; }
 .contact-tip text { color: #12764a; }
 </style>

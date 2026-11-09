@@ -230,7 +230,7 @@ function toSearch() {
   border: 1rpx solid rgba(255, 255, 255, 0.16);
   border-radius: 14rpx;
   background: rgba(255, 255, 255, 0.1);
-  font-size: 21rpx;
+  font-size: 24rpx;
 }
 
 .index-entry .tiny {
@@ -333,14 +333,14 @@ function toSearch() {
   border-radius: 8rpx;
   background: #f6c56b;
   color: #6b4400;
-  font-size: 18rpx;
+  font-size: 24rpx;
 }
 
 .ticker-text {
   flex: 1;
   overflow: hidden;
   color: #8a5a10;
-  font-size: 20rpx;
+  font-size: 24rpx;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -404,7 +404,7 @@ function toSearch() {
 .quote-sub {
   overflow: hidden;
   color: #718277;
-  font-size: 21rpx;
+  font-size: 24rpx;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -419,7 +419,7 @@ function toSearch() {
 .foot-note {
   padding: 24rpx 0 0;
   color: #b3c0b7;
-  font-size: 20rpx;
+  font-size: 24rpx;
   text-align: center;
 }
 </style>

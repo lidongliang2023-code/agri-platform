@@ -21,7 +21,6 @@ const MOBILES = [
   { id: 'trade', dir: 'agri-trade/miniprogram', publishApp: 'trade-mobile', envKey: 'VITE_TRADE_API_BASE' },
   { id: 'iot', dir: 'agri-iot/miniprogram', publishApp: 'iot-mobile', envKey: 'VITE_IOT_API_BASE' },
   { id: 's2b2c-consumer', dir: 'agri-s2b2c/mobile', publishApp: 'mall-mobile', envKey: 'VITE_S2B2C_API_BASE' },
-  { id: 's2b2c-supplier', dir: 'agri-s2b2c/mobile-supplier', publishApp: 'mall-supplier-mobile', envKey: 'VITE_S2B2C_API_BASE' },
   { id: 's2b2c-channel', dir: 'agri-s2b2c/mobile-channel', publishApp: 'mall-channel-mobile', envKey: 'VITE_S2B2C_API_BASE' },
   { id: 'service', dir: 'agri-service/mobile', publishApp: 'service-mobile', envKey: 'VITE_SERVICE_API_BASE' },
   { id: 'government', dir: 'agri-government/mobile', publishApp: 'gov-mobile', envKey: 'VITE_GOVERNMENT_API_BASE' },

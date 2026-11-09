@@ -1,3 +1,4 @@
+import Card from '@/components/SectionCard'
 /**
  * 页面名称：新增地块
  * 路由路径：/production/plots/create
@@ -25,12 +26,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { PageContainer } from '@ant-design/pro-components'
+import PageContainer from '@/components/ProductionPageContainer'
 import { LeftOutlined, EnvironmentOutlined } from '@ant-design/icons'
 import {
   Alert,
   Button,
-  Card,
   Col,
   Form,
   Input,
@@ -379,7 +379,7 @@ export default function Create(): JSX.Element {
     onSuccess: ({ plotId, farmId, action }) => {
       message.success(editingPlotId ? '地块信息已更新' : '地块创建成功')
       if (action === 'crop') {
-        // 「保存并添加作物」跳转种养计划创建弹窗（约定见 PlanList：`?create=1` 自动弹出新增 ModalForm，
+        // 「保存并添加作物」跳转农事计划创建弹窗（约定见 PlanList：`?create=1` 自动弹出新增 ModalForm，
         // 并预填 farmId / plotId），避免用户到列表页后再手动重选农场与地块。
         const query = [
           'create=1',
@@ -388,7 +388,7 @@ export default function Create(): JSX.Element {
         ]
           .filter(Boolean)
           .join('&')
-        message.info('已打开种养计划，请为该地块绑定作物')
+        message.info('已打开农事计划，请为该地块绑定作物')
         navigate(`/production/plans?${query}`)
         return
       }
@@ -418,12 +418,14 @@ export default function Create(): JSX.Element {
       title={editingPlotId ? '编辑地块' : '新增地块'}
       onBack={() => navigate('/production/plots')}
       backIcon={<LeftOutlined />}
+      subTitle="维护地块档案与空间边界，作物安排通过农事计划管理"
       extra={[
         <Button key="cancel" onClick={() => navigate('/production/plots')}>
           取消
         </Button>,
         <Button
           key="save"
+          disabled={Boolean(editingPlotId) && (plotQuery.isLoading || plotQuery.isError)}
           loading={saveAction === 'list' && saveMutation.isPending}
           onClick={() => handleSubmit('list')}
         >
@@ -432,7 +434,7 @@ export default function Create(): JSX.Element {
         <Button
           key="save-crop"
           type="primary"
-          disabled={Boolean(editingPlotId)}
+          disabled={Boolean(editingPlotId) || plotQuery.isLoading || plotQuery.isError}
           loading={saveAction === 'crop' && saveMutation.isPending}
           onClick={() => handleSubmit('crop')}
         >
@@ -442,6 +444,8 @@ export default function Create(): JSX.Element {
     >
       {editingPlotId && plotQuery.isLoading ? (
         <Card loading />
+      ) : editingPlotId && plotQuery.isError ? (
+        <Card><Alert type="error" showIcon message="地块资料加载失败，请重新加载后编辑" action={<Button onClick={() => void plotQuery.refetch()}>重新加载</Button>} /></Card>
       ) : (
         <Form
           form={form}
@@ -558,7 +562,7 @@ export default function Create(): JSX.Element {
             </Form.Item>
           </Card>
 
-          <Card title="📍 地块位置与边界（可选）">
+          <Card title="地块位置与边界（可选）">
             <Space.Compact style={{ width: '100%', maxWidth: 720 }}>
               <Input
                 allowClear
@@ -578,10 +582,7 @@ export default function Create(): JSX.Element {
                 按地址定位
               </Button>
             </Space.Compact>
-            <Typography.Paragraph type="secondary" style={{ margin: '8px 0 12px' }}>
-              地址只用于地图定位，不写入地块档案；定位后在下方天地图上点击绘制边界，
-              不绘制边界时以定位点作为地块中心点。
-            </Typography.Paragraph>
+
 
             <TiandituBoundaryEditor
               value={boundaryPoints}
@@ -638,10 +639,7 @@ export default function Create(): JSX.Element {
                 </Col>
               )}
             </Row>
-            <Typography.Paragraph type="secondary" style={{ margin: '8px 0 0' }}>
-              在天地图上依次点击顶点绘制边界（至少 3 个），点击已有顶点标记可删除；
-              保存后边界按 GeoJSON 写入地块档案，并在列表 / 详情地图上展示。
-            </Typography.Paragraph>
+
 
             <Row gutter={24} style={{ marginTop: 12 }}>
               <Col xs={24} md={12}>

@@ -131,16 +131,16 @@ function logout() {
 .profile-hero { display: flex; align-items: center; flex-direction: column; padding: 0 28rpx 44rpx; border-radius: 0 0 40rpx 40rpx; background: radial-gradient(circle at 85% 0, rgba(82,204,134,.23), transparent 400rpx), linear-gradient(145deg,#073821,#0d5a3a); color: #fff; }
 .profile-top { display: flex; width: 100%; align-items: center; justify-content: space-between; margin-bottom: 20rpx; }
 .profile-title { font-size: 32rpx; font-weight: 700; }
-.bell { padding: 9rpx 14rpx; border: 1rpx solid rgba(255,255,255,.14); border-radius: 15rpx; background: rgba(255,255,255,.08); font-size: 23rpx; }
+.bell { padding: 9rpx 14rpx; border: 1rpx solid rgba(255,255,255,.14); border-radius: 15rpx; background: rgba(255,255,255,.08); font-size: 24rpx; }
 .avatar { display: flex; width: 126rpx; height: 126rpx; align-items: center; justify-content: center; border: 6rpx solid rgba(255,255,255,.16); border-radius: 50%; background: linear-gradient(135deg,#26a96a,#12764a); font-size: 45rpx; font-weight: 700; }
 .name { margin-top: 15rpx; font-size: 36rpx; font-weight: 700; }
-.farm { margin-top: 6rpx; color: rgba(255,255,255,.55); font-size: 21rpx; }
-.verified { margin-top: 14rpx; padding: 7rpx 16rpx; border-radius: 22rpx; background: rgba(255,255,255,.1); color: #a9e7c1; font-size: 19rpx; }
+.farm { margin-top: 6rpx; color: rgba(255,255,255,.55); font-size: 24rpx; }
+.verified { margin-top: 14rpx; padding: 7rpx 16rpx; border-radius: 22rpx; background: rgba(255,255,255,.1); color: #a9e7c1; font-size: 24rpx; }
 .stats { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: -18rpx; padding: 22rpx; border: 1rpx solid #e1e9e3; border-radius: 22rpx; background: #fff; box-shadow: 0 10rpx 30rpx rgba(16,57,37,.05); }
 .stats view { display: flex; align-items: center; flex-direction: column; gap: 4rpx; border-right: 1rpx solid #edf2ee; }
 .stats view:last-child { border-right: 0; }
 .stats text:first-child { color: #0e5233; font-family: monospace; font-size: 33rpx; font-weight: 700; }
-.stats text:last-child { color: #94a198; font-size: 19rpx; }
+.stats text:last-child { color: #94a198; font-size: 24rpx; }
 .menu { margin-top: 18rpx; overflow: hidden; border: 1rpx solid #e1e9e3; border-radius: 22rpx; background: #fff; }
 .menu > view { display: flex; min-height: 92rpx; align-items: center; gap: 16rpx; padding: 12rpx 22rpx; border-bottom: 1rpx solid #edf2ee; }
 .menu > view:last-child { border-bottom: 0; }

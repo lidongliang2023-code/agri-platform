@@ -270,6 +270,6 @@ function validOf(expert: Expert) {
   border-radius: 14rpx;
   background: #f2fbf5;
   color: #0e5233;
-  font-size: 22rpx;
+  font-size: 24rpx;
 }
 </style>

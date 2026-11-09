@@ -3,7 +3,7 @@
     <div class="page-head">
       <div>
         <h2>订单详情</h2>
-        <p v-if="order">订单号 {{ order.orderNo }} · 下单时间 {{ order.createTime }} · 渠道商编号 {{ channelCode }}</p>
+        <p v-if="order">订单号 {{ order.orderNo }} · 下单时间 {{ order.createTime }} · 商家编号 {{ channelCode }}</p>
       </div>
       <div class="head-actions">
         <el-button @click="$router.push('/orders')">返回列表</el-button>
@@ -32,7 +32,7 @@
           </el-tag>
         </div>
         <dl class="descs">
-          <dt>提交方</dt><dd>{{ shipment.proposerType === 'CHANNEL' ? '渠道商（我方）' : '供应商' }}</dd>
+          <dt>提交方</dt><dd>{{ shipment.proposerType === 'CHANNEL' ? '商家（我方）' : '供应商' }}</dd>
           <dt>物流</dt><dd>{{ shipment.logisticsCompany }} · {{ shipment.logisticsNo }}</dd>
           <dt>提交时间</dt><dd>{{ shipment.createTime }}</dd>
           <dt v-if="shipment.reason">驳回原因</dt><dd v-if="shipment.reason">{{ shipment.reason }}</dd>

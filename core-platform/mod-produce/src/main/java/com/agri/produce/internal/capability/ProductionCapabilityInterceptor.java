@@ -39,7 +39,14 @@ public class ProductionCapabilityInterceptor implements HandlerInterceptor {
         if (userId == null) {
             return reject(response, HttpServletResponse.SC_UNAUTHORIZED, 401, "请先登录后再维护生产数据");
         }
-        CapabilityFacade.Decision decision = capabilityFacade.check(userId, CapabilityCodes.PRODUCTION_MANAGE, null);
+        Long merchantId;
+        try {
+            merchantId = Long.valueOf(request.getHeader("X-Merchant-Id"));
+            if (merchantId <= 0) throw new NumberFormatException();
+        } catch (NumberFormatException e) {
+            return reject(response, 403, 403, "请先选择本次业务所属的经营主体");
+        }
+        CapabilityFacade.Decision decision = capabilityFacade.check(userId, CapabilityCodes.PRODUCTION_MANAGE, merchantId);
         if (decision.granted()) {
             return true;
         }

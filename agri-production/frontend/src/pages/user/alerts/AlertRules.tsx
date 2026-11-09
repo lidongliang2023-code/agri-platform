@@ -1,3 +1,4 @@
+import Table from '@/components/BusinessRecordList'
 /**
  * 页面名称：告警规则配置
  * 路由路径：/production/alerts/rules
@@ -34,7 +35,6 @@ import {
   Space,
   Spin,
   Switch,
-  Table,
   Tag,
   Tooltip,
   Typography,
@@ -946,12 +946,12 @@ export default function AlertRules(): JSX.Element {
   return (
     <div style={{ padding: 24 }}>
       <Space direction="vertical" size={16} style={{ width: '100%' }}>
-        <Card>
+        <Card className="production-custom-page-header">
           <Row align="middle" gutter={16}>
             <Col flex="auto">
               <Space size={8}>
                 <SettingOutlined style={{ fontSize: 20, color: '#1677ff' }} />
-                <span style={{ fontSize: 18, fontWeight: 600 }}>告警规则配置</span>
+                <span className="production-page-heading">告警规则配置</span>
                 <Text type="secondary">
                   共 {total} 条规则 · 阈值命中后按级别推送至通知对象
                 </Text>

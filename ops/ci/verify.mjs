@@ -27,6 +27,12 @@
  *       不再用已经消失的 puppeteer、用 chromium 驱动时给了本机浏览器路径。
  *       加这一组是因为 puppeteer 被移出依赖后，45 个脚本一跑就 MODULE_NOT_FOUND，
  *       而门禁毫无察觉：脚本从没真正执行，历史"全绿"记录是假的。</li>
+ *   <li><b>font</b>：可见文字不得小于 12px（uni-app 侧等价位 24rpx）。端清单取自
+ *       publish.mjs 的注册表（真正发版的那份），不在这里维护第二份名单。
+ *       加这一组是因为本轮清账查出 11 个端共 875 处写在 6–11.5px，改一次动上千行；
+ *       没有机器把关，下一个人写 <code>font-size: 11px</code> 依旧无人拦。
+ *       连两类"grep 源码看不见"的漏点一起兜住：uni-app 的 tabBar 文字由 pages.json
+ *       生成（缺省 10px），以及 <code>&lt;small&gt;</code> 走浏览器默认 0.833em。</li>
  * </ul>
  *
  * <p><b>CI 的已知边界</b>：`agri-master-data/`、`agri-finance/`、`agri-s2b2c/` 这些目录目前
@@ -61,7 +67,7 @@ for (let i = 2; i < process.argv.length; i += 1) {
   else if (token === '--help' || token === '-h') {
     console.log(
       '用法：node ops/ci/verify.mjs [--build] [--mobile-e2e] ' +
-        '[--only workspace,shared,gateway,bucket,apps,mobile,mobile-e2e,schema,scripts] [--skip shared]',
+        '[--only workspace,shared,gateway,bucket,apps,mobile,mobile-e2e,schema,scripts,font] [--skip shared]',
     )
     process.exit(0)
   } else {
@@ -426,6 +432,108 @@ async function checkE2eHarness() {
     `${files.length} 个脚本语法通过、无 puppeteer 残留；${browserScripts} 个浏览器脚本都给了本机浏览器路径`)
 }
 
+/** ---------- font：可见文字不得小于 12px（uni-app 侧等价位是 24rpx） ---------- */
+
+/**
+ * 字号下限门禁。
+ *
+ * <p>为什么要有这一条：本轮清账时发现全平台 875 处写在 6–11.5px（含 uni-app 的 12–23rpx），
+ * 分散在 11 个端、改一次要动 458+597 行。没有机器把关，下一个人写 `font-size: 11px` 依旧无人拦，
+ * 而这正是"看起来一切正常、真机读不清"的成因。</p>
+ *
+ * <p>端清单取自 publish.mjs 的注册表（真正发版的东西），不在这里维护第二份名单 ——
+ * 顺带避开一个真实陷阱：`agri-trade/mobile` 是不发版的旧目录，
+ * 注册表里 trade-mobile 的源码其实是 `agri-trade/miniprogram`。</p>
+ *
+ * <p>两类"grep 源码看不见"的漏点也一起兜住，都是本轮实测抓到的：
+ * uni-app 的 tabBar 文字由 pages.json 配置生成（缺省 10px），
+ * 以及 `<small>` 走浏览器默认 0.833em（父级 ≤14px 时它自己就掉到 12px 以下）。</p>
+ */
+const FONT_FLOOR = { px: 12, rpx: 24 }
+const FONT_EXT = /\.(vue|css|scss|less|wxss|tsx|jsx|ts|js)$/
+const FONT_SKIP = new Set(['node_modules', 'dist', 'unpackage', 'target', '.git', 'build'])
+
+async function collectFontFiles(dir, out = []) {
+  if (!existsSync(dir)) return out
+  for (const entry of await readdir(dir, { withFileTypes: true })) {
+    if (FONT_SKIP.has(entry.name)) continue
+    const full = path.join(dir, entry.name)
+    if (entry.isDirectory()) await collectFontFiles(full, out)
+    else if (FONT_EXT.test(entry.name)) out.push(full)
+  }
+  return out
+}
+
+/** 从 publish.mjs 的 APPS 里取出「slug → 前端目录 + 是否 uni-app」；单行与多行写法都要认 */
+async function publishedFrontends() {
+  const text = await readFile(path.join(GATEWAY_DIR, 'scripts', 'publish.mjs'), 'utf8')
+  const start = text.indexOf('const APPS')
+  const block = text.slice(start, text.indexOf('\n}', start))
+  const apps = []
+  for (const m of block.matchAll(/^ {2}'?([a-z0-9-]+)'?:\s*\{/gm)) {
+    let depth = 0, end = m.index + m[0].length - 1
+    for (; end < block.length; end += 1) {
+      if (block[end] === '{') depth += 1
+      else if (block[end] === '}') { depth -= 1; if (depth === 0) break }
+    }
+    const body = block.slice(m.index + m[0].length, end)
+    const join = /frontendDir:\s*path\.join\(([^)]*)\)/.exec(body)
+    if (!join) continue
+    apps.push({
+      slug: m[1],
+      dir: path.join(REPO_ROOT, ...[...join[1].matchAll(/'([^']+)'/g)].map((x) => x[1])),
+      uni: /builder:\s*'uni-app'/.test(body),
+    })
+  }
+  return apps
+}
+
+async function checkFontFloor() {
+  const bad = []
+  let scanned = 0
+  for (const app of await publishedFrontends()) {
+    const srcDir = path.join(app.dir, 'src')
+    const files = await collectFontFiles(srcDir)
+    scanned += files.length
+    for (const f of files) {
+      const source = await readFile(f, 'utf8')
+      for (const m of source.matchAll(/font-size\s*:\s*([0-9]*\.?[0-9]+)(px|rpx|rem|em|pt)/g)) {
+        const v = Number.parseFloat(m[1]); const unit = m[2]
+        const why = (unit === 'px' && v < FONT_FLOOR.px) || (unit === 'rpx' && v < FONT_FLOOR.rpx)
+          || (unit === 'rem' && v < FONT_FLOOR.px / 16) || (unit === 'em' && v < FONT_FLOOR.px / 16)
+          || (unit === 'pt' && v < FONT_FLOOR.px * 0.75)
+        if (why) bad.push(`${path.relative(REPO_ROOT, f)} 第${source.slice(0, m.index).split(/\r?\n/).length} 行 ${m[1]}${unit}（${app.slug}）`)
+      }
+      for (const m of source.matchAll(/fontSize:\s*(['"])?([0-9]*\.?[0-9]+)(px|rpx)?\1?/g)) {
+        const v = Number.parseFloat(m[2]); const unit = m[3] ?? 'px'
+        if ((unit === 'px' && v < FONT_FLOOR.px) || (unit === 'rpx' && v < FONT_FLOOR.rpx)) {
+          bad.push(`${path.relative(REPO_ROOT, f)} 行内 fontSize ${m[2]}${unit}（${app.slug}）`)
+        }
+      }
+    }
+    if (app.uni) {
+      const pagesJson = path.join(app.dir, 'src/pages.json')
+      if (existsSync(pagesJson)) {
+        const text = await readFile(pagesJson, 'utf8')
+        const tab = /"tabBar"\s*:/.test(text)
+        const size = /"tabBar"\s*:\s*\{[\s\S]*?"fontSize"\s*:\s*"([0-9]*\.?[0-9]+)(px|rpx)"/.exec(text)
+        if (tab && !size) bad.push(`${app.slug}：pages.json 的 tabBar 没写 fontSize，uni-app 缺省 10px 标签`)
+        else if (size && ((size[2] === 'px' && Number.parseFloat(size[1]) < FONT_FLOOR.px)
+          || (size[2] === 'rpx' && Number.parseFloat(size[1]) < FONT_FLOOR.rpx))) {
+          bad.push(`${app.slug}：tabBar fontSize=${size[1]}${size[2]} 低于下限`)
+        }
+      }
+    }
+  }
+  if (bad.length > 0) {
+    record('font', '可见文字 ≥12px', 'fail',
+      `${bad.length} 处低于可读下限：${bad.slice(0, 5).join(' | ')}${bad.length > 5 ? ` | …另 ${bad.length - 5} 处` : ''}`.slice(0, 900))
+    return
+  }
+  record('font', '可见文字 ≥12px', 'pass',
+    `按 publish.mjs 注册表逐端扫描，${scanned} 个源文件的字号声明都不低于 12px（uni-app 为 24rpx）`)
+}
+
 /** ---------- mobile：移动端工程（uni-app，小程序/H5 同源）静态一致性 ---------- */
 const MOBILE_DIR = path.join(REPO_ROOT, 'agri-production', 'miniprogram')
 const MOBILE_SRC = path.join(MOBILE_DIR, 'src')
@@ -692,6 +800,7 @@ if (enabled('mobile-e2e')) {
 }
 if (enabled('schema')) checkSchema()
 if (enabled('scripts')) await checkE2eHarness()
+if (enabled('font')) await checkFontFloor()
 if (args.build && enabled('apps')) await checkApps()
 
 const icons = { pass: '✓', fail: '✗', skip: '·', warn: '⚠' }

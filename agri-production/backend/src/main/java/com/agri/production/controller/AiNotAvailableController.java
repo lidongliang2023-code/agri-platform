@@ -29,6 +29,12 @@ public class AiNotAvailableController {
     private static final String REASON =
             "本部署未接入任何识别/预测模型，按口径不提供该结果（不做近似、不用样本量推算）。";
 
+    /** 兼容旧入口，禁止回退至静态模拟结果。 */
+    @PostMapping({"/ask", "/diagnose", "/predict-yield", "/recommend-input", "/analyze-soil"})
+    public ApiResponse<Map<String, Object>> legacyCapabilities() {
+        throw new BusinessException(501, "旧版静态决策接口已停用，请使用农事智能助手会话或真实生产台账。" + REASON);
+    }
+
     /** 病虫害识别（上传图片出结论）——没有模型就没有结论。 */
     @PostMapping("/pest-detection")
     public ApiResponse<Map<String, Object>> pestDetection() {

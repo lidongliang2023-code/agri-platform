@@ -48,13 +48,13 @@ function detail(id: number) {
 <style scoped lang="scss">
 .search { display: flex; gap: 12rpx; margin-bottom: 20rpx; }
 .search input { flex: 1; height: 78rpx; padding: 0 20rpx; border: 1rpx solid #dfe8e2; border-radius: 16rpx; background: #fff; font-size: 24rpx; }
-.search button { width: 116rpx; border-radius: 16rpx; background: #12764a; color: #fff; font-size: 23rpx; font-weight: 650; }
+.search button { width: 116rpx; border-radius: 16rpx; background: #12764a; color: #fff; font-size: 24rpx; font-weight: 650; }
 .grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16rpx; }
 .product-card { padding: 18rpx; border: 1rpx solid #e1e9e3; border-radius: 20rpx; background: #fff; }
 .glyph { display: grid; width: 88rpx; height: 88rpx; place-items: center; border-radius: 22rpx; background: #e5f5eb; color: #0e5233; font-size: 34rpx; font-weight: 750; }
 .name,.product-card > text { display: block; }
 .name { margin-top: 14rpx; font-size: 24rpx; font-weight: 680; }
 .product-card > .tiny { margin-top: 5rpx; }
-.product-card > .muted { margin-top: 8rpx; font-size: 19rpx; }
+.product-card > .muted { margin-top: 8rpx; font-size: 24rpx; }
 .foot { display: flex; align-items: flex-end; gap: 3rpx; margin-top: 12rpx; }
 </style>

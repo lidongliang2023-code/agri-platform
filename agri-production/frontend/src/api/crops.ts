@@ -1,5 +1,5 @@
 /**
- * 作物主数据 API（页面「作物管理」+ 种养计划 / 地块的作物下拉）
+ * 作物主数据 API（页面「作物管理」+ 农事计划 / 地块的作物下拉）
  *
  * <p>作物是**平台级主数据**（同一经营主体共用一套），落库在后端 {@code agri_prod_crop_info}。
  * 此前作物是自由文本，计划的 {@code crop_id} 恒空 —— 这个接口层就是为了把作物接成可选的主数据。</p>
@@ -107,7 +107,7 @@ export function updateCropStatus(cropId: string, status: number): Promise<Crop> 
   return http.patch<Crop>(`${BASE}/${cropId}/status?status=${status}`)
 }
 
-/** 删除作物（逻辑删除；已被种养计划引用时后端会拒绝，提示改用停用） */
+/** 删除作物（逻辑删除；已被农事计划引用时后端会拒绝，提示改用停用） */
 export function deleteCrop(cropId: string): Promise<void> {
   return http.delete<void>(`${BASE}/${cropId}`)
 }

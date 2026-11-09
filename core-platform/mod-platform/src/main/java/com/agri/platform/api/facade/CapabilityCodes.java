@@ -17,14 +17,14 @@ public final class CapabilityCodes {
     public static final String SERVICE_PROVIDER = "service.provider";
     public static final String GOV_OVERSIGHT = "gov.oversight";
 
-    /** 生产管理：不来自业务身份，来自"已加入经营主体"（生产数据按主体归属） */
+    /** 生产管理：已加入经营主体 + 已开通农户 / 合作社管理员业务身份（不"加入主体即开通"） */
     public static final String PRODUCTION_MANAGE = "production.manage";
     /** 融资申请：不来自业务身份，来自"经营主体认证通过" */
     public static final String FINANCE_APPLY = "finance.apply";
 
     /** S2B2C 消费者：已登录并建立消费者档案即可（商城本地判定，核心仅作能力登记） */
     public static final String S2B2C_CONSUMER = "s2b2c.consumer";
-    /** S2B2C 供应商：已加入经营主体 + 已开通交易类业务身份（批发商/零售商/农户/合作社管理员） */
+    /** S2B2C 供应商：已加入经营主体 + 已开通「商城供应商」业务身份 */
     public static final String S2B2C_SUPPLIER = "s2b2c.supplier";
 
     /** 发布供货挂牌（SELL）认可的能力 */

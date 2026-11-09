@@ -42,7 +42,6 @@ import java.util.Set;
  * <p>可重复执行：同一端点重复同步只更新时间与名称，不会产生第二条。</p>
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class PermissionPointCatalogService {
 
@@ -81,6 +80,13 @@ public class PermissionPointCatalogService {
 
     private final RequestMappingHandlerMapping handlerMapping;
     private final PermissionMapper permissionMapper;
+
+    public PermissionPointCatalogService(
+            @org.springframework.beans.factory.annotation.Qualifier("requestMappingHandlerMapping") RequestMappingHandlerMapping handlerMapping,
+            PermissionMapper permissionMapper) {
+        this.handlerMapping = handlerMapping;
+        this.permissionMapper = permissionMapper;
+    }
 
     /**
      * 同步一次。

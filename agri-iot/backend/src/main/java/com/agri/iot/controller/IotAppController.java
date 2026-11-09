@@ -27,6 +27,33 @@ public class IotAppController {
         this.ruleRepository = ruleRepository;
     }
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.agri.iot.service.DeviceCommandService commandService;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.agri.iot.integration.IotIdentityService commandIdentity;
+    @GetMapping("/devices/{id}/commands")
+    public ApiResponse<List<Map<String,Object>>> commandHistory(@PathVariable long id,
+            @RequestParam(defaultValue="1") int page,@RequestParam(defaultValue="20") int size) {
+        commandIdentity.requireDeviceAccess(id);
+        return ApiResponse.success(commandService.history(id,page,size));
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.agri.iot.service.GatewayCommandService gatewayCommands;
+    @GetMapping("/gateways/{id}/commands")
+    public ApiResponse<List<Map<String,Object>>> gatewayHistory(@PathVariable long id,
+            @RequestParam(defaultValue="1") int page,@RequestParam(defaultValue="20") int size) {
+        commandIdentity.requireGateway(id);
+        return ApiResponse.success(gatewayCommands.history(id,page,size));
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.agri.iot.service.OtaCommandService otaCommands;
+    @GetMapping("/gateways/{id}/ota")
+    public ApiResponse<List<Map<String,Object>>> otaHistory(@PathVariable long id,@RequestParam(defaultValue="1") int page,@RequestParam(defaultValue="20") int size){
+        commandIdentity.requireGateway(id);
+        return ApiResponse.success(otaCommands.history(id,page,size));
+    }
     @GetMapping("/overview")
     public ApiResponse<Map<String, Object>> overview() { return ApiResponse.success(repository.overview()); }
 
@@ -85,7 +112,7 @@ public class IotAppController {
     @PostMapping("/devices/{id}/control")
     public ApiResponse<Map<String, Object>> control(
             @PathVariable long id, @RequestBody Map<String, Object> body) {
-        return ApiResponse.success("控制指令已下发到边缘网关", repository.controlDevice(id, body));
+        return ApiResponse.success("控制申请已登记", repository.controlDevice(id, body));
     }
 
     @GetMapping("/plots")
@@ -284,6 +311,11 @@ public class IotAppController {
 
     @GetMapping("/messages")
     public ApiResponse<List<Map<String, Object>>> messages() { return ApiResponse.success(repository.messages()); }
+
+    @PostMapping("/messages/{id}/read")
+    public ApiResponse<Map<String, Object>> readMessage(@PathVariable long id) {
+        return ApiResponse.success(repository.readMessage(id));
+    }
 
     @PostMapping("/messages/read-all")
     public ApiResponse<Map<String, Object>> readAll() { return ApiResponse.success(repository.readAllMessages()); }

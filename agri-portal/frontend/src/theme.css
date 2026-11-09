@@ -4,6 +4,13 @@
    ============================================================ */
 
 :root {
+  --portal-hero-background: radial-gradient(760px 520px at 88% 8%, rgba(56, 189, 248, .3), transparent 60%), radial-gradient(680px 480px at 6% 108%, rgba(111, 214, 162, .22), transparent 62%), linear-gradient(135deg, #0a3a25, #12764a 60%, #0c7ba8);
+  --text: var(--ink-800);
+  --text-2: var(--ink-600);
+  --text-3: var(--ink-500);
+  --card: var(--surface);
+  --line-2: var(--line);
+  --danger: var(--red);
   /* 主色 - 农业绿 */
   --green-900: #06281A;
   --green-800: #0A3A25;

@@ -11,6 +11,10 @@ export type { DetailInfoItem, DetailInfoGridProps } from './DetailInfoGrid'
 export { default as DetailMetricGrid } from './DetailMetricGrid'
 export type { DetailMetricItem, DetailMetricGridProps } from './DetailMetricGrid'
 export {
+  SCROLL_BY_CONTENT,
+  wideTextCell,
+} from './tableScroll'
+export {
   default as MetricStatistic,
   MetricText,
   MetricNumber,
@@ -22,3 +26,5 @@ export type {
   MetricTextProps,
   MetricNumberProps,
 } from './MetricStatistic'
+
+export { default as SectionCard } from './SectionCard'

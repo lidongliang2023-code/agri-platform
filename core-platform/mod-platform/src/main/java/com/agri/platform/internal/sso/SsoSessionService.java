@@ -79,6 +79,23 @@ public class SsoSessionService {
      */
     public String create(Long userId, Long marketId, boolean remember, HttpServletResponse response,
                          String userAgent, String ip) {
+        return create(userId, marketId, remember, response, userAgent, ip, null);
+    }
+
+    /**
+     * 为指定子系统建立会话：**同时**写「子系统专属 Cookie」与全局 Cookie。
+     *
+     * <p>为什么要按 client 分开：同一个浏览器要能同时以不同账号登录不同子系统。
+     * 全局 Cookie 只作为账号中心 / 注册流程的兜底；authorize 只认当前 client 的专属 Cookie，
+     * 因此 A 子系统登录不会让 B 子系统免登。</p>
+     */
+    public String createForClient(Long userId, Long marketId, boolean remember, String clientId,
+                                  HttpServletResponse response) {
+        return create(userId, marketId, remember, response, null, null, clientId);
+    }
+
+    private String create(Long userId, Long marketId, boolean remember, HttpServletResponse response,
+                          String userAgent, String ip, String clientId) {
         String sid = UUID.randomUUID().toString().replace("-", "");
         long seconds = remember ? rememberSeconds() : properties.getSessionTtlHours() * 3600;
         activeMerchantService.ensure(userId, marketId);
@@ -88,8 +105,24 @@ public class SsoSessionService {
         redis.opsForSet().add(userIndex, sid);
         redis.expire(userIndex, Duration.ofDays(7));
         writeMeta(sid, userAgent, ip, seconds);
-        response.addHeader("Set-Cookie", cookie(sid, seconds));
+        if (clientId != null && !clientId.isBlank()) {
+            response.addHeader("Set-Cookie", cookie(clientCookieName(clientId), sid, seconds));
+        }
+        response.addHeader("Set-Cookie", cookie(properties.getSessionCookieName(), sid, seconds));
         return sid;
+    }
+
+    /**
+     * 解析会话（按子系统）。
+     *
+     * <p>只读该 client 的专属 Cookie；没有就返回 null，由调用方跳登录页。
+     * 这样"访问另一个子系统默认是登录页"是默认行为，而不是靠前端各自判断。</p>
+     */
+    public long[] resolve(HttpServletRequest request, String clientId) {
+        if (clientId == null || clientId.isBlank()) {
+            return resolve(request);
+        }
+        return resolveSid(readSid(request, clientCookieName(clientId)));
     }
 
     /**
@@ -98,7 +131,10 @@ public class SsoSessionService {
      * @return [userId, marketId]；无 Cookie、会话不存在或已过期时返回 null
      */
     public long[] resolve(HttpServletRequest request) {
-        String sid = readSid(request);
+        return resolveSid(readSid(request, properties.getSessionCookieName()));
+    }
+
+    private long[] resolveSid(String sid) {
         if (sid == null) {
             // H5 正常走 SSO Cookie；小程序等非 Cookie 客户端使用 Bearer 访问令牌。
             // JwtAuthFilter 会先写入 MarketContext，这里作为同一条分步开通流程的第二凭据通道。
@@ -113,16 +149,41 @@ public class SsoSessionService {
         return new long[]{Long.parseLong(parts[0]), Long.parseLong(parts[1])};
     }
 
-    /** 销毁会话并清 Cookie（单点登出；V2.0 第 5.4 节第 2 步） */
+    /** 销毁全局会话并清 Cookie（独立认证中心登出）。 */
     public void destroy(HttpServletRequest request, HttpServletResponse response) {
-        String sid = readSid(request);
-        if (sid != null) {
-            String value = redis.opsForValue().get(KEY_PREFIX + sid);
-            redis.delete(KEY_PREFIX + sid);
-            removeFromUserIndex(sid, value);
-            clearActiveMerchant(value);
+        String sid = readSid(request, properties.getSessionCookieName());
+        removeSession(sid);
+        response.addHeader("Set-Cookie", cookie(properties.getSessionCookieName(), "", 0L));
+    }
+
+    /**
+     * 销毁指定子系统的会话并清它的专属 Cookie。
+     *
+     * <p>只影响这个子系统；其他子系统的账号保持登录。若全局 Cookie 恰好也是这条会话，
+     * 顺带清掉，避免账号中心残留"已登出账号"。</p>
+     */
+    public void destroy(HttpServletRequest request, HttpServletResponse response, String clientId) {
+        if (clientId == null || clientId.isBlank()) {
+            destroy(request, response);
+            return;
         }
-        response.addHeader("Set-Cookie", cookie("", 0L));
+        String sid = readSid(request, clientCookieName(clientId));
+        removeSession(sid);
+        response.addHeader("Set-Cookie", cookie(clientCookieName(clientId), "", 0L));
+        String globalSid = readSid(request, properties.getSessionCookieName());
+        if (clientId != null && sid != null && sid.equals(globalSid)) {
+            response.addHeader("Set-Cookie", cookie(properties.getSessionCookieName(), "", 0L));
+        }
+    }
+
+    private void removeSession(String sid) {
+        if (sid == null) {
+            return;
+        }
+        String value = redis.opsForValue().get(KEY_PREFIX + sid);
+        redis.delete(KEY_PREFIX + sid);
+        removeFromUserIndex(sid, value);
+        clearActiveMerchant(value);
     }
 
     /**
@@ -251,7 +312,7 @@ public class SsoSessionService {
 
     /** 从请求里取当前 sid（供"标记本机"用） */
     public String currentSid(HttpServletRequest request) {
-        return readSid(request);
+        return readSid(request, properties.getSessionCookieName());
     }
 
     private String findSidByKey(Long userId, String sessionKey) {
@@ -366,18 +427,23 @@ public class SsoSessionService {
         return request.getRemoteAddr();
     }
 
-    private String readSid(HttpServletRequest request) {
+    private String readSid(HttpServletRequest request, String cookieName) {
         Cookie[] cookies = request.getCookies();
         if (cookies == null) {
             return null;
         }
         for (Cookie cookie : cookies) {
-            if (properties.getSessionCookieName().equals(cookie.getName())) {
+            if (cookieName.equals(cookie.getName())) {
                 String value = cookie.getValue();
                 return (value == null || value.isBlank()) ? null : value;
             }
         }
         return null;
+    }
+
+    /** 子系统专属会话 Cookie 名：同一浏览器可同时持有多个子系统的不同账号。 */
+    private String clientCookieName(String clientId) {
+        return properties.getSessionCookieName() + "_" + clientId;
     }
 
     // 手写 Set-Cookie：Servlet 的 Cookie API 没有 SameSite 属性（与 RefreshCookieSupport 同一原因）
@@ -390,9 +456,9 @@ public class SsoSessionService {
         }
     }
 
-    private String cookie(String value, long maxAgeSeconds) {
+    private String cookie(String name, String value, long maxAgeSeconds) {
         StringBuilder header = new StringBuilder()
-                .append(properties.getSessionCookieName()).append('=').append(value == null ? "" : value)
+                .append(name).append('=').append(value == null ? "" : value)
                 .append("; Path=").append(properties.getSessionCookiePath())
                 .append("; Max-Age=").append(maxAgeSeconds)
                 .append("; HttpOnly")

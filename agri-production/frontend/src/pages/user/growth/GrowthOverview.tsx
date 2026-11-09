@@ -1,3 +1,4 @@
+import Table from '@/components/BusinessRecordList'
 /**
  * 页面名称：生长监测总览
  * 路由路径：/production/growth
@@ -29,7 +30,6 @@ import {
   Skeleton,
   Space,
   Steps,
-  Table,
   Tag,
   Timeline,
   Tooltip,
@@ -515,8 +515,8 @@ export default function GrowthOverview(): JSX.Element {
 
   return (
     <div style={{ padding: 24 }}>
-      <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
-        <Typography.Title level={4} style={{ margin: 0 }}>
+      <Row className="production-custom-page-header production-page-header-row" justify="space-between" align="middle" style={{ marginBottom: 16 }}>
+        <Typography.Title className="production-page-heading" level={4} style={{ margin: 0 }}>
           🌱 生长监测总览
         </Typography.Title>
         <Space>

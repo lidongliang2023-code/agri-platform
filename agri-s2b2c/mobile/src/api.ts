@@ -1,5 +1,11 @@
 import { getUnifiedToken, handleUnauthorized } from '../../frontend-shared/mobile-unified-auth'
 
+/**
+ * 允许匿名停留的页面：扫码溯源落地的那一页（内容全部来自 /api/public/trace/**）。
+ * 判据与 PC 端 src/config/public-paths.js 同一条，只是移动端路由不带前导斜杠。
+ */
+const PUBLIC_PAGES = ['pages/services/index']
+
 export type IdParam = string | number
 
 export interface Product {
@@ -75,6 +81,8 @@ export interface Consumer {
 }
 
 export interface OrderItem {
+  prodBatchNo?: string
+  traceCode?: string
   id: number
   orderId: number
   productId: number
@@ -185,15 +193,51 @@ export interface ChannelShopDetail {
   products: ChannelShopProduct[]
 }
 
-export interface TraceRecord {
-  id: number
-  batchCode: string
-  origin: string
-  plantingDate: string
-  harvestDate: string
-  processingInfo: string
-  qualityReport: string
-  storageInfo: string
+/** 链路节点（生产域核验视图的形状） */
+export interface TraceNode {
+  seq: number
+  stage: string
+  stageName: string
+  title: string
+  detail: string
+  occurredAt: string | null
+  operatorName: string | null
+  attested: boolean
+  onChain: boolean
+  chainStatus: string | null
+  txHash: string | null
+  failedReason: string | null
+}
+
+/**
+ * 溯源视图：三种状态必须可区分 —— 未绑定（bound=false）、
+ * 绑了但生产域查不到（matched=false）、链路不可达（unavailable=true）。
+ * 把它们压成空数组，页面就会把"系统没接上"说成"这货没来历"。
+ */
+export interface TraceView {
+  units?: { traceCode: string; batchNo: string; boundAt: string }[]
+  circulation?: { boundAt: string; orderStatus: string; logisticsCompany?: string }[]
+  sourceBasis?: string
+  circulationRecorded?: boolean
+  bound: boolean
+  matched: boolean
+  reason?: string
+  message?: string
+  unavailable?: boolean
+  source?: string
+  batchNo?: string
+  productName?: string
+  cropName?: string
+  qualityGrade?: string
+  origin?: string
+  harvestDate?: string
+  farmName?: string | null
+  conclusion?: string
+  nodeCount?: number
+  onChainCount?: number
+  stages?: string[]
+  nodes: TraceNode[]
+  codes?: { code: string; status: string; expired?: boolean }[]
 }
 
 export interface AfterSale {
@@ -240,12 +284,20 @@ export function request<T>(
       success(response: { statusCode: number; data: unknown }) {
         const body = response.data as Record<string, unknown>
         if (response.statusCode === 401) {
-          handleUnauthorized()
+          handleUnauthorized(PUBLIC_PAGES)
           reject(new Error('登录已失效，请重新使用统一账号登录'))
           return
         }
         if (response.statusCode >= 400) {
-          reject(new Error(String(body?.message || `请求失败（HTTP ${response.statusCode}）`)))
+          const failure = new Error(String(body?.message || `请求失败（HTTP ${response.statusCode}）`)) as Error & {
+            status?: number
+            body?: Record<string, unknown>
+          }
+          // 带上状态码与响应体：404（查无此码）与 503（溯源链路不可达）在页面上必须是两句话，
+          // 只留 message 的话调用方无从区分，就会把故障显示成"这个商品没有溯源"。
+          failure.status = response.statusCode
+          failure.body = body
+          reject(failure)
           return
         }
         resolve(response.data as T)
@@ -258,6 +310,7 @@ export function request<T>(
 }
 
 export const mallApi = {
+  getProfile: () => request<Consumer>('/consumer/profile'),
   login: (phone: string) => request<LoginResult>('/consumer/login', 'GET', undefined, { phone }),
   getProducts: (params: { page?: number; size?: number; keyword?: string; categoryId?: number | null }) =>
     request<PageResult<Product>>('/consumer/products', 'GET', undefined, params),
@@ -275,6 +328,7 @@ export const mallApi = {
   createOrder: (data: Record<string, unknown>) => request<ActionResult>('/consumer/order/create', 'POST', data),
   getOrders: (params: { consumerId: IdParam; page?: number; size?: number; status?: string }) =>
     request<PageResult<Order>>('/consumer/orders', 'GET', undefined, params),
+  getOrderTrace: (orderId: IdParam, itemId: IdParam) => request<TraceView>(`/consumer/order/${orderId}/item/${itemId}/trace`),
   getOrder: (id: IdParam) => request<Order>(`/consumer/order/detail/${id}`),
   payOrder: (id: IdParam) => request<ActionResult>(`/consumer/order/pay/${id}`, 'PUT'),
   receiveOrder: (id: IdParam) => request<ActionResult>(`/consumer/order/receive/${id}`, 'PUT'),
@@ -288,7 +342,8 @@ export const mallApi = {
     request<CouponItem[]>('/consumer/coupons', 'GET', undefined, { consumerId }),
   receiveCoupon: (consumerId: IdParam, couponId: number) =>
     request<ActionResult>('/consumer/coupon/receive', 'POST', undefined, { consumerId, couponId }),
-  getTrace: (productId: IdParam) => request<TraceRecord[]>(`/consumer/trace/${productId}`),
+  getTrace: (productId: IdParam) => request<TraceView>(`/public/trace/product/${productId}`),
+  getTraceByCode: (code: string) => request<TraceView>(`/public/trace/code/${encodeURIComponent(code)}`),
   getAfterSales: (consumerId: IdParam) =>
     request<AfterSale[]>('/consumer/after-sales', 'GET', undefined, { consumerId }),
   createAfterSale: (data: Record<string, unknown>) =>

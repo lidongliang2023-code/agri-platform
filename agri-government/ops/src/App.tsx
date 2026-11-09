@@ -1,3 +1,7 @@
+import AuthorizationNotice from './AuthorizationNotice'
+import RegionRegistry from './RegionRegistry'
+import ScopeConfig from './ScopeConfig'
+import PersonnelGrants from './PersonnelGrants'
 import { useEffect,useMemo,useState,type ReactNode } from 'react'
 import {
   AlertOutlined,AuditOutlined,BarChartOutlined,BellOutlined,CheckCircleFilled,CreditCardOutlined,
@@ -13,15 +17,15 @@ import {
 import { logoutUnified,useUnifiedUser } from '../../frontend/src/sso'
 
 interface StaffRow{id:number;name:string;role:string;organization:string;grid:string;status:string;certificateNo?:string;platformUserId?:string}
-type Page='dashboard'|'subjects'|'warnings'|'tasks'|'items'|'cases'|'repairs'|'subsidies'|'complaints'|'samplings'|'sharing'|'statistics'|'users'|'logs'
-const PAGES:Page[]=['dashboard','subjects','warnings','tasks','items','cases','repairs','subsidies','complaints','samplings','sharing','statistics','users','logs']
-const TITLES:Record<Page,string>={dashboard:'监管工作台',subjects:'市场主体监管',warnings:'AI 预警处置',tasks:'执法检查任务',items:'执法事项清单',cases:'案件管理',repairs:'信用修复复核',subsidies:'补贴项目监管',complaints:'举报处理',samplings:'监督抽检',sharing:'跨部门数据共享',statistics:'统计报表中心',users:'组织与权限',logs:'操作审计日志'}
+type Page='region-registry'|'personnel-grants'|'scopes'|'dashboard'|'subjects'|'warnings'|'tasks'|'items'|'cases'|'repairs'|'subsidies'|'complaints'|'samplings'|'sharing'|'statistics'|'users'|'logs'
+const PAGES:Page[]=['region-registry','personnel-grants','scopes','dashboard','subjects','warnings','tasks','items','cases','repairs','subsidies','complaints','samplings','sharing','statistics','users','logs']
+const TITLES:Record<Page,string>={'region-registry':'业务辖区登记','personnel-grants':'监管人员授权',scopes:'监管范围配置',dashboard:'监管工作台',subjects:'市场主体监管',warnings:'AI 预警处置',tasks:'执法检查任务',items:'执法事项清单',cases:'案件管理',repairs:'信用修复复核',subsidies:'补贴项目监管',complaints:'举报处理',samplings:'监督抽检',sharing:'跨部门数据共享',statistics:'统计报表中心',users:'组织与权限',logs:'操作审计日志'}
 const NAV:Array<{group:string;items:Array<{page:Page;label:string;icon:ReactNode}>}>= [
   {group:'监管指挥',items:[{page:'dashboard',label:'监管工作台',icon:<HomeOutlined/>},{page:'statistics',label:'统计报表中心',icon:<BarChartOutlined/>}]},
   {group:'运行监测',items:[{page:'warnings',label:'AI 预警处置',icon:<AlertOutlined/>},{page:'tasks',label:'执法检查任务',icon:<AuditOutlined/>},{page:'items',label:'执法事项清单',icon:<CheckCircleFilled/>},{page:'cases',label:'案件管理',icon:<FileProtectOutlined/>}]},
   {group:'信用与主体',items:[{page:'subjects',label:'市场主体监管',icon:<TeamOutlined/>},{page:'repairs',label:'信用修复复核',icon:<CreditCardOutlined/>}]},
   {group:'质量与政策',items:[{page:'samplings',label:'监督抽检',icon:<SafetyCertificateOutlined/>},{page:'subsidies',label:'补贴项目监管',icon:<FundOutlined/>},{page:'complaints',label:'举报处理',icon:<WarningOutlined/>}]},
-  {group:'数据与系统',items:[{page:'sharing',label:'跨部门数据共享',icon:<ShareAltOutlined/>},{page:'users',label:'组织与权限',icon:<TeamOutlined/>},{page:'logs',label:'操作审计日志',icon:<DatabaseOutlined/>}]},
+  {group:'数据与系统',items:[{page:'region-registry',label:'业务辖区登记',icon:<DatabaseOutlined/>},{page:'personnel-grants',label:'监管人员授权',icon:<TeamOutlined/>},{page:'scopes',label:'监管范围配置',icon:<SafetyCertificateOutlined/>},{page:'sharing',label:'跨部门数据共享',icon:<ShareAltOutlined/>},{page:'users',label:'组织与权限',icon:<TeamOutlined/>},{page:'logs',label:'操作审计日志',icon:<DatabaseOutlined/>}]},
 ]
 /** 顶栏检索要把词带到主体台账，否则回车只是换了个页面。 */
 const transfer={keyword:''}
@@ -441,14 +445,14 @@ export default function App(){
     case'items':return <CheckItems/>;case'cases':return <Cases/>;case'repairs':return <Repairs/>;
     case'subsidies':return <Subsidies/>;case'complaints':return <Complaints/>;case'samplings':return <Samplings/>;
     case'sharing':return <Sharing/>;case'statistics':return <Statistics/>;case'users':return <Users/>;
-    case'logs':return <Logs/>;default:return <Dashboard data={overview}/>}
+    case'region-registry':return <RegionRegistry/>;case'personnel-grants':return <PersonnelGrants/>;case'scopes':return <ScopeConfig/>;case'logs':return <Logs/>;default:return <Dashboard data={overview}/>}
   },[page,overview])
   const pending=overview?.metrics.pendingWarnings??0
-  return <div className={`o-shell${collapsed?' collapsed':''}`}><aside className="o-sidebar"><button type="button" className="o-brand" onClick={()=>go('dashboard')}><span>丰</span>{!collapsed&&<div><b>丰链云</b><small>政府监管运营端</small></div>}</button><nav>{NAV.map(g=><section key={g.group}>{!collapsed&&<h3>{g.group}</h3>}{g.items.map(i=><button type="button" key={i.page} className={page===i.page?'on':''} onClick={()=>go(i.page)} title={i.label}>{i.icon}{!collapsed&&<span>{i.label}</span>}</button>)}</section>)}</nav><div className="o-side-foot">{!collapsed&&<div><b>监管指挥中心</b><small>值班 09:00-21:00</small></div>}<button type="button" onClick={()=>setCollapsed(!collapsed)}>{collapsed?<MenuUnfoldOutlined/>:<><MenuFoldOutlined/>收起导航</>}</button></div></aside>
+  return <div className={`o-shell${collapsed?' collapsed':''}`}><aside className="o-sidebar"><button type="button" className="o-brand" onClick={()=>go('dashboard')}><img className="o-brand-logo" src={`${import.meta.env.BASE_URL}fengchain.svg`} alt="丰链云"/>{!collapsed&&<div><b>丰链云</b><small>FENGCHAIN · AGRI</small></div>}</button><nav>{NAV.map(g=><section key={g.group}>{!collapsed&&<h3>{g.group}</h3>}{g.items.map(i=><button type="button" key={i.page} className={page===i.page?'on':''} onClick={()=>go(i.page)} title={i.label}>{i.icon}{!collapsed&&<span>{i.label}</span>}</button>)}</section>)}</nav><div className="o-side-foot">{!collapsed&&<div><b>监管指挥中心</b><small>值班 09:00-21:00</small></div>}<button type="button" onClick={()=>setCollapsed(!collapsed)}>{collapsed?<MenuUnfoldOutlined/>:<><MenuFoldOutlined/>收起导航</>}</button></div></aside>
     <div className="o-main"><header className="o-header"><div><span>政府监管</span><b>/</b><strong>{TITLES[page]}</strong></div>
       <form onSubmit={e=>{e.preventDefault();if(!keyword.trim()){return}transfer.keyword=keyword.trim();go('subjects')}}><SearchOutlined/><input value={keyword} onChange={e=>setKeyword(e.target.value)} placeholder="按主体名称或信用代码查台账"/></form>
       <div className="o-header-right"><span>{todayText()}</span>
         <button type="button" title={`待处置预警 ${pending} 条`} onClick={()=>go('warnings')}><BellOutlined/>{pending>0&&<i>{pending}</i>}</button>
         <Dropdown menu={{items:[{key:'users',label:'组织与权限',onClick:()=>go('users')},{key:'logs',label:'操作审计',onClick:()=>go('logs')},{key:'logout',label:'退出统一登录',onClick:()=>void logoutUnified('gov-ops')}]}}><button type="button" className="o-user-chip"><Avatar size={30} className="o-avatar">{displayName.slice(0,1)}</Avatar><span><b>{displayName}</b><small>{identity?.operatorName?`${identity.roles?.admin?'监管运营':'执法人员'} · ${identity.operatorName}`:'统一账号 · 监管运营'}</small></span></button></Dropdown>
-      </div></header><main>{content}</main></div></div>
+      </div></header><main><AuthorizationNotice page={page}/>{content}</main></div></div>
 }

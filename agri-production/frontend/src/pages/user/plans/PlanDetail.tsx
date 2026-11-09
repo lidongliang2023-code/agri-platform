@@ -1,13 +1,16 @@
+import Table from '@/components/BusinessRecordList'
 /**
- * 页面名称：种养计划详情
+ * 页面名称：农事计划详情
  * 路由路径：/production/plans/:planId
- * 所属模块：智能种养
+ * 所属模块：农事生产
  * PRD 序号：PRD 6.1 #12（对应 PRD 8.2 PLAN-02 生育期编排 / PLAN-05 进度追踪）
  *
  * 页面用途（PRD）：计划详情、生育期安排、进度追踪。
  * 结构：头部（返回 / 状态 / 操作）→ 基本信息 Descriptions + 进度卡 →
  * 生育期安排时间线 + 关联农事任务列表。
  */
+import Card from '@/components/SectionCard'
+import './plans.css'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import dayjs from 'dayjs'
@@ -15,7 +18,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   App as AntdApp,
   Button,
-  Card,
   Col,
   Empty,
   List,
@@ -26,38 +28,33 @@ import {
   Skeleton,
   Space,
   Steps,
-  Table,
   Tag,
   Timeline,
   Typography,
 } from 'antd'
 import {
   CalendarOutlined,
+  CheckCircleOutlined,
   DeleteOutlined,
   EditOutlined,
   LeftOutlined,
-  PlayCircleOutlined,
   PlusOutlined,
   ReloadOutlined,
+  SendOutlined,
   StopOutlined,
 } from '@ant-design/icons'
-import {
-  ModalForm,
-  PageContainer,
-  ProFormDatePicker,
-  ProFormDigit,
-  ProFormSelect,
-  ProFormText,
-  ProFormTextArea,
-} from '@ant-design/pro-components'
+import { ModalForm, ProFormDatePicker, ProFormDigit, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components'
+import PageContainer from '@/components/ProductionPageContainer'
 import { DetailInfoGrid, DetailMetricGrid } from '@/components'
 import {
+  approvePlan,
   createPlanStage,
+  fetchPlanApprovalPermission,
   fetchPlanDetail,
   fetchPlanStages,
   fetchPlanTasks,
   removePlanStage,
-  startPlan,
+  submitPlanApproval,
   terminatePlan,
   updatePlanStage,
 } from '@/api/production-view'
@@ -75,6 +72,7 @@ import {
 import type { PlanStageView } from '@/api/production-view'
 import type { PlanStage, Task } from '@/types'
 import { isTaskDone } from '@/types/task'
+import useAuthStore from '@/store/auth'
 
 /** 阶段「默认任务类型」下拉选项 */
 const taskTypeOptions = Object.entries(TASK_TYPE_META).map(([value, label]) => ({
@@ -83,7 +81,7 @@ const taskTypeOptions = Object.entries(TASK_TYPE_META).map(([value, label]) => (
 }))
 
 /**
- * 种养计划详情
+ * 农事计划详情
  * @returns 页面内容
  */
 export default function PlanDetail(): JSX.Element {
@@ -92,6 +90,7 @@ export default function PlanDetail(): JSX.Element {
   const [searchParams] = useSearchParams()
   const { message } = AntdApp.useApp()
   const queryClient = useQueryClient()
+  const currentUser = useAuthStore((state) => state.userInfo)
 
   /**
    * 路由表中并不存在 /production/plans/create（PRD 6.1 仅有列表 / 详情 / 日历三条）。
@@ -135,6 +134,15 @@ export default function PlanDetail(): JSX.Element {
     enabled: isQueryEnabled,
   })
 
+  /** 当前用户是否有农事计划审批权限 */
+  const approvalPermissionQuery = useQuery({
+    queryKey: ['plan-approval-permission'],
+    queryFn: fetchPlanApprovalPermission,
+    enabled: isQueryEnabled,
+    staleTime: 60_000,
+  })
+  const canApprovePlan = approvalPermissionQuery.data === true
+
   /**
    * 刷新全部区块
    * @returns void
@@ -143,13 +151,23 @@ export default function PlanDetail(): JSX.Element {
     await Promise.all([planQuery.refetch(), stagesQuery.refetch(), tasksQuery.refetch()])
   }
 
-  const startMutation = useMutation({
-    mutationFn: () => startPlan(planId),
+  const submitMutation = useMutation({
+    mutationFn: () => submitPlanApproval(planId),
     onSuccess: () => {
-      message.success('计划已启动')
+      message.success('计划已提交审批，等待本主体审批')
       void queryClient.invalidateQueries({ queryKey: ['plan-detail', planId] })
     },
-    onError: (error: Error) => message.error(error.message || '启动失败'),
+    onError: (error: Error) => message.error(error.message || '提交审批失败'),
+  })
+
+  const approveMutation = useMutation({
+    mutationFn: () =>
+      approvePlan(planId, currentUser?.realName || currentUser?.username || '本主体审批人', '审批通过'),
+    onSuccess: () => {
+      message.success('计划审批已通过，已进入进行中')
+      void queryClient.invalidateQueries({ queryKey: ['plan-detail', planId] })
+    },
+    onError: (error: Error) => message.error(error.message || '审批失败'),
   })
 
   const terminateMutation = useMutation({
@@ -343,7 +361,7 @@ export default function PlanDetail(): JSX.Element {
 
   if (planQuery.isLoading) {
     return (
-      <PageContainer title="📋 种养计划详情">
+      <PageContainer className="production-plans-page" title="农事计划详情">
         <Card>
           <Skeleton active paragraph={{ rows: 8 }} />
         </Card>
@@ -353,15 +371,15 @@ export default function PlanDetail(): JSX.Element {
 
   if (planQuery.isError || !plan) {
     return (
-      <PageContainer title="📋 种养计划详情">
+      <PageContainer className="production-plans-page" title="农事计划详情">
         <Card>
           <Result
             status="404"
-            title="未找到该种养计划"
+            title="未找到该农事计划"
             subTitle="计划可能已被删除，或当前账号无访问权限。"
             extra={
               <Button type="primary" onClick={() => navigate('/production/plans')}>
-                返回种养计划
+                返回农事计划
               </Button>
             }
           />
@@ -374,6 +392,7 @@ export default function PlanDetail(): JSX.Element {
 
   return (
     <PageContainer
+      className="production-plans-page"
       title={
         <Space wrap>
           <span>📋 {plan.planName}</span>
@@ -389,14 +408,26 @@ export default function PlanDetail(): JSX.Element {
             刷新
           </Button>
           {plan.status === 1 && (
-            <Button
-              type="primary"
-              icon={<PlayCircleOutlined />}
-              loading={startMutation.isPending}
-              onClick={() => startMutation.mutate()}
+            <Popconfirm
+              title="提交审批"
+              description={`确认提交「${plan.planName}」给本主体审批人审批？`}
+              onConfirm={() => submitMutation.mutate()}
             >
-              启动计划
-            </Button>
+              <Button type="primary" icon={<SendOutlined />} loading={submitMutation.isPending}>
+                提交审批
+              </Button>
+            </Popconfirm>
+          )}
+          {plan.status === 5 && canApprovePlan && (
+            <Popconfirm
+              title="审批通过"
+              description={`确认审批通过「${plan.planName}」？通过后计划将进入进行中。`}
+              onConfirm={() => approveMutation.mutate()}
+            >
+              <Button type="primary" icon={<CheckCircleOutlined />} loading={approveMutation.isPending}>
+                审批通过
+              </Button>
+            </Popconfirm>
           )}
           {plan.status === 2 && (
             <Button
@@ -705,7 +736,7 @@ export default function PlanDetail(): JSX.Element {
             dataSource={tasks}
             columns={taskColumns}
             pagination={tasks.length > 8 ? { pageSize: 8, size: 'small' } : false}
-            scroll={{ x: 900 }}
+            scroll={{ x: 'max-content' }}
           />
         )}
       </Card>

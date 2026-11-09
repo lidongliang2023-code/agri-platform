@@ -284,7 +284,7 @@ function goBack() {
 
 .head-sub {
   color: rgba(255, 255, 255, 0.72);
-  font-size: 21rpx;
+  font-size: 24rpx;
 }
 
 .head .tiny {
@@ -318,7 +318,7 @@ function goBack() {
   display: block;
   margin-top: 14rpx;
   color: #53665a;
-  font-size: 22rpx;
+  font-size: 24rpx;
   line-height: 1.72;
 }
 

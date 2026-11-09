@@ -126,7 +126,7 @@ function toSetup() {
 
 .read-all {
   color: #12764a;
-  font-size: 22rpx;
+  font-size: 24rpx;
 }
 
 .msg-card {
@@ -172,7 +172,7 @@ function toSetup() {
   display: block;
   margin-top: 8rpx;
   color: #53665a;
-  font-size: 23rpx;
+  font-size: 24rpx;
   line-height: 1.65;
 }
 
@@ -185,6 +185,6 @@ function toSetup() {
 
 .link {
   color: #12764a;
-  font-size: 21rpx;
+  font-size: 24rpx;
 }
 </style>

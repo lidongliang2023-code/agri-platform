@@ -1,3 +1,6 @@
+import Card from '@/components/SectionCard'
+import './harvests.css'
+import Table from '@/components/BusinessRecordList'
 /**
  * 页面名称：库存详情
  * 路由路径：/production/harvests/inventory/:inventoryId
@@ -10,15 +13,15 @@
  *   保质期至、关联采收（→harvest-detail）、状态
  * - 「📋 出入库记录」表：时间 | 类型 | 数量 | 操作人 | 备注
  */
-import { useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { PageContainer } from '@ant-design/pro-components'
+import PageContainer from '@/components/ProductionPageContainer'
 import {
   Alert as AntAlert,
   Button,
-  Card,
   Empty,
+  DatePicker,
   Form,
   Input,
   InputNumber,
@@ -28,9 +31,7 @@ import {
   Select,
   Skeleton,
   Space,
-  Table,
   Tag,
-  Timeline,
   Typography,
   message,
 } from 'antd'
@@ -39,19 +40,21 @@ import {
   ExportOutlined,
   LockOutlined,
   SwapOutlined,
-  UnlockOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import useFarmStore from '@/store/farm'
+import useAuthStore from '@/store/auth'
+import { requireInventorySource } from './inventoryHelpers'
 import { DetailInfoGrid, DetailMetricGrid } from '@/components'
 import {
   outboundInventory,
-  queryHarvests,
   queryInventoryFlows,
   queryInventoryRecord,
   toggleInventoryFreeze,
+  updateInventory,
   transferInventoryRecord,
 } from '@/api/harvests'
+import type { InventoryFlowParams } from '@/api/harvests'
 import type { InventoryFlow, InventoryRecord } from '@/types'
 import { asApiRequestError, httpStatusOf } from '@/utils/request'
 import {
@@ -66,7 +69,7 @@ import {
 const FLOW_TYPE_META: Record<number, { label: string; color: string }> = {
   1: { label: '入库', color: 'green' },
   2: { label: '出库', color: 'blue' },
-  3: { label: '盘点', color: 'geekblue' },
+  3: { label: '调拨', color: 'geekblue' },
   4: { label: '报损', color: 'red' },
 }
 
@@ -104,7 +107,15 @@ export default function InventoryDetail(): JSX.Element {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const currentFarm = useFarmStore((state) => state.currentFarm)
-  const farmId = currentFarm?.farmId
+  const subjectId = useAuthStore((state) => state.userInfo?.tenantId)
+  const [flowFilters, setFlowFilters] = useState<Omit<InventoryFlowParams, 'pageNum' | 'pageSize'>>({})
+  const [flowScope, setFlowScope] = useState('current')
+  const [flowForm] = Form.useForm()
+  const [flowPage, setFlowPage] = useState(1)
+  const [flowSize, setFlowSize] = useState(10)
+  const [editOpen, setEditOpen] = useState(false)
+  const [editForm] = Form.useForm<{ safeQty: number; locationCode?: string; remark?: string }>()
+  useEffect(() => { setFlowFilters({}); setFlowScope('current'); flowForm.resetFields(); setFlowPage(1); setOutboundOpen(false); setTransferOpen(false); setEditOpen(false) }, [inventoryId, subjectId])
 
   const [outboundOpen, setOutboundOpen] = useState<boolean>(false)
   const [transferOpen, setTransferOpen] = useState<boolean>(false)
@@ -113,7 +124,7 @@ export default function InventoryDetail(): JSX.Element {
 
   /** 库存详情 */
   const detailQuery = useQuery({
-    queryKey: ['production-inventory', 'detail', inventoryId],
+    queryKey: ['production-inventory', 'detail', subjectId, inventoryId],
     enabled: Boolean(inventoryId),
     queryFn: () => queryInventoryRecord(inventoryId as string),
   })
@@ -122,16 +133,9 @@ export default function InventoryDetail(): JSX.Element {
 
   /** 出入库流水 */
   const flowQuery = useQuery({
-    queryKey: ['production-inventory', 'flows', record?.batchId],
+    queryKey: ['production-inventory', 'flows', subjectId, record?.batchId, inventoryId, flowScope, flowFilters, flowPage, flowSize],
     enabled: Boolean(record?.batchId),
-    queryFn: () => queryInventoryFlows(record?.batchId as string, { pageNum: 1, pageSize: 50 }),
-  })
-
-  /** 采收批次（用于关联采收跳转） */
-  const harvestQuery = useQuery({
-    queryKey: ['production-harvests', 'options', farmId],
-    enabled: Boolean(farmId),
-    queryFn: () => queryHarvests({ farmId, pageNum: 1, pageSize: 100 }),
+    queryFn: () => queryInventoryFlows(record?.batchId as string, { ...flowFilters, inventoryId: flowScope === 'current' ? inventoryId : undefined, pageNum: flowPage, pageSize: flowSize }),
   })
 
   /** 统一失效刷新 */
@@ -143,8 +147,11 @@ export default function InventoryDetail(): JSX.Element {
 
   /** 出库 */
   const outboundMutation = useMutation({
-    mutationFn: (payload: { batchId: string; quantity: number; orderNo?: string; remark?: string }) =>
-      outboundInventory(payload.batchId, payload),
+    mutationFn: async (payload: { batchId: string; quantity: number; orderNo?: string; remark?: string }) => {
+      if (!record) throw new Error('库存记录不存在')
+      await requireInventorySource(record)
+      return outboundInventory(payload.batchId, { ...payload, inventoryId: record.inventoryId })
+    },
     onSuccess: () => {
       message.success('出库成功')
       setOutboundOpen(false)
@@ -162,7 +169,10 @@ export default function InventoryDetail(): JSX.Element {
       quantity: number
       locationCode?: string
       remark?: string
-    }) => transferInventoryRecord(payload),
+    }) => {
+      if (!record) throw new Error('库存记录不存在')
+      return requireInventorySource(record).then(() => transferInventoryRecord({ ...payload, inventoryId: record.inventoryId }))
+    },
     onSuccess: () => {
       message.success('调拨成功')
       setTransferOpen(false)
@@ -174,8 +184,11 @@ export default function InventoryDetail(): JSX.Element {
 
   /** 冻结 / 解冻 */
   const freezeMutation = useMutation({
-    mutationFn: (payload: { batchId: string; frozen: boolean }) =>
-      toggleInventoryFreeze(payload.batchId, payload.frozen),
+    mutationFn: async (payload: { batchId: string; frozen: boolean }) => {
+      if (!record) throw new Error('库存记录不存在')
+      await requireInventorySource(record)
+      return toggleInventoryFreeze(payload.batchId, payload.frozen, record.inventoryId)
+    },
     onSuccess: (_result, payload) => {
       message.success(payload.frozen ? '库存已冻结' : '库存已解冻')
       void invalidateAll()
@@ -183,14 +196,11 @@ export default function InventoryDetail(): JSX.Element {
     onError: (error) => message.error(error.message || '操作失败，请稍后重试', 6),
   })
 
-  /** 关联采收批次（按采收编号匹配） */
-  const relatedHarvest = useMemo(
-    () =>
-      (harvestQuery.data?.list ?? []).find(
-        (item) => item.batchNo === record?.relatedBatchNo,
-      ),
-    [harvestQuery.data, record],
-  )
+  const editMutation = useMutation({
+    mutationFn: (values: { safeQty: number; locationCode?: string; remark?: string }) => updateInventory(inventoryId!, values),
+    onSuccess: () => { message.success('库存资料已更新'); setEditOpen(false); void invalidateAll() },
+    onError: (error) => message.error(error.message || '保存失败'),
+  })
 
   /** 提交出库 */
   const handleOutbound = (): void => {
@@ -201,7 +211,7 @@ export default function InventoryDetail(): JSX.Element {
         message.warning('出库数量必须大于 0')
         return
       }
-      if (quantity > record.currentQty) {
+      if (quantity > Math.max(0, record.currentQty - (record.frozenQty ?? 0))) {
         message.warning(`出库数量不能超过当前库存 ${record.currentQty}${record.unit}`)
         return
       }
@@ -211,13 +221,15 @@ export default function InventoryDetail(): JSX.Element {
         orderNo: values.orderNo,
         remark: values.remark,
       })
-    })
+    }).catch(() => undefined)
   }
 
   /** 提交调拨 */
   const handleTransfer = (): void => {
     if (!record) return
     transferForm.validateFields().then((values) => {
+      if (!values.quantity || values.quantity <= 0 || values.quantity > record.currentQty - (record.frozenQty ?? 0)) { message.warning('调拨数量必须大于 0 且不能超过可用库存'); return }
+      if (values.targetWarehouse === record.warehouseName) { message.warning('目标仓库不能与来源仓库相同'); return }
       transferMutation.mutate({
         batchId: record.batchId,
         targetWarehouse: values.targetWarehouse ?? '主仓库',
@@ -225,13 +237,13 @@ export default function InventoryDetail(): JSX.Element {
         locationCode: values.locationCode,
         remark: values.remark,
       })
-    })
+    }).catch(() => undefined)
   }
 
   /** 加载态 */
   if (detailQuery.isLoading) {
     return (
-      <PageContainer title="库存详情">
+      <PageContainer className="harvest-business-page" title="库存详情">
         <Card>
           <Skeleton active paragraph={{ rows: 8 }} />
         </Card>
@@ -242,7 +254,7 @@ export default function InventoryDetail(): JSX.Element {
   /** 错误态 / 空态 */
   if (detailQuery.isError || !record) {
     return (
-      <PageContainer title="库存详情">
+      <PageContainer className="harvest-business-page" title="库存详情">
         <Empty
           description={
             <Space direction="vertical">
@@ -290,16 +302,18 @@ export default function InventoryDetail(): JSX.Element {
 
   return (
     <PageContainer
-      title={`📦 ${record.productName ?? '库存'}`}
+      className="harvest-business-page"
+      title={`${record.productName ?? '库存'} · 库存详情`}
       subTitle={currentFarm?.farmName}
       onBack={() => navigate('/production/harvests/inventory')}
       backIcon={<ArrowLeftOutlined />}
       extra={[
+        <Button key="edit" onClick={() => { editForm.setFieldsValue({ safeQty: record.safeQty ?? 0, locationCode: record.locationCode, remark: record.remark }); setEditOpen(true) }}>编辑资料</Button>,
         <Button
           key="out"
           type="primary"
           icon={<ExportOutlined />}
-          disabled={record.frozen}
+          disabled={Boolean(record.frozen) || !(record.currentQty > (record.frozenQty ?? 0))}
           loading={outboundMutation.isPending}
           onClick={() => setOutboundOpen(true)}
         >
@@ -307,6 +321,7 @@ export default function InventoryDetail(): JSX.Element {
         </Button>,
         <Button
           key="transfer"
+          disabled={Boolean(record.frozen) || !(record.currentQty > (record.frozenQty ?? 0))}
           icon={<SwapOutlined />}
           loading={transferMutation.isPending}
           onClick={() => setTransferOpen(true)}
@@ -314,15 +329,7 @@ export default function InventoryDetail(): JSX.Element {
           调拨
         </Button>,
         record.frozen ? (
-          <Popconfirm
-            key="unfreeze"
-            title="确认解冻该库存？"
-            okText="确认解冻"
-            cancelText="取消"
-            onConfirm={() => freezeMutation.mutate({ batchId: record.batchId, frozen: false })}
-          >
-            <Button icon={<UnlockOutlined />}>解冻</Button>
-          </Popconfirm>
+          <Popconfirm key="unfreeze" title="确认解冻当前仓库库存？" onConfirm={() => freezeMutation.mutate({ batchId: record.batchId, frozen: false })}><Button>解冻</Button></Popconfirm>
         ) : (
           <Popconfirm
             key="freeze"
@@ -358,7 +365,7 @@ export default function InventoryDetail(): JSX.Element {
             {
               key: 'available',
               title: '可用库存',
-              value: Math.max(0, record.currentQty - (record.frozenQty ?? 0)),
+              value: record.frozen ? 0 : Math.max(0, record.currentQty - (record.frozenQty ?? 0)),
               precision: 2,
               suffix: record.unit,
               valueStyle: { color: '#1677ff' },
@@ -374,7 +381,7 @@ export default function InventoryDetail(): JSX.Element {
       </div>
 
       <Card
-        title="📋 基本信息"
+        title="基本信息"
         style={{ marginBottom: 16 }}
         extra={
           <Space size={4} wrap>
@@ -405,7 +412,7 @@ export default function InventoryDetail(): JSX.Element {
             {
               key: 'currentQty',
               label: '当前库存',
-              value: `${record.currentQty.toLocaleString()} ${record.unit}`,
+              value: `${record.currentQty?.toLocaleString() ?? '—'} ${record.unit}`,
             },
             {
               key: 'safeQty',
@@ -433,11 +440,11 @@ export default function InventoryDetail(): JSX.Element {
             {
               key: 'relatedHarvest',
               label: '关联采收',
-              value: relatedHarvest ? (
+              value: record.batchId ? (
                 <Typography.Link
-                  onClick={() => navigate(`/production/harvests/${relatedHarvest.batchId}`)}
+                  onClick={() => navigate(`/production/harvests/${record.batchId}`)}
                 >
-                  {relatedHarvest.batchNo}
+                  {record.relatedBatchNo ?? record.batchNo ?? record.batchId}
                 </Typography.Link>
               ) : (
                 record.relatedBatchNo ?? '-'
@@ -460,7 +467,7 @@ export default function InventoryDetail(): JSX.Element {
         />
       </Card>
 
-      <Card title={`📋 出入库记录（${flows.length} 条）`}>
+      <Card title={`批次出入库流水（${flowQuery.data?.total ?? '—'} 条）`}>
         {/*
           失败必须说出来，不能只留一张空表。
           教训：`queryInventoryFlows` 曾把路径写成 `/harvests/inventory/{batchId}/flows`，
@@ -474,15 +481,33 @@ export default function InventoryDetail(): JSX.Element {
             type="error"
             style={{ marginBottom: 16 }}
             message={`出入库流水未取到：${flowErrorMessage}`}
-            description="这不是「这段时间没有出入库流水」，而是本次请求失败了。请把上面的原因报给后端或前端负责人。"
+            action={<Button onClick={() => void flowQuery.refetch()}>重新加载</Button>}
           />
         ) : null}
+        <Form form={flowForm} layout="inline" style={{ gap: 12, marginBottom: 16 }} onFinish={(values) => {
+          setFlowScope(values.scope ?? 'current')
+          setFlowFilters({ flowType: values.flowType, direction: values.direction,
+            startDate: values.dates?.[0]?.format('YYYY-MM-DD'), endDate: values.dates?.[1]?.format('YYYY-MM-DD'),
+            operatorName: values.operatorName?.trim() || undefined, keyword: values.keyword?.trim() || undefined })
+          setFlowPage(1)
+        }} initialValues={{ scope: 'current' }}>
+          <Form.Item name="scope" label="仓库范围"><Select style={{ width: 160 }} options={[{ value: 'current', label: '当前仓库' }, { value: 'all', label: '批次全部仓库' }]} /></Form.Item>
+          <Form.Item name="flowType" label="流水类型"><Select allowClear placeholder="全部类型" style={{ width: 130 }} options={Object.entries(FLOW_TYPE_META).map(([value, meta]) => ({ value: Number(value), label: meta.label }))} /></Form.Item>
+          <Form.Item name="direction" label="数量方向"><Select allowClear placeholder="全部方向" style={{ width: 130 }} options={[{ value: 'in', label: '增加（入）' }, { value: 'out', label: '减少（出）' }]} /></Form.Item>
+          <Form.Item name="dates" label="流水日期"><DatePicker.RangePicker /></Form.Item>
+          <Form.Item name="operatorName" label="操作人"><Input allowClear maxLength={100} placeholder="输入操作人" style={{ width: 140 }} /></Form.Item>
+          <Form.Item name="keyword" label="关键词"><Input allowClear maxLength={100} placeholder="关联单据 / 备注" style={{ width: 190 }} /></Form.Item>
+          <Form.Item><Space><Button type="primary" htmlType="submit">查询</Button><Button onClick={() => { flowForm.resetFields(); setFlowFilters({}); setFlowScope('current'); setFlowPage(1) }}>重置</Button></Space></Form.Item>
+        </Form>
         <Table<InventoryFlow>
           rowKey="flowId"
           dataSource={flows}
           loading={flowQuery.isFetching}
-          pagination={false}
-          locale={{ emptyText: '暂无出入库流水' }}
+          columnWidthStorageKey="inventory-flows"
+          onReload={() => flowQuery.refetch()}
+          pagination={{ current: flowPage, pageSize: flowSize, total: flowQuery.data?.total ?? 0, showSizeChanger: true, onChange: (page, size) => { setFlowPage(size !== flowSize ? 1 : page); setFlowSize(size) } }}
+          locale={{ emptyText: '暂无符合筛选条件的流水' }}
+          toolbarTitle={flowScope === 'current' ? `当前仓库：${record?.warehouseName ?? '-'}` : '批次全部仓库'}
           columns={[
             {
               title: '时间',
@@ -509,37 +534,13 @@ export default function InventoryDetail(): JSX.Element {
                 </Typography.Text>
               ),
             },
+            { title: '仓库', dataIndex: 'warehouseName', width: 140 },
             { title: '操作人', dataIndex: 'operatorName', width: 120 },
             { title: '关联单据', dataIndex: 'orderNo', width: 140, render: (value) => value ?? '-' },
             { title: '备注', dataIndex: 'remark', render: (value) => value ?? '-' },
           ]}
         />
 
-        <DividerLabel text="流转时间线" />
-        <Timeline
-          items={flows.map((flow) => {
-            const meta = FLOW_TYPE_META[flow.flowType] ?? { label: '其他', color: 'default' }
-            return {
-              color: meta.color,
-              children: (
-                <Space size={8} wrap>
-                  <Typography.Text strong>{flow.operatedAt}</Typography.Text>
-                  <Tag color={meta.color}>{meta.label}</Tag>
-                  <Typography.Text type={flow.quantity >= 0 ? 'success' : 'danger'}>
-                    {flow.quantity >= 0 ? '+' : ''}
-                    {flow.quantity.toLocaleString()} {flow.unit}
-                  </Typography.Text>
-                  <Typography.Text type="secondary">
-                    {flow.operatorName ?? '-'} · {flow.remark ?? '-'}
-                  </Typography.Text>
-                </Space>
-              ),
-            }
-          })}
-        />
-        {flows.length === 0 ? (
-          <Empty description="暂无出入库流水" image={Empty.PRESENTED_IMAGE_SIMPLE} />
-        ) : null}
       </Card>
 
       {/* 出库 */}
@@ -560,11 +561,11 @@ export default function InventoryDetail(): JSX.Element {
           <Form.Item
             name="quantity"
             label="出库数量"
-            rules={[{ required: true, message: '请输入出库数量' }]}
+            rules={[{ required: true, message: '请输入出库数量' }, { type: 'number', min: 0.01, message: '数量必须大于 0' }]}
           >
             <InputNumber
               style={{ width: '100%' }}
-              min={0}
+              min={0.01}
               precision={2}
               placeholder={`当前库存 ${record.currentQty}${record.unit}`}
             />
@@ -603,10 +604,10 @@ export default function InventoryDetail(): JSX.Element {
             label="目标仓库"
             rules={[{ required: true, message: '请选择目标仓库' }]}
           >
-            <Select options={WAREHOUSE_OPTIONS} placeholder="请选择目标仓库" />
+            <Select options={WAREHOUSE_OPTIONS.filter((option) => option.value !== record.warehouseName)} placeholder="请选择目标仓库" />
           </Form.Item>
-          <Form.Item name="quantity" label="调拨数量">
-            <InputNumber style={{ width: '100%' }} min={0} precision={2} />
+          <Form.Item name="quantity" label="调拨数量" rules={[{ required: true, message: '请输入调拨数量' }]}>
+            <InputNumber style={{ width: '100%' }} min={0.01} precision={2} />
           </Form.Item>
           <Form.Item name="locationCode" label="目标库位">
             <Input placeholder="如 B-02-01（可选）" />
@@ -616,21 +617,14 @@ export default function InventoryDetail(): JSX.Element {
           </Form.Item>
         </Form>
       </Modal>
+      <Modal title="编辑库存资料" open={editOpen} onCancel={() => setEditOpen(false)} confirmLoading={editMutation.isPending} onOk={() => { editForm.validateFields().then((values) => editMutation.mutate(values)).catch(() => undefined) }} destroyOnClose>
+        <Form form={editForm} layout="vertical">
+          <Form.Item name="safeQty" label="安全库存" rules={[{ required: true }, { type: 'number', min: 0 }]}><InputNumber min={0} precision={2} style={{ width: '100%' }} /></Form.Item>
+          <Form.Item name="locationCode" label="库位编号"><Input maxLength={64} /></Form.Item>
+          <Form.Item name="remark" label="备注"><Input.TextArea rows={3} maxLength={500} showCount /></Form.Item>
+        </Form>
+      </Modal>
     </PageContainer>
   )
 }
 
-/**
- * 时间线小标题。
- *
- * @param props 组件属性
- * @param props.text 标题文案
- * @returns 标题节点
- */
-function DividerLabel({ text }: { text: string }): JSX.Element {
-  return (
-    <Typography.Title level={5} style={{ marginTop: 24, marginBottom: 12 }}>
-      {text}
-    </Typography.Title>
-  )
-}

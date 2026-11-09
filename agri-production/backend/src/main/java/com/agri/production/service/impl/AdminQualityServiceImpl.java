@@ -32,13 +32,16 @@ public class AdminQualityServiceImpl implements IAdminQualityService {
     private static final int LAB_STATUS_COOPERATING = 1;
     private static final int LAB_STATUS_TERMINATED = 0;
 
+    private final com.agri.production.service.IAdminTraceService adminTraceService;
+
     private final TestingLabMapper testingLabMapper;
     private final InspectionMapper inspectionMapper;
     private final HarvestBatchMapper harvestBatchMapper;
 
     public AdminQualityServiceImpl(TestingLabMapper testingLabMapper,
                                    InspectionMapper inspectionMapper,
-                                   HarvestBatchMapper harvestBatchMapper) {
+                                   HarvestBatchMapper harvestBatchMapper, com.agri.production.service.IAdminTraceService adminTraceService) {
+        this.adminTraceService = adminTraceService;
         this.testingLabMapper = testingLabMapper;
         this.inspectionMapper = inspectionMapper;
         this.harvestBatchMapper = harvestBatchMapper;
@@ -143,8 +146,8 @@ public class AdminQualityServiceImpl implements IAdminQualityService {
             // 与 admin/trace 的召回同一口径：批次不存在必须失败，不能静默返回一个"看起来成功"的空结果
             throw new BusinessException(404, "采收批次不存在：" + batchId);
         }
-        batch.setStatus(BATCH_STATUS_FROZEN);
-        harvestBatchMapper.updateById(batch);
+        adminTraceService.recall(batchId);
+        batch = harvestBatchMapper.selectById(id);
         log.info("不合格批次召回（冻结）：batchId={} batchNo={}", id, batch.getBatchNo());
         Map<String, Object> row = new LinkedHashMap<>();
         row.put("batchId", batch.getBatchId());

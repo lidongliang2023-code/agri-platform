@@ -54,7 +54,7 @@
     </div>
 
     <div class="card">
-      <div class="card-head"><h3>结算批次</h3><span class="muted">批次号不可重复，渠道端可查看与自己相关的批次</span></div>
+      <div class="card-head"><h3>结算批次</h3><span class="muted">批次号不可重复，商家端可查看与自己相关的批次</span></div>
       <el-table :data="rows" border>
         <el-table-column prop="batchNo" label="批次号" width="210" />
         <el-table-column prop="channelId" label="渠道" width="180" show-overflow-tooltip />

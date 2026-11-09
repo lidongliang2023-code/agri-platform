@@ -35,15 +35,15 @@ public class OrderShipmentController {
 
     /* ---------------- 供应商 ---------------- */
 
-    @GetMapping("/api/supplier/order/{id}/shipment")
-    @OperatorOnly("s2b2c:supplier")
+    @GetMapping("/api/platform/supply/order/{id}/shipment")
+    @OperatorOnly("s2b2c:platform")
     public ResponseEntity<Map<String, Object>> supplierLatest(@PathVariable Long id) {
         requireSupplierOrder(id);
         return ResponseEntity.ok(shipmentService.latest(id));
     }
 
-    @PutMapping("/api/supplier/order/{id}/shipment/propose")
-    @OperatorOnly("s2b2c:supplier")
+    @PutMapping("/api/platform/supply/order/{id}/shipment/propose")
+    @OperatorOnly("s2b2c:platform")
     public ResponseEntity<Map<String, Object>> supplierPropose(@PathVariable Long id,
                                                                @RequestParam String logisticsNo,
                                                                @RequestParam(required = false) String company) {
@@ -51,23 +51,23 @@ public class OrderShipmentController {
         return ResponseEntity.ok(shipmentService.propose(id, "SUPPLIER", supplier.getId(), logisticsNo, company));
     }
 
-    @PutMapping("/api/supplier/order/{id}/shipment/confirm")
-    @OperatorOnly("s2b2c:supplier")
+    @PutMapping("/api/platform/supply/order/{id}/shipment/confirm")
+    @OperatorOnly("s2b2c:platform")
     public ResponseEntity<Map<String, Object>> supplierConfirm(@PathVariable Long id) {
         Supplier supplier = requireSupplierOrder(id);
         return ResponseEntity.ok(shipmentService.confirm(id, "SUPPLIER", supplier.getId()));
     }
 
-    @PutMapping("/api/supplier/order/{id}/shipment/reject")
-    @OperatorOnly("s2b2c:supplier")
+    @PutMapping("/api/platform/supply/order/{id}/shipment/reject")
+    @OperatorOnly("s2b2c:platform")
     public ResponseEntity<Map<String, Object>> supplierReject(@PathVariable Long id,
                                                               @RequestParam String reason) {
         Supplier supplier = requireSupplierOrder(id);
         return ResponseEntity.ok(shipmentService.reject(id, "SUPPLIER", supplier.getId(), reason));
     }
 
-    @PutMapping("/api/supplier/order/{id}/shipment/withdraw")
-    @OperatorOnly("s2b2c:supplier")
+    @PutMapping("/api/platform/supply/order/{id}/shipment/withdraw")
+    @OperatorOnly("s2b2c:platform")
     public ResponseEntity<Map<String, Object>> supplierWithdraw(@PathVariable Long id) {
         Supplier supplier = requireSupplierOrder(id);
         return ResponseEntity.ok(shipmentService.withdraw(id, "SUPPLIER", supplier.getId()));

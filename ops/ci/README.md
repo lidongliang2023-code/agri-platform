@@ -25,20 +25,23 @@ node ops/ci/verify.mjs --skip shared   # 跳过某一组（CI 里单独跑 share
 | `gateway` | `nginx -t` 校验 `ops/gateway/conf/nginx.conf` | 配置可加载；无 nginx 或无非 ASCII 前缀时跳过并说明 |
 | `bucket` | 发布产物完整性：指针 → 版本目录 → index.html 引用的资源 | 三者一致才通过；专门盯"指针切过去了、资源却 404"的白屏发布 |
 | `apps`（`--build`） | 逐个前端工程跑它自己的 build | 退出码 0 |
+| `font` | 可见文字的最小字号（端清单取自 `publish.mjs` 注册表，不发版的旧目录不算） | 任何 `font-size` 低于 12px（uni-app 低于 24rpx）即失败；`pages.json` 的 `tabBar` 没写 `fontSize`（uni-app 缺省 10px）也算失败 |
 
 ## CI 的已知边界（不是配置疏漏，是依赖顺序）
 
-CI 检出的是**已入库**的内容，而下列目录目前尚未纳入版本控制：
+CI 检出的是**已入库**的内容。下列目录此前"未纳入版本控制"，本条说明就是照那个状态写的；
+现在它们已经在库里（`git ls-files` 实测 agri-master-data 521、agri-s2b2c 364、agri-finance 148 个文件），
+所以覆盖面已经扩大，`workspace` 组与 `--build` 会自动带上它们：
 
 ```
-agri-master-data/  agri-finance/  agri-s2b2c/        # 以及 agri-iot/ agri-trade/ 的在途改动
+agri-master-data/  agri-finance/  agri-s2b2c/        # 已入库（2026-11-03 复核）
 ```
 
-因此：
+因此仍然需要注意的两点：
 
-- CI **不跑根目录 `pnpm install`** —— workspace 文件登记了这些成员，成员不在就会安装失败；
-  改为让共享包脱离 workspace 单独安装（`--ignore-workspace`，本地已实测 43 个用例照跑）。
-- CI **不校验**这些子系统前端的构建与接入 —— 它们入库后会被 `workspace` 组与 `--build` 自动覆盖，
-  不需要改这份流水线。
+- 共享包**脱离 workspace 单独安装**（`--ignore-workspace`）这条做法先保留：它是在成员缺失的年代定下的，
+  改成走根 install 需要单独验一次 CI runner 上的中文路径与 pnpm 包装脚本问题，不属于字号这一轮。
+- 各子系统的 `target/`、`dist/` 仍有历史遗留被跟踪（`agri-*/backend/target`），
+  它们会进 CI 检出、拖慢构建，是否移出版本控制需要一个单独的决定。
 
 也就是说：**这份门禁的覆盖面受限于版本库的覆盖面**。子系统目录入库越早，被守住的就越多。

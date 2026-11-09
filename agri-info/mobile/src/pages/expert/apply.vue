@@ -314,7 +314,7 @@ function toVerify() {
 
 .head-desc {
   color: rgba(255, 255, 255, 0.68);
-  font-size: 21rpx;
+  font-size: 24rpx;
   line-height: 1.7;
 }
 
@@ -327,12 +327,12 @@ function toVerify() {
 
 .step {
   color: rgba(255, 255, 255, 0.55);
-  font-size: 20rpx;
+  font-size: 24rpx;
 }
 
 .verify-link {
   margin-top: 10rpx;
-  font-size: 21rpx;
+  font-size: 24rpx;
   text-decoration: underline;
 }
 
@@ -374,7 +374,7 @@ function toVerify() {
   border-radius: 12rpx;
   background: #eef7f2;
   color: #0e5233;
-  font-size: 21rpx;
+  font-size: 24rpx;
 }
 
 .agree {
@@ -395,7 +395,7 @@ function toVerify() {
   border-radius: 8rpx;
   background: #ffffff;
   color: #ffffff;
-  font-size: 20rpx;
+  font-size: 24rpx;
 }
 
 .checkbox.checked {
@@ -405,7 +405,7 @@ function toVerify() {
 
 .agree-text {
   color: #718277;
-  font-size: 20rpx;
+  font-size: 24rpx;
   line-height: 1.6;
 }
 

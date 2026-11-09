@@ -1,0 +1,164 @@
+.production-workspace { min-width: 0; }
+.production-workspace-tabbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 6px 8px;
+  margin-bottom: 16px;
+  background: #fff;
+  border-bottom: 1px solid #e0e9e3;
+  border-radius: 8px;
+}
+.production-workspace-tabbar > .ant-tabs { flex: 1; min-width: 0; }
+.production-workspace-tabbar .ant-tabs-nav { margin: 0; }
+.production-workspace-tabbar .ant-tabs-nav::before { border: 0; }
+.production-workspace-tabbar .ant-tabs-content-holder { display: none; }
+.production-workspace-tabbar .ant-tabs-tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 12px !important;
+  margin: 0 6px 0 0 !important;
+  border: 1px solid transparent !important;
+  border-radius: 6px !important;
+  background: transparent !important;
+  color: #61766a;
+  transition: background-color .16s, border-color .16s, opacity .16s;
+}
+.production-workspace-tabbar .ant-tabs-tab:hover { background: #f5f8f6 !important; }
+.production-workspace-tabbar .ant-tabs-tab-active {
+  background: #eaf5ee !important;
+  border-color: #cee5d6 !important;
+}
+.production-workspace-tabbar .ant-tabs-tab-btn {
+  max-width: 200px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  line-height: 20px;
+  font-size: 14px;
+}
+.production-workspace-tabbar .ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: #23744c !important;
+  font-weight: 600;
+  text-shadow: none;
+}
+.production-workspace-tabbar .ant-tabs-tab-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-inline-start: 8px;
+  padding: 0;
+  border-radius: 4px;
+  color: #7c8e83;
+}
+.production-workspace-tabbar .ant-tabs-tab-remove:hover { background: #dcebe1; color: #23744c; }
+.production-workspace-tabbar > .ant-btn {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  margin: 0;
+  border-inline-start: 1px solid #e0e9e3;
+  border-radius: 0 6px 6px 0;
+  color: #61766a;
+}
+.production-workspace-pane[hidden] { display: none !important; }
+.production-workspace-pane { min-width: 0; }
+@media (max-width: 767px) {
+  .production-workspace-tabbar { gap: 4px; padding: 5px 6px; margin-bottom: 12px; min-height: 44px; }
+  .production-workspace-tabbar .ant-tabs-tab { padding-inline: 10px !important; margin-inline-end: 4px !important; }
+  .production-workspace-tabbar .ant-tabs-tab-btn { max-width: 128px; }
+}
+
+.production-workspace-tab-label {
+  position: relative;
+  display: block;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: grab;
+  user-select: none;
+}
+.production-workspace-tab-label:active {
+  cursor: grabbing;
+}
+.production-workspace-tab-label.is-dragging {
+  opacity: 0.4;
+  cursor: grabbing;
+}
+
+/* 拖拽排序指示器 */
+.production-workspace-tabbar .ant-tabs-tab:has(.is-dragging) {
+  opacity: 0.45;
+  border-style: dashed !important;
+  border-color: #9ac2ab !important;
+}
+.production-workspace-tabbar .ant-tabs-tab:has(.is-drop-left)::before,
+.production-workspace-tab-label.is-drop-left::before {
+  content: '';
+  position: absolute;
+  left: -4px;
+  top: 4px;
+  bottom: 4px;
+  width: 3px;
+  background: #23744c;
+  border-radius: 2px;
+  z-index: 10;
+  box-shadow: 0 0 4px rgba(35, 116, 76, 0.4);
+}
+.production-workspace-tabbar .ant-tabs-tab:has(.is-drop-right)::after,
+.production-workspace-tab-label.is-drop-right::after {
+  content: '';
+  position: absolute;
+  right: -4px;
+  top: 4px;
+  bottom: 4px;
+  width: 3px;
+  background: #23744c;
+  border-radius: 2px;
+  z-index: 10;
+  box-shadow: 0 0 4px rgba(35, 116, 76, 0.4);
+}
+
+@media (max-width: 767px) {
+  .production-workspace-tab-label { max-width: 128px; }
+}
+
+/* 与顶部栏连为一体：页签不进入业务内容的滚动区域。 */
+.agri-content > .production-workspace {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.agri-content .production-workspace-tabbar {
+  flex: none;
+  min-height: 44px;
+  padding: 4px 24px;
+  margin: 0;
+  border-radius: 0;
+  background: #fff;
+  border-bottom: 1px solid #e0e9e3;
+  z-index: 10;
+}
+.agri-content .production-workspace-pane {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 16px 24px 24px;
+  scrollbar-gutter: stable;
+}
+@media (max-width: 900px) {
+  .agri-content .production-workspace-tabbar { padding-inline: 14px; }
+  .agri-content .production-workspace-pane { padding: 14px; }
+}
+@media (max-width: 767px) {
+  .agri-content .production-workspace-tabbar { min-height: 42px; padding-block: 4px; margin: 0; }
+}

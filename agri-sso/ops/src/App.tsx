@@ -20,6 +20,7 @@ import { PrivacyRequestPage, FeedbackPage } from './pages/CompliancePages'
 import { StatsPage, ConfigPage, AuditLogPage } from './pages/SystemPages'
 import type { OpsPageKey } from './types'
 import './styles.css'
+import {HealthMonitorPage} from './pages/HealthMonitorPage'
 
 function resolvePage(route: RouteState): JSX.Element {
   switch (route.page) {
@@ -44,6 +45,7 @@ function resolvePage(route: RouteState): JSX.Element {
     case 'privacy-request': return <PrivacyRequestPage />
     case 'feedback-manage': return <FeedbackPage />
     case 'stats': return <StatsPage />
+    case 'health-monitor': return <HealthMonitorPage />
     case 'config': return <ConfigPage />
     case 'audit-log': return <AuditLogPage />
     default: return <DashboardPage />

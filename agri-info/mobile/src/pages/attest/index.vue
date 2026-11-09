@@ -145,7 +145,7 @@ function iconOf(contentType: string) {
   border: 1rpx solid rgba(255, 255, 255, 0.18);
   border-radius: 16rpx;
   background: rgba(255, 255, 255, 0.1);
-  font-size: 22rpx;
+  font-size: 24rpx;
   text-align: center;
 }
 

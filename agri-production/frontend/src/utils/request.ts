@@ -239,13 +239,46 @@ export interface RequestOptions extends AxiosRequestConfig {
   silent?: boolean
 }
 
-/** 请求拦截：注入 token */
+/** 实时读取服务端准入判断，不缓存审核状态。 */
+export async function productionAdmission(): Promise<{ granted: boolean; reason?: string }> {
+  const state = useAuthStore.getState()
+  const response = await axios.get('/api/v1/sso/account/capabilities', {
+    timeout: 15000, withCredentials: true,
+    headers: state.token ? { Authorization: `Bearer ${state.token}` } : {},
+    params: { merchantId: state.userInfo?.tenantId || undefined },
+  })
+  if (response.data?.code !== 0) throw new Error(response.data?.message || '生产准入校验失败，请稍后重试')
+  const rows = response.data?.data?.capabilities as Array<{ code: string; granted: boolean; reason?: string }> | undefined
+  const result = rows?.find(row => row.code === 'production.manage')
+  if (!result) throw new Error('生产准入结果缺失，请稍后重试')
+  return result
+}
+
+/** 请求拦截：注入 token，并对普通生产写操作执行同源准入判断。 */
 function installRequestInterceptor(instance: AxiosInstance): void {
   instance.interceptors.request.use(
-    (config: InternalAxiosRequestConfig) => {
+    async (config: InternalAxiosRequestConfig) => {
       const token = useAuthStore.getState().token
       if (token) {
         config.headers.Authorization = `Bearer ${token}`
+      }
+      const subjectAtStart = useAuthStore.getState().userInfo?.tenantId
+      if (instance === request && subjectAtStart && !/^\/?admin(?:\/|$)/.test(config.url || '')) {
+        config.headers['X-Merchant-Id'] = subjectAtStart
+      }
+      if (instance === request && !/^(get|head|options)$/i.test(config.method || 'get')
+          && !/^\/?admin(?:\/|$)/.test(config.url || '')) {
+        const subject = useAuthStore.getState().userInfo?.tenantId
+        if (subject) config.headers['X-Merchant-Id'] = subject
+        const admission = await productionAdmission()
+        if (subjectAtStart !== useAuthStore.getState().userInfo?.tenantId || token !== useAuthStore.getState().token) {
+          throw new Error('账号或经营主体已切换，本次操作已取消')
+        }
+        if (!admission.granted) {
+          const reason = admission.reason || '当前主体尚未具备生产写入权限'
+          message.warning(reason)
+          throw new Error(reason)
+        }
       }
       return config
     },

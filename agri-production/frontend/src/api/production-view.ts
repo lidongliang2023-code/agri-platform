@@ -1,5 +1,5 @@
 /**
- * 用户端「首页看板 / 消息中心 / 团队管理 / 种养计划」取数层
+ * 用户端「首页看板 / 消息中心 / 团队管理 / 农事计划」取数层
  *
  * 之所以独立一层，而不是直接复用 `src/api/*` 中已有的类型化函数：
  * 1. core-platform 分页入参为 `page/size`，而既有 API 传的是 `pageNum/pageSize`，
@@ -688,10 +688,10 @@ export async function fetchPermissions(): Promise<Permission[]> {
     }))
 }
 
-/* ==================== 种养计划 ==================== */
+/* ==================== 农事计划 ==================== */
 
 /**
- * 分页查询种养计划
+ * 分页查询农事计划
  * @param params 查询参数
  * @returns 分页计划列表
  */
@@ -718,7 +718,7 @@ export async function fetchPlans(params: {
 }
 
 /**
- * 查询种养计划详情
+ * 查询农事计划详情
  * @param planId 计划 ID
  * @returns 计划详情
  */
@@ -788,7 +788,7 @@ function toDateString(value: unknown): string | undefined {
 }
 
 /**
- * 新增种养计划（按后端 PlanInfoEntity 字段命名）
+ * 新增农事计划（按后端 PlanInfoEntity 字段命名）
  * @param payload 计划入参
  * @returns 新建计划 ID
  */
@@ -816,7 +816,7 @@ export async function createPlanInfo(payload: {
 }
 
 /**
- * 更新种养计划
+ * 更新农事计划
  * @param planId 计划 ID
  * @param payload 更新内容
  * @returns void
@@ -850,7 +850,7 @@ export async function updatePlanInfo(
 }
 
 /**
- * 删除种养计划
+ * 删除农事计划
  * @param planId 计划 ID
  * @returns void
  */
@@ -946,12 +946,39 @@ export async function terminatePlan(planId: string): Promise<void> {
 }
 
 /**
- * 提交种养计划审批（→ 5 待审批，并生成运营端审批单）。
+ * 提交农事计划审批（→ 5 待审批，等待本主体有审批权限的成员处理）。
  * @param planId 计划 ID
  * @returns 最新计划
  */
 export async function submitPlanApproval(planId: string): Promise<Plan> {
   return http.post<Plan>(`/plans/${planId}/submit`)
+}
+
+/**
+ * 查询当前用户是否有农事计划审批权限。
+ * 前端据此决定「待审批」计划是否展示审批入口，后端审批接口仍会二次校验。
+ */
+export async function fetchPlanApprovalPermission(): Promise<boolean> {
+  return http.get<boolean>('/plans/approval-permission', undefined, { silent: true })
+}
+
+/**
+ * 用户端审批通过农事计划（待审批 → 进行中）。
+ * @param planId 计划 ID
+ * @param approver 审批人展示名
+ * @param comment 审批意见
+ * @returns 最新计划
+ */
+export async function approvePlan(
+  planId: string,
+  approver?: string,
+  comment?: string,
+): Promise<Plan> {
+  const params = new URLSearchParams()
+  if (approver) params.set('approver', approver)
+  if (comment) params.set('comment', comment)
+  const query = params.toString()
+  return http.post<Plan>(`/plans/${planId}/approve${query ? `?${query}` : ''}`)
 }
 
 /** 农事日历条目视图模型 */
@@ -1080,15 +1107,21 @@ export async function fetchCalendarEntries(params: {
   const unavailableReasons: string[] = []
   const { startDate: rangeStart, endDate: rangeEnd } = params
 
+  async function readAllPages(path: string, size: number): Promise<unknown[]> {
+    const result: unknown[] = []
+    for (let pageNum = 1; ; pageNum++) {
+      const raw = await http.get<unknown>(path, { ...buildPageParams(pageNum, size, { keyword: '' }), farmId: params.farmId }, { silent: true })
+      const page = normalizePageResult<unknown>(raw, pageNum, size)
+      result.push(...page.list)
+      if (result.length >= page.total || page.list.length === 0) return result
+      if (pageNum >= 500) throw new Error('排期数据量超出读取上限，请缩小农场范围')
+    }
+  }
+
   // 1) 农事任务：区间重叠 + 逐日展开
   try {
-    const raw = await http.get<unknown>(
-      '/tasks',
-      buildPageParams(1, 200, { keyword: '' }),
-      { silent: true },
-    )
-    const page = normalizePageResult<unknown>(raw, 1, 200)
-    for (const item of page.list) {
+    const tasks = await readAllPages('/tasks', 200)
+    for (const item of tasks) {
       const task = normalizeTask(item)
       const taskStart = task.planStartDate ? task.planStartDate.slice(0, 10) : ''
       if (!taskStart) continue
@@ -1128,13 +1161,8 @@ export async function fetchCalendarEntries(params: {
 
   // 2) 计划生育期阶段：同为区间重叠 + 逐日展开
   try {
-    const planRaw = await http.get<unknown>(
-      '/plans',
-      buildPageParams(1, 100, { keyword: '' }),
-      { silent: true },
-    )
-    const planPage = normalizePageResult<unknown>(planRaw, 1, 100)
-    for (const item of planPage.list) {
+    const plans = await readAllPages('/plans', 100)
+    for (const item of plans) {
       const plan = normalizePlan(item)
       const stages = await fetchPlanStages(plan.planId)
       for (const stage of stages) {
@@ -1168,7 +1196,7 @@ export async function fetchCalendarEntries(params: {
   } catch (error) {
     // 不再静默：计划阶段这一半缺失同样是"少了一块排期"而不是"没有排期"
     unavailableReasons.push(
-      `${describeSourceFailure('种养计划阶段', error)}——本次日历里不会有生育期阶段排期，这不是"这段时间没有阶段"`,
+      `${describeSourceFailure('农事计划阶段', error)}——本次日历里不会有生育期阶段排期，这不是"这段时间没有阶段"`,
     )
   }
 

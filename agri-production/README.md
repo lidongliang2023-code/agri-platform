@@ -268,7 +268,75 @@ node ops/gateway/scripts/publish.mjs --app prod --version 20261102-prod-menu-far
 删掉台账最后一行会把两列一起清空，这是设计（派生缓存不能比它的来源活得久）。
 回归见 `scripts/e2e-plot-crop.mjs`（登记品种 → 两列落地 → 列表显示 → 编辑不丢 → 清空台账后两列清掉 → 停用/启用口径）。
 
+## 加工环节进入溯源链路（2026-11-03 接通）
+
+「种植 → 采收 → **加工**」这一段以前在链路里是空的：加工工序既没有业务表也没有写入口，
+于是商城详情页与监管核验页看到的"全链路"永远停在采收入库，页面却写着"加工质检可查"。现在：
+
+- 新表 `agri_prod_process_record`（`schema-mysql.sql` 建表 + 两条演示工序：预冷、分级）。
+  一行 = 一道工序挂在某个采收批次上（`batch_id` 为主，`batch_no` 冗余留给人读）。
+- 写入口 `/api/v1/production/process`（`ProcessController`）：按批次取、分页、登记、编辑、逻辑删除。
+  **身份一律由令牌解析**（`TenantContextService.currentTenantId()`），入参里没有 `tenantId` ——
+  收这个参数等于允许"替别人登记加工工序"。
+- 加工类型词表只有一处：`PRECOOL / SORTING / GRADING / DRYING / PACKAGING / CUTING`（中文文案同源），
+  状态 `DOING / DONE / CANCELED`；词表外的取值报 400 并把合法值列给你，不静默落成某个默认类型。
+- 加工单号 `PR + 当天日期 + 4 位随机`，租户内查重、最多重试 10 次；撞不上空位就报错，
+  而不是发一个重号让人事后分不清是哪一道工序。
+- 链路节点补两类：`plantingNodes()` 由地块种养品种台账（`agri_prod_plot_crop` 最早一条）派生种植节点，
+  加工节点读上面这张表（`stage=process`）。**属主全链路与公众核验调的是同一个方法**，
+  所以属主页面、监管核验页、商城详情页看到的是同一批节点，不会各拼一套。
+- 存证业务类型词表加 `PROCESS`（`ChainRecordServiceImpl.ANCHORABLE_TYPES` + 业务存在性校验），
+  加工工序可以按业务键上链；链上状态仍由 `ChainEvidenceRule` 一处判定。
+- 用户端入口：菜单「质量检测与溯源 → 加工记录」，路由 `/production/process`。
+
+回归见 `scripts/e2e-traceability-loop.mjs` 第 4 节：按批次取到演示工序 → 词表外的类型被拒 →
+登记一道 `PACKAGING` 后全链路立刻多出这个加工节点 → 删除后节点同步少掉（自清理，不留残留）。
+
+## 产销对接归位到用户端（2026-11-03 口径纠正）
+
+产销对接的后端**一直**是按令牌解析经营主体的：`P2tController` 每个端点都取
+`TenantContextService.currentTenantId()`（转发到平台 `/api/v1/platform/merchants/mine` 换主体号），
+入参里没有 `tenantId`，也没有 `@OperatorOnly`。但 9 个页面挂在**运营端**
+`/admin/production/p2t/**` —— 于是"能力是属主的，入口是平台的"：属主在自己端里既看不到也发不起供给意向，
+反而平台运营方能替某个主体发布与管理意向。这与产品口径相反：**产销对接是两个经营主体之间的事**
+（生产主体发起，交易撮合平台的供应商承接），平台运营方不做对接。
+
+归位后的形态：
+
+- 页面：`pages/admin/p2t/**` → `pages/user/p2t/**`（9 页整体搬，不做"两边都留一份"）；
+- 路由：从 `ADMIN_ROUTES` 移进 `USER_ROUTES`，路径 `/production/p2t/**`
+  （页面条数仍由路由表派生，不写死）；菜单同理：用户端新增「产销对接」组，运营端那一组删除；
+- 页面内跳转（批次页 →「去发布意向」、总览 →「查看供给单 / 去处置」）同步改到 `/production/p2t/**`，
+  旧路径不复用：`/admin/production/p2t` 现在就是生产端的 404 页（实测截图 `outputs/p2t-owner-side.png`）；
+- 「边界与归位说明」页的归属表按新口径重写：生产端 8 项 owner 改成 `生产管理 · 用户端（经营主体发起）`，
+  承接侧（供给池 / 建品上架 / 订单回写）改成 `交易撮合 · 供应商端（卖家主体承接）`，
+  平台只留 `产销对账`、`对接规则配置` 两项且明确标注"平台兜底，不做对接"。
+
+点检 `scripts/check-p2t-owner-side-ui.mjs`（18 项全绿）：菜单与页面渲染 → KPI 与接口同源（不是前端写死的数）→
+列表显示真实供给单号 → 属主在本页**真的发起**一张意向（表单选批次→品类联动→填可供量→提交，
+接口回读 +1）→ 运营端旧地址不再是 p2t 页 → 用例数据清理。清理这一步踩过一次：
+`DELETE /p2t/offers/{id}` 是**逻辑删除**，按 `deleted=0` 计数会把它算成"已清理"（假绿），
+所以核对改成"任何 deleted 状态都为 0"并物理清掉本轮用例行。
+
+承接侧同日已归位（2026-11-03 同日第二轮）：交易端把 `pool → audit → build → price` 从运营端搬到
+**卖家中心**（`/api/trade/seller/p2t/**`，商品 `seller_id` 写承接方卖家主体号），
+旧的 `/api/trade/admin/p2t/**` 五条对接路由返回 **410**；本侧不用改代码就能吃到这个变化——
+`agri_p2t_offer.trade_status` 的回写值、`auditor` 前缀（`供应商承接：…`）与 `product_code`
+都由交易端在承接时写，生产端仍只读。端到端判据见 `agri-trade/README.md`「产销对接改由供应商主体承接」
+与 `scripts/e2e-p2t-claim-loop.mjs`（29 条全绿；存量单分支 30 条全绿）。
+本页「供给意向发布」的成功提示也已改成**等待供应商在交易撮合平台承接**（不再是"等待交易侧审核"）。
+
 ## 已知边界
+
+- **产销对接的"承接结果"在生产端只看到三个字段**：`trade_status`、`product_code`、`auditor`，
+  谁在什么时候以多少量上架的明细都在交易域（`agri_trade_product.source_offer_no`），
+  生产端要查得跨模块调；供应商"婉拒/退回"目前没有回写通道，所以属主看不到"没人接"的原因。
+
+- **加工记录只有属主一侧能维护**：菜单、路由与端点都挂在用户端（`/production/process`），
+  运营端（`/admin/production`）既没有页面也没有转发端点 —— 监管/运营目前只能从核验视图看到加工节点，
+  不能替企业补登或更正工序。
+- 登记加工工序**不动库存**：`input_quantity / output_quantity` 只是登记值，成品入库仍要走
+  采收后的入库单（`成品入库` 节点）。想按加工损耗自动扣增库存，得先定义损耗口径与单据关系。
 
 - 溯源码表上的 `blockchain_tx_hash / blockchain_block_height` 是历史遗留列：**没有任何写路径**
   维护它们（全为空），链上凭证一律以存证表为准。列暂不删（怕动到存量导出），也不再作为判定依据。

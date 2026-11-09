@@ -84,7 +84,11 @@ public class AdminFoodSafetyServiceImpl implements IAdminFoodSafetyService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public AdminFsAlertVO handleAlert(String alertId, String measure, String remark) {
-        FoodSafetyAlert alert = requireAlert(alertId);
+        FoodSafetyAlert alert = alertId == null ? null : alertMapper.lockById(alertId.trim());
+        if (alert == null) throw new BusinessException(404, "告警不存在");
+        if (STATUS_DONE.equals(alert.getStatus())) throw new BusinessException(409, "已结案记录不可重复修改");
+        if (remark == null || remark.isBlank() || remark.length() > 200 || measure == null || measure.length() > 100)
+            throw new BusinessException(400, "请填写200字以内的实际处理进展及100字以内的措施");
         if (measure == null || measure.isBlank()) {
             throw new BusinessException(400, "请填写处置措施");
         }
@@ -92,7 +96,8 @@ public class AdminFoodSafetyServiceImpl implements IAdminFoodSafetyService {
         if (remark != null && !remark.isBlank()) {
             alert.setHandleRemark(remark.trim());
         }
-        alert.setStatus(STATUS_DONE);
+        alert.setHandleBy(currentOperatorId());
+        alert.setStatus(STATUS_PROCESSING);
         alert.setHandleTime(LocalDateTime.now());
         alert.setUpdateTime(LocalDateTime.now());
         alertMapper.updateById(alert);
@@ -138,18 +143,22 @@ public class AdminFoodSafetyServiceImpl implements IAdminFoodSafetyService {
         if (anomalyId == null || anomalyId.isBlank()) {
             throw new BusinessException(400, "缺少异常编号");
         }
-        CirculationAnomaly anomaly = circulationMapper.selectById(anomalyId.trim());
+        CirculationAnomaly anomaly = circulationMapper.lockById(anomalyId.trim());
         if (anomaly == null) {
             throw new BusinessException(404, "流通异常记录不存在：" + anomalyId);
+        }
+        if ("done".equalsIgnoreCase(anomaly.getStatus())) {
+            throw new BusinessException(400, "该流通异常已处置完成，禁止重复改写");
         }
         if (action == null || action.isBlank()) {
             throw new BusinessException(400, "请选择处置方式");
         }
         anomaly.setMeasure(action.trim());
-        if (remark != null && !remark.isBlank()) {
-            anomaly.setHandleRemark(remark.trim());
-        }
-        anomaly.setStatus("done");
+        if (remark == null || remark.isBlank() || remark.length() > 200 || action.length() > 100)
+            throw new BusinessException(400, "请填写200字以内的实际处理进展及100字以内的措施");
+        anomaly.setHandleRemark(remark.trim());
+        anomaly.setHandleBy(currentOperatorId());
+        anomaly.setStatus("processing");
         anomaly.setHandleTime(LocalDateTime.now());
         anomaly.setUpdateTime(LocalDateTime.now());
         circulationMapper.updateById(anomaly);
@@ -329,4 +338,11 @@ public class AdminFoodSafetyServiceImpl implements IAdminFoodSafetyService {
         }
         return alert;
     }
+    private static Long currentOperatorId() {
+        String id = com.agri.production.service.TenantContextService.currentUserId();
+        if (id == null || id.isBlank()) throw new BusinessException(401, "无法确认当前操作人身份");
+        try { return Long.valueOf(id); }
+        catch (NumberFormatException e) { throw new BusinessException(401, "操作人身份无效"); }
+    }
+
 }

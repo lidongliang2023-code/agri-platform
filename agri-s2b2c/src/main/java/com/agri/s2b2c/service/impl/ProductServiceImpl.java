@@ -112,6 +112,7 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
         product.setSales(0);
         product.setCreateTime(LocalDateTime.now());
         product.setUpdateTime(LocalDateTime.now());
+        normalizeBatchBinding(product);
         return save(product);
     }
 
@@ -122,7 +123,21 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
         product.setStatus(existing.getStatus());
         product.setSales(existing.getSales());
         product.setUpdateTime(LocalDateTime.now());
+        normalizeBatchBinding(product);
         return updateById(product);
+    }
+
+    /**
+     * 「未绑定生产批次」在库里只有一个写法：NULL。
+     *
+     * <p>供应商在编辑页清空批次时提交的是空串；{@code prod_batch_no} 的更新策略是 IGNORED
+     * （为的是"清空能真的写回去"），空串会原样落库。届时同一列既有 NULL 又有 ''，
+     * 每个统计都得写两种条件——现在库里 11 行全是 NULL，就在这里把它守住。</p>
+     */
+    private static void normalizeBatchBinding(Product product) {
+        if (product.getProdBatchNo() != null && product.getProdBatchNo().isBlank()) {
+            product.setProdBatchNo(null);
+        }
     }
 
     @Override

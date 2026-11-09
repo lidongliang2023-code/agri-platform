@@ -1,3 +1,5 @@
+import Card from '@/components/SectionCard'
+import './harvests.css'
 /**
  * 页面名称：采收详情
  * 路由路径：/production/harvests/:harvestId
@@ -14,11 +16,10 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { PageContainer } from '@ant-design/pro-components'
+import PageContainer from '@/components/ProductionPageContainer'
 import {
   Alert,
   Button,
-  Card,
   Empty,
   Form,
   Input,
@@ -34,6 +35,7 @@ import {
 import { ArrowLeftOutlined, InboxOutlined, PrinterOutlined } from '@ant-design/icons'
 import { DetailInfoGrid, DetailMetricGrid } from '@/components'
 import useFarmStore from '@/store/farm'
+import useAuthStore from '@/store/auth'
 import { inboundHarvest, queryHarvest } from '@/api/harvests'
 import type { HarvestBatch, InboundStatus } from '@/types'
 import {
@@ -63,6 +65,7 @@ export default function Detail(): JSX.Element {
   const { harvestId } = useParams<{ harvestId: string }>()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const subjectId = useAuthStore((state) => state.userInfo?.tenantId)
   const currentFarm = useFarmStore((state) => state.currentFarm)
 
   const [inboundOpen, setInboundOpen] = useState<boolean>(false)
@@ -70,7 +73,7 @@ export default function Detail(): JSX.Element {
 
   /** 采收批次详情 */
   const detailQuery = useQuery({
-    queryKey: ['production-harvests', 'detail', harvestId],
+    queryKey: ['production-harvests', 'detail', harvestId, subjectId],
     enabled: Boolean(harvestId),
     queryFn: () => queryHarvest(harvestId as string),
   })
@@ -117,7 +120,7 @@ export default function Detail(): JSX.Element {
   /** 加载态 */
   if (detailQuery.isLoading) {
     return (
-      <PageContainer title="采收详情">
+      <PageContainer className="harvest-business-page" title="采收详情">
         <Card>
           <Skeleton active paragraph={{ rows: 8 }} />
         </Card>
@@ -128,7 +131,7 @@ export default function Detail(): JSX.Element {
   /** 错误态 / 空态 */
   if (detailQuery.isError || !batch) {
     return (
-      <PageContainer title="采收详情">
+      <PageContainer className="harvest-business-page" title="采收详情">
         <Empty
           description={
             <Space direction="vertical">
@@ -151,6 +154,7 @@ export default function Detail(): JSX.Element {
 
   return (
     <PageContainer
+      className="harvest-business-page"
       title={`📦 采收记录 ${batch.batchNo}`}
       subTitle={batch.farmName ?? currentFarm?.farmName}
       onBack={() => navigate('/production/harvests')}
@@ -164,6 +168,7 @@ export default function Detail(): JSX.Element {
           loading={inboundMutation.isPending}
           onClick={() => setInboundOpen(true)}
         >
+      {batch.status === 4 && <Alert type="error" showIcon message="批次已冻结" description={batch.remark || '请核对监管处置与质量检测记录，冻结期间不得继续出库或发布现货。'} style={{marginBottom: 16}} />}
           {inboundStatus === 0 ? '确认入库' : '已入库'}
         </Button>,
         <Button key="print" icon={<PrinterOutlined />} onClick={handlePrint}>
@@ -173,7 +178,7 @@ export default function Detail(): JSX.Element {
     >
 
       <Card
-        title="📋 基本信息"
+        title="基本信息"
         style={{ marginBottom: 16 }}
         extra={
           <Space size={4} wrap>
@@ -233,6 +238,22 @@ export default function Detail(): JSX.Element {
             { key: 'warehouse', label: '存放仓库', value: batch.warehouseName ?? '-' },
             { key: 'createdAt', label: '登记时间', value: batch.createdAt ?? '-' },
             {
+              key: 'linkedOffers', label: '关联供给',
+              value: batch.linkedOfferCount == null ? '—' : (
+                <Space>
+                  <span>{batch.linkedOfferCount} 条</span>
+                  {batch.linkedOfferCount > 0 && subjectId && <Button type="link" size="small" onClick={() => {
+                    const params = new URLSearchParams({ batchId: String(batch.batchId), subjectId: String(subjectId) })
+                    navigate(`/production/p2t/offers?${params}`)
+                  }}>查看关联供给</Button>}
+                </Space>
+              ),
+            },
+            ...(batch.mutationBlockedReason ? [{
+              key: 'mutationBlockedReason', label: '批次保护', fullWidth: true,
+              value: batch.mutationBlockedReason,
+            }] : []),
+            {
               key: 'remark',
               label: '备注',
               fullWidth: true,
@@ -242,7 +263,7 @@ export default function Detail(): JSX.Element {
         />
       </Card>
 
-      <Card title="📊 产量统计" style={{ marginBottom: 16 }}>
+      <Card title="产量统计" style={{ marginBottom: 16 }}>
         <DetailMetricGrid
           items={[
             {
@@ -282,7 +303,7 @@ export default function Detail(): JSX.Element {
         />
       </Card>
 
-      <Card title="🔗 关联信息">
+      <Card title="关联信息">
         <DetailInfoGrid
           columns={2}
           items={[

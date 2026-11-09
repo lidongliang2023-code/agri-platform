@@ -4,7 +4,7 @@
  * <p>移动端不复用浏览器 Cookie 会话（小程序没有 Cookie 语义），而是拿统一认证中心
  * 返回的 accessToken 存本地、按 Bearer 发送 —— 这与 PC 端探针/联调脚本用的是同一套。</p>
  */
-import { BASE_URL, request, TOKEN_KEY } from './request'
+import { BASE_URL, request, TOKEN_KEY, clearProductionContext } from './request'
 
 /** 用户信息存储键 */
 const USER_KEY = 'agri_user'
@@ -81,6 +81,7 @@ export interface FarmBrief {
 function persistLogin(data: any, fallbackUsername: string): MobileUser {
   const token = data?.accessToken ?? data?.token
   if (!token) throw new Error('登录失败：认证中心未返回访问令牌')
+  clearProductionContext()
   uni.setStorageSync(TOKEN_KEY, token)
   const user: MobileUser = {
     userId: data?.user?.id ?? data?.user?.userId ?? data?.userId,
@@ -237,6 +238,7 @@ export function uploadOnboardingFile(
 
 /** 退出登录：清本地登录态（服务端吊销是 PC 端与会话凭证的事，移动端不持有刷新令牌） */
 export function logout(): void {
+  clearProductionContext()
   uni.removeStorageSync(TOKEN_KEY)
   uni.removeStorageSync(USER_KEY)
   uni.removeStorageSync(FARM_KEY)

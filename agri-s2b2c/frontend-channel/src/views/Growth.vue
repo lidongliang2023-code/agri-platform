@@ -35,7 +35,7 @@ import { channelApi } from '../api'
 import { currentChannelId } from '../api/channelSession'
 
 const data = ref({})
-const shareText = ref('农联优选产地直发：五常大米限时秒杀 ¥58，邻里 3 人成团更优惠。点击进入我的小店查看。')
+const shareText = ref('丰链云产地直发：五常大米限时秒杀 ¥58，邻里 3 人成团更优惠。点击进入我的小店查看。')
 const pendingAfterSales = computed(() => (data.value.afterSales || []).filter((item) => item.status === 'PENDING').length)
 const commissionTotal = computed(() => (data.value.commissions || []).reduce((sum, item) => sum + Number(item.amount || 0), 0))
 

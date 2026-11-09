@@ -44,23 +44,52 @@ public class RefreshCookieSupport {
 
     /** 下发刷新令牌 Cookie（有效期与 Redis 侧刷新令牌 TTL 一致）。 */
     public void write(HttpServletResponse response, String refreshToken) {
-        long maxAgeSeconds = (long) properties.getRefreshTtlDays() * 24 * 60 * 60;
-        response.addHeader("Set-Cookie", build(refreshToken, maxAgeSeconds));
+        response.addHeader("Set-Cookie", build(cookieName, refreshToken, maxAge()));
+    }
+
+    /** 下发该子系统专属的刷新令牌 Cookie：同一浏览器不同子系统可持有不同账号的刷新令牌。 */
+    public void writeForClient(HttpServletResponse response, String refreshToken, String clientId) {
+        if (clientId == null || clientId.isBlank()) {
+            write(response, refreshToken);
+            return;
+        }
+        response.addHeader("Set-Cookie", build(clientCookieName(clientId), refreshToken, maxAge()));
     }
 
     /** 清除刷新令牌 Cookie（登出时调用，Max-Age=0 立即失效）。 */
     public void clear(HttpServletResponse response) {
-        response.addHeader("Set-Cookie", build("", 0L));
+        response.addHeader("Set-Cookie", build(cookieName, "", 0L));
+    }
+
+    /** 清除指定子系统的刷新令牌 Cookie（不影响其他子系统）。 */
+    public void clearForClient(HttpServletResponse response, String clientId) {
+        if (clientId == null || clientId.isBlank()) {
+            clear(response);
+            return;
+        }
+        response.addHeader("Set-Cookie", build(clientCookieName(clientId), "", 0L));
     }
 
     /** 读取刷新令牌；不存在时返回 null，由调用方决定是回退到请求体还是判为未认证。 */
     public String read(HttpServletRequest request) {
+        return readCookie(request, cookieName);
+    }
+
+    /** 读取指定子系统的刷新令牌；没有该子系统的 Cookie 时返回 null（不回退全局）。 */
+    public String readForClient(HttpServletRequest request, String clientId) {
+        if (clientId == null || clientId.isBlank()) {
+            return read(request);
+        }
+        return readCookie(request, clientCookieName(clientId));
+    }
+
+    private String readCookie(HttpServletRequest request, String name) {
         Cookie[] cookies = request.getCookies();
         if (cookies == null) {
             return null;
         }
         for (Cookie cookie : cookies) {
-            if (cookieName.equals(cookie.getName())) {
+            if (name.equals(cookie.getName())) {
                 String value = cookie.getValue();
                 return (value == null || value.isBlank()) ? null : value;
             }
@@ -68,10 +97,18 @@ public class RefreshCookieSupport {
         return null;
     }
 
-    private String build(String value, long maxAgeSeconds) {
+    private String clientCookieName(String clientId) {
+        return cookieName + "_" + clientId;
+    }
+
+    private long maxAge() {
+        return (long) properties.getRefreshTtlDays() * 24 * 60 * 60;
+    }
+
+    private String build(String name, String value, long maxAgeSeconds) {
         String safeValue = value == null ? "" : value;
         StringBuilder header = new StringBuilder()
-                .append(cookieName).append('=').append(safeValue)
+                .append(name).append('=').append(safeValue)
                 .append("; Path=").append(cookiePath)
                 .append("; Max-Age=").append(maxAgeSeconds)
                 .append("; HttpOnly")

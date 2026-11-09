@@ -536,7 +536,7 @@ try {
       check(batchOnRows !== '0', '佣金行记录了结算批次号', `rows=${batchOnRows}`)
       const channelBatches = await channelCall('/api/channel/settlements', { headers: auth })
       check((channelBatches.body ?? []).some((row) => row.batchNo === settleRes?.batchNo),
-        '渠道端能看到结算批次')
+        '商家端能看到结算批次')
       const channelOrders = await channelCall('/api/channel/orders?page=1&size=50', { headers: auth })
       const channelOrderRows = channelOrders.body?.records ?? []
       check(channelOrderRows.length >= 1
@@ -594,7 +594,7 @@ try {
           '已打款后不能再驳回', String(illegal?.message ?? '').slice(0, 24))
         const mine = await channelCall('/api/channel/withdrawals', { headers: auth })
         const paid = (mine.body ?? []).find((row) => String(row.id) === String(withdrawRow.id))
-        check(paid?.status === 'PAID' && paid?.payoutNo === payoutNo, '渠道端看到打款状态与流水号',
+        check(paid?.status === 'PAID' && paid?.payoutNo === payoutNo, '商家端看到打款状态与流水号',
           `status=${paid?.status} payoutNo=${paid?.payoutNo}`)
       }
       /*
@@ -1374,7 +1374,7 @@ try {
       '等级考核触发降级并留痕', `grade=${gradeAfterDown} logs=${gradeLogsDown}`)
     const gradeHistory = await channelCall('/api/channel/grade-history?days=365', { headers: auth })
     check(gradeHistory.body?.currentGrade === 'LEVEL_1' && (gradeHistory.body?.changes ?? []).length >= 2,
-      '渠道端可查看等级考核历史', `changes=${(gradeHistory.body?.changes ?? []).length}`)
+      '商家端可查看等级考核历史', `changes=${(gradeHistory.body?.changes ?? []).length}`)
 
     sql(`DELETE FROM agri_s2b2c.s2b2c_cart WHERE consumer_id = '${createdConsumerId}' AND product_id = 1`)
     sql(`DELETE FROM agri_s2b2c.s2b2c_address WHERE id = '${gradeAddressId}'`)
@@ -1927,7 +1927,7 @@ try {
     const channelReviewRow = (channelReviewList.body?.records ?? []).find(
       (row) => String(row.id) === channelReviewId)
     check(Boolean(channelReviewRow) && channelReviewRow.nickname == null,
-      '渠道端可见本渠道订单评价且匿名昵称不下发')
+      '商家端可见本渠道订单评价且匿名昵称不下发')
     const channelReply = await call(
       `/api/channel/review/${channelReviewId}/reply?reply=${encodeURIComponent('感谢您选择本店')}`,
       { method: 'PUT', headers: auth })

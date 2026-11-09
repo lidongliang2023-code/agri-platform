@@ -149,7 +149,7 @@ function manage() {
 
 .manage {
   color: #12764a;
-  font-size: 22rpx;
+  font-size: 24rpx;
 }
 
 .fav-row {
@@ -173,6 +173,6 @@ function manage() {
 
 .remove {
   color: #c54b4b;
-  font-size: 21rpx;
+  font-size: 24rpx;
 }
 </style>

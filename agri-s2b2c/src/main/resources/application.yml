@@ -43,6 +43,10 @@ agri:
 services:
   platform:
     url: http://localhost:8093
+  # 生产域（溯源链路的唯一真源）。商品详情的种植-采收-加工数据从这里实查，商城不自存副本。
+  # 独立部署时用环境变量覆盖；不可达会显式报 503，不会退化成"该商品没有溯源"。
+  production:
+    url: "${S2B2C_PRODUCTION_URL:http://localhost:8092}"
 
 # S2B2C 后端没有独立认证层，所有 /api 入口必须携带平台访问令牌。
 # 路径级权限使用通用读写权限，控制器的 @OperatorOnly 再收紧到角色权限。
@@ -50,6 +54,10 @@ platform:
   rbac:
     operator-paths:
       - /api/**
+    # 溯源核验是"任何人拿到这串码都能查"：这一族只读、只回核验字段，下游也是生产域的公开端点。
+    # 不放开的话，消费者扫码第一步就是"请先登录"，一物一码可溯源名不副实。
+    public-paths:
+      - /api/public/**
     read-permission: s2b2c:read
     write-permission: s2b2c:write
     require-auth: true
@@ -57,3 +65,22 @@ platform:
 logging:
   level:
     com.agri.s2b2c: DEBUG
+
+# Unified probes: dependency failures affect readiness, not liveness.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      show-components: never
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: '*'
+          exclude: livenessState

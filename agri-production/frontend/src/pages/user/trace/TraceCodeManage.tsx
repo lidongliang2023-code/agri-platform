@@ -1,3 +1,6 @@
+import '@/pages/user/quality/quality-trace.css'
+import Card from '@/components/SectionCard'
+import ProTable from '@/components/ProductionTable'
 /**
  * 页面名称：溯源码管理
  * 路由路径：/production/trace
@@ -16,12 +19,12 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { PageContainer, ProTable } from '@ant-design/pro-components'
+
+import PageContainer from '@/components/ProductionPageContainer'
 import type { ProColumns } from '@ant-design/pro-components'
 import {
   AutoComplete,
   Button,
-  Card,
   Col,
   DatePicker,
   Form,
@@ -310,7 +313,10 @@ export default function TraceCodeManage(): JSX.Element {
     const ok = results.filter((item) => item.status === 'fulfilled').length
     const fail = results.length - ok
     if (ok > 0) message.success(`${okText}成功 ${ok} 个`)
-    if (fail > 0) message.error(`${fail} 个溯源码操作失败，请刷新后重试`)
+    if (fail > 0) {
+      const reasons = [...new Set(results.flatMap(item => item.status === 'rejected' ? [item.reason instanceof Error ? item.reason.message : '请求失败'] : []))]
+      message.error(`${fail} 个溯源码操作失败：${reasons.join('；')}`)
+    }
     if (ok === 0 && fail === 0) message.warning('请先选择溯源码')
     await invalidateAll()
   }
@@ -328,6 +334,7 @@ export default function TraceCodeManage(): JSX.Element {
       return {
         ok,
         fail: results.length - ok,
+        reasons: [...new Set(results.flatMap(item => item.status === 'rejected' ? [item.reason instanceof Error ? item.reason.message : '请求失败'] : []))].join('；'),
         firstCode: first && first.status === 'fulfilled' ? String(first.value) : undefined,
       }
     },
@@ -340,14 +347,14 @@ export default function TraceCodeManage(): JSX.Element {
         )
       }
       if (result.fail > 0) {
-        message.warning(`${result.fail} 个未生成（后端生成接口不可用，或该批次不存在）`)
+        message.warning(`${result.fail} 个未生成：${result.reasons}`)
       }
       setGenOpen(false)
       setSelectedKeys([])
       await invalidateAll()
     },
-    onError: () => {
-      message.error('生成溯源码失败，请确认批次是否存在')
+    onError: (error: Error) => {
+      message.error(error.message || '生成溯源码失败')
     },
   })
 
@@ -586,6 +593,7 @@ export default function TraceCodeManage(): JSX.Element {
     },
     {
       title: '操作',
+      fixed: 'right',
       key: 'option',
       width: 230,
       valueType: 'option',
@@ -647,8 +655,8 @@ export default function TraceCodeManage(): JSX.Element {
     generatedQuery.isFetching
 
   return (
-    <PageContainer
-      title="🏷️ 溯源码管理"
+    <PageContainer className="quality-trace-page"
+      title="单品码管理"
       subTitle={currentFarm ? currentFarm.farmName : undefined}
       extra={[
         <Button
@@ -808,7 +816,7 @@ export default function TraceCodeManage(): JSX.Element {
         ]}
       />
 
-      <Modal
+      <Modal className="quality-trace-dialog"
         title={genMode === 'batch' ? '批量生成溯源码' : '生成溯源码'}
         open={genOpen}
         okText="确认生成"

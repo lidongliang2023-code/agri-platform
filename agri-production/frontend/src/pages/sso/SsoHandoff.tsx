@@ -8,12 +8,31 @@
  */
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
+import { useLocation } from 'react-router-dom'
 import useAuthStore from '@/store/auth'
 import { redirectToSso } from '@/api/sso'
+
+/**
+ * 取"登录成功后该回哪儿"。
+ *
+ * 深链进生产端（商城的「在生产管理模块看全链路」、存证列表跳回业务页）时，
+ * RequireAuth 会把原地址放进 `state.from` 再送来登录页；而 SSO 往返是**整页跳转**，
+ * 历史状态回不来，只有跳转前写进 sessionStorage 才留得住。
+ * 以前这里不传 returnTo，代价是每个深链在"用户恰好没登录"时都掉回看板页，
+ * 用户看到的是一条与手上那支码无关的首页。
+ */
+function takeReturnTarget(from: unknown): string | undefined {
+  const path = typeof from === 'string' ? from : ''
+  if (!path.startsWith('/')) return undefined
+  // 登录页与回跳页自己不算目标，否则会绕圈
+  if (/\/login(\/|$)/.test(path) || /\/sso\/callback/.test(path)) return undefined
+  return path
+}
 
 /** 跳转闸门：已登录或显式要求本地登录时放行，否则送去 SSO */
 export default function SsoHandoff({ clientId, fallback }: { clientId: string; fallback: ReactNode }): JSX.Element {
   const token = useAuthStore((state) => state.token)
+  const location = useLocation()
   const params = new URLSearchParams(window.location.search)
   const useLocal = params.get('local') === '1'
   const [error, setError] = useState<string>('')
@@ -22,10 +41,11 @@ export default function SsoHandoff({ clientId, fallback }: { clientId: string; f
     if (token || useLocal) {
       return
     }
-    redirectToSso(clientId).catch((cause: unknown) => {
-      setError(cause instanceof Error ? cause.message : '无法跳转到统一认证中心')
-    })
-  }, [clientId, token, useLocal])
+    redirectToSso(clientId, takeReturnTarget((location.state as { from?: unknown } | null)?.from))
+      .catch((cause: unknown) => {
+        setError(cause instanceof Error ? cause.message : '无法跳转到统一认证中心')
+      })
+  }, [clientId, token, useLocal, location.state])
 
   if (token || useLocal) {
     return <>{fallback}</>
@@ -46,7 +66,7 @@ export default function SsoHandoff({ clientId, fallback }: { clientId: string; f
       {error !== '' && (
         <>
           <span style={{ color: 'var(--agri-color-error, #ff4d4f)' }}>{error}</span>
-          <button type="button" onClick={() => void redirectToSso(clientId)}>
+          <button type="button" onClick={() => void redirectToSso(clientId, takeReturnTarget((location.state as { from?: unknown } | null)?.from))}>
             立即跳转
           </button>
           <a href="?local=1">改用本地账号登录（过渡期）</a>

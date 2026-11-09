@@ -2,7 +2,7 @@
   <view class="auth-page">
     <view class="auth-hero">
       <view class="brand-row">
-        <view class="brand-mark">丰</view>
+        <image class="brand-mark" src="/static/fengchain.svg" mode="aspectFill" />
         <view>
           <text class="brand-name">丰链云</text>
           <text class="brand-en">FENGCHAIN · AGRI</text>
@@ -292,7 +292,7 @@ onUnmounted(() => {
 .brand-en {
   margin-top: 3rpx;
   color: rgba(255, 255, 255, .62);
-  font-size: 16rpx;
+  font-size: 24rpx;
   letter-spacing: 2rpx;
 }
 
@@ -304,7 +304,7 @@ onUnmounted(() => {
 
 .hero-kicker {
   color: #a7e9c3;
-  font-size: 20rpx;
+  font-size: 24rpx;
   letter-spacing: 2rpx;
 }
 
@@ -316,7 +316,7 @@ onUnmounted(() => {
 
 .hero-desc {
   color: rgba(255, 255, 255, .72);
-  font-size: 23rpx;
+  font-size: 24rpx;
   line-height: 1.6;
 }
 
@@ -333,7 +333,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 7rpx;
   color: rgba(255, 255, 255, .82);
-  font-size: 20rpx;
+  font-size: 24rpx;
 }
 
 .hero-flow view text:first-child,
@@ -345,7 +345,7 @@ onUnmounted(() => {
   border-radius: 50%;
   background: rgba(255, 255, 255, .14);
   color: #d7f8e4;
-  font-size: 15rpx;
+  font-size: 24rpx;
   font-weight: 800;
 }
 
@@ -409,7 +409,7 @@ onUnmounted(() => {
   display: block;
   margin-bottom: 10rpx;
   color: #40574a;
-  font-size: 23rpx;
+  font-size: 24rpx;
   font-weight: 600;
 }
 
@@ -459,7 +459,7 @@ onUnmounted(() => {
   border-radius: 13rpx;
   background: #eff9f3;
   color: #117849;
-  font-size: 22rpx;
+  font-size: 24rpx;
   font-weight: 700;
 }
 
@@ -473,7 +473,7 @@ onUnmounted(() => {
   justify-content: space-between;
   margin: 22rpx 2rpx 0;
   color: #7c8f83;
-  font-size: 21rpx;
+  font-size: 24rpx;
 }
 
 .remember {
@@ -494,7 +494,7 @@ onUnmounted(() => {
   margin-top: 18rpx;
   padding: 16rpx 18rpx;
   border-radius: 12rpx;
-  font-size: 22rpx;
+  font-size: 24rpx;
   line-height: 1.55;
 }
 
@@ -533,7 +533,7 @@ onUnmounted(() => {
   gap: 14rpx;
   padding: 0 28rpx;
   color: #95a39b;
-  font-size: 20rpx;
+  font-size: 24rpx;
 }
 
 .divider i {
@@ -558,7 +558,7 @@ onUnmounted(() => {
   border: none;
   background: transparent;
   color: #667a6e;
-  font-size: 20rpx;
+  font-size: 24rpx;
 }
 
 .third-icon {
@@ -584,7 +584,7 @@ onUnmounted(() => {
   padding: 24rpx 20rpx 30rpx;
   border-top: 1rpx solid #edf2ee;
   color: #819086;
-  font-size: 22rpx;
+  font-size: 24rpx;
 }
 
 .footer-link {
@@ -597,7 +597,7 @@ onUnmounted(() => {
   gap: 6rpx;
   padding: 28rpx 16rpx 0;
   color: #91a098;
-  font-size: 19rpx;
+  font-size: 24rpx;
   line-height: 1.5;
   text-align: center;
 }

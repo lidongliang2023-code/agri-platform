@@ -46,6 +46,12 @@ mybatis-plus:
       logic-not-delete-value: 0
 
 agri:
+  health-monitor:
+    targets:
+      ai: ${AGRI_HEALTH_AI_URL:http://127.0.0.1:8201}
+      satellite-iot: ${AGRI_HEALTH_SATELLITE_IOT_URL:http://127.0.0.1:8202}
+      satellite-ai: ${AGRI_HEALTH_SATELLITE_AI_URL:http://127.0.0.1:8203}
+      satellite-quote: ${AGRI_HEALTH_SATELLITE_QUOTE_URL:http://127.0.0.1:8204}
   jwt:
     # 生产必须经环境变量注入 ≥32 字符密钥；密钥绝不写入代码库
     secret: ${AGRI_JWT_SECRET:agri-dev-secret-key-change-me-32bytes!}
@@ -85,15 +91,6 @@ agri:
     # 通配符只出现在端口位（localhost / 127.0.0.1 主机固定），application-prod.yml 置空。
     allowed-origin-patterns: ${AGRI_CORS_ORIGIN_PATTERNS:http://localhost:*,http://127.0.0.1:*}
 
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info
-  endpoint:
-    health:
-      show-details: always
-
 logging:
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId}] %logger{40} - %msg%n"
@@ -101,3 +98,22 @@ logging:
 springdoc:
   swagger-ui:
     path: /swagger-ui.html
+
+# Unified probes: dependency failures affect readiness, not liveness.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      show-components: never
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: '*'
+          exclude: livenessState

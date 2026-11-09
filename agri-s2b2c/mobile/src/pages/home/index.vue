@@ -3,10 +3,10 @@
     <view class="status-bar" :style="{ height: `${statusBarHeight}px` }" />
     <view class="topbar">
       <view class="brand">
-        <view class="brand-mark">丰</view>
+        <image class="brand-mark" src="/static/fengchain.svg" mode="aspectFill" />
         <view class="brand-copy">
           <text class="brand-name">丰链云</text>
-          <text class="brand-sub">农联优选 · 产地直供</text>
+          <text class="brand-sub">产地直供</text>
         </view>
       </view>
       <view class="topbar-actions">
@@ -166,8 +166,8 @@ onPullDownRefresh(loadProducts)
 .channel-logo-m { width: 72rpx; height: 72rpx; border-radius: 16rpx; background: #e5f5eb; flex-shrink: 0; }
 .channel-logo-m.fallback { display: grid; place-items: center; color: #12764a; font-size: 30rpx; font-weight: 800; }
 .channel-name-m { overflow: hidden; color: #0b1a12; font-size: 26rpx; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
-.channel-meta-m { color: #84938a; font-size: 20rpx; }
-.channel-price-m { color: #d45b32; font-size: 22rpx; font-weight: 700; }
+.channel-meta-m { color: #84938a; font-size: 24rpx; }
+.channel-price-m { color: #d45b32; font-size: 24rpx; font-weight: 700; }
 
 .home-page {
   padding-bottom: 32rpx;
@@ -219,7 +219,7 @@ onPullDownRefresh(loadProducts)
 .brand-sub {
   margin-top: 3rpx;
   color: #6b7c72;
-  font-size: 17rpx;
+  font-size: 24rpx;
   letter-spacing: 1rpx;
 }
 
@@ -234,7 +234,7 @@ onPullDownRefresh(loadProducts)
   align-items: center;
   gap: 8rpx;
   color: #718277;
-  font-size: 18rpx;
+  font-size: 24rpx;
 }
 
 .online-dot {
@@ -254,7 +254,7 @@ onPullDownRefresh(loadProducts)
   border-radius: 16rpx;
   background: #fff;
   color: #0e5233;
-  font-size: 22rpx;
+  font-size: 24rpx;
   font-weight: 700;
 }
 
@@ -272,7 +272,7 @@ onPullDownRefresh(loadProducts)
   border-radius: 18rpx;
   background: #fff;
   color: #93a29a;
-  font-size: 23rpx;
+  font-size: 24rpx;
 }
 
 .search-icon {
@@ -324,7 +324,7 @@ onPullDownRefresh(loadProducts)
 .hero-kicker {
   position: relative;
   color: #a9dfbd;
-  font-size: 18rpx;
+  font-size: 24rpx;
   font-weight: 700;
   letter-spacing: 3rpx;
 }
@@ -343,7 +343,7 @@ onPullDownRefresh(loadProducts)
   display: block;
   margin-top: 14rpx;
   color: rgba(255, 255, 255, 0.68);
-  font-size: 21rpx;
+  font-size: 24rpx;
 }
 
 .hero-button {
@@ -357,7 +357,7 @@ onPullDownRefresh(loadProducts)
   border-radius: 14rpx;
   background: #fff;
   color: #0e5233;
-  font-size: 22rpx;
+  font-size: 24rpx;
   font-weight: 700;
 }
 
@@ -409,7 +409,7 @@ onPullDownRefresh(loadProducts)
   border-radius: 12rpx;
   background: #eaf7ef;
   color: #12764a;
-  font-size: 20rpx;
+  font-size: 24rpx;
   font-weight: 800;
 }
 
@@ -420,13 +420,13 @@ onPullDownRefresh(loadProducts)
 
 .trust-item b {
   color: #0e5233;
-  font-size: 21rpx;
+  font-size: 24rpx;
 }
 
 .trust-item small {
   margin-top: 3rpx;
   color: #84938a;
-  font-size: 16rpx;
+  font-size: 24rpx;
   white-space: nowrap;
   transform: scale(0.92);
   transform-origin: left center;
@@ -447,7 +447,7 @@ onPullDownRefresh(loadProducts)
 
 .section-kicker {
   color: #12764a;
-  font-size: 17rpx;
+  font-size: 24rpx;
   font-weight: 700;
   letter-spacing: 2rpx;
 }
@@ -461,7 +461,7 @@ onPullDownRefresh(loadProducts)
 
 .section-link {
   color: #829188;
-  font-size: 19rpx;
+  font-size: 24rpx;
 }
 
 .category-grid {
@@ -491,20 +491,20 @@ onPullDownRefresh(loadProducts)
 .category-name {
   margin-top: 7rpx;
   color: #33453b;
-  font-size: 22rpx;
+  font-size: 24rpx;
   font-weight: 650;
 }
 
 .category-sub {
   margin-top: 3rpx;
   color: #9aa69f;
-  font-size: 16rpx;
+  font-size: 24rpx;
 }
 
 .loading {
   padding: 70rpx 0;
   color: #84938a;
-  font-size: 23rpx;
+  font-size: 24rpx;
   text-align: center;
 }
 
@@ -562,7 +562,7 @@ onPullDownRefresh(loadProducts)
 .product-point {
   margin-top: 8rpx;
   color: #829188;
-  font-size: 19rpx;
+  font-size: 24rpx;
 }
 
 .product-meta {
@@ -579,6 +579,6 @@ onPullDownRefresh(loadProducts)
 
 .product-sales {
   color: #93a29a;
-  font-size: 17rpx;
+  font-size: 24rpx;
 }
 </style>

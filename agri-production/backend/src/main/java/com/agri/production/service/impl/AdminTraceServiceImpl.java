@@ -46,6 +46,8 @@ public class AdminTraceServiceImpl implements IAdminTraceService {
      */
     private static final List<String> CODE_STATUSES = List.of("generated", "active", "scanned", "revoked", "expired");
 
+    private final com.agri.production.mapper.InventoryMapper inventoryMapper;
+
     private final TraceCodeMapper traceCodeMapper;
     private final HarvestBatchMapper harvestBatchMapper;
     private final InspectionMapper inspectionMapper;
@@ -58,7 +60,8 @@ public class AdminTraceServiceImpl implements IAdminTraceService {
                                  InspectionMapper inspectionMapper,
                                  TestingLabMapper testingLabMapper,
                                  FarmMapper farmMapper,
-                                 IChainRecordService chainRecordService) {
+                                 IChainRecordService chainRecordService, com.agri.production.mapper.InventoryMapper inventoryMapper) {
+        this.inventoryMapper = inventoryMapper;
         this.traceCodeMapper = traceCodeMapper;
         this.harvestBatchMapper = harvestBatchMapper;
         this.inspectionMapper = inspectionMapper;
@@ -211,10 +214,13 @@ public class AdminTraceServiceImpl implements IAdminTraceService {
             // 批次不存在必须失败：静默返回 0 会让前端宣称"批次已冻结"，而库里什么都没变
             throw new BusinessException(404, "采收批次不存在：" + batchId);
         }
+        batch = harvestBatchMapper.lockOwned(id, batch.getTenantId());
+        if (batch == null) throw new BusinessException(409, "批次已变化，请刷新后重试");
         List<TraceCode> codes = batch.getBatchNo() == null || batch.getBatchNo().isBlank()
                 ? List.of()
                 : traceCodeMapper.selectList(new LambdaQueryWrapper<TraceCode>()
-                        .eq(TraceCode::getBatchNumber, batch.getBatchNo()));
+                        .eq(TraceCode::getBatchNumber, batch.getBatchNo())
+                        .eq(TraceCode::getTenantId, batch.getTenantId()));
         int revoked = 0;
         for (TraceCode code : codes) {
             if ("revoked".equals(AdminTraceCodeVO.normalizeStatus(code.getStatus()))) {
@@ -224,6 +230,22 @@ public class AdminTraceServiceImpl implements IAdminTraceService {
             code.setUpdateTime(java.time.LocalDateTime.now());
             traceCodeMapper.updateById(code);
             revoked++;
+        }
+        {
+            for (com.agri.production.entity.Inventory stock : inventoryMapper.selectList(
+                    new LambdaQueryWrapper<com.agri.production.entity.Inventory>()
+                    .eq(com.agri.production.entity.Inventory::getTenantId, batch.getTenantId())
+                    .eq(com.agri.production.entity.Inventory::getBatchId, id).last("FOR UPDATE"))) {
+                stock.setFrozen(1);
+                stock.setFrozenQty(stock.getCurrentQty() == null ? java.math.BigDecimal.ZERO : stock.getCurrentQty());
+                inventoryMapper.updateById(stock);
+            }
+        }
+        if (!Integer.valueOf(BATCH_STATUS_FROZEN).equals(batch.getStatus())) {
+            String old = batch.getRemark() == null ? "" : batch.getRemark();
+            String evidence = "\n监管召回：" + java.time.LocalDateTime.now() + " 操作人：" + com.agri.production.service.TenantContextService.currentOperator();
+            if (old.length() + evidence.length() > 500) throw new BusinessException(400, "批次处置说明容量不足，请先整理历史说明");
+            batch.setRemark(old + evidence);
         }
         batch.setStatus(BATCH_STATUS_FROZEN);
         harvestBatchMapper.updateById(batch);

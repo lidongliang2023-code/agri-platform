@@ -1,3 +1,6 @@
+import Card from '@/components/SectionCard'
+import './harvests.css'
+import ProTable from '@/components/ProductionTable'
 /**
  * 页面名称：采收管理列表
  * 路由路径：/production/harvests
@@ -12,16 +15,16 @@
  * - 批量操作：批量入库 / 批量导出；视图切换：列表视图 / 日历视图
  * - 表格列：复选框 | 采收编号 | 作物品种 | 采收地块 | 采收日期 | 数量(kg) | 质量等级 | 状态 | 操作
  */
-import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { PageContainer, ProTable } from '@ant-design/pro-components'
+
+import PageContainer from '@/components/ProductionPageContainer'
 import type { ProColumns } from '@ant-design/pro-components'
 import {
   Badge,
   Button,
   Calendar,
-  Card,
   Col,
   DatePicker,
   Empty,
@@ -43,6 +46,7 @@ import type { Dayjs } from 'dayjs'
 import useFarmStore from '@/store/farm'
 import { inboundHarvest, queryHarvests } from '@/api/harvests'
 import { listPlots } from '@/api/plots'
+import { listMembers } from '@/api/members'
 import type { HarvestBatch, HarvestGrade, InboundStatus, Plot } from '@/types'
 import {
   BATCH_STATUS_META,
@@ -94,6 +98,8 @@ function escapeCsv(value: string): string {
  */
 export default function HarvestRecords(): JSX.Element {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const presetPlotId = searchParams.get('plotId') || undefined
   const queryClient = useQueryClient()
   const currentFarm = useFarmStore((state) => state.currentFarm)
   const farmId = currentFarm?.farmId
@@ -102,9 +108,24 @@ export default function HarvestRecords(): JSX.Element {
   const [tab, setTab] = useState<TabKey>('all')
   const [pageNum, setPageNum] = useState<number>(1)
   const [pageSize, setPageSize] = useState<number>(10)
-  const [filters, setFilters] = useState<HarvestFilters>({})
+  const [filters, setFilters] = useState<HarvestFilters>({ plotId: presetPlotId })
   const [selectedKeys, setSelectedKeys] = useState<string[]>([])
   const [filterForm] = Form.useForm<HarvestFilters>()
+
+  useEffect(() => {
+    filterForm.setFieldsValue({ plotId: presetPlotId })
+    setFilters((previous) => ({ ...previous, plotId: presetPlotId }))
+    setPageNum(1)
+    setSelectedKeys([])
+  }, [presetPlotId, filterForm])
+
+  useEffect(() => {
+    filterForm.resetFields()
+    filterForm.setFieldsValue({ plotId: presetPlotId })
+    setFilters({ plotId: presetPlotId })
+    setPageNum(1)
+    setSelectedKeys([])
+  }, [farmId, filterForm, presetPlotId])
 
   /** 基础筛选（不含 Tab 入库状态），用于统计 / 日历 / 计数 */
   const baseFilters = useMemo(
@@ -120,11 +141,22 @@ export default function HarvestRecords(): JSX.Element {
     [farmId, filters],
   )
 
-  /** 统计 / 日历 / Tab 计数数据源：一次性取较大页，客户端分组与计数 */
+  /** 逐页加载完整筛选结果，统计、日历和导出共用，不截断前 200 条。 */
   const boardQuery = useQuery({
     queryKey: ['production-harvests', 'board', farmId, filters],
     enabled: Boolean(farmId),
-    queryFn: () => queryHarvests({ ...baseFilters, pageNum: 1, pageSize: 200 }),
+    queryFn: async () => {
+      const rows: HarvestBatch[] = []
+      let page = 1
+      while (true) {
+        const result = await queryHarvests({ ...baseFilters, pageNum: page, pageSize: 200 })
+        rows.push(...result.list)
+        if (rows.length >= result.total) break
+        if (result.list.length === 0) throw new Error('采收数据分页不完整，请刷新重试')
+        page += 1
+      }
+      return rows
+    },
   })
 
   /** 列表视图数据源：服务端分页 */
@@ -146,6 +178,18 @@ export default function HarvestRecords(): JSX.Element {
     enabled: Boolean(farmId),
     queryFn: () => listPlots({ farmId, pageNum: 1, pageSize: 100 }),
   })
+
+  const memberQuery = useQuery({
+    queryKey: ['member-options', farmId],
+    enabled: Boolean(farmId),
+    queryFn: () => listMembers({ farmId, pageNum: 1, pageSize: 100 }),
+  })
+  const memberNameOf = useMemo(
+    () => new Map((memberQuery.data?.list ?? []).map((member) => [String(member.id), member.realName])),
+    [memberQuery.data],
+  )
+  const operatorName = (record: HarvestBatch): string =>
+    record.operatorName || memberNameOf.get(String(record.operatorId)) || record.operatorId || '—'
 
   /** 统一失效刷新 */
   const invalidateHarvests = (): Promise<void> =>
@@ -181,16 +225,14 @@ export default function HarvestRecords(): JSX.Element {
   })
 
   /** 全部批次（用于统计与日历） */
-  const allBatches = useMemo<HarvestBatch[]>(() => boardQuery.data?.list ?? [], [boardQuery.data])
+  const allBatches = useMemo<HarvestBatch[]>(() => boardQuery.data ?? [], [boardQuery.data])
 
   /**
    * 统计数据。
-   * 以数据集中最晚采收日期所在月份 / 季度为统计基准，
-   * 避免演示数据与系统当前日期不在同一周期时统计恒为 0。
+   * 本月、本季均按当前自然月与季度计算。
    */
   const overview = useMemo(() => {
-    const dates = allBatches.map((item) => item.harvestDate).sort()
-    const baseDate = dates.length > 0 ? dayjs(dates[dates.length - 1]) : dayjs()
+    const baseDate = dayjs()
     const baseMonth = baseDate.format('YYYY-MM')
     const baseQuarter = `${baseDate.year()}-Q${baseDate.quarter()}`
     let monthCount = 0
@@ -255,6 +297,7 @@ export default function HarvestRecords(): JSX.Element {
   const handleSearch = (): void => {
     setPageNum(1)
     setFilters(filterForm.getFieldsValue())
+    setSelectedKeys([])
   }
 
   /** 重置按钮 */
@@ -262,6 +305,12 @@ export default function HarvestRecords(): JSX.Element {
     filterForm.resetFields()
     setPageNum(1)
     setFilters({})
+    setSelectedKeys([])
+    if (presetPlotId) {
+      const next = new URLSearchParams(searchParams)
+      next.delete('plotId')
+      setSearchParams(next, { replace: true })
+    }
   }
 
   /** 批量入库 */
@@ -278,7 +327,7 @@ export default function HarvestRecords(): JSX.Element {
     const rows =
       selectedKeys.length > 0
         ? allBatches.filter((item) => selectedKeys.includes(item.batchId))
-        : allBatches
+        : allBatches.filter((item) => tab === 'all' || item.inboundStatus === TAB_INBOUND_STATUS[tab])
     if (rows.length === 0) {
       message.warning('暂无可导出的数据')
       return
@@ -292,6 +341,8 @@ export default function HarvestRecords(): JSX.Element {
       '质量等级',
       '入库状态',
       '批次状态',
+      '采收人',
+      '备注',
     ]
     const body = rows.map((item) =>
       [
@@ -303,6 +354,8 @@ export default function HarvestRecords(): JSX.Element {
         GRADE_LABEL_MAP[item.grade] ?? item.grade,
         INBOUND_STATUS_META[(item.inboundStatus ?? 0) as InboundStatus].label,
         BATCH_STATUS_META[item.status]?.label ?? String(item.status),
+        operatorName(item),
+        item.remark ?? '',
       ]
         .map(escapeCsv)
         .join(','),
@@ -344,7 +397,7 @@ export default function HarvestRecords(): JSX.Element {
     },
     { title: '采收日期', dataIndex: 'harvestDate', width: 120 },
     {
-      title: '数量(kg)',
+      title: '采收数量',
       dataIndex: 'quantity',
       width: 110,
       render: (_, record) => `${record.quantity.toLocaleString()} ${record.unit}`,
@@ -378,11 +431,25 @@ export default function HarvestRecords(): JSX.Element {
       },
     },
     {
+      title: '采收人',
+      dataIndex: 'operatorName',
+      width: 120,
+      render: (_, record) => operatorName(record),
+    },
+    { title: '备注', dataIndex: 'remark', width: 200, render: (_, record) => record.remark || '—' },
+    {
       title: '操作',
       key: 'option',
-      width: 150,
+      fixed: 'right',
+      width: 220,
       valueType: 'option',
       render: (_, record) => [
+        <Typography.Link
+          key="register"
+          onClick={() => navigate(`/production/harvests/create?plotId=${encodeURIComponent(record.plotId ?? '')}`)}
+        >
+          登记采收
+        </Typography.Link>,
         <Typography.Link
           key="detail"
           onClick={() => navigate(`/production/harvests/${record.batchId}`)}
@@ -435,7 +502,16 @@ export default function HarvestRecords(): JSX.Element {
   /** 渲染列表视图 */
   const renderTable = (): JSX.Element => (
     <ProTable<HarvestBatch>
+      headerTitle="采收记录"
+      cardProps={false}
       rowKey="batchId"
+      columnWidthStorageKey={JSON.stringify([
+        ['batchNo', '采收编号', null], ['crop', '作物品种', null],
+        ['plotName', '采收地块', null], ['harvestDate', '采收日期', null],
+        ['quantity', '数量(kg)', null], ['grade', '质量等级', null],
+        ['status', '状态', null], ['option', '操作', null],
+      ])}
+      scroll={{ x: 1500 }}
       columns={columns}
       dataSource={tableQuery.data?.list ?? []}
       loading={tableQuery.isFetching}
@@ -463,7 +539,7 @@ export default function HarvestRecords(): JSX.Element {
     if (!farmId) {
       return <Empty description="请先在顶部切换农场" />
     }
-    if (boardQuery.isError) {
+    if (boardQuery.isError || (view === 'table' && tableQuery.isError)) {
       return (
         <Empty
           description={
@@ -501,7 +577,8 @@ export default function HarvestRecords(): JSX.Element {
 
   return (
     <PageContainer
-      title="🌾 采收管理"
+      className="harvest-business-page"
+      title="采收记录"
       subTitle={currentFarm?.farmName}
       extra={[
         <Segmented
@@ -513,9 +590,6 @@ export default function HarvestRecords(): JSX.Element {
             { label: '日历视图', value: 'calendar' },
           ]}
         />,
-        <Button key="plan" onClick={() => navigate('/production/harvests/plan')}>
-          地块采收记录
-        </Button>,
         <Button key="inventory" onClick={() => navigate('/production/harvests/inventory')}>
           库存管理
         </Button>,
@@ -531,33 +605,33 @@ export default function HarvestRecords(): JSX.Element {
     >
 
       <Row gutter={16} style={{ marginBottom: 16 }}>
-        <Col span={6}>
+        <Col xs={24} sm={12} xl={6}>
           <Card>
             <Statistic
               title="本季采收总量"
               value={overview.seasonQuantity}
-              precision={0}
+              precision={2}
               suffix="kg"
               valueStyle={{ color: '#52c41a' }}
             />
           </Card>
         </Col>
-        <Col span={6}>
+        <Col xs={24} sm={12} xl={6}>
           <Card>
             <Statistic title="本月采收次数" value={overview.monthCount} suffix="次" />
           </Card>
         </Col>
-        <Col span={6}>
+        <Col xs={24} sm={12} xl={6}>
           <Card>
             <Statistic
-              title="平均质量等级"
-              value="A"
-              suffix={`(${overview.gradeARatio}%)`}
+              title="A级记录占比"
+              value={overview.gradeARatio}
+              suffix="%"
               valueStyle={{ color: '#1677ff' }}
             />
           </Card>
         </Col>
-        <Col span={6}>
+        <Col xs={24} sm={12} xl={6}>
           <Card>
             <Statistic
               title="待入库数量"
@@ -570,7 +644,7 @@ export default function HarvestRecords(): JSX.Element {
       </Row>
 
       <Card style={{ marginBottom: 16 }}>
-        <Form form={filterForm} layout="inline" style={{ rowGap: 12 }}>
+        <Form form={filterForm} initialValues={{ plotId: presetPlotId }} layout="inline" style={{ rowGap: 12 }}>
           <Form.Item name="dateRange" label="采收日期">
             <DatePicker.RangePicker style={{ width: 240 }} />
           </Form.Item>
@@ -622,6 +696,7 @@ export default function HarvestRecords(): JSX.Element {
             <Button
               icon={<InboxOutlined />}
               loading={inboundMutation.isPending}
+              disabled={selectedKeys.length === 0}
               onClick={handleBatchInbound}
             >
               批量入库
@@ -637,6 +712,7 @@ export default function HarvestRecords(): JSX.Element {
           onChange={(key) => {
             setTab(key as TabKey)
             setPageNum(1)
+            setSelectedKeys([])
           }}
           items={[
             { key: 'all', label: `全部(${tabCounts.all})` },

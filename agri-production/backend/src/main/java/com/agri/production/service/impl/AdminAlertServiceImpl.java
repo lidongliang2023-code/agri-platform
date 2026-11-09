@@ -38,8 +38,7 @@ public class AdminAlertServiceImpl implements IAdminAlertService {
 
     /** 已处置（与用户端 AlertServiceImpl 写的是同一个值；库里还有默认值 unhandled，两代词表并存） */
     private static final String ALERT_STATUS_HANDLED = "handled";
-    /** 运营端写入的行统一挂演示租户 */
-    private static final String DEFAULT_TENANT = "2001";
+
     private static final DateTimeFormatter DATE_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private final AlertRecordMapper alertRecordMapper;
@@ -52,6 +51,13 @@ public class AdminAlertServiceImpl implements IAdminAlertService {
         this.alertRecordMapper = alertRecordMapper;
         this.emergencyPlanMapper = emergencyPlanMapper;
         this.plotMapper = plotMapper;
+    }
+
+    @Override
+    public AdminAlertReviewVO getAlert(Long id) {
+        AlertRecord alert = alertRecordMapper.selectById(id);
+        if (alert == null) throw new BusinessException(404, "告警不存在");
+        return AdminAlertReviewVO.of(alert);
     }
 
     /** 地块名一次查出来，避免逐行查库（地块表很小，但没必要 N+1） */
@@ -67,22 +73,30 @@ public class AdminAlertServiceImpl implements IAdminAlertService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> closeAlert(Long alertId, String operator, String closeRemark) {
-        AlertRecord alert = alertId == null ? null : alertRecordMapper.selectById(alertId);
-        if (alert == null) {
-            throw new BusinessException(404, "告警不存在：" + alertId);
+        if (closeRemark == null || closeRemark.isBlank() || closeRemark.trim().length() > 300) {
+            throw new BusinessException(400, "请填写 1 至 300 字的处理说明");
         }
-        alert.setStatus(ALERT_STATUS_HANDLED);
+        String actor = com.agri.production.service.TenantContextService.currentOperator();
+        if (com.agri.production.service.TenantContextService.currentUserId() == null) {
+            throw new BusinessException(403, "无法确认可信操作人，操作未保存");
+        }
+        AlertRecord alert = alertId == null ? null : alertRecordMapper.lockForHandling(alertId);
+        if (alert == null) throw new BusinessException(404, "告警不存在");
+        String state = alert.getStatus() == null ? "" : alert.getStatus().toLowerCase(java.util.Locale.ROOT);
+        String next = switch (state) {
+            case "pending", "unhandled" -> "handling";
+            case "handling", "processing", "in_progress" -> "handled";
+            default -> throw new BusinessException(409, "当前告警状态不允许继续处置，请刷新");
+        };
+        String history = (alert.getHandleResult() == null ? "" : alert.getHandleResult() + "\n")
+                + LocalDateTime.now().format(DATE_TIME) + " · " + actor + " · " + next + " · " + closeRemark.trim();
+        if (history.length() > 500) throw new BusinessException(400, "处置历史超过存储容量，未覆盖原记录");
+        alert.setStatus(next);
         alert.setHandleTime(LocalDateTime.now());
-        if (operator != null && !operator.isBlank()) {
-            alert.setHandleUser(operator.trim());
-        }
-        if (closeRemark != null && !closeRemark.isBlank()) {
-            alert.setHandleResult(closeRemark.trim());
-        }
+        alert.setHandleUser(actor);
+        alert.setHandleResult(history);
         alert.setUpdateTime(LocalDateTime.now());
-        alertRecordMapper.updateById(alert);
-        log.info("告警关闭：id={} 操作人={} 说明={}", alertId, operator,
-                closeRemark == null || closeRemark.isBlank() ? "（未填）" : closeRemark.trim());
+        if (alertRecordMapper.updateById(alert) != 1) throw new BusinessException(409, "告警保存失败");
         Map<String, Object> row = new LinkedHashMap<>();
         row.put("alertId", String.valueOf(alert.getId()));
         row.put("status", alert.getStatus());
@@ -153,13 +167,13 @@ public class AdminAlertServiceImpl implements IAdminAlertService {
     @Transactional(rollbackFor = Exception.class)
     public AdminEmergencyPlanVO createPlan(Map<String, Object> payload) {
         EmergencyPlan plan = new EmergencyPlan();
-        plan.setPlanCode("EP-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss")));
+        plan.setPlanCode("EP-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS")) + java.util.UUID.randomUUID().toString().substring(0, 8));
         applyPlanPayload(plan, payload);
         if (plan.getPlanName() == null || plan.getPlanName().isBlank()) {
             throw new BusinessException(400, "预案名称不能为空");
         }
         plan.setIsEnabled(plan.getIsEnabled() == null ? 1 : plan.getIsEnabled());
-        plan.setTenantId(DEFAULT_TENANT);
+        plan.setTenantId(com.agri.production.service.TenantContextService.currentTenantId());
         plan.setCreateTime(LocalDateTime.now());
         plan.setUpdateTime(LocalDateTime.now());
         plan.setDeleted(0);
@@ -216,7 +230,7 @@ public class AdminAlertServiceImpl implements IAdminAlertService {
         // 数据源是"已处置告警"：页面的行模型只认 alertId。
         // disasterType 这个筛选参数后端没有对应字段，**不静默套用别的列**（页面自己会提示「未接入」）。
         LambdaQueryWrapper<AlertRecord> w = new LambdaQueryWrapper<AlertRecord>()
-                .eq(AlertRecord::getStatus, ALERT_STATUS_HANDLED)
+                .in(AlertRecord::getStatus, List.of("handled", "HANDLED", "closed", "CLOSED"))
                 .orderByDesc(AlertRecord::getHandleTime)
                 .orderByDesc(AlertRecord::getId);
         Page<AlertRecord> page = alertRecordMapper.selectPage(new Page<>(p, s), w);
@@ -240,20 +254,7 @@ public class AdminAlertServiceImpl implements IAdminAlertService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public AdminAlertReviewVO updateReview(Long alertId, Map<String, Object> payload) {
-        AlertRecord alert = alertId == null ? null : alertRecordMapper.selectById(alertId);
-        if (alert == null) {
-            throw new BusinessException(404, "告警不存在：" + alertId);
-        }
-        // 页面只送一个字段：{handleProcess: 处置说明}，它读回来当 handleRemark
-        String handleProcess = payload == null || payload.get("handleProcess") == null
-                ? null : str(payload.get("handleProcess"));
-        if (handleProcess != null) {
-            alert.setHandleResult(handleProcess);
-        }
-        alert.setUpdateTime(LocalDateTime.now());
-        alertRecordMapper.updateById(alert);
-        log.info("复盘信息已保存（写到告警 {} 的处置结果）", alertId);
-        return AdminAlertReviewVO.of(alertRecordMapper.selectById(alertId));
+        throw new BusinessException(409, "复盘视图只读，禁止覆盖告警原处置证据，请在告警中心按流程追加进展");
     }
 
     private static String str(Object value) {

@@ -100,14 +100,6 @@ export interface AlertStats {
 }
 
 /** 空统计（后端骨架未返回时的兜底） */
-const EMPTY_ALERT_STATS: AlertStats = {
-  total: 0,
-  unhandled: 0,
-  handling: 0,
-  resolved: 0,
-  ignored: 0,
-  levelCounts: [],
-}
 
 /**
  * 查询告警统计
@@ -118,22 +110,7 @@ const EMPTY_ALERT_STATS: AlertStats = {
  * @returns 告警统计
  */
 export async function getAlertStats(farmId?: string): Promise<AlertStats> {
-  try {
-    const raw = await http.get<Partial<AlertStats>>(
-      `${BASE}/stats`,
-      { farmId },
-      { silent: true },
-    )
-    if (!raw || typeof raw !== 'object') return EMPTY_ALERT_STATS
-    return {
-      total: raw.total ?? 0,
-      unhandled: raw.unhandled ?? 0,
-      handling: raw.handling ?? 0,
-      resolved: raw.resolved ?? 0,
-      ignored: raw.ignored ?? 0,
-      levelCounts: Array.isArray(raw.levelCounts) ? raw.levelCounts : [],
-    }
-  } catch {
-    return EMPTY_ALERT_STATS
-  }
+  const raw = await http.get<AlertStats>(`${BASE}/stats`, { farmId })
+  if (!raw || typeof raw !== 'object') throw new Error('告警统计响应异常')
+  return raw
 }

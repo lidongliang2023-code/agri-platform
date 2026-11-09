@@ -34,6 +34,8 @@ public class AdminFsCirculationVO {
     private String status;
     /** 发现日期 yyyy-MM-dd（页面的日期筛选按它比） */
     private String foundDate;
+    private String handleRemark;
+    private Long handleBy;
     private String measure;
 
     public static AdminFsCirculationVO of(CirculationAnomaly entity) {
@@ -50,6 +52,8 @@ public class AdminFsCirculationVO {
         vo.impact = entity.getImpactRange();
         vo.status = entity.getStatus();
         vo.foundDate = entity.getFoundDate() == null ? null : entity.getFoundDate().toString();
+        vo.handleRemark = entity.getHandleRemark();
+        vo.handleBy = entity.getHandleBy();
         vo.measure = entity.getMeasure();
         return vo;
     }

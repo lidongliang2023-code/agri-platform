@@ -60,3 +60,33 @@ V2.0 4.8 节明确要求用「共享组件库 + CLI 模板 + SSO」抵消这种�
 > 为什么先不接私有 npm：现在只有一个前端应用、且本机无私有 registry；
 > 此时配置一个用不上的发布链路，只会产生"看起来合规、实际没跑过"的假合规。
 > 真正的触发条件是"子系统拆成独立仓库"——那时版本号才有意义。
+
+## 字号：全平台一条下限（2026-11-03 收口）
+
+**可见文字不得小于 12px。** uni-app 侧的等价位是 **24rpx**（H5 真机 root=16px 时 1rpx=0.5px，
+这一条不是推算，是在 375×812 上量出来的：源码 15rpx 渲染成 7.5px）。
+
+层级靠字重与颜色拉开，不靠把字压到 12px 以下。落点有三处，缺一处都会漂回去：
+
+| 落点 | 位置 | 作用 |
+| :-- | :-- | :-- |
+| 令牌 | `src/tokens/index.ts` 的 `FONT.sizeMicro = 12`，投影为 `--agri-font-size-micro` | 唯一真源；`tokens.css` 与它逐项一致由 `tests/tokens.test.ts` 守着 |
+| 兜底规则 | `tokens.css` 末尾的 `small { font-size: max(var(--agri-font-size-micro), 0.833em); }` | `<small>` 没人写过字号，它走浏览器默认 0.833em，父级只要 ≤14px 就自己掉回 12px 以下 |
+| 门禁 | `node ops/ci/verify.mjs --only font` | 按 `publish.mjs` 注册表逐端扫源码字号 + `pages.json` 的 `tabBar.fontSize` |
+
+本轮清账的规模：11 个端、875 处写在 6–11.5px（含 12–23rpx）。其中
+五个 React 运营端（`iot-admin`、`user-center-ops`、`info-ops`、`service-ops`、`gov-ops`）
+各自把阶梯收进 `src/styles.css` 的 `:root`（`--o-fs-micro: 12px` 起步，13px 以上原样成档，
+**不并档**——它们写的是 0.5px 步进密档，强行并到 7 档会顺带改掉本来正常的字号）；
+九个 uni-app 端只把 <24rpx 的提到 24rpx，≥24rpx 原样保留，同理。
+
+两类"grep 源码看不见"的漏点，是这轮真机复验抓出来的，门禁现在都兜住了：
+
+1. **uni-app 的 tabBar 文字不在 CSS 里**，由 `pages.json` 的 `tabBar` 生成，缺省 `fontSize` 就是 10px。
+   改完 CSS 后 trade-mobile 首页其余全部 ≥12px，唯独 5 个 tab 标签还是 10px。
+2. **`<small>` 的默认缩放**。info-ops 行情页表格里 4 个「元/公斤」渲染成 11.6667px（父级 14px × 0.833），
+   源码里根本搜不到这个数。
+
+> 判据教训：`低于12px = 0` 本身不是通过。有一次首页文字节点从 60 掉到 17（页面被守卫弹回登录页），
+> "0 处低于 12px"是空的真。要么先证明页面真的渲染了（节点数阈值），要么正面数目标元素
+> （`uni-tabbar__label` 的个数与文案），否则结论不成立。

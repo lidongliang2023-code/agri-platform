@@ -2,8 +2,10 @@ package com.agri.platform.internal.permission;
 
 import com.agri.shared.result.ApiResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -22,13 +24,48 @@ import java.util.List;
 @RequiredArgsConstructor
 public class RoleAdminController {
 
-    private final RoleMapper roleMapper;
+    private final RoleAdminService roleAdminService;
     private final RolePermissionService rolePermissionService;
 
-    /** 角色列表 */
+    /** 角色列表（含成员数、状态、更新时间） */
     @GetMapping
     public ApiResponse<List<RoleEntity>> list() {
-        return ApiResponse.ok(roleMapper.selectList(null));
+        return ApiResponse.ok(roleAdminService.list());
+    }
+
+    /**
+     * 新建平台级角色。
+     *
+     * @param request 编码/名称/说明
+     * @return 新建后的角色
+     */
+    @PostMapping
+    public ApiResponse<RoleEntity> create(@RequestBody(required = false) RoleCreateRequest request) {
+        return ApiResponse.ok(roleAdminService.create(request));
+    }
+
+    /**
+     * 编辑角色名称/说明/启停状态；编码不可改。
+     *
+     * @param code    角色编码
+     * @param request 待更新字段
+     * @return 更新后的角色
+     */
+    @PutMapping("/{code}")
+    public ApiResponse<RoleEntity> update(@PathVariable String code,
+                                          @RequestBody(required = false) RoleUpdateRequest request) {
+        return ApiResponse.ok(roleAdminService.update(code, request));
+    }
+
+    /**
+     * 删除角色：内置角色、仍被用户绑定的角色会被明确阻断。
+     *
+     * @param code 角色编码
+     */
+    @DeleteMapping("/{code}")
+    public ApiResponse<Void> delete(@PathVariable String code) {
+        roleAdminService.delete(code);
+        return ApiResponse.ok(null);
     }
 
     /**

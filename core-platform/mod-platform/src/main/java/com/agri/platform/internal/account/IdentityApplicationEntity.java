@@ -20,7 +20,7 @@ public class IdentityApplicationEntity extends BaseEntity {
 
     private Long userId;
 
-    /** 身份类型：wholesaler / retailer / farmer / coop_admin / service_provider / government */
+    /** 身份类型：wholesaler / retailer / farmer / coop_admin / mall_supplier / service_provider / government */
     private String identityType;
 
     private Long merchantId;

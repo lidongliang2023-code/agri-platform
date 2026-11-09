@@ -108,10 +108,20 @@ public class UserAlertServiceImpl implements IUserAlertService {
                     + (status == null ? "空" : status));
         }
         AlertRecord alert = requireAlert(tenantId, alertId);
+        int previous = AlertDict.codeOfStatus(alert.getStatus());
+        if (!((previous == 1 && (status == 2 || status == 3 || status == 4)) || (previous == 2 && status == 3)))
+            throw new BusinessException(400, "告警状态已变化或不允许该流转，请刷新后重试");
+        if (handleRemark == null || handleRemark.isBlank())
+            throw new BusinessException(400, "请填写处置说明");
         alert.setStatus(AlertDict.statusTextOf(status));
+        alert.setHandleUser(com.agri.production.service.TenantContextService.currentUserId());
         alert.setHandleTime(LocalDateTime.now());
         if (handleRemark != null && !handleRemark.isBlank()) {
-            alert.setHandleResult(handleRemark.trim());
+            String history = (alert.getHandleResult() == null ? "" : alert.getHandleResult() + "\n")
+                    + LocalDateTime.now() + " · 用户 ID：" + com.agri.production.service.TenantContextService.currentUserId()
+                    + " · " + AlertDict.statusTextOf(status) + " · " + handleRemark.trim();
+            if (history.length() > 500) throw new BusinessException(400, "处置历史超过存储容量，未覆盖原记录");
+            alert.setHandleResult(history);
         }
         alert.setUpdateTime(LocalDateTime.now());
         alertMapper.updateById(alert);
@@ -131,13 +141,15 @@ public class UserAlertServiceImpl implements IUserAlertService {
         if (codes.isEmpty()) {
             throw new BusinessException(400, "请选择要忽略的告警");
         }
-        List<AlertRecord> hits = alertMapper.selectList(baseWrapper(tenantId).in(AlertRecord::getAlertCode, codes));
+        List<AlertRecord> hits = alertMapper.selectList(baseWrapper(tenantId).in(AlertRecord::getAlertCode, codes).orderByAsc(AlertRecord::getId).last("FOR UPDATE"));
         // 有一条对不上就整批不动：部分成功的批量操作会让人不知道到底忽略了几条
         if (hits.size() != codes.size()) {
             List<String> found = hits.stream().map(AlertRecord::getAlertCode).toList();
             List<String> missing = codes.stream().filter(code -> !found.contains(code)).toList();
             throw new BusinessException(400, "这些告警不存在或不属于当前租户：" + missing);
         }
+        if (hits.stream().anyMatch(a -> AlertDict.codeOfStatus(a.getStatus()) != AlertDict.STATUS_PENDING))
+            throw new BusinessException(400, "仅未处理告警可忽略，请刷新选择");
         int updated = 0;
         LocalDateTime now = LocalDateTime.now();
         for (AlertRecord alert : hits) {
@@ -145,6 +157,7 @@ public class UserAlertServiceImpl implements IUserAlertService {
                 continue;
             }
             alert.setStatus(AlertDict.statusTextOf(AlertDict.STATUS_IGNORED));
+            alert.setHandleUser(com.agri.production.service.TenantContextService.currentUserId());
             alert.setHandleTime(now);
             alert.setUpdateTime(now);
             alertMapper.updateById(alert);
@@ -268,7 +281,7 @@ public class UserAlertServiceImpl implements IUserAlertService {
         }
         AlertRecord alert = alertMapper.selectOne(baseWrapper(tenantId)
                 .eq(AlertRecord::getAlertCode, alertId.trim())
-                .last("LIMIT 1"));
+                .last(org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive() ? "LIMIT 1 FOR UPDATE" : "LIMIT 1"));
         if (alert == null) {
             throw new BusinessException(404, "告警不存在：" + alertId.trim());
         }

@@ -1,13 +1,13 @@
 {
-  "name": "丰链云渠道商",
+  "name": "丰链云商家",
   "appid": "__UNI__AGRI_S2B2C_CHANNEL_MOBILE",
-  "description": "S2B2C 渠道商移动工作台，支持 H5、微信小程序与 App",
+  "description": "S2B2C 商家移动工作台，支持 H5、微信小程序与 App",
   "versionName": "1.0.0",
   "versionCode": "100",
   "transformPx": false,
   "vueVersion": "3",
   "h5": {
-    "title": "丰链云 · 渠道商移动工作台",
+    "title": "丰链云 · 商家移动工作台",
     "router": { "mode": "hash", "base": "./" }
   },
   "mp-weixin": {
@@ -16,7 +16,7 @@
     "usingComponents": true
   },
   "app-plus": {
-    "name": "丰链云渠道商",
+    "name": "丰链云商家",
     "usingComponents": true,
     "nvueStyleCompiler": "uni-app",
     "compilerVersion": 3,

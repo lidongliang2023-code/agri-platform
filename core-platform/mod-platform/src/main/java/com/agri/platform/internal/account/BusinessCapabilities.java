@@ -36,15 +36,15 @@ public final class BusinessCapabilities {
                     "承接农机、植保等农业服务订单"),
             new Definition(CapabilityCodes.GOV_OVERSIGHT, "监管协同", "government", "政府人员",
                     "查看辖区监管数据与协同任务"),
-            // 下面两个不来自业务身份：identityCode 为空，能力由主体/认证数据推导
-            new Definition(CapabilityCodes.PRODUCTION_MANAGE, "生产管理", "", "已加入经营主体",
-                    "维护农事计划、批次、设备与溯源数据"),
+            // 下面几个不来自业务身份本身：identityCode 为空，能力由主体/身份组合推导
+            new Definition(CapabilityCodes.PRODUCTION_MANAGE, "生产管理", "", "农户 / 合作社管理员 + 经营主体",
+                    "维护农事计划、批次、设备与溯源数据（需已加入主体并开通农户或合作社管理员身份）"),
             new Definition(CapabilityCodes.FINANCE_APPLY, "融资申请", "", "经营主体认证通过",
                     "以认证主体身份申请供应链金融产品"),
             new Definition(CapabilityCodes.S2B2C_CONSUMER, "商城消费", "", "已登录账号",
                     "在 S2B2C 商城下单、使用购物车与收货地址"),
-            new Definition(CapabilityCodes.S2B2C_SUPPLIER, "商城供应商", "", "交易类业务身份 + 经营主体",
-                    "在 S2B2C 商城上架商品、处理订单与结算"));
+            new Definition(CapabilityCodes.S2B2C_SUPPLIER, "商城供应商", "", "商城供应商 + 经营主体",
+                    "在 S2B2C 商城上架商品、处理订单与结算（需已加入主体并开通商城供应商身份）"));
 
     private static final Map<String, Definition> BY_CODE;
     private static final Map<String, Definition> BY_IDENTITY;

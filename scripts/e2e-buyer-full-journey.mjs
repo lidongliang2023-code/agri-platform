@@ -102,7 +102,7 @@ const expectOk = (result, label) => {
 const makeOrderFromProduct = async (buyerToken, marker) => {
   const created = await request('POST', '/api/trade/order/from-product', buyerToken, {
     productId: PRODUCT_ID,
-    quantity: 1,
+    quantity: 50,
     freightAmount: 0,
     deliveryProvince: '北京市',
     deliveryCity: '北京市',

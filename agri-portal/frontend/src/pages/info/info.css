@@ -8,41 +8,10 @@
   padding: 24px 24px 56px;
 }
 
-/* ---------- 频道头 ---------- */
-.info-hero {
-  position: relative;
-  overflow: hidden;
-  padding: 36px 40px;
-  border-radius: 16px;
-  background: linear-gradient(135deg, var(--green-800), var(--green-600) 62%, var(--tech-600));
-  color: #fff;
-}
-
-.info-hero::after {
-  position: absolute;
-  right: -80px;
-  top: -80px;
-  width: 320px;
-  height: 320px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, .07);
-  content: '';
-}
-
-.info-hero h1 {
-  margin: 0 0 10px;
-  font-size: 28px;
-  font-weight: 700;
-  letter-spacing: .5px;
-}
-
-.info-hero p {
-  max-width: 720px;
-  margin: 0;
-  color: rgba(255, 255, 255, .82);
-  font-size: 13.5px;
-  line-height: 1.75;
-}
+/* 子频道沿用公共门户标题；主频道使用 PortalPageHero。 */
+.info-hero { position: relative; overflow: hidden; padding: 48px 40px; border-radius: var(--r-md); background: var(--portal-hero-background); color: #fff; }
+.info-hero h1 { margin: 0 0 14px; font-size: 36px; font-weight: 800; line-height: 1.3; }
+.info-hero p { max-width: 720px; color: rgba(255,255,255,.8); font-size: 14px; line-height: 1.8; }
 
 .info-hero-metrics {
   display: flex;
@@ -148,8 +117,8 @@
   padding: 18px 20px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: var(--card);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, .03);
+  background: var(--surface);
+  box-shadow: var(--shadow-xs);
 }
 
 .info-grid-2 {
@@ -575,4 +544,29 @@
   .info-article-body {
     font-size: 14px;
   }
+}
+
+/* 价格指数：与产业资讯共用频道头、内容面板与间距。 */
+.market-hero-links { margin-top: 22px; position: relative; z-index: 1; }
+.market-hero-links a { color: #fff; padding: 7px 14px; border: 1px solid rgba(255,255,255,.3); border-radius: 999px; font-size: 13px; }
+.market-hero-links a:hover { background: rgba(255,255,255,.14); }
+.market-hero-links a:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+.info-market-page .market-section-head { margin-top: 28px; }
+.market-index-strip { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); margin-bottom: 20px; border: 1px solid var(--line); border-radius: 12px; background: #fff; overflow: hidden; }
+.market-index-item { padding: 22px 24px; border-right: 1px solid var(--line); }
+.market-index-item:last-child { border-right: 0; }
+.info-market-page .market-filter { padding: 20px 24px; border: 1px solid var(--line); border-radius: 12px; background: #fff; gap: 14px; }
+.market-filter .info-chips { flex: 1; flex-wrap: wrap; }
+.info-market-page .market-search { margin-left: auto; width: 220px; max-width: 100%; }
+.info-market-page .market-quotes { padding: 0; overflow-x: auto; border-radius: 12px; }
+.market-quotes .info-table { min-width: 720px; }
+.market-quotes .info-table th { background: var(--green-050); color: var(--ink-600); }
+.market-quotes .info-table th, .market-quotes .info-table td { padding: 16px 20px; }
+@media (max-width: 760px) {
+  .market-index-strip { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .market-index-item { padding: 18px; border-bottom: 1px solid var(--line); }
+  .market-index-item:nth-child(2n) { border-right: 0; }
+  .market-index-item:nth-last-child(-n+2) { border-bottom: 0; }
+  .info-market-page .market-filter { padding: 16px; flex-wrap: wrap; }
+  .info-market-page .market-search { width: 100%; margin-left: 0; }
 }

@@ -74,6 +74,7 @@ public class ProductionRoleService {
     /** 保存某一主体的角色权限与数据范围。 */
     @Transactional(rollbackFor = Exception.class)
     public RoleView savePermissions(String tenantId, String roleId, List<String> permissions, String dataScope) {
+        TenantContextService.requireSubjectOwner();
         requireTenant(tenantId);
         ProductionRole role = requireRole(tenantId, roleId);
         String scope = normalizeScope(dataScope);
@@ -87,6 +88,40 @@ public class ProductionRoleService {
         role.setUpdateTime(LocalDateTime.now());
         roleMapper.updateById(role);
         return view(role, headcount(tenantId).getOrDefault(role.getRoleCode(), 0));
+    }
+
+    /**
+     * 当前调用方是否有「种养计划审批」权限。
+     *
+     * <p>平台主体经营者（roleInMerchant=owner）视为拥有全部权限；
+     * 其他成员按其团队角色配置的 {@code produce.plan.approve} 判断。</p>
+     *
+     * @param tenantId 当前经营主体
+     * @return 是否可审批种养计划
+     */
+    public boolean canApprovePlan(String tenantId) {
+        requireTenant(tenantId);
+        if ("owner".equalsIgnoreCase(TenantContextService.currentMerchantRole())) {
+            return true;
+        }
+        String userId = TenantContextService.currentUserId();
+        if (userId == null || userId.isBlank()) {
+            return false;
+        }
+        TeamMember member = memberMapper.selectOne(new LambdaQueryWrapper<TeamMember>()
+                .eq(TeamMember::getTenantId, tenantId)
+                .eq(TeamMember::getUserId, userId)
+                .eq(TeamMember::getStatus, 1)
+                .last("LIMIT 1"));
+        if (member == null || member.getRoleCode() == null || member.getRoleCode().isBlank()) {
+            return false;
+        }
+        ProductionRole role = roleMapper.selectOne(new LambdaQueryWrapper<ProductionRole>()
+                .eq(ProductionRole::getTenantId, tenantId)
+                .eq(ProductionRole::getStatus, 1)
+                .apply("UPPER(role_code) = {0}", member.getRoleCode().trim().toUpperCase(Locale.ROOT))
+                .last("LIMIT 1"));
+        return role != null && parsePermissions(role.getPermissions()).contains("produce.plan.approve");
     }
 
     /** 成员分配角色时校验：角色必须在当前主体内存在且启用。 */

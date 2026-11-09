@@ -316,6 +316,10 @@ node ops/ci/verify.mjs                 # 64 项（带 MYSQL_PWD=root 时含"列�
 
 规范只有一条硬约束：**可见文字不得小于 12px**；层级靠字重与颜色拉开，不靠把字压小。
 
+> 这一条已经不再是金融端独有：同日把同一口径推到了其余 10 个端（合计 875 处 6–11.5px，含 uni-app 的 12–23rpx），
+> 并加了 `node ops/ci/verify.mjs --only font` 守着。全平台口径、令牌落点与两类"grep 源码看不见"的漏点
+> （uni-app tabBar 缺省 10px、`<small>` 走 0.833em）见 [packages/agri-shared/README.md](../packages/agri-shared/README.md) 的「字号：全平台一条下限」。
+
 真机对比（同一套 14 个页面，`:8081/finance/`，1440×900）：
 
 | 版本 | 最小字号 | 低于 12px 的文字节点 | 文字裁切 | 横向溢出 |

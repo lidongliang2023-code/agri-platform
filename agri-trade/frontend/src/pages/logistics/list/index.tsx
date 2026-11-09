@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Form, Input, InputNumber, Select, Spin, message } from 'antd'
+import { Form, Input, InputNumber, Select, Spin, Modal, Alert, message } from 'antd'
 import {
   ArrowLeftOutlined,
   CheckCircleOutlined,
@@ -13,6 +13,7 @@ import {
 } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  createReship,
   deleteLogistics,
   getCarriers,
   getLogisticsById,
@@ -68,6 +69,22 @@ export default function LogisticsList(): JSX.Element {
   const [carriers, setCarriers] = useState<CarrierVO[]>([])
   const [traces, setTraces] = useState<LogisticsTraceVO[]>([])
   const [traceLoading, setTraceLoading] = useState(false)
+  const [reshipSource, setReshipSource] = useState<LogisticsVO | null>(null)
+  const [ticketNo, setTicketNo] = useState('')
+  const [reshipSaving, setReshipSaving] = useState(false)
+  const submitReship = async (): Promise<void> => {
+    if (!reshipSource || reshipSaving) return
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(ticketNo.trim())) { message.warning('请填写有效工单号'); return }
+    setReshipSaving(true)
+    try {
+      const result = await createReship(reshipSource.id, ticketNo.trim())
+      if (result?.code !== 200) { message.error(result?.message || '补发登记失败'); return }
+      message.success(`已生成补发物流 ${result.data?.logisticsNo}，数量以生产工单为准，买方签收后可核验关闭`)
+      setReshipSource(null); await queryClient.invalidateQueries({ queryKey: ['logistics'] })
+    } catch { message.error('补发登记失败，请刷新查询，勿重复登记') }
+    finally { setReshipSaving(false) }
+  }
+
 
   const { data, isLoading } = useQuery({
     queryKey: ['logistics', query],
@@ -139,7 +156,7 @@ export default function LogisticsList(): JSX.Element {
     const values = await form.validateFields()
     setSaving(true)
     try {
-      const basic = await updateLogistics(active.id, {
+      const basic = active.diffTicketNo ? { code: 200, message: '' } : await updateLogistics(active.id, {
         carrierId: values.carrierId,
         logisticsType: values.logisticsType,
         freightAmount: values.freightAmount,
@@ -366,6 +383,10 @@ export default function LogisticsList(): JSX.Element {
           <div><span>本页运费</span><strong>{money(summary.freight)}</strong></div>
         </div>
       </section>
+      <Modal title="按短装工单登记补发" open={!!reshipSource} confirmLoading={reshipSaving} onOk={() => void submitReship()} onCancel={() => { if (!reshipSaving) setReshipSource(null) }}>
+        <Alert type="info" showIcon message="卖方登记补发，买方确认签收" description="先将生产短装工单登记为处理中、方式为补发。系统核对原供给和订单，按差异量生成一张足额补发单。补发单不可删除、不可重复登记；此操作仅安排物流，不自动扣减库存。" />
+        <Input style={{ marginTop: 16 }} value={ticketNo} maxLength={64} onChange={e => setTicketNo(e.target.value)} placeholder="生产短装工单号" />
+      </Modal>
       <Panel title="物流单" extra={<span className="after-count">共 {total} 条</span>}>
         <div className="after-toolbar">
           <Input
@@ -413,7 +434,7 @@ export default function LogisticsList(): JSX.Element {
                           <span>{shortDate(row.createTime)}</span>
                         </button>
                       </td>
-                      <td className="mc-mono">{row.orderId}</td>
+                      <td className="mc-mono">{row.orderId}{row.diffTicketNo && <><br />工单：{row.diffTicketNo}<br />补发：{row.reshipQty} {row.reshipUnit}</>}</td>
                       <td><div className="logistics-carrier-cell"><TruckOutlined /><span>{row.carrierName || '承运商待补充'}</span><small>{LOGISTICS_TYPE[row.logisticsType] ?? row.logisticsType}</small></div></td>
                       <td><div className="logistics-receiver-cell"><strong>{row.receiverContact || '—'}</strong><small>{row.receiverAddress || '地址待补充'}</small></div></td>
                       <td><LogisticsTag value={row.logisticsStatus} /></td>
@@ -422,6 +443,7 @@ export default function LogisticsList(): JSX.Element {
                         <div className="mc-actions">
                           <button type="button" className="mc-link after-action" onClick={() => void openTrace(row)}><TruckOutlined /> 跟踪</button>
                           <button type="button" className="mc-link after-action" onClick={() => showDetail(row)}><EyeOutlined /> 查看</button>
+                          {!row.diffTicketNo && <button type="button" className="mc-link after-action" onClick={() => { setTicketNo(''); setReshipSource(row) }}>登记补发</button>}
                           <button type="button" className="mc-link after-action" onClick={() => openEdit(row)}><EditOutlined /> 编辑</button>
                         </div>
                       </td>

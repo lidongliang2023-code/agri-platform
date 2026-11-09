@@ -27,6 +27,8 @@
         <text class="section-link">{{ products.length }} 件</text>
       </view>
 
+      <view v-if="cartError" class="cart-feedback cart-error" role="alert">{{ cartError }}</view>
+      <view v-else-if="cartMessage" class="cart-feedback cart-success" role="status" aria-live="polite">{{ cartMessage }}</view>
       <view v-if="products.length" class="product-list">
         <view v-for="item in products" :key="item.id" class="product-row">
           <image v-if="item.image" class="product-thumb" :src="item.image" mode="aspectFill" />
@@ -36,7 +38,7 @@
             <text class="muted">库存 {{ item.stock }}{{ item.unit || '' }}</text>
             <view class="product-bottom">
               <text class="price">{{ money(item.price) }}</text>
-              <view class="btn btn-primary btn-sm" @tap="addToCart(item)">加入购物车</view>
+              <button class="btn btn-primary btn-sm cart-button" role="button" :aria-label="`加入购物车：${item.name}`" :aria-busy="addingId === item.id" :disabled="addingId !== null || !(Number(item.stock) > 0)" :loading="addingId === item.id" @tap.stop="addToCart(item)" @keydown.enter.prevent="addToCart(item)" @keydown.space.prevent="addToCart(item)">{{ addingId === item.id ? '加入中…' : Number(item.stock) > 0 ? '加入购物车' : '暂时缺货' }}</button>
             </view>
           </view>
         </view>
@@ -47,7 +49,7 @@
       </view>
 
       <view class="channel-note">
-        <text class="tiny">通过本店下单，订单归属该渠道商；售后与结算按渠道订单处理。</text>
+        <text class="tiny">通过本店下单，订单归属该商家；售后与结算按渠道订单处理。</text>
       </view>
     </template>
   </view>
@@ -65,6 +67,9 @@ const loading = ref(true)
 const shop = ref<ChannelShop | null>(null)
 const products = ref<ChannelShopProduct[]>([])
 const channelId = ref('')
+const addingId = ref<string | number | null>(null)
+const cartError = ref('')
+const cartMessage = ref('')
 
 const gradeText = computed(() => {
   const grade = shop.value?.grade || ''
@@ -96,13 +101,37 @@ async function load(id: string) {
 }
 
 async function addToCart(item: ChannelShopProduct) {
-  if (!ensureLogin() || !session.user) return
+  if (addingId.value !== null) return
+  cartError.value = ''
+  cartMessage.value = ''
+  if (!ensureLogin() || !session.user) {
+    cartError.value = '请登录后再加入购物车'
+    return
+  }
+  if (!channelId.value || String(shop.value?.id) !== channelId.value) {
+    cartError.value = '店铺信息不完整，请重新打开店铺'
+    return
+  }
+  if (!(Number(item.stock) > 0)) {
+    cartError.value = '该商品暂时缺货'
+    return
+  }
+  const consumerId = session.user.id
+  const sourceId = channelId.value
+  addingId.value = item.id
   try {
-    const result = await mallApi.addCart(session.user.id, item.id, 1, channelId.value)
-    if (!result.success) throw new Error(result.message || '加入购物车失败')
+    const result = await mallApi.addCart(consumerId, item.id, 1, sourceId)
+    if (result?.success !== true) throw new Error(result?.message || '加入购物车失败')
+    if (String(session.user?.id) !== String(consumerId) || channelId.value !== sourceId) {
+      throw new Error('账号或店铺已切换，请在原账号购物车确认结果')
+    }
+    cartMessage.value = `已加入购物车：${item.name}`
     toast(result.message || '已加入购物车', 'success')
   } catch (error) {
-    toast((error as Error).message)
+    cartError.value = (error as Error)?.message || '加入购物车失败，请重试'
+    toast(cartError.value)
+  } finally {
+    addingId.value = null
   }
 }
 
@@ -113,6 +142,13 @@ onShareAppMessage(() => ({
 </script>
 
 <style lang="scss" scoped>
+.cart-feedback { margin: 0 24rpx 16rpx; padding: 20rpx; border-radius: 12rpx; font-size: 26rpx; line-height: 1.5; word-break: break-word; }
+.cart-error { background: #fff2ef; color: #a33124; border: 1rpx solid #efc4be; }
+.cart-success { background: #e9f6ee; color: #0e5233; border: 1rpx solid #bcdfc9; }
+.cart-button { min-height: 88rpx; min-width: 196rpx; margin: 0 0 0 16rpx; cursor: pointer; touch-action: manipulation; }
+.cart-button:focus-visible { outline: 3px solid #0e5233; outline-offset: 3px; }
+.cart-button[disabled] { opacity: .6; cursor: default; }
+
 .channel-page {
   padding: 24rpx 0 40rpx;
 }
@@ -158,7 +194,7 @@ onShareAppMessage(() => ({
 
 .shop-desc {
   color: rgba(255, 255, 255, 0.68);
-  font-size: 22rpx;
+  font-size: 24rpx;
 }
 
 .shop-tags {
@@ -177,7 +213,7 @@ onShareAppMessage(() => ({
 .section-kicker {
   display: block;
   color: #94a198;
-  font-size: 18rpx;
+  font-size: 24rpx;
   letter-spacing: 2rpx;
 }
 
@@ -191,7 +227,7 @@ onShareAppMessage(() => ({
 
 .section-link {
   color: #718277;
-  font-size: 22rpx;
+  font-size: 24rpx;
 }
 
 .product-list {

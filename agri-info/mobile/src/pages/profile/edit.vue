@@ -128,6 +128,6 @@ function changeAvatar() {
 
 .change {
   color: #12764a;
-  font-size: 22rpx;
+  font-size: 24rpx;
 }
 </style>

@@ -876,7 +876,7 @@ export function App(): JSX.Element {
   return (
     <div className={`ops-shell${collapsed ? ' collapsed' : ''}`}>
       <aside className="ops-sidebar">
-        <button type="button" className="ops-brand" onClick={() => go('dashboard')}><span>丰</span>{!collapsed && <div><b>丰链云</b><small>综合服务运营端</small></div>}</button>
+        <button type="button" className="ops-brand" onClick={() => go('dashboard')}><img className="ops-brand-logo" src={`${import.meta.env.BASE_URL}fengchain.svg`} alt="丰链云" />{!collapsed && <div><b>丰链云</b><small>FENGCHAIN · AGRI</small></div>}</button>
         <nav>{NAV.map((group) => <section key={group.group}>{!collapsed && <h3>{group.group}</h3>}{group.items.map((item) => <button type="button" key={item.page} className={route.page === item.page ? 'on' : ''} onClick={() => go(item.page)} title={item.label}>{item.icon}{!collapsed && <span>{item.label}</span>}</button>)}</section>)}</nav>
         <div className="ops-side-foot">{!collapsed && <div><b>运营值守</b><small>今日 09:00-21:00</small></div>}<button type="button" onClick={() => setCollapsed(!collapsed)}>{collapsed ? <MenuUnfoldOutlined /> : <><MenuFoldOutlined /> 收起导航</>}</button></div>
       </aside>

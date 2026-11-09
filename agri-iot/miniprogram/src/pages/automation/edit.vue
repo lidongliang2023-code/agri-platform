@@ -213,9 +213,9 @@ async function submit(test = false) {
 <style scoped lang="scss">
 .rule-section{margin:0 0 20rpx;padding:18rpx;border:1rpx solid #e1e9e3;border-radius:17rpx;background:#fbfdfc}
 .section-label{display:flex;align-items:center;gap:10rpx;margin-bottom:16rpx;font-size:24rpx;font-weight:700}
-.if-badge,.then-badge{display:inline-flex;padding:4rpx 9rpx;border-radius:6rpx;font-size:18rpx;font-weight:800}
+.if-badge,.then-badge{display:inline-flex;padding:4rpx 9rpx;border-radius:6rpx;font-size:24rpx;font-weight:800}
 .if-badge{background:#e7f3fa;color:#176c93}.then-badge{background:#e5f5eb;color:#0e5233}
-.form-tip,.rule-hint{display:block;margin-top:-7rpx;color:#718277;font-size:20rpx;line-height:1.6}
+.form-tip,.rule-hint{display:block;margin-top:-7rpx;color:#718277;font-size:24rpx;line-height:1.6}
 .rule-hint{padding:14rpx;border-radius:11rpx;background:#f2fbf5;color:#53665a}
 .save-actions{display:grid;grid-template-columns:1fr 1.5fr;gap:12rpx}
 </style>

@@ -70,5 +70,5 @@ async function submit() {
 </template>
 
 <style scoped lang="scss">
-.mono { font-family: ui-monospace, monospace; font-size: 21rpx; }
+.mono { font-family: ui-monospace, monospace; font-size: 24rpx; }
 </style>

@@ -1,3 +1,4 @@
+import Card from '@/components/SectionCard'
 /**
  * 页面名称：新增农场
  * 路由路径：/production/farms/create
@@ -9,20 +10,20 @@
  * - 分节「农场基本信息」：农场名称（2-50 字符，主体内唯一校验）、农场类型（radio 六项，默认蔬菜种植）、
  *   省/市/区三级联动、详细地址、面积（亩）、海拔（米）、负责人、联系电话、农场简介（500 字计数）
  * - 分节「资质信息（可选）」：无公害农产品 / 有机认证 / 绿色食品认证 / 地理标志认证 / GAP 认证（多选）
- * + 证书附件上传区：JPG、PNG、PDF，单个文件 ≤10MB，已选文件可预览与删除
+ * + 证书附件上传区：JPG、PNG、WEBP，单张 ≤5MB，已选文件可预览与删除
  * - 底部三按钮：`取消`、`保存并继续添加地块 →`、`保存并查看详情`
  *
  * 补充说明：后端 FarmInfoEntity 无「海拔」「简介」字段，统一以
  * `海拔:35m；产业类型:蔬菜种植；简介:xxx` 结构持久化到 remark 字段。
  */
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { PageContainer } from '@ant-design/pro-components'
+import PageContainer from '@/components/ProductionPageContainer'
 import { FilePdfOutlined, FileTextOutlined, InboxOutlined, LeftOutlined } from '@ant-design/icons'
 import {
+  Alert,
   Button,
-  Card,
   Cascader,
   Checkbox,
   Divider,
@@ -30,45 +31,28 @@ import {
   Input,
   InputNumber,
   Radio,
+  Select,
   Space,
   Typography,
   Upload,
   message,
 } from 'antd'
-import { createFarm, createFarmCert, getFarm, listFarms, updateFarm } from '@/api/farms'
-import type { FarmCertPayload } from '@/api/farms'
+import { createFarm, createFarmCert, getFarm, listFarms, updateFarm, listFarmCerts, uploadFarmCertificate, previewFarmCertificate } from '@/api/farms'
+import useAuthStore from '@/store/auth'
+import { FARM_REGION_OPTIONS } from '@/data/farmRegions'
 import type { FarmCertType, PageQuery } from '@/types'
 
-/** 单个文件上限（10MB） */
-const MAX_FILE_SIZE = 10 * 1024 * 1024
+/** 单个文件上限（5MB） */
+const MAX_FILE_SIZE = 5 * 1024 * 1024
 
 /** 允许上传的扩展名 */
-const ACCEPT_EXT = /\.(jpg|jpeg|png|pdf)$/i
+const ACCEPT_EXT = /\.(jpg|jpeg|png|webp)$/i
 
-/**
- * 资质选项 → 后端 certType 枚举。
- *
- * ⚠️ 后端 `FarmCertEntity.certType` 只开放 4 个取值：GREEN / ORGANIC / GEO / HACCP，
- * 而原型 P3 有 5 种资质名称，无法一一对应。此处的映射是把原型选项就近归到已有枚举：
- * 安全 / 绿色类（无公害农产品、绿色食品认证）→ GREEN，体系类（GAP）→ HACCP。
- * 后端若补齐 `OTHER` / `GAP` / `WUWUHAI` 等枚举值，此处需同步放开。
- */
+/** 按生产证照真实分类展示，不以近似类型替代。 */
 const CERT_CODE_MAP: Partial<Record<string, FarmCertType>> = {
-  无公害农产品: 'GREEN',
-  有机认证: 'ORGANIC',
-  绿色食品认证: 'GREEN',
-  地理标志认证: 'GEO',
-  'GAP认证': 'HACCP',
+  有机认证: 'ORGANIC', 绿色食品认证: 'GREEN', 地理标志认证: 'GEO', HACCP认证: 'HACCP',
 }
-
-/** 资质选项（原型 P3） */
-const CERT_OPTIONS: string[] = [
-  '无公害农产品',
-  '有机认证',
-  '绿色食品认证',
-  '地理标志认证',
-  'GAP认证',
-]
+const CERT_OPTIONS = Object.keys(CERT_CODE_MAP)
 
 /** 农场类型选项（原型 P3，默认选中蔬菜种植） */
 const FARM_TYPE_OPTIONS: string[] = [
@@ -90,149 +74,6 @@ const BUSINESS_TYPE_VALUE_MAP: Record<string, number> = {
   水产养殖: 2,
 }
 
-/** 省市区级联数据节点 */
-interface RegionNode {
-  /** 行政名称 */
-  value: string
-  /** 展示文案 */
-  label: string
-  /** 下级节点 */
-  children?: RegionNode[]
-}
-
-/** 内置省市区静态数据（覆盖原型示例地区与主要农业产区） */
-const REGION_OPTIONS: RegionNode[] = [
-  {
-    value: '北京市',
-    label: '北京市',
-    children: [
-      {
-        value: '北京市',
-        label: '北京市',
-        children: [
-          { value: '顺义区', label: '顺义区' },
-          { value: '通州区', label: '通州区' },
-          { value: '大兴区', label: '大兴区' },
-          { value: '昌平区', label: '昌平区' },
-          { value: '平谷区', label: '平谷区' },
-        ],
-      },
-    ],
-  },
-  {
-    value: '黑龙江省',
-    label: '黑龙江省',
-    children: [
-      {
-        value: '哈尔滨市',
-        label: '哈尔滨市',
-        children: [
-          { value: '五常市', label: '五常市' },
-          { value: '双城区', label: '双城区' },
-          { value: '尚志市', label: '尚志市' },
-        ],
-      },
-      {
-        value: '齐齐哈尔市',
-        label: '齐齐哈尔市',
-        children: [
-          { value: '龙江县', label: '龙江县' },
-          { value: '讷河市', label: '讷河市' },
-        ],
-      },
-    ],
-  },
-  {
-    value: '山东省',
-    label: '山东省',
-    children: [
-      {
-        value: '烟台市',
-        label: '烟台市',
-        children: [
-          { value: '栖霞市', label: '栖霞市' },
-          { value: '莱山区', label: '莱山区' },
-          { value: '福山区', label: '福山区' },
-        ],
-      },
-      {
-        value: '潍坊市',
-        label: '潍坊市',
-        children: [
-          { value: '寿光市', label: '寿光市' },
-          { value: '安丘市', label: '安丘市' },
-        ],
-      },
-    ],
-  },
-  {
-    value: '河南省',
-    label: '河南省',
-    children: [
-      {
-        value: '郑州市',
-        label: '郑州市',
-        children: [
-          { value: '中牟县', label: '中牟县' },
-          { value: '荥阳市', label: '荥阳市' },
-        ],
-      },
-      {
-        value: '周口市',
-        label: '周口市',
-        children: [
-          { value: '太康县', label: '太康县' },
-          { value: '淮阳区', label: '淮阳区' },
-        ],
-      },
-    ],
-  },
-  {
-    value: '江苏省',
-    label: '江苏省',
-    children: [
-      {
-        value: '南京市',
-        label: '南京市',
-        children: [
-          { value: '六合区', label: '六合区' },
-          { value: '溧水区', label: '溧水区' },
-        ],
-      },
-      {
-        value: '徐州市',
-        label: '徐州市',
-        children: [
-          { value: '邳州市', label: '邳州市' },
-          { value: '沛县', label: '沛县' },
-        ],
-      },
-    ],
-  },
-  {
-    value: '四川省',
-    label: '四川省',
-    children: [
-      {
-        value: '成都市',
-        label: '成都市',
-        children: [
-          { value: '崇州市', label: '崇州市' },
-          { value: '邛崃市', label: '邛崃市' },
-        ],
-      },
-      {
-        value: '绵阳市',
-        label: '绵阳市',
-        children: [
-          { value: '安州区', label: '安州区' },
-          { value: '江油市', label: '江油市' },
-        ],
-      },
-    ],
-  },
-]
-
 /** 已选文件项 */
 interface UploadedFile {
   /** 唯一标识 */
@@ -243,6 +84,11 @@ interface UploadedFile {
   size: number
   /** 是否 PDF */
   pdf: boolean
+  url?: string
+  subject: string
+  certName?: string
+  status: 'uploading' | 'done' | 'error'
+  saved?: boolean
 }
 
 /** 表单值 */
@@ -308,6 +154,11 @@ export default function Create(): JSX.Element {
 
   const [form] = Form.useForm<FarmFormValues>()
   const [fileList, setFileList] = useState<UploadedFile[]>([])
+  const initialSubject = useRef(useAuthStore.getState().userInfo?.tenantId)
+  const createdId = useRef<string>('')
+  const savedNames = useRef(new Set<string>())
+  const subject = useAuthStore((state) => state.userInfo?.tenantId)
+  const certQuery = useQuery({ queryKey: ['farm-certs', editingFarmId, subject], enabled: Boolean(editingFarmId), queryFn: () => listFarmCerts(editingFarmId!, { pageNum: 1, pageSize: 100 }) })
   const [submitAction, setSubmitAction] = useState<'plot' | 'detail'>('detail')
 
   /** 编辑态：加载原农场数据 */
@@ -344,6 +195,7 @@ export default function Create(): JSX.Element {
    * @returns 农场 ID
    */
   const persist = async (values: FarmFormValues): Promise<string> => {
+    if (initialSubject.current !== useAuthStore.getState().userInfo?.tenantId) throw new Error('经营主体已变更，请重新打开农场表单')
     // 字段映射约定（后端 FarmInfoEntity 无海拔 / 简介 / 业务类型等独立列）：
     // 海拔、简介、产业类型统一序列化写入 remark，格式 `海拔:35m；产业类型:蔬菜种植；简介:xxx`。
     // 后端未来补这些列时需同步迁移此处与读取侧（FarmList / FarmDetail 的 parseRemarkField）。
@@ -362,34 +214,28 @@ export default function Create(): JSX.Element {
       remark: buildRemark(values),
     }
 
-    let farmId = editingFarmId ?? ''
+    const operationSubject = useAuthStore.getState().userInfo?.tenantId
+    if (fileList.some(file => file.status !== 'done' || !file.certName || file.subject !== operationSubject)) throw new Error('请等待上传完成、移除失败附件并为每份附件选择证书类型；切换主体后请重新上传')
+    let farmId = editingFarmId || createdId.current
     if (farmId) {
       await updateFarm(farmId, payload)
     } else {
       // 后端 POST /farms 返回 ApiResponse<String>（新农场主键），直取即可。
       farmId = await createFarm(payload)
+      createdId.current = farmId
     }
 
-    // 资质写库：新增场景根据用户勾选生成资质记录
-    if (!editingFarmId && farmId && (values.certNames ?? []).length > 0) {
-      const issueDate = new Date().toISOString().slice(0, 10)
-      const expire = new Date()
-      expire.setFullYear(expire.getFullYear() + 1)
-      const expireDate = expire.toISOString().slice(0, 10)
-      await Promise.allSettled(
-        (values.certNames ?? []).map((certName) => {
-          const payload: FarmCertPayload = {
-            farmId,
-            certName,
-            certType: CERT_CODE_MAP[certName],
-            issueDate,
-            expireDate,
-            attachUrl: fileList[0]?.name ?? '',
-            status: 1,
-          }
-          return createFarmCert(farmId, payload)
-        }),
-      )
+    // 不推断签发日期或有效期；上传材料不等于审核通过。
+    for (const file of fileList.filter(item => !item.saved)) {
+      if (operationSubject !== useAuthStore.getState().userInfo?.tenantId) throw new Error('主体已切换，请重新进入农场后操作')
+      await createFarmCert(farmId, { farmId, certName: file.certName!, certType: CERT_CODE_MAP[file.certName!], attachUrl: file.url })
+      file.saved = true
+    }
+    for (const certName of values.certNames ?? []) {
+      if (fileList.some(file => file.certName === certName) || savedNames.current.has(certName) || certQuery.data?.list.some(cert => cert.certName === certName)) continue
+      if (operationSubject !== useAuthStore.getState().userInfo?.tenantId) throw new Error('主体已切换，请重新进入农场后操作')
+      await createFarmCert(farmId, { farmId, certName, certType: CERT_CODE_MAP[certName] })
+      savedNames.current.add(certName)
     }
     return farmId
   }
@@ -399,6 +245,9 @@ export default function Create(): JSX.Element {
     mutationFn: async (params: { values: FarmFormValues; action: 'plot' | 'detail' }) => {
       const farmId = await persist(params.values)
       return { farmId, action: params.action }
+    },
+    onError: (error: Error) => {
+      message.error(createdId.current ? `农场已创建，证书关联未全部完成：${error.message}。请留在此页重试，不会重复创建农场。` : error.message || '农场保存失败，请检查主体权限及服务状态', 8)
     },
     onSuccess: ({ farmId, action }) => {
       message.success(editingFarmId ? '农场信息已保存' : '农场创建成功')
@@ -414,31 +263,31 @@ export default function Create(): JSX.Element {
 
   /** 提交入口：统一校验后按按钮类型跳转 */
   const handleSubmit = (action: 'plot' | 'detail'): void => {
+    if (submitMutation.isPending) return
     setSubmitAction(action)
     void form.validateFields().then((values) => {
       submitMutation.mutate({ values, action })
+    }).catch(() => {
+      message.warning('请检查必填项，补齐后再保存')
     })
   }
 
   /** 上传前校验：类型 + 大小 */
   const beforeUpload = (file: File): boolean => {
-    if (!ACCEPT_EXT.test(file.name)) {
-      message.error('仅支持 JPG、PNG、PDF 格式的文件')
-      return false
+    if (!ACCEPT_EXT.test(file.name) || file.size === 0 || file.size > MAX_FILE_SIZE) {
+      message.error('请选择不超过 5MB 的 JPG、PNG 或 WEBP 图片'); return false
     }
-    if (file.size > MAX_FILE_SIZE) {
-      message.error(`「${file.name}」超过 10MB，请压缩后重试`)
-      return false
-    }
-    setFileList((prev) => [
-      ...prev,
-      {
-        uid: `${file.name}-${file.size}-${Date.now()}`,
-        name: file.name,
-        size: file.size,
-        pdf: /\.pdf$/i.test(file.name),
-      },
-    ])
+    const current = useAuthStore.getState().userInfo?.tenantId
+    if (!current) { message.error('请先选择经营主体'); return false }
+    const uid = crypto.randomUUID()
+    setFileList(prev => [...prev, { uid, name: file.name, size: file.size, pdf: false, subject: current, status: 'uploading' }])
+    void uploadFarmCertificate(file, current).then(url => {
+      if (useAuthStore.getState().userInfo?.tenantId !== current) throw new Error('主体已切换，请移除附件后重新上传')
+      setFileList(prev => prev.map(item => item.uid === uid ? { ...item, url, status: 'done' } : item))
+    }).catch((error) => {
+      setFileList(prev => prev.map(item => item.uid === uid ? { ...item, status: 'error' } : item))
+      message.error(error.response?.data?.message || error.message || '上传失败，请移除后重试')
+    })
     return false
   }
 
@@ -469,6 +318,8 @@ export default function Create(): JSX.Element {
         </Button>,
       ]}
     >
+
+      {editingFarmId && farmQuery.isError && <Card><Alert type="error" showIcon message="农场资料加载失败" action={<Button onClick={() => void farmQuery.refetch()}>重新加载</Button>} /></Card>}
       {editingFarmId && farmQuery.isLoading && <Card loading />}
       {!editingFarmId || farmQuery.data ? (
         <Form
@@ -476,12 +327,12 @@ export default function Create(): JSX.Element {
           layout="vertical"
           initialValues={{
             farmTypeLabel: '蔬菜种植',
-            certNames: ['有机认证'],
+            certNames: [],
             ...(initialValues ?? {}),
           }}
           disabled={submitMutation.isPending}
         >
-          <Card title="农场基本信息" style={{ marginBottom: 16 }}>
+          <Card title="01 · 农场基本信息" style={{ marginBottom: 16 }}>
             <Form.Item
               name="farmName"
               label="农场名称"
@@ -525,9 +376,27 @@ export default function Create(): JSX.Element {
             <Form.Item
               name="region"
               label="省/市/区"
-              rules={[{ required: true, message: '请选择省/市/区' }]}
+              rules={[{ required: true, message: '请选择省、市、区县' }, {
+                validator: (_, value: string[] | undefined) => {
+                  let options = FARM_REGION_OPTIONS
+                  for (const name of value ?? []) {
+                    const node = options.find((item) => item.value === name)
+                    if (!node) return Promise.reject(new Error('请重新选择有效的省、市、区县'))
+                    options = node.children ?? []
+                  }
+                  return value?.length && !options.length
+                    ? Promise.resolve()
+                    : Promise.reject(new Error('请选择完整地区'))
+                },
+              }]}
             >
-              <Cascader options={REGION_OPTIONS} placeholder="请选择省 / 市 / 区" style={{ maxWidth: 420 }} />
+              <Cascader
+                options={FARM_REGION_OPTIONS}
+                placeholder="请选择省 / 市 / 区县"
+                showSearch={{ filter: (input, path) => path.some((item) => String(item.label).includes(input.trim())) }}
+                style={{ width: '100%', maxWidth: 480 }}
+                allowClear
+              />
             </Form.Item>
 
             <Form.Item name="address" label="详细地址" rules={[{ required: true, message: '请输入详细地址' }]}>
@@ -578,7 +447,7 @@ export default function Create(): JSX.Element {
             </Form.Item>
           </Card>
 
-          <Card title="资质信息（可选）" style={{ marginBottom: 16 }}>
+          <Card title="02 · 资质信息（可选）" style={{ marginBottom: 16 }}>
             <Form.Item name="certNames" label="资质认证">
               <Checkbox.Group
                 options={CERT_OPTIONS.map((item) => ({ value: item, label: item }))}
@@ -588,8 +457,10 @@ export default function Create(): JSX.Element {
             <Divider orientation="left" plain>
               资质证书附件
             </Divider>
+            <Alert type="warning" showIcon style={{ marginBottom: 12 }} message="证书材料上传" description="每份图片请选择对应资质，保存农场后关联附件。上传或勾选资质不代表审核通过，不自动填写签发日期和有效期。移除待提交附件不会删除平台文件。" />
             <Upload.Dragger
-              accept=".jpg,.jpeg,.png,.pdf"
+              accept=".jpg,.jpeg,.png,.webp"
+              disabled={submitMutation.isPending}
               multiple
               showUploadList={false}
               beforeUpload={(file) => {
@@ -600,10 +471,16 @@ export default function Create(): JSX.Element {
               <p className="ant-upload-drag-icon">
                 <InboxOutlined />
               </p>
-              <p className="ant-upload-text">拖拽文件到此处，或 点击上传</p>
-              <p className="ant-upload-hint">支持 JPG、PNG、PDF，单个文件不超过 10MB</p>
+              <p className="ant-upload-text">拖拽证书图片到此处，或点击上传</p>
+              <p className="ant-upload-hint">支持 JPG、PNG、WEBP，单张不超过 5MB；暂不支持 PDF</p>
             </Upload.Dragger>
 
+            {editingFarmId && <div style={{ marginTop: 12 }}>
+              {certQuery.isError ? <Alert type="error" message="已有证书加载失败" action={<Button onClick={() => void certQuery.refetch()}>重试</Button>} /> : certQuery.isLoading ? '正在加载已有证书…' : certQuery.data?.list.map(cert => <Card key={cert.certId} title={cert.certName} style={{ marginBottom: 8 }}>
+                <Typography.Text type="secondary">{cert.expireDate ? `有效期至 ${cert.expireDate}` : '未填写有效期'} · 材料记录不代表审核结论</Typography.Text>
+                {cert.attachUrl && <Button type="link" onClick={() => void previewFarmCertificate(cert.attachUrl!).catch(error => message.error(error.message))}>预览已有附件</Button>}
+              </Card>)}
+            </div>}
             {fileList.length > 0 && (
               <div style={{ marginTop: 12 }}>
                 {fileList.map((file) => (
@@ -615,11 +492,14 @@ export default function Create(): JSX.Element {
                     {file.pdf ? <FilePdfOutlined /> : <FileTextOutlined />}
                     <Typography.Text>📄 {file.name}</Typography.Text>
                     <Typography.Text type="secondary">{formatSize(file.size)}</Typography.Text>
-                    <Typography.Link onClick={() => message.info('预览功能需在附件上传完成后开放')}>
+                    <Select disabled={submitMutation.isPending || file.saved} placeholder="选择证书类型" value={file.certName} style={{ minWidth: 160 }} options={CERT_OPTIONS.map(value => ({ value, label: value }))} onChange={certName => setFileList(prev => prev.map(item => item.uid === file.uid ? { ...item, certName } : item))} />
+                    <Typography.Text>{file.status === 'uploading' ? '上传中' : file.status === 'error' ? '上传失败，请移除后重试' : file.saved ? '已关联' : '已上传，待保存关联'}</Typography.Text>
+                    <Typography.Link disabled={!file.url || file.subject !== subject} onClick={() => file.url && void previewFarmCertificate(file.url).catch(error => message.error(error.message))}>
                       预览
                     </Typography.Link>
                     <Typography.Link
                       type="danger"
+                      disabled={submitMutation.isPending || file.saved}
                       onClick={() =>
                         setFileList((prev) => prev.filter((item) => item.uid !== file.uid))
                       }

@@ -214,6 +214,7 @@ export function createTaskRecord(
 /** 分页查询任务模板库（适配后端 page/size 入参） */
 export async function fetchTaskTemplatesPage(params: {
   keyword?: string
+  taskType?: string
   status?: number
   pageNum?: number
   pageSize?: number
@@ -221,6 +222,7 @@ export async function fetchTaskTemplatesPage(params: {
   const { pageNum = 1, pageSize = 10 } = params
   const raw = await http.get<RawPageResult<TaskTemplate>>(`${BASE}/templates`, {
     keyword: params.keyword,
+    taskType: params.taskType,
     status: params.status,
     page: pageNum,
     size: pageSize,

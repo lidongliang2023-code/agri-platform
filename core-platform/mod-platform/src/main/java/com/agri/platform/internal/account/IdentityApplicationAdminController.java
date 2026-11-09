@@ -21,6 +21,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -44,12 +45,16 @@ public class IdentityApplicationAdminController {
      * 分页查询身份申请。
      *
      * @param status 单据状态：pending / approved / rejected / cancelled；为空表示全部
+     * @param identityType 身份类型筛选，大小写兼容；为空或 all 表示全部
+     * @param keyword 关键字：主体名称 / 信用代码 / 联系人 / 联系电话 / 申请人账号
      */
     @GetMapping
     public ApiResponse<Map<String, Object>> page(
             @RequestParam(defaultValue = "1") int pageNum,
             @RequestParam(defaultValue = "20") int pageSize,
-            @RequestParam(required = false) String status) {
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String identityType,
+            @RequestParam(required = false) String keyword) {
         int p = Math.max(pageNum, 1);
         int size = Math.min(Math.max(pageSize, 1), 100);
         LambdaQueryWrapper<IdentityApplicationEntity> wrapper =
@@ -58,6 +63,28 @@ public class IdentityApplicationAdminController {
                                 IdentityApplicationEntity::getStatus, status)
                         .orderByDesc(IdentityApplicationEntity::getCreatedAt)
                         .orderByDesc(IdentityApplicationEntity::getId);
+        // 历史数据的身份码大小写混用，筛选时同时匹配大小写两种写法
+        if (identityType != null && !identityType.isBlank() && !"all".equalsIgnoreCase(identityType)) {
+            String code = identityType.trim();
+            wrapper.in(IdentityApplicationEntity::getIdentityType,
+                    code, code.toUpperCase(Locale.ROOT), code.toLowerCase(Locale.ROOT));
+        }
+        String kw = keyword == null ? null : keyword.trim();
+        if (kw != null && !kw.isEmpty()) {
+            List<Long> userIds = userMapper.selectList(new LambdaQueryWrapper<UserEntity>()
+                            .like(UserEntity::getUsername, kw)
+                            .or().like(UserEntity::getNickname, kw))
+                    .stream().map(UserEntity::getId).toList();
+            wrapper.and(w -> {
+                w.like(IdentityApplicationEntity::getSubjectName, kw)
+                        .or().like(IdentityApplicationEntity::getCreditCode, kw)
+                        .or().like(IdentityApplicationEntity::getContactName, kw)
+                        .or().like(IdentityApplicationEntity::getContactPhone, kw);
+                if (!userIds.isEmpty()) {
+                    w.or().in(IdentityApplicationEntity::getUserId, userIds);
+                }
+            });
+        }
         Page<IdentityApplicationEntity> result =
                 identityApplicationMapper.selectPage(new Page<>(p, size), wrapper);
         List<Map<String, Object>> rows = new ArrayList<>();

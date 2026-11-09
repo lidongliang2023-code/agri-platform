@@ -67,6 +67,11 @@ export interface Quote {
 }
 
 export interface PriceIndex {
+  code?: string
+  basePeriod?: string
+  sampleCount?: number
+  method?: string
+  publishedAt?: string
   id: number
   name: string
   category?: string
@@ -212,7 +217,8 @@ export const infoPublicApi = {
       aiRead?: string
     }>('/markets', params),
   market: (id: number) => get<Quote & {
-    series?: Array<{ date: string; price: number; forecast?: boolean }>
+    series?: Array<{ date: string; price: number; volume?: number; forecast?: boolean }>
+    regionPrices?: Array<{ id: number; region?: string; market?: string; price: number; priceUnit?: string; changePct?: number; updatedAt?: string }>
     relatedArticles?: Article[]
     aiRead?: string
   }>(`/markets/${id}`),

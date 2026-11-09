@@ -144,6 +144,16 @@ public class AccountPolicyService {
         return Math.max(number("captcha.sms.ttl", 300), 30);
     }
 
+    /**
+     * 同一手机号、同一场景的当日发码上限。
+     *
+     * <p>{@code captcha.sms.daily.limit} 这条配置自 V52 起就在库里，运营端也能改，
+     * 但服务侧从来没读它 —— 配置页改了没东西执行，比没有配置更误导人。这里把它接上。</p>
+     */
+    public int smsDailyLimit() {
+        return Math.max(number("captcha.sms.daily.limit", 10), 1);
+    }
+
     // ==================== 执行 ====================
 
     /**

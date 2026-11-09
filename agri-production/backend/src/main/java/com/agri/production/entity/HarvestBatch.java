@@ -28,6 +28,9 @@ public class HarvestBatch {
     @TableId(value = "id", type = IdType.AUTO)
     private Long batchId;
 
+    public Long getId() { return this.batchId; }
+    public void setId(Long id) { this.batchId = id; }
+
     @TableField("batch_no")
     private String batchNo;
 
@@ -93,6 +96,12 @@ public class HarvestBatch {
     @TableField("inventory_id")
     private Long inventoryId;
     private String remark;
+
+    /** 详情只读派生字段，不落库。 */
+    @TableField(exist = false)
+    private Long linkedOfferCount;
+    @TableField(exist = false)
+    private String mutationBlockedReason;
 
     @TableField("tenant_id")
     private String tenantId;

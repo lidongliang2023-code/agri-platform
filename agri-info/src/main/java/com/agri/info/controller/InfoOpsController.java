@@ -33,12 +33,20 @@ import java.util.Map;
 @OperatorOnly("info:admin")
 public class InfoOpsController {
 
+    private final com.agri.info.integration.QuoteCollectionService collection;
+    private final com.agri.info.integration.QuoteCollectionScheduler scheduler;
+    private final com.agri.info.integration.QuoteCollectionAlertService collectionAlerts;
     private final InfoOpsRepository repository;
     private final MediaStorageService mediaStorage;
     private final SupplyDemandService supplyDemandService;
 
     public InfoOpsController(InfoOpsRepository repository, MediaStorageService mediaStorage,
-                             SupplyDemandService supplyDemandService) {
+                             SupplyDemandService supplyDemandService, com.agri.info.integration.QuoteCollectionService collection,
+                             com.agri.info.integration.QuoteCollectionScheduler scheduler,
+                             com.agri.info.integration.QuoteCollectionAlertService collectionAlerts) {
+        this.collectionAlerts = collectionAlerts;
+        this.scheduler = scheduler;
+        this.collection = collection;
         this.repository = repository;
         this.mediaStorage = mediaStorage;
         this.supplyDemandService = supplyDemandService;
@@ -156,7 +164,61 @@ public class InfoOpsController {
     public ApiResponse<Map<String, Object>> runTask(
             @PathVariable long id,
             @RequestHeader(value = "X-Agri-User", required = false) String user) {
-        return ApiResponse.success(repository.runTask(id, operator(user)));
+        return ApiResponse.success(collection.run(id, operator(user)));
+    }
+
+    @GetMapping("/collect-tasks/{id}/config")
+    public ApiResponse<Map<String, Object>> collectionConfig(@PathVariable long id) {
+        return ApiResponse.success(collection.config(id));
+    }
+
+    @PostMapping("/collect-tasks/{id}/config")
+    public ApiResponse<Map<String, Object>> saveCollectionConfig(@PathVariable long id,
+            @RequestBody Map<String, Object> body,
+            @RequestHeader(value = "X-Agri-User", required = false) String user) {
+        return ApiResponse.success(collection.saveConfig(id, body, operator(user)));
+    }
+
+    @GetMapping("/collect-tasks/{id}/schedule")
+    public ApiResponse<Map<String,Object>> collectionSchedule(@PathVariable long id) {
+        return ApiResponse.success(scheduler.config(id));
+    }
+
+    @PostMapping("/collect-tasks/{id}/schedule")
+    public ApiResponse<Map<String,Object>> saveCollectionSchedule(@PathVariable long id,
+            @RequestBody Map<String,Object> body,
+            @RequestHeader(value="X-Agri-User", required=false) String user) {
+        return ApiResponse.success(scheduler.save(id,body,operator(user)));
+    }
+
+    @GetMapping("/collect-tasks/{id}/runs")
+    public ApiResponse<List<Map<String, Object>>> collectionRuns(@PathVariable long id) {
+        return ApiResponse.success(collection.runs(id));
+    }
+
+    @GetMapping("/collection-alerts")
+    public ApiResponse<Map<String,Object>> collectionAlerts(@RequestParam(defaultValue="active") String status,
+            @RequestParam(required=false) Long taskId) {
+        return ApiResponse.success(collectionAlerts.list(status,taskId));
+    }
+
+    @GetMapping("/collect-tasks/{id}/alert-policy")
+    public ApiResponse<Map<String,Object>> collectionAlertPolicy(@PathVariable long id) {
+        return ApiResponse.success(collectionAlerts.config(id));
+    }
+
+    @PostMapping("/collect-tasks/{id}/alert-policy")
+    public ApiResponse<Map<String,Object>> saveCollectionAlertPolicy(@PathVariable long id,
+            @RequestBody Map<String,Object> body,
+            @RequestHeader(value="X-Agri-User",required=false) String user) {
+        return ApiResponse.success(collectionAlerts.save(id,body,operator(user)));
+    }
+
+    @PostMapping("/collection-alerts/{id}/acknowledge")
+    public ApiResponse<Map<String,Object>> acknowledgeCollectionAlert(@PathVariable long id,
+            @RequestBody Map<String,Object> body,
+            @RequestHeader(value="X-Agri-User",required=false) String user) {
+        return ApiResponse.success(collectionAlerts.acknowledge(id,java.util.Objects.toString(body.get("note"),""),operator(user)));
     }
 
     @GetMapping("/quality")

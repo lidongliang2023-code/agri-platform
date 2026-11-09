@@ -12,9 +12,17 @@ import com.agri.production.service.TenantContextService;
 public class AnalyticsController {
 
     private final IAnalyticsService analyticsService;
+    private final com.agri.production.service.ProductionDashboardService dashboard;
 
-    public AnalyticsController(IAnalyticsService analyticsService) {
+    public AnalyticsController(IAnalyticsService analyticsService, com.agri.production.service.ProductionDashboardService dashboard) {
         this.analyticsService = analyticsService;
+        this.dashboard = dashboard;
+    }
+
+    @GetMapping("/dashboard")
+    public ApiResponse<Map<String, Object>> dashboard(@RequestParam(required = false) Long farmId,
+            @RequestParam(defaultValue = "30") int days) {
+        return ApiResponse.success(dashboard.load(TenantContextService.currentTenantId(), farmId, days));
     }
 
     @GetMapping("/overview")

@@ -32,7 +32,7 @@
 | 供应链金融 | `finance.agri.local` | `:8081` | Vue 3 + element-plus | :8087 |
 | S2B2C 商城（消费者端） | `mall.agri.local` / `mall-consumer.agri.local` | `:8082` | Vue 3 + vant | :8088 |
 | S2B2C 商城（供应商端） | `mall-supplier.agri.local` | `:8084` | Vue 3 + element-plus | :8088 |
-| S2B2C 商城（渠道端） | `mall-channel.agri.local` | `:8085` | Vue 3 + element-plus | :8088 |
+| S2B2C 商城（商家端） | `mall-channel.agri.local` | `:8085` | Vue 3 + element-plus | :8088 |
 | S2B2C 商城（平台运营端） | `s2b2c-platform.agri.local` | `:8103` | Vue 3 + element-plus | :8088 |
 | 统一认证中心（登录页） | `sso.agri.local` | `:8090` | React + TS | core-platform（:8093，在跑） |
 

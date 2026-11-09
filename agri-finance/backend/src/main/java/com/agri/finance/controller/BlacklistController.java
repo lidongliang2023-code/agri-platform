@@ -43,6 +43,9 @@ public class BlacklistController {
     @GetMapping("/{id}")
     public Map<String, Object> getBlacklistItem(@PathVariable String id) {
         Blacklist item = blacklistService.getById(id);
+        if (item == null || Integer.valueOf(1).equals(item.getDelFlag())) {
+            return Map.of("code", 404, "message", "黑名单记录不存在", "data", "");
+        }
         return Map.of("code", 200, "message", "success", "data", item);
     }
 

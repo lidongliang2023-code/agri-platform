@@ -44,7 +44,7 @@
         <div class="card">
           <h3>渠道档案</h3>
           <dl class="descs">
-            <dt>渠道商 ID</dt><dd>{{ profile.id || '—' }}</dd>
+            <dt>商家 ID</dt><dd>{{ profile.id || '—' }}</dd>
             <dt>渠道等级</dt><dd><el-tag type="success">{{ gradeText(profile.grade) }}</el-tag></dd>
             <dt>审核状态</dt><dd>{{ auditText(profile.auditStatus) }}</dd>
             <dt>审核时间</dt><dd>{{ profile.auditTime || '—' }}</dd>
@@ -82,7 +82,7 @@
             <el-table-column prop="owner" label="维护方" width="100" />
             <el-table-column prop="status" label="状态" width="100" />
           </el-table>
-          <p class="note">资质过期会由用户中心提醒；渠道端仅按审核结果展示经营能力，不自行判定资质有效性。</p>
+          <p class="note">资质过期会由用户中心提醒；商家端仅按审核结果展示经营能力，不自行判定资质有效性。</p>
         </div>
 
         <div class="card">

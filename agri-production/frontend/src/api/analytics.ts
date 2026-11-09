@@ -9,7 +9,7 @@ const BASE = '/analytics'
 
 /** 查询生产总览指标 */
 export function getProductionOverview(farmId?: string): Promise<ProductionOverview> {
-  return http.get<ProductionOverview>(`${BASE}/overview`, { farmId })
+  return http.get<ProductionOverview>(`${BASE}/report-overview`, { farmId })
 }
 
 /** 查询数据分析总览 */
@@ -18,7 +18,7 @@ export function getAnalyticsOverview(params?: {
   startDate?: string
   endDate?: string
 }): Promise<AnalyticsOverview> {
-  return http.get<AnalyticsOverview>(`${BASE}/dashboard`, params)
+  return http.get<AnalyticsOverview>(`${BASE}/report-overview`, params)
 }
 
 /** 查询产量趋势 */
@@ -27,7 +27,7 @@ export function getYieldTrend(params: {
   startDate: string
   endDate: string
 }): Promise<TrendPoint[]> {
-  return http.get<TrendPoint[]>(`${BASE}/yield-trend`, params)
+  return http.get<TrendPoint[]>(`${BASE}/trend`, { ...params, metricCode: 'YIELD' })
 }
 
 /** 查询任务完成趋势 */
@@ -110,12 +110,9 @@ export async function getAnalyticsDimension(params: {
   startDate?: string
   endDate?: string
 }): Promise<DimensionPoint[]> {
-  try {
-    const res = await http.get<DimensionPoint[]>(`${BASE}/dimension`, params, { silent: true })
-    return Array.isArray(res) ? res : []
-  } catch {
-    return []
-  }
+  const res = await http.get<DimensionPoint[]>(`${BASE}/dimension`, params)
+  if (!Array.isArray(res)) throw new Error('维度数据格式异常')
+  return res
 }
 
 /** 报表订阅周期：daily 每日 / weekly 每周 / monthly 每月 / quarterly 每季 */
@@ -152,14 +149,9 @@ export type ReportSubscriptionPayload = Omit<
  * @returns 订阅列表
  */
 export async function listReportSubscriptions(): Promise<ReportSubscription[]> {
-  try {
-    const res = await http.get<ReportSubscription[]>(`${BASE}/reports/subscriptions`, undefined, {
-      silent: true,
-    })
-    return Array.isArray(res) ? res : []
-  } catch {
-    return []
-  }
+  const res = await http.get<ReportSubscription[]>(`${BASE}/reports/subscriptions`)
+  if (!Array.isArray(res)) throw new Error('通知配置返回格式异常')
+  return res
 }
 
 /** 新增 / 更新报表订阅 */
@@ -170,4 +162,9 @@ export function subscribeReport(payload: ReportSubscriptionPayload): Promise<boo
 /** 取消报表订阅 */
 export function unsubscribeReport(subscribeId: string): Promise<boolean> {
   return http.delete<boolean>(`${BASE}/reports/subscriptions/${subscribeId}`)
+}
+
+export interface MetricTrend { bizDate: string; metricValue: number | null; metricCode: string }
+export function getAnalysisTrend(params: { farmId?: string; startDate: string; endDate: string; metricCode: 'YIELD' | 'PASS_RATE' }): Promise<MetricTrend[]> {
+  return http.get<MetricTrend[]>(`${BASE}/trend`, params)
 }

@@ -148,10 +148,20 @@ export function listInventory(
   return http.get<PageResult<InventoryRecord>>(`${BASE}/inventory`, params)
 }
 
+export interface InventoryFlowParams extends PageQuery {
+  inventoryId?: BizId
+  flowType?: number
+  direction?: 'in' | 'out'
+  startDate?: string
+  endDate?: string
+  operatorName?: string
+  keyword?: string
+}
+
 /** 查询某批次的库存流水（真端点是 /harvests/{batchId}/flows） */
 export function listInventoryFlows(
   batchId: string,
-  params: PageQuery,
+  params: InventoryFlowParams,
 ): Promise<PageResult<InventoryFlow>> {
   return http.get<PageResult<InventoryFlow>>(`${BASE}/${batchId}/flows`, params)
 }
@@ -164,12 +174,15 @@ export function listInventoryFlows(
  */
 export function stockOut(
   batchId: string,
-  payload: { quantity: number; orderNo?: string; remark?: string },
+  payload: { quantity: number; inventoryId?: BizId; operatorName?: string
+    orderNo?: string; remark?: string },
 ): Promise<boolean> {
   return http
     .post<InventoryFlow>(`${BASE}/inventory/${batchId}/out`, undefined, {
       params: {
         qty: payload.quantity,
+        inventoryId: payload.inventoryId,
+        operatorName: payload.operatorName,
         relatedOrderNo: payload.orderNo,
       },
     })
@@ -180,11 +193,11 @@ export function stockOut(
  * 冻结库存。
  *
  * 后端契约 `POST /harvests/inventory/{batchId}/freeze`（无请求体，返回冻结后的批次）。
- * 后端当前没有解冻端点，解冻不在此处实现。
+ * 通过 inventoryId 定位分仓，frozen=false 执行解冻。
  */
-export function freezeInventory(batchId: string): Promise<boolean> {
+export function freezeInventory(batchId: string, inventoryId?: BizId, frozen = true): Promise<boolean> {
   return http
-    .post<HarvestBatch>(`${BASE}/inventory/${batchId}/freeze`)
+    .post<HarvestBatch>(`${BASE}/inventory/${batchId}/freeze`, undefined, { params: { inventoryId, frozen } })
     .then((batch) => Boolean(batch))
 }
 
@@ -209,6 +222,7 @@ export interface StockInPayload {
   warehouseName: string
   /** 入库数量 */
   quantity: number
+    inventoryId?: BizId
   /** 计量单位 */
   unit?: string
   /** 库位编号 */
@@ -258,6 +272,7 @@ export interface LossPayload {
   batchId: BizId
   /** 损耗数量 */
   quantity: number
+    inventoryId?: BizId
   /** 损耗原因 */
   reason: string
   /** 操作人 */
@@ -279,6 +294,7 @@ export interface TransferPayload {
   targetWarehouse: string
   /** 调拨数量 */
   quantity: number
+    inventoryId?: BizId
   /** 目标库位 */
   locationCode?: string
   /** 备注 */
@@ -351,7 +367,7 @@ export function queryInventoryRecord(inventoryId: BizId): Promise<InventoryRecor
  */
 export function queryInventoryFlows(
   batchId: BizId,
-  params: PageQuery,
+  params: InventoryFlowParams,
 ): Promise<PageResult<InventoryFlow>> {
   return http.get<PageResult<InventoryFlow>>(`${BASE}/${batchId}/flows`, params, { silent: true })
 }
@@ -520,6 +536,7 @@ export async function outboundInventory(
   batchId: BizId,
   payload: {
     quantity: number
+    inventoryId?: BizId
     orderNo?: string
     remark?: string
     operatorName?: string
@@ -543,6 +560,7 @@ export async function inboundInventory(
   batchId: BizId,
   payload: {
     quantity: number
+    inventoryId?: BizId
     warehouseName?: string
     remark?: string
     operatorName?: string
@@ -579,24 +597,15 @@ export async function registerLoss(payload: LossPayload): Promise<boolean> {
  * 冻结 / 解冻库存。
  *
  * 冻结走真实接口 POST /harvests/inventory/{batchId}/freeze。
- * 后端当前**没有解冻端点**，因此解冻不做本地假动作，直接明确失败，
- * 避免页面显示「已解冻」而服务端库存仍处冻结状态。
+ * 冻结和解冻均调用真实接口并指定分仓库存记录。
  *
  * @param batchId 批次 ID
  * @param frozen true 冻结 / false 解冻
  * @returns 服务端确认操作成功时返回 true
  */
-export async function toggleInventoryFreeze(batchId: BizId, frozen: boolean): Promise<boolean> {
-  if (!frozen) {
-    throw new Error(
-      '解冻失败：服务端暂未提供解冻接口，本次操作未写入服务端（请联系管理员开通该能力）',
-    )
-  }
-  try {
-    return await freezeInventory(String(batchId))
-  } catch (error) {
-    throwWriteFailure('冻结', error)
-  }
+export async function toggleInventoryFreeze(batchId: BizId, frozen: boolean, inventoryId?: BizId): Promise<boolean> {
+  try { return await freezeInventory(String(batchId), inventoryId, frozen) }
+  catch (error) { throwWriteFailure(frozen ? '冻结' : '解冻', error) }
 }
 
 /**

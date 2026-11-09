@@ -38,6 +38,19 @@ public class MerchantCertificationEntity extends BaseEntity {
 
     private String contactPhone;
 
+    /** 提交时的主体资料快照；历史记录不反向填充。 */
+    private String address;
+    private String industry;
+    private String companySize;
+    private Long previousCertificationId;
+
+    public void snapshot(MerchantEntity merchant) {
+        setAddress(merchant.getAddress());
+        setIndustry(merchant.getIndustry());
+        setCompanySize(merchant.getCompanySize());
+    }
+
+
     /** 材料说明 */
     private String attachNote;
 

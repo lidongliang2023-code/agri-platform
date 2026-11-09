@@ -94,9 +94,9 @@ const CHAIN_CARDS = [
 
 const EMPOWERMENT = [
   { icon: 'chart', title: '价格指数', desc: '精准高效的专业行业交易大数据服务', tech: true },
-  { icon: 'cpu', title: 'VR 云工厂', desc: '基地实景在线看货，远程验厂溯源' },
-  { icon: 'leaf', title: '绿色供应链', desc: '碳核算 · 碳报告 · 绿色认证 · 碳咨询', amber: true },
-  { icon: 'shield', title: '质量溯源', desc: '一物一码，从种植到流通全链路溯源', tech: true },
+  { icon: 'cpu', title: 'VR 云工厂', desc: '基地实景在线看货，远程验厂溯源', href: '#/cloud-factory' },
+  { icon: 'leaf', title: '绿色供应链', desc: '碳核算 · 碳报告 · 绿色认证 · 碳咨询', amber: true, href: '#/green-supply' },
+  { icon: 'shield', title: '质量溯源', desc: '一物一码，从种植到流通全链路溯源', tech: true, href: '#/quality-trace' },
 ]
 
 const THEMES = ['g', 'a', 't', 'o', 'v', 'g', 'a', 't']
@@ -260,10 +260,10 @@ export function Home(): JSX.Element {
             </div>
             <div className="portal-hot-search">
               热搜：
-              <a href="#/chains?q=富硒大米">富硒大米</a> ·
-              <a href="#/chains?q=菜籽油">一级菜籽油</a> ·
-              <a href="#/chains?q=玉米">优质蛋白玉米</a> ·
-              <a href="#/chains?q=脐橙">赣南脐橙</a>
+              <a href="#/hall?q=富硒大米">富硒大米</a> ·
+              <a href="#/hall?q=菜籽油">一级菜籽油</a> ·
+              <a href="#/hall?q=玉米">优质蛋白玉米</a> ·
+              <a href="#/hall?q=脐橙">赣南脐橙</a>
             </div>
           </div>
           <div className="portal-hero-metrics">
@@ -320,11 +320,11 @@ export function Home(): JSX.Element {
               <div className="bar-title">产业链频道</div>
               <div className="sub">按产业链聚合供需，快速定位品类与货源</div>
             </div>
-            <a className="t-sm muted portal-more-link" href="#/chains">查看全部产业链 →</a>
+            <a className="t-sm muted portal-more-link" href="#/hall">进入交易大厅 →</a>
           </div>
           <div className="grid grid-3">
             {CHAIN_CARDS.map((chain) => (
-              <a className="card card-hover" key={chain.name} href={`#/chains?l1=${encodeURIComponent(chain.name)}`}>
+              <a className="card card-hover" key={chain.name} href={`#/hall?l1=${encodeURIComponent(chain.name)}`}>
                 <div className="card-b">
                   <div className="row center gap-12 mb-12">
                     <div className={`stat-icon${chain.tech ? ' tech' : chain.amber ? ' amber' : ''}`}><Icon name={chain.icon} size={20} /></div>
@@ -505,6 +505,7 @@ export function Home(): JSX.Element {
                   <div className={`stat-icon mb-12${item.tech ? ' tech' : item.amber ? ' amber' : ''}`}><Icon name={item.icon} size={20} /></div>
                   <div className="strong">{item.title}</div>
                   <div className="muted t-sm mt-8 portal-two-line">{item.desc}</div>
+                  {'href' in item && item.href && <a className="btn btn-sm btn-outline mt-16" href={item.href}>{item.title === 'VR 云工厂' ? '在线看厂' : item.title === '绿色供应链' ? '绿色服务' : '查询溯源'}</a>}
                 </div>
               </div>
             ))}

@@ -10,6 +10,10 @@ agri:
     internal-token: "${AGRI_INTERNAL_TOKEN:agri-internal-dev}"
 
 spring:
+  servlet:
+    multipart:
+      max-file-size: 256MB
+      max-request-size: 257MB
   application:
     name: agri-iot
   profiles:
@@ -67,3 +71,32 @@ logging:
     root: INFO
     com.agri.iot: DEBUG
     com.agri.iot.feign: DEBUG
+
+# Unified probes: dependency failures affect readiness, not liveness.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      show-components: never
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: '*'
+          exclude: livenessState
+
+# 网关接入通过 iot.command.gateway-keys-json 配置每个网关独立的32位以上密钥。
+# 接入端领取后必须持久化commandNo及dispatchToken，重启完成后回执；不得以领取成功代替重启成功。
+
+# 托管文件需通过TLS网关暴露此路径；下载接入端携带X-Gateway-Id和X-Gateway-Key。
+iot:
+  firmware:
+    storage-dir: ${IOT_FIRMWARE_STORAGE_DIR:data/firmware}
+    public-base-url: ${IOT_FIRMWARE_PUBLIC_BASE_URL:}
+    max-bytes: ${IOT_FIRMWARE_MAX_BYTES:268435456}

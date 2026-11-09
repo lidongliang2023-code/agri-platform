@@ -130,13 +130,16 @@ public class ReportAnalyticsServiceImpl implements IReportAnalyticsService {
     @Override
     public Map<String, Object> dashboard(String tenantId, Long farmId, String startDate, String endDate) {
         requireTenant(tenantId);
-        LocalDate monthStart = LocalDate.now().withDayOfMonth(1);
-        LocalDate monthEnd = monthStart.withDayOfMonth(monthStart.lengthOfMonth());
+        LocalDate monthStart = parseDate(startDate, "startDate");
+        LocalDate monthEnd = parseDate(endDate, "endDate");
+        if (monthStart == null) monthStart = LocalDate.now().withDayOfMonth(1);
+        if (monthEnd == null) monthEnd = LocalDate.now();
+        validateRange(monthStart, monthEnd);
 
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("yieldTotal", sumHarvestQty(tenantId, farmId, null, null));
+        result.put("yieldTotal", sumHarvestQty(tenantId, farmId, monthStart, monthEnd));
         result.put("monthHarvestQty", sumHarvestQty(tenantId, farmId, monthStart, monthEnd));
-        result.put("passRate", passRate(tenantId, farmId, null, null));
+        result.put("passRate", passRate(tenantId, farmId, monthStart, monthEnd));
         result.put("farmCount", farmCount(tenantId, farmId));
         result.put("plotCount", plotCount(tenantId, farmId));
         result.put("plantingArea", plantingArea(tenantId, farmId));
@@ -187,6 +190,7 @@ public class ReportAnalyticsServiceImpl implements IReportAnalyticsService {
         }
         LocalDate from = parseDate(startDate, "startDate");
         LocalDate to = parseDate(endDate, "endDate");
+        validateRange(from, to);
 
         // 产量：采收批次按 harvest_date 落在区间内聚合；任务：按 plan_start_time 落区间。
         QueryWrapper<HarvestBatch> harvest = new QueryWrapper<>();
@@ -225,7 +229,7 @@ public class ReportAnalyticsServiceImpl implements IReportAnalyticsService {
                 default -> blankToNull(batch.getCropName()) == null ? "未标注作物" : batch.getCropName().trim();
             };
             DimensionPointVO point = grouped.computeIfAbsent(name, key -> newPoint(key));
-            point.setYieldQty(nullToZero(point.getYieldQty()).add(nullToZero(batch.getQuantity())));
+            point.setYieldQty(nullToZero(point.getYieldQty()).add(weightKg(batch)));
             // 面积：按"这批采收涉及的地块面积"累加。同一地块在一个维度里只算一次 ——
             // 直接累加会把 8.5 亩的地块因三批采收算成 25.5 亩（面积不是可加的流量指标）。
             Plot plot = batch.getPlotId() == null ? null : plots.get(batch.getPlotId());
@@ -245,7 +249,7 @@ public class ReportAnalyticsServiceImpl implements IReportAnalyticsService {
             };
             DimensionPointVO point = grouped.computeIfAbsent(name, key -> newPoint(key));
             point.setTaskCount(point.getTaskCount() + 1);
-            if (isDone(task.getStatus())) {
+            if (isDone(task.getStatus()) && Integer.valueOf(1).equals(task.getAcceptStatus())) {
                 point.setDoneCount(point.getDoneCount() + 1);
             }
         }
@@ -280,31 +284,26 @@ public class ReportAnalyticsServiceImpl implements IReportAnalyticsService {
         }
         LocalDate from = parseDate(startDate, "startDate");
         LocalDate to = parseDate(endDate, "endDate");
+        validateRange(from, to);
         List<MetricTrendPointVO> points = new ArrayList<>();
         if ("YIELD".equals(code)) {
             QueryWrapper<HarvestBatch> w = new QueryWrapper<>();
-            w.select("harvest_date AS bizDate", "IFNULL(SUM(quantity), 0) AS metricValue")
-                    .eq("tenant_id", tenantId);
-            if (farmId != null) {
-                w.eq("farm_id", farmId);
+            w.eq("tenant_id", tenantId).isNotNull("harvest_date");
+            if (farmId != null) w.eq("farm_id", farmId);
+            if (from != null) w.ge("harvest_date", from);
+            if (to != null) w.le("harvest_date", to);
+            Map<LocalDate, BigDecimal> daily = new java.util.TreeMap<>();
+            for (HarvestBatch batch : harvestBatchMapper.selectList(w)) {
+                daily.merge(batch.getHarvestDate(), weightKg(batch), BigDecimal::add);
             }
-            if (from != null) {
-                w.ge("harvest_date", from);
-            }
-            if (to != null) {
-                w.le("harvest_date", to);
-            }
-            w.isNotNull("harvest_date").groupBy("harvest_date").orderByAsc("harvest_date");
-            for (Map<String, Object> row : harvestBatchMapper.selectMaps(w)) {
-                points.add(point(row.get("bizDate"), row.get("metricValue"), code));
-            }
+            daily.forEach((date, qty) -> points.add(point(date, qty, code)));
         } else {
             QueryWrapper<com.agri.production.entity.Inspection> w = new QueryWrapper<>();
             w.select("DATE(sample_at) AS bizDate", "COUNT(*) AS totalCount",
                     "SUM(CASE WHEN UPPER(TRIM(result)) = 'PASS' THEN 1 ELSE 0 END) AS passCount")
                     .eq("tenant_id", tenantId)
                     .isNotNull("sample_at")
-                    .isNotNull("result");
+                    .apply("UPPER(TRIM(status)) = 'DONE'").apply("UPPER(TRIM(result)) IN ('PASS', 'FAIL')");
             if (farmId != null) {
                 w.eq("farm_id", farmId);
             }
@@ -566,7 +565,7 @@ public class ReportAnalyticsServiceImpl implements IReportAnalyticsService {
     /** 采收量合计（kg）—— 没有区间时是"累计"，有区间时是"区间内"。 */
     private BigDecimal sumHarvestQty(String tenantId, Long farmId, LocalDate from, LocalDate to) {
         QueryWrapper<HarvestBatch> w = new QueryWrapper<>();
-        w.select("IFNULL(SUM(quantity), 0) AS qty").eq("tenant_id", tenantId);
+        w.eq("tenant_id", tenantId);
         if (farmId != null) {
             w.eq("farm_id", farmId);
         }
@@ -576,7 +575,7 @@ public class ReportAnalyticsServiceImpl implements IReportAnalyticsService {
         if (to != null) {
             w.le("harvest_date", to);
         }
-        return toDecimal(firstValue(harvestBatchMapper.selectMaps(w), "qty"));
+        return harvestBatchMapper.selectList(w).stream().map(ReportAnalyticsServiceImpl::weightKg).reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     private long countHarvest(String tenantId, Long farmId, LocalDate from, LocalDate to) {
@@ -628,7 +627,7 @@ public class ReportAnalyticsServiceImpl implements IReportAnalyticsService {
         QueryWrapper<com.agri.production.entity.Inspection> w = new QueryWrapper<>();
         w.eq("tenant_id", tenantId);
         if (finishedOnly) {
-            w.isNotNull("result");
+            w.apply("UPPER(TRIM(status)) = 'DONE'").apply("UPPER(TRIM(result)) IN ('PASS', 'FAIL')");
         }
         if (farmId != null) {
             w.eq("farm_id", farmId);
@@ -644,7 +643,7 @@ public class ReportAnalyticsServiceImpl implements IReportAnalyticsService {
 
     private long countInspectionPassed(String tenantId, Long farmId, LocalDate from, LocalDate to) {
         QueryWrapper<com.agri.production.entity.Inspection> w = new QueryWrapper<>();
-        w.eq("tenant_id", tenantId).in("result", INSPECTION_PASS);
+        w.eq("tenant_id", tenantId).apply("UPPER(TRIM(status)) = 'DONE'").apply("UPPER(TRIM(result)) = 'PASS'");
         if (farmId != null) {
             w.eq("farm_id", farmId);
         }
@@ -682,6 +681,7 @@ public class ReportAnalyticsServiceImpl implements IReportAnalyticsService {
         }
         if (statuses != null && !statuses.isEmpty()) {
             w.in(Task::getStatus, statuses);
+            if (statuses.equals(TASK_DONE)) w.eq(Task::getAcceptStatus, 1);
         }
         if (from != null) {
             w.ge(Task::getPlanStartTime, from.atStartOfDay());
@@ -990,6 +990,24 @@ public class ReportAnalyticsServiceImpl implements IReportAnalyticsService {
         Plot plot = plots.get(plotId);
         return plot == null || blankToNull(plot.getPlotName()) == null
                 ? "地块#" + plotId : plot.getPlotName().trim();
+    }
+
+    static BigDecimal weightKg(HarvestBatch batch) {
+        if (batch.getQuantity() == null) return BigDecimal.ZERO;
+        String unit = batch.getUnit() == null ? "" : batch.getUnit().trim().toLowerCase(Locale.ROOT);
+        BigDecimal factor = switch (unit) {
+            case "kg", "千克", "公斤" -> BigDecimal.ONE;
+            case "t", "吨" -> BigDecimal.valueOf(1000);
+            case "斤" -> new BigDecimal("0.5");
+            default -> throw new BusinessException(400, "采收批次存在无法换算为 kg 的单位，请先核对台账：" + unit);
+        };
+        return batch.getQuantity().multiply(factor);
+    }
+
+    private static void validateRange(LocalDate from, LocalDate to) {
+        if (from != null && to != null && (from.isAfter(to) || java.time.temporal.ChronoUnit.DAYS.between(from, to) > 366)) {
+            throw new BusinessException(400, "统计日期须按先后顺序且跨度不超过 366 天");
+        }
     }
 
     private static boolean isDone(String status) {

@@ -275,7 +275,7 @@ function metricLabel(rule: AlertRule) {
 
 .head-sub {
   color: rgba(255, 255, 255, 0.6);
-  font-size: 21rpx;
+  font-size: 24rpx;
 }
 
 .head-btn {
@@ -283,7 +283,7 @@ function metricLabel(rule: AlertRule) {
   border: 1rpx solid rgba(255, 255, 255, 0.2);
   border-radius: 14rpx;
   background: rgba(255, 255, 255, 0.1);
-  font-size: 21rpx;
+  font-size: 24rpx;
 }
 
 .rule-card {
@@ -333,7 +333,7 @@ function metricLabel(rule: AlertRule) {
 
 .link {
   color: #c54b4b;
-  font-size: 21rpx;
+  font-size: 24rpx;
 }
 
 .picker {

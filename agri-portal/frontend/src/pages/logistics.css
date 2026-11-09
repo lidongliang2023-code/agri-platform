@@ -3,10 +3,7 @@
   overflow: hidden;
   color: #fff;
   /* 与首页 .portal-hero 使用同一品牌渐变，蓝色只作为右侧点缀。 */
-  background:
-    radial-gradient(760px 520px at 88% 8%, rgba(56, 189, 248, 0.3), transparent 60%),
-    radial-gradient(680px 480px at 6% 108%, rgba(111, 214, 162, 0.22), transparent 62%),
-    linear-gradient(135deg, #0a3a25, #12764a 60%, #0c7ba8);
+  background: var(--portal-hero-background);
 }
 
 .logi-hero::after {

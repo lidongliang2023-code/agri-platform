@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { redirectToSso } from '../../../shared-ui/sso'
 
 const request = axios.create({
   baseURL: '/api',
@@ -25,7 +26,8 @@ request.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('token')
-      window.location.href = '/login'
+      // 本应用已不再自建登录页，401 一律回到统一认证中心。
+      void redirectToSso('iot', window.location.pathname + window.location.search)
     }
     return Promise.reject(error)
   },

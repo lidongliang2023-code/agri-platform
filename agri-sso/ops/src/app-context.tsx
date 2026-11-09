@@ -50,6 +50,7 @@ const PAGE_KEYS: OpsPageKey[] = [
   'privacy-request',
   'feedback-manage',
   'stats',
+  'health-monitor',
   'config',
   'audit-log',
 ]

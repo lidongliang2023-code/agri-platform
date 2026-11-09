@@ -1,3 +1,6 @@
+import ProTable from '@/components/ProductionTable'
+import Card from '@/components/SectionCard'
+import './inputs.css'
 /**
  * 页面名称：使用记录
  * 路由路径：/production/inputs?tab=ledger（旧 /production/inputs/usages 自动跳转）
@@ -15,12 +18,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ProTable } from '@ant-design/pro-components'
+
 import type { ProColumns } from '@ant-design/pro-components'
 import {
   Alert,
   Button,
-  Card,
   Col,
   DatePicker,
   Empty,
@@ -761,6 +763,7 @@ export default function InputUsages(): JSX.Element {
     },
     {
       title: '操作',
+      fixed: 'right',
       key: 'option',
       width: 125,
       valueType: 'option',
@@ -829,23 +832,23 @@ export default function InputUsages(): JSX.Element {
           }
         />
       ) : null}
-      <Row gutter={16} style={{ marginBottom: 16 }}>
-        <Col span={6}>
+      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+        <Col xs={12} lg={6}>
           <Card>
             <Statistic title="台账记录" value={ledgerEvents.length} suffix="条" />
           </Card>
         </Col>
-        <Col span={6}>
+        <Col xs={12} lg={6}>
           <Card>
             <Statistic title="使用记录" value={stats.total} suffix="条" />
           </Card>
         </Col>
-        <Col span={6}>
+        <Col xs={12} lg={6}>
           <Card>
             <Statistic title="库存业务" value={stats.stockBusiness} suffix="条" />
           </Card>
         </Col>
-        <Col span={6}>
+        <Col xs={12} lg={6}>
           <Card>
             <Statistic title="涉及地块" value={stats.plotCount} suffix="个" />
           </Card>
@@ -862,6 +865,7 @@ export default function InputUsages(): JSX.Element {
       )}
 
       <Card
+        className="input-record-section"
         title="农资使用与库存台账"
         extra={
           <Typography.Text type="secondary">
@@ -944,6 +948,9 @@ export default function InputUsages(): JSX.Element {
           />
         ) : (
           <ProTable<LedgerEventRow>
+            cardProps={false}
+            className="input-record-table"
+            headerTitle="农资使用与库存台账"
             rowKey="eventKey"
             columns={columns}
             dataSource={pagedEvents}

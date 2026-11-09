@@ -18,9 +18,12 @@ import com.agri.production.mapper.PlanStageMapper;
 import com.agri.production.mapper.PlotMapper;
 import com.agri.production.mapper.TaskMapper;
 import com.agri.production.mapper.TaskRecordMapper;
+import com.agri.production.mapper.TaskTemplateMapper;
+import com.agri.production.entity.TaskTemplate;
 import com.agri.production.mapper.TeamMemberMapper;
 import com.agri.production.service.FarmIdResolver;
 import com.agri.production.service.ITaskService;
+import com.agri.production.service.TenantContextService;
 import com.agri.production.vo.TaskVO;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -41,6 +44,7 @@ import java.util.List;
 public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements ITaskService {
 
     private final TaskRecordMapper taskRecordMapper;
+    private final TaskTemplateMapper taskTemplateMapper;
     /** 成员台账：把页面的执行人（成员业务标识或主键）换成 executor_id + executor_name。 */
     private final TeamMemberMapper memberMapper;
     /** 种养计划与阶段：任务必须能回挂到计划，验收通过后再驱动阶段状态。 */
@@ -217,6 +221,20 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
         taskRecordMapper.insert(record);
     }
 
+
+    private void assertTemplateUsable(Long templateId) {
+        if (templateId == null) {
+            return;
+        }
+        TaskTemplate template = taskTemplateMapper.selectById(templateId);
+        if (template == null || (template.getDelFlag() != null && template.getDelFlag() == 1)) {
+            throw new BusinessException(400, "关联的任务模板不存在或已被删除：" + templateId);
+        }
+        if (!"active".equalsIgnoreCase(template.getStatus())) {
+            throw new BusinessException(400, "关联的任务模板已停用，不能作为新任务模板引用");
+        }
+    }
+
     @Override
     @Transactional
     public TaskVO save(TaskSaveDTO dto, String tenantId) {
@@ -228,6 +246,7 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
         task.setAcceptStatus(0);
         task.setRejectCount(0);
         // 先挂计划（缺地块/农场时由计划补齐），再归一场地与地块并做归属校验
+        assertTemplateUsable(task.getTemplateId());
         applyPlanReference(task, tenantId);
         applyFarmAndPlotReferences(task, dto.getFarmId(), tenantId);
         if (task.getFarmId() == null) {
@@ -244,6 +263,8 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
         if (task == null || !tenantId.equals(task.getTenantId())) {
             throw new BusinessException(404, "任务不存在");
         }
+        requireManager(task, tenantId);
+
         if (!isEditable(task.getStatus())) {
             throw new BusinessException(400, "任务已开始执行，无法修改");
         }
@@ -272,7 +293,10 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
         if (dto.getInputMaterialsJson() != null) task.setInputMaterialsJson(dto.getInputMaterialsJson());
         if (dto.getExpectedOutput() != null) task.setExpectedOutput(dto.getExpectedOutput());
         if (dto.getQualityRequirement() != null) task.setQualityRequirement(dto.getQualityRequirement());
-        if (dto.getTemplateId() != null) task.setTemplateId(dto.getTemplateId());
+        if (dto.getTemplateId() != null) {
+            assertTemplateUsable(dto.getTemplateId());
+            task.setTemplateId(dto.getTemplateId());
+        }
         if (dto.getRemark() != null) task.setRemark(dto.getRemark());
         if (task.getTaskName() == null || task.getTaskName().isBlank()) {
             throw new BusinessException(400, "任务名称不能为空");
@@ -280,6 +304,7 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
         if (task.getTaskType() == null || task.getTaskType().isBlank()) {
             throw new BusinessException(400, "任务类型不能为空");
         }
+        assertTemplateUsable(task.getTemplateId());
         applyPlanReference(task, tenantId);
         applyFarmAndPlotReferences(task, dto.getFarmId(), tenantId);
         if (task.getFarmId() == null) {
@@ -292,10 +317,12 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
     @Override
     @Transactional
     public void delete(Long id, String tenantId) {
-        Task task = getById(id);
+        Task task = lockTask(id, tenantId);
         if (task == null || !tenantId.equals(task.getTenantId())) {
             throw new BusinessException(404, "任务不存在");
         }
+        requireManager(task, tenantId);
+
         if (isExecuting(task.getStatus())) {
             throw new BusinessException(400, "任务正在执行中，无法删除");
         }
@@ -335,10 +362,12 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
     @Override
     @Transactional
     public TaskVO startTask(Long id, String tenantId) {
-        Task task = getById(id);
+        Task task = lockTask(id, tenantId);
         if (task == null || !tenantId.equals(task.getTenantId())) {
             throw new BusinessException(404, "任务不存在");
         }
+        requireExecutor(task, tenantId);
+
         // 待处理、已派发、验收驳回后都能重新进入执行；驳回不再落到 doing 死状态。
         if (!"pending".equals(task.getStatus()) && !"assigned".equals(task.getStatus())
                 && !"rejected".equals(task.getStatus())) {
@@ -359,10 +388,12 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
     @Override
     @Transactional
     public TaskVO completeTask(Long id, String resultDesc, String resultPhotoUrls, String tenantId) {
-        Task task = getById(id);
+        Task task = lockTask(id, tenantId);
         if (task == null || !tenantId.equals(task.getTenantId())) {
             throw new BusinessException(404, "任务不存在");
         }
+        requireExecutor(task, tenantId);
+
         if (!isExecuting(task.getStatus())) {
             throw new BusinessException(400, "任务状态不正确");
         }
@@ -380,10 +411,12 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
     @Override
     @Transactional
     public TaskVO acceptTask(Long id, Integer acceptStatus, String remark, String acceptorName, String tenantId) {
-        Task task = getById(id);
+        Task task = lockTask(id, tenantId);
         if (task == null || !tenantId.equals(task.getTenantId())) {
             throw new BusinessException(404, "任务不存在");
         }
+        TeamMember actor = requireManager(task, tenantId);
+
         if (acceptStatus == null || (acceptStatus != 1 && acceptStatus != 2)) {
             throw new BusinessException(400, "验收结论只能是 1（通过）或 2（驳回）");
         }
@@ -393,6 +426,9 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
         }
         if (task.getAcceptStatus() != null && task.getAcceptStatus() != 0) {
             throw new BusinessException(400, "任务已经验收过，如需重新验收请让执行人重新提交成果");
+        }
+        if (acceptStatus == 2 && (remark == null || remark.isBlank())) {
+            throw new BusinessException(400, "驳回必须填写原因");
         }
         if (acceptStatus == 1) {
             task.setStatus("completed");
@@ -405,7 +441,8 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
         }
         task.setAcceptStatus(acceptStatus);
         task.setAcceptRemark(remark);
-        task.setAcceptorName(acceptorName);
+        task.setAcceptorId(Long.valueOf(TenantContextService.currentUserId()));
+        task.setAcceptorName(actor == null ? "主体负责人" : actor.getMemberName());
         task.setAcceptedAt(LocalDateTime.now());
         updateById(task);
         if (acceptStatus == 1) {
@@ -436,19 +473,21 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
     @Override
     @Transactional
     public TaskVO assignTask(Long id, String assigneeId, String assigneeName, String tenantId) {
-        Task task = getById(id);
+        Task task = lockTask(id, tenantId);
         if (task == null || !tenantId.equals(task.getTenantId())) {
             throw new BusinessException(404, "任务不存在");
         }
+        requireManager(task, tenantId);
+
+        if (!isEditable(task.getStatus())) throw new BusinessException(400, "仅待处理、已派发或驳回任务可转派");
         if (assigneeId == null || assigneeId.isBlank()) {
             throw new BusinessException(400, "必须指定执行人");
         }
         TeamMember member = resolveMember(assigneeId.trim(), tenantId);
+        requireMemberFarm(member, task);
         task.setExecutorId(member.getId());
         // 姓名优先取调用方带的，否则用成员台账的真实姓名（避免"执行人只有 id 没有名字"）
-        task.setExecutorName(assigneeName != null && !assigneeName.isBlank()
-                ? assigneeName
-                : member.getMemberName());
+        task.setExecutorName(member.getMemberName());
         // 派发后进入"已派发"：原先只有 pending，派了人也还是 pending，看板上分不清
         if ("pending".equals(task.getStatus())) {
             task.setStatus("assigned");
@@ -481,10 +520,13 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
     @Override
     @Transactional
     public Long createRecord(Long taskId, java.util.Map<String, Object> body, String tenantId) {
-        Task task = getById(taskId);
+        Task task = lockTask(taskId, tenantId);
         if (task == null || !tenantId.equals(task.getTenantId())) {
             throw new BusinessException(404, "任务不存在");
         }
+        requireExecutor(task, tenantId);
+
+        if (!isExecuting(task.getStatus())) throw new BusinessException(400, "仅执行中任务可登记过程记录");
         // 打卡记录至少要有"这是个什么动作"：executeType 1 开始 / 2 过程 / 3 完成。
         // 少了这条校验，一个空请求体就能写进一行"动作、时间、照片、GPS 全空"的记录
         // （实测：空体体检连打几次，任务详情页的打卡列表里就多出几行空白）。
@@ -654,7 +696,9 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
         Long unfinished = baseMapper.selectCount(new LambdaQueryWrapper<Task>()
                 .eq(Task::getStageId, task.getStageId())
                 .eq(Task::getTenantId, task.getTenantId())
-                .notIn(Task::getStatus, "completed", "done", "cancelled", "expired"));
+                .and(w -> w.notIn(Task::getStatus, "cancelled", "expired")
+                        .and(x -> x.notIn(Task::getStatus, "completed", "done")
+                                .or().isNull(Task::getAcceptStatus).or().ne(Task::getAcceptStatus, 1))));
         if (unfinished != null && unfinished > 0) {
             stage.setStatus(2);
             if (stage.getActualStartDate() == null) {
@@ -669,6 +713,45 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
         }
         stage.setUpdateTime(LocalDateTime.now());
         stageMapper.updateById(stage);
+    }
+
+    private Task lockTask(Long id, String tenantId) {
+        return baseMapper.selectOne(new LambdaQueryWrapper<Task>().eq(Task::getId, id)
+                .eq(Task::getTenantId, tenantId).last("FOR UPDATE"));
+    }
+
+    private TeamMember currentMember(String tenantId) {
+        String userId = TenantContextService.currentUserId();
+        if (userId == null) throw new BusinessException(403, "无法确认当前操作身份");
+        return memberMapper.selectOne(new LambdaQueryWrapper<TeamMember>()
+                .eq(TeamMember::getTenantId, tenantId).eq(TeamMember::getUserId, userId)
+                .eq(TeamMember::getStatus, 1).last("LIMIT 1"));
+    }
+
+    private void requireMemberFarm(TeamMember member, Task task) {
+        if (member.getFarmId() == null || !member.getFarmId().equals(String.valueOf(task.getFarmId())))
+            throw new BusinessException(403, "成员不属于任务所在农场");
+    }
+
+    private void requireExecutor(Task task, String tenantId) {
+        if ("owner".equalsIgnoreCase(TenantContextService.currentMerchantRole())) {
+            return;
+        }
+        TeamMember member = currentMember(tenantId);
+        if (member == null || !member.getId().equals(task.getExecutorId()))
+            throw new BusinessException(403, "仅任务执行人可开始、打卡或提交成果");
+        requireMemberFarm(member, task);
+    }
+
+    private TeamMember requireManager(Task task, String tenantId) {
+        TeamMember member = currentMember(tenantId);
+        if ("owner".equalsIgnoreCase(TenantContextService.currentMerchantRole())) return member;
+        if (member == null) throw new BusinessException(403, "当前用户无任务管理权限");
+        requireMemberFarm(member, task);
+        if (!java.util.Set.of("OWNER", "AGRONOMIST", "INSPECTOR").contains(member.getMemberType() == null ? "" : member.getMemberType())
+                && !java.util.Set.of("FARM_OWNER", "AGRONOMIST", "INSPECTOR").contains(member.getRoleCode() == null ? "" : member.getRoleCode()))
+            throw new BusinessException(403, "当前成员无任务管理或验收权限");
+        return member;
     }
 
     private static boolean isEditable(String status) {

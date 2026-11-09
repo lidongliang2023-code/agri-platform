@@ -119,14 +119,14 @@ public class InfoRepository extends InfoSupport {
         stats.put("up", quotes.stream().filter(item -> decimal(item.get("changePct"), BigDecimal.ZERO).signum() > 0).count());
         stats.put("down", quotes.stream().filter(item -> decimal(item.get("changePct"), BigDecimal.ZERO).signum() < 0).count());
         stats.put("flat", quotes.stream().filter(item -> decimal(item.get("changePct"), BigDecimal.ZERO).signum() == 0).count());
-        stats.put("abnormal", number("SELECT COUNT(*) FROM info_quote WHERE monitor_level='abnormal'"));
+        stats.put("abnormal", quotes.stream().filter(item -> "abnormal".equals(item.get("monitorLevel"))).count());
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("stats", stats);
         result.put("quotes", quotes);
         result.put("categories", jdbc.queryForList("SELECT DISTINCT category FROM info_quote WHERE status='online' ORDER BY category", String.class));
         result.put("markets", jdbc.queryForList("SELECT DISTINCT market FROM info_quote WHERE status='online' ORDER BY market", String.class));
-        result.put("regionPrices", regionPrices(1L));
+        result.put("regionPrices", List.of());
         result.put("aiRead", aiMarketRead());
         return result;
     }
@@ -1093,43 +1093,20 @@ public class InfoRepository extends InfoSupport {
         return rows.isEmpty() ? null : rows.get(0);
     }
 
-    /** 30 日走势：以「月涨跌幅」反推起点，叠加确定性波动，保证同一品种每次刷新曲线一致。 */
+    /** 仅返回实际存储的历史观测，不根据最新价反推历史或插入模拟预测。 */
     private List<Map<String, Object>> series(Map<String, Object> quote) {
-        BigDecimal price = decimal(quote.get("price"), BigDecimal.ONE);
-        int monthPct = intValue(quote.get("monthPct"));
-        BigDecimal start = price.multiply(BigDecimal.valueOf(100L - monthPct))
-                .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
-        long seed = longValue(quote.get("id"), 1L);
-        List<Map<String, Object>> points = new ArrayList<>();
-        LocalDate today = LocalDate.now();
-        for (int i = 0; i < 30; i++) {
-            double ratio = i / 29.0;
-            double base = start.doubleValue() + (price.doubleValue() - start.doubleValue()) * ratio;
-            double wobble = Math.sin((i + seed) * 1.7) * price.doubleValue() * 0.006;
+        return jdbc.query("""
+                SELECT stat_date,price,volume FROM info_quote_series
+                WHERE quote_id=? AND forecast=FALSE AND stat_date<=?
+                ORDER BY stat_date,id
+                """, (rs, rowNum) -> {
             Map<String, Object> point = new LinkedHashMap<>();
-            point.put("date", today.minusDays(29L - i).toString());
-            point.put("price", BigDecimal.valueOf(base + wobble).setScale(2, RoundingMode.HALF_UP));
+            point.put("date", rs.getString("stat_date"));
+            point.put("price", rs.getBigDecimal("price"));
+            point.put("volume", rs.getBigDecimal("volume"));
             point.put("forecast", false);
-            points.add(point);
-        }
-        Map<String, Object> forecast = forecastOf(longValue(quote.get("id"), 0L), "7d");
-        if (forecast != null) {
-            BigDecimal mid = decimal(forecast.get("midPrice"), price);
-            BigDecimal low = decimal(forecast.get("lowPrice"), price);
-            BigDecimal high = decimal(forecast.get("highPrice"), price);
-            for (int i = 1; i <= 7; i++) {
-                double ratio = i / 7.0;
-                Map<String, Object> point = new LinkedHashMap<>();
-                point.put("date", today.plusDays(i).toString());
-                point.put("price", mid.multiply(BigDecimal.valueOf(ratio))
-                        .add(price.multiply(BigDecimal.valueOf(1 - ratio))).setScale(2, RoundingMode.HALF_UP));
-                point.put("low", low);
-                point.put("high", high);
-                point.put("forecast", true);
-                points.add(point);
-            }
-        }
-        return points;
+            return point;
+        }, longValue(quote.get("id"), 0L), LocalDate.now().toString());
     }
 
     private List<Map<String, Object>> indexSeries(Map<String, Object> index) {
@@ -1165,25 +1142,27 @@ public class InfoRepository extends InfoSupport {
         return normalized;
     }
 
+    /** 同品种、同规格、同单位的有效报价；不将跨品类数据作为区域比价。 */
     private List<Map<String, Object>> regionPrices(long quoteId) {
-        List<Map<String, Object>> rows = jdbc.query("""
-                SELECT origin,price,change_pct FROM info_quote WHERE status='online'
-                ORDER BY ABS(change_pct) DESC LIMIT 4
+        Map<String, Object> selected = quote(quoteId);
+        return jdbc.query("""
+                SELECT id,origin,market,price,price_unit,change_pct,updated_at FROM info_quote
+                WHERE status='online' AND name=? AND category=?
+                  AND COALESCE(spec,'')=? AND COALESCE(price_unit,'')=?
+                ORDER BY price,id
                 """, (rs, rowNum) -> {
             Map<String, Object> item = new LinkedHashMap<>();
+            item.put("id", rs.getLong("id"));
             item.put("region", rs.getString("origin"));
+            item.put("market", rs.getString("market"));
             item.put("price", rs.getBigDecimal("price"));
+            item.put("priceUnit", rs.getString("price_unit"));
             item.put("changePct", rs.getBigDecimal("change_pct"));
+            item.put("updatedAt", rs.getString("updated_at"));
             return item;
-        });
-        if (rows.isEmpty()) {
-            Map<String, Object> fallback = new LinkedHashMap<>();
-            fallback.put("region", "山东金乡");
-            fallback.put("price", new BigDecimal("9.00"));
-            fallback.put("changePct", new BigDecimal("7.10"));
-            return List.of(fallback);
-        }
-        return rows;
+        }, selected.get("name"), selected.get("category"),
+                selected.get("spec") == null ? "" : selected.get("spec"),
+                selected.get("priceUnit") == null ? "" : selected.get("priceUnit"));
     }
 
     private Map<String, Object> aiMarketRead() {

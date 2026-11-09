@@ -35,11 +35,11 @@ import java.util.Map;
  * 供应商分销运营台：分销总览、订单、渠道网络、供货收入与动销。
  *
  * <p>供应商主责供货与授权；渠道经营、平台审核、区域分润与财务打款分别归
- * 渠道商端 / 平台运营 / 城市合伙人 / 财务系统。供货收入为估算值，最终以交易撮合合同与结算为准。</p>
+ * 商家端 / 平台运营 / 城市合伙人 / 财务系统。供货收入为估算值，最终以交易撮合合同与结算为准。</p>
  */
 @RestController
-@RequestMapping("/api/supplier")
-@OperatorOnly("s2b2c:supplier")
+@RequestMapping("/api/platform/supply")
+@OperatorOnly("s2b2c:platform")
 public class SupplierOpsController {
 
     private static final DateTimeFormatter DATE_LABEL = DateTimeFormatter.ofPattern("MM-dd");
@@ -289,7 +289,7 @@ public class SupplierOpsController {
         Supplier mine = supplierIdentityService.requireCurrent();
         ChannelPartner channel = channelPartnerMapper.selectById(id);
         if (channel == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "渠道商不存在");
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "商家不存在");
         }
         List<Map<String, Object>> products = jdbc.queryForList(
                 "SELECT cp.id AS relationId, cp.product_id AS productId, p.name, cp.status, "

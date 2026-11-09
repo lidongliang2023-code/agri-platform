@@ -165,35 +165,13 @@
 
         <el-tab-pane label="溯源信息" name="trace">
           <div class="pane">
-            <div v-if="traces.length" class="trace-list">
-              <article v-for="t in traces" :key="t.id" class="trace-card">
-                <div class="tr-hd">
-                  <b>批次 {{ t.batchCode }}</b>
-                  <span class="m-tag">产地 {{ t.origin || '—' }}</span>
-                </div>
-                <div class="tr-grid">
-                  <div><span>种植日期</span><b>{{ dateOnly(t.plantingDate) }}</b></div>
-                  <div><span>采收日期</span><b>{{ dateOnly(t.harvestDate) }}</b></div>
-                  <div><span>加工信息</span><b>{{ t.processingInfo || '—' }}</b></div>
-                  <div><span>储运信息</span><b>{{ t.storageInfo || '—' }}</b></div>
-                  <div class="full"><span>质检报告</span><b>{{ t.qualityReport || '—' }}</b></div>
-                </div>
-              </article>
-            </div>
-            <EmptyBlock
-              v-else
-              icon="🔍"
-              title="该商品暂无溯源批次"
-              desc="溯源批次由生产管理模块在采收/加工环节写入。你也可以用溯源码直接查询。"
-            >
+            <TraceTimeline :trace="trace" :product-name="product?.name">
               <template #actions>
-                <button type="button" class="m-btn ghost" @click="$router.push('/trace')">去溯源查询</button>
+                <div class="m-row-wrap">
+                  <button type="button" class="m-btn ghost" @click="$router.push('/trace')">去溯源查询</button>
+                </div>
               </template>
-            </EmptyBlock>
-            <p class="pane-note">
-              溯源数据只读展示；完整种植-采收-加工链路在生产管理模块，可通过
-              <a :href="crossModule.production" target="_blank" rel="noopener">生产溯源</a> 查看。
-            </p>
+            </TraceTimeline>
           </div>
         </el-tab-pane>
       </el-tabs>
@@ -209,9 +187,10 @@ import { consumerApi } from '../api'
 import { useUserStore } from '../stores/user'
 import { useFavorites } from '../composables/useFavorites'
 import { crossModule } from '../config/cross-module'
-import { dateOnly, dateTime, money, productImage, usableImage } from '../utils/format'
+import { dateTime, money, productImage, usableImage } from '../utils/format'
 import Countdown from '../components/Countdown.vue'
 import EmptyBlock from '../components/EmptyBlock.vue'
+import TraceTimeline from '../components/TraceTimeline.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -222,7 +201,7 @@ const loading = ref(false)
 const product = ref(null)
 const reviews = ref([])
 const summary = ref({ total: 0, average: 0, distribution: [] })
-const traces = ref([])
+const trace = ref({ bound: false, nodes: [], codes: [] })
 const quantity = ref(1)
 const tab = ref('detail')
 const activeIndex = ref(0)
@@ -295,11 +274,27 @@ async function load() {
       const [rv, sm, tr] = await Promise.all([
         consumerApi.getProductReviews({ productId: id, page: 1, size: 20 }).catch(() => ({ records: [] })),
         consumerApi.getReviewSummary(id).catch(() => ({ total: 0, average: 0, distribution: [] })),
-        consumerApi.getTrace(id).catch(() => []),
+        // 溯源不能 .catch(() => [])：那会把"生产域不可达"（503）与"没绑批次"（bound=false）
+        // 压成同一个空态，页面就会把系统故障说成"这货没来历"。故障单独标出来。
+        consumerApi.getTrace(id).then((data) => ({ ok: true, data }))
+          .catch((err) => ({ ok: false, err })),
       ])
       reviews.value = rv?.records || []
       summary.value = sm || { total: 0, average: 0, distribution: [] }
-      traces.value = tr || []
+      if (tr.ok) {
+        trace.value = { ...(tr.data || {}), nodes: tr.data?.nodes ?? [], codes: tr.data?.codes ?? [] }
+      } else {
+        const status = tr.err?.response?.status
+        const body = tr.err?.response?.data
+        trace.value = {
+          bound: false,
+          matched: false,
+          nodes: [],
+          codes: [],
+          unavailable: status === 503 || body?.unavailable === true,
+          message: body?.message || (status ? `溯源查询失败（HTTP ${status}）` : '溯源请求未能发出或超时'),
+        }
+      }
       if (userStore.consumerId) {
         consumerApi.addFootprint(userStore.consumerId, id).catch(() => {})
       }
@@ -705,54 +700,6 @@ onMounted(load)
   font-size: 12.5px;
 }
 
-.trace-list {
-  display: grid;
-  gap: 14px;
-}
-
-.trace-card {
-  padding: 16px 18px;
-  border: 1px solid #e3eae5;
-  border-radius: 12px;
-  background: #fbfdfc;
-}
-
-.tr-hd {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 12px;
-}
-
-.tr-hd b {
-  font-size: 14px;
-}
-
-.tr-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px 24px;
-  font-size: 12.5px;
-}
-
-.tr-grid > div {
-  display: flex;
-  gap: 10px;
-}
-
-.tr-grid .full {
-  grid-column: 1 / -1;
-}
-
-.tr-grid span {
-  flex: 0 0 68px;
-  color: #6b7c72;
-}
-
-.tr-grid b {
-  color: #33453b;
-  font-weight: 500;
-}
 
 @media (max-width: 1080px) {
   .detail { grid-template-columns: minmax(0, 1fr); }

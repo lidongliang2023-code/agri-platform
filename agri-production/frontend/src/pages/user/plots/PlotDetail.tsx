@@ -1,3 +1,5 @@
+import BusinessRecordList from '@/components/BusinessRecordList'
+import Card from '@/components/SectionCard'
 /**
  * 页面名称：地块详情
  * 路由路径：/production/plots/:plotId
@@ -15,7 +17,7 @@
  * - 「💊 投入品使用统计」+ `查看投入品台账→`
  *
  * 数据说明：
- * - 地块、农场、种养计划、生长记录、环境数据均来自真实接口
+ * - 地块、农场、农事计划、生长记录、环境数据均来自真实接口
  * - pH 取自 GET /plots/{plotId}/soil/latest
  * - 长势评分由最新生长记录的 growthLevel 折算（真实）；NDVI / 异常区域当前无遥感数据源，
  *   展示原型示例值并显式标注「示例」
@@ -27,7 +29,7 @@
 import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { PageContainer } from '@ant-design/pro-components'
+import PageContainer from '@/components/ProductionPageContainer'
 import ReactECharts from 'echarts-for-react'
 import {
   DeleteOutlined,
@@ -40,7 +42,6 @@ import {
 import {
   Alert,
   Button,
-  Card,
   Col,
   DatePicker,
   Divider,
@@ -55,7 +56,6 @@ import {
   Select,
   Skeleton,
   Space,
-  Table,
   Tabs,
   Tag,
   Typography,
@@ -1277,9 +1277,7 @@ export default function PlotDetail(): JSX.Element {
                   <Space direction="vertical" size={12} style={{ width: '100%' }}>
                     <Row justify="space-between" align="middle" gutter={[12, 8]}>
                       <Col>
-                        <Typography.Text type="secondary">
-                          关联该地块的农事任务，进入详情可编辑、验收或转派
-                        </Typography.Text>
+
                       </Col>
                       <Col>
                         <Button
@@ -1295,7 +1293,7 @@ export default function PlotDetail(): JSX.Element {
                         </Button>
                       </Col>
                     </Row>
-                    <Table<Task>
+                    <BusinessRecordList<Task>
                       rowKey="taskId"
                       size="small"
                       dataSource={tasks}
@@ -1339,7 +1337,7 @@ export default function PlotDetail(): JSX.Element {
                         </Button>
                       </Col>
                     </Row>
-                    <Table<HarvestBatch>
+                    <BusinessRecordList<HarvestBatch>
                       rowKey="batchId"
                       size="small"
                       dataSource={harvests}
@@ -1365,9 +1363,7 @@ export default function PlotDetail(): JSX.Element {
                   <Space direction="vertical" size={12} style={{ width: '100%' }}>
                     <Row justify="space-between" align="middle" gutter={[12, 8]}>
                       <Col>
-                        <Typography.Text type="secondary">
-                          该地块的农资投入品使用记录，可进入投入品台账查看合规与存证
-                        </Typography.Text>
+
                       </Col>
                       <Col>
                         <Button
@@ -1383,7 +1379,7 @@ export default function PlotDetail(): JSX.Element {
                         </Button>
                       </Col>
                     </Row>
-                    <Table<InputUsageRecord>
+                    <BusinessRecordList<InputUsageRecord>
                       rowKey="usageId"
                       size="small"
                       dataSource={usages}
@@ -1409,9 +1405,7 @@ export default function PlotDetail(): JSX.Element {
                   <Space direction="vertical" size={12} style={{ width: '100%' }}>
                     <Row justify="space-between" align="middle" gutter={[12, 8]}>
                       <Col>
-                        <Typography.Text type="secondary">
-                          生育期、株高、叶面积与长势打卡记录，进入生长记录页可编辑
-                        </Typography.Text>
+
                       </Col>
                       <Col>
                         <Button
@@ -1427,7 +1421,7 @@ export default function PlotDetail(): JSX.Element {
                         </Button>
                       </Col>
                     </Row>
-                    <Table<GrowthRecord>
+                    <BusinessRecordList<GrowthRecord>
                       rowKey="recordId"
                       size="small"
                       dataSource={growthRecords}

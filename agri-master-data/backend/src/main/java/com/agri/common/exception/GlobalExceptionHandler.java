@@ -86,6 +86,12 @@ public class GlobalExceptionHandler {
         return ApiResponse.fail(404, "资源不存在");
     }
 
+    @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
+    public org.springframework.http.ResponseEntity<java.util.Map<String, Object>> healthRouteNotFound(Exception exception) {
+        return org.springframework.http.ResponseEntity.status(404)
+                .body(java.util.Map.of("code", 404, "message", "请求地址不存在"));
+    }
+
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public ApiResponse<Void> handleException(Exception e) {

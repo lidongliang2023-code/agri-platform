@@ -66,12 +66,12 @@ button::after {
 
 .muted {
   color: #718277;
-  font-size: 22rpx;
+  font-size: 24rpx;
 }
 
 .tiny {
   color: #94a198;
-  font-size: 20rpx;
+  font-size: 24rpx;
 }
 
 .strong {
@@ -102,7 +102,7 @@ button::after {
 
 .card-sub {
   color: #94a198;
-  font-size: 20rpx;
+  font-size: 24rpx;
 }
 
 .btn {
@@ -143,7 +143,7 @@ button::after {
   min-height: 58rpx;
   padding: 0 20rpx;
   border-radius: 12rpx;
-  font-size: 22rpx;
+  font-size: 24rpx;
 }
 
 .btn-block {
@@ -155,7 +155,7 @@ button::after {
   align-items: center;
   padding: 4rpx 12rpx;
   border-radius: 8rpx;
-  font-size: 20rpx;
+  font-size: 24rpx;
   line-height: 1.5;
 }
 
@@ -251,7 +251,7 @@ button::after {
   display: block;
   margin-bottom: 9rpx;
   color: #53665a;
-  font-size: 23rpx;
+  font-size: 24rpx;
   font-weight: 600;
 }
 
@@ -326,7 +326,7 @@ button::after {
 .hero-desc {
   margin-top: 10rpx;
   color: rgba(255, 255, 255, 0.62);
-  font-size: 22rpx;
+  font-size: 24rpx;
   line-height: 1.65;
 }
 
@@ -363,7 +363,7 @@ button::after {
 
 .ai-copy text:first-child {
   color: #6b418d;
-  font-size: 20rpx;
+  font-size: 24rpx;
   font-weight: 700;
 }
 
@@ -374,7 +374,7 @@ button::after {
 
 .ai-copy text:last-child {
   color: #718277;
-  font-size: 21rpx;
+  font-size: 24rpx;
 }
 
 .custom-nav {
@@ -406,7 +406,7 @@ button::after {
 .custom-nav .right {
   min-width: 96rpx;
   color: #12764a;
-  font-size: 23rpx;
+  font-size: 24rpx;
   text-align: right;
 }
 
@@ -445,7 +445,7 @@ button::after {
 .price-unit {
   margin-left: 4rpx;
   color: #94a198;
-  font-size: 20rpx;
+  font-size: 24rpx;
   font-weight: 400;
 }
 
@@ -454,7 +454,7 @@ button::after {
   align-items: center;
   gap: 4rpx;
   font-family: "DIN Alternate", monospace;
-  font-size: 22rpx;
+  font-size: 24rpx;
   font-weight: 600;
 }
 
@@ -483,7 +483,7 @@ button::after {
   padding: 12rpx 0;
   border-radius: 12rpx;
   color: #718277;
-  font-size: 23rpx;
+  font-size: 24rpx;
   text-align: center;
 }
 
@@ -508,7 +508,7 @@ button::after {
   border-radius: 30rpx;
   background: #ffffff;
   color: #53665a;
-  font-size: 23rpx;
+  font-size: 24rpx;
 }
 
 .chip.active {
@@ -569,7 +569,7 @@ button::after {
 .item-sub {
   overflow: hidden;
   color: #94a198;
-  font-size: 21rpx;
+  font-size: 24rpx;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -587,7 +587,7 @@ button::after {
   border-radius: 16rpx;
   background: #f2fbf5;
   color: #0e5233;
-  font-size: 21rpx;
+  font-size: 24rpx;
   line-height: 1.6;
 }
 
@@ -619,7 +619,7 @@ button::after {
 
 .stat-label {
   color: #94a198;
-  font-size: 20rpx;
+  font-size: 24rpx;
 }
 
 .divider {
@@ -652,7 +652,7 @@ button::after {
   flex-direction: column;
   gap: 2rpx;
   color: #718277;
-  font-size: 19rpx;
+  font-size: 24rpx;
 }
 
 .action-bar .icon-btn text:first-child {

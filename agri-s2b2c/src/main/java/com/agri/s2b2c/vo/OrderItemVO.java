@@ -16,4 +16,6 @@ public class OrderItemVO {
     private BigDecimal totalAmount;
     private String image;
     private String traceCode;
+    /** 下单来源批次快照，不能替代实际出货单品绑定。 */
+    private String prodBatchNo;
 }

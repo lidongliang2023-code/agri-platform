@@ -275,6 +275,12 @@ CREATE TABLE IF NOT EXISTS `agri_trade_contract` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='电子合同表';
 
 CREATE TABLE IF NOT EXISTS `agri_trade_logistics` (
+  diff_ticket_no VARCHAR(64) NULL,
+  diff_subject_id BIGINT NULL,
+  reship_qty DECIMAL(20,6) NULL,
+  reship_unit VARCHAR(64) NULL,
+  signed_buyer_id BIGINT NULL,
+  UNIQUE KEY uk_logistics_diff_subject (diff_subject_id, diff_ticket_no),
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     `logistics_no` VARCHAR(100) NOT NULL COMMENT '物流单号',
     `order_id` BIGINT NULL COMMENT '订单ID',

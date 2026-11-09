@@ -1,3 +1,5 @@
+import Card from '@/components/SectionCard'
+import './harvests.css'
 /**
  * 页面名称：新建采收
  * 路由路径：/production/harvests/create
@@ -14,11 +16,10 @@
 import { useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { PageContainer } from '@ant-design/pro-components'
+import PageContainer from '@/components/ProductionPageContainer'
 import {
   Alert,
   Button,
-  Card,
   Col,
   DatePicker,
   Divider,
@@ -127,7 +128,7 @@ export default function Create(): JSX.Element {
     queryFn: () => listPlots({ farmId, pageNum: 1, pageSize: 100 }),
   })
 
-  /** 种养计划（取预计产量 / 作物 / 种植周期） */
+  /** 农事计划（取预计产量 / 作物 / 种植周期） */
   const planQuery = useQuery({
     queryKey: ['plan-options', farmId],
     enabled: Boolean(farmId),
@@ -191,7 +192,7 @@ export default function Create(): JSX.Element {
     [memberQuery.data],
   )
 
-  /** 当前地块对应的种养计划 */
+  /** 当前地块对应的农事计划 */
   const currentPlan = useMemo<Plan | undefined>(
     () => (planQuery.data?.list ?? []).find((plan: Plan) => plan.plotId === plotId),
     [planQuery.data, plotId],
@@ -203,7 +204,7 @@ export default function Create(): JSX.Element {
     [plotQuery.data, plotId],
   )
 
-  /** 预计产量（优先取种养计划的计划产量） */
+  /** 预计产量（优先取农事计划的计划产量） */
   const expectedQuantity = currentPlan?.expectedYield ?? 0
 
   /** 完成率（%） */
@@ -330,6 +331,7 @@ export default function Create(): JSX.Element {
 
   return (
     <PageContainer
+      className="harvest-business-page"
       title={
         <Space size={8}>
           <Typography.Link onClick={() => navigate('/production/harvests')}>
@@ -373,9 +375,9 @@ export default function Create(): JSX.Element {
         }}
         style={{ maxWidth: 960 }}
       >
-        <Card title="☐ 基本信息" style={{ marginBottom: 16 }}>
-          <Row gutter={16}>
-            <Col span={12}>
+        <Card title="基本信息" style={{ marginBottom: 16 }}>
+          <Row gutter={[16, 16]}>
+            <Col xs={24} md={12}>
               <Form.Item
                 name="farmId"
                 label="农场名称"
@@ -391,7 +393,7 @@ export default function Create(): JSX.Element {
                 />
               </Form.Item>
             </Col>
-            <Col span={12}>
+            <Col xs={24} md={12}>
               <Form.Item
                 name="plotId"
                 label="地块选择"
@@ -456,9 +458,9 @@ export default function Create(): JSX.Element {
           )}
         </Card>
 
-        <Card title="☐ 采收信息" style={{ marginBottom: 16 }}>
-          <Row gutter={16}>
-            <Col span={8}>
+        <Card title="采收信息" style={{ marginBottom: 16 }}>
+          <Row gutter={[16, 16]}>
+            <Col xs={24} md={8}>
               <Form.Item
                 name="harvestDate"
                 label="采收日期"
@@ -467,7 +469,7 @@ export default function Create(): JSX.Element {
                 <DatePicker style={{ width: '100%' }} />
               </Form.Item>
             </Col>
-            <Col span={8}>
+            <Col xs={24} md={8}>
               <Form.Item
                 name="quantity"
                 label="采收数量(kg)"
@@ -489,7 +491,7 @@ export default function Create(): JSX.Element {
                 />
               </Form.Item>
             </Col>
-            <Col span={8}>
+            <Col xs={24} md={8}>
               <Form.Item name="unit" label="计量单位">
                 <Select
                   options={HARVEST_UNIT_OPTIONS}
@@ -498,13 +500,13 @@ export default function Create(): JSX.Element {
               </Form.Item>
             </Col>
           </Row>
-          <Row gutter={16}>
-            <Col span={8}>
+          <Row gutter={[16, 16]}>
+            <Col xs={24} md={8}>
               <Form.Item name="harvestArea" label="采收面积(亩)">
                 <InputNumber style={{ width: '100%' }} min={0} precision={2} placeholder="选填" />
               </Form.Item>
             </Col>
-            <Col span={8}>
+            <Col xs={24} md={8}>
               <Form.Item
                 name="operatorId"
                 label="采收人"
@@ -519,7 +521,7 @@ export default function Create(): JSX.Element {
                 />
               </Form.Item>
             </Col>
-            <Col span={8}>
+            <Col xs={24} md={8}>
               <Form.Item label="亩产量">
                 <Input
                   value={perMuYield > 0 ? `${perMuYield} ${unit}/亩` : '填写面积后自动计算'}
@@ -532,11 +534,11 @@ export default function Create(): JSX.Element {
           <Divider orientation="left" plain>
             产量对比
           </Divider>
-          <Row gutter={16}>
-            <Col span={8}>
+          <Row gutter={[16, 16]}>
+            <Col xs={24} md={8}>
               <Statistic title="预计产量" value={expectedQuantity} suffix="kg" />
             </Col>
-            <Col span={8}>
+            <Col xs={24} md={8}>
               <Statistic
                 title="实际采收"
                 value={quantity}
@@ -545,7 +547,7 @@ export default function Create(): JSX.Element {
                 valueStyle={{ color: '#1677ff' }}
               />
             </Col>
-            <Col span={8}>
+            <Col xs={24} md={8}>
               <Statistic
                 title="完成率"
                 value={finishRate}
@@ -556,9 +558,9 @@ export default function Create(): JSX.Element {
           </Row>
         </Card>
 
-        <Card title="☐ 质量信息" style={{ marginBottom: 16 }}>
-          <Row gutter={16}>
-            <Col span={12}>
+        <Card title="质量信息" style={{ marginBottom: 16 }}>
+          <Row gutter={[16, 16]}>
+            <Col xs={24} md={12}>
               <Form.Item
                 name="grade"
                 label="质量等级"
@@ -573,7 +575,7 @@ export default function Create(): JSX.Element {
                 />
               </Form.Item>
             </Col>
-            <Col span={12}>
+            <Col xs={24} md={12}>
               <Form.Item name="appearance" label="外观评价">
                 <Radio.Group
                   options={APPEARANCE_OPTIONS.map((item) => ({

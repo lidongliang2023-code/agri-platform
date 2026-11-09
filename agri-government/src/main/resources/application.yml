@@ -45,3 +45,24 @@ platform:
     # 溯源那条又是刻意脱过敏的最小核验视图。
     public-paths:
       - /api/v1/government/public/**
+
+# Health probes expose status only; business endpoints retain RBAC checks.
+
+# Unified probes: dependency failures affect readiness, not liveness.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      show-components: never
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: '*'
+          exclude: livenessState

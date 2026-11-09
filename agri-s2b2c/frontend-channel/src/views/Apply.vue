@@ -1,7 +1,7 @@
 <template>
   <div class="apply-page">
     <el-form :model="form" :rules="rules" ref="formRef" label-width="120px">
-      <h2>渠道商入驻申请</h2>
+      <h2>商家入驻申请</h2>
       <el-form-item label="注册类型" prop="registerType">
         <el-select v-model="form.registerType">
           <el-option label="个人" value="PERSONAL" />

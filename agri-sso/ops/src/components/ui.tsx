@@ -140,13 +140,42 @@ export const ROLE_LABEL: Record<string, string> = {
   GOVERNMENT_INSPECTOR: '监管执法',
 }
 
+/**
+ * 身份申请单的业务身份码 → 中文名。
+ *
+ * <p>同一张 `platform_identity_application` 表里，用户端申请写的是小写业务码
+ * （wholesaler / coop_admin …），而历史种子与联调脚本写的是大写枚举
+ * （WHOLESALER / PURCHASER …）。早期这里是大小写敏感的直接查表，且漏了
+ * COOP_ADMIN / MALL_SUPPLIER，导致「申请身份」列落回原始枚举码；值为空时
+ * 连兜底文案都没有，直接渲染成空白。统一按大写归一后再查表即可兼容两种写法。</p>
+ */
 export const IDENTITY_TYPE_LABEL: Record<string, string> = {
   PURCHASER: '收购商',
   WHOLESALER: '批发商',
   RETAILER: '零售商',
-  SERVICE_PROVIDER: '服务商',
   FARMER: '农户',
-  GOVERNMENT: '政府用户',
+  COOP_ADMIN: '合作社管理员',
+  MALL_SUPPLIER: '商城供应商',
+  SERVICE_PROVIDER: '服务商',
+  GOVERNMENT: '政府人员',
+}
+
+/** 身份筛选下拉的可选项：值用后端写入的小写业务码，后端按大小写兼容匹配。 */
+export const IDENTITY_TYPE_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: 'wholesaler', label: '批发商' },
+  { value: 'retailer', label: '零售商' },
+  { value: 'farmer', label: '农户' },
+  { value: 'coop_admin', label: '合作社管理员' },
+  { value: 'mall_supplier', label: '商城供应商' },
+  { value: 'service_provider', label: '服务商' },
+  { value: 'government', label: '政府人员' },
+]
+
+/** 身份码转中文名：大小写无关，空值给「—」，未知码保留原值便于排查。 */
+export function identityTypeText(code?: string | null): string {
+  if (!code) return '—'
+  const key = code.trim().toUpperCase()
+  return IDENTITY_TYPE_LABEL[key] ?? code
 }
 
 export const FREEZE_TYPE_LABEL: Record<string, string> = {

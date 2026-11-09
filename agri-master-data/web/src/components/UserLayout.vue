@@ -5,7 +5,7 @@
         <BrandMark :size="34" />
         <div class="logo-text">
           <h1>丰链云</h1>
-          <p>主数据 · 企业端</p>
+          <p>FENGCHAIN · AGRI</p>
         </div>
       </div>
 

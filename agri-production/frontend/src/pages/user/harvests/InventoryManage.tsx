@@ -1,3 +1,6 @@
+import Card from '@/components/SectionCard'
+import './harvests.css'
+import ProTable from '@/components/ProductionTable'
 /**
  * 页面名称：库存管理
  * 路由路径：/production/harvests/inventory
@@ -12,15 +15,15 @@
  * - 状态标签：正常 / 预警 / 不足 / 临期
  * - 出入库操作：入库、出库、损耗登记、冻结 / 解冻（HARV-05 / HARV-06 / HARV-09）
  */
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { PageContainer, ProTable } from '@ant-design/pro-components'
+
+import PageContainer from '@/components/ProductionPageContainer'
 import type { ProColumns } from '@ant-design/pro-components'
 import {
   Alert,
   Button,
-  Card,
   Col,
   Empty,
   Form,
@@ -36,10 +39,11 @@ import {
   Typography,
   message,
 } from 'antd'
-import { LockOutlined, PlusOutlined, UnlockOutlined, WarningOutlined } from '@ant-design/icons'
+import { LockOutlined, PlusOutlined, WarningOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
-import useFarmStore from '@/store/farm'
-import { MetricStatistic, MetricText } from '@/components'
+import useAuthStore from '@/store/auth'
+import { loadInventoryPages, quantitySummary, requireInventorySource } from './inventoryHelpers'
+import { MetricText } from '@/components'
 import {
   inboundInventory,
   outboundInventory,
@@ -60,6 +64,8 @@ import {
 interface InventoryFilters {
   /** 仓库名称 */
   warehouseName?: string
+  keyword?: string
+  batchNo?: string
   /** 品类 */
   category?: string
   /** 库存健康状态 */
@@ -91,8 +97,8 @@ interface StockFormValues {
 export default function InventoryManage(): JSX.Element {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const currentFarm = useFarmStore((state) => state.currentFarm)
-  const farmId = currentFarm?.farmId
+  const subjectId = useAuthStore((state) => state.userInfo?.tenantId)
+  const operatorName = useAuthStore((state) => state.userInfo?.realName || state.userInfo?.username)
 
   const [pageNum, setPageNum] = useState<number>(1)
   const [pageSize, setPageSize] = useState<number>(10)
@@ -103,24 +109,27 @@ export default function InventoryManage(): JSX.Element {
   const [actionTarget, setActionTarget] = useState<InventoryRecord | null>(null)
   const [stockForm] = Form.useForm<StockFormValues>()
 
-  /** 库存列表 */
+  useEffect(() => { setPageNum(1); closeAction() }, [subjectId])
+
+  /** 库存列表：接口范围为当前经营主体，不依赖顶部农场。 */
   const listQuery = useQuery({
-    queryKey: ['production-inventory', 'list', farmId, filters, pageNum, pageSize],
-    enabled: Boolean(farmId),
-    queryFn: () => queryInventory({ ...filters, pageNum, pageSize }),
+    queryKey: ['production-inventory', 'list', subjectId, filters],
+    enabled: Boolean(subjectId),
+    queryFn: () => loadInventoryPages((pageNum) => queryInventory({ ...filters, pageNum, pageSize: 200 })),
   })
 
   /** 统一失效刷新 */
   const invalidateInventory = (): Promise<void> =>
-    queryClient.invalidateQueries({ queryKey: ['production-inventory'] })
+    Promise.all([queryClient.invalidateQueries({ queryKey: ['production-inventory'] }), queryClient.invalidateQueries({ queryKey: ['production-harvests'] })]).then(() => undefined)
 
   /** 入库 */
   const inboundMutation = useMutation({
-    mutationFn: (payload: { batchId: string; quantity: number; remark?: string }) =>
+    mutationFn: (payload: { inventoryId: string; batchId: string; quantity: number; remark?: string; warehouseName?: string }) =>
       inboundInventory(payload.batchId, {
         quantity: payload.quantity,
         remark: payload.remark,
-        operatorName: currentFarm?.farmName,
+        operatorName,
+        warehouseName: payload.warehouseName,
       }),
     onSuccess: () => {
       message.success('入库成功，库存流水已生成')
@@ -132,7 +141,7 @@ export default function InventoryManage(): JSX.Element {
 
   /** 出库 */
   const outboundMutation = useMutation({
-    mutationFn: (payload: { batchId: string; quantity: number; orderNo?: string; remark?: string }) =>
+    mutationFn: (payload: { inventoryId: string; batchId: string; quantity: number; orderNo?: string; remark?: string }) =>
       outboundInventory(payload.batchId, payload),
     onSuccess: () => {
       message.success('出库成功，库存流水已生成')
@@ -144,8 +153,8 @@ export default function InventoryManage(): JSX.Element {
 
   /** 损耗登记 */
   const lossMutation = useMutation({
-    mutationFn: (payload: { batchId: string; quantity: number; reason: string }) =>
-      registerLoss({ ...payload, operatorName: currentFarm?.farmName }),
+    mutationFn: (payload: { inventoryId: string; batchId: string; quantity: number; reason: string; remark?: string }) =>
+      registerLoss({ ...payload, operatorName }),
     onSuccess: () => {
       message.success('损耗登记成功')
       closeAction()
@@ -156,8 +165,12 @@ export default function InventoryManage(): JSX.Element {
 
   /** 冻结 / 解冻 */
   const freezeMutation = useMutation({
-    mutationFn: (payload: { batchId: string; frozen: boolean }) =>
-      toggleInventoryFreeze(payload.batchId, payload.frozen),
+    mutationFn: async (payload: { inventoryId: string; batchId: string; frozen: boolean }) => {
+      const record = rows.find((row) => String(row.inventoryId) === String(payload.inventoryId))
+      if (!record) throw new Error('库存记录已变化，请刷新')
+      await requireInventorySource(record)
+      return toggleInventoryFreeze(payload.batchId, payload.frozen, payload.inventoryId)
+    },
     onSuccess: (_result, payload) => {
       message.success(payload.frozen ? '库存已冻结' : '库存已解冻')
       void invalidateInventory()
@@ -174,6 +187,7 @@ export default function InventoryManage(): JSX.Element {
 
   /** 打开出入库弹窗 */
   const openAction = (type: StockAction, record: InventoryRecord): void => {
+    if (inboundMutation.isPending || outboundMutation.isPending || lossMutation.isPending) return
     setAction(type)
     setActionTarget(record)
     stockForm.resetFields()
@@ -182,28 +196,33 @@ export default function InventoryManage(): JSX.Element {
   /** 提交出入库 */
   const handleStockSubmit = (): void => {
     if (!actionTarget || !action) return
-    stockForm.validateFields().then((values) => {
+    stockForm.validateFields().then(async (values) => {
+      if (subjectId !== useAuthStore.getState().userInfo?.tenantId) throw new Error('经营主体已切换，请重新操作')
+      if (action !== 'in') await requireInventorySource(actionTarget)
       const quantity = values.quantity ?? 0
       if (quantity <= 0) {
         message.warning('变动数量必须大于 0')
         return
       }
-      if (action === 'out' && quantity > actionTarget.currentQty) {
+      if (action === 'out' && quantity > Math.max(0, actionTarget.currentQty - (actionTarget.frozenQty ?? 0))) {
         message.warning(`出库数量不能超过当前库存 ${actionTarget.currentQty}${actionTarget.unit}`)
         return
       }
-      if (action === 'loss' && quantity > actionTarget.currentQty) {
+      if (action === 'loss' && quantity > Math.max(0, actionTarget.currentQty - (actionTarget.frozenQty ?? 0))) {
         message.warning(`损耗数量不能超过当前库存 ${actionTarget.currentQty}${actionTarget.unit}`)
         return
       }
       if (action === 'in') {
         inboundMutation.mutate({
+          inventoryId: String(actionTarget.inventoryId),
           batchId: actionTarget.batchId,
           quantity,
           remark: values.remark,
+          warehouseName: actionTarget.warehouseName,
         })
       } else if (action === 'out') {
         outboundMutation.mutate({
+          inventoryId: String(actionTarget.inventoryId),
           batchId: actionTarget.batchId,
           quantity,
           orderNo: values.orderNo,
@@ -211,15 +230,17 @@ export default function InventoryManage(): JSX.Element {
         })
       } else {
         lossMutation.mutate({
+          inventoryId: String(actionTarget.inventoryId),
           batchId: actionTarget.batchId,
           quantity,
           reason: values.reason ?? '其他',
+          remark: values.remark,
         })
       }
-    })
+    }).catch((error) => { if (!error?.errorFields) message.error(error.message || '请检查表单') })
   }
 
-  const rows = useMemo<InventoryRecord[]>(() => listQuery.data?.list ?? [], [listQuery.data])
+  const rows = useMemo<InventoryRecord[]>(() => listQuery.data ?? [], [listQuery.data])
 
   /**
    * 健康状态兜底计算：后端未返回 healthStatus 时按安全库存 / 保质期推导。
@@ -251,15 +272,11 @@ export default function InventoryManage(): JSX.Element {
    */
   const overview = useMemo(() => {
     const known = rows.filter((item) => typeof item.currentQty === 'number')
-    const totalQty =
-      known.length > 0 ? known.reduce((sum, item) => sum + (item.currentQty ?? 0), 0) : null
-    const frozenQty = rows.reduce((sum, item) => sum + (item.frozenQty ?? 0), 0)
-    const lossQty = rows.reduce((sum, item) => sum + (item.lossQty ?? 0), 0)
     return {
-      totalQty,
-      frozenQty,
-      lossQty,
-      skuCount: rows.length,
+      totalQty: quantitySummary(rows, 'currentQty'),
+      frozenQty: quantitySummary(rows, 'frozenQty'),
+      lossQty: quantitySummary(rows, 'lossQty'),
+      skuCount: rows.filter((row) => row.currentQty > 0).length,
       missingQtyCount: rows.length - known.length,
     }
   }, [rows])
@@ -346,6 +363,7 @@ export default function InventoryManage(): JSX.Element {
     {
       title: '操作',
       key: 'option',
+      fixed: 'right',
       width: 280,
       valueType: 'option',
       render: (_, record) => [
@@ -358,34 +376,22 @@ export default function InventoryManage(): JSX.Element {
         <Typography.Link key="in" onClick={() => openAction('in', record)}>
           入库
         </Typography.Link>,
-        <Typography.Link key="out" onClick={() => openAction('out', record)}>
+        <Typography.Link disabled={Boolean(record.frozen) || !(record.currentQty > (record.frozenQty ?? 0))} key="out" onClick={() => openAction('out', record)}>
           出库
         </Typography.Link>,
-        <Typography.Link key="loss" onClick={() => openAction('loss', record)}>
+        <Typography.Link disabled={Boolean(record.frozen) || !(record.currentQty > (record.frozenQty ?? 0))} key="loss" onClick={() => openAction('loss', record)}>
           损耗
         </Typography.Link>,
         record.frozen ? (
-          <Popconfirm
-            key="unfreeze"
-            title="确认解冻该库存？"
-            okText="确认解冻"
-            cancelText="取消"
-            onConfirm={() =>
-              freezeMutation.mutate({ batchId: record.batchId, frozen: false })
-            }
-          >
-            <Typography.Link>
-              <UnlockOutlined /> 解冻
-            </Typography.Link>
-          </Popconfirm>
+          <Popconfirm key="unfreeze" title={`确认解冻 ${record.warehouseName} 的库存？`} onConfirm={() => freezeMutation.mutate({ inventoryId: String(record.inventoryId), batchId: record.batchId, frozen: false })}><Typography.Link>解冻</Typography.Link></Popconfirm>
         ) : (
           <Popconfirm
             key="freeze"
-            title="确认冻结该库存？"
+            title={`确认冻结 ${record.warehouseName} 的库存？`}
             description="冻结后不可出库，请先解冻。"
             okText="确认冻结"
             cancelText="取消"
-            onConfirm={() => freezeMutation.mutate({ batchId: record.batchId, frozen: true })}
+            onConfirm={() => freezeMutation.mutate({ inventoryId: String(record.inventoryId), batchId: record.batchId, frozen: true })}
           >
             <Typography.Link>
               <LockOutlined /> 冻结
@@ -405,8 +411,9 @@ export default function InventoryManage(): JSX.Element {
 
   return (
     <PageContainer
-      title="🏪 库存管理"
-      subTitle={currentFarm?.farmName}
+      className="harvest-business-page"
+      title="库存管理"
+      subTitle="当前经营主体全部仓库"
       extra={[
         <Button key="harvests" onClick={() => navigate('/production/harvests')}>
           采收记录
@@ -428,43 +435,39 @@ export default function InventoryManage(): JSX.Element {
           showIcon
           style={{ marginBottom: 16 }}
           message={`有 ${overview.missingQtyCount} 条记录后端未返回库存台账字段（inventoryId / currentQty / safeQty / productName），相关列显示为「—」`}
-          description="后端 /harvests/inventory 当前返回的是出入库流水结构，不是库存台账。前端不做字段补 0、不做数量估算、也不用流水数量冒充库存数量；接口补齐台账字段后自动填充。"
+          description="部分数量缺失，汇总仅包含已有数量，请刷新后核实。"
         />
       ) : null}
 
       <Row gutter={16} style={{ marginBottom: 16 }}>
-        <Col span={6}>
+        <Col xs={24} sm={12} xl={6}>
           <Card>
-            <Statistic title="在库 SKU" value={overview.skuCount} suffix="个" />
+            <Statistic title="在库记录" value={overview.skuCount} suffix="个" />
           </Card>
         </Col>
-        <Col span={6}>
+        <Col xs={24} sm={12} xl={6}>
           <Card>
-            <MetricStatistic
-              title="库存总量"
+            <Statistic
+              title="库存总量（按单位）"
               value={overview.totalQty}
-              suffix="kg"
               valueStyle={{ color: '#52c41a' }}
-              missingTip="后端未返回任何一条记录的 currentQty，库存总量不做补 0 汇总，显示为「—」"
             />
           </Card>
         </Col>
-        <Col span={6}>
+        <Col xs={24} sm={12} xl={6}>
           <Card>
             <Statistic
               title="冻结数量"
               value={overview.frozenQty}
-              suffix="kg"
               valueStyle={{ color: '#fa541c' }}
             />
           </Card>
         </Col>
-        <Col span={6}>
+        <Col xs={24} sm={12} xl={6}>
           <Card>
             <Statistic
               title="累计损耗"
               value={overview.lossQty}
-              suffix="kg"
               valueStyle={{ color: '#faad14' }}
             />
           </Card>
@@ -477,10 +480,10 @@ export default function InventoryManage(): JSX.Element {
           showIcon
           icon={<WarningOutlined />}
           style={{ marginBottom: 16 }}
-          message={`⚠️ 库存预警：${warnings.length} 个批次需要关注`}
+          message={`库存预警：${warnings.length} 条库存需要关注${warnings.length > 5 ? '（仅展示前 5 条，可按状态筛选）' : ''}`}
           description={
             <Space direction="vertical" size={2}>
-              {warnings.map((item, index) => (
+              {warnings.slice(0, 5).map((item, index) => (
                 <Typography.Text key={item.inventoryId ?? `inventory-row-${index}`}>
                   {item.warehouseName ?? '—'} - {item.productName ?? '—'} 库存
                   {healthOf(item) === 'expiring' ? '临期' : '不足'}（当前{' '}
@@ -510,7 +513,9 @@ export default function InventoryManage(): JSX.Element {
       ) : null}
 
       <Card style={{ marginBottom: 16 }}>
-        <Form form={filterForm} layout="inline" style={{ rowGap: 12 }}>
+        <Form form={filterForm} layout="inline" style={{ rowGap: 12 }} onFinish={handleSearch}>
+          <Form.Item name="keyword" label="品名"><Input allowClear placeholder="搜索品名" /></Form.Item>
+          <Form.Item name="batchNo" label="批次号"><Input allowClear placeholder="搜索采收批次" /></Form.Item>
           <Form.Item name="warehouseName" label="仓库">
             <Select
               allowClear
@@ -546,9 +551,9 @@ export default function InventoryManage(): JSX.Element {
         </Form>
       </Card>
 
-      <Card>
-        {!farmId ? (
-          <Empty description="请先在顶部切换农场" />
+      <Card title="库存记录">
+        {!subjectId ? (
+          <Empty description="请先选择经营主体" />
         ) : listQuery.isError ? (
           <Empty
             description={
@@ -560,16 +565,19 @@ export default function InventoryManage(): JSX.Element {
           />
         ) : (
           <ProTable<InventoryRecord>
+            cardProps={false}
+            columnWidthStorageKey="inventory-records"
+            scroll={{ x: 'max-content' }}
             rowKey="inventoryId"
             columns={columns}
-            dataSource={rows}
+            dataSource={rows.slice((pageNum - 1) * pageSize, pageNum * pageSize)}
             loading={listQuery.isFetching}
             search={false}
             options={{ reload: () => void invalidateInventory(), density: true, setting: true }}
             pagination={{
               current: pageNum,
               pageSize,
-              total: listQuery.data?.total ?? 0,
+              total: rows.length,
               showSizeChanger: true,
               onChange: (nextPage, nextSize) => {
                 setPageNum(nextPage)
@@ -609,7 +617,7 @@ export default function InventoryManage(): JSX.Element {
           >
             <InputNumber
               style={{ width: '100%' }}
-              min={0}
+              min={0.01}
               precision={2}
               placeholder={`当前库存 ${actionTarget?.currentQty ?? 0}${actionTarget?.unit ?? 'kg'}`}
             />

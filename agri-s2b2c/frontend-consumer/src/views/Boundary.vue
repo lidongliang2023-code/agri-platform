@@ -56,7 +56,7 @@
             <small>商品上架 · 订单发货</small>
           </div>
           <div class="flow-box peer">
-            <b>渠道商端</b>
+            <b>商家端</b>
             <small>选品分销 · 佣金结算</small>
           </div>
           <div class="flow-box peer">

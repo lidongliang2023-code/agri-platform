@@ -71,7 +71,7 @@ public class AdminGuaranteeController {
     public ApiResponse<Boolean> verify(@PathVariable Long id, @RequestBody Map<String, String> params) {
         MerchantGuarantee guarantee = guaranteeMapper.selectById(id);
         if (guarantee == null) {
-            return ApiResponse.error("保证金账户不存在");
+            return ApiResponse.error(404, "保证金账户不存在");
         }
         if (!"pending".equals(guarantee.getGuaranteeStatus())) {
             return ApiResponse.error("该账户已经审核过了");
@@ -102,7 +102,7 @@ public class AdminGuaranteeController {
         }
         boolean ok = guaranteeService.freezeGuarantee(id, amount, SecurityUtils.getUsername(), reason);
         return ok ? ApiResponse.success(true)
-                : ApiResponse.error("冻结失败：账户不存在，或可用保证金不足");
+                : ApiResponse.error(404, "冻结失败：账户不存在，或可用保证金不足");
     }
 
     /** 解冻保证金。必须给原因。 */
@@ -119,7 +119,7 @@ public class AdminGuaranteeController {
         }
         boolean ok = guaranteeService.unfreezeGuarantee(id, amount, SecurityUtils.getUsername(), reason);
         return ok ? ApiResponse.success(true)
-                : ApiResponse.error("解冻失败：账户不存在，或冻结额不足");
+                : ApiResponse.error(404, "解冻失败：账户不存在，或冻结额不足");
     }
 
     private static BigDecimal parseAmount(String raw) {

@@ -211,7 +211,7 @@ onPullDownRefresh(loadProducts)
   border-radius: 999rpx;
   background: #fff;
   color: #4b5d53;
-  font-size: 22rpx;
+  font-size: 24rpx;
 }
 
 .category-chip.active {
@@ -239,7 +239,7 @@ onPullDownRefresh(loadProducts)
 
 .result-kicker {
   color: #12764a;
-  font-size: 17rpx;
+  font-size: 24rpx;
   font-weight: 700;
   letter-spacing: 2rpx;
 }
@@ -253,13 +253,13 @@ onPullDownRefresh(loadProducts)
 
 .result-count {
   color: #93a29a;
-  font-size: 20rpx;
+  font-size: 24rpx;
 }
 
 .loading {
   padding: 100rpx 0;
   color: #84938a;
-  font-size: 23rpx;
+  font-size: 24rpx;
   text-align: center;
 }
 
@@ -314,7 +314,7 @@ onPullDownRefresh(loadProducts)
 .product-point {
   margin-top: 8rpx;
   color: #718277;
-  font-size: 20rpx;
+  font-size: 24rpx;
 }
 
 .product-tags {
@@ -339,12 +339,12 @@ onPullDownRefresh(loadProducts)
 .original {
   margin-left: 9rpx;
   color: #a8b1ab;
-  font-size: 18rpx;
+  font-size: 24rpx;
   text-decoration: line-through;
 }
 
 .sales {
   color: #93a29a;
-  font-size: 18rpx;
+  font-size: 24rpx;
 }
 </style>

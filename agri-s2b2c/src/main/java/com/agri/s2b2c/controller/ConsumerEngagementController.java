@@ -6,6 +6,7 @@ import com.agri.s2b2c.service.OrderCancellationService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,14 +43,17 @@ public class ConsumerEngagementController {
     private final ConsumerIdentityService consumerIdentityService;
     private final ObjectMapper objectMapper;
     private final OrderCancellationService orderCancellationService;
+    private final com.agri.s2b2c.service.ProductionTraceQueryService traceQueryService;
 
     public ConsumerEngagementController(JdbcTemplate jdbc, ConsumerIdentityService consumerIdentityService,
                                         ObjectMapper objectMapper,
-                                        OrderCancellationService orderCancellationService) {
+                                        OrderCancellationService orderCancellationService,
+                                        com.agri.s2b2c.service.ProductionTraceQueryService traceQueryService) {
         this.jdbc = jdbc;
         this.consumerIdentityService = consumerIdentityService;
         this.objectMapper = objectMapper;
         this.orderCancellationService = orderCancellationService;
+        this.traceQueryService = traceQueryService;
     }
 
     // ── 分类 ────────────────────────────────────────────────────────────
@@ -95,27 +99,29 @@ public class ConsumerEngagementController {
 
     // ── 溯源（按批次码） ────────────────────────────────────────────────
 
-    /** 消费者扫商品包装上的批次码查询溯源；查不到给 404，前端据此提示"非本平台商品"。 */
+    /**
+     * 消费者扫包装上的溯源码查溯源。
+     *
+     * <p>改读生产域：溯源码是生产域生成与激活的，商城里没有第二份真相。
+     * 三种结果分开给：<b>命中</b>（链路 + 链上结论）、<b>查无此码</b>（404，前端说"非本平台溯源码"）、
+     * <b>链路不可用</b>（503，前端要说"暂时连不上生产管理模块"，不能说"这码没记录"）。</p>
+     */
     @GetMapping("/api/consumer/trace/code/{code}")
     @OperatorOnly("s2b2c:consumer")
     public ResponseEntity<Object> traceByCode(@PathVariable String code) {
-        List<Map<String, Object>> rows = jdbc.query("""
-                SELECT t.id,t.batch_code AS batchCode,t.origin,t.planting_date AS plantingDate,
-                       t.harvest_date AS harvestDate,t.processing_info AS processingInfo,
-                       t.quality_report AS qualityReport,t.storage_info AS storageInfo,
-                       t.product_id AS productId,p.name AS productName
-                FROM s2b2c_traceability t LEFT JOIN s2b2c_product p ON p.id=t.product_id
-                WHERE t.batch_code=? LIMIT 1
-                """, (rs, rowNum) -> row(
-                "id", rs.getLong("id"), "batchCode", rs.getString("batchCode"),
-                "origin", rs.getString("origin"), "plantingDate", rs.getString("plantingDate"),
-                "harvestDate", rs.getString("harvestDate"), "processingInfo", rs.getString("processingInfo"),
-                "qualityReport", rs.getString("qualityReport"), "storageInfo", rs.getString("storageInfo"),
-                "productId", rs.getLong("productId"), "productName", rs.getString("productName")), code);
-        if (rows.isEmpty()) {
-            return ResponseEntity.status(404).body(Map.of("message", "未查询到该溯源码对应的批次"));
+        try {
+            Map<String, Object> trace = traceQueryService.codeTrace(code);
+            if (!Boolean.TRUE.equals(trace.get("matched"))) {
+                return ResponseEntity.status(404).body(Map.of(
+                        "success", false, "matched", false,
+                        "message", trace.get("reason") == null
+                                ? "未查询到该溯源码对应的批次" : trace.get("reason")));
+            }
+            return ResponseEntity.ok(trace);
+        } catch (com.agri.s2b2c.integration.ProductionTraceUnavailableException e) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body(Map.of("success", false, "unavailable", true, "message", e.getMessage()));
         }
-        return ResponseEntity.ok(rows);
     }
 
     // ── 物流 ────────────────────────────────────────────────────────────

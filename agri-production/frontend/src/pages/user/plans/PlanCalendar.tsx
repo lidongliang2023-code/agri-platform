@@ -1,13 +1,16 @@
 /**
  * 页面名称：农事日历
  * 路由路径：/production/plans/calendar
- * 所属模块：智能种养
+ * 所属模块：农事生产
  * PRD 序号：PRD 6.1 #13（对应 PRD 8.2 PLAN-04 农事日历 + 冲突检测）
  *
  * 页面用途（PRD）：日历视图查看农事安排、计划冲突检测。
- * 冲突定义（PRD PLAN-04）：同一地块同一天存在多条农事安排时判定为冲突，
- * 日历单元格以红色标记，并在侧栏顶部给出冲突汇总提示。
+ * 同地块同日多项未完成任务提示待协调；生育期与无地块记录不参与冲突判断。
  */
+import PageContainer from '@/components/ProductionPageContainer'
+import Card from '@/components/SectionCard'
+import './plans.css'
+import './calendar.css'
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -16,8 +19,7 @@ import {
   App as AntdApp,
   Badge,
   Button,
-  Calendar,
-  Card,
+  DatePicker,
   Col,
   Drawer,
   Empty,
@@ -25,16 +27,18 @@ import {
   Radio,
   Row,
   Skeleton,
+  Select,
   Space,
   Statistic,
   Tag,
-  Tooltip,
   Typography,
 } from 'antd'
 import type { BadgeProps } from 'antd'
 import dayjs, { type Dayjs } from 'dayjs'
 import {
   CalendarOutlined,
+  LeftOutlined,
+  RightOutlined,
   ReloadOutlined,
   WarningOutlined,
 } from '@ant-design/icons'
@@ -94,12 +98,14 @@ export default function PlanCalendar(): JSX.Element {
   const [viewMonth, setViewMonth] = useState<Dayjs>(dayjs())
   const [selectedDate, setSelectedDate] = useState<string>(dayjs().format('YYYY-MM-DD'))
   const [drawerOpen, setDrawerOpen] = useState<boolean>(false)
+  const [plotFilter, setPlotFilter] = useState<string>()
   const [sourceFilter, setSourceFilter] = useState<'all' | 'task' | 'plan-stage'>('all')
 
   /** 当前显示月份的起止（含前后各 7 天，避免月视图边界缺失） */
   const range = useMemo(() => {
-    const start = viewMonth.startOf('month').subtract(7, 'day')
-    const end = viewMonth.endOf('month').add(7, 'day')
+    const first = viewMonth.startOf('month')
+    const start = first.subtract((first.day() + 6) % 7, 'day')
+    const end = start.add(41, 'day')
     return {
       startDate: start.format('YYYY-MM-DD'),
       endDate: end.format('YYYY-MM-DD'),
@@ -108,6 +114,9 @@ export default function PlanCalendar(): JSX.Element {
 
   const calendarQuery = useQuery({
     queryKey: ['plan-calendar', farmId, range.startDate, range.endDate],
+    enabled: Boolean(farmId),
+    staleTime: 0,
+    refetchOnWindowFocus: true,
     queryFn: () =>
       fetchCalendarEntries({
         startDate: range.startDate,
@@ -116,7 +125,9 @@ export default function PlanCalendar(): JSX.Element {
       }),
   })
 
-  const entries = calendarQuery.data?.entries ?? []
+  const allEntries = calendarQuery.data?.entries ?? []
+  const plotOptions = Array.from(new Map(allEntries.filter(item => item.plotId).map(item => [item.plotId, { value: item.plotId, label: item.plotName || item.plotId }])).values())
+  const entries = allEntries.filter(item => (sourceFilter === 'all' || item.source === sourceFilter) && (!plotFilter || item.plotId === plotFilter))
   /** 日历各来源的不可用原因（非空表示本次少了一块排期，不是"没有排期"） */
   const calendarUnavailableReasons = calendarQuery.data?.unavailableReasons ?? []
 
@@ -144,7 +155,8 @@ export default function PlanCalendar(): JSX.Element {
       // 目的是未指派任务（assignee 为空）也能被判出，避免漏报）
       const byPlot = new Map<string, PlotConflict>()
       for (const entry of bucket.entries) {
-        const plotKey = entry.plotId || '未关联地块'
+        if (!entry.plotId || entry.source !== 'task' || entry.done) continue
+        const plotKey = entry.plotId
         const group = byPlot.get(plotKey) ?? {
           plotId: plotKey,
           plotName: entry.plotName || '未关联地块',
@@ -158,7 +170,7 @@ export default function PlanCalendar(): JSX.Element {
         })
         byPlot.set(plotKey, group)
       }
-      bucket.plotCount = byPlot.size
+      bucket.plotCount = new Set(bucket.entries.filter(item => item.plotId).map(item => item.plotId)).size
       bucket.conflicts = Array.from(byPlot.values()).filter((group) => group.items.length > 1)
     }
     return map
@@ -168,9 +180,9 @@ export default function PlanCalendar(): JSX.Element {
   const conflictDays = useMemo(
     () =>
       Array.from(buckets.entries())
-        .filter(([, bucket]) => bucket.conflicts.length > 0)
+        .filter(([date, bucket]) => date.startsWith(viewMonth.format('YYYY-MM')) && bucket.conflicts.length > 0)
         .sort(([a], [b]) => a.localeCompare(b)),
-    [buckets],
+    [buckets, viewMonth],
   )
 
   /** 选中日过滤后的条目 */
@@ -185,9 +197,9 @@ export default function PlanCalendar(): JSX.Element {
     const prefix = viewMonth.format('YYYY-MM')
     const monthEntries = entries.filter((item) => item.date.startsWith(prefix))
     return {
-      total: monthEntries.length,
-      taskCount: monthEntries.filter((item) => item.source === 'task').length,
-      stageCount: monthEntries.filter((item) => item.source === 'plan-stage').length,
+      total: new Set(monthEntries.map(item => item.source === 'task' ? `task-${item.taskId || item.entryId}` : `stage-${item.planId}-${item.stageId || item.entryId}`)).size,
+      taskCount: new Set(monthEntries.filter(item => item.source === 'task').map(item => item.taskId || item.entryId)).size,
+      stageCount: new Set(monthEntries.filter(item => item.source === 'plan-stage').map(item => `${item.planId}-${item.stageId || item.entryId}`)).size,
       busyDays: Array.from(
         new Set(monthEntries.map((item) => item.date)),
       ).length,
@@ -199,54 +211,6 @@ export default function PlanCalendar(): JSX.Element {
    * @param date 单元格日期
    * @returns ReactNode
    */
-  function renderCell(date: Dayjs): JSX.Element | null {
-    const key = date.format('YYYY-MM-DD')
-    if (key.slice(0, 7) !== viewMonth.format('YYYY-MM')) return null
-    const bucket = buckets.get(key)
-    if (!bucket || bucket.entries.length === 0) return null
-    const preview = bucket.entries.slice(0, 3)
-    return (
-      <div style={{ padding: '2px 4px' }}>
-        <Space direction="vertical" size={1} style={{ width: '100%' }}>
-          {preview.map((entry) => (
-            <div key={entry.entryId} style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-              <Badge status={entryStatus(entry)} />
-              <span
-                style={{
-                  fontSize: 12,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                  color: entry.source === 'plan-stage' ? '#1677ff' : undefined,
-                }}
-              >
-                {entry.source === 'plan-stage' ? entry.category : taskTypeLabel(entry.category)}
-              </span>
-            </div>
-          ))}
-          {bucket.entries.length > 3 ? (
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              +{bucket.entries.length - 3} 项
-            </Typography.Text>
-          ) : null}
-          {bucket.conflicts.length > 0 ? (
-            <Tooltip
-              title={bucket.conflicts
-                .map(
-                  (group) =>
-                    `${group.plotName}：${group.items.map(formatConflictItem).join(' / ')}`,
-                )
-                .join('\n')}
-            >
-              <Tag color="error" style={{ fontSize: 12, lineHeight: '16px', marginInlineEnd: 0 }}>
-                <WarningOutlined /> 冲突×{bucket.conflicts.length}
-              </Tag>
-            </Tooltip>
-          ) : null}
-        </Space>
-      </div>
-    )
-  }
 
   /**
    * 打开某天的任务抽屉
@@ -259,6 +223,22 @@ export default function PlanCalendar(): JSX.Element {
   }
 
   return (
+    <PageContainer
+      className="production-plans-page"
+      title="📅 农事日历"
+      subTitle={currentFarm?.farmName}
+      extra={[
+        <Typography.Text key="month" type="secondary">{viewMonth.format('YYYY 年 MM 月')}</Typography.Text>,
+        <Button key="refresh" icon={<ReloadOutlined />} onClick={() => {
+          void calendarQuery.refetch().then(result => {
+            if (result.isError) message.error('日历刷新失败，请重试')
+            else if (result.data?.unavailableReasons.length) message.warning('部分排期未能刷新，请查看提示')
+            else message.success('日历数据已刷新')
+          })
+        }}>刷新</Button>,
+        <Button key="plans" onClick={() => navigate('/production/plans')}>返回农事计划</Button>,
+      ]}
+    >
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
       {calendarUnavailableReasons.length > 0 && (
         <AntAlert
@@ -279,30 +259,7 @@ export default function PlanCalendar(): JSX.Element {
           }
         />
       )}
-      <Card
-        title={
-          <Space>
-            <CalendarOutlined style={{ color: '#13a05a' }} />
-            <span>农事日历</span>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              {viewMonth.format('YYYY 年 MM 月')}
-            </Typography.Text>
-          </Space>
-        }
-        extra={
-          <Space>
-            <Button
-              icon={<ReloadOutlined />}
-              onClick={() => {
-                void calendarQuery.refetch().then(() => message.success('日历数据已刷新'))
-              }}
-            >
-              刷新
-            </Button>
-            <Button onClick={() => navigate('/production/plans')}>返回种养计划</Button>
-          </Space>
-        }
-      >
+      <Card>
         <Row gutter={16}>
           <Col xs={12} md={6}>
             <Statistic title="本月农事安排" value={monthStats.total} suffix="项" />
@@ -324,74 +281,44 @@ export default function PlanCalendar(): JSX.Element {
         </Row>
       </Card>
 
-      {conflictDays.length > 0 ? (
-        <AntAlert
-          type="error"
-          showIcon
-          message={`检测到 ${conflictDays.length} 天存在同地块多任务冲突（PRD PLAN-04）`}
-          description={
-            <Space direction="vertical" size={2}>
-              {conflictDays.slice(0, 5).map(([date, bucket]) => (
-                <Typography.Text key={date} style={{ fontSize: 12 }}>
-                  <Typography.Text strong>{date}</Typography.Text>
-                  {bucket.conflicts.map((group, index) => (
-                    <span key={`${date}-${group.plotId}-${index}`}>
-                      {'　'}
-                      {group.plotName}：{group.items.map(formatConflictItem).join(' / ')}
-                    </span>
-                  ))}
-                </Typography.Text>
-              ))}
-              {conflictDays.length > 5 ? (
-                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                  另有 {conflictDays.length - 5} 天冲突未展开，可在日历中查看。
-                </Typography.Text>
-              ) : null}
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                建议调整同一地块的任务时间或合并同类作业后再派发。
-              </Typography.Text>
-            </Space>
-          }
-          action={
-            <Button
-              size="small"
-              danger
-              onClick={() => {
-                setSelectedDate(conflictDays[0][0])
-                setDrawerOpen(true)
-              }}
-            >
-              查看首日明细
-            </Button>
-          }
-        />
-      ) : null}
-
+      {!farmId && <AntAlert type="info" showIcon message="请先选择当前农场，再查看农事安排" />}
+      {calendarQuery.isError && <AntAlert type="error" showIcon message="日历加载失败" description="无法取得当前农场排期，请刷新重试。" action={<Button onClick={() => void calendarQuery.refetch()}>重试</Button>} />}
       <Card>
-        {calendarQuery.isLoading ? (
-          <Skeleton active paragraph={{ rows: 10 }} />
-        ) : (
-          <Calendar
-            value={viewMonth}
-            onSelect={(date, info) => {
-              if (info.source === 'date') {
-                openDay(date)
-              }
-            }}
-            onChange={(date) => setViewMonth(date)}
-            cellRender={(current, info) => {
-              if (info.type !== 'date') {
-                return info.originNode
-              }
-              const content = renderCell(current)
-              return (
-                <div>
-                  {info.originNode}
-                  {content}
-                </div>
-              )
-            }}
-          />
+        <div className="farm-calendar-toolbar">
+          <Space wrap>
+            <Button aria-label="上个月" icon={<LeftOutlined />} onClick={() => setViewMonth(value => value.subtract(1, 'month'))} />
+            <DatePicker picker="month" allowClear={false} value={viewMonth} format="YYYY 年 MM 月" onChange={date => { if (date) setViewMonth(date) }} />
+            <Button aria-label="下个月" icon={<RightOutlined />} onClick={() => setViewMonth(value => value.add(1, 'month'))} />
+            <Button onClick={() => { setViewMonth(dayjs()); setSelectedDate(dayjs().format('YYYY-MM-DD')) }}>今天</Button>
+          </Space>
+          <Space wrap>
+            <Select allowClear placeholder="全部地块" aria-label="筛选地块" value={plotFilter} options={plotOptions} style={{ width: 160 }} onChange={setPlotFilter} />
+            <Radio.Group value={sourceFilter} onChange={event => setSourceFilter(event.target.value)} optionType="button" options={[{ label: '全部', value: 'all' }, { label: '农事任务', value: 'task' }, { label: '生育期', value: 'plan-stage' }]} />
+          </Space>
+        </div>
+        <div className="farm-calendar-legend">
+          <span><Badge status="warning" /> 待完成任务</span><span><Badge status="success" /> 已完成任务</span><span><Badge status="processing" /> 生育期</span>
+          <Typography.Text type="secondary">统计按业务单据去重；跨天安排逐日展示</Typography.Text>
+          {conflictDays.length > 0 && <Button size="small" type="link" danger onClick={() => openDay(dayjs(conflictDays[0][0]))}><WarningOutlined /> {conflictDays.length} 天存在同地块多任务待协调</Button>}
+        </div>
+        {calendarQuery.isLoading ? <Skeleton active paragraph={{ rows: 10 }} /> : (
+          <div className="farm-calendar-scroll">
+            <div className="farm-calendar-grid" role="group" aria-label={`${viewMonth.format('YYYY年M月')}农事月历`}>
+              {['一', '二', '三', '四', '五', '六', '日'].map((day, index) => <div key={day} className={`farm-calendar-weekday ${index > 4 ? 'is-weekend' : ''}`}>周{day}</div>)}
+              {Array.from({ length: 42 }, (_, index) => {
+                const date = dayjs(range.startDate).add(index, 'day')
+                const key = date.format('YYYY-MM-DD')
+                const bucket = buckets.get(key)
+                const items = bucket?.entries ?? []
+                const outside = !date.isSame(viewMonth, 'month')
+                const today = date.isSame(dayjs(), 'day')
+                return <button key={key} type="button" disabled={!farmId || calendarQuery.isError} className={`farm-calendar-day${outside ? ' is-outside' : ''}${today ? ' is-today' : ''}${key === selectedDate ? ' is-selected' : ''}`} aria-label={`${key}，${items.length}项安排`} onClick={() => { if (outside) setViewMonth(date); openDay(date) }}>
+                  <span className="farm-calendar-day-heading"><span className="farm-calendar-date">{today ? '今' : date.date()}</span>{bucket?.conflicts.length ? <span className="farm-calendar-conflict" title="同地块多项未完成任务，请协调安排">待协调</span> : null}</span>
+                  <span className="farm-calendar-events">{items.slice(0, 3).map(entry => <span key={entry.entryId} className={`farm-calendar-event ${entry.source === 'plan-stage' ? 'is-stage' : entry.done ? 'is-done' : 'is-task'}`} title={`${entry.title} · ${entry.plotName || '未关联地块'} · ${entry.assigneeName || '未指派'}`}><span className="farm-calendar-event-title">{entry.title}</span><span className="farm-calendar-event-plot">{entry.plotName || '未关联地块'}</span></span>)}{items.length > 3 && <span className="farm-calendar-more">另有 {items.length - 3} 项 · 点击查看</span>}</span>
+                </button>
+              })}
+            </div>
+          </div>
         )}
       </Card>
 
@@ -402,7 +329,7 @@ export default function PlanCalendar(): JSX.Element {
             <span>{selectedDate} 农事安排</span>
           </Space>
         }
-        width={520}
+        width={Math.min(600, window.innerWidth)}
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         extra={
@@ -425,7 +352,7 @@ export default function PlanCalendar(): JSX.Element {
               <AntAlert
                 type="warning"
                 showIcon
-                message="该日存在同地块多任务冲突"
+                message="该日存在同地块多任务待协调"
                 description={
                   <Space direction="vertical" size={2}>
                     {dayConflicts.map((group, index) => (
@@ -446,7 +373,7 @@ export default function PlanCalendar(): JSX.Element {
             )
           })()}
           {selectedEntries.length === 0 ? (
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当日暂无农事安排" />
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={calendarUnavailableReasons.length ? "部分排期读取失败，暂无法确认当日全部安排" : "当前筛选下暂无农事安排"} />
           ) : (
             <List
               dataSource={selectedEntries}
@@ -477,6 +404,7 @@ export default function PlanCalendar(): JSX.Element {
                       <Space wrap>
                         <Badge status={entryStatus(item)} />
                         <Typography.Text strong>{item.title}</Typography.Text>
+                        {item.source === 'task' && <Tag>{item.done ? '已完成' : '待完成'}</Tag>}
                         <Tag color={item.source === 'plan-stage' ? 'blue' : 'green'}>
                           {item.source === 'plan-stage' ? '生育期' : '农事任务'}
                         </Tag>
@@ -507,5 +435,6 @@ export default function PlanCalendar(): JSX.Element {
         </Space>
       </Drawer>
     </Space>
+    </PageContainer>
   )
 }

@@ -20,6 +20,7 @@ import com.agri.s2b2c.vo.SupplierVO;
 import com.agri.common.rbac.OperatorOnly;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -30,8 +31,8 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/supplier")
-@OperatorOnly("s2b2c:supplier")
+@RequestMapping("/api/platform/supply")
+@OperatorOnly("s2b2c:platform")
 public class SupplierController {
 
     private final SupplierService supplierService;
@@ -44,6 +45,7 @@ public class SupplierController {
     private final DistributionRuleService distributionRuleService;
     private final PriceGuardService priceGuardService;
     private final SupplierStatementService supplierStatementService;
+    private final com.agri.s2b2c.service.ProductionTraceQueryService traceQueryService;
 
     public SupplierController(SupplierService supplierService, ProductService productService,
                               SupplierIdentityService supplierIdentityService,
@@ -52,7 +54,8 @@ public class SupplierController {
                               ChannelPartnerMapper channelPartnerMapper,
                               DistributionRuleService distributionRuleService,
                               PriceGuardService priceGuardService,
-                              SupplierStatementService supplierStatementService) {
+                              SupplierStatementService supplierStatementService,
+                              com.agri.s2b2c.service.ProductionTraceQueryService traceQueryService) {
         this.supplierService = supplierService;
         this.productService = productService;
         this.supplierIdentityService = supplierIdentityService;
@@ -63,6 +66,7 @@ public class SupplierController {
         this.distributionRuleService = distributionRuleService;
         this.priceGuardService = priceGuardService;
         this.supplierStatementService = supplierStatementService;
+        this.traceQueryService = traceQueryService;
     }
 
     @GetMapping("/statements")
@@ -143,7 +147,7 @@ public class SupplierController {
      */
     @PutMapping("/channel-authorization/{id}/revoke")
     public ResponseEntity<Map<String, Object>> revokeChannelAuthorization(@PathVariable Long id) {
-        capabilityGuard.require("s2b2c.supplier", "撤销渠道授权");
+        // Platform operator authorization is enforced by @OperatorOnly.
         Supplier mine = supplierIdentityService.requireCurrent();
         ChannelProduct relation = channelProductMapper.selectById(id);
         Map<String, Object> result = new HashMap<>();
@@ -179,7 +183,7 @@ public class SupplierController {
             data.put("auditOpinion", mine.getAuditOpinion());
             data.put("auditTime", mine.getAuditTime());
             data.put("createTime", mine.getCreateTime());
-            java.util.Map<String, Object> capability = capabilityGuard.check("s2b2c.supplier");
+            java.util.Map<String, Object> capability = Map.of("granted", true, "reason", "平台统一供货运营");
             data.put("capabilityGranted", capability.get("granted"));
             data.put("capabilityReason", capability.get("reason"));
         }
@@ -188,35 +192,8 @@ public class SupplierController {
 
     @PostMapping("/apply")
     public ResponseEntity<Map<String, Object>> apply(@RequestBody Supplier supplier) {
-        Supplier existing = supplierIdentityService.currentOrNull();
-        if (existing != null) {
-            String auditStatus = existing.getAuditStatus() == null ? "" : existing.getAuditStatus();
-            if ("APPROVED".equalsIgnoreCase(auditStatus)) {
-                return ResponseEntity.ok(Map.of("success", false, "message", "已入驻商城，无需重复申请"));
-            }
-            if ("REJECTED".equalsIgnoreCase(auditStatus)) {
-                String error = validateApplication(supplier);
-                if (error != null) {
-                    return ResponseEntity.ok(Map.of("success", false, "message", error));
-                }
-                supplier.setId(existing.getId());
-                boolean success = supplierService.reapply(supplier);
-                return ResponseEntity.ok(Map.of("success", success,
-                        "message", success ? "已重新提交入驻申请，等待审核" : "重新提交失败"));
-            }
-            return ResponseEntity.ok(Map.of("success", false, "message", "入驻申请正在审核中"));
-        }
-        String error = validateApplication(supplier);
-        if (error != null) {
-            return ResponseEntity.ok(Map.of("success", false, "message", error));
-        }
-        // 入驻申请绑定到当前登录账号，不信任请求体里的 userId
-        supplier.setUserId(SecurityUtils.getUserId());
-        Map<String, Object> result = new HashMap<>();
-        boolean success = supplierService.apply(supplier);
-        result.put("success", success);
-        result.put("message", success ? "申请提交成功，等待审核" : "申请提交失败");
-        return ResponseEntity.ok(result);
+        return ResponseEntity.status(HttpStatus.GONE).body(Map.of("success", false,
+                "message", "供应商自行入驻已取消，请由平台运营维护货源档案"));
     }
 
     private String validateApplication(Supplier supplier) {
@@ -254,14 +231,50 @@ public class SupplierController {
         return ResponseEntity.ok(supplierService.getProducts(supplierId, page, size, status));
     }
 
+    /**
+     * 单品编辑用的完整档案（供应商端）。
+     *
+     * <p>为什么单开一个端点而不是复用 {@code /detail/{id}}：那条是**供应商档案**详情，
+     * 商品编辑页按商品 id 调它，拿到的是 id 恰好等于商品号的供应商记录 ——
+     * 表单里除了名字其余字段全空，一保存就把没带出来的列写成默认值（溯源批次正是其中之一）。
+     *
+     * <p>这里返回实体而不是 {@link ProductVO}：VO 是列表页的展示投影，缺
+     * categoryId/costPrice/stockWarning/detail/prodBatchNo 等编辑必填回读项；
+     * 表单要能原样回读、原样写回，才能区分"用户清空了批次"和"页面没读到批次"。
+     * 归属仍按令牌校验：不是本主体的商品一律 404（不泄露存在性）。</p>
+     */
+    @GetMapping("/product/{id}")
+    public ResponseEntity<?> productDetail(@PathVariable Long id) {
+        // Platform operator authorization is enforced by @OperatorOnly.
+        Product product = id == null ? null : productMapper.selectById(id);
+        if (product == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("success", false, "message", "商品不存在"));
+        }
+        try {
+            supplierIdentityService.requireOwnSupplier(product.getSupplierId());
+        } catch (org.springframework.web.server.ResponseStatusException e) {
+            // 别人的商品：说"不存在"，不确认它属于另一家供应商（越权一律 404，与物联网域同一口径）
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("success", false, "message", "商品不存在"));
+        }
+        return ResponseEntity.ok(product);
+    }
+
     @PostMapping("/product/create")
     public ResponseEntity<Map<String, Object>> createProduct(@RequestBody Product product) {
         // 上架要 s2b2c.supplier（主体 + 交易类业务身份），且商品必须挂在自己的供应商档案下
-        capabilityGuard.require("s2b2c.supplier", "上架商品");
+        // Platform operator authorization is enforced by @OperatorOnly.
         if (product.getSupplierId() == null) {
             product.setSupplierId(supplierIdentityService.requireCurrent().getId());
         } else {
             supplierIdentityService.requireOwnSupplier(product.getSupplierId());
+        }
+        try {
+            // 绑定的批次必须是本主体在生产管理模块登记的批次，否则消费者看到的链路是别人的数据
+            traceQueryService.requireOwnBatch(product.getProdBatchNo());
+        } catch (IllegalArgumentException | com.agri.s2b2c.integration.ProductionTraceUnavailableException e) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", e.getMessage()));
         }
         Map<String, Object> result = new HashMap<>();
         boolean success = productService.create(product);
@@ -272,29 +285,70 @@ public class SupplierController {
 
     @PutMapping("/product/update")
     public ResponseEntity<Map<String, Object>> updateProduct(@RequestBody Product product) {
-        capabilityGuard.require("s2b2c.supplier", "修改商品");
+        // Platform operator authorization is enforced by @OperatorOnly.
         Product existing = product.getId() == null ? null : productMapper.selectById(product.getId());
         if (existing == null) {
             return ResponseEntity.status(404).body(Map.of("success", false, "message", "商品不存在"));
         }
         supplierIdentityService.requireOwnSupplier(existing.getSupplierId());
         product.setSupplierId(existing.getSupplierId());
+        try {
+            if (!java.util.Objects.equals(existing.getProdBatchNo(), product.getProdBatchNo())) {
+                traceQueryService.requireOwnBatch(product.getProdBatchNo());
+            }
+        } catch (IllegalArgumentException | com.agri.s2b2c.integration.ProductionTraceUnavailableException e) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", e.getMessage()));
+        }
         Map<String, Object> result = new HashMap<>();
         boolean success = productService.update(product);
         Product refreshed = success ? productMapper.selectById(product.getId()) : null;
         int autoOffShelf = refreshed == null ? 0 : priceGuardService.enforceProduct(refreshed, "PRODUCT_UPDATE");
         result.put("success", success);
         result.put("autoOffShelf", autoOffShelf);
+        // 绑定状态要回显给页面：解绑是否真的生效，以前只能靠"再打开编辑表单看看"猜
+        result.put("prodBatchNo", refreshed == null ? null : refreshed.getProdBatchNo());
         result.put("message", success
                 ? "商品更新成功" + (autoOffShelf > 0 ? "，已自动下架 " + autoOffShelf + " 个超低价渠道货架" : "")
                 : "商品更新失败");
         return ResponseEntity.ok(result);
     }
 
+    /**
+     * 可绑定的生产批次候选（按调用方令牌向生产域要，只含本经营主体名下）。
+     *
+     * <p>商品详情的溯源链路要有内容，前提是这里选得出批次；选不出来就是"你的主体在生产管理模块
+     * 还没登记采收批次"，这是事实，不需要商城再造一层假批次。</p>
+     */
+    @GetMapping("/production-batches")
+    public ResponseEntity<?> productionBatches(@RequestParam(required = false) String keyword) {
+        // Platform operator authorization is enforced by @OperatorOnly.
+        try {
+            return ResponseEntity.ok(Map.of("records", traceQueryService.bindableBatches(keyword)));
+        } catch (com.agri.s2b2c.integration.ProductionTraceUnavailableException e) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body(Map.of("success", false, "unavailable", true, "message", e.getMessage()));
+        }
+    }
+
+    /** 供应商预览某批次在生产域的真实链路（绑定前先看得到，而不是绑完才知道有没有内容）。 */
+    @GetMapping("/production-batches/{batchNo}/trace")
+    public ResponseEntity<?> previewBatchTrace(@PathVariable String batchNo) {
+        // Platform operator authorization is enforced by @OperatorOnly.
+        try {
+            traceQueryService.requireOwnBatch(batchNo);
+            return ResponseEntity.ok(traceQueryService.batchTrace(batchNo, null, null));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(404).body(Map.of("success", false, "message", e.getMessage()));
+        } catch (com.agri.s2b2c.integration.ProductionTraceUnavailableException e) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body(Map.of("success", false, "unavailable", true, "message", e.getMessage()));
+        }
+    }
+
     /** 驳回后重新提交审核：仅允许 REJECTED → PENDING，清空上次审核意见。 */
     @PutMapping("/product/{id}/resubmit")
     public ResponseEntity<Map<String, Object>> resubmitProduct(@PathVariable Long id) {
-        capabilityGuard.require("s2b2c.supplier", "重新提交商品");
+        // Platform operator authorization is enforced by @OperatorOnly.
         Product product = productMapper.selectById(id);
         if (product == null) {
             return ResponseEntity.status(404).body(Map.of("success", false, "message", "商品不存在"));
@@ -317,7 +371,7 @@ public class SupplierController {
     public ResponseEntity<Map<String, Object>> updateDistribution(@PathVariable Long id,
                                                                   @RequestParam Boolean enabled,
                                                                   @RequestParam(required = false) Integer maxChannels) {
-        capabilityGuard.require("s2b2c.supplier", "配置投放规则");
+        // Platform operator authorization is enforced by @OperatorOnly.
         Product product = productMapper.selectById(id);
         if (product == null) {
             return ResponseEntity.status(404).body(Map.of("success", false, "message", "商品不存在"));
@@ -355,7 +409,7 @@ public class SupplierController {
     @PutMapping("/product/{id}/distribution-rule")
     public ResponseEntity<Map<String, Object>> saveDistributionRule(@PathVariable Long id,
                                                                     @RequestBody Map<String, Object> body) {
-        capabilityGuard.require("s2b2c.supplier", "配置投放规则");
+        // Platform operator authorization is enforced by @OperatorOnly.
         Product product = productMapper.selectById(id);
         if (product == null) {
             return ResponseEntity.status(404).body(Map.of("success", false, "message", "商品不存在"));

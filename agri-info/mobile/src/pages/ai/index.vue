@@ -327,7 +327,7 @@ function askPestToChat() {
   padding: 8rpx 16rpx;
   border: 1rpx solid rgba(255, 255, 255, 0.18);
   border-radius: 14rpx;
-  font-size: 21rpx;
+  font-size: 24rpx;
 }
 
 .ai-note {
@@ -343,7 +343,7 @@ function askPestToChat() {
 .note-text {
   flex: 1;
   color: rgba(255, 255, 255, 0.72);
-  font-size: 19rpx;
+  font-size: 24rpx;
   line-height: 1.5;
 }
 
@@ -364,7 +364,7 @@ function askPestToChat() {
   display: block;
   margin-bottom: 12rpx;
   color: #53665a;
-  font-size: 22rpx;
+  font-size: 24rpx;
   font-weight: 650;
 }
 
@@ -380,7 +380,7 @@ function askPestToChat() {
   border-radius: 16rpx;
   background: #ffffff;
   color: #34473b;
-  font-size: 22rpx;
+  font-size: 24rpx;
 }
 
 .msg {
@@ -403,7 +403,7 @@ function askPestToChat() {
   border-radius: 18rpx;
   background: linear-gradient(135deg, #765097, #56346f);
   color: #ffffff;
-  font-size: 20rpx;
+  font-size: 24rpx;
   font-weight: 700;
 }
 
@@ -442,7 +442,7 @@ function askPestToChat() {
 
 .time {
   color: #b3c0b7;
-  font-size: 18rpx;
+  font-size: 24rpx;
 }
 
 .sources {
@@ -455,7 +455,7 @@ function askPestToChat() {
   display: block;
   margin-bottom: 8rpx;
   color: #94a198;
-  font-size: 19rpx;
+  font-size: 24rpx;
 }
 
 .src-item {
@@ -467,7 +467,7 @@ function askPestToChat() {
 
 .src-name {
   color: #176c93;
-  font-size: 21rpx;
+  font-size: 24rpx;
 }
 
 .confidence {
@@ -487,7 +487,7 @@ function askPestToChat() {
 
 .act {
   color: #12764a;
-  font-size: 21rpx;
+  font-size: 24rpx;
   font-weight: 600;
 }
 
@@ -503,7 +503,7 @@ function askPestToChat() {
   border: 1rpx dashed #cfe0d6;
   border-radius: 14rpx;
   color: #53665a;
-  font-size: 20rpx;
+  font-size: 24rpx;
 }
 
 .input-bar {

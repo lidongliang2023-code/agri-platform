@@ -1,25 +1,26 @@
+import ProTable from '@/components/ProductionTable'
 /**
  * 页面名称：任务列表（看板）
  * 路由路径：/production/tasks
- * 所属模块：智能种养
+ * 所属模块：农事生产
  * PRD 序号：PRD 6.1 #14
  * 原型来源：用户端原型 P7 tasks（看板视图）
  *
  * 还原要点：
  * - 标题「📋 农事任务管理」+ 新建任务 / 今日任务看板 / 导出 按钮
  * - 状态 Tab（全部 / 待执行 / 执行中 / 待验收 / 已完成 / 已逾期）带数量
- * - 看板列：待执行 / 执行中 / 待验收 / 已完成 / 已驳回
+ * - 看板直接平铺任务卡片，卡片内展示任务类型与状态标签
  * - 卡片字段：任务名 / 地块 | 执行人 / 计划时间 / 优先级标签 + 类型标签
  * - 额外提供「列表 / 看板」视图切换与关键字、状态、类型、优先级、执行人、地块筛选
  */
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { PageContainer, ProTable } from '@ant-design/pro-components'
+
+import PageContainer from '@/components/ProductionPageContainer'
 import type { ProColumns } from '@ant-design/pro-components'
 import {
   Button,
-  Card,
   Col,
   Empty,
   Form,
@@ -32,7 +33,6 @@ import {
   Space,
   Tabs,
   Tag,
-  Tooltip,
   Typography,
   message,
 } from 'antd'
@@ -44,6 +44,7 @@ import {
   PlusOutlined,
   UserSwitchOutlined,
 } from '@ant-design/icons'
+import Card from '@/components/SectionCard'
 import dayjs from 'dayjs'
 import useFarmStore from '@/store/farm'
 import {
@@ -60,7 +61,6 @@ import {
   isTaskDone,
   isTaskExecuting,
   isTaskOverdue,
-  OVERDUE_DERIVED_NOTICE,
   TASK_ACCEPT_PENDING,
   TASK_STATUS_COMPLETED,
   TASK_STATUS_EXECUTING,
@@ -119,66 +119,6 @@ interface TaskFilters {
   /** 地块 */
   plotId?: string
 }
-
-/** 看板列定义 */
-interface BoardColumn {
-  /** 列标识 */
-  key: string
-  /** 列标题 */
-  title: string
-  /** 列头颜色 */
-  color: string
-  /** 判定该任务属于本列（一条任务只会落进一列，避免同一卡片重复出现） */
-  match: (task: Task) => boolean
-}
-
-/**
- * 看板列配置。
- *
- * 「待验收」与「已完成」都来自 status=completed，靠 acceptStatus 拆开：
- * - completed + acceptStatus=0 → 待验收
- * - completed + acceptStatus=1 → 已完成
- * 同一个任务不会同时出现在两列，也不会因为两个状态词（doing/done）重复展示。
- */
-const BOARD_COLUMNS: BoardColumn[] = [
-  {
-    key: 'pending',
-    title: '待执行',
-    color: '#1677ff',
-    match: (task) => task.status === 'pending' || task.status === 'assigned',
-  },
-  {
-    key: 'doing',
-    title: '执行中',
-    color: '#fa8c16',
-    match: (task) => isTaskExecuting(task.status),
-  },
-  {
-    key: 'acceptPending',
-    title: '待验收',
-    color: '#d4b106',
-    match: (task) => isTaskDone(task.status) && task.acceptStatus === TASK_ACCEPT_PENDING,
-  },
-  {
-    key: 'done',
-    title: '已完成',
-    color: '#52c41a',
-    match: (task) => isTaskDone(task.status) && task.acceptStatus !== TASK_ACCEPT_PENDING,
-  },
-  {
-    key: 'rejected',
-    title: '已驳回',
-    color: '#ff4d4f',
-    match: (task) => task.status === 'rejected',
-  },
-  {
-    key: 'closed',
-    title: '已暂停 / 取消 / 过期',
-    color: '#8c8c8c',
-    match: (task) =>
-      task.status === 'suspended' || task.status === 'cancelled' || task.status === 'expired',
-  },
-]
 
 /**
  * 已逾期判定：统一走 {@link isTaskOverdue}（本地按 planEndDate 推导，非后端状态）。
@@ -251,7 +191,7 @@ export default function TaskList(): JSX.Element {
   const currentFarm = useFarmStore((state) => state.currentFarm)
   const farmId = currentFarm?.farmId
 
-  const [view, setView] = useState<ViewMode>('kanban')
+  const [view, setView] = useState<ViewMode>('table')
   const [tab, setTab] = useState<TabKey>('all')
   const [pageNum, setPageNum] = useState<number>(1)
   const [pageSize, setPageSize] = useState<number>(20)
@@ -509,8 +449,8 @@ export default function TaskList(): JSX.Element {
 
   /** 列表视图列定义 */
   const columns: ProColumns<Task>[] = [
-    { title: '任务编号', dataIndex: 'taskNo', width: 140 },
-    { title: '任务名称', dataIndex: 'taskName', ellipsis: true },
+    { title: '任务编号', dataIndex: 'taskNo', width: 180 },
+    { title: '任务名称', dataIndex: 'taskName', width: 220, ellipsis: true },
     {
       title: '类型',
       dataIndex: 'taskType',
@@ -576,6 +516,7 @@ export default function TaskList(): JSX.Element {
     },
     {
       title: '操作',
+      fixed: 'right',
       key: 'option',
       width: 280,
       valueType: 'option',
@@ -653,7 +594,7 @@ export default function TaskList(): JSX.Element {
     <Card
       size="small"
       hoverable
-      style={{ marginBottom: 12 }}
+      style={{ height: '100%' }}
       onClick={() => navigate(`/production/tasks/${task.taskId}`)}
       title={
         <Space size={4}>
@@ -662,9 +603,14 @@ export default function TaskList(): JSX.Element {
         </Space>
       }
       extra={
-        <Tag color={TASK_PRIORITY_COLOR_MAP[task.priority] ?? 'default'}>
-          {TASK_PRIORITY_LABEL_MAP[task.priority] ?? '普通'}
-        </Tag>
+        <Space size={4} wrap>
+          <Tag color={isTaskDone(task.status) && task.acceptStatus === TASK_ACCEPT_PENDING ? 'gold' : TASK_STATUS_COLOR_MAP[task.status] ?? 'default'}>
+            状态：{isTaskDone(task.status) && task.acceptStatus === TASK_ACCEPT_PENDING ? '待验收' : TASK_STATUS_LABEL_MAP[task.status] ?? task.status ?? '未知'}
+          </Tag>
+          <Tag color={TASK_PRIORITY_COLOR_MAP[task.priority] ?? 'default'}>
+            {TASK_PRIORITY_LABEL_MAP[task.priority] ?? '普通'}
+          </Tag>
+        </Space>
       }
     >
       <Space direction="vertical" size={4} style={{ width: '100%' }}>
@@ -676,9 +622,6 @@ export default function TaskList(): JSX.Element {
         </Typography.Text>
         <Space size={4} wrap>
           <Tag color="geekblue">{TASK_TYPE_LABEL_MAP[task.taskType] ?? task.taskType}</Tag>
-          <Tag color={TASK_STATUS_COLOR_MAP[task.status] ?? 'default'}>
-            {TASK_STATUS_LABEL_MAP[task.status] ?? task.status}
-          </Tag>
           {task.rejectCount > 0 && <Tag color="volcano">驳回 {task.rejectCount} 次</Tag>}
         </Space>
         <Space size={8} wrap onClick={(event) => event.stopPropagation()}>
@@ -724,50 +667,64 @@ export default function TaskList(): JSX.Element {
     </Card>
   )
 
-  /** 渲染看板 */
+  /** 看板直接展示任务卡片，不再按状态嵌套分栏。 */
   const renderBoard = (): JSX.Element => (
-    <Row gutter={12} wrap={false} style={{ overflowX: 'auto', paddingBottom: 8 }}>
-      {BOARD_COLUMNS.map((column) => {
-        const items = filteredTasks.filter((task) => column.match(task))
-        return (
-          <Col key={column.key} flex="1 1 20%" style={{ minWidth: 240 }}>
-            <Card
-              size="small"
-              title={
-                <Space>
-                  <span style={{ color: column.color }}>●</span>
-                  <span>{column.title}</span>
-                  <Tag>{items.length}</Tag>
-                </Space>
-              }
-              bodyStyle={{ maxHeight: 620, overflowY: 'auto', background: '#fafafa' }}
-            >
-              {items.length === 0 ? (
-                <Empty
-                  image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description={<Typography.Text type="secondary">暂无任务</Typography.Text>}
-                />
-              ) : (
-                items.map((task) => <div key={task.taskId}>{renderTaskCard(task)}</div>)
-              )}
-            </Card>
-          </Col>
-        )
-      })}
-    </Row>
+    <Card loading={boardQuery.isLoading} bordered={false} styles={{ body: { padding: 0 } }} style={{ boxShadow: 'none', background: 'transparent' }}>
+      {filteredTasks.length === 0 ? (
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无任务" />
+      ) : (
+        <Row gutter={[16, 16]}>
+          {filteredTasks.map((task) => (
+            <Col key={task.taskId} xs={24} md={12} xl={8} xxl={6}>
+              {renderTaskCard(task)}
+            </Col>
+          ))}
+        </Row>
+      )}
+    </Card>
+  )
+
+  /** 列表与看板共用状态筛选。 */
+  const renderStatusTabs = (): JSX.Element => (
+        <Tabs
+          activeKey={tab}
+          onChange={(key) => {
+            setTab(key as TabKey)
+            setPageNum(1)
+          }}
+          items={[
+            { key: 'all', label: `全部(${tabCounts.all})` },
+            { key: 'pending', label: `待执行(${tabCounts.pending})` },
+            { key: 'doing', label: `执行中(${tabCounts.doing})` },
+            {
+              key: 'acceptPending',
+              label: `待验收(${tabCounts.acceptPending})`,
+            },
+            { key: 'done', label: `已完成(${tabCounts.done})` },
+            { key: 'rejected', label: `已驳回(${tabCounts.rejected})` },
+            { key: 'overdue', label: `已逾期(${tabCounts.overdue})` },
+          ]}
+        />
   )
 
   /** 渲染列表 */
   const renderTable = (): JSX.Element => (
     <ProTable<Task>
+      headerTitle={false}
+      toolbar={{
+        title: renderStatusTabs(),
+        style: { padding: 0 },
+      }}
+      toolBarRender={() => []}
+      cardProps={{ bordered: false, bodyStyle: { padding: '0 20px 16px' }, style: { boxShadow: 'none' } }}
       rowKey="taskId"
       columns={columns}
       dataSource={tableRows}
       loading={tableLoading}
       search={false}
-      // 列宽合计约 1400，窄屏时在卡片内横向滚动
-      scroll={{ x: 1420 }}
-      options={{ reload: () => void invalidateTasks(), density: true, setting: true }}
+      // 为编号与名称预留列宽，窄屏时在容器内横向滚动
+      scroll={{ x: 1600 }}
+      options={{ reload: () => void invalidateTasks(), density: true, setting: true, fullScreen: false }}
       pagination={{
         current: pageNum,
         pageSize,
@@ -893,41 +850,7 @@ export default function TaskList(): JSX.Element {
       </Card>
 
       <Card>
-        <Tabs
-          activeKey={tab}
-          onChange={(key) => {
-            setTab(key as TabKey)
-            setPageNum(1)
-          }}
-          items={[
-            { key: 'all', label: `全部(${tabCounts.all})` },
-            { key: 'pending', label: `待执行(${tabCounts.pending})` },
-            { key: 'doing', label: `执行中(${tabCounts.doing})` },
-            {
-              key: 'acceptPending',
-              // 「待验收」是验收维度（acceptStatus），不是任务状态维度（status）——
-              // 必须写清楚，否则容易被误读成后端还有一个 'submitted' 状态。
-              label: (
-                <Tooltip title="按验收状态筛选：status=done 且 acceptStatus=0（待验收）。这是「验收状态」维度，与「任务状态」status 是两个维度；后端 status 枚举里没有 submitted。本 Tab 是「已完成」的子集，不是互斥关系。">
-                  <span>待验收({tabCounts.acceptPending})</span>
-                </Tooltip>
-              ),
-            },
-            { key: 'done', label: `已完成(${tabCounts.done})` },
-            { key: 'rejected', label: `已驳回(${tabCounts.rejected})` },
-            { key: 'overdue', label: `已逾期(${tabCounts.overdue})` },
-          ]}
-        />
-        {/* 逾期是本地推导值，不是后端状态——不标注会让用户以为是后端判定的 */}
-        <Typography.Paragraph type="secondary" style={{ fontSize: 12, margin: '8px 0 0' }}>
-          {OVERDUE_DERIVED_NOTICE}。「待验收」Tab 走
-          <Typography.Text code>status=completed &amp;&amp; acceptStatus=0</Typography.Text>
-          —— 它是<strong>验收状态</strong>维度，与「任务状态」status 是两个维度（后端 status 为
-          pending/assigned/executing/completed/rejected 等，<strong>没有</strong> submitted）；
-          它是「已完成」的<strong>子集</strong>（已提交但还没验收），两者不互斥，
-          与「已逾期」和其他 Tab 的关系同理。看板已把 completed 按验收状态拆成「待验收 / 已完成」两列，
-          同一条任务只会出现在一列。
-        </Typography.Paragraph>
+        {view === 'kanban' && renderStatusTabs()}
         {!farmId ? (
           <Empty description="请先在顶部切换农场" />
         ) : view === 'kanban' && boardQuery.isError ? (

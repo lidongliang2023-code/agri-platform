@@ -161,31 +161,89 @@ public class SsoAccountController {
         return ApiResponse.ok();
     }
 
-    @PostMapping("/phone")
-    public ApiResponse<Void> changePhone(@RequestBody PhoneRequest body, HttpServletRequest request) {
+    /**
+     * 换绑手机第一步：在登录态里给**新号码**发验证码。
+     *
+     * <p>为什么不走公开的 {@code /api/v1/sso/sms/code}：那个端点在"拿到令牌之前"，
+     * 未登录就能对任意号码发码 —— 谁都能替别人触发短信，还能把对方刚收到的码顶掉。
+     * 换绑是账号变更，必须由会话决定谁能发起。</p>
+     *
+     * <p>这里先查一次"这个号是否已被别的账号绑定"再说发不出去，是有意的取舍：
+     * 让页面填完 6 位码才被拒，等于白烧一条验证码、还要干等 60 秒冷却才能重来。
+     * 代价是登录用户能探出"某号码已注册"，所以真正生效的判据仍然放在
+     * {@link #changePhone} 的**验码之后**再查一遍（发码与提交之间号可能被抢走）。</p>
+     */
+    @PostMapping("/phone/code")
+    public ApiResponse<com.agri.platform.internal.sso.SmsCodeSentResult> sendPhoneCode(
+            @RequestBody PhoneRequest body, HttpServletRequest request) {
         long[] session = requireSession(request);
         UserEntity user = requireUser(session[0]);
-        String phone = trim(body == null ? null : body.getPhone());
-        if (phone == null || !phone.matches("^1[3-9]\\d{9}$")) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "请输入正确的 11 位手机号");
+        String phone = requirePhone(body == null ? null : body.getPhone());
+        assertPhoneIsNewFor(user, phone);
+        if (phoneTakenByOther(phone, user.getId()) > 0) {
+            throw new BusinessException(ErrorCode.CONFLICT, "该手机号已绑定其他账号，不能重复占用");
         }
-        smsAuthService.verify(phone, "change_phone", body.getCode());
-        Long exists = userMapper.selectCount(new LambdaQueryWrapper<UserEntity>()
-                .and(w -> w.eq(UserEntity::getPhone, phone).or().eq(UserEntity::getUsername, phone))
-                .ne(UserEntity::getId, user.getId()));
-        if (exists != null && exists > 0) {
+        smsAuthService.send(phone, "change_phone");
+        return ApiResponse.ok(new com.agri.platform.internal.sso.SmsCodeSentResult(true, smsAuthService.devMode(),
+                smsAuthService.devMode() ? "开发模式：验证码已写入后端日志（不回传、不入库明文）" : "验证码已发送"));
+    }
+
+    /**
+     * 换绑手机：验证码证明新号码收得到，才允许落库。
+     *
+     * <p>返回体带 {@code loginNameChanged}：手机号本身就是登录名的账号换号后，
+     * 登录名会一起改掉（否则下次用新号登录找不到账号）。这个副作用必须让页面说得出、
+     * 而不是等用户拿旧手机号登录失败才发现。</p>
+     */
+    @PostMapping("/phone")
+    public ApiResponse<Map<String, Object>> changePhone(@RequestBody PhoneRequest body, HttpServletRequest request) {
+        long[] session = requireSession(request);
+        UserEntity user = requireUser(session[0]);
+        String phone = requirePhone(body == null ? null : body.getPhone());
+        assertPhoneIsNewFor(user, phone);
+        smsAuthService.verify(phone, "change_phone", body == null ? null : body.getCode());
+        if (phoneTakenByOther(phone, user.getId()) > 0) {
             throw new BusinessException(ErrorCode.CONFLICT, "该手机号已绑定其他账号");
         }
         String oldPhone = user.getPhone();
-        if (oldPhone != null && oldPhone.equals(user.getUsername())) {
+        boolean loginNameChanged = oldPhone != null && oldPhone.equals(user.getUsername());
+        if (loginNameChanged) {
             user.setUsername(phone);
         }
         user.setPhone(phone);
         user.setUpdatedAt(LocalDateTime.now());
         userMapper.updateById(user);
         operationLog.record(session[0], "phone_change", "变更绑定手机号", maskPhone(phone),
-                oldPhone == null ? "首次绑定手机号" : "原手机号 " + maskPhone(oldPhone));
-        return ApiResponse.ok();
+                (oldPhone == null ? "首次绑定手机号" : "原手机号 " + maskPhone(oldPhone))
+                        + (loginNameChanged ? "；登录名同步改为新手机号" : ""));
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("phone", maskPhone(phone));
+        result.put("loginNameChanged", loginNameChanged);
+        return ApiResponse.ok(result);
+    }
+
+    /** 手机号入参：只接受 11 位大陆号码，其他一律说清哪里不对。 */
+    private static String requirePhone(String raw) {
+        String phone = trim(raw);
+        if (phone == null || !phone.matches("^1[3-9]\\d{9}$")) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "请输入正确的 11 位手机号");
+        }
+        return phone;
+    }
+
+    /** 新号码与当前绑定的号码相同：这不算变更，别把它推成一次"成功"的操作日志。 */
+    private static void assertPhoneIsNewFor(UserEntity user, String phone) {
+        if (phone.equals(user.getPhone())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "新手机号与当前绑定的手机号相同，无需变更");
+        }
+    }
+
+    /** 这个号码是否已被别的账号占用（按手机号或按登录名都算，手机号常兼作登录名）。 */
+    private long phoneTakenByOther(String phone, Long selfId) {
+        Long exists = userMapper.selectCount(new LambdaQueryWrapper<UserEntity>()
+                .and(w -> w.eq(UserEntity::getPhone, phone).or().eq(UserEntity::getUsername, phone))
+                .ne(UserEntity::getId, selfId));
+        return exists == null ? 0L : exists;
     }
 
     /** 手机号掩码：日志里不留明文 */
@@ -354,12 +412,13 @@ public class SsoAccountController {
 
     /* ==================== 身份申请 ==================== */
 
-    /** 可申请的身份类型（对齐原型「可申请身份 共 6 类」） */
+    /** 可申请的身份类型（对齐原型「可申请身份」目录，新增商城供应商后共 7 类） */
     private static final List<Map<String, Object>> IDENTITY_TYPES = List.of(
             identityType("wholesaler", "批发商"),
             identityType("retailer", "零售商"),
             identityType("farmer", "农户"),
             identityType("coop_admin", "合作社管理员"),
+            identityType("mall_supplier", "商城供应商"),
             identityType("service_provider", "服务商"),
             identityType("government", "政府人员"));
 
@@ -373,7 +432,7 @@ public class SsoAccountController {
     /**
      * 我的身份申请列表（含已开通/审核中的身份状态）。
      *
-     * <p>同时返回**全部 6 类身份**及其"当前状态"：没有申请过的显示 available，
+     * <p>同时返回**全部 7 类身份**及其"当前状态"：没有申请过的显示 available，
      * 有申请单的显示单据状态 —— 页面据此渲染"去申请 / 审核中 / 已开通"。</p>
      */
     @GetMapping("/identity-applications")
@@ -426,9 +485,19 @@ public class SsoAccountController {
         if (identityType == null || !validTypes.contains(identityType)) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "身份类型不正确：" + body.identityType());
         }
-        String subjectName = trim(body.subjectName());
+        // 主体名称与统一社会信用代码**以当前登录主体为准**，不接受前端自报：
+        // 身份申请是"以这家主体申请"，填别家名称会让审核员对不上主体。
+        Long merchantId = activeMerchantService.resolve(session[0], session[1]);
+        if (merchantId == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "请先创建或加入经营主体后再申请业务身份");
+        }
+        MerchantEntity merchant = merchantMapper.selectById(merchantId);
+        if (merchant == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "当前经营主体不存在，请刷新后重试");
+        }
+        String subjectName = trim(merchant.getName());
         if (subjectName == null) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "请填写主体名称");
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "当前经营主体缺少名称，请先在用户中心补全主体信息");
         }
         // 同一身份已有审核中的单子时不允许重复提交，避免运营端出现重复待审
         Long pending = identityApplicationMapper.selectCount(
@@ -442,9 +511,9 @@ public class SsoAccountController {
         IdentityApplicationEntity entity = new IdentityApplicationEntity();
         entity.setUserId(session[0]);
         entity.setIdentityType(identityType);
-        entity.setMerchantId(body.merchantId());
+        entity.setMerchantId(merchantId);
         entity.setSubjectName(subjectName);
-        entity.setCreditCode(trim(body.creditCode()));
+        entity.setCreditCode(trim(merchant.getCreditCode()));
         entity.setBusinessPlace(trim(body.businessPlace()));
         entity.setBusinessCategory(trim(body.businessCategory()));
         entity.setAnnualVolume(trim(body.annualVolume()));
@@ -779,7 +848,8 @@ public class SsoAccountController {
      * 不会出现"页面显示已开通、接口还是 403"。</p>
      */
     @GetMapping("/capabilities")
-    public ApiResponse<Map<String, Object>> capabilities(HttpServletRequest request) {
+    public ApiResponse<Map<String, Object>> capabilities(HttpServletRequest request,
+            @RequestParam(required = false) Long merchantId) {
         long[] session = requireSession(request);
         List<IdentityApplicationEntity> rows = identityApplicationMapper.selectList(
                 new LambdaQueryWrapper<IdentityApplicationEntity>()
@@ -792,7 +862,9 @@ public class SsoAccountController {
         List<Map<String, Object>> list = new ArrayList<>();
         int grantedCount = 0;
         for (BusinessCapabilities.Definition definition : BusinessCapabilities.all()) {
-            CapabilityFacade.Decision decision = capabilityFacade.check(session[0], definition.code(), null);
+            Long scope = "production.manage".equals(definition.code())
+                    ? (merchantId == null ? activeMerchantService.resolve(session[0], session[1]) : merchantId) : null;
+            CapabilityFacade.Decision decision = capabilityFacade.check(session[0], definition.code(), scope);
             String identityStatus = definition.identityCode().isEmpty()
                     ? "derived" : latestStatus.getOrDefault(definition.identityCode(), "available");
             boolean granted = decision.granted();
@@ -2179,6 +2251,7 @@ public class SsoAccountController {
     }
 
     /** 将指定企业主体当前草稿/驳回认证提交为待审核。 */
+    @Transactional(rollbackFor = Exception.class)
     @PostMapping("/businesses/{merchantId}/submit-certification")
     public ApiResponse<Void> submitEnterpriseCertification(@PathVariable Long merchantId,
                                                            @RequestBody(required = false) CertificationSubmitRequest body,
@@ -2187,12 +2260,19 @@ public class SsoAccountController {
         if (!merchantIdsOfUser(session[0]).contains(merchantId)) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "无权认证该经营主体");
         }
-        MerchantEntity merchant = merchantMapper.selectById(merchantId);
+        MerchantEntity merchant = merchantMapper.lockById(merchantId);
         if (merchant == null || "personal".equalsIgnoreCase(merchant.getMemberType())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "该主体不是企业主体");
         }
         String companyName = trim(body == null ? null : body.getCompanyName());
         String creditCode = trim(body == null ? null : body.getCreditCode());
+        if (!java.util.Objects.equals(trim(merchant.getName()), companyName)
+                || !java.util.Objects.equals(trim(merchant.getCreditCode()), creditCode)) {
+            throw new BusinessException(ErrorCode.CONFLICT, "认证名称和信用代码必须与当前经营主体一致，请先核对主体资料");
+        }
+        if ("approved".equals(merchant.getVerifyStatus())) {
+            throw new BusinessException(ErrorCode.CONFLICT, "该主体已通过认证，请通过主体变更流程修改资料");
+        }
         String legalPerson = trim(body == null ? null : body.getLegalPerson());
         String contactName = trim(body == null ? null : body.getContactName());
         String contactPhone = trim(body == null ? null : body.getContactPhone());
@@ -2216,9 +2296,7 @@ public class SsoAccountController {
         if (companyName == null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "企业认证必须填写企业名称");
         }
-        if (creditCode == null || !creditCode.matches("[0-9A-Za-z]{15,18}")) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "统一社会信用代码应为 15-18 位字母数字");
-        }
+        creditCode = com.agri.platform.internal.merchant.CreditCodeValidator.validate(creditCode);
         if (legalPerson == null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "企业认证必须填写法定代表人");
         }
@@ -2254,7 +2332,7 @@ public class SsoAccountController {
                 new LambdaQueryWrapper<MerchantCertificationEntity>()
                         .eq(MerchantCertificationEntity::getMerchantId, merchantId)
                         .orderByDesc(MerchantCertificationEntity::getId)
-                        .last("LIMIT 1"));
+                        .last("LIMIT 1 FOR UPDATE"));
         LocalDateTime now = LocalDateTime.now();
         if ("pending".equals(cert == null ? null : cert.getCertStatus())) {
             throw new BusinessException(ErrorCode.CONFLICT, "该企业主体已有待审核认证，请等待审核结果");
@@ -2263,7 +2341,9 @@ public class SsoAccountController {
             throw new BusinessException(ErrorCode.CONFLICT, "该企业主体已经认证通过");
         }
         if (cert == null || "rejected".equals(cert.getCertStatus())) {
+            Long previousId = cert == null ? null : cert.getId();
             cert = new MerchantCertificationEntity();
+            cert.setPreviousCertificationId(previousId);
             cert.setMerchantId(merchantId);
             cert.setMerchantName(companyName);
             cert.setCompanyName(companyName);
@@ -2317,6 +2397,10 @@ public class SsoAccountController {
             cert.setCorporateTransferAt(now);
             cert.setVerificationChannel("法人扫脸 + 对公打款");
         }
+        merchant.setContactName(contactName);
+        merchant.setContactPhone(contactPhone);
+        com.agri.platform.internal.merchant.MerchantCertificationController.requireProfile(merchant);
+        cert.snapshot(merchant);
         cert.setCertStatus("pending");
         cert.setSubmitTime(now);
         cert.setReviewer(null);

@@ -19,6 +19,15 @@
   （多一个变量、少一个变量、值不一致，任一条都红），并断言 antd 主题确实由令牌派生、
   `global.less` 不再自行定义令牌。共享包门禁现为 5 个测试文件 43 条用例、覆盖率 100%。
 
+- **全平台字号下限与 `<small>` 兜底（2026-11-03）**：`FONT.sizeMicro = 12` 成为「可见文字不得小于 12px」
+  的唯一落点，`tokens.css` 新增 `small { font-size: max(var(--agri-font-size-micro), 0.833em); }`，
+  `tests/tokens.test.ts` 增一条用例把这条规则钉住（现为 7 条）。
+  动机不是有人写了 `font-size: 11px`——那类声明本轮已在各端清零；而是 `<small>` **根本没写过字号**，
+  它走浏览器默认 0.833em，父级只要 ≤14px 就自己掉回 12px 以下。
+  真机证据：info-ops 行情页表格 4 个「元/公斤」渲染成 11.6667px（14px × 0.833）。
+  配套：`ops/ci/verify.mjs` 新增 `font` 组，按 `publish.mjs` 注册表逐端扫字号声明与 `pages.json` 的
+  `tabBar.fontSize`；负样本已实测两类都能判红（`font-size: 11px` / `20rpx`、tabBar 缺 `fontSize`）。
+
 - **T2 首批落地（2026-10-11）**：接入 `vitest` 5.0.3 + `@vitest/coverage-v8`，
   单测与覆盖率门禁成为包内可执行脚本（`pnpm test` / `pnpm test:coverage`）。
   - 用例 37 条 / 4 个文件，覆盖本包**全部 5 个含运行时代码的模块**：

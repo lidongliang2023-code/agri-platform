@@ -69,7 +69,7 @@ public class InvoiceController {
         }
         TradeOrder order = orderMapper.selectById(request.getOrderId());
         if (order == null || Integer.valueOf(1).equals(order.getDelFlag())) {
-            return ApiResponse.error("订单不存在");
+            return ApiResponse.error(404, "订单不存在");
         }
         if (order.getBuyerId() == null || !scope.merchantIds().contains(order.getBuyerId())) {
             return ApiResponse.error("只能对自己的采购订单申请开票");

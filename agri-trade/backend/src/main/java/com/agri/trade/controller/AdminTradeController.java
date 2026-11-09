@@ -248,7 +248,7 @@ public class AdminTradeController {
     public ApiResponse<Boolean> auditProduct(@PathVariable Long id, @RequestBody Map<String, Object> params) {
         TradeProduct product = productMapper.selectById(id);
         if (product == null) {
-            return ApiResponse.error("货源不存在");
+            return ApiResponse.error(404, "货源不存在");
         }
         String action = String.valueOf(params.getOrDefault("action", "")).trim();
         String pass = String.valueOf(params.getOrDefault("approved", "false"));
@@ -297,7 +297,7 @@ public class AdminTradeController {
     public ApiResponse<Map<String, Object>> orderDetail(@PathVariable Long id) {
         TradeOrder order = orderMapper.selectById(id);
         if (order == null) {
-            return ApiResponse.error("订单不存在");
+            return ApiResponse.error(404, "订单不存在");
         }
         List<OrderItem> items = orderItemMapper.selectList(
                 new LambdaQueryWrapper<OrderItem>().eq(OrderItem::getOrderId, id));

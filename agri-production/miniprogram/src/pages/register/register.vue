@@ -575,7 +575,7 @@ onUnmounted(() => {
 
 .eyebrow {
   color: #a5e8c1;
-  font-size: 18rpx;
+  font-size: 24rpx;
   font-weight: 700;
   letter-spacing: 2rpx;
 }
@@ -589,7 +589,7 @@ onUnmounted(() => {
 .subtitle {
   margin-top: 9rpx;
   color: rgba(255, 255, 255, .7);
-  font-size: 22rpx;
+  font-size: 24rpx;
   line-height: 1.6;
 }
 
@@ -606,7 +606,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 7rpx;
   color: rgba(255, 255, 255, .48);
-  font-size: 19rpx;
+  font-size: 24rpx;
 }
 
 .steps view text,
@@ -617,7 +617,7 @@ onUnmounted(() => {
   place-items: center;
   border-radius: 50%;
   background: rgba(255, 255, 255, .12);
-  font-size: 16rpx;
+  font-size: 24rpx;
   font-weight: 800;
 }
 
@@ -647,7 +647,7 @@ onUnmounted(() => {
   margin-bottom: 16rpx;
   padding: 18rpx 20rpx;
   border-radius: 14rpx;
-  font-size: 22rpx;
+  font-size: 24rpx;
   line-height: 1.6;
 }
 
@@ -692,7 +692,7 @@ onUnmounted(() => {
 .section-head > text:last-child,
 .section-head > uni-text:last-child {
   color: #8a9a90;
-  font-size: 19rpx;
+  font-size: 24rpx;
 }
 
 .field {
@@ -707,7 +707,7 @@ onUnmounted(() => {
   width: 180rpx;
   flex: 0 0 auto;
   color: #4b6052;
-  font-size: 23rpx;
+  font-size: 24rpx;
   font-weight: 600;
 }
 
@@ -730,7 +730,7 @@ onUnmounted(() => {
   border-radius: 10rpx;
   background: #eff9f3;
   color: #14764a;
-  font-size: 19rpx;
+  font-size: 24rpx;
 }
 
 .code-field button[disabled] {
@@ -744,7 +744,7 @@ onUnmounted(() => {
   border-radius: 12rpx;
   background: #f5fbf7;
   color: #6f8377;
-  font-size: 20rpx;
+  font-size: 24rpx;
   line-height: 1.65;
 }
 
@@ -813,7 +813,7 @@ onUnmounted(() => {
   border-radius: 13rpx;
   background: #e0f3e8;
   color: #117a49;
-  font-size: 23rpx;
+  font-size: 24rpx;
   font-weight: 800;
 }
 
@@ -825,7 +825,7 @@ onUnmounted(() => {
 
 .identity-desc {
   color: #7e9084;
-  font-size: 18rpx;
+  font-size: 24rpx;
   line-height: 1.5;
 }
 
@@ -861,7 +861,7 @@ onUnmounted(() => {
   justify-content: space-between;
   gap: 20rpx;
   color: #7b8d82;
-  font-size: 20rpx;
+  font-size: 24rpx;
 }
 
 .verify-summary strong {
@@ -895,7 +895,7 @@ onUnmounted(() => {
 .verify-actions uni-button uni-text,
 .upload-grid button strong,
 .upload-grid uni-button strong {
-  font-size: 22rpx;
+  font-size: 24rpx;
   font-weight: 700;
 }
 
@@ -904,7 +904,7 @@ onUnmounted(() => {
 .upload-grid button small,
 .upload-grid uni-button small {
   color: #829389;
-  font-size: 18rpx;
+  font-size: 24rpx;
 }
 
 .verify-actions button.done,
@@ -938,7 +938,7 @@ onUnmounted(() => {
   border-radius: 50%;
   background: #e7f5ed;
   color: #14764a;
-  font-size: 20rpx;
+  font-size: 24rpx;
   font-weight: 800;
 }
 
@@ -955,7 +955,7 @@ onUnmounted(() => {
   gap: 8rpx;
   margin-top: 22rpx;
   color: #75877c;
-  font-size: 19rpx;
+  font-size: 24rpx;
   line-height: 1.6;
 }
 
@@ -1001,7 +1001,7 @@ onUnmounted(() => {
 
 .state-desc {
   color: #75887c;
-  font-size: 20rpx;
+  font-size: 24rpx;
   line-height: 1.6;
 }
 
@@ -1011,7 +1011,7 @@ onUnmounted(() => {
   gap: 10rpx;
   padding: 28rpx 0 0;
   color: #809087;
-  font-size: 21rpx;
+  font-size: 24rpx;
 }
 
 .bottom-link text:last-child,

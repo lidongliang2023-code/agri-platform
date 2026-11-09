@@ -1,5 +1,5 @@
 /**
- * 用户端「首页看板 / 消息中心 / 团队管理 / 种养计划」通用适配层
+ * 用户端「首页看板 / 消息中心 / 团队管理 / 农事计划」通用适配层
  *
  * 存在背景：
  * 1. 后端 `core-platform/mod-produce` 返回的实体字段名与 `src/types` 契约存在命名差异
@@ -558,20 +558,20 @@ export interface PermissionGroup {
  * 权限点目录
  *
  * 权限点命名遵循 `{域}.{资源}.{动作}`（PRD 3.4 RBAC 三层模型），
- * 覆盖用户端六大功能域：农场/地块、种养计划、农事任务、投入品、采收库存、质量溯源 + 系统管理。
+ * 覆盖用户端六大功能域：农场/地块、农事计划、农事任务、投入品、采收库存、质量溯源 + 系统管理。
  */
 export const PERMISSION_GROUPS: PermissionGroup[] = [
   {
     domain: 'produce',
     domainName: '生产管理',
-    actions: ['view', 'create', 'update', 'delete', 'export'],
+    actions: ['view', 'create', 'update', 'delete', 'export', 'approve'],
     resources: [
       { code: 'dashboard', name: '生产看板' },
       { code: 'farm', name: '农场档案' },
       { code: 'plot', name: '地块档案' },
       { code: 'member', name: '团队人员' },
       { code: 'role', name: '角色权限' },
-      { code: 'plan', name: '种养计划' },
+      { code: 'plan', name: '农事计划' },
       { code: 'task', name: '农事任务' },
       { code: 'input', name: '投入品' },
       { code: 'growth', name: '生长监测' },
@@ -680,6 +680,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<string, string[]> = {
     'produce.plan.view',
     'produce.plan.create',
     'produce.plan.update',
+    'produce.plan.approve',
     'produce.task.view',
     'produce.task.create',
     'produce.task.update',
@@ -758,7 +759,7 @@ export function normalizeMember(raw: unknown): Member {
 }
 
 /**
- * 归一化种养计划
+ * 归一化农事计划
  * @param raw 后端原始记录
  * @returns Plan
  */
@@ -790,7 +791,7 @@ export function normalizePlan(raw: unknown): Plan {
 }
 
 /**
- * 归一化种养计划阶段
+ * 归一化农事计划阶段
  * @param raw 后端原始记录
  * @returns PlanStage
  */
@@ -1300,7 +1301,7 @@ export function aggregateInputRanking(usages: unknown[], topN = 5): RankItem[] {
 }
 
 /**
- * 计算种养计划时间进度百分比
+ * 计算农事计划时间进度百分比
  * @param plan 计划
  * @returns 0-100 的进度值
  */

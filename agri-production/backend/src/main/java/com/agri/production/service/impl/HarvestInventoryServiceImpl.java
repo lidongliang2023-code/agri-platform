@@ -6,6 +6,8 @@ import com.agri.production.entity.HarvestBatch;
 import com.agri.production.entity.Inventory;
 import com.agri.production.entity.InventoryFlow;
 import com.agri.production.entity.Plot;
+import com.agri.production.entity.P2tOffer;
+import com.agri.production.mapper.P2tOfferMapper;
 import com.agri.production.mapper.HarvestBatchMapper;
 import com.agri.production.mapper.InventoryFlowMapper;
 import com.agri.production.mapper.InventoryMapper;
@@ -45,19 +47,21 @@ public class HarvestInventoryServiceImpl implements IHarvestInventoryService {
     private final InventoryMapper inventoryMapper;
     private final InventoryFlowMapper flowMapper;
     private final PlotMapper plotMapper;
+    private final P2tOfferMapper offerMapper;
     private final IDomainEventService domainEventService;
     private final ITraceLifecycleService traceLifecycleService;
 
     public HarvestInventoryServiceImpl(HarvestBatchMapper batchMapper, InventoryMapper inventoryMapper,
                                       InventoryFlowMapper flowMapper, PlotMapper plotMapper,
                                       IDomainEventService domainEventService,
-                                      ITraceLifecycleService traceLifecycleService) {
+                                      ITraceLifecycleService traceLifecycleService, P2tOfferMapper offerMapper) {
         this.batchMapper = batchMapper;
         this.inventoryMapper = inventoryMapper;
         this.flowMapper = flowMapper;
         this.plotMapper = plotMapper;
         this.domainEventService = domainEventService;
         this.traceLifecycleService = traceLifecycleService;
+        this.offerMapper = offerMapper;
     }
 
     /* ==================== 采收批次 ==================== */
@@ -88,7 +92,14 @@ public class HarvestInventoryServiceImpl implements IHarvestInventoryService {
 
     @Override
     public HarvestBatch detailBatch(Long batchId, String tenantId) {
-        return getOwnedBatch(batchId, tenantId);
+        HarvestBatch batch = getOwnedBatch(batchId, tenantId);
+        long count = offerMapper.selectCount(new LambdaQueryWrapper<P2tOffer>()
+                .eq(P2tOffer::getTenantId, tenantId).eq(P2tOffer::getBatchId, batchId));
+        batch.setLinkedOfferCount(count);
+        batch.setMutationBlockedReason(count > 0 ? "已关联 " + count + " 条供给单，不能直接修改或删除采收批次"
+                : !Integer.valueOf(0).equals(batch.getInboundStatus()) || Integer.valueOf(1).equals(batch.getTraceGenerated())
+                ? "已入库或已赋码，不能直接修改或删除采收批次" : null);
+        return batch;
     }
 
     @Override
@@ -108,13 +119,7 @@ public class HarvestInventoryServiceImpl implements IHarvestInventoryService {
         if (batch.getStatus() == null) batch.setStatus(1);
         if (batch.getInboundStatus() == null) batch.setInboundStatus(0);
         if (batch.getTraceGenerated() == null) batch.setTraceGenerated(0);
-        // 地块/农场/作物能从地块推出来就补上（可推导的冗余，不算编数据）
-        Plot plot = plotMapper.selectById(batch.getPlotId());
-        if (plot != null) {
-            if (batch.getPlotName() == null) batch.setPlotName(plot.getPlotName());
-            if (batch.getFarmId() == null) batch.setFarmId(plot.getFarmId());
-            if (batch.getCropName() == null) batch.setCropName(plot.getCurrentCrop());
-        }
+        validateBatch(batch, tenantId);
         batch.setCreateTime(LocalDateTime.now());
         batch.setUpdateTime(LocalDateTime.now());
         batch.setDeleted(0);
@@ -129,8 +134,13 @@ public class HarvestInventoryServiceImpl implements IHarvestInventoryService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public HarvestBatch updateBatch(Long batchId, Map<String, Object> body, String tenantId) {
-        HarvestBatch batch = getOwnedBatch(batchId, tenantId);
+        HarvestBatch batch = lockBatch(batchId, tenantId);
+        assertNoLinkedOffers(batchId, tenantId);
+        if (!Integer.valueOf(0).equals(batch.getInboundStatus()) || Integer.valueOf(1).equals(batch.getTraceGenerated())) {
+            throw new BusinessException(400, "已入库或已生成溯源码的批次不能直接修改，请通过库存及质量业务处理");
+        }
         applyBatch(batch, body);
+        validateBatch(batch, tenantId);
         batch.setUpdateTime(LocalDateTime.now());
         batchMapper.updateById(batch);
         return batch;
@@ -139,14 +149,18 @@ public class HarvestInventoryServiceImpl implements IHarvestInventoryService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteBatch(Long batchId, String tenantId) {
-        getOwnedBatch(batchId, tenantId);
+        HarvestBatch batch = lockBatch(batchId, tenantId);
+        assertNoLinkedOffers(batchId, tenantId);
+        if (!Integer.valueOf(0).equals(batch.getInboundStatus()) || Integer.valueOf(1).equals(batch.getTraceGenerated())) {
+            throw new BusinessException(400, "已入库或已赋码的批次不能删除");
+        }
         batchMapper.deleteById(batchId);
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public HarvestBatch generateBatch(Long batchId, Map<String, Object> body, String tenantId) {
-        HarvestBatch batch = getOwnedBatch(batchId, tenantId);
+        HarvestBatch batch = lockBatch(batchId, tenantId);
         if (body != null && body.get("warehouseName") != null) {
             batch.setWarehouseName(str(body.get("warehouseName")));
         }
@@ -175,9 +189,42 @@ public class HarvestInventoryServiceImpl implements IHarvestInventoryService {
 
     @Override
     public PageResult<InventoryFlow> pageBatchFlows(Long batchId, int pageNum, int pageSize, String tenantId) {
+        return pageBatchFlows(batchId, pageNum, pageSize, tenantId, null, null, null, null, null, null, null);
+    }
+
+    @Override
+    public PageResult<InventoryFlow> pageBatchFlows(Long batchId, int pageNum, int pageSize, String tenantId, Long inventoryId, Integer flowType, String direction, String startDate, String endDate, String operatorName, String keyword) {
         getOwnedBatch(batchId, tenantId);
         LambdaQueryWrapper<InventoryFlow> w = new LambdaQueryWrapper<>();
         w.eq(InventoryFlow::getTenantId, tenantId).eq(InventoryFlow::getBatchId, batchId);
+        if (inventoryId != null) {
+            Inventory inv = getOwnedInventory(inventoryId, tenantId);
+            if (!batchId.equals(inv.getBatchId())) throw new BusinessException("库存与采收批次不一致");
+            if (inv.getWarehouseName() == null) w.isNull(InventoryFlow::getWarehouseName);
+            else w.eq(InventoryFlow::getWarehouseName, inv.getWarehouseName());
+        }
+        if (flowType != null) {
+            if (flowType < 1 || flowType > 4) throw new BusinessException("流水类型无效");
+            w.eq(InventoryFlow::getFlowType, flowType);
+        }
+        if (direction != null && !direction.isBlank()) {
+            if ("in".equals(direction)) w.gt(InventoryFlow::getQuantity, BigDecimal.ZERO);
+            else if ("out".equals(direction)) w.lt(InventoryFlow::getQuantity, BigDecimal.ZERO);
+            else throw new BusinessException("流水方向无效");
+        }
+        LocalDate from = null, to = null;
+        try {
+            if (startDate != null && !startDate.isBlank()) from = LocalDate.parse(startDate);
+            if (endDate != null && !endDate.isBlank()) to = LocalDate.parse(endDate);
+        } catch (java.time.DateTimeException ex) { throw new BusinessException("流水日期格式应为 yyyy-MM-dd"); }
+        if (from != null && to != null && from.isAfter(to)) throw new BusinessException("开始日期不能晚于结束日期");
+        if (from != null) w.ge(InventoryFlow::getOperatedAt, from.atStartOfDay());
+        if (to != null) w.lt(InventoryFlow::getOperatedAt, to.plusDays(1).atStartOfDay());
+        if (operatorName != null && !operatorName.isBlank()) w.like(InventoryFlow::getOperatorName, operatorName.trim());
+        if (keyword != null && !keyword.isBlank()) {
+            String text = keyword.trim();
+            w.and(q -> q.like(InventoryFlow::getOrderNo, text).or().like(InventoryFlow::getRemark, text));
+        }
         w.orderByDesc(InventoryFlow::getOperatedAt).orderByDesc(InventoryFlow::getFlowId);
         int p = pageNum > 0 ? pageNum : 1;
         int s = pageSize > 0 ? pageSize : 50;
@@ -263,19 +310,17 @@ public class HarvestInventoryServiceImpl implements IHarvestInventoryService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Inventory createInventory(Map<String, Object> body, String tenantId) {
-        Inventory inv = new Inventory();
-        inv.setTenantId(tenantId);
-        applyInventory(inv, body);
-        if (inv.getBatchId() == null) throw new BusinessException(400, "请选择关联批次");
-        if (inv.getWarehouseName() == null) throw new BusinessException(400, "仓库名称不能为空");
-        if (inv.getCurrentQty() == null) inv.setCurrentQty(BigDecimal.ZERO);
-        if (inv.getFrozenQty() == null) inv.setFrozenQty(BigDecimal.ZERO);
-        if (inv.getLossQty() == null) inv.setLossQty(BigDecimal.ZERO);
-        if (inv.getFrozen() == null) inv.setFrozen(0);
-        inv.setCreateTime(LocalDateTime.now());
-        inv.setUpdateTime(LocalDateTime.now());
-        inv.setDeleted(0);
-        inventoryMapper.insert(inv);
+        Long batchId = toLong(body.get("batchId"));
+        BigDecimal quantity = requirePositive(dec(body.get("currentQty")), "入库数量必须大于 0");
+        String warehouse = str(body.get("warehouseName"));
+        if (warehouse == null) throw new BusinessException(400, "仓库名称不能为空");
+        Map<String, Object> entry = new LinkedHashMap<>(body);
+        entry.put("quantity", quantity);
+        stockIn(entry, tenantId);
+        Inventory inv = inventoryOfWarehouse(batchId, warehouse, tenantId);
+        if (body.containsKey("safeQty")) inv.setSafeQty(dec(body.get("safeQty")));
+        if (body.containsKey("remark")) inv.setRemark(str(body.get("remark")));
+        inventoryMapper.updateById(inv);
         fillHealth(inv);
         return inv;
     }
@@ -284,6 +329,24 @@ public class HarvestInventoryServiceImpl implements IHarvestInventoryService {
     @Transactional(rollbackFor = Exception.class)
     public Inventory updateInventory(Long inventoryId, Map<String, Object> body, String tenantId) {
         Inventory inv = getOwnedInventory(inventoryId, tenantId);
+        lockBatch(inv.getBatchId(), tenantId);
+        inv = getOwnedInventory(inventoryId, tenantId);
+        for (String key : List.of("batchId", "batchNo", "warehouseName", "unit", "currentQty", "frozenQty")) {
+            if (!body.containsKey(key)) continue;
+            Object old = switch (key) {
+                case "batchId" -> inv.getBatchId();
+                case "batchNo" -> inv.getBatchNo();
+                case "warehouseName" -> inv.getWarehouseName();
+                case "unit" -> inv.getUnit();
+                case "currentQty" -> inv.getCurrentQty();
+                default -> inv.getFrozenQty();
+            };
+            Object next = body.get(key);
+            boolean same = old instanceof BigDecimal && next != null
+                    ? ((BigDecimal) old).compareTo(dec(next)) == 0
+                    : java.util.Objects.equals(old == null ? null : old.toString(), next == null ? null : next.toString());
+            if (!same) throw new BusinessException(400, "批次、仓库、单位及库存余额不能直接改写，请使用库存业务操作");
+        }
         applyInventory(inv, body);
         inv.setUpdateTime(LocalDateTime.now());
         inventoryMapper.updateById(inv);
@@ -294,7 +357,13 @@ public class HarvestInventoryServiceImpl implements IHarvestInventoryService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteInventory(Long inventoryId, String tenantId) {
-        getOwnedInventory(inventoryId, tenantId);
+        Inventory inv = getOwnedInventory(inventoryId, tenantId);
+        lockBatch(inv.getBatchId(), tenantId);
+        if (flowMapper.selectCount(new LambdaQueryWrapper<InventoryFlow>()
+                .eq(InventoryFlow::getTenantId, tenantId).eq(InventoryFlow::getBatchId, inv.getBatchId())) > 0)
+            throw new BusinessException(400, "已有库存流水的记录不能删除，须保留对账记录");
+        if (inv.getCurrentQty() != null && inv.getCurrentQty().signum() != 0)
+            throw new BusinessException(400, "库存余额不为零，不能删除");
         inventoryMapper.deleteById(inventoryId);
     }
 
@@ -304,7 +373,15 @@ public class HarvestInventoryServiceImpl implements IHarvestInventoryService {
         Long batchId = toLong(body.get("batchId"));
         if (batchId == null) throw new BusinessException(400, "缺少 batchId");
         BigDecimal qty = requirePositive(dec(body.get("quantity")), "入库数量必须大于 0");
-        HarvestBatch batch = getOwnedBatch(batchId, tenantId);
+        HarvestBatch batch = lockBatch(batchId, tenantId);
+        BigDecimal entered = flowMapper.selectList(new LambdaQueryWrapper<InventoryFlow>()
+                .eq(InventoryFlow::getTenantId, tenantId).eq(InventoryFlow::getBatchId, batchId)
+                .eq(InventoryFlow::getFlowType, 1)).stream()
+                .map(InventoryFlow::getQuantity).reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (batch.getQuantity() == null || entered.add(qty).compareTo(batch.getQuantity()) > 0)
+            throw new BusinessException(400, "累计入库数量不能超过采收数量");
+        if (str(body.get("unit")) != null && !java.util.Objects.equals(batch.getUnit(), str(body.get("unit"))))
+            throw new BusinessException(400, "入库单位必须与采收批次一致");
         String warehouse = str(body.get("warehouseName"));
         if (warehouse == null) warehouse = "主仓库";
 
@@ -331,6 +408,7 @@ public class HarvestInventoryServiceImpl implements IHarvestInventoryService {
         if (str(body.get("locationCode")) != null) inv.setLocationCode(str(body.get("locationCode")));
         if (str(body.get("expireDate")) != null) inv.setExpireDate(parseDate(str(body.get("expireDate"))));
         inv.setCurrentQty(inv.getCurrentQty().add(qty));
+        if (Integer.valueOf(1).equals(inv.getFrozen())) inv.setFrozenQty(inv.getCurrentQty());
         inv.setLastInAt(LocalDateTime.now());
         inv.setUpdateTime(LocalDateTime.now());
         if (inv.getInventoryId() == null) inventoryMapper.insert(inv);
@@ -340,7 +418,7 @@ public class HarvestInventoryServiceImpl implements IHarvestInventoryService {
                 "采收入库", tenantId);
 
         // 批次的入库状态由库存动作推导，不让人手工填（手工填会出现"库存有货但批次写着待入库"）
-        batch.setInboundStatus(1);
+        refreshBatchStock(batch);
         batch.setWarehouseName(warehouse);
         batch.setInventoryId(inv.getInventoryId());
         batch.setUpdateTime(LocalDateTime.now());
@@ -351,12 +429,16 @@ public class HarvestInventoryServiceImpl implements IHarvestInventoryService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public InventoryFlow stockOut(Long batchId, BigDecimal qty, String relatedOrderNo,
-                                  String operatorName, String tenantId) {
+                                  String operatorName, Long inventoryId, String tenantId) {
         if (batchId == null) throw new BusinessException(400, "缺少 batchId");
         requirePositive(qty, "出库数量必须大于 0");
-        getOwnedBatch(batchId, tenantId);
-        Inventory inv = firstInventoryOfBatch(batchId, tenantId);
+        lockBatch(batchId, tenantId);
+        Inventory inv = sourceInventory(batchId, inventoryId, tenantId);
         if (inv == null) throw new BusinessException(400, "该批次还没有入库记录，无法出库");
+        if (Integer.valueOf(1).equals(inv.getFrozen()) ||
+                inv.getCurrentQty().subtract(inv.getFrozenQty() == null ? BigDecimal.ZERO : inv.getFrozenQty()).compareTo(qty) < 0) {
+            throw new BusinessException(400, "可用库存不足或库存已冻结");
+        }
         if (inv.getCurrentQty().compareTo(qty) < 0) {
             throw new BusinessException(400, String.format("库存不足：当前 %s %s，本次出库 %s",
                     inv.getCurrentQty().stripTrailingZeros().toPlainString(),
@@ -372,7 +454,7 @@ public class HarvestInventoryServiceImpl implements IHarvestInventoryService {
                 operatorName, relatedOrderNo, "销售出库", tenantId);
 
         HarvestBatch batch = getOwnedBatch(batchId, tenantId);
-        batch.setInboundStatus(inv.getCurrentQty().compareTo(BigDecimal.ZERO) == 0 ? 2 : 1);
+        refreshBatchStock(batch);
         batch.setUpdateTime(LocalDateTime.now());
         batchMapper.updateById(batch);
         return flow;
@@ -380,15 +462,15 @@ public class HarvestInventoryServiceImpl implements IHarvestInventoryService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public HarvestBatch freeze(Long batchId, String tenantId) {
-        HarvestBatch batch = getOwnedBatch(batchId, tenantId);
-        Inventory inv = firstInventoryOfBatch(batchId, tenantId);
+    public HarvestBatch freeze(Long batchId, Long inventoryId, boolean frozen, String tenantId) {
+        HarvestBatch batch = lockBatch(batchId, tenantId);
+        Inventory inv = sourceInventory(batchId, inventoryId, tenantId);
         if (inv == null) throw new BusinessException(400, "该批次还没有入库记录，无法冻结");
-        inv.setFrozen(1);
-        inv.setFrozenQty(inv.getCurrentQty());
+        inv.setFrozen(frozen ? 1 : 0);
+        inv.setFrozenQty(frozen ? inv.getCurrentQty() : BigDecimal.ZERO);
         inv.setUpdateTime(LocalDateTime.now());
         inventoryMapper.updateById(inv);
-        batch.setStatus(4);
+        refreshBatchStock(batch);
         batch.setUpdateTime(LocalDateTime.now());
         batchMapper.updateById(batch);
         return batch;
@@ -397,12 +479,16 @@ public class HarvestInventoryServiceImpl implements IHarvestInventoryService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean registerLoss(Long batchId, Map<String, Object> body, String tenantId) {
-        getOwnedBatch(batchId, tenantId);
+        lockBatch(batchId, tenantId);
         BigDecimal qty = requirePositive(dec(body.get("quantity")), "损耗数量必须大于 0");
         String reason = str(body.get("reason"));
         if (reason == null) throw new BusinessException(400, "损耗原因不能为空");
-        Inventory inv = firstInventoryOfBatch(batchId, tenantId);
+        Inventory inv = sourceInventory(batchId, idOf(body.get("inventoryId")), tenantId);
         if (inv == null) throw new BusinessException(400, "该批次还没有入库记录，无法登记损耗");
+        if (Integer.valueOf(1).equals(inv.getFrozen()) ||
+                inv.getCurrentQty().subtract(inv.getFrozenQty() == null ? BigDecimal.ZERO : inv.getFrozenQty()).compareTo(qty) < 0) {
+            throw new BusinessException(400, "可用库存不足或库存已冻结");
+        }
         if (inv.getCurrentQty().compareTo(qty) < 0) {
             throw new BusinessException(400, String.format("库存不足：当前 %s，本次损耗 %s",
                     inv.getCurrentQty().stripTrailingZeros().toPlainString(),
@@ -415,22 +501,26 @@ public class HarvestInventoryServiceImpl implements IHarvestInventoryService {
         inventoryMapper.updateById(inv);
         writeFlow(batchId, 4, qty.negate(), inv.getUnit(), inv.getWarehouseName(),
                 str(body.get("operatorName")), null, reason, tenantId);
+        HarvestBatch batch = getOwnedBatch(batchId, tenantId);
+        refreshBatchStock(batch);
+        batchMapper.updateById(batch);
         return true;
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean transfer(Long batchId, Map<String, Object> body, String tenantId) {
-        getOwnedBatch(batchId, tenantId);
+        lockBatch(batchId, tenantId);
         String target = str(body.get("targetWarehouse"));
         if (target == null) throw new BusinessException(400, "目标仓库不能为空");
         BigDecimal qty = requirePositive(dec(body.get("quantity")), "调拨数量必须大于 0");
-        Inventory source = firstInventoryOfBatch(batchId, tenantId);
+        Inventory source = sourceInventory(batchId, idOf(body.get("inventoryId")), tenantId);
         if (source == null) throw new BusinessException(400, "该批次还没有入库记录，无法调拨");
         if (target.equals(source.getWarehouseName())) {
             throw new BusinessException(400, "目标仓库与当前仓库相同，无需调拨");
         }
-        if (source.getCurrentQty().compareTo(qty) < 0) {
+        if (Integer.valueOf(1).equals(source.getFrozen()) ||
+                source.getCurrentQty().subtract(source.getFrozenQty() == null ? BigDecimal.ZERO : source.getFrozenQty()).compareTo(qty) < 0) {
             throw new BusinessException(400, String.format("库存不足：当前 %s，本次调拨 %s",
                     source.getCurrentQty().stripTrailingZeros().toPlainString(),
                     qty.stripTrailingZeros().toPlainString()));
@@ -453,10 +543,13 @@ public class HarvestInventoryServiceImpl implements IHarvestInventoryService {
             targetRow.setUnit(source.getUnit());
             targetRow.setGrade(source.getGrade());
             targetRow.setCategory(source.getCategory());
+            targetRow.setExpireDate(source.getExpireDate());
             targetRow.setProductName(source.getProductName());
             targetRow.setCreateTime(LocalDateTime.now());
             targetRow.setDeleted(0);
         }
+        if (Integer.valueOf(1).equals(targetRow.getFrozen()))
+            throw new BusinessException(400, "目标仓库库存已冻结，不能调入");
         if (str(body.get("locationCode")) != null) targetRow.setLocationCode(str(body.get("locationCode")));
         targetRow.setCurrentQty(targetRow.getCurrentQty().add(qty));
         targetRow.setLastInAt(LocalDateTime.now());
@@ -465,7 +558,9 @@ public class HarvestInventoryServiceImpl implements IHarvestInventoryService {
         else inventoryMapper.updateById(targetRow);
 
         writeFlow(batchId, 3, qty.negate(), source.getUnit(), source.getWarehouseName(),
-                null, null, "调拨至 " + target, tenantId);
+                str(body.get("operatorName")), null, "调拨至 " + target, tenantId);
+        writeFlow(batchId, 3, qty, source.getUnit(), target,
+                str(body.get("operatorName")), null, "调拨自 " + source.getWarehouseName(), tenantId);
         return true;
     }
 
@@ -476,6 +571,31 @@ public class HarvestInventoryServiceImpl implements IHarvestInventoryService {
     }
 
     /* ==================== 内部工具 ==================== */
+
+    private HarvestBatch lockBatch(Long batchId, String tenantId) {
+        HarvestBatch batch = batchMapper.lockOwned(batchId, tenantId);
+        if (batch == null) throw new BusinessException(404, "采收批次不存在或不属于当前主体");
+        return batch;
+    }
+
+    private void validateBatch(HarvestBatch batch, String tenantId) {
+        Plot plot = batch.getPlotId() == null ? null : plotMapper.selectById(batch.getPlotId());
+        if (plot == null || !java.util.Objects.equals(tenantId, plot.getTenantId()))
+            throw new BusinessException(404, "采收地块不存在或不属于当前主体");
+        if (batch.getFarmId() != null && !java.util.Objects.equals(batch.getFarmId(), plot.getFarmId()))
+            throw new BusinessException(400, "采收农场与地块所属农场不一致");
+        requirePositive(batch.getQuantity(), "采收数量必须大于 0");
+        batch.setFarmId(plot.getFarmId());
+        batch.setPlotName(plot.getPlotName());
+        if (batch.getCropName() == null) batch.setCropName(plot.getCurrentCrop());
+    }
+
+    private void assertNoLinkedOffers(Long batchId, String tenantId) {
+        // 锁定读避免 REPEATABLE READ 旧快照漏掉并发刚提交的供给。关闭/驳回也保留来源关系。
+        if (!offerMapper.lockBatchOfferIds(batchId, tenantId).isEmpty()) {
+            throw new BusinessException(400, "采收批次已关联供给单，不能直接修改或删除；请在产销对接中核对关联供给，保留历史采收来源");
+        }
+    }
 
     private HarvestBatch getOwnedBatch(Long batchId, String tenantId) {
         HarvestBatch batch = batchMapper.selectById(batchId);
@@ -493,10 +613,33 @@ public class HarvestInventoryServiceImpl implements IHarvestInventoryService {
         return inv;
     }
 
-    private Inventory firstInventoryOfBatch(Long batchId, String tenantId) {
-        return inventoryMapper.selectOne(new LambdaQueryWrapper<Inventory>()
-                .eq(Inventory::getTenantId, tenantId).eq(Inventory::getBatchId, batchId)
-                .orderByAsc(Inventory::getInventoryId).last("LIMIT 1"));
+    private Long idOf(Object value) {
+        if (value == null) return null;
+        try { return Long.valueOf(String.valueOf(value)); }
+        catch (NumberFormatException ex) { throw new BusinessException(400, "库存编号无效"); }
+    }
+
+    private Inventory sourceInventory(Long batchId, Long inventoryId, String tenantId) {
+        if (inventoryId != null) {
+            Inventory row = getOwnedInventory(inventoryId, tenantId);
+            if (!java.util.Objects.equals(row.getBatchId(), batchId))
+                throw new BusinessException(400, "库存记录与采收批次不一致");
+            return row;
+        }
+        List<Inventory> rows = inventoryByBatch(batchId, tenantId);
+        if (rows.size() > 1) throw new BusinessException(400, "该批次有多个仓库，请指定库存编号");
+        return rows.isEmpty() ? null : rows.get(0);
+    }
+
+    private void refreshBatchStock(HarvestBatch batch) {
+        List<Inventory> rows = inventoryByBatch(batch.getBatchId(), batch.getTenantId());
+        BigDecimal total = rows.stream().map(Inventory::getCurrentQty)
+                .filter(java.util.Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add);
+        boolean allFrozen = rows.stream().filter(x -> x.getCurrentQty().signum() > 0)
+                .allMatch(x -> Integer.valueOf(1).equals(x.getFrozen()));
+        batch.setInboundStatus(total.signum() > 0 ? 1 : 2);
+        batch.setStatus(total.signum() == 0 ? 3 : allFrozen ? 4 : 1);
+        batch.setUpdateTime(LocalDateTime.now());
     }
 
     private Inventory inventoryOfWarehouse(Long batchId, String warehouse, String tenantId) {

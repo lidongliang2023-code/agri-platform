@@ -1,3 +1,4 @@
+import Card from '@/components/SectionCard'
 /**
  * 页面名称：农场列表
  * 路由路径：/production/farms
@@ -10,33 +11,29 @@
  * - 筛选器：搜索农场名称/编号、全部状态（运营中 / 已停用）、全部类型（六种业务类型）
  * - 统计条：共 N 个农场（并补充总面积 / 运营中 / 地块总数）
  * - **卡片视图**：每张卡含 🌾 农场名、状态标签、★默认标签、
- *   📍 地区 | 类型 | 面积 | 在田面积、地块数 | 本月任务 | 告警，
+ *   📍 地区 | 类型 | 面积 | 在田面积、地块数 | 任务总数 | 告警，
  *   底部操作 `查看详情`、`生产监控→`，右上角 `更多 ▾` 下拉
- * - 额外提供「卡片 / 列表」视图切换、设为默认农场、启停、删除、CSV 模板下载与批量导入
+ * - 默认列表视图、列表/卡片切换、设为默认农场、启停、删除与批量导入
  *
  * 数据口径说明：
  * - 农场主数据来自 GET /farms；地块数 / 在田面积来自 GET /farms/{farmId}/summary
- * - 本月任务数来自 GET /tasks 分页 total（后端未支持月份过滤时按全量任务数展示）
+ * - 任务总数来自 GET /tasks 分页 total（后端未支持月份过滤时按全量任务数展示）
  * - 告警数来自 GET /alerts 分页 total
  */
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
-import { PageContainer } from '@ant-design/pro-components'
+import PageContainer from '@/components/ProductionPageContainer'
 import type { MenuProps } from 'antd'
 import {
   AppstoreOutlined,
-  DownOutlined,
-  DownloadOutlined,
-  ImportOutlined,
-  InboxOutlined,
-  PlusOutlined,
   UnorderedListOutlined,
+  DownOutlined,
+  ImportOutlined,
+  PlusOutlined,
 } from '@ant-design/icons'
 import {
-  Alert,
   Button,
-  Card,
   Col,
   Dropdown,
   Empty,
@@ -45,32 +42,24 @@ import {
   Modal,
   Pagination,
   Row,
-  Segmented,
   Select,
+  Segmented,
   Space,
-  Statistic,
-  Table,
   Tag,
   Typography,
-  Upload,
   message,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { deleteFarm, getFarmSummary, listFarms, updateFarmStatus, createFarm } from '@/api/farms'
-import type { FarmPayload } from '@/api/farms'
+import { deleteFarm, getFarmSummary, listFarms, updateFarmStatus } from '@/api/farms'
+import { DetailInfoGrid, DetailMetricGrid } from '@/components'
+import BusinessRecordList from '@/components/BusinessRecordList'
+import FarmImportModal from './FarmImportModal'
 import { listAlerts } from '@/api/alerts'
 import { listTasks } from '@/api/tasks'
-import {
-  FARM_TYPE_BUSINESS_OPTIONS,
-  downloadFarmImportTemplate,
-  parseFarmImportFile,
-  type FarmImportRow,
-} from '@/utils/farm-import'
+import { FARM_TYPE_BUSINESS_OPTIONS } from '@/utils/farm-import'
 import useFarmStore from '@/store/farm'
 import type { Farm } from '@/types'
 
-/** 视图模式：卡片 / 列表 */
-type ViewMode = 'card' | 'table'
 
 /** 筛选表单值 */
 interface FilterValues {
@@ -159,7 +148,7 @@ function formatArea(value: number | undefined): string {
 /**
  * 农场列表页
  *
- * 业务职责：以卡片 / 列表双视图展示主体下全部农场，支持检索筛选、
+ * 业务职责：以列表或卡片视图展示主体下全部农场，默认列表，支持检索筛选、
  * 切换当前农场、启停、删除，以及「下载模板 → 编辑 → 上传 CSV」的批量导入。
  *
  * @returns 页面内容
@@ -170,20 +159,13 @@ export default function FarmList(): JSX.Element {
   const currentFarm = useFarmStore((state) => state.currentFarm)
   const setCurrentFarm = useFarmStore((state) => state.setCurrentFarm)
 
-  const [view, setView] = useState<ViewMode>('card')
+  const [viewMode, setViewMode] = useState<'list' | 'card'>('list')
   const [pageNum, setPageNum] = useState<number>(1)
   const [pageSize, setPageSize] = useState<number>(9)
   const [filters, setFilters] = useState<FilterValues>({})
   const [filterForm] = Form.useForm<FilterValues>()
   /** 导入弹窗开关 */
   const [importOpen, setImportOpen] = useState<boolean>(false)
-  /** 解析后的导入行（含逐行校验结果） */
-  const [importRows, setImportRows] = useState<FarmImportRow[]>([])
-  /** 已选择的文件名 */
-  const [importFileName, setImportFileName] = useState<string>('')
-  /** 文件级错误（表头缺失 / 无法解析） */
-  const [importError, setImportError] = useState<string>('')
-
   /** 农场分页数据（关键字 / 状态由服务端过滤） */
   const listQuery = useQuery({
     queryKey: ['farms', filters, pageNum, pageSize],
@@ -280,70 +262,6 @@ export default function FarmList(): JSX.Element {
     onSuccess: () => {
       message.success('农场已删除')
       void invalidateFarms()
-    },
-  })
-
-  /**
-   * 批量导入（逐行提交）。
-   *
-   * <p>只提交逐行校验通过的数据；失败行跳过并在结果里列出原因，
-   * 不因单行失败回滚已成功的农场（与原有导入行为一致）。</p>
-   */
-  const importMutation = useMutation({
-    mutationFn: async (rows: FarmImportRow[]) => {
-      const targets = rows.filter((row) => row.payload !== undefined)
-      const results = await Promise.allSettled(
-        targets.map((row) => createFarm(row.payload as FarmPayload)),
-      )
-      const failures = results
-        .map((result, index) => ({ result, row: targets[index] }))
-        .filter((item) => item.result.status === 'rejected')
-        .map((item) => ({
-          rowNumber: item.row.rowNumber,
-          farmName: item.row.values.farmName,
-          reason:
-            item.result.status === 'rejected' && item.result.reason instanceof Error
-              ? item.result.reason.message
-              : '导入失败',
-        }))
-      return {
-        success: results.length - failures.length,
-        failed: failures.length,
-        failures,
-      }
-    },
-    onSuccess: (result) => {
-      setImportOpen(false)
-      void invalidateFarms()
-      if (result.failed === 0) {
-        message.success(`导入完成：成功导入 ${result.success} 个农场`)
-        return
-      }
-      message.warning(`导入完成：成功 ${result.success} 条，失败 ${result.failed} 条`)
-      Modal.warning({
-        title: '部分农场导入失败',
-        width: 560,
-        content: (
-          <Space direction="vertical" size={4} style={{ width: '100%' }}>
-            {result.failures.slice(0, 10).map((failure) => (
-              <Typography.Text
-                key={`${failure.rowNumber}-${failure.farmName}`}
-                type="danger"
-              >
-                第 {failure.rowNumber} 行「{failure.farmName || '未命名'}」：{failure.reason}
-              </Typography.Text>
-            ))}
-            {result.failures.length > 10 && (
-              <Typography.Text type="secondary">
-                仅显示前 10 条失败记录，请修正文件后重新导入。
-              </Typography.Text>
-            )}
-          </Space>
-        ),
-      })
-    },
-    onError: (error: Error) => {
-      message.error(error.message || '导入失败，请稍后重试')
     },
   })
 
@@ -449,171 +367,53 @@ export default function FarmList(): JSX.Element {
     setPageNum(1)
   }
 
-  /** 打开导入弹窗并重置上一次的选择 */
-  const openImportModal = (): void => {
-    setImportRows([])
-    setImportFileName('')
-    setImportError('')
-    setImportOpen(true)
-  }
+  const openImportModal = (): void => setImportOpen(true)
 
-  /**
-   * 读取用户选择的 CSV 文件并逐行校验。
-   *
-   * <p>选中文件后不立即提交，先在弹窗里展示解析与校验结果，
-   * 用户确认后再导入，避免选错文件直接落库。</p>
-   *
-   * @param file 用户选择的文件
-   */
-  const handleImportFile = async (file: File): Promise<void> => {
-    setImportFileName(file.name)
-    setImportError('')
-    setImportRows([])
-    try {
-      const result = await parseFarmImportFile(file)
-      if (result.headerErrors.length > 0) {
-        setImportError(result.headerErrors.join('；'))
-      }
-      setImportRows(result.rows)
-      if (result.rows.length === 0 && result.headerErrors.length === 0) {
-        setImportError('文件中没有可解析的数据行，请按模板填写后再导入')
-      }
-    } catch (error) {
-      setImportError(
-        error instanceof Error ? error.message : '文件解析失败，请确认文件为 CSV 格式',
-      )
-    }
-  }
-
-  /** 当前文件中逐行校验通过、可提交的行 */
-  const importableRows = useMemo<FarmImportRow[]>(
-    () => importRows.filter((row) => row.errors.length === 0 && row.payload !== undefined),
-    [importRows],
-  )
-
-  /** 导入预览列定义 */
-  const importPreviewColumns: ColumnsType<FarmImportRow> = [
+  /** 列表与卡片共用数据源和操作，切换不重置筛选与分页。 */
+  const farmColumns: ColumnsType<Farm> = [
     {
-      title: '行号',
-      dataIndex: 'rowNumber',
-      width: 66,
-    },
-    {
-      title: '农场名称',
-      key: 'farmName',
-      width: 160,
-      ellipsis: true,
-      render: (_, row) => row.values.farmName || '-',
-    },
-    {
-      title: '类型',
-      key: 'farmType',
-      width: 100,
-      render: (_, row) => row.values.farmTypeLabel || '-',
-    },
-    {
-      title: '地区',
-      key: 'region',
-      width: 180,
-      ellipsis: true,
-      render: (_, row) =>
-        `${row.values.province}${row.values.city}${row.values.district}` || '-',
-    },
-    {
-      title: '面积(亩)',
-      key: 'area',
-      width: 90,
-      render: (_, row) => row.values.area || '-',
-    },
-    {
-      title: '负责人',
-      key: 'manager',
-      width: 140,
-      ellipsis: true,
-      render: (_, row) =>
-        [row.values.managerName, row.values.managerPhone].filter(Boolean).join(' / ') || '-',
-    },
-    {
-      title: '校验结果',
-      key: 'validation',
-      render: (_, row) =>
-        row.errors.length === 0 ? (
-          <Tag color="green">可导入</Tag>
-        ) : (
-          <Typography.Text type="danger">{row.errors.join('；')}</Typography.Text>
-        ),
-    },
-  ]
-
-  /** 列表视图列定义 */
-  const columns: ColumnsType<Farm> = [
-    { title: '农场编号', dataIndex: 'farmCode', width: 140, render: (value) => value || '-' },
-    { title: '农场名称', dataIndex: 'farmName', ellipsis: true },
-    {
-      title: '状态',
-      dataIndex: 'status',
-      width: 100,
-      render: (_, record) => (
-        <Tag color={FARM_STATUS_META[record.status]?.color ?? 'default'}>
-          {FARM_STATUS_META[record.status]?.label ?? '未知'}
-        </Tag>
-      ),
-    },
-    {
-      title: '类型',
-      dataIndex: 'farmType',
-      width: 110,
-      render: (_, record) => <Tag>{resolveFarmTypeLabel(record)}</Tag>,
-    },
-    {
-      title: '地区',
-      key: 'region',
-      width: 180,
-      render: (_, record) =>
-        `${record.province ?? ''}${record.city ?? ''}${record.district ?? ''}` || '-',
-    },
-    {
-      title: '面积',
-      dataIndex: 'areaTotal',
-      width: 100,
-      render: (_, record) => formatArea(Number(record.areaTotal)),
-    },
-    {
-      title: '在田面积',
-      key: 'planted',
-      width: 110,
-      render: (_, record) => formatArea(summaryMap[record.farmId]?.plotAreaTotal ?? 0),
-    },
-    {
-      title: '地块数',
-      key: 'plotCount',
-      width: 90,
-      render: (_, record) => summaryMap[record.farmId]?.plotCount ?? 0,
-    },
-    {
-      title: '操作',
-      key: 'option',
-      width: 200,
-      fixed: 'right',
-      render: (_, record) => (
-        <Space size={8}>
-          <Typography.Link onClick={() => navigate(`/production/farms/${record.farmId}`)}>
-            详情
-          </Typography.Link>
-          <Typography.Link onClick={() => navigate(`/production/monitor?farmId=${record.farmId}`)}>
-            监控
-          </Typography.Link>
-          <Dropdown
-            trigger={['click']}
-            menu={{ items: buildMenuItems(record), onClick: (info) => handleMoreAction(info.key, record) }}
-          >
-            <Typography.Link>
-              更多 <DownOutlined />
+      title: '农场名称 / 编号', key: 'name', width: 230, fixed: 'left',
+      render: (_, farm) => (
+        <Space direction="vertical" size={2}>
+          <Space size={6} wrap>
+            <Typography.Link onClick={() => navigate(`/production/farms/${farm.farmId}`)}>
+              {farm.farmName}
             </Typography.Link>
-          </Dropdown>
+            {currentFarm?.farmId === farm.farmId && <Tag color="gold">★ 默认</Tag>}
+          </Space>
+          <Typography.Text type="secondary">{farm.farmCode || '—'}</Typography.Text>
         </Space>
       ),
     },
+    { title: '状态', key: 'status', width: 100, render: (_, farm) => {
+      const meta = FARM_STATUS_META[farm.status] ?? { label: '未知', color: 'default' }
+      return <Tag color={meta.color}>{meta.label}</Tag>
+    } },
+    { title: '类型', key: 'type', width: 120, render: (_, farm) => resolveFarmTypeLabel(farm) },
+    { title: '所在地区', key: 'region', width: 220, render: (_, farm) =>
+      [farm.province, farm.city, farm.district].filter(Boolean).join(' · ') || '—' },
+    { title: '面积（亩）', key: 'area', width: 120, render: (_, farm) => formatArea(farm.areaTotal) },
+    { title: '地块数', key: 'plots', width: 90, render: (_, farm) =>
+      summaryResults[pageFarmIds.indexOf(farm.farmId)]?.data ? summaryMap[farm.farmId]?.plotCount ?? 0 : '—' },
+    { title: '任务总数', key: 'tasks', width: 100, render: (_, farm) =>
+      taskResults[pageFarmIds.indexOf(farm.farmId)]?.data ? taskCountMap[farm.farmId] ?? 0 : '—' },
+    { title: '告警总数', key: 'alerts', width: 100, render: (_, farm) =>
+      alertResults[pageFarmIds.indexOf(farm.farmId)]?.data ? alertCountMap[farm.farmId] ?? 0 : '—' },
+    { title: '负责人 / 联系电话', key: 'manager', width: 180, render: (_, farm) => (
+      <Space direction="vertical" size={2}>
+        <span>{farm.managerName || '—'}</span>
+        <Typography.Text type="secondary">{farm.managerPhone || '—'}</Typography.Text>
+      </Space>
+    ) },
+    { title: '操作', key: 'actions', width: 240, fixed: 'right', render: (_, farm) => (
+      <Space size={12}>
+        <Typography.Link onClick={() => navigate(`/production/farms/${farm.farmId}`)}>查看详情</Typography.Link>
+        <Typography.Link onClick={() => navigate(`/production/monitor?farmId=${farm.farmId}`)}>生产监控</Typography.Link>
+        <Dropdown trigger={['click']} menu={{ items: buildMenuItems(farm), onClick: (info) => handleMoreAction(info.key, farm) }}>
+          <Button type="link" size="small">更多 <DownOutlined /></Button>
+        </Dropdown>
+      </Space>
+    ) },
   ]
 
   /** 渲染单张农场卡片（原型 P1） */
@@ -624,13 +424,10 @@ export default function FarmList(): JSX.Element {
     const isDefault = currentFarm?.farmId === farm.farmId
     const statusMeta = FARM_STATUS_META[farm.status] ?? { label: '未知', color: 'default' }
     const plantedArea = summary?.plotAreaTotal ?? 0
-    const usageRate =
-      summary && summary.areaTotal > 0
-        ? Math.round((plantedArea / summary.areaTotal) * 100)
-        : 0
 
     return (
       <Card
+        key={farm.farmId}
         hoverable
         loading={listQuery.isLoading}
         title={
@@ -671,33 +468,23 @@ export default function FarmList(): JSX.Element {
           </Typography.Link>,
         ]}
       >
-        <Space direction="vertical" size={8} style={{ width: '100%' }}>
+        <Space direction="vertical" size={14} style={{ width: '100%' }}>
           <Space size={6} wrap>
             <Tag color={statusMeta.color}>{statusMeta.label}</Tag>
             <Tag>{resolveFarmTypeLabel(farm)}</Tag>
           </Space>
-          <Typography.Text type="secondary">
-            📍 {farm.province ?? '-'}
-            {farm.city ? `·${farm.city}` : ''}
-            {farm.district ? `·${farm.district}` : ''} | {formatArea(Number(farm.areaTotal))} | 在田{' '}
-            {formatArea(plantedArea)}（{usageRate}%）
-          </Typography.Text>
-          <Typography.Text type="secondary">
-            海拔 {resolveAltitude(farm)} | 负责人 {farm.managerName ?? '-'} |{' '}
-            {farm.managerPhone ?? '-'}
-          </Typography.Text>
-          <Space size={12} wrap>
-            <Typography.Text>
-              地块:{' '}
-              <Typography.Text strong>{summary?.plotCount ?? 0}个</Typography.Text>
-            </Typography.Text>
-            <Typography.Text>
-              本月任务: <Typography.Text strong>{taskCount}</Typography.Text>
-            </Typography.Text>
-            <Typography.Text type={alertCount > 0 ? 'danger' : 'secondary'}>
-              告警: <Typography.Text strong>{alertCount}条</Typography.Text>
-            </Typography.Text>
-          </Space>
+          <Typography.Text type="secondary">编号：{farm.farmCode || '—'}</Typography.Text>
+          <DetailInfoGrid columns={2} items={[
+            { key: 'region', label: '所在地区', value: [farm.province, farm.city, farm.district].filter(Boolean).join(' · '), fullWidth: true },
+            { key: 'area', label: '农场面积', value: formatArea(Number(farm.areaTotal)) },
+            { key: 'planted', label: '地块面积合计', value: summaryResults[pageFarmIds.indexOf(farm.farmId)]?.data ? formatArea(plantedArea) : '—' },
+            { key: 'plots', label: '地块数', value: summaryResults[pageFarmIds.indexOf(farm.farmId)]?.data ? `${summary?.plotCount ?? 0} 个` : '—' },
+            { key: 'tasks', label: '任务总数', value: taskResults[pageFarmIds.indexOf(farm.farmId)]?.data ? taskCount : '—' },
+            { key: 'alerts', label: '告警总数', value: alertResults[pageFarmIds.indexOf(farm.farmId)]?.data ? alertCount : '—' },
+            { key: 'manager', label: '负责人', value: farm.managerName },
+            { key: 'phone', label: '联系电话', value: farm.managerPhone },
+            { key: 'altitude', label: '海拔', value: resolveAltitude(farm) },
+          ]} />
         </Space>
       </Card>
     )
@@ -705,6 +492,25 @@ export default function FarmList(): JSX.Element {
 
   /** 渲染内容区（加载 / 错误 / 空 / 卡片 / 列表） */
   const renderContent = (): JSX.Element => {
+    if (viewMode === 'list' && !listQuery.isError) {
+      return (
+        <BusinessRecordList<Farm>
+          onReload={() => Promise.all([
+            listQuery.refetch(),
+            ...summaryResults.map((query) => query.refetch()),
+            ...taskResults.map((query) => query.refetch()),
+            ...alertResults.map((query) => query.refetch()),
+          ])}
+          rowKey="farmId"
+          columns={farmColumns}
+          dataSource={filteredList}
+          loading={listQuery.isLoading}
+          pagination={false}
+          scroll={{ x: 1600 }}
+          locale={{ emptyText: '暂无匹配的农场，试试调整筛选条件或新建农场' }}
+        />
+      )
+    }
     if (listQuery.isLoading) {
       return (
         <Row gutter={[16, 16]}>
@@ -747,17 +553,10 @@ export default function FarmList(): JSX.Element {
         />
       )
     }
-    if (view === 'table') {
-      return <Table<Farm> rowKey="farmId" columns={columns} dataSource={filteredList} pagination={false} />
-    }
     return (
-      <Row gutter={[16, 16]}>
-        {filteredList.map((farm) => (
-          <Col key={farm.farmId} xs={24} md={12} xxl={8}>
-            {renderFarmCard(farm)}
-          </Col>
-        ))}
-      </Row>
+      <div className="farm-record-grid">
+        {filteredList.map((farm) => renderFarmCard(farm))}
+      </div>
     )
   }
 
@@ -766,22 +565,6 @@ export default function FarmList(): JSX.Element {
       title="🏠 农场管理"
       subTitle={`共 ${stats.total} 个农场`}
       extra={[
-        <Segmented
-          key="view"
-          value={view}
-          onChange={(value) => setView(value as ViewMode)}
-          options={[
-            { label: '卡片视图', value: 'card', icon: <AppstoreOutlined /> },
-            { label: '列表视图', value: 'table', icon: <UnorderedListOutlined /> },
-          ]}
-        />,
-        <Button
-          key="template"
-          icon={<DownloadOutlined />}
-          onClick={downloadFarmImportTemplate}
-        >
-          下载模板
-        </Button>,
         <Button key="import" icon={<ImportOutlined />} onClick={openImportModal}>
           📥 导入
         </Button>,
@@ -830,37 +613,32 @@ export default function FarmList(): JSX.Element {
         </Form>
       </Card>
 
-      <Row gutter={16} style={{ marginBottom: 16 }}>
-        <Col xs={12} md={6}>
-          <Card>
-            <Statistic title="农场总数" value={stats.total} suffix="个" />
-          </Card>
-        </Col>
-        <Col xs={12} md={6}>
-          <Card>
-            <Statistic
-              title="运营中"
-              value={stats.activeCount}
-              suffix="个"
-              valueStyle={{ color: '#52c41a' }}
-            />
-          </Card>
-        </Col>
-        <Col xs={12} md={6}>
-          <Card>
-            <Statistic title="总面积" value={stats.areaTotal} suffix="亩" />
-          </Card>
-        </Col>
-        <Col xs={12} md={6}>
-          <Card>
-            <Statistic title="地块总数" value={stats.plotCount} suffix="个" />
-          </Card>
-        </Col>
-      </Row>
+      <div style={{ marginBottom: 16 }}>
+        <DetailMetricGrid items={[
+          { key: 'total', title: '符合检索条件的农场', value: listQuery.isError || !listQuery.data ? null : stats.total, suffix: '个' },
+          { key: 'active', title: '当前页运营中', value: listQuery.isError || !listQuery.data ? null : stats.activeCount, suffix: '个' },
+          { key: 'area', title: '当前页农场面积', value: listQuery.isError || !listQuery.data ? null : stats.areaTotal, suffix: '亩' },
+          { key: 'plots', title: '当前页地块数', value: summaryResults.some(result => !result.data || result.isError) || !listQuery.data ? null : stats.plotCount, suffix: '个' },
+        ]} />
+      </div>
 
-      <Card>
+      <Card title="农场档案" extra={
+        <Space wrap>
+          <Typography.Text type="secondary">面积、运营数、地块数按当前页汇总</Typography.Text>
+          <Segmented
+            aria-label="农场展示方式"
+            value={viewMode}
+            onChange={(value) => setViewMode(value as 'list' | 'card')}
+            options={[
+              { label: '列表', value: 'list', icon: <UnorderedListOutlined /> },
+              { label: '卡片', value: 'card', icon: <AppstoreOutlined /> },
+            ]}
+          />
+        </Space>
+      }>
+
         {renderContent()}
-        {view === 'card' && filteredList.length > 0 && (
+        {filteredList.length > 0 && (
           <div style={{ marginTop: 16, textAlign: 'right' }}>
             <Pagination
               current={pageNum}
@@ -877,106 +655,7 @@ export default function FarmList(): JSX.Element {
         )}
       </Card>
 
-      <Modal
-        title="导入农场"
-        open={importOpen}
-        width={880}
-        maskClosable={!importMutation.isPending}
-        onCancel={() => {
-          if (!importMutation.isPending) setImportOpen(false)
-        }}
-        footer={[
-          <Button
-            key="cancel"
-            disabled={importMutation.isPending}
-            onClick={() => setImportOpen(false)}
-          >
-            取消
-          </Button>,
-          <Button
-            key="template"
-            icon={<DownloadOutlined />}
-            disabled={importMutation.isPending}
-            onClick={downloadFarmImportTemplate}
-          >
-            下载导入模板
-          </Button>,
-          <Button
-            key="submit"
-            type="primary"
-            loading={importMutation.isPending}
-            disabled={importableRows.length === 0}
-            onClick={() => importMutation.mutate(importableRows)}
-          >
-            开始导入{importableRows.length > 0 ? `（${importableRows.length} 条）` : ''}
-          </Button>,
-        ]}
-      >
-        <Space direction="vertical" size={12} style={{ width: '100%' }}>
-          <Alert
-            type="info"
-            showIcon
-            message="按模板填写后上传 CSV 文件"
-            description={
-              <Space direction="vertical" size={2}>
-                <span>1. 点击「下载导入模板」，用 Excel 打开并填写农场数据。</span>
-                <span>
-                  2. 必填列：农场名称、农场类型、省份、城市、区县、详细地址、面积、负责人、联系电话；
-                  农场类型需为模板中的六种业务类型之一。
-                </span>
-                <span>3. 保存为 CSV 后，在下方选择该文件；校验不通过的行会标红并在导入时跳过。</span>
-              </Space>
-            }
-          />
-
-          <Upload.Dragger
-            accept=".csv,.txt"
-            maxCount={1}
-            showUploadList={false}
-            disabled={importMutation.isPending}
-            beforeUpload={(file) => {
-              void handleImportFile(file as File)
-              return false
-            }}
-          >
-            <p className="ant-upload-drag-icon">
-              <InboxOutlined />
-            </p>
-            <p className="ant-upload-text">点击或拖拽 CSV 文件到此处</p>
-            <p className="ant-upload-hint">
-              支持 UTF-8 / GBK 编码；Excel 编辑后请另存为 CSV（逗号分隔）
-            </p>
-          </Upload.Dragger>
-
-          {importFileName && (
-            <Typography.Text type="secondary">已选择文件：{importFileName}</Typography.Text>
-          )}
-
-          {importError && <Alert type="error" showIcon message={importError} />}
-
-          {importRows.length > 0 && (
-            <Space direction="vertical" size={8} style={{ width: '100%' }}>
-              <Alert
-                type={importableRows.length === importRows.length ? 'success' : 'warning'}
-                showIcon
-                message={`已解析 ${importRows.length} 行，可导入 ${importableRows.length} 行${
-                  importRows.length - importableRows.length > 0
-                    ? `，${importRows.length - importableRows.length} 行需修正（导入时跳过）`
-                    : ''
-                }`}
-              />
-              <Table<FarmImportRow>
-                rowKey={(row) => String(row.rowNumber)}
-                size="small"
-                columns={importPreviewColumns}
-                dataSource={importRows}
-                pagination={false}
-                scroll={{ y: 280 }}
-              />
-            </Space>
-          )}
-        </Space>
-      </Modal>
+      {importOpen && <FarmImportModal onClose={() => setImportOpen(false)} onComplete={invalidateFarms} />}
     </PageContainer>
   )
 }

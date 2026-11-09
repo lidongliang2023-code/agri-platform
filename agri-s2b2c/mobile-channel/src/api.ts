@@ -76,10 +76,11 @@ export interface GrowthData {
 }
 
 export interface Dashboard {
-  orderCount?: number
-  productCount?: number
-  consumerCount?: number
-  totalAmount?: number
+  todayOrders?: number
+  todayAmount?: number
+  pendingShip?: number
+  pendingAfterSale?: number
+  byStatus?: Record<string, number>
 }
 
 export interface ActionResult {
@@ -137,20 +138,21 @@ function request<T>(
 }
 
 export const channelApi = {
+  getProfile: () => request<Partial<ChannelPartner> & { applied: boolean }>('/channel/profile'),
   getChannel: (id = 1) => request<ChannelPartner>(`/channel/detail/${id}`),
   updateChannel: (data: ChannelPartner) => request<ActionResult>('/channel/update', 'PUT', data as unknown as Record<string, unknown>),
-  getDashboard: () => request<Dashboard>('/platform/dashboard'),
+  getDashboard: () => request<Dashboard>('/channel/order-stats'),
   getProducts: (params: { channelId?: number; page?: number; size?: number }) =>
     request<PageResult<Product>>('/channel/products', 'GET', undefined, params),
   getProductPool: (params: { page?: number; size?: number; keyword?: string; categoryId?: number | null }) =>
     request<PageResult<Product>>('/channel/product-pool', 'GET', undefined, params),
-  selectProduct: (channelId: number, productId: number) =>
+  selectProduct: (channelId: string | number, productId: string | number) =>
     request<ActionResult>('/channel/select-product', 'POST', undefined, { channelId, productId }),
   getOrders: (params: { page?: number; size?: number; status?: string }) =>
-    request<PageResult<Order>>('/platform/orders', 'GET', undefined, params),
+    request<PageResult<Order>>('/channel/orders', 'GET', undefined, params),
   getCommissions: (params: { channelId?: number; page?: number; size?: number; status?: string }) =>
     request<PageResult<Commission>>('/channel/commissions', 'GET', undefined, params),
-  getTotalCommission: (channelId = 1) =>
+  getTotalCommission: (channelId?: number) =>
     request<{ total: number }>('/channel/total-commission', 'GET', undefined, { channelId }),
-  getGrowth: (channelId = 1) => request<GrowthData>('/channel/growth', 'GET', undefined, { channelId }),
+  getGrowth: (channelId?: number) => request<GrowthData>('/channel/growth', 'GET', undefined, { channelId }),
 }
