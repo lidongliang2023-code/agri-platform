@@ -143,10 +143,10 @@ async function main() {
   check('A20 不存在的设备 → 404', notFoundDevice.status === 404)
 
   // ========== B. 写路径与留痕 ==========
-  const controlOk = await call('/devices/3/control', { method: 'POST', token: farmer, body: { action: `${MARK} 开启风机` } })
+  const controlOk = await call('/devices/3/control', { method: 'POST', token: farmer, body: { action: '开启设备' } })
   check('B1 本主体可控设备下发指令 → 200', controlOk.status === 200 && controlOk.code === 200, controlOk.message)
-  check('B2 回执只声明"已下发到边缘网关"，不替设备确认', /边缘网关/.test(controlOk.message + String(controlOk.data?.message || '')) && !/设备已确认/.test(JSON.stringify(controlOk.data)), JSON.stringify(controlOk.data))
-  const controlRow = rows(`SELECT operator_name FROM iot_control_log WHERE action_name='${MARK} 开启风机' ORDER BY id DESC LIMIT 1`)[0]
+  check('B2 回执只登记待设备领取，不替设备确认', /等待设备领取与回执/.test(controlOk.message + String(controlOk.data?.message || '')) && !/设备已确认/.test(JSON.stringify(controlOk.data)), JSON.stringify(controlOk.data))
+  const controlRow = rows(`SELECT operator_name FROM iot_control_log WHERE action_name='开启设备' ORDER BY id DESC LIMIT 1`)[0]
   check('B3 控制留痕的操作人是令牌账号 farmer（不是写死的"陈建国"）', controlRow?.[0] === 'farmer', JSON.stringify(controlRow))
   const sensorControl = await call('/devices/1/control', { method: 'POST', token: farmer, body: { action: '不该成功' } })
   check('B4 不可控设备下发 → 400 且说明原因', sensorControl.status === 400 && /不支持远程控制/.test(sensorControl.message), sensorControl.message)
@@ -186,7 +186,7 @@ async function main() {
   const ruleCreate = await call('/rules', {
     method: 'POST',
     token: farmer,
-    body: { ruleName, trigger: '温度 > 30℃ 持续 5 分钟', action: '开启风机', ruleType: 'automation', triggerMetric: 'temperature', operator: '>', threshold: '30', actionDeviceId: 3, actionCommand: 'on', actionDeviceName: '伪造的名字' },
+    body: { ruleName, trigger: '温度 > 30℃ 持续 5 分钟', action: '开启风机', ruleType: 'automation', triggerMetric: 'temperature', operator: '>', threshold: '30', actionDeviceId: 3, actionCommand: '开启设备', actionDeviceName: '伪造的名字' },
   })
   check('B17 创建自动化规则 → 200', ruleCreate.status === 200 && ruleCreate.data?.ruleName === ruleName, ruleCreate.message)
   check(
@@ -204,13 +204,13 @@ async function main() {
   const badRule = await call('/rules', {
     method: 'POST',
     token: farmer,
-    body: { ruleName: `${MARK} 坏规则`, trigger: 'x', action: 'y', ruleType: 'automation', triggerMetric: 'temperature', operator: '>', threshold: '30', actionDeviceId: 1, actionCommand: 'on' },
+    body: { ruleName: `${MARK} 坏规则`, trigger: 'x', action: 'y', ruleType: 'automation', triggerMetric: 'temperature', operator: '>', threshold: '30', actionDeviceId: 1, actionCommand: '开启设备' },
   })
   check('B23 规则选择不可控设备 → 400', badRule.status === 400 && /不支持远程控制/.test(badRule.message), badRule.message)
   const crossDeviceRule = await call('/rules', {
     method: 'POST',
     token: luochuan,
-    body: { ruleName: `${MARK} 越权规则`, trigger: 'x', action: 'y', ruleType: 'automation', triggerMetric: 'temperature', operator: '>', threshold: '30', actionDeviceId: 3, actionCommand: 'on' },
+    body: { ruleName: `${MARK} 越权规则`, trigger: 'x', action: 'y', ruleType: 'automation', triggerMetric: 'temperature', operator: '>', threshold: '30', actionDeviceId: 3, actionCommand: '开启设备' },
   })
   check('B24 规则引用别人设备的 → 404', crossDeviceRule.status === 404, String(crossDeviceRule.status))
 
@@ -227,12 +227,12 @@ async function main() {
   check('B29 工单列表按主体隔离', (ordersB.data || []).every((item) => item.orderNo !== orderCreate.data?.orderNo) && ordersB.data?.length === Number(scalar(`SELECT COUNT(*) FROM iot_work_order WHERE tenant_id=${TENANT_B}`)))
 
   const alertSnapshot = rows(`SELECT id,status,handled_by,IFNULL(handle_note,''),IFNULL(handled_at,'') FROM iot_alert WHERE tenant_id=${TENANT_A} AND status='pending' ORDER BY id LIMIT 1`)[0]
-  const handleWithFakeName = await call(`/alerts/${alertSnapshot?.[0]}/handle`, { method: 'POST', token: farmer, body: { status: 'resolved', note: '已现场核查', handledBy: '冒充的处置人' } })
-  check('B30 处置本主体告警 → 200', handleWithFakeName.status === 200, handleWithFakeName.message)
-  const handledRow = rows(`SELECT status,handled_by,handle_note FROM iot_alert WHERE id=${alertSnapshot?.[0]}`)[0]
-  check('B31 处置人取令牌账号，不接受前端自报', handledRow?.[1] === 'farmer' && handledRow?.[0] === 'resolved', JSON.stringify(handledRow))
-  const badStatus = await call(`/alerts/${alertSnapshot?.[0]}/handle`, { method: 'POST', token: farmer, body: { status: '随便写的状态', note: 'x' } })
-  check('B32 非法告警状态 → 400', badStatus.status === 400 && /只能是待处理、处理中或已恢复/.test(badStatus.message), badStatus.message)
+  const handleWithFakeName = await call(`/alerts/${alertSnapshot?.[0]}/handle`, { method: 'POST', token: farmer, body: { status: 'handling', note: '已接单并开始现场核查', handledBy: '冒充的处置人' } })
+  check('B30 告警进入处理中 → 200', handleWithFakeName.status === 200, handleWithFakeName.message)
+  const handleResolved = await call(`/alerts/${alertSnapshot?.[0]}/handle`, { method: 'POST', token: farmer, body: { status: 'resolved', note: '现场核查完成，风险已恢复', handledBy: '冒充的处置人' } })
+  check('B31 告警完成处置 → 200 且处置人取令牌账号', handleResolved.status === 200 && handleResolved.data?.handledBy === 'farmer' && handleResolved.data?.status === 'resolved', JSON.stringify(handleResolved.data))
+  const badStatus = await call(`/alerts/${alertSnapshot?.[0]}/handle`, { method: 'POST', token: farmer, body: { status: '随便写的状态', note: '非法状态测试' } })
+  check('B32 非法告警状态 → 400', badStatus.status === 400 && /状态已变化或不允许跳转/.test(badStatus.message), badStatus.message)
   const noNote = await call(`/alerts/${alertSnapshot?.[0]}/handle`, { method: 'POST', token: farmer, body: { status: 'resolved' } })
   check('B33 缺处置说明 → 400', noNote.status === 400)
 
@@ -314,9 +314,10 @@ async function main() {
 
   const otaStatusBefore = scalar(`SELECT status FROM iot_ota_task WHERE tenant_id=${TENANT_A} ORDER BY id DESC LIMIT 1`)
   const otaTargetId = scalar(`SELECT id FROM iot_ota_task WHERE tenant_id=${TENANT_A} ORDER BY id DESC LIMIT 1`)
-  const otaExecute = await call(`${OPS}/ota/${otaTargetId}/execute`, { method: 'POST', token: admin })
-  check('D21 OTA 排期接口可用并返回执行窗口说明', otaExecute.status === 200 && /执行窗口/.test(String(otaExecute.data?.message)), `id=${otaTargetId} status=${otaExecute.status} message=${otaExecute.message}`)
-  check('D22 没有下发链路就不把状态改成"执行中"（原来点一下变 running）', scalar(`SELECT status FROM iot_ota_task WHERE tenant_id=${TENANT_A} ORDER BY id DESC LIMIT 1`) === otaStatusBefore, otaStatusBefore)
+  const otaGatewayId = scalar(`SELECT id FROM iot_gateway WHERE farm_id IN (SELECT id FROM iot_farm WHERE tenant_id=${TENANT_A}) ORDER BY id LIMIT 1`)
+  const otaExecute = await call(`${OPS}/ota/${otaTargetId}/execute`, { method: 'POST', token: admin, body: { gatewayIds: [Number(otaGatewayId)], firmwareUrl: '' } })
+  check('D21 已运行 OTA 任务禁止重复排期并返回明确提示', otaExecute.status === 400 && /仅待执行任务可启动|已经生成升级指令/.test(otaExecute.message), `id=${otaTargetId} status=${otaExecute.status} message=${otaExecute.message}`)
+  check('D22 重复排期不会改变任务状态', scalar(`SELECT status FROM iot_ota_task WHERE tenant_id=${TENANT_A} ORDER BY id DESC LIMIT 1`) === otaStatusBefore, otaStatusBefore)
   const otaListB = await call('/ota', { token: luochuan })
   check('D23 用户端升级任务按主体隔离', otaListB.data?.length === Number(scalar(`SELECT COUNT(*) FROM iot_ota_task WHERE tenant_id=${TENANT_B}`)), JSON.stringify(otaListB.data?.map((t) => t.taskNo)))
 

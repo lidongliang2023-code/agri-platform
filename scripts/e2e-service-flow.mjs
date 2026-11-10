@@ -404,7 +404,7 @@ async function main() {
   const ghostApply = await api(farmer, 'POST', '/api/v1/service/policies/applications', { policyId: 987654, contactPhone: '138' })
   check(ghostApply.status === 404, '指向不存在的政策返回 404', ghostApply.message)
   const apply = await api(farmer, 'POST', '/api/v1/service/policies/applications', { policyId: 2, contactPhone: '13800001234' })
-  check(apply.code === 200 && apply.data?.applicant === '绿源农业合作社',
+  check(apply.code === 200 && apply.data?.applicant === '漳州南靖有限公司',
     '申报人取当前主体（不再是"平台用户"）', String(apply.data?.applicant))
   const applicationId = Number(apply.data?.id)
   const appsB = await api(other, 'GET', '/api/v1/service/policies/applications')

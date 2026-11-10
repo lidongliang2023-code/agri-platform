@@ -120,10 +120,10 @@ try {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username: 'supplier1', password: 'Admin@123', marketId: 1 }),
   })).json().catch(() => ({}))
-  const supplierAuth = { Authorization: `Bearer ${supplierLogin?.data?.accessToken ?? ''}` }
+  const supplierLoginAuth = { Authorization: `Bearer ${supplierLogin?.data?.accessToken ?? ''}` }
   const shipOrder = async (orderId, prefix) => {
     const owner = sql(`SELECT supplier_id FROM agri_s2b2c.s2b2c_order WHERE id = '${orderId}'`)
-    const headers = owner === '1' ? supplierAuth : auth
+    const headers = owner === '1' ? supplierLoginAuth : auth
     const response = await fetch(`${S2B2C}/api/platform/order/ship?id=${orderId}`
       + `&logisticsNo=${prefix}${Date.now()}&company=顺丰`, { method: 'PUT', headers })
     return { status: response.status, body: await readJson(response) }
@@ -141,6 +141,9 @@ try {
 
   const bound = sql(`SELECT user_id FROM agri_s2b2c.s2b2c_consumer WHERE id = '${createdConsumerId}'`)
   const adminId = sql(`SELECT id FROM agri_core.platform_user WHERE username = 'admin'`)
+  const supplierSourceId = sql(`SELECT id FROM agri_s2b2c.s2b2c_supplier WHERE user_id = (SELECT id FROM agri_core.platform_user WHERE username = 'lvyuanshop') ORDER BY id DESC LIMIT 1`)
+  const supplierAuth = { ...auth, 'X-Supply-Source-Id': supplierSourceId }
+  check(Boolean(supplierSourceId), '读取现有供应商货源档案', `source=${supplierSourceId}`)
   check(String(bound) === String(adminId), '消费者档案已绑定平台账号', `user_id=${bound}`)
 
   /* ---------- 3) 归属校验 ---------- */
@@ -183,91 +186,79 @@ try {
   })
   check(order.status !== 401 && order.status !== 403,
     '下单请求已越过认证与归属校验（业务侧校验失败）', `status=${order.status} body=${JSON.stringify(order.body).slice(0, 40)}`)
-  /* ---------- 5) 供应商商品写入：能力 + 归属 ---------- */
-  const productCreate = async (body, headers = auth) => {
-    const response = await fetch(`${S2B2C}/api/supplier/product/create`, {
+  /* ---------- 5) 供应商商品写入：货源档案 + 归属 ---------- */
+  const productCreate = async (body, headers = supplierAuth) => {
+    const response = await fetch(`${S2B2C}/api/platform/supply/product/create`, {
       method: 'POST',
       headers: { ...headers, 'Content-Type': 'application/json' },
       body: JSON.stringify(body ?? {}),
     })
     return { status: response.status, body: await readJson(response) }
   }
-  const deniedProduct = await productCreate({})
-  check(deniedProduct.status === 403 && String(deniedProduct.body?.message ?? '').includes('交易类业务身份'),
-    '无交易身份时上架商品被 403', `status=${deniedProduct.status} msg=${String(deniedProduct.body?.message ?? '').slice(0, 22)}`)
-
-  // 临时开通批发商身份，让能力层放行；此时应该卡在"没有供应商档案"
-  const sessionRes = await fetch(`${CORE}/api/v1/sso/login-standalone`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: 'admin', password: 'Admin@123' }),
+  const noSourceProduct = await productCreate({}, auth)
+  check(noSourceProduct.status === 400 && String(noSourceProduct.body?.message ?? '').includes('货源档案'),
+    '未选择货源档案时上架被拒', `status=${noSourceProduct.status} msg=${String(noSourceProduct.body?.message ?? '').slice(0, 28)}`)
+  const supplierProfile = await fetch(`${S2B2C}/api/platform/supply/profile`, { headers: supplierAuth })
+  const supplierProfileBody = await readJson(supplierProfile)
+  check(supplierProfile.status === 200 && supplierProfileBody?.applied === true
+    && supplierProfileBody?.auditStatus === 'APPROVED',
+    '现有供应商货源档案可正常读取', `status=${supplierProfile.status} id=${supplierProfileBody?.id}`)
+  const selfApply = await fetch(`${S2B2C}/api/platform/supply/apply`, {
+    method: 'POST', headers: { ...auth, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ companyName: 'E2E商城供应商', creditCode: '91320100E2E0001X', contactPhone: '13800000000' }),
   })
-  const cookie = (sessionRes.headers.getSetCookie?.() ?? []).map((item) => item.split(';')[0]).join('; ')
-  const applied = await (await fetch(`${CORE}/api/v1/sso/account/identity-applications`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Cookie: cookie },
-    body: JSON.stringify({ identityType: 'wholesaler', subjectName: 'E2E商城供应商主体' }),
-  })).json()
-  supplierApplicationId = applied?.data?.id ?? ''
-  if (supplierApplicationId) {
-    await fetch(`${CORE}/api/v1/admin/identity-applications/${supplierApplicationId}/review`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...auth },
-      body: JSON.stringify({ approved: true, remark: 'e2e 商城供应商' }),
-    })
-  }
-  const noProfile = await productCreate({})
-  check(noProfile.status === 403 && String(noProfile.body?.message ?? '').includes('供应商档案'),
-    '能力具备但未入驻商城时被 403', `status=${noProfile.status} msg=${String(noProfile.body?.message ?? '').slice(0, 22)}`)
+  const selfApplyBody = await readJson(selfApply)
+  check(selfApply.status === 410 && selfApplyBody?.success === false,
+    '供应商自助入驻已按现行规则关闭', `status=${selfApply.status} msg=${String(selfApplyBody?.message ?? '').slice(0, 32)}`)
 
-  const applySupplier = await (await fetch(`${S2B2C}/api/supplier/apply`, {
-    method: 'POST',
-    headers: { ...auth, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ companyName: 'E2E商城供应商', creditCode: '91320100E2E0001X', contactPhone: '13800000000' }),
-  })).json()
-  supplierCreated = applySupplier?.success === true
-  check(supplierCreated, '提交商城入驻申请', JSON.stringify(applySupplier).slice(0, 40))
-
-  const ownSupplierId = sql(`SELECT id FROM agri_s2b2c.s2b2c_supplier WHERE user_id = '${adminId}' ORDER BY id DESC LIMIT 1`)
-  const duplicateSupplierApply = await (await fetch(`${S2B2C}/api/supplier/apply`, {
-    method: 'POST', headers: { ...auth, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ companyName: 'E2E商城供应商', creditCode: '91320100E2E0001X', contactPhone: '13800000000' }),
-  })).json()
-  check(duplicateSupplierApply?.success === false && String(duplicateSupplierApply?.message ?? '').includes('审核'),
-    '供应商审核中不能重复申请', String(duplicateSupplierApply?.message ?? '').slice(0, 20))
-  await fetch(`${S2B2C}/api/platform/supplier/audit?id=${ownSupplierId}&auditStatus=REJECTED&auditOpinion=e2e拒绝`,
-    { method: 'PUT', headers: auth })
-  const reapplySupplier = await (await fetch(`${S2B2C}/api/supplier/apply`, {
-    method: 'POST', headers: { ...auth, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ companyName: 'E2E商城供应商', creditCode: '91320100E2E0001X',
-      contactPhone: '13800000000', shopName: 'E2E能力校验店' }),
-  })).json()
-  const supplierProfileAfter = await (await fetch(`${S2B2C}/api/supplier/profile`, { headers: auth })).json()
-  const supplierRows = sql(`SELECT COUNT(*) FROM agri_s2b2c.s2b2c_supplier WHERE user_id = '${adminId}'`)
-  check(reapplySupplier?.success === true && supplierProfileAfter?.auditStatus === 'PENDING'
-    && supplierRows === '1', '驳回后重新申请复用原供应商档案', `rows=${supplierRows}`)
-  const created = await productCreate({ categoryId: 1, name: 'E2E 能力校验商品', price: 1, stock: 1 })
-  check(created.status !== 403 && created.body?.success === true,
-    '开通身份并入驻后上架商品成功', `status=${created.status} body=${JSON.stringify(created.body).slice(0, 40)}`)
+  const ownSupplierId = supplierSourceId
+  const created = await productCreate({
+    categoryId: 1, name: 'E2E 能力校验商品', price: 1, stock: 1, prodBatchNo: 'H20260601',
+  })
+  check(created.status === 200 && created.body?.success === true,
+    '使用已维护货源档案上架商品成功', `status=${created.status} body=${JSON.stringify(created.body).slice(0, 60)}`)
   ownProductId = sql(`SELECT id FROM agri_s2b2c.s2b2c_product WHERE supplier_id = '${ownSupplierId}' ORDER BY id DESC LIMIT 1`)
+  const productAudit = await fetch(`${S2B2C}/api/platform/product/audit?id=${ownProductId}&status=APPROVED&opinion=e2e认证链路`, {
+    method: 'PUT', headers: auth,
+  })
+  const productAuditBody = await readJson(productAudit)
+  check(productAudit.status === 200 && productAuditBody?.success === true,
+    '平台审核通过测试商品后再进入履约链路', `status=${productAudit.status} msg=${String(productAuditBody?.message ?? '').slice(0, 28)}`)
 
   const otherProductId = sql('SELECT id FROM agri_s2b2c.s2b2c_product WHERE supplier_id <> ' +
     `'${ownSupplierId}' ORDER BY id DESC LIMIT 1`)
   if (otherProductId && !otherProductId.startsWith('ERR')) {
-    const otherResponse = await fetch(`${S2B2C}/api/supplier/product/update`, {
+    const otherResponse = await fetch(`${S2B2C}/api/platform/supply/product/update`, {
       method: 'PUT',
-      headers: { ...auth, 'Content-Type': 'application/json' },
+      headers: { ...supplierAuth, 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: otherProductId, name: '越权改名' }),
     })
     const otherBody = await readJson(otherResponse)
-    check(otherResponse.status === 403 && String(otherBody?.message ?? '').includes('其他供应商'),
-      '按商品 id 改其他供应商的商品被 403', `status=${otherResponse.status}`)
+    check(otherResponse.status === 403,
+      '按商品 id 改其他供应商的商品被 403 拦截', `status=${otherResponse.status}`)
   }
 
   /* ---------- 6) 渠道合伙人：账号绑定 + profile ---------- */
   const channelCall = async (url, options = {}) => {
     const response = await fetch(`${S2B2C}${url}`, options)
     return { status: response.status, body: await readJson(response) }
+  }
+  const supplierCall = async (url, options = {}) => channelCall(url, { ...options, headers: { ...(options.headers ?? {}), ...supplierAuth } })
+  const bindTraceUnits = async (orderId) => {
+    const itemId = sql(`SELECT id FROM agri_s2b2c.s2b2c_order_item WHERE order_id = '${orderId}' ORDER BY id LIMIT 1`)
+    const batchNo = sql(`SELECT prod_batch_no FROM agri_s2b2c.s2b2c_order_item WHERE id = '${itemId}'`)
+    const quantity = Number(sql(`SELECT quantity FROM agri_s2b2c.s2b2c_order_item WHERE id = '${itemId}'`))
+    const codes = String(sql(`SELECT trace_code FROM agri_production.agri_prod_trace_code
+      WHERE deleted=0 AND status='active' AND (batch_number='${batchNo}' OR harvest_code='${batchNo}')
+      ORDER BY id LIMIT ${quantity}`)).split(/\r?\n/).filter(Boolean)
+    const response = await fetch(`${S2B2C}/api/platform/supply/order/${orderId}/item/${itemId}/trace-units`, {
+      method: 'POST', headers: { ...supplierAuth, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ codes }),
+    })
+    const body = await readJson(response)
+    check(response.status === 200 && body?.success === true && Number(body?.count) === quantity,
+      '发货前绑定订单单品溯源码', `order=${orderId} batch=${batchNo} codes=${codes.length} status=${response.status}`)
+    return { response, body }
   }
   const profileBefore = await channelCall('/api/channel/profile', { headers: auth })
   check(profileBefore.status === 200 && profileBefore.body?.applied === false,
@@ -689,6 +680,7 @@ try {
       sql(`DELETE FROM agri_s2b2c.s2b2c_order_shipment WHERE order_id IN (${inClause})`)
       sql(`DELETE FROM agri_s2b2c.s2b2c_notice WHERE ref_type = 'ORDER' AND ref_id IN (${inClause})`)
       sql(`DELETE FROM agri_s2b2c.s2b2c_commission WHERE order_id IN (${inClause})`)
+      sql(`DELETE FROM agri_s2b2c.s2b2c_order_trace_unit WHERE order_id IN (${inClause})`)
       sql(`DELETE FROM agri_s2b2c.s2b2c_order_item WHERE order_id IN (${inClause})`)
       sql(`DELETE FROM agri_s2b2c.s2b2c_order WHERE id IN (${inClause})`)
     }
@@ -718,13 +710,13 @@ try {
     sql(`INSERT INTO agri_s2b2c.s2b2c_address
          (id, consumer_id, name, phone, province, city, district, address, is_default, status)
          VALUES ('${regionAddressId}', '${createdConsumerId}', 'E2E限售', '13800000002', '江苏省', '南京市', '鼓楼区', '限售路 10 号', FALSE, 'ACTIVE')`)
-    const regionRule = await channelCall(`/api/supplier/product/${ownProductId}/distribution-rule`, {
+    const regionRule = await supplierCall(`/api/platform/supply/product/${ownProductId}/distribution-rule`, {
       method: 'PUT', headers: { ...auth, 'Content-Type': 'application/json' },
       body: JSON.stringify({ enabled: true, maxChannels: 0, regionNames: ['浙江省'] }),
     })
     check(regionRule.body?.success === true && (regionRule.body?.regionNames ?? []).includes('浙江省'),
       '投放规则保存限售区域', JSON.stringify(regionRule.body?.regionNames ?? []).slice(0, 30))
-    const regionRuleGet = await channelCall(`/api/supplier/product/${ownProductId}/distribution-rule`, { headers: auth })
+    const regionRuleGet = await supplierCall(`/api/platform/supply/product/${ownProductId}/distribution-rule`, { headers: auth })
     check((regionRuleGet.body?.regionNames ?? []).includes('浙江省'), '限售区域可回读',
       JSON.stringify(regionRuleGet.body?.regionNames ?? []).slice(0, 30))
 
@@ -742,7 +734,7 @@ try {
       && String(blockedOrder.body?.message ?? '').includes('限售'),
       '收货地址不在限售区域时下单被拒', `status=${blockedOrder.status} msg=${String(blockedOrder.body?.message ?? '').slice(0, 24)}`)
 
-    const relaxRule = await channelCall(`/api/supplier/product/${ownProductId}/distribution-rule`, {
+    const relaxRule = await supplierCall(`/api/platform/supply/product/${ownProductId}/distribution-rule`, {
       method: 'PUT', headers: { ...auth, 'Content-Type': 'application/json' },
       body: JSON.stringify({ enabled: true, maxChannels: 0, regionNames: ['江苏省'] }),
     })
@@ -762,24 +754,24 @@ try {
     }
     sql(`DELETE FROM agri_s2b2c.s2b2c_cart WHERE consumer_id = '${createdConsumerId}'`)
     sql(`DELETE FROM agri_s2b2c.s2b2c_address WHERE id = '${regionAddressId}'`)
-    const clearRegions = await channelCall(`/api/supplier/product/${ownProductId}/distribution-rule`, {
+    const clearRegions = await supplierCall(`/api/platform/supply/product/${ownProductId}/distribution-rule`, {
       method: 'PUT', headers: { ...auth, 'Content-Type': 'application/json' },
       body: JSON.stringify({ enabled: true, maxChannels: 0, regionNames: [] }),
     })
     check(clearRegions.body?.success === true && (clearRegions.body?.regionNames ?? []).length === 0,
       '限售区域可清空为全国', JSON.stringify(clearRegions.body?.regionNames ?? []))
 
-    const authList = await channelCall(`/api/supplier/channel-authorizations?productId=${ownProductId}`, { headers: auth })
+    const authList = await supplierCall(`/api/platform/supply/channel-authorizations?productId=${ownProductId}`, { headers: auth })
     const relation = (authList.body ?? []).find((item) => String(item.productId) === String(ownProductId))
     check(Boolean(relation?.id), '供应商能看到渠道授权记录', `id=${relation?.id}`)
 
     if (relation?.id) {
-      const revoke = await channelCall(`/api/supplier/channel-authorization/${relation.id}/revoke`, {
+      const revoke = await supplierCall(`/api/platform/supply/channel-authorization/${relation.id}/revoke`, {
         method: 'PUT', headers: auth,
       })
       check(revoke.body?.success === true, '供应商撤销渠道授权', JSON.stringify(revoke.body).slice(0, 30))
 
-      const afterList = await channelCall(`/api/supplier/channel-authorizations?productId=${ownProductId}`, { headers: auth })
+      const afterList = await supplierCall(`/api/platform/supply/channel-authorizations?productId=${ownProductId}`, { headers: auth })
       const revoked = (afterList.body ?? []).find((item) => item.id === relation.id)
       check(revoked?.status === 'REVOKED', '撤销后状态为 REVOKED', `status=${revoked?.status}`)
 
@@ -787,7 +779,7 @@ try {
       const stillListed = (channelProducts.body?.records ?? []).some((item) => String(item.id) === String(ownProductId))
       check(!stillListed, '撤销后渠道选品列表不再包含该商品')
 
-      const revokeAgain = await channelCall(`/api/supplier/channel-authorization/${relation.id}/revoke`, {
+      const revokeAgain = await supplierCall(`/api/platform/supply/channel-authorization/${relation.id}/revoke`, {
         method: 'PUT', headers: auth,
       })
       check(revokeAgain.body?.success === true && String(revokeAgain.body?.message ?? '').includes('已经'),
@@ -1724,7 +1716,7 @@ try {
          (id,consumer_id,name,phone,province,city,district,address,is_default,status)
          VALUES ('${snapshotAddressId}','${createdConsumerId}','E2E快照','13800000010','江苏省','南京市','鼓楼区','快照路 18 号',FALSE,'ACTIVE')`)
     sql(`UPDATE agri_s2b2c.s2b2c_product SET stock = 10, price = 1 WHERE id = '${ownProductId}'`)
-    const revenueBefore = await channelCall(`/api/supplier/revenue?month=${month}`, { headers: auth })
+    const revenueBefore = await supplierCall(`/api/platform/supply/revenue?month=${month}`, { headers: auth })
     sql(`DELETE FROM agri_s2b2c.s2b2c_cart WHERE consumer_id = '${createdConsumerId}' AND product_id = '${ownProductId}'`)
     await channelCall(`/api/consumer/cart/add?consumerId=${createdConsumerId}&productId=${ownProductId}&quantity=1`,
       { method: 'POST', headers: auth })
@@ -1740,9 +1732,9 @@ try {
              WHERE order_id = '${snapshotOrderId}' LIMIT 1`) : ''
     check(Boolean(snapshotOrderId) && Number(supplySnapshot) === 1,
       '下单时写入供货价快照', `order=${snapshotOrderId} supply=${supplySnapshot}`)
-    const revenueAfterOrder = await channelCall(`/api/supplier/revenue?month=${month}`, { headers: auth })
+    const revenueAfterOrder = await supplierCall(`/api/platform/supply/revenue?month=${month}`, { headers: auth })
     sql(`UPDATE agri_s2b2c.s2b2c_product SET price = 999 WHERE id = '${ownProductId}'`)
-    const revenueAfterPrice = await channelCall(`/api/supplier/revenue?month=${month}`, { headers: auth })
+    const revenueAfterPrice = await supplierCall(`/api/platform/supply/revenue?month=${month}`, { headers: auth })
     const before = Number(revenueBefore.body?.summary?.supplyRevenue || 0)
     const afterOrder = Number(revenueAfterOrder.body?.summary?.supplyRevenue || 0)
     const afterPrice = Number(revenueAfterPrice.body?.summary?.supplyRevenue || 0)
@@ -1781,8 +1773,10 @@ try {
       ? sql(`SELECT order_no FROM agri_s2b2c.s2b2c_order WHERE id = '${statementOrderId}'`) : ''
     if (statementOrderId) {
       await channelCall(`/api/consumer/order/pay/${statementOrderId}`, { method: 'PUT', headers: auth })
-      await fetch(`${S2B2C}/api/platform/order/ship?id=${statementOrderId}&logisticsNo=STMT${Date.now()}&company=顺丰`,
+      await bindTraceUnits(statementOrderId)
+      const statementShip = await fetch(`${S2B2C}/api/platform/order/ship?id=${statementOrderId}&logisticsNo=STMT${Date.now()}&company=顺丰`,
         { method: 'PUT', headers: auth })
+      check(statementShip.status === 200, '对账订单发货成功', `status=${statementShip.status}`)
       await channelCall(`/api/consumer/order/receive/${statementOrderId}`, { method: 'PUT', headers: auth })
     }
     const generated = await (await fetch(`${S2B2C}/api/platform/supplier-statements/generate`, {
@@ -1799,11 +1793,11 @@ try {
     })).json()
     check(duplicate?.success === true && duplicate?.existing === true
       && String(duplicate?.id) === supplierStatementId, '同账期重复生成返回已有对账单')
-    const statementDetail = await channelCall(`/api/supplier/statement/${supplierStatementId}`, { headers: auth })
+    const statementDetail = await supplierCall(`/api/platform/supply/statement/${supplierStatementId}`, { headers: auth })
     check(statementDetail.status === 200
       && (statementDetail.body?.orders ?? []).some((row) => String(row.orderNo) === statementOrderNo),
       '供应商可查看对账明细', `orders=${(statementDetail.body?.orders ?? []).length}`)
-    const confirmStatement = await channelCall(`/api/supplier/statement/${supplierStatementId}/confirm?remark=e2e确认`,
+    const confirmStatement = await supplierCall(`/api/platform/supply/statement/${supplierStatementId}/confirm?remark=e2e确认`,
       { method: 'PUT', headers: auth })
     const statementStatus = sql(`SELECT status FROM agri_s2b2c.s2b2c_supplier_statement WHERE id = '${supplierStatementId}'`)
     check(confirmStatement.body?.success === true && statementStatus === 'CONFIRMED',
@@ -1861,23 +1855,23 @@ try {
     const ownReviews = await call(`/api/consumer/reviews?productId=${ownProductId}&page=1&size=50`, { headers: auth })
     check((ownReviews.body?.records ?? []).some((row) => String(row.id) === supplierReviewId),
       '消费者端展示已提交评价')
-    const supplierReviewList = await call('/api/supplier/reviews?page=1&size=50', { headers: auth })
+    const supplierReviewList = await supplierCall('/api/platform/supply/reviews?page=1&size=50', { headers: auth })
     check((supplierReviewList.body?.records ?? []).some((row) => String(row.id) === supplierReviewId),
       '供应商端可见本供应商商品评价')
-    const supplierReply = await call(
-      `/api/supplier/review/${supplierReviewId}/reply?reply=${encodeURIComponent('感谢反馈，欢迎复购')}`,
+    const supplierReply = await supplierCall(
+      `/api/platform/supply/review/${supplierReviewId}/reply?reply=${encodeURIComponent('感谢反馈，欢迎复购')}`,
       { method: 'PUT', headers: auth })
     const supplierReplyDb = sql(`SELECT CONCAT(IFNULL(reply,''),'|',IFNULL(reply_by,'')) FROM agri_s2b2c.s2b2c_review
                                  WHERE id = '${supplierReviewId}'`)
     check(supplierReply.body?.success === true && supplierReplyDb.endsWith('|SUPPLIER'),
       '供应商回复评价并记录回复方', supplierReplyDb)
-    const duplicateReply = await call(
-      `/api/supplier/review/${supplierReviewId}/reply?reply=${encodeURIComponent('二次回复')}`,
+    const duplicateReply = await supplierCall(
+      `/api/platform/supply/review/${supplierReviewId}/reply?reply=${encodeURIComponent('二次回复')}`,
       { method: 'PUT', headers: auth })
     check(duplicateReply.body?.success === false && String(duplicateReply.body?.message ?? '').includes('已回复'),
       '同一评价不能重复回复', String(duplicateReply.body?.message ?? '').slice(0, 16))
-    const repliedList = await call('/api/supplier/reviews?replied=true&page=1&size=50', { headers: auth })
-    const unrepliedList = await call('/api/supplier/reviews?replied=false&page=1&size=50', { headers: auth })
+    const repliedList = await supplierCall('/api/platform/supply/reviews?replied=true&page=1&size=50', { headers: auth })
+    const unrepliedList = await supplierCall('/api/platform/supply/reviews?replied=false&page=1&size=50', { headers: auth })
     check((repliedList.body?.records ?? []).some((row) => String(row.id) === supplierReviewId)
       && !(unrepliedList.body?.records ?? []).some((row) => String(row.id) === supplierReviewId),
       '供应商评价按回复状态筛选')
@@ -1935,11 +1929,11 @@ try {
                                 WHERE id = '${channelReviewId}'`)
     check(channelReply.body?.success === true && channelReplyDb.endsWith('|CHANNEL'),
       '渠道回复评价并记录回复方', channelReplyDb)
-    const supplierListForChannelReview = await call('/api/supplier/reviews?page=1&size=50', { headers: auth })
+    const supplierListForChannelReview = await supplierCall('/api/platform/supply/reviews?page=1&size=50', { headers: auth })
     check(!(supplierListForChannelReview.body?.records ?? []).some(
       (row) => String(row.id) === channelReviewId), '供应商看不到其他供应商商品的评价')
-    const supplierCrossReply = await call(
-      `/api/supplier/review/${channelReviewId}/reply?reply=${encodeURIComponent('供应商越权回复')}`,
+    const supplierCrossReply = await supplierCall(
+      `/api/platform/supply/review/${channelReviewId}/reply?reply=${encodeURIComponent('供应商越权回复')}`,
       { method: 'PUT', headers: auth })
     check(supplierCrossReply.status === 403, '供应商不能回复非本供应商商品评价', `status=${supplierCrossReply.status}`)
     const productOneReviews = await call('/api/consumer/reviews?productId=1&page=1&size=50', { headers: auth })
@@ -1967,6 +1961,7 @@ try {
   if (priceOrderIds.length) {
     const priceInClause = priceOrderIds.map((id) => `'${id}'`).join(',')
     sql(`DELETE FROM agri_s2b2c.s2b2c_commission WHERE order_id IN (${priceInClause})`)
+    sql(`DELETE FROM agri_s2b2c.s2b2c_order_trace_unit WHERE order_id IN (${priceInClause})`)
     sql(`DELETE FROM agri_s2b2c.s2b2c_order_item WHERE order_id IN (${priceInClause})`)
     sql(`DELETE FROM agri_s2b2c.s2b2c_order WHERE id IN (${priceInClause})`)
     sql(`UPDATE agri_s2b2c.s2b2c_product SET stock = stock + 1, sales = GREATEST(IFNULL(sales,0) - 1, 0) WHERE id = 3`)
@@ -1974,6 +1969,7 @@ try {
   if (couponOrderIds.length) {
     const couponInClause = couponOrderIds.map((id) => `'${id}'`).join(',')
     sql(`DELETE FROM agri_s2b2c.s2b2c_commission WHERE order_id IN (${couponInClause})`)
+    sql(`DELETE FROM agri_s2b2c.s2b2c_order_trace_unit WHERE order_id IN (${couponInClause})`)
     sql(`DELETE FROM agri_s2b2c.s2b2c_order_item WHERE order_id IN (${couponInClause})`)
     sql(`DELETE FROM agri_s2b2c.s2b2c_order WHERE id IN (${couponInClause})`)
   }
@@ -2006,6 +2002,7 @@ try {
   if (refundOrderIds.length) {
     const refundInClause = refundOrderIds.map((id) => `'${id}'`).join(',')
     sql(`DELETE FROM agri_s2b2c.s2b2c_commission WHERE order_id IN (${refundInClause})`)
+    sql(`DELETE FROM agri_s2b2c.s2b2c_order_trace_unit WHERE order_id IN (${refundInClause})`)
     sql(`DELETE FROM agri_s2b2c.s2b2c_order_item WHERE order_id IN (${refundInClause})`)
     sql(`DELETE FROM agri_s2b2c.s2b2c_after_sale WHERE order_id IN (${refundInClause})`)
     sql(`DELETE FROM agri_s2b2c.s2b2c_order WHERE id IN (${refundInClause})`)
