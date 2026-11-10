@@ -52,7 +52,7 @@ public class InfoExceptionHandler {
 
     @ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
     public org.springframework.http.ResponseEntity<ApiResponse<Void>> handleStatus(org.springframework.web.server.ResponseStatusException exception) {
-        return org.springframework.http.ResponseEntity.status(exception.getStatusCode()).body(ApiResponse.fail(exception.getReason()));
+        return org.springframework.http.ResponseEntity.status(exception.getStatusCode()).body(ApiResponse.fail(exception.getStatusCode().value(), exception.getReason()));
     }
 
     @ExceptionHandler(Exception.class)

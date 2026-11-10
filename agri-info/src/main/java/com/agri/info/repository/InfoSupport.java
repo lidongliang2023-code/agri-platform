@@ -31,19 +31,6 @@ public abstract class InfoSupport {
         this.jdbc = jdbc;
     }
 
-    /** 当前登录用户（统一账号昵称）。前端通过 X-Agri-User 透传，缺失时归入平台用户。 */
-    public String owner(String headerValue) {
-        if (headerValue == null || headerValue.isBlank()) {
-            return "平台用户";
-        }
-        // 浏览器对非 ASCII 的请求头值支持不一致，前端统一做了 URL 编码，这里还原。
-        try {
-            return java.net.URLDecoder.decode(headerValue.trim(), java.nio.charset.StandardCharsets.UTF_8);
-        } catch (IllegalArgumentException ignored) {
-            return headerValue.trim();
-        }
-    }
-
     protected long number(String sql) {
         Number value = jdbc.queryForObject(sql, Number.class);
         return value == null ? 0 : value.longValue();

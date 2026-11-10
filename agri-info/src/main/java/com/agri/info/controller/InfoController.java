@@ -5,6 +5,7 @@ import com.agri.common.result.ApiResponse;
 import com.agri.info.integration.SupplyDemandService;
 import com.agri.info.media.VodSigner;
 import com.agri.info.repository.InfoRepository;
+import com.agri.info.security.InfoIdentity;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -26,8 +27,7 @@ import java.util.Map;
  * 信息资讯 · 用户端接口。
  *
  * <p>准入：平台统一令牌 + {@code info:consumer} 权限（与综合服务 {@code service:consumer} 同一套词表）。
- * 归属：私域数据（供需发布、预警规则、订阅、收藏、AI 问答记录）按 {@code X-Agri-User} 头区分，
- * 该头由前端从统一账号昵称透传；缺失时归入"平台用户"，不会出现跨账号串数据。</p>
+ * 归属：私域数据使用认证中心验证后的固定账号 ID，昵称请求头不参与身份判定。</p>
  */
 @RestController
 @RequestMapping("/api/v1/info")
@@ -35,6 +35,7 @@ import java.util.Map;
 public class InfoController {
 
     private final InfoRepository repository;
+    private final InfoIdentity identity;
     private final VodSigner vodSigner;
     private final SupplyDemandService supplyDemandService;
 
@@ -42,8 +43,9 @@ public class InfoController {
     // 这里按 bean 名精确取用户端那一份，避免注入到运营端实现。
     public InfoController(@Qualifier("infoRepository") InfoRepository repository,
                           VodSigner vodSigner,
-                          SupplyDemandService supplyDemandService) {
+                          SupplyDemandService supplyDemandService, InfoIdentity identity) {
         this.repository = repository;
+        this.identity = identity;
         this.vodSigner = vodSigner;
         this.supplyDemandService = supplyDemandService;
     }
@@ -54,7 +56,7 @@ public class InfoController {
     public ApiResponse<Map<String, Object>> overview(
             @RequestHeader(value = "X-Agri-User", required = false) String user) {
         return ApiResponse.success(
-                supplyDemandService.fillOverviewStats(repository.overview(repository.owner(user))));
+                supplyDemandService.fillOverviewStats(repository.overview(identity.owner())));
     }
 
     // ---------- 行情 ----------
@@ -110,7 +112,7 @@ public class InfoController {
     public ApiResponse<Map<String, Object>> article(
             @PathVariable long id,
             @RequestHeader(value = "X-Agri-User", required = false) String user) {
-        return ApiResponse.success(repository.articleDetail(id, repository.owner(user)));
+        return ApiResponse.success(repository.articleDetail(id, identity.owner()));
     }
 
     @PostMapping("/articles/{id}/like")
@@ -123,7 +125,7 @@ public class InfoController {
             @PathVariable long id,
             @RequestHeader(value = "X-Agri-User", required = false) String user,
             @RequestBody Map<String, Object> body) {
-        return ApiResponse.success(repository.commentArticle(id, repository.owner(user), body));
+        return ApiResponse.success(repository.commentArticle(id, identity.owner(), body));
     }
 
     @GetMapping("/channels")
@@ -182,7 +184,7 @@ public class InfoController {
             @RequestHeader(value = "X-Agri-User", required = false) String user,
             @RequestHeader(value = "Authorization", required = false) String authorization,
             @RequestBody Map<String, Object> body) {
-        Map<String, Object> result = supplyDemandService.publish(body, authorization, repository.owner(user));
+        Map<String, Object> result = supplyDemandService.publish(body, authorization, identity.owner());
         return ApiResponse.success(String.valueOf(result.get("message")), result);
     }
 
@@ -209,12 +211,12 @@ public class InfoController {
             @RequestBody Map<String, Object> body) {
         if (!"demand".equalsIgnoreCase(type)) {
             return ApiResponse.success(supplyDemandService.sendChatMessage(
-                    id, body == null ? Map.of() : body, authorization, repository.owner(user)));
+                    id, body == null ? Map.of() : body, authorization, identity.owner()));
         }
         // 需求侧：先向交易模块确认这条需求确实存在（id 来自交易模块），再落本地留言，
         // 避免有人拿任意数字往 info_sd_message 里灌数据。
         supplyDemandService.detail(id, "demand", authorization);
-        return ApiResponse.success(repository.sendSdMessage(id, repository.owner(user), body));
+        return ApiResponse.success(repository.sendSdMessage(id, identity.owner(), body));
     }
 
     // ---------- 培训与知识库 ----------
@@ -222,14 +224,14 @@ public class InfoController {
     @GetMapping("/courses")
     public ApiResponse<Map<String, Object>> courses(
             @RequestHeader(value = "X-Agri-User", required = false) String user) {
-        return ApiResponse.success(repository.courses(repository.owner(user)));
+        return ApiResponse.success(repository.courses(identity.owner()));
     }
 
     @PostMapping("/courses/{id}/enroll")
     public ApiResponse<Map<String, Object>> enroll(
             @PathVariable long id,
             @RequestHeader(value = "X-Agri-User", required = false) String user) {
-        return ApiResponse.success(repository.enrollCourse(id, repository.owner(user)));
+        return ApiResponse.success(repository.enrollCourse(id, identity.owner()));
     }
 
     /**
@@ -241,7 +243,7 @@ public class InfoController {
     public ApiResponse<Map<String, Object>> courseDetail(
             @PathVariable long id,
             @RequestHeader(value = "X-Agri-User", required = false) String user) {
-        return ApiResponse.success(repository.courseDetail(id, repository.owner(user)));
+        return ApiResponse.success(repository.courseDetail(id, identity.owner()));
     }
 
     /**
@@ -255,7 +257,7 @@ public class InfoController {
             @PathVariable long id,
             @PathVariable long lessonId,
             @RequestHeader(value = "X-Agri-User", required = false) String user) {
-        Map<String, Object> lesson = repository.lessonForPlay(id, lessonId, repository.owner(user));
+        Map<String, Object> lesson = repository.lessonForPlay(id, lessonId, identity.owner());
         Map<String, Object> ticket = new LinkedHashMap<>();
         ticket.put("lessonId", lessonId);
         ticket.put("title", lesson.get("title"));
@@ -274,7 +276,7 @@ public class InfoController {
             @RequestHeader(value = "X-Agri-User", required = false) String user,
             @RequestBody(required = false) Map<String, Object> body) {
         return ApiResponse.success(repository.reportProgress(
-                id, lessonId, repository.owner(user), body == null ? Map.of() : body));
+                id, lessonId, identity.owner(), body == null ? Map.of() : body));
     }
 
     @GetMapping("/knowledge")
@@ -295,20 +297,20 @@ public class InfoController {
     public ApiResponse<Map<String, Object>> askAi(
             @RequestHeader(value = "X-Agri-User", required = false) String user,
             @RequestBody Map<String, Object> body) {
-        return ApiResponse.success(repository.askAi(body, repository.owner(user)));
+        return ApiResponse.success(repository.askAi(body, identity.owner()));
     }
 
     @PostMapping("/ai/pest")
     public ApiResponse<Map<String, Object>> pestIdentify(
             @RequestHeader(value = "X-Agri-User", required = false) String user,
             @RequestBody Map<String, Object> body) {
-        return ApiResponse.success(repository.pestIdentify(body, repository.owner(user)));
+        return ApiResponse.success(repository.pestIdentify(body, identity.owner()));
     }
 
     @GetMapping("/ai/records")
     public ApiResponse<List<Map<String, Object>>> qaRecords(
             @RequestHeader(value = "X-Agri-User", required = false) String user) {
-        return ApiResponse.success(repository.qaRecords(repository.owner(user)));
+        return ApiResponse.success(repository.qaRecords(identity.owner()));
     }
 
     // ---------- 专家 ----------
@@ -321,7 +323,7 @@ public class InfoController {
     @GetMapping("/experts/mine")
     public ApiResponse<List<Map<String, Object>>> myExpert(
             @RequestHeader(value = "X-Agri-User", required = false) String user) {
-        return ApiResponse.success(repository.myExpert(repository.owner(user)));
+        return ApiResponse.success(repository.myExpert(identity.owner()));
     }
 
     @GetMapping("/experts/{id}")
@@ -333,7 +335,7 @@ public class InfoController {
     public ApiResponse<Map<String, Object>> applyExpert(
             @RequestHeader(value = "X-Agri-User", required = false) String user,
             @RequestBody Map<String, Object> body) {
-        return ApiResponse.success(repository.applyExpert(body, repository.owner(user)));
+        return ApiResponse.success(repository.applyExpert(body, identity.owner()));
     }
 
     // ---------- 报告与存证 ----------
@@ -346,7 +348,7 @@ public class InfoController {
     @GetMapping("/reports/mine")
     public ApiResponse<List<Map<String, Object>>> myReports(
             @RequestHeader(value = "X-Agri-User", required = false) String user) {
-        return ApiResponse.success(repository.myReports(repository.owner(user)));
+        return ApiResponse.success(repository.myReports(identity.owner()));
     }
 
     @GetMapping("/reports/{id}")
@@ -362,17 +364,17 @@ public class InfoController {
     @GetMapping("/attestations")
     public ApiResponse<List<Map<String, Object>>> attestations(
             @RequestHeader(value = "X-Agri-User", required = false) String user) {
-        return ApiResponse.success(repository.attestations(repository.owner(user)));
+        return ApiResponse.success(repository.attestations(identity.owner()));
     }
 
     @GetMapping("/attestations/{id}")
     public ApiResponse<Map<String, Object>> attestation(@PathVariable long id) {
-        return ApiResponse.success(repository.attestationDetail(id));
+        return ApiResponse.success(repository.attestationDetail(id, identity.owner()));
     }
 
     @PostMapping("/attestations/verify")
     public ApiResponse<Map<String, Object>> verifyAttestation(@RequestBody Map<String, Object> body) {
-        return ApiResponse.success(repository.verifyAttestation(body));
+        return ApiResponse.success(repository.verifyAttestation(body, identity.owner()));
     }
 
     // ---------- 预警 / 订阅 / 收藏 ----------
@@ -380,14 +382,14 @@ public class InfoController {
     @GetMapping("/alerts/rules")
     public ApiResponse<List<Map<String, Object>>> alertRules(
             @RequestHeader(value = "X-Agri-User", required = false) String user) {
-        return ApiResponse.success(repository.alertRules(repository.owner(user)));
+        return ApiResponse.success(repository.alertRules(identity.owner()));
     }
 
     @PostMapping("/alerts/rules")
     public ApiResponse<Map<String, Object>> createAlertRule(
             @RequestHeader(value = "X-Agri-User", required = false) String user,
             @RequestBody Map<String, Object> body) {
-        return ApiResponse.success(repository.createAlertRule(body, repository.owner(user)));
+        return ApiResponse.success(repository.createAlertRule(body, identity.owner()));
     }
 
     @PatchMapping("/alerts/rules/{id}")
@@ -395,7 +397,7 @@ public class InfoController {
             @PathVariable long id,
             @RequestHeader(value = "X-Agri-User", required = false) String user,
             @RequestBody Map<String, Object> body) {
-        return ApiResponse.success(repository.updateAlertRule(id, body, repository.owner(user)));
+        return ApiResponse.success(repository.updateAlertRule(id, body, identity.owner()));
     }
 
     /** 小程序与部分原生容器不支持 PATCH，保留同语义的 PUT 入口。 */
@@ -404,32 +406,32 @@ public class InfoController {
             @PathVariable long id,
             @RequestHeader(value = "X-Agri-User", required = false) String user,
             @RequestBody Map<String, Object> body) {
-        return ApiResponse.success(repository.updateAlertRule(id, body, repository.owner(user)));
+        return ApiResponse.success(repository.updateAlertRule(id, body, identity.owner()));
     }
 
     @GetMapping("/alerts/messages")
     public ApiResponse<Map<String, Object>> alertMessages(
             @RequestHeader(value = "X-Agri-User", required = false) String user) {
-        return ApiResponse.success(repository.alertMessages(repository.owner(user)));
+        return ApiResponse.success(repository.alertMessages(identity.owner()));
     }
 
     @PostMapping("/alerts/messages/read-all")
     public ApiResponse<Map<String, Object>> readAllAlerts(
             @RequestHeader(value = "X-Agri-User", required = false) String user) {
-        return ApiResponse.success(repository.readAllAlerts(repository.owner(user)));
+        return ApiResponse.success(repository.readAllAlerts(identity.owner()));
     }
 
     @GetMapping("/subscriptions")
     public ApiResponse<List<Map<String, Object>>> subscriptions(
             @RequestHeader(value = "X-Agri-User", required = false) String user) {
-        return ApiResponse.success(repository.subscriptions(repository.owner(user)));
+        return ApiResponse.success(repository.subscriptions(identity.owner()));
     }
 
     @PostMapping("/subscriptions")
     public ApiResponse<Map<String, Object>> createSubscription(
             @RequestHeader(value = "X-Agri-User", required = false) String user,
             @RequestBody Map<String, Object> body) {
-        return ApiResponse.success(repository.createSubscription(body, repository.owner(user)));
+        return ApiResponse.success(repository.createSubscription(body, identity.owner()));
     }
 
     @PatchMapping("/subscriptions/{id}")
@@ -437,27 +439,27 @@ public class InfoController {
             @PathVariable long id,
             @RequestHeader(value = "X-Agri-User", required = false) String user,
             @RequestBody Map<String, Object> body) {
-        return ApiResponse.success(repository.toggleSubscription(id, body, repository.owner(user)));
+        return ApiResponse.success(repository.toggleSubscription(id, body, identity.owner()));
     }
 
     @GetMapping("/favorites")
     public ApiResponse<List<Map<String, Object>>> favorites(
             @RequestHeader(value = "X-Agri-User", required = false) String user) {
-        return ApiResponse.success(repository.favorites(repository.owner(user)));
+        return ApiResponse.success(repository.favorites(identity.owner()));
     }
 
     @PostMapping("/favorites")
     public ApiResponse<Map<String, Object>> addFavorite(
             @RequestHeader(value = "X-Agri-User", required = false) String user,
             @RequestBody Map<String, Object> body) {
-        return ApiResponse.success(repository.addFavorite(body, repository.owner(user)));
+        return ApiResponse.success(repository.addFavorite(body, identity.owner()));
     }
 
     @DeleteMapping("/favorites/{id}")
     public ApiResponse<Map<String, Object>> removeFavorite(
             @PathVariable long id,
             @RequestHeader(value = "X-Agri-User", required = false) String user) {
-        return ApiResponse.success(repository.removeFavorite(id, repository.owner(user)));
+        return ApiResponse.success(repository.removeFavorite(id, identity.owner()));
     }
 
     // ---------- 搜索 ----------

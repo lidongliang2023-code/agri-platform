@@ -53,11 +53,12 @@ const check = (ok, label, extra = '') => {
 
 const PASSWORD = 'Admin@123'
 const MARK = `E2E资讯状态机${String(Date.now()).slice(-8)}`
-/** 库里真实存在的两个存证归属（owner 列，3 个不同值） */
+/** 仅作为伪造昵称头输入；真正归属由令牌 ID 决定。 */
 const OWNER_A = '政策研究部'
 const OWNER_B = '平台行情数据中心'
 
 let token = ''
+let attestCountBefore = ''
 
 /**
  * @param rawUser 传 null 表示不带 X-Agri-User；传字符串时按前端约定 URL 编码
@@ -187,21 +188,25 @@ try {
   check(sql(`SELECT summary FROM agri_info.info_article WHERE id = ${draftId}`) === '改过的摘要',
     '   ↳ 正文/摘要这些内容字段确实保存了（不是整个请求被拒）')
 
-  /* ---------- 7) 存证按归属过滤 ---------- */
+  /* ---------- 7) 存证归属必须来自真实令牌，不信任昵称头 ---------- */
+  const authMe = await (await fetch(`${CORE}/api/v1/auth/me`, {
+    headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(10000),
+  })).json()
+  const owner = `uid:${authMe.data.id}`
+  attestCountBefore = sql('SELECT COUNT(*) FROM agri_info.info_attestation')
   const attestA = await call('GET', '/api/v1/info/attestations', { user: OWNER_A })
   const attestB = await call('GET', '/api/v1/info/attestations', { user: OWNER_B })
   const idsOf = (rows) => (rows ?? []).map((row) => String(row.id)).sort().join(',')
-  const sqlIds = (owner) => sql(
-    `SELECT GROUP_CONCAT(id ORDER BY id) FROM agri_info.info_attestation WHERE owner = '${owner}'`)
-  check(attestA.status === 200 && idsOf(attestA.data) === String(sqlIds(OWNER_A)),
-    `存证列表只回当前归属（${OWNER_A}）的记录，与库里 owner 列逐条一致`,
-    `接口=${idsOf(attestA.data)} 库里=${sqlIds(OWNER_A)}`)
-  check(attestB.status === 200 && idsOf(attestB.data) === String(sqlIds(OWNER_B))
-    && idsOf(attestA.data) !== idsOf(attestB.data),
-    `换一个归属（${OWNER_B}）看到的是另一批，两批不重叠`,
-    `接口=${idsOf(attestB.data)}`)
-  check(Number(sql(`SELECT COUNT(*) FROM agri_info.info_attestation`) || '0') > idsOf(attestA.data).split(',').length,
-    '库里确实还有别人单位的存证（说明过滤不是"恰好只有一条"造成的假通过）')
+  const expected = sql(`SELECT GROUP_CONCAT(id ORDER BY id) FROM agri_info.info_attestation WHERE owner='${owner}'`)
+  check(attestA.status === 200 && idsOf(attestA.data) === (expected === 'NULL' ? '' : expected),
+    '存证列表按令牌账号过滤，与数据库固定账号归属一致')
+  check(attestB.status === 200 && idsOf(attestA.data) === idsOf(attestB.data),
+    '同一账号伪造不同昵称头不能切换私域归属')
+  const stranger = sql(`SELECT id FROM agri_info.info_attestation WHERE owner<>'${owner}' ORDER BY id LIMIT 1`)
+  if (stranger) {
+    const blocked = await call('GET', `/api/v1/info/attestations/${stranger}`, { user: OWNER_B })
+    check(blocked.status === 400 || blocked.status === 404, '其他归属存证详情不可按 ID 越权读取')
+  }
 
   /* ---------- 8) 运营端页面：草稿页签与审核默认结论 ---------- */
   browser = await chromium.launch({ headless: true, executablePath: BROWSER, args: ['--no-sandbox'] })
@@ -275,7 +280,7 @@ try {
   console.log('')
   check(residueArticle === '0' && residueLog === '0',
     '清理：本次造的内容与审计日志零残留', `article=${residueArticle} audit_log=${residueLog}`)
-  check(residueAttest === '4', '清理：存证表未被改动（本轮只读）', `rows=${residueAttest} in=${inClause}`)
+  check(residueAttest === attestCountBefore, '清理：存证表未被改动（本轮只读）', `rows=${residueAttest} in=${inClause}`)
 }
 
 console.log('')

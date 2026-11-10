@@ -5,6 +5,7 @@ import com.agri.common.result.ApiResponse;
 import com.agri.info.integration.SupplyDemandService;
 import com.agri.info.media.MediaStorageService;
 import com.agri.info.repository.InfoOpsRepository;
+import com.agri.info.security.InfoIdentity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -26,7 +27,7 @@ import java.util.Map;
  * 信息资讯 · 运营端接口。
  *
  * <p>准入：平台统一令牌 + {@code info:admin} 权限（与综合服务运营端同一套 RBAC 机制）。
- * 所有写操作都会落审计日志，操作人取自 {@code X-Agri-User} 头（统一账号昵称）。</p>
+ * 所有写操作都会落审计日志，操作人取自认证中心验证后的账号 ID。</p>
  */
 @RestController
 @RequestMapping("/api/v1/info/ops")
@@ -37,30 +38,25 @@ public class InfoOpsController {
     private final com.agri.info.integration.QuoteCollectionScheduler scheduler;
     private final com.agri.info.integration.QuoteCollectionAlertService collectionAlerts;
     private final InfoOpsRepository repository;
+    private final InfoIdentity identity;
     private final MediaStorageService mediaStorage;
     private final SupplyDemandService supplyDemandService;
 
     public InfoOpsController(InfoOpsRepository repository, MediaStorageService mediaStorage,
                              SupplyDemandService supplyDemandService, com.agri.info.integration.QuoteCollectionService collection,
                              com.agri.info.integration.QuoteCollectionScheduler scheduler,
-                             com.agri.info.integration.QuoteCollectionAlertService collectionAlerts) {
+                             com.agri.info.integration.QuoteCollectionAlertService collectionAlerts, InfoIdentity identity) {
         this.collectionAlerts = collectionAlerts;
         this.scheduler = scheduler;
         this.collection = collection;
         this.repository = repository;
+        this.identity = identity;
         this.mediaStorage = mediaStorage;
         this.supplyDemandService = supplyDemandService;
     }
 
-    private String operator(String header) {
-        if (header == null || header.isBlank()) {
-            return "平台运营";
-        }
-        try {
-            return java.net.URLDecoder.decode(header.trim(), java.nio.charset.StandardCharsets.UTF_8);
-        } catch (IllegalArgumentException ignored) {
-            return header.trim();
-        }
+    private String operator(String ignoredHeader) {
+        return identity.owner();
     }
 
     // ---------- 大盘 ----------

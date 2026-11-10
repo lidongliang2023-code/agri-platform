@@ -3,6 +3,9 @@ package com.agri.info.repository;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -17,7 +20,7 @@ import java.util.Map;
  * 信息资讯 · 用户端仓储。
  *
  * <p>用户端只读为主，写入集中在四类：供需发布/沟通、AI 问答、预警与订阅、收藏。
- * 所有写入都带 owner（统一账号昵称），避免不同用户互相看到对方的私域数据。</p>
+ * 所有写入都带 owner（认证中心验证后的固定账号标识），避免不同用户互相看到对方的私域数据。</p>
  */
 @Repository
 public class InfoRepository extends InfoSupport {
@@ -287,6 +290,7 @@ public class InfoRepository extends InfoSupport {
     }
 
     public Map<String, Object> likeArticle(long id) {
+        article(id);
         jdbc.update("UPDATE info_article SET like_count=like_count+1 WHERE id=?", id);
         return Map.of("likeCount", number("SELECT like_count FROM info_article WHERE id=?", id));
     }
@@ -417,19 +421,26 @@ public class InfoRepository extends InfoSupport {
         return result;
     }
 
+    /** 同一课程串行检查报名；人数、唯一报名记录与订阅在同一事务中提交。 */
+    @Transactional
     public Map<String, Object> enrollCourse(long id, String user) {
-        int updated = jdbc.update("""
-                UPDATE info_course SET learners=learners+1,
-                  progress=CASE WHEN progress=0 THEN 5 ELSE progress END
-                WHERE id=?
-                """, id);
-        if (updated == 0) {
-            throw new IllegalArgumentException("课程不存在");
+        List<String> titles = jdbc.queryForList(
+                "SELECT title FROM info_course WHERE id=? AND status='published' FOR UPDATE", String.class, id);
+        if (titles.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "课程不存在或未发布");
         }
-        jdbc.update("""
-                INSERT INTO info_subscription (target_type,target_name,channel,frequency,enabled,owner)
-                VALUES ('course',?,'站内消息','每周',TRUE,?)
-                """, String.valueOf(course(id).get("title")), user);
+        if (enrolled(id, user)) {
+            return Map.of("message", "已报名该课程，无需重复报名", "course", course(id));
+        }
+        jdbc.update("INSERT INTO info_course_enrollment (course_id,owner) VALUES (?,?)", id, user);
+        jdbc.update("UPDATE info_course SET learners=learners+1 WHERE id=?", id);
+        if (number("SELECT COUNT(*) FROM info_subscription WHERE target_type='course' AND target_name=? AND owner=?",
+                titles.get(0), user) == 0) {
+            jdbc.update("""
+                    INSERT INTO info_subscription (target_type,target_name,channel,frequency,enabled,owner)
+                    VALUES ('course',?,'站内消息','每周',TRUE,?)
+                    """, titles.get(0), user);
+        }
         return Map.of("message", "已加入学习，课程更新将推送到消息中心", "course", course(id));
     }
 
@@ -495,8 +506,7 @@ public class InfoRepository extends InfoSupport {
     /**
      * 播放授权检查：返回该节的可播放信息。
      *
-     * <p>试看节对所有人开放；其余节要求已报名（报名语义沿用 info_subscription，
-     * 与 {@link #enrollCourse} 的副作用保持一致，不额外引入报名表）。</p>
+     * <p>试看节对登录用户开放；其余节要求唯一报名表中存在当前账号的记录。</p>
      */
     public Map<String, Object> lessonForPlay(long courseId, long lessonId, String user) {
         List<Map<String, Object>> rows = jdbc.query(
@@ -549,10 +559,8 @@ public class InfoRepository extends InfoSupport {
     }
 
     private boolean enrolled(long courseId, String user) {
-        return number("""
-                SELECT COUNT(*) FROM info_subscription
-                WHERE target_type='course' AND target_name=? AND owner=?
-                """, String.valueOf(course(courseId).get("title")), user) > 0;
+        return number("SELECT COUNT(*) FROM info_course_enrollment WHERE course_id=? AND owner=?",
+                courseId, user) > 0;
     }
 
     public List<Map<String, Object>> knowledge(String keyword, String crop) {
@@ -857,9 +865,9 @@ public class InfoRepository extends InfoSupport {
                 attestationMapper(), user);
     }
 
-    public Map<String, Object> attestationDetail(long id) {
+    public Map<String, Object> attestationDetail(long id, String user) {
         List<Map<String, Object>> rows = jdbc.query(
-                "SELECT * FROM info_attestation WHERE id=?", attestationMapper(), id);
+                "SELECT * FROM info_attestation WHERE id=? AND owner=?", attestationMapper(), id, user);
         if (rows.isEmpty()) {
             throw new IllegalArgumentException("存证记录不存在");
         }
@@ -872,10 +880,10 @@ public class InfoRepository extends InfoSupport {
         return result;
     }
 
-    public Map<String, Object> verifyAttestation(Map<String, Object> body) {
+    public Map<String, Object> verifyAttestation(Map<String, Object> body, String user) {
         String attestNo = required(body, "attestNo", "请输入存证编号");
         List<Map<String, Object>> rows = jdbc.query(
-                "SELECT * FROM info_attestation WHERE attest_no=?", attestationMapper(), attestNo.trim());
+                "SELECT * FROM info_attestation WHERE attest_no=? AND owner=?", attestationMapper(), attestNo.trim(), user);
         Map<String, Object> result = new LinkedHashMap<>();
         if (rows.isEmpty()) {
             result.put("valid", false);
@@ -1058,9 +1066,9 @@ public class InfoRepository extends InfoSupport {
     }
 
     private Map<String, Object> article(long id) {
-        List<Map<String, Object>> rows = jdbc.query("SELECT * FROM info_article WHERE id=?", articleMapper(true), id);
+        List<Map<String, Object>> rows = jdbc.query("SELECT * FROM info_article WHERE id=? AND status='published'", articleMapper(true), id);
         if (rows.isEmpty()) {
-            throw new IllegalArgumentException("资讯不存在");
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "资讯不存在或未发布");
         }
         return rows.get(0);
     }

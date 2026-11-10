@@ -225,6 +225,14 @@ CREATE TABLE IF NOT EXISTS info_course (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 账号级报名记录独立于可删除/停用的消息订阅，按课程 ID 保持幂等。
+CREATE TABLE IF NOT EXISTS info_course_enrollment (
+    course_id BIGINT NOT NULL,
+    owner VARCHAR(100) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (course_id, owner)
+);
+
 -- 课程章节：一门课 N 节，每节一个播放源。
 -- 为什么单独建表而不在 info_course 上加 video_url：真实课程是"多集"结构，
 -- 单集字段撑不住目录/续播/试看，后期再拆表反而要迁数据。
