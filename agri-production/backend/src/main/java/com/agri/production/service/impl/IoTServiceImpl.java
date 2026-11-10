@@ -1,5 +1,8 @@
 package com.agri.production.service.impl;
 
+import com.agri.common.rbac.PermissionResolver;
+import com.agri.common.rbac.PlatformPermissionResolver;
+import com.agri.production.common.exception.BusinessException;
 import com.agri.production.entity.AlertRecord;
 import com.agri.production.entity.AlertRule;
 import com.agri.production.entity.IoTDevice;
@@ -26,6 +29,7 @@ import java.util.Map;
 @Service
 public class IoTServiceImpl implements IIoTService {
 
+    private final PermissionResolver permissionResolver;
     private final IoTDeviceMapper ioTDeviceMapper;
     private final SensorDataMapper sensorDataMapper;
     private final AlertRuleMapper alertRuleMapper;
@@ -34,7 +38,9 @@ public class IoTServiceImpl implements IIoTService {
 
     public IoTServiceImpl(IoTDeviceMapper ioTDeviceMapper, SensorDataMapper sensorDataMapper,
                           AlertRuleMapper alertRuleMapper, IAlertService alertService,
-                          IProductionNotificationService notificationService) {
+                          IProductionNotificationService notificationService,
+                          PermissionResolver permissionResolver) {
+        this.permissionResolver = permissionResolver;
         this.ioTDeviceMapper = ioTDeviceMapper;
         this.sensorDataMapper = sensorDataMapper;
         this.alertRuleMapper = alertRuleMapper;
@@ -102,9 +108,8 @@ public class IoTServiceImpl implements IIoTService {
     @Transactional
     public void saveSensorData(SensorData data) {
         data.setDataTime(LocalDateTime.now());
-        if (data.getTenantId() == null || data.getTenantId().isBlank()) {
-            data.setTenantId(TenantContextService.currentTenantId());
-        }
+        // 主体只能来自已验证的令牌绑定，禁止请求体指定其他主体。
+        data.setTenantId(TenantContextService.currentTenantId());
         sensorDataMapper.insert(data);
         evaluateSensorRules(data);
     }
@@ -173,22 +178,39 @@ public class IoTServiceImpl implements IIoTService {
 
     @Override
     public List<SensorData> getSensorHistory(Long deviceId, LocalDateTime startTime, LocalDateTime endTime) {
-        return sensorDataMapper.selectByDeviceId(deviceId, startTime, endTime);
+        return sensorDataMapper.selectByDeviceId(deviceId, startTime, endTime, sensorReadTenant());
     }
 
     @Override
     public List<Map<String, Object>> getLatestData(List<Long> deviceIds) {
-        return sensorDataMapper.getLatestByDevice(deviceIds);
+        String tenantId = sensorReadTenant();
+        if (deviceIds == null || deviceIds.isEmpty()) {
+            return List.of();
+        }
+        if (deviceIds.size() > 500 || deviceIds.stream().anyMatch(id -> id == null || id <= 0)) {
+            throw new BusinessException(400, "设备编号必须为正整数，单次最多查询500台设备");
+        }
+        return sensorDataMapper.getLatestByDevice(deviceIds.stream().distinct().toList(), tenantId);
     }
 
     @Override
     public List<Map<String, Object>> getHourlyAverage(Long deviceId, LocalDateTime startTime, LocalDateTime endTime) {
-        return sensorDataMapper.getHourlyAverage(deviceId, startTime, endTime);
+        return sensorDataMapper.getHourlyAverage(deviceId, startTime, endTime, sensorReadTenant());
     }
 
     @Override
     public Map<String, Object> getDeviceStatistics(Long deviceId, LocalDateTime startTime, LocalDateTime endTime) {
-        return sensorDataMapper.getStatistics(deviceId, startTime, endTime);
+        return sensorDataMapper.getStatistics(deviceId, startTime, endTime, sensorReadTenant());
+    }
+
+    /** 先验证账号的真实主体绑定，再检查读取权限；失败时绝不退化成全库查询。 */
+    private String sensorReadTenant() {
+        String tenantId = TenantContextService.currentTenantId();
+        var permissions = permissionResolver.currentPermissions();
+        if (!PlatformPermissionResolver.granted(permissions, "iot:read")) {
+            throw new BusinessException(403, "当前账号无权读取传感器数据（需要 iot:read）");
+        }
+        return tenantId;
     }
 
     @Override

@@ -244,6 +244,12 @@ try {
                 SPRING_PROFILES_ACTIVE=$null; SPRING_DATASOURCE_URL=$null
                 CORE_BASE_URL='http://localhost:8093'
             }
+            # 仓储窄通道密钥只从部署环境读取，无默认共享密钥；两端未配置时关闭。
+            if ($name -in @('agri-production','agri-finance')) {
+                $warehouseToken = $env:AGRI_FINANCE_WAREHOUSE_TOKEN
+                if (!$warehouseToken) { $warehouseToken = [Environment]::GetEnvironmentVariable('AGRI_FINANCE_WAREHOUSE_TOKEN','User') }
+                $environment.AGRI_FINANCE_WAREHOUSE_TOKEN = $warehouseToken
+            }
             if ($name -eq 'agri-ai') { $environment.AI_ADMIN_SCENE_FILE=Join-Path $RepoRoot 'ops/local/data/ai-scenes.json' }
             if ($name -eq 'agri-finance') { $environment.MYSQL_DATABASE='agri_finance' }
             if ($name -eq 'core-platform') { $environment.AGRI_CERTIFICATION_UPLOAD_DIR=Join-Path $RepoRoot 'core-platform/uploads/platform/certification' }

@@ -25,11 +25,14 @@ public class WarehouseReceiptController {
 
     private final WarehouseReceiptServiceImpl receiptService;
     private final FinanceIdentityService identityService;
+    private final com.agri.finance.service.WarehouseMonitorAuthorization monitorAuthorization;
 
     public WarehouseReceiptController(WarehouseReceiptServiceImpl receiptService,
-                                      FinanceIdentityService identityService) {
+                                      FinanceIdentityService identityService,
+                                      com.agri.finance.service.WarehouseMonitorAuthorization monitorAuthorization) {
         this.receiptService = receiptService;
         this.identityService = identityService;
+        this.monitorAuthorization = monitorAuthorization;
     }
 
     /** 可开仓单的批次（当前主体已入库的采收批次）。 */
@@ -93,12 +96,7 @@ public class WarehouseReceiptController {
     }
 
     private WarehouseReceipt require(String id) {
-        WarehouseReceipt receipt = receiptService.getById(id);
-        if (receipt == null || Integer.valueOf(1).equals(receipt.getDelFlag())) {
-            throw new BusinessException(404, "仓单不存在");
-        }
-        identityService.assertBorrowerOwns(receipt.getUserId());
-        return receipt;
+        return monitorAuthorization.require(id);
     }
 
     private Map<String, Object> ok(Object data) {

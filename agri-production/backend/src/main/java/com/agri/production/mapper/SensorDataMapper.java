@@ -12,11 +12,14 @@ import java.util.Map;
 @Mapper
 public interface SensorDataMapper extends BaseMapper<SensorData> {
 
-    List<SensorData> selectByDeviceId(@Param("deviceId") Long deviceId, @Param("startTime") LocalDateTime startTime, @Param("endTime") LocalDateTime endTime);
+    List<Map<String, Object>> getWarehouseLatest(@Param("tenantId") String tenantId,
+            @Param("farmId") Long farmId, @Param("plotId") Long plotId);
 
-    List<Map<String, Object>> getLatestByDevice(@Param("deviceIds") List<Long> deviceIds);
+    List<SensorData> selectByDeviceId(@Param("deviceId") Long deviceId, @Param("startTime") LocalDateTime startTime, @Param("endTime") LocalDateTime endTime, @Param("tenantId") String tenantId);
 
-    List<Map<String, Object>> getHourlyAverage(@Param("deviceId") Long deviceId, @Param("startTime") LocalDateTime startTime, @Param("endTime") LocalDateTime endTime);
+    List<Map<String, Object>> getLatestByDevice(@Param("deviceIds") List<Long> deviceIds, @Param("tenantId") String tenantId);
 
-    Map<String, Object> getStatistics(@Param("deviceId") Long deviceId, @Param("startTime") LocalDateTime startTime, @Param("endTime") LocalDateTime endTime);
+    List<Map<String, Object>> getHourlyAverage(@Param("deviceId") Long deviceId, @Param("startTime") LocalDateTime startTime, @Param("endTime") LocalDateTime endTime, @Param("tenantId") String tenantId);
+
+    Map<String, Object> getStatistics(@Param("deviceId") Long deviceId, @Param("startTime") LocalDateTime startTime, @Param("endTime") LocalDateTime endTime, @Param("tenantId") String tenantId);
 }

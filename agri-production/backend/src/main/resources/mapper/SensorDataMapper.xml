@@ -11,9 +11,29 @@
 -->
 <mapper namespace="com.agri.production.mapper.SensorDataMapper">
 
+    <!-- 仓单通道只取真实批次地块/农场内温湿度，按设备及测点取最新，不回退到其他农场。 -->
+    <select id="getWarehouseLatest" resultType="java.util.Map">
+        SELECT s.device_id AS deviceId, s.device_code AS deviceCode, s.sensor_type AS sensorType,
+               s.sensor_name AS sensorName, s.value AS value, s.unit AS unit,
+               s.data_time AS dataTime, s.quality_flag AS qualityFlag
+        FROM agri_prod_sensor_data s
+        WHERE s.tenant_id = #{tenantId} AND s.sensor_type IN ('temperature','humidity')
+        <choose>
+            <when test="plotId != null">AND s.plot_id = #{plotId}</when>
+            <otherwise>AND s.farm_id = #{farmId}</otherwise>
+        </choose>
+        <if test="farmId != null">AND s.farm_id = #{farmId}</if>
+          AND s.id = (SELECT x.id FROM agri_prod_sensor_data x
+              WHERE x.tenant_id = s.tenant_id AND x.device_id = s.device_id
+                AND x.sensor_type = s.sensor_type AND x.sensor_name &lt;=&gt; s.sensor_name
+                AND x.farm_id &lt;=&gt; s.farm_id AND x.plot_id &lt;=&gt; s.plot_id
+              ORDER BY x.data_time DESC, x.id DESC LIMIT 1)
+        ORDER BY s.data_time DESC, s.id DESC
+    </select>
+
     <select id="selectByDeviceId" resultType="com.agri.production.entity.SensorData">
         SELECT * FROM agri_prod_sensor_data
-        WHERE device_id = #{deviceId}
+        WHERE tenant_id = #{tenantId} AND device_id = #{deviceId}
         <if test="startTime != null">AND data_time &gt;= #{startTime}</if>
         <if test="endTime != null">AND data_time &lt;= #{endTime}</if>
         ORDER BY data_time DESC
@@ -27,10 +47,11 @@
         JOIN (
             SELECT device_id, MAX(data_time) AS latest
             FROM agri_prod_sensor_data
-            WHERE device_id IN
+            WHERE tenant_id = #{tenantId} AND device_id IN
             <foreach collection="deviceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
             GROUP BY device_id
         ) m ON m.device_id = s.device_id AND m.latest = s.data_time
+        WHERE s.tenant_id = #{tenantId}
     </select>
 
     <select id="getHourlyAverage" resultType="java.util.Map">
@@ -38,7 +59,7 @@
                ROUND(AVG(value), 4) AS avgValue,
                COUNT(*) AS sampleCount
         FROM agri_prod_sensor_data
-        WHERE device_id = #{deviceId}
+        WHERE tenant_id = #{tenantId} AND device_id = #{deviceId}
         <if test="startTime != null">AND data_time &gt;= #{startTime}</if>
         <if test="endTime != null">AND data_time &lt;= #{endTime}</if>
         GROUP BY DATE_FORMAT(data_time, '%Y-%m-%d %H:00:00')
@@ -54,7 +75,7 @@
                ROUND(MIN(value), 4) AS `minValue`,
                MAX(data_time) AS latestTime
         FROM agri_prod_sensor_data
-        WHERE device_id = #{deviceId}
+        WHERE tenant_id = #{tenantId} AND device_id = #{deviceId}
         <if test="startTime != null">AND data_time &gt;= #{startTime}</if>
         <if test="endTime != null">AND data_time &lt;= #{endTime}</if>
     </select>

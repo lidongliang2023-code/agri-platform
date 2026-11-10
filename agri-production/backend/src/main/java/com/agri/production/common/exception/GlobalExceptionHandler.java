@@ -31,7 +31,10 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(BusinessException.class)
-    public ApiResponse<Void> handleBusinessException(BusinessException e) {
+    public ApiResponse<Void> handleBusinessException(BusinessException e, jakarta.servlet.http.HttpServletResponse response) {
+        if (e.getCode() == 400 || e.getCode() == 401 || e.getCode() == 403 || e.getCode() == 404) {
+            response.setStatus(e.getCode());
+        }
         log.error("业务异常: {}", e.getMessage());
         return ApiResponse.fail(e.getCode(), e.getMessage());
     }

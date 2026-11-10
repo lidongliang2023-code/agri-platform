@@ -75,6 +75,35 @@ public class ProductionWarehouseClient {
     private final RestTemplate restTemplate;
     private final String productionUrl;
 
+    @Value("${finance-warehouse.token:${AGRI_FINANCE_WAREHOUSE_TOKEN:}}")
+    private String warehouseToken;
+
+    public List<SensorView> warehouseSensors(String receiptId) {
+        if (!configured() || warehouseToken == null || warehouseToken.isBlank())
+            throw new BusinessException(503, "金融仓储监控通道未配置");
+        String bearer = FinanceIdentityService.currentAuthorization();
+        if (bearer == null) throw new BusinessException(401, "请先登录");
+        HttpHeaders h = new HttpHeaders(); h.set(HttpHeaders.AUTHORIZATION, bearer);
+        h.set("X-Finance-Warehouse-Token", warehouseToken);
+        try {
+            Map<?,?> result = restTemplate.exchange(productionUrl + "/internal/finance/warehouse/{id}/sensors",
+                    HttpMethod.GET, new HttpEntity<>(h), Map.class, receiptId).getBody();
+            if (result == null || !(result.get("code") instanceof Number code) || code.intValue()!=0
+                    || !(result.get("data") instanceof List<?> rows))
+                throw new BusinessException(503, "生产仓储监控响应无效");
+            List<SensorView> readings = new ArrayList<>();
+            for (Object item : rows) if (item instanceof Map<?,?> row) {
+                readings.add(new SensorView(text(row.get("deviceId")), text(row.get("deviceCode")),
+                        text(row.get("sensorType")), text(row.get("sensorName")), decimal(row.get("value")),
+                        text(row.get("unit")), text(row.get("dataTime")), text(row.get("qualityFlag"))));
+            }
+            return readings;
+        } catch (org.springframework.web.client.HttpStatusCodeException e) {
+            int code=e.getStatusCode().value();
+            throw new BusinessException(code==401||code==403||code==404?code:503,"仓储监控读取被拒绝或暂不可用");
+        } catch (RestClientException e) { throw new BusinessException(503, "生产仓储监控服务不可用"); }
+    }
+
     public ProductionWarehouseClient(@Value("${services.production.url:}") String productionUrl,
                                      @Value("${agri.production-client.connect-timeout-ms:3000}") int connectTimeoutMs,
                                      @Value("${agri.production-client.read-timeout-ms:15000}") int readTimeoutMs) {

@@ -49,15 +49,18 @@ public class WarehouseReceiptServiceImpl extends ServiceImpl<WarehouseReceiptMap
     private final PledgeGoodsServiceImpl pledgeGoodsService;
     private final PledgeMonitorServiceImpl monitorService;
     private final FinanceIdentityService identityService;
+    private final com.agri.finance.service.WarehouseMonitorAuthorization monitorAuthorization;
 
     public WarehouseReceiptServiceImpl(ProductionWarehouseClient productionClient,
                                        PledgeGoodsServiceImpl pledgeGoodsService,
                                        PledgeMonitorServiceImpl monitorService,
-                                       FinanceIdentityService identityService) {
+                                       FinanceIdentityService identityService,
+                                       com.agri.finance.service.WarehouseMonitorAuthorization monitorAuthorization) {
         this.productionClient = productionClient;
         this.pledgeGoodsService = pledgeGoodsService;
         this.monitorService = monitorService;
         this.identityService = identityService;
+        this.monitorAuthorization = monitorAuthorization;
     }
 
     /**
@@ -236,7 +239,12 @@ public class WarehouseReceiptServiceImpl extends ServiceImpl<WarehouseReceiptMap
 
     /** 最近一次仓储读数快照（没有就读到 null，页面按"暂无监控"显示）。 */
     public PledgeMonitor latestMonitor(String receiptId) {
-        return monitorService.getLatestMonitor(receiptId);
+        WarehouseReceipt receipt = monitorAuthorization.require(receiptId);
+        PledgeMonitor monitor = monitorService.getLatestMonitor(receiptId);
+        // 老快照曾回退其他农场，未带批次范围标记的快照需先刷新，不能冒充本仓单读数。
+        String marker = "[warehouse-batch:" + receipt.getBatchId() + "] ";
+        return monitor != null && monitor.getDeviceNote() != null
+                && monitor.getDeviceNote().startsWith(marker) ? monitor : null;
     }
 
     /**
@@ -245,31 +253,15 @@ public class WarehouseReceiptServiceImpl extends ServiceImpl<WarehouseReceiptMap
      * <p>重量与气体浓度本部署没有采集通道（生产域只有温湿度/土壤/光照等传感器），
      * 存 null 而不是编一个数 —— 页面显示"—"是"这个传感器没装"，显示 0 会被当成"货不见了"。</p>
      *
-     * <p>读数出处一并存下来：优先取本批次地块/农场名下的设备，一处都取不到时才退到主体名下其它设备，
-     * 并在 {@code deviceNote} 里写明"这不是该批次的仓储通道"。不加这层出处，页面上的温度
-     * 就成了不知道属于谁的数字。</p>
+     * <p>经业务授权回查后只取实际批次地块/农场温湿度，不回退其他农场或暴露全量告警。</p>
      */
     @Transactional
     public PledgeMonitor refreshMonitor(String receiptId) {
-        WarehouseReceipt receipt = getById(receiptId);
-        if (receipt == null || Integer.valueOf(1).equals(receipt.getDelFlag())) {
-            throw new BusinessException(404, "仓单不存在");
-        }
-        identityService.assertBorrowerOwns(receipt.getUserId());
-        List<DeviceView> scoped = productionClient.devices(receipt.getFarmId(), receipt.getPlotId());
-        List<SensorView> readings = productionClient.latestSensors(idsOf(scoped));
-        List<DeviceView> pool = scoped;
-        String note;
-        if (!readings.isEmpty()) {
-            note = "读数来自本批次地块/农场名下的设备";
-        } else {
-            List<DeviceView> all = productionClient.allDevices();
-            readings = productionClient.latestSensors(idsOf(all));
-            pool = all;
-            note = readings.isEmpty()
-                    ? "生产域当前没有可用读数（设备离线或本部署未接入传感器）"
-                    : "本批次地块/农场没有绑定在线传感器，读数取自主体名下其它设备，不是该批次的仓储冷链通道";
-        }
+        WarehouseReceipt receipt = monitorAuthorization.require(receiptId);
+        List<SensorView> readings = productionClient.warehouseSensors(receiptId);
+        String note = readings.isEmpty()
+                ? "本批次地块/农场暂无温湿度读数，未使用其他农场设备替代"
+                : "读数来自授权批次地块/农场，仅作环境参考，不代表专用仓库冷链通道";
         PledgeMonitor monitor = new PledgeMonitor();
         monitor.setReceiptId(receipt.getId());
         monitor.setReceiptNo(receipt.getReceiptNo());
@@ -278,11 +270,10 @@ public class WarehouseReceiptServiceImpl extends ServiceImpl<WarehouseReceiptMap
         monitor.setTemperature(temperature == null ? null : temperature.value());
         monitor.setHumidity(humidity == null ? null : humidity.value());
         monitor.setDeviceCode(sourceDevice(temperature == null ? humidity : temperature, readings));
-        monitor.setDeviceNote(note);
-        monitor.setDeviceStatus(deviceStatus(pool));
-        AlertView alert = relatedAlert(receipt);
-        monitor.setAlertLevel(alert == null ? "无" : alert.level());
-        monitor.setAlertContent(alert == null ? "仓储读数正常，无相关告警" : alert.title() + "：" + nullToDash(alert.content()));
+        monitor.setDeviceNote("[warehouse-batch:" + receipt.getBatchId() + "] " + note);
+        monitor.setDeviceStatus(readings.isEmpty() ? "暂无读数" : "有读数");
+        monitor.setAlertLevel("未核验");
+        monitor.setAlertContent("本快照只包含授权温湿度；仓储告警需结合专用监控核验");
         monitor.setMonitorTime(LocalDateTime.now());
         monitor.setCreatedAt(LocalDateTime.now());
         monitor.setUpdatedAt(LocalDateTime.now());

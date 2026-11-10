@@ -48,6 +48,12 @@ public class ProductionApiCapabilityInterceptor implements HandlerInterceptor {
         if (CorsUtils.isPreFlightRequest(request) || !WRITE_METHODS.contains(request.getMethod())) {
             return true;
         }
+        // POST 批量读数仅使用请求体传递设备 ID，是只读查询。
+        // 身份、iot:read 与主体过滤由 IoTServiceImpl 强制执行，不能套用生产写能力。
+        if ("POST".equals(request.getMethod())
+                && "/api/v1/production/iot/sensor-data/latest".equals(request.getRequestURI())) {
+            return true;
+        }
         String authorization = request.getHeader("Authorization");
         if (authorization == null || !authorization.startsWith("Bearer ")) {
             return reject(response, HttpServletResponse.SC_UNAUTHORIZED, 401, "请先登录后再维护生产数据");
