@@ -702,8 +702,8 @@ public class GovernmentOpsRepository {
      * 查不到就按溯源码去**生产域**核验 —— 这一段以前读的是本库 {@code gov_trace_event} 的
      * 5 行种子，"已上链"与否取决于种子里有没有填 {@code chain_hash}，与生产域真实存证无关。</p>
      *
-     * <p>现在 {@code verified} 的口径是"码有效且节点都有 SUCCESS 存证"；
-     * 节点存证情况、每条的存证状态与交易哈希都按真实记录给（没有就说没有）。</p>
+     * <p>本辖区主体可直接核验；生产码未建立辖区映射时不返回执法明细，
+     * 公众溯源结果仍由公开入口提供。不存在与服务异常分别保留 404、503。</p>
      */
     public Map<String, Object> mobileScan(String code) {
         if (code == null || code.isBlank()) {
@@ -728,25 +728,11 @@ public class GovernmentOpsRepository {
             }
             throw e;
         }
-        if (verification != null) throw BusinessException.forbidden("跨域溯源尚未建立可核实的辖区映射，请使用公众溯源入口；执法核验暂不返回跨域明细");
-        boolean effective = Boolean.TRUE.equals(verification.raw().get("verifiable"));
-        boolean allOnChain = verification.nodeCount() > 0 && verification.onChainCount() == verification.nodeCount();
-        Map<String, Object> result = new LinkedHashMap<>(verification.raw());
-        result.put("type", "trace");
-        result.put("verified", effective && allOnChain);
-        result.put("chainedNodes", verification.onChainCount() + "/" + verification.nodeCount());
-        result.put("nodeCount", verification.nodeCount());
-        result.put("onChainCount", verification.onChainCount());
-        result.put("attestedCount", verification.attestedCount());
-        boolean expired = Boolean.TRUE.equals(verification.raw().get("expired"));
-        // 与公众查询端共用一处状态映射：移动端以前直接透出 active/inactive 英文原值
-        String statusText = ProductionTraceClient.statusText(
-                String.valueOf(verification.raw().getOrDefault("status", "")), expired);
-        result.put("statusText", statusText);
-        result.put("events", verification.events());
-        result.put("chainSummary", verification.conclusion()
-                + (effective ? "" : "；该码当前状态为 " + statusText));
-        return result;
+        if (verification == null) {
+            throw new BusinessException(503, "生产域未返回有效核验结果，请稍后重试");
+        }
+        // 生产码尚未与监管辖区建立可核实映射，不能用公众可查替代执法数据授权。
+        throw BusinessException.forbidden("跨域溯源尚未建立可核实的辖区映射，请使用公众溯源入口；执法核验暂不返回跨域明细");
     }
 
     public List<Map<String, Object>> mobileCases() {

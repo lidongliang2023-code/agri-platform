@@ -21,7 +21,7 @@ const CORE = 'http://localhost:8093'
 const GOV = 'http://localhost:8095'
 const MYSQL = 'C:/Program Files/MySQL/MySQL Server 8.4/bin/mysql.exe'
 const PASSWORD = 'Admin@123'
-const MARKER = 'E2E监管闭环'
+const MARKER = `E2E监管闭环-${Date.now()}`
 const SUBJECT_NAME = '绿源蔬菜专业合作社'
 const OTHER_SUBJECT_NAME = '寿光绿丰农资店'
 // 王磊（稻田镇网格执法人员，已绑定 inspector 账号）与赵宁（另一网格，用于越权对照）
@@ -30,10 +30,10 @@ const INSPECTOR_USER = process.env.GOV_INSPECTOR_USERNAME || 'inspector'
 const OTHER_MERCHANT = 2003
 
 const sql = (query) => {
-  if (!existsSync(MYSQL)) return ''
+  if (!existsSync(MYSQL)) throw new Error('缺少 MySQL 测试客户端')
   const result = spawnSync(MYSQL,
-    ['-uroot', '-proot', '--default-character-set=utf8mb4', '-N', '-B', '-e', query], { encoding: 'utf8' })
-  if (result.status !== 0) return `ERR:${String(result.stderr ?? '').trim().slice(0, 200)}`
+    ['-uroot', '-proot', '--default-character-set=utf8mb4', '-D', 'agri_government', '-N', '-B', '-e', query], { encoding: 'utf8', timeout: 15000 })
+  if (result.status !== 0) throw new Error(`SQL 执行失败：${String(result.stderr ?? result.error ?? '')}`)
   return String(result.stdout ?? '').trim()
 }
 
@@ -56,7 +56,7 @@ const check = (ok, label, extra = '') => {
 
 const login = async (username) => {
   const response = await fetch(`${CORE}/api/v1/auth/login`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    method: 'POST', signal: AbortSignal.timeout(15000), headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password: PASSWORD, marketId: 1 }),
   })
   const body = await response.json().catch(() => null)
@@ -65,14 +65,16 @@ const login = async (username) => {
 
 /** 监管接口有两种失败：HTTP 4xx（RBAC 与身份解析）与 HTTP 200 + code!=200（业务判定）。 */
 const api = async (token, method, path, body) => {
-  const response = await fetch(`${GOV}${path}`, {
-    method,
+  const before = method === 'GET' ? null : captureGenerated()
+  let response
+  try { response = await fetch(`${GOV}${path}`, {
+    method, signal: AbortSignal.timeout(15000),
     headers: {
       Authorization: `Bearer ${token}`,
       ...(body ? { 'Content-Type': 'application/json' } : {}),
     },
     body: body ? JSON.stringify(body) : undefined,
-  })
+  }) } finally { if (before) trackGenerated(before) }
   const text = await response.text()
   let parsed = null
   try {
@@ -92,23 +94,41 @@ const ids = {
 let policyBefore = ''
 let otherBindingBefore = ''
 
-/** 上一轮中断留下的带标记数据先清干净，判据才只反映本轮行为。 */
-function purgePreviousRuns() {
-  exec(`USE agri_government;
-    DELETE c FROM agri_government.gov_task_check c
-      JOIN agri_government.gov_task t ON t.id = c.task_id WHERE t.task_type LIKE '%${MARKER}%'`)
-  exec(`DELETE FROM agri_government.gov_task WHERE task_type LIKE '%${MARKER}%'`)
-  exec(`DELETE FROM agri_government.gov_evidence WHERE description LIKE '%${MARKER}%'`)
-  exec(`DELETE FROM agri_government.gov_case WHERE summary LIKE '%${MARKER}%'`)
-  exec(`DELETE FROM agri_government.gov_report WHERE title LIKE '%${MARKER}%'`)
-  exec(`DELETE FROM agri_government.gov_credit_repair WHERE reason LIKE '%${MARKER}%'`)
-  exec(`DELETE FROM agri_government.gov_subsidy WHERE project_name LIKE '%${MARKER}%'`)
-  exec(`DELETE FROM agri_government.gov_self_check WHERE result_text LIKE '%${MARKER}%'`)
-  // 自查记录没有标记字段；种子行的时间戳都是 10 月，今天写入的只可能是用例产物
-  exec(`DELETE FROM agri_government.gov_self_check WHERE checked_at >= CURDATE()`)
-  exec(`DELETE FROM agri_government.gov_check_item WHERE item_name LIKE '%${MARKER}%'`)
-  exec(`DELETE FROM agri_government.gov_message WHERE content LIKE '%${MARKER}%'`)
-  exec(`DELETE FROM agri_government.gov_op_log WHERE detail LIKE '%${MARKER}%'`)
+const generated = Object.fromEntries(['gov_message', 'gov_op_log', 'gov_self_check'].map(t => [t, new Set()]))
+const quote = value => value == null ? 'NULL' : "'" + String(value).replaceAll("'", "''").replaceAll('\\', '\\\\') + "'"
+const rows = table => { const text = sql(`SELECT JSON_OBJECT('id',id) FROM agri_government.${table}`); return new Set(text ? text.split('\n').map(line => String(JSON.parse(line).id)) : []) }
+function captureGenerated() { return Object.fromEntries(Object.keys(generated).map(t => [t, rows(t)])) }
+function trackGenerated(before) { for (const t of Object.keys(generated)) for (const id of rows(t)) if (!before[t].has(id)) generated[t].add(id) }
+let fixtureScope = '', fixtureGrant = '', regionBefore = null, warningBefore = null, rectificationBefore = null, readBefore = [], fixtureWarning = ''
+const jsonRows = query => { const text = sql(query); return text ? text.split('\n').map(line => JSON.parse(line)) : [] }
+function recoverPreviousFixture() {
+  // Only records explicitly marked as temporary E2E authorizations from interrupted runs.
+  exec(`DELETE a FROM agri_government.gov_personnel_grant_audit a JOIN agri_government.gov_personnel_grant g ON a.grant_id=g.id WHERE JSON_UNQUOTE(JSON_EXTRACT(g.snapshot_json,'$.basis')) LIKE 'E2E临时测试授权%'`)
+  exec(`DELETE FROM agri_government.gov_personnel_grant WHERE JSON_UNQUOTE(JSON_EXTRACT(snapshot_json,'$.basis')) LIKE 'E2E临时测试授权%'`)
+  const old = sql(`SELECT COUNT(*) FROM agri_government.gov_scope_config WHERE organization_code='E2E-SG-2026' AND note='E2E临时测试授权'`)
+  if (Number(old) > 0) {
+    exec(`UPDATE agri_government.gov_subject SET merchant_id=NULL,region_code=NULL WHERE id=2 AND merchant_id='2003' AND region_code='370783'`)
+    exec(`DELETE a FROM agri_government.gov_scope_config_audit a JOIN agri_government.gov_scope_config s ON a.scope_id=s.id WHERE s.organization_code='E2E-SG-2026' AND s.note='E2E临时测试授权'`)
+    exec(`DELETE FROM agri_government.gov_scope_config WHERE organization_code='E2E-SG-2026' AND note='E2E临时测试授权'`)
+  }
+}
+async function prepareFixture(admin) {
+  const regions = [{code:'370783', name:'寿光市', includeChildren:true, duties:['inspection','sampling','case','credit','complaint','statistics','subsidy']}]
+  const created = await api(admin, 'POST', '/api/v1/government/ops/scopes', {
+    organizationCode:`E2E-SG-${Date.now()}`, organizationName:MARKER, status:'enabled', regions, note:MARKER,
+  })
+  fixtureScope = created.data?.id || ''
+  if (!fixtureScope) throw new Error(`创建测试辖区失败：${created.message}`)
+  const grant = await api(admin, 'POST', '/api/v1/government/ops/personnel-grants', {
+    personnelId:2, scopeId:fixtureScope, status:'enabled', regions,
+    validFrom:'2026-01-01', validUntil:'2026-12-31', basis:MARKER,
+  })
+  fixtureGrant = grant.data?.id || ''
+  if (!fixtureGrant) throw new Error(`创建测试授权失败：${grant.message}`)
+  regionBefore = jsonRows(`SELECT JSON_OBJECT('region_code',region_code) FROM agri_government.gov_subject WHERE id=2`)[0]
+  exec(`UPDATE agri_government.gov_subject SET region_code='370783' WHERE id=2`)
+  rectificationBefore = jsonRows(`SELECT JSON_OBJECT('status',status,'progress',progress,'feedback_text',feedback_text) FROM agri_government.gov_rectification WHERE id=2`)[0]
+  readBefore = jsonRows(`SELECT JSON_OBJECT('id',id,'is_read',is_read) FROM agri_government.gov_message WHERE subject_id=1`)
 }
 
 async function main() {
@@ -117,7 +137,8 @@ async function main() {
   const outsider = await login('luochuan')
   check(Boolean(admin && inspector && outsider), '三个测试账号登录成功（admin / inspector / luochuan）')
 
-  purgePreviousRuns()
+  recoverPreviousFixture()
+  await prepareFixture(admin)
 
   // ---------- 1. 身份由令牌解析 ----------
   const adminIdentity = await api(admin, 'GET', '/api/v1/government/identity')
@@ -134,7 +155,7 @@ async function main() {
   check(inspectorIdentity.data?.roles?.inspector === true && inspectorIdentity.data?.roles?.admin === false,
     '执法账号没有运营端权限位')
 
-  const anonymous = await fetch(`${GOV}/api/v1/government/home`)
+  const anonymous = await fetch(`${GOV}/api/v1/government/home`, { signal: AbortSignal.timeout(15000) })
   check(anonymous.status === 401, '未带令牌访问主体首页返回 401', String(anonymous.status))
 
   const farmer = await login('farmer')
@@ -151,6 +172,7 @@ async function main() {
     + encodeURIComponent(OTHER_SUBJECT_NAME))
   ids.subjectOther = (outsiderSubjects.data ?? [])[0]?.id ?? ''
   otherBindingBefore = sql(`SELECT IFNULL(merchant_id,'') FROM agri_government.gov_subject WHERE id=${ids.subjectOther}`)
+  if (otherBindingBefore) throw new Error('第二主体已有业务绑定，拒绝覆盖')
   const tempBind = await api(admin, 'PUT', `/api/v1/government/ops/subjects/${ids.subjectOther}/merchant-binding`,
     { merchantId: String(OTHER_MERCHANT) })
   check(tempBind.code === 200 && String(tempBind.data?.merchantId ?? '') === String(OTHER_MERCHANT),
@@ -371,8 +393,11 @@ async function main() {
   check(badEvidence.code === 404, '挂到不存在任务号上的取证被拒', badEvidence.message)
 
   // ---------- 8. 预警分派 ----------
+  fixtureWarning = sql(`INSERT INTO agri_government.gov_warning(warning_no,warning_type,level_name,subject_id,subject_name,title,content,status,created_at) VALUES (${quote(MARKER)},'现场检查','orange',2,${quote(OTHER_SUBJECT_NAME)},${quote(MARKER)},${quote(MARKER)},'pending','2026-11-09 22:00'); SELECT LAST_INSERT_ID()` )
   const warnings = await api(admin, 'GET', '/api/v1/government/ops/warnings?status=pending')
-  ids.warningUsed = (warnings.data ?? [])[0]?.id ?? null
+  ids.warningUsed = (warnings.data ?? []).find(item => String(item.subjectId) === '2')?.id ?? null
+  if (!ids.warningUsed) throw new Error('没有测试辖区内的待处理预警')
+  warningBefore = jsonRows(`SELECT JSON_OBJECT('status',status,'assigned_to',assigned_to,'assignee_id',assignee_id,'handle_note',handle_note) FROM agri_government.gov_warning WHERE id=${ids.warningUsed}`)[0]
   const noTarget = await api(admin, 'POST', `/api/v1/government/ops/warnings/${ids.warningUsed}/handle`,
     { note: `${MARKER} 请核查` })
   check(noTarget.code === 400, '运营分派预警必须点名承办人', noTarget.message)
@@ -389,15 +414,17 @@ async function main() {
   check(ghostWarning.code === 404, '处置不存在的预警返回 404', ghostWarning.message)
 
   // ---------- 9. 立案 → 案件推进 → 整改反馈与复核 ----------
+  const noTaskCase = await api(inspector, 'POST', '/api/v1/government/mobile/cases', {subjectId:2, summary:MARKER})
+  check(noTaskCase.status === 403 && /关联本人承办任务/.test(noTaskCase.message), '无本人任务关联时现场立案被拒绝')
   const caseCreated = await api(inspector, 'POST', '/api/v1/government/mobile/cases', {
-    subjectId: 2, caseType: '现场检查发现', summary: `${MARKER} 销售限制使用农药且台账不完整`,
+    taskId: ids.task, subjectId: 2, caseType: '现场检查发现', summary: `${MARKER} 销售限制使用农药且台账不完整`,
     legalBasis: '《农药管理条例》第五十八条',
   })
   ids.case = caseCreated.data?.id ?? ''
   ids.caseNo = caseCreated.data?.caseNo ?? ''
   check(caseCreated.code === 200 && caseCreated.data?.handler === '王磊'
     && sql(`SELECT handler_id FROM agri_government.gov_case WHERE id=${ids.case}`) === '2',
-    '执法人员立案：承办人姓名与账号号同时落库', ids.caseNo)
+    '执法人员立案：承办人姓名与账号号同时落库', `${ids.caseNo} ${caseCreated.message}`)
   check(Number(sql(`SELECT COUNT(*) FROM agri_government.gov_message
     WHERE subject_id=2 AND title='已对你立案调查'`)) === 1, '立案动作通知被检查主体',
   `case=${ids.case} 计数=${sql(`SELECT COUNT(*) FROM agri_government.gov_message WHERE subject_id=2`)}`)
@@ -565,7 +592,7 @@ async function main() {
     `${seedCode} → ${seedStillGone.code} ${seedStillGone.message}`)
   const missingTrace = await api(admin, 'GET', '/api/v1/government/public/trace/不存在-0000')
   check(missingTrace.code === 404, '查不到的溯源码返回 404', missingTrace.message)
-  const anonymousTrace = await fetch(`${GOV}/api/v1/government/public/trace/${liveCode}`)
+  const anonymousTrace = await fetch(`${GOV}/api/v1/government/public/trace/${liveCode}`, { signal: AbortSignal.timeout(15000) })
   const anonymousBody = await anonymousTrace.json().catch(() => null)
   check(anonymousTrace.status === 200 && anonymousBody?.code === 200,
     '公众溯源核验真的免登录（以前挂在 gov:citizen 下，政府人员账号反而 403）',
@@ -573,16 +600,22 @@ async function main() {
   const inspectorTrace = await api(inspector, 'GET', `/api/v1/government/public/trace/${liveCode}`)
   check(inspectorTrace.code === 200, '执法账号能核验（不再被监管对象端的权限拦住）', inspectorTrace.message)
   const scanned = await api(inspector, 'POST', '/api/v1/government/mobile/scan', { code: liveCode })
-  check(scanned.code === 200 && scanned.data?.type === 'trace'
-      && String(scanned.data?.chainedNodes ?? '').split('/')[1] === String(scanned.data?.nodeCount),
-    '执法端扫码走同一份生产域数据（节点数与已上链数同口径）',
-    `chained=${scanned.data?.chainedNodes} type=${scanned.data?.type} verified=${scanned.data?.verified}`)
+  check(scanned.status === 403 && /辖区映射/.test(scanned.message) && scanned.data == null,
+    '未建立辖区映射的跨域码拒绝返回执法明细（公众入口仍可核验）', scanned.message)
+  const localCredit = sql(`SELECT credit_code FROM agri_government.gov_subject WHERE id=2`)
+  const localScan = await api(inspector, 'POST', '/api/v1/government/mobile/scan', {code:localCredit})
+  check(localScan.code === 200 && localScan.data?.type === 'subject' && String(localScan.data?.subject?.id) === '2',
+    '有效授权辖区内的主体扫码成功')
+  const missingScan = await api(inspector, 'POST', '/api/v1/government/mobile/scan', {code:`不存在-${MARKER}`})
+  check(missingScan.code === 404, '执法扫码不存在的码返回404')
+  const emptyScan = await api(inspector, 'POST', '/api/v1/government/mobile/scan', {code:''})
+  check(emptyScan.code === 400, '执法扫码空码返回400')
   const inactiveCode = String(sql(`SELECT trace_code FROM agri_production.agri_prod_trace_code
     WHERE deleted=0 AND status<>'active' ORDER BY id LIMIT 1`)).split('\n')[0] ?? ''
   if (inactiveCode) {
     const inactive = await api(admin, 'GET', `/api/v1/government/public/trace/${inactiveCode}`)
     check(inactive.code === 200 && inactive.data?.verifiable === false && inactive.data?.verified === false
-        && /不可核验（当前状态：未激活）/.test(String(inactive.data?.chainSummary)),
+        && String(inactive.data?.chainSummary).includes(String(inactive.data?.statusText)),
       '未激活/作废的码不显示"核验通过"，并说清当前状态',
       `${inactiveCode} verifiable=${inactive.data?.verifiable} ${inactive.data?.statusText}`)
   }
@@ -636,19 +669,12 @@ function cleanup() {
   exec(`DELETE FROM agri_government.gov_check_item WHERE item_name LIKE '%${MARKER}%'`)
   exec(`DELETE FROM agri_government.gov_message WHERE content LIKE '%${MARKER}%'`)
   exec(`DELETE FROM agri_government.gov_op_log WHERE detail LIKE '%${MARKER}%'`)
-  // 本轮写入的站内信与留痕带的是完整时间戳，种子里的是"今天 09:20"这类文案，按格式清掉本轮新增
-  exec(`DELETE FROM agri_government.gov_message WHERE created_at REGEXP '^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}$'`)
-  exec(`DELETE FROM agri_government.gov_op_log WHERE created_at REGEXP '^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}$'`)
-  // 自查记录没有标记字段，按本轮写入时间清（种子的自查行 created 是更早的时间戳）
-  if (ids.selfCheck) exec(`DELETE FROM agri_government.gov_self_check WHERE id=${ids.selfCheck}`)
-
-  // 还原被本轮改动过的种子（整改单 2 的原始状态是 pending/30）
-  if (ids.warningUsed) {
-    exec(`UPDATE agri_government.gov_warning SET status='pending',assigned_to='王磊',assignee_id=2,handle_note=NULL
-      WHERE id=${ids.warningUsed}`)
+  for (const [table, values] of Object.entries(generated)) {
+    if (values.size) exec(`DELETE FROM agri_government.${table} WHERE id IN (${[...values].map(quote).join(',')})`)
   }
-  exec(`UPDATE agri_government.gov_rectification SET status='pending',progress=30,
-    feedback_text='正在收集供应商材料。' WHERE id=2`)
+  if (warningBefore && ids.warningUsed) exec(`UPDATE agri_government.gov_warning SET ${Object.entries(warningBefore).map(([k,v]) => `${k}=${quote(v)}`).join(',')} WHERE id=${ids.warningUsed}`)
+  if (rectificationBefore) exec(`UPDATE agri_government.gov_rectification SET ${Object.entries(rectificationBefore).map(([k,v]) => `${k}=${quote(v)}`).join(',')} WHERE id=2`)
+  for (const row of readBefore) exec(`UPDATE agri_government.gov_message SET is_read=${Number(row.is_read)} WHERE id=${Number(row.id)}`)
   if (policyBefore) {
     const [status, deadline] = String(policyBefore).split('#')
     exec(`UPDATE agri_government.gov_policy SET status='${status}',deadline='${deadline}' WHERE id=3`)
@@ -668,8 +694,7 @@ function cleanup() {
     WHERE summary LIKE '%${MARKER}%'`)) === 0, '清理后案件残留为 0')
   check(Number(sql(`SELECT COUNT(*) FROM agri_government.gov_report
     WHERE title LIKE '%${MARKER}%'`)) === 0, '清理后报送残留为 0')
-  check(Number(sql(`SELECT COUNT(*) FROM agri_government.gov_message
-    WHERE created_at REGEXP '^[0-9]{4}-[0-9]{2}-[0-9]{2}'`)) === 0, '清理后本轮站内信残留为 0')
+  check([...generated.gov_message].every(id => Number(sql(`SELECT COUNT(*) FROM agri_government.gov_message WHERE id=${quote(id)}`)) === 0), '清理后本轮新增站内信残留为0')
   check(Number(sql(`SELECT COUNT(*) FROM agri_government.gov_subsidy
     WHERE project_name LIKE '%${MARKER}%'`)) === 0, '清理后补贴申报残留为 0')
   check(Number(sql(`SELECT COUNT(*) FROM agri_government.gov_credit_repair
@@ -678,8 +703,20 @@ function cleanup() {
     WHERE item_name LIKE '%${MARKER}%'`)) === 0, '清理后新增执法事项残留为 0')
   check(sql(`SELECT IFNULL(merchant_id,'') FROM agri_government.gov_subject WHERE id=${ids.subjectOther || 0}`)
     === otherBindingBefore, '第二家监管档案的临时绑定已还原', `原值=${otherBindingBefore}`)
-  check(sql(`SELECT CONCAT(status,'#',IFNULL(deadline,'')) FROM agri_government.gov_policy WHERE id=3`)
+  if (policyBefore) check(sql(`SELECT CONCAT(status,'#',IFNULL(deadline,'')) FROM agri_government.gov_policy WHERE id=3`)
     === policyBefore, '政策申报期状态已还原', policyBefore)
+  if (fixtureWarning) exec(`DELETE FROM agri_government.gov_warning WHERE id=${Number(fixtureWarning)} AND warning_no=${quote(MARKER)}`)
+  if (regionBefore) exec(`UPDATE agri_government.gov_subject SET region_code=${quote(regionBefore.region_code)} WHERE id=2`)
+  if (fixtureGrant) {
+    exec(`DELETE FROM agri_government.gov_personnel_grant_audit WHERE grant_id=${quote(fixtureGrant)}`)
+    exec(`DELETE FROM agri_government.gov_personnel_grant WHERE id=${quote(fixtureGrant)}`)
+  }
+  if (fixtureScope) {
+    exec(`DELETE FROM agri_government.gov_scope_config_audit WHERE scope_id=${quote(fixtureScope)}`)
+    exec(`DELETE FROM agri_government.gov_scope_config WHERE id=${quote(fixtureScope)}`)
+  }
+  check(Number(sql(`SELECT COUNT(*) FROM agri_government.gov_personnel_grant WHERE id=${quote(fixtureGrant)}`)) === 0, '本轮临时授权已回收')
+  check(Number(sql(`SELECT COUNT(*) FROM agri_government.gov_scope_config WHERE id=${quote(fixtureScope)}`)) === 0, '本轮临时机构已回收')
   check(sql(`SELECT merchant_id FROM agri_government.gov_subject WHERE subject_name='${SUBJECT_NAME}'`) === '2001',
     '本轮没有改动主测试档案的绑定', SUBJECT_NAME)
 }
@@ -690,8 +727,8 @@ main()
     console.error(error)
   })
   .finally(() => {
-    cleanup()
-    console.log(`\n政府监管端到端回归：${checked} 条断言通过，${failures.length} 条失败`)
+    try { cleanup() } catch (error) { failures.push(`清理失败：${error.message}`); console.error(error) }
+    console.log(`\n政府监管端到端回归：${checked} 项断言，${checked - failures.length} 项通过，${failures.length} 项失败`)
     if (failures.length) {
       failures.forEach((label) => console.log(`  ✗ ${label}`))
       process.exitCode = 1

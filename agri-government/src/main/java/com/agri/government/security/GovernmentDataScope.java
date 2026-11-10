@@ -60,6 +60,9 @@ public class GovernmentDataScope {
     }
     /** 仅用于本模块固定 SQL。派生表先过滤再统计/排序/分页，客户端参数不参与 SQL 拼接。 */
     public String sql(String original) {
+        // 监管运营账号负责跨主体台账、分派与复核，按 gov:admin 角色访问全域；
+        // 执法人员仍按本人有效授权辖区过滤。
+        if (identity.isOps()) return original;
         Matcher matcher=TABLE.matcher(original); StringBuffer out=new StringBuffer();
         while(matcher.find()) {
             String table=matcher.group(2).toLowerCase(Locale.ROOT);
@@ -82,7 +85,14 @@ public class GovernmentDataScope {
         String previous=reportingDuty.get(); reportingDuty.set("statistics");
         try { return action.get(); } finally { if(previous==null) reportingDuty.remove(); else reportingDuty.set(previous); }
     }
-    public void requireSubject(Long subjectId,String duty) { requirePersonSubject(currentPerson(),subjectId,duty); }
+    public void requireSubject(Long subjectId,String duty) {
+        if (identity.isOps()) {
+            if (jdbc.queryForObject("SELECT COUNT(*) FROM gov_subject WHERE id=?", Integer.class, subjectId) == 0)
+                throw BusinessException.notFound("监管主体档案不存在");
+            return;
+        }
+        requirePersonSubject(currentPerson(),subjectId,duty);
+    }
     public void requirePersonSubject(Long person,Long subjectId,String duty) {
         List<String> codes=jdbc.queryForList("SELECT region_code FROM gov_subject WHERE id=?",String.class,subjectId);
         if(codes.size()!=1 || regions(person,duty).stream().noneMatch(r->contains(r.code(),r.includeChildren(),codes.get(0))))
@@ -90,6 +100,11 @@ public class GovernmentDataScope {
     }
     public void requireRecord(String table,long id,String duty) {
         if(!DUTIES.containsKey(table)) throw BusinessException.forbidden("该业务未接入辖区授权");
+        if (identity.isOps()) {
+            if (jdbc.queryForObject("SELECT COUNT(*) FROM " + table + " WHERE id=?", Integer.class, id) == 0)
+                throw BusinessException.notFound("记录不存在");
+            return;
+        }
         if(table.equals("gov_complaint")) {
             var codes=jdbc.queryForList("SELECT region_code FROM gov_complaint WHERE id=?",String.class,id);
             if(codes.size()!=1||regions(currentPerson(),duty).stream().noneMatch(r->contains(r.code(),r.includeChildren(),codes.get(0))))
