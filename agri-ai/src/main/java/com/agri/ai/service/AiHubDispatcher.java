@@ -2,7 +2,7 @@ package com.agri.ai.service;
 
 import com.agri.common.ai.dto.AiInvokeRequest;
 import com.agri.common.ai.dto.AiInvokeResponse;
-import lombok.extern.slf4j.Slf4j;
+import com.agri.ai.config.AIConfig;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -11,14 +11,23 @@ import java.util.*;
  * 现代农业产业互联网 AI 中台统一场景分发调度引擎 (Java 核心实现)
  * 覆盖 8 大业务子系统，严格实施领域边界隔离与结构化数据规范
  */
-@Slf4j
 @Service
 public class AiHubDispatcher {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(AiHubDispatcher.class);
     private final AIService aiService;
+    private final AiCallAudit audit;
+    private final AiSceneManagement management;
+    private final RealModelClient modelClient;
+    private final AIConfig config;
 
-    public AiHubDispatcher(com.agri.ai.service.impl.AIServiceProxy aiService) {
+    public AiHubDispatcher(com.agri.ai.service.impl.AIServiceProxy aiService, AiCallAudit audit,
+                           AiSceneManagement management, RealModelClient modelClient, AIConfig config) {
         this.aiService = aiService;
+        this.audit = audit;
+        this.management = management;
+        this.modelClient = modelClient;
+        this.config = config;
     }
 
     /**
@@ -38,6 +47,30 @@ public class AiHubDispatcher {
         Map<String, Object> result = new LinkedHashMap<>();
 
         try {
+            var sceneConfig = management.forDispatch(sceneCode, bizSystem);
+            boolean usedRuleFallback = false;
+            if (config.isRealInferenceEnabled() && sceneConfig.publishedVersion() != null && modelClient.configured()) {
+                try {
+                    var prompts = management.promptsForDispatch(sceneCode, input, req.getBizId());
+                    var model = modelClient.complete(String.valueOf(prompts.get("systemPrompt")), String.valueOf(prompts.get("userPrompt")));
+                    Map<String, Object> usage = new LinkedHashMap<>();
+                    usage.put("input_tokens", model.inputTokens());
+                    usage.put("output_tokens", model.outputTokens());
+                    usage.put("latency_ms", System.currentTimeMillis() - startTime);
+                    usage.put("execution_mode", "REAL_MODEL");
+                    usage.put("prompt_applied", true);
+                    usage.put("prompt_version", sceneConfig.publishedVersion());
+                    usage.put("model", model.model());
+                    AiInvokeResponse response = AiInvokeResponse.builder().ok(true).taskId(taskId).status("SUCCESS")
+                            .sceneCode(sceneCode).result(new LinkedHashMap<>(model.output())).usage(usage).traceId(traceId).build();
+                    audit.record(req, response);
+                    return response;
+                } catch (Exception modelError) {
+                    if (!config.isFallbackToRuleTemplate()) throw modelError;
+                    usedRuleFallback = true;
+                    log.warn("真实模型调用失败，按配置降级规则模板：scene={}, reason={}", sceneCode, modelError.getMessage());
+                }
+            }
             switch (sceneCode) {
                 // 1. 生产管理系统 (farm_prod)
                 case "farm.crop.schedule":
@@ -116,8 +149,14 @@ public class AiHubDispatcher {
             usage.put("input_tokens", Math.max(30, (req.toString().length() / 4)));
             usage.put("output_tokens", Math.max(50, (result.toString().length() / 4)));
             usage.put("latency_ms", latency);
+            usage.put("execution_mode", "RULE_TEMPLATE");
+            usage.put("prompt_applied", false);
+            usage.put("model_configured", modelClient.configured());
+            usage.put("real_inference_enabled", config.isRealInferenceEnabled());
+            usage.put("fallback", usedRuleFallback);
+            if (sceneConfig.publishedVersion() != null) usage.put("prompt_version", sceneConfig.publishedVersion());
 
-            return AiInvokeResponse.builder()
+            AiInvokeResponse response = AiInvokeResponse.builder()
                     .ok(true)
                     .taskId(taskId)
                     .status("SUCCESS")
@@ -126,6 +165,8 @@ public class AiHubDispatcher {
                     .usage(usage)
                     .traceId(traceId)
                     .build();
+            audit.record(req, response);
+            return response;
 
         } catch (Exception e) {
             log.error("[AI-HUB-ENGINE] 执行场景失败: scene={}, err={}", sceneCode, e.getMessage(), e);
@@ -135,7 +176,7 @@ public class AiHubDispatcher {
             usage.put("output_tokens", 0);
             usage.put("latency_ms", latency);
 
-            return AiInvokeResponse.builder()
+            AiInvokeResponse failure = AiInvokeResponse.builder()
                     .ok(false)
                     .taskId(taskId)
                     .status("FAILED")
@@ -144,6 +185,8 @@ public class AiHubDispatcher {
                     .usage(usage)
                     .traceId(traceId)
                     .build();
+            audit.record(req, failure);
+            return failure;
         }
     }
 

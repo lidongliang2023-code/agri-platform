@@ -7,7 +7,6 @@ spring:
   profiles:
     active: dev
 
-# 产业互联网平台统一登录 (Sa-Token 配置)
 sa-token:
   token-name: agri-token
   timeout: 2592000
@@ -21,17 +20,22 @@ sa-token:
 ai:
   tongyi:
     api-key: ${TONGYI_API_KEY:your-api-key}
-    base-url: https://dashscope.aliyuncs.com/api/v1
+    base-url: ${TONGYI_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
+    model: ${TONGYI_MODEL:qwen-turbo}
   openai:
     api-key: ${OPENAI_API_KEY:your-api-key}
-    base-url: https://api.openai.com/v1
-  provider: tongyi
+    base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1}
+    model: ${OPENAI_MODEL:gpt-4o-mini}
+  provider: ${AI_PROVIDER:tongyi}
+  real-inference-enabled: ${AI_REAL_INFERENCE_ENABLED:true}
+  fallback-to-rule-template: ${AI_FALLBACK_TO_RULE_TEMPLATE:true}
+  connect-timeout-ms: ${AI_CONNECT_TIMEOUT_MS:5000}
+  request-timeout-ms: ${AI_REQUEST_TIMEOUT_MS:45000}
 
 logging:
   level:
     com.agri.ai: INFO
 
-# Unified probes: dependency failures affect readiness, not liveness.
 management:
   endpoints:
     web:
@@ -49,3 +53,7 @@ management:
         readiness:
           include: '*'
           exclude: livenessState
+
+services:
+  platform:
+    url: ${PLATFORM_URL:http://localhost:8093}

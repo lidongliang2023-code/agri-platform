@@ -144,6 +144,10 @@ agri:
         - http://localhost:5198/
         - http://127.0.0.1:5198/
         - http://info-ops.agri.local/
+      ai-ops:
+        - http://localhost:8116/
+        - http://127.0.0.1:8116/
+        - http://ai-ops.agri.local/
       # 用户中心运营端（agri-sso/ops）：网关 :8115，dev :5200。
       user-center-ops:
         - http://localhost:8115/

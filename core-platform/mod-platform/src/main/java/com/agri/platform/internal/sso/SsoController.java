@@ -412,6 +412,9 @@ public class SsoController {
         if ("user-center-ops".equals(clientId) || "portal".equals(clientId)) {
             return userPermissionService.resolvePlatform(userId).has("uc:admin");
         }
+        if ("ai-ops".equals(clientId)) {
+            return userPermissionService.resolve(userId, marketId).has("ai:admin");
+        }
         if ("gov-ops".equals(clientId)) {
             return userPermissionService.resolve(userId, marketId).has("gov:admin");
         }

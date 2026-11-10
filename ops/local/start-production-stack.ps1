@@ -244,6 +244,7 @@ try {
                 SPRING_PROFILES_ACTIVE=$null; SPRING_DATASOURCE_URL=$null
                 CORE_BASE_URL='http://localhost:8093'
             }
+            if ($name -eq 'agri-ai') { $environment.AI_ADMIN_SCENE_FILE=Join-Path $RepoRoot 'ops/local/data/ai-scenes.json' }
             if ($name -eq 'agri-finance') { $environment.MYSQL_DATABASE='agri_finance' }
             if ($name -eq 'core-platform') { $environment.AGRI_CERTIFICATION_UPLOAD_DIR=Join-Path $RepoRoot 'core-platform/uploads/platform/certification' }
             if ($name -eq 'agri-trade') { $environment.AGRI_TRADE_UPLOAD_DIR=Join-Path $RepoRoot 'agri-trade/backend/uploads' }

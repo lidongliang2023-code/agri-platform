@@ -98,6 +98,7 @@ public class SsoProperties {
                 "http://localhost:8115/", "http://127.0.0.1:8115/",
                 "http://localhost:5200/", "http://127.0.0.1:5200/",
                 "http://user-center-ops.agri.local/"));
+        result.put("ai-ops", List.of("http://localhost:8116/", "http://127.0.0.1:8116/", "http://ai-ops.agri.local/"));
         return result;
     }
 
