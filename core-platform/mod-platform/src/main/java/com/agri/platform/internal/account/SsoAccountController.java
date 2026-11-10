@@ -2481,8 +2481,8 @@ public class SsoAccountController {
             @RequestParam(required = false) String status,
             HttpServletRequest request) {
         long[] session = requireSession(request);
-        if (!merchantIdsOfUser(session[0]).contains(merchantId)) {
-            throw new BusinessException(ErrorCode.FORBIDDEN, "你不属于该经营主体");
+        if (!ownedMerchantIds(session[0]).contains(merchantId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "只有经营主体负责人可以查看加入申请");
         }
         LambdaQueryWrapper<MerchantJoinRequestEntity> wrapper =
                 new LambdaQueryWrapper<MerchantJoinRequestEntity>()

@@ -52,12 +52,19 @@ public class MessageController {
 
     @PostMapping("/{id}/read")
     public ApiResponse<Void> read(@PathVariable Long id) {
+        Long userId = MarketContext.currentUserId();
+        if (userId == null) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED);
+        }
         MessageEntity message = messageMapper.selectById(id);
-        if (message == null) {
+        // Hide the existence of messages owned by another account.
+        if (message == null || !userId.equals(message.getUserId())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
-        message.setReadFlag(1);
-        messageMapper.updateById(message);
+        messageMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<MessageEntity>()
+                .eq(MessageEntity::getId, id)
+                .eq(MessageEntity::getUserId, userId)
+                .set(MessageEntity::getReadFlag, 1));
         return ApiResponse.ok();
     }
 }
