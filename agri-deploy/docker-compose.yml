@@ -132,13 +132,18 @@ services:
       dockerfile: Dockerfile
     container_name: agri-ai-service
     ports:
-      - "8085:8085"
+      - "8201:8201"
     environment:
       SPRING_PROFILES_ACTIVE: prod
       AI_TONGYI_API-KEY: ${TONGYI_API_KEY}
       AI_OPENAI_API-KEY: ${OPENAI_API_KEY}
       AI_PROVIDER: tongyi
+      AI_MYSQL_URL: jdbc:mysql://mysql:3306/agri_platform?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      MYSQL_USERNAME: root
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-agri@123}
+      AI_ADMIN_ENCRYPTION_KEY: ${AI_ADMIN_ENCRYPTION_KEY:?请注入32字节Base64编码的AI配置加密密钥}
     depends_on:
+      - mysql
       - redis
     restart: always
 

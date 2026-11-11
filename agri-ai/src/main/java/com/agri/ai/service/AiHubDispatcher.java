@@ -46,13 +46,23 @@ public class AiHubDispatcher {
         Map<String, Object> input = req.getInput() != null ? req.getInput() : Collections.emptyMap();
         Map<String, Object> result = new LinkedHashMap<>();
 
+        ModelProviderSettings.Channel channel=null;
+        String modelSource="GLOBAL";
+        List<Map<String,Object>> modelAttempts=List.of();
         try {
             var sceneConfig = management.forDispatch(sceneCode, bizSystem);
+            modelSource=sceneConfig.providerId()==null||sceneConfig.providerId().isBlank()?"GLOBAL":"SCENE";
+            if(sceneConfig.custom()) {
+                if(!config.isRealInferenceEnabled()) throw new IllegalArgumentException("自定义场景需要开启真实推理");
+                if(sceneConfig.publishedVersion()==null) throw new IllegalArgumentException("自定义场景尚未发布提示词，请先发布后再调试");
+            }
             boolean usedRuleFallback = false;
-            if (config.isRealInferenceEnabled() && sceneConfig.publishedVersion() != null && modelClient.configured()) {
+            String fallbackReason="";
+            if (config.isRealInferenceEnabled() && sceneConfig.publishedVersion() != null) {
                 try {
+                    channel=management.resolveChannel(sceneConfig);
                     var prompts = management.promptsForDispatch(sceneCode, input, req.getBizId());
-                    var model = modelClient.complete(String.valueOf(prompts.get("systemPrompt")), String.valueOf(prompts.get("userPrompt")));
+                    var model = modelClient.complete(channel, String.valueOf(prompts.get("systemPrompt")), String.valueOf(prompts.get("userPrompt")),sceneCode);
                     Map<String, Object> usage = new LinkedHashMap<>();
                     usage.put("input_tokens", model.inputTokens());
                     usage.put("output_tokens", model.outputTokens());
@@ -61,13 +71,18 @@ public class AiHubDispatcher {
                     usage.put("prompt_applied", true);
                     usage.put("prompt_version", sceneConfig.publishedVersion());
                     usage.put("model", model.model());
+                    usage.put("provider", model.providerId()); usage.put("provider_name",model.providerName());
+                    usage.put("primary_provider",channel.id()); usage.put("failover",model.failover()); usage.put("model_attempts",model.attempts());
+                    usage.put("model_source",modelSource); usage.put("requested_model",channel.model());
                     AiInvokeResponse response = AiInvokeResponse.builder().ok(true).taskId(taskId).status("SUCCESS")
                             .sceneCode(sceneCode).result(new LinkedHashMap<>(model.output())).usage(usage).traceId(traceId).build();
                     audit.record(req, response);
                     return response;
                 } catch (Exception modelError) {
-                    if (!config.isFallbackToRuleTemplate()) throw modelError;
+                    if(modelError instanceof RealModelClient.RouteFailure failure) modelAttempts=failure.attempts();
+                    if (sceneConfig.custom() || !config.isFallbackToRuleTemplate()) throw modelError;
                     usedRuleFallback = true;
+                    fallbackReason="目标模型调用失败或配置不可用";
                     log.warn("真实模型调用失败，按配置降级规则模板：scene={}, reason={}", sceneCode, modelError.getMessage());
                 }
             }
@@ -151,9 +166,12 @@ public class AiHubDispatcher {
             usage.put("latency_ms", latency);
             usage.put("execution_mode", "RULE_TEMPLATE");
             usage.put("prompt_applied", false);
-            usage.put("model_configured", modelClient.configured());
+            usage.put("model_configured", channel!=null&&RealModelClient.isConfigured(channel));
+            usage.put("model_source",modelSource);
+            if(channel!=null) { usage.put("provider",channel.id()); usage.put("requested_model",channel.model()); }
+            if(!fallbackReason.isBlank()) usage.put("fallback_reason",fallbackReason);
             usage.put("real_inference_enabled", config.isRealInferenceEnabled());
-            usage.put("fallback", usedRuleFallback);
+            usage.put("fallback", usedRuleFallback); usage.put("model_attempts",modelAttempts);
             if (sceneConfig.publishedVersion() != null) usage.put("prompt_version", sceneConfig.publishedVersion());
 
             AiInvokeResponse response = AiInvokeResponse.builder()
@@ -174,6 +192,9 @@ public class AiHubDispatcher {
             Map<String, Object> usage = new LinkedHashMap<>();
             usage.put("input_tokens", 0);
             usage.put("output_tokens", 0);
+            usage.put("model_attempts",modelAttempts);
+            usage.put("execution_mode","FAILED"); usage.put("model_source",modelSource);
+            if(channel!=null) { usage.put("provider",channel.id()); usage.put("requested_model",channel.model()); }
             usage.put("latency_ms", latency);
 
             AiInvokeResponse failure = AiInvokeResponse.builder()

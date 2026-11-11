@@ -250,7 +250,10 @@ try {
                 if (!$warehouseToken) { $warehouseToken = [Environment]::GetEnvironmentVariable('AGRI_FINANCE_WAREHOUSE_TOKEN','User') }
                 $environment.AGRI_FINANCE_WAREHOUSE_TOKEN = $warehouseToken
             }
-            if ($name -eq 'agri-ai') { $environment.AI_ADMIN_SCENE_FILE=Join-Path $RepoRoot 'ops/local/data/ai-scenes.json' }
+            if ($name -eq 'agri-ai') {
+                $environment.AI_ADMIN_SCENE_FILE=Join-Path $RepoRoot 'ops/local/data/ai-scenes.json'
+                $environment.AI_MYSQL_URL='jdbc:mysql://localhost:3306/agri_ai?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true'
+            }
             if ($name -eq 'agri-finance') { $environment.MYSQL_DATABASE='agri_finance' }
             if ($name -eq 'core-platform') { $environment.AGRI_CERTIFICATION_UPLOAD_DIR=Join-Path $RepoRoot 'core-platform/uploads/platform/certification' }
             if ($name -eq 'agri-trade') { $environment.AGRI_TRADE_UPLOAD_DIR=Join-Path $RepoRoot 'agri-trade/backend/uploads' }

@@ -6,6 +6,20 @@ spring:
     name: agri-ai
   profiles:
     active: dev
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: ${AI_MYSQL_URL:jdbc:mysql://localhost:3306/agri_ai?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
+    username: ${MYSQL_USERNAME:root}
+    password: ${MYSQL_PASSWORD:root123}
+    hikari:
+      maximum-pool-size: 5
+      connection-timeout: 5000
+  flyway:
+    enabled: true
+    locations: classpath:db/ai-hub-migration
+    table: ai_hub_schema_history
+    baseline-on-migrate: true
+    baseline-version: 0
 
 sa-token:
   token-name: agri-token

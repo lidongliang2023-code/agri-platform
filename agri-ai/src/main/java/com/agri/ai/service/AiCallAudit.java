@@ -12,7 +12,7 @@ import java.util.*;
 @Service
 public class AiCallAudit {
     public record Entry(String time, String taskId, String sceneCode, String bizSystem, String status,
-                        long latencyMs, String traceId, String source, String operator) {}
+                        long latencyMs, String traceId, String source, String operator, String provider, Boolean failover, List<Map<String,Object>> modelAttempts) {}
     private final Deque<Entry> entries = new ArrayDeque<>();
     private final Path file; private final ObjectMapper json;
     private boolean writable = true;
@@ -36,7 +36,10 @@ public class AiCallAudit {
         }
         long elapsed = result.getUsage() == null ? 0 : ((Number)result.getUsage().getOrDefault("latency_ms",0)).longValue();
         Entry entry = new Entry(Instant.now().toString(), result.getTaskId(), req.getSceneCode(), req.getBizSystem(),
-                result.getStatus(), elapsed, result.getTraceId(), source, operator);
+                result.getStatus(), elapsed, result.getTraceId(), source, operator,
+                result.getUsage()==null?null:Objects.toString(result.getUsage().get("provider"),null),
+                result.getUsage()==null?false:Boolean.TRUE.equals(result.getUsage().get("failover")),
+                result.getUsage()==null?List.of():(List<Map<String,Object>>)result.getUsage().getOrDefault("model_attempts",List.of()));
         entries.addLast(entry); boolean rotate = entries.size() > 1000; if (rotate) entries.removeFirst();
         try {
             Files.createDirectories(file.getParent());

@@ -16,34 +16,94 @@ import java.util.Map;
 /** 统一真实模型调用：通义兼容 OpenAI Chat Completions 协议，或 OpenAI 官方协议。 */
 @Service
 public class RealModelClient {
-    public record Result(Map<String, Object> output, long inputTokens, long outputTokens, String model) {}
+    public record Result(Map<String, Object> output, long inputTokens, long outputTokens, String model,
+                         String providerId, String providerName, List<Map<String,Object>> attempts, boolean failover) {
+        public Result(Map<String,Object> output,long inputTokens,long outputTokens,String model) { this(output,inputTokens,outputTokens,model,"","",List.of(),false); }
+    }
+    public static class RouteFailure extends IllegalStateException {
+        private final List<Map<String,Object>> attempts;
+        public RouteFailure(List<Map<String,Object>> attempts) { super("模型调用失败，请查看通道尝试记录"); this.attempts=List.copyOf(attempts); }
+        public List<Map<String,Object>> attempts() { return attempts; }
+    }
+    private static class ModelFailure extends IllegalStateException {
+        final String reason; final Integer status; final boolean retryable;
+        ModelFailure(String reason,Integer status,boolean retryable) { super(reason); this.reason=reason;this.status=status;this.retryable=retryable; }
+    }
 
     private final AIConfig config;
+    private final ModelProviderSettings settings;
     private final ObjectMapper json;
-    private final RestTemplate rest;
+    private final ModelCircuitBreaker circuits;
+    private final ModelFailoverStatistics statistics;
 
-    public RealModelClient(AIConfig config, ObjectMapper json) {
+    public RealModelClient(AIConfig config, ObjectMapper json, ModelProviderSettings settings, ModelCircuitBreaker circuits, ModelFailoverStatistics statistics) {
+        this.statistics=statistics;
+        this.circuits=circuits;
+        this.settings=settings;
         this.config = config;
         this.json = json;
-        var factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(config.getConnectTimeoutMs());
-        factory.setReadTimeout(config.getRequestTimeoutMs());
-        this.rest = new RestTemplate(factory);
     }
 
     public boolean configured() {
-        return !apiKey().isBlank() && !"your-api-key".equalsIgnoreCase(apiKey())
-                && !baseUrl().isBlank() && !model().isBlank();
+        return isConfigured(settings.selectedChannel());
     }
-
-    public String provider() { return config.getProvider(); }
-    public String modelName() { return model(); }
-    public String baseUrlForDisplay() { return baseUrl(); }
+    public static boolean isConfigured(ModelProviderSettings.Channel c) {
+        return ("NONE".equals(c.authType()) || (!c.apiKey().isBlank()&&!"your-api-key".equalsIgnoreCase(c.apiKey()))) && !c.baseUrl().isBlank()&&!c.model().isBlank();
+    }
+    public String provider() { return settings.selectedChannel().id(); }
+    public String modelName() { return settings.selectedChannel().model(); }
+    public String baseUrlForDisplay() { return settings.selectedChannel().baseUrl(); }
 
     public Result complete(String systemPrompt, String userPrompt) {
-        if (!configured()) throw new IllegalStateException("真实模型通道未配置 API Key 或模型名");
+        return complete(settings.selectedChannel(),systemPrompt,userPrompt);
+    }
+    /** 单次请求使用不可变通道快照，不改动全局选择。 */
+    public Result complete(ModelProviderSettings.Channel channel, String systemPrompt, String userPrompt) {
+        return complete(channel,systemPrompt,userPrompt,"");
+    }
+    public Result complete(ModelProviderSettings.Channel channel, String systemPrompt, String userPrompt, String sceneCode) {
+        if(!config.isRealInferenceEnabled()) throw new IllegalStateException("真实推理开关已关闭");
+        var route=settings.route(channel); var attempts=new java.util.ArrayList<Map<String,Object>>();
+        long started=System.nanoTime();
+        long deadline=started+45_000_000_000L;
+        for(var target:route.channels()) {
+            long remaining=(deadline-System.nanoTime())/1000000;
+            if(route.channels().size()>1 && remaining<2) break;
+            int attemptTimeout=route.channels().size()>1?(int)Math.min(route.timeoutMs(),remaining/2):route.timeoutMs();
+            long start=System.nanoTime(); var entry=new LinkedHashMap<String,Object>();
+            entry.put("provider",target.id()); entry.put("provider_name",target.name()); entry.put("model",target.model());
+            var ticket=circuits.acquire(target,settings.circuitPolicy(target.id()));
+            entry.put("circuit_state",ticket.state());
+            if(!ticket.allowed()) {
+                entry.put("status","SKIPPED");entry.put("reason",ticket.reason());entry.put("latency_ms",0);
+                attempts.add(entry);continue;
+            }
+            try {
+                if(!isConfigured(target)) throw new ModelFailure("配置不完整",null,true);
+                var result=attempt(target,systemPrompt,userPrompt,attemptTimeout);
+                circuits.success(ticket);
+                entry.put("status","SUCCESS"); entry.put("latency_ms",(System.nanoTime()-start)/1000000);attempts.add(entry);
+                statistics.record(channel,sceneCode,route.channels().size()>1,attempts,true,(System.nanoTime()-started)/1000000);
+                return new Result(result.output(),result.inputTokens(),result.outputTokens(),result.model(),target.id(),target.name(),List.copyOf(attempts),attempts.size()>1);
+            } catch(ModelFailure e) {
+                circuits.failure(ticket,e.retryable,e.reason);
+                entry.put("status","FAILED");entry.put("reason",e.reason); if(e.status!=null)entry.put("http_status",e.status);
+                entry.put("latency_ms",(System.nanoTime()-start)/1000000); attempts.add(entry);
+                if(!e.retryable) break;
+            }
+        }
+        statistics.record(channel,sceneCode,route.channels().size()>1,attempts,false,(System.nanoTime()-started)/1000000);
+        throw new RouteFailure(attempts);
+    }
+    private Result attempt(ModelProviderSettings.Channel channel,String systemPrompt,String userPrompt,int timeoutMs) {
+        var factory=new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(Math.max(1,Math.min(config.getConnectTimeoutMs(),timeoutMs)));
+        factory.setReadTimeout(timeoutMs);
+        var client=new RestTemplate(factory);
+        String requestKey=channel.apiKey(), requestUrl=channel.baseUrl(), requestModel=channel.model();
+        if(!"NONE".equals(channel.authType())&&(requestKey.isBlank()||"your-api-key".equalsIgnoreCase(requestKey))) throw new IllegalStateException("真实模型通道未配置 API Key");
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("model", model());
+        body.put("model", requestModel);
         body.put("messages", List.of(
                 Map.of("role", "system", "content", systemPrompt),
                 Map.of("role", "user", "content", userPrompt + "\n\n请仅返回一个合法 JSON 对象，不要使用 Markdown 代码块。")));
@@ -52,18 +112,21 @@ public class RealModelClient {
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.setBearerAuth(apiKey());
+        if(!"NONE".equals(channel.authType())) headers.setBearerAuth(requestKey);
         try {
-            String raw = rest.postForObject(baseUrl() + "/chat/completions", new HttpEntity<>(body, headers), String.class);
-            return parse(raw);
+            String raw = client.postForObject(requestUrl.replaceAll("/+$", "") + "/chat/completions", new HttpEntity<>(body, headers), String.class);
+            return parse(raw,requestModel);
         } catch (RestClientResponseException e) {
-            throw new IllegalStateException("模型服务返回 HTTP " + e.getStatusCode().value(), e);
+            int status=e.getStatusCode().value();
+            throw new ModelFailure("上游 HTTP "+status,status,status==401||status==403||status==404||status==408||status==429||status>=500);
+        } catch (org.springframework.web.client.ResourceAccessException e) {
+            throw new ModelFailure("网络连接失败或请求超时",null,true);
         } catch (Exception e) {
-            throw new IllegalStateException("模型服务调用失败：" + e.getMessage(), e);
+            throw new ModelFailure("模型响应格式异常或内容为空",null,true);
         }
     }
 
-    private Result parse(String raw) {
+    private Result parse(String raw, String requestModel) {
         try {
             JsonNode root = json.readTree(raw);
             JsonNode choices = root.path("choices");
@@ -83,7 +146,7 @@ public class RealModelClient {
             }
             long input = root.path("usage").path("prompt_tokens").asLong(0);
             long outputTokens = root.path("usage").path("completion_tokens").asLong(0);
-            return new Result(output, input, outputTokens, root.path("model").asText(model()));
+            return new Result(output, input, outputTokens, root.path("model").asText(requestModel));
         } catch (Exception e) {
             if (e instanceof IllegalStateException state) throw state;
             throw new IllegalStateException("模型返回格式无法解析", e);
@@ -99,8 +162,4 @@ public class RealModelClient {
         return text;
     }
 
-    private String apiKey() { return "openai".equalsIgnoreCase(config.getProvider()) ? value(config.getOpenai().getApiKey()) : value(config.getTongyi().getApiKey()); }
-    private String baseUrl() { return "openai".equalsIgnoreCase(config.getProvider()) ? value(config.getOpenai().getBaseUrl()) : value(config.getTongyi().getBaseUrl()); }
-    private String model() { return "openai".equalsIgnoreCase(config.getProvider()) ? value(config.getOpenai().getModel()) : value(config.getTongyi().getModel()); }
-    private String value(String value) { return value == null ? "" : value.trim().replaceAll("/$", ""); }
 }
