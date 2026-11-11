@@ -12,4 +12,8 @@ import org.apache.ibatis.annotations.Mapper;
 @Mapper
 @InterceptorIgnore(tenantLine = "true")
 public interface MessagePushTaskMapper extends BaseMapper<MessagePushTaskEntity> {
+    /** 必须在事务中调用；领取后重读，拒绝使用调度列表中的旧状态。 */
+    @org.apache.ibatis.annotations.Select("SELECT * FROM platform_uc_message_push_task WHERE id=#{id} AND deleted=0 FOR UPDATE")
+    MessagePushTaskEntity lockById(@org.apache.ibatis.annotations.Param("id") Long id);
+
 }

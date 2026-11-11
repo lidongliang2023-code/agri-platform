@@ -30,7 +30,11 @@ public class MessagePushWorker {
             pushService.prepareQueued();
             // 2) 在投任务：各投一批（每批 500）
             for (MessagePushTaskEntity task : pushService.pickSending()) {
-                pushService.deliverBatch(task);
+                try { pushService.deliverBatch(task); }
+                catch(RuntimeException e) {
+                    pushService.recordFailure(task.getId(),MessagePushService.STATUS_SENDING,"投递失败，整批已回滚，请检查服务日志");
+                    log.warn("推送任务 {} 投递失败",task.getId(),e);
+                }
             }
         } catch (RuntimeException e) {
             log.warn("推送投递调度异常（不影响下一轮）：{}", e.getMessage());

@@ -34,9 +34,8 @@ import java.util.Objects;
  * <p><b>可恢复</b>：人群名单落在 {@code platform_uc_push_target}，投递一条删一条。
  * 进程中途重启，下一次 tick 会接着把剩下的发完，不会重复也不会漏。</p>
  *
- * <p><b>单实例假设</b>：多实例同时跑 worker 可能重复投递同一批（没有分布式锁）。
- * 当前核心平台是模块化单体、单实例部署，故未引入锁；真要多实例需加
- * 任务级的 SELECT ... FOR UPDATE 或 Redis 锁。</p>
+ * <p>多实例使用数据库任务行锁；名单、站内信与进度在同一事务提交，
+ * 站内信额外以任务和用户唯一键保证重放幂等。</p>
  */
 @Slf4j
 @Service
@@ -58,6 +57,7 @@ public class MessagePushService {
     public static final String STATUS_FAILED = "failed";
 
     private final MessagePushTaskMapper taskMapper;
+    private final org.springframework.transaction.PlatformTransactionManager transactionManager;
     private final PushTargetMapper targetMapper;
     private final MessageMapper messageMapper;
     private final UserMapper userMapper;
@@ -161,7 +161,9 @@ public class MessagePushService {
         task.setContent(content);
         task.setTemplateCode(templateCode);
         task.setAudience(audience == null || audience.isBlank() ? "all" : audience);
-        task.setChannels(channels == null || channels.isBlank() ? "station" : channels);
+        if(channels!=null && !channels.isBlank() && !"station".equals(channels))
+            throw new com.agri.shared.exception.BusinessException(com.agri.shared.exception.ErrorCode.BAD_REQUEST,"当前仅支持站内信，其他渠道尚未接入投递回执");
+        task.setChannels("station");
         task.setTargetCount(0);
         task.setReachCount(0);
         task.setOpenRate(BigDecimal.ZERO);
@@ -184,7 +186,15 @@ public class MessagePushService {
                 .orderByAsc(MessagePushTaskEntity::getId)
                 .last("LIMIT 3"));
         for (MessagePushTaskEntity task : queued) {
-            prepareTargets(task);
+            try {
+                new org.springframework.transaction.support.TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+                    var locked=taskMapper.lockById(task.getId());
+                    if(locked!=null && STATUS_QUEUED.equals(locked.getStatus())) prepareTargets(locked);
+                });
+            } catch(RuntimeException e) {
+                recordFailure(task.getId(), STATUS_QUEUED, "解析人群失败");
+                log.warn("推送任务 {} 人群固化失败，事务已回滚",task.getId(),e);
+            }
         }
     }
 
@@ -198,7 +208,6 @@ public class MessagePushService {
 
     /** queued → 固化人群名单 → sending。名单为空则直接 sent。 */
     private void prepareTargets(MessagePushTaskEntity task) {
-        try {
             List<Long> userIds = resolveAudienceIds(task.getAudience());
             for (Long userId : userIds) {
                 PushTargetEntity target = new PushTargetEntity();
@@ -215,9 +224,7 @@ public class MessagePushService {
             taskMapper.updateById(task);
             log.info("推送任务 {} 人群已固化：{} 人（audience={}）",
                     task.getId(), userIds.size(), task.getAudience());
-        } catch (RuntimeException e) {
-            markFailed(task, "解析人群失败：" + e.getMessage());
-        }
+
     }
 
     /**
@@ -228,7 +235,9 @@ public class MessagePushService {
      * 重试会重复发送。所以调度由 {@link MessagePushWorker} 负责，它调的是代理对象。</p>
      */
     @Transactional(rollbackFor = Exception.class)
-    public void deliverBatch(MessagePushTaskEntity task) {
+    public void deliverBatch(MessagePushTaskEntity candidate) {
+        MessagePushTaskEntity task=taskMapper.lockById(candidate.getId());
+        if(task==null || !STATUS_SENDING.equals(task.getStatus())) return;
         List<PushTargetEntity> batch = targetMapper.selectList(
                 new LambdaQueryWrapper<PushTargetEntity>()
                         .eq(PushTargetEntity::getTaskId, task.getId())
@@ -238,8 +247,7 @@ public class MessagePushService {
             finish(task);
             return;
         }
-        try {
-            long maxId = 0L;
+        long maxId = 0L;
             for (PushTargetEntity target : batch) {
                 MessageEntity message = new MessageEntity();
                 message.setUserId(target.getUserId());
@@ -248,23 +256,31 @@ public class MessagePushService {
                 message.setReadFlag(0);
                 // worker 线程没有会话上下文，市场维度取任务上的值，避免落到默认市场
                 message.setMarketId(task.getMarketId());
-                messageMapper.insert(message);
+                message.setId(com.baomidou.mybatisplus.core.toolkit.IdWorker.getId());
+                message.setTenantId(task.getTenantId()==null?0L:task.getTenantId());
+                message.setPushTaskId(task.getId());
+                messageMapper.insertPushOnce(message);
                 maxId = Math.max(maxId, target.getId());
             }
             // 物理删除：实体带 @TableLogic，deleteBatchIds 只会标记 deleted=1，名单行会永久堆积
             targetMapper.deleteUpTo(task.getId(), maxId);
 
-            task.setReachCount(safeInt(task.getReachCount()) + batch.size());
+            task.setReachCount(messageMapper.countDeliveredPush(task.getId()));
             taskMapper.updateById(task);
 
             // 这一批不满说明名单已空，直接收尾，省一次空查询
             if (batch.size() < batchSize) {
                 finish(task);
             }
-        } catch (RuntimeException e) {
-            markFailed(task, "投递失败：" + e.getMessage());
-            log.error("推送任务 {} 投递失败：{}", task.getId(), e.getMessage());
-        }
+
+    }
+
+    /** 在上一个事务回滚后单独记失败，不能吞异常后提交半批数据。 */
+    public void recordFailure(Long id, String expectedStatus, String reason) {
+        new org.springframework.transaction.support.TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            var task=taskMapper.lockById(id);
+            if(task!=null && expectedStatus.equals(task.getStatus())) markFailed(task, reason);
+        });
     }
 
     private void finish(MessagePushTaskEntity task) {

@@ -14,6 +14,8 @@ import lombok.EqualsAndHashCode;
 public class MessageEntity extends BaseEntity {
 
     private Long userId;
+    /** 群发投递幂等键；普通站内信为空。 */
+    private Long pushTaskId;
     private String title;
     private String content;
     /** 0=未读 1=已读 */
