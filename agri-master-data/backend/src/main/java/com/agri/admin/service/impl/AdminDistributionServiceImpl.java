@@ -39,6 +39,8 @@ import java.util.Map;
 public class AdminDistributionServiceImpl implements IAdminDistributionService {
 
     private final DistributionTaskMapper distributionTaskMapper;
+    private final com.agri.masterdata.service.DistributionDelivery delivery;
+    private final org.springframework.jdbc.core.JdbcTemplate jdbc;
 
     private static final DateTimeFormatter DATETIME_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
@@ -152,59 +154,21 @@ public class AdminDistributionServiceImpl implements IAdminDistributionService {
         if (task.getEndTime() != null) {
             logs.add(logOf(fmt(task.getEndTime()), "INFO", "任务结束"));
         }
+        for(var attempt:jdbc.queryForList("SELECT success,error_message,created_at FROM agri_md_distribution_attempt WHERE task_id=? ORDER BY id",id)) {
+            boolean ok=Boolean.TRUE.equals(attempt.get("success")) || "1".equals(String.valueOf(attempt.get("success")));
+            logs.add(logOf(String.valueOf(attempt.get("created_at")),ok?"INFO":"ERROR",
+                ok?"目标持久化回执已核验":"投递失败："+attempt.get("error_message")));
+        }
         vo.setLogs(logs);
         return vo;
     }
 
     @Override
-    @Transactional
-    public void retryDistribution(Long id) {
-        DistributionTask task = distributionTaskMapper.selectById(id);
-        if (task == null) {
-            throw new BusinessException("分发任务不存在");
-        }
-        if (!"failed".equals(task.getStatus())) {
-            throw new BusinessException("只有失败的任务才能重试");
-        }
-        // 重试 = 把这条任务重新置为执行中并清掉上一次的失败信息。
-        // 真实的重新推送需要分发引擎，当前没有 —— 所以只做状态流转，不假装"已重推成功"。
-        task.setStatus("running");
-        task.setProgress(0);
-        task.setFailedCount(0);
-        task.setErrorMessage(null);
-        task.setStartTime(LocalDateTime.now());
-        task.setEndTime(null);
-        distributionTaskMapper.updateById(task);
-        log.info("分发任务重试：id={} code={}", id, task.getTaskCode());
-    }
-
+    public void retryDistribution(Long id) { delivery.retry(id); }
     @Override
-    @Transactional
-    public void pauseDistribution(Long id) {
-        DistributionTask task = distributionTaskMapper.selectById(id);
-        if (task == null) {
-            throw new BusinessException("分发任务不存在");
-        }
-        if (!"running".equals(task.getStatus())) {
-            throw new BusinessException("只有执行中的任务才能暂停");
-        }
-        task.setStatus("paused");
-        distributionTaskMapper.updateById(task);
-    }
-
+    public void pauseDistribution(Long id) { delivery.pause(id); }
     @Override
-    @Transactional
-    public void resumeDistribution(Long id) {
-        DistributionTask task = distributionTaskMapper.selectById(id);
-        if (task == null) {
-            throw new BusinessException("分发任务不存在");
-        }
-        if (!"paused".equals(task.getStatus())) {
-            throw new BusinessException("只有已暂停的任务才能恢复");
-        }
-        task.setStatus("running");
-        distributionTaskMapper.updateById(task);
-    }
+    public void resumeDistribution(Long id) { delivery.resume(id); }
 
     @Override
     public List<DistributionStatisticsVO.DistributionTrend> getDistributionTrend(String timeRange) {

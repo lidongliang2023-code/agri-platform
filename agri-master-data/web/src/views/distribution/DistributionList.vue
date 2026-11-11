@@ -77,7 +77,7 @@
                 @click="retryTask(task.id)"
               >重试</button>
               <button 
-                v-if="task.status === 'running'"
+                v-if="task.status === 'pending'"
                 class="action-btn pause"
                 @click="pauseTask(task)"
               >暂停</button>
@@ -160,6 +160,7 @@
 </template>
 
 <script setup>
+import { pauseDistribution, resumeDistribution } from '../../utils/api'
 import { ref, reactive, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { getDistributionList, getDistributionDetail, retryDistribution } from '../../utils/api'
@@ -251,18 +252,24 @@ const retryTask = async (id) => {
       message.error(response.message || '操作失败')
     }
   } catch (error) {
-    message.error('操作失败')
+    message.error(error instanceof Error ? error.message : '操作失败')
   }
 }
 
-const pauseTask = (row) => {
-  message.info(`任务 ${row.taskName} 已暂停`)
-  loadData()
+const pauseTask = async (row) => {
+  try {
+    const response = await pauseDistribution(row.id)
+    if (response.code !== 200) throw new Error(response.message || '暂停失败')
+    message.success('任务已暂停'); await loadData()
+  } catch (error) { message.error(error instanceof Error ? error.message : '暂停失败') }
 }
 
-const resumeTask = (row) => {
-  message.info(`任务 ${row.taskName} 已恢复`)
-  loadData()
+const resumeTask = async (row) => {
+  try {
+    const response = await resumeDistribution(row.id)
+    if (response.code !== 200) throw new Error(response.message || '恢复失败')
+    message.success('任务已恢复并等待执行'); await loadData()
+  } catch (error) { message.error(error instanceof Error ? error.message : '恢复失败') }
 }
 
 const formatDate = (date) => {

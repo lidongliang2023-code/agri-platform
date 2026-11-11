@@ -20,6 +20,13 @@ import java.util.List;
 public class AdminDistributionController {
 
     private final IAdminDistributionService adminDistributionService;
+    private final com.agri.masterdata.service.DistributionDelivery delivery;
+
+    @Operation(summary = "创建真实分发任务（持久化快照后异步发送）")
+    @PostMapping("/tasks")
+    public ApiResponse<Long> create(@RequestBody com.agri.masterdata.service.DistributionDelivery.Submit request) {
+        return ApiResponse.success(delivery.submit(request));
+    }
 
     @Operation(summary = "获取分发统计概览")
     @GetMapping("/statistics")

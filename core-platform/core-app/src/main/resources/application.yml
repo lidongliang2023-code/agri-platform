@@ -81,6 +81,9 @@ agri:
       cron: "0 0 1 * * ?"
   platform:
     certification-upload-dir: ${AGRI_CERTIFICATION_UPLOAD_DIR:uploads/platform/certification}
+  master-data:
+    receive:
+      internal-token: ${AGRI_MASTER_DATA_INTERNAL_TOKEN:dev-internal-token}
   cors:
     # 精确来源白名单：生产环境必须经 AGRI_CORS_ORIGINS 注入，禁止出现通配符。
     allowed-origins: ${AGRI_CORS_ORIGINS:http://localhost:5173,http://localhost:3000}
