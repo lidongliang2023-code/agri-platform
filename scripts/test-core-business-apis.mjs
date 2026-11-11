@@ -48,6 +48,7 @@ async function request(url, options = {}) {
   try {
     const res = await fetch(url, {
       ...options,
+      signal: options.signal ?? AbortSignal.timeout(30000),
       headers: {
         'Accept': 'application/json',
         ...(options.headers || {})
@@ -435,13 +436,18 @@ async function run() {
         ...authHeader
       },
       body: JSON.stringify({
-        bizSystem: 'production',
-        sceneCode: 'DIAGNOSIS_PEST',
+        bizSystem: 'farm_prod',
+        sceneCode: 'farm.pest.diagnosis',
         bizId: 'biz-test-001',
-        params: { cropName: '大豆', symptom: '叶片发黄枯萎' }
+        input: { crop: '柑橘', symptom: '叶片卷曲，存在虫道' }
       })
     },
-    assertFn: (body) => body?.ok === true && body?.status === 'SUCCESS' && body?.result !== undefined
+    assertFn: (body) => body?.ok === true && body?.status === 'SUCCESS'
+      && body?.sceneCode === 'farm.pest.diagnosis'
+      && typeof body?.taskId === 'string' && body.taskId.length > 0
+      && typeof body?.traceId === 'string' && body.traceId.length > 0
+      && body?.result != null && typeof body.result === 'object'
+      && Object.keys(body.result).length > 0
   })
 
   // 测试汇总输出

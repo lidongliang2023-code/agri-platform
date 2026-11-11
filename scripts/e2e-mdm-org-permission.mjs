@@ -95,7 +95,11 @@ try {
   await page.waitForTimeout(600)
   const dialog = page.locator('.mds-dialog')
   await dialog.locator('input').first().fill(`${MARK}组织`)
-  await dialog.locator('select').nth(1).selectOption({ index: 1 }) // 上级组织：选第一个（根组织）
+  // 新版表单已由服务端按当前主体生成根组织；旧版仍保留上级组织下拉时，兼容选择第一个根节点。
+  const parentSelect = dialog.locator('select')
+  if (await parentSelect.count() > 1) {
+    await parentSelect.nth(1).selectOption({ index: 1 })
+  }
   await dialog.locator('button', { hasText: '保存' }).click()
   await page.waitForTimeout(2500)
 
