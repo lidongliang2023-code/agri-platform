@@ -43,6 +43,10 @@ public class KnowledgeArticle {
     @TableField("summary")
     private String summary;
 
+    /** 正文以富文本 HTML 存储，兼容历史纯文本和 Markdown，空字符串表示显式清空。 */
+    @TableField("content")
+    private String content;
+
     @TableField("content_url")
     private String contentUrl;
 

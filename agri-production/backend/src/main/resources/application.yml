@@ -2,6 +2,10 @@ server:
   port: 8082
 
 spring:
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
   application:
     name: agri-production
   profiles:
@@ -104,3 +108,8 @@ management:
         readiness:
           include: '*'
           exclude: livenessState
+
+# 正文附件独立持久化；部署时可配置到持久卷，不随前端版本替换。
+production:
+  content-images:
+    directory: "${PRODUCTION_CONTENT_IMAGE_DIR:./data/production-content-images}"

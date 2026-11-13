@@ -38,4 +38,10 @@ public interface IAdminKnowledgeService {
 
     /** SOP 规程分页（keyword 匹配规程名称/编码，status 可筛）。 */
     PageResult<SopLibrary> pageSops(int pageNum, int pageSize, String keyword, Integer status);
+
+    SopLibrary getSop(String sopId);
+    String createSop(Map<String, Object> payload);
+    SopLibrary updateSop(String sopId, Map<String, Object> payload);
+    SopLibrary publishSop(String sopId, Integer status);
+    boolean deleteSop(String sopId);
 }

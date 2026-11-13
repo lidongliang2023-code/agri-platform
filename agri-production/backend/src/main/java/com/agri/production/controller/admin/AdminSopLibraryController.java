@@ -4,29 +4,20 @@ import com.agri.production.common.entity.ApiResponse;
 import com.agri.production.common.entity.PageResult;
 import com.agri.production.entity.SopLibrary;
 import com.agri.production.service.IAdminKnowledgeService;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
-/**
- * 运营端：SOP 规程库（{@code /api/v1/production/admin/sop}）。
- *
- * <p>页面「SOP管理」只调一条：分页列表。api 层那几个 create/update/delete/by-crop 函数
- * **没有任何页面调用**（探针把它们归入"不计入缺口"），所以这里不实现 ——
- * 真要支持编辑，届时连页面一起做。</p>
- */
+import java.util.Map;
+
+/** 运营端生产 SOP 规程库：规程主数据归生产域维护，模型能力归 AI 中台。 */
 @RestController
 @RequestMapping("/api/v1/production/admin/sop")
 public class AdminSopLibraryController {
+    private final IAdminKnowledgeService service;
 
-    private final IAdminKnowledgeService adminKnowledgeService;
-
-    public AdminSopLibraryController(IAdminKnowledgeService adminKnowledgeService) {
-        this.adminKnowledgeService = adminKnowledgeService;
+    public AdminSopLibraryController(IAdminKnowledgeService service) {
+        this.service = service;
     }
 
-    /** 规程分页。 */
     @GetMapping
     public ApiResponse<PageResult<SopLibrary>> page(
             @RequestParam(required = false) Integer page,
@@ -37,6 +28,38 @@ public class AdminSopLibraryController {
             @RequestParam(required = false) Integer status) {
         int p = pageNum != null ? pageNum : (page != null ? page : 1);
         int s = pageSize != null ? pageSize : (size != null ? size : 10);
-        return ApiResponse.success(adminKnowledgeService.pageSops(p, s, keyword, status));
+        return ApiResponse.success(service.pageSops(p, s, keyword, status));
+    }
+
+    @GetMapping("/{sopId}")
+    public ApiResponse<SopLibrary> detail(@PathVariable String sopId) {
+        return ApiResponse.success(service.getSop(sopId));
+    }
+
+    @PostMapping
+    public ApiResponse<String> create(@RequestBody(required = false) Map<String, Object> payload) {
+        return ApiResponse.success(service.createSop(payload));
+    }
+
+    @PutMapping("/{sopId}")
+    public ApiResponse<SopLibrary> update(@PathVariable String sopId,
+                                          @RequestBody(required = false) Map<String, Object> payload) {
+        return ApiResponse.success(service.updateSop(sopId, payload));
+    }
+
+    @PatchMapping("/{sopId}/publish")
+    public ApiResponse<SopLibrary> publish(@PathVariable String sopId,
+                                           @RequestBody(required = false) Map<String, Object> payload) {
+        Integer status = null;
+        if (payload != null && payload.get("status") != null) {
+            try { status = Integer.valueOf(String.valueOf(payload.get("status"))); }
+            catch (NumberFormatException ignored) { }
+        }
+        return ApiResponse.success(service.publishSop(sopId, status));
+    }
+
+    @DeleteMapping("/{sopId}")
+    public ApiResponse<Boolean> delete(@PathVariable String sopId) {
+        return ApiResponse.success(service.deleteSop(sopId));
     }
 }

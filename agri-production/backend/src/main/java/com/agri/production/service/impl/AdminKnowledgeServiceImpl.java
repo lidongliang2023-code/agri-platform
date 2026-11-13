@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * 运营端知识库 + SOP 规程库实现。
@@ -70,7 +71,7 @@ public class AdminKnowledgeServiceImpl implements IAdminKnowledgeService {
     @Transactional(rollbackFor = Exception.class)
     public String createArticle(Map<String, Object> payload) {
         KnowledgeArticle article = new KnowledgeArticle();
-        article.setArticleCode("KNWL" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss")));
+        article.setArticleCode("KNWL" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss")) + UUID.randomUUID().toString().substring(0, 8));
         applyArticlePayload(article, payload);
         if (article.getTitle() == null || article.getTitle().isBlank()) {
             throw new BusinessException(400, "文章标题不能为空");
@@ -148,6 +149,7 @@ public class AdminKnowledgeServiceImpl implements IAdminKnowledgeService {
         if (payload.containsKey("summary")) {
             article.setSummary(str(payload.get("summary")));
         }
+        if (payload.containsKey("content")) article.setContent(body(payload.get("content")));
         if (payload.containsKey("contentUrl")) {
             article.setContentUrl(str(payload.get("contentUrl")));
         }
@@ -180,6 +182,97 @@ public class AdminKnowledgeServiceImpl implements IAdminKnowledgeService {
         w.orderByDesc(SopLibrary::getCreateTime).orderByAsc(SopLibrary::getId);
         Page<SopLibrary> page = sopLibraryMapper.selectPage(new Page<>(p, s), w);
         return PageResult.of(page.getRecords(), page.getTotal(), p, s);
+    }
+
+
+    @Override
+    public SopLibrary getSop(String sopId) {
+        return requireSop(sopId);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public String createSop(Map<String, Object> payload) {
+        SopLibrary sop = new SopLibrary();
+        applySopPayload(sop, payload);
+        if (sop.getSopName() == null || sop.getSopName().isBlank()) {
+            throw new BusinessException(400, "SOP名称不能为空");
+        }
+        if (sop.getSopCode() == null || sop.getSopCode().isBlank()) {
+            sop.setSopCode("SOP-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase());
+        }
+        sop.setStatus(sop.getStatus() == null ? 0 : (sop.getStatus() == 1 ? 1 : 0));
+        sop.setTenantId(DEFAULT_TENANT);
+        sop.setCreateTime(LocalDateTime.now());
+        sop.setUpdateTime(LocalDateTime.now());
+        sop.setDeleted(0);
+        sopLibraryMapper.insert(sop);
+        return String.valueOf(sop.getId());
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public SopLibrary updateSop(String sopId, Map<String, Object> payload) {
+        SopLibrary sop = requireSop(sopId);
+        applySopPayload(sop, payload);
+        sop.setUpdateTime(LocalDateTime.now());
+        sopLibraryMapper.updateById(sop);
+        return sopLibraryMapper.selectById(sop.getId());
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public SopLibrary publishSop(String sopId, Integer status) {
+        SopLibrary sop = requireSop(sopId);
+        sop.setStatus(status != null && status == 1 ? 1 : 0);
+        sop.setUpdateTime(LocalDateTime.now());
+        sopLibraryMapper.updateById(sop);
+        return sopLibraryMapper.selectById(sop.getId());
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean deleteSop(String sopId) {
+        SopLibrary sop = requireSop(sopId);
+        sopLibraryMapper.deleteById(sop.getId());
+        return true;
+    }
+
+    private SopLibrary requireSop(String sopId) {
+        if (sopId == null || sopId.isBlank()) throw new BusinessException(400, "缺少 sopId");
+        SopLibrary sop;
+        try {
+            sop = sopLibraryMapper.selectById(Long.valueOf(sopId.trim()));
+        } catch (NumberFormatException ex) {
+            sop = null;
+        }
+        if (sop == null) throw new BusinessException(404, "SOP不存在：" + sopId);
+        return sop;
+    }
+
+    private void applySopPayload(SopLibrary sop, Map<String, Object> payload) {
+        if (payload == null) return;
+        if (payload.containsKey("sopCode")) sop.setSopCode(str(payload.get("sopCode")));
+        if (payload.containsKey("cropId")) sop.setCropId(str(payload.get("cropId")));
+        if (payload.containsKey("sopName")) sop.setSopName(str(payload.get("sopName")));
+        if (payload.containsKey("sopType")) sop.setSopType(str(payload.get("sopType")));
+        if (payload.containsKey("versionNo")) sop.setVersionNo(str(payload.get("versionNo")));
+        if (payload.containsKey("content")) sop.setContent(body(payload.get("content")));
+        if (payload.containsKey("contentUrl")) sop.setContentUrl(str(payload.get("contentUrl")));
+        if (payload.containsKey("stageSeq")) sop.setStageSeq(toInt(payload.get("stageSeq")));
+        if (payload.containsKey("applicableRegion")) sop.setApplicableRegion(str(payload.get("applicableRegion")));
+        if (payload.containsKey("publisher")) sop.setPublisher(str(payload.get("publisher")));
+        if (payload.containsKey("status")) {
+            Integer status = toInt(payload.get("status"));
+            if (status != null) sop.setStatus(status == 1 ? 1 : 0);
+        }
+    }
+
+    private static String body(Object value) {
+        if (value != null && !(value instanceof String)) throw new BusinessException(400, "正文必须为文本");
+        String text = value == null ? "" : ((String) value).replace("\r\n", "\n").replace("\r", "\n");
+        if (text.length() > 100000) throw new BusinessException(400, "正文不能超过100000个字符");
+        return text;
     }
 
     private static String str(Object value) {

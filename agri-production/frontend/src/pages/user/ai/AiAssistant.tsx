@@ -1,4 +1,5 @@
 import PageContainer from '@/components/ProductionPageContainer'
+import { ContentPreview } from '@/components/ContentEditor'
 /**
  * 页面名称：AI农艺师对话
  * 路由路径：/production/ai/assistant
@@ -28,7 +29,7 @@ import PageContainer from '@/components/ProductionPageContainer'
  * 4. 新建 / 删除 / 重命名会话失败时明确报错，**不再把失败弹成成功**。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { KeyboardEvent, ReactNode } from 'react'
+import type { KeyboardEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -69,7 +70,7 @@ import {
 } from '@/api/ai'
 import type { ChatMessage, ChatSession } from '@/types'
 
-const { Text, Title, Paragraph } = Typography
+const { Text } = Typography
 
 /** 流式打字速度：每次追加字符数 */
 const STREAM_STEP = 18
@@ -108,125 +109,6 @@ type LocalMessage = ChatMessage & { pending?: boolean }
  * - 服务端无会话 → 列表空态 + 醒目提示；
  * - 问答接口失败 / 未返回内容 → 明确报错，不生成任何回复。
  */
-
-/* ==================== Markdown 轻量渲染 ==================== */
-
-/** 行内标记正则：`**加粗**` 与 `` `代码` `` */
-const INLINE_PATTERN = /(\*\*[^*]+\*\*|`[^`]+`)/g
-
-/**
- * 渲染行内标记
- *
- * @param text 文本片段
- * @param keyPrefix React key 前缀
- * @returns 渲染结果
- */
-function renderInline(text: string, keyPrefix: string): ReactNode {
-  const nodes: ReactNode[] = []
-  let lastIndex = 0
-  let cursor = 0
-  let match: RegExpExecArray | null = INLINE_PATTERN.exec(text)
-  while (match !== null) {
-    if (match.index > lastIndex) {
-      nodes.push(<span key={`${keyPrefix}-t-${cursor}`}>{text.slice(lastIndex, match.index)}</span>)
-    }
-    const token = match[0]
-    if (token.startsWith('**')) {
-      nodes.push(<strong key={`${keyPrefix}-b-${cursor}`}>{token.slice(2, -2)}</strong>)
-    } else {
-      nodes.push(
-        <code key={`${keyPrefix}-c-${cursor}`} style={{ padding: '0 4px' }}>
-          {token.slice(1, -1)}
-        </code>,
-      )
-    }
-    cursor += 1
-    lastIndex = match.index + token.length
-    match = INLINE_PATTERN.exec(text)
-  }
-  if (lastIndex < text.length) {
-    nodes.push(<span key={`${keyPrefix}-t-${cursor}`}>{text.slice(lastIndex)}</span>)
-  }
-  return nodes
-}
-
-/**
- * 轻量 Markdown 渲染（标题 / 无序列表 / 有序列表 / 段落）
- *
- * @param content Markdown 文本
- * @returns 渲染结果
- */
-function renderMarkdown(content: string): ReactNode {
-  const lines = content.split('\n')
-  const blocks: ReactNode[] = []
-  let listItems: string[] = []
-  let listType: 'ul' | 'ol' = 'ul'
-
-  /** 输出已缓存的列表块 */
-  const flushList = (): void => {
-    if (listItems.length === 0) return
-    const items = listItems.map((item, index) => (
-      <li key={`li-${blocks.length}-${index}`}>{renderInline(item, `li-${blocks.length}-${index}`)}</li>
-    ))
-    blocks.push(
-      listType === 'ul' ? (
-        <ul key={`ul-${blocks.length}`} style={{ marginBottom: 8, paddingLeft: 20 }}>
-          {items}
-        </ul>
-      ) : (
-        <ol key={`ol-${blocks.length}`} style={{ marginBottom: 8, paddingLeft: 20 }}>
-          {items}
-        </ol>
-      ),
-    )
-    listItems = []
-  }
-
-  lines.forEach((rawLine, index) => {
-    const line = rawLine.trimEnd()
-    if (line.trim() === '') {
-      flushList()
-      return
-    }
-    const heading = /^(#{1,4})\s+(.*)$/.exec(line)
-    if (heading) {
-      flushList()
-      const level = Math.min(5, heading[1].length + 2)
-      blocks.push(
-        <Title key={`h-${index}`} level={level as 1 | 2 | 3 | 4 | 5} style={{ marginBottom: 8 }}>
-          {renderInline(heading[2], `h-${index}`)}
-        </Title>,
-      )
-      return
-    }
-    const bullet = /^[-*]\s+(.*)$/.exec(line)
-    if (bullet) {
-      if (listType !== 'ul') {
-        flushList()
-        listType = 'ul'
-      }
-      listItems.push(bullet[1])
-      return
-    }
-    const ordered = /^\d+[.、]\s*(.*)$/.exec(line)
-    if (ordered) {
-      if (listType !== 'ol') {
-        flushList()
-        listType = 'ol'
-      }
-      listItems.push(ordered[1])
-      return
-    }
-    flushList()
-    blocks.push(
-      <Paragraph key={`p-${index}`} style={{ marginBottom: 6 }}>
-        {renderInline(line, `p-${index}`)}
-      </Paragraph>,
-    )
-  })
-  flushList()
-  return <div>{blocks}</div>
-}
 
 /* ==================== 农事任务建议解析 ==================== */
 
@@ -857,7 +739,7 @@ function AssistantContent(): JSX.Element {
                           {isUser ? (
                             <span style={{ whiteSpace: 'pre-wrap' }}>{item.content}</span>
                           ) : (
-                            <div>{renderMarkdown(item.content)}</div>
+                            <div><ContentPreview value={item.content} format="markdown" /></div>
                           )}
                         </div>
                         <div
@@ -901,7 +783,7 @@ function AssistantContent(): JSX.Element {
                         }}
                       >
                         {streamText ? (
-                          <div>{renderMarkdown(streamText)}</div>
+                          <div><ContentPreview value={streamText} format="markdown" /></div>
                         ) : (
                           <Space>
                             <Spin size="small" />

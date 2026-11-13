@@ -36,6 +36,8 @@ export interface SopLibraryItem {
   sopType?: string | null
   /** 版本号 */
   versionNo?: string | null
+  /** 规程正文（富文本HTML，兼容历史Markdown） */
+  content?: string | null
   /** 规程文件地址 */
   contentUrl?: string | null
   /** 适用阶段序号 */
@@ -81,6 +83,11 @@ export function updateSopLibrary(
   return http.put<SopLibraryItem>(`${SOP_BASE}/${sopId}`, payload)
 }
 
+/** 发布 / 下架 SOP 规程 */
+export function publishSopLibrary(sopId: string, status: number): Promise<SopLibraryItem> {
+  return http.patch<SopLibraryItem>(`${SOP_BASE}/${sopId}/publish`, { status })
+}
+
 /** 删除 SOP 规程 */
 export function deleteSopLibrary(sopId: string): Promise<boolean> {
   return http.delete<boolean>(`${SOP_BASE}/${sopId}`)
@@ -99,7 +106,7 @@ export function listSopLibraryByCrop(cropId: string): Promise<SopLibraryItem[]> 
  * （实测 `title=水稻` 仍返回全部条目），因此这里补上真参数名 `keyword`。
  */
 export function listKnowledgeArticles(
-  params: PageQuery & { title?: string; keyword?: string; category?: number; status?: number },
+  params: PageQuery & { title?: string; keyword?: string; category?: number; categoryCode?: string; status?: number },
 ): Promise<PageResult<KnowledgeArticle>> {
   return http.get<PageResult<KnowledgeArticle>>(KB_BASE, params)
 }

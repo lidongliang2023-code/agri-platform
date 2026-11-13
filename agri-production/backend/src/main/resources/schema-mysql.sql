@@ -2123,7 +2123,8 @@ CREATE TABLE IF NOT EXISTS agri_prod_knowledge_article (
     category_code VARCHAR(32) COMMENT '分类：PLANT 种植 / PEST 植保 / POLICY 政策',
     title VARCHAR(128) NOT NULL,
     summary VARCHAR(500),
-    content_url VARCHAR(255) COMMENT '正文链接（后端没有正文内容列，页面按此说明显示）',
+    content MEDIUMTEXT COMMENT '正文（富文本HTML，兼容历史Markdown）',
+    content_url VARCHAR(255) COMMENT '外部正文或参考资料链接',
     author VARCHAR(50),
     source VARCHAR(100),
     read_count INT DEFAULT 0,
@@ -2144,6 +2145,7 @@ CREATE TABLE IF NOT EXISTS agri_prod_sop_library (
     sop_name VARCHAR(100) NOT NULL,
     sop_type VARCHAR(20) COMMENT 'PLANT 种植 / PEST 植保 / HARVEST 收获',
     version_no VARCHAR(16),
+    content MEDIUMTEXT COMMENT '正文（富文本HTML，兼容历史Markdown）',
     content_url VARCHAR(255),
     stage_seq INT COMMENT '作业阶段序号',
     applicable_region VARCHAR(100),
@@ -2156,6 +2158,17 @@ CREATE TABLE IF NOT EXISTS agri_prod_sop_library (
     INDEX `idx_sop_library_tenant_id` (tenant_id),
     INDEX `idx_sop_library_status` (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 正文列升级：兼容已有数据库，可重复执行。
+SET @content_ddl := IF((SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'agri_prod_knowledge_article' AND COLUMN_NAME = 'content') = 0, 'ALTER TABLE agri_prod_knowledge_article ADD COLUMN content MEDIUMTEXT NULL COMMENT ''正文（富文本HTML，兼容历史Markdown）''', 'DO 0');
+PREPARE content_stmt FROM @content_ddl;
+EXECUTE content_stmt;
+DEALLOCATE PREPARE content_stmt;
+SET @content_ddl := IF((SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'agri_prod_sop_library' AND COLUMN_NAME = 'content') = 0, 'ALTER TABLE agri_prod_sop_library ADD COLUMN content MEDIUMTEXT NULL COMMENT ''正文（富文本HTML，兼容历史Markdown）''', 'DO 0');
+PREPARE content_stmt FROM @content_ddl;
+EXECUTE content_stmt;
+DEALLOCATE PREPARE content_stmt;
+
 
 CREATE TABLE IF NOT EXISTS agri_prod_report_task (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,

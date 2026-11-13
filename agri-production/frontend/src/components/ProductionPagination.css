@@ -1,0 +1,63 @@
+.production-pagination-footer {
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+}
+.ant-table-wrapper ul.production-pagination,
+ul.ant-pagination.production-pagination {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0 0;
+  color: #4b5d53;
+  font-size: 14px;
+}
+.production-pagination-footer ul.production-pagination { margin-top: 0; }
+ul.production-pagination > li { margin: 0; }
+ul.production-pagination .ant-pagination-total-text {
+  height: auto;
+  line-height: 32px;
+  margin-inline-end: 16px;
+  white-space: nowrap;
+}
+ul.production-pagination .ant-pagination-item,
+ul.production-pagination .ant-pagination-prev,
+ul.production-pagination .ant-pagination-next {
+  min-width: 32px;
+  width: 32px;
+  height: 32px;
+  line-height: 30px;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: #fff;
+}
+ul.production-pagination .ant-pagination-item a { color: #4b5d53; padding: 0; }
+.agri-layout ul.production-pagination .ant-pagination-item-active,
+ul.production-pagination .ant-pagination-item-active {
+  border-color: #12764a;
+  background: #fff;
+  font-weight: 400;
+}
+.agri-layout ul.production-pagination .ant-pagination-item-active a,
+ul.production-pagination .ant-pagination-item-active a { color: #12764a; }
+ul.production-pagination .ant-pagination-item-link {
+  border: 0;
+  background: transparent;
+  color: #4b5d53;
+  border-radius: 50%;
+}
+ul.production-pagination .ant-pagination-disabled .ant-pagination-item-link { color: #c8d2cc; }
+ul.production-pagination .ant-pagination-options { margin-inline-start: 16px; }
+ul.production-pagination .ant-select-selector {
+  min-width: 108px;
+  border-color: #dce5df;
+  border-radius: 6px;
+  box-shadow: none;
+}
+ul.production-pagination .ant-select-selection-item { color: #4b5d53; }
+@media (max-width: 575px) {
+  ul.production-pagination .ant-pagination-total-text { width: 100%; text-align: right; margin-inline-end: 0; }
+  ul.production-pagination .ant-pagination-options { margin-inline-start: 4px; }
+}

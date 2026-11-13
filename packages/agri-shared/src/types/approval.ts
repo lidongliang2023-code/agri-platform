@@ -198,9 +198,7 @@ export interface KnowledgeArticle {
   summary?: string
   /** 正文链接（后端真字段 `contentUrl`；不是正文内容本身） */
   contentUrl?: string
-  /**
-   * 正文内容：后端无该列（只有正文链接），声明为可选，页面显示「—」。
-   */
+  /** 正文（Markdown）；生产知识文章接口持久化到 content 列。 */
   content?: string
   /** 标签列表 */
   tags?: string[]
