@@ -21,6 +21,8 @@ export interface GrowthRecord {
   cropName?: string
   /** 生育期，如 苗期 / 花期 */
   growthStage: string
+  /** 生长记录状态：1 有效 / 0 停用（与生产后端 GrowthRecordVO 一致）。 */
+  status?: 0 | 1
   /** 株高（cm） */
   plantHeight?: number
   /** 叶面积指数 */

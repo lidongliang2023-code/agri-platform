@@ -59,9 +59,8 @@ import { CROP_EMOJI_MAP, PLOT_STATUS_META } from '@/types'
 /** 视图模式：列表 / 地图 / 看板（卡片） */
 type ViewMode = 'table' | 'map' | 'board'
 
-/** 地块状态元数据 */
-/** 原型 P4 生长阶段取值 */
-const DEFAULT_STAGE_OPTIONS: string[] = ['苗期', '开花期', '结果期', '采收期']
+/** 与后端 PlotVO 状态口径一致：空闲、在种、已停用。采收期/休耕尚无状态数据源。 */
+const FILTER_STATUS_VALUES = [1, 2, 0]
 
 /**
  * 地块的「作物」显示值。
@@ -101,7 +100,8 @@ interface PlotFilters {
  */
 export default function PlotList(): JSX.Element {
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const farmIdFromUrl = searchParams.get('farmId')?.trim() || undefined
   const queryClient = useQueryClient()
 
   const [importOpen, setImportOpen] = useState(false)
@@ -110,9 +110,17 @@ export default function PlotList(): JSX.Element {
   const [pageSize, setPageSize] = useState<number>(10)
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([])
   const [filters, setFilters] = useState<PlotFilters>({
-    farmId: searchParams.get('farmId') ?? undefined,
+    farmId: farmIdFromUrl,
   })
   const [filterForm] = Form.useForm<PlotFilters>()
+
+  // 农场详情跳转和浏览器前进/后退时，同步地址、表单与实际筛选条件。
+  useEffect(() => {
+    filterForm.setFieldsValue({ farmId: farmIdFromUrl })
+    setFilters((current) => ({ ...current, farmId: farmIdFromUrl }))
+    setPageNum(1)
+    setSelectedRowKeys([])
+  }, [farmIdFromUrl, filterForm])
 
   /** 完整加载地块：不得用单页结果冒充主体全量。 */
   const plotsQuery = useQuery({
@@ -192,12 +200,18 @@ export default function PlotList(): JSX.Element {
   /** 地块 → 最新生育期 */
   const plotStageMap = useMemo<Record<string, string>>(() => {
     const map: Record<string, string> = {}
-    const sorted = [...(growthQuery.data?.list ?? [])].sort((a, b) =>
-      (a.recordDate ?? '').localeCompare(b.recordDate ?? ''),
-    )
+    // 与后端分页顺序一致：记录日期降序，同日按记录编号降序；只取有效记录。
+    const sorted = [...(growthQuery.data?.list ?? [])]
+      .filter((record) => Number(record.status) === 1)
+      .sort((a, b) =>
+        (b.recordDate ?? '').localeCompare(a.recordDate ?? '') ||
+        String(b.recordId).localeCompare(String(a.recordId)),
+      )
     sorted.forEach((record) => {
-      if (record.plotId && record.growthStage) {
-        map[record.plotId] = record.growthStage
+      const plotId = String(record.plotId ?? '')
+      const stage = record.growthStage?.trim()
+      if (plotId && stage && !map[plotId]) {
+        map[plotId] = stage
       }
     })
     return map
@@ -218,14 +232,15 @@ export default function PlotList(): JSX.Element {
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'zh-CN'))
   }, [plotsQuery.data])
 
-  /** 生长阶段下拉选项（真实数据 ∪ 原型取值） */
+  /** 仅列出当前地块的最新有效生长阶段，避免出现没有数据来源的选项。 */
   const stageOptions = useMemo<string[]>(() => {
-    const set = new Set<string>(DEFAULT_STAGE_OPTIONS)
-    Object.values(plotStageMap).forEach((stage) => {
+    const set = new Set<string>()
+    ;(plotsQuery.data?.list ?? []).forEach((plot) => {
+      const stage = plotStageMap[plot.plotId]
       if (stage) set.add(stage)
     })
-    return Array.from(set)
-  }, [plotStageMap])
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'zh-CN'))
+  }, [plotsQuery.data, plotStageMap])
 
   /** 四维过滤后的数据 */
   const filteredPlots = useMemo<Plot[]>(() => {
@@ -237,9 +252,9 @@ export default function PlotList(): JSX.Element {
       if (filters.stage && plotStageMap[plot.plotId] !== filters.stage) return false
       if (
         filters.keyword &&
-        !`${plot.plotCode ?? ''}${plot.plotName ?? ''}`
-          .toLowerCase()
-          .includes(filters.keyword.toLowerCase())
+        ![plot.plotCode, plot.plotName].some((value) =>
+          (value ?? '').toLowerCase().includes(filters.keyword!.toLowerCase()),
+        )
       ) {
         return false
       }
@@ -273,15 +288,26 @@ export default function PlotList(): JSX.Element {
 
   /** 查询 */
   const handleSearch = (): void => {
-    setFilters(filterForm.getFieldsValue())
+    const values = filterForm.getFieldsValue()
+    const farmId = values.farmId == null ? undefined : String(values.farmId).trim() || undefined
+    setFilters({ ...values, farmId, keyword: values.keyword?.trim() || undefined })
+    const nextParams = new URLSearchParams(searchParams)
+    if (farmId) nextParams.set('farmId', farmId)
+    else nextParams.delete('farmId')
+    setSearchParams(nextParams, { replace: true })
     setPageNum(1)
+    setSelectedRowKeys([])
   }
 
   /** 重置 */
   const handleReset = (): void => {
     filterForm.resetFields()
     setFilters({})
+    const nextParams = new URLSearchParams(searchParams)
+    nextParams.delete('farmId')
+    setSearchParams(nextParams, { replace: true })
     setPageNum(1)
+    setSelectedRowKeys([])
   }
 
   /** 批量删除确认 */
@@ -545,7 +571,7 @@ export default function PlotList(): JSX.Element {
 
       {(plotsQuery.isError || growthQuery.isError) && <Alert type="error" showIcon message="全量数据未加载完成，暂不显示统计" style={{ marginBottom: 16 }} />}
       <Card title="筛选地块" style={{ marginBottom: 16 }}>
-        <Form form={filterForm} layout="inline" initialValues={{ farmId: filters.farmId }} style={{ rowGap: 12 }}>
+        <Form form={filterForm} layout="inline" onFinish={handleSearch} style={{ rowGap: 12 }}>
           <Form.Item name="farmId" label="农场">
             <Select
               allowClear
@@ -554,7 +580,7 @@ export default function PlotList(): JSX.Element {
               placeholder="全部农场"
               style={{ width: 180 }}
               options={(farmQuery.data ?? []).map((farm) => ({
-                value: farm.farmId,
+                value: String(farm.farmId),
                 label: farm.farmName,
               }))}
             />
@@ -582,7 +608,7 @@ export default function PlotList(): JSX.Element {
               allowClear
               placeholder="全部状态"
               style={{ width: 130 }}
-              options={[1, 2, 3, 4, 0].map((value) => ({
+              options={FILTER_STATUS_VALUES.map((value) => ({
                 value,
                 label: PLOT_STATUS_META[value].label,
               }))}
@@ -593,7 +619,7 @@ export default function PlotList(): JSX.Element {
           </Form.Item>
           <Form.Item>
             <Space>
-              <Button type="primary" onClick={handleSearch}>
+              <Button type="primary" htmlType="submit">
                 查询
               </Button>
               <Button onClick={handleReset}>重置</Button>

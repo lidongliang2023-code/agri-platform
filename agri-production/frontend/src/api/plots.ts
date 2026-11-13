@@ -31,14 +31,20 @@ export interface PlotListParams extends PageQuery {
 /** 地块新增 / 编辑入参 */
 export type PlotPayload = Partial<Plot>
 
+/** 后端 Long 类型的 farmId 在运行时是数字；统一为页面约定的字符串，保证农场筛选和表单回显一致。 */
+function normalizePlot(plot: Plot): Plot {
+  return { ...plot, farmId: plot.farmId == null ? '' : String(plot.farmId) }
+}
+
 /** 分页查询地块列表 */
-export function listPlots(params: PlotListParams): Promise<PageResult<Plot>> {
-  return http.get<PageResult<Plot>>(BASE, params)
+export async function listPlots(params: PlotListParams): Promise<PageResult<Plot>> {
+  const page = await http.get<PageResult<Plot>>(BASE, params)
+  return { ...page, list: page.list.map(normalizePlot) }
 }
 
 /** 查询地块详情 */
-export function getPlot(plotId: string): Promise<Plot> {
-  return http.get<Plot>(`${BASE}/${plotId}`)
+export async function getPlot(plotId: string): Promise<Plot> {
+  return normalizePlot(await http.get<Plot>(`${BASE}/${plotId}`))
 }
 
 /**
@@ -54,8 +60,8 @@ export function createPlot(payload: PlotPayload): Promise<string> {
 }
 
 /** 更新地块 */
-export function updatePlot(plotId: string, payload: PlotPayload): Promise<Plot> {
-  return http.put<Plot>(`${BASE}/${plotId}`, payload)
+export async function updatePlot(plotId: string, payload: PlotPayload): Promise<Plot> {
+  return normalizePlot(await http.put<Plot>(`${BASE}/${plotId}`, payload))
 }
 
 /**
@@ -70,8 +76,8 @@ export function updatePlot(plotId: string, payload: PlotPayload): Promise<Plot> 
  * @param status 1 启用 / 0 停用
  * @returns 更新后的地块
  */
-export function updatePlotStatus(plotId: string, status: number): Promise<Plot> {
-  return http.patch<Plot>(`${BASE}/${plotId}/status?status=${status}`)
+export async function updatePlotStatus(plotId: string, status: number): Promise<Plot> {
+  return normalizePlot(await http.patch<Plot>(`${BASE}/${plotId}/status?status=${status}`))
 }
 
 /**
