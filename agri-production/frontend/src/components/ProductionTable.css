@@ -17,7 +17,8 @@
 }
 .production-record-table .production-column-resize-handle {
   position: absolute;
-  z-index: 5;
+  /* 手柄只属于当前列，不能压过 Ant Design 的固定列。 */
+  z-index: 1;
   top: 0;
   right: -5px;
   bottom: 0;
@@ -25,6 +26,18 @@
   cursor: col-resize;
   touch-action: none;
   user-select: none;
+}
+/*
+ * 固定操作列覆盖相邻列外延的 5px 拖拽区域，避免拖动列宽时竖线显示在固定列上。
+ * 背景必须不透明，否则 z-index 提高后仍会透出下面的竖线。
+ */
+.production-record-table .ant-table-thead > tr > .ant-table-cell-fix-right {
+  z-index: 3;
+  background: var(--ant-table-header-bg, #f4f7f5);
+}
+.production-record-table .ant-table-tbody > tr > .ant-table-cell-fix-right {
+  z-index: 3;
+  background: var(--ant-table-bg, #fff);
 }
 .production-record-table .production-column-resize-handle::after {
   content: '';
