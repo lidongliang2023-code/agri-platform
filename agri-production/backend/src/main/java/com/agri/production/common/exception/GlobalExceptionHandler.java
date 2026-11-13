@@ -32,7 +32,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(BusinessException.class)
     public ApiResponse<Void> handleBusinessException(BusinessException e, jakarta.servlet.http.HttpServletResponse response) {
-        if (e.getCode() == 400 || e.getCode() == 401 || e.getCode() == 403 || e.getCode() == 404) {
+        if (e.getCode() == 400 || e.getCode() == 401 || e.getCode() == 403 || e.getCode() == 404 || e.getCode() == 413 || e.getCode() == 415 || e.getCode() == 503) {
             response.setStatus(e.getCode());
         }
         log.error("业务异常: {}", e.getMessage());
@@ -133,6 +133,38 @@ public class GlobalExceptionHandler {
     public ApiResponse<Void> handleNoResourceFoundException(NoResourceFoundException e) {
         log.warn("接口不存在: {}", e.getResourcePath());
         return ApiResponse.fail(404, "接口不存在：" + e.getResourcePath());
+    }
+
+    @ExceptionHandler(org.springframework.web.multipart.support.MissingServletRequestPartException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiResponse<Void> handleMissingUploadPart(
+            org.springframework.web.multipart.support.MissingServletRequestPartException e) {
+        return ApiResponse.fail(400, "file".equals(e.getRequestPartName())
+                ? "请选择要上传的图片（文件字段为file）" : "缺少上传文件字段: " + e.getRequestPartName());
+    }
+
+    @ExceptionHandler(org.springframework.web.HttpMediaTypeNotSupportedException.class)
+    @ResponseStatus(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
+    public ApiResponse<Void> handleUnsupportedMediaType(
+            org.springframework.web.HttpMediaTypeNotSupportedException e,
+            jakarta.servlet.http.HttpServletRequest request) {
+        String message = "/api/v1/production/admin/knowledge/images".equals(request.getRequestURI())
+                ? "图片上传请求须使用multipart/form-data，并包含file图片文件"
+                : "请求格式不支持，请检查Content-Type";
+        return ApiResponse.fail(415, message);
+    }
+
+    @ExceptionHandler(org.springframework.web.multipart.MultipartException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiResponse<Void> handleInvalidMultipart(org.springframework.web.multipart.MultipartException e) {
+        log.warn("上传请求解析失败: {}", e.getClass().getSimpleName());
+        return ApiResponse.fail(400, "上传请求格式错误，请重新选择图片后上传");
+    }
+
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    @ResponseStatus(HttpStatus.PAYLOAD_TOO_LARGE)
+    public ApiResponse<Void> handleUploadSize(org.springframework.web.multipart.MaxUploadSizeExceededException e) {
+        return ApiResponse.fail(413, "单张图片不能超过5MB");
     }
 
     @ExceptionHandler(Exception.class)

@@ -1,0 +1,47 @@
+.production-content-editor { border: 1px solid #d9e4dc; border-radius: 10px; overflow: hidden; background: #fff; }
+.production-content-editor:focus-within { border-color: #12764a; box-shadow: 0 0 0 2px #12764a12; }
+.production-content-editor-heading, .production-content-editor-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; padding: 10px 14px; background: #f7faf8; }
+.production-content-editor-heading { border-bottom: 1px solid #e3eae5; }
+.production-content-editor-footer { border-top: 1px solid #e3eae5; font-size: 12px; }
+.production-content-editor-body { display: flex; align-items: stretch; }
+.production-content-editor-input, .production-content-editor-preview { flex: 1; min-width: 0; }
+.production-content-editor-preview { padding: 20px; min-height: 360px; max-height: 620px; overflow: auto; }
+.mode-split .production-content-editor-preview { border-left: 1px solid #e3eae5; }
+.production-content-editor .ql-toolbar.ql-snow { border: 0; border-bottom: 1px solid #e3eae5; background: #fcfdfc; padding: 10px; }
+.production-content-editor .ql-container.ql-snow { border: 0; font-family: inherit; font-size: 14px; }
+.production-content-editor .ql-editor { min-height: 360px; max-height: 560px; overflow-y: auto; padding: 20px; line-height: 1.8; overflow-wrap: anywhere; }
+.production-content-editor .ql-editor.ql-blank::before { left: 20px; right: 20px; font-style: normal; color: #9aa79e; }
+.production-content-editor .ql-snow .ql-picker.ql-header { width: 90px; }
+.production-content-editor .ql-snow .ql-picker.ql-header .ql-picker-label::before,
+.production-content-editor .ql-snow .ql-picker.ql-header .ql-picker-item::before { content: '正文'; }
+.production-content-editor .ql-snow .ql-picker.ql-header [data-value='1']::before { content: '一级标题'; }
+.production-content-editor .ql-snow .ql-picker.ql-header [data-value='2']::before { content: '二级标题'; }
+.production-content-editor .ql-snow .ql-picker.ql-header [data-value='3']::before { content: '三级标题'; }
+.production-content-editor .ql-snow .ql-picker.ql-size [data-value]::before { content: attr(data-value); }
+.production-content-editor .ql-snow .ql-picker.ql-size .ql-picker-label:not([data-value])::before { content: '默认字号'; }
+.production-content-editor .ql-snow .ql-picker-options { z-index: 20; }
+.production-content-editor .ql-snow.ql-toolbar button:hover .ql-stroke,
+.production-content-editor .ql-snow.ql-toolbar button.ql-active .ql-stroke { stroke: #12764a; }
+.production-content-editor .ql-snow.ql-toolbar button:hover .ql-fill,
+.production-content-editor .ql-snow.ql-toolbar button.ql-active .ql-fill { fill: #12764a; }
+.production-content-editor .ql-snow.ql-toolbar .ql-picker-label.ql-active { color: #12764a; }
+.production-content-editor.is-disabled .ql-toolbar { pointer-events: none; opacity: .55; }
+.production-content-editor .ql-tooltip { display: none !important; }
+.production-rich-content { line-height: 1.8; overflow-wrap: anywhere; color: inherit; }
+.production-rich-content p { margin: 0 0 .8em; white-space: pre-wrap; }
+.production-rich-content h1 { font-size: 2em; }
+.production-rich-content h2 { font-size: 1.5em; }
+.production-rich-content h3 { font-size: 1.2em; }
+.production-rich-content h1, .production-rich-content h2, .production-rich-content h3, .production-rich-content h4 { margin: 1em 0 .5em; font-weight: 600; line-height: 1.5; }
+.production-rich-content > :first-child { margin-top: 0; }
+.production-rich-content ul, .production-rich-content ol { padding-left: 1.8em; margin: .6em 0; }
+.production-rich-content blockquote { border-left: 3px solid #93b6a1; margin: 12px 0; padding: 4px 14px; color: #53675b; background: #f4f8f5; }
+.production-rich-content pre { padding: 12px; border-radius: 6px; background: #f3f6f4; white-space: pre-wrap; }
+.production-rich-content code { background: #f3f6f4; padding: 1px 4px; border-radius: 3px; }
+.production-rich-content a { color: #12764a; text-decoration: underline; }
+.production-rich-content table { border-collapse: collapse; max-width: 100%; display: block; overflow-x: auto; }
+.production-rich-content th, .production-rich-content td { border: 1px solid #d9e4dc; padding: 8px 12px; }
+@media (max-width: 767px) { .mode-split { flex-direction: column; } .mode-split .production-content-editor-preview { border-left: 0; border-top: 1px solid #e3eae5; } .production-content-editor-heading, .production-content-editor-footer { align-items: flex-start; } }
+
+/* 正文图片自适应编辑区与统一详情，保留原始宽高比。 */
+.production-content-editor .ql-editor img, .production-rich-content img { max-width: 100%; height: auto; vertical-align: middle; border-radius: 4px; }

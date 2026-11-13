@@ -395,11 +395,21 @@ function installResponseInterceptor(instance: AxiosInstance): void {
       return Promise.reject(new Error('登录已失效，请重新登录'))
     }
 
-    if (!silent) {
-      const bizMessage = error.response?.data?.message
-      message.error(bizMessage || error.message || '网络异常，请稍后重试')
+    const body = error.response?.data
+    const failure = error as AxiosError<ApiResult<unknown>> & ApiRequestError
+    if (body && typeof body === 'object') {
+      if (typeof body.message === 'string' && body.message.trim()) {
+        failure.message = body.message
+      }
+      if (typeof body.code === 'number' && body.code !== SUCCESS_CODE) {
+        failure.bizCode = body.code
+      }
     }
-    return Promise.reject(error)
+    failure.httpStatus = status
+    if (!silent) {
+      message.error(failure.message || '网络异常，请稍后重试')
+    }
+    return Promise.reject(failure)
   },
   )
 }
