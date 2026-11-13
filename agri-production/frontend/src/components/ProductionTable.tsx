@@ -8,6 +8,7 @@ import type { TableProps } from 'antd'
 import { useQueryClient } from '@tanstack/react-query'
 import ResizableTableHeader from './ResizableTableHeader'
 import './ProductionTable.css'
+import { productionPagination } from './ProductionPagination'
 
 type ColumnWidths = Record<string, number>
 type ProductionTableProps<T extends Record<string, any>, P extends Record<string, any>> = ProTableProps<T, P> & {
@@ -75,6 +76,7 @@ export default function ProductionTable<T extends Record<string, any>, P extends
   const headerComponents = typeof components?.header === 'object' ? components.header : {}
   return <ProTable<T, P>
     {...props}
+    pagination={pathname.startsWith('/admin') ? productionPagination(props.pagination) : props.pagination}
     tableRender={mergeToolbar ? (_tableProps, _defaultDom, dom) => <>
       {dom.toolbar && createPortal(dom.toolbar, toolbarHost)}
       {dom.alert}

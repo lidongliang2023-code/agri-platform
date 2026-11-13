@@ -1,3 +1,5 @@
+import ProductionPagination from '@/components/ProductionPagination'
+import Table from '@/components/ProductionListTable'
 /**
  * 页面名称：冷链资源撮合
  * 路由路径：/admin/production/food-safety/cold-chain
@@ -28,7 +30,6 @@ import {
   Select,
   Space,
   Statistic,
-  Table,
   Tag,
   Typography,
 } from 'antd'
@@ -511,49 +512,11 @@ export default function ColdChain(): JSX.Element {
         )}
       </Row>
 
-      {/* 资源分页 */}
-      <Card size="small" style={{ marginBottom: 12 }}>
-        <Row justify="space-between" align="middle">
-          <Col>
-            <Text type="secondary">共 {listQuery.data?.total ?? 0} 个冷链资源</Text>
-          </Col>
-          <Col>
-            <Space>
-              <Button
-                size="small"
-                disabled={pageNum <= 1}
-                onClick={() => setPageNum((prev) => Math.max(1, prev - 1))}
-              >
-                上一页
-              </Button>
-              <Text>
-                {pageNum} / {listQuery.data?.pages ?? 1}
-              </Text>
-              <Button
-                size="small"
-                disabled={pageNum >= (listQuery.data?.pages ?? 1)}
-                onClick={() => setPageNum((prev) => prev + 1)}
-              >
-                下一页
-              </Button>
-              <Select
-                size="small"
-                style={{ width: 110 }}
-                value={pageSize}
-                options={[
-                  { value: 8, label: '8 个/页' },
-                  { value: 12, label: '12 个/页' },
-                  { value: 16, label: '16 个/页' },
-                ]}
-                onChange={(value: number) => {
-                  setPageSize(value)
-                  setPageNum(1)
-                }}
-              />
-            </Space>
-          </Col>
-        </Row>
-      </Card>
+      {/* 资源列表和表格列表共用分页组件。 */}
+      <div style={{ marginBottom: 16 }}>
+        <ProductionPagination current={pageNum} pageSize={pageSize} total={listQuery.data?.total ?? 0}
+          pageSizeOptions={[8, 12, 16, 20, 50]} onChange={(page, size) => { setPageNum(page); setPageSize(size) }} />
+      </div>
 
       {/* 撮合记录（原型 P19 Match Records） */}
       <Card title="撮合记录">

@@ -1,3 +1,4 @@
+import Table from '@/components/ProductionListTable'
 /**
  * 页面名称：AI模型管理
  * 路由路径：/admin/production/ai/models
@@ -43,7 +44,6 @@ import {
   Select,
   Space,
   Statistic,
-  Table,
   Tag,
   Typography,
 } from 'antd'

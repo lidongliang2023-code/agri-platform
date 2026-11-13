@@ -7,9 +7,9 @@ import {
   ProFormSelect,
   ProFormText,
   ProFormTextArea,
-  ProTable,
 } from '@ant-design/pro-components'
 import type { ActionType, ProColumns } from '@ant-design/pro-components'
+import ProTable from '@/components/ProductionTable'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CheckCircleOutlined, DeleteOutlined, EditOutlined, PlusOutlined, StopOutlined } from '@ant-design/icons'
 import {
