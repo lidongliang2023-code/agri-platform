@@ -51,6 +51,15 @@ public class TokenService {
         return new long[]{Long.parseLong(parts[0]), Long.parseLong(parts[1])};
     }
 
+    /** 仅读取服务端保存的归属；未知或失效令牌不用于定位退出账号。 */
+    public Long userIdOf(String refreshToken) {
+        if (refreshToken == null || refreshToken.isBlank()) {
+            return null;
+        }
+        String value = redis.opsForValue().get(KEY_PREFIX + refreshToken);
+        return value == null ? null : Long.valueOf(value.split(":")[0]);
+    }
+
     /**
      * 吊销单枚刷新令牌，并返回它归属的用户 ID。
      *

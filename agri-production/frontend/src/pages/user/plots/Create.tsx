@@ -23,9 +23,9 @@ import Card from '@/components/SectionCard'
  *   这样列表 / 详情的地图视图能直接按中心点定位并展示边界。
  * - 支持 `?plotId=` 编辑态与 `?farmId=` 预选农场
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import PageContainer from '@/components/ProductionPageContainer'
 import { LeftOutlined, EnvironmentOutlined } from '@ant-design/icons'
 import {
@@ -33,6 +33,7 @@ import {
   Button,
   Col,
   Form,
+  Grid,
   Input,
   InputNumber,
   Radio,
@@ -44,7 +45,9 @@ import {
   message,
 } from 'antd'
 import { createPlot, getPlot, listPlots, updatePlot } from '@/api/plots'
-import { getFarmSummary, listAllFarms } from '@/api/farms'
+import { http } from '@/utils/request'
+import { loadCompletePages } from '@/utils/load-complete-pages'
+import { getFarm, getFarmSummary, listAllFarms } from '@/api/farms'
 import {
   TiandituBoundaryEditor,
   computePolygonMetrics,
@@ -88,7 +91,7 @@ interface PolygonGeometry {
   /** 几何类型 */
   type: 'Polygon'
   /** 外环坐标 */
-  coordinates: number[][]
+  coordinates: number[][][]
   /** 坡度描述 */
   slope?: string
 }
@@ -105,13 +108,13 @@ interface PlotFormValues {
   /** 面积（亩） */
   area: number
   /** 土壤类型 */
-  soilType: string
+  soilType?: string
   /** 灌溉方式 */
-  irrigationType: string
+  irrigationType?: string
   /** 种植类型 */
-  plantingType: number
+  plantingType?: number
   /** 坡度 */
-  slope: string
+  slope?: string
   /** 经度 */
   longitude?: number
   /** 纬度 */
@@ -148,7 +151,7 @@ function buildBoundary(values: PlotFormValues, points: number[][]): string | und
   if (points.length >= 3) {
     const geometry: PolygonGeometry = {
       type: 'Polygon',
-      coordinates: [...points, points[0]],
+      coordinates: [[...points, points[0]]],
       slope: values.slope,
     }
     return JSON.stringify(geometry)
@@ -172,7 +175,10 @@ function buildBoundary(values: PlotFormValues, points: number[][]): string | und
  * @returns 页面内容
  */
 export default function Create(): JSX.Element {
+  const screens = Grid.useBreakpoint()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const submitting = useRef(false)
   const [searchParams] = useSearchParams()
   const editingPlotId = searchParams.get('plotId')
   const presetFarmId = searchParams.get('farmId')
@@ -197,6 +203,16 @@ export default function Create(): JSX.Element {
     queryFn: () => listAllFarms(),
   })
 
+  const selectedFarmQuery = useQuery({ queryKey: ['farm-detail', farmId], queryFn: () => getFarm(farmId!), enabled: !!farmId })
+  const selectedFarmBoundary = selectedFarmQuery.data?.boundary
+  const draftBoundary = boundaryPoints.length >= 3 ? JSON.stringify({ type: 'Polygon', coordinates: [[...boundaryPoints, boundaryPoints[0]]] }) : undefined
+  const boundaryCheckQuery = useQuery({
+    queryKey: ['plot-boundary-preview', farmId, selectedFarmBoundary, draftBoundary, editingPlotId],
+    queryFn: () => http.post<{ status: string; message: string }>(`/farms/${farmId}/plot-boundary-check`, { boundary: draftBoundary, plotId: editingPlotId }),
+    enabled: !!farmId && !!draftBoundary,
+    retry: false,
+  })
+
   /** 编辑态地块 */
   const plotQuery = useQuery({
     queryKey: ['plot-detail', editingPlotId],
@@ -218,11 +234,11 @@ export default function Create(): JSX.Element {
       farmId: plot.farmId,
       plotName: plot.plotName,
       area: Number(plot.area) || 0,
-      soilType: plot.soilType || '壤土',
-      irrigationType: plot.irrigationType || '滴灌',
+      soilType: plot.soilType ?? undefined,
+      irrigationType: plot.irrigationType ?? undefined,
       // 存量行没有这一列（补列前建的），不猜；表单默认露天只在新建时生效
-      plantingType: plot.plantingType ?? 1,
-      slope: geometry?.slope ?? '平地',
+      plantingType: plot.plantingType ?? undefined,
+      slope: geometry?.slope,
       // 点型边界 → 用几何里的坐标；否则用后端中心点列；都没有但有多边形时用质心
       longitude: pointCoordinates?.[0] ?? plot.centerLongitude ?? boundaryCenter?.longitude,
       latitude: pointCoordinates?.[1] ?? plot.centerLatitude ?? boundaryCenter?.latitude,
@@ -243,7 +259,8 @@ export default function Create(): JSX.Element {
   /** 农场下地块（计算已用面积） */
   const plotsQuery = useQuery({
     queryKey: ['plots-all'],
-    queryFn: () => listPlots({ pageNum: 1, pageSize: 500 }),
+    queryFn: () => loadCompletePages(listPlots, (plot) => plot.plotId),
+    retry: false,
   })
 
   /** 剩余可用面积 */
@@ -302,8 +319,8 @@ export default function Create(): JSX.Element {
     if (farm?.longitude !== undefined && farm?.latitude !== undefined) {
       return { longitude: Number(farm.longitude), latitude: Number(farm.latitude) }
     }
-    return null
-  }, [watchedLongitude, watchedLatitude, farmQuery.data, farmId])
+    return polygonCentroid(parseBoundaryVertices(selectedFarmBoundary))
+  }, [watchedLongitude, watchedLatitude, farmQuery.data, farmId, selectedFarmBoundary])
 
   /**
    * 按地址定位地块位置。
@@ -354,6 +371,10 @@ export default function Create(): JSX.Element {
               latitude: params.values.latitude,
             }
           : polygonCentroid(params.points)
+      const boundary = buildBoundary(params.values, params.points)
+      const result = await http.post<{ status: string; message: string }>(`/farms/${params.values.farmId}/plot-boundary-check`, { boundary, plotId: editingPlotId })
+      if (result.status === 'outside' || result.status === 'invalid' || result.status === 'overlap') throw new Error(result.message)
+      if (result.status !== 'inside') message.warning(result.message)
       const payload = {
         farmId: params.values.farmId,
         plotName: params.values.plotName,
@@ -361,7 +382,7 @@ export default function Create(): JSX.Element {
         soilType: params.values.soilType,
         irrigationType: params.values.irrigationType,
         plantingType: params.values.plantingType as 1 | 2 | 3 | 4,
-        boundary: buildBoundary(params.values, params.points),
+        boundary: boundary ?? '',
         centerLongitude: center ? Number(center.longitude.toFixed(6)) : undefined,
         centerLatitude: center ? Number(center.latitude.toFixed(6)) : undefined,
         // 这里原先固定发 status: 1，但后端 PlotSaveDTO **根本没有这个字段**（新增的地块统一是
@@ -369,14 +390,19 @@ export default function Create(): JSX.Element {
         // 更糟的是若哪天后端收下这个字段，编辑一个已停用地块时会被这一行**静默重新启用**。
       }
       if (editingPlotId) {
-        await updatePlot(editingPlotId, payload)
-        return { plotId: editingPlotId, farmId: params.values.farmId, action: params.action }
+        const plot = await updatePlot(editingPlotId, payload)
+        return { plotId: editingPlotId, farmId: params.values.farmId, action: params.action, plot }
       }
       // 后端 POST /plots 返回 ApiResponse<String>（新地块主键），直取即可。
       const plotId = await createPlot(payload)
-      return { plotId, farmId: params.values.farmId, action: params.action }
+      return { plotId, farmId: params.values.farmId, action: params.action, plot: undefined }
     },
-    onSuccess: ({ plotId, farmId, action }) => {
+    onSuccess: ({ plotId, farmId, action, plot }) => {
+      if (plot) queryClient.setQueryData(['plot-detail', plotId], plot)
+      void queryClient.invalidateQueries({ queryKey: ['plots-all'] })
+      void queryClient.invalidateQueries({ queryKey: ['farm-summary', farmId] })
+      void queryClient.invalidateQueries({ queryKey: ['farm-detail', farmId] })
+      void queryClient.invalidateQueries({ queryKey: ['plot-farm', farmId] })
       message.success(editingPlotId ? '地块信息已更新' : '地块创建成功')
       if (action === 'crop') {
         // 「保存并添加作物」跳转农事计划创建弹窗（约定见 PlanList：`?create=1` 自动弹出新增 ModalForm，
@@ -398,23 +424,42 @@ export default function Create(): JSX.Element {
       }
       navigate('/production/plots')
     },
+    onError: (error) => message.error(error instanceof Error ? error.message : '保存失败，请稍后重试'),
+    onSettled: () => { submitting.current = false },
   })
 
   /** 提交 */
   const handleSubmit = (action: 'list' | 'crop'): void => {
+    if (submitting.current || saveMutation.isPending) return
+    const longitude = form.getFieldValue('longitude')
+    const latitude = form.getFieldValue('latitude')
+    if ((typeof longitude === 'number') !== (typeof latitude === 'number')) {
+      message.warning('中心经纬度必须同时填写或同时清空')
+      return
+    }
     // 1~2 个顶点构不成边界；直接拦下，避免把半成品静默丢掉或降级成中心点
     if (boundaryPoints.length > 0 && boundaryPoints.length < 3) {
       message.warning('地块边界至少需要 3 个顶点：请继续在地图上绘制，或清空边界后保存')
       return
     }
+    if (boundaryCheckQuery.data?.status === 'outside' || boundaryCheckQuery.data?.status === 'invalid') {
+      message.error(boundaryCheckQuery.data.message)
+      return
+    }
+    submitting.current = true
     setSaveAction(action)
     void form.validateFields().then((values) => {
       saveMutation.mutate({ values, action, points: boundaryPoints })
+    }).catch(() => {
+      submitting.current = false
+      const invalid = form.getFieldsError().find(field => field.errors.length)
+      if (invalid) form.scrollToField(invalid.name, { block: 'center', behavior: 'smooth' })
+      message.warning('请完整填写必填项后再保存')
     })
   }
 
   return (
-    <PageContainer
+    <PageContainer mobileForm
       title={editingPlotId ? '编辑地块' : '新增地块'}
       onBack={() => navigate('/production/plots')}
       backIcon={<LeftOutlined />}
@@ -425,7 +470,7 @@ export default function Create(): JSX.Element {
         </Button>,
         <Button
           key="save"
-          disabled={Boolean(editingPlotId) && (plotQuery.isLoading || plotQuery.isError)}
+          disabled={saveMutation.isPending || (Boolean(editingPlotId) && (plotQuery.isLoading || plotQuery.isError))}
           loading={saveAction === 'list' && saveMutation.isPending}
           onClick={() => handleSubmit('list')}
         >
@@ -434,7 +479,7 @@ export default function Create(): JSX.Element {
         <Button
           key="save-crop"
           type="primary"
-          disabled={Boolean(editingPlotId) || plotQuery.isLoading || plotQuery.isError}
+          disabled={saveMutation.isPending || Boolean(editingPlotId) || plotQuery.isLoading || plotQuery.isError}
           loading={saveAction === 'crop' && saveMutation.isPending}
           onClick={() => handleSubmit('crop')}
         >
@@ -448,6 +493,7 @@ export default function Create(): JSX.Element {
         <Card><Alert type="error" showIcon message="地块资料加载失败，请重新加载后编辑" action={<Button onClick={() => void plotQuery.refetch()}>重新加载</Button>} /></Card>
       ) : (
         <Form
+          scrollToFirstError
           form={form}
           layout="vertical"
           initialValues={{
@@ -467,6 +513,7 @@ export default function Create(): JSX.Element {
             >
               <Select
                 placeholder="请选择所属农场"
+                disabled={Boolean(editingPlotId)}
                 style={{ maxWidth: 360 }}
                 onChange={(value: string) => setFarmId(value)}
                 options={(farmQuery.data ?? []).map((farm) => ({
@@ -553,8 +600,9 @@ export default function Create(): JSX.Element {
               />
             </Form.Item>
 
-            <Form.Item name="slope" label="坡度">
+            <Form.Item name="slope" label="坡度" extra="坡度随位置或边界保存；请先填写完整中心经纬度或绘制边界。">
               <Radio.Group
+                disabled={boundaryPoints.length < 3 && !(typeof watchedLongitude === 'number' && typeof watchedLatitude === 'number')}
                 options={SLOPE_OPTIONS.map((item) => ({ value: item, label: item }))}
                 optionType="button"
                 buttonStyle="solid"
@@ -584,10 +632,16 @@ export default function Create(): JSX.Element {
             </Space.Compact>
 
 
+            <Alert style={{ margin: '12px 0' }} showIcon
+              type={boundaryCheckQuery.isError || boundaryCheckQuery.data?.status === 'outside' || boundaryCheckQuery.data?.status === 'invalid' || boundaryCheckQuery.data?.status === 'overlap' ? 'error' : boundaryCheckQuery.data?.status === 'inside' ? 'success' : 'warning'}
+              message={boundaryCheckQuery.isError ? '范围与重叠校验失败，保存时将重新校验' : boundaryCheckQuery.isFetching ? '正在校验完整地块范围与重叠…' : !draftBoundary ? '地块边界未完成，暂无法校验完整范围' : boundaryCheckQuery.data?.message ?? '等待范围校验'}
+              description="蓝色为所属农场边界，绿色为地块边界。地块须完整位于农场内，且不得与同农场其他地块产生面积重叠；允许共边或共点，编辑时排除自身，更换农场后重新校验。"
+            />
             <TiandituBoundaryEditor
+              referenceBoundary={selectedFarmBoundary}
               value={boundaryPoints}
               onChange={setBoundaryPoints}
-              height={420}
+              height={screens.md === false ? 280 : 420}
               focusPoint={boundaryFocusPoint}
               locateSignal={locateSignal}
               disabled={saveMutation.isPending}
@@ -643,7 +697,7 @@ export default function Create(): JSX.Element {
 
             <Row gutter={24} style={{ marginTop: 12 }}>
               <Col xs={24} md={12}>
-                <Form.Item name="longitude" label="中心经度">
+                <Form.Item name="longitude" label="中心经度" rules={[{ type: 'number', min: -180, max: 180, message: '经度应在-180到180之间' }]}>
                   <InputNumber
                     precision={6}
                     style={{ width: '100%' }}
@@ -652,7 +706,7 @@ export default function Create(): JSX.Element {
                 </Form.Item>
               </Col>
               <Col xs={24} md={12}>
-                <Form.Item name="latitude" label="中心纬度">
+                <Form.Item name="latitude" label="中心纬度" rules={[{ type: 'number', min: -90, max: 90, message: '纬度应在-90到90之间' }]}>
                   <InputNumber
                     precision={6}
                     style={{ width: '100%' }}

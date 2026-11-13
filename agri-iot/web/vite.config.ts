@@ -6,6 +6,8 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
+      'antd': path.resolve(__dirname, 'node_modules/antd'),
+      '@ant-design/icons': path.resolve(__dirname, 'node_modules/@ant-design/icons'),
       '@agri/shared': path.resolve(__dirname, '../../packages/agri-shared/src'),
       '@': path.resolve(__dirname, './src'),
     },

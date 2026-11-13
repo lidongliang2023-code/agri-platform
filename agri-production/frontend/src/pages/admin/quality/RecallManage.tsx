@@ -1,27 +1,15 @@
 import { useState } from 'react'
-import { Alert, App, Button, Modal, Space, Table, Typography } from 'antd'
+import { Alert, App, Button, Form, Input, Modal, Tag } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { fetchFailedInspections, recallQualityBatch, type AdminInspectionRow } from '@/api/admin/trace'
-
-export default function RecallManage() {
- const {message}=App.useApp()
- const client=useQueryClient()
- const [selected,setSelected]=useState<AdminInspectionRow>()
- const query=useQuery({queryKey:['admin','quality','failed'],queryFn:fetchFailedInspections,retry:false})
- const recall=useMutation({mutationFn:async(row:AdminInspectionRow)=>{
-  if(!row.batchId)throw new Error('检测单未关联采收批次，无法召回')
-  const result=await recallQualityBatch(row.batchId)
-  if(Number(result.status)!==4 || String(result.batchId)!==String(row.batchId))throw new Error('批次冻结回读未确认，请刷新核对，勿重复提交')
-  return result
- },onSuccess:()=>{message.success('服务端已确认批次冻结；同主体分仓库存冻结及溯源码作废已在同一事务执行');setSelected(undefined);void client.invalidateQueries({queryKey:['admin','quality']});void client.invalidateQueries({queryKey:['admin','trace']})},onError:(e:Error)=>message.error(e.message)})
- return <Space direction="vertical" size={16} style={{width:'100%'}}>
- <Space style={{justifyContent:'space-between',width:'100%'}}><Typography.Title level={4} style={{margin:0}}>不合格批次与召回</Typography.Title><Button loading={query.isFetching} onClick={()=>void query.refetch()}>刷新</Button></Space>
- <Alert type="warning" showIcon message="召回阻断流通，实际回收处置需独立凭据" description="本页读取用户端真实不合格检测单。召回将冻结同主体采收批次及分仓库存、作废对应单品码；不代表已通知交易相对方、货品已回收或已销毁。不再将浏览器本地登记显示为结案。"/>
- {query.isError?<Alert type="error" message="不合格检测台账读取失败" action={<Button onClick={()=>void query.refetch()}>重试</Button>}/>:null}
- <Table<AdminInspectionRow> rowKey="inspectionId" loading={query.isFetching} dataSource={query.data??[]} scroll={{x:1100}} pagination={{defaultPageSize:20,showSizeChanger:true}} columns={[
- {title:'检测单号',dataIndex:'inspectionNo',width:200,render:(v,r)=>v??r.inspectionId},{title:'批次号',dataIndex:'batchNo',width:180,render:v=>v??'未关联'},{title:'产品',dataIndex:'cropName',width:150,render:v=>v??'—'},
- {title:'检测机构',dataIndex:'labName',width:200,render:v=>v??'—'},{title:'结论',dataIndex:'result',width:100},{title:'操作',key:'action',width:140,fixed:'right',render:(_,r)=><Button danger disabled={!r.batchId} onClick={()=>setSelected(r)}>核验并召回</Button>}
- ]}/>
- <Modal title="确认监管召回" open={Boolean(selected)} confirmLoading={recall.isPending} onCancel={()=>{if(!recall.isPending)setSelected(undefined)}} onOk={()=>{if(selected)recall.mutate(selected)}} okText="冻结批次并作废码" okButtonProps={{danger:true}}><p>检测单：{selected?.inspectionNo??selected?.inspectionId}</p><p>批次：{selected?.batchNo??selected?.batchId}</p><p>请依据实际不合格事实执行。成功后以服务端返回的批次冻结状态为准，不执行退款或销毁。</p></Modal>
- </Space>
+import { useSearchParams } from 'react-router-dom'
+import type { ProColumns } from '@ant-design/pro-components'
+import { qualityRecords, controlQualityBatch, type QualityRecord } from '@/api/admin/quality-workbench'
+import { Card, Table, QualityPage, LoadError, InspectionDetail } from './QualityShared'
+const controlled=(r:QualityRecord)=>Number(r.batch?.status)===4&&Number(r.unrevokedCodeCount??0)===0&&Number(r.frozenInventoryCount??0)===Number(r.inventoryCount??0)&&!!r.batch?.remark?.includes('监管管控：')
+export default function RecallManage(){
+ const {message}=App.useApp(),qc=useQueryClient(),[params]=useSearchParams();const [page,setPage]=useState(1),[size,setSize]=useState(20),[keyword,setKeyword]=useState(''),[selected,setSelected]=useState<QualityRecord>(),[active,setActive]=useState(params.get('inspectionId')||''),[form]=Form.useForm<{reason:string}>()
+ const query=useQuery({queryKey:['quality-control',page,size,keyword],queryFn:()=>qualityRecords({pageNum:page,pageSize:size,keyword,result:'FAIL'}),retry:false})
+ const mutation=useMutation({mutationFn:async()=>{const v=await form.validateFields();if(!selected)throw new Error('请选择检测单');const d=await controlQualityBatch(selected.inspection.inspectionId,v.reason);if(Number(d.batch?.status)!==4)throw new Error('冻结状态未确认，请刷新核验');return d},onSuccess:()=>{message.success('批次冻结、分仓库存冻结及溯源码作废已确认');setSelected(undefined);form.resetFields();void qc.invalidateQueries({queryKey:['quality-control']});void qc.invalidateQueries({queryKey:['quality-inspection']});void qc.invalidateQueries({queryKey:['admin','trace']})},onError:(e:Error)=>message.error(e.message)})
+ const cols:ProColumns<QualityRecord>[]=[{title:'检测单号',width:200,render:(_,r)=><Button type="link" onClick={()=>setActive(r.inspection.inspectionId)}>{r.inspection.inspectionNo||r.inspection.inspectionId}</Button>},{title:'批次号',width:180,render:(_,r)=>r.inspection.batchNo||'未关联'},{title:'产品',width:140,render:(_,r)=>r.inspection.cropName||'—'},{title:'农场',dataIndex:'farmName',width:180},{title:'检测机构',width:185,render:(_,r)=>r.inspection.labName||'—'},{title:'管控状态',width:130,render:(_,r)=><Tag color={controlled(r)?'red':'orange'}>{r.batch?(controlled(r)?'管控已完成':Number(r.batch.status)===4?'已冻结待补管控':'待管控'):'无有效批次'}</Tag>},{title:'冻结库存记录',width:130,render:(_,r)=>r.batch?`${r.frozenInventoryCount??0} / ${r.inventoryCount??0}`:'—'},{title:'操作',valueType:'option',fixed:'right',width:190,render:(_,r)=>[<Button key="d" type="link" onClick={()=>setActive(r.inspection.inspectionId)}>详情</Button>,<Button key="c" danger type="link" disabled={!r.batch||controlled(r)} onClick={()=>{setSelected(r);form.resetFields()}}>管控批次</Button>]}]
+ return <QualityPage title="不合格品处置" subTitle="依据真实检测结论实施生产侧风险管控，跟踪批次与库存状态"><Alert showIcon type="warning" message="冻结同主体批次及分仓库存、作废关联单品码；不自动执行交易下架、物流回收、退款或销毁。相关订单应由交易履约域处理。"/><LoadError error={query.error}/><Card title="不合格批次台账"><div className="quality-filters"><Input.Search value={keyword} allowClear placeholder="检测单号 / 批次号 / 产品" style={{width:260}} onChange={e=>{setKeyword(e.target.value);setPage(1)}}/><Button onClick={()=>{setKeyword('');setPage(1)}}>重置</Button></div><Table<QualityRecord> rowKey={r=>r.inspection.inspectionId} columns={cols} dataSource={query.data?.list??[]} loading={query.isFetching} search={false} columnWidthStorageKey="quality-controls" options={{reload:()=>void query.refetch()}} pagination={{current:page,pageSize:size,total:query.data?.total??0,showSizeChanger:true,onChange:(p,s)=>{setPage(s===size?p:1);setSize(s)}}}/></Card><InspectionDetail id={active||undefined} onClose={()=>setActive('')}/><Modal title="确认冻结不合格批次" rootClassName="quality-dialog" open={!!selected} onCancel={()=>{if(!mutation.isPending)setSelected(undefined)}} confirmLoading={mutation.isPending} onOk={()=>mutation.mutate()} okText="冻结批次并作废码" okButtonProps={{danger:true}}><p>检测单：{selected?.inspection.inspectionNo}</p><p>批次：{selected?.inspection.batchNo}</p><Form form={form} layout="horizontal" labelCol={{span:5}} wrapperCol={{span:19}}><Form.Item name="reason" label="处置依据" rules={[{required:true,whitespace:true,message:'填写不合格事实与处置依据'},{max:200}]}><Input.TextArea rows={3} maxLength={200} showCount/></Form.Item></Form></Modal></QualityPage>
 }

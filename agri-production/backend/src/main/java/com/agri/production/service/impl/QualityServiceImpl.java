@@ -398,7 +398,7 @@ public class QualityServiceImpl implements IQualityService {
     @Override
     public PageResult<TestingLab> pageLabs(int pageNum, int pageSize, String keyword, Integer status, String tenantId) {
         LambdaQueryWrapper<TestingLab> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(TestingLab::getTenantId, tenantId);
+        wrapper.and(q -> q.eq(TestingLab::getTenantId, tenantId).or().eq(TestingLab::getTenantId, "PLATFORM"));
         if (keyword != null && !keyword.isBlank()) {
             String kw = keyword.trim();
             wrapper.and(q -> q.like(TestingLab::getLabName, kw).or().like(TestingLab::getLabCode, kw));
@@ -416,7 +416,7 @@ public class QualityServiceImpl implements IQualityService {
     @Override
     public List<TestingLab> activeLabs(String tenantId) {
         return labMapper.selectList(new LambdaQueryWrapper<TestingLab>()
-                .eq(TestingLab::getTenantId, tenantId)
+                .and(q -> q.eq(TestingLab::getTenantId, tenantId).or().eq(TestingLab::getTenantId, "PLATFORM"))
                 .eq(TestingLab::getStatus, 1)
                 .orderByAsc(TestingLab::getLabLevel)
                 .orderByAsc(TestingLab::getLabId));
@@ -535,18 +535,19 @@ public class QualityServiceImpl implements IQualityService {
             log.warn("质检单 {} 关联的采收批次不存在或租户不一致：{}", inspection.getInspectionNo(), inspection.getBatchId());
             return;
         }
+        boolean regulatoryHold = batch.getRemark() != null && (batch.getRemark().contains("监管管控：") || batch.getRemark().contains("监管召回："));
         batch.setInspectionId(inspection.getInspectionId());
         batch.setInspectionNo(inspection.getInspectionNo());
         if (RESULT_FAIL.equals(result)) {
             batch.setStatus(4);
             batch.setRemark(appendBatchRemark(batch.getRemark(), "质检不合格，批次已冻结：" + inspection.getInspectionNo()));
-        } else if (Integer.valueOf(4).equals(batch.getStatus())) {
+        } else if (Integer.valueOf(4).equals(batch.getStatus()) && !regulatoryHold) {
             batch.setStatus(1);
             batch.setRemark(appendBatchRemark(batch.getRemark(), "质检合格，批次解除冻结：" + inspection.getInspectionNo()));
         }
         batch.setUpdateTime(LocalDateTime.now());
         harvestBatchMapper.updateById(batch);
-        applyInventoryFreeze(batch.getBatchId(), tenantId, RESULT_FAIL.equals(result));
+        applyInventoryFreeze(batch.getBatchId(), tenantId, RESULT_FAIL.equals(result) || regulatoryHold);
 
         if (RESULT_FAIL.equals(result)) {
             AlertRecord alert = new AlertRecord();
@@ -619,7 +620,14 @@ public class QualityServiceImpl implements IQualityService {
             com.agri.production.entity.Farm farm = farmMapper.selectById(inspection.getFarmId());
             if (farm == null || !tenantId.equals(farm.getTenantId())) throw new BusinessException(404, "当前主体下农场不存在");
         }
-        if (inspection.getLabId() != null) inspection.setLabName(getOwnedLab(inspection.getLabId(), tenantId).getLabName());
+        if (inspection.getLabId() != null) {
+            TestingLab lab = labMapper.selectById(inspection.getLabId());
+            if (lab == null || (!tenantId.equals(lab.getTenantId()) && !"PLATFORM".equals(lab.getTenantId())))
+                throw new BusinessException(404, "检测机构不存在或不可使用");
+            if (!Integer.valueOf(1).equals(lab.getStatus()) && inspection.getInspectionId() == null)
+                throw new BusinessException(400, "检测机构未准入或已停用");
+            inspection.setLabName(lab.getLabName());
+        }
         if (inspection.getSampleQty() != null && inspection.getSampleQty().signum() <= 0) throw new BusinessException(400, "抽样数量必须大于0");
     }
 

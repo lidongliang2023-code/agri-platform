@@ -20,6 +20,25 @@ public class FarmController {
         this.farmService = farmService;
     }
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.agri.production.service.PlotBoundaryService boundaryService;
+
+    @GetMapping("/{id:\\d+}/plot-boundary-checks")
+    public ApiResponse<java.util.List<java.util.Map<String,Object>>> boundaryChecks(@PathVariable Long id) {
+        return ApiResponse.success(boundaryService.report(boundaryService.farm(id,TenantContextService.currentTenantId(),false)));
+    }
+
+    @PostMapping("/{id:\\d+}/plot-boundary-check")
+    public ApiResponse<com.agri.production.service.PlotBoundaryService.Result> checkPlotBoundary(@PathVariable Long id, @RequestBody java.util.Map<String,String> body) {
+        var farm=boundaryService.farm(id,TenantContextService.currentTenantId(),false);
+        Long plotId=null;
+        if (body.get("plotId")!=null && !body.get("plotId").isBlank()) {
+            try { plotId=Long.valueOf(body.get("plotId")); }
+            catch (NumberFormatException e) { throw new com.agri.production.common.exception.BusinessException(400,"地块ID无效"); }
+        }
+        return ApiResponse.success(boundaryService.preview(farm,body.get("boundary"),plotId));
+    }
+
     @PostMapping
     public ApiResponse<String> create(@Valid @RequestBody FarmSaveDTO dto) {
         String tenantId = TenantContextService.currentTenantId();

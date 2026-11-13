@@ -28,6 +28,9 @@ public interface IAdminAlertService {
      */
     PageResult<AdminAlertReviewVO> pageAlerts(int pageNum, int pageSize, Integer status, Integer alertLevel);
 
+    /** 统一告警列表：农场条件参与服务端分页。 */
+    PageResult<AdminAlertReviewVO> pageAlerts(int pageNum, int pageSize, Integer status, Integer alertLevel, Long farmId);
+
     /**
      * 关闭告警。
      *

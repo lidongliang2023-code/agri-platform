@@ -1,3 +1,4 @@
+import '@/components/ProductionDetailCompact.css'
 import PageContainer from '@/components/ProductionPageContainer'
 import { ContentPreview } from '@/components/ContentEditor'
 /**
@@ -831,7 +832,7 @@ function AssistantContent(): JSX.Element {
       </Card>
 
       {/* 重命名会话 */}
-      <Modal
+      <Modal className="production-form-dialog"
         title="重命名会话"
         open={renameOpen}
         onCancel={() => setRenameOpen(false)}

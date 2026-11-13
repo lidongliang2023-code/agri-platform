@@ -6,7 +6,8 @@ import lombok.Data;
 import java.math.BigDecimal;
 
 @Data
-public class FarmSaveDTO {
+@lombok.EqualsAndHashCode(callSuper = true)
+public class FarmSaveDTO extends FarmCoordinatesDTO {
 
     private Long id;
 
@@ -27,9 +28,10 @@ public class FarmSaveDTO {
 
     private String address;
 
-    private BigDecimal longitude;
+    @jakarta.validation.constraints.Size(max = 60000)
+    private String boundary;
 
-    private BigDecimal latitude;
+    private boolean clearBoundary;
 
     private BigDecimal totalArea;
 

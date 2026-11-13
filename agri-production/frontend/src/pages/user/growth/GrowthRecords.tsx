@@ -1,3 +1,4 @@
+import '@/components/ProductionDetailCompact.css'
 import Table from '@/components/BusinessRecordList'
 /**
  * 页面名称：生长记录
@@ -699,7 +700,7 @@ export default function GrowthRecords(): JSX.Element {
         </Card>
       )}
 
-      <Modal
+      <Modal className="production-form-dialog"
         title={editing ? '编辑生长记录' : '新增生长记录'}
         open={modalOpen}
         onCancel={() => {

@@ -1,6 +1,7 @@
 /** 用户中心运营端的页面枚举。新增页面必须同时改这里与 AppShell 的 MENU。 */
 export type OpsPageKey =
   | 'dashboard'
+  | 'audit-workbench'
   | 'user-list'
   | 'user-detail'
   | 'user-identity'

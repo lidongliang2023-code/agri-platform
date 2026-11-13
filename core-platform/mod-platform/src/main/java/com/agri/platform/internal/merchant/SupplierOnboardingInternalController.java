@@ -133,6 +133,7 @@ public class SupplierOnboardingInternalController {
         List<IdentityApplicationEntity> rows = identityApplicationMapper.selectList(
                 new LambdaQueryWrapper<IdentityApplicationEntity>()
                         .eq(IdentityApplicationEntity::getUserId, body.userId())
+                        .eq(IdentityApplicationEntity::getMerchantId, merchantId)
                         .eq(IdentityApplicationEntity::getIdentityType, identityType)
                         .orderByDesc(IdentityApplicationEntity::getId));
         IdentityApplicationEntity approved = rows.stream()

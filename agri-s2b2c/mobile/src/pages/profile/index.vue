@@ -121,7 +121,7 @@ function logout() {
     content: '退出后仍可浏览商品，购物车和订单需重新登录查看。',
     async success(result) {
       if (!result.confirm) return
-      await logoutUnifiedAccount()
+      if (!await logoutUnifiedAccount()) return
       clearSession()
       toast('已退出登录', 'success')
       uni.reLaunch({ url: '/pages/login/index' })

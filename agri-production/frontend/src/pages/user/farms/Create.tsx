@@ -1,4 +1,5 @@
 import Card from '@/components/SectionCard'
+import FarmLocationFields from '@/components/FarmLocationFields'
 /**
  * 页面名称：新增农场
  * 路由路径：/production/farms/create
@@ -18,7 +19,7 @@ import Card from '@/components/SectionCard'
  */
 import { useMemo, useState, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import PageContainer from '@/components/ProductionPageContainer'
 import { FilePdfOutlined, FileTextOutlined, InboxOutlined, LeftOutlined } from '@ant-design/icons'
 import {
@@ -101,6 +102,11 @@ interface FarmFormValues {
   region: string[]
   /** 详细地址 */
   address: string
+  longitude?: number
+  latitude?: number
+  clearCoordinates?: boolean
+  boundary?: string
+  clearBoundary?: boolean
   /** 面积（亩） */
   areaTotal: number
   /** 海拔（米） */
@@ -149,6 +155,7 @@ function parseRemarkField(remark: string | undefined, key: string): string | und
  */
 export default function Create(): JSX.Element {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [searchParams] = useSearchParams()
   const editingFarmId = searchParams.get('farmId')
 
@@ -179,6 +186,10 @@ export default function Create(): JSX.Element {
       farmTypeLabel: parseRemarkField(farm.remark, '产业类型') ?? '蔬菜种植',
       region,
       address: farm.address,
+      longitude: farm.longitude == null ? undefined : Number(farm.longitude),
+      latitude: farm.latitude == null ? undefined : Number(farm.latitude),
+      boundary: farm.boundary ?? undefined,
+      clearBoundary: false,
       areaTotal: Number(farm.areaTotal) || 0,
       altitude: altitude ? Number(altitude.replace('m', '')) || undefined : undefined,
       managerName: farm.managerName,
@@ -207,6 +218,11 @@ export default function Create(): JSX.Element {
       city: city ?? '',
       district: district ?? '',
       address: values.address,
+      longitude: values.longitude,
+      latitude: values.latitude,
+      clearCoordinates: values.clearCoordinates ?? false,
+      boundary: values.clearBoundary ? undefined : values.boundary,
+      clearBoundary: values.clearBoundary ?? false,
       areaTotal: Number(values.areaTotal) || 0,
       managerName: values.managerName,
       managerPhone: values.managerPhone,
@@ -249,7 +265,8 @@ export default function Create(): JSX.Element {
     onError: (error: Error) => {
       message.error(createdId.current ? `农场已创建，证书关联未全部完成：${error.message}。请留在此页重试，不会重复创建农场。` : error.message || '农场保存失败，请检查主体权限及服务状态', 8)
     },
-    onSuccess: ({ farmId, action }) => {
+    onSuccess: async ({ farmId, action }) => {
+      await Promise.all([queryClient.invalidateQueries({ queryKey: ['farm-detail'] }), queryClient.invalidateQueries({ queryKey: ['farm-supervision'] }), queryClient.invalidateQueries({ queryKey: ['supervision-map'] }), queryClient.invalidateQueries({ queryKey: ['supervision-detail'] }), queryClient.invalidateQueries({ queryKey: ['farms'] })])
       message.success(editingFarmId ? '农场信息已保存' : '农场创建成功')
       if (action === 'plot') {
         navigate(`/production/plots/create?farmId=${farmId}`)
@@ -268,6 +285,8 @@ export default function Create(): JSX.Element {
     void form.validateFields().then((values) => {
       submitMutation.mutate({ values, action })
     }).catch(() => {
+      const invalid = form.getFieldsError().find(field => field.errors.length)
+      if (invalid) form.scrollToField(invalid.name, { block: 'center', behavior: 'smooth' })
       message.warning('请检查必填项，补齐后再保存')
     })
   }
@@ -292,7 +311,7 @@ export default function Create(): JSX.Element {
   }
 
   return (
-    <PageContainer
+    <PageContainer mobileForm
       title={editingFarmId ? '编辑农场' : '新增农场'}
       onBack={() => navigate('/production/farms')}
       backIcon={<LeftOutlined />}
@@ -323,6 +342,7 @@ export default function Create(): JSX.Element {
       {editingFarmId && farmQuery.isLoading && <Card loading />}
       {!editingFarmId || farmQuery.data ? (
         <Form
+          scrollToFirstError
           form={form}
           layout="vertical"
           initialValues={{
@@ -402,6 +422,8 @@ export default function Create(): JSX.Element {
             <Form.Item name="address" label="详细地址" rules={[{ required: true, message: '请输入详细地址' }]}>
               <Input placeholder="请输入详细地址" style={{ maxWidth: 480 }} />
             </Form.Item>
+
+            <FarmLocationFields form={form} disabled={submitMutation.isPending} address={() => [...(form.getFieldValue('region') ?? []), form.getFieldValue('address')].filter(Boolean).join('')} />
 
             <Space size={24} wrap>
               <Form.Item

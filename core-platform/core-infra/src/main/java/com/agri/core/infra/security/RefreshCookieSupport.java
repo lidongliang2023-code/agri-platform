@@ -83,6 +83,24 @@ public class RefreshCookieSupport {
         return readCookie(request, clientCookieName(clientId));
     }
 
+    /** 清除当前域中该账号的刷新 Cookie；其他账号的有效 Cookie 保留。 */
+    public void clearForUser(HttpServletResponse response, HttpServletRequest request, Long userId,
+                             java.util.function.Function<String, Long> ownerOf) {
+        Cookie[] cookies = request.getCookies();
+        if (cookies == null) {
+            return;
+        }
+        for (Cookie item : cookies) {
+            if (!item.getName().equals(cookieName) && !item.getName().startsWith(cookieName + "_")) {
+                continue;
+            }
+            Long owner = ownerOf.apply(item.getValue());
+            if (owner == null || userId.equals(owner)) {
+                response.addHeader("Set-Cookie", build(item.getName(), "", 0L));
+            }
+        }
+    }
+
     private String readCookie(HttpServletRequest request, String name) {
         Cookie[] cookies = request.getCookies();
         if (cookies == null) {

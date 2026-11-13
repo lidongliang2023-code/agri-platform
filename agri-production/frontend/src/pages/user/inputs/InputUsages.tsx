@@ -1,3 +1,4 @@
+import '@/components/ProductionDetailCompact.css'
 import ProTable from '@/components/ProductionTable'
 import Card from '@/components/SectionCard'
 import './inputs.css'
@@ -974,7 +975,7 @@ export default function InputUsages(): JSX.Element {
         )}
       </Card>
 
-      <Modal
+      <Modal className="production-form-dialog"
         title="登记投入品使用记录"
         open={createOpen}
         okText="保存"

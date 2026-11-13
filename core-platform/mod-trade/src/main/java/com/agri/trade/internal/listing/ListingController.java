@@ -70,7 +70,7 @@ public class ListingController {
         Long userId = MarketContext.currentUserId();
         capabilityFacade.requireAny(userId,
                 "SELL".equals(req.type()) ? CapabilityCodes.TRADE_LISTING_SELL : CapabilityCodes.TRADE_LISTING_BUY,
-                "发布交易挂牌");
+                req.merchantId(), "发布交易挂牌");
         ListingEntity listing = new ListingEntity();
         listing.setListingNo("LP" + NO_FORMAT.format(LocalDateTime.now())
                 + ThreadLocalRandom.current().nextInt(1000, 9999));

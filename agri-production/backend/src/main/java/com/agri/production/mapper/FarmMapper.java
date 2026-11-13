@@ -11,5 +11,12 @@ public interface FarmMapper extends BaseMapper<Farm> {
 
     IPage<Farm> pageQuery(Page<Farm> page, @Param("dto") FarmPageDTO dto, @Param("tenantId") String tenantId);
 
+    /** 与地块保存串行化；调用方必须处于事务中。 */
+    @org.apache.ibatis.annotations.Select("SELECT id FROM agri_prod_farm_info WHERE id = #{id} AND deleted = 0 FOR UPDATE")
+    Long lockBoundary(@Param("id") Long id);
+
+    @org.apache.ibatis.annotations.Select("SELECT * FROM agri_prod_farm_info WHERE id = #{id} AND deleted = 0 FOR UPDATE")
+    Farm boundaryForUpdate(@Param("id") Long id);
+
     Farm selectByCode(@Param("farmCode") String farmCode, @Param("tenantId") String tenantId);
 }

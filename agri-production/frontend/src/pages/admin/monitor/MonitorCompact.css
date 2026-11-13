@@ -1,0 +1,121 @@
+.production-monitor-compact {
+  color: #1f2d24;
+}
+
+.production-monitor-compact > .ant-row:first-child {
+  margin-bottom: 10px !important;
+}
+
+.production-monitor-compact .ant-breadcrumb {
+  margin-bottom: 2px !important;
+  font-size: 12px;
+}
+
+.production-monitor-compact h4.ant-typography {
+  font-size: 18px;
+  line-height: 26px;
+}
+
+.production-monitor-compact .ant-typography-secondary {
+  font-size: 12px;
+}
+
+.production-monitor-compact > .ant-card,
+.production-monitor-compact > .ant-row > .ant-col > .ant-card,
+.production-monitor-compact > .ant-row > .ant-card {
+  border-radius: 8px;
+}
+
+.production-monitor-compact .ant-card-head {
+  min-height: 42px;
+  padding-inline: 14px;
+}
+
+.production-monitor-compact .ant-card-head-title {
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.production-monitor-compact .ant-card-body {
+  padding: 12px 14px;
+}
+
+.production-monitor-compact .ant-statistic-title {
+  margin-bottom: 2px;
+  font-size: 12px;
+}
+
+.production-monitor-compact .ant-statistic-content {
+  font-size: 22px;
+  line-height: 28px;
+}
+
+.production-monitor-compact .ant-statistic-content-suffix,
+.production-monitor-compact .ant-statistic-content-prefix {
+  font-size: 12px;
+}
+
+.production-monitor-compact .ant-table {
+  font-size: 13px;
+}
+
+.production-monitor-compact .ant-table-thead > tr > th,
+.production-monitor-compact .ant-table-tbody > tr > td {
+  padding-block: 7px;
+}
+
+.production-monitor-compact .ant-btn {
+  font-size: 13px;
+}
+
+.production-monitor-compact .ant-btn-link {
+  padding-inline: 5px;
+}
+
+.production-monitor-compact .ant-alert {
+  padding: 8px 12px;
+}
+
+.production-monitor-compact .ant-alert-message {
+  font-size: 13px;
+}
+
+.production-monitor-compact .ant-alert-description,
+.production-monitor-compact .ant-form-item-explain,
+.production-monitor-compact .ant-form-item-extra {
+  font-size: 12px;
+  line-height: 19px;
+}
+
+.production-monitor-compact .ant-progress-text,
+.production-monitor-compact .ant-tag {
+  font-size: 12px;
+}
+
+.production-monitor-compact .monitor-filter-card .ant-card-body {
+  padding: 10px 12px;
+}
+
+.production-monitor-compact .monitor-filter-card .ant-space {
+  row-gap: 6px !important;
+}
+
+@media (max-width: 768px) {
+  .production-monitor-compact {
+    padding-inline: 12px !important;
+  }
+
+  .production-monitor-compact .ant-card-body {
+    padding: 10px 12px;
+  }
+
+  .production-monitor-compact > .ant-row:first-child {
+    align-items: flex-start;
+    gap: 8px;
+  }
+}
+
+.production-monitor-compact .monitor-metrics {display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;}
+.production-monitor-compact .monitor-note {margin-top:10px;color:#75867c;font-size:12px;line-height:20px;}
+.production-monitor-compact .ant-page-header-heading-title {font-size:18px!important;}
+.production-monitor-compact .ant-page-header {padding:10px 20px;}

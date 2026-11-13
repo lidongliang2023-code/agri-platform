@@ -162,6 +162,11 @@ export interface Task {
   priority: TaskPriority
   /** 关联任务模板 ID */
   templateId?: string
+  cropName?: string
+  inputMaterials?: string
+  inputMaterialsJson?: string
+  qualityRequirement?: string
+  remark?: string
   /** 提交的成果说明（后端 result_desc） */
   resultDesc?: string
   /** 提交的成果照片（后端 result_photo_urls，JSON 数组字符串） */
@@ -188,6 +193,12 @@ export interface Task {
 
 /** 任务模板 */
 export interface TaskTemplate {
+  growthStage?: string
+  description?: string
+  requiredInputs?: string
+  optionalInputs?: string
+  sortOrder?: number
+  remark?: string
   /** 模板 ID */
   templateId: string
   /** 模板编码 */

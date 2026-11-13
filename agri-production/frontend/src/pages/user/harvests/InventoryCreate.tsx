@@ -142,12 +142,14 @@ export default function InventoryCreate(): JSX.Element {
         })
       })
       .catch(() => {
+        const invalid = form.getFieldsError().find(field => field.errors.length)
+        if (invalid) form.scrollToField(invalid.name, { block: 'center', behavior: 'smooth' })
         message.warning('请完整填写必填项后再提交')
       })
   }
 
   return (
-    <PageContainer
+    <PageContainer mobileForm
       className="harvest-business-page"
       title={
         <Space size={8}>
@@ -177,6 +179,7 @@ export default function InventoryCreate(): JSX.Element {
       {harvestQuery.isError && <Alert showIcon type="error" message="采收批次加载失败" action={<Button onClick={() => void harvestQuery.refetch()}>重试</Button>} style={{ marginBottom: 16 }} />}
       <Card title="采收入库登记">
         <Form
+          scrollToFirstError
           form={form}
           layout="vertical"
           initialValues={{ warehouseName: '主仓库' }}

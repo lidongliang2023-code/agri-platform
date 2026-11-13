@@ -1,3 +1,4 @@
+import '@/components/ProductionDetailCompact.css'
 import { Alert, Button, Drawer, Space, Spin, Tag } from 'antd'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
@@ -31,8 +32,8 @@ export default function SubscriptionDetail({ record, subjectId, onClose }: {
   })
   const offer = allowed ? offerQuery.data : undefined
   const status = SUBSCRIPTION_STATUSES[record.writebackStatus]
-  return <Drawer title="认购流水详情" open={allowed} onClose={onClose} destroyOnClose width={860}>
-    <Space direction="vertical" size={16} style={{ width: '100%' }}>
+  return <Drawer rootClassName="production-detail-compact production-detail-dialog" title="认购流水详情" open={allowed} onClose={onClose} destroyOnClose width={860}>
+    <Space direction="vertical" size={12} style={{ width: '100%' }}>
       <Alert type={record.writebackStatus === 'FAILED' ? 'error' : 'info'} showIcon
         message={`本条认购影响：${subscriptionEffect(record)}`}
         description="本详情为认购回写记录，认购预留不等于库存出库，也不代表订单已履约。" />

@@ -2,6 +2,11 @@ const STORAGE_KEY = 'fengchain_platform_access_token'
 
 let memoryToken: string | null = null
 
+export function setPlatformAccessToken(token: string): void {
+  memoryToken = token
+  sessionStorage.setItem(STORAGE_KEY, token)
+}
+
 /** 从 HttpOnly 刷新凭证换取短时访问令牌，仅保存于当前标签页。 */
 export async function getPlatformAccessToken(force = false): Promise<string> {
   if (!force) {
@@ -10,8 +15,9 @@ export async function getPlatformAccessToken(force = false): Promise<string> {
   }
   const response = await fetch('/api/v1/auth/refresh', {
     method: 'POST',
+    signal: AbortSignal.timeout(10000),
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'X-Sso-Client': 'portal' },
     body: '{}',
   })
   const result = await response.json() as {
@@ -23,9 +29,8 @@ export async function getPlatformAccessToken(force = false): Promise<string> {
     clearPlatformAccessToken()
     throw new Error(result.message || '登录状态已失效，请重新登录')
   }
-  memoryToken = result.data.accessToken
-  sessionStorage.setItem(STORAGE_KEY, memoryToken)
-  return memoryToken
+  setPlatformAccessToken(result.data.accessToken)
+  return result.data.accessToken
 }
 
 export function clearPlatformAccessToken(): void {

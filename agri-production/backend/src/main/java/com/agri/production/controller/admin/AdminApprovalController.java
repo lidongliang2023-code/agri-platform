@@ -20,16 +20,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-/**
- * 运营端：审批管理（{@code /api/v1/production/admin/approvals}）。
- *
- * <p>按页面契约 {@code api/admin/approvals.ts} 实现页面真的会调的七条：
- * 待审分页 / 审批通过 / 批量审批 / 流程配置分页 / 新建流程 / 更新流程 / 审批历史。</p>
- *
- * <p><b>审批动作用的是 PATCH</b>（页面就是这么发的），而平台侧实现的是 POST ——
- * 也就是说页面上那个"审批通过"按钮在平台侧一直不匹配（405/404）。
- * 这里按页面契约实现，不再有自己的另一套方法。</p>
- */
+/** 历史审批兼容接口。GET 保留查询；所有写动作由服务层拒绝，不再回写业务。 */
 @RestController
 @RequestMapping("/api/v1/production/admin/approvals")
 public class AdminApprovalController {

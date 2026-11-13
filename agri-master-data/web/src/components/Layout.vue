@@ -89,7 +89,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useSessionStore } from '@/stores/session'
-import { revokePlatformSession, ssoLogoutUrl } from '@/utils/sso'
+import { revokePlatformSession } from '@/utils/sso'
 import BrandMark from '@/components/BrandMark.vue'
 import MenuIcon from '@/components/MenuIcon.vue'
 import PointHiddenNotice from '@/components/ui/PointHiddenNotice.vue'
@@ -300,10 +300,10 @@ function openUserCenter() {
 async function handleLogout() {
   if (loggingOut.value) return
   loggingOut.value = true
-  session.markForcedLogout()
-  await revokePlatformSession()
-  session.clear()
-  window.location.assign(ssoLogoutUrl())
+  await revokePlatformSession(session.accessToken ?? undefined, () => {
+    session.markForcedLogout(); session.clear()
+  })
+  loggingOut.value = false
 }
 
 watch(

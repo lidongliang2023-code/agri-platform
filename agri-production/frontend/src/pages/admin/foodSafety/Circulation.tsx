@@ -1,3 +1,7 @@
+import DetailInfoGrid from '@/components/DetailInfoGrid'
+import ProductionTable from '@/components/ProductionTable'
+import { QualityPage, tradeOpsUrl } from '../quality/QualityShared'
+import { useNavigate } from 'react-router-dom'
 /**
  * 页面名称：流通异常检测
  * 路由路径：/admin/production/food-safety/circulation
@@ -15,7 +19,6 @@ import {
   Card,
   Col,
   DatePicker,
-  Descriptions,
   Empty,
   Form,
   Input,
@@ -23,7 +26,6 @@ import {
   Row,
   Select,
   Space,
-  Table,
   Tag,
   Typography,
 } from 'antd'
@@ -34,14 +36,11 @@ import dayjs from 'dayjs'
 import {
   CIRCULATION_TYPE_ICON,
   CIRCULATION_TYPE_TEXT,
-  FOOD_SAFETY_WRITE_ALERT,
   HANDLE_STATUS_COLOR,
   HANDLE_STATUS_TEXT,
   SEVERITY_COLOR,
   SEVERITY_TEXT,
   handleCirculation,
-  isMockSource,
-  isWriteBackendConfirmed,
   listCirculation,
   notifyWriteResult,
 } from '@/api/admin/foodSafety'
@@ -78,7 +77,7 @@ const SEVERITY_OPTIONS: Array<{ value: Severity | 'all'; label: string }> = [
 ]
 
 /** 处理方式下拉选项 */
-const ACTION_OPTIONS: string[] = ['通知责任方核查', '召回问题批次', '转人工复核', '关闭']
+const ACTION_OPTIONS: string[] = ['通知责任方核查', '申请批次风险管控', '转人工复核', '补充核查证据']
 
 /**
  * 流通异常检测
@@ -231,35 +230,17 @@ function Circulation(): JSX.Element {
       </Row>
 
       {/* 示例数据明示（食品安全为合规强相关数据，禁止静默降级） */}
-      {isMockSource('circulation') && (
-        <Alert
-          type="warning"
-          showIcon
-          banner
-          style={{ marginBottom: 12 }}
-          message="当前展示示例数据，后端接口建设中"
-          description="流通异常涉及召回与责任追溯，属于合规强相关数据：本列表取自原型示例口径（原型 P16），不代表真实异常记录。后端 /admin/food-safety/circulation 接口上线后本页将自动切换真实数据。"
-        />
-      )}
+
 
       {/* 写操作未接入后端明示（禁止「未写入服务端却提示成功」） */}
-      {!isWriteBackendConfirmed() && (
-        <Alert
-          type="warning"
-          showIcon
-          banner
-          style={{ marginBottom: 12 }}
-          message={FOOD_SAFETY_WRITE_ALERT.message}
-          description={`${FOOD_SAFETY_WRITE_ALERT.description}本页涉及：流通异常处置。`}
-        />
-      )}
+
 
       {listQuery.isError && (
         <Alert
           type="warning"
           showIcon
           style={{ marginBottom: 12 }}
-          message="流通异常列表获取失败，已切换为示例数据展示"
+          message="流通异常列表加载失败，请刷新重试"
         />
       )}
 
@@ -328,11 +309,11 @@ function Circulation(): JSX.Element {
 
       {/* 流通异常检测列表 */}
       <Card title="异常流向检测列表">
-        <Table<CirculationRecord>
+        <ProductionTable<CirculationRecord>
           rowKey="id"
-          size="middle"
+          size="small" search={false}
           loading={listQuery.isLoading}
-          columns={columns}
+          columns={columns as import('@ant-design/pro-components').ProColumns<any>[]}
           dataSource={records}
           locale={{ emptyText: <Empty description="当前筛选条件下暂无流通异常记录" /> }}
           pagination={{
@@ -351,6 +332,8 @@ function Circulation(): JSX.Element {
 
       {/* 异常详情弹窗 */}
       <Modal
+        rootClassName="quality-dialog quality-detail"
+        width={800}
         open={detailRecord !== null}
         title="流通异常详情"
         onCancel={() => setDetailRecord(null)}
@@ -361,28 +344,28 @@ function Circulation(): JSX.Element {
         ]}
       >
         {detailRecord && (
-          <Descriptions column={1} size="small" bordered items={[
-            { key: 'id', label: '异常编号', children: detailRecord.id },
-            { key: 'foundAt', label: '发现时间', children: `${detailRecord.foundDate} ${detailRecord.foundAt}` },
-            { key: 'batchNo', label: '批次号', children: detailRecord.batchNo },
-            { key: 'product', label: '产品', children: detailRecord.product },
+          <DetailInfoGrid items={[
+            { key: 'id', fullWidth: true, label: '异常编号', value: detailRecord.id },
+            { key: 'foundAt', label: '发现时间', value: detailRecord.foundAt?.startsWith(detailRecord.foundDate) ? detailRecord.foundAt : [detailRecord.foundDate, detailRecord.foundAt].filter(Boolean).join(' ') },
+            { key: 'batchNo', label: '批次号', value: detailRecord.batchNo },
+            { key: 'product', label: '产品', value: detailRecord.product },
             {
               key: 'type',
               label: '异常类型',
-              children: `${CIRCULATION_TYPE_ICON[detailRecord.type]} ${CIRCULATION_TYPE_TEXT[detailRecord.type]}`,
+              value: `${CIRCULATION_TYPE_ICON[detailRecord.type]} ${CIRCULATION_TYPE_TEXT[detailRecord.type]}`,
             },
             {
               key: 'severity',
               label: '严重度',
-              children: <Tag color={SEVERITY_COLOR[detailRecord.severity]}>{SEVERITY_TEXT[detailRecord.severity]}</Tag>,
+              value: <Tag color={SEVERITY_COLOR[detailRecord.severity]}>{SEVERITY_TEXT[detailRecord.severity]}</Tag>,
             },
-            { key: 'impact', label: '影响范围', children: detailRecord.impact },
+            { key: 'impact', fullWidth: true, label: '影响范围', value: detailRecord.impact },
             {
               key: 'status',
               label: '处理状态',
-              children: <Tag color={HANDLE_STATUS_COLOR[detailRecord.status]}>{HANDLE_STATUS_TEXT[detailRecord.status]}</Tag>,
+              value: <Tag color={HANDLE_STATUS_COLOR[detailRecord.status]}>{HANDLE_STATUS_TEXT[detailRecord.status]}</Tag>,
             },
-            { key: 'measure', label: '处置措施', children: detailRecord.measure ?? '—' },
+            { key: 'measure', fullWidth: true, label: '处置措施', value: detailRecord.measure ?? '—' },
           ]} />
         )}
       </Modal>
@@ -431,4 +414,4 @@ function Circulation(): JSX.Element {
   )
 }
 
-export default function SafetyEvidencePage() { return <><div role="note" style={{padding: 16, background: "#fffbe6", marginBottom: 16}}>此处仅登记处理进展，不自动执行下架、销毁、物流或退款，也不作为整改结案凭据。批次冻结与码作废请进入不合格品处置。</div><Circulation /></> }
+export default function SafetyEvidencePage(){const nav=useNavigate();return <QualityPage extra={<Space><Button onClick={()=>nav('/admin/production/quality/recalls')}>批次风险管控</Button><Button href={tradeOpsUrl('order')}>交易订单监管</Button></Space>} title="流通异常台账" subTitle="记录流通异常核查进展，批次管控复用不合格品处置"><div className="legacy-quality"><Circulation/></div></QualityPage>}

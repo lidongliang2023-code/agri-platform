@@ -1,3 +1,4 @@
+import '@/components/ProductionDetailCompact.css'
 import '@/pages/user/quality/quality-trace.css'
 import Card from '@/components/SectionCard'
 import ProTable from '@/components/ProductionTable'
@@ -816,7 +817,7 @@ export default function TraceCodeManage(): JSX.Element {
         ]}
       />
 
-      <Modal className="quality-trace-dialog"
+      <Modal className="production-form-dialog quality-trace-dialog"
         title={genMode === 'batch' ? '批量生成溯源码' : '生成溯源码'}
         open={genOpen}
         okText="确认生成"

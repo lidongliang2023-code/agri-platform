@@ -2,7 +2,11 @@
   "compilerOptions": {
     "target": "ES2020",
     "useDefineForClassFields": true,
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "lib": [
+      "ES2020",
+      "DOM",
+      "DOM.Iterable"
+    ],
     "module": "ESNext",
     "skipLibCheck": true,
     "moduleResolution": "bundler",
@@ -10,7 +14,9 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "types": ["vite/client"],
+    "types": [
+      "vite/client"
+    ],
     "jsx": "react-jsx",
     "strict": true,
     "noUnusedLocals": true,
@@ -18,14 +24,38 @@
     "noFallthroughCasesInSwitch": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"],
-      "@agri/shared": ["../../packages/agri-shared/src"],
-      "@agri/shared/*": ["../../packages/agri-shared/src/*"],
-      "react": ["node_modules/@types/react/index.d.ts"],
-      "react/jsx-runtime": ["node_modules/@types/react/jsx-runtime.d.ts"],
-      "axios": ["node_modules/axios"]
+      "@/*": [
+        "src/*"
+      ],
+      "@agri/shared": [
+        "../../packages/agri-shared/src"
+      ],
+      "@agri/shared/*": [
+        "../../packages/agri-shared/src/*"
+      ],
+      "react": [
+        "node_modules/@types/react/index.d.ts"
+      ],
+      "react/jsx-runtime": [
+        "node_modules/@types/react/jsx-runtime.d.ts"
+      ],
+      "axios": [
+        "node_modules/axios"
+      ],
+      "antd": [
+        "node_modules/antd"
+      ],
+      "@ant-design/icons": [
+        "node_modules/@ant-design/icons"
+      ]
     }
   },
-  "include": ["src"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  "include": [
+    "src"
+  ],
+  "references": [
+    {
+      "path": "./tsconfig.node.json"
+    }
+  ]
 }

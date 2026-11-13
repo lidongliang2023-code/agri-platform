@@ -12,6 +12,7 @@ import {
   Badge,
   Breadcrumb,
   Dropdown,
+  Drawer,
   Layout,
   Menu,
   Select,
@@ -37,8 +38,11 @@ import { BrandMark } from '@/components/BrandMark'
 import { getUnreadCount } from '@/api/messages'
 import { listAllFarms } from '@/api/farms'
 import useAuthStore from '@/store/auth'
+import { accountRequest } from '@/api/auth'
+import { redirectToSso, SSO_CLIENT_ID } from '@/api/sso'
 import useFarmStore from '@/store/farm'
 import { ADMIN_MENU, USER_MENU, buildBreadcrumb, matchMenu } from '@/config/menu'
+import './BasicLayout.css'
 
 const { Header, Sider, Content, Footer: LayoutFooter } = Layout
 const SIDER_WIDTH = 224
@@ -62,12 +66,23 @@ export interface BasicLayoutProps {
  */
 export default function BasicLayout({ variant, title }: BasicLayoutProps): JSX.Element {
   const [collapsed, setCollapsed] = useState<boolean>(false)
+  const [mobile, setMobile] = useState(() => window.matchMedia('(max-width: 767px)').matches)
+  const [navigationOpen, setNavigationOpen] = useState(false)
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 767px)')
+    const update = () => { setMobile(media.matches); setNavigationOpen(false) }
+    media.addEventListener('change', update)
+    return () => media.removeEventListener('change', update)
+  }, [])
   const location = useLocation()
   const navigate = useNavigate()
+  useEffect(() => { setNavigationOpen(false) }, [location.pathname, location.search])
 
   const userInfo = useAuthStore((state) => state.userInfo)
   const logout = useAuthStore((state) => state.logout)
   const token = useAuthStore((state) => state.token)
+  const tokenExpireAt = useAuthStore((state) => state.tokenExpireAt)
+  const marketId = useAuthStore((state) => state.marketId)
   const [switchingSubject, setSwitchingSubject] = useState(false)
   const currentFarm = useFarmStore((state) => state.currentFarm)
   const farmOptions = useFarmStore((state) => state.farmOptions)
@@ -78,29 +93,34 @@ export default function BasicLayout({ variant, title }: BasicLayoutProps): JSX.E
   const menuGroups = isAdmin ? ADMIN_MENU : USER_MENU
 
   const { data: subjectSummary, isPending: loadingSubjects, error: subjectError, refetch: reloadSubjects } = useQuery({
-    queryKey: ['operating-subjects', userInfo?.userId],
-    enabled: !!token,
-    retry: false,
-    refetchOnWindowFocus: false,
-    queryFn: async () => {
-      const sessionToken = useAuthStore.getState().token
-      const response = await axios.get('/api/v1/sso/account/summary', {
-        timeout: 15000, withCredentials: true,
-        headers: { Authorization: `Bearer ${sessionToken}` },
-      })
-      if (sessionToken !== useAuthStore.getState().token) throw new Error('登录会话已变化，请刷新页面')
-      if (response.data?.code !== 0) throw new Error(response.data?.message || '经营主体加载失败')
-      return response.data.data as {
-        activeMerchantId?: string
-        merchants: Array<{ merchantId: string; merchantName?: string; active?: boolean }>
-      }
-    },
+    queryKey: ['operating-subjects', userInfo?.userId, marketId, tokenExpireAt],
+    enabled: !isAdmin && !!token && !!userInfo?.userId,
+    retry: (count, error) => count < 1 && axios.isAxiosError(error) && !axios.isCancel(error)
+      && (!error.response || error.response.status >= 500),
+    refetchOnWindowFocus: true,
+    queryFn: ({ signal }) => accountRequest<{
+      activeMerchantId?: string
+      merchants: Array<{ merchantId: string; merchantName?: string; active?: boolean }>
+    }>({ url: '/summary', method: 'get', timeout: 15000, signal }),
   })
   const subjects = subjectSummary?.merchants ?? []
   const activeSubject = subjects.find(item => String(item.merchantId) === String(subjectSummary?.activeMerchantId))
-  const subjectReady = !!activeSubject && String(userInfo?.tenantId) === String(activeSubject.merchantId)
+  const subjectErrorMessage = subjectError ? (
+    axios.isAxiosError(subjectError)
+      ? subjectError.response?.data?.message || (subjectError.response?.status === 401
+        ? '登录已过期，请重新前往统一登录'
+        : subjectError.response?.status === 403 ? '当前账号无权读取经营主体'
+        : subjectError.response ? `经营主体服务异常（${subjectError.response.status}），请稍后重试` : '经营主体服务暂时无法连接，请稍后重试')
+      : subjectError instanceof Error ? subjectError.message : '经营主体加载失败，请重试'
+  ) : ''
+  const subjectReady = !subjectError && !!activeSubject && String(userInfo?.tenantId) === String(activeSubject.merchantId)
+  const reauthenticate = (): void => {
+    void redirectToSso(SSO_CLIENT_ID, location.pathname + location.search).catch((error: unknown) => {
+      message.error(error instanceof Error ? error.message : '无法前往统一登录')
+    })
+  }
   useEffect(() => {
-    if (!subjectSummary) return
+    if (isAdmin || !subjectSummary || subjectError) return
     const current = useAuthStore.getState().userInfo
     if (!current) return
     const id = activeSubject ? String(activeSubject.merchantId) : ''
@@ -110,7 +130,7 @@ export default function BasicLayout({ variant, title }: BasicLayoutProps): JSX.E
       useFarmStore.getState().setFarmOptions([])
       useAuthStore.getState().setUserInfo({ ...current, tenantId: id, tenantName: name })
     }
-  }, [subjectSummary, activeSubject])
+  }, [isAdmin, subjectSummary, activeSubject, subjectError])
 
   const switchSubject = async (merchantId: string): Promise<void> => {
     if (switchingSubject || merchantId === String(activeSubject?.merchantId)) return
@@ -118,12 +138,9 @@ export default function BasicLayout({ variant, title }: BasicLayoutProps): JSX.E
     if (!selected) return
     setSwitchingSubject(true)
     try {
-      const response = await axios.post(`/api/v1/sso/account/businesses/${encodeURIComponent(merchantId)}/activate`, {}, {
-        timeout: 15000, withCredentials: true,
-        headers: { Authorization: `Bearer ${useAuthStore.getState().token}` },
+      const activated = await accountRequest<{ activeMerchantId: string; merchantName?: string }>({
+        url: `/businesses/${encodeURIComponent(merchantId)}/activate`, method: 'post', data: {}, timeout: 15000,
       })
-      if (response.data?.code !== 0) throw new Error(response.data?.message || '经营主体切换失败')
-      const activated = response.data.data as { activeMerchantId: string; merchantName?: string }
       const current = useAuthStore.getState().userInfo
       if (current) useAuthStore.getState().setUserInfo({ ...current, tenantId: String(activated.activeMerchantId), tenantName: activated.merchantName })
       useFarmStore.getState().setCurrentFarm(null)
@@ -170,12 +187,12 @@ export default function BasicLayout({ variant, title }: BasicLayoutProps): JSX.E
   const activeGroupKey = matched?.group.key
   const [openGroupKeys, setOpenGroupKeys] = useState<string[]>([])
   useEffect(() => {
-    if (activeGroupKey && !collapsed) {
+    if (activeGroupKey && (mobile || !collapsed)) {
       setOpenGroupKeys((keys) => isAdmin
         ? Array.from(new Set([...keys, activeGroupKey]))
         : [activeGroupKey])
     }
-  }, [activeGroupKey, collapsed, isAdmin])
+  }, [activeGroupKey, collapsed, isAdmin, mobile])
 
   const breadcrumb = useMemo(
     () => buildBreadcrumb(location.pathname, menuGroups),
@@ -201,12 +218,12 @@ export default function BasicLayout({ variant, title }: BasicLayoutProps): JSX.E
       disabled: true,
     },
     { type: 'divider' as const },
-    {
+    ...(!isAdmin ? [{
       key: 'settings',
       icon: <SettingOutlined />,
       label: '系统设置',
       onClick: () => navigate('/production/settings'),
-    },
+    }] : []),
     {
       key: 'logout',
       icon: <LogoutOutlined />,
@@ -215,20 +232,10 @@ export default function BasicLayout({ variant, title }: BasicLayoutProps): JSX.E
     },
   ]
 
-  return (
-    <Layout className="agri-layout">
-      <Sider
-        className="agri-sider"
-        collapsible
-        collapsed={collapsed}
-        trigger={null}
-        theme="dark"
-        width={SIDER_WIDTH}
-        collapsedWidth={SIDER_COLLAPSED_WIDTH}
-      >
-        <div className={`agri-brand${collapsed ? ' is-collapsed' : ''}`}>
+  const navigation = <>
+        <div className={`agri-brand${!mobile && collapsed ? ' is-collapsed' : ''}`}>
           <span className="agri-brand-logo"><BrandMark size={34} /></span>
-          {!collapsed && (
+          {(mobile || !collapsed) && (
             <span className="agri-brand-text">
               <strong>丰链云</strong>
               <small>FENGCHAIN · AGRI</small>
@@ -241,33 +248,51 @@ export default function BasicLayout({ variant, title }: BasicLayoutProps): JSX.E
             theme="dark"
             items={menuItems}
             selectedKeys={matched ? [matched.leaf.key] : []}
-            openKeys={collapsed ? undefined : openGroupKeys}
+            inlineCollapsed={!mobile && collapsed}
+            openKeys={!mobile && collapsed ? undefined : openGroupKeys}
             onOpenChange={(keys) => {
               const newlyOpened = keys.find((key) => !openGroupKeys.includes(key))
               setOpenGroupKeys(isAdmin ? keys : newlyOpened ? [newlyOpened] : keys.slice(-1))
             }}
-            onClick={({ key }) => navigate(key)}
+            onClick={({ key }) => { navigate(key); setNavigationOpen(false) }}
           />
         </div>
-      </Sider>
+  </>
 
-      <Layout className="agri-main" style={{ marginLeft: collapsed ? SIDER_COLLAPSED_WIDTH : SIDER_WIDTH }}>
+  return (
+    <Layout className="agri-layout">
+      {!mobile && <Sider
+        className="agri-sider"
+        collapsible collapsed={collapsed} trigger={null} theme="dark"
+        width={SIDER_WIDTH} collapsedWidth={SIDER_COLLAPSED_WIDTH}
+      >{navigation}</Sider>}
+      <Drawer title="生产管理导航" placement="left" width="min(288px, 86vw)"
+        rootClassName="production-mobile-nav" open={mobile && navigationOpen}
+        onClose={() => setNavigationOpen(false)}>
+        {navigation}
+      </Drawer>
+
+      <Layout className="agri-main" style={{ marginLeft: mobile ? 0 : collapsed ? SIDER_COLLAPSED_WIDTH : SIDER_WIDTH }}>
         <Header className="agri-header">
           <div className="agri-header-left">
             <Button
               type="text"
-              aria-label={collapsed ? '展开侧边栏' : '收起侧边栏'}
-              icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-              onClick={() => setCollapsed(!collapsed)}
+              aria-label={mobile ? '打开导航菜单' : collapsed ? '展开侧边栏' : '收起侧边栏'}
+              aria-expanded={mobile ? navigationOpen : !collapsed}
+              icon={mobile || collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+              onClick={() => mobile ? setNavigationOpen(true) : setCollapsed(!collapsed)}
             />
-            <Breadcrumb items={breadcrumb.map((text) => ({ title: text }))} />
+            {mobile ? <Typography.Text className="agri-mobile-page-title" ellipsis>{breadcrumb[breadcrumb.length - 1] || title}</Typography.Text>
+              : <Breadcrumb items={breadcrumb.map((text) => ({ title: text }))} />}
           </div>
 
           <div className="agri-header-right">
-            <Space size={8}>
+            {!isAdmin && <div className="agri-header-context">
+            <Space size={8} className="agri-subject-control">
               <Typography.Text style={{ whiteSpace: 'nowrap' }}>经营主体</Typography.Text>
               <Select
                 aria-label="当前经营主体"
+                className="agri-subject-select"
                 style={{ width: 240, maxWidth: '35vw' }}
                 showSearch optionFilterProp="label"
                 loading={loadingSubjects || switchingSubject}
@@ -278,10 +303,12 @@ export default function BasicLayout({ variant, title }: BasicLayoutProps): JSX.E
                 onChange={value => { void switchSubject(value) }}
                 title="切换经营主体后将关闭已打开的页签，未提交内容不会保留"
               />
-              {!!subjectError && <Button size="small" onClick={() => { void reloadSubjects() }}>重试</Button>}
+              {!!subjectError && <><Button size="small" onClick={() => { void reloadSubjects() }}>重试</Button><Button size="small" onClick={reauthenticate}>统一登录</Button></>}
             </Space>
             {!isAdmin && (
               <Select
+                aria-label="当前农场"
+                className="agri-farm-select"
                 style={{ width: 180 }}
                 disabled={!subjectReady || switchingSubject}
                 value={subjectReady ? currentFarm?.farmId : undefined}
@@ -298,7 +325,8 @@ export default function BasicLayout({ variant, title }: BasicLayoutProps): JSX.E
               />
             )}
 
-            <Badge count={isAdmin ? 0 : (unreadCount ?? 0)} size="small">
+            </div>}
+            <Badge className="agri-header-notifications" count={isAdmin ? 0 : (unreadCount ?? 0)} size="small">
               <Button
                 type="text"
                 aria-label="消息中心"
@@ -309,8 +337,8 @@ export default function BasicLayout({ variant, title }: BasicLayoutProps): JSX.E
               />
             </Badge>
 
-            <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
-              <Space style={{ cursor: 'pointer' }}>
+            <Dropdown menu={{ items: userMenuItems }} trigger={['click']} placement="bottomRight">
+              <Space className="agri-user-trigger" tabIndex={0} role="button" aria-label="账号菜单" style={{ cursor: 'pointer' }}>
                 <Avatar
                   className="agri-avatar"
                   size="small"
@@ -326,7 +354,7 @@ export default function BasicLayout({ variant, title }: BasicLayoutProps): JSX.E
         <Content className="agri-content">
           {!isAdmin && (!subjectReady || switchingSubject) ? (
             loadingSubjects || switchingSubject ? <Spin tip="正在加载经营主体"><div style={{ minHeight: 200 }} /></Spin> :
-            <Alert type={subjectError ? 'error' : 'info'} showIcon message={subjectError ? '经营主体加载失败，请重试' : subjects.length ? '请在顶部选择当前经营主体' : '当前账号暂无关联经营主体'} />
+            <Alert type={subjectError ? 'error' : 'info'} showIcon message={subjectError ? '经营主体加载失败' : subjects.length ? '请在顶部选择当前经营主体' : '当前账号暂无关联经营主体'} description={subjectErrorMessage || undefined} action={subjectError ? <Space><Button onClick={() => { void reloadSubjects() }}>重新加载</Button><Button onClick={reauthenticate}>前往统一登录</Button></Space> : undefined} />
           ) : <ProductionWorkspaceTabs key={`${variant}:${userInfo?.userId}:${userInfo?.tenantId}:${currentFarm?.farmId ?? ""}`} admin={isAdmin} />}
         </Content>
         <LayoutFooter className="agri-footer">

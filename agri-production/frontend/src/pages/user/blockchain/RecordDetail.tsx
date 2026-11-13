@@ -1,3 +1,4 @@
+import '@/components/ProductionDetailCompact.css'
 /**
  * 页面名称：存证详情
  * 路由路径：/production/blockchain/records/:recordId
@@ -320,12 +321,12 @@ export default function RecordDetail(): JSX.Element {
   const blockHeight = toNumber(record.blockHeight, 0)
 
   return (
-    <PageContainer
+    <PageContainer className="production-detail-compact"
       title={`🔗 存证详情 #${record.recordId}`}
       onBack={() => navigate('/production/blockchain/records')}
       backIcon={<LinkOutlined />}
     >
-      <Space direction="vertical" size={16} style={{ width: '100%' }}>
+      <Space direction="vertical" size={12} style={{ width: '100%' }}>
       <Card
         title="📋 链上元数据"
         extra={

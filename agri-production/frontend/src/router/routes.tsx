@@ -10,9 +10,9 @@
  * 例如 /production/harvests/plan 必须早于 /production/harvests/:xxx，
  * 以保证 React Router 优先命中静态段。
  */
-import { lazy } from 'react'
+import { lazy, useEffect } from 'react'
 import type { RouteObject } from 'react-router-dom'
-import { Navigate, useLocation } from 'react-router-dom'
+import { Navigate, useLocation, useParams } from 'react-router-dom'
 
 /** 路由元信息 */
 export interface RouteMeta {
@@ -46,6 +46,7 @@ const PlotDetail = lazy(() => import('@/pages/user/plots/PlotDetail'))
 const PlotCreate = lazy(() => import('@/pages/user/plots/Create'))
 const PlotSoilRecords = lazy(() => import('@/pages/user/plots/PlotSoilRecords'))
 // 农事生产
+const PlanCreate = lazy(() => import('@/pages/user/plans/PlanCreate'))
 const PlanList = lazy(() => import('@/pages/user/plans/PlanList'))
 const PlanDetail = lazy(() => import('@/pages/user/plans/PlanDetail'))
 const PlanCalendar = lazy(() => import('@/pages/user/plans/PlanCalendar'))
@@ -66,10 +67,8 @@ const GrowthOverview = lazy(() => import('@/pages/user/growth/GrowthOverview'))
 const GrowthRecords = lazy(() => import('@/pages/user/growth/GrowthRecords'))
 const EnvironmentData = lazy(() => import('@/pages/user/growth/EnvironmentData'))
 const AlertCenter = lazy(() => import('@/pages/user/alerts/AlertCenter'))
-const AlertRules = lazy(() => import('@/pages/user/alerts/AlertRules'))
+
 // IoT 设备管理
-const DeviceList = lazy(() => import('@/pages/user/iot/DeviceList'))
-const DeviceDetail = lazy(() => import('@/pages/user/iot/DeviceDetail'))
 const DeviceBindings = lazy(() => import('@/pages/user/iot/DeviceBindings'))
 // 生长监测与IoT
 const MonitorDashboard = lazy(() => import('@/pages/user/monitor/Index'))
@@ -113,7 +112,38 @@ const FarmSupervisionList = lazy(() => import('@/pages/admin/farms/FarmSupervisi
 // 所以页面在 admin 侧、用户端只在下拉里选。
 const CropMasterList = lazy(() => import('@/pages/admin/production/crops/CropList'))
 const FarmSupervisionDetail = lazy(() => import('@/pages/admin/farms/FarmSupervisionDetail'))
-const FarmGisMap = lazy(() => import('@/pages/admin/farms/FarmGisMap'))
+const IOT_USER_ORIGIN = `${window.location.protocol}//${window.location.hostname}:8101`
+
+/**
+ * 生产端旧设备 / 通用规则地址兼容跳转到物联网用户端。
+ * 设备资产与通用阈值规则只在物联网域维护，旧书签保留可达性。
+ */
+function IotUserRedirect({ target }: { target: string }): JSX.Element {
+  const location = useLocation()
+  const destination = new URL(target, IOT_USER_ORIGIN)
+  new URLSearchParams(location.search).forEach((value, key) => {
+    if (!destination.searchParams.has(key)) destination.searchParams.append(key, value)
+  })
+  destination.hash = location.hash
+  const targetUrl = destination.toString()
+  useEffect(() => {
+    window.location.replace(targetUrl)
+  }, [targetUrl])
+  return <div style={{ padding: 24 }}>正在打开物联网管理页面…</div>
+}
+
+function IotDeviceRedirect(): JSX.Element {
+  const { deviceId } = useParams()
+  return <IotUserRedirect target={`/devices/${encodeURIComponent(deviceId ?? '')}`} />
+}
+
+function FarmMapRedirect(): JSX.Element {
+  const { search } = useLocation()
+  const params = new URLSearchParams(search)
+  // 保留旧地图链接的直达视图及坐标、边界维护参数。
+  params.set('view', 'map')
+  return <Navigate to={`/admin/production/farms?${params.toString()}`} replace />
+}
 const ComplianceCheck = lazy(() => import('@/pages/admin/farms/ComplianceCheck'))
 // 生产监控
 const MonitorCenter = lazy(() => import('@/pages/admin/monitor/MonitorCenter'))
@@ -133,7 +163,7 @@ const FoodSafetyIndex = lazy(() => import('@/pages/admin/foodSafety/Index'))
 const FoodSafetyCirculation = lazy(() => import('@/pages/admin/foodSafety/Circulation'))
 const FoodSafetyCompliance = lazy(() => import('@/pages/admin/foodSafety/Compliance'))
 const FoodSafetyTrustLabel = lazy(() => import('@/pages/admin/foodSafety/TrustLabel'))
-// AI中心
+// AI中台治理总览（模型、场景、渠道与提示词归 AI 中台）
 const AiModels = lazy(() => import('@/pages/admin/ai/Models'))
 // 审批管理
 const ApprovalPending = lazy(() => import('@/pages/admin/approvals/ApprovalPending'))
@@ -281,6 +311,16 @@ export const USER_ROUTES: AppRoute[] = [
     },
   },
   {
+    path: 'plans/create',
+    element: <PlanCreate />,
+    meta: { name: '新建农事计划', path: '/production/plans/create', module: '农事生产', prd: 'PRD 6.1 #11' },
+  },
+  {
+    path: 'plans/:planId/edit',
+    element: <PlanCreate />,
+    meta: { name: '编辑农事计划', path: '/production/plans/:planId/edit', module: '农事生产', prd: 'PRD 6.1 #11' },
+  },
+  {
     path: 'plans/:planId',
     element: <PlanDetail />,
     meta: {
@@ -396,7 +436,7 @@ export const USER_ROUTES: AppRoute[] = [
     meta: {
       name: '生长监测总览',
       path: '/production/growth',
-      module: '监测与设备',
+      module: '生产监测与设备关联',
       prd: 'PRD 6.1 #23',
     },
   },
@@ -406,7 +446,7 @@ export const USER_ROUTES: AppRoute[] = [
     meta: {
       name: '生长记录',
       path: '/production/growth/records',
-      module: '监测与设备',
+      module: '生产监测与设备关联',
       prd: 'PRD 6.1 #24',
     },
   },
@@ -416,29 +456,30 @@ export const USER_ROUTES: AppRoute[] = [
     meta: {
       name: '环境数据',
       path: '/production/growth/environment',
-      module: '监测与设备',
+      module: '生产监测与设备关联',
       prd: 'PRD 6.1 #25',
     },
   },
   {
     path: 'alerts',
     element: <AlertCenter />,
-    meta: { name: '告警中心', path: '/production/alerts', module: '监测与设备', prd: 'PRD 6.1 #26' },
+    meta: { name: '告警中心', path: '/production/alerts', module: '生产监测与设备关联', prd: 'PRD 6.1 #26' },
   },
   {
     path: 'alerts/rules',
-    element: <AlertRules />,
+    element: <IotUserRedirect target="/alerts?tab=rules" />,
     meta: {
       name: '告警规则配置',
       path: '/production/alerts/rules',
-      module: '监测与设备',
+      module: '生产监测与设备关联',
       prd: 'PRD 6.1 #27',
     },
   },
   {
+    // 旧设备台账入口：设备本体统一由物联网用户端管理。
     path: 'iot',
-    element: <DeviceList />,
-    meta: { name: '设备列表', path: '/production/iot', module: '监测与设备', prd: 'PRD 6.1 #28' },
+    element: <IotUserRedirect target="/devices" />,
+    meta: { name: '设备列表', path: '/production/iot', module: '生产监测与设备关联', prd: 'PRD 6.1 #28' },
   },
   {
     path: 'iot/bindings',
@@ -446,17 +487,17 @@ export const USER_ROUTES: AppRoute[] = [
     meta: {
       name: '设备绑定管理',
       path: '/production/iot/bindings',
-      module: '监测与设备',
+      module: '生产监测与设备关联',
       prd: 'PRD 6.1 #30',
     },
   },
   {
     path: 'iot/:deviceId',
-    element: <DeviceDetail />,
+    element: <IotDeviceRedirect />,
     meta: {
       name: '设备详情',
       path: '/production/iot/:deviceId',
-      module: '监测与设备',
+      module: '生产监测与设备关联',
       prd: 'PRD 6.1 #29',
     },
   },
@@ -466,7 +507,7 @@ export const USER_ROUTES: AppRoute[] = [
     meta: {
       name: '生产监控看板',
       path: '/production/monitor',
-      module: '监测与设备',
+      module: '生产监测与设备关联',
       prd: '原型补充',
     },
   },
@@ -869,7 +910,7 @@ export const ADMIN_ROUTES: AppRoute[] = [
     path: 'farms',
     element: <FarmSupervisionList />,
     meta: {
-      name: '农场监管列表',
+      name: '农场监管',
       path: '/admin/production/farms',
       module: '农场监管',
       prd: 'PRD 6.2 #8',
@@ -898,9 +939,9 @@ export const ADMIN_ROUTES: AppRoute[] = [
   },
   {
     path: 'farms/map',
-    element: <FarmGisMap />,
+    element: <FarmMapRedirect />,
     meta: {
-      name: 'GIS地图监管',
+      name: '农场监管（旧地图入口）',
       path: '/admin/production/farms/map',
       module: '农场监管',
       prd: 'PRD 6.2 #10',
@@ -930,7 +971,7 @@ export const ADMIN_ROUTES: AppRoute[] = [
     path: 'monitor',
     element: <MonitorCenter />,
     meta: {
-      name: '生产监控中心',
+      name: '生产告警（旧监控入口）',
       path: '/admin/production/monitor',
       module: '生产监控',
       prd: 'PRD 6.2 #12',
@@ -1040,7 +1081,7 @@ export const ADMIN_ROUTES: AppRoute[] = [
     path: 'food-safety',
     element: <FoodSafetyIndex />,
     meta: {
-      name: '食品安全监控中心',
+      name: '安全事件台账（旧入口）',
       path: '/admin/production/food-safety',
       module: '质量安全与溯源',
       prd: '原型补充',
@@ -1092,7 +1133,7 @@ export const ADMIN_ROUTES: AppRoute[] = [
     meta: {
       name: 'AI模型管理',
       path: '/admin/production/ai/models',
-      module: 'AI中心',
+      module: 'AI与知识中心',
       prd: '原型补充',
     },
   },
@@ -1100,9 +1141,9 @@ export const ADMIN_ROUTES: AppRoute[] = [
     path: 'approvals',
     element: <ApprovalPending />,
     meta: {
-      name: '待审批列表',
+      name: '审批业务入口',
       path: '/admin/production/approvals',
-      module: '审批管理',
+      module: '历史审批兼容',
       prd: 'PRD 6.2 #20',
     },
   },
@@ -1110,9 +1151,9 @@ export const ADMIN_ROUTES: AppRoute[] = [
     path: 'approvals/history',
     element: <ApprovalHistory />,
     meta: {
-      name: '审批历史',
+      name: '历史审批档案',
       path: '/admin/production/approvals/history',
-      module: '审批管理',
+      module: '历史审批兼容',
       prd: 'PRD 6.2 #21',
     },
   },
@@ -1120,9 +1161,9 @@ export const ADMIN_ROUTES: AppRoute[] = [
     path: 'approvals/config',
     element: <ApprovalConfig />,
     meta: {
-      name: '审批流程配置',
+      name: '历史流程配置',
       path: '/admin/production/approvals/config',
-      module: '审批管理',
+      module: '历史审批兼容',
       prd: 'PRD 6.2 #22',
     },
   },
@@ -1130,9 +1171,9 @@ export const ADMIN_ROUTES: AppRoute[] = [
     path: 'alerts',
     element: <AdminAlertCenter />,
     meta: {
-      name: '告警中心',
+      name: '生产告警处置与复盘',
       path: '/admin/production/alerts',
-      module: '异常告警处理',
+      module: '生产监控',
       prd: 'PRD 6.2 #23',
     },
   },
@@ -1160,9 +1201,9 @@ export const ADMIN_ROUTES: AppRoute[] = [
     path: 'sop',
     element: <SopLibrary />,
     meta: {
-      name: 'SOP标准作业规程库',
+      name: '生产SOP规程',
       path: '/admin/production/sop',
-      module: 'SOP与知识库',
+      module: 'AI与知识中心',
       prd: 'PRD 6.2 #26',
     },
   },
@@ -1170,7 +1211,7 @@ export const ADMIN_ROUTES: AppRoute[] = [
     path: 'knowledge',
     element: <KnowledgeBase />,
     meta: {
-      name: '农业知识库',
+      name: '生产知识文章',
       path: '/admin/production/knowledge',
       module: 'SOP与知识库',
       prd: 'PRD 6.2 #27',

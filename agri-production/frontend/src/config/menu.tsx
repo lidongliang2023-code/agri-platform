@@ -12,8 +12,6 @@
  * 一致性保障：每个菜单 key 必须能在路由表中命中，由 scripts/check-menu-route-map.mjs 硬校验。
  */
 import {
-  AlertOutlined,
-  AuditOutlined,
   BarChartOutlined,
   CalendarOutlined,
   DashboardOutlined,
@@ -88,8 +86,10 @@ export const USER_MENU: MenuGroup[] = [
     ],
   },
   {
+    // 生产端只保留生产事实、告警处置和设备与地块的业务关联；
+    // 设备资产、通用阈值规则和设备运维统一由物联网系统负责。
     key: 'growth',
-    label: '监测与设备',
+    label: '生产监测与设备关联',
     icon: <MonitorOutlined />,
     children: [
       { key: '/production/monitor', label: '生产监控看板' },
@@ -97,8 +97,6 @@ export const USER_MENU: MenuGroup[] = [
       { key: '/production/growth/records', label: '生长记录' },
       { key: '/production/growth/environment', label: '环境数据' },
       { key: '/production/alerts', label: '告警处置与复盘' },
-      { key: '/production/alerts/rules', label: '告警规则配置' },
-      { key: '/production/iot', label: '设备列表' },
       { key: '/production/iot/bindings', label: '设备绑定管理' },
     ],
   },
@@ -176,8 +174,7 @@ export const ADMIN_MENU: MenuGroup[] = [
     label: '农场监管',
     icon: <HomeOutlined />,
     children: [
-      { key: '/admin/production/farms', label: '农场监管列表' },
-      { key: '/admin/production/farms/map', label: 'GIS地图监管' },
+      { key: '/admin/production/farms', label: '农场监管' },
       { key: '/admin/production/farms/compliance', label: '合规检查' },
     ],
   },
@@ -198,7 +195,8 @@ export const ADMIN_MENU: MenuGroup[] = [
     label: '生产监控',
     icon: <MonitorOutlined />,
     children: [
-      { key: '/admin/production/monitor', label: '生产监控中心' },
+      { key: '/admin/production/alerts', label: '生产告警处置与复盘' },
+      { key: '/admin/production/alerts/emergency', label: '应急预案' },
       { key: '/admin/production/monitor/tasks', label: '任务执行监控' },
       { key: '/admin/production/monitor/iot', label: 'IoT设备监控' },
       { key: '/admin/production/monitor/inputs', label: '投入品使用监管' },
@@ -225,30 +223,9 @@ export const ADMIN_MENU: MenuGroup[] = [
     label: 'AI与知识中心',
     icon: <RobotOutlined />,
     children: [
-      { key: '/admin/production/ai/models', label: 'AI模型管理' },
-      { key: '/admin/production/knowledge', label: 'AI知识库' },
-      { key: '/admin/production/sop', label: 'SOP管理' },
-    ],
-  },
-  {
-    // 产销对接不在运营端：意向发布与认领归经营主体自己（见用户端「产销对接」组），
-    // 平台侧只保留下面的审批、差异兜底等治理动作。
-    key: 'approval',
-    label: '审批管理',
-    icon: <AuditOutlined />,
-    children: [
-      { key: '/admin/production/approvals', label: '待审批列表' },
-      { key: '/admin/production/approvals/history', label: '审批历史' },
-      { key: '/admin/production/approvals/config', label: '审批流程配置' },
-    ],
-  },
-  {
-    key: 'alert',
-    label: '异常告警处理',
-    icon: <AlertOutlined />,
-    children: [
-      { key: '/admin/production/alerts', label: '告警处置与复盘' },
-      { key: '/admin/production/alerts/emergency', label: '应急预案' },
+      { key: '/admin/production/ai/models', label: 'AI中台治理总览' },
+      { key: '/admin/production/knowledge', label: '生产知识文章' },
+      { key: '/admin/production/sop', label: '生产SOP规程' },
     ],
   },
   {

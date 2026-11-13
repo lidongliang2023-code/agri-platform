@@ -47,6 +47,8 @@ const LAB_BASE = '/quality'
 export interface QualityLab {
   /** 机构 ID */
   labId: string
+  region?: string
+  remark?: string
   /** 机构编码 */
   labCode?: string
   /** 机构名称 */
@@ -240,6 +242,7 @@ export interface AdminTraceChain {
   /** 关联批次档案 */
   batch?: AdminTraceChainBatch
   /** 批次关联检测记录 */
+  nodes?: {nodeType?:string;nodeName?:string;refId?:string;refNo?:string;occurredAt?:string;operatorName?:string;description?:string;onChain?:boolean;chainStatus?:string}[]
   inspections?: AdminInspectionRow[]
 }
 
@@ -419,6 +422,8 @@ export async function fetchAdminTraceCodeStats(): Promise<Record<string, number>
  * （后端只认 status），所以搜一个不在本页的码会筛出空列表，而分页总数还是没筛的数。
  */
 export interface AdminTraceCodePageParams {
+  code?: string
+  batchNo?: string
   /** 状态过滤 generated / active / scanned / revoked / expired */
   status?: string
   /** 关键字：模糊匹配溯源码 / 批次号 / 产品名 */
@@ -448,6 +453,8 @@ export function fetchAdminTraceCodes(
     size: params.pageSize ?? 10,
     status: params.status,
     keyword: params.keyword,
+    code: params.code,
+    batchNo: params.batchNo,
     farmId: params.farmId,
     chain: params.chain,
     expiry: params.expiry,

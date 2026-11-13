@@ -50,9 +50,10 @@ public class AdminAlertController {
             @RequestParam(required = false) Integer size,
             @RequestParam(required = false) Integer pageSize,
             @RequestParam(required = false) Integer status,
-            @RequestParam(required = false) Integer alertLevel) {
+            @RequestParam(required = false) Integer alertLevel,
+            @RequestParam(required = false) Long farmId) {
         return ApiResponse.success(adminAlertService.pageAlerts(
-                firstNonNull(pageNum, page, 1), firstNonNull(pageSize, size, 10), status, alertLevel));
+                firstNonNull(pageNum, page, 1), firstNonNull(pageSize, size, 10), status, alertLevel, farmId));
     }
 
     @GetMapping("/{alertId}")

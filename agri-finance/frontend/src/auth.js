@@ -1,3 +1,4 @@
+import { logoutBrowser } from '../../../packages/agri-shared/src/auth/logout'
 import { reactive } from 'vue'
 
 const CLIENT_ID = 'finance'
@@ -223,13 +224,7 @@ export function installFinanceAuthInterceptor(axios) {
 }
 
 export async function logoutFinance() {
-  try {
-    await fetch('/api/v1/auth/logout', { method: 'POST', credentials: 'include' })
-  } catch {
-    // 本地会话必须清理，即使服务端登出接口暂时不可达。
-  }
-  clearSession()
-  window.location.assign(`${ssoOrigin()}/logout?client_id=${CLIENT_ID}`)
+  return logoutBrowser({ token: getFinanceToken(), clientId: CLIENT_ID, ssoOrigin: ssoOrigin(), clear: clearSession })
 }
 
 export function showFinanceAuthFailure(error) {

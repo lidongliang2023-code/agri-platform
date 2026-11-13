@@ -48,6 +48,8 @@ public class AdminTraceServiceImpl implements IAdminTraceService {
 
     private final com.agri.production.mapper.InventoryMapper inventoryMapper;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.agri.production.service.ITraceLifecycleService lifecycle;
     private final TraceCodeMapper traceCodeMapper;
     private final HarvestBatchMapper harvestBatchMapper;
     private final InspectionMapper inspectionMapper;
@@ -145,12 +147,14 @@ public class AdminTraceServiceImpl implements IAdminTraceService {
         HarvestBatch batch = null;
         if (traceCode.getBatchNumber() != null && !traceCode.getBatchNumber().isBlank()) {
             List<HarvestBatch> byNo = harvestBatchMapper.selectList(new LambdaQueryWrapper<HarvestBatch>()
-                    .eq(HarvestBatch::getBatchNo, traceCode.getBatchNumber()).last("LIMIT 1"));
+                    .eq(HarvestBatch::getBatchNo, traceCode.getBatchNumber()).eq(HarvestBatch::getTenantId, traceCode.getTenantId()).last("LIMIT 1"));
             batch = byNo.isEmpty() ? null : byNo.get(0);
         }
         if (batch == null && traceCode.getHarvestId() != null) {
             batch = harvestBatchMapper.selectById(traceCode.getHarvestId());
         }
+        if (batch != null && !java.util.Objects.equals(batch.getTenantId(), traceCode.getTenantId())) batch = null;
+        result.put("nodes", batch == null ? List.of() : lifecycle.fullChainNodes(String.valueOf(batch.getBatchId()), traceCode.getTenantId()));
         result.put("batch", batchSnapshot(batch));
         result.put("inspections", batch == null ? List.of() : inspectionsOf(batch));
         return result;
@@ -176,6 +180,7 @@ public class AdminTraceServiceImpl implements IAdminTraceService {
 
     private List<Inspection> inspectionsOf(HarvestBatch batch) {
         return inspectionMapper.selectList(new LambdaQueryWrapper<Inspection>()
+                .eq(Inspection::getTenantId, batch.getTenantId())
                 .eq(Inspection::getBatchId, batch.getBatchId())
                 .orderByDesc(Inspection::getInspectionId));
     }

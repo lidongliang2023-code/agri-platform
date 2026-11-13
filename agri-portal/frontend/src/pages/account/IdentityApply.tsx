@@ -283,7 +283,9 @@ export function IdentityApply(): JSX.Element {
                         ? `开通于 ${String(row.reviewTime ?? '').replace('T', ' ').slice(0, 16)}`
                         : row.status === 'rejected'
                           ? `驳回原因：${row.reviewRemark || '未填写'}`
-                          : '尚未申请'}
+                          : row.status === 'cancelled'
+                            ? `已于 ${String(row.applyTime ?? '').replace('T', ' ').slice(0, 16)} 撤回，可重新申请`
+                            : '尚未申请'}
                   </small>
                 </div>
                 <div className="uc-id-actions">

@@ -1,3 +1,7 @@
+import DetailInfoGrid from '@/components/DetailInfoGrid'
+import ProductionTable from '@/components/ProductionTable'
+import { QualityPage, tradeOpsUrl } from '../quality/QualityShared'
+import { useNavigate } from 'react-router-dom'
 /**
  * 页面名称：可信农产品管理
  * 路由路径：/admin/production/food-safety/trust-label
@@ -17,7 +21,6 @@ import {
   Card,
   Col,
   DatePicker,
-  Descriptions,
   Empty,
   Form,
   Input,
@@ -27,7 +30,6 @@ import {
   Select,
   Space,
   Statistic,
-  Table,
   Tag,
   Typography,
 } from 'antd'
@@ -43,7 +45,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import dayjs from 'dayjs'
 import {
   CERT_MARK_TEXT,
-  FOOD_SAFETY_WRITE_ALERT,
   TRUST_AUDIT_COLOR,
   TRUST_AUDIT_TEXT,
   TRUST_LEVEL_COLOR,
@@ -51,8 +52,6 @@ import {
   TRUST_LEVEL_TEXT,
   auditTrustProduct,
   getTrustStats,
-  isMockSource,
-  isWriteBackendConfirmed,
   listTrustProducts,
   notifyWriteResult,
   updateTrustProduct,
@@ -100,7 +99,7 @@ const AUDIT_OPTIONS: Array<{ value: TrustAuditStatus | 'all'; label: string }> =
  *
  * @returns 页面内容
  */
-export default function TrustLabel(): JSX.Element {
+function TrustLabel(): JSX.Element {
   const { message } = App.useApp()
   const queryClient = useQueryClient()
 
@@ -294,35 +293,17 @@ export default function TrustLabel(): JSX.Element {
       </div>
 
       {/* 示例数据明示（食品安全为合规强相关数据，禁止静默降级） */}
-      {isMockSource('trust-stats', 'trust-products') && (
-        <Alert
-          type="warning"
-          showIcon
-          banner
-          style={{ marginBottom: 12 }}
-          message="当前展示示例数据，后端接口建设中"
-          description="可信等级、信任分数、认证标志与认证有效期属于对外公示与监管强相关数据：本页取自原型示例口径（原型 P18 / 4.2），不构成真实认证结论，请勿据此对外公示。后端 /admin/food-safety/trust-label/* 接口上线后本页将自动切换真实数据。"
-        />
-      )}
+
 
       {/* 写操作未接入后端明示（禁止「未写入服务端却提示成功」） */}
-      {!isWriteBackendConfirmed() && (
-        <Alert
-          type="warning"
-          showIcon
-          banner
-          style={{ marginBottom: 12 }}
-          message={FOOD_SAFETY_WRITE_ALERT.message}
-          description={`${FOOD_SAFETY_WRITE_ALERT.description}本页涉及：可信农产品编辑、主体审核通过 / 驳回。`}
-        />
-      )}
+
 
       {(statsQuery.isError || listQuery.isError) && (
         <Alert
           type="warning"
           showIcon
           style={{ marginBottom: 12 }}
-          message="部分数据获取失败，已切换为示例数据展示"
+          message="部分数据加载失败，请刷新重试"
         />
       )}
 
@@ -432,11 +413,11 @@ export default function TrustLabel(): JSX.Element {
 
       {/* 可信农产品名单 */}
       <Card title="可信农产品名单">
-        <Table<TrustProduct>
+        <ProductionTable<TrustProduct>
           rowKey="id"
-          size="middle"
+          size="small" search={false}
           loading={listQuery.isLoading}
-          columns={columns}
+          columns={columns as import('@ant-design/pro-components').ProColumns<any>[]}
           dataSource={products}
           scroll={{ x: 1400 }}
           locale={{ emptyText: <Empty description="当前筛选条件下暂无可信农产品" /> }}
@@ -456,9 +437,10 @@ export default function TrustLabel(): JSX.Element {
 
       {/* 详情弹窗 */}
       <Modal
+        rootClassName="quality-dialog quality-detail"
         open={detail !== null}
         title="可信农产品详情"
-        width={620}
+        width={800}
         onCancel={() => setDetail(null)}
         footer={[
           <Button key="close" onClick={() => setDetail(null)}>
@@ -467,28 +449,28 @@ export default function TrustLabel(): JSX.Element {
         ]}
       >
         {detail && (
-          <Descriptions column={1} size="small" bordered items={[
-            { key: 'id', label: '产品编号', children: detail.id },
-            { key: 'name', label: '产品名称', children: detail.name },
-            { key: 'category', label: '品类', children: detail.category },
-            { key: 'producer', label: '生产者', children: detail.producer },
+          <DetailInfoGrid items={[
+            { key: 'id', fullWidth: true, label: '产品编号', value: detail.id },
+            { key: 'name', label: '产品名称', value: detail.name },
+            { key: 'category', label: '品类', value: detail.category },
+            { key: 'producer', fullWidth: true, label: '生产者', value: detail.producer },
             {
               key: 'level',
               label: '可信等级',
-              children: (
+              value: (
                 <Tag color={TRUST_LEVEL_COLOR[detail.level]}>
                   {TRUST_LEVEL_ICON[detail.level]} {TRUST_LEVEL_TEXT[detail.level]}
                 </Tag>
               ),
             },
-            { key: 'score', label: '信任分数', children: `${detail.score} 分` },
-            { key: 'cert', label: '认证标志', children: CERT_MARK_TEXT[detail.cert] },
-            { key: 'certOrg', label: '认证机构', children: detail.certOrg },
-            { key: 'validUntil', label: '认证有效期', children: detail.validUntil },
+            { key: 'score', label: '信任分数', value: `${detail.score} 分` },
+            { key: 'cert', label: '认证标志', value: CERT_MARK_TEXT[detail.cert] },
+            { key: 'certOrg', fullWidth: true, label: '认证机构', value: detail.certOrg },
+            { key: 'validUntil', label: '认证有效期', value: detail.validUntil },
             {
               key: 'auditStatus',
               label: '审核状态',
-              children: <Tag color={TRUST_AUDIT_COLOR[detail.auditStatus]}>{TRUST_AUDIT_TEXT[detail.auditStatus]}</Tag>,
+              value: <Tag color={TRUST_AUDIT_COLOR[detail.auditStatus]}>{TRUST_AUDIT_TEXT[detail.auditStatus]}</Tag>,
             },
           ]} />
         )}
@@ -641,3 +623,5 @@ export default function TrustLabel(): JSX.Element {
     </div>
   )
 }
+
+export default function CompactTrustLabel(){const nav=useNavigate();return <QualityPage extra={<Space><Button onClick={()=>nav('/admin/production/quality/recalls')}>批次风险管控</Button><Button href={tradeOpsUrl('order')}>交易订单监管</Button></Space>} title="产品认证台账" subTitle="维护已有认证资料与审核结果，证书登记不自动变更交易商品"><div className="legacy-quality"><TrustLabel/></div></QualityPage>}

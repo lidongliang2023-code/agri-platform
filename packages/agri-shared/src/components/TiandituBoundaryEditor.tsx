@@ -11,6 +11,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   computePolygonMetrics,
+  parseBoundaryVertices,
   getTiandituNamespace,
   isValidLngLat,
   loadTianditu,
@@ -22,6 +23,7 @@ import './TiandituBoundaryEditor.css'
 
 export interface TiandituBoundaryEditorProps {
   /** 边界顶点（不闭合，至少 3 个才构成面） */
+  referenceBoundary?: string | null
   value: number[][]
   /** 顶点变化回调 */
   onChange: (value: number[][]) => void
@@ -37,6 +39,10 @@ export interface TiandituBoundaryEditorProps {
   locateSignal?: number
   /** 无边界顶点时是否用地图标记显示 focusPoint（默认显示） */
   showFocusMarker?: boolean
+  /** 可选中心点选择模式；默认仍为边界绘制。 */
+  selectionMode?: 'point' | 'boundary'
+  onPointSelect?: (point: { longitude: number; latitude: number }) => void
+  showFocusMarkerWithBoundary?: boolean
   /** 是否禁用绘制（例如保存中） */
   disabled?: boolean
 }
@@ -52,6 +58,7 @@ const OVERLAY_CLICK_GUARD_MS = 300
 
 export default function TiandituBoundaryEditor({
   value,
+  referenceBoundary,
   onChange,
   height = 380,
   className = '',
@@ -60,12 +67,17 @@ export default function TiandituBoundaryEditor({
   locateSignal,
   showFocusMarker = true,
   disabled = false,
+  selectionMode = 'boundary',
+  onPointSelect,
+  showFocusMarkerWithBoundary = false,
 }: TiandituBoundaryEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<TiandituMapInstance | null>(null)
   const valueRef = useRef(value)
   const onChangeRef = useRef(onChange)
   const disabledRef = useRef(disabled)
+  const selectionModeRef = useRef(selectionMode)
+  const onPointSelectRef = useRef(onPointSelect)
   const focusRef = useRef(focusPoint)
   const focusZoomRef = useRef(focusZoom)
   const overlayClickAtRef = useRef(0)
@@ -77,6 +89,8 @@ export default function TiandituBoundaryEditor({
   valueRef.current = value
   onChangeRef.current = onChange
   disabledRef.current = disabled
+  selectionModeRef.current = selectionMode
+  onPointSelectRef.current = onPointSelect
   focusRef.current = focusPoint
   focusZoomRef.current = focusZoom
 
@@ -87,6 +101,7 @@ export default function TiandituBoundaryEditor({
   const focusKey = focusPoint
     ? `${focusPoint.longitude}:${focusPoint.latitude}`
     : ''
+  const referenceVertices = useMemo(() => parseBoundaryVertices(referenceBoundary), [referenceBoundary])
   const metrics = useMemo(() => computePolygonMetrics(value), [value])
   const hasPolygon = value.length >= MIN_VERTICES
 
@@ -124,6 +139,10 @@ export default function TiandituBoundaryEditor({
           // 点顶点标记时地图 click 也可能触发，这里直接忽略；
           // 同时避免在同一位置重复添加顶点。
           if (Date.now() - overlayClickAtRef.current < OVERLAY_CLICK_GUARD_MS) return
+          if (selectionModeRef.current === 'point') {
+            onPointSelectRef.current?.({ longitude, latitude })
+            return
+          }
           const current = valueRef.current
           const isDuplicate = current.some(
             ([vertexLongitude, vertexLatitude]) =>
@@ -184,6 +203,11 @@ export default function TiandituBoundaryEditor({
     if (!namespace || !map) return
 
     map.clearOverLays()
+    if (referenceVertices.length >= 3) {
+      map.addOverLay(new namespace.Polygon(referenceVertices.map(([x,y]) => new namespace.LngLat(x,y)), {
+        color: '#1677ff', weight: 3, opacity: 0.9, fillColor: '#1677ff', fillOpacity: 0.06,
+      }))
+    }
     const positions = value.map(
       ([longitude, latitude]) => new namespace.LngLat(longitude, latitude),
     )
@@ -212,7 +236,7 @@ export default function TiandituBoundaryEditor({
       const marker = new namespace.Marker(new namespace.LngLat(longitude, latitude))
       marker.addEventListener('click', () => {
         overlayClickAtRef.current = Date.now()
-        if (disabledRef.current) return
+        if (disabledRef.current || selectionModeRef.current === 'point') return
         onChangeRef.current(valueRef.current.filter((_, vertexIndex) => vertexIndex !== index))
       })
       map.addOverLay(marker)
@@ -221,7 +245,7 @@ export default function TiandituBoundaryEditor({
     // 尚未绘制边界时，把定位点（地址搜索结果 / 中心点）用地图标记显示出来
     if (
       showFocusMarker &&
-      value.length === 0 &&
+      (value.length === 0 || showFocusMarkerWithBoundary) &&
       focusPoint &&
       isValidLngLat(focusPoint.longitude, focusPoint.latitude)
     ) {
@@ -239,9 +263,12 @@ export default function TiandituBoundaryEditor({
     if (!hasFitRef.current && value.length >= 2) {
       hasFitRef.current = true
       map.setViewport?.(positions)
+    } else if (!hasFitRef.current && referenceVertices.length >= 3) {
+      hasFitRef.current = true
+      map.setViewport?.(referenceVertices.map(([x,y]) => new namespace.LngLat(x,y)))
     }
     map.checkResize?.()
-  }, [state, valueKey, disabled, focusKey, showFocusMarker])
+  }, [state, valueKey, disabled, focusKey, showFocusMarker, showFocusMarkerWithBoundary, referenceVertices])
 
   const statusText = state === 'missing-token'
     ? '尚未配置天地图访问密钥'
@@ -279,21 +306,21 @@ export default function TiandituBoundaryEditor({
             <span className="tianditu-boundary-count">{value.length} 个顶点</span>
             <button
               type="button"
-              disabled={disabled || value.length === 0}
+              disabled={disabled || selectionMode === 'point' || value.length === 0}
               onClick={() => onChange(value.slice(0, -1))}
             >
               撤销上一点
             </button>
             <button
               type="button"
-              disabled={disabled || value.length === 0}
+              disabled={disabled || selectionMode === 'point' || value.length === 0}
               onClick={() => onChange([])}
             >
               清空
             </button>
           </div>
           <div className="tianditu-boundary-hint">
-            点击地图添加顶点，点击顶点标记可删除
+            {selectionMode === 'point' ? '点击地图设置农场中心点，边界保持不变' : '点击地图添加顶点，点击顶点标记可删除'}
           </div>
           <div className="tianditu-boundary-metrics">
             {hasPolygon

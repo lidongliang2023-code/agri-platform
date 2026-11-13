@@ -27,6 +27,7 @@ import java.util.UUID;
 public class AuthorizationCodeService {
 
     private static final String KEY_PREFIX = "agri:sso:code:";
+    private static final String USER_INDEX_PREFIX = "agri:sso:user-codes:";
     // 换行不可能出现在 client_id / redirect_uri / challenge 里，作字段分隔不会歧义
     private static final String FIELD_SEPARATOR = "\n";
 
@@ -61,6 +62,9 @@ public class AuthorizationCodeService {
                 codeChallenge == null ? "" : codeChallenge,
                 codeChallengeMethod == null ? "" : codeChallengeMethod);
         redis.opsForValue().set(KEY_PREFIX + code, payload, Duration.ofSeconds(properties.getCodeTtlSeconds()));
+        String indexKey = USER_INDEX_PREFIX + userId;
+        redis.opsForSet().add(indexKey, code);
+        redis.expire(indexKey, Duration.ofSeconds(properties.getCodeTtlSeconds() + 60L));
         return code;
     }
 
@@ -76,8 +80,21 @@ public class AuthorizationCodeService {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "授权码无效、已过期或已被使用");
         }
         String[] parts = payload.split(FIELD_SEPARATOR, -1);
+        redis.opsForSet().remove(USER_INDEX_PREFIX + parts[0], code);
         return new AuthorizationCode(Long.parseLong(parts[0]), Long.parseLong(parts[1]),
                 parts[2], parts[3], parts[4], parts[5]);
+    }
+
+    /** 全局退出时取消尚未换票的授权码，避免退出后重新签发业务令牌。 */
+    public void revokeAllForUser(Long userId) {
+        String indexKey = USER_INDEX_PREFIX + userId;
+        java.util.Set<String> codes = redis.opsForSet().members(indexKey);
+        if (codes != null) {
+            for (String code : codes) {
+                redis.delete(KEY_PREFIX + code);
+            }
+        }
+        redis.delete(indexKey);
     }
 
     /**

@@ -34,6 +34,8 @@ const client=axios.create({baseURL:'/api/v1/iot/ops',timeout:15000})
 attachUnifiedAuth(client,'iot-admin')
 async function req<T>(call:Promise<{data:Envelope<T>}>):Promise<T>{try{const r=await call;if(![0,200].includes(r.data.code))throw new Error(r.data.message);return r.data.data}catch(e){if(axios.isAxiosError(e)){const m=(e.response?.data as {message?:string}|undefined)?.message;throw new Error(m||'物联网运营服务不可用')}throw e}}
 export const opsApi={
+  sampling:(id:number)=>req<import('../../shared-ui/DeviceSampling').SamplingConfig>(client.get(`/devices/${id}/sampling`)),
+  saveSampling:(id:number,body:import('../../shared-ui/DeviceSampling').SamplingConfig)=>req<import('../../shared-ui/DeviceSampling').SamplingConfig>(client.put(`/devices/${id}/sampling`,body)),
   uploadFirmwarePackage:(file:File,expectedSha256?:string)=>{const data=new FormData();data.append('file',file);if(expectedSha256)data.append('expectedSha256',expectedSha256);return req<{packageUrl:string;sha256Text:string;fileSizeBytes:number;originalName:string}>(client.post('/firmware/packages/upload',data,{timeout:300000}))},
   listFirmwarePackages:(params?:{type?:string;model?:string;status?:string})=>req<FirmwarePackage[]>(client.get('/firmware/packages',{params})),
   getFirmwarePackage:(id:number)=>req<FirmwarePackage>(client.get(`/firmware/packages/${id}`)),
@@ -57,6 +59,10 @@ export const opsApi={
   protocols:()=>req<Protocol[]>(client.get('/protocols')),
   accessAudits:()=>req<AccessAudit[]>(client.get('/access-audits')),
   alertRules:()=>req<AlertRule[]>(client.get('/alert-rules')),
+  alertRuleOptions:()=>req<{metrics:Array<{key:string;name:string;unit:string;deviceTypes:string[]}>;deviceTypes:string[];operators:string[];levels:string[]}>(client.get('/alert-rules/options')),
+  createAlertRule:(body:Record<string,unknown>)=>req<AlertRule>(client.post('/alert-rules',body)),
+  updateAlertRule:(id:number,body:Record<string,unknown>)=>req<AlertRule>(client.put(`/alert-rules/${id}`,body)),
+  deleteAlertRule:(id:number)=>req<Record<string,unknown>>(client.delete(`/alert-rules/${id}`)),
   toggleAlertRule:(id:number)=>req<AlertRule>(client.post(`/alert-rules/${id}/toggle`,{})),
   tenantAlertRules:()=>req<AlertRule[]>(client.get('/alert-rules/tenant')),
   reviewAccess:(id:number,status:string,note:string)=>req<AccessAudit>(client.post(`/access-audits/${id}/review`,{status,note})),
@@ -68,7 +74,7 @@ export const opsApi={
 }
 export const STATUS:Record<string,{label:string;tone:string}>={
   online:{label:'在线',tone:'green'},offline:{label:'离线',tone:'gray'},alert:{label:'告警中',tone:'red'},active:{label:'正常',tone:'green'},trial:{label:'试用',tone:'orange'},
-  pending:{label:'待处理',tone:'orange'},resolved:{label:'已恢复',tone:'green'},critical:{label:'紧急',tone:'red'},major:{label:'重要',tone:'orange'},normal:{label:'一般',tone:'blue'},
+  pending:{label:'待处理',tone:'orange'}, handling:{label:'处理中',tone:'blue'},resolved:{label:'已处理',tone:'green'},critical:{label:'紧急',tone:'red'},major:{label:'重要',tone:'orange'},normal:{label:'一般',tone:'blue'},
   approved:{label:'已通过',tone:'green'},rejected:{label:'已驳回',tone:'red'},published:{label:'已发布',tone:'green'},running:{label:'运行中',tone:'green'},scheduled:{label:'待执行',tone:'orange'},
   completed:{label:'已完成',tone:'gray'},assigned:{label:'已派单',tone:'blue'},processing:{label:'处理中',tone:'orange'},high:{label:'高',tone:'red'},
 }

@@ -227,7 +227,8 @@ export async function fetchTaskTemplatesPage(params: {
     page: pageNum,
     size: pageSize,
   })
-  return normalizePageResult<TaskTemplate>(raw, pageNum, pageSize)
+  const result = normalizePageResult<TaskTemplate>(raw, pageNum, pageSize)
+  return { ...result, list: result.list.map(normalizeTaskTemplate) }
 }
 
 /** 派发 / 转派任务（后端 POST + RequestParam assigneeId） */
@@ -268,4 +269,23 @@ export function reviewTask(taskId: string, pass: boolean, opinion?: string): Pro
 /** 按作物查询可用任务模板 */
 export function listTemplatesByCrop(cropId: string): Promise<TaskTemplate[]> {
   return http.get<TaskTemplate[]>(`${BASE}/templates/by-crop`, { cropId })
+}
+
+/** 启用且当前主体可见的全部模板，避免分页截断可选项。 */
+export async function listAvailableTaskTemplates(): Promise<TaskTemplate[]> {
+  const rows = await http.get<TaskTemplate[]>(`${BASE}/templates/list`)
+  return rows.map(normalizeTaskTemplate)
+}
+
+function normalizeTaskTemplate(row: TaskTemplate): TaskTemplate {
+  const inputItems = row.inputItems ?? (row.requiredInputs ?? '').split(/[,，\n]/).map(v => v.trim()).filter(Boolean)
+  const aliases: Record<string, string> = {
+    '整地': 'tillage', '播种': 'sowing', '移栽': 'sowing', '施肥': 'fertilizing',
+    '灌溉': 'irrigating', '打药': 'pest_control', '病虫害防治': 'pest_control',
+    '修剪': 'pruning', '整枝': 'pruning', '除草': 'weeding', '授粉': 'pollination',
+    '采收': 'harvesting', '巡田': 'patrol', '巡检': 'patrol', '其他': 'other',
+    PLANTING: 'sowing', FERTILIZING: 'fertilizing', IRRIGATION: 'irrigating',
+    PEST_CONTROL: 'pest_control', HARVESTING: 'harvesting', OTHER: 'other',
+  }
+  return { ...row, templateId: String(row.templateId), taskType: aliases[row.taskType] ?? row.taskType, inputItems }
 }

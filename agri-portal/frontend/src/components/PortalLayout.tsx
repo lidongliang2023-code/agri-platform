@@ -1,3 +1,4 @@
+import { logoutBrowser } from '../../../../packages/agri-shared/src/auth/logout'
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import { Icon } from './Icon'
@@ -11,7 +12,7 @@ import {
   ssoRegister,
   tradeUrl,
 } from '../utils'
-import { clearPlatformAccessToken } from '../utils/platformToken'
+import { clearPlatformAccessToken, getPlatformAccessToken } from '../utils/platformToken'
 
 const CHANNELS = ['粮油产业', '果蔬产业', '畜禽产业', '茶药产业', '饲料农资', '水产产业', '预制菜', '冷链物流']
 type PortalScope = 'full' | 'info' | 'service'
@@ -48,6 +49,8 @@ export function PortalLayout({ children, active = '/' }: { children: ReactNode; 
   const [keyword, setKeyword] = useState('')
   const [user, setUser] = useState<PortalUser | null>(null)
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
+  const [loggingOut, setLoggingOut] = useState(false)
+  const logoutPending = useRef(false)
   // 横滑导航之外保留手机抽屉，便于集中浏览所有入口。
   const [navOpen, setNavOpen] = useState(false)
   const navRef = useRef<HTMLElement>(null)
@@ -160,23 +163,46 @@ export function PortalLayout({ children, active = '/' }: { children: ReactNode; 
       .catch(() => false)
       .then(() => sessionUser())
       .then((nextUser) => {
-        if (!cancelled && nextUser) setUser(nextUser)
+        if (cancelled) return
+        setUser(nextUser)
+        if (sessionStorage.getItem('agri_portal_logout_pending') === '1') {
+          sessionStorage.removeItem('agri_portal_logout_pending')
+          if (nextUser) void logout(true)
+        }
       })
     return () => { cancelled = true }
   }, [])
 
-  async function logout(): Promise<void> {
+  async function logout(resuming = false): Promise<void> {
+    if (logoutPending.current) return
+    logoutPending.current = true
+    setLoggingOut(true)
     try {
-      await fetch('/api/v1/sso/logout', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: '{}',
-      })
+      let token: string
+      try { token = await getPlatformAccessToken(true) }
+      catch {
+        if (resuming) {
+          window.alert('未完成全局退出，请重试。')
+          return
+        }
+        // 只有全局 SSO 会话时，先为门户建立自身凭据，再继续同一次退出。
+        sessionStorage.setItem('agri_portal_logout_pending', '1')
+        try { await redirectToPlatformLogin() }
+        catch {
+          sessionStorage.removeItem('agri_portal_logout_pending')
+          window.alert('无法连接统一认证中心，登录状态已保留，请重试。')
+        }
+        return
+      }
+      const origin = ['localhost', '127.0.0.1'].includes(window.location.hostname)
+        ? `${window.location.protocol}//${window.location.hostname}:8090` : 'https://sso.agri-platform.com'
+      await logoutBrowser({ token, clientId: 'portal', ssoOrigin: origin, clear: () => {
+        sessionStorage.removeItem('agri_portal_logout_pending')
+        clearPlatformAccessToken(); setUser(null); setAccountMenuOpen(false)
+      } })
     } finally {
-      clearPlatformAccessToken()
-      setUser(null)
-      setAccountMenuOpen(false)
+      logoutPending.current = false
+      setLoggingOut(false)
     }
   }
 
@@ -206,7 +232,7 @@ export function PortalLayout({ children, active = '/' }: { children: ReactNode; 
                   <b>{user.nickname || user.username || user.phone || '丰链云用户'}</b>
                   <i>▾</i>
                 </button>
-                <button className="portal-user-logout" type="button" onClick={() => void logout()}>退出</button>
+                <button className="portal-user-logout" type="button" disabled={loggingOut} onClick={() => void logout()}>{loggingOut ? '退出中…' : '退出'}</button>
                 {accountMenuOpen && (
                   <div className="portal-account-menu">
                     <a href="#/account" onClick={() => setAccountMenuOpen(false)}>

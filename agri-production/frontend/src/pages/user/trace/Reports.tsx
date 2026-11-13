@@ -1,3 +1,4 @@
+import '@/components/ProductionDetailCompact.css'
 import '@/pages/user/quality/quality-trace.css'
 import Card from '@/components/SectionCard'
 import DetailInfoGrid from '@/components/DetailInfoGrid'
@@ -564,7 +565,7 @@ export default function Reports(): JSX.Element {
         ]}
       />
 
-      <Modal className="quality-trace-dialog"
+      <Modal className="production-form-dialog quality-trace-dialog"
         title="生成溯源报告"
         open={genOpen}
         okText="生成报告"
@@ -606,7 +607,7 @@ export default function Reports(): JSX.Element {
         </Form>
       </Modal>
 
-      <Drawer rootClassName="quality-trace-dialog"
+      <Drawer rootClassName="quality-trace-dialog production-detail-compact production-detail-dialog"
         title={preview ? `📑 产品溯源报告 · ${preview.reportNo}` : '报告预览'}
         width={900}
         open={Boolean(preview)}

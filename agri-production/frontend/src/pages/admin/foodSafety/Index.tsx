@@ -1,3 +1,4 @@
+import DetailInfoGrid from '@/components/DetailInfoGrid'
 /**
  * 页面名称：食品安全事件台账
  * 路由路径：/admin/production/food-safety
@@ -15,7 +16,6 @@ import {
   Button,
   Card,
   Col,
-  Descriptions,
   Empty,
   Form,
   Input,
@@ -42,7 +42,7 @@ import {
   WarningOutlined,
 } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import ReactECharts from 'echarts-for-react'
 import type { EChartsOption } from 'echarts'
 import {
@@ -89,9 +89,9 @@ const ALERT_STATUS_COLOR: Record<string, string> = {
 
 /** 处置措施下拉选项 */
 const MEASURE_OPTIONS: string[] = [
-  '封存批次并启动复检',
+  '申请封存并启动复检',
   '通知农场负责人整改',
-  '下架并召回流通批次',
+  '申请批次风险管控',
   '转属地监管部门处理',
   '要求补传检测报告',
 ]
@@ -375,7 +375,7 @@ function Index(): JSX.Element {
           <Button type="link" size="small" onClick={() => navigate('/admin/production/food-safety/trust-label')}>
             可信农产品管理
           </Button>
-          <Button type="link" size="small" onClick={() => navigate('/admin/production/food-safety/cold-chain')}>
+          <Button type="link" size="small" onClick={() => navigate('/admin/production/quality/recalls')}>
             冷链资源撮合
           </Button>
         </Space>
@@ -544,6 +544,8 @@ function Index(): JSX.Element {
 
       {/* 告警详情弹窗 */}
       <Modal
+        rootClassName="quality-dialog quality-detail"
+        width={800}
         open={detailAlert !== null}
         title="告警详情"
         onCancel={() => setDetailAlert(null)}
@@ -554,29 +556,29 @@ function Index(): JSX.Element {
         ]}
       >
         {detailAlert && (
-          <Descriptions column={1} size="small" bordered items={[
-            { key: 'id', label: '告警编号', children: detailAlert.id },
-            { key: 'type', label: '告警类型', children: detailAlert.type },
+          <DetailInfoGrid items={[
+            { key: 'id', fullWidth: true, label: '告警编号', value: detailAlert.id },
+            { key: 'type', label: '告警类型', value: detailAlert.type },
             {
               key: 'level',
               label: '告警级别',
-              children: (
+              value: (
                 <Tag color={LEVEL_COLOR[detailAlert.level]}>
                   {LEVEL_DOT[detailAlert.level]} {LEVEL_TEXT[detailAlert.level]}
                 </Tag>
               ),
             },
-            { key: 'target', label: '告警对象', children: detailAlert.target },
-            { key: 'code', label: '关联编号', children: detailAlert.code },
-            { key: 'time', label: '发生时间', children: detailAlert.time },
+            { key: 'target', label: '告警对象', value: detailAlert.target },
+            { key: 'code', label: '关联编号', value: detailAlert.code },
+            { key: 'time', label: '发生时间', value: detailAlert.time },
             {
               key: 'status',
               label: '处理状态',
-              children: (
+              value: (
                 <Tag color={ALERT_STATUS_COLOR[detailAlert.status] ?? 'default'}>{detailAlert.status}</Tag>
               ),
             },
-            { key: 'measure', label: '处置措施', children: detailAlert.measure ?? '—' },
+            { key: 'measure', fullWidth: true, label: '处置措施', value: detailAlert.measure ?? '—' },
           ]} />
         )}
       </Modal>
@@ -633,4 +635,13 @@ function Index(): JSX.Element {
   )
 }
 
-export default function SafetyEvidencePage() { return <><div role="note" style={{padding: 16, background: "#fffbe6", marginBottom: 16}}>此处仅登记处理进展，不自动执行下架、销毁、物流或退款，也不作为整改结案凭据。批次冻结与码作废请进入不合格品处置。</div><Index /></> }
+function SafetyEvidencePage() { return <><div role="note" style={{padding: 16, background: "#fffbe6", marginBottom: 16}}>此处仅登记处理进展，不自动执行下架、销毁、物流或退款，也不作为整改结案凭据。批次冻结与码作废请进入不合格品处置。</div><Index /></> }
+
+/** 旧食品安全入口归并到质量总览，原安全事件业务作为内嵌面板使用。 */
+export default function SafetyEntry({ embedded = false }: { embedded?: boolean }) {
+  const { search, hash } = useLocation()
+  if (embedded) return <SafetyEvidencePage />
+  const params = new URLSearchParams(search)
+  params.set('tab', 'safety')
+  return <Navigate to={`/admin/production/trace?${params.toString()}${hash}`} replace />
+}

@@ -29,10 +29,16 @@ public interface CapabilityFacade {
     /** 是否具备其中任意一项能力；userId 为空一律返回 false */
     boolean hasAny(Long userId, Collection<String> capabilityCodes);
 
+    /** 按指定经营主体校验能力，身份类能力不得跨主体复用。 */
+    boolean hasAny(Long userId, Collection<String> capabilityCodes, Long merchantId);
+
     /**
      * 前置校验：不具备时抛业务异常（403），消息里说明需要开通哪类业务身份。
      *
      * @param actionLabel 动作名，用于拼错误消息，例如"发布挂牌"
      */
     void requireAny(Long userId, Collection<String> capabilityCodes, String actionLabel);
+
+    /** 按指定经营主体校验并抛出 403。 */
+    void requireAny(Long userId, Collection<String> capabilityCodes, Long merchantId, String actionLabel);
 }

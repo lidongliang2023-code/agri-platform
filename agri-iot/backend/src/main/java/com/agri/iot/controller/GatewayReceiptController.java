@@ -17,6 +17,8 @@ import java.util.*;
 public class GatewayReceiptController {
     @org.springframework.beans.factory.annotation.Autowired
     private com.agri.iot.service.OtaCommandService ota;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.agri.iot.service.IotTelemetryService telemetry;
     private final GatewayCommandService commands;
     private final Map<String,String> keys;
     public GatewayReceiptController(GatewayCommandService commands,
@@ -43,4 +45,13 @@ public class GatewayReceiptController {
     public ApiResponse<List<Map<String,Object>>> claimOta(@PathVariable long gatewayId,@RequestHeader(value="X-Gateway-Key",required=false) String key){authenticate(gatewayId,key);return ApiResponse.success(ota.claim(gatewayId));}
     @PostMapping("/ota/{code}/receipt")
     public ApiResponse<Map<String,Object>> receiptOta(@PathVariable long gatewayId,@PathVariable String code,@RequestHeader(value="X-Gateway-Key",required=false) String key,@RequestBody Map<String,String> body){authenticate(gatewayId,key);return ApiResponse.success(ota.receipt(gatewayId,code,body));}
+    /** reportId 由采集端持久化；网络重试必须复用原 reportId 与原载荷。 */
+    @PostMapping("/telemetry")
+    public ApiResponse<Map<String,Object>> telemetry(@PathVariable long gatewayId,
+            @RequestHeader(value="X-Gateway-Key",required=false) String key,
+            @RequestBody com.agri.iot.service.IotTelemetryService.Report body) {
+        authenticate(gatewayId,key);
+        return ApiResponse.success(telemetry.ingestGateway(gatewayId,body));
+    }
+
 }

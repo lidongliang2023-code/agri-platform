@@ -18,6 +18,13 @@ export interface IotPlot {
 export interface IotGroup { id:number;name:string;icon:string;color:string;deviceCount:number;isDefault:boolean }
 export interface IotGateway { id:number;farmId:number;farmName?:string;farmCode?:string;tenantId?:string;gatewayCode:string;gatewayName:string;model:string;protocol:string;firmwareVersion:string;ipAddress:string;onlineCount:number;totalCount:number;onlineStatus:string;cpuRate:number;memoryRate:number;lastOnline:string;source?:string }
 export interface IotDeviceType { id:number;name:string;category:string;protocol:string;icon:string;manufacturer:string;model:string;properties:string[];status:string }
+export interface PlotMonitoring {
+  plot: IotPlot
+  devices: IotDevice[]
+  telemetry: Telemetry[]
+  alerts: IotAlert[]
+  summary: { deviceCount:number; onlineCount:number; alertCount:number; latestAt?:string|null }
+}
 export interface IotProductionFarm { id:number;farmId:string;farmCode:string;farmName:string;tenantId:string;managerName?:string;managerPhone?:string;address?:string;totalArea:number;plotCount:number;status:number;source:string }
 export interface IotScene { id:number;sceneCode:string;sceneName:string;icon:string;category:string;description:string;config:string;active:boolean;plotCount:number }
 export interface IotRule {
@@ -48,7 +55,12 @@ async function req<T>(call:Promise<{data:Envelope<T>}>):Promise<T>{
   try{const r=await call;if(![0,200].includes(r.data.code))throw new Error(r.data.message);return r.data.data}
   catch(e){if(axios.isAxiosError(e)){const m=(e.response?.data as {message?:string}|undefined)?.message;throw new Error(m||'物联网服务暂时不可用')}throw e}
 }
+export class CommandSubmissionError extends Error {
+  constructor(message:string, public readonly uncertain:boolean) { super(message); this.name='CommandSubmissionError' }
+}
 export const iotApi={
+  sampling:(id:number)=>req<import('../../../shared-ui/DeviceSampling').SamplingConfig>(client.get(`/devices/${id}/sampling`)),
+  saveSampling:(id:number,body:import('../../../shared-ui/DeviceSampling').SamplingConfig)=>req<import('../../../shared-ui/DeviceSampling').SamplingConfig>(client.put(`/devices/${id}/sampling`,body)),
   otaReceipts:(id:number,page:number)=>req<CommandReceipt[]>(client.get(`/gateways/${id}/ota`,{params:{page,size:20}})),
   gatewayCommandReceipts:(id:number,page:number)=>req<CommandReceipt[]>(client.get(`/gateways/${id}/commands`,{params:{page,size:20}})),
   commandReceipts:(id:number,page:number)=>req<CommandReceipt[]>(client.get(`/devices/${id}/commands`,{params:{page,size:20}})),
@@ -57,8 +69,23 @@ export const iotApi={
   device:(id:number)=>req<IotDevice>(client.get(`/devices/${id}`)),
   deviceTypes:()=>req<IotDeviceType[]>(client.get('/device-types')),
   createDevice:(body:Record<string,unknown>)=>req<IotDevice>(client.post('/devices',body)),
-  control:(id:number,action:string)=>req<Record<string,unknown>>(client.post(`/devices/${id}/control`,{action})),
+  updateDevice:(id:number,body:Record<string,unknown>)=>req<IotDevice>(client.put(`/devices/${id}`,body)),
+  control:async(id:number,action:string,requestNo?:string)=>{
+    try {
+      const r=await client.post<Envelope<Record<string,unknown>>>(`/devices/${id}/control`,{action,requestNo})
+      if(![0,200].includes(r.data.code))throw new CommandSubmissionError(r.data.message||'指令申请被拒绝',false)
+      return r.data.data
+    } catch(e) {
+      if(e instanceof CommandSubmissionError)throw e
+      if(axios.isAxiosError(e)) {
+        const uncertain=!e.response||e.response.status>=500||[408,429].includes(e.response.status)
+        throw new CommandSubmissionError((e.response?.data as {message?:string}|undefined)?.message||(uncertain?'网络中断或服务响应超时，提交结果尚未确认':'指令申请被拒绝，请刷新设备信息'),uncertain)
+      }
+      throw new CommandSubmissionError('提交结果尚未确认，请刷新记录核对',true)
+    }
+  },
   plots:()=>req<IotPlot[]>(client.get('/plots')),
+  plotMonitoring:(id:number)=>req<PlotMonitoring>(client.get(`/plots/${id}/monitoring`)),
   farms:()=>req<IotProductionFarm[]>(client.get('/farms')),
   groups:()=>req<IotGroup[]>(client.get('/groups')),
   gateways:()=>req<IotGateway[]>(client.get('/gateways')),
@@ -102,7 +129,7 @@ export const iotApi={
 
 export const STATUS:Record<string,{label:string;tone:string}>={
   online:{label:'在线',tone:'green'},offline:{label:'离线',tone:'gray'},alert:{label:'告警中',tone:'red'},disabled:{label:'已停用',tone:'gray'},
-  pending:{label:'待处理',tone:'orange'},handling:{label:'处理中',tone:'blue'},resolved:{label:'已恢复',tone:'green'},
+  pending:{label:'待处理',tone:'orange'},handling:{label:'处理中',tone:'blue'},resolved:{label:'已处理',tone:'green'},
   critical:{label:'紧急',tone:'red'},major:{label:'重要',tone:'orange'},normal:{label:'一般',tone:'blue'},
   completed:{label:'已完成',tone:'gray'},assigned:{label:'已派单',tone:'blue'},processing:{label:'处理中',tone:'orange'},
   running:{label:'执行中',tone:'blue'},scheduled:{label:'待执行',tone:'orange'},stable:{label:'稳定版',tone:'green'},beta:{label:'测试版',tone:'orange'},

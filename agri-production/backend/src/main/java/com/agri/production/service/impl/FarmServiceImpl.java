@@ -19,11 +19,14 @@ import java.util.List;
 
 @Service
 public class FarmServiceImpl extends ServiceImpl<FarmMapper, Farm> implements IFarmService {
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.agri.production.mapper.PlotMapper boundaryPlots;
 
     @Override
     @Transactional
     public FarmVO save(FarmSaveDTO dto, String tenantId) {
         normalizePageAliases(dto);
+        dto.setBoundary(com.agri.production.service.FarmBoundaryGeometry.normalize(dto.getBoundary(), dto.isClearBoundary()));
         Farm farm = BeanCopyUtils.copy(dto, Farm.class);
         farm.setTenantId(tenantId);
         farm.setFarmCode(generateFarmCode(tenantId));
@@ -41,9 +44,32 @@ public class FarmServiceImpl extends ServiceImpl<FarmMapper, Farm> implements IF
         if (farm == null || !tenantId.equals(farm.getTenantId())) {
             throw new FarmNotFoundException();
         }
+        farm = baseMapper.boundaryForUpdate(dto.getId());
+        if (farm == null || !tenantId.equals(farm.getTenantId())) throw new FarmNotFoundException();
+        var boundary = com.agri.production.service.FarmBoundaryGeometry.normalize(dto.getBoundary(), dto.isClearBoundary());
+        if (dto.getBoundary() != null || dto.isClearBoundary())
+            com.agri.production.service.PlotBoundaryService.assertFarmChange(boundaryPlots, farm, boundary);
+        var originalBoundary = farm.getBoundary();
+        var originalLongitude = farm.getLongitude();
+        var originalLatitude = farm.getLatitude();
         BeanCopyUtils.copy(dto, farm);
-        updateById(farm);
-        return FarmVO.of(farm);
+        if (dto.getLongitude() == null && !dto.isClearCoordinates()) {
+            farm.setLongitude(originalLongitude);
+            farm.setLatitude(originalLatitude);
+        }
+        farm.setBoundary(boundary == null ? originalBoundary : boundary);
+        if (!updateById(farm)) throw new com.agri.production.common.exception.BusinessException(409, "农场资料未保存");
+        if (dto.isClearBoundary()) {
+            if (baseMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<Farm>()
+                .eq(Farm::getId, farm.getId()).eq(Farm::getTenantId, tenantId).set(Farm::getBoundary, null)) != 1)
+                throw new com.agri.production.common.exception.BusinessException(409, "农场边界未清空");
+        }
+        if (dto.isClearCoordinates()) {
+            baseMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<Farm>()
+                .eq(Farm::getId, farm.getId()).eq(Farm::getTenantId, tenantId)
+                .set(Farm::getLongitude, null).set(Farm::getLatitude, null));
+        }
+        return FarmVO.of(getById(farm.getId()));
     }
 
     /**

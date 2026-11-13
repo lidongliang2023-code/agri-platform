@@ -1,3 +1,4 @@
+import { logoutBrowser } from '../../../../packages/agri-shared/src/auth/logout'
 /**
  * 平台统一认证（SSO）客户端 —— 授权码 + PKCE。
  *
@@ -196,17 +197,8 @@ export async function refreshAccessToken(): Promise<SsoLoginResult | null> {
  * <p>SSO 全局会话位于认证中心域，本函数清不到；反过来，只跳认证中心登出也清不掉
  * 主数据域上的刷新 Cookie。因此完整退出必须两件事都做。</p>
  */
-export async function revokePlatformSession(): Promise<boolean> {
-  try {
-    const response = await axios.post('/api/v1/auth/logout', {}, {
-      timeout: 10000,
-      withCredentials: true,
-    })
-    return response.data?.code === 0
-  } catch {
-    // 网络异常时仍继续清理本地态和 SSO 会话；强制退出标记会阻止本域 Cookie 自动续签。
-    return false
-  }
+export async function revokePlatformSession(token?: string, clear: () => void = () => {}): Promise<boolean> {
+  return logoutBrowser({ token, clientId: SSO_CLIENT_ID, ssoOrigin: resolveSsoOrigin(), clear })
 }
 
 /**

@@ -31,7 +31,8 @@ export type DevicePayload = Partial<IotDevice>
 
 /** 分页查询设备列表 */
 export function listDevices(params: DeviceListParams): Promise<PageResult<IotDevice>> {
-  return http.get<PageResult<IotDevice>>(`${BASE}/devices`, params)
+  const { onlineStatus, ...rest } = params
+  return http.get<PageResult<IotDevice>>(`${BASE}/devices`, { ...rest, status: onlineStatus })
 }
 
 /** 查询设备详情 */

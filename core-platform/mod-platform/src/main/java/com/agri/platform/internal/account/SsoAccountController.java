@@ -438,12 +438,17 @@ public class SsoAccountController {
     @GetMapping("/identity-applications")
     public ApiResponse<Map<String, Object>> identityApplications(HttpServletRequest request) {
         long[] session = requireSession(request);
-        List<IdentityApplicationEntity> entities = identityApplicationMapper.selectList(
-                new LambdaQueryWrapper<IdentityApplicationEntity>()
-                        .eq(IdentityApplicationEntity::getUserId, session[0])
-                        .orderByDesc(IdentityApplicationEntity::getCreatedAt)
-                        .orderByDesc(IdentityApplicationEntity::getId));
-        // 每类身份取最近一张单子
+        Long activeMerchantId = activeMerchantService.resolve(session[0], session[1]);
+        // 身份申请属于“账号 + 经营主体”范围。切换主体后只展示当前主体的申请，
+        // 没有当前主体时不返回历史申请，避免把其他主体的状态带入当前页面。
+        List<IdentityApplicationEntity> entities = activeMerchantId == null ? List.of()
+                : identityApplicationMapper.selectList(
+                        new LambdaQueryWrapper<IdentityApplicationEntity>()
+                                .eq(IdentityApplicationEntity::getUserId, session[0])
+                                .eq(IdentityApplicationEntity::getMerchantId, activeMerchantId)
+                                .orderByDesc(IdentityApplicationEntity::getCreatedAt)
+                                .orderByDesc(IdentityApplicationEntity::getId));
+        // 每类身份取当前主体最近一张单子
         Map<String, IdentityApplicationEntity> latest = new LinkedHashMap<>();
         for (IdentityApplicationEntity entity : entities) {
             latest.putIfAbsent(entity.getIdentityType(), entity);
@@ -453,6 +458,7 @@ public class SsoAccountController {
             String code = String.valueOf(type.get("code"));
             IdentityApplicationEntity entity = latest.get(code);
             Map<String, Object> row = new LinkedHashMap<>(type);
+            row.put("merchantId", activeMerchantId == null ? null : String.valueOf(activeMerchantId));
             row.put("status", entity == null ? "available" : entity.getStatus());
             row.put("applicationId", entity == null ? null : String.valueOf(entity.getId()));
             row.put("applyNote", entity == null ? null : entity.getApplyNote());
@@ -464,6 +470,7 @@ public class SsoAccountController {
             rows.add(row);
         }
         Map<String, Object> result = new LinkedHashMap<>();
+        result.put("merchantId", activeMerchantId == null ? null : String.valueOf(activeMerchantId));
         result.put("identities", rows);
         result.put("records", entities.stream().map(this::applicationView).toList());
         return ApiResponse.ok(result);
@@ -503,6 +510,7 @@ public class SsoAccountController {
         Long pending = identityApplicationMapper.selectCount(
                 new LambdaQueryWrapper<IdentityApplicationEntity>()
                         .eq(IdentityApplicationEntity::getUserId, session[0])
+                        .eq(IdentityApplicationEntity::getMerchantId, merchantId)
                         .eq(IdentityApplicationEntity::getIdentityType, identityType)
                         .eq(IdentityApplicationEntity::getStatus, "pending"));
         if (pending != null && pending > 0) {
@@ -533,8 +541,10 @@ public class SsoAccountController {
     public ApiResponse<Void> cancelIdentityApplication(@PathVariable Long id, HttpServletRequest request) {
         long[] session = requireSession(request);
         IdentityApplicationEntity entity = identityApplicationMapper.selectById(id);
-        // session[0] 是基本类型 long，不能调 .equals；先判空再比数值
-        if (entity == null || entity.getUserId() == null || entity.getUserId() != session[0]) {
+        Long activeMerchantId = activeMerchantService.resolve(session[0], session[1]);
+        // 撤回也必须限制在当前主体，防止切换主体后操作另一主体的申请单。
+        if (entity == null || entity.getUserId() == null || entity.getUserId() != session[0]
+                || activeMerchantId == null || !activeMerchantId.equals(entity.getMerchantId())) {
             throw new BusinessException(ErrorCode.NOT_FOUND, "申请单不存在");
         }
         if (!"pending".equals(entity.getStatus())) {
@@ -759,25 +769,27 @@ public class SsoAccountController {
                 new LambdaQueryWrapper<UserMerchantEntity>()
                         .eq(UserMerchantEntity::getUserId, session[0])
                         .eq(UserMerchantEntity::getStatus, 1));
+        Long activeMerchantId = activeMerchantService.resolve(session[0], session[1]);
         boolean hasMerchant = !bindings.isEmpty();
         boolean merchantVerified = false;
-        for (UserMerchantEntity binding : bindings) {
+        if (activeMerchantId != null) {
             MerchantCertificationEntity cert = certificationMapper.selectOne(
                     new LambdaQueryWrapper<MerchantCertificationEntity>()
-                            .eq(MerchantCertificationEntity::getMerchantId, binding.getMerchantId())
+                            .eq(MerchantCertificationEntity::getMerchantId, activeMerchantId)
                             .orderByDesc(MerchantCertificationEntity::getId)
                             .last("LIMIT 1"));
             // 注意：企业认证的状态字段是 certStatus（不是 status），个人实名才是 status
             if (cert != null && "approved".equals(cert.getCertStatus())) {
                 merchantVerified = true;
-                break;
             }
         }
 
-        // 已开通的业务身份（按身份类型取集合：交易模块只认交易类身份）
-        java.util.Set<String> approvedIdentityTypes = identityApplicationMapper.selectList(
+        // 已开通的业务身份只取当前经营主体，不能把其他主体的身份带入入口判断。
+        java.util.Set<String> approvedIdentityTypes = activeMerchantId == null ? java.util.Set.of()
+                : identityApplicationMapper.selectList(
                         new LambdaQueryWrapper<IdentityApplicationEntity>()
                                 .eq(IdentityApplicationEntity::getUserId, session[0])
+                                .eq(IdentityApplicationEntity::getMerchantId, activeMerchantId)
                                 .eq(IdentityApplicationEntity::getStatus, "approved"))
                 .stream()
                 .map(IdentityApplicationEntity::getIdentityType)
@@ -851,10 +863,13 @@ public class SsoAccountController {
     public ApiResponse<Map<String, Object>> capabilities(HttpServletRequest request,
             @RequestParam(required = false) Long merchantId) {
         long[] session = requireSession(request);
-        List<IdentityApplicationEntity> rows = identityApplicationMapper.selectList(
-                new LambdaQueryWrapper<IdentityApplicationEntity>()
-                        .eq(IdentityApplicationEntity::getUserId, session[0])
-                        .orderByDesc(IdentityApplicationEntity::getId));
+        Long activeMerchantId = activeMerchantService.resolve(session[0], session[1]);
+        List<IdentityApplicationEntity> rows = activeMerchantId == null ? List.of()
+                : identityApplicationMapper.selectList(
+                        new LambdaQueryWrapper<IdentityApplicationEntity>()
+                                .eq(IdentityApplicationEntity::getUserId, session[0])
+                                .eq(IdentityApplicationEntity::getMerchantId, activeMerchantId)
+                                .orderByDesc(IdentityApplicationEntity::getId));
         Map<String, String> latestStatus = new LinkedHashMap<>();
         for (IdentityApplicationEntity row : rows) {
             latestStatus.putIfAbsent(row.getIdentityType(), row.getStatus());
@@ -862,8 +877,8 @@ public class SsoAccountController {
         List<Map<String, Object>> list = new ArrayList<>();
         int grantedCount = 0;
         for (BusinessCapabilities.Definition definition : BusinessCapabilities.all()) {
-            Long scope = "production.manage".equals(definition.code())
-                    ? (merchantId == null ? activeMerchantService.resolve(session[0], session[1]) : merchantId) : null;
+            Long currentMerchantId = activeMerchantService.resolve(session[0], session[1]);
+            Long scope = merchantId == null ? currentMerchantId : merchantId;
             CapabilityFacade.Decision decision = capabilityFacade.check(session[0], definition.code(), scope);
             String identityStatus = definition.identityCode().isEmpty()
                     ? "derived" : latestStatus.getOrDefault(definition.identityCode(), "available");
@@ -1018,17 +1033,20 @@ public class SsoAccountController {
         /* 2) 活跃登录会话 */
         List<Map<String, Object>> sessions = sessionService.listSessions(session[0], currentSid);
 
-        /* 3) 已开通的业务身份 */
+        /* 3) 当前主体已开通的业务身份 */
+        Long activeMerchantId = activeMerchantService.resolve(session[0], session[1]);
         List<Map<String, Object>> identities = new ArrayList<>();
         Map<String, String> typeLabels = new LinkedHashMap<>();
         for (Map<String, Object> type : IDENTITY_TYPES) {
             typeLabels.put(String.valueOf(type.get("code")), String.valueOf(type.get("label")));
         }
-        List<IdentityApplicationEntity> approvedApps = identityApplicationMapper.selectList(
-                new LambdaQueryWrapper<IdentityApplicationEntity>()
-                        .eq(IdentityApplicationEntity::getUserId, session[0])
-                        .eq(IdentityApplicationEntity::getStatus, "approved")
-                        .orderByDesc(IdentityApplicationEntity::getReviewTime));
+        List<IdentityApplicationEntity> approvedApps = activeMerchantId == null ? List.of()
+                : identityApplicationMapper.selectList(
+                        new LambdaQueryWrapper<IdentityApplicationEntity>()
+                                .eq(IdentityApplicationEntity::getUserId, session[0])
+                                .eq(IdentityApplicationEntity::getMerchantId, activeMerchantId)
+                                .eq(IdentityApplicationEntity::getStatus, "approved")
+                                .orderByDesc(IdentityApplicationEntity::getReviewTime));
         Set<String> seenTypes = new LinkedHashSet<>();
         for (IdentityApplicationEntity app : approvedApps) {
             // 同一身份可能有多张历史单，只展示最近一张
@@ -1045,7 +1063,6 @@ public class SsoAccountController {
 
         /* 4) 主体成员身份（我在各主体里以什么角色参与） */
         List<Map<String, Object>> memberships = new ArrayList<>();
-        Long activeMerchantId = activeMerchantService.resolve(session[0], session[1]);
         List<UserMerchantEntity> bindingsOfMerchant = userMerchantMapper.selectList(
                 new LambdaQueryWrapper<UserMerchantEntity>()
                         .eq(UserMerchantEntity::getUserId, session[0])

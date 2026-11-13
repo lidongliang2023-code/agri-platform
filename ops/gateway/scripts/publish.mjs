@@ -74,7 +74,7 @@ const APPS = {
     builder: 'uni-app',
     distDir: path.join('dist', 'build', 'h5'),
   },
-  // S2B2C 一个子系统有四个端（渠道/消费者/平台运营/供应商），按端各出一份产物。
+  // S2B2C 消费者端、商家端、平台运营端分别构建；供应商功能已合并至平台供货运营。
   // 生产环境它们同属 mall 子域（按路径区分端），本地为了能直接点开，各给一个端口。
   'mall-consumer': {
     frontendDir: path.join('agri-s2b2c', 'frontend-consumer'),

@@ -18,6 +18,8 @@ export interface Farm {
   farmType: FarmType
   /** 所属租户 ID */
   tenantId: string
+  /** 所属经营主体名称（监管接口从平台主体档案读取） */
+  tenantName?: string
   /** 省份 */
   province: string
   /** 城市 */
@@ -36,6 +38,8 @@ export interface Farm {
   longitude?: number
   /** 纬度 */
   latitude?: number
+  /** 农场边界，GeoJSON Polygon */
+  boundary?: string | null
   /** 状态：1 正常 0 停用 */
   status: EnableStatus
   /** 备注 */

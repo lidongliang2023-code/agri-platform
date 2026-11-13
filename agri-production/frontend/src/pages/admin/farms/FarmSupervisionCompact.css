@@ -1,0 +1,40 @@
+.farm-supervision-compact .ant-page-header { padding: 10px 20px; }
+.farm-supervision-compact .ant-page-header-heading-title { font-size: 18px !important; line-height: 26px; }
+.farm-supervision-compact .ant-page-header-heading-sub-title { font-size: 12px; }
+.farm-supervision-compact .production-section-card > .ant-card-head { min-height: 42px; padding: 0 16px; }
+.farm-supervision-compact .production-section-card > .ant-card-head .ant-card-head-title { font-size: 14px; line-height: 22px; }
+.farm-supervision-compact .production-section-card > .ant-card-body { padding: 14px 16px; }
+.farm-supervision-compact .detail-info-grid { gap: 10px 24px; }
+.farm-supervision-compact .detail-info-item { display: flex; align-items: baseline; gap: 8px; }
+.farm-supervision-compact .detail-info-label { flex: 0 0 104px; color: #75867c; font-size: 12px; line-height: 22px; }
+.farm-supervision-compact .detail-info-value { flex: 1; min-width: 0; margin-top: 0; font-size: 13px; font-weight: 500; line-height: 22px; overflow-wrap: anywhere; }
+.farm-supervision-compact .detail-info-label::after { content: '：'; }
+.farm-supervision-compact .detail-metric-grid { gap: 10px; }
+.farm-supervision-compact .detail-metric-card { padding: 10px 14px; border-radius: 8px; }
+.farm-supervision-compact .ant-statistic-title { margin-bottom: 2px; font-size: 12px; }
+.farm-supervision-compact .ant-statistic-content { font-size: 22px; line-height: 30px; }
+.farm-supervision-compact .ant-statistic-content-suffix { font-size: 12px; }
+.farm-supervision-compact .detail-metric-extra { margin-top: 3px; font-size: 12px; line-height: 18px; }
+.farm-supervision-compact .ant-alert { padding: 8px 12px; }
+.farm-supervision-compact .ant-alert-message { font-size: 13px; }
+.farm-supervision-compact .ant-alert-description { font-size: 12px; line-height: 20px; }
+.farm-supervision-compact .ant-typography { font-size: 13px; }
+.farm-supervision-compact h5.ant-typography { font-size: 14px; }
+.farm-supervision-compact .ant-btn { font-size: 13px; }
+.farm-supervision-compact .ant-btn-link { padding-inline: 6px; }
+.farm-supervision-compact .ant-table { font-size: 13px; }
+.farm-supervision-compact .ant-table.ant-table-small .ant-table-thead > tr > th,
+.farm-supervision-compact .ant-table.ant-table-small .ant-table-tbody > tr > td { padding-block: 7px; }
+.farm-supervision-compact .ant-tabs > .ant-tabs-nav { margin-bottom: 12px; }
+.farm-supervision-compact .ant-tabs-tab { padding-block: 8px; font-size: 13px; }
+.farm-supervision-compact.ant-drawer .ant-drawer-body { padding: 16px; }
+@media (max-width: 1200px) {
+  .farm-supervision-compact .detail-info-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 20px; }
+}
+@media (max-width: 640px) {
+  .farm-supervision-compact .detail-info-grid { grid-template-columns: 1fr; gap: 8px; }
+  .farm-supervision-compact .detail-info-label { flex-basis: 96px; }
+  .farm-supervision-compact .production-section-card > .ant-card-body { padding: 12px; }
+  .farm-supervision-compact .production-section-card > .ant-card-head { padding-inline: 12px; }
+  .farm-supervision-compact .ant-page-header { padding: 8px 12px; }
+}

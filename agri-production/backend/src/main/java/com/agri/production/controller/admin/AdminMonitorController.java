@@ -5,6 +5,7 @@ import com.agri.production.service.IAdminMonitorService;
 import com.agri.production.vo.AdminMonitorAlertVO;
 import com.agri.production.vo.AdminMonitorDeviceVO;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -33,6 +34,16 @@ public class AdminMonitorController {
         this.adminMonitorService = adminMonitorService;
     }
 
+    @org.springframework.beans.factory.annotation.Value("${platform.services.platform.url:http://localhost:8093}") private String platformUrl;
+    private String actor(){
+        try{
+            var f=new org.springframework.http.client.SimpleClientHttpRequestFactory();f.setConnectTimeout(2000);f.setReadTimeout(3000);
+            var h=new org.springframework.http.HttpHeaders();h.set("Authorization",com.agri.production.service.TenantContextService.currentAuthorization());
+            var r=new org.springframework.web.client.RestTemplate(f).exchange(platformUrl+"/api/v1/auth/me",org.springframework.http.HttpMethod.GET,new org.springframework.http.HttpEntity<>(h),Map.class).getBody();
+            if(r==null||!(r.get("data") instanceof Map u)||u.get("id")==null)throw new IllegalStateException();
+            return String.valueOf(u.get("username"))+" · 用户 ID："+u.get("id");
+        }catch(Exception e){throw new com.agri.production.common.exception.BusinessException(503,"无法确认运营操作人，催办未保存");}
+    }
     /** 监测总览（MonitorCenter 走这条）。 */
     @GetMapping("/overview")
     public ApiResponse<Map<String, Object>> overview() {
@@ -62,18 +73,26 @@ public class AdminMonitorController {
     @PatchMapping("/tasks/{taskId}/urge")
     public ApiResponse<Map<String, Object>> urge(@PathVariable Long taskId,
                                                 @RequestParam(required = false) String operator) {
-        return ApiResponse.success(adminMonitorService.urgeTask(taskId, operator));
+        return ApiResponse.success(adminMonitorService.urgeTask(taskId, actor()));
     }
 
     /**
-     * 下发设备重启指令（IotMonitor 走这条）。
+     * 旧设备重启入口保留明确拒绝，设备指令由物联网域负责。
      *
-     * <p>本部署没有设备网关：这里只把指令记下来（页面文案即"重启指令已下发"），
-     * 不会真去重启设备。</p>
+     * <p>不写设备副本，不用登记时间冒充真实指令下发。</p>
      */
     @PatchMapping("/iot/{deviceId}/reboot")
     public ApiResponse<Map<String, Object>> reboot(@PathVariable Long deviceId,
                                                   @RequestParam(required = false) String operator) {
         return ApiResponse.success(adminMonitorService.requestReboot(deviceId, operator));
     }
+    @org.springframework.beans.factory.annotation.Autowired private com.agri.production.service.ProductionMonitorQueryService query;
+    @GetMapping("/task-page")
+    public ApiResponse<?> taskPage(@RequestParam(defaultValue="1") int pageNum,@RequestParam(defaultValue="20") int pageSize,@RequestParam(required=false) String keyword,@RequestParam(required=false) Long farmId,@RequestParam(required=false) String status,@RequestParam(required=false) String taskType,@RequestParam(required=false) String startDate,@RequestParam(required=false) String endDate){return ApiResponse.success(query.taskPage(pageNum,pageSize,keyword,farmId,status,taskType,startDate,endDate));}
+    @GetMapping("/task-detail/{id}") public ApiResponse<?> taskDetail(@PathVariable Long id){return ApiResponse.success(query.taskDetail(id));}
+    @GetMapping("/input-page")
+    public ApiResponse<?> inputPage(@RequestParam(defaultValue="1") int pageNum,@RequestParam(defaultValue="20") int pageSize,@RequestParam(required=false) String keyword,@RequestParam(required=false) Long farmId,@RequestParam(required=false) String startDate,@RequestParam(required=false) String endDate){return ApiResponse.success(query.inputPage(pageNum,pageSize,keyword,farmId,startDate,endDate));}
+    @GetMapping("/environment") public ApiResponse<?> environment(@RequestParam Long farmId,@RequestParam(defaultValue="24") int hours){return ApiResponse.success(query.environment(farmId,hours));}
+    @GetMapping("/alert-page") public ApiResponse<?> alertPage(@RequestParam(defaultValue="1") int pageNum,@RequestParam(defaultValue="20") int pageSize,@RequestParam(required=false) Long farmId,@RequestParam(required=false) String status){return ApiResponse.success(query.alertPage(pageNum,pageSize,farmId,status));}
+    @GetMapping("/device-page") public ApiResponse<?> devicePage(@RequestHeader(value="Authorization",required=false) String authorization,@RequestParam(defaultValue="1") int pageNum,@RequestParam(defaultValue="20") int pageSize,@RequestParam(required=false) String keyword,@RequestParam(required=false) String deviceType,@RequestParam(required=false) String status,@RequestParam(required=false) Long farmId){return ApiResponse.success(query.devicePage(authorization,pageNum,pageSize,keyword,deviceType,status,farmId));}
 }

@@ -219,6 +219,12 @@ const useAuthStore = create<AuthState>((set, get) => ({
 
   logout: (options?: LogoutOptions) => {
     if (options?.sso !== false) {
+      if (redirectingToSsoLogout) return
+      redirectingToSsoLogout = true
+      serverLogoutNotifier?.(options)
+      return
+    }
+    if (options?.sso !== false) {
       // 显式退出：从这一刻起由 SSO 登出整页跳转接管，守卫不要再插中间登录页
       redirectingToSsoLogout = true
     }
@@ -237,7 +243,6 @@ const useAuthStore = create<AuthState>((set, get) => ({
     })
     // 通知服务端：吊销刷新令牌并清除 HttpOnly Cookie。
     // 少了这一步就会出现"点了登出、刷新页面又登回来"—— Cookie 还在，静默续签照样成功。
-    serverLogoutNotifier?.(options)
   },
 }))
 
@@ -255,3 +260,6 @@ export function registerServerLogout(fn: (options?: LogoutOptions) => void): voi
 }
 
 export default useAuthStore
+
+/** 退出请求失败后允许再次操作。 */
+export function resetLogoutRedirect(): void { redirectingToSsoLogout = false }

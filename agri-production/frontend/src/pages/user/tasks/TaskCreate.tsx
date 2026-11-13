@@ -1,35 +1,22 @@
-/**
- * 页面名称：创建任务（分步表单）
- * 路由路径：/production/tasks/create
- * 所属模块：农事生产
- * PRD 序号：PRD 6.1 #16
- * 原型来源：用户端原型 P8 task-create（三步向导）
- *
- * 还原要点：
- * - 步骤条：1 基本信息 → 2 执行设置 → 3 确认提交
- * - 步骤一：任务名称 / 任务类型（施肥·灌溉·病虫害防治·采收·整枝·其他…）/ 优先级（紧急·重要·普通）
- *          / 所属农场 / 执行地块
- * - 步骤二：计划开始（datetime）/ 计划结束（datetime）/ 执行人 / 关联模板
- * - 步骤三：任务描述 + 信息确认，提交后跳转任务详情
- */
+import '@/components/ProductionDetailCompact.css'
 import { useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ProForm, ProFormDateTimePicker, ProFormRadio, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components'
 import PageContainer from '@/components/ProductionPageContainer'
-import { Button, Space, Steps, Tag, message } from 'antd'
+import { Alert, Button, Space, message } from 'antd'
 import { ArrowLeftOutlined } from '@ant-design/icons'
 import Card from '@/components/SectionCard'
 import DetailInfoGrid from '@/components/DetailInfoGrid'
 import dayjs from 'dayjs'
 import type { Dayjs } from 'dayjs'
 import useFarmStore from '@/store/farm'
-import { createTask, fetchTaskTemplatesPage } from '@/api/tasks'
+import { createTask, listAvailableTaskTemplates } from '@/api/tasks'
 import { listMembers } from '@/api/members'
 import { listPlans, listPlanStages } from '@/api/plans'
 import { listPlots } from '@/api/plots'
 import type { Member, Plan, PlanStage, Plot, Task, TaskPriority, TaskTemplate } from '@/types'
-import { TASK_PRIORITY_LABEL_MAP, TASK_TYPE_LABEL_MAP, TASK_TYPE_OPTIONS } from '@/types'
+import { TASK_TYPE_OPTIONS } from '@/types'
 
 /** 新建任务表单值 */
 interface TaskFormValues {
@@ -57,6 +44,10 @@ interface TaskFormValues {
   templateId?: string
   /** 任务描述 */
   description?: string
+  cropName?: string
+  inputItems?: string[]
+  qualityRequirement?: string
+  remark?: string
 }
 
 /** 优先级选项（原型：⚡紧急 / 🔶重要 / 普通） */
@@ -67,20 +58,6 @@ const PRIORITY_RADIO_OPTIONS = [
   { value: 1, label: '低' },
 ]
 
-/** 各步骤需要校验的字段名 */
-const STEP_FIELDS: string[][] = [
-  ['taskName', 'taskType', 'priority', 'farmId', 'plotId'],
-  ['planStartDate', 'planEndDate', 'assigneeId'],
-  ['description'],
-]
-
-/**
- * 新建任务页
- *
- * 业务职责：三步向导创建农事任务，逐步校验后调用新增接口并跳转详情。
- *
- * @returns 页面内容
- */
 export default function TaskCreate(): JSX.Element {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -91,7 +68,7 @@ export default function TaskCreate(): JSX.Element {
   /** 从计划 / 阶段进入时预选关联计划与阶段 */
   const presetPlanId = searchParams.get('planId') ?? undefined
   const presetStageId = searchParams.get('stageId') ?? undefined
-  const [currentStep, setCurrentStep] = useState<number>(0)
+  const [selectedTemplate, setSelectedTemplate] = useState<TaskTemplate | undefined>()
   const [selectedPlanId, setSelectedPlanId] = useState<string | undefined>(presetPlanId)
   const [form] = ProForm.useForm<TaskFormValues>()
 
@@ -128,7 +105,9 @@ export default function TaskCreate(): JSX.Element {
   /** 任务模板下拉 */
   const templateQuery = useQuery({
     queryKey: ['task-template-options'],
-    queryFn: () => fetchTaskTemplatesPage({ pageNum: 1, pageSize: 100 }),
+    queryFn: listAvailableTaskTemplates,
+    staleTime: 0,
+    refetchOnMount: 'always',
   })
 
   const plotOptions = useMemo(
@@ -169,7 +148,7 @@ export default function TaskCreate(): JSX.Element {
 
   const templateOptions = useMemo(
     () =>
-      (templateQuery.data?.list ?? []).map((template: TaskTemplate) => ({
+      (templateQuery.data ?? []).map((template: TaskTemplate) => ({
         value: template.templateId,
         label: template.templateName,
       })),
@@ -196,26 +175,6 @@ export default function TaskCreate(): JSX.Element {
     },
   })
 
-  /** 下一步：仅校验当前步骤字段 */
-  const handleNext = async (): Promise<void> => {
-    try {
-      await form.validateFields(STEP_FIELDS[currentStep])
-      setCurrentStep((prev) => Math.min(prev + 1, STEP_FIELDS.length - 1))
-    } catch {
-      message.warning('请先完整填写本步骤的必填项')
-    }
-  }
-
-  /** 上一步 */
-  const handlePrev = (): void => {
-    setCurrentStep((prev) => Math.max(prev - 1, 0))
-  }
-
-  /** 提交：交给 ProForm 的 onFinish 统一处理 */
-  const handleSubmit = (): void => {
-    form.submit()
-  }
-
   /** 提交表单 */
   const handleFinish = async (values: TaskFormValues): Promise<void> => {
     const payload: Partial<Task> = {
@@ -228,6 +187,11 @@ export default function TaskCreate(): JSX.Element {
       assigneeId: values.assigneeId,
       templateId: values.templateId,
       description: values.description,
+      cropName: values.cropName,
+      inputMaterials: (values.inputItems ?? []).join(","),
+      inputMaterialsJson: JSON.stringify(values.inputItems ?? []),
+      qualityRequirement: values.qualityRequirement,
+      remark: values.remark,
       farmId: values.farmId,
       // status 由后端统一置为 pending，前端不再传（传了也会被忽略，容易让人误以为可指定初始状态）
       planStartDate: values.planStartDate ? dayjs(values.planStartDate).format('YYYY-MM-DD HH:mm:ss') : undefined,
@@ -236,36 +200,10 @@ export default function TaskCreate(): JSX.Element {
     createMutation.mutate(payload)
   }
 
-  /** 第三步确认信息 */
-  const renderConfirm = (): JSX.Element => {
-    const values = form.getFieldsValue(true) as TaskFormValues
-    const plotLabel = plotOptions.find((item) => item.value === values.plotId)?.label ?? '-'
-    const planLabel = planOptions.find((item) => item.value === values.planId)?.label ?? '不关联计划'
-    const stageLabel = stageOptions.find((item) => item.value === values.stageId)?.label ?? '不关联阶段'
-    const memberLabel = memberOptions.find((item) => item.value === values.assigneeId)?.label ?? '-'
-    const templateLabel =
-      templateOptions.find((item) => item.value === values.templateId)?.label ?? '不关联模板'
-    return (
-      <DetailInfoGrid columns={2} items={[
-        { label: "任务名称", value: (<>{values.taskName ?? '-'}</>) },
-        { label: "任务类型", value: (<><Tag color="geekblue">
-            {TASK_TYPE_LABEL_MAP[values.taskType ?? ''] ?? values.taskType ?? '-'}
-          </Tag></>) },
-        { label: "优先级", value: (<>{TASK_PRIORITY_LABEL_MAP[values.priority ?? 3] ?? '重要'}</>) },
-        { label: "执行地块", value: (<>{plotLabel}</>) },
-        { label: "关联计划", value: (<>{planLabel}</>) },
-        { label: "关联阶段", value: (<>{stageLabel}</>) },
-        { label: "计划开始", value: (<>{values.planStartDate ? dayjs(values.planStartDate).format('YYYY-MM-DD HH:mm') : '-'}</>) },
-        { label: "计划结束", value: (<>{values.planEndDate ? dayjs(values.planEndDate).format('YYYY-MM-DD HH:mm') : '-'}</>) },
-        { label: "执行人", value: (<>{memberLabel}</>) },
-        { label: "关联模板", value: (<>{templateLabel}</>) },
-      ]} />
-    )
-  }
-
   return (
-    <PageContainer
+    <PageContainer mobileForm
       title="新建农事任务"
+      className="production-detail-compact"
       extra={[
         <Button
           key="back"
@@ -276,21 +214,16 @@ export default function TaskCreate(): JSX.Element {
         </Button>,
       ]}
     >
-      <Card style={{ marginBottom: 16 }}>
-        <Steps
-          current={currentStep}
-          items={[
-            { title: '基本信息' },
-            { title: '执行设置' },
-            { title: '确认提交' },
-          ]}
-        />
-      </Card>
-
-      <Card title={`第 ${currentStep + 1} 步 / 共 3 步`}>
+      <Card title="任务信息">
         <ProForm<TaskFormValues>
+          scrollToFirstError
           form={form}
-          layout="vertical"
+          layout="horizontal"
+          grid
+          colProps={{ xs: 24, md: 12 }}
+          rowProps={{ gutter: 24 }}
+          labelCol={{ flex: "112px" }}
+          wrapperCol={{ flex: 1 }}
           submitter={false}
           onFinish={handleFinish}
           initialValues={{
@@ -302,14 +235,25 @@ export default function TaskCreate(): JSX.Element {
             taskType: 'fertilizing',
           }}
         >
-          {/* ⚠️ 三步**必须全部保持挂载**，只用 display 隐藏：
-              原先写的是 {currentStep === 0 && (…)}，走到下一步就把上一步的控件卸载了，
-              而 antd Form 不会保留已卸载字段的值 —— 于是最后一步点「提交」时，
-              onFinish 拿到的只有当前步的字段，名称 / 类型 / 农场 / 地块 / 时段 / 执行人**全丢**，
-              后端回 400「农场ID不能为空, 任务名称不能为空, 任务类型不能为空」。
-              也就是说：**真实用户在这个页面根本建不出任务**（2026-10-16 联调实测）。
-              改成 display 切换后，字段一直挂载，值与分步校验（validateFields(STEP_FIELDS[n])）都不受影响。 */}
-          <div style={{ display: currentStep === 0 ? 'block' : 'none' }}>
+          <ProFormSelect name="templateId" label="关联任务模板" placeholder="选择运营端发布的启用模板，自动带出作业属性"
+            colProps={{ span: 24 }} options={templateOptions} fieldProps={{ allowClear: true, showSearch: true, optionFilterProp: 'label', loading: templateQuery.isFetching,
+              onChange: (value?: string) => {
+                const template = (templateQuery.data ?? []).find(t => String(t.templateId) === String(value))
+                setSelectedTemplate(template)
+                if (!template) return
+                form.setFieldsValue({ taskName: template.templateName, taskType: template.taskType,
+                  cropName: template.cropName, description: template.content || template.workContent || template.description,
+                  inputItems: template.inputItems ?? [], remark: template.remark })
+              } }} />
+          {templateQuery.isError && <Alert type="error" message="任务模板加载失败，请刷新后重试" />}
+          {selectedTemplate && <div style={{ width: '100%', padding: '0 12px 16px' }}>
+            <DetailInfoGrid columns={3} items={[
+              { label: '模板编码', value: selectedTemplate.templateCode || '-' },
+              { label: '标准工时', value: selectedTemplate.standardHours != null ? `${selectedTemplate.standardHours} 小时` : '-' },
+              { label: '生长阶段', value: selectedTemplate.growthStage || '-' },
+              { label: '模板说明', value: selectedTemplate.description || '-' },
+            ]} />
+          </div>}
               <ProFormText
                 name="taskName"
                 label="任务名称"
@@ -384,9 +328,7 @@ export default function TaskCreate(): JSX.Element {
                 disabled={!selectedPlanId}
                 fieldProps={{ allowClear: true }}
               />
-          </div>
 
-          <div style={{ display: currentStep === 1 ? 'block' : 'none' }}>
               <ProFormDateTimePicker
                 name="planStartDate"
                 label="计划开始"
@@ -419,56 +361,21 @@ export default function TaskCreate(): JSX.Element {
                 options={memberOptions}
                 rules={[{ required: true, message: '请选择执行人' }]}
               />
-              <ProFormSelect
-                name="templateId"
-                label="关联任务模板（可选）"
-                placeholder="可基于 SOP 模板填充作业内容"
-                options={templateOptions}
-                fieldProps={{
-                  onChange: (value: string) => {
-                    const template = (templateQuery.data?.list ?? []).find(
-                      (item: TaskTemplate) => item.templateId === value,
-                    )
-                    if (template) {
-                      form.setFieldValue('description', template.content ?? template.workContent)
-                      if (!form.getFieldValue('taskType')) {
-                        form.setFieldValue('taskType', template.taskType)
-                      }
-                    }
-                  },
-                }}
-              />
-          </div>
-
-          <div style={{ display: currentStep === 2 ? 'block' : 'none' }}>
+              <ProFormText name="cropName" label="适用作物" placeholder="选择模板自动带出，也可手工填写" />
+              <ProFormSelect name="inputItems" label="所需投入品" mode="tags" placeholder="输入物料名称后回车，可多选" />
+              <ProFormTextArea name="qualityRequirement" label="质量要求" colProps={{ span: 24 }} fieldProps={{ rows: 2, maxLength: 500 }} />
+              <ProFormTextArea name="remark" label="备注" colProps={{ span: 24 }} fieldProps={{ rows: 2, maxLength: 500 }} />
               <ProFormTextArea
+                colProps={{ span: 24 }}
                 name="description"
                 label="任务描述"
                 placeholder="请描述作业要求、用量标准与注意事项"
                 fieldProps={{ rows: 4, maxLength: 500, showCount: true }}
               />
-              <Card title="信息确认" style={{ marginTop: 24 }}>
-                {renderConfirm()}
-              </Card>
-          </div>
         </ProForm>
 
-        <Space style={{ marginTop: 16 }}>
-          {currentStep > 0 && <Button onClick={handlePrev}>上一步</Button>}
-          {currentStep < STEP_FIELDS.length - 1 && (
-            <Button type="primary" onClick={() => void handleNext()}>
-              下一步
-            </Button>
-          )}
-          {currentStep === STEP_FIELDS.length - 1 && (
-            <Button
-              type="primary"
-              loading={createMutation.isPending}
-              onClick={handleSubmit}
-            >
-              提交
-            </Button>
-          )}
+        <Space className="production-form-actions" style={{ marginTop: 16 }}>
+          <Button type="primary" loading={createMutation.isPending} onClick={() => form.submit()}>创建任务</Button>
           <Button onClick={() => navigate('/production/tasks')}>取消</Button>
         </Space>
       </Card>

@@ -108,9 +108,15 @@ public class AdminAlertServiceImpl implements IAdminAlertService {
 
     @Override
     public PageResult<AdminAlertReviewVO> pageAlerts(int pageNum, int pageSize, Integer status, Integer alertLevel) {
+        return pageAlerts(pageNum, pageSize, status, alertLevel, null);
+    }
+
+    @Override
+    public PageResult<AdminAlertReviewVO> pageAlerts(int pageNum, int pageSize, Integer status, Integer alertLevel, Long farmId) {
         int p = pageNum > 0 ? pageNum : 1;
         int s = pageSize > 0 ? pageSize : 10;
         LambdaQueryWrapper<AlertRecord> w = new LambdaQueryWrapper<>();
+        w.eq(farmId != null, AlertRecord::getFarmId, farmId);
         if (status != null) {
             w.in(AlertRecord::getStatus, statusTexts(status));
         }

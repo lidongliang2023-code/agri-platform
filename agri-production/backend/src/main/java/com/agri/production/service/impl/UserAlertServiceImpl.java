@@ -109,7 +109,7 @@ public class UserAlertServiceImpl implements IUserAlertService {
         }
         AlertRecord alert = requireAlert(tenantId, alertId);
         int previous = AlertDict.codeOfStatus(alert.getStatus());
-        if (!((previous == 1 && (status == 2 || status == 3 || status == 4)) || (previous == 2 && status == 3)))
+        if (!((previous == 1 && (status == 2 || status == 4)) || (previous == 2 && status == 3)))
             throw new BusinessException(400, "告警状态已变化或不允许该流转，请刷新后重试");
         if (handleRemark == null || handleRemark.isBlank())
             throw new BusinessException(400, "请填写处置说明");

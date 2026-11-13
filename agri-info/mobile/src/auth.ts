@@ -1,3 +1,4 @@
+import { logoutMobile } from '../../../packages/agri-shared/src/auth/logoutMobile'
 declare const uni: any
 
 /**
@@ -140,13 +141,10 @@ export function clearUnifiedInfoSession() {
 }
 
 export async function logoutUnifiedInfo() {
-  try {
-    await apiRequest(`${AUTH_BASE}/api/v1/auth/logout`, 'POST', {}, getInfoToken())
-  } catch {
-    // 本地身份必须清理，即使统一认证服务暂时不可达。
-  }
-  clearUnifiedInfoSession()
-  uni.reLaunch({ url: '/pages/login/index' })
+  await logoutMobile(`${AUTH_BASE}/api/v1/auth/logout`, getInfoToken(), () => {
+    clearUnifiedInfoSession()
+    uni.reLaunch({ url: '/pages/login/index' })
+  })
 }
 
 export function handleInfoUnauthorized() {

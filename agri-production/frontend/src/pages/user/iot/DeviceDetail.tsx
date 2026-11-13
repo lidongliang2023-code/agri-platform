@@ -1,3 +1,4 @@
+import '@/components/ProductionDetailCompact.css'
 import Table from '@/components/BusinessRecordList'
 /**
  * 页面名称：设备详情
@@ -345,7 +346,7 @@ export default function DeviceDetail(): JSX.Element {
 
   if (deviceQuery.isLoading) {
     return (
-      <PageContainer title="📡 设备详情">
+      <PageContainer className="production-detail-compact" title="📡 设备详情">
         <Card>
           <Skeleton active paragraph={{ rows: 8 }} />
         </Card>
@@ -355,7 +356,7 @@ export default function DeviceDetail(): JSX.Element {
 
   if (deviceQuery.isError || !device) {
     return (
-      <PageContainer title="📡 设备详情">
+      <PageContainer className="production-detail-compact" title="📡 设备详情">
         <Alert
           type="error"
           showIcon
@@ -375,7 +376,7 @@ export default function DeviceDetail(): JSX.Element {
   const latest = latestQuery.data ?? null
 
   return (
-    <PageContainer
+    <PageContainer className="production-detail-compact"
       title={
         <Space wrap>
           <span>📡 {device.deviceName || device.deviceCode || '设备详情'}</span>
@@ -707,7 +708,7 @@ export default function DeviceDetail(): JSX.Element {
         />
       </Card>
 
-      <Modal
+      <Modal className="production-form-dialog"
         title="下发控制指令"
         open={commandOpen}
         onCancel={() => setCommandOpen(false)}
@@ -735,7 +736,7 @@ export default function DeviceDetail(): JSX.Element {
         </Form>
       </Modal>
 
-      <Modal
+      <Modal className="production-form-dialog"
         title="登记维修记录"
         open={maintainOpen}
         onCancel={() => setMaintainOpen(false)}

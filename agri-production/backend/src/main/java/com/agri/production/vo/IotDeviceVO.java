@@ -34,6 +34,8 @@ public class IotDeviceVO {
     private String manufacturer;
     private String firmwareVersion;
     private String farmId;
+    private String farmName;
+    private String plotName;
     /** 在线状态：1 在线 2 离线 3 故障 */
     private Integer onlineStatus;
     private Integer battery;

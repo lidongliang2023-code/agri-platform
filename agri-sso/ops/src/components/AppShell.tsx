@@ -41,6 +41,7 @@ const MENU: MenuGroup[] = [
   {
     title: '认证审核',
     items: [
+      { key: 'audit-workbench', label: '审核工作台', icon: <AuditOutlined /> },
       { key: 'identity-audit', label: '身份申请审核', icon: <SolutionOutlined /> },
       { key: 'realname-audit', label: '实名认证审核', icon: <SafetyCertificateOutlined /> },
       { key: 'qualification-audit', label: '资质审核', icon: <FileProtectOutlined /> },
@@ -101,6 +102,7 @@ const MENU: MenuGroup[] = [
 ]
 
 const TITLES: Record<OpsPageKey, string> = {
+  'audit-workbench': '审核工作台',
   dashboard: '用户中心总览',
   'health-monitor': '统一健康监控',
   'user-list': '用户列表',

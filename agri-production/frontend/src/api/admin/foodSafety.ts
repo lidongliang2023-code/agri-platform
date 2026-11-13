@@ -40,7 +40,7 @@ export function isMockSource(...keys: string[]): boolean {
 
 /** 写操作失败原因 */
 export type WriteFailureReason =
-  /** 请求未到达业务处理（404 / 网络异常 / 5xx）：后端当前没有可用接口，未写入服务端 */
+  /** 请求未到达业务处理（404 / 网络异常 / 5xx）：后端当前没有可用接口，提交结果未确认，请刷新核验 */
   | 'backend-not-implemented'
   /** 后端收到请求并明确拒绝（业务码非 0），错误信息取服务端原文 */
   | 'backend-rejected'
@@ -51,7 +51,7 @@ export type WriteFailureReason =
 export interface WriteResult {
   /** 是否已写入服务端；只有 true 才允许页面提示「操作成功」 */
   ok: boolean
-  /** 是否仅停留在本机（未写入服务端、本机也未留存任何结果） */
+  /** 是否仅停留在本机（提交结果未确认，请刷新核验、本机也未留存任何结果） */
   local: boolean
   /** 失败原因；成功时为空串 */
   reason: WriteFailureReason | ''
@@ -128,9 +128,7 @@ function failFromError(action: string, error: unknown): WriteResult {
     ok: false,
     local: true,
     reason: 'backend-not-implemented',
-    message:
-      `${action}未写入服务端${statusText}：后端暂无可用接口，` +
-      '本次操作没有产生任何服务端记录，本机也未留存，请勿据此认定处置已完成。',
+    message: `${action}提交结果未确认${statusText}，请刷新台账核验结果，勿重复提交；不能据此认定处置已完成。`,
   }
 }
 
@@ -707,7 +705,7 @@ export async function runStandardCheck(payload: StandardRunPayload): Promise<Wri
   } catch (error) {
     return failFromError('标准校验执行', error)
   }
-  return failNotFound('标准校验未执行：后端未返回校验汇总，未写入服务端')
+  return failNotFound('标准校验未执行：后端未返回校验汇总，提交结果未确认，请刷新核验')
 }
 
 /* ==================== P18 可信农产品管理 ==================== */

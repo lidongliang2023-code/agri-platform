@@ -1,3 +1,4 @@
+import '@/components/ProductionDetailCompact.css'
 import Card from '@/components/SectionCard'
 import './harvests.css'
 /**
@@ -120,7 +121,7 @@ export default function Detail(): JSX.Element {
   /** 加载态 */
   if (detailQuery.isLoading) {
     return (
-      <PageContainer className="harvest-business-page" title="采收详情">
+      <PageContainer className="harvest-business-page production-detail-compact" title="采收详情">
         <Card>
           <Skeleton active paragraph={{ rows: 8 }} />
         </Card>
@@ -131,7 +132,7 @@ export default function Detail(): JSX.Element {
   /** 错误态 / 空态 */
   if (detailQuery.isError || !batch) {
     return (
-      <PageContainer className="harvest-business-page" title="采收详情">
+      <PageContainer className="harvest-business-page production-detail-compact" title="采收详情">
         <Empty
           description={
             <Space direction="vertical">
@@ -154,7 +155,7 @@ export default function Detail(): JSX.Element {
 
   return (
     <PageContainer
-      className="harvest-business-page"
+      className="harvest-business-page production-detail-compact"
       title={`📦 采收记录 ${batch.batchNo}`}
       subTitle={batch.farmName ?? currentFarm?.farmName}
       onBack={() => navigate('/production/harvests')}
@@ -374,7 +375,7 @@ export default function Detail(): JSX.Element {
         </Space>
       </Card>
 
-      <Modal
+      <Modal className="production-form-dialog"
         title={`确认入库：${batch.batchNo}`}
         open={inboundOpen}
         okText="确认入库"

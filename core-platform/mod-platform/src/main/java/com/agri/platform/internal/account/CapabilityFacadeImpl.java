@@ -76,11 +76,18 @@ public class CapabilityFacadeImpl implements CapabilityFacade {
         if (definition == null) {
             return new Decision(false, "未知能力码：" + capabilityCode);
         }
-        // 1) 身份类能力
+        // 1) 身份类能力也必须绑定到本次业务动作所属主体，不能跨主体复用已通过身份。
         if (!definition.identityCode().isEmpty()) {
-            boolean granted = identityTypes(userId).contains(definition.identityCode());
+            if (merchantId == null) {
+                return new Decision(false, "请先选择当前经营主体");
+            }
+            List<Long> merchantIds = merchantIdsOf(userId);
+            if (!merchantIds.contains(merchantId)) {
+                return new Decision(false, "你不是该主体的成员，不能使用该业务身份");
+            }
+            boolean granted = identityTypes(userId, List.of(merchantId)).contains(definition.identityCode());
             return new Decision(granted, granted ? null
-                    : "需要开通「" + definition.identityLabel() + "」业务身份并通过审核");
+                    : "需要在当前经营主体下开通「" + definition.identityLabel() + "」业务身份并通过审核");
         }
         // 2) 主体类能力
         List<Long> merchantIds = merchantIdsOf(userId);
@@ -137,6 +144,14 @@ public class CapabilityFacadeImpl implements CapabilityFacade {
     }
 
     @Override
+    public boolean hasAny(Long userId, Collection<String> capabilityCodes, Long merchantId) {
+        if (userId == null || merchantId == null || capabilityCodes == null || capabilityCodes.isEmpty()) {
+            return false;
+        }
+        return capabilityCodes.stream().anyMatch(code -> check(userId, code, merchantId).granted());
+    }
+
+    @Override
     public void requireAny(Long userId, Collection<String> capabilityCodes, String actionLabel) {
         if (userId == null) {
             throw new BusinessException(ErrorCode.UNAUTHORIZED, "请先登录后再" + actionLabel);
@@ -152,6 +167,26 @@ public class CapabilityFacadeImpl implements CapabilityFacade {
                 .collect(Collectors.joining(" / "));
         throw new BusinessException(ErrorCode.FORBIDDEN,
                 "当前账号尚未开通所需业务身份，无法" + actionLabel
+                        + "。请先在用户中心「我的组织 → 业务身份」申请" + needed + "，审核通过后自动生效。");
+    }
+
+    @Override
+    public void requireAny(Long userId, Collection<String> capabilityCodes, Long merchantId, String actionLabel) {
+        if (userId == null) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED, "请先登录后再" + actionLabel);
+        }
+        if (hasAny(userId, capabilityCodes, merchantId)) {
+            return;
+        }
+        String needed = (capabilityCodes == null ? List.<String>of() : capabilityCodes).stream()
+                .map(BusinessCapabilities::byCode)
+                .filter(Objects::nonNull)
+                .map(definition -> "「" + definition.identityLabel() + "」")
+                .distinct()
+                .collect(Collectors.joining(" / "));
+        String scopeHint = merchantId == null ? "请先选择当前经营主体后，" : "在当前经营主体下";
+        throw new BusinessException(ErrorCode.FORBIDDEN,
+                "当前账号" + scopeHint + "尚未开通所需业务身份，无法" + actionLabel
                         + "。请先在用户中心「我的组织 → 业务身份」申请" + needed + "，审核通过后自动生效。");
     }
 

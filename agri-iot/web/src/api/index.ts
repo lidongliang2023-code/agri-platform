@@ -13,12 +13,6 @@ export const alertAPI = {
   handle: (id: number, data: any) => request.put(`/iot/alert/${id}/handle`, data),
 }
 
-export const plotAPI = {
-  list: (params: any) => request.get('/iot/plot', { params }),
-  create: (data: any) => request.post('/iot/plot', data),
-  update: (id: number, data: any) => request.put(`/iot/plot/${id}`, data),
-  delete: (id: number) => request.delete(`/iot/plot/${id}`),
-}
 
 export const groupAPI = {
   list: () => request.get('/iot/group'),

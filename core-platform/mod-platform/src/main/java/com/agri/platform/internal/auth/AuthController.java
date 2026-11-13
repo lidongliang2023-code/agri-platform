@@ -37,6 +37,7 @@ import java.util.Map;
 public class AuthController {
 
     private final AuthService authService;
+    private final com.agri.platform.internal.sso.GlobalLogoutService globalLogoutService;
     private final RefreshCookieSupport cookieSupport;
     private final SsoProperties ssoProperties;
 
@@ -61,16 +62,8 @@ public class AuthController {
     public ApiResponse<Void> logout(@RequestBody(required = false) RefreshRequest request,
                                     HttpServletRequest httpRequest, HttpServletResponse response) {
         String clientId = clientIdOf(httpRequest);
-        String refreshToken = clientId == null ? cookieSupport.read(httpRequest)
-                : cookieSupport.readForClient(httpRequest, clientId);
-        authService.logout(refreshToken != null ? refreshToken
-                : (request == null ? null : request.refreshToken()));
-        // 无论服务端是否吊销成功，都要把浏览器侧 Cookie 清掉，否则会出现"点了登出、刷新又回来了"
-        if (clientId == null) {
-            cookieSupport.clear(response);
-        } else {
-            cookieSupport.clearForClient(response, clientId);
-        }
+        globalLogoutService.logout(httpRequest, response, clientId,
+                request == null ? null : request.refreshToken());
         return ApiResponse.ok();
     }
 

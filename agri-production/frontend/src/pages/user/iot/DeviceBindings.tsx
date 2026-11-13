@@ -1,3 +1,4 @@
+import '@/components/ProductionDetailCompact.css'
 /**
  * 页面名称：设备绑定管理
  * 路由路径：/production/iot/bindings
@@ -597,7 +598,7 @@ export default function DeviceBindings(): JSX.Element {
         />
       </Card>
 
-      <Modal
+      <Modal className="production-form-dialog"
         title={editing ? '编辑绑定关系' : '新增设备绑定'}
         open={modalOpen}
         onCancel={() => {
@@ -670,7 +671,7 @@ export default function DeviceBindings(): JSX.Element {
         </Form>
       </Modal>
 
-      <Modal
+      <Modal className="production-form-dialog"
         title={`传感器映射配置${mappingBinding?.deviceName ? ` · ${mappingBinding.deviceName}` : ''}`}
         open={mappingOpen}
         onCancel={() => setMappingOpen(false)}

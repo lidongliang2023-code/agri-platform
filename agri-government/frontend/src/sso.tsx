@@ -1,3 +1,4 @@
+import { logoutBrowser } from '../../../packages/agri-shared/src/auth/logout'
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import axios, { type AxiosError, type AxiosInstance } from 'axios'
 
@@ -150,13 +151,7 @@ export function attachUnifiedAuth(client: AxiosInstance, clientId: string) {
 }
 
 export async function logoutUnified(clientId: string) {
-  try {
-    await axios.post('/api/v1/auth/logout', {}, { timeout: 10000, withCredentials: true })
-  } catch {
-    // 本地会话必须清理，即使服务端登出接口暂时不可达。
-  }
-  clearSession()
-  window.location.assign(`${ssoOrigin()}/logout?client_id=${encodeURIComponent(clientId)}`)
+  await logoutBrowser({ token: accessToken, clientId, ssoOrigin: ssoOrigin(), clear: clearSession })
 }
 
 function Failure({ title, message, retry }: { title: string; message: string; retry?: () => void }) {

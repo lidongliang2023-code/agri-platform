@@ -1,3 +1,4 @@
+import DeviceSampling from "../../shared-ui/DeviceSampling";
 import CommandReceipts from '../../shared-ui/CommandReceipts'
 import { useEffect, useState, type ReactNode } from "react";
 import {
@@ -20,9 +21,7 @@ import {
 } from "@ant-design/icons";
 import {
   App as AntApp,
-  Avatar,
   Button,
-  Dropdown,
   Form,
   Input,
   InputNumber,
@@ -51,10 +50,9 @@ import {
 } from "./api";
 import { downloadCsv, stampFilename } from "../../shared-ui/exportCsv";
 import { useClock } from "../../shared-ui/clock";
-import UnifiedSsoGate, {
-  logoutUnified,
-  useUnifiedUser,
-} from "../../shared-ui/sso";
+import UnifiedSsoGate from "../../shared-ui/sso";
+
+import { WorkspaceNavigation, MobileNavigationButton, AccountMenu } from "../../shared-ui/WorkspaceNavigation";
 
 type Page =
   | "dashboard"
@@ -104,39 +102,29 @@ const MENU: Array<{
   group: string;
   items: Array<{ page: Page; label: string; icon: ReactNode }>;
 }> = [
-  {
-    group: "运营监控",
-    items: [
-      { page: "dashboard", label: "运营概览大屏", icon: <DashboardOutlined /> },
-      { page: "devices", label: "平台设备监控", icon: <CloudServerOutlined /> },
-      { page: "gateways", label: "网关运维", icon: <ApiOutlined /> },
-    ],
-  },
-  {
-    group: "平台管理",
-    items: [
-      { page: "tenants", label: "租户与配额", icon: <TeamOutlined /> },
-      { page: "products", label: "产品与协议", icon: <AppstoreOutlined /> },
-      { page: "access", label: "设备接入审核", icon: <ShopOutlined /> },
-    ],
-  },
-  {
-    group: "运营处置",
-    items: [
-      { page: "alerts", label: "告警运营中心", icon: <AlertOutlined /> },
-      { page: "rules", label: "阈值规则治理", icon: <SlidersOutlined /> },
-      { page: "workorders", label: "运维工单", icon: <ToolOutlined /> },
-      { page: "firmwares", label: "固件包管理", icon: <DatabaseOutlined /> },
-      { page: "ota", label: "OTA 升级运营", icon: <ReloadOutlined /> },
-    ],
-  },
-  {
-    group: "数据与审计",
-    items: [
-      { page: "reports", label: "统计分析", icon: <BarChartOutlined /> },
-      { page: "logs", label: "操作审计日志", icon: <DatabaseOutlined /> },
-    ],
-  },
+  { group: "运营总览", items: [
+    { page: "dashboard", label: "运营概览大屏", icon: <DashboardOutlined /> },
+    { page: "reports", label: "统计分析", icon: <BarChartOutlined /> },
+  ] },
+  { group: "设备与接入", items: [
+    { page: "devices", label: "平台设备监控", icon: <CloudServerOutlined /> },
+    { page: "gateways", label: "网关运维", icon: <ApiOutlined /> },
+    { page: "products", label: "产品与协议", icon: <AppstoreOutlined /> },
+    { page: "access", label: "设备接入审核", icon: <ShopOutlined /> },
+  ] },
+  { group: "告警治理", items: [
+    { page: "alerts", label: "告警运营中心", icon: <AlertOutlined /> },
+    { page: "rules", label: "阈值规则治理", icon: <SlidersOutlined /> },
+  ] },
+  { group: "运维与升级", items: [
+    { page: "workorders", label: "运维工单", icon: <ToolOutlined /> },
+    { page: "firmwares", label: "固件包管理", icon: <DatabaseOutlined /> },
+    { page: "ota", label: "OTA 升级运营", icon: <ReloadOutlined /> },
+  ] },
+  { group: "主体与审计", items: [
+    { page: "tenants", label: "租户与配额", icon: <TeamOutlined /> },
+    { page: "logs", label: "操作审计日志", icon: <DatabaseOutlined /> },
+  ] },
 ];
 const ROUTER_BASE = (import.meta.env.VITE_ROUTER_BASE || "/").replace(
   /\/$/,
@@ -454,6 +442,7 @@ function Devices() {
     [status, setStatus] = useState("all"),
     [keyword, setKeyword] = useState("");
   const [commandDevice,setCommandDevice]=useState<Device|null>(null);
+  const [samplingDevice,setSamplingDevice]=useState<Device|null>(null);
   const load = () =>
     void opsApi
       .devices({ keyword, status: status === "all" ? undefined : status })
@@ -492,10 +481,11 @@ function Devices() {
     { title: "电量", dataIndex: "battery", render: (v) => `${v}%` },
     { title: "最近上报", dataIndex: "lastReport" },
     { title: "固件", dataIndex: "firmwareVersion" },
-    { title: "操作", key:"commands",fixed:"right",width:120,render:(_,r)=><Button onClick={()=>setCommandDevice(r)}>指令回执</Button> },
+    { title: "操作", key:"commands",fixed:"right",width:200,render:(_,r)=><><Button onClick={()=>setSamplingDevice(r)}>采样配置</Button><Button onClick={()=>setCommandDevice(r)}>指令回执</Button></> },
   ];
   return (
     <div className="o-page">
+      <Modal title={samplingDevice?.deviceName + " · 采样配置"} open={!!samplingDevice} footer={null} onCancel={()=>setSamplingDevice(null)}>{samplingDevice&&<DeviceSampling key={samplingDevice.id} deviceId={samplingDevice.id} load={opsApi.sampling} save={opsApi.saveSampling}/>}</Modal>
       <Modal title="设备指令与回执" open={!!commandDevice} footer={null} width={1200} onCancel={()=>setCommandDevice(null)}>{commandDevice&&<CommandReceipts key={commandDevice.id} deviceId={commandDevice.id} load={opsApi.commandReceipts}/>}</Modal>
       <Title
         title="平台设备监控"
@@ -620,7 +610,11 @@ function Alerts() {
       .alerts()
       .then(setItems)
       .catch((e: Error) => message.error(e.message));
-  useEffect(load, []);
+  useEffect(() => {
+    load();
+    const timer = window.setInterval(load, 30000);
+    return () => window.clearInterval(timer);
+  }, []);
   const handle = async () => {
     if (!target) return;
     // 处置说明会进审计，不能用一句代码里写死的话替运营"编造"处置结论
@@ -638,51 +632,28 @@ function Alerts() {
       message.error(e instanceof Error ? e.message : "操作失败");
     }
   };
+  const columns: ColumnsType<Alert> = [
+    { title: "告警", dataIndex: "title", render: (_, row) => <div className="o-entity"><b>{row.title}</b><small>{row.alertNo} · {row.tenantName}</small></div> },
+    { title: "设备", dataIndex: "deviceName" },
+    { title: "级别", dataIndex: "level", render: (value) => <Status value={value} /> },
+    { title: "状态", dataIndex: "status", render: (value) => <Status value={value} /> },
+    { title: "告警信息", dataIndex: "content", ellipsis: true },
+    { title: "发生时间", dataIndex: "createdAt" },
+    { title: "操作", key: "action", fixed: "right", width: 150, render: (_, row) => <div className="o-row-actions"><Button size="small" onClick={() => go("workorders")}>创建工单</Button>{row.status !== "resolved" && <Button size="small" type="primary" onClick={() => { setTarget(row); setNote(""); }}>登记处置</Button>}</div> },
+  ];
   return (
     <div className="o-page">
       <Title
         title="告警运营中心"
         desc="全平台设备告警统一台账；待处理→处理中→已处理，双端共用处置记录。"
       />
-      <div className="o-alert-grid">
-        {items.map((a) => (
-          <section
-            className={`o-card o-alert-card level-${a.level}`}
-            key={a.id}
-          >
-            <div className="o-card-head">
-              <div>
-                <Status value={a.level} />
-                <b>{a.title}</b>
-                <small>
-                  {a.alertNo} · {a.tenantName}
-                </small>
-              </div>
-              <Status value={a.status} />
-            </div>
-            <p>{a.content}</p>
-            <div className="o-summary">
-              <span>设备：{a.deviceName}</span>
-              <span>时间：{a.createdAt}</span>
-              {a.handleNote && <span>处置：{a.handleNote}</span>}
-            </div>
-            <footer>
-              <Button size="small" onClick={() => go("workorders")}>
-                创建工单
-              </Button>
-              {a.status !== "resolved" && (
-                <Button
-                  size="small"
-                  type="primary"
-                  onClick={() => { setTarget(a); setNote(""); }}
-                >
-                  登记处置
-                </Button>
-              )}
-            </footer>
-          </section>
-        ))}
-      </div>
+      <section className="o-card o-filter">
+        <div className="o-tabs"><span className="o-filter-label">共 {items.length} 条告警</span></div>
+        <Button icon={<ReloadOutlined />} onClick={load}>刷新</Button>
+      </section>
+      <section className="o-card o-table">
+        <Table rowKey="id" dataSource={items} columns={columns} locale={{ emptyText: <div className="o-empty-list"><b>暂无告警记录</b><span>设备产生告警后会自动进入统一台账。</span></div> }} scroll={{ x: 980 }} pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (total) => `共 ${total} 条告警` }} />
+      </section>
       <Modal
         title="告警处置"
         open={Boolean(target)}
@@ -712,110 +683,102 @@ function Alerts() {
  * 经营主体自己的阈值规则列在下面，用于回答"为什么这家报警、那家不报"。
  */
 function AlertRules() {
-  const { message } = AntApp.useApp();
+  const { message, modal } = AntApp.useApp();
   const [platform, setPlatform] = useState<AlertRule[]>([]),
-    [tenant, setTenant] = useState<AlertRule[]>([]);
+    [tenant, setTenant] = useState<AlertRule[]>([]),
+    [options, setOptions] = useState<{ metrics: Array<{ key: string; name: string; unit: string; deviceTypes: string[] }>; deviceTypes: string[]; operators: string[]; levels: string[] } | null>(null),
+    [editing, setEditing] = useState<AlertRule | null>(null),
+    [open, setOpen] = useState(false),
+    [form] = Form.useForm();
   const load = () =>
-    void Promise.all([opsApi.alertRules(), opsApi.tenantAlertRules()])
-      .then(([preset, own]) => {
+    void Promise.all([opsApi.alertRules(), opsApi.tenantAlertRules(), opsApi.alertRuleOptions()])
+      .then(([preset, own, ruleOptions]) => {
         setPlatform(preset);
         setTenant(own);
+        setOptions(ruleOptions);
       })
       .catch((e: Error) => message.error(e.message));
   useEffect(load, []);
-  const toggle = async (rule: AlertRule) => {
+  const openForm = (rule: AlertRule | null) => {
+    setEditing(rule);
+    form.resetFields();
+    form.setFieldsValue(rule ? {
+      ruleName: rule.ruleName, metricKey: rule.metricKey, deviceType: rule.deviceType || undefined,
+      operator: rule.operator, threshold: Number(rule.threshold), durationSeconds: rule.durationSeconds,
+      level: rule.level, enabled: rule.enabled,
+    } : { operator: ">", durationSeconds: 0, level: "major", enabled: true, metricKey: options?.metrics[0]?.key });
+    setOpen(true);
+  };
+  const save = async () => {
     try {
-      await opsApi.toggleAlertRule(rule.id);
-      message.success("平台阈值规则状态已更新");
+      const values = await form.validateFields();
+      if (editing) await opsApi.updateAlertRule(editing.id, values);
+      else await opsApi.createAlertRule(values);
+      setOpen(false);
+      message.success("指标告警规则已保存");
       load();
     } catch (e) {
-      message.error(e instanceof Error ? e.message : "操作失败");
+      if (e instanceof Error && e.message) message.error(e.message);
     }
   };
+  const toggle = async (rule: AlertRule) => {
+    try { await opsApi.toggleAlertRule(rule.id); message.success("平台阈值规则状态已更新"); load(); }
+    catch (e) { message.error(e instanceof Error ? e.message : "操作失败"); }
+  };
+  const remove = (rule: AlertRule) => modal.confirm({
+    title: `删除平台规则「${rule.ruleName}」？`, okText: "确认删除", okButtonProps: { danger: true },
+    content: "删除后使用该指标的主体将回落到其他可用平台规则；已产生的告警不受影响。",
+    onOk: async () => { await opsApi.deleteAlertRule(rule.id); message.success("平台指标规则已删除"); load(); },
+  });
+  const metricLabel = (r: AlertRule) => `${r.metricName}${r.deviceType ? ` · ${r.deviceType}` : ""}`;
   return (
     <div className="o-page">
-      <Title
-        title="阈值规则治理"
-        desc="平台预置阈值是全平台兜底；经营主体可在同一指标上自定义并覆盖它。"
-      />
+      <Title title="阈值规则治理" desc="按指标维护平台兜底规则；经营主体可在用户端按同一指标覆盖阈值。" actions={<Button type="primary" onClick={() => openForm(null)}>新增指标规则</Button>} />
       <section className="o-card o-table">
-        <Head title="平台预置阈值" sub="启停影响全平台，操作按登录账号写入审计" />
-        <Table
-          rowKey="id"
-          dataSource={platform}
-          columns={[
-            { title: "规则", dataIndex: "ruleName" },
-            {
-              title: "条件",
-              render: (_, r) => `${r.metricName} ${r.operator} ${Number(r.threshold)}`,
-            },
-            {
-              title: "持续",
-              dataIndex: "durationSeconds",
-              render: (v) => `${v} 秒`,
-            },
-            {
-              title: "等级",
-              dataIndex: "level",
-              render: (v) => <Status value={v} />,
-            },
-            {
-              title: "状态",
-              dataIndex: "enabled",
-              render: (v) => <Status value={v ? "running" : "disabled"} />,
-            },
-            {
-              title: "操作",
-              render: (_, r) => (
-                <Button size="small" onClick={() => void toggle(r)}>
-                  {r.enabled ? "停用" : "启用"}
-                </Button>
-              ),
-            },
-          ]}
-        />
+        <Head title="平台指标阈值" sub="每条规则对应一个指标、比较方式、阈值和持续时长；启停影响平台兜底判定" />
+        <Table rowKey="id" dataSource={platform} columns={[
+          { title: "规则", dataIndex: "ruleName" },
+          { title: "指标范围", render: (_, r) => metricLabel(r) },
+          { title: "条件", render: (_, r) => `${r.operator} ${Number(r.threshold)}` },
+          { title: "持续", dataIndex: "durationSeconds", render: (v) => v > 0 ? `${v} 秒` : "瞬时" },
+          { title: "等级", dataIndex: "level", render: (v) => <Status value={v} /> },
+          { title: "状态", dataIndex: "enabled", render: (v) => <Status value={v ? "running" : "disabled"} /> },
+          { title: "操作", render: (_, r) => <><Button size="small" onClick={() => openForm(r)}>编辑</Button><Button size="small" onClick={() => void toggle(r)}>{r.enabled ? "停用" : "启用"}</Button><Button size="small" danger onClick={() => remove(r)}>删除</Button></> },
+        ]} />
       </section>
       <section className="o-card o-table" style={{ marginTop: 14 }}>
-        <Head title="各经营主体自定义阈值" sub="只读：主体在自己的用户端维护，同指标覆盖平台预置" />
-        <Table
-          rowKey={(row) => `${row.tenantId}-${row.id}`}
-          dataSource={tenant}
-          columns={[
-            {
-              title: "经营主体",
-              dataIndex: "tenantName",
-              render: (v) => v || "未归属",
-            },
-            { title: "规则", dataIndex: "ruleName" },
-            {
-              title: "条件",
-              render: (_, r) =>
-                `${r.metricName} ${r.operator} ${Number(r.threshold)}${r.deviceType ? ` · ${r.deviceType}` : ""}`,
-            },
-            {
-              title: "持续",
-              dataIndex: "durationSeconds",
-              render: (v) => (v > 0 ? `${v} 秒` : "瞬时"),
-            },
-            {
-              title: "等级",
-              dataIndex: "level",
-              render: (v) => <Status value={v} />,
-            },
-            {
-              title: "状态",
-              dataIndex: "enabled",
-              render: (v) => <Status value={v ? "running" : "disabled"} />,
-            },
-            { title: "创建人", dataIndex: "createdBy", render: (v) => v || "—" },
-            { title: "更新", dataIndex: "updatedAt" },
-          ]}
-        />
+        <Head title="各经营主体自定义阈值" sub="只读：主体在用户端维护，同指标规则覆盖平台预置" />
+        <Table rowKey={(row) => `${row.tenantId}-${row.id}`} dataSource={tenant} columns={[
+          { title: "经营主体", dataIndex: "tenantName", render: (v) => v || "未归属" },
+          { title: "规则", dataIndex: "ruleName" },
+          { title: "指标范围", render: (_, r) => metricLabel(r) },
+          { title: "条件", render: (_, r) => `${r.operator} ${Number(r.threshold)}` },
+          { title: "持续", dataIndex: "durationSeconds", render: (v) => v > 0 ? `${v} 秒` : "瞬时" },
+          { title: "等级", dataIndex: "level", render: (v) => <Status value={v} /> },
+          { title: "状态", dataIndex: "enabled", render: (v) => <Status value={v ? "running" : "disabled"} /> },
+        ]} />
       </section>
+      <Modal title={editing ? "编辑平台指标规则" : "新增平台指标规则"} open={open} onCancel={() => setOpen(false)} onOk={() => void save()} okText="保存">
+        <Form form={form} layout="vertical">
+          <Form.Item name="ruleName" label="规则名称" rules={[{ required: true, message: "请输入规则名称" }]}><Input maxLength={160} placeholder="例如：温度过高告警" /></Form.Item>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <Form.Item name="metricKey" label="监控指标" rules={[{ required: true, message: "请选择指标" }]}><Select showSearch optionFilterProp="label" options={options?.metrics.map(item => ({ value: item.key, label: `${item.name}${item.unit ? `（${item.unit}）` : ""}` }))} /></Form.Item>
+            <Form.Item name="deviceType" label="限定设备类型"><Select allowClear placeholder="不限设备类型" options={options?.deviceTypes.map(v => ({ value: v, label: v }))} /></Form.Item>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <Form.Item name="operator" label="比较方式" rules={[{ required: true }]}><Select options={options?.operators.map(v => ({ value: v, label: v }))} /></Form.Item>
+            <Form.Item name="threshold" label="阈值" rules={[{ required: true, message: "请输入阈值" }]}><InputNumber style={{ width: "100%" }} /></Form.Item>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <Form.Item name="durationSeconds" label="持续时间（秒）" rules={[{ type: "number", min: 0, max: 86400 }]}><InputNumber min={0} max={86400} step={1} style={{ width: "100%" }} /></Form.Item>
+            <Form.Item name="level" label="告警等级" rules={[{ required: true }]}><Select options={options?.levels.map(v => ({ value: v, label: v === "critical" ? "紧急" : v === "major" ? "重要" : "一般" }))} /></Form.Item>
+          </div>
+          <div className="o-summary"><b>生效口径</b><span>自动告警按该指标的独立采样周期判定连续性；采样断档、无效读数不会满足持续条件。</span></div>
+        </Form>
+      </Modal>
     </div>
   );
 }
-
 function Products() {
   const { message } = AntApp.useApp();
   const [products, setProducts] = useState<Product[]>([]),
@@ -932,52 +895,28 @@ function Access() {
         title="设备接入审核"
         desc="自动注册与人工接入审核、物模型校验和风险拦截。"
       />
-      <div className="o-access-grid">
-        {items.map((a) => (
-          <section className="o-card" key={a.id}>
-            <div className="o-card-head">
-              <div>
-                <b>{a.deviceName}</b>
-                <small>
-                  {a.deviceCode} · {a.requestType}
-                </small>
-              </div>
-              <Status value={a.status} />
-            </div>
-            <p>
-              {a.tenantName} · {a.submittedAt}
-            </p>
-            <div className="o-summary">
-              <span>审核人：{a.auditor || "待分配"}</span>
-              <span>{a.note || "等待物模型与产品认证校验"}</span>
-            </div>
-            {a.status === "pending" && (
-              <footer>
-                <Button
-                  size="small"
-                  danger
-                  onClick={() => {
-                    setTarget({ row: a, status: "rejected" });
-                    setNote("");
-                  }}
-                >
-                  驳回
-                </Button>
-                <Button
-                  size="small"
-                  type="primary"
-                  onClick={() => {
-                    setTarget({ row: a, status: "approved" });
-                    setNote("");
-                  }}
-                >
-                  通过接入
-                </Button>
-              </footer>
-            )}
-          </section>
-        ))}
-      </div>
+      <section className="o-card o-filter">
+        <div className="o-tabs"><span className="o-filter-label">共 {items.length} 条接入申请</span></div>
+        <Button icon={<ReloadOutlined />} onClick={load}>刷新</Button>
+      </section>
+      <section className="o-card o-table">
+        <Table
+          rowKey="id"
+          dataSource={items}
+          scroll={{ x: 900 }}
+          locale={{ emptyText: <div className="o-empty-list"><b>暂无接入申请</b><span>设备提交接入后会出现在这里。</span></div> }}
+          pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (total) => `共 ${total} 条申请` }}
+          columns={[
+            { title: "设备", dataIndex: "deviceName", render: (_, row) => <div className="o-entity"><b>{row.deviceName}</b><small>{row.deviceCode} · {row.requestType}</small></div> },
+            { title: "所属主体", dataIndex: "tenantName" },
+            { title: "提交时间", dataIndex: "submittedAt" },
+            { title: "审核人", dataIndex: "auditor", render: (value) => value || "待分配" },
+            { title: "状态", dataIndex: "status", render: (value) => <Status value={value} /> },
+            { title: "审核意见", dataIndex: "note", ellipsis: true, render: (value) => value || "等待物模型与产品认证校验" },
+            { title: "操作", key: "action", fixed: "right", width: 140, render: (_, row) => row.status === "pending" ? <div className="o-row-actions"><Button size="small" danger onClick={() => { setTarget({ row, status: "rejected" }); setNote(""); }}>驳回</Button><Button size="small" type="primary" onClick={() => { setTarget({ row, status: "approved" }); setNote(""); }}>通过接入</Button></div> : "—" },
+          ]}
+        />
+      </section>
       <Modal
         title={target?.status === "approved" ? "通过接入" : "驳回接入"}
         open={Boolean(target)}
@@ -1622,7 +1561,7 @@ function OpsShell() {
   const [page, setPage] = useState<Page>(parse),
     [collapsed, setCollapsed] = useState(false);
   const clock = useClock();
-  const { user } = useUnifiedUser();
+  const [mobileOpen, setMobileOpen] = useState(false);
   useEffect(() => {
     const h = () => setPage(parse());
     addEventListener("popstate", h);
@@ -1644,29 +1583,13 @@ function OpsShell() {
             </div>
           )}
         </button>
-        <nav>
-          {MENU.map((g) => (
-            <section key={g.group}>
-              {!collapsed && <h3>{g.group}</h3>}
-              {g.items.map((i) => (
-                <button
-                  type="button"
-                  key={i.page}
-                  className={page === i.page ? "on" : ""}
-                  onClick={() => go(i.page)}
-                >
-                  {i.icon}
-                  {!collapsed && <span>{i.label}</span>}
-                </button>
-              ))}
-            </section>
-          ))}
-        </nav>
+        <WorkspaceNavigation groups={MENU} selected={page} collapsed={collapsed}
+          onNavigate={key => go(key as Page)} mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
         <div className="o-side-foot">
           {!collapsed && (
             <div>
-              <b>平台运行正常</b>
-              <small>在线率 94.3%</small>
+              <b>物联网平台运营</b>
+              <small>接入治理 · 告警处置 · 运维审计</small>
             </div>
           )}
           <button type="button" onClick={() => setCollapsed(!collapsed)}>
@@ -1683,6 +1606,7 @@ function OpsShell() {
       </aside>
       <div className="o-main">
         <header className="o-header">
+          <MobileNavigationButton onClick={() => setMobileOpen(true)} />
           <div>
             <span>物联网运营</span>
             <b>/</b>
@@ -1700,30 +1624,7 @@ function OpsShell() {
           <div className="o-header-right">
             <span>{clock.date}</span>
             <PendingAuditBadge onOpen={() => go("access")} />
-            <Dropdown
-              menu={{
-                items: [
-                  { key: "logs", label: "操作审计", onClick: () => go("logs") },
-                  {
-                    key: "logout",
-                    label: "退出统一登录",
-                    onClick: () => void logoutUnified("iot-admin"),
-                  },
-                ],
-              }}
-            >
-              <button type="button" className="o-user">
-                <Avatar size={30} className="o-avatar">
-                  {(user.nickname || user.username).slice(0, 1)}
-                </Avatar>
-                <span>
-                  <b>{user.nickname || user.username}</b>
-                  <small>
-                    {user.roles?.join(" / ") || "统一平台账号"}
-                  </small>
-                </span>
-              </button>
-            </Dropdown>
+            <AccountMenu clientId="iot-admin" onLogs={() => go("logs")} />
           </div>
         </header>
         <main>

@@ -38,13 +38,6 @@ public interface IAdminMonitorService {
      */
     Map<String, Object> urgeTask(Long taskId, String operator);
 
-    /**
-     * 下发设备重启指令：记录指令下发时间。
-     *
-     * <p><b>本部署没有设备网关</b>，这里做的是"把这条指令记下来"（页面文案即"重启指令已下发"），
-     * 不会真去重启设备 —— 不假装设备已经重启。</p>
-     *
-     * @throws com.agri.production.common.exception.BusinessException 设备不存在（404）
-     */
-    Map<String, Object> requestReboot(Long deviceId, String operator);
+    /** 兼容旧入口：明确拒绝操作并引导物联网指令服务。 */
+    Map<String,Object> requestReboot(Long deviceId,String operator);
 }

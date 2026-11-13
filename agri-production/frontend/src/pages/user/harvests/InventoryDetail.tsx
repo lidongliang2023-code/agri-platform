@@ -1,3 +1,4 @@
+import '@/components/ProductionDetailCompact.css'
 import Card from '@/components/SectionCard'
 import './harvests.css'
 import Table from '@/components/BusinessRecordList'
@@ -243,7 +244,7 @@ export default function InventoryDetail(): JSX.Element {
   /** 加载态 */
   if (detailQuery.isLoading) {
     return (
-      <PageContainer className="harvest-business-page" title="库存详情">
+      <PageContainer className="harvest-business-page production-detail-compact" title="库存详情">
         <Card>
           <Skeleton active paragraph={{ rows: 8 }} />
         </Card>
@@ -254,7 +255,7 @@ export default function InventoryDetail(): JSX.Element {
   /** 错误态 / 空态 */
   if (detailQuery.isError || !record) {
     return (
-      <PageContainer className="harvest-business-page" title="库存详情">
+      <PageContainer className="harvest-business-page production-detail-compact" title="库存详情">
         <Empty
           description={
             <Space direction="vertical">
@@ -302,7 +303,7 @@ export default function InventoryDetail(): JSX.Element {
 
   return (
     <PageContainer
-      className="harvest-business-page"
+      className="harvest-business-page production-detail-compact"
       title={`${record.productName ?? '库存'} · 库存详情`}
       subTitle={currentFarm?.farmName}
       onBack={() => navigate('/production/harvests/inventory')}
@@ -544,7 +545,7 @@ export default function InventoryDetail(): JSX.Element {
       </Card>
 
       {/* 出库 */}
-      <Modal
+      <Modal className="production-form-dialog"
         title={`出库：${record.productName ?? ''}`}
         open={outboundOpen}
         okText="确认出库"
@@ -580,7 +581,7 @@ export default function InventoryDetail(): JSX.Element {
       </Modal>
 
       {/* 调拨 */}
-      <Modal
+      <Modal className="production-form-dialog"
         title={`调拨：${record.productName ?? ''}`}
         open={transferOpen}
         okText="确认调拨"
@@ -617,7 +618,7 @@ export default function InventoryDetail(): JSX.Element {
           </Form.Item>
         </Form>
       </Modal>
-      <Modal title="编辑库存资料" open={editOpen} onCancel={() => setEditOpen(false)} confirmLoading={editMutation.isPending} onOk={() => { editForm.validateFields().then((values) => editMutation.mutate(values)).catch(() => undefined) }} destroyOnClose>
+      <Modal className="production-form-dialog" title="编辑库存资料" open={editOpen} onCancel={() => setEditOpen(false)} confirmLoading={editMutation.isPending} onOk={() => { editForm.validateFields().then((values) => editMutation.mutate(values)).catch(() => undefined) }} destroyOnClose>
         <Form form={editForm} layout="vertical">
           <Form.Item name="safeQty" label="安全库存" rules={[{ required: true }, { type: 'number', min: 0 }]}><InputNumber min={0} precision={2} style={{ width: '100%' }} /></Form.Item>
           <Form.Item name="locationCode" label="库位编号"><Input maxLength={64} /></Form.Item>

@@ -36,10 +36,16 @@ public class CropMasterService {
 
     private final CropInfoMapper cropMapper;
     private final PlantingPlanMapper planMapper;
+    private final com.agri.production.mapper.PlotCropMapper plotCropMapper;
+    private final com.agri.production.mapper.PlotMapper plotMapper;
 
-    public CropMasterService(CropInfoMapper cropMapper, PlantingPlanMapper planMapper) {
+    public CropMasterService(CropInfoMapper cropMapper, PlantingPlanMapper planMapper,
+                             com.agri.production.mapper.PlotCropMapper plotCropMapper,
+                             com.agri.production.mapper.PlotMapper plotMapper) {
         this.cropMapper = cropMapper;
         this.planMapper = planMapper;
+        this.plotCropMapper = plotCropMapper;
+        this.plotMapper = plotMapper;
     }
 
     /**
@@ -190,7 +196,17 @@ public class CropMasterService {
      */
     @Transactional(rollbackFor = Exception.class)
     public void delete(Long cropId, String tenantId) {
-        CropInfo crop = getOwned(cropId, tenantId);
+        CropInfo crop = cropMapper.selectOne(new LambdaQueryWrapper<CropInfo>()
+                .eq(CropInfo::getId, cropId).eq(CropInfo::getTenantId, tenantId).last("FOR UPDATE"));
+        if (crop == null) throw new BusinessException(404, "作物不存在：" + cropId);
+        Long cropRecords = plotCropMapper.selectCount(new LambdaQueryWrapper<com.agri.production.entity.PlotCrop>()
+                .eq(com.agri.production.entity.PlotCrop::getTenantId, tenantId)
+                .eq(com.agri.production.entity.PlotCrop::getCropId, cropId));
+        Long plots = plotMapper.selectCount(new LambdaQueryWrapper<com.agri.production.entity.Plot>()
+                .eq(com.agri.production.entity.Plot::getTenantId, tenantId)
+                .eq(com.agri.production.entity.Plot::getCropId, cropId));
+        if (cropRecords > 0 || plots > 0) throw new BusinessException(400,
+                "该作物已被地块或种养品种台账引用，不能删除；如需停用请改状态");
         Long used = planMapper.selectCount(new LambdaQueryWrapper<PlantingPlan>()
                 .eq(PlantingPlan::getTenantId, tenantId)
                 .eq(PlantingPlan::getCropId, crop.getId()));

@@ -1,0 +1,83 @@
+{
+  "test.custom.scene.20261111" : {
+    "code" : "test.custom.scene.20261111",
+    "name" : "联调测试·自定义场景",
+    "description" : "仅用于自定义场景新增、发布、调试与停用的在线联调，不用于业务生产。验证完成后停用保留记录。",
+    "exampleJson" : "{\n  \"query\": \"自定义场景联调测试，请返回测试确认。\"\n}",
+    "enabled" : false,
+    "revision" : 3,
+    "publishedVersion" : 1,
+    "versions" : [ {
+      "number" : 1,
+      "systemPrompt" : "你是用于验证自定义场景流程的测试助手。仅返回简短的测试确认，不提供真实业务建议。",
+      "userPrompt" : "测试请求：{{query}}",
+      "note" : "在线联调 v1：验证新增、预览、发布、调试及停用。",
+      "createdAt" : "2026-11-11T01:06:04.273679200Z",
+      "createdBy" : "2108130996492058625",
+      "publishedAt" : "2026-11-11T01:06:43.126857400Z"
+    } ],
+    "events" : [ {
+      "action" : "CREATE_SCENE",
+      "version" : 1,
+      "time" : "2026-11-11T01:06:04.273679200Z",
+      "operator" : "2108130996492058625",
+      "beforeProviderId" : null,
+      "afterProviderId" : null
+    }, {
+      "action" : "PUBLISH",
+      "version" : 1,
+      "time" : "2026-11-11T01:06:43.126857400Z",
+      "operator" : "2108130996492058625",
+      "beforeProviderId" : null,
+      "afterProviderId" : null
+    }, {
+      "action" : "EDIT_SCENE",
+      "version" : null,
+      "time" : "2026-11-11T01:08:57.700762400Z",
+      "operator" : "2108130996492058625",
+      "beforeProviderId" : null,
+      "afterProviderId" : null
+    } ],
+    "providerId" : "",
+    "bizSystem" : "farm_prod",
+    "domain" : "农事生产",
+    "custom" : true
+  },
+  "farm.crop.schedule" : {
+    "code" : "farm.crop.schedule",
+    "name" : "农事排程建议",
+    "description" : "根据作物与生育阶段返回农事安排参考",
+    "exampleJson" : "{\"crop\": \"柑橘\", \"stage\": \"果实膨大期\"}",
+    "enabled" : true,
+    "revision" : 2,
+    "publishedVersion" : 1,
+    "versions" : [ {
+      "number" : 1,
+      "systemPrompt" : "你是农业产业互联网的农事排程建议助手。请基于提供的数据给出审慎、可解释的建议，不编造事实。",
+      "userPrompt" : "业务编号：{{bizId}}\n业务输入：{{input}}\n请返回结构化建议与必要的风险说明。",
+      "note" : "真实场景联调",
+      "createdAt" : "2026-11-11T01:29:24.949892200Z",
+      "createdBy" : "2108130996492058625",
+      "publishedAt" : "2026-11-11T01:29:46.648419300Z"
+    } ],
+    "events" : [ {
+      "action" : "CREATE_DRAFT",
+      "version" : 1,
+      "time" : "2026-11-11T01:29:24.950889900Z",
+      "operator" : "2108130996492058625",
+      "beforeProviderId" : null,
+      "afterProviderId" : null
+    }, {
+      "action" : "PUBLISH",
+      "version" : 1,
+      "time" : "2026-11-11T01:29:46.648419300Z",
+      "operator" : "2108130996492058625",
+      "beforeProviderId" : null,
+      "afterProviderId" : null
+    } ],
+    "providerId" : "",
+    "bizSystem" : "farm_prod",
+    "domain" : "农事生产",
+    "custom" : false
+  }
+}

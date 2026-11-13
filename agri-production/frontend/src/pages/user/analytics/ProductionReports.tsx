@@ -1,3 +1,4 @@
+import '@/components/ProductionDetailCompact.css'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Alert, App, Button, DatePicker, Form, Input, Modal, Popconfirm, Select, Space, Tabs, Tag } from 'antd'
@@ -96,7 +97,7 @@ function ReportContent({ subject }: { subject: string }): JSX.Element {
         </Space> },
       ]} />
     </Space>
-    <Modal title="生成生产报表" open={open} confirmLoading={busy} closable={!busy} maskClosable={false} cancelButtonProps={{ disabled: busy }} onCancel={() => setOpen(false)} onOk={() => void submit()}>
+    <Modal className="production-form-dialog" title="生成生产报表" open={open} confirmLoading={busy} closable={!busy} maskClosable={false} cancelButtonProps={{ disabled: busy }} onCancel={() => setOpen(false)} onOk={() => void submit()}>
       <Alert type="info" message={`生成范围：${farm?.farmName ?? '当前主体全部农场'}`} style={{ marginBottom: 16 }} />
       <Form form={form} layout="vertical"><Form.Item name="reportType" label="报表周期" rules={[{ required: true }]}><Select options={TYPES} /></Form.Item><Form.Item name="period" label="周期内任意一天" rules={[{ required: true }]}><DatePicker allowClear={false} /></Form.Item></Form>
     </Modal>

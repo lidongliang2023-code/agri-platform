@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { setPlatformAccessToken } from './utils/platformToken'
 
 const SITE_NAME = '丰链云'
 
@@ -177,7 +178,15 @@ export async function redirectToPlatformLogin(): Promise<void> {
 }
 
 /** 处理统一认证回跳：校验 state/PKCE、换取令牌并回到登录前页面。 */
-export async function completePlatformLogin(): Promise<boolean> {
+let completingLogin: Promise<boolean> | null = null
+
+export function completePlatformLogin(): Promise<boolean> {
+  if (!new URLSearchParams(window.location.search).has('code')) return Promise.resolve(false)
+  if (!completingLogin) completingLogin = finishPlatformLogin().finally(() => { completingLogin = null })
+  return completingLogin
+}
+
+async function finishPlatformLogin(): Promise<boolean> {
   const query = new URLSearchParams(window.location.search)
   const code = query.get('code')
   if (!code) return false
@@ -197,6 +206,7 @@ export async function completePlatformLogin(): Promise<boolean> {
   if (!response.ok || body.code !== 0 || !body.data?.accessToken) {
     throw new Error(body.message || '统一认证登录未完成')
   }
+  setPlatformAccessToken(body.data.accessToken)
   const returnTo = sessionStorage.getItem(SSO_RETURN_KEY) || '/portal/'
   sessionStorage.removeItem(SSO_VERIFIER_KEY)
   sessionStorage.removeItem(SSO_STATE_KEY)

@@ -85,9 +85,9 @@ public class SsoSessionService {
     /**
      * 为指定子系统建立会话：**同时**写「子系统专属 Cookie」与全局 Cookie。
      *
-     * <p>为什么要按 client 分开：同一个浏览器要能同时以不同账号登录不同子系统。
-     * 全局 Cookie 只作为账号中心 / 注册流程的兜底；authorize 只认当前 client 的专属 Cookie，
-     * 因此 A 子系统登录不会让 B 子系统免登。</p>
+     * <p>为什么要按 client 分开：同一个浏览器要能同时持有不同子系统的专属会话。
+     * 授权端点优先使用当前 client 的有效会话；当前 client 没有有效会话时，
+     * 回退到全局 Cookie，让统一认证中心的登录可以跨子系统免登。</p>
      */
     public String createForClient(Long userId, Long marketId, boolean remember, String clientId,
                                   HttpServletResponse response) {
@@ -115,14 +115,16 @@ public class SsoSessionService {
     /**
      * 解析会话（按子系统）。
      *
-     * <p>只读该 client 的专属 Cookie；没有就返回 null，由调用方跳登录页。
-     * 这样"访问另一个子系统默认是登录页"是默认行为，而不是靠前端各自判断。</p>
+     * <p>先读当前 client 的专属 Cookie；该会话不存在或已经失效时，
+     * 再回退读取统一认证中心的全局 Cookie。这样既保留同一浏览器的客户端会话优先级，
+     * 又能让登录过统一认证中心的账号跨子系统免登。</p>
      */
     public long[] resolve(HttpServletRequest request, String clientId) {
         if (clientId == null || clientId.isBlank()) {
             return resolve(request);
         }
-        return resolveSid(readSid(request, clientCookieName(clientId)));
+        long[] clientSession = resolveSid(readSid(request, clientCookieName(clientId)));
+        return clientSession != null ? clientSession : resolve(request);
     }
 
     /**
@@ -197,13 +199,36 @@ public class SsoSessionService {
         int revoked = 0;
         if (sessions != null) {
             for (String sid : sessions) {
+                String value = redis.opsForValue().get(KEY_PREFIX + sid);
                 if (Boolean.TRUE.equals(redis.delete(KEY_PREFIX + sid))) {
                     revoked++;
                 }
+                redis.delete(META_PREFIX + sid);
+                clearActiveMerchant(value);
             }
         }
         redis.delete(userIndex);
         return revoked;
+    }
+
+    /** 清除浏览器中属于该账号的会话 Cookie，并吊销其全部客户端和设备会话。 */
+    public void destroyAllForUser(Long userId, HttpServletRequest request, HttpServletResponse response) {
+        Cookie[] cookies = request.getCookies();
+        if (cookies != null) {
+            String globalName = properties.getSessionCookieName();
+            for (Cookie item : cookies) {
+                if (!item.getName().equals(globalName) && !item.getName().startsWith(globalName + "_")) {
+                    continue;
+                }
+                String value = redis.opsForValue().get(KEY_PREFIX + item.getValue());
+                if (value != null && value.startsWith(userId + ":")) {
+                    removeSession(item.getValue());
+                    redis.delete(META_PREFIX + item.getValue());
+                    response.addHeader("Set-Cookie", cookie(item.getName(), "", 0L));
+                }
+            }
+        }
+        revokeAllForUser(userId);
     }
 
     /**

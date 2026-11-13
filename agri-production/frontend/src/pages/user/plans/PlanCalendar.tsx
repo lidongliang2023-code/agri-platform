@@ -1,3 +1,4 @@
+import '@/components/ProductionDetailCompact.css'
 /**
  * 页面名称：农事日历
  * 路由路径：/production/plans/calendar
@@ -322,7 +323,7 @@ export default function PlanCalendar(): JSX.Element {
         )}
       </Card>
 
-      <Drawer
+      <Drawer rootClassName="production-detail-compact production-detail-dialog"
         title={
           <Space>
             <CalendarOutlined style={{ color: '#13a05a' }} />

@@ -3,7 +3,8 @@
     启动本机依赖、15 个后端与网关；重复运行只补启动缺失实例。
 .DESCRIPTION
     不构建、不停止现有进程。健康检查失败返回退出码 1，成功返回 0。
-    日志持久保存在 ops/local/logs；密码优先使用 MYSQL_PASSWORD 环境变量。
+    日志持久保存在 ops/local/logs；密码优先使用参数，其次使用进程、用户、系统 MYSQL_PASSWORD。
+    数据库口令仅通过子进程环境传递；检查模式不启动进程、不清理历史日志。
 .EXAMPLE
     .\ops\local\start-production-stack.ps1
 .EXAMPLE
@@ -14,7 +15,7 @@
 [CmdletBinding()]
 param(
     [string]$RepoRoot = '',
-    [string]$MysqlRootPassword = $(if ($env:MYSQL_PASSWORD) { $env:MYSQL_PASSWORD } else { 'root' }),
+    [string]$MysqlRootPassword = '',
     [string]$GatewayPrefix = "$env:USERPROFILE\agri-gw",
     [string[]]$Services = @(),
     [switch]$CheckOnly,
@@ -25,6 +26,16 @@ param(
     [ValidateRange(0,36500)][int]$LogRetentionDays = 30
 )
 $ErrorActionPreference = 'Stop'
+function Get-StartupEnvironment([string]$Name, [string]$Fallback = '') {
+    foreach ($scope in @('Process','User','Machine')) {
+        $value=[Environment]::GetEnvironmentVariable($Name,$scope)
+        if (![string]::IsNullOrEmpty($value)) { return $value }
+    }
+    return $Fallback
+}
+if ([string]::IsNullOrEmpty($MysqlRootPassword)) {
+    $MysqlRootPassword=Get-StartupEnvironment 'MYSQL_PASSWORD' 'root'
+}
 if (!$RepoRoot) {
     if ($PSScriptRoot) { $RepoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot) }
     elseif (Test-Path 'ops/local/start-production-stack.ps1') { $RepoRoot = (Get-Location).Path }
@@ -218,9 +229,12 @@ $locked=$false
 try {
     try { $locked=$mutex.WaitOne(0) } catch [Threading.AbandonedMutexException] { $locked=$true }
     if (!$locked) { throw '另一个启动脚本正在执行，请等待其结束。' }
-    Remove-ExpiredCheckLogs -Directory $LogDirectory -RetentionDays $LogRetentionDays -CurrentLog $runLog
+    if (!$CheckOnly) {
+        Remove-ExpiredCheckLogs -Directory $LogDirectory -RetentionDays $LogRetentionDays -CurrentLog $runLog
+    } else { Write-CheckMessage '检查模式：不启动进程，不清理历史日志。' }
     $db=Dependency 'MySQL' 3306 'C:\Program Files\MySQL\MySQL Server 8.4\bin\mysqld.exe' '--defaults-file="C:\ProgramData\MySQL\MySQL Server 8.4\my.ini"' $RepoRoot
     $cache=Dependency 'Redis' 6379 'C:\Redis\redis-server.exe' '"C:\Redis\redis.windows.conf"' 'C:\Redis'
+    $coreReady=$false
     foreach ($s in $catalog) {
         $name,$port,$relative,$profile=$s
         # 部分启动仍先确保认证核心可用。
@@ -230,11 +244,15 @@ try {
         if ($existing) {
             $errorText=Probe $port
             if ($errorText) { Record $name 'FAIL' "端口已占用，不重复启动；$errorText" }
-            else { Record $name 'OK' '已运行，三个探针均 UP' }
+            else {
+                Record $name 'OK' '已运行，三个探针均 UP'
+                if ($name -eq 'core-platform') { $coreReady=$true }
+            }
             continue
         }
         if ($CheckOnly) { Record $name 'FAIL' '未运行'; continue }
         if (!$db -or !$cache) { Record $name 'FAIL' '依赖未就绪，跳过启动'; continue }
+        if ($name -ne 'core-platform' -and !$coreReady) { Record $name 'FAIL' '认证核心未就绪，跳过启动'; continue }
         if (!(Test-Path $jar -PathType Leaf)) { Record $name 'FAIL' '运行包不存在，请先构建'; continue }
         try {
             $environment=@{
@@ -243,16 +261,21 @@ try {
                 MYSQL_HOST='localhost'; MYSQL_PORT='3306'; MYSQL_DATABASE=$null; MYSQL_URL=$null
                 SPRING_PROFILES_ACTIVE=$null; SPRING_DATASOURCE_URL=$null
                 CORE_BASE_URL='http://localhost:8093'
+                PLATFORM_URL='http://localhost:8093'
             }
             # 仓储窄通道密钥只从部署环境读取，无默认共享密钥；两端未配置时关闭。
             if ($name -in @('agri-production','agri-finance')) {
-                $warehouseToken = $env:AGRI_FINANCE_WAREHOUSE_TOKEN
-                if (!$warehouseToken) { $warehouseToken = [Environment]::GetEnvironmentVariable('AGRI_FINANCE_WAREHOUSE_TOKEN','User') }
+                $warehouseToken = Get-StartupEnvironment 'AGRI_FINANCE_WAREHOUSE_TOKEN'
                 $environment.AGRI_FINANCE_WAREHOUSE_TOKEN = $warehouseToken
             }
             if ($name -eq 'agri-ai') {
-                $environment.AI_ADMIN_SCENE_FILE=Join-Path $RepoRoot 'ops/local/data/ai-scenes.json'
-                $environment.AI_MYSQL_URL='jdbc:mysql://localhost:3306/agri_ai?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true'
+                # 场景与渠道配置由 AI 中台数据库管理；不再指定旧场景 JSON 台账。
+                $environment.AI_MYSQL_URL=Get-StartupEnvironment 'AI_MYSQL_URL' 'jdbc:mysql://localhost:3306/agri_ai?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true'
+                # 沿用原有加密密钥，绝不在启动脚本中生成或轮换，以免历史渠道配置无法解密。
+                foreach ($key in @('AI_ADMIN_ENCRYPTION_KEY','AI_ADMIN_PROVIDER_FILE')) {
+                    $value=Get-StartupEnvironment $key
+                    if ($value) { $environment[$key]=$value }
+                }
             }
             if ($name -eq 'agri-finance') { $environment.MYSQL_DATABASE='agri_finance' }
             if ($name -eq 'core-platform') { $environment.AGRI_CERTIFICATION_UPLOAD_DIR=Join-Path $RepoRoot 'core-platform/uploads/platform/certification' }
@@ -265,7 +288,6 @@ try {
             $arguments=@('-jar',('"'+$jar+'"'),"--server.port=$port")
             if ($port -ge 8201) { $arguments=@('-Xms64m','-Xmx256m')+$arguments }
             if ($profile) { $arguments+="--spring.profiles.active=$profile" }
-            if ($name -eq 'agri-production') { $arguments+="--spring.datasource.password=$MysqlRootPassword" }
             if ($name -eq 'core-platform') {
                 $uri=([Uri](Join-Path $RepoRoot 'core-platform/core-app/src/main/resources/application.yml')).AbsoluteUri
                 $arguments+='"--spring.config.additional-location='+$uri+'"'
@@ -282,6 +304,7 @@ try {
             } while ((Get-Date) -lt $deadline)
             if ($errorText) { throw "启动未就绪：$errorText" }
             Record $name 'OK' "已启动 PID=$($proc.Id)，三个探针均 UP"
+            if ($name -eq 'core-platform') { $coreReady=$true }
         } catch { Record $name 'FAIL' $_.Exception.Message }
     }
     if (!$SkipGateway) {
@@ -289,19 +312,43 @@ try {
             $nginx='C:\nginx\nginx.exe'
             if (!$CheckOnly) {
                 if (!(Test-Path $GatewayPrefix)) { throw '网关目录不存在' }
-                $chk = Start-Process $nginx -ArgumentList @('-p', $GatewayPrefix, '-c', 'conf/nginx.conf', '-t') -NoNewWindow -Wait -PassThru
-                if ($chk.ExitCode -ne 0) { throw '网关配置检查失败' }
+                $chk=Launch $nginx @('-p',('"'+$GatewayPrefix+'"'),'-c','conf/nginx.conf','-t') $GatewayPrefix 'nginx-config-check' @{}
+                if (!$chk.WaitForExit(15000)) {
+                    # 只结束本次创建的配置检查进程，不触碰正在运行的网关。
+                    $chk.Kill()
+                    throw '网关配置检查超过 15 秒，已终止本次检查进程；现有网关未停止'
+                }
+                $chk.Refresh()
+                if ($chk.ExitCode -ne 0) { throw '网关配置检查失败，请查看 nginx-config-check 日志' }
             }
             if (!(Test-Port 80) -and !$CheckOnly) {
                 $null=Launch $nginx @('-p',('"'+$GatewayPrefix+'"'),'-c','conf/nginx.conf') $GatewayPrefix 'nginx' @{}
                 $deadline=(Get-Date).AddSeconds(15)
                 while (!(Test-Port 80) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }
             }
-            foreach ($port in @(80,8090,8098,8110,8115)) {
-                $r=Get-LocalResponse "http://127.0.0.1:$port/" 5
-                if ($r.StatusCode -ne 200) { throw "网关入口 $port HTTP $($r.StatusCode)：检查网关路由、静态资源和上游服务" }
+            $gatewayEntries=@(
+                @('生产用户端',80,'/production/login'),
+                @('统一认证',8090,'/'),
+                @('官网门户',8098,'/'),
+                @('政府监管运营端',8110,'/'),
+                @('用户中心运营端',8115,'/'),
+                @('生产运营端',8190,'/admin/login'),
+                @('AI中台管理端',8116,'/ai-ops/')
+            )
+            $gatewayIssues=@()
+            foreach ($entry in $gatewayEntries) {
+                $entryName,$entryPort,$entryPath=$entry
+                try {
+                    $r=Get-LocalResponse "http://127.0.0.1:$entryPort$entryPath" 5
+                    if ($r.StatusCode -ne 200) { throw "HTTP $($r.StatusCode)" }
+                    if ($r.Content -notmatch '(?i)<(?:!doctype\s+html|html)(?:\s|>)') { throw '未返回 HTML 页面' }
+                    Write-CheckMessage "[入口通过] $entryName（$entryPort）HTTP 200"
+                } catch {
+                    $gatewayIssues+="$entryName（$entryPort）检查失败：$($_.Exception.Message)"
+                }
             }
-            Record 'nginx' 'OK' '五个主要入口 HTTP 检查通过'
+            if ($gatewayIssues.Count) { throw ($gatewayIssues -join '； ') }
+            Record 'nginx' 'OK' '七个入口 HTTP 与 HTML 检查通过（含生产运营端、AI中台）'
         } catch { Record 'nginx' 'FAIL' $_.Exception.Message }
     }
     Write-CheckMessage "`n运行检查汇总："
@@ -321,9 +368,9 @@ Write-CheckMessage '  物联网运营端    http://localhost:8102/'
 Write-CheckMessage '  物联网移动端    http://localhost:8111/'
 Write-CheckMessage '  S2B2C 消费者端  http://localhost:8082/'
 Write-CheckMessage '  S2B2C 移动端    http://localhost:8182/'
-Write-CheckMessage '  S2B2C 供应商移动端 http://localhost:8183/'
+Write-CheckMessage '  S2B2C 供应商移动端（已停用说明） http://localhost:8183/'
 Write-CheckMessage '  S2B2C 渠道商移动端 http://localhost:8184/'
-Write-CheckMessage '  S2B2C 供应商端  http://localhost:8084/'
+Write-CheckMessage '  S2B2C 供货运营  http://localhost:8103/supply/products （旧入口 :8084 自动兼容）'
 Write-CheckMessage '  S2B2C 商家端    http://localhost:8085/'
 Write-CheckMessage '  S2B2C 运营端    http://localhost:8103/'
 Write-CheckMessage '  信息资讯        http://localhost:8104/'
@@ -339,7 +386,8 @@ Write-CheckMessage '  统一认证        http://localhost:8090/login'
 Write-CheckMessage '  主数据运营端    http://localhost:8080/user/list'
 Write-CheckMessage '  生产管理移动端  http://localhost:8180/'
 Write-CheckMessage '  交易撮合移动端  http://localhost:8181/'
-Write-CheckMessage '  运营端（平台）  http://localhost:8190/    → 登录后 http://localhost:8190/admin/login'
+Write-CheckMessage '  生产管理运营端  http://localhost:8190/admin/login'
+Write-CheckMessage '  AI中台管理端    http://localhost:8116/ai-ops/'
 Write-CheckMessage '  后端直连（调试）http://localhost:8092/api/v1/production'
     Write-CheckMessage '  用户中心运营端  http://localhost:8115/user-center-ops/'
     exit 0

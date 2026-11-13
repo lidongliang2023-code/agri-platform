@@ -1,3 +1,4 @@
+import { logoutBrowser } from '../../../packages/agri-shared/src/auth/logout'
 // 用户中心运营端沿用平台统一 SSO（PKCE 授权码 + 刷新令牌），
 // 与资讯运营端、物联网运营端同一套实现，只是 clientId 与本地存储键不同 ——
 // 不同运营端开在同一个浏览器里不会互相覆盖会话。
@@ -192,13 +193,7 @@ export function attachUnifiedAuth(client: AxiosInstance, clientId: string) {
 }
 
 export async function logoutUnified(clientId: string) {
-  try {
-    await axios.post('/api/v1/auth/logout', {}, { headers: { 'X-Sso-Client': clientId }, timeout: 10000, withCredentials: true })
-  } catch {
-    // 本地会话必须清理，即使服务端登出接口暂时不可达。
-  }
-  clearSession()
-  window.location.assign(`${ssoOrigin()}/logout?client_id=${encodeURIComponent(clientId)}`)
+  await logoutBrowser({ token: accessToken, clientId, ssoOrigin: ssoOrigin(), clear: clearSession })
 }
 
 function Failure({ title, message, onRetry }: { title: string; message: string; onRetry?: () => void }) {

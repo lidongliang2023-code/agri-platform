@@ -3,9 +3,11 @@ package com.agri.iot.controller;
 import com.agri.common.result.ApiResponse;
 import com.agri.iot.repository.IotAlertRuleRepository;
 import com.agri.iot.repository.IotOpsRepository;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import com.agri.common.rbac.OperatorOnly;
@@ -19,6 +21,20 @@ import java.util.Map;
 @RequestMapping("/api/v1/iot/ops")
 @OperatorOnly("iot:admin")
 public class IotOpsController {
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.agri.iot.service.DeviceSamplingService samplingService;
+
+    @GetMapping("/devices/{id}/sampling")
+    public ApiResponse<Map<String,Object>> sampling(@PathVariable long id) {
+        return ApiResponse.success(samplingService.get(id, true));
+    }
+
+    @org.springframework.web.bind.annotation.PutMapping("/devices/{id}/sampling")
+    public ApiResponse<Map<String,Object>> saveSampling(@PathVariable long id, @RequestBody Map<String,Object> body) {
+        return ApiResponse.success(samplingService.save(id, body, true));
+    }
+
+
     @org.springframework.beans.factory.annotation.Autowired
     private com.agri.iot.integration.ProductionFarmClient otaFarms;
     public record OtaStart(List<Long> gatewayIds,String firmwareUrl) {}
@@ -110,6 +126,31 @@ public class IotOpsController {
     @PostMapping("/alert-rules/{id}/toggle")
     public ApiResponse<Map<String, Object>> toggleAlertRule(@PathVariable long id) {
         return ApiResponse.success("平台阈值规则状态已更新", ruleRepository.togglePlatformRule(id));
+    }
+
+    @PostMapping("/alert-rules")
+    public ApiResponse<Map<String, Object>> createAlertRule(@RequestBody Map<String, Object> body) {
+        return ApiResponse.success("平台指标阈值规则已保存", ruleRepository.createPlatformRule(body));
+    }
+
+    @PutMapping("/alert-rules/{id}")
+    public ApiResponse<Map<String, Object>> updateAlertRule(@PathVariable long id, @RequestBody Map<String, Object> body) {
+        return ApiResponse.success("平台指标阈值规则已更新", ruleRepository.updatePlatformRule(id, body));
+    }
+
+    @DeleteMapping("/alert-rules/{id}")
+    public ApiResponse<Map<String, Object>> deleteAlertRule(@PathVariable long id) {
+        return ApiResponse.success("平台指标阈值规则已删除", ruleRepository.deletePlatformRule(id));
+    }
+
+    @GetMapping("/alert-rules/options")
+    public ApiResponse<Map<String, Object>> alertRuleOptions() {
+        return ApiResponse.success(Map.of(
+                "metrics", ruleRepository.metricOptions(),
+                "deviceTypes", ruleRepository.deviceTypeNames(),
+                "operators", com.agri.iot.support.IotMetrics.OPERATORS,
+                "levels", com.agri.iot.support.IotMetrics.LEVELS
+        ));
     }
 
     /** 各经营主体的自定义阈值：运营要能看出"为什么这家报警、那家不报"。 */

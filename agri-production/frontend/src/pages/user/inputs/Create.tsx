@@ -210,6 +210,8 @@ export default function Create(): JSX.Element {
     try {
       values = await form.validateFields()
     } catch {
+      const invalid = form.getFieldsError().find(field => field.errors.length)
+      if (invalid) form.scrollToField(invalid.name, { block: 'center', behavior: 'smooth' })
       message.warning('请先完善必填项与格式错误项')
       return
     }
@@ -293,7 +295,7 @@ export default function Create(): JSX.Element {
   const blocked = admission.level === 'blocked'
 
   return (
-    <PageContainer
+    <PageContainer mobileForm
       className="inputs-page"
       title={
         <Space size={8}>

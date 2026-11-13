@@ -4,6 +4,7 @@ import { SectionToolbarContext } from './SectionToolbarContext'
 import { useLocation } from 'react-router-dom'
 import { ProTable } from '@ant-design/pro-components'
 import type { ProColumns, ProTableProps } from '@ant-design/pro-components'
+import { Grid } from 'antd'
 import type { TableProps } from 'antd'
 import { useQueryClient } from '@tanstack/react-query'
 import ResizableTableHeader from './ResizableTableHeader'
@@ -27,6 +28,8 @@ function readWidths(key: string | null): ColumnWidths {
 
 /** 生产记录统一列表：刷新、密度、列设置、列宽拖拽及浏览器持久保存。 */
 export default function ProductionTable<T extends Record<string, any>, P extends Record<string, any> = Record<string, any>>({ size, onSizeChange, options, className = '', columns, components, scroll, tableLayout, columnWidthStorageKey, ...props }: ProductionTableProps<T, P>): JSX.Element {
+  const screens = Grid.useBreakpoint()
+  const mobile = screens.md === false
   const queryClient = useQueryClient()
   const toolbarHost = useContext(SectionToolbarContext)
   const mergeToolbar = toolbarHost && !props.headerTitle && !props.toolbar?.title && !props.toolbar?.menu && !props.tableRender
@@ -63,6 +66,7 @@ export default function ProductionTable<T extends Record<string, any>, P extends
       if (!column.hideInTable) totalWidth += width
       return {
         ...column,
+        fixed: mobile ? undefined : column.fixed,
         width,
         onHeaderCell: (current) => ({
           ...column.onHeaderCell?.(current),
@@ -72,7 +76,7 @@ export default function ProductionTable<T extends Record<string, any>, P extends
       }
     })
     return { columns: columns ? walk(columns) : undefined, totalWidth }
-  }, [columns, widths, storageKey, restored])
+  }, [columns, widths, storageKey, restored, mobile])
   const headerComponents = typeof components?.header === 'object' ? components.header : {}
   return <ProTable<T, P>
     {...props}

@@ -1,3 +1,4 @@
+import { logoutMobile } from '../../../packages/agri-shared/src/auth/logoutMobile'
 declare const uni: any
 
 export interface UnifiedAccount {
@@ -112,18 +113,10 @@ export function clearUnifiedServiceSession() {
 }
 
 export async function logoutUnifiedService() {
-  try {
-    await apiRequest(
-      `${AUTH_BASE}/api/v1/auth/logout`,
-      'POST',
-      {},
-      getServiceToken(),
-    )
-  } catch {
-    // 本地身份必须清理，即使统一认证服务暂时不可达。
-  }
-  clearUnifiedServiceSession()
-  uni.reLaunch({ url: '/pages/login/index' })
+  await logoutMobile(`${AUTH_BASE}/api/v1/auth/logout`, getServiceToken(), () => {
+    clearUnifiedServiceSession()
+    uni.reLaunch({ url: '/pages/login/index' })
+  })
 }
 
 export function handleServiceUnauthorized() {

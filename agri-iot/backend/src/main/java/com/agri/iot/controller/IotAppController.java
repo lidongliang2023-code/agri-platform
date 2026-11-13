@@ -19,6 +19,20 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/v1/iot/app")
 public class IotAppController {
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.agri.iot.service.DeviceSamplingService samplingService;
+
+    @GetMapping("/devices/{id}/sampling")
+    public ApiResponse<Map<String,Object>> sampling(@PathVariable long id) {
+        return ApiResponse.success(samplingService.get(id, false));
+    }
+
+    @org.springframework.web.bind.annotation.PutMapping("/devices/{id}/sampling")
+    public ApiResponse<Map<String,Object>> saveSampling(@PathVariable long id, @RequestBody Map<String,Object> body) {
+        return ApiResponse.success(samplingService.save(id, body, false));
+    }
+
+
     private final IotAppRepository repository;
     private final IotAlertRuleRepository ruleRepository;
 
@@ -117,6 +131,14 @@ public class IotAppController {
 
     @GetMapping("/plots")
     public ApiResponse<List<Map<String, Object>>> plots() { return ApiResponse.success(repository.plots()); }
+
+    /**
+     * 生产地块监测详情：地块主数据来自生产管理，物联网只返回设备、遥测和告警视图。
+     */
+    @GetMapping("/plots/{id}/monitoring")
+    public ApiResponse<Map<String, Object>> plotMonitoring(@PathVariable long id) {
+        return ApiResponse.success(repository.plotMonitoring(id));
+    }
 
     @GetMapping("/farms")
     public ApiResponse<List<Map<String, Object>>> farms() { return ApiResponse.success(repository.farms()); }

@@ -1,3 +1,4 @@
+import '@/components/ProductionDetailCompact.css'
 import '@/pages/user/quality/quality-trace.css'
 import BusinessRecordList from '@/components/BusinessRecordList'
 import DetailInfoGrid from '@/components/DetailInfoGrid'
@@ -662,7 +663,7 @@ export default function QualityInspection(): JSX.Element {
         ]}
       />
 
-      <Modal className="quality-trace-dialog"
+      <Modal className="production-form-dialog quality-trace-dialog"
         title="录入检测报告"
         open={createOpen}
         okText="确认登记"
@@ -763,7 +764,7 @@ export default function QualityInspection(): JSX.Element {
         </Form>
       </Modal>
 
-      <Modal className="quality-trace-dialog"
+      <Modal className="production-form-dialog quality-trace-dialog"
         title={`结果录入：${resultTarget?.inspectionNo ?? resultTarget?.inspectionId ?? ''}`}
         open={Boolean(resultTarget)}
         okText="确认提交"
@@ -800,7 +801,7 @@ export default function QualityInspection(): JSX.Element {
         </Form>
       </Modal>
 
-      <Drawer rootClassName="quality-trace-dialog"
+      <Drawer rootClassName="quality-trace-dialog production-detail-compact production-detail-dialog"
         title="检测项明细"
         width={720}
         open={Boolean(detailId)}

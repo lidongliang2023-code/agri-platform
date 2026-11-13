@@ -1,3 +1,4 @@
+import '@/components/ProductionDetailCompact.css'
 import Card from '@/components/SectionCard'
 import '@/pages/user/quality/quality-trace.css'
 import ProTable from '@/components/ProductionTable'
@@ -247,7 +248,7 @@ export default function ProcessRecordManage() {
         }}
       />
 
-      <Modal className="quality-trace-dialog"
+      <Modal className="production-form-dialog quality-trace-dialog"
         open={creating || !!editing}
         title={editing ? `编辑加工记录 ${editing.processCode}` : '登记加工工序'}
         onCancel={() => { setCreating(false); setEditing(null) }}

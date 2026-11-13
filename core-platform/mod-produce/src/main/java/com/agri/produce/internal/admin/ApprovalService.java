@@ -1,14 +1,10 @@
 package com.agri.produce.internal.admin;
 
-import com.agri.produce.internal.common.ProduceIds;
 import com.agri.shared.exception.BusinessException;
 import com.agri.shared.exception.ErrorCode;
 import com.agri.shared.result.PageResult;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import java.math.BigDecimal;
-import java.time.LocalDateTime;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -21,8 +17,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class ApprovalService {
-
-    private static final String ID_PREFIX = "APPR";
 
     private final ApprovalMapper approvalMapper;
 
@@ -64,11 +58,7 @@ public class ApprovalService {
      */
     @Transactional
     public ApprovalEntity create(ApprovalEntity entity) {
-        if (entity.getApprovalId() == null || entity.getApprovalId().isBlank()) {
-            entity.setApprovalId(ProduceIds.newId(ID_PREFIX));
-        }
-        approvalMapper.insert(entity);
-        return entity;
+        throw new BusinessException(ErrorCode.FORBIDDEN, "旧生产审批已停办，请使用用户中心认证审核、主体内部计划审批或质量处置；历史档案只读。");
     }
 
     /**
@@ -80,9 +70,7 @@ public class ApprovalService {
      */
     @Transactional
     public ApprovalEntity update(String id, ApprovalEntity entity) {
-        entity.setApprovalId(id);
-        approvalMapper.updateById(entity);
-        return detail(id);
+        throw new BusinessException(ErrorCode.FORBIDDEN, "旧生产审批已停办，请使用用户中心认证审核、主体内部计划审批或质量处置；历史档案只读。");
     }
 
     /**
@@ -92,31 +80,19 @@ public class ApprovalService {
      */
     @Transactional
     public void delete(String id) {
-        approvalMapper.deleteById(id);
+        throw new BusinessException(ErrorCode.FORBIDDEN, "旧生产审批已停办，请使用用户中心认证审核、主体内部计划审批或质量处置；历史档案只读。");
     }
 
     /** 审批通过 */
     @Transactional
     public ApprovalEntity approve(String approvalId, String approverId, String opinion) {
-        ApprovalEntity approval = detail(approvalId);
-        approval.setCurrentApproverId(approverId);
-        approval.setApproveOpinion(opinion);
-        approval.setApproveAt(LocalDateTime.now());
-        approval.setStatus("APPROVED");
-        approvalMapper.updateById(approval);
-        return approval;
+        throw new BusinessException(ErrorCode.FORBIDDEN, "旧生产审批已停办，请使用用户中心认证审核、主体内部计划审批或质量处置；历史档案只读。");
     }
 
     /** 审批驳回 */
     @Transactional
     public ApprovalEntity reject(String approvalId, String approverId, String opinion) {
-        ApprovalEntity approval = detail(approvalId);
-        approval.setCurrentApproverId(approverId);
-        approval.setApproveOpinion(opinion);
-        approval.setApproveAt(LocalDateTime.now());
-        approval.setStatus("REJECTED");
-        approvalMapper.updateById(approval);
-        return approval;
+        throw new BusinessException(ErrorCode.FORBIDDEN, "旧生产审批已停办，请使用用户中心认证审核、主体内部计划审批或质量处置；历史档案只读。");
     }
 
     /** 待我审批 */
@@ -137,15 +113,6 @@ public class ApprovalService {
         return PageResult.of(result.getRecords(), result.getTotal(), page, size);
     }
 
-    /** 审批流配置（骨架：按业务类型给出层级） */
-    public List<Map<String, Object>> config() {
-        List<Map<String, Object>> result = new java.util.ArrayList<>();
-        for (String bizType : List.of("CERT", "RECALL", "QUOTA")) {
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("bizType", bizType);
-            row.put("approveLevel", "CERT".equals(bizType) ? 2 : 1);
-            result.add(row);
-        }
-        return result;
-    }
+    /** 未接入执行引擎的骨架不再作为有效配置返回。 */
+    public List<Map<String, Object>> config() { return List.of(); }
 }

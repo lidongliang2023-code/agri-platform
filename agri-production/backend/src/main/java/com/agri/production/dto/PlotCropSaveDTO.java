@@ -1,6 +1,10 @@
 package com.agri.production.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Size;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
@@ -23,6 +27,7 @@ public class PlotCropSaveDTO {
     private String cropId;
 
     /** 品种（如 中杂9号 / 普罗旺斯） */
+    @Size(max = 100, message = "品种不能超过100个字符")
     private String cropVariety;
 
     /** 种植标准：ORGANIC 有机 / GREEN 绿色 / NORMAL 普通 */
@@ -45,11 +50,16 @@ public class PlotCropSaveDTO {
     private LocalDate expectedHarvestDate;
 
     /** 预计亩产（公斤/亩） */
+    @DecimalMin(value = "0", message = "预计亩产不能为负数")
+    @Digits(integer = 10, fraction = 2, message = "预计亩产最多10位整数和2位小数")
     private BigDecimal expectedYieldPerMu;
 
     /** 株数 */
+    @Min(value = 0, message = "株数不能为负数")
     private Integer plantCount;
 
     /** 株间距（cm） */
+    @DecimalMin(value = "0", message = "株间距不能为负数")
+    @Digits(integer = 8, fraction = 2, message = "株间距最多8位整数和2位小数")
     private BigDecimal plantSpacing;
 }

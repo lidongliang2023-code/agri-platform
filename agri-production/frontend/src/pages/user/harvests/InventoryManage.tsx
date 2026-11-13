@@ -1,3 +1,4 @@
+import '@/components/ProductionDetailCompact.css'
 import Card from '@/components/SectionCard'
 import './harvests.css'
 import ProTable from '@/components/ProductionTable'
@@ -588,7 +589,7 @@ export default function InventoryManage(): JSX.Element {
         )}
       </Card>
 
-      <Modal
+      <Modal className="production-form-dialog"
         title={`${action ? actionTitleMap[action] : ''}：${actionTarget?.productName ?? ''}`}
         open={Boolean(action)}
         okText="确认提交"

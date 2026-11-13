@@ -1,3 +1,4 @@
+import '@/components/ProductionDetailCompact.css'
 import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getP2tOffer, listP2tDiffs } from '@/api/p2t'
@@ -143,7 +144,7 @@ export default function QualityGrading(): JSX.Element {
             return { data: result.list, total: result.total, success: true }
           }} />)}
     </Space>
-    <Modal title="申请正式等级复核" open={open} confirmLoading={busy} okButtonProps={{ disabled: selectionBusy || !!selectionError || !selectedTicket || !selectedInspection }} onCancel={() => { if (!busy) setOpen(false) }} onOk={() => void save(false)}>
+    <Modal className="production-form-dialog" title="申请正式等级复核" open={open} confirmLoading={busy} okButtonProps={{ disabled: selectionBusy || !!selectionError || !selectedTicket || !selectedInspection }} onCancel={() => { if (!busy) setOpen(false) }} onOk={() => void save(false)}>
       <Form form={form} layout="vertical">
         <Form.Item name="ticketId" label="等级降级工单" rules={[{ required: true, message: '请选择待复核工单' }]}>
           <Select showSearch allowClear optionFilterProp="label" loading={tickets.isFetching} placeholder="搜索工单号、订单号或供给单号"
@@ -168,7 +169,7 @@ export default function QualityGrading(): JSX.Element {
         <Form.Item name="reason" label="复核依据及适用范围" rules={[{ required: true, whitespace: true }]}><Input.TextArea rows={4} maxLength={500} showCount /></Form.Item>
       </Form>
     </Modal>
-    <Modal title={`复核确认 ${decision?.reviewNo ?? ''}`} open={!!decision} confirmLoading={busy} onCancel={() => { if (!busy) setDecision(null) }} onOk={() => void save(true)}>
+    <Modal className="production-form-dialog" title={`复核确认 ${decision?.reviewNo ?? ''}`} open={!!decision} confirmLoading={busy} onCancel={() => { if (!busy) setDecision(null) }} onOk={() => void save(true)}>
       <Alert type="info" message="申请人不能确认自己的申请；确认后不可修改。" />
       {decision && <p>{decision.ticketNo}：{decision.originalGrade} → {decision.reviewedGrade}；依据：{decision.reason}</p>}
       <Form form={decisionForm} layout="vertical">
@@ -176,8 +177,8 @@ export default function QualityGrading(): JSX.Element {
         <Form.Item name="remark" label="确认意见" rules={[{ required: true, whitespace: true }]}><Input.TextArea rows={3} maxLength={500} showCount /></Form.Item>
       </Form>
     </Modal>
-    <Drawer title="正式等级复核凭据" open={!!detail} onClose={() => setDetail(null)} width={760}>
-      {detail && <DetailInfoGrid items={Object.entries({ 复核单号: detail.reviewNo, 工单号: detail.ticketNo, 供给单号: detail.offerNo, 订单号: detail.orderNo, 批次ID: detail.batchId, 原等级: detail.originalGrade, 复核等级: detail.reviewedGrade, 检测单号: detail.inspectionNo, 检测单ID: detail.inspectionId, 状态: labels[detail.status], 申请人: detail.applicantId, 确认人: detail.reviewerId, 申请时间: detail.createTime, 确认时间: detail.reviewedAt, 核销时间: detail.consumedAt, 复核依据: detail.reason, 确认意见: detail.reviewRemark }).map(([label, value]) => ({ label, value }))} />}
+    <Drawer rootClassName="production-detail-compact production-detail-dialog" title="正式等级复核凭据" open={!!detail} onClose={() => setDetail(null)} width={760}>
+      {detail && <DetailInfoGrid items={Object.entries({ 复核单号: detail.reviewNo, 工单号: detail.ticketNo, 供给单号: detail.offerNo, 订单号: detail.orderNo, 批次ID: detail.batchId, 原等级: detail.originalGrade, 复核等级: detail.reviewedGrade, 检测单号: detail.inspectionNo, 检测单ID: detail.inspectionId, 状态: labels[detail.status], 申请人: detail.applicantId, 确认人: detail.reviewerId, 申请时间: detail.createTime, 确认时间: detail.reviewedAt, 核销时间: detail.consumedAt, 复核依据: detail.reason, 确认意见: detail.reviewRemark }).map(([label, value]) => ({ label, value, fullWidth: ['复核依据', '确认意见'].includes(label) }))} />}
     </Drawer>
   </PageContainer>
 }

@@ -1,3 +1,4 @@
+import '@/components/ProductionDetailCompact.css'
 import { useEffect, useRef, useState } from 'react'
 import { Alert, Button, Drawer, Tabs, Tag } from 'antd'
 import type { ActionType, ProColumns } from '@ant-design/pro-components'
@@ -64,7 +65,7 @@ export default function P2tSubscriptions(): JSX.Element {
           return isCurrent() ? { data: result.list, total: result.total, success: true } : { data: [], total: 0, success: false }
         }} onRequestError={() => setFailed(previous => ({ ...previous, summary: true }))} />
     </SectionCard>}
-    <Drawer title={`供给单流水 ${offer?.offerNo || ''}`} width="85%" open={!!offer} onClose={() => setOffer(null)} destroyOnClose>
+    <Drawer rootClassName="production-detail-compact production-detail-dialog" title={`供给单流水 ${offer?.offerNo || ''}`} width="min(1100px, 100vw)" open={!!offer} onClose={() => setOffer(null)} destroyOnClose>
       {offer && <OfferSubscriptionFlows key={`${scope}-${offer.offerNo}`} offerNo={offer.offerNo} unit={offer.unit} subjectId={scope} />}
     </Drawer>
     {tab === 'flow' && <SectionCard title="认购回写流水" style={{ marginTop: 16 }}>

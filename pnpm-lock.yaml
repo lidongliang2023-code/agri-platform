@@ -247,6 +247,9 @@ importers:
       sass:
         specifier: ^1.70.0
         version: 1.105.1
+      terser:
+        specifier: 5.51.2
+        version: 5.51.2
       typescript:
         specifier: ^5.3.3
         version: 5.9.3
@@ -745,6 +748,9 @@ importers:
       sass:
         specifier: ^1.70.0
         version: 1.105.1
+      terser:
+        specifier: 5.51.2
+        version: 5.51.2
       typescript:
         specifier: ^5.3.3
         version: 5.9.3

@@ -1,3 +1,4 @@
+import '@/components/ProductionDetailCompact.css'
 import ProTable from '@/components/ProductionTable'
 import Card from '@/components/SectionCard'
 import './inputs.css'
@@ -974,7 +975,7 @@ export default function InputList(): JSX.Element {
         />
       </Card>
 
-      <Modal
+      <Modal className="production-form-dialog"
         title="编辑投入品"
         open={Boolean(editTarget)}
         okText="保存"
@@ -1036,7 +1037,7 @@ export default function InputList(): JSX.Element {
         </Form>
       </Modal>
 
-      <Modal
+      <Modal className="production-form-dialog"
         title="📷 扫码录入"
         open={scanOpen}
         okText="匹配并继续"
@@ -1061,7 +1062,7 @@ export default function InputList(): JSX.Element {
         </Space>
       </Modal>
 
-      <Modal
+      <Modal className="production-form-dialog"
         title="批量导入投入品"
         open={importOpen}
         okText="关闭"

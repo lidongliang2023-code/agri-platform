@@ -23,3 +23,39 @@
 
 /* <small> 走浏览器默认 0.833em，父级 ≤14px 时会掉到 12px 以下（info-ops 行情页实测 11.6667px）；同一个下限兜住它。 */
 small { font-size: max(var(--o-fs-micro), 0.833em); }
+
+/* 统一运营台账密度与移动端规则（2026-11-13） */
+.o-card.o-table{padding:12px}
+.o-table .ant-table-thead>tr>th{padding:9px 10px;background:#f7faf8;color:var(--ink7);font-weight:650;white-space:nowrap}
+.o-table .ant-table-tbody>tr>td{padding:9px 10px;vertical-align:middle}
+.o-table .ant-table-wrapper{overflow-x:auto}
+.o-table .ant-pagination{margin:12px 0 2px}
+.o-filter{padding:9px 12px;box-shadow:none}
+.o-filter .ant-input-affix-wrapper{min-width:220px}
+.o-filter .ant-btn{flex:0 0 auto}
+.o-alert-grid,.o-access-grid{grid-template-columns:1fr;gap:8px}
+.o-alert-card,.o-access-grid>.o-card{padding:12px}
+.o-alert-card>p,.o-access-grid p{line-height:1.5}
+.o-empty-list{padding:36px 16px;text-align:center;color:var(--ink5);font-size:var(--o-fs-micro)}
+.o-empty-list b{display:block;margin-bottom:5px;color:var(--ink7)}
+@media(max-width:760px){
+  .o-main>main{padding:14px 10px 22px}
+  .o-page{gap:10px}
+  .o-title h1{font-size:19px}
+  .o-actions{width:100%;flex-wrap:wrap}
+  .o-actions .ant-btn{flex:1 1 auto}
+  .o-filter{align-items:stretch;gap:7px}
+  .o-filter .o-tabs{width:100%;overflow-x:auto;flex:0 0 auto}
+  .o-filter .o-tabs button{flex:0 0 auto;white-space:nowrap}
+  .o-filter>.ant-input-affix-wrapper{width:100%;min-width:0}
+  .o-filter>.ant-btn{width:100%}
+  .o-table{overflow:visible}
+  .o-table .ant-table-container{min-width:760px}
+  .o-table .ant-table-wrapper{overflow-x:auto}
+  .o-card footer{flex-wrap:wrap}
+  .o-card footer>span:first-child{width:100%;margin-right:0}
+}
+
+.o-row-actions{display:flex;gap:5px;flex-wrap:wrap}.o-filter-label{color:var(--ink5);font-size:var(--o-fs-micro)}
+
+.o-row-actions{display:flex;gap:5px;flex-wrap:wrap}.o-filter-label{color:var(--ink5);font-size:var(--o-fs-micro)}

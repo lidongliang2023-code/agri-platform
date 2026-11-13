@@ -18,6 +18,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Set;
+import java.util.Locale;
+import java.util.Objects;
+import java.time.LocalDateTime;
+import jakarta.validation.Validation;
+import jakarta.validation.Validator;
 
 /**
  * 地块种养品种台账（页面「地块详情 → 种养品种」）。
@@ -29,6 +34,7 @@ import java.util.Set;
 @Service
 public class PlotCropServiceImpl {
 
+    private static final Validator VALIDATOR = Validation.buildDefaultValidatorFactory().getValidator();
     private static final Set<String> STANDARD_VALUES = Set.of("ORGANIC", "GREEN", "NORMAL");
     private static final Set<String> PLANTING_METHOD_VALUES = Set.of("TRANSPLANT", "DIRECT");
     private static final Set<String> OPERATION_METHOD_VALUES = Set.of("MANUAL", "MECHANICAL");
@@ -50,7 +56,7 @@ public class PlotCropServiceImpl {
 
     /** 查询地块下的全部种养品种（按登记顺序）。 */
     public List<PlotCropVO> list(String tenantId, String rawPlotId) {
-        Long plotId = plotIdResolver.require(rawPlotId, tenantId);
+        Long plotId = requirePlot(rawPlotId, tenantId, false).getId();
         return PlotCropVO.listOf(plotCropMapper.selectList(new LambdaQueryWrapper<PlotCrop>()
                 .eq(PlotCrop::getTenantId, tenantId)
                 .eq(PlotCrop::getPlotId, plotId)
@@ -60,39 +66,39 @@ public class PlotCropServiceImpl {
     /** 新增种养品种。 */
     @Transactional(rollbackFor = Exception.class)
     public PlotCropVO create(String tenantId, String rawPlotId, PlotCropSaveDTO dto) {
-        Long plotId = plotIdResolver.require(rawPlotId, tenantId);
-        Plot plot = plotMapper.selectById(plotId);
-        if (plot == null || !tenantId.equals(plot.getTenantId())) {
-            throw new BusinessException(404, "地块不存在：" + rawPlotId);
-        }
+        Plot plot = requirePlot(rawPlotId, tenantId, true);
+        Long plotId = plot.getId();
         PlotCrop entity = new PlotCrop();
         entity.setPlotId(plotId);
         entity.setTenantId(tenantId);
         entity.setFarmId(plot.getFarmId());
         apply(entity, dto, tenantId);
-        plotCropMapper.insert(entity);
+        if (plotCropMapper.insert(entity) != 1) throw new BusinessException(409, "种养品种未保存");
         syncCurrentCropToPlot(plotId, tenantId);
         log.info("地块种养品种新增：地块 {} / {}（{}）", plotId, entity.getCropName(), entity.getId());
-        return PlotCropVO.of(entity);
+        return PlotCropVO.of(getOwned(tenantId, plotId, entity.getId()));
     }
 
     /** 编辑种养品种。 */
     @Transactional(rollbackFor = Exception.class)
     public PlotCropVO update(String tenantId, String rawPlotId, Long cropRecordId, PlotCropSaveDTO dto) {
-        Long plotId = plotIdResolver.require(rawPlotId, tenantId);
+        Plot plot = requirePlot(rawPlotId, tenantId, true);
+        Long plotId = plot.getId();
         PlotCrop entity = getOwned(tenantId, plotId, cropRecordId);
+        entity.setFarmId(plot.getFarmId());
         apply(entity, dto, tenantId);
-        plotCropMapper.updateById(entity);
+        entity.setUpdateTime(LocalDateTime.now());
+        if (plotCropMapper.updateById(entity) != 1) throw new BusinessException(409, "种养品种未保存");
         syncCurrentCropToPlot(plotId, tenantId);
-        return PlotCropVO.of(entity);
+        return PlotCropVO.of(getOwned(tenantId, plotId, cropRecordId));
     }
 
     /** 删除种养品种（逻辑删除）。 */
     @Transactional(rollbackFor = Exception.class)
     public void delete(String tenantId, String rawPlotId, Long cropRecordId) {
-        Long plotId = plotIdResolver.require(rawPlotId, tenantId);
+        Long plotId = requirePlot(rawPlotId, tenantId, true).getId();
         getOwned(tenantId, plotId, cropRecordId);
-        plotCropMapper.deleteById(cropRecordId);
+        if (plotCropMapper.deleteById(cropRecordId) != 1) throw new BusinessException(409, "种养品种未删除");
         syncCurrentCropToPlot(plotId, tenantId);
     }
 
@@ -115,13 +121,30 @@ public class PlotCropServiceImpl {
 
     /** 把台账最早一条品种回写进地块的 {@code crop_id} + {@code current_crop}；台账空了就把两列一起清掉。 */
     private void syncCurrentCropToPlot(Long plotId, String tenantId) {
-        PlotCrop first = earliest(plotId, tenantId);
+        // 锁定读避免等待地块锁期间留下的 REPEATABLE READ 旧快照。
+        PlotCrop first = plotCropMapper.selectOne(new LambdaQueryWrapper<PlotCrop>()
+                .eq(PlotCrop::getPlotId, plotId).eq(PlotCrop::getTenantId, tenantId)
+                .orderByAsc(PlotCrop::getId).last("LIMIT 1 FOR UPDATE"));
         // 必须用 UpdateWrapper 显式 set：实体走 updateById 时 null 字段被 MP 的 NOT_NULL 策略跳过，
         // "台账清空"这一步会静默什么都不写。
-        plotMapper.update(null, new LambdaUpdateWrapper<Plot>()
-                .eq(Plot::getId, plotId)
+        if (plotMapper.update(null, new LambdaUpdateWrapper<Plot>()
+                .eq(Plot::getId, plotId).eq(Plot::getTenantId, tenantId)
                 .set(Plot::getCropId, first == null ? null : first.getCropId())
-                .set(Plot::getCurrentCrop, first == null ? null : first.getCropName()));
+                .set(Plot::getCurrentCrop, first == null ? null : first.getCropName())
+                .set(Plot::getCropVariety, first == null ? null : first.getCropVariety())
+                .set(Plot::getUpdateTime, LocalDateTime.now())) != 1) {
+            throw new BusinessException(409, "地块当前作物未同步，种养品种保存已回滚");
+        }
+    }
+
+    /** 写操作共用地块行锁，与地块编辑串行；数字标识也必须校验归属。 */
+    private Plot requirePlot(String rawPlotId, String tenantId, boolean lock) {
+        Long id = plotIdResolver.require(rawPlotId, tenantId);
+        var query = new LambdaQueryWrapper<Plot>().eq(Plot::getId, id).eq(Plot::getTenantId, tenantId);
+        if (lock) query.last("FOR UPDATE");
+        Plot plot = plotMapper.selectOne(query);
+        if (plot == null) throw new BusinessException(404, "地块不存在或不属于当前主体：" + rawPlotId);
+        return plot;
     }
 
     private PlotCrop getOwned(String tenantId, Long plotId, Long cropRecordId) {
@@ -143,7 +166,14 @@ public class PlotCropServiceImpl {
      * 实体上这几个字段用了 {@code FieldStrategy.IGNORED}，null 也会写进 UPDATE。</p>
      */
     private void apply(PlotCrop entity, PlotCropSaveDTO dto, String tenantId) {
-        CropInfo crop = resolveCrop(dto == null ? null : dto.getCropId(), tenantId);
+        if (dto == null) throw new BusinessException(400, "请填写种养品种资料");
+        var errors = VALIDATOR.validate(dto);
+        if (!errors.isEmpty()) throw new BusinessException(400, errors.stream()
+                .map(v -> v.getMessage()).sorted().findFirst().orElse("种养品种资料不合法"));
+        CropInfo crop = resolveCrop(dto.getCropId(), tenantId);
+        if (!Integer.valueOf(1).equals(crop.getStatus()) && !Objects.equals(entity.getCropId(), crop.getId())) {
+            throw new BusinessException(400, "该作物已停用，请选择启用中的作物");
+        }
         entity.setCropId(crop.getId());
         entity.setCropName(crop.getCropName());
         entity.setCropVariety(trim(dto.getCropVariety()));
@@ -175,11 +205,12 @@ public class PlotCropServiceImpl {
         }
         Long pk = parseLong(text);
         CropInfo crop = pk != null
-                ? cropMapper.selectById(pk)
+                ? cropMapper.selectOne(new LambdaQueryWrapper<CropInfo>()
+                        .eq(CropInfo::getId, pk).eq(CropInfo::getTenantId, tenantId).last("FOR UPDATE"))
                 : cropMapper.selectOne(new LambdaQueryWrapper<CropInfo>()
                         .eq(CropInfo::getTenantId, tenantId)
                         .eq(CropInfo::getCropName, text)
-                        .last("LIMIT 1"));
+                        .last("LIMIT 1 FOR UPDATE"));
         if (crop == null || !tenantId.equals(crop.getTenantId())) {
             throw new BusinessException(400, "作物不存在（请先在「作物管理」里维护）：" + text);
         }
@@ -187,7 +218,7 @@ public class PlotCropServiceImpl {
     }
 
     private static String requireValue(String value, Set<String> allowed, String field, String expected) {
-        String text = value == null ? null : value.trim().toUpperCase();
+        String text = value == null ? null : value.trim().toUpperCase(Locale.ROOT);
         if (text == null || !allowed.contains(text)) {
             throw new BusinessException(400, field + "取值应为 " + expected + "：" + value);
         }

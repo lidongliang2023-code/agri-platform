@@ -11,7 +11,6 @@ import UserLayout from '@/layouts/UserLayout'
 import AdminLayout from '@/layouts/AdminLayout'
 import NotFound from '@/pages/NotFound'
 import AdminLogin from '@/pages/admin/AdminLogin'
-import UserLogin from '@/pages/user/UserLogin'
 import SsoCallback from '@/pages/sso/SsoCallback'
 import SsoHandoff from '@/pages/sso/SsoHandoff'
 import { ADMIN_ROUTES, USER_ROUTES } from './routes'
@@ -150,18 +149,14 @@ const router = createBrowserRouter([
     element: <LoginEntry />,
   },
   {
-    // 运营端独立登录页（路线 2「独立登录页」拆分）：独立全屏页，不挂任何 Layout，
-    // 也不进业务分组与页面条数统计（条数由 routes.tsx 的 TOTAL_PAGE_COUNT 派生）
-    //
-    // 外面再包一层 SsoHandoff：未登录用户送统一认证中心（V2.0 5.2），
-    // 已登录或带 ?local=1 时照旧渲染本地登录页（过渡期回退路径）。
+    // 兼容旧运营登录地址，统一转到认证中心（忽略 local 参数）。
     path: '/admin/login',
-    element: <SsoHandoff clientId="prod" fallback={<AdminLogin />} />,
+    element: <AdminLogin />,
   },
   {
-    // 用户端独立登录页（同上）
+    // 用户端也使用统一认证中心
     path: '/production/login',
-    element: <SsoHandoff clientId="prod" fallback={<UserLogin />} />,
+    element: <SsoHandoff clientId="prod" />,
   },
   {
     // SSO 回跳：授权码换令牌的落点（V2.0 5.2 第 ⑥⑦ 步）

@@ -11,12 +11,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.Duration;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 
 /**
  * 告警阈值规则：平台预置 + 经营主体自定义，以及基于它们的判定。
@@ -34,7 +36,7 @@ import java.util.Map;
  * </ul>
  *
  * <p>{@code duration_seconds} 不是摆设：它回到 {@code iot_telemetry} 的真实读数序列上判定
- * "窗口内每条读数都越线"，窗口里没有读数就不算持续越线（缺数据不等于满足条件）。</p>
+ * "采样覆盖完整窗口且每条读数都越线"；缺失、无效或断档采样不能证明持续越线。</p>
  */
 @Repository
 public class IotAlertRuleRepository {
@@ -63,6 +65,10 @@ public class IotAlertRuleRepository {
 
     /** 当前主体的自定义阈值。 */
     public List<Map<String, Object>> tenantRules() {
+        return tenantRules(identity.currentTenantId());
+    }
+
+    private List<Map<String, Object>> tenantRules(long tenantId) {
         return jdbc.query("SELECT * FROM iot_alert_rule_tenant WHERE tenant_id=? ORDER BY metric_key,id",
                 (rs, rowNum) -> ruleMap(
                         rs.getLong("id"), "tenant", rs.getString("rule_name"), rs.getString("device_type"),
@@ -70,7 +76,7 @@ public class IotAlertRuleRepository {
                         decimal(rs.getString("threshold_value")), rs.getInt("duration_seconds"),
                         rs.getString("level_name"), rs.getBoolean("enabled"), rs.getString("remark"),
                         rs.getObject("source_rule_id"), rs.getString("created_by"), rs.getString("updated_at")),
-                identity.currentTenantId());
+                tenantId);
     }
 
     /**
@@ -102,6 +108,20 @@ public class IotAlertRuleRepository {
             effective.add(platform);
         }
         return effective;
+    }
+
+    /** 接入通道只信任锁定的设备台账主体，不能依赖用户会话或接入载荷自报的主体。 */
+    public List<Map<String, Object>> effectiveRulesForDevice(long tenantId, String deviceType) {
+        List<Map<String, Object>> own = tenantRules(tenantId).stream()
+                .filter(r -> Boolean.TRUE.equals(r.get("enabled")))
+                .filter(r -> matches(r, String.valueOf(r.get("metricKey")), deviceType)).toList();
+        List<Map<String, Object>> result = new ArrayList<>(own);
+        for (Map<String, Object> preset : platformRules()) {
+            if (Boolean.TRUE.equals(preset.get("enabled"))
+                    && matches(preset, String.valueOf(preset.get("metricKey")), deviceType)
+                    && own.stream().noneMatch(r -> sameScope(r, preset))) result.add(preset);
+        }
+        return result;
     }
 
     /** 给页面用的一份完整视图：平台预置（含"被谁覆盖"）、我的规则、生效集合。 */
@@ -250,6 +270,46 @@ public class IotAlertRuleRepository {
         return requireTenantRule(id);
     }
 
+    // ================= 平台预置规则维护（运营端） =================
+
+    @Transactional
+    public Map<String, Object> createPlatformRule(Map<String, Object> body) {
+        NormalizedRule rule = normalize(body);
+        var key = new org.springframework.jdbc.support.GeneratedKeyHolder();
+        jdbc.update(connection -> {
+            var statement = connection.prepareStatement(
+                    "INSERT INTO iot_alert_rule (rule_name,device_type,metric_key,metric_name,operator_text,threshold_value,duration_seconds,level_name,enabled,tenant_scope) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                    java.sql.Statement.RETURN_GENERATED_KEYS);
+            Object[] values = {rule.ruleName(), rule.deviceType(), rule.metricKey(), rule.metricName(),
+                    rule.operator(), rule.thresholdText(), rule.durationSeconds(), rule.level(), rule.enabled(), "全部经营主体"};
+            for (int i = 0; i < values.length; i++) statement.setObject(i + 1, values[i]);
+            return statement;
+        }, key);
+        addLog("新增平台阈值规则", rule.ruleName(),
+                rule.metricName() + " " + rule.operator() + " " + rule.thresholdText() + " " + rule.level());
+        return requirePlatformRule(key.getKey() == null ? 0 : key.getKey().longValue());
+    }
+
+    @Transactional
+    public Map<String, Object> updatePlatformRule(long id, Map<String, Object> body) {
+        Map<String, Object> existing = requirePlatformRule(id);
+        NormalizedRule rule = normalize(body);
+        jdbc.update("UPDATE iot_alert_rule SET rule_name=?,device_type=?,metric_key=?,metric_name=?,operator_text=?,threshold_value=?,duration_seconds=?,level_name=?,enabled=?,tenant_scope=? WHERE id=?",
+                rule.ruleName(), rule.deviceType(), rule.metricKey(), rule.metricName(), rule.operator(), rule.thresholdText(),
+                rule.durationSeconds(), rule.level(), rule.enabled(), "全部经营主体", id);
+        addLog("编辑平台阈值规则", String.valueOf(existing.get("ruleName")),
+                rule.metricName() + " " + rule.operator() + " " + rule.thresholdText() + " " + rule.level());
+        return requirePlatformRule(id);
+    }
+
+    @Transactional
+    public Map<String, Object> deletePlatformRule(long id) {
+        Map<String, Object> existing = requirePlatformRule(id);
+        jdbc.update("DELETE FROM iot_alert_rule WHERE id=?", id);
+        addLog("删除平台阈值规则", String.valueOf(existing.get("ruleName")), "平台规则已删除");
+        return map("id", id, "ruleName", existing.get("ruleName"));
+    }
+
     // ================= 平台预置治理（运营端） =================
 
     /** 运营端启停平台预置：这是全平台开关，所以只有运营能做，并且要留痕。 */
@@ -298,8 +358,7 @@ public class IotAlertRuleRepository {
     /**
      * 阈值试算：给一个读数，按<b>当前主体</b>的生效规则判定等级。
      *
-     * <p>这是采集/接入侧将来落地时应该调用的判据入口：平台目前没有到设备的链路，
-     * 所以读数不会自动进来，但"这条读数在本主体的阈值下算不算越线、算几级"现在就是可算的。</p>
+     * <p>页面试算只判瞬时阈值；设备接入通过 IotTelemetryService 使用同源生效规则及持续判据生成告警。</p>
      */
     public Map<String, Object> evaluate(Map<String, Object> body) {
         String metricKey = required(body, "metricKey", "请选择要试算的指标");
@@ -346,11 +405,11 @@ public class IotAlertRuleRepository {
         List<Object> latestArgs = new ArrayList<>();
         String latestScope = farmScope("d.farm_id", latestArgs);
         List<Map<String, Object>> latest = jdbc.query("""
-                SELECT device_id,device_name,device_code,type_name,metric_key,metric_value,unit_name,recorded_at
+                SELECT device_id,device_name,device_code,type_name,config_text,metric_key,metric_value,unit_name,recorded_at
                 FROM (
-                    SELECT d.id device_id,d.device_name,d.device_code,d.type_name,
+                    SELECT d.id device_id,d.device_name,d.device_code,d.type_name,d.config_text,
                            t.metric_key,t.metric_value,t.unit_name,t.recorded_at,
-                           ROW_NUMBER() OVER (PARTITION BY t.device_id,t.metric_key ORDER BY t.recorded_at DESC,t.id DESC) rn
+                           ROW_NUMBER() OVER (PARTITION BY t.device_id,t.metric_key ORDER BY REPLACE(t.recorded_at,'T',' ') DESC,t.id DESC) rn
                     FROM iot_telemetry t JOIN iot_device d ON d.id=t.device_id
                     WHERE 1=1""" + latestScope + """
                 ) x WHERE x.rn=1
@@ -362,7 +421,7 @@ public class IotAlertRuleRepository {
                 "metricKey", rs.getString("metric_key"),
                 "value", rs.getBigDecimal("metric_value"),
                 "unit", rs.getString("unit_name"),
-                "recordedAt", rs.getString("recorded_at")), latestArgs.toArray());
+                "recordedAt", rs.getString("recorded_at"), "config", rs.getString("config_text")), latestArgs.toArray());
         if (latest.isEmpty()) {
             return List.of();
         }
@@ -400,8 +459,9 @@ public class IotAlertRuleRepository {
                         String.valueOf(row.get("recordedAt")),
                         duration,
                         String.valueOf(rule.get("operator")),
-                        decimal(rule.get("threshold")));
-                if (duration > 0 && Boolean.FALSE.equals(sustained)) {
+                        decimal(rule.get("threshold")),
+                        com.agri.iot.support.SamplingPolicy.read((String) row.get("config")).policyFor(metricKey));
+                if (duration > 0 && !Boolean.TRUE.equals(sustained)) {
                     // 写了持续时间却没满足：瞬时越线可以提示，但不能当成"已满足条件的风险读数"
                     continue;
                 }
@@ -447,28 +507,61 @@ public class IotAlertRuleRepository {
 
     // ================= 内部 =================
 
-    private Boolean durationSustained(List<Map<String, Object>> readings, String latestRecordedAt,
+    /**
+     * 按采样时间判定连续超限：起点前最近一条采样也必须超限，且最新采样确实存在。
+     * 同时刻有多条采样时全部需要超限；非法时间或值不能作为持续证据。
+     * 已配置设备使用周期加允许延迟；未配置设备保留规则时长作为保守间隔上限。
+     */
+    public static boolean durationSustained(List<Map<String, Object>> readings, String latestRecordedAt,
                                       int durationSeconds, String operator, BigDecimal threshold) {
-        if (durationSeconds <= 0) {
-            return Boolean.TRUE;
-        }
-        if (readings == null || readings.isEmpty()) {
-            return Boolean.FALSE;
-        }
+        return durationSustained(readings, latestRecordedAt, durationSeconds, operator, threshold,
+                new com.agri.iot.support.SamplingPolicy(null, 0, null));
+    }
+
+    public static boolean durationSustained(List<Map<String, Object>> readings, String latestRecordedAt,
+            int durationSeconds, String operator, BigDecimal threshold, com.agri.iot.support.SamplingPolicy policy) {
+        return durationSustained(readings, latestRecordedAt, durationSeconds, operator, threshold,
+                policy == null ? new com.agri.iot.support.SamplingPolicy.MetricPolicy(null, 0, null)
+                        : policy.policyFor(null));
+    }
+
+    public static boolean durationSustained(List<Map<String, Object>> readings, String latestRecordedAt,
+            int durationSeconds, String operator, BigDecimal threshold, com.agri.iot.support.SamplingPolicy.MetricPolicy policy) {
+        if (durationSeconds <= 0) return true;
         LocalDateTime latest = parseTime(latestRecordedAt);
-        if (latest == null) {
-            return null;
+        if (latest == null || readings == null || readings.isEmpty()) {
+            return false;
         }
-        String windowStart = latest.minusSeconds(durationSeconds).format(TIME);
-        List<Map<String, Object>> inWindow = readings.stream()
-                .filter(row -> String.valueOf(row.get("recordedAt")).compareTo(windowStart) > 0)
-                .toList();
-        if (inWindow.isEmpty()) {
-            return Boolean.FALSE;
+        LocalDateTime start = latest.minusSeconds(durationSeconds);
+        if (policy.effectiveAt() != null && start.isBefore(policy.effectiveAt())) return false;
+        TreeMap<LocalDateTime, Boolean> samples = new TreeMap<>();
+        for (Map<String, Object> reading : readings) {
+            LocalDateTime at = parseTime(String.valueOf(reading.get("recordedAt")));
+            if (at == null) {
+                return false;
+            }
+            if (policy.effectiveAt() != null && at.isBefore(policy.effectiveAt())) continue;
+            if (at.isAfter(latest)) {
+                continue;
+            }
+            boolean breach = IotMetrics.breaches(operator, decimal(reading.get("value")), threshold);
+            samples.merge(at, breach, (left, right) -> left && right);
         }
-        boolean allBreach = inWindow.stream().allMatch(row ->
-                IotMetrics.breaches(operator, (BigDecimal) row.get("value"), threshold));
-        return allBreach ? Boolean.TRUE : Boolean.FALSE;
+        if (!samples.containsKey(latest)) {
+            return false;
+        }
+        LocalDateTime previous = latest;
+        for (Map.Entry<LocalDateTime, Boolean> sample : samples.descendingMap().entrySet()) {
+            LocalDateTime at = sample.getKey();
+            if (!sample.getValue() || Duration.between(at, previous).compareTo(Duration.ofSeconds(policy.maxGapSeconds(durationSeconds))) > 0) {
+                return false;
+            }
+            if (!at.isAfter(start)) {
+                return true;
+            }
+            previous = at;
+        }
+        return false;
     }
 
     private boolean sameScope(Map<String, Object> tenantRule, Map<String, Object> platformRule) {
@@ -496,6 +589,23 @@ public class IotAlertRuleRepository {
         return deviceType == null || deviceType.isBlank() || ruleType.equals(deviceType);
     }
 
+    private Map<String, Object> requirePlatformRule(long id) {
+        return platformRules().stream()
+                .filter(rule -> longValue(rule.get("id")) == id)
+                .findFirst()
+                .orElseThrow(() -> BusinessException.notFound("平台阈值规则不存在：" + id));
+    }
+
+    private java.util.Set<String> knownMetricKeys() {
+        java.util.Set<String> keys = new java.util.LinkedHashSet<>();
+        jdbc.query("SELECT property_text FROM iot_device_type WHERE property_text IS NOT NULL AND property_text<>''", rs -> {
+            for (String key : rs.getString(1).split(",")) {
+                if (!key.isBlank()) keys.add(key.trim());
+            }
+        });
+        return keys;
+    }
+
     private Map<String, Object> requireTenantRule(long id) {
         identity.requireTenantRow("iot_alert_rule_tenant", id, "阈值规则");
         return tenantRules().stream()
@@ -513,6 +623,9 @@ public class IotAlertRuleRepository {
         String metricKey = required(body, "metricKey", "请选择监控指标");
         if (metricKey.length() > 40) {
             throw new IllegalArgumentException("指标标识过长");
+        }
+        if (!knownMetricKeys().contains(metricKey)) {
+            throw new IllegalArgumentException("指标「" + metricKey + "」不在物联网指标目录里");
         }
         String operator = text(body, "operator", "");
         if (!IotMetrics.OPERATORS.contains(operator)) {
@@ -598,7 +711,8 @@ public class IotAlertRuleRepository {
             return null;
         }
         try {
-            return LocalDateTime.parse(raw.trim(), TIME);
+            // ISO_LOCAL_DATE_TIME 同时支持分钟、秒及小数秒；数据库空格分隔与 ISO T 分隔统一处理。
+            return LocalDateTime.parse(raw.trim().replace(' ', 'T'), DateTimeFormatter.ISO_LOCAL_DATE_TIME);
         } catch (RuntimeException ignored) {
             return null;
         }

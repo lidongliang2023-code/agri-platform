@@ -20,6 +20,7 @@ import { PrivacyRequestPage, FeedbackPage } from './pages/CompliancePages'
 import { StatsPage, ConfigPage, AuditLogPage } from './pages/SystemPages'
 import type { OpsPageKey } from './types'
 import './styles.css'
+import { AuditWorkbench } from './pages/AuditWorkbench'
 import {HealthMonitorPage} from './pages/HealthMonitorPage'
 
 function resolvePage(route: RouteState): JSX.Element {
@@ -27,6 +28,7 @@ function resolvePage(route: RouteState): JSX.Element {
     case 'user-list': return <UserListPage />
     case 'user-detail': return <UserDetailPage id={route.id ?? ''} />
     case 'user-identity': return <IdentityPage />
+    case 'audit-workbench': return <AuditWorkbench />
     case 'identity-audit': return <IdentityAuditPage />
     case 'realname-audit': return <RealnameAuditPage />
     case 'qualification-audit': return <QualificationAuditPage />

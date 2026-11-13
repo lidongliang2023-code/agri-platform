@@ -26,6 +26,7 @@
     "@dcloudio/vite-plugin-uni": "3.0.0-4010520240507001",
     "@types/node": "^20.11.0",
     "sass": "^1.70.0",
+    "terser": "5.51.2",
     "typescript": "^5.3.3",
     "vite": "^5.0.12",
     "vue-tsc": "^2.0.29"

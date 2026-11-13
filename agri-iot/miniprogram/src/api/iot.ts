@@ -1,3 +1,4 @@
+import { logoutMobile } from '../../../../packages/agri-shared/src/auth/logoutMobile'
 export interface Device{id:number;plotId:number;gatewayId:number;groupId:number;deviceCode:string;deviceName:string;typeName:string;protocol:string;onlineStatus:string;status:string;lastReport:string;rssi:number|null;battery:number;firmwareVersion:string;controlCapable:boolean;config:string;telemetry?:Telemetry[];controls?:ControlLog[]}
 export interface Telemetry{key:string;name:string;value:number;unit:string;recordedAt:string}
 export interface ControlLog{id:number;deviceName:string;action:string;operator:string;result:string;createdAt:string}
@@ -34,7 +35,7 @@ function request<T>(url:string,method:'GET'|'POST'|'PUT'|'DELETE'='GET',data?:Re
 }
 export function hasIotSession(){return Boolean(uni.getStorageSync('token'))}
 export function ensureIotSession(){if(hasIotSession())return true;uni.reLaunch({url:'/pages/login/index'});return false}
-export function logoutIotSession(){uni.removeStorageSync('token');uni.removeStorageSync('user');uni.reLaunch({url:'/pages/login/index'})}
+export async function logoutIotSession(){await logoutMobile(`${AUTH_BASE}/api/v1/auth/logout`,String(uni.getStorageSync('token')||''),()=>{uni.removeStorageSync('token');uni.removeStorageSync('user');uni.reLaunch({url:'/pages/login/index'})})}
 export function loginWithUnifiedAccount(username:string,password:string):Promise<{accessToken:string;user:{id:number;username:string;nickname?:string;roles?:string[]}}>{
   return new Promise((resolve,reject)=>uni.request({url:`${AUTH_BASE}/api/v1/sso/login-standalone`,method:'POST',data:{username,password,marketId:1,remember:true},header:{'Content-Type':'application/json'},success:async(res:any)=>{
     const body=res.data as {code:number;message?:string;data?:{accessToken:string;user:{id:number;username:string;nickname?:string;roles?:string[]}}}
@@ -53,7 +54,7 @@ export const api={
   device:(id:number)=>request<Device>(`/devices/${id}`),
   control:(id:number,action:string)=>request<Record<string,unknown>>(`/devices/${id}/control`,'POST',{action}),
   alerts:()=>request<Alert[]>('/alerts'),
-  handleAlert:(id:number,note:string)=>request<Alert>(`/alerts/${id}/handle`,'POST',{status:'resolved',note}),
+  handleAlert:(id:number,note:string,status:'handling'|'resolved')=>request<Alert>(`/alerts/${id}/handle`,'POST',{status,note}),
   plots:()=>request<Plot[]>('/plots'),
   scenes:()=>request<Scene[]>('/scenes'),
   createScene:(data:Record<string,unknown>)=>request<Scene>('/scenes','POST',data),
@@ -66,12 +67,14 @@ export const api={
   deleteRule:(id:number)=>request(`/rules/${id}`,'DELETE'),
   toggleRule:(id:number)=>request<AutomationRule>(`/rules/${id}/toggle`,'POST',{}),
   executeRule:(id:number)=>request<AutomationRule>(`/rules/${id}/execute`,'POST',{}),
+  readMessage:(id:number)=>request(`/messages/${id}/read`,'POST',{}),
+  readAllMessages:()=>request('/messages/read-all','POST',{}),
   messages:()=>request<Array<{id:number;type:string;title:string;content:string;read:boolean;createdAt:string}>>('/messages'),
   sync:()=>request<MobileSync>('/mobile/sync','POST',{}),
 }
 export const STATUS:Record<string,{label:string;tone:string}>={
   online:{label:'在线',tone:'green'},offline:{label:'离线',tone:'gray'},alert:{label:'告警中',tone:'red'},
-  pending:{label:'待处理',tone:'orange'},handling:{label:'处理中',tone:'blue'},resolved:{label:'已恢复',tone:'green'},
+  pending:{label:'待处理',tone:'orange'},handling:{label:'处理中',tone:'blue'},resolved:{label:'已处理',tone:'green'},
   critical:{label:'紧急',tone:'red'},major:{label:'重要',tone:'orange'},normal:{label:'一般',tone:'blue'},running:{label:'运行中',tone:'green'}
 }
 export function statusMeta(value:string){return STATUS[value]??{label:value,tone:'gray'}}

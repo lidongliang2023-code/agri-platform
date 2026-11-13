@@ -57,6 +57,7 @@ import java.util.stream.Collectors;
 public class SsoController {
 
     private final AuthService authService;
+    private final GlobalLogoutService globalLogoutService;
     private final SsoSessionService sessionService;
     /** 用户操作日志：登录也要留痕，否则「操作日志」页里永远看不到登录记录 */
     private final UserOperationLogService operationLog;
@@ -440,9 +441,7 @@ public class SsoController {
     @PostMapping("/logout")
     public ApiResponse<Void> logout(@RequestBody(required = false) RefreshRequest body,
                                     HttpServletRequest request, HttpServletResponse response) {
-        sessionService.destroy(request, response);
-        String refreshToken = cookieSupport.read(request);
-        authService.logout(refreshToken != null ? refreshToken : (body == null ? null : body.refreshToken()));
+        globalLogoutService.logout(request, response, null, body == null ? null : body.refreshToken());
         return ApiResponse.ok();
     }
 
@@ -459,9 +458,18 @@ public class SsoController {
         if (allowed == null || allowed.isEmpty()) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "未注册的 client_id：" + clientId);
         }
-        sessionService.destroy(request, response, clientId);
-        cookieSupport.clearForClient(response, clientId);
+        globalLogoutService.logout(request, response, clientId, null);
         // 回到该客户端注册在案的第一个来源（取自配置白名单，不是请求参数 —— 避免开放重定向）
+        return redirect(allowed.get(0) + "?logout=1");
+    }
+
+    /** 已由 POST 吊销的客户端只做白名单回跳，不能再用其他账号 Cookie 二次退出。 */
+    @GetMapping("/logout/complete")
+    public ResponseEntity<Void> logoutComplete(@RequestParam("client_id") String clientId) {
+        List<String> allowed = properties.getClients().get(clientId);
+        if (allowed == null || allowed.isEmpty()) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "未注册的 client_id：" + clientId);
+        }
         return redirect(allowed.get(0) + "?logout=1");
     }
 

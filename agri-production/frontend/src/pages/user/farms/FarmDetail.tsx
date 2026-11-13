@@ -1,4 +1,7 @@
+import '@/components/ProductionDetailCompact.css'
 import FarmRectificationPanel from '@/components/FarmRectificationPanel'
+import FarmBoundaryPreview from '@/components/FarmBoundaryPreview'
+import FarmPlotBoundaryChecks from '@/components/FarmPlotBoundaryChecks'
 import { previewFarmCertificate } from '@/api/farms'
 import Card from '@/components/SectionCard'
 import useFarmStore from '@/store/farm'
@@ -327,7 +330,7 @@ export default function FarmDetail(): JSX.Element {
       : regionText || '-'
 
     return (
-      <Space direction="vertical" size={16} style={{ width: '100%' }}>
+      <Space direction="vertical" size={12} style={{ width: '100%' }}>
         <Card
           title="📋 基本信息"
           extra={
@@ -350,6 +353,7 @@ export default function FarmDetail(): JSX.Element {
                 label: '面积',
                 value: `${Number(farm.areaTotal || 0).toLocaleString('zh-CN')}亩`,
               },
+              { key: 'coordinates', label: '经纬度', value: farm.longitude != null && farm.latitude != null ? `${farm.longitude}, ${farm.latitude}` : '未登记' },
               { key: 'altitude', label: '海拔', value: altitude },
               { key: 'manager', label: '负责人', value: farm.managerName || '-' },
               { key: 'phone', label: '联系电话', value: farm.managerPhone || '-' },
@@ -377,6 +381,9 @@ export default function FarmDetail(): JSX.Element {
             ]}
           />
         </Card>
+
+        <Card title="农场边界" extra={<Button type="link" onClick={openEdit}>维护边界</Button>}><FarmBoundaryPreview boundary={farm.boundary} name={farm.farmName} /></Card>
+        <Card title="地块范围检查"><FarmPlotBoundaryChecks farmId={farmId} boundary={farm.boundary} /></Card>
 
         <DetailMetricGrid
           items={[
@@ -525,7 +532,7 @@ export default function FarmDetail(): JSX.Element {
   }
 
   return (
-    <PageContainer
+    <PageContainer className="production-detail-compact"
       title={`🏠 ${farmQuery.data?.farmName ?? '农场详情'}`}
       subTitle={farmQuery.data?.farmCode}
       onBack={() => navigate('/production/farms')}

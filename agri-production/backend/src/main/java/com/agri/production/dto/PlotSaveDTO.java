@@ -2,6 +2,14 @@ package com.agri.production.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.AssertTrue;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -12,22 +20,37 @@ public class PlotSaveDTO {
     private Long id;
 
     @NotBlank(message = "地块名称不能为空")
+    @Size(max = 30, message = "地块名称不超过30个字符")
     private String plotName;
 
     @NotNull(message = "所属农场ID不能为空")
+    @Min(value = 1, message = "所属农场ID不合法")
     private Long farmId;
 
     private String farmCode;
 
+    @NotNull(message = "地块面积不能为空")
+    @DecimalMin(value = "0", inclusive = false, message = "地块面积必须大于0")
+    @Digits(integer = 8, fraction = 2, message = "地块面积最多8位整数、2位小数")
     private BigDecimal area;
 
     private String shape;
 
     private String boundary;
 
+    @DecimalMin(value = "-180", message = "经度应在-180到180之间")
+    @DecimalMax(value = "180", message = "经度应在-180到180之间")
     private BigDecimal centerLongitude;
 
+    @DecimalMin(value = "-90", message = "纬度应在-90到90之间")
+    @DecimalMax(value = "90", message = "纬度应在-90到90之间")
     private BigDecimal centerLatitude;
+
+    @JsonIgnore
+    @AssertTrue(message = "中心经纬度必须同时填写或同时清空")
+    public boolean isCenterPairValid() {
+        return (centerLongitude == null) == (centerLatitude == null);
+    }
 
     private String soilType;
 
@@ -48,6 +71,8 @@ public class PlotSaveDTO {
      * 表单提交了也被丢弃、列表用默认值 1 把整片农场都说成「露天」。现在落真实列，
      * 存量行保持 NULL（不猜），页面显示「—」。</p>
      */
+    @Min(value = 1, message = "种植类型不合法")
+    @Max(value = 4, message = "种植类型不合法")
     private Integer plantingType;
 
     /**

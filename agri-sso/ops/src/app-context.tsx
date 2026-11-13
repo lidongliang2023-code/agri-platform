@@ -29,6 +29,7 @@ export function useApp(): AppContextValue {
  */
 const PAGE_KEYS: OpsPageKey[] = [
   'dashboard',
+  'audit-workbench',
   'user-list',
   'user-detail',
   'user-identity',

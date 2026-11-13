@@ -1,3 +1,4 @@
+import '@/components/ProductionDetailCompact.css'
 /**
  * 页面名称：任务详情
  * 路由路径：/production/tasks/:taskId
@@ -377,6 +378,11 @@ export default function TaskDetail(): JSX.Element {
         ),
       },
       { key: 'rejectCount', label: '驳回次数', value: `${task.rejectCount ?? 0} 次` },
+      { key: 'templateId', label: '关联模板', value: task.templateId ?? '未关联' },
+      { key: 'cropName', label: '适用作物', value: task.cropName || '-' },
+      { key: 'inputs', label: '所需投入品', value: task.inputMaterials || '-', fullWidth: true },
+      { key: 'quality', label: '质量要求', value: task.qualityRequirement || '-', fullWidth: true },
+      { key: 'remark', label: '备注', value: task.remark || '-', fullWidth: true },
       {
         key: 'description',
         label: '任务描述',
@@ -457,7 +463,7 @@ export default function TaskDetail(): JSX.Element {
 
   if (taskQuery.isLoading) {
     return (
-      <PageContainer title="任务详情">
+      <PageContainer className="production-detail-compact" title="任务详情">
         <Card>
           <Skeleton active paragraph={{ rows: 6 }} />
         </Card>
@@ -467,7 +473,7 @@ export default function TaskDetail(): JSX.Element {
 
   if (taskQuery.isError || !task) {
     return (
-      <PageContainer title="任务详情">
+      <PageContainer className="production-detail-compact" title="任务详情">
         <Card>
           <Empty
             description={
@@ -483,7 +489,7 @@ export default function TaskDetail(): JSX.Element {
   }
 
   return (
-    <PageContainer
+    <PageContainer className="production-detail-compact"
       title={`📋 ${task.taskName}`}
       subTitle={task.taskNo}
       onBack={() => navigate('/production/tasks')}
@@ -717,7 +723,7 @@ export default function TaskDetail(): JSX.Element {
         open={assignOpen}
         onOpenChange={setAssignOpen}
         width={480}
-        modalProps={{ destroyOnClose: true }}
+        modalProps={{ className: "production-form-dialog", destroyOnClose: true }}
         onFinish={async (values) => {
           try { await dispatchMutation.mutateAsync(values.assigneeId); return true } catch { return false }
         }}
@@ -737,7 +743,7 @@ export default function TaskDetail(): JSX.Element {
         open={checkInOpen}
         onOpenChange={setCheckInOpen}
         width={520}
-        modalProps={{ destroyOnClose: true }}
+        modalProps={{ className: "production-form-dialog", destroyOnClose: true }}
         initialValues={{ executeType: 2 }}
         onFinish={async (values) => {
           try { await checkInMutation.mutateAsync(values); return true } catch { return false }
@@ -772,7 +778,7 @@ export default function TaskDetail(): JSX.Element {
         open={submitOpen}
         onOpenChange={setSubmitOpen}
         width={520}
-        modalProps={{ destroyOnClose: true }}
+        modalProps={{ className: "production-form-dialog", destroyOnClose: true }}
         onFinish={async (values) => {
           try { await submitMutation.mutateAsync(values); return true } catch { return false }
         }}
@@ -797,7 +803,7 @@ export default function TaskDetail(): JSX.Element {
         open={editOpen}
         onOpenChange={setEditOpen}
         width={560}
-        modalProps={{ destroyOnClose: true }}
+        modalProps={{ className: "production-form-dialog", destroyOnClose: true }}
         initialValues={{
           taskName: task.taskName,
           taskType: task.taskType,
@@ -865,7 +871,7 @@ export default function TaskDetail(): JSX.Element {
         open={reviewOpen}
         onOpenChange={setReviewOpen}
         width={520}
-        modalProps={{ destroyOnClose: true }}
+        modalProps={{ className: "production-form-dialog", destroyOnClose: true }}
         initialValues={{ pass: reviewPass }}
         onFinish={async (values) => {
           if (!values.pass && !values.remark) {

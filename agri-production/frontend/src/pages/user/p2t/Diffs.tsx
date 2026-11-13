@@ -1,3 +1,4 @@
+import '@/components/ProductionDetailCompact.css'
 import { useNavigate } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
 import { App, Alert, Button, Drawer, Input, Modal, Select, Space, Tag } from 'antd'
@@ -69,7 +70,7 @@ export default function P2tDiffs(): JSX.Element {
         const result = await listP2tDiffs({ pageNum: p.current ?? 1, pageSize: p.pageSize ?? 20, keyword: p.keyword, status: p.status, diffType: p.diffType })
         return current() ? { data: result.list, total: result.total, success: true } : { data: [], total: 0, success: false }
       }} onRequestError={() => { if (current()) setFailed(true) }} />
-    <Drawer open={!!selected} title="差异工单详情" width={760} onClose={() => setSelected(null)} destroyOnClose>
+    <Drawer rootClassName="production-detail-compact production-detail-dialog" open={!!selected} title="差异工单详情" width={760} onClose={() => setSelected(null)} destroyOnClose>
       {selected && <><DetailInfoGrid items={[
         { label: '工单号', value: selected.ticketNo }, { label: '差异类型', value: TYPES[selected.diffType] || selected.diffType },
         { label: '状态', value: STATUSES[selected.status] || selected.status }, { label: '责任方', value: OWNERS[selected.ownerSide] || selected.ownerSide },
@@ -79,7 +80,7 @@ export default function P2tDiffs(): JSX.Element {
         { label: '处置说明', value: selected.handleRemark, fullWidth: true },
       ]} />{selected.status !== 'CLOSED' && selected.ownerSide === 'PRODUCTION' && <Button style={{ marginTop: 16 }} type="primary" onClick={() => begin(selected)}>登记处置</Button>}</>}
     </Drawer>
-    <Modal title={`登记处置 ${handling?.ticketNo || ''}`} open={!!handling} confirmLoading={saving} onCancel={() => { if (!saving) setHandling(null) }} onOk={() => void submit()}>
+    <Modal className="production-form-dialog" title={`登记处置 ${handling?.ticketNo || ''}`} open={!!handling} confirmLoading={saving} onCancel={() => { if (!saving) setHandling(null) }} onOk={() => void submit()}>
       <Space direction="vertical" style={{ width: '100%' }}>
         <Alert type="info" showIcon message="此处仅登记协同处置记录"
           description="先登记处理中，再核验关闭。短装工单可用原订单足额补发且买方签收的专用物流单核验关闭；退款仅核验交易账务全额记账，不代表外部到账。等级降级可凭双人确认的正式复核单关闭，仅认定履约商品等级，不含价款调整；其他方案保留处理中。先在交易物流页从原物流单登记补发。交易或系统责任工单仅可查看。" />

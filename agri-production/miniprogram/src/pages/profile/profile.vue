@@ -186,9 +186,8 @@ function goLogout(): void {
   uni.showModal({
     title: '退出登录',
     content: '确认退出当前账号？',
-    success: (res) => {
-      if (!res.confirm) return
-      logout()
+    success: async (res) => {
+      if (!res.confirm || !await logout()) return
       uni.reLaunch({ url: '/pages/login/login' })
     },
   })

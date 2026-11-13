@@ -1,3 +1,4 @@
+import { logoutMobile } from '../../../packages/agri-shared/src/auth/logoutMobile'
 declare const uni: any
 
 const TOKEN_KEY = 'trade_unified_token'
@@ -71,13 +72,10 @@ export function clearTradeSession() {
 }
 
 export async function logoutTrade() {
-  try {
-    await request(`${AUTH_BASE}/api/v1/auth/logout`, 'POST', {}, getTradeToken())
-  } catch {
-    // 本地身份必须清理。
-  }
-  clearTradeSession()
-  uni.reLaunch({ url: '/pages/login/index' })
+  await logoutMobile(`${AUTH_BASE}/api/v1/auth/logout`, getTradeToken(), () => {
+    clearTradeSession()
+    uni.reLaunch({ url: '/pages/login/index' })
+  })
 }
 
 export function handleTradeUnauthorized() {

@@ -261,6 +261,7 @@ public class P2tService {
 
     private void assertStockCapacity(HarvestBatch batch, String tenantId, Long excludingOfferId, BigDecimal requested) {
         if (batch == null) throw new BusinessException(404, "采收批次不存在或不属于当前主体");
+        if (Integer.valueOf(4).equals(batch.getStatus())) throw new BusinessException(400, "批次已冻结，禁止新增供给或认购；请先完成质量风险核验");
         StockSummary stock = stockSummary(batch, tenantId);
         if (stock.unitMismatch()) throw new BusinessException(400, "库存单位与采收批次不一致，请先核对库存单位");
         BigDecimal occupied = batchOffers(batch.getBatchId(), tenantId).stream()

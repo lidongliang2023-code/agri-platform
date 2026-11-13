@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 export type CommandReceipt={commandNo:string|null;status:string;action:string;operator:string;result:string;createdAt:string;sentAt:string|null;receiptAt:string|null;expiresAt:string|null;progress?:number;installedVersion?:string|null}
-const labels:Record<string,string>={PENDING:'待接入端领取',SENT:'已领取待回执',RUNNING:'升级执行中',SUCCEEDED:'接入端报告成功',FAILED:'接入端报告失败',TIMEOUT:'超时结果未知',LEGACY:'历史未采集回执'}
+const labels:Record<string,string>={PENDING:'待接入端领取',SENT:'已领取待回执',RUNNING:'升级执行中',SUCCEEDED:'接入端报告成功',FAILED:'接入端报告失败',TIMEOUT:'超时结果未知',EXPIRED:'未领取已过期',LEGACY:'历史未采集回执'}
 export default function CommandReceipts({deviceId,load}:{deviceId:number;load:(id:number,page:number)=>Promise<CommandReceipt[]>}) {
  const [rows,setRows]=useState<CommandReceipt[]>([]),[page,setPage]=useState(1),[busy,setBusy]=useState(false),[error,setError]=useState(''),[revision,setRevision]=useState(0)
  useEffect(()=>{

@@ -1,3 +1,4 @@
+import { logoutBrowser } from '../../packages/agri-shared/src/auth/logout'
 import { reactive } from 'vue'
 
 const TOKEN_KEY = 's2b2c_unified_token'
@@ -249,24 +250,8 @@ export function attachUnifiedAuth(instance, clientId, publicPaths = []) {
   )
 }
 
-export function logoutUnified(clientId) {
-  /*
-   * 登出请求**不等返回**就整页跳转。
-   *
-   * 原来写的是 `await fetch(...)` 再 assign：只要这个请求慢一点、被网关卡住或响应始终
-   * 不落地，await 就永远挂着，按钮表现成"点了没反应"（2026-11-03 在 8084 供应商端实测到
-   * 这一现象：请求已发出，但两种存储都没清、URL 也没变）。
-   * 清本地会话与跳转不依赖这个请求的成败，所以立即执行；请求用 keepalive 让它在页面
-   * 卸载后仍能发完。真正销毁 SSO 全局会话的是下一跳认证中心的 /logout 端点，
-   * 它同时会清掉该 client 的刷新 Cookie。
-   */
-  try {
-    void fetch('/api/v1/auth/logout', { method: 'POST', credentials: 'include', keepalive: true })
-  } catch {
-    // 本地会话无论服务端是否可达都必须清理。
-  }
-  clearSession()
-  window.location.assign(`${ssoOrigin()}/logout?client_id=${encodeURIComponent(clientId)}`)
+export async function logoutUnified(clientId) {
+  return logoutBrowser({ token: getUnifiedToken(), clientId: clientId, ssoOrigin: ssoOrigin(), clear: clearSession })
 }
 
 /**

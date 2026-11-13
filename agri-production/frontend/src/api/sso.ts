@@ -62,6 +62,8 @@ export async function redirectToSso(clientId: string, returnTo?: string): Promis
   sessionStorage.setItem(STATE_KEY, state)
   if (returnTo) {
     sessionStorage.setItem(RETURN_KEY, returnTo)
+  } else {
+    sessionStorage.removeItem(RETURN_KEY)
   }
   const params = new URLSearchParams({
     client_id: clientId,
@@ -90,7 +92,13 @@ export async function exchangeCode(clientId: string, code: string, state: string
   if (!verifier) {
     throw new Error('缺少 PKCE code_verifier（换过标签页或清过会话存储），请重新登录')
   }
-  const response = await ssoRequest.post('/token', { code, clientId, codeVerifier: verifier })
+  const response = await ssoRequest.post('/token', { code, clientId, codeVerifier: verifier }).catch((cause: unknown) => {
+    if (axios.isAxiosError(cause)) {
+      const detail = cause.response?.data?.message
+      throw new Error(detail || (cause.response?.status === 404 ? '统一认证接口未找到，请检查认证请求代理配置' : '统一认证服务暂时不可用，请稍后重试'))
+    }
+    throw cause
+  })
   const body = response.data
   if (!body || body.code !== 0) {
     throw new Error(body?.message ?? '换取令牌失败')

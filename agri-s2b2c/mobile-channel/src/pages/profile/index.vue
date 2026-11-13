@@ -98,7 +98,7 @@ function logout() {
     content: '确定退出商家移动工作台吗？',
     async success(result) {
       if (!result.confirm) return
-      await logoutUnifiedAccount()
+      if (!await logoutUnifiedAccount()) return
       clearChannelSession()
       uni.reLaunch({ url: '/pages/login/index' })
     },

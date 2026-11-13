@@ -67,6 +67,10 @@ public class Farm extends BaseEntity {
     @TableField("latitude")
     private BigDecimal latitude;
 
+    /** 农场独立边界，GeoJSON Polygon。 */
+    @TableField("boundary")
+    private String boundary;
+
     @TableField("total_area")
     private BigDecimal totalArea;
 

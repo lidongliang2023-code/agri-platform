@@ -7,6 +7,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import java.util.Map;
+import java.util.List;
+import com.agri.iot.integration.ProductionPlotClient;
+import com.agri.iot.integration.ProductionFarmClient;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
@@ -60,5 +63,86 @@ class IotWorkflowTest {
         verify(identity).requireTenantRow("iot_message",1L,"消息");
         doThrow(new IllegalArgumentException("跨主体拒绝")).when(identity).requireTenantRow("iot_message",2L,"消息");
         assertThrows(IllegalArgumentException.class,()->app.readMessage(2));
+    }
+
+    private IotAppRepository bindingRepository() {
+        jdbc.execute("""
+CREATE TABLE IF NOT EXISTS iot_device (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    tenant_id BIGINT NOT NULL,
+    farm_id BIGINT NOT NULL,
+    plot_id BIGINT,
+    gateway_id BIGINT,
+    group_id BIGINT,
+    device_code VARCHAR(60) NOT NULL UNIQUE,
+    device_name VARCHAR(160) NOT NULL,
+    type_id BIGINT,
+    type_name VARCHAR(120),
+    protocol_name VARCHAR(40),
+    online_status VARCHAR(30) DEFAULT 'online',
+    status_text VARCHAR(30) DEFAULT 'normal',
+    last_report VARCHAR(40),
+    signal_strength INT DEFAULT -60,
+    battery_rate INT DEFAULT 100,
+    firmware_version VARCHAR(40),
+    latitude DECIMAL(10,6),
+    longitude DECIMAL(10,6),
+    control_capable BOOLEAN DEFAULT FALSE,
+    config_text VARCHAR(1000),
+    created_at VARCHAR(40)
+);
+                """);
+        jdbc.update("INSERT INTO iot_device(id,tenant_id,farm_id,plot_id,device_code,device_name) VALUES(99,2001,1,10,'BIND-TEST','绑定测试设备')");
+        ProductionPlotClient plots = mock(ProductionPlotClient.class);
+        when(plots.listCurrentTenantPlots()).thenReturn(List.of(
+                Map.of("id", 10L, "farmId", 1L, "productionStatus", 1),
+                Map.of("id", 11L, "farmId", 1L, "productionStatus", 2),
+                Map.of("id", 12L, "farmId", 2L, "productionStatus", 1),
+                Map.of("id", 13L, "farmId", 1L, "productionStatus", 0)));
+        return new IotAppRepository(jdbc, plots, mock(ProductionFarmClient.class), identity, null, new ObjectMapper());
+    }
+    @Test void deviceRebindPersistsAndAuditsWithoutChangingIdentity() {
+        IotAppRepository app = bindingRepository();
+        Map<String,Object> result = app.updateDevice(99, Map.of("plotId", 11));
+        assertEquals(11L, ((Number)result.get("plotId")).longValue());
+        assertEquals(1L, ((Number)result.get("farmId")).longValue());
+        assertEquals("BIND-TEST", result.get("deviceCode"));
+        String audit=jdbc.queryForObject("SELECT detail_text FROM iot_ops_log",String.class);
+        assertTrue(audit.contains("10 → 11"));
+        verify(identity).requireDeviceAccess(99L);
+    }
+    @Test void deviceExplicitUnbindPersistsNull() {
+        IotAppRepository app = bindingRepository();
+        Map<String,Object> body = new java.util.HashMap<>(); body.put("plotId",null);
+        assertNull(app.updateDevice(99,body).get("plotId"));
+        assertNull(jdbc.queryForObject("SELECT plot_id FROM iot_device WHERE id=99",Long.class));
+    }
+    @Test void omittedPlotDoesNotUnbind() {
+        IotAppRepository app = bindingRepository();
+        assertEquals(10L,((Number)app.updateDevice(99,Map.of()).get("plotId")).longValue());
+        assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM iot_ops_log",Integer.class));
+    }
+    @Test void invalidPlotValuesNeverClearBinding() {
+        IotAppRepository app = bindingRepository();
+        for (Object invalid: List.of("abc", "", 0, -1, 10.5, "9223372036854775808")) {
+            assertThrows(IllegalArgumentException.class,()->app.updateDevice(99,Map.of("plotId",invalid)));
+            assertEquals(10L,jdbc.queryForObject("SELECT plot_id FROM iot_device WHERE id=99",Long.class));
+        }
+        assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM iot_ops_log",Integer.class));
+    }
+    @Test void foreignFarmMissingAndInactivePlotsNeverPersist() {
+        IotAppRepository app = bindingRepository();
+        for(long plotId: List.of(12L,13L,999L)) {
+            assertThrows(IllegalArgumentException.class,()->app.updateDevice(99,Map.of("plotId",plotId)));
+            assertEquals(10L,jdbc.queryForObject("SELECT plot_id FROM iot_device WHERE id=99",Long.class));
+        }
+        assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM iot_ops_log",Integer.class));
+    }
+    @Test void unauthorizedDeviceCannotRebind() {
+        IotAppRepository app = bindingRepository();
+        doThrow(new IllegalArgumentException("设备不属于当前主体")).when(identity).requireDeviceAccess(99L);
+        assertThrows(IllegalArgumentException.class,()->app.updateDevice(99,Map.of("plotId",11)));
+        assertEquals(10L,jdbc.queryForObject("SELECT plot_id FROM iot_device WHERE id=99",Long.class));
+        assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM iot_ops_log",Integer.class));
     }
 }

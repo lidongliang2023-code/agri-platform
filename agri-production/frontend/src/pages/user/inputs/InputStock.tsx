@@ -1,3 +1,4 @@
+import '@/components/ProductionDetailCompact.css'
 import ProTable from '@/components/ProductionTable'
 import Card from '@/components/SectionCard'
 import './inputs.css'
@@ -808,7 +809,7 @@ export default function InputStock({
       {part === 'overview' && (
         <>
           {/* 入库 */}
-          <Modal
+          <Modal className="production-form-dialog"
         title="投入品入库"
         open={action === 'in'}
         okText="确认入库"
@@ -855,7 +856,7 @@ export default function InputStock({
 
 
       {/* 退回 */}
-      <Modal
+      <Modal className="production-form-dialog"
         title="投入品退回"
         open={action === 'return'}
         okText="确认退回"
@@ -905,7 +906,7 @@ export default function InputStock({
       </Modal>
 
       {/* 盘点 */}
-      <Modal
+      <Modal className="production-form-dialog"
         title="库存盘点"
         open={action === 'check'}
         okText="确认盘点"

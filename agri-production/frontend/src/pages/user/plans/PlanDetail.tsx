@@ -1,3 +1,4 @@
+import '@/components/ProductionDetailCompact.css'
 import Table from '@/components/BusinessRecordList'
 /**
  * 页面名称：农事计划详情
@@ -361,7 +362,7 @@ export default function PlanDetail(): JSX.Element {
 
   if (planQuery.isLoading) {
     return (
-      <PageContainer className="production-plans-page" title="农事计划详情">
+      <PageContainer className="production-plans-page production-detail-compact" title="农事计划详情">
         <Card>
           <Skeleton active paragraph={{ rows: 8 }} />
         </Card>
@@ -371,7 +372,7 @@ export default function PlanDetail(): JSX.Element {
 
   if (planQuery.isError || !plan) {
     return (
-      <PageContainer className="production-plans-page" title="农事计划详情">
+      <PageContainer className="production-plans-page production-detail-compact" title="农事计划详情">
         <Card>
           <Result
             status="404"
@@ -392,7 +393,7 @@ export default function PlanDetail(): JSX.Element {
 
   return (
     <PageContainer
-      className="production-plans-page"
+      className="production-plans-page production-detail-compact"
       title={
         <Space wrap>
           <span>📋 {plan.planName}</span>
@@ -404,6 +405,9 @@ export default function PlanDetail(): JSX.Element {
       backIcon={<LeftOutlined />}
       extra={
         <Space>
+          <Button icon={<EditOutlined />} onClick={() => navigate(`/production/plans/${planId}/edit?from=detail`)}>
+            编辑计划
+          </Button>
           <Button icon={<ReloadOutlined />} onClick={() => void refreshAll()}>
             刷新
           </Button>
@@ -442,7 +446,7 @@ export default function PlanDetail(): JSX.Element {
         </Space>
       }
     >
-      <Space direction="vertical" size={16} style={{ width: '100%' }}>
+      <Space direction="vertical" size={12} style={{ width: '100%' }}>
         <DetailMetricGrid
           items={[
             {
@@ -541,7 +545,7 @@ export default function PlanDetail(): JSX.Element {
 
         <Col xs={24} lg={10}>
           <Card title="📊 进度追踪">
-            <Space direction="vertical" size={16} style={{ width: '100%' }}>
+            <Space direction="vertical" size={12} style={{ width: '100%' }}>
               <div>
                 <Space style={{ width: '100%', justifyContent: 'space-between' }}>
                   <Typography.Text>计划时间进度</Typography.Text>
@@ -751,7 +755,7 @@ export default function PlanDetail(): JSX.Element {
         }
         open={stageFormOpen}
         width={520}
-        modalProps={{
+        modalProps={{ className: "production-form-dialog",
           destroyOnHidden: true,
           confirmLoading:
             createStageMutation.isPending || updateStageMutation.isPending,

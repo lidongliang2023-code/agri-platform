@@ -1,0 +1,45 @@
+/* 物联网双端框架：一级分组、二级功能；不影响业务表单与表格。 */
+.iot-level-nav{flex:1;min-height:0;overflow:auto;padding:8px}
+.iot-level-nav .ant-menu{background:transparent!important;border-inline-end:0!important;font-size:13px;color:rgba(255,255,255,.78)}
+.iot-level-nav .ant-menu-sub{background:rgba(0,0,0,.1)!important}
+.iot-level-nav .ant-menu-submenu-title,.iot-level-nav .ant-menu-item{height:38px;line-height:38px;margin:3px 0;width:100%;border-radius:7px}
+.iot-level-nav .ant-menu-submenu-title{font-weight:600}
+.iot-level-nav .ant-menu-item-selected{background:#12764a!important;color:white!important}
+.iot-level-nav .ant-menu-submenu-selected>.ant-menu-submenu-title{color:#fff!important}
+.iot-level-nav .ant-menu-inline-collapsed{width:48px}
+.iot-level-nav .ant-menu-inline-collapsed>.ant-menu-submenu>.ant-menu-submenu-title{padding-inline:15px!important}
+.iot-sidebar .iot-level-nav,.o-sidebar .iot-level-nav{display:block}
+.iot-account-menu{display:flex;align-items:center;gap:8px;padding:4px 6px;border:0;background:transparent;border-radius:8px;cursor:pointer;min-width:0}
+.iot-account-menu:hover{background:#edf5ef}
+.iot-account-avatar{display:grid;place-items:center;width:30px;height:30px;flex:0 0 30px;border-radius:50%;background:#e5f5eb;color:#12764a;font-weight:600}
+.iot-account-name{display:grid;gap:1px;text-align:left;max-width:130px}
+.iot-account-name b{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:13px}
+.iot-account-name small{font-size:11px;color:#718277}
+.iot-account-menu>.anticon{font-size:11px;color:#718277}
+.iot-subject-picker{display:flex;align-items:center;gap:8px;min-width:0;flex:0 1 280px}
+.iot-subject-picker>label{white-space:nowrap;font-size:12px;color:#718277}
+.iot-subject-picker .ant-select{width:205px;min-width:0;flex:1;font-size:13px}
+.iot-subject-fallback{padding:28px 20px}
+.iot-mobile-nav-button{display:none;flex:0 0 32px;align-items:center;justify-content:center;width:32px;height:32px;border:0;border-radius:6px;background:#edf5ef;color:#12764a;cursor:pointer}
+.iot-nav-drawer .ant-drawer-body{padding:0;background:#052f1e;display:flex;flex-direction:column}
+.iot-nav-drawer .iot-level-nav{width:100%}
+.iot-header,.o-header{gap:12px;min-width:0}
+.iot-header>div:first-child,.o-header>div:first-child{min-width:0;flex-shrink:1;white-space:nowrap}
+.iot-header>form{display:none}
+.iot-header-right,.o-header-right{margin-left:auto;flex-shrink:0}
+@media(min-width:861px) and (max-width:1200px){.iot-header-right>span{display:none}.iot-subject-picker{flex-basis:225px}.iot-subject-picker .ant-select{width:160px}.iot-header{padding-inline:14px}}
+@media(max-width:860px){
+  .iot-shell>.iot-sidebar,.o-shell>.o-sidebar{display:none!important}
+  .iot-shell>.iot-main,.o-shell>.o-main{width:100%;min-width:0;margin-left:0!important}
+  .iot-mobile-nav-button{display:inline-flex}
+  .iot-header,.o-header{height:auto!important;min-height:58px;flex-wrap:wrap;padding:10px 12px!important;gap:8px}
+  .iot-header>div:first-child,.o-header>div:first-child{flex:1;overflow:hidden;text-overflow:ellipsis;font-size:12px}
+  .iot-header>.iot-subject-picker{order:4;flex-basis:100%;width:100%;padding-top:6px;border-top:1px solid #e1e9e3}
+  .iot-subject-picker .ant-select{width:auto;max-width:none}
+  .iot-header-right,.o-header-right{gap:8px!important}
+  .iot-header-right>span,.o-header-right>span{display:none}
+  .o-header>form{display:none}
+  .iot-main>main,.o-main>main{min-width:0}
+}
+@media(max-width:620px){.iot-account-name{display:none}.iot-header-right,.o-header-right{gap:4px!important}.iot-account-menu{padding:2px;gap:4px}.iot-subject-picker>label{font-size:12px}}
+@media(max-width:359px){body{min-width:320px!important}}

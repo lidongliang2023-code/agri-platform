@@ -36,6 +36,8 @@ public class FarmVO {
 
     private BigDecimal latitude;
 
+    private String boundary;
+
     private BigDecimal totalArea;
 
     private Integer plotCount;
@@ -76,6 +78,9 @@ public class FarmVO {
     private String remark;
 
     private String tenantId;
+
+    /** 监管页面使用的平台经营主体名称。 */
+    private String tenantName;
 
     private LocalDateTime createTime;
 

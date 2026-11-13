@@ -1,3 +1,4 @@
+import { logoutBrowser } from '../../../../../packages/agri-shared/src/auth/logout'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { CSSProperties, FormEvent } from 'react'
 import { message } from 'antd'
@@ -48,7 +49,7 @@ import { getMyMerchants, type MyMerchant } from '@/api/identity'
 import { getMyGuarantees, type GuaranteeRow } from '@/api/guarantee'
 import { matchDemandToProducts, type MatchResult } from '@/api/match'
 import { CHINA_REGIONS, getChinaCities } from '@/data/chinaRegions'
-import { clearSession, getCurrentUser, isLoggedIn } from '@/utils/session'
+import { clearSession, getAccessToken, getCurrentUser, isLoggedIn } from '@/utils/session'
 import { redirectToSso, ssoLogoutUrl } from '@/utils/sso'
 import './mobile-trade.css'
 
@@ -1348,8 +1349,7 @@ export default function MobileTrade(): JSX.Element {
 
       {loggedIn ? (
         <button type="button" className="mt-logout" onClick={() => {
-          clearSession()
-          window.location.href = ssoLogoutUrl('trade-mobile')
+          void logoutBrowser({ token: getAccessToken(), clientId: 'trade-mobile', ssoOrigin: new URL(ssoLogoutUrl('trade-mobile')).origin, clear: clearSession })
         }}><LogoutOutlined /> 退出登录</button>
       ) : (
         <button type="button" className="mt-primary-button mt-profile-login" onClick={goLogin}>登录 / 注册</button>

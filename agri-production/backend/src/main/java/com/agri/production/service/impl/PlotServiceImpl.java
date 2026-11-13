@@ -36,24 +36,30 @@ public class PlotServiceImpl extends ServiceImpl<PlotMapper, Plot> implements IP
     private final PlantingPlanMapper planMapper;
     /** 种养品种台账：地块表单去掉「当前作物」后，这两列的真相在这一张表里。 */
     private final PlotCropServiceImpl plotCropService;
+    private final com.agri.production.service.PlotBoundaryService boundaryService;
 
     public PlotServiceImpl(CropInfoMapper cropMapper, PlantingPlanMapper planMapper,
-                           PlotCropServiceImpl plotCropService) {
+                           PlotCropServiceImpl plotCropService, com.agri.production.service.PlotBoundaryService boundaryService) {
         this.cropMapper = cropMapper;
         this.planMapper = planMapper;
         this.plotCropService = plotCropService;
+        this.boundaryService = boundaryService;
     }
 
     @Override
     @Transactional
     public PlotVO save(PlotSaveDTO dto, String tenantId) {
+        var farm = boundaryService.farm(dto.getFarmId(), tenantId, true);
+        dto.setBoundary(boundaryService.validatePlot(dto.getFarmId(), tenantId, dto.getBoundary(), null));
         Plot plot = BeanCopyUtils.copy(dto, Plot.class);
+        plot.setId(null); // 新增主键只能由数据库生成
         plot.setTenantId(tenantId);
+        plot.setFarmCode(farm.getFarmCode());
         plot.setPlotCode(generatePlotCode(tenantId));
         plot.setStatus("active");
         resolveCrop(plot, dto, tenantId, null, null);
-        save(plot);
-        return PlotVO.of(plot, plantingPlotIds(tenantId));
+        if (!save(plot)) throw new BusinessException(409, "地块未保存");
+        return getById(plot.getId(), tenantId);
     }
 
     @Override
@@ -63,13 +69,40 @@ public class PlotServiceImpl extends ServiceImpl<PlotMapper, Plot> implements IP
         if (plot == null || !tenantId.equals(plot.getTenantId())) {
             throw new BusinessException(404, "地块不存在：" + dto.getId());
         }
-        // BeanCopyUtils 是整表覆盖，省略的字段会变成 null，作物两列的旧值得先留住再判口径。
+        var farm = boundaryService.farm(dto.getFarmId(), tenantId, true);
+        plot = baseMapper.selectOne(new LambdaQueryWrapper<Plot>().eq(Plot::getId, dto.getId())
+            .eq(Plot::getTenantId, tenantId).last("FOR UPDATE"));
+        if (plot == null) throw new BusinessException(404,"地块不存在：" + dto.getId());
+        if (!Objects.equals(plot.getFarmId(), dto.getFarmId())) {
+            throw new BusinessException(400, "所属农场暂不支持在地块编辑中变更，避免已有计划、任务及历史记录归属不一致");
+        }
+        boolean clearPosition = dto.getBoundary() != null && dto.getBoundary().isBlank()
+                && dto.getCenterLongitude() == null && dto.getCenterLatitude() == null;
+        String boundary = boundaryService.validatePlot(dto.getFarmId(), tenantId,
+            dto.getBoundary() == null ? plot.getBoundary() : dto.getBoundary(), plot.getId());
+        dto.setBoundary(boundary);
+        // 未提交的可选档案字段保留原值；边界与坐标清空在下面显式写 NULL。
         String previousCrop = plot.getCurrentCrop();
         Long previousCropId = plot.getCropId();
-        BeanCopyUtils.copy(dto, plot);
+        var properties = new org.springframework.beans.BeanWrapperImpl(dto);
+        String[] omitted = java.util.Arrays.stream(properties.getPropertyDescriptors())
+                .map(java.beans.PropertyDescriptor::getName)
+                .filter(name -> properties.getPropertyValue(name) == null)
+                .toArray(String[]::new);
+        org.springframework.beans.BeanUtils.copyProperties(dto, plot, omitted);
+        plot.setFarmCode(farm.getFarmCode());
+        plot.setBoundary(boundary);
+        plot.setUpdateTime(java.time.LocalDateTime.now());
         resolveCrop(plot, dto, tenantId, previousCropId, previousCrop);
-        updateById(plot);
-        return PlotVO.of(plot, plantingPlotIds(tenantId));
+        if (!updateById(plot)) throw new BusinessException(409, "地块未保存");
+        if (boundary == null || clearPosition) {
+            var clearing = new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<Plot>()
+                    .eq(Plot::getId, plot.getId()).eq(Plot::getTenantId, tenantId);
+            if (boundary == null) clearing.set(Plot::getBoundary, null);
+            if (clearPosition) clearing.set(Plot::getCenterLongitude, null).set(Plot::getCenterLatitude, null);
+            if (baseMapper.update(null, clearing) != 1) throw new BusinessException(409, "地块位置未保存");
+        }
+        return getById(plot.getId(), tenantId);
     }
 
     /**
@@ -238,6 +271,6 @@ public class PlotServiceImpl extends ServiceImpl<PlotMapper, Plot> implements IP
     }
 
     private String generatePlotCode(String tenantId) {
-        return "PLT" + System.currentTimeMillis() % 1000000;
+        return "PLT" + java.util.UUID.randomUUID().toString().replace("-", "");
     }
 }

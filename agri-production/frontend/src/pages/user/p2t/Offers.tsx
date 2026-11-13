@@ -1,3 +1,4 @@
+import '@/components/ProductionDetailCompact.css'
 import ProTable from '@/components/ProductionTable'
 import PageContainer from '@/components/ProductionPageContainer'
 import DetailInfoGrid from '@/components/DetailInfoGrid'
@@ -317,13 +318,13 @@ export default function P2tOffers(): JSX.Element {
         ]}
       />}
 
-      <Drawer title="供给详情" width="min(920px, 100vw)" open={detailVisible} onClose={() => setDetailTarget(null)} destroyOnClose
+      <Drawer rootClassName="production-detail-compact production-detail-dialog" title="供给详情" width="min(920px, 100vw)" open={detailVisible} onClose={() => setDetailTarget(null)} destroyOnClose
         extra={<Button loading={detailQuery.isFetching} onClick={() => void detailQuery.refetch()}>刷新</Button>}>
         {detailQuery.isError ? <Alert type="error" showIcon message="供给详情加载失败"
           description={detailQuery.error instanceof Error ? detailQuery.error.message : '请稍后重试'}
           action={<Button onClick={() => void detailQuery.refetch()}>重试</Button>} /> :
           <Spin spinning={detailQuery.isFetching}>
-            {detail && <Space direction="vertical" size={16} style={{ width: '100%' }}>
+            {detail && <Space direction="vertical" size={12} style={{ width: '100%' }}>
               <SectionCard title="供给与来源" extra={<Button onClick={() => { setDetailTarget(null); navigate(`/production/harvests/${detail.batchId}`) }}>查看采收详情</Button>}>
                 <DetailInfoGrid items={[
                   { label: '供给单号', value: <Typography.Text copyable>{detail.offerNo}</Typography.Text> },
@@ -392,7 +393,7 @@ export default function P2tOffers(): JSX.Element {
 
           deliveryType: 'WAREHOUSE',
         }}
-        modalProps={{ destroyOnClose: true, width: 760 }}
+        modalProps={{ className: "production-form-dialog", destroyOnClose: true, width: 760 }}
         onFinish={async (values) => {
           if (useAuthStore.getState().userInfo?.tenantId !== subjectId) { message.error('经营主体已切换，请重新填写'); return false }
           if (!values.availableQty || values.availableQty <= 0) { message.error('可供量必须大于 0'); return false }

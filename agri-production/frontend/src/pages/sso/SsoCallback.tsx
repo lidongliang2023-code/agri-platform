@@ -5,7 +5,7 @@
  * 之所以单独成页而不是塞进登录页：登录页的职责是"收集意图并跳转"，回跳是另一件事，
  * 混在一起会让"本地账号登录"和"SSO 登录"两条路径互相干扰。</p>
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ADMIN_LOGIN_PATH, persistSession, resolveHomePath } from '@/api/auth'
 import { exchangeCode } from '@/api/sso'
@@ -14,6 +14,8 @@ import { exchangeCode } from '@/api/sso'
 export default function SsoCallback({ clientId }: { clientId: string }): JSX.Element {
   const navigate = useNavigate()
   const [error, setError] = useState<string>('')
+  // StrictMode 会重复执行 effect，一次性授权码只允许发送一次兑换请求。
+  const exchange = useRef<ReturnType<typeof exchangeCode>>()
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -23,13 +25,15 @@ export default function SsoCallback({ clientId }: { clientId: string }): JSX.Ele
       return
     }
     let cancelled = false
-    exchangeCode(clientId, code, params.get('state'))
+    exchange.current ??= exchangeCode(clientId, code, params.get('state'))
+    exchange.current
       .then((result) => {
         if (cancelled) return
         persistSession(result)
         const returnTo = sessionStorage.getItem('agri_sso_return')
         sessionStorage.removeItem('agri_sso_return')
-        navigate(returnTo ?? resolveHomePath(result.user?.roles ?? []), { replace: true })
+        const safeReturn = returnTo?.startsWith('/') && !returnTo.startsWith('//') && !/^\/(?:admin\/|production\/)?login(?:[/?#]|$)|^\/sso\/callback/.test(returnTo) ? returnTo : undefined
+        navigate(safeReturn ?? resolveHomePath(result.user?.roles ?? []), { replace: true })
       })
       .catch((cause: unknown) => {
         if (!cancelled) {
@@ -57,8 +61,7 @@ export default function SsoCallback({ clientId }: { clientId: string }): JSX.Ele
       ) : (
         <>
           <span style={{ color: 'var(--agri-color-error, #ff4d4f)' }}>{error}</span>
-          {/* 带 ?local=1 回到登录页：绕过自动跳转，避免"跳过去又失败"来回打转 */}
-          <a href={`${ADMIN_LOGIN_PATH}?local=1`}>返回登录页</a>
+          <a href={ADMIN_LOGIN_PATH}>返回统一登录</a>
         </>
       )}
     </div>

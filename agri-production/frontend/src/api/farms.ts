@@ -16,7 +16,7 @@ export interface FarmListParams extends PageQuery {
 }
 
 /** 农场新增 / 编辑入参 */
-export type FarmPayload = Partial<Farm>
+export type FarmPayload = Partial<Farm> & { clearCoordinates?: boolean; clearBoundary?: boolean }
 
 /** 分页查询农场列表 */
 export function listFarms(params: FarmListParams): Promise<PageResult<Farm>> {

@@ -1,4 +1,6 @@
+import DeviceSampling from "../../shared-ui/DeviceSampling";
 import CommandReceipts from '../../shared-ui/CommandReceipts'
+import DeviceRemoteControl from "./components/DeviceRemoteControl";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
@@ -56,6 +58,7 @@ import {
   type IotGroup,
   type IotOverview,
   type IotPlot,
+  type PlotMonitoring,
   type IotProductionFarm,
   type IotRule,
   type IotScene,
@@ -63,11 +66,10 @@ import {
 import { downloadCsv, stampFilename } from "../../shared-ui/exportCsv";
 import { useClock } from "../../shared-ui/clock";
 import "./iot-app.css";
-import UnifiedSsoGate, {
-  logoutUnified,
-  useUnifiedUser,
-} from "../../shared-ui/sso";
+import UnifiedSsoGate from "../../shared-ui/sso";
 import { TiandituMap, type TiandituMapPoint } from "@agri/shared";
+import { WorkspaceNavigation, MobileNavigationButton, AccountMenu } from "../../shared-ui/WorkspaceNavigation";
+import { useBusinessSubject } from "../../shared-ui/BusinessSubject";
 
 type Page =
   | "dashboard"
@@ -109,9 +111,11 @@ const MENU: Array<{
   items: Array<{ page: Page; label: string; icon: ReactNode }>;
 }> = [
   {
-    group: "运营监控",
+    group: "监测总览",
     items: [
       { page: "dashboard", label: "监测工作台", icon: <DashboardOutlined /> },
+      { page: "monitor", label: "实时监测大屏", icon: <BarChartOutlined /> },
+      { page: "plots", label: "地块监测", icon: <EnvironmentOutlined /> },
     ],
   },
   {
@@ -119,11 +123,10 @@ const MENU: Array<{
     items: [
       { page: "devices", label: "设备管理", icon: <CloudServerOutlined /> },
       { page: "gateways", label: "边缘网关", icon: <ApiOutlined /> },
-      { page: "plots", label: "地块监测", icon: <EnvironmentOutlined /> },
     ],
   },
   {
-    group: "告警与控制",
+    group: "告警与自动化",
     items: [
       { page: "alerts", label: "预警中心", icon: <AlertOutlined /> },
       { page: "automation", label: "场景与自动化", icon: <SlidersOutlined /> },
@@ -137,7 +140,7 @@ const MENU: Array<{
     ],
   },
   {
-    group: "我的",
+    group: "消息通知",
     items: [{ page: "messages", label: "消息中心", icon: <MessageOutlined /> }],
   },
 ];
@@ -205,10 +208,14 @@ function EmptyHint({
 function MessageBadge({ onOpen }: { onOpen: () => void }) {
   const [unread, setUnread] = useState(0);
   useEffect(() => {
-    void iotApi
-      .messages()
-      .then((items) => setUnread(items.filter((item) => !item.read).length))
-      .catch(() => setUnread(0));
+    let alive = true;
+    const refresh = () => void iotApi.messages()
+      .then((items) => { if (alive) setUnread(items.filter((item) => !item.read).length); })
+      .catch(() => {});
+    refresh();
+    const timer = window.setInterval(refresh, 30000);
+    window.addEventListener("iot-messages-updated", refresh);
+    return () => { alive = false; window.clearInterval(timer); window.removeEventListener("iot-messages-updated", refresh); };
   }, []);
   return (
     <button type="button" onClick={onOpen}>
@@ -625,6 +632,11 @@ function Devices() {
     [plotFilter, setPlotFilter] = useState<number | undefined>(initialPlotId),
     [detail, setDetail] = useState<IotDevice | null>(null),
     [addOpen, setAddOpen] = useState(false),
+    [bindingOpen, setBindingOpen] = useState(false),
+    [bindingSaving, setBindingSaving] = useState(false),
+    [bindingLoading, setBindingLoading] = useState(false),
+    [bindingPlotId, setBindingPlotId] = useState<number | null>(null),
+    [plotLoadError, setPlotLoadError] = useState(""),
     [loading, setLoading] = useState(false),
     [registering, setRegistering] = useState(false),
     [form] = Form.useForm();
@@ -663,8 +675,9 @@ function Devices() {
     setFarms(farmRows);
     try {
       setPlots(await iotApi.plots());
-    } catch {
-      setPlots([]);
+      setPlotLoadError("");
+    } catch (error) {
+      setPlotLoadError(error instanceof Error ? error.message : "生产地块加载失败");
     }
     return { groupRows, gatewayRows, typeRows, farmRows };
   };
@@ -679,15 +692,39 @@ function Devices() {
       .device(id)
       .then(setDetail)
       .catch((e: Error) => message.error(e.message));
-  const control = async (action: string) => {
+  const openBinding = async () => {
     if (!detail) return;
+    setBindingPlotId(detail.plotId);
+    setBindingLoading(true);
     try {
-      const result = await iotApi.control(detail.id, action);
-      // 申请与设备执行结果分别展示，以设备回执为准
-      message.success(String(result.message ?? "控制申请已登记"));
-      open(detail.id);
-    } catch (e) {
-      message.error(e instanceof Error ? e.message : "控制失败");
+      const rows = await iotApi.plots();
+      setPlots(rows);
+      setPlotLoadError("");
+      setBindingOpen(true);
+    } catch (error) {
+      setPlotLoadError(error instanceof Error ? error.message : "生产地块加载失败");
+      message.error("生产地块加载失败，未打开绑定表单，请刷新后重试");
+    } finally {
+      setBindingLoading(false);
+    }
+  };
+  const saveBinding = async () => {
+    if (!detail) return;
+    if (bindingPlotId !== null && !plots.some((plot) => plot.id === bindingPlotId && plot.farmId === detail.farmId && plot.productionStatus !== 0)) {
+      message.error("请选择设备所在农场的启用地块，或清空以解除绑定");
+      return;
+    }
+    setBindingSaving(true);
+    try {
+      const updated = await iotApi.updateDevice(detail.id, { plotId: bindingPlotId });
+      setDetail((current) => current?.id === updated.id ? { ...current, ...updated } : current);
+      setBindingOpen(false);
+      message.success(bindingPlotId === null ? "已解除地块绑定" : "地块绑定已保存");
+      await loadDevices();
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "保存地块绑定失败");
+    } finally {
+      setBindingSaving(false);
     }
   };
   const openCreate = async () => {
@@ -707,7 +744,9 @@ function Devices() {
         gatewayId: defaultGateway?.id,
         controlCapable: options.typeRows[0]?.category?.includes("控制") ?? false,
         firmwareVersion: "v1.0.0",
-        config: '{"reportInterval":30}',
+        config: "{}",
+        reportInterval: 30,
+        samplingToleranceSeconds: 5,
       });
       setAddOpen(true);
     } catch (error) {
@@ -735,6 +774,7 @@ function Devices() {
       setRegistering(true);
       const created = await iotApi.createDevice({
         ...values,
+        config: JSON.stringify({ ...JSON.parse(String(values.config || "{}")), reportInterval: values.reportInterval, samplingToleranceSeconds: values.samplingToleranceSeconds }),
         deviceCode: String(values.deviceCode).trim().toUpperCase(),
         deviceName: String(values.deviceName).trim(),
         latitude: plot?.latitude,
@@ -935,6 +975,7 @@ function Devices() {
             重置
           </Button>
         </div>
+        {plotLoadError && <div role="alert">生产地块暂不可用：{plotLoadError}。请刷新后重试，当前绑定不会改变。</div>}
         <span className="filter-result">共 {items.length} 台设备</span>
       </section>
       <section className="iot-card iot-table device-table-card">
@@ -945,6 +986,7 @@ function Devices() {
           dataSource={items}
           loading={loading}
           scroll={{ x: 1050 }}
+          locale={{ emptyText: <EmptyHint icon="📡" title="暂无设备" desc="当前经营主体还没有登记设备，或筛选条件没有匹配结果。" /> }}
           pagination={{
             pageSize: 8,
             showSizeChanger: true,
@@ -953,12 +995,29 @@ function Devices() {
           }}
         />
       </section>
+      <Modal title="维护地块绑定" open={bindingOpen} confirmLoading={bindingSaving}
+        onOk={() => void saveBinding()} onCancel={() => { if (!bindingSaving) setBindingOpen(false); }}
+        okText="保存绑定" cancelText="取消" maskClosable={!bindingSaving} closable={!bindingSaving} cancelButtonProps={{ disabled: bindingSaving }} destroyOnClose>
+        <p>设备：{detail?.deviceName}（{detail?.deviceCode}）</p>
+        <p>所属农场：{farms.find((farm) => farm.id === detail?.farmId)?.farmName || `农场 #${detail?.farmId}`}</p>
+        <Form layout="vertical">
+          <Form.Item label="安装地块" extra="只允许选择设备所在农场的启用地块。清空后保存即解除绑定。">
+            <Select style={{ width: "100%" }} allowClear showSearch optionFilterProp="label"
+              value={bindingPlotId} onChange={(value: number | undefined) => setBindingPlotId(value ?? null)}
+              placeholder="未绑定地块" disabled={bindingSaving}
+              options={plots.filter((plot) => plot.farmId === detail?.farmId && plot.productionStatus !== 0).map((plot) => ({
+                value: plot.id, label: `${plot.plotName} · ${plot.plotCode}`,
+              }))} />
+          </Form.Item>
+        </Form>
+        <small>保存后设备列表及地块监测按新关联实时查询；不迁移设备历史数据，不向硬件下发指令。</small>
+      </Modal>
       <Modal
         title="设备详情"
         open={Boolean(detail)}
         width={780}
-        onCancel={() => setDetail(null)}
-        footer={<Button onClick={() => setDetail(null)}>关闭</Button>}
+        onCancel={() => { setBindingOpen(false); setDetail(null); }}
+        footer={<Button onClick={() => { setBindingOpen(false); setDetail(null); }}>关闭</Button>}
       >
         {detail && (
           <div className="device-detail">
@@ -978,6 +1037,16 @@ function Devices() {
                 <b>{detail.lastReport}</b>
               </div>
             </div>
+            <section className="iot-card" style={{ padding: 12, marginBottom: 12 }}>
+              <div className="iot-actions" style={{ justifyContent: "space-between" }}>
+                <b>生产地块关联</b>
+                <Button loading={bindingLoading} onClick={() => void openBinding()}>维护地块绑定</Button>
+              </div>
+              <p>所属农场：{farms.find((farm) => farm.id === detail.farmId)?.farmName || `农场 #${detail.farmId}`}</p>
+              <p>安装地块：{detail.plotId === null ? "未绑定地块" : plots.find((plot) => plot.id === detail.plotId)?.plotName || `地块 #${detail.plotId}（暂未取得档案）`}</p>
+              <small>地块档案由生产管理维护；这里只维护设备关联，不修改网关、设备坐标或历史采样。</small>
+            </section>
+            <DeviceSampling key={detail.id} deviceId={detail.id} load={iotApi.sampling} save={iotApi.saveSampling} />
             {detail.telemetry?.length ? (
               <div className="telemetry-grid">
                 {detail.telemetry.map((t) => (
@@ -996,39 +1065,11 @@ function Devices() {
                 <span>📡</span>
                 <div>
                   <b>等待首次数据上报</b>
-                  <small>设备已注册并绑定网关，上线后将在此展示实时遥测。</small>
+                  <small>设备已注册，收到有效采样后将在此展示遥测数据；接入状态以实际设备上报为准。</small>
                 </div>
               </div>
             )}
-            {detail.controlCapable && (
-              <div className="control-panel">
-                <b>远程控制</b>
-                <div>
-                  <Button
-                    icon={<PlayCircleOutlined />}
-                    onClick={() => void control("开启设备")}
-                  >
-                    开启
-                  </Button>
-                  <Button
-                    icon={<PoweroffOutlined />}
-                    onClick={() => void control("关闭设备")}
-                  >
-                    关闭
-                  </Button>
-                  <Button
-                    icon={<ReloadOutlined />}
-                    onClick={() => void control("重启设备")}
-                  >
-                    重启
-                  </Button>
-                </div>
-              </div>
-            )}
-            <div className="device-history">
-              <b>设备指令与回执</b>
-              <CommandReceipts key={detail.id} deviceId={detail.id} load={iotApi.commandReceipts} />
-            </div>
+            <DeviceRemoteControl key={detail.id} device={detail} />
           </div>
         )}
       </Modal>
@@ -1167,13 +1208,14 @@ function Devices() {
                   : "选择农场后自动带出"}
               </div>
             </Form.Item>
-            <Form.Item label="安装地块" name="plotId">
+            <Form.Item label="安装地块" name="plotId" help={plotLoadError ? "生产地块加载失败，请刷新后重试" : undefined} validateStatus={plotLoadError ? "error" : undefined}>
               <Select
+                disabled={Boolean(plotLoadError)}
                 allowClear
                 showSearch
                 optionFilterProp="label"
                 placeholder={plots.some((plot) => plot.farmId === selectedFarmId) ? "选择该农场下的生产地块" : "该农场暂无地块，可不绑定"}
-                options={plots.filter((plot) => plot.farmId === selectedFarmId).map((plot) => ({
+                options={plots.filter((plot) => plot.farmId === selectedFarmId && plot.productionStatus !== 0).map((plot) => ({
                   value: plot.id,
                   label: `${plot.plotName} · ${plot.plotCode} · ${plot.cropName}`,
                 }))}
@@ -1216,10 +1258,15 @@ function Devices() {
             <b>03 扩展配置</b>
             <span>使用 JSON 保存上报频率、通道或采集策略</span>
           </div>
+          <div className="form-grid">
+            <Form.Item label="采样周期（秒）" name="reportInterval" rules={[{required:true, message:"请输入采样周期"}]}><InputNumber min={1} max={86400} precision={0} style={{width:"100%"}} /></Form.Item>
+            <Form.Item label="允许延迟（秒）" name="samplingToleranceSeconds" rules={[{required:true, message:"请输入允许延迟"}]}><InputNumber min={0} max={86400} precision={0} style={{width:"100%"}} /></Form.Item>
+          </div>
+          <p>按每个告警指标的实际采样频率配置；平台保存不代表已下发硬件。</p>
           <Form.Item
             label="设备配置 JSON"
             name="config"
-            extra='示例：{"reportInterval":30,"channel":1}'
+            extra='示例：{"channel":1}；采样相关参数以上方字段为准'
           >
             <Input.TextArea rows={4} className="mono-input" />
           </Form.Item>
@@ -1702,7 +1749,7 @@ function Plots() {
     [status, setStatus] = useState("all"),
     [farmFilter, setFarmFilter] = useState<number | undefined>(),
     [detail, setDetail] = useState<IotPlot | null>(null),
-    [detailDevices, setDetailDevices] = useState<IotDevice[]>([]),
+    [detailMonitoring, setDetailMonitoring] = useState<PlotMonitoring | null>(null),
     [detailLoading, setDetailLoading] = useState(false),
     [view, setView] = useState<"cards" | "list" | "map">(
       () => {
@@ -1763,12 +1810,12 @@ function Plots() {
   );
   const openDetail = async (plot: IotPlot) => {
     setDetail(plot);
-    setDetailDevices([]);
+    setDetailMonitoring(null);
     setDetailLoading(true);
     try {
-      setDetailDevices(await iotApi.devices({ plotId: plot.id }));
+      setDetailMonitoring(await iotApi.plotMonitoring(plot.id));
     } catch (error) {
-      message.error(error instanceof Error ? error.message : "地块设备加载失败");
+      message.error(error instanceof Error ? error.message : "地块监测数据加载失败");
     } finally {
       setDetailLoading(false);
     }
@@ -1845,8 +1892,8 @@ function Plots() {
         actions={
           <>
             <Button icon={<ReloadOutlined />} loading={loading} onClick={() => void load()}>刷新</Button>
-            <Button icon={<EnvironmentOutlined />} onClick={() => message.info("地块边界与中心坐标来自生产管理 GIS")}>
-              生产地块 GIS
+            <Button icon={<EnvironmentOutlined />} onClick={() => window.location.assign(`${window.location.protocol}//${window.location.hostname}/production/plots`)}>
+              查看生产地块
             </Button>
           </>
         }
@@ -1982,6 +2029,7 @@ function Plots() {
             dataSource={filteredItems}
             columns={columns}
             scroll={{ x: 1050 }}
+            locale={{ emptyText: <EmptyHint icon="🌾" title="暂无地块" desc="当前经营主体还没有同步生产地块，或筛选条件没有匹配结果。" /> }}
             pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (total) => `共 ${total} 个地块` }}
           />
         </section>
@@ -2035,20 +2083,41 @@ function Plots() {
               <span><small>种植日期</small><b>{detail.plantingDate || "—"}</b></span>
               <span><small>预计采收</small><b>{detail.expectedHarvestDate || "—"}</b></span>
             </div>
-            <div className="gateway-device-title">
-              <b>地块监测设备</b>
-              <span>{detailDevices.length} 台 · 在线 {detailDevices.filter((device) => device.onlineStatus === "online").length} 台</span>
-            </div>
-            <div className="modal-list">
-              {detailLoading ? <div className="plot-detail-loading">正在加载设备监测数据…</div> : detailDevices.length ? detailDevices.map((device) => (
-                <div key={device.id}>
-                  <span>{typeIcon(device.typeName)}</span>
-                  <div><b>{device.deviceName}</b><small>{device.deviceCode} · {device.protocol} · {device.lastReport}</small></div>
-                  <Status value={device.onlineStatus} />
+            <div className="plot-live-section">
+              <div className="gateway-device-title">
+                <b>最近监测数据</b>
+                <span>{detailMonitoring?.summary.latestAt ? `更新于 ${detailMonitoring.summary.latestAt}` : "暂无遥测记录"}</span>
+              </div>
+              {detailLoading ? <div className="plot-detail-loading">正在加载监测数据…</div> : detailMonitoring?.telemetry.length ? (
+                <div className="plot-telemetry-grid">
+                  {detailMonitoring.telemetry.map((item) => (
+                    <div key={item.key}><small>{item.name}</small><b>{item.value}<em>{item.unit}</em></b><span>{item.recordedAt}</span></div>
+                  ))}
                 </div>
-              )) : (
-                <div className="gateway-detail-empty"><span>📡</span><div><b>该地块暂未挂载设备</b><small>可在设备注册时选择该生产地块。</small></div></div>
-              )}
+              ) : <div className="gateway-detail-empty"><span>📈</span><div><b>该地块暂无遥测记录</b><small>设备完成首次上报后，这里会显示最新环境数据。</small></div></div>}
+            </div>
+            <div className="plot-live-section">
+              <div className="gateway-device-title">
+                <b>地块监测设备</b>
+                <span>{detailMonitoring?.summary.deviceCount ?? 0} 台 · 在线 {detailMonitoring?.summary.onlineCount ?? 0} 台</span>
+              </div>
+              <div className="modal-list">
+                {detailLoading ? <div className="plot-detail-loading">正在加载设备监测数据…</div> : detailMonitoring?.devices.length ? detailMonitoring.devices.map((device) => (
+                  <div key={device.id}>
+                    <span>{typeIcon(device.typeName)}</span>
+                    <div><b>{device.deviceName}</b><small>{device.deviceCode} · {device.protocol} · {device.lastReport}</small></div>
+                    <Status value={device.onlineStatus} />
+                  </div>
+                )) : (
+                  <div className="gateway-detail-empty"><span>📡</span><div><b>该地块暂未挂载设备</b><small>请在物联网设备管理中选择生产农场和地块进行关联。</small></div></div>
+                )}
+              </div>
+            </div>
+            <div className="plot-live-section">
+              <div className="gateway-device-title"><b>地块关联告警</b><span>当前地块设备产生的告警</span></div>
+              {detailMonitoring?.alerts.length ? <div className="plot-alert-list">{detailMonitoring.alerts.slice(0, 5).map((alert) => (
+                <div key={alert.id}><Status value={alert.level} /><div><b>{alert.title}</b><small>{alert.content} · {alert.createdAt}</small></div><Status value={alert.status} /></div>
+              ))}</div> : <div className="gateway-detail-empty"><span>✓</span><div><b>当前地块暂无关联告警</b><small>告警处置统一在物联网预警中心完成。</small></div></div>}
             </div>
           </div>
         )}
@@ -2405,6 +2474,15 @@ function AlertRuleWorkbench() {
               />
             </Form.Item>
           </div>
+          <Form.Item shouldUpdate={(prev, next) => prev.metricKey !== next.metricKey}>
+            {() => {
+              const item = options.metrics.find((metric) => metric.key === form.getFieldValue("metricKey"));
+              return <div className="dialog-summary" style={{ marginTop: -4 }}>
+                <b>{item ? `${item.name}${item.unit ? `（${item.unit}）` : ""}` : "请选择指标"}</b>
+                <span>{item?.deviceTypes?.length ? `可用设备类型：${item.deviceTypes.join("、")}` : "按设备上报的该指标判定"}；持续时间必须由对应采样周期覆盖，采样断档不会触发持续告警。</span>
+              </div>;
+            }}
+          </Form.Item>
           <div className="form-grid">
             <Form.Item label="比较方式" name="operator" rules={[{ required: true }]}>
               <Select options={options.operators.map((op) => ({ value: op, label: op }))} />
@@ -2415,7 +2493,7 @@ function AlertRuleWorkbench() {
           </div>
           <div className="form-grid">
             <Form.Item label="持续时间（秒）" name="durationSeconds">
-              <InputNumber min={0} max={86400} style={{ width: "100%" }} />
+              <InputNumber min={0} max={86400} step={1} style={{ width: "100%" }} />
             </Form.Item>
             <Form.Item label="告警等级" name="level" rules={[{ required: true }]}>
               <Select
@@ -2438,8 +2516,14 @@ function AlertRuleWorkbench() {
 function Alerts() {
   const { message } = AntApp.useApp();
   const navigate = useNavigate();
+  const location = useLocation();
+  const tab = new URLSearchParams(location.search).get("tab") === "rules" || location.pathname === "/alert-rules" ? "rules" : "alerts";
+  const setTab = (next: "alerts" | "rules") => {
+    const params = new URLSearchParams(location.search);
+    params.set("tab", next);
+    navigate({ pathname: "/alerts", search: `?${params.toString()}`, hash: location.hash });
+  };
   const [items, setItems] = useState<IotAlert[]>([]),
-    [tab, setTab] = useState<"alerts" | "rules">("alerts"),
     [target, setTarget] = useState<IotAlert | null>(null),
     [note, setNote] = useState("");
   const load = () =>
@@ -2447,7 +2531,11 @@ function Alerts() {
       .alerts()
       .then(setItems)
       .catch((e: Error) => message.error(e.message));
-  useEffect(load, []);
+  useEffect(() => {
+    load();
+    const timer = window.setInterval(load, 30000);
+    return () => window.clearInterval(timer);
+  }, []);
   const handle = async () => {
     if (!target) return;
     try {
@@ -3376,9 +3464,13 @@ function Messages() {
   const load = () =>
     void iotApi
       .messages()
-      .then(setItems)
+      .then((rows) => { setItems(rows); window.dispatchEvent(new Event("iot-messages-updated")); })
       .catch((e: Error) => message.error(e.message));
-  useEffect(load, []);
+  useEffect(() => {
+    load();
+    const timer = window.setInterval(load, 30000);
+    return () => window.clearInterval(timer);
+  }, []);
   const readAll = async () => {
     try {
       await iotApi.readAll();
@@ -3462,6 +3554,7 @@ function AppContent({ page }: { page: Page }) {
   }
 }
 function normalizePath(path: string): Page {
+  if (path.replace(/\/+$/, "") === "/alert-rules") return "alerts";
   const key = path.replace(/^\//, "").split("/")[0] as Page;
   return PAGES.includes(key) ? key : "dashboard";
 }
@@ -3473,14 +3566,20 @@ function IotShell() {
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
   const clock = useClock();
-  const { user } = useUnifiedUser();
+  const subject = useBusinessSubject();
+  const [mobileOpen, setMobileOpen] = useState(false);
   const page = useMemo(
     () => normalizePath(location.pathname),
     [location.pathname],
   );
   useEffect(() => {
     if (location.pathname === "/") navigate("/dashboard", { replace: true });
-  }, [location.pathname, navigate]);
+    if (location.pathname.replace(/\/+$/, "") === "/alert-rules") {
+      const params = new URLSearchParams(location.search);
+      params.set("tab", "rules");
+      navigate({ pathname: "/alerts", search: `?${params.toString()}`, hash: location.hash }, { replace: true });
+    }
+  }, [location.pathname, location.search, location.hash, navigate]);
   return (
     <ConfigProvider
       theme={{
@@ -3514,25 +3613,8 @@ function IotShell() {
                 </div>
               )}
             </button>
-            <nav>
-              {MENU.map((g) => (
-                <section key={g.group}>
-                  {!collapsed && <h3>{g.group}</h3>}
-                  {g.items.map((i) => (
-                    <button
-                      type="button"
-                      key={i.page}
-                      className={page === i.page ? "on" : ""}
-                      onClick={() => navigate("/" + i.page)}
-                      title={i.label}
-                    >
-                      {i.icon}
-                      {!collapsed && <span>{i.label}</span>}
-                    </button>
-                  ))}
-                </section>
-              ))}
-            </nav>
+            <WorkspaceNavigation groups={MENU} selected={page} collapsed={collapsed}
+              onNavigate={key => navigate("/" + key)} mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
             <div className="iot-side-foot">
               {!collapsed && (
                 <div>
@@ -3554,40 +3636,26 @@ function IotShell() {
           </aside>
           <div className="iot-main">
             <header className="iot-header">
+              <MobileNavigationButton onClick={() => setMobileOpen(true)} />
               <div>
                 <span>物联网管理</span>
                 <b>/</b>
                 <strong>{TITLES[page]}</strong>
               </div>
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  const keyword = String(new FormData(e.currentTarget).get("keyword") || "").trim();
-                  navigate(`/devices?keyword=${encodeURIComponent(keyword)}`);
-                }}
-              >
-                <SearchOutlined />
-                <input name="keyword" placeholder="搜索设备名称或编号" />
-              </form>
+              {subject.selector}
               <div className="iot-header-right">
                 <span>{clock.date}</span>
-                <MessageBadge onOpen={() => navigate("/messages")} />
-                <button
-                  type="button"
-                  className="iot-user"
-                  title="点击退出统一登录"
-                  onClick={() => void logoutUnified("iot")}
-                >
-                  <span>{(user.nickname || user.username).slice(0, 1)}</span>
-                  <div>
-                    <b>{user.nickname || user.username}</b>
-                    <small>统一账号 · 点击退出</small>
-                  </div>
-                </button>
+                {subject.ready && !subject.busy && <MessageBadge onOpen={() => navigate("/messages")} />}
+                <AccountMenu clientId="iot" />
               </div>
             </header>
             <main>
-              <AppContent page={page} />
+              {subject.ready ? <div style={{ position: "relative", minHeight: 200 }} aria-busy={subject.busy}>
+                <div ref={node => { node?.toggleAttribute("inert", subject.busy) }} style={subject.busy ? { opacity: 0.35, pointerEvents: "none" } : undefined}>
+                  <AppContent page={page} />
+                </div>
+                {subject.busy && <div style={{ position: "absolute", inset: 0, zIndex: 20, background: "rgba(244,247,245,.7)" }}>{subject.fallback}</div>}
+              </div> : subject.fallback}
             </main>
             <footer>© 2026 农业产业互联网平台 · 物联网管理系统</footer>
           </div>

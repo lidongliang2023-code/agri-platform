@@ -118,9 +118,10 @@ export const useUserStore = defineStore('user', () => {
   }
 
   async function logout() {
-    user.value = null
-    token.value = ''
-    await logoutUnified('mall-consumer')
+    if (await logoutUnified('mall-consumer')) {
+      user.value = null
+      token.value = ''
+    }
   }
 
   return {

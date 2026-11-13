@@ -184,11 +184,12 @@
         },
         {
           "id": "s2b2c-supplier",
-          "kind": "frontend",
+          "kind": "redirect",
           "port": 8084,
           "url": "http://localhost:8084/",
-          "publishApp": "mall-supplier",
-          "source": "agri-s2b2c/frontend-supplier"
+          "source": "agri-s2b2c/frontend-platform",
+          "redirectTo": "http://localhost:8103/supply/products",
+          "note": "供应商独立端已合并至平台供货运营；此端口仅兼容旧链接，统一登录使用 s2b2c-platform。"
         },
         {
           "id": "s2b2c-channel",
@@ -221,16 +222,11 @@
         },
         {
           "id": "s2b2c-supplier-mobile",
-          "kind": "mobile-frontend",
+          "kind": "retired-entry",
           "port": 8183,
           "url": "http://localhost:8183/",
-          "publishApp": "mall-supplier-mobile",
-          "source": "agri-s2b2c/mobile-supplier",
-          "targets": [
-            "h5",
-            "mp-weixin",
-            "app"
-          ]
+          "source": "ops/gateway/conf/conf.d/44-s2b2c-role-mobile.conf",
+          "note": "供应商移动独立端已停用，此入口显示停用说明；请使用平台运营端供货工作台。"
         },
         {
           "id": "s2b2c-channel-mobile",

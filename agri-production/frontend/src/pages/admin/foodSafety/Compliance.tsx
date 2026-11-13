@@ -1,3 +1,6 @@
+import DetailInfoGrid from '@/components/DetailInfoGrid'
+import ProductionTable from '@/components/ProductionTable'
+import { QualityPage } from '../quality/QualityShared'
 /**
  * 页面名称：合规校验管理
  * 路由路径：/admin/production/food-safety/compliance
@@ -7,7 +10,7 @@
  * 原型结构：Tab（投入品合规 / 标签合规 / 标准校验）。
  * - Tab1「投入品合规」按原型还原：记录编号 | 农场 | 投入品 | 类型 | 用量 | 校验结果 | 违规项 | 操作
  * - Tab2「标签合规」与 Tab3「标准校验」原型仅有一行占位文案
- *   （"标签合规模块 - 产品标签信息校验"、"标准合规模块 - 行业标准自动校验"），
+ *   （"标签合规模块 - 产品标签信息校验"、"标准核验记录与汇总"），
  *   **原型未展开，此处为补充设计**，字段与交互见各 Tab 内部注释。
  */
 import { useState } from 'react'
@@ -18,7 +21,6 @@ import {
   Button,
   Card,
   Col,
-  Descriptions,
   Empty,
   Form,
   Input,
@@ -28,7 +30,6 @@ import {
   Select,
   Space,
   Statistic,
-  Table,
   Tabs,
   Tag,
   Typography,
@@ -49,15 +50,12 @@ import { MetricStatistic, MetricText } from '@/components'
 import ReactECharts from 'echarts-for-react'
 import type { EChartsOption } from 'echarts'
 import {
-  FOOD_SAFETY_WRITE_ALERT,
   STANDARD_LIBRARY,
   getStandardCheckSummary,
-  isWriteBackendConfirmed,
   listInputCompliance,
   listLabelCompliance,
   listStandardCheckItems,
   listStandardLibrary,
-  isMockSource,
   notifyLabelRectify,
   notifyWriteResult,
   punishInputCompliance,
@@ -116,7 +114,7 @@ const RECTIFY_COLOR: Record<RectifyStatus, string> = {
 }
 
 /** 处罚方式下拉选项 */
-const PUNISH_OPTIONS: string[] = ['警告并限期整改', '罚款并暂停供货', '列入重点监管名单', '移交执法部门']
+const PUNISH_OPTIONS: string[] = ['警告并限期整改', '登记处罚及停供建议', '列入重点监管名单', '移交执法部门']
 
 /** 校验批次范围下拉选项（补充设计） */
 const BATCH_SCOPE_OPTIONS: Array<{ value: string; label: string }> = [
@@ -188,7 +186,7 @@ function InputComplianceTab(): JSX.Element {
   })
 
   /** 台账「未接入」原因（非空表示本次没拿到任何真实记录，示例数据已不再回落） */
-  const complianceUnavailableReason: string | undefined = listQuery.data?.unavailableReason
+  const complianceUnavailableReason: string | undefined = listQuery.isError || statsQuery.isError ? '台账加载失败，请刷新重试' : listQuery.data?.unavailableReason
 
   /** 全量数据 */
   const allRecords = statsQuery.data?.list ?? []
@@ -277,16 +275,7 @@ function InputComplianceTab(): JSX.Element {
       )}
 
       {/* 写操作未接入后端明示（禁止「未写入服务端却提示成功」） */}
-      {!isWriteBackendConfirmed() && (
-        <Alert
-          type="warning"
-          showIcon
-          banner
-          style={{ marginBottom: 12 }}
-          message={FOOD_SAFETY_WRITE_ALERT.message}
-          description={`${FOOD_SAFETY_WRITE_ALERT.description}本 Tab 涉及：处罚登记（后端无处罚金额字段）。`}
-        />
-      )}
+
 
       <Row gutter={[12, 12]} style={{ marginBottom: 12 }}>
         <Col xs={24} sm={8}>
@@ -312,7 +301,7 @@ function InputComplianceTab(): JSX.Element {
               valueStyle={{ color: '#ff4d4f' }}
             />
             <Text type="secondary">
-              合规率 {complianceUnavailableReason ? '—' : `${passRate}%`}
+              合规率 {complianceUnavailableReason ? '—' : `${allRecords.length?passRate:'—'}%`}
             </Text>
           </Card>
         </Col>
@@ -369,11 +358,11 @@ function InputComplianceTab(): JSX.Element {
       </Card>
 
       <Card title="投入品合规台账">
-        <Table<InputComplianceRecord>
+        <ProductionTable<InputComplianceRecord>
           rowKey="id"
-          size="middle"
+          size="small" search={false}
           loading={listQuery.isLoading}
-          columns={columns}
+          columns={columns as import('@ant-design/pro-components').ProColumns<any>[]}
           dataSource={listQuery.data?.list ?? []}
           locale={{ emptyText: <Empty description="暂无投入品合规校验记录" /> }}
           pagination={{
@@ -391,6 +380,8 @@ function InputComplianceTab(): JSX.Element {
       </Card>
 
       <Modal
+        rootClassName="quality-dialog quality-detail"
+        width={800}
         open={detail !== null}
         title="投入品合规记录详情"
         onCancel={() => setDetail(null)}
@@ -401,19 +392,19 @@ function InputComplianceTab(): JSX.Element {
         ]}
       >
         {detail && (
-          <Descriptions column={1} size="small" bordered items={[
-            { key: 'id', label: '记录编号', children: detail.id },
-            { key: 'farmName', label: '农场', children: detail.farmName },
-            { key: 'inputName', label: '投入品', children: detail.inputName },
-            { key: 'inputType', label: '投入品类型', children: detail.inputType },
-            { key: 'dosage', label: '用量', children: detail.dosage },
+          <DetailInfoGrid items={[
+            { key: 'id', fullWidth: true, label: '记录编号', value: detail.id },
+            { key: 'farmName', label: '农场', value: detail.farmName },
+            { key: 'inputName', label: '投入品', value: detail.inputName },
+            { key: 'inputType', label: '投入品类型', value: detail.inputType },
+            { key: 'dosage', label: '用量', value: detail.dosage },
             {
               key: 'result',
               label: '校验结果',
-              children: <Tag color={detail.result === 'pass' ? 'green' : 'red'}>{RESULT_TEXT[detail.result]}</Tag>,
+              value: <Tag color={detail.result === 'pass' ? 'green' : 'red'}>{RESULT_TEXT[detail.result]}</Tag>,
             },
-            { key: 'violation', label: '违规项', children: detail.violation },
-            { key: 'checkDate', label: '校验日期', children: detail.checkDate },
+            { key: 'violation', fullWidth: true, label: '违规项', value: detail.violation },
+            { key: 'checkDate', label: '校验日期', value: detail.checkDate },
           ]} />
         )}
       </Modal>
@@ -651,35 +642,17 @@ function LabelComplianceTab(): JSX.Element {
         showIcon
         style={{ marginBottom: 12 }}
         message="标签合规模块 - 产品标签信息校验"
-        description="原型未展开该 Tab，此处为补充设计：按 GB 7718 预包装食品标签通则校验 10 项必填字段完整性与认证标识合规性。"
+        description="查看服务端标签核验记录并登记整改通知；不自动改动交易商品或替代机构认证。"
       />
-      {isMockSource('labels') && (
-        <Alert
-          type="warning"
-          showIcon
-          banner
-          style={{ marginBottom: 12 }}
-          message="当前展示示例数据，后端接口建设中"
-          description="标签缺失字段、标识违规判定与整改状态属于合规强相关数据：本列表为补充设计的示例数据，不可作为标签合规结论使用。后端 /admin/food-safety/compliance/labels 接口上线后本 Tab 将自动切换真实数据。"
-        />
-      )}
+
 
       {/* 写操作未接入后端明示（禁止「未写入服务端却提示成功」） */}
-      {!isWriteBackendConfirmed() && (
-        <Alert
-          type="warning"
-          showIcon
-          banner
-          style={{ marginBottom: 12 }}
-          message={FOOD_SAFETY_WRITE_ALERT.message}
-          description={`${FOOD_SAFETY_WRITE_ALERT.description}本 Tab 涉及：整改通知下发。`}
-        />
-      )}
+
 
       <Row gutter={[12, 12]} style={{ marginBottom: 12 }}>
         <Col xs={24} sm={12} xl={6}>
           <Card>
-            <Statistic title="已校验标签数" value={allRecords.length} suffix="件" />
+            <Statistic title="已校验标签数" value={statsQuery.isError?'—':allRecords.length} suffix="件" />
           </Card>
         </Col>
         <Col xs={24} sm={12} xl={6}>
@@ -751,11 +724,11 @@ function LabelComplianceTab(): JSX.Element {
       </Card>
 
       <Card title="产品标签校验结果">
-        <Table<LabelComplianceRecord>
+        <ProductionTable<LabelComplianceRecord>
           rowKey="id"
-          size="middle"
+          size="small" search={false}
           loading={listQuery.isLoading}
-          columns={columns}
+          columns={columns as import('@ant-design/pro-components').ProColumns<any>[]}
           dataSource={listQuery.data?.list ?? []}
           scroll={{ x: 1400 }}
           locale={{ emptyText: <Empty description="暂无标签校验记录" /> }}
@@ -774,9 +747,10 @@ function LabelComplianceTab(): JSX.Element {
       </Card>
 
       <Modal
+        rootClassName="quality-dialog quality-detail"
         open={detail !== null}
         title="标签校验详情"
-        width={620}
+        width={800}
         onCancel={() => setDetail(null)}
         footer={[
           <Button key="close" onClick={() => setDetail(null)}>
@@ -785,33 +759,33 @@ function LabelComplianceTab(): JSX.Element {
         ]}
       >
         {detail && (
-          <Descriptions column={1} size="small" bordered items={[
-            { key: 'id', label: '标签编号', children: detail.id },
-            { key: 'productName', label: '产品名称', children: detail.productName },
-            { key: 'producer', label: '生产者', children: detail.producer },
-            { key: 'labelVersion', label: '标签版本', children: detail.labelVersion },
+          <DetailInfoGrid items={[
+            { key: 'id', fullWidth: true, label: '标签编号', value: detail.id },
+            { key: 'productName', label: '产品名称', value: detail.productName },
+            { key: 'producer', fullWidth: true, label: '生产者', value: detail.producer },
+            { key: 'labelVersion', label: '标签版本', value: detail.labelVersion },
             {
               key: 'fields',
               label: '必填字段完整度',
-              children: `${detail.filledFields}/${detail.requiredFields}`,
+              value: `${detail.filledFields}/${detail.requiredFields}`,
             },
-            { key: 'missing', label: '缺失字段', children: detail.missingFields },
+            { key: 'missing', fullWidth: true, label: '缺失字段', value: detail.missingFields },
             {
               key: 'marking',
               label: '标识合规性',
-              children: <Tag color={MARKING_COLOR[detail.marking]}>{MARKING_TEXT[detail.marking]}</Tag>,
+              value: <Tag color={MARKING_COLOR[detail.marking]}>{MARKING_TEXT[detail.marking]}</Tag>,
             },
-            { key: 'markingNote', label: '标识校验说明', children: detail.markingNote },
+            { key: 'markingNote', fullWidth: true, label: '标识校验说明', value: detail.markingNote },
             {
               key: 'result',
               label: '校验结果',
-              children: <Tag color={CHECK_COLOR[detail.result]}>{detail.result === 'pass' ? '通过' : '不通过'}</Tag>,
+              value: <Tag color={CHECK_COLOR[detail.result]}>{detail.result === 'pass' ? '通过' : '不通过'}</Tag>,
             },
-            { key: 'checkedAt', label: '校验时间', children: detail.checkedAt },
+            { key: 'checkedAt', label: '校验时间', value: detail.checkedAt },
             {
               key: 'rectify',
               label: '整改状态',
-              children: <Tag color={RECTIFY_COLOR[detail.rectifyStatus]}>{RECTIFY_TEXT[detail.rectifyStatus]}</Tag>,
+              value: <Tag color={RECTIFY_COLOR[detail.rectifyStatus]}>{RECTIFY_TEXT[detail.rectifyStatus]}</Tag>,
             },
           ]} />
         )}
@@ -863,9 +837,9 @@ function LabelComplianceTab(): JSX.Element {
  * 标准校验 Tab
  *
  * 【原型未展开，此处为补充设计】原型 P17 该 Tab 仅有一行占位文案
- * "标准合规模块 - 行业标准自动校验"，按业务合理性补全为三个区块：
+ * "标准核验记录与汇总"，按业务合理性补全为三个区块：
  * 1. 校验配置：标准库下拉（GB 2762 / GB 2763 / GB 7718 / NY/T 391 / GB/T 19630）
- *    + 校验批次范围 +「执行校验」按钮
+ *    + 校验批次范围 +「汇总核验结果」按钮
  * 2. 汇总卡 + 通过率仪表盘：校验批次总数 / 通过 / 不通过 / 通过率
  * 3. 校验项明细表：校验项 | 标准限值 | 实测值 | 判定 | 抽检批次
  *
@@ -917,7 +891,7 @@ function StandardCheckTab(): JSX.Element {
   })
 
   /** 标准库下拉数据 */
-  const library: StandardLibraryItem[] = libraryQuery.data ?? STANDARD_LIBRARY
+  const library: StandardLibraryItem[] = libraryQuery.data ?? []
   /** 当前标准 */
   const currentStandard = library.find((item) => item.value === standardNo)
   /**
@@ -1001,31 +975,13 @@ function StandardCheckTab(): JSX.Element {
         type="info"
         showIcon
         style={{ marginBottom: 12 }}
-        message="标准合规模块 - 行业标准自动校验"
-        description="原型未展开该 Tab，此处为补充设计：选择标准库与批次范围后一键执行自动校验，输出通过率与逐项判定明细。"
+        message="标准核验记录与汇总"
+        description="按所选时间窗口汇总已登记的核验项，生成批次统计；不发起新的采样检测，不推定缺失数据为合格。"
       />
-      {isMockSource('standards', 'standard-items', 'standard-summary') && (
-        <Alert
-          type="warning"
-          showIcon
-          banner
-          style={{ marginBottom: 12 }}
-          message="当前展示示例数据，后端接口建设中"
-          description="标准限值比对与通过率判定属于合规强相关数据：标准库、校验项与实测值均为演示用示例，不可作为合规结论使用。后端 /admin/food-safety/compliance/standards/* 接口上线后本 Tab 将自动切换真实数据。"
-        />
-      )}
+
 
       {/* 写操作未接入后端明示（禁止「未写入服务端却提示成功」） */}
-      {!isWriteBackendConfirmed() && (
-        <Alert
-          type="warning"
-          showIcon
-          banner
-          style={{ marginBottom: 12 }}
-          message={FOOD_SAFETY_WRITE_ALERT.message}
-          description={`${FOOD_SAFETY_WRITE_ALERT.description}本 Tab 涉及：执行标准校验（当前不会触发任何检验数据流）。`}
-        />
-      )}
+
 
       {/* 校验配置 */}
       <Card size="small" style={{ marginBottom: 12 }}>
@@ -1054,7 +1010,7 @@ function StandardCheckTab(): JSX.Element {
             loading={runMutation.isPending}
             onClick={() => runMutation.mutate({ standardNo, batchScope })}
           >
-            执行校验
+            汇总核验结果
           </Button>
           <Button
             icon={<ReloadOutlined />}
@@ -1071,7 +1027,7 @@ function StandardCheckTab(): JSX.Element {
               当前标准：{currentStandard.label}
               <br />
               发布机构：{currentStandard.issuer}（标准编号与发布机构为公开常识性信息；
-              <Text type="warning">本平台未与任何标准发布机构对接，该标准库为前端硬编码示例，不代表已同步到现行有效版本</Text>
+              <Text type="warning">标准目录与核验结果来自平台登记，请以原始标准和有效版本核查，登记不代表认证机构认可</Text>
               ）
             </Text>
           </div>
@@ -1129,18 +1085,18 @@ function StandardCheckTab(): JSX.Element {
         title="校验项明细"
         extra={<Text type="secondary">最后校验时间：未接入（无真实校验执行记录）</Text>}
       >
-        <Table<StandardCheckItem>
+        <ProductionTable<StandardCheckItem>
           rowKey="id"
-          size="middle"
+          size="small" search={false}
           loading={itemsQuery.isLoading}
-          columns={itemColumns}
+          columns={itemColumns as import('@ant-design/pro-components').ProColumns<any>[]}
           dataSource={items}
           pagination={false}
           locale={{ emptyText: <Empty description="该标准下暂无校验项" /> }}
         />
         <div style={{ marginTop: 8 }}>
           <Text type="secondary" style={{ fontSize: 12 }}>
-            注：「标准限值」「实测值」「判定结果」均为演示用示例，非取自标准原文、也非真实检测数据，
+            注：本页展示服务端登记的标准核验记录，标准限值与检测报告仍需核对原始凭据，
             不构成任何合规判定结论。
           </Text>
         </div>
@@ -1152,13 +1108,13 @@ function StandardCheckTab(): JSX.Element {
 /**
  * 合规校验管理
  *
- * 业务职责：承载投入品合规台账（原型还原）、产品标签信息校验与行业标准自动校验
+ * 业务职责：承载投入品合规台账（原型还原）、产品标签信息校验与标准核验结果汇总
  * （后两者为原型占位处的补充设计）。数据优先取后端 /admin/food-safety/compliance/*，
  * 接口未就绪时降级到示例数据。
  *
  * @returns 页面内容
  */
-export default function Compliance(): JSX.Element {
+function Compliance(): JSX.Element {
   /** 当前激活 Tab */
   const [activeTab, setActiveTab] = useState<string>('input')
 
@@ -1177,7 +1133,7 @@ export default function Compliance(): JSX.Element {
         <Title level={4} style={{ margin: 0 }}>
           合规校验管理
         </Title>
-        <Text type="secondary">投入品合规台账、产品标签校验与行业标准自动校验</Text>
+        <Text type="secondary">投入品合规台账、产品标签校验与标准核验结果汇总</Text>
       </div>
 
       <Card>
@@ -1194,3 +1150,5 @@ export default function Compliance(): JSX.Element {
     </div>
   )
 }
+
+export default function CompactCompliance(){return <QualityPage title="合规核验台账" subTitle="投入品、标签与标准核验，保留原始记录和统计口径"><div className="legacy-quality"><Compliance/></div></QualityPage>}

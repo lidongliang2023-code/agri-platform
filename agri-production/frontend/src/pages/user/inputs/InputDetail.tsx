@@ -1,3 +1,4 @@
+import '@/components/ProductionDetailCompact.css'
 import ProTable from '@/components/ProductionTable'
 import Card from '@/components/SectionCard'
 import './inputs.css'
@@ -414,7 +415,7 @@ export default function InputDetail(): JSX.Element {
 
   if (!inputId) {
     return (
-      <PageContainer className="inputs-page" title="投入品详情">
+      <PageContainer className="inputs-page production-detail-compact" title="投入品详情">
         <Empty description="缺少投入品 ID" />
       </PageContainer>
     )
@@ -422,7 +423,7 @@ export default function InputDetail(): JSX.Element {
 
   if (detailQuery.isError) {
     return (
-      <PageContainer className="inputs-page" title="投入品详情">
+      <PageContainer className="inputs-page production-detail-compact" title="投入品详情">
         <Empty
           description={
             <Space direction="vertical">
@@ -445,7 +446,7 @@ export default function InputDetail(): JSX.Element {
 
   return (
     <PageContainer
-      className="inputs-page"
+      className="inputs-page production-detail-compact"
       title={`📦 ${inputName || '投入品'}`}
       subTitle={item ? `编号 ${item.inputCode ?? item.inputId}` : undefined}
       onBack={() => navigate('/production/inputs')}
@@ -731,7 +732,7 @@ export default function InputDetail(): JSX.Element {
         </Col>
       </Row>
 
-      <Modal
+      <Modal className="production-form-dialog"
         title="🔍 存证验证"
         open={verifyOpen}
         width={640}

@@ -1,3 +1,5 @@
+import DetailInfoGrid from '@/components/DetailInfoGrid'
+import '@/components/ProductionDetailCompact.css'
 import Table from '@/components/BusinessRecordList'
 /**
  * 页面名称：告警中心
@@ -587,7 +589,7 @@ export default function AlertCenter(): JSX.Element {
       </Space>
 
       {/* 处理闭环弹窗 */}
-      <Modal
+      <Modal className="production-form-dialog"
         title={`告警处置 · ${currentTarget?.alertNo ?? ''}`}
         open={handleOpen}
         onCancel={() => setHandleOpen(false)}
@@ -677,6 +679,7 @@ export default function AlertCenter(): JSX.Element {
 
       {/* 详情弹窗 */}
       <Modal
+        className="production-detail-compact production-detail-dialog"
         title="告警详情"
         open={Boolean(detailId)}
         onCancel={() => setDetailId(null)}
@@ -690,36 +693,20 @@ export default function AlertCenter(): JSX.Element {
         {detailQuery.isLoading && <Spin />}
         {detailQuery.isError && <Feedback type="error" message="详情加载失败" action={<Button onClick={() => void detailQuery.refetch()}>重试</Button>} />}
         {detailTarget && (
-          <Descriptions column={2} size="small" bordered>
-            <Descriptions.Item label="告警编号">{detailTarget.alertNo}</Descriptions.Item>
-            <Descriptions.Item label="告警级别">
-              <Tag color={alertLevelMeta(detailTarget.alertLevel).color}>
-                {alertLevelMeta(detailTarget.alertLevel).label}
-              </Tag>
-            </Descriptions.Item>
-            <Descriptions.Item label="告警场景">
-              {ALERT_SOURCE_LABEL[detailTarget.alertSource] ?? '其他'}
-            </Descriptions.Item>
-            <Descriptions.Item label="处理状态">
-              <Tag color={resolveStatus(detailTarget).color}>
-                {resolveStatus(detailTarget).label}
-              </Tag>
-            </Descriptions.Item>
-            <Descriptions.Item label="触发值">{detailTarget.triggerValue || '-'}</Descriptions.Item>
-            <Descriptions.Item label="关联地块">
-              {detailTarget.plotName || '农场级'}
-            </Descriptions.Item>
-            <Descriptions.Item label="触发时间">{detailTarget.triggeredAt}</Descriptions.Item>
-            <Descriptions.Item label="处理时间">{detailTarget.handledAt || '-'}</Descriptions.Item>
-            <Descriptions.Item label="处理人">{detailTarget.handlerName || '-'}</Descriptions.Item>
-            <Descriptions.Item label="关联规则">{detailTarget.ruleId || '-'}</Descriptions.Item>
-            <Descriptions.Item label="告警内容" span={2}>
-              {detailTarget.alertContent}
-            </Descriptions.Item>
-            <Descriptions.Item label="处理意见" span={2}>
-              {detailTarget.handleRemark || '-'}
-            </Descriptions.Item>
-          </Descriptions>
+          <DetailInfoGrid items={[
+            { label: '告警编号', value: detailTarget.alertNo },
+            { label: '告警级别', value: <Tag color={alertLevelMeta(detailTarget.alertLevel).color}>{alertLevelMeta(detailTarget.alertLevel).label}</Tag> },
+            { label: '告警场景', value: ALERT_SOURCE_LABEL[detailTarget.alertSource] ?? '其他' },
+            { label: '处理状态', value: <Tag color={resolveStatus(detailTarget).color}>{resolveStatus(detailTarget).label}</Tag> },
+            { label: '触发值', value: detailTarget.triggerValue },
+            { label: '关联地块', value: detailTarget.plotName || '农场级' },
+            { label: '触发时间', value: detailTarget.triggeredAt },
+            { label: '处理时间', value: detailTarget.handledAt },
+            { label: '处理人', value: detailTarget.handlerName },
+            { label: '关联规则', value: detailTarget.ruleId },
+            { label: '告警内容', value: <span style={{ whiteSpace: 'pre-wrap' }}>{detailTarget.alertContent || '—'}</span>, fullWidth: true },
+            { label: '处理意见', value: <span style={{ whiteSpace: 'pre-wrap' }}>{detailTarget.handleRemark || '—'}</span>, fullWidth: true },
+          ]} />
         )}
       </Modal>
     </div>

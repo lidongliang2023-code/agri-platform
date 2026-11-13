@@ -1,3 +1,4 @@
+import '@/components/ProductionDetailCompact.css'
 import useAuthStore from '@/store/auth'
 import ProTable from '@/components/ProductionTable'
 /**
@@ -227,7 +228,7 @@ export default function P2tVarietyMapPage(): JSX.Element {
           status: editing.status,
           remark: editing.remark,
         } : { status: 1, conversionRate: 1 }}
-        modalProps={{ destroyOnClose: true, width: 720 }}
+        modalProps={{ className: "production-form-dialog", destroyOnClose: true, width: 720 }}
         onFinish={async (values) => { try { await saveMutation.mutateAsync(values); return true } catch { return false } }}
       >
         <ProFormSelect

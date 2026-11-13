@@ -9,7 +9,7 @@ const BASE = '/admin/alerts'
 
 /** 分页查询告警中心列表 */
 export function listAdminAlerts(
-  params: PageQuery & { tenantId?: string; alertLevel?: number; status?: number },
+  params: PageQuery & { tenantId?: string; farmId?: string; alertLevel?: number; status?: number },
 ): Promise<PageResult<Alert>> {
   return http.get<PageResult<Alert>>(BASE, params)
 }

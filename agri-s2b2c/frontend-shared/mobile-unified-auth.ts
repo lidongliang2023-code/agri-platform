@@ -1,3 +1,4 @@
+import { logoutMobile } from '../../packages/agri-shared/src/auth/logoutMobile'
 declare const uni: any
 
 export interface UnifiedAccount {
@@ -97,13 +98,8 @@ export function clearUnifiedAccount() {
 }
 
 export async function logoutUnifiedAccount() {
-  const token = getUnifiedToken()
-  try {
-    await apiRequest(`${AUTH_BASE}/api/v1/auth/logout`, 'POST', {}, token)
-  } catch {
-    // 即使服务端会话已失效，也必须清理移动端本地身份。
-  }
-  clearUnifiedAccount()
+  const success = await logoutMobile(`${AUTH_BASE}/api/v1/auth/logout`, getUnifiedToken(), clearUnifiedAccount)
+  return success
 }
 
 /**

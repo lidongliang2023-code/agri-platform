@@ -1,3 +1,4 @@
+import '@/components/ProductionDetailCompact.css'
 import { useMemo, useRef, useState } from 'react'
 import {
   ModalForm,
@@ -7,12 +8,12 @@ import {
   ProFormSelect,
   ProFormText,
   ProFormTextArea,
-  ProTable,
 } from '@ant-design/pro-components'
 import type { ActionType, ProColumns } from '@ant-design/pro-components'
-import { Button, Popconfirm, Space, Tag, Typography, message } from 'antd'
+import ProTable from '@/components/ProductionTable'
+import { Button, Popconfirm, Tag, Typography, message } from 'antd'
 import { CheckCircleOutlined, DeleteOutlined, EditOutlined, PlusOutlined, StopOutlined } from '@ant-design/icons'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createTaskTemplate,
   deleteTaskTemplate,
@@ -38,6 +39,8 @@ interface TemplateFormValues {
   taskType: string
   standardHours?: number
   content?: string
+  growthStage?: string
+  description?: string
   inputItems?: string[]
   status: 0 | 1
   sortOrder?: number
@@ -49,6 +52,7 @@ interface TemplateFormValues {
  * 业务职责：维护平台标准化农事任务模板（作业内容、标准工时、投入品清单、适用作物），供多主体农事生产直接引用。
  */
 export default function TaskTemplates(): JSX.Element {
+  const queryClient = useQueryClient()
   const actionRef = useRef<ActionType | undefined>(undefined)
   const [modalOpen, setModalOpen] = useState<boolean>(false)
   const [editing, setEditing] = useState<TaskTemplateRow | null>(null)
@@ -92,10 +96,12 @@ export default function TaskTemplates(): JSX.Element {
     const payload: Record<string, unknown> = {
       templateName: values.templateName?.trim(),
       templateCode: values.templateCode?.trim() || undefined,
-      cropName: values.cropName?.trim() || undefined,
+      cropName: values.cropName?.trim() ?? "",
       taskType: values.taskType,
       standardHours: values.standardHours,
-      content: values.content?.trim(),
+      content: values.content?.trim() ?? "",
+      growthStage: values.growthStage?.trim() ?? "",
+      description: values.description?.trim() ?? "",
       inputItems: values.inputItems ?? [],
       status: values.status,
       sortOrder: values.sortOrder ?? 0,
@@ -112,6 +118,7 @@ export default function TaskTemplates(): JSX.Element {
       }
       setModalOpen(false)
       setEditing(null)
+      void queryClient.invalidateQueries({ queryKey: ["task-template-options"] })
       actionRef.current?.reload()
       return true
     } catch (err: unknown) {
@@ -127,6 +134,7 @@ export default function TaskTemplates(): JSX.Element {
     try {
       await updateTaskTemplate(record.templateId, { status: nextStatus })
       message.success(nextStatus === 1 ? '模板已启用' : '模板已停用')
+      void queryClient.invalidateQueries({ queryKey: ["task-template-options"] })
       actionRef.current?.reload()
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : '状态切换失败'
@@ -139,6 +147,7 @@ export default function TaskTemplates(): JSX.Element {
     try {
       await deleteTaskTemplate(record.templateId)
       message.success('模板已删除')
+      void queryClient.invalidateQueries({ queryKey: ["task-template-options"] })
       actionRef.current?.reload()
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : '删除失败'
@@ -321,23 +330,26 @@ export default function TaskTemplates(): JSX.Element {
         title={editing ? '编辑任务模板' : '新建任务模板'}
         open={modalOpen}
         onOpenChange={setModalOpen}
-        modalProps={{ destroyOnClose: true }}
+        modalProps={{ className: "production-form-dialog", destroyOnClose: true }}
+        width={800} grid colProps={{ xs: 24, md: 12 }} rowProps={{ gutter: 20 }}
         initialValues={
           editing
             ? {
                 templateName: editing.templateName,
                 templateCode: editing.templateCode,
                 cropName: editing.cropName,
-                taskType: editing.taskType ?? 'OTHER',
+                taskType: editing.taskType ?? 'other',
                 standardHours: editing.standardHours,
                 content: editing.content,
+                growthStage: editing.growthStage,
+                description: editing.description,
                 inputItems: editing.inputItems ?? (editing.requiredInputs ? editing.requiredInputs.split(',') : []),
                 status: (editing.status ?? 1) as 0 | 1,
                 sortOrder: editing.sortOrder ?? 0,
                 remark: editing.remark,
               }
             : {
-                taskType: 'PLANTING',
+                taskType: 'sowing',
                 status: 1,
                 sortOrder: 0,
               }
@@ -350,7 +362,7 @@ export default function TaskTemplates(): JSX.Element {
           placeholder="如：西红柿定植标准作业"
           rules={[{ required: true, message: '请输入模板名称' }]}
         />
-        <Space style={{ display: 'flex', width: '100%' }} align="start">
+
           <ProFormSelect
             name="cropName"
             label="适用作物"
@@ -360,30 +372,33 @@ export default function TaskTemplates(): JSX.Element {
               showSearch: true,
               allowClear: true,
             }}
-            style={{ minWidth: 260 }}
+
           />
           <ProFormSelect
             name="taskType"
             label="任务类型"
             options={TASK_TYPE_OPTIONS}
             rules={[{ required: true, message: '请选择任务类型' }]}
-            style={{ minWidth: 200 }}
+
           />
-        </Space>
+        <ProFormText name="growthStage" label="适用生长阶段" placeholder="如：苗期、开花期、采收期" />
+        <ProFormTextArea name="description" label="模板说明" colProps={{ span: 24 }} fieldProps={{ rows: 2, maxLength: 500 }} />
         <ProFormDigit
           name="standardHours"
           label="标准工时（小时）"
           min={0}
           max={1000}
-          fieldProps={{ precision: 1 }}
+          fieldProps={{ precision: 0 }}
         />
         <ProFormTextArea
+          colProps={{ span: 24 }}
           name="content"
           label="标准作业内容"
           placeholder="描述标准作业步骤、质量要求与作业规范..."
           fieldProps={{ rows: 4, maxLength: 500, showCount: true }}
         />
         <ProFormSelect
+          colProps={{ span: 24 }}
           name="inputItems"
           label="关联投入品清单"
           mode="tags"

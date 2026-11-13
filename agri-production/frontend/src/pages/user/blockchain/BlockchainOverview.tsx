@@ -1,3 +1,4 @@
+import '@/components/ProductionDetailCompact.css'
 import Table from '@/components/BusinessRecordList'
 import PageContainer from '@/components/ProductionPageContainer'
 /**
@@ -488,7 +489,7 @@ export default function BlockchainOverview(): JSX.Element {
         </Space>
       </Card>
 
-      <Modal
+      <Modal className="production-form-dialog"
         title="手动上链"
         open={anchorOpen}
         onCancel={() => setAnchorOpen(false)}

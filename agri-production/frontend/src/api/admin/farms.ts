@@ -5,7 +5,8 @@ import { asApiRequestError, http, httpStatusOf } from '@/utils/request'
 import type { BizId, PageQuery, PageResult } from '@/types'
 import type { ComplianceCheck, Farm } from '@/types'
 
-const BASE = '/admin/farms'
+// 农场监管统一走 FarmSupervisionController，用户端整改仍走 /farm-rectifications。
+const BASE = '/admin/farm-supervision'
 
 /** 农场监管列表查询参数 */
 export interface FarmSupervisionParams extends PageQuery {
@@ -25,28 +26,28 @@ export function listSupervisedFarms(
 
 /** 查询农场监管详情 */
 export function getSupervisedFarm(farmId: string): Promise<Farm> {
-  return http.get<Farm>(`${BASE}/${farmId}`)
+  return http.get<Farm>(`${BASE}/farms/${farmId}`)
 }
 
 /** 更新农场监管信息 */
 export function updateSupervisedFarm(farmId: string, payload: Partial<Farm>): Promise<Farm> {
-  return http.put<Farm>(`${BASE}/${farmId}`, payload)
+  return http.put<Farm>(`${BASE}/farms/${farmId}`, payload)
 }
 
 /** 删除农场 */
 export function deleteSupervisedFarm(farmId: string): Promise<boolean> {
-  return http.delete<boolean>(`${BASE}/${farmId}`)
+  return http.delete<boolean>(`${BASE}/farms/${farmId}`)
 }
 
 /** 启停农场 */
 export function updateSupervisedFarmStatus(farmId: string, status: number): Promise<boolean> {
-  return http.patch<boolean>(`${BASE}/${farmId}/status`, { status })
+  return http.patch<boolean>(`${BASE}/farms/${farmId}/status`, { status })
 }
 
 /**
  * 分页查询合规检查**任务台账**。
  *
- * ⚠️ 端点必须是 `GET /admin/farms/compliance/checks`，不是 `GET /admin/farms/compliance`。
+ * ⚠️ 端点必须是 `GET /admin/farm-supervision/checks`，不是 `GET /admin/farm-supervision/checks`。
  * 两者在后端 `AdminFarmController` 里是两个不同端点：
  * - `/compliance`        → 农场合规**画像清单**（`ApiResponse<List<Map>>`，非分页体）
  * - `/compliance/checks` → 检查任务**台账**（`ApiResponse<PageResult<FarmComplianceCheckEntity>>`）
@@ -65,14 +66,14 @@ export function updateSupervisedFarmStatus(farmId: string, status: number): Prom
 export function listComplianceChecks(
   params: PageQuery & { farmId?: string; result?: number },
 ): Promise<PageResult<ComplianceCheck>> {
-  return http.get<PageResult<ComplianceCheck>>(`${BASE}/compliance/checks`, params)
+  return http.get<PageResult<ComplianceCheck>>(`${BASE}/checks`, params)
 }
 
 /** 新增合规检查记录 */
 export function createComplianceCheck(
   payload: Partial<ComplianceCheck>,
 ): Promise<ComplianceCheck> {
-  return http.post<ComplianceCheck>(`${BASE}/compliance`, payload)
+  return http.post<ComplianceCheck>(`${BASE}/checks`, payload)
 }
 
 /** 更新合规检查记录 */
@@ -80,12 +81,12 @@ export function updateComplianceCheck(
   checkId: string,
   payload: Partial<ComplianceCheck>,
 ): Promise<ComplianceCheck> {
-  return http.put<ComplianceCheck>(`${BASE}/compliance/${checkId}`, payload)
+  return http.put<ComplianceCheck>(`${BASE}/checks/${checkId}`, payload)
 }
 
 /** 删除合规检查记录 */
 export function deleteComplianceCheck(checkId: string): Promise<boolean> {
-  return http.delete<boolean>(`${BASE}/compliance/${checkId}`)
+  return http.delete<boolean>(`${BASE}/checks/${checkId}`)
 }
 
 /* ==================== 农场监管页面补齐端点（对齐 AdminFarmController） ==================== */
@@ -115,21 +116,21 @@ export interface FarmComplianceProfile {
 
 /** 查询单个农场合规画像 */
 export function getSupervisedFarmCompliance(farmId: BizId): Promise<FarmComplianceProfile> {
-  return http.get<FarmComplianceProfile>(`${BASE}/${farmId}/compliance`)
+  return http.get<FarmComplianceProfile>(`${BASE}/farms/${farmId}/compliance`)
 }
 
 /**
  * 查询全平台农场合规画像清单
  *
- * 对应 `GET /admin/farms/compliance?limit`，后端返回 List（非分页体），页面层直接使用数组。
+ * 对应 `GET /admin/farm-supervision/checks?pageNum=1&pageSize=limit`，后端返回 List（非分页体），页面层直接使用数组。
  */
 export function listSupervisedComplianceProfiles(limit = 200): Promise<FarmComplianceProfile[]> {
-  return http.get<FarmComplianceProfile[]>(`${BASE}/compliance`, { limit })
+  return http.get<FarmComplianceProfile[]>(`${BASE}/checks`, { pageNum: 1, pageSize: limit })
 }
 
 /** 查询认证临期农场清单 */
 export function listCertExpiringFarms(withinDays = 30): Promise<Farm[]> {
-  return http.get<Farm[]>(`${BASE}/cert-expiring`, { withinDays })
+  return http.get<Farm[]>(`${BASE}/map`, { withinDays })
 }
 
 /**
@@ -138,14 +139,13 @@ export function listCertExpiringFarms(withinDays = 30): Promise<Farm[]> {
  * 对应 `PUT /admin/farms/{farmId}/status?enable=true|false`。
  */
 export function toggleSupervisedFarmStatus(farmId: BizId, enable: boolean): Promise<Farm> {
-  return http.put<Farm>(`${BASE}/${farmId}/status`, undefined, { params: { enable } })
+  return http.put<Farm>(`${BASE}/farms/${farmId}/status`, undefined, { params: { enable } })
 }
 
 /**
  * GIS 地图点位
  *
- * 后端 `/admin/farms/map` 目前只返回省市区与面积，不含经纬度，
- * 故经纬度为可选字段，后续后端补齐可直接消费。
+ * 后端 `/admin/farm-supervision/map` 返回农场真实坐标；坐标缺失的农场仍返回，页面列出缺失清单。
  */
 export interface FarmMapPoint {
   /** 农场 ID */
@@ -158,12 +158,28 @@ export interface FarmMapPoint {
   city?: string
   /** 区县 */
   district?: string
+  address?: string
   /** 面积（亩） */
   areaTotal?: number
-  /** 经度（后端暂未返回） */
-  longitude?: number
-  /** 纬度（后端暂未返回） */
-  latitude?: number
+  tenantId?: string
+  tenantName?: string
+  farmCode?: string
+  status?: number
+  /** 经度，单位度 */
+  longitude?: number | null
+  /** 纬度，单位度 */
+  latitude?: number | null
+  boundary?: string | null
+}
+
+/** 专用坐标接口只修改坐标，不覆盖农场经营资料。 */
+export function saveSupervisedFarmCoordinates(farmId: BizId, payload: { longitude?: number; latitude?: number; clearCoordinates?: boolean }): Promise<Farm> {
+  return http.put<Farm>(`${BASE}/farms/${farmId}/coordinates`, payload)
+}
+
+/** 专用边界接口不覆盖中心坐标与农场经营资料。 */
+export function saveSupervisedFarmBoundary(farmId: BizId, payload: { boundary?: string; clearBoundary?: boolean }): Promise<Farm> {
+  return http.put<Farm>(`${BASE}/farms/${farmId}/boundary`, payload)
 }
 
 /** 查询农场地理分布 */
@@ -271,7 +287,7 @@ export async function createSupervisedComplianceTask(
   payload: Record<string, unknown>,
 ): Promise<ComplianceWriteResult> {
   try {
-    const remote = await http.post<ComplianceCheck>(`${BASE}/compliance`, payload, { silent: true })
+    const remote = await http.post<ComplianceCheck>(`${BASE}/checks`, payload, { silent: true })
     return { ok: true, remote }
   } catch (error) {
     return toComplianceWriteFailure(error)
@@ -292,7 +308,7 @@ export async function updateSupervisedComplianceTask(
   payload: Record<string, unknown>,
 ): Promise<ComplianceWriteResult> {
   try {
-    const remote = await http.put<ComplianceCheck>(`${BASE}/compliance/${checkId}`, payload, {
+    const remote = await http.put<ComplianceCheck>(`${BASE}/checks/${checkId}`, payload, {
       silent: true,
     })
     return { ok: true, remote }

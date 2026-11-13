@@ -1,3 +1,4 @@
+import { logoutBrowser } from '../../packages/agri-shared/src/auth/logout'
 import {
   createContext,
   useContext,
@@ -160,13 +161,7 @@ export function useUnifiedUser() {
 }
 
 export async function logoutUnified(clientId: string) {
-  try {
-    await axios.post('/api/v1/auth/logout', {}, { timeout: 10000, withCredentials: true })
-  } catch {
-    // 即使本地令牌已经失效，也继续清理 SSO 全局会话。
-  }
-  clearSession()
-  window.location.href = `${ssoOrigin()}/logout?client_id=${encodeURIComponent(clientId)}`
+  await logoutBrowser({ token: accessToken, clientId, ssoOrigin: ssoOrigin(), clear: clearSession })
 }
 
 export function attachUnifiedAuth(client: AxiosInstance, clientId: string) {

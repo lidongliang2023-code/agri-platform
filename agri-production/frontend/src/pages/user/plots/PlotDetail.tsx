@@ -1,3 +1,4 @@
+import '@/components/ProductionDetailCompact.css'
 import BusinessRecordList from '@/components/BusinessRecordList'
 import Card from '@/components/SectionCard'
 /**
@@ -26,7 +27,7 @@ import Card from '@/components/SectionCard'
  *   2026-10-17 修正：此前前端自造的 `geoBoundary` 键后端不收，位置信息实际没落库。
  *   农场「海拔 / 简介 / 业务类型」序列化存放于 Farm.remark。后端补列后需同步迁移读写两侧。
  */
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import PageContainer from '@/components/ProductionPageContainer'
@@ -315,6 +316,7 @@ export default function PlotDetail(): JSX.Element {
 
   /** 种养品种弹窗：editingCrop 为空表示新增，有值表示编辑该条 */
   const [cropModalOpen, setCropModalOpen] = useState(false)
+  const cropWriteLock = useRef(false)
   const [editingCrop, setEditingCrop] = useState<PlotCrop | null>(null)
   const [cropForm] = Form.useForm<CropFormValues>()
 
@@ -565,12 +567,16 @@ export default function PlotDetail(): JSX.Element {
 
   /** 作物下拉（种养品种维护） */
   const cropOptions = useMemo(
-    () =>
-      (cropOptionsQuery.data ?? []).map((item) => ({
-        value: item.cropId,
-        label: item.cropName,
-      })),
-    [cropOptionsQuery.data],
+    () => {
+      const options = (cropOptionsQuery.data ?? []).map((item) => ({
+        value: String(item.cropId), label: item.cropName,
+      }))
+      if (editingCrop?.cropId != null && !options.some((item) => item.value === String(editingCrop.cropId))) {
+        options.push({ value: String(editingCrop.cropId), label: `${editingCrop.cropName}（历史引用）` })
+      }
+      return options
+    },
+    [cropOptionsQuery.data, editingCrop],
   )
 
   /** 弹窗里已选的种类（品种输入框占位文案用） */
@@ -623,6 +629,12 @@ export default function PlotDetail(): JSX.Element {
     setCropModalOpen(true)
   }
 
+  /** 品种变更会回写地块当前作物，同时刷新使用该派生值的页面。 */
+  const refreshCropReferences = async (): Promise<void> => {
+    await Promise.all(['plot-crops', 'plot-detail', 'plots-all', 'plots', 'farm-detail', 'farm-plots', 'farm-summary']
+      .map((key) => queryClient.invalidateQueries({ queryKey: [key] })))
+  }
+
   /** 新增 / 编辑种养品种 */
   const saveCropMutation = useMutation({
     mutationFn: async (values: CropFormValues) => {
@@ -643,21 +655,27 @@ export default function PlotDetail(): JSX.Element {
         ? updatePlotCrop(plotId, editingCrop.cropRecordId, payload)
         : createPlotCrop(plotId, payload)
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       message.success(editingCrop ? '种养品种已更新' : '种养品种已添加')
       setCropModalOpen(false)
       setEditingCrop(null)
-      void queryClient.invalidateQueries({ queryKey: ['plot-crops', plotId] })
+      await refreshCropReferences()
     },
+    onSettled: () => { cropWriteLock.current = false },
     onError: (error: Error) => message.error(error.message || '保存失败，请稍后重试'),
   })
 
   /** 删除种养品种 */
   const deleteCropMutation = useMutation({
-    mutationFn: (record: PlotCrop) => deletePlotCrop(plotId as string, record.cropRecordId),
-    onSuccess: (_data, record) => {
+    mutationFn: async (record: PlotCrop) => {
+      if (cropWriteLock.current) throw new Error('正在保存，请稍后操作')
+      cropWriteLock.current = true
+      try { await deletePlotCrop(plotId as string, record.cropRecordId) }
+      finally { cropWriteLock.current = false }
+    },
+    onSuccess: async (_data, record) => {
       message.success(`已删除种养品种：${record.cropName}`)
-      void queryClient.invalidateQueries({ queryKey: ['plot-crops', plotId] })
+      await refreshCropReferences()
     },
     onError: (error: Error) => message.error(error.message || '删除失败，请稍后重试'),
   })
@@ -837,7 +855,7 @@ export default function PlotDetail(): JSX.Element {
   /** 主内容 */
   if (plotQuery.isLoading) {
     return (
-      <PageContainer title="地块详情">
+      <PageContainer className="production-detail-compact" title="地块详情">
         <Skeleton active paragraph={{ rows: 12 }} />
       </PageContainer>
     )
@@ -845,7 +863,7 @@ export default function PlotDetail(): JSX.Element {
 
   if (plotQuery.isError || !plot) {
     return (
-      <PageContainer title="地块详情">
+      <PageContainer className="production-detail-compact" title="地块详情">
         <Empty
           description={
             <Space direction="vertical">
@@ -862,7 +880,7 @@ export default function PlotDetail(): JSX.Element {
   const statusMeta = PLOT_STATUS_META[plot.status] ?? { label: '未知', color: 'default' }
 
   return (
-    <PageContainer
+    <PageContainer className="production-detail-compact"
       title={`🗺️ ${plot.plotName}`}
       subTitle={plot.plotCode}
       onBack={() => navigate('/production/plots')}
@@ -892,7 +910,7 @@ export default function PlotDetail(): JSX.Element {
         </Button>,
       ]}
     >
-      <Space direction="vertical" size={16} style={{ width: '100%' }}>
+      <Space direction="vertical" size={12} style={{ width: '100%' }}>
         <Card
           title="📋 基本信息"
           extra={<Tag color={statusMeta.color}>{statusMeta.label}</Tag>}
@@ -925,7 +943,10 @@ export default function PlotDetail(): JSX.Element {
             </Typography.Link>
           }
         >
-          {plotCrops.length === 0 ? (
+          {plotCropsQuery.isError ? (
+            <Alert type="error" showIcon message="种养品种加载失败"
+              action={<Button onClick={() => void plotCropsQuery.refetch()}>重新加载</Button>} />
+          ) : plotCropsQuery.isLoading ? <Skeleton active /> : plotCrops.length === 0 ? (
             <Space direction="vertical" size={12} style={{ width: '100%' }}>
               {(plot.currentCrop || plot.cropVariety) && (
                 <Alert
@@ -957,7 +978,7 @@ export default function PlotDetail(): JSX.Element {
                       style={{ height: '100%', borderColor: '#b7eb8f' }}
                       title={
                         <Space size={8} wrap>
-                          <Typography.Text strong style={{ fontSize: 16 }}>
+                          <Typography.Text strong style={{ fontSize: 14 }}>
                             {standard.icon} {record.cropName}
                           </Typography.Text>
                           <Tag color={standard.color}>{standard.label}</Tag>
@@ -1011,7 +1032,7 @@ export default function PlotDetail(): JSX.Element {
                             key: 'yield',
                             label: '预计亩产',
                             value:
-                              record.expectedYieldPerMu !== undefined
+                              record.expectedYieldPerMu != null
                                 ? `${record.expectedYieldPerMu} 公斤/亩`
                                 : '-',
                           },
@@ -1019,13 +1040,13 @@ export default function PlotDetail(): JSX.Element {
                             key: 'count',
                             label: '株数',
                             value:
-                              record.plantCount !== undefined ? `${record.plantCount} 株` : '-',
+                              record.plantCount != null ? `${record.plantCount} 株` : '-',
                           },
                           {
                             key: 'spacing',
                             label: '株间距',
                             value:
-                              record.plantSpacing !== undefined
+                              record.plantSpacing != null
                                 ? `${record.plantSpacing} cm`
                                 : '-',
                           },
@@ -1162,14 +1183,14 @@ export default function PlotDetail(): JSX.Element {
                 <Card size="small" title="长势评估">
                   {vigorScore === null ? (
                     <Space size={6} wrap>
-                      <Typography.Text strong style={{ fontSize: 20 }}>
+                      <Typography.Text strong style={{ fontSize: 18 }}>
                         未接入
                       </Typography.Text>
                       <Tag color="orange">无长势记录</Tag>
                     </Space>
                   ) : (
                     <>
-                      <Typography.Text strong style={{ fontSize: 20 }}>
+                      <Typography.Text strong style={{ fontSize: 18 }}>
                         {vigorScore} 分
                       </Typography.Text>
                       <Divider type="vertical" />
@@ -1186,7 +1207,7 @@ export default function PlotDetail(): JSX.Element {
                     不拿叶面积指数顶替，也不再显示原型示例的 0.78。
                   */}
                   <Space size={6} wrap>
-                    <Typography.Text strong style={{ fontSize: 20 }}>
+                    <Typography.Text strong style={{ fontSize: 18 }}>
                       未接入
                     </Typography.Text>
                     <Tag color="orange">遥感源未接入</Tag>
@@ -1194,7 +1215,7 @@ export default function PlotDetail(): JSX.Element {
                 </Card>
                 <Card size="small" title="异常区域">
                   <Space size={6} wrap>
-                    <Typography.Text type="warning" style={{ fontSize: 20 }}>
+                    <Typography.Text type="warning" style={{ fontSize: 18 }}>
                       未接入
                     </Typography.Text>
                     <Tag color="orange">遥感源未接入</Tag>
@@ -1445,7 +1466,7 @@ export default function PlotDetail(): JSX.Element {
         </Card>
       </Space>
 
-      <Modal
+      <Modal className="production-form-dialog"
         title={editingCrop ? '🌱 编辑种养品种' : '🌱 添加种养品种'}
         open={cropModalOpen}
         okText="确定"
@@ -1454,12 +1475,19 @@ export default function PlotDetail(): JSX.Element {
         destroyOnHidden
         forceRender
         confirmLoading={saveCropMutation.isPending}
+        closable={!saveCropMutation.isPending}
+        maskClosable={!saveCropMutation.isPending}
+        cancelButtonProps={{ disabled: saveCropMutation.isPending }}
         onCancel={() => {
+          if (cropWriteLock.current) return
           setCropModalOpen(false)
           setEditingCrop(null)
         }}
         onOk={() => {
+          if (cropWriteLock.current) return
+          cropWriteLock.current = true
           void cropForm.validateFields().then((values) => saveCropMutation.mutate(values))
+            .catch(() => { cropWriteLock.current = false })
         }}
       >
         <Form form={cropForm} layout="vertical" preserve={false}>
@@ -1485,7 +1513,7 @@ export default function PlotDetail(): JSX.Element {
                   placeholder={
                     selectedCropName ? `${selectedCropName}的哪个品种` : '该作物下的哪个品种'
                   }
-                  maxLength={50}
+                  maxLength={100}
                 />
               </Form.Item>
             </Col>
@@ -1579,6 +1607,7 @@ export default function PlotDetail(): JSX.Element {
                   style={{ width: '100%' }}
                   min={0}
                   precision={2}
+                  max={9999999999.99}
                   addonAfter="公斤/亩"
                   placeholder="如 5000"
                 />
@@ -1590,6 +1619,7 @@ export default function PlotDetail(): JSX.Element {
                   style={{ width: '100%' }}
                   min={0}
                   precision={0}
+                  max={2147483647}
                   addonAfter="株"
                   placeholder="如 1200"
                 />
@@ -1601,6 +1631,7 @@ export default function PlotDetail(): JSX.Element {
                   style={{ width: '100%' }}
                   min={0}
                   precision={2}
+                  max={99999999.99}
                   addonAfter="cm"
                   placeholder="如 35"
                 />

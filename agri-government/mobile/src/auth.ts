@@ -1,3 +1,4 @@
+import { logoutMobile } from '../../../packages/agri-shared/src/auth/logoutMobile'
 declare const uni: any
 
 export interface UnifiedAccount {
@@ -92,13 +93,10 @@ export function clearGovSession() {
 }
 
 export async function logoutGov() {
-  try {
-    await request(`${AUTH_BASE}/api/v1/auth/logout`, 'POST', {}, getGovToken())
-  } catch {
-    // 本地身份必须清理，即使统一认证服务暂时不可达。
-  }
-  clearGovSession()
-  uni.reLaunch({ url: '/pages/login/index' })
+  await logoutMobile(`${AUTH_BASE}/api/v1/auth/logout`, getGovToken(), () => {
+    clearGovSession()
+    uni.reLaunch({ url: '/pages/login/index' })
+  })
 }
 
 export function handleGovUnauthorized() {

@@ -31,6 +31,44 @@ public class FarmSupervisionService {
   var p=farms.selectPage(new Page<>(Math.max(1,page),Math.min(100,Math.max(1,size))),w);
   return PageResult.of(FarmVO.listOf(p.getRecords()),p.getTotal(),(int)p.getCurrent(),(int)p.getSize());
  }
+ public List<Map<String,Object>> mapPoints(String tenant){
+  var w=new LambdaQueryWrapper<Farm>().eq(Farm::getDeleted,0)
+    .eq(tenant!=null&&!tenant.isBlank(),Farm::getTenantId,tenant)
+    .orderByDesc(Farm::getId);
+  var rows=new ArrayList<Map<String,Object>>();
+  for(Farm f:farms.selectList(w)){
+   var row=new LinkedHashMap<String,Object>();
+   row.put("farmId",f.getId()); row.put("farmName",f.getFarmName());
+   row.put("farmCode",f.getFarmCode()); row.put("tenantId",f.getTenantId());
+   row.put("province",f.getProvince()); row.put("city",f.getCity()); row.put("district",f.getDistrict()); row.put("address",f.getAddress());
+   row.put("areaTotal",f.getTotalArea()); row.put("longitude",f.getLongitude()); row.put("latitude",f.getLatitude());
+   row.put("boundary",f.getBoundary()); row.put("status",FarmVO.of(f).getStatus()); rows.add(row);
+  }
+  return rows;
+ }
+ @Transactional(rollbackFor=Exception.class)
+ public FarmVO updateCoordinates(Long id,com.agri.production.dto.FarmCoordinatesDTO body,String actor){
+  owned(id,null);
+  if(!body.isClearCoordinates() && (body.getLongitude()==null || body.getLatitude()==null))throw new BusinessException(400,"请填写完整经纬度，或明确选择清空坐标");
+  var update=new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<Farm>()
+    .eq(Farm::getId,id).set(Farm::getLongitude,body.isClearCoordinates()?null:body.getLongitude())
+    .set(Farm::getLatitude,body.isClearCoordinates()?null:body.getLatitude())
+    .set(Farm::getUpdateBy,actor).set(Farm::getUpdateTime,LocalDateTime.now());
+  if(farms.update(null,update)!=1)throw new BusinessException(409,"坐标未保存，请刷新农场档案后重试");
+  return FarmVO.of(owned(id,null));
+ }
+ @Transactional(rollbackFor=Exception.class)
+ public FarmVO updateBoundary(Long id,com.agri.production.dto.FarmBoundaryDTO body,String actor){
+  farms.lockBoundary(id);
+  Farm farm=owned(id,null);
+  if(body.getBoundary()==null && !body.isClearBoundary())throw new BusinessException(400,"请绘制边界或明确选择清空边界");
+  String boundary=FarmBoundaryGeometry.normalize(body.getBoundary(),body.isClearBoundary());
+  PlotBoundaryService.assertFarmChange(plots,farm,boundary);
+  var update=new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<Farm>()
+    .eq(Farm::getId,id).set(Farm::getBoundary,boundary).set(Farm::getUpdateBy,actor).set(Farm::getUpdateTime,LocalDateTime.now());
+  if(farms.update(null,update)!=1)throw new BusinessException(409,"边界未保存，请刷新后重试");
+  return FarmVO.of(owned(id,null));
+ }
  public Map<String,Object> detail(Long id){
   Farm f=owned(id,null); var out=new LinkedHashMap<String,Object>();out.put("farm",FarmVO.of(f));
   out.put("plotCount",plots.selectCount(new LambdaQueryWrapper<Plot>().eq(Plot::getTenantId,f.getTenantId()).eq(Plot::getFarmId,id)));

@@ -1,3 +1,4 @@
+import '@/components/ProductionDetailCompact.css'
 import { useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -124,7 +125,7 @@ function SettingsContent({ scope }: { scope: string }): JSX.Element {
         <ProTable<OperationLogItem> headerTitle="操作日志" rowKey="logId" search={false} columns={logColumns} dataSource={logs.data?.list ?? []} loading={logs.isFetching} scroll={{ x: 1000 }} columnWidthStorageKey="settings-logs" columnsState={{ persistenceKey: 'production-settings-log-columns', persistenceType: 'localStorage' }} options={{ reload: () => { void logs.refetch() } }} pagination={{ current: logPage, pageSize: logSize, total: logs.data?.total ?? 0, showSizeChanger: true, onChange: (page, size) => { setLogPage(size === logSize ? page : 1); setLogSize(size) }, showTotal: total => `共 ${total} 条` }} />
       </Space> },
     ]} />}
-    <Modal title={creating ? '新增自定义配置' : '编辑自定义配置'} open={creating || !!editing} confirmLoading={saving} closable={!saving} maskClosable={false} cancelButtonProps={{ disabled: saving }} onCancel={() => { if (!saving) { setCreating(false); setEditing(null) } }} onOk={() => void save()} destroyOnClose>
+    <Modal className="production-form-dialog" title={creating ? '新增自定义配置' : '编辑自定义配置'} open={creating || !!editing} confirmLoading={saving} closable={!saving} maskClosable={false} cancelButtonProps={{ disabled: saving }} onCancel={() => { if (!saving) { setCreating(false); setEditing(null) } }} onOk={() => void save()} destroyOnClose>
       <Alert type="info" showIcon message="仅保存配置记录，不会自动改变生产业务流程" style={{ marginBottom: 16 }} />
       <Form form={form} layout="vertical">
         <Form.Item name="configKey" label="配置键" rules={[{ required: true }, { pattern: /^custom\.[A-Za-z0-9][A-Za-z0-9_.-]*$/, message: '须以 custom. 开头，后接字母、数字、下划线、点或短横线' }, { max: 64 }]}><Input disabled={!creating} maxLength={64} /></Form.Item>

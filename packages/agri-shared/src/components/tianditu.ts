@@ -255,7 +255,9 @@ export function parseBoundaryRings(boundary?: string | null): number[][][] {
     }
     if (geometry.type === 'Polygon' && Array.isArray(geometry.coordinates)) {
       const ring = geometry.coordinates[0]
-      return Array.isArray(ring) ? [ring as number[][]] : []
+      if (!Array.isArray(ring)) return []
+      // 兼容历史地块把外环直接写在 coordinates 下的格式。
+      return typeof ring[0] === 'number' ? [geometry.coordinates as number[][]] : [ring as number[][]]
     }
     if (geometry.type === 'MultiPolygon' && Array.isArray(geometry.coordinates)) {
       return geometry.coordinates

@@ -1,3 +1,4 @@
+import '@/components/ProductionDetailCompact.css'
 import Table from '@/components/BusinessRecordList'
 /**
  * 页面名称：告警规则配置
@@ -1021,7 +1022,7 @@ export default function AlertRules(): JSX.Element {
       </Space>
 
       {/* 新增 / 编辑规则 */}
-      <Modal
+      <Modal className="production-form-dialog"
         title={editing ? `编辑规则 · ${editing.ruleName}` : '新增告警规则'}
         open={modalOpen}
         onCancel={() => setModalOpen(false)}

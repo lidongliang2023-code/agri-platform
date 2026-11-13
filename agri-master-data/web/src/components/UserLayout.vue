@@ -80,7 +80,7 @@ import MenuIcon from '@/components/MenuIcon.vue'
 import PointHiddenNotice from '@/components/ui/PointHiddenNotice.vue'
 import { useSessionStore } from '@/stores/session'
 import { useMeStore } from '@/stores/me'
-import { revokePlatformSession, ssoLogoutUrl } from '@/utils/sso'
+import { revokePlatformSession } from '@/utils/sso'
 
 interface MenuItem {
   path: string
@@ -189,10 +189,10 @@ const currentLabel = computed(() => currentItem.value.item)
 async function handleLogout() {
   if (loggingOut.value) return
   loggingOut.value = true
-  session.markForcedLogout()
-  await revokePlatformSession()
-  session.clear()
-  window.location.assign(ssoLogoutUrl())
+  await revokePlatformSession(session.accessToken ?? undefined, () => {
+    session.markForcedLogout(); session.clear()
+  })
+  loggingOut.value = false
 }
 
 watch(

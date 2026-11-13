@@ -25,10 +25,10 @@ public interface IAdminApprovalService {
     /** 审批历史（已通过 / 已驳回）。 */
     PageResult<Approval> pageHistory(int pageNum, int pageSize, String keyword);
 
-    /** 审批通过：status → APPROVED，落审批意见与审批时间，并回写关联业务。 */
+    /** 旧写入口：已停办，统一拒绝。 */
     Approval approve(String approvalId, String remark);
 
-    /** 审批驳回：status → REJECTED，落审批意见与审批时间，并回写关联业务。 */
+    /** 旧写入口：已停办，统一拒绝。 */
     Approval reject(String approvalId, String remark);
 
     /** 审批详情。 */

@@ -14,7 +14,7 @@ class DeviceCommandTest {
  JdbcTemplate jdbc; DeviceCommandService service;
  @BeforeEach void setup(){
   jdbc=new JdbcTemplate(new DriverManagerDataSource("jdbc:h2:mem:"+UUID.randomUUID()+";MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1","sa",""));
-  jdbc.execute("CREATE TABLE iot_device(id BIGINT PRIMARY KEY)"); jdbc.update("INSERT INTO iot_device VALUES(1),(2)");
+  jdbc.execute("CREATE TABLE iot_device(id BIGINT PRIMARY KEY,status VARCHAR(20),control_capable BOOLEAN)"); jdbc.update("INSERT INTO iot_device(id,status,control_capable) VALUES(1,'normal',TRUE),(2,'normal',TRUE)");
   jdbc.execute("CREATE TABLE iot_control_log(id BIGINT AUTO_INCREMENT PRIMARY KEY,device_id BIGINT,device_name VARCHAR(160),action_name VARCHAR(120),operator_name VARCHAR(80),result_text VARCHAR(300),created_at VARCHAR(40),command_no VARCHAR(40) UNIQUE,command_status VARCHAR(20),dispatch_token VARCHAR(64),expires_at VARCHAR(40),sent_at VARCHAR(40),receipt_at VARCHAR(40))");
   service=new DeviceCommandService(jdbc);
  }
@@ -55,5 +55,50 @@ class DeviceCommandTest {
   assertThrows(ResponseStatusException.class,()->controller.claim(1,null));
   assertThrows(ResponseStatusException.class,()->controller.claim(2,"01234567890123456789012345678901"));
   assertNotNull(controller.claim(1,"01234567890123456789012345678901"));
+ }
+ @Test void retrySameRequestNeverDuplicatesEvenAfterReceipt(){
+  String request="CMD01234567890123456789012345678901";
+  service.register(1,"水泵","开启设备","甲",request);
+  service.register(1,"水泵","开启设备","甲",request);
+  var claim=service.claim(1).get(0);
+  service.receipt(1,request,claim.get("dispatchToken").toString(),"SUCCEEDED","完成");
+  assertEquals("SUCCEEDED",service.register(1,"水泵","开启设备","甲",request).get("result"));
+  assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM iot_control_log",Integer.class));
+ }
+ @Test void sameRequestCannotChangeActionOperatorOrDevice(){
+  String request=register();
+  assertThrows(IllegalArgumentException.class,()->service.register(1,"泵","关闭设备","真实操作人",request));
+  assertThrows(IllegalArgumentException.class,()->service.register(1,"泵","开启设备","乙",request));
+  assertThrows(IllegalArgumentException.class,()->service.register(2,"泵","开启设备","真实操作人",request));
+  assertThrows(IllegalArgumentException.class,()->service.register(1,"泵","开启设备","甲","bad"));
+ }
+ @Test void activeCommandBlocksConflictingSubmission(){
+  register();assertThrows(IllegalArgumentException.class,()->service.register(1,"泵","关闭设备","甲"));
+  service.claim(1);assertThrows(IllegalArgumentException.class,()->service.register(1,"泵","重启设备","甲"));
+  assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM iot_control_log",Integer.class));
+ }
+ @Test void unclaimedExpiryIsDifferentFromMissingReceipt(){
+  register();jdbc.update("UPDATE iot_control_log SET expires_at='2000-01-01T00:00:00'");
+  assertTrue(service.claim(1).isEmpty());assertEquals("EXPIRED",service.history(1,1,20).get(0).get("status"));
+  assertNotNull(register());
+ }
+ @Test void disabledOrSensorDeviceCannotRegister(){
+  jdbc.update("UPDATE iot_device SET status='disabled' WHERE id=1");
+  assertThrows(IllegalArgumentException.class,()->register());
+  jdbc.update("UPDATE iot_device SET status='normal',control_capable=FALSE WHERE id=1");
+  assertThrows(IllegalArgumentException.class,()->register());
+ }
+ @Test void disabledDeviceCannotClaimPendingButCanReceiptClaimed(){
+  String code=register();jdbc.update("UPDATE iot_device SET status='disabled' WHERE id=1");assertTrue(service.claim(1).isEmpty());
+  jdbc.update("UPDATE iot_device SET status='normal' WHERE id=1");var c=service.claim(1).get(0);
+  jdbc.update("UPDATE iot_device SET status='disabled' WHERE id=1");
+  service.receipt(1,code,c.get("dispatchToken").toString(),"FAILED","设备已停用");
+  assertEquals("FAILED",service.history(1,1,20).get(0).get("status"));
+ }
+ @Test void lateReceiptPersistsTimeoutWithoutChangingResultToSuccess(){
+  String code=register(),token=service.claim(1).get(0).get("dispatchToken").toString();
+  jdbc.update("UPDATE iot_control_log SET expires_at='2000-01-01T00:00:00'");
+  assertThrows(IllegalArgumentException.class,()->service.receipt(1,code,token,"SUCCEEDED","迟到成功"));
+  assertEquals("TIMEOUT",jdbc.queryForObject("SELECT command_status FROM iot_control_log",String.class));
  }
 }

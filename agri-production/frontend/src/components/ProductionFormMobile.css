@@ -1,0 +1,71 @@
+/* 生产管理表单的手机布局；独立页面显式启用，浮层沿用已有表单范围。 */
+.production-mobile-form-actions { display: none; }
+@media (max-width: 767px) {
+  .production-form-page { min-width: 0; }
+  .production-form-page .production-form-header-actions { display: none; }
+  .production-form-page .ant-page-header-heading-extra:has(.production-form-header-actions) { display: none; }
+  .production-form-page .production-mobile-form-actions,
+  .production-form-page .production-form-actions.ant-space {
+    display: flex; flex-wrap: wrap; gap: 8px !important;
+    width: 100%; padding: 12px 0 max(8px, env(safe-area-inset-bottom, 0px));
+    margin-top: 12px; border-top: 1px solid #e0e9e3; background: #fff;
+  }
+  .production-form-page .production-mobile-form-actions > .ant-btn,
+  .production-form-page .production-form-actions > .ant-space-item { flex: 1 1 120px; min-width: 0; }
+  .production-form-page .production-mobile-form-actions > .ant-btn-primary { flex-basis: 100%; }
+  .production-form-page .production-form-actions > .ant-space-item > .ant-btn { width: 100%; }
+  :is(.production-form-page, .production-form-dialog, .quality-dialog) .ant-form { min-width: 0; max-width: 100%; }
+  :is(.production-form-page, .production-form-dialog, .quality-dialog) .ant-form-item { margin-bottom: 16px; scroll-margin-block: 16px; }
+  :is(.production-form-page, .production-form-dialog, .quality-dialog) .ant-form-item:not(.ant-form-item-hidden) > .ant-form-item-row { flex-direction: column; flex-wrap: nowrap; }
+  :is(.production-form-page, .production-form-dialog, .quality-dialog) .ant-form-item-row > .ant-form-item-label {
+    flex: 0 0 auto !important; width: 100%; max-width: 100% !important;
+    padding: 0 0 6px; text-align: left; white-space: normal; overflow: visible;
+  }
+  :is(.production-form-page, .production-form-dialog, .quality-dialog) .ant-form-item-label > label { height: auto; min-height: 20px; font-size: 14px; line-height: 20px; }
+  :is(.production-form-page, .production-form-dialog, .quality-dialog) .ant-form-item-label > label::after { display: none; }
+  :is(.production-form-page, .production-form-dialog, .quality-dialog) .ant-form-item-row > .ant-form-item-control {
+    flex: 1 1 auto !important; width: 100%; min-width: 0; max-width: 100% !important;
+  }
+  :is(.production-form-page, .production-form-dialog, .quality-dialog) .ant-form .ant-row:not(.ant-form-item-row) > .ant-col { flex: 0 0 100%; max-width: 100%; min-width: 0; }
+  :is(.production-form-page, .production-form-dialog, .quality-dialog) .ant-form .ant-row:not(.ant-form-item-row) { row-gap: 0 !important; }
+  :is(.production-form-page, .production-form-dialog, .quality-dialog) .ant-form-item-control-input-content > :is(.ant-input, .ant-input-affix-wrapper, .ant-input-number, .ant-input-number-affix-wrapper, .ant-select, .ant-picker, .ant-cascader) {
+    width: 100% !important; max-width: 100% !important; min-width: 0;
+  }
+  :is(.production-form-page, .production-form-dialog, .quality-dialog) :is(input.ant-input, textarea.ant-input, .ant-input-affix-wrapper input, .ant-input-number-input, .ant-select-selection-search-input, .ant-picker-input > input) { font-size: 16px !important; }
+  :is(.production-form-page, .production-form-dialog, .quality-dialog) :is(input.ant-input, .ant-input-affix-wrapper, .ant-select-single, .ant-picker, .ant-input-number-input) { min-height: 40px; }
+  :is(.production-form-page, .production-form-dialog, .quality-dialog) .ant-select-single { height: 40px; }
+  :is(.production-form-page, .production-form-dialog, .quality-dialog) .ant-select-multiple .ant-select-selector { min-height: 40px; }
+  :is(.production-form-page, .production-form-dialog, .quality-dialog) .ant-form-item-extra,
+  :is(.production-form-page, .production-form-dialog, .quality-dialog) .ant-form-item-explain { font-size: 12px; line-height: 19px; overflow-wrap: anywhere; }
+  :is(.production-form-page, .production-form-dialog, .quality-dialog) textarea.ant-input { line-height: 24px; }
+  :is(.production-form-page, .production-form-dialog, .quality-dialog) .ant-form .ant-space:has(> .ant-space-item > .ant-form-item) { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 !important; width: 100%; }
+  :is(.production-form-page, .production-form-dialog, .quality-dialog) .ant-space-item { min-width: 0; }
+  :is(.production-form-page, .production-form-dialog, .quality-dialog) .ant-radio-group { display: flex; flex-wrap: wrap; gap: 6px; max-width: 100%; }
+  :is(.production-form-page, .production-form-dialog, .quality-dialog) .ant-radio-button-wrapper { height: auto; min-height: 40px; line-height: 24px; padding: 7px 12px; border: 1px solid #d9d9d9; border-radius: 6px; white-space: normal; }
+  :is(.production-form-page, .production-form-dialog, .quality-dialog) .ant-radio-button-wrapper::before { display: none; }
+  :is(.production-form-page, .production-form-dialog, .quality-dialog) .ant-checkbox-wrapper { white-space: normal; align-items: flex-start; line-height: 24px; }
+  :is(.production-form-page, .production-form-dialog, .quality-dialog) .ant-btn:not(.ant-btn-link, .ant-btn-text) { height: auto; min-height: 40px; white-space: normal; line-height: 22px; }
+  .production-form-page .ant-space { max-width: 100%; }
+  .production-form-page .ant-space-horizontal { flex-wrap: wrap; }
+  .production-form-page .ant-typography { overflow-wrap: anywhere; }
+  .production-form-page .ant-upload-drag .ant-upload { padding: 12px; }
+  .production-form-page .ant-upload-drag .ant-upload-text { font-size: 14px; }
+  .production-form-page .ant-upload-drag .ant-upload-hint { font-size: 12px; }
+  .production-form-page .farm-location-fields .farm-coordinate-fields > .ant-space-item:has(> .ant-btn) { margin-bottom: 12px; }
+  .production-form-page .farm-location-fields .farm-coordinate-fields .ant-btn { margin-top: 0 !important; }
+  .production-form-page .farm-location-toolbar { width: 100%; }
+  .production-form-page .farm-location-toolbar > .ant-space-item:first-child { width: 100%; }
+  .production-form-page .farm-location-toolbar .ant-segmented { width: 100%; }
+  .production-form-page .farm-location-toolbar .ant-segmented-group { display: flex; }
+  .production-form-page .farm-location-toolbar .ant-segmented-item { flex: 1; min-height: 40px; display: flex; align-items: center; justify-content: center; }
+  .production-form-page .tianditu-boundary-toolbar { position: relative; top: auto; right: auto; display: flex; flex-wrap: wrap; gap: 6px; padding: 6px; margin: 6px 6px 0 48px; }
+  .production-form-page .tianditu-boundary-toolbar button { min-height: 36px; }
+  .production-form-dialog.ant-modal { top: 12px; max-width: calc(100vw - 20px); padding-bottom: 12px; }
+  .production-form-dialog .ant-modal-content { padding: 14px 12px; }
+  .production-form-dialog .ant-modal-body { max-height: calc(100dvh - 180px); overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+  .production-form-dialog .ant-modal-footer { display: flex; flex-wrap: wrap; gap: 8px; }
+  .production-form-dialog .ant-modal-footer .ant-btn { flex: 1 1 100px; margin: 0 !important; }
+  .production-form-dialog .ant-drawer-footer { padding-bottom: max(12px, env(safe-area-inset-bottom, 0px)); }
+  body:has(.production-workspace-pane:not([hidden]) .production-form-page) .ant-picker-dropdown .ant-picker-panels,
+  body:has(.production-form-dialog) .ant-picker-dropdown .ant-picker-panels { flex-wrap: wrap; max-width: calc(100vw - 16px); }
+}

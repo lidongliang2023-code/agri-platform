@@ -1,3 +1,4 @@
+import { logoutMobile } from '../../../../packages/agri-shared/src/auth/logoutMobile'
 /**
  * 登录态与「当前农场」上下文。
  *
@@ -236,12 +237,14 @@ export function uploadOnboardingFile(
   })
 }
 
-/** 退出登录：清本地登录态（服务端吊销是 PC 端与会话凭证的事，移动端不持有刷新令牌） */
-export function logout(): void {
-  clearProductionContext()
-  uni.removeStorageSync(TOKEN_KEY)
-  uni.removeStorageSync(USER_KEY)
-  uni.removeStorageSync(FARM_KEY)
+/** 退出当前账号及各端凭据，成功后才清除本地状态。 */
+export function logout(): Promise<boolean> {
+  return logoutMobile(`${BASE_URL}/api/v1/auth/logout`, String(uni.getStorageSync(TOKEN_KEY) || ''), () => {
+    clearProductionContext()
+    uni.removeStorageSync(TOKEN_KEY)
+    uni.removeStorageSync(USER_KEY)
+    uni.removeStorageSync(FARM_KEY)
+  })
 }
 
 /** 是否已登录 */

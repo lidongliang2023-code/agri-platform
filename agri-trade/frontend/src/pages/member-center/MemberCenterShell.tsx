@@ -1,8 +1,9 @@
+import { logoutBrowser } from '../../../../../packages/agri-shared/src/auth/logout'
 import type { ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ConfigProvider } from 'antd'
 import { BellOutlined, LogoutOutlined, ShopOutlined, SwapOutlined } from '@ant-design/icons'
-import { clearSession } from '@/utils/session'
+import { clearSession, getAccessToken } from '@/utils/session'
 import { ssoLogoutUrl } from '@/utils/sso'
 import { BrandMark } from '@/components/BrandMark'
 import './member-center.css'
@@ -42,8 +43,7 @@ export function MemberCenterShell({ role, active, navItems, merchantName, onNavi
   const avatar = (merchantName || (role === 'buyer' ? '买' : '卖')).slice(0, 1)
 
   const logout = (): void => {
-    clearSession()
-    window.location.href = ssoLogoutUrl('portal')
+    void logoutBrowser({ token: getAccessToken(), clientId: 'trade', ssoOrigin: new URL(ssoLogoutUrl()).origin, clear: clearSession })
   }
 
   return (

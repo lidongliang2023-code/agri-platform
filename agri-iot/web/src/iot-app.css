@@ -24,3 +24,46 @@
 
 .plot-map-view{padding:13px}.plot-map-view-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}.plot-map-view-head>div{display:grid;gap:2px}.plot-map-view-head b{font-size: var(--agri-font-size-micro)}.plot-map-view-head span{color:var(--ink4);font-size: var(--agri-font-size-micro)}.plot-map-missing{margin-top:8px;padding:8px 10px;border-radius:7px;background:var(--amberbg);color:#8a5b13;font-size: var(--agri-font-size-micro)}.plot-detail-map{position:relative;display:block;width:180px;min-width:180px;height:150px;overflow:hidden;border-radius:8px;background:transparent}.plot-detail-map .tianditu-map-shell{width:180px;height:150px!important;min-height:150px}
 @media(max-width:620px){.plot-detail-map{width:100%;min-width:0;height:210px}.plot-detail-map .tianditu-map-shell{width:100%;height:210px!important;min-height:210px}}
+
+/* 统一列表密度与移动端规则（2026-11-13） */
+.iot-filter{padding:9px 12px;gap:10px;box-shadow:none}
+.iot-filter-main{display:flex;align-items:center;gap:8px;min-width:0;flex:1;flex-wrap:wrap}
+.iot-filter-main>.ant-input-affix-wrapper{width:260px}
+.iot-filter-main>.ant-select{width:145px}
+.iot-filter .filter-result,.filter-result{flex:0 0 auto;color:var(--ink5);font-size:var(--agri-font-size-micro);white-space:nowrap}
+.iot-table .ant-table-thead>tr>th{padding:9px 10px;background:#f7faf8;color:var(--ink7);font-size:var(--agri-font-size-micro);font-weight:650;white-space:nowrap}
+.iot-table .ant-table-tbody>tr>td{padding:9px 10px;font-size:var(--agri-font-size-micro);vertical-align:middle}
+.iot-table .ant-pagination{margin:12px 0 2px}
+.iot-table .ant-table-wrapper{overflow-x:auto}
+.iot-table .ant-table-cell{word-break:break-word}
+.gateway-grid{gap:10px}
+.gateway-card{gap:9px;padding:13px}
+.gateway-card footer{gap:8px;flex-wrap:wrap}
+.gateway-card footer>div{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end}
+.plot-table-card .ant-table-tbody>tr>td{padding-block:8px}
+@media(max-width:760px){
+  .iot-main>main{padding:14px 10px 22px}
+  .iot-page{gap:10px}
+  .iot-title{align-items:flex-start;gap:9px}
+  .iot-title h1{font-size:19px}
+  .iot-title p{line-height:1.45}
+  .iot-actions{width:100%;flex-wrap:wrap}
+  .iot-actions .ant-btn{flex:1 1 auto}
+  .iot-filter{align-items:stretch;flex-direction:column}
+  .iot-filter-main{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+  .iot-filter-main>.ant-input-affix-wrapper,.iot-filter-main>.ant-select{width:100%;min-width:0}
+  .iot-filter-main>.ant-input-affix-wrapper{grid-column:1 / -1}
+  .iot-filter-main>.ant-btn{min-width:0}
+  .iot-filter .filter-result{align-self:flex-start}
+  .iot-card{padding:11px}
+  .iot-table{overflow:visible}
+  .iot-table .ant-table-container{min-width:760px}
+  .iot-table .ant-table-wrapper{overflow-x:auto}
+  .gateway-grid{grid-template-columns:1fr}
+  .gateway-card footer>span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .plot-view-switch{align-items:flex-start;flex-direction:column;gap:7px}
+}
+
+/* 生产地块监测：主数据来自生产管理，物联网展示设备与监测事实 */
+.plot-live-section{display:grid;gap:8px;margin-top:12px}.plot-telemetry-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.plot-telemetry-grid>div{display:grid;gap:3px;padding:10px;border:1px solid #e6ede9;border-radius:8px;background:#fbfdfc}.plot-telemetry-grid small,.plot-telemetry-grid span{color:var(--ink4);font-size:var(--agri-font-size-micro)}.plot-telemetry-grid b{font-size:17px}.plot-telemetry-grid em{margin-left:2px;color:var(--ink4);font-size:var(--agri-font-size-micro);font-style:normal;font-weight:400}.plot-alert-list{display:grid}.plot-alert-list>div{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #edf2ee}.plot-alert-list>div>div{display:grid;gap:2px}.plot-alert-list b{font-size:var(--agri-font-size-micro)}.plot-alert-list small{color:var(--ink4);font-size:var(--agri-font-size-micro);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.plot-source-note{display:flex;align-items:center;gap:7px;padding:9px 11px;border:1px solid #d8e8de;border-radius:8px;background:var(--g050);color:var(--ink5);font-size:var(--agri-font-size-micro)}
+@media(max-width:620px){.plot-telemetry-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.plot-alert-list>div{grid-template-columns:1fr auto}.plot-alert-list>div>.iot-status:first-child{grid-column:1/-1;justify-self:start}.plot-alert-list small{white-space:normal}}

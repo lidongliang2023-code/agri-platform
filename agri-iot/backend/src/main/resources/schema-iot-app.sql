@@ -8,7 +8,7 @@
 -- 两条配套约定，缺一个就会重新长出"看不见的数据"：
 --   · 租户列一律 NOT NULL 且**不给默认值**：漏传就直接报错，而不是默默落到某个默认主体上，
 --     变成"页面列表有条数、租户筛选查不到"这种谁也说不清的偏差；
---   · 参与统计的时间列（recorded_at / created_at / last_trigger）统一存 'yyyy-MM-dd HH:mm' 文本，
+--   · 参与统计的时间列使用可排序的本地日期时间文本；遥测接入固定存 'yyyy-MM-dd HH:mm:ss.SSS' 保留采样精度，
 --     与仓储里 nowLabel() 的格式一致；报表按 SUBSTRING(col,1,10) 聚合日期、
 --     SUBSTRING(col,12,2) 聚合小时。写"今天 10:18"这类相对文本会让聚合彻底失效。
 CREATE TABLE IF NOT EXISTS iot_tenant (
@@ -368,4 +368,25 @@ CREATE TABLE IF NOT EXISTS iot_ota_receipt (
  result_text VARCHAR(300), operator_name VARCHAR(160),
  created_at VARCHAR(40), expires_at VARCHAR(40), sent_at VARCHAR(40), receipt_at VARCHAR(40),
  UNIQUE KEY uk_ota_task_gateway(task_id,gateway_id)
+);
+
+-- 自动告警接入的技术状态；业务告警与消息仍使用现有 iot_alert / iot_message。
+CREATE TABLE IF NOT EXISTS iot_telemetry_report (
+    device_id BIGINT NOT NULL,
+    report_id VARCHAR(80) NOT NULL,
+    payload_hash VARCHAR(64) NOT NULL,
+    received_at VARCHAR(40) NOT NULL,
+    PRIMARY KEY(device_id,report_id)
+);
+CREATE TABLE IF NOT EXISTS iot_alert_signal (
+    device_id BIGINT NOT NULL,
+    tenant_id BIGINT NOT NULL,
+    metric_key VARCHAR(40) NOT NULL,
+    rule_source VARCHAR(16) NOT NULL,
+    rule_id BIGINT NOT NULL,
+    rule_fingerprint VARCHAR(64) NOT NULL,
+    active BOOLEAN NOT NULL DEFAULT FALSE,
+    alert_id BIGINT,
+    last_recorded_at VARCHAR(40),
+    PRIMARY KEY(device_id,metric_key,rule_source,rule_id)
 );

@@ -1,3 +1,4 @@
+import { logoutBrowser } from '../../../../packages/agri-shared/src/auth/logout'
 /**
  * 认证接口层（/api/v1/auth）
  *
@@ -19,9 +20,9 @@
  *
  * @module api/auth
  */
-import axios, { type AxiosResponse, type InternalAxiosRequestConfig } from 'axios'
+import axios, { type AxiosRequestConfig, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios'
 import request from '@/utils/request'
-import useAuthStore, { registerServerLogout } from '@/store/auth'
+import useAuthStore, { registerServerLogout, resetLogoutRedirect, isRedirectingToSsoLogout } from '@/store/auth'
 import { SSO_CLIENT_ID, ssoLogoutUrl } from '@/api/sso'
 
 /** 认证端点前缀 */
@@ -30,16 +31,10 @@ const AUTH_BASE = '/api/v1/auth'
 /** 登录页地址（与 `@/utils/request` 中保持一致） */
 export const LOGIN_PATH = '/login'
 
-/**
- * 运营端独立登录页路径（路线 2「独立登录页」拆分，2026-10-11）。
- *
- * 背景：V2.0 第 2.3 节 D1 要求九大子系统独立应用、各自独立登录页；
- * 现阶段先把现有单应用的运营端 / 用户端拆成两个独立登录页，
- * 原 {@link LOGIN_PATH} 保留为「按端分流」入口，兼容旧链接与 401 跳转。
- */
+/** 兼容旧运营登录地址，页面只跳转统一认证中心。 */
 export const ADMIN_LOGIN_PATH = '/admin/login'
 
-/** 用户端独立登录页路径（同上） */
+/** 用户端统一认证跳转入口。 */
 export const USER_LOGIN_PATH = '/production/login'
 
 /** 用户端首页 */
@@ -226,15 +221,19 @@ export function resolveHomePath(roles: string[]): string {
  * @param result 登录或刷新结果
  * @param marketId 当前市场 ID
  */
-export function persistSession(result: LoginResult, marketId?: number): void {
+export function persistSession(result: LoginResult, marketId?: number, preserveSubject = false): void {
   const store = useAuthStore.getState()
+  const previous = preserveSubject && String(store.userInfo?.userId) === String(result.user?.id)
+    && (marketId ?? null) === store.marketId ? store.userInfo : null
   store.login({
     token: result.accessToken,
     userInfo: {
       userId: result.user?.id ?? '',
       username: result.user?.username ?? '',
       realName: result.user?.nickname ?? result.user?.username ?? '',
-      tenantId: '',
+      // 仅同账号、同市场的续签保留已确认主体；新登录仍由服务端重新解析。
+      tenantId: previous?.tenantId ?? '',
+      tenantName: previous?.tenantName,
       // 运营端角色为 1，农户等普通用户为 3
       userType: resolveHomePath(result.user?.roles ?? []) === ADMIN_HOME_PATH ? 1 : 3,
     },
@@ -254,19 +253,61 @@ let refreshing: Promise<string> | null = null
  * @returns 新的访问令牌
  */
 async function doRefresh(): Promise<string> {
+  if (isRedirectingToSsoLogout()) throw new axios.CanceledError('正在退出统一登录')
   if (refreshing) {
     return refreshing
   }
   // 刷新令牌在 HttpOnly Cookie 里：前端只负责发这一次请求，不参与令牌管理
+  const session = useAuthStore.getState()
   refreshing = refreshSession()
     .then((result) => {
-      persistSession(result, useAuthStore.getState().marketId ?? undefined)
+      const current = useAuthStore.getState()
+      if (isRedirectingToSsoLogout() || current.token !== session.token || current.userInfo?.userId !== session.userInfo?.userId
+          || current.marketId !== session.marketId) {
+        throw new axios.CanceledError('登录会话已变化，已取消旧会话续签')
+      }
+      persistSession(result, session.marketId ?? undefined, true)
       return result.accessToken
     })
     .finally(() => {
       refreshing = null
     })
   return refreshing
+}
+
+/** 主体接口复用同一份续签锁；响应只交给发起请求的账号与市场。 */
+export async function accountRequest<T>(config: AxiosRequestConfig): Promise<T> {
+  const session = useAuthStore.getState()
+  const ensureSameAccount = (): void => {
+    const current = useAuthStore.getState()
+    if (config.signal?.aborted || current.userInfo?.userId !== session.userInfo?.userId
+        || current.marketId !== session.marketId || !current.token) {
+      throw new axios.CanceledError('账号已切换，已取消原主体请求')
+    }
+  }
+  if (!session.token) throw new Error('登录状态未恢复，请重新前往统一登录')
+  if (session.tokenExpireAt > 0 && session.tokenExpireAt <= Date.now() + REFRESH_AHEAD_MS) {
+    await doRefresh()
+  }
+  const send = async (): Promise<T> => {
+    ensureSameAccount()
+    const response = await authRequest.request<AuthApiResult<T>>({
+      ...config,
+      baseURL: '/api/v1/sso/account',
+      headers: { ...config.headers, Authorization: `Bearer ${useAuthStore.getState().token}` },
+    })
+    ensureSameAccount()
+    return unwrapAuthResult(response)
+  }
+  try {
+    return await send()
+  } catch (error) {
+    if (!axios.isAxiosError(error) || error.response?.status !== 401) throw error
+    ensureSameAccount()
+    // 仅在明确未认证时续签重试一次；403 不刷新，也不改写为主体加载错误。
+    await doRefresh()
+    return send()
+  }
 }
 
 /**
@@ -327,25 +368,10 @@ export function installAuthRefreshInterceptor(): void {
  * 这样任何调用 `store.logout()` 的地方（顶栏退出、401 清理、续签失败）都会顺带吊销
  * 服务端刷新令牌并清除 HttpOnly Cookie，不必逐个调用点去补网络请求。
  */
-registerServerLogout((options) => {
-  if (options?.sso === false) {
-    void logout()
-    return
-  }
-  // 显式退出登录：立即整页跳转 SSO 登出，不再先 await 平台登出接口。
-  // 原实现等待接口返回期间，路由守卫已把用户送到 /production/login；该页的 SsoHandoff
-  // 看到 SSO 全局会话仍然有效，会再次发起授权跳转，表现为“要点两次退出”才能离开。
-  // 这里用 keepalive 把平台登出塞进浏览器卸载流程，然后立刻离开当前文档。
-  try {
-    void fetch(`${AUTH_BASE}/logout`, {
-      method: 'POST',
-      credentials: 'include',
-      keepalive: true,
-      headers: { 'Content-Type': 'application/json' },
-      body: '{}',
-    })
-  } catch {
-    // 平台令牌吊销失败不阻塞 SSO 登出；SSO 会话销毁后仍会回到登录页
-  }
-  window.location.href = ssoLogoutUrl(SSO_CLIENT_ID)
+registerServerLogout(() => {
+  const token = useAuthStore.getState().token
+  void logoutBrowser({
+    token, clientId: SSO_CLIENT_ID, ssoOrigin: new URL(ssoLogoutUrl(SSO_CLIENT_ID)).origin,
+    clear: () => useAuthStore.getState().logout({ sso: false }),
+  }).then((success) => { if (!success) resetLogoutRedirect() })
 })

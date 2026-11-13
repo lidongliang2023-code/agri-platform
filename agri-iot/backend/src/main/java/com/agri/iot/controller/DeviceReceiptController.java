@@ -15,6 +15,8 @@ import java.util.*;
 @RestController
 @RequestMapping("/api/v1/iot/device-channel/devices/{deviceId}")
 public class DeviceReceiptController {
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.agri.iot.service.IotTelemetryService telemetry;
     private final DeviceCommandService commands;
     private final Map<String,String> keys;
     public DeviceReceiptController(DeviceCommandService commands,
@@ -37,4 +39,13 @@ public class DeviceReceiptController {
             @RequestHeader(value="X-Device-Key",required=false) String key,@RequestBody Map<String,String> body) {
         authenticate(deviceId,key);return ApiResponse.success(commands.receipt(deviceId,code,body.get("dispatchToken"),body.getOrDefault("status",""),body.get("result")));
     }
+    /** reportId 由采集端持久化；网络重试必须复用原 reportId 与原载荷。 */
+    @PostMapping("/telemetry")
+    public ApiResponse<Map<String,Object>> telemetry(@PathVariable long deviceId,
+            @RequestHeader(value="X-Device-Key",required=false) String key,
+            @RequestBody com.agri.iot.service.IotTelemetryService.Report body) {
+        authenticate(deviceId,key);
+        return ApiResponse.success(telemetry.ingestDevice(deviceId,body));
+    }
+
 }

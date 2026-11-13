@@ -27,6 +27,8 @@ public class IotAppRepository {
     private final JdbcTemplate jdbc;
     @org.springframework.beans.factory.annotation.Autowired
     private com.agri.iot.service.GatewayCommandService gatewayCommands;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.agri.iot.service.DeviceCommandService deviceCommands;
     private final ProductionPlotClient productionPlots;
     private final ProductionFarmClient productionFarms;
     private final IotIdentityService identity;
@@ -455,20 +457,9 @@ public class IotAppRepository {
         }
         long groupId = requiredLong(body, "groupId", "请选择设备分组");
         identity.requireTenantRow("iot_device_group", groupId, "设备分组");
-        Long plotId = longObject(body.get("plotId"));
-        if (plotId != null && plotId <= 0) {
-            throw new IllegalArgumentException("地块标识无效");
-        }
-        if (plotId != null) {
-            Map<String, Object> plot = productionPlots.listCurrentTenantPlots().stream()
-                    .filter(item -> longValue(item.get("id"), -1) == plotId)
-                    .findFirst()
-                    .orElseThrow(() -> new IllegalArgumentException("所选地块不属于当前生产管理租户"));
-            if (longValue(plot.get("farmId"), -1) != farmId) {
-                throw new IllegalArgumentException("所选地块与农场不一致");
-            }
-        }
-        String config = text(body, "config", "{\"reportInterval\":30}");
+        Long plotId = bindingPlotId(body.get("plotId"));
+        if (plotId != null) requireBindingPlot(plotId, farmId);
+        String config = com.agri.iot.support.SamplingPolicy.normalize(text(body, "config", "{}"), null, true);
         validateJson(config, "设备扩展配置必须是有效的 JSON");
         String now = LocalDateTime.now().format(TIME);
         try {
@@ -504,7 +495,7 @@ public class IotAppRepository {
     @Transactional
     public Map<String, Object> updateDevice(long id, Map<String, Object> body) {
         identity.requireDeviceAccess(id);
-        Map<String, Object> device = queryOne("SELECT * FROM iot_device WHERE id=?", deviceMapper(), id);
+        Map<String, Object> device = queryOne("SELECT * FROM iot_device WHERE id=? FOR UPDATE", deviceMapper(), id);
         long farmId = longValue(device.get("farmId"), -1);
         Long oldGroupId = longObject(device.get("groupId"));
         Long oldGatewayId = longObject(device.get("gatewayId"));
@@ -525,7 +516,7 @@ public class IotAppRepository {
             args.add(text(body, "firmwareVersion", "v1.0.0"));
         }
         if (body.containsKey("config")) {
-            String config = text(body, "config", "");
+            String config = com.agri.iot.support.SamplingPolicy.normalize(text(body, "config", "{}"), (String) device.get("config"), false);
             validateJson(config, "设备扩展配置必须是有效的 JSON");
             sets.add("config_text=?");
             args.add(config);
@@ -545,20 +536,8 @@ public class IotAppRepository {
 
         // 地块：null 表示解除归属；非空则必须属于该设备所在农场
         if (body.containsKey("plotId")) {
-            Long candidate = longObject(body.get("plotId"));
-            if (candidate != null && candidate <= 0) {
-                throw new IllegalArgumentException("地块标识无效");
-            }
-            if (candidate != null) {
-                final Long targetPlotId = candidate;
-                Map<String, Object> plot = productionPlots.listCurrentTenantPlots().stream()
-                        .filter(item -> longValue(item.get("id"), -1) == targetPlotId)
-                        .findFirst()
-                        .orElseThrow(() -> new IllegalArgumentException("所选地块不属于当前生产管理租户"));
-                if (longValue(plot.get("farmId"), -1) != farmId) {
-                    throw new IllegalArgumentException("所选地块与设备所属农场不一致");
-                }
-            }
+            Long candidate = bindingPlotId(body.get("plotId"));
+            if (candidate != null) requireBindingPlot(candidate, farmId);
             sets.add("plot_id=?");
             args.add(candidate);
         }
@@ -612,8 +591,10 @@ public class IotAppRepository {
         }
         // 地块侧不维护设备数（同上，plots() 实时聚合）
 
+        String bindingChange = body.containsKey("plotId")
+                ? " · 地块 " + device.get("plotId") + " → " + bindingPlotId(body.get("plotId")) : "";
         addLog("更新设备", String.valueOf(device.get("deviceCode")),
-                String.valueOf(device.get("deviceName")) + " · 字段 " + String.join("/", sets));
+                String.valueOf(device.get("deviceName")) + " · 字段 " + String.join("/", sets) + bindingChange);
         return queryOne("SELECT * FROM iot_device WHERE id=?", deviceMapper(), id);
     }
 
@@ -637,8 +618,9 @@ public class IotAppRepository {
             throw new IllegalArgumentException("该设备不支持远程控制");
         }
         String action = required(body, "action", "请选择控制动作");
-        return new com.agri.iot.service.DeviceCommandService(jdbc).register(id,
-                String.valueOf(device.get("deviceName")), action, operator);
+        return deviceCommands.register(id,
+                String.valueOf(device.get("deviceName")), action, operator,
+                body.get("requestNo") == null ? null : body.get("requestNo").toString());
     }
 
     public List<Map<String, Object>> plots() {
@@ -689,6 +671,48 @@ public class IotAppRepository {
                     : Math.round(onlineCount * 1000.0 / deviceCount) / 10.0);
         }
         return plots;
+    }
+
+    /**
+     * 地块监测详情：生产管理提供地块主数据，物联网提供设备、最近遥测和告警视图。
+     * 设备必须通过 plot_id 关联到生产地块，查询始终受当前主体农场范围约束。
+     */
+    public Map<String, Object> plotMonitoring(long plotId) {
+        Map<String, Object> plot = plots().stream()
+                .filter(item -> longValue(item.get("id"), -1) == plotId)
+                .findFirst()
+                .orElseThrow(() -> BusinessException.notFound("生产地块不存在或不属于当前经营主体：" + plotId));
+        List<Map<String, Object>> deviceRows = devices(null, null, null, plotId);
+        List<Map<String, Object>> telemetry = new ArrayList<>();
+        List<Map<String, Object>> alertRows = new ArrayList<>();
+        if (!deviceRows.isEmpty()) {
+            String placeholders = String.join(",", java.util.Collections.nCopies(deviceRows.size(), "?"));
+            List<Object> deviceIds = deviceRows.stream().map(item -> item.get("id")).toList();
+            List<Map<String, Object>> rawTelemetry = jdbc.query(
+                    "SELECT * FROM iot_telemetry WHERE device_id IN (" + placeholders + ") ORDER BY recorded_at DESC,id DESC",
+                    telemetryMapper(), deviceIds.toArray());
+            java.util.Set<String> metricKeys = new java.util.HashSet<>();
+            for (Map<String, Object> row : rawTelemetry) {
+                String key = String.valueOf(row.get("key"));
+                if (metricKeys.add(key)) telemetry.add(row);
+                if (telemetry.size() >= 12) break;
+            }
+            List<Object> alertArgs = new ArrayList<>();
+            alertArgs.add(scopeTenantId());
+            alertArgs.addAll(deviceIds);
+            alertRows = jdbc.query(
+                    "SELECT * FROM iot_alert WHERE tenant_id=? AND device_id IN (" + placeholders + ") "
+                            + "ORDER BY CASE status WHEN 'pending' THEN 0 WHEN 'handling' THEN 1 ELSE 2 END,id DESC LIMIT 20",
+                    alertMapper(), alertArgs.toArray());
+        }
+        long onlineCount = deviceRows.stream().filter(item -> "online".equals(item.get("onlineStatus"))).count();
+        String latestAt = telemetry.stream().map(item -> String.valueOf(item.get("recordedAt"))).findFirst().orElse(null);
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("deviceCount", deviceRows.size());
+        summary.put("onlineCount", onlineCount);
+        summary.put("alertCount", alertRows.stream().filter(item -> !"resolved".equals(item.get("status"))).count());
+        summary.put("latestAt", latestAt);
+        return map("plot", plot, "devices", deviceRows, "telemetry", telemetry, "alerts", alertRows, "summary", summary);
     }
 
     /** 设备分组：每个经营主体一套，原先全平台共用一份，第二个租户能在下拉里看到别家的分组。 */
@@ -1482,6 +1506,30 @@ public class IotAppRepository {
                     """, args.stream()
                     .map(values -> new Object[]{values[0], values[1], values[0]})
                     .toList());
+        }
+    }
+
+    private Long bindingPlotId(Object value) {
+        if (value == null) return null;
+        try {
+            long id = new BigDecimal(String.valueOf(value)).longValueExact();
+            if (id <= 0) throw new ArithmeticException();
+            return id;
+        } catch (NumberFormatException | ArithmeticException error) {
+            throw new IllegalArgumentException("地块标识必须是正整数，解除绑定请明确传入 null");
+        }
+    }
+
+    private void requireBindingPlot(long plotId, long farmId) {
+        Map<String, Object> plot = productionPlots.listCurrentTenantPlots().stream()
+                .filter(item -> longValue(item.get("id"), -1) == plotId)
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("所选地块不存在或不属于当前经营主体"));
+        if (longValue(plot.get("farmId"), -1) != farmId) {
+            throw new IllegalArgumentException("所选地块与设备所属农场不一致");
+        }
+        if (longValue(plot.get("productionStatus"), -1) == 0) {
+            throw new IllegalArgumentException("所选地块已停用，不能绑定设备");
         }
     }
 

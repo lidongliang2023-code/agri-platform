@@ -215,7 +215,7 @@ public class AdminMonitorServiceImpl implements IAdminMonitorService {
         return switch (status.trim().toLowerCase()) {
             case "pending" -> "pending";
             case "assigned" -> "assigned";
-            case "doing", "in_progress", "processing" -> "doing";
+            case "executing", "doing", "in_progress", "processing" -> "doing";
             case "completed", "done", "finished" -> "done";
             case "rejected" -> "rejected";
             default -> {
@@ -232,14 +232,15 @@ public class AdminMonitorServiceImpl implements IAdminMonitorService {
         if (task == null) {
             throw new BusinessException(404, "任务不存在：" + taskId);
         }
-        task.setUrgeCount((task.getUrgeCount() == null ? 0 : task.getUrgeCount()) + 1);
-        task.setLastUrgeTime(LocalDateTime.now());
-        // 只在调用方给了操作人时才覆盖：页面当前不传 operator，直接 set 会把上一次的催办人清成 null
-        if (operator != null && !operator.isBlank()) {
-            task.setLastUrgeBy(operator.trim());
-        }
-        task.setUpdateTime(LocalDateTime.now());
-        taskMapper.updateById(task);
+        if (java.util.Set.of("done","completed","cancelled","expired","rejected").contains(String.valueOf(task.getStatus())))
+            throw new BusinessException(409,"任务已终结，无需催办");
+        var change=new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<Task>()
+            .eq(Task::getId,taskId).notIn(Task::getStatus,java.util.List.of("done","completed","cancelled","expired","rejected"))
+            .setSql("urge_count = COALESCE(urge_count, 0) + 1")
+            .set(Task::getLastUrgeTime,LocalDateTime.now()).set(Task::getLastUrgeBy,operator)
+            .set(Task::getUpdateTime,LocalDateTime.now());
+        if(taskMapper.update(null,change)!=1)throw new BusinessException(409,"任务状态已变更，请刷新后重试");
+        task=taskMapper.selectById(taskId);
         log.info("任务催办：id={} 第 {} 次，操作人={}", taskId, task.getUrgeCount(), operator);
         Map<String, Object> row = new LinkedHashMap<>();
         row.put("taskId", task.getId());
@@ -253,20 +254,6 @@ public class AdminMonitorServiceImpl implements IAdminMonitorService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> requestReboot(Long deviceId, String operator) {
-        IoTDevice device = deviceId == null ? null : iotDeviceMapper.selectById(deviceId);
-        if (device == null) {
-            throw new BusinessException(404, "设备不存在：" + deviceId);
-        }
-        device.setRebootRequestedAt(LocalDateTime.now());
-        device.setUpdateTime(LocalDateTime.now());
-        iotDeviceMapper.updateById(device);
-        log.info("设备重启指令已记录：id={} code={} 操作人={}（本部署无设备网关，未真正重启）",
-                deviceId, device.getDeviceCode(), operator);
-        Map<String, Object> row = new LinkedHashMap<>();
-        row.put("deviceId", device.getId());
-        row.put("deviceCode", device.getDeviceCode());
-        row.put("rebootRequestedAt", device.getRebootRequestedAt() == null
-                ? null : DATE_TIME.format(device.getRebootRequestedAt()));
-        return row;
+        throw new BusinessException(409,"设备指令请在物联网运营端下发并查看回执，生产监控不再维护设备重启副本");
     }
 }

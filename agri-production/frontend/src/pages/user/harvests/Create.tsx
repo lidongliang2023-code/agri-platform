@@ -325,12 +325,14 @@ export default function Create(): JSX.Element {
         })
       })
       .catch(() => {
+        const invalid = form.getFieldsError().find(field => field.errors.length)
+        if (invalid) form.scrollToField(invalid.name, { block: 'center', behavior: 'smooth' })
         message.warning('请完整填写必填项后再提交')
       })
   }
 
   return (
-    <PageContainer
+    <PageContainer mobileForm
       className="harvest-business-page"
       title={
         <Space size={8}>
@@ -363,6 +365,7 @@ export default function Create(): JSX.Element {
       ]}
     >
       <Form
+          scrollToFirstError
         form={form}
         layout="vertical"
         initialValues={{

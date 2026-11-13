@@ -1,3 +1,4 @@
+import '@/components/ProductionDetailCompact.css'
 import ProTable from '@/components/ProductionTable'
 /**
  * 页面名称：任务列表（看板）
@@ -878,7 +879,7 @@ export default function TaskList(): JSX.Element {
         )}
       </Card>
 
-      <Modal
+      <Modal className="production-form-dialog"
         title={`派发任务：${assignTarget?.taskName ?? ''}`}
         open={Boolean(assignTarget)}
         okText="确认派发"

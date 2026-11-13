@@ -1,3 +1,4 @@
+import '@/components/ProductionDetailCompact.css'
 import BusinessRecordList from '@/components/BusinessRecordList'
 import Card from '@/components/SectionCard'
 /**
@@ -690,7 +691,7 @@ export default function PlotSoilRecords(): JSX.Element {
         </Card>
       </Space>
 
-      <Modal
+      <Modal className="production-form-dialog"
         title="新增土壤检测记录"
         open={createOpen}
         okText="保存"

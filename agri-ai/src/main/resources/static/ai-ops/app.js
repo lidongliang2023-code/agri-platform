@@ -503,7 +503,17 @@ function bind(id){if(id==='providers'){$('#circuit-alerts').onclick=()=>showCirc
  if(id==='debug'){$('#debug-scene').onchange=e=>{state.selected=e.target.value;state.result=null;render()};$('#load-example').onclick=()=>$('#json-input').value=JSON.stringify(JSON.parse(state.scenes.find(s=>s.code===state.selected).exampleJson),null,2);$('#copy-result').onclick=()=>copy(JSON.stringify(state.result,null,2));$('#debug-form').onsubmit=async e=>{e.preventDefault();if(state.running)return;let input;try{input=JSON.parse($('#json-input').value);if(!input||Array.isArray(input)||typeof input!=='object')throw Error('参数必须是 JSON 对象');if(Object.keys(input).length>50||$('#json-input').value.length>16000)throw Error('参数超过 50 个字段或 16KB 限制')}catch(err){toast('参数错误：'+err.message);return}state.running=true;const button=$('#run');button.disabled=true;button.textContent='执行中…';try{state.result=await api('debug',{method:'POST',timeoutMs:105000,body:JSON.stringify({sceneCode:state.selected,bizId:$('#biz-id').value,input})});$('#result').innerHTML=resultView(state.result);$('#copy-result').disabled=false;state.overview=await api('overview');toast(state.result.ok?'场景执行成功，调用已记录':'场景执行失败，请查看响应')}catch(err){toast(err.message)}finally{state.running=false;button.disabled=false;button.textContent='▷ 执行调试'}}}
  if(id==='calls'){const query=()=>{state.keyword=$('#call-search').value;state.status=$('#call-status').value;state.page=1;render()};$('#query-calls').onclick=query;$('#call-search').onkeydown=e=>{if(e.key==='Enter')query()};$('#call-status').onchange=query;$('#prev').onclick=()=>{state.page--;render()};$('#next').onclick=()=>{state.page++;render()}}
 }
-$('#login').onclick=()=>login().catch(e=>toast(e.message));$('#logout').onclick=async()=>{try{await request('/api/v1/auth/logout',{method:'POST',body:'{}'})}catch{}state.token='';location.assign(sso+'/logout?client_id='+CLIENT)}
+$('#login').onclick=()=>login().catch(e=>toast(e.message));
+let logoutPending=false
+$('#logout').onclick=async()=>{
+ if(logoutPending)return
+ logoutPending=true;$('#logout').disabled=true
+ try{
+  await request('/api/v1/auth/logout',{method:'POST',body:'{}',timeoutMs:10000})
+  state.token='';['verifier','state','return'].forEach(key=>sessionStorage.removeItem(PREFIX+key))
+  location.assign(sso+'/api/v1/sso/logout/complete?client_id='+CLIENT)
+ }catch{toast('未完成全局退出，登录状态已保留，请重试');logoutPending=false;$('#logout').disabled=false}
+}
 $('#refresh').onclick=async()=>{try{[state.overview,state.providers,state.scenes]=await Promise.all([api('overview'),api('providers'),api('scenes')]);state.providerTests={};state.sceneSelection.clear();await render();toast('数据已刷新')}catch(e){toast(e.message)}}
 $('#drawer').onclick=e=>{if(!state.sceneCreating&&e.target===$('#drawer'))$('#drawer').hidden=true};document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!state.sceneCreating)$('#drawer').hidden=true})
 window.addEventListener('hashchange',()=>{if(state.token){render();window.scrollTo(0,0)}})

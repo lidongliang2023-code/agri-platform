@@ -16,6 +16,10 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
+      // 认证、主体能力和平台 RBAC 始终由核心平台处理，不能随生产直连覆盖。
+      '/api/v1/auth': { target: process.env.VITE_PLATFORM_PROXY_TARGET ?? 'http://localhost:8093', changeOrigin: true },
+      '/api/v1/sso': { target: process.env.VITE_PLATFORM_PROXY_TARGET ?? 'http://localhost:8093', changeOrigin: true },
+      '/api/v1/admin': { target: process.env.VITE_PLATFORM_PROXY_TARGET ?? 'http://localhost:8093', changeOrigin: true },
       '/api': {
         // 默认指向**网关**（nginx :80），而不是某个后端的直连端口。
         //
