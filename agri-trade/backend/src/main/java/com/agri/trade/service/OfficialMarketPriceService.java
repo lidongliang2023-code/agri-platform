@@ -106,7 +106,9 @@ public class OfficialMarketPriceService {
         while(links.find()) {
             String label=plain(links.group(2)); if(!label.contains("蔬菜批发市场主要品种价格")) continue;
             URI candidate=URI.create(FUJIAN_INDEX).resolve(links.group(1));
-            if(!"nynct.fj.gov.cn".equals(candidate.getHost()) || !candidate.getPath().startsWith("/xxgk/tjxx/tjsj/scpfscjg/")) continue;
+            if(!Set.of("nynct.fj.gov.cn", "nynct.fujian.gov.cn").contains(candidate.getHost()) || !Set.of("http", "https").contains(candidate.getScheme()) || candidate.getUserInfo()!=null || candidate.getPort()!=-1 || !candidate.getPath().startsWith("/xxgk/tjxx/tjsj/scpfscjg/") || candidate.getQuery()!=null || candidate.getFragment()!=null) continue;
+            // 官方目录仍含旧域名 HTTP 链接，统一到当前官方 HTTPS 主机后抓取。
+            candidate=URI.create("https://nynct.fj.gov.cn"+candidate.getPath());
             LocalDate d; try { d=date(label); } catch(Exception e) {
                 Matcher pathDate=Pattern.compile("/(20\\d{2})(\\d{2})/t(20\\d{2})(\\d{2})(\\d{2})_").matcher(candidate.getPath());
                 if(!pathDate.find()) continue;
