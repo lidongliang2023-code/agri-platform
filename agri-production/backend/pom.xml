@@ -144,6 +144,13 @@
             <version>1.18.30</version>
         </dependency>
 
+        <!-- 农业农村部登记信息官方 XLS 同步解析；解析失败的批次会留痕，不会静默导入。 -->
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi</artifactId>
+            <version>5.2.5</version>
+        </dependency>
+
         <dependency>
             <groupId>cn.hutool</groupId>
             <artifactId>hutool-all</artifactId>

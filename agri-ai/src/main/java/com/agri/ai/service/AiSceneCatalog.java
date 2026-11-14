@@ -5,6 +5,7 @@ import java.util.*;
 public class AiSceneCatalog {
     public record Scene(String code, String name, String bizSystem, String domain, String description, String exampleJson) {}
     private final List<Scene> scenes = List.of(
+        new Scene("farm.voice.record", "语音农事结构化提取", "farm_prod", "农事生产", "提取口述事实候选，人工确认后归档，不生成任务或处方", "{\"transcript\":\"今天在北棚放风两小时\",\"recordedAt\":\"2026-11-14T10:00:00\",\"plots\":[],\"inputs\":[],\"members\":[]}"),
         new Scene("farm.crop.schedule", "农事排程建议", "farm_prod", "农事生产", "根据作物与生育阶段返回农事安排参考", "{\"crop\": \"柑橘\", \"stage\": \"果实膨大期\"}"),
         new Scene("farm.pest.diagnosis", "病虫害诊断参考", "farm_prod", "农事生产", "演示病虫害诊断输出结构，不作为真实诊断", "{\"symptom\": \"叶片卷曲，存在虫道\"}"),
         new Scene("iot.device.anomaly", "设备异常分析", "iot_sensor", "物联网", "演示设备异常原因与处置建议", "{\"deviceType\": \"土壤传感器\", \"readings\": [2.8, 4.9, 2.7]}"),

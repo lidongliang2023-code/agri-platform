@@ -3,8 +3,8 @@ CREATE TABLE IF NOT EXISTS agri_prod_calendar_weather_snapshot (
  id BIGINT AUTO_INCREMENT PRIMARY KEY,
  tenant_id VARCHAR(191) NOT NULL,
  farm_id BIGINT NOT NULL,
- latitude DECIMAL(10,7) NOT NULL,
- longitude DECIMAL(10,7) NOT NULL,
+ latitude DECIMAL(10,7) NULL,
+ longitude DECIMAL(10,7) NULL,
  week_start DATE NOT NULL,
  issued_at DATETIME NULL,
  provider VARCHAR(64) NOT NULL,
@@ -17,3 +17,8 @@ CREATE TABLE IF NOT EXISTS agri_prod_calendar_weather_snapshot (
  KEY idx_calendar_weather_farm(tenant_id,farm_id,week_start,created_at),
  KEY idx_calendar_weather_status(tenant_id,status,created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 缺少农场坐标也是需留痕的获取失败，不得填入虚构坐标。
+ALTER TABLE agri_prod_calendar_weather_snapshot
+ MODIFY COLUMN latitude DECIMAL(10,7) NULL,
+ MODIFY COLUMN longitude DECIMAL(10,7) NULL;

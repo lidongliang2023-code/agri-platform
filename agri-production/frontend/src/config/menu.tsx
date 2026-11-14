@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 侧边栏菜单配置
  *
  * 用户端按生产业务流程组织两级分类；
@@ -74,6 +74,7 @@ export const USER_MENU: MenuGroup[] = [
     children: [
       { key: '/production/plans', label: '农事计划' },
       { key: '/production/tasks', label: '农事任务' },
+      { key: '/production/tasks/voice-records', label: '语音农事归档' },
       { key: '/production/plans/calendar', label: '农事日历' },
     ],
   },
@@ -142,6 +143,7 @@ export const USER_MENU: MenuGroup[] = [
       { key: '/production/analytics', label: '数据分析总览' },
       { key: '/production/analytics/reports', label: '生产报表' },
       { key: '/production/ai/pest-detection', label: '多模态病虫害诊断' },
+      { key: '/production/ai/input-safety', label: '投入品推荐与安全校验' },
       { key: '/production/ai/assistant', label: '农事智能助手' },
     ],
   },

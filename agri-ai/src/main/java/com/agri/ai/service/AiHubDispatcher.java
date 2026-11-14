@@ -57,6 +57,7 @@ public class AiHubDispatcher {
                 if(sceneConfig.publishedVersion()==null) throw new IllegalArgumentException("自定义场景尚未发布提示词，请先发布后再调试");
             }
             boolean pest="farm.pest.diagnosis".equals(sceneCode);
+            boolean voice="farm.voice.record".equals(sceneCode);
             if(pest && (!config.isRealInferenceEnabled() || sceneConfig.publishedVersion()==null))
                 throw new IllegalArgumentException("病虫害诊断需要真实视觉模型和已发布提示词，不提供演示降级");
             boolean usedRuleFallback = false;
@@ -97,7 +98,7 @@ public class AiHubDispatcher {
                     return response;
                 } catch (Exception modelError) {
                     if(modelError instanceof RealModelClient.RouteFailure failure) modelAttempts=failure.attempts();
-                    if (pest || sceneConfig.custom() || !config.isFallbackToRuleTemplate()) throw modelError;
+                    if (pest || voice || sceneConfig.custom() || !config.isFallbackToRuleTemplate()) throw modelError;
                     usedRuleFallback = true;
                     fallbackReason="目标模型调用失败或配置不可用";
                     log.warn("真实模型调用失败，按配置降级规则模板：scene={}, reason={}", sceneCode, modelError.getMessage());

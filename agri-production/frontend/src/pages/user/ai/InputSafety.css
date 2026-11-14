@@ -1,0 +1,8 @@
+.input-safety-page { display:flex; flex-direction:column; gap:20px; }
+.input-safety-hero { display:flex; align-items:center; justify-content:space-between; padding:26px 30px; border:1px solid #d7e8ee; border-radius:14px; background:linear-gradient(115deg,#edf8fa,#f8fbfa); }
+.input-safety-hero h3.ant-typography { margin:12px 0 8px; color:#175a67; }
+.input-safety-hero .ant-typography { margin-bottom:0; }
+.input-safety-hero-icon { color:#5b9da6; font-size:68px; margin-left:20px; }
+.input-safety-steps { padding:4px 12px 12px; }
+.input-safety-json { max-height:420px; overflow:auto; white-space:pre-wrap; background:#f7faf8; padding:12px; border-radius:8px; font-size:12px; }
+@media (max-width:600px) { .input-safety-hero { padding:20px; } .input-safety-hero-icon { display:none; } .input-safety-steps { display:none; } }

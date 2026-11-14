@@ -4,8 +4,8 @@ server:
 spring:
   servlet:
     multipart:
-      max-file-size: 5MB
-      max-request-size: 6MB
+      max-file-size: 12MB
+      max-request-size: 14MB
   application:
     name: agri-production
   profiles:
@@ -75,6 +75,16 @@ p2t:
   trade-channel-token: "${P2T_TRADE_CHANNEL_TOKEN:agri-p2t-channel-2026}"
 
 agri:
+  voice:
+    local-enabled: "${AGRI_VOICE_LOCAL_ENABLED:true}"
+    ffmpeg: "${AGRI_VOICE_FFMPEG:}"
+    # 标准音频转写接口完整地址；未配置时仅保留录音并转人工补录。
+    asr-url: "${AGRI_VOICE_ASR_URL:}"
+    asr-key: "${AGRI_VOICE_ASR_KEY:}"
+    asr-model: "${AGRI_VOICE_ASR_MODEL:}"
+  input-registration-sync:
+    default-url: "${AGRI_INPUT_REGISTRATION_URL:https://zzys.moa.gov.cn/gzdt/202506/P020250605415301749040.xls}"
+    max-bytes: ${AGRI_INPUT_REGISTRATION_MAX_BYTES:52428800}
   # 生产写接口的能力校验：调用核心平台内部接口（共享内部令牌）
   capability:
     check-url: "${CORE_CAPABILITY_CHECK_URL:http://localhost:8093/api/v1/internal/capability-check}"

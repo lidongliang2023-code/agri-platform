@@ -65,6 +65,8 @@ public class TraceLifecycleServiceImpl implements ITraceLifecycleService {
     private final IDomainEventService domainEventService;
     private final PlotCropMapper plotCropMapper;
     private final GrowthRecordMapper growthRecordMapper;
+    @org.springframework.beans.factory.annotation.Autowired
+    private org.springframework.jdbc.core.JdbcTemplate voiceArchiveDb;
     private final PlotMapper plotMapper;
     private final ProcessRecordMapper processMapper;
 
@@ -471,6 +473,18 @@ public class TraceLifecycleServiceImpl implements ITraceLifecycleService {
             nodes.add(node);
         }
 
+        // 仅展示已确认且明确关联该批次的记录；药肥/采收事实已由原节点表达，不重复。
+        if (voiceArchiveDb != null) {
+            var confirmed = voiceArchiveDb.queryForList("SELECT archive_group,MIN(operation_date) operation_date,MIN(operation_type) operation_type,COUNT(*) evidence_count FROM agri_prod_voice_record WHERE tenant_id=? AND batch_id=? AND state='ARCHIVED' AND usage_id IS NULL AND operation_type<>'harvesting' GROUP BY archive_group", tenantId, batch.getBatchId());
+            for (var row : confirmed) {
+                Map<String,Object> node = new LinkedHashMap<>();
+                node.put("nodeType", "FARM_OPERATION"); node.put("refId", row.get("archive_group"));
+                node.put("nodeName", "已确认农事记录"); node.put("stage", "production"); node.put("operatorName", "已确认");
+                node.put("occurredAt", row.get("operation_date"));
+                node.put("description", "作业类型：" + row.get("operation_type") + "；确认凭证 " + row.get("evidence_count") + " 段；不表示任务已验收或已上链");
+                nodes.add(node);
+            }
+        }
         attachChainEvidence(tenantId, nodes);
         nodes.sort(Comparator.comparing(n -> String.valueOf(n.get("occurredAt") == null ? "" : n.get("occurredAt"))));
         return nodes;

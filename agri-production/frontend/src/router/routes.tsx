@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 路由注册表（唯一路由配置源）
  *
  * 用户端挂 /production、运营端挂 /admin/production，**页面条数不再写死**：
@@ -52,6 +52,7 @@ const PlanDetail = lazy(() => import('@/pages/user/plans/PlanDetail'))
 const PlanCalendar = lazy(() => import('@/pages/user/plans/PlanCalendar'))
 // 农事任务管理
 const TaskList = lazy(() => import('@/pages/user/tasks/TaskList'))
+const VoiceFarmRecords = lazy(() => import('@/pages/user/tasks/VoiceFarmRecords'))
 const TaskDetail = lazy(() => import('@/pages/user/tasks/TaskDetail'))
 const TaskCreate = lazy(() => import('@/pages/user/tasks/TaskCreate'))
 // 任务模板库（运营端维护，2026-10-16 从用户端搬过来）：模板是"标准作业配置"，
@@ -94,6 +95,7 @@ const BlockchainRecordDetail = lazy(() => import('@/pages/user/blockchain/Record
 const BlockchainVerify = lazy(() => import('@/pages/user/blockchain/Verify'))
 // 智能决策中心
 const PestDetection = lazy(() => import('@/pages/user/ai/PestDetection'))
+const InputSafety = lazy(() => import('@/pages/user/ai/InputSafety'))
 const AiAssistant = lazy(() => import('@/pages/user/ai/AiAssistant'))
 const YieldForecast = lazy(() => import('@/pages/user/ai/YieldForecast'))
 // 报表与设置
@@ -334,6 +336,11 @@ export const USER_ROUTES: AppRoute[] = [
     path: 'tasks',
     element: <TaskList />,
     meta: { name: '任务列表', path: '/production/tasks', module: '农事任务管理', prd: 'PRD 6.1 #14' },
+  },
+  {
+    path: 'tasks/voice-records',
+    element: <VoiceFarmRecords />,
+    meta: { name: '语音农事归档', path: '/production/tasks/voice-records', module: '农事生产', prd: 'AI 场景47' },
   },
   {
     path: 'tasks/create',
@@ -690,6 +697,16 @@ export const USER_ROUTES: AppRoute[] = [
       path: '/production/ai/pest-detection',
       module: '分析与决策',
       prd: 'PRD 6.1 #40',
+    },
+  },
+  {
+    path: 'ai/input-safety',
+    element: <InputSafety />,
+    meta: {
+      name: '投入品推荐与安全校验',
+      path: '/production/ai/input-safety',
+      module: '分析与决策',
+      prd: '场景 48',
     },
   },
   {

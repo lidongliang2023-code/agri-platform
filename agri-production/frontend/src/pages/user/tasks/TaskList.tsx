@@ -761,6 +761,7 @@ export default function TaskList(): JSX.Element {
         >
           新建任务
         </Button>,
+        <Button key="voice" onClick={() => navigate('/production/tasks/voice-records')}>语音农事归档</Button>,
         <Button
           key="today"
           onClick={() => {
