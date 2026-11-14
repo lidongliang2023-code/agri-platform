@@ -1,29 +1,52 @@
-import { useNavigate } from 'react-router-dom'
-import { Alert, Button, Card, Space } from 'antd'
+import { useState } from 'react'
+import dayjs from 'dayjs'
+import YieldMarketPrices from './YieldMarketPrices'
+import type { MarketQuote } from '@/api/yield-forecast'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Alert, App, Button, Card, Col, DatePicker, Descriptions, Divider, Empty, Form, Input, InputNumber, List, Row, Space, Statistic, Table, Tag, Typography } from 'antd'
+import { LineChartOutlined, ReloadOutlined, SendOutlined } from '@ant-design/icons'
 import PageContainer from '@/components/ProductionPageContainer'
+import { feedbackYieldForecast, getYieldForecast, inferYieldForecast, listYieldForecasts } from '@/api/yield-forecast'
+import type { YieldForecastRequest, YieldForecastDetail } from '@/api/yield-forecast'
 
 export default function YieldForecast(): JSX.Element {
-  const navigate = useNavigate()
-  return (
-    <PageContainer title="产量预测" subTitle="算法模型接入状态说明">
-      <Space direction="vertical" size={16} style={{ width: '100%' }}>
-        <Alert
-          type="info"
-          showIcon
-          message="产量预测算法模型未接入"
-          description="当前部署未接入产量预测模型，不使用样本量或固定数值推算产量。生产排产与产量核算请查阅实际采收台账、在地地块面积与农事计划。"
-        />
-        <Card title="可用业务替代入口">
-          <Space wrap size={16}>
-            <Button type="primary" onClick={() => navigate('/production/harvests')}>
-              查看采收台账
-            </Button>
-            <Button onClick={() => navigate('/production/plots')}>查看地块台账</Button>
-            <Button onClick={() => navigate('/production/plans')}>查看农事计划</Button>
-            <Button onClick={() => navigate('/production/ai/assistant')}>前往农事智能助手</Button>
-          </Space>
-        </Card>
-      </Space>
-    </PageContainer>
-  )
+  const { message } = App.useApp()
+  const [form] = Form.useForm<YieldForecastRequest & { harvestStart: dayjs.Dayjs; harvestEnd: dayjs.Dayjs }>()
+  const cropName = Form.useWatch('cropName', form) as string | undefined
+  const [selectedQuote, setSelectedQuote] = useState<MarketQuote>()
+  const [current, setCurrent] = useState<YieldForecastDetail>()
+  const client = useQueryClient()
+  const history = useQuery({ queryKey: ['yield-forecasts'], queryFn: () => listYieldForecasts({ pageNum: 1, pageSize: 20 }) })
+  const loadDetail = async (id: string): Promise<void> => { setCurrent(await getYieldForecast(id)) }
+  const infer = useMutation({ mutationFn: (values: YieldForecastRequest & { harvestStart: dayjs.Dayjs; harvestEnd: dayjs.Dayjs }) => inferYieldForecast({ ...values, marketQuoteId: selectedQuote?.cropName === (values.cropName === '番茄' ? '西红柿' : values.cropName === '马铃薯' ? '土豆' : values.cropName) ? selectedQuote.id : undefined, harvestStart: values.harvestStart.format('YYYY-MM-DD'), harvestEnd: values.harvestEnd.format('YYYY-MM-DD'), forecastDate: dayjs().format('YYYY-MM-DD'), dataCutoff: dayjs().format('YYYY-MM-DD') }), onSuccess: row => { setCurrent(row); void client.invalidateQueries({ queryKey: ['yield-forecasts'] }); message.success('预测与销售建议已保存为可追溯快照') }, onError: (e: Error) => message.error(e.message) })
+  const feedback = useMutation({ mutationFn: (values: { actualQuantity: number; unit: string; actualDate: string; note?: string }) => feedbackYieldForecast(current!.id, values), onSuccess: row => { setCurrent(row); void client.invalidateQueries({ queryKey: ['yield-forecasts'] }); message.success('实际采收已回填，偏差已留痕') }, onError: (e: Error) => message.error(e.message) })
+  return <PageContainer title="产量预估与销售时机建议" subTitle="长势与气象输入 · 产量区间预测 · 分批出货建议 · 实际采收回填">
+    <Space direction="vertical" size={20} style={{ width: '100%' }}>
+      <Card className="yield-hero"><Space align="start"><LineChartOutlined style={{ fontSize: 30, color: '#0b6379' }} /><div><Tag color="blue">AI 农技助手 · 场景 49</Tag><Typography.Title level={3} style={{ margin: '8px 0' }}>融合真实输入生成可追溯的产量区间和销售建议</Typography.Title><Typography.Text>建议只作为决策参考，实际采收由采收台账记录，订单和交易仍由产销对接模块负责。</Typography.Text></div></Space></Card>
+      <Row gutter={[20, 20]}>
+        <Col xs={24} xl={9}><Card title="① 输入与数据" extra={<Tag color="green">INPUT</Tag>}><Form form={form} layout="vertical" onFinish={values => infer.mutate(values)} initialValues={{ harvestStart: dayjs().add(14, 'day'), harvestEnd: dayjs().add(35, 'day'), areaMu: 10, historyYield: 1000, ndviScore: 1, weatherFactor: 1, shipmentBatches: 2 }} disabled={infer.isPending}>
+          <Form.Item name="cropName" label="作物" rules={[{ required: true, message: '请填写作物' }]}><Input placeholder="例如：番茄" /></Form.Item>
+          <Form.Item name="cropVariety" label="品种"><Input placeholder="可选，例如：普罗旺斯" /></Form.Item>
+          <Row gutter={10}><Col span={12}><Form.Item name="areaMu" label="种植面积（亩）" rules={[{ required: true }]}><InputNumber min={0.01} style={{ width: '100%' }} /></Form.Item></Col><Col span={12}><Form.Item name="historyYield" label="历史/基准亩产（kg）" rules={[{ required: true }]}><InputNumber min={0.01} style={{ width: '100%' }} /></Form.Item></Col></Row>
+          <Row gutter={10}><Col span={12}><Form.Item name="ndviScore" label="长势系数"><InputNumber min={0} max={1.2} step={0.01} style={{ width: '100%' }} /></Form.Item></Col><Col span={12}><Form.Item name="weatherFactor" label="天气修正系数"><InputNumber min={0.7} max={1.2} step={0.01} style={{ width: '100%' }} /></Form.Item></Col></Row>
+          <Row gutter={10}><Col span={12}><Form.Item name="harvestStart" label="预计采收开始" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} /></Form.Item></Col><Col span={12}><Form.Item name="harvestEnd" label="预计采收结束" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} /></Form.Item></Col></Row>
+          <Alert showIcon type={selectedQuote && (selectedQuote.cropName === cropName || (cropName === '番茄' && selectedQuote.cropName === '西红柿') || (cropName === '马铃薯' && selectedQuote.cropName === '土豆')) ? 'success' : 'info'} message={selectedQuote && (selectedQuote.cropName === cropName || (cropName === '番茄' && selectedQuote.cropName === '西红柿') || (cropName === '马铃薯' && selectedQuote.cropName === '土豆')) ? `已选 ${selectedQuote.quoteDate} · ${selectedQuote.priceKg} 元/kg · ${selectedQuote.market}` : '可在下方真实行情中引用报价；不引用时只生成产量和批次参考，不填入价格。'} />
+          {selectedQuote && <Button type="link" onClick={() => setSelectedQuote(undefined)}>取消行情引用</Button>}
+          <Form.Item name="shipmentBatches" label="建议分批数"><InputNumber min={1} max={4} precision={0} style={{ width: '100%' }} /></Form.Item>
+          <Alert showIcon type="info" message="缺少面积或历史/基准亩产时拒绝生成，不使用固定样例数值。" /><Button block type="primary" htmlType="submit" loading={infer.isPending} icon={<LineChartOutlined />} style={{ marginTop: 16 }}>生成预测与销售建议</Button>
+        </Form></Card></Col>
+        <Col xs={24} xl={15}><Card title="③ 输出与动作" extra={<Button icon={<ReloadOutlined />} onClick={() => void history.refetch()}>刷新历史</Button>}>{current ? <ForecastResult current={current} feedback={feedback} /> : <Empty description="填写真实输入后生成预测快照" />}</Card></Col>
+      </Row>
+      <YieldMarketPrices crop={cropName ?? ''} onSelect={setSelectedQuote} />
+      <Card title="分析结果" extra={<Tag color="blue">本次预测快照</Tag>}><Table size="middle" rowKey="id" dataSource={history.data?.list ?? []} pagination={false} locale={{ emptyText: <Empty description="暂无预测记录" /> }} columns={[{ title: '作物 / 品种', render: (_, r) => `${String(r.crop_name ?? '')} · ${String(r.crop_variety ?? '—')}` }, { title: '预测日', dataIndex: 'forecast_date' }, { title: '采收期', render: (_, r) => `${String(r.harvest_start)} 至 ${String(r.harvest_end)}` }, { title: '数据截止', dataIndex: 'data_cutoff' }, { title: '状态', dataIndex: 'status', render: v => <Tag color={v === 'ACTIVE' ? 'green' : 'default'}>{v === 'ACTIVE' ? '有效' : '已失效'}</Tag> }, { title: '操作', render: (_, r) => <Button type="link" onClick={() => void loadDetail(String(r.id))}>查看结果</Button> }]} /></Card>
+      <Alert type="warning" showIcon message="规则与边界" description="早期预测必须标注仅供参考；建议标注数据截止时间和有效期，不替代农户自主决策；不与平台自营采购形成未披露利益冲突；跨周未更新自动失效。产量建议不修改采收台账、不创建订单，实际采收和销售结果回到原业务模块。" />
+      <Row gutter={[20, 20]}><Col xs={24} md={8}><Card title="使用角色 / 适用对象">种植户、合作社、经纪人，以及负责订单锁量的合作社销售。</Card></Col><Col xs={24} md={8}><Card title="业务价值">把地块长势、天气、历史产量和价格区间放在同一份快照中，减少集中上市和惜售风险。</Card></Col><Col xs={24} md={8}><Card title="依赖组件 / 关联模块">地块档案、天气预报、采收台账、行情数据、仓储损耗、产销对接；预测每周更新。</Card></Col></Row>
+    </Space>
+  </PageContainer>
+}
+
+function ForecastResult({ current, feedback }: { current: YieldForecastDetail; feedback: { isPending: boolean; mutate: (value: { actualQuantity: number; unit: string; actualDate: string; note?: string }) => void } }): JSX.Element {
+  const [actual, setActual] = useState('')
+  const result = current.result
+  return <Space direction="vertical" style={{ width: '100%' }} size={16}><Space wrap><Tag color={result.earlyReferenceOnly ? 'orange' : 'green'}>{result.earlyReferenceOnly ? '早期预估，仅供参考' : '当前预测有效'}</Tag><Typography.Text type="secondary">数据截止：{current.dataCutoff} · 有效至：{current.validUntil}</Typography.Text></Space><Row gutter={12}><Col span={8}><Statistic title="预估总产量" value={result.predictedTotal} suffix="kg" /></Col><Col span={8}><Statistic title="区间下限" value={result.lowerTotal} suffix="kg" /></Col><Col span={8}><Statistic title="区间上限" value={result.upperTotal} suffix="kg" /></Col></Row><Descriptions bordered size="small" column={1} items={[{ key: 'harvest', label: '采收窗口', children: `${result.harvestStart} 至 ${result.harvestEnd}` }, { key: 'price', label: result.priceKind === 'OBSERVED_WHOLESALE_PRICE' ? '引用历史批发价' : '价格依据', children: result.priceKind === 'OBSERVED_WHOLESALE_PRICE' ? `${result.priceLow} 元/kg` : result.priceLow }, { key: 'reason', label: '说明', children: result.notice }]} />{result.priceNotice && <Alert type="info" showIcon message={result.priceNotice} />}{result.marketEvidence?.id && <Descriptions bordered size="small" column={1} items={[{ key: 'market', label: '行情市场', children: `${result.marketEvidence.market} · ${result.marketEvidence.region}` }, { key: 'date', label: '报价日期', children: result.marketEvidence.quoteDate }, { key: 'original', label: '原始单位', children: `${result.marketEvidence.originalPrice} ${result.marketEvidence.originalUnit}` }, { key: 'source', label: '出处', children: <Typography.Link href={result.marketEvidence.sourceUrl} target="_blank" rel="noopener noreferrer">官方报告</Typography.Link> }]} />}<Card size="small" title="分批出货参考"><List size="small" dataSource={result.shipments} renderItem={item => <List.Item><List.Item.Meta title={`第 ${item.sequence} 批 · ${Math.round(item.ratio * 100)}% · ${item.quantity} kg · ${item.suggestedDate}`} description={item.reason} /></List.Item>} /></Card><Divider orientation="left">实际采收回填</Divider><Space><InputNumber min={0.01} value={actual ? Number(actual) : undefined} onChange={v => setActual(v == null ? '' : String(v))} placeholder="实际采收量" /><Button type="primary" icon={<SendOutlined />} disabled={!actual} loading={feedback.isPending} onClick={() => feedback.mutate({ actualQuantity: Number(actual), unit: 'kg', actualDate: dayjs().format('YYYY-MM-DD') })}>回填并记录偏差</Button></Space>{current.feedback?.length > 0 && <Typography.Text type="secondary">已回填 {current.feedback.length} 次，详见记录留痕。</Typography.Text>}</Space>
 }

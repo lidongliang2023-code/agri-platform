@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 侧边栏菜单配置
  *
  * 用户端按生产业务流程组织两级分类；
@@ -144,6 +144,7 @@ export const USER_MENU: MenuGroup[] = [
       { key: '/production/analytics/reports', label: '生产报表' },
       { key: '/production/ai/pest-detection', label: '多模态病虫害诊断' },
       { key: '/production/ai/input-safety', label: '投入品推荐与安全校验' },
+      { key: '/production/ai/yield-forecast', label: '产量预估与销售建议' },
       { key: '/production/ai/assistant', label: '农事智能助手' },
     ],
   },
