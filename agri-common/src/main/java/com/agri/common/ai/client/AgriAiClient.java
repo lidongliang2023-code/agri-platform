@@ -56,7 +56,7 @@ public class AgriAiClient {
             HttpResponse response = HttpRequest.post(aiHubUrl)
                     .header("Content-Type", "application/json; charset=utf-8")
                     .body(payload)
-                    .timeout(timeoutMs)
+                    .timeout("farm.pest.diagnosis".equals(request.getSceneCode()) ? Math.max(timeoutMs, 55000) : timeoutMs)
                     .execute();
 
             long latency = System.currentTimeMillis() - startTime;
@@ -81,6 +81,10 @@ public class AgriAiClient {
      * 当外部网络或独立中台暂时离线时，确保业务子系统单据正常推进而不阻断核心业务流程
      */
     private AiInvokeResponse fallbackMockResponse(AiInvokeRequest request, String reason) {
+        if ("farm.pest.diagnosis".equals(request.getSceneCode())) {
+            return AiInvokeResponse.builder().ok(false).status("FAILED").sceneCode(request.getSceneCode())
+                    .message("病虫害真实诊断暂不可用，不生成演示结论").build();
+        }
         Map<String, Object> fallbackResult = new HashMap<>();
         fallbackResult.put("_fallback", true);
         fallbackResult.put("_reason", reason);

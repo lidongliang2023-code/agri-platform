@@ -82,7 +82,7 @@ export default function Models(): JSX.Element {
           <Descriptions.Item label="生产 SOP">生产域维护规程、版本、适用阶段和发布状态</Descriptions.Item>
           <Descriptions.Item label="生产 AI 会话">生产域保存会话、消息和业务引用，回答来源明确标记</Descriptions.Item>
           <Descriptions.Item label="当前模型配置">{data?.modelConfigured ? '已配置' : '未配置'}</Descriptions.Item>
-          <Descriptions.Item label="调用审计落库">{data?.auditWritable ? '已启用' : '当前为运行日志/内存审计'}</Descriptions.Item>
+          <Descriptions.Item label="调用审计持久化">{data?.auditWritable ? '文件审计已启用' : '文件不可写，当前仅内存审计'}</Descriptions.Item>
         </Descriptions>
       </Card>
       <Card>

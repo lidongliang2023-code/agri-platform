@@ -62,6 +62,12 @@ public class RealModelClient {
         return complete(channel,systemPrompt,userPrompt,"");
     }
     public Result complete(ModelProviderSettings.Channel channel, String systemPrompt, String userPrompt, String sceneCode) {
+        return complete(channel,systemPrompt,userPrompt,sceneCode,List.of());
+    }
+    public Result complete(ModelProviderSettings.Channel channel,String systemPrompt,String userPrompt,String sceneCode,List<String> images) {
+        if(images==null || images.size()>3 || images.stream().anyMatch(image -> image==null || image.length()>1_400_000 ||
+            !(image.startsWith("data:image/jpeg;base64,") || image.startsWith("data:image/png;base64,"))))
+            throw new IllegalArgumentException("多模态图片格式无效");
         if(!config.isRealInferenceEnabled()) throw new IllegalStateException("真实推理开关已关闭");
         var route=settings.route(channel); var attempts=new java.util.ArrayList<Map<String,Object>>();
         long started=System.nanoTime();
@@ -80,7 +86,7 @@ public class RealModelClient {
             }
             try {
                 if(!isConfigured(target)) throw new ModelFailure("配置不完整",null,true);
-                var result=attempt(target,systemPrompt,userPrompt,attemptTimeout);
+                var result=attempt(target,systemPrompt,userPrompt,attemptTimeout,images);
                 circuits.success(ticket);
                 entry.put("status","SUCCESS"); entry.put("latency_ms",(System.nanoTime()-start)/1000000);attempts.add(entry);
                 statistics.record(channel,sceneCode,route.channels().size()>1,attempts,true,(System.nanoTime()-started)/1000000);
@@ -95,7 +101,7 @@ public class RealModelClient {
         statistics.record(channel,sceneCode,route.channels().size()>1,attempts,false,(System.nanoTime()-started)/1000000);
         throw new RouteFailure(attempts);
     }
-    private Result attempt(ModelProviderSettings.Channel channel,String systemPrompt,String userPrompt,int timeoutMs) {
+    private Result attempt(ModelProviderSettings.Channel channel,String systemPrompt,String userPrompt,int timeoutMs,List<String> images) {
         var factory=new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(Math.max(1,Math.min(config.getConnectTimeoutMs(),timeoutMs)));
         factory.setReadTimeout(timeoutMs);
@@ -104,9 +110,12 @@ public class RealModelClient {
         if(!"NONE".equals(channel.authType())&&(requestKey.isBlank()||"your-api-key".equalsIgnoreCase(requestKey))) throw new IllegalStateException("真实模型通道未配置 API Key");
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("model", requestModel);
+        var content=new java.util.ArrayList<Map<String,Object>>();
+        content.add(Map.of("type","text","text",userPrompt + "\n\n请仅返回一个合法 JSON 对象，不要使用 Markdown 代码块。"));
+        for(String image:images) content.add(Map.of("type","image_url","image_url",Map.of("url",image)));
         body.put("messages", List.of(
                 Map.of("role", "system", "content", systemPrompt),
-                Map.of("role", "user", "content", userPrompt + "\n\n请仅返回一个合法 JSON 对象，不要使用 Markdown 代码块。")));
+                Map.of("role", "user", "content", images.isEmpty()?userPrompt + "\n\n请仅返回一个合法 JSON 对象，不要使用 Markdown 代码块。":content)));
         body.put("temperature", 0.2);
         body.put("max_tokens", 2048);
 

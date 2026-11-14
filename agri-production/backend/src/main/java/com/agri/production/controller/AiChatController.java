@@ -28,9 +28,7 @@ import java.util.Map;
  * {@code PATCH /ai/assistant/sessions/{id}}（重命名）、{@code DELETE /ai/assistant/sessions/{id}}（删除）、
  * {@code GET /ai/assistant/sessions/{id}/messages}（消息）、{@code POST /ai/assistant/messages}（提问）。</p>
  *
- * <p><b>刻意未实现</b>：{@code POST /ai/pest-detection}、{@code GET|POST /ai/yield-forecast}、
- * {@code GET /ai/yield-forecast/accuracy} —— 本部署没有模型，识别与预测类数字一旦被当真会直接影响
- * 生产决策（方案第五节的定论）。这些路径经网关 404 回退平台侧，不受本服务影响。</p>
+ * <p>病虫害病例写入、核验和随访由 PestDiagnosisController 统一负责；此处保留旧诊断历史读取及助手会话。</p>
  */
 @RestController
 @RequestMapping("/api/v1/production/ai")

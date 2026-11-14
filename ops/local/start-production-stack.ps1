@@ -312,14 +312,30 @@ try {
             $nginx='C:\nginx\nginx.exe'
             if (!$CheckOnly) {
                 if (!(Test-Path $GatewayPrefix)) { throw '网关目录不存在' }
-                $chk=Launch $nginx @('-p',('"'+$GatewayPrefix+'"'),'-c','conf/nginx.conf','-t') $GatewayPrefix 'nginx-config-check' @{}
-                if (!$chk.WaitForExit(15000)) {
-                    # 只结束本次创建的配置检查进程，不触碰正在运行的网关。
-                    $chk.Kill()
-                    throw '网关配置检查超过 15 秒，已终止本次检查进程；现有网关未停止'
-                }
-                $chk.Refresh()
-                if ($chk.ExitCode -ne 0) { throw '网关配置检查失败，请查看 nginx-config-check 日志' }
+                $checkInfo = New-Object System.Diagnostics.ProcessStartInfo
+                $checkInfo.FileName = $nginx
+                $checkInfo.Arguments = '-p "' + $GatewayPrefix + '" -c conf/nginx.conf -t'
+                $checkInfo.WorkingDirectory = $GatewayPrefix
+                $checkInfo.UseShellExecute = $false
+                $checkInfo.CreateNoWindow = $true
+                $checkInfo.RedirectStandardOutput = $true
+                $checkInfo.RedirectStandardError = $true
+                $chk = New-Object System.Diagnostics.Process
+                $chk.StartInfo = $checkInfo
+                try {
+                    $null = $chk.Start()
+                    $checkOut = $chk.StandardOutput.ReadToEndAsync()
+                    $checkErr = $chk.StandardError.ReadToEndAsync()
+                    if (!$chk.WaitForExit(15000)) {
+                        $chk.Kill()
+                        throw '网关配置检查超过 15 秒，现有网关未停止'
+                    }
+                    $checkExitCode = $chk.ExitCode
+                    foreach ($text in @($checkOut.GetAwaiter().GetResult(), $checkErr.GetAwaiter().GetResult())) {
+                        if ($text) { Write-CheckMessage $text.Trim() }
+                    }
+                    if ($checkExitCode -ne 0) { throw '网关配置检查失败，请查看本次巡检日志' }
+                } finally { $chk.Dispose() }
             }
             if (!(Test-Port 80) -and !$CheckOnly) {
                 $null=Launch $nginx @('-p',('"'+$GatewayPrefix+'"'),'-c','conf/nginx.conf') $GatewayPrefix 'nginx' @{}

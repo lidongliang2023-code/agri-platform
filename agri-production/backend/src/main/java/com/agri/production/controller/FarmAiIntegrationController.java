@@ -44,22 +44,4 @@ public class FarmAiIntegrationController {
         return ApiResponse.success("智能农事排程生成成功", response);
     }
 
-    /**
-     * 智能植保与病虫害诊断推荐
-     */
-    @PostMapping("/pest-diagnosis")
-    public ApiResponse<AiInvokeResponse> diagnosePest(@RequestBody Map<String, Object> params) {
-        String inspectId = String.valueOf(params.getOrDefault("inspectId", "insp-" + System.currentTimeMillis()));
-        log.info("[PRODUCTION-AI] 触发田间巡检智能诊断: inspectId={}", inspectId);
-
-        AiInvokeRequest req = AiInvokeRequest.builder()
-                .sceneCode("farm.pest.diagnosis")
-                .bizSystem("farm_prod")
-                .bizId(inspectId)
-                .input(params)
-                .build();
-
-        AiInvokeResponse response = agriAiClient.invoke(req);
-        return ApiResponse.success("病害智能诊断完成", response);
-    }
 }

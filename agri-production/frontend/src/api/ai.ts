@@ -7,7 +7,6 @@ import type {
   AiDiagnosisRecord,
   ChatMessage,
   ChatSession,
-  PestDetection,
   YieldForecast,
 } from '@/types'
 
@@ -28,29 +27,8 @@ export function listAiDiagnoses(
   return http.get<PageResult<AiDiagnosisRecord>>(BASE, params)
 }
 
-/** 分页查询病虫害识别记录 */
-export function listPestDetections(
-  params: PageQuery & { plotId?: string; status?: number },
-): Promise<PageResult<PestDetection>> {
-  return http.get<PageResult<PestDetection>>(
-    `${BASE}/pest-detection`,
-    params,
-  )
-}
-
-/** 上传图片进行病虫害识别 */
-export function detectPest(payload: {
-  imageUrl: string
-  plotId?: string
-  cropId?: string
-}): Promise<PestDetection> {
-  return http.post<PestDetection>(`${BASE}/pest-detection`, payload)
-}
-
-/** 查询识别结果详情 */
-export function getPestDetection(detectId: string): Promise<PestDetection> {
-  return http.get<PestDetection>(`${BASE}/pest-detection/${detectId}`)
-}
+/** 病虫害所有入口复用同一生产病例接口，不再维护旧版结果契约。 */
+export { listPestCases as listPestDetections, submitPestCase as detectPest, getPestCase as getPestDetection } from './pest-diagnosis'
 
 /** 查询问答会话列表 */
 export function listChatSessions(): Promise<ChatSession[]> {

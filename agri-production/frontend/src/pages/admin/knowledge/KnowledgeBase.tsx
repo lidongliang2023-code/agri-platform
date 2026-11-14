@@ -1,3 +1,5 @@
+import PestAtlasPanel from './PestAtlasPanel'
+import PestImageSamplesPanel from './PestImageSamplesPanel'
 import Table from '@/components/ProductionListTable'
 import { useMemo, useRef, useState } from 'react'
 import ContentEditor, { CONTENT_LIMIT, ContentPreview, hasContent, normalizeContent, safeContentUrl } from '@/components/ContentEditor'
@@ -185,6 +187,8 @@ export default function KnowledgeBase(): JSX.Element {
         pagination={{ current: page, pageSize, total: list.data?.total ?? 0, onChange: (next, size) => { setPage(next); setPageSize(size) } }}
       />
     </Card>
+    <PestAtlasPanel />
+    <PestImageSamplesPanel />
     <Drawer title={detail ? `文章详情 - ${dash(detail.title)}` : '文章详情'} width={720} open={Boolean(detail)} onClose={() => setDetail(null)}>
       {detail ? <Space direction="vertical" size={16} style={{ width: '100%' }}><Descriptions bordered column={2}><Descriptions.Item label="文章编号">{dash(detail.articleId)}</Descriptions.Item><Descriptions.Item label="分类">{CATEGORY_NAMES[detail.categoryCode ?? ''] ?? dash(detail.categoryCode)}</Descriptions.Item><Descriptions.Item label="来源">{dash(detail.source ?? detail.author)}</Descriptions.Item><Descriptions.Item label="状态">{statusTag(detail.status)}</Descriptions.Item><Descriptions.Item label="阅读数">{dash(detail.readCount)}</Descriptions.Item><Descriptions.Item label="更新时间">{dash(detail.updatedAt)}</Descriptions.Item><Descriptions.Item label="摘要" span={2}>{dash(detail.summary)}</Descriptions.Item></Descriptions><Card title="文章正文"><ContentPreview value={detail.content} /></Card>{safeContentUrl(detail.contentUrl) ? <Typography.Link href={safeContentUrl(detail.contentUrl)} target="_blank" rel="noreferrer"><LinkOutlined /> 打开正文链接</Typography.Link> : <Typography.Text type="secondary">未配置正文链接</Typography.Text>}</Space> : null}
     </Drawer>

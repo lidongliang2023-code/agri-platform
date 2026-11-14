@@ -141,6 +141,7 @@ export const USER_MENU: MenuGroup[] = [
     children: [
       { key: '/production/analytics', label: '数据分析总览' },
       { key: '/production/analytics/reports', label: '生产报表' },
+      { key: '/production/ai/pest-detection', label: '多模态病虫害诊断' },
       { key: '/production/ai/assistant', label: '农事智能助手' },
     ],
   },

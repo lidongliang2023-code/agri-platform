@@ -113,3 +113,9 @@ management:
 production:
   content-images:
     directory: "${PRODUCTION_CONTENT_IMAGE_DIR:./data/production-content-images}"
+
+# 生产病例经AI中台真实推理；允许部署环境覆盖地址。
+ai:
+  hub:
+    url: ${AI_HUB_URL:http://127.0.0.1:8201/api/ai/invoke}
+    timeout: 55000

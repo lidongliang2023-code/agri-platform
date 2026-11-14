@@ -64,7 +64,13 @@ export function getAiHubOverview(): Promise<AiHubOverview> {
 }
 
 export function listAiHubScenes(): Promise<AiHubScene[]> {
-  return aiHub.get('/scenes').then((res) => res.data.data ?? [])
+  return aiHub.get('/scenes').then((res) => (res.data.data ?? []).map((row: Record<string, unknown>) => ({
+    ...row,
+    sceneCode: String(row.sceneCode ?? row.code ?? ''),
+    sceneName: String(row.sceneName ?? row.name ?? ''),
+    model: row.model ?? (row.providerId ? `场景渠道：${row.providerId}` : '跟随中台全局模型'),
+    promptVersion: row.promptVersion ?? (row.publishedVersion == null ? undefined : `V${row.publishedVersion}`),
+  })))
 }
 
 export function listAiHubProviders(): Promise<AiHubProvider[]> {
