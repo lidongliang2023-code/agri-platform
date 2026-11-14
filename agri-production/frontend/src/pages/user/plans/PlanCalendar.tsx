@@ -12,6 +12,7 @@ import PageContainer from '@/components/ProductionPageContainer'
 import Card from '@/components/SectionCard'
 import './plans.css'
 import './calendar.css'
+import CalendarArrangementPanel from './CalendarArrangementPanel'
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -241,6 +242,7 @@ export default function PlanCalendar(): JSX.Element {
       ]}
     >
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
+      <CalendarArrangementPanel farmId={farmId} />
       {calendarUnavailableReasons.length > 0 && (
         <AntAlert
           showIcon

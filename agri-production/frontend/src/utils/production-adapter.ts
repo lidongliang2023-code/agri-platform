@@ -427,6 +427,7 @@ export const TASK_TYPE_META: Record<string, string> = {
   tillage: '整地',
   sowing: '播种/移栽',
   fertilizing: '施肥',
+  ventilation: '通风控湿',
   irrigating: '灌溉',
   pest_control: '植保/施药',
   pruning: '修剪/整枝',

@@ -1,0 +1,8 @@
+.calendar-arrangement { margin-bottom: 16px; }
+.calendar-arrangement .arrange-intro { display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 20px 24px; margin-bottom: 16px; border-radius: 12px; background: linear-gradient(115deg, #ecf7f0, #eff7fa); }
+.calendar-arrangement .arrange-intro h4 { margin: 0 0 8px; color: #175b46; }
+.calendar-arrangement .arrange-intro .ant-typography { max-width: 800px; }
+.calendar-arrangement .arrange-intro > .anticon { font-size: 48px; color: #31876c; }
+.calendar-arrangement > .ant-card-body > .ant-alert { margin-bottom: 16px; }
+.arrange-model-text { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 320px; overflow-y: auto; font-size: 12px; margin-bottom: 0; }
+@media (max-width: 640px) { .calendar-arrangement .arrange-intro { padding: 16px; } .calendar-arrangement .arrange-intro > .anticon { display: none; } }

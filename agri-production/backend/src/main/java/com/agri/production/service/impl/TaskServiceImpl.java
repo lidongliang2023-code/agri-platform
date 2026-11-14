@@ -767,6 +767,6 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
     }
 
     private String generateTaskCode(String tenantId) {
-        return "TSK" + System.currentTimeMillis() % 1000000;
+        return "TSK" + java.util.UUID.randomUUID().toString().replace("-", "");
     }
 }
