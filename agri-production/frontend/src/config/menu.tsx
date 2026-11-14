@@ -146,6 +146,7 @@ export const USER_MENU: MenuGroup[] = [
       { key: '/production/ai/input-safety', label: '投入品推荐与安全校验' },
       { key: '/production/ai/yield-forecast', label: '产量预估与销售建议' },
       { key: '/production/ai/assistant', label: '农事智能助手' },
+      { key: '/production/ai/tech-learning', label: '农技知识问答与培训陪练' },
     ],
   },
   {

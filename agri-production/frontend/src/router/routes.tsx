@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 路由注册表（唯一路由配置源）
  *
  * 用户端挂 /production、运营端挂 /admin/production，**页面条数不再写死**：
@@ -97,6 +97,7 @@ const BlockchainVerify = lazy(() => import('@/pages/user/blockchain/Verify'))
 const PestDetection = lazy(() => import('@/pages/user/ai/PestDetection'))
 const InputSafety = lazy(() => import('@/pages/user/ai/InputSafety'))
 const AiAssistant = lazy(() => import('@/pages/user/ai/AiAssistant'))
+const TechLearning = lazy(() => import('@/pages/user/ai/TechLearning'))
 const YieldForecast = lazy(() => import('@/pages/user/ai/YieldForecast'))
 // 报表与设置
 const AnalyticsOverview = lazy(() => import('@/pages/user/analytics/AnalyticsOverview'))
@@ -718,6 +719,11 @@ export const USER_ROUTES: AppRoute[] = [
       module: '分析与决策',
       prd: 'PRD 6.1 #41',
     },
+  },
+  {
+    path: 'ai/tech-learning',
+    element: <TechLearning />,
+    meta: { name: '农技知识问答与培训陪练', path: '/production/ai/tech-learning', module: '分析与决策', prd: '场景 50' },
   },
   {
     path: 'ai/yield-forecast',
