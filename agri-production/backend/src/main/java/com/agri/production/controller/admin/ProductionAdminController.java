@@ -65,30 +65,7 @@ public class ProductionAdminController {
         this.iotDeviceClient = iotDeviceClient;
     }
 
-    @GetMapping("/dashboard")
-    public ApiResponse<Map<String, Object>> getDashboard() {
-        Map<String, Object> result = new HashMap<>();
-
-        long farmCount = farmMapper.selectCount(null);
-        long taskCount = taskMapper.selectCount(null);
-        long harvestCount = harvestMapper.selectCount(null);
-        long inputCount = inputMaterialMapper.selectCount(null);
-        long traceCount = traceCodeMapper.selectCount(null);
-        long alertCount = alertRecordMapper.selectCount(null);
-        long deviceCount = ioTDeviceMapper.selectCount(null);
-        long inspectionCount = inspectionMapper.selectCount(null);
-
-        result.put("farmCount", farmCount);
-        result.put("taskCount", taskCount);
-        result.put("harvestCount", harvestCount);
-        result.put("inputCount", inputCount);
-        result.put("traceCount", traceCount);
-        result.put("alertCount", alertCount);
-        result.put("deviceCount", deviceCount);
-        result.put("inspectionCount", inspectionCount);
-
-        return ApiResponse.success(result);
-    }
+    // 大盘根接口统一由 AdminDashboardController 聚合，避免旧总数字段覆盖真实 KPI。
 
     @GetMapping("/farms")
     public ApiResponse<PageResult<FarmVO>> getFarmList(FarmPageDTO dto) {

@@ -350,8 +350,10 @@ public class OrderController {
     }
 
     @PostMapping("/{id}/status")
+    @Transactional(rollbackFor = Exception.class)
     public ApiResponse<Boolean> updateOrderStatus(@PathVariable Long id, @RequestBody java.util.Map<String, String> params) {
-        TradeOrder order = orderMapper.selectById(id);
+        TradeOrder order = orderMapper.selectOne(new LambdaQueryWrapper<TradeOrder>()
+                .eq(TradeOrder::getId, id).last("FOR UPDATE"));
         if (order == null) return ApiResponse.error(404, "订单不存在");
         String denied = denyIfNotParticipant(order);
         if (denied != null) return ApiResponse.error(denied);
@@ -378,7 +380,7 @@ public class OrderController {
     }
 
     private void revertOrderStock(TradeOrder order) {
-        if (order == null || !"product".equals(order.getSource())) return;
+        if (order == null || !("product".equals(order.getSource()) || "agent".equals(order.getSource()))) return;
         List<OrderItem> items = itemMapper.selectList(new LambdaQueryWrapper<OrderItem>()
                 .eq(OrderItem::getOrderId, order.getId())
                 .eq(OrderItem::getDelFlag, 0));

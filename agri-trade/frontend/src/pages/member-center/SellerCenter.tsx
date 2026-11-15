@@ -1,3 +1,4 @@
+import TradeAgentPanel from './TradeAgentPanel'
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Modal, message } from 'antd'
@@ -59,6 +60,7 @@ import {
 } from './shared'
 
 const NAV: MemberNavItem[] = [
+  { key: 'agent', label: '供货 Agent', icon: <FileTextOutlined /> },
   { key: 'overview', label: '首页概览', icon: <HomeOutlined /> },
   { key: 'goods', label: '商品管理', icon: <AppstoreOutlined /> },
   { key: 'p2t', label: '产销对接（承接）', icon: <SwapOutlined /> },
@@ -710,7 +712,7 @@ export default function SellerCenter(): JSX.Element {
     </div>
   )
 
-  const content = active === 'publish' ? <ProductCreate embedded />
+  const content = active === 'agent' ? <TradeAgentPanel role="SELLER" /> : active === 'publish' ? <ProductCreate embedded />
     : active === 'sales' ? renderSales()
     : active === 'goods' ? renderGoods()
       : active === 'supply' ? renderSupply()

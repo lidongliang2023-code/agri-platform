@@ -33,9 +33,13 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   fetchAlertLevelMap,
   fetchOpsOverviewMetrics,
+  fetchOverviewRows,
+  fetchRealtimeMetrics,
+  fetchRegionStats,
   fetchRankItems,
+  fetchTrendPoints,
 } from '@/api/admin/dashboard'
-import { TiandituMap } from '@agri/shared'
+import { TiandituMap, chinaRegionCenter, type TiandituMapPoint } from '@agri/shared'
 
 const { Text } = Typography
 
@@ -184,6 +188,38 @@ export default function OpsDataScreen(): JSX.Element {
     refetchInterval: 300_000,
   })
 
+  /** 区域分布：使用生产域真实区域聚合 */
+  const regionQuery = useQuery({
+    queryKey: ['admin', 'dashboard', 'region-distribution'],
+    queryFn: () => fetchRegionStats(),
+    retry: false,
+    refetchInterval: 300_000,
+  })
+
+  /** 近 7 天趋势：真实任务完成率、作业人数和告警数 */
+  const trendQuery = useQuery({
+    queryKey: ['admin', 'dashboard', 'trend'],
+    queryFn: () => fetchTrendPoints(),
+    retry: false,
+    refetchInterval: 300_000,
+  })
+
+  /** 在田作物结构：按当前地块作物聚合真实面积 */
+  const cropQuery = useQuery({
+    queryKey: ['admin', 'dashboard', 'crop-rows'],
+    queryFn: () => fetchOverviewRows({ dimension: 'crop' }),
+    retry: false,
+    refetchInterval: 300_000,
+  })
+
+  /** 最近生产动态：任务与告警事实合并后的真实列表 */
+  const realtimeQuery = useQuery({
+    queryKey: ['admin', 'dashboard', 'realtime'],
+    queryFn: () => fetchRealtimeMetrics(20),
+    retry: false,
+    refetchInterval: 60_000,
+  })
+
   /** 时钟：每秒刷新一次，组件卸载时清理 */
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -278,6 +314,28 @@ export default function OpsDataScreen(): JSX.Element {
       .filter((item) => item.count > 0)
   }, [alertQuery.data])
 
+  const regionMapPoints = useMemo<TiandituMapPoint[]>(() => {
+    return (regionQuery.data ?? []).flatMap((item) => {
+      const center = chinaRegionCenter(item.region)
+      return center
+        ? [{
+            id: item.region,
+            longitude: center.longitude,
+            latitude: center.latitude,
+            title: item.region,
+            meta: `${item.farmCount} 个农场 · ${Number(item.fieldArea).toLocaleString('zh-CN')} 亩`,
+            tone: item.activityLevel === 'high' ? 'green' : item.activityLevel === 'middle' ? 'orange' : 'red',
+          }]
+        : []
+    })
+  }, [regionQuery.data])
+
+  const cropRows = useMemo(() => (cropQuery.data ?? []).map((item) => ({
+    name: item.name,
+    area: Number(item.fieldArea) || 0,
+    farmCount: Number(item.farmCount) || 0,
+  })).sort((a, b) => b.area - a.area), [cropQuery.data])
+
   /** 切换全屏 */
   const toggleFullscreen = (): void => {
     if (document.fullscreenElement) {
@@ -304,7 +362,7 @@ export default function OpsDataScreen(): JSX.Element {
   }
 
   /** 真实数据是否至少有一个源成功 */
-  const hasRealData = Boolean(overviewQuery.data || rankQuery.data || alertQuery.data)
+  const hasRealData = Boolean(overviewQuery.data || rankQuery.data || alertQuery.data || regionQuery.data || trendQuery.data || cropQuery.data || realtimeQuery.data)
 
   return (
     <div
@@ -322,7 +380,7 @@ export default function OpsDataScreen(): JSX.Element {
         type="warning"
         showIcon
         style={{ marginBottom: 12 }}
-        message="大屏口径说明：核心指标、TOP 农场榜、告警级别分布取自真实接口；区域分布 / 实时滚动流 / 近 12 小时趋势 / 作物结构后端暂无接口，显示为空态，不做示例数据填充"
+        message="大屏口径说明：核心指标、区域分布、近 7 天趋势、作物结构、生产动态、TOP 农场榜和告警级别均取真实生产接口；没有历史设备小时数据，因此不虚构设备趋势"
       />
 
       {/* 大屏顶栏 */}
@@ -431,29 +489,35 @@ export default function OpsDataScreen(): JSX.Element {
           marginBottom: 12,
         }}
       >
-        {/* 区域生产分布：后端暂无 /admin/dashboard/region-distribution 端点 */}
+        {/* 区域生产分布：真实生产域区域聚合 */}
         <div style={panelStyle}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-            <span style={{ fontSize: 15, fontWeight: 600, color: SCREEN_THEME.text }}>
-              区域生产分布
-            </span>
-            <span style={{ fontSize: 12, color: SCREEN_THEME.accentOrange }}>未接入</span>
+            <span style={{ fontSize: 15, fontWeight: 600, color: SCREEN_THEME.text }}>区域生产分布</span>
+            <span style={{ fontSize: 12, color: SCREEN_THEME.accent }}>{regionMapPoints.length > 0 ? '实时口径' : '暂无数据'}</span>
           </div>
-          <TiandituMap points={[]} height={190} showLegend={false} compact />
-          <div style={{ marginTop: 6, color: SCREEN_THEME.subText, fontSize: 12 }}>
-            天地图底图已接入；后端暂无区域分布数据，暂不绘制区域点位。
-          </div>
+          <TiandituMap points={regionMapPoints} height={190} showLegend={false} compact />
+          <div style={{ marginTop: 6, color: SCREEN_THEME.subText, fontSize: 12 }}>来源：GET /admin/dashboard/region-distribution；按省级区域聚合。</div>
         </div>
 
-        {/* 实时滚动指标：后端暂无 /admin/dashboard/realtime 端点 */}
+        {/* 实时滚动指标：任务与告警事实 */}
         <div style={panelStyle}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-            <span style={{ fontSize: 15, fontWeight: 600, color: SCREEN_THEME.text }}>
-              实时生产动态
-            </span>
-            <span style={{ fontSize: 12, color: SCREEN_THEME.accentOrange }}>未接入</span>
+            <span style={{ fontSize: 15, fontWeight: 600, color: SCREEN_THEME.text }}>实时生产动态</span>
+            <span style={{ fontSize: 12, color: SCREEN_THEME.accent }}>{realtimeQuery.data?.length ? '实时口径' : '暂无数据'}</span>
           </div>
-          <PanelEmpty text="后端未提供 /admin/dashboard/realtime 端点，暂无实时滚动数据" />
+          {realtimeQuery.data?.length ? (
+            <div style={{ maxHeight: 205, overflowY: 'auto' }}>
+              {realtimeQuery.data.map((item) => (
+                <div key={item.metricId} style={{ padding: '7px 8px', marginBottom: 6, borderRadius: 6, background: 'rgba(160,200,240,0.08)', borderLeft: `3px solid ${item.isAlert ? SCREEN_THEME.accentRed : SCREEN_THEME.accent}` }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                    <span style={{ color: SCREEN_THEME.text, fontSize: 12 }}>{item.targetName}</span>
+                    <span style={{ color: SCREEN_THEME.subText, fontSize: 11 }}>{item.time}</span>
+                  </div>
+                  <div style={{ color: item.isAlert ? SCREEN_THEME.accentRed : SCREEN_THEME.subText, fontSize: 12, marginTop: 3 }}>{item.content}</div>
+                </div>
+              ))}
+            </div>
+          ) : <PanelEmpty text="暂无任务或告警动态" />}
         </div>
 
         {/* 告警播报：真实告警级别分布 */}
@@ -505,17 +569,38 @@ export default function OpsDataScreen(): JSX.Element {
       {/* 底部：趋势 + 作物结构 + TOP 主体 */}
       <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr', gap: 12 }}>
         <div style={panelStyle}>
-          <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6, color: SCREEN_THEME.text }}>
-            近 12 小时任务量与设备在线率
-          </div>
-          <PanelEmpty text="后端未提供小时级趋势端点，暂无趋势数据" />
+          <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6, color: SCREEN_THEME.text }}>近 7 天任务与告警趋势</div>
+          {trendQuery.data?.length ? (
+            <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+              {trendQuery.data.map((item) => (
+                <div key={item.label} style={{ display: 'grid', gridTemplateColumns: '52px 1fr 54px', gap: 8, alignItems: 'center', padding: '8px 0', borderBottom: '1px solid rgba(160,200,240,0.12)' }}>
+                  <span style={{ color: SCREEN_THEME.subText, fontSize: 12 }}>{item.label}</span>
+                  <div>
+                    <div style={{ height: 7, borderRadius: 4, background: 'rgba(79,172,254,0.18)', overflow: 'hidden' }}><div style={{ width: `${Math.min(100, Math.max(0, Number(item.taskRate) || 0))}%`, height: '100%', background: SCREEN_THEME.accentBlue }} /></div>
+                    <span style={{ color: SCREEN_THEME.subText, fontSize: 11 }}>完成率 {Number(item.taskRate) || 0}% · 作业人数 {Number(item.activeWorkers) || 0}</span>
+                  </div>
+                  <span style={{ color: SCREEN_THEME.accentOrange, fontSize: 12, textAlign: 'right' }}>告警 {Number(item.alertCount) || 0}</span>
+                </div>
+              ))}
+            </div>
+          ) : <PanelEmpty text="暂无近 7 天任务趋势" />}
+          <div style={{ marginTop: 6, color: SCREEN_THEME.subText, fontSize: 11 }}>来源：GET /admin/dashboard/trend；设备历史小时率暂无数据。</div>
         </div>
 
         <div style={panelStyle}>
-          <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6, color: SCREEN_THEME.text }}>
-            在田作物结构
-          </div>
-          <PanelEmpty text="后端未提供作物结构统计端点，暂无数据" />
+          <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6, color: SCREEN_THEME.text }}>在田作物结构</div>
+          {cropRows.length ? (
+            <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+              {cropRows.map((item) => (
+                <div key={item.name} style={{ marginBottom: 9 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: SCREEN_THEME.text, fontSize: 12 }}><span>{item.name}</span><span>{item.area.toLocaleString('zh-CN')} 亩</span></div>
+                  <div style={{ height: 6, marginTop: 4, borderRadius: 4, background: 'rgba(43,231,196,0.16)', overflow: 'hidden' }}><div style={{ width: `${Math.min(100, cropRows[0].area > 0 ? item.area / cropRows[0].area * 100 : 0)}%`, height: '100%', background: SCREEN_THEME.accent }} /></div>
+                  <div style={{ color: SCREEN_THEME.subText, fontSize: 11 }}>{item.farmCount} 个农场</div>
+                </div>
+              ))}
+            </div>
+          ) : <PanelEmpty text="暂无已标注作物的地块数据" />}
+          <div style={{ marginTop: 6, color: SCREEN_THEME.subText, fontSize: 11 }}>来源：GET /admin/dashboard/overview-rows?dimension=crop。</div>
         </div>
 
         <div style={panelStyle}>

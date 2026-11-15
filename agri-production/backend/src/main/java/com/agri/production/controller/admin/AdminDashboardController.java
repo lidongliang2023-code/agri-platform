@@ -30,6 +30,11 @@ public class AdminDashboardController {
         this.adminDashboardService = adminDashboardService;
     }
 
+    @GetMapping
+    public ApiResponse<Map<String, Object>> metrics() {
+        return ApiResponse.success(adminDashboardService.metrics());
+    }
+
     /** 汇总指标（生产总览页的指标卡）。 */
     @GetMapping("/overview")
     public ApiResponse<Map<String, Object>> overview(
@@ -75,5 +80,12 @@ public class AdminDashboardController {
             @RequestParam(required = false) String startDate,
             @RequestParam(required = false) String endDate) {
         return ApiResponse.success(adminDashboardService.trend(startDate, endDate));
+    }
+
+    /** 最近生产动态，由任务和告警事实合并而来。 */
+    @GetMapping("/realtime")
+    public ApiResponse<List<Map<String, Object>>> realtime(
+            @RequestParam(required = false, defaultValue = "20") Integer limit) {
+        return ApiResponse.success(adminDashboardService.realtime(limit == null ? 20 : limit));
     }
 }

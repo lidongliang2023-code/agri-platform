@@ -132,7 +132,7 @@ public class TradeCapabilityInterceptor implements HandlerInterceptor {
         }
         for (String prefix : List.of("/api/trade/order", "/api/trade/contract", "/api/trade/negotiation",
                 "/api/trade/guarantee", "/api/trade/compensation", "/api/trade/dispute",
-                "/api/trade/invoice", "/api/trade/logistics", "/api/trade/evaluation")) {
+                "/api/trade/invoice", "/api/trade/logistics", "/api/trade/evaluation", "/api/trade/agents")) {
             if (uri.startsWith(prefix)) {
                 return ANY_TRADE;
             }

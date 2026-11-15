@@ -93,13 +93,7 @@ public class AdminAlertReviewVO {
         if (value.matches("[1-4]")) {
             return Integer.valueOf(value);
         }
-        return switch (value) {
-            case "info", "提示", "低" -> 1;
-            case "warning", "warn", "normal", "一般", "中", "medium" -> 2;
-            case "error", "high", "重要", "严重", "高" -> 3;
-            case "critical", "urgent", "紧急" -> 4;
-            default -> null;
-        };
+        return com.agri.production.common.constant.AlertDict.codeOfLevel(value);
     }
 
     /** environment/device/pest/task/input（含中文）→ 1-5；认不出给 null */

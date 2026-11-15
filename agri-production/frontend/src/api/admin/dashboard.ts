@@ -8,22 +8,14 @@ const BASE = '/admin/dashboard'
 
 /** 运营大盘核心指标 */
 export interface OpsDashboardMetrics {
-  /** 主体总数 */
-  tenantCount: number
-  /** 农场总数 */
-  farmCount: number
-  /** 地块总数 */
-  plotCount: number
-  /** 在线设备数 */
-  onlineDeviceCount: number
-  /** 本月任务完成数 */
-  monthTaskCount: number
-  /** 本月采收总量（kg） */
-  monthHarvestQty: number
-  /** 待审批数量 */
-  pendingApprovalCount: number
-  /** 未处理告警数 */
-  unhandledAlertCount: number
+  farmCount: number | string
+  plotCount: number | string
+  taskPending: number | string
+  alertPending: number | string
+  deviceOnline: number | string | null
+  deviceTotal: number | string | null
+  deviceStatsStatus: 'LIVE' | 'UNAVAILABLE'
+  dataAsOf: string
 }
 
 /** 查询运营管理大盘指标 */
@@ -54,7 +46,7 @@ export function listGrowthTrend(params: PageQuery): Promise<PageResult<Record<st
 
 /* ==================== 运营端页面扩展查询（追加） ==================== */
 /* 说明：以下查询统一使用 silent 选项，接口未就绪时不弹全局错误，
- * 由页面自行降级到原型示例数据，保证页面始终可用。 */
+ * 由页面明确展示失败或空态，不使用示例数据。 */
 
 /** 区域分布统计条目 */
 export interface OpsRegionStat {

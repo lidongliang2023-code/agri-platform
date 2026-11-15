@@ -1,3 +1,4 @@
+import TradeAgentPanel from './TradeAgentPanel'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Form, Input, Modal, Select, message } from 'antd'
@@ -57,6 +58,7 @@ import {
 } from './shared'
 
 const NAV: MemberNavItem[] = [
+  { key: 'agent', label: '采购 Agent', icon: <FileTextOutlined /> },
   { key: 'overview', label: '首页概览', icon: <HomeOutlined /> },
   { key: 'demand-list', label: '采购需求', icon: <FileSearchOutlined /> },
   { key: 'inquiry', label: '询价与报价', icon: <FileSearchOutlined /> },
@@ -1046,7 +1048,7 @@ export default function BuyerCenter(): JSX.Element {
     )
   }
 
-  const content = active === 'publish'
+  const content = active === 'agent' ? <TradeAgentPanel role="BUYER" /> : active === 'publish'
     ? <DemandCreate embedded returnPath="/member/buyer?tab=demand-list" />
     : active === 'demand-list' ? renderDemandList()
       : active === 'purchase' ? renderPurchase()

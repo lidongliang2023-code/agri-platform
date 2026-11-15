@@ -85,6 +85,7 @@ public final class AlertDict {
     /** 库内级别串 → 数字编码；认不出来时按"提示"处理。 */
     public static int codeOfLevel(String raw) {
         String text = normalize(raw);
+        if (text.matches("[1-4]")) return Integer.parseInt(text);
         return switch (text) {
             case "normal", "warn", "warning", "medium", "一般" -> LEVEL_NORMAL;
             case "important", "error", "critical", "high", "重要", "严重" -> LEVEL_IMPORTANT;

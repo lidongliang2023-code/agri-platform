@@ -6,10 +6,10 @@
  * 原型来源：P1 dashboard — 运营管理大盘
  *
  * 数据来源约定（硬规矩：不造数据源；可以降级，不能骗人）：
- * - KPI 卡片只展示后端真实返回的字段，来源为 GET /admin/dashboard/overview
- *   与 GET /admin/tenants/overview；后端没有的指标不渲染、不用原型数字填充；
+ * - KPI 卡片只展示后端真实返回的字段，来源为 GET /admin/dashboard
+ *   与 GET /admin/subjects/overview；后端没有的指标不渲染、不用原型数字填充；
  * - 区域分布（/admin/dashboard/region-distribution）与近 7 天趋势（/admin/dashboard/trend）
- *   后端当前**没有端点**（实测返回 500「系统繁忙」），这两个区块展示空态并显式说明「后端暂未提供」；
+ *   使用生产域聚合接口，失败时明确提示；
  * - 告警级别分布取 GET /admin/dashboard/alert-trend，告警/审批列表取各自真实分页接口；
  * - 「较昨日涨跌」后端无同比数据源，因此不展示，也不再多保留一条造假百分比。
  */
@@ -34,8 +34,6 @@ import {
 } from 'antd'
 import {
   BellOutlined,
-  CheckCircleOutlined,
-  CloseCircleOutlined,
   EnvironmentOutlined,
   ExclamationCircleOutlined,
   ReloadOutlined,
@@ -50,7 +48,7 @@ import {
   type TiandituMapPoint,
 } from '@agri/shared'
 import type { EChartsOption } from 'echarts'
-import { approveApproval, listApprovals, rejectApproval } from '@/api/admin/approvals'
+import { listApprovals } from '@/api/admin/approvals'
 import { closeAlert, listAdminAlerts } from '@/api/admin/alerts'
 import {
   fetchAlertLevelMap,
@@ -85,7 +83,7 @@ interface KpiItem {
 interface TrendPoint {
   /** X 轴标签 */
   label: string
-  /** 任务完成率（%） */
+  /** 验收完成率（%） */
   taskRate: number
   /**
    * 当日作业人数（后端字段名 activeWorkers）。
@@ -168,28 +166,6 @@ function pickNumber(source: unknown, key: string): number | null {
 }
 
 /**
- * 按候选键顺序取第一个有值的数值（告警级别键名兼容用）。
- *
- * 告警级别枚举正在迁移，同一个桶在迁移前后是两个不同的键：
- * `CRITICAL→important`、`WARN→normal`、`INFO→info`、`URGENT→urgent`
- * （**不是**简单大小写转换）。迁移还没执行完，所以这里**新旧键都认**，
- * 且旧键排在前面——删掉旧键会在迁移落地前立刻退化成「—」。
- *
- * @param source 后端返回对象
- * @param keys 候选键，按优先级从高到低
- * @returns 第一个命中且能解析成有限数字的值；全都不命中时为 null
- */
-function pickNumberAny(source: unknown, keys: string[]): number | null {
-  for (const key of keys) {
-    const value = pickNumber(source, key)
-    if (value !== null) {
-      return value
-    }
-  }
-  return null
-}
-
-/**
  * 运营管理大盘
  *
  * 业务职责：平台级运营总览，含 KPI 卡片、全国生产分布、近 7 天趋势、
@@ -207,10 +183,6 @@ export default function OpsDashboard(): JSX.Element {
   const [autoRefresh, setAutoRefresh] = useState<boolean>(true)
   /** 距离下次自动刷新的剩余秒数 */
   const [countdown, setCountdown] = useState<number>(AUTO_REFRESH_SECONDS)
-  /** 审批确认弹窗当前处理的审批单 */
-  const [activeApproval, setActiveApproval] = useState<ApprovalItem | null>(null)
-  /** 审批意见 */
-  const [approveRemark, setApproveRemark] = useState<string>('')
   /** 告警处理弹窗当前处理的告警 */
   const [activeAlert, setActiveAlert] = useState<AlertItem | null>(null)
   /** 告警处理措施 */
@@ -227,19 +199,19 @@ export default function OpsDashboard(): JSX.Element {
 
   /** 主体概览（/admin/tenants/overview，提供真实主体数） */
   const overviewQuery = useQuery({
-    queryKey: ['admin', 'tenants', 'overview'],
+    queryKey: ['admin', 'dashboard', 'tenant-overview'],
     queryFn: () => getTenantOverview(),
     retry: false,
   })
 
-  /** 区域分布（后端当前无此端点） */
+  /** 区域分布（使用生产域聚合接口） */
   const regionQuery = useQuery({
     queryKey: ['admin', 'dashboard', 'regions'],
     queryFn: () => fetchRegionStats(),
     retry: false,
   })
 
-  /** 近 7 天趋势（后端当前无此端点） */
+  /** 近 7 天趋势（使用生产域聚合接口） */
   const trendQuery = useQuery({
     queryKey: ['admin', 'dashboard', 'trend'],
     queryFn: () => fetchTrendPoints(),
@@ -263,7 +235,7 @@ export default function OpsDashboard(): JSX.Element {
   /** 告警列表（最新 5 条） */
   const alertsQuery = useQuery({
     queryKey: ['admin', 'dashboard', 'alerts'],
-    queryFn: () => listAdminAlerts({ pageNum: 1, pageSize: 5 }),
+    queryFn: () => listAdminAlerts({ pageNum: 1, pageSize: 5, status: 1 }),
     retry: false,
   })
 
@@ -272,20 +244,6 @@ export default function OpsDashboard(): JSX.Element {
     queryKey: ['admin', 'dashboard', 'approvals'],
     queryFn: () => listApprovals({ pageNum: 1, pageSize: 5, status: 1 }),
     retry: false,
-  })
-
-  /** 审批通过 / 驳回 */
-  const approvalMutation = useMutation({
-    mutationFn: (payload: { id: string; action: 'approve' | 'reject'; remark: string }) =>
-      payload.action === 'approve'
-        ? approveApproval(payload.id, { remark: payload.remark })
-        : rejectApproval(payload.id, { remark: payload.remark }),
-    onSuccess: (_data, variables) => {
-      message.success(variables.action === 'approve' ? '审批已通过' : '审批已驳回')
-      setActiveApproval(null)
-      setApproveRemark('')
-      void queryClient.invalidateQueries({ queryKey: ['admin', 'dashboard'] })
-    },
   })
 
   /** 告警处理（关闭告警） */
@@ -307,7 +265,7 @@ export default function OpsDashboard(): JSX.Element {
       {
         key: 'activeTenants',
         title: '活跃主体',
-        value: overview ? Number(overview.activeTenantCount) : null,
+        value: pickNumber(overview, 'activeTenantCount'),
         suffix: '家',
         precision: 0,
       },
@@ -396,24 +354,13 @@ export default function OpsDashboard(): JSX.Element {
     }))
   }, [rankQuery.data])
 
-  /**
-   * 告警级别计数：紧急 / 重要 / 一般；后端未返回时为 null（展示「—」）。
-   *
-   * 键名兼容见 {@link pickNumberAny}：迁移前是 `CRITICAL / WARN / INFO`，
-   * 迁移后是 `important / normal / info`，两套都认。
-   *
-   * ⚠️ `URGENT / urgent` 这一档**没有并入「紧急」**：旧端点实测只返回
-   * `INFO / WARN / CRITICAL`（DB 里另有 3 条 URGENT 未计入），页面也只有三个卡片位，
-   * 硬塞进去会在迁移落地那天悄悄改掉「紧急」的口径。是否新增第四个卡位
-   * 由 team-lead 裁决，本批不擅自扩大口径。
-   */
-  const alertLevelCounts = useMemo<{ critical: number | null; warn: number | null; info: number | null }>(() => {
-    const raw = alertLevelQuery.data
-    const critical = pickNumberAny(raw, ['CRITICAL', 'important'])
-    const warn = pickNumberAny(raw, ['WARN', 'normal'])
-    const info = pickNumberAny(raw, ['INFO', 'info'])
-    return { critical, warn, info }
-  }, [alertLevelQuery.data])
+  /** 未关闭告警按统一四级词表统计，与生产告警中心一致。 */
+  const alertLevelCounts = useMemo(() => ({
+    urgent: pickNumber(alertLevelQuery.data, 'urgent'),
+    important: pickNumber(alertLevelQuery.data, 'important'),
+    normal: pickNumber(alertLevelQuery.data, 'normal'),
+    info: pickNumber(alertLevelQuery.data, 'info'),
+  }), [alertLevelQuery.data])
 
   /** 告警列表：只用后端返回数据，无数据时为空（渲染空态） */
   const alertItems = useMemo<AlertItem[]>(() => {
@@ -425,7 +372,7 @@ export default function OpsDashboard(): JSX.Element {
       id: item.alertId,
       title: item.alertTitle,
       content: item.alertContent,
-      level: item.alertLevel >= 3 ? '紧急' : item.alertLevel === 2 ? '重要' : '一般',
+      level: Number(item.alertLevel) >= 4 ? '紧急' : Number(item.alertLevel) === 3 ? '严重' : Number(item.alertLevel) === 2 ? '一般' : '提示',
       relativeTime: item.triggeredAt?.slice(11, 16) ?? '--:--',
       target: item.plotName ?? item.farmId ?? '—',
     }))
@@ -440,32 +387,32 @@ export default function OpsDashboard(): JSX.Element {
     return remote.slice(0, 5).map((item) => ({
       id: item.approvalId,
       no: item.approvalNo,
-      type: ['农场入驻', '计划变更', '投入品采购', '质量复检', '数据更正'][item.approvalType - 1] ?? '其他',
-      target: item.bizSummary ?? item.tenantName ?? '—',
+      type: ({ CERT: '历史认证申请', RECALL: '历史召回申请', QUOTA: '历史配额申请' } as Record<string, string>)[item.bizType ?? ''] ?? item.bizType ?? '历史申请',
+      target: item.title ?? item.bizSummary ?? item.tenantName ?? item.approvalId,
       applicant: item.applicantName,
-      submitTime: item.submittedAt?.slice(11, 16) ?? '--:--',
+      submitTime: item.submitAt?.slice(0, 16) ?? '--:--',
       // 后端审批表无优先级字段，不展示编造的优先级
       priority: '—',
     }))
   }, [approvalsQuery.data])
 
-  /** 后端缺失的区块端点清单（用于统一降级提示） */
+  /** 请求失败的区块清单（用于统一降级提示） */
   const unavailableBlocks = useMemo<string[]>(() => {
     const blocks: string[] = []
     if (trendQuery.isError) {
-      blocks.push('近7天趋势：GET /admin/dashboard/trend 后端未实现（实测返回 500）')
+      blocks.push('近7天趋势：GET /admin/dashboard/trend 请求失败')
     }
     if (regionQuery.isError) {
-      blocks.push('全国生产分布：GET /admin/dashboard/region-distribution 后端未实现（实测返回 500）')
+      blocks.push('全国生产分布：GET /admin/dashboard/region-distribution 请求失败')
     }
     if (alertLevelQuery.isError) {
       blocks.push('告警级别分布（GET /admin/dashboard/alert-trend 不可用）')
     }
     if (metricsQuery.isError) {
-      blocks.push('KPI 汇总（GET /admin/dashboard/overview 不可用）')
+      blocks.push('KPI 汇总（GET /admin/dashboard 不可用）')
     }
     if (overviewQuery.isError) {
-      blocks.push('主体概览（GET /admin/tenants/overview 不可用）')
+      blocks.push('主体概览（GET /admin/subjects/overview 不可用）')
     }
     if (rankQuery.isError) {
       blocks.push('种植面积排行（GET /admin/dashboard/rank 不可用）')
@@ -576,7 +523,7 @@ export default function OpsDashboard(): JSX.Element {
     () => ({
       tooltip: { trigger: 'axis' },
       grid: { left: 8, right: 16, top: 40, bottom: 8, containLabel: true },
-      legend: { data: ['任务完成率', '作业人数', '告警数'], top: 0 },
+      legend: { data: ['验收完成率', '计划执行人数', '告警数'], top: 0 },
       xAxis: { type: 'category', boundaryGap: false, data: trendPoints.map((item) => item.label) },
       yAxis: [
         { type: 'value', name: '作业/告警' },
@@ -585,7 +532,7 @@ export default function OpsDashboard(): JSX.Element {
       series: [
         {
           type: 'line',
-          name: '任务完成率',
+          name: '验收完成率',
           yAxisIndex: 1,
           smooth: true,
           data: trendPoints.map((item) => item.taskRate),
@@ -594,7 +541,7 @@ export default function OpsDashboard(): JSX.Element {
         },
         {
           type: 'line',
-          name: '作业人数',
+          name: '计划执行人数',
           smooth: true,
           // 口径：当日有作业记录的不同人数（非登录活跃用户 / DAU）
           data: trendPoints.map((item) => item.activeWorkers),
@@ -615,8 +562,9 @@ export default function OpsDashboard(): JSX.Element {
   /** 告警级别 → antd Tag 颜色 */
   const levelColorMap: Record<string, string> = {
     紧急: 'red',
-    重要: 'orange',
+    严重: 'orange',
     一般: 'blue',
+    提示: 'default',
   }
 
   /** 区域活跃度 → 颜色 */
@@ -638,7 +586,7 @@ export default function OpsDashboard(): JSX.Element {
     <div style={{ textAlign: 'center', padding: '24px 0' }}>
       <Empty
         image={Empty.PRESENTED_IMAGE_SIMPLE}
-        description={<Text type="secondary">{label}：后端暂未提供该数据，此处不用原型示例数据兜底</Text>}
+        description={<Text type="secondary">{label}：暂无可展示数据；接口失败时请查看页面提示</Text>}
       />
     </div>
   )
@@ -652,7 +600,7 @@ export default function OpsDashboard(): JSX.Element {
             运营管理大盘
           </Title>
           <Text type="secondary">
-            数据均取自后端真实接口；后端未提供的指标展示「—」或未展示对应区块
+            生产数据实时聚合；设备数来自物联网运营接口，历史审批仅供查询
           </Text>
         </Col>
         <Col>
@@ -682,7 +630,7 @@ export default function OpsDashboard(): JSX.Element {
           type="warning"
           showIcon
           style={{ marginBottom: 12 }}
-          message={`以下 ${unavailableBlocks.length} 个区块暂无后端数据源，已展示空态（不用示例数据填充）`}
+          message={`以下 ${unavailableBlocks.length} 个区块个区块请求失败，请刷新重试`}
           description={
             <ul style={{ margin: 0, paddingLeft: 18 }}>
               {unavailableBlocks.map((item) => (
@@ -692,6 +640,8 @@ export default function OpsDashboard(): JSX.Element {
           }
         />
       )}
+
+      {metricsQuery.data?.deviceStatsStatus === 'UNAVAILABLE' && <Alert type="warning" showIcon style={{ marginBottom: 12 }} message="物联网运营统计暂不可用或无访问权限，在线设备显示“—”，其他生产指标不受影响。" />}
 
       {/* KPI 卡片区：只渲染后端有数据源的指标 */}
       <Row gutter={[12, 12]}>
@@ -778,7 +728,7 @@ export default function OpsDashboard(): JSX.Element {
                             </Col>
                             <Col style={{ textAlign: 'right' }}>
                               <Text strong style={{ color: activityColorMap[item.activityLevel] }}>
-                                {(item.fieldArea / 10000).toFixed(1)}万亩
+                                {item.fieldArea >= 10000 ? `${(item.fieldArea / 10000).toFixed(2)}万亩` : `${item.fieldArea.toLocaleString('zh-CN')}亩`}
                               </Text>
                               <div>
                                 <Text type="secondary" style={{ fontSize: 12 }}>
@@ -803,7 +753,7 @@ export default function OpsDashboard(): JSX.Element {
             title="近7天趋势图"
             extra={
               <Text type="secondary">
-                任务完成率 / 作业人数（当日有作业记录的人数，非登录活跃用户）/ 告警数
+                验收完成率 / 计划执行人数 / 新增告警数
               </Text>
             }
           >
@@ -843,17 +793,12 @@ export default function OpsDashboard(): JSX.Element {
               </Button>
             }
           >
-            <Row gutter={8} style={{ marginBottom: 8 }}>
-              <Col span={8}>
-                <Tag color="red">紧急 {alertLevelCounts.critical ?? '—'}</Tag>
-              </Col>
-              <Col span={8}>
-                <Tag color="orange">重要 {alertLevelCounts.warn ?? '—'}</Tag>
-              </Col>
-              <Col span={8}>
-                <Tag color="blue">一般 {alertLevelCounts.info ?? '—'}</Tag>
-              </Col>
-            </Row>
+            <Space wrap style={{ marginBottom: 8 }}>
+              <Tag color="red">紧急 {alertLevelCounts.urgent ?? '—'}</Tag>
+              <Tag color="orange">严重 {alertLevelCounts.important ?? '—'}</Tag>
+              <Tag color="blue">一般 {alertLevelCounts.normal ?? '—'}</Tag>
+              <Tag>提示 {alertLevelCounts.info ?? '—'}</Tag>
+            </Space>
             {alertsQuery.isLoading ? (
               <Skeleton active paragraph={{ rows: 4 }} />
             ) : alertItems.length === 0 ? (
@@ -892,9 +837,9 @@ export default function OpsDashboard(): JSX.Element {
                       <Button
                         type="link"
                         size="small"
-                        onClick={() => message.success(`已通知「${item.target}」负责人`)}
+                        onClick={() => navigate('/admin/production/alerts')}
                       >
-                        联系
+                        处理入口
                       </Button>
                       <Button
                         type="link"
@@ -914,19 +859,20 @@ export default function OpsDashboard(): JSX.Element {
         <Col xs={24} lg={rankItems.length > 0 ? 7 : 12}>
           <Card
             size="small"
-            title="待办审批事项"
+            title="历史待审档案（只读）"
             extra={
               <Button type="link" size="small" onClick={() => navigate('/admin/production/approvals')}>
-                查看全部待办 <RightOutlined />
+                业务办理入口 <RightOutlined />
               </Button>
             }
           >
             {approvalsQuery.isLoading ? (
               <Skeleton active paragraph={{ rows: 4 }} />
             ) : approvalItems.length === 0 ? (
-              <Empty description="暂无待办审批（后端未返回待审数据）" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+              <Empty description="暂无历史待审档案" image={Empty.PRESENTED_IMAGE_SIMPLE} />
             ) : (
               <div style={{ maxHeight: 268, overflowY: 'auto' }}>
+                <Text type="secondary">以下为旧台账待审档案，不代表可执行待办；请在所属业务办理。</Text>
                 {approvalItems.map((item) => (
                   <div
                     key={item.id}
@@ -943,28 +889,10 @@ export default function OpsDashboard(): JSX.Element {
                       </Col>
                       <Col>
                         <Space size={6}>
-                          <Tooltip title="通过">
-                            <CheckCircleOutlined
-                              style={{ color: '#52c41a', fontSize: 16, cursor: 'pointer' }}
-                              onClick={() => {
-                                setActiveApproval(item)
-                                setApproveRemark('')
-                              }}
-                            />
-                          </Tooltip>
-                          <Tooltip title="驳回">
-                            <CloseCircleOutlined
-                              style={{ color: '#ff4d4f', fontSize: 16, cursor: 'pointer' }}
-                              onClick={() => {
-                                setActiveApproval(item)
-                                setApproveRemark('')
-                              }}
-                            />
-                          </Tooltip>
                           <Tooltip title="查看详情">
                             <RightOutlined
                               style={{ color: '#1677ff', fontSize: 14, cursor: 'pointer' }}
-                              onClick={() => navigate('/admin/production/approvals')}
+                              onClick={() => navigate('/admin/production/approvals/history')}
                             />
                           </Tooltip>
                         </Space>
@@ -979,94 +907,10 @@ export default function OpsDashboard(): JSX.Element {
       </Row>
 
       <Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: 12 }}>
-        数据说明：KPI 取自 `GET /admin/dashboard/overview` 与 `GET /admin/tenants/overview` 的真实返回值；
-        「在田面积」与「溯源查询次数」后端无对应聚合字段，已从 KPI 中移除；
-        「较昨日涨跌」后端无同比数据源，已不再展示。
-        后端缺失的区块展示空态而非示例数据。
+        数据说明：KPI 来自生产域大盘和主体概览；在线设备来自物联网运营接口，接口不可用时显示“—”。
+        区域面积和排行按地块面积汇总；告警分布统计未处理与处理中的记录，列表展示最新未处理记录。
+        趋势按任务计划日期归属，完工且验收通过才计入完成率；历史审批只读，办理回到所属业务。
       </Text>
-
-      {/* 审批确认弹窗（原型 approve-modal） */}
-      <Modal
-        open={activeApproval !== null}
-        title="审批确认"
-        onCancel={() => setActiveApproval(null)}
-        destroyOnClose
-        footer={[
-          <Button key="cancel" onClick={() => setActiveApproval(null)}>
-            取消
-          </Button>,
-          <Button
-            key="reject"
-            danger
-            loading={approvalMutation.isPending}
-            onClick={() => {
-              if (!activeApproval) {
-                return
-              }
-              if (!approveRemark.trim()) {
-                message.warning('驳回需填写审批意见')
-                return
-              }
-              approvalMutation.mutate({
-                id: activeApproval.id,
-                action: 'reject',
-                remark: approveRemark,
-              })
-            }}
-          >
-            驳回
-          </Button>,
-          <Button
-            key="approve"
-            type="primary"
-            loading={approvalMutation.isPending}
-            onClick={() => {
-              if (!activeApproval) {
-                return
-              }
-              approvalMutation.mutate({
-                id: activeApproval.id,
-                action: 'approve',
-                remark: approveRemark,
-              })
-            }}
-          >
-            通过
-          </Button>,
-        ]}
-      >
-        {activeApproval && (
-          <div>
-            <Row gutter={[0, 8]}>
-              <Col span={12}>审批编号：{activeApproval.no}</Col>
-              <Col span={12}>类型：{activeApproval.type}</Col>
-              <Col span={12}>申请人：{activeApproval.applicant}</Col>
-              <Col span={12}>企业名称：{activeApproval.target}</Col>
-              <Col span={12}>申请时间：{activeApproval.submitTime}</Col>
-              <Col span={12}>优先级：{activeApproval.priority}</Col>
-            </Row>
-            <div style={{ marginTop: 12 }}>
-              <Text>审批意见：</Text>
-              <textarea
-                value={approveRemark}
-                onChange={(event) => setApproveRemark(event.target.value)}
-                rows={3}
-                placeholder="请输入审批意见（驳回时必填）"
-                style={{
-                  width: '100%',
-                  marginTop: 6,
-                  padding: 8,
-                  border: '1px solid rgba(0,0,0,0.15)',
-                  borderRadius: 6,
-                  resize: 'vertical',
-                  color: 'inherit',
-                  background: 'transparent',
-                }}
-              />
-            </div>
-          </div>
-        )}
-      </Modal>
 
       {/* 告警处理弹窗（原型 alert-modal） */}
       <Modal

@@ -14,6 +14,9 @@ import java.util.Map;
  */
 public interface IAdminDashboardService {
 
+    /** 运营大盘 KPI：生产域实查，设备统计透传运营令牌查询物联网域。 */
+    Map<String, Object> metrics();
+
     /**
      * 汇总指标：{@code farmCount / fieldArea / outputTon / taskRate / alertCount}
      * —— 页面就是按这五个键取值的（见 OpsProductionOverview 的 pick()）。
@@ -38,4 +41,7 @@ public interface IAdminDashboardService {
 
     /** 近 7 天趋势：{@code label / taskRate / activeWorkers / alertCount}。 */
     List<Map<String, Object>> trend(String startDate, String endDate);
+
+    /** 最近生产动态：由任务和告警事实组成，按发生时间倒序。 */
+    List<Map<String, Object>> realtime(int limit);
 }

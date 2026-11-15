@@ -103,6 +103,12 @@ public class IotDeviceClient {
         return asMap(data);
     }
 
+    /** 运营端平台范围统计；由物联网运营权限控制，绝不退回单主体设备数。 */
+    public Map<String, Object> operatorDeviceStats(String authorization) {
+        Map<String, Object> data = asMap(exchange(HttpMethod.GET, "/api/v1/iot/ops/overview", authorization, null, null));
+        return data == null ? null : asMap(data.get("metrics"));
+    }
+
     private Object exchange(HttpMethod method, String path, String authorization,
                             Object body, Map<String, Object> query) {
         UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(baseUrl + path);

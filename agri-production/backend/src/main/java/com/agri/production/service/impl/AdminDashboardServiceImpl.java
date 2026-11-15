@@ -1,6 +1,9 @@
 package com.agri.production.service.impl;
 
 import com.agri.production.entity.AlertRecord;
+import com.agri.production.common.constant.AlertDict;
+import com.agri.production.integration.IotDeviceClient;
+import com.agri.production.service.TenantContextService;
 import com.agri.production.entity.Farm;
 import com.agri.production.entity.HarvestBatch;
 import com.agri.production.entity.Plot;
@@ -52,6 +55,7 @@ public class AdminDashboardServiceImpl implements IAdminDashboardService {
 
     private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("MM-dd");
 
+    private final IotDeviceClient iotDeviceClient;
     private final FarmMapper farmMapper;
     private final PlotMapper plotMapper;
     private final TaskMapper taskMapper;
@@ -62,12 +66,52 @@ public class AdminDashboardServiceImpl implements IAdminDashboardService {
                                      PlotMapper plotMapper,
                                      TaskMapper taskMapper,
                                      HarvestBatchMapper harvestBatchMapper,
-                                     AlertRecordMapper alertRecordMapper) {
+                                     AlertRecordMapper alertRecordMapper,
+                                     IotDeviceClient iotDeviceClient) {
+        this.iotDeviceClient = iotDeviceClient;
         this.farmMapper = farmMapper;
         this.plotMapper = plotMapper;
         this.taskMapper = taskMapper;
         this.harvestBatchMapper = harvestBatchMapper;
         this.alertRecordMapper = alertRecordMapper;
+    }
+
+    @Override
+    public Map<String, Object> metrics() {
+        List<Task> tasks = taskMapper.selectList(new LambdaQueryWrapper<>());
+        List<AlertRecord> alerts = alertRecordMapper.selectList(new LambdaQueryWrapper<>());
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("farmCount", farmMapper.selectCount(new LambdaQueryWrapper<>()));
+        result.put("plotCount", plotMapper.selectCount(new LambdaQueryWrapper<>()));
+        result.put("taskPending", tasks.stream().filter(t -> !"cancelled".equalsIgnoreCase(t.getStatus())
+                && !"canceled".equalsIgnoreCase(t.getStatus()) && !accepted(t)).count());
+        result.put("alertPending", alerts.stream().filter(AdminDashboardServiceImpl::openAlert).count());
+        result.put("deviceOnline", null);
+        result.put("deviceTotal", null);
+        result.put("deviceStatsStatus", "UNAVAILABLE");
+        String authorization = TenantContextService.currentAuthorization();
+        if (authorization != null && !authorization.isBlank()) {
+            try {
+                Map<String, Object> devices = iotDeviceClient.operatorDeviceStats(authorization);
+                if (devices != null && devices.get("online") != null && devices.get("devices") != null) {
+                    result.put("deviceOnline", devices.get("online"));
+                    result.put("deviceTotal", devices.get("devices"));
+                    result.put("deviceStatsStatus", "LIVE");
+                }
+            } catch (RuntimeException e) {
+                log.warn("运营大盘物联网统计不可用：{}", e.getClass().getSimpleName());
+            }
+        }
+        result.put("dataAsOf", LocalDateTime.now().toString());
+        return result;
+    }
+
+    private static boolean openAlert(AlertRecord alert) {
+        return AlertDict.codeOfStatus(alert.getStatus()) <= AlertDict.STATUS_HANDLING;
+    }
+
+    private static boolean accepted(Task task) {
+        return "completed".equalsIgnoreCase(task.getStatus()) && Integer.valueOf(1).equals(task.getAcceptStatus());
     }
 
     @Override
@@ -168,7 +212,7 @@ public class AdminDashboardServiceImpl implements IAdminDashboardService {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("farmId", farm.getId() == null ? null : String.valueOf(farm.getId()));
             row.put("farmName", farm.getFarmName());
-            row.put("areaTotal", farm.getTotalArea() == null ? BigDecimal.ZERO : farm.getTotalArea());
+            row.put("areaTotal", sumArea(plots.stream().filter(p -> farm.getId().equals(p.getFarmId())).toList()));
             row.put("plotCount", plotCount);
             rows.add(row);
         }
@@ -212,9 +256,16 @@ public class AdminDashboardServiceImpl implements IAdminDashboardService {
     public Map<String, Object> alertTrend() {
         List<AlertRecord> alerts = alertRecordMapper.selectList(new LambdaQueryWrapper<>());
         Map<String, Object> result = new LinkedHashMap<>();
+        for (String key : List.of("urgent", "important", "normal", "info")) result.put(key, 0);
         for (AlertRecord alert : alerts) {
-            String level = alert.getLevel() == null || alert.getLevel().isBlank() ? "unknown" : alert.getLevel();
-            result.put(level, ((Number) result.getOrDefault(level, 0)).intValue() + 1);
+            if (!openAlert(alert)) continue;
+            String key = switch (AlertDict.codeOfLevel(alert.getLevel())) {
+                case 4 -> "urgent";
+                case 3 -> "important";
+                case 2 -> "normal";
+                default -> "info";
+            };
+            result.put(key, ((Number) result.get(key)).intValue() + 1);
         }
         return result;
     }
@@ -233,10 +284,11 @@ public class AdminDashboardServiceImpl implements IAdminDashboardService {
                     .filter(task -> task.getPlanStartTime() != null
                             && task.getPlanStartTime().toLocalDate().equals(current))
                     .toList();
-            long done = dayTasks.stream().filter(task -> "completed".equalsIgnoreCase(task.getStatus())).count();
+            long done = dayTasks.stream().filter(task -> accepted(task)).count();
             long workers = dayTasks.stream()
-                    .map(Task::getExecutorName)
-                    .filter(name -> name != null && !name.isBlank())
+                    .map(t -> t.getExecutorId() != null ? "id:" + t.getExecutorId()
+                            : (t.getExecutorName() == null || t.getExecutorName().isBlank() ? null : "name:" + t.getExecutorName()))
+                    .filter(java.util.Objects::nonNull)
                     .distinct().count();
             long alertCount = alerts.stream()
                     .filter(alert -> alert.getCreateTime() != null
@@ -250,6 +302,44 @@ public class AdminDashboardServiceImpl implements IAdminDashboardService {
             rows.add(row);
         }
         return rows;
+    }
+
+    @Override
+    public List<Map<String, Object>> realtime(int limit) {
+        int size = limit > 0 ? Math.min(limit, 50) : 20;
+        List<Task> tasks = taskMapper.selectList(new LambdaQueryWrapper<>());
+        List<AlertRecord> alerts = alertRecordMapper.selectList(new LambdaQueryWrapper<>());
+        Map<Long, String> farmNames = farmMapper.selectList(new LambdaQueryWrapper<>()).stream()
+                .filter(f -> f.getId() != null)
+                .collect(Collectors.toMap(Farm::getId, f -> f.getFarmName() == null ? "未命名农场" : f.getFarmName(),
+                        (left, right) -> left, LinkedHashMap::new));
+        List<Map<String, Object>> events = new ArrayList<>();
+        for (Task task : tasks) {
+            if (task.getPlanStartTime() == null) continue;
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("metricId", "TASK-" + task.getId());
+            row.put("time", task.getPlanStartTime().toLocalTime().toString());
+            row.put("occurredAt", task.getPlanStartTime().toString());
+            row.put("targetName", farmNames.getOrDefault(task.getFarmId(), "未标注农场"));
+            String taskName = task.getTaskName() == null || task.getTaskName().isBlank() ? "农事任务" : task.getTaskName();
+            row.put("content", "计划农事：" + taskName);
+            row.put("isAlert", false);
+            events.add(row);
+        }
+        for (AlertRecord alert : alerts) {
+            if (alert.getCreateTime() == null) continue;
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("metricId", "ALERT-" + alert.getId());
+            row.put("time", alert.getCreateTime().toLocalTime().toString());
+            row.put("occurredAt", alert.getCreateTime().toString());
+            row.put("targetName", farmNames.getOrDefault(alert.getFarmId(), "未标注农场"));
+            String title = alert.getTitle() == null || alert.getTitle().isBlank() ? "生产告警" : alert.getTitle();
+            row.put("content", "告警：" + title);
+            row.put("isAlert", true);
+            events.add(row);
+        }
+        events.sort((left, right) -> String.valueOf(right.get("occurredAt")).compareTo(String.valueOf(left.get("occurredAt"))));
+        return events.size() > size ? new ArrayList<>(events.subList(0, size)) : events;
     }
 
     /** 区域：优先省，其次市，都没有就归到"未标注区域"（不臆断一个省名） */
@@ -297,7 +387,7 @@ public class AdminDashboardServiceImpl implements IAdminDashboardService {
         if (scoped.isEmpty()) {
             return 0;
         }
-        long done = scoped.stream().filter(task -> "completed".equalsIgnoreCase(task.getStatus())).count();
+        long done = scoped.stream().filter(task -> accepted(task)).count();
         return (int) (done * 100 / scoped.size());
     }
 
