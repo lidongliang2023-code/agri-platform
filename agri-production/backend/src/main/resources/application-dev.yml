@@ -14,7 +14,7 @@ spring:
       # 必须显式指定 UTF-8：spring.sql.init.encoding 默认取**平台默认编码**，
       # 中文 Windows 上是 GBK，脚本里的中文种子会被写成乱码（不可逆）。
       encoding: UTF-8
-      schema-locations: classpath:schema-mysql.sql,classpath:schema-patch-farm-boundary.sql,classpath:schema-patch-knowledge-sop.sql,classpath:schema-patch-knowledge-real-articles.sql
+      schema-locations: classpath:schema-mysql.sql,classpath:schema-patch-farm-boundary.sql,classpath:schema-patch-knowledge-sop.sql,classpath:schema-patch-knowledge-real-articles.sql,classpath:schema-patch-process-optimization.sql
 
 mybatis-plus:
   mapper-locations: classpath:mapper/**/*.xml

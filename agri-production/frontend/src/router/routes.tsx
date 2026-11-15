@@ -99,6 +99,7 @@ const InputSafety = lazy(() => import('@/pages/user/ai/InputSafety'))
 const AiAssistant = lazy(() => import('@/pages/user/ai/AiAssistant'))
 const TechLearning = lazy(() => import('@/pages/user/ai/TechLearning'))
 const YieldForecast = lazy(() => import('@/pages/user/ai/YieldForecast'))
+const ProcessOptimization = lazy(() => import('@/pages/user/ai/ProcessOptimization'))
 // 报表与设置
 const AnalyticsOverview = lazy(() => import('@/pages/user/analytics/AnalyticsOverview'))
 const ProductionReports = lazy(() => import('@/pages/user/analytics/ProductionReports'))
@@ -733,6 +734,16 @@ export const USER_ROUTES: AppRoute[] = [
       path: '/production/ai/yield-forecast',
       module: '分析与决策',
       prd: 'PRD 6.1 #42',
+    },
+  },
+  {
+    path: 'ai/process-optimization',
+    element: <ProcessOptimization />,
+    meta: {
+      name: '产后初加工工艺优化',
+      path: '/production/ai/process-optimization',
+      module: '分析与决策',
+      prd: '场景 201',
     },
   },
   {
