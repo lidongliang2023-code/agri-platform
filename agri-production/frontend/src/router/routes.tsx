@@ -100,6 +100,7 @@ const AiAssistant = lazy(() => import('@/pages/user/ai/AiAssistant'))
 const TechLearning = lazy(() => import('@/pages/user/ai/TechLearning'))
 const YieldForecast = lazy(() => import('@/pages/user/ai/YieldForecast'))
 const ProcessOptimization = lazy(() => import('@/pages/user/ai/ProcessOptimization'))
+const ProcessingSchedule = lazy(() => import('@/pages/user/ai/ProcessingSchedule'))
 // 报表与设置
 const AnalyticsOverview = lazy(() => import('@/pages/user/analytics/AnalyticsOverview'))
 const ProductionReports = lazy(() => import('@/pages/user/analytics/ProductionReports'))
@@ -735,6 +736,11 @@ export const USER_ROUTES: AppRoute[] = [
       module: '分析与决策',
       prd: 'PRD 6.1 #42',
     },
+  },
+  {
+    path: 'ai/processing-schedule',
+    element: <ProcessingSchedule />,
+    meta: { name: '加工产能与订单协同排产', path: '/production/ai/processing-schedule', module: '分析与决策', prd: '场景 203' },
   },
   {
     path: 'ai/process-optimization',

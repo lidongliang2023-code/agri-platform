@@ -17,6 +17,9 @@ export const PROCESS_TYPES = [
   { value: 'DRYING', label: '烘干' },
   { value: 'PACKAGING', label: '分装' },
   { value: 'CUTING', label: '净切' },
+  { value: 'SPREADING', label: '摊青' },
+  { value: 'FIXATION', label: '杀青' },
+  { value: 'ROLLING', label: '揉捻' },
 ] as const
 
 export const PROCESS_STATUS = [

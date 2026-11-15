@@ -40,7 +40,7 @@ public class ProcessServiceImpl {
 
     /** 加工类型词表（封闭集合：不在表里的直接拒绝，不接受自由填写）。 */
     private static final Set<String> PROCESS_TYPES = Set.of(
-            "PRECOOL", "SORTING", "GRADING", "DRYING", "PACKAGING", "CUTING");
+            "PRECOOL", "SORTING", "GRADING", "DRYING", "PACKAGING", "CUTING", "SPREADING", "FIXATION", "ROLLING");
 
     private static final Map<String, String> TYPE_LABELS = Map.of(
             "PRECOOL", "预冷",
@@ -48,7 +48,7 @@ public class ProcessServiceImpl {
             "GRADING", "分级",
             "DRYING", "烘干",
             "PACKAGING", "分装",
-            "CUTING", "净切");
+            "CUTING", "净切", "SPREADING", "摊青", "FIXATION", "杀青", "ROLLING", "揉捻");
 
     private static final Set<String> STATUS_VALUES = Set.of("DOING", "DONE", "CANCELED");
 
@@ -215,7 +215,7 @@ public class ProcessServiceImpl {
         String text = value == null ? null : value.trim().toUpperCase();
         if (text == null || !PROCESS_TYPES.contains(text)) {
             throw new BusinessException(400, "加工类型取值应为 PRECOOL / SORTING / GRADING / DRYING / "
-                    + "PACKAGING / CUTING：" + value);
+                    + "PACKAGING / CUTING / SPREADING / FIXATION / ROLLING：" + value);
         }
         return text;
     }
