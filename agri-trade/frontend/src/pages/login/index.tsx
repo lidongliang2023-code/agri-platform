@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Button, Card } from 'antd'
 import { MessageOutlined } from '@ant-design/icons'
 import { useSearchParams } from 'react-router-dom'
-import { redirectToSso } from '../../utils/sso'
+import { redirectToSso } from '@/utils/sso'
 
 /**
  * 登录页 —— 只负责把用户送到平台统一认证中心。

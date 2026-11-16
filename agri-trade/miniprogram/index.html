@@ -2,12 +2,133 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#073821" />
     <link rel="icon" type="image/svg+xml" href="/static/fengchain.svg" />
     <title>丰链云 · 交易撮合</title>
+    <script id="trade-boot">
+      // 首屏加速（构建时由 vite.config.ts 填入首页 chunk 清单与接口地址）：
+      // 首页路由下，在主脚本下载的同时就开始拉首页代码和首页两份公开数据，
+      // 不再串行等「主脚本 → 首页代码 → 接口」三轮。路径须与 pages/home/index.vue 保持一致。
+      (function () {
+        var route = (location.hash.replace(/^#\/?/, '').split('?')[0]) || 'pages/home/index'
+        var tabs = ['pages/home/index', 'pages/products/index', 'pages/demands/index', 'pages/orders/index', 'pages/profile/index']
+        var root = document.documentElement
+        if (route === 'pages/home/index') root.className += ' boot-home'
+        if (tabs.indexOf(route) >= 0) root.className += ' boot-tab'
+        if (route !== 'pages/home/index') return
+        var list = "__TRADE_HOME_PRELOAD__"
+        if (typeof list === 'object') {
+          list.js.forEach(function (href) { var l = document.createElement('link'); l.rel = 'modulepreload'; l.crossOrigin = ''; l.href = href; document.head.appendChild(l) })
+          list.css.forEach(function (href) { var l = document.createElement('link'); l.rel = 'stylesheet'; l.crossOrigin = ''; l.href = href; document.head.appendChild(l) })
+        }
+        if (!window.fetch || !window.Promise) return
+        var api = '__TRADE_API_BASE__'
+        if (/^__TRADE/.test(api)) api = ''
+        var store = window.__TRADE_PREFETCH__ = {}
+        ;['/public/hall/products?sort=latest&pageNum=1&pageSize=6', '/public/demands'].forEach(function (p) {
+          var ctrl = window.AbortController ? new AbortController() : null
+          var timer = setTimeout(function () { if (ctrl) ctrl.abort() }, 12000)
+          var promise = fetch(api + '/api/trade' + p, { headers: { Accept: 'application/json' }, signal: ctrl ? ctrl.signal : undefined })
+            .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json() })
+            .then(function (body) { if (!body || body.code !== 200) throw new Error('code ' + (body && body.code)); return body.data })
+          promise.then(function () { clearTimeout(timer) }, function () { clearTimeout(timer) })
+          store[p] = { at: Date.now(), promise: promise }
+        })
+      })()
+    </script>
+    <style>
+      #boot { position: fixed; z-index: 2000; top: 0; right: 0; bottom: 0; left: 0; overflow: hidden; background: #f3f6f4; color: #17271e; font: 14px/1.5 -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; transition: opacity .18s; }
+      #boot.done { opacity: 0; pointer-events: none; }
+      #boot .b-hero { display: none; padding: 12px 16px 36px; background: radial-gradient(circle at 88% 0, rgba(83, 213, 138, .26), transparent 210px), linear-gradient(150deg, #073821, #0f6440); color: #fff; }
+      .boot-home #boot .b-hero { display: block; }
+      #boot .b-top { display: flex; height: 44px; align-items: center; gap: 7px; font-size: 15px; font-weight: 700; }
+      #boot .b-mark { width: 24px; height: 24px; border-radius: 6px; background: rgba(255, 255, 255, .92); }
+      #boot .b-title { display: block; margin-top: 12px; font-size: 22px; font-weight: 750; }
+      #boot .b-desc { display: block; margin-top: 4px; color: rgba(255, 255, 255, .68); font-size: 13px; }
+      #boot .b-search { display: flex; height: 40px; align-items: center; margin-top: 16px; padding: 0 14px; border-radius: 20px; background: rgba(255, 255, 255, .96); color: #8a998f; font-size: 13px; }
+      #boot .b-metrics { display: flex; margin-top: 14px; text-align: center; }
+      #boot .b-metrics div { flex: 1; font-size: 19px; font-weight: 700; }
+      #boot .b-metrics div + div { border-left: 1px solid rgba(255, 255, 255, .16); }
+      #boot .b-metrics small { display: block; color: rgba(255, 255, 255, .64); font-size: 12px; font-weight: 400; }
+      #boot .b-nav { height: 44px; background: #fff; }
+      .boot-home #boot .b-nav { display: none; }
+      #boot .b-body { padding: 12px; }
+      .boot-home #boot .b-body { position: relative; margin-top: -20px; padding-top: 0; }
+      #boot .b-card { margin-bottom: 10px; padding: 14px; border-radius: 12px; background: #fff; }
+      #boot .b-grid { display: none; grid-template-columns: repeat(4, 1fr); row-gap: 14px; padding: 2px 0; }
+      .boot-home #boot .b-grid { display: grid; }
+      .boot-home #boot .b-card.b-entry { padding: 16px 8px; }
+      #boot .b-grid span { display: flex; align-items: center; flex-direction: column; gap: 6px; font-size: 12px; }
+      #boot .b-grid i { width: 42px; height: 42px; border-radius: 13px; background: #e8f6ee; }
+      #boot .b-card.b-entry { display: none; }
+      .boot-home #boot .b-card.b-entry { display: block; }
+      #boot .b-line { height: 14px; margin: 10px 0; border-radius: 7px; background: linear-gradient(90deg, #eef2ef 25%, #f6f8f7 50%, #eef2ef 75%); background-size: 200% 100%; animation: boot-shine 1.2s infinite linear; }
+      #boot .b-line.s { width: 46%; }
+      #boot .b-line.m { width: 72%; }
+      #boot .b-head { margin-bottom: 4px; font-size: 15px; font-weight: 700; }
+      #boot .b-tip { display: none; margin: 16px 12px; text-align: center; color: #53665a; font-size: 13px; }
+      #boot .b-tip button { min-height: 36px; margin-top: 10px; padding: 0 18px; border: 0; border-radius: 18px; background: #12764a; color: #fff; font: inherit; }
+      #boot.slow .b-tip, #boot.fail .b-tip { display: block; }
+      #boot .b-tab { display: none; position: absolute; right: 0; bottom: 0; left: 0; height: calc(56px + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom); background: #fff; }
+      .boot-tab #boot .b-tab { display: flex; }
+      #boot .b-tab span { display: flex; flex: 1; align-items: center; justify-content: center; flex-direction: column; gap: 3px; color: #8a998f; font-size: 12px; }
+      #boot .b-tab i { width: 22px; height: 22px; border-radius: 6px; background: #edf1ee; }
+      .boot-home #boot .b-tab span:first-child { color: #12764a; }
+      @keyframes boot-shine { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+    </style>
   </head>
   <body>
+    <div id="boot" aria-busy="true">
+      <div class="b-hero">
+        <div class="b-top"><span class="b-mark"></span>丰链云 · 交易撮合</div>
+        <span class="b-title">找货源，接需求</span>
+        <span class="b-desc">品质农产品供需撮合，从产地直达采购方</span>
+        <div class="b-search">⌕&nbsp;&nbsp;搜索产品、品类或产地</div>
+        <div class="b-metrics"><div>—<small>在售货源</small></div><div>—<small>公开需求</small></div><div>AI<small>智能撮合</small></div></div>
+      </div>
+      <div class="b-nav"></div>
+      <div class="b-body">
+        <div class="b-card b-entry"><div class="b-grid">
+          <span><i></i>交易大厅</span><span><i></i>采购需求</span><span><i></i>智能撮合</span><span><i></i>我的订单</span>
+          <span><i></i>电子合同</span><span><i></i>物流跟踪</span><span><i></i>买家中心</span><span><i></i>卖家中心</span>
+        </div></div>
+        <div class="b-card"><div class="b-head">&nbsp;</div><div class="b-line m"></div><div class="b-line s"></div><div class="b-line m"></div><div class="b-line s"></div></div>
+        <div class="b-card"><div class="b-line m"></div><div class="b-line s"></div><div class="b-line m"></div></div>
+        <div class="b-tip"><span class="b-tip-text">网络较慢，仍在加载…</span><br /><button type="button" onclick="location.reload()">重新加载</button></div>
+      </div>
+      <div class="b-tab"><span><i></i>首页</span><span><i></i>大厅</span><span><i></i>需求</span><span><i></i>订单</span><span><i></i>我的</span></div>
+    </div>
     <div id="app"></div>
+    <script>
+      // 页面主体渲染出来就撤掉启动骨架；脚本或样式下载失败时提示重试，加载过慢时给出提示。
+      (function () {
+        var boot = document.getElementById('boot')
+        if (!boot) return
+        var head = document.querySelector('#boot .b-head')
+        if (head && /boot-home/.test(document.documentElement.className)) head.textContent = '热门货源'
+        var finished = false
+        function finish() {
+          if (finished) return
+          finished = true
+          boot.className += ' done'
+          setTimeout(function () { if (boot.parentNode) boot.parentNode.removeChild(boot) }, 220)
+          if (observer) observer.disconnect()
+        }
+        function ready() { return !!document.querySelector('uni-page-body > *') }
+        var observer = window.MutationObserver ? new MutationObserver(function () { if (ready()) finish() }) : null
+        if (observer) observer.observe(document.getElementById('app'), { childList: true, subtree: true })
+        else var poll = setInterval(function () { if (ready()) { clearInterval(poll); finish() } }, 100)
+        window.addEventListener('error', function (event) {
+          var el = event.target
+          if (finished || !el || (el.tagName !== 'SCRIPT' && el.tagName !== 'LINK')) return
+          boot.className += ' fail'
+          var text = boot.querySelector('.b-tip-text')
+          if (text) text.textContent = '页面加载失败，请检查网络后重试'
+        }, true)
+        setTimeout(function () { if (!finished) boot.className += ' slow' }, 10000)
+      })()
+    </script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

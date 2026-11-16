@@ -45,10 +45,12 @@ const APPS = {
     builder: 'uni-app',
     distDir: path.join('dist', 'build', 'h5'),
   },
+  // 生产管理移动端只保留 uni-app 一套源码：H5 在这里发布，微信小程序与 App 由同一工程
+  // 构建 dist/build/mp-weixin、dist/build/app；React 独立移动 H5 已下线。
   'prod-mobile': {
     frontendDir: path.join('agri-production', 'miniprogram'),
     title: '生产管理移动端（H5 / 微信小程序 / App）',
-    accessUrl: 'http://localhost:8180/',
+    accessUrl: 'http://localhost:8180/prod-mobile/',
     builder: 'uni-app',
     distDir: path.join('dist', 'build', 'h5'),
   },

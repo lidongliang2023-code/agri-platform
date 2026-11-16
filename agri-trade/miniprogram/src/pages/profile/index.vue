@@ -1,61 +1,107 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { getTradeUser, logoutTrade } from '../../auth'
+import { ref, computed } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
+import { getTradeStatusBarHeight, getTradeUser, getTradeToken, getTradeRole, setTradeRole, logoutTrade, type TradeRole } from '../../auth'
 
-const statusBarHeight = ref(Number(uni.getSystemInfoSync().statusBarHeight || 0))
-const account = getTradeUser()
-const displayName = account?.nickname || account?.username || '平台用户'
+import { buyerMenu, sellerMenu } from '../../business'
 
-function publish() { uni.navigateTo({ url: '/pages/publish-demand/index' }) }
-function orders() { uni.switchTab({ url: '/pages/orders/index' }) }
-function toMarket() { uni.switchTab({ url: '/pages/products/index' }) }
+const statusBarHeight = ref(getTradeStatusBarHeight())
+const account = ref(getTradeUser())
+const displayName = computed(() => account.value?.nickname || account.value?.username || '未登录')
+
+const role = ref(getTradeRole())
+const loggedIn = ref(!!getTradeToken())
+const centerName = computed(() => role.value === 'buyer' ? '买家中心' : '卖家中心')
+const menu = computed(() => role.value === 'buyer' ? buyerMenu : sellerMenu)
+const groups = computed(() => [
+  { title: centerName.value, items: menu.value.map(([key, label]) => ({ key, label })) },
+  { title: '账户', items: [{ key: 'identity', label: '经营主体与资质' }] },
+])
+onShow(() => {
+  role.value = getTradeRole()
+  loggedIn.value = !!getTradeToken()
+  account.value = loggedIn.value ? getTradeUser() : null
+})
+function switchRole(value: TradeRole) {
+  if (role.value === value) return
+  setTradeRole(value)
+  role.value = value
+  uni.showToast({ title: `已切换到${centerName.value}`, icon: 'none' })
+}
+function open(key: string) {
+  // 先进入目标页，由目标页保存登录返回位置，确保登录后仍在选定中心。
+  uni.navigateTo({ url: `/pages/business/index?key=${key}&role=${role.value}` })
+}
+function enterCenter() {
+  uni.navigateTo({ url: `/pages/workspace/index?role=${role.value}` })
+}
 function logout() {
   uni.showModal({
     title: '退出登录',
     content: '确定退出交易撮合移动端吗？',
-    success(result) {
-      if (result.confirm) void logoutTrade()
-    },
+    success(result) { if (result.confirm) void logoutTrade() },
   })
 }
 </script>
 
 <template>
-  <view class="page">
-    <view class="hero" :style="{ paddingTop: `${statusBarHeight + 20}px` }">
-      <text class="page-title">我的交易账户</text>
-      <view class="avatar">{{ displayName.slice(0, 1) }}</view>
-      <text class="name">{{ displayName }}</text>
-      <text class="account">统一账号 · {{ account?.username || '' }}</text>
-      <text class="verified">✓ 平台统一身份已生效</text>
+  <view class="page flush">
+    <view class="hero" :style="{ paddingTop: `${statusBarHeight + 12}px` }">
+      <text class="nav-title">我的</text>
+      <view class="account-row">
+        <view class="avatar">{{ displayName.slice(0, 1) }}</view>
+        <view class="grow">
+          <text class="name ellipsis">{{ displayName }}</text>
+          <text class="account ellipsis">{{ loggedIn ? `统一账号 · ${account?.username || ''}` : '登录后办理当前中心业务' }}</text>
+          <text v-if="loggedIn" class="verified">{{ centerName }} · 统一账号已登录</text>
+        </view>
+      </view>
     </view>
-    <view class="pad">
-      <view class="menu">
-        <view @tap="orders"><text class="icon">单</text><b>我的交易订单</b><text>›</text></view>
-        <view @tap="publish"><text class="icon">求</text><b>发布采购需求</b><text>›</text></view>
-        <view @tap="toMarket"><text class="icon">货</text><b>浏览交易大厅</b><text>›</text></view>
+
+    <view class="pad body">
+      <view class="center-card">
+        <view class="center-switch">
+          <button class="center-option" :class="{ active: role === 'buyer' }" @tap="switchRole('buyer')"><text class="center-label">买家中心</text><text class="center-desc">采购 · 询价 · 收货</text></button>
+          <button class="center-option" :class="{ active: role === 'seller' }" @tap="switchRole('seller')"><text class="center-label">卖家中心</text><text class="center-desc">商品 · 报价 · 发货</text></button>
+        </view>
+        <text class="center-hint">{{ role === 'buyer' ? '当前展示采购业务，可切换到卖家中心管理供货。' : '当前展示供货业务，可切换到买家中心办理采购。' }}</text>
+        <button class="btn btn-primary btn-block" @tap="enterCenter">{{ loggedIn ? `进入${centerName}` : `登录并进入${centerName}` }}</button>
       </view>
-      <view class="menu">
-        <view><text class="icon">证</text><b>经营主体与资质</b><text>›</text></view>
-        <view><text class="icon">设</text><b>设置</b><text>›</text></view>
-        <view @tap="logout"><text class="icon">退</text><b>退出统一登录</b><text>›</text></view>
+      <view v-for="group in groups" :key="group.title" class="group">
+        <text class="group-title">{{ group.title }}</text>
+        <view class="menu-list">
+          <view v-for="item in group.items" :key="item.label" class="menu-row" @tap="open(item.key)">
+            <view class="entry-icon">{{ item.label.slice(0, 1) }}</view>
+            <view class="menu-text"><text class="menu-label">{{ item.label }}</text></view>
+            <text class="arrow">›</text>
+          </view>
+        </view>
       </view>
+      <button v-if="loggedIn" class="btn btn-block logout" @tap="logout">退出统一登录</button>
     </view>
   </view>
 </template>
 
 <style scoped lang="scss">
-.hero { display: flex; align-items: center; flex-direction: column; padding: 0 28rpx 42rpx; border-radius: 0 0 38rpx 38rpx; background: radial-gradient(circle at 85% 0,rgba(82,204,134,.23),transparent 390rpx),linear-gradient(145deg,#073821,#0d5a3a); color: #fff; }
-.page-title { align-self: stretch; margin-bottom: 20rpx; font-size: 31rpx; font-weight: 700; }
-.avatar { display: grid; width: 120rpx; height: 120rpx; place-items: center; border: 6rpx solid rgba(255,255,255,.16); border-radius: 50%; background: linear-gradient(135deg,#26a96a,#12764a); font-size: 42rpx; font-weight: 750; }
-.name { margin-top: 14rpx; font-size: 34rpx; font-weight: 700; }
-.account { margin-top: 6rpx; color: rgba(255,255,255,.55); font-size: 24rpx; }
-.verified { margin-top: 12rpx; padding: 6rpx 14rpx; border-radius: 18rpx; background: rgba(255,255,255,.1); color: #a9e7c1; font-size: 24rpx; }
-.pad { margin-top: -20rpx; position: relative; padding: 0 24rpx; }
-.menu { margin-bottom: 16rpx; overflow: hidden; border: 1rpx solid #e1e9e3; border-radius: 21rpx; background: #fff; }
-.menu view { display: flex; min-height: 90rpx; align-items: center; gap: 14rpx; padding: 12rpx 20rpx; border-bottom: 1rpx solid #edf2ee; }
-.menu view:last-child { border-bottom: 0; }
-.icon { display: grid; width: 52rpx; height: 52rpx; place-items: center; border-radius: 14rpx; background: #edf8f2; color: #12764a; font-size: 24rpx; font-weight: 750; }
-.menu b { flex: 1; font-size: 24rpx; }
-.menu view > text:last-child { color: #94a198; font-size: 30rpx; }
+.hero { padding: 0 32rpx 72rpx; background: radial-gradient(circle at 85% 0, rgba(82, 204, 134, .23), transparent 390rpx), linear-gradient(150deg, #073821, #0f6440); color: #fff; }
+.nav-title { display: flex; height: 88rpx; align-items: center; font-size: 32rpx; font-weight: 700; }
+.account-row { display: flex; align-items: center; gap: 24rpx; margin-top: 16rpx; }
+.avatar { display: flex; width: 120rpx; height: 120rpx; flex-shrink: 0; align-items: center; justify-content: center; border: 6rpx solid rgba(255, 255, 255, .18); border-radius: 50%; background: linear-gradient(135deg, #26a96a, #12764a); font-size: 44rpx; font-weight: 700; }
+.name { display: block; font-size: 36rpx; font-weight: 700; }
+.account { display: block; margin-top: 4rpx; color: rgba(255, 255, 255, .7); font-size: 24rpx; }
+.verified { display: inline-flex; margin-top: 12rpx; padding: 4rpx 16rpx; border-radius: 20rpx; background: rgba(255, 255, 255, .12); color: #a9e7c1; font-size: 24rpx; }
+.body { position: relative; margin-top: -40rpx; }
+.group { margin-bottom: 24rpx; }
+.group-title { display: block; margin: 0 8rpx 12rpx; color: var(--c-text-3); font-size: 24rpx; }
+.center-card { margin-bottom: 28rpx; padding: 24rpx; border-radius: 24rpx; background: #fff; }
+.center-switch { display: flex; gap: 16rpx; }
+.center-option { flex: 1; min-width: 0; min-height: 112rpx; padding: 20rpx 12rpx; border: 2rpx solid #e3ebe6; border-radius: 18rpx; background: #f6f8f6; color: var(--c-text-3); line-height: 1.5; }
+.center-option.active { border-color: var(--c-primary); background: #e6f5ed; color: var(--c-primary); }
+.center-label, .center-desc { display: block; }
+.center-label { font-size: 30rpx; font-weight: 700; }
+.center-desc { margin-top: 4rpx; font-size: 24rpx; }
+.center-hint { display: block; margin: 20rpx 0; color: var(--c-text-3); font-size: 24rpx; line-height: 1.6; }
+.menu-text { display: flex; flex-direction: column; justify-content: center; }
+.menu-label { font-size: 28rpx; }
+.logout { margin-top: 8rpx; background: #fff; color: var(--c-danger); }
 </style>

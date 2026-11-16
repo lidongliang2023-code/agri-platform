@@ -1,33 +1,156 @@
 {
   "pages": [
-    { "path": "pages/home/index", "style": { "navigationStyle": "custom" } },
-    { "path": "pages/products/index", "style": { "navigationBarTitleText": "交易大厅" } },
-    { "path": "pages/product/detail", "style": { "navigationBarTitleText": "商品详情" } },
-    { "path": "pages/demands/index", "style": { "navigationBarTitleText": "采购需求" } },
-    { "path": "pages/orders/index", "style": { "navigationBarTitleText": "我的订单" } },
-    { "path": "pages/profile/index", "style": { "navigationStyle": "custom" } },
-    { "path": "pages/publish-demand/index", "style": { "navigationBarTitleText": "发布采购需求" } },
-    { "path": "pages/login/index", "style": { "navigationStyle": "custom" } }
+    {
+      "path": "pages/home/index",
+      "style": {
+        "navigationStyle": "custom",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/products/index",
+      "style": {
+        "navigationBarTitleText": "交易大厅",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/product/detail",
+      "style": {
+        "navigationBarTitleText": "商品详情"
+      }
+    },
+    {
+      "path": "pages/demands/index",
+      "style": {
+        "navigationBarTitleText": "采购需求",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/orders/index",
+      "style": {
+        "navigationBarTitleText": "我的订单",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/profile/index",
+      "style": {
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/publish-demand/index",
+      "style": {
+        "navigationBarTitleText": "发布采购需求"
+      }
+    },
+    {
+      "path": "pages/login/index",
+      "style": {
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/match/index",
+      "style": {
+        "navigationBarTitleText": "智能撮合"
+      }
+    },
+    {
+      "path": "pages/order-detail/index",
+      "style": {
+        "navigationBarTitleText": "订单详情"
+      }
+    },
+    {
+      "path": "pages/contracts/index",
+      "style": {
+        "navigationBarTitleText": "电子合同",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/contract-detail/index",
+      "style": {
+        "navigationBarTitleText": "合同签署"
+      }
+    },
+    {
+      "path": "pages/logistics/index",
+      "style": {
+        "navigationBarTitleText": "物流跟踪",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/workspace/index",
+      "style": {
+        "navigationBarTitleText": "交易工作台"
+      }
+    },
+    {
+      "path": "pages/business/index",
+      "style": {
+        "navigationBarTitleText": "业务办理",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/checkout/index",
+      "style": {
+        "navigationBarTitleText": "确认采购"
+      }
+    }
   ],
   "globalStyle": {
     "navigationBarTextStyle": "black",
     "navigationBarTitleText": "丰链云交易撮合",
     "navigationBarBackgroundColor": "#ffffff",
-    "backgroundColor": "#f4f7f5",
+    "backgroundColor": "#f3f6f4",
+    "backgroundColorTop": "#f3f6f4",
     "backgroundTextStyle": "dark"
   },
   "tabBar": {
     "fontSize": "12px",
-    "color": "#94a198",
+    "iconWidth": "24px",
+    "height": "56px",
+    "color": "#8a998f",
     "selectedColor": "#12764a",
     "borderStyle": "white",
     "backgroundColor": "#ffffff",
     "list": [
-      { "pagePath": "pages/home/index", "text": "首页" },
-      { "pagePath": "pages/products/index", "text": "大厅" },
-      { "pagePath": "pages/demands/index", "text": "需求" },
-      { "pagePath": "pages/orders/index", "text": "订单" },
-      { "pagePath": "pages/profile/index", "text": "我的" }
+      {
+        "pagePath": "pages/home/index",
+        "text": "首页",
+        "iconPath": "static/tab/home.png",
+        "selectedIconPath": "static/tab/home-on.png"
+      },
+      {
+        "pagePath": "pages/products/index",
+        "text": "大厅",
+        "iconPath": "static/tab/hall.png",
+        "selectedIconPath": "static/tab/hall-on.png"
+      },
+      {
+        "pagePath": "pages/demands/index",
+        "text": "需求",
+        "iconPath": "static/tab/demand.png",
+        "selectedIconPath": "static/tab/demand-on.png"
+      },
+      {
+        "pagePath": "pages/orders/index",
+        "text": "订单",
+        "iconPath": "static/tab/orders.png",
+        "selectedIconPath": "static/tab/orders-on.png"
+      },
+      {
+        "pagePath": "pages/profile/index",
+        "text": "我的",
+        "iconPath": "static/tab/profile.png",
+        "selectedIconPath": "static/tab/profile-on.png"
+      }
     ]
   }
 }

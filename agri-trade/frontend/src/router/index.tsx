@@ -1,40 +1,41 @@
-import { useEffect, useRef } from 'react'
+import { Component, Suspense, lazy, useEffect, useRef } from 'react'
+import type { ReactNode } from 'react'
 import { Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom'
-import Login from '@/pages/login'
-import OrderDetail from '@/pages/order/detail'
-import OrderConfirm from '@/pages/order/confirm'
-import OrderCreate from '@/pages/order/create'
-import ProductDetail from '@/pages/product/detail'
-import ShopDetail from '@/pages/shop/detail'
-import DemandDetail from '@/pages/demand/detail'
-import BuyerCenter from '@/pages/member-center/BuyerCenter'
-import SellerCenter from '@/pages/member-center/SellerCenter'
-import TradeHall from '@/pages/hall'
-import SsoCallback from '@/pages/sso/callback'
-import AdminLayout from '@/pages/admin/layout'
-import AdminDashboard from '@/pages/admin/dashboard'
-import AdminProductAudit from '@/pages/admin/product'
-import AdminOrderOversight from '@/pages/admin/order'
-import AdminDispute from '@/pages/admin/dispute'
-import AdminRefund from '@/pages/admin/refund'
-import AdminInvoice from '@/pages/admin/invoice'
-import AdminCompensation from '@/pages/admin/compensation'
-import AdminBindings from '@/pages/admin/bindings'
-import AdminSettlement from '@/pages/admin/settlement'
-import AdminCredit from '@/pages/admin/credit'
-import AdminConfig from '@/pages/admin/config'
-import AdminRisk from '@/pages/admin/risk'
-import AdminReport from '@/pages/admin/report'
-import AdminGuarantee from '@/pages/admin/guarantee'
-import AdminContractTemplate from '@/pages/admin/contract-template'
-import AdminCarrier from '@/pages/admin/carrier'
-import ExternalRedirect from '@/pages/admin/external-redirect'
-import P2tOrders from '@/pages/admin/p2t/Orders'
-import P2tRecon from '@/pages/admin/p2t/Recon'
-import P2tRules from '@/pages/admin/p2t/Rules'
-import P2tDiffs from '@/pages/admin/p2t/Diffs'
-import P2tTrace from '@/pages/admin/p2t/Trace'
-import P2tBoundary from '@/pages/admin/p2t/Boundary'
+const Login = lazy(() => import('@/pages/login'))
+const OrderDetail = lazy(() => import('@/pages/order/detail'))
+const OrderConfirm = lazy(() => import('@/pages/order/confirm'))
+const OrderCreate = lazy(() => import('@/pages/order/create'))
+const ProductDetail = lazy(() => import('@/pages/product/detail'))
+const ShopDetail = lazy(() => import('@/pages/shop/detail'))
+const DemandDetail = lazy(() => import('@/pages/demand/detail'))
+const BuyerCenter = lazy(() => import('@/pages/member-center/BuyerCenter'))
+const SellerCenter = lazy(() => import('@/pages/member-center/SellerCenter'))
+const TradeHall = lazy(() => import('@/pages/hall'))
+const SsoCallback = lazy(() => import('@/pages/sso/callback'))
+const AdminLayout = lazy(() => import('@/pages/admin/layout'))
+const AdminDashboard = lazy(() => import('@/pages/admin/dashboard'))
+const AdminProductAudit = lazy(() => import('@/pages/admin/product'))
+const AdminOrderOversight = lazy(() => import('@/pages/admin/order'))
+const AdminDispute = lazy(() => import('@/pages/admin/dispute'))
+const AdminRefund = lazy(() => import('@/pages/admin/refund'))
+const AdminInvoice = lazy(() => import('@/pages/admin/invoice'))
+const AdminCompensation = lazy(() => import('@/pages/admin/compensation'))
+const AdminBindings = lazy(() => import('@/pages/admin/bindings'))
+const AdminSettlement = lazy(() => import('@/pages/admin/settlement'))
+const AdminCredit = lazy(() => import('@/pages/admin/credit'))
+const AdminConfig = lazy(() => import('@/pages/admin/config'))
+const AdminRisk = lazy(() => import('@/pages/admin/risk'))
+const AdminReport = lazy(() => import('@/pages/admin/report'))
+const AdminGuarantee = lazy(() => import('@/pages/admin/guarantee'))
+const AdminContractTemplate = lazy(() => import('@/pages/admin/contract-template'))
+const AdminCarrier = lazy(() => import('@/pages/admin/carrier'))
+const ExternalRedirect = lazy(() => import('@/pages/admin/external-redirect'))
+const P2tOrders = lazy(() => import('@/pages/admin/p2t/Orders'))
+const P2tRecon = lazy(() => import('@/pages/admin/p2t/Recon'))
+const P2tRules = lazy(() => import('@/pages/admin/p2t/Rules'))
+const P2tDiffs = lazy(() => import('@/pages/admin/p2t/Diffs'))
+const P2tTrace = lazy(() => import('@/pages/admin/p2t/Trace'))
+const P2tBoundary = lazy(() => import('@/pages/admin/p2t/Boundary'))
 import { isLoggedIn } from '@/utils/session'
 import { redirectToSso, SSO_CALLBACK_PATH } from '@/utils/sso'
 
@@ -100,12 +101,38 @@ function RootEntry(): JSX.Element {
   return mobile ? <MobileTradeRedirect /> : <Navigate to="/member/buyer" replace />
 }
 
-function AppRouter() {
+class PageLoadBoundary extends Component<{ children: ReactNode; resetKey: string }, { failed: boolean }> {
+  state = { failed: false }
+
+  static getDerivedStateFromError(): { failed: boolean } {
+    return { failed: true }
+  }
+
+  // 某个页面加载失败后，返回或切到别的页面要能正常显示，不能一直停在失败提示。
+  componentDidUpdate(previous: { resetKey: string }): void {
+    if (this.state.failed && previous.resetKey !== this.props.resetKey) this.setState({ failed: false })
+  }
+
+  render(): ReactNode {
+    if (this.state.failed) {
+      return <div role="alert" style={{ padding: 32, color: '#53665a' }}>
+        <p>页面加载失败，请检查网络后重试。</p>
+        <button type="button" onClick={() => window.location.reload()} style={{ minHeight: 44, padding: '0 20px' }}>重新加载</button>
+      </div>
+    }
+    return this.props.children
+  }
+}
+
+function AppRouter({ mobileEntry, callbackElement }: { mobileEntry?: React.ReactNode; callbackElement?: React.ReactNode } = {}) {
+  const location = useLocation()
   return (
+    <PageLoadBoundary resetKey={location.pathname}>
+    <Suspense fallback={<div role="status" style={{ padding: 32, color: '#53665a' }}>正在加载页面…</div>}>
     <Routes>
       <Route path="/login" element={<Login />} />
       {/* SSO 回跳页必须在守卫之外：它就是"正在登录"的那一步 */}
-      <Route path={SSO_CALLBACK_PATH} element={<SsoCallback />} />
+      <Route path={SSO_CALLBACK_PATH} element={callbackElement ?? <SsoCallback />} />
       {/* 运营端：同一套 SSO 登录，但布局与页面集合与用户端完全分开 */}
       <Route
         path="/admin/trade"
@@ -147,9 +174,9 @@ function AppRouter() {
       </Route>
       {/* 交易端只剩买家中心 / 卖家中心；没有全局后台菜单与首页 */}
       <Route path="/hall" element={<TradeHall />} />
-      <Route path="/mobile/trade" element={<MobileTradeRedirect />} />
-      <Route path="/mobile" element={<MobileTradeRedirect />} />
-      <Route path="/m" element={<MobileTradeRedirect />} />
+      <Route path="/mobile/trade" element={mobileEntry ?? <MobileTradeRedirect />} />
+      <Route path="/mobile" element={mobileEntry ?? <MobileTradeRedirect />} />
+      <Route path="/m" element={mobileEntry ?? <MobileTradeRedirect />} />
       <Route path="/member/buyer" element={<PrivateRoute><BuyerCenter /></PrivateRoute>} />
       <Route path="/member/seller" element={<PrivateRoute><SellerCenter /></PrivateRoute>} />
 
@@ -181,9 +208,11 @@ function AppRouter() {
       <Route path="/my-identity" element={<PortalAccountRedirect />} />
       <Route path="/mine" element={<Navigate to="/member/buyer" replace />} />
 
-      <Route path="/" element={<RootEntry />} />
+      <Route path="/" element={mobileEntry ?? <RootEntry />} />
       <Route path="*" element={<Navigate to="/member/buyer" replace />} />
     </Routes>
+    </Suspense>
+    </PageLoadBoundary>
   )
 }
 

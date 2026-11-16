@@ -28,7 +28,7 @@
 | 政府监管（用户端） | `gov.agri.local` | `:8108` | React + TS + antd | :8095 |
 | 政府监管（移动端） | `gov-mobile.agri.local` | `:8109` | uni-app（H5 / 微信小程序 / App） | :8095 |
 | 政府监管（运营端） | `gov-ops.agri.local` | `:8110` | React + TS + antd | :8095 |
-| 交易撮合移动端 | `trade-mobile.agri.local` | `:8181` | React + TS | :8089 |
+| 交易撮合移动端 | `trade-mobile.agri.local` | `:8181` | uni-app（H5 / 微信小程序 / App） | :8089 |
 | 供应链金融 | `finance.agri.local` | `:8081` | Vue 3 + element-plus | :8087 |
 | S2B2C 商城（消费者端） | `mall.agri.local` / `mall-consumer.agri.local` | `:8082` | Vue 3 + vant | :8088 |
 | S2B2C 商城（供应商端） | `mall-supplier.agri.local` | `:8084` | Vue 3 + element-plus | :8088 |
