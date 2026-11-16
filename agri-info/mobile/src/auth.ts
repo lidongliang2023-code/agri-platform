@@ -111,23 +111,32 @@ export function isLoggedIn(): boolean {
   return Boolean(getInfoToken())
 }
 
-export async function loginWithUnifiedAccount(
-  username: string,
-  password: string,
-): Promise<{ token: string; user: UnifiedAccount; permissions: string[] }> {
-  const login = await apiRequest<{
-    code: number
-    message?: string
-    data?: { accessToken: string; user: UnifiedAccount }
-  }>(
-    `${AUTH_BASE}/api/v1/sso/login-standalone`,
-    'POST',
-    { username, password, marketId: 1, remember: true },
-  )
-  if (login.status >= 400 || login.body.code !== 0 || !login.body.data?.accessToken) {
-    throw new Error(login.body.message || '统一账号登录失败')
-  }
-  const token = login.body.data.accessToken
+export interface InfoMfaChallenge {
+  mfaRequired: true
+  challengeToken: string
+}
+
+export interface InfoLoginSuccess {
+  mfaRequired?: false
+  token: string
+  user: UnifiedAccount
+  permissions: string[]
+}
+
+export function isInfoMfaChallenge(value: unknown): value is InfoMfaChallenge {
+  return Boolean(value && typeof value === 'object' && (value as InfoMfaChallenge).mfaRequired === true)
+    && Boolean((value as InfoMfaChallenge).challengeToken)
+}
+
+function persistInfoSession(token: string, user: UnifiedAccount, permissions: string[]) {
+  // 登录账号变化时清理上一账号的临时草稿，内容缓存仍通过 accountStorageKey 隔离。
+  clearInfoCache()
+  uni.setStorageSync(TOKEN_KEY, token)
+  uni.setStorageSync(USER_KEY, user)
+  uni.setStorageSync(PERMISSION_KEY, permissions)
+}
+
+async function resolveInfoPermissions(token: string): Promise<string[]> {
   const permission = await apiRequest<{
     code: number
     message?: string
@@ -136,13 +145,66 @@ export async function loginWithUnifiedAccount(
   const permissions = permission.body.data?.permissions || []
   const allowed = ['info:consumer', 'info:admin']
     .some((code) => permissionGranted(permissions, code))
-  if (permission.status >= 400 || !allowed) {
+  if (permission.status >= 400 || permission.body.code !== 0 || !allowed) {
     throw new Error('当前统一账号没有信息资讯角色权限，请联系平台运营开通')
   }
-  uni.setStorageSync(TOKEN_KEY, token)
-  uni.setStorageSync(USER_KEY, login.body.data.user)
-  uni.setStorageSync(PERMISSION_KEY, permissions)
-  return { token, user: login.body.data.user, permissions }
+  return permissions
+}
+
+/** 第一步：统一账号密码登录。开启二次验证时返回一次性挑战，不保存半成品会话。 */
+export async function loginWithUnifiedAccount(
+  username: string,
+  password: string,
+  remember = true,
+): Promise<InfoLoginSuccess | InfoMfaChallenge> {
+  const login = await apiRequest<{
+    code: number
+    message?: string
+    data?: {
+      accessToken?: string
+      user?: UnifiedAccount
+      mfaRequired?: boolean
+      challengeToken?: string
+    }
+  }>(
+    `${AUTH_BASE}/api/v1/sso/login-standalone`,
+    'POST',
+    { username, password, marketId: 1, remember },
+  )
+  if (login.status >= 400 || login.body.code !== 0) {
+    throw new Error(login.body.message || '统一账号登录失败')
+  }
+  const data = login.body.data
+  if (isInfoMfaChallenge(data)) return data
+  if (!data?.accessToken || !data.user) {
+    throw new Error('统一认证中心未返回有效登录结果')
+  }
+  const permissions = await resolveInfoPermissions(data.accessToken)
+  persistInfoSession(data.accessToken, data.user, permissions)
+  return { token: data.accessToken, user: data.user, permissions }
+}
+
+/** 第二步：用认证中心签发的一次性挑战完成动态码登录。 */
+export async function completeInfoMfaLogin(
+  challengeToken: string,
+  code: string,
+  remember = true,
+): Promise<InfoLoginSuccess> {
+  const result = await apiRequest<{
+    code: number
+    message?: string
+    data?: { accessToken?: string; user?: UnifiedAccount }
+  }>(
+    `${AUTH_BASE}/api/v1/sso/login-standalone-mfa`,
+    'POST',
+    { challengeToken, code: code.trim(), marketId: 1, remember },
+  )
+  if (result.status >= 400 || result.body.code !== 0 || !result.body.data?.accessToken || !result.body.data.user) {
+    throw new Error(result.body.message || '二次验证码校验失败，请重新登录')
+  }
+  const permissions = await resolveInfoPermissions(result.body.data.accessToken)
+  persistInfoSession(result.body.data.accessToken, result.body.data.user, permissions)
+  return { token: result.body.data.accessToken, user: result.body.data.user, permissions }
 }
 
 export function clearUnifiedInfoSession() {
