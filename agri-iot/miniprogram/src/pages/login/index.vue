@@ -11,13 +11,13 @@
       <view class="hero-copy">
         <text class="hero-kicker">物联网移动工作台</text>
         <text class="hero-title">欢迎回来</text>
-        <text class="hero-desc">使用丰链云统一账号登录，设备监测、告警处理与农场运维随时处理。</text>
+        <text class="hero-desc">使用丰链云统一账号登录，随时查看设备、处理告警与管理农场。</text>
       </view>
       <view class="hero-flow">
         <view><text>01</text><text>统一账号</text></view>
-        <i />
+        <view class="flow-line" />
         <view><text>02</text><text>权限校验</text></view>
-        <i />
+        <view class="flow-line" />
         <view><text>03</text><text>进入主体</text></view>
       </view>
     </view>
@@ -29,15 +29,16 @@
       </view>
       <view v-else class="mfa-head">
         <text class="mfa-title">二次验证</text>
-        <text class="mfa-tip">该账号已开启二次验证，请输入验证器上的 6 位动态码</text>
+        <text class="mfa-tip">{{ recoveryMode ? '请输入启用二次验证时保存的一次性备用码，用后即失效' : '该账号已开启二次验证，请输入验证器上的 6 位动态码' }}</text>
       </view>
 
       <view class="form-block">
         <template v-if="challengeToken">
           <view class="input-group">
-            <text class="label">动态验证码</text>
+            <text class="label">{{ recoveryMode ? '一次性备用码' : '动态验证码' }}</text>
             <view class="input-shell">
-              <input v-model="mfaCode" type="number" maxlength="6" :disabled="submitting" placeholder="请输入 6 位动态码" confirm-type="done" @confirm="submitLogin" />
+              <input v-if="!recoveryMode" v-model="mfaCode" type="number" maxlength="6" :disabled="submitting" placeholder="请输入 6 位动态码" confirm-type="done" @confirm="submitLogin" />
+              <input v-else v-model="mfaCode" type="text" maxlength="32" :disabled="submitting" placeholder="请输入一次性备用码" confirm-type="done" @confirm="submitLogin" />
             </view>
           </view>
         </template>
@@ -73,27 +74,44 @@
           <view class="input-group">
             <text class="label">登录密码</text>
             <view class="input-shell">
-              <input v-model="password" password :disabled="submitting" placeholder="请输入统一账号密码" confirm-type="done" @confirm="submitLogin" />
+              <input v-model="password" :password="!showPassword" :disabled="submitting" placeholder="请输入统一账号密码" confirm-type="done" @confirm="submitLogin" />
+              <button class="password-toggle" :disabled="submitting" @tap="showPassword = !showPassword">{{ showPassword ? '隐藏' : '显示' }}</button>
             </view>
           </view>
         </template>
 
         <view v-if="!challengeToken" class="form-meta">
-          <view class="remember" @tap="remember = !remember">
+          <button class="remember" :disabled="submitting" @tap="remember = !remember">
             <text class="check" :class="{ on: remember }">{{ remember ? '✓' : '' }}</text>
             <text>保持登录（有效期内）</text>
-          </view>
-          <text class="meta-link" @tap="showPasswordHelp">忘记密码？</text>
+          </button>
+          <button class="meta-link" :disabled="submitting" @tap="showPasswordHelp">忘记密码？</button>
         </view>
         <view v-else class="form-meta">
-          <text />
-          <text class="meta-link" @tap="resetMfa">返回账号登录</text>
+          <button class="meta-link" :disabled="submitting" @tap="toggleMfaMode">{{ recoveryMode ? '使用动态码' : '使用备用码' }}</button>
+          <button class="meta-link" :disabled="submitting" @tap="backFromMfa">返回账号登录</button>
         </view>
 
         <view v-if="messageText" :class="['inline-message', messageType]" role="alert">{{ messageText }}</view>
 
-        <button class="primary-button" :disabled="submitting" @tap="submitLogin">
+        <button class="primary-button" :disabled="submitting || sending" :loading="submitting" @tap="submitLogin">
           {{ submitting ? '登录中…' : challengeToken ? '验证并登录' : '登 录' }}
+        </button>
+      </view>
+
+      <view v-if="!challengeToken" class="divider"><i /><text>其他登录方式</text><i /></view>
+      <view v-if="!challengeToken" class="third-party">
+        <button @tap="showThirdParty('微信')">
+          <text class="third-icon wechat">微</text>
+          <text>微信</text>
+        </button>
+        <button @tap="showThirdParty('支付宝')">
+          <text class="third-icon alipay">支</text>
+          <text>支付宝</text>
+        </button>
+        <button @tap="showThirdParty('国家政务服务平台')">
+          <text class="third-icon gov">政</text>
+          <text>政务服务</text>
         </button>
       </view>
 
@@ -123,6 +141,8 @@ const smsCode = ref('')
 const account = ref('')
 const password = ref('')
 const remember = ref(true)
+const showPassword = ref(false)
+const recoveryMode = ref(false)
 const sending = ref(false)
 const submitting = ref(false)
 const countdown = ref(0)
@@ -133,7 +153,9 @@ const messageType = ref<'error' | 'notice'>('error')
 let timer: ReturnType<typeof setInterval> | null = null
 
 const canSubmit = computed(() => {
-  if (challengeToken.value) return /^\d{6}$/.test(mfaCode.value.trim())
+  if (challengeToken.value) return recoveryMode.value
+    ? /^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{10}$/.test(mfaCode.value.replace(/[\s-]/g, '').toUpperCase())
+    : /^\d{6}$/.test(mfaCode.value.trim())
   return tab.value === 'sms'
     ? PHONE_PATTERN.test(phone.value) && /^\d{6}$/.test(smsCode.value)
     : account.value.trim().length > 0 && password.value.length > 0
@@ -145,11 +167,26 @@ function notice(text: string, type: 'error' | 'notice' = 'error'): void {
 }
 
 function switchTab(next: LoginTab): void {
+  if (submitting.value || sending.value) return
+  showPassword.value = false
   tab.value = next
   notice('')
 }
 
+function toggleMfaMode(): void {
+  if (submitting.value) return
+  recoveryMode.value = !recoveryMode.value
+  mfaCode.value = ''
+  notice('')
+}
+
+function backFromMfa(): void {
+  if (!submitting.value) resetMfa()
+}
+
 function resetMfa(): void {
+  recoveryMode.value = false
+  showPassword.value = false
   challengeToken.value = ''
   mfaCode.value = ''
   password.value = ''
@@ -170,6 +207,7 @@ function startCountdown(): void {
 }
 
 async function requestLoginCode(): Promise<void> {
+  if (submitting.value || sending.value || countdown.value > 0) return
   if (!PHONE_PATTERN.test(phone.value)) {
     notice('请输入正确的 11 位手机号')
     return
@@ -193,9 +231,9 @@ function enterWorkbench(): void {
 }
 
 async function submitLogin(): Promise<void> {
-  if (submitting.value) return
+  if (submitting.value || sending.value) return
   if (!canSubmit.value) {
-    notice(challengeToken.value ? '请输入 6 位动态码' : tab.value === 'sms' ? '请填写正确的手机号和 6 位验证码' : '请输入账号和密码')
+    notice(challengeToken.value ? (recoveryMode.value ? '请输入有效的 10 位备用码，可带连字符' : '请输入 6 位动态码') : tab.value === 'sms' ? '请填写正确的手机号和 6 位验证码' : '请输入账号和密码')
     return
   }
   submitting.value = true
@@ -207,8 +245,10 @@ async function submitLogin(): Promise<void> {
     else if (tab.value === 'sms') result = await loginWithSmsCode(phone.value, smsCode.value, remember.value)
     else result = await loginWithUnifiedAccount(account.value.trim(), password.value, remember.value)
     password.value = ''
+    showPassword.value = false
     smsCode.value = ''
     if (result.mfaRequired) {
+      recoveryMode.value = false
       challengeToken.value = result.challengeToken!
       mfaCode.value = ''
       return
@@ -228,6 +268,15 @@ function showPasswordHelp(): void {
   uni.showModal({
     title: '找回密码',
     content: '物联网使用丰链云统一账号。请在统一账号中心用注册手机号重置密码，或联系平台管理员处理。',
+    showCancel: false,
+    confirmText: '我知道了',
+  })
+}
+
+function showThirdParty(name: string): void {
+  uni.showModal({
+    title: `${name}登录`,
+    content: `${name}登录入口已预留，本部署尚未配置开放平台应用凭据和回调域名，暂不能发起真实授权。请使用丰链云统一账号登录。`,
     showCancel: false,
     confirmText: '我知道了',
   })
@@ -264,12 +313,12 @@ onUnmounted(() => {
 .hero-desc { color: rgba(255, 255, 255, .72); font-size: 24rpx; line-height: 1.6; }
 
 .hero-flow { display: flex; align-items: center; gap: 12rpx; margin-top: 34rpx; }
-.hero-flow view, .hero-flow uni-view { display: flex; align-items: center; gap: 8rpx; color: rgba(255, 255, 255, .82); font-size: 24rpx; }
+.hero-flow > view:not(.flow-line), .hero-flow > uni-view:not(.flow-line) { display: flex; align-items: center; gap: 8rpx; color: rgba(255, 255, 255, .82); font-size: 24rpx; }
 .hero-flow view text:first-child, .hero-flow uni-view uni-text:first-child {
   display: flex; width: 34rpx; height: 34rpx; align-items: center; justify-content: center;
   border-radius: 50%; background: rgba(255, 255, 255, .14); color: #d7f8e4; font-size: 20rpx; font-weight: 800;
 }
-.hero-flow i { height: 1rpx; flex: 1; background: rgba(255, 255, 255, .18); }
+.hero-flow .flow-line { height: 1rpx; flex: 1; background: rgba(255, 255, 255, .18); }
 
 .auth-card {
   overflow: hidden;
@@ -330,6 +379,51 @@ onUnmounted(() => {
 }
 .primary-button[disabled] { opacity: .55; }
 
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+  padding: 0 28rpx;
+  color: #95a39b;
+  font-size: 24rpx;
+}
+.divider i { height: 1rpx; flex: 1; background: #edf1ee; }
+
+.third-party {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12rpx;
+  padding: 24rpx 28rpx 12rpx;
+}
+.third-party button,
+.third-party uni-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 9rpx;
+  min-height: 82rpx;
+  border: none;
+  background: transparent;
+  color: #667a6e;
+  font-size: 24rpx;
+}
+.third-party button::after,
+.third-party uni-button::after { border: 0; }
+.third-icon {
+  display: flex;
+  width: 62rpx;
+  height: 62rpx;
+  align-items: center;
+  justify-content: center;
+  border-radius: 18rpx;
+  color: #fff;
+  font-size: 26rpx;
+  font-weight: 800;
+}
+.third-icon.wechat { background: #16a34a; }
+.third-icon.alipay { background: #1677ff; }
+.third-icon.gov { background: linear-gradient(135deg, #d9363e, #f05b42); }
+
 .auth-footer {
   display: flex; align-items: center; justify-content: center;
   padding: 24rpx 20rpx 28rpx; border-top: 1rpx solid #edf2ee;
@@ -339,5 +433,30 @@ onUnmounted(() => {
 .auth-bottom {
   display: flex; flex-direction: column; gap: 6rpx; padding: 28rpx 16rpx 0;
   color: #91a098; font-size: 24rpx; line-height: 1.5; text-align: center;
+}
+
+/* 与生产管理同系的登录卡片，兼顾窄屏、触控和 H5 宽屏。 */
+.auth-page { box-sizing: border-box; }
+.auth-hero, .auth-card, .auth-bottom { width: 100%; max-width: 480px; margin-left: auto; margin-right: auto; }
+.auth-tabs { display: flex; }
+.auth-tabs button { flex: 1; min-width: 0; min-height: 44px; display: flex; align-items: center; justify-content: center; line-height: 1.4; }
+.input-shell { min-height: 48px; }
+.input-shell input { width: 0; min-height: 44px; font-size: 16px; }
+.code-button { min-height: 48px; display: flex; align-items: center; justify-content: center; line-height: 1.4; font-size: 14px; }
+.password-toggle { flex-shrink: 0; min-width: 44px; min-height: 44px; color: #188454; font-size: 14px; }
+.primary-button { min-height: 48px; display: flex; align-items: center; justify-content: center; line-height: 1.4; }
+.remember, .meta-link { min-height: 44px; font-size: 12px; }
+.form-meta { flex-wrap: wrap; gap: 4px; }
+.hero-flow .flow-line { min-width: 6px; }
+.brand-en, .hero-kicker, .hero-desc, .hero-flow > view, .auth-footer, .auth-bottom, .mfa-tip { font-size: 12px; }
+.auth-bottom { color: #647a6d; }
+@media (max-width: 350px) {
+  .auth-page { padding-left: 16rpx; padding-right: 16rpx; }
+  .form-block { padding-left: 22rpx; padding-right: 22rpx; }
+  .hero-copy { margin-top: 26rpx; }
+  .hero-flow { gap: 6rpx; }
+  .code-row { gap: 8rpx; }
+  .code-button { width: 102px; }
+  .input-shell { padding-left: 14rpx; padding-right: 14rpx; }
 }
 </style>
