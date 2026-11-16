@@ -342,20 +342,23 @@ async function main() {
     checks: [{ itemId: 1, done: true }],
   })
   check(missingResult.code === 400, '缺检查结论不能提交', missingResult.message)
+  const incomplete = await api(inspector, 'POST', `/api/v1/government/mobile/tasks/${ids.task}/submit`, {
+    result: `${MARKER} 尚未完成`, checks: [{ itemId: checklist[0].itemId, done: true }],
+  })
+  check(incomplete.code === 400, '不完整清单不能将任务标为完成')
   const submit = await api(inspector, 'POST', `/api/v1/government/mobile/tasks/${ids.task}/submit`, {
-    result: `${MARKER} 台账完整，未发现禁用农药`,
-    checks: [
-      { itemId: 1, done: true, note: '证照均在有效期' },
-      { itemId: 2, done: true, note: '抽查 3 个月记录' },
-      { itemId: 3, done: false, note: '仓库待整理' },
-    ],
+    result: `${MARKER} 全部项目已核验，仓库问题已记录`,
+    checks: checklist.map((item) => ({ itemId: item.itemId, done: true, note: '现场已核验，问题见检查结论' })),
   })
   check(submit.code === 200
-    && sql(`SELECT CONCAT(status,'#',checklist_done) FROM agri_government.gov_task WHERE id=${ids.task}`) === 'completed#2',
-    '逐项结论落库且进度按真实勾选数计算',
-    sql(`SELECT CONCAT(status,'#',checklist_done,'#',checklist_total) FROM agri_government.gov_task WHERE id=${ids.task}`))
-  check(Number(sql(`SELECT COUNT(*) FROM agri_government.gov_task_check WHERE task_id=${ids.task} AND done=TRUE`)) === 2,
-    '已勾项数与库中逐项记录一致')
+    && sql(`SELECT CONCAT(status,'#',checklist_done) FROM agri_government.gov_task WHERE id=${ids.task}`) === `completed#${checklist.length}`,
+    '完整逐项核验落库，进度与任务快照一致')
+  check(Number(sql(`SELECT COUNT(*) FROM agri_government.gov_task_check WHERE task_id=${ids.task} AND done=TRUE`)) === checklist.length,
+    '已核验项数与库中逐项记录一致')
+  const replay = await api(inspector, 'POST', `/api/v1/government/mobile/tasks/${ids.task}/submit`, {
+    result: `${MARKER} 重复提交`, checks: checklist.map((item) => ({ itemId: item.itemId, done: true })),
+  })
+  check(replay.code === 400, '完成任务不能重复提交')
   check(Number(sql(`SELECT COUNT(*) FROM agri_government.gov_message
     WHERE subject_id=2 AND title='现场检查已结束'`)) === 1, '检查结论同步通知被检查主体')
   // 赵宁（档案 3）没有这个任务：换一个执法人员提交必须被拒

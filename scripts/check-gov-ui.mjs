@@ -354,48 +354,46 @@ try {
   check(!afterLogin.includes('22℃') && afterLogin.includes(today),
     '工作台不再显示写死的天气与日期', today)
   const statsExpected = sql(`SELECT CONCAT(
-      (SELECT COUNT(*) FROM agri_government.gov_task WHERE assignee_id=${inspectorId}), ' 今日任务 ',
+      (SELECT COUNT(*) FROM agri_government.gov_task WHERE assignee_id=${inspectorId} AND created_at LIKE CONCAT(CURDATE(),'%')), ' 今日任务 ',
       (SELECT COUNT(*) FROM agri_government.gov_task WHERE assignee_id=${inspectorId} AND status<>'completed'), ' 待检查 ',
       (SELECT COUNT(*) FROM agri_government.gov_warning WHERE assignee_id=${inspectorId} AND status<>'closed'), ' 预警事件 ',
       (SELECT COUNT(*) FROM agri_government.gov_case WHERE handler_id=${inspectorId} AND status<>'closed'), ' 在办案件')`)
   const statsActual = (await mobile.locator('.stats-card').innerText().catch(() => '')).replace(/\s+/g, ' ').trim()
   check(statsActual === statsExpected, '工作台四个统计都等于库里本人的真实条数', `${statsActual} ｜ 期望 ${statsExpected}`)
 
-  // 负分支：结论留空提交，必须由页面拦住
-  check(await openMobile(mobile, `/pages/tasks/checklist?id=${uiTaskId}`, '现场检查表'), '打开现场检查表')
+  // 全量核验前禁用提交；全量核验后仍要求填写结论，并二次确认。
+  check(await openMobile(mobile, `/pages/tasks/checklist?id=${uiTaskId}`, '现场检查'), '打开现场检查表')
   await hasText(mobile, SUBJECT_NAME, 9000)
-  const checklistText = await pageText(mobile)
-  check(checklistText.includes(SUBJECT_NAME) && checklistText.includes(`0/${uiTaskTotal}`),
-    '现场检查表按任务加载主体与清单', checklistText.slice(0, 60))
-  await mobile.locator('.check').nth(2).click()
-  await mobile.locator('.check').nth(4).click()
-  await mobile.locator('uni-button, button').filter({ hasText: cjk('提交检查结果') }).click()
-  check(await hasText(mobile, '请填写检查结论', 4000), '结论留空被拦住（不会静默提交）')
-  await mobile.locator('textarea').first().fill(`${MARKER} 3 项已查，试剂效期缺领用记录`)
-  await mobile.locator('uni-button, button').filter({ hasText: cjk('提交检查结果') }).click()
-  check(await hasText(mobile, '检查结果已提交', 6000), '逐项打勾并提交检查结论')
+  check(await mobile.locator('.check-toggle').count() === uiTaskTotal, '现场检查表读取任务快照全部检查项')
+  for (const item of await mobile.locator('.check-toggle').all()) await item.click()
+  await mobile.locator('.bottom-action uni-button, .bottom-action button').filter({ hasText: cjk('提交结果') }).first().click()
+  check(await hasText(mobile, '请填写检查结论', 4000), '结论留空被拦住')
+  await mobile.locator('.conclusion textarea, textarea.conclusion').first().fill(`${MARKER} 全部项目已核验，试剂效期缺领用记录`)
+  await mobile.locator('.bottom-action uni-button, .bottom-action button').filter({ hasText: cjk('提交结果') }).first().click()
+  await mobile.getByText('确定', { exact: true }).last().click()
+  check(await hasText(mobile, '检查结果已入库', 6000), '逐项核验并提交检查结论')
   const taskAfterSubmit = sql(`SELECT CONCAT(status,'#',checklist_done,'#',IFNULL(result_text,''))
     FROM agri_government.gov_task WHERE id=${uiTaskId}`)
-  check(String(taskAfterSubmit).includes('completed#2') && String(taskAfterSubmit).includes(MARKER),
+  check(String(taskAfterSubmit).includes(`completed#${uiTaskTotal}`) && String(taskAfterSubmit).includes(MARKER),
     '提交后进度按实际勾选数落库（不是前端报的数）', String(taskAfterSubmit).slice(0, 70))
   const checkedRows = Number(scalar(`SELECT COUNT(*) FROM agri_government.gov_task_check
     WHERE task_id=${uiTaskId} AND done=TRUE AND checked_at IS NOT NULL`))
-  check(checkedRows === 2, '逐项结论写进任务检查表', `rows=${checkedRows}`)
+  check(checkedRows === uiTaskTotal, '逐项结论写进任务检查表', `rows=${checkedRows}`)
   const inspectionNotice = Number(scalar(`SELECT COUNT(*) FROM agri_government.gov_message
     WHERE subject_id=${subjectId} AND biz_no='${uiTaskNo}' AND content LIKE '%${MARKER}%'`))
   check(inspectionNotice === 1, '检查结论同步进主体收件箱', `rows=${inspectionNotice}`)
 
   await mobile.waitForTimeout(1200)
-  check(await openMobile(mobile, `/pages/evidence/index?taskNo=${uiTaskNo}`, '保存证据并生成哈希'),
+  check(await openMobile(mobile, `/pages/evidence/index?taskNo=${uiTaskNo}`, '提交取证说明'),
     '取证页带上来源任务号', uiTaskNo)
   await mobile.locator('textarea').first().fill(`${MARKER} 大棚 A 区试剂柜照片 1 张`)
-  await mobile.locator('uni-button, button').filter({ hasText: cjk('保存证据并生成哈希') }).click()
-  check(await hasText(mobile, '已入库', 6000), '现场取证保存成功并回显证据号')
+  await mobile.locator('uni-button, button').filter({ hasText: cjk('提交取证说明') }).click()
+  check(await hasText(mobile, '已入库', 6000), '取证说明保存成功')
   const evidenceRow = sql(`SELECT CONCAT(evidence_no,'#',IFNULL(task_id,''),'#',uploaded,'#',evidence_hash)
     FROM agri_government.gov_evidence WHERE description LIKE '%${MARKER}%' ORDER BY id DESC LIMIT 1`)
   const [evidenceNo, evidenceTaskId, evidenceUploaded, evidenceHash] = String(evidenceRow).split('#')
   check(Boolean(evidenceNo) && evidenceTaskId === String(uiTaskId) && evidenceUploaded === '1',
-    '证据带任务归属并按在线上传入库', evidenceRow.slice(0, 40))
+    '取证说明带任务归属并入库', evidenceRow.slice(0, 40))
   check(/^[0-9a-f]{64}$/.test(String(evidenceHash)), '证据摘要是真实 SHA-256（不再是字符串 hashCode）',
     `${evidenceHash?.slice(0, 16)}…`)
 

@@ -17,14 +17,14 @@
           <text class="input-icon">密</text>
           <input v-model="password" password placeholder="请输入统一账号密码" confirm-type="done" @confirm="submit" />
         </view>
-        <button class="login-button" :loading="submitting" @tap="submit">登录</button>
-        <text class="permission-tip">登录后自动校验移动执法或监管运营权限</text>
+        <button class="login-button" :loading="submitting" :disabled="submitting" @tap="submit">登录</button>
+        <text class="permission-tip">登录后校验执法权限、人员档案与辖区职责</text>
       </view>
 
       <view class="trust-row">
-        <view><b>统一身份</b><text>全平台同一账号</text></view>
-        <view><b>执法权限</b><text>平台 RBAC 校验</text></view>
-        <view><b>多端可用</b><text>小程序与 APP</text></view>
+        <view><text class="strong">统一身份</text><text>全平台同一账号</text></view>
+        <view><text class="strong">执法权限</text><text>平台 RBAC 校验</text></view>
+        <view><text class="strong">多端可用</text><text>小程序与 APP</text></view>
       </view>
     </view>
   </view>
@@ -40,6 +40,7 @@ const password = ref('')
 const submitting = ref(false)
 
 async function submit() {
+  if (submitting.value) return
   if (!username.value.trim() || !password.value) {
     uni.showToast({ title: '请输入统一账号和密码', icon: 'none' })
     return
@@ -163,8 +164,8 @@ async function submit() {
 
 .trust-row { display: flex; width: 100%; margin-top: 40rpx; }
 .trust-row view { flex: 1; text-align: center; }
-.trust-row b,
+.trust-row .strong,
 .trust-row text { display: block; }
-.trust-row b { color: rgba(255, 255, 255, .82); font-size: 24rpx; }
+.trust-row .strong { color: rgba(255, 255, 255, .82); font-size: 24rpx; }
 .trust-row text { margin-top: 5rpx; color: rgba(255, 255, 255, .42); font-size: 24rpx; }
 </style>

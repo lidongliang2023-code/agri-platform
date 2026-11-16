@@ -10,6 +10,9 @@ import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
+import java.util.HashSet;
+import java.util.Set;
 
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -242,6 +245,7 @@ public class GovernmentOpsRepository {
      * 创建执法任务：主体必须真实存在，承办人必须是档案里的执法人员，
      * 检查项按 {@code gov_check_item} 模板展开成逐项记录（详情页读这些行，不再返回写死的 8 条）。
      */
+    @Transactional
     public Map<String, Object> createTask(Map<String, Object> body) {
         scope.requireSubject(longValue(body.get("subjectId")), "inspection");
         String taskNo = "RW" + nowCompact();
@@ -587,7 +591,7 @@ public class GovernmentOpsRepository {
         Map<String, Object> inspector = requireInspector();
         long inspectorId = ((Number) inspector.get("id")).longValue();
         Map<String, Object> stats = new LinkedHashMap<>();
-        stats.put("todayTasks", number("SELECT COUNT(*) FROM gov_task WHERE assignee_id=?", inspectorId));
+        stats.put("todayTasks", number("SELECT COUNT(*) FROM gov_task WHERE assignee_id=? AND created_at LIKE ?", inspectorId, DATE.format(LocalDateTime.now()) + "%"));
         stats.put("pendingTasks", number(
                 "SELECT COUNT(*) FROM gov_task WHERE assignee_id=? AND status<>'completed'", inspectorId));
         stats.put("warnings", number(
@@ -598,7 +602,7 @@ public class GovernmentOpsRepository {
                 "SELECT * FROM gov_task WHERE assignee_id=? ORDER BY status='completed', created_at DESC"),
                 taskMapper(), inspectorId);
         List<Map<String, Object>> warnings = jdbc.query(scope.sql(
-                "SELECT * FROM gov_warning WHERE assignee_id=? OR assignee_id IS NULL ORDER BY status='closed', id"),
+                "SELECT * FROM gov_warning WHERE assignee_id=? AND status<>'closed' ORDER BY id DESC"),
                 warningMapper(), inspectorId);
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("inspector", Map.of(
@@ -627,71 +631,89 @@ public class GovernmentOpsRepository {
                 taskMapper(), requireInspectorId());
     }
 
-    /** 任务详情：检查项读 {@code gov_task_check}（没有就按清单模板即时展开），不再返回代码里写死的 8 条。 */
+    /** 读取任务快照；GET 不初始化、不改变进度。 */
     public Map<String, Object> mobileTask(long id) {
         Map<String, Object> task = requireAssignableTask(id);
-        List<Map<String, Object>> checks = jdbc.query(scope.sql("""
+        task.put("checklist", jdbc.query(scope.sql("""
                 SELECT c.*, i.sort_order FROM gov_task_check c
                 LEFT JOIN gov_check_item i ON i.id = c.item_id
                 WHERE c.task_id=? ORDER BY COALESCE(i.sort_order, 99), c.id
-                """), taskCheckMapper(), id);
-        if (checks.isEmpty()) {
-            for (Map<String, Object> item : activeCheckItems()) {
-                jdbc.update("INSERT INTO gov_task_check (task_id,item_id,item_name,note,done) VALUES (?,?,?, ?,FALSE)",
-                        id, item.get("id"), item.get("itemName"), item.get("note"));
-            }
-            jdbc.update("UPDATE gov_task SET checklist_total=? WHERE id=?", activeCheckItems().size(), id);
-            checks = jdbc.query(scope.sql("""
-                    SELECT c.*, i.sort_order FROM gov_task_check c
-                    LEFT JOIN gov_check_item i ON i.id = c.item_id
-                    WHERE c.task_id=? ORDER BY COALESCE(i.sort_order, 99), c.id
-                    """), taskCheckMapper(), id);
-        }
-        task.put("checklist", checks);
+                """), taskCheckMapper(), id));
         task.put("subject", queryOne("SELECT * FROM gov_subject WHERE id=?", subjectMapper(),
                 longValue(task.get("subjectId"))));
         return task;
     }
 
-    /**
-     * 提交检查结果：逐项结论写回 {@code gov_task_check}，进度与状态按真实勾选数更新。
-     *
-     * <p>{@code checklist_done} 由实际勾选条数算出，不接受前端直接塞一个数 ——
-     * 否则"8/8 已完成"可以是页面随手报出来的。</p>
-     */
-    public Map<String, Object> submitTask(long id, Map<String, Object> body) {
-        Map<String, Object> task = requireAssignableTask(id);
-        List<Map<String, Object>> answers = answersOf(body);
-        if (answers.isEmpty()) {
-            throw BusinessException.validationError("请至少提交一项检查结论");
-        }
-        LocalDateTime now = LocalDateTime.now();
-        int done = 0;
-        for (Map<String, Object> answer : answers) {
-            boolean checked = Boolean.TRUE.equals(answer.get("done"));
-            done += checked ? 1 : 0;
-            int updated = jdbc.update("UPDATE gov_task_check SET done=?,note=?,checked_at=? WHERE task_id=? AND item_id=?",
-                    checked, text(answer, "note", ""), TIME.format(now), id, answer.get("itemId"));
-            if (updated == 0) {
-                jdbc.update("INSERT INTO gov_task_check (task_id,item_id,item_name,note,done,checked_at) VALUES (?,?,?,?,?,?)",
-                        id, answer.get("itemId"), text(answer, "itemName", "检查项"),
-                        text(answer, "note", ""), checked, TIME.format(now));
+    /** 显式开始：历史任务仅在写操作中补清单，锁任务行防止并发重复初始化。 */
+    @Transactional
+    public Map<String, Object> startTask(long id) {
+        requireAssignableTask(id);
+        String status = jdbc.queryForObject("SELECT status FROM gov_task WHERE id=? FOR UPDATE", String.class, id);
+        if ("completed".equals(status)) throw BusinessException.validationError("任务已完成，请查看检查记录");
+        if (!"pending".equals(status) && !"in_progress".equals(status))
+            throw BusinessException.validationError("当前任务状态不能开始检查");
+        Integer total = jdbc.queryForObject("SELECT COUNT(*) FROM gov_task_check WHERE task_id=?", Integer.class, id);
+        if (total == null || total == 0) {
+            List<Map<String, Object>> items = activeCheckItems();
+            if (items.isEmpty()) throw BusinessException.validationError("检查清单为空，请联系监管运营维护");
+            for (Map<String, Object> item : items) {
+                jdbc.update("INSERT INTO gov_task_check (task_id,item_id,item_name,note,done) VALUES (?,?,?,?,FALSE)",
+                        id, item.get("id"), item.get("itemName"), item.get("note"));
             }
         }
-        String result = required(body, "result", "请填写检查结论");
-        jdbc.update("UPDATE gov_task SET checklist_done=?,checklist_total=?,status='completed',result_text=? WHERE id=?",
-                done, answers.size(), result, id);
-        Long subjectId = longValue(task.get("subjectId"));
-        Long assigneeId = longValue(task.get("assigneeId"));
-        audit.log(requireOperatorName(), assigneeId, identity.operatorRole(), "提交检查结果",
-                String.valueOf(task.get("taskNo")), result + "（完成 " + done + "/" + answers.size() + " 项）",
-                subjectId);
-        if (subjectId != null) {
-            audit.notifySubject(subjectId, "inspection", "现场检查已结束",
-                    "任务 " + task.get("taskNo") + " 检查结论：" + result
-                            + (done < answers.size() ? "（有 " + (answers.size() - done) + " 项未检查，可能转为责令改正）" : ""),
-                    "TASK", String.valueOf(task.get("taskNo")));
+        jdbc.update("""
+                UPDATE gov_task SET status='in_progress',
+                checklist_total=(SELECT COUNT(*) FROM gov_task_check WHERE task_id=?),
+                checklist_done=(SELECT COUNT(*) FROM gov_task_check WHERE task_id=? AND done=TRUE) WHERE id=?
+                """, id, id, id);
+        return mobileTask(id);
+    }
+
+    /** 检查项必须来自任务快照且全量核验；任务、审计、通知原子落库。 */
+    @Transactional
+    public Map<String, Object> submitTask(long id, Map<String, Object> body) {
+        Map<String, Object> task = requireAssignableTask(id);
+        String status = jdbc.queryForObject("SELECT status FROM gov_task WHERE id=? FOR UPDATE", String.class, id);
+        if ("completed".equals(status)) throw BusinessException.validationError("任务已完成，不能重复提交");
+        if (!"pending".equals(status) && !"in_progress".equals(status))
+            throw BusinessException.validationError("当前任务状态不能提交检查");
+        String result = required(body, "result", "请填写检查结论").trim();
+        if (result.length() > 1000) throw BusinessException.validationError("检查结论不能超过1000字");
+        List<Long> ids = jdbc.queryForList("SELECT item_id FROM gov_task_check WHERE task_id=?", Long.class, id);
+        if (ids.isEmpty()) throw BusinessException.validationError("任务没有检查清单，请先开始检查");
+        Set<Long> expected = new HashSet<>(ids);
+        if (expected.size() != ids.size() || expected.contains(null))
+            throw BusinessException.validationError("任务检查清单异常，请联系监管运营核实");
+        Object raw = body.get("checks");
+        if (!(raw instanceof List<?> list) || list.size() != expected.size())
+            throw BusinessException.validationError("必须提交任务的全部检查项");
+        List<Map<String, Object>> answers = answersOf(body);
+        if (answers.size() != expected.size()) throw BusinessException.validationError("检查项格式不正确");
+        Set<Long> received = new HashSet<>();
+        for (Map<String, Object> answer : answers) {
+            Long itemId;
+            try { itemId = Long.valueOf(String.valueOf(answer.get("itemId"))); }
+            catch (NumberFormatException e) { throw BusinessException.validationError("检查项编号不正确"); }
+            if (!expected.contains(itemId)) throw BusinessException.validationError("检查项不属于当前任务");
+            if (!received.add(itemId)) throw BusinessException.validationError("检查项不能重复提交");
+            if (!Boolean.TRUE.equals(answer.get("done")))
+                throw BusinessException.validationError("请逐项完成核验；发现的问题请写入备注和检查结论");
+            if (text(answer, "note", "").length() > 300)
+                throw BusinessException.validationError("单项备注不能超过300字");
         }
+        String checkedAt = TIME.format(LocalDateTime.now());
+        for (Map<String, Object> answer : answers) {
+            jdbc.update("UPDATE gov_task_check SET done=TRUE,note=?,checked_at=? WHERE task_id=? AND item_id=?",
+                    text(answer, "note", ""), checkedAt, id, answer.get("itemId"));
+        }
+        int done = jdbc.queryForObject("SELECT COUNT(*) FROM gov_task_check WHERE task_id=? AND done=TRUE", Integer.class, id);
+        jdbc.update("UPDATE gov_task SET checklist_done=?,checklist_total=?,status='completed',result_text=? WHERE id=?",
+                done, expected.size(), result, id);
+        Long subjectId = longValue(task.get("subjectId"));
+        audit.log(requireOperatorName(), longValue(task.get("assigneeId")), identity.operatorRole(), "提交检查结果",
+                String.valueOf(task.get("taskNo")), result + "（核验 " + done + "/" + expected.size() + " 项）", subjectId);
+        audit.notifySubject(subjectId, "inspection", "现场检查已结束",
+                "任务 " + task.get("taskNo") + " 检查结论：" + result, "TASK", String.valueOf(task.get("taskNo")));
         return mobileTask(id);
     }
 
@@ -710,10 +732,10 @@ public class GovernmentOpsRepository {
             throw BusinessException.validationError("请输入溯源码或主体信用代码");
         }
         requireInspectorId();
-        String like = "%" + code.trim().toLowerCase(Locale.ROOT) + "%";
+
         List<Map<String, Object>> subjects = jdbc.query(scope.sql(
-                "SELECT * FROM gov_subject WHERE LOWER(credit_code)=LOWER(?) OR credit_code LIKE ? LIMIT 3"),
-                subjectMapper(), code.trim(), like);
+                "SELECT * FROM gov_subject WHERE LOWER(credit_code)=LOWER(?) LIMIT 1"),
+                subjectMapper(), code.trim());
         if (!subjects.isEmpty()) {
             return Map.of("type", "subject", "verified", true, "subject", subjects.get(0));
         }
@@ -740,6 +762,7 @@ public class GovernmentOpsRepository {
                 caseMapper(), requireInspectorId());
     }
 
+    @Transactional
     public Map<String, Object> createCase(Map<String, Object> body) {
         scope.requireSubject(longValue(body.get("subjectId")), "case");
         String caseNo = "AJ" + nowCompact();
@@ -782,6 +805,7 @@ public class GovernmentOpsRepository {
         return subjects.get(0);
     }
 
+    @Transactional
     public Map<String, Object> addEvidence(Map<String, Object> body) {
         Long inspectorId = requireInspectorId();
         String evidenceNo = "ZJ" + nowCompact();
@@ -939,15 +963,10 @@ public class GovernmentOpsRepository {
     private Map<String, Object> requireAssignableTask(long id) {
         scope.requireRecord("gov_task", id, "inspection");
         Map<String, Object> task = queryOne("SELECT * FROM gov_task WHERE id=?", taskMapper(), id);
-        if (identity.isInspector()) {
-            long inspectorId = requireInspectorId();
-            Long assignee = longValue(task.get("assigneeId"), null);
-            if (assignee == null || assignee != inspectorId) {
-                throw BusinessException.forbidden("该任务不属于当前执法人员，不能提交检查结果");
-            }
-        } else if (!identity.isOps()) {
-            throw BusinessException.forbidden("只有执法人员或监管运营可以提交检查结果");
-        }
+        long inspectorId = requireInspectorId();
+        Long assignee = longValue(task.get("assigneeId"), null);
+        if (assignee == null || assignee != inspectorId)
+            throw BusinessException.forbidden("该任务不属于当前执法人员");
         return task;
     }
 

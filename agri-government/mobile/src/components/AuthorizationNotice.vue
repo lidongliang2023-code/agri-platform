@@ -16,15 +16,16 @@ onShow(refresh)
 <template>
  <view class="authorization-notice" :class="{warning:!loading&&!capable,error:!!error}" aria-label="当前辖区授权">
   <view class="notice-head"><text class="notice-title">{{title}}</text><button class="notice-refresh" :disabled="loading" @click="refresh">{{loading?'读取中':'刷新'}}</button></view>
-  <text v-if="!loading" class="notice-text">{{guidance}}</text>
+  <text v-if="!loading && (!capable || expanded)" class="notice-text">{{guidance}}</text>
   <text v-if="error" class="notice-error">{{error}}</text>
-  <template v-if="data&&!loading">
+  <button v-if="data&&!loading&&capable" class="notice-toggle" @click="expanded=!expanded">{{expanded?'收起授权范围':'查看授权范围'}}</button>
+  <template v-if="data&&!loading&&(!capable||expanded)">
    <text class="notice-meta">{{data.personnelName||'当前账号'}} · 服务端日期 {{data.serverDate}}</text>
    <text class="notice-text">管理员身份不自动获得执法权，实际办理以服务端即时校验为准。</text>
    <text v-if="context==='scan'" class="notice-text">跨域溯源明细尚无可核实的辖区映射，暂不开放；扫码成功不代表获得办理授权。</text>
    <text v-if="context==='evidence'" class="notice-text">取证还须关联本人承办且辖区、职责匹配的任务或案件。</text>
    <text v-if="context==='workbench'" class="notice-text">工作台指标按相应职责及本人承办范围统计，部分指标可能为空。</text>
-   <button v-if="data.grants.length" class="notice-toggle" @click="expanded=!expanded">{{expanded?'收起':'查看'}}授权明细（{{data.grants.length}} 条）{{expanded?' ↑':' ↓'}}</button>
+   <button v-if="data.grants.length&&!capable" class="notice-toggle" @click="expanded=!expanded">{{expanded?'收起':'查看'}}授权明细（{{data.grants.length}} 条）{{expanded?' ↑':' ↓'}}</button>
    <view v-if="expanded" class="notice-details">
     <view v-for="g in data.grants" :key="g.id" class="notice-record">
      <text class="notice-title">{{g.organizationName}}</text><text class="notice-state" :class="{valid:g.effective}">{{g.effective?'授权有效':g.reason}}</text>
@@ -36,5 +37,5 @@ onShow(refresh)
  </view>
 </template>
 <style scoped>
-.authorization-notice{margin:20rpx 24rpx;padding:24rpx;border:1rpx solid #cee3d6;border-radius:22rpx;background:#f2f8f4;color:#274c39;overflow-wrap:anywhere;min-width:0}.authorization-notice.warning{background:#fffbf0;border-color:#eddfb7;color:#735821}.authorization-notice.error{background:#fff4f2;border-color:#efcec7}.notice-head{display:flex;align-items:center;justify-content:space-between;gap:16rpx}.notice-title{font-size:27rpx;font-weight:650;display:block}.notice-refresh{flex-shrink:0;margin:0;padding:0 18rpx;line-height:52rpx;font-size:24rpx;color:#12764a;background:#fff;border-radius:14rpx}.notice-text,.notice-meta,.notice-error{display:block;margin-top:12rpx;font-size:24rpx;line-height:1.65}.notice-meta{color:#687b70;font-size:22rpx}.notice-error{color:#b63829}.notice-toggle{margin:18rpx 0 0;padding:0;background:transparent;color:#12764a;text-align:left;line-height:48rpx;font-size:24rpx}.notice-toggle::after,.notice-refresh::after{border:0}.notice-record{margin-top:18rpx;border-top:1rpx solid #dfe7df;padding-top:18rpx}.notice-state{display:inline-block;margin-top:10rpx;color:#8b631e;font-size:23rpx}.notice-state.valid{color:#12764a}.notice-region{margin-top:12rpx;background:#ffffff99;padding:14rpx;border-radius:12rpx}.notice-region text{display:block;line-height:1.6;font-size:23rpx}
+.authorization-notice{margin:0 0 24rpx;padding:20rpx;border:1rpx solid #cee3d6;border-radius:22rpx;background:#f2f8f4;color:#274c39;overflow-wrap:anywhere;min-width:0}.authorization-notice.warning{background:#fffbf0;border-color:#eddfb7;color:#735821}.authorization-notice.error{background:#fff4f2;border-color:#efcec7}.notice-head{display:flex;align-items:center;justify-content:space-between;gap:16rpx}.notice-title{font-size:27rpx;font-weight:650;display:block}.notice-refresh{flex-shrink:0;margin:0;padding:0 18rpx;line-height:80rpx;font-size:24rpx;color:#12764a;background:#fff;border-radius:14rpx}.notice-text,.notice-meta,.notice-error{display:block;margin-top:12rpx;font-size:24rpx;line-height:1.65}.notice-meta{color:#687b70;font-size:22rpx}.notice-error{color:#b63829}.notice-toggle{margin:18rpx 0 0;padding:0;background:transparent;color:#12764a;text-align:left;line-height:80rpx;font-size:24rpx}.notice-toggle::after,.notice-refresh::after{border:0}.notice-record{margin-top:18rpx;border-top:1rpx solid #dfe7df;padding-top:18rpx}.notice-state{display:inline-block;margin-top:10rpx;color:#8b631e;font-size:23rpx}.notice-state.valid{color:#12764a}.notice-region{margin-top:12rpx;background:#ffffff99;padding:14rpx;border-radius:12rpx}.notice-region text{display:block;line-height:1.6;font-size:23rpx}
 </style>

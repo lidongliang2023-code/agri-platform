@@ -42,6 +42,11 @@ public class GovernmentInspectorController {
         return ApiResponse.success(repository.mobileTask(id));
     }
 
+    @PostMapping("/tasks/{id}/start")
+    public ApiResponse<Map<String, Object>> startTask(@PathVariable long id) {
+        return ApiResponse.success(repository.startTask(id));
+    }
+
     @PostMapping("/tasks/{id}/submit")
     public ApiResponse<Map<String, Object>> submitTask(
             @PathVariable long id,
@@ -66,7 +71,7 @@ public class GovernmentInspectorController {
 
     @PostMapping("/evidence")
     public ApiResponse<Map<String, Object>> evidence(@RequestBody Map<String, Object> body) {
-        return ApiResponse.success("证据已保存并生成证据链哈希", repository.addEvidence(body));
+        return ApiResponse.success("取证说明已保存并生成摘要", repository.addEvidence(body));
     }
 
     /** 我的取证记录（取证是真落库的，页面能看到自己交过什么、哈希是多少）。 */

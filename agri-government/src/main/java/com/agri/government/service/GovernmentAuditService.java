@@ -43,7 +43,7 @@ public class GovernmentAuditService {
             return;
         }
         jdbc.update("INSERT INTO gov_message (user_type,subject_id,assignee_id,message_type,title,content,"
-                + "biz_type,biz_no,is_read,created_at) VALUES ('inspector',?,?,?,?, ?,?,?,TRUE,?)",
+                + "biz_type,biz_no,is_read,created_at) VALUES ('inspector',?,?,?,?, ?,?,?,FALSE,?)",
                 null, assigneeId, type, title, content, bizType, bizNo, LocalDateTime.now().format(TIME));
     }
 

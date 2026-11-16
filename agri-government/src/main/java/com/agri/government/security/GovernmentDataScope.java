@@ -5,6 +5,8 @@ import com.agri.government.service.GovernmentPersonnelService;
 import com.agri.government.service.GovernmentScopeService.Region;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import java.util.*;
 import java.util.function.Supplier;
 import java.util.regex.*;
@@ -59,10 +61,18 @@ public class GovernmentDataScope {
         return conditions.isEmpty()?"1=0":"("+String.join(" OR ",conditions)+")";
     }
     /** 仅用于本模块固定 SQL。派生表先过滤再统计/排序/分页，客户端参数不参与 SQL 拼接。 */
+    private boolean unrestrictedOps() {
+        var attributes = RequestContextHolder.getRequestAttributes();
+        if (attributes instanceof ServletRequestAttributes servlet) {
+            String path = servlet.getRequest().getRequestURI();
+            if (path.startsWith(servlet.getRequest().getContextPath() + "/api/v1/government/mobile/")) return false;
+        }
+        return identity.isOps();
+    }
     public String sql(String original) {
         // 监管运营账号负责跨主体台账、分派与复核，按 gov:admin 角色访问全域；
         // 执法人员仍按本人有效授权辖区过滤。
-        if (identity.isOps()) return original;
+        if (unrestrictedOps()) return original;
         Matcher matcher=TABLE.matcher(original); StringBuffer out=new StringBuffer();
         while(matcher.find()) {
             String table=matcher.group(2).toLowerCase(Locale.ROOT);
@@ -86,7 +96,7 @@ public class GovernmentDataScope {
         try { return action.get(); } finally { if(previous==null) reportingDuty.remove(); else reportingDuty.set(previous); }
     }
     public void requireSubject(Long subjectId,String duty) {
-        if (identity.isOps()) {
+        if (unrestrictedOps()) {
             if (jdbc.queryForObject("SELECT COUNT(*) FROM gov_subject WHERE id=?", Integer.class, subjectId) == 0)
                 throw BusinessException.notFound("监管主体档案不存在");
             return;
@@ -100,7 +110,7 @@ public class GovernmentDataScope {
     }
     public void requireRecord(String table,long id,String duty) {
         if(!DUTIES.containsKey(table)) throw BusinessException.forbidden("该业务未接入辖区授权");
-        if (identity.isOps()) {
+        if (unrestrictedOps()) {
             if (jdbc.queryForObject("SELECT COUNT(*) FROM " + table + " WHERE id=?", Integer.class, id) == 0)
                 throw BusinessException.notFound("记录不存在");
             return;

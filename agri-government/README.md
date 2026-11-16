@@ -106,14 +106,14 @@ node ops/ci/verify.mjs                     # schema ↔ 实体一致性
 
 ## 溯源核验的数据来源
 
-公众查询页与移动执法端的扫码核验**不读本域任何表**，而是走生产域的公开核验入口
+公众溯源查询走生产域公开核验入口；移动执法的主体信用代码精确匹配本域授权档案，跨域溯源码未建立辖区映射前拒绝返回执法明细。公众入口为
 `GET /api/v1/production/trace/public/verify/{code}`（配置项 `agri.production.url`，默认 8092）：
 
 - 码是否存在、状态是否有效，由生产域判断（软删的码不参与核验）；
   **有效期也归生产域判**：`verifiable` 不只看状态，还按 `expiry_date` 兜一层
   （生产域的到期扫描是每小时的，两次之间状态可能还是 `active`），
   出参另给 `expiryDate / expired`，过期码的结论会写明"有效期 X 已过，不再作为核验依据"；
-  本模块不再自己拼状态文案，两端（公众查询、移动执法）共用生产域返回的状态与
+  本模块不再自己拼状态文案，公众查询采用生产域返回的状态与
   `ProductionTraceClient#statusText` 一处映射，已过期一律显示"已过期"；
 - 每条链路节点的 `attested / onChain / chainStatus / txHash / recordNo` 按生产域
   `agri_prod_chain_record` 的**真实存证记录**匹配得出 —— 有记录且状态 SUCCESS 才算已上链；
@@ -153,3 +153,16 @@ node ops/gateway/scripts/publish.mjs --app gov --version 20261101-gov-trace-r1 -
 node ops/gateway/scripts/publish.mjs --app gov-mobile --version 20261101-gov-trace-r1 --build
 node ops/gateway/scripts/publish.mjs --app gov-ops --version 20261101-gov-identity-r1 --build
 ```
+
+## 移动端流程与边界（2026-11-16）
+
+- 唯一移动工程为 `mobile/`，统一输出 H5、微信小程序、App。当前没有独立移动 H5 源码可删除；`frontend/` 是 PC 主体办事与公众查询，`ops/` 是监管运营，均保留。
+- 工作台按本人承办范围显示任务，今日任务按创建日期统计。任务列表支持搜索、下拉刷新、加载失败重试。
+- 任务详情 GET 只读。`POST /mobile/tasks/{id}/start` 在事务和任务行锁内初始化历史空清单并进入检查中，重复开始不产生重复项。
+- 检查提交必须覆盖任务快照全部项目、编号唯一且属于本任务，并全部核验；勾选表示核验完成，不表示合格，问题记录在备注与结论中。备注最多 300 字，结论最多 1000 字。
+- 已完成任务禁止再次提交；检查记录、任务进度、审计和主体通知在同一事务内写入，失败整体回滚。
+- 立案与取证均须选择本人承办任务，主体和承办人由服务端校验。移动端负责现场登记与进度查询，阶段推进和处罚审批由监管运营负责。
+- 取证页面目前只登记文字说明和摘要，不上传照片、视频、录音原件，不声明已上链。本机草稿按登录账号隔离并标明未入库；点击提交才落库。旧 `uploaded=false` 记录为历史暂存记录，不等于设备离线上传队列。
+- 移动接口强制使用执法辖区模式，同时具备监管运营角色也不能绕过辖区授权；运营接口保持运营台账的数据范围。
+- `GovernmentMobileFlowTest` 的 10 项用例验证真实 JDBC 与 Spring 事务；`GovernmentMobileBoundaryTest` 的 8 项用例使用真实授权表、辖区服务、控制器和权限拦截器，覆盖跨辖区、双角色、过期授权、停用机构、缺少职责、401/403、能力服务失败以及检查→立案→取证请求链路。
+- 两组测试共 18 项在 H2 和 MySQL 临时库中均通过。MySQL 通过 `-Dgov.test.mysql=jdbc:mysql://localhost:3306/` 启用，逐用例创建并清理随机命名的测试库；平台身份解析与能力远程服务使用测试替身，因此这些测试不声称覆盖真实账号登录或外部平台网络。

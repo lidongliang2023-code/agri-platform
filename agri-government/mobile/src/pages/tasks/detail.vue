@@ -1,23 +1,32 @@
 <script setup lang="ts">
 import AuthorizationNotice from '../../components/AuthorizationNotice.vue'
 import { ref } from 'vue'
-import { onLoad } from '@dcloudio/uni-app'
-import { api,statusMeta,type Task } from '../../api'
-const task=ref<(Task&{checklist:Array<{id:number;itemId?:number;itemName:string;note:string;done:boolean}>;subject?:{subjectName:string;creditCode:string;contactPhone?:string;address?:string}})|null>(null),id=ref(0)
-onLoad(async o=>{
-  id.value=Number(o?.id||0)
-  if(!id.value){uni.showToast({title:'缺少任务编号，请从任务列表进入',icon:'none'});setTimeout(()=>uni.switchTab({url:'/pages/tasks/index'}),600);return}
-  try{task.value=await api.task(id.value)}catch(e){uni.showToast({title:e instanceof Error?e.message:'加载失败',icon:'none'})}
-})
-function checklist(){uni.navigateTo({url:`/pages/tasks/checklist?id=${id.value}`})}
-function evidence(){uni.navigateTo({url:`/pages/evidence/index?taskNo=${task.value?.taskNo||''}`})}
-function createCase(){uni.navigateTo({url:`/pages/cases/create?taskId=${id.value}&subjectId=${task.value?.subjectId??''}&subjectName=${encodeURIComponent(task.value?.subjectName||'')}`})}
-/** 主体档案里没有经纬度字段，导航只能落回地图 App；这里改为复制真实地址，避免用写死的坐标指路。 */
-function copyAddress(){const address=task.value?.address||'';if(!address)return uni.showToast({title:'该任务没有登记检查地点',icon:'none'})
-  uni.setClipboardData({data:address,success:()=>uni.showToast({title:'检查地点已复制，可粘贴到地图 App 导航',icon:'none'})})}
-function contact(){const phone=task.value?.subject?.contactPhone
-  if(!phone)return uni.showToast({title:'监管主体未登记联系电话',icon:'none'})
-  uni.showModal({title:task.value?.subjectName||'监管主体',content:`联系电话 ${phone}\n统一社会信用代码 ${task.value?.subject?.creditCode||'未登记'}`,showCancel:false})}
+import { onLoad,onShow } from '@dcloudio/uni-app'
+import { api,statusMeta } from '../../api'
+const task=ref<Awaited<ReturnType<typeof api.task>>|null>(null),id=ref(0),loading=ref(false),error=ref(''),starting=ref(false)
+onLoad(o=>{id.value=Number(o?.id||0)})
+onShow(load)
+async function load(){if(!id.value){error.value='缺少任务编号，请从任务列表进入';return}loading.value=true;error.value='';try{task.value=await api.task(id.value)}catch(e){error.value=e instanceof Error?e.message:'加载失败'}finally{loading.value=false}}
+async function checklist(){if(!task.value||starting.value)return;starting.value=true;try{if(task.value.status!=='completed')task.value=await api.startTask(id.value);uni.navigateTo({url:`/pages/tasks/checklist?id=${id.value}`})}catch(e){uni.showToast({title:e instanceof Error?e.message:'开始检查失败',icon:'none'})}finally{starting.value=false}}
+function evidence(){uni.navigateTo({url:`/pages/evidence/index?taskNo=${encodeURIComponent(task.value?.taskNo||'')}`})}
+function createCase(){uni.navigateTo({url:`/pages/cases/create?taskId=${id.value}`})}
+function copyAddress(){if(!task.value?.address)return uni.showToast({title:'该任务未登记检查地点',icon:'none'});uni.setClipboardData({data:task.value.address})}
+function contact(){const phone=task.value?.subject?.contactPhone;if(!phone)return uni.showToast({title:'监管主体未登记联系电话',icon:'none'});uni.makePhoneCall({phoneNumber:phone,fail:()=>uni.showModal({title:'联系电话',content:phone,showCancel:false})})}
 </script>
-<template><view class="page pad" v-if="task"><AuthorizationNotice duty="inspection" context="tasks"/><view class="card hero-card"><view class="between"><text class="tag" :class="statusMeta(task.status).tone">{{statusMeta(task.status).label}}</text><text class="tiny">{{task.deadline}}</text></view><text class="title">{{task.subjectName}}</text><text class="muted">{{task.taskType}} · {{task.taskNo}}</text><view class="info"><view><text>检查地点</text><b>{{task.address}}</b></view><view><text>距离</text><b>{{task.distanceKm}}km</b></view><view><text>承办人</text><b>{{task.assignedTo}}</b></view></view></view><view class="card"><view class="card-head"><text class="card-title">检查清单</text><text class="tag green">{{task.checklist.filter(i=>i.done).length}}/{{task.checklist.length}}</text></view><view class="check-row" v-for="item in task.checklist" :key="item.id"><text :class="{done:item.done}">{{item.done?'✓':'○'}}</text><view><b>{{item.itemName}}</b><small>{{item.note}}</small></view></view><button class="btn btn-primary btn-block" @click="checklist">进入现场检查表</button></view><view class="action-grid"><button class="btn btn-ghost" @click="evidence">📷 拍照取证</button><button class="btn btn-ghost" @click="copyAddress">📍 复制检查地点</button><button class="btn btn-ghost" @click="contact">📞 联系主体</button><button class="btn btn-ghost" @click="createCase">⚖️ 现场立案</button></view></view></template>
-<style lang="scss" scoped>.hero-card{padding:24rpx;background:linear-gradient(140deg,#fff,#edf8f2)}.title{display:block;margin-top:12rpx;font-size:34rpx;font-weight:750}.hero-card>.muted{display:block;margin-top:5rpx}.info{display:grid;grid-template-columns:1.4fr .6fr .6fr;gap:10rpx;margin-top:18rpx;padding-top:16rpx;border-top:1rpx solid #dce8e0}.info view{display:flex;flex-direction:column;gap:4rpx}.info text{color:#718277;font-size:24rpx}.info b{font-size:24rpx}.check-row{display:flex;gap:12rpx;padding:14rpx 0;border-bottom:1rpx solid #edf2ee}.check-row>text{color:#94a198}.check-row>text.done{color:#159a5e}.check-row>view{display:flex;flex-direction:column;gap:4rpx}.check-row b{font-size:24rpx}.check-row small{color:#94a198;font-size:24rpx}.card .btn{margin-top:16rpx}.action-grid{display:grid;grid-template-columns:1fr 1fr;gap:12rpx}</style>
+<template>
+ <view class="page pad action-page">
+  <view v-if="loading" class="loading">正在加载任务…</view><view v-else-if="error" class="state-panel"><text>{{error}}</text><button class="btn" @click="load">重新加载</button></view>
+  <template v-else-if="task">
+   <view class="card task-heading"><view class="between"><text class="tag" :class="statusMeta(task.status).tone">{{statusMeta(task.status).label}}</text><text class="tag orange" v-if="task.priority==='high'">优先处理</text></view><text class="page-title">{{task.subjectName}}</text><text class="muted">{{task.taskType}}</text><text class="tiny">{{task.taskNo}}</text></view>
+   <AuthorizationNotice duty="inspection" context="tasks"/>
+   <view class="card"><view class="field"><text class="field-label">截止时间</text><text class="field-value">{{task.deadline||'未设置'}}</text></view><view class="field"><text class="field-label">检查地点</text><text class="field-value">{{task.address||'未登记'}}</text></view><view class="field"><text class="field-label">承办人</text><text class="field-value">{{task.assignedTo}}</text></view></view>
+   <view class="card"><view class="card-head"><text class="card-title">检查进度</text><text class="tag green">{{task.checklist.filter(i=>i.done).length}} / {{task.checklist.length}}</text></view><view v-for="item in task.checklist" :key="item.id" class="check-row"><text :class="{done:item.done}">{{item.done?'✓':'○'}}</text><view><text class="strong">{{item.itemName}}</text><text class="muted">{{item.note||'暂无记录'}}</text></view></view><text v-if="!task.checklist.length" class="muted">开始检查后生成清单</text></view>
+   <view v-if="task.result" class="card"><text class="card-title">检查结论</text><text class="result-text">{{task.result}}</text></view>
+   <view class="action-grid"><button class="btn" @click="evidence">登记取证说明</button><button class="btn" @click="createCase">关联任务立案</button><button class="btn" @click="copyAddress">复制检查地点</button><button class="btn" @click="contact">联系主体</button></view>
+   <view class="bottom-action"><text class="muted">{{task.status==='completed'?'检查记录已归档':'逐项核验并记录现场情况'}}</text><button class="btn btn-primary" :loading="starting" :disabled="starting" @click="checklist">{{task.status==='completed'?'查看检查表':task.status==='in_progress'?'继续检查':'开始检查'}}</button></view>
+  </template>
+ </view>
+</template>
+<style scoped>
+.task-heading{border-left:8rpx solid #12764a}.task-heading>.muted,.task-heading>.tiny{display:block;margin-top:8rpx}.task-heading .page-title{margin-top:20rpx}.check-row{display:flex;gap:18rpx;padding:22rpx 0;border-bottom:1rpx solid #edf2ee}.check-row>view{flex:1;min-width:0;display:flex;flex-direction:column;gap:8rpx}.check-row>text{color:#82998a}.check-row>text.done{color:#12764a}.action-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16rpx}.result-text{display:block;margin-top:16rpx;white-space:pre-wrap;line-height:1.7}
+</style>

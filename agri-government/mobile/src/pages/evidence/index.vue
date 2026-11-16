@@ -1,27 +1,32 @@
 <script setup lang="ts">
 import AuthorizationNotice from '../../components/AuthorizationNotice.vue'
-import { ref } from 'vue'
-import { onLoad, onShow } from '@dcloudio/uni-app'
-import { api, type Evidence } from '../../api'
-const taskNo=ref(''),description=ref(''),saving=ref(false),saved=ref<Evidence|null>(null)
-const type=ref('现场照片'),offline=ref(false),list=ref<Evidence[]>([])
-onLoad(o=>taskNo.value=String(o?.taskNo||''))
+import { computed,ref } from 'vue'
+import { onLoad,onShow } from '@dcloudio/uni-app'
+import { api,type Task,type Evidence } from '../../api'
+import { getGovUser } from '../../auth'
+const tasks=ref<Task[]>([]),taskNo=ref(''),description=ref(''),saving=ref(false),loading=ref(false),error=ref(''),list=ref<Evidence[]>([]),draft=ref(false)
+const selected=computed(()=>tasks.value.find(t=>t.taskNo===taskNo.value))
+const labels=computed(()=>tasks.value.map(t=>`${t.subjectName} · ${t.taskNo}`))
+const draftKey=()=>`gov-evidence-draft:${getGovUser()?.id||'anonymous'}`
+onLoad(o=>{const raw=uni.getStorageSync(draftKey());if(raw&&typeof raw==='object'){taskNo.value=String(raw.taskNo||'');description.value=String(raw.description||'');draft.value=true}if(o?.taskNo&&String(o.taskNo)!==taskNo.value){taskNo.value=String(o.taskNo);description.value='';draft.value=false}})
 onShow(refresh)
-async function refresh(){try{list.value=await api.evidenceList()}catch(e){uni.showToast({title:e instanceof Error?e.message:'取证记录加载失败',icon:'none'})}}
-/** 现场素材只取本机路径做说明留痕：服务端落的是证据类型、说明与 SHA-256 摘要。 */
-function capture(kind:string){type.value=kind
-  if(kind==='现场照片'){uni.chooseImage({count:1,sourceType:['camera','album'],success:r=>{const p=String(r.tempFilePaths[0]||'');description.value+=`【现场照片 ${p.slice(-18)}】`}})}
-  else uni.showToast({title:`已切换证据类型为「${kind}」`,icon:'none'})}
+async function refresh(){loading.value=true;error.value='';try{const [t,e]=await Promise.all([api.tasks(),api.evidenceList()]);tasks.value=t;list.value=e}catch(e){error.value=e instanceof Error?e.message:'加载失败'}finally{loading.value=false}}
+function choose(e:any){taskNo.value=tasks.value[Number(e.detail.value)]?.taskNo||''}
+function saveDraft(){if(saving.value)return;if(!description.value.trim())return uni.showToast({title:'请先填写取证说明',icon:'none'});try{uni.setStorageSync(draftKey(),{taskNo:taskNo.value,description:description.value});draft.value=true;uni.showToast({title:'草稿已存本机，尚未入库',icon:'none'})}catch{uni.showToast({title:'本机存储失败，请复制说明留存',icon:'none'})}}
 async function save(){
-  if(!description.value.trim())return uni.showToast({title:'请填写取证说明',icon:'none'})
-  saving.value=true
-  try{
-    saved.value=await api.evidence({taskNo:taskNo.value,description:description.value.trim(),evidenceType:type.value,uploaded:!offline.value})
-    description.value='';uni.showToast({title:offline.value?'证据已离线暂存':'证据已保存并生成摘要',icon:'success'});refresh()
-  }catch(e){uni.showToast({title:e instanceof Error?e.message:'保存失败',icon:'none'})}finally{saving.value=false}
+ if(saving.value)return
+ if(!selected.value)return uni.showToast({title:'请选择本人承办的任务',icon:'none'})
+ if(!description.value.trim())return uni.showToast({title:'请填写取证说明',icon:'none'})
+ saving.value=true
+ try{await api.evidence({taskNo:taskNo.value,description:description.value.trim(),evidenceType:'现场取证说明',uploaded:true});description.value='';draft.value=false;try{uni.removeStorageSync(draftKey())}catch{}uni.showToast({title:'取证说明已入库',icon:'success'});await refresh()}catch(e){uni.showToast({title:e instanceof Error?e.message:'保存失败，说明仍保留在当前页面',icon:'none'})}finally{saving.value=false}
 }
-function detail(item:Evidence){uni.showModal({title:item.evidenceNo,content:`类型：${item.evidenceType}\n关联任务：${item.taskNo||'未关联'}\n状态：${item.uploaded?'已上传':'离线暂存'}\n说明：${item.description}\n摘要：${item.evidenceHash}`,showCancel:false})}
-function setOffline(event:Event){offline.value=Boolean((event as unknown as {detail?:{value?:boolean}}).detail?.value)}
+function detail(item:Evidence){uni.showModal({title:item.evidenceNo,content:`类型：${item.evidenceType}\n关联任务：${item.taskNo||'关联案件'}\n说明：${item.description}\n摘要：${item.evidenceHash}\n登记时间：${item.capturedAt}`,showCancel:false})}
 </script>
-<template><view class="page pad"><AuthorizationNotice duty="" context="evidence"/><view class="card"><view class="card-head"><text class="card-title">现场取证</text><text class="tiny">{{ taskNo || '未关联任务（可按任务号补关联）' }}</text></view><view class="evidence-grid"><button @click="capture('现场照片')"><text>📷</text><text>拍照取证</text></button><button @click="capture('现场录音')"><text>🎙️</text><text>录音取证</text></button><button @click="capture('现场视频')"><text>🎬</text><text>视频取证</text></button><button @click="capture('书面材料')"><text>📄</text><text>材料扫描</text></button></view><view class="switch-row"><text class="form-label">当前证据类型</text><text class="strong">{{type}}</text></view><view class="switch-row"><text class="form-label">离线暂存（现场无网络）</text><switch :checked="offline" @change="setOffline"/></view><view class="form-item"><text class="form-label">取证说明</text><textarea class="textarea" v-model="description" placeholder="记录证据位置、现场情况和关联违法行为"/></view><button class="btn btn-primary btn-block" :loading="saving" @click="save">保存证据并生成哈希</button><view v-if="saved" class="saved"><text class="tag green">✓ 已入库 {{saved.evidenceNo}}</text><text>证据摘要 {{saved.evidenceHash}}</text><text>保存时间 {{saved.capturedAt}} · {{saved.uploaded?'已上传':'离线暂存'}}</text></view></view><view class="card"><view class="card-head"><text class="card-title">我的取证记录</text><text class="card-sub">{{list.length}} 条 · 全程留痕</text></view><view v-if="!list.length" class="empty"><text class="empty-icon">🗂</text><text>还没有取证记录</text></view><view class="chain"><view v-for="item in list.slice(0,8)" :key="item.id" @click="detail(item)"><text>✓</text><view><b>{{item.evidenceType}} · {{item.evidenceNo}}</b><small>{{item.taskNo||'未关联任务'}} · {{item.capturedAt}} · {{item.uploaded?'已上传':'离线暂存'}}</small></view></view></view></view></view></template>
-<style lang="scss" scoped>.evidence-grid{display:grid;grid-template-columns:1fr 1fr;gap:12rpx;margin-bottom:20rpx}.evidence-grid button{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8rpx;padding:22rpx;border:1rpx dashed #cbd8cf;border-radius:18rpx;background:#f2fbf5}.evidence-grid button text:first-child{font-size:36rpx}.evidence-grid button text:last-child{color:#53665a;font-size:24rpx}.switch-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:12rpx}.form-label{color:#53665a;font-size:24rpx}.saved{display:flex;flex-direction:column;gap:6rpx;margin-top:16rpx;padding:15rpx;border-radius:13rpx;background:#f2fbf5;font-size:24rpx}.chain>view{display:grid;grid-template-columns:36rpx 1fr;gap:2px 10rpx;padding:13rpx 0;border-bottom:1rpx solid #edf2ee}.chain>view>text{grid-row:1/span 2;display:flex;width:34rpx;height:34rpx;align-items:center;justify-content:center;border-radius:50%;background:#12764a;color:#fff;font-size:24rpx}.chain b{font-size:24rpx}.chain small{color:#94a198;font-size:24rpx}</style>
+<template><view class="page pad action-page"><view class="page-heading"><text class="page-title">取证登记</text><text class="muted">记录现场事实，关联本人承办任务</text></view><AuthorizationNotice duty="inspection" context="evidence"/>
+ <view class="notice">当前支持取证说明登记与摘要留痕，不上传照片、录音或视频原件。原始材料请按执法档案要求另行保管；摘要不代表已上链。</view>
+ <view v-if="error" class="state-panel"><text>{{error}}</text><button class="btn" @click="refresh">重新加载</button></view>
+ <view class="card"><view class="form-item"><text class="form-label">关联任务 *</text><picker :range="labels" :disabled="loading||saving||!tasks.length" @change="choose"><view class="select-field">{{selected?`${selected.subjectName} · ${selected.taskNo}`:taskNo||'请选择本人承办任务'}} <text>⌄</text></view></picker></view><view class="form-item"><text class="form-label">取证说明 *</text><textarea class="textarea evidence-note" v-model="description" :disabled="saving" :maxlength="1000" placeholder="记录现场时间、地点、事实、材料编号及原件保管位置"/><text class="tiny">{{description.length}} / 1000</text></view><text v-if="draft" class="tag orange">本机草稿 · 未入库</text><button class="btn btn-ghost" :disabled="saving" @click="saveDraft">暂存本机草稿</button></view>
+ <view class="card"><view class="card-head"><text class="card-title">我的取证记录</text><text class="tiny">最近 {{list.length}} 条</text></view><view v-if="loading" class="loading">正在加载…</view><text v-else-if="!list.length&&!error" class="muted">暂无记录，完成上方登记后可在此查回。</text><view v-for="item in list" :key="item.id" class="record" @click="detail(item)"><text class="strong">{{item.evidenceType}}</text><text class="muted">{{item.description}}</text><text class="tiny">{{item.taskNo||'关联案件'}} · {{item.capturedAt}}</text><text class="tag" :class="item.uploaded?'green':'orange'">{{item.uploaded?'已登记':'历史暂存记录'}}</text></view></view>
+ <view class="bottom-action"><text class="muted">提交后生成记录摘要</text><button class="btn btn-primary" :disabled="saving||!selected" :loading="saving" @click="save">提交取证说明</button></view>
+</view></template>
+<style scoped>.evidence-note{height:260rpx}.record{padding:24rpx 0;border-bottom:1rpx solid #e1e9e3;display:flex;flex-direction:column;gap:10rpx}.record .tag{align-self:flex-start}.record .muted{white-space:pre-wrap}.card>.btn{margin-top:20rpx}</style>

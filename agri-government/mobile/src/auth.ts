@@ -75,10 +75,10 @@ export async function loginWithUnifiedAccount(
   }>(`${AUTH_BASE}/api/v1/platform/permissions/mine`, 'GET', undefined, token)
   const permissions = permission.body.data?.permissions || []
   const allowed = permissions.some((code) =>
-    code === '*' || code === 'gov:inspector' || code === 'gov:admin' || code === 'gov:*',
+    code === '*' || code === 'gov:inspector' || code === 'gov:*',
   )
   if (permission.status >= 400 || !allowed) {
-    throw new Error('当前统一账号没有政府监管执法或运营权限，请联系平台运营开通')
+    throw new Error('当前统一账号没有政府监管执法权限，请联系平台运营开通')
   }
   uni.setStorageSync(TOKEN_KEY, token)
   uni.setStorageSync(USER_KEY, login.body.data.user)
