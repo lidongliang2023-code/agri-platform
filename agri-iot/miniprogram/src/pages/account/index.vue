@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import { accountSummary, activateSubject, ensureIotSession, logoutIotSession, type Row } from '../../api/iot'
+import WorkspaceSwitch from '../../components/WorkspaceSwitch.vue'
+import OpsTabBar from '../../components/OpsTabBar.vue'
+import { currentWorkspace, identitySessionReady, accountSummary, activateSubject, ensureIotSession, logoutIotSession, type Row } from '../../api/iot'
 import { showError, confirmAction } from '../../utils/ui'
 import manifest from '../../manifest.json'
 
+const workspace = ref(currentWorkspace())
 const summary = ref<Row | null>(null)
 const busy = ref(false)
 const error = ref('')
@@ -24,7 +27,7 @@ async function load() {
   user.value = uni.getStorageSync('user') || {}
   summary.value = null
   error.value = ''
-  try { summary.value = await accountSummary() }
+  try { await identitySessionReady(); workspace.value = currentWorkspace(); if(workspace.value==='ops')uni.hideTabBar();else uni.showTabBar(); if(workspace.value==='user') summary.value = await accountSummary() }
   catch (cause) { error.value = cause instanceof Error ? cause.message : '账号加载失败，请重试' }
   finally { busy.value = false }
 }
@@ -65,14 +68,16 @@ function about() {
           <text class="identity-badge">丰链云统一身份</text>
         </view>
       </view>
-      <view class="current-subject">
+      <view v-if="workspace === 'user'" class="current-subject">
         <text class="subject-caption">当前经营主体</text>
         <text class="subject-name">{{ activeSubject?.merchantName || (busy ? '正在加载…' : error ? '暂时无法获取' : '尚未选择主体') }}</text>
       </view>
     </view>
 
     <view class="profile-content">
-      <view class="card subject-card">
+      <WorkspaceSwitch />
+      <view v-if="workspace === 'ops' && error" class="error" role="alert">{{error}}<button role="button" class="btn" :disabled="busy" @tap="load">重新加载</button></view>
+      <view v-if="workspace === 'user'" class="card subject-card">
         <view class="card-head">
           <text class="card-title">经营主体</text>
           <button class="btn btn-sm" :disabled="busy" :loading="busy" @tap="load">刷新</button>
@@ -91,7 +96,7 @@ function about() {
         </template>
       </view>
 
-      <view class="card service-card">
+      <view v-if="workspace === 'user'" class="card service-card">
         <text class="card-title service-title">我的服务</text>
         <button v-for="item in shortcuts" :key="item.path" class="service-row" :disabled="busy" @tap="open(item.path)">
           <text class="service-mark" aria-hidden="true">{{ item.mark }}</text>
@@ -102,7 +107,8 @@ function about() {
 
       <button class="card about-row" @tap="about"><text>关于丰链云物联网</text><view class="version"><text>v{{ manifest.versionName }}</text><text class="chevron" aria-hidden="true">›</text></view></button>
       <button class="btn btn-danger logout-button" :disabled="busy" @tap="logout">退出登录</button>
-      <text class="footer-note">账号与 PC 端通用 · 数据按经营主体隔离</text>
+      <text class="footer-note">{{ workspace === 'ops' ? '运营工作台 · 全平台运营范围' : '账号与 PC 端通用 · 数据按经营主体隔离' }}</text>
+      <OpsTabBar v-if="workspace === 'ops'" active="account" />
     </view>
   </view>
 </template>

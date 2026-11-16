@@ -1,6 +1,6 @@
 <template>
   <view class="auth-page">
-    <view class="auth-hero" :style="{ paddingTop: `calc(${statusBarHeight}px + 38rpx)` }">
+    <view class="auth-hero">
       <view class="brand-row">
         <image class="brand-mark" src="/static/fengchain.svg" mode="aspectFill" />
         <view>
@@ -11,7 +11,7 @@
       <view class="hero-copy">
         <text class="hero-kicker">物联网移动工作台</text>
         <text class="hero-title">欢迎回来</text>
-        <text class="hero-desc">使用丰链云统一账号登录，随时查看设备、处理告警与管理农场。</text>
+        <text class="hero-desc">统一账号登录，查看设备、处理告警与管理农场。</text>
       </view>
       <view class="hero-flow">
         <view><text>01</text><text>统一账号</text></view>
@@ -99,17 +99,17 @@
         </button>
       </view>
 
-      <view v-if="!challengeToken" class="divider"><i /><text>其他登录方式</text><i /></view>
+      <view v-if="!challengeToken" class="divider"><view class="divider-line" /><text>其他登录方式</text><view class="divider-line" /></view>
       <view v-if="!challengeToken" class="third-party">
-        <button @tap="showThirdParty('微信')">
+        <button :disabled="submitting || sending" @tap="showThirdParty('微信')">
           <text class="third-icon wechat">微</text>
           <text>微信</text>
         </button>
-        <button @tap="showThirdParty('支付宝')">
+        <button :disabled="submitting || sending" @tap="showThirdParty('支付宝')">
           <text class="third-icon alipay">支</text>
           <text>支付宝</text>
         </button>
-        <button @tap="showThirdParty('国家政务服务平台')">
+        <button :disabled="submitting || sending" @tap="showThirdParty('国家政务服务平台')">
           <text class="third-icon gov">政</text>
           <text>政务服务</text>
         </button>
@@ -122,7 +122,7 @@
 
     <view class="auth-bottom">
       <text>登录即表示同意《用户服务协议》和《隐私政策》</text>
-      <text>登录后自动校验物联网权限，业务数据按经营主体管理</text>
+      <text>登录后按权限进入用户或运营工作台</text>
     </view>
   </view>
 </template>
@@ -130,11 +130,10 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import { PHONE_PATTERN, completeUnifiedMfa, hasIotSession, loginWithSmsCode, loginWithUnifiedAccount, sendLoginSmsCode, type UnifiedLoginResult } from '../../api/iot'
+import { enterWorkspace, PHONE_PATTERN, completeUnifiedMfa, hasIotSession, loginWithSmsCode, loginWithUnifiedAccount, sendLoginSmsCode, type UnifiedLoginResult } from '../../api/iot'
 
 type LoginTab = 'sms' | 'pwd'
 
-const statusBarHeight = Number(uni.getSystemInfoSync().statusBarHeight || 0)
 const tab = ref<LoginTab>('pwd')
 const phone = ref('')
 const smsCode = ref('')
@@ -225,9 +224,8 @@ async function requestLoginCode(): Promise<void> {
   }
 }
 
-function enterWorkbench(): void {
-  uni.showToast({ title: '登录成功', icon: 'success' })
-  setTimeout(() => uni.reLaunch({ url: '/pages/index/index' }), 250)
+async function enterWorkbench(): Promise<void> {
+  await enterWorkspace()
 }
 
 async function submitLogin(): Promise<void> {
@@ -255,7 +253,7 @@ async function submitLogin(): Promise<void> {
     }
     challengeToken.value = ''
     mfaCode.value = ''
-    enterWorkbench()
+    await enterWorkbench()
   } catch (error) {
     if (wasMfa) resetMfa()
     notice((error instanceof Error ? error.message : '登录失败，请稍后重试') + (wasMfa ? '；请重新登录获取验证机会' : ''))
@@ -283,7 +281,7 @@ function showThirdParty(name: string): void {
 }
 
 onShow(() => {
-  if (!submitting.value && hasIotSession()) uni.reLaunch({ url: '/pages/index/index' })
+  if (!submitting.value && hasIotSession()) void enterWorkspace().catch(error => notice(error.message))
 })
 
 onUnmounted(() => {
@@ -293,11 +291,11 @@ onUnmounted(() => {
 
 <style lang="scss" scoped>
 .auth-page {
-  min-height: 100vh;
+  min-height: calc(100vh - var(--window-top, 0px));
   padding: 0 28rpx calc(42rpx + env(safe-area-inset-bottom));
   background:
     radial-gradient(circle at 92% 5%, rgba(67, 190, 121, .18), transparent 340rpx),
-    linear-gradient(180deg, #0f5838 0, #13764a 520rpx, #f3f8f5 520rpx, #f3f8f5 100%);
+    linear-gradient(180deg, #0f5838 0, #13764a 500rpx, #f3f8f5 500rpx, #f3f8f5 100%);
 }
 
 .auth-hero { padding: 38rpx 12rpx 28rpx; color: #fff; }
@@ -313,10 +311,10 @@ onUnmounted(() => {
 .hero-desc { color: rgba(255, 255, 255, .72); font-size: 24rpx; line-height: 1.6; }
 
 .hero-flow { display: flex; align-items: center; gap: 12rpx; margin-top: 34rpx; }
-.hero-flow > view:not(.flow-line), .hero-flow > uni-view:not(.flow-line) { display: flex; align-items: center; gap: 8rpx; color: rgba(255, 255, 255, .82); font-size: 24rpx; }
+.hero-flow > view:not(.flow-line), .hero-flow > uni-view:not(.flow-line) { display: flex; align-items: center; gap: 7rpx; color: rgba(255, 255, 255, .82); font-size: 24rpx; }
 .hero-flow view text:first-child, .hero-flow uni-view uni-text:first-child {
-  display: flex; width: 34rpx; height: 34rpx; align-items: center; justify-content: center;
-  border-radius: 50%; background: rgba(255, 255, 255, .14); color: #d7f8e4; font-size: 20rpx; font-weight: 800;
+  display: flex; width: 30rpx; height: 30rpx; align-items: center; justify-content: center;
+  border-radius: 50%; background: rgba(255, 255, 255, .14); color: #d7f8e4; font-size: 24rpx; font-weight: 800;
 }
 .hero-flow .flow-line { height: 1rpx; flex: 1; background: rgba(255, 255, 255, .18); }
 
@@ -331,7 +329,7 @@ onUnmounted(() => {
 .auth-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 8rpx; padding: 12rpx; background: #f7faf8; }
 .auth-tabs button, .auth-tabs uni-button {
   min-height: 72rpx; padding: 0 8rpx; border-radius: 14rpx;
-  color: #7b8c82; font-size: 26rpx; font-weight: 600; line-height: 72rpx;
+  color: #7b8c82; font-size: 25rpx; font-weight: 600; line-height: 72rpx;
 }
 .auth-tabs button.on, .auth-tabs uni-button.on { background: #fff; color: #0f6d43; box-shadow: 0 4rpx 18rpx rgba(21, 67, 43, .08); }
 
@@ -339,9 +337,9 @@ onUnmounted(() => {
 .mfa-title { display: block; color: #0b1a12; font-size: 32rpx; font-weight: 800; }
 .mfa-tip { display: block; margin-top: 8rpx; color: #718277; font-size: 24rpx; line-height: 1.6; }
 
-.form-block { padding: 30rpx 28rpx 24rpx; }
+.form-block { padding: 30rpx 28rpx 18rpx; }
 .input-group + .input-group { margin-top: 24rpx; }
-.label { display: block; margin-bottom: 10rpx; color: #40574a; font-size: 26rpx; font-weight: 600; }
+.label { display: block; margin-bottom: 10rpx; color: #40574a; font-size: 24rpx; font-weight: 600; }
 
 .input-shell {
   display: flex; min-width: 0; height: 88rpx; flex: 1; align-items: center; gap: 12rpx;
@@ -387,7 +385,7 @@ onUnmounted(() => {
   color: #95a39b;
   font-size: 24rpx;
 }
-.divider i { height: 1rpx; flex: 1; background: #edf1ee; }
+.divider-line { height: 1rpx; flex: 1; background: #edf1ee; }
 
 .third-party {
   display: grid;
@@ -426,7 +424,7 @@ onUnmounted(() => {
 
 .auth-footer {
   display: flex; align-items: center; justify-content: center;
-  padding: 24rpx 20rpx 28rpx; border-top: 1rpx solid #edf2ee;
+  padding: 24rpx 20rpx 30rpx; border-top: 1rpx solid #edf2ee;
   color: #819086; font-size: 24rpx; text-align: center;
 }
 
@@ -440,13 +438,24 @@ onUnmounted(() => {
 .auth-hero, .auth-card, .auth-bottom { width: 100%; max-width: 480px; margin-left: auto; margin-right: auto; }
 .auth-tabs { display: flex; }
 .auth-tabs button { flex: 1; min-width: 0; min-height: 44px; display: flex; align-items: center; justify-content: center; line-height: 1.4; }
-.input-shell { min-height: 48px; }
-.input-shell input { width: 0; min-height: 44px; font-size: 16px; }
-.code-button { min-height: 48px; display: flex; align-items: center; justify-content: center; line-height: 1.4; font-size: 14px; }
+.input-shell { height: 86rpx; min-height: 44px; box-sizing: border-box; }
+.input-shell input { width: 0; height: 100%; min-height: 40px; font-size: 16px; }
+.code-button { height: 86rpx; min-height: 44px; display: flex; align-items: center; justify-content: center; line-height: 1.4; font-size: 14px; }
 .password-toggle { flex-shrink: 0; min-width: 44px; min-height: 44px; color: #188454; font-size: 14px; }
-.primary-button { min-height: 48px; display: flex; align-items: center; justify-content: center; line-height: 1.4; }
+.primary-button { height: 88rpx; min-height: 48px; display: flex; align-items: center; justify-content: center; line-height: 1.4; }
 .remember, .meta-link { min-height: 44px; font-size: 12px; }
-.form-meta { flex-wrap: wrap; gap: 4px; }
+.form-meta { flex-wrap: wrap; column-gap: 4px; row-gap: 0; margin-top: 12rpx; }
+.third-party button { min-height: 72px; padding: 0; justify-content: center; line-height: 1.5; }
+.third-party button[disabled] { opacity: .55; }
+.auth-hero { box-sizing: border-box; }
+/* H5 宽屏时限制头图区，保持与登录卡片的左右边缘一致。 */
+/* #ifdef H5 */
+@media (min-width: 768px) {
+  .auth-hero { padding-top: 24px; }
+  .hero-copy { margin-top: 24px; }
+  .hero-flow { margin-top: 20px; }
+}
+/* #endif */
 .hero-flow .flow-line { min-width: 6px; }
 .brand-en, .hero-kicker, .hero-desc, .hero-flow > view, .auth-footer, .auth-bottom, .mfa-tip { font-size: 12px; }
 .auth-bottom { color: #647a6d; }

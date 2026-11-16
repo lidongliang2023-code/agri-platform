@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import { api, ensureIotSession, statusMeta } from '../../api/iot'
+import WorkspaceSwitch from '../../components/WorkspaceSwitch.vue'
+import { api, ensureIotSession, statusMeta, identitySessionReady, currentWorkspace, workspaceHome } from '../../api/iot'
 
 const data=ref<Awaited<ReturnType<typeof api.overview>>|null>(null)
 const syncing=ref(false),error=ref('')
@@ -22,7 +23,7 @@ const entries=[
 ]
 const user=ref<{nickname?:string;username?:string}|null>(uni.getStorageSync('user')||null)
 onShow(load)
-async function load(){if(!ensureIotSession())return;user.value=uni.getStorageSync('user')||null;try{data.value=await api.overview();error.value=''}catch(e){data.value=null;error.value=e instanceof Error?e.message:'加载失败'}}
+async function load(){if(!ensureIotSession())return;user.value=uni.getStorageSync('user')||null;try{await identitySessionReady();if(currentWorkspace()==='ops'){data.value=null;uni.reLaunch({url:workspaceHome()});return}uni.showTabBar();data.value=await api.overview();error.value=''}catch(e){data.value=null;error.value=e instanceof Error?e.message:'加载失败'}}
 function open(entry:{path:string;tab?:boolean}){if(entry.tab)uni.switchTab({url:entry.path});else uni.navigateTo({url:entry.path})}
 function account(){uni.switchTab({url:'/pages/account/index'})}
 function device(id:number){uni.navigateTo({url:`/pages/device/detail?id=${id}`})}
@@ -45,6 +46,7 @@ async function sync(){syncing.value=true;try{const r=await api.sync();uni.showTo
       </view>
     </view>
     <view class="pad body">
+      <WorkspaceSwitch />
       <view v-if="error" class="card"><view class="error" @tap="load">{{error}}<text class="retry">点击重试</text></view><button class="btn btn-block" @tap="account">查看账号与经营主体</button></view>
       <view v-else-if="!data" class="card loading">正在加载设备与环境数据…</view>
       <template v-else>

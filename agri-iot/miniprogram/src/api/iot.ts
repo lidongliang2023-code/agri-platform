@@ -29,8 +29,9 @@ const BASE=configuredOrigin
 const AUTH_BASE=(import.meta.env.VITE_IOT_AUTH_BASE||configuredOrigin).replace(/\/$/,'')
 let generation=0, redirecting=false
 let ready:Promise<void>|null=null
+let identityReady:Promise<void>|null=null
 let permissions:string[]=[]
-export function clearIotSession(){generation++;ready=null;permissions=[];['token','user','iot_session_expires','iot_subject','iot_status','iot_plot'].forEach(k=>uni.removeStorageSync(k))}
+export function clearIotSession(){generation++;ready=null;identityReady=null;permissions=[];['iot_workspace','token','user','iot_session_expires','iot_subject','iot_status','iot_plot'].forEach(k=>uni.removeStorageSync(k))}
 /** 统一认证中心的公开登录端点：401 表示凭据错误，不能当成“登录失效”去跳转。 */
 const AUTH_ENDPOINTS=['/api/v1/sso/login-standalone','/api/v1/sso/login-standalone-mfa','/api/v1/sso/login-standalone-by-sms','/api/v1/sso/sms/code']
 function loginRequired(){clearIotSession();if(!redirecting){redirecting=true;uni.reLaunch({url:'/pages/login/index',complete:()=>{redirecting=false}})}}
@@ -59,18 +60,54 @@ export function hasIotSession(){
  return Boolean(uni.getStorageSync('token'))
 }
 export function ensureIotSession(){if(hasIotSession())return true;loginRequired();return false}
-export async function sessionReady(){
+export type Workspace = 'user' | 'ops'
+export function canOperate(){return granted(permissions,'iot:admin')}
+export function canUseUser(){return granted(permissions,'iot:read')}
+export function currentWorkspace():Workspace{return uni.getStorageSync('iot_workspace')==='ops'?'ops':'user'}
+export function workspaceHome(){return currentWorkspace()==='ops'?'/pages/ops/index':'/pages/index/index'}
+export async function identitySessionReady(){
  if(!ensureIotSession())throw new Error('请先登录')
- if(!ready)ready=(async()=>{
+ if(!identityReady)identityReady=(async()=>{
   const result=await raw<{permissions:string[]}>(AUTH_BASE,'/api/v1/platform/permissions/mine')
   permissions=result.permissions||[]
-  if(!granted(permissions,'iot:read')||!granted(permissions,'iot:write'))throw new Error('当前账号未开通完整物联网权限，请联系平台运营')
+  if(!canUseUser()&&!canOperate())throw new Error('当前账号未开通物联网访问权限，请联系平台运营')
+  if(currentWorkspace()==='ops'&&!canOperate())uni.setStorageSync('iot_workspace','user')
+  if(!canUseUser()&&canOperate())uni.setStorageSync('iot_workspace','ops')
+ })().catch(e=>{identityReady=null;throw e})
+ return identityReady
+}
+export async function switchWorkspace(mode:Workspace){
+ identityReady=null
+ await identitySessionReady()
+ if(mode==='ops'?!canOperate():!canUseUser())throw new Error('当前账号没有该工作台权限')
+ generation++;ready=null
+ ;['iot_subject','iot_status','iot_plot'].forEach(k=>uni.removeStorageSync(k))
+ uni.setStorageSync('iot_workspace',mode)
+ uni.reLaunch({url:workspaceHome()})
+}
+export async function enterWorkspace(){await identitySessionReady();uni.reLaunch({url:workspaceHome()})}
+export async function guardWorkspace(route:string){
+ await identitySessionReady()
+ if(route==='pages/account/index')return
+ const ops=route.startsWith('pages/ops/')
+ if(ops&&!canOperate()){uni.reLaunch({url:workspaceHome()});throw new Error('当前账号没有运营权限')}
+ if(ops&&currentWorkspace()!=='ops'||!ops&&currentWorkspace()==='ops')uni.reLaunch({url:workspaceHome()})
+}
+export async function sessionReady(){
+ await identitySessionReady()
+ if(!canUseUser()||currentWorkspace()!=='user')throw new Error('请切换到用户工作台查看经营主体业务')
+ if(!ready)ready=(async()=>{
   const summary=await accountSummary()
   const active=summary.merchants.find((x:Row)=>String(x.merchantId)===String(summary.activeMerchantId))
   if(!active)throw new Error('当前账号暂无可用经营主体，请前往账号页选择主体')
   uni.setStorageSync('iot_subject',active)
  })().catch(e=>{ready=null;throw e})
  return ready
+}
+export async function opsRequest<T>(url:string,method:'GET'|'POST'|'PUT'|'DELETE'='GET',data?:Record<string,unknown>):Promise<T>{
+ await identitySessionReady()
+ if(!canOperate()||currentWorkspace()!=='ops')throw new Error('当前账号未进入获授权的运营工作台')
+ return raw<T>(BASE,`/api/v1/iot/ops${url}`,method,data)
 }
 async function request<T>(url:string,method:'GET'|'POST'|'PUT'|'DELETE'='GET',data?:Record<string,unknown>):Promise<T>{
  await sessionReady()
@@ -97,9 +134,10 @@ async function acceptLogin(result:UnifiedLoginResult){
  }
  if(!result?.accessToken||!result.user)throw new Error('登录结果缺少有效凭证，请重新登录')
  const check=await raw<{permissions:string[]}>(AUTH_BASE,'/api/v1/platform/permissions/mine','GET',undefined,result.accessToken)
- if(!granted(check.permissions||[],'iot:read')||!granted(check.permissions||[],'iot:write'))throw new Error('当前账号未开通完整物联网权限，请联系平台运营')
+ if(!granted(check.permissions||[],'iot:read')&&!granted(check.permissions||[],'iot:admin'))throw new Error('当前账号未开通物联网访问权限，请联系平台运营')
  clearIotSession();permissions=check.permissions;uni.setStorageSync('token',result.accessToken);uni.setStorageSync('user',result.user)
  uni.setStorageSync('iot_session_expires',Date.now()+Number(result.expiresIn||7200)*1000)
+ uni.setStorageSync('iot_workspace',canUseUser()?'user':'ops')
  return result
 }
 export const PHONE_PATTERN=/^1[3-9]\d{9}$/

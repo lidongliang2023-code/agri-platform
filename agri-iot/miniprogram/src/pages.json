@@ -65,7 +65,9 @@
     {
       "path": "pages/login/index",
       "style": {
-        "navigationStyle": "custom"
+        "navigationBarTitleText": "登录",
+        "navigationBarBackgroundColor": "#ffffff",
+        "navigationBarTextStyle": "black"
       }
     },
     {
@@ -146,6 +148,27 @@
       "path": "pages/maintenance/create",
       "style": {
         "navigationBarTitleText": "设备报修"
+      }
+    },
+    {
+      "path": "pages/ops/index",
+      "style": {
+        "navigationBarTitleText": "运营工作台",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/ops/list",
+      "style": {
+        "navigationBarTitleText": "运营业务",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/ops/receipts",
+      "style": {
+        "navigationBarTitleText": "指令与回执",
+        "enablePullDownRefresh": true
       }
     }
   ],
