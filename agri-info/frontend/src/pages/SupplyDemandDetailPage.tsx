@@ -28,7 +28,7 @@ export function SupplyDemandDetailPage(): JSX.Element {
       .catch((reason: Error) => setError(reason.message))
   }
 
-  useEffect(load, [id])
+  useEffect(load, [id, sdType])
 
   const send = (): void => {
     if (!id || !draft.trim()) return

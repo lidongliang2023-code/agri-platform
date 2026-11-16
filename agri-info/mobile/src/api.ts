@@ -1,4 +1,4 @@
-import { API_BASE, MEDIA_BASE, currentOwner, getInfoToken, handleInfoUnauthorized } from './auth'
+import { API_BASE, MEDIA_BASE, accountStorageKey, getInfoToken, handleInfoUnauthorized } from './auth'
 
 /* ===================== 领域类型（与 PC 用户端同构，字段名对齐后端返回） ===================== */
 
@@ -225,6 +225,8 @@ export interface SupplyDemand {
 }
 
 export interface SdMatch {
+  productId?: number
+  demandId?: number
   id: number
   sdId: number
   targetType: string
@@ -514,7 +516,6 @@ export function request<T>(
   params?: Record<string, string | number | undefined>,
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const owner = currentOwner()
     const token = getInfoToken()
     uni.request({
       url: `${API_BASE}/api/v1/info${url}${query(params)}`,
@@ -524,8 +525,6 @@ export function request<T>(
       header: {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        // 私域数据归属：平台令牌只承载权限，昵称由前端透传（与 PC 端同一约定）。
-        ...(owner ? { 'X-Agri-User': encodeURIComponent(owner) } : {}),
       },
       success(response) {
         const body = response.data as Envelope<T>
@@ -551,7 +550,17 @@ export function request<T>(
   })
 }
 
+export interface InfoProfile { region: string; crops: string; scale: string; intro: string }
+
 export const infoApi = {
+  profile: () => request<InfoProfile>('/profile'),
+  saveProfile: (body: InfoProfile) => request<InfoProfile>('/profile', 'PUT', { ...body }),
+  removeFavoriteTarget: async (targetType: string, targetId: number) => {
+    const records = await request<Favorite[]>('/favorites')
+    for (const record of records.filter((item) => item.targetType === targetType && item.targetId === targetId)) {
+      await request(`/favorites/${record.id}`, 'DELETE')
+    }
+  },
   overview: () => request<Overview>('/overview'),
 
   markets: (params?: { category?: string; market?: string; keyword?: string }) =>
@@ -579,12 +588,17 @@ export const infoApi = {
 
   supplyDemands: (params?: { type?: string; category?: string; origin?: string; sort?: string; keyword?: string }) =>
     request<SupplyDemandList>('/supply-demands', 'GET', undefined, params),
-  mySupplyDemands: () =>
-    request<{ items: SupplyDemand[]; onlineCount: number; pendingCount: number }>('/supply-demands/mine'),
-  supplyDemand: (id: number) => request<SupplyDemandDetail>(`/supply-demands/${id}`),
+  mySupplyDemands: async () => {
+    const results = await Promise.all(['supply', 'demand'].map((type) =>
+      request<{ items: SupplyDemand[] }>('/supply-demands/mine', 'GET', undefined, { type })))
+    const items = results.flatMap((result) => result.items || [])
+    return { items, onlineCount: items.filter((item) => item.status === 'online').length,
+      pendingCount: items.filter((item) => item.status === 'pending').length }
+  },
+  supplyDemand: (id: number, type?: string) => request<SupplyDemandDetail>(`/supply-demands/${id}`, 'GET', undefined, { type }),
   publishSupplyDemand: (body: Record<string, unknown>) =>
     request<{ sdNo: string; status: string; matchScore: number; message: string }>('/supply-demands', 'POST', body),
-  sdMatches: (id: number) => request<SdMatch[]>(`/supply-demands/${id}/matches`),
+  sdMatches: (id: number, type?: string) => request<SdMatch[]>(`/supply-demands/${id}/matches`, 'GET', undefined, { type }),
   sendSdMessage: (id: number, body: { content: string }, type?: string) =>
     request<{ message: string; messages: SdMessage[] }>(
       `/supply-demands/${id}/messages`, 'POST', body, { type }),
@@ -780,13 +794,13 @@ export interface ViewRecord {
 export function pushView(record: Omit<ViewRecord, 'at'>): void {
   const list = getViews().filter((item) => !(item.type === record.type && item.id === record.id))
   list.unshift({ ...record, at: new Date().toISOString() })
-  uni.setStorageSync(HISTORY_KEY, list.slice(0, 60))
+  uni.setStorageSync(accountStorageKey(HISTORY_KEY), list.slice(0, 60))
 }
 
 export function getViews(): ViewRecord[] {
-  return (uni.getStorageSync(HISTORY_KEY) as ViewRecord[] | null) || []
+  return (uni.getStorageSync(accountStorageKey(HISTORY_KEY)) as ViewRecord[] | null) || []
 }
 
 export function clearViews(): void {
-  uni.removeStorageSync(HISTORY_KEY)
+  uni.removeStorageSync(accountStorageKey(HISTORY_KEY))
 }

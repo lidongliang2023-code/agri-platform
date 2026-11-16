@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { accountStorageKey } from '../../auth'
 import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { infoApi, toast, type Attestation } from '../../api'
@@ -16,7 +17,7 @@ interface VerifyItem {
 const attestNo = ref('')
 const result = ref<{ valid: boolean; message: string; record?: Attestation } | null>(null)
 const loading = ref(false)
-const history = ref<VerifyItem[]>(uni.getStorageSync(HISTORY_KEY) || [])
+const history = ref<VerifyItem[]>(uni.getStorageSync(accountStorageKey(HISTORY_KEY)) || [])
 
 onLoad((options) => {
   const preset = decodeURIComponent(String(options?.attestNo || ''))
@@ -44,7 +45,7 @@ async function verify() {
       at: new Date().toISOString(),
     }
     history.value = [item, ...history.value.filter((row) => row.attestNo !== item.attestNo)].slice(0, 20)
-    uni.setStorageSync(HISTORY_KEY, history.value)
+    uni.setStorageSync(accountStorageKey(HISTORY_KEY), history.value)
   } catch (error) {
     toast(error instanceof Error ? error.message : '验证失败')
   } finally {
@@ -54,7 +55,7 @@ async function verify() {
 
 function clearHistory() {
   history.value = []
-  uni.removeStorageSync(HISTORY_KEY)
+  uni.removeStorageSync(accountStorageKey(HISTORY_KEY))
 }
 
 function openRecord() {

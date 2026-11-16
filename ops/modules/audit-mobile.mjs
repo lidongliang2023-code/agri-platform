@@ -17,6 +17,7 @@ const ROOT = path.resolve(HERE, '..', '..')
 const jsonMode = process.argv.includes('--json')
 
 const MOBILES = [
+  { id: 'info', dir: 'agri-info/mobile', publishApp: 'info-mobile', envKey: 'VITE_INFO_API_BASE' },
   { id: 'production', dir: 'agri-production/miniprogram', publishApp: 'prod-mobile', envKey: 'VITE_API_BASE' },
   { id: 'trade', dir: 'agri-trade/miniprogram', publishApp: 'trade-mobile', envKey: 'VITE_TRADE_API_BASE' },
   { id: 'iot', dir: 'agri-iot/miniprogram', publishApp: 'iot-mobile', envKey: 'VITE_IOT_API_BASE' },

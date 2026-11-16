@@ -4,6 +4,7 @@ import { onLoad } from '@dcloudio/uni-app'
 import { infoApi, money, toast, type SdMatch, type SupplyDemandDetail } from '../../api'
 
 const id = ref(0)
+const sdType = ref('supply')
 const matches = ref<SdMatch[]>([])
 const detail = ref<SupplyDemandDetail | null>(null)
 const loading = ref(true)
@@ -22,13 +23,14 @@ const visible = computed(() =>
 
 onLoad((options) => {
   id.value = Number(options?.id || 0)
+  sdType.value = options?.type === 'demand' ? 'demand' : 'supply'
   load()
 })
 
 async function load() {
   loading.value = true
   try {
-    const [list, data] = await Promise.all([infoApi.sdMatches(id.value), infoApi.supplyDemand(id.value)])
+    const [list, data] = await Promise.all([infoApi.sdMatches(id.value, sdType.value), infoApi.supplyDemand(id.value, sdType.value)])
     matches.value = [...list].sort((a, b) => b.score - a.score)
     detail.value = data
   } catch (error) {
@@ -38,12 +40,19 @@ async function load() {
   }
 }
 
+function target(match: SdMatch) {
+  return sdType.value === 'supply' ? { id: match.demandId, type: 'demand' } : { id: match.productId, type: 'supply' }
+}
 function openDetail(match: SdMatch) {
-  uni.navigateTo({ url: `/pages/sd/detail?id=${match.sdId || id.value}` })
+  const item = target(match)
+  if (!item.id) { toast('匹配对象暂不可用'); return }
+  uni.navigateTo({ url: `/pages/sd/detail?id=${item.id}&type=${item.type}` })
 }
 
 function inquire(match: SdMatch) {
-  uni.navigateTo({ url: `/pages/sd/chat?id=${match.sdId || id.value}` })
+  const item = target(match)
+  if (!item.id) { toast('匹配对象暂不可用'); return }
+  uni.navigateTo({ url: `/pages/sd/${item.type === 'supply' ? 'chat' : 'detail'}?id=${item.id}&type=${item.type}` })
 }
 
 function toPreference() {

@@ -13,7 +13,10 @@ const ROUTE: Record<string, { page: PageKey; withId: boolean; label: string }> =
   report: { page: 'reports', withId: false, label: '报告' },
   knowledge: { page: 'knowledge', withId: true, label: '知识' },
   course: { page: 'training', withId: false, label: '课程' },
-  supplyDemand: { page: 'sd-detail', withId: true, label: '供需' },
+  supplyDemand: { page: 'sd', withId: false, label: '供需（旧记录）' },
+  sd: { page: 'sd', withId: false, label: '供需（旧记录）' },
+  supply: { page: 'sd-detail', withId: true, label: '供应' },
+  demand: { page: 'sd-detail', withId: true, label: '需求' },
 }
 
 export function FavoritesPage(): JSX.Element {
@@ -91,7 +94,8 @@ export function FavoritesPage(): JSX.Element {
                 onClick={() => {
                   const route = ROUTE[item.targetType]
                   if (!route) { message.info('该类型暂不支持跳转'); return }
-                  navigate(route.page, route.withId ? item.targetId : undefined)
+                  navigate(route.page, route.withId ? item.targetId : undefined,
+                    ['supply', 'demand'].includes(item.targetType) ? { type: item.targetType } : undefined)
                 }}
               >
                 <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>

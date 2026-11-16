@@ -49,11 +49,11 @@ function switchCategory(name: string) {
 }
 
 function openDetail(item: SupplyDemand) {
-  uni.navigateTo({ url: `/pages/sd/detail?id=${item.id}` })
+  uni.navigateTo({ url: `/pages/sd/detail?id=${item.id}&type=${item.sdType}` })
 }
 
 function openMatch(item: SupplyDemand) {
-  uni.navigateTo({ url: `/pages/sd/match?id=${item.id}` })
+  uni.navigateTo({ url: `/pages/sd/match?id=${item.id}&type=${item.sdType}` })
 }
 
 function publish() {

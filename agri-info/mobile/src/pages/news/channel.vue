@@ -15,8 +15,8 @@ const finished = ref(false)
 const types = ['全部', '图文', '短视频', '直播', '行情简报']
 
 onLoad((options) => {
-  channel.value = decodeURIComponent(String(options?.channel || ''))
-  keyword.value = decodeURIComponent(String(options?.keyword || ''))
+  channel.value = String(options?.channel || '')
+  keyword.value = String(options?.keyword || '')
   if (channel.value) uni.setNavigationBarTitle({ title: channel.value })
   load(true)
 })
@@ -52,6 +52,7 @@ async function load(reset = false) {
 onReachBottom(() => load())
 
 function switchType(name: string) {
+  if (loading.value) return
   contentType.value = name === '全部' ? '' : name
   load(true)
 }

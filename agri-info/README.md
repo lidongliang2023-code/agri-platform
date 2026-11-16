@@ -23,7 +23,7 @@
   新增匿名接口必须显式挂到这个前缀下，**不要把写接口挂进来**。
   注意白名单里的 GET 有副作用（`read_count` / `view_count` / `downloads` 自增），
   匿名可无限刷 —— 属于已知限制，未做频控。
-- **私域归属**：`X-Agri-User` 请求头（前端注入昵称，后端 `InfoSupport.owner()` 解码）。
+- 私域归属由服务端验证 Bearer 令牌后获得的 `uid:<账号ID>` 决定，不接受昵称作为归属依据。
   ⚠️ 这一层**目前不是身份**：头是客户端自报的，改一下就能冒充别人。
   改成从 Bearer 令牌解析是下一轮的事（涉及 55 处调用点），本轮只修了"参数被完全忽略"的那种泄漏。
 
@@ -98,9 +98,18 @@ node ops/gateway/scripts/publish.mjs --app info-mobile --version <版本号> --b
 
 ## 已知限制 / 未收口的部分
 
-- `X-Agri-User` 仍是客户端自报身份（见上），要改成从令牌解析；
+- 私域归属由服务端验证 Bearer 令牌后获得的 `uid:<账号ID>` 决定，不接受昵称作为归属依据。
 - 点赞（`likeArticle`）无去重、付费报告没有购买表（"收藏一下"就进「我的报告」）、
   `info_report` 无 owner 列；
 - 公开 GET 的浏览/下载计数无频控；
 - 运营端 `/ops/forecast-config`、`/ops/quality` 后端有接口但前端无入口；
 - 用户端首页与培训页的 tab 筛选只筛当前已加载的一页（`Home.tsx:24`、`TrainingPage.tsx:53`）。
+
+## 移动端收敛与资料边界
+
+- 移动端唯一源码为 `agri-info/mobile`（uni-app），分别构建 H5、微信小程序和 App；React frontend 仅保留桌面功能，原手机抽屉与底栏已删除。
+- 资讯地区、主营品种、规模及简介经 GET/PUT `/api/v1/info/profile` 写入 `info_user_profile`；统一昵称、头像及认证仍属于用户中心。
+- 订阅支持 PUT（必须携带布尔 enabled）及既有 PATCH；收藏取消使用收藏记录 ID，供需收藏区分 supply/demand。
+- 浏览、搜索和验证历史为按账号 ID 隔离的本机记录；清理缓存会删除这些本机记录，不删除服务端资料及业务数据。
+- 订单和报价归交易撮合所有。H5 跨应用入口可配置 `VITE_TRADE_MOBILE_URL`；微信小程序需配置 `VITE_TRADE_MINIPROGRAM_APPID`；App 需配置 `VITE_TRADE_APP_SCHEME` 并由目标应用注册 scheme。未配置时显示明确说明，不伪报交易成功。
+- 桌面手机重定向可配置 `VITE_INFO_MOBILE_URL`；生产同域默认 `/info-mobile/`，需由网关映射到 uni-app H5 产物。

@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { openTrade } from '../../trade'
 import { onLoad } from '@dcloudio/uni-app'
 import { infoApi, money, pushView, timeAgo, toast, type SupplyDemandDetail } from '../../api'
 
 const id = ref(0)
+const sdType = ref('supply')
 const detail = ref<SupplyDemandDetail | null>(null)
 const loading = ref(true)
 const statusBarHeight = ref(0)
@@ -21,16 +23,19 @@ const isSupply = computed(() => detail.value?.sdType === 'supply')
 
 onLoad((options) => {
   id.value = Number(options?.id || 0)
+  sdType.value = options?.type === 'demand' ? 'demand' : 'supply'
   load()
 })
 
 async function load() {
   loading.value = true
   try {
-    const data = await infoApi.supplyDemand(id.value)
+    const data = await infoApi.supplyDemand(id.value, sdType.value)
     detail.value = data
+    const favorites = await infoApi.favorites()
+    favorited.value = favorites.some((item) => item.targetType === data.sdType && item.targetId === data.id)
     pushView({
-      type: 'sd',
+      type: data.sdType,
       id: data.id,
       title: data.title,
       summary: `${data.origin} · ${data.quantity} · ${money(data.price)} ${data.priceUnit}`,
@@ -47,12 +52,13 @@ async function toggleFavorite() {
   if (!detail.value) return
   try {
     if (favorited.value) {
+      await infoApi.removeFavoriteTarget(detail.value.sdType, detail.value.id)
       toast('已取消收藏')
       favorited.value = false
       return
     }
     await infoApi.addFavorite({
-      targetType: 'sd',
+      targetType: detail.value.sdType,
       targetId: detail.value.id,
       title: detail.value.title,
       summary: `${detail.value.origin} · ${detail.value.quantity}`,
@@ -65,11 +71,12 @@ async function toggleFavorite() {
 }
 
 function openChat() {
-  uni.navigateTo({ url: `/pages/sd/chat?id=${id.value}` })
+  if (sdType.value === 'demand') { trade(); return }
+  uni.navigateTo({ url: `/pages/sd/chat?id=${id.value}&type=${sdType.value}` })
 }
 
 function openMatch() {
-  uni.navigateTo({ url: `/pages/sd/match?id=${id.value}` })
+  uni.navigateTo({ url: `/pages/sd/match?id=${id.value}&type=${sdType.value}` })
 }
 
 function openAttest() {
@@ -84,14 +91,7 @@ function share() {
 }
 
 function trade() {
-  uni.showModal({
-    title: '去交易下单',
-    content:
-      '平台担保交易在「交易撮合」子系统中完成。确认后将跳转交易模块，以本条供需信息作为订单标的。',
-    success: (result: { confirm: boolean }) => {
-      if (result.confirm) toast('交易模块接入中，可先在线沟通议价')
-    },
-  })
+  openTrade(id.value, sdType.value)
 }
 
 function goBack() {
@@ -242,7 +242,7 @@ function goBack() {
                 <text v-if="detail.badge" class="tag green">{{ detail.badge }}</text>
               </view>
               <text class="tiny">{{ detail.contactName }} · {{ detail.orgType }}</text>
-              <text class="tiny">近 30 天成交活跃 · 平台担保交易</text>
+              <text class="tiny">交易资质与履约信息请在交易模块核实</text>
             </view>
           </view>
         </view>
@@ -273,8 +273,8 @@ function goBack() {
           <text>{{ favorited ? '★' : '☆' }}</text>
           <text>收藏</text>
         </view>
-        <button class="btn grow" @click="openChat">在线沟通</button>
-        <button class="btn btn-primary grow" @click="trade">去交易下单</button>
+        <button class="btn grow" @click="openChat">{{ isSupply ? '在线沟通' : '前往报价' }}</button>
+        <button class="btn btn-primary grow" @click="trade">{{ isSupply ? '去交易下单' : '查看采购需求' }}</button>
       </view>
     </template>
   </view>

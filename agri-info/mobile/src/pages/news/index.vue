@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { onShow } from '@dcloudio/uni-app'
-import { infoApi, timeAgo, type Overview } from '../../api'
+import { onShow, onPullDownRefresh, onReachBottom } from '@dcloudio/uni-app'
+import { infoApi, timeAgo, type Overview, type Article } from '../../api'
 import { currentOwner, isLoggedIn } from '../../auth'
 
 const overview = ref<Overview | null>(null)
@@ -15,22 +15,20 @@ const channels = computed(() => {
   return ['推荐', ...list.filter((name) => name !== '推荐')]
 })
 
-const feed = computed(() => {
-  const items = overview.value?.feed || []
-  if (activeChannel.value === '推荐') return items
-  return items.filter((item) => item.channel === activeChannel.value)
-})
+const feed = ref<Article[]>([])
+const pageNo = ref(1)
+const total = ref(0)
+const moreLoading = ref(false)
+const errorText = ref('')
+let generation = 0
+const hasMore = computed(() => feed.value.length < total.value)
 
 const unread = computed(() => overview.value?.stats?.unreadAlerts || 0)
 const owner = computed(() => currentOwner() || overview.value?.greeting?.owner || '平台用户')
 
 const entries = [
   { icon: '🤝', label: '供需大厅', url: '/pages/sd/index' },
-  { icon: '📑', label: '数据报告', url: '/pages/report/mine' },
-  { icon: '🔗', label: '内容存证', url: '/pages/attest/index' },
-  { icon: '🎖', label: '专家认证', url: '/pages/expert/cert' },
-  { icon: '📈', label: '实时行情', tab: '/pages/market/index' },
-  { icon: '📊', label: '价格指数', url: '/pages/market/price-index' },
+  { icon: '🎓', label: '培训课堂', url: '/pages/course/index' },
   { icon: '🔔', label: '价格预警', url: '/pages/alert/setup' },
   { icon: '⭐', label: '我的订阅', url: '/pages/subscription/index' },
 ]
@@ -45,19 +43,45 @@ onShow(() => {
   } catch {
     statusBarHeight.value = 0
   }
+  infoApi.overview().then((data) => { overview.value = data }).catch(() => undefined)
   load()
 })
 
 async function load() {
   loading.value = true
+  errorText.value = ''
+  const stamp = ++generation
   try {
-    overview.value = await infoApi.overview()
+    const result = await infoApi.articles({ channel: activeChannel.value === '推荐' ? undefined : activeChannel.value, page: 1, size: 12 })
+    if (stamp !== generation) return
+    feed.value = result.items
+    total.value = result.total
+    pageNo.value = 1
   } catch (error) {
-    uni.showToast({ title: error instanceof Error ? error.message : '加载失败', icon: 'none' })
-  } finally {
-    loading.value = false
-  }
+    if (stamp === generation) errorText.value = error instanceof Error ? error.message : '资讯加载失败'
+  } finally { if (stamp === generation) loading.value = false; uni.stopPullDownRefresh() }
 }
+async function loadMore() {
+  if (loading.value || moreLoading.value || !hasMore.value) return
+  moreLoading.value = true
+  const stamp = generation
+  try {
+    const result = await infoApi.articles({ channel: activeChannel.value === '推荐' ? undefined : activeChannel.value, page: pageNo.value + 1, size: 12 })
+    if (stamp !== generation) return
+    feed.value = [...feed.value, ...result.items.filter((item) => !feed.value.some((old) => old.id === item.id))]
+    total.value = result.total
+    pageNo.value++
+  } catch (error) { uni.showToast({ title: error instanceof Error ? error.message : '加载失败，请重试', icon: 'none' }) }
+  finally { moreLoading.value = false }
+}
+function selectChannel(name: string) {
+  if (activeChannel.value === name) return
+  activeChannel.value = name
+  load()
+}
+onPullDownRefresh(load)
+onReachBottom(loadMore)
+
 
 function go(url: string, tab = false) {
   if (tab) {
@@ -73,8 +97,7 @@ function onEntry(entry: { url?: string; tab?: string }) {
 }
 
 function openChannel(name: string) {
-  if (name === '推荐') return
-  uni.navigateTo({ url: `/pages/news/channel?channel=${encodeURIComponent(name)}` })
+  uni.navigateTo({ url: `/pages/news/channel?channel=${encodeURIComponent(name === '推荐' ? '' : name)}` })
 }
 
 function openArticle(id: number) {
@@ -103,8 +126,7 @@ function openVariety(id: number) {
     <view class="home-hero" :style="{ paddingTop: `${statusBarHeight + 16}px` }">
       <view class="home-nav">
         <view class="city">
-          <text class="city-name">山东 · 潍坊</text>
-          <text class="city-caret">▾</text>
+          <text class="city-name">丰链云 · 农业资讯</text>
         </view>
         <view class="bell" @click="openMessages">
           🔔
@@ -114,7 +136,7 @@ function openVariety(id: number) {
 
       <view class="greeting">
         <text class="small">您好，{{ owner }}</text>
-        <text class="title">今天有什么可以帮您？</text>
+        <text class="title">读资讯，看农业</text>
       </view>
 
       <view class="search-box">
@@ -137,15 +159,6 @@ function openVariety(id: number) {
     </view>
 
     <view class="page-body">
-      <view v-if="overview?.aiBrief" class="ai-card brief" @click="openArticle(overview.aiBrief.articleId)">
-        <view class="ai-icon">✦</view>
-        <view class="ai-copy">
-          <text>{{ overview.aiBrief.title }}</text>
-          <text>{{ overview.aiBrief.lines[0] }}</text>
-          <text>置信度 {{ overview.aiBrief.confidence }}% · 点击查看完整解读</text>
-        </view>
-        <text class="arrow">›</text>
-      </view>
 
       <view class="card quick-card">
         <view v-for="entry in entries" :key="entry.label" class="quick-item" @click="onEntry(entry)">
@@ -168,7 +181,7 @@ function openVariety(id: number) {
           v-for="name in channels"
           :key="name"
           :class="['chip', { active: activeChannel === name }]"
-          @click="activeChannel = name"
+          @click="selectChannel(name)"
         >
           {{ name }}
         </view>
@@ -180,6 +193,7 @@ function openVariety(id: number) {
       </view>
 
       <view v-if="loading" class="loading">正在加载资讯…</view>
+      <view v-else-if="errorText" class="empty"><text>{{ errorText }}</text><button class="btn" @click="load">重新加载</button></view>
       <view v-else-if="!feed.length" class="empty">
         <text class="empty-icon">📰</text>
         <text>该频道暂无内容</text>
@@ -203,7 +217,7 @@ function openVariety(id: number) {
             </view>
           </view>
         </view>
-        <view class="feed-end">— 已为你加载全部推荐 —</view>
+        <button class="feed-end" :disabled="moreLoading || !hasMore" @click="loadMore">{{ moreLoading ? '正在加载…' : hasMore ? '加载更多资讯' : '已加载全部资讯' }}</button>
       </view>
 
       <view class="section-head">
@@ -559,4 +573,18 @@ function openVariety(id: number) {
   font-size: 28rpx;
   font-weight: 700;
 }
+/* 阅读优先：浅色栏目、紧凑头部、频道置顶。 */
+.home-hero { background: #fff; color: #173b29; border-radius: 0; padding-bottom: 22rpx; border-bottom: 1rpx solid #e1e9e3; }
+.home-hero .small, .home-hero .city-name { color: #53665a; }
+.home-hero .title { font-size: 42rpx; }
+.home-hero .search-box { background: #f1f5f2; color: #173b29; border: 1rpx solid #dce7df; }
+.home-hero .search-box input { color: #173b29; }
+.home-hero .ticker, .home-hero .ticker-line { color: #53665a; }
+.quick-card { grid-template-columns: repeat(4, minmax(0, 1fr)); box-shadow: none; }
+.channel-chips { position: sticky; top: 0; z-index: 8; background: #f4f7f5; padding-top: 12rpx; padding-bottom: 12rpx; }
+.feed-item { align-items: flex-start; padding: 26rpx 0; }
+.feed-body { min-width: 0; }
+.feed-summary { line-height: 1.65; }
+.feed-meta { flex-wrap: wrap; row-gap: 8rpx; }
+.feed-end { width: 100%; min-height: 88rpx; }
 </style>

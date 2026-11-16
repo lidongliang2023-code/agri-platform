@@ -90,10 +90,21 @@ export function hasInfoPermission(required: string): boolean {
   return permissionGranted(getInfoPermissions(), required)
 }
 
-/** 统一账号昵称：私域数据（我的发布、预警、订阅、收藏、AI 记录）按此隔离。 */
+/** 统一账号显示名称，仅用于展示；业务归属由后端验证令牌确定。 */
 export function currentOwner(): string {
   const user = getInfoUser()
   return user?.nickname || user?.username || ''
+}
+
+/** 本机数据按不可变账号 ID 隔离，不迁移旧的无归属缓存。 */
+export function accountStorageKey(key: string): string {
+  return `${key}:uid:${getInfoUser()?.id ?? 'guest'}`
+}
+
+export function clearInfoCache(): void {
+  const keys = uni.getStorageInfoSync().keys as string[]
+  keys.filter((key) => key.startsWith('info_') && ![TOKEN_KEY, USER_KEY, PERMISSION_KEY].includes(key))
+    .forEach((key) => uni.removeStorageSync(key))
 }
 
 export function isLoggedIn(): boolean {
@@ -135,6 +146,8 @@ export async function loginWithUnifiedAccount(
 }
 
 export function clearUnifiedInfoSession() {
+  // 清除跨页面临时草稿；浏览/搜索等持久缓存使用账号专属键。
+  for (const key of ['info_ai_question', 'info_alert_quote', 'info_market_keyword', 'info_sd_repost', 'info_compare_ids']) uni.removeStorageSync(key)
   uni.removeStorageSync(TOKEN_KEY)
   uni.removeStorageSync(USER_KEY)
   uni.removeStorageSync(PERMISSION_KEY)

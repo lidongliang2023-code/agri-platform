@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { accountStorageKey } from '../../auth'
 import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { infoApi, toast, type Expert } from '../../api'
@@ -11,7 +12,7 @@ const searched = ref(false)
 const loading = ref(false)
 const experts = ref<Expert[]>([])
 const history = ref<Array<{ name: string; certNo: string; level: string; valid: boolean; at: string }>>(
-  uni.getStorageSync(HISTORY_KEY) || [],
+  uni.getStorageSync(accountStorageKey(HISTORY_KEY)) || [],
 )
 
 onLoad((options) => {
@@ -52,7 +53,7 @@ async function query() {
       const valid = found.status === 'approved' || found.status === 'active'
       const item = { name: found.name, certNo: found.certNo, level: found.level, valid, at: new Date().toISOString() }
       history.value = [item, ...history.value.filter((row) => row.certNo !== item.certNo)].slice(0, 20)
-      uni.setStorageSync(HISTORY_KEY, history.value)
+      uni.setStorageSync(accountStorageKey(HISTORY_KEY), history.value)
     }
   } catch (error) {
     toast(error instanceof Error ? error.message : '查询失败')
@@ -83,7 +84,7 @@ function useHistory(item: { name: string; certNo: string }) {
 
 function clearHistory() {
   history.value = []
-  uni.removeStorageSync(HISTORY_KEY)
+  uni.removeStorageSync(accountStorageKey(HISTORY_KEY))
 }
 
 function toApply() {

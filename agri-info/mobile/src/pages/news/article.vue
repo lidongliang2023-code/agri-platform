@@ -68,7 +68,7 @@ async function toggleFavorite() {
   if (!detail.value) return
   try {
     if (favorited.value) {
-      await infoApi.removeFavorite(detail.value.id)
+      await infoApi.removeFavoriteTarget('article', detail.value.id)
       favorited.value = false
       toast('已取消收藏')
       return

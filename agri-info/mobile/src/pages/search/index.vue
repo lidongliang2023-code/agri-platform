@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { accountStorageKey } from '../../auth'
 import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { infoApi, money, signed, timeAgo, toast, type SearchResult } from '../../api'
@@ -6,7 +7,7 @@ import { infoApi, money, signed, timeAgo, toast, type SearchResult } from '../..
 const HISTORY_KEY = 'info_search_history'
 const keyword = ref('')
 const submitted = ref('')
-const history = ref<string[]>(uni.getStorageSync(HISTORY_KEY) || [])
+const history = ref<string[]>(uni.getStorageSync(accountStorageKey(HISTORY_KEY)) || [])
 const result = ref<SearchResult | null>(null)
 const loading = ref(false)
 const tab = ref<'all' | 'article' | 'quote' | 'knowledge'>('all')
@@ -60,7 +61,7 @@ async function doSearch(text?: string) {
     result.value = await infoApi.search(value)
     const list = [value, ...history.value.filter((item) => item !== value)].slice(0, 10)
     history.value = list
-    uni.setStorageSync(HISTORY_KEY, list)
+    uni.setStorageSync(accountStorageKey(HISTORY_KEY), list)
   } catch (error) {
     toast(error instanceof Error ? error.message : '搜索失败')
   } finally {
@@ -70,7 +71,7 @@ async function doSearch(text?: string) {
 
 function clearHistory() {
   history.value = []
-  uni.removeStorageSync(HISTORY_KEY)
+  uni.removeStorageSync(accountStorageKey(HISTORY_KEY))
 }
 
 function openArticle(id: number) {
@@ -86,8 +87,8 @@ function askAi(text: string) {
   uni.switchTab({ url: '/pages/ai/index' })
 }
 
-function openSd(id: number) {
-  uni.navigateTo({ url: `/pages/sd/detail?id=${id}` })
+function openSd(id: number, type: string) {
+  uni.navigateTo({ url: `/pages/sd/detail?id=${id}&type=${type}` })
 }
 
 function goBack() {
@@ -212,7 +213,7 @@ function goBack() {
             v-for="item in result.supplyDemands"
             :key="item.id"
             class="list-item"
-            @click="openSd(item.id)"
+            @click="openSd(item.id, item.sdType)"
           >
             <view class="item-icon">{{ item.sdType === 'supply' ? '📦' : '🛒' }}</view>
             <view class="item-body">

@@ -4,6 +4,7 @@ import { onLoad } from '@dcloudio/uni-app'
 import { infoApi, money, timeAgo, toast, type SdMessage, type SupplyDemandDetail } from '../../api'
 
 const id = ref(0)
+const sdType = ref('supply')
 const detail = ref<SupplyDemandDetail | null>(null)
 const messages = ref<SdMessage[]>([])
 const text = ref('')
@@ -28,13 +29,14 @@ const priceHint = computed(() => {
 
 onLoad((options) => {
   id.value = Number(options?.id || 0)
+  sdType.value = options?.type === 'demand' ? 'demand' : 'supply'
   load()
 })
 
 async function load() {
   loading.value = true
   try {
-    const data = await infoApi.supplyDemand(id.value)
+    const data = await infoApi.supplyDemand(id.value, sdType.value)
     detail.value = data
     messages.value = data.messages || []
     scrollToEnd()
@@ -49,9 +51,9 @@ async function send(content?: string) {
   const value = (content ?? text.value).trim()
   if (!value || sending.value) return
   sending.value = true
-  text.value = ''
   try {
     const result = await infoApi.sendSdMessage(id.value, { content: value }, detail.value?.sdType)
+    text.value = ''
     messages.value = result.messages
     scrollToEnd()
   } catch (error) {
@@ -79,7 +81,7 @@ function goBack() {
 }
 
 function openDetail() {
-  uni.navigateTo({ url: `/pages/sd/detail?id=${id.value}` })
+  uni.navigateTo({ url: `/pages/sd/detail?id=${id.value}&type=${sdType.value}` })
 }
 </script>
 

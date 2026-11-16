@@ -13,7 +13,9 @@ const labels: Record<string, string> = {
   course: '课程',
   report: '报告',
   knowledge: '农技',
-  sd: '供需',
+  sd: '供需（旧记录）',
+  supply: '供应',
+  demand: '需求',
 }
 
 const tabs = computed(() => {
@@ -59,10 +61,12 @@ function open(item: Favorite) {
     uni.navigateTo({ url: `/pages/report/detail?id=${item.targetId}` })
     return
   }
-  if (item.targetType === 'sd') {
-    uni.navigateTo({ url: `/pages/sd/detail?id=${item.targetId}` })
+  if (['supply', 'demand'].includes(item.targetType)) {
+    uni.navigateTo({ url: `/pages/sd/detail?id=${item.targetId}&type=${item.targetType}` })
     return
   }
+  if (item.targetType === 'course') { uni.navigateTo({ url: `/pages/course/detail?id=${item.targetId}` }); return }
+  if (item.targetType === 'sd') { uni.navigateTo({ url: '/pages/sd/index' }); return }
   uni.showToast({ title: item.summary || item.title, icon: 'none' })
 }
 

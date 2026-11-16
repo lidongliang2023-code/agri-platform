@@ -573,3 +573,12 @@ CREATE TABLE IF NOT EXISTS info_green_record (
  created_at VARCHAR(40) DEFAULT '',
  updated_at VARCHAR(40) DEFAULT ''
 );
+
+-- 资讯领域偏好，与统一账号资料分离，以认证中心不可变账号标识隔离。
+CREATE TABLE IF NOT EXISTS info_user_profile (
+    owner VARCHAR(120) PRIMARY KEY,
+    region VARCHAR(100) NOT NULL DEFAULT '',
+    crops VARCHAR(200) NOT NULL DEFAULT '',
+    scale VARCHAR(100) NOT NULL DEFAULT '',
+    intro VARCHAR(120) NOT NULL DEFAULT ''
+);

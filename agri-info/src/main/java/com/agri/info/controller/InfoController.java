@@ -442,6 +442,23 @@ public class InfoController {
         return ApiResponse.success(repository.toggleSubscription(id, body, identity.owner()));
     }
 
+    @PutMapping("/subscriptions/{id}")
+    public ApiResponse<Map<String, Object>> putSubscription(@PathVariable long id,
+            @RequestBody Map<String, Object> body) {
+        if (!(body.get("enabled") instanceof Boolean)) throw new IllegalArgumentException("请指定订阅启用状态");
+        return ApiResponse.success(repository.toggleSubscription(id, body, identity.owner()));
+    }
+
+    @GetMapping("/profile")
+    public ApiResponse<Map<String, Object>> profile() {
+        return ApiResponse.success(repository.profile(identity.owner()));
+    }
+
+    @PutMapping("/profile")
+    public ApiResponse<Map<String, Object>> saveProfile(@RequestBody Map<String, Object> body) {
+        return ApiResponse.success(repository.saveProfile(body, identity.owner()));
+    }
+
     @GetMapping("/favorites")
     public ApiResponse<List<Map<String, Object>>> favorites(
             @RequestHeader(value = "X-Agri-User", required = false) String user) {

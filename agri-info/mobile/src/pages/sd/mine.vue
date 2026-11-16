@@ -43,11 +43,11 @@ async function load() {
 }
 
 function openDetail(item: SupplyDemand) {
-  uni.navigateTo({ url: `/pages/sd/detail?id=${item.id}` })
+  uni.navigateTo({ url: `/pages/sd/detail?id=${item.id}&type=${item.sdType}` })
 }
 
 function openMatch(item: SupplyDemand) {
-  uni.navigateTo({ url: `/pages/sd/match?id=${item.id}` })
+  uni.navigateTo({ url: `/pages/sd/match?id=${item.id}&type=${item.sdType}` })
 }
 
 function publish() {
@@ -130,7 +130,7 @@ function statusLabel(value: string) {
       </view>
 
       <view v-else>
-        <view v-for="item in filtered" :key="item.id" class="post-card" @click="openDetail(item)">
+        <view v-for="item in filtered" :key="item.sdType + item.id" class="post-card" @click="openDetail(item)">
           <view class="post-top">
             <text class="post-icon">{{ item.sdType === 'supply' ? '📦' : '🛒' }}</text>
             <view class="post-copy">

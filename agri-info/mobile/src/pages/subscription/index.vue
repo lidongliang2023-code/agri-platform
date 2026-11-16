@@ -11,6 +11,7 @@ const addOpen = ref(false)
 const addType = ref<'品种' | '频道'>('品种')
 const addIndex = ref(0)
 const saving = ref(false)
+const toggling = ref<number[]>([])
 
 const quoteNames = computed(() => quotes.value.map((item) => `${item.icon} ${item.name}（${item.origin}）`))
 
@@ -45,13 +46,15 @@ async function load() {
 }
 
 async function toggle(sub: Subscription) {
+  if (toggling.value.includes(sub.id)) return
+  toggling.value.push(sub.id)
   try {
     const result = await infoApi.toggleSubscription(sub.id, !sub.enabled)
     subs.value = result.subscriptions
     toast(sub.enabled ? '已暂停推送' : '已恢复推送')
   } catch (error) {
     toast(error instanceof Error ? error.message : '操作失败')
-  }
+  } finally { toggling.value = toggling.value.filter((id) => id !== sub.id) }
 }
 
 async function create() {
@@ -95,7 +98,7 @@ function switchAddType(type: '品种' | '频道') {
   <view class="page">
     <view class="head">
       <text class="head-title">{{ subs.length }} 个订阅</text>
-      <text class="head-sub">{{ enabledCount }} 个生效中 · 每日 07:30 推送行情早报</text>
+      <text class="head-sub">{{ enabledCount }} 个生效中 · 通过站内消息接收更新</text>
     </view>
 
     <view class="page-pad">
@@ -116,7 +119,7 @@ function switchAddType(type: '品种' | '频道') {
               <text class="item-title">{{ sub.targetName }}</text>
               <text class="item-sub">{{ sub.frequency }} · {{ sub.channel }}</text>
             </view>
-            <switch :checked="sub.enabled" color="#12764a" style="transform: scale(0.72)" @change="toggle(sub)" />
+            <switch :checked="sub.enabled" :disabled="toggling.includes(sub.id)" color="#12764a" style="transform: scale(0.72)" @change="toggle(sub)" />
           </view>
         </view>
 
@@ -133,7 +136,7 @@ function switchAddType(type: '品种' | '频道') {
               <text class="item-title">{{ sub.targetName }}</text>
               <text class="item-sub">{{ sub.frequency }} · {{ sub.channel }}</text>
             </view>
-            <switch :checked="sub.enabled" color="#12764a" style="transform: scale(0.72)" @change="toggle(sub)" />
+            <switch :checked="sub.enabled" :disabled="toggling.includes(sub.id)" color="#12764a" style="transform: scale(0.72)" @change="toggle(sub)" />
           </view>
         </view>
 
@@ -144,7 +147,7 @@ function switchAddType(type: '品种' | '频道') {
               <text class="item-title">{{ sub.targetName }}</text>
               <text class="item-sub">{{ sub.targetType }} · {{ sub.frequency }}</text>
             </view>
-            <switch :checked="sub.enabled" color="#12764a" style="transform: scale(0.72)" @change="toggle(sub)" />
+            <switch :checked="sub.enabled" :disabled="toggling.includes(sub.id)" color="#12764a" style="transform: scale(0.72)" @change="toggle(sub)" />
           </view>
         </view>
 

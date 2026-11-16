@@ -713,4 +713,21 @@ button::after {
     transform: translateX(-50%);
   }
 }
+/* 全端统一触控与阅读尺度，固定操作栏预留系统安全区。 */
+page { line-height: 1.55; }
+.page { padding-bottom: calc(32rpx + env(safe-area-inset-bottom)); overflow-wrap: anywhere; }
+.page-pad, .page-body { padding-left: 24rpx; padding-right: 24rpx; }
+.card { border-radius: 20rpx; box-shadow: none; }
+.btn { min-height: 88rpx; font-size: 28rpx; }
+.btn[disabled] { opacity: .5; }
+.btn-primary { background: #12764a; box-shadow: none; }
+.input, .select { min-height: 88rpx; height: 88rpx; font-size: 28rpx; }
+.textarea { font-size: 28rpx; line-height: 1.7; }
+.tiny, .card-sub, .muted { color: #66796d; }
+.item-title { line-height: 1.55; overflow-wrap: anywhere; }
+.item-body, .head-copy, .hero-copy { min-width: 0; }
+.custom-nav .back, .custom-nav .right { display: flex; align-items: center; justify-content: center; min-width: 88rpx; min-height: 88rpx; }
+.custom-nav .title { min-width: 0; }
+.action-bar { padding-bottom: calc(16rpx + env(safe-area-inset-bottom)); }
+.chip, .seg-item { min-height: 80rpx; }
 </style>

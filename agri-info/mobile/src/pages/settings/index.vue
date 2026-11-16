@@ -1,21 +1,25 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { logoutUnifiedInfo } from '../../auth'
+import { logoutUnifiedInfo, clearInfoCache } from '../../auth'
 import { toast } from '../../api'
 
-const alertPush = ref(true)
-const subPush = ref(true)
-const quietStart = ref('22:00')
-const quietEnd = ref('07:00')
-const cacheSize = ref('12.6MB')
+const cacheSize = ref('')
+function refreshCacheSize() {
+  const keys = uni.getStorageInfoSync().keys.filter((key: string) => key.startsWith('info_') && !key.startsWith('info_unified_'))
+  const size = keys.reduce((sum: number, key: string) => sum + JSON.stringify(uni.getStorageSync(key) ?? '').length * 2, 0)
+  cacheSize.value = `${(size / 1024).toFixed(1)} KB`
+}
+refreshCacheSize()
+function open(url: string) { uni.navigateTo({ url }) }
 
 function clearCache() {
   uni.showModal({
     title: '清理缓存',
-    content: `当前缓存约 ${cacheSize.value}，清理后图片与列表数据需重新加载，不影响账号与业务数据。`,
+    content: `当前缓存约 ${cacheSize.value}，将删除本机浏览、搜索、验证记录及临时草稿，保留登录会话和服务端业务数据。`,
     success: (result: { confirm: boolean }) => {
       if (!result.confirm) return
-      cacheSize.value = '0MB'
+      clearInfoCache()
+      refreshCacheSize()
       toast('缓存已清理', 'success')
     },
   })
@@ -54,34 +58,14 @@ function logout() {
 <template>
   <view class="page">
     <view class="page-pad">
-      <view class="group-label">通知设置</view>
+      <view class="group-label">消息与订阅</view>
       <view class="card">
-        <view class="row-item">
-          <view class="row-copy">
-            <text class="row-title">价格预警推送</text>
-            <text class="tiny">突破阈值即时提醒</text>
-          </view>
-          <switch :checked="alertPush" color="#12764a" style="transform: scale(0.78)" @change="alertPush = !alertPush" />
+        <view class="row-item" @click="open('/pages/alert/setup')">
+          <view class="row-copy"><text class="row-title">价格预警规则</text><text class="tiny">设置阈值与启用状态</text></view><text class="item-arrow">›</text>
         </view>
-        <view class="row-item">
-          <view class="row-copy">
-            <text class="row-title">资讯订阅推送</text>
-            <text class="tiny">关注频道有新内容时</text>
-          </view>
-          <switch :checked="subPush" color="#12764a" style="transform: scale(0.78)" @change="subPush = !subPush" />
+        <view class="row-item" @click="open('/pages/subscription/index')">
+          <view class="row-copy"><text class="row-title">资讯订阅管理</text><text class="tiny">管理品种和频道订阅</text></view><text class="item-arrow">›</text>
         </view>
-        <picker mode="time" :value="quietStart" @change="quietStart = $event.detail.value">
-          <view class="row-item">
-            <text class="row-title">免打扰开始</text>
-            <text class="row-value">{{ quietStart }} ›</text>
-          </view>
-        </picker>
-        <picker mode="time" :value="quietEnd" @change="quietEnd = $event.detail.value">
-          <view class="row-item">
-            <text class="row-title">免打扰结束</text>
-            <text class="row-value">{{ quietEnd }} ›</text>
-          </view>
-        </picker>
       </view>
 
       <view class="group-label">通用</view>

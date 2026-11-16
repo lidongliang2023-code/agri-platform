@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import { getViews, infoApi, toast } from '../../api'
-import { currentOwner, getInfoUser, hasInfoPermission, isLoggedIn } from '../../auth'
+import { getViews, infoApi, toast, type InfoProfile } from '../../api'
+import { currentOwner, getInfoUser, isLoggedIn } from '../../auth'
 
+const profile = ref<InfoProfile>({ region: '', crops: '', scale: '', intro: '' })
 const favorites = ref(0)
 const views = ref(0)
 const subs = ref(0)
@@ -16,20 +17,17 @@ const statusBarHeight = ref(0)
 
 const user = computed(() => getInfoUser())
 const owner = computed(() => currentOwner() || '平台用户')
-const isExpert = computed(() => expertCount.value > 0 || hasInfoPermission('info:admin'))
+const isExpert = ref(false)
 
 const menus = [
   { icon: '🔔', title: '价格预警', desc: '突破阈值即时提醒', url: '/pages/alert/setup', badge: () => alerts.value },
   { icon: '⭐', title: '订阅管理', desc: '品种、频道与推送时间', url: '/pages/subscription/index', badge: () => subs.value },
   { icon: '🤖', title: '我的 AI 提问', desc: '历史对话与专家回答', url: '/pages/ai/history', badge: () => 0 },
-  { icon: '🎓', title: '培训课堂', desc: '农技课程与直播回放', url: '/pages/course/index', badge: () => 0 },
-  { icon: '💬', title: '我的收藏', desc: '资讯、品种与报告', url: '/pages/favorite/index', badge: () => favorites.value },
-  { icon: '📦', title: '我的发布', desc: '供需信息与询价', url: '/pages/sd/mine', badge: () => myPosts.value },
+      { icon: '📦', title: '我的发布', desc: '供需信息与询价', url: '/pages/sd/mine', badge: () => myPosts.value },
   { icon: '📑', title: '我的报告', desc: '已购报告与下载记录', url: '/pages/report/mine', badge: () => reports.value },
   { icon: '🔗', title: '我的存证', desc: '内容上链与校验结果', url: '/pages/attest/index', badge: () => attestations.value },
   { icon: '🎖', title: '我的认证', desc: '专家认证与有效期', url: '/pages/expert/cert', badge: () => expertCount.value },
-  { icon: '🕘', title: '浏览历史', desc: '最近看过的内容', url: '/pages/history/index', badge: () => 0 },
-  { icon: '❓', title: '帮助与反馈', desc: '常见问题与客服', url: '/pages/help/index', badge: () => 0 },
+    { icon: '❓', title: '帮助与反馈', desc: '常见问题与客服', url: '/pages/help/index', badge: () => 0 },
   { icon: '⚙️', title: '设置', desc: '通知、缓存与账号', url: '/pages/settings/index', badge: () => 0 },
 ]
 
@@ -50,7 +48,7 @@ onShow(() => {
 
 async function load() {
   try {
-    const [favList, subList, alertList, mine, expertList, reportList, attestList] = await Promise.all([
+    const [favList, subList, alertList, mine, expertList, reportList, attestList, savedProfile] = await Promise.all([
       infoApi.favorites(),
       infoApi.subscriptions(),
       infoApi.alertRules(),
@@ -58,7 +56,10 @@ async function load() {
       infoApi.myExpert(),
       infoApi.myReports(),
       infoApi.attestations(),
+      infoApi.profile(),
     ])
+    profile.value = savedProfile
+    isExpert.value = expertList.some((item) => item.status === 'approved' || item.status === 'active')
     favorites.value = favList.length
     subs.value = subList.filter((item) => item.enabled).length
     alerts.value = alertList.filter((item) => item.enabled).length
@@ -72,7 +73,9 @@ async function load() {
 }
 
 function go(url: string) {
-  uni.navigateTo({ url })
+  const tabs = ['/pages/news/index', '/pages/market/index', '/pages/ai/index', '/pages/profile/index']
+  if (tabs.includes(url)) uni.switchTab({ url })
+  else uni.navigateTo({ url })
 }
 
 function toSettings() {
@@ -98,11 +101,9 @@ function toSearch() {
             <text class="name">{{ owner }}</text>
             <text v-if="isExpert" class="cert">认证专家 ✓</text>
           </view>
-          <text class="hero-sub">{{ user?.username || '统一账号' }} · 山东潍坊</text>
+          <text class="hero-sub">{{ user?.username || '统一账号' }} · {{ profile.region || '地区未填写' }}</text>
           <view class="cat-row">
-            <text class="cat">大蒜</text>
-            <text class="cat">番茄</text>
-            <text class="cat">苹果</text>
+            <text v-for="crop in profile.crops.split(/[\/、,，]/).filter(Boolean).slice(0, 3)" :key="crop" class="cat">{{ crop }}</text>
           </view>
         </view>
         <text class="settings" @click="toSettings">设置 ›</text>
@@ -149,8 +150,8 @@ function toSearch() {
       <view class="card creator-card" @click="go('/pages/sd/publish?type=supply')">
         <view class="creator-icon">✍️</view>
         <view class="creator-copy">
-          <text class="strong">创作中心</text>
-          <text class="tiny">发布田间动态与供需信息，成为认证创作者</text>
+          <text class="strong">发布供需</text>
+          <text class="tiny">供应与采购需求统一进入交易撮合模块</text>
         </view>
         <text class="item-arrow">›</text>
       </view>

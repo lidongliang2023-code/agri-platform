@@ -28,8 +28,8 @@ function open(record: ViewRecord) {
     uni.navigateTo({ url: `/pages/market/variety?id=${record.id}` })
     return
   }
-  if (record.type === 'sd') {
-    uni.navigateTo({ url: `/pages/sd/detail?id=${record.id}` })
+  if (['supply', 'demand'].includes(record.type)) {
+    uni.navigateTo({ url: `/pages/sd/detail?id=${record.id}&type=${record.type}` })
     return
   }
   if (record.type === 'report') {

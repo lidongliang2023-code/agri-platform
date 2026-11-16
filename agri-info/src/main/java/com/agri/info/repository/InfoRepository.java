@@ -36,9 +36,9 @@ public class InfoRepository extends InfoSupport {
         Map<String, Object> stats = new LinkedHashMap<>();
         stats.put("monitoredQuotes", number("SELECT COUNT(*) FROM info_quote WHERE status='online'"));
         stats.put("todayArticles", number("SELECT COUNT(*) FROM info_article WHERE status='published'"));
-        stats.put("unreadAlerts", number("SELECT COUNT(*) FROM info_alert_message WHERE is_read=FALSE"));
+        stats.put("unreadAlerts", number("SELECT COUNT(*) FROM info_alert_message WHERE is_read=FALSE AND owner=?", user));
         // onlineSupplyDemand 由 Controller 层用交易模块的实时数补齐，这里不查本地历史表
-        stats.put("aiCalls", number("SELECT COUNT(*) FROM info_qa_record"));
+        stats.put("aiCalls", number("SELECT COUNT(*) FROM info_qa_record WHERE owner=?", user));
         result.put("stats", stats);
 
         Map<String, Object> greeting = new LinkedHashMap<>();
@@ -898,6 +898,33 @@ public class InfoRepository extends InfoSupport {
         return result;
     }
 
+    // 资讯领域资料；账号昵称、头像及认证由统一用户中心维护。
+    public Map<String, Object> profile(String user) {
+        List<Map<String, Object>> rows = jdbc.query(
+                "SELECT region,crops,scale,intro FROM info_user_profile WHERE owner=?",
+                (rs, rowNum) -> {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    for (String key : List.of("region", "crops", "scale", "intro")) row.put(key, rs.getString(key));
+                    return row;
+                }, user);
+        return rows.isEmpty() ? Map.of("region", "", "crops", "", "scale", "", "intro", "") : rows.get(0);
+    }
+
+    @Transactional
+    public Map<String, Object> saveProfile(Map<String, Object> body, String user) {
+        String[] keys = {"region", "crops", "scale", "intro"};
+        int[] limits = {100, 200, 100, 120};
+        String[] values = new String[4];
+        for (int i = 0; i < keys.length; i++) {
+            values[i] = text(body, keys[i], "").trim();
+            if (values[i].length() > limits[i]) throw new IllegalArgumentException(keys[i] + " 超出允许长度");
+        }
+        jdbc.update("INSERT INTO info_user_profile(owner,region,crops,scale,intro) VALUES(?,?,?,?,?) "
+                + "ON DUPLICATE KEY UPDATE region=VALUES(region),crops=VALUES(crops),scale=VALUES(scale),intro=VALUES(intro)",
+                user, values[0], values[1], values[2], values[3]);
+        return profile(user);
+    }
+
     // ==================== 预警 / 订阅 / 收藏 ====================
 
     public List<Map<String, Object>> alertRules(String user) {
@@ -980,8 +1007,8 @@ public class InfoRepository extends InfoSupport {
         if (rows.isEmpty()) {
             throw new IllegalArgumentException("订阅不存在");
         }
-        jdbc.update("UPDATE info_subscription SET enabled=? WHERE id=?",
-                boolValue(body.get("enabled"), !Boolean.TRUE.equals(rows.get(0).get("enabled"))), id);
+        jdbc.update("UPDATE info_subscription SET enabled=? WHERE id=? AND owner=?",
+                boolValue(body.get("enabled"), !Boolean.TRUE.equals(rows.get(0).get("enabled"))), id, user);
         return Map.of("message", "订阅状态已更新", "subscriptions", subscriptions(user));
     }
 

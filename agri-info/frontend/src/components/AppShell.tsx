@@ -117,19 +117,17 @@ const TITLES: Record<PageKey, string> = {
   'expert-cert': '专家认证',
 }
 
-const PRIMARY_MOBILE: PageKey[] = ['home', 'market', 'sd', 'alerts']
 
 export function AppShell({ children }: { children: ReactNode }): JSX.Element {
   const { user } = useUnifiedUser()
   const { page, navigate, openSearch } = useApp()
   const [collapsed, setCollapsed] = useState(false)
-  const [mobileOpen, setMobileOpen] = useState(false)
   const [keyword, setKeyword] = useState('')
   const [unread, setUnread] = useState(0)
 
   const displayName = user.nickname || user.username
 
-  // 统一账号昵称是私域数据（我的发布 / 预警 / 收藏）的归属键，会话建立后立即注入请求头。
+  // 显示名称仅用于兼容展示，业务归属由后端验证令牌得到的账号 ID 决定。
   useEffect(() => {
     setCurrentUser(displayName)
   }, [displayName])
@@ -140,15 +138,12 @@ export function AppShell({ children }: { children: ReactNode }): JSX.Element {
       .catch(() => undefined)
   }, [page])
 
-  useEffect(() => {
-    setMobileOpen(false)
-  }, [page])
 
   const activeLabel = useMemo(() => TITLES[page], [page])
 
   return (
     <div className={`app-shell${collapsed ? ' sidebar-collapsed' : ''}`}>
-      <aside className={`app-sidebar${mobileOpen ? ' mobile-open' : ''}`}>
+      <aside className="app-sidebar">
         <button className="app-brand" type="button" onClick={() => navigate('home')}>
           <img className="app-brand-mark" src={`${import.meta.env.BASE_URL}fengchain.svg`} alt="丰链云" />
           {!collapsed && (
@@ -191,14 +186,10 @@ export function AppShell({ children }: { children: ReactNode }): JSX.Element {
         </div>
       </aside>
 
-      {mobileOpen && <button type="button" className="mobile-overlay" aria-label="关闭菜单" onClick={() => setMobileOpen(false)} />}
 
       <div className="app-main">
         <header className="app-header">
           <div className="header-left">
-            <button type="button" className="mobile-menu-button" onClick={() => setMobileOpen(true)}>
-              <MenuUnfoldOutlined />
-            </button>
             <div className="header-crumb">
               <span>信息资讯</span><b>/</b><strong>{activeLabel}</strong>
             </div>
@@ -250,23 +241,6 @@ export function AppShell({ children }: { children: ReactNode }): JSX.Element {
         <footer className="app-footer">© 2026 农业产业互联网平台 · 丰链云信息资讯</footer>
       </div>
 
-      <nav className="mobile-tabbar">
-        {PRIMARY_MOBILE.map((key) => {
-          const item = MENU.flatMap((group) => group.items).find((entry) => entry.key === key)
-          if (!item) return null
-          return (
-            <button type="button" key={key} className={page === key ? 'on' : ''} onClick={() => navigate(key)}>
-              {item.icon}
-              <span>{item.label.replace('资讯', '').replace('信息', '')}</span>
-              {key === 'alerts' && unread > 0 && <i>{unread}</i>}
-            </button>
-          )
-        })}
-        <button type="button" onClick={() => setMobileOpen(true)}>
-          <FileTextOutlined />
-          <span>更多</span>
-        </button>
-      </nav>
     </div>
   )
 }

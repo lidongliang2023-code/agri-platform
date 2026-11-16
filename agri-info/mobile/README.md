@@ -44,7 +44,7 @@ npm run build:app
 - PC 端用「授权码 + PKCE 整页跳转」，移动端无法整页跳转，因此改走平台同源的
   `/api/v1/sso/login-standalone` 直连换取令牌，随后用 `/api/v1/platform/permissions/mine` 校验角色。
 - 私域数据（我的发布 / 预警 / 订阅 / 收藏 / AI 提问记录）按统一账号昵称隔离，
-  请求头 `X-Agri-User` 由前端透传（`encodeURIComponent`），后端 `URLDecoder` 还原 —— 与 PC 端同一约定。
+- 私域归属由服务端验证 Bearer 令牌后获得的 `uid:<账号ID>` 决定，不接受昵称作为归属依据。
 
 ## 目录结构
 
@@ -77,3 +77,12 @@ java -jar agri-info/target/agri-info-1.0.0.jar --server.port=8096
 ```
 
 默认 MySQL（库 `agri_info`）；本地无库时用 `--spring.profiles.active=h2` 走内存库演示数据。
+
+## 移动端收敛与资料边界
+
+- 移动端唯一源码为 `agri-info/mobile`（uni-app），分别构建 H5、微信小程序和 App；React frontend 仅保留桌面功能，原手机抽屉与底栏已删除。
+- 资讯地区、主营品种、规模及简介经 GET/PUT `/api/v1/info/profile` 写入 `info_user_profile`；统一昵称、头像及认证仍属于用户中心。
+- 订阅支持 PUT（必须携带布尔 enabled）及既有 PATCH；收藏取消使用收藏记录 ID，供需收藏区分 supply/demand。
+- 浏览、搜索和验证历史为按账号 ID 隔离的本机记录；清理缓存会删除这些本机记录，不删除服务端资料及业务数据。
+- 订单和报价归交易撮合所有。H5 跨应用入口可配置 `VITE_TRADE_MOBILE_URL`；微信小程序需配置 `VITE_TRADE_MINIPROGRAM_APPID`；App 需配置 `VITE_TRADE_APP_SCHEME` 并由目标应用注册 scheme。未配置时显示明确说明，不伪报交易成功。
+- 桌面手机重定向可配置 `VITE_INFO_MOBILE_URL`；生产同域默认 `/info-mobile/`，需由网关映射到 uni-app H5 产物。

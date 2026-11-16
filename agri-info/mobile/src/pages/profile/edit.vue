@@ -2,87 +2,70 @@
 import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { currentOwner, getInfoUser } from '../../auth'
-
-interface ProfileForm {
-  nickname: string
-  identity: string
-  region: string
-  crops: string
-  scale: string
-  intro: string
+import { infoApi, toast, type InfoProfile } from '../../api'
+const form = ref<InfoProfile>({ region: '', crops: '', scale: '', intro: '' })
+const loading = ref(true)
+const saving = ref(false)
+const errorText = ref('')
+onLoad(load)
+async function load() {
+  loading.value = true
+  errorText.value = ''
+  try { form.value = await infoApi.profile() }
+  catch (error) { errorText.value = error instanceof Error ? error.message : '资料加载失败' }
+  finally { loading.value = false }
 }
-
-const STORAGE_KEY = 'info_profile'
-
-const form = ref<ProfileForm>({
-  nickname: currentOwner() || '平台用户',
-  identity: '种植户（已认证）',
-  region: '山东省 潍坊市',
-  crops: '大蒜 / 番茄 / 苹果',
-  scale: '合作社 · 320 亩',
-  intro: '从事大蒜与设施蔬菜种植 12 年，关注行情走势与病虫害防治，欢迎同行交流。',
-})
-
-onLoad(() => {
-  const saved = uni.getStorageSync(STORAGE_KEY)
-  if (saved) form.value = { ...form.value, ...saved }
-})
-
-function save() {
-  if (!form.value.nickname.trim()) {
-    uni.showToast({ title: '请填写昵称', icon: 'none' })
-    return
-  }
-  uni.setStorageSync(STORAGE_KEY, form.value)
-  uni.showToast({ title: '已保存', icon: 'success' })
-  setTimeout(() => uni.navigateBack({ delta: 1 }), 400)
-}
-
-function changeAvatar() {
-  uni.chooseImage({
-    count: 1,
-    success: () => uni.showToast({ title: '头像已更新（本机预览）', icon: 'none' }),
-    fail: () => undefined,
-  })
+async function save() {
+  if (saving.value || loading.value || errorText.value) return
+  saving.value = true
+  try {
+    form.value = await infoApi.saveProfile(form.value)
+    toast('资料已保存', 'success')
+    setTimeout(() => uni.navigateBack({ delta: 1 }), 400)
+  } catch (error) { toast(error instanceof Error ? error.message : '保存失败') }
+  finally { saving.value = false }
 }
 </script>
 
 <template>
   <view class="page">
     <view class="avatar-block">
-      <view class="avatar" @click="changeAvatar">👨‍🌾</view>
-      <text class="change">更换头像</text>
+      <view class="avatar">👨‍🌾</view>
+      <text class="change">{{ currentOwner() }}</text>
       <text class="tiny">{{ getInfoUser()?.username || '' }}</text>
     </view>
 
     <view class="page-pad">
+      <view v-if="loading" class="loading">正在加载资料…</view>
+      <view v-if="errorText" class="empty"><text>{{ errorText }}</text><button class="btn" @click="load">重新加载</button></view>
       <view class="card">
         <view class="form-item">
           <text class="form-label">昵称</text>
-          <input v-model="form.nickname" class="input" placeholder="请输入昵称" />
+          <text>{{ currentOwner() }}</text>
+          <text class="tiny">昵称由统一用户中心维护</text>
         </view>
 
         <view class="form-item">
           <text class="form-label">身份</text>
           <view class="field">
-            <text class="field-label">{{ form.identity }}</text>
-            <text class="tiny">由平台认证结果决定</text>
+            <text class="field-label">统一账号</text>
+            <text class="tiny">认证结果请查看「我的认证」</text>
           </view>
         </view>
 
         <view class="form-item">
           <text class="form-label">所在地区</text>
-          <input v-model="form.region" class="input" placeholder="省 / 市 / 区县" />
+          <input v-model="form.region" :maxlength="100" class="input" placeholder="省 / 市 / 区县" />
         </view>
 
         <view class="form-item">
           <text class="form-label">主营品种</text>
-          <input v-model="form.crops" class="input" placeholder="用「/」分隔多个品种" />
+          <input v-model="form.crops" :maxlength="200" class="input" placeholder="用「/」分隔多个品种" />
         </view>
 
         <view class="form-item">
           <text class="form-label">经营规模</text>
-          <input v-model="form.scale" class="input" placeholder="例如：合作社 · 320 亩" />
+          <input v-model="form.scale" :maxlength="100" class="input" placeholder="例如：合作社 · 320 亩" />
         </view>
 
         <view class="form-item">
@@ -95,12 +78,11 @@ function changeAvatar() {
       <view class="notice">
         <text>·</text>
         <text>
-          昵称同时作为信息资讯模块私域数据的归属标识（我的发布、预警、订阅、收藏、AI 记录），
-          正式环境由平台用户中心统一维护，本页在移动端做本机留存与预览。
+          本页保存资讯使用资料，按统一账号隔离存储。昵称、头像及身份认证由统一用户中心维护。
         </text>
       </view>
 
-      <button class="btn btn-primary btn-block" style="margin-top: 18rpx" @click="save">保存</button>
+      <button class="btn btn-primary btn-block" style="margin-top: 18rpx" :disabled="loading || saving || !!errorText" :loading="saving" @click="save">保存资料</button>
     </view>
   </view>
 </template>
