@@ -17,9 +17,11 @@ export interface LoginPayload {
   username: string
   password: string
   marketId?: number
+  remember?: boolean
 }
 
 export interface SmsLoginPayload {
+  remember?: boolean
   phone: string
   code: string
   marketId?: number
@@ -54,6 +56,34 @@ export interface OnboardingStatus {
   certificationStatus?: string
   certificationNo?: string
   verification?: OnboardingVerification
+}
+
+/**
+ * 二次验证挑战：账号开启了二次验证时，认证中心第一步只返回一次性挑战凭证（5 分钟有效、用一次即作废），
+ * 不返回访问令牌；提交动态码后才真正登录。
+ */
+export interface MfaChallenge {
+  mfaRequired: true
+  challengeToken: string
+}
+
+/** 登录完成后的结果：用户信息 + 开通阶段 */
+export interface LoginSuccess {
+  mfaRequired?: false
+  user: MobileUser
+  stage: string
+  redirect?: string
+}
+
+export function isMfaChallenge(value: unknown): value is MfaChallenge {
+  return Boolean(value && typeof value === 'object' && (value as MfaChallenge).mfaRequired === true)
+}
+
+/** 认证中心返回挑战时转成 MfaChallenge；挑战凭证缺失按异常处理，不能当成登录成功。 */
+function mfaChallengeOf(data: any): MfaChallenge | null {
+  if (!data?.mfaRequired) return null
+  if (!data.challengeToken) throw new Error('二次验证凭证缺失，请重新登录')
+  return { mfaRequired: true, challengeToken: String(data.challengeToken) }
 }
 
 /** 登录后本地保存的用户信息 */
@@ -95,24 +125,20 @@ function persistLogin(data: any, fallbackUsername: string): MobileUser {
   return user
 }
 
-export async function login(payload: LoginPayload): Promise<MobileUser> {
+export async function login(payload: LoginPayload): Promise<MobileUser | MfaChallenge> {
   const data = await request<any>({
-    url: '/api/v1/auth/login',
+    url: '/api/v1/sso/login-standalone',
     method: 'POST',
     auth: false,
-    data: { username: payload.username, password: payload.password, marketId: payload.marketId ?? 1 },
+    data: { username: payload.username, password: payload.password, marketId: payload.marketId ?? 1, remember: payload.remember ?? false },
   })
   // 姓名口径：统一认证中心返回的是 user.nickname（如「张农户」），
   // 不是 realName；拿不到才退回账号名，避免界面上直接把登录名当姓名显示。
-  return persistLogin(data, payload.username)
+  return mfaChallengeOf(data) ?? persistLogin(data, payload.username)
 }
 
 /** 手机验证码登录；返回开通阶段，登录账号本身可先进入业务端。 */
-export async function loginBySms(payload: SmsLoginPayload): Promise<{
-  user: MobileUser
-  stage: string
-  redirect?: string
-}> {
+export async function loginBySms(payload: SmsLoginPayload): Promise<LoginSuccess | MfaChallenge> {
   const data = await request<any>({
     url: '/api/v1/sso/login-standalone-by-sms',
     method: 'POST',
@@ -121,11 +147,32 @@ export async function loginBySms(payload: SmsLoginPayload): Promise<{
       phone: payload.phone,
       code: payload.code,
       marketId: payload.marketId ?? 1,
-      remember: true,
+      remember: payload.remember ?? false,
     },
   })
+  const challenge = mfaChallengeOf(data)
+  if (challenge) return challenge
   return {
     user: persistLogin(data, payload.phone),
+    stage: data?.stage ?? 'done',
+    redirect: data?.redirect,
+  }
+}
+
+/**
+ * 登录第二步：提交验证器上的 6 位动态码。
+ *
+ * <p>挑战凭证在认证中心校验后立即作废，动态码错了也要重新走第一步，防止暴力试码。</p>
+ */
+export async function completeMfaLogin(challengeToken: string, code: string, remember = false): Promise<LoginSuccess> {
+  const data = await request<any>({
+    url: '/api/v1/sso/login-standalone-mfa',
+    method: 'POST',
+    auth: false,
+    data: { challengeToken, code: code.trim(), marketId: 1, remember },
+  })
+  return {
+    user: persistLogin(data, data?.user?.username ?? ''),
     stage: data?.stage ?? 'done',
     redirect: data?.redirect,
   }
@@ -161,7 +208,8 @@ export async function registerAccount(payload: {
       remember: true,
     },
   })
-  await login({ username: payload.phone, password: payload.password, marketId: 1 })
+  const signedIn = await login({ username: payload.phone, password: payload.password, marketId: 1 })
+  if (isMfaChallenge(signedIn)) throw new Error('账号已开启二次验证，请回到登录页完成验证后继续')
   return status
 }
 

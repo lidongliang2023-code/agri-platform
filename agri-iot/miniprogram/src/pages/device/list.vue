@@ -2,11 +2,47 @@
 import { computed,ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { api,statusMeta,type Device } from '../../api/iot'
-const items=ref<Device[]>([]),tab=ref('all'),keyword=ref(''),loading=ref(false)
+import SegTabs from '../../components/SegTabs.vue'
+const items=ref<Device[]>([]),tab=ref('all'),keyword=ref(''),loading=ref(false),plotId=ref<number|undefined>(),groupId=ref<number|undefined>(),groups=ref<any[]>([]),error=ref('')
 const visible=computed(()=>items.value.filter(i=>(!keyword.value||i.deviceName.includes(keyword.value)||i.deviceCode.includes(keyword.value))&&(tab.value==='all'||i.onlineStatus===tab.value)))
-onShow(()=>{const saved=uni.getStorageSync('iot_status')||'all';tab.value=saved;uni.removeStorageSync('iot_status');load()})
-async function load(){loading.value=true;try{items.value=await api.devices()}catch(e){uni.showToast({title:e instanceof Error?e.message:'加载失败',icon:'none'})}finally{loading.value=false}}
+const count=(status:string)=>items.value.filter(i=>i.onlineStatus===status).length
+const tabs=computed<Array<[string,string]>>(()=>[['all',`全部 ${items.value.length}`],['online',`在线 ${count('online')}`],['offline',`离线 ${count('offline')}`],['alert',`告警 ${count('alert')}`]])
+const groupOptions=computed(()=>[{id:undefined,name:'全部分组'},...groups.value])
+onShow(()=>{const saved=uni.getStorageSync('iot_status')||'all';tab.value=saved;uni.removeStorageSync('iot_status');const selected=uni.getStorageSync('iot_plot');if(selected){plotId.value=Number(selected);uni.removeStorageSync('iot_plot')}load()})
+async function load(){loading.value=true;try{items.value=await api.devices({plotId:plotId.value,groupId:groupId.value});groups.value=await api.groups();error.value=''}catch(e){items.value=[];error.value=e instanceof Error?e.message:'加载失败'}finally{loading.value=false}}
 function open(id:number){uni.navigateTo({url:`/pages/device/detail?id=${id}`})}
+function register(){uni.navigateTo({url:'/pages/device/edit'})}
+function clearPlot(){plotId.value=undefined;load()}
+function selectGroup(event:any){const index=Number(event?.detail?.value||0);groupId.value=index?groups.value[index-1]?.id:undefined;load()}
+function deviceMark(typeName=''){return typeName.includes('温湿度')?'温':typeName.includes('土壤')?'土':typeName.includes('阀')?'阀':typeName.includes('摄像')?'像':typeName.includes('气象')?'气':'设'}
 </script>
-<template><view class="page pad"><view class="between"><view><text class="page-title">设备管理</text><text class="tiny">全部设备实时状态</text></view><text class="tag green">{{items.filter(i=>i.onlineStatus==='online').length}} 在线</text></view><view class="search"><text>⌕</text><input v-model="keyword" placeholder="设备名称 / 编码"/></view><view class="tabs"><button v-for="t in [['all','全部'],['online','在线'],['offline','离线'],['alert','告警']]" :key="t[0]" :class="{on:tab===t[0]}" @click="tab=t[0]">{{t[1]}}</button></view><view v-if="loading" class="loading">正在加载设备…</view><view v-else class="device-list"><view class="device" v-for="item in visible" :key="item.id" @click="open(item.id)"><span class="device-icon">{{item.typeName.includes('温湿度')?'🌡️':item.typeName.includes('土壤')?'🌱':item.typeName.includes('阀')?'💧':item.typeName.includes('摄像')?'📹':'📱'}}</span><view class="device-copy"><view class="between"><text class="strong">{{item.deviceName}}</text><text class="tag" :class="statusMeta(item.onlineStatus).tone">{{statusMeta(item.onlineStatus).label}}</text></view><text class="tiny">{{item.deviceCode}} · {{item.typeName}}</text><text class="muted">{{item.protocol}} · 信号 {{item.rssi||'—'}} dBm · 电量 {{item.battery}}%</text></view><text class="chev">›</text></view></view></view></template>
-<style lang="scss" scoped>.page-title{display:block;font-size:38rpx;font-weight:750}.search{display:flex;height:74rpx;align-items:center;gap:10rpx;margin:18rpx 0;padding:0 18rpx;border:1rpx solid #e1e9e3;border-radius:16rpx;background:#fff;color:#94a198}.search input{flex:1;font-size:24rpx}.tabs{display:flex;gap:8rpx;margin-bottom:16rpx}.tabs button{padding:10rpx 18rpx;border-radius:22rpx;background:#e9f0ec;color:#718277;font-size:24rpx}.tabs button.on{background:#12764a;color:#fff}.device-list{display:flex;flex-direction:column;gap:12rpx}.device{display:grid;grid-template-columns:62rpx 1fr 18rpx;align-items:center;gap:12rpx;padding:18rpx;border:1rpx solid #e1e9e3;border-radius:19rpx;background:#fff}.device-icon{display:flex;width:60rpx;height:60rpx;align-items:center;justify-content:center;border-radius:15rpx;background:#f2fbf5;font-size:28rpx}.device-copy{display:flex;min-width:0;flex-direction:column;gap:4rpx}.device-copy .between{display:flex}.device-copy strong{overflow:hidden;font-size:24rpx;text-overflow:ellipsis;white-space:nowrap}.chev{color:#94a198;font-size:32rpx}</style>
+<template>
+  <view class="page pad">
+    <view class="toolbar">
+      <view class="toolbar-main"><text class="toolbar-title">共 {{items.length}} 台设备</text><text class="toolbar-sub">在线 {{count('online')}} · 离线 {{count('offline')}} · 告警 {{count('alert')}}</text></view>
+      <view class="toolbar-actions"><button class="btn btn-sm btn-primary" @tap="register">注册设备</button></view>
+    </view>
+    <view class="sticky-head">
+      <view class="search-bar"><text>⌕</text><input v-model="keyword" placeholder="搜索设备名称 / 编码" confirm-type="search"/></view>
+      <SegTabs v-model="tab" :options="tabs"/>
+      <view class="filter-row">
+        <picker :range="groupOptions" range-key="name" @change="selectGroup($event)"><view class="chip" :class="{active:groupId}">{{groups.find(g=>g.id===groupId)?.name||'全部分组'}} ▾</view></picker>
+        <view v-if="plotId" class="chip active" @tap="clearPlot">已按地块筛选 ✕</view>
+      </view>
+    </view>
+    <view v-if="error" class="error" @tap="load">{{error}}<text class="retry">点击重试</text></view>
+    <view v-if="loading&&!items.length" class="loading">正在加载设备…</view>
+    <view v-else class="list">
+      <view v-for="item in visible" :key="item.id" class="list-item" @tap="open(item.id)">
+        <text class="item-icon" :class="statusMeta(item.onlineStatus).tone">{{deviceMark(item.typeName)}}</text>
+        <view class="list-body">
+          <view class="item-head"><text class="item-title">{{item.deviceName}}</text><text class="tag" :class="statusMeta(item.onlineStatus).tone">{{statusMeta(item.onlineStatus).label}}</text></view>
+          <text class="item-meta">{{item.deviceCode}} · {{item.typeName}}</text>
+          <text class="item-meta">{{item.protocol}} · 信号 {{item.rssi||'—'}} dBm · 电量 {{item.battery}}%</text>
+        </view>
+        <text class="chev">›</text>
+      </view>
+      <view v-if="!visible.length&&!error" class="empty">暂无匹配设备</view>
+    </view>
+  </view>
+</template>

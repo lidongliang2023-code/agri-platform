@@ -16,6 +16,7 @@ const form = reactive({
 
 onLoad(async (options?: Record<string, string>) => {
   id.value = Number(options?.id || 0)
+  uni.setNavigationBarTitle({ title: id.value ? '编辑场景' : '新建场景' })
   if (!id.value) return
   try {
     const scenes = await api.scenes()
@@ -53,9 +54,9 @@ async function submit() {
 </script>
 
 <template>
-  <view class="page pad">
+  <view class="page pad has-footer">
     <view class="card">
-      <view class="card-head"><text class="card-title">{{ id ? '编辑场景' : '新建场景' }}</text><text class="tag purple">场景联动</text></view>
+      <view class="card-head"><text class="card-title">场景信息</text><text class="tag blue">场景联动</text></view>
       <view class="form-item"><text class="form-label">场景名称</text><input v-model="form.sceneName" class="input" placeholder="例如：低温保温" /></view>
       <view class="grid-2">
         <view class="form-item"><text class="form-label">场景图标</text><input v-model="form.icon" class="input" maxlength="8" /></view>
@@ -64,7 +65,7 @@ async function submit() {
       <view class="form-item"><text class="form-label">场景分类</text><input v-model="form.category" class="input" placeholder="环境控制、水肥管理等" /></view>
       <view class="form-item"><text class="form-label">场景说明</text><textarea v-model="form.description" class="textarea" placeholder="说明场景用途和执行目标" /></view>
       <view class="form-item"><text class="form-label">执行配置（JSON）</text><textarea v-model="form.config" class="textarea mono" placeholder='{"valve":"on","durationMinutes":15}' /></view>
-      <button class="btn btn-primary btn-block" :loading="saving" @tap="submit">保存场景</button>
+      <view class="footer-bar"><button class="btn btn-primary" :disabled="saving" :loading="saving" @tap="submit">保存场景</button></view>
     </view>
   </view>
 </template>

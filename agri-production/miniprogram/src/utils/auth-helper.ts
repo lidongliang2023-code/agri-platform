@@ -6,27 +6,33 @@
  */
 import { listFarms as fetchFarms } from '@/api/production'
 import {
+  completeMfaLogin,
   currentFarm,
   currentUser,
   ensureLogin,
   getOnboardingStatus,
   isLoggedIn,
+  isMfaChallenge,
   login,
   loginBySms,
   logout,
   registerAccount,
   sendSmsCode,
   setCurrentFarm,
+  type LoginSuccess,
+  type MfaChallenge,
   type MobileUser,
 } from './auth'
 import type { FarmBrief } from './auth'
 
 export {
+  completeMfaLogin,
   currentFarm,
   currentUser,
   ensureLogin,
   getOnboardingStatus,
   isLoggedIn,
+  isMfaChallenge,
   login,
   loginBySms,
   logout,
@@ -34,7 +40,7 @@ export {
   sendSmsCode,
   setCurrentFarm,
 }
-export type { MobileUser }
+export type { LoginSuccess, MfaChallenge, MobileUser }
 
 /**
  * 当前账号可见的农场列表（归一化 farmId）。

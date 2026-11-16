@@ -1,12 +1,37 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref,computed } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { api,type Plot } from '../../api/iot'
-const items=ref<Plot[]>([])
+const items=ref<Plot[]>([]),keyword=ref(''),error=ref(''),loading=ref(false)
+const visible=computed(()=>items.value.filter(i=>`${i.plotName} ${i.plotCode} ${i.farmName||''} ${i.cropName||''}`.includes(keyword.value)))
+function detail(plot:Plot){uni.navigateTo({url:'/pages/plot/detail?id='+plot.id})}
 onShow(load)
-async function load(){try{items.value=await api.plots()}catch(e){uni.showToast({title:e instanceof Error?e.message:'加载失败',icon:'none'})}}
-function devices(plot:Plot){uni.setStorageSync('iot_plot',plot.id);uni.switchTab({url:'/pages/device/list'})}
+async function load(){loading.value=true;try{items.value=await api.plots();error.value=''}catch(e){items.value=[];error.value=e instanceof Error?e.message:'加载失败'}finally{loading.value=false}}
 </script>
-<template><view class="page pad"><view class="between"><view><text class="page-title">地块监测</text><text class="tiny">生产管理地块档案 · 设备覆盖</text></view><text class="tag green">{{items.reduce((sum,i)=>sum+i.onlineCount,0)}} 设备在线</text></view><view class="plot-list"><view class="plot" v-for="(item,index) in items" :key="item.plotId || item.id" @click="devices(item)">
-<view class="plot-map" :class="`tone-${index%4}`"><text>🌾</text><b>{{item.onlineCount}}/{{item.deviceCount}}</b></view><view class="plot-copy"><view class="between"><text class="strong">{{item.plotName}}</text><text class="tag" :class="item.status==='warning'?'orange':'green'">{{item.status==='warning'?'已停用':'正常'}}</text></view><text class="tiny">{{item.plotCode}} · {{item.area}}亩 · 生产地块</text><text class="muted">{{item.cropName}} · {{item.cropStage}}</text><view class="progress"><view :style="{width:`${item.deviceCount?item.onlineCount/item.deviceCount*100:0}%`}"/></view></view></view></view></view></template>
-<style lang="scss" scoped>.page-title{display:block;font-size:38rpx;font-weight:750}.plot-list{display:flex;flex-direction:column;gap:13rpx;margin-top:18rpx}.plot{display:grid;grid-template-columns:120rpx 1fr;gap:16rpx;align-items:center;padding:18rpx;border:1rpx solid #e1e9e3;border-radius:20rpx;background:#fff}.plot-map{position:relative;display:flex;height:116rpx;align-items:center;justify-content:center;border-radius:16rpx;background:linear-gradient(135deg,#dff4e7,#ccead7)}.plot-map.tone-1{background:linear-gradient(135deg,#e4f2fb,#d5eaf7)}.plot-map.tone-2{background:linear-gradient(135deg,#fff3dd,#f8e7c7)}.plot-map.tone-3{background:linear-gradient(135deg,#f2eafa,#e7daf3)}.plot-map>text{font-size:40rpx}.plot-map>b{position:absolute;right:7rpx;bottom:7rpx;padding:3rpx 6rpx;border-radius:6rpx;background:rgba(255,255,255,.85);color:#0e5233;font-size:24rpx}.plot-copy{display:flex;flex-direction:column;gap:5rpx}.plot-copy .between{display:flex}.progress{margin-top:5rpx}</style>
+<template>
+  <view class="page pad">
+    <view class="toolbar">
+      <view class="toolbar-main"><text class="toolbar-title">共 {{items.length}} 个地块</text><text class="toolbar-sub">生产管理地块档案 · {{items.reduce((sum,i)=>sum+i.onlineCount,0)}} 台设备在线</text></view>
+    </view>
+    <view class="sticky-head"><view class="search-bar"><text>⌕</text><input v-model="keyword" placeholder="搜索地块 / 农场 / 作物" confirm-type="search"/></view></view>
+    <view v-if="error" class="error" @tap="load">{{error}}<text class="retry">点击重试</text></view>
+    <view v-if="loading&&!items.length" class="loading">正在加载地块…</view>
+    <view v-else class="list">
+      <view v-for="(item,index) in visible" :key="item.plotId || item.id" class="list-item" @tap="detail(item)">
+        <view class="plot-map" :class="`tone-${index%4}`"><text class="plot-mark">地</text><text class="plot-count">{{item.onlineCount}}/{{item.deviceCount}}</text></view>
+        <view class="list-body">
+          <view class="item-head"><text class="item-title">{{item.plotName}}</text><text class="tag" :class="item.status==='warning'?'orange':'green'">{{item.status==='warning'?'已停用':'正常'}}</text></view>
+          <text class="item-meta">{{item.plotCode}} · {{item.area}} 亩 · {{item.farmName||'生产地块'}}</text>
+          <text class="item-meta">{{item.cropName||'未种植'}}{{item.cropStage?' · '+item.cropStage:''}}</text>
+          <view class="progress"><view :style="{width:`${item.deviceCount?item.onlineCount/item.deviceCount*100:0}%`}"/></view>
+        </view>
+        <text class="chev">›</text>
+      </view>
+      <view v-if="!visible.length&&!error" class="empty">暂无匹配地块</view>
+    </view>
+  </view>
+</template>
+<style lang="scss" scoped>
+.plot-map{position:relative;display:flex;flex-shrink:0;width:112rpx;height:112rpx;align-items:center;justify-content:center;border-radius:18rpx;background:#dff4e7}.plot-map.tone-1{background:#e4f2fb}.plot-map.tone-2{background:#fff3dd}.plot-map.tone-3{background:#f2eafa}
+.plot-mark{color:#286044;font-size:36rpx;font-weight:700}.plot-count{position:absolute;right:6rpx;bottom:6rpx;padding:2rpx 8rpx;border-radius:8rpx;background:rgba(255,255,255,.9);color:#0e5233;font-size:24rpx}.progress{margin-top:8rpx}
+</style>

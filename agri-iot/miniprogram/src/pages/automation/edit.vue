@@ -50,6 +50,7 @@ const form = reactive({
 
 onLoad(async (options?: Record<string, string>) => {
   id.value = Number(options?.id || 0)
+  uni.setNavigationBarTitle({ title: id.value ? '编辑自动化规则' : '新建自动化规则' })
   try {
     const [deviceData, ruleData] = await Promise.all([api.devices(), id.value ? api.rules() : Promise.resolve([])])
     devices.value = deviceData
@@ -164,11 +165,11 @@ async function submit(test = false) {
 </script>
 
 <template>
-  <view class="page pad">
+  <view class="page pad has-footer">
     <view class="card">
-      <view class="card-head"><text class="card-title">{{ id ? '编辑自动化规则' : '新建自动化规则' }}</text><text class="tag blue">规则引擎</text></view>
+      <view class="card-head"><text class="card-title">基本信息</text><text class="tag blue">规则引擎</text></view>
       <view class="form-item"><text class="form-label">规则名称</text><input v-model="form.ruleName" class="input" placeholder="例如：高温自动通风" /></view>
-      <view class="form-item"><text class="form-label">规则类型</text><picker :range="ruleTypes" range-key="label" @change="selectRuleType"><view class="input">{{ ruleTypes.find(i=>i.value===form.ruleType)?.label }}</view></picker></view>
+      <view class="form-item"><text class="form-label">规则类型</text><picker :range="ruleTypes" range-key="label" @change="selectRuleType"><view class="input select">{{ ruleTypes.find(i=>i.value===form.ruleType)?.label }}</view></picker></view>
 
       <view class="rule-section">
         <view class="section-label"><text class="if-badge">IF</text><text>触发条件</text></view>
@@ -180,9 +181,9 @@ async function submit(test = false) {
           <view class="rule-hint">任一受控设备离线后触发，执行下方预设动作。</view>
         </template>
         <template v-else>
-          <view class="form-item"><text class="form-label">触发指标</text><picker :range="metrics" range-key="label" @change="selectMetric"><view class="input">{{ metrics.find(i=>i.value===form.triggerMetric)?.label }}</view></picker></view>
+          <view class="form-item"><text class="form-label">触发指标</text><picker :range="metrics" range-key="label" @change="selectMetric"><view class="input select">{{ metrics.find(i=>i.value===form.triggerMetric)?.label }}</view></picker></view>
           <view v-if="form.triggerMetric !== 'device_offline'" class="grid-2">
-            <view class="form-item"><text class="form-label">比较方式</text><picker :range="operators" range-key="label" @change="selectOperator"><view class="input">{{ operators.find(i=>i.value===form.operator)?.label }}</view></picker></view>
+            <view class="form-item"><text class="form-label">比较方式</text><picker :range="operators" range-key="label" @change="selectOperator"><view class="input select">{{ operators.find(i=>i.value===form.operator)?.label }}</view></picker></view>
             <view class="form-item"><text class="form-label">阈值</text><input v-model="form.threshold" class="input" placeholder="如 32" /></view>
             <view class="form-item"><text class="form-label">持续时间（秒）</text><input v-model.number="form.durationSeconds" class="input" type="number" /></view>
           </view>
@@ -192,19 +193,19 @@ async function submit(test = false) {
 
       <view class="rule-section">
         <view class="section-label"><text class="then-badge">THEN</text><text>执行动作</text></view>
-        <view class="form-item"><text class="form-label">执行设备（支持远程控制）</text><picker :range="devices.filter(i=>i.controlCapable)" range-key="deviceName" @change="chooseDevice"><view class="input">{{ form.actionDeviceName || '请选择执行设备' }}</view></picker></view>
+        <view class="form-item"><text class="form-label">执行设备（支持远程控制）</text><picker :range="devices.filter(i=>i.controlCapable)" range-key="deviceName" @change="chooseDevice"><view class="input select">{{ form.actionDeviceName || '请选择执行设备' }}</view></picker></view>
         <view class="grid-2">
           <view class="form-item"><text class="form-label">执行指令</text><input v-model="form.actionCommand" class="input" placeholder="on/off/open" /></view>
           <view class="form-item"><text class="form-label">指令参数</text><input v-model="form.actionValue" class="input" placeholder="如 15分钟" /></view>
         </view>
-        <view class="form-item"><text class="form-label">执行位置</text><picker :range="executionModes" range-key="label" @change="selectExecutionMode"><view class="input">{{ executionModes.find(i=>i.value===form.executionMode)?.label }}</view></picker></view>
+        <view class="form-item"><text class="form-label">执行位置</text><picker :range="executionModes" range-key="label" @change="selectExecutionMode"><view class="input select">{{ executionModes.find(i=>i.value===form.executionMode)?.label }}</view></picker></view>
         <view class="form-item"><text class="form-label">冷却时间（秒）</text><input v-model.number="form.cooldownSeconds" class="input" type="number" /></view>
       </view>
 
-      <view class="form-item"><text class="form-label">创建后状态</text><switch :checked="form.enabled" color="#159a5e" @change="setEnabled" /></view>
-      <view class="save-actions">
+      <view class="form-item switch-item"><text class="form-label">保存后启用</text><switch :checked="form.enabled" color="#12764a" @change="setEnabled" /></view>
+      <view class="footer-bar">
         <button class="btn btn-ghost" :disabled="saving" @tap="submit(false)">仅保存</button>
-        <button class="btn btn-primary" :loading="saving" @tap="submit(true)">保存并测试</button>
+        <button class="btn btn-primary save-test" :disabled="saving" :loading="saving" @tap="submit(true)">保存并测试</button>
       </view>
     </view>
   </view>
@@ -217,5 +218,7 @@ async function submit(test = false) {
 .if-badge{background:#e7f3fa;color:#176c93}.then-badge{background:#e5f5eb;color:#0e5233}
 .form-tip,.rule-hint{display:block;margin-top:-7rpx;color:#718277;font-size:24rpx;line-height:1.6}
 .rule-hint{padding:14rpx;border-radius:11rpx;background:#f2fbf5;color:#53665a}
-.save-actions{display:grid;grid-template-columns:1fr 1.5fr;gap:12rpx}
+.footer-bar .save-test{flex:1.5}
+.select{display:flex;align-items:center;height:76rpx;padding-top:0;padding-bottom:0}
+.switch-item{display:flex;align-items:center;justify-content:space-between}.switch-item .form-label{margin-bottom:0}
 </style>

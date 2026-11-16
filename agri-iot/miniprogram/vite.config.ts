@@ -8,6 +8,9 @@ export default defineConfig({
   server: {
     port: 5178,
     proxy: {
+      '/api/v1/sso': { target: process.env.VITE_AUTH_PROXY_TARGET ?? 'http://localhost:8093', changeOrigin: true },
+      '/api/v1/auth': { target: process.env.VITE_AUTH_PROXY_TARGET ?? 'http://localhost:8093', changeOrigin: true },
+      '/api/v1/platform': { target: process.env.VITE_AUTH_PROXY_TARGET ?? 'http://localhost:8093', changeOrigin: true },
       '/api': {
         target: process.env.VITE_PROXY_TARGET ?? 'http://localhost:8091',
         changeOrigin: true

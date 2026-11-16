@@ -23,13 +23,26 @@
     </view>
 
     <view class="auth-card">
-      <view class="auth-tabs">
-        <button :class="{ on: tab === 'sms' }" @tap="switchTab('sms')">手机验证码</button>
-        <button :class="{ on: tab === 'pwd' }" @tap="switchTab('pwd')">账号密码</button>
+      <view v-if="!challengeToken" class="auth-tabs">
+        <button :class="{ on: tab === 'sms' }" :disabled="submitting" @tap="switchTab('sms')">手机验证码</button>
+        <button :class="{ on: tab === 'pwd' }" :disabled="submitting" @tap="switchTab('pwd')">账号密码</button>
+      </view>
+      <view v-else class="mfa-head">
+        <text class="mfa-title">二次验证</text>
+        <text class="mfa-tip">该账号已开启二次验证，请输入验证器上的 6 位动态码</text>
       </view>
 
       <view class="form-block">
-        <template v-if="tab === 'sms'">
+        <template v-if="challengeToken">
+          <view class="input-group">
+            <text class="label">动态验证码</text>
+            <view class="input-shell">
+              <input v-model="mfaCode" type="number" maxlength="6" :disabled="submitting" placeholder="请输入 6 位动态码" confirm-type="done" @confirm="submitLogin" />
+            </view>
+          </view>
+        </template>
+
+        <template v-else-if="tab === 'sms'">
           <view class="input-group">
             <text class="label">手机号</text>
             <view class="input-shell">
@@ -65,20 +78,24 @@
           </view>
         </template>
 
-        <view class="form-meta">
-          <label class="remember"><checkbox :checked="remember" color="#159a5e" @tap="remember = !remember" /><text>7 天内保持登录</text></label>
+        <view v-if="!challengeToken" class="form-meta">
+          <label class="remember"><checkbox :checked="remember" color="#159a5e" @tap="remember = !remember" /><text>保持登录（有效期内）</text></label>
           <text class="meta-link" @tap="showPasswordHelp">忘记密码？</text>
+        </view>
+        <view v-else class="form-meta">
+          <text />
+          <text class="meta-link" @tap="resetMfa">返回账号登录</text>
         </view>
 
         <view v-if="messageText" :class="['inline-message', messageType]">{{ messageText }}</view>
 
         <button class="primary-button" :disabled="submitting" @tap="submitLogin">
-          {{ submitting ? '登录中…' : '登 录' }}
+          {{ submitting ? '登录中…' : challengeToken ? '验证并登录' : '登 录' }}
         </button>
       </view>
 
-      <view class="divider"><i /><text>其他登录方式</text><i /></view>
-      <view class="third-party">
+      <view v-if="!challengeToken" class="divider"><i /><text>其他登录方式</text><i /></view>
+      <view v-if="!challengeToken" class="third-party">
         <button @tap="showThirdParty('微信')">
           <text class="third-icon wechat">微</text>
           <text>微信</text>
@@ -109,7 +126,9 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref } from 'vue'
 import {
+  completeMfaLogin,
   getOnboardingStatus,
+  isMfaChallenge,
   listFarms,
   login,
   loginBySms,
@@ -129,13 +148,19 @@ const remember = ref(true)
 const sending = ref(false)
 const submitting = ref(false)
 const countdown = ref(0)
+/** 二次验证挑战凭证：有值时登录卡片切到动态码输入 */
+const challengeToken = ref('')
+const mfaCode = ref('')
 const messageText = ref('')
 const messageType = ref<'error' | 'notice'>('error')
 let timer: ReturnType<typeof setInterval> | null = null
 
-const canSubmit = computed(() => tab.value === 'sms'
-  ? /^1[3-9]\d{9}$/.test(phone.value) && /^\d{6}$/.test(smsCode.value)
-  : account.value.trim().length > 0 && password.value.length > 0)
+const canSubmit = computed(() => {
+  if (challengeToken.value) return /^\d{6}$/.test(mfaCode.value.trim())
+  return tab.value === 'sms'
+    ? /^1[3-9]\d{9}$/.test(phone.value) && /^\d{6}$/.test(smsCode.value)
+    : account.value.trim().length > 0 && password.value.length > 0
+})
 
 function notice(text: string, type: 'error' | 'notice' = 'error'): void {
   messageType.value = type
@@ -144,6 +169,15 @@ function notice(text: string, type: 'error' | 'notice' = 'error'): void {
 
 function switchTab(next: LoginTab): void {
   tab.value = next
+  notice('', 'error')
+}
+
+/** 退出二次验证步骤：挑战凭证一次性，返回后必须重新输入密码或验证码 */
+function resetMfa(): void {
+  challengeToken.value = ''
+  mfaCode.value = ''
+  password.value = ''
+  smsCode.value = ''
   notice('', 'error')
 }
 
@@ -196,24 +230,47 @@ async function handleStage(stage: string | undefined, user: MobileUser): Promise
   await enterWorkbench(user)
 }
 
+/** 进入二次验证步骤：清掉第一步填的密码 / 短信码，只留挑战凭证 */
+function enterMfa(token: string): void {
+  challengeToken.value = token
+  mfaCode.value = ''
+  password.value = ''
+  smsCode.value = ''
+  notice('', 'error')
+}
+
 async function submitLogin(): Promise<void> {
-  if (!canSubmit.value || submitting.value) {
-    notice(tab.value === 'sms' ? '请填写正确的手机号和验证码' : '请输入账号和密码')
+  if (submitting.value) return
+  if (!canSubmit.value) {
+    notice(challengeToken.value ? '请输入 6 位动态码' : tab.value === 'sms' ? '请填写正确的手机号和验证码' : '请输入账号和密码')
     return
   }
   submitting.value = true
   notice('', 'error')
+  const wasMfa = Boolean(challengeToken.value)
   try {
+    if (wasMfa) {
+      const result = await completeMfaLogin(challengeToken.value, mfaCode.value, remember.value)
+      challengeToken.value = ''
+      mfaCode.value = ''
+      const status = await getOnboardingStatus().catch(() => ({ stage: result.stage }))
+      await handleStage(status?.stage, result.user)
+      return
+    }
     if (tab.value === 'sms') {
-      const result = await loginBySms({ phone: phone.value, code: smsCode.value, marketId: 1 })
+      const result = await loginBySms({ phone: phone.value, code: smsCode.value, marketId: 1, remember: remember.value })
+      if (isMfaChallenge(result)) { enterMfa(result.challengeToken); return }
       await handleStage(result.stage, result.user)
       return
     }
-    const user = await login({ username: account.value.trim(), password: password.value, marketId: 1 })
+    const user = await login({ username: account.value.trim(), password: password.value, marketId: 1, remember: remember.value })
+    if (isMfaChallenge(user)) { enterMfa(user.challengeToken); return }
     const status = await getOnboardingStatus()
     await handleStage(status?.stage, user)
   } catch (error) {
-    notice(error instanceof Error ? error.message : '登录失败，请稍后重试')
+    // 挑战凭证校验一次就作废：动态码错了只能回到第一步重新登录
+    if (wasMfa) resetMfa()
+    notice((error instanceof Error ? error.message : '登录失败，请稍后重试') + (wasMfa ? '；请重新登录获取验证机会' : ''))
   } finally {
     submitting.value = false
   }
@@ -395,6 +452,25 @@ onUnmounted(() => {
   background: #fff;
   color: #0f6d43;
   box-shadow: 0 4rpx 18rpx rgba(21, 67, 43, .08);
+}
+
+.mfa-head {
+  padding: 28rpx 28rpx 0;
+}
+
+.mfa-title {
+  display: block;
+  color: #0b1a12;
+  font-size: 32rpx;
+  font-weight: 800;
+}
+
+.mfa-tip {
+  display: block;
+  margin-top: 8rpx;
+  color: #718277;
+  font-size: 24rpx;
+  line-height: 1.6;
 }
 
 .form-block {

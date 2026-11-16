@@ -1,12 +1,44 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { onLoad } from '@dcloudio/uni-app'
-import { api,statusMeta,type Device } from '../../api/iot'
-const item=ref<Device|null>(null),id=ref(0),controlling=ref(false)
-onLoad(async o=>{id.value=Number(o?.id||1);load()})
-async function load(){try{item.value=await api.device(id.value)}catch(e){uni.showToast({title:e instanceof Error?e.message:'加载失败',icon:'none'})}}
-async function control(action:string){controlling.value=true;try{await api.control(id.value,action);uni.showToast({title:'控制指令已执行',icon:'success'});load()}catch(e){uni.showToast({title:e instanceof Error?e.message:'控制失败',icon:'none'})}finally{controlling.value=false}}
-function createOrder(){uni.showToast({title:'已创建运维工单',icon:'success'})}
+import {ref,onUnmounted} from 'vue'
+import {onLoad,onShow,onHide} from '@dcloudio/uni-app'
+import {api,statusMeta,type Device} from '../../api/iot'
+import {showError,confirmAction,go} from '../../utils/ui'
+import CommandReceipts from '../../components/CommandReceipts.vue'
+const item=ref<Device|null>(null),id=ref(0),busy=ref(false),error=ref(''),pending=ref<{action:string;requestNo:string}|null>(null)
+let timer:ReturnType<typeof setInterval>|undefined,loading=false
+onLoad(o=>{id.value=Number(o?.id);if(!Number.isSafeInteger(id.value)||id.value<1){error.value='设备编号无效';return}void load()})
+onShow(()=>{clearInterval(timer);if(id.value)void load();timer=setInterval(()=>void load(),10000)})
+function stop(){clearInterval(timer)}onHide(stop);onUnmounted(stop)
+async function load(){if(loading||!id.value)return;loading=true;try{item.value=await api.device(id.value);error.value=''}catch(e){error.value=e instanceof Error?e.message:'设备读取失败'}finally{loading=false}}
+async function control(action:string){if(busy.value||!item.value)return;if(pending.value){uni.showToast({title:'请先核对上次指令回执',icon:'none'});return}if(!(await confirmAction('确认远程控制',`对 ${item.value.deviceName} 申请${action}？执行结果以接入端回执为准。`)))return;pending.value={action,requestNo:`M${Date.now()}-${Math.random().toString(36).slice(2,14)}`};await submit()}
+async function submit(){if(busy.value||!pending.value)return;busy.value=true;try{await api.control(id.value,pending.value.action,pending.value.requestNo);pending.value=null;uni.showToast({title:'申请已登记，请查看回执',icon:'none'});void load()}catch(e){showError(e)}finally{busy.value=false}}
+async function reconcile(){if(!pending.value||busy.value)return;busy.value=true;try{const rows=await api.commandReceipts(id.value);if(rows.some(r=>r.commandNo===pending.value?.requestNo)){pending.value=null;uni.showToast({title:'已找到该指令，请查看回执',icon:'none'})}else uni.showToast({title:'尚未查到，请使用原编号重试',icon:'none'})}catch(e){showError(e)}finally{busy.value=false}}
 </script>
-<template><view class="page pad" v-if="item"><view class="card device-head"><view class="between"><text class="tag" :class="statusMeta(item.onlineStatus).tone">{{statusMeta(item.onlineStatus).label}}</text><text class="tiny">{{item.lastReport}}</text></view><text class="device-title">{{item.deviceName}}</text><text class="muted">{{item.deviceCode}} · {{item.typeName}} · {{item.protocol}}</text><view class="grid"><view><text>信号</text><b>{{item.rssi||'—'}} dBm</b></view><view><text>电量</text><b>{{item.battery}}%</b></view><view><text>固件</text><b>{{item.firmwareVersion}}</b></view></view></view><view class="card"><view class="card-head"><text class="card-title">📊 实时数据</text><text class="card-sub">自动刷新</text></view><view class="telemetry"><view v-for="t in item.telemetry" :key="t.key"><text>{{t.name}}</text><b>{{t.value}}<text>{{t.unit}}</text></b><em>{{t.recordedAt}}</em></view></view></view><view class="card" v-if="item.controlCapable"><view class="card-head"><text class="card-title">🎛️ 远程控制</text><text class="card-sub">指令二次确认</text></view><view class="control-grid"><button class="btn btn-primary" :loading="controlling" @click="control('开启设备')">▶ 开启</button><button class="btn" :loading="controlling" @click="control('关闭设备')">■ 关闭</button><button class="btn" :loading="controlling" @click="control('重启设备')">↻ 重启</button></view></view><view class="card"><view class="card-head"><text class="card-title">控制记录</text></view><view class="log" v-for="log in item.controls" :key="log.id"><view><text class="strong">{{log.action}}</text><text class="tiny">{{log.operator}} · {{log.createdAt}}</text></view><text class="tag green">{{log.result}}</text></view><button class="btn btn-ghost btn-block" @click="createOrder">创建运维工单</button></view></view></template>
-<style lang="scss" scoped>.device-head{display:flex;flex-direction:column;gap:7rpx;background:linear-gradient(140deg,#fff,#edf8f2)}.device-title{display:block;margin-top:9rpx;font-size:34rpx;font-weight:750}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8rpx;margin-top:18rpx;padding-top:16rpx;border-top:1rpx solid #dce7df}.grid>view{display:flex;flex-direction:column;gap:4rpx}.grid text{color:#94a198;font-size:24rpx}.grid b{font-size:24rpx}.telemetry{display:grid;grid-template-columns:repeat(2,1fr);gap:12rpx}.telemetry>view{display:flex;flex-direction:column;gap:4rpx;padding:15rpx;border:1rpx solid #edf2ee;border-radius:14rpx;background:#fbfdfc}.telemetry>view>text{color:#718277;font-size:24rpx}.telemetry b{font-size:30rpx}.telemetry b text{color:#94a198;font-size:24rpx}.telemetry em{color:#94a198;font-size:24rpx;font-style:normal}.control-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10rpx}.log{display:flex;align-items:center;justify-content:space-between;padding:13rpx 0;border-bottom:1rpx solid #edf2ee}.log>view{display:flex;flex-direction:column;gap:4rpx}.card .btn-block{margin-top:14rpx}</style>
+<template>
+  <view class="page pad">
+    <view v-if="error" class="error" @tap="load">{{error}}<text class="retry">点击重试</text></view>
+    <template v-if="item">
+      <view class="card">
+        <view class="item-head"><text class="item-title detail-title">{{item.deviceName}}</text><text class="tag" :class="statusMeta(item.onlineStatus).tone">{{statusMeta(item.onlineStatus).label}}</text></view>
+        <text class="item-meta">{{item.deviceCode}} · {{item.typeName}} · {{item.protocol}}</text>
+        <view class="kv-grid head-kv"><view><text>最近上报</text><text class="kv-value">{{item.lastReport||'—'}}</text></view><view><text>信号</text><text class="kv-value">{{item.rssi??'—'}} dBm</text></view><view><text>电量</text><text class="kv-value">{{item.battery}}%</text></view></view>
+        <view class="action-row"><button class="btn btn-sm" @tap="go('/pages/device/edit?id='+id)">编辑 / 绑定</button><button class="btn btn-sm" @tap="go('/pages/device/sampling?id='+id)">采样配置</button><button class="btn btn-sm" @tap="go('/pages/maintenance/create?deviceId='+id)">报修</button></view>
+      </view>
+      <view class="card">
+        <view class="card-head"><text class="card-title">实时遥测</text><text class="card-sub">每 10 秒刷新</text></view>
+        <view class="metric-grid"><view v-for="t in item.telemetry" :key="t.key"><text class="muted">{{t.name}}</text><text class="value">{{t.value}} {{t.unit}}</text><text class="tiny">{{t.recordedAt}}</text></view></view>
+        <text v-if="!item.telemetry?.length" class="muted">暂无上报数据</text>
+      </view>
+      <view v-if="item.controlCapable" class="card">
+        <view class="card-head"><text class="card-title">远程控制</text><text class="card-sub">以接入端回执为准</text></view>
+        <view class="action-row first"><button v-for="action in ['开启设备','关闭设备','重启设备']" :key="action" class="btn btn-sm" :class="{'btn-ghost':action==='开启设备'}" :disabled="busy||!!pending" @tap="control(action)">{{action}}</button></view>
+        <view v-if="pending" class="notice"><text>提交结果尚未确认，保留原编号：{{pending.requestNo}}</text><view class="action-row"><button class="btn btn-sm" :disabled="busy" @tap="reconcile">核对回执</button><button class="btn btn-sm btn-primary" :disabled="busy" @tap="submit">原编号重试</button></view></view>
+      </view>
+      <CommandReceipts :id="id" :load="api.commandReceipts"/>
+    </template>
+    <view v-else-if="!error" class="loading">正在加载设备…</view>
+  </view>
+</template>
+<style scoped>
+.detail-title{font-size:34rpx;white-space:normal}.head-kv{margin-top:18rpx}.action-row.first{margin-top:0}
+</style>

@@ -150,6 +150,12 @@ export async function request<T = any>(options: RequestOptions): Promise<T> {
       success: (res) => {
         const body = res.data as ApiResponse<T>
         if (res.statusCode === 401 || body?.code === 401) {
+          // 免令牌的登录类接口（密码登录、验证码登录、二次验证）返回 401 是凭据不对，
+          // 不是登录失效：带上认证中心的原话留在登录页，不清登录态、不跳转。
+          if (options.auth === false) {
+            reject(new Error(body?.message || '账号、密码或验证码不正确'))
+            return
+          }
           handleUnauthorized()
           reject(new Error('登录已过期，请重新登录'))
           return

@@ -21,38 +21,141 @@ export interface AutomationRule{
 /** 移动端"立即同步"的返回：待办计数由服务端按当前经营主体实查。 */
 export interface MobileSync{syncedAt:string;pendingWorkOrders:number;pendingAlerts:number;unreadMessages:number;message:string}
 interface Overview{stats:{devices:number;online:number;offline:number;alerts:number;plots:number;gateways:number;todayControl:number;dataToday:number};farm:Record<string,unknown>;devices:Device[];alerts:Alert[];plots:Plot[];environment:Array<{name:string;value:number;unit:string;key:string;change:number;status:string}>;messages:Array<{id:number;type:string;title:string;content:string;read:boolean;createdAt:string}>}
+export type Row = Record<string, any>
 interface Envelope<T>{code:number;message:string;data:T}
 const runtimePlatform=uni.getSystemInfoSync().uniPlatform
-const configuredOrigin=import.meta.env.VITE_IOT_API_BASE||''
-const BASE=configuredOrigin||(runtimePlatform==='web'?'':'http://localhost:8091')
-const AUTH_BASE=import.meta.env.VITE_IOT_AUTH_BASE||configuredOrigin||(runtimePlatform==='web'?'':'http://localhost:8093')
+const configuredOrigin=(import.meta.env.VITE_IOT_API_BASE||'').replace(/\/$/,'')
+const BASE=configuredOrigin
+const AUTH_BASE=(import.meta.env.VITE_IOT_AUTH_BASE||configuredOrigin).replace(/\/$/,'')
+let generation=0, redirecting=false
+let ready:Promise<void>|null=null
+let permissions:string[]=[]
+export function clearIotSession(){generation++;ready=null;permissions=[];['token','user','iot_session_expires','iot_subject','iot_status','iot_plot'].forEach(k=>uni.removeStorageSync(k))}
+/** 统一认证中心的公开登录端点：401 表示凭据错误，不能当成“登录失效”去跳转。 */
+const AUTH_ENDPOINTS=['/api/v1/sso/login-standalone','/api/v1/sso/login-standalone-mfa','/api/v1/sso/login-standalone-by-sms','/api/v1/sso/sms/code']
+function loginRequired(){clearIotSession();if(!redirecting){redirecting=true;uni.reLaunch({url:'/pages/login/index',complete:()=>{redirecting=false}})}}
 function toQuery(params?:Record<string,unknown>):string{
-  const entries=Object.entries(params??{}).filter(([,value])=>value!==undefined&&value!==null&&value!=='')
-  return entries.length?`?${entries.map(([key,value])=>`${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`).join('&')}`:''
+ const entries=Object.entries(params??{}).filter(([,value])=>value!==undefined&&value!==null&&value!=='')
+ return entries.length?`?${entries.map(([key,value])=>`${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`).join('&')}`:''
 }
-function request<T>(url:string,method:'GET'|'POST'|'PUT'|'DELETE'='GET',data?:Record<string,unknown>):Promise<T>{
-  return new Promise((resolve,reject)=>uni.request({url:`${BASE}/api/v1/iot/app${url}`,method,data,header:{'Content-Type':'application/json',...(uni.getStorageSync('token')?{Authorization:`Bearer ${uni.getStorageSync('token')}`}:{})},success(res:any){const body=res.data as Envelope<T>;if(res.statusCode===401){uni.removeStorageSync('token');uni.removeStorageSync('user');uni.reLaunch({url:'/pages/login/index'});return reject(new Error('登录已失效，请重新使用统一账号登录'))}if(res.statusCode>=400||![0,200].includes(body?.code))return reject(new Error(body?.message||'物联网请求失败'));resolve(body.data)},fail(err:any){reject(new Error(err?.errMsg||'网络异常'))}}))
+async function raw<T>(origin:string,url:string,method:'GET'|'POST'|'PUT'|'DELETE'='GET',data?:Record<string,unknown>,token=String(uni.getStorageSync('token')||'')):Promise<T>{
+ if(runtimePlatform!=='web'&&!origin)throw new Error('请配置小程序 / APP 的 HTTPS 服务地址后重新构建')
+ const version=generation
+ return new Promise((resolve,reject)=>uni.request({url:`${origin}${url}`,method,data,timeout:15000,header:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})},success(res:any){
+  if(version!==generation)return reject(new Error('账号或经营主体已改变，请重新加载'))
+  const body=res.data as Envelope<T>
+  if(!body||typeof body!=='object'||typeof body.code!=='number')return reject(new Error(`服务返回异常（HTTP ${res.statusCode}），请检查认证服务地址或网关转发`))
+  const authentication=AUTH_ENDPOINTS.includes(url)
+  if(res.statusCode===401||body.code===401){if(!authentication)loginRequired();return reject(new Error(authentication?(body.message||'账号、密码或验证码不正确'):'登录已失效，请重新登录'))}
+  if(res.statusCode>=400||![0,200].includes(body.code))return reject(new Error(body.message||`服务请求失败（HTTP ${res.statusCode}）`))
+  resolve(body.data)
+ },fail(err:any){reject(new Error(err?.errMsg?.includes('timeout')?'请求超时，请重试':err?.errMsg||'网络异常，请重试'))}}))
 }
-export function hasIotSession(){return Boolean(uni.getStorageSync('token'))}
-export function ensureIotSession(){if(hasIotSession())return true;uni.reLaunch({url:'/pages/login/index'});return false}
-export async function logoutIotSession(){await logoutMobile(`${AUTH_BASE}/api/v1/auth/logout`,String(uni.getStorageSync('token')||''),()=>{uni.removeStorageSync('token');uni.removeStorageSync('user');uni.reLaunch({url:'/pages/login/index'})})}
-export function loginWithUnifiedAccount(username:string,password:string):Promise<{accessToken:string;user:{id:number;username:string;nickname?:string;roles?:string[]}}>{
-  return new Promise((resolve,reject)=>uni.request({url:`${AUTH_BASE}/api/v1/sso/login-standalone`,method:'POST',data:{username,password,marketId:1,remember:true},header:{'Content-Type':'application/json'},success:async(res:any)=>{
-    const body=res.data as {code:number;message?:string;data?:{accessToken:string;user:{id:number;username:string;nickname?:string;roles?:string[]}}}
-    if(res.statusCode>=400||![0,200].includes(body?.code)||!body.data?.accessToken){reject(new Error(body?.message||'统一账号登录失败'));return}
-    uni.request({url:`${AUTH_BASE}/api/v1/platform/permissions/mine`,method:'GET',header:{Authorization:`Bearer ${body.data.accessToken}`},success(permissionRes:any){
-      const permissions=permissionRes.data?.data?.permissions as string[]|undefined
-      const allowed=permissions?.some(code=>code==='*'||code==='iot:read'||code==='iot:*')
-      if(permissionRes.statusCode>=400||!allowed){reject(new Error('当前统一账号未开通物联网访问权限，请联系平台运营'));return}
-      uni.setStorageSync('token',body.data!.accessToken);uni.setStorageSync('user',body.data!.user);resolve(body.data!)
-    },fail(err:any){reject(new Error(err?.errMsg||'权限校验失败'))}})
-  },fail(err:any){reject(new Error(err?.errMsg||'统一认证中心连接失败'))}}))
+function granted(list:string[],code:string){return list.includes('*')||list.includes('iot:*')||list.includes(code)}
+export function canWrite(){return granted(permissions,'iot:write')}
+export function hasIotSession(){
+ const expires=Number(uni.getStorageSync('iot_session_expires')||0)
+ if(expires&&expires<=Date.now()){clearIotSession();return false}
+ return Boolean(uni.getStorageSync('token'))
+}
+export function ensureIotSession(){if(hasIotSession())return true;loginRequired();return false}
+export async function sessionReady(){
+ if(!ensureIotSession())throw new Error('请先登录')
+ if(!ready)ready=(async()=>{
+  const result=await raw<{permissions:string[]}>(AUTH_BASE,'/api/v1/platform/permissions/mine')
+  permissions=result.permissions||[]
+  if(!granted(permissions,'iot:read')||!granted(permissions,'iot:write'))throw new Error('当前账号未开通完整物联网权限，请联系平台运营')
+  const summary=await accountSummary()
+  const active=summary.merchants.find((x:Row)=>String(x.merchantId)===String(summary.activeMerchantId))
+  if(!active)throw new Error('当前账号暂无可用经营主体，请前往账号页选择主体')
+  uni.setStorageSync('iot_subject',active)
+ })().catch(e=>{ready=null;throw e})
+ return ready
+}
+async function request<T>(url:string,method:'GET'|'POST'|'PUT'|'DELETE'='GET',data?:Record<string,unknown>):Promise<T>{
+ await sessionReady()
+ if(method!=='GET'&&!canWrite())throw new Error('当前账号没有物联网写入权限')
+ return raw<T>(BASE,`/api/v1/iot/app${url}`,method,data)
+}
+export async function accountSummary(){
+ const value=await raw<Row>(AUTH_BASE,'/api/v1/sso/account/summary')
+ value.merchants=(value.merchants||[]).filter((x:Row)=>x.status!==0&&String(x.merchantName||'').trim())
+ return value
+}
+export async function activateSubject(id:string){
+ const result=await raw<Row>(AUTH_BASE,`/api/v1/sso/account/businesses/${encodeURIComponent(id)}/activate`,'POST',{})
+ if(String(result.activeMerchantId)!==id)throw new Error('主体切换结果不一致，请重新加载')
+ generation++;ready=null;['iot_subject','iot_status','iot_plot'].forEach(k=>uni.removeStorageSync(k))
+ uni.reLaunch({url:'/pages/index/index'})
+}
+export async function logoutIotSession(){await logoutMobile(`${AUTH_BASE}/api/v1/auth/logout`,String(uni.getStorageSync('token')||''),()=>{clearIotSession();uni.reLaunch({url:'/pages/login/index'})})}
+export interface UnifiedLoginResult{accessToken?:string;user?:Row;expiresIn?:number;mfaRequired?:boolean;challengeToken?:string}
+async function acceptLogin(result:UnifiedLoginResult){
+ if(result?.mfaRequired){
+  if(!result.challengeToken)throw new Error('二次验证凭证缺失，请重新登录')
+  return result
+ }
+ if(!result?.accessToken||!result.user)throw new Error('登录结果缺少有效凭证，请重新登录')
+ const check=await raw<{permissions:string[]}>(AUTH_BASE,'/api/v1/platform/permissions/mine','GET',undefined,result.accessToken)
+ if(!granted(check.permissions||[],'iot:read')||!granted(check.permissions||[],'iot:write'))throw new Error('当前账号未开通完整物联网权限，请联系平台运营')
+ clearIotSession();permissions=check.permissions;uni.setStorageSync('token',result.accessToken);uni.setStorageSync('user',result.user)
+ uni.setStorageSync('iot_session_expires',Date.now()+Number(result.expiresIn||7200)*1000)
+ return result
+}
+export const PHONE_PATTERN=/^1[3-9]\d{9}$/
+/** 账号密码登录（统一认证中心，与生产管理、交易撮合同一个端点）。 */
+export async function loginWithUnifiedAccount(account:string,password:string,remember=true){
+ const value=account.trim()
+ const identity=PHONE_PATTERN.test(value)?{phone:value}:{username:value}
+ return acceptLogin(await raw<UnifiedLoginResult>(AUTH_BASE,'/api/v1/sso/login-standalone','POST',{...identity,password,marketId:1,remember},''))
+}
+/** 手机验证码登录；开启二次验证的账号同样返回挑战凭证。 */
+export async function loginWithSmsCode(phone:string,code:string,remember=true){
+ return acceptLogin(await raw<UnifiedLoginResult>(AUTH_BASE,'/api/v1/sso/login-standalone-by-sms','POST',{phone:phone.trim(),code:code.trim(),marketId:1,remember},''))
+}
+/** 发送登录验证码（只允许 login 场景）。 */
+export async function sendLoginSmsCode(phone:string){
+ return raw<{sent?:boolean;devMode?:boolean;hint?:string}>(AUTH_BASE,'/api/v1/sso/sms/code','POST',{phone:phone.trim(),scene:'login'},'')
+}
+export async function completeUnifiedMfa(challengeToken:string,code:string,remember=true){
+ return acceptLogin(await raw<UnifiedLoginResult>(AUTH_BASE,'/api/v1/sso/login-standalone-mfa','POST',{challengeToken,code:code.trim(),marketId:1,remember},''))
 }
 export const api={
+  monitor:()=>request<Row>('/overview'),
+  deviceTypes:()=>request<Row[]>('/device-types'),
+  farms:()=>request<Row[]>('/farms'),
+  groups:()=>request<Row[]>('/groups'),
+  createDevice:(body:Row)=>request<Device>('/devices','POST',body),
+  updateDevice:(id:number,body:Row)=>request<Device>(`/devices/${id}`,'PUT',body),
+  sampling:(id:number)=>request<Row>(`/devices/${id}/sampling`),
+  saveSampling:(id:number,body:Row)=>request<Row>(`/devices/${id}/sampling`,'PUT',body),
+  commandReceipts:(id:number,page=1)=>request<Row[]>(`/devices/${id}/commands?page=${page}&size=20`),
+  gateways:()=>request<Row[]>('/gateways'),
+  gateway:(id:number)=>request<Row>(`/gateways/${id}`),
+  createGateway:(body:Row)=>request<Row>('/gateways','POST',body),
+  updateGateway:(id:number,body:Row)=>request<Row>(`/gateways/${id}`,'PUT',body),
+  deleteGateway:(id:number)=>request<Row>(`/gateways/${id}`,'DELETE'),
+  restartGateway:(id:number)=>request<Row>(`/gateways/${id}/restart`,'POST',{}),
+  gatewayCommands:(id:number,page=1)=>request<Row[]>(`/gateways/${id}/commands?page=${page}&size=20`),
+  gatewayOta:(id:number,page=1)=>request<Row[]>(`/gateways/${id}/ota?page=${page}&size=20`),
+  plotMonitoring:(id:number)=>request<Row>(`/plots/${id}/monitoring`),
+  alertRuleView:()=>request<Row>('/alert-rules/view'),
+  alertRuleOptions:()=>request<Row>('/alert-rules/options'),
+  riskReadings:()=>request<Row[]>('/alert-rules/risk-readings'),
+  createAlertRule:(body:Row)=>request<Row>('/alert-rules/custom','POST',body),
+  updateAlertRule:(id:number,body:Row)=>request<Row>(`/alert-rules/custom/${id}`,'PUT',body),
+  deleteAlertRule:(id:number)=>request<Row>(`/alert-rules/custom/${id}`,'DELETE'),
+  toggleAlertRule:(id:number)=>request<Row>(`/alert-rules/custom/${id}/toggle`,'POST',{}),
+  evaluateAlertRule:(params:Row)=>request<Row>(`/alert-rules/evaluate${toQuery(params)}`),
+  reports:()=>request<Row>('/reports'),
+  workOrders:()=>request<Row[]>('/work-orders'),
+  createWorkOrder:(body:Row)=>request<Row>('/work-orders','POST',body),
+  firmware:()=>request<Row[]>('/firmware'),
+  ota:()=>request<Row[]>('/ota'),
   overview:()=>request<Overview>('/mobile/overview'),
-  devices:(params?:{status?:string})=>request<Device[]>(`/devices${toQuery(params)}`),
+  devices:(params?:{keyword?:string;status?:string;groupId?:number;plotId?:number})=>request<Device[]>(`/devices${toQuery(params)}`),
   device:(id:number)=>request<Device>(`/devices/${id}`),
-  control:(id:number,action:string)=>request<Record<string,unknown>>(`/devices/${id}/control`,'POST',{action}),
+  control:(id:number,action:string,requestNo:string)=>request<Record<string,unknown>>(`/devices/${id}/control`,'POST',{action,requestNo}),
   alerts:()=>request<Alert[]>('/alerts'),
   handleAlert:(id:number,note:string,status:'handling'|'resolved')=>request<Alert>(`/alerts/${id}/handle`,'POST',{status,note}),
   plots:()=>request<Plot[]>('/plots'),

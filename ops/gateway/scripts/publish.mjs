@@ -67,9 +67,11 @@ const APPS = {
     title: '物联网管理运营端',
     accessUrl: 'http://localhost:8102/',
   },
+  // 物联网移动端只保留 uni-app 一套源码：H5 在这里发布，微信小程序与 App 由同一工程
+  // 构建 dist/build/mp-weixin、dist/build/app，不再另设 React 独立 H5。
   'iot-mobile': {
     frontendDir: path.join('agri-iot', 'miniprogram'),
-    title: '物联网管理移动端',
+    title: '物联网管理移动端（H5 / 微信小程序 / App）',
     accessUrl: 'http://localhost:8111/',
     builder: 'uni-app',
     distDir: path.join('dist', 'build', 'h5'),
@@ -290,6 +292,15 @@ async function publishVersion(app, version, distDir, { force, repoint }) {
     ) + '\n',
     'utf8',
   )
+  // uni-app H5 的图片（如底部导航图标）在运行时按入口页的相对路径 ./static/ 加载，
+  // 指针页在 /{app}/index.html，所以要把当前版本的 static/ 同步到 /{app}/static/，
+  // 否则请求会落到网关的页面兜底，图标全部裂图。回滚切指针时同样同步。
+  const versionStatic = path.join(versionDir, 'static')
+  if (await existsAsDir(versionStatic)) {
+    const pointerStatic = path.join(appBucket, 'static')
+    await rm(pointerStatic, { recursive: true, force: true })
+    await cp(versionStatic, pointerStatic, { recursive: true })
+  }
   return versionDir
 }
 
