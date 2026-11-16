@@ -54,6 +54,7 @@ export function getGovUser(): UnifiedAccount | null {
 export async function loginWithUnifiedAccount(
   username: string,
   password: string,
+  remember = true,
 ): Promise<{ token: string; user: UnifiedAccount; permissions: string[] }> {
   const login = await request<{
     code: number
@@ -62,7 +63,7 @@ export async function loginWithUnifiedAccount(
   }>(
     `${AUTH_BASE}/api/v1/sso/login-standalone`,
     'POST',
-    { username, password, marketId: 1, remember: true },
+    { username, password, marketId: 1, remember },
   )
   if (login.status >= 400 || login.body.code !== 0 || !login.body.data?.accessToken) {
     throw new Error(login.body.message || '统一账号登录失败')
