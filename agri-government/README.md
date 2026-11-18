@@ -43,7 +43,9 @@ pnpm run build:app
 - App：`dist/build/app`
 
 小程序和 App 的 API 域名通过 `VITE_GOVERNMENT_API_BASE` 注入，要求 HTTPS。微信正式发布前还需填写小程序 AppID 并配置 request 合法域名；App 资源使用 HBuilderX 完成原生签名和安装包制作。
-统一认证地址通过 `VITE_GOVERNMENT_AUTH_BASE` 注入，示例见 `mobile/.env.example`。
+统一认证地址通过 `VITE_GOVERNMENT_AUTH_BASE` 注入，示例见 `mobile/.env.example`。H5 默认同源网关；小程序与 App 必须显式配置这两个设备可访问的 HTTPS 地址（使用同一网关时两个变量填同一地址），不再回退手机回环地址或其他模块环境变量。认证地址须提供 SSO、平台权限与退出接口，不能填只提供监管业务 API 的后端地址。
+
+登录先校验统一认证返回码、令牌与用户，再校验平台权限返回码及 `gov:inspector` / `gov:*` / `*`，全部通过后才保存本地会话。账号启用二次验证时，页面继续提交统一认证的 MFA 接口；挑战码仅留在页面内存，失败后按服务端一次性挑战约定重新走账号登录。退出仍调用统一吊销接口，服务端失败时保留会话供重试。
 
 ## 本地端口
 

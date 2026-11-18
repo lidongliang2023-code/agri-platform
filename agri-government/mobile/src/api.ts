@@ -1,4 +1,5 @@
 import { getGovToken,handleGovUnauthorized } from './auth'
+import { governmentBase } from './endpoints'
 
 export interface Task{id:number;taskNo:string;taskType:string;subjectId?:number;subjectName:string;address:string;distanceKm:number;deadline:string;priority:string;status:string;checklistDone:number;checklistTotal:number;assignedTo:string;result:string;createdAt:string}
 export interface Warning{id:number;warningNo:string;type:string;level:string;subjectName:string;location:string;title:string;content:string;aiConfidence:number;status:string;assignedTo:string;handleNote:string;createdAt:string}
@@ -9,10 +10,10 @@ export interface Message{id:number;type:string;title:string;content:string;bizTy
 export interface SubjectBrief{id:number;subjectName:string;creditCode:string;contactPhone?:string;address?:string;creditScore?:number;creditLevel?:string;riskLevel?:string}
 interface Workbench{inspector:{name:string;team:string;certificateNo:string;grid:string;organization:string};stats:{todayTasks:number;pendingTasks:number;warnings:number;openCases:number};tasks:Task[];warnings:Warning[];recentCases:Case[];offlineRecords:number;evidenceCount:number}
 interface Envelope<T>{code:number;message:string;data:T}
-const runtimePlatform=uni.getSystemInfoSync().uniPlatform
-const BASE=import.meta.env.VITE_GOVERNMENT_API_BASE||import.meta.env.VITE_SERVICE_API_BASE||(runtimePlatform==='web'?'':'http://localhost:8095')
 function request<T>(url:string,method:'GET'|'POST'='GET',data?:Record<string,unknown>):Promise<T>{
-  return new Promise((resolve,reject)=>uni.request({url:`${BASE}/api/v1/government${url}`,method,data,timeout:15000,header:{'Content-Type':'application/json',...(getGovToken()?{Authorization:`Bearer ${getGovToken()}`}:{})},success(res:any){const body=res.data as Envelope<T>;if(res.statusCode===401){handleGovUnauthorized();return reject(new Error('登录已失效，请重新使用统一账号登录'))}if(res.statusCode>=400||![0,200].includes(body?.code))return reject(new Error(body?.message||'请求失败'));resolve(body.data)},fail(err:any){reject(new Error(err?.errMsg||'网络异常'))}}))
+  const token=getGovToken()
+  if(!token){handleGovUnauthorized();return Promise.reject(new Error('请先使用统一账号登录'))}
+  return new Promise((resolve,reject)=>uni.request({url:`${governmentBase('api')}/api/v1/government${url}`,method,data,timeout:15000,header:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},success(res:any){const body=res.data as Envelope<T>;if(res.statusCode===401){handleGovUnauthorized();return reject(new Error('登录已失效，请重新使用统一账号登录'))}if(res.statusCode>=400||![0,200].includes(body?.code))return reject(new Error(body?.message||'请求失败'));resolve(body.data)},fail(err:any){reject(new Error(err?.errMsg||'网络异常'))}}))
 }
 export interface AuthorizationStatus {serverDate:string;bound:boolean;personnelName:string;grants:Array<{id:string;organizationName:string;validFrom:string;validUntil:string;effective:boolean;reason:string;regions:Array<{code:string;name:string;includeChildren:boolean;duties:string[]}>}>}
 export const api={

@@ -6,7 +6,6 @@ declare const uni:any
 interface ImportMetaEnv {
   readonly VITE_GOVERNMENT_API_BASE?: string
   readonly VITE_GOVERNMENT_AUTH_BASE?: string
-  readonly VITE_SERVICE_API_BASE?: string
 }
 
 interface ImportMeta {

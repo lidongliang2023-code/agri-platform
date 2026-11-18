@@ -15,17 +15,17 @@ onShow(refresh)
 </script>
 <template>
  <view class="authorization-notice" :class="{warning:!loading&&!capable,error:!!error}" aria-label="当前辖区授权">
-  <view class="notice-head"><text class="notice-title">{{title}}</text><button class="notice-refresh" :disabled="loading" @click="refresh">{{loading?'读取中':'刷新'}}</button></view>
+  <view class="notice-head"><text class="notice-title">{{title}}</text><button class="notice-refresh" :disabled="loading" @tap="refresh">{{loading?'读取中':'刷新'}}</button></view>
   <text v-if="!loading && (!capable || expanded)" class="notice-text">{{guidance}}</text>
   <text v-if="error" class="notice-error">{{error}}</text>
-  <button v-if="data&&!loading&&capable" class="notice-toggle" @click="expanded=!expanded">{{expanded?'收起授权范围':'查看授权范围'}}</button>
+  <button v-if="data&&!loading&&capable" class="notice-toggle" @tap="expanded=!expanded">{{expanded?'收起授权范围':'查看授权范围'}}</button>
   <template v-if="data&&!loading&&(!capable||expanded)">
    <text class="notice-meta">{{data.personnelName||'当前账号'}} · 服务端日期 {{data.serverDate}}</text>
    <text class="notice-text">管理员身份不自动获得执法权，实际办理以服务端即时校验为准。</text>
    <text v-if="context==='scan'" class="notice-text">跨域溯源明细尚无可核实的辖区映射，暂不开放；扫码成功不代表获得办理授权。</text>
    <text v-if="context==='evidence'" class="notice-text">取证还须关联本人承办且辖区、职责匹配的任务或案件。</text>
    <text v-if="context==='workbench'" class="notice-text">工作台指标按相应职责及本人承办范围统计，部分指标可能为空。</text>
-   <button v-if="data.grants.length&&!capable" class="notice-toggle" @click="expanded=!expanded">{{expanded?'收起':'查看'}}授权明细（{{data.grants.length}} 条）{{expanded?' ↑':' ↓'}}</button>
+   <button v-if="data.grants.length&&!capable" class="notice-toggle" @tap="expanded=!expanded">{{expanded?'收起':'查看'}}授权明细（{{data.grants.length}} 条）{{expanded?' ↑':' ↓'}}</button>
    <view v-if="expanded" class="notice-details">
     <view v-for="g in data.grants" :key="g.id" class="notice-record">
      <text class="notice-title">{{g.organizationName}}</text><text class="notice-state" :class="{valid:g.effective}">{{g.effective?'授权有效':g.reason}}</text>

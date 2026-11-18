@@ -69,6 +69,34 @@
       "style": {
         "navigationStyle": "custom"
       }
+    },
+    {
+      "path": "pages/cases/detail",
+      "style": {
+        "navigationBarTitleText": "案件详情",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/evidence/detail",
+      "style": {
+        "navigationBarTitleText": "取证详情",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/messages/detail",
+      "style": {
+        "navigationBarTitleText": "消息详情",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/warnings/detail",
+      "style": {
+        "navigationBarTitleText": "预警详情",
+        "enablePullDownRefresh": true
+      }
     }
   ],
   "globalStyle": {

@@ -18,9 +18,9 @@
 
       <view class="hero-flow">
         <view class="flow-step active"><text>01</text><text>统一账号</text></view>
-        <i />
+        <view class="divider-line" />
         <view class="flow-step"><text>02</text><text>执法权限</text></view>
-        <i />
+        <view class="divider-line" />
         <view class="flow-step"><text>03</text><text>辖区授权</text></view>
       </view>
     </view>
@@ -35,7 +35,7 @@
       </view>
 
       <view class="form-block">
-        <view class="input-group">
+        <view v-if="!challengeToken" class="input-group">
           <text class="label">账号 / 手机号</text>
           <view class="input-shell">
             <text class="input-prefix">用</text>
@@ -49,27 +49,43 @@
           </view>
         </view>
 
-        <view class="input-group">
+        <view v-if="!challengeToken" class="input-group">
           <text class="label">登录密码</text>
           <view class="input-shell">
             <text class="input-prefix">密</text>
             <input
               v-model="password"
+              :maxlength="128"
               password
+              :focus="passwordFocused"
+              @blur="passwordFocused = false"
               :disabled="submitting"
               placeholder="请输入统一账号密码"
+              :cursor-spacing="120"
               confirm-type="done"
               @confirm="submit"
             />
           </view>
         </view>
 
-        <view class="form-meta">
-          <label class="remember" @tap="remember = !remember">
-            <checkbox :checked="remember" color="#159a5e" />
-            <text>保持登录（有效期内）</text>
-          </label>
-          <text class="meta-link" @tap="showPasswordHelp">忘记密码？</text>
+        <view v-if="challengeToken" class="input-group">
+          <text class="label">二次验证</text>
+          <view class="input-shell">
+            <text class="input-prefix">验</text>
+            <input v-model="verificationCode" :disabled="submitting" :focus="true"
+              placeholder="请输入身份验证器动态码或恢复码" confirm-type="done" @confirm="submit" />
+          </view>
+          <button class="meta-link" :disabled="submitting" @tap="resetMfa">返回账号登录</button>
+        </view>
+
+        <view v-if="!challengeToken" class="form-meta">
+          <checkbox-group @change="changeRemember">
+            <label class="remember">
+              <checkbox value="remember" :checked="remember" :disabled="submitting" color="#159a5e" />
+              <text>保持登录（有效期内）</text>
+            </label>
+          </checkbox-group>
+          <button class="meta-link" :disabled="submitting" @tap="showPasswordHelp">忘记密码？</button>
         </view>
 
         <view v-if="messageText" :class="['inline-message', messageType]">
@@ -78,19 +94,19 @@
         </view>
 
         <button class="primary-button" :disabled="submitting" @tap="submit">
-          {{ submitting ? '登录中…' : '登 录' }}
+          {{ submitting ? '验证中…' : challengeToken ? '验证并登录' : '登 录' }}
         </button>
 
         <view class="permission-note">
           <text class="permission-icon">盾</text>
           <view>
             <text class="permission-title">登录后自动校验监管执法身份</text>
-            <text class="permission-desc">需具备 gov:inspector 权限，并拥有有效的人员、机构和辖区职责授权</text>
+            <text class="permission-desc">需开通执法人员权限，并拥有有效的人员、机构和辖区职责授权</text>
           </view>
         </view>
       </view>
 
-      <view class="auth-divider"><i /><text>登录后可使用</text><i /></view>
+      <view class="auth-divider"><view class="divider-line" /><text>登录后可使用</text><view class="divider-line" /></view>
       <view class="service-grid">
         <view class="service-item"><text class="service-icon green">任</text><text>执法任务</text></view>
         <view class="service-item"><text class="service-icon blue">查</text><text>现场检查</text></view>
@@ -100,7 +116,7 @@
 
       <view class="auth-footer">
         <text>账号、权限或辖区未开通？</text>
-        <text class="footer-link" @tap="showAccessHelp">联系平台运营开通 →</text>
+        <button class="footer-link" @tap="showAccessHelp">联系平台运营开通 →</button>
       </view>
     </view>
 
@@ -113,14 +129,22 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { loginWithUnifiedAccount } from '../../auth'
+import { nextTick, ref } from 'vue'
+import { onUnload } from '@dcloudio/uni-app'
+import { completeGovMfa, GovMfaRequired, loginWithUnifiedAccount } from '../../auth'
 
 const statusBarHeight = ref(Number(uni.getSystemInfoSync().statusBarHeight || 0))
 const username = ref('')
 const password = ref('')
 const remember = ref(true)
+function changeRemember(event: { detail: { value: string[] } }): void {
+  remember.value = event.detail.value.includes('remember')
+}
 const submitting = ref(false)
+const passwordFocused = ref(false)
+const challengeToken = ref('')
+const verificationCode = ref('')
+let completed = false
 const messageText = ref('')
 const messageType = ref<'error' | 'notice'>('error')
 
@@ -129,13 +153,32 @@ function notice(text: string, type: 'error' | 'notice' = 'error'): void {
   messageText.value = text
 }
 
-function focusPassword(): void {
-  // H5、小程序和 App 均支持回车提交；账号输入框回车后由系统切换到密码框。
+async function focusPassword(): Promise<void> {
+  passwordFocused.value = false
+  await nextTick()
+  passwordFocused.value = true
 }
 
+function resetMfa(): void {
+  challengeToken.value = ''
+  verificationCode.value = ''
+  password.value = ''
+  notice('请重新输入账号密码', 'notice')
+}
+
+onUnload(() => {
+  challengeToken.value = ''
+  verificationCode.value = ''
+  password.value = ''
+})
+
 async function submit(): Promise<void> {
-  if (submitting.value) return
-  if (!username.value.trim() || !password.value) {
+  if (submitting.value || completed) return
+  if (challengeToken.value && !verificationCode.value.trim()) {
+    notice('请输入身份验证器动态码或恢复码')
+    return
+  }
+  if (!challengeToken.value && (!username.value.trim() || !password.value)) {
     notice('请输入统一账号和密码')
     return
   }
@@ -143,11 +186,31 @@ async function submit(): Promise<void> {
   submitting.value = true
   notice('', 'notice')
   try {
-    await loginWithUnifiedAccount(username.value.trim(), password.value, remember.value)
+    if (challengeToken.value) {
+      await completeGovMfa(challengeToken.value, verificationCode.value, remember.value)
+    } else {
+      await loginWithUnifiedAccount(username.value.trim(), password.value, remember.value)
+    }
+    completed = true
+    password.value = ''
+    challengeToken.value = ''
+    verificationCode.value = ''
     uni.showToast({ title: '登录成功', icon: 'success' })
-    setTimeout(() => uni.switchTab({ url: '/pages/workbench/index' }), 250)
+    uni.switchTab({ url: '/pages/workbench/index', fail: () => {
+      completed = false
+      notice('登录成功，但工作台打开失败，请重试')
+    } })
   } catch (error) {
-    notice(error instanceof Error ? error.message : '登录失败，请稍后重试')
+    if (error instanceof GovMfaRequired) {
+      challengeToken.value = error.challengeToken
+      password.value = ''
+      notice(error.message, 'notice')
+    } else {
+      const wasMfa = !!challengeToken.value
+      if (wasMfa) resetMfa()
+      notice((error instanceof Error ? error.message : '登录失败，请稍后重试')
+        + (wasMfa ? '；请重新输入账号密码获取新的验证请求' : ''))
+    }
   } finally {
     submitting.value = false
   }
@@ -197,10 +260,11 @@ function showAccessHelp(): void {
 }
 
 .brand-mark {
-  display: grid;
+  display: flex;
   width: 66rpx;
   height: 66rpx;
-  place-items: center;
+  align-items: center;
+  justify-content: center;
   border-radius: 19rpx;
   background: linear-gradient(145deg, #dff8e8, #8fe0af);
   color: #0e6a41;
@@ -237,7 +301,8 @@ function showAccessHelp(): void {
 }
 
 .hero-copy {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 8rpx;
   margin-top: 40rpx;
 }
@@ -278,10 +343,11 @@ function showAccessHelp(): void {
 }
 
 .flow-step text:first-child {
-  display: grid;
+  display: flex;
   width: 30rpx;
   height: 30rpx;
-  place-items: center;
+  align-items: center;
+  justify-content: center;
   border-radius: 50%;
   background: rgba(255, 255, 255, .14);
   color: #d7f8e4;
@@ -294,7 +360,7 @@ function showAccessHelp(): void {
   color: #117849;
 }
 
-.hero-flow i {
+.hero-flow .divider-line {
   height: 1rpx;
   flex: 1;
   background: rgba(255, 255, 255, .18);
@@ -383,10 +449,11 @@ function showAccessHelp(): void {
 }
 
 .input-prefix {
-  display: grid;
+  display: flex;
   width: 72rpx;
   height: 44rpx;
-  place-items: center;
+  align-items: center;
+  justify-content: center;
   border-right: 1rpx solid #e1e9e4;
   color: #6e8275;
   font-size: 24rpx;
@@ -449,11 +516,12 @@ function showAccessHelp(): void {
 }
 
 .message-mark {
-  display: grid;
+  display: flex;
   width: 28rpx;
   height: 28rpx;
   flex: 0 0 28rpx;
-  place-items: center;
+  align-items: center;
+  justify-content: center;
   border-radius: 50%;
   background: currentColor;
   color: #fff;
@@ -498,11 +566,12 @@ function showAccessHelp(): void {
 }
 
 .permission-icon {
-  display: grid;
+  display: flex;
   width: 40rpx;
   height: 40rpx;
   flex: 0 0 40rpx;
-  place-items: center;
+  align-items: center;
+  justify-content: center;
   border-radius: 12rpx;
   background: #dff4e7;
   color: #117849;
@@ -532,20 +601,22 @@ function showAccessHelp(): void {
   font-size: 23rpx;
 }
 
-.auth-divider i {
+.auth-divider .divider-line {
   height: 1rpx;
   flex: 1;
   background: #edf1ee;
 }
 
 .service-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  display: flex;
+  justify-content: space-between;
   gap: 8rpx;
   padding: 24rpx 28rpx 28rpx;
 }
 
 .service-item {
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   flex-direction: column;
@@ -555,10 +626,11 @@ function showAccessHelp(): void {
 }
 
 .service-icon {
-  display: grid;
+  display: flex;
   width: 58rpx;
   height: 58rpx;
-  place-items: center;
+  align-items: center;
+  justify-content: center;
   border-radius: 17rpx;
   color: #fff;
   font-size: 24rpx;
@@ -582,7 +654,8 @@ function showAccessHelp(): void {
 }
 
 .auth-bottom {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 6rpx;
   padding: 28rpx 16rpx 0;
   color: #91a098;
@@ -602,8 +675,11 @@ function showAccessHelp(): void {
 
 @media (min-width: 768px) {
   .auth-page {
-    width: 750rpx;
+    width: 100%;
+    max-width: 750px;
     margin: 0 auto;
   }
 }
+.meta-link,.footer-link{min-height:88rpx;display:flex;align-items:center;text-align:left;font-size:24rpx}
+.auth-footer{flex-wrap:wrap}.card-heading>view:first-child{min-width:0;flex:1}.auth-badge{font-size:22rpx}
 </style>

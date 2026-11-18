@@ -38,7 +38,11 @@ button[disabled]{opacity:.5}.input{height:96rpx;min-height:96rpx;padding:16rpx 2
 .notice{padding:22rpx;margin-bottom:24rpx;border-radius:16rpx;background:#fff6e5;color:#805d18;font-size:26rpx;line-height:1.7}
 .action-page{padding-bottom:calc(180rpx + env(safe-area-inset-bottom))}
 .bottom-action{position:fixed;left:0;right:0;bottom:0;z-index:10;display:flex;align-items:center;justify-content:space-between;gap:20rpx;padding:20rpx 24rpx calc(20rpx + env(safe-area-inset-bottom));border-top:1rpx solid #dce7df;background:#fff}.bottom-action>view{display:flex;flex:1;min-width:0;flex-direction:column}.bottom-action>.muted{flex:1;min-width:0}.bottom-action .btn{flex-shrink:0;min-width:240rpx}
-.tabs{overflow-x:auto;white-space:nowrap;padding-bottom:8rpx}.tabs button{min-height:88rpx;flex-shrink:0}
+.tabs{white-space:nowrap;padding-bottom:8rpx}.tabs button{min-height:88rpx;flex-shrink:0}
 .custom-nav{height:auto;min-height:96rpx;padding-top:env(safe-area-inset-top)}
 @media(min-width:768px){.page{width:100%;max-width:750px}.bottom-action{max-width:750px;margin:0 auto}}
+/* 原生页面长文阅读与键盘/安全区适配。 */
+.detail-content{display:block;margin-top:20rpx;white-space:pre-wrap;word-break:break-all;line-height:1.8;font-size:29rpx}
+.input,.textarea{min-width:0}.bottom-action{flex-wrap:wrap}.bottom-action>.btn{max-width:100%}
+.card,.field-value,.muted,.tiny{word-break:break-word}.filter-scroll{min-width:0}
 </style>
