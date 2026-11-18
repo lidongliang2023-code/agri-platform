@@ -133,9 +133,40 @@ export async function logoutGov() {
 }
 
 let redirectingToLogin = false
+/** 等当前页面导航完成后再读取页面栈，避免 onShow 中读到上一页或跳转被覆盖。 */
 export function handleGovUnauthorized() {
   clearGovSession()
-  if (redirectingToLogin || getCurrentPages().slice(-1)[0]?.route === 'pages/login/index') return
+  if (redirectingToLogin) return
   redirectingToLogin = true
-  uni.reLaunch({ url: '/pages/login/index', complete: () => { redirectingToLogin = false } })
+  const redirect = (retry: boolean) => {
+    let onLoginPage = getCurrentPages().slice(-1)[0]?.route === 'pages/login/index'
+    // #ifdef H5
+    // 浏览器直接更改 hash 时，页面栈可能仍是上一页，必须以实际 URL 为准。
+    onLoginPage = window.location.hash.split('?')[0] === '#/pages/login/index'
+    // #endif
+    if (getGovToken() || onLoginPage) {
+      redirectingToLogin = false
+      return
+    }
+    // #ifdef H5
+    if (!retry) {
+      redirectingToLogin = false
+      window.location.replace(`${window.location.pathname}${window.location.search}#/pages/login/index`)
+      window.location.reload()
+      return
+    }
+    // #endif
+    uni.reLaunch({
+      url: '/pages/login/index',
+      complete: () => {
+        if (retry) {
+          // 初始路由或原生页面动画可能仍在完成；只补偿一次，避免跳转循环。
+          setTimeout(() => redirect(false), 150)
+        } else {
+          redirectingToLogin = false
+        }
+      },
+    })
+  }
+  setTimeout(() => redirect(true), 0)
 }

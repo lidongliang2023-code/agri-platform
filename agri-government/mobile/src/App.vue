@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { onLaunch } from '@dcloudio/uni-app'
-onLaunch(() => {
-  if (!uni.getStorageSync('gov_unified_token')) {
-    setTimeout(() => uni.reLaunch({ url: '/pages/login/index' }), 0)
-  }
+import { onShow } from '@dcloudio/uni-app'
+import { getGovToken, handleGovUnauthorized } from './auth'
+onShow(() => {
+  if (!getGovToken()) handleGovUnauthorized()
 })
 </script>
 <style lang="scss">
