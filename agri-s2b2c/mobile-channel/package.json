@@ -9,7 +9,8 @@
     "dev:mp-weixin": "uni -p mp-weixin",
     "build:mp-weixin": "uni build -p mp-weixin",
     "build:app": "uni build -p app",
-    "typecheck": "vue-tsc --noEmit"
+    "typecheck": "vue-tsc --noEmit",
+    "test:order-navigation": "node --test tests/order-navigation.test.cjs"
   },
   "dependencies": {
     "@dcloudio/uni-app": "3.0.0-4010520240507001",
