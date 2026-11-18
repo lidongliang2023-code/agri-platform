@@ -1,4 +1,5 @@
-import { opsRequest, type Row } from './iot'
+import { computed, ref } from 'vue'
+import { opsRequest, currentWorkspace, hasIotSession, type Row } from './iot'
 export interface OpsMenu { key:string; title:string; group:string; mark:string; path:string; titleKey:string; fields:Array<[string,string]> }
 export const opsMenus:OpsMenu[]=[
  {key:'devices',title:'平台设备',group:'设备与接入',mark:'设',path:'/devices',titleKey:'deviceName',fields:[['deviceCode','设备编码'],['tenantName','所属主体'],['farmName','农场'],['typeName','类型'],['protocol','协议'],['lastReport','最近上报'],['firmwareVersion','固件版本']]},
@@ -25,9 +26,68 @@ export function isOpsTodo(kind: string, row: Row): boolean {
   return false
 }
 export const opsApi={
+  sampling:(id:number)=>opsRequest<Row>(`/devices/${id}/sampling`),
+  saveSampling:(id:number,body:Row)=>opsRequest<Row>(`/devices/${id}/sampling`,'PUT',body),
+  ruleOptions:()=>opsRequest<Row>('/alert-rules/options'),
+  saveRule:(id:number,body:Row)=>opsRequest<Row>(id?`/alert-rules/${id}`:'/alert-rules',id?'PUT':'POST',body),
+  removeRule:(id:number)=>opsRequest<Row>(`/alert-rules/${id}`,'DELETE'),
+  firmware:(id:number)=>opsRequest<Row>(`/firmware/packages/${id}`),
+  registerFirmware:(body:Row)=>opsRequest<Row>('/firmware/packages','POST',body),
+  publishFirmware:(id:number)=>opsRequest<Row>(`/firmware/packages/${id}/publish`,'POST',{}),
+  deprecateFirmware:(id:number,reason:string)=>opsRequest<Row>(`/firmware/packages/${id}/deprecate`,'POST',{reason}),
+  executeOta:(id:number,gatewayIds:number[],firmwareUrl:string)=>opsRequest<Row>(`/ota/${id}/execute`,'POST',{gatewayIds,firmwareUrl}),
  overview:()=>opsRequest<Row>('/overview'),
  list:(path:string)=>opsRequest<Row[]>(path),
  reports:()=>opsRequest<Row>('/reports'),
- action:(path:string,data:Row={})=>opsRequest<Row>(path,'POST',data),
+ action:async(path:string,data:Row={})=>{
+  const result=await opsRequest<Row>(path,'POST',data)
+  await refreshOpsTodos(true).catch(()=>undefined)
+  return result
+ },
  receipts:(kind:string,id:number,page:number)=>opsRequest<Row[]>(`/${kind==='device'?'devices':'gateways'}/${id}/${kind==='ota'?'ota':'commands'}?page=${page}&size=20`),
+}
+
+interface OpsTodoSnapshot { overview: Row; counts: Record<string, number> }
+const todoSnapshot = ref<OpsTodoSnapshot | null>(null)
+export const opsTodoError = ref('')
+export const opsTodoCounts = computed<Record<string, number>>(() => todoSnapshot.value?.counts || {})
+export const opsTodoTotal = computed(() => Object.values(opsTodoCounts.value).reduce((sum, value) => sum + value, 0))
+let todoRequest: Promise<OpsTodoSnapshot> | null = null
+let todoRevision = 0
+function resetOpsTodos() {
+  todoRevision++
+  todoRequest = null
+  todoSnapshot.value = null
+  opsTodoError.value = ''
+}
+uni.$on('iot:session-reset', resetOpsTodos)
+function todoCount(value: unknown) {
+  const n = Number(value)
+  return Number.isSafeInteger(n) && n > 0 ? n : 0
+}
+export function refreshOpsTodos(force = false): Promise<OpsTodoSnapshot> {
+  if (!hasIotSession() || currentWorkspace() !== 'ops') {
+    resetOpsTodos()
+    return Promise.reject(new Error('请先进入运营工作台'))
+  }
+  if (todoRequest && !force) return todoRequest
+  const revision = ++todoRevision
+  const request = Promise.all([opsApi.overview(), opsApi.list('/work-orders')]).then(([overview, orders]) => {
+    if (revision !== todoRevision) throw new Error('待办上下文已改变，请重新加载')
+    const snapshot = { overview, counts: {
+      alerts: todoCount(overview.metrics?.openAlerts),
+      access: todoCount(overview.metrics?.pendingAccess),
+      workorders: orders.filter(row => isOpsTodo('workorders', row)).length,
+    } }
+    todoSnapshot.value = snapshot
+    opsTodoError.value = ''
+    return snapshot
+  }).catch(error => {
+    if (revision === todoRevision) opsTodoError.value = error instanceof Error ? error.message : '待办数量更新失败'
+    throw error
+  }).finally(() => {
+    if (todoRequest === request) todoRequest = null
+  })
+  todoRequest = request
+  return request
 }

@@ -10,6 +10,7 @@ const syncing=ref(false),error=ref('')
 const entries=[
   {mark:'监',label:'实时监测',tone:'green',path:'/pages/monitor/index'},
   {mark:'设',label:'设备管理',tone:'blue',path:'/pages/device/list',tab:true},
+  {mark:'组',label:'设备分组',tone:'blue',path:'/pages/group/index'},
   {mark:'网',label:'边缘网关',tone:'blue',path:'/pages/gateway/list'},
   {mark:'地',label:'地块监测',tone:'green',path:'/pages/plot/list',tab:true},
   {mark:'景',label:'场景控制',tone:'purple',path:'/pages/scene/index'},

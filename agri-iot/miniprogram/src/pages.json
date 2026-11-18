@@ -170,6 +170,130 @@
         "navigationBarTitleText": "指令与回执",
         "enablePullDownRefresh": true
       }
+    },
+    {
+      "path": "pages/ops/devices",
+      "style": {
+        "navigationBarTitleText": "平台设备",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/ops/gateways",
+      "style": {
+        "navigationBarTitleText": "网关运维",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/ops/products",
+      "style": {
+        "navigationBarTitleText": "产品与协议",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/ops/access",
+      "style": {
+        "navigationBarTitleText": "接入审核",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/ops/alerts",
+      "style": {
+        "navigationBarTitleText": "告警运营",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/ops/rules",
+      "style": {
+        "navigationBarTitleText": "阈值规则治理",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/ops/workorders",
+      "style": {
+        "navigationBarTitleText": "运维工单",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/ops/firmwares",
+      "style": {
+        "navigationBarTitleText": "固件包",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/ops/ota",
+      "style": {
+        "navigationBarTitleText": "OTA 升级",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/ops/tenants",
+      "style": {
+        "navigationBarTitleText": "主体与配额",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/ops/logs",
+      "style": {
+        "navigationBarTitleText": "操作审计",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/ops/reports",
+      "style": {
+        "navigationBarTitleText": "统计分析",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/ops/sampling",
+      "style": {
+        "navigationBarTitleText": "运营采样配置"
+      }
+    },
+    {
+      "path": "pages/ops/rule-edit",
+      "style": {
+        "navigationBarTitleText": "平台阈值编辑"
+      }
+    },
+    {
+      "path": "pages/ops/firmware-edit",
+      "style": {
+        "navigationBarTitleText": "登记固件包"
+      }
+    },
+    {
+      "path": "pages/ops/firmware-detail",
+      "style": {
+        "navigationBarTitleText": "固件详情"
+      }
+    },
+    {
+      "path": "pages/ops/ota-execute",
+      "style": {
+        "navigationBarTitleText": "执行升级"
+      }
+    },
+    {
+      "path": "pages/group/index",
+      "style": {"navigationBarTitleText": "设备分组", "enablePullDownRefresh": true}
+    },
+    {
+      "path": "pages/threshold/evaluate",
+      "style": {
+        "navigationBarTitleText": "阈值试算"
+      }
     }
   ],
   "globalStyle": {

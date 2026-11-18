@@ -7,6 +7,8 @@
     "build:h5": "uni build",
     "dev:mp-weixin": "uni -p mp-weixin",
     "build:mp-weixin": "uni build -p mp-weixin",
+    "dev:mp-weixin:local": "uni -p mp-weixin --mode wechat",
+    "build:mp-weixin:local": "uni build -p mp-weixin --mode wechat",
     "build:app": "uni build -p app",
     "typecheck": "vue-tsc --noEmit"
   },

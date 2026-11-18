@@ -1,106 +1,12 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { onLoad, onShow, onPullDownRefresh, onReachBottom } from '@dcloudio/uni-app'
-import { opsApi, opsMenus, opsLabel, reportLabels, opsTodoLabels, isOpsTodo } from '../../api/ops'
-import { type Row } from '../../api/iot'
-import SegTabs from '../../components/SegTabs.vue'
-import OpsTabBar from '../../components/OpsTabBar.vue'
-import { confirmAction, showError } from '../../utils/ui'
-const kind=ref(''),rows=ref<Row[]>([]),extra=ref<Row[]>([]),summary=ref<Row>({}),busy=ref(false),error=ref(''),keyword=ref(''),filter=ref('all'),limit=ref(30)
-const selected=ref<Row|null>(null),action=ref(''),note=ref(''),quota=ref(''),saving=ref(false)
-const menu=computed(()=>opsMenus.find(m=>m.key===kind.value))
-const status=(row:Row)=>row.onlineStatus||row.status||(typeof row.enabled==='boolean'?(row.enabled?'enabled':'disabled'):'')
-const filters=computed<Array<[string,string]>>(()=>[
-  ['all',`全部 ${rows.value.length}`],
-  ...(opsTodoLabels[kind.value] ? [['todo',`${opsTodoLabels[kind.value]} ${rows.value.filter(row=>isOpsTodo(kind.value,row)).length}`] as [string,string]] : []),
-  ...Array.from(new Set(rows.value.map(status).filter(Boolean))).map(s=>[s,`${opsLabel(s)} ${rows.value.filter(row=>status(row)===s).length}`] as [string,string])
-])
-const matched=computed(()=>rows.value.filter(row=>(filter.value==='all'||(filter.value==='todo'?isOpsTodo(kind.value,row):status(row)===filter.value))&&Object.values(row).some(v=>String(v??'').toLowerCase().includes(keyword.value.trim().toLowerCase()))))
-const visible=computed(()=>matched.value.slice(0,limit.value))
-const actionTitle=computed(()=>({handling:'开始处理告警',resolved:'解决告警',processing:'受理工单',completed:'完成工单',approved:'通过接入审核',rejected:'驳回接入申请',quota:'调整设备配额'}[action.value]||'处理'))
-onLoad(options=>{kind.value=String(options?.kind||'');filter.value=options?.filter==='todo'&&opsTodoLabels[kind.value]?'todo':'all';if(menu.value)uni.setNavigationBarTitle({title:menu.value.title})})
-onShow(load);onPullDownRefresh(load);onReachBottom(()=>{limit.value+=30})
-async function load(){if(busy.value)return;if(!menu.value){error.value='运营菜单不存在，请返回工作台';uni.stopPullDownRefresh();return}busy.value=true;rows.value=[];extra.value=[];summary.value={};error.value='';try{if(kind.value==='reports'){const report=await opsApi.reports();rows.value=report.tenantRank||[];summary.value=report.summary||{}}else{const main=await opsApi.list(menu.value.path);if(kind.value==='rules'){const tenant=await opsApi.list('/alert-rules/tenant');rows.value=[...main.map(r=>({...r,source:'platform'})),...tenant.map(r=>({...r,source:'tenant'}))]}else rows.value=main;if(kind.value==='products')extra.value=await opsApi.list('/protocols')}limit.value=30;expanded.value={}}catch(e){rows.value=[];error.value=e instanceof Error?e.message:'运营数据加载失败'}finally{busy.value=false;uni.stopPullDownRefresh()}}
-function edit(row:Row,next:string){selected.value=row;action.value=next;note.value='';quota.value=String(row.deviceLimit??'')}
-function close(){if(!saving.value)selected.value=null}
-async function save(){if(!selected.value||saving.value)return;const row=selected.value;let body:Row,path:string;if(action.value==='quota'){const n=Number(quota.value);if(!/^\d+$/.test(quota.value)||!Number.isSafeInteger(n)||n<1||n>100000||n<Number(row.deviceCount)){showError(new Error('设备上限须为 1～100000 的整数，且不能少于已接入数量'));return}body={deviceLimit:n};path=`/tenants/${row.id}/quota`}else{const text=note.value.trim();if(text.length<4||text.length>200){showError(new Error('请填写 4～200 字的实际处理说明'));return}body={status:action.value,note:text};path=kind.value==='access'?`/access-audits/${row.id}/review`:kind.value==='alerts'?`/alerts/${row.id}/handle`:`/work-orders/${row.id}/handle`}saving.value=true;try{if(!await confirmAction(actionTitle.value,`对象：${row[menu.value!.titleKey]}。${action.value==='quota'?'设备上限调整为 '+quota.value:note.value.trim()}`))return;await opsApi.action(path,body);selected.value=null;uni.showToast({title:'已保存',icon:'success'});await load()}catch(e){showError(e)}finally{saving.value=false}}
-async function restart(row:Row){if(saving.value)return;saving.value=true;try{if(!await confirmAction('重启网关',`将向“${row.gatewayName}”提交重启申请，可能短暂中断设备连接。实际执行结果请查看指令回执。`))return;await opsApi.action(`/gateways/${row.id}/restart`);uni.showModal({title:'申请已登记',content:'请进入指令回执查看接入端执行结果。',showCancel:false})}catch(e){showError(e)}finally{saving.value=false}}
-async function toggle(row:Row){if(saving.value)return;saving.value=true;try{if(!await confirmAction(row.enabled?'停用平台阈值':'启用平台阈值',`该操作将影响适用主体的告警判定：${row.ruleName}`))return;await opsApi.action(`/alert-rules/${row.id}/toggle`);await load()}catch(e){showError(e)}finally{saving.value=false}}
-function receipts(row:Row,type:string){uni.navigateTo({url:`/pages/ops/receipts?id=${row.id}&kind=${type}`})}
-const expanded=ref<Record<string,boolean>>({})
-const keyFields:Record<string,string[]>={
-  devices:['tenantName','farmName','typeName','lastReport'],gateways:['farmName','model','onlineCount','totalCount'],
-  products:['category','model','protocol','deviceCount'],access:['tenantName','requestType','submittedAt','auditor'],
-  alerts:['tenantName','deviceName','level','createdAt'],rules:['tenantName','metricName','threshold','level'],
-  workorders:['tenantName','deviceName','priority','technician'],firmwares:['versionName','firmwareType','targetModel','publishedAt'],
-  ota:['firmwareVersion','targetCount','successCount','failedCount'],tenants:['planName','deviceCount','deviceLimit','expireDate'],
-  logs:['operator','target','createdAt'],reports:['tenantCode','deviceCount','deviceLimit','region']
-}
-const summaryFields=computed(()=>menu.value?.fields.filter(([key])=>keyFields[kind.value]?.includes(key))||[])
-const detailFields=computed(()=>menu.value?.fields.filter(([key])=>!keyFields[kind.value]?.includes(key))||[])
-const searchPlaceholder=computed(()=>kind.value==='logs'?'搜索操作人、对象、操作内容':kind.value==='firmwares'?'搜索固件名称、版本、型号':'搜索名称、主体、编号')
-const emptyTitle=computed(()=>filter.value==='todo'&&!keyword.value?'暂无'+opsTodoLabels[kind.value]+'事项':keyword.value||filter.value!=='all'?'没有匹配的记录':'暂无记录')
-function rowKey(row:Row){return String(row.source||'')+row.id}
-function toggleDetails(row:Row){const key=rowKey(row);expanded.value[key]=!expanded.value[key]}
-function fieldValue(row:Row,key:string){return ['level','priority','firmwareType','status'].includes(key)?opsLabel(row[key]):row[key]??'—'}
-function tone(value:string){if(['failed','rejected','critical','high'].includes(value))return 'red';if(['pending','scheduled','major','medium','partial'].includes(value))return 'orange';if(['processing','handling','running','assigned'].includes(value))return 'blue';if(['offline','disabled','deprecated','draft'].includes(value))return 'gray';return 'green'}
-function statusLabel(row:Row){return kind.value==='access'&&status(row)==='pending'?'待审核':opsLabel(status(row))}
-function preview(row:Row){return kind.value==='alerts'?row.content:kind.value==='workorders'?row.description:kind.value==='logs'?row.detail:kind.value==='firmwares'?row.releaseNotes:''}
-function hasActions(row:Row){return kind.value==='alerts'?['pending','handling'].includes(row.status):kind.value==='workorders'?['pending','processing'].includes(row.status):kind.value==='access'?row.status==='pending':['tenants','devices','gateways'].includes(kind.value)||(kind.value==='rules'&&row.source==='platform')}
-function clearFilters(){keyword.value='';filter.value='all';limit.value=30}
-function resetFilter(){limit.value=30}
-
+import {ref} from 'vue'
+import {onLoad,onShow,onPullDownRefresh,onReachBottom} from '@dcloudio/uni-app'
+import OpsBusiness from '../../components/OpsBusiness.vue'
+const business=ref<InstanceType<typeof OpsBusiness>|null>(null), filter=ref('all')
+const kind=ref('')
+onLoad(o=>{kind.value=String(o?.kind||'');filter.value=o?.filter==='todo'?'todo':'all'})
+onShow(()=>business.value?.reload())
+onPullDownRefresh(()=>{if(business.value)void business.value.reload();else uni.stopPullDownRefresh()})
+onReachBottom(()=>business.value?.more())
 </script>
-<template>
-  <view class="page pad ops-list">
-    <view class="list-overview">
-      <view><text class="scope-label">全平台范围</text><text class="result-count">{{busy?'加载中':matched.length+' 条记录'}}<text v-if="!busy&&matched.length!==rows.length" class="count-total"> / 共 {{rows.length}} 条</text></text></view>
-      <button role="button" class="btn refresh-button" :disabled="busy||saving" :loading="busy" @tap="load">刷新</button>
-    </view>
-    <view v-if="error" class="error-state"><text class="strong">加载失败</text><text class="error-message">{{error}}</text><button role="button" class="btn" @tap="load">重新加载</button></view>
-    <template v-if="menu&&!error">
-      <view v-if="kind==='reports'" class="metric-grid report-summary"><view v-for="(value,key) in summary" :key="key"><text class="muted">{{reportLabels[key]||key}}</text><text class="value">{{value}}</text></view></view>
-      <view class="sticky-head list-filters">
-        <view class="search-bar"><input v-model="keyword" :placeholder="searchPlaceholder" confirm-type="search" @input="resetFilter"/><button role="button" v-if="keyword" class="clear-search" aria-label="清空搜索" @tap="keyword='';resetFilter()">清除</button></view>
-        <SegTabs v-model="filter" :options="filters" @update:modelValue="resetFilter"/>
-        <view v-if="keyword||filter!=='all'" class="filter-context"><text>{{filter==='todo'?'仅看'+opsTodoLabels[kind]:'已筛选'}}{{keyword?' · 搜索“'+keyword+'”':''}}</text><button role="button" class="reset-filter" @tap="clearFilters">重置</button></view>
-      </view>
-      <view v-if="busy" class="loading">正在加载运营记录…</view>
-      <text v-if="kind==='rules'" class="list-note">平台规则可启停；主体规则只读，按所属主体管理。</text>
-      <text v-if="kind==='firmwares'||kind==='ota'" class="notice block">此页用于查询进度。固件上传、发布与升级执行请在 PC 运营端完成；网关运维中可查看升级回执。</text>
-      <view class="list">
-        <view v-for="row in visible" :key="rowKey(row)" class="card record">
-          <view class="item-head"><text class="record-title">{{row[menu.titleKey]||'未命名'}}</text><text v-if="status(row)" class="tag status-tag" :class="tone(status(row))">{{statusLabel(row)}}</text></view>
-          <text v-if="kind==='rules'" class="source-label">{{row.source==='tenant'?'主体规则':'平台规则'}}</text>
-          <view class="record-summary"><view v-for="field in summaryFields" :key="field[0]" class="summary-cell"><text class="field-caption">{{field[1]}}</text><text class="summary-value" :class="['level','priority'].includes(field[0])?'severity-'+tone(String(row[field[0]])):''">{{fieldValue(row,field[0])}}</text></view></view>
-          <view v-if="preview(row)&&!expanded[rowKey(row)]" class="record-preview"><text>{{preview(row)}}</text></view>
-          <view v-if="expanded[rowKey(row)]" class="record-details"><view v-for="field in detailFields" :key="field[0]" class="record-field"><text class="field-caption">{{field[1]}}</text><text class="detail-value">{{fieldValue(row,field[0])}}</text></view></view>
-          <button role="button" v-if="detailFields.length" class="detail-toggle" :aria-expanded="!!expanded[rowKey(row)]" :aria-label="(expanded[rowKey(row)]?'收起':'展开')+'详情：'+row[menu.titleKey]" @tap="toggleDetails(row)"><text>{{expanded[rowKey(row)]?'收起详情':'查看完整详情'}}</text><text class="disclosure">{{expanded[rowKey(row)]?'−':'＋'}}</text></button>
-          <view class="actions" v-if="hasActions(row)"><template v-if="kind==='alerts'"><button role="button" v-if="row.status==='pending'" class="btn btn-ghost" :disabled="saving" @tap="edit(row,'handling')">开始处理</button><button role="button" v-if="row.status==='handling'" class="btn btn-ghost" :disabled="saving" @tap="edit(row,'resolved')">解决告警</button></template><template v-if="kind==='workorders'"><button role="button" v-if="row.status==='pending'" class="btn btn-ghost" :disabled="saving" @tap="edit(row,'processing')">受理工单</button><button role="button" v-if="row.status==='processing'" class="btn btn-ghost" :disabled="saving" @tap="edit(row,'completed')">完成工单</button></template><template v-if="kind==='access'&&row.status==='pending'"><button role="button" class="btn btn-ghost" :disabled="saving" @tap="edit(row,'approved')">通过</button><button role="button" class="btn btn-danger" :disabled="saving" @tap="edit(row,'rejected')">驳回</button></template><button role="button" v-if="kind==='tenants'" class="btn btn-ghost" :disabled="saving" @tap="edit(row,'quota')">调整配额</button><button role="button" v-if="kind==='devices'" class="btn" @tap="receipts(row,'device')">指令回执</button><template v-if="kind==='gateways'"><button role="button" class="btn" @tap="receipts(row,'gateway')">指令回执</button><button role="button" class="btn" @tap="receipts(row,'ota')">升级回执</button><button role="button" class="btn btn-danger" :disabled="saving" @tap="restart(row)">重启网关</button></template><button role="button" v-if="kind==='rules'&&row.source==='platform'" class="btn" :disabled="saving" @tap="toggle(row)">{{row.enabled?'停用规则':'启用规则'}}</button></view>
-        </view>
-      </view>
-      <view v-if="!matched.length&&!busy" class="empty"><text class="empty-title">{{emptyTitle}}</text><text>{{keyword||filter!=='all'?'可以调整关键词或切换筛选条件。':'刷新列表以获取最新记录。'}}</text><button role="button" class="btn" @tap="keyword||filter!=='all'?clearFilters():load()">{{keyword||filter!=='all'?'查看全部记录':'刷新列表'}}</button></view>
-      <button role="button" v-if="visible.length<matched.length" class="btn btn-block load-more" @tap="limit+=30">加载更多（{{visible.length}} / {{matched.length}}）</button>
-      <text v-else-if="matched.length&&!busy" class="list-end">已显示全部 {{matched.length}} 条记录</text>
-      <template v-if="kind==='products'"><view class="section-title">协议接入 <text class="muted">{{extra.length}} 项</text></view><view v-for="protocol in extra" :key="protocol.id" class="card protocol-card"><view class="item-head"><text class="record-title">{{protocol.protocolName}}</text><text class="tag status-tag" :class="tone(protocol.status)">{{opsLabel(protocol.status)}}</text></view><text class="item-meta">{{protocol.protocolType}} · 连接数 {{protocol.connections}}</text><text class="protocol-endpoint">{{protocol.endpoint}} · {{protocol.port}}</text></view><text v-if="!extra.length&&!busy" class="muted">暂无协议记录</text></template>
-    </template>
-    <OpsTabBar :active="filter === 'todo' ? 'todo' : 'business'" />
-    <view v-if="selected" class="sheet-mask" @tap="close">
-      <view class="sheet" @tap.stop>
-        <view class="sheet-heading"><view class="sheet-title-wrap"><text class="toolbar-title">{{actionTitle}}</text><text class="sheet-target">{{selected[menu!.titleKey]}}</text></view><button role="button" class="sheet-close" :disabled="saving" aria-label="关闭处理窗口" @tap="close">关闭</button></view>
-        <scroll-view scroll-y class="sheet-body">
-          <template v-if="action==='quota'"><text class="form-label">设备上限</text><text class="list-note">已接入 {{selected.deviceCount}} 台，上限不能低于已接入数量。</text><input v-model="quota" class="input" type="number" maxlength="6" :disabled="saving" placeholder="请输入设备上限"/></template>
-          <template v-else><text class="form-label">处理说明</text><textarea v-model="note" class="textarea" maxlength="200" :disabled="saving" placeholder="请填写实际处理结果或审核理由（至少 4 字）"/><view class="input-help"><text>保存前将再次确认处理内容</text><text>{{note.trim().length}} / 200</text></view></template>
-        </scroll-view>
-        <view class="sheet-footer"><button role="button" class="btn" :disabled="saving" @tap="close">取消</button><button role="button" class="btn btn-primary" :disabled="saving" :loading="saving" @tap="save">{{action==='quota'?'保存配额':'确认保存'}}</button></view>
-      </view>
-    </view>
-  </view>
-</template>
-<style scoped>
-.ops-list{max-width:750px;margin:auto;font-size:14px}
-.list-overview{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:2px 0 12px}.scope-label{display:block;color:#65796d;font-size:12px}.result-count{display:block;margin-top:4px;font-size:22px;line-height:1.4;font-weight:700;color:#173c2a}.count-total{font-size:12px;color:#718277;font-weight:400}.refresh-button{min-height:44px;padding:0 16px;font-size:14px}
-.list-filters{padding-top:10px;padding-bottom:10px;margin-bottom:6px;border-bottom:1px solid #e1e9e3}.search-bar{height:44px;border-radius:12px;padding:0 12px;margin-bottom:10px}.search-bar input{min-width:0;height:44px;font-size:14px}.clear-search{flex-shrink:0;min-height:44px;padding:0 6px;color:#12764a;font-size:13px}.list-filters :deep(.seg-item){min-height:44px;padding:0 15px;font-size:13px}.filter-context{display:flex;align-items:center;gap:8px;justify-content:space-between;color:#53665a;font-size:12px}.filter-context>text{min-width:0;overflow-wrap:anywhere}.reset-filter{flex-shrink:0;min-height:44px;padding:0 8px;color:#12764a;font-size:13px}
-.list{gap:12px;margin-top:12px}.record{padding:16px;margin-bottom:0;border-radius:16px;box-shadow:0 3px 12px rgba(20,64,40,.025)}.record .item-head{align-items:flex-start;gap:10px}.record-title{flex:1;min-width:0;font-size:16px;font-weight:700;line-height:1.5;overflow-wrap:anywhere}.status-tag{flex-shrink:0;max-width:90px;font-size:12px;line-height:1.5;padding:4px 8px;border-radius:6px}.source-label{display:block;margin-top:6px;font-size:12px;color:#65796d}.record-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 16px;margin-top:16px}.summary-cell{min-width:0}.field-caption{display:block;color:#718277;font-size:12px;line-height:1.6}.summary-value{display:block;margin-top:3px;font-size:14px;line-height:1.5;color:#263f30;overflow-wrap:anywhere}.summary-value.severity-red{color:#b63232;font-weight:600}.summary-value.severity-orange{color:#93600e;font-weight:600}.record-preview{margin-top:14px;padding:10px 12px;border-radius:8px;background:#f5f8f6;color:#53665a;font-size:13px;line-height:1.7;overflow-wrap:anywhere}.record-preview>text{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.record-details{margin-top:14px;padding-top:4px;border-top:1px solid #edf2ee}.record-field{padding:9px 0;border-bottom:1px solid #f0f3f1}.record-field:last-child{border:0}.detail-value{display:block;margin-top:4px;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;font-size:14px;line-height:1.65;color:#34473b}.detail-toggle{display:flex;width:100%;min-height:44px;align-items:center;justify-content:space-between;margin-top:6px;color:#12764a;font-size:13px;text-align:left}.disclosure{font-size:18px}.record .actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:4px 0 0;padding-top:12px;border-top:1px solid #edf2ee}.record .actions .btn{min-width:0;min-height:44px;padding:8px;font-size:14px;line-height:1.4;border-radius:10px}.record .actions .btn:only-child{grid-column:1/-1}.list-note{display:block;margin:8px 0 12px;color:#65796d;font-size:12px;line-height:1.7}.load-more{margin-top:16px;min-height:44px;font-size:14px}.list-end{display:block;padding:20px 0 8px;text-align:center;color:#718277;font-size:12px}.empty{gap:12px;text-align:center;font-size:13px}.empty-title{color:#34473b;font-size:16px;font-weight:600}.empty .btn{min-height:44px;font-size:14px}.error-state{padding:20px;border-radius:14px;background:#fff0ee;color:#a73636}.error-message{display:block;margin:10px 0 16px;font-size:14px;overflow-wrap:anywhere}.error-state .btn{min-height:44px;font-size:14px}.report-summary{margin-bottom:16px}.protocol-card .item-meta{margin-top:10px;font-size:13px}.protocol-endpoint{display:block;margin-top:8px;font-size:12px;color:#65796d;overflow-wrap:anywhere}
-.sheet-mask{position:fixed;inset:0;z-index:100;background:rgba(8,29,18,.45);display:flex;align-items:flex-end;justify-content:center}.sheet{width:100%;max-width:750px;max-height:85vh;overflow:hidden;border-radius:22px 22px 0 0;background:#fff;display:flex;flex-direction:column}.sheet-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:20px 20px 14px;border-bottom:1px solid #edf2ee}.sheet-title-wrap{min-width:0}.sheet .toolbar-title{font-size:18px}.sheet-target{display:block;margin-top:6px;font-size:13px;color:#65796d;overflow-wrap:anywhere}.sheet-close{flex-shrink:0;min-width:44px;min-height:44px;font-size:13px;color:#65796d}.sheet-body{min-height:0;max-height:46vh;padding:18px 20px}.sheet .form-label{font-size:14px;margin-bottom:10px}.sheet .input{height:48px;min-height:48px;font-size:16px;border-radius:10px}.sheet .textarea{width:100%;height:132px;font-size:15px;line-height:1.6;padding:12px;border-radius:10px}.input-help{display:flex;justify-content:space-between;gap:10px;margin-top:8px;font-size:12px;color:#718277;line-height:1.6}.sheet-footer{display:flex;gap:12px;padding:14px 20px calc(16px + env(safe-area-inset-bottom));border-top:1px solid #edf2ee;background:#fff}.sheet-footer .btn{flex:1;min-height:48px;padding:8px;font-size:15px;border-radius:12px}.sheet-footer .btn-primary{flex:2}.notice{font-size:13px}
-</style>
+<template><OpsBusiness v-if="kind" ref="business" :kind="kind" :initial-filter="filter"/></template>

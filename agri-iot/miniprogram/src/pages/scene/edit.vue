@@ -3,8 +3,10 @@ import { reactive, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { api, type Scene } from '../../api/iot'
 
+const configPlaceholder = JSON.stringify({ valve: 'on', durationMinutes: 15 })
 const id = ref(0)
 const saving = ref(false)
+const loaded = ref(false), error = ref('')
 const form = reactive({
   sceneName: '',
   icon: '⚙️',
@@ -17,17 +19,21 @@ const form = reactive({
 onLoad(async (options?: Record<string, string>) => {
   id.value = Number(options?.id || 0)
   uni.setNavigationBarTitle({ title: id.value ? '编辑场景' : '新建场景' })
-  if (!id.value) return
+  if (!Number.isSafeInteger(id.value) || id.value < 0) { error.value = '场景编号无效'; return }
+  if (!id.value) { loaded.value = true; return }
   try {
     const scenes = await api.scenes()
     const scene = scenes.find((item: Scene) => item.id === id.value)
-    if (scene) Object.assign(form, scene)
-  } catch (error) {
-    uni.showToast({ title: error instanceof Error ? error.message : '场景加载失败', icon: 'none' })
+    if (!scene) throw new Error('场景不存在或已被删除')
+    Object.assign(form, scene)
+    loaded.value = true
+  } catch (cause) {
+    error.value = cause instanceof Error ? cause.message : '场景加载失败'
   }
 })
 
 async function submit() {
+  if (saving.value || !loaded.value) return
   if (!form.sceneName.trim()) {
     uni.showToast({ title: '请输入场景名称', icon: 'none' })
     return
@@ -55,7 +61,9 @@ async function submit() {
 
 <template>
   <view class="page pad has-footer">
-    <view class="card">
+    <view v-if="error" class="error">{{ error }}</view>
+    <view v-else-if="!loaded" class="loading">正在加载场景…</view>
+    <view v-if="loaded" class="card">
       <view class="card-head"><text class="card-title">场景信息</text><text class="tag blue">场景联动</text></view>
       <view class="form-item"><text class="form-label">场景名称</text><input v-model="form.sceneName" class="input" placeholder="例如：低温保温" /></view>
       <view class="grid-2">
@@ -64,7 +72,7 @@ async function submit() {
       </view>
       <view class="form-item"><text class="form-label">场景分类</text><input v-model="form.category" class="input" placeholder="环境控制、水肥管理等" /></view>
       <view class="form-item"><text class="form-label">场景说明</text><textarea v-model="form.description" class="textarea" placeholder="说明场景用途和执行目标" /></view>
-      <view class="form-item"><text class="form-label">执行配置（JSON）</text><textarea v-model="form.config" class="textarea mono" placeholder='{"valve":"on","durationMinutes":15}' /></view>
+      <view class="form-item"><text class="form-label">执行配置（JSON）</text><textarea v-model="form.config" class="textarea mono" :placeholder="configPlaceholder" /></view>
       <view class="footer-bar"><button class="btn btn-primary" :disabled="saving" :loading="saving" @tap="submit">保存场景</button></view>
     </view>
   </view>

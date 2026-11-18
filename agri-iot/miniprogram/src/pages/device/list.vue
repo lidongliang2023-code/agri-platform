@@ -8,8 +8,9 @@ const visible=computed(()=>items.value.filter(i=>(!keyword.value||i.deviceName.i
 const count=(status:string)=>items.value.filter(i=>i.onlineStatus===status).length
 const tabs=computed<Array<[string,string]>>(()=>[['all',`全部 ${items.value.length}`],['online',`在线 ${count('online')}`],['offline',`离线 ${count('offline')}`],['alert',`告警 ${count('alert')}`]])
 const groupOptions=computed(()=>[{id:undefined,name:'全部分组'},...groups.value])
-onShow(()=>{const saved=uni.getStorageSync('iot_status')||'all';tab.value=saved;uni.removeStorageSync('iot_status');const selected=uni.getStorageSync('iot_plot');if(selected){plotId.value=Number(selected);uni.removeStorageSync('iot_plot')}load()})
-async function load(){loading.value=true;try{items.value=await api.devices({plotId:plotId.value,groupId:groupId.value});groups.value=await api.groups();error.value=''}catch(e){items.value=[];error.value=e instanceof Error?e.message:'加载失败'}finally{loading.value=false}}
+onShow(()=>{const saved=uni.getStorageSync('iot_status')||'all';tab.value=saved;uni.removeStorageSync('iot_status');const selected=uni.getStorageSync('iot_plot');if(selected){plotId.value=Number(selected);uni.removeStorageSync('iot_plot')}const group=uni.getStorageSync('iot_group');if(group){groupId.value=Number(group);plotId.value=undefined;keyword.value='';uni.removeStorageSync('iot_group')}load()})
+let revision=0
+async function load(){const op=++revision;loading.value=true;try{const [devices,options]=await Promise.all([api.devices({plotId:plotId.value,groupId:groupId.value}),api.groups()]);if(op!==revision)return;items.value=devices;groups.value=options;error.value=''}catch(e){if(op===revision){items.value=[];error.value=e instanceof Error?e.message:'加载失败'}}finally{if(op===revision)loading.value=false}}
 function open(id:number){uni.navigateTo({url:`/pages/device/detail?id=${id}`})}
 function register(){uni.navigateTo({url:'/pages/device/edit'})}
 function clearPlot(){plotId.value=undefined;load()}
@@ -38,7 +39,7 @@ function deviceMark(typeName=''){return typeName.includes('温湿度')?'温':typ
         <view class="list-body">
           <view class="item-head"><text class="item-title">{{item.deviceName}}</text><text class="tag" :class="statusMeta(item.onlineStatus).tone">{{statusMeta(item.onlineStatus).label}}</text></view>
           <text class="item-meta">{{item.deviceCode}} · {{item.typeName}}</text>
-          <text class="item-meta">{{item.protocol}} · 信号 {{item.rssi||'—'}} dBm · 电量 {{item.battery}}%</text>
+          <text class="item-meta">{{item.protocol}} · 信号 {{item.rssi??'—'}} dBm · 电量 {{item.battery}}%</text>
         </view>
         <text class="chev">›</text>
       </view>

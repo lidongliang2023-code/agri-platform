@@ -9,10 +9,9 @@ onLoad(options => {
   tab.value = options?.tab === 'business' ? 'business' : options?.tab === 'todo' ? 'todo' : 'overview'
   uni.setNavigationBarTitle({ title: titles[tab.value] })
 })
-import { opsApi, opsMenus, reportLabels, isOpsTodo } from '../../api/ops'
+import { opsMenus, reportLabels, refreshOpsTodos, opsTodoCounts, opsTodoTotal } from '../../api/ops'
 import { type Row } from '../../api/iot'
 const data = ref<Row|null>(null), error = ref(''), busy = ref(false), updated = ref('')
-const workOrders = ref<Row[]>([])
 const groups = computed(() => Array.from(new Set(opsMenus.map(m => m.group))).map(name => ({ name, items: opsMenus.filter(m => m.group === name) })))
 const metrics = ['tenants','devices','online','offline','openAlerts','pendingAccess','throughput','gateways']
 const todos = [
@@ -29,12 +28,8 @@ function count(value: unknown) {
   const n = Number(value)
   return Number.isSafeInteger(n) && n > 0 ? n : 0
 }
-const pending = computed((): Record<string, number> => data.value ? {
-  alerts: count(data.value.metrics?.openAlerts),
-  access: count(data.value.metrics?.pendingAccess),
-  workorders: workOrders.value.filter(row => isOpsTodo('workorders', row)).length,
-} : {})
-const total = computed(() => Object.values(pending.value).reduce((sum, n) => sum + n, 0))
+const pending = opsTodoCounts
+const total = opsTodoTotal
 function badge(key: string) { const n = pending.value[key] || 0; return n > 99 ? '99+' : String(n) }
 function entryLabel(key: string, title: string) {
   return data.value && key in pending.value ? `${title}，${pending.value[key]} 条待办${error.value ? '，数据未更新' : ''}` : title
@@ -44,9 +39,8 @@ async function load() {
   busy.value = true
   error.value = ''
   try {
-    const [overview, orders] = await Promise.all([opsApi.overview(), opsApi.list('/work-orders')])
-    workOrders.value = orders
-    data.value = overview
+    const snapshot = await refreshOpsTodos()
+    data.value = snapshot.overview
     const now = new Date()
     updated.value = [now.getHours(), now.getMinutes(), now.getSeconds()].map(n => String(n).padStart(2,'0')).join(':')
   } catch (e) {
@@ -56,7 +50,7 @@ async function load() {
     uni.stopPullDownRefresh()
   }
 }
-function open(key: string, todo = false) { uni.navigateTo({ url: '/pages/ops/list?kind=' + key + (todo ? '&filter=todo' : '') }) }
+function open(key: string, todo = false) { uni.navigateTo({ url: '/pages/ops/' + key + (todo ? '?filter=todo' : '') }) }
 function account() { uni.switchTab({ url: '/pages/account/index' }) }
 onShow(load)
 onPullDownRefresh(load)

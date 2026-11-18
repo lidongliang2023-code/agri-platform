@@ -21,6 +21,7 @@ function edit(item?: AutomationRule) {
 }
 
 async function toggle(item: AutomationRule) {
+  if (busy.value) return
   busy.value = item.id
   try {
     await api.toggleRule(item.id)
@@ -34,10 +35,11 @@ async function toggle(item: AutomationRule) {
 }
 
 async function execute(item: AutomationRule) {
+  if (busy.value || !item.enabled) return
   busy.value = item.id
   try {
     await api.executeRule(item.id)
-    uni.showToast({ title: '规则已执行', icon: 'success' })
+    uni.showToast({ title: '申请已登记，请核对设备回执', icon: 'none' })
     load()
   } catch (error) {
     uni.showToast({ title: error instanceof Error ? error.message : '执行失败', icon: 'none' })
@@ -81,8 +83,8 @@ function remove(item: AutomationRule) {
         <view class="item-actions">
           <button class="btn btn-sm" @tap="edit(item)">编辑</button>
           <button class="btn btn-sm btn-danger" @tap="remove(item)">删除</button>
-          <button class="btn btn-sm" :loading="busy === item.id" @tap="toggle(item)">{{ item.enabled ? '停用' : '启用' }}</button>
-          <button class="btn btn-sm btn-primary" :loading="busy === item.id" @tap="execute(item)">执行</button>
+          <button class="btn btn-sm" :disabled="!!busy" :loading="busy === item.id" @tap="toggle(item)">{{ item.enabled ? '停用' : '启用' }}</button>
+          <button class="btn btn-sm btn-primary" :disabled="!!busy || !item.enabled" :loading="busy === item.id" @tap="execute(item)">执行</button>
         </view>
       </view>
     </view>

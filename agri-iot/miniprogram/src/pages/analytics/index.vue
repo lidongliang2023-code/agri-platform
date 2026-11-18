@@ -1,17 +1,21 @@
 <script setup lang="ts">
 import {ref} from 'vue'
 import {onShow} from '@dcloudio/uni-app'
+import {shareCsv} from '../../utils/report'
+import {showError} from '../../utils/ui'
 import {api,type Row} from '../../api/iot'
 const data=ref<Row|null>(null),error=ref(''),busy=ref(false)
 onShow(load)
 async function load(){busy.value=true;try{data.value=await api.reports();error.value=''}catch(e){error.value=e instanceof Error?e.message:'分析加载失败'}finally{busy.value=false}}
-function exportCsv(){if(!data.value)return;const rows=[['日期','采集量','控制次数'],...(data.value.daily||[]).map((r:Row)=>[r.date,r.data,r.control])];const csv='\ufeff'+rows.map((r:unknown[])=>r.map((x:unknown)=>`"${String(x??'').replaceAll('"','""')}"`).join(',')).join('\n');const fs=(uni as any).getFileSystemManager?.();if(fs){const path=(`${(uni as any).env?.USER_DATA_PATH||'_doc'}/iot-report.csv`);fs.writeFile({filePath:path,data:csv,encoding:'utf8',success:()=>uni.showToast({title:'报表已导出'}),fail:()=>uni.showToast({title:'当前端暂不支持文件导出',icon:'none'})})}else uni.showToast({title:'当前端暂不支持文件导出',icon:'none'})}
+const exporting=ref(false)
+async function exportCsv(){if(!data.value||exporting.value)return;exporting.value=true;try{await shareCsv('物联网运行报表',[['日期','采集量','控制次数'],...(data.value.daily||[]).map((r:Row)=>[r.date,r.data,r.control])])}catch(e){showError(e)}finally{exporting.value=false}}
+
 </script>
 <template>
   <view class="page pad">
     <view class="toolbar">
       <view class="toolbar-main"><text class="toolbar-title">运行数据概览</text><text class="toolbar-sub">采集、在线、告警与控制统计</text></view>
-      <view class="toolbar-actions"><button class="btn btn-sm" :disabled="!data" @tap="exportCsv">导出 CSV</button></view>
+      <view class="toolbar-actions"><button class="btn btn-sm" :disabled="!data||exporting" :loading="exporting" @tap="exportCsv">分享 CSV</button></view>
     </view>
     <view v-if="error" class="error" @tap="load">{{error}}<text class="retry">点击重试</text></view>
     <template v-if="data">

@@ -6,6 +6,7 @@ import { api, type AutomationRule, type Device } from '../../api/iot'
 const id = ref(0)
 const devices = ref<Device[]>([])
 const saving = ref(false)
+const loaded = ref(false), error = ref('')
 const ruleTypes = [
   { value: 'automation', label: '传感器自动触发' },
   { value: 'schedule', label: '定时触发' },
@@ -51,11 +52,13 @@ const form = reactive({
 onLoad(async (options?: Record<string, string>) => {
   id.value = Number(options?.id || 0)
   uni.setNavigationBarTitle({ title: id.value ? '编辑自动化规则' : '新建自动化规则' })
+  if (!Number.isSafeInteger(id.value) || id.value < 0) { error.value = '规则编号无效'; return }
   try {
     const [deviceData, ruleData] = await Promise.all([api.devices(), id.value ? api.rules() : Promise.resolve([])])
     devices.value = deviceData
     if (id.value) {
       const rule = ruleData.find((item: AutomationRule) => item.id === id.value)
+      if (!rule) throw new Error('规则不存在或已被删除')
       if (rule) {
         let extra: Record<string, unknown> = {}
         try {
@@ -68,8 +71,9 @@ onLoad(async (options?: Record<string, string>) => {
         })
       }
     }
-  } catch (error) {
-    uni.showToast({ title: error instanceof Error ? error.message : '加载失败', icon: 'none' })
+    loaded.value = true
+  } catch (cause) {
+    error.value = cause instanceof Error ? cause.message : '加载失败'
   }
 })
 
@@ -102,6 +106,10 @@ function setEnabled(event: any) {
 }
 
 async function submit(test = false) {
+  if (saving.value || !loaded.value) return
+  if (test && !form.enabled) { uni.showToast({ title: '请先启用规则再测试', icon: 'none' }); return }
+  if (![form.durationSeconds, form.cooldownSeconds].every(v => String(v).trim() !== '' && Number.isSafeInteger(Number(v)) && Number(v) >= 0 && Number(v) <= 2147483647)) { uni.showToast({ title: '持续和冷却时间须为有效的非负整数秒', icon: 'none' }); return }
+  if (!form.actionCommand.trim()) { uni.showToast({ title: '请输入执行指令', icon: 'none' }); return }
   if (!form.ruleName.trim()) {
     uni.showToast({ title: '请输入规则名称', icon: 'none' })
     return
@@ -111,12 +119,12 @@ async function submit(test = false) {
     return
   }
   if (form.ruleType === 'automation' && form.triggerMetric !== 'device_offline') {
-    if (!form.threshold.trim()) {
-      uni.showToast({ title: '请输入触发阈值', icon: 'none' })
+    if (!String(form.threshold).trim() || !Number.isFinite(Number(form.threshold))) {
+      uni.showToast({ title: '请输入有效数字阈值', icon: 'none' })
       return
     }
   }
-  if (!form.actionDeviceId) {
+  if (!devices.value.some(device => device.id === form.actionDeviceId && device.controlCapable)) {
     uni.showToast({ title: '请选择执行设备', icon: 'none' })
     return
   }
@@ -138,6 +146,7 @@ async function submit(test = false) {
     const saved = id.value
       ? await api.updateRule(id.value, body)
       : await api.createRule(body)
+    id.value = saved.id
     if (test) {
       try {
         await api.executeRule(saved.id)
@@ -152,8 +161,8 @@ async function submit(test = false) {
       }
     }
     uni.showToast({
-      title: test ? '规则已保存并测试成功' : (id.value ? '规则已更新' : '规则已创建'),
-      icon: 'success',
+      title: test ? '申请已登记，请核对设备回执' : '规则已保存',
+      icon: test ? 'none' : 'success',
     })
     setTimeout(() => uni.navigateBack(), 300)
   } catch (error) {
@@ -166,7 +175,9 @@ async function submit(test = false) {
 
 <template>
   <view class="page pad has-footer">
-    <view class="card">
+    <view v-if="error" class="error">{{ error }}</view>
+    <view v-else-if="!loaded" class="loading">正在加载规则…</view>
+    <view v-if="loaded" class="card">
       <view class="card-head"><text class="card-title">基本信息</text><text class="tag blue">规则引擎</text></view>
       <view class="form-item"><text class="form-label">规则名称</text><input v-model="form.ruleName" class="input" placeholder="例如：高温自动通风" /></view>
       <view class="form-item"><text class="form-label">规则类型</text><picker :range="ruleTypes" range-key="label" @change="selectRuleType"><view class="input select">{{ ruleTypes.find(i=>i.value===form.ruleType)?.label }}</view></picker></view>
@@ -205,7 +216,7 @@ async function submit(test = false) {
       <view class="form-item switch-item"><text class="form-label">保存后启用</text><switch :checked="form.enabled" color="#12764a" @change="setEnabled" /></view>
       <view class="footer-bar">
         <button class="btn btn-ghost" :disabled="saving" @tap="submit(false)">仅保存</button>
-        <button class="btn btn-primary save-test" :disabled="saving" :loading="saving" @tap="submit(true)">保存并测试</button>
+        <button class="btn btn-primary save-test" :disabled="saving || !form.enabled" :loading="saving" @tap="submit(true)">保存并测试</button>
       </view>
     </view>
   </view>
