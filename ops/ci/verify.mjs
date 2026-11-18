@@ -67,7 +67,7 @@ for (let i = 2; i < process.argv.length; i += 1) {
   else if (token === '--help' || token === '-h') {
     console.log(
       '用法：node ops/ci/verify.mjs [--build] [--mobile-e2e] ' +
-        '[--only workspace,shared,gateway,bucket,apps,mobile,mobile-e2e,schema,scripts,font] [--skip shared]',
+        '[--only workspace,shared,gateway,bucket,apps,mobile,order-navigation,mobile-e2e,schema,scripts,font] [--skip shared]',
     )
     process.exit(0)
   } else {
@@ -794,6 +794,14 @@ if (enabled('shared')) checkShared()
 if (enabled('gateway')) await checkGateway()
 if (enabled('bucket')) await checkBucket()
 if (enabled('mobile')) await checkMobile()
+if (enabled('order-navigation')) {
+  const result = run(process.execPath, ['--test', '--test-reporter=tap', 'tests/order-navigation.test.cjs'], {
+    cwd: path.join(REPO_ROOT, 'agri-s2b2c', 'mobile-channel'),
+  })
+  process.stdout.write(result.stdout ?? '')
+  process.stderr.write(result.stderr ?? '')
+  record('order-navigation', '商家订单详情跳转', result.status === 0 ? 'pass' : 'fail', result.error?.message)
+}
 if (enabled('mobile-e2e')) {
   if (args.mobileE2e) await checkMobileE2E()
   else record('mobile-e2e', '移动端端到端（真浏览器）', 'skip', '加 --mobile-e2e 打开（需要生产栈与 H5 dev server 在跑）')

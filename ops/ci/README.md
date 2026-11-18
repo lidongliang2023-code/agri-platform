@@ -24,6 +24,7 @@ node ops/ci/verify.mjs --skip shared   # 跳过某一组（CI 里单独跑 share
 | `shared` | 共享包单测 + 覆盖率 | `test:coverage` 退出码 0（perFile ≥80%） |
 | `gateway` | `nginx -t` 校验 `ops/gateway/conf/nginx.conf` | 配置可加载；无 nginx 或无非 ASCII 前缀时跳过并说明 |
 | `bucket` | 发布产物完整性：指针 → 版本目录 → index.html 引用的资源 | 三者一致才通过；专门盯"指针切过去了、资源却 404"的白屏发布 |
+| `order-navigation` | S2B2C 商家端各入口跳转原订单，核对详情与物流请求，以及无效引用的处理 | Node 测试退出码为 0，缺依赖或用例失败均报错 |
 | `apps`（`--build`） | 逐个前端工程跑它自己的 build | 退出码 0 |
 | `font` | 可见文字的最小字号（端清单取自 `publish.mjs` 注册表，不发版的旧目录不算） | 任何 `font-size` 低于 12px（uni-app 低于 24rpx）即失败；`pages.json` 的 `tabBar` 没写 `fontSize`（uni-app 缺省 10px）也算失败 |
 

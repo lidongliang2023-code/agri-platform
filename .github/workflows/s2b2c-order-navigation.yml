@@ -1,0 +1,32 @@
+name: 商家订单详情跳转回归
+
+on:
+  pull_request:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  order-navigation:
+    name: S2B2C 商家订单详情跳转
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - name: 安装商家端依赖
+        run: pnpm --filter agri-s2b2c-channel-mobile --fail-if-no-match install --frozen-lockfile
+      - name: 验证订单详情跳转
+        run: node ops/ci/verify.mjs --only order-navigation

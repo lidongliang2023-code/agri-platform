@@ -1,13 +1,107 @@
 {
   "pages": [
-    { "path": "pages/home/index", "style": { "navigationBarTitleText": "商家工作台", "enablePullDownRefresh": true } },
-    { "path": "pages/pool/index", "style": { "navigationBarTitleText": "选品中心", "enablePullDownRefresh": true } },
-    { "path": "pages/products/index", "style": { "navigationBarTitleText": "我的货架", "enablePullDownRefresh": true } },
-    { "path": "pages/orders/index", "style": { "navigationBarTitleText": "订单管理", "enablePullDownRefresh": true } },
-    { "path": "pages/commissions/index", "style": { "navigationBarTitleText": "佣金管理", "enablePullDownRefresh": true } },
-    { "path": "pages/growth/index", "style": { "navigationBarTitleText": "营销与售后" } },
-    { "path": "pages/profile/index", "style": { "navigationBarTitleText": "店铺信息" } },
-    { "path": "pages/login/index", "style": { "navigationStyle": "custom" } }
+    {
+      "path": "pages/home/index",
+      "style": {
+        "navigationBarTitleText": "商家工作台",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/products/index",
+      "style": {
+        "navigationBarTitleText": "我的货架",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/orders/index",
+      "style": {
+        "navigationBarTitleText": "订单与售后",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/profile/index",
+      "style": {
+        "navigationBarTitleText": "我的",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/pool/index",
+      "style": {
+        "navigationBarTitleText": "选品中心",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/orders/detail",
+      "style": {
+        "navigationBarTitleText": "订单详情"
+      }
+    },
+    {
+      "path": "pages/commissions/index",
+      "style": {
+        "navigationBarTitleText": "佣金与提现",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/marketing/index",
+      "style": {
+        "navigationBarTitleText": "营销素材",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/shop/edit",
+      "style": {
+        "navigationBarTitleText": "店铺资料"
+      }
+    },
+    {
+      "path": "pages/login/index",
+      "style": {
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/customers/index",
+      "style": {
+        "navigationBarTitleText": "客户与运营",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/customers/detail",
+      "style": {
+        "navigationBarTitleText": "客户画像",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/notices/index",
+      "style": {
+        "navigationBarTitleText": "通知中心",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/notices/preferences",
+      "style": {
+        "navigationBarTitleText": "通知偏好",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/growth/index",
+      "style": {
+        "navigationBarTitleText": "商家成长",
+        "enablePullDownRefresh": true
+      }
+    }
   ],
   "globalStyle": {
     "navigationBarTextStyle": "black",
@@ -23,10 +117,22 @@
     "borderStyle": "white",
     "backgroundColor": "#ffffff",
     "list": [
-      { "pagePath": "pages/home/index", "text": "工作台" },
-      { "pagePath": "pages/pool/index", "text": "选品" },
-      { "pagePath": "pages/commissions/index", "text": "佣金" },
-      { "pagePath": "pages/profile/index", "text": "我的" }
+      {
+        "pagePath": "pages/home/index",
+        "text": "工作台"
+      },
+      {
+        "pagePath": "pages/products/index",
+        "text": "货架"
+      },
+      {
+        "pagePath": "pages/orders/index",
+        "text": "订单"
+      },
+      {
+        "pagePath": "pages/profile/index",
+        "text": "我的"
+      }
     ]
   }
 }

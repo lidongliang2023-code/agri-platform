@@ -1,5 +1,7 @@
 import { getUnifiedToken, handleUnauthorized } from '../../frontend-shared/mobile-unified-auth'
 
+export type IdParam = string | number
+
 export interface PageResult<T> {
   records: T[]
   total: number
@@ -11,6 +13,7 @@ export interface ChannelPartner {
   id: number
   shopName: string
   shopDesc?: string
+  shopLogo?: string
   registerType: string
   companyName: string
   creditCode?: string
@@ -25,6 +28,10 @@ export interface ChannelPartner {
   auditOpinion?: string
 }
 
+export type ChannelUpdate = Pick<ChannelPartner,
+  'id' | 'shopName' | 'shopDesc' | 'registerType' | 'companyName' |
+  'contactName' | 'contactPhone' | 'province' | 'city' | 'district' | 'address'>
+
 export interface Product {
   id: number
   name: string
@@ -33,6 +40,8 @@ export interface Product {
   categoryName?: string
   supplierName?: string
   origin?: string
+  spec?: string
+  unit?: string
   price: number
   stock: number
   sales?: number
@@ -40,6 +49,13 @@ export interface Product {
   images: string[] | string
   status?: string
   createTime?: string
+  /** 货架层（channel_product）字段：只在「我的货架」里有值 */
+  retailPrice?: number | null
+  effectivePrice?: number
+  shelfStatus?: 'ON' | 'OFF' | string
+  minRetailPrice?: number | null
+  maxRetailPrice?: number | null
+  regionNames?: string[]
 }
 
 export interface Order {
@@ -48,8 +64,47 @@ export interface Order {
   consumerId: number
   payAmount: number
   totalAmount: number
+  freightAmount?: number
+  discountAmount?: number
   status: string
+  logisticsNo?: string
+  logisticsCompany?: string
+  shipConfirmStatus?: string
+  shipProposedBy?: string
+  remark?: string
   createTime: string
+  payTime?: string
+}
+
+export interface OrderItem {
+  id: number
+  productId: number
+  name: string
+  spec?: string
+  image?: string
+  price: number
+  quantity: number
+  totalAmount?: number
+}
+
+export interface OrderDetail {
+  order: Order
+  items: OrderItem[]
+  commissions: Array<{ id: number; amount: number; rate: number; status: string }>
+  afterSales: AfterSale[]
+  address?: { name: string; phone: string; region: string; detail: string }
+  buyer?: { id: number; nickname?: string; phone?: string; memberLevel?: string; orderCount?: number; totalAmount?: number }
+}
+
+export interface Shipment {
+  id?: string | number
+  status?: string
+  proposerType?: string
+  logisticsNo?: string
+  logisticsCompany?: string
+  /** 驳回原因 */
+  reason?: string
+  createTime?: string
 }
 
 export interface Commission {
@@ -63,16 +118,51 @@ export interface Commission {
   createTime: string
 }
 
-export interface MarketingData {
-  coupons: Array<{ id: number; name: string; amount: number; minAmount: number; remainCount: number; validEnd: string }>
-  flashSales: Array<{ id: number; productName: string; salePrice: number; originalPrice: number; remainStock: number; totalStock: number; unit: string }>
-  groupBuys: Array<{ id: number; name: string; groupSize: number; groupPrice: number; singlePrice: number; validHours: number }>
+export interface CommissionSummary {
+  settledTotal: number
+  pendingTotal: number
+  withdrawnTotal: number
+  frozenTotal: number
+  available: number
 }
 
-export interface GrowthData {
-  marketing: MarketingData
-  commissions: Array<{ id: number; orderId: number; amount: number; rate: number; status: string; createTime: string }>
-  afterSales: Array<{ id: number; orderId: number; type: string; reason: string; amount: number; status: string; createTime: string }>
+export interface Withdrawal {
+  id: number
+  amount: number
+  status: string
+  applyTime: string
+  reviewTime?: string
+  remark?: string
+  payoutTime?: string
+}
+
+export interface AfterSale {
+  id: number
+  orderId: number
+  orderNo?: string
+  type: string
+  reason: string
+  amount: number
+  status: string
+  items?: string
+  buyerName?: string
+  buyerPhone?: string
+  handleOpinion?: string
+  returnCompany?: string
+  returnLogisticsNo?: string
+  returnShippedAt?: string
+  returnReceivedAt?: string
+  createTime: string
+}
+
+export interface ChannelMarketing {
+  channelId: string
+  shopName: string
+  summary: { coupons: number; flashes: number; groups: number; shelfProducts: number }
+  coupons: Array<{ id: number; name: string; type?: string; amount?: number; discountRate?: number; minAmount?: number; remainCount?: number; validEnd?: string }>
+  flashes: Array<{ id: number; productName: string; salePrice: number; originalPrice: number; remainStock: number; totalStock: number; startTime?: string; endTime?: string; status: string }>
+  groups: Array<{ id: number; name: string; productName: string; groupSize: number; groupPrice: number; singlePrice: number; validHours: number; status: string }>
+  storeSharePath: string
 }
 
 export interface Dashboard {
@@ -94,19 +184,21 @@ export const API_BASE = String(
   configuredBase || (runtimePlatform === 'web' ? '/api' : 'http://127.0.0.1:8088/api'),
 ).replace(/\/$/, '')
 
-function query(params?: Record<string, string | number | boolean | null | undefined>) {
+type Params = Record<string, string | number | boolean | null | undefined>
+
+function query(params?: Params) {
   if (!params) return ''
   const pairs = Object.keys(params)
-    .filter((key) => params[key] !== undefined && params[key] !== null && params[key] !== '')
+    .filter((key) => params[key] !== undefined && params[key] !== null)
     .map((key) => `${encodeURIComponent(key)}=${encodeURIComponent(String(params[key]))}`)
   return pairs.length ? `?${pairs.join('&')}` : ''
 }
 
-function request<T>(
+export function request<T>(
   path: string,
   method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET',
   data?: Record<string, unknown>,
-  params?: Record<string, string | number | boolean | null | undefined>,
+  params?: Params,
 ): Promise<T> {
   return new Promise((resolve, reject) => {
     uni.request({
@@ -125,7 +217,8 @@ function request<T>(
           return
         }
         if (response.statusCode >= 400) {
-          reject(new Error(String((response.data as any)?.message || `请求失败（HTTP ${response.statusCode}）`)))
+          const body = response.data as Record<string, unknown> | undefined
+          reject(new Error(String(body?.message || `请求失败（HTTP ${response.statusCode}）`)))
           return
         }
         resolve(response.data as T)
@@ -137,22 +230,61 @@ function request<T>(
   })
 }
 
+/**
+ * 商家（渠道）移动工作台接口。
+ *
+ * 归属一律由后端按令牌解析（ChannelIdentityService）：大多数接口不带渠道参数；
+ * 仍要求 channelId 的老接口（货架、选品、佣金）由调用方传当前会话里的渠道 id，
+ * 后端会再校验它属于当前账号 —— 前端不再有任何「默认渠道 1」的兜底。
+ */
 export const channelApi = {
   getProfile: () => request<Partial<ChannelPartner> & { applied: boolean }>('/channel/profile'),
-  getChannel: (id = 1) => request<ChannelPartner>(`/channel/detail/${id}`),
-  updateChannel: (data: ChannelPartner) => request<ActionResult>('/channel/update', 'PUT', data as unknown as Record<string, unknown>),
+  getChannel: (id: IdParam) => request<ChannelPartner>(`/channel/detail/${id}`),
+  updateChannel: (data: ChannelUpdate) => {
+    const { id, shopName, shopDesc, registerType, companyName, contactName, contactPhone, province, city, district, address } = data
+    return request<ActionResult>('/channel/update', 'PUT', {
+      id, shopName, shopDesc, registerType, companyName, contactName, contactPhone, province, city, district, address,
+    })
+  },
   getDashboard: () => request<Dashboard>('/channel/order-stats'),
-  getProducts: (params: { channelId?: number; page?: number; size?: number }) =>
-    request<PageResult<Product>>('/channel/products', 'GET', undefined, params),
+
+  // 货架与选品
+  getProducts: (channelId: IdParam, params: { page?: number; size?: number } = {}) =>
+    request<PageResult<Product>>('/channel/products', 'GET', undefined, { channelId, ...params }),
   getProductPool: (params: { page?: number; size?: number; keyword?: string; categoryId?: number | null }) =>
     request<PageResult<Product>>('/channel/product-pool', 'GET', undefined, params),
-  selectProduct: (channelId: string | number, productId: string | number) =>
+  selectProduct: (channelId: IdParam, productId: IdParam) =>
     request<ActionResult>('/channel/select-product', 'POST', undefined, { channelId, productId }),
-  getOrders: (params: { page?: number; size?: number; status?: string }) =>
+  /** 只改分销层：零售价（空串=恢复按供货价）与上下架；商品标题、图片归交易撮合，不在商家端修改 */
+  updateListing: (productId: IdParam, params: { retailPrice?: string; shelfStatus?: 'ON' | 'OFF' }) =>
+    request<ActionResult & { effectivePrice?: number; shelfStatus?: string }>(`/channel/product/${productId}/listing`, 'PUT', undefined, params),
+
+  // 订单与履约
+  getOrders: (params: { page?: number; size?: number; status?: string; keyword?: string }) =>
     request<PageResult<Order>>('/channel/orders', 'GET', undefined, params),
-  getCommissions: (params: { channelId?: number; page?: number; size?: number; status?: string }) =>
-    request<PageResult<Commission>>('/channel/commissions', 'GET', undefined, params),
-  getTotalCommission: (channelId?: number) =>
-    request<{ total: number }>('/channel/total-commission', 'GET', undefined, { channelId }),
-  getGrowth: (channelId?: number) => request<GrowthData>('/channel/growth', 'GET', undefined, { channelId }),
+  getOrder: (id: IdParam) => request<OrderDetail>(`/channel/order/${id}`),
+  getShipment: (id: IdParam) => request<Shipment | null>(`/channel/order/${id}/shipment`),
+  proposeShipment: (id: IdParam, logisticsNo: string, company?: string) =>
+    request<ActionResult>(`/channel/order/${id}/shipment/propose`, 'PUT', undefined, { logisticsNo, company }),
+  confirmShipment: (id: IdParam) => request<ActionResult>(`/channel/order/${id}/shipment/confirm`, 'PUT'),
+  rejectShipment: (id: IdParam, reason: string) =>
+    request<ActionResult>(`/channel/order/${id}/shipment/reject`, 'PUT', undefined, { reason }),
+  withdrawShipment: (id: IdParam) => request<ActionResult>(`/channel/order/${id}/shipment/withdraw`, 'PUT'),
+
+  // 售后
+  getAfterSales: (status?: string) => request<AfterSale[]>('/channel/after-sales', 'GET', undefined, { status }),
+  reviewAfterSale: (id: IdParam, status: 'APPROVED' | 'REJECTED', opinion?: string) =>
+    request<ActionResult>(`/channel/after-sale/${id}/review`, 'PUT', undefined, { status, opinion }),
+  confirmReturn: (id: IdParam, opinion?: string) =>
+    request<ActionResult>(`/channel/after-sale/${id}/confirm-return`, 'PUT', undefined, { opinion }),
+
+  // 佣金与提现
+  getCommissions: (channelId: IdParam, params: { page?: number; size?: number; status?: string } = {}) =>
+    request<PageResult<Commission>>('/channel/commissions', 'GET', undefined, { channelId, ...params }),
+  getCommissionSummary: () => request<CommissionSummary>('/channel/commission-summary'),
+  getWithdrawals: () => request<Withdrawal[]>('/channel/withdrawals'),
+  applyWithdrawal: (amount: number) => request<ActionResult>('/channel/withdrawal', 'POST', { amount }),
+
+  // 营销（只读，活动由平台运营创建）
+  getMarketing: () => request<ChannelMarketing>('/channel/marketing'),
 }
