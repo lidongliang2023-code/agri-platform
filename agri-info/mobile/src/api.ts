@@ -515,9 +515,14 @@ export function request<T>(
   method: Method = 'GET',
   data?: Record<string, unknown>,
   params?: Record<string, string | number | undefined>,
+  expectedToken?: string,
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const token = getInfoToken()
+    if (expectedToken !== undefined && token !== expectedToken) {
+      reject(new Error('登录会话已变化，请重新核对发布主体'))
+      return
+    }
     if (!token) { handleInfoUnauthorized(); reject(new Error('请先使用统一账号登录')); return }
     uni.request({
       url: `${API_BASE}/api/v1/info${url}${query(params)}`,
@@ -531,7 +536,7 @@ export function request<T>(
       success(response) {
         const body = response.data as Envelope<T>
         if (response.statusCode === 401) {
-          handleInfoUnauthorized()
+          if (getInfoToken() === token) handleInfoUnauthorized()
           reject(new Error('登录已失效，请重新使用统一账号登录'))
           return
         }
@@ -598,8 +603,8 @@ export const infoApi = {
       pendingCount: items.filter((item) => item.status === 'pending').length }
   },
   supplyDemand: (id: number, type?: string) => request<SupplyDemandDetail>(`/supply-demands/${id}`, 'GET', undefined, { type }),
-  publishSupplyDemand: (body: Record<string, unknown>) =>
-    request<{ sdNo: string; status: string; matchScore: number; message: string }>('/supply-demands', 'POST', body),
+  publishSupplyDemand: (body: Record<string, unknown>, expectedToken: string) =>
+    request<{ sdNo: string; status: string; matchScore: number; message: string }>('/supply-demands', 'POST', body, undefined, expectedToken),
   sdMatches: (id: number, type?: string) => request<SdMatch[]>(`/supply-demands/${id}/matches`, 'GET', undefined, { type }),
   sendSdMessage: (id: number, body: { content: string }, type?: string) =>
     request<{ message: string; messages: SdMessage[] }>(

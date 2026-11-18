@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { onLoad } from '@dcloudio/uni-app'
+import { onHide, onLoad, onShow, onUnload } from '@dcloudio/uni-app'
 import { infoApi, money, toast, type Quote } from '../../api'
-import { currentOwner, getInfoUser, accountStorageKey, getInfoMerchants, type InfoMerchant } from '../../auth'
+import { currentOwner, getInfoToken, getInfoUser, accountStorageKey, getInfoMerchants, type InfoMerchant } from '../../auth'
 
 const sdType = ref<'supply' | 'demand'>('supply')
 const categories = ['蔬菜', '水果', '粮食', '畜牧', '食用菌', '水产']
@@ -24,19 +24,49 @@ const merchantError = ref('')
 const loadingMerchants = ref(false)
 const selectedMerchant = computed(() => merchants.value.find(item => item.merchantId === merchantId.value))
 
+let lookupVersion = 0
+let displayedToken = ''
+const username = ref('')
+
 async function loadMerchants() {
+  const version = ++lookupVersion
+  const token = getInfoToken()
+  const previousId = merchantId.value
+  const previousToken = displayedToken
   loadingMerchants.value = true
   merchantError.value = ''
-  merchantId.value = ''
   try {
-    merchants.value = await getInfoMerchants()
-    if (merchants.value.length === 1) merchantId.value = merchants.value[0].merchantId
-    if (!merchants.value.length) merchantError.value = '当前账号未绑定经营主体，请在用户中心完成绑定和业务身份申请'
+    const rows = await getInfoMerchants()
+    if (version !== lookupVersion) return
+    if (token !== getInfoToken()) throw new Error('登录会话已变化，请重新加载经营主体')
+    const selected = previousToken === token && rows.find(item => item.merchantId === previousId)
+    const active = selected || (rows.length === 1 ? rows[0] : undefined)
+    merchants.value = rows
+    merchantId.value = active?.merchantId || ''
+    displayedToken = token
+    username.value = getInfoUser()?.username || ''
+    if (!rows.length) merchantError.value = '当前账号未绑定经营主体，请在用户中心完成绑定和业务身份申请'
+    if (previousToken && (previousToken !== token || previousId !== merchantId.value)) {
+      uni.showModal({ title: '请重新确认发布主体',
+        content: `当前主体：${active?.merchantName || '未选择'}。已保留表单，请核对主体和联系方式后再发布。`, showCancel: false })
+      return
+    }
+    if (active) return { token, merchant: active, version }
   } catch (error) {
+    if (version !== lookupVersion) return
     merchants.value = []
+    merchantId.value = ''
+    username.value = ''
     merchantError.value = error instanceof Error ? error.message : '经营主体加载失败'
-  } finally { loadingMerchants.value = false }
+  } finally {
+    if (version === lookupVersion) loadingMerchants.value = false
+  }
 }
+
+onShow(() => loadMerchants())
+function invalidateLookup() { lookupVersion++ }
+onHide(invalidateLookup)
+onUnload(invalidateLookup)
 
 const form = ref({
   category: '水果',
@@ -81,7 +111,6 @@ onLoad((options) => {
     }
   }
   loadQuotes()
-  loadMerchants()
 })
 
 async function loadQuotes() {
@@ -111,7 +140,7 @@ function pickDate(event: { detail: { value: string } }) {
 }
 
 async function submit() {
-  if (submitting.value) return
+  if (submitting.value || loadingMerchants.value) return
   if (!selectedMerchant.value) { toast(merchantError.value || '请选择本次发布所属经营主体'); return }
   if (!form.value.variety.trim()) {
     toast('请填写品种')
@@ -143,9 +172,12 @@ async function submit() {
 
   submitting.value = true
   try {
+    const verified = await loadMerchants()
+    if (!verified || verified.version !== lookupVersion || verified.token !== getInfoToken()) return
+    const draftKey = accountStorageKey(`info_sd_draft:${sdType.value}`)
     const result = await infoApi.publishSupplyDemand({
       sdType: sdType.value,
-      merchantId: merchantId.value,
+      merchantId: verified.merchant.merchantId,
       title,
       category: form.value.category,
       variety: form.value.variety.trim(),
@@ -159,10 +191,11 @@ async function submit() {
       durationDays: form.value.duration,
       contactName: form.value.contactName.trim() || currentOwner() || '平台用户',
       contactPhone: form.value.contactPhone.trim(),
-      orgName: selectedMerchant.value.merchantName,
+      orgName: verified.merchant.merchantName,
       orgType: '个人',
-    })
-    uni.removeStorageSync(accountStorageKey(`info_sd_draft:${sdType.value}`))
+    }, verified.token)
+    uni.removeStorageSync(draftKey)
+    if (getInfoToken() !== verified.token) return
     uni.showModal({
       title: '提交成功',
       content: `${result.message}\n信息编号：${result.sdNo}\nAI 预估匹配度：${result.matchScore}%`,
@@ -196,7 +229,7 @@ function useQuote() {
 }
 
 const phoneMasked = computed(() => {
-  const phone = getInfoUser()?.username || ''
+  const phone = username.value
   return phone.length === 11 ? `${phone.slice(0, 3)}****${phone.slice(7)}` : ''
 })
 </script>
@@ -373,7 +406,7 @@ const phoneMasked = computed(() => {
 
       <view class="submit-row">
         <button role="button" aria-label="保存供需草稿" class="btn grow" @click="saveDraft">存草稿</button>
-        <button role="button" aria-label="立即发布供需" class="btn btn-primary grow" :disabled="submitting" @click="submit">
+        <button role="button" aria-label="立即发布供需" class="btn btn-primary grow" :disabled="submitting || loadingMerchants || !selectedMerchant" @click="submit">
           {{ submitting ? '提交中…' : '立即发布' }}
         </button>
       </view>

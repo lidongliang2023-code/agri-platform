@@ -76,6 +76,7 @@ export async function getInfoMerchants(): Promise<InfoMerchant[]> {
   if (!token) throw new Error('请先登录')
   const result = await apiRequest<{ code: number; message?: string; data?: InfoMerchant[] }>(
     `${AUTH_BASE}/api/v1/platform/merchants/mine`, 'GET', undefined, token)
+  if (token !== getInfoToken()) throw new Error('登录会话已变化，请重新加载经营主体')
   if (result.status === 401) handleInfoUnauthorized()
   if (result.status >= 400 || result.body.code !== 0 || !Array.isArray(result.body.data)) {
     throw new Error(result.body.message || '经营主体加载失败，请重试')
