@@ -122,10 +122,12 @@ export function clearGovSession() {
 
 export async function logoutGov() {
   try {
-    return await logoutMobile(`${governmentBase('auth')}/api/v1/auth/logout`, getGovToken(), () => {
-      clearGovSession()
-      uni.reLaunch({ url: '/pages/login/index' })
-    })
+    const token = getGovToken()
+    const endCurrentSession = () => {
+      if (getGovToken() === token) handleGovUnauthorized()
+    }
+    return await logoutMobile(`${governmentBase('auth')}/api/v1/auth/logout`, token,
+      endCurrentSession, endCurrentSession)
   } catch (error) {
     uni.showToast({ title: error instanceof Error ? error.message : '退出失败，请重试', icon: 'none' })
     return false
