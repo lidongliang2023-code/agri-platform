@@ -196,7 +196,8 @@ async function submit(): Promise<void> {
     challengeToken.value = ''
     verificationCode.value = ''
     uni.showToast({ title: '登录成功', icon: 'success' })
-    uni.switchTab({ url: '/pages/workbench/index', fail: () => {
+    // 新会话从新的工作台页面开始，避免复用登录前的 tab 状态。
+    uni.reLaunch({ url: '/pages/workbench/index', fail: () => {
       completed = false
       notice('登录成功，但工作台打开失败，请重试')
     } })

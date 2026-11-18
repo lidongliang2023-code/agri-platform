@@ -5,7 +5,7 @@ import AuthorizationNotice from '../../components/AuthorizationNotice.vue'
 import { computed, ref } from 'vue'
 import { onShow,onPullDownRefresh } from '@dcloudio/uni-app'
 import { api, statusMeta, type Case, type Task, type Warning } from '../../api'
-import { getGovUser } from '../../auth'
+import { getGovToken, getGovUser } from '../../auth'
 
 const error=ref(''),loading=ref(false)
 const data=ref<Awaited<ReturnType<typeof api.workbench>>|null>(null)
@@ -20,7 +20,25 @@ const inspectorGrid=computed(()=>data.value?.inspector.grid||'')
 const certificateNo=computed(()=>data.value?.inspector.certificateNo||'')
 onShow(load)
 onPullDownRefresh(load)
-async function load(){if(loading.value){uni.stopPullDownRefresh();return}loading.value=true;error.value='';try{data.value=await api.workbench()}catch(e){data.value=null;error.value=e instanceof Error?e.message:'加载失败'}finally{loading.value=false;uni.stopPullDownRefresh()}}
+async function load() {
+  const token = getGovToken()
+  if (!token || loading.value) {
+    uni.stopPullDownRefresh()
+    return
+  }
+  loading.value = true
+  error.value = ''
+  try {
+    const result = await api.workbench()
+    if (token === getGovToken()) data.value = result
+  } catch (e) {
+    data.value = null
+    if (token === getGovToken()) error.value = e instanceof Error ? e.message : '加载失败'
+  } finally {
+    loading.value = false
+    uni.stopPullDownRefresh()
+  }
+}
 function to(path:string){uni.navigateTo({url:path})}
 function task(item:Task){to(`/pages/tasks/detail?id=${item.id}`)}
 function caseDetail(item:Case){to(`/pages/cases/detail?id=${item.id}`)}
