@@ -35,7 +35,7 @@ public class OtaCommandService {
   for(long gateway:ids.stream().sorted().toList()){
    var gateways=jdbc.queryForList("SELECT * FROM iot_gateway WHERE id=? FOR UPDATE",gateway);if(gateways.isEmpty())throw new IllegalArgumentException("网关不存在");var g=gateways.get(0);
    String model=Objects.toString(fw.get("target_model"),"");
-   if(model.isBlank()||(!"ALL".equals(model)&&!model.equals(Objects.toString(g.get("model"),""))))throw new IllegalArgumentException("固件适用型号与目标网关不匹配");
+   if(model.isBlank()||(!"ALL".equals(model)&&!model.equals(Objects.toString(g.get("gateway_model"),""))))throw new IllegalArgumentException("固件适用型号与目标网关不匹配");
    boolean owned=farms.stream().anyMatch(f->Objects.toString(f.get("id"),"").equals(Objects.toString(g.get("farm_id"),""))&&Objects.toString(f.get("tenantId"),"").equals(Objects.toString(task.get("tenant_id"),"")));
    if(!owned)throw new IllegalArgumentException("目标网关农场不属于任务主体或当前运营账号不可核验");
    expire(gateway);

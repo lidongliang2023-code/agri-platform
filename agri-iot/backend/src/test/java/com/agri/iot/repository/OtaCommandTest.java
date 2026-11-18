@@ -23,6 +23,33 @@ class OtaCommandTest {
  List<Map<String,Object>> farms(){return List.of(Map.of("id",10,"tenantId","2001"));}
  void start(){service.start(1,List.of(1L),"https://firmware.test/v2.bin","可信运营员",farms());}
  Map<String,String> body(Map<String,Object> claim,String status,int progress){return new HashMap<>(Map.of("dispatchToken",claim.get("dispatchToken").toString(),"status",status,"progress",String.valueOf(progress),"result","执行结果","installedVersion","v2","sha256",hash));}
+ @Test void specificModelUsesPersistedGatewayModel(){
+  jdbc.execute("ALTER TABLE iot_gateway ADD COLUMN gateway_model VARCHAR(80)");
+  jdbc.update("UPDATE iot_gateway SET gateway_model='OTA-TEST-MODEL' WHERE id=1");
+  jdbc.update("UPDATE iot_firmware SET target_model='OTA-TEST-MODEL'");
+  assertDoesNotThrow(this::start);
+  assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM iot_ota_receipt",Integer.class));
+ }
+ @Test void incompatibleModelIsRejectedWithoutWrites(){
+  jdbc.execute("ALTER TABLE iot_gateway ADD COLUMN gateway_model VARCHAR(80)");
+  jdbc.update("UPDATE iot_gateway SET gateway_model='OTHER' WHERE id=1");
+  jdbc.update("UPDATE iot_firmware SET target_model='OTA-TEST-MODEL'");
+  assertThrows(IllegalArgumentException.class,this::start);
+  assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM iot_ota_receipt",Integer.class));
+ }
+ @Test void mixedTargetsRollBackAllReceipts(){
+  var factory=new org.springframework.aop.framework.ProxyFactory(service);
+  factory.addAdvice(new org.springframework.transaction.interceptor.TransactionInterceptor(new org.springframework.jdbc.datasource.DataSourceTransactionManager(jdbc.getDataSource()),new org.springframework.transaction.annotation.AnnotationTransactionAttributeSource()));
+  var tx=(OtaCommandService)factory.getProxy();
+  assertThrows(IllegalArgumentException.class,()->tx.start(1,List.of(1L,2L),"https://firmware.test/v2.bin","测试运营员",farms()));
+  assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM iot_ota_receipt",Integer.class));
+  assertEquals("scheduled",jdbc.queryForObject("SELECT status FROM iot_ota_task WHERE id=1",String.class));
+ }
+ @Test void invalidTargetListsDoNotWrite(){
+  for(List<Long> ids:List.of(List.<Long>of(),List.of(1L,1L),List.of(0L),List.of(-1L),java.util.stream.LongStream.rangeClosed(1,201).boxed().toList()))
+   assertThrows(IllegalArgumentException.class,()->service.start(1,ids,"https://firmware.test/v2.bin","测试运营员",farms()));
+  assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM iot_ota_receipt",Integer.class));
+ }
  @Test void fullFlowPersistsAndAggregates(){start();var c=service.claim(1).get(0);assertEquals(c,service.claim(1).get(0));service.receipt(1,c.get("commandNo").toString(),body(c,"RUNNING",50));assertEquals(50,jdbc.queryForObject("SELECT progress FROM iot_ota_receipt",Integer.class));service.receipt(1,c.get("commandNo").toString(),body(c,"SUCCEEDED",100));service.refreshTasks();assertEquals("completed",jdbc.queryForObject("SELECT status FROM iot_ota_task WHERE id=1",String.class));assertEquals(1,jdbc.queryForObject("SELECT success_count FROM iot_ota_task WHERE id=1",Integer.class));assertTrue(service.claim(1).isEmpty());}
  @Test void targetAndFirmwareFailClosed(){assertThrows(IllegalArgumentException.class,()->service.start(1,List.of(2L),"https://firmware.test/v2","甲",farms()));assertThrows(IllegalArgumentException.class,()->service.start(1,List.of(1L),"http://firmware.test/v2","甲",farms()));jdbc.update("UPDATE iot_firmware SET sha256_text='incomplete'");assertThrows(IllegalArgumentException.class,this::start);assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM iot_ota_receipt",Integer.class));}
  @Test void duplicateAndParallelBlocked(){start();assertThrows(IllegalArgumentException.class,this::start);assertThrows(IllegalArgumentException.class,()->service.start(2,List.of(1L),"https://firmware.test/v2","甲",farms()));}
