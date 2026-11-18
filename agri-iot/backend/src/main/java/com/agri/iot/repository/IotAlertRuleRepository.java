@@ -266,7 +266,7 @@ public class IotAlertRuleRepository {
         jdbc.update("UPDATE iot_alert_rule_tenant SET enabled=?,updated_by=?,updated_at=? WHERE id=?",
                 enabled, identity.requireOperatorName(), nowLabel(), id);
         addLog((enabled ? "启用" : "停用") + "阈值规则", String.valueOf(existing.get("ruleName")),
-                enabled ? "停用后该指标回落到平台预置阈值" : "按本主体阈值判定");
+                enabled ? "按本主体阈值判定" : "停用后该指标回落到平台预置阈值");
         return requireTenantRule(id);
     }
 
@@ -639,9 +639,15 @@ public class IotAlertRuleRepository {
         if (!IotMetrics.LEVELS.contains(level)) {
             throw new IllegalArgumentException("告警等级只能是 " + String.join(" / ", IotMetrics.LEVELS));
         }
-        long duration = longValue(body.get("durationSeconds"));
+        long duration;
+        Object rawDuration = body.get("durationSeconds");
+        try {
+            duration = rawDuration == null ? 0 : new BigDecimal(String.valueOf(rawDuration).trim()).longValueExact();
+        } catch (NumberFormatException | ArithmeticException exception) {
+            throw new IllegalArgumentException("持续时间须为 0~86400 的整数秒");
+        }
         if (duration < 0 || duration > 86400) {
-            throw new IllegalArgumentException("持续时间需要在 0~86400 秒之间");
+            throw new IllegalArgumentException("持续时间须为 0~86400 的整数秒");
         }
         String deviceType = blankToNull(text(body, "deviceType", ""));
         if (deviceType != null && !deviceTypeNames().contains(deviceType)) {

@@ -455,7 +455,8 @@ public class IotAppRepository {
         if (longValue(gateway.get("farmId"), -1) != farmId) {
             throw new IllegalArgumentException("接入网关不属于所选生产农场");
         }
-        long groupId = requiredLong(body, "groupId", "请选择设备分组");
+        Long groupId = bindingGroupId(body.get("groupId"));
+        if (groupId == null) throw new IllegalArgumentException("请选择设备分组");
         identity.requireTenantRow("iot_device_group", groupId, "设备分组");
         Long plotId = bindingPlotId(body.get("plotId"));
         if (plotId != null) requireBindingPlot(plotId, farmId);
@@ -545,7 +546,7 @@ public class IotAppRepository {
         // 分组：变更时同步两边的设备计数
         Long newGroupId = oldGroupId;
         if (body.containsKey("groupId")) {
-            newGroupId = longObject(body.get("groupId"));
+            newGroupId = bindingGroupId(body.get("groupId"));
             if (newGroupId != null) {
                 identity.requireTenantRow("iot_device_group", newGroupId, "设备分组");
             }
@@ -1197,10 +1198,10 @@ public class IotAppRepository {
     }
 
     public List<Map<String, Object>> workOrders() {
-        return jdbc.query("""
+        return withWorkOrderHistory(jdbc, jdbc.query("""
                 SELECT * FROM iot_work_order WHERE tenant_id=?
                 ORDER BY CASE status WHEN 'completed' THEN 1 ELSE 0 END,id DESC
-                """, workOrderMapper(), scopeTenantId());
+                """, workOrderMapper(), scopeTenantId()));
     }
 
     /**
@@ -1222,7 +1223,7 @@ public class IotAppRepository {
         jdbc.update("""
                 INSERT INTO iot_work_order
                 (tenant_id,order_no,source_name,device_name,order_type,priority,status,technician,description,created_at)
-                VALUES (?,?,?,?,?, 'pending',?,?,?,?)
+                VALUES (?,?,?,?,?,?, 'pending',?,?,?)
                 """, tenantId, orderNo, text(body, "source", "用户报修"), device.get("deviceName"),
                 text(body, "orderType", "设备故障"), text(body, "priority", "normal"),
                 text(body, "technician", "待智能派单"), description, nowLabel());
@@ -1415,6 +1416,29 @@ public class IotAppRepository {
                 "result", rs.getString("result_text"), "createdAt", rs.getString("created_at"));
     }
 
+    /** 处理记录使用现有审计表，读取时合并，保留各端 description 契约及原始报修描述。 */
+    static List<Map<String, Object>> withWorkOrderHistory(JdbcTemplate jdbc, List<Map<String, Object>> orders) {
+        if (orders.isEmpty()) return orders;
+        Map<String, Map<String, Object>> targets = new LinkedHashMap<>();
+        for (Map<String, Object> order : orders) targets.put("WO-" + order.get("id"), order);
+        String marks = String.join(",", java.util.Collections.nCopies(targets.size(), "?"));
+        List<Map<String, Object>> logs = jdbc.queryForList(
+                "SELECT target_name,created_at,operator_name,detail_text FROM iot_ops_log WHERE action_name='运维工单处置' AND target_name IN (" + marks + ") ORDER BY id",
+                targets.keySet().toArray());
+        for (Map<String, Object> log : logs) {
+            Map<String, Object> order = targets.get(String.valueOf(log.get("target_name")));
+            String detail = String.valueOf(log.get("detail_text"));
+            int separator = detail.indexOf(" · ");
+            if (separator < 0) continue;
+            String line = "[" + log.get("created_at") + " · " + log.get("operator_name") + " · "
+                    + detail.substring(0, separator) + "] " + detail.substring(separator + 3);
+            String description = java.util.Objects.toString(order.get("description"), "");
+            // 兼容旧版本已追加到 description 的历史，避免重复显示。
+            if (!description.contains(line)) order.put("description", description + "\n" + line);
+        }
+        return orders;
+    }
+
     private RowMapper<Map<String, Object>> workOrderMapper() {
         return (rs, rowNum) -> map(
                 "id", rs.getLong("id"), "orderNo", rs.getString("order_no"), "source", rs.getString("source_name"),
@@ -1428,9 +1452,11 @@ public class IotAppRepository {
     private RowMapper<Map<String, Object>> firmwareMapper() {
         return (rs, rowNum) -> map(
                 "id", rs.getLong("id"), "productName", rs.getString("product_name"),
-                "version", rs.getString("version_name"), "fileSize", rs.getString("file_size"),
+                "version", rs.getString("version_name"), "fileSize", rs.getLong("file_size_bytes") > 0
+                        ? rs.getLong("file_size_bytes") + " B" : rs.getString("file_size"),
                 "sha256", rs.getString("sha256_text"), "status", rs.getString("status"),
-                "releaseAt", rs.getString("release_at"));
+                "releaseAt", rs.getString("published_at") == null || rs.getString("published_at").isBlank()
+                        ? rs.getString("release_at") : rs.getString("published_at"));
     }
 
     private RowMapper<Map<String, Object>> otaMapper() {
@@ -1506,6 +1532,17 @@ public class IotAppRepository {
                     """, args.stream()
                     .map(values -> new Object[]{values[0], values[1], values[0]})
                     .toList());
+        }
+    }
+
+    private Long bindingGroupId(Object value) {
+        if (value == null) return null;
+        try {
+            long id = new BigDecimal(String.valueOf(value)).longValueExact();
+            if (id <= 0) throw new ArithmeticException();
+            return id;
+        } catch (NumberFormatException | ArithmeticException error) {
+            throw new IllegalArgumentException("分组标识必须是正整数，解除分组请明确传入 null");
         }
     }
 

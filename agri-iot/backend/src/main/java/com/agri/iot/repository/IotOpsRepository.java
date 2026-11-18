@@ -218,19 +218,27 @@ public class IotOpsRepository {
      * <p>审核人以前固定写"张运营"，谁点都是他；现在取令牌账号，
      * 并且只允许 approved/rejected 两种结论，避免把状态字段写成任意文本。</p>
      */
+    @org.springframework.transaction.annotation.Transactional
     public Map<String, Object> reviewAccess(long id, Map<String, Object> body) {
-        String status = text(body, "status", "approved");
+        String status = text(body, "status", "");
         if (!List.of("approved", "rejected").contains(status)) {
             throw new IllegalArgumentException("接入审核结论只能是通过或驳回");
         }
-        if (jdbc.queryForObject("SELECT COUNT(*) FROM iot_access_audit WHERE id=?", Integer.class, id) == 0) {
-            throw BusinessException.notFound("接入申请不存在：" + id);
+        String note = required(body, "note", "请填写审核意见");
+        if (note.length() < 4 || note.length() > 200) {
+            throw new IllegalArgumentException("审核意见须为4至200字");
         }
-        jdbc.update("""
-                UPDATE iot_access_audit SET status=?,auditor=?,note=? WHERE id=?
-                """, status, identity.requireOperatorName(),
-                required(body, "note", "请填写审核意见"), id);
-        addLog("设备接入审核", "ACCESS-" + id, status + " · " + text(body, "note", ""));
+        List<Map<String, Object>> rows = jdbc.queryForList(
+                "SELECT status FROM iot_access_audit WHERE id=? FOR UPDATE", id);
+        if (rows.isEmpty()) throw BusinessException.notFound("接入申请不存在：" + id);
+        if (!"pending".equals(rows.get(0).get("status"))) {
+            throw new IllegalArgumentException("接入申请已审核，请刷新；禁止重复审核或覆盖原审核意见");
+        }
+        int changed = jdbc.update("""
+                UPDATE iot_access_audit SET status=?,auditor=?,note=? WHERE id=? AND status='pending'
+                """, status, identity.requireOperatorName(), note, id);
+        if (changed != 1) throw new IllegalArgumentException("接入申请状态已变化，请刷新");
+        addLog("设备接入审核", "ACCESS-" + id, status + " · " + note);
         return accessAudits().stream().filter(a -> longValue(a.get("id")) == id).findFirst()
                 .orElseThrow(() -> BusinessException.notFound("接入申请不存在：" + id));
     }
@@ -249,7 +257,7 @@ public class IotOpsRepository {
     }
 
     public List<Map<String, Object>> workOrders() {
-        return jdbc.query("""
+        return IotAppRepository.withWorkOrderHistory(jdbc, jdbc.query("""
                 SELECT w.*,t.tenant_name FROM iot_work_order w LEFT JOIN iot_tenant t ON t.id=w.tenant_id
                 ORDER BY CASE w.status WHEN 'completed' THEN 1 ELSE 0 END,w.id DESC
                 """, (rs, rowNum) -> map(
@@ -258,7 +266,7 @@ public class IotOpsRepository {
                 "deviceName", rs.getString("device_name"), "type", rs.getString("order_type"),
                 "priority", rs.getString("priority"), "status", rs.getString("status"),
                 "technician", rs.getString("technician"), "description", rs.getString("description"),
-                "createdAt", rs.getString("created_at")));
+                "createdAt", rs.getString("created_at"))));
     }
 
     @org.springframework.transaction.annotation.Transactional
@@ -267,18 +275,15 @@ public class IotOpsRepository {
         if (rows.isEmpty()) throw BusinessException.notFound("工单不存在");
         String current = String.valueOf(rows.get(0).get("status"));
         String next = text(body, "status", "");
-        if (!("pending".equals(current) && "processing".equals(next))
+        if (!(("pending".equals(current) || "assigned".equals(current)) && "processing".equals(next))
                 && !("processing".equals(current) && "completed".equals(next))) {
-            throw new IllegalArgumentException("仅支持待受理→处理中→已完成，请刷新状态");
+            throw new IllegalArgumentException("仅支持待受理或已派单→处理中→已完成，请刷新状态");
         }
         String note = required(body, "note", "请填写实际处理结果");
         if (note.length() < 4 || note.length() > 200) throw new IllegalArgumentException("处理说明须为4至200字");
         String operator = identity.requireOperatorName();
-        String old = rows.get(0).get("description") == null ? "" : String.valueOf(rows.get(0).get("description"));
-        String history = old + "\n[" + nowLabel() + " · " + operator + " · " + next + "] " + note;
-        if (history.length() > 500) throw new IllegalArgumentException("历史超过500字容量，禁止截断，请精简本次说明");
-        int changed = jdbc.update("UPDATE iot_work_order SET status=?,technician=?,description=?,completed_at=? WHERE id=? AND status=?",
-                next, operator, history, "completed".equals(next) ? nowLabel() : null, id, current);
+        int changed = jdbc.update("UPDATE iot_work_order SET status=?,technician=?,completed_at=? WHERE id=? AND status=?",
+                next, operator, "completed".equals(next) ? nowLabel() : null, id, current);
         if (changed != 1) throw new IllegalArgumentException("工单状态已变化，请刷新");
         addLog("运维工单处置", "WO-" + id, next + " · " + note);
         return workOrders().stream().filter(row -> longValue(row.get("id")) == id).findFirst().orElseThrow();

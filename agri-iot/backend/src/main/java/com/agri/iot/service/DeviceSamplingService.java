@@ -70,6 +70,7 @@ public class DeviceSamplingService {
         if (rows.isEmpty()) throw com.agri.common.exception.BusinessException.notFound("设备不存在");
         String old = (String) rows.get(0).get("config_text");
         ObjectNode node = SamplingPolicy.object(old);
+        if (!body.containsKey("intervalSeconds")) throw new IllegalArgumentException("请明确提供默认采样周期，关闭时传 null");
         Object interval = body.get("intervalSeconds"), tolerance = body.get("toleranceSeconds");
         if (interval == null) {
             node.remove("reportInterval");
@@ -79,21 +80,26 @@ public class DeviceSamplingService {
             node.set("samplingToleranceSeconds", json.valueToTree(tolerance == null ? 0 : tolerance));
         }
         Object rawMetrics = body.get("metrics");
+        if (body.containsKey("metrics") && !(rawMetrics instanceof List<?>)) {
+            throw new IllegalArgumentException("指标采样配置必须是列表");
+        }
         if (rawMetrics instanceof List<?> list) {
+            java.util.Set<String> seen = new java.util.HashSet<>();
             ObjectNode byMetric = node.with("samplingByMetric");
             for (Object raw : list) {
                 if (!(raw instanceof Map<?, ?> entry)) throw new IllegalArgumentException("指标采样配置格式无效");
                 String key = String.valueOf(entry.get("metricKey"));
                 if (!key.matches("[A-Za-z][A-Za-z0-9_]{0,39}")) throw new IllegalArgumentException("指标标识无效：" + key);
+                if (!seen.add(key)) throw new IllegalArgumentException("指标采样配置重复：" + key);
                 Object enabled = entry.get("enabled");
-                if (Boolean.FALSE.equals(enabled) || "false".equalsIgnoreCase(String.valueOf(enabled))) {
+                if (!(enabled instanceof Boolean)) throw new IllegalArgumentException("指标启用状态必须为布尔值");
+                if (Boolean.FALSE.equals(enabled)) {
                     byMetric.remove(key);
                     continue;
                 }
                 Object metricInterval = entry.get("intervalSeconds");
                 if (metricInterval == null || String.valueOf(metricInterval).isBlank()) {
-                    byMetric.remove(key);
-                    continue;
+                    throw new IllegalArgumentException("启用指标独立采样时必须提供周期");
                 }
                 ObjectNode item = json.createObjectNode();
                 item.set("reportInterval", json.valueToTree(metricInterval));

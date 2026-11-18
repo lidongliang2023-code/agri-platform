@@ -147,7 +147,7 @@ public class FirmwarePackageService {
     }
 
     public List<Map<String, Object>> list(String type, String model, String status) {
-        StringBuilder sql = new StringBuilder("SELECT id, product_name AS firmwareName, version_name AS versionName, firmware_type AS firmwareType, target_model AS targetModel, package_url AS packageUrl, file_size_bytes AS fileSizeBytes, status, sha256_text AS sha256Text, release_notes AS releaseNotes, changelog_text AS changelogText, published_at AS publishedAt, deprecated_at AS deprecatedAt, COALESCE(created_at,release_at) AS createdAt,deprecate_reason AS deprecateReason FROM iot_firmware WHERE 1=1");
+        StringBuilder sql = new StringBuilder("SELECT id, product_name AS firmwareName, version_name AS versionName, firmware_type AS firmwareType, target_model AS targetModel, package_url AS packageUrl, file_size_bytes AS fileSizeBytes, CASE WHEN file_size_bytes>0 THEN CONCAT(file_size_bytes,' B') ELSE file_size END AS fileSize, status, sha256_text AS sha256Text, release_notes AS releaseNotes, changelog_text AS changelogText, published_at AS publishedAt, COALESCE(NULLIF(published_at,''),release_at) AS releaseAt, deprecated_at AS deprecatedAt, COALESCE(created_at,release_at) AS createdAt,deprecate_reason AS deprecateReason FROM iot_firmware WHERE 1=1");
         List<Object> params = new ArrayList<>();
         if (type != null && !type.isBlank()) {
             sql.append(" AND firmware_type=?");
@@ -166,7 +166,7 @@ public class FirmwarePackageService {
     }
 
     public Map<String, Object> get(long id) {
-        var rows = jdbc.queryForList("SELECT id, product_name AS firmwareName, version_name AS versionName, firmware_type AS firmwareType, target_model AS targetModel, package_url AS packageUrl, file_size_bytes AS fileSizeBytes, status, sha256_text AS sha256Text, release_notes AS releaseNotes, changelog_text AS changelogText, published_at AS publishedAt, deprecated_at AS deprecatedAt, COALESCE(created_at,release_at) AS createdAt,deprecate_reason AS deprecateReason FROM iot_firmware WHERE id=?", id);
+        var rows = jdbc.queryForList("SELECT id, product_name AS firmwareName, version_name AS versionName, firmware_type AS firmwareType, target_model AS targetModel, package_url AS packageUrl, file_size_bytes AS fileSizeBytes, CASE WHEN file_size_bytes>0 THEN CONCAT(file_size_bytes,' B') ELSE file_size END AS fileSize, status, sha256_text AS sha256Text, release_notes AS releaseNotes, changelog_text AS changelogText, published_at AS publishedAt, COALESCE(NULLIF(published_at,''),release_at) AS releaseAt, deprecated_at AS deprecatedAt, COALESCE(created_at,release_at) AS createdAt,deprecate_reason AS deprecateReason FROM iot_firmware WHERE id=?", id);
         if (rows.isEmpty()) throw new IllegalArgumentException("固件不存在");
         return rows.get(0);
     }

@@ -25,7 +25,7 @@ class FirmwarePackageTest {
     void setup() throws Exception {
         tempDir = Files.createTempDirectory("fw-test-");
         jdbc = new JdbcTemplate(new DriverManagerDataSource("jdbc:h2:mem:" + UUID.randomUUID() + ";MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1", "sa", ""));
-        jdbc.execute("CREATE TABLE iot_firmware(id BIGINT AUTO_INCREMENT PRIMARY KEY, product_name VARCHAR(120), version_name VARCHAR(40), firmware_type VARCHAR(40), target_model VARCHAR(80), package_url VARCHAR(1000), file_size_bytes BIGINT, status VARCHAR(20), sha256_text VARCHAR(64), release_notes VARCHAR(500), changelog_text VARCHAR(1000), created_at VARCHAR(40), published_at VARCHAR(40), deprecated_at VARCHAR(40), release_at VARCHAR(40), deprecate_reason VARCHAR(300))");
+        jdbc.execute("CREATE TABLE iot_firmware(id BIGINT AUTO_INCREMENT PRIMARY KEY, product_name VARCHAR(120), version_name VARCHAR(40), firmware_type VARCHAR(40), target_model VARCHAR(80), package_url VARCHAR(1000), file_size_bytes BIGINT, file_size VARCHAR(40), status VARCHAR(20), sha256_text VARCHAR(64), release_notes VARCHAR(500), changelog_text VARCHAR(1000), created_at VARCHAR(40), published_at VARCHAR(40), deprecated_at VARCHAR(40), release_at VARCHAR(40), deprecate_reason VARCHAR(300))");
         jdbc.execute("CREATE TABLE iot_ota_task(id BIGINT PRIMARY KEY, firmware_id BIGINT, status VARCHAR(20))");
         jdbc.execute("CREATE TABLE iot_ota_receipt(id BIGINT AUTO_INCREMENT PRIMARY KEY, task_id BIGINT, gateway_id BIGINT, firmware_url VARCHAR(1000), sha256_text VARCHAR(64), command_status VARCHAR(20), expires_at VARCHAR(40))");
 
@@ -66,6 +66,37 @@ class FirmwarePackageTest {
         var pub = firmwareService.publish(id);
         assertEquals("stable", pub.get("status"));
         assertEquals("stable", firmwareService.get(id).get("status"));
+    }
+
+    @Test
+    void mobileFirmwareUsesPublishedMetadataAndKeepsLegacyFallback() {
+        long id = ((Number)firmwareService.register(sampleDraft("3.2.1")).get("id")).longValue();
+        firmwareService.publish(id);
+        IotAppRepository app = new IotAppRepository(jdbc,null,null,null,null,new ObjectMapper());
+        var current = app.firmware().get(0);
+        assertEquals("15728640 B", current.get("fileSize"));
+        assertEquals(firmwareService.get(id).get("publishedAt"),current.get("releaseAt"));
+        jdbc.update("INSERT INTO iot_firmware(product_name,version_name,file_size,release_at,status) VALUES('旧固件','1.0.0','2 MB','2026-01-01','stable')");
+        var legacy = app.firmware().get(0);
+        assertEquals("2 MB",legacy.get("fileSize"));
+        assertEquals("2026-01-01",legacy.get("releaseAt"));
+    }
+
+    @Test
+    void opsLegacyMetadataDoesNotInventVerifiedBytesOrPublishTime() {
+        jdbc.update("INSERT INTO iot_firmware(product_name,version_name,file_size,file_size_bytes,release_at,status) VALUES('旧固件','1.0.0','2 MB',0,'2026-01-01','stable')");
+        var legacy=firmwareService.list(null,null,null).get(0);
+        long id=((Number)legacy.get("id")).longValue();
+        assertEquals("2 MB",legacy.get("fileSize"));
+        assertEquals("2026-01-01",legacy.get("releaseAt"));
+        assertEquals(0L,((Number)legacy.get("fileSizeBytes")).longValue());
+        assertNull(legacy.get("publishedAt"));
+        assertEquals(legacy,firmwareService.get(id));
+        long fresh=((Number)firmwareService.register(sampleDraft("9.0.0")).get("id")).longValue();
+        firmwareService.publish(fresh);
+        var current=firmwareService.get(fresh);
+        assertEquals("15728640 B",current.get("fileSize"));
+        assertEquals(current.get("publishedAt"),current.get("releaseAt"));
     }
 
     @Test
